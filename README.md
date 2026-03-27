@@ -9,7 +9,7 @@
 	- will implement Multi-Edit standard features 
 		- cursor movement
 		- block management
-		- keystroke macros ..
+		- keystroke macros ...
 
 
 > [!NOTE]
