@@ -982,6 +982,7 @@ static int parse_primary(Parser *ps, ExprInfo *out)
     {
         ExprInfo args[8];
         int argc = 0;
+        int line = ps->tok.line;
         name = xstrdup(ps->tok.text);
         if (name == NULL)
         {
@@ -1009,6 +1010,76 @@ static int parse_primary(Parser *ps, ExprInfo *out)
 
         if (parser_accept(ps, TOK_LPAREN))
         {
+            if (strcasecmp(name, "VAL") == 0 || strcasecmp(name, "RVAL") == 0)
+            {
+                char *target_name;
+                int target_type;
+                ExprInfo source_expr;
+                int is_real_target = (strcasecmp(name, "RVAL") == 0);
+
+                if (ps->tok.kind != TOK_IDENTIFIER)
+                {
+                    set_compile_error(ps->tok.line, "Variable expected.");
+                    free(name);
+                    return -1;
+                }
+
+                target_name = xstrdup(ps->tok.text);
+                if (target_name == NULL)
+                {
+                    set_compile_error(ps->tok.line, "Out of memory.");
+                    free(name);
+                    return -1;
+                }
+                if (lookup_symbol(target_name, &target_type) < 0)
+                {
+                    set_compile_error(ps->tok.line, "Variable expected.");
+                    free(target_name);
+                    free(name);
+                    return -1;
+                }
+                if ((is_real_target && target_type != TYPE_REAL) || (!is_real_target && target_type != TYPE_INT))
+                {
+                    set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
+                    free(target_name);
+                    free(name);
+                    return -1;
+                }
+                parser_next(ps);
+                if (parser_expect(ps, TOK_COMMA, "',' expected.") != 0)
+                {
+                    free(target_name);
+                    free(name);
+                    return -1;
+                }
+                if (parse_expression(ps, 1, &source_expr) != 0)
+                {
+                    free(target_name);
+                    free(name);
+                    return -1;
+                }
+                if (!is_stringlike_type(source_expr.type))
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(target_name);
+                    free(name);
+                    return -1;
+                }
+                if (parser_expect(ps, TOK_RPAREN, "')' expected.") != 0)
+                {
+                    free(target_name);
+                    free(name);
+                    return -1;
+                }
+
+                emit_byte(is_real_target ? OP_RVAL : OP_VAL);
+                emit_string(target_name);
+                out->type = TYPE_INT;
+                free(target_name);
+                free(name);
+                return 0;
+            }
+
             if (parse_argument_expressions(ps, args, &argc, 8) != 0)
             {
                 free(name);
@@ -1024,7 +1095,7 @@ static int parse_primary(Parser *ps, ExprInfo *out)
             {
                 if (argc != 1 || args[0].type != TYPE_INT)
                 {
-                    set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
+                    set_compile_error(line, "Type mismatch or syntax error.");
                     free(name);
                     return -1;
                 }
@@ -1035,7 +1106,7 @@ static int parse_primary(Parser *ps, ExprInfo *out)
             {
                 if (argc != 1 || args[0].type != TYPE_INT)
                 {
-                    set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
+                    set_compile_error(line, "Type mismatch or syntax error.");
                     free(name);
                     return -1;
                 }
@@ -1046,29 +1117,95 @@ static int parse_primary(Parser *ps, ExprInfo *out)
             {
                 if (argc != 1 || !is_stringlike_type(args[0].type))
                 {
-                    set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
+                    set_compile_error(line, "Type mismatch or syntax error.");
                     free(name);
                     return -1;
                 }
                 emit_intrinsic_call("ASCII", argc);
                 out->type = TYPE_INT;
             }
+            else if (strcasecmp(name, "CAPS") == 0)
+            {
+                if (argc != 1 || !is_stringlike_type(args[0].type))
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(name);
+                    return -1;
+                }
+                emit_intrinsic_call("CAPS", argc);
+                out->type = TYPE_STR;
+            }
+            else if (strcasecmp(name, "COPY") == 0)
+            {
+                if (argc != 3 || !is_stringlike_type(args[0].type) || args[1].type != TYPE_INT || args[2].type != TYPE_INT)
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(name);
+                    return -1;
+                }
+                emit_intrinsic_call("COPY", argc);
+                out->type = TYPE_STR;
+            }
             else if (strcasecmp(name, "LENGTH") == 0)
             {
                 if (argc != 1 || !is_stringlike_type(args[0].type))
                 {
-                    set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
+                    set_compile_error(line, "Type mismatch or syntax error.");
                     free(name);
                     return -1;
                 }
                 emit_intrinsic_call("LENGTH", argc);
                 out->type = TYPE_INT;
             }
+            else if (strcasecmp(name, "POS") == 0)
+            {
+                if (argc != 2 || !is_stringlike_type(args[0].type) || !is_stringlike_type(args[1].type))
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(name);
+                    return -1;
+                }
+                emit_intrinsic_call("POS", argc);
+                out->type = TYPE_INT;
+            }
+            else if (strcasecmp(name, "XPOS") == 0)
+            {
+                if (argc != 3 || !is_stringlike_type(args[0].type) || !is_stringlike_type(args[1].type) || args[2].type != TYPE_INT)
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(name);
+                    return -1;
+                }
+                emit_intrinsic_call("XPOS", argc);
+                out->type = TYPE_INT;
+            }
+            else if (strcasecmp(name, "STR_DEL") == 0)
+            {
+                if (argc != 3 || !is_stringlike_type(args[0].type) || args[1].type != TYPE_INT || args[2].type != TYPE_INT)
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(name);
+                    return -1;
+                }
+                emit_intrinsic_call("STR_DEL", argc);
+                out->type = TYPE_STR;
+            }
+            else if (strcasecmp(name, "STR_INS") == 0)
+            {
+                if (argc != 3 || !is_stringlike_type(args[0].type) || !is_stringlike_type(args[1].type) || args[2].type != TYPE_INT)
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(name);
+                    return -1;
+                }
+                emit_intrinsic_call("STR_INS", argc);
+                out->type = TYPE_STR;
+            }
             else if (strcasecmp(name, "REAL_I") == 0)
             {
                 if (argc != 1 || args[0].type != TYPE_INT)
                 {
-                    set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
+                    set_compile_error(line, "Type mismatch or syntax error.");
                     free(name);
                     return -1;
                 }
@@ -1079,7 +1216,7 @@ static int parse_primary(Parser *ps, ExprInfo *out)
             {
                 if (argc != 1 || args[0].type != TYPE_REAL)
                 {
-                    set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
+                    set_compile_error(line, "Type mismatch or syntax error.");
                     free(name);
                     return -1;
                 }
@@ -1090,7 +1227,7 @@ static int parse_primary(Parser *ps, ExprInfo *out)
             {
                 if (argc != 3 || args[0].type != TYPE_REAL || args[1].type != TYPE_INT || args[2].type != TYPE_INT)
                 {
-                    set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
+                    set_compile_error(line, "Type mismatch or syntax error.");
                     free(name);
                     return -1;
                 }
@@ -1099,7 +1236,7 @@ static int parse_primary(Parser *ps, ExprInfo *out)
             }
             else
             {
-                set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
+                set_compile_error(line, "Type mismatch or syntax error.");
                 free(name);
                 return -1;
             }

@@ -1,0 +1,17 @@
+$MACRO StringFns;
+DEF_INT(ParseRC, IPos);
+DEF_STR(TextA, TextB);
+DEF_REAL(RValue);
+
+TextA := CAPS('mixed Case 123');
+TextB := COPY(TextA, 1, 5);
+TextB := STR_INS('-', TextB, 5);
+TextB := STR_DEL(TextB, 2, 1);
+
+ParseRC := VAL(IPos, '4711');
+ParseRC := ParseRC + RVAL(RValue, '123.50');
+
+IF (ParseRC = 0) AND (POS('MIX', TextA) = 1) AND (XPOS('ED', TextA, 3) = 4) THEN
+    TVCALL MessageBox(TextA + ' | ' + TextB + ' | ' + STR(IPos) + ' | ' + RSTR(RValue, 0, 2));
+END;
+END_MACRO;

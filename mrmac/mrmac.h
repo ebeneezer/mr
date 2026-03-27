@@ -9,6 +9,8 @@
 #define OP_CALL      0x22
 #define OP_RET       0x23
 #define OP_INTRINSIC 0x24
+#define OP_VAL       0x25
+#define OP_RVAL      0x26
 
 #define OP_PUSH_I    0x30
 #define OP_PUSH_S    0x31

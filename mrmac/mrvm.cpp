@@ -5,6 +5,7 @@
 #include "mrmac.h"
 #include <algorithm>
 #include <cmath>
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <limits>
@@ -87,6 +88,13 @@ namespace
         default:
             return std::string();
         }
+    }
+
+    static std::string uppercaseAscii(std::string value)
+    {
+        for (std::string::size_type i = 0; i < value.size(); ++i)
+            value[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(value[i])));
+        return value;
     }
 
     static double valueAsReal(const Value &value)
@@ -193,6 +201,103 @@ namespace
             throw std::runtime_error("String length error.");
     }
 
+    static int checkedStringIndex(int pos)
+    {
+        if (pos < 1 || pos > 254)
+            throw std::runtime_error("Invalid string index on string copy operation.");
+        return pos;
+    }
+
+    static int checkedInsertIndex(int pos)
+    {
+        if (pos < 0 || pos > 254)
+            throw std::runtime_error("Invalid string index on string copy operation.");
+        return pos;
+    }
+
+    static int findValErrorPosition(const std::string &text)
+    {
+        std::size_t i = 0;
+        const std::size_t n = text.size();
+
+        while (i < n && std::isspace(static_cast<unsigned char>(text[i])))
+            ++i;
+        if (i == n)
+            return 1;
+
+        if (text[i] == '+' || text[i] == '-')
+            ++i;
+
+        {
+            const std::size_t firstDigit = i;
+            while (i < n && std::isdigit(static_cast<unsigned char>(text[i])))
+                ++i;
+            if (i == firstDigit)
+                return static_cast<int>(firstDigit + 1);
+        }
+
+        while (i < n && std::isspace(static_cast<unsigned char>(text[i])))
+            ++i;
+        if (i != n)
+            return static_cast<int>(i + 1);
+        return 0;
+    }
+
+    static int findRValErrorPosition(const std::string &text)
+    {
+        std::size_t i = 0;
+        const std::size_t n = text.size();
+
+        while (i < n && std::isspace(static_cast<unsigned char>(text[i])))
+            ++i;
+        if (i == n)
+            return 1;
+
+        if (text[i] == '+' || text[i] == '-')
+            ++i;
+
+        {
+            bool seenDigits = false;
+            while (i < n && std::isdigit(static_cast<unsigned char>(text[i])))
+            {
+                seenDigits = true;
+                ++i;
+            }
+            if (i < n && text[i] == '.')
+            {
+                ++i;
+                while (i < n && std::isdigit(static_cast<unsigned char>(text[i])))
+                {
+                    seenDigits = true;
+                    ++i;
+                }
+            }
+            if (!seenDigits)
+                return static_cast<int>(i + 1);
+        }
+
+        if (i < n && (text[i] == 'e' || text[i] == 'E'))
+        {
+            const std::size_t expPos = i;
+            ++i;
+            if (i < n && (text[i] == '+' || text[i] == '-'))
+                ++i;
+            {
+                const std::size_t firstExpDigit = i;
+                while (i < n && std::isdigit(static_cast<unsigned char>(text[i])))
+                    ++i;
+                if (i == firstExpDigit)
+                    return static_cast<int>(expPos + 1);
+            }
+        }
+
+        while (i < n && std::isspace(static_cast<unsigned char>(text[i])))
+            ++i;
+        if (i != n)
+            return static_cast<int>(i + 1);
+        return 0;
+    }
+
     static Value applyIntrinsic(const std::string &name, const std::vector<Value> &args)
     {
         if (name == "STR")
@@ -214,11 +319,104 @@ namespace
             std::string s = valueAsString(args[0]);
             return makeInt(s.empty() ? 0 : static_cast<unsigned char>(s[0]));
         }
+        if (name == "CAPS")
+        {
+            if (args.size() != 1 || !isStringLike(args[0]))
+                throw std::runtime_error("CAPS expects one string argument.");
+            return makeString(uppercaseAscii(valueAsString(args[0])));
+        }
+        if (name == "COPY")
+        {
+            std::string s;
+            int pos;
+            int count;
+            std::size_t start;
+            if (args.size() != 3 || !isStringLike(args[0]) || args[1].type != TYPE_INT || args[2].type != TYPE_INT)
+                throw std::runtime_error("COPY expects (string, int, int).");
+            s = valueAsString(args[0]);
+            pos = checkedStringIndex(args[1].i);
+            count = args[2].i;
+            if (count < 0)
+                throw std::runtime_error("Invalid string index on string copy operation.");
+            if (static_cast<std::size_t>(pos) > s.size())
+                return makeString("");
+            start = static_cast<std::size_t>(pos - 1);
+            return makeString(s.substr(start, static_cast<std::size_t>(count)));
+        }
         if (name == "LENGTH")
         {
             if (args.size() != 1 || !isStringLike(args[0]))
                 throw std::runtime_error("LENGTH expects one string argument.");
             return makeInt(static_cast<int>(valueAsString(args[0]).size()));
+        }
+        if (name == "POS")
+        {
+            std::string needle;
+            std::string haystack;
+            std::size_t pos;
+            if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1]))
+                throw std::runtime_error("POS expects (substring, string).");
+            needle = valueAsString(args[0]);
+            haystack = valueAsString(args[1]);
+            if (needle.empty())
+                return makeInt(1);
+            pos = haystack.find(needle);
+            return makeInt(pos == std::string::npos ? 0 : static_cast<int>(pos + 1));
+        }
+        if (name == "XPOS")
+        {
+            std::string needle;
+            std::string haystack;
+            int startPos;
+            std::size_t pos;
+            if (args.size() != 3 || !isStringLike(args[0]) || !isStringLike(args[1]) || args[2].type != TYPE_INT)
+                throw std::runtime_error("XPOS expects (substring, string, int).");
+            needle = valueAsString(args[0]);
+            haystack = valueAsString(args[1]);
+            startPos = checkedStringIndex(args[2].i);
+            if (needle.empty())
+                return makeInt(startPos <= static_cast<int>(haystack.size()) + 1 ? startPos : 0);
+            if (static_cast<std::size_t>(startPos) > haystack.size())
+                return makeInt(0);
+            pos = haystack.find(needle, static_cast<std::size_t>(startPos - 1));
+            return makeInt(pos == std::string::npos ? 0 : static_cast<int>(pos + 1));
+        }
+        if (name == "STR_DEL")
+        {
+            std::string s;
+            int pos;
+            int count;
+            std::size_t start;
+            if (args.size() != 3 || !isStringLike(args[0]) || args[1].type != TYPE_INT || args[2].type != TYPE_INT)
+                throw std::runtime_error("STR_DEL expects (string, int, int).");
+            s = valueAsString(args[0]);
+            pos = checkedStringIndex(args[1].i);
+            count = args[2].i;
+            if (count < 0)
+                throw std::runtime_error("Invalid string index on string copy operation.");
+            if (static_cast<std::size_t>(pos) > s.size())
+                return makeString(s);
+            start = static_cast<std::size_t>(pos - 1);
+            s.erase(start, static_cast<std::size_t>(count));
+            return makeString(s);
+        }
+        if (name == "STR_INS")
+        {
+            std::string target;
+            std::string dest;
+            int location;
+            std::size_t insertPos;
+            if (args.size() != 3 || !isStringLike(args[0]) || !isStringLike(args[1]) || args[2].type != TYPE_INT)
+                throw std::runtime_error("STR_INS expects (string, string, int).");
+            target = valueAsString(args[0]);
+            dest = valueAsString(args[1]);
+            location = checkedInsertIndex(args[2].i);
+            insertPos = static_cast<std::size_t>(location);
+            if (insertPos > dest.size())
+                insertPos = dest.size();
+            dest.insert(insertPos, target);
+            enforceStringLength(dest);
+            return makeString(dest);
         }
         if (name == "REAL_I")
         {
@@ -515,18 +713,18 @@ void VirtualMachine::execute(const unsigned char *bytecode, size_t length)
             {
                 Value b = pop();
                 Value a = pop();
-                push(makeInt(valueAsInt(a) & valueAsInt(b)));
+                push(makeInt((valueAsInt(a) != 0 && valueAsInt(b) != 0) ? 1 : 0));
             }
             else if (opcode == OP_OR)
             {
                 Value b = pop();
                 Value a = pop();
-                push(makeInt(valueAsInt(a) | valueAsInt(b)));
+                push(makeInt((valueAsInt(a) != 0 || valueAsInt(b) != 0) ? 1 : 0));
             }
             else if (opcode == OP_NOT)
             {
                 Value a = pop();
-                push(makeInt(~valueAsInt(a)));
+                push(makeInt(valueAsInt(a) == 0 ? 1 : 0));
             }
             else if (opcode == OP_SHL)
             {
@@ -547,6 +745,46 @@ void VirtualMachine::execute(const unsigned char *bytecode, size_t length)
                 unsigned char argc = bytecode[ip++];
                 std::vector<Value> args = popArgs(argc);
                 push(applyIntrinsic(name, args));
+            }
+            else if (opcode == OP_VAL || opcode == OP_RVAL)
+            {
+                std::string varName;
+                Value source;
+                int resultCode = 0;
+                readCString(varName);
+                source = pop();
+                if (!isStringLike(source))
+                    throw std::runtime_error("Type mismatch or syntax error.");
+
+                std::string textValue = valueAsString(source);
+                if (opcode == OP_VAL)
+                {
+                    int errorPos = findValErrorPosition(textValue);
+                    if (errorPos == 0)
+                    {
+                        long long parsed = std::strtoll(textValue.c_str(), nullptr, 10);
+                        if (parsed < static_cast<long long>(std::numeric_limits<int>::min()) ||
+                            parsed > static_cast<long long>(std::numeric_limits<int>::max()))
+                            throw std::runtime_error("Real to Integer conversion out of range.");
+                        variables[varName] = makeInt(static_cast<int>(parsed));
+                    }
+                    else
+                        resultCode = errorPos;
+                }
+                else
+                {
+                    int errorPos = findRValErrorPosition(textValue);
+                    if (errorPos == 0)
+                    {
+                        char *endPtr = nullptr;
+                        double parsed = std::strtod(textValue.c_str(), &endPtr);
+                        (void) endPtr;
+                        variables[varName] = makeReal(parsed);
+                    }
+                    else
+                        resultCode = errorPos;
+                }
+                push(makeInt(resultCode));
             }
             else if (opcode == OP_TVCALL)
             {
