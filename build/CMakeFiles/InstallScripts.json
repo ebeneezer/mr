@@ -1,0 +1,18 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/idoc/mr/build/cmake_install.cmake",
+		"/home/idoc/mr/build/source/cmake_install.cmake",
+		"/home/idoc/mr/build/examples/cmake_install.cmake",
+		"/home/idoc/mr/build/examples/tvedit/cmake_install.cmake",
+		"/home/idoc/mr/build/examples/tvdemo/cmake_install.cmake",
+		"/home/idoc/mr/build/examples/tvdir/cmake_install.cmake",
+		"/home/idoc/mr/build/examples/tvforms/cmake_install.cmake",
+		"/home/idoc/mr/build/examples/tvhc/cmake_install.cmake",
+		"/home/idoc/mr/build/examples/mmenu/cmake_install.cmake",
+		"/home/idoc/mr/build/examples/palette/cmake_install.cmake",
+		"/home/idoc/mr/build/examples/avscolor/cmake_install.cmake",
+		"/home/idoc/mr/build/test/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

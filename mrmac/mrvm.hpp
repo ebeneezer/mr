@@ -2,26 +2,36 @@
 #define MRVM_HPP
 
 #include <cstddef>
+#include <map>
 #include <string>
 #include <vector>
-#include <map>
 
 class VirtualMachine
 {
+public:
+    struct Value
+    {
+        int type;
+        int i;
+        double r;
+        std::string s;
+        unsigned char c;
+
+        Value();
+    };
+
 private:
-	int stack[256];
-	int sp;
+    std::vector<Value> stack;
+    std::map<std::string, Value> variables;
 
-	std::map<std::string, int> variables;
-
-	void push(int value);
-	int pop();
+    void push(const Value &value);
+    Value pop();
 
 public:
-	std::vector<std::string> log;
+    std::vector<std::string> log;
 
-	VirtualMachine();
-	void execute(const unsigned char *bytecode, size_t length);
+    VirtualMachine();
+    void execute(const unsigned char *bytecode, size_t length);
 };
 
 #endif

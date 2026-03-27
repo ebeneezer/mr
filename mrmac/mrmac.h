@@ -4,19 +4,22 @@
 #include <stddef.h>
 
 /* Opcode set for the current MRMAC core */
-#define OP_TVCALL 0x20
-#define OP_JZ     0x21
-#define OP_CALL   0x22
-#define OP_RET    0x23
+#define OP_TVCALL    0x20
+#define OP_JZ        0x21
+#define OP_CALL      0x22
+#define OP_RET       0x23
+#define OP_INTRINSIC 0x24
 
 #define OP_PUSH_I    0x30
 #define OP_PUSH_S    0x31
 #define OP_STORE_VAR 0x32
 #define OP_LOAD_VAR  0x33
 #define OP_GOTO      0x34
+#define OP_DEF_VAR   0x35
+#define OP_PUSH_R    0x36
 #define OP_HALT      0xFF
 
-/* Integer arithmetic */
+/* Arithmetic */
 #define OP_ADD 0x40
 #define OP_SUB 0x41
 #define OP_MUL 0x42
@@ -52,6 +55,7 @@ extern "C"
 
     void emit_byte(unsigned char byte);
     void emit_int(int value);
+    void emit_double(double value);
     void emit_string(const char *s);
 
     /* Helper functions for backpatching */

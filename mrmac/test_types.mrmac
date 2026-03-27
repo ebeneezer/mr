@@ -1,0 +1,17 @@
+$MACRO TestTypes;
+DEF_STR(S, T);
+DEF_CHAR(C);
+DEF_INT(I);
+DEF_REAL(R);
+
+S := 'Hello';
+T := S + ' world';
+C := CHAR(33);
+S := T + C;
+I := ASCII(C);
+R := REAL_I(I) / 3.0;
+T := RSTR(R, 8, 3);
+
+TVCALL MessageBox(S);
+TVCALL MessageBox(T);
+END_MACRO;

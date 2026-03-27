@@ -7,6 +7,6 @@ WHILE A < 5 DO
     A := A + 1;
 END;
 IF B = 10 THEN
-    CALL MessageBox('OK');
+    TVCALL MessageBox('OK');
 END;
 END_MACRO;
