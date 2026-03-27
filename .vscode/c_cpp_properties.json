@@ -1,0 +1,33 @@
+{
+	"configurations": [
+		{
+			"name": "CachyOS-Clang",
+			"includePath": [
+				"${workspaceFolder}/**"
+			],
+			"defines": [],
+			"compilerPath": "/usr/bin/clang",
+			"cStandard": "c23",
+			"intelliSenseMode": "linux-clang-x64",
+			"configurationProvider": "ms-vscode.cpptools",
+			"compilerArgs": [
+				"-std=c23"
+			]
+		},
+		{
+			"name": "CachyOS-GCC",
+			"includePath": [
+				"${workspaceFolder}/**"
+			],
+			"defines": [],
+			"compilerPath": "/usr/bin/gcc",
+			"cStandard": "c23",
+			"intelliSenseMode": "linux-gcc-x64",
+			"configurationProvider": "ms-vscode.cpptools",
+			"compilerArgs": [
+				"-std=c23"
+			]
+		}
+	],
+	"version": 4
+}

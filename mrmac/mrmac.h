@@ -1,0 +1,77 @@
+#ifndef MRMAC_H
+#define MRMAC_H
+
+#include <stddef.h>
+
+/* Opcode set for the current MRMAC core */
+#define OP_TVCALL 0x20
+#define OP_JZ     0x21
+#define OP_CALL   0x22
+#define OP_RET    0x23
+
+#define OP_PUSH_I    0x30
+#define OP_PUSH_S    0x31
+#define OP_STORE_VAR 0x32
+#define OP_LOAD_VAR  0x33
+#define OP_GOTO      0x34
+#define OP_HALT      0xFF
+
+/* Integer arithmetic */
+#define OP_ADD 0x40
+#define OP_SUB 0x41
+#define OP_MUL 0x42
+#define OP_DIV 0x43
+#define OP_MOD 0x44
+#define OP_NEG 0x45
+
+/* Comparisons */
+#define OP_CMP_EQ 0x50
+#define OP_CMP_NE 0x51
+#define OP_CMP_LT 0x52
+#define OP_CMP_GT 0x53
+#define OP_CMP_LE 0x54
+#define OP_CMP_GE 0x55
+
+/* Logic / bit operations */
+#define OP_AND 0x60
+#define OP_OR  0x61
+#define OP_NOT 0x62
+#define OP_SHL 0x63
+#define OP_SHR 0x64
+
+/* Multi-Edit data types */
+#define TYPE_INT  1
+#define TYPE_STR  2
+#define TYPE_CHAR 3
+#define TYPE_REAL 4
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+    void emit_byte(unsigned char byte);
+    void emit_int(int value);
+    void emit_string(const char *s);
+
+    /* Helper functions for backpatching */
+    size_t emit_get_pos(void);
+    void emit_patch_int(size_t pos, int value);
+
+    /* Error handling */
+    void set_compile_error(int line, const char *msg);
+    const char *get_last_compile_error(void);
+
+    /* Symbol table management */
+    void clear_symbols(void);
+    int add_symbol(const char *name, int type);
+    int lookup_symbol(const char *name, int *out_type);
+
+    /* Main function for in-memory compilation */
+    unsigned char *compile_macro_code(const char *source, size_t *out_size);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

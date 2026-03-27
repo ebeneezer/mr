@@ -1,0 +1,22 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Debug: Clang (CodeLLDB)",
+			"type": "lldb",
+			"request": "launch",
+			"program": "${fileDirname}/${fileBasenameNoExtension}",
+			"preLaunchTask": "C/C++: clang Aktive Datei kompilieren"
+		},
+		{
+			"name": "Debug: GCC (C23)",
+			"type": "cppdbg",
+			"request": "launch",
+			"cwd": "${workspaceFolder}", 
+			"program": "${fileDirname}/${fileBasenameNoExtension}",
+			"MIMode": "gdb",
+			"miDebuggerPath": "/usr/bin/gdb",
+			"preLaunchTask": "C/C++: gcc Aktive Datei kompilieren"
+		}
+	]
+}

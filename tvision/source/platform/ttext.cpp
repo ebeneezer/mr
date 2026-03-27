@@ -1,0 +1,403 @@
+#define Uses_TText
+#include <tvision/tv.h>
+
+#include <internal/codepage.h>
+#include <internal/platform.h>
+#include <internal/utf8.h>
+
+namespace ttext
+{
+
+// Copyright (c) 2008-2010 Bjoern Hoehrmann <bjoern@hoehrmann.de>
+// See http://bjoern.hoehrmann.de/utf-8/decoder/dfa/ for details.
+
+enum { UTF8_ACCEPT = 0, UTF8_REJECT = 12 };
+
+static const uint8_t utf8d[] =
+{
+    // The first part of the table maps bytes to character classes that
+    // to reduce the size of the transition table and create bitmasks.
+     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+     1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,  9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,
+     7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,  7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,
+     8,8,2,2,2,2,2,2,2,2,2,2,2,2,2,2,  2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+    10,3,3,3,3,3,3,3,3,3,3,3,3,4,3,3, 11,6,6,6,5,8,8,8,8,8,8,8,8,8,8,8,
+
+    // The second part is a transition table that maps a combination
+    // of a state of the automaton and a character class to a state.
+     0,12,24,36,60,96,84,12,12,12,48,72, 12,12,12,12,12,12,12,12,12,12,12,12,
+    12, 0,12,12,12,12,12, 0,12, 0,12,12, 12,24,12,12,12,12,12,24,12,24,12,12,
+    12,12,12,12,12,12,12,24,12,12,12,12, 12,24,12,12,12,12,12,12,12,24,12,12,
+    12,12,12,12,12,12,12,36,12,36,12,12, 12,36,12,12,12,12,12,36,12,36,12,12,
+    12,36,12,12,12,12,12,12,12,12,12,12,
+};
+
+static inline
+uint32_t decode_utf8(uint32_t* state, uint32_t* codep, uint8_t byte) noexcept
+{
+    uint32_t type = utf8d[byte];
+
+    *codep = (*state != UTF8_ACCEPT) ?
+        (byte & 0x3F) | (*codep << 6) :
+        (0xFF >> type) & (byte);
+
+    *state = utf8d[256 + *state + type];
+    return *state;
+}
+
+static inline
+uint32_t decode_utf8(uint32_t* state, uint8_t byte) noexcept
+{
+    uint32_t type = utf8d[byte];
+    *state = utf8d[256 + *state + type];
+    return *state;
+}
+
+static int mbtowc(uint32_t &wc, TStringView text) noexcept
+// Pre: text.size() > 0.
+// Returns n >= 1 if 'text' begins with a UTF-8 multibyte character that's
+// 'n' bytes long, -1 otherwise.
+{
+    uint32_t state = 0;
+    uint32_t codep = 0;
+    for (size_t i = 0; i < text.size(); ++i)
+        switch (decode_utf8(&state, &codep, text[i]))
+        {
+            case UTF8_ACCEPT:
+                return (wc = codep), i + 1;
+            case UTF8_REJECT:
+                return -1;
+            default:
+                break;
+        }
+    return -1;
+}
+
+static int mblen(TStringView text) noexcept
+// Pre: text.size() > 0.
+// Returns n >= 1 if 'text' begins with a UTF-8 multibyte character that's
+// 'n' bytes long, -1 otherwise.
+{
+    uint32_t state = 0;
+    for (size_t i = 0; i < text.size(); ++i)
+        switch (decode_utf8(&state, text[i]))
+        {
+            case UTF8_ACCEPT:
+                return i + 1;
+            case UTF8_REJECT:
+                return -1;
+            default:
+                break;
+        }
+    return -1;
+}
+
+struct mbstat_r { int length; int width; };
+
+static mbstat_r mbstat(TStringView text) noexcept
+// Pre: 'text.size() > 0'.
+{
+    using namespace tvision;
+    uint32_t wc;
+    int length = mbtowc(wc, text);
+    int width = 1;
+    if (length > 1)
+        width = Platform::charOps.width(wc);
+    return {length, width};
+}
+
+} // namespace ttext
+
+size_t TText::width(TStringView text) noexcept
+{
+    size_t i = 0, width = 0;
+    while (TText::next(text, i, width));
+    return width;
+}
+
+TTextMetrics TText::measure(TStringView text) noexcept
+{
+    TTextMetrics metrics {};
+    size_t i = 0;
+    while (true)
+    {
+        size_t width = 0;
+        if (!TText::next(text, i, width))
+            break;
+        metrics.width += width;
+        metrics.characterCount += 1;
+        metrics.graphemeCount += (width > 0);
+    }
+    return metrics;
+}
+
+size_t TText::next(TStringView text) noexcept
+{
+    if (text.size())
+        return max(ttext::mblen(text), 1);
+    return 0;
+}
+
+TText::Lw TText::nextImpl(TStringView text) noexcept
+{
+    if (text.size())
+    {
+        auto mb = ttext::mbstat(text);
+        if (mb.length <= 1)
+            return {1, 1};
+        return {
+            size_t(mb.length),
+            size_t(mb.width ? max(mb.width, 1) : 0),
+        };
+    }
+    return {0, 0};
+}
+
+TText::Lw TText::nextImpl(TSpan<const uint32_t> text) noexcept
+{
+    using namespace tvision;
+    if (text.size())
+    {
+        int width = Platform::charOps.width(text[0]);
+        return {
+            1,
+            size_t(width ? max(width, 1) : 0)
+        };
+    }
+    return {0, 0};
+}
+
+size_t TText::prev(TStringView text, size_t index) noexcept
+{
+    if (index)
+    {
+        // Try reading backwards character by character, until a valid
+        // character is found. This tolerates invalid characters.
+        size_t lead = min<size_t>(index, 4);
+        for (size_t i = 1; i <= lead; ++i)
+        {
+            int len = ttext::mblen({&text[index - i], i});
+            if (len > 0)
+                return size_t(len) == i ? i : 1;
+        }
+        return 1;
+    }
+    return 0;
+}
+
+bool TText::equalsIgnoreCase(TStringView a, TStringView b) noexcept
+{
+    using namespace tvision;
+    while (!a.empty() && !b.empty())
+    {
+        // Convert the first character in each string to UTF-32.
+        // If the conversion fails, assume the character to be in extended ASCII.
+        uint32_t wcA = 0;
+        int lenA;
+        if ((lenA = ttext::mbtowc(wcA, a)) == -1)
+        {
+            ttext::mbtowc(wcA, {CpTranslator::toUtf8(a[0]), 4});
+            lenA = 1;
+        }
+
+        uint32_t wcB = 0;
+        int lenB;
+        if ((lenB = ttext::mbtowc(wcB, b)) == -1)
+        {
+            ttext::mbtowc(wcB, {CpTranslator::toUtf8(b[0]), 4});
+            lenB = 1;
+        }
+
+        // Convert both characters to lowercase. This is the recommended way
+        // of doing case-insensitive comparison.
+        if ( Platform::charOps.toLower(wcA) !=
+             Platform::charOps.toLower(wcB) )
+            break;
+
+        a = a.substr(lenA);
+        b = b.substr(lenB);
+    }
+
+    return a.empty() && b.empty();
+}
+
+char TText::toCodePage(TStringView text) noexcept
+{
+    using namespace tvision;
+    size_t length = TText::next(text);
+    // ASCII characters must not be converted, let them through.
+    if (length == 1 && (uchar) text[0] <= 0x7F)
+        return text[0];
+    return CpTranslator::fromUtf8(text.substr(0, length));
+}
+
+TStringView TText::fromCodePage(char c) noexcept
+{
+    using namespace tvision;
+    const char (&s)[4] = CpTranslator::toUtf8(c);
+    size_t length = 1 + (s[1] != 0) + (s[2] != 0) + (s[3] != 0);
+    return TStringView(s, length);
+}
+
+void TText::setCodePageTranslation(const char (*codePageToUtf8)[256][4]) noexcept
+{
+    using namespace tvision;
+    CpTranslator::setTranslation(codePageToUtf8);
+}
+
+template <class Text>
+inline TText::Lw TText::scrollImplT(Text text, int count, Boolean includeIncomplete) noexcept
+{
+    if (count > 0)
+    {
+        size_t i = 0, w = 0;
+        while (true)
+        {
+            size_t i2 = i, w2 = w;
+            if (!TText::next(text, i, w) || w == (size_t) count)
+                break;
+            if (w > (size_t) count)
+            {
+                if (!includeIncomplete)
+                    i = i2, w = w2;
+                break;
+            }
+        }
+        return {i, w};
+    }
+    return {0, 0};
+}
+
+TText::Lw TText::scrollImpl(TStringView text, int count, Boolean includeIncomplete) noexcept
+
+{
+    return scrollImplT(text, count, includeIncomplete);
+}
+
+TText::Lw TText::scrollImpl(TSpan<const uint32_t> text, int count, Boolean includeIncomplete) noexcept
+
+{
+    return scrollImplT(text, count, includeIncomplete);
+}
+
+namespace ttext
+{
+
+static inline bool isZeroWidthJoiner(TStringView mbc)
+// We want to avoid printing certain characters which are usually represented
+// differently by different terminal applications or which can combine different
+// characters together, changing the width of a whole string.
+{
+    return mbc == "\xE2\x80\x8D"; // U+200D ZERO WIDTH JOINER.
+}
+
+} // namespace ttext
+
+TText::Lw TText::drawOneImpl( TSpan<TScreenCell> cells, size_t i,
+                              TStringView text, size_t j ) noexcept
+{
+    using namespace tvision;
+    using namespace ttext;
+    if (j < text.size())
+    {
+        auto mb = mbstat(text.substr(j));
+        if (mb.length <= 1)
+        {
+            if (i < cells.size())
+            {
+                // We need to convert control characters here since we
+                // might later try to append combining characters to them.
+                if (text[j] < ' ' || '\x7F' <= text[j])
+                    cells[i]._ch.moveMultiByteChar(CpTranslator::toPackedUtf8(text[j]));
+                else
+                    cells[i]._ch.moveChar(text[j]);
+                return {1, 1};
+            }
+        }
+        else
+        {
+            if (mb.width < 0)
+            {
+                if (i < cells.size())
+                {
+                    cells[i]._ch.moveMultiByteChar("�");
+                    return {(size_t) mb.length, 1};
+                }
+            }
+            else if (mb.width == 0)
+            {
+                TStringView zwc {&text[j], (size_t) mb.length};
+                // Append to the previous cell, if present.
+                if (i > 0 && !isZeroWidthJoiner(zwc))
+                {
+                    size_t k = i;
+                    while (cells[--k]._ch.isWideCharTrail() && k > 0);
+                    cells[k]._ch.appendZeroWidthChar(zwc);
+                }
+                return {(size_t) mb.length, 0};
+            }
+            else
+            {
+                if (i < cells.size())
+                {
+                    bool wide = mb.width > 1;
+                    cells[i]._ch.moveMultiByteChar({&text[j], (size_t) mb.length}, wide);
+                    bool drawTrail = (wide && i + 1 < cells.size());
+                    if (drawTrail)
+                        cells[i + 1]._ch.moveWideCharTrail();
+                    return {(size_t) mb.length, size_t(1 + drawTrail)};
+                }
+            }
+        }
+    }
+    return {0, 0};
+}
+
+TText::Lw TText::drawOneImpl( TSpan<TScreenCell> cells, size_t i,
+                              TSpan<const uint32_t> textU32, size_t j ) noexcept
+{
+    using namespace tvision;
+    using namespace ttext;
+    if (j < textU32.size())
+    {
+        char utf8[4] = {};
+        size_t length = utf32To8(textU32[j], utf8);
+        TStringView textU8(utf8, length);
+        int width = Platform::charOps.width(textU32[j]);
+        if (width < 0)
+        {
+            if (i < cells.size())
+            {
+                cells[i]._ch.moveMultiByteChar("�");
+                return {1, 1};
+            }
+        }
+        else if (textU32[j] != 0 && width == 0)
+        {
+            // Append to the previous cell, if present.
+            if (i > 0 && !isZeroWidthJoiner(textU8))
+            {
+                size_t k = i;
+                while (cells[--k]._ch.isWideCharTrail() && k > 0);
+                cells[k]._ch.appendZeroWidthChar(textU8);
+            }
+            return {1, 0};
+        }
+        else
+        {
+            if (i < cells.size())
+            {
+                bool wide = width > 1;
+                cells[i]._ch.moveMultiByteChar(textU8, wide);
+                bool drawTrail = (wide && i + 1 < cells.size());
+                if (drawTrail)
+                    cells[i + 1]._ch.moveWideCharTrail();
+                return {1, size_t(1 + drawTrail)};
+            }
+        }
+    }
+    return {0, 0};
+}

@@ -1,0 +1,53 @@
+{
+	"version": "2.0.0",
+	"inputs": [
+		{
+			"id": "compilerSelection",
+			"type": "pickString",
+			"description": "Wählen Sie den Compiler für diesen Durchlauf:",
+			"options": [
+				"g++",
+				"clang++"
+			],
+			"default": "g++"
+		}
+	],
+	"tasks": [
+		{
+			"label": "Build mr (Inkrementell)",
+			"type": "shell",
+			"command": "make",
+			"args": [
+				"CXX=${input:compilerSelection}"
+			],
+			"group": "build",
+			"problemMatcher": [
+				"$gcc"
+			],
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"clear": true
+			}
+		},
+		{
+			"label": "Rebuild mr (Clean & Neu)",
+			"type": "shell",
+			"command": "make",
+			"args": [
+				"clean",
+				"all",
+				"CXX=${input:compilerSelection}"
+			],
+			"group": "build",
+			"problemMatcher": [
+				"$gcc"
+			],
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"clear": true
+			}
+		}
+	]
+}
