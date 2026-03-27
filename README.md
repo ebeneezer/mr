@@ -13,7 +13,7 @@
 
 
 > [!NOTE]
-> I am looking for devs knowing Multi-Edit and his fantastic features that are into retro coding. Lets recreate a true terminal gem!
+> I am looking for devs knowing Multi-Edit and his fantastic features. Into retro coding? Let's recreate a true terminal gem!
 
 ![mr running under vscode terminal](screenshots/screenshot01.png)
 ![mr running in terminal showing menu structure](screenshots/screenshot02.png)
