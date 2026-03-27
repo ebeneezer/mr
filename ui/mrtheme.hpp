@@ -27,7 +27,7 @@ private:
 	{
 		// Authentisches Multi-Edit Farbschema für MS-DOS
 		// Indizes 0-7: Rahmen (Classic Cyan/Blue Style)
-		// Indizes 8-15: Inhalt (Normaler Text, Keywords, Strings, etc)
+		// Indizes 8-15: Inhalt (Normaler Text, Keywords, Strings, etc.)
 		MRTheme multiEditTheme = {{0x13, 0x13, 0x1B, 0x13, 0x13, 0x13, 0x13, 0x13, // Rahmen (Cyan auf Blau)
 											0x1F, 0x1E, 0x1A, 0x1B, 0x1C, 0x30, 0x1F, 0x1F, // Inhalt (Weiß/Gelb auf Blau, 0x30 für Selektion)
 											'\0'}};

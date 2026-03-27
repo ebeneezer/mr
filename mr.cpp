@@ -135,7 +135,9 @@ namespace
         cmMrColorWindowColors,
         cmMrColorMenuDialogColors,
         cmMrColorHelpColors,
-        cmMrColorOtherColors
+        cmMrColorOtherColors,
+
+        cmMrDevRunMacro
     };
 
     std::string readTextFile(const std::string &filename)
@@ -604,6 +606,12 @@ namespace
             + *new TMenuItem("~P~revious topic", cmMrHelpPreviousTopic, kbAltF1, hcNoContext, "AltF1")
             + *new TMenuItem("~A~bout...", cmMrHelpAbout, kbNoKey, hcNoContext));
     }
+
+    TSubMenu *createDevMenu()
+    {
+        return &(*new TSubMenu("De~V~", kbAltV)
+            + *new TMenuItem("~R~un macro file...", cmMrDevRunMacro, kbCtrlT, hcNoContext, "CtrlT"));
+    }
 }
 
 class TMREditorApp : public TApplication
@@ -622,7 +630,8 @@ public:
                 + *createSearchMenu()
                 + *createTextMenu()
                 + *createOtherMenu()
-                + *createHelpMenu());
+                + *createHelpMenu()
+                + *createDevMenu());
     }
 
     static TStatusLine *initMRStatusLine(TRect r)
@@ -782,6 +791,10 @@ private:
 
         case cmMrOtherInstallationAndSetup:
             runInstallationAndSetup();
+            return true;
+
+        case cmMrDevRunMacro:
+            runMacroFileDialog();
             return true;
 
         default:
