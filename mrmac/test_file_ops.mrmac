@@ -1,0 +1,13 @@
+$MACRO TestFileOps;
+DEF_STR(FS, Match, PathOnly, BaseOnly);
+DEF_INT(Exists, Rc);
+
+FS := 'mrmac/test_file_ops.mrmac';
+Exists := FILE_EXISTS(FS);
+Rc := FIRST_FILE('mrmac/test_*.mrmac');
+Match := LAST_FILE_NAME;
+Rc := NEXT_FILE;
+PathOnly := GET_PATH(Match);
+BaseOnly := TRUNCATE_PATH(Match);
+TVCALL MessageBox('exists=' + STR(Exists) + ' rc=' + STR(Rc) + ' match=' + Match + ' path=' + PathOnly + ' base=' + BaseOnly);
+END_MACRO;

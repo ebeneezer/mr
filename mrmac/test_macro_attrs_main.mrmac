@@ -1,0 +1,28 @@
+$MACRO Main;
+DEF_INT(R1, A, R2, B, X, T1, T2, P);
+DEF_STR(S);
+
+LOAD_MACRO_FILE('mrmac/test_macro_attrs_dump');
+RUN_MACRO('Once');
+R1 := RETURN_INT;
+A := INQ_MACRO('Once');
+RUN_MACRO('Once');
+R2 := RETURN_INT;
+B := INQ_MACRO('Once');
+
+LOAD_MACRO_FILE('mrmac/test_macro_attrs_perm1');
+LOAD_MACRO_FILE('mrmac/test_macro_attrs_perm2');
+P := ERROR_LEVEL;
+
+LOAD_MACRO_FILE('mrmac/test_macro_attrs_trans');
+RUN_MACRO('Temp');
+T1 := RETURN_INT;
+X := INQ_MACRO('Temp');
+RUN_MACRO('Temp');
+T2 := RETURN_INT;
+
+S := 'DUMP=' + STR(R1) + ',' + STR(A) + ',' + STR(R2) + ',' + STR(B)
+     + ' PERM=' + STR(P)
+     + ' TRANS=' + STR(X) + ',' + STR(T1) + ',' + STR(T2);
+RETURN_STR := S;
+END_MACRO;

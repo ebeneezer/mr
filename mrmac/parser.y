@@ -14,7 +14,6 @@ int current_def_type = 0;
 
 #define MAX_LABELS 500
 #define MAX_PENDING_REFS 1000
-#define MAX_MACRO_NAME_LEN 8
 #define MAX_IDENTIFIER_LEN 20
 
 typedef struct
@@ -56,9 +55,9 @@ static int begin_macro(const char *name, int line)
 {
     size_t len = strlen(name);
 
-    if (len == 0 || len > MAX_MACRO_NAME_LEN)
+    if (len == 0)
     {
-        set_compile_error(line, "Macro name must be <= 8 characters long.");
+        set_compile_error(line, "Macro name expected.");
         return -1;
     }
 
@@ -245,7 +244,7 @@ macro_file_definition:
         {
             if (smacro_file_seen)
             {
-                set_compile_error(yylineno, "SMACRO_FILE already defined.");
+                set_compile_error(yylineno, "$MACRO_FILE already defined.");
                 free($2);
                 YYERROR;
             }

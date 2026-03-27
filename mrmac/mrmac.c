@@ -39,6 +39,15 @@ typedef struct
     PendingRefKind kind;
 } PendingRef;
 
+typedef struct
+{
+    char *name;
+    int entry_pos;
+    unsigned flags;
+} CompiledMacroInfo;
+
+#define MAX_COMPILED_MACROS 256
+
 static unsigned char *g_code = NULL;
 static size_t g_code_size = 0;
 static size_t g_code_capacity = 0;
@@ -51,6 +60,10 @@ static int g_label_count = 0;
 
 static PendingRef g_pending_refs[MAX_PENDING_REFS];
 static int g_pending_ref_count = 0;
+
+static CompiledMacroInfo g_compiled_macros[MAX_COMPILED_MACROS];
+static int g_compiled_macro_count = 0;
+static char *g_compiled_macro_file_name = NULL;
 
 static char g_last_error[512];
 static int g_last_error_line = 0;
@@ -138,6 +151,8 @@ typedef struct
     int type;
 } ExprInfo;
 
+static char *xstrdup(const char *s);
+
 static void reset_code_buffer(void)
 {
     free(g_code);
@@ -157,6 +172,54 @@ static void reset_macro_context(void)
     g_label_count = 0;
     g_pending_ref_count = 0;
     clear_symbols();
+}
+
+static void reset_compiled_macro_info(void)
+{
+    int i;
+    for (i = 0; i < g_compiled_macro_count; ++i)
+    {
+        free(g_compiled_macros[i].name);
+        g_compiled_macros[i].name = NULL;
+        g_compiled_macros[i].entry_pos = 0;
+        g_compiled_macros[i].flags = 0;
+    }
+    g_compiled_macro_count = 0;
+    free(g_compiled_macro_file_name);
+    g_compiled_macro_file_name = NULL;
+}
+
+static int add_compiled_macro_info(const char *name, int entry_pos, unsigned flags)
+{
+    if (g_compiled_macro_count >= MAX_COMPILED_MACROS)
+    {
+        set_compile_error(0, "Too many macros in source.");
+        return -1;
+    }
+
+    g_compiled_macros[g_compiled_macro_count].name = xstrdup(name);
+    if (g_compiled_macros[g_compiled_macro_count].name == NULL)
+    {
+        set_compile_error(0, "Out of memory.");
+        return -1;
+    }
+    g_compiled_macros[g_compiled_macro_count].entry_pos = entry_pos;
+    g_compiled_macros[g_compiled_macro_count].flags = flags;
+    g_compiled_macro_count++;
+    return 0;
+}
+
+static int set_compiled_macro_file_name(const char *name)
+{
+    char *dup = xstrdup(name);
+    if (dup == NULL)
+    {
+        set_compile_error(0, "Out of memory.");
+        return -1;
+    }
+    free(g_compiled_macro_file_name);
+    g_compiled_macro_file_name = dup;
+    return 0;
 }
 
 static int ensure_code_capacity(size_t extra)
@@ -873,6 +936,50 @@ static int can_assign_type(int target, int source)
     return 0;
 }
 
+static int lookup_builtin_constant(const char *name, int *out_value)
+{
+    struct BuiltinConstant { const char *name; int value; };
+    static const struct BuiltinConstant constants[] = {
+        {"TRUE", 1}, {"FALSE", 0},
+        {"BLACK", 0}, {"BLUE", 1}, {"GREEN", 2}, {"CYAN", 3},
+        {"RED", 4}, {"MAGENTA", 5}, {"BROWN", 6}, {"LIGHTGRAY", 7},
+        {"DARKGRAY", 8}, {"LIGHTBLUE", 9}, {"LIGHTGREEN", 10}, {"LIGHTCYAN", 11},
+        {"LIGHTRED", 12}, {"LIGHTMAGENTA", 13}, {"YELLOW", 14}, {"WHITE", 15},
+        {"EDIT", 0}, {"DOS_SHELL", 1}, {"ALL", 255},
+        {NULL, 0}
+    };
+    int i;
+    for (i = 0; constants[i].name != NULL; ++i)
+        if (strcasecmp(name, constants[i].name) == 0)
+        {
+            if (out_value != NULL)
+                *out_value = constants[i].value;
+            return 1;
+        }
+    return 0;
+}
+
+static int lookup_builtin_variable(const char *name, int *out_type)
+{
+    if (strcasecmp(name, "RETURN_INT") == 0 || strcasecmp(name, "ERROR_LEVEL") == 0 ||
+        strcasecmp(name, "FIRST_RUN") == 0 || strcasecmp(name, "IGNORE_CASE") == 0)
+    {
+        if (out_type != NULL)
+            *out_type = TYPE_INT;
+        return 1;
+    }
+    if (strcasecmp(name, "RETURN_STR") == 0 || strcasecmp(name, "MPARM_STR") == 0 ||
+        strcasecmp(name, "DATE") == 0 || strcasecmp(name, "TIME") == 0 ||
+        strcasecmp(name, "FIRST_MACRO") == 0 || strcasecmp(name, "NEXT_MACRO") == 0 ||
+        strcasecmp(name, "LAST_FILE_NAME") == 0)
+    {
+        if (out_type != NULL)
+            *out_type = TYPE_STR;
+        return 1;
+    }
+    return 0;
+}
+
 static int binary_precedence(TokenKind kind)
 {
     switch (kind)
@@ -904,6 +1011,14 @@ static int binary_precedence(TokenKind kind)
 static int emit_intrinsic_call(const char *name, int argc)
 {
     emit_byte(OP_INTRINSIC);
+    emit_string(name);
+    emit_byte((unsigned char) argc);
+    return 0;
+}
+
+static int emit_proc_call(const char *name, int argc)
+{
+    emit_byte(OP_PROC);
     emit_string(name);
     emit_byte((unsigned char) argc);
     return 0;
@@ -991,18 +1106,30 @@ static int parse_primary(Parser *ps, ExprInfo *out)
         }
         parser_next(ps);
 
-        if (strcasecmp(name, "TRUE") == 0)
         {
-            emit_byte(OP_PUSH_I);
-            emit_int(1);
-            out->type = TYPE_INT;
-            free(name);
-            return 0;
+            int builtin_value;
+            int builtin_var_type;
+            if (lookup_builtin_constant(name, &builtin_value))
+            {
+                emit_byte(OP_PUSH_I);
+                emit_int(builtin_value);
+                out->type = TYPE_INT;
+                free(name);
+                return 0;
+            }
+            if (lookup_builtin_variable(name, &builtin_var_type))
+            {
+                emit_byte(OP_LOAD_VAR);
+                emit_string(name);
+                out->type = builtin_var_type;
+                free(name);
+                return 0;
+            }
         }
-        if (strcasecmp(name, "FALSE") == 0)
+
+        if (strcasecmp(name, "NEXT_FILE") == 0)
         {
-            emit_byte(OP_PUSH_I);
-            emit_int(0);
+            emit_intrinsic_call("NEXT_FILE", 0);
             out->type = TYPE_INT;
             free(name);
             return 0;
@@ -1075,6 +1202,45 @@ static int parse_primary(Parser *ps, ExprInfo *out)
                 emit_byte(is_real_target ? OP_RVAL : OP_VAL);
                 emit_string(target_name);
                 out->type = TYPE_INT;
+                free(target_name);
+                free(name);
+                return 0;
+            }
+
+            if (strcasecmp(name, "FIRST_GLOBAL") == 0 || strcasecmp(name, "NEXT_GLOBAL") == 0)
+            {
+                char *target_name;
+                int target_type;
+                if (ps->tok.kind != TOK_IDENTIFIER)
+                {
+                    set_compile_error(ps->tok.line, "Variable expected.");
+                    free(name);
+                    return -1;
+                }
+                target_name = xstrdup(ps->tok.text);
+                if (target_name == NULL)
+                {
+                    set_compile_error(ps->tok.line, "Out of memory.");
+                    free(name);
+                    return -1;
+                }
+                if (lookup_symbol(target_name, &target_type) < 0 || target_type != TYPE_INT)
+                {
+                    set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
+                    free(target_name);
+                    free(name);
+                    return -1;
+                }
+                parser_next(ps);
+                if (parser_expect(ps, TOK_RPAREN, "')' expected.") != 0)
+                {
+                    free(target_name);
+                    free(name);
+                    return -1;
+                }
+                emit_byte(strcasecmp(name, "FIRST_GLOBAL") == 0 ? OP_FIRST_GLOBAL : OP_NEXT_GLOBAL);
+                emit_string(target_name);
+                out->type = TYPE_STR;
                 free(target_name);
                 free(name);
                 return 0;
@@ -1233,6 +1399,160 @@ static int parse_primary(Parser *ps, ExprInfo *out)
                 }
                 emit_intrinsic_call("RSTR", argc);
                 out->type = TYPE_STR;
+            }
+            else if (strcasecmp(name, "REMOVE_SPACE") == 0)
+            {
+                if (argc != 1 || !is_stringlike_type(args[0].type))
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(name);
+                    return -1;
+                }
+                emit_intrinsic_call("REMOVE_SPACE", argc);
+                out->type = TYPE_STR;
+            }
+            else if (strcasecmp(name, "GET_EXTENSION") == 0)
+            {
+                if (argc != 1 || !is_stringlike_type(args[0].type))
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(name);
+                    return -1;
+                }
+                emit_intrinsic_call("GET_EXTENSION", argc);
+                out->type = TYPE_STR;
+            }
+            else if (strcasecmp(name, "GET_PATH") == 0)
+            {
+                if (argc != 1 || !is_stringlike_type(args[0].type))
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(name);
+                    return -1;
+                }
+                emit_intrinsic_call("GET_PATH", argc);
+                out->type = TYPE_STR;
+            }
+            else if (strcasecmp(name, "TRUNCATE_EXTENSION") == 0)
+            {
+                if (argc != 1 || !is_stringlike_type(args[0].type))
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(name);
+                    return -1;
+                }
+                emit_intrinsic_call("TRUNCATE_EXTENSION", argc);
+                out->type = TYPE_STR;
+            }
+            else if (strcasecmp(name, "TRUNCATE_PATH") == 0)
+            {
+                if (argc != 1 || !is_stringlike_type(args[0].type))
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(name);
+                    return -1;
+                }
+                emit_intrinsic_call("TRUNCATE_PATH", argc);
+                out->type = TYPE_STR;
+            }
+            else if (strcasecmp(name, "FILE_EXISTS") == 0)
+            {
+                if (argc != 1 || !is_stringlike_type(args[0].type))
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(name);
+                    return -1;
+                }
+                emit_intrinsic_call("FILE_EXISTS", argc);
+                out->type = TYPE_INT;
+            }
+            else if (strcasecmp(name, "FIRST_FILE") == 0)
+            {
+                if (argc != 1 || !is_stringlike_type(args[0].type))
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(name);
+                    return -1;
+                }
+                emit_intrinsic_call("FIRST_FILE", argc);
+                out->type = TYPE_INT;
+            }
+            else if (strcasecmp(name, "NEXT_FILE") == 0)
+            {
+                if (argc != 0)
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(name);
+                    return -1;
+                }
+                emit_intrinsic_call("NEXT_FILE", argc);
+                out->type = TYPE_INT;
+            }
+            else if (strcasecmp(name, "GLOBAL_STR") == 0)
+            {
+                if (argc != 1 || !is_stringlike_type(args[0].type))
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(name);
+                    return -1;
+                }
+                emit_intrinsic_call("GLOBAL_STR", argc);
+                out->type = TYPE_STR;
+            }
+            else if (strcasecmp(name, "GLOBAL_INT") == 0)
+            {
+                if (argc != 1 || !is_stringlike_type(args[0].type))
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(name);
+                    return -1;
+                }
+                emit_intrinsic_call("GLOBAL_INT", argc);
+                out->type = TYPE_INT;
+            }
+            else if (strcasecmp(name, "PARSE_STR") == 0)
+            {
+                if (argc != 2 || !is_stringlike_type(args[0].type) || !is_stringlike_type(args[1].type))
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(name);
+                    return -1;
+                }
+                emit_intrinsic_call("PARSE_STR", argc);
+                out->type = TYPE_STR;
+            }
+            else if (strcasecmp(name, "PARSE_INT") == 0)
+            {
+                if (argc != 2 || !is_stringlike_type(args[0].type) || !is_stringlike_type(args[1].type))
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(name);
+                    return -1;
+                }
+                emit_intrinsic_call("PARSE_INT", argc);
+                out->type = TYPE_INT;
+            }
+            else if (strcasecmp(name, "INQ_MACRO") == 0)
+            {
+                if (argc != 1 || !is_stringlike_type(args[0].type))
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(name);
+                    return -1;
+                }
+                emit_intrinsic_call("INQ_MACRO", argc);
+                out->type = TYPE_INT;
+            }
+            else if (strcasecmp(name, "SEARCH_FWD") == 0 || strcasecmp(name, "SEARCH_BWD") == 0)
+            {
+                if (argc != 2 || !is_stringlike_type(args[0].type) || args[1].type != TYPE_INT)
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(name);
+                    return -1;
+                }
+                emit_intrinsic_call(strcasecmp(name, "SEARCH_FWD") == 0 ? "SEARCH_FWD" : "SEARCH_BWD", argc);
+                out->type = TYPE_INT;
             }
             else
             {
@@ -1431,7 +1751,7 @@ static int parse_assignment_after_name(Parser *ps, const char *name, int line)
     ExprInfo expr;
     int var_type = 0;
 
-    if (lookup_symbol(name, &var_type) < 0)
+    if (lookup_symbol(name, &var_type) < 0 && !lookup_builtin_variable(name, &var_type))
     {
         set_compile_error(line, "Variable expected.");
         return -1;
@@ -1545,6 +1865,104 @@ static int parse_tvcall_statement(Parser *ps)
     emit_byte((unsigned char) argc);
     free(name);
     return 0;
+}
+
+static int parse_proc_statement_after_name(Parser *ps, const char *name, int line)
+{
+    ExprInfo args[8];
+    int argc = 0;
+
+    if (parser_expect(ps, TOK_LPAREN, "'(' expected.") != 0)
+        return -1;
+
+    if (parse_argument_expressions(ps, args, &argc, 8) != 0)
+        return -1;
+    if (parser_expect(ps, TOK_RPAREN, "')' expected.") != 0)
+        return -1;
+
+    if (strcasecmp(name, "SET_GLOBAL_STR") == 0)
+    {
+        if (argc != 2 || !is_stringlike_type(args[0].type) || !is_stringlike_type(args[1].type))
+        {
+            set_compile_error(line, "Type mismatch or syntax error.");
+            return -1;
+        }
+        emit_proc_call("SET_GLOBAL_STR", argc);
+        return 0;
+    }
+    if (strcasecmp(name, "SET_GLOBAL_INT") == 0)
+    {
+        if (argc != 2 || !is_stringlike_type(args[0].type) || args[1].type != TYPE_INT)
+        {
+            set_compile_error(line, "Type mismatch or syntax error.");
+            return -1;
+        }
+        emit_proc_call("SET_GLOBAL_INT", argc);
+        return 0;
+    }
+    if (strcasecmp(name, "RUN_MACRO") == 0)
+    {
+        if (argc != 1 || !is_stringlike_type(args[0].type))
+        {
+            set_compile_error(line, "Type mismatch or syntax error.");
+            return -1;
+        }
+        emit_proc_call("RUN_MACRO", argc);
+        return 0;
+    }
+    if (strcasecmp(name, "LOAD_MACRO_FILE") == 0)
+    {
+        if (argc != 1 || !is_stringlike_type(args[0].type))
+        {
+            set_compile_error(line, "Type mismatch or syntax error.");
+            return -1;
+        }
+        emit_proc_call("LOAD_MACRO_FILE", argc);
+        return 0;
+    }
+    if (strcasecmp(name, "UNLOAD_MACRO") == 0)
+    {
+        if (argc != 1 || !is_stringlike_type(args[0].type))
+        {
+            set_compile_error(line, "Type mismatch or syntax error.");
+            return -1;
+        }
+        emit_proc_call("UNLOAD_MACRO", argc);
+        return 0;
+    }
+    if (strcasecmp(name, "LOAD_FILE") == 0)
+    {
+        if (argc != 1 || !is_stringlike_type(args[0].type))
+        {
+            set_compile_error(line, "Type mismatch or syntax error.");
+            return -1;
+        }
+        emit_proc_call("LOAD_FILE", argc);
+        return 0;
+    }
+    if (strcasecmp(name, "SAVE_FILE") == 0)
+    {
+        if (argc != 0)
+        {
+            set_compile_error(line, "Type mismatch or syntax error.");
+            return -1;
+        }
+        emit_proc_call("SAVE_FILE", argc);
+        return 0;
+    }
+    if (strcasecmp(name, "REPLACE") == 0)
+    {
+        if (argc != 1 || !is_stringlike_type(args[0].type))
+        {
+            set_compile_error(line, "Type mismatch or syntax error.");
+            return -1;
+        }
+        emit_proc_call("REPLACE", argc);
+        return 0;
+    }
+
+    set_compile_error(line, "Syntax Error.");
+    return -1;
 }
 
 static int parse_if_statement(Parser *ps)
@@ -1706,6 +2124,19 @@ static int parse_statement(Parser *ps)
             if (rc != 0) return -1;
             return parser_expect(ps, TOK_SEMICOLON, "; expected.");
         }
+        if (ps->tok.kind == TOK_LPAREN)
+        {
+            int rc = parse_proc_statement_after_name(ps, name, line);
+            free(name);
+            if (rc != 0) return -1;
+            return parser_expect(ps, TOK_SEMICOLON, "; expected.");
+        }
+        if (strcasecmp(name, "SAVE_FILE") == 0)
+        {
+            emit_proc_call("SAVE_FILE", 0);
+            free(name);
+            return parser_expect(ps, TOK_SEMICOLON, "; expected.");
+        }
         free(name);
         set_compile_error(line, "Syntax Error.");
         return -1;
@@ -1725,8 +2156,10 @@ static int parse_statement_list(Parser *ps, TokenKind end1, TokenKind end2, Toke
     return 0;
 }
 
-static int parse_macro_header(Parser *ps)
+static int parse_macro_header(Parser *ps, unsigned *out_flags)
 {
+    unsigned flags = 0;
+
     while (ps->tok.kind != TOK_SEMICOLON && ps->tok.kind != TOK_EOF)
     {
         if (parser_accept(ps, TOK_TO))
@@ -1753,6 +2186,12 @@ static int parse_macro_header(Parser *ps)
         }
         else if (ps->tok.kind == TOK_TRANS || ps->tok.kind == TOK_DUMP || ps->tok.kind == TOK_PERM)
         {
+            if (ps->tok.kind == TOK_TRANS)
+                flags |= MACRO_ATTR_TRANS;
+            else if (ps->tok.kind == TOK_DUMP)
+                flags |= MACRO_ATTR_DUMP;
+            else if (ps->tok.kind == TOK_PERM)
+                flags |= MACRO_ATTR_PERM;
             parser_next(ps);
         }
         else
@@ -1761,6 +2200,8 @@ static int parse_macro_header(Parser *ps)
             return -1;
         }
     }
+    if (out_flags != NULL)
+        *out_flags = flags;
     return 0;
 }
 
@@ -1778,6 +2219,8 @@ static int parse_macro_file_definition(Parser *ps)
         set_compile_error(ps->tok.line, "Identifier expected.");
         return -1;
     }
+    if (set_compiled_macro_file_name(ps->tok.text) != 0)
+        return -1;
     ps->macro_file_seen = 1;
     parser_next(ps);
     return parser_expect(ps, TOK_SEMICOLON, "; expected.");
@@ -1786,6 +2229,7 @@ static int parse_macro_file_definition(Parser *ps)
 static int parse_macro_definition(Parser *ps)
 {
     char *name;
+    unsigned flags = 0;
 
     if (parser_expect(ps, TOK_MACRO, "Scommand expected.") != 0)
         return -1;
@@ -1807,12 +2251,18 @@ static int parse_macro_definition(Parser *ps)
         return -1;
     }
     parser_next(ps);
-
-    if (parse_macro_header(ps) != 0)
+    if (parse_macro_header(ps, &flags) != 0)
     {
         free(name);
         return -1;
     }
+
+    if (add_compiled_macro_info(name, (int) emit_get_pos(), flags) != 0)
+    {
+        free(name);
+        return -1;
+    }
+
     if (parser_expect(ps, TOK_SEMICOLON, "; expected.") != 0)
     {
         free(name);
@@ -1886,6 +2336,7 @@ unsigned char *compile_macro_code(const char *source, size_t *out_size)
     clear_symbols();
     reset_error_state();
     reset_macro_context();
+    reset_compiled_macro_info();
 
     if (source == NULL)
     {
@@ -1940,4 +2391,36 @@ unsigned char *compile_macro_code(const char *source, size_t *out_size)
     reset_code_buffer();
     clear_symbols();
     return result;
+}
+
+
+int get_compiled_macro_count(void)
+{
+    return g_compiled_macro_count;
+}
+
+const char *get_compiled_macro_name(int index)
+{
+    if (index < 0 || index >= g_compiled_macro_count)
+        return NULL;
+    return g_compiled_macros[index].name;
+}
+
+int get_compiled_macro_entry(int index)
+{
+    if (index < 0 || index >= g_compiled_macro_count)
+        return -1;
+    return g_compiled_macros[index].entry_pos;
+}
+
+int get_compiled_macro_flags(int index)
+{
+    if (index < 0 || index >= g_compiled_macro_count)
+        return 0;
+    return (int) g_compiled_macros[index].flags;
+}
+
+const char *get_compiled_macro_file_name(void)
+{
+    return g_compiled_macro_file_name;
 }

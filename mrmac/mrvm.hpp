@@ -32,6 +32,9 @@ public:
 
     VirtualMachine();
     void execute(const unsigned char *bytecode, size_t length);
+    void executeAt(const unsigned char *bytecode, size_t length, size_t entryOffset,
+                   const std::string &parameterString, const std::string &macroName,
+                   bool resetState, bool firstRun);
 };
 
 #endif

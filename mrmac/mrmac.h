@@ -11,6 +11,9 @@
 #define OP_INTRINSIC 0x24
 #define OP_VAL       0x25
 #define OP_RVAL      0x26
+#define OP_FIRST_GLOBAL 0x27
+#define OP_NEXT_GLOBAL  0x28
+#define OP_PROC      0x29
 
 #define OP_PUSH_I    0x30
 #define OP_PUSH_S    0x31
@@ -50,6 +53,11 @@
 #define TYPE_CHAR 3
 #define TYPE_REAL 4
 
+/* Macro attribute flags */
+#define MACRO_ATTR_TRANS 0x01
+#define MACRO_ATTR_DUMP  0x02
+#define MACRO_ATTR_PERM  0x04
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -75,6 +83,13 @@ extern "C"
 
     /* Main function for in-memory compilation */
     unsigned char *compile_macro_code(const char *source, size_t *out_size);
+
+    /* Information about the most recently compiled macro source. */
+    int get_compiled_macro_count(void);
+    const char *get_compiled_macro_name(int index);
+    int get_compiled_macro_entry(int index);
+    int get_compiled_macro_flags(int index);
+    const char *get_compiled_macro_file_name(void);
 
 #ifdef __cplusplus
 }

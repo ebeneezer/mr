@@ -84,7 +84,6 @@ int current_def_type = 0;
 
 #define MAX_LABELS 500
 #define MAX_PENDING_REFS 1000
-#define MAX_MACRO_NAME_LEN 8
 #define MAX_IDENTIFIER_LEN 20
 
 typedef struct
@@ -126,9 +125,9 @@ static int begin_macro(const char *name, int line)
 {
     size_t len = strlen(name);
 
-    if (len == 0 || len > MAX_MACRO_NAME_LEN)
+    if (len == 0)
     {
-        set_compile_error(line, "Macro name must be <= 8 characters long.");
+        set_compile_error(line, "Macro name expected.");
         return -1;
     }
 
@@ -259,7 +258,7 @@ static int validate_mode(const char *text, int line)
     return -1;
 }
 
-#line 263 "mrmac/parser.tab.c"
+#line 262 "mrmac/parser.tab.c"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -762,14 +761,14 @@ static const yytype_int8 yytranslate[] =
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_int16 yyrline[] =
 {
-       0,   224,   224,   224,   233,   235,   239,   240,   244,   259,
-     258,   276,   278,   282,   283,   287,   296,   305,   306,   307,
-     310,   312,   316,   317,   318,   319,   320,   321,   322,   323,
-     327,   327,   328,   328,   329,   329,   330,   330,   334,   343,
-     355,   367,   386,   393,   411,   427,   439,   448,   457,   464,
-     472,   476,   484,   492,   494,   495,   499,   503,   513,   518,
-     533,   534,   538,   542,   546,   550,   554,   558,   562,   566,
-     570,   574,   578,   582,   586,   590,   594,   598
+       0,   223,   223,   223,   232,   234,   238,   239,   243,   258,
+     257,   275,   277,   281,   282,   286,   295,   304,   305,   306,
+     309,   311,   315,   316,   317,   318,   319,   320,   321,   322,
+     326,   326,   327,   327,   328,   328,   329,   329,   333,   342,
+     354,   366,   385,   392,   410,   426,   438,   447,   456,   463,
+     471,   475,   483,   491,   493,   494,   498,   502,   512,   517,
+     532,   533,   537,   541,   545,   549,   553,   557,   561,   565,
+     569,   573,   577,   581,   585,   589,   593,   597
 };
 #endif
 
@@ -1449,33 +1448,33 @@ yyreduce:
   switch (yyn)
     {
   case 2: /* $@1: %empty  */
-#line 224 "mrmac/parser.y"
+#line 223 "mrmac/parser.y"
       {
           smacro_file_seen = 0;
           param_count = 0;
           current_def_type = 0;
           reset_macro_context();
       }
-#line 1460 "mrmac/parser.tab.c"
+#line 1459 "mrmac/parser.tab.c"
     break;
 
   case 8: /* macro_file_definition: SMACRO_FILE IDENTIFIER SEMICOLON  */
-#line 245 "mrmac/parser.y"
+#line 244 "mrmac/parser.y"
         {
             if (smacro_file_seen)
             {
-                set_compile_error(yylineno, "SMACRO_FILE already defined.");
+                set_compile_error(yylineno, "$MACRO_FILE already defined.");
                 free((yyvsp[-1].sval));
                 YYERROR;
             }
             smacro_file_seen = 1;
             free((yyvsp[-1].sval));
         }
-#line 1475 "mrmac/parser.tab.c"
+#line 1474 "mrmac/parser.tab.c"
     break;
 
   case 9: /* $@2: %empty  */
-#line 259 "mrmac/parser.y"
+#line 258 "mrmac/parser.y"
         {
             if (begin_macro((yyvsp[0].sval), yylineno) != 0)
             {
@@ -1484,22 +1483,22 @@ yyreduce:
             }
             free((yyvsp[0].sval));
         }
-#line 1488 "mrmac/parser.tab.c"
+#line 1487 "mrmac/parser.tab.c"
     break;
 
   case 10: /* macro_definition: SMACRO IDENTIFIER $@2 macro_header_opt SEMICOLON statement_list END_MACRO SEMICOLON  */
-#line 268 "mrmac/parser.y"
+#line 267 "mrmac/parser.y"
         {
             if (resolve_pending_refs() != 0)
                 YYERROR;
 
             emit_byte(OP_HALT);
         }
-#line 1499 "mrmac/parser.tab.c"
+#line 1498 "mrmac/parser.tab.c"
     break;
 
   case 15: /* macro_header_item: TO KEYSPEC  */
-#line 288 "mrmac/parser.y"
+#line 287 "mrmac/parser.y"
         {
             if (validate_keyspec((yyvsp[0].sval), yylineno) != 0)
             {
@@ -1508,11 +1507,11 @@ yyreduce:
             }
             free((yyvsp[0].sval));
         }
-#line 1512 "mrmac/parser.tab.c"
+#line 1511 "mrmac/parser.tab.c"
     break;
 
   case 16: /* macro_header_item: FROM IDENTIFIER  */
-#line 297 "mrmac/parser.y"
+#line 296 "mrmac/parser.y"
         {
             if (validate_mode((yyvsp[0].sval), yylineno) != 0)
             {
@@ -1521,35 +1520,35 @@ yyreduce:
             }
             free((yyvsp[0].sval));
         }
-#line 1525 "mrmac/parser.tab.c"
+#line 1524 "mrmac/parser.tab.c"
     break;
 
   case 30: /* $@3: %empty  */
-#line 327 "mrmac/parser.y"
+#line 326 "mrmac/parser.y"
                { current_def_type = TYPE_INT;  }
-#line 1531 "mrmac/parser.tab.c"
+#line 1530 "mrmac/parser.tab.c"
     break;
 
   case 32: /* $@4: %empty  */
-#line 328 "mrmac/parser.y"
+#line 327 "mrmac/parser.y"
                { current_def_type = TYPE_STR;  }
-#line 1537 "mrmac/parser.tab.c"
+#line 1536 "mrmac/parser.tab.c"
     break;
 
   case 34: /* $@5: %empty  */
-#line 329 "mrmac/parser.y"
+#line 328 "mrmac/parser.y"
                { current_def_type = TYPE_CHAR; }
-#line 1543 "mrmac/parser.tab.c"
+#line 1542 "mrmac/parser.tab.c"
     break;
 
   case 36: /* $@6: %empty  */
-#line 330 "mrmac/parser.y"
+#line 329 "mrmac/parser.y"
                { current_def_type = TYPE_REAL; }
-#line 1549 "mrmac/parser.tab.c"
+#line 1548 "mrmac/parser.tab.c"
     break;
 
   case 38: /* var_list: IDENTIFIER  */
-#line 335 "mrmac/parser.y"
+#line 334 "mrmac/parser.y"
         {
             if (add_symbol((yyvsp[0].sval), current_def_type) == -1)
             {
@@ -1558,11 +1557,11 @@ yyreduce:
             }
             free((yyvsp[0].sval));
         }
-#line 1562 "mrmac/parser.tab.c"
+#line 1561 "mrmac/parser.tab.c"
     break;
 
   case 39: /* var_list: var_list COMMA IDENTIFIER  */
-#line 344 "mrmac/parser.y"
+#line 343 "mrmac/parser.y"
         {
             if (add_symbol((yyvsp[0].sval), current_def_type) == -1)
             {
@@ -1571,11 +1570,11 @@ yyreduce:
             }
             free((yyvsp[0].sval));
         }
-#line 1575 "mrmac/parser.tab.c"
+#line 1574 "mrmac/parser.tab.c"
     break;
 
   case 40: /* label_definition: IDENTIFIER COLON  */
-#line 356 "mrmac/parser.y"
+#line 355 "mrmac/parser.y"
         {
             if (define_label((yyvsp[-1].sval), yylineno) != 0)
             {
@@ -1584,11 +1583,11 @@ yyreduce:
             }
             free((yyvsp[-1].sval));
         }
-#line 1588 "mrmac/parser.tab.c"
+#line 1587 "mrmac/parser.tab.c"
     break;
 
   case 41: /* goto_statement: GOTO IDENTIFIER  */
-#line 368 "mrmac/parser.y"
+#line 367 "mrmac/parser.y"
         {
             size_t patch_pos;
 
@@ -1604,19 +1603,19 @@ yyreduce:
 
             free((yyvsp[0].sval));
         }
-#line 1608 "mrmac/parser.tab.c"
+#line 1607 "mrmac/parser.tab.c"
     break;
 
   case 42: /* ret_statement: RET  */
-#line 387 "mrmac/parser.y"
+#line 386 "mrmac/parser.y"
         {
             emit_byte(OP_RET);
         }
-#line 1616 "mrmac/parser.tab.c"
+#line 1615 "mrmac/parser.tab.c"
     break;
 
   case 43: /* assignment_statement: IDENTIFIER ASSIGN expression  */
-#line 394 "mrmac/parser.y"
+#line 393 "mrmac/parser.y"
         {
             int type = 0;
 
@@ -1631,11 +1630,11 @@ yyreduce:
             emit_string((yyvsp[-2].sval));
             free((yyvsp[-2].sval));
         }
-#line 1635 "mrmac/parser.tab.c"
+#line 1634 "mrmac/parser.tab.c"
     break;
 
   case 44: /* call_statement: CALL IDENTIFIER  */
-#line 412 "mrmac/parser.y"
+#line 411 "mrmac/parser.y"
         {
             size_t patch_pos;
 
@@ -1651,11 +1650,11 @@ yyreduce:
 
             free((yyvsp[0].sval));
         }
-#line 1655 "mrmac/parser.tab.c"
+#line 1654 "mrmac/parser.tab.c"
     break;
 
   case 45: /* call_statement: TVCALL IDENTIFIER LPAREN argument_list RPAREN  */
-#line 428 "mrmac/parser.y"
+#line 427 "mrmac/parser.y"
         {
             emit_byte(OP_TVCALL);
             emit_string((yyvsp[-3].sval));
@@ -1663,104 +1662,104 @@ yyreduce:
             free((yyvsp[-3].sval));
             param_count = 0;
         }
-#line 1667 "mrmac/parser.tab.c"
+#line 1666 "mrmac/parser.tab.c"
     break;
 
   case 46: /* if_jz_mark: %empty  */
-#line 439 "mrmac/parser.y"
+#line 438 "mrmac/parser.y"
         {
             emit_byte(OP_JZ);
             (yyval.ival) = (int) emit_get_pos();
             emit_int(-1);
         }
-#line 1677 "mrmac/parser.tab.c"
+#line 1676 "mrmac/parser.tab.c"
     break;
 
   case 47: /* else_jump_mark: %empty  */
-#line 448 "mrmac/parser.y"
+#line 447 "mrmac/parser.y"
         {
             emit_byte(OP_GOTO);
             (yyval.ival) = (int) emit_get_pos();
             emit_int(-1);
         }
-#line 1687 "mrmac/parser.tab.c"
+#line 1686 "mrmac/parser.tab.c"
     break;
 
   case 48: /* while_start_mark: %empty  */
-#line 457 "mrmac/parser.y"
+#line 456 "mrmac/parser.y"
         {
             (yyval.ival) = (int) emit_get_pos();
         }
-#line 1695 "mrmac/parser.tab.c"
+#line 1694 "mrmac/parser.tab.c"
     break;
 
   case 49: /* while_jz_mark: %empty  */
-#line 464 "mrmac/parser.y"
+#line 463 "mrmac/parser.y"
         {
             emit_byte(OP_JZ);
             (yyval.ival) = (int) emit_get_pos();
             emit_int(-1);
         }
-#line 1705 "mrmac/parser.tab.c"
+#line 1704 "mrmac/parser.tab.c"
     break;
 
   case 50: /* if_statement: IF expression THEN if_jz_mark statement_list END  */
-#line 473 "mrmac/parser.y"
+#line 472 "mrmac/parser.y"
         {
             emit_patch_int((yyvsp[-2].ival), (int) emit_get_pos());
         }
-#line 1713 "mrmac/parser.tab.c"
+#line 1712 "mrmac/parser.tab.c"
     break;
 
   case 51: /* if_statement: IF expression THEN if_jz_mark statement_list ELSE else_jump_mark statement_list END  */
-#line 477 "mrmac/parser.y"
+#line 476 "mrmac/parser.y"
         {
             emit_patch_int((yyvsp[-5].ival), (yyvsp[-2].ival) + (int) sizeof(int));
             emit_patch_int((yyvsp[-2].ival), (int) emit_get_pos());
         }
-#line 1722 "mrmac/parser.tab.c"
+#line 1721 "mrmac/parser.tab.c"
     break;
 
   case 52: /* while_statement: WHILE while_start_mark expression DO while_jz_mark statement_list END  */
-#line 485 "mrmac/parser.y"
+#line 484 "mrmac/parser.y"
         {
             emit_byte(OP_GOTO);
             emit_int((yyvsp[-5].ival));
             emit_patch_int((yyvsp[-2].ival), (int) emit_get_pos());
         }
-#line 1732 "mrmac/parser.tab.c"
+#line 1731 "mrmac/parser.tab.c"
     break;
 
   case 56: /* argument: expression  */
-#line 500 "mrmac/parser.y"
+#line 499 "mrmac/parser.y"
         {
             param_count++;
         }
-#line 1740 "mrmac/parser.tab.c"
+#line 1739 "mrmac/parser.tab.c"
     break;
 
   case 57: /* argument: STRING_LITERAL  */
-#line 504 "mrmac/parser.y"
+#line 503 "mrmac/parser.y"
         {
             emit_byte(OP_PUSH_S);
             emit_string((yyvsp[0].sval));
             free((yyvsp[0].sval));
             param_count++;
         }
-#line 1751 "mrmac/parser.tab.c"
+#line 1750 "mrmac/parser.tab.c"
     break;
 
   case 58: /* expression: INTEGER_LITERAL  */
-#line 514 "mrmac/parser.y"
+#line 513 "mrmac/parser.y"
         {
             emit_byte(OP_PUSH_I);
             emit_int((yyvsp[0].ival));
         }
-#line 1760 "mrmac/parser.tab.c"
+#line 1759 "mrmac/parser.tab.c"
     break;
 
   case 59: /* expression: IDENTIFIER  */
-#line 519 "mrmac/parser.y"
+#line 518 "mrmac/parser.y"
         {
             int type = 0;
 
@@ -1775,147 +1774,147 @@ yyreduce:
             emit_string((yyvsp[0].sval));
             free((yyvsp[0].sval));
         }
-#line 1779 "mrmac/parser.tab.c"
+#line 1778 "mrmac/parser.tab.c"
     break;
 
   case 61: /* expression: MINUS expression  */
-#line 535 "mrmac/parser.y"
+#line 534 "mrmac/parser.y"
         {
             emit_byte(OP_NEG);
         }
-#line 1787 "mrmac/parser.tab.c"
+#line 1786 "mrmac/parser.tab.c"
     break;
 
   case 62: /* expression: NOT expression  */
-#line 539 "mrmac/parser.y"
+#line 538 "mrmac/parser.y"
         {
             emit_byte(OP_NOT);
         }
-#line 1795 "mrmac/parser.tab.c"
+#line 1794 "mrmac/parser.tab.c"
     break;
 
   case 63: /* expression: expression PLUS expression  */
-#line 543 "mrmac/parser.y"
+#line 542 "mrmac/parser.y"
         {
             emit_byte(OP_ADD);
         }
-#line 1803 "mrmac/parser.tab.c"
+#line 1802 "mrmac/parser.tab.c"
     break;
 
   case 64: /* expression: expression MINUS expression  */
-#line 547 "mrmac/parser.y"
+#line 546 "mrmac/parser.y"
         {
             emit_byte(OP_SUB);
         }
-#line 1811 "mrmac/parser.tab.c"
+#line 1810 "mrmac/parser.tab.c"
     break;
 
   case 65: /* expression: expression MULT expression  */
-#line 551 "mrmac/parser.y"
+#line 550 "mrmac/parser.y"
         {
             emit_byte(OP_MUL);
         }
-#line 1819 "mrmac/parser.tab.c"
+#line 1818 "mrmac/parser.tab.c"
     break;
 
   case 66: /* expression: expression DIV expression  */
-#line 555 "mrmac/parser.y"
+#line 554 "mrmac/parser.y"
         {
             emit_byte(OP_DIV);
         }
-#line 1827 "mrmac/parser.tab.c"
+#line 1826 "mrmac/parser.tab.c"
     break;
 
   case 67: /* expression: expression MOD expression  */
-#line 559 "mrmac/parser.y"
+#line 558 "mrmac/parser.y"
         {
             emit_byte(OP_MOD);
         }
-#line 1835 "mrmac/parser.tab.c"
+#line 1834 "mrmac/parser.tab.c"
     break;
 
   case 68: /* expression: expression EQ expression  */
-#line 563 "mrmac/parser.y"
+#line 562 "mrmac/parser.y"
         {
             emit_byte(OP_CMP_EQ);
         }
-#line 1843 "mrmac/parser.tab.c"
+#line 1842 "mrmac/parser.tab.c"
     break;
 
   case 69: /* expression: expression NE expression  */
-#line 567 "mrmac/parser.y"
+#line 566 "mrmac/parser.y"
         {
             emit_byte(OP_CMP_NE);
         }
-#line 1851 "mrmac/parser.tab.c"
+#line 1850 "mrmac/parser.tab.c"
     break;
 
   case 70: /* expression: expression LT expression  */
-#line 571 "mrmac/parser.y"
+#line 570 "mrmac/parser.y"
         {
             emit_byte(OP_CMP_LT);
         }
-#line 1859 "mrmac/parser.tab.c"
+#line 1858 "mrmac/parser.tab.c"
     break;
 
   case 71: /* expression: expression GT expression  */
-#line 575 "mrmac/parser.y"
+#line 574 "mrmac/parser.y"
         {
             emit_byte(OP_CMP_GT);
         }
-#line 1867 "mrmac/parser.tab.c"
+#line 1866 "mrmac/parser.tab.c"
     break;
 
   case 72: /* expression: expression LE expression  */
-#line 579 "mrmac/parser.y"
+#line 578 "mrmac/parser.y"
         {
             emit_byte(OP_CMP_LE);
         }
-#line 1875 "mrmac/parser.tab.c"
+#line 1874 "mrmac/parser.tab.c"
     break;
 
   case 73: /* expression: expression GE expression  */
-#line 583 "mrmac/parser.y"
+#line 582 "mrmac/parser.y"
         {
             emit_byte(OP_CMP_GE);
         }
-#line 1883 "mrmac/parser.tab.c"
+#line 1882 "mrmac/parser.tab.c"
     break;
 
   case 74: /* expression: expression AND expression  */
-#line 587 "mrmac/parser.y"
+#line 586 "mrmac/parser.y"
         {
             emit_byte(OP_AND);
         }
-#line 1891 "mrmac/parser.tab.c"
+#line 1890 "mrmac/parser.tab.c"
     break;
 
   case 75: /* expression: expression OR expression  */
-#line 591 "mrmac/parser.y"
+#line 590 "mrmac/parser.y"
         {
             emit_byte(OP_OR);
         }
-#line 1899 "mrmac/parser.tab.c"
+#line 1898 "mrmac/parser.tab.c"
     break;
 
   case 76: /* expression: expression SHL expression  */
-#line 595 "mrmac/parser.y"
+#line 594 "mrmac/parser.y"
         {
             emit_byte(OP_SHL);
         }
-#line 1907 "mrmac/parser.tab.c"
+#line 1906 "mrmac/parser.tab.c"
     break;
 
   case 77: /* expression: expression SHR expression  */
-#line 599 "mrmac/parser.y"
+#line 598 "mrmac/parser.y"
         {
             emit_byte(OP_SHR);
         }
-#line 1915 "mrmac/parser.tab.c"
+#line 1914 "mrmac/parser.tab.c"
     break;
 
 
-#line 1919 "mrmac/parser.tab.c"
+#line 1918 "mrmac/parser.tab.c"
 
       default: break;
     }
@@ -2108,7 +2107,7 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 604 "mrmac/parser.y"
+#line 603 "mrmac/parser.y"
 
 
 void yyerror(const char *s)

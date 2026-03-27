@@ -1,0 +1,14 @@
+$MACRO GlobalsDemo;
+DEF_INT(Kind, Answer, Parsed);
+DEF_STR(Name, Info);
+
+SET_GLOBAL_INT('Answer', 42);
+SET_GLOBAL_STR('Greeting', 'Hello');
+
+Name := FIRST_GLOBAL(Kind);
+Info := NEXT_GLOBAL(Kind);
+Parsed := PARSE_INT('/P=', '/P=17 /X=abc');
+
+RETURN_INT := GLOBAL_INT('Answer') + Parsed;
+RETURN_STR := GLOBAL_STR('Greeting') + ' | ' + Name + ' | ' + Info + ' | ' + DATE + ' ' + TIME;
+END_MACRO;

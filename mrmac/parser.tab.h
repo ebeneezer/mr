@@ -111,7 +111,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 193 "mrmac/parser.y"
+#line 192 "mrmac/parser.y"
 
     int ival;
     char *sval;
