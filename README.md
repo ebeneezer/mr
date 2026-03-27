@@ -17,5 +17,4 @@
 
 ![mr running under vscode terminal](screenshots/screenshot01.png)
 ![mr running in terminal showing menu structure](screenshots/screenshot02.png)
-# mr
-# mr
+
