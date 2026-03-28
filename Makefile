@@ -48,7 +48,9 @@ CHAT_CONTEXT_FILES = \
 	ui/TMRFrame.hpp \
 	ui/TMRStatusLine.hpp \
 	ui/TMRDeskTop.hpp \
-	ui/TMREditWindow.hpp
+	ui/TMREditWindow.hpp \
+	ui/TMRIndicator.hpp \
+	ui/TMRFileEditor.hpp
 
 CHAT_CONTEXT_DIRS = \
 	mrmac/macros
@@ -91,11 +93,11 @@ mrmac/parser.tab.o: mrmac/parser.tab.c mrmac/parser.tab.h mrmac/mrmac.h
 mrmac/mrmac.o: mrmac/mrmac.c mrmac/parser.tab.h mrmac/mrmac.h
 
 # 3. Dependencies for C++ compilation
-mr.o: mr.cpp mrmac/mrmac.h mrmac/mrvm.hpp ui/mrpalette.hpp ui/mrmacrotest.hpp ui/mrwindowlist.hpp
+mr.o: mr.cpp mrmac/mrmac.h mrmac/mrvm.hpp ui/mrpalette.hpp ui/mrmacrotest.hpp ui/mrwindowlist.hpp ui/TMREditWindow.hpp ui/TMRIndicator.hpp ui/TMRFileEditor.hpp
 mrmac/mrvm.o: mrmac/mrvm.cpp mrmac/mrvm.hpp mrmac/mrmac.h ui/mrwindowlist.hpp
 ui/mrpalette.o: ui/mrpalette.cpp ui/mrpalette.hpp
 ui/mrmacrotest.o: ui/mrmacrotest.cpp ui/mrmacrotest.hpp mrmac/mrmac.h mrmac/mrvm.hpp
-ui/mrwindowlist.o: ui/mrwindowlist.cpp ui/mrwindowlist.hpp ui/TMREditWindow.hpp
+ui/mrwindowlist.o: ui/mrwindowlist.cpp ui/mrwindowlist.hpp ui/TMREditWindow.hpp ui/TMRIndicator.hpp ui/TMRFileEditor.hpp
 
 # 4. Linker call
 $(TARGET): $(CXX_OBJECTS) $(C_OBJECTS)

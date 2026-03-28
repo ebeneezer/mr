@@ -8,13 +8,19 @@
 #define Uses_TRect
 #define Uses_TEvent
 #define Uses_TEditor
+#define Uses_TObject
 #include <tvision/tv.h>
 
 #include <algorithm>
 #include <cstring>
+#include <fstream>
+#include <iterator>
 #include <string>
+#include <unistd.h>
 
 #include "TMRFrame.hpp"
+#include "TMRFileEditor.hpp"
+#include "TMRIndicator.hpp"
 
 class TMREditWindow : public TWindow {
   public:
@@ -37,14 +43,14 @@ class TMREditWindow : public TWindow {
 		vScrollBar->hide();
 		insert(vScrollBar);
 
-		indicator = new TIndicator(TRect(2, size.y - 1, 16, size.y));
+		indicator = new TMRIndicator(TRect(2, size.y - 1, 16, size.y));
 		indicator->hide();
 		insert(indicator);
 
 		TRect r(getExtent());
 		r.grow(-1, -1);
 
-		editor = new TFileEditor(r, hScrollBar, vScrollBar, indicator, "");
+		editor = createEditor(r, "");
 		insert(editor);
 	}
 
@@ -68,14 +74,39 @@ class TMREditWindow : public TWindow {
 	}
 
 	bool loadFromFile(const char *fileName) {
+		std::string expandedName;
+		TRect r;
+		TMRFileEditor *newEditor;
+		bool wasSelected;
+
 		if (editor == nullptr || fileName == nullptr || *fileName == '\0')
 			return false;
 
-		strnzcpy(editor->fileName, fileName, sizeof(editor->fileName));
-		fexpand(editor->fileName);
-		if (!editor->loadFile())
+		expandedName = fileName;
+		if (expandedName.size() >= sizeof(editor->fileName))
 			return false;
+		char expandedPath[MAXPATH];
+		strnzcpy(expandedPath, expandedName.c_str(), sizeof(expandedPath));
+		fexpand(expandedPath);
+		expandedName = expandedPath;
 
+		r = editor->getBounds();
+		wasSelected = (editor->state & sfSelected) != 0;
+		newEditor = createEditor(r, expandedName.c_str());
+		if (newEditor == nullptr || newEditor->valid(cmValid) == False) {
+			TObject::destroy(newEditor);
+			return false;
+		}
+
+		remove(editor);
+		TObject::destroy(editor);
+		editor = newEditor;
+		insert(editor);
+		if (wasSelected)
+			editor->select();
+
+		resetTransientEditorState();
+		setReadOnly(isExistingPathReadOnly(editor->fileName));
 		temporaryFileUsed_ = false;
 		temporaryFileName_.clear();
 		updateTitleFromEditor();
@@ -100,6 +131,8 @@ class TMREditWindow : public TWindow {
 		editor->modified = False;
 		editor->update(ufUpdate);
 
+		resetTransientEditorState();
+		setReadOnly(false);
 		temporaryFileUsed_ = false;
 		temporaryFileName_.clear();
 		editor->fileName[0] = EOS;
@@ -111,10 +144,10 @@ class TMREditWindow : public TWindow {
 	}
 
 	bool saveCurrentFile() {
-		if (editor == nullptr)
+		if (editor == nullptr || isReadOnly() || !editor->canSaveInPlace())
 			return false;
 
-		bool ok = editor->save() == True;
+		bool ok = editor->saveInPlace() == True;
 		if (ok) {
 			firstSaveDone_ = true;
 			temporaryFileUsed_ = false;
@@ -132,6 +165,29 @@ class TMREditWindow : public TWindow {
 
 	TFileEditor *getEditor() const {
 		return editor;
+	}
+
+	bool hasPersistentFileName() const {
+		return editor != nullptr && editor->hasPersistentFileName();
+	}
+
+	bool canSaveInPlace() const {
+		return editor != nullptr && editor->canSaveInPlace();
+	}
+
+	bool isReadOnly() const {
+		return editor != nullptr && editor->isReadOnly();
+	}
+
+	void setReadOnly(bool readOnly) {
+		if (editor != nullptr)
+			editor->setReadOnly(readOnly);
+		if (indicator != nullptr)
+			indicator->setReadOnly(readOnly);
+		if (readOnly && editor != nullptr) {
+			editor->modified = False;
+			editor->update(ufUpdate);
+		}
 	}
 
 	bool hasBeenSavedInSession() const {
@@ -155,12 +211,12 @@ class TMREditWindow : public TWindow {
 	}
 
 	bool isFileChanged() const {
-		return editor != nullptr && editor->modified == True;
+		return editor != nullptr && !isReadOnly() && editor->modified == True;
 	}
 
 	void setFileChanged(bool changed) {
 		if (editor != nullptr) {
-			editor->modified = changed ? True : False;
+			editor->modified = changed && !isReadOnly() ? True : False;
 			editor->update(ufUpdate);
 		}
 	}
@@ -176,6 +232,26 @@ class TMREditWindow : public TWindow {
 			fexpand(editor->fileName);
 		}
 		updateTitleFromEditor();
+	}
+
+	bool confirmAbandonForReload() {
+		if (editor == nullptr)
+			return false;
+		return editor->valid(cmClose) == True;
+	}
+
+	bool replaceTextBuffer(const char *text, const char *title = nullptr) {
+		if (editor == nullptr || !editor->replaceBufferText(text))
+			return false;
+		if (title != nullptr && *title != '\0')
+			setDisplayTitle(title);
+		return true;
+	}
+
+	bool appendTextBuffer(const char *text) {
+		if (editor == nullptr)
+			return false;
+		return editor->appendBufferText(text);
 	}
 
 	void setDisplayTitle(const char *title) {
@@ -272,6 +348,10 @@ class TMREditWindow : public TWindow {
 	}
 
   private:
+	TMRFileEditor *createEditor(const TRect &bounds, const char *fileName) {
+		return new TMRFileEditor(bounds, hScrollBar, vScrollBar, indicator, fileName != nullptr ? fileName : "");
+	}
+
 	static int allocateBufferId() {
 		static int nextId = 1;
 		return nextId++;
@@ -279,6 +359,22 @@ class TMREditWindow : public TWindow {
 
 	static TFrame *initFrame(TRect r) {
 		return new TMRFrame(r);
+	}
+
+	static bool isExistingPathReadOnly(const char *fileName) {
+		if (fileName == nullptr || *fileName == '\0')
+			return false;
+		if (access(fileName, F_OK) != 0)
+			return false;
+		return access(fileName, W_OK) != 0;
+	}
+
+	void resetTransientEditorState() {
+		if (editor == nullptr)
+			return;
+		editor->delCount = 0;
+		editor->insCount = 0;
+		clearBlock();
 	}
 
 	void updateTitleFromEditor() {
@@ -402,8 +498,8 @@ class TMREditWindow : public TWindow {
 
 	TScrollBar *vScrollBar;
 	TScrollBar *hScrollBar;
-	TIndicator *indicator;
-	TFileEditor *editor;
+	TMRIndicator *indicator;
+	TMRFileEditor *editor;
 	int bufferId_;
 	bool firstSaveDone_;
 	bool temporaryFileUsed_;

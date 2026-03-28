@@ -12,6 +12,8 @@
 ./mrmac/parser.y
 ./ui/TMRDeskTop.hpp
 ./ui/TMREditWindow.hpp
+./ui/TMRIndicator.hpp
+./ui/TMRFileEditor.hpp
 ./ui/TMRFrame.hpp
 ./ui/TMRMenuBar.hpp
 ./ui/TMRMenuBox.hpp

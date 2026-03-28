@@ -17,6 +17,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <string>
 #include <vector>
 #include <unistd.h>
@@ -34,6 +35,9 @@ enum : ushort {
 
 const char *kHelpWindowTitle = "MR HELP";
 const char *kHelpFilePath = "mr.hlp";
+const char *kLogWindowTitle = "MR LOG";
+
+std::string g_logBuffer;
 
 struct WindowListEntry {
 	TMREditWindow *window;
@@ -54,6 +58,24 @@ std::string currentWorkingDirectory() {
 	return std::string(cwd);
 }
 
+std::string currentTimestamp() {
+	char buffer[32];
+	std::time_t now = std::time(nullptr);
+	std::tm *tmNow = std::localtime(&now);
+
+	if (tmNow == nullptr)
+		return std::string("--:--:--");
+	if (std::strftime(buffer, sizeof(buffer), "%H:%M:%S", tmNow) == 0)
+		return std::string("--:--:--");
+	return std::string(buffer);
+}
+
+std::string normalizeLogLine(const char *message) {
+	std::string line = message != nullptr ? message : "";
+	while (!line.empty() && (line.back() == '\n' || line.back() == '\r'))
+		line.pop_back();
+	return line;
+}
 
 std::string trimCopy(const std::string &value) {
 	std::string out = value;
@@ -118,6 +140,98 @@ std::vector<TMREditWindow *> allEditWindows() {
 	return windows;
 }
 
+TMREditWindow *findWindowByTitle(const char *title) {
+	std::vector<TMREditWindow *> windows = allEditWindows();
+	for (std::size_t i = 0; i < windows.size(); ++i) {
+		const char *windowTitle = windows[i]->getTitle(0);
+		if (title != nullptr && windowTitle != nullptr && std::strcmp(windowTitle, title) == 0)
+			return windows[i];
+	}
+	return nullptr;
+}
+
+bool isReservedUtilityWindow(TMREditWindow *win) {
+	const char *title = win != nullptr ? win->getTitle(0) : nullptr;
+	return title != nullptr &&
+	       (std::strcmp(title, kHelpWindowTitle) == 0 || std::strcmp(title, kLogWindowTitle) == 0);
+}
+
+TMREditWindow *createDefaultWorkWindow(const char *title) {
+	TRect bounds;
+	TMREditWindow *win;
+
+	if (TProgram::deskTop == nullptr)
+		return nullptr;
+	bounds = TProgram::deskTop->getExtent();
+	bounds.grow(-2, -1);
+	win = new TMREditWindow(bounds, title != nullptr ? title : "?No-File?", 1);
+	TProgram::deskTop->insert(win);
+	return win;
+}
+
+TMREditWindow *chooseFallbackWorkWindow() {
+	std::vector<TMREditWindow *> windows = allEditWindows();
+	TMREditWindow *hiddenEditable = nullptr;
+	TMREditWindow *hiddenNonUtility = nullptr;
+
+	for (std::size_t i = 0; i < windows.size(); ++i) {
+		if ((windows[i]->state & sfVisible) != 0)
+			return windows[i];
+		if (hiddenEditable == nullptr && !windows[i]->isReadOnly())
+			hiddenEditable = windows[i];
+		if (hiddenNonUtility == nullptr && !isReservedUtilityWindow(windows[i]))
+			hiddenNonUtility = windows[i];
+	}
+	if (hiddenEditable != nullptr)
+		return hiddenEditable;
+	if (hiddenNonUtility != nullptr)
+		return hiddenNonUtility;
+	return nullptr;
+}
+
+TMREditWindow *createReadOnlyTextWindow(const char *title, const char *text, bool hidden) {
+	TRect bounds;
+	TMREditWindow *previous;
+	TMREditWindow *win;
+
+	if (TProgram::deskTop == nullptr)
+		return nullptr;
+
+	previous = dynamic_cast<TMREditWindow *>(TProgram::deskTop->current);
+	bounds = TProgram::deskTop->getExtent();
+	bounds.grow(-2, -1);
+	win = new TMREditWindow(bounds, title, 1);
+	TProgram::deskTop->insert(win);
+	if (!win->loadTextBuffer(text, title)) {
+		message(win, evCommand, cmClose, nullptr);
+		return nullptr;
+	}
+	win->setReadOnly(true);
+	win->setFileChanged(false);
+	if (hidden)
+		win->hide();
+	if (hidden && previous != nullptr && previous != win)
+		mrActivateEditWindow(previous);
+	return win;
+}
+
+TMREditWindow *ensureLogWindow(bool activate) {
+	TMREditWindow *win = findWindowByTitle(kLogWindowTitle);
+
+	if (g_logBuffer.empty())
+		g_logBuffer = "MR/MEMAC log initialized.\n";
+	if (win == nullptr)
+		win = createReadOnlyTextWindow(kLogWindowTitle, g_logBuffer.c_str(), !activate);
+	if (win == nullptr)
+		return nullptr;
+	win->replaceTextBuffer(g_logBuffer.c_str(), kLogWindowTitle);
+	win->setReadOnly(true);
+	win->setFileChanged(false);
+	if (activate)
+		mrActivateEditWindow(win);
+	return win;
+}
+
 TMREditWindow *preferredLinkTarget(TMREditWindow *current) {
 	std::vector<TMREditWindow *> windows = allEditWindows();
 	TMREditWindow *firstOther = nullptr;
@@ -149,7 +263,24 @@ TMREditWindow *preferredLinkTarget(TMREditWindow *current) {
 bool saveWindow(TMREditWindow *win) {
 	if (win == nullptr)
 		return false;
-	return win->saveCurrentFile();
+	if (win->isReadOnly()) {
+		messageBox(mfInformation | mfOKButton, "Window is read-only.");
+		mrLogMessage("Save rejected for read-only window.");
+		return false;
+	}
+	if (!win->canSaveInPlace()) {
+		messageBox(mfInformation | mfOKButton, "Save As is not available yet for this window.");
+		mrLogMessage("Save rejected because the window has no persistent file name.");
+		return false;
+	}
+	if (!win->isFileChanged())
+		return true;
+	if (!win->saveCurrentFile()) {
+		mrLogMessage("Save failed.");
+		return false;
+	}
+	mrLogMessage("Window saved.");
+	return true;
 }
 
 void closeWindow(TMREditWindow *win) {
@@ -403,6 +534,7 @@ class WindowListDialog : public TDialog {
 		if (win == nullptr)
 			return;
 		closeWindow(win);
+		mrEnsureUsableWorkWindow();
 		refreshEntries();
 	}
 
@@ -419,6 +551,7 @@ class WindowListDialog : public TDialog {
 		if (win == nullptr)
 			return;
 		hideWindow(win);
+		mrEnsureUsableWorkWindow();
 		refreshEntries();
 	}
 
@@ -426,6 +559,7 @@ class WindowListDialog : public TDialog {
 		std::vector<TMREditWindow *> windows = allEditWindows();
 		for (std::size_t i = 0; i < windows.size(); ++i)
 			hideWindow(windows[i]);
+		mrEnsureUsableWorkWindow();
 		refreshEntries();
 	}
 
@@ -450,7 +584,6 @@ bool mrActivateEditWindow(TMREditWindow *win) {
 }
 
 bool mrShowProjectHelp() {
-	TRect bounds;
 	TMREditWindow *win;
 	if (TProgram::deskTop == nullptr)
 		return false;
@@ -464,19 +597,63 @@ bool mrShowProjectHelp() {
 			return true;
 	}
 
-	bounds = TProgram::deskTop->getExtent();
-	bounds.grow(-2, -1);
-	win = new TMREditWindow(bounds, kHelpWindowTitle, 1);
-	TProgram::deskTop->insert(win);
+	win = findWindowByTitle(kHelpWindowTitle);
+	if (win == nullptr) {
+		TRect bounds = TProgram::deskTop->getExtent();
+		bounds.grow(-2, -1);
+		win = new TMREditWindow(bounds, kHelpWindowTitle, 1);
+		TProgram::deskTop->insert(win);
 
-	if (!win->loadFromFile(kHelpFilePath)) {
-		messageBox(mfError | mfOKButton, "Unable to load help file:\n%s", kHelpFilePath);
-		message(win, evCommand, cmClose, nullptr);
-		return false;
+		if (!win->loadFromFile(kHelpFilePath)) {
+			messageBox(mfError | mfOKButton, "Unable to load help file:\n%s", kHelpFilePath);
+			message(win, evCommand, cmClose, nullptr);
+			return false;
+		}
+
+		win->setReadOnly(true);
+		win->setFileChanged(false);
 	}
-
-	win->setFileChanged(false);
+	mrActivateEditWindow(win);
 	return true;
+}
+
+bool mrEnsureLogWindow(bool activate) {
+	return ensureLogWindow(activate) != nullptr;
+}
+
+bool mrEnsureUsableWorkWindow() {
+	TMREditWindow *current = dynamic_cast<TMREditWindow *>(TProgram::deskTop != nullptr ? TProgram::deskTop->current : nullptr);
+	TMREditWindow *fallback;
+
+	if (TProgram::deskTop == nullptr)
+		return false;
+	if (current != nullptr && (current->state & sfVisible) != 0)
+		return true;
+	fallback = chooseFallbackWorkWindow();
+	if (fallback != nullptr)
+		return mrActivateEditWindow(fallback);
+	fallback = createDefaultWorkWindow("?No-File?");
+	if (fallback == nullptr)
+		return false;
+	mrLogMessage("Created fallback empty window to keep the editor usable.");
+	return mrActivateEditWindow(fallback);
+}
+
+void mrLogMessage(const char *message) {
+	std::string line = normalizeLogLine(message);
+	TMREditWindow *win;
+
+	if (line.empty())
+		return;
+	if (!g_logBuffer.empty() && g_logBuffer[g_logBuffer.size() - 1] != '\n')
+		g_logBuffer += '\n';
+	g_logBuffer += "[" + currentTimestamp() + "] " + line + "\n";
+	win = ensureLogWindow(false);
+	if (win != nullptr) {
+		win->replaceTextBuffer(g_logBuffer.c_str(), kLogWindowTitle);
+		win->setReadOnly(true);
+		win->setFileChanged(false);
+	}
 }
 
 TMREditWindow *mrShowWindowListDialog(MRWindowListMode mode, TMREditWindow *current) {
