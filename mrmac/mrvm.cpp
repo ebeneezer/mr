@@ -247,6 +247,17 @@ static bool copyBlockFromWindow(TMREditWindow *srcWin, TFileEditor *srcEditor,
                                 TMREditWindow *destWin, TFileEditor *destEditor);
 static bool moveBlockFromWindow(TMREditWindow *srcWin, TFileEditor *srcEditor,
                                 TMREditWindow *destWin, TFileEditor *destEditor);
+static bool extractCurrentBlockText(TMREditWindow *win, TFileEditor *editor, std::string &out);
+static bool saveCurrentBlockToFile(TMREditWindow *win, TFileEditor *editor, const std::string &path);
+static int countEditWindows();
+static int currentEditWindowIndex();
+static bool currentWindowGeometry(int &x1, int &y1, int &x2, int &y2);
+static bool createEditWindow();
+static bool switchEditWindow(int index);
+static bool sizeCurrentEditWindow(int x1, int y1, int x2, int y2);
+static bool deleteCurrentEditWindow();
+static bool eraseCurrentEditWindow();
+static bool modifyCurrentEditWindow();
 
 static std::string upperKey(const std::string &value) {
 	std::string out = value;
@@ -1564,6 +1575,137 @@ static TMREditWindow *editWindowByIndex(int index) {
 	return lookup.result;
 }
 
+static void countEditWindowProc(TView *view, void *arg) {
+	int *count = static_cast<int *>(arg);
+	if (count != NULL && dynamic_cast<TMREditWindow *>(view) != NULL)
+		++(*count);
+}
+
+static int countEditWindows() {
+	int count = 0;
+	if (TProgram::deskTop == NULL)
+		return 0;
+	TProgram::deskTop->forEach(countEditWindowProc, &count);
+	return count;
+}
+
+static int currentEditWindowIndex() {
+	TMREditWindow *current = currentEditWindow();
+	int index = 0;
+	if (current == NULL || TProgram::deskTop == NULL)
+		return 0;
+	for (TView *view = TProgram::deskTop->first(); view != NULL; view = view->next) {
+		TMREditWindow *win = dynamic_cast<TMREditWindow *>(view);
+		if (win == NULL)
+			continue;
+		++index;
+		if (win == current)
+			return index;
+	}
+	return 0;
+}
+
+static bool currentWindowGeometry(int &x1, int &y1, int &x2, int &y2) {
+	TMREditWindow *win = currentEditWindow();
+	TRect bounds;
+	if (win == NULL)
+		return false;
+	bounds = win->getBounds();
+	x1 = bounds.a.x + 1;
+	y1 = bounds.a.y + 1;
+	x2 = bounds.b.x;
+	y2 = bounds.b.y;
+	return true;
+}
+
+static bool createEditWindow() {
+	TRect r;
+	int number;
+	TMREditWindow *win;
+	if (TProgram::deskTop == NULL)
+		return false;
+	r = TProgram::deskTop->getExtent();
+	r.grow(-2, -1);
+	number = countEditWindows() + 1;
+	win = new TMREditWindow(r, "?No-File?", number);
+	if (win == NULL)
+		return false;
+	TProgram::deskTop->insert(win);
+	TProgram::deskTop->setCurrent(win, TView::normalSelect);
+	return true;
+}
+
+static bool switchEditWindow(int index) {
+	int count;
+	TMREditWindow *win;
+	if (TProgram::deskTop == NULL)
+		return false;
+	count = countEditWindows();
+	if (count <= 0)
+		return false;
+	if (index <= 0)
+		index = 1;
+	if (index > count)
+		index = ((index - 1) % count) + 1;
+	win = editWindowByIndex(index);
+	if (win == NULL)
+		return false;
+	TProgram::deskTop->setCurrent(win, TView::normalSelect);
+	return true;
+}
+
+static bool sizeCurrentEditWindow(int x1, int y1, int x2, int y2) {
+	TMREditWindow *win = currentEditWindow();
+	TRect desk;
+	TRect bounds;
+	if (win == NULL || TProgram::deskTop == NULL)
+		return false;
+	if (x2 < x1 || y2 < y1)
+		return false;
+	desk = TProgram::deskTop->getExtent();
+	x1 = std::max(1, x1);
+	y1 = std::max(1, y1);
+	x2 = std::min(desk.b.x, x2);
+	y2 = std::min(desk.b.y, y2);
+	if (x2 <= x1)
+		x2 = std::min(desk.b.x, x1 + 3);
+	if (y2 <= y1)
+		y2 = std::min(desk.b.y, y1 + 3);
+	bounds = TRect(x1 - 1, y1 - 1, x2, y2);
+	win->changeBounds(bounds);
+	win->drawView();
+	return true;
+}
+
+static bool deleteCurrentEditWindow() {
+	TMREditWindow *win = currentEditWindow();
+	if (win == NULL)
+		return false;
+	win->close();
+	return true;
+}
+
+static bool eraseCurrentEditWindow() {
+	TMREditWindow *win = currentEditWindow();
+	TFileEditor *editor = currentEditor();
+	if (win == NULL || editor == NULL)
+		return false;
+	if (!replaceEditorBuffer(editor, std::string(), 0))
+		return false;
+	win->clearBlock();
+	win->setCurrentFileName("");
+	win->setFileChanged(false);
+	return true;
+}
+
+static bool modifyCurrentEditWindow() {
+	TMREditWindow *win = currentEditWindow();
+	if (win == NULL)
+		return false;
+	message(win, evCommand, cmResize, 0);
+	return true;
+}
+
 static bool copyBlockFromWindow(TMREditWindow *srcWin, TFileEditor *srcEditor,
                                 TMREditWindow *destWin, TFileEditor *destEditor) {
 	int mode;
@@ -1656,6 +1798,78 @@ static bool moveBlockFromWindow(TMREditWindow *srcWin, TFileEditor *srcEditor,
 		return false;
 	srcWin->clearBlock();
 	return true;
+}
+
+static bool extractCurrentBlockText(TMREditWindow *win, TFileEditor *editor, std::string &out) {
+	int mode;
+	uint anchor;
+	uint end;
+	std::string text;
+	out.clear();
+	if (!currentBlockInfo(win, editor, mode, anchor, end))
+		return false;
+	text = snapshotEditorText(editor);
+	if (mode == TMREditWindow::bmStream) {
+		std::size_t start = std::min<std::size_t>(anchor, end);
+		std::size_t finish = std::max<std::size_t>(anchor, end);
+		out = text.substr(start, finish - start);
+		return true;
+	}
+	if (mode == TMREditWindow::bmLine) {
+		SplitTextBuffer buf = splitBufferLines(text);
+		int line1 = std::min(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
+		int line2 = std::max(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
+		if (buf.lines.empty())
+			return false;
+		line1 = std::max(0, std::min(line1, static_cast<int>(buf.lines.size()) - 1));
+		line2 = std::max(line1, std::min(line2, static_cast<int>(buf.lines.size()) - 1));
+		for (int line = line1; line <= line2; ++line) {
+			if (!out.empty())
+				out.push_back('\n');
+			out += buf.lines[static_cast<std::size_t>(line)];
+		}
+		return true;
+	}
+	if (mode == TMREditWindow::bmColumn) {
+		SplitTextBuffer buf = splitBufferLines(text);
+		int row1 = std::min(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
+		int row2 = std::max(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
+		int col1 = std::min(win->blockCol1(), win->blockCol2());
+		int col2 = std::max(win->blockCol1(), win->blockCol2());
+		int width = std::max(1, col2 - col1);
+		if (buf.lines.empty())
+			return false;
+		row1 = std::max(0, std::min(row1, static_cast<int>(buf.lines.size()) - 1));
+		row2 = std::max(row1, std::min(row2, static_cast<int>(buf.lines.size()) - 1));
+		for (int row = row1; row <= row2; ++row) {
+			const std::string &line = buf.lines[static_cast<std::size_t>(row)];
+			std::string slice(static_cast<std::size_t>(width), ' ');
+			std::size_t startCol = static_cast<std::size_t>(std::max(0, col1 - 1));
+			if (startCol < line.size()) {
+				std::size_t avail =
+				    std::min<std::size_t>(static_cast<std::size_t>(width), line.size() - startCol);
+				slice.replace(0, avail, line.substr(startCol, avail));
+			}
+			if (!out.empty())
+				out.push_back('\n');
+			out += slice;
+		}
+		return true;
+	}
+	return false;
+}
+
+static bool saveCurrentBlockToFile(TMREditWindow *win, TFileEditor *editor, const std::string &path) {
+	std::ofstream outFile;
+	std::string blockText;
+	if (!extractCurrentBlockText(win, editor, blockText))
+		return false;
+	outFile.open(path.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
+	if (!outFile.is_open())
+		return false;
+	outFile.write(blockText.data(), static_cast<std::streamsize>(blockText.size()));
+	outFile.close();
+	return outFile.good();
 }
 
 static bool copyCurrentBlock(TMREditWindow *win, TFileEditor *editor) {
@@ -2019,6 +2233,25 @@ static Value loadSpecialVariable(const std::string &name, bool &handled) {
 		return makeInt(currentEditorAtEof(currentEditor()) ? 1 : 0);
 	if (key == "AT_EOL")
 		return makeInt(currentEditorAtEol(currentEditor()) ? 1 : 0);
+	if (key == "CUR_WINDOW")
+		return makeInt(currentEditWindowIndex());
+	if (key == "WINDOW_COUNT")
+		return makeInt(countEditWindows());
+	if (key == "WIN_X1" || key == "WIN_Y1" || key == "WIN_X2" || key == "WIN_Y2") {
+		int x1;
+		int y1;
+		int x2;
+		int y2;
+		if (!currentWindowGeometry(x1, y1, x2, y2))
+			return makeInt(0);
+		if (key == "WIN_X1")
+			return makeInt(x1);
+		if (key == "WIN_Y1")
+			return makeInt(y1);
+		if (key == "WIN_X2")
+			return makeInt(x2);
+		return makeInt(y2);
+	}
 	if (key == "BLOCK_STAT") {
 		TMREditWindow *win = currentEditWindow();
 		return makeInt(win != NULL ? win->blockStatus() : 0);
@@ -2129,8 +2362,10 @@ static bool storeSpecialVariable(const std::string &name, const Value &value) {
 	if (key == "FIRST_RUN" || key == "FIRST_MACRO" || key == "NEXT_MACRO" ||
 	    key == "LAST_FILE_NAME" || key == "GET_LINE" || key == "CUR_CHAR" || key == "C_COL" ||
 	    key == "C_LINE" || key == "C_ROW" || key == "AT_EOF" || key == "AT_EOL" ||
-	    key == "BLOCK_STAT" || key == "BLOCK_LINE1" || key == "BLOCK_LINE2" ||
-	    key == "BLOCK_COL1" || key == "BLOCK_COL2" || key == "MARKING" || key == "FIRST_SAVE" ||
+	    key == "CUR_WINDOW" || key == "WIN_X1" || key == "WIN_Y1" || key == "WIN_X2" ||
+	    key == "WIN_Y2" || key == "WINDOW_COUNT" || key == "BLOCK_STAT" ||
+	    key == "BLOCK_LINE1" || key == "BLOCK_LINE2" || key == "BLOCK_COL1" ||
+	    key == "BLOCK_COL2" || key == "MARKING" || key == "FIRST_SAVE" ||
 	    key == "EOF_IN_MEM" || key == "BUFFER_ID" || key == "TMP_FILE" || key == "TMP_FILE_NAME" ||
 	    key == "COMSPEC" || key == "MR_PATH" || key == "OS_VERSION" || key == "PARAM_COUNT" ||
 	    key == "CPU")
@@ -3224,6 +3459,23 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					}
 					g_runtimeEnv.lastFileName = win->currentFileName();
 					g_runtimeEnv.errorLevel = 0;
+				} else if (name == "SAVE_BLOCK") {
+					TMREditWindow *win = currentEditWindow();
+					TFileEditor *editor = currentEditor();
+					std::string path;
+					if (args.size() != 1 || !isStringLike(args[0]))
+						throw std::runtime_error("SAVE_BLOCK expects one string argument.");
+					if (win == NULL || editor == NULL) {
+						g_runtimeEnv.errorLevel = 1001;
+						continue;
+					}
+					path = expandUserPath(valueAsString(args[0]));
+					if (!saveCurrentBlockToFile(win, editor, path)) {
+						g_runtimeEnv.errorLevel = errno != 0 ? errno : 1010;
+						continue;
+					}
+					g_runtimeEnv.lastFileName = path;
+					g_runtimeEnv.errorLevel = 0;
 				} else if (name == "SET_INDENT_LEVEL") {
 					if (!args.empty())
 						throw std::runtime_error("SET_INDENT_LEVEL expects no arguments.");
@@ -3312,12 +3564,14 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				           name == "INDENT" || name == "UNDENT" || name == "BLOCK_BEGIN" ||
 				           name == "COL_BLOCK_BEGIN" || name == "STR_BLOCK_BEGIN" ||
 				           name == "BLOCK_END" || name == "BLOCK_OFF" || name == "COPY_BLOCK" ||
-				           name == "MOVE_BLOCK" || name == "DELETE_BLOCK") {
+				           name == "MOVE_BLOCK" || name == "DELETE_BLOCK" ||
+				           name == "CREATE_WINDOW" || name == "DELETE_WINDOW" ||
+				           name == "ERASE_WINDOW" || name == "MODIFY_WINDOW") {
 					TFileEditor *editor = currentEditor();
 					bool ok = false;
 					if (!args.empty())
 						throw std::runtime_error((name + " expects no arguments.").c_str());
-					if (editor == NULL) {
+					if (editor == NULL && name != "CREATE_WINDOW") {
 						g_runtimeEnv.errorLevel = 1001;
 						continue;
 					}
@@ -3386,6 +3640,14 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						ok = moveCurrentBlock(currentEditWindow(), editor);
 					else if (name == "DELETE_BLOCK")
 						ok = deleteCurrentBlock(currentEditWindow(), editor);
+					else if (name == "CREATE_WINDOW")
+						ok = createEditWindow();
+					else if (name == "DELETE_WINDOW")
+						ok = deleteCurrentEditWindow();
+					else if (name == "ERASE_WINDOW")
+						ok = eraseCurrentEditWindow();
+					else if (name == "MODIFY_WINDOW")
+						ok = modifyCurrentEditWindow();
 					g_runtimeEnv.errorLevel = ok ? 0 : 1001;
 				} else if (name == "GOTO_LINE") {
 					TFileEditor *editor = currentEditor();
@@ -3406,6 +3668,19 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						continue;
 					}
 					g_runtimeEnv.errorLevel = gotoEditorCol(editor, valueAsInt(args[0])) ? 0 : 1010;
+				} else if (name == "SWITCH_WINDOW") {
+					if (args.size() != 1 || args[0].type != TYPE_INT)
+						throw std::runtime_error("SWITCH_WINDOW expects one integer argument.");
+					g_runtimeEnv.errorLevel = switchEditWindow(valueAsInt(args[0])) ? 0 : 1001;
+				} else if (name == "SIZE_WINDOW") {
+					if (args.size() != 4 || args[0].type != TYPE_INT || args[1].type != TYPE_INT ||
+					    args[2].type != TYPE_INT || args[3].type != TYPE_INT)
+						throw std::runtime_error("SIZE_WINDOW expects four integer arguments.");
+					g_runtimeEnv.errorLevel =
+					    sizeCurrentEditWindow(valueAsInt(args[0]), valueAsInt(args[1]),
+					                          valueAsInt(args[2]), valueAsInt(args[3]))
+					        ? 0
+					        : 1010;
 				} else if (name == "WINDOW_COPY" || name == "WINDOW_MOVE") {
 					TMREditWindow *destWin = currentEditWindow();
 					TFileEditor *destEditor = currentEditor();

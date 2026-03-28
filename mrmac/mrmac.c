@@ -934,7 +934,10 @@ static int lookup_builtin_variable(const char *name, int *out_type) {
 	    strcasecmp(name, "BLOCK_LINE2") == 0 || strcasecmp(name, "BLOCK_COL1") == 0 ||
 	    strcasecmp(name, "BLOCK_COL2") == 0 || strcasecmp(name, "MARKING") == 0 ||
 	    strcasecmp(name, "TAB_EXPAND") == 0 || strcasecmp(name, "INSERT_MODE") == 0 ||
-	    strcasecmp(name, "INDENT_LEVEL") == 0) {
+	    strcasecmp(name, "INDENT_LEVEL") == 0 || strcasecmp(name, "CUR_WINDOW") == 0 ||
+	    strcasecmp(name, "WIN_X1") == 0 || strcasecmp(name, "WIN_Y1") == 0 ||
+	    strcasecmp(name, "WIN_X2") == 0 || strcasecmp(name, "WIN_Y2") == 0 ||
+	    strcasecmp(name, "WINDOW_COUNT") == 0) {
 		if (out_type != NULL)
 			*out_type = TYPE_INT;
 		return 1;
@@ -1909,8 +1912,19 @@ static int parse_proc_statement_after_name(Parser *ps, const char *name, int lin
 		emit_proc_call("GOTO_COL", argc);
 		return 0;
 	}
-	if (strcasecmp(name, "WINDOW_COPY") == 0 || strcasecmp(name, "WINDOW_MOVE") == 0) {
-		if (argc != 1 || args[0].type != TYPE_INT) {
+	if (strcasecmp(name, "WINDOW_COPY") == 0 || strcasecmp(name, "WINDOW_MOVE") == 0 ||
+	    strcasecmp(name, "SWITCH_WINDOW") == 0 || strcasecmp(name, "SAVE_BLOCK") == 0) {
+		if (argc != 1 || (args[0].type != TYPE_INT && strcasecmp(name, "SAVE_BLOCK") != 0) ||
+		    (strcasecmp(name, "SAVE_BLOCK") == 0 && !is_stringlike_type(args[0].type))) {
+			set_compile_error(line, "Type mismatch or syntax error.");
+			return -1;
+		}
+		emit_proc_call(name, argc);
+		return 0;
+	}
+	if (strcasecmp(name, "SIZE_WINDOW") == 0) {
+		if (argc != 4 || args[0].type != TYPE_INT || args[1].type != TYPE_INT ||
+		    args[2].type != TYPE_INT || args[3].type != TYPE_INT) {
 			set_compile_error(line, "Type mismatch or syntax error.");
 			return -1;
 		}
@@ -2116,7 +2130,9 @@ static int parse_statement(Parser *ps) {
 		    strcasecmp(name, "BLOCK_BEGIN") == 0 || strcasecmp(name, "COL_BLOCK_BEGIN") == 0 ||
 		    strcasecmp(name, "STR_BLOCK_BEGIN") == 0 || strcasecmp(name, "BLOCK_END") == 0 ||
 		    strcasecmp(name, "BLOCK_OFF") == 0 || strcasecmp(name, "COPY_BLOCK") == 0 ||
-		    strcasecmp(name, "MOVE_BLOCK") == 0 || strcasecmp(name, "DELETE_BLOCK") == 0) {
+		    strcasecmp(name, "MOVE_BLOCK") == 0 || strcasecmp(name, "DELETE_BLOCK") == 0 ||
+		    strcasecmp(name, "CREATE_WINDOW") == 0 || strcasecmp(name, "DELETE_WINDOW") == 0 ||
+		    strcasecmp(name, "ERASE_WINDOW") == 0 || strcasecmp(name, "MODIFY_WINDOW") == 0) {
 			emit_proc_call(name, 0);
 			free(name);
 			return parser_expect(ps, TOK_SEMICOLON, "; expected.");
