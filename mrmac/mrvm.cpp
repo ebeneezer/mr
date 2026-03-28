@@ -602,6 +602,28 @@ namespace
         return win != NULL ? win->getEditor() : NULL;
     }
 
+    static TMREditWindow *currentEditWindow();
+
+    static Value loadCurrentFileState(const std::string &key)
+    {
+        TMREditWindow *win = currentEditWindow();
+        if (key == "FIRST_SAVE")
+            return makeInt(win != NULL && win->hasBeenSavedInSession() ? 1 : 0);
+        if (key == "EOF_IN_MEM")
+            return makeInt(win != NULL && win->eofInMemory() ? 1 : 0);
+        if (key == "BUFFER_ID")
+            return makeInt(win != NULL ? win->bufferId() : 0);
+        if (key == "TMP_FILE")
+            return makeInt(win != NULL && win->isTemporaryFile() ? 1 : 0);
+        if (key == "TMP_FILE_NAME")
+            return makeString(win != NULL ? win->temporaryFileName() : "");
+        if (key == "FILE_CHANGED")
+            return makeInt(win != NULL && win->isFileChanged() ? 1 : 0);
+        if (key == "FILE_NAME")
+            return makeString(win != NULL ? win->currentFileName() : "");
+        return makeInt(0);
+    }
+
     static std::string snapshotEditorText(TFileEditor *editor)
     {
         std::string out;
@@ -767,6 +789,10 @@ namespace
             return makeString(formatCurrentTime());
         if (key == "LAST_FILE_NAME")
             return makeString(g_runtimeEnv.lastFileName);
+        if (key == "FIRST_SAVE" || key == "EOF_IN_MEM" || key == "BUFFER_ID" ||
+            key == "TMP_FILE" || key == "TMP_FILE_NAME" || key == "FILE_CHANGED" ||
+            key == "FILE_NAME")
+            return loadCurrentFileState(key);
         if (key == "FIRST_RUN")
         {
             if (!g_runtimeEnv.macroStack.empty())
@@ -830,7 +856,23 @@ namespace
             enforceStringLength(g_runtimeEnv.parameterString);
             return true;
         }
-        if (key == "FIRST_RUN" || key == "FIRST_MACRO" || key == "NEXT_MACRO" || key == "LAST_FILE_NAME")
+        if (key == "FILE_CHANGED")
+        {
+            TMREditWindow *win = currentEditWindow();
+            if (win != NULL)
+                win->setFileChanged(valueAsInt(value) != 0);
+            return true;
+        }
+        if (key == "FILE_NAME")
+        {
+            TMREditWindow *win = currentEditWindow();
+            if (win != NULL)
+                win->setCurrentFileName(valueAsString(value).c_str());
+            return true;
+        }
+        if (key == "FIRST_RUN" || key == "FIRST_MACRO" || key == "NEXT_MACRO" || key == "LAST_FILE_NAME" ||
+            key == "FIRST_SAVE" || key == "EOF_IN_MEM" || key == "BUFFER_ID" ||
+            key == "TMP_FILE" || key == "TMP_FILE_NAME")
             throw std::runtime_error("Attempt to assign to read-only system variable.");
         return false;
     }

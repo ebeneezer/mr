@@ -11,6 +11,7 @@
 #include <tvision/tv.h>
 
 #include <cstring>
+#include <string>
 
 #include "TMRFrame.hpp"
 
@@ -23,7 +24,11 @@ public:
             vScrollBar(nullptr),
             hScrollBar(nullptr),
             indicator(nullptr),
-            editor(nullptr)
+            editor(nullptr),
+            bufferId_(allocateBufferId()),
+            firstSaveDone_(false),
+            temporaryFileUsed_(false),
+            temporaryFileName_()
     {
         options |= ofTileable;
 
@@ -83,6 +88,8 @@ public:
         if (!editor->loadFile())
             return false;
 
+        temporaryFileUsed_ = false;
+        temporaryFileName_.clear();
         updateTitleFromEditor();
         return true;
     }
@@ -94,7 +101,12 @@ public:
 
         bool ok = editor->save() == True;
         if (ok)
+        {
+            firstSaveDone_ = true;
+            temporaryFileUsed_ = false;
+            temporaryFileName_.clear();
             updateTitleFromEditor();
+        }
         return ok;
     }
 
@@ -110,7 +122,67 @@ public:
         return editor;
     }
 
+    bool hasBeenSavedInSession() const
+    {
+        return firstSaveDone_;
+    }
+
+    bool eofInMemory() const
+    {
+        return editor != nullptr;
+    }
+
+    int bufferId() const
+    {
+        return bufferId_;
+    }
+
+    bool isTemporaryFile() const
+    {
+        return temporaryFileUsed_;
+    }
+
+    const char *temporaryFileName() const
+    {
+        return temporaryFileName_.c_str();
+    }
+
+    bool isFileChanged() const
+    {
+        return editor != nullptr && editor->modified == True;
+    }
+
+    void setFileChanged(bool changed)
+    {
+        if (editor != nullptr)
+        {
+            editor->modified = changed ? True : False;
+            editor->update(ufUpdate);
+        }
+    }
+
+    void setCurrentFileName(const char *fileName)
+    {
+        if (editor == nullptr)
+            return;
+
+        if (fileName == nullptr || *fileName == '\0')
+            editor->fileName[0] = EOS;
+        else
+        {
+            strnzcpy(editor->fileName, fileName, sizeof(editor->fileName));
+            fexpand(editor->fileName);
+        }
+        updateTitleFromEditor();
+    }
+
 private:
+    static int allocateBufferId()
+    {
+        static int nextId = 1;
+        return nextId++;
+    }
+
     static TFrame *initFrame(TRect r)
     {
         return new TMRFrame(r);
@@ -130,6 +202,10 @@ private:
     TScrollBar *hScrollBar;
     TIndicator *indicator;
     TFileEditor *editor;
+    int bufferId_;
+    bool firstSaveDone_;
+    bool temporaryFileUsed_;
+    std::string temporaryFileName_;
     char displayTitle[MAXPATH];
 };
 

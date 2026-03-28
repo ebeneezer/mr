@@ -962,7 +962,10 @@ static int lookup_builtin_constant(const char *name, int *out_value)
 static int lookup_builtin_variable(const char *name, int *out_type)
 {
     if (strcasecmp(name, "RETURN_INT") == 0 || strcasecmp(name, "ERROR_LEVEL") == 0 ||
-        strcasecmp(name, "FIRST_RUN") == 0 || strcasecmp(name, "IGNORE_CASE") == 0)
+        strcasecmp(name, "FIRST_RUN") == 0 || strcasecmp(name, "IGNORE_CASE") == 0 ||
+        strcasecmp(name, "FIRST_SAVE") == 0 || strcasecmp(name, "EOF_IN_MEM") == 0 ||
+        strcasecmp(name, "BUFFER_ID") == 0 || strcasecmp(name, "TMP_FILE") == 0 ||
+        strcasecmp(name, "FILE_CHANGED") == 0)
     {
         if (out_type != NULL)
             *out_type = TYPE_INT;
@@ -971,7 +974,8 @@ static int lookup_builtin_variable(const char *name, int *out_type)
     if (strcasecmp(name, "RETURN_STR") == 0 || strcasecmp(name, "MPARM_STR") == 0 ||
         strcasecmp(name, "DATE") == 0 || strcasecmp(name, "TIME") == 0 ||
         strcasecmp(name, "FIRST_MACRO") == 0 || strcasecmp(name, "NEXT_MACRO") == 0 ||
-        strcasecmp(name, "LAST_FILE_NAME") == 0)
+        strcasecmp(name, "LAST_FILE_NAME") == 0 || strcasecmp(name, "TMP_FILE_NAME") == 0 ||
+        strcasecmp(name, "FILE_NAME") == 0)
     {
         if (out_type != NULL)
             *out_type = TYPE_STR;
