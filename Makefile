@@ -14,7 +14,10 @@ CXXFLAGS = -Wall -g -O0 $(INCLUDES)
 CFLAGS = -Wall -g -O0 $(INCLUDES)
 
 # Linker paths and libraries
-LDFLAGS = -L./tvision/build -ltvision -lncursesw -lgpm
+NCURSESW_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libncursesw.so.6 ]; then echo -l:libncursesw.so.6; else echo -lncursesw; fi)
+GPM_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libgpm.so.2 ]; then echo -l:libgpm.so.2; else echo -lgpm; fi)
+TINFO_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libtinfo.so.6 ]; then echo -l:libtinfo.so.6; else echo -ltinfo; fi)
+LDFLAGS = -L./tvision/build -ltvision $(NCURSESW_LIB) $(GPM_LIB) $(TINFO_LIB)
 
 TARGET = mr
 CHAT_CONTEXT_ARCHIVE = mr-chat-context.tar
@@ -22,6 +25,7 @@ CHAT_CONTEXT_ARCHIVE = mr-chat-context.tar
 # Files relevant for ChatGPT sync / review
 CHAT_CONTEXT_FILES = \
 	Makefile \
+	filelist.txt \
 	mr.cpp \
 	mrmac/mrmac.h \
 	mrmac/mrmac.c \
@@ -34,11 +38,11 @@ CHAT_CONTEXT_FILES = \
 	mrmac/mrvm.hpp \
 	ui/mrmacrotest.cpp \
 	ui/mrmacrotest.hpp \
-	ui/theme.mrmac \
 	ui/mrpalette.cpp \
 	ui/mrpalette.hpp \
-	ui/mrtheme.hpp \
-	ui/mrtheme.cpp \
+	ui/mrwindowlist.cpp \
+	ui/mrwindowlist.hpp \
+	mr.hlp \
 	ui/TMRMenuBar.hpp \
 	ui/TMRMenuBox.hpp \
 	ui/TMRFrame.hpp \
@@ -46,12 +50,16 @@ CHAT_CONTEXT_FILES = \
 	ui/TMRDeskTop.hpp \
 	ui/TMREditWindow.hpp
 
+CHAT_CONTEXT_DIRS = \
+	mrmac/macros
+
 # C++ source files (Editor and VM)
 CXX_SOURCES = \
 	mr.cpp \
 	mrmac/mrvm.cpp \
 	ui/mrpalette.cpp \
-	ui/mrmacrotest.cpp
+	ui/mrmacrotest.cpp \
+	ui/mrwindowlist.cpp
 
 CXX_OBJECTS = $(CXX_SOURCES:.cpp=.o)
 
@@ -83,10 +91,11 @@ mrmac/parser.tab.o: mrmac/parser.tab.c mrmac/parser.tab.h mrmac/mrmac.h
 mrmac/mrmac.o: mrmac/mrmac.c mrmac/parser.tab.h mrmac/mrmac.h
 
 # 3. Dependencies for C++ compilation
-mr.o: mr.cpp mrmac/mrmac.h mrmac/mrvm.hpp ui/mrpalette.hpp ui/mrmacrotest.hpp
-mrmac/mrvm.o: mrmac/mrvm.cpp mrmac/mrvm.hpp mrmac/mrmac.h
+mr.o: mr.cpp mrmac/mrmac.h mrmac/mrvm.hpp ui/mrpalette.hpp ui/mrmacrotest.hpp ui/mrwindowlist.hpp
+mrmac/mrvm.o: mrmac/mrvm.cpp mrmac/mrvm.hpp mrmac/mrmac.h ui/mrwindowlist.hpp
 ui/mrpalette.o: ui/mrpalette.cpp ui/mrpalette.hpp
 ui/mrmacrotest.o: ui/mrmacrotest.cpp ui/mrmacrotest.hpp mrmac/mrmac.h mrmac/mrvm.hpp
+ui/mrwindowlist.o: ui/mrwindowlist.cpp ui/mrwindowlist.hpp ui/TMREditWindow.hpp
 
 # 4. Linker call
 $(TARGET): $(CXX_OBJECTS) $(C_OBJECTS)
@@ -101,6 +110,16 @@ context-tar: $(CHAT_CONTEXT_GENERATED)
 			files="$$files $$f"; \
 		else \
 			echo "Skipping missing file: $$f"; \
+		fi; \
+	done; \
+	for d in $(CHAT_CONTEXT_DIRS); do \
+		if [ -d "$$d" ]; then \
+			files="$$files $$d"; \
+			for f in `find "$$d" -type f | sort`; do \
+				files="$$files $$f"; \
+			done; \
+		else \
+			echo "Skipping missing directory: $$d"; \
 		fi; \
 	done; \
 	if [ -z "$$files" ]; then \

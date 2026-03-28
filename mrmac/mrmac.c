@@ -935,6 +935,7 @@ static int lookup_builtin_variable(const char *name, int *out_type) {
 	    strcasecmp(name, "BLOCK_COL2") == 0 || strcasecmp(name, "MARKING") == 0 ||
 	    strcasecmp(name, "TAB_EXPAND") == 0 || strcasecmp(name, "INSERT_MODE") == 0 ||
 	    strcasecmp(name, "INDENT_LEVEL") == 0 || strcasecmp(name, "CUR_WINDOW") == 0 ||
+	    strcasecmp(name, "LINK_STAT") == 0 ||
 	    strcasecmp(name, "WIN_X1") == 0 || strcasecmp(name, "WIN_Y1") == 0 ||
 	    strcasecmp(name, "WIN_X2") == 0 || strcasecmp(name, "WIN_Y2") == 0 ||
 	    strcasecmp(name, "WINDOW_COUNT") == 0) {
@@ -1784,6 +1785,12 @@ static int parse_proc_statement_after_name(Parser *ps, const char *name, int lin
 	if (parser_expect(ps, TOK_RPAREN, "')' expected.") != 0)
 		return -1;
 
+	if ((strcasecmp(name, "LINK_WINDOW") == 0 || strcasecmp(name, "UNLINK_WINDOW") == 0 ||
+	     strcasecmp(name, "ZOOM") == 0 || strcasecmp(name, "REDRAW") == 0 ||
+	     strcasecmp(name, "NEW_SCREEN") == 0) && argc == 0) {
+		emit_proc_call(name, argc);
+		return 0;
+	}
 	if (strcasecmp(name, "SET_GLOBAL_STR") == 0) {
 		if (argc != 2 || !is_stringlike_type(args[0].type) || !is_stringlike_type(args[1].type)) {
 			set_compile_error(line, "Type mismatch or syntax error.");
@@ -2132,7 +2139,10 @@ static int parse_statement(Parser *ps) {
 		    strcasecmp(name, "BLOCK_OFF") == 0 || strcasecmp(name, "COPY_BLOCK") == 0 ||
 		    strcasecmp(name, "MOVE_BLOCK") == 0 || strcasecmp(name, "DELETE_BLOCK") == 0 ||
 		    strcasecmp(name, "CREATE_WINDOW") == 0 || strcasecmp(name, "DELETE_WINDOW") == 0 ||
-		    strcasecmp(name, "ERASE_WINDOW") == 0 || strcasecmp(name, "MODIFY_WINDOW") == 0) {
+		    strcasecmp(name, "ERASE_WINDOW") == 0 || strcasecmp(name, "MODIFY_WINDOW") == 0 ||
+		    strcasecmp(name, "LINK_WINDOW") == 0 || strcasecmp(name, "UNLINK_WINDOW") == 0 ||
+		    strcasecmp(name, "ZOOM") == 0 || strcasecmp(name, "REDRAW") == 0 ||
+		    strcasecmp(name, "NEW_SCREEN") == 0) {
 			emit_proc_call(name, 0);
 			free(name);
 			return parser_expect(ps, TOK_SEMICOLON, "; expected.");

@@ -1,0 +1,19 @@
+MR project summary
+==================
+
+MR is a Turbo Vision editor project inspired by classic Multi-Edit.
+The current code focuses on a stable DOS-like workflow and clean
+incremental reconstruction.
+
+Current highlights
+------------------
+- Multi-Edit style menu and status line.
+- In-memory macro compiler and VM.
+- Block, search, and window operations.
+- WINDOW LIST dialog with real actions.
+- Room for later piece-table and Tree-sitter work.
+
+Near-term direction
+-------------------
+Complete the remaining menu commands, improve editor persistence,
+and keep macro, menu, and UI behavior aligned.

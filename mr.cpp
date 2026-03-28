@@ -34,7 +34,7 @@
 #include "ui/TMRStatusLine.hpp"
 #include "ui/mrmacrotest.hpp"
 #include "ui/mrpalette.hpp"
-#include "ui/mrtheme.hpp"
+#include "ui/mrwindowlist.hpp"
 
 namespace {
 enum : ushort {
@@ -138,15 +138,6 @@ enum : ushort {
 	cmMrDevRunMacro
 };
 
-std::string readTextFile(const std::string &filename) {
-	std::ifstream file(filename.c_str(), std::ios::in | std::ios::binary);
-	if (!file.is_open())
-		return std::string();
-
-	std::stringstream buffer;
-	buffer << file.rdbuf();
-	return buffer.str();
-}
 
 TRect centeredRect(int width, int height) {
 	TRect r = TProgram::deskTop->getExtent();
@@ -164,8 +155,70 @@ ushort execDialog(TDialog *dialog) {
 	if (dialog != 0) {
 		result = TProgram::deskTop->execView(dialog);
 		TObject::destroy(dialog);
+		if (result == cmHelp)
+			mrShowProjectHelp();
 	}
 	return result;
+}
+
+std::vector<TMREditWindow *> allEditWindowsInZOrder() {
+	std::vector<TMREditWindow *> windows;
+
+	if (TProgram::deskTop == 0)
+		return windows;
+
+	for (TView *view = TProgram::deskTop->first(); view != 0; view = view->next) {
+		TMREditWindow *win = dynamic_cast<TMREditWindow *>(view);
+		if (win != 0)
+			windows.push_back(win);
+	}
+	return windows;
+}
+
+TMREditWindow *currentEditWindow() {
+	if (TProgram::deskTop == 0 || TProgram::deskTop->current == 0)
+		return 0;
+	return dynamic_cast<TMREditWindow *>(TProgram::deskTop->current);
+}
+
+bool closeCurrentEditWindow() {
+	TMREditWindow *win = currentEditWindow();
+	if (win == 0)
+		return false;
+	message(win, evCommand, cmClose, 0);
+	return true;
+}
+
+bool activateRelativeEditWindow(int delta) {
+	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+	TMREditWindow *current = currentEditWindow();
+	std::size_t index;
+
+	if (windows.empty())
+		return false;
+	if (current == 0)
+		return mrActivateEditWindow(windows.front());
+
+	for (index = 0; index < windows.size(); ++index) {
+		if (windows[index] == current) {
+			int nextIndex = static_cast<int>(index) + delta;
+			int count = static_cast<int>(windows.size());
+
+			while (nextIndex < 0)
+				nextIndex += count;
+			nextIndex %= count;
+			return mrActivateEditWindow(windows[static_cast<std::size_t>(nextIndex)]);
+		}
+	}
+	return mrActivateEditWindow(windows.front());
+}
+
+bool hideCurrentEditWindow() {
+	TMREditWindow *win = currentEditWindow();
+	if (win == 0)
+		return false;
+	win->hide();
+	return true;
 }
 
 TDialog *createSimplePreviewDialog(const char *title, int width, int height,
@@ -712,7 +765,6 @@ class TMREditorApp : public TApplication {
 	TMREditorApp()
 	    : TProgInit(&TMREditorApp::initMRStatusLine, &TMREditorApp::initMRMenuBar,
 	                &TMREditorApp::initMRDeskTop) {
-		loadThemeMacro();
 		createEditorWindow("?No-File?");
 	}
 
@@ -732,25 +784,6 @@ class TMREditorApp : public TApplication {
 	}
 
   private:
-	void loadThemeMacro() {
-		std::string macroSource = readTextFile("ui/theme.mrmac");
-		if (!macroSource.empty()) {
-			size_t byteCodeSize = 0;
-			unsigned char *byteCode = compile_macro_code(macroSource.c_str(), &byteCodeSize);
-
-			if (byteCode != 0 && byteCodeSize > 0) {
-				VirtualMachine vm;
-				vm.execute(byteCode, byteCodeSize);
-				std::free(byteCode);
-			} else {
-				const char *err = get_last_compile_error();
-				if (err == 0 || *err == '\0')
-					err = "Unknown macro error.";
-
-				messageBox(mfError | mfOKButton, "Macro Error:\n%s", err);
-			}
-		}
-	}
 
 	void createEditorWindow(const char *title) {
 		TRect r = deskTop->getExtent();
@@ -827,6 +860,49 @@ class TMREditorApp : public TApplication {
 		switch (command) {
 			case cmMrWindowOpen:
 				createEditorWindow("?No-File?");
+				return true;
+
+			case cmMrWindowClose:
+				closeCurrentEditWindow();
+				return true;
+
+			case cmMrWindowList: {
+				TMREditWindow *selected = mrShowWindowListDialog(mrwlActivateWindow, currentEditWindow());
+				if (selected != nullptr)
+					mrActivateEditWindow(selected);
+				return true;
+			}
+
+			case cmMrWindowNext:
+				activateRelativeEditWindow(1);
+				return true;
+
+			case cmMrWindowPrevious:
+				activateRelativeEditWindow(-1);
+				return true;
+
+			case cmMrWindowHide:
+				hideCurrentEditWindow();
+				return true;
+
+			case cmMrWindowZoom:
+				mrvmUiZoomCurrentWindow();
+				return true;
+
+			case cmMrWindowLink:
+				mrvmUiLinkCurrentWindow();
+				return true;
+
+			case cmMrWindowUnlink:
+				mrvmUiUnlinkCurrentWindow();
+				return true;
+
+			case cmMrHelpContents:
+			case cmMrHelpKeys:
+			case cmMrHelpDetailedIndex:
+			case cmMrHelpPreviousTopic:
+			case cmHelp:
+				mrShowProjectHelp();
 				return true;
 
 			case cmMrOtherInstallationAndSetup:

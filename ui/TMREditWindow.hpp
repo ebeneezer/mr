@@ -82,6 +82,34 @@ class TMREditWindow : public TWindow {
 		return true;
 	}
 
+	bool loadTextBuffer(const char *text, const char *title = nullptr) {
+		uint length = 0;
+
+		if (editor == nullptr)
+			return false;
+		if (text != nullptr)
+			length = static_cast<uint>(std::strlen(text));
+
+		editor->setBufLen(0);
+		editor->setCurPtr(0, 0);
+		editor->setSelect(0, 0, False);
+		if (length != 0 && !editor->insertText(text, length, False))
+			return false;
+		editor->setCurPtr(0, 0);
+		editor->setSelect(0, 0, False);
+		editor->modified = False;
+		editor->update(ufUpdate);
+
+		temporaryFileUsed_ = false;
+		temporaryFileName_.clear();
+		editor->fileName[0] = EOS;
+		if (title != nullptr && *title != '\0')
+			setDisplayTitle(title);
+		else
+			updateTitleFromEditor();
+		return true;
+	}
+
 	bool saveCurrentFile() {
 		if (editor == nullptr)
 			return false;
@@ -148,6 +176,13 @@ class TMREditWindow : public TWindow {
 			fexpand(editor->fileName);
 		}
 		updateTitleFromEditor();
+	}
+
+	void setDisplayTitle(const char *title) {
+		std::strncpy(displayTitle, (title != nullptr && *title != '\0') ? title : "Untitled",
+		             sizeof(displayTitle) - 1);
+		displayTitle[sizeof(displayTitle) - 1] = '\0';
+		message(owner, evBroadcast, cmUpdateTitle, 0);
 	}
 
 	int indentLevel() const {

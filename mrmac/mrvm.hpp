@@ -38,3 +38,9 @@ class VirtualMachine {
 #endif
 
 void mrvmSetProcessContext(int argc, char **argv);
+
+bool mrvmUiLinkCurrentWindow();
+bool mrvmUiUnlinkCurrentWindow();
+bool mrvmUiZoomCurrentWindow();
+bool mrvmUiRedrawCurrentWindow();
+bool mrvmUiNewScreen();

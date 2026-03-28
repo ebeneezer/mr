@@ -1,0 +1,26 @@
+./Makefile
+./filelist.txt
+./mr.cpp
+./mrmac/lex.yy.c
+./mrmac/lexer.l
+./mrmac/mrmac.c
+./mrmac/mrmac.h
+./mrmac/mrvm.cpp
+./mrmac/mrvm.hpp
+./mrmac/parser.tab.c
+./mrmac/parser.tab.h
+./mrmac/parser.y
+./ui/TMRDeskTop.hpp
+./ui/TMREditWindow.hpp
+./ui/TMRFrame.hpp
+./ui/TMRMenuBar.hpp
+./ui/TMRMenuBox.hpp
+./ui/TMRStatusLine.hpp
+./mr.hlp
+./mrmac/macros/* (recursive, if present)
+./ui/mrmacrotest.cpp
+./ui/mrmacrotest.hpp
+./ui/mrpalette.cpp
+./ui/mrpalette.hpp
+./ui/mrwindowlist.cpp
+./ui/mrwindowlist.hpp

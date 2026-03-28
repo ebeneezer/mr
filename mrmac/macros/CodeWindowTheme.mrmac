@@ -1,0 +1,14 @@
+; CodewindowTheme.mrmac
+TARGET "Codewindow"
+
+; Rahmenfarben (0x1F = Classic Blue)
+SET_FRAME_COLORS 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F, 0x1F
+
+; Syntaxfarben
+SET_SYNTAX NORMAL, 0x1F
+SET_SYNTAX KEYWORD, 0x1E
+SET_SYNTAX STRING, 0x1A
+SET_SYNTAX COMMENT, 0x1B
+SET_SYNTAX ERROR, 0x1C
+
+COMMIT_THEME

@@ -1,6 +1,13 @@
 #define Uses_MsgBox
+#define Uses_TKeys
 #define Uses_TProgram
 #define Uses_TDeskTop
+#define Uses_TDialog
+#define Uses_TButton
+#define Uses_TStaticText
+#define Uses_TScrollBar
+#define Uses_TListViewer
+#define Uses_TObject
 #include <tvision/tv.h>
 
 #include "mrmac.h"
@@ -16,6 +23,7 @@
 #include <glob.h>
 #include <limits>
 #include <map>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -24,7 +32,7 @@
 #include <vector>
 
 #include "../ui/TMREditWindow.hpp"
-#include "../ui/mrtheme.hpp"
+#include "../ui/mrwindowlist.hpp"
 
 namespace {
 using Value = VirtualMachine::Value;
@@ -99,6 +107,8 @@ struct RuntimeEnvironment {
 	std::size_t lastSearchStart;
 	std::size_t lastSearchEnd;
 	std::size_t lastSearchCursor;
+	std::map<const void *, int> windowLinkGroups;
+	int nextWindowLinkGroupId;
 
 	RuntimeEnvironment()
 	    : globals(), globalOrder(), globalEnumIndex(0), parameterString(), returnInt(0),
@@ -107,7 +117,7 @@ struct RuntimeEnvironment {
 	      markStacks(), startupCommand(), processArgs(), executablePath(), executableDir(),
 	      shellPath(), shellVersion(), ignoreCase(false), tabExpand(true), lastSearchValid(false),
 	      lastSearchWindow(NULL), lastSearchFileName(), lastSearchStart(0), lastSearchEnd(0),
-	      lastSearchCursor(0) {
+	      lastSearchCursor(0), windowLinkGroups(), nextWindowLinkGroupId(1) {
 	}
 };
 
@@ -144,6 +154,20 @@ static bool ensureLoadedFileResident(const std::string &fileKey);
 static bool evictTransientFileImage(const std::string &fileKey);
 static std::string expandUserPath(const std::string &path);
 static bool fileExistsPath(const std::string &path);
+static std::vector<TMREditWindow *> allEditWindows();
+static void cleanupWindowLinkGroups();
+static int windowLinkGroupOf(TMREditWindow *win);
+static bool isWindowLinked(TMREditWindow *win);
+static int currentLinkStatus();
+static TMREditWindow *selectLinkTargetWindow(TMREditWindow *current);
+static bool prepareWindowLink(TMREditWindow *current, TMREditWindow *target,
+                              TMREditWindow *&source, TMREditWindow *&dest);
+static bool linkCurrentEditWindow();
+static bool unlinkCurrentEditWindow();
+static void syncLinkedWindowsFrom(TMREditWindow *source);
+static bool redrawCurrentEditWindow();
+static bool redrawEntireScreen();
+static bool zoomCurrentEditWindow();
 static int findFirstFileMatch(const std::string &pattern);
 static int findNextFileMatch();
 static TMREditWindow *currentEditWindow();
@@ -1589,6 +1613,241 @@ static int countEditWindows() {
 	return count;
 }
 
+static void collectEditWindowsProc(TView *view, void *arg) {
+	std::vector<TMREditWindow *> *windows = static_cast<std::vector<TMREditWindow *> *>(arg);
+	TMREditWindow *win = dynamic_cast<TMREditWindow *>(view);
+	if (windows != NULL && win != NULL)
+		windows->push_back(win);
+}
+
+static std::vector<TMREditWindow *> allEditWindows() {
+	std::vector<TMREditWindow *> windows;
+	if (TProgram::deskTop != NULL)
+		TProgram::deskTop->forEach(collectEditWindowsProc, &windows);
+	return windows;
+}
+
+static void cleanupWindowLinkGroups() {
+	std::vector<TMREditWindow *> windows = allEditWindows();
+	std::set<const void *> live;
+	std::map<int, int> counts;
+	std::map<const void *, int>::iterator it;
+
+	for (std::size_t i = 0; i < windows.size(); ++i)
+		live.insert(windows[i]);
+
+	for (it = g_runtimeEnv.windowLinkGroups.begin(); it != g_runtimeEnv.windowLinkGroups.end();) {
+		if (live.find(it->first) == live.end())
+			it = g_runtimeEnv.windowLinkGroups.erase(it);
+		else {
+			++counts[it->second];
+			++it;
+		}
+	}
+
+	for (it = g_runtimeEnv.windowLinkGroups.begin(); it != g_runtimeEnv.windowLinkGroups.end();) {
+		if (counts[it->second] < 2)
+			it = g_runtimeEnv.windowLinkGroups.erase(it);
+		else
+			++it;
+	}
+}
+
+static int windowLinkGroupOf(TMREditWindow *win) {
+	std::map<const void *, int>::const_iterator it;
+	if (win == NULL)
+		return 0;
+	cleanupWindowLinkGroups();
+	it = g_runtimeEnv.windowLinkGroups.find(win);
+	if (it == g_runtimeEnv.windowLinkGroups.end())
+		return 0;
+	return it->second;
+}
+
+static bool isWindowLinked(TMREditWindow *win) {
+	return windowLinkGroupOf(win) != 0;
+}
+
+static int currentLinkStatus() {
+	return isWindowLinked(currentEditWindow()) ? 1 : 0;
+}
+
+static bool windowBufferIdentity(TMREditWindow *win, std::string &fileName, std::string &text,
+                                 bool &emptyUntitled) {
+	TFileEditor *editor;
+	if (win == NULL)
+		return false;
+	editor = win->getEditor();
+	if (editor == NULL)
+		return false;
+	fileName = win->currentFileName();
+	text = snapshotEditorText(editor);
+	emptyUntitled = fileName.empty() && text.empty();
+	return true;
+}
+
+static bool copyWindowBufferState(TMREditWindow *src, TMREditWindow *dest) {
+	TFileEditor *srcEditor;
+	TFileEditor *destEditor;
+	std::string text;
+	std::size_t cursorPos;
+	if (src == NULL || dest == NULL)
+		return false;
+	srcEditor = src->getEditor();
+	destEditor = dest->getEditor();
+	if (srcEditor == NULL || destEditor == NULL)
+		return false;
+	text = snapshotEditorText(srcEditor);
+	cursorPos = std::min<std::size_t>(destEditor->curPtr, text.size());
+	if (!replaceEditorBuffer(destEditor, text, cursorPos))
+		return false;
+	dest->setCurrentFileName(src->currentFileName());
+	dest->setFileChanged(src->isFileChanged());
+	return true;
+}
+
+static bool assignLinkedWindows(TMREditWindow *a, TMREditWindow *b) {
+	int groupA;
+	int groupB;
+	int targetGroup;
+	std::map<const void *, int>::iterator it;
+
+	if (a == NULL || b == NULL || a == b)
+		return false;
+
+	cleanupWindowLinkGroups();
+	groupA = windowLinkGroupOf(a);
+	groupB = windowLinkGroupOf(b);
+	if (groupA != 0 && groupA == groupB)
+		return true;
+
+	targetGroup = groupA != 0 ? groupA : groupB;
+	if (targetGroup == 0)
+		targetGroup = g_runtimeEnv.nextWindowLinkGroupId++;
+
+	if (groupA != 0 && groupB != 0 && groupA != groupB) {
+		for (it = g_runtimeEnv.windowLinkGroups.begin(); it != g_runtimeEnv.windowLinkGroups.end(); ++it)
+			if (it->second == groupB)
+				it->second = targetGroup;
+	}
+
+	g_runtimeEnv.windowLinkGroups[a] = targetGroup;
+	g_runtimeEnv.windowLinkGroups[b] = targetGroup;
+	cleanupWindowLinkGroups();
+	return true;
+}
+
+
+static TMREditWindow *selectLinkTargetWindow(TMREditWindow *current) {
+	return mrShowWindowListDialog(mrwlSelectLinkTarget, current);
+}
+
+static bool prepareWindowLink(TMREditWindow *current, TMREditWindow *target,
+                              TMREditWindow *&source, TMREditWindow *&dest) {
+	std::string currentFile;
+	std::string currentText;
+	std::string targetFile;
+	std::string targetText;
+	bool currentEmptyUntitled = false;
+	bool targetEmptyUntitled = false;
+
+	if (current == NULL || target == NULL || current == target)
+		return false;
+	if (!windowBufferIdentity(current, currentFile, currentText, currentEmptyUntitled) ||
+	    !windowBufferIdentity(target, targetFile, targetText, targetEmptyUntitled))
+		return false;
+
+	if (!currentEmptyUntitled && !targetEmptyUntitled) {
+		if (currentFile != targetFile || currentText != targetText)
+			return false;
+		source = current;
+		dest = target;
+	} else if (currentEmptyUntitled && !targetEmptyUntitled) {
+		source = target;
+		dest = current;
+	} else {
+		source = current;
+		dest = target;
+	}
+	return true;
+}
+
+static bool linkCurrentEditWindow() {
+	TMREditWindow *current = currentEditWindow();
+	TMREditWindow *target;
+	TMREditWindow *source = NULL;
+	TMREditWindow *dest = NULL;
+
+	if (current == NULL)
+		return false;
+	target = selectLinkTargetWindow(current);
+	if (target == NULL)
+		return false;
+	if (!prepareWindowLink(current, target, source, dest))
+		return false;
+	if (source != dest && !copyWindowBufferState(source, dest))
+		return false;
+	if (!assignLinkedWindows(current, target))
+		return false;
+	syncLinkedWindowsFrom(source);
+	return true;
+}
+
+static bool unlinkCurrentEditWindow() {
+	TMREditWindow *current = currentEditWindow();
+	if (current == NULL)
+		return false;
+	cleanupWindowLinkGroups();
+	g_runtimeEnv.windowLinkGroups.erase(current);
+	cleanupWindowLinkGroups();
+	return true;
+}
+
+static void syncLinkedWindowsFrom(TMREditWindow *source) {
+	std::vector<TMREditWindow *> windows = allEditWindows();
+	int group;
+	if (source == NULL)
+		return;
+	group = windowLinkGroupOf(source);
+	if (group == 0)
+		return;
+	for (std::size_t i = 0; i < windows.size(); ++i) {
+		if (windows[i] == source)
+			continue;
+		if (windowLinkGroupOf(windows[i]) == group)
+			copyWindowBufferState(source, windows[i]);
+	}
+}
+
+static bool redrawCurrentEditWindow() {
+	TMREditWindow *win = currentEditWindow();
+	TFileEditor *editor = currentEditor();
+	if (win == NULL)
+		return false;
+	if (editor != NULL)
+		editor->doUpdate();
+	win->drawView();
+	return true;
+}
+
+static bool redrawEntireScreen() {
+	std::vector<TMREditWindow *> windows = allEditWindows();
+	if (TProgram::deskTop == NULL)
+		return false;
+	TProgram::deskTop->drawView();
+	for (std::size_t i = 0; i < windows.size(); ++i)
+		windows[i]->drawView();
+	return true;
+}
+
+static bool zoomCurrentEditWindow() {
+	TMREditWindow *win = currentEditWindow();
+	if (win == NULL)
+		return false;
+	message(win, evCommand, cmZoom, 0);
+	return true;
+}
+
 static int currentEditWindowIndex() {
 	TMREditWindow *current = currentEditWindow();
 	int index = 0;
@@ -2235,6 +2494,8 @@ static Value loadSpecialVariable(const std::string &name, bool &handled) {
 		return makeInt(currentEditorAtEol(currentEditor()) ? 1 : 0);
 	if (key == "CUR_WINDOW")
 		return makeInt(currentEditWindowIndex());
+	if (key == "LINK_STAT")
+		return makeInt(currentLinkStatus());
 	if (key == "WINDOW_COUNT")
 		return makeInt(countEditWindows());
 	if (key == "WIN_X1" || key == "WIN_Y1" || key == "WIN_X2" || key == "WIN_Y2") {
@@ -2362,7 +2623,7 @@ static bool storeSpecialVariable(const std::string &name, const Value &value) {
 	if (key == "FIRST_RUN" || key == "FIRST_MACRO" || key == "NEXT_MACRO" ||
 	    key == "LAST_FILE_NAME" || key == "GET_LINE" || key == "CUR_CHAR" || key == "C_COL" ||
 	    key == "C_LINE" || key == "C_ROW" || key == "AT_EOF" || key == "AT_EOL" ||
-	    key == "CUR_WINDOW" || key == "WIN_X1" || key == "WIN_Y1" || key == "WIN_X2" ||
+	    key == "CUR_WINDOW" || key == "LINK_STAT" || key == "WIN_X1" || key == "WIN_Y1" || key == "WIN_X2" ||
 	    key == "WIN_Y2" || key == "WINDOW_COUNT" || key == "BLOCK_STAT" ||
 	    key == "BLOCK_LINE1" || key == "BLOCK_LINE2" || key == "BLOCK_COL1" ||
 	    key == "BLOCK_COL2" || key == "MARKING" || key == "FIRST_SAVE" ||
@@ -3566,7 +3827,9 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				           name == "BLOCK_END" || name == "BLOCK_OFF" || name == "COPY_BLOCK" ||
 				           name == "MOVE_BLOCK" || name == "DELETE_BLOCK" ||
 				           name == "CREATE_WINDOW" || name == "DELETE_WINDOW" ||
-				           name == "ERASE_WINDOW" || name == "MODIFY_WINDOW") {
+				           name == "ERASE_WINDOW" || name == "MODIFY_WINDOW" ||
+				           name == "LINK_WINDOW" || name == "UNLINK_WINDOW" ||
+				           name == "ZOOM" || name == "REDRAW" || name == "NEW_SCREEN") {
 					TFileEditor *editor = currentEditor();
 					bool ok = false;
 					if (!args.empty())
@@ -3648,6 +3911,16 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						ok = eraseCurrentEditWindow();
 					else if (name == "MODIFY_WINDOW")
 						ok = modifyCurrentEditWindow();
+					else if (name == "LINK_WINDOW")
+						ok = linkCurrentEditWindow();
+					else if (name == "UNLINK_WINDOW")
+						ok = unlinkCurrentEditWindow();
+					else if (name == "ZOOM")
+						ok = zoomCurrentEditWindow();
+					else if (name == "REDRAW")
+						ok = redrawCurrentEditWindow();
+					else if (name == "NEW_SCREEN")
+						ok = redrawEntireScreen();
 					g_runtimeEnv.errorLevel = ok ? 0 : 1001;
 				} else if (name == "GOTO_LINE") {
 					TFileEditor *editor = currentEditor();
@@ -3801,19 +4074,6 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						}
 						messageBox(mfInformation | mfOKButton, "%s", text.c_str());
 					}
-				} else if (funcName == "RegisterTheme") {
-					if (args.size() == 17 && isStringLike(args[16])) {
-						MRTheme newTheme;
-						std::string targetClass = valueAsString(args[16]);
-						for (int i = 0; i < 16; ++i) {
-							if (args[i].type != TYPE_INT)
-								throw std::runtime_error(
-								    "RegisterTheme palette values must be integers.");
-							newTheme.paletteData[i] = static_cast<char>(args[i].i & 0xFF);
-						}
-						newTheme.paletteData[16] = '\0';
-						MRThemeRegistry::instance().registerTheme(targetClass, newTheme);
-					}
 				}
 			} else if (opcode == OP_HALT) {
 				log.push_back("Program end reached.");
@@ -3823,6 +4083,8 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				std::snprintf(hexOp, sizeof(hexOp), "0x%02X", opcode);
 				throw std::runtime_error(std::string("Unknown opcode ") + hexOp);
 			}
+
+			syncLinkedWindowsFrom(currentEditWindow());
 		}
 	} catch (const std::exception &ex) {
 		log.push_back(std::string("VM Error: ") + ex.what());
@@ -3831,4 +4093,24 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 	g_runtimeEnv.parameterString = savedParameterString;
 	if (pushedMacroFrame)
 		g_runtimeEnv.macroStack.pop_back();
+}
+
+bool mrvmUiLinkCurrentWindow() {
+	return linkCurrentEditWindow();
+}
+
+bool mrvmUiUnlinkCurrentWindow() {
+	return unlinkCurrentEditWindow();
+}
+
+bool mrvmUiZoomCurrentWindow() {
+	return zoomCurrentEditWindow();
+}
+
+bool mrvmUiRedrawCurrentWindow() {
+	return redrawCurrentEditWindow();
+}
+
+bool mrvmUiNewScreen() {
+	return redrawEntireScreen();
 }
