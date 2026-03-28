@@ -161,17 +161,22 @@ ushort execDialog(TDialog *dialog) {
 	return result;
 }
 
+void collectEditWindowsInZOrder(TView *view, void *arg) {
+	std::vector<TMREditWindow *> *windows = static_cast<std::vector<TMREditWindow *> *>(arg);
+	TMREditWindow *win = dynamic_cast<TMREditWindow *>(view);
+
+	if (windows != 0 && win != 0)
+		windows->push_back(win);
+}
+
 std::vector<TMREditWindow *> allEditWindowsInZOrder() {
 	std::vector<TMREditWindow *> windows;
 
 	if (TProgram::deskTop == 0)
 		return windows;
 
-	for (TView *view = TProgram::deskTop->first(); view != 0; view = view->next) {
-		TMREditWindow *win = dynamic_cast<TMREditWindow *>(view);
-		if (win != 0)
-			windows.push_back(win);
-	}
+	/* TGroup uses a ring list; iterate via forEach instead of walking until nullptr. */
+	TProgram::deskTop->forEach(collectEditWindowsInZOrder, &windows);
 	return windows;
 }
 

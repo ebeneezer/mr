@@ -1848,20 +1848,33 @@ static bool zoomCurrentEditWindow() {
 	return true;
 }
 
+struct CurrentEditWindowIndexLookup {
+	TMREditWindow *current;
+	int index;
+	int result;
+};
+
+static void currentEditWindowIndexProc(TView *view, void *arg) {
+	CurrentEditWindowIndexLookup *lookup = static_cast<CurrentEditWindowIndexLookup *>(arg);
+	TMREditWindow *win = dynamic_cast<TMREditWindow *>(view);
+	if (lookup == NULL || win == NULL || lookup->result != 0)
+		return;
+	++lookup->index;
+	if (win == lookup->current)
+		lookup->result = lookup->index;
+}
+
 static int currentEditWindowIndex() {
-	TMREditWindow *current = currentEditWindow();
-	int index = 0;
-	if (current == NULL || TProgram::deskTop == NULL)
+	CurrentEditWindowIndexLookup lookup;
+	if (TProgram::deskTop == NULL)
 		return 0;
-	for (TView *view = TProgram::deskTop->first(); view != NULL; view = view->next) {
-		TMREditWindow *win = dynamic_cast<TMREditWindow *>(view);
-		if (win == NULL)
-			continue;
-		++index;
-		if (win == current)
-			return index;
-	}
-	return 0;
+	lookup.current = currentEditWindow();
+	lookup.index = 0;
+	lookup.result = 0;
+	if (lookup.current == NULL)
+		return 0;
+	TProgram::deskTop->forEach(currentEditWindowIndexProc, &lookup);
+	return lookup.result;
 }
 
 static bool currentWindowGeometry(int &x1, int &y1, int &x2, int &y2) {

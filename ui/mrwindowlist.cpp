@@ -102,15 +102,19 @@ bool isWindowEmptyUntitled(TMREditWindow *win) {
 	return editor != nullptr && editor->bufLen == 0;
 }
 
+void collectEditWindowsProc(TView *view, void *arg) {
+	std::vector<TMREditWindow *> *windows = static_cast<std::vector<TMREditWindow *> *>(arg);
+	TMREditWindow *win = dynamic_cast<TMREditWindow *>(view);
+	if (windows != nullptr && win != nullptr)
+		windows->push_back(win);
+}
+
 std::vector<TMREditWindow *> allEditWindows() {
 	std::vector<TMREditWindow *> windows;
 	if (TProgram::deskTop == nullptr)
 		return windows;
-	for (TView *view = TProgram::deskTop->first(); view != nullptr; view = view->next) {
-		TMREditWindow *win = dynamic_cast<TMREditWindow *>(view);
-		if (win != nullptr)
-			windows.push_back(win);
-	}
+	/* TDeskTop stores subviews in a circular list. */
+	TProgram::deskTop->forEach(collectEditWindowsProc, &windows);
 	return windows;
 }
 

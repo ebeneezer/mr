@@ -20,7 +20,7 @@ TINFO_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libtinfo.so.6 ]; then echo -l
 LDFLAGS = -L./tvision/build -ltvision $(NCURSESW_LIB) $(GPM_LIB) $(TINFO_LIB)
 
 TARGET = mr
-CHAT_CONTEXT_ARCHIVE = mr-chat-context.tar
+CHAT_CONTEXT_ARCHIVE = mr-chat-context.tar.bz2
 
 # Files relevant for ChatGPT sync / review
 CHAT_CONTEXT_FILES = \
@@ -115,9 +115,6 @@ context-tar: $(CHAT_CONTEXT_GENERATED)
 	for d in $(CHAT_CONTEXT_DIRS); do \
 		if [ -d "$$d" ]; then \
 			files="$$files $$d"; \
-			for f in `find "$$d" -type f | sort`; do \
-				files="$$files $$f"; \
-			done; \
 		else \
 			echo "Skipping missing directory: $$d"; \
 		fi; \
@@ -126,7 +123,7 @@ context-tar: $(CHAT_CONTEXT_GENERATED)
 		echo "No context files found for archive."; \
 		exit 1; \
 	fi; \
-	$(TAR) -cf $(CHAT_CONTEXT_ARCHIVE) $$files; \
+	$(TAR) -cjf $(CHAT_CONTEXT_ARCHIVE) $$files; \
 	echo "Created $(CHAT_CONTEXT_ARCHIVE)"
 
 # C++ compilation
