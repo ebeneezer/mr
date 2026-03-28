@@ -11,39 +11,30 @@
  *
  */
 
-#if !defined( __MOUSEDLG_H )
+#if !defined(__MOUSEDLG_H)
 #define __MOUSEDLG_H
 
-class TClickTester : public TStaticText
-{
+class TClickTester : public TStaticText {
 
-public:
+  public:
+	TClickTester(TRect &r, const char *aText);
+	virtual TPalette &getPalette() const;
+	virtual void handleEvent(TEvent &event);
+	virtual void draw();
 
-    TClickTester(TRect& r, const char *aText);
-    virtual TPalette& getPalette() const;
-    virtual void handleEvent(TEvent& event);
-    virtual void draw();
-
-private:
-
-    char clicked;
-
+  private:
+	char clicked;
 };
 
+class TMouseDialog : public TDialog {
 
-class TMouseDialog : public TDialog
-{
+  public:
+	TMouseDialog();
+	virtual void handleEvent(TEvent &event);
 
-public:
-
-    TMouseDialog();
-    virtual void handleEvent(TEvent& event);
-
-private:
-
-    TScrollBar *mouseScrollBar;
-    short oldDelay;
-
+  private:
+	TScrollBar *mouseScrollBar;
+	short oldDelay;
 };
 
 #endif // __MOUSEDLG_H

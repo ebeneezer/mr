@@ -15,11 +15,7 @@
 #define Uses_TLabel
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
-__link( RStaticText )
+__link(RStaticText)
 
-TStreamableClass RLabel( TLabel::name,
-                         TLabel::build,
-                         __DELTA(TLabel)
-                       );
+    TStreamableClass RLabel(TLabel::name, TLabel::build, __DELTA(TLabel));
 #endif
-

@@ -39,49 +39,45 @@
 
 static void autoPlacePopup(TMenuPopup *, TPoint);
 
-ushort popupMenu(TPoint where, TMenuItem &aMenu, TGroup *receiver)
-{
-    ushort res = 0;
-    TGroup *app = TProgram::application;
-    if (app)
-    {
-        {
-            TPoint p = app->makeLocal(where);
-            TRect bounds(p, p);
-            TMenu *menu = new TMenu(aMenu);
-            TMenuPopup *menuPopup = new TMenuPopup(bounds, menu);
-            autoPlacePopup(menuPopup, p);
-            // Execute and dispose the menu.
-            res = app->execView(menuPopup);
-            TObject::destroy(menuPopup);
-        }
-        // Generate an event.
-        if (res && receiver)
-        {
-            TEvent event = {};
-            event.what = evCommand;
-            event.message.command = res;
-            receiver->putEvent(event);
-        }
-    }
-    return res;
+ushort popupMenu(TPoint where, TMenuItem &aMenu, TGroup *receiver) {
+	ushort res = 0;
+	TGroup *app = TProgram::application;
+	if (app) {
+		{
+			TPoint p = app->makeLocal(where);
+			TRect bounds(p, p);
+			TMenu *menu = new TMenu(aMenu);
+			TMenuPopup *menuPopup = new TMenuPopup(bounds, menu);
+			autoPlacePopup(menuPopup, p);
+			// Execute and dispose the menu.
+			res = app->execView(menuPopup);
+			TObject::destroy(menuPopup);
+		}
+		// Generate an event.
+		if (res && receiver) {
+			TEvent event = {};
+			event.what = evCommand;
+			event.message.command = res;
+			receiver->putEvent(event);
+		}
+	}
+	return res;
 }
 
 static void autoPlacePopup(TMenuPopup *m, TPoint p)
 // Pre: TMenuPopup was constructed with bounds=TRect(p, p).
 {
-    TGroup *app = TProgram::application;
-    // Initially, the menu is placed above 'p'. So we need to move it.
-    TRect r = m->getBounds();
-    // But we must ensure that the popup does not go beyond the desktop's
-    // bottom right corner, for usability.
-    {
-        TPoint d = app->size - p;
-        r.move(min(m->size.x, d.x),
-               min(m->size.y + 1, d.y));
-    }
-    // If the popup then contains 'p', try to move it to a better place.
-    if (r.contains(p) && r.b.y - r.a.y < p.y)
-        r.move(0, -(r.b.y - p.y));
-    m->setBounds(r);
+	TGroup *app = TProgram::application;
+	// Initially, the menu is placed above 'p'. So we need to move it.
+	TRect r = m->getBounds();
+	// But we must ensure that the popup does not go beyond the desktop's
+	// bottom right corner, for usability.
+	{
+		TPoint d = app->size - p;
+		r.move(min(m->size.x, d.x), min(m->size.y + 1, d.y));
+	}
+	// If the popup then contains 'p', try to move it to a better place.
+	if (r.contains(p) && r.b.y - r.a.y < p.y)
+		r.move(0, -(r.b.y - p.y));
+	m->setBounds(r);
 }

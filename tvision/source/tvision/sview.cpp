@@ -16,9 +16,6 @@
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
 
-TStreamableClass RView( TView::name,
-                        TView::build,
-                        __DELTA(TView)
-                      );
+TStreamableClass RView(TView::name, TView::build, __DELTA(TView));
 
 #endif

@@ -15,12 +15,7 @@
 #define Uses_TStreamableClass
 #define Uses_TCluster
 #include <tvision/tv.h>
-__link( RView )
-__link( RStringCollection )
+__link(RView) __link(RStringCollection)
 
-TStreamableClass RCluster( TCluster::name,
-                           TCluster::build,
-                           __DELTA(TCluster)
-                         );
+    TStreamableClass RCluster(TCluster::name, TCluster::build, __DELTA(TCluster));
 #endif
-

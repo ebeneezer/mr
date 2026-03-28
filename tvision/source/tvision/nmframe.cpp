@@ -15,5 +15,5 @@
 #define Uses_TFrame
 #include <tvision/tv.h>
 
-const char * const _NEAR TFrame::name = "TFrame";
+const char *const _NEAR TFrame::name = "TFrame";
 #endif

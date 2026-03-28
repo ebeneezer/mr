@@ -36,8 +36,8 @@
 #ifndef TVISION_COMPAT__DEFS_H
 #define TVISION_COMPAT__DEFS_H
 
-#define _RTLENTRY  __cdecl
-#define _Cdecl      _RTLENTRY
+#define _RTLENTRY __cdecl
+#define _Cdecl _RTLENTRY
 
 #endif // TVISION_COMPAT__DEFS_H
 

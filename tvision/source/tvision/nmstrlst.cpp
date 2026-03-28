@@ -15,5 +15,5 @@
 #define Uses_TStringList
 #include <tvision/tv.h>
 
-const char * const _NEAR TStringList::name = "TStringList";
+const char *const _NEAR TStringList::name = "TStringList";
 #endif

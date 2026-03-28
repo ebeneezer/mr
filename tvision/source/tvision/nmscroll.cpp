@@ -15,5 +15,5 @@
 #define Uses_TScroller
 #include <tvision/tv.h>
 
-const char * const _NEAR TScroller::name = "TScroller";
+const char *const _NEAR TScroller::name = "TScroller";
 #endif

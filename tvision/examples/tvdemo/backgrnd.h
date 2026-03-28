@@ -10,19 +10,15 @@
 #define Uses_TInputLine
 #include <tvision/tv.h>
 
-class TChBackground : public TDialog
-{
+class TChBackground : public TDialog {
 
-public:
+  public:
+	TChBackground(TBackground *);
+	virtual Boolean valid(ushort);
 
-    TChBackground( TBackground * );
-    virtual Boolean valid( ushort );
-
-private:
-
-    TBackground *background;
-    TInputLine *input;
-
+  private:
+	TBackground *background;
+	TInputLine *input;
 };
 
 #endif

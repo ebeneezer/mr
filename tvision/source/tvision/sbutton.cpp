@@ -15,10 +15,7 @@
 #define Uses_TButton
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
-__link( RView )
+__link(RView)
 
-TStreamableClass RButton( TButton::name,
-                          TButton::build,
-                          __DELTA(TButton)
-                        );
+    TStreamableClass RButton(TButton::name, TButton::build, __DELTA(TButton));
 #endif

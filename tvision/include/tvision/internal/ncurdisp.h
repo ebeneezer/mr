@@ -13,43 +13,38 @@
 #undef scroll
 #endif
 
-namespace tvision
-{
+namespace tvision {
 
-class NcursesDisplay final : public DisplayAdapter
-{
-public:
+class NcursesDisplay final : public DisplayAdapter {
+  public:
+	// The lifetime of 'con' exceeds that of the returned object.
+	static NcursesDisplay &create(ConsoleCtl &con) noexcept;
+	~NcursesDisplay();
 
-    // The lifetime of 'con' exceeds that of the returned object.
-    static NcursesDisplay &create(ConsoleCtl &con) noexcept;
-    ~NcursesDisplay();
+  private:
+	ConsoleCtl &con;
+	SCREEN *term;
+	AnsiScreenWriter ansiScreenWriter;
 
-private:
+	NcursesDisplay(ConsoleCtl &, SCREEN *) noexcept;
 
-    ConsoleCtl &con;
-    SCREEN *term;
-    AnsiScreenWriter ansiScreenWriter;
+	TPoint reloadScreenInfo() noexcept override;
 
-    NcursesDisplay(ConsoleCtl &, SCREEN *) noexcept;
+	int getColorCount() noexcept override;
+	TPoint getFontSize() noexcept override;
 
-    TPoint reloadScreenInfo() noexcept override;
-
-    int getColorCount() noexcept override;
-    TPoint getFontSize() noexcept override;
-
-    void writeCell(TPoint, TStringView, TColorAttr, bool) noexcept override;
-    void setCaretPosition(TPoint) noexcept override;
-    void setCaretSize(int) noexcept override;
-    void clearScreen() noexcept override;
-    void flush() noexcept override;
+	void writeCell(TPoint, TStringView, TColorAttr, bool) noexcept override;
+	void setCaretPosition(TPoint) noexcept override;
+	void setCaretSize(int) noexcept override;
+	void clearScreen() noexcept override;
+	void flush() noexcept override;
 };
 
 } // namespace tvision
 
 #else
 
-namespace tvision
-{
+namespace tvision {
 
 class NcursesDisplay : public DisplayAdapter {};
 

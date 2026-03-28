@@ -28,35 +28,29 @@
 
 #pragma hdrstop
 
-#if !defined( __CMDS_H )
+#if !defined(__CMDS_H)
 #include "cmds.h"
 #endif
 
-#if !defined( __MMENU_H )
+#if !defined(__MMENU_H)
 #include "mmenu.h"
 #endif
-
 
 /***********************************************************************
  *
  * Application object for demo.
  *
  ***********************************************************************/
-class TTestApp : public TApplication
-{
+class TTestApp : public TApplication {
 
-public:
+  public:
+	TTestApp();
+	static TMenuBar *initMenuBar(TRect r);
+	virtual void handleEvent(TEvent &event);
 
-    TTestApp();
-    static TMenuBar *initMenuBar( TRect r );
-    virtual void handleEvent( TEvent& event );
-
-protected:
-
-    int curMenu;
-
+  protected:
+	int curMenu;
 };
-
 
 /***********************************************************************
  *
@@ -65,13 +59,9 @@ protected:
  * Application object contructor.
  *
  ***********************************************************************/
-TTestApp::TTestApp() :
-    TProgInit( initStatusLine, initMenuBar, initDeskTop ),
-    TApplication(),
-    curMenu( 0 )
-{
+TTestApp::TTestApp()
+    : TProgInit(initStatusLine, initMenuBar, initDeskTop), TApplication(), curMenu(0) {
 }
-
 
 /***********************************************************************
  *
@@ -81,62 +71,46 @@ TTestApp::TTestApp() :
  * constructor.
  *
  ***********************************************************************/
-TMenuBar *TTestApp::initMenuBar( TRect r )
-{
-    r.b.y = r.a.y + 1;
-    TMenu *M[] =
-    {
-                    /*  Menu Number One  */
-        new TMenu(
-          *new TMenuItem( "~N~ext menu", cmCycle, kbAltN ) +
-          *new TMenuItem( "~M~enu One", kbAltM, new TMenu(
-            *new TMenuItem( "~O~ne", cmOne, kbAltO ) +
-            *new TMenuItem( "~T~wo", cmTwo, kbAltT ) +
-            *new TMenuItem( "T~h~ree", cmThree, kbAltH )
-            )) +
-          *new TMenuItem( "~F~ile", kbAltF, new TMenu(
-            *new TMenuItem( "~N~ew", cmNothing, kbAltN ) +
-            *new TMenuItem( "~O~pen", cmNothing, kbAltO ) +
-            *new TMenuItem( "~S~ave", cmNothing, kbAltS ) +
-            *new TMenuItem( "S~a~ve all", cmNothing, kbAltA )
-            ))
-          ),
-                    /*  Menu Number Two  */
-        new TMenu(
-          *new TMenuItem( "~N~ext menu", cmCycle, kbAltN ) +
-          *new TMenuItem( "~M~enu Two", kbAltM, new TMenu(
-            *new TMenuItem( "~O~ne", cmOne, kbAltO ) +
-            *new TMenuItem( "~T~wo", cmTwo, kbAltT ) +
-            *new TMenuItem( "T~h~ree", cmThree, kbAltH )
-            )) +
-          *new TMenuItem( "~E~dit", kbAltE, new TMenu(
-            *new TMenuItem( "Cu~t~", cmNothing, kbAltT ) +
-            *new TMenuItem( "~C~opy", cmNothing, kbAltC ) +
-            *new TMenuItem( "~P~aste", cmNothing, kbAltP )
-            ))
-          ),
-                    /*  Menu Number Three  */
-        new TMenu(
-          *new TMenuItem( "~N~ext menu", cmCycle, kbAltN ) +
-          *new TMenuItem( "~M~enu Three", kbAltM, new TMenu(
-            *new TMenuItem( "~O~ne", cmOne, kbAltO ) +
-            *new TMenuItem( "~T~wo", cmTwo, kbAltT ) +
-            *new TMenuItem( "T~h~ree", cmThree, kbAltH )
-            )) +
-          *new TMenuItem( "~C~ompile", kbAltC, new TMenu(
-            *new TMenuItem( "~C~ompile", cmNothing, kbAltO ) +
-            *new TMenuItem( "~M~ake", cmNothing, kbAltT ) +
-            *new TMenuItem( "~L~ink", cmNothing, kbAltH ) +
+TMenuBar *TTestApp::initMenuBar(TRect r) {
+	r.b.y = r.a.y + 1;
+	TMenu *M[] = {
+	    /*  Menu Number One  */
+	    new TMenu(*new TMenuItem("~N~ext menu", cmCycle, kbAltN) +
+	              *new TMenuItem("~M~enu One", kbAltM,
+	                             new TMenu(*new TMenuItem("~O~ne", cmOne, kbAltO) +
+	                                       *new TMenuItem("~T~wo", cmTwo, kbAltT) +
+	                                       *new TMenuItem("T~h~ree", cmThree, kbAltH))) +
+	              *new TMenuItem("~F~ile", kbAltF,
+	                             new TMenu(*new TMenuItem("~N~ew", cmNothing, kbAltN) +
+	                                       *new TMenuItem("~O~pen", cmNothing, kbAltO) +
+	                                       *new TMenuItem("~S~ave", cmNothing, kbAltS) +
+	                                       *new TMenuItem("S~a~ve all", cmNothing, kbAltA)))),
+	    /*  Menu Number Two  */
+	    new TMenu(*new TMenuItem("~N~ext menu", cmCycle, kbAltN) +
+	              *new TMenuItem("~M~enu Two", kbAltM,
+	                             new TMenu(*new TMenuItem("~O~ne", cmOne, kbAltO) +
+	                                       *new TMenuItem("~T~wo", cmTwo, kbAltT) +
+	                                       *new TMenuItem("T~h~ree", cmThree, kbAltH))) +
+	              *new TMenuItem("~E~dit", kbAltE,
+	                             new TMenu(*new TMenuItem("Cu~t~", cmNothing, kbAltT) +
+	                                       *new TMenuItem("~C~opy", cmNothing, kbAltC) +
+	                                       *new TMenuItem("~P~aste", cmNothing, kbAltP)))),
+	    /*  Menu Number Three  */
+	    new TMenu(*new TMenuItem("~N~ext menu", cmCycle, kbAltN) +
+	              *new TMenuItem("~M~enu Three", kbAltM,
+	                             new TMenu(*new TMenuItem("~O~ne", cmOne, kbAltO) +
+	                                       *new TMenuItem("~T~wo", cmTwo, kbAltT) +
+	                                       *new TMenuItem("T~h~ree", cmThree, kbAltH))) +
+	              *new TMenuItem("~C~ompile", kbAltC,
+	                             new TMenu(*new TMenuItem("~C~ompile", cmNothing, kbAltO) +
+	                                       *new TMenuItem("~M~ake", cmNothing, kbAltT) +
+	                                       *new TMenuItem("~L~ink", cmNothing, kbAltH) +
 
-            *new TMenuItem( "~B~uild All", cmNothing, kbAltH )
-            ))
-          ),
-                    /*  END of Menu List Marker (NULL)  */
-        0
-    };
-    return new TMultiMenu( r, M );
+	                                       *new TMenuItem("~B~uild All", cmNothing, kbAltH)))),
+	    /*  END of Menu List Marker (NULL)  */
+	    0};
+	return new TMultiMenu(r, M);
 }
-
 
 /***********************************************************************
  *
@@ -147,41 +121,28 @@ TMenuBar *TTestApp::initMenuBar( TRect r )
  * to a new setting automatically upon receiving the correct message.
  *
  ***********************************************************************/
-void TTestApp::handleEvent( TEvent& event )
-{
-    if( event.what == evCommand &&
-        event.message.command >= cmOne &&
-        event.message.command <= cmThree
-      )
-    {
-        curMenu = (event.message.command - cmOne) % 3;
+void TTestApp::handleEvent(TEvent &event) {
+	if (event.what == evCommand && event.message.command >= cmOne &&
+	    event.message.command <= cmThree) {
+		curMenu = (event.message.command - cmOne) % 3;
 
-        message( TProgram::menuBar, evBroadcast, cmMMChangeMenu,
-                 (void *)(size_t) curMenu
-               );
-        clearEvent( event );
-    }
-    else if( event.what == evCommand && event.message.command == cmCycle )
-    {
-        curMenu = (curMenu + 1) % 3;
-        message( TProgram::menuBar, evBroadcast, cmMMChangeMenu,
-                 (void *)(size_t) curMenu
-               );
-        clearEvent( event );
-    }
-    else
-        TApplication::handleEvent( event );
+		message(TProgram::menuBar, evBroadcast, cmMMChangeMenu, (void *)(size_t)curMenu);
+		clearEvent(event);
+	} else if (event.what == evCommand && event.message.command == cmCycle) {
+		curMenu = (curMenu + 1) % 3;
+		message(TProgram::menuBar, evBroadcast, cmMMChangeMenu, (void *)(size_t)curMenu);
+		clearEvent(event);
+	} else
+		TApplication::handleEvent(event);
 }
-
 
 /***********************************************************************
  *
  * main()
  *
  ***********************************************************************/
-int main()
-{
-    TTestApp TB;
-    TB.run();
-    return 0;
+int main() {
+	TTestApp TB;
+	TB.run();
+	return 0;
 }

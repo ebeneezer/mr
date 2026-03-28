@@ -15,12 +15,7 @@
 #define Uses_TListViewer
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
-__link( RView )
-__link( RScrollBar )
+__link(RView) __link(RScrollBar)
 
-TStreamableClass RListViewer( TListViewer::name,
-                              TListViewer::build,
-                              __DELTA(TListViewer)
-                            );
+    TStreamableClass RListViewer(TListViewer::name, TListViewer::build, __DELTA(TListViewer));
 #endif
-

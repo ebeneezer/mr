@@ -16,11 +16,7 @@
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
 
-__link( RCluster )
+__link(RCluster)
 
-TStreamableClass RCheckBoxes( TCheckBoxes::name,
-                              TCheckBoxes::build,
-                              __DELTA(TCheckBoxes)
-                            );
+    TStreamableClass RCheckBoxes(TCheckBoxes::name, TCheckBoxes::build, __DELTA(TCheckBoxes));
 #endif
-

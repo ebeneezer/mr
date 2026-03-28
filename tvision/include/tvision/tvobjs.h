@@ -18,135 +18,126 @@
  *
  */
 
-#if defined( __BORLANDC__ )
+#if defined(__BORLANDC__)
 #pragma option -Vo-
 #endif
-#if defined( __BCOPT__ ) && !defined (__FLAT__)
+#if defined(__BCOPT__) && !defined(__FLAT__)
 #pragma option -po-
 #endif
 
-#if defined( Uses_TObject ) && !defined( __TObject )
+#if defined(Uses_TObject) && !defined(__TObject)
 #define __TObject
 
-#if !defined( __STDDEF_H )
+#if !defined(__STDDEF_H)
 #include <stddef.h>
-#endif  // __STDDEF_H
+#endif // __STDDEF_H
 
-class TObject
-{
+class TObject {
 
-public:
+  public:
+	virtual ~TObject() {
+	}
 
-    virtual ~TObject() {}
+	static void destroy(TObject *);
+	virtual void shutDown();
 
-    static void destroy( TObject * );
-    virtual void shutDown();
-
-private:
-
+  private:
 };
 
-inline void TObject::destroy( TObject *o )
-{
-    if( o != 0 )
-        o->shutDown();
-    delete o;
+inline void TObject::destroy(TObject *o) {
+	if (o != 0)
+		o->shutDown();
+	delete o;
 }
 
-#endif  // Uses_TObject
+#endif // Uses_TObject
 
-#if defined( Uses_TNSCollection ) && !defined( __TNSCollection )
+#if defined(Uses_TNSCollection) && !defined(__TNSCollection)
 #define __TNSCollection
 
-class TNSCollection : public TObject
-{
+class TNSCollection : public TObject {
 
-public:
+  public:
+	TNSCollection(ccIndex aLimit, ccIndex aDelta) noexcept;
+	~TNSCollection();
 
-    TNSCollection( ccIndex aLimit, ccIndex aDelta ) noexcept;
-    ~TNSCollection();
+	virtual void shutDown();
 
-    virtual void shutDown();
+	void *at(ccIndex index);
+	virtual ccIndex indexOf(void *item);
 
-    void *at( ccIndex index );
-    virtual ccIndex indexOf( void *item );
+	void atFree(ccIndex index);
+	void atRemove(ccIndex index);
+	void remove(void *item);
+	void removeAll();
+	void free(void *item);
+	void freeAll();
 
-    void atFree( ccIndex index );
-    void atRemove( ccIndex index );
-    void remove( void *item );
-    void removeAll();
-    void free( void *item );
-    void freeAll();
+	void atInsert(ccIndex index, void *item);
+	void atPut(ccIndex index, void *item);
+	virtual ccIndex insert(void *item);
 
-    void atInsert( ccIndex index, void *item );
-    void atPut( ccIndex index, void *item );
-    virtual ccIndex insert( void *item );
+	virtual void error(ccIndex code, ccIndex info);
 
-    virtual void error( ccIndex code, ccIndex info );
+	void *firstThat(ccTestFunc Test, void *arg);
+	void *lastThat(ccTestFunc Test, void *arg);
+	void forEach(ccAppFunc action, void *arg);
 
-    void *firstThat( ccTestFunc Test, void *arg );
-    void *lastThat( ccTestFunc Test, void *arg );
-    void forEach( ccAppFunc action, void *arg );
+	void pack();
+	virtual void setLimit(ccIndex aLimit);
 
-    void pack();
-    virtual void setLimit( ccIndex aLimit );
+	ccIndex getCount() {
+		return count;
+	}
 
-    ccIndex getCount()
-        { return count; }
+  protected:
+	TNSCollection() noexcept;
 
-protected:
+	void **items;
+	ccIndex count;
+	ccIndex limit;
+	ccIndex delta;
+	Boolean shouldDelete;
 
-    TNSCollection() noexcept;
-
-    void **items;
-    ccIndex count;
-    ccIndex limit;
-    ccIndex delta;
-    Boolean shouldDelete;
-
-private:
-
-    virtual void freeItem( void *item );
-
+  private:
+	virtual void freeItem(void *item);
 };
 
-#endif  // Uses_TNSCollection
+#endif // Uses_TNSCollection
 
-#if defined( Uses_TNSSortedCollection ) && !defined( __TNSSortedCollection )
+#if defined(Uses_TNSSortedCollection) && !defined(__TNSSortedCollection)
 #define __TNSSortedCollection
 
-class TNSSortedCollection: public virtual TNSCollection
-{
+class TNSSortedCollection : public virtual TNSCollection {
 
-public:
+  public:
+	TNSSortedCollection(ccIndex aLimit, ccIndex aDelta) noexcept
+	    : TNSCollection(aLimit, aDelta), duplicates(False) {
+		delta = aDelta;
+		setLimit(aLimit);
+	}
 
-    TNSSortedCollection( ccIndex aLimit, ccIndex aDelta) noexcept :
-        TNSCollection( aLimit, aDelta ), duplicates(False)
-            { delta = aDelta; setLimit( aLimit ); }
+	virtual Boolean search(void *key, ccIndex &index);
 
-    virtual Boolean search( void *key, ccIndex& index );
+	virtual ccIndex indexOf(void *item);
+	virtual ccIndex insert(void *item);
 
-    virtual ccIndex indexOf( void *item );
-    virtual ccIndex insert( void *item );
+	Boolean duplicates;
+	virtual void *keyOf(void *item);
 
-    Boolean duplicates;
-    virtual void *keyOf( void *item );
+  protected:
+	TNSSortedCollection() noexcept : duplicates(False) {
+	}
 
-protected:
-
-    TNSSortedCollection() noexcept : duplicates(False) {}
-
-private:
-
-    virtual int compare( void *key1, void *key2 ) = 0;
-
+  private:
+	virtual int compare(void *key1, void *key2) = 0;
 };
 
-#endif  // Uses_TNSSortedCollection
+#endif // Uses_TNSSortedCollection
 
-#if defined( __BORLANDC__ )
+#if defined(__BORLANDC__)
 #pragma option -Vo.
 #endif
-#if defined( __BCOPT__ ) && !defined (__FLAT__)
+#if defined(__BCOPT__) && !defined(__FLAT__)
 #pragma option -po.
 #endif

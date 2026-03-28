@@ -15,11 +15,7 @@
 #define Uses_TStreamableClass
 #define Uses_TOutline
 #include <tvision/tv.h>
-__link( RScroller )
+__link(RScroller)
 
-TStreamableClass ROutline( TOutline::name,
-                              TOutline::build,
-                              __DELTA(TOutline)
-                            );
+    TStreamableClass ROutline(TOutline::name, TOutline::build, __DELTA(TOutline));
 #endif
-

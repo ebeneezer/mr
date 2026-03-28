@@ -15,11 +15,7 @@
 #define Uses_TListBox
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
-__link( RListViewer )
+__link(RListViewer)
 
-TStreamableClass RListBox( TListBox::name,
-                           TListBox::build,
-                           __DELTA(TListBox)
-                         );
+    TStreamableClass RListBox(TListBox::name, TListBox::build, __DELTA(TListBox));
 #endif
-

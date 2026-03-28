@@ -16,9 +16,5 @@
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
 
-TStreamableClass RMenuBar( TMenuBar::name,
-                           TMenuBar::build,
-                           __DELTA(TMenuBar)
-                         );
+TStreamableClass RMenuBar(TMenuBar::name, TMenuBar::build, __DELTA(TMenuBar));
 #endif
-

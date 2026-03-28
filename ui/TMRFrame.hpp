@@ -5,10 +5,10 @@
 #define Uses_TRect
 #include <tvision/tv.h>
 
-class TMRFrame : public TFrame
-{
-public:
-    TMRFrame(const TRect &bounds) : TFrame(bounds) {}
+class TMRFrame : public TFrame {
+  public:
+	TMRFrame(const TRect &bounds) : TFrame(bounds) {
+	}
 };
 
 #endif

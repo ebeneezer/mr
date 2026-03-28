@@ -1,49 +1,41 @@
 #ifndef TVISION_CONSTMAP_H
 #define TVISION_CONSTMAP_H
 
-#include <tvision/tv.h>
 #include <internal/strings.h>
+#include <tvision/tv.h>
 
-#include <cstddef>
-#include <utility>
 #include <algorithm>
+#include <cstddef>
 #include <unordered_map>
+#include <utility>
 
-namespace tvision
-{
+namespace tvision {
 
 // Same as unordered_map, but with operator[] const.
 
-template<typename Key, typename Value>
-class const_unordered_map_base : public std::unordered_map<Key, Value>
-{
+template <typename Key, typename Value>
+class const_unordered_map_base : public std::unordered_map<Key, Value> {
 
-    using super = std::unordered_map<Key, Value>;
+	using super = std::unordered_map<Key, Value>;
 
-public:
+  public:
+	using super::super;
 
-    using super::super;
-
-    Value operator[](const Key &key) const noexcept
-    {
-        auto it = super::find(key);
-        if (it == super::end())
-            return {};
-        return it->second;
-    }
-
+	Value operator[](const Key &key) const noexcept {
+		auto it = super::find(key);
+		if (it == super::end())
+			return {};
+		return it->second;
+	}
 };
 
-template<typename Key, typename Value>
-class const_unordered_map : public const_unordered_map_base<Key, Value>
-{
+template <typename Key, typename Value>
+class const_unordered_map : public const_unordered_map_base<Key, Value> {
 
-    using super = const_unordered_map_base<Key, Value>;
+	using super = const_unordered_map_base<Key, Value>;
 
-public:
-
-    using super::super;
-
+  public:
+	using super::super;
 };
 
 // Overload of const_unordered_map for Key=uint64_t, which provides an additional
@@ -62,48 +54,38 @@ public:
 // assert(map[0x323130] == true);
 // assert(map["abc"]    == false);
 
-template<typename Value>
-class const_unordered_map<uint64_t, Value> : public const_unordered_map_base<uint64_t, Value>
-{
+template <typename Value>
+class const_unordered_map<uint64_t, Value> : public const_unordered_map_base<uint64_t, Value> {
 
-    using super = const_unordered_map_base<uint64_t, Value>;
+	using super = const_unordered_map_base<uint64_t, Value>;
 
-    struct StringAsIntPair : const_unordered_map::super::value_type
-    {
+	struct StringAsIntPair : const_unordered_map::super::value_type {
 
-        using super = typename const_unordered_map::super::value_type;
+		using super = typename const_unordered_map::super::value_type;
 
-        using super::super;
+		using super::super;
 
-        constexpr StringAsIntPair(TStringView s, const Value &v) noexcept :
-            super(string_as_int<uint64_t>(s), v)
-        {
-        }
+		constexpr StringAsIntPair(TStringView s, const Value &v) noexcept
+		    : super(string_as_int<uint64_t>(s), v) {
+		}
 
-        constexpr StringAsIntPair(TStringView s, Value &&v) noexcept :
-            super(string_as_int<uint64_t>(s), std::move(v))
-        {
-        }
+		constexpr StringAsIntPair(TStringView s, Value &&v) noexcept
+		    : super(string_as_int<uint64_t>(s), std::move(v)) {
+		}
+	};
 
-    };
+  public:
+	using super::super;
 
-public:
+	static const_unordered_map
+	with_string_keys(std::initializer_list<StringAsIntPair> init) noexcept {
+		return const_unordered_map(static_cast<const typename super::value_type *>(init.begin()),
+		                           static_cast<const typename super::value_type *>(init.end()));
+	}
 
-    using super::super;
-
-    static const_unordered_map with_string_keys(std::initializer_list<StringAsIntPair> init) noexcept
-    {
-        return const_unordered_map(
-            static_cast<const typename super::value_type *>(init.begin()),
-            static_cast<const typename super::value_type *>(init.end())
-        );
-    }
-
-    Value operator[](TStringView key) const noexcept
-    {
-        return super::operator[](string_as_int<uint64_t>(key));
-    }
-
+	Value operator[](TStringView key) const noexcept {
+		return super::operator[](string_as_int<uint64_t>(key));
+	}
 };
 
 } // namespace tvision

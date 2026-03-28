@@ -25,33 +25,15 @@
 #define Uses_TEditWindow
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
-__link( RView )
-__link( RWindow )
-__link( RScrollBar )
+__link(RView) __link(RWindow) __link(RScrollBar)
 
-TStreamableClass RIndicator( TIndicator::name,
-                             TIndicator::build,
-                             __DELTA(TIndicator)
-                           );
+    TStreamableClass RIndicator(TIndicator::name, TIndicator::build, __DELTA(TIndicator));
 
-TStreamableClass REditor( TEditor::name,
-                          TEditor::build,
-                          __DELTA(TEditor)
-                        );
+TStreamableClass REditor(TEditor::name, TEditor::build, __DELTA(TEditor));
 
-TStreamableClass RMemo( TMemo::name,
-                        TMemo::build,
-                        __DELTA(TMemo)
-                      );
+TStreamableClass RMemo(TMemo::name, TMemo::build, __DELTA(TMemo));
 
-TStreamableClass RFileEditor( TFileEditor::name,
-                              TFileEditor::build,
-                              __DELTA(TFileEditor)
-                            );
+TStreamableClass RFileEditor(TFileEditor::name, TFileEditor::build, __DELTA(TFileEditor));
 
-TStreamableClass REditWindow( TEditWindow::name,
-                              TEditWindow::build,
-                              __DELTA(TEditWindow)
-                            );
+TStreamableClass REditWindow(TEditWindow::name, TEditWindow::build, __DELTA(TEditWindow));
 #endif
-

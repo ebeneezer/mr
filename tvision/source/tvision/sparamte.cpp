@@ -15,12 +15,7 @@
 #define Uses_TParamText
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
-__link( RView )
-__link( RStaticText )
+__link(RView) __link(RStaticText)
 
-TStreamableClass RParamText( TParamText::name,
-                              TParamText::build,
-                              __DELTA(TParamText)
-                            );
+    TStreamableClass RParamText(TParamText::name, TParamText::build, __DELTA(TParamText));
 #endif
-

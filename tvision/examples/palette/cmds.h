@@ -3,10 +3,10 @@
 // status line, dialog boxes).
 //
 
-#if !defined( _CMDS_H )
+#if !defined(_CMDS_H)
 #define _CMDS_H
 
-const unsigned short cmAbout            = 100;
-const unsigned short cmPaletteView      = 101;
+const unsigned short cmAbout = 100;
+const unsigned short cmPaletteView = 101;
 
-#endif  // _CMDS_H
+#endif // _CMDS_H

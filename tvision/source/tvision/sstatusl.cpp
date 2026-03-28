@@ -15,11 +15,8 @@
 #define Uses_TStatusLine
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
-__link( RView )
+__link(RView)
 
-TStreamableClass RStatusLine( TStatusLine::name,
-                              TStatusLine::build,
-                              __DELTA(TStatusLine)
-                            );
+    TStreamableClass RStatusLine(TStatusLine::name, TStatusLine::build, __DELTA(TStatusLine));
 
 #endif

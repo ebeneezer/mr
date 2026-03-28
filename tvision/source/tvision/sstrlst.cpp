@@ -15,8 +15,4 @@
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
 
-TStreamableClass RStringList( TStringList::name,
-                              TStringList::build,
-                              __DELTA(TStringList)
-                            );
-
+TStreamableClass RStringList(TStringList::name, TStringList::build, __DELTA(TStringList));

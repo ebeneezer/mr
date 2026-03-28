@@ -15,31 +15,25 @@
 #define Uses_TCheckBoxes
 #include <tvision/tv.h>
 
-void TCheckBoxes::draw()
-{
-    drawMultiBox( button, " X" );
+void TCheckBoxes::draw() {
+	drawMultiBox(button, " X");
 }
 
-Boolean TCheckBoxes::mark(int item)
-{
-    return Boolean( (value & (1 <<  item)) != 0 );
+Boolean TCheckBoxes::mark(int item) {
+	return Boolean((value & (1 << item)) != 0);
 }
 
-void TCheckBoxes::press(int item)
-{
-    value = value^(1 << item);
+void TCheckBoxes::press(int item) {
+	value = value ^ (1 << item);
 }
 
 #if !defined(NO_STREAMABLE)
 
-TStreamable *TCheckBoxes::build()
-{
-    return new TCheckBoxes( streamableInit );
+TStreamable *TCheckBoxes::build() {
+	return new TCheckBoxes(streamableInit);
 }
 
-TCheckBoxes::TCheckBoxes( StreamableInit ) noexcept : TCluster( streamableInit )
-{
+TCheckBoxes::TCheckBoxes(StreamableInit) noexcept : TCluster(streamableInit) {
 }
-
 
 #endif

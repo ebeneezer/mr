@@ -14,7 +14,7 @@
  *
  */
 
-#if !defined( __FORMS_H )
+#if !defined(__FORMS_H)
 #define __FORMS_H
 
 #define Uses_TStreamable
@@ -24,46 +24,44 @@
 #define Uses_TView
 #include <tvision/tv.h>
 
-class TForm : public TDialog
-{
+class TForm : public TDialog {
 
-public:
+  public:
+	TForm(StreamableInit) : TWindowInit(&TForm::initFrame), TDialog(streamableInit) {};
+	TForm(const TRect &, const char *);
+	virtual Boolean changed();
+	virtual void handleEvent(TEvent &);
+	virtual Boolean valid(ushort);
 
-    TForm( StreamableInit ) : TWindowInit(&TForm::initFrame), TDialog (streamableInit) {};
-    TForm( const TRect&, const char* );
-    virtual Boolean changed();
-    virtual void handleEvent( TEvent& );
-    virtual Boolean valid( ushort );
+	TView *listDialog;
+	void *prevData;
+	ushort keyWidth;
 
-    TView  *listDialog;
-    void   *prevData;
-    ushort keyWidth;
+  private:
+	virtual const char *streamableName() const {
+		return name;
+	}
 
-private:
+  protected:
+	virtual void write(opstream &);
+	virtual void *read(ipstream &);
 
-    virtual const char *streamableName() const
-        { return name; }
-
-protected:
-
-    virtual void write( opstream& );
-    virtual void *read( ipstream& );
-
-public:
-
-    static const char * const name;
-    static TStreamable *build();
-
+  public:
+	static const char *const name;
+	static TStreamable *build();
 };
 
-inline ipstream& operator >> ( ipstream& is, TForm& cl )
-    { return is >> (TStreamable&)cl; }
-inline ipstream& operator >> ( ipstream& is, TForm*& cl )
-    { return is >> (void *&)cl; }
-inline opstream& operator << ( opstream& os, TForm& cl )
-    { return os << (TStreamable&)cl; }
-inline opstream& operator << ( opstream& os, TForm* cl )
-    { return os << (TStreamable *)cl; }
+inline ipstream &operator>>(ipstream &is, TForm &cl) {
+	return is >> (TStreamable &)cl;
+}
+inline ipstream &operator>>(ipstream &is, TForm *&cl) {
+	return is >> (void *&)cl;
+}
+inline opstream &operator<<(opstream &os, TForm &cl) {
+	return os << (TStreamable &)cl;
+}
+inline opstream &operator<<(opstream &os, TForm *cl) {
+	return os << (TStreamable *)cl;
+}
 
-
-#endif  // __FORMS_H
+#endif // __FORMS_H

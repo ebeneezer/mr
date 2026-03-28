@@ -13,7 +13,7 @@
  *
  */
 
-#if !defined( __TVEDIT_H )
+#if !defined(__TVEDIT_H)
 #define __TVEDIT_H
 
 class TMenuBar;
@@ -21,32 +21,28 @@ class TStatusLine;
 class TEditWindow;
 class TDialog;
 
-const int
-  cmChangeDrct = 102;
+const int cmChangeDrct = 102;
 
-class TEditorApp : public TApplication
-{
+class TEditorApp : public TApplication {
 
-public:
+  public:
+	TEditorApp(int argc, char **argv);
 
-    TEditorApp( int argc, char **argv );
+	virtual void handleEvent(TEvent &event);
+	static TMenuBar *initMenuBar(TRect);
+	static TStatusLine *initStatusLine(TRect);
+	virtual void outOfMemory();
 
-    virtual void handleEvent( TEvent& event );
-    static TMenuBar *initMenuBar( TRect );
-    static TStatusLine *initStatusLine( TRect );
-    virtual void outOfMemory();
-
-private:
-
-    TEditWindow *openEditor( const char *fileName, Boolean visible );
-    void fileOpen();
-    void fileNew();
-    void changeDir();
+  private:
+	TEditWindow *openEditor(const char *fileName, Boolean visible);
+	void fileOpen();
+	void fileNew();
+	void changeDir();
 };
 
-ushort execDialog( TDialog *d, void *data );
+ushort execDialog(TDialog *d, void *data);
 TDialog *createFindDialog();
 TDialog *createReplaceDialog();
-ushort doEditDialog( int dialog, ... );
+ushort doEditDialog(int dialog, ...);
 
 #endif // __TVEDIT_H

@@ -3,8 +3,7 @@
 
 #include <internal/termio.h>
 
-namespace tvision
-{
+namespace tvision {
 
 #define far2lEnableSeq "\x1B_far2l1\x1B\\"
 #define far2lDisableSeq "\x1B_far2l0\x1B\\"

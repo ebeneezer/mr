@@ -8,9 +8,9 @@
 #include <iomanip>
 
 using std::resetiosflags;
-using std::setiosflags;
 using std::setbase;
 using std::setfill;
+using std::setiosflags;
 using std::setprecision;
 using std::setw;
 

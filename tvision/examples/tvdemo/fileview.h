@@ -11,7 +11,7 @@
  *
  */
 
-#if !defined( __FILEVIEW_H )
+#if !defined(__FILEVIEW_H)
 #define __FILEVIEW_H
 
 #define Uses_TCollection
@@ -21,69 +21,59 @@
 
 const int hlChangeDir = cmChangeDir;
 
-class TLineCollection : public TCollection
-{
+class TLineCollection : public TCollection {
 
-public:
+  public:
+	TLineCollection(short lim, short delta) : TCollection(lim, delta) {
+	}
+	virtual void freeItem(void *p) {
+		delete[] (char *)p;
+	}
 
-    TLineCollection(short lim, short delta) : TCollection(lim, delta) {}
-    virtual void  freeItem(void *p) { delete[] (char *) p; }
-
-private:
-
-    virtual void *readItem( ipstream& ) { return 0; }
-    virtual void writeItem( void *, opstream& ) {}
-
+  private:
+	virtual void *readItem(ipstream &) {
+		return 0;
+	}
+	virtual void writeItem(void *, opstream &) {
+	}
 };
 
-class TFileViewer : public TScroller
-{
+class TFileViewer : public TScroller {
 
-    enum { maxLineLength = 256 };
+	enum { maxLineLength = 256 };
 
-public:
+  public:
+	char *fileName;
+	TCollection *fileLines;
+	Boolean isValid;
+	TFileViewer(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar,
+	            const char *aFileName);
+	~TFileViewer();
+	TFileViewer(StreamableInit) : TScroller(streamableInit) {};
+	void draw();
+	void readFile(const char *fName);
+	void setState(ushort aState, Boolean enable);
+	void scrollDraw();
+	Boolean valid(ushort command);
 
-    char *fileName;
-    TCollection *fileLines;
-    Boolean isValid;
-    TFileViewer( const TRect& bounds,
-                 TScrollBar *aHScrollBar,
-                 TScrollBar *aVScrollBar,
-                 const char *aFileName
-               );
-    ~TFileViewer();
-    TFileViewer( StreamableInit ) : TScroller(streamableInit) { };
-    void draw();
-    void readFile( const char *fName );
-    void setState( ushort aState, Boolean enable );
-    void scrollDraw();
-    Boolean valid( ushort command );
+  private:
+	virtual const char *streamableName() const {
+		return name;
+	}
 
-private:
+  protected:
+	virtual void write(opstream &);
+	virtual void *read(ipstream &);
 
-    virtual const char *streamableName() const
-        { return name; }
-
-protected:
-
-    virtual void write( opstream& );
-    virtual void *read( ipstream& );
-
-public:
-
-    static const char * const name;
-    static TStreamable *build();
-
+  public:
+	static const char *const name;
+	static TStreamable *build();
 };
 
-class TFileWindow : public TWindow
-{
+class TFileWindow : public TWindow {
 
-public:
-
-    TFileWindow( const char *fileName );
-
+  public:
+	TFileWindow(const char *fileName);
 };
 
 #endif
-

@@ -5,10 +5,10 @@
 #ifndef TVISION_COMPAT_IOSTREAM_H
 #define TVISION_COMPAT_IOSTREAM_H
 
-#include <iostream>
 #include <ios>
-#include <streambuf>
+#include <iostream>
 #include <ostream>
+#include <streambuf>
 
 using std::cerr;
 using std::cin;

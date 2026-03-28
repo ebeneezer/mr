@@ -15,11 +15,7 @@
 #define Uses_TMenuView
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
-__link( RView )
+__link(RView)
 
-TStreamableClass RMenuView( TMenuView::name,
-                            TMenuView::build,
-                            __DELTA(TMenuView)
-                          );
+    TStreamableClass RMenuView(TMenuView::name, TMenuView::build, __DELTA(TMenuView));
 #endif
-

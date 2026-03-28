@@ -15,6 +15,5 @@
 #define Uses_TObject
 #include <tvision/tv.h>
 
-void TObject::shutDown()
-{
+void TObject::shutDown() {
 }

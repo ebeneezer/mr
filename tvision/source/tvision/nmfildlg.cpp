@@ -15,5 +15,5 @@
 #define Uses_TFileDialog
 #include <tvision/tv.h>
 
-const char * const _NEAR TFileDialog::name = "TFileDialog";
+const char *const _NEAR TFileDialog::name = "TFileDialog";
 #endif

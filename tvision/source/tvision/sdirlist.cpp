@@ -15,11 +15,8 @@
 #define Uses_TDirListBox
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
-__link( RListBox )
+__link(RListBox)
 
-TStreamableClass RDirListBox( TDirListBox::name,
-                              TDirListBox::build,
-                              __DELTA(TDirListBox)
-                            );
+    TStreamableClass RDirListBox(TDirListBox::name, TDirListBox::build, __DELTA(TDirListBox));
 
 #endif

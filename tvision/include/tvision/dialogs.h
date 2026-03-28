@@ -15,26 +15,22 @@
  *
  */
 
-#if defined( __BORLANDC__ )
+#if defined(__BORLANDC__)
 #pragma option -Vo-
 #endif
-#if defined( __BCOPT__ ) && !defined (__FLAT__)
+#if defined(__BCOPT__) && !defined(__FLAT__)
 #pragma option -po-
 #endif
 
-#if !defined( __BUTTON_TYPE )
+#if !defined(__BUTTON_TYPE)
 #define __BUTTON_TYPE
 
-const int
-    bfNormal    = 0x00,
-    bfDefault   = 0x01,
-    bfLeftJust  = 0x02,
-    bfBroadcast = 0x04,
-    bfGrabFocus = 0x08,
+const int bfNormal = 0x00, bfDefault = 0x01, bfLeftJust = 0x02, bfBroadcast = 0x04,
+          bfGrabFocus = 0x08,
 
-    cmRecordHistory = 60;
+          cmRecordHistory = 60;
 
-#endif  // __BUTTON_TYPE
+#endif // __BUTTON_TYPE
 
 /* ---------------------------------------------------------------------- */
 /*      class TDialog                                                     */
@@ -74,70 +70,66 @@ const int
 /*       32 = Reserved                                                    */
 /* ---------------------------------------------------------------------- */
 
-#if defined( Uses_TDialog ) && !defined( __TDialog )
+#if defined(Uses_TDialog) && !defined(__TDialog)
 #define __TDialog
 
-#define  cpGrayDialog \
-    "\x20\x21\x22\x23\x24\x25\x26\x27\x28\x29\x2A\x2B\x2C\x2D\x2E\x2F"\
-    "\x30\x31\x32\x33\x34\x35\x36\x37\x38\x39\x3A\x3B\x3C\x3D\x3E\x3F"
+#define cpGrayDialog                                                                               \
+	"\x20\x21\x22\x23\x24\x25\x26\x27\x28\x29\x2A\x2B\x2C\x2D\x2E\x2F"                             \
+	"\x30\x31\x32\x33\x34\x35\x36\x37\x38\x39\x3A\x3B\x3C\x3D\x3E\x3F"
 
-#define  cpBlueDialog \
-    "\x40\x41\x42\x43\x44\x45\x46\x47\x48\x49\x4a\x4b\x4c\x4d\x4e\x4f"\
-    "\x50\x51\x52\x53\x54\x55\x56\x57\x58\x59\x5a\x5b\x5c\x5d\x5e\x5f"
+#define cpBlueDialog                                                                               \
+	"\x40\x41\x42\x43\x44\x45\x46\x47\x48\x49\x4a\x4b\x4c\x4d\x4e\x4f"                             \
+	"\x50\x51\x52\x53\x54\x55\x56\x57\x58\x59\x5a\x5b\x5c\x5d\x5e\x5f"
 
-#define  cpCyanDialog \
-    "\x60\x61\x62\x63\x64\x65\x66\x67\x68\x69\x6a\x6b\x6c\x6d\x6e\x6f"\
-    "\x70\x71\x72\x73\x74\x75\x76\x77\x78\x79\x7a\x7b\x7c\x7d\x7e\x7f"
+#define cpCyanDialog                                                                               \
+	"\x60\x61\x62\x63\x64\x65\x66\x67\x68\x69\x6a\x6b\x6c\x6d\x6e\x6f"                             \
+	"\x70\x71\x72\x73\x74\x75\x76\x77\x78\x79\x7a\x7b\x7c\x7d\x7e\x7f"
 
 #define cpDialog cpGrayDialog
 
-const int
-      dpBlueDialog = 0,
-      dpCyanDialog = 1,
-      dpGrayDialog = 2;
+const int dpBlueDialog = 0, dpCyanDialog = 1, dpGrayDialog = 2;
 
 class _FAR TRect;
 struct _FAR TEvent;
 class _FAR TValidator;
 
-class TDialog : public TWindow
-{
+class TDialog : public TWindow {
 
-public:
+  public:
+	TDialog(const TRect &bounds, TStringView aTitle) noexcept;
 
-    TDialog( const TRect& bounds, TStringView aTitle ) noexcept;
+	virtual TPalette &getPalette() const;
+	virtual void handleEvent(TEvent &event);
+	virtual Boolean valid(ushort command);
 
-    virtual TPalette& getPalette() const;
-    virtual void handleEvent( TEvent& event );
-    virtual Boolean valid( ushort command );
+  private:
+	virtual const char *streamableName() const {
+		return name;
+	}
 
-private:
+  protected:
+	TDialog(StreamableInit) noexcept;
 
-    virtual const char *streamableName() const
-        { return name; }
-
-protected:
-
-    TDialog( StreamableInit ) noexcept;
-
-public:
-
-    static const char * const _NEAR name;
-    static TStreamable *build();
-
+  public:
+	static const char *const _NEAR name;
+	static TStreamable *build();
 };
 
-inline ipstream& operator >> ( ipstream& is, TDialog& cl )
-    { return is >> (TStreamable&)cl; }
-inline ipstream& operator >> ( ipstream& is, TDialog*& cl )
-    { return is >> (void *&)cl; }
+inline ipstream &operator>>(ipstream &is, TDialog &cl) {
+	return is >> (TStreamable &)cl;
+}
+inline ipstream &operator>>(ipstream &is, TDialog *&cl) {
+	return is >> (void *&)cl;
+}
 
-inline opstream& operator << ( opstream& os, TDialog& cl )
-    { return os << (TStreamable&)cl; }
-inline opstream& operator << ( opstream& os, TDialog* cl )
-    { return os << (TStreamable *)cl; }
+inline opstream &operator<<(opstream &os, TDialog &cl) {
+	return os << (TStreamable &)cl;
+}
+inline opstream &operator<<(opstream &os, TDialog *cl) {
+	return os << (TStreamable *)cl;
+}
 
-#endif  // Uses_TDialog
+#endif // Uses_TDialog
 
 /* ---------------------------------------------------------------------- */
 /*      class TInputLine                                                  */
@@ -149,101 +141,98 @@ inline opstream& operator << ( opstream& os, TDialog* cl )
 /*        4 = Arrows                                                      */
 /* ---------------------------------------------------------------------- */
 
-#if defined( Uses_TInputLine ) && !defined( __TInputLine )
+#if defined(Uses_TInputLine) && !defined(__TInputLine)
 #define __TInputLine
 
-const ushort
-    ilMaxBytes = 0,
-    ilMaxWidth = 1,
-    ilMaxChars = 2;
+const ushort ilMaxBytes = 0, ilMaxWidth = 1, ilMaxChars = 2;
 
 class _FAR TRect;
 struct _FAR TEvent;
 class _FAR TValidator;
 
-class TInputLine : public TView
-{
+class TInputLine : public TView {
 
-public:
+  public:
+	TInputLine(const TRect &bounds, int limit, TValidator *aValid = 0,
+	           ushort limitMode = ilMaxBytes) noexcept;
+	~TInputLine();
 
-    TInputLine( const TRect& bounds, int limit, TValidator *aValid = 0, ushort limitMode = ilMaxBytes ) noexcept;
-    ~TInputLine();
+	virtual ushort dataSize();
+	virtual void draw();
+	virtual void getData(void *rec);
+	virtual TPalette &getPalette() const;
+	virtual void handleEvent(TEvent &event);
+	void selectAll(Boolean enable, Boolean scroll = True);
+	virtual void setData(void *rec);
+	virtual void setState(ushort aState, Boolean enable);
+	virtual Boolean valid(ushort cmd);
+	void setValidator(TValidator *aValid);
 
-    virtual ushort dataSize();
-    virtual void draw();
-    virtual void getData( void *rec );
-    virtual TPalette& getPalette() const;
-    virtual void handleEvent( TEvent& event );
-    void selectAll( Boolean enable, Boolean scroll=True );
-    virtual void setData( void *rec );
-    virtual void setState( ushort aState, Boolean enable );
-    virtual Boolean valid( ushort cmd );
-    void setValidator( TValidator* aValid );
+	char *data;
+	int maxLen;
+	int maxWidth;
+	int maxChars;
+	int curPos;
+	int firstPos;
+	int selStart;
+	int selEnd;
 
-    char* data;
-    int maxLen;
-    int maxWidth;
-    int maxChars;
-    int curPos;
-    int firstPos;
-    int selStart;
-    int selEnd;
+  private:
+	Boolean canScroll(int delta);
+	int mouseDelta(TEvent &event);
+	int mousePos(TEvent &event);
+	int displayedPos(int pos);
+	void deleteSelect();
+	void deleteCurrent();
+	void adjustSelectBlock();
+	void saveState();
+	void restoreState();
+	Boolean checkValid(Boolean);
+	Boolean canUpdateCommands();
+	void setCmdState(ushort, Boolean);
+	void updateCommands();
 
-private:
+	static const char _NEAR rightArrow;
+	static const char _NEAR leftArrow;
 
-    Boolean canScroll( int delta );
-    int mouseDelta( TEvent& event );
-    int mousePos( TEvent& event );
-    int displayedPos( int pos );
-    void deleteSelect();
-    void deleteCurrent();
-    void adjustSelectBlock();
-    void saveState();
-    void restoreState();
-    Boolean checkValid(Boolean);
-    Boolean canUpdateCommands();
-    void setCmdState( ushort, Boolean );
-    void updateCommands();
+	virtual const char *streamableName() const {
+		return name;
+	}
 
-    static const char _NEAR rightArrow;
-    static const char _NEAR leftArrow;
+	TValidator *validator;
 
-    virtual const char *streamableName() const
-        { return name; }
+	int anchor;
+	char *oldData;
+	int oldCurPos;
+	int oldFirstPos;
+	int oldSelStart;
+	int oldSelEnd;
 
-    TValidator* validator;
+  protected:
+	TInputLine(StreamableInit) noexcept;
+	virtual void write(opstream &);
+	virtual void *read(ipstream &);
 
-    int anchor;
-    char* oldData;
-    int oldCurPos;
-    int oldFirstPos;
-    int oldSelStart;
-    int oldSelEnd;
-
-protected:
-
-    TInputLine( StreamableInit ) noexcept;
-    virtual void write( opstream& );
-    virtual void *read( ipstream& );
-
-public:
-    static const char * const _NEAR name;
-    static TStreamable *build();
-
+  public:
+	static const char *const _NEAR name;
+	static TStreamable *build();
 };
 
-inline ipstream& operator >> ( ipstream& is, TInputLine& cl )
-    { return is >> (TStreamable&)cl; }
-inline ipstream& operator >> ( ipstream& is, TInputLine*& cl )
-    { return is >> (void *&)cl; }
+inline ipstream &operator>>(ipstream &is, TInputLine &cl) {
+	return is >> (TStreamable &)cl;
+}
+inline ipstream &operator>>(ipstream &is, TInputLine *&cl) {
+	return is >> (void *&)cl;
+}
 
-inline opstream& operator << ( opstream& os, TInputLine& cl )
-    { return os << (TStreamable&)cl; }
-inline opstream& operator << ( opstream& os, TInputLine* cl )
-    { return os << (TStreamable *)cl; }
+inline opstream &operator<<(opstream &os, TInputLine &cl) {
+	return os << (TStreamable &)cl;
+}
+inline opstream &operator<<(opstream &os, TInputLine *cl) {
+	return os << (TStreamable *)cl;
+}
 
-#endif  // Uses_TInputLine
-
+#endif // Uses_TInputLine
 
 /* ---------------------------------------------------------------------- */
 /*      TButton object                                                    */
@@ -259,99 +248,94 @@ inline opstream& operator << ( opstream& os, TInputLine* cl )
 /*        8 = Shadow                                                      */
 /* ---------------------------------------------------------------------- */
 
-#if defined( Uses_TButton ) && !defined( __TButton )
+#if defined(Uses_TButton) && !defined(__TButton)
 #define __TButton
 
 class _FAR TRect;
 struct _FAR TEvent;
 class _FAR TDrawBuffer;
 
-class TButton : public TView
-{
+class TButton : public TView {
 
-public:
+  public:
+	TButton(const TRect &bounds, TStringView aTitle, ushort aCommand, ushort aFlags) noexcept;
+	~TButton();
 
-    TButton( const TRect& bounds,
-             TStringView aTitle,
-             ushort aCommand,
-             ushort aFlags
-           ) noexcept;
-    ~TButton();
+	virtual void draw();
+	void drawState(Boolean down);
+	virtual TPalette &getPalette() const;
+	virtual void handleEvent(TEvent &event);
+	void makeDefault(Boolean enable);
+	virtual void press();
+	virtual void setState(ushort aState, Boolean enable);
 
-    virtual void draw();
-    void drawState( Boolean down );
-    virtual TPalette& getPalette() const;
-    virtual void handleEvent( TEvent& event );
-    void makeDefault( Boolean enable );
-    virtual void press();
-    virtual void setState( ushort aState, Boolean enable );
+	const char *title;
 
-    const char *title;
+  protected:
+	ushort command;
+	uchar flags;
+	Boolean amDefault;
 
-protected:
+  private:
+	void drawTitle(TDrawBuffer &, int, int, TAttrPair, Boolean);
+	void pressButton(TEvent &);
+	TRect getActiveRect();
 
-    ushort command;
-    uchar flags;
-    Boolean amDefault;
+	enum { animationDurationMs = 100 };
+	TTimerId animationTimer;
 
-private:
+	static const char *_NEAR shadows;
+	static const char *_NEAR markers;
 
-    void drawTitle( TDrawBuffer&, int, int, TAttrPair, Boolean );
-    void pressButton( TEvent& );
-    TRect getActiveRect();
+	virtual const char *streamableName() const {
+		return name;
+	}
 
-    enum { animationDurationMs = 100 };
-    TTimerId animationTimer;
+  protected:
+	TButton(StreamableInit) noexcept : TView(streamableInit) {};
+	virtual void write(opstream &);
+	virtual void *read(ipstream &);
 
-    static const char * _NEAR shadows;
-    static const char * _NEAR markers;
-
-    virtual const char *streamableName() const
-        { return name; }
-
-protected:
-
-    TButton( StreamableInit ) noexcept : TView( streamableInit ) {};
-    virtual void write( opstream& );
-    virtual void *read( ipstream& );
-
-public:
-
-    static const char * const _NEAR name;
-    static TStreamable *build();
-
+  public:
+	static const char *const _NEAR name;
+	static TStreamable *build();
 };
 
-inline ipstream& operator >> ( ipstream& is, TButton& cl )
-    { return is >> (TStreamable&)cl; }
-inline ipstream& operator >> ( ipstream& is, TButton*& cl )
-    { return is >> (void *&)cl; }
+inline ipstream &operator>>(ipstream &is, TButton &cl) {
+	return is >> (TStreamable &)cl;
+}
+inline ipstream &operator>>(ipstream &is, TButton *&cl) {
+	return is >> (void *&)cl;
+}
 
-inline opstream& operator << ( opstream& os, TButton& cl )
-    { return os << (TStreamable&)cl; }
-inline opstream& operator << ( opstream& os, TButton* cl )
-    { return os << (TStreamable *)cl; }
+inline opstream &operator<<(opstream &os, TButton &cl) {
+	return os << (TStreamable &)cl;
+}
+inline opstream &operator<<(opstream &os, TButton *cl) {
+	return os << (TStreamable *)cl;
+}
 
-#endif  // Uses_TButton
+#endif // Uses_TButton
 
-
-#if defined( Uses_TSItem ) && !defined( __TSItem )
+#if defined(Uses_TSItem) && !defined(__TSItem)
 #define __TSItem
 
-class TSItem
-{
+class TSItem {
 
-public:
+  public:
+	TSItem(TStringView aValue, TSItem *aNext) noexcept {
+		value = newStr(aValue);
+		next = aNext;
+	}
+	~TSItem() {
+		delete[] (char *)value;
+	}
 
-    TSItem( TStringView aValue, TSItem *aNext ) noexcept
-        { value = newStr(aValue); next = aNext; }
-    ~TSItem() { delete[] (char *) value; }
-
-    const char *value;
-    TSItem *next;
+	const char *value;
+	TSItem *next;
 };
 
-#endif  // Uses_TSItem
+#endif // Uses_TSItem
 
 /* ---------------------------------------------------------------------- */
 /*      class TCluster                                                    */
@@ -364,7 +348,7 @@ public:
 /*        5 = Disabled text                                               */
 /* ---------------------------------------------------------------------- */
 
-#if defined( Uses_TCluster ) && !defined( __TCluster )
+#if defined(Uses_TCluster) && !defined(__TCluster)
 #define __TCluster
 
 class _FAR TRect;
@@ -373,73 +357,71 @@ struct _FAR TEvent;
 class _FAR TPoint;
 class _FAR TStringCollection;
 
-class TCluster : public TView
-{
+class TCluster : public TView {
 
-public:
+  public:
+	TCluster(const TRect &bounds, TSItem *aStrings) noexcept;
+	~TCluster();
 
-    TCluster( const TRect& bounds, TSItem *aStrings ) noexcept;
-    ~TCluster();
+	virtual ushort dataSize();
+	void drawBox(const char *icon, char marker);
+	void drawMultiBox(const char *icon, const char *marker);
+	virtual void getData(void *rec);
+	ushort getHelpCtx();
+	virtual TPalette &getPalette() const;
+	virtual void handleEvent(TEvent &event);
+	virtual Boolean mark(int item);
+	virtual uchar multiMark(int item);
 
-    virtual ushort dataSize();
-    void drawBox( const char *icon, char marker );
-    void drawMultiBox(const char *icon, const char* marker);
-    virtual void getData( void *rec );
-    ushort getHelpCtx();
-    virtual TPalette& getPalette() const;
-    virtual void handleEvent( TEvent& event );
-    virtual Boolean mark( int item );
-    virtual uchar multiMark( int item );
+	virtual void press(int item);
+	virtual void movedTo(int item);
+	virtual void setData(void *rec);
+	virtual void setState(ushort aState, Boolean enable);
+	virtual void setButtonState(uint32_t aMask, Boolean enable);
 
-    virtual void press( int item );
-    virtual void movedTo( int item );
-    virtual void setData( void *rec );
-    virtual void setState( ushort aState, Boolean enable );
-    virtual void setButtonState(uint32_t aMask, Boolean enable);
+  protected:
+	uint32_t value;
+	uint32_t enableMask;
+	int sel;
+	TStringCollection *strings;
 
-protected:
+  private:
+	int column(int item);
+	int findSel(TPoint p);
+	int row(int item);
+	void moveSel(int, int);
 
-    uint32_t value;
-    uint32_t enableMask;
-    int sel;
-    TStringCollection *strings;
+	virtual const char *streamableName() const {
+		return name;
+	}
 
-private:
+  protected:
+	TCluster(StreamableInit) noexcept;
+	virtual void write(opstream &);
+	virtual void *read(ipstream &);
 
-    int column( int item );
-    int findSel( TPoint p );
-    int row( int item );
-    void moveSel(int, int);
+  public:
+	Boolean buttonState(int);
 
-    virtual const char *streamableName() const
-        { return name; }
-
-protected:
-
-    TCluster( StreamableInit ) noexcept;
-    virtual void write( opstream& );
-    virtual void *read( ipstream& );
-
-public:
-    Boolean buttonState(int );
-
-    static const char * const _NEAR name;
-    static TStreamable *build();
-
+	static const char *const _NEAR name;
+	static TStreamable *build();
 };
 
-inline ipstream& operator >> ( ipstream& is, TCluster& cl )
-    { return is >> (TStreamable&)cl; }
-inline ipstream& operator >> ( ipstream& is, TCluster*& cl )
-    { return is >> (void *&)cl; }
+inline ipstream &operator>>(ipstream &is, TCluster &cl) {
+	return is >> (TStreamable &)cl;
+}
+inline ipstream &operator>>(ipstream &is, TCluster *&cl) {
+	return is >> (void *&)cl;
+}
 
-inline opstream& operator << ( opstream& os, TCluster& cl )
-    { return os << (TStreamable&)cl; }
-inline opstream& operator << ( opstream& os, TCluster* cl )
-    { return os << (TStreamable *)cl; }
+inline opstream &operator<<(opstream &os, TCluster &cl) {
+	return os << (TStreamable &)cl;
+}
+inline opstream &operator<<(opstream &os, TCluster *cl) {
+	return os << (TStreamable *)cl;
+}
 
-#endif  // Uses_TCluster
-
+#endif // Uses_TCluster
 
 /* ---------------------------------------------------------------------- */
 /*      class TRadioButtons                                               */
@@ -452,60 +434,56 @@ inline opstream& operator << ( opstream& os, TCluster* cl )
 /*        5 = Disabled text                                               */
 /* ---------------------------------------------------------------------- */
 
-
-#if defined( Uses_TRadioButtons ) && !defined( __TRadioButtons )
+#if defined(Uses_TRadioButtons) && !defined(__TRadioButtons)
 #define __TRadioButtons
 
 class _FAR TRect;
 class _FAR TSItem;
 
-class TRadioButtons : public TCluster
-{
+class TRadioButtons : public TCluster {
 
-public:
+  public:
+	TRadioButtons(const TRect &bounds, TSItem *aStrings) noexcept;
 
-    TRadioButtons( const TRect& bounds, TSItem *aStrings ) noexcept;
+	virtual void draw();
+	virtual Boolean mark(int item);
+	virtual void movedTo(int item);
+	virtual void press(int item);
+	virtual void setData(void *rec);
 
-    virtual void draw();
-    virtual Boolean mark( int item );
-    virtual void movedTo( int item );
-    virtual void press( int item );
-    virtual void setData( void *rec );
+  private:
+	static const char *_NEAR button;
+	virtual const char *streamableName() const {
+		return name;
+	}
 
-private:
+  protected:
+	TRadioButtons(StreamableInit) noexcept;
 
-    static const char * _NEAR button;
-    virtual const char *streamableName() const
-        { return name; }
-
-protected:
-
-    TRadioButtons( StreamableInit ) noexcept;
-
-public:
-
-    static const char * const _NEAR name;
-    static TStreamable *build();
-
+  public:
+	static const char *const _NEAR name;
+	static TStreamable *build();
 };
 
-inline ipstream& operator >> ( ipstream& is, TRadioButtons& cl )
-    { return is >> (TStreamable&)cl; }
-inline ipstream& operator >> ( ipstream& is, TRadioButtons*& cl )
-    { return is >> (void *&)cl; }
-
-inline opstream& operator << ( opstream& os, TRadioButtons& cl )
-    { return os << (TStreamable&)cl; }
-inline opstream& operator << ( opstream& os, TRadioButtons* cl )
-    { return os << (TStreamable *)cl; }
-
-inline TRadioButtons::TRadioButtons( const TRect& bounds, TSItem *aStrings ) noexcept :
-    TCluster( bounds, aStrings )
-{
+inline ipstream &operator>>(ipstream &is, TRadioButtons &cl) {
+	return is >> (TStreamable &)cl;
+}
+inline ipstream &operator>>(ipstream &is, TRadioButtons *&cl) {
+	return is >> (void *&)cl;
 }
 
-#endif  // Uses_TRadioButtons
+inline opstream &operator<<(opstream &os, TRadioButtons &cl) {
+	return os << (TStreamable &)cl;
+}
+inline opstream &operator<<(opstream &os, TRadioButtons *cl) {
+	return os << (TStreamable *)cl;
+}
 
+inline TRadioButtons::TRadioButtons(const TRect &bounds, TSItem *aStrings) noexcept
+    : TCluster(bounds, aStrings) {
+}
+
+#endif // Uses_TRadioButtons
 
 /* ---------------------------------------------------------------------- */
 /*      TCheckBoxes                                                       */
@@ -518,67 +496,62 @@ inline TRadioButtons::TRadioButtons( const TRect& bounds, TSItem *aStrings ) noe
 /*        5 = Disabled text                                               */
 /* ---------------------------------------------------------------------- */
 
-#if defined( Uses_TCheckBoxes ) && !defined( __TCheckBoxes )
+#if defined(Uses_TCheckBoxes) && !defined(__TCheckBoxes)
 #define __TCheckBoxes
 
 class _FAR TRect;
 class _FAR TSItem;
 
-class TCheckBoxes : public TCluster
-{
+class TCheckBoxes : public TCluster {
 
-public:
+  public:
+	TCheckBoxes(const TRect &bounds, TSItem *aStrings) noexcept;
 
-    TCheckBoxes( const TRect& bounds, TSItem *aStrings) noexcept;
+	virtual void draw();
 
-    virtual void draw();
+	virtual Boolean mark(int item);
+	virtual void press(int item);
 
-    virtual Boolean mark( int item );
-    virtual void press( int item );
+  private:
+	static const char *_NEAR button;
 
-private:
+	virtual const char *streamableName() const {
+		return name;
+	}
 
-    static const char * _NEAR button;
+  protected:
+	TCheckBoxes(StreamableInit) noexcept;
 
-    virtual const char *streamableName() const
-        { return name; }
-
-protected:
-
-    TCheckBoxes( StreamableInit ) noexcept;
-
-public:
-
-    static const char * const _NEAR name;
-    static TStreamable *build();
-
+  public:
+	static const char *const _NEAR name;
+	static TStreamable *build();
 };
 
-inline ipstream& operator >> ( ipstream& is, TCheckBoxes& cl )
-    { return is >> (TStreamable&)cl; }
-inline ipstream& operator >> ( ipstream& is, TCheckBoxes*& cl )
-    { return is >> (void *&)cl; }
-
-inline opstream& operator << ( opstream& os, TCheckBoxes& cl )
-    { return os << (TStreamable&)cl; }
-inline opstream& operator << ( opstream& os, TCheckBoxes* cl )
-    { return os << (TStreamable *)cl; }
-
-inline TCheckBoxes::TCheckBoxes( const TRect& bounds, TSItem *aStrings) noexcept :
-    TCluster( bounds, aStrings )
-{
+inline ipstream &operator>>(ipstream &is, TCheckBoxes &cl) {
+	return is >> (TStreamable &)cl;
+}
+inline ipstream &operator>>(ipstream &is, TCheckBoxes *&cl) {
+	return is >> (void *&)cl;
 }
 
-#endif  // Uses_TCheckBoxes
+inline opstream &operator<<(opstream &os, TCheckBoxes &cl) {
+	return os << (TStreamable &)cl;
+}
+inline opstream &operator<<(opstream &os, TCheckBoxes *cl) {
+	return os << (TStreamable *)cl;
+}
 
+inline TCheckBoxes::TCheckBoxes(const TRect &bounds, TSItem *aStrings) noexcept
+    : TCluster(bounds, aStrings) {
+}
 
-#if defined( Uses_TMultiCheckBoxes ) && !defined( __TMultiCheckBoxes )
+#endif // Uses_TCheckBoxes
+
+#if defined(Uses_TMultiCheckBoxes) && !defined(__TMultiCheckBoxes)
 #define __TMultiCheckBoxes
 
-const unsigned short cfOneBit       = 0x0101,
-                     cfTwoBits      = 0x0203,
-                     cfFourBits     = 0x040F,
-                     cfEightBits    = 0x08FF;
+const unsigned short cfOneBit = 0x0101, cfTwoBits = 0x0203, cfFourBits = 0x040F,
+                     cfEightBits = 0x08FF;
 
 /* ---------------------------------------------------------------------- */
 /*      TMultiCheckBoxes                                                  */
@@ -594,47 +567,49 @@ const unsigned short cfOneBit       = 0x0101,
 class _FAR TRect;
 class _FAR TSItem;
 
-class TMultiCheckBoxes : public TCluster
-{
-public:
-    TMultiCheckBoxes(TRect&, TSItem*, uchar, ushort, const char*) noexcept;
-    ~TMultiCheckBoxes();
-    virtual ushort dataSize();
-    virtual void draw();
-    virtual void getData(void *);
-    virtual uchar multiMark(int item);
-    virtual void press( int item );
-    virtual void setData(void*);
+class TMultiCheckBoxes : public TCluster {
+  public:
+	TMultiCheckBoxes(TRect &, TSItem *, uchar, ushort, const char *) noexcept;
+	~TMultiCheckBoxes();
+	virtual ushort dataSize();
+	virtual void draw();
+	virtual void getData(void *);
+	virtual uchar multiMark(int item);
+	virtual void press(int item);
+	virtual void setData(void *);
 
-private:
-    uchar selRange;
-    ushort flags;
-    char* states;
+  private:
+	uchar selRange;
+	ushort flags;
+	char *states;
 
-    virtual const char *streamableName() const
-        { return name; }
+	virtual const char *streamableName() const {
+		return name;
+	}
 
-protected:
+  protected:
+	TMultiCheckBoxes(StreamableInit) noexcept;
+	virtual void write(opstream &);
+	virtual void *read(ipstream &);
 
-    TMultiCheckBoxes( StreamableInit ) noexcept;
-    virtual void write( opstream& );
-    virtual void *read( ipstream& );
-
-public:
-    static const char * const _NEAR name;
-    static TStreamable *build();
-
+  public:
+	static const char *const _NEAR name;
+	static TStreamable *build();
 };
 
-inline ipstream& operator >> ( ipstream& is, TMultiCheckBoxes& cl )
-    { return is >> (TStreamable&)cl; }
-inline ipstream& operator >> ( ipstream& is, TMultiCheckBoxes*& cl )
-    { return is >> (void *&)cl; }
+inline ipstream &operator>>(ipstream &is, TMultiCheckBoxes &cl) {
+	return is >> (TStreamable &)cl;
+}
+inline ipstream &operator>>(ipstream &is, TMultiCheckBoxes *&cl) {
+	return is >> (void *&)cl;
+}
 
-inline opstream& operator << ( opstream& os, TMultiCheckBoxes& cl )
-    { return os << (TStreamable&)cl; }
-inline opstream& operator << ( opstream& os, TMultiCheckBoxes* cl )
-    { return os << (TStreamable *)cl; }
+inline opstream &operator<<(opstream &os, TMultiCheckBoxes &cl) {
+	return os << (TStreamable &)cl;
+}
+inline opstream &operator<<(opstream &os, TMultiCheckBoxes *cl) {
+	return os << (TStreamable *)cl;
+}
 
 #endif
 
@@ -649,72 +624,68 @@ inline opstream& operator << ( opstream& os, TMultiCheckBoxes* cl )
 /*        5 = Divider                                                     */
 /* ---------------------------------------------------------------------- */
 
-#if defined( Uses_TListBox ) && !defined( __TListBox )
+#if defined(Uses_TListBox) && !defined(__TListBox)
 #define __TListBox
 
 class _FAR TRect;
 class _FAR TScrollBar;
 class _FAR TCollection;
 
-struct TListBoxRec
-{
-    TCollection *items;
-    ushort selection;
+struct TListBoxRec {
+	TCollection *items;
+	ushort selection;
 };
 
-class TListBox : public TListViewer
-{
+class TListBox : public TListViewer {
 
-public:
+  public:
+	TListBox(const TRect &bounds, ushort aNumCols, TScrollBar *aScrollBar) noexcept;
+	~TListBox();
 
-    TListBox( const TRect& bounds, ushort aNumCols, TScrollBar *aScrollBar ) noexcept;
-    ~TListBox();
+	virtual ushort dataSize();
+	virtual void getData(void *rec);
+	virtual void getText(char *dest, short item, short maxLen);
+	virtual void newList(TCollection *aList);
+	virtual void setData(void *rec);
 
-    virtual ushort dataSize();
-    virtual void getData( void *rec );
-    virtual void getText( char *dest, short item, short maxLen );
-    virtual void newList( TCollection *aList );
-    virtual void setData( void *rec );
+	TCollection *list();
 
-    TCollection *list();
+  private:
+	virtual const char *streamableName() const {
+		return name;
+	}
 
-private:
+  protected:
+	TCollection *items;
 
-    virtual const char *streamableName() const
-        { return name; }
+	TListBox(StreamableInit) noexcept;
+	virtual void write(opstream &);
+	virtual void *read(ipstream &);
 
-protected:
-
-    TCollection *items;
-
-    TListBox( StreamableInit ) noexcept;
-    virtual void write( opstream& );
-    virtual void *read( ipstream& );
-
-public:
-
-    static const char * const _NEAR name;
-    static TStreamable *build();
-
+  public:
+	static const char *const _NEAR name;
+	static TStreamable *build();
 };
 
-inline ipstream& operator >> ( ipstream& is, TListBox& cl )
-    { return is >> (TStreamable&)cl; }
-inline ipstream& operator >> ( ipstream& is, TListBox*& cl )
-    { return is >> (void *&)cl; }
-
-inline opstream& operator << ( opstream& os, TListBox& cl )
-    { return os << (TStreamable&)cl; }
-inline opstream& operator << ( opstream& os, TListBox* cl )
-    { return os << (TStreamable *)cl; }
-
-inline TCollection *TListBox::list()
-{
-    return items;
+inline ipstream &operator>>(ipstream &is, TListBox &cl) {
+	return is >> (TStreamable &)cl;
+}
+inline ipstream &operator>>(ipstream &is, TListBox *&cl) {
+	return is >> (void *&)cl;
 }
 
-#endif  // Uses_TListBox
+inline opstream &operator<<(opstream &os, TListBox &cl) {
+	return os << (TStreamable &)cl;
+}
+inline opstream &operator<<(opstream &os, TListBox *cl) {
+	return os << (TStreamable *)cl;
+}
 
+inline TCollection *TListBox::list() {
+	return items;
+}
+
+#endif // Uses_TListBox
 
 /* ---------------------------------------------------------------------- */
 /*      class TStaticText                                                 */
@@ -723,57 +694,54 @@ inline TCollection *TListBox::list()
 /*        1 = Text                                                        */
 /* ---------------------------------------------------------------------- */
 
-#if defined( Uses_TStaticText ) && !defined( __TStaticText )
+#if defined(Uses_TStaticText) && !defined(__TStaticText)
 #define __TStaticText
 
 class _FAR TRect;
 
-class TStaticText : public TView
-{
+class TStaticText : public TView {
 
-public:
+  public:
+	TStaticText(const TRect &bounds, TStringView aText) noexcept;
+	~TStaticText();
 
-    TStaticText( const TRect& bounds, TStringView aText ) noexcept;
-    ~TStaticText();
+	virtual void draw();
+	virtual TPalette &getPalette() const;
+	virtual void getText(char *);
 
-    virtual void draw();
-    virtual TPalette& getPalette() const;
-    virtual void getText( char * );
+  protected:
+	const char *text;
 
-protected:
+  private:
+	virtual const char *streamableName() const {
+		return name;
+	}
 
-    const char *text;
+  protected:
+	TStaticText(StreamableInit) noexcept;
+	virtual void write(opstream &);
+	virtual void *read(ipstream &);
 
-private:
-
-    virtual const char *streamableName() const
-        { return name; }
-
-protected:
-
-    TStaticText( StreamableInit ) noexcept;
-    virtual void write( opstream& );
-    virtual void *read( ipstream& );
-
-public:
-
-    static const char * const _NEAR name;
-    static TStreamable *build();
-
+  public:
+	static const char *const _NEAR name;
+	static TStreamable *build();
 };
 
-inline ipstream& operator >> ( ipstream& is, TStaticText& cl )
-    { return is >> (TStreamable&)cl; }
-inline ipstream& operator >> ( ipstream& is, TStaticText*& cl )
-    { return is >> (void *&)cl; }
+inline ipstream &operator>>(ipstream &is, TStaticText &cl) {
+	return is >> (TStreamable &)cl;
+}
+inline ipstream &operator>>(ipstream &is, TStaticText *&cl) {
+	return is >> (void *&)cl;
+}
 
-inline opstream& operator << ( opstream& os, TStaticText& cl )
-    { return os << (TStreamable&)cl; }
-inline opstream& operator << ( opstream& os, TStaticText* cl )
-    { return os << (TStreamable *)cl; }
+inline opstream &operator<<(opstream &os, TStaticText &cl) {
+	return os << (TStreamable &)cl;
+}
+inline opstream &operator<<(opstream &os, TStaticText *cl) {
+	return os << (TStreamable *)cl;
+}
 
-#endif  // Uses_TStaticText
-
+#endif // Uses_TStaticText
 
 /* ---------------------------------------------------------------------- */
 /*      class TParamText                                                  */
@@ -782,56 +750,54 @@ inline opstream& operator << ( opstream& os, TStaticText* cl )
 /*        1 = Text                                                        */
 /* ---------------------------------------------------------------------- */
 
-#if defined( Uses_TParamText ) && !defined( __TParamText )
+#if defined(Uses_TParamText) && !defined(__TParamText)
 #define __TParamText
 
 class _FAR TRect;
 
-class TParamText : public TStaticText
-{
+class TParamText : public TStaticText {
 
-public:
-    TParamText( const TRect& bounds ) noexcept;
-    ~TParamText();
+  public:
+	TParamText(const TRect &bounds) noexcept;
+	~TParamText();
 
-    virtual void getText( char *str );
-    virtual void setText( const char *fmt, ... );
-    virtual int getTextLen();
+	virtual void getText(char *str);
+	virtual void setText(const char *fmt, ...);
+	virtual int getTextLen();
 
-protected:
+  protected:
+	char *str;
 
-    char *str;
+  private:
+	virtual const char *streamableName() const {
+		return name;
+	}
 
-private:
+  protected:
+	TParamText(StreamableInit) noexcept;
+	virtual void write(opstream &);
+	virtual void *read(ipstream &);
 
-    virtual const char *streamableName() const
-        { return name; }
-
-protected:
-
-    TParamText( StreamableInit ) noexcept;
-    virtual void write( opstream& );
-    virtual void *read( ipstream& );
-
-public:
-
-    static const char * const _NEAR name;
-    static TStreamable *build();
-
+  public:
+	static const char *const _NEAR name;
+	static TStreamable *build();
 };
 
-inline ipstream& operator >> ( ipstream& is, TParamText& cl )
-    { return is >> (TStreamable&)cl; }
-inline ipstream& operator >> ( ipstream& is, TParamText*& cl )
-    { return is >> (void *&)cl; }
+inline ipstream &operator>>(ipstream &is, TParamText &cl) {
+	return is >> (TStreamable &)cl;
+}
+inline ipstream &operator>>(ipstream &is, TParamText *&cl) {
+	return is >> (void *&)cl;
+}
 
-inline opstream& operator << ( opstream& os, TParamText& cl )
-    { return os << (TStreamable&)cl; }
-inline opstream& operator << ( opstream& os, TParamText* cl )
-    { return os << (TStreamable *)cl; }
+inline opstream &operator<<(opstream &os, TParamText &cl) {
+	return os << (TStreamable &)cl;
+}
+inline opstream &operator<<(opstream &os, TParamText *cl) {
+	return os << (TStreamable *)cl;
+}
 
-#endif  // Uses_TParamText
-
+#endif // Uses_TParamText
 
 /* ---------------------------------------------------------------------- */
 /*      class TLabel                                                      */
@@ -843,61 +809,58 @@ inline opstream& operator << ( opstream& os, TParamText* cl )
 /*        4 = Selected shortcut                                           */
 /* ---------------------------------------------------------------------- */
 
-#if defined( Uses_TLabel ) && !defined( __TLabel )
+#if defined(Uses_TLabel) && !defined(__TLabel)
 #define __TLabel
 
 class _FAR TRect;
 struct _FAR TEvent;
 class _FAR TView;
 
-class TLabel : public TStaticText
-{
+class TLabel : public TStaticText {
 
-public:
+  public:
+	TLabel(const TRect &bounds, TStringView aText, TView *aLink) noexcept;
 
-    TLabel( const TRect& bounds, TStringView aText, TView *aLink ) noexcept;
+	virtual void draw();
+	virtual TPalette &getPalette() const;
+	virtual void handleEvent(TEvent &event);
+	virtual void shutDown();
 
-    virtual void draw();
-    virtual TPalette& getPalette() const;
-    virtual void handleEvent( TEvent& event );
-    virtual void shutDown();
+  protected:
+	TView *link;
+	Boolean light;
 
-protected:
+  private:
+	virtual const char *streamableName() const {
+		return name;
+	}
+	void focusLink(TEvent &);
 
-    TView *link;
-    Boolean light;
+  protected:
+	TLabel(StreamableInit) noexcept;
+	virtual void write(opstream &);
+	virtual void *read(ipstream &);
 
-private:
-
-    virtual const char *streamableName() const
-        { return name; }
-    void focusLink(TEvent&);
-
-protected:
-
-    TLabel( StreamableInit ) noexcept;
-    virtual void write( opstream& );
-    virtual void *read( ipstream& );
-
-public:
-
-    static const char * const _NEAR name;
-    static TStreamable *build();
-
+  public:
+	static const char *const _NEAR name;
+	static TStreamable *build();
 };
 
-inline ipstream& operator >> ( ipstream& is, TLabel& cl )
-    { return is >> (TStreamable&)cl; }
-inline ipstream& operator >> ( ipstream& is, TLabel*& cl )
-    { return is >> (void *&)cl; }
+inline ipstream &operator>>(ipstream &is, TLabel &cl) {
+	return is >> (TStreamable &)cl;
+}
+inline ipstream &operator>>(ipstream &is, TLabel *&cl) {
+	return is >> (void *&)cl;
+}
 
-inline opstream& operator << ( opstream& os, TLabel& cl )
-    { return os << (TStreamable&)cl; }
-inline opstream& operator << ( opstream& os, TLabel* cl )
-    { return os << (TStreamable *)cl; }
+inline opstream &operator<<(opstream &os, TLabel &cl) {
+	return os << (TStreamable &)cl;
+}
+inline opstream &operator<<(opstream &os, TLabel *cl) {
+	return os << (TStreamable *)cl;
+}
 
-#endif  // Uses_TLabel
-
+#endif // Uses_TLabel
 
 /* ---------------------------------------------------------------------- */
 /*      class THistoryViewer                                              */
@@ -910,37 +873,30 @@ inline opstream& operator << ( opstream& os, TLabel* cl )
 /*        5 = Divider                                                     */
 /* ---------------------------------------------------------------------- */
 
-#if defined( Uses_THistoryViewer ) && !defined( __THistoryViewer )
+#if defined(Uses_THistoryViewer) && !defined(__THistoryViewer)
 #define __THistoryViewer
 
 class _FAR TRect;
 class _FAR TScrollBar;
 
-class THistoryViewer : public TListViewer
-{
+class THistoryViewer : public TListViewer {
 
-public:
+  public:
+	THistoryViewer(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar,
+	               ushort aHistoryId) noexcept;
 
-    THistoryViewer( const TRect& bounds,
-                    TScrollBar *aHScrollBar,
-                    TScrollBar *aVScrollBar,
-                    ushort aHistoryId
-                  ) noexcept;
+	virtual TPalette &getPalette() const;
+	virtual void getText(char *dest, short item, short maxLen);
+	virtual void handleEvent(TEvent &event);
+	int historyWidth() noexcept;
 
-    virtual TPalette& getPalette() const;
-    virtual void getText( char *dest, short item, short maxLen );
-    virtual void handleEvent( TEvent& event );
-    int historyWidth() noexcept;
-
-protected:
-
-    ushort historyId;
-
+  protected:
+	ushort historyId;
 };
 
-#endif  // Uses_THistoryViewer
+#endif // Uses_THistoryViewer
 
-#if defined( Uses_THistoryWindow ) && !defined( __THistoryWindow )
+#if defined(Uses_THistoryWindow) && !defined(__THistoryWindow)
 #define __THistoryWindow
 
 class _FAR TListViewer;
@@ -948,17 +904,13 @@ class _FAR TRect;
 class _FAR TWindow;
 class _FAR TInputLine;
 
-class THistInit
-{
+class THistInit {
 
-public:
+  public:
+	THistInit(TListViewer *(*cListViewer)(TRect, TWindow *, ushort)) noexcept;
 
-    THistInit( TListViewer *(*cListViewer)( TRect, TWindow *, ushort ) ) noexcept;
-
-protected:
-
-    TListViewer *(*createListViewer)( TRect, TWindow *, ushort );
-
+  protected:
+	TListViewer *(*createListViewer)(TRect, TWindow *, ushort);
 };
 
 /* ---------------------------------------------------------------------- */
@@ -974,24 +926,21 @@ protected:
 /*        7 = HistoryViewer selected text                                 */
 /* ---------------------------------------------------------------------- */
 
-class THistoryWindow : public TWindow, public virtual THistInit
-{
+class THistoryWindow : public TWindow, public virtual THistInit {
 
-public:
+  public:
+	THistoryWindow(const TRect &bounds, ushort historyId) noexcept;
 
-    THistoryWindow( const TRect& bounds, ushort historyId ) noexcept;
+	virtual TPalette &getPalette() const;
+	virtual void getSelection(char *dest);
+	virtual void handleEvent(TEvent &event);
+	static TListViewer *initViewer(TRect, TWindow *, ushort);
 
-    virtual TPalette& getPalette() const;
-    virtual void getSelection( char *dest );
-    virtual void handleEvent( TEvent& event );
-    static TListViewer *initViewer( TRect, TWindow *, ushort );
-
-protected:
-
-    TListViewer *viewer;
+  protected:
+	TListViewer *viewer;
 };
 
-#endif  // Uses_THistoryWindow
+#endif // Uses_THistoryWindow
 
 /* ---------------------------------------------------------------------- */
 /*      class THistory                                                    */
@@ -1001,7 +950,7 @@ protected:
 /*        2 = Sides                                                       */
 /* ---------------------------------------------------------------------- */
 
-#if defined( Uses_THistory ) && !defined( __THistory )
+#if defined(Uses_THistory) && !defined(__THistory)
 #define __THistory
 
 class _FAR TRect;
@@ -1009,60 +958,58 @@ class _FAR TInputLine;
 struct _FAR TEvent;
 class _FAR THistoryWindow;
 
-class THistory : public TView
-{
+class THistory : public TView {
 
-public:
+  public:
+	THistory(const TRect &bounds, TInputLine *aLink, ushort aHistoryId) noexcept;
 
-    THistory( const TRect& bounds, TInputLine *aLink, ushort aHistoryId ) noexcept;
+	virtual void draw();
+	virtual TPalette &getPalette() const;
+	virtual void handleEvent(TEvent &event);
+	virtual THistoryWindow *initHistoryWindow(const TRect &bounds);
+	virtual void recordHistory(const char *s);
+	virtual void shutDown();
 
-    virtual void draw();
-    virtual TPalette& getPalette() const;
-    virtual void handleEvent( TEvent& event );
-    virtual THistoryWindow *initHistoryWindow( const TRect& bounds );
-    virtual void recordHistory(const char *s);
-    virtual void shutDown();
+  protected:
+	TInputLine *link;
+	ushort historyId;
 
-protected:
+  private:
+	static const char *_NEAR icon;
 
-    TInputLine *link;
-    ushort historyId;
+	virtual const char *streamableName() const {
+		return name;
+	}
 
-private:
+  protected:
+	THistory(StreamableInit) noexcept;
+	virtual void write(opstream &);
+	virtual void *read(ipstream &);
 
-    static const char * _NEAR icon;
-
-    virtual const char *streamableName() const
-        { return name; }
-
-protected:
-
-    THistory( StreamableInit ) noexcept;
-    virtual void write( opstream& );
-    virtual void *read( ipstream& );
-
-public:
-
-    static const char * const _NEAR name;
-    static TStreamable *build();
-
+  public:
+	static const char *const _NEAR name;
+	static TStreamable *build();
 };
 
-inline ipstream& operator >> ( ipstream& is, THistory& cl )
-    { return is >> (TStreamable&)cl; }
-inline ipstream& operator >> ( ipstream& is, THistory*& cl )
-    { return is >> (void *&)cl; }
+inline ipstream &operator>>(ipstream &is, THistory &cl) {
+	return is >> (TStreamable &)cl;
+}
+inline ipstream &operator>>(ipstream &is, THistory *&cl) {
+	return is >> (void *&)cl;
+}
 
-inline opstream& operator << ( opstream& os, THistory& cl )
-    { return os << (TStreamable&)cl; }
-inline opstream& operator << ( opstream& os, THistory* cl )
-    { return os << (TStreamable *)cl; }
+inline opstream &operator<<(opstream &os, THistory &cl) {
+	return os << (TStreamable &)cl;
+}
+inline opstream &operator<<(opstream &os, THistory *cl) {
+	return os << (TStreamable *)cl;
+}
 
-#endif  // Uses_THistory
+#endif // Uses_THistory
 
-#if defined( __BORLANDC__ )
+#if defined(__BORLANDC__)
 #pragma option -Vo.
 #endif
-#if defined( __BCOPT__ ) && !defined (__FLAT__)
+#if defined(__BCOPT__) && !defined(__FLAT__)
 #pragma option -po.
 #endif

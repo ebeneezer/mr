@@ -15,6 +15,5 @@
 #define Uses_TCheckBoxes
 #include <tvision/tv.h>
 
-const char * const _NEAR TCheckBoxes::name = "TCheckBoxes";
+const char *const _NEAR TCheckBoxes::name = "TCheckBoxes";
 #endif
-

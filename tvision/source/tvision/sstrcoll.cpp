@@ -15,8 +15,5 @@
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
 
-TStreamableClass RStringCollection( TStringCollection::name,
-                                    TStringCollection::build,
-                                    __DELTA(TStringCollection)
-                                  );
-
+TStreamableClass RStringCollection(TStringCollection::name, TStringCollection::build,
+                                   __DELTA(TStringCollection));

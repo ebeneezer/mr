@@ -2,8 +2,7 @@
 
 MRPalette currentPalette;
 
-void loadDefaultMultiEditPalette()
-{
+void loadDefaultMultiEditPalette() {
 	currentPalette.desktop = 0x70; // Grau
 
 	// Menü (Blau auf Grau, Selektion Magenta)

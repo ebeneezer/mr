@@ -15,12 +15,7 @@
 #define Uses_THistory
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
-__link( RView )
-__link( RInputLine )
+__link(RView) __link(RInputLine)
 
-TStreamableClass RHistory( THistory::name,
-                           THistory::build,
-                           __DELTA(THistory)
-                         );
+    TStreamableClass RHistory(THistory::name, THistory::build, __DELTA(THistory));
 #endif
-

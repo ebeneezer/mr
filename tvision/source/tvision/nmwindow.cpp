@@ -15,5 +15,5 @@
 #define Uses_TWindow
 #include <tvision/tv.h>
 
-const char * const _NEAR TWindow::name = "TWindow";
+const char *const _NEAR TWindow::name = "TWindow";
 #endif

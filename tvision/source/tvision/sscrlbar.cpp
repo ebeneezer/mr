@@ -15,11 +15,7 @@
 #define Uses_TScrollBar
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
-__link( RView )
+__link(RView)
 
-TStreamableClass RScrollBar( TScrollBar::name,
-                              TScrollBar::build,
-                              __DELTA(TScrollBar)
-                           );
+    TStreamableClass RScrollBar(TScrollBar::name, TScrollBar::build, __DELTA(TScrollBar));
 #endif
-

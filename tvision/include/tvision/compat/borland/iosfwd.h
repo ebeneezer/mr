@@ -16,8 +16,8 @@ typedef long streamoff;
 
 using std::ostream;
 using std::streambuf;
-using std::streampos;
 using std::streamoff;
+using std::streampos;
 
 #endif // __BORLANDC__
 

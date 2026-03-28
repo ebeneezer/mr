@@ -15,6 +15,5 @@
 #define Uses_TButton
 #include <tvision/tv.h>
 
-const char * const _NEAR TButton::name = "TButton";
+const char *const _NEAR TButton::name = "TButton";
 #endif
-

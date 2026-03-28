@@ -20,13 +20,13 @@
 #define Uses_TText
 #include <tvision/tv.h>
 
-#if !defined( __DOS_H )
+#if !defined(__DOS_H)
 #include <dos.h>
-#endif  // __DOS_H
+#endif // __DOS_H
 
 #include <string.h>
 
-#pragma warn -asc
+#pragma warn - asc
 
 /*------------------------------------------------------------------------*/
 /*                                                                        */
@@ -46,12 +46,12 @@
 /*                                                                        */
 /*------------------------------------------------------------------------*/
 
-void TDrawBuffer::moveBuf( ushort indent, const void _FAR *source,
-                           TColorAttr attr, ushort count ) noexcept
+void TDrawBuffer::moveBuf(ushort indent, const void _FAR *source, TColorAttr attr,
+                          ushort count) noexcept
 
 {
-    TStringView str((const char *) source, count);
-    moveStr(indent, str, attr, USHRT_MAX, 0);
+	TStringView str((const char *)source, count);
+	moveStr(indent, str, attr, USHRT_MAX, 0);
 }
 
 /*------------------------------------------------------------------------*/
@@ -79,64 +79,53 @@ void TDrawBuffer::moveBuf( ushort indent, const void _FAR *source,
 /*                                                                        */
 /*------------------------------------------------------------------------*/
 
-void TDrawBuffer::moveChar( ushort indent, char c, TColorAttr attr, ushort count ) noexcept
-{
-    if (count == 0 || indent >= capacity)
-        return;
-    if (indent + count >= capacity)
-        count = capacity - indent;
-    // The following conditions are now true:
-    // * indent + count <= capacity
-    // * count > 0
+void TDrawBuffer::moveChar(ushort indent, char c, TColorAttr attr, ushort count) noexcept {
+	if (count == 0 || indent >= capacity)
+		return;
+	if (indent + count >= capacity)
+		count = capacity - indent;
+	// The following conditions are now true:
+	// * indent + count <= capacity
+	// * count > 0
 
-#if !defined( __FLAT__ )
-    _ES = FP_SEG( &data[indent] );
-    _DI = FP_OFF( &data[indent] );
+#if !defined(__FLAT__)
+	_ES = FP_SEG(&data[indent]);
+	_DI = FP_OFF(&data[indent]);
 
-    _CX = count;
+	_CX = count;
 
-I   MOV     AL,c
-I   MOV     AH,[BYTE PTR attr]
-I   CLD
-I   TEST    AL,AL
-I   JZ      __1
-I   TEST    AH,AH
-I   JZ      __3
-I   REP     STOSW
-I   JMP     __4
+	I MOV AL, c I MOV AH, [BYTE PTR attr] I CLD I TEST AL, AL I JZ __1 I TEST AH,
+	    AH I JZ __3 I REP STOSW I JMP __4
 
-__1:
+	        __1 :
 
-I   MOV     AL,AH
+	    I MOV AL,
+	    AH
 
-__2:
+	        __2 :
 
-I   INC     DI
+	    I INC DI
 
-__3:
+	        __3 :
 
-I   STOSB
-I   LOOP    __2
+	    I STOSB I LOOP __2
 
-__4:
-    ;
+	        __4 :;
 #else
-    TScreenCell *dest = &data[indent];
+	TScreenCell *dest = &data[indent];
 
-    if (attr != 0)
-        if (c != 0)
-            {
-            TScreenCell cell;
-            ::setCell(cell, (uchar) c, attr);
-            while (count--)
-                *dest++ = cell;
-            }
-        else
-            while(count--)
-                ::setAttr(*dest++, attr);
-    else
-        while (count--)
-            ::setChar(*dest++, (uchar) c);
+	if (attr != 0)
+		if (c != 0) {
+			TScreenCell cell;
+			::setCell(cell, (uchar)c, attr);
+			while (count--)
+				*dest++ = cell;
+		} else
+			while (count--)
+				::setAttr(*dest++, attr);
+	else
+		while (count--)
+			::setChar(*dest++, (uchar)c);
 #endif
 }
 
@@ -167,116 +156,99 @@ __4:
 /*                                                                        */
 /*------------------------------------------------------------------------*/
 
-ushort TDrawBuffer::moveCStr( ushort indent, TStringView str, TAttrPair attrs,
-                              ushort maxStrWidth, ushort strIndent ) noexcept
-{
-    if (indent >= capacity || str.size() == 0 || maxStrWidth == 0)
-        return 0;
-    if (indent + maxStrWidth < indent || indent + maxStrWidth >= capacity)
-        maxStrWidth = capacity - indent;
-    // The following conditions are now true:
-    // * indent + maxStrWidth <= capacity
-    // * maxStrWidth > 0
-    // * str.size() > 0
+ushort TDrawBuffer::moveCStr(ushort indent, TStringView str, TAttrPair attrs, ushort maxStrWidth,
+                             ushort strIndent) noexcept {
+	if (indent >= capacity || str.size() == 0 || maxStrWidth == 0)
+		return 0;
+	if (indent + maxStrWidth < indent || indent + maxStrWidth >= capacity)
+		maxStrWidth = capacity - indent;
+	// The following conditions are now true:
+	// * indent + maxStrWidth <= capacity
+	// * maxStrWidth > 0
+	// * str.size() > 0
 
-#if !defined( __FLAT__ )
-    // Compute the end pointer here since doing it later would overwrite
-    // registers already in use.
-    TScreenCell _FAR * dataEnd = &data[indent + maxStrWidth];
+#if !defined(__FLAT__)
+	// Compute the end pointer here since doing it later would overwrite
+	// registers already in use.
+	TScreenCell _FAR *dataEnd = &data[indent + maxStrWidth];
 
-I   CLD
-I   PUSH    DS
+	I CLD I PUSH DS
 
-    _DS = FP_SEG( &str[0] );
-    _SI = FP_OFF( &str[0] );
+	    _DS = FP_SEG(&str[0]);
+	_SI = FP_OFF(&str[0]);
 
-    _ES = FP_SEG( &data[indent] );
-    _DI = FP_OFF( &data[indent] );
+	_ES = FP_SEG(&data[indent]);
+	_DI = FP_OFF(&data[indent]);
 
-    _CX = str.size();
+	_CX = str.size();
 
-    _BX = attrs;
-    _AH = _BL;
+	_BX = attrs;
+	_AH = _BL;
 
-    // Skip 'strIndent' columns in 'str'.
+	// Skip 'strIndent' columns in 'str'.
 
-    _DX = strIndent;
+	_DX = strIndent;
 
 __1:
 
-I   TEST    DX,DX
-I   JZ      __4
-I   LODSB
-I   CMP     AL,'~'
-I   JNE     __2
-I   XCHG    AH,BH
-I   JMP     __3
+	I TEST DX, DX I JZ __4 I LODSB I CMP AL, '~' I JNE __2 I XCHG AH,
+	    BH I JMP __3
 
-__2:
+	        __2 :
 
-I   DEC     DX
+	    I DEC DX
 
-__3:
+	        __3 :
 
-I   LOOP    __1
-I   JMP     __7
+	    I LOOP __1 I JMP __7
 
-__4:
+	        __4 :
 
-    // Copy string.
+	    // Copy string.
 
-    _DX = FP_OFF( dataEnd );
+	    _DX = FP_OFF(dataEnd);
 
-I   LODSB
-I   CMP     AL,'~'
-I   JNE     __5
-I   XCHG    AH,BH
-I   JMP     __6
+	I LODSB I CMP AL, '~' I JNE __5 I XCHG AH,
+	    BH I JMP __6
 
-__5:
+	        __5 :
 
-I   STOSW
-I   CMP     DI,DX
-I   JAE     __7
+	    I STOSW I CMP DI,
+	    DX I JAE __7
 
-__6:
+	            __6 :
 
-I   LOOP    __4
+	    I LOOP __4
 
-__7:
+	        __7 :
 
-I   POP     DS
+	    I POP DS
 
-    return (_DI - FP_OFF( &data[indent] ))/sizeof(TScreenCell);
+	    return (_DI - FP_OFF(&data[indent])) /
+	    sizeof(TScreenCell);
 #else
-    size_t i = indent, j = 0, w = 0;
-    int toggle = 1;
-    TColorAttr curAttr = ((TColorAttr *) &attrs)[0];
-    TSpan<TScreenCell> dest(data, indent + maxStrWidth);
-    while (j < str.size())
-        if (str[j] == '~')
-            {
-            curAttr = ((TColorAttr *) &attrs)[toggle];
-            toggle = 1 - toggle;
-            ++j;
-            }
-        else
-            {
-            if (strIndent <= w)
-                {
-                if (!TText::drawOne(dest, i, str, j, curAttr))
-                    break;
-                }
-            else
-                {
-                if (!TText::next(str, j, w))
-                    break;
-                if (strIndent < w && i < dest.size())
-                    // 'strIndent' is in the middle of a double-width character.
-                    ::setCell(dest[i++], ' ', curAttr);
-                }
-            }
-    return i - indent;
+	size_t i = indent, j = 0, w = 0;
+	int toggle = 1;
+	TColorAttr curAttr = ((TColorAttr *)&attrs)[0];
+	TSpan<TScreenCell> dest(data, indent + maxStrWidth);
+	while (j < str.size())
+		if (str[j] == '~') {
+			curAttr = ((TColorAttr *)&attrs)[toggle];
+			toggle = 1 - toggle;
+			++j;
+		} else {
+			if (strIndent <= w) {
+				if (!TText::drawOne(dest, i, str, j, curAttr))
+					break;
+			} else {
+				if (!TText::next(str, j, w))
+					break;
+				if (strIndent < w && i < dest.size())
+					// 'strIndent' is in the middle of a double-width character.
+					::setCell(dest[i++], ' ', curAttr);
+			}
+		}
+	return i - indent;
 #endif
 }
 
@@ -305,89 +277,79 @@ I   POP     DS
 /*                                                                        */
 /*------------------------------------------------------------------------*/
 
-ushort TDrawBuffer::moveStr( ushort indent, TStringView str, TColorAttr attr,
-                             ushort maxStrWidth, ushort strIndent ) noexcept
-{
-    if (indent >= capacity || str.size() == 0 || maxStrWidth == 0)
-        return 0;
-    if (indent + maxStrWidth < indent || indent + maxStrWidth >= capacity)
-        maxStrWidth = capacity - indent;
-    // The following conditions are now true:
-    // * indent + maxStrWidth <= capacity
-    // * maxStrWidth > 0
+ushort TDrawBuffer::moveStr(ushort indent, TStringView str, TColorAttr attr, ushort maxStrWidth,
+                            ushort strIndent) noexcept {
+	if (indent >= capacity || str.size() == 0 || maxStrWidth == 0)
+		return 0;
+	if (indent + maxStrWidth < indent || indent + maxStrWidth >= capacity)
+		maxStrWidth = capacity - indent;
+	// The following conditions are now true:
+	// * indent + maxStrWidth <= capacity
+	// * maxStrWidth > 0
 
-#if !defined( __FLAT__ )
-    if (strIndent >= str.size())
-        return 0;
-    // * count > 0
-    ushort count = str.size() - strIndent;
-    if (count > maxStrWidth)
-        count = maxStrWidth;
+#if !defined(__FLAT__)
+	if (strIndent >= str.size())
+		return 0;
+	// * count > 0
+	ushort count = str.size() - strIndent;
+	if (count > maxStrWidth)
+		count = maxStrWidth;
 
-I   CLD
-I   PUSH    DS
+	I CLD I PUSH DS
 
-    _DS = FP_SEG( &str[strIndent] );
-    _SI = FP_OFF( &str[strIndent] );
+	    _DS = FP_SEG(&str[strIndent]);
+	_SI = FP_OFF(&str[strIndent]);
 
-    _ES = FP_SEG( &data[indent] );
-    _DI = FP_OFF( &data[indent] );
+	_ES = FP_SEG(&data[indent]);
+	_DI = FP_OFF(&data[indent]);
 
-    _CX = count;
+	_CX = count;
 
-    _AH = attr;
+	_AH = attr;
 
-I   TEST    AH, AH
-I   JZ      __2
+	I TEST AH, AH I JZ __2
 
-__1:
+	               __1 :
 
-I   LODSB
-I   STOSW
-I   LOOP    __1
-I   JMP     __3
+	    I LODSB I STOSW I LOOP __1 I JMP __3
 
-__2:
+	        __2 :
 
-I   MOVSB
-I   INC     DI
-I   LOOP    __2
+	    I MOVSB I INC DI I LOOP __2
 
-__3:
+	        __3 :
 
-I   POP     DS
+	    I POP DS
 
-    return count;
+	    return count;
 #else
-    TSpan<TScreenCell> dest(data, indent + maxStrWidth);
-    if (attr != 0)
-        return TText::drawStr(dest, indent, str, strIndent, attr);
-    else
-        return TText::drawStr(dest, indent, str, strIndent);
+	TSpan<TScreenCell> dest(data, indent + maxStrWidth);
+	if (attr != 0)
+		return TText::drawStr(dest, indent, str, strIndent, attr);
+	else
+		return TText::drawStr(dest, indent, str, strIndent);
 #endif
 }
 
-#if defined( __FLAT__ )
-TDrawBuffer::TDrawBuffer() noexcept
-{
-    // Unlike on DOS, the screen's dimensions are arbitrary, so we have to take
-    // this into account and allocate the buffer dynamically. We must take the
-    // largest of the screen's dimensions, since TDrawBuffer can also be used to
-    // draw vertical views (e.g. TScrollBar).
-    // In addition, we give some room for views that might exceed the screen size.
-    capacity = 8 + max(max(TScreen::screenWidth, TScreen::screenHeight), 80);
-    data = new TScreenCell[capacity];
-#if !defined( __BORLANDC__ )
-    // We cannot leave the buffer uninitialized because, if it ends up being
-    // displayed on screen, it may mess up the screen severely.
-    memset(data, 0, capacity * sizeof(TScreenCell));
+#if defined(__FLAT__)
+TDrawBuffer::TDrawBuffer() noexcept {
+	// Unlike on DOS, the screen's dimensions are arbitrary, so we have to take
+	// this into account and allocate the buffer dynamically. We must take the
+	// largest of the screen's dimensions, since TDrawBuffer can also be used to
+	// draw vertical views (e.g. TScrollBar).
+	// In addition, we give some room for views that might exceed the screen size.
+	capacity = 8 + max(max(TScreen::screenWidth, TScreen::screenHeight), 80);
+	data = new TScreenCell[capacity];
+#if !defined(__BORLANDC__)
+	// We cannot leave the buffer uninitialized because, if it ends up being
+	// displayed on screen, it may mess up the screen severely.
+	memset(data, 0, capacity * sizeof(TScreenCell));
 #endif // __BORLANDC__
 }
 
-TDrawBuffer::~TDrawBuffer()
-{
-    delete[] data;
+TDrawBuffer::~TDrawBuffer() {
+	delete[] data;
 }
 #endif // __FLAT__
 
-#pragma warn .asc
+#pragma warn.asc

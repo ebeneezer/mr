@@ -15,11 +15,7 @@
 #define Uses_TInputLine
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
-__link( RView )
+__link(RView)
 
-TStreamableClass RInputLine( TInputLine::name,
-                             TInputLine::build,
-                             __DELTA(TInputLine)
-                           );
+    TStreamableClass RInputLine(TInputLine::name, TInputLine::build, __DELTA(TInputLine));
 #endif
-

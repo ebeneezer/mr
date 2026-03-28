@@ -15,5 +15,5 @@
 #define Uses_THistory
 #include <tvision/tv.h>
 
-const char * const _NEAR THistory::name = "THistory";
+const char *const _NEAR THistory::name = "THistory";
 #endif

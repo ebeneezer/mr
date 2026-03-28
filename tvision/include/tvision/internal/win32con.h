@@ -1,14 +1,13 @@
 #ifndef WIN32CON_H
 #define WIN32CON_H
 
-#include <tvision/tv.h>
 #include <compat/windows/windows.h>
+#include <internal/ansiwrit.h>
 #include <internal/platform.h>
 #include <internal/termio.h>
-#include <internal/ansiwrit.h>
+#include <tvision/tv.h>
 
-namespace tvision
-{
+namespace tvision {
 
 bool getWin32Key(const KEY_EVENT_RECORD &, TEvent &, InputState &) noexcept;
 void getWin32Mouse(const MOUSE_EVENT_RECORD &, TEvent &, InputState &) noexcept;
@@ -17,90 +16,76 @@ void getWin32Mouse(const MOUSE_EVENT_RECORD &, TEvent &, InputState &) noexcept;
 
 class ConsoleCtl;
 
-class Win32ConsoleAdapter final : public ConsoleAdapter
-{
-    ConsoleCtl &con;
-    InputAdapter &input;
-    DWORD startupMode;
-    UINT cpInput, cpOutput;
+class Win32ConsoleAdapter final : public ConsoleAdapter {
+	ConsoleCtl &con;
+	InputAdapter &input;
+	DWORD startupMode;
+	UINT cpInput, cpOutput;
 
-    Win32ConsoleAdapter( ConsoleCtl &aCon, DWORD aStartupMode,
-                         UINT cpInput, UINT cpOutput,
-                         DisplayAdapter &aDisplay,
-                         InputAdapter &aInput ) noexcept :
-        ConsoleAdapter(aDisplay, {&aInput}),
-        con(aCon),
-        input(aInput),
-        startupMode(aStartupMode),
-        cpInput(cpInput),
-        cpOutput(cpOutput)
-    {
-    }
+	Win32ConsoleAdapter(ConsoleCtl &aCon, DWORD aStartupMode, UINT cpInput, UINT cpOutput,
+	                    DisplayAdapter &aDisplay, InputAdapter &aInput) noexcept
+	    : ConsoleAdapter(aDisplay, {&aInput}), con(aCon), input(aInput), startupMode(aStartupMode),
+	      cpInput(cpInput), cpOutput(cpOutput) {
+	}
 
-    ~Win32ConsoleAdapter();
+	~Win32ConsoleAdapter();
 
-    bool isAlive() noexcept override;
-    bool setClipboardText(TStringView) noexcept override;
-    bool requestClipboardText(void (&)(TStringView)) noexcept override;
+	bool isAlive() noexcept override;
+	bool setClipboardText(TStringView) noexcept override;
+	bool requestClipboardText(void (&)(TStringView)) noexcept override;
 
-    static DWORD initInputMode(ConsoleCtl &) noexcept;
-    static bool initOutputMode(ConsoleCtl &) noexcept;
-    static void initEncoding(bool, UINT &, UINT &) noexcept;
-    static bool isBitmapFont(UINT) noexcept;
-    static void disableBitmapFont(ConsoleCtl &) noexcept;
+	static DWORD initInputMode(ConsoleCtl &) noexcept;
+	static bool initOutputMode(ConsoleCtl &) noexcept;
+	static void initEncoding(bool, UINT &, UINT &) noexcept;
+	static bool isBitmapFont(UINT) noexcept;
+	static void disableBitmapFont(ConsoleCtl &) noexcept;
 
-public:
-
-    static Win32ConsoleAdapter &create() noexcept;
+  public:
+	static Win32ConsoleAdapter &create() noexcept;
 };
 
-class Win32Input final : public InputAdapter
-{
-    ConsoleCtl &con;
-    InputState state;
+class Win32Input final : public InputAdapter {
+	ConsoleCtl &con;
+	InputState state;
 
-    bool getEvent(const INPUT_RECORD &, TEvent &ev) noexcept;
-    bool getMouseEvent(MOUSE_EVENT_RECORD, TEvent &ev) noexcept;
+	bool getEvent(const INPUT_RECORD &, TEvent &ev) noexcept;
+	bool getMouseEvent(MOUSE_EVENT_RECORD, TEvent &ev) noexcept;
 
-public:
+  public:
+	// The lifetime of 'con' must exceed that of 'this'.
+	Win32Input(ConsoleCtl &aCon) noexcept;
 
-    // The lifetime of 'con' must exceed that of 'this'.
-    Win32Input(ConsoleCtl &aCon) noexcept;
-
-    bool getEvent(TEvent &ev) noexcept override;
+	bool getEvent(TEvent &ev) noexcept override;
 };
 
-class Win32Display final : public DisplayAdapter
-{
-public:
+class Win32Display final : public DisplayAdapter {
+  public:
+	// The lifetime of 'con' must exceed that of 'this'.
+	Win32Display(ConsoleCtl &con, bool isLegacyConsole) noexcept;
+	~Win32Display();
 
-    // The lifetime of 'con' must exceed that of 'this'.
-    Win32Display(ConsoleCtl &con, bool isLegacyConsole) noexcept;
-    ~Win32Display();
+  private:
+	ConsoleCtl &con;
 
-private:
+	TPoint size{};
+	CONSOLE_FONT_INFO lastFontInfo{};
 
-    ConsoleCtl &con;
+	AnsiScreenWriter *ansiScreenWriter{nullptr};
 
-    TPoint size {};
-    CONSOLE_FONT_INFO lastFontInfo {};
+	TPoint caretPos{-1, -1};
+	uchar lastAttr{'\x00'};
+	std::vector<char> buf;
 
-    AnsiScreenWriter *ansiScreenWriter {nullptr};
+	TPoint reloadScreenInfo() noexcept override;
 
-    TPoint caretPos {-1, -1};
-    uchar lastAttr {'\x00'};
-    std::vector<char> buf;
+	int getColorCount() noexcept override;
+	TPoint getFontSize() noexcept override;
 
-    TPoint reloadScreenInfo() noexcept override;
-
-    int getColorCount() noexcept override;
-    TPoint getFontSize() noexcept override;
-
-    void writeCell(TPoint, TStringView, TColorAttr, bool) noexcept override;
-    void setCaretPosition(TPoint) noexcept override;
-    void setCaretSize(int) noexcept override;
-    void clearScreen() noexcept override;
-    void flush() noexcept override;
+	void writeCell(TPoint, TStringView, TColorAttr, bool) noexcept override;
+	void setCaretPosition(TPoint) noexcept override;
+	void setCaretSize(int) noexcept override;
+	void clearScreen() noexcept override;
+	void flush() noexcept override;
 };
 
 #endif // _WIN32

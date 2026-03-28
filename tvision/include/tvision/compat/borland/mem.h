@@ -15,9 +15,8 @@
 #include <stddef.h>
 #include <string.h>
 
-inline void movmem(const void *src, void *dest, unsigned length) noexcept
-{
-    memmove(dest, src, length);
+inline void movmem(const void *src, void *dest, unsigned length) noexcept {
+	memmove(dest, src, length);
 }
 
 #endif // TVISION_COMPAT_MEM_H

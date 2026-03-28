@@ -15,5 +15,5 @@
 #define Uses_TScrollBar
 #include <tvision/tv.h>
 
-const char * const _NEAR TScrollBar::name = "TScrollBar";
+const char *const _NEAR TScrollBar::name = "TScrollBar";
 #endif

@@ -15,5 +15,5 @@
 #define Uses_TListViewer
 #include <tvision/tv.h>
 
-const char * const _NEAR TListViewer::name = "TListViewer";
+const char *const _NEAR TListViewer::name = "TListViewer";
 #endif

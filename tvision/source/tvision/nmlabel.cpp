@@ -15,5 +15,5 @@
 #define Uses_TLabel
 #include <tvision/tv.h>
 
-const char * const _NEAR TLabel::name = "TLabel";
+const char *const _NEAR TLabel::name = "TLabel";
 #endif

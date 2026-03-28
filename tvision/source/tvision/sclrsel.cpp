@@ -26,42 +26,21 @@
 #define Uses_TColorDialog
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
-__link( RCluster )
-__link( RView )
-__link( RLabel )
-__link( RButton )
-__link( RListViewer )
-__link( RDialog )
+__link(RCluster) __link(RView) __link(RLabel) __link(RButton) __link(RListViewer) __link(RDialog)
 
-TStreamableClass RColorSelector( TColorSelector::name,
-                                 TColorSelector::build,
-                                 __DELTA(TColorSelector)
-                               );
+    TStreamableClass
+    RColorSelector(TColorSelector::name, TColorSelector::build, __DELTA(TColorSelector));
 
-TStreamableClass RMonoSelector( TMonoSelector::name,
-                                TMonoSelector::build,
-                                __DELTA(TMonoSelector)
-                              );
+TStreamableClass RMonoSelector(TMonoSelector::name, TMonoSelector::build, __DELTA(TMonoSelector));
 
-TStreamableClass RColorDisplay( TColorDisplay::name,
-                                TColorDisplay::build,
-                                __DELTA(TColorDisplay)
-                              );
+TStreamableClass RColorDisplay(TColorDisplay::name, TColorDisplay::build, __DELTA(TColorDisplay));
 
-TStreamableClass RColorGroupList( TColorGroupList::name,
-                                  TColorGroupList::build,
-                                  __DELTA(TColorGroupList)
-                                );
+TStreamableClass RColorGroupList(TColorGroupList::name, TColorGroupList::build,
+                                 __DELTA(TColorGroupList));
 
+TStreamableClass RColorItemList(TColorItemList::name, TColorItemList::build,
+                                __DELTA(TColorItemList));
 
-TStreamableClass RColorItemList( TColorItemList::name,
-                                 TColorItemList::build,
-                                 __DELTA(TColorItemList)
-                               );
-
-TStreamableClass RColorDialog( TColorDialog::name,
-                               TColorDialog::build,
-                               __DELTA(TColorDialog)
-                             );
+TStreamableClass RColorDialog(TColorDialog::name, TColorDialog::build, __DELTA(TColorDialog));
 
 #endif

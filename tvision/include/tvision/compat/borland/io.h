@@ -10,13 +10,13 @@
 #ifndef TVISION_COMPAT_IO_H
 #define TVISION_COMPAT_IO_H
 
-struct  ftime   {
-  unsigned    ft_tsec  : 5;   /* Two second interval */
-  unsigned    ft_min   : 6;   /* Minutes */
-  unsigned    ft_hour  : 5;   /* Hours */
-  unsigned    ft_day   : 5;   /* Days */
-  unsigned    ft_month : 4;   /* Months */
-  unsigned    ft_year  : 7;   /* Year */
+struct ftime {
+	unsigned ft_tsec : 5;  /* Two second interval */
+	unsigned ft_min : 6;   /* Minutes */
+	unsigned ft_hour : 5;  /* Hours */
+	unsigned ft_day : 5;   /* Days */
+	unsigned ft_month : 4; /* Months */
+	unsigned ft_year : 7;  /* Year */
 };
 
 #ifdef _MSC_VER
@@ -27,15 +27,14 @@ struct  ftime   {
 #undef TVISION_COMPAT_IO_INCNEXT
 #elif !defined(_WIN32)
 
-#include <unistd.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
-inline off_t filelength( int fd ) noexcept
-{
-    struct stat s;
-    if ( fstat( fd, &s ) == (off_t) -1 )
-        return -1;
-    return s.st_size;
+inline off_t filelength(int fd) noexcept {
+	struct stat s;
+	if (fstat(fd, &s) == (off_t)-1)
+		return -1;
+	return s.st_size;
 }
 
 #endif // !_MSC_VER && !__MINGW32__ && !_WIN32

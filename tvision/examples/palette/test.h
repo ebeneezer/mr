@@ -13,19 +13,19 @@
 //      aboutDlg - creates and shows about box
 //
 
-#if !defined( _TEST_H )
+#if !defined(_TEST_H)
 #define _TEST_H
 
-class TTestApp : public TApplication
-{
-public:
-    TTestApp();
-    static TMenuBar *initMenuBar( TRect r );
-    virtual void handleEvent( TEvent& event);
-    virtual TPalette& getPalette() const;
-private:
-    void aboutDlg();
-    void paletteView();
+class TTestApp : public TApplication {
+  public:
+	TTestApp();
+	static TMenuBar *initMenuBar(TRect r);
+	virtual void handleEvent(TEvent &event);
+	virtual TPalette &getPalette() const;
+
+  private:
+	void aboutDlg();
+	void paletteView();
 };
 
-#endif  // _TEST_H
+#endif // _TEST_H

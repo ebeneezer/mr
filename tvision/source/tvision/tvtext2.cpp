@@ -26,179 +26,162 @@
 #define Uses_TRangeValidator
 #define Uses_TStringLookupValidator
 #define Uses_TListViewer
-#include <tvision/tv.h>
 #include <tvision/help.h>
+#include <tvision/tv.h>
 
-#if !defined( __CTYPE_H )
+#if !defined(__CTYPE_H)
 #include <ctype.h>
-#endif  // __CTYPE_H
+#endif // __CTYPE_H
 
-static const char altCodes1[] =
-    "QWERTYUIOP\0\0\0\0ASDFGHJKL\0\0\0\0\0ZXCVBNM";
+static const char altCodes1[] = "QWERTYUIOP\0\0\0\0ASDFGHJKL\0\0\0\0\0ZXCVBNM";
 static const char altCodes2[] = "1234567890-=";
 static const char altSpaceChar = '\xF0'; // '≡' in CP437.
 
 static const char ctrlCodes[] = "\0ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-char getAltChar(ushort keyCode) noexcept
-{
-    KeyDownEvent keyDown = {{keyCode}};
-    TStringView altChar = getAltCharStr(keyDown);
+char getAltChar(ushort keyCode) noexcept {
+	KeyDownEvent keyDown = {{keyCode}};
+	TStringView altChar = getAltCharStr(keyDown);
 
-    if( altChar.empty() )
-        return '\0';
-    else
-        return altChar[0];
+	if (altChar.empty())
+		return '\0';
+	else
+		return altChar[0];
 }
 
-TStringView getAltCharStr(const KeyDownEvent &keyDown) noexcept
-{
-    // If the Alt+Key KeyDownEvent contains text, return it.
-    if( (keyDown.controlKeyState & kbAltShift) != 0 &&
-        !keyDown.getText().empty()
-      )
-        return keyDown.getText();
+TStringView getAltCharStr(const KeyDownEvent &keyDown) noexcept {
+	// If the Alt+Key KeyDownEvent contains text, return it.
+	if ((keyDown.controlKeyState & kbAltShift) != 0 && !keyDown.getText().empty())
+		return keyDown.getText();
 
-    // Otherwise, try mapping the scan code to a character.
-    if( keyDown.charScan.charCode == 0 )
-        {
-        ushort scanCode = keyDown.charScan.scanCode;
+	// Otherwise, try mapping the scan code to a character.
+	if (keyDown.charScan.charCode == 0) {
+		ushort scanCode = keyDown.charScan.scanCode;
 
-        const char *ch = 0;
-        if( keyDown.keyCode == kbAltSpace )
-            ch = &altSpaceChar; // special case to handle alt-Space
-        else if( scanCode >= 0x10 && scanCode <= 0x32 )
-            ch = &altCodes1[scanCode - 0x10]; // alt-letter
-        else if( scanCode >= 0x78 && scanCode <= 0x83 )
-            ch = &altCodes2[scanCode - 0x78]; // alt-number
+		const char *ch = 0;
+		if (keyDown.keyCode == kbAltSpace)
+			ch = &altSpaceChar; // special case to handle alt-Space
+		else if (scanCode >= 0x10 && scanCode <= 0x32)
+			ch = &altCodes1[scanCode - 0x10]; // alt-letter
+		else if (scanCode >= 0x78 && scanCode <= 0x83)
+			ch = &altCodes2[scanCode - 0x78]; // alt-number
 
-        if( ch != 0 && *ch != '\0')
-            return TStringView(ch, 1);
-        }
+		if (ch != 0 && *ch != '\0')
+			return TStringView(ch, 1);
+	}
 
-    return TStringView();
+	return TStringView();
 }
 
-ushort getAltCode(char c) noexcept
-{
-    if( c == 0 )
-        return 0;
+ushort getAltCode(char c) noexcept {
+	if (c == 0)
+		return 0;
 
-    c = toupper((uchar) c);
+	c = toupper((uchar)c);
 
-    if( c == altSpaceChar )
-        return kbAltSpace; // special case to handle alt-Space
+	if (c == altSpaceChar)
+		return kbAltSpace; // special case to handle alt-Space
 
-    size_t i;
-    for( i = 0; i < sizeof( altCodes1 ); i++)
-       if( altCodes1[i] == c )
-        return (i+0x10) << 8;
+	size_t i;
+	for (i = 0; i < sizeof(altCodes1); i++)
+		if (altCodes1[i] == c)
+			return (i + 0x10) << 8;
 
-    for( i = 0; i < sizeof( altCodes2); i++)
-        if (altCodes2[i] == c)
-            return (i+0x78) << 8;
+	for (i = 0; i < sizeof(altCodes2); i++)
+		if (altCodes2[i] == c)
+			return (i + 0x78) << 8;
 
-    return 0;
+	return 0;
 }
 
-char getCtrlChar(ushort keyCode) noexcept
-{
-    KeyDownEvent keyDown = {{keyCode}};
-    TStringView ctrlChar = getCtrlCharStr(keyDown);
+char getCtrlChar(ushort keyCode) noexcept {
+	KeyDownEvent keyDown = {{keyCode}};
+	TStringView ctrlChar = getCtrlCharStr(keyDown);
 
-    if( ctrlChar.empty() )
-        return '\0';
-    else
-        return ctrlChar[0];
+	if (ctrlChar.empty())
+		return '\0';
+	else
+		return ctrlChar[0];
 }
 
-TStringView getCtrlCharStr(const KeyDownEvent &keyDown) noexcept
-{
-    // If the Ctrl+Key KeyDownEvent contains text, return it.
-    // Note that the Alt modifier must not be present, since that would be
-    // considered an Alt+Key press.
-    if( (keyDown.controlKeyState & kbAltShift) == 0 &&
-        (keyDown.controlKeyState & kbCtrlShift) != 0 &&
-        !keyDown.getText().empty()
-      )
-        return keyDown.getText();
+TStringView getCtrlCharStr(const KeyDownEvent &keyDown) noexcept {
+	// If the Ctrl+Key KeyDownEvent contains text, return it.
+	// Note that the Alt modifier must not be present, since that would be
+	// considered an Alt+Key press.
+	if ((keyDown.controlKeyState & kbAltShift) == 0 &&
+	    (keyDown.controlKeyState & kbCtrlShift) != 0 && !keyDown.getText().empty())
+		return keyDown.getText();
 
-    // Otherwise, map control characters into the corresponding ASCII character.
-    uchar charCode = keyDown.charScan.charCode;
-    if( 0 < charCode && charCode <= ('Z' - 'A' + 1) )
-        return TStringView(&ctrlCodes[charCode], 1);
+	// Otherwise, map control characters into the corresponding ASCII character.
+	uchar charCode = keyDown.charScan.charCode;
+	if (0 < charCode && charCode <= ('Z' - 'A' + 1))
+		return TStringView(&ctrlCodes[charCode], 1);
 
-    return TStringView();
+	return TStringView();
 }
 
-ushort getCtrlCode(uchar ch) noexcept
-{
-    return getAltCode(ch)|(((('a'<=ch)&&(ch<='z'))?(ch&~0x20):ch)-'A'+1);
+ushort getCtrlCode(uchar ch) noexcept {
+	return getAltCode(ch) | (((('a' <= ch) && (ch <= 'z')) ? (ch & ~0x20) : ch) - 'A' + 1);
 }
 
-const char * _NEAR TPXPictureValidator::errorMsg = "Error in picture format.\n %s";
-const char * _NEAR TFilterValidator::errorMsg = "Invalid character in input";
-const char * _NEAR TRangeValidator::errorMsg = "Value not in the range %ld to %ld";
-const char * _NEAR TStringLookupValidator::errorMsg = "Input is not in list of valid strings";
+const char *_NEAR TPXPictureValidator::errorMsg = "Error in picture format.\n %s";
+const char *_NEAR TFilterValidator::errorMsg = "Invalid character in input";
+const char *_NEAR TRangeValidator::errorMsg = "Value not in the range %ld to %ld";
+const char *_NEAR TStringLookupValidator::errorMsg = "Input is not in list of valid strings";
 
-const char * _NEAR TRangeValidator::validUnsignedChars = "+0123456789";
-const char * _NEAR TRangeValidator::validSignedChars = "+-0123456789";
+const char *_NEAR TRangeValidator::validUnsignedChars = "+0123456789";
+const char *_NEAR TRangeValidator::validSignedChars = "+-0123456789";
 
-const char * _NEAR TListViewer::emptyText = "<empty>";
+const char *_NEAR TListViewer::emptyText = "<empty>";
 
-const char * _NEAR THelpWindow::helpWinTitle = "Help";
-const char * _NEAR THelpFile::invalidContext =
-    "\n No help available in this context.";
+const char *_NEAR THelpWindow::helpWinTitle = "Help";
+const char *_NEAR THelpFile::invalidContext = "\n No help available in this context.";
 
-const char * _NEAR TEditWindow::clipboardTitle = "Clipboard";
-const char * _NEAR TEditWindow::untitled = "Untitled";
+const char *_NEAR TEditWindow::clipboardTitle = "Clipboard";
+const char *_NEAR TEditWindow::untitled = "Untitled";
 
-const char * _NEAR TFileList::tooManyFiles = "Too many files.";
+const char *_NEAR TFileList::tooManyFiles = "Too many files.";
 
-const char * _NEAR TProgram::exitText = "~Alt-X~ Exit";
+const char *_NEAR TProgram::exitText = "~Alt-X~ Exit";
 
-const char * _NEAR MsgBoxText::yesText = "~Y~es";
-const char * _NEAR MsgBoxText::noText = "~N~o";
-const char * _NEAR MsgBoxText::okText = "O~K~";
-const char * _NEAR MsgBoxText::cancelText = "~C~ancel";
-const char * _NEAR MsgBoxText::warningText = "Warning";
-const char * _NEAR MsgBoxText::errorText = "Error";
-const char * _NEAR MsgBoxText::informationText = "Information";
-const char * _NEAR MsgBoxText::confirmText = "Confirm";
+const char *_NEAR MsgBoxText::yesText = "~Y~es";
+const char *_NEAR MsgBoxText::noText = "~N~o";
+const char *_NEAR MsgBoxText::okText = "O~K~";
+const char *_NEAR MsgBoxText::cancelText = "~C~ancel";
+const char *_NEAR MsgBoxText::warningText = "Warning";
+const char *_NEAR MsgBoxText::errorText = "Error";
+const char *_NEAR MsgBoxText::informationText = "Information";
+const char *_NEAR MsgBoxText::confirmText = "Confirm";
 
-const char * _NEAR TChDirDialog::changeDirTitle = "Change Directory";
-const char * _NEAR TChDirDialog::dirNameText = "Directory ~n~ame";
-const char * _NEAR TChDirDialog::dirTreeText = "Directory ~t~ree";
-const char * _NEAR TChDirDialog::okText = "O~K~";
-const char * _NEAR TChDirDialog::chdirText = "~C~hdir";
-const char * _NEAR TChDirDialog::revertText = "~R~evert";
-const char * _NEAR TChDirDialog::helpText = "Help";
-const char * _NEAR TChDirDialog::drivesText = "Drives";
-const char * _NEAR TChDirDialog::invalidText = "Invalid directory";
+const char *_NEAR TChDirDialog::changeDirTitle = "Change Directory";
+const char *_NEAR TChDirDialog::dirNameText = "Directory ~n~ame";
+const char *_NEAR TChDirDialog::dirTreeText = "Directory ~t~ree";
+const char *_NEAR TChDirDialog::okText = "O~K~";
+const char *_NEAR TChDirDialog::chdirText = "~C~hdir";
+const char *_NEAR TChDirDialog::revertText = "~R~evert";
+const char *_NEAR TChDirDialog::helpText = "Help";
+const char *_NEAR TChDirDialog::drivesText = "Drives";
+const char *_NEAR TChDirDialog::invalidText = "Invalid directory";
 
-const char * _NEAR TFileDialog::filesText = "~F~iles";
-const char * _NEAR TFileDialog::openText = "~O~pen";
-const char * _NEAR TFileDialog::okText = "O~K~";
-const char * _NEAR TFileDialog::replaceText = "~R~eplace";
-const char * _NEAR TFileDialog::clearText = "~C~lear";
-const char * _NEAR TFileDialog::cancelText = "Cancel";
-const char * _NEAR TFileDialog::helpText = "~H~elp";
-const char * _NEAR TFileDialog::invalidDriveText = "Invalid drive or directory";
-const char * _NEAR TFileDialog::invalidFileText = "Invalid file name";
+const char *_NEAR TFileDialog::filesText = "~F~iles";
+const char *_NEAR TFileDialog::openText = "~O~pen";
+const char *_NEAR TFileDialog::okText = "O~K~";
+const char *_NEAR TFileDialog::replaceText = "~R~eplace";
+const char *_NEAR TFileDialog::clearText = "~C~lear";
+const char *_NEAR TFileDialog::cancelText = "Cancel";
+const char *_NEAR TFileDialog::helpText = "~H~elp";
+const char *_NEAR TFileDialog::invalidDriveText = "Invalid drive or directory";
+const char *_NEAR TFileDialog::invalidFileText = "Invalid file name";
 
-const char * _NEAR TFileInfoPane::pmText = "p";
-const char * _NEAR TFileInfoPane::amText = "a";
-const char * const _NEAR TFileInfoPane::months[] =
-    {
-    "","Jan","Feb","Mar","Apr","May","Jun",
-    "Jul","Aug","Sep","Oct","Nov","Dec"
-    };
+const char *_NEAR TFileInfoPane::pmText = "p";
+const char *_NEAR TFileInfoPane::amText = "a";
+const char *const _NEAR TFileInfoPane::months[] = {"",    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
 const char _NEAR TDeskTop::defaultBkgrnd = '\xB0';
 
-#if !defined( __FLAT__ )
-const char * const _NEAR TSystemError::errorString[] =
-{
+#if !defined(__FLAT__)
+const char *const _NEAR TSystemError::errorString[] = {
     "Disk in drive %c is write protected",          // 0
     "Unknown unit %c",                              // 1 - NEW
     "Disk is not ready in drive %c",                // 2
@@ -215,13 +198,13 @@ const char * const _NEAR TSystemError::errorString[] =
     "Sharing violation on drive %c",                // D
     "Lock violation on drive %c",                   // E
     "Disk change invalid on drive %c",              // F
-    "FCB unavailable",                              //10
-    "Sharing buffer overflow",                      //11
-    "Code page mismatch",                           //12
-    "Out of input",                                 //13
-    "Insufficient disk space on drive %c",          //14
-    "Insert diskette in drive %c"                   //15
+    "FCB unavailable",                              // 10
+    "Sharing buffer overflow",                      // 11
+    "Code page mismatch",                           // 12
+    "Out of input",                                 // 13
+    "Insufficient disk space on drive %c",          // 14
+    "Insert diskette in drive %c"                   // 15
 };
 
-const char * _NEAR TSystemError::sRetryOrCancel = "~Enter~ Retry  ~Esc~ Cancel";
+const char *_NEAR TSystemError::sRetryOrCancel = "~Enter~ Retry  ~Esc~ Cancel";
 #endif

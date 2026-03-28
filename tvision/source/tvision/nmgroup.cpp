@@ -15,5 +15,5 @@
 #define Uses_TGroup
 #include <tvision/tv.h>
 
-const char * const _NEAR TGroup::name = "TGroup";
+const char *const _NEAR TGroup::name = "TGroup";
 #endif

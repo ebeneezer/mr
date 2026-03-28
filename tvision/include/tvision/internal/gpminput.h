@@ -11,39 +11,36 @@
 
 #include <gpm.h>
 
-namespace tvision
-{
+namespace tvision {
 
 class DisplayBuffer;
 
-class GpmInput final : public InputAdapter
-{
-    uchar buttonState {0};
-    DisplayBuffer &displayBuf;
+class GpmInput final : public InputAdapter {
+	uchar buttonState{0};
+	DisplayBuffer &displayBuf;
 
-    GpmInput(DisplayBuffer &) noexcept;
-    void fitEvent(Gpm_Event &) noexcept;
+	GpmInput(DisplayBuffer &) noexcept;
+	void fitEvent(Gpm_Event &) noexcept;
 
-public:
+  public:
+	// Pre: The lifetime of 'displayBuf' must exceed that of the returned object.
+	static GpmInput *create(DisplayBuffer &displayBuf) noexcept;
+	~GpmInput();
 
-    // Pre: The lifetime of 'displayBuf' must exceed that of the returned object.
-    static GpmInput *create(DisplayBuffer &displayBuf) noexcept;
-    ~GpmInput();
-
-    bool getEvent(TEvent &ev) noexcept override;
+	bool getEvent(TEvent &ev) noexcept override;
 };
 
 } // namespace tvision
 
 #else
 
-namespace tvision
-{
+namespace tvision {
 
-class GpmInput : public InputAdapter
-{
-public:
-    static GpmInput *create(DisplayBuffer &) noexcept { return nullptr; }
+class GpmInput : public InputAdapter {
+  public:
+	static GpmInput *create(DisplayBuffer &) noexcept {
+		return nullptr;
+	}
 };
 
 } // namespace tvision

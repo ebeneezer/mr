@@ -12,10 +12,9 @@
 #define Uses_TMenuBar
 #include <tv.h>
 
-#if !defined( __MMENU_H )
+#if !defined(__MMENU_H)
 #include "mmenu.h"
 #endif
-
 
 /***********************************************************************
  * global operator +
@@ -36,7 +35,6 @@ TMenuItem& operator +( TMenuItem& menuItem1, TMenuItem& menuItem2 )
 }
 #endif
 
-
 /***********************************************************************
  *                                                                     *
  * class TTestList                                                     *
@@ -47,19 +45,17 @@ TMenuItem& operator +( TMenuItem& menuItem1, TMenuItem& menuItem2 )
  *   of TMenu pointers.
  ***********************************************************************/
 
-TMultiMenu::TMultiMenu( const TRect& bounds, TMenu *aMenu[],
-            int nMenus ) :    TMenuBar( bounds, aMenu[0] )
-{
-    if( nMenus == 0)
-        for( nMenus = 0; aMenu[nMenus] != NULL; nMenus++ )
-            ;
-    mList = new TMenu *[nMenus];
-    numMenus = nMenus;
+TMultiMenu::TMultiMenu(const TRect &bounds, TMenu *aMenu[], int nMenus)
+    : TMenuBar(bounds, aMenu[0]) {
+	if (nMenus == 0)
+		for (nMenus = 0; aMenu[nMenus] != NULL; nMenus++)
+			;
+	mList = new TMenu *[nMenus];
+	numMenus = nMenus;
 
-    for( int i = 0; i < nMenus; i++ )
-        mList[i] = aMenu[i];
+	for (int i = 0; i < nMenus; i++)
+		mList[i] = aMenu[i];
 }
-
 
 /***********************************************************************
  * TMultiMenu::TMultiMenu
@@ -67,17 +63,12 @@ TMultiMenu::TMultiMenu( const TRect& bounds, TMenu *aMenu[],
  *   of TSubMenu objects.
  ***********************************************************************/
 
-TMultiMenu::TMultiMenu( const TRect& bounds, TSubMenu aMenu[],
-                        int nMenus ) :
-    TMenuBar( bounds, aMenu[0] ),
-    mList( new TMenu *[nMenus] ),
-    numMenus( nMenus )
-{
-    mList[0] = menu;                  // First menu is already allocated.
-    for( int i = 1; i < nMenus; i++ )
-        mList[i] = new TMenu( aMenu[i] );
+TMultiMenu::TMultiMenu(const TRect &bounds, TSubMenu aMenu[], int nMenus)
+    : TMenuBar(bounds, aMenu[0]), mList(new TMenu *[nMenus]), numMenus(nMenus) {
+	mList[0] = menu; // First menu is already allocated.
+	for (int i = 1; i < nMenus; i++)
+		mList[i] = new TMenu(aMenu[i]);
 }
-
 
 /***********************************************************************
  * TMultiMenu::~TMultiMenu
@@ -86,15 +77,13 @@ TMultiMenu::TMultiMenu( const TRect& bounds, TSubMenu aMenu[],
  *   and frees the space where the list was stored.
  ***********************************************************************/
 
-TMultiMenu::~TMultiMenu()
-{
-    for( int i = 0; i < numMenus; i++ )
-        if( mList[i] != menu )          // Delete all but current menu.
-            delete mList[i];
+TMultiMenu::~TMultiMenu() {
+	for (int i = 0; i < numMenus; i++)
+		if (mList[i] != menu) // Delete all but current menu.
+			delete mList[i];
 
-    delete [] mList;
+	delete[] mList;
 }
-
 
 /***********************************************************************
  * TMultiMenu::handleEvent
@@ -103,22 +92,15 @@ TMultiMenu::~TMultiMenu()
  *   to, passed via the infoInt data member of TEvent.
  ***********************************************************************/
 
-void TMultiMenu::handleEvent( TEvent& event )
-{
-    if( event.what == evBroadcast &&
-        event.message.command == cmMMChangeMenu )
-    {
-        if( event.message.infoInt >= 0 &&
-            event.message.infoInt < numMenus )
-        {
-            if( menu != mList[ event.message.infoInt ] )
-            {
-                menu = mList[ event.message.infoInt ];
-                drawView();
-            }
-        }
-        clearEvent( event );
-    }
-    else
-        TMenuBar::handleEvent( event );
+void TMultiMenu::handleEvent(TEvent &event) {
+	if (event.what == evBroadcast && event.message.command == cmMMChangeMenu) {
+		if (event.message.infoInt >= 0 && event.message.infoInt < numMenus) {
+			if (menu != mList[event.message.infoInt]) {
+				menu = mList[event.message.infoInt];
+				drawView();
+			}
+		}
+		clearEvent(event);
+	} else
+		TMenuBar::handleEvent(event);
 }

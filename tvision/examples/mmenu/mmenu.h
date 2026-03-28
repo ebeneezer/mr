@@ -62,25 +62,21 @@
  * make the example code in the test module much easier to read.
  */
 
-#if !defined( __MMENU_H )
+#if !defined(__MMENU_H)
 #define __MMENU_H
 
-class TMultiMenu : public TMenuBar
-{
+class TMultiMenu : public TMenuBar {
 
-public:
+  public:
+	TMultiMenu(const TRect &bounds, TMenu *aMenu[], int nMenus = 0);
+	TMultiMenu(const TRect &bounds, TSubMenu aMenu[], int nMenus);
+	~TMultiMenu();
 
-    TMultiMenu( const TRect& bounds, TMenu *aMenu[], int nMenus = 0 );
-    TMultiMenu( const TRect& bounds, TSubMenu aMenu[], int nMenus );
-    ~TMultiMenu();
+	virtual void handleEvent(TEvent &event);
 
-    virtual void handleEvent( TEvent& event );
-
-protected:
-
-    TMenu **mList;
-    int numMenus;
-
+  protected:
+	TMenu **mList;
+	int numMenus;
 };
 
 const unsigned cmMMChangeMenu = 0x1600;

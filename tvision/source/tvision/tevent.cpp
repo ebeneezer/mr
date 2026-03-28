@@ -11,7 +11,7 @@
  *      All Rights Reserved.
  *
  */
-#if defined( __DPMI16__ )
+#if defined(__DPMI16__)
 #pragma inline
 #endif
 
@@ -23,22 +23,22 @@
 #define Uses_TText
 #include <tvision/tv.h>
 
-#if !defined (__FLAT__)
+#if !defined(__FLAT__)
 
-#if !defined( __BIOS_H )
+#if !defined(__BIOS_H)
 #include <bios.h>
-#endif  // __BIOS_H
+#endif // __BIOS_H
 
-#if !defined( __DOS_H )
+#if !defined(__DOS_H)
 #include <dos.h>
-#endif  // __DOS_H
+#endif // __DOS_H
 
 #endif
 
-#if !defined( __FLAT__ )
-TEvent _NEAR TEventQueue::eventQueue[ eventQSize ] = { {0} };
-TEvent * _NEAR TEventQueue::eventQHead = TEventQueue::eventQueue;
-TEvent * _NEAR TEventQueue::eventQTail = TEventQueue::eventQueue;
+#if !defined(__FLAT__)
+TEvent _NEAR TEventQueue::eventQueue[eventQSize] = {{0}};
+TEvent *_NEAR TEventQueue::eventQHead = TEventQueue::eventQueue;
+TEvent *_NEAR TEventQueue::eventQTail = TEventQueue::eventQueue;
 Boolean _NEAR TEventQueue::mouseIntFlag = False;
 ushort _NEAR TEventQueue::eventCount = 0;
 #endif
@@ -57,415 +57,355 @@ MouseEventType _NEAR TEventQueue::lastMouse;
 MouseEventType _NEAR TEventQueue::curMouse;
 MouseEventType _NEAR TEventQueue::downMouse;
 
-char * _FAR TEventQueue::pasteText = 0;
+char *_FAR TEventQueue::pasteText = 0;
 size_t _NEAR TEventQueue::pasteTextLength = 0;
 size_t _NEAR TEventQueue::pasteTextIndex = 0;
 
-TEvent _NEAR TEventQueue::keyEventQueue[ minPasteEventCount ] = { {0} };
+TEvent _NEAR TEventQueue::keyEventQueue[minPasteEventCount] = {{0}};
 size_t _NEAR TEventQueue::keyEventCount = 0;
 size_t _NEAR TEventQueue::keyEventIndex = 0;
 Boolean _NEAR TEventQueue::pasteState = False;
 
-TEventQueue::TEventQueue() noexcept
-{
-    resume();
+TEventQueue::TEventQueue() noexcept {
+	resume();
 }
 
+void TEventQueue::resume() noexcept {
+	if (TMouse::present() == False)
+		TMouse::resume();
+	if (TMouse::present() == False)
+		return;
 
-void TEventQueue::resume() noexcept
-{
-    if( TMouse::present() == False )
-        TMouse::resume();
-    if( TMouse::present() == False )
-        return;
+	TMouse::getEvent(curMouse);
+	lastMouse = curMouse;
 
-    TMouse::getEvent( curMouse );
-    lastMouse = curMouse;
-
-#if defined( __FLAT__ )
-    THardwareInfo::clearPendingEvent();
+#if defined(__FLAT__)
+	THardwareInfo::clearPendingEvent();
 #else
-    TMouse::registerHandler( 0xFFFF, (void (_FAR *)()) mouseInt );
+	TMouse::registerHandler(0xFFFF, (void(_FAR *)())mouseInt);
 #endif
 
-    mouseEvents = True;
-    TMouse::setRange( TScreen::screenWidth-1, TScreen::screenHeight-1 );
+	mouseEvents = True;
+	TMouse::setRange(TScreen::screenWidth - 1, TScreen::screenHeight - 1);
 }
 
-
-void TEventQueue::suspend() noexcept
-{
-    TMouse::suspend();
+void TEventQueue::suspend() noexcept {
+	TMouse::suspend();
 }
 
-TEventQueue::~TEventQueue()
-{
-    suspend();
-    delete pasteText;
-    pasteText = 0;
+TEventQueue::~TEventQueue() {
+	suspend();
+	delete pasteText;
+	pasteText = 0;
 }
 
+void TEventQueue::getMouseEvent(TEvent &ev) noexcept {
+	if (mouseEvents == True) {
+		if (pendingMouseUp == True) {
+			ev.what = evMouseUp;
+			ev.mouse = lastMouse;
+			lastMouse.buttons = 0;
+			pendingMouseUp = False;
+			return;
+		}
+		if (!getMouseState(ev))
+			return;
 
-void TEventQueue::getMouseEvent( TEvent & ev) noexcept
-{
-    if( mouseEvents == True )
-        {
-        if( pendingMouseUp == True )
-            {
-            ev.what = evMouseUp;
-            ev.mouse = lastMouse;
-            lastMouse.buttons = 0;
-            pendingMouseUp = False;
-            return;
-            }
-        if( !getMouseState( ev ) )
-            return;
+		ev.mouse.eventFlags = 0;
 
-        ev.mouse.eventFlags = 0;
+		if (ev.mouse.buttons == 0 && lastMouse.buttons != 0) {
+			if (ev.mouse.where == lastMouse.where) {
+				ev.what = evMouseUp;
+				uchar buttons = lastMouse.buttons;
+				lastMouse = ev.mouse;
+				ev.mouse.buttons = buttons;
+			} else {
+				ev.what = evMouseMove;
+				MouseEventType up = ev.mouse;
+				TPoint where = up.where;
+				ev.mouse = lastMouse;
+				ev.mouse.where = where;
+				ev.mouse.eventFlags |= meMouseMoved;
+				up.buttons = lastMouse.buttons;
+				lastMouse = up;
+				pendingMouseUp = True;
+			}
+			return;
+		}
 
-        if( ev.mouse.buttons == 0 && lastMouse.buttons != 0 )
-            {
-            if( ev.mouse.where == lastMouse.where )
-                {
-                ev.what = evMouseUp;
-                uchar buttons = lastMouse.buttons;
-                lastMouse = ev.mouse;
-                ev.mouse.buttons = buttons;
-                }
-            else
-                {
-                ev.what = evMouseMove;
-                MouseEventType up = ev.mouse;
-                TPoint where = up.where;
-                ev.mouse = lastMouse;
-                ev.mouse.where = where;
-                ev.mouse.eventFlags |= meMouseMoved;
-                up.buttons = lastMouse.buttons;
-                lastMouse = up;
-                pendingMouseUp = True;
-                }
-            return;
-            }
+		if (ev.mouse.buttons != 0 && lastMouse.buttons == 0) {
+			if (ev.mouse.buttons == downMouse.buttons && ev.mouse.where == downMouse.where &&
+			    ev.what - downTicks <= doubleDelay) {
+				if (!(downMouse.eventFlags & (meDoubleClick | meTripleClick)))
+					ev.mouse.eventFlags |= meDoubleClick;
+				else if (downMouse.eventFlags & meDoubleClick) {
+					ev.mouse.eventFlags &= ~meDoubleClick;
+					ev.mouse.eventFlags |= meTripleClick;
+				}
+			}
 
-        if( ev.mouse.buttons != 0 && lastMouse.buttons == 0 )
-            {
-            if( ev.mouse.buttons == downMouse.buttons &&
-                ev.mouse.where == downMouse.where &&
-                ev.what - downTicks <= doubleDelay
-              )
-                {
-                if( !(downMouse.eventFlags & (meDoubleClick | meTripleClick)) )
-                    ev.mouse.eventFlags |= meDoubleClick;
-                else if( downMouse.eventFlags & meDoubleClick )
-                    {
-                    ev.mouse.eventFlags &= ~meDoubleClick;
-                    ev.mouse.eventFlags |= meTripleClick;
-                    }
-                }
+			downMouse = ev.mouse;
+			autoTicks = downTicks = ev.what;
+			autoDelay = repeatDelay;
+			ev.what = evMouseDown;
+			lastMouse = ev.mouse;
+			return;
+		}
 
-            downMouse = ev.mouse;
-            autoTicks = downTicks = ev.what;
-            autoDelay = repeatDelay;
-            ev.what = evMouseDown;
-            lastMouse = ev.mouse;
-            return;
-            }
+		ev.mouse.buttons = lastMouse.buttons;
 
-        ev.mouse.buttons = lastMouse.buttons;
-
-        if( ev.mouse.wheel != 0 )
-            {
-            ev.what = evMouseWheel;
+		if (ev.mouse.wheel != 0) {
+			ev.what = evMouseWheel;
 #ifdef __BORLANDC__
-        // A bug in Borland C++ causes mouse position to be trash in
-        // MOUSE_WHEELED events.
-            ev.mouse.where = lastMouse.where;
+			// A bug in Borland C++ causes mouse position to be trash in
+			// MOUSE_WHEELED events.
+			ev.mouse.where = lastMouse.where;
 #endif
-            lastMouse = ev.mouse;
-            return;
-            }
+			lastMouse = ev.mouse;
+			return;
+		}
 
-        if( ev.mouse.where != lastMouse.where )
-            {
-            ev.what = evMouseMove;
-            ev.mouse.eventFlags |= meMouseMoved;
-            lastMouse = ev.mouse;
-            return;
-            }
+		if (ev.mouse.where != lastMouse.where) {
+			ev.what = evMouseMove;
+			ev.mouse.eventFlags |= meMouseMoved;
+			lastMouse = ev.mouse;
+			return;
+		}
 
-        if( ev.mouse.buttons != 0 && ev.what - autoTicks > autoDelay )
-            {
-            autoTicks = ev.what;
-            autoDelay = 1;
-            ev.what = evMouseAuto;
-            lastMouse = ev.mouse;
-            return;
-            }
-        }
+		if (ev.mouse.buttons != 0 && ev.what - autoTicks > autoDelay) {
+			autoTicks = ev.what;
+			autoDelay = 1;
+			ev.what = evMouseAuto;
+			lastMouse = ev.mouse;
+			return;
+		}
+	}
 
-    ev.what = evNothing;
+	ev.what = evNothing;
 }
 
+Boolean TEventQueue::getMouseState(TEvent &ev) noexcept {
+#if defined(__FLAT__)
+	ev.what = evNothing;
 
-Boolean TEventQueue::getMouseState( TEvent & ev ) noexcept
-{
-#if defined( __FLAT__ )
-    ev.what = evNothing;
+	if (!THardwareInfo::getMouseEvent(curMouse))
+		return False;
 
-    if( !THardwareInfo::getMouseEvent( curMouse ) )
-        return False;
+	if (mouseReverse == True && curMouse.buttons != 0 && curMouse.buttons != 3)
+		curMouse.buttons ^= 3;
 
-    if( mouseReverse == True && curMouse.buttons != 0 && curMouse.buttons != 3 )
-        curMouse.buttons ^= 3;
-
-    ev.what = THardwareInfo::getTickCount();  // Temporarily save tick count when event was read.
-    ev.mouse = curMouse;
-    return True;
+	ev.what = THardwareInfo::getTickCount(); // Temporarily save tick count when event was read.
+	ev.mouse = curMouse;
+	return True;
 #else
-    disable();
+	disable();
 
-    if( eventCount == 0 )
-        {
-        ev.what = THardwareInfo::getTickCount();
-        ev.mouse = curMouse;
-        // 'wheel' represents an event, not a state. So, in order not to process
-        // a mouse wheel event more than once, this field must be set back to zero.
-        curMouse.wheel = 0;
-        }
-    else
-        {
-        ev = *eventQHead;
-        if( ++eventQHead >= eventQueue + eventQSize )
-            eventQHead = eventQueue;
-        eventCount--;
-        }
-    enable();
+	if (eventCount == 0) {
+		ev.what = THardwareInfo::getTickCount();
+		ev.mouse = curMouse;
+		// 'wheel' represents an event, not a state. So, in order not to process
+		// a mouse wheel event more than once, this field must be set back to zero.
+		curMouse.wheel = 0;
+	} else {
+		ev = *eventQHead;
+		if (++eventQHead >= eventQueue + eventQSize)
+			eventQHead = eventQueue;
+		eventCount--;
+	}
+	enable();
 
-    if( mouseReverse && ev.mouse.buttons != 0 && ev.mouse.buttons != 3 )
-        ev.mouse.buttons ^= 3;
+	if (mouseReverse && ev.mouse.buttons != 0 && ev.mouse.buttons != 3)
+		ev.mouse.buttons ^= 3;
 
-    return True;
+	return True;
 #endif
 }
 
-
-#if !defined( __FLAT__ )
+#if !defined(__FLAT__)
 #pragma saveregs
-void __MOUSEHUGE TEventQueue::mouseInt()
-{
-#if defined( __DPMI16__ )
-I   PUSH DS          // Cannot use huge anymore, because someone might compile
-I   PUSH AX          //  this module with -WX and that generates Smart Callback
-I   MOV  AX, DGROUP  //  style prolog code.  This is an asynchronous callback!
-I   MOV  DS, AX
-I   POP  AX
+void __MOUSEHUGE TEventQueue::mouseInt() {
+#if defined(__DPMI16__)
+	I PUSH DS     // Cannot use huge anymore, because someone might compile
+	    I PUSH AX //  this module with -WX and that generates Smart Callback
+	        I MOV AX,
+	    DGROUP //  style prolog code.  This is an asynchronous callback!
+	        I MOV DS,
+	    AX I POP AX
 #endif
 
-    unsigned flag = _AX;
-    MouseEventType tempMouse;
+	    unsigned flag = _AX;
+	MouseEventType tempMouse;
 
-    tempMouse.buttons = _BL;
-    tempMouse.wheel = _BH == 0 ? 0 : char(_BH) > 0 ? mwDown : mwUp; // CuteMouse
-    tempMouse.eventFlags = 0;
-    tempMouse.where.x = _CX >> 3;
-    tempMouse.where.y = _DX >> 3;
-    tempMouse.controlKeyState = THardwareInfo::getShiftState();
+	tempMouse.buttons = _BL;
+	tempMouse.wheel = _BH == 0 ? 0 : char(_BH) > 0 ? mwDown : mwUp; // CuteMouse
+	tempMouse.eventFlags = 0;
+	tempMouse.where.x = _CX >> 3;
+	tempMouse.where.y = _DX >> 3;
+	tempMouse.controlKeyState = THardwareInfo::getShiftState();
 
-    if( (flag & 0x1e) != 0 && eventCount < eventQSize )
-        {
-        eventQTail->what = THardwareInfo::getTickCount();
-        eventQTail->mouse = curMouse;
-        if( ++eventQTail >= eventQueue + eventQSize )
-            eventQTail = eventQueue;
-        eventCount++;
-        }
+	if ((flag & 0x1e) != 0 && eventCount < eventQSize) {
+		eventQTail->what = THardwareInfo::getTickCount();
+		eventQTail->mouse = curMouse;
+		if (++eventQTail >= eventQueue + eventQSize)
+			eventQTail = eventQueue;
+		eventCount++;
+	}
 
-    curMouse = tempMouse;
-    mouseIntFlag = True;
+	curMouse = tempMouse;
+	mouseIntFlag = True;
 
-#if defined( __DPMI16__ )
-I   POP DS
+#if defined(__DPMI16__)
+	I POP DS
 #endif
 }
 #endif
 
-void TEventQueue::getKeyEvent( TEvent &ev ) noexcept
-{
-    static Boolean shouldSkipLf = False;
+void TEventQueue::getKeyEvent(TEvent &ev) noexcept {
+	static Boolean shouldSkipLf = False;
 
-    getKeyOrPasteEvent( ev );
+	getKeyOrPasteEvent(ev);
 
-    if( shouldSkipLf )
-        {
-        shouldSkipLf = False;
-        // Skip a LF, since we had previously read a CR.
-        if( ev.what == evKeyDown && (ev.keyDown.controlKeyState & kbPaste) != 0 &&
-            ( (ev.keyDown.textLength == 0 && ev.keyDown.charScan.charCode == '\n') ||
-              (ev.keyDown.textLength == 1 && ev.keyDown.text[0] == '\n')
-            )
-          )
-            getKeyOrPasteEvent( ev );
-        }
+	if (shouldSkipLf) {
+		shouldSkipLf = False;
+		// Skip a LF, since we had previously read a CR.
+		if (ev.what == evKeyDown && (ev.keyDown.controlKeyState & kbPaste) != 0 &&
+		    ((ev.keyDown.textLength == 0 && ev.keyDown.charScan.charCode == '\n') ||
+		     (ev.keyDown.textLength == 1 && ev.keyDown.text[0] == '\n')))
+			getKeyOrPasteEvent(ev);
+	}
 
-    if( ev.what == evKeyDown && (ev.keyDown.controlKeyState & kbPaste) != 0 )
-        {
-        if( ev.keyDown.textLength == 0 )
-            {
-            ev.keyDown.text[0] = (char) ev.keyDown.charScan.charCode;
-            ev.keyDown.textLength = 1;
-            }
-        // Convert CR and CRLF into LF.
-        if( ev.keyDown.text[0] == '\r' )
-            {
-            ev.keyDown.text[0] = '\n';
-            shouldSkipLf = True;
-            }
-        ev.keyDown.keyCode = 0;
-        }
+	if (ev.what == evKeyDown && (ev.keyDown.controlKeyState & kbPaste) != 0) {
+		if (ev.keyDown.textLength == 0) {
+			ev.keyDown.text[0] = (char)ev.keyDown.charScan.charCode;
+			ev.keyDown.textLength = 1;
+		}
+		// Convert CR and CRLF into LF.
+		if (ev.keyDown.text[0] == '\r') {
+			ev.keyDown.text[0] = '\n';
+			shouldSkipLf = True;
+		}
+		ev.keyDown.keyCode = 0;
+	}
 }
 
-void TEventQueue::setPasteText( TStringView text ) noexcept
-{
-    delete[] pasteText;
-    // Always initialize the paste event, even if it is empty, so that
-    // 'waitForEvent' won't block in the next call.
-    if( (pasteText = new char[ text.size() ]) != 0 )
-        {
-        pasteTextLength = text.size();
-        pasteTextIndex = 0;
-        memcpy( pasteText, text.data(), text.size() );
-        }
+void TEventQueue::setPasteText(TStringView text) noexcept {
+	delete[] pasteText;
+	// Always initialize the paste event, even if it is empty, so that
+	// 'waitForEvent' won't block in the next call.
+	if ((pasteText = new char[text.size()]) != 0) {
+		pasteTextLength = text.size();
+		pasteTextIndex = 0;
+		memcpy(pasteText, text.data(), text.size());
+	}
 }
 
-Boolean TEventQueue::getPasteEvent( TEvent &ev ) noexcept
-{
-    if( pasteText )
-        {
-        TSpan<char> text( pasteText + pasteTextIndex,
-                          pasteTextLength - pasteTextIndex );
-        size_t length = TText::next( text );
-        if( length > 0 )
-            {
-            KeyDownEvent keyDown = { {0x0000}, kbPaste, {0}, (uchar) length };
-            ev.what = evKeyDown;
-            ev.keyDown = keyDown;
-            memcpy( ev.keyDown.text, text.data(), length );
-            pasteTextIndex += length;
-            return True;
-            }
-        delete[] pasteText;
-        pasteText = 0;
-        }
-    return False;
+Boolean TEventQueue::getPasteEvent(TEvent &ev) noexcept {
+	if (pasteText) {
+		TSpan<char> text(pasteText + pasteTextIndex, pasteTextLength - pasteTextIndex);
+		size_t length = TText::next(text);
+		if (length > 0) {
+			KeyDownEvent keyDown = {{0x0000}, kbPaste, {0}, (uchar)length};
+			ev.what = evKeyDown;
+			ev.keyDown = keyDown;
+			memcpy(ev.keyDown.text, text.data(), length);
+			pasteTextIndex += length;
+			return True;
+		}
+		delete[] pasteText;
+		pasteText = 0;
+	}
+	return False;
 }
 
-static int isTextEvent( TEvent &ev ) noexcept
-{
-    return ev.what == evKeyDown &&
-           ( ev.keyDown.textLength != 0 ||
-             ev.keyDown.keyCode == kbEnter ||
-             ev.keyDown.keyCode == kbTab );
+static int isTextEvent(TEvent &ev) noexcept {
+	return ev.what == evKeyDown && (ev.keyDown.textLength != 0 || ev.keyDown.keyCode == kbEnter ||
+	                                ev.keyDown.keyCode == kbTab);
 }
 
-void TEventQueue::getKeyOrPasteEvent( TEvent &ev ) noexcept
-{
-    if( getPasteEvent( ev ) )
-        return;
-    if( keyEventCount == 0 )
-        {
-        int firstNonText = minPasteEventCount;
-        for( int i = 0; i < minPasteEventCount; ++i )
-            {
-            if( !readKeyPress( keyEventQueue[i] ) )
-                break;
-            ++keyEventCount;
-            if( !isTextEvent( keyEventQueue[i] ) )
-                {
-                firstNonText = i;
-                break;
-                }
-            }
-        // If we receive at least X consecutive text events, then this is
-        // the beginning of a paste event.
-        if( keyEventCount == minPasteEventCount && firstNonText == minPasteEventCount )
-            pasteState = True;
-        if( pasteState )
-            for( int i = 0; i < min(keyEventCount, firstNonText); ++i )
-                keyEventQueue[i].keyDown.controlKeyState |= kbPaste;
-        if( keyEventCount < minPasteEventCount || firstNonText < minPasteEventCount )
-            pasteState = False;
-        keyEventIndex = 0;
-        }
-    if( keyEventCount != 0 )
-        {
-        ev = keyEventQueue[keyEventIndex];
-        ++keyEventIndex;
-        --keyEventCount;
-        }
-    else
-        ev.what = evNothing;
+void TEventQueue::getKeyOrPasteEvent(TEvent &ev) noexcept {
+	if (getPasteEvent(ev))
+		return;
+	if (keyEventCount == 0) {
+		int firstNonText = minPasteEventCount;
+		for (int i = 0; i < minPasteEventCount; ++i) {
+			if (!readKeyPress(keyEventQueue[i]))
+				break;
+			++keyEventCount;
+			if (!isTextEvent(keyEventQueue[i])) {
+				firstNonText = i;
+				break;
+			}
+		}
+		// If we receive at least X consecutive text events, then this is
+		// the beginning of a paste event.
+		if (keyEventCount == minPasteEventCount && firstNonText == minPasteEventCount)
+			pasteState = True;
+		if (pasteState)
+			for (int i = 0; i < min(keyEventCount, firstNonText); ++i)
+				keyEventQueue[i].keyDown.controlKeyState |= kbPaste;
+		if (keyEventCount < minPasteEventCount || firstNonText < minPasteEventCount)
+			pasteState = False;
+		keyEventIndex = 0;
+	}
+	if (keyEventCount != 0) {
+		ev = keyEventQueue[keyEventIndex];
+		++keyEventIndex;
+		--keyEventCount;
+	} else
+		ev.what = evNothing;
 }
 
-Boolean TEventQueue::readKeyPress( TEvent &ev ) noexcept
-{
-#if defined( __FLAT__ )
-    if( !THardwareInfo::getKeyEvent( ev ) )
-        ev.what = evNothing;
+Boolean TEventQueue::readKeyPress(TEvent &ev) noexcept {
+#if defined(__FLAT__)
+	if (!THardwareInfo::getKeyEvent(ev))
+		ev.what = evNothing;
 #else
 
-I   MOV AH,1;
-I   INT 16h;
-I   JNZ keyWaiting;
+	I MOV AH, 1;
+	I INT 16h;
+	I JNZ keyWaiting;
 
-    ev.what = evNothing;
-    return False;
+	ev.what = evNothing;
+	return False;
 
 keyWaiting:
 
-    ev.what = evKeyDown;
+	ev.what = evKeyDown;
 
-I   MOV AH,0;
-I   INT 16h;
+	I MOV AH, 0;
+	I INT 16h;
 
-    ev.keyDown.keyCode = _AX;
-    ev.keyDown.controlKeyState = THardwareInfo::getShiftState();
+	ev.keyDown.keyCode = _AX;
+	ev.keyDown.controlKeyState = THardwareInfo::getShiftState();
 #endif
-#if defined( __BORLANDC__ )
-    if( ev.what == evKeyDown )
-        {
-        if( ' ' <= ev.keyDown.charScan.charCode &&
-            ev.keyDown.charScan.charCode != 0x7F &&
-            ev.keyDown.charScan.charCode != 0xFF
-          )
-            {
-            ev.keyDown.text[0] = (char) ev.keyDown.charScan.charCode;
-            ev.keyDown.textLength = 1;
-            }
-        else
-            ev.keyDown.textLength = 0;
-        }
+#if defined(__BORLANDC__)
+	if (ev.what == evKeyDown) {
+		if (' ' <= ev.keyDown.charScan.charCode && ev.keyDown.charScan.charCode != 0x7F &&
+		    ev.keyDown.charScan.charCode != 0xFF) {
+			ev.keyDown.text[0] = (char)ev.keyDown.charScan.charCode;
+			ev.keyDown.textLength = 1;
+		} else
+			ev.keyDown.textLength = 0;
+	}
 #endif
-    return Boolean( ev.what != evNothing );
+	return Boolean(ev.what != evNothing);
 }
 
-void TEventQueue::waitForEvents( int timeoutMs ) noexcept
-{
-#if defined( __FLAT__ )
-    if( pasteText == 0 && keyEventCount == 0 )
-        THardwareInfo::waitForEvents( timeoutMs );
+void TEventQueue::waitForEvents(int timeoutMs) noexcept {
+#if defined(__FLAT__)
+	if (pasteText == 0 && keyEventCount == 0)
+		THardwareInfo::waitForEvents(timeoutMs);
 #else
-    (void) timeoutMs;
+	(void)timeoutMs;
 #endif
 }
 
-void TEventQueue::wakeUp() noexcept
-{
-#if defined( __FLAT__ )
-    THardwareInfo::interruptEventWait();
+void TEventQueue::wakeUp() noexcept {
+#if defined(__FLAT__)
+	THardwareInfo::interruptEventWait();
 #endif
 }
 
-void TEvent::getKeyEvent() noexcept
-{
-    TEventQueue::getKeyEvent( *this );
+void TEvent::getKeyEvent() noexcept {
+	TEventQueue::getKeyEvent(*this);
 }

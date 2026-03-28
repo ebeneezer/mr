@@ -14,4 +14,4 @@
 #define Uses_TCollection
 #include <tvision/tv.h>
 
-const char * const _NEAR TCollection::name = "TCollection";
+const char *const _NEAR TCollection::name = "TCollection";

@@ -2,17 +2,16 @@
 #define TVISION_EVENTS_H
 
 #define Uses_TEvent
-#include <tvision/tv.h>
 #include <atomic>
 #include <memory>
+#include <tvision/tv.h>
 #include <vector>
 
 #ifdef _WIN32
 #include <tvision/compat/windows/windows.h>
 #endif
 
-namespace tvision
-{
+namespace tvision {
 
 #ifdef _WIN32
 using SysHandle = HANDLE;
@@ -20,145 +19,128 @@ using SysHandle = HANDLE;
 using SysHandle = int;
 #endif
 
-struct SysManualEvent
-{
+struct SysManualEvent {
 #ifdef _WIN32
-    using Handle = HANDLE;
-    Handle hEvent;
+	using Handle = HANDLE;
+	Handle hEvent;
 #else
-    using Handle = int[2];
-    Handle fds;
+	using Handle = int[2];
+	Handle fds;
 #endif
 
-    static bool createHandle(Handle &handle) noexcept;
-    static SysHandle getWaitableHandle(Handle handle) noexcept;
+	static bool createHandle(Handle &handle) noexcept;
+	static SysHandle getWaitableHandle(Handle handle) noexcept;
 
-    SysManualEvent(Handle aHandle) noexcept;
-    ~SysManualEvent();
-    void signal() noexcept;
-    void clear() noexcept;
+	SysManualEvent(Handle aHandle) noexcept;
+	~SysManualEvent();
+	void signal() noexcept;
+	void clear() noexcept;
 };
 
-inline SysManualEvent::SysManualEvent(Handle aHandle) noexcept :
+inline SysManualEvent::SysManualEvent(Handle aHandle) noexcept
+    :
 #ifdef _WIN32
-    hEvent {aHandle}
+      hEvent{aHandle}
 #else
-    fds {aHandle[0], aHandle[1]}
+      fds{aHandle[0], aHandle[1]}
 #endif
 {
 }
 
-inline SysHandle SysManualEvent::getWaitableHandle(Handle handle) noexcept
-{
+inline SysHandle SysManualEvent::getWaitableHandle(Handle handle) noexcept {
 #ifdef _WIN32
-    return handle;
+	return handle;
 #else
-    return handle[0];
+	return handle[0];
 #endif
 }
 
-class EventSource
-{
-public:
+class EventSource {
+  public:
+	const SysHandle handle;
 
-    const SysHandle handle;
+	EventSource(SysHandle handle) noexcept : handle(handle) {
+	}
 
-    EventSource(SysHandle handle) noexcept :
-        handle(handle)
-    {
-    }
-
-    virtual bool hasPendingEvents() noexcept;
-    virtual bool getEvent(TEvent &) noexcept;
+	virtual bool hasPendingEvents() noexcept;
+	virtual bool getEvent(TEvent &) noexcept;
 };
 
-class WakeUpEventSource : public EventSource
-{
-    SysManualEvent sys;
-    bool (*callback) (void *, TEvent &) noexcept;
-    void *callbackArgs;
-    std::atomic<bool> signaled {false};
+class WakeUpEventSource : public EventSource {
+	SysManualEvent sys;
+	bool (*callback)(void *, TEvent &) noexcept;
+	void *callbackArgs;
+	std::atomic<bool> signaled{false};
 
-    bool clear() noexcept;
+	bool clear() noexcept;
 
-public:
+  public:
+	// Pre: if 'callback' or 'callbackArgs' are not null, their lifetime must
+	// exceed that of 'this'. 'callback' must be noexcept.
+	WakeUpEventSource(SysManualEvent::Handle aHandle, bool (*aCallback)(void *, TEvent &),
+	                  void *aCallbackArgs) noexcept;
+	virtual ~WakeUpEventSource() {
+	}
 
-    // Pre: if 'callback' or 'callbackArgs' are not null, their lifetime must
-    // exceed that of 'this'. 'callback' must be noexcept.
-    WakeUpEventSource( SysManualEvent::Handle aHandle,
-                       bool (*aCallback) (void *, TEvent &),
-                       void *aCallbackArgs ) noexcept;
-    virtual ~WakeUpEventSource() {}
+	WakeUpEventSource &operator=(const WakeUpEventSource &) = delete;
 
-    WakeUpEventSource &operator=(const WakeUpEventSource &) = delete;
-
-    void signal() noexcept; // Multiple producers.
-    bool getEvent(TEvent &event) noexcept override; // Single consumer.
+	void signal() noexcept;                         // Multiple producers.
+	bool getEvent(TEvent &event) noexcept override; // Single consumer.
 };
 
-inline WakeUpEventSource::WakeUpEventSource( SysManualEvent::Handle aHandle,
-                                             bool (*aCallback) (void *, TEvent &),
-                                             void *aCallbackArgs ) noexcept :
-    EventSource(SysManualEvent::getWaitableHandle(aHandle)),
-    sys(aHandle),
-    callback((bool (*)(void *, TEvent &) noexcept) aCallback),
-    callbackArgs(aCallbackArgs)
-{
+inline WakeUpEventSource::WakeUpEventSource(SysManualEvent::Handle aHandle,
+                                            bool (*aCallback)(void *, TEvent &),
+                                            void *aCallbackArgs) noexcept
+    : EventSource(SysManualEvent::getWaitableHandle(aHandle)), sys(aHandle),
+      callback((bool (*)(void *, TEvent &) noexcept)aCallback), callbackArgs(aCallbackArgs) {
 }
 
-enum PollState : uint8_t
-{
-    psNothing,
-    psReady,
-    psDisconnect,
+enum PollState : uint8_t {
+	psNothing,
+	psReady,
+	psDisconnect,
 };
 
-struct PollData
-{
-    std::vector<SysHandle> handles;
-    std::vector<PollState> states;
+struct PollData {
+	std::vector<SysHandle> handles;
+	std::vector<PollState> states;
 
-    void push_back(SysHandle h)
-    {
-        handles.push_back(h);
-        states.push_back(psNothing);
-    }
+	void push_back(SysHandle h) {
+		handles.push_back(h);
+		states.push_back(psNothing);
+	}
 
-    void erase(size_t i)
-    {
-        handles.erase(handles.begin() + i);
-        states.erase(states.begin() + i);
-    }
+	void erase(size_t i) {
+		handles.erase(handles.begin() + i);
+		states.erase(states.begin() + i);
+	}
 
-    size_t size()
-    {
-        return handles.size();
-    }
+	size_t size() {
+		return handles.size();
+	}
 };
 
-class EventWaiter
-{
-    std::vector<EventSource *> sources;
-    PollData pd;
-    std::unique_ptr<WakeUpEventSource> wakeUp {nullptr};
-    TEvent readyEvent;
-    bool readyEventPresent {false};
+class EventWaiter {
+	std::vector<EventSource *> sources;
+	PollData pd;
+	std::unique_ptr<WakeUpEventSource> wakeUp{nullptr};
+	TEvent readyEvent;
+	bool readyEventPresent{false};
 
-    void removeSource(size_t i) noexcept;
-    void pollSources(int timeoutMs) noexcept;
-    bool hasReadyEvent() noexcept;
-    void getReadyEvent(TEvent &ev) noexcept;
+	void removeSource(size_t i) noexcept;
+	void pollSources(int timeoutMs) noexcept;
+	bool hasReadyEvent() noexcept;
+	void getReadyEvent(TEvent &ev) noexcept;
 
-public:
+  public:
+	EventWaiter() noexcept;
 
-    EventWaiter() noexcept;
+	void addSource(EventSource &) noexcept;
+	void removeSource(EventSource &) noexcept;
 
-    void addSource(EventSource &) noexcept;
-    void removeSource(EventSource &) noexcept;
-
-    bool getEvent(TEvent &ev) noexcept;
-    void waitForEvents(int ms) noexcept;
-    void interruptEventWait() noexcept;
+	bool getEvent(TEvent &ev) noexcept;
+	void waitForEvents(int ms) noexcept;
+	void interruptEventWait() noexcept;
 };
 
 } // namespace tvision

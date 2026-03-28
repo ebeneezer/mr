@@ -15,11 +15,8 @@
 #define Uses_TStaticText
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
-__link( RView )
+__link(RView)
 
-TStreamableClass RStaticText( TStaticText::name,
-                              TStaticText::build,
-                              __DELTA(TStaticText)
-                            );
+    TStreamableClass RStaticText(TStaticText::name, TStaticText::build, __DELTA(TStaticText));
 
 #endif

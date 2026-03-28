@@ -12,19 +12,17 @@
  *
  */
 
-
 #include <tvision/tv.h>
 
-#if !defined( __STRING_H )
+#if !defined(__STRING_H)
 #include <string.h>
-#endif  // __STRING_H
+#endif // __STRING_H
 
-char *newStr( TStringView s ) noexcept
-{
-    if( s.data() == 0 )
-        return 0;
-    char *temp = new char[ s.size()+1 ];
-    memcpy( temp, s.data(), s.size() );
-    temp[s.size()] = EOS;
-    return temp;
+char *newStr(TStringView s) noexcept {
+	if (s.data() == 0)
+		return 0;
+	char *temp = new char[s.size() + 1];
+	memcpy(temp, s.data(), s.size());
+	temp[s.size()] = EOS;
+	return temp;
 }

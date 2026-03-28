@@ -5,16 +5,12 @@
 
 #ifdef _TV_UNIX
 
-namespace tvision
-{
+namespace tvision {
 
-class UnixClipboard
-{
-public:
-
-    static bool setClipboardText(TStringView text) noexcept;
-    static bool requestClipboardText(void (&accept)(TStringView)) noexcept;
-
+class UnixClipboard {
+  public:
+	static bool setClipboardText(TStringView text) noexcept;
+	static bool requestClipboardText(void (&accept)(TStringView)) noexcept;
 };
 
 } // namespace tvision

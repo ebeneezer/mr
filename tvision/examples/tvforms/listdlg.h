@@ -13,7 +13,7 @@
  *
  */
 
-#if !defined( __LISTDLG_H )
+#if !defined(__LISTDLG_H)
 #define __LISTDLG_H
 
 #define Uses_TSortedListBox
@@ -24,66 +24,58 @@
 #define Uses_pstream
 #include <tvision/tv.h>
 
-#if !defined( __DATACOLL_H )
+#if !defined(__DATACOLL_H)
 #include "datacoll.h"
-#endif  // __DATACOLL_H
+#endif // __DATACOLL_H
 
-#if !defined( __FORMS_H )
+#if !defined(__FORMS_H)
 #include "forms.h"
-#endif  // __FORMS_H
+#endif // __FORMS_H
 
+typedef char *(*ExpandFunc)(char *);
 
-typedef char * (*ExpandFunc)(char *);
+class TListKeyBox : public TSortedListBox {
 
-class TListKeyBox :  public TSortedListBox
-{
+  public:
+	TListKeyBox(const TRect &, ushort, TScrollBar *);
 
-public:
-
-    TListKeyBox( const TRect&, ushort, TScrollBar *);
-
-    virtual void *getKey( const char * );
-    virtual void getText( char *, short, short );
-    void newList( TDataCollection * );
-    TDataCollection *list();
+	virtual void *getKey(const char *);
+	virtual void getText(char *, short, short);
+	void newList(TDataCollection *);
+	TDataCollection *list();
 };
 
-inline void TListKeyBox::newList( TDataCollection * aList )
-{
-    TSortedListBox::newList(aList);
+inline void TListKeyBox::newList(TDataCollection *aList) {
+	TSortedListBox::newList(aList);
 }
 
-inline TDataCollection *TListKeyBox::list()
-{
-    return static_cast<TDataCollection *>(TSortedListBox::list());
+inline TDataCollection *TListKeyBox::list() {
+	return static_cast<TDataCollection *>(TSortedListBox::list());
 }
 
-class TListDialog :  public TDialog
-{
+class TListDialog : public TDialog {
 
-public:
+  public:
+	TListDialog(char *, char *);
+	~TListDialog(void);
 
-    TListDialog( char *, char * );
-    ~TListDialog(void);
+	virtual void close();
+	void deleteSelection();
+	TForm *editingForm();
+	void formOpen(Boolean);
+	virtual void handleEvent(TEvent &);
+	Boolean openDataFile(char *, TResourceFile *&, pstream::openmode);
+	Boolean saveList();
+	Boolean saveForm(TDialog *);
+	void stackOnPrev(TDialog *);
+	virtual Boolean valid(ushort);
 
-    virtual void close();
-    void deleteSelection();
-    TForm *editingForm();
-    void formOpen( Boolean );
-    virtual void handleEvent( TEvent& );
-    Boolean openDataFile( char *, TResourceFile *&, pstream::openmode );
-    Boolean saveList();
-    Boolean saveForm(TDialog *);
-    void stackOnPrev(TDialog *);
-    virtual Boolean valid( ushort );
-
-
-    TDataCollection *dataCollection;
-    char *fileName;
-    TResourceFile *formDataFile;
-    Boolean isValid;
-    TListKeyBox *list;
-    Boolean modified;
+	TDataCollection *dataCollection;
+	char *fileName;
+	TResourceFile *formDataFile;
+	Boolean isValid;
+	TListKeyBox *list;
+	Boolean modified;
 };
 
-#endif  // __LISTDLG_H
+#endif // __LISTDLG_H

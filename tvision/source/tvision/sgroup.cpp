@@ -15,11 +15,7 @@
 #define Uses_TGroup
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
-__link( RView )
+__link(RView)
 
-TStreamableClass RGroup( TGroup::name,
-                         TGroup::build,
-                         __DELTA(TGroup)
-                       );
+    TStreamableClass RGroup(TGroup::name, TGroup::build, __DELTA(TGroup));
 #endif
-

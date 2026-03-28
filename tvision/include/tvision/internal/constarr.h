@@ -6,24 +6,18 @@
 // std::array is not constexpr until C++17. So we make our own, which costs
 // nothing.
 
-namespace tvision
-{
+namespace tvision {
 
-template <class T, size_t N>
-struct constarray
-{
-    T elems[N];
+template <class T, size_t N> struct constarray {
+	T elems[N];
 
-    constexpr T& operator[](size_t i) noexcept
-    {
-        return elems[i];
-    }
+	constexpr T &operator[](size_t i) noexcept {
+		return elems[i];
+	}
 
-    constexpr const T& operator[](size_t i) const noexcept
-    {
-        return elems[i];
-    }
-
+	constexpr const T &operator[](size_t i) const noexcept {
+		return elems[i];
+	}
 };
 
 } // namespace tvision

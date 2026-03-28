@@ -27,74 +27,69 @@ typedef unsigned P_id_type;
 /* ------------------------------------------------------------------------*/
 
 #ifdef __DLL__
-#define _FAR   far
+#define _FAR far
 #else
 #define _FAR
 #endif
 
-#if defined( __BORLANDC__ )
-#pragma warn -nst
+#if defined(__BORLANDC__)
+#pragma warn - nst
 #pragma option -Vo-
 #endif
-#if defined( __BCOPT__ ) && !defined (__FLAT__)
+#if defined(__BCOPT__) && !defined(__FLAT__)
 #pragma option -po-
 #endif
 
-#if !defined( __fLink_def )
+#if !defined(__fLink_def)
 #define __fLink_def
 
-struct fLink
-{
-    fLink _NEAR *f;
-    class TStreamableClass _NEAR *t;
-    static class TStreamableClass * volatile forceLink;
+struct fLink {
+	fLink _NEAR *f;
+	class TStreamableClass _NEAR *t;
+	static class TStreamableClass *volatile forceLink;
 };
 
 #ifndef __COUNTER__
 
-#define __link( s )             \
-  extern TStreamableClass s;    \
-  static fLink force ## s =     \
-    { (fLink _NEAR *)&force ## s, (fLink::forceLink = &s, (TStreamableClass _NEAR *)&s) };
+#define __link(s)                                                                                  \
+	extern TStreamableClass s;                                                                     \
+	static fLink force##s = {(fLink _NEAR *)&force##s,                                             \
+	                         (fLink::forceLink = &s, (TStreamableClass _NEAR *)&s)};
 
 #else
 
 // Take advantage of the __COUNTER__ macro so that linking the same object twice
 // doesn't trigger a compilation error.
 
-#define __link_declare( s, n )  \
-  extern TStreamableClass s;    \
-  static void * const force ## s ## n = ((void) force ## s ## n, fLink::forceLink = &s, nullptr);
+#define __link_declare(s, n)                                                                       \
+	extern TStreamableClass s;                                                                     \
+	static void *const force##s##n = ((void)force##s##n, fLink::forceLink = &s, nullptr);
 
-#define __link_expand( s, ... ) __link_declare( s, __VA_ARGS__ )
-#define __link( s ) __link_expand( s, __COUNTER__ )
+#define __link_expand(s, ...) __link_declare(s, __VA_ARGS__)
+#define __link(s) __link_expand(s, __COUNTER__)
 
 #endif // __COUNTER__
 
 #endif // __fLink_def
 
-#if defined( Uses_TStreamable ) && !defined( __TStreamable )
+#if defined(Uses_TStreamable) && !defined(__TStreamable)
 #define __TStreamable
 
-class TStreamable
-{
+class TStreamable {
 
-    friend class pstream;
-    friend class opstream;
-    friend class ipstream;
+	friend class pstream;
+	friend class opstream;
+	friend class ipstream;
 
-private:
+  private:
+	virtual const char *streamableName() const = 0;
 
-    virtual const char *streamableName() const = 0;
-
-protected:
-
-    virtual void *read( ipstream& ) = 0;
-    virtual void write( opstream& ) = 0;
-
+  protected:
+	virtual void *read(ipstream &) = 0;
+	virtual void write(opstream &) = 0;
 };
 
-#endif  // Uses_TStreamable
+#endif // Uses_TStreamable
 
 /* ------------------------------------------------------------------------*/
 /*                                                                         */
@@ -104,39 +99,35 @@ protected:
 /*                                                                         */
 /* ------------------------------------------------------------------------*/
 
-#if defined( Uses_TStreamableClass ) && !defined( __TStreamableClass )
+#if defined(Uses_TStreamableClass) && !defined(__TStreamableClass)
 #define __TStreamableClass
 
-#include <tvision/compat/borland/dos.h>
 #include <limits.h>
 #include <stddef.h>
+#include <tvision/compat/borland/dos.h>
 
 const P_id_type P_id_notFound = UINT_MAX;
 
 typedef TStreamable *(*BUILDER)();
 
 // This is now computed at runtime by ipstream.
-#define __DELTA( d ) 0
+#define __DELTA(d) 0
 
-class TStreamableClass
-{
+class TStreamableClass {
 
-    friend TStreamableTypes;
-    friend opstream;
-    friend ipstream;
+	friend TStreamableTypes;
+	friend opstream;
+	friend ipstream;
 
-public:
+  public:
+	TStreamableClass(const char *n, BUILDER b, int /* unused */ = 0) noexcept;
 
-    TStreamableClass( const char *n, BUILDER b, int /* unused */ = 0 ) noexcept;
-
-private:
-
-    const char *name;
-    BUILDER build;
-
+  private:
+	const char *name;
+	BUILDER build;
 };
 
-#endif  // Uses_TStreamableClass
+#endif // Uses_TStreamableClass
 
 /* ------------------------------------------------------------------------*/
 /*                                                                         */
@@ -148,28 +139,24 @@ private:
 /*                                                                         */
 /* ------------------------------------------------------------------------*/
 
-#if defined( Uses_TStreamableTypes ) && !defined( __TStreamableTypes )
+#if defined(Uses_TStreamableTypes) && !defined(__TStreamableTypes)
 #define __TStreamableTypes
 
-class TStreamableTypes : private TNSSortedCollection
-{
+class TStreamableTypes : private TNSSortedCollection {
 
-public:
+  public:
+	TStreamableTypes() noexcept;
+	~TStreamableTypes();
 
-    TStreamableTypes() noexcept;
-    ~TStreamableTypes();
+	void registerType(const TStreamableClass *);
+	const TStreamableClass *lookup(const char *);
 
-    void registerType( const TStreamableClass * );
-    const TStreamableClass *lookup( const char * );
-
-private:
-
-    virtual void *keyOf( void * );
-    int compare( void *, void * );
-
+  private:
+	virtual void *keyOf(void *);
+	int compare(void *, void *);
 };
 
-#endif  // Uses_TStreamableTypes
+#endif // Uses_TStreamableTypes
 
 /* ------------------------------------------------------------------------*/
 /*                                                                         */
@@ -183,31 +170,30 @@ private:
 /*                                                                         */
 /* ------------------------------------------------------------------------*/
 
-#if defined( Uses_TPWrittenObjects ) && !defined( __TPWrittenObjects )
+#if defined(Uses_TPWrittenObjects) && !defined(__TPWrittenObjects)
 #define __TPWrittenObjects
 
-class TPWrittenObjects : public TNSSortedCollection
-{
+class TPWrittenObjects : public TNSSortedCollection {
 
-    friend opstream;
+	friend opstream;
 
-public:
+  public:
+	void removeAll() {
+		curId = 0;
+		TNSSortedCollection::freeAll();
+	}
 
-    void removeAll() { curId = 0; TNSSortedCollection::freeAll(); }
+  private:
+	TPWrittenObjects() noexcept;
+	~TPWrittenObjects();
 
-private:
+	void registerObject(const void *adr);
+	P_id_type find(const void *adr);
 
-    TPWrittenObjects() noexcept;
-    ~TPWrittenObjects();
+	void *keyOf(void *);
+	int compare(void *, void *);
 
-    void registerObject( const void *adr );
-    P_id_type find( const void *adr );
-
-    void *keyOf( void * );
-    int compare( void *, void * );
-
-    P_id_type curId;
-
+	P_id_type curId;
 };
 
 /* ------------------------------------------------------------------------*/
@@ -218,21 +204,18 @@ private:
 /*                                                                         */
 /* ------------------------------------------------------------------------*/
 
-class TPWObj
-{
+class TPWObj {
 
-    friend TPWrittenObjects;
+	friend TPWrittenObjects;
 
-private:
+  private:
+	TPWObj(const void *adr, P_id_type id) noexcept;
 
-    TPWObj( const void *adr, P_id_type id ) noexcept;
-
-    const void *address;
-    P_id_type ident;
-
+	const void *address;
+	P_id_type ident;
 };
 
-#endif  // Uses_TPWrittenObjects
+#endif // Uses_TPWrittenObjects
 
 /* ------------------------------------------------------------------------*/
 /*                                                                         */
@@ -246,31 +229,30 @@ private:
 /*                                                                         */
 /* ------------------------------------------------------------------------*/
 
-#if defined( Uses_TPReadObjects ) && !defined( __TPReadObjects )
+#if defined(Uses_TPReadObjects) && !defined(__TPReadObjects)
 #define __TPReadObjects
 
-class TPReadObjects : public TNSCollection
-{
+class TPReadObjects : public TNSCollection {
 
-    friend ipstream;
+	friend ipstream;
 
-public:
+  public:
+	void removeAll() {
+		curId = 0;
+		TNSCollection::removeAll();
+	}
 
-    void removeAll() { curId = 0; TNSCollection::removeAll(); }
+  private:
+	TPReadObjects() noexcept;
+	~TPReadObjects();
 
-private:
+	void registerObject(const void *adr);
+	const void *find(P_id_type id);
 
-    TPReadObjects() noexcept;
-    ~TPReadObjects();
-
-    void registerObject( const void *adr );
-    const void *find( P_id_type id );
-
-    P_id_type curId;
-
+	P_id_type curId;
 };
 
-#endif  // Uses_TPReadObjects
+#endif // Uses_TPReadObjects
 
 /* ------------------------------------------------------------------------*/
 /*                                                                         */
@@ -280,66 +262,62 @@ private:
 /*                                                                         */
 /* ------------------------------------------------------------------------*/
 
-#if defined( Uses_pstream ) && !defined( __pstream )
+#if defined(Uses_pstream) && !defined(__pstream)
 #define __pstream
 
-#if defined( __BORLANDC__ )
+#if defined(__BORLANDC__)
 #pragma option -Vo-
 #endif
-#if defined( __BCOPT__ ) && !defined (__FLAT__)
+#if defined(__BCOPT__) && !defined(__FLAT__)
 #pragma option -po-
 #endif
 
 class _FAR TStreamableTypes;
 
-class pstream
-{
+class pstream {
 
-    friend TStreamableTypes;
+	friend TStreamableTypes;
 
-public:
+  public:
+	enum StreamableError { peNotRegistered, peInvalidType };
+	enum PointerTypes { ptNull, ptIndexed, ptObject };
 
-    enum StreamableError { peNotRegistered, peInvalidType };
-    enum PointerTypes { ptNull, ptIndexed, ptObject };
+	_Cdecl pstream(streambuf _FAR *) noexcept;
+	virtual _Cdecl ~pstream();
 
-    _Cdecl pstream( streambuf _FAR * ) noexcept;
-    virtual _Cdecl ~pstream();
+	typedef int openmode;
+	typedef int seekdir;
 
-    typedef int openmode;
-    typedef int seekdir;
+	int _Cdecl rdstate() const noexcept;
+	int _Cdecl eof() const noexcept;
+	int _Cdecl fail() const noexcept;
+	int _Cdecl bad() const noexcept;
+	int _Cdecl good() const noexcept;
+	void _Cdecl clear(int = 0) noexcept;
+	_Cdecl operator void *() const noexcept;
+	int _Cdecl operator!() const noexcept;
 
-    int _Cdecl rdstate() const noexcept;
-    int _Cdecl eof() const noexcept;
-    int _Cdecl fail() const noexcept;
-    int _Cdecl bad() const noexcept;
-    int _Cdecl good() const noexcept;
-    void _Cdecl clear( int = 0 ) noexcept;
-    _Cdecl operator void *() const noexcept;
-    int _Cdecl operator ! () const noexcept;
+	streambuf _FAR *_Cdecl rdbuf() const noexcept;
 
-    streambuf _FAR * _Cdecl rdbuf() const noexcept;
+	static void initTypes() noexcept;
+	static void registerType(TStreamableClass *ts) noexcept;
 
-    static void initTypes() noexcept;
-    static void registerType( TStreamableClass *ts ) noexcept;
+  protected:
+	_Cdecl pstream() noexcept;
 
-protected:
+	void _Cdecl error(StreamableError) noexcept;
+	void _Cdecl error(StreamableError, const TStreamable &) noexcept;
 
-    _Cdecl pstream() noexcept;
+	streambuf _FAR *bp;
+	int state;
 
-    void _Cdecl error( StreamableError ) noexcept;
-    void _Cdecl error( StreamableError, const TStreamable& ) noexcept;
+	void _Cdecl init(streambuf _FAR *) noexcept;
+	void _Cdecl setstate(int) noexcept;
 
-    streambuf _FAR *bp;
-    int state;
-
-    void _Cdecl init( streambuf _FAR * ) noexcept;
-    void _Cdecl setstate( int ) noexcept;
-
-    static TStreamableTypes * _NEAR types;
-
+	static TStreamableTypes *_NEAR types;
 };
 
-#endif  // Uses_pstream
+#endif // Uses_pstream
 
 /* ------------------------------------------------------------------------*/
 /*                                                                         */
@@ -349,58 +327,52 @@ protected:
 /*                                                                         */
 /* ------------------------------------------------------------------------*/
 
-#if defined( Uses_ipstream ) && !defined( __ipstream )
+#if defined(Uses_ipstream) && !defined(__ipstream)
 #define __ipstream
 
-#if defined( __BORLANDC__ )
+#if defined(__BORLANDC__)
 #pragma option -Vo-
 #endif
-#if defined( __BCOPT__ ) && !defined (__FLAT__)
+#if defined(__BCOPT__) && !defined(__FLAT__)
 #pragma option -po-
 #endif
 
 class _FAR TStreamableClass;
 
-class ipstream : virtual public pstream
-{
+class ipstream : virtual public pstream {
 
-public:
+  public:
+	_Cdecl ipstream(streambuf _FAR *) noexcept;
+	_Cdecl ~ipstream();
 
-    _Cdecl ipstream( streambuf _FAR * ) noexcept;
-    _Cdecl ~ipstream();
+	streampos _Cdecl tellg();
+	ipstream &_Cdecl seekg(streampos);
+	ipstream &_Cdecl seekg(streamoff, pstream::seekdir);
 
-    streampos _Cdecl tellg();
-    ipstream& _Cdecl seekg( streampos );
-    ipstream& _Cdecl seekg( streamoff, pstream::seekdir );
+	uchar _Cdecl readByte();
+	void _Cdecl readBytes(void _FAR *, size_t);
+	ushort _Cdecl readWord();
+	char _FAR *_Cdecl readString();
+	char _FAR *_Cdecl readString(char _FAR *, unsigned);
 
-    uchar _Cdecl readByte();
-    void _Cdecl readBytes( void _FAR *, size_t );
-    ushort _Cdecl readWord();
-    char _FAR * _Cdecl readString();
-    char _FAR * _Cdecl readString( char _FAR *, unsigned );
+	friend ipstream &_Cdecl operator>>(ipstream &, TStreamable &);
+	friend ipstream &_Cdecl operator>>(ipstream &, void _FAR *&);
 
-    friend ipstream& _Cdecl operator >> ( ipstream&, TStreamable& );
-    friend ipstream& _Cdecl operator >> ( ipstream&, void _FAR *& );
+  protected:
+	_Cdecl ipstream() noexcept;
 
-protected:
+	const TStreamableClass _FAR *_Cdecl readPrefix();
+	void _FAR *_Cdecl readData(const TStreamableClass _FAR *, TStreamable _FAR *);
+	void _Cdecl readSuffix();
 
-    _Cdecl ipstream() noexcept;
+	const void _FAR *_Cdecl find(P_id_type);
+	void _Cdecl registerObject(const void _FAR *adr);
 
-    const TStreamableClass _FAR * _Cdecl readPrefix();
-    void _FAR * _Cdecl readData( const TStreamableClass _FAR *,
-                                        TStreamable _FAR * );
-    void _Cdecl readSuffix();
-
-    const void _FAR * _Cdecl find( P_id_type );
-    void _Cdecl registerObject( const void _FAR *adr );
-
-private:
-
-    TPReadObjects objs;
-
+  private:
+	TPReadObjects objs;
 };
 
-#endif  // Uses_ipstream
+#endif // Uses_ipstream
 
 /* ------------------------------------------------------------------------*/
 /*                                                                         */
@@ -410,59 +382,53 @@ private:
 /*                                                                         */
 /* ------------------------------------------------------------------------*/
 
-#if defined( Uses_opstream ) && !defined( __opstream )
+#if defined(Uses_opstream) && !defined(__opstream)
 #define __opstream
 
-#if defined( __BORLANDC__ )
+#if defined(__BORLANDC__)
 #pragma option -Vo-
 #endif
-#if defined( __BCOPT__ ) && !defined (__FLAT__)
+#if defined(__BCOPT__) && !defined(__FLAT__)
 #pragma option -po-
 #endif
 
-
 class _FAR TStreamableClass;
 
-class opstream : virtual public pstream
-{
+class opstream : virtual public pstream {
 
-public:
+  public:
+	_Cdecl opstream(streambuf _FAR *) noexcept;
+	_Cdecl ~opstream();
 
-    _Cdecl opstream( streambuf _FAR * ) noexcept;
-    _Cdecl ~opstream();
+	streampos _Cdecl tellp();
+	opstream &_Cdecl seekp(streampos);
+	opstream &_Cdecl seekp(streamoff, pstream::seekdir);
+	opstream &_Cdecl flush();
 
-    streampos _Cdecl tellp();
-    opstream& _Cdecl seekp( streampos );
-    opstream& _Cdecl seekp( streamoff, pstream::seekdir );
-    opstream& _Cdecl flush();
+	void _Cdecl writeByte(uchar);
+	void _Cdecl writeBytes(const void _FAR *, size_t);
+	void _Cdecl writeWord(ushort);
+	void _Cdecl writeString(const char _FAR *);
+	void _Cdecl writeString(TStringView);
 
-    void _Cdecl writeByte( uchar );
-    void _Cdecl writeBytes( const void _FAR *, size_t );
-    void _Cdecl writeWord( ushort );
-    void _Cdecl writeString( const char _FAR * );
-    void _Cdecl writeString( TStringView );
+	friend opstream &_Cdecl operator<<(opstream &, TStreamable &);
+	friend opstream &_Cdecl operator<<(opstream &, TStreamable _FAR *);
 
-    friend opstream& _Cdecl operator << ( opstream&, TStreamable& );
-    friend opstream& _Cdecl operator << ( opstream&, TStreamable _FAR * );
+  protected:
+	_Cdecl opstream() noexcept;
 
-protected:
+	void _Cdecl writePrefix(const TStreamable &);
+	void _Cdecl writeData(TStreamable &);
+	void _Cdecl writeSuffix(const TStreamable &);
 
-    _Cdecl opstream() noexcept;
+	P_id_type _Cdecl find(const void _FAR *adr);
+	void _Cdecl registerObject(const void _FAR *adr);
 
-    void _Cdecl writePrefix( const TStreamable& );
-    void _Cdecl writeData( TStreamable& );
-    void _Cdecl writeSuffix( const TStreamable& );
-
-    P_id_type _Cdecl find( const void _FAR *adr );
-    void _Cdecl registerObject( const void _FAR *adr );
-
-private:
-
-    TPWrittenObjects *objs;
-
+  private:
+	TPWrittenObjects *objs;
 };
 
-#endif  // Uses_opstream
+#endif // Uses_opstream
 
 /* ------------------------------------------------------------------------*/
 /*                                                                         */
@@ -472,31 +438,27 @@ private:
 /*                                                                         */
 /* ------------------------------------------------------------------------*/
 
-#if defined( Uses_iopstream ) && !defined( __iopstream )
+#if defined(Uses_iopstream) && !defined(__iopstream)
 #define __iopstream
 
-#if defined( __BORLANDC__ )
+#if defined(__BORLANDC__)
 #pragma option -Vo-
 #endif
-#if defined( __BCOPT__ ) && !defined (__FLAT__)
+#if defined(__BCOPT__) && !defined(__FLAT__)
 #pragma option -po-
 #endif
 
-class iopstream : public ipstream, public opstream
-{
+class iopstream : public ipstream, public opstream {
 
-public:
+  public:
+	_Cdecl iopstream(streambuf _FAR *) noexcept;
+	_Cdecl ~iopstream();
 
-    _Cdecl iopstream( streambuf _FAR * ) noexcept;
-    _Cdecl ~iopstream();
-
-protected:
-
-    _Cdecl iopstream() noexcept;
-
+  protected:
+	_Cdecl iopstream() noexcept;
 };
 
-#endif  // Uses_iopstream
+#endif // Uses_iopstream
 
 /* ------------------------------------------------------------------------*/
 /*                                                                         */
@@ -506,40 +468,36 @@ protected:
 /*                                                                         */
 /* ------------------------------------------------------------------------*/
 
-#if defined( Uses_fpbase ) && !defined( __fpbase )
+#if defined(Uses_fpbase) && !defined(__fpbase)
 #define __fpbase
 
-#if !defined( __FSTREAM_H )
+#if !defined(__FSTREAM_H)
 #include <tvision/compat/borland/fstream.h>
-#endif  // __FSTREAM_H
+#endif // __FSTREAM_H
 
-#if defined( __BORLANDC__ )
+#if defined(__BORLANDC__)
 #pragma option -Vo-
 #endif
-#if defined( __BCOPT__ ) && !defined (__FLAT__)
+#if defined(__BCOPT__) && !defined(__FLAT__)
 #pragma option -po-
 #endif
 
-class fpbase : virtual public pstream
-{
+class fpbase : virtual public pstream {
 
-public:
+  public:
+	_Cdecl fpbase() noexcept;
+	_Cdecl fpbase(const char _FAR *, pstream::openmode);
+	_Cdecl ~fpbase();
 
-    _Cdecl fpbase() noexcept;
-    _Cdecl fpbase( const char _FAR *, pstream::openmode);
-    _Cdecl ~fpbase();
+	void _Cdecl open(const char _FAR *, pstream::openmode);
+	void _Cdecl close();
+	filebuf _FAR *_Cdecl rdbuf() noexcept;
 
-    void _Cdecl open( const char _FAR *, pstream::openmode);
-    void _Cdecl close();
-    filebuf _FAR * _Cdecl rdbuf() noexcept;
-
-private:
-
-    filebuf buf;
-
+  private:
+	filebuf buf;
 };
 
-#endif  // Uses_fpbase
+#endif // Uses_fpbase
 
 /* ------------------------------------------------------------------------*/
 /*                                                                         */
@@ -549,35 +507,28 @@ private:
 /*                                                                         */
 /* ------------------------------------------------------------------------*/
 
-#if defined( Uses_ifpstream ) && !defined( __ifpstream )
+#if defined(Uses_ifpstream) && !defined(__ifpstream)
 #define __ifpstream
 
-#if defined( __BORLANDC__ )
+#if defined(__BORLANDC__)
 #pragma option -Vo-
 #endif
-#if defined( __BCOPT__ ) && !defined (__FLAT__)
+#if defined(__BCOPT__) && !defined(__FLAT__)
 #pragma option -po-
 #endif
 
-class ifpstream : public fpbase, public ipstream
-{
+class ifpstream : public fpbase, public ipstream {
 
-public:
+  public:
+	_Cdecl ifpstream() noexcept;
+	_Cdecl ifpstream(const char _FAR *, pstream::openmode = ios::in);
+	_Cdecl ~ifpstream();
 
-    _Cdecl ifpstream() noexcept;
-    _Cdecl ifpstream( const char _FAR *,
-                      pstream::openmode = ios::in
-                    );
-    _Cdecl ~ifpstream();
-
-    filebuf _FAR * _Cdecl rdbuf() noexcept;
-    void _Cdecl open( const char _FAR *,
-                      pstream::openmode = ios::in
-                    );
-
+	filebuf _FAR *_Cdecl rdbuf() noexcept;
+	void _Cdecl open(const char _FAR *, pstream::openmode = ios::in);
 };
 
-#endif  // Uses_ifpstream
+#endif // Uses_ifpstream
 
 /* ------------------------------------------------------------------------*/
 /*                                                                         */
@@ -587,36 +538,28 @@ public:
 /*                                                                         */
 /* ------------------------------------------------------------------------*/
 
-#if defined( Uses_ofpstream ) && !defined( __ofpstream )
+#if defined(Uses_ofpstream) && !defined(__ofpstream)
 #define __ofpstream
 
-#if defined( __BORLANDC__ )
+#if defined(__BORLANDC__)
 #pragma option -Vo-
 #endif
-#if defined( __BCOPT__ ) && !defined (__FLAT__)
+#if defined(__BCOPT__) && !defined(__FLAT__)
 #pragma option -po-
 #endif
 
+class ofpstream : public fpbase, public opstream {
 
-class ofpstream : public fpbase, public opstream
-{
+  public:
+	_Cdecl ofpstream() noexcept;
+	_Cdecl ofpstream(const char _FAR *, pstream::openmode = ios::out);
+	_Cdecl ~ofpstream();
 
-public:
-
-    _Cdecl ofpstream() noexcept;
-    _Cdecl ofpstream( const char _FAR *,
-                      pstream::openmode = ios::out
-                    );
-    _Cdecl ~ofpstream();
-
-    filebuf _FAR * _Cdecl rdbuf() noexcept;
-    void _Cdecl open( const char _FAR *,
-                      pstream::openmode = ios::out
-                    );
-
+	filebuf _FAR *_Cdecl rdbuf() noexcept;
+	void _Cdecl open(const char _FAR *, pstream::openmode = ios::out);
 };
 
-#endif  // Uses_ofpstream
+#endif // Uses_ofpstream
 
 /* ------------------------------------------------------------------------*/
 /*                                                                         */
@@ -627,36 +570,32 @@ public:
 /*                                                                         */
 /* ------------------------------------------------------------------------*/
 
-#if defined( Uses_fpstream ) && !defined( __fpstream )
+#if defined(Uses_fpstream) && !defined(__fpstream)
 #define __fpstream
 
-#if defined( __BORLANDC__ )
+#if defined(__BORLANDC__)
 #pragma option -Vo-
 #endif
-#if defined( __BCOPT__ ) && !defined (__FLAT__)
+#if defined(__BCOPT__) && !defined(__FLAT__)
 #pragma option -po-
 #endif
 
-class fpstream : public fpbase, public iopstream
-{
+class fpstream : public fpbase, public iopstream {
 
-public:
+  public:
+	_Cdecl fpstream() noexcept;
+	_Cdecl fpstream(const char _FAR *, pstream::openmode);
+	_Cdecl ~fpstream();
 
-    _Cdecl fpstream() noexcept;
-    _Cdecl fpstream( const char _FAR *, pstream::openmode);
-    _Cdecl ~fpstream();
-
-    filebuf _FAR * _Cdecl rdbuf() noexcept;
-    void _Cdecl open( const char _FAR *, pstream::openmode);
-
+	filebuf _FAR *_Cdecl rdbuf() noexcept;
+	void _Cdecl open(const char _FAR *, pstream::openmode);
 };
 
+#endif // Uses_fpstream
 
-#endif  // Uses_fpstream
-
-#if defined( __BORLANDC__ )
+#if defined(__BORLANDC__)
 #pragma option -Vo.
 #endif
-#if defined( __BCOPT__ ) && !defined (__FLAT__)
+#if defined(__BCOPT__) && !defined(__FLAT__)
 #pragma option -po.
 #endif

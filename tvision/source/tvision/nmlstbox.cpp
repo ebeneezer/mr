@@ -15,5 +15,5 @@
 #define Uses_TListBox
 #include <tvision/tv.h>
 
-const char * const _NEAR TListBox::name = "TListBox";
+const char *const _NEAR TListBox::name = "TListBox";
 #endif

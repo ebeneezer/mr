@@ -15,16 +15,9 @@
 #define Uses_TChDirDialog
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
-__link( RDialog )
-__link( RButton )
-__link( RDirListBox )
-__link( RInputLine )
-__link( RHistory )
-__link( RLabel )
-__link( RScrollBar )
+__link(RDialog) __link(RButton) __link(RDirListBox) __link(RInputLine) __link(RHistory)
+    __link(RLabel) __link(RScrollBar)
 
-TStreamableClass RChDirDialog( TChDirDialog::name,
-                               TChDirDialog::build,
-                               __DELTA(TChDirDialog)
-                             );
+        TStreamableClass
+    RChDirDialog(TChDirDialog::name, TChDirDialog::build, __DELTA(TChDirDialog));
 #endif

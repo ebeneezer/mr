@@ -6,41 +6,35 @@
 
 #include <internal/errredir.h>
 
-namespace tvision
-{
+namespace tvision {
 
 class ConsoleCtl;
 class SigwinchHandler;
 struct InputState;
 
-class UnixConsoleAdapter final : public ConsoleAdapter
-{
-    StderrRedirector errRedir;
+class UnixConsoleAdapter final : public ConsoleAdapter {
+	StderrRedirector errRedir;
 
-    ConsoleCtl &con;
-    DisplayBuffer &displayBuf;
-    InputState &inputState;
-    SigwinchHandler *sigwinch;
-    InputAdapter &input;
+	ConsoleCtl &con;
+	DisplayBuffer &displayBuf;
+	InputState &inputState;
+	SigwinchHandler *sigwinch;
+	InputAdapter &input;
 
-    UnixConsoleAdapter( DisplayAdapter &, InputAdapter &, ConsoleCtl &,
-                        DisplayBuffer &, InputState &,
-                        SigwinchHandler * ) noexcept;
+	UnixConsoleAdapter(DisplayAdapter &, InputAdapter &, ConsoleCtl &, DisplayBuffer &,
+	                   InputState &, SigwinchHandler *) noexcept;
 
-public:
+  public:
+	// The lifetime of 'con' and 'displayBuf' must exceed that of the returned object.
+	// Takes ownership over 'inputState', 'display' and 'input'.
+	static UnixConsoleAdapter &create(ConsoleCtl &con, DisplayBuffer &displayBuf,
+	                                  InputState &inputState, DisplayAdapter &display,
+	                                  InputAdapter &input) noexcept;
 
-    // The lifetime of 'con' and 'displayBuf' must exceed that of the returned object.
-    // Takes ownership over 'inputState', 'display' and 'input'.
-    static UnixConsoleAdapter &create( ConsoleCtl &con,
-                                       DisplayBuffer &displayBuf,
-                                       InputState &inputState,
-                                       DisplayAdapter &display,
-                                       InputAdapter &input ) noexcept;
+	~UnixConsoleAdapter();
 
-    ~UnixConsoleAdapter();
-
-    bool setClipboardText(TStringView) noexcept override;
-    bool requestClipboardText(void (&)(TStringView)) noexcept override;
+	bool setClipboardText(TStringView) noexcept override;
+	bool requestClipboardText(void (&)(TStringView)) noexcept override;
 };
 
 } // namespace tvision

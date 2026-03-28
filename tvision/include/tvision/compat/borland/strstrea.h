@@ -5,8 +5,8 @@
 #ifndef TVISION_COMPAT_STRSTREA_H
 #define TVISION_COMPAT_STRSTREA_H
 
-#include <strstream>
 #include <ostream>
+#include <strstream>
 
 using std::ends;
 using std::istrstream;

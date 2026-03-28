@@ -14,7 +14,7 @@
  *
  */
 
-#if !defined( __HELPBASE_H )
+#if !defined(__HELPBASE_H)
 #define __HELPBASE_H
 
 const int32_t magicHeader = 0x46484246L; //"FBHF"
@@ -24,175 +24,161 @@ const int32_t magicHeader = 0x46484246L; //"FBHF"
 
 // TParagraph
 
-class TParagraph
-{
+class TParagraph {
 
-public:
-
-    TParagraph() noexcept {}
-    TParagraph *next;
-    Boolean wrap;
-    ushort size;
-    char *text;
-
+  public:
+	TParagraph() noexcept {
+	}
+	TParagraph *next;
+	Boolean wrap;
+	ushort size;
+	char *text;
 };
 
 // TCrossRef
 
-class TCrossRef
-{
+class TCrossRef {
 
-public:
-
-    TCrossRef() noexcept {}
-    int ref;
-    int offset;
-    uchar length;
-
+  public:
+	TCrossRef() noexcept {
+	}
+	int ref;
+	int offset;
+	uchar length;
 };
 
+typedef void (*TCrossRefHandler)(opstream &, int);
 
-typedef void (*TCrossRefHandler) ( opstream&, int );
+class THelpTopic : public TObject, public TStreamable {
 
-class THelpTopic: public TObject, public TStreamable
-{
+  public:
+	THelpTopic() noexcept;
+	THelpTopic(StreamableInit) noexcept {};
+	virtual ~THelpTopic();
 
-public:
+	void addCrossRef(TCrossRef ref) noexcept;
+	void addParagraph(TParagraph *p) noexcept;
+	void getCrossRef(int i, TPoint &loc, uchar &length, int &ref) noexcept;
+	TStringView getLine(int line) noexcept;
+	int getNumCrossRefs() noexcept;
+	int longestLineWidth() noexcept;
+	int numLines() noexcept;
+	void setCrossRef(int i, TCrossRef &ref) noexcept;
+	void setNumCrossRefs(int i) noexcept;
+	void setWidth(int aWidth) noexcept;
 
-    THelpTopic() noexcept;
-    THelpTopic( StreamableInit ) noexcept {};
-    virtual ~THelpTopic();
+	TParagraph *paragraphs;
 
-    void addCrossRef( TCrossRef ref ) noexcept;
-    void addParagraph( TParagraph *p ) noexcept;
-    void getCrossRef( int i, TPoint& loc, uchar& length, int& ref ) noexcept;
-    TStringView getLine( int line ) noexcept;
-    int getNumCrossRefs() noexcept;
-    int longestLineWidth() noexcept;
-    int numLines() noexcept;
-    void setCrossRef( int i, TCrossRef& ref ) noexcept;
-    void setNumCrossRefs( int i ) noexcept;
-    void setWidth( int aWidth ) noexcept;
+	int numRefs;
+	TCrossRef *crossRefs;
 
-    TParagraph *paragraphs;
+  private:
+	TStringView wrapText(char *text, int size, int &offset, Boolean wrap) noexcept;
+	void readParagraphs(ipstream &s);
+	void readCrossRefs(ipstream &s);
+	void writeParagraphs(opstream &s);
+	void writeCrossRefs(opstream &s);
+	void disposeParagraphs() noexcept;
+	virtual const char *streamableName() const {
+		return name;
+	}
+	int width;
+	int lastOffset;
+	int lastLine;
+	TParagraph *lastParagraph;
 
-    int numRefs;
-    TCrossRef *crossRefs;
+  protected:
+	virtual void write(opstream &);
+	virtual void *read(ipstream &);
 
-private:
-
-    TStringView wrapText( char *text, int size, int& offset, Boolean wrap ) noexcept;
-    void readParagraphs( ipstream& s );
-    void readCrossRefs( ipstream& s );
-    void writeParagraphs( opstream& s );
-    void writeCrossRefs( opstream& s );
-    void disposeParagraphs() noexcept;
-    virtual const char *streamableName() const
-        { return name; }
-    int width;
-    int lastOffset;
-    int lastLine;
-    TParagraph *lastParagraph;
-
-protected:
-
-    virtual void write( opstream& );
-    virtual void *read( ipstream& );
-
-public:
-
-    static const char * const _NEAR name;
-    static TStreamable *build();
-
+  public:
+	static const char *const _NEAR name;
+	static TStreamable *build();
 };
 
-inline ipstream& operator >> ( ipstream& is, THelpTopic& cl )
-    { return is >> (TStreamable&)cl; }
-inline ipstream& operator >> ( ipstream& is, THelpTopic*& cl )
-    { return is >> (void *&)cl; }
+inline ipstream &operator>>(ipstream &is, THelpTopic &cl) {
+	return is >> (TStreamable &)cl;
+}
+inline ipstream &operator>>(ipstream &is, THelpTopic *&cl) {
+	return is >> (void *&)cl;
+}
 
-inline opstream& operator << ( opstream& os, THelpTopic& cl )
-    { return os << (TStreamable&)cl; }
-inline opstream& operator << ( opstream& os, THelpTopic* cl )
-    { return os << (TStreamable *)cl; }
-
+inline opstream &operator<<(opstream &os, THelpTopic &cl) {
+	return os << (TStreamable &)cl;
+}
+inline opstream &operator<<(opstream &os, THelpTopic *cl) {
+	return os << (TStreamable *)cl;
+}
 
 // THelpIndex
 
-class THelpIndex : public TObject, public TStreamable
-{
-public:
+class THelpIndex : public TObject, public TStreamable {
+  public:
+	THelpIndex() noexcept;
+	THelpIndex(StreamableInit) noexcept {};
+	virtual ~THelpIndex();
 
+	int32_t position(int) noexcept;
+	void add(int, int32_t);
 
-    THelpIndex() noexcept;
-    THelpIndex( StreamableInit ) noexcept {};
-    virtual ~THelpIndex();
+	ushort size;
+	int32_t *index;
 
-    int32_t position( int ) noexcept;
-    void add( int, int32_t );
+  private:
+	virtual const char *streamableName() const {
+		return name;
+	}
 
-    ushort size;
-    int32_t *index;
+  protected:
+	virtual void write(opstream &);
+	virtual void *read(ipstream &);
 
-private:
-
-    virtual const char *streamableName() const
-        { return name; }
-
-protected:
-
-    virtual void write( opstream& );
-    virtual void *read( ipstream& );
-
-public:
-
-    static const char * const _NEAR name;
-    static TStreamable *build();
-
+  public:
+	static const char *const _NEAR name;
+	static TStreamable *build();
 };
 
-inline ipstream& operator >> ( ipstream& is, THelpIndex& cl )
-    { return is >> (TStreamable&)cl; }
-inline ipstream& operator >> ( ipstream& is, THelpIndex*& cl )
-    { return is >> (void *&)cl; }
+inline ipstream &operator>>(ipstream &is, THelpIndex &cl) {
+	return is >> (TStreamable &)cl;
+}
+inline ipstream &operator>>(ipstream &is, THelpIndex *&cl) {
+	return is >> (void *&)cl;
+}
 
-inline opstream& operator << ( opstream& os, THelpIndex& cl )
-    { return os << (TStreamable&)cl; }
-inline opstream& operator << ( opstream& os, THelpIndex* cl )
-    { return os << (TStreamable *)cl; }
-
+inline opstream &operator<<(opstream &os, THelpIndex &cl) {
+	return os << (TStreamable &)cl;
+}
+inline opstream &operator<<(opstream &os, THelpIndex *cl) {
+	return os << (TStreamable *)cl;
+}
 
 // THelpFile
 
-class THelpFile : public TObject
-{
+class THelpFile : public TObject {
 
-    static const char * _NEAR invalidContext;
+	static const char *_NEAR invalidContext;
 
-public:
+  public:
+	THelpFile(iopstream &s);
+	virtual ~THelpFile();
 
-    THelpFile( iopstream& s );
-    virtual ~THelpFile();
+	THelpTopic *getTopic(int);
+	THelpTopic *invalidTopic();
+	void recordPositionInIndex(int);
+	void putTopic(THelpTopic *);
 
-    THelpTopic *getTopic( int );
-    THelpTopic *invalidTopic();
-    void recordPositionInIndex( int );
-    void putTopic( THelpTopic* );
+	iopstream *stream;
+	Boolean modified;
 
-    iopstream *stream;
-    Boolean modified;
+	THelpIndex *index;
+	int32_t indexPos;
 
-    THelpIndex *index;
-    int32_t indexPos;
-
-private:
-
-    static void ensureStreamSize( iopstream &, int );
-
+  private:
+	static void ensureStreamSize(iopstream &, int);
 };
 
-extern void notAssigned( opstream& s, int value );
+extern void notAssigned(opstream &s, int value);
 
 extern TCrossRefHandler crossRefHandler;
 
-#endif  // __HELPBASE_H
+#endif // __HELPBASE_H

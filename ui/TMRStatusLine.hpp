@@ -1,13 +1,12 @@
 #ifndef TMRSTATUSLINE_HPP
 #define TMRSTATUSLINE_HPP
 #define Uses_TStatusLine
-#include <tvision/tv.h>
 #include "mrpalette.hpp"
+#include <tvision/tv.h>
 
-class TMRStatusLine : public TStatusLine
-{
-public:
-	TMRStatusLine(const TRect &r, TStatusDef &aDef) : TStatusLine(r, aDef) {}
-
+class TMRStatusLine : public TStatusLine {
+  public:
+	TMRStatusLine(const TRect &r, TStatusDef &aDef) : TStatusLine(r, aDef) {
+	}
 };
 #endif

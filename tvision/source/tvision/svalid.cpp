@@ -22,34 +22,21 @@
 
 #include <tvision/tv.h>
 
-TStreamableClass RValidator( TValidator::name,
-                         TValidator::build,
-                         __DELTA(TValidator)
-                       );
+TStreamableClass RValidator(TValidator::name, TValidator::build, __DELTA(TValidator));
 
-TStreamableClass RFilterValidator( TFilterValidator::name,
-                         TFilterValidator::build,
-                         __DELTA(TFilterValidator)
-                       );
+TStreamableClass RFilterValidator(TFilterValidator::name, TFilterValidator::build,
+                                  __DELTA(TFilterValidator));
 
-TStreamableClass RRangeValidator( TRangeValidator::name,
-                         TRangeValidator::build,
-                         __DELTA(TRangeValidator)
-                       );
+TStreamableClass RRangeValidator(TRangeValidator::name, TRangeValidator::build,
+                                 __DELTA(TRangeValidator));
 
-TStreamableClass RPXPictureValidator( TPXPictureValidator::name,
-                         TPXPictureValidator::build,
-                         __DELTA(TPXPictureValidator)
-                       );
+TStreamableClass RPXPictureValidator(TPXPictureValidator::name, TPXPictureValidator::build,
+                                     __DELTA(TPXPictureValidator));
 
-TStreamableClass RLookupValidator( TLookupValidator::name,
-                         TLookupValidator::build,
-                         __DELTA(TLookupValidator)
-                       );
+TStreamableClass RLookupValidator(TLookupValidator::name, TLookupValidator::build,
+                                  __DELTA(TLookupValidator));
 
-TStreamableClass RStringLookupValidator( TStringLookupValidator::name,
-                         TStringLookupValidator::build,
-                         __DELTA(TStringLookupValidator)
-                       );
+TStreamableClass RStringLookupValidator(TStringLookupValidator::name, TStringLookupValidator::build,
+                                        __DELTA(TStringLookupValidator));
 
 #endif

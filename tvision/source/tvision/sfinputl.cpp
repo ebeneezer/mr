@@ -15,21 +15,16 @@
 #define Uses_TFileInputLine
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
-__link( RInputLine )
+__link(RInputLine)
 
-TFileInputLine::TFileInputLine( StreamableInit ) noexcept :
-                TInputLine( streamableInit)
-{
+    TFileInputLine::TFileInputLine(StreamableInit) noexcept
+    : TInputLine(streamableInit) {
 }
 
-TStreamable *TFileInputLine::build()
-{
-    return new TFileInputLine( streamableInit );
+TStreamable *TFileInputLine::build() {
+	return new TFileInputLine(streamableInit);
 }
 
-TStreamableClass RFileInputLine( TFileInputLine::name,
-                                 TFileInputLine::build,
-                                __DELTA(TFileInputLine)
-                               );
+TStreamableClass RFileInputLine(TFileInputLine::name, TFileInputLine::build,
+                                __DELTA(TFileInputLine));
 #endif
-

@@ -15,20 +15,14 @@
 #define Uses_TFileList
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
-__link( RSortedListBox )            // In case the object below is moved
-                                    //   to another file.
+__link(RSortedListBox) // In case the object below is moved
+                       //   to another file.
 
-TStreamableClass RFileList( TFileList::name,
-                            TFileList::build,
-                            __DELTA(TFileList)
-                          );
+    TStreamableClass RFileList(TFileList::name, TFileList::build, __DELTA(TFileList));
 
 /* TSortedListBox registration. */
-__link( RListBox )
+__link(RListBox)
 
-TStreamableClass RSortedListBox( TSortedListBox::name,
-                                 TSortedListBox::build,
-                                 __DELTA( TSortedListBox )
-                               );
+    TStreamableClass
+    RSortedListBox(TSortedListBox::name, TSortedListBox::build, __DELTA(TSortedListBox));
 #endif
-

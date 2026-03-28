@@ -15,5 +15,5 @@
 #define Uses_TMenuPopup
 #include <tvision/tv.h>
 
-const char * const _NEAR TMenuPopup::name = "TMenuPopup";
+const char *const _NEAR TMenuPopup::name = "TMenuPopup";
 #endif

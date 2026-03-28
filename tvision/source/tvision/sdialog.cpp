@@ -16,11 +16,7 @@
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
 
-__link( RWindow )
+__link(RWindow)
 
-TStreamableClass RDialog( TDialog::name,
-                          TDialog::build,
-                          __DELTA(TDialog)
-                        );
+    TStreamableClass RDialog(TDialog::name, TDialog::build, __DELTA(TDialog));
 #endif
-

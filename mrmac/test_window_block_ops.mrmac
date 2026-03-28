@@ -1,0 +1,6 @@
+$MACRO WindowBlockOps;
+DEF_INT(SrcWin);
+SrcWin := 1;
+WINDOW_COPY(SrcWin);
+WINDOW_MOVE(SrcWin);
+END_MACRO;

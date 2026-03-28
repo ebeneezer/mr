@@ -12,16 +12,13 @@
 #define SMILING_FACE_WITH_SMILING_EYES_UTF8 "\xF0\x9F\x98\x8A"
 #define SMILING_FACE_WITH_SMILING_EYES_UTF32 U"\U0001F60A"
 
-class TestCharOps
-{
-public:
+class TestCharOps {
+  public:
+	static void init();
 
-    static void init();
-
-private:
-
-    static int mockCharWidth(uint32_t) noexcept;
-    static uint32_t mockCharToLower(uint32_t) noexcept;
+  private:
+	static int mockCharWidth(uint32_t) noexcept;
+	static uint32_t mockCharToLower(uint32_t) noexcept;
 };
 
 #endif // TVISION_TEST_CHAROPS_H

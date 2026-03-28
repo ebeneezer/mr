@@ -2,13 +2,12 @@
 #define TMRDESKTOP_HPP
 #define Uses_TDeskTop
 #define Uses_TBackground
-#include <tvision/tv.h>
 #include "mrpalette.hpp"
+#include <tvision/tv.h>
 
-class TMRDeskTop : public TDeskTop
-{
-public:
-	TMRDeskTop(const TRect &r) : TDeskInit(&TDeskTop::initBackground), TDeskTop(r) {}
-
+class TMRDeskTop : public TDeskTop {
+  public:
+	TMRDeskTop(const TRect &r) : TDeskInit(&TDeskTop::initBackground), TDeskTop(r) {
+	}
 };
 #endif

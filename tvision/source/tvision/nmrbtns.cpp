@@ -15,5 +15,5 @@
 #define Uses_TRadioButtons
 #include <tvision/tv.h>
 
-const char * const _NEAR TRadioButtons::name = "TRadioButtons";
+const char *const _NEAR TRadioButtons::name = "TRadioButtons";
 #endif

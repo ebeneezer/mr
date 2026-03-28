@@ -15,5 +15,5 @@
 #define Uses_TCluster
 #include <tvision/tv.h>
 
-const char * const _NEAR TCluster::name = "TCluster";
+const char *const _NEAR TCluster::name = "TCluster";
 #endif

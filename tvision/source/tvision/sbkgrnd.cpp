@@ -15,11 +15,7 @@
 #define Uses_TStreamableClass
 #define Uses_TBackground
 #include <tvision/tv.h>
-__link( RView )
+__link(RView)
 
-TStreamableClass RBackground( TBackground::name,
-                              TBackground::build,
-                              __DELTA(TBackground)
-                            );
+    TStreamableClass RBackground(TBackground::name, TBackground::build, __DELTA(TBackground));
 #endif
-

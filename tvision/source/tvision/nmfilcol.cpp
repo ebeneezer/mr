@@ -14,4 +14,4 @@
 #define Uses_TFileCollection
 #include <tvision/tv.h>
 
-const char * const _NEAR TFileCollection::name = "TFileCollection";
+const char *const _NEAR TFileCollection::name = "TFileCollection";

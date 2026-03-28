@@ -15,7 +15,5 @@
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
 
-TStreamableClass RResourceCollection( TResourceCollection::name,
-                                      TResourceCollection::build,
-                                      __DELTA(TResourceCollection)
-                                    );
+TStreamableClass RResourceCollection(TResourceCollection::name, TResourceCollection::build,
+                                     __DELTA(TResourceCollection));

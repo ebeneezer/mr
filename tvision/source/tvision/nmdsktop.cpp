@@ -15,5 +15,5 @@
 #define Uses_TDeskTop
 #include <tvision/tv.h>
 
-const char * const _NEAR TDeskTop::name = "TDeskTop";
+const char *const _NEAR TDeskTop::name = "TDeskTop";
 #endif

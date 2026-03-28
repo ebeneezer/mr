@@ -15,8 +15,5 @@
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
 
-TStreamableClass RFileCollection( TFileCollection::name,
-                                  TFileCollection::build,
-                                  __DELTA(TFileCollection)
-                                );
-
+TStreamableClass RFileCollection(TFileCollection::name, TFileCollection::build,
+                                 __DELTA(TFileCollection));

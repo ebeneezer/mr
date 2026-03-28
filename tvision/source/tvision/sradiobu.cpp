@@ -16,11 +16,8 @@
 #define Uses_TStreamableClass
 #include <tvision/tv.h>
 
-__link( RCluster )
+__link(RCluster)
 
-TStreamableClass RRadioButtons( TRadioButtons::name,
-                                TRadioButtons::build,
-                                __DELTA(TRadioButtons)
-                              );
+    TStreamableClass
+    RRadioButtons(TRadioButtons::name, TRadioButtons::build, __DELTA(TRadioButtons));
 #endif
-

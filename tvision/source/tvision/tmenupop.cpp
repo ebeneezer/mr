@@ -21,57 +21,47 @@
 #define Uses_TDeskTop
 #include <tvision/tv.h>
 
-TMenuPopup::TMenuPopup(const TRect& bounds, TMenu* aMenu, TMenuView *aParentMenu) noexcept :
-    TMenuBox( bounds, aMenu, aParentMenu )
-{
-    putClickEventOnExit = False;
+TMenuPopup::TMenuPopup(const TRect &bounds, TMenu *aMenu, TMenuView *aParentMenu) noexcept
+    : TMenuBox(bounds, aMenu, aParentMenu) {
+	putClickEventOnExit = False;
 }
 
-TMenuPopup::~TMenuPopup()
-{
-    delete menu;
+TMenuPopup::~TMenuPopup() {
+	delete menu;
 }
 
-ushort TMenuPopup::execute()
-{
-    // Do not highlight the default entry, because it would look ugly.
-    menu->deflt = 0;
-    return TMenuBox::execute();
+ushort TMenuPopup::execute() {
+	// Do not highlight the default entry, because it would look ugly.
+	menu->deflt = 0;
+	return TMenuBox::execute();
 }
 
-void TMenuPopup::handleEvent(TEvent& event)
-{
-    switch (event.what)
-    {
-    case evKeyDown:
-        TMenuItem* p = findItem(getCtrlChar(event.keyDown.keyCode));
-        if (!p)
-            p = hotKey(event.keyDown.keyCode);
-        if (p && commandEnabled(p->command))
-        {
-            event.what = evCommand;
-            event.message.command = p->command;
-            event.message.infoPtr = NULL;
-            putEvent(event);
-            clearEvent(event);
-        }
-        else
-            if (getAltChar(event.keyDown.keyCode))
-                clearEvent(event);
-        break;
-    }
-    TMenuBox::handleEvent(event);
+void TMenuPopup::handleEvent(TEvent &event) {
+	switch (event.what) {
+		case evKeyDown:
+			TMenuItem *p = findItem(getCtrlChar(event.keyDown.keyCode));
+			if (!p)
+				p = hotKey(event.keyDown.keyCode);
+			if (p && commandEnabled(p->command)) {
+				event.what = evCommand;
+				event.message.command = p->command;
+				event.message.infoPtr = NULL;
+				putEvent(event);
+				clearEvent(event);
+			} else if (getAltChar(event.keyDown.keyCode))
+				clearEvent(event);
+			break;
+	}
+	TMenuBox::handleEvent(event);
 }
 
 #if !defined(NO_STREAMABLE)
 
-TStreamable *TMenuPopup::build()
-{
-    return new TMenuPopup( streamableInit );
+TStreamable *TMenuPopup::build() {
+	return new TMenuPopup(streamableInit);
 }
 
-TMenuPopup::TMenuPopup( StreamableInit ) noexcept : TMenuBox( streamableInit )
-{
+TMenuPopup::TMenuPopup(StreamableInit) noexcept : TMenuBox(streamableInit) {
 }
 
 #endif

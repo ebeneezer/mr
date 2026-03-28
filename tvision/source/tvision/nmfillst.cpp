@@ -15,5 +15,5 @@
 #define Uses_TFileList
 #include <tvision/tv.h>
 
-const char * const _NEAR TFileList::name = "TFileList";
+const char *const _NEAR TFileList::name = "TFileList";
 #endif

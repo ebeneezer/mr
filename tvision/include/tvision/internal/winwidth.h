@@ -3,53 +3,48 @@
 
 #ifdef _WIN32
 
-#include <tvision/tv.h>
-#include <tvision/compat/windows/windows.h>
 #include <atomic>
+#include <tvision/compat/windows/windows.h>
+#include <tvision/tv.h>
 #include <unordered_map>
 
-namespace tvision
-{
+namespace tvision {
 
-class WinWidth
-{
-    // Since there is no equivalent to wcwidth and the console API allows
-    // having buffers out of sight, character widths are measured by printing
-    // to a console buffer and taking the cursor position.
+class WinWidth {
+	// Since there is no equivalent to wcwidth and the console API allows
+	// having buffers out of sight, character widths are measured by printing
+	// to a console buffer and taking the cursor position.
 
-    // A separate state is stored for every thread so that mbcwidth() is both
-    // thread-safe and lock-free.
+	// A separate state is stored for every thread so that mbcwidth() is both
+	// thread-safe and lock-free.
 
-    static std::atomic<size_t> lastReset;
-    static std::atomic<bool> isLegacyConsole;
-    static thread_local WinWidth &localInstance;
+	static std::atomic<size_t> lastReset;
+	static std::atomic<bool> isLegacyConsole;
+	static thread_local WinWidth &localInstance;
 
-    std::unordered_map<uint32_t, short> results;
-    HANDLE cnHandle {INVALID_HANDLE_VALUE};
-    size_t currentReset {lastReset};
+	std::unordered_map<uint32_t, short> results;
+	HANDLE cnHandle{INVALID_HANDLE_VALUE};
+	size_t currentReset{lastReset};
 
-    int calcWidth(uint32_t) noexcept;
-    void setUp() noexcept;
-    void tearDown() noexcept;
+	int calcWidth(uint32_t) noexcept;
+	void setUp() noexcept;
+	void tearDown() noexcept;
 
-    ~WinWidth();
-    struct Destructor;
+	~WinWidth();
+	struct Destructor;
 
-public:
-
-    static int width(uint32_t) noexcept;
-    static void reset(bool) noexcept;
+  public:
+	static int width(uint32_t) noexcept;
+	static void reset(bool) noexcept;
 };
 
-inline int WinWidth::width(uint32_t wc) noexcept
-{
-    return localInstance.calcWidth(wc);
+inline int WinWidth::width(uint32_t wc) noexcept {
+	return localInstance.calcWidth(wc);
 }
 
-inline void WinWidth::reset(bool isLegacyConsole) noexcept
-{
-    WinWidth::isLegacyConsole = isLegacyConsole;
-    ++lastReset;
+inline void WinWidth::reset(bool isLegacyConsole) noexcept {
+	WinWidth::isLegacyConsole = isLegacyConsole;
+	++lastReset;
 }
 
 } // namespace tvision
