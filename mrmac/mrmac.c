@@ -965,7 +965,10 @@ static int lookup_builtin_variable(const char *name, int *out_type)
         strcasecmp(name, "FIRST_RUN") == 0 || strcasecmp(name, "IGNORE_CASE") == 0 ||
         strcasecmp(name, "FIRST_SAVE") == 0 || strcasecmp(name, "EOF_IN_MEM") == 0 ||
         strcasecmp(name, "BUFFER_ID") == 0 || strcasecmp(name, "TMP_FILE") == 0 ||
-        strcasecmp(name, "FILE_CHANGED") == 0)
+        strcasecmp(name, "FILE_CHANGED") == 0 || strcasecmp(name, "PARAM_COUNT") == 0 ||
+        strcasecmp(name, "CPU") == 0 || strcasecmp(name, "C_COL") == 0 ||
+        strcasecmp(name, "C_LINE") == 0 || strcasecmp(name, "AT_EOF") == 0 ||
+        strcasecmp(name, "AT_EOL") == 0)
     {
         if (out_type != NULL)
             *out_type = TYPE_INT;
@@ -975,10 +978,18 @@ static int lookup_builtin_variable(const char *name, int *out_type)
         strcasecmp(name, "DATE") == 0 || strcasecmp(name, "TIME") == 0 ||
         strcasecmp(name, "FIRST_MACRO") == 0 || strcasecmp(name, "NEXT_MACRO") == 0 ||
         strcasecmp(name, "LAST_FILE_NAME") == 0 || strcasecmp(name, "TMP_FILE_NAME") == 0 ||
-        strcasecmp(name, "FILE_NAME") == 0)
+        strcasecmp(name, "FILE_NAME") == 0 || strcasecmp(name, "COMSPEC") == 0 ||
+        strcasecmp(name, "MR_PATH") == 0 || strcasecmp(name, "OS_VERSION") == 0 ||
+        strcasecmp(name, "GET_LINE") == 0)
     {
         if (out_type != NULL)
             *out_type = TYPE_STR;
+        return 1;
+    }
+    if (strcasecmp(name, "CUR_CHAR") == 0)
+    {
+        if (out_type != NULL)
+            *out_type = TYPE_CHAR;
         return 1;
     }
     return 0;
@@ -1492,6 +1503,39 @@ static int parse_primary(Parser *ps, ExprInfo *out)
                 emit_intrinsic_call("NEXT_FILE", argc);
                 out->type = TYPE_INT;
             }
+            else if (strcasecmp(name, "GET_ENVIRONMENT") == 0)
+            {
+                if (argc != 1 || !is_stringlike_type(args[0].type))
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(name);
+                    return -1;
+                }
+                emit_intrinsic_call("GET_ENVIRONMENT", argc);
+                out->type = TYPE_STR;
+            }
+            else if (strcasecmp(name, "GET_WORD") == 0)
+            {
+                if (argc != 1 || !is_stringlike_type(args[0].type))
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(name);
+                    return -1;
+                }
+                emit_intrinsic_call("GET_WORD", argc);
+                out->type = TYPE_STR;
+            }
+            else if (strcasecmp(name, "PARAM_STR") == 0)
+            {
+                if (argc != 1 || args[0].type != TYPE_INT)
+                {
+                    set_compile_error(line, "Type mismatch or syntax error.");
+                    free(name);
+                    return -1;
+                }
+                emit_intrinsic_call("PARAM_STR", argc);
+                out->type = TYPE_STR;
+            }
             else if (strcasecmp(name, "GLOBAL_STR") == 0)
             {
                 if (argc != 1 || !is_stringlike_type(args[0].type))
@@ -1934,6 +1978,26 @@ static int parse_proc_statement_after_name(Parser *ps, const char *name, int lin
         emit_proc_call("UNLOAD_MACRO", argc);
         return 0;
     }
+    if (strcasecmp(name, "CHANGE_DIR") == 0)
+    {
+        if (argc != 1 || !is_stringlike_type(args[0].type))
+        {
+            set_compile_error(line, "Type mismatch or syntax error.");
+            return -1;
+        }
+        emit_proc_call("CHANGE_DIR", argc);
+        return 0;
+    }
+    if (strcasecmp(name, "DEL_FILE") == 0)
+    {
+        if (argc != 1 || !is_stringlike_type(args[0].type))
+        {
+            set_compile_error(line, "Type mismatch or syntax error.");
+            return -1;
+        }
+        emit_proc_call("DEL_FILE", argc);
+        return 0;
+    }
     if (strcasecmp(name, "LOAD_FILE") == 0)
     {
         if (argc != 1 || !is_stringlike_type(args[0].type))
@@ -1962,6 +2026,56 @@ static int parse_proc_statement_after_name(Parser *ps, const char *name, int lin
             return -1;
         }
         emit_proc_call("REPLACE", argc);
+        return 0;
+    }
+    if (strcasecmp(name, "TEXT") == 0)
+    {
+        if (argc != 1 || !is_stringlike_type(args[0].type))
+        {
+            set_compile_error(line, "Type mismatch or syntax error.");
+            return -1;
+        }
+        emit_proc_call("TEXT", argc);
+        return 0;
+    }
+    if (strcasecmp(name, "PUT_LINE") == 0)
+    {
+        if (argc != 1 || !is_stringlike_type(args[0].type))
+        {
+            set_compile_error(line, "Type mismatch or syntax error.");
+            return -1;
+        }
+        emit_proc_call("PUT_LINE", argc);
+        return 0;
+    }
+    if (strcasecmp(name, "DEL_CHARS") == 0)
+    {
+        if (argc != 1 || args[0].type != TYPE_INT)
+        {
+            set_compile_error(line, "Type mismatch or syntax error.");
+            return -1;
+        }
+        emit_proc_call("DEL_CHARS", argc);
+        return 0;
+    }
+    if (strcasecmp(name, "GOTO_LINE") == 0)
+    {
+        if (argc != 1 || args[0].type != TYPE_INT)
+        {
+            set_compile_error(line, "Type mismatch or syntax error.");
+            return -1;
+        }
+        emit_proc_call("GOTO_LINE", argc);
+        return 0;
+    }
+    if (strcasecmp(name, "GOTO_COL") == 0)
+    {
+        if (argc != 1 || args[0].type != TYPE_INT)
+        {
+            set_compile_error(line, "Type mismatch or syntax error.");
+            return -1;
+        }
+        emit_proc_call("GOTO_COL", argc);
         return 0;
     }
 
@@ -2138,6 +2252,35 @@ static int parse_statement(Parser *ps)
         if (strcasecmp(name, "SAVE_FILE") == 0)
         {
             emit_proc_call("SAVE_FILE", 0);
+            free(name);
+            return parser_expect(ps, TOK_SEMICOLON, "; expected.");
+        }
+        if (strcasecmp(name, "CR") == 0)
+        {
+            emit_proc_call("CR", 0);
+            free(name);
+            return parser_expect(ps, TOK_SEMICOLON, "; expected.");
+        }
+        if (strcasecmp(name, "DEL_CHAR") == 0)
+        {
+            emit_proc_call("DEL_CHAR", 0);
+            free(name);
+            return parser_expect(ps, TOK_SEMICOLON, "; expected.");
+        }
+        if (strcasecmp(name, "DEL_LINE") == 0)
+        {
+            emit_proc_call("DEL_LINE", 0);
+            free(name);
+            return parser_expect(ps, TOK_SEMICOLON, "; expected.");
+        }
+        if (strcasecmp(name, "LEFT") == 0 || strcasecmp(name, "RIGHT") == 0 ||
+            strcasecmp(name, "UP") == 0 || strcasecmp(name, "DOWN") == 0 ||
+            strcasecmp(name, "HOME") == 0 || strcasecmp(name, "EOL") == 0 ||
+            strcasecmp(name, "TOF") == 0 || strcasecmp(name, "EOF") == 0 ||
+            strcasecmp(name, "WORD_LEFT") == 0 || strcasecmp(name, "WORD_RIGHT") == 0 ||
+            strcasecmp(name, "FIRST_WORD") == 0)
+        {
+            emit_proc_call(name, 0);
             free(name);
             return parser_expect(ps, TOK_SEMICOLON, "; expected.");
         }

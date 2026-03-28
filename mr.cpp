@@ -813,8 +813,7 @@ private:
 
 int main(int argc, char **argv)
 {
-    (void) argc;
-    (void) argv;
+    mrvmSetProcessContext(argc, argv);
     loadDefaultMultiEditPalette();
     TMREditorApp app;
     app.run();

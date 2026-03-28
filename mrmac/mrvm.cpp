@@ -21,6 +21,7 @@
 #include <vector>
 #include <ctime>
 #include <map>
+#include <unistd.h>
 
 #include "../ui/mrtheme.hpp"
 #include "../ui/TMREditWindow.hpp"
@@ -83,6 +84,12 @@ namespace
         std::vector<std::string> fileMatches;
         std::size_t fileMatchIndex;
         std::string lastFileName;
+        std::string startupCommand;
+        std::vector<std::string> processArgs;
+        std::string executablePath;
+        std::string executableDir;
+        std::string shellPath;
+        std::string shellVersion;
         bool ignoreCase;
         bool lastSearchValid;
         const void *lastSearchWindow;
@@ -91,7 +98,7 @@ namespace
         std::size_t lastSearchEnd;
         std::size_t lastSearchCursor;
 
-        RuntimeEnvironment() : globals(), globalOrder(), globalEnumIndex(0), parameterString(), returnInt(0), returnStr(), errorLevel(0), loadedFiles(), loadedMacros(), macroOrder(), macroEnumIndex(0), macroStack(), fileMatches(), fileMatchIndex(0), lastFileName(), ignoreCase(false), lastSearchValid(false), lastSearchWindow(NULL), lastSearchFileName(), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0) {}
+        RuntimeEnvironment() : globals(), globalOrder(), globalEnumIndex(0), parameterString(), returnInt(0), returnStr(), errorLevel(0), loadedFiles(), loadedMacros(), macroOrder(), macroEnumIndex(0), macroStack(), fileMatches(), fileMatchIndex(0), lastFileName(), startupCommand(), processArgs(), executablePath(), executableDir(), shellPath(), shellVersion(), ignoreCase(false), lastSearchValid(false), lastSearchWindow(NULL), lastSearchFileName(), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0) {}
     };
 
     static RuntimeEnvironment g_runtimeEnv;
@@ -100,6 +107,17 @@ namespace
     static int valueAsInt(const Value &value);
     static void enforceStringLength(const std::string &s);
     static std::string trimAscii(const std::string &value);
+    static std::string commandFirstLine(const std::string &command);
+    static std::string detectExecutablePathFromProc();
+    static std::string normalizeDirPath(const std::string &path);
+    static std::string detectExecutableDir(const std::string &argv0);
+    static std::string detectShellPath();
+    static std::string detectShellVersion(const std::string &shellPath);
+    static int detectCpuCode();
+    static std::string getenvValue(const std::string &name);
+    static std::string getEnvironmentValue(const std::string &entryName);
+    static bool changeDirectoryPath(const std::string &path);
+    static bool deleteFilePath(const std::string &path);
     static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *loadedFileKey = NULL);
     static bool unloadMacroFromRegistry(const std::string &macroName);
     static bool parseRunMacroSpec(const std::string &spec, std::string &filePart, std::string &macroPart, std::string &paramPart);
@@ -153,6 +171,30 @@ namespace
     static bool searchEditorForward(TFileEditor *editor, const std::string &needle, int numLines, bool ignoreCase, std::size_t &matchStart, std::size_t &matchEnd);
     static bool searchEditorBackward(TFileEditor *editor, const std::string &needle, int numLines, bool ignoreCase, std::size_t &matchStart, std::size_t &matchEnd);
     static bool replaceLastSearch(TFileEditor *editor, const std::string &replacement);
+    static Value currentEditorCharValue();
+    static std::string currentEditorLineText(TFileEditor *editor);
+    static std::string currentEditorWord(TFileEditor *editor, const std::string &delimiters);
+    static bool insertEditorText(TFileEditor *editor, const std::string &text);
+    static bool replaceEditorLine(TFileEditor *editor, const std::string &text);
+    static bool deleteEditorChars(TFileEditor *editor, int count);
+    static bool deleteEditorLine(TFileEditor *editor);
+    static int currentEditorColumn(TFileEditor *editor);
+    static int currentEditorLineNumber(TFileEditor *editor);
+    static bool moveEditorLeft(TFileEditor *editor);
+    static bool moveEditorRight(TFileEditor *editor);
+    static bool moveEditorUp(TFileEditor *editor);
+    static bool moveEditorDown(TFileEditor *editor);
+    static bool moveEditorHome(TFileEditor *editor);
+    static bool moveEditorEol(TFileEditor *editor);
+    static bool moveEditorTof(TFileEditor *editor);
+    static bool moveEditorEof(TFileEditor *editor);
+    static bool moveEditorWordLeft(TFileEditor *editor);
+    static bool moveEditorWordRight(TFileEditor *editor);
+    static bool moveEditorFirstWord(TFileEditor *editor);
+    static bool gotoEditorLine(TFileEditor *editor, int lineNum);
+    static bool gotoEditorCol(TFileEditor *editor, int colNum);
+    static bool currentEditorAtEof(TFileEditor *editor);
+    static bool currentEditorAtEol(TFileEditor *editor);
 
     static std::string upperKey(const std::string &value)
     {
@@ -522,6 +564,160 @@ namespace
     }
 
 
+    static std::string commandFirstLine(const std::string &command)
+    {
+        std::string line;
+        FILE *pipe = ::popen(command.c_str(), "r");
+        if (pipe == NULL)
+            return std::string();
+        char buffer[512];
+        if (std::fgets(buffer, sizeof(buffer), pipe) != NULL)
+            line = buffer;
+        ::pclose(pipe);
+        while (!line.empty() && (line.back() == '\n' || line.back() == '\r'))
+            line.pop_back();
+        return line;
+    }
+
+    static std::string detectExecutablePathFromProc()
+    {
+        char buf[4096];
+        ssize_t n = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+        if (n <= 0)
+            return std::string();
+        buf[n] = '\0';
+        return std::string(buf);
+    }
+
+    static std::string normalizeDirPath(const std::string &path)
+    {
+        if (path.empty())
+            return std::string("./");
+        std::string out = path;
+        if (out.back() != '/')
+            out.push_back('/');
+        return out;
+    }
+
+    static std::string detectExecutableDir(const std::string &argv0)
+    {
+        std::string path = detectExecutablePathFromProc();
+        if (path.empty())
+            path = argv0;
+        if (path.empty())
+        {
+            char cwd[4096];
+            if (::getcwd(cwd, sizeof(cwd)) != NULL)
+                return normalizeDirPath(std::string(cwd));
+            return std::string("./");
+        }
+        std::size_t sep = path.find_last_of("/");
+        if (sep == std::string::npos)
+        {
+            char cwd[4096];
+            if (::getcwd(cwd, sizeof(cwd)) != NULL)
+                return normalizeDirPath(std::string(cwd));
+            return std::string("./");
+        }
+        return normalizeDirPath(path.substr(0, sep));
+    }
+
+    static std::string detectShellPath()
+    {
+        const char *comspec = std::getenv("COMSPEC");
+        if (comspec != NULL && *comspec != '\0')
+            return std::string(comspec);
+        const char *shell = std::getenv("SHELL");
+        if (shell != NULL && *shell != '\0')
+            return std::string(shell);
+        return std::string("/bin/sh");
+    }
+
+    static std::string detectShellVersion(const std::string &shellPath)
+    {
+        if (shellPath.empty())
+            return std::string();
+        const char *bashVersion = std::getenv("BASH_VERSION");
+        const char *zshVersion = std::getenv("ZSH_VERSION");
+        const char *fishVersion = std::getenv("FISH_VERSION");
+        std::string base = shellPath.substr(shellPath.find_last_of('/') == std::string::npos ? 0 : shellPath.find_last_of('/') + 1);
+        if (base == "bash" && bashVersion != NULL && *bashVersion != '\0')
+            return std::string("bash ") + bashVersion;
+        if (base == "zsh" && zshVersion != NULL && *zshVersion != '\0')
+            return std::string("zsh ") + zshVersion;
+        if (base == "fish" && fishVersion != NULL && *fishVersion != '\0')
+            return std::string("fish ") + fishVersion;
+        std::string command = "'";
+        for (std::string::size_type i = 0; i < shellPath.size(); ++i)
+        {
+            if (shellPath[i] == '\'')
+                command += "'\\''";
+            else
+                command.push_back(shellPath[i]);
+        }
+        command += "' --version 2>/dev/null";
+        std::string line = commandFirstLine(command);
+        if (!line.empty())
+            return line;
+        return base;
+    }
+
+    static int detectCpuCode()
+    {
+    #if defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
+        return 3;
+    #elif defined(__aarch64__) || defined(__arm__) || defined(__riscv) || defined(__powerpc__) || defined(__ppc64__)
+        return 3;
+    #else
+        return 3;
+    #endif
+    }
+
+    static std::string getenvValue(const std::string &name)
+    {
+        const char *value = std::getenv(name.c_str());
+        if (value == NULL)
+            return std::string();
+        return std::string(value);
+    }
+
+    static std::string getEnvironmentValue(const std::string &entryName)
+    {
+        std::string key = trimAscii(entryName);
+        std::size_t pos = key.find('=');
+        if (pos != std::string::npos)
+            key = key.substr(0, pos);
+        if (key.empty())
+            return std::string();
+        std::string direct = getenvValue(key);
+        if (!direct.empty())
+            return direct;
+        std::string up = upperKey(key);
+        if (up == "MR_PATH")
+            return g_runtimeEnv.executableDir;
+        if (up == "COMSPEC")
+            return g_runtimeEnv.shellPath;
+        if (up == "OS_VERSION")
+            return g_runtimeEnv.shellVersion;
+        return std::string();
+    }
+
+    static bool changeDirectoryPath(const std::string &path)
+    {
+        std::string expanded = expandUserPath(trimAscii(path));
+        if (expanded.empty())
+            return false;
+        return ::chdir(expanded.c_str()) == 0;
+    }
+
+    static bool deleteFilePath(const std::string &path)
+    {
+        std::string expanded = expandUserPath(trimAscii(path));
+        if (expanded.empty())
+            return false;
+        return std::remove(expanded.c_str()) == 0;
+    }
+
     static std::string expandUserPath(const std::string &path)
     {
         if (path.size() >= 2 && path[0] == '~' && path[1] == '/')
@@ -744,6 +940,310 @@ namespace
         return true;
     }
 
+    static Value currentEditorCharValue()
+    {
+        TFileEditor *editor = currentEditor();
+        uint lineEnd;
+        if (editor == NULL)
+            return makeChar(static_cast<char>(255));
+        lineEnd = editor->lineEnd(editor->curPtr);
+        if (editor->curPtr >= editor->bufLen || editor->curPtr >= lineEnd)
+            return makeChar(static_cast<char>(255));
+        return makeChar(editor->bufChar(editor->curPtr));
+    }
+
+    static std::string currentEditorLineText(TFileEditor *editor)
+    {
+        std::string out;
+        uint start;
+        uint end;
+        if (editor == NULL)
+            return out;
+        start = editor->lineStart(editor->curPtr);
+        end = editor->lineEnd(editor->curPtr);
+        out.reserve(end >= start ? end - start : 0);
+        for (uint p = start; p < end; ++p)
+            out.push_back(editor->bufChar(p));
+        return out;
+    }
+
+    static std::string currentEditorWord(TFileEditor *editor, const std::string &delimiters)
+    {
+        std::string out;
+        uint pos;
+        uint end;
+        if (editor == NULL)
+            return out;
+        pos = editor->curPtr;
+        end = editor->lineEnd(pos);
+        while (pos < end)
+        {
+            char c = editor->bufChar(pos);
+            if (delimiters.find(c) != std::string::npos)
+                break;
+            out.push_back(c);
+            pos = editor->nextChar(pos);
+        }
+        editor->setCurPtr(pos, 0);
+        editor->trackCursor(True);
+        editor->doUpdate();
+        enforceStringLength(out);
+        return out;
+    }
+
+    static bool insertEditorText(TFileEditor *editor, const std::string &text)
+    {
+        uint endSel;
+        if (editor == NULL)
+            return false;
+        editor->lock();
+        if (editor->overwrite == True && editor->hasSelection() == False)
+        {
+            endSel = editor->curPtr;
+            for (std::string::size_type i = 0; i < text.size() && endSel < editor->lineEnd(editor->curPtr); ++i)
+                endSel = editor->nextChar(endSel);
+            if (endSel > editor->curPtr)
+                editor->setSelect(editor->curPtr, endSel, False);
+        }
+        if (!text.empty())
+            editor->insertText(text.c_str(), static_cast<uint>(text.size()), False);
+        editor->trackCursor(True);
+        editor->unlock();
+        editor->doUpdate();
+        return true;
+    }
+
+    static bool replaceEditorLine(TFileEditor *editor, const std::string &text)
+    {
+        uint start;
+        uint end;
+        if (editor == NULL)
+            return false;
+        start = editor->lineStart(editor->curPtr);
+        end = editor->lineEnd(editor->curPtr);
+        editor->lock();
+        editor->deleteRange(start, end, False);
+        editor->setCurPtr(start, 0);
+        if (!text.empty())
+            editor->insertText(text.c_str(), static_cast<uint>(text.size()), False);
+        editor->setCurPtr(start, 0);
+        editor->trackCursor(True);
+        editor->unlock();
+        editor->doUpdate();
+        return true;
+    }
+
+    static bool deleteEditorChars(TFileEditor *editor, int count)
+    {
+        uint start;
+        uint end;
+        if (editor == NULL)
+            return false;
+        if (count <= 0)
+            return true;
+        start = editor->curPtr;
+        end = start;
+        for (int i = 0; i < count && end < editor->bufLen; ++i)
+            end = editor->nextChar(end);
+        if (end <= start)
+            return true;
+        editor->lock();
+        editor->deleteRange(start, end, False);
+        editor->setCurPtr(start, 0);
+        editor->trackCursor(True);
+        editor->unlock();
+        editor->doUpdate();
+        return true;
+    }
+
+    static bool deleteEditorLine(TFileEditor *editor)
+    {
+        uint start;
+        uint end;
+        if (editor == NULL)
+            return false;
+        start = editor->lineStart(editor->curPtr);
+        end = editor->nextLine(editor->curPtr);
+        if (end < start)
+            end = start;
+        if (end > editor->bufLen)
+            end = editor->bufLen;
+        editor->lock();
+        editor->deleteRange(start, end, False);
+        if (start > editor->bufLen)
+            start = editor->bufLen;
+        editor->setCurPtr(start, 0);
+        editor->trackCursor(True);
+        editor->unlock();
+        editor->doUpdate();
+        return true;
+    }
+
+    static int currentEditorColumn(TFileEditor *editor)
+    {
+        uint lineStart;
+        if (editor == NULL)
+            return 1;
+        lineStart = editor->lineStart(editor->curPtr);
+        return editor->charPos(lineStart, editor->curPtr) + 1;
+    }
+
+    static int currentEditorLineNumber(TFileEditor *editor)
+    {
+        if (editor == NULL)
+            return 1;
+        return editor->curPos.y + 1;
+    }
+
+    static bool setEditorCursor(TFileEditor *editor, uint target)
+    {
+        if (editor == NULL)
+            return false;
+        if (target > editor->bufLen)
+            target = editor->bufLen;
+        editor->setCurPtr(target, 0);
+        editor->trackCursor(True);
+        editor->doUpdate();
+        return true;
+    }
+
+    static bool moveEditorLeft(TFileEditor *editor)
+    {
+        uint start;
+        uint target;
+        if (editor == NULL)
+            return false;
+        start = editor->lineStart(editor->curPtr);
+        if (editor->curPtr > start)
+            target = editor->prevChar(editor->curPtr);
+        else if (start > 0)
+            target = editor->lineEnd(editor->prevLine(start));
+        else
+            target = 0;
+        return setEditorCursor(editor, target);
+    }
+
+    static bool moveEditorRight(TFileEditor *editor)
+    {
+        uint lineEnd;
+        uint target;
+        if (editor == NULL)
+            return false;
+        lineEnd = editor->lineEnd(editor->curPtr);
+        if (editor->curPtr < lineEnd)
+            target = editor->nextChar(editor->curPtr);
+        else
+            target = editor->curPtr;
+        return setEditorCursor(editor, target);
+    }
+
+    static bool moveEditorUp(TFileEditor *editor)
+    {
+        if (editor == NULL)
+            return false;
+        return setEditorCursor(editor, editor->lineMove(editor->curPtr, -1));
+    }
+
+    static bool moveEditorDown(TFileEditor *editor)
+    {
+        if (editor == NULL)
+            return false;
+        return setEditorCursor(editor, editor->lineMove(editor->curPtr, 1));
+    }
+
+    static bool moveEditorHome(TFileEditor *editor)
+    {
+        if (editor == NULL)
+            return false;
+        return setEditorCursor(editor, editor->indentedLineStart(editor->curPtr));
+    }
+
+    static bool moveEditorEol(TFileEditor *editor)
+    {
+        if (editor == NULL)
+            return false;
+        return setEditorCursor(editor, editor->lineEnd(editor->curPtr));
+    }
+
+    static bool moveEditorTof(TFileEditor *editor)
+    {
+        if (editor == NULL)
+            return false;
+        return setEditorCursor(editor, 0);
+    }
+
+    static bool moveEditorEof(TFileEditor *editor)
+    {
+        if (editor == NULL)
+            return false;
+        return setEditorCursor(editor, editor->bufLen);
+    }
+
+    static bool moveEditorWordLeft(TFileEditor *editor)
+    {
+        if (editor == NULL)
+            return false;
+        return setEditorCursor(editor, editor->prevWord(editor->curPtr));
+    }
+
+    static bool moveEditorWordRight(TFileEditor *editor)
+    {
+        if (editor == NULL)
+            return false;
+        return setEditorCursor(editor, editor->nextWord(editor->curPtr));
+    }
+
+    static bool moveEditorFirstWord(TFileEditor *editor)
+    {
+        uint pos;
+        uint end;
+        if (editor == NULL)
+            return false;
+        pos = editor->lineStart(editor->curPtr);
+        end = editor->lineEnd(editor->curPtr);
+        while (pos < end)
+        {
+            char c = editor->bufChar(pos);
+            if (c != ' ' && c != '	')
+                break;
+            pos = editor->nextChar(pos);
+        }
+        return setEditorCursor(editor, pos);
+    }
+
+    static bool gotoEditorLine(TFileEditor *editor, int lineNum)
+    {
+        uint pos = 0;
+        if (editor == NULL || lineNum < 1 || lineNum > 32767)
+            return false;
+        for (int i = 1; i < lineNum && pos < editor->bufLen; ++i)
+            pos = editor->nextLine(pos);
+        return setEditorCursor(editor, pos);
+    }
+
+    static bool gotoEditorCol(TFileEditor *editor, int colNum)
+    {
+        uint start;
+        if (editor == NULL || colNum < 1 || colNum > 254)
+            return false;
+        start = editor->lineStart(editor->curPtr);
+        return setEditorCursor(editor, editor->charPtr(start, colNum - 1));
+    }
+
+    static bool currentEditorAtEof(TFileEditor *editor)
+    {
+        return editor == NULL || editor->curPtr >= editor->bufLen;
+    }
+
+    static bool currentEditorAtEol(TFileEditor *editor)
+    {
+        uint lineEnd;
+        if (editor == NULL)
+            return true;
+        lineEnd = editor->lineEnd(editor->curPtr);
+        return editor->curPtr >= lineEnd;
+    }
+
     static std::string formatCurrentDate()
     {
         char buf[32];
@@ -787,8 +1287,30 @@ namespace
             return makeString(formatCurrentDate());
         if (key == "TIME")
             return makeString(formatCurrentTime());
+        if (key == "COMSPEC")
+            return makeString(g_runtimeEnv.shellPath);
+        if (key == "MR_PATH")
+            return makeString(g_runtimeEnv.executableDir);
+        if (key == "OS_VERSION")
+            return makeString(g_runtimeEnv.shellVersion);
+        if (key == "PARAM_COUNT")
+            return makeInt(static_cast<int>(g_runtimeEnv.processArgs.size()));
+        if (key == "CPU")
+            return makeInt(detectCpuCode());
+        if (key == "C_COL")
+            return makeInt(currentEditorColumn(currentEditor()));
+        if (key == "C_LINE")
+            return makeInt(currentEditorLineNumber(currentEditor()));
+        if (key == "AT_EOF")
+            return makeInt(currentEditorAtEof(currentEditor()) ? 1 : 0);
+        if (key == "AT_EOL")
+            return makeInt(currentEditorAtEol(currentEditor()) ? 1 : 0);
         if (key == "LAST_FILE_NAME")
             return makeString(g_runtimeEnv.lastFileName);
+        if (key == "GET_LINE")
+            return makeString(currentEditorLineText(currentEditor()));
+        if (key == "CUR_CHAR")
+            return currentEditorCharValue();
         if (key == "FIRST_SAVE" || key == "EOF_IN_MEM" || key == "BUFFER_ID" ||
             key == "TMP_FILE" || key == "TMP_FILE_NAME" || key == "FILE_CHANGED" ||
             key == "FILE_NAME")
@@ -871,8 +1393,11 @@ namespace
             return true;
         }
         if (key == "FIRST_RUN" || key == "FIRST_MACRO" || key == "NEXT_MACRO" || key == "LAST_FILE_NAME" ||
+            key == "GET_LINE" || key == "CUR_CHAR" || key == "C_COL" || key == "C_LINE" ||
+            key == "AT_EOF" || key == "AT_EOL" ||
             key == "FIRST_SAVE" || key == "EOF_IN_MEM" || key == "BUFFER_ID" ||
-            key == "TMP_FILE" || key == "TMP_FILE_NAME")
+            key == "TMP_FILE" || key == "TMP_FILE_NAME" || key == "COMSPEC" ||
+            key == "MR_PATH" || key == "OS_VERSION" || key == "PARAM_COUNT" || key == "CPU")
             throw std::runtime_error("Attempt to assign to read-only system variable.");
         return false;
     }
@@ -1511,6 +2036,34 @@ namespace
             g_runtimeEnv.errorLevel = 0;
             return makeInt(1);
         }
+        if (name == "GET_ENVIRONMENT")
+        {
+            if (args.size() != 1 || !isStringLike(args[0]))
+                throw std::runtime_error("GET_ENVIRONMENT expects one string argument.");
+            return makeString(getEnvironmentValue(valueAsString(args[0])));
+        }
+        if (name == "GET_WORD")
+        {
+            TFileEditor *editor;
+            if (args.size() != 1 || !isStringLike(args[0]))
+                throw std::runtime_error("GET_WORD expects one string argument.");
+            editor = currentEditor();
+            if (editor == NULL)
+                return makeString("");
+            return makeString(currentEditorWord(editor, valueAsString(args[0])));
+        }
+        if (name == "PARAM_STR")
+        {
+            int index;
+            if (args.size() != 1 || args[0].type != TYPE_INT)
+                throw std::runtime_error("PARAM_STR expects one integer argument.");
+            index = valueAsInt(args[0]);
+            if (index == 0)
+                return makeString(g_runtimeEnv.startupCommand);
+            if (index < 0 || static_cast<std::size_t>(index) > g_runtimeEnv.processArgs.size())
+                return makeString("");
+            return makeString(g_runtimeEnv.processArgs[static_cast<std::size_t>(index - 1)]);
+        }
         if (name == "GLOBAL_STR")
         {
             if (args.size() != 1 || !isStringLike(args[0]))
@@ -1560,6 +2113,22 @@ namespace
 
         throw std::runtime_error("Unknown intrinsic: " + name);
     }
+}
+
+void mrvmSetProcessContext(int argc, char **argv)
+{
+    g_runtimeEnv.startupCommand.clear();
+    g_runtimeEnv.processArgs.clear();
+    if (argc > 0 && argv != NULL && argv[0] != NULL)
+        g_runtimeEnv.startupCommand = argv[0];
+    for (int i = 1; argv != NULL && i < argc; ++i)
+        g_runtimeEnv.processArgs.push_back(argv[i] != NULL ? std::string(argv[i]) : std::string());
+    g_runtimeEnv.executablePath = detectExecutablePathFromProc();
+    if (g_runtimeEnv.executablePath.empty() && !g_runtimeEnv.startupCommand.empty())
+        g_runtimeEnv.executablePath = g_runtimeEnv.startupCommand;
+    g_runtimeEnv.executableDir = detectExecutableDir(g_runtimeEnv.startupCommand);
+    g_runtimeEnv.shellPath = detectShellPath();
+    g_runtimeEnv.shellVersion = detectShellVersion(g_runtimeEnv.shellPath);
 }
 
 VirtualMachine::Value::Value() : type(TYPE_INT), i(0), r(0.0), s(), c(0) {}
@@ -1971,6 +2540,24 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
                         throw std::runtime_error("UNLOAD_MACRO expects one string argument.");
                     unloadMacroFromRegistry(valueAsString(args[0]));
                 }
+                else if (name == "CHANGE_DIR")
+                {
+                    if (args.size() != 1 || !isStringLike(args[0]))
+                        throw std::runtime_error("CHANGE_DIR expects one string argument.");
+                    if (changeDirectoryPath(valueAsString(args[0])))
+                        g_runtimeEnv.errorLevel = 0;
+                    else
+                        g_runtimeEnv.errorLevel = errno != 0 ? errno : 1;
+                }
+                else if (name == "DEL_FILE")
+                {
+                    if (args.size() != 1 || !isStringLike(args[0]))
+                        throw std::runtime_error("DEL_FILE expects one string argument.");
+                    if (deleteFilePath(valueAsString(args[0])))
+                        g_runtimeEnv.errorLevel = 0;
+                    else
+                        g_runtimeEnv.errorLevel = errno != 0 ? errno : 1;
+                }
                 else if (name == "LOAD_FILE")
                 {
                     TMREditWindow *win;
@@ -2028,6 +2615,151 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
                     }
                     replaceLastSearch(editor, valueAsString(args[0]));
                     g_runtimeEnv.errorLevel = 0;
+                }
+                else if (name == "TEXT")
+                {
+                    TFileEditor *editor;
+                    if (args.size() != 1 || !isStringLike(args[0]))
+                        throw std::runtime_error("TEXT expects one string argument.");
+                    editor = currentEditor();
+                    if (editor == NULL)
+                    {
+                        g_runtimeEnv.errorLevel = 1001;
+                        continue;
+                    }
+                    insertEditorText(editor, valueAsString(args[0]));
+                    g_runtimeEnv.errorLevel = 0;
+                }
+                else if (name == "PUT_LINE")
+                {
+                    TFileEditor *editor;
+                    if (args.size() != 1 || !isStringLike(args[0]))
+                        throw std::runtime_error("PUT_LINE expects one string argument.");
+                    editor = currentEditor();
+                    if (editor == NULL)
+                    {
+                        g_runtimeEnv.errorLevel = 1001;
+                        continue;
+                    }
+                    replaceEditorLine(editor, valueAsString(args[0]));
+                    g_runtimeEnv.errorLevel = 0;
+                }
+                else if (name == "CR")
+                {
+                    TFileEditor *editor = currentEditor();
+                    if (!args.empty())
+                        throw std::runtime_error("CR expects no arguments.");
+                    if (editor == NULL)
+                    {
+                        g_runtimeEnv.errorLevel = 1001;
+                        continue;
+                    }
+                    editor->lock();
+                    editor->newLine();
+                    editor->trackCursor(True);
+                    editor->unlock();
+                    editor->doUpdate();
+                    g_runtimeEnv.errorLevel = 0;
+                }
+                else if (name == "DEL_CHAR")
+                {
+                    TFileEditor *editor = currentEditor();
+                    if (!args.empty())
+                        throw std::runtime_error("DEL_CHAR expects no arguments.");
+                    if (editor == NULL)
+                    {
+                        g_runtimeEnv.errorLevel = 1001;
+                        continue;
+                    }
+                    deleteEditorChars(editor, 1);
+                    g_runtimeEnv.errorLevel = 0;
+                }
+                else if (name == "DEL_CHARS")
+                {
+                    TFileEditor *editor = currentEditor();
+                    if (args.size() != 1 || args[0].type != TYPE_INT)
+                        throw std::runtime_error("DEL_CHARS expects one integer argument.");
+                    if (editor == NULL)
+                    {
+                        g_runtimeEnv.errorLevel = 1001;
+                        continue;
+                    }
+                    deleteEditorChars(editor, valueAsInt(args[0]));
+                    g_runtimeEnv.errorLevel = 0;
+                }
+                else if (name == "DEL_LINE")
+                {
+                    TFileEditor *editor = currentEditor();
+                    if (!args.empty())
+                        throw std::runtime_error("DEL_LINE expects no arguments.");
+                    if (editor == NULL)
+                    {
+                        g_runtimeEnv.errorLevel = 1001;
+                        continue;
+                    }
+                    deleteEditorLine(editor);
+                    g_runtimeEnv.errorLevel = 0;
+                }
+                else if (name == "LEFT" || name == "RIGHT" || name == "UP" || name == "DOWN" ||
+                         name == "HOME" || name == "EOL" || name == "TOF" || name == "EOF" ||
+                         name == "WORD_LEFT" || name == "WORD_RIGHT" || name == "FIRST_WORD")
+                {
+                    TFileEditor *editor = currentEditor();
+                    bool ok = false;
+                    if (!args.empty())
+                        throw std::runtime_error((name + " expects no arguments.").c_str());
+                    if (editor == NULL)
+                    {
+                        g_runtimeEnv.errorLevel = 1001;
+                        continue;
+                    }
+                    if (name == "LEFT")
+                        ok = moveEditorLeft(editor);
+                    else if (name == "RIGHT")
+                        ok = moveEditorRight(editor);
+                    else if (name == "UP")
+                        ok = moveEditorUp(editor);
+                    else if (name == "DOWN")
+                        ok = moveEditorDown(editor);
+                    else if (name == "HOME")
+                        ok = moveEditorHome(editor);
+                    else if (name == "EOL")
+                        ok = moveEditorEol(editor);
+                    else if (name == "TOF")
+                        ok = moveEditorTof(editor);
+                    else if (name == "EOF")
+                        ok = moveEditorEof(editor);
+                    else if (name == "WORD_LEFT")
+                        ok = moveEditorWordLeft(editor);
+                    else if (name == "WORD_RIGHT")
+                        ok = moveEditorWordRight(editor);
+                    else if (name == "FIRST_WORD")
+                        ok = moveEditorFirstWord(editor);
+                    g_runtimeEnv.errorLevel = ok ? 0 : 1001;
+                }
+                else if (name == "GOTO_LINE")
+                {
+                    TFileEditor *editor = currentEditor();
+                    if (args.size() != 1 || args[0].type != TYPE_INT)
+                        throw std::runtime_error("GOTO_LINE expects one integer argument.");
+                    if (editor == NULL)
+                    {
+                        g_runtimeEnv.errorLevel = 1001;
+                        continue;
+                    }
+                    g_runtimeEnv.errorLevel = gotoEditorLine(editor, valueAsInt(args[0])) ? 0 : 1010;
+                }
+                else if (name == "GOTO_COL")
+                {
+                    TFileEditor *editor = currentEditor();
+                    if (args.size() != 1 || args[0].type != TYPE_INT)
+                        throw std::runtime_error("GOTO_COL expects one integer argument.");
+                    if (editor == NULL)
+                    {
+                        g_runtimeEnv.errorLevel = 1001;
+                        continue;
+                    }
+                    g_runtimeEnv.errorLevel = gotoEditorCol(editor, valueAsInt(args[0])) ? 0 : 1010;
                 }
                 else if (name == "RUN_MACRO")
                 {

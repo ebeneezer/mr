@@ -38,3 +38,6 @@ public:
 };
 
 #endif
+
+
+void mrvmSetProcessContext(int argc, char **argv);
