@@ -1,0 +1,14 @@
+$MACRO Main;
+DEF_STR(First, Next, Msg);
+DEF_INT(Exists1, Exists2);
+LOAD_MACRO_FILE('mrmac/test_macro_registry_aux');
+Exists1 := INQ_MACRO('Child');
+First := FIRST_MACRO;
+Next := NEXT_MACRO;
+RUN_MACRO('Child /P=42');
+RUN_MACRO('mrmac/test_macro_registry_aux^Other /P=7');
+UNLOAD_MACRO('Child');
+Exists2 := INQ_MACRO('Child');
+Msg := STR(Exists1) + '|' + First + '|' + Next + '|' + STR(RETURN_INT) + '|' + RETURN_STR + '|' + STR(Exists2);
+TVCALL MessageBox(Msg);
+END_MACRO;

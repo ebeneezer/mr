@@ -967,8 +967,14 @@ static int lookup_builtin_variable(const char *name, int *out_type)
         strcasecmp(name, "BUFFER_ID") == 0 || strcasecmp(name, "TMP_FILE") == 0 ||
         strcasecmp(name, "FILE_CHANGED") == 0 || strcasecmp(name, "PARAM_COUNT") == 0 ||
         strcasecmp(name, "CPU") == 0 || strcasecmp(name, "C_COL") == 0 ||
-        strcasecmp(name, "C_LINE") == 0 || strcasecmp(name, "AT_EOF") == 0 ||
-        strcasecmp(name, "AT_EOL") == 0)
+        strcasecmp(name, "C_LINE") == 0 || strcasecmp(name, "C_ROW") == 0 ||
+        strcasecmp(name, "AT_EOF") == 0 ||
+        strcasecmp(name, "AT_EOL") == 0 ||
+        strcasecmp(name, "BLOCK_STAT") == 0 || strcasecmp(name, "BLOCK_LINE1") == 0 ||
+        strcasecmp(name, "BLOCK_LINE2") == 0 || strcasecmp(name, "BLOCK_COL1") == 0 ||
+        strcasecmp(name, "BLOCK_COL2") == 0 || strcasecmp(name, "MARKING") == 0 ||
+        strcasecmp(name, "TAB_EXPAND") == 0 || strcasecmp(name, "INSERT_MODE") == 0 ||
+        strcasecmp(name, "INDENT_LEVEL") == 0)
     {
         if (out_type != NULL)
             *out_type = TYPE_INT;
@@ -1036,6 +1042,14 @@ static int emit_proc_call(const char *name, int argc)
     emit_byte(OP_PROC);
     emit_string(name);
     emit_byte((unsigned char) argc);
+    return 0;
+}
+
+static int emit_proc_var_call(const char *name, const char *var_name)
+{
+    emit_byte(OP_PROC_VAR);
+    emit_string(name);
+    emit_string(var_name);
     return 0;
 }
 
@@ -1923,6 +1937,39 @@ static int parse_proc_statement_after_name(Parser *ps, const char *name, int lin
     if (parser_expect(ps, TOK_LPAREN, "'(' expected.") != 0)
         return -1;
 
+    if (strcasecmp(name, "CRUNCH_TABS") == 0 || strcasecmp(name, "EXPAND_TABS") == 0 ||
+        strcasecmp(name, "TABS_TO_SPACES") == 0)
+    {
+        char *var_name;
+        int var_type;
+        if (ps->tok.kind != TOK_IDENTIFIER)
+        {
+            set_compile_error(ps->tok.line, "Variable expected.");
+            return -1;
+        }
+        var_name = xstrdup(ps->tok.text);
+        if (var_name == NULL)
+        {
+            set_compile_error(ps->tok.line, "Out of memory.");
+            return -1;
+        }
+        if (lookup_symbol(var_name, &var_type) < 0 || var_type != TYPE_STR)
+        {
+            free(var_name);
+            set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
+            return -1;
+        }
+        parser_next(ps);
+        if (parser_expect(ps, TOK_RPAREN, "')' expected.") != 0)
+        {
+            free(var_name);
+            return -1;
+        }
+        emit_proc_var_call(name, var_name);
+        free(var_name);
+        return 0;
+    }
+
     if (parse_argument_expressions(ps, args, &argc, 8) != 0)
         return -1;
     if (parser_expect(ps, TOK_RPAREN, "')' expected.") != 0)
@@ -2016,6 +2063,16 @@ static int parse_proc_statement_after_name(Parser *ps, const char *name, int lin
             return -1;
         }
         emit_proc_call("SAVE_FILE", argc);
+        return 0;
+    }
+    if (strcasecmp(name, "SET_INDENT_LEVEL") == 0)
+    {
+        if (argc != 0)
+        {
+            set_compile_error(line, "Type mismatch or syntax error.");
+            return -1;
+        }
+        emit_proc_call("SET_INDENT_LEVEL", argc);
         return 0;
     }
     if (strcasecmp(name, "REPLACE") == 0)
@@ -2261,6 +2318,12 @@ static int parse_statement(Parser *ps)
             free(name);
             return parser_expect(ps, TOK_SEMICOLON, "; expected.");
         }
+        if (strcasecmp(name, "SET_INDENT_LEVEL") == 0)
+        {
+            emit_proc_call("SET_INDENT_LEVEL", 0);
+            free(name);
+            return parser_expect(ps, TOK_SEMICOLON, "; expected.");
+        }
         if (strcasecmp(name, "DEL_CHAR") == 0)
         {
             emit_proc_call("DEL_CHAR", 0);
@@ -2278,7 +2341,16 @@ static int parse_statement(Parser *ps)
             strcasecmp(name, "HOME") == 0 || strcasecmp(name, "EOL") == 0 ||
             strcasecmp(name, "TOF") == 0 || strcasecmp(name, "EOF") == 0 ||
             strcasecmp(name, "WORD_LEFT") == 0 || strcasecmp(name, "WORD_RIGHT") == 0 ||
-            strcasecmp(name, "FIRST_WORD") == 0)
+            strcasecmp(name, "FIRST_WORD") == 0 || strcasecmp(name, "MARK_POS") == 0 ||
+            strcasecmp(name, "GOTO_MARK") == 0 || strcasecmp(name, "POP_MARK") == 0 ||
+            strcasecmp(name, "PAGE_UP") == 0 || strcasecmp(name, "PAGE_DOWN") == 0 ||
+            strcasecmp(name, "NEXT_PAGE_BREAK") == 0 || strcasecmp(name, "LAST_PAGE_BREAK") == 0 ||
+            strcasecmp(name, "TAB_RIGHT") == 0 || strcasecmp(name, "TAB_LEFT") == 0 ||
+            strcasecmp(name, "INDENT") == 0 || strcasecmp(name, "UNDENT") == 0 ||
+            strcasecmp(name, "BLOCK_BEGIN") == 0 || strcasecmp(name, "COL_BLOCK_BEGIN") == 0 ||
+            strcasecmp(name, "STR_BLOCK_BEGIN") == 0 || strcasecmp(name, "BLOCK_END") == 0 ||
+            strcasecmp(name, "BLOCK_OFF") == 0 || strcasecmp(name, "COPY_BLOCK") == 0 ||
+            strcasecmp(name, "MOVE_BLOCK") == 0 || strcasecmp(name, "DELETE_BLOCK") == 0)
         {
             emit_proc_call(name, 0);
             free(name);

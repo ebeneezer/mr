@@ -14,6 +14,7 @@
 #define OP_FIRST_GLOBAL 0x27
 #define OP_NEXT_GLOBAL  0x28
 #define OP_PROC      0x29
+#define OP_PROC_VAR  0x2A
 
 #define OP_PUSH_I    0x30
 #define OP_PUSH_S    0x31

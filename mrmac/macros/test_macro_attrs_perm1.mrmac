@@ -1,0 +1,3 @@
+$MACRO Hold PERM;
+RETURN_INT := 1;
+END_MACRO;

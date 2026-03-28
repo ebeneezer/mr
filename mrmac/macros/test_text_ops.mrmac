@@ -1,0 +1,14 @@
+$MACRO TextOps;
+DEF_STR(LineText, WordText);
+DEF_CHAR(CurrentCh);
+CurrentCh := CUR_CHAR;
+LineText := GET_LINE;
+WordText := GET_WORD(' ,.;:()[]{}');
+TEXT('abc');
+CR;
+TEXT('next');
+DEL_CHAR;
+DEL_CHARS(2);
+PUT_LINE('replaced line');
+DEL_LINE;
+END_MACRO;

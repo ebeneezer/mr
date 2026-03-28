@@ -1,0 +1,13 @@
+$MACRO NavOpsDemo;
+DEF_INT(L, C, AtEndFile, AtEndLine);
+TOF;
+GOTO_LINE(1);
+GOTO_COL(1);
+FIRST_WORD;
+WORD_RIGHT;
+WORD_LEFT;
+AtEndFile := AT_EOF;
+AtEndLine := AT_EOL;
+L := C_LINE;
+C := C_COL;
+END_MACRO;

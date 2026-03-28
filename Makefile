@@ -27,6 +27,9 @@ CHAT_CONTEXT_FILES = \
 	mrmac/mrmac.c \
 	mrmac/parser.y \
 	mrmac/lexer.l \
+	mrmac/parser.tab.h \
+	mrmac/parser.tab.c \
+	mrmac/lex.yy.c \
 	mrmac/mrvm.cpp \
 	mrmac/mrvm.hpp \
 	ui/mrmacrotest.cpp \
@@ -62,6 +65,8 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 
 .PHONY: all clean context-tar
 
+CHAT_CONTEXT_GENERATED = mrmac/parser.tab.h mrmac/parser.tab.c mrmac/lex.yy.c
+
 all: $(TARGET) context-tar
 
 # 1. Flex and Bison generation
@@ -88,7 +93,7 @@ $(TARGET): $(CXX_OBJECTS) $(C_OBJECTS)
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
 # 5. Create a tar archive with the files relevant for ChatGPT sync / review
-context-tar:
+context-tar: $(CHAT_CONTEXT_GENERATED)
 	@set -e; \
 	files=""; \
 	for f in $(CHAT_CONTEXT_FILES); do \

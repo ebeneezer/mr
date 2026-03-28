@@ -1,3 +1,0 @@
-$MACRO Hold;
-RETURN_INT := 2;
-END_MACRO;
