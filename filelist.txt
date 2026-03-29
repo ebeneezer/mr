@@ -26,3 +26,6 @@
 ./ui/mrpalette.hpp
 ./ui/mrwindowlist.cpp
 ./ui/mrwindowlist.hpp
+./tvision/include/tvision/internal/findfrst.h
+./tvision/source/platform/findfrst.cpp
+./tvision/source/platform/dir.cpp

@@ -21,6 +21,9 @@ LDFLAGS = -L./tvision/build -ltvision $(NCURSESW_LIB) $(GPM_LIB) $(TINFO_LIB)
 
 TARGET = mr
 CHAT_CONTEXT_ARCHIVE = mr-chat-context.tar.bz2
+TVISION_ARCHIVE = tvision.tar.bz2
+BISON_ARCHIVE = bison-system.tar.bz2
+FLEX_ARCHIVE = flex-system.tar.bz2
 
 # Files relevant for ChatGPT sync / review
 CHAT_CONTEXT_FILES = \
@@ -50,7 +53,10 @@ CHAT_CONTEXT_FILES = \
 	ui/TMRDeskTop.hpp \
 	ui/TMREditWindow.hpp \
 	ui/TMRIndicator.hpp \
-	ui/TMRFileEditor.hpp
+	ui/TMRFileEditor.hpp \
+	tvision/include/tvision/internal/findfrst.h \
+	tvision/source/platform/findfrst.cpp \
+	tvision/source/platform/dir.cpp
 
 CHAT_CONTEXT_DIRS = \
 	mrmac/macros
@@ -73,11 +79,16 @@ C_SOURCES = \
 
 C_OBJECTS = $(C_SOURCES:.c=.o)
 
-.PHONY: all clean context-tar
+.PHONY: all clean clean-root-bz2 Synchronisation context-tar tvision-tar bison-tar flex-tar
 
 CHAT_CONTEXT_GENERATED = mrmac/parser.tab.h mrmac/parser.tab.c mrmac/lex.yy.c
 
-all: $(TARGET) context-tar
+all: clean-root-bz2 $(TARGET)
+
+Synchronisation: clean-root-bz2 context-tar tvision-tar bison-tar flex-tar
+
+clean-root-bz2:
+	rm -f ./*.bz2
 
 # 1. Flex and Bison generation
 mrmac/parser.tab.c mrmac/parser.tab.h: mrmac/parser.y
@@ -104,7 +115,7 @@ $(TARGET): $(CXX_OBJECTS) $(C_OBJECTS)
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
 # 5. Create a tar archive with the files relevant for ChatGPT sync / review
-context-tar: $(CHAT_CONTEXT_GENERATED)
+context-tar: clean-root-bz2 $(CHAT_CONTEXT_GENERATED)
 	@set -e; \
 	files=""; \
 	for f in $(CHAT_CONTEXT_FILES); do \
@@ -128,6 +139,40 @@ context-tar: $(CHAT_CONTEXT_GENERATED)
 	$(TAR) -cjf $(CHAT_CONTEXT_ARCHIVE) $$files; \
 	echo "Created $(CHAT_CONTEXT_ARCHIVE)"
 
+# 6. Create a bzip2 tar archive with the complete tvision tree, including binaries
+tvision-tar: clean-root-bz2
+	@set -e; \
+	if [ ! -d tvision ]; then \
+		echo "Directory tvision not found."; \
+		exit 1; \
+	fi; \
+	$(TAR) -cjf $(TVISION_ARCHIVE) tvision; \
+	echo "Created $(TVISION_ARCHIVE)"
+
+# 7. Create a bzip2 tar archive with the system bison binary and support files
+bison-tar: clean-root-bz2
+	@set -e; \
+	if [ ! -x /usr/bin/bison ]; then \
+		echo "System binary /usr/bin/bison not found."; \
+		exit 1; \
+	fi; \
+	if [ ! -d /usr/share/bison ]; then \
+		echo "Directory /usr/share/bison not found."; \
+		exit 1; \
+	fi; \
+	$(TAR) -cjf $(BISON_ARCHIVE) /usr/bin/bison /usr/share/bison; \
+	echo "Created $(BISON_ARCHIVE)"
+
+# 8. Create a bzip2 tar archive with the system flex binary
+flex-tar: clean-root-bz2
+	@set -e; \
+	if [ ! -x /usr/bin/flex ]; then \
+		echo "System binary /usr/bin/flex not found."; \
+		exit 1; \
+	fi; \
+	$(TAR) -cjf $(FLEX_ARCHIVE) /usr/bin/flex; \
+	echo "Created $(FLEX_ARCHIVE)"
+
 # C++ compilation
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
@@ -137,4 +182,4 @@ context-tar: $(CHAT_CONTEXT_GENERATED)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(CXX_OBJECTS) $(C_OBJECTS) $(TARGET) $(CHAT_CONTEXT_ARCHIVE) mrmac/lex.yy.c mrmac/parser.tab.c mrmac/parser.tab.h
+	rm -f $(CXX_OBJECTS) $(C_OBJECTS) $(TARGET) $(CHAT_CONTEXT_ARCHIVE) $(TVISION_ARCHIVE) $(BISON_ARCHIVE) $(FLEX_ARCHIVE) mrmac/lex.yy.c mrmac/parser.tab.c mrmac/parser.tab.h

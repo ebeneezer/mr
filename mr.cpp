@@ -184,15 +184,34 @@ ushort execDialogWithData(TDialog *dialog, void *data) {
 	return result;
 }
 
+std::string normalizeTvPath(const std::string &path) {
+	std::string result = path;
+	std::size_t i;
+
+	for (i = 0; i < result.size(); ++i)
+		if (result[i] == '\\')
+			result[i] = '/';
+	#ifdef __unix__
+	if (result.size() >= 2 && ((result[0] >= 'A' && result[0] <= 'Z') ||
+	                           (result[0] >= 'a' && result[0] <= 'z')) &&
+	    result[1] == ':')
+		result.erase(0, 2);
+	#endif
+	return result;
+}
+
 std::string expandUserPath(const char *path) {
+	std::string result;
+
 	if (path == 0)
 		return std::string();
-	if (path[0] == '~' && path[1] == '/') {
+	result = normalizeTvPath(path);
+	if (result.size() >= 2 && result[0] == '~' && result[1] == '/') {
 		const char *home = std::getenv("HOME");
 		if (home != 0 && *home != '\0')
-			return std::string(home) + (path + 1);
+			return std::string(home) + result.substr(1);
 	}
-	return std::string(path);
+	return result;
 }
 
 bool isEmptyUntitledEditableWindow(TMREditWindow *win) {
@@ -218,8 +237,8 @@ bool promptForPath(const char *title, char *fileName, std::size_t fileNameSize) 
 	if (fileName == 0 || fileNameSize == 0)
 		return false;
 	std::memset(fileName, 0, fileNameSize);
-	strnzcpy(fileName, "*", fileNameSize);
-	return execDialogWithData(new TFileDialog("*", title, "~N~ame", fdOpenButton, 100), fileName) !=
+	strnzcpy(fileName, "*.*", fileNameSize);
+	return execDialogWithData(new TFileDialog("*.*", title, "~N~ame", fdOpenButton, 100), fileName) !=
 	       cmCancel;
 }
 

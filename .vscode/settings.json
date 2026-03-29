@@ -1,4 +1,10 @@
 {
 	"C_Cpp.errorSquiggles": "disabled",
-	"cmake.sourceDirectory": "/home/idoc/mr/tvision"
+	"cmake.sourceDirectory": "/home/idoc/mr/tvision",
+	"terminal.integrated.automationProfile.linux": {
+		"path": "/usr/bin/zsh"
+	},
+	"terminal.integrated.env.linux": {
+		"TERM": "xterm-256color"
+	}
 }

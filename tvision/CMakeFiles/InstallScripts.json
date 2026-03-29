@@ -1,0 +1,18 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/idoc/mr/tvision/cmake_install.cmake",
+		"/home/idoc/mr/tvision/source/cmake_install.cmake",
+		"/home/idoc/mr/tvision/examples/cmake_install.cmake",
+		"/home/idoc/mr/tvision/examples/tvedit/cmake_install.cmake",
+		"/home/idoc/mr/tvision/examples/tvdemo/cmake_install.cmake",
+		"/home/idoc/mr/tvision/examples/tvdir/cmake_install.cmake",
+		"/home/idoc/mr/tvision/examples/tvforms/cmake_install.cmake",
+		"/home/idoc/mr/tvision/examples/tvhc/cmake_install.cmake",
+		"/home/idoc/mr/tvision/examples/mmenu/cmake_install.cmake",
+		"/home/idoc/mr/tvision/examples/palette/cmake_install.cmake",
+		"/home/idoc/mr/tvision/examples/avscolor/cmake_install.cmake",
+		"/home/idoc/mr/tvision/test/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

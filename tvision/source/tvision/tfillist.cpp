@@ -147,7 +147,10 @@ void TFileList::readDirectory(TStringView aWildCard) {
 	char ext[MAXEXT];
 	const unsigned findAttr = FA_RDONLY | FA_ARCH;
 	memset(&s, 0, sizeof(s));
-	strnzcpy(path, aWildCard, MAXPATH);
+	if (aWildCard.size() == 0)
+		strnzcpy(path, "*.*", MAXPATH);
+	else
+		strnzcpy(path, aWildCard, MAXPATH);
 
 	TFileCollection *fileList = new TFileCollection(5, 5);
 

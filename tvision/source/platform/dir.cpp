@@ -13,6 +13,10 @@
 unsigned _dos_findfirst(const char *pathname, unsigned attrib, struct find_t *fileinfo) noexcept {
 	using namespace tvision;
 	// The original findfirst sets errno on failure. We don't do this for now.
+	// Some file-dialog paths can transiently hand us an empty filespec.
+	// Normalize this before entering the Unix directory scanner.
+	if (pathname == nullptr || *pathname == '\0')
+		pathname = "*.*";
 	FindFirstRec *r;
 	if ((r = FindFirstRec::allocate(fileinfo, attrib, pathname)))
 		return r->next() ? 0 : -1;

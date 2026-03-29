@@ -1,0 +1,1 @@
+/usr/bin/c++ -Wl,--dependency-file=CMakeFiles/mmenu.dir/link.d CMakeFiles/mmenu.dir/Unity/unity_0_cxx.cxx.o -o ../../mmenu  ../../libtvision.a /usr/lib/libncursesw.so -ltinfo /usr/lib/libgpm.so
