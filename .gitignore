@@ -1,2 +1,7 @@
 *.tar
 *.bz2
+.vendor-cache/
+build/vendor/
+tvision/build/
+tvision/build-asan/
+tvision/build-debug/

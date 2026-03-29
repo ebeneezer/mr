@@ -1,8 +1,6 @@
 file(REMOVE_RECURSE
   "../libtvision.a"
   "../libtvision.pdb"
-  "CMakeFiles/tvision.dir/cmake_pch.hxx.gch"
-  "CMakeFiles/tvision.dir/cmake_pch.hxx.gch.d"
   "CMakeFiles/tvision.dir/platform/ansiwrit.cpp.o"
   "CMakeFiles/tvision.dir/platform/ansiwrit.cpp.o.d"
   "CMakeFiles/tvision.dir/platform/base64.cpp.o"

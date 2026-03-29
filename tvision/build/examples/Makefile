@@ -161,59 +161,6 @@ depend:
 	cd /home/idoc/mr/tvision/build && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
 .PHONY : depend
 
-# Convenience name for target.
-examples/CMakeFiles/hello.dir/rule:
-	cd /home/idoc/mr/tvision/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 examples/CMakeFiles/hello.dir/rule
-.PHONY : examples/CMakeFiles/hello.dir/rule
-
-# Convenience name for target.
-hello: examples/CMakeFiles/hello.dir/rule
-.PHONY : hello
-
-# fast build rule for target.
-hello/fast:
-	cd /home/idoc/mr/tvision/build && $(MAKE) $(MAKESILENT) -f examples/CMakeFiles/hello.dir/build.make examples/CMakeFiles/hello.dir/build
-.PHONY : hello/fast
-
-Unity/unity_0_cxx.o: Unity/unity_0_cxx.cxx.o
-.PHONY : Unity/unity_0_cxx.o
-
-# target to build an object file
-Unity/unity_0_cxx.cxx.o:
-	cd /home/idoc/mr/tvision/build && $(MAKE) $(MAKESILENT) -f examples/CMakeFiles/hello.dir/build.make examples/CMakeFiles/hello.dir/Unity/unity_0_cxx.cxx.o
-.PHONY : Unity/unity_0_cxx.cxx.o
-
-Unity/unity_0_cxx.i: Unity/unity_0_cxx.cxx.i
-.PHONY : Unity/unity_0_cxx.i
-
-# target to preprocess a source file
-Unity/unity_0_cxx.cxx.i:
-	cd /home/idoc/mr/tvision/build && $(MAKE) $(MAKESILENT) -f examples/CMakeFiles/hello.dir/build.make examples/CMakeFiles/hello.dir/Unity/unity_0_cxx.cxx.i
-.PHONY : Unity/unity_0_cxx.cxx.i
-
-Unity/unity_0_cxx.s: Unity/unity_0_cxx.cxx.s
-.PHONY : Unity/unity_0_cxx.s
-
-# target to generate assembly for a file
-Unity/unity_0_cxx.cxx.s:
-	cd /home/idoc/mr/tvision/build && $(MAKE) $(MAKESILENT) -f examples/CMakeFiles/hello.dir/build.make examples/CMakeFiles/hello.dir/Unity/unity_0_cxx.cxx.s
-.PHONY : Unity/unity_0_cxx.cxx.s
-
-# target to build an object file
-cmake_pch.hxx.gch:
-	cd /home/idoc/mr/tvision/build && $(MAKE) $(MAKESILENT) -f examples/CMakeFiles/hello.dir/build.make examples/CMakeFiles/hello.dir/cmake_pch.hxx.gch
-.PHONY : cmake_pch.hxx.gch
-
-# target to preprocess a source file
-cmake_pch.hxx.i:
-	cd /home/idoc/mr/tvision/build && $(MAKE) $(MAKESILENT) -f examples/CMakeFiles/hello.dir/build.make examples/CMakeFiles/hello.dir/cmake_pch.hxx.i
-.PHONY : cmake_pch.hxx.i
-
-# target to generate assembly for a file
-cmake_pch.hxx.s:
-	cd /home/idoc/mr/tvision/build && $(MAKE) $(MAKESILENT) -f examples/CMakeFiles/hello.dir/build.make examples/CMakeFiles/hello.dir/cmake_pch.hxx.s
-.PHONY : cmake_pch.hxx.s
-
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -226,13 +173,6 @@ help:
 	@echo "... install/strip"
 	@echo "... list_install_components"
 	@echo "... rebuild_cache"
-	@echo "... hello"
-	@echo "... Unity/unity_0_cxx.o"
-	@echo "... Unity/unity_0_cxx.i"
-	@echo "... Unity/unity_0_cxx.s"
-	@echo "... cmake_pch.hxx.gch"
-	@echo "... cmake_pch.hxx.i"
-	@echo "... cmake_pch.hxx.s"
 .PHONY : help
 
 

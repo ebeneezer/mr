@@ -2,78 +2,174 @@ source/CMakeFiles/tvision.dir/platform/platform.cpp.o: \
  /home/idoc/mr/tvision/source/platform/platform.cpp \
  /usr/include/stdc-predef.h /home/idoc/mr/tvision/include/tvision/tv.h \
  /home/idoc/mr/tvision/include/tvision/config.h \
+ /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/include/limits.h \
+ /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/include/syslimits.h \
+ /usr/include/limits.h /usr/include/bits/libc-header-start.h \
+ /usr/include/features.h /usr/include/features-time64.h \
+ /usr/include/bits/wordsize.h /usr/include/bits/timesize.h \
+ /usr/include/sys/cdefs.h /usr/include/bits/long-double.h \
+ /usr/include/gnu/stubs.h /usr/include/gnu/stubs-64.h \
+ /usr/include/bits/posix1_lim.h /usr/include/bits/local_lim.h \
+ /usr/include/linux/limits.h \
+ /usr/include/bits/pthread_stack_min-dynamic.h \
+ /usr/include/bits/posix2_lim.h /usr/include/bits/xopen_lim.h \
+ /usr/include/bits/uio_lim.h \
  /home/idoc/mr/tvision/include/tvision/ttypes.h \
+ /home/idoc/mr/tvision/include/tvision/compat/borland/_defs.h \
+ /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/include/stddef.h \
+ /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/include/stdint.h \
+ /usr/include/stdint.h /usr/include/bits/types.h \
+ /usr/include/bits/typesizes.h /usr/include/bits/time64.h \
+ /usr/include/bits/wchar.h /usr/include/bits/stdint-intn.h \
+ /usr/include/bits/stdint-uintn.h /usr/include/bits/stdint-least.h \
+ /home/idoc/mr/tvision/include/tvision/compat/borland/iosfwd.h \
+ /usr/include/c++/15.2.1/iosfwd \
+ /usr/include/c++/15.2.1/bits/requires_hosted.h \
+ /usr/include/c++/15.2.1/x86_64-pc-linux-gnu/bits/c++config.h \
+ /usr/include/c++/15.2.1/x86_64-pc-linux-gnu/bits/os_defines.h \
+ /usr/include/c++/15.2.1/x86_64-pc-linux-gnu/bits/cpu_defines.h \
+ /usr/include/c++/15.2.1/pstl/pstl_config.h \
+ /usr/include/c++/15.2.1/bits/stringfwd.h \
+ /usr/include/c++/15.2.1/bits/memoryfwd.h \
+ /usr/include/c++/15.2.1/bits/postypes.h /usr/include/c++/15.2.1/cwchar \
+ /usr/include/wchar.h /usr/include/bits/floatn.h \
+ /usr/include/bits/floatn-common.h \
+ /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/include/stdarg.h \
+ /usr/include/bits/types/wint_t.h /usr/include/bits/types/mbstate_t.h \
+ /usr/include/bits/types/__mbstate_t.h /usr/include/bits/types/__FILE.h \
+ /usr/include/bits/types/FILE.h /usr/include/bits/types/locale_t.h \
+ /usr/include/bits/types/__locale_t.h \
  /home/idoc/mr/tvision/include/tvision/util.h \
  /home/idoc/mr/tvision/include/tvision/tspan.h \
- /home/idoc/mr/tvision/include/tvision/tstrview.h \
- /home/idoc/mr/tvision/include/tvision/colors.h \
- /home/idoc/mr/tvision/include/tvision/scrncell.h \
- /home/idoc/mr/tvision/include/tvision/tkeys.h \
- /home/idoc/mr/tvision/include/tvision/tvobjs.h \
- /home/idoc/mr/tvision/include/tvision/tobjstrm.h \
- /home/idoc/mr/tvision/include/tvision/drawbuf.h \
- /home/idoc/mr/tvision/include/tvision/objects.h \
+ /home/idoc/mr/tvision/include/tvision/tstrview.h /usr/include/string.h \
+ /usr/include/strings.h /home/idoc/mr/tvision/include/tvision/tkeys.h \
  /home/idoc/mr/tvision/include/tvision/system.h \
  /home/idoc/mr/tvision/include/tvision/views.h \
- /home/idoc/mr/tvision/include/tvision/dialogs.h \
  /home/idoc/mr/tvision/include/tvision/stddlg.h \
- /home/idoc/mr/tvision/include/tvision/app.h \
+ /home/idoc/mr/tvision/include/tvision/internal/conctl.h \
+ /usr/include/stdio.h /usr/include/bits/types/__fpos_t.h \
+ /usr/include/bits/types/__fpos64_t.h \
+ /usr/include/bits/types/struct_FILE.h \
+ /usr/include/bits/types/cookie_io_functions_t.h \
+ /usr/include/bits/stdio_lim.h \
+ /home/idoc/mr/tvision/include/tvision/internal/linuxcon.h \
+ /home/idoc/mr/tvision/include/tvision/internal/errredir.h \
  /home/idoc/mr/tvision/include/tvision/internal/platform.h \
  /home/idoc/mr/tvision/include/tvision/internal/dispbuff.h \
- /usr/include/c++/15.2.1/vector \
- /usr/include/c++/15.2.1/bits/requires_hosted.h \
- /usr/include/c++/15.2.1/bits/stl_algobase.h \
- /usr/include/c++/15.2.1/bits/allocator.h \
- /usr/include/c++/15.2.1/bits/stl_construct.h \
- /usr/include/c++/15.2.1/bits/stl_uninitialized.h \
- /usr/include/c++/15.2.1/bits/stl_vector.h \
- /usr/include/c++/15.2.1/bits/stl_iterator_base_funcs.h \
- /usr/include/c++/15.2.1/bits/functexcept.h \
- /usr/include/c++/15.2.1/bits/concept_check.h \
- /usr/include/c++/15.2.1/initializer_list \
- /usr/include/c++/15.2.1/debug/assertions.h \
- /usr/include/c++/15.2.1/bits/stl_bvector.h \
- /usr/include/c++/15.2.1/bits/functional_hash.h \
- /usr/include/c++/15.2.1/bits/refwrap.h \
- /usr/include/c++/15.2.1/bits/range_access.h \
- /usr/include/c++/15.2.1/bits/vector.tcc \
- /usr/include/c++/15.2.1/bits/version.h \
- /usr/include/c++/15.2.1/x86_64-pc-linux-gnu/bits/c++config.h \
- /usr/include/c++/15.2.1/bits/memory_resource.h \
+ /home/idoc/mr/tvision/include/tvision/colors.h \
+ /home/idoc/mr/tvision/include/tvision/scrncell.h \
+ /home/idoc/mr/tvision/include/tvision/objects.h \
  /usr/include/c++/15.2.1/chrono /usr/include/c++/15.2.1/bits/chrono.h \
  /usr/include/c++/15.2.1/ratio /usr/include/c++/15.2.1/type_traits \
- /usr/include/c++/15.2.1/cstdint \
- /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/include/stdint.h \
+ /usr/include/c++/15.2.1/bits/version.h /usr/include/c++/15.2.1/cstdint \
  /usr/include/c++/15.2.1/limits /usr/include/c++/15.2.1/ctime \
- /usr/include/time.h /usr/include/c++/15.2.1/bits/parse_numbers.h \
+ /usr/include/time.h /usr/include/bits/time.h /usr/include/bits/timex.h \
+ /usr/include/bits/types/struct_timeval.h \
+ /usr/include/bits/types/clock_t.h /usr/include/bits/types/time_t.h \
+ /usr/include/bits/types/struct_tm.h \
+ /usr/include/bits/types/struct_timespec.h /usr/include/bits/endian.h \
+ /usr/include/bits/endianness.h /usr/include/bits/types/clockid_t.h \
+ /usr/include/bits/types/timer_t.h \
+ /usr/include/bits/types/struct_itimerspec.h \
+ /usr/include/c++/15.2.1/bits/parse_numbers.h \
  /usr/include/c++/15.2.1/ext/numeric_traits.h \
+ /usr/include/c++/15.2.1/bits/cpp_type_traits.h \
+ /usr/include/c++/15.2.1/ext/type_traits.h /usr/include/c++/15.2.1/vector \
+ /usr/include/c++/15.2.1/bits/stl_algobase.h \
+ /usr/include/c++/15.2.1/bits/functexcept.h \
+ /usr/include/c++/15.2.1/bits/exception_defines.h \
+ /usr/include/c++/15.2.1/bits/stl_pair.h \
+ /usr/include/c++/15.2.1/bits/move.h \
+ /usr/include/c++/15.2.1/bits/utility.h \
+ /usr/include/c++/15.2.1/bits/stl_iterator_base_types.h \
+ /usr/include/c++/15.2.1/bits/stl_iterator_base_funcs.h \
+ /usr/include/c++/15.2.1/bits/concept_check.h \
+ /usr/include/c++/15.2.1/debug/assertions.h \
+ /usr/include/c++/15.2.1/bits/stl_iterator.h \
+ /usr/include/c++/15.2.1/bits/ptr_traits.h \
+ /usr/include/c++/15.2.1/debug/debug.h \
+ /usr/include/c++/15.2.1/bits/predefined_ops.h \
+ /usr/include/c++/15.2.1/bit /usr/include/c++/15.2.1/concepts \
+ /usr/include/c++/15.2.1/bits/allocator.h \
+ /usr/include/c++/15.2.1/x86_64-pc-linux-gnu/bits/c++allocator.h \
+ /usr/include/c++/15.2.1/bits/new_allocator.h /usr/include/c++/15.2.1/new \
+ /usr/include/c++/15.2.1/bits/exception.h \
+ /usr/include/c++/15.2.1/bits/stl_construct.h \
+ /usr/include/c++/15.2.1/bits/stl_uninitialized.h \
+ /usr/include/c++/15.2.1/ext/alloc_traits.h \
+ /usr/include/c++/15.2.1/bits/alloc_traits.h \
+ /usr/include/c++/15.2.1/bits/stl_vector.h \
+ /usr/include/c++/15.2.1/initializer_list \
+ /usr/include/c++/15.2.1/bits/stl_bvector.h \
+ /usr/include/c++/15.2.1/bits/functional_hash.h \
+ /usr/include/c++/15.2.1/bits/hash_bytes.h \
+ /usr/include/c++/15.2.1/bits/refwrap.h \
+ /usr/include/c++/15.2.1/bits/invoke.h \
+ /usr/include/c++/15.2.1/bits/stl_function.h \
+ /usr/include/c++/15.2.1/backward/binders.h \
+ /usr/include/c++/15.2.1/bits/range_access.h \
+ /usr/include/c++/15.2.1/bits/vector.tcc \
+ /usr/include/c++/15.2.1/bits/memory_resource.h \
+ /usr/include/c++/15.2.1/cstddef \
+ /usr/include/c++/15.2.1/bits/uses_allocator.h \
+ /usr/include/c++/15.2.1/bits/uses_allocator_args.h \
+ /usr/include/c++/15.2.1/tuple \
  /home/idoc/mr/tvision/include/tvision/internal/events.h \
  /usr/include/c++/15.2.1/atomic \
  /usr/include/c++/15.2.1/bits/atomic_base.h \
+ /usr/include/c++/15.2.1/bits/atomic_lockfree_defines.h \
  /usr/include/c++/15.2.1/memory \
+ /usr/include/c++/15.2.1/bits/stl_tempbuf.h \
+ /usr/include/c++/15.2.1/bits/stl_raw_storage_iter.h \
+ /usr/include/c++/15.2.1/bits/align.h \
+ /usr/include/c++/15.2.1/bits/unique_ptr.h \
+ /usr/include/c++/15.2.1/bits/shared_ptr.h \
+ /usr/include/c++/15.2.1/bits/shared_ptr_base.h \
+ /usr/include/c++/15.2.1/typeinfo \
+ /usr/include/c++/15.2.1/bits/allocated_ptr.h \
+ /usr/include/c++/15.2.1/ext/aligned_buffer.h \
+ /usr/include/c++/15.2.1/ext/atomicity.h \
+ /usr/include/c++/15.2.1/x86_64-pc-linux-gnu/bits/gthr.h \
+ /usr/include/c++/15.2.1/x86_64-pc-linux-gnu/bits/gthr-default.h \
+ /usr/include/pthread.h /usr/include/sched.h /usr/include/bits/sched.h \
+ /usr/include/linux/sched/types.h /usr/include/linux/types.h \
+ /usr/include/asm/types.h /usr/include/asm-generic/types.h \
+ /usr/include/asm-generic/int-ll64.h /usr/include/asm/bitsperlong.h \
+ /usr/include/asm-generic/bitsperlong.h /usr/include/linux/posix_types.h \
+ /usr/include/linux/stddef.h /usr/include/asm/posix_types.h \
+ /usr/include/asm/posix_types_64.h /usr/include/asm-generic/posix_types.h \
+ /usr/include/bits/types/struct_sched_param.h /usr/include/bits/cpu-set.h \
+ /usr/include/bits/pthreadtypes.h /usr/include/bits/thread-shared-types.h \
+ /usr/include/bits/pthreadtypes-arch.h \
+ /usr/include/bits/atomic_wide_counter.h /usr/include/bits/struct_mutex.h \
+ /usr/include/bits/struct_rwlock.h /usr/include/bits/setjmp.h \
+ /usr/include/bits/types/__sigset_t.h \
+ /usr/include/bits/types/struct___jmp_buf_tag.h \
+ /usr/include/c++/15.2.1/x86_64-pc-linux-gnu/bits/atomic_word.h \
+ /usr/include/sys/single_threaded.h \
+ /usr/include/c++/15.2.1/ext/concurrence.h \
+ /usr/include/c++/15.2.1/exception \
+ /usr/include/c++/15.2.1/bits/exception_ptr.h \
+ /usr/include/c++/15.2.1/bits/cxxabi_init_exception.h \
+ /usr/include/c++/15.2.1/bits/nested_exception.h \
+ /usr/include/c++/15.2.1/bits/shared_ptr_atomic.h \
+ /usr/include/c++/15.2.1/backward/auto_ptr.h \
+ /usr/include/c++/15.2.1/pstl/glue_memory_defs.h \
+ /usr/include/c++/15.2.1/pstl/execution_defs.h \
  /home/idoc/mr/tvision/include/tvision/internal/mutex.h \
- /home/idoc/mr/tvision/include/tvision/internal/unixcon.h \
- /home/idoc/mr/tvision/include/tvision/internal/errredir.h \
- /home/idoc/mr/tvision/include/tvision/internal/linuxcon.h \
- /home/idoc/mr/tvision/include/tvision/internal/win32con.h \
- /home/idoc/mr/tvision/include/tvision/compat/windows/windows.h \
- /home/idoc/mr/tvision/include/tvision/internal/termio.h \
- /home/idoc/mr/tvision/include/tvision/compat/windows/windows.h \
+ /home/idoc/mr/tvision/include/tvision/internal/ncurdisp.h \
  /home/idoc/mr/tvision/include/tvision/internal/ansiwrit.h \
  /home/idoc/mr/tvision/include/tvision/internal/endian.h \
- /home/idoc/mr/tvision/include/tvision/internal/ncurdisp.h \
- /usr/include/curses.h /usr/include/ncurses_dll.h /usr/include/stdio.h \
- /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/include/stdarg.h \
- /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/include/stddef.h \
- /usr/include/wchar.h /usr/include/unctrl.h /usr/include/curses.h \
+ /usr/include/curses.h /usr/include/ncurses_dll.h \
+ /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/include/stdbool.h \
+ /usr/include/unctrl.h /usr/include/curses.h \
  /home/idoc/mr/tvision/include/tvision/internal/ncursinp.h \
+ /home/idoc/mr/tvision/include/tvision/compat/windows/windows.h \
+ /home/idoc/mr/tvision/include/tvision/internal/termio.h \
  /home/idoc/mr/tvision/include/tvision/internal/sighandl.h \
- /usr/include/signal.h /usr/include/features.h /usr/include/bits/types.h \
- /usr/include/bits/signum-generic.h /usr/include/bits/signum-arch.h \
- /usr/include/bits/types/sig_atomic_t.h \
- /usr/include/bits/types/sigset_t.h \
- /usr/include/bits/types/struct_timespec.h \
- /usr/include/bits/types/siginfo_t.h /usr/include/bits/wordsize.h \
+ /usr/include/signal.h /usr/include/bits/signum-generic.h \
+ /usr/include/bits/signum-arch.h /usr/include/bits/types/sig_atomic_t.h \
+ /usr/include/bits/types/sigset_t.h /usr/include/bits/types/siginfo_t.h \
  /usr/include/bits/types/__sigval_t.h /usr/include/bits/siginfo-arch.h \
  /usr/include/bits/siginfo-consts.h \
  /usr/include/bits/siginfo-consts-arch.h \
@@ -86,7 +182,8 @@ source/CMakeFiles/tvision.dir/platform/platform.cpp.o: \
  /usr/include/bits/confname.h /usr/include/bits/getopt_posix.h \
  /usr/include/bits/getopt_core.h /usr/include/bits/unistd_ext.h \
  /usr/include/linux/close_range.h /usr/include/bits/ss_flags.h \
- /usr/include/bits/types/struct_sigstack.h \
- /usr/include/bits/pthreadtypes.h /usr/include/bits/sigthread.h \
- /usr/include/bits/types/__sigset_t.h /usr/include/bits/signal_ext.h \
- /home/idoc/mr/tvision/include/tvision/internal/conctl.h
+ /usr/include/bits/types/struct_sigstack.h /usr/include/bits/sigthread.h \
+ /usr/include/bits/signal_ext.h \
+ /home/idoc/mr/tvision/include/tvision/internal/unixcon.h \
+ /home/idoc/mr/tvision/include/tvision/internal/win32con.h \
+ /home/idoc/mr/tvision/include/tvision/compat/windows/windows.h

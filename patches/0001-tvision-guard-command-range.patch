@@ -1,0 +1,71 @@
+--- a/source/tvision/tcmdset.cpp
++++ b/source/tvision/tcmdset.cpp
+@@ -15,16 +15,22 @@
+ #define Uses_TCommandSet
+ #include <tvision/tv.h>
+ 
+-int _NEAR TCommandSet::masks[8] =
+-{
+-    0x0001,
+-    0x0002,
+-    0x0004,
+-    0x0008,
+-    0x0010,
+-    0x0020,
+-    0x0040,
+-    0x0080
+-};
++int _NEAR TCommandSet::masks[8] =
++{
++    0x0001,
++    0x0002,
++    0x0004,
++    0x0008,
++    0x0010,
++    0x0020,
++    0x0040,
++    0x0080
++};
++
++static inline bool isValidCommand(int cmd) noexcept
++{
++    enum { commandBits = 32 * 8 };
++    return cmd >= 0 && cmd < commandBits;
++}
+ 
+ TCommandSet::TCommandSet() noexcept
+ {
+@@ -48,26 +54,28 @@ TCommandSet& TCommandSet::operator = ( const TCommandSet& tc ) noexcept
+ Boolean TCommandSet::has( int cmd ) noexcept
+ {
+-    return Boolean( (cmds[ loc( cmd ) ] & mask( cmd )) != 0 );
++    return isValidCommand(cmd) ? Boolean( (cmds[ loc( cmd ) ] & mask( cmd )) != 0 ) : False;
+ }
+ 
+ void TCommandSet::disableCmd( int cmd ) noexcept
+ {
+-    cmds[ loc( cmd ) ] &= ~mask( cmd );
++    if( isValidCommand(cmd) )
++        cmds[ loc( cmd ) ] &= ~mask( cmd );
+ }
+ 
+ void TCommandSet::enableCmd( const TCommandSet& tc ) noexcept
+ {
+     for( int i = 0; i < 32; i++ )
+         cmds[i] |= tc.cmds[i];
+ }
+ 
+ void TCommandSet::disableCmd( const TCommandSet& tc ) noexcept
+ {
+     for( int i = 0; i < 32; i++ )
+         cmds[i] &= ~(tc.cmds[i]);
+ }
+ 
+ void TCommandSet::enableCmd( int cmd ) noexcept
+ {
+-    cmds[ loc( cmd ) ] |= mask( cmd );
++    if( isValidCommand(cmd) )
++        cmds[ loc( cmd ) ] |= mask( cmd );
+ }
+ 
+ TCommandSet& TCommandSet::operator &= ( const TCommandSet& tc ) noexcept

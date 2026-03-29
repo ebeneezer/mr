@@ -20,9 +20,7 @@ events:
     names:
       - "uname"
     candidate_directories:
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/bin/"
@@ -30,19 +28,16 @@ events:
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
       - "/bin/"
     searched_directories:
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/uname"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/uname"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/uname"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/uname"
       - "/usr/local/sbin/uname"
       - "/usr/local/bin/uname"
     found: "/usr/bin/uname"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -50,13 +45,14 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
   -
     kind: "message-v1"
     backtrace:
       - "/usr/share/cmake/Modules/CMakeDetermineSystem.cmake:212 (message)"
       - "CMakeLists.txt:47 (project)"
     message: |
-      The system is: Linux - 6.19.9-1-cachyos-bore-lto-zen4-perf-idoc - x86_64
+      The system is: Linux - 6.19.10-1-cachyos-bore-lto-zen4-perf-idoc - x86_64
   -
     kind: "find-v1"
     backtrace:
@@ -78,9 +74,7 @@ events:
       - "make"
       - "smake"
     candidate_directories:
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/bin/"
@@ -88,10 +82,9 @@ events:
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
     searched_directories:
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/gmake"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/gmake"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/gmake"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/gmake"
       - "/usr/local/sbin/gmake"
       - "/usr/local/bin/gmake"
       - "/usr/bin/gmake"
@@ -99,17 +92,14 @@ events:
       - "/usr/bin/site_perl/gmake"
       - "/usr/bin/vendor_perl/gmake"
       - "/usr/bin/core_perl/gmake"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/make"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/make"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/make"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/gmake"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/make"
       - "/usr/local/sbin/make"
       - "/usr/local/bin/make"
     found: "/usr/bin/make"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -117,15 +107,16 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
   -
     kind: "find-v1"
     backtrace:
-      - "/usr/share/cmake/Modules/CMakeDetermineCompiler.cmake:73 (find_program)"
-      - "/usr/share/cmake/Modules/CMakeDetermineCCompiler.cmake:64 (_cmake_find_compiler)"
+      - "/usr/share/cmake/Modules/CMakeDetermineCompiler.cmake:115 (find_program)"
+      - "/usr/share/cmake/Modules/CMakeDetermineCCompiler.cmake:67 (_cmake_find_compiler_path)"
       - "CMakeLists.txt:47 (project)"
     mode: "program"
-    variable: "CMAKE_C_COMPILER"
-    description: "C compiler"
+    variable: "CMAKE_C_COMPILER_WITH_PATH"
+    description: "Path to a program."
     settings:
       SearchFramework: "NEVER"
       SearchAppBundle: "NEVER"
@@ -135,17 +126,9 @@ events:
       CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
       CMAKE_FIND_USE_INSTALL_PREFIX: true
     names:
-      - "cc"
       - "gcc"
-      - "cl"
-      - "bcc"
-      - "xlc"
-      - "icx"
-      - "clang"
     candidate_directories:
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/bin/"
@@ -153,18 +136,15 @@ events:
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
     searched_directories:
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/cc"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/cc"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/cc"
-      - "/usr/local/sbin/cc"
-      - "/usr/local/bin/cc"
-    found: "/usr/bin/cc"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/gcc"
+      - "/usr/local/sbin/gcc"
+      - "/usr/local/bin/gcc"
+    found: "/usr/bin/gcc"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -172,6 +152,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
   -
     kind: "find-v1"
     backtrace:
@@ -199,9 +180,7 @@ events:
     found: "/usr/share/cmake/Modules/CMakeCCompilerId.c.in"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -209,6 +188,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
   -
     kind: "message-v1"
     backtrace:
@@ -218,7 +198,7 @@ events:
       - "CMakeLists.txt:47 (project)"
     message: |
       Compiling the C compiler identification source file "CMakeCCompilerId.c" succeeded.
-      Compiler: /usr/bin/cc 
+      Compiler: /usr/bin/gcc 
       Build flags: 
       Id flags:  
       
@@ -229,7 +209,7 @@ events:
       Compilation of the C compiler identification source "CMakeCCompilerId.c" produced "a.out"
       
       The C compiler identification is GNU, found in:
-        /home/idoc/mr/tvision/build/CMakeFiles/4.3.0/CompilerIdC/a.out
+        /home/idoc/mr/tvision/build/CMakeFiles/4.3.1/CompilerIdC/a.out
       
   -
     kind: "find-v1"
@@ -252,21 +232,18 @@ events:
       - "ar"
     candidate_directories:
       - "/usr/bin/"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/lib/jvm/default/bin/"
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
     found: "/usr/bin/ar"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -274,6 +251,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
   -
     kind: "find-v1"
     backtrace:
@@ -295,21 +273,18 @@ events:
       - "ranlib"
     candidate_directories:
       - "/usr/bin/"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/lib/jvm/default/bin/"
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
     found: "/usr/bin/ranlib"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -317,6 +292,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
   -
     kind: "find-v1"
     backtrace:
@@ -338,21 +314,18 @@ events:
       - "strip"
     candidate_directories:
       - "/usr/bin/"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/lib/jvm/default/bin/"
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
     found: "/usr/bin/strip"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -360,6 +333,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
   -
     kind: "find-v1"
     backtrace:
@@ -381,21 +355,18 @@ events:
       - "ld"
     candidate_directories:
       - "/usr/bin/"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/lib/jvm/default/bin/"
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
     found: "/usr/bin/ld"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -403,6 +374,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
   -
     kind: "find-v1"
     backtrace:
@@ -424,21 +396,18 @@ events:
       - "nm"
     candidate_directories:
       - "/usr/bin/"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/lib/jvm/default/bin/"
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
     found: "/usr/bin/nm"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -446,6 +415,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
   -
     kind: "find-v1"
     backtrace:
@@ -467,21 +437,18 @@ events:
       - "objdump"
     candidate_directories:
       - "/usr/bin/"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/lib/jvm/default/bin/"
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
     found: "/usr/bin/objdump"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -489,6 +456,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
   -
     kind: "find-v1"
     backtrace:
@@ -510,21 +478,18 @@ events:
       - "objcopy"
     candidate_directories:
       - "/usr/bin/"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/lib/jvm/default/bin/"
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
     found: "/usr/bin/objcopy"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -532,6 +497,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
   -
     kind: "find-v1"
     backtrace:
@@ -553,21 +519,18 @@ events:
       - "readelf"
     candidate_directories:
       - "/usr/bin/"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/lib/jvm/default/bin/"
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
     found: "/usr/bin/readelf"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -575,6 +538,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
   -
     kind: "find-v1"
     backtrace:
@@ -596,32 +560,28 @@ events:
       - "dlltool"
     candidate_directories:
       - "/usr/bin/"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/lib/jvm/default/bin/"
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
     searched_directories:
       - "/usr/bin/dlltool"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/dlltool"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/dlltool"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/dlltool"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/dlltool"
       - "/usr/local/sbin/dlltool"
       - "/usr/local/bin/dlltool"
       - "/usr/lib/jvm/default/bin/dlltool"
       - "/usr/bin/site_perl/dlltool"
       - "/usr/bin/vendor_perl/dlltool"
       - "/usr/bin/core_perl/dlltool"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/dlltool"
     found: false
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -629,6 +589,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
   -
     kind: "find-v1"
     backtrace:
@@ -650,21 +611,18 @@ events:
       - "addr2line"
     candidate_directories:
       - "/usr/bin/"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/lib/jvm/default/bin/"
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
     found: "/usr/bin/addr2line"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -672,6 +630,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
   -
     kind: "find-v1"
     backtrace:
@@ -693,32 +652,28 @@ events:
       - "tapi"
     candidate_directories:
       - "/usr/bin/"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/lib/jvm/default/bin/"
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
     searched_directories:
       - "/usr/bin/tapi"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/tapi"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/tapi"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/tapi"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/tapi"
       - "/usr/local/sbin/tapi"
       - "/usr/local/bin/tapi"
       - "/usr/lib/jvm/default/bin/tapi"
       - "/usr/bin/site_perl/tapi"
       - "/usr/bin/vendor_perl/tapi"
       - "/usr/bin/core_perl/tapi"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/tapi"
     found: false
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -726,6 +681,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
   -
     kind: "find-v1"
     backtrace:
@@ -750,52 +706,46 @@ events:
       - "gcc-ar"
     candidate_directories:
       - "/usr/bin/"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/lib/jvm/default/bin/"
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
     searched_directories:
       - "/usr/bin/gcc-ar-15.2"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/gcc-ar-15.2"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/gcc-ar-15.2"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/gcc-ar-15.2"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/gcc-ar-15.2"
       - "/usr/local/sbin/gcc-ar-15.2"
       - "/usr/local/bin/gcc-ar-15.2"
       - "/usr/lib/jvm/default/bin/gcc-ar-15.2"
       - "/usr/bin/site_perl/gcc-ar-15.2"
       - "/usr/bin/vendor_perl/gcc-ar-15.2"
       - "/usr/bin/core_perl/gcc-ar-15.2"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/gcc-ar-15.2"
       - "/usr/bin/gcc-ar-15"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/gcc-ar-15"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/gcc-ar-15"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/gcc-ar-15"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/gcc-ar-15"
       - "/usr/local/sbin/gcc-ar-15"
       - "/usr/local/bin/gcc-ar-15"
       - "/usr/lib/jvm/default/bin/gcc-ar-15"
       - "/usr/bin/site_perl/gcc-ar-15"
       - "/usr/bin/vendor_perl/gcc-ar-15"
       - "/usr/bin/core_perl/gcc-ar-15"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/gcc-ar-15"
       - "/usr/bin/gcc-ar15"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/gcc-ar15"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/gcc-ar15"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/gcc-ar15"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/gcc-ar15"
       - "/usr/local/sbin/gcc-ar15"
       - "/usr/local/bin/gcc-ar15"
       - "/usr/lib/jvm/default/bin/gcc-ar15"
       - "/usr/bin/site_perl/gcc-ar15"
       - "/usr/bin/vendor_perl/gcc-ar15"
       - "/usr/bin/core_perl/gcc-ar15"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/gcc-ar15"
     found: "/usr/bin/gcc-ar"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -803,6 +753,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
   -
     kind: "find-v1"
     backtrace:
@@ -827,52 +778,46 @@ events:
       - "gcc-ranlib"
     candidate_directories:
       - "/usr/bin/"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/lib/jvm/default/bin/"
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
     searched_directories:
       - "/usr/bin/gcc-ranlib-15.2"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/gcc-ranlib-15.2"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/gcc-ranlib-15.2"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/gcc-ranlib-15.2"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/gcc-ranlib-15.2"
       - "/usr/local/sbin/gcc-ranlib-15.2"
       - "/usr/local/bin/gcc-ranlib-15.2"
       - "/usr/lib/jvm/default/bin/gcc-ranlib-15.2"
       - "/usr/bin/site_perl/gcc-ranlib-15.2"
       - "/usr/bin/vendor_perl/gcc-ranlib-15.2"
       - "/usr/bin/core_perl/gcc-ranlib-15.2"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/gcc-ranlib-15.2"
       - "/usr/bin/gcc-ranlib-15"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/gcc-ranlib-15"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/gcc-ranlib-15"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/gcc-ranlib-15"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/gcc-ranlib-15"
       - "/usr/local/sbin/gcc-ranlib-15"
       - "/usr/local/bin/gcc-ranlib-15"
       - "/usr/lib/jvm/default/bin/gcc-ranlib-15"
       - "/usr/bin/site_perl/gcc-ranlib-15"
       - "/usr/bin/vendor_perl/gcc-ranlib-15"
       - "/usr/bin/core_perl/gcc-ranlib-15"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/gcc-ranlib-15"
       - "/usr/bin/gcc-ranlib15"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/gcc-ranlib15"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/gcc-ranlib15"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/gcc-ranlib15"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/gcc-ranlib15"
       - "/usr/local/sbin/gcc-ranlib15"
       - "/usr/local/bin/gcc-ranlib15"
       - "/usr/lib/jvm/default/bin/gcc-ranlib15"
       - "/usr/bin/site_perl/gcc-ranlib15"
       - "/usr/bin/vendor_perl/gcc-ranlib15"
       - "/usr/bin/core_perl/gcc-ranlib15"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/gcc-ranlib15"
     found: "/usr/bin/gcc-ranlib"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -880,15 +825,16 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
   -
     kind: "find-v1"
     backtrace:
-      - "/usr/share/cmake/Modules/CMakeDetermineCompiler.cmake:54 (find_program)"
-      - "/usr/share/cmake/Modules/CMakeDetermineCXXCompiler.cmake:69 (_cmake_find_compiler)"
+      - "/usr/share/cmake/Modules/CMakeDetermineCompiler.cmake:115 (find_program)"
+      - "/usr/share/cmake/Modules/CMakeDetermineCXXCompiler.cmake:71 (_cmake_find_compiler_path)"
       - "CMakeLists.txt:47 (project)"
     mode: "program"
-    variable: "CMAKE_CXX_COMPILER"
-    description: "CXX compiler"
+    variable: "CMAKE_CXX_COMPILER_WITH_PATH"
+    description: "Path to a program."
     settings:
       SearchFramework: "NEVER"
       SearchAppBundle: "NEVER"
@@ -898,24 +844,25 @@ events:
       CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
       CMAKE_FIND_USE_INSTALL_PREFIX: true
     names:
-      - "c++"
-      - "CC"
       - "g++"
-      - "aCC"
-      - "cl"
-      - "bcc"
-      - "xlC"
-      - "icpx"
-      - "icx"
-      - "clang++"
     candidate_directories:
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
       - "/usr/bin/"
-    found: "/usr/bin/c++"
+      - "/usr/lib/jvm/default/bin/"
+      - "/usr/bin/site_perl/"
+      - "/usr/bin/vendor_perl/"
+      - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
+    searched_directories:
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/g++"
+      - "/usr/local/sbin/g++"
+      - "/usr/local/bin/g++"
+    found: "/usr/bin/g++"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -923,6 +870,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
   -
     kind: "find-v1"
     backtrace:
@@ -950,9 +898,7 @@ events:
     found: "/usr/share/cmake/Modules/CMakeCXXCompilerId.cpp.in"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -960,6 +906,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
   -
     kind: "message-v1"
     backtrace:
@@ -969,7 +916,7 @@ events:
       - "CMakeLists.txt:47 (project)"
     message: |
       Compiling the CXX compiler identification source file "CMakeCXXCompilerId.cpp" succeeded.
-      Compiler: /usr/bin/c++ 
+      Compiler: /usr/bin/g++ 
       Build flags: 
       Id flags:  
       
@@ -980,7 +927,7 @@ events:
       Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "a.out"
       
       The CXX compiler identification is GNU, found in:
-        /home/idoc/mr/tvision/build/CMakeFiles/4.3.0/CompilerIdCXX/a.out
+        /home/idoc/mr/tvision/build/CMakeFiles/4.3.1/CompilerIdCXX/a.out
       
   -
     kind: "find-v1"
@@ -1006,52 +953,46 @@ events:
       - "gcc-ar"
     candidate_directories:
       - "/usr/bin/"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/lib/jvm/default/bin/"
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
     searched_directories:
       - "/usr/bin/gcc-ar-15.2"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/gcc-ar-15.2"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/gcc-ar-15.2"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/gcc-ar-15.2"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/gcc-ar-15.2"
       - "/usr/local/sbin/gcc-ar-15.2"
       - "/usr/local/bin/gcc-ar-15.2"
       - "/usr/lib/jvm/default/bin/gcc-ar-15.2"
       - "/usr/bin/site_perl/gcc-ar-15.2"
       - "/usr/bin/vendor_perl/gcc-ar-15.2"
       - "/usr/bin/core_perl/gcc-ar-15.2"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/gcc-ar-15.2"
       - "/usr/bin/gcc-ar-15"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/gcc-ar-15"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/gcc-ar-15"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/gcc-ar-15"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/gcc-ar-15"
       - "/usr/local/sbin/gcc-ar-15"
       - "/usr/local/bin/gcc-ar-15"
       - "/usr/lib/jvm/default/bin/gcc-ar-15"
       - "/usr/bin/site_perl/gcc-ar-15"
       - "/usr/bin/vendor_perl/gcc-ar-15"
       - "/usr/bin/core_perl/gcc-ar-15"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/gcc-ar-15"
       - "/usr/bin/gcc-ar15"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/gcc-ar15"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/gcc-ar15"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/gcc-ar15"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/gcc-ar15"
       - "/usr/local/sbin/gcc-ar15"
       - "/usr/local/bin/gcc-ar15"
       - "/usr/lib/jvm/default/bin/gcc-ar15"
       - "/usr/bin/site_perl/gcc-ar15"
       - "/usr/bin/vendor_perl/gcc-ar15"
       - "/usr/bin/core_perl/gcc-ar15"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/gcc-ar15"
     found: "/usr/bin/gcc-ar"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -1059,6 +1000,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
   -
     kind: "find-v1"
     backtrace:
@@ -1083,52 +1025,46 @@ events:
       - "gcc-ranlib"
     candidate_directories:
       - "/usr/bin/"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/lib/jvm/default/bin/"
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
     searched_directories:
       - "/usr/bin/gcc-ranlib-15.2"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/gcc-ranlib-15.2"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/gcc-ranlib-15.2"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/gcc-ranlib-15.2"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/gcc-ranlib-15.2"
       - "/usr/local/sbin/gcc-ranlib-15.2"
       - "/usr/local/bin/gcc-ranlib-15.2"
       - "/usr/lib/jvm/default/bin/gcc-ranlib-15.2"
       - "/usr/bin/site_perl/gcc-ranlib-15.2"
       - "/usr/bin/vendor_perl/gcc-ranlib-15.2"
       - "/usr/bin/core_perl/gcc-ranlib-15.2"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/gcc-ranlib-15.2"
       - "/usr/bin/gcc-ranlib-15"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/gcc-ranlib-15"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/gcc-ranlib-15"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/gcc-ranlib-15"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/gcc-ranlib-15"
       - "/usr/local/sbin/gcc-ranlib-15"
       - "/usr/local/bin/gcc-ranlib-15"
       - "/usr/lib/jvm/default/bin/gcc-ranlib-15"
       - "/usr/bin/site_perl/gcc-ranlib-15"
       - "/usr/bin/vendor_perl/gcc-ranlib-15"
       - "/usr/bin/core_perl/gcc-ranlib-15"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/gcc-ranlib-15"
       - "/usr/bin/gcc-ranlib15"
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/gcc-ranlib15"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/gcc-ranlib15"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/gcc-ranlib15"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/gcc-ranlib15"
       - "/usr/local/sbin/gcc-ranlib15"
       - "/usr/local/bin/gcc-ranlib15"
       - "/usr/lib/jvm/default/bin/gcc-ranlib15"
       - "/usr/bin/site_perl/gcc-ranlib15"
       - "/usr/bin/vendor_perl/gcc-ranlib15"
       - "/usr/bin/core_perl/gcc-ranlib15"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/gcc-ranlib15"
     found: "/usr/bin/gcc-ranlib"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -1136,6 +1072,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
   -
     kind: "try_compile-v1"
     backtrace:
@@ -1145,8 +1082,8 @@ events:
     checks:
       - "Detecting C compiler ABI info"
     directories:
-      source: "/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-Owp59E"
-      binary: "/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-Owp59E"
+      source: "/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-cLMfi3"
+      binary: "/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-cLMfi3"
     cmakeVariables:
       CMAKE_CXX_STDLIB_MODULES_JSON: ""
       CMAKE_C_FLAGS: ""
@@ -1156,25 +1093,27 @@ events:
       variable: "CMAKE_C_ABI_COMPILED"
       cached: true
       stdout: |
-        Change Dir: '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-Owp59E'
+        Change Dir: '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-cLMfi3'
         
-        Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/make -f Makefile cmTC_d3017/fast
-        /usr/bin/make  -f CMakeFiles/cmTC_d3017.dir/build.make CMakeFiles/cmTC_d3017.dir/build
-        make[1]: Entering directory '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-Owp59E'
-        Building C object CMakeFiles/cmTC_d3017.dir/CMakeCCompilerABI.c.o
-        /usr/bin/cc   -v -o CMakeFiles/cmTC_d3017.dir/CMakeCCompilerABI.c.o -c /usr/share/cmake/Modules/CMakeCCompilerABI.c
+        Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/make -f Makefile cmTC_0fe49/fast
+        make[1]: Entering directory '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-cLMfi3'
+        /usr/bin/make  -f CMakeFiles/cmTC_0fe49.dir/build.make CMakeFiles/cmTC_0fe49.dir/build
+        make[2]: Entering directory '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-cLMfi3'
+        Building C object CMakeFiles/cmTC_0fe49.dir/CMakeCCompilerABI.c.o
+        /usr/bin/gcc   -v -o CMakeFiles/cmTC_0fe49.dir/CMakeCCompilerABI.c.o -c /usr/share/cmake/Modules/CMakeCCompilerABI.c
         Using built-in specs.
-        COLLECT_GCC=/usr/bin/cc
+        COLLECT_GCC=/usr/bin/gcc
         Target: x86_64-pc-linux-gnu
         Configured with: /tmp/pkg/src/gcc/configure --enable-languages=ada,c,c++,d,fortran,go,lto,m2,objc,obj-c++,rust,cobol --enable-bootstrap --prefix=/usr --libdir=/usr/lib --libexecdir=/usr/lib --mandir=/usr/share/man --infodir=/usr/share/info --with-bugurl=https://github.com/CachyOS/CachyOS-PKGBUILDS/issues --with-build-config=bootstrap-lto --with-linker-hash-style=gnu --with-system-zlib --enable-__cxa_atexit --enable-cet=auto --enable-checking=release --enable-clocale=gnu --enable-default-pie --enable-default-ssp --enable-gnu-indirect-function --enable-gnu-unique-object --enable-libstdcxx-backtrace --enable-link-serialization=1 --enable-linker-build-id --enable-lto --enable-multilib --enable-plugin --enable-shared --enable-threads=posix --disable-libssp --disable-libstdcxx-pch --disable-werror
         Thread model: posix
         Supported LTO compression algorithms: zlib zstd
         gcc version 15.2.1 20260209 (GCC) 
-        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_d3017.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_d3017.dir/'
-         /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/cc1 -quiet -v /usr/share/cmake/Modules/CMakeCCompilerABI.c -quiet -dumpdir CMakeFiles/cmTC_d3017.dir/ -dumpbase CMakeCCompilerABI.c.c -dumpbase-ext .c -mtune=generic -march=x86-64 -version -o /tmp/ccu7uBAW.s
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_0fe49.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_0fe49.dir/'
+         /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/cc1 -quiet -v /usr/share/cmake/Modules/CMakeCCompilerABI.c -quiet -dumpdir CMakeFiles/cmTC_0fe49.dir/ -dumpbase CMakeCCompilerABI.c.c -dumpbase-ext .c -mtune=generic -march=x86-64 -version -o /tmp/cc58Cx3V.s
         GNU C23 (GCC) version 15.2.1 20260209 (x86_64-pc-linux-gnu)
         	compiled by GNU C version 15.2.1 20260209, GMP version 6.3.0, MPFR version 4.2.2, MPC version 1.3.1, isl version isl-0.27-GMP
         
+        warning: MPC header version 1.3.1 differs from library version 1.4.0.
         GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
         ignoring nonexistent directory "/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../x86_64-pc-linux-gnu/include"
         #include "..." search starts here:
@@ -1185,16 +1124,16 @@ events:
          /usr/include
         End of search list.
         Compiler executable checksum: bf2fc87de31234076e243c1d6f6bc76e
-        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_d3017.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_d3017.dir/'
-         as -v --64 -o CMakeFiles/cmTC_d3017.dir/CMakeCCompilerABI.c.o /tmp/ccu7uBAW.s
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_0fe49.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_0fe49.dir/'
+         as -v --64 -o CMakeFiles/cmTC_0fe49.dir/CMakeCCompilerABI.c.o /tmp/cc58Cx3V.s
         GNU assembler version 2.46 (x86_64-pc-linux-gnu) using BFD version (GNU Binutils) 2.46
         COMPILER_PATH=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/
         LIBRARY_PATH=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/:/lib/../lib/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../:/lib/:/usr/lib/
-        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_d3017.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_d3017.dir/CMakeCCompilerABI.c.'
-        Linking C executable cmTC_d3017
-        /usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_d3017.dir/link.txt --verbose=1
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_0fe49.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_0fe49.dir/CMakeCCompilerABI.c.'
+        Linking C executable cmTC_0fe49
+        /usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_0fe49.dir/link.txt --verbose=1
         Using built-in specs.
-        COLLECT_GCC=/usr/bin/cc
+        COLLECT_GCC=/usr/bin/gcc
         COLLECT_LTO_WRAPPER=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/lto-wrapper
         Target: x86_64-pc-linux-gnu
         Configured with: /tmp/pkg/src/gcc/configure --enable-languages=ada,c,c++,d,fortran,go,lto,m2,objc,obj-c++,rust,cobol --enable-bootstrap --prefix=/usr --libdir=/usr/lib --libexecdir=/usr/lib --mandir=/usr/share/man --infodir=/usr/share/info --with-bugurl=https://github.com/CachyOS/CachyOS-PKGBUILDS/issues --with-build-config=bootstrap-lto --with-linker-hash-style=gnu --with-system-zlib --enable-__cxa_atexit --enable-cet=auto --enable-checking=release --enable-clocale=gnu --enable-default-pie --enable-default-ssp --enable-gnu-indirect-function --enable-gnu-unique-object --enable-libstdcxx-backtrace --enable-link-serialization=1 --enable-linker-build-id --enable-lto --enable-multilib --enable-plugin --enable-shared --enable-threads=posix --disable-libssp --disable-libstdcxx-pch --disable-werror
@@ -1203,14 +1142,15 @@ events:
         gcc version 15.2.1 20260209 (GCC) 
         COMPILER_PATH=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/
         LIBRARY_PATH=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/:/lib/../lib/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../:/lib/:/usr/lib/
-        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_d3017' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_d3017.'
-         /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/collect2 -plugin /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/lto-wrapper -plugin-opt=-fresolution=/tmp/ccIPHLOD.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr --hash-style=gnu -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_d3017 /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/Scrt1.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crti.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtbeginS.o -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1 -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib -L/lib/../lib -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_d3017.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtendS.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crtn.o
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_0fe49' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_0fe49.'
+         /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/collect2 -plugin /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/lto-wrapper -plugin-opt=-fresolution=/tmp/ccI7hG2t.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr --hash-style=gnu -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_0fe49 /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/Scrt1.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crti.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtbeginS.o -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1 -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib -L/lib/../lib -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_0fe49.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtendS.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crtn.o
         collect2 version 15.2.1 20260209
-        /usr/bin/ld -plugin /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/lto-wrapper -plugin-opt=-fresolution=/tmp/ccIPHLOD.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr --hash-style=gnu -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_d3017 /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/Scrt1.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crti.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtbeginS.o -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1 -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib -L/lib/../lib -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_d3017.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtendS.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crtn.o
+        /usr/bin/ld -plugin /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/lto-wrapper -plugin-opt=-fresolution=/tmp/ccI7hG2t.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr --hash-style=gnu -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_0fe49 /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/Scrt1.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crti.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtbeginS.o -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1 -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib -L/lib/../lib -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_0fe49.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtendS.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crtn.o
         GNU ld (GNU Binutils) 2.46
-        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_d3017' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_d3017.'
-        /usr/bin/cc  -v -Wl,-v CMakeFiles/cmTC_d3017.dir/CMakeCCompilerABI.c.o -o cmTC_d3017
-        make[1]: Leaving directory '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-Owp59E'
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_0fe49' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_0fe49.'
+        /usr/bin/gcc  -v -Wl,-v CMakeFiles/cmTC_0fe49.dir/CMakeCCompilerABI.c.o -o cmTC_0fe49
+        make[2]: Leaving directory '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-cLMfi3'
+        make[1]: Leaving directory '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-cLMfi3'
         
       exitCode: 0
   -
@@ -1245,25 +1185,27 @@ events:
       Parsed C implicit link information:
         link line regex: [^( *|.*[/\\])(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
         linker tool regex: [^[ 	]*(->|"|[0-9]+>[ 	-]*Build:[ 	0-9]+ ms[ 	]*)?[ 	]*(([^"]*[/\\])?(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)))("|,| |$)]
-        ignore line: [Change Dir: '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-Owp59E']
+        ignore line: [Change Dir: '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-cLMfi3']
         ignore line: []
-        ignore line: [Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/make -f Makefile cmTC_d3017/fast]
-        ignore line: [/usr/bin/make  -f CMakeFiles/cmTC_d3017.dir/build.make CMakeFiles/cmTC_d3017.dir/build]
-        ignore line: [make[1]: Entering directory '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-Owp59E']
-        ignore line: [Building C object CMakeFiles/cmTC_d3017.dir/CMakeCCompilerABI.c.o]
-        ignore line: [/usr/bin/cc   -v -o CMakeFiles/cmTC_d3017.dir/CMakeCCompilerABI.c.o -c /usr/share/cmake/Modules/CMakeCCompilerABI.c]
+        ignore line: [Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/make -f Makefile cmTC_0fe49/fast]
+        ignore line: [make[1]: Entering directory '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-cLMfi3']
+        ignore line: [/usr/bin/make  -f CMakeFiles/cmTC_0fe49.dir/build.make CMakeFiles/cmTC_0fe49.dir/build]
+        ignore line: [make[2]: Entering directory '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-cLMfi3']
+        ignore line: [Building C object CMakeFiles/cmTC_0fe49.dir/CMakeCCompilerABI.c.o]
+        ignore line: [/usr/bin/gcc   -v -o CMakeFiles/cmTC_0fe49.dir/CMakeCCompilerABI.c.o -c /usr/share/cmake/Modules/CMakeCCompilerABI.c]
         ignore line: [Using built-in specs.]
-        ignore line: [COLLECT_GCC=/usr/bin/cc]
+        ignore line: [COLLECT_GCC=/usr/bin/gcc]
         ignore line: [Target: x86_64-pc-linux-gnu]
         ignore line: [Configured with: /tmp/pkg/src/gcc/configure --enable-languages=ada c c++ d fortran go lto m2 objc obj-c++ rust cobol --enable-bootstrap --prefix=/usr --libdir=/usr/lib --libexecdir=/usr/lib --mandir=/usr/share/man --infodir=/usr/share/info --with-bugurl=https://github.com/CachyOS/CachyOS-PKGBUILDS/issues --with-build-config=bootstrap-lto --with-linker-hash-style=gnu --with-system-zlib --enable-__cxa_atexit --enable-cet=auto --enable-checking=release --enable-clocale=gnu --enable-default-pie --enable-default-ssp --enable-gnu-indirect-function --enable-gnu-unique-object --enable-libstdcxx-backtrace --enable-link-serialization=1 --enable-linker-build-id --enable-lto --enable-multilib --enable-plugin --enable-shared --enable-threads=posix --disable-libssp --disable-libstdcxx-pch --disable-werror]
         ignore line: [Thread model: posix]
         ignore line: [Supported LTO compression algorithms: zlib zstd]
         ignore line: [gcc version 15.2.1 20260209 (GCC) ]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_d3017.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_d3017.dir/']
-        ignore line: [ /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/cc1 -quiet -v /usr/share/cmake/Modules/CMakeCCompilerABI.c -quiet -dumpdir CMakeFiles/cmTC_d3017.dir/ -dumpbase CMakeCCompilerABI.c.c -dumpbase-ext .c -mtune=generic -march=x86-64 -version -o /tmp/ccu7uBAW.s]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_0fe49.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_0fe49.dir/']
+        ignore line: [ /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/cc1 -quiet -v /usr/share/cmake/Modules/CMakeCCompilerABI.c -quiet -dumpdir CMakeFiles/cmTC_0fe49.dir/ -dumpbase CMakeCCompilerABI.c.c -dumpbase-ext .c -mtune=generic -march=x86-64 -version -o /tmp/cc58Cx3V.s]
         ignore line: [GNU C23 (GCC) version 15.2.1 20260209 (x86_64-pc-linux-gnu)]
         ignore line: [	compiled by GNU C version 15.2.1 20260209  GMP version 6.3.0  MPFR version 4.2.2  MPC version 1.3.1  isl version isl-0.27-GMP]
         ignore line: []
+        ignore line: [warning: MPC header version 1.3.1 differs from library version 1.4.0.]
         ignore line: [GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072]
         ignore line: [ignoring nonexistent directory "/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../x86_64-pc-linux-gnu/include"]
         ignore line: [#include "..." search starts here:]
@@ -1274,16 +1216,16 @@ events:
         ignore line: [ /usr/include]
         ignore line: [End of search list.]
         ignore line: [Compiler executable checksum: bf2fc87de31234076e243c1d6f6bc76e]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_d3017.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_d3017.dir/']
-        ignore line: [ as -v --64 -o CMakeFiles/cmTC_d3017.dir/CMakeCCompilerABI.c.o /tmp/ccu7uBAW.s]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_0fe49.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_0fe49.dir/']
+        ignore line: [ as -v --64 -o CMakeFiles/cmTC_0fe49.dir/CMakeCCompilerABI.c.o /tmp/cc58Cx3V.s]
         ignore line: [GNU assembler version 2.46 (x86_64-pc-linux-gnu) using BFD version (GNU Binutils) 2.46]
         ignore line: [COMPILER_PATH=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/]
         ignore line: [LIBRARY_PATH=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/:/lib/../lib/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../:/lib/:/usr/lib/]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_d3017.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_d3017.dir/CMakeCCompilerABI.c.']
-        ignore line: [Linking C executable cmTC_d3017]
-        ignore line: [/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_d3017.dir/link.txt --verbose=1]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_0fe49.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_0fe49.dir/CMakeCCompilerABI.c.']
+        ignore line: [Linking C executable cmTC_0fe49]
+        ignore line: [/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_0fe49.dir/link.txt --verbose=1]
         ignore line: [Using built-in specs.]
-        ignore line: [COLLECT_GCC=/usr/bin/cc]
+        ignore line: [COLLECT_GCC=/usr/bin/gcc]
         ignore line: [COLLECT_LTO_WRAPPER=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/lto-wrapper]
         ignore line: [Target: x86_64-pc-linux-gnu]
         ignore line: [Configured with: /tmp/pkg/src/gcc/configure --enable-languages=ada c c++ d fortran go lto m2 objc obj-c++ rust cobol --enable-bootstrap --prefix=/usr --libdir=/usr/lib --libexecdir=/usr/lib --mandir=/usr/share/man --infodir=/usr/share/info --with-bugurl=https://github.com/CachyOS/CachyOS-PKGBUILDS/issues --with-build-config=bootstrap-lto --with-linker-hash-style=gnu --with-system-zlib --enable-__cxa_atexit --enable-cet=auto --enable-checking=release --enable-clocale=gnu --enable-default-pie --enable-default-ssp --enable-gnu-indirect-function --enable-gnu-unique-object --enable-libstdcxx-backtrace --enable-link-serialization=1 --enable-linker-build-id --enable-lto --enable-multilib --enable-plugin --enable-shared --enable-threads=posix --disable-libssp --disable-libstdcxx-pch --disable-werror]
@@ -1292,13 +1234,13 @@ events:
         ignore line: [gcc version 15.2.1 20260209 (GCC) ]
         ignore line: [COMPILER_PATH=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/]
         ignore line: [LIBRARY_PATH=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/:/lib/../lib/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../:/lib/:/usr/lib/]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_d3017' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_d3017.']
-        link line: [ /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/collect2 -plugin /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/lto-wrapper -plugin-opt=-fresolution=/tmp/ccIPHLOD.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr --hash-style=gnu -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_d3017 /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/Scrt1.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crti.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtbeginS.o -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1 -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib -L/lib/../lib -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_d3017.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtendS.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crtn.o]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_0fe49' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_0fe49.']
+        link line: [ /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/collect2 -plugin /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/lto-wrapper -plugin-opt=-fresolution=/tmp/ccI7hG2t.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr --hash-style=gnu -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_0fe49 /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/Scrt1.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crti.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtbeginS.o -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1 -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib -L/lib/../lib -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_0fe49.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtendS.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crtn.o]
           arg [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/collect2] ==> ignore
           arg [-plugin] ==> ignore
           arg [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/liblto_plugin.so] ==> ignore
           arg [-plugin-opt=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/lto-wrapper] ==> ignore
-          arg [-plugin-opt=-fresolution=/tmp/ccIPHLOD.res] ==> ignore
+          arg [-plugin-opt=-fresolution=/tmp/ccI7hG2t.res] ==> ignore
           arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
           arg [-plugin-opt=-pass-through=-lgcc_s] ==> ignore
           arg [-plugin-opt=-pass-through=-lc] ==> ignore
@@ -1313,7 +1255,7 @@ events:
           arg [/lib64/ld-linux-x86-64.so.2] ==> ignore
           arg [-pie] ==> ignore
           arg [-o] ==> ignore
-          arg [cmTC_d3017] ==> ignore
+          arg [cmTC_0fe49] ==> ignore
           arg [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/Scrt1.o] ==> obj [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/Scrt1.o]
           arg [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crti.o] ==> obj [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crti.o]
           arg [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtbeginS.o] ==> obj [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtbeginS.o]
@@ -1325,7 +1267,7 @@ events:
           arg [-L/lib] ==> dir [/lib]
           arg [-L/usr/lib] ==> dir [/usr/lib]
           arg [-v] ==> ignore
-          arg [CMakeFiles/cmTC_d3017.dir/CMakeCCompilerABI.c.o] ==> ignore
+          arg [CMakeFiles/cmTC_0fe49.dir/CMakeCCompilerABI.c.o] ==> ignore
           arg [-lgcc] ==> lib [gcc]
           arg [--push-state] ==> ignore
           arg [--as-needed] ==> ignore
@@ -1340,7 +1282,7 @@ events:
           arg [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtendS.o] ==> obj [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtendS.o]
           arg [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crtn.o] ==> obj [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crtn.o]
         ignore line: [collect2 version 15.2.1 20260209]
-        ignore line: [/usr/bin/ld -plugin /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/lto-wrapper -plugin-opt=-fresolution=/tmp/ccIPHLOD.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr --hash-style=gnu -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_d3017 /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/Scrt1.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crti.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtbeginS.o -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1 -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib -L/lib/../lib -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_d3017.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtendS.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crtn.o]
+        ignore line: [/usr/bin/ld -plugin /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/lto-wrapper -plugin-opt=-fresolution=/tmp/ccI7hG2t.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr --hash-style=gnu -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_0fe49 /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/Scrt1.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crti.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtbeginS.o -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1 -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib -L/lib/../lib -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_0fe49.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtendS.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crtn.o]
         linker tool for 'C': /usr/bin/ld
         collapse obj [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/Scrt1.o] ==> [/usr/lib/Scrt1.o]
         collapse obj [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crti.o] ==> [/usr/lib/crti.o]
@@ -1377,8 +1319,8 @@ events:
     checks:
       - "Detecting CXX compiler ABI info"
     directories:
-      source: "/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-f5DIDD"
-      binary: "/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-f5DIDD"
+      source: "/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-CRfaxj"
+      binary: "/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-CRfaxj"
     cmakeVariables:
       CMAKE_CXX_FLAGS: ""
       CMAKE_CXX_FLAGS_DEBUG: "-g"
@@ -1389,25 +1331,27 @@ events:
       variable: "CMAKE_CXX_ABI_COMPILED"
       cached: true
       stdout: |
-        Change Dir: '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-f5DIDD'
+        Change Dir: '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-CRfaxj'
         
-        Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/make -f Makefile cmTC_c07ee/fast
-        /usr/bin/make  -f CMakeFiles/cmTC_c07ee.dir/build.make CMakeFiles/cmTC_c07ee.dir/build
-        make[1]: Entering directory '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-f5DIDD'
-        Building CXX object CMakeFiles/cmTC_c07ee.dir/CMakeCXXCompilerABI.cpp.o
-        /usr/bin/c++   -v -o CMakeFiles/cmTC_c07ee.dir/CMakeCXXCompilerABI.cpp.o -c /usr/share/cmake/Modules/CMakeCXXCompilerABI.cpp
+        Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/make -f Makefile cmTC_2c770/fast
+        make[1]: Entering directory '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-CRfaxj'
+        /usr/bin/make  -f CMakeFiles/cmTC_2c770.dir/build.make CMakeFiles/cmTC_2c770.dir/build
+        make[2]: Entering directory '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-CRfaxj'
+        Building CXX object CMakeFiles/cmTC_2c770.dir/CMakeCXXCompilerABI.cpp.o
+        /usr/bin/g++   -v -o CMakeFiles/cmTC_2c770.dir/CMakeCXXCompilerABI.cpp.o -c /usr/share/cmake/Modules/CMakeCXXCompilerABI.cpp
         Using built-in specs.
-        COLLECT_GCC=/usr/bin/c++
+        COLLECT_GCC=/usr/bin/g++
         Target: x86_64-pc-linux-gnu
         Configured with: /tmp/pkg/src/gcc/configure --enable-languages=ada,c,c++,d,fortran,go,lto,m2,objc,obj-c++,rust,cobol --enable-bootstrap --prefix=/usr --libdir=/usr/lib --libexecdir=/usr/lib --mandir=/usr/share/man --infodir=/usr/share/info --with-bugurl=https://github.com/CachyOS/CachyOS-PKGBUILDS/issues --with-build-config=bootstrap-lto --with-linker-hash-style=gnu --with-system-zlib --enable-__cxa_atexit --enable-cet=auto --enable-checking=release --enable-clocale=gnu --enable-default-pie --enable-default-ssp --enable-gnu-indirect-function --enable-gnu-unique-object --enable-libstdcxx-backtrace --enable-link-serialization=1 --enable-linker-build-id --enable-lto --enable-multilib --enable-plugin --enable-shared --enable-threads=posix --disable-libssp --disable-libstdcxx-pch --disable-werror
         Thread model: posix
         Supported LTO compression algorithms: zlib zstd
         gcc version 15.2.1 20260209 (GCC) 
-        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_c07ee.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_c07ee.dir/'
-         /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/cc1plus -quiet -v -D_GNU_SOURCE /usr/share/cmake/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_c07ee.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -mtune=generic -march=x86-64 -version -o /tmp/cccC2lDd.s
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_2c770.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_2c770.dir/'
+         /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/cc1plus -quiet -v -D_GNU_SOURCE /usr/share/cmake/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_2c770.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -mtune=generic -march=x86-64 -version -o /tmp/ccnltQJs.s
         GNU C++17 (GCC) version 15.2.1 20260209 (x86_64-pc-linux-gnu)
         	compiled by GNU C version 15.2.1 20260209, GMP version 6.3.0, MPFR version 4.2.2, MPC version 1.3.1, isl version isl-0.27-GMP
         
+        warning: MPC header version 1.3.1 differs from library version 1.4.0.
         GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
         ignoring nonexistent directory "/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../x86_64-pc-linux-gnu/include"
         #include "..." search starts here:
@@ -1421,16 +1365,16 @@ events:
          /usr/include
         End of search list.
         Compiler executable checksum: 404f410ac26da12cd6eb106b86392ad7
-        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_c07ee.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_c07ee.dir/'
-         as -v --64 -o CMakeFiles/cmTC_c07ee.dir/CMakeCXXCompilerABI.cpp.o /tmp/cccC2lDd.s
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_2c770.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_2c770.dir/'
+         as -v --64 -o CMakeFiles/cmTC_2c770.dir/CMakeCXXCompilerABI.cpp.o /tmp/ccnltQJs.s
         GNU assembler version 2.46 (x86_64-pc-linux-gnu) using BFD version (GNU Binutils) 2.46
         COMPILER_PATH=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/
         LIBRARY_PATH=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/:/lib/../lib/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../:/lib/:/usr/lib/
-        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_c07ee.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_c07ee.dir/CMakeCXXCompilerABI.cpp.'
-        Linking CXX executable cmTC_c07ee
-        /usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_c07ee.dir/link.txt --verbose=1
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_2c770.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_2c770.dir/CMakeCXXCompilerABI.cpp.'
+        Linking CXX executable cmTC_2c770
+        /usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_2c770.dir/link.txt --verbose=1
         Using built-in specs.
-        COLLECT_GCC=/usr/bin/c++
+        COLLECT_GCC=/usr/bin/g++
         COLLECT_LTO_WRAPPER=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/lto-wrapper
         Target: x86_64-pc-linux-gnu
         Configured with: /tmp/pkg/src/gcc/configure --enable-languages=ada,c,c++,d,fortran,go,lto,m2,objc,obj-c++,rust,cobol --enable-bootstrap --prefix=/usr --libdir=/usr/lib --libexecdir=/usr/lib --mandir=/usr/share/man --infodir=/usr/share/info --with-bugurl=https://github.com/CachyOS/CachyOS-PKGBUILDS/issues --with-build-config=bootstrap-lto --with-linker-hash-style=gnu --with-system-zlib --enable-__cxa_atexit --enable-cet=auto --enable-checking=release --enable-clocale=gnu --enable-default-pie --enable-default-ssp --enable-gnu-indirect-function --enable-gnu-unique-object --enable-libstdcxx-backtrace --enable-link-serialization=1 --enable-linker-build-id --enable-lto --enable-multilib --enable-plugin --enable-shared --enable-threads=posix --disable-libssp --disable-libstdcxx-pch --disable-werror
@@ -1439,14 +1383,15 @@ events:
         gcc version 15.2.1 20260209 (GCC) 
         COMPILER_PATH=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/
         LIBRARY_PATH=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/:/lib/../lib/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../:/lib/:/usr/lib/
-        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_c07ee' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_c07ee.'
-         /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/collect2 -plugin /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/lto-wrapper -plugin-opt=-fresolution=/tmp/ccHy4Akb.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr --hash-style=gnu -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_c07ee /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/Scrt1.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crti.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtbeginS.o -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1 -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib -L/lib/../lib -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_c07ee.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtendS.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crtn.o
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_2c770' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_2c770.'
+         /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/collect2 -plugin /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/lto-wrapper -plugin-opt=-fresolution=/tmp/ccziAbNN.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr --hash-style=gnu -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_2c770 /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/Scrt1.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crti.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtbeginS.o -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1 -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib -L/lib/../lib -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_2c770.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtendS.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crtn.o
         collect2 version 15.2.1 20260209
-        /usr/bin/ld -plugin /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/lto-wrapper -plugin-opt=-fresolution=/tmp/ccHy4Akb.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr --hash-style=gnu -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_c07ee /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/Scrt1.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crti.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtbeginS.o -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1 -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib -L/lib/../lib -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_c07ee.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtendS.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crtn.o
+        /usr/bin/ld -plugin /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/lto-wrapper -plugin-opt=-fresolution=/tmp/ccziAbNN.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr --hash-style=gnu -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_2c770 /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/Scrt1.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crti.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtbeginS.o -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1 -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib -L/lib/../lib -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_2c770.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtendS.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crtn.o
         GNU ld (GNU Binutils) 2.46
-        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_c07ee' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_c07ee.'
-        /usr/bin/c++  -v -Wl,-v CMakeFiles/cmTC_c07ee.dir/CMakeCXXCompilerABI.cpp.o -o cmTC_c07ee
-        make[1]: Leaving directory '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-f5DIDD'
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_2c770' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_2c770.'
+        /usr/bin/g++  -v -Wl,-v CMakeFiles/cmTC_2c770.dir/CMakeCXXCompilerABI.cpp.o -o cmTC_2c770
+        make[2]: Leaving directory '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-CRfaxj'
+        make[1]: Leaving directory '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-CRfaxj'
         
       exitCode: 0
   -
@@ -1487,25 +1432,27 @@ events:
       Parsed CXX implicit link information:
         link line regex: [^( *|.*[/\\])(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
         linker tool regex: [^[ 	]*(->|"|[0-9]+>[ 	-]*Build:[ 	0-9]+ ms[ 	]*)?[ 	]*(([^"]*[/\\])?(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)))("|,| |$)]
-        ignore line: [Change Dir: '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-f5DIDD']
+        ignore line: [Change Dir: '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-CRfaxj']
         ignore line: []
-        ignore line: [Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/make -f Makefile cmTC_c07ee/fast]
-        ignore line: [/usr/bin/make  -f CMakeFiles/cmTC_c07ee.dir/build.make CMakeFiles/cmTC_c07ee.dir/build]
-        ignore line: [make[1]: Entering directory '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-f5DIDD']
-        ignore line: [Building CXX object CMakeFiles/cmTC_c07ee.dir/CMakeCXXCompilerABI.cpp.o]
-        ignore line: [/usr/bin/c++   -v -o CMakeFiles/cmTC_c07ee.dir/CMakeCXXCompilerABI.cpp.o -c /usr/share/cmake/Modules/CMakeCXXCompilerABI.cpp]
+        ignore line: [Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/make -f Makefile cmTC_2c770/fast]
+        ignore line: [make[1]: Entering directory '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-CRfaxj']
+        ignore line: [/usr/bin/make  -f CMakeFiles/cmTC_2c770.dir/build.make CMakeFiles/cmTC_2c770.dir/build]
+        ignore line: [make[2]: Entering directory '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-CRfaxj']
+        ignore line: [Building CXX object CMakeFiles/cmTC_2c770.dir/CMakeCXXCompilerABI.cpp.o]
+        ignore line: [/usr/bin/g++   -v -o CMakeFiles/cmTC_2c770.dir/CMakeCXXCompilerABI.cpp.o -c /usr/share/cmake/Modules/CMakeCXXCompilerABI.cpp]
         ignore line: [Using built-in specs.]
-        ignore line: [COLLECT_GCC=/usr/bin/c++]
+        ignore line: [COLLECT_GCC=/usr/bin/g++]
         ignore line: [Target: x86_64-pc-linux-gnu]
         ignore line: [Configured with: /tmp/pkg/src/gcc/configure --enable-languages=ada c c++ d fortran go lto m2 objc obj-c++ rust cobol --enable-bootstrap --prefix=/usr --libdir=/usr/lib --libexecdir=/usr/lib --mandir=/usr/share/man --infodir=/usr/share/info --with-bugurl=https://github.com/CachyOS/CachyOS-PKGBUILDS/issues --with-build-config=bootstrap-lto --with-linker-hash-style=gnu --with-system-zlib --enable-__cxa_atexit --enable-cet=auto --enable-checking=release --enable-clocale=gnu --enable-default-pie --enable-default-ssp --enable-gnu-indirect-function --enable-gnu-unique-object --enable-libstdcxx-backtrace --enable-link-serialization=1 --enable-linker-build-id --enable-lto --enable-multilib --enable-plugin --enable-shared --enable-threads=posix --disable-libssp --disable-libstdcxx-pch --disable-werror]
         ignore line: [Thread model: posix]
         ignore line: [Supported LTO compression algorithms: zlib zstd]
         ignore line: [gcc version 15.2.1 20260209 (GCC) ]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_c07ee.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_c07ee.dir/']
-        ignore line: [ /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/cc1plus -quiet -v -D_GNU_SOURCE /usr/share/cmake/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_c07ee.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -mtune=generic -march=x86-64 -version -o /tmp/cccC2lDd.s]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_2c770.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_2c770.dir/']
+        ignore line: [ /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/cc1plus -quiet -v -D_GNU_SOURCE /usr/share/cmake/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_2c770.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -mtune=generic -march=x86-64 -version -o /tmp/ccnltQJs.s]
         ignore line: [GNU C++17 (GCC) version 15.2.1 20260209 (x86_64-pc-linux-gnu)]
         ignore line: [	compiled by GNU C version 15.2.1 20260209  GMP version 6.3.0  MPFR version 4.2.2  MPC version 1.3.1  isl version isl-0.27-GMP]
         ignore line: []
+        ignore line: [warning: MPC header version 1.3.1 differs from library version 1.4.0.]
         ignore line: [GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072]
         ignore line: [ignoring nonexistent directory "/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../x86_64-pc-linux-gnu/include"]
         ignore line: [#include "..." search starts here:]
@@ -1519,16 +1466,16 @@ events:
         ignore line: [ /usr/include]
         ignore line: [End of search list.]
         ignore line: [Compiler executable checksum: 404f410ac26da12cd6eb106b86392ad7]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_c07ee.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_c07ee.dir/']
-        ignore line: [ as -v --64 -o CMakeFiles/cmTC_c07ee.dir/CMakeCXXCompilerABI.cpp.o /tmp/cccC2lDd.s]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_2c770.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_2c770.dir/']
+        ignore line: [ as -v --64 -o CMakeFiles/cmTC_2c770.dir/CMakeCXXCompilerABI.cpp.o /tmp/ccnltQJs.s]
         ignore line: [GNU assembler version 2.46 (x86_64-pc-linux-gnu) using BFD version (GNU Binutils) 2.46]
         ignore line: [COMPILER_PATH=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/]
         ignore line: [LIBRARY_PATH=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/:/lib/../lib/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../:/lib/:/usr/lib/]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_c07ee.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_c07ee.dir/CMakeCXXCompilerABI.cpp.']
-        ignore line: [Linking CXX executable cmTC_c07ee]
-        ignore line: [/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_c07ee.dir/link.txt --verbose=1]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_2c770.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_2c770.dir/CMakeCXXCompilerABI.cpp.']
+        ignore line: [Linking CXX executable cmTC_2c770]
+        ignore line: [/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_2c770.dir/link.txt --verbose=1]
         ignore line: [Using built-in specs.]
-        ignore line: [COLLECT_GCC=/usr/bin/c++]
+        ignore line: [COLLECT_GCC=/usr/bin/g++]
         ignore line: [COLLECT_LTO_WRAPPER=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/lto-wrapper]
         ignore line: [Target: x86_64-pc-linux-gnu]
         ignore line: [Configured with: /tmp/pkg/src/gcc/configure --enable-languages=ada c c++ d fortran go lto m2 objc obj-c++ rust cobol --enable-bootstrap --prefix=/usr --libdir=/usr/lib --libexecdir=/usr/lib --mandir=/usr/share/man --infodir=/usr/share/info --with-bugurl=https://github.com/CachyOS/CachyOS-PKGBUILDS/issues --with-build-config=bootstrap-lto --with-linker-hash-style=gnu --with-system-zlib --enable-__cxa_atexit --enable-cet=auto --enable-checking=release --enable-clocale=gnu --enable-default-pie --enable-default-ssp --enable-gnu-indirect-function --enable-gnu-unique-object --enable-libstdcxx-backtrace --enable-link-serialization=1 --enable-linker-build-id --enable-lto --enable-multilib --enable-plugin --enable-shared --enable-threads=posix --disable-libssp --disable-libstdcxx-pch --disable-werror]
@@ -1537,13 +1484,13 @@ events:
         ignore line: [gcc version 15.2.1 20260209 (GCC) ]
         ignore line: [COMPILER_PATH=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/]
         ignore line: [LIBRARY_PATH=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/:/lib/../lib/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../:/lib/:/usr/lib/]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_c07ee' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_c07ee.']
-        link line: [ /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/collect2 -plugin /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/lto-wrapper -plugin-opt=-fresolution=/tmp/ccHy4Akb.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr --hash-style=gnu -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_c07ee /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/Scrt1.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crti.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtbeginS.o -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1 -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib -L/lib/../lib -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_c07ee.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtendS.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crtn.o]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_2c770' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_2c770.']
+        link line: [ /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/collect2 -plugin /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/lto-wrapper -plugin-opt=-fresolution=/tmp/ccziAbNN.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr --hash-style=gnu -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_2c770 /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/Scrt1.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crti.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtbeginS.o -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1 -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib -L/lib/../lib -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_2c770.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtendS.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crtn.o]
           arg [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/collect2] ==> ignore
           arg [-plugin] ==> ignore
           arg [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/liblto_plugin.so] ==> ignore
           arg [-plugin-opt=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/lto-wrapper] ==> ignore
-          arg [-plugin-opt=-fresolution=/tmp/ccHy4Akb.res] ==> ignore
+          arg [-plugin-opt=-fresolution=/tmp/ccziAbNN.res] ==> ignore
           arg [-plugin-opt=-pass-through=-lgcc_s] ==> ignore
           arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
           arg [-plugin-opt=-pass-through=-lc] ==> ignore
@@ -1558,7 +1505,7 @@ events:
           arg [/lib64/ld-linux-x86-64.so.2] ==> ignore
           arg [-pie] ==> ignore
           arg [-o] ==> ignore
-          arg [cmTC_c07ee] ==> ignore
+          arg [cmTC_2c770] ==> ignore
           arg [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/Scrt1.o] ==> obj [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/Scrt1.o]
           arg [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crti.o] ==> obj [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crti.o]
           arg [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtbeginS.o] ==> obj [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtbeginS.o]
@@ -1570,7 +1517,7 @@ events:
           arg [-L/lib] ==> dir [/lib]
           arg [-L/usr/lib] ==> dir [/usr/lib]
           arg [-v] ==> ignore
-          arg [CMakeFiles/cmTC_c07ee.dir/CMakeCXXCompilerABI.cpp.o] ==> ignore
+          arg [CMakeFiles/cmTC_2c770.dir/CMakeCXXCompilerABI.cpp.o] ==> ignore
           arg [-lstdc++] ==> lib [stdc++]
           arg [-lm] ==> lib [m]
           arg [-lgcc_s] ==> lib [gcc_s]
@@ -1581,7 +1528,7 @@ events:
           arg [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtendS.o] ==> obj [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtendS.o]
           arg [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crtn.o] ==> obj [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crtn.o]
         ignore line: [collect2 version 15.2.1 20260209]
-        ignore line: [/usr/bin/ld -plugin /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/lto-wrapper -plugin-opt=-fresolution=/tmp/ccHy4Akb.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr --hash-style=gnu -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_c07ee /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/Scrt1.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crti.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtbeginS.o -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1 -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib -L/lib/../lib -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_c07ee.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtendS.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crtn.o]
+        ignore line: [/usr/bin/ld -plugin /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/liblto_plugin.so -plugin-opt=/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/lto-wrapper -plugin-opt=-fresolution=/tmp/ccziAbNN.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr --hash-style=gnu -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_2c770 /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/Scrt1.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crti.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtbeginS.o -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1 -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib -L/lib/../lib -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_2c770.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/crtendS.o /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crtn.o]
         linker tool for 'CXX': /usr/bin/ld
         collapse obj [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/Scrt1.o] ==> [/usr/lib/Scrt1.o]
         collapse obj [/usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/../../../../lib/crti.o] ==> [/usr/lib/crti.o]
@@ -1618,8 +1565,8 @@ events:
     checks:
       - "Performing Test SUPPORTS_COUNTER_MACRO"
     directories:
-      source: "/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-FvlYje"
-      binary: "/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-FvlYje"
+      source: "/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-xaE5mP"
+      binary: "/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-xaE5mP"
     cmakeVariables:
       CMAKE_CXX_FLAGS: ""
       CMAKE_CXX_FLAGS_DEBUG: "-g"
@@ -1629,17 +1576,19 @@ events:
       variable: "SUPPORTS_COUNTER_MACRO"
       cached: true
       stdout: |
-        Change Dir: '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-FvlYje'
+        Change Dir: '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-xaE5mP'
         
-        Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/make -f Makefile cmTC_38a35/fast
-        /usr/bin/make  -f CMakeFiles/cmTC_38a35.dir/build.make CMakeFiles/cmTC_38a35.dir/build
-        make[1]: Verzeichnis „/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-FvlYje“ wird betreten
-        Building CXX object CMakeFiles/cmTC_38a35.dir/src.cxx.o
-        /usr/bin/c++ -DSUPPORTS_COUNTER_MACRO   -o CMakeFiles/cmTC_38a35.dir/src.cxx.o -c /home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-FvlYje/src.cxx
-        Linking CXX executable cmTC_38a35
-        /usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_38a35.dir/link.txt --verbose=1
-        /usr/bin/c++ CMakeFiles/cmTC_38a35.dir/src.cxx.o -o cmTC_38a35
-        make[1]: Verzeichnis „/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-FvlYje“ wird verlassen
+        Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/make -f Makefile cmTC_7a519/fast
+        make[1]: Entering directory '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-xaE5mP'
+        /usr/bin/make  -f CMakeFiles/cmTC_7a519.dir/build.make CMakeFiles/cmTC_7a519.dir/build
+        make[2]: Entering directory '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-xaE5mP'
+        Building CXX object CMakeFiles/cmTC_7a519.dir/src.cxx.o
+        /usr/bin/g++ -DSUPPORTS_COUNTER_MACRO   -o CMakeFiles/cmTC_7a519.dir/src.cxx.o -c /home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-xaE5mP/src.cxx
+        Linking CXX executable cmTC_7a519
+        /usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_7a519.dir/link.txt --verbose=1
+        /usr/bin/g++ CMakeFiles/cmTC_7a519.dir/src.cxx.o -o cmTC_7a519
+        make[2]: Leaving directory '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-xaE5mP'
+        make[1]: Leaving directory '/home/idoc/mr/tvision/build/CMakeFiles/CMakeScratch/TryCompile-xaE5mP'
         
       exitCode: 0
   -
@@ -1660,9 +1609,7 @@ events:
     names:
       - "ncursesw"
     candidate_directories:
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/bin/"
@@ -1670,6 +1617,7 @@ events:
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
       - "/usr/local/lib/"
       - "/usr/local/"
       - "/usr/lib/"
@@ -1683,9 +1631,7 @@ events:
       - "/opt/"
       - "/usr/lib/X11/"
     searched_directories:
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/bin/"
@@ -1693,14 +1639,13 @@ events:
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
       - "/usr/local/lib/"
       - "/usr/local/"
     found: "/usr/lib/libncursesw.so"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -1708,6 +1653,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
         - "/usr/local"
@@ -1738,9 +1684,7 @@ events:
     names:
       - "ncursesw/ncurses.h"
     candidate_directories:
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/bin/"
@@ -1748,6 +1692,7 @@ events:
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
       - "/usr/local/include/"
       - "/usr/local/"
       - "/usr/include/"
@@ -1761,9 +1706,7 @@ events:
       - "/opt/"
       - "/usr/include/X11/"
     searched_directories:
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/ncursesw/ncurses.h"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/ncursesw/ncurses.h"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/ncursesw/ncurses.h"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/ncursesw/ncurses.h"
       - "/usr/local/sbin/ncursesw/ncurses.h"
       - "/usr/local/bin/ncursesw/ncurses.h"
       - "/usr/bin/ncursesw/ncurses.h"
@@ -1771,6 +1714,7 @@ events:
       - "/usr/bin/site_perl/ncursesw/ncurses.h"
       - "/usr/bin/vendor_perl/ncursesw/ncurses.h"
       - "/usr/bin/core_perl/ncursesw/ncurses.h"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/ncursesw/ncurses.h"
       - "/usr/local/include/ncursesw/ncurses.h"
       - "/usr/local/ncursesw/ncurses.h"
       - "/usr/include/ncursesw/ncurses.h"
@@ -1786,9 +1730,7 @@ events:
     found: false
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -1796,6 +1738,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
         - "/usr/local"
@@ -1826,9 +1769,7 @@ events:
     names:
       - "ncurses.h"
     candidate_directories:
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/bin/"
@@ -1836,6 +1777,7 @@ events:
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
       - "/usr/local/include/"
       - "/usr/local/"
       - "/usr/include/"
@@ -1849,9 +1791,7 @@ events:
       - "/opt/"
       - "/usr/include/X11/"
     searched_directories:
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/ncurses.h"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/ncurses.h"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/ncurses.h"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/ncurses.h"
       - "/usr/local/sbin/ncurses.h"
       - "/usr/local/bin/ncurses.h"
       - "/usr/bin/ncurses.h"
@@ -1859,14 +1799,13 @@ events:
       - "/usr/bin/site_perl/ncurses.h"
       - "/usr/bin/vendor_perl/ncurses.h"
       - "/usr/bin/core_perl/ncurses.h"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/ncurses.h"
       - "/usr/local/include/ncurses.h"
       - "/usr/local/ncurses.h"
     found: "/usr/include/"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -1874,6 +1813,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
         - "/usr/local"
@@ -1904,9 +1844,7 @@ events:
     names:
       - "tinfow"
     candidate_directories:
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/bin/"
@@ -1914,6 +1852,7 @@ events:
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
       - "/usr/local/lib/"
       - "/usr/local/"
       - "/usr/lib/"
@@ -1927,9 +1866,7 @@ events:
       - "/opt/"
       - "/usr/lib/X11/"
     searched_directories:
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/bin/"
@@ -1937,6 +1874,7 @@ events:
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
       - "/usr/local/lib/"
       - "/usr/local/"
       - "/usr/lib/"
@@ -1952,9 +1890,7 @@ events:
     found: false
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -1962,6 +1898,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
         - "/usr/local"
@@ -1992,9 +1929,7 @@ events:
     names:
       - "tinfo"
     candidate_directories:
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/bin/"
@@ -2002,6 +1937,7 @@ events:
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
       - "/usr/local/lib/"
       - "/usr/local/"
       - "/usr/lib/"
@@ -2015,9 +1951,7 @@ events:
       - "/opt/"
       - "/usr/lib/X11/"
     searched_directories:
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/bin/"
@@ -2025,14 +1959,13 @@ events:
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
       - "/usr/local/lib/"
       - "/usr/local/"
     found: "/usr/lib/libtinfo.so"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -2040,6 +1973,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
         - "/usr/local"
@@ -2070,9 +2004,7 @@ events:
     names:
       - "gpm"
     candidate_directories:
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/bin/"
@@ -2080,6 +2012,7 @@ events:
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
       - "/usr/local/lib/"
       - "/usr/local/"
       - "/usr/lib/"
@@ -2093,9 +2026,7 @@ events:
       - "/opt/"
       - "/usr/lib/X11/"
     searched_directories:
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/bin/"
@@ -2103,14 +2034,13 @@ events:
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
       - "/usr/local/lib/"
       - "/usr/local/"
     found: "/usr/lib/libgpm.so"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -2118,6 +2048,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
         - "/usr/local"
@@ -2148,9 +2079,7 @@ events:
     names:
       - "gpm.h"
     candidate_directories:
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/bin/"
@@ -2158,6 +2087,7 @@ events:
       - "/usr/bin/site_perl/"
       - "/usr/bin/vendor_perl/"
       - "/usr/bin/core_perl/"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/"
       - "/usr/local/include/"
       - "/usr/local/"
       - "/usr/include/"
@@ -2171,9 +2101,7 @@ events:
       - "/opt/"
       - "/usr/include/X11/"
     searched_directories:
-      - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin/gpm.h"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand/gpm.h"
-      - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli/gpm.h"
+      - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa/gpm.h"
       - "/usr/local/sbin/gpm.h"
       - "/usr/local/bin/gpm.h"
       - "/usr/bin/gpm.h"
@@ -2181,14 +2109,13 @@ events:
       - "/usr/bin/site_perl/gpm.h"
       - "/usr/bin/vendor_perl/gpm.h"
       - "/usr/bin/core_perl/gpm.h"
+      - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64/gpm.h"
       - "/usr/local/include/gpm.h"
       - "/usr/local/gpm.h"
     found: "/usr/include/"
     search_context:
       ENV{PATH}:
-        - "/home/idoc/.vscode/extensions/vadimcn.vscode-lldb-1.12.1/bin"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/debugCommand"
-        - "/home/idoc/.config/Code/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/idoc/.codex/tmp/arg0/codex-arg0XajGfa"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/bin"
@@ -2196,6 +2123,7 @@ events:
         - "/usr/bin/site_perl"
         - "/usr/bin/vendor_perl"
         - "/usr/bin/core_perl"
+        - "/home/idoc/.vscode/extensions/openai.chatgpt-26.325.31654-linux-x64/bin/linux-x86_64"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
         - "/usr/local"

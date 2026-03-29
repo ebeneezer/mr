@@ -1,0 +1,10 @@
+--- a/include/tvision/internal/codepage.h
++++ b/include/tvision/internal/codepage.h
+@@ -3,6 +3,7 @@
+ 
+ #include <stdint.h>
+ #include <string.h>
++#include <tvision/tv.h>
+ 
+ namespace tvision
+ {

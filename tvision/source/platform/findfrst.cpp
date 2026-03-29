@@ -5,51 +5,50 @@
 
 namespace tvision {
 
-std::vector<std::unique_ptr<FindFirstRec>> FindFirstRec::recList;
-std::unordered_map<struct find_t *, size_t> FindFirstRec::recIndexByFileInfo;
-std::mutex FindFirstRec::recMutex;
+FindFirstRec::RecList FindFirstRec::recList;
 
 FindFirstRec *FindFirstRec::allocate(struct find_t *fileinfo, unsigned attrib,
                                      const char *pathname) noexcept {
 	// The findfirst interface based on DOS call 0x4E doesn't provide a
-	// findclose function. Keep one search record per find_t address and
-	// reuse it when the caller restarts a search with the same ffblk/find_t.
+	// findclose function. The strategy here is the same as in Borland's RTL:
+	// new directory streams are allocated unless fileinfo is an address
+	// that has already been passed to us before.
 	if (!fileinfo)
 		return 0;
-	std::lock_guard<std::mutex> lock(recMutex);
+	std::lock_guard<std::mutex> lock(recList);
 	FindFirstRec *r = 0;
-	size_t index = 0;
-	auto it = recIndexByFileInfo.find(fileinfo);
+	size_t index;
 
-	if (it != recIndexByFileInfo.end() && it->second < recList.size() && recList[it->second]) {
-		index = it->second;
-		r = recList[index].get();
+	for (index = 0; index < recList.size(); ++index)
+		if (recList[index].finfo == fileinfo) {
+			r = &recList[index];
+			break;
+		}
+	// At this point, 'index' is either the position of the matching FindFirstRec
+	// item or the size of recList, in which case a new item will be added
+	// at the end of the list and 'index' will be a valid index pointing at it.
+	if (r)
 		r->close();
-	} else {
-		index = recList.size();
-		recList.emplace_back(new FindFirstRec);
-		r = recList[index].get();
+	else {
+		recList.emplace_back();
+		r = &recList[index];
 		r->finfo = fileinfo;
-		recIndexByFileInfo[fileinfo] = index;
 	}
 	// If pathname is a valid directory, make fileinfo point to the allocated
 	// FindFirstRec. Otherwise, return NULL.
 	if (r->setParameters(attrib, pathname)) {
 		fileinfo->reserved = (long)index;
 		return r;
-	}
-	fileinfo->reserved = -1;
-	return 0;
+	} else
+		return 0;
 }
 
 FindFirstRec *FindFirstRec::get(struct find_t *fileinfo) noexcept {
-	// Return the FindFirstRec instance assigned to fileinfo.
-	if (!fileinfo)
-		return 0;
-	std::lock_guard<std::mutex> lock(recMutex);
-	auto it = recIndexByFileInfo.find(fileinfo);
-	if (it != recIndexByFileInfo.end() && it->second < recList.size() && recList[it->second])
-		return recList[it->second].get();
+	// Return the FindFirstRec instance pointed to by fileinfo.
+	std::lock_guard<std::mutex> lock(recList);
+	size_t pos = fileinfo->reserved;
+	if (pos < recList.size() && recList[pos].finfo == fileinfo)
+		return &recList[pos];
 	return 0;
 }
 

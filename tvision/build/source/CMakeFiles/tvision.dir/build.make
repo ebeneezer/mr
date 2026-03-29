@@ -72,3316 +72,2889 @@ include source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/codegen:
 .PHONY : source/CMakeFiles/tvision.dir/codegen
 
-source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch: source/CMakeFiles/tvision.dir/flags.make
-source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch: source/CMakeFiles/tvision.dir/cmake_pch.hxx.cxx
-source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -x c++-header -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch -MF CMakeFiles/tvision.dir/cmake_pch.hxx.gch.d -o CMakeFiles/tvision.dir/cmake_pch.hxx.gch -c /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx.cxx
-
-source/CMakeFiles/tvision.dir/cmake_pch.hxx.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/cmake_pch.hxx.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -x c++-header -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx.cxx > CMakeFiles/tvision.dir/cmake_pch.hxx.i
-
-source/CMakeFiles/tvision.dir/cmake_pch.hxx.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/cmake_pch.hxx.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -x c++-header -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx.cxx -o CMakeFiles/tvision.dir/cmake_pch.hxx.s
-
 source/CMakeFiles/tvision.dir/platform/ansiwrit.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/ansiwrit.cpp.o: /home/idoc/mr/tvision/source/platform/ansiwrit.cpp
-source/CMakeFiles/tvision.dir/platform/ansiwrit.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/ansiwrit.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/ansiwrit.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object source/CMakeFiles/tvision.dir/platform/ansiwrit.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/ansiwrit.cpp.o -MF CMakeFiles/tvision.dir/platform/ansiwrit.cpp.o.d -o CMakeFiles/tvision.dir/platform/ansiwrit.cpp.o -c /home/idoc/mr/tvision/source/platform/ansiwrit.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object source/CMakeFiles/tvision.dir/platform/ansiwrit.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/ansiwrit.cpp.o -MF CMakeFiles/tvision.dir/platform/ansiwrit.cpp.o.d -o CMakeFiles/tvision.dir/platform/ansiwrit.cpp.o -c /home/idoc/mr/tvision/source/platform/ansiwrit.cpp
 
 source/CMakeFiles/tvision.dir/platform/ansiwrit.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/ansiwrit.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/ansiwrit.cpp > CMakeFiles/tvision.dir/platform/ansiwrit.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/ansiwrit.cpp > CMakeFiles/tvision.dir/platform/ansiwrit.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/ansiwrit.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/ansiwrit.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/ansiwrit.cpp -o CMakeFiles/tvision.dir/platform/ansiwrit.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/ansiwrit.cpp -o CMakeFiles/tvision.dir/platform/ansiwrit.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/base64.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/base64.cpp.o: /home/idoc/mr/tvision/source/platform/base64.cpp
-source/CMakeFiles/tvision.dir/platform/base64.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/base64.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/base64.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object source/CMakeFiles/tvision.dir/platform/base64.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/base64.cpp.o -MF CMakeFiles/tvision.dir/platform/base64.cpp.o.d -o CMakeFiles/tvision.dir/platform/base64.cpp.o -c /home/idoc/mr/tvision/source/platform/base64.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object source/CMakeFiles/tvision.dir/platform/base64.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/base64.cpp.o -MF CMakeFiles/tvision.dir/platform/base64.cpp.o.d -o CMakeFiles/tvision.dir/platform/base64.cpp.o -c /home/idoc/mr/tvision/source/platform/base64.cpp
 
 source/CMakeFiles/tvision.dir/platform/base64.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/base64.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/base64.cpp > CMakeFiles/tvision.dir/platform/base64.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/base64.cpp > CMakeFiles/tvision.dir/platform/base64.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/base64.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/base64.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/base64.cpp -o CMakeFiles/tvision.dir/platform/base64.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/base64.cpp -o CMakeFiles/tvision.dir/platform/base64.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/codepage.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/codepage.cpp.o: /home/idoc/mr/tvision/source/platform/codepage.cpp
-source/CMakeFiles/tvision.dir/platform/codepage.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/codepage.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/codepage.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object source/CMakeFiles/tvision.dir/platform/codepage.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/codepage.cpp.o -MF CMakeFiles/tvision.dir/platform/codepage.cpp.o.d -o CMakeFiles/tvision.dir/platform/codepage.cpp.o -c /home/idoc/mr/tvision/source/platform/codepage.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object source/CMakeFiles/tvision.dir/platform/codepage.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/codepage.cpp.o -MF CMakeFiles/tvision.dir/platform/codepage.cpp.o.d -o CMakeFiles/tvision.dir/platform/codepage.cpp.o -c /home/idoc/mr/tvision/source/platform/codepage.cpp
 
 source/CMakeFiles/tvision.dir/platform/codepage.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/codepage.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/codepage.cpp > CMakeFiles/tvision.dir/platform/codepage.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/codepage.cpp > CMakeFiles/tvision.dir/platform/codepage.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/codepage.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/codepage.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/codepage.cpp -o CMakeFiles/tvision.dir/platform/codepage.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/codepage.cpp -o CMakeFiles/tvision.dir/platform/codepage.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/colors.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/colors.cpp.o: /home/idoc/mr/tvision/source/platform/colors.cpp
-source/CMakeFiles/tvision.dir/platform/colors.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/colors.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/colors.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object source/CMakeFiles/tvision.dir/platform/colors.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/colors.cpp.o -MF CMakeFiles/tvision.dir/platform/colors.cpp.o.d -o CMakeFiles/tvision.dir/platform/colors.cpp.o -c /home/idoc/mr/tvision/source/platform/colors.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object source/CMakeFiles/tvision.dir/platform/colors.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/colors.cpp.o -MF CMakeFiles/tvision.dir/platform/colors.cpp.o.d -o CMakeFiles/tvision.dir/platform/colors.cpp.o -c /home/idoc/mr/tvision/source/platform/colors.cpp
 
 source/CMakeFiles/tvision.dir/platform/colors.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/colors.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/colors.cpp > CMakeFiles/tvision.dir/platform/colors.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/colors.cpp > CMakeFiles/tvision.dir/platform/colors.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/colors.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/colors.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/colors.cpp -o CMakeFiles/tvision.dir/platform/colors.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/colors.cpp -o CMakeFiles/tvision.dir/platform/colors.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/conctl.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/conctl.cpp.o: /home/idoc/mr/tvision/source/platform/conctl.cpp
-source/CMakeFiles/tvision.dir/platform/conctl.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/conctl.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/conctl.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object source/CMakeFiles/tvision.dir/platform/conctl.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/conctl.cpp.o -MF CMakeFiles/tvision.dir/platform/conctl.cpp.o.d -o CMakeFiles/tvision.dir/platform/conctl.cpp.o -c /home/idoc/mr/tvision/source/platform/conctl.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object source/CMakeFiles/tvision.dir/platform/conctl.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/conctl.cpp.o -MF CMakeFiles/tvision.dir/platform/conctl.cpp.o.d -o CMakeFiles/tvision.dir/platform/conctl.cpp.o -c /home/idoc/mr/tvision/source/platform/conctl.cpp
 
 source/CMakeFiles/tvision.dir/platform/conctl.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/conctl.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/conctl.cpp > CMakeFiles/tvision.dir/platform/conctl.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/conctl.cpp > CMakeFiles/tvision.dir/platform/conctl.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/conctl.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/conctl.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/conctl.cpp -o CMakeFiles/tvision.dir/platform/conctl.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/conctl.cpp -o CMakeFiles/tvision.dir/platform/conctl.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/dir.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/dir.cpp.o: /home/idoc/mr/tvision/source/platform/dir.cpp
-source/CMakeFiles/tvision.dir/platform/dir.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/dir.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/dir.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Building CXX object source/CMakeFiles/tvision.dir/platform/dir.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/dir.cpp.o -MF CMakeFiles/tvision.dir/platform/dir.cpp.o.d -o CMakeFiles/tvision.dir/platform/dir.cpp.o -c /home/idoc/mr/tvision/source/platform/dir.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object source/CMakeFiles/tvision.dir/platform/dir.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/dir.cpp.o -MF CMakeFiles/tvision.dir/platform/dir.cpp.o.d -o CMakeFiles/tvision.dir/platform/dir.cpp.o -c /home/idoc/mr/tvision/source/platform/dir.cpp
 
 source/CMakeFiles/tvision.dir/platform/dir.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/dir.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/dir.cpp > CMakeFiles/tvision.dir/platform/dir.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/dir.cpp > CMakeFiles/tvision.dir/platform/dir.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/dir.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/dir.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/dir.cpp -o CMakeFiles/tvision.dir/platform/dir.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/dir.cpp -o CMakeFiles/tvision.dir/platform/dir.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/dispbuff.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/dispbuff.cpp.o: /home/idoc/mr/tvision/source/platform/dispbuff.cpp
-source/CMakeFiles/tvision.dir/platform/dispbuff.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/dispbuff.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/dispbuff.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_8) "Building CXX object source/CMakeFiles/tvision.dir/platform/dispbuff.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/dispbuff.cpp.o -MF CMakeFiles/tvision.dir/platform/dispbuff.cpp.o.d -o CMakeFiles/tvision.dir/platform/dispbuff.cpp.o -c /home/idoc/mr/tvision/source/platform/dispbuff.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Building CXX object source/CMakeFiles/tvision.dir/platform/dispbuff.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/dispbuff.cpp.o -MF CMakeFiles/tvision.dir/platform/dispbuff.cpp.o.d -o CMakeFiles/tvision.dir/platform/dispbuff.cpp.o -c /home/idoc/mr/tvision/source/platform/dispbuff.cpp
 
 source/CMakeFiles/tvision.dir/platform/dispbuff.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/dispbuff.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/dispbuff.cpp > CMakeFiles/tvision.dir/platform/dispbuff.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/dispbuff.cpp > CMakeFiles/tvision.dir/platform/dispbuff.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/dispbuff.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/dispbuff.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/dispbuff.cpp -o CMakeFiles/tvision.dir/platform/dispbuff.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/dispbuff.cpp -o CMakeFiles/tvision.dir/platform/dispbuff.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/errredir.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/errredir.cpp.o: /home/idoc/mr/tvision/source/platform/errredir.cpp
-source/CMakeFiles/tvision.dir/platform/errredir.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/errredir.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/errredir.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_9) "Building CXX object source/CMakeFiles/tvision.dir/platform/errredir.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/errredir.cpp.o -MF CMakeFiles/tvision.dir/platform/errredir.cpp.o.d -o CMakeFiles/tvision.dir/platform/errredir.cpp.o -c /home/idoc/mr/tvision/source/platform/errredir.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_8) "Building CXX object source/CMakeFiles/tvision.dir/platform/errredir.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/errredir.cpp.o -MF CMakeFiles/tvision.dir/platform/errredir.cpp.o.d -o CMakeFiles/tvision.dir/platform/errredir.cpp.o -c /home/idoc/mr/tvision/source/platform/errredir.cpp
 
 source/CMakeFiles/tvision.dir/platform/errredir.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/errredir.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/errredir.cpp > CMakeFiles/tvision.dir/platform/errredir.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/errredir.cpp > CMakeFiles/tvision.dir/platform/errredir.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/errredir.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/errredir.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/errredir.cpp -o CMakeFiles/tvision.dir/platform/errredir.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/errredir.cpp -o CMakeFiles/tvision.dir/platform/errredir.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/events.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/events.cpp.o: /home/idoc/mr/tvision/source/platform/events.cpp
-source/CMakeFiles/tvision.dir/platform/events.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/events.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/events.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_10) "Building CXX object source/CMakeFiles/tvision.dir/platform/events.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/events.cpp.o -MF CMakeFiles/tvision.dir/platform/events.cpp.o.d -o CMakeFiles/tvision.dir/platform/events.cpp.o -c /home/idoc/mr/tvision/source/platform/events.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_9) "Building CXX object source/CMakeFiles/tvision.dir/platform/events.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/events.cpp.o -MF CMakeFiles/tvision.dir/platform/events.cpp.o.d -o CMakeFiles/tvision.dir/platform/events.cpp.o -c /home/idoc/mr/tvision/source/platform/events.cpp
 
 source/CMakeFiles/tvision.dir/platform/events.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/events.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/events.cpp > CMakeFiles/tvision.dir/platform/events.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/events.cpp > CMakeFiles/tvision.dir/platform/events.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/events.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/events.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/events.cpp -o CMakeFiles/tvision.dir/platform/events.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/events.cpp -o CMakeFiles/tvision.dir/platform/events.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/far2l.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/far2l.cpp.o: /home/idoc/mr/tvision/source/platform/far2l.cpp
-source/CMakeFiles/tvision.dir/platform/far2l.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/far2l.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/far2l.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_11) "Building CXX object source/CMakeFiles/tvision.dir/platform/far2l.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/far2l.cpp.o -MF CMakeFiles/tvision.dir/platform/far2l.cpp.o.d -o CMakeFiles/tvision.dir/platform/far2l.cpp.o -c /home/idoc/mr/tvision/source/platform/far2l.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_10) "Building CXX object source/CMakeFiles/tvision.dir/platform/far2l.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/far2l.cpp.o -MF CMakeFiles/tvision.dir/platform/far2l.cpp.o.d -o CMakeFiles/tvision.dir/platform/far2l.cpp.o -c /home/idoc/mr/tvision/source/platform/far2l.cpp
 
 source/CMakeFiles/tvision.dir/platform/far2l.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/far2l.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/far2l.cpp > CMakeFiles/tvision.dir/platform/far2l.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/far2l.cpp > CMakeFiles/tvision.dir/platform/far2l.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/far2l.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/far2l.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/far2l.cpp -o CMakeFiles/tvision.dir/platform/far2l.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/far2l.cpp -o CMakeFiles/tvision.dir/platform/far2l.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/findfrst.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/findfrst.cpp.o: /home/idoc/mr/tvision/source/platform/findfrst.cpp
-source/CMakeFiles/tvision.dir/platform/findfrst.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/findfrst.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/findfrst.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_12) "Building CXX object source/CMakeFiles/tvision.dir/platform/findfrst.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/findfrst.cpp.o -MF CMakeFiles/tvision.dir/platform/findfrst.cpp.o.d -o CMakeFiles/tvision.dir/platform/findfrst.cpp.o -c /home/idoc/mr/tvision/source/platform/findfrst.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_11) "Building CXX object source/CMakeFiles/tvision.dir/platform/findfrst.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/findfrst.cpp.o -MF CMakeFiles/tvision.dir/platform/findfrst.cpp.o.d -o CMakeFiles/tvision.dir/platform/findfrst.cpp.o -c /home/idoc/mr/tvision/source/platform/findfrst.cpp
 
 source/CMakeFiles/tvision.dir/platform/findfrst.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/findfrst.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/findfrst.cpp > CMakeFiles/tvision.dir/platform/findfrst.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/findfrst.cpp > CMakeFiles/tvision.dir/platform/findfrst.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/findfrst.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/findfrst.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/findfrst.cpp -o CMakeFiles/tvision.dir/platform/findfrst.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/findfrst.cpp -o CMakeFiles/tvision.dir/platform/findfrst.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/gpminput.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/gpminput.cpp.o: /home/idoc/mr/tvision/source/platform/gpminput.cpp
-source/CMakeFiles/tvision.dir/platform/gpminput.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/gpminput.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/gpminput.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_13) "Building CXX object source/CMakeFiles/tvision.dir/platform/gpminput.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/gpminput.cpp.o -MF CMakeFiles/tvision.dir/platform/gpminput.cpp.o.d -o CMakeFiles/tvision.dir/platform/gpminput.cpp.o -c /home/idoc/mr/tvision/source/platform/gpminput.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_12) "Building CXX object source/CMakeFiles/tvision.dir/platform/gpminput.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/gpminput.cpp.o -MF CMakeFiles/tvision.dir/platform/gpminput.cpp.o.d -o CMakeFiles/tvision.dir/platform/gpminput.cpp.o -c /home/idoc/mr/tvision/source/platform/gpminput.cpp
 
 source/CMakeFiles/tvision.dir/platform/gpminput.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/gpminput.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/gpminput.cpp > CMakeFiles/tvision.dir/platform/gpminput.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/gpminput.cpp > CMakeFiles/tvision.dir/platform/gpminput.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/gpminput.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/gpminput.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/gpminput.cpp -o CMakeFiles/tvision.dir/platform/gpminput.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/gpminput.cpp -o CMakeFiles/tvision.dir/platform/gpminput.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/hardware.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/hardware.cpp.o: /home/idoc/mr/tvision/source/platform/hardware.cpp
-source/CMakeFiles/tvision.dir/platform/hardware.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/hardware.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/hardware.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_14) "Building CXX object source/CMakeFiles/tvision.dir/platform/hardware.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/hardware.cpp.o -MF CMakeFiles/tvision.dir/platform/hardware.cpp.o.d -o CMakeFiles/tvision.dir/platform/hardware.cpp.o -c /home/idoc/mr/tvision/source/platform/hardware.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_13) "Building CXX object source/CMakeFiles/tvision.dir/platform/hardware.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/hardware.cpp.o -MF CMakeFiles/tvision.dir/platform/hardware.cpp.o.d -o CMakeFiles/tvision.dir/platform/hardware.cpp.o -c /home/idoc/mr/tvision/source/platform/hardware.cpp
 
 source/CMakeFiles/tvision.dir/platform/hardware.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/hardware.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/hardware.cpp > CMakeFiles/tvision.dir/platform/hardware.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/hardware.cpp > CMakeFiles/tvision.dir/platform/hardware.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/hardware.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/hardware.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/hardware.cpp -o CMakeFiles/tvision.dir/platform/hardware.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/hardware.cpp -o CMakeFiles/tvision.dir/platform/hardware.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/linuxcon.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/linuxcon.cpp.o: /home/idoc/mr/tvision/source/platform/linuxcon.cpp
-source/CMakeFiles/tvision.dir/platform/linuxcon.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/linuxcon.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/linuxcon.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_15) "Building CXX object source/CMakeFiles/tvision.dir/platform/linuxcon.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/linuxcon.cpp.o -MF CMakeFiles/tvision.dir/platform/linuxcon.cpp.o.d -o CMakeFiles/tvision.dir/platform/linuxcon.cpp.o -c /home/idoc/mr/tvision/source/platform/linuxcon.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_14) "Building CXX object source/CMakeFiles/tvision.dir/platform/linuxcon.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/linuxcon.cpp.o -MF CMakeFiles/tvision.dir/platform/linuxcon.cpp.o.d -o CMakeFiles/tvision.dir/platform/linuxcon.cpp.o -c /home/idoc/mr/tvision/source/platform/linuxcon.cpp
 
 source/CMakeFiles/tvision.dir/platform/linuxcon.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/linuxcon.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/linuxcon.cpp > CMakeFiles/tvision.dir/platform/linuxcon.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/linuxcon.cpp > CMakeFiles/tvision.dir/platform/linuxcon.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/linuxcon.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/linuxcon.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/linuxcon.cpp -o CMakeFiles/tvision.dir/platform/linuxcon.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/linuxcon.cpp -o CMakeFiles/tvision.dir/platform/linuxcon.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/mutex.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/mutex.cpp.o: /home/idoc/mr/tvision/source/platform/mutex.cpp
-source/CMakeFiles/tvision.dir/platform/mutex.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/mutex.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/mutex.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_16) "Building CXX object source/CMakeFiles/tvision.dir/platform/mutex.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/mutex.cpp.o -MF CMakeFiles/tvision.dir/platform/mutex.cpp.o.d -o CMakeFiles/tvision.dir/platform/mutex.cpp.o -c /home/idoc/mr/tvision/source/platform/mutex.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_15) "Building CXX object source/CMakeFiles/tvision.dir/platform/mutex.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/mutex.cpp.o -MF CMakeFiles/tvision.dir/platform/mutex.cpp.o.d -o CMakeFiles/tvision.dir/platform/mutex.cpp.o -c /home/idoc/mr/tvision/source/platform/mutex.cpp
 
 source/CMakeFiles/tvision.dir/platform/mutex.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/mutex.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/mutex.cpp > CMakeFiles/tvision.dir/platform/mutex.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/mutex.cpp > CMakeFiles/tvision.dir/platform/mutex.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/mutex.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/mutex.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/mutex.cpp -o CMakeFiles/tvision.dir/platform/mutex.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/mutex.cpp -o CMakeFiles/tvision.dir/platform/mutex.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/ncurdisp.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/ncurdisp.cpp.o: /home/idoc/mr/tvision/source/platform/ncurdisp.cpp
-source/CMakeFiles/tvision.dir/platform/ncurdisp.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/ncurdisp.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/ncurdisp.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_17) "Building CXX object source/CMakeFiles/tvision.dir/platform/ncurdisp.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/ncurdisp.cpp.o -MF CMakeFiles/tvision.dir/platform/ncurdisp.cpp.o.d -o CMakeFiles/tvision.dir/platform/ncurdisp.cpp.o -c /home/idoc/mr/tvision/source/platform/ncurdisp.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_16) "Building CXX object source/CMakeFiles/tvision.dir/platform/ncurdisp.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/ncurdisp.cpp.o -MF CMakeFiles/tvision.dir/platform/ncurdisp.cpp.o.d -o CMakeFiles/tvision.dir/platform/ncurdisp.cpp.o -c /home/idoc/mr/tvision/source/platform/ncurdisp.cpp
 
 source/CMakeFiles/tvision.dir/platform/ncurdisp.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/ncurdisp.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/ncurdisp.cpp > CMakeFiles/tvision.dir/platform/ncurdisp.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/ncurdisp.cpp > CMakeFiles/tvision.dir/platform/ncurdisp.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/ncurdisp.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/ncurdisp.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/ncurdisp.cpp -o CMakeFiles/tvision.dir/platform/ncurdisp.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/ncurdisp.cpp -o CMakeFiles/tvision.dir/platform/ncurdisp.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/ncursinp.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/ncursinp.cpp.o: /home/idoc/mr/tvision/source/platform/ncursinp.cpp
-source/CMakeFiles/tvision.dir/platform/ncursinp.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/ncursinp.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/ncursinp.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_18) "Building CXX object source/CMakeFiles/tvision.dir/platform/ncursinp.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/ncursinp.cpp.o -MF CMakeFiles/tvision.dir/platform/ncursinp.cpp.o.d -o CMakeFiles/tvision.dir/platform/ncursinp.cpp.o -c /home/idoc/mr/tvision/source/platform/ncursinp.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_17) "Building CXX object source/CMakeFiles/tvision.dir/platform/ncursinp.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/ncursinp.cpp.o -MF CMakeFiles/tvision.dir/platform/ncursinp.cpp.o.d -o CMakeFiles/tvision.dir/platform/ncursinp.cpp.o -c /home/idoc/mr/tvision/source/platform/ncursinp.cpp
 
 source/CMakeFiles/tvision.dir/platform/ncursinp.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/ncursinp.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/ncursinp.cpp > CMakeFiles/tvision.dir/platform/ncursinp.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/ncursinp.cpp > CMakeFiles/tvision.dir/platform/ncursinp.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/ncursinp.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/ncursinp.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/ncursinp.cpp -o CMakeFiles/tvision.dir/platform/ncursinp.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/ncursinp.cpp -o CMakeFiles/tvision.dir/platform/ncursinp.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/platfchr.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/platfchr.cpp.o: /home/idoc/mr/tvision/source/platform/platfchr.cpp
-source/CMakeFiles/tvision.dir/platform/platfchr.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/platfchr.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/platfchr.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_19) "Building CXX object source/CMakeFiles/tvision.dir/platform/platfchr.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/platfchr.cpp.o -MF CMakeFiles/tvision.dir/platform/platfchr.cpp.o.d -o CMakeFiles/tvision.dir/platform/platfchr.cpp.o -c /home/idoc/mr/tvision/source/platform/platfchr.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_18) "Building CXX object source/CMakeFiles/tvision.dir/platform/platfchr.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/platfchr.cpp.o -MF CMakeFiles/tvision.dir/platform/platfchr.cpp.o.d -o CMakeFiles/tvision.dir/platform/platfchr.cpp.o -c /home/idoc/mr/tvision/source/platform/platfchr.cpp
 
 source/CMakeFiles/tvision.dir/platform/platfchr.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/platfchr.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/platfchr.cpp > CMakeFiles/tvision.dir/platform/platfchr.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/platfchr.cpp > CMakeFiles/tvision.dir/platform/platfchr.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/platfchr.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/platfchr.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/platfchr.cpp -o CMakeFiles/tvision.dir/platform/platfchr.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/platfchr.cpp -o CMakeFiles/tvision.dir/platform/platfchr.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/platform.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/platform.cpp.o: /home/idoc/mr/tvision/source/platform/platform.cpp
-source/CMakeFiles/tvision.dir/platform/platform.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/platform.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/platform.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_20) "Building CXX object source/CMakeFiles/tvision.dir/platform/platform.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/platform.cpp.o -MF CMakeFiles/tvision.dir/platform/platform.cpp.o.d -o CMakeFiles/tvision.dir/platform/platform.cpp.o -c /home/idoc/mr/tvision/source/platform/platform.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_19) "Building CXX object source/CMakeFiles/tvision.dir/platform/platform.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/platform.cpp.o -MF CMakeFiles/tvision.dir/platform/platform.cpp.o.d -o CMakeFiles/tvision.dir/platform/platform.cpp.o -c /home/idoc/mr/tvision/source/platform/platform.cpp
 
 source/CMakeFiles/tvision.dir/platform/platform.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/platform.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/platform.cpp > CMakeFiles/tvision.dir/platform/platform.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/platform.cpp > CMakeFiles/tvision.dir/platform/platform.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/platform.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/platform.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/platform.cpp -o CMakeFiles/tvision.dir/platform/platform.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/platform.cpp -o CMakeFiles/tvision.dir/platform/platform.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/sighandl.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/sighandl.cpp.o: /home/idoc/mr/tvision/source/platform/sighandl.cpp
-source/CMakeFiles/tvision.dir/platform/sighandl.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/sighandl.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/sighandl.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_21) "Building CXX object source/CMakeFiles/tvision.dir/platform/sighandl.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/sighandl.cpp.o -MF CMakeFiles/tvision.dir/platform/sighandl.cpp.o.d -o CMakeFiles/tvision.dir/platform/sighandl.cpp.o -c /home/idoc/mr/tvision/source/platform/sighandl.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_20) "Building CXX object source/CMakeFiles/tvision.dir/platform/sighandl.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/sighandl.cpp.o -MF CMakeFiles/tvision.dir/platform/sighandl.cpp.o.d -o CMakeFiles/tvision.dir/platform/sighandl.cpp.o -c /home/idoc/mr/tvision/source/platform/sighandl.cpp
 
 source/CMakeFiles/tvision.dir/platform/sighandl.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/sighandl.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/sighandl.cpp > CMakeFiles/tvision.dir/platform/sighandl.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/sighandl.cpp > CMakeFiles/tvision.dir/platform/sighandl.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/sighandl.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/sighandl.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/sighandl.cpp -o CMakeFiles/tvision.dir/platform/sighandl.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/sighandl.cpp -o CMakeFiles/tvision.dir/platform/sighandl.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/sigwinch.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/sigwinch.cpp.o: /home/idoc/mr/tvision/source/platform/sigwinch.cpp
-source/CMakeFiles/tvision.dir/platform/sigwinch.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/sigwinch.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/sigwinch.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_22) "Building CXX object source/CMakeFiles/tvision.dir/platform/sigwinch.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/sigwinch.cpp.o -MF CMakeFiles/tvision.dir/platform/sigwinch.cpp.o.d -o CMakeFiles/tvision.dir/platform/sigwinch.cpp.o -c /home/idoc/mr/tvision/source/platform/sigwinch.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_21) "Building CXX object source/CMakeFiles/tvision.dir/platform/sigwinch.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/sigwinch.cpp.o -MF CMakeFiles/tvision.dir/platform/sigwinch.cpp.o.d -o CMakeFiles/tvision.dir/platform/sigwinch.cpp.o -c /home/idoc/mr/tvision/source/platform/sigwinch.cpp
 
 source/CMakeFiles/tvision.dir/platform/sigwinch.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/sigwinch.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/sigwinch.cpp > CMakeFiles/tvision.dir/platform/sigwinch.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/sigwinch.cpp > CMakeFiles/tvision.dir/platform/sigwinch.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/sigwinch.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/sigwinch.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/sigwinch.cpp -o CMakeFiles/tvision.dir/platform/sigwinch.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/sigwinch.cpp -o CMakeFiles/tvision.dir/platform/sigwinch.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/strings.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/strings.cpp.o: /home/idoc/mr/tvision/source/platform/strings.cpp
-source/CMakeFiles/tvision.dir/platform/strings.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/strings.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/strings.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_23) "Building CXX object source/CMakeFiles/tvision.dir/platform/strings.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/strings.cpp.o -MF CMakeFiles/tvision.dir/platform/strings.cpp.o.d -o CMakeFiles/tvision.dir/platform/strings.cpp.o -c /home/idoc/mr/tvision/source/platform/strings.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_22) "Building CXX object source/CMakeFiles/tvision.dir/platform/strings.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/strings.cpp.o -MF CMakeFiles/tvision.dir/platform/strings.cpp.o.d -o CMakeFiles/tvision.dir/platform/strings.cpp.o -c /home/idoc/mr/tvision/source/platform/strings.cpp
 
 source/CMakeFiles/tvision.dir/platform/strings.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/strings.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/strings.cpp > CMakeFiles/tvision.dir/platform/strings.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/strings.cpp > CMakeFiles/tvision.dir/platform/strings.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/strings.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/strings.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/strings.cpp -o CMakeFiles/tvision.dir/platform/strings.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/strings.cpp -o CMakeFiles/tvision.dir/platform/strings.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/termio.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/termio.cpp.o: /home/idoc/mr/tvision/source/platform/termio.cpp
-source/CMakeFiles/tvision.dir/platform/termio.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/termio.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/termio.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_24) "Building CXX object source/CMakeFiles/tvision.dir/platform/termio.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/termio.cpp.o -MF CMakeFiles/tvision.dir/platform/termio.cpp.o.d -o CMakeFiles/tvision.dir/platform/termio.cpp.o -c /home/idoc/mr/tvision/source/platform/termio.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_23) "Building CXX object source/CMakeFiles/tvision.dir/platform/termio.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/termio.cpp.o -MF CMakeFiles/tvision.dir/platform/termio.cpp.o.d -o CMakeFiles/tvision.dir/platform/termio.cpp.o -c /home/idoc/mr/tvision/source/platform/termio.cpp
 
 source/CMakeFiles/tvision.dir/platform/termio.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/termio.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/termio.cpp > CMakeFiles/tvision.dir/platform/termio.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/termio.cpp > CMakeFiles/tvision.dir/platform/termio.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/termio.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/termio.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/termio.cpp -o CMakeFiles/tvision.dir/platform/termio.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/termio.cpp -o CMakeFiles/tvision.dir/platform/termio.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/ttext.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/ttext.cpp.o: /home/idoc/mr/tvision/source/platform/ttext.cpp
-source/CMakeFiles/tvision.dir/platform/ttext.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/ttext.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/ttext.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_25) "Building CXX object source/CMakeFiles/tvision.dir/platform/ttext.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/ttext.cpp.o -MF CMakeFiles/tvision.dir/platform/ttext.cpp.o.d -o CMakeFiles/tvision.dir/platform/ttext.cpp.o -c /home/idoc/mr/tvision/source/platform/ttext.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_24) "Building CXX object source/CMakeFiles/tvision.dir/platform/ttext.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/ttext.cpp.o -MF CMakeFiles/tvision.dir/platform/ttext.cpp.o.d -o CMakeFiles/tvision.dir/platform/ttext.cpp.o -c /home/idoc/mr/tvision/source/platform/ttext.cpp
 
 source/CMakeFiles/tvision.dir/platform/ttext.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/ttext.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/ttext.cpp > CMakeFiles/tvision.dir/platform/ttext.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/ttext.cpp > CMakeFiles/tvision.dir/platform/ttext.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/ttext.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/ttext.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/ttext.cpp -o CMakeFiles/tvision.dir/platform/ttext.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/ttext.cpp -o CMakeFiles/tvision.dir/platform/ttext.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/unixclip.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/unixclip.cpp.o: /home/idoc/mr/tvision/source/platform/unixclip.cpp
-source/CMakeFiles/tvision.dir/platform/unixclip.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/unixclip.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/unixclip.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_26) "Building CXX object source/CMakeFiles/tvision.dir/platform/unixclip.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/unixclip.cpp.o -MF CMakeFiles/tvision.dir/platform/unixclip.cpp.o.d -o CMakeFiles/tvision.dir/platform/unixclip.cpp.o -c /home/idoc/mr/tvision/source/platform/unixclip.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_25) "Building CXX object source/CMakeFiles/tvision.dir/platform/unixclip.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/unixclip.cpp.o -MF CMakeFiles/tvision.dir/platform/unixclip.cpp.o.d -o CMakeFiles/tvision.dir/platform/unixclip.cpp.o -c /home/idoc/mr/tvision/source/platform/unixclip.cpp
 
 source/CMakeFiles/tvision.dir/platform/unixclip.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/unixclip.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/unixclip.cpp > CMakeFiles/tvision.dir/platform/unixclip.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/unixclip.cpp > CMakeFiles/tvision.dir/platform/unixclip.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/unixclip.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/unixclip.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/unixclip.cpp -o CMakeFiles/tvision.dir/platform/unixclip.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/unixclip.cpp -o CMakeFiles/tvision.dir/platform/unixclip.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/unixcon.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/unixcon.cpp.o: /home/idoc/mr/tvision/source/platform/unixcon.cpp
-source/CMakeFiles/tvision.dir/platform/unixcon.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/unixcon.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/unixcon.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_27) "Building CXX object source/CMakeFiles/tvision.dir/platform/unixcon.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/unixcon.cpp.o -MF CMakeFiles/tvision.dir/platform/unixcon.cpp.o.d -o CMakeFiles/tvision.dir/platform/unixcon.cpp.o -c /home/idoc/mr/tvision/source/platform/unixcon.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_26) "Building CXX object source/CMakeFiles/tvision.dir/platform/unixcon.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/unixcon.cpp.o -MF CMakeFiles/tvision.dir/platform/unixcon.cpp.o.d -o CMakeFiles/tvision.dir/platform/unixcon.cpp.o -c /home/idoc/mr/tvision/source/platform/unixcon.cpp
 
 source/CMakeFiles/tvision.dir/platform/unixcon.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/unixcon.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/unixcon.cpp > CMakeFiles/tvision.dir/platform/unixcon.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/unixcon.cpp > CMakeFiles/tvision.dir/platform/unixcon.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/unixcon.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/unixcon.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/unixcon.cpp -o CMakeFiles/tvision.dir/platform/unixcon.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/unixcon.cpp -o CMakeFiles/tvision.dir/platform/unixcon.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/utf8.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/utf8.cpp.o: /home/idoc/mr/tvision/source/platform/utf8.cpp
-source/CMakeFiles/tvision.dir/platform/utf8.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/utf8.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/utf8.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_28) "Building CXX object source/CMakeFiles/tvision.dir/platform/utf8.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/utf8.cpp.o -MF CMakeFiles/tvision.dir/platform/utf8.cpp.o.d -o CMakeFiles/tvision.dir/platform/utf8.cpp.o -c /home/idoc/mr/tvision/source/platform/utf8.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_27) "Building CXX object source/CMakeFiles/tvision.dir/platform/utf8.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/utf8.cpp.o -MF CMakeFiles/tvision.dir/platform/utf8.cpp.o.d -o CMakeFiles/tvision.dir/platform/utf8.cpp.o -c /home/idoc/mr/tvision/source/platform/utf8.cpp
 
 source/CMakeFiles/tvision.dir/platform/utf8.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/utf8.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/utf8.cpp > CMakeFiles/tvision.dir/platform/utf8.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/utf8.cpp > CMakeFiles/tvision.dir/platform/utf8.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/utf8.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/utf8.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/utf8.cpp -o CMakeFiles/tvision.dir/platform/utf8.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/utf8.cpp -o CMakeFiles/tvision.dir/platform/utf8.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/win32con.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/win32con.cpp.o: /home/idoc/mr/tvision/source/platform/win32con.cpp
-source/CMakeFiles/tvision.dir/platform/win32con.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/win32con.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/win32con.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_29) "Building CXX object source/CMakeFiles/tvision.dir/platform/win32con.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/win32con.cpp.o -MF CMakeFiles/tvision.dir/platform/win32con.cpp.o.d -o CMakeFiles/tvision.dir/platform/win32con.cpp.o -c /home/idoc/mr/tvision/source/platform/win32con.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_28) "Building CXX object source/CMakeFiles/tvision.dir/platform/win32con.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/win32con.cpp.o -MF CMakeFiles/tvision.dir/platform/win32con.cpp.o.d -o CMakeFiles/tvision.dir/platform/win32con.cpp.o -c /home/idoc/mr/tvision/source/platform/win32con.cpp
 
 source/CMakeFiles/tvision.dir/platform/win32con.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/win32con.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/win32con.cpp > CMakeFiles/tvision.dir/platform/win32con.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/win32con.cpp > CMakeFiles/tvision.dir/platform/win32con.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/win32con.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/win32con.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/win32con.cpp -o CMakeFiles/tvision.dir/platform/win32con.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/win32con.cpp -o CMakeFiles/tvision.dir/platform/win32con.cpp.s
 
 source/CMakeFiles/tvision.dir/platform/winwidth.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/platform/winwidth.cpp.o: /home/idoc/mr/tvision/source/platform/winwidth.cpp
-source/CMakeFiles/tvision.dir/platform/winwidth.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/platform/winwidth.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/platform/winwidth.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_30) "Building CXX object source/CMakeFiles/tvision.dir/platform/winwidth.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/platform/winwidth.cpp.o -MF CMakeFiles/tvision.dir/platform/winwidth.cpp.o.d -o CMakeFiles/tvision.dir/platform/winwidth.cpp.o -c /home/idoc/mr/tvision/source/platform/winwidth.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_29) "Building CXX object source/CMakeFiles/tvision.dir/platform/winwidth.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/platform/winwidth.cpp.o -MF CMakeFiles/tvision.dir/platform/winwidth.cpp.o.d -o CMakeFiles/tvision.dir/platform/winwidth.cpp.o -c /home/idoc/mr/tvision/source/platform/winwidth.cpp
 
 source/CMakeFiles/tvision.dir/platform/winwidth.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/platform/winwidth.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/platform/winwidth.cpp > CMakeFiles/tvision.dir/platform/winwidth.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/platform/winwidth.cpp > CMakeFiles/tvision.dir/platform/winwidth.cpp.i
 
 source/CMakeFiles/tvision.dir/platform/winwidth.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/platform/winwidth.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/platform/winwidth.cpp -o CMakeFiles/tvision.dir/platform/winwidth.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/platform/winwidth.cpp -o CMakeFiles/tvision.dir/platform/winwidth.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/colorsel.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/colorsel.cpp.o: /home/idoc/mr/tvision/source/tvision/colorsel.cpp
-source/CMakeFiles/tvision.dir/tvision/colorsel.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/colorsel.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/colorsel.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_31) "Building CXX object source/CMakeFiles/tvision.dir/tvision/colorsel.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/colorsel.cpp.o -MF CMakeFiles/tvision.dir/tvision/colorsel.cpp.o.d -o CMakeFiles/tvision.dir/tvision/colorsel.cpp.o -c /home/idoc/mr/tvision/source/tvision/colorsel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_30) "Building CXX object source/CMakeFiles/tvision.dir/tvision/colorsel.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/colorsel.cpp.o -MF CMakeFiles/tvision.dir/tvision/colorsel.cpp.o.d -o CMakeFiles/tvision.dir/tvision/colorsel.cpp.o -c /home/idoc/mr/tvision/source/tvision/colorsel.cpp
 
 source/CMakeFiles/tvision.dir/tvision/colorsel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/colorsel.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/colorsel.cpp > CMakeFiles/tvision.dir/tvision/colorsel.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/colorsel.cpp > CMakeFiles/tvision.dir/tvision/colorsel.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/colorsel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/colorsel.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/colorsel.cpp -o CMakeFiles/tvision.dir/tvision/colorsel.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/colorsel.cpp -o CMakeFiles/tvision.dir/tvision/colorsel.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/drivers.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/drivers.cpp.o: /home/idoc/mr/tvision/source/tvision/drivers.cpp
-source/CMakeFiles/tvision.dir/tvision/drivers.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/drivers.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/drivers.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_32) "Building CXX object source/CMakeFiles/tvision.dir/tvision/drivers.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/drivers.cpp.o -MF CMakeFiles/tvision.dir/tvision/drivers.cpp.o.d -o CMakeFiles/tvision.dir/tvision/drivers.cpp.o -c /home/idoc/mr/tvision/source/tvision/drivers.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_31) "Building CXX object source/CMakeFiles/tvision.dir/tvision/drivers.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/drivers.cpp.o -MF CMakeFiles/tvision.dir/tvision/drivers.cpp.o.d -o CMakeFiles/tvision.dir/tvision/drivers.cpp.o -c /home/idoc/mr/tvision/source/tvision/drivers.cpp
 
 source/CMakeFiles/tvision.dir/tvision/drivers.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/drivers.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/drivers.cpp > CMakeFiles/tvision.dir/tvision/drivers.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/drivers.cpp > CMakeFiles/tvision.dir/tvision/drivers.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/drivers.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/drivers.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/drivers.cpp -o CMakeFiles/tvision.dir/tvision/drivers.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/drivers.cpp -o CMakeFiles/tvision.dir/tvision/drivers.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/drivers2.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/drivers2.cpp.o: /home/idoc/mr/tvision/source/tvision/drivers2.cpp
-source/CMakeFiles/tvision.dir/tvision/drivers2.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/drivers2.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/drivers2.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_33) "Building CXX object source/CMakeFiles/tvision.dir/tvision/drivers2.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/drivers2.cpp.o -MF CMakeFiles/tvision.dir/tvision/drivers2.cpp.o.d -o CMakeFiles/tvision.dir/tvision/drivers2.cpp.o -c /home/idoc/mr/tvision/source/tvision/drivers2.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_32) "Building CXX object source/CMakeFiles/tvision.dir/tvision/drivers2.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/drivers2.cpp.o -MF CMakeFiles/tvision.dir/tvision/drivers2.cpp.o.d -o CMakeFiles/tvision.dir/tvision/drivers2.cpp.o -c /home/idoc/mr/tvision/source/tvision/drivers2.cpp
 
 source/CMakeFiles/tvision.dir/tvision/drivers2.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/drivers2.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/drivers2.cpp > CMakeFiles/tvision.dir/tvision/drivers2.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/drivers2.cpp > CMakeFiles/tvision.dir/tvision/drivers2.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/drivers2.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/drivers2.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/drivers2.cpp -o CMakeFiles/tvision.dir/tvision/drivers2.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/drivers2.cpp -o CMakeFiles/tvision.dir/tvision/drivers2.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/edits.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/edits.cpp.o: /home/idoc/mr/tvision/source/tvision/edits.cpp
-source/CMakeFiles/tvision.dir/tvision/edits.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/edits.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/edits.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_34) "Building CXX object source/CMakeFiles/tvision.dir/tvision/edits.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/edits.cpp.o -MF CMakeFiles/tvision.dir/tvision/edits.cpp.o.d -o CMakeFiles/tvision.dir/tvision/edits.cpp.o -c /home/idoc/mr/tvision/source/tvision/edits.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_33) "Building CXX object source/CMakeFiles/tvision.dir/tvision/edits.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/edits.cpp.o -MF CMakeFiles/tvision.dir/tvision/edits.cpp.o.d -o CMakeFiles/tvision.dir/tvision/edits.cpp.o -c /home/idoc/mr/tvision/source/tvision/edits.cpp
 
 source/CMakeFiles/tvision.dir/tvision/edits.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/edits.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/edits.cpp > CMakeFiles/tvision.dir/tvision/edits.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/edits.cpp > CMakeFiles/tvision.dir/tvision/edits.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/edits.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/edits.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/edits.cpp -o CMakeFiles/tvision.dir/tvision/edits.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/edits.cpp -o CMakeFiles/tvision.dir/tvision/edits.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/editstat.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/editstat.cpp.o: /home/idoc/mr/tvision/source/tvision/editstat.cpp
-source/CMakeFiles/tvision.dir/tvision/editstat.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/editstat.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/editstat.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_35) "Building CXX object source/CMakeFiles/tvision.dir/tvision/editstat.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/editstat.cpp.o -MF CMakeFiles/tvision.dir/tvision/editstat.cpp.o.d -o CMakeFiles/tvision.dir/tvision/editstat.cpp.o -c /home/idoc/mr/tvision/source/tvision/editstat.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_34) "Building CXX object source/CMakeFiles/tvision.dir/tvision/editstat.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/editstat.cpp.o -MF CMakeFiles/tvision.dir/tvision/editstat.cpp.o.d -o CMakeFiles/tvision.dir/tvision/editstat.cpp.o -c /home/idoc/mr/tvision/source/tvision/editstat.cpp
 
 source/CMakeFiles/tvision.dir/tvision/editstat.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/editstat.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/editstat.cpp > CMakeFiles/tvision.dir/tvision/editstat.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/editstat.cpp > CMakeFiles/tvision.dir/tvision/editstat.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/editstat.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/editstat.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/editstat.cpp -o CMakeFiles/tvision.dir/tvision/editstat.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/editstat.cpp -o CMakeFiles/tvision.dir/tvision/editstat.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/fmtstr.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/fmtstr.cpp.o: /home/idoc/mr/tvision/source/tvision/fmtstr.cpp
-source/CMakeFiles/tvision.dir/tvision/fmtstr.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/fmtstr.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/fmtstr.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_36) "Building CXX object source/CMakeFiles/tvision.dir/tvision/fmtstr.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/fmtstr.cpp.o -MF CMakeFiles/tvision.dir/tvision/fmtstr.cpp.o.d -o CMakeFiles/tvision.dir/tvision/fmtstr.cpp.o -c /home/idoc/mr/tvision/source/tvision/fmtstr.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_35) "Building CXX object source/CMakeFiles/tvision.dir/tvision/fmtstr.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/fmtstr.cpp.o -MF CMakeFiles/tvision.dir/tvision/fmtstr.cpp.o.d -o CMakeFiles/tvision.dir/tvision/fmtstr.cpp.o -c /home/idoc/mr/tvision/source/tvision/fmtstr.cpp
 
 source/CMakeFiles/tvision.dir/tvision/fmtstr.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/fmtstr.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/fmtstr.cpp > CMakeFiles/tvision.dir/tvision/fmtstr.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/fmtstr.cpp > CMakeFiles/tvision.dir/tvision/fmtstr.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/fmtstr.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/fmtstr.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/fmtstr.cpp -o CMakeFiles/tvision.dir/tvision/fmtstr.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/fmtstr.cpp -o CMakeFiles/tvision.dir/tvision/fmtstr.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/framelin.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/framelin.cpp.o: /home/idoc/mr/tvision/source/tvision/framelin.cpp
-source/CMakeFiles/tvision.dir/tvision/framelin.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/framelin.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/framelin.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_37) "Building CXX object source/CMakeFiles/tvision.dir/tvision/framelin.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/framelin.cpp.o -MF CMakeFiles/tvision.dir/tvision/framelin.cpp.o.d -o CMakeFiles/tvision.dir/tvision/framelin.cpp.o -c /home/idoc/mr/tvision/source/tvision/framelin.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_36) "Building CXX object source/CMakeFiles/tvision.dir/tvision/framelin.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/framelin.cpp.o -MF CMakeFiles/tvision.dir/tvision/framelin.cpp.o.d -o CMakeFiles/tvision.dir/tvision/framelin.cpp.o -c /home/idoc/mr/tvision/source/tvision/framelin.cpp
 
 source/CMakeFiles/tvision.dir/tvision/framelin.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/framelin.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/framelin.cpp > CMakeFiles/tvision.dir/tvision/framelin.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/framelin.cpp > CMakeFiles/tvision.dir/tvision/framelin.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/framelin.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/framelin.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/framelin.cpp -o CMakeFiles/tvision.dir/tvision/framelin.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/framelin.cpp -o CMakeFiles/tvision.dir/tvision/framelin.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/grp.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/grp.cpp.o: /home/idoc/mr/tvision/source/tvision/grp.cpp
-source/CMakeFiles/tvision.dir/tvision/grp.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/grp.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/grp.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_38) "Building CXX object source/CMakeFiles/tvision.dir/tvision/grp.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/grp.cpp.o -MF CMakeFiles/tvision.dir/tvision/grp.cpp.o.d -o CMakeFiles/tvision.dir/tvision/grp.cpp.o -c /home/idoc/mr/tvision/source/tvision/grp.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_37) "Building CXX object source/CMakeFiles/tvision.dir/tvision/grp.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/grp.cpp.o -MF CMakeFiles/tvision.dir/tvision/grp.cpp.o.d -o CMakeFiles/tvision.dir/tvision/grp.cpp.o -c /home/idoc/mr/tvision/source/tvision/grp.cpp
 
 source/CMakeFiles/tvision.dir/tvision/grp.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/grp.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/grp.cpp > CMakeFiles/tvision.dir/tvision/grp.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/grp.cpp > CMakeFiles/tvision.dir/tvision/grp.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/grp.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/grp.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/grp.cpp -o CMakeFiles/tvision.dir/tvision/grp.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/grp.cpp -o CMakeFiles/tvision.dir/tvision/grp.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/hardwrvr.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/hardwrvr.cpp.o: /home/idoc/mr/tvision/source/tvision/hardwrvr.cpp
-source/CMakeFiles/tvision.dir/tvision/hardwrvr.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/hardwrvr.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/hardwrvr.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_39) "Building CXX object source/CMakeFiles/tvision.dir/tvision/hardwrvr.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/hardwrvr.cpp.o -MF CMakeFiles/tvision.dir/tvision/hardwrvr.cpp.o.d -o CMakeFiles/tvision.dir/tvision/hardwrvr.cpp.o -c /home/idoc/mr/tvision/source/tvision/hardwrvr.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_38) "Building CXX object source/CMakeFiles/tvision.dir/tvision/hardwrvr.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/hardwrvr.cpp.o -MF CMakeFiles/tvision.dir/tvision/hardwrvr.cpp.o.d -o CMakeFiles/tvision.dir/tvision/hardwrvr.cpp.o -c /home/idoc/mr/tvision/source/tvision/hardwrvr.cpp
 
 source/CMakeFiles/tvision.dir/tvision/hardwrvr.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/hardwrvr.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/hardwrvr.cpp > CMakeFiles/tvision.dir/tvision/hardwrvr.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/hardwrvr.cpp > CMakeFiles/tvision.dir/tvision/hardwrvr.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/hardwrvr.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/hardwrvr.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/hardwrvr.cpp -o CMakeFiles/tvision.dir/tvision/hardwrvr.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/hardwrvr.cpp -o CMakeFiles/tvision.dir/tvision/hardwrvr.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/help.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/help.cpp.o: /home/idoc/mr/tvision/source/tvision/help.cpp
-source/CMakeFiles/tvision.dir/tvision/help.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/help.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/help.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_40) "Building CXX object source/CMakeFiles/tvision.dir/tvision/help.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/help.cpp.o -MF CMakeFiles/tvision.dir/tvision/help.cpp.o.d -o CMakeFiles/tvision.dir/tvision/help.cpp.o -c /home/idoc/mr/tvision/source/tvision/help.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_39) "Building CXX object source/CMakeFiles/tvision.dir/tvision/help.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/help.cpp.o -MF CMakeFiles/tvision.dir/tvision/help.cpp.o.d -o CMakeFiles/tvision.dir/tvision/help.cpp.o -c /home/idoc/mr/tvision/source/tvision/help.cpp
 
 source/CMakeFiles/tvision.dir/tvision/help.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/help.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/help.cpp > CMakeFiles/tvision.dir/tvision/help.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/help.cpp > CMakeFiles/tvision.dir/tvision/help.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/help.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/help.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/help.cpp -o CMakeFiles/tvision.dir/tvision/help.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/help.cpp -o CMakeFiles/tvision.dir/tvision/help.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/helpbase.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/helpbase.cpp.o: /home/idoc/mr/tvision/source/tvision/helpbase.cpp
-source/CMakeFiles/tvision.dir/tvision/helpbase.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/helpbase.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/helpbase.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_41) "Building CXX object source/CMakeFiles/tvision.dir/tvision/helpbase.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/helpbase.cpp.o -MF CMakeFiles/tvision.dir/tvision/helpbase.cpp.o.d -o CMakeFiles/tvision.dir/tvision/helpbase.cpp.o -c /home/idoc/mr/tvision/source/tvision/helpbase.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_40) "Building CXX object source/CMakeFiles/tvision.dir/tvision/helpbase.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/helpbase.cpp.o -MF CMakeFiles/tvision.dir/tvision/helpbase.cpp.o.d -o CMakeFiles/tvision.dir/tvision/helpbase.cpp.o -c /home/idoc/mr/tvision/source/tvision/helpbase.cpp
 
 source/CMakeFiles/tvision.dir/tvision/helpbase.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/helpbase.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/helpbase.cpp > CMakeFiles/tvision.dir/tvision/helpbase.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/helpbase.cpp > CMakeFiles/tvision.dir/tvision/helpbase.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/helpbase.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/helpbase.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/helpbase.cpp -o CMakeFiles/tvision.dir/tvision/helpbase.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/helpbase.cpp -o CMakeFiles/tvision.dir/tvision/helpbase.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/histlist.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/histlist.cpp.o: /home/idoc/mr/tvision/source/tvision/histlist.cpp
-source/CMakeFiles/tvision.dir/tvision/histlist.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/histlist.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/histlist.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_42) "Building CXX object source/CMakeFiles/tvision.dir/tvision/histlist.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/histlist.cpp.o -MF CMakeFiles/tvision.dir/tvision/histlist.cpp.o.d -o CMakeFiles/tvision.dir/tvision/histlist.cpp.o -c /home/idoc/mr/tvision/source/tvision/histlist.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_41) "Building CXX object source/CMakeFiles/tvision.dir/tvision/histlist.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/histlist.cpp.o -MF CMakeFiles/tvision.dir/tvision/histlist.cpp.o.d -o CMakeFiles/tvision.dir/tvision/histlist.cpp.o -c /home/idoc/mr/tvision/source/tvision/histlist.cpp
 
 source/CMakeFiles/tvision.dir/tvision/histlist.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/histlist.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/histlist.cpp > CMakeFiles/tvision.dir/tvision/histlist.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/histlist.cpp > CMakeFiles/tvision.dir/tvision/histlist.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/histlist.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/histlist.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/histlist.cpp -o CMakeFiles/tvision.dir/tvision/histlist.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/histlist.cpp -o CMakeFiles/tvision.dir/tvision/histlist.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/mapcolor.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/mapcolor.cpp.o: /home/idoc/mr/tvision/source/tvision/mapcolor.cpp
-source/CMakeFiles/tvision.dir/tvision/mapcolor.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/mapcolor.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/mapcolor.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_43) "Building CXX object source/CMakeFiles/tvision.dir/tvision/mapcolor.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/mapcolor.cpp.o -MF CMakeFiles/tvision.dir/tvision/mapcolor.cpp.o.d -o CMakeFiles/tvision.dir/tvision/mapcolor.cpp.o -c /home/idoc/mr/tvision/source/tvision/mapcolor.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_42) "Building CXX object source/CMakeFiles/tvision.dir/tvision/mapcolor.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/mapcolor.cpp.o -MF CMakeFiles/tvision.dir/tvision/mapcolor.cpp.o.d -o CMakeFiles/tvision.dir/tvision/mapcolor.cpp.o -c /home/idoc/mr/tvision/source/tvision/mapcolor.cpp
 
 source/CMakeFiles/tvision.dir/tvision/mapcolor.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/mapcolor.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/mapcolor.cpp > CMakeFiles/tvision.dir/tvision/mapcolor.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/mapcolor.cpp > CMakeFiles/tvision.dir/tvision/mapcolor.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/mapcolor.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/mapcolor.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/mapcolor.cpp -o CMakeFiles/tvision.dir/tvision/mapcolor.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/mapcolor.cpp -o CMakeFiles/tvision.dir/tvision/mapcolor.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/menu.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/menu.cpp.o: /home/idoc/mr/tvision/source/tvision/menu.cpp
-source/CMakeFiles/tvision.dir/tvision/menu.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/menu.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/menu.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_44) "Building CXX object source/CMakeFiles/tvision.dir/tvision/menu.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/menu.cpp.o -MF CMakeFiles/tvision.dir/tvision/menu.cpp.o.d -o CMakeFiles/tvision.dir/tvision/menu.cpp.o -c /home/idoc/mr/tvision/source/tvision/menu.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_43) "Building CXX object source/CMakeFiles/tvision.dir/tvision/menu.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/menu.cpp.o -MF CMakeFiles/tvision.dir/tvision/menu.cpp.o.d -o CMakeFiles/tvision.dir/tvision/menu.cpp.o -c /home/idoc/mr/tvision/source/tvision/menu.cpp
 
 source/CMakeFiles/tvision.dir/tvision/menu.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/menu.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/menu.cpp > CMakeFiles/tvision.dir/tvision/menu.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/menu.cpp > CMakeFiles/tvision.dir/tvision/menu.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/menu.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/menu.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/menu.cpp -o CMakeFiles/tvision.dir/tvision/menu.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/menu.cpp -o CMakeFiles/tvision.dir/tvision/menu.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/misc.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/misc.cpp.o: /home/idoc/mr/tvision/source/tvision/misc.cpp
-source/CMakeFiles/tvision.dir/tvision/misc.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/misc.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/misc.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_45) "Building CXX object source/CMakeFiles/tvision.dir/tvision/misc.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/misc.cpp.o -MF CMakeFiles/tvision.dir/tvision/misc.cpp.o.d -o CMakeFiles/tvision.dir/tvision/misc.cpp.o -c /home/idoc/mr/tvision/source/tvision/misc.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_44) "Building CXX object source/CMakeFiles/tvision.dir/tvision/misc.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/misc.cpp.o -MF CMakeFiles/tvision.dir/tvision/misc.cpp.o.d -o CMakeFiles/tvision.dir/tvision/misc.cpp.o -c /home/idoc/mr/tvision/source/tvision/misc.cpp
 
 source/CMakeFiles/tvision.dir/tvision/misc.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/misc.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/misc.cpp > CMakeFiles/tvision.dir/tvision/misc.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/misc.cpp > CMakeFiles/tvision.dir/tvision/misc.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/misc.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/misc.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/misc.cpp -o CMakeFiles/tvision.dir/tvision/misc.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/misc.cpp -o CMakeFiles/tvision.dir/tvision/misc.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/msgbox.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/msgbox.cpp.o: /home/idoc/mr/tvision/source/tvision/msgbox.cpp
-source/CMakeFiles/tvision.dir/tvision/msgbox.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/msgbox.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/msgbox.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_46) "Building CXX object source/CMakeFiles/tvision.dir/tvision/msgbox.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/msgbox.cpp.o -MF CMakeFiles/tvision.dir/tvision/msgbox.cpp.o.d -o CMakeFiles/tvision.dir/tvision/msgbox.cpp.o -c /home/idoc/mr/tvision/source/tvision/msgbox.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_45) "Building CXX object source/CMakeFiles/tvision.dir/tvision/msgbox.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/msgbox.cpp.o -MF CMakeFiles/tvision.dir/tvision/msgbox.cpp.o.d -o CMakeFiles/tvision.dir/tvision/msgbox.cpp.o -c /home/idoc/mr/tvision/source/tvision/msgbox.cpp
 
 source/CMakeFiles/tvision.dir/tvision/msgbox.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/msgbox.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/msgbox.cpp > CMakeFiles/tvision.dir/tvision/msgbox.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/msgbox.cpp > CMakeFiles/tvision.dir/tvision/msgbox.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/msgbox.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/msgbox.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/msgbox.cpp -o CMakeFiles/tvision.dir/tvision/msgbox.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/msgbox.cpp -o CMakeFiles/tvision.dir/tvision/msgbox.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/new.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/new.cpp.o: /home/idoc/mr/tvision/source/tvision/new.cpp
-source/CMakeFiles/tvision.dir/tvision/new.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/new.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/new.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_47) "Building CXX object source/CMakeFiles/tvision.dir/tvision/new.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/new.cpp.o -MF CMakeFiles/tvision.dir/tvision/new.cpp.o.d -o CMakeFiles/tvision.dir/tvision/new.cpp.o -c /home/idoc/mr/tvision/source/tvision/new.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_46) "Building CXX object source/CMakeFiles/tvision.dir/tvision/new.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/new.cpp.o -MF CMakeFiles/tvision.dir/tvision/new.cpp.o.d -o CMakeFiles/tvision.dir/tvision/new.cpp.o -c /home/idoc/mr/tvision/source/tvision/new.cpp
 
 source/CMakeFiles/tvision.dir/tvision/new.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/new.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/new.cpp > CMakeFiles/tvision.dir/tvision/new.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/new.cpp > CMakeFiles/tvision.dir/tvision/new.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/new.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/new.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/new.cpp -o CMakeFiles/tvision.dir/tvision/new.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/new.cpp -o CMakeFiles/tvision.dir/tvision/new.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/newstr.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/newstr.cpp.o: /home/idoc/mr/tvision/source/tvision/newstr.cpp
-source/CMakeFiles/tvision.dir/tvision/newstr.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/newstr.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/newstr.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_48) "Building CXX object source/CMakeFiles/tvision.dir/tvision/newstr.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/newstr.cpp.o -MF CMakeFiles/tvision.dir/tvision/newstr.cpp.o.d -o CMakeFiles/tvision.dir/tvision/newstr.cpp.o -c /home/idoc/mr/tvision/source/tvision/newstr.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_47) "Building CXX object source/CMakeFiles/tvision.dir/tvision/newstr.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/newstr.cpp.o -MF CMakeFiles/tvision.dir/tvision/newstr.cpp.o.d -o CMakeFiles/tvision.dir/tvision/newstr.cpp.o -c /home/idoc/mr/tvision/source/tvision/newstr.cpp
 
 source/CMakeFiles/tvision.dir/tvision/newstr.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/newstr.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/newstr.cpp > CMakeFiles/tvision.dir/tvision/newstr.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/newstr.cpp > CMakeFiles/tvision.dir/tvision/newstr.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/newstr.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/newstr.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/newstr.cpp -o CMakeFiles/tvision.dir/tvision/newstr.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/newstr.cpp -o CMakeFiles/tvision.dir/tvision/newstr.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmbkgrnd.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmbkgrnd.cpp.o: /home/idoc/mr/tvision/source/tvision/nmbkgrnd.cpp
-source/CMakeFiles/tvision.dir/tvision/nmbkgrnd.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmbkgrnd.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmbkgrnd.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_49) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmbkgrnd.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmbkgrnd.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmbkgrnd.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmbkgrnd.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmbkgrnd.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_48) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmbkgrnd.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmbkgrnd.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmbkgrnd.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmbkgrnd.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmbkgrnd.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmbkgrnd.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmbkgrnd.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmbkgrnd.cpp > CMakeFiles/tvision.dir/tvision/nmbkgrnd.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmbkgrnd.cpp > CMakeFiles/tvision.dir/tvision/nmbkgrnd.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmbkgrnd.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmbkgrnd.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmbkgrnd.cpp -o CMakeFiles/tvision.dir/tvision/nmbkgrnd.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmbkgrnd.cpp -o CMakeFiles/tvision.dir/tvision/nmbkgrnd.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmbutton.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmbutton.cpp.o: /home/idoc/mr/tvision/source/tvision/nmbutton.cpp
-source/CMakeFiles/tvision.dir/tvision/nmbutton.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmbutton.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmbutton.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_50) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmbutton.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmbutton.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmbutton.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmbutton.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmbutton.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_49) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmbutton.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmbutton.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmbutton.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmbutton.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmbutton.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmbutton.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmbutton.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmbutton.cpp > CMakeFiles/tvision.dir/tvision/nmbutton.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmbutton.cpp > CMakeFiles/tvision.dir/tvision/nmbutton.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmbutton.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmbutton.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmbutton.cpp -o CMakeFiles/tvision.dir/tvision/nmbutton.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmbutton.cpp -o CMakeFiles/tvision.dir/tvision/nmbutton.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmchdrdl.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmchdrdl.cpp.o: /home/idoc/mr/tvision/source/tvision/nmchdrdl.cpp
-source/CMakeFiles/tvision.dir/tvision/nmchdrdl.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmchdrdl.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmchdrdl.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_51) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmchdrdl.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmchdrdl.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmchdrdl.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmchdrdl.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmchdrdl.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_50) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmchdrdl.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmchdrdl.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmchdrdl.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmchdrdl.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmchdrdl.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmchdrdl.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmchdrdl.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmchdrdl.cpp > CMakeFiles/tvision.dir/tvision/nmchdrdl.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmchdrdl.cpp > CMakeFiles/tvision.dir/tvision/nmchdrdl.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmchdrdl.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmchdrdl.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmchdrdl.cpp -o CMakeFiles/tvision.dir/tvision/nmchdrdl.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmchdrdl.cpp -o CMakeFiles/tvision.dir/tvision/nmchdrdl.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmchkbox.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmchkbox.cpp.o: /home/idoc/mr/tvision/source/tvision/nmchkbox.cpp
-source/CMakeFiles/tvision.dir/tvision/nmchkbox.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmchkbox.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmchkbox.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_52) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmchkbox.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmchkbox.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmchkbox.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmchkbox.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmchkbox.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_51) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmchkbox.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmchkbox.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmchkbox.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmchkbox.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmchkbox.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmchkbox.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmchkbox.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmchkbox.cpp > CMakeFiles/tvision.dir/tvision/nmchkbox.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmchkbox.cpp > CMakeFiles/tvision.dir/tvision/nmchkbox.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmchkbox.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmchkbox.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmchkbox.cpp -o CMakeFiles/tvision.dir/tvision/nmchkbox.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmchkbox.cpp -o CMakeFiles/tvision.dir/tvision/nmchkbox.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmclrsel.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmclrsel.cpp.o: /home/idoc/mr/tvision/source/tvision/nmclrsel.cpp
-source/CMakeFiles/tvision.dir/tvision/nmclrsel.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmclrsel.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmclrsel.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_53) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmclrsel.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmclrsel.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmclrsel.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmclrsel.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmclrsel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_52) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmclrsel.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmclrsel.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmclrsel.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmclrsel.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmclrsel.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmclrsel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmclrsel.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmclrsel.cpp > CMakeFiles/tvision.dir/tvision/nmclrsel.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmclrsel.cpp > CMakeFiles/tvision.dir/tvision/nmclrsel.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmclrsel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmclrsel.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmclrsel.cpp -o CMakeFiles/tvision.dir/tvision/nmclrsel.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmclrsel.cpp -o CMakeFiles/tvision.dir/tvision/nmclrsel.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmclustr.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmclustr.cpp.o: /home/idoc/mr/tvision/source/tvision/nmclustr.cpp
-source/CMakeFiles/tvision.dir/tvision/nmclustr.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmclustr.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmclustr.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_54) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmclustr.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmclustr.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmclustr.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmclustr.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmclustr.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_53) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmclustr.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmclustr.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmclustr.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmclustr.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmclustr.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmclustr.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmclustr.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmclustr.cpp > CMakeFiles/tvision.dir/tvision/nmclustr.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmclustr.cpp > CMakeFiles/tvision.dir/tvision/nmclustr.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmclustr.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmclustr.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmclustr.cpp -o CMakeFiles/tvision.dir/tvision/nmclustr.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmclustr.cpp -o CMakeFiles/tvision.dir/tvision/nmclustr.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmcollct.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmcollct.cpp.o: /home/idoc/mr/tvision/source/tvision/nmcollct.cpp
-source/CMakeFiles/tvision.dir/tvision/nmcollct.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmcollct.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmcollct.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_55) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmcollct.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmcollct.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmcollct.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmcollct.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmcollct.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_54) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmcollct.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmcollct.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmcollct.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmcollct.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmcollct.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmcollct.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmcollct.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmcollct.cpp > CMakeFiles/tvision.dir/tvision/nmcollct.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmcollct.cpp > CMakeFiles/tvision.dir/tvision/nmcollct.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmcollct.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmcollct.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmcollct.cpp -o CMakeFiles/tvision.dir/tvision/nmcollct.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmcollct.cpp -o CMakeFiles/tvision.dir/tvision/nmcollct.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmdialog.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmdialog.cpp.o: /home/idoc/mr/tvision/source/tvision/nmdialog.cpp
-source/CMakeFiles/tvision.dir/tvision/nmdialog.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmdialog.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmdialog.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_56) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmdialog.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmdialog.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmdialog.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmdialog.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmdialog.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_55) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmdialog.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmdialog.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmdialog.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmdialog.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmdialog.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmdialog.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmdialog.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmdialog.cpp > CMakeFiles/tvision.dir/tvision/nmdialog.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmdialog.cpp > CMakeFiles/tvision.dir/tvision/nmdialog.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmdialog.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmdialog.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmdialog.cpp -o CMakeFiles/tvision.dir/tvision/nmdialog.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmdialog.cpp -o CMakeFiles/tvision.dir/tvision/nmdialog.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmdirbox.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmdirbox.cpp.o: /home/idoc/mr/tvision/source/tvision/nmdirbox.cpp
-source/CMakeFiles/tvision.dir/tvision/nmdirbox.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmdirbox.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmdirbox.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_57) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmdirbox.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmdirbox.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmdirbox.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmdirbox.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmdirbox.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_56) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmdirbox.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmdirbox.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmdirbox.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmdirbox.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmdirbox.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmdirbox.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmdirbox.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmdirbox.cpp > CMakeFiles/tvision.dir/tvision/nmdirbox.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmdirbox.cpp > CMakeFiles/tvision.dir/tvision/nmdirbox.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmdirbox.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmdirbox.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmdirbox.cpp -o CMakeFiles/tvision.dir/tvision/nmdirbox.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmdirbox.cpp -o CMakeFiles/tvision.dir/tvision/nmdirbox.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmdircol.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmdircol.cpp.o: /home/idoc/mr/tvision/source/tvision/nmdircol.cpp
-source/CMakeFiles/tvision.dir/tvision/nmdircol.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmdircol.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmdircol.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_58) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmdircol.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmdircol.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmdircol.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmdircol.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmdircol.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_57) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmdircol.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmdircol.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmdircol.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmdircol.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmdircol.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmdircol.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmdircol.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmdircol.cpp > CMakeFiles/tvision.dir/tvision/nmdircol.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmdircol.cpp > CMakeFiles/tvision.dir/tvision/nmdircol.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmdircol.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmdircol.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmdircol.cpp -o CMakeFiles/tvision.dir/tvision/nmdircol.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmdircol.cpp -o CMakeFiles/tvision.dir/tvision/nmdircol.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmdsktop.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmdsktop.cpp.o: /home/idoc/mr/tvision/source/tvision/nmdsktop.cpp
-source/CMakeFiles/tvision.dir/tvision/nmdsktop.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmdsktop.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmdsktop.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_59) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmdsktop.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmdsktop.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmdsktop.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmdsktop.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmdsktop.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_58) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmdsktop.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmdsktop.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmdsktop.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmdsktop.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmdsktop.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmdsktop.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmdsktop.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmdsktop.cpp > CMakeFiles/tvision.dir/tvision/nmdsktop.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmdsktop.cpp > CMakeFiles/tvision.dir/tvision/nmdsktop.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmdsktop.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmdsktop.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmdsktop.cpp -o CMakeFiles/tvision.dir/tvision/nmdsktop.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmdsktop.cpp -o CMakeFiles/tvision.dir/tvision/nmdsktop.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmeditor.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmeditor.cpp.o: /home/idoc/mr/tvision/source/tvision/nmeditor.cpp
-source/CMakeFiles/tvision.dir/tvision/nmeditor.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmeditor.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmeditor.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_60) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmeditor.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmeditor.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmeditor.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmeditor.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmeditor.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_59) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmeditor.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmeditor.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmeditor.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmeditor.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmeditor.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmeditor.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmeditor.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmeditor.cpp > CMakeFiles/tvision.dir/tvision/nmeditor.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmeditor.cpp > CMakeFiles/tvision.dir/tvision/nmeditor.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmeditor.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmeditor.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmeditor.cpp -o CMakeFiles/tvision.dir/tvision/nmeditor.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmeditor.cpp -o CMakeFiles/tvision.dir/tvision/nmeditor.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmfilcol.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmfilcol.cpp.o: /home/idoc/mr/tvision/source/tvision/nmfilcol.cpp
-source/CMakeFiles/tvision.dir/tvision/nmfilcol.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmfilcol.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmfilcol.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_61) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmfilcol.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmfilcol.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmfilcol.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmfilcol.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmfilcol.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_60) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmfilcol.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmfilcol.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmfilcol.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmfilcol.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmfilcol.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmfilcol.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmfilcol.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmfilcol.cpp > CMakeFiles/tvision.dir/tvision/nmfilcol.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmfilcol.cpp > CMakeFiles/tvision.dir/tvision/nmfilcol.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmfilcol.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmfilcol.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmfilcol.cpp -o CMakeFiles/tvision.dir/tvision/nmfilcol.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmfilcol.cpp -o CMakeFiles/tvision.dir/tvision/nmfilcol.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmfildlg.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmfildlg.cpp.o: /home/idoc/mr/tvision/source/tvision/nmfildlg.cpp
-source/CMakeFiles/tvision.dir/tvision/nmfildlg.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmfildlg.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmfildlg.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_62) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmfildlg.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmfildlg.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmfildlg.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmfildlg.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmfildlg.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_61) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmfildlg.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmfildlg.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmfildlg.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmfildlg.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmfildlg.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmfildlg.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmfildlg.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmfildlg.cpp > CMakeFiles/tvision.dir/tvision/nmfildlg.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmfildlg.cpp > CMakeFiles/tvision.dir/tvision/nmfildlg.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmfildlg.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmfildlg.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmfildlg.cpp -o CMakeFiles/tvision.dir/tvision/nmfildlg.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmfildlg.cpp -o CMakeFiles/tvision.dir/tvision/nmfildlg.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmfillst.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmfillst.cpp.o: /home/idoc/mr/tvision/source/tvision/nmfillst.cpp
-source/CMakeFiles/tvision.dir/tvision/nmfillst.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmfillst.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmfillst.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_63) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmfillst.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmfillst.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmfillst.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmfillst.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmfillst.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_62) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmfillst.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmfillst.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmfillst.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmfillst.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmfillst.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmfillst.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmfillst.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmfillst.cpp > CMakeFiles/tvision.dir/tvision/nmfillst.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmfillst.cpp > CMakeFiles/tvision.dir/tvision/nmfillst.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmfillst.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmfillst.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmfillst.cpp -o CMakeFiles/tvision.dir/tvision/nmfillst.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmfillst.cpp -o CMakeFiles/tvision.dir/tvision/nmfillst.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmframe.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmframe.cpp.o: /home/idoc/mr/tvision/source/tvision/nmframe.cpp
-source/CMakeFiles/tvision.dir/tvision/nmframe.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmframe.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmframe.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_64) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmframe.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmframe.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmframe.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmframe.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmframe.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_63) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmframe.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmframe.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmframe.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmframe.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmframe.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmframe.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmframe.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmframe.cpp > CMakeFiles/tvision.dir/tvision/nmframe.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmframe.cpp > CMakeFiles/tvision.dir/tvision/nmframe.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmframe.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmframe.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmframe.cpp -o CMakeFiles/tvision.dir/tvision/nmframe.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmframe.cpp -o CMakeFiles/tvision.dir/tvision/nmframe.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmgroup.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmgroup.cpp.o: /home/idoc/mr/tvision/source/tvision/nmgroup.cpp
-source/CMakeFiles/tvision.dir/tvision/nmgroup.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmgroup.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmgroup.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_65) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmgroup.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmgroup.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmgroup.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmgroup.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmgroup.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_64) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmgroup.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmgroup.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmgroup.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmgroup.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmgroup.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmgroup.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmgroup.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmgroup.cpp > CMakeFiles/tvision.dir/tvision/nmgroup.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmgroup.cpp > CMakeFiles/tvision.dir/tvision/nmgroup.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmgroup.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmgroup.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmgroup.cpp -o CMakeFiles/tvision.dir/tvision/nmgroup.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmgroup.cpp -o CMakeFiles/tvision.dir/tvision/nmgroup.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmhist.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmhist.cpp.o: /home/idoc/mr/tvision/source/tvision/nmhist.cpp
-source/CMakeFiles/tvision.dir/tvision/nmhist.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmhist.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmhist.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_66) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmhist.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmhist.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmhist.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmhist.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmhist.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_65) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmhist.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmhist.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmhist.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmhist.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmhist.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmhist.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmhist.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmhist.cpp > CMakeFiles/tvision.dir/tvision/nmhist.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmhist.cpp > CMakeFiles/tvision.dir/tvision/nmhist.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmhist.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmhist.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmhist.cpp -o CMakeFiles/tvision.dir/tvision/nmhist.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmhist.cpp -o CMakeFiles/tvision.dir/tvision/nmhist.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nminptln.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nminptln.cpp.o: /home/idoc/mr/tvision/source/tvision/nminptln.cpp
-source/CMakeFiles/tvision.dir/tvision/nminptln.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nminptln.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nminptln.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_67) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nminptln.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nminptln.cpp.o -MF CMakeFiles/tvision.dir/tvision/nminptln.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nminptln.cpp.o -c /home/idoc/mr/tvision/source/tvision/nminptln.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_66) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nminptln.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nminptln.cpp.o -MF CMakeFiles/tvision.dir/tvision/nminptln.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nminptln.cpp.o -c /home/idoc/mr/tvision/source/tvision/nminptln.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nminptln.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nminptln.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nminptln.cpp > CMakeFiles/tvision.dir/tvision/nminptln.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nminptln.cpp > CMakeFiles/tvision.dir/tvision/nminptln.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nminptln.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nminptln.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nminptln.cpp -o CMakeFiles/tvision.dir/tvision/nminptln.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nminptln.cpp -o CMakeFiles/tvision.dir/tvision/nminptln.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmlabel.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmlabel.cpp.o: /home/idoc/mr/tvision/source/tvision/nmlabel.cpp
-source/CMakeFiles/tvision.dir/tvision/nmlabel.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmlabel.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmlabel.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_68) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmlabel.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmlabel.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmlabel.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmlabel.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmlabel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_67) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmlabel.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmlabel.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmlabel.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmlabel.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmlabel.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmlabel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmlabel.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmlabel.cpp > CMakeFiles/tvision.dir/tvision/nmlabel.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmlabel.cpp > CMakeFiles/tvision.dir/tvision/nmlabel.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmlabel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmlabel.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmlabel.cpp -o CMakeFiles/tvision.dir/tvision/nmlabel.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmlabel.cpp -o CMakeFiles/tvision.dir/tvision/nmlabel.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmlstbox.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmlstbox.cpp.o: /home/idoc/mr/tvision/source/tvision/nmlstbox.cpp
-source/CMakeFiles/tvision.dir/tvision/nmlstbox.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmlstbox.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmlstbox.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_69) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmlstbox.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmlstbox.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmlstbox.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmlstbox.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmlstbox.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_68) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmlstbox.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmlstbox.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmlstbox.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmlstbox.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmlstbox.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmlstbox.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmlstbox.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmlstbox.cpp > CMakeFiles/tvision.dir/tvision/nmlstbox.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmlstbox.cpp > CMakeFiles/tvision.dir/tvision/nmlstbox.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmlstbox.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmlstbox.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmlstbox.cpp -o CMakeFiles/tvision.dir/tvision/nmlstbox.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmlstbox.cpp -o CMakeFiles/tvision.dir/tvision/nmlstbox.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmlstvwr.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmlstvwr.cpp.o: /home/idoc/mr/tvision/source/tvision/nmlstvwr.cpp
-source/CMakeFiles/tvision.dir/tvision/nmlstvwr.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmlstvwr.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmlstvwr.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_70) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmlstvwr.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmlstvwr.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmlstvwr.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmlstvwr.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmlstvwr.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_69) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmlstvwr.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmlstvwr.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmlstvwr.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmlstvwr.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmlstvwr.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmlstvwr.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmlstvwr.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmlstvwr.cpp > CMakeFiles/tvision.dir/tvision/nmlstvwr.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmlstvwr.cpp > CMakeFiles/tvision.dir/tvision/nmlstvwr.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmlstvwr.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmlstvwr.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmlstvwr.cpp -o CMakeFiles/tvision.dir/tvision/nmlstvwr.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmlstvwr.cpp -o CMakeFiles/tvision.dir/tvision/nmlstvwr.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmmnubar.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmmnubar.cpp.o: /home/idoc/mr/tvision/source/tvision/nmmnubar.cpp
-source/CMakeFiles/tvision.dir/tvision/nmmnubar.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmmnubar.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmmnubar.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_71) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmmnubar.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmmnubar.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmmnubar.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmmnubar.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmmnubar.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_70) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmmnubar.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmmnubar.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmmnubar.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmmnubar.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmmnubar.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmmnubar.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmmnubar.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmmnubar.cpp > CMakeFiles/tvision.dir/tvision/nmmnubar.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmmnubar.cpp > CMakeFiles/tvision.dir/tvision/nmmnubar.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmmnubar.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmmnubar.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmmnubar.cpp -o CMakeFiles/tvision.dir/tvision/nmmnubar.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmmnubar.cpp -o CMakeFiles/tvision.dir/tvision/nmmnubar.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmmnubox.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmmnubox.cpp.o: /home/idoc/mr/tvision/source/tvision/nmmnubox.cpp
-source/CMakeFiles/tvision.dir/tvision/nmmnubox.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmmnubox.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmmnubox.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_72) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmmnubox.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmmnubox.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmmnubox.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmmnubox.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmmnubox.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_71) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmmnubox.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmmnubox.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmmnubox.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmmnubox.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmmnubox.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmmnubox.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmmnubox.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmmnubox.cpp > CMakeFiles/tvision.dir/tvision/nmmnubox.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmmnubox.cpp > CMakeFiles/tvision.dir/tvision/nmmnubox.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmmnubox.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmmnubox.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmmnubox.cpp -o CMakeFiles/tvision.dir/tvision/nmmnubox.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmmnubox.cpp -o CMakeFiles/tvision.dir/tvision/nmmnubox.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmmnupop.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmmnupop.cpp.o: /home/idoc/mr/tvision/source/tvision/nmmnupop.cpp
-source/CMakeFiles/tvision.dir/tvision/nmmnupop.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmmnupop.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmmnupop.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_73) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmmnupop.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmmnupop.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmmnupop.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmmnupop.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmmnupop.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_72) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmmnupop.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmmnupop.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmmnupop.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmmnupop.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmmnupop.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmmnupop.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmmnupop.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmmnupop.cpp > CMakeFiles/tvision.dir/tvision/nmmnupop.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmmnupop.cpp > CMakeFiles/tvision.dir/tvision/nmmnupop.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmmnupop.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmmnupop.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmmnupop.cpp -o CMakeFiles/tvision.dir/tvision/nmmnupop.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmmnupop.cpp -o CMakeFiles/tvision.dir/tvision/nmmnupop.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmmnuvw.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmmnuvw.cpp.o: /home/idoc/mr/tvision/source/tvision/nmmnuvw.cpp
-source/CMakeFiles/tvision.dir/tvision/nmmnuvw.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmmnuvw.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmmnuvw.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_74) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmmnuvw.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmmnuvw.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmmnuvw.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmmnuvw.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmmnuvw.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_73) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmmnuvw.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmmnuvw.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmmnuvw.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmmnuvw.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmmnuvw.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmmnuvw.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmmnuvw.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmmnuvw.cpp > CMakeFiles/tvision.dir/tvision/nmmnuvw.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmmnuvw.cpp > CMakeFiles/tvision.dir/tvision/nmmnuvw.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmmnuvw.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmmnuvw.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmmnuvw.cpp -o CMakeFiles/tvision.dir/tvision/nmmnuvw.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmmnuvw.cpp -o CMakeFiles/tvision.dir/tvision/nmmnuvw.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmmulchk.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmmulchk.cpp.o: /home/idoc/mr/tvision/source/tvision/nmmulchk.cpp
-source/CMakeFiles/tvision.dir/tvision/nmmulchk.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmmulchk.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmmulchk.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_75) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmmulchk.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmmulchk.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmmulchk.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmmulchk.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmmulchk.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_74) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmmulchk.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmmulchk.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmmulchk.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmmulchk.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmmulchk.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmmulchk.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmmulchk.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmmulchk.cpp > CMakeFiles/tvision.dir/tvision/nmmulchk.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmmulchk.cpp > CMakeFiles/tvision.dir/tvision/nmmulchk.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmmulchk.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmmulchk.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmmulchk.cpp -o CMakeFiles/tvision.dir/tvision/nmmulchk.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmmulchk.cpp -o CMakeFiles/tvision.dir/tvision/nmmulchk.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmoutlin.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmoutlin.cpp.o: /home/idoc/mr/tvision/source/tvision/nmoutlin.cpp
-source/CMakeFiles/tvision.dir/tvision/nmoutlin.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmoutlin.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmoutlin.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_76) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmoutlin.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmoutlin.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmoutlin.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmoutlin.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmoutlin.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_75) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmoutlin.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmoutlin.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmoutlin.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmoutlin.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmoutlin.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmoutlin.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmoutlin.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmoutlin.cpp > CMakeFiles/tvision.dir/tvision/nmoutlin.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmoutlin.cpp > CMakeFiles/tvision.dir/tvision/nmoutlin.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmoutlin.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmoutlin.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmoutlin.cpp -o CMakeFiles/tvision.dir/tvision/nmoutlin.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmoutlin.cpp -o CMakeFiles/tvision.dir/tvision/nmoutlin.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmprmtxt.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmprmtxt.cpp.o: /home/idoc/mr/tvision/source/tvision/nmprmtxt.cpp
-source/CMakeFiles/tvision.dir/tvision/nmprmtxt.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmprmtxt.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmprmtxt.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_77) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmprmtxt.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmprmtxt.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmprmtxt.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmprmtxt.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmprmtxt.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_76) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmprmtxt.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmprmtxt.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmprmtxt.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmprmtxt.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmprmtxt.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmprmtxt.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmprmtxt.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmprmtxt.cpp > CMakeFiles/tvision.dir/tvision/nmprmtxt.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmprmtxt.cpp > CMakeFiles/tvision.dir/tvision/nmprmtxt.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmprmtxt.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmprmtxt.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmprmtxt.cpp -o CMakeFiles/tvision.dir/tvision/nmprmtxt.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmprmtxt.cpp -o CMakeFiles/tvision.dir/tvision/nmprmtxt.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmrbtns.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmrbtns.cpp.o: /home/idoc/mr/tvision/source/tvision/nmrbtns.cpp
-source/CMakeFiles/tvision.dir/tvision/nmrbtns.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmrbtns.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmrbtns.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_78) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmrbtns.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmrbtns.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmrbtns.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmrbtns.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmrbtns.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_77) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmrbtns.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmrbtns.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmrbtns.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmrbtns.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmrbtns.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmrbtns.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmrbtns.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmrbtns.cpp > CMakeFiles/tvision.dir/tvision/nmrbtns.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmrbtns.cpp > CMakeFiles/tvision.dir/tvision/nmrbtns.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmrbtns.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmrbtns.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmrbtns.cpp -o CMakeFiles/tvision.dir/tvision/nmrbtns.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmrbtns.cpp -o CMakeFiles/tvision.dir/tvision/nmrbtns.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmrescol.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmrescol.cpp.o: /home/idoc/mr/tvision/source/tvision/nmrescol.cpp
-source/CMakeFiles/tvision.dir/tvision/nmrescol.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmrescol.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmrescol.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_79) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmrescol.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmrescol.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmrescol.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmrescol.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmrescol.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_78) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmrescol.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmrescol.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmrescol.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmrescol.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmrescol.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmrescol.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmrescol.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmrescol.cpp > CMakeFiles/tvision.dir/tvision/nmrescol.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmrescol.cpp > CMakeFiles/tvision.dir/tvision/nmrescol.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmrescol.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmrescol.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmrescol.cpp -o CMakeFiles/tvision.dir/tvision/nmrescol.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmrescol.cpp -o CMakeFiles/tvision.dir/tvision/nmrescol.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmscoll.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmscoll.cpp.o: /home/idoc/mr/tvision/source/tvision/nmscoll.cpp
-source/CMakeFiles/tvision.dir/tvision/nmscoll.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmscoll.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmscoll.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_80) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmscoll.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmscoll.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmscoll.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmscoll.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmscoll.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_79) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmscoll.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmscoll.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmscoll.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmscoll.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmscoll.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmscoll.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmscoll.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmscoll.cpp > CMakeFiles/tvision.dir/tvision/nmscoll.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmscoll.cpp > CMakeFiles/tvision.dir/tvision/nmscoll.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmscoll.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmscoll.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmscoll.cpp -o CMakeFiles/tvision.dir/tvision/nmscoll.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmscoll.cpp -o CMakeFiles/tvision.dir/tvision/nmscoll.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmscrbar.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmscrbar.cpp.o: /home/idoc/mr/tvision/source/tvision/nmscrbar.cpp
-source/CMakeFiles/tvision.dir/tvision/nmscrbar.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmscrbar.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmscrbar.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_81) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmscrbar.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmscrbar.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmscrbar.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmscrbar.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmscrbar.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_80) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmscrbar.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmscrbar.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmscrbar.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmscrbar.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmscrbar.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmscrbar.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmscrbar.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmscrbar.cpp > CMakeFiles/tvision.dir/tvision/nmscrbar.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmscrbar.cpp > CMakeFiles/tvision.dir/tvision/nmscrbar.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmscrbar.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmscrbar.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmscrbar.cpp -o CMakeFiles/tvision.dir/tvision/nmscrbar.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmscrbar.cpp -o CMakeFiles/tvision.dir/tvision/nmscrbar.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmscroll.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmscroll.cpp.o: /home/idoc/mr/tvision/source/tvision/nmscroll.cpp
-source/CMakeFiles/tvision.dir/tvision/nmscroll.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmscroll.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmscroll.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_82) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmscroll.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmscroll.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmscroll.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmscroll.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmscroll.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_81) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmscroll.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmscroll.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmscroll.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmscroll.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmscroll.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmscroll.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmscroll.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmscroll.cpp > CMakeFiles/tvision.dir/tvision/nmscroll.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmscroll.cpp > CMakeFiles/tvision.dir/tvision/nmscroll.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmscroll.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmscroll.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmscroll.cpp -o CMakeFiles/tvision.dir/tvision/nmscroll.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmscroll.cpp -o CMakeFiles/tvision.dir/tvision/nmscroll.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmstctxt.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmstctxt.cpp.o: /home/idoc/mr/tvision/source/tvision/nmstctxt.cpp
-source/CMakeFiles/tvision.dir/tvision/nmstctxt.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmstctxt.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmstctxt.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_83) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmstctxt.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmstctxt.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmstctxt.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmstctxt.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmstctxt.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_82) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmstctxt.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmstctxt.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmstctxt.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmstctxt.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmstctxt.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmstctxt.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmstctxt.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmstctxt.cpp > CMakeFiles/tvision.dir/tvision/nmstctxt.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmstctxt.cpp > CMakeFiles/tvision.dir/tvision/nmstctxt.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmstctxt.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmstctxt.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmstctxt.cpp -o CMakeFiles/tvision.dir/tvision/nmstctxt.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmstctxt.cpp -o CMakeFiles/tvision.dir/tvision/nmstctxt.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmstddlg.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmstddlg.cpp.o: /home/idoc/mr/tvision/source/tvision/nmstddlg.cpp
-source/CMakeFiles/tvision.dir/tvision/nmstddlg.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmstddlg.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmstddlg.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_84) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmstddlg.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmstddlg.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmstddlg.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmstddlg.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmstddlg.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_83) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmstddlg.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmstddlg.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmstddlg.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmstddlg.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmstddlg.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmstddlg.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmstddlg.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmstddlg.cpp > CMakeFiles/tvision.dir/tvision/nmstddlg.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmstddlg.cpp > CMakeFiles/tvision.dir/tvision/nmstddlg.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmstddlg.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmstddlg.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmstddlg.cpp -o CMakeFiles/tvision.dir/tvision/nmstddlg.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmstddlg.cpp -o CMakeFiles/tvision.dir/tvision/nmstddlg.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmstline.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmstline.cpp.o: /home/idoc/mr/tvision/source/tvision/nmstline.cpp
-source/CMakeFiles/tvision.dir/tvision/nmstline.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmstline.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmstline.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_85) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmstline.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmstline.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmstline.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmstline.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmstline.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_84) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmstline.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmstline.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmstline.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmstline.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmstline.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmstline.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmstline.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmstline.cpp > CMakeFiles/tvision.dir/tvision/nmstline.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmstline.cpp > CMakeFiles/tvision.dir/tvision/nmstline.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmstline.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmstline.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmstline.cpp -o CMakeFiles/tvision.dir/tvision/nmstline.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmstline.cpp -o CMakeFiles/tvision.dir/tvision/nmstline.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmstrcol.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmstrcol.cpp.o: /home/idoc/mr/tvision/source/tvision/nmstrcol.cpp
-source/CMakeFiles/tvision.dir/tvision/nmstrcol.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmstrcol.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmstrcol.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_86) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmstrcol.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmstrcol.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmstrcol.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmstrcol.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmstrcol.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_85) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmstrcol.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmstrcol.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmstrcol.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmstrcol.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmstrcol.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmstrcol.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmstrcol.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmstrcol.cpp > CMakeFiles/tvision.dir/tvision/nmstrcol.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmstrcol.cpp > CMakeFiles/tvision.dir/tvision/nmstrcol.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmstrcol.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmstrcol.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmstrcol.cpp -o CMakeFiles/tvision.dir/tvision/nmstrcol.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmstrcol.cpp -o CMakeFiles/tvision.dir/tvision/nmstrcol.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmstrlst.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmstrlst.cpp.o: /home/idoc/mr/tvision/source/tvision/nmstrlst.cpp
-source/CMakeFiles/tvision.dir/tvision/nmstrlst.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmstrlst.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmstrlst.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_87) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmstrlst.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmstrlst.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmstrlst.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmstrlst.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmstrlst.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_86) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmstrlst.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmstrlst.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmstrlst.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmstrlst.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmstrlst.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmstrlst.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmstrlst.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmstrlst.cpp > CMakeFiles/tvision.dir/tvision/nmstrlst.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmstrlst.cpp > CMakeFiles/tvision.dir/tvision/nmstrlst.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmstrlst.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmstrlst.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmstrlst.cpp -o CMakeFiles/tvision.dir/tvision/nmstrlst.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmstrlst.cpp -o CMakeFiles/tvision.dir/tvision/nmstrlst.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmvalida.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmvalida.cpp.o: /home/idoc/mr/tvision/source/tvision/nmvalida.cpp
-source/CMakeFiles/tvision.dir/tvision/nmvalida.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmvalida.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmvalida.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_88) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmvalida.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmvalida.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmvalida.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmvalida.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmvalida.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_87) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmvalida.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmvalida.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmvalida.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmvalida.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmvalida.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmvalida.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmvalida.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmvalida.cpp > CMakeFiles/tvision.dir/tvision/nmvalida.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmvalida.cpp > CMakeFiles/tvision.dir/tvision/nmvalida.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmvalida.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmvalida.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmvalida.cpp -o CMakeFiles/tvision.dir/tvision/nmvalida.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmvalida.cpp -o CMakeFiles/tvision.dir/tvision/nmvalida.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmview.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmview.cpp.o: /home/idoc/mr/tvision/source/tvision/nmview.cpp
-source/CMakeFiles/tvision.dir/tvision/nmview.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmview.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmview.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_89) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmview.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmview.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmview.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmview.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmview.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_88) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmview.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmview.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmview.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmview.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmview.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmview.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmview.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmview.cpp > CMakeFiles/tvision.dir/tvision/nmview.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmview.cpp > CMakeFiles/tvision.dir/tvision/nmview.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmview.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmview.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmview.cpp -o CMakeFiles/tvision.dir/tvision/nmview.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmview.cpp -o CMakeFiles/tvision.dir/tvision/nmview.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/nmwindow.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/nmwindow.cpp.o: /home/idoc/mr/tvision/source/tvision/nmwindow.cpp
-source/CMakeFiles/tvision.dir/tvision/nmwindow.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/nmwindow.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/nmwindow.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_90) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmwindow.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/nmwindow.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmwindow.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmwindow.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmwindow.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_89) "Building CXX object source/CMakeFiles/tvision.dir/tvision/nmwindow.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/nmwindow.cpp.o -MF CMakeFiles/tvision.dir/tvision/nmwindow.cpp.o.d -o CMakeFiles/tvision.dir/tvision/nmwindow.cpp.o -c /home/idoc/mr/tvision/source/tvision/nmwindow.cpp
 
 source/CMakeFiles/tvision.dir/tvision/nmwindow.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/nmwindow.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/nmwindow.cpp > CMakeFiles/tvision.dir/tvision/nmwindow.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/nmwindow.cpp > CMakeFiles/tvision.dir/tvision/nmwindow.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/nmwindow.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/nmwindow.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/nmwindow.cpp -o CMakeFiles/tvision.dir/tvision/nmwindow.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/nmwindow.cpp -o CMakeFiles/tvision.dir/tvision/nmwindow.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/palette.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/palette.cpp.o: /home/idoc/mr/tvision/source/tvision/palette.cpp
-source/CMakeFiles/tvision.dir/tvision/palette.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/palette.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/palette.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_91) "Building CXX object source/CMakeFiles/tvision.dir/tvision/palette.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/palette.cpp.o -MF CMakeFiles/tvision.dir/tvision/palette.cpp.o.d -o CMakeFiles/tvision.dir/tvision/palette.cpp.o -c /home/idoc/mr/tvision/source/tvision/palette.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_90) "Building CXX object source/CMakeFiles/tvision.dir/tvision/palette.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/palette.cpp.o -MF CMakeFiles/tvision.dir/tvision/palette.cpp.o.d -o CMakeFiles/tvision.dir/tvision/palette.cpp.o -c /home/idoc/mr/tvision/source/tvision/palette.cpp
 
 source/CMakeFiles/tvision.dir/tvision/palette.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/palette.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/palette.cpp > CMakeFiles/tvision.dir/tvision/palette.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/palette.cpp > CMakeFiles/tvision.dir/tvision/palette.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/palette.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/palette.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/palette.cpp -o CMakeFiles/tvision.dir/tvision/palette.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/palette.cpp -o CMakeFiles/tvision.dir/tvision/palette.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/popupmnu.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/popupmnu.cpp.o: /home/idoc/mr/tvision/source/tvision/popupmnu.cpp
-source/CMakeFiles/tvision.dir/tvision/popupmnu.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/popupmnu.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/popupmnu.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_92) "Building CXX object source/CMakeFiles/tvision.dir/tvision/popupmnu.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/popupmnu.cpp.o -MF CMakeFiles/tvision.dir/tvision/popupmnu.cpp.o.d -o CMakeFiles/tvision.dir/tvision/popupmnu.cpp.o -c /home/idoc/mr/tvision/source/tvision/popupmnu.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_91) "Building CXX object source/CMakeFiles/tvision.dir/tvision/popupmnu.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/popupmnu.cpp.o -MF CMakeFiles/tvision.dir/tvision/popupmnu.cpp.o.d -o CMakeFiles/tvision.dir/tvision/popupmnu.cpp.o -c /home/idoc/mr/tvision/source/tvision/popupmnu.cpp
 
 source/CMakeFiles/tvision.dir/tvision/popupmnu.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/popupmnu.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/popupmnu.cpp > CMakeFiles/tvision.dir/tvision/popupmnu.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/popupmnu.cpp > CMakeFiles/tvision.dir/tvision/popupmnu.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/popupmnu.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/popupmnu.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/popupmnu.cpp -o CMakeFiles/tvision.dir/tvision/popupmnu.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/popupmnu.cpp -o CMakeFiles/tvision.dir/tvision/popupmnu.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/prntcnst.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/prntcnst.cpp.o: /home/idoc/mr/tvision/source/tvision/prntcnst.cpp
-source/CMakeFiles/tvision.dir/tvision/prntcnst.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/prntcnst.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/prntcnst.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_93) "Building CXX object source/CMakeFiles/tvision.dir/tvision/prntcnst.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/prntcnst.cpp.o -MF CMakeFiles/tvision.dir/tvision/prntcnst.cpp.o.d -o CMakeFiles/tvision.dir/tvision/prntcnst.cpp.o -c /home/idoc/mr/tvision/source/tvision/prntcnst.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_92) "Building CXX object source/CMakeFiles/tvision.dir/tvision/prntcnst.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/prntcnst.cpp.o -MF CMakeFiles/tvision.dir/tvision/prntcnst.cpp.o.d -o CMakeFiles/tvision.dir/tvision/prntcnst.cpp.o -c /home/idoc/mr/tvision/source/tvision/prntcnst.cpp
 
 source/CMakeFiles/tvision.dir/tvision/prntcnst.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/prntcnst.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/prntcnst.cpp > CMakeFiles/tvision.dir/tvision/prntcnst.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/prntcnst.cpp > CMakeFiles/tvision.dir/tvision/prntcnst.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/prntcnst.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/prntcnst.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/prntcnst.cpp -o CMakeFiles/tvision.dir/tvision/prntcnst.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/prntcnst.cpp -o CMakeFiles/tvision.dir/tvision/prntcnst.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sbkgrnd.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sbkgrnd.cpp.o: /home/idoc/mr/tvision/source/tvision/sbkgrnd.cpp
-source/CMakeFiles/tvision.dir/tvision/sbkgrnd.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sbkgrnd.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sbkgrnd.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_94) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sbkgrnd.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sbkgrnd.cpp.o -MF CMakeFiles/tvision.dir/tvision/sbkgrnd.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sbkgrnd.cpp.o -c /home/idoc/mr/tvision/source/tvision/sbkgrnd.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_93) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sbkgrnd.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sbkgrnd.cpp.o -MF CMakeFiles/tvision.dir/tvision/sbkgrnd.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sbkgrnd.cpp.o -c /home/idoc/mr/tvision/source/tvision/sbkgrnd.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sbkgrnd.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sbkgrnd.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sbkgrnd.cpp > CMakeFiles/tvision.dir/tvision/sbkgrnd.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sbkgrnd.cpp > CMakeFiles/tvision.dir/tvision/sbkgrnd.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sbkgrnd.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sbkgrnd.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sbkgrnd.cpp -o CMakeFiles/tvision.dir/tvision/sbkgrnd.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sbkgrnd.cpp -o CMakeFiles/tvision.dir/tvision/sbkgrnd.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sbutton.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sbutton.cpp.o: /home/idoc/mr/tvision/source/tvision/sbutton.cpp
-source/CMakeFiles/tvision.dir/tvision/sbutton.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sbutton.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sbutton.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_95) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sbutton.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sbutton.cpp.o -MF CMakeFiles/tvision.dir/tvision/sbutton.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sbutton.cpp.o -c /home/idoc/mr/tvision/source/tvision/sbutton.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_94) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sbutton.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sbutton.cpp.o -MF CMakeFiles/tvision.dir/tvision/sbutton.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sbutton.cpp.o -c /home/idoc/mr/tvision/source/tvision/sbutton.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sbutton.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sbutton.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sbutton.cpp > CMakeFiles/tvision.dir/tvision/sbutton.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sbutton.cpp > CMakeFiles/tvision.dir/tvision/sbutton.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sbutton.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sbutton.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sbutton.cpp -o CMakeFiles/tvision.dir/tvision/sbutton.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sbutton.cpp -o CMakeFiles/tvision.dir/tvision/sbutton.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/schdrdlg.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/schdrdlg.cpp.o: /home/idoc/mr/tvision/source/tvision/schdrdlg.cpp
-source/CMakeFiles/tvision.dir/tvision/schdrdlg.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/schdrdlg.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/schdrdlg.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_96) "Building CXX object source/CMakeFiles/tvision.dir/tvision/schdrdlg.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/schdrdlg.cpp.o -MF CMakeFiles/tvision.dir/tvision/schdrdlg.cpp.o.d -o CMakeFiles/tvision.dir/tvision/schdrdlg.cpp.o -c /home/idoc/mr/tvision/source/tvision/schdrdlg.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_95) "Building CXX object source/CMakeFiles/tvision.dir/tvision/schdrdlg.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/schdrdlg.cpp.o -MF CMakeFiles/tvision.dir/tvision/schdrdlg.cpp.o.d -o CMakeFiles/tvision.dir/tvision/schdrdlg.cpp.o -c /home/idoc/mr/tvision/source/tvision/schdrdlg.cpp
 
 source/CMakeFiles/tvision.dir/tvision/schdrdlg.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/schdrdlg.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/schdrdlg.cpp > CMakeFiles/tvision.dir/tvision/schdrdlg.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/schdrdlg.cpp > CMakeFiles/tvision.dir/tvision/schdrdlg.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/schdrdlg.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/schdrdlg.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/schdrdlg.cpp -o CMakeFiles/tvision.dir/tvision/schdrdlg.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/schdrdlg.cpp -o CMakeFiles/tvision.dir/tvision/schdrdlg.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/scheckbo.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/scheckbo.cpp.o: /home/idoc/mr/tvision/source/tvision/scheckbo.cpp
-source/CMakeFiles/tvision.dir/tvision/scheckbo.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/scheckbo.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/scheckbo.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_97) "Building CXX object source/CMakeFiles/tvision.dir/tvision/scheckbo.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/scheckbo.cpp.o -MF CMakeFiles/tvision.dir/tvision/scheckbo.cpp.o.d -o CMakeFiles/tvision.dir/tvision/scheckbo.cpp.o -c /home/idoc/mr/tvision/source/tvision/scheckbo.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_96) "Building CXX object source/CMakeFiles/tvision.dir/tvision/scheckbo.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/scheckbo.cpp.o -MF CMakeFiles/tvision.dir/tvision/scheckbo.cpp.o.d -o CMakeFiles/tvision.dir/tvision/scheckbo.cpp.o -c /home/idoc/mr/tvision/source/tvision/scheckbo.cpp
 
 source/CMakeFiles/tvision.dir/tvision/scheckbo.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/scheckbo.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/scheckbo.cpp > CMakeFiles/tvision.dir/tvision/scheckbo.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/scheckbo.cpp > CMakeFiles/tvision.dir/tvision/scheckbo.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/scheckbo.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/scheckbo.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/scheckbo.cpp -o CMakeFiles/tvision.dir/tvision/scheckbo.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/scheckbo.cpp -o CMakeFiles/tvision.dir/tvision/scheckbo.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sclrsel.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sclrsel.cpp.o: /home/idoc/mr/tvision/source/tvision/sclrsel.cpp
-source/CMakeFiles/tvision.dir/tvision/sclrsel.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sclrsel.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sclrsel.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_98) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sclrsel.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sclrsel.cpp.o -MF CMakeFiles/tvision.dir/tvision/sclrsel.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sclrsel.cpp.o -c /home/idoc/mr/tvision/source/tvision/sclrsel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_97) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sclrsel.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sclrsel.cpp.o -MF CMakeFiles/tvision.dir/tvision/sclrsel.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sclrsel.cpp.o -c /home/idoc/mr/tvision/source/tvision/sclrsel.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sclrsel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sclrsel.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sclrsel.cpp > CMakeFiles/tvision.dir/tvision/sclrsel.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sclrsel.cpp > CMakeFiles/tvision.dir/tvision/sclrsel.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sclrsel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sclrsel.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sclrsel.cpp -o CMakeFiles/tvision.dir/tvision/sclrsel.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sclrsel.cpp -o CMakeFiles/tvision.dir/tvision/sclrsel.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/scluster.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/scluster.cpp.o: /home/idoc/mr/tvision/source/tvision/scluster.cpp
-source/CMakeFiles/tvision.dir/tvision/scluster.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/scluster.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/scluster.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_99) "Building CXX object source/CMakeFiles/tvision.dir/tvision/scluster.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/scluster.cpp.o -MF CMakeFiles/tvision.dir/tvision/scluster.cpp.o.d -o CMakeFiles/tvision.dir/tvision/scluster.cpp.o -c /home/idoc/mr/tvision/source/tvision/scluster.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_98) "Building CXX object source/CMakeFiles/tvision.dir/tvision/scluster.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/scluster.cpp.o -MF CMakeFiles/tvision.dir/tvision/scluster.cpp.o.d -o CMakeFiles/tvision.dir/tvision/scluster.cpp.o -c /home/idoc/mr/tvision/source/tvision/scluster.cpp
 
 source/CMakeFiles/tvision.dir/tvision/scluster.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/scluster.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/scluster.cpp > CMakeFiles/tvision.dir/tvision/scluster.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/scluster.cpp > CMakeFiles/tvision.dir/tvision/scluster.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/scluster.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/scluster.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/scluster.cpp -o CMakeFiles/tvision.dir/tvision/scluster.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/scluster.cpp -o CMakeFiles/tvision.dir/tvision/scluster.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sdesktop.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sdesktop.cpp.o: /home/idoc/mr/tvision/source/tvision/sdesktop.cpp
-source/CMakeFiles/tvision.dir/tvision/sdesktop.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sdesktop.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sdesktop.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_100) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sdesktop.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sdesktop.cpp.o -MF CMakeFiles/tvision.dir/tvision/sdesktop.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sdesktop.cpp.o -c /home/idoc/mr/tvision/source/tvision/sdesktop.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_99) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sdesktop.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sdesktop.cpp.o -MF CMakeFiles/tvision.dir/tvision/sdesktop.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sdesktop.cpp.o -c /home/idoc/mr/tvision/source/tvision/sdesktop.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sdesktop.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sdesktop.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sdesktop.cpp > CMakeFiles/tvision.dir/tvision/sdesktop.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sdesktop.cpp > CMakeFiles/tvision.dir/tvision/sdesktop.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sdesktop.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sdesktop.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sdesktop.cpp -o CMakeFiles/tvision.dir/tvision/sdesktop.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sdesktop.cpp -o CMakeFiles/tvision.dir/tvision/sdesktop.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sdialog.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sdialog.cpp.o: /home/idoc/mr/tvision/source/tvision/sdialog.cpp
-source/CMakeFiles/tvision.dir/tvision/sdialog.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sdialog.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sdialog.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_101) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sdialog.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sdialog.cpp.o -MF CMakeFiles/tvision.dir/tvision/sdialog.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sdialog.cpp.o -c /home/idoc/mr/tvision/source/tvision/sdialog.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_100) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sdialog.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sdialog.cpp.o -MF CMakeFiles/tvision.dir/tvision/sdialog.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sdialog.cpp.o -c /home/idoc/mr/tvision/source/tvision/sdialog.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sdialog.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sdialog.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sdialog.cpp > CMakeFiles/tvision.dir/tvision/sdialog.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sdialog.cpp > CMakeFiles/tvision.dir/tvision/sdialog.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sdialog.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sdialog.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sdialog.cpp -o CMakeFiles/tvision.dir/tvision/sdialog.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sdialog.cpp -o CMakeFiles/tvision.dir/tvision/sdialog.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sdircoll.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sdircoll.cpp.o: /home/idoc/mr/tvision/source/tvision/sdircoll.cpp
-source/CMakeFiles/tvision.dir/tvision/sdircoll.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sdircoll.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sdircoll.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_102) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sdircoll.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sdircoll.cpp.o -MF CMakeFiles/tvision.dir/tvision/sdircoll.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sdircoll.cpp.o -c /home/idoc/mr/tvision/source/tvision/sdircoll.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_101) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sdircoll.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sdircoll.cpp.o -MF CMakeFiles/tvision.dir/tvision/sdircoll.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sdircoll.cpp.o -c /home/idoc/mr/tvision/source/tvision/sdircoll.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sdircoll.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sdircoll.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sdircoll.cpp > CMakeFiles/tvision.dir/tvision/sdircoll.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sdircoll.cpp > CMakeFiles/tvision.dir/tvision/sdircoll.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sdircoll.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sdircoll.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sdircoll.cpp -o CMakeFiles/tvision.dir/tvision/sdircoll.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sdircoll.cpp -o CMakeFiles/tvision.dir/tvision/sdircoll.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sdirlist.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sdirlist.cpp.o: /home/idoc/mr/tvision/source/tvision/sdirlist.cpp
-source/CMakeFiles/tvision.dir/tvision/sdirlist.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sdirlist.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sdirlist.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_103) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sdirlist.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sdirlist.cpp.o -MF CMakeFiles/tvision.dir/tvision/sdirlist.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sdirlist.cpp.o -c /home/idoc/mr/tvision/source/tvision/sdirlist.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_102) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sdirlist.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sdirlist.cpp.o -MF CMakeFiles/tvision.dir/tvision/sdirlist.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sdirlist.cpp.o -c /home/idoc/mr/tvision/source/tvision/sdirlist.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sdirlist.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sdirlist.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sdirlist.cpp > CMakeFiles/tvision.dir/tvision/sdirlist.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sdirlist.cpp > CMakeFiles/tvision.dir/tvision/sdirlist.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sdirlist.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sdirlist.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sdirlist.cpp -o CMakeFiles/tvision.dir/tvision/sdirlist.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sdirlist.cpp -o CMakeFiles/tvision.dir/tvision/sdirlist.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/seditors.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/seditors.cpp.o: /home/idoc/mr/tvision/source/tvision/seditors.cpp
-source/CMakeFiles/tvision.dir/tvision/seditors.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/seditors.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/seditors.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_104) "Building CXX object source/CMakeFiles/tvision.dir/tvision/seditors.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/seditors.cpp.o -MF CMakeFiles/tvision.dir/tvision/seditors.cpp.o.d -o CMakeFiles/tvision.dir/tvision/seditors.cpp.o -c /home/idoc/mr/tvision/source/tvision/seditors.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_103) "Building CXX object source/CMakeFiles/tvision.dir/tvision/seditors.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/seditors.cpp.o -MF CMakeFiles/tvision.dir/tvision/seditors.cpp.o.d -o CMakeFiles/tvision.dir/tvision/seditors.cpp.o -c /home/idoc/mr/tvision/source/tvision/seditors.cpp
 
 source/CMakeFiles/tvision.dir/tvision/seditors.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/seditors.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/seditors.cpp > CMakeFiles/tvision.dir/tvision/seditors.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/seditors.cpp > CMakeFiles/tvision.dir/tvision/seditors.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/seditors.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/seditors.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/seditors.cpp -o CMakeFiles/tvision.dir/tvision/seditors.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/seditors.cpp -o CMakeFiles/tvision.dir/tvision/seditors.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sfilcoll.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sfilcoll.cpp.o: /home/idoc/mr/tvision/source/tvision/sfilcoll.cpp
-source/CMakeFiles/tvision.dir/tvision/sfilcoll.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sfilcoll.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sfilcoll.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_105) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sfilcoll.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sfilcoll.cpp.o -MF CMakeFiles/tvision.dir/tvision/sfilcoll.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sfilcoll.cpp.o -c /home/idoc/mr/tvision/source/tvision/sfilcoll.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_104) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sfilcoll.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sfilcoll.cpp.o -MF CMakeFiles/tvision.dir/tvision/sfilcoll.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sfilcoll.cpp.o -c /home/idoc/mr/tvision/source/tvision/sfilcoll.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sfilcoll.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sfilcoll.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sfilcoll.cpp > CMakeFiles/tvision.dir/tvision/sfilcoll.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sfilcoll.cpp > CMakeFiles/tvision.dir/tvision/sfilcoll.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sfilcoll.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sfilcoll.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sfilcoll.cpp -o CMakeFiles/tvision.dir/tvision/sfilcoll.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sfilcoll.cpp -o CMakeFiles/tvision.dir/tvision/sfilcoll.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sfildlg.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sfildlg.cpp.o: /home/idoc/mr/tvision/source/tvision/sfildlg.cpp
-source/CMakeFiles/tvision.dir/tvision/sfildlg.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sfildlg.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sfildlg.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_106) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sfildlg.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sfildlg.cpp.o -MF CMakeFiles/tvision.dir/tvision/sfildlg.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sfildlg.cpp.o -c /home/idoc/mr/tvision/source/tvision/sfildlg.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_105) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sfildlg.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sfildlg.cpp.o -MF CMakeFiles/tvision.dir/tvision/sfildlg.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sfildlg.cpp.o -c /home/idoc/mr/tvision/source/tvision/sfildlg.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sfildlg.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sfildlg.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sfildlg.cpp > CMakeFiles/tvision.dir/tvision/sfildlg.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sfildlg.cpp > CMakeFiles/tvision.dir/tvision/sfildlg.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sfildlg.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sfildlg.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sfildlg.cpp -o CMakeFiles/tvision.dir/tvision/sfildlg.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sfildlg.cpp -o CMakeFiles/tvision.dir/tvision/sfildlg.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sfilelst.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sfilelst.cpp.o: /home/idoc/mr/tvision/source/tvision/sfilelst.cpp
-source/CMakeFiles/tvision.dir/tvision/sfilelst.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sfilelst.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sfilelst.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_107) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sfilelst.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sfilelst.cpp.o -MF CMakeFiles/tvision.dir/tvision/sfilelst.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sfilelst.cpp.o -c /home/idoc/mr/tvision/source/tvision/sfilelst.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_106) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sfilelst.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sfilelst.cpp.o -MF CMakeFiles/tvision.dir/tvision/sfilelst.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sfilelst.cpp.o -c /home/idoc/mr/tvision/source/tvision/sfilelst.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sfilelst.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sfilelst.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sfilelst.cpp > CMakeFiles/tvision.dir/tvision/sfilelst.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sfilelst.cpp > CMakeFiles/tvision.dir/tvision/sfilelst.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sfilelst.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sfilelst.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sfilelst.cpp -o CMakeFiles/tvision.dir/tvision/sfilelst.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sfilelst.cpp -o CMakeFiles/tvision.dir/tvision/sfilelst.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sfinfpne.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sfinfpne.cpp.o: /home/idoc/mr/tvision/source/tvision/sfinfpne.cpp
-source/CMakeFiles/tvision.dir/tvision/sfinfpne.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sfinfpne.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sfinfpne.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_108) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sfinfpne.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sfinfpne.cpp.o -MF CMakeFiles/tvision.dir/tvision/sfinfpne.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sfinfpne.cpp.o -c /home/idoc/mr/tvision/source/tvision/sfinfpne.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_107) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sfinfpne.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sfinfpne.cpp.o -MF CMakeFiles/tvision.dir/tvision/sfinfpne.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sfinfpne.cpp.o -c /home/idoc/mr/tvision/source/tvision/sfinfpne.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sfinfpne.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sfinfpne.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sfinfpne.cpp > CMakeFiles/tvision.dir/tvision/sfinfpne.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sfinfpne.cpp > CMakeFiles/tvision.dir/tvision/sfinfpne.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sfinfpne.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sfinfpne.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sfinfpne.cpp -o CMakeFiles/tvision.dir/tvision/sfinfpne.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sfinfpne.cpp -o CMakeFiles/tvision.dir/tvision/sfinfpne.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sfinputl.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sfinputl.cpp.o: /home/idoc/mr/tvision/source/tvision/sfinputl.cpp
-source/CMakeFiles/tvision.dir/tvision/sfinputl.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sfinputl.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sfinputl.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_109) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sfinputl.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sfinputl.cpp.o -MF CMakeFiles/tvision.dir/tvision/sfinputl.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sfinputl.cpp.o -c /home/idoc/mr/tvision/source/tvision/sfinputl.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_108) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sfinputl.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sfinputl.cpp.o -MF CMakeFiles/tvision.dir/tvision/sfinputl.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sfinputl.cpp.o -c /home/idoc/mr/tvision/source/tvision/sfinputl.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sfinputl.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sfinputl.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sfinputl.cpp > CMakeFiles/tvision.dir/tvision/sfinputl.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sfinputl.cpp > CMakeFiles/tvision.dir/tvision/sfinputl.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sfinputl.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sfinputl.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sfinputl.cpp -o CMakeFiles/tvision.dir/tvision/sfinputl.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sfinputl.cpp -o CMakeFiles/tvision.dir/tvision/sfinputl.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sframe.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sframe.cpp.o: /home/idoc/mr/tvision/source/tvision/sframe.cpp
-source/CMakeFiles/tvision.dir/tvision/sframe.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sframe.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sframe.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_110) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sframe.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sframe.cpp.o -MF CMakeFiles/tvision.dir/tvision/sframe.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sframe.cpp.o -c /home/idoc/mr/tvision/source/tvision/sframe.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_109) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sframe.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sframe.cpp.o -MF CMakeFiles/tvision.dir/tvision/sframe.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sframe.cpp.o -c /home/idoc/mr/tvision/source/tvision/sframe.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sframe.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sframe.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sframe.cpp > CMakeFiles/tvision.dir/tvision/sframe.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sframe.cpp > CMakeFiles/tvision.dir/tvision/sframe.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sframe.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sframe.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sframe.cpp -o CMakeFiles/tvision.dir/tvision/sframe.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sframe.cpp -o CMakeFiles/tvision.dir/tvision/sframe.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sgroup.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sgroup.cpp.o: /home/idoc/mr/tvision/source/tvision/sgroup.cpp
-source/CMakeFiles/tvision.dir/tvision/sgroup.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sgroup.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sgroup.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_111) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sgroup.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sgroup.cpp.o -MF CMakeFiles/tvision.dir/tvision/sgroup.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sgroup.cpp.o -c /home/idoc/mr/tvision/source/tvision/sgroup.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_110) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sgroup.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sgroup.cpp.o -MF CMakeFiles/tvision.dir/tvision/sgroup.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sgroup.cpp.o -c /home/idoc/mr/tvision/source/tvision/sgroup.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sgroup.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sgroup.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sgroup.cpp > CMakeFiles/tvision.dir/tvision/sgroup.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sgroup.cpp > CMakeFiles/tvision.dir/tvision/sgroup.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sgroup.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sgroup.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sgroup.cpp -o CMakeFiles/tvision.dir/tvision/sgroup.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sgroup.cpp -o CMakeFiles/tvision.dir/tvision/sgroup.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/shistory.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/shistory.cpp.o: /home/idoc/mr/tvision/source/tvision/shistory.cpp
-source/CMakeFiles/tvision.dir/tvision/shistory.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/shistory.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/shistory.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_112) "Building CXX object source/CMakeFiles/tvision.dir/tvision/shistory.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/shistory.cpp.o -MF CMakeFiles/tvision.dir/tvision/shistory.cpp.o.d -o CMakeFiles/tvision.dir/tvision/shistory.cpp.o -c /home/idoc/mr/tvision/source/tvision/shistory.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_111) "Building CXX object source/CMakeFiles/tvision.dir/tvision/shistory.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/shistory.cpp.o -MF CMakeFiles/tvision.dir/tvision/shistory.cpp.o.d -o CMakeFiles/tvision.dir/tvision/shistory.cpp.o -c /home/idoc/mr/tvision/source/tvision/shistory.cpp
 
 source/CMakeFiles/tvision.dir/tvision/shistory.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/shistory.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/shistory.cpp > CMakeFiles/tvision.dir/tvision/shistory.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/shistory.cpp > CMakeFiles/tvision.dir/tvision/shistory.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/shistory.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/shistory.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/shistory.cpp -o CMakeFiles/tvision.dir/tvision/shistory.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/shistory.cpp -o CMakeFiles/tvision.dir/tvision/shistory.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sinputli.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sinputli.cpp.o: /home/idoc/mr/tvision/source/tvision/sinputli.cpp
-source/CMakeFiles/tvision.dir/tvision/sinputli.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sinputli.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sinputli.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_113) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sinputli.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sinputli.cpp.o -MF CMakeFiles/tvision.dir/tvision/sinputli.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sinputli.cpp.o -c /home/idoc/mr/tvision/source/tvision/sinputli.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_112) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sinputli.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sinputli.cpp.o -MF CMakeFiles/tvision.dir/tvision/sinputli.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sinputli.cpp.o -c /home/idoc/mr/tvision/source/tvision/sinputli.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sinputli.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sinputli.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sinputli.cpp > CMakeFiles/tvision.dir/tvision/sinputli.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sinputli.cpp > CMakeFiles/tvision.dir/tvision/sinputli.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sinputli.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sinputli.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sinputli.cpp -o CMakeFiles/tvision.dir/tvision/sinputli.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sinputli.cpp -o CMakeFiles/tvision.dir/tvision/sinputli.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/slabel.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/slabel.cpp.o: /home/idoc/mr/tvision/source/tvision/slabel.cpp
-source/CMakeFiles/tvision.dir/tvision/slabel.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/slabel.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/slabel.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_114) "Building CXX object source/CMakeFiles/tvision.dir/tvision/slabel.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/slabel.cpp.o -MF CMakeFiles/tvision.dir/tvision/slabel.cpp.o.d -o CMakeFiles/tvision.dir/tvision/slabel.cpp.o -c /home/idoc/mr/tvision/source/tvision/slabel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_113) "Building CXX object source/CMakeFiles/tvision.dir/tvision/slabel.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/slabel.cpp.o -MF CMakeFiles/tvision.dir/tvision/slabel.cpp.o.d -o CMakeFiles/tvision.dir/tvision/slabel.cpp.o -c /home/idoc/mr/tvision/source/tvision/slabel.cpp
 
 source/CMakeFiles/tvision.dir/tvision/slabel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/slabel.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/slabel.cpp > CMakeFiles/tvision.dir/tvision/slabel.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/slabel.cpp > CMakeFiles/tvision.dir/tvision/slabel.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/slabel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/slabel.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/slabel.cpp -o CMakeFiles/tvision.dir/tvision/slabel.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/slabel.cpp -o CMakeFiles/tvision.dir/tvision/slabel.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/slistbox.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/slistbox.cpp.o: /home/idoc/mr/tvision/source/tvision/slistbox.cpp
-source/CMakeFiles/tvision.dir/tvision/slistbox.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/slistbox.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/slistbox.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_115) "Building CXX object source/CMakeFiles/tvision.dir/tvision/slistbox.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/slistbox.cpp.o -MF CMakeFiles/tvision.dir/tvision/slistbox.cpp.o.d -o CMakeFiles/tvision.dir/tvision/slistbox.cpp.o -c /home/idoc/mr/tvision/source/tvision/slistbox.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_114) "Building CXX object source/CMakeFiles/tvision.dir/tvision/slistbox.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/slistbox.cpp.o -MF CMakeFiles/tvision.dir/tvision/slistbox.cpp.o.d -o CMakeFiles/tvision.dir/tvision/slistbox.cpp.o -c /home/idoc/mr/tvision/source/tvision/slistbox.cpp
 
 source/CMakeFiles/tvision.dir/tvision/slistbox.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/slistbox.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/slistbox.cpp > CMakeFiles/tvision.dir/tvision/slistbox.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/slistbox.cpp > CMakeFiles/tvision.dir/tvision/slistbox.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/slistbox.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/slistbox.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/slistbox.cpp -o CMakeFiles/tvision.dir/tvision/slistbox.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/slistbox.cpp -o CMakeFiles/tvision.dir/tvision/slistbox.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/slstview.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/slstview.cpp.o: /home/idoc/mr/tvision/source/tvision/slstview.cpp
-source/CMakeFiles/tvision.dir/tvision/slstview.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/slstview.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/slstview.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_116) "Building CXX object source/CMakeFiles/tvision.dir/tvision/slstview.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/slstview.cpp.o -MF CMakeFiles/tvision.dir/tvision/slstview.cpp.o.d -o CMakeFiles/tvision.dir/tvision/slstview.cpp.o -c /home/idoc/mr/tvision/source/tvision/slstview.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_115) "Building CXX object source/CMakeFiles/tvision.dir/tvision/slstview.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/slstview.cpp.o -MF CMakeFiles/tvision.dir/tvision/slstview.cpp.o.d -o CMakeFiles/tvision.dir/tvision/slstview.cpp.o -c /home/idoc/mr/tvision/source/tvision/slstview.cpp
 
 source/CMakeFiles/tvision.dir/tvision/slstview.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/slstview.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/slstview.cpp > CMakeFiles/tvision.dir/tvision/slstview.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/slstview.cpp > CMakeFiles/tvision.dir/tvision/slstview.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/slstview.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/slstview.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/slstview.cpp -o CMakeFiles/tvision.dir/tvision/slstview.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/slstview.cpp -o CMakeFiles/tvision.dir/tvision/slstview.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/smenubar.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/smenubar.cpp.o: /home/idoc/mr/tvision/source/tvision/smenubar.cpp
-source/CMakeFiles/tvision.dir/tvision/smenubar.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/smenubar.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/smenubar.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_117) "Building CXX object source/CMakeFiles/tvision.dir/tvision/smenubar.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/smenubar.cpp.o -MF CMakeFiles/tvision.dir/tvision/smenubar.cpp.o.d -o CMakeFiles/tvision.dir/tvision/smenubar.cpp.o -c /home/idoc/mr/tvision/source/tvision/smenubar.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_116) "Building CXX object source/CMakeFiles/tvision.dir/tvision/smenubar.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/smenubar.cpp.o -MF CMakeFiles/tvision.dir/tvision/smenubar.cpp.o.d -o CMakeFiles/tvision.dir/tvision/smenubar.cpp.o -c /home/idoc/mr/tvision/source/tvision/smenubar.cpp
 
 source/CMakeFiles/tvision.dir/tvision/smenubar.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/smenubar.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/smenubar.cpp > CMakeFiles/tvision.dir/tvision/smenubar.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/smenubar.cpp > CMakeFiles/tvision.dir/tvision/smenubar.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/smenubar.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/smenubar.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/smenubar.cpp -o CMakeFiles/tvision.dir/tvision/smenubar.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/smenubar.cpp -o CMakeFiles/tvision.dir/tvision/smenubar.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/smenubox.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/smenubox.cpp.o: /home/idoc/mr/tvision/source/tvision/smenubox.cpp
-source/CMakeFiles/tvision.dir/tvision/smenubox.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/smenubox.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/smenubox.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_118) "Building CXX object source/CMakeFiles/tvision.dir/tvision/smenubox.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/smenubox.cpp.o -MF CMakeFiles/tvision.dir/tvision/smenubox.cpp.o.d -o CMakeFiles/tvision.dir/tvision/smenubox.cpp.o -c /home/idoc/mr/tvision/source/tvision/smenubox.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_117) "Building CXX object source/CMakeFiles/tvision.dir/tvision/smenubox.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/smenubox.cpp.o -MF CMakeFiles/tvision.dir/tvision/smenubox.cpp.o.d -o CMakeFiles/tvision.dir/tvision/smenubox.cpp.o -c /home/idoc/mr/tvision/source/tvision/smenubox.cpp
 
 source/CMakeFiles/tvision.dir/tvision/smenubox.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/smenubox.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/smenubox.cpp > CMakeFiles/tvision.dir/tvision/smenubox.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/smenubox.cpp > CMakeFiles/tvision.dir/tvision/smenubox.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/smenubox.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/smenubox.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/smenubox.cpp -o CMakeFiles/tvision.dir/tvision/smenubox.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/smenubox.cpp -o CMakeFiles/tvision.dir/tvision/smenubox.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/smenupop.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/smenupop.cpp.o: /home/idoc/mr/tvision/source/tvision/smenupop.cpp
-source/CMakeFiles/tvision.dir/tvision/smenupop.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/smenupop.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/smenupop.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_119) "Building CXX object source/CMakeFiles/tvision.dir/tvision/smenupop.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/smenupop.cpp.o -MF CMakeFiles/tvision.dir/tvision/smenupop.cpp.o.d -o CMakeFiles/tvision.dir/tvision/smenupop.cpp.o -c /home/idoc/mr/tvision/source/tvision/smenupop.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_118) "Building CXX object source/CMakeFiles/tvision.dir/tvision/smenupop.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/smenupop.cpp.o -MF CMakeFiles/tvision.dir/tvision/smenupop.cpp.o.d -o CMakeFiles/tvision.dir/tvision/smenupop.cpp.o -c /home/idoc/mr/tvision/source/tvision/smenupop.cpp
 
 source/CMakeFiles/tvision.dir/tvision/smenupop.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/smenupop.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/smenupop.cpp > CMakeFiles/tvision.dir/tvision/smenupop.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/smenupop.cpp > CMakeFiles/tvision.dir/tvision/smenupop.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/smenupop.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/smenupop.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/smenupop.cpp -o CMakeFiles/tvision.dir/tvision/smenupop.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/smenupop.cpp -o CMakeFiles/tvision.dir/tvision/smenupop.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/smnuview.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/smnuview.cpp.o: /home/idoc/mr/tvision/source/tvision/smnuview.cpp
-source/CMakeFiles/tvision.dir/tvision/smnuview.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/smnuview.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/smnuview.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_120) "Building CXX object source/CMakeFiles/tvision.dir/tvision/smnuview.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/smnuview.cpp.o -MF CMakeFiles/tvision.dir/tvision/smnuview.cpp.o.d -o CMakeFiles/tvision.dir/tvision/smnuview.cpp.o -c /home/idoc/mr/tvision/source/tvision/smnuview.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_119) "Building CXX object source/CMakeFiles/tvision.dir/tvision/smnuview.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/smnuview.cpp.o -MF CMakeFiles/tvision.dir/tvision/smnuview.cpp.o.d -o CMakeFiles/tvision.dir/tvision/smnuview.cpp.o -c /home/idoc/mr/tvision/source/tvision/smnuview.cpp
 
 source/CMakeFiles/tvision.dir/tvision/smnuview.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/smnuview.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/smnuview.cpp > CMakeFiles/tvision.dir/tvision/smnuview.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/smnuview.cpp > CMakeFiles/tvision.dir/tvision/smnuview.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/smnuview.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/smnuview.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/smnuview.cpp -o CMakeFiles/tvision.dir/tvision/smnuview.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/smnuview.cpp -o CMakeFiles/tvision.dir/tvision/smnuview.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/smulchkb.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/smulchkb.cpp.o: /home/idoc/mr/tvision/source/tvision/smulchkb.cpp
-source/CMakeFiles/tvision.dir/tvision/smulchkb.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/smulchkb.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/smulchkb.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_121) "Building CXX object source/CMakeFiles/tvision.dir/tvision/smulchkb.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/smulchkb.cpp.o -MF CMakeFiles/tvision.dir/tvision/smulchkb.cpp.o.d -o CMakeFiles/tvision.dir/tvision/smulchkb.cpp.o -c /home/idoc/mr/tvision/source/tvision/smulchkb.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_120) "Building CXX object source/CMakeFiles/tvision.dir/tvision/smulchkb.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/smulchkb.cpp.o -MF CMakeFiles/tvision.dir/tvision/smulchkb.cpp.o.d -o CMakeFiles/tvision.dir/tvision/smulchkb.cpp.o -c /home/idoc/mr/tvision/source/tvision/smulchkb.cpp
 
 source/CMakeFiles/tvision.dir/tvision/smulchkb.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/smulchkb.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/smulchkb.cpp > CMakeFiles/tvision.dir/tvision/smulchkb.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/smulchkb.cpp > CMakeFiles/tvision.dir/tvision/smulchkb.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/smulchkb.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/smulchkb.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/smulchkb.cpp -o CMakeFiles/tvision.dir/tvision/smulchkb.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/smulchkb.cpp -o CMakeFiles/tvision.dir/tvision/smulchkb.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/snprintf.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/snprintf.cpp.o: /home/idoc/mr/tvision/source/tvision/snprintf.cpp
-source/CMakeFiles/tvision.dir/tvision/snprintf.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/snprintf.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/snprintf.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_122) "Building CXX object source/CMakeFiles/tvision.dir/tvision/snprintf.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/snprintf.cpp.o -MF CMakeFiles/tvision.dir/tvision/snprintf.cpp.o.d -o CMakeFiles/tvision.dir/tvision/snprintf.cpp.o -c /home/idoc/mr/tvision/source/tvision/snprintf.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_121) "Building CXX object source/CMakeFiles/tvision.dir/tvision/snprintf.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/snprintf.cpp.o -MF CMakeFiles/tvision.dir/tvision/snprintf.cpp.o.d -o CMakeFiles/tvision.dir/tvision/snprintf.cpp.o -c /home/idoc/mr/tvision/source/tvision/snprintf.cpp
 
 source/CMakeFiles/tvision.dir/tvision/snprintf.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/snprintf.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/snprintf.cpp > CMakeFiles/tvision.dir/tvision/snprintf.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/snprintf.cpp > CMakeFiles/tvision.dir/tvision/snprintf.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/snprintf.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/snprintf.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/snprintf.cpp -o CMakeFiles/tvision.dir/tvision/snprintf.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/snprintf.cpp -o CMakeFiles/tvision.dir/tvision/snprintf.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/soutline.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/soutline.cpp.o: /home/idoc/mr/tvision/source/tvision/soutline.cpp
-source/CMakeFiles/tvision.dir/tvision/soutline.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/soutline.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/soutline.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_123) "Building CXX object source/CMakeFiles/tvision.dir/tvision/soutline.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/soutline.cpp.o -MF CMakeFiles/tvision.dir/tvision/soutline.cpp.o.d -o CMakeFiles/tvision.dir/tvision/soutline.cpp.o -c /home/idoc/mr/tvision/source/tvision/soutline.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_122) "Building CXX object source/CMakeFiles/tvision.dir/tvision/soutline.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/soutline.cpp.o -MF CMakeFiles/tvision.dir/tvision/soutline.cpp.o.d -o CMakeFiles/tvision.dir/tvision/soutline.cpp.o -c /home/idoc/mr/tvision/source/tvision/soutline.cpp
 
 source/CMakeFiles/tvision.dir/tvision/soutline.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/soutline.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/soutline.cpp > CMakeFiles/tvision.dir/tvision/soutline.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/soutline.cpp > CMakeFiles/tvision.dir/tvision/soutline.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/soutline.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/soutline.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/soutline.cpp -o CMakeFiles/tvision.dir/tvision/soutline.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/soutline.cpp -o CMakeFiles/tvision.dir/tvision/soutline.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sparamte.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sparamte.cpp.o: /home/idoc/mr/tvision/source/tvision/sparamte.cpp
-source/CMakeFiles/tvision.dir/tvision/sparamte.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sparamte.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sparamte.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_124) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sparamte.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sparamte.cpp.o -MF CMakeFiles/tvision.dir/tvision/sparamte.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sparamte.cpp.o -c /home/idoc/mr/tvision/source/tvision/sparamte.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_123) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sparamte.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sparamte.cpp.o -MF CMakeFiles/tvision.dir/tvision/sparamte.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sparamte.cpp.o -c /home/idoc/mr/tvision/source/tvision/sparamte.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sparamte.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sparamte.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sparamte.cpp > CMakeFiles/tvision.dir/tvision/sparamte.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sparamte.cpp > CMakeFiles/tvision.dir/tvision/sparamte.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sparamte.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sparamte.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sparamte.cpp -o CMakeFiles/tvision.dir/tvision/sparamte.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sparamte.cpp -o CMakeFiles/tvision.dir/tvision/sparamte.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sradiobu.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sradiobu.cpp.o: /home/idoc/mr/tvision/source/tvision/sradiobu.cpp
-source/CMakeFiles/tvision.dir/tvision/sradiobu.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sradiobu.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sradiobu.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_125) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sradiobu.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sradiobu.cpp.o -MF CMakeFiles/tvision.dir/tvision/sradiobu.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sradiobu.cpp.o -c /home/idoc/mr/tvision/source/tvision/sradiobu.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_124) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sradiobu.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sradiobu.cpp.o -MF CMakeFiles/tvision.dir/tvision/sradiobu.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sradiobu.cpp.o -c /home/idoc/mr/tvision/source/tvision/sradiobu.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sradiobu.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sradiobu.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sradiobu.cpp > CMakeFiles/tvision.dir/tvision/sradiobu.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sradiobu.cpp > CMakeFiles/tvision.dir/tvision/sradiobu.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sradiobu.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sradiobu.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sradiobu.cpp -o CMakeFiles/tvision.dir/tvision/sradiobu.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sradiobu.cpp -o CMakeFiles/tvision.dir/tvision/sradiobu.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/srescoll.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/srescoll.cpp.o: /home/idoc/mr/tvision/source/tvision/srescoll.cpp
-source/CMakeFiles/tvision.dir/tvision/srescoll.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/srescoll.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/srescoll.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_126) "Building CXX object source/CMakeFiles/tvision.dir/tvision/srescoll.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/srescoll.cpp.o -MF CMakeFiles/tvision.dir/tvision/srescoll.cpp.o.d -o CMakeFiles/tvision.dir/tvision/srescoll.cpp.o -c /home/idoc/mr/tvision/source/tvision/srescoll.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_125) "Building CXX object source/CMakeFiles/tvision.dir/tvision/srescoll.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/srescoll.cpp.o -MF CMakeFiles/tvision.dir/tvision/srescoll.cpp.o.d -o CMakeFiles/tvision.dir/tvision/srescoll.cpp.o -c /home/idoc/mr/tvision/source/tvision/srescoll.cpp
 
 source/CMakeFiles/tvision.dir/tvision/srescoll.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/srescoll.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/srescoll.cpp > CMakeFiles/tvision.dir/tvision/srescoll.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/srescoll.cpp > CMakeFiles/tvision.dir/tvision/srescoll.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/srescoll.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/srescoll.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/srescoll.cpp -o CMakeFiles/tvision.dir/tvision/srescoll.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/srescoll.cpp -o CMakeFiles/tvision.dir/tvision/srescoll.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sscrlbar.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sscrlbar.cpp.o: /home/idoc/mr/tvision/source/tvision/sscrlbar.cpp
-source/CMakeFiles/tvision.dir/tvision/sscrlbar.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sscrlbar.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sscrlbar.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_127) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sscrlbar.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sscrlbar.cpp.o -MF CMakeFiles/tvision.dir/tvision/sscrlbar.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sscrlbar.cpp.o -c /home/idoc/mr/tvision/source/tvision/sscrlbar.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_126) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sscrlbar.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sscrlbar.cpp.o -MF CMakeFiles/tvision.dir/tvision/sscrlbar.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sscrlbar.cpp.o -c /home/idoc/mr/tvision/source/tvision/sscrlbar.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sscrlbar.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sscrlbar.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sscrlbar.cpp > CMakeFiles/tvision.dir/tvision/sscrlbar.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sscrlbar.cpp > CMakeFiles/tvision.dir/tvision/sscrlbar.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sscrlbar.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sscrlbar.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sscrlbar.cpp -o CMakeFiles/tvision.dir/tvision/sscrlbar.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sscrlbar.cpp -o CMakeFiles/tvision.dir/tvision/sscrlbar.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sscrolle.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sscrolle.cpp.o: /home/idoc/mr/tvision/source/tvision/sscrolle.cpp
-source/CMakeFiles/tvision.dir/tvision/sscrolle.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sscrolle.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sscrolle.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_128) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sscrolle.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sscrolle.cpp.o -MF CMakeFiles/tvision.dir/tvision/sscrolle.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sscrolle.cpp.o -c /home/idoc/mr/tvision/source/tvision/sscrolle.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_127) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sscrolle.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sscrolle.cpp.o -MF CMakeFiles/tvision.dir/tvision/sscrolle.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sscrolle.cpp.o -c /home/idoc/mr/tvision/source/tvision/sscrolle.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sscrolle.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sscrolle.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sscrolle.cpp > CMakeFiles/tvision.dir/tvision/sscrolle.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sscrolle.cpp > CMakeFiles/tvision.dir/tvision/sscrolle.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sscrolle.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sscrolle.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sscrolle.cpp -o CMakeFiles/tvision.dir/tvision/sscrolle.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sscrolle.cpp -o CMakeFiles/tvision.dir/tvision/sscrolle.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sstatict.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sstatict.cpp.o: /home/idoc/mr/tvision/source/tvision/sstatict.cpp
-source/CMakeFiles/tvision.dir/tvision/sstatict.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sstatict.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sstatict.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_129) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sstatict.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sstatict.cpp.o -MF CMakeFiles/tvision.dir/tvision/sstatict.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sstatict.cpp.o -c /home/idoc/mr/tvision/source/tvision/sstatict.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_128) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sstatict.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sstatict.cpp.o -MF CMakeFiles/tvision.dir/tvision/sstatict.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sstatict.cpp.o -c /home/idoc/mr/tvision/source/tvision/sstatict.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sstatict.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sstatict.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sstatict.cpp > CMakeFiles/tvision.dir/tvision/sstatict.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sstatict.cpp > CMakeFiles/tvision.dir/tvision/sstatict.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sstatict.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sstatict.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sstatict.cpp -o CMakeFiles/tvision.dir/tvision/sstatict.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sstatict.cpp -o CMakeFiles/tvision.dir/tvision/sstatict.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sstatusl.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sstatusl.cpp.o: /home/idoc/mr/tvision/source/tvision/sstatusl.cpp
-source/CMakeFiles/tvision.dir/tvision/sstatusl.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sstatusl.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sstatusl.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_130) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sstatusl.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sstatusl.cpp.o -MF CMakeFiles/tvision.dir/tvision/sstatusl.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sstatusl.cpp.o -c /home/idoc/mr/tvision/source/tvision/sstatusl.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_129) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sstatusl.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sstatusl.cpp.o -MF CMakeFiles/tvision.dir/tvision/sstatusl.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sstatusl.cpp.o -c /home/idoc/mr/tvision/source/tvision/sstatusl.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sstatusl.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sstatusl.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sstatusl.cpp > CMakeFiles/tvision.dir/tvision/sstatusl.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sstatusl.cpp > CMakeFiles/tvision.dir/tvision/sstatusl.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sstatusl.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sstatusl.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sstatusl.cpp -o CMakeFiles/tvision.dir/tvision/sstatusl.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sstatusl.cpp -o CMakeFiles/tvision.dir/tvision/sstatusl.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sstrcoll.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sstrcoll.cpp.o: /home/idoc/mr/tvision/source/tvision/sstrcoll.cpp
-source/CMakeFiles/tvision.dir/tvision/sstrcoll.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sstrcoll.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sstrcoll.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_131) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sstrcoll.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sstrcoll.cpp.o -MF CMakeFiles/tvision.dir/tvision/sstrcoll.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sstrcoll.cpp.o -c /home/idoc/mr/tvision/source/tvision/sstrcoll.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_130) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sstrcoll.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sstrcoll.cpp.o -MF CMakeFiles/tvision.dir/tvision/sstrcoll.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sstrcoll.cpp.o -c /home/idoc/mr/tvision/source/tvision/sstrcoll.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sstrcoll.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sstrcoll.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sstrcoll.cpp > CMakeFiles/tvision.dir/tvision/sstrcoll.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sstrcoll.cpp > CMakeFiles/tvision.dir/tvision/sstrcoll.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sstrcoll.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sstrcoll.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sstrcoll.cpp -o CMakeFiles/tvision.dir/tvision/sstrcoll.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sstrcoll.cpp -o CMakeFiles/tvision.dir/tvision/sstrcoll.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sstrlst.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sstrlst.cpp.o: /home/idoc/mr/tvision/source/tvision/sstrlst.cpp
-source/CMakeFiles/tvision.dir/tvision/sstrlst.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sstrlst.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sstrlst.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_132) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sstrlst.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sstrlst.cpp.o -MF CMakeFiles/tvision.dir/tvision/sstrlst.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sstrlst.cpp.o -c /home/idoc/mr/tvision/source/tvision/sstrlst.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_131) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sstrlst.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sstrlst.cpp.o -MF CMakeFiles/tvision.dir/tvision/sstrlst.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sstrlst.cpp.o -c /home/idoc/mr/tvision/source/tvision/sstrlst.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sstrlst.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sstrlst.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sstrlst.cpp > CMakeFiles/tvision.dir/tvision/sstrlst.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sstrlst.cpp > CMakeFiles/tvision.dir/tvision/sstrlst.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sstrlst.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sstrlst.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sstrlst.cpp -o CMakeFiles/tvision.dir/tvision/sstrlst.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sstrlst.cpp -o CMakeFiles/tvision.dir/tvision/sstrlst.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/stddlg.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/stddlg.cpp.o: /home/idoc/mr/tvision/source/tvision/stddlg.cpp
-source/CMakeFiles/tvision.dir/tvision/stddlg.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/stddlg.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/stddlg.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_133) "Building CXX object source/CMakeFiles/tvision.dir/tvision/stddlg.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/stddlg.cpp.o -MF CMakeFiles/tvision.dir/tvision/stddlg.cpp.o.d -o CMakeFiles/tvision.dir/tvision/stddlg.cpp.o -c /home/idoc/mr/tvision/source/tvision/stddlg.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_132) "Building CXX object source/CMakeFiles/tvision.dir/tvision/stddlg.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/stddlg.cpp.o -MF CMakeFiles/tvision.dir/tvision/stddlg.cpp.o.d -o CMakeFiles/tvision.dir/tvision/stddlg.cpp.o -c /home/idoc/mr/tvision/source/tvision/stddlg.cpp
 
 source/CMakeFiles/tvision.dir/tvision/stddlg.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/stddlg.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/stddlg.cpp > CMakeFiles/tvision.dir/tvision/stddlg.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/stddlg.cpp > CMakeFiles/tvision.dir/tvision/stddlg.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/stddlg.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/stddlg.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/stddlg.cpp -o CMakeFiles/tvision.dir/tvision/stddlg.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/stddlg.cpp -o CMakeFiles/tvision.dir/tvision/stddlg.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/strmstat.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/strmstat.cpp.o: /home/idoc/mr/tvision/source/tvision/strmstat.cpp
-source/CMakeFiles/tvision.dir/tvision/strmstat.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/strmstat.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/strmstat.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_134) "Building CXX object source/CMakeFiles/tvision.dir/tvision/strmstat.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/strmstat.cpp.o -MF CMakeFiles/tvision.dir/tvision/strmstat.cpp.o.d -o CMakeFiles/tvision.dir/tvision/strmstat.cpp.o -c /home/idoc/mr/tvision/source/tvision/strmstat.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_133) "Building CXX object source/CMakeFiles/tvision.dir/tvision/strmstat.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/strmstat.cpp.o -MF CMakeFiles/tvision.dir/tvision/strmstat.cpp.o.d -o CMakeFiles/tvision.dir/tvision/strmstat.cpp.o -c /home/idoc/mr/tvision/source/tvision/strmstat.cpp
 
 source/CMakeFiles/tvision.dir/tvision/strmstat.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/strmstat.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/strmstat.cpp > CMakeFiles/tvision.dir/tvision/strmstat.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/strmstat.cpp > CMakeFiles/tvision.dir/tvision/strmstat.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/strmstat.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/strmstat.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/strmstat.cpp -o CMakeFiles/tvision.dir/tvision/strmstat.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/strmstat.cpp -o CMakeFiles/tvision.dir/tvision/strmstat.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/svalid.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/svalid.cpp.o: /home/idoc/mr/tvision/source/tvision/svalid.cpp
-source/CMakeFiles/tvision.dir/tvision/svalid.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/svalid.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/svalid.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_135) "Building CXX object source/CMakeFiles/tvision.dir/tvision/svalid.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/svalid.cpp.o -MF CMakeFiles/tvision.dir/tvision/svalid.cpp.o.d -o CMakeFiles/tvision.dir/tvision/svalid.cpp.o -c /home/idoc/mr/tvision/source/tvision/svalid.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_134) "Building CXX object source/CMakeFiles/tvision.dir/tvision/svalid.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/svalid.cpp.o -MF CMakeFiles/tvision.dir/tvision/svalid.cpp.o.d -o CMakeFiles/tvision.dir/tvision/svalid.cpp.o -c /home/idoc/mr/tvision/source/tvision/svalid.cpp
 
 source/CMakeFiles/tvision.dir/tvision/svalid.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/svalid.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/svalid.cpp > CMakeFiles/tvision.dir/tvision/svalid.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/svalid.cpp > CMakeFiles/tvision.dir/tvision/svalid.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/svalid.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/svalid.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/svalid.cpp -o CMakeFiles/tvision.dir/tvision/svalid.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/svalid.cpp -o CMakeFiles/tvision.dir/tvision/svalid.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/sview.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/sview.cpp.o: /home/idoc/mr/tvision/source/tvision/sview.cpp
-source/CMakeFiles/tvision.dir/tvision/sview.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/sview.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/sview.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_136) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sview.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/sview.cpp.o -MF CMakeFiles/tvision.dir/tvision/sview.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sview.cpp.o -c /home/idoc/mr/tvision/source/tvision/sview.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_135) "Building CXX object source/CMakeFiles/tvision.dir/tvision/sview.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/sview.cpp.o -MF CMakeFiles/tvision.dir/tvision/sview.cpp.o.d -o CMakeFiles/tvision.dir/tvision/sview.cpp.o -c /home/idoc/mr/tvision/source/tvision/sview.cpp
 
 source/CMakeFiles/tvision.dir/tvision/sview.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/sview.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/sview.cpp > CMakeFiles/tvision.dir/tvision/sview.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/sview.cpp > CMakeFiles/tvision.dir/tvision/sview.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/sview.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/sview.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/sview.cpp -o CMakeFiles/tvision.dir/tvision/sview.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/sview.cpp -o CMakeFiles/tvision.dir/tvision/sview.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/swindow.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/swindow.cpp.o: /home/idoc/mr/tvision/source/tvision/swindow.cpp
-source/CMakeFiles/tvision.dir/tvision/swindow.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/swindow.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/swindow.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_137) "Building CXX object source/CMakeFiles/tvision.dir/tvision/swindow.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/swindow.cpp.o -MF CMakeFiles/tvision.dir/tvision/swindow.cpp.o.d -o CMakeFiles/tvision.dir/tvision/swindow.cpp.o -c /home/idoc/mr/tvision/source/tvision/swindow.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_136) "Building CXX object source/CMakeFiles/tvision.dir/tvision/swindow.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/swindow.cpp.o -MF CMakeFiles/tvision.dir/tvision/swindow.cpp.o.d -o CMakeFiles/tvision.dir/tvision/swindow.cpp.o -c /home/idoc/mr/tvision/source/tvision/swindow.cpp
 
 source/CMakeFiles/tvision.dir/tvision/swindow.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/swindow.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/swindow.cpp > CMakeFiles/tvision.dir/tvision/swindow.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/swindow.cpp > CMakeFiles/tvision.dir/tvision/swindow.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/swindow.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/swindow.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/swindow.cpp -o CMakeFiles/tvision.dir/tvision/swindow.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/swindow.cpp -o CMakeFiles/tvision.dir/tvision/swindow.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/syserr.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/syserr.cpp.o: /home/idoc/mr/tvision/source/tvision/syserr.cpp
-source/CMakeFiles/tvision.dir/tvision/syserr.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/syserr.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/syserr.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_138) "Building CXX object source/CMakeFiles/tvision.dir/tvision/syserr.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/syserr.cpp.o -MF CMakeFiles/tvision.dir/tvision/syserr.cpp.o.d -o CMakeFiles/tvision.dir/tvision/syserr.cpp.o -c /home/idoc/mr/tvision/source/tvision/syserr.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_137) "Building CXX object source/CMakeFiles/tvision.dir/tvision/syserr.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/syserr.cpp.o -MF CMakeFiles/tvision.dir/tvision/syserr.cpp.o.d -o CMakeFiles/tvision.dir/tvision/syserr.cpp.o -c /home/idoc/mr/tvision/source/tvision/syserr.cpp
 
 source/CMakeFiles/tvision.dir/tvision/syserr.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/syserr.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/syserr.cpp > CMakeFiles/tvision.dir/tvision/syserr.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/syserr.cpp > CMakeFiles/tvision.dir/tvision/syserr.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/syserr.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/syserr.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/syserr.cpp -o CMakeFiles/tvision.dir/tvision/syserr.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/syserr.cpp -o CMakeFiles/tvision.dir/tvision/syserr.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tapplica.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tapplica.cpp.o: /home/idoc/mr/tvision/source/tvision/tapplica.cpp
-source/CMakeFiles/tvision.dir/tvision/tapplica.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tapplica.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tapplica.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_139) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tapplica.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tapplica.cpp.o -MF CMakeFiles/tvision.dir/tvision/tapplica.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tapplica.cpp.o -c /home/idoc/mr/tvision/source/tvision/tapplica.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_138) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tapplica.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tapplica.cpp.o -MF CMakeFiles/tvision.dir/tvision/tapplica.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tapplica.cpp.o -c /home/idoc/mr/tvision/source/tvision/tapplica.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tapplica.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tapplica.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tapplica.cpp > CMakeFiles/tvision.dir/tvision/tapplica.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tapplica.cpp > CMakeFiles/tvision.dir/tvision/tapplica.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tapplica.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tapplica.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tapplica.cpp -o CMakeFiles/tvision.dir/tvision/tapplica.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tapplica.cpp -o CMakeFiles/tvision.dir/tvision/tapplica.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tbkgrnd.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tbkgrnd.cpp.o: /home/idoc/mr/tvision/source/tvision/tbkgrnd.cpp
-source/CMakeFiles/tvision.dir/tvision/tbkgrnd.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tbkgrnd.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tbkgrnd.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_140) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tbkgrnd.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tbkgrnd.cpp.o -MF CMakeFiles/tvision.dir/tvision/tbkgrnd.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tbkgrnd.cpp.o -c /home/idoc/mr/tvision/source/tvision/tbkgrnd.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_139) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tbkgrnd.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tbkgrnd.cpp.o -MF CMakeFiles/tvision.dir/tvision/tbkgrnd.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tbkgrnd.cpp.o -c /home/idoc/mr/tvision/source/tvision/tbkgrnd.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tbkgrnd.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tbkgrnd.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tbkgrnd.cpp > CMakeFiles/tvision.dir/tvision/tbkgrnd.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tbkgrnd.cpp > CMakeFiles/tvision.dir/tvision/tbkgrnd.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tbkgrnd.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tbkgrnd.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tbkgrnd.cpp -o CMakeFiles/tvision.dir/tvision/tbkgrnd.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tbkgrnd.cpp -o CMakeFiles/tvision.dir/tvision/tbkgrnd.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tbutton.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tbutton.cpp.o: /home/idoc/mr/tvision/source/tvision/tbutton.cpp
-source/CMakeFiles/tvision.dir/tvision/tbutton.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tbutton.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tbutton.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_141) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tbutton.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tbutton.cpp.o -MF CMakeFiles/tvision.dir/tvision/tbutton.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tbutton.cpp.o -c /home/idoc/mr/tvision/source/tvision/tbutton.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_140) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tbutton.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tbutton.cpp.o -MF CMakeFiles/tvision.dir/tvision/tbutton.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tbutton.cpp.o -c /home/idoc/mr/tvision/source/tvision/tbutton.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tbutton.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tbutton.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tbutton.cpp > CMakeFiles/tvision.dir/tvision/tbutton.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tbutton.cpp > CMakeFiles/tvision.dir/tvision/tbutton.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tbutton.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tbutton.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tbutton.cpp -o CMakeFiles/tvision.dir/tvision/tbutton.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tbutton.cpp -o CMakeFiles/tvision.dir/tvision/tbutton.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tchdrdlg.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tchdrdlg.cpp.o: /home/idoc/mr/tvision/source/tvision/tchdrdlg.cpp
-source/CMakeFiles/tvision.dir/tvision/tchdrdlg.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tchdrdlg.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tchdrdlg.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_142) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tchdrdlg.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tchdrdlg.cpp.o -MF CMakeFiles/tvision.dir/tvision/tchdrdlg.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tchdrdlg.cpp.o -c /home/idoc/mr/tvision/source/tvision/tchdrdlg.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_141) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tchdrdlg.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tchdrdlg.cpp.o -MF CMakeFiles/tvision.dir/tvision/tchdrdlg.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tchdrdlg.cpp.o -c /home/idoc/mr/tvision/source/tvision/tchdrdlg.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tchdrdlg.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tchdrdlg.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tchdrdlg.cpp > CMakeFiles/tvision.dir/tvision/tchdrdlg.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tchdrdlg.cpp > CMakeFiles/tvision.dir/tvision/tchdrdlg.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tchdrdlg.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tchdrdlg.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tchdrdlg.cpp -o CMakeFiles/tvision.dir/tvision/tchdrdlg.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tchdrdlg.cpp -o CMakeFiles/tvision.dir/tvision/tchdrdlg.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tcheckbo.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tcheckbo.cpp.o: /home/idoc/mr/tvision/source/tvision/tcheckbo.cpp
-source/CMakeFiles/tvision.dir/tvision/tcheckbo.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tcheckbo.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tcheckbo.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_143) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tcheckbo.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tcheckbo.cpp.o -MF CMakeFiles/tvision.dir/tvision/tcheckbo.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tcheckbo.cpp.o -c /home/idoc/mr/tvision/source/tvision/tcheckbo.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_142) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tcheckbo.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tcheckbo.cpp.o -MF CMakeFiles/tvision.dir/tvision/tcheckbo.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tcheckbo.cpp.o -c /home/idoc/mr/tvision/source/tvision/tcheckbo.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tcheckbo.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tcheckbo.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tcheckbo.cpp > CMakeFiles/tvision.dir/tvision/tcheckbo.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tcheckbo.cpp > CMakeFiles/tvision.dir/tvision/tcheckbo.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tcheckbo.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tcheckbo.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tcheckbo.cpp -o CMakeFiles/tvision.dir/tvision/tcheckbo.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tcheckbo.cpp -o CMakeFiles/tvision.dir/tvision/tcheckbo.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tclipbrd.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tclipbrd.cpp.o: /home/idoc/mr/tvision/source/tvision/tclipbrd.cpp
-source/CMakeFiles/tvision.dir/tvision/tclipbrd.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tclipbrd.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tclipbrd.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_144) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tclipbrd.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tclipbrd.cpp.o -MF CMakeFiles/tvision.dir/tvision/tclipbrd.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tclipbrd.cpp.o -c /home/idoc/mr/tvision/source/tvision/tclipbrd.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_143) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tclipbrd.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tclipbrd.cpp.o -MF CMakeFiles/tvision.dir/tvision/tclipbrd.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tclipbrd.cpp.o -c /home/idoc/mr/tvision/source/tvision/tclipbrd.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tclipbrd.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tclipbrd.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tclipbrd.cpp > CMakeFiles/tvision.dir/tvision/tclipbrd.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tclipbrd.cpp > CMakeFiles/tvision.dir/tvision/tclipbrd.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tclipbrd.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tclipbrd.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tclipbrd.cpp -o CMakeFiles/tvision.dir/tvision/tclipbrd.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tclipbrd.cpp -o CMakeFiles/tvision.dir/tvision/tclipbrd.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tcluster.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tcluster.cpp.o: /home/idoc/mr/tvision/source/tvision/tcluster.cpp
-source/CMakeFiles/tvision.dir/tvision/tcluster.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tcluster.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tcluster.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_145) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tcluster.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tcluster.cpp.o -MF CMakeFiles/tvision.dir/tvision/tcluster.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tcluster.cpp.o -c /home/idoc/mr/tvision/source/tvision/tcluster.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_144) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tcluster.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tcluster.cpp.o -MF CMakeFiles/tvision.dir/tvision/tcluster.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tcluster.cpp.o -c /home/idoc/mr/tvision/source/tvision/tcluster.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tcluster.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tcluster.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tcluster.cpp > CMakeFiles/tvision.dir/tvision/tcluster.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tcluster.cpp > CMakeFiles/tvision.dir/tvision/tcluster.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tcluster.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tcluster.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tcluster.cpp -o CMakeFiles/tvision.dir/tvision/tcluster.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tcluster.cpp -o CMakeFiles/tvision.dir/tvision/tcluster.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tcmdset.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tcmdset.cpp.o: /home/idoc/mr/tvision/source/tvision/tcmdset.cpp
-source/CMakeFiles/tvision.dir/tvision/tcmdset.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tcmdset.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tcmdset.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_146) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tcmdset.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tcmdset.cpp.o -MF CMakeFiles/tvision.dir/tvision/tcmdset.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tcmdset.cpp.o -c /home/idoc/mr/tvision/source/tvision/tcmdset.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_145) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tcmdset.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tcmdset.cpp.o -MF CMakeFiles/tvision.dir/tvision/tcmdset.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tcmdset.cpp.o -c /home/idoc/mr/tvision/source/tvision/tcmdset.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tcmdset.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tcmdset.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tcmdset.cpp > CMakeFiles/tvision.dir/tvision/tcmdset.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tcmdset.cpp > CMakeFiles/tvision.dir/tvision/tcmdset.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tcmdset.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tcmdset.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tcmdset.cpp -o CMakeFiles/tvision.dir/tvision/tcmdset.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tcmdset.cpp -o CMakeFiles/tvision.dir/tvision/tcmdset.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tcollect.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tcollect.cpp.o: /home/idoc/mr/tvision/source/tvision/tcollect.cpp
-source/CMakeFiles/tvision.dir/tvision/tcollect.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tcollect.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tcollect.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_147) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tcollect.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tcollect.cpp.o -MF CMakeFiles/tvision.dir/tvision/tcollect.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tcollect.cpp.o -c /home/idoc/mr/tvision/source/tvision/tcollect.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_146) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tcollect.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tcollect.cpp.o -MF CMakeFiles/tvision.dir/tvision/tcollect.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tcollect.cpp.o -c /home/idoc/mr/tvision/source/tvision/tcollect.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tcollect.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tcollect.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tcollect.cpp > CMakeFiles/tvision.dir/tvision/tcollect.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tcollect.cpp > CMakeFiles/tvision.dir/tvision/tcollect.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tcollect.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tcollect.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tcollect.cpp -o CMakeFiles/tvision.dir/tvision/tcollect.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tcollect.cpp -o CMakeFiles/tvision.dir/tvision/tcollect.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tdesktop.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tdesktop.cpp.o: /home/idoc/mr/tvision/source/tvision/tdesktop.cpp
-source/CMakeFiles/tvision.dir/tvision/tdesktop.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tdesktop.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tdesktop.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_148) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tdesktop.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tdesktop.cpp.o -MF CMakeFiles/tvision.dir/tvision/tdesktop.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tdesktop.cpp.o -c /home/idoc/mr/tvision/source/tvision/tdesktop.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_147) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tdesktop.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tdesktop.cpp.o -MF CMakeFiles/tvision.dir/tvision/tdesktop.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tdesktop.cpp.o -c /home/idoc/mr/tvision/source/tvision/tdesktop.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tdesktop.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tdesktop.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tdesktop.cpp > CMakeFiles/tvision.dir/tvision/tdesktop.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tdesktop.cpp > CMakeFiles/tvision.dir/tvision/tdesktop.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tdesktop.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tdesktop.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tdesktop.cpp -o CMakeFiles/tvision.dir/tvision/tdesktop.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tdesktop.cpp -o CMakeFiles/tvision.dir/tvision/tdesktop.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tdialog.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tdialog.cpp.o: /home/idoc/mr/tvision/source/tvision/tdialog.cpp
-source/CMakeFiles/tvision.dir/tvision/tdialog.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tdialog.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tdialog.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_149) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tdialog.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tdialog.cpp.o -MF CMakeFiles/tvision.dir/tvision/tdialog.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tdialog.cpp.o -c /home/idoc/mr/tvision/source/tvision/tdialog.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_148) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tdialog.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tdialog.cpp.o -MF CMakeFiles/tvision.dir/tvision/tdialog.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tdialog.cpp.o -c /home/idoc/mr/tvision/source/tvision/tdialog.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tdialog.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tdialog.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tdialog.cpp > CMakeFiles/tvision.dir/tvision/tdialog.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tdialog.cpp > CMakeFiles/tvision.dir/tvision/tdialog.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tdialog.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tdialog.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tdialog.cpp -o CMakeFiles/tvision.dir/tvision/tdialog.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tdialog.cpp -o CMakeFiles/tvision.dir/tvision/tdialog.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tdircoll.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tdircoll.cpp.o: /home/idoc/mr/tvision/source/tvision/tdircoll.cpp
-source/CMakeFiles/tvision.dir/tvision/tdircoll.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tdircoll.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tdircoll.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_150) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tdircoll.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tdircoll.cpp.o -MF CMakeFiles/tvision.dir/tvision/tdircoll.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tdircoll.cpp.o -c /home/idoc/mr/tvision/source/tvision/tdircoll.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_149) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tdircoll.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tdircoll.cpp.o -MF CMakeFiles/tvision.dir/tvision/tdircoll.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tdircoll.cpp.o -c /home/idoc/mr/tvision/source/tvision/tdircoll.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tdircoll.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tdircoll.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tdircoll.cpp > CMakeFiles/tvision.dir/tvision/tdircoll.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tdircoll.cpp > CMakeFiles/tvision.dir/tvision/tdircoll.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tdircoll.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tdircoll.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tdircoll.cpp -o CMakeFiles/tvision.dir/tvision/tdircoll.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tdircoll.cpp -o CMakeFiles/tvision.dir/tvision/tdircoll.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tdirlist.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tdirlist.cpp.o: /home/idoc/mr/tvision/source/tvision/tdirlist.cpp
-source/CMakeFiles/tvision.dir/tvision/tdirlist.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tdirlist.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tdirlist.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_151) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tdirlist.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tdirlist.cpp.o -MF CMakeFiles/tvision.dir/tvision/tdirlist.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tdirlist.cpp.o -c /home/idoc/mr/tvision/source/tvision/tdirlist.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_150) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tdirlist.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tdirlist.cpp.o -MF CMakeFiles/tvision.dir/tvision/tdirlist.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tdirlist.cpp.o -c /home/idoc/mr/tvision/source/tvision/tdirlist.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tdirlist.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tdirlist.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tdirlist.cpp > CMakeFiles/tvision.dir/tvision/tdirlist.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tdirlist.cpp > CMakeFiles/tvision.dir/tvision/tdirlist.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tdirlist.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tdirlist.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tdirlist.cpp -o CMakeFiles/tvision.dir/tvision/tdirlist.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tdirlist.cpp -o CMakeFiles/tvision.dir/tvision/tdirlist.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/teditor1.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/teditor1.cpp.o: /home/idoc/mr/tvision/source/tvision/teditor1.cpp
-source/CMakeFiles/tvision.dir/tvision/teditor1.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/teditor1.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/teditor1.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_152) "Building CXX object source/CMakeFiles/tvision.dir/tvision/teditor1.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/teditor1.cpp.o -MF CMakeFiles/tvision.dir/tvision/teditor1.cpp.o.d -o CMakeFiles/tvision.dir/tvision/teditor1.cpp.o -c /home/idoc/mr/tvision/source/tvision/teditor1.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_151) "Building CXX object source/CMakeFiles/tvision.dir/tvision/teditor1.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/teditor1.cpp.o -MF CMakeFiles/tvision.dir/tvision/teditor1.cpp.o.d -o CMakeFiles/tvision.dir/tvision/teditor1.cpp.o -c /home/idoc/mr/tvision/source/tvision/teditor1.cpp
 
 source/CMakeFiles/tvision.dir/tvision/teditor1.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/teditor1.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/teditor1.cpp > CMakeFiles/tvision.dir/tvision/teditor1.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/teditor1.cpp > CMakeFiles/tvision.dir/tvision/teditor1.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/teditor1.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/teditor1.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/teditor1.cpp -o CMakeFiles/tvision.dir/tvision/teditor1.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/teditor1.cpp -o CMakeFiles/tvision.dir/tvision/teditor1.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/teditor2.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/teditor2.cpp.o: /home/idoc/mr/tvision/source/tvision/teditor2.cpp
-source/CMakeFiles/tvision.dir/tvision/teditor2.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/teditor2.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/teditor2.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_153) "Building CXX object source/CMakeFiles/tvision.dir/tvision/teditor2.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/teditor2.cpp.o -MF CMakeFiles/tvision.dir/tvision/teditor2.cpp.o.d -o CMakeFiles/tvision.dir/tvision/teditor2.cpp.o -c /home/idoc/mr/tvision/source/tvision/teditor2.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_152) "Building CXX object source/CMakeFiles/tvision.dir/tvision/teditor2.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/teditor2.cpp.o -MF CMakeFiles/tvision.dir/tvision/teditor2.cpp.o.d -o CMakeFiles/tvision.dir/tvision/teditor2.cpp.o -c /home/idoc/mr/tvision/source/tvision/teditor2.cpp
 
 source/CMakeFiles/tvision.dir/tvision/teditor2.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/teditor2.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/teditor2.cpp > CMakeFiles/tvision.dir/tvision/teditor2.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/teditor2.cpp > CMakeFiles/tvision.dir/tvision/teditor2.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/teditor2.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/teditor2.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/teditor2.cpp -o CMakeFiles/tvision.dir/tvision/teditor2.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/teditor2.cpp -o CMakeFiles/tvision.dir/tvision/teditor2.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/teditwnd.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/teditwnd.cpp.o: /home/idoc/mr/tvision/source/tvision/teditwnd.cpp
-source/CMakeFiles/tvision.dir/tvision/teditwnd.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/teditwnd.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/teditwnd.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_154) "Building CXX object source/CMakeFiles/tvision.dir/tvision/teditwnd.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/teditwnd.cpp.o -MF CMakeFiles/tvision.dir/tvision/teditwnd.cpp.o.d -o CMakeFiles/tvision.dir/tvision/teditwnd.cpp.o -c /home/idoc/mr/tvision/source/tvision/teditwnd.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_153) "Building CXX object source/CMakeFiles/tvision.dir/tvision/teditwnd.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/teditwnd.cpp.o -MF CMakeFiles/tvision.dir/tvision/teditwnd.cpp.o.d -o CMakeFiles/tvision.dir/tvision/teditwnd.cpp.o -c /home/idoc/mr/tvision/source/tvision/teditwnd.cpp
 
 source/CMakeFiles/tvision.dir/tvision/teditwnd.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/teditwnd.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/teditwnd.cpp > CMakeFiles/tvision.dir/tvision/teditwnd.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/teditwnd.cpp > CMakeFiles/tvision.dir/tvision/teditwnd.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/teditwnd.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/teditwnd.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/teditwnd.cpp -o CMakeFiles/tvision.dir/tvision/teditwnd.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/teditwnd.cpp -o CMakeFiles/tvision.dir/tvision/teditwnd.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tevent.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tevent.cpp.o: /home/idoc/mr/tvision/source/tvision/tevent.cpp
-source/CMakeFiles/tvision.dir/tvision/tevent.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tevent.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tevent.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_155) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tevent.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tevent.cpp.o -MF CMakeFiles/tvision.dir/tvision/tevent.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tevent.cpp.o -c /home/idoc/mr/tvision/source/tvision/tevent.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_154) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tevent.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tevent.cpp.o -MF CMakeFiles/tvision.dir/tvision/tevent.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tevent.cpp.o -c /home/idoc/mr/tvision/source/tvision/tevent.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tevent.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tevent.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tevent.cpp > CMakeFiles/tvision.dir/tvision/tevent.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tevent.cpp > CMakeFiles/tvision.dir/tvision/tevent.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tevent.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tevent.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tevent.cpp -o CMakeFiles/tvision.dir/tvision/tevent.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tevent.cpp -o CMakeFiles/tvision.dir/tvision/tevent.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/textview.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/textview.cpp.o: /home/idoc/mr/tvision/source/tvision/textview.cpp
-source/CMakeFiles/tvision.dir/tvision/textview.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/textview.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/textview.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_156) "Building CXX object source/CMakeFiles/tvision.dir/tvision/textview.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/textview.cpp.o -MF CMakeFiles/tvision.dir/tvision/textview.cpp.o.d -o CMakeFiles/tvision.dir/tvision/textview.cpp.o -c /home/idoc/mr/tvision/source/tvision/textview.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_155) "Building CXX object source/CMakeFiles/tvision.dir/tvision/textview.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/textview.cpp.o -MF CMakeFiles/tvision.dir/tvision/textview.cpp.o.d -o CMakeFiles/tvision.dir/tvision/textview.cpp.o -c /home/idoc/mr/tvision/source/tvision/textview.cpp
 
 source/CMakeFiles/tvision.dir/tvision/textview.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/textview.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/textview.cpp > CMakeFiles/tvision.dir/tvision/textview.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/textview.cpp > CMakeFiles/tvision.dir/tvision/textview.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/textview.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/textview.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/textview.cpp -o CMakeFiles/tvision.dir/tvision/textview.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/textview.cpp -o CMakeFiles/tvision.dir/tvision/textview.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tfildlg.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tfildlg.cpp.o: /home/idoc/mr/tvision/source/tvision/tfildlg.cpp
-source/CMakeFiles/tvision.dir/tvision/tfildlg.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tfildlg.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tfildlg.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_157) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tfildlg.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tfildlg.cpp.o -MF CMakeFiles/tvision.dir/tvision/tfildlg.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tfildlg.cpp.o -c /home/idoc/mr/tvision/source/tvision/tfildlg.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_156) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tfildlg.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tfildlg.cpp.o -MF CMakeFiles/tvision.dir/tvision/tfildlg.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tfildlg.cpp.o -c /home/idoc/mr/tvision/source/tvision/tfildlg.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tfildlg.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tfildlg.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tfildlg.cpp > CMakeFiles/tvision.dir/tvision/tfildlg.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tfildlg.cpp > CMakeFiles/tvision.dir/tvision/tfildlg.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tfildlg.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tfildlg.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tfildlg.cpp -o CMakeFiles/tvision.dir/tvision/tfildlg.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tfildlg.cpp -o CMakeFiles/tvision.dir/tvision/tfildlg.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tfilecol.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tfilecol.cpp.o: /home/idoc/mr/tvision/source/tvision/tfilecol.cpp
-source/CMakeFiles/tvision.dir/tvision/tfilecol.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tfilecol.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tfilecol.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_158) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tfilecol.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tfilecol.cpp.o -MF CMakeFiles/tvision.dir/tvision/tfilecol.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tfilecol.cpp.o -c /home/idoc/mr/tvision/source/tvision/tfilecol.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_157) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tfilecol.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tfilecol.cpp.o -MF CMakeFiles/tvision.dir/tvision/tfilecol.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tfilecol.cpp.o -c /home/idoc/mr/tvision/source/tvision/tfilecol.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tfilecol.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tfilecol.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tfilecol.cpp > CMakeFiles/tvision.dir/tvision/tfilecol.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tfilecol.cpp > CMakeFiles/tvision.dir/tvision/tfilecol.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tfilecol.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tfilecol.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tfilecol.cpp -o CMakeFiles/tvision.dir/tvision/tfilecol.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tfilecol.cpp -o CMakeFiles/tvision.dir/tvision/tfilecol.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tfiledtr.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tfiledtr.cpp.o: /home/idoc/mr/tvision/source/tvision/tfiledtr.cpp
-source/CMakeFiles/tvision.dir/tvision/tfiledtr.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tfiledtr.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tfiledtr.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_159) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tfiledtr.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tfiledtr.cpp.o -MF CMakeFiles/tvision.dir/tvision/tfiledtr.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tfiledtr.cpp.o -c /home/idoc/mr/tvision/source/tvision/tfiledtr.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_158) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tfiledtr.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tfiledtr.cpp.o -MF CMakeFiles/tvision.dir/tvision/tfiledtr.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tfiledtr.cpp.o -c /home/idoc/mr/tvision/source/tvision/tfiledtr.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tfiledtr.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tfiledtr.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tfiledtr.cpp > CMakeFiles/tvision.dir/tvision/tfiledtr.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tfiledtr.cpp > CMakeFiles/tvision.dir/tvision/tfiledtr.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tfiledtr.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tfiledtr.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tfiledtr.cpp -o CMakeFiles/tvision.dir/tvision/tfiledtr.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tfiledtr.cpp -o CMakeFiles/tvision.dir/tvision/tfiledtr.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tfillist.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tfillist.cpp.o: /home/idoc/mr/tvision/source/tvision/tfillist.cpp
-source/CMakeFiles/tvision.dir/tvision/tfillist.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tfillist.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tfillist.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_160) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tfillist.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tfillist.cpp.o -MF CMakeFiles/tvision.dir/tvision/tfillist.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tfillist.cpp.o -c /home/idoc/mr/tvision/source/tvision/tfillist.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_159) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tfillist.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tfillist.cpp.o -MF CMakeFiles/tvision.dir/tvision/tfillist.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tfillist.cpp.o -c /home/idoc/mr/tvision/source/tvision/tfillist.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tfillist.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tfillist.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tfillist.cpp > CMakeFiles/tvision.dir/tvision/tfillist.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tfillist.cpp > CMakeFiles/tvision.dir/tvision/tfillist.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tfillist.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tfillist.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tfillist.cpp -o CMakeFiles/tvision.dir/tvision/tfillist.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tfillist.cpp -o CMakeFiles/tvision.dir/tvision/tfillist.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tframe.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tframe.cpp.o: /home/idoc/mr/tvision/source/tvision/tframe.cpp
-source/CMakeFiles/tvision.dir/tvision/tframe.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tframe.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tframe.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_161) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tframe.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tframe.cpp.o -MF CMakeFiles/tvision.dir/tvision/tframe.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tframe.cpp.o -c /home/idoc/mr/tvision/source/tvision/tframe.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_160) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tframe.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tframe.cpp.o -MF CMakeFiles/tvision.dir/tvision/tframe.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tframe.cpp.o -c /home/idoc/mr/tvision/source/tvision/tframe.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tframe.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tframe.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tframe.cpp > CMakeFiles/tvision.dir/tvision/tframe.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tframe.cpp > CMakeFiles/tvision.dir/tvision/tframe.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tframe.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tframe.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tframe.cpp -o CMakeFiles/tvision.dir/tvision/tframe.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tframe.cpp -o CMakeFiles/tvision.dir/tvision/tframe.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tgrmv.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tgrmv.cpp.o: /home/idoc/mr/tvision/source/tvision/tgrmv.cpp
-source/CMakeFiles/tvision.dir/tvision/tgrmv.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tgrmv.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tgrmv.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_162) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tgrmv.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tgrmv.cpp.o -MF CMakeFiles/tvision.dir/tvision/tgrmv.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tgrmv.cpp.o -c /home/idoc/mr/tvision/source/tvision/tgrmv.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_161) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tgrmv.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tgrmv.cpp.o -MF CMakeFiles/tvision.dir/tvision/tgrmv.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tgrmv.cpp.o -c /home/idoc/mr/tvision/source/tvision/tgrmv.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tgrmv.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tgrmv.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tgrmv.cpp > CMakeFiles/tvision.dir/tvision/tgrmv.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tgrmv.cpp > CMakeFiles/tvision.dir/tvision/tgrmv.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tgrmv.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tgrmv.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tgrmv.cpp -o CMakeFiles/tvision.dir/tvision/tgrmv.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tgrmv.cpp -o CMakeFiles/tvision.dir/tvision/tgrmv.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tgroup.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tgroup.cpp.o: /home/idoc/mr/tvision/source/tvision/tgroup.cpp
-source/CMakeFiles/tvision.dir/tvision/tgroup.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tgroup.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tgroup.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_163) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tgroup.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tgroup.cpp.o -MF CMakeFiles/tvision.dir/tvision/tgroup.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tgroup.cpp.o -c /home/idoc/mr/tvision/source/tvision/tgroup.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_162) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tgroup.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tgroup.cpp.o -MF CMakeFiles/tvision.dir/tvision/tgroup.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tgroup.cpp.o -c /home/idoc/mr/tvision/source/tvision/tgroup.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tgroup.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tgroup.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tgroup.cpp > CMakeFiles/tvision.dir/tvision/tgroup.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tgroup.cpp > CMakeFiles/tvision.dir/tvision/tgroup.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tgroup.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tgroup.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tgroup.cpp -o CMakeFiles/tvision.dir/tvision/tgroup.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tgroup.cpp -o CMakeFiles/tvision.dir/tvision/tgroup.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/thistory.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/thistory.cpp.o: /home/idoc/mr/tvision/source/tvision/thistory.cpp
-source/CMakeFiles/tvision.dir/tvision/thistory.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/thistory.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/thistory.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_164) "Building CXX object source/CMakeFiles/tvision.dir/tvision/thistory.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/thistory.cpp.o -MF CMakeFiles/tvision.dir/tvision/thistory.cpp.o.d -o CMakeFiles/tvision.dir/tvision/thistory.cpp.o -c /home/idoc/mr/tvision/source/tvision/thistory.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_163) "Building CXX object source/CMakeFiles/tvision.dir/tvision/thistory.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/thistory.cpp.o -MF CMakeFiles/tvision.dir/tvision/thistory.cpp.o.d -o CMakeFiles/tvision.dir/tvision/thistory.cpp.o -c /home/idoc/mr/tvision/source/tvision/thistory.cpp
 
 source/CMakeFiles/tvision.dir/tvision/thistory.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/thistory.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/thistory.cpp > CMakeFiles/tvision.dir/tvision/thistory.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/thistory.cpp > CMakeFiles/tvision.dir/tvision/thistory.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/thistory.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/thistory.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/thistory.cpp -o CMakeFiles/tvision.dir/tvision/thistory.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/thistory.cpp -o CMakeFiles/tvision.dir/tvision/thistory.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/thistwin.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/thistwin.cpp.o: /home/idoc/mr/tvision/source/tvision/thistwin.cpp
-source/CMakeFiles/tvision.dir/tvision/thistwin.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/thistwin.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/thistwin.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_165) "Building CXX object source/CMakeFiles/tvision.dir/tvision/thistwin.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/thistwin.cpp.o -MF CMakeFiles/tvision.dir/tvision/thistwin.cpp.o.d -o CMakeFiles/tvision.dir/tvision/thistwin.cpp.o -c /home/idoc/mr/tvision/source/tvision/thistwin.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_164) "Building CXX object source/CMakeFiles/tvision.dir/tvision/thistwin.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/thistwin.cpp.o -MF CMakeFiles/tvision.dir/tvision/thistwin.cpp.o.d -o CMakeFiles/tvision.dir/tvision/thistwin.cpp.o -c /home/idoc/mr/tvision/source/tvision/thistwin.cpp
 
 source/CMakeFiles/tvision.dir/tvision/thistwin.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/thistwin.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/thistwin.cpp > CMakeFiles/tvision.dir/tvision/thistwin.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/thistwin.cpp > CMakeFiles/tvision.dir/tvision/thistwin.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/thistwin.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/thistwin.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/thistwin.cpp -o CMakeFiles/tvision.dir/tvision/thistwin.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/thistwin.cpp -o CMakeFiles/tvision.dir/tvision/thistwin.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/thstview.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/thstview.cpp.o: /home/idoc/mr/tvision/source/tvision/thstview.cpp
-source/CMakeFiles/tvision.dir/tvision/thstview.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/thstview.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/thstview.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_166) "Building CXX object source/CMakeFiles/tvision.dir/tvision/thstview.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/thstview.cpp.o -MF CMakeFiles/tvision.dir/tvision/thstview.cpp.o.d -o CMakeFiles/tvision.dir/tvision/thstview.cpp.o -c /home/idoc/mr/tvision/source/tvision/thstview.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_165) "Building CXX object source/CMakeFiles/tvision.dir/tvision/thstview.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/thstview.cpp.o -MF CMakeFiles/tvision.dir/tvision/thstview.cpp.o.d -o CMakeFiles/tvision.dir/tvision/thstview.cpp.o -c /home/idoc/mr/tvision/source/tvision/thstview.cpp
 
 source/CMakeFiles/tvision.dir/tvision/thstview.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/thstview.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/thstview.cpp > CMakeFiles/tvision.dir/tvision/thstview.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/thstview.cpp > CMakeFiles/tvision.dir/tvision/thstview.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/thstview.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/thstview.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/thstview.cpp -o CMakeFiles/tvision.dir/tvision/thstview.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/thstview.cpp -o CMakeFiles/tvision.dir/tvision/thstview.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tindictr.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tindictr.cpp.o: /home/idoc/mr/tvision/source/tvision/tindictr.cpp
-source/CMakeFiles/tvision.dir/tvision/tindictr.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tindictr.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tindictr.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_167) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tindictr.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tindictr.cpp.o -MF CMakeFiles/tvision.dir/tvision/tindictr.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tindictr.cpp.o -c /home/idoc/mr/tvision/source/tvision/tindictr.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_166) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tindictr.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tindictr.cpp.o -MF CMakeFiles/tvision.dir/tvision/tindictr.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tindictr.cpp.o -c /home/idoc/mr/tvision/source/tvision/tindictr.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tindictr.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tindictr.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tindictr.cpp > CMakeFiles/tvision.dir/tvision/tindictr.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tindictr.cpp > CMakeFiles/tvision.dir/tvision/tindictr.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tindictr.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tindictr.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tindictr.cpp -o CMakeFiles/tvision.dir/tvision/tindictr.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tindictr.cpp -o CMakeFiles/tvision.dir/tvision/tindictr.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tinputli.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tinputli.cpp.o: /home/idoc/mr/tvision/source/tvision/tinputli.cpp
-source/CMakeFiles/tvision.dir/tvision/tinputli.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tinputli.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tinputli.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_168) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tinputli.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tinputli.cpp.o -MF CMakeFiles/tvision.dir/tvision/tinputli.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tinputli.cpp.o -c /home/idoc/mr/tvision/source/tvision/tinputli.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_167) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tinputli.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tinputli.cpp.o -MF CMakeFiles/tvision.dir/tvision/tinputli.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tinputli.cpp.o -c /home/idoc/mr/tvision/source/tvision/tinputli.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tinputli.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tinputli.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tinputli.cpp > CMakeFiles/tvision.dir/tvision/tinputli.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tinputli.cpp > CMakeFiles/tvision.dir/tvision/tinputli.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tinputli.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tinputli.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tinputli.cpp -o CMakeFiles/tvision.dir/tvision/tinputli.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tinputli.cpp -o CMakeFiles/tvision.dir/tvision/tinputli.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tkey.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tkey.cpp.o: /home/idoc/mr/tvision/source/tvision/tkey.cpp
-source/CMakeFiles/tvision.dir/tvision/tkey.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tkey.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tkey.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_169) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tkey.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tkey.cpp.o -MF CMakeFiles/tvision.dir/tvision/tkey.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tkey.cpp.o -c /home/idoc/mr/tvision/source/tvision/tkey.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_168) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tkey.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tkey.cpp.o -MF CMakeFiles/tvision.dir/tvision/tkey.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tkey.cpp.o -c /home/idoc/mr/tvision/source/tvision/tkey.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tkey.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tkey.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tkey.cpp > CMakeFiles/tvision.dir/tvision/tkey.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tkey.cpp > CMakeFiles/tvision.dir/tvision/tkey.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tkey.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tkey.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tkey.cpp -o CMakeFiles/tvision.dir/tvision/tkey.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tkey.cpp -o CMakeFiles/tvision.dir/tvision/tkey.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tlabel.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tlabel.cpp.o: /home/idoc/mr/tvision/source/tvision/tlabel.cpp
-source/CMakeFiles/tvision.dir/tvision/tlabel.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tlabel.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tlabel.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_170) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tlabel.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tlabel.cpp.o -MF CMakeFiles/tvision.dir/tvision/tlabel.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tlabel.cpp.o -c /home/idoc/mr/tvision/source/tvision/tlabel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_169) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tlabel.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tlabel.cpp.o -MF CMakeFiles/tvision.dir/tvision/tlabel.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tlabel.cpp.o -c /home/idoc/mr/tvision/source/tvision/tlabel.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tlabel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tlabel.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tlabel.cpp > CMakeFiles/tvision.dir/tvision/tlabel.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tlabel.cpp > CMakeFiles/tvision.dir/tvision/tlabel.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tlabel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tlabel.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tlabel.cpp -o CMakeFiles/tvision.dir/tvision/tlabel.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tlabel.cpp -o CMakeFiles/tvision.dir/tvision/tlabel.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tlistbox.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tlistbox.cpp.o: /home/idoc/mr/tvision/source/tvision/tlistbox.cpp
-source/CMakeFiles/tvision.dir/tvision/tlistbox.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tlistbox.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tlistbox.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_171) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tlistbox.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tlistbox.cpp.o -MF CMakeFiles/tvision.dir/tvision/tlistbox.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tlistbox.cpp.o -c /home/idoc/mr/tvision/source/tvision/tlistbox.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_170) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tlistbox.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tlistbox.cpp.o -MF CMakeFiles/tvision.dir/tvision/tlistbox.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tlistbox.cpp.o -c /home/idoc/mr/tvision/source/tvision/tlistbox.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tlistbox.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tlistbox.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tlistbox.cpp > CMakeFiles/tvision.dir/tvision/tlistbox.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tlistbox.cpp > CMakeFiles/tvision.dir/tvision/tlistbox.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tlistbox.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tlistbox.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tlistbox.cpp -o CMakeFiles/tvision.dir/tvision/tlistbox.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tlistbox.cpp -o CMakeFiles/tvision.dir/tvision/tlistbox.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tlstview.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tlstview.cpp.o: /home/idoc/mr/tvision/source/tvision/tlstview.cpp
-source/CMakeFiles/tvision.dir/tvision/tlstview.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tlstview.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tlstview.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_172) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tlstview.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tlstview.cpp.o -MF CMakeFiles/tvision.dir/tvision/tlstview.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tlstview.cpp.o -c /home/idoc/mr/tvision/source/tvision/tlstview.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_171) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tlstview.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tlstview.cpp.o -MF CMakeFiles/tvision.dir/tvision/tlstview.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tlstview.cpp.o -c /home/idoc/mr/tvision/source/tvision/tlstview.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tlstview.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tlstview.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tlstview.cpp > CMakeFiles/tvision.dir/tvision/tlstview.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tlstview.cpp > CMakeFiles/tvision.dir/tvision/tlstview.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tlstview.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tlstview.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tlstview.cpp -o CMakeFiles/tvision.dir/tvision/tlstview.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tlstview.cpp -o CMakeFiles/tvision.dir/tvision/tlstview.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tmemo.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tmemo.cpp.o: /home/idoc/mr/tvision/source/tvision/tmemo.cpp
-source/CMakeFiles/tvision.dir/tvision/tmemo.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tmemo.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tmemo.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_173) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tmemo.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tmemo.cpp.o -MF CMakeFiles/tvision.dir/tvision/tmemo.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tmemo.cpp.o -c /home/idoc/mr/tvision/source/tvision/tmemo.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_172) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tmemo.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tmemo.cpp.o -MF CMakeFiles/tvision.dir/tvision/tmemo.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tmemo.cpp.o -c /home/idoc/mr/tvision/source/tvision/tmemo.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tmemo.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tmemo.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tmemo.cpp > CMakeFiles/tvision.dir/tvision/tmemo.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tmemo.cpp > CMakeFiles/tvision.dir/tvision/tmemo.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tmemo.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tmemo.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tmemo.cpp -o CMakeFiles/tvision.dir/tvision/tmemo.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tmemo.cpp -o CMakeFiles/tvision.dir/tvision/tmemo.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tmenubar.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tmenubar.cpp.o: /home/idoc/mr/tvision/source/tvision/tmenubar.cpp
-source/CMakeFiles/tvision.dir/tvision/tmenubar.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tmenubar.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tmenubar.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_174) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tmenubar.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tmenubar.cpp.o -MF CMakeFiles/tvision.dir/tvision/tmenubar.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tmenubar.cpp.o -c /home/idoc/mr/tvision/source/tvision/tmenubar.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_173) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tmenubar.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tmenubar.cpp.o -MF CMakeFiles/tvision.dir/tvision/tmenubar.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tmenubar.cpp.o -c /home/idoc/mr/tvision/source/tvision/tmenubar.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tmenubar.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tmenubar.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tmenubar.cpp > CMakeFiles/tvision.dir/tvision/tmenubar.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tmenubar.cpp > CMakeFiles/tvision.dir/tvision/tmenubar.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tmenubar.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tmenubar.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tmenubar.cpp -o CMakeFiles/tvision.dir/tvision/tmenubar.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tmenubar.cpp -o CMakeFiles/tvision.dir/tvision/tmenubar.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tmenubox.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tmenubox.cpp.o: /home/idoc/mr/tvision/source/tvision/tmenubox.cpp
-source/CMakeFiles/tvision.dir/tvision/tmenubox.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tmenubox.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tmenubox.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_175) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tmenubox.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tmenubox.cpp.o -MF CMakeFiles/tvision.dir/tvision/tmenubox.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tmenubox.cpp.o -c /home/idoc/mr/tvision/source/tvision/tmenubox.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_174) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tmenubox.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tmenubox.cpp.o -MF CMakeFiles/tvision.dir/tvision/tmenubox.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tmenubox.cpp.o -c /home/idoc/mr/tvision/source/tvision/tmenubox.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tmenubox.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tmenubox.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tmenubox.cpp > CMakeFiles/tvision.dir/tvision/tmenubox.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tmenubox.cpp > CMakeFiles/tvision.dir/tvision/tmenubox.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tmenubox.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tmenubox.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tmenubox.cpp -o CMakeFiles/tvision.dir/tvision/tmenubox.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tmenubox.cpp -o CMakeFiles/tvision.dir/tvision/tmenubox.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tmenupop.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tmenupop.cpp.o: /home/idoc/mr/tvision/source/tvision/tmenupop.cpp
-source/CMakeFiles/tvision.dir/tvision/tmenupop.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tmenupop.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tmenupop.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_176) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tmenupop.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tmenupop.cpp.o -MF CMakeFiles/tvision.dir/tvision/tmenupop.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tmenupop.cpp.o -c /home/idoc/mr/tvision/source/tvision/tmenupop.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_175) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tmenupop.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tmenupop.cpp.o -MF CMakeFiles/tvision.dir/tvision/tmenupop.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tmenupop.cpp.o -c /home/idoc/mr/tvision/source/tvision/tmenupop.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tmenupop.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tmenupop.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tmenupop.cpp > CMakeFiles/tvision.dir/tvision/tmenupop.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tmenupop.cpp > CMakeFiles/tvision.dir/tvision/tmenupop.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tmenupop.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tmenupop.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tmenupop.cpp -o CMakeFiles/tvision.dir/tvision/tmenupop.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tmenupop.cpp -o CMakeFiles/tvision.dir/tvision/tmenupop.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tmnuview.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tmnuview.cpp.o: /home/idoc/mr/tvision/source/tvision/tmnuview.cpp
-source/CMakeFiles/tvision.dir/tvision/tmnuview.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tmnuview.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tmnuview.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_177) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tmnuview.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tmnuview.cpp.o -MF CMakeFiles/tvision.dir/tvision/tmnuview.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tmnuview.cpp.o -c /home/idoc/mr/tvision/source/tvision/tmnuview.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_176) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tmnuview.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tmnuview.cpp.o -MF CMakeFiles/tvision.dir/tvision/tmnuview.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tmnuview.cpp.o -c /home/idoc/mr/tvision/source/tvision/tmnuview.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tmnuview.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tmnuview.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tmnuview.cpp > CMakeFiles/tvision.dir/tvision/tmnuview.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tmnuview.cpp > CMakeFiles/tvision.dir/tvision/tmnuview.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tmnuview.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tmnuview.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tmnuview.cpp -o CMakeFiles/tvision.dir/tvision/tmnuview.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tmnuview.cpp -o CMakeFiles/tvision.dir/tvision/tmnuview.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tmouse.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tmouse.cpp.o: /home/idoc/mr/tvision/source/tvision/tmouse.cpp
-source/CMakeFiles/tvision.dir/tvision/tmouse.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tmouse.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tmouse.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_178) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tmouse.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tmouse.cpp.o -MF CMakeFiles/tvision.dir/tvision/tmouse.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tmouse.cpp.o -c /home/idoc/mr/tvision/source/tvision/tmouse.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_177) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tmouse.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tmouse.cpp.o -MF CMakeFiles/tvision.dir/tvision/tmouse.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tmouse.cpp.o -c /home/idoc/mr/tvision/source/tvision/tmouse.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tmouse.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tmouse.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tmouse.cpp > CMakeFiles/tvision.dir/tvision/tmouse.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tmouse.cpp > CMakeFiles/tvision.dir/tvision/tmouse.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tmouse.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tmouse.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tmouse.cpp -o CMakeFiles/tvision.dir/tvision/tmouse.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tmouse.cpp -o CMakeFiles/tvision.dir/tvision/tmouse.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tmulchkb.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tmulchkb.cpp.o: /home/idoc/mr/tvision/source/tvision/tmulchkb.cpp
-source/CMakeFiles/tvision.dir/tvision/tmulchkb.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tmulchkb.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tmulchkb.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_179) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tmulchkb.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tmulchkb.cpp.o -MF CMakeFiles/tvision.dir/tvision/tmulchkb.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tmulchkb.cpp.o -c /home/idoc/mr/tvision/source/tvision/tmulchkb.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_178) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tmulchkb.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tmulchkb.cpp.o -MF CMakeFiles/tvision.dir/tvision/tmulchkb.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tmulchkb.cpp.o -c /home/idoc/mr/tvision/source/tvision/tmulchkb.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tmulchkb.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tmulchkb.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tmulchkb.cpp > CMakeFiles/tvision.dir/tvision/tmulchkb.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tmulchkb.cpp > CMakeFiles/tvision.dir/tvision/tmulchkb.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tmulchkb.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tmulchkb.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tmulchkb.cpp -o CMakeFiles/tvision.dir/tvision/tmulchkb.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tmulchkb.cpp -o CMakeFiles/tvision.dir/tvision/tmulchkb.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tobject.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tobject.cpp.o: /home/idoc/mr/tvision/source/tvision/tobject.cpp
-source/CMakeFiles/tvision.dir/tvision/tobject.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tobject.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tobject.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_180) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tobject.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tobject.cpp.o -MF CMakeFiles/tvision.dir/tvision/tobject.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tobject.cpp.o -c /home/idoc/mr/tvision/source/tvision/tobject.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_179) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tobject.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tobject.cpp.o -MF CMakeFiles/tvision.dir/tvision/tobject.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tobject.cpp.o -c /home/idoc/mr/tvision/source/tvision/tobject.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tobject.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tobject.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tobject.cpp > CMakeFiles/tvision.dir/tvision/tobject.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tobject.cpp > CMakeFiles/tvision.dir/tvision/tobject.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tobject.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tobject.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tobject.cpp -o CMakeFiles/tvision.dir/tvision/tobject.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tobject.cpp -o CMakeFiles/tvision.dir/tvision/tobject.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tobjstrm.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tobjstrm.cpp.o: /home/idoc/mr/tvision/source/tvision/tobjstrm.cpp
-source/CMakeFiles/tvision.dir/tvision/tobjstrm.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tobjstrm.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tobjstrm.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_181) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tobjstrm.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tobjstrm.cpp.o -MF CMakeFiles/tvision.dir/tvision/tobjstrm.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tobjstrm.cpp.o -c /home/idoc/mr/tvision/source/tvision/tobjstrm.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_180) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tobjstrm.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tobjstrm.cpp.o -MF CMakeFiles/tvision.dir/tvision/tobjstrm.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tobjstrm.cpp.o -c /home/idoc/mr/tvision/source/tvision/tobjstrm.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tobjstrm.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tobjstrm.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tobjstrm.cpp > CMakeFiles/tvision.dir/tvision/tobjstrm.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tobjstrm.cpp > CMakeFiles/tvision.dir/tvision/tobjstrm.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tobjstrm.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tobjstrm.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tobjstrm.cpp -o CMakeFiles/tvision.dir/tvision/tobjstrm.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tobjstrm.cpp -o CMakeFiles/tvision.dir/tvision/tobjstrm.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/toutline.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/toutline.cpp.o: /home/idoc/mr/tvision/source/tvision/toutline.cpp
-source/CMakeFiles/tvision.dir/tvision/toutline.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/toutline.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/toutline.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_182) "Building CXX object source/CMakeFiles/tvision.dir/tvision/toutline.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/toutline.cpp.o -MF CMakeFiles/tvision.dir/tvision/toutline.cpp.o.d -o CMakeFiles/tvision.dir/tvision/toutline.cpp.o -c /home/idoc/mr/tvision/source/tvision/toutline.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_181) "Building CXX object source/CMakeFiles/tvision.dir/tvision/toutline.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/toutline.cpp.o -MF CMakeFiles/tvision.dir/tvision/toutline.cpp.o.d -o CMakeFiles/tvision.dir/tvision/toutline.cpp.o -c /home/idoc/mr/tvision/source/tvision/toutline.cpp
 
 source/CMakeFiles/tvision.dir/tvision/toutline.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/toutline.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/toutline.cpp > CMakeFiles/tvision.dir/tvision/toutline.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/toutline.cpp > CMakeFiles/tvision.dir/tvision/toutline.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/toutline.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/toutline.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/toutline.cpp -o CMakeFiles/tvision.dir/tvision/toutline.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/toutline.cpp -o CMakeFiles/tvision.dir/tvision/toutline.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tparamte.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tparamte.cpp.o: /home/idoc/mr/tvision/source/tvision/tparamte.cpp
-source/CMakeFiles/tvision.dir/tvision/tparamte.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tparamte.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tparamte.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_183) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tparamte.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tparamte.cpp.o -MF CMakeFiles/tvision.dir/tvision/tparamte.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tparamte.cpp.o -c /home/idoc/mr/tvision/source/tvision/tparamte.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_182) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tparamte.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tparamte.cpp.o -MF CMakeFiles/tvision.dir/tvision/tparamte.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tparamte.cpp.o -c /home/idoc/mr/tvision/source/tvision/tparamte.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tparamte.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tparamte.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tparamte.cpp > CMakeFiles/tvision.dir/tvision/tparamte.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tparamte.cpp > CMakeFiles/tvision.dir/tvision/tparamte.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tparamte.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tparamte.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tparamte.cpp -o CMakeFiles/tvision.dir/tvision/tparamte.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tparamte.cpp -o CMakeFiles/tvision.dir/tvision/tparamte.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tprogram.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tprogram.cpp.o: /home/idoc/mr/tvision/source/tvision/tprogram.cpp
-source/CMakeFiles/tvision.dir/tvision/tprogram.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tprogram.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tprogram.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_184) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tprogram.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tprogram.cpp.o -MF CMakeFiles/tvision.dir/tvision/tprogram.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tprogram.cpp.o -c /home/idoc/mr/tvision/source/tvision/tprogram.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_183) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tprogram.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tprogram.cpp.o -MF CMakeFiles/tvision.dir/tvision/tprogram.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tprogram.cpp.o -c /home/idoc/mr/tvision/source/tvision/tprogram.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tprogram.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tprogram.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tprogram.cpp > CMakeFiles/tvision.dir/tvision/tprogram.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tprogram.cpp > CMakeFiles/tvision.dir/tvision/tprogram.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tprogram.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tprogram.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tprogram.cpp -o CMakeFiles/tvision.dir/tvision/tprogram.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tprogram.cpp -o CMakeFiles/tvision.dir/tvision/tprogram.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tradiobu.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tradiobu.cpp.o: /home/idoc/mr/tvision/source/tvision/tradiobu.cpp
-source/CMakeFiles/tvision.dir/tvision/tradiobu.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tradiobu.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tradiobu.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_185) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tradiobu.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tradiobu.cpp.o -MF CMakeFiles/tvision.dir/tvision/tradiobu.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tradiobu.cpp.o -c /home/idoc/mr/tvision/source/tvision/tradiobu.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_184) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tradiobu.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tradiobu.cpp.o -MF CMakeFiles/tvision.dir/tvision/tradiobu.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tradiobu.cpp.o -c /home/idoc/mr/tvision/source/tvision/tradiobu.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tradiobu.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tradiobu.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tradiobu.cpp > CMakeFiles/tvision.dir/tvision/tradiobu.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tradiobu.cpp > CMakeFiles/tvision.dir/tvision/tradiobu.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tradiobu.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tradiobu.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tradiobu.cpp -o CMakeFiles/tvision.dir/tvision/tradiobu.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tradiobu.cpp -o CMakeFiles/tvision.dir/tvision/tradiobu.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/trescoll.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/trescoll.cpp.o: /home/idoc/mr/tvision/source/tvision/trescoll.cpp
-source/CMakeFiles/tvision.dir/tvision/trescoll.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/trescoll.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/trescoll.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_186) "Building CXX object source/CMakeFiles/tvision.dir/tvision/trescoll.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/trescoll.cpp.o -MF CMakeFiles/tvision.dir/tvision/trescoll.cpp.o.d -o CMakeFiles/tvision.dir/tvision/trescoll.cpp.o -c /home/idoc/mr/tvision/source/tvision/trescoll.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_185) "Building CXX object source/CMakeFiles/tvision.dir/tvision/trescoll.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/trescoll.cpp.o -MF CMakeFiles/tvision.dir/tvision/trescoll.cpp.o.d -o CMakeFiles/tvision.dir/tvision/trescoll.cpp.o -c /home/idoc/mr/tvision/source/tvision/trescoll.cpp
 
 source/CMakeFiles/tvision.dir/tvision/trescoll.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/trescoll.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/trescoll.cpp > CMakeFiles/tvision.dir/tvision/trescoll.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/trescoll.cpp > CMakeFiles/tvision.dir/tvision/trescoll.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/trescoll.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/trescoll.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/trescoll.cpp -o CMakeFiles/tvision.dir/tvision/trescoll.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/trescoll.cpp -o CMakeFiles/tvision.dir/tvision/trescoll.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tresfile.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tresfile.cpp.o: /home/idoc/mr/tvision/source/tvision/tresfile.cpp
-source/CMakeFiles/tvision.dir/tvision/tresfile.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tresfile.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tresfile.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_187) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tresfile.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tresfile.cpp.o -MF CMakeFiles/tvision.dir/tvision/tresfile.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tresfile.cpp.o -c /home/idoc/mr/tvision/source/tvision/tresfile.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_186) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tresfile.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tresfile.cpp.o -MF CMakeFiles/tvision.dir/tvision/tresfile.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tresfile.cpp.o -c /home/idoc/mr/tvision/source/tvision/tresfile.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tresfile.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tresfile.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tresfile.cpp > CMakeFiles/tvision.dir/tvision/tresfile.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tresfile.cpp > CMakeFiles/tvision.dir/tvision/tresfile.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tresfile.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tresfile.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tresfile.cpp -o CMakeFiles/tvision.dir/tvision/tresfile.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tresfile.cpp -o CMakeFiles/tvision.dir/tvision/tresfile.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tscreen.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tscreen.cpp.o: /home/idoc/mr/tvision/source/tvision/tscreen.cpp
-source/CMakeFiles/tvision.dir/tvision/tscreen.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tscreen.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tscreen.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_188) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tscreen.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tscreen.cpp.o -MF CMakeFiles/tvision.dir/tvision/tscreen.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tscreen.cpp.o -c /home/idoc/mr/tvision/source/tvision/tscreen.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_187) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tscreen.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tscreen.cpp.o -MF CMakeFiles/tvision.dir/tvision/tscreen.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tscreen.cpp.o -c /home/idoc/mr/tvision/source/tvision/tscreen.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tscreen.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tscreen.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tscreen.cpp > CMakeFiles/tvision.dir/tvision/tscreen.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tscreen.cpp > CMakeFiles/tvision.dir/tvision/tscreen.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tscreen.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tscreen.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tscreen.cpp -o CMakeFiles/tvision.dir/tvision/tscreen.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tscreen.cpp -o CMakeFiles/tvision.dir/tvision/tscreen.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tscrlbar.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tscrlbar.cpp.o: /home/idoc/mr/tvision/source/tvision/tscrlbar.cpp
-source/CMakeFiles/tvision.dir/tvision/tscrlbar.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tscrlbar.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tscrlbar.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_189) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tscrlbar.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tscrlbar.cpp.o -MF CMakeFiles/tvision.dir/tvision/tscrlbar.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tscrlbar.cpp.o -c /home/idoc/mr/tvision/source/tvision/tscrlbar.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_188) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tscrlbar.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tscrlbar.cpp.o -MF CMakeFiles/tvision.dir/tvision/tscrlbar.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tscrlbar.cpp.o -c /home/idoc/mr/tvision/source/tvision/tscrlbar.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tscrlbar.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tscrlbar.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tscrlbar.cpp > CMakeFiles/tvision.dir/tvision/tscrlbar.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tscrlbar.cpp > CMakeFiles/tvision.dir/tvision/tscrlbar.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tscrlbar.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tscrlbar.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tscrlbar.cpp -o CMakeFiles/tvision.dir/tvision/tscrlbar.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tscrlbar.cpp -o CMakeFiles/tvision.dir/tvision/tscrlbar.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tscrolle.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tscrolle.cpp.o: /home/idoc/mr/tvision/source/tvision/tscrolle.cpp
-source/CMakeFiles/tvision.dir/tvision/tscrolle.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tscrolle.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tscrolle.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_190) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tscrolle.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tscrolle.cpp.o -MF CMakeFiles/tvision.dir/tvision/tscrolle.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tscrolle.cpp.o -c /home/idoc/mr/tvision/source/tvision/tscrolle.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_189) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tscrolle.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tscrolle.cpp.o -MF CMakeFiles/tvision.dir/tvision/tscrolle.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tscrolle.cpp.o -c /home/idoc/mr/tvision/source/tvision/tscrolle.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tscrolle.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tscrolle.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tscrolle.cpp > CMakeFiles/tvision.dir/tvision/tscrolle.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tscrolle.cpp > CMakeFiles/tvision.dir/tvision/tscrolle.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tscrolle.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tscrolle.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tscrolle.cpp -o CMakeFiles/tvision.dir/tvision/tscrolle.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tscrolle.cpp -o CMakeFiles/tvision.dir/tvision/tscrolle.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tsortcol.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tsortcol.cpp.o: /home/idoc/mr/tvision/source/tvision/tsortcol.cpp
-source/CMakeFiles/tvision.dir/tvision/tsortcol.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tsortcol.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tsortcol.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_191) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tsortcol.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tsortcol.cpp.o -MF CMakeFiles/tvision.dir/tvision/tsortcol.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tsortcol.cpp.o -c /home/idoc/mr/tvision/source/tvision/tsortcol.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_190) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tsortcol.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tsortcol.cpp.o -MF CMakeFiles/tvision.dir/tvision/tsortcol.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tsortcol.cpp.o -c /home/idoc/mr/tvision/source/tvision/tsortcol.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tsortcol.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tsortcol.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tsortcol.cpp > CMakeFiles/tvision.dir/tvision/tsortcol.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tsortcol.cpp > CMakeFiles/tvision.dir/tvision/tsortcol.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tsortcol.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tsortcol.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tsortcol.cpp -o CMakeFiles/tvision.dir/tvision/tsortcol.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tsortcol.cpp -o CMakeFiles/tvision.dir/tvision/tsortcol.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tstatict.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tstatict.cpp.o: /home/idoc/mr/tvision/source/tvision/tstatict.cpp
-source/CMakeFiles/tvision.dir/tvision/tstatict.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tstatict.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tstatict.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_192) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tstatict.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tstatict.cpp.o -MF CMakeFiles/tvision.dir/tvision/tstatict.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tstatict.cpp.o -c /home/idoc/mr/tvision/source/tvision/tstatict.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_191) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tstatict.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tstatict.cpp.o -MF CMakeFiles/tvision.dir/tvision/tstatict.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tstatict.cpp.o -c /home/idoc/mr/tvision/source/tvision/tstatict.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tstatict.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tstatict.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tstatict.cpp > CMakeFiles/tvision.dir/tvision/tstatict.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tstatict.cpp > CMakeFiles/tvision.dir/tvision/tstatict.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tstatict.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tstatict.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tstatict.cpp -o CMakeFiles/tvision.dir/tvision/tstatict.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tstatict.cpp -o CMakeFiles/tvision.dir/tvision/tstatict.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tstatusl.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tstatusl.cpp.o: /home/idoc/mr/tvision/source/tvision/tstatusl.cpp
-source/CMakeFiles/tvision.dir/tvision/tstatusl.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tstatusl.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tstatusl.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_193) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tstatusl.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tstatusl.cpp.o -MF CMakeFiles/tvision.dir/tvision/tstatusl.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tstatusl.cpp.o -c /home/idoc/mr/tvision/source/tvision/tstatusl.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_192) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tstatusl.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tstatusl.cpp.o -MF CMakeFiles/tvision.dir/tvision/tstatusl.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tstatusl.cpp.o -c /home/idoc/mr/tvision/source/tvision/tstatusl.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tstatusl.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tstatusl.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tstatusl.cpp > CMakeFiles/tvision.dir/tvision/tstatusl.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tstatusl.cpp > CMakeFiles/tvision.dir/tvision/tstatusl.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tstatusl.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tstatusl.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tstatusl.cpp -o CMakeFiles/tvision.dir/tvision/tstatusl.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tstatusl.cpp -o CMakeFiles/tvision.dir/tvision/tstatusl.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tstrcoll.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tstrcoll.cpp.o: /home/idoc/mr/tvision/source/tvision/tstrcoll.cpp
-source/CMakeFiles/tvision.dir/tvision/tstrcoll.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tstrcoll.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tstrcoll.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_194) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tstrcoll.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tstrcoll.cpp.o -MF CMakeFiles/tvision.dir/tvision/tstrcoll.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tstrcoll.cpp.o -c /home/idoc/mr/tvision/source/tvision/tstrcoll.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_193) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tstrcoll.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tstrcoll.cpp.o -MF CMakeFiles/tvision.dir/tvision/tstrcoll.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tstrcoll.cpp.o -c /home/idoc/mr/tvision/source/tvision/tstrcoll.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tstrcoll.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tstrcoll.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tstrcoll.cpp > CMakeFiles/tvision.dir/tvision/tstrcoll.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tstrcoll.cpp > CMakeFiles/tvision.dir/tvision/tstrcoll.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tstrcoll.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tstrcoll.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tstrcoll.cpp -o CMakeFiles/tvision.dir/tvision/tstrcoll.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tstrcoll.cpp -o CMakeFiles/tvision.dir/tvision/tstrcoll.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tstrlist.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tstrlist.cpp.o: /home/idoc/mr/tvision/source/tvision/tstrlist.cpp
-source/CMakeFiles/tvision.dir/tvision/tstrlist.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tstrlist.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tstrlist.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_195) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tstrlist.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tstrlist.cpp.o -MF CMakeFiles/tvision.dir/tvision/tstrlist.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tstrlist.cpp.o -c /home/idoc/mr/tvision/source/tvision/tstrlist.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_194) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tstrlist.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tstrlist.cpp.o -MF CMakeFiles/tvision.dir/tvision/tstrlist.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tstrlist.cpp.o -c /home/idoc/mr/tvision/source/tvision/tstrlist.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tstrlist.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tstrlist.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tstrlist.cpp > CMakeFiles/tvision.dir/tvision/tstrlist.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tstrlist.cpp > CMakeFiles/tvision.dir/tvision/tstrlist.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tstrlist.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tstrlist.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tstrlist.cpp -o CMakeFiles/tvision.dir/tvision/tstrlist.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tstrlist.cpp -o CMakeFiles/tvision.dir/tvision/tstrlist.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tstrview.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tstrview.cpp.o: /home/idoc/mr/tvision/source/tvision/tstrview.cpp
-source/CMakeFiles/tvision.dir/tvision/tstrview.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tstrview.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tstrview.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_196) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tstrview.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tstrview.cpp.o -MF CMakeFiles/tvision.dir/tvision/tstrview.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tstrview.cpp.o -c /home/idoc/mr/tvision/source/tvision/tstrview.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_195) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tstrview.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tstrview.cpp.o -MF CMakeFiles/tvision.dir/tvision/tstrview.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tstrview.cpp.o -c /home/idoc/mr/tvision/source/tvision/tstrview.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tstrview.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tstrview.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tstrview.cpp > CMakeFiles/tvision.dir/tvision/tstrview.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tstrview.cpp > CMakeFiles/tvision.dir/tvision/tstrview.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tstrview.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tstrview.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tstrview.cpp -o CMakeFiles/tvision.dir/tvision/tstrview.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tstrview.cpp -o CMakeFiles/tvision.dir/tvision/tstrview.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tsurface.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tsurface.cpp.o: /home/idoc/mr/tvision/source/tvision/tsurface.cpp
-source/CMakeFiles/tvision.dir/tvision/tsurface.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tsurface.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tsurface.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_197) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tsurface.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tsurface.cpp.o -MF CMakeFiles/tvision.dir/tvision/tsurface.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tsurface.cpp.o -c /home/idoc/mr/tvision/source/tvision/tsurface.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_196) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tsurface.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tsurface.cpp.o -MF CMakeFiles/tvision.dir/tvision/tsurface.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tsurface.cpp.o -c /home/idoc/mr/tvision/source/tvision/tsurface.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tsurface.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tsurface.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tsurface.cpp > CMakeFiles/tvision.dir/tvision/tsurface.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tsurface.cpp > CMakeFiles/tvision.dir/tvision/tsurface.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tsurface.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tsurface.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tsurface.cpp -o CMakeFiles/tvision.dir/tvision/tsurface.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tsurface.cpp -o CMakeFiles/tvision.dir/tvision/tsurface.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/ttimerqu.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/ttimerqu.cpp.o: /home/idoc/mr/tvision/source/tvision/ttimerqu.cpp
-source/CMakeFiles/tvision.dir/tvision/ttimerqu.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/ttimerqu.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/ttimerqu.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_198) "Building CXX object source/CMakeFiles/tvision.dir/tvision/ttimerqu.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/ttimerqu.cpp.o -MF CMakeFiles/tvision.dir/tvision/ttimerqu.cpp.o.d -o CMakeFiles/tvision.dir/tvision/ttimerqu.cpp.o -c /home/idoc/mr/tvision/source/tvision/ttimerqu.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_197) "Building CXX object source/CMakeFiles/tvision.dir/tvision/ttimerqu.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/ttimerqu.cpp.o -MF CMakeFiles/tvision.dir/tvision/ttimerqu.cpp.o.d -o CMakeFiles/tvision.dir/tvision/ttimerqu.cpp.o -c /home/idoc/mr/tvision/source/tvision/ttimerqu.cpp
 
 source/CMakeFiles/tvision.dir/tvision/ttimerqu.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/ttimerqu.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/ttimerqu.cpp > CMakeFiles/tvision.dir/tvision/ttimerqu.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/ttimerqu.cpp > CMakeFiles/tvision.dir/tvision/ttimerqu.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/ttimerqu.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/ttimerqu.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/ttimerqu.cpp -o CMakeFiles/tvision.dir/tvision/ttimerqu.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/ttimerqu.cpp -o CMakeFiles/tvision.dir/tvision/ttimerqu.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/ttprvlns.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/ttprvlns.cpp.o: /home/idoc/mr/tvision/source/tvision/ttprvlns.cpp
-source/CMakeFiles/tvision.dir/tvision/ttprvlns.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/ttprvlns.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/ttprvlns.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_199) "Building CXX object source/CMakeFiles/tvision.dir/tvision/ttprvlns.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/ttprvlns.cpp.o -MF CMakeFiles/tvision.dir/tvision/ttprvlns.cpp.o.d -o CMakeFiles/tvision.dir/tvision/ttprvlns.cpp.o -c /home/idoc/mr/tvision/source/tvision/ttprvlns.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_198) "Building CXX object source/CMakeFiles/tvision.dir/tvision/ttprvlns.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/ttprvlns.cpp.o -MF CMakeFiles/tvision.dir/tvision/ttprvlns.cpp.o.d -o CMakeFiles/tvision.dir/tvision/ttprvlns.cpp.o -c /home/idoc/mr/tvision/source/tvision/ttprvlns.cpp
 
 source/CMakeFiles/tvision.dir/tvision/ttprvlns.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/ttprvlns.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/ttprvlns.cpp > CMakeFiles/tvision.dir/tvision/ttprvlns.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/ttprvlns.cpp > CMakeFiles/tvision.dir/tvision/ttprvlns.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/ttprvlns.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/ttprvlns.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/ttprvlns.cpp -o CMakeFiles/tvision.dir/tvision/ttprvlns.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/ttprvlns.cpp -o CMakeFiles/tvision.dir/tvision/ttprvlns.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tvalidat.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tvalidat.cpp.o: /home/idoc/mr/tvision/source/tvision/tvalidat.cpp
-source/CMakeFiles/tvision.dir/tvision/tvalidat.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tvalidat.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tvalidat.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_200) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tvalidat.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tvalidat.cpp.o -MF CMakeFiles/tvision.dir/tvision/tvalidat.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tvalidat.cpp.o -c /home/idoc/mr/tvision/source/tvision/tvalidat.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_199) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tvalidat.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tvalidat.cpp.o -MF CMakeFiles/tvision.dir/tvision/tvalidat.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tvalidat.cpp.o -c /home/idoc/mr/tvision/source/tvision/tvalidat.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tvalidat.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tvalidat.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tvalidat.cpp > CMakeFiles/tvision.dir/tvision/tvalidat.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tvalidat.cpp > CMakeFiles/tvision.dir/tvision/tvalidat.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tvalidat.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tvalidat.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tvalidat.cpp -o CMakeFiles/tvision.dir/tvision/tvalidat.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tvalidat.cpp -o CMakeFiles/tvision.dir/tvision/tvalidat.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tvcursor.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tvcursor.cpp.o: /home/idoc/mr/tvision/source/tvision/tvcursor.cpp
-source/CMakeFiles/tvision.dir/tvision/tvcursor.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tvcursor.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tvcursor.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_201) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tvcursor.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tvcursor.cpp.o -MF CMakeFiles/tvision.dir/tvision/tvcursor.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tvcursor.cpp.o -c /home/idoc/mr/tvision/source/tvision/tvcursor.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_200) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tvcursor.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tvcursor.cpp.o -MF CMakeFiles/tvision.dir/tvision/tvcursor.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tvcursor.cpp.o -c /home/idoc/mr/tvision/source/tvision/tvcursor.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tvcursor.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tvcursor.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tvcursor.cpp > CMakeFiles/tvision.dir/tvision/tvcursor.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tvcursor.cpp > CMakeFiles/tvision.dir/tvision/tvcursor.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tvcursor.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tvcursor.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tvcursor.cpp -o CMakeFiles/tvision.dir/tvision/tvcursor.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tvcursor.cpp -o CMakeFiles/tvision.dir/tvision/tvcursor.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tvexposd.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tvexposd.cpp.o: /home/idoc/mr/tvision/source/tvision/tvexposd.cpp
-source/CMakeFiles/tvision.dir/tvision/tvexposd.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tvexposd.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tvexposd.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_202) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tvexposd.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tvexposd.cpp.o -MF CMakeFiles/tvision.dir/tvision/tvexposd.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tvexposd.cpp.o -c /home/idoc/mr/tvision/source/tvision/tvexposd.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_201) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tvexposd.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tvexposd.cpp.o -MF CMakeFiles/tvision.dir/tvision/tvexposd.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tvexposd.cpp.o -c /home/idoc/mr/tvision/source/tvision/tvexposd.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tvexposd.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tvexposd.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tvexposd.cpp > CMakeFiles/tvision.dir/tvision/tvexposd.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tvexposd.cpp > CMakeFiles/tvision.dir/tvision/tvexposd.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tvexposd.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tvexposd.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tvexposd.cpp -o CMakeFiles/tvision.dir/tvision/tvexposd.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tvexposd.cpp -o CMakeFiles/tvision.dir/tvision/tvexposd.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tview.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tview.cpp.o: /home/idoc/mr/tvision/source/tvision/tview.cpp
-source/CMakeFiles/tvision.dir/tvision/tview.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tview.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tview.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_203) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tview.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tview.cpp.o -MF CMakeFiles/tvision.dir/tvision/tview.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tview.cpp.o -c /home/idoc/mr/tvision/source/tvision/tview.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_202) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tview.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tview.cpp.o -MF CMakeFiles/tvision.dir/tvision/tview.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tview.cpp.o -c /home/idoc/mr/tvision/source/tvision/tview.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tview.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tview.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tview.cpp > CMakeFiles/tvision.dir/tvision/tview.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tview.cpp > CMakeFiles/tvision.dir/tvision/tview.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tview.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tview.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tview.cpp -o CMakeFiles/tvision.dir/tvision/tview.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tview.cpp -o CMakeFiles/tvision.dir/tvision/tview.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tvtext1.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tvtext1.cpp.o: /home/idoc/mr/tvision/source/tvision/tvtext1.cpp
-source/CMakeFiles/tvision.dir/tvision/tvtext1.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tvtext1.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tvtext1.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_204) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tvtext1.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tvtext1.cpp.o -MF CMakeFiles/tvision.dir/tvision/tvtext1.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tvtext1.cpp.o -c /home/idoc/mr/tvision/source/tvision/tvtext1.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_203) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tvtext1.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tvtext1.cpp.o -MF CMakeFiles/tvision.dir/tvision/tvtext1.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tvtext1.cpp.o -c /home/idoc/mr/tvision/source/tvision/tvtext1.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tvtext1.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tvtext1.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tvtext1.cpp > CMakeFiles/tvision.dir/tvision/tvtext1.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tvtext1.cpp > CMakeFiles/tvision.dir/tvision/tvtext1.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tvtext1.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tvtext1.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tvtext1.cpp -o CMakeFiles/tvision.dir/tvision/tvtext1.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tvtext1.cpp -o CMakeFiles/tvision.dir/tvision/tvtext1.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tvtext2.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tvtext2.cpp.o: /home/idoc/mr/tvision/source/tvision/tvtext2.cpp
-source/CMakeFiles/tvision.dir/tvision/tvtext2.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tvtext2.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tvtext2.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_205) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tvtext2.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tvtext2.cpp.o -MF CMakeFiles/tvision.dir/tvision/tvtext2.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tvtext2.cpp.o -c /home/idoc/mr/tvision/source/tvision/tvtext2.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_204) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tvtext2.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tvtext2.cpp.o -MF CMakeFiles/tvision.dir/tvision/tvtext2.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tvtext2.cpp.o -c /home/idoc/mr/tvision/source/tvision/tvtext2.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tvtext2.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tvtext2.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tvtext2.cpp > CMakeFiles/tvision.dir/tvision/tvtext2.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tvtext2.cpp > CMakeFiles/tvision.dir/tvision/tvtext2.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tvtext2.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tvtext2.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tvtext2.cpp -o CMakeFiles/tvision.dir/tvision/tvtext2.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tvtext2.cpp -o CMakeFiles/tvision.dir/tvision/tvtext2.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/tvwrite.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/tvwrite.cpp.o: /home/idoc/mr/tvision/source/tvision/tvwrite.cpp
-source/CMakeFiles/tvision.dir/tvision/tvwrite.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/tvwrite.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/tvwrite.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_206) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tvwrite.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/tvwrite.cpp.o -MF CMakeFiles/tvision.dir/tvision/tvwrite.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tvwrite.cpp.o -c /home/idoc/mr/tvision/source/tvision/tvwrite.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_205) "Building CXX object source/CMakeFiles/tvision.dir/tvision/tvwrite.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/tvwrite.cpp.o -MF CMakeFiles/tvision.dir/tvision/tvwrite.cpp.o.d -o CMakeFiles/tvision.dir/tvision/tvwrite.cpp.o -c /home/idoc/mr/tvision/source/tvision/tvwrite.cpp
 
 source/CMakeFiles/tvision.dir/tvision/tvwrite.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/tvwrite.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/tvwrite.cpp > CMakeFiles/tvision.dir/tvision/tvwrite.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/tvwrite.cpp > CMakeFiles/tvision.dir/tvision/tvwrite.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/tvwrite.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/tvwrite.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/tvwrite.cpp -o CMakeFiles/tvision.dir/tvision/tvwrite.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/tvwrite.cpp -o CMakeFiles/tvision.dir/tvision/tvwrite.cpp.s
 
 source/CMakeFiles/tvision.dir/tvision/twindow.cpp.o: source/CMakeFiles/tvision.dir/flags.make
 source/CMakeFiles/tvision.dir/tvision/twindow.cpp.o: /home/idoc/mr/tvision/source/tvision/twindow.cpp
-source/CMakeFiles/tvision.dir/tvision/twindow.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx
-source/CMakeFiles/tvision.dir/tvision/twindow.cpp.o: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 source/CMakeFiles/tvision.dir/tvision/twindow.cpp.o: source/CMakeFiles/tvision.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_207) "Building CXX object source/CMakeFiles/tvision.dir/tvision/twindow.cpp.o"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -MD -MT source/CMakeFiles/tvision.dir/tvision/twindow.cpp.o -MF CMakeFiles/tvision.dir/tvision/twindow.cpp.o.d -o CMakeFiles/tvision.dir/tvision/twindow.cpp.o -c /home/idoc/mr/tvision/source/tvision/twindow.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_206) "Building CXX object source/CMakeFiles/tvision.dir/tvision/twindow.cpp.o"
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT source/CMakeFiles/tvision.dir/tvision/twindow.cpp.o -MF CMakeFiles/tvision.dir/tvision/twindow.cpp.o.d -o CMakeFiles/tvision.dir/tvision/twindow.cpp.o -c /home/idoc/mr/tvision/source/tvision/twindow.cpp
 
 source/CMakeFiles/tvision.dir/tvision/twindow.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/tvision.dir/tvision/twindow.cpp.i"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -E /home/idoc/mr/tvision/source/tvision/twindow.cpp > CMakeFiles/tvision.dir/tvision/twindow.cpp.i
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/idoc/mr/tvision/source/tvision/twindow.cpp > CMakeFiles/tvision.dir/tvision/twindow.cpp.i
 
 source/CMakeFiles/tvision.dir/tvision/twindow.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/tvision.dir/tvision/twindow.cpp.s"
-	cd /home/idoc/mr/tvision/build/source && /usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -Winvalid-pch -include /home/idoc/mr/tvision/build/source/CMakeFiles/tvision.dir/cmake_pch.hxx -S /home/idoc/mr/tvision/source/tvision/twindow.cpp -o CMakeFiles/tvision.dir/tvision/twindow.cpp.s
+	cd /home/idoc/mr/tvision/build/source && /usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/idoc/mr/tvision/source/tvision/twindow.cpp -o CMakeFiles/tvision.dir/tvision/twindow.cpp.s
 
 # Object files for target tvision
 tvision_OBJECTS = \
@@ -3595,7 +3168,6 @@ tvision_OBJECTS = \
 # External object files for target tvision
 tvision_EXTERNAL_OBJECTS =
 
-libtvision.a: source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
 libtvision.a: source/CMakeFiles/tvision.dir/platform/ansiwrit.cpp.o
 libtvision.a: source/CMakeFiles/tvision.dir/platform/base64.cpp.o
 libtvision.a: source/CMakeFiles/tvision.dir/platform/codepage.cpp.o
@@ -3804,7 +3376,7 @@ libtvision.a: source/CMakeFiles/tvision.dir/tvision/tvwrite.cpp.o
 libtvision.a: source/CMakeFiles/tvision.dir/tvision/twindow.cpp.o
 libtvision.a: source/CMakeFiles/tvision.dir/build.make
 libtvision.a: source/CMakeFiles/tvision.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_208) "Linking CXX static library ../libtvision.a"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/idoc/mr/tvision/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_207) "Linking CXX static library ../libtvision.a"
 	cd /home/idoc/mr/tvision/build/source && $(CMAKE_COMMAND) -P CMakeFiles/tvision.dir/cmake_clean_target.cmake
 	cd /home/idoc/mr/tvision/build/source && $(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/tvision.dir/link.txt --verbose=$(VERBOSE)
 

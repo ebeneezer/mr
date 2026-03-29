@@ -41,7 +41,7 @@
 
 namespace {
 enum : ushort {
-	cmMrFileOpen = 1000,
+	cmMrFileOpen = 110,
 	cmMrFileLoad,
 	cmMrFileSave,
 	cmMrFileSaveAs,
@@ -200,12 +200,30 @@ std::string normalizeTvPath(const std::string &path) {
 	return result;
 }
 
+std::string trimPathInput(const std::string &path) {
+	std::size_t start = 0;
+	std::size_t end = path.size();
+
+	while (start < end && std::isspace(static_cast<unsigned char>(path[start])) != 0)
+		++start;
+	while (end > start &&
+	       (std::isspace(static_cast<unsigned char>(path[end - 1])) != 0 ||
+	        static_cast<unsigned char>(path[end - 1]) < 32))
+		--end;
+
+	std::string result = path.substr(start, end - start);
+	if (result.size() >= 2 &&
+	    ((result.front() == '"' && result.back() == '"') || (result.front() == '\'' && result.back() == '\'')))
+		result = result.substr(1, result.size() - 2);
+	return result;
+}
+
 std::string expandUserPath(const char *path) {
 	std::string result;
 
 	if (path == 0)
 		return std::string();
-	result = normalizeTvPath(path);
+	result = normalizeTvPath(trimPathInput(path));
 	if (result.size() >= 2 && result[0] == '~' && result[1] == '/') {
 		const char *home = std::getenv("HOME");
 		if (home != 0 && *home != '\0')
@@ -215,11 +233,9 @@ std::string expandUserPath(const char *path) {
 }
 
 bool isEmptyUntitledEditableWindow(TMREditWindow *win) {
-	TFileEditor *editor;
 	if (win == 0 || win->isReadOnly() || win->currentFileName()[0] != '\0' || win->isFileChanged())
 		return false;
-	editor = win->getEditor();
-	return editor != 0 && editor->bufLen == 0;
+	return win->isBufferEmpty();
 }
 
 TMREditWindow *findReusableEmptyWindow(TMREditWindow *preferred) {
@@ -242,10 +258,8 @@ bool promptForPath(const char *title, char *fileName, std::size_t fileNameSize) 
 	       cmCancel;
 }
 
-bool loadFileIntoWindow(TMREditWindow *win, const char *path) {
-	std::string resolvedPath = expandUserPath(path);
-	if (win == 0)
-		return false;
+bool resolveReadableExistingPath(const char *path, std::string &resolvedPath) {
+	resolvedPath = expandUserPath(path);
 	if (resolvedPath.empty()) {
 		messageBox(mfError | mfOKButton, "No file name specified.");
 		return false;
@@ -258,6 +272,12 @@ bool loadFileIntoWindow(TMREditWindow *win, const char *path) {
 		messageBox(mfError | mfOKButton, "File is not readable:\n%s", resolvedPath.c_str());
 		return false;
 	}
+	return true;
+}
+
+bool loadResolvedFileIntoWindow(TMREditWindow *win, const std::string &resolvedPath) {
+	if (win == 0)
+		return false;
 	if (!win->loadFromFile(resolvedPath.c_str())) {
 		messageBox(mfError | mfOKButton, "Unable to load file:\n%s", resolvedPath.c_str());
 		return false;
@@ -332,7 +352,6 @@ bool hideCurrentEditWindow() {
 
 struct AppCommandState {
 	TMREditWindow *window;
-	TFileEditor *editor;
 	std::size_t windowCount;
 	bool hasEditableWindow;
 	bool hasReadOnlyWindow;
@@ -344,9 +363,9 @@ struct AppCommandState {
 	bool hasBlock;
 
 	AppCommandState()
-	    : window(0), editor(0), windowCount(0), hasEditableWindow(false), hasReadOnlyWindow(false),
-	      hasDirtyWindow(false), hasPersistentFileName(false), canSaveInPlace(false),
-	      hasSelection(false), hasUndo(false), hasBlock(false) {
+	    : window(0), windowCount(0), hasEditableWindow(false), hasReadOnlyWindow(false),
+	      hasDirtyWindow(false), hasPersistentFileName(false), canSaveInPlace(false), hasSelection(false),
+	      hasUndo(false), hasBlock(false) {
 	}
 };
 
@@ -366,17 +385,14 @@ AppCommandState appCommandState() {
 	if (win == 0)
 		return state;
 
-	state.editor = win->getEditor();
 	state.hasReadOnlyWindow = win->isReadOnly();
 	state.hasEditableWindow = !state.hasReadOnlyWindow;
 	state.hasDirtyWindow = win->isFileChanged();
 	state.hasPersistentFileName = win->hasPersistentFileName();
 	state.canSaveInPlace = win->canSaveInPlace();
 	state.hasBlock = win->hasBlock();
-	if (state.editor != 0) {
-		state.hasSelection = state.editor->hasSelection() == True;
-		state.hasUndo = state.editor->delCount != 0 || state.editor->insCount != 0;
-	}
+	state.hasSelection = win->hasSelection();
+	state.hasUndo = win->hasUndoHistory();
 	return state;
 }
 
@@ -390,32 +406,53 @@ bool saveCurrentEditWindow() {
 		mrLogMessage("Save rejected for read-only window.");
 		return false;
 	}
-	if (!win->canSaveInPlace()) {
-		messageBox(mfInformation | mfOKButton, "Save As is not available yet for this window.");
-		mrLogMessage("Save rejected because the window has no persistent file name.");
-		return false;
-	}
 	if (!win->isFileChanged())
 		return true;
-	if (!win->saveCurrentFile()) {
+	if (win->canSaveInPlace()) {
+		if (!win->saveCurrentFile()) {
+			mrLogMessage("Save failed.");
+			return false;
+		}
+		mrLogMessage("Window saved.");
+		return true;
+	}
+	if (!win->saveCurrentFileAs()) {
 		mrLogMessage("Save failed.");
 		return false;
 	}
-	mrLogMessage("Window saved.");
+	mrLogMessage("Window saved as a new file.");
+	return true;
+}
+
+bool saveCurrentEditWindowAs() {
+	TMREditWindow *win = currentEditWindow();
+
+	if (win == 0)
+		return false;
+	if (win->isReadOnly()) {
+		messageBox(mfInformation | mfOKButton, "Window is read-only.");
+		mrLogMessage("Save As rejected for read-only window.");
+		return false;
+	}
+	if (!win->saveCurrentFileAs()) {
+		mrLogMessage("Save As failed.");
+		return false;
+	}
+	mrLogMessage("Window saved as a new file.");
 	return true;
 }
 
 void updateAppCommandState() {
 	AppCommandState state = appCommandState();
 	bool hasWindow = state.window != 0;
-	bool hasEditor = state.editor != 0;
+	bool hasEditor = hasWindow;
 	bool canModify = hasEditor && state.hasEditableWindow;
 	bool hasMultipleWindows = state.windowCount > 1;
 
 	setCommandEnabled(cmMrFileOpen, true);
 	setCommandEnabled(cmMrFileLoad, true);
-	setCommandEnabled(cmMrFileSave, hasEditor && state.canSaveInPlace && state.hasDirtyWindow);
-	setCommandEnabled(cmMrFileSaveAs, false);
+	setCommandEnabled(cmMrFileSave, canModify && state.hasDirtyWindow);
+	setCommandEnabled(cmMrFileSaveAs, canModify);
 	setCommandEnabled(cmMrFileInformation, hasEditor);
 	setCommandEnabled(cmMrFileMerge, hasEditor);
 	setCommandEnabled(cmMrFilePrint, hasEditor);
@@ -487,19 +524,6 @@ std::string yesNo(bool value) {
 	return value ? "Yes" : "No";
 }
 
-std::size_t countEditorLines(TFileEditor *editor) {
-	std::size_t lines = 1;
-	uint i;
-
-	if (editor == 0 || editor->bufLen == 0)
-		return 1;
-	for (i = 0; i < editor->bufLen; ++i) {
-		if (editor->bufChar(i) == '\n')
-			++lines;
-	}
-	return lines;
-}
-
 const char *blockModeLabel(TMREditWindow *win) {
 	if (win == 0)
 		return "None";
@@ -517,12 +541,13 @@ const char *blockModeLabel(TMREditWindow *win) {
 
 std::vector<std::string> buildFileInformationLines(TMREditWindow *win) {
 	std::vector<std::string> lines;
-	TFileEditor *editor = win != 0 ? win->getEditor() : 0;
+	TMRTextBuffer textBuffer = win != 0 ? win->buffer() : TMRTextBuffer();
 	std::string path = win != 0 ? win->currentFileName() : std::string();
 	std::string title = win != 0 && win->getTitle(0) != 0 ? win->getTitle(0) : "?No-File?";
 	struct stat st;
 	bool hasStat = !path.empty() && ::stat(path.c_str(), &st) == 0;
-	char buffer[128];
+	char field[128];
+	TPoint cursor = win != 0 ? win->cursorPoint() : TPoint{0, 0};
 
 	lines.push_back(std::string("Title         : ") + shortenForDialog(title, 56));
 	lines.push_back(std::string("Path          : ") +
@@ -530,22 +555,23 @@ std::vector<std::string> buildFileInformationLines(TMREditWindow *win) {
 	lines.push_back(std::string("Read-only     : ") + yesNo(win != 0 && win->isReadOnly()));
 	lines.push_back(std::string("Modified      : ") + yesNo(win != 0 && win->isFileChanged()));
 	lines.push_back(std::string("Save in place : ") + yesNo(win != 0 && win->canSaveInPlace()));
-	std::snprintf(buffer, sizeof(buffer), "%u bytes", editor != 0 ? editor->bufLen : 0);
-	lines.push_back(std::string("Buffer size   : ") + buffer);
+	lines.push_back(std::string("Syntax        : ") + (win != 0 ? win->syntaxLanguageName() : "Plain Text"));
+	std::snprintf(field, sizeof(field), "%lu bytes", static_cast<unsigned long>(textBuffer.length()));
+	lines.push_back(std::string("Buffer size   : ") + field);
 	if (hasStat)
-		std::snprintf(buffer, sizeof(buffer), "%lld bytes", static_cast<long long>(st.st_size));
+		std::snprintf(field, sizeof(field), "%lld bytes", static_cast<long long>(st.st_size));
 	else
-		std::snprintf(buffer, sizeof(buffer), "<n/a>");
-	lines.push_back(std::string("On disk       : ") + buffer);
-	std::snprintf(buffer, sizeof(buffer), "%lu", static_cast<unsigned long>(countEditorLines(editor)));
-	lines.push_back(std::string("Lines         : ") + buffer);
-	if (editor != 0)
-		std::snprintf(buffer, sizeof(buffer), "line %d, column %d", editor->curPos.y + 1, editor->curPos.x + 1);
+		std::snprintf(field, sizeof(field), "<n/a>");
+	lines.push_back(std::string("On disk       : ") + field);
+	std::snprintf(field, sizeof(field), "%lu", static_cast<unsigned long>(win != 0 ? win->bufferLineCount() : 1));
+	lines.push_back(std::string("Lines         : ") + field);
+	if (win != 0)
+		std::snprintf(field, sizeof(field), "line %d, column %d", cursor.y + 1, cursor.x + 1);
 	else
-		std::snprintf(buffer, sizeof(buffer), "<n/a>");
-	lines.push_back(std::string("Cursor        : ") + buffer);
-	std::snprintf(buffer, sizeof(buffer), "%d", win != 0 ? win->bufferId() : 0);
-	lines.push_back(std::string("Buffer id     : ") + buffer);
+		std::snprintf(field, sizeof(field), "<n/a>");
+	lines.push_back(std::string("Cursor        : ") + field);
+	std::snprintf(field, sizeof(field), "%d", win != 0 ? win->bufferId() : 0);
+	lines.push_back(std::string("Buffer id     : ") + field);
 	lines.push_back(std::string("Block mode    : ") + blockModeLabel(win));
 	lines.push_back(std::string("Visible       : ") + yesNo(win != 0 && (win->state & sfVisible) != 0));
 	return lines;
@@ -556,7 +582,7 @@ void showFileInformationDialog(TMREditWindow *win) {
 		messageBox(mfInformation | mfOKButton, "No active file window.");
 		return;
 	}
-	execDialog(createSimplePreviewDialog("FILE INFORMATION", 74, 17, buildFileInformationLines(win)));
+	execDialog(createSimplePreviewDialog("FILE INFORMATION", 74, 18, buildFileInformationLines(win)));
 }
 
 TDialog *createSimplePreviewDialog(const char *title, int width, int height,
@@ -1141,50 +1167,66 @@ class TMREditorApp : public TApplication {
 		return win;
 	}
 
-	bool handleFileOpen() {
-		enum { FileNameBufferSize = MAXPATH };
-		char fileName[FileNameBufferSize];
-		TMREditWindow *target;
-		TMREditWindow *current = currentEditWindow();
-		std::string logLine;
+		bool handleFileOpen() {
+			enum { FileNameBufferSize = MAXPATH };
+			char fileName[FileNameBufferSize];
+			TMREditWindow *target;
+			TMREditWindow *current = currentEditWindow();
+			std::string resolvedPath;
+			std::string logLine;
+			bool createdTarget = false;
 
-		if (!promptForPath("Open File", fileName, sizeof(fileName)))
-			return true;
+			if (!promptForPath("Open File", fileName, sizeof(fileName)))
+				return true;
+			if (!resolveReadableExistingPath(fileName, resolvedPath))
+				return true;
 
-		target = findReusableEmptyWindow(current);
-		if (target == 0)
-			target = createEditorWindow("?No-File?");
-		if (!loadFileIntoWindow(target, fileName)) {
-			if (target != 0 && isEmptyUntitledEditableWindow(target) && current != target && current != 0)
-				mrActivateEditWindow(current);
-			return true;
-		}
-		mrActivateEditWindow(target);
-		logLine = "Opened file: ";
-		logLine += target->currentFileName();
+			target = findReusableEmptyWindow(current);
+			if (target == 0) {
+				target = createEditorWindow("?No-File?");
+				createdTarget = true;
+			}
+			if (!loadResolvedFileIntoWindow(target, resolvedPath)) {
+				if (createdTarget && target != 0)
+					message(target, evCommand, cmClose, 0);
+				if (target != 0 && isEmptyUntitledEditableWindow(target) && current != target && current != 0)
+					mrActivateEditWindow(current);
+				return true;
+			}
+			mrActivateEditWindow(target);
+			logLine = "Opened file: ";
+			logLine += target->currentFileName();
 		if (target->isReadOnly())
 			logLine += " [read-only]";
 		mrLogMessage(logLine.c_str());
 		return true;
 	}
 
-	bool handleFileLoad() {
-		enum { FileNameBufferSize = MAXPATH };
-		char fileName[FileNameBufferSize];
-		TMREditWindow *target = currentEditWindow();
-		std::string logLine;
+		bool handleFileLoad() {
+			enum { FileNameBufferSize = MAXPATH };
+			char fileName[FileNameBufferSize];
+			TMREditWindow *target = currentEditWindow();
+			std::string resolvedPath;
+			std::string logLine;
+			bool createdTarget = false;
 
-		if (!promptForPath("Load File", fileName, sizeof(fileName)))
-			return true;
-		if (target == 0)
-			target = createEditorWindow("?No-File?");
-		else if (!target->confirmAbandonForReload())
-			return true;
-		if (!loadFileIntoWindow(target, fileName))
-			return true;
-		mrActivateEditWindow(target);
-		logLine = "Loaded file into active window: ";
-		logLine += target->currentFileName();
+			if (!promptForPath("Load File", fileName, sizeof(fileName)))
+				return true;
+			if (!resolveReadableExistingPath(fileName, resolvedPath))
+				return true;
+			if (target == 0) {
+				target = createEditorWindow("?No-File?");
+				createdTarget = true;
+			} else if (!target->confirmAbandonForReload())
+				return true;
+			if (!loadResolvedFileIntoWindow(target, resolvedPath)) {
+				if (createdTarget && target != 0)
+					message(target, evCommand, cmClose, 0);
+				return true;
+			}
+			mrActivateEditWindow(target);
+			logLine = "Loaded file into active window: ";
+			logLine += target->currentFileName();
 		if (target->isReadOnly())
 			logLine += " [read-only]";
 		mrLogMessage(logLine.c_str());
@@ -1264,14 +1306,13 @@ class TMREditorApp : public TApplication {
 			case cmMrFileLoad:
 				return handleFileLoad();
 
-			case cmMrFileSave:
-				saveCurrentEditWindow();
-				return true;
+				case cmMrFileSave:
+					saveCurrentEditWindow();
+					return true;
 
-			case cmMrFileSaveAs:
-				messageBox(mfInformation | mfOKButton, "Save As is not available yet.");
-				mrLogMessage("Save As requested but not implemented yet.");
-				return true;
+				case cmMrFileSaveAs:
+					saveCurrentEditWindowAs();
+					return true;
 
 			case cmMrFileInformation:
 				showFileInformationDialog(currentEditWindow());

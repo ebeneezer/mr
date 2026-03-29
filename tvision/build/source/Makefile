@@ -175,21 +175,6 @@ tvision/fast:
 	cd /home/idoc/mr/tvision/build && $(MAKE) $(MAKESILENT) -f source/CMakeFiles/tvision.dir/build.make source/CMakeFiles/tvision.dir/build
 .PHONY : tvision/fast
 
-# target to build an object file
-cmake_pch.hxx.gch:
-	cd /home/idoc/mr/tvision/build && $(MAKE) $(MAKESILENT) -f source/CMakeFiles/tvision.dir/build.make source/CMakeFiles/tvision.dir/cmake_pch.hxx.gch
-.PHONY : cmake_pch.hxx.gch
-
-# target to preprocess a source file
-cmake_pch.hxx.i:
-	cd /home/idoc/mr/tvision/build && $(MAKE) $(MAKESILENT) -f source/CMakeFiles/tvision.dir/build.make source/CMakeFiles/tvision.dir/cmake_pch.hxx.i
-.PHONY : cmake_pch.hxx.i
-
-# target to generate assembly for a file
-cmake_pch.hxx.s:
-	cd /home/idoc/mr/tvision/build && $(MAKE) $(MAKESILENT) -f source/CMakeFiles/tvision.dir/build.make source/CMakeFiles/tvision.dir/cmake_pch.hxx.s
-.PHONY : cmake_pch.hxx.s
-
 platform/ansiwrit.o: platform/ansiwrit.cpp.o
 .PHONY : platform/ansiwrit.o
 
@@ -5147,9 +5132,6 @@ help:
 	@echo "... list_install_components"
 	@echo "... rebuild_cache"
 	@echo "... tvision"
-	@echo "... cmake_pch.hxx.gch"
-	@echo "... cmake_pch.hxx.i"
-	@echo "... cmake_pch.hxx.s"
 	@echo "... platform/ansiwrit.o"
 	@echo "... platform/ansiwrit.i"
 	@echo "... platform/ansiwrit.s"

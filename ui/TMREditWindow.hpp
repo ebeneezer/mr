@@ -19,8 +19,8 @@
 #include <unistd.h>
 
 #include "TMRFrame.hpp"
-#include "TMRFileEditor.hpp"
 #include "TMRIndicator.hpp"
+#include "TMRTextBuffer.hpp"
 
 class TMREditWindow : public TWindow {
   public:
@@ -52,6 +52,7 @@ class TMREditWindow : public TWindow {
 
 		editor = createEditor(r, "");
 		insert(editor);
+		refreshSyntaxContext();
 	}
 
 	virtual TPalette &getPalette() const override {
@@ -97,6 +98,7 @@ class TMREditWindow : public TWindow {
 			TObject::destroy(newEditor);
 			return false;
 		}
+		newEditor->syncFromEditorState();
 
 		remove(editor);
 		TObject::destroy(editor);
@@ -114,22 +116,10 @@ class TMREditWindow : public TWindow {
 	}
 
 	bool loadTextBuffer(const char *text, const char *title = nullptr) {
-		uint length = 0;
-
 		if (editor == nullptr)
 			return false;
-		if (text != nullptr)
-			length = static_cast<uint>(std::strlen(text));
-
-		editor->setBufLen(0);
-		editor->setCurPtr(0, 0);
-		editor->setSelect(0, 0, False);
-		if (length != 0 && !editor->insertText(text, length, False))
+		if (!editor->replaceBufferText(text))
 			return false;
-		editor->setCurPtr(0, 0);
-		editor->setSelect(0, 0, False);
-		editor->modified = False;
-		editor->update(ufUpdate);
 
 		resetTransientEditorState();
 		setReadOnly(false);
@@ -140,6 +130,7 @@ class TMREditWindow : public TWindow {
 			setDisplayTitle(title);
 		else
 			updateTitleFromEditor();
+		refreshSyntaxContext();
 		return true;
 	}
 
@@ -157,14 +148,65 @@ class TMREditWindow : public TWindow {
 		return ok;
 	}
 
+	bool saveCurrentFileAs() {
+		if (editor == nullptr || isReadOnly() || !editor->canSaveAs())
+			return false;
+
+		bool ok = editor->saveAsWithPrompt() == True;
+		if (ok) {
+			firstSaveDone_ = true;
+			temporaryFileUsed_ = false;
+			temporaryFileName_.clear();
+			setReadOnly(isExistingPathReadOnly(editor->fileName));
+			updateTitleFromEditor();
+		}
+		return ok;
+	}
+
 	const char *currentFileName() const {
 		if (editor != nullptr && editor->fileName[0] != EOS)
 			return editor->fileName;
 		return "";
 	}
 
-	TFileEditor *getEditor() const {
+	TMRFileEditor *getEditor() const {
 		return editor;
+	}
+
+	TMRTextBuffer buffer() const {
+		return TMRTextBuffer(editor);
+	}
+
+	bool isBufferEmpty() const {
+		return buffer().isEmpty();
+	}
+
+	std::size_t bufferLength() const {
+		return buffer().length();
+	}
+
+	std::size_t bufferLineCount() const {
+		return buffer().lineCount();
+	}
+
+	bool hasSelection() const {
+		return buffer().hasSelection();
+	}
+
+	bool hasUndoHistory() const {
+		return buffer().hasUndoHistory();
+	}
+
+	TPoint cursorPoint() const {
+		return buffer().cursorPoint();
+	}
+
+	const char *syntaxLanguageName() const {
+		return editor != nullptr ? editor->syntaxLanguageName() : "Plain Text";
+	}
+
+	TMRSyntaxLanguage syntaxLanguage() const {
+		return editor != nullptr ? editor->syntaxLanguage() : TMRSyntaxLanguage::PlainText;
 	}
 
 	bool hasPersistentFileName() const {
@@ -173,6 +215,10 @@ class TMREditWindow : public TWindow {
 
 	bool canSaveInPlace() const {
 		return editor != nullptr && editor->canSaveInPlace();
+	}
+
+	bool canSaveAs() const {
+		return editor != nullptr && editor->canSaveAs();
 	}
 
 	bool isReadOnly() const {
@@ -232,6 +278,7 @@ class TMREditWindow : public TWindow {
 			fexpand(editor->fileName);
 		}
 		updateTitleFromEditor();
+		refreshSyntaxContext();
 	}
 
 	bool confirmAbandonForReload() {
@@ -258,6 +305,7 @@ class TMREditWindow : public TWindow {
 		std::strncpy(displayTitle, (title != nullptr && *title != '\0') ? title : "Untitled",
 		             sizeof(displayTitle) - 1);
 		displayTitle[sizeof(displayTitle) - 1] = '\0';
+		refreshSyntaxContext();
 		message(owner, evBroadcast, cmUpdateTitle, 0);
 	}
 
@@ -382,7 +430,13 @@ class TMREditWindow : public TWindow {
 			std::strncpy(displayTitle, editor->fileName, sizeof(displayTitle) - 1);
 			displayTitle[sizeof(displayTitle) - 1] = '\0';
 		}
+		refreshSyntaxContext();
 		message(owner, evBroadcast, cmUpdateTitle, 0);
+	}
+
+	void refreshSyntaxContext() {
+		if (editor != nullptr)
+			editor->setSyntaxTitleHint(displayTitle);
 	}
 
 	void beginBlock(BlockMode mode) {

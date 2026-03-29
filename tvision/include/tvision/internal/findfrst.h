@@ -2,11 +2,9 @@
 #define TVISION_FINDFRST_H
 
 #include <dos.h>
-#include <memory>
 #include <mutex>
 #include <string>
 #include <tvision/tv.h>
-#include <unordered_map>
 #include <vector>
 
 #ifndef _WIN32
@@ -34,8 +32,8 @@ class FindFirstRec {
 	bool next() noexcept;
 
   private:
-	struct find_t *finfo{nullptr};
-	unsigned searchAttr{0};
+	struct find_t *finfo;
+	unsigned searchAttr;
 
 #ifndef _WIN32
 	DIR *dirStream{0};
@@ -63,9 +61,20 @@ class FindFirstRec {
 	static void cvtTime(const WIN32_FIND_DATAW *findData, struct find_t *fileinfo) noexcept;
 #endif // _WIN32
 
-	static std::vector<std::unique_ptr<FindFirstRec>> recList;
-	static std::unordered_map<struct find_t *, size_t> recIndexByFileInfo;
-	static std::mutex recMutex;
+	// A vector of FindFirstRec that deallocates all directory streams
+	// on destruction.
+	class RecList : std::vector<FindFirstRec> {
+		friend class FindFirstRec;
+		using std::vector<FindFirstRec>::vector;
+		~RecList() {
+			for (FindFirstRec &r : *this)
+				r.close();
+		}
+		std::mutex m;
+		operator std::mutex &() {
+			return m;
+		}
+	} static recList;
 };
 
 } // namespace tvision

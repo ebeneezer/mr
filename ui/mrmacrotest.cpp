@@ -49,13 +49,31 @@ static std::string normalizeTvPath(const std::string &path) {
 	return result;
 }
 
+static std::string trimPathInput(const std::string &path) {
+	std::size_t start = 0;
+	std::size_t end = path.size();
+
+	while (start < end && std::isspace(static_cast<unsigned char>(path[start])) != 0)
+		++start;
+	while (end > start &&
+	       (std::isspace(static_cast<unsigned char>(path[end - 1])) != 0 ||
+	        static_cast<unsigned char>(path[end - 1]) < 32))
+		--end;
+
+	std::string result = path.substr(start, end - start);
+	if (result.size() >= 2 &&
+	    ((result.front() == '"' && result.back() == '"') || (result.front() == '\'' && result.back() == '\'')))
+		result = result.substr(1, result.size() - 2);
+	return result;
+}
+
 static std::string expandUserPath(const char *path) {
 	std::string result;
 
 	if (path == 0)
 		return std::string();
 
-	result = normalizeTvPath(path);
+	result = normalizeTvPath(trimPathInput(path));
 	if (result.size() >= 2 && result[0] == '~' && result[1] == '/') {
 		const char *home = std::getenv("HOME");
 		if (home != 0 && *home != '\0')

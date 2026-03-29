@@ -31,6 +31,24 @@
 			}
 		},
 		{
+			"label": "Build mr (mit TVision Auto-Sync)",
+			"type": "shell",
+			"command": "make",
+			"args": [
+				"TVISION_AUTO_SYNC=1",
+				"CXX=${input:compilerSelection}"
+			],
+			"group": "build",
+			"problemMatcher": [
+				"$gcc"
+			],
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"clear": true
+			}
+		},
+		{
 			"label": "Synchronisation",
 			"type": "shell",
 			"command": "make",
@@ -54,6 +72,26 @@
 			"args": [
 				"clean",
 				"all",
+				"CXX=${input:compilerSelection}"
+			],
+			"group": "build",
+			"problemMatcher": [
+				"$gcc"
+			],
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"clear": true
+			}
+		},
+		{
+			"label": "Rebuild mr (Clean & Neu, mit TVision Auto-Sync)",
+			"type": "shell",
+			"command": "make",
+			"args": [
+				"clean",
+				"all",
+				"TVISION_AUTO_SYNC=1",
 				"CXX=${input:compilerSelection}"
 			],
 			"group": "build",

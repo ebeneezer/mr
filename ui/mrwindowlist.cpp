@@ -27,7 +27,7 @@
 
 namespace {
 enum : ushort {
-	cmMRWindowListDelete = 3200,
+	cmMRWindowListDelete = 200,
 	cmMRWindowListSave,
 	cmMRWindowListHide,
 	cmMRWindowListHideAll
@@ -56,6 +56,38 @@ std::string currentWorkingDirectory() {
 	if (::getcwd(cwd, sizeof(cwd)) == nullptr)
 		return std::string();
 	return std::string(cwd);
+}
+
+std::string executableDirectory() {
+	char path[4096];
+	ssize_t len = ::readlink("/proc/self/exe", path, sizeof(path) - 1);
+	std::size_t pos;
+
+	if (len <= 0)
+		return std::string();
+	path[len] = '\0';
+	pos = std::string(path).find_last_of('/');
+	if (pos == std::string::npos)
+		return std::string();
+	return std::string(path, static_cast<std::size_t>(pos));
+}
+
+std::string resolveHelpFilePath() {
+	std::string fromCwd = currentWorkingDirectory();
+	std::string fromExe = executableDirectory();
+	std::string candidate;
+
+	if (!fromCwd.empty()) {
+		candidate = fromCwd + "/" + kHelpFilePath;
+		if (::access(candidate.c_str(), R_OK) == 0)
+			return candidate;
+	}
+	if (!fromExe.empty()) {
+		candidate = fromExe + "/" + kHelpFilePath;
+		if (::access(candidate.c_str(), R_OK) == 0)
+			return candidate;
+	}
+	return std::string(kHelpFilePath);
 }
 
 std::string currentTimestamp() {
@@ -115,13 +147,11 @@ std::string slotLabelFor(std::size_t index) {
 }
 
 bool isWindowEmptyUntitled(TMREditWindow *win) {
-	TFileEditor *editor;
 	if (win == nullptr)
 		return false;
 	if (win->currentFileName()[0] != '\0')
 		return false;
-	editor = win->getEditor();
-	return editor != nullptr && editor->bufLen == 0;
+	return win->isBufferEmpty();
 }
 
 void collectEditWindowsProc(TView *view, void *arg) {
@@ -268,18 +298,21 @@ bool saveWindow(TMREditWindow *win) {
 		mrLogMessage("Save rejected for read-only window.");
 		return false;
 	}
-	if (!win->canSaveInPlace()) {
-		messageBox(mfInformation | mfOKButton, "Save As is not available yet for this window.");
-		mrLogMessage("Save rejected because the window has no persistent file name.");
-		return false;
-	}
 	if (!win->isFileChanged())
 		return true;
-	if (!win->saveCurrentFile()) {
+	if (win->canSaveInPlace()) {
+		if (!win->saveCurrentFile()) {
+			mrLogMessage("Save failed.");
+			return false;
+		}
+		mrLogMessage("Window saved.");
+		return true;
+	}
+	if (!win->saveCurrentFileAs()) {
 		mrLogMessage("Save failed.");
 		return false;
 	}
-	mrLogMessage("Window saved.");
+	mrLogMessage("Window saved as a new file.");
 	return true;
 }
 
@@ -467,26 +500,29 @@ class WindowListDialog : public TDialog {
 		return padRight(filePart, 24) + " " + padRight(entry.slotLabel, 2) + "  " + dirPart;
 	}
 
-	void collectEntries() {
-		std::vector<TMREditWindow *> windows = allEditWindows();
-		entries.clear();
-		rows.clear();
-		for (std::size_t i = 0; i < windows.size(); ++i) {
-			WindowListEntry entry;
-			std::string fileName = windows[i]->currentFileName();
+		void collectEntries() {
+			std::vector<TMREditWindow *> windows = allEditWindows();
+			entries.clear();
+			rows.clear();
+			for (std::size_t i = 0; i < windows.size(); ++i) {
+				WindowListEntry entry;
+				std::string fileName = windows[i]->currentFileName();
+				const char *title = windows[i]->getTitle(0);
+				std::string titleText = title != nullptr ? title : "";
 
-			if (mode == mrwlSelectLinkTarget && windows[i] == current)
-				continue;
+				if (mode == mrwlSelectLinkTarget && windows[i] == current)
+					continue;
 
-			entry.window = windows[i];
-			entry.fileLabel = fileName.empty() ? "?No-File" : baseNameOf(fileName);
-			entry.slotLabel = slotLabelFor(i);
-			entry.directoryLabel = directoryOf(fileName.empty() ? currentWorkingDirectory() : fileName);
-			entry.hidden = (windows[i]->state & sfVisible) == 0;
-			entries.push_back(entry);
-			rows.push_back(renderRow(entry));
+				entry.window = windows[i];
+				entry.fileLabel =
+				    fileName.empty() ? (titleText.empty() ? "?No-File" : baseNameOf(titleText)) : baseNameOf(fileName);
+				entry.slotLabel = slotLabelFor(i);
+				entry.directoryLabel = directoryOf(fileName.empty() ? currentWorkingDirectory() : fileName);
+				entry.hidden = (windows[i]->state & sfVisible) == 0;
+				entries.push_back(entry);
+				rows.push_back(renderRow(entry));
+			}
 		}
-	}
 
 	void refreshEntries() {
 		int oldFocus = listView != nullptr ? listView->focused : 0;
@@ -585,6 +621,7 @@ bool mrActivateEditWindow(TMREditWindow *win) {
 
 bool mrShowProjectHelp() {
 	TMREditWindow *win;
+	std::string helpPath = resolveHelpFilePath();
 	if (TProgram::deskTop == nullptr)
 		return false;
 
@@ -604,8 +641,8 @@ bool mrShowProjectHelp() {
 		win = new TMREditWindow(bounds, kHelpWindowTitle, 1);
 		TProgram::deskTop->insert(win);
 
-		if (!win->loadFromFile(kHelpFilePath)) {
-			messageBox(mfError | mfOKButton, "Unable to load help file:\n%s", kHelpFilePath);
+		if (!win->loadFromFile(helpPath.c_str())) {
+			messageBox(mfError | mfOKButton, "Unable to load help file:\n%s", helpPath.c_str());
 			message(win, evCommand, cmClose, nullptr);
 			return false;
 		}

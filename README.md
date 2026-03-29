@@ -1,3 +1,6 @@
+![mr logo](ui/mr.png)
+
+
 # Multi-Edit Revisited (mr) 
 
 - American Cybernetics (makers of Multi-Edit) went out of business in 2020 and stopped development of the TUI version of Multi-Edit years bevor.

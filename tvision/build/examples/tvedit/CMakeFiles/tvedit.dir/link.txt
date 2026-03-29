@@ -1,1 +1,0 @@
-/usr/bin/c++ -g -Wl,--dependency-file=CMakeFiles/tvedit.dir/link.d CMakeFiles/tvedit.dir/Unity/unity_0_cxx.cxx.o -o ../../tvedit  ../../libtvision.a /usr/lib/libncursesw.so -ltinfo /usr/lib/libgpm.so
