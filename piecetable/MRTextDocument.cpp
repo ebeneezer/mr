@@ -19,6 +19,201 @@ std::size_t allocateDocumentId() noexcept {
 	static std::atomic<std::size_t> nextId(1);
 	return nextId.fetch_add(1, std::memory_order_relaxed);
 }
+
+template <class Doc>
+char piecewiseCharAt(const Doc &doc, Offset pos) noexcept {
+	pos = doc.clampOffset(pos);
+	if (pos >= doc.length())
+		return '\0';
+	Offset logical = 0;
+	for (std::size_t i = 0; i < doc.pieceCount(); ++i) {
+		PieceChunkView chunk = doc.pieceChunk(i);
+		if (chunk.data == nullptr || chunk.length == 0)
+			continue;
+		if (pos < logical + chunk.length)
+			return chunk.data[pos - logical];
+		logical += chunk.length;
+	}
+	return '\0';
+}
+
+inline bool isLineBreakByte(char ch) noexcept {
+	return ch == '\n' || ch == '\r';
+}
+
+template <class Doc>
+std::size_t piecewiseLineCount(const Doc &doc) noexcept {
+	std::size_t lines = 1;
+	bool prevWasCR = false;
+	for (std::size_t i = 0; i < doc.pieceCount(); ++i) {
+		PieceChunkView chunk = doc.pieceChunk(i);
+		if (chunk.data == nullptr || chunk.length == 0)
+			continue;
+		for (Offset j = 0; j < chunk.length; ++j) {
+			char ch = chunk.data[j];
+			if (ch == '\n') {
+				if (!prevWasCR)
+					++lines;
+				prevWasCR = false;
+			} else if (ch == '\r') {
+				++lines;
+				prevWasCR = true;
+			} else
+				prevWasCR = false;
+		}
+	}
+	return lines;
+}
+
+template <class Doc>
+Offset piecewiseLineStart(const Doc &doc, Offset pos) noexcept {
+	pos = doc.clampOffset(pos);
+	if (pos == 0)
+		return 0;
+
+	Offset logicalEnd = doc.length();
+	for (std::size_t i = doc.pieceCount(); i > 0; --i) {
+		PieceChunkView chunk = doc.pieceChunk(i - 1);
+		if (chunk.data == nullptr || chunk.length == 0)
+			continue;
+		Offset chunkStart = logicalEnd - chunk.length;
+		if (pos <= chunkStart) {
+			logicalEnd = chunkStart;
+			continue;
+		}
+
+		Offset localLimit = std::min(chunk.length, pos - chunkStart);
+		for (Offset j = localLimit; j > 0; --j)
+			if (isLineBreakByte(chunk.data[j - 1]))
+				return chunkStart + j;
+
+		pos = chunkStart;
+		logicalEnd = chunkStart;
+		if (pos == 0)
+			break;
+	}
+	return 0;
+}
+
+template <class Doc>
+Offset piecewiseLineEnd(const Doc &doc, Offset pos) noexcept {
+	pos = doc.clampOffset(pos);
+	Offset logical = 0;
+	bool active = false;
+	for (std::size_t i = 0; i < doc.pieceCount(); ++i) {
+		PieceChunkView chunk = doc.pieceChunk(i);
+		if (chunk.data == nullptr || chunk.length == 0)
+			continue;
+		Offset start = 0;
+		if (!active) {
+			if (pos >= logical + chunk.length) {
+				logical += chunk.length;
+				continue;
+			}
+			start = pos - logical;
+			active = true;
+		}
+		for (Offset j = start; j < chunk.length; ++j)
+			if (isLineBreakByte(chunk.data[j]))
+				return logical + j;
+		logical += chunk.length;
+	}
+	return doc.length();
+}
+
+template <class Doc>
+Offset piecewiseNextLine(const Doc &doc, Offset pos) noexcept {
+	Offset end = piecewiseLineEnd(doc, pos);
+	if (end < doc.length()) {
+		if (piecewiseCharAt(doc, end) == '\r' && end + 1 < doc.length() &&
+		    piecewiseCharAt(doc, end + 1) == '\n')
+			end += 2;
+		else
+			++end;
+	}
+	return end;
+}
+
+template <class Doc>
+Offset piecewisePrevLine(const Doc &doc, Offset pos) noexcept {
+	Offset start = piecewiseLineStart(doc, pos);
+	if (start == 0)
+		return 0;
+	Offset probe = start - 1;
+	if (probe > 0 && piecewiseCharAt(doc, probe - 1) == '\r' && piecewiseCharAt(doc, probe) == '\n')
+		--probe;
+	return piecewiseLineStart(doc, probe);
+}
+
+template <class Doc>
+std::size_t piecewiseLineIndex(const Doc &doc, Offset pos) noexcept {
+	std::size_t line = 0;
+	bool prevWasCR = false;
+	pos = doc.clampOffset(pos);
+	Offset logical = 0;
+	for (std::size_t i = 0; i < doc.pieceCount() && logical < pos; ++i) {
+		PieceChunkView chunk = doc.pieceChunk(i);
+		if (chunk.data == nullptr || chunk.length == 0)
+			continue;
+		Offset localLimit = std::min(chunk.length, pos - logical);
+		for (Offset j = 0; j < localLimit; ++j) {
+			char ch = chunk.data[j];
+			if (ch == '\n') {
+				if (!prevWasCR)
+					++line;
+				prevWasCR = false;
+			} else if (ch == '\r') {
+				++line;
+				prevWasCR = true;
+			} else
+				prevWasCR = false;
+		}
+		logical += chunk.length;
+	}
+	return line;
+}
+
+template <class Doc>
+Offset piecewiseLineStartByIndex(const Doc &doc, std::size_t index) noexcept {
+	Offset pos = 0;
+	std::size_t line = 0;
+	while (line < index && pos < doc.length()) {
+		Offset next = piecewiseNextLine(doc, pos);
+		if (next <= pos)
+			break;
+		pos = next;
+		++line;
+	}
+	return pos;
+}
+
+template <class Doc>
+std::string piecewiseRangeText(const Doc &doc, Offset start, Offset end) {
+	start = doc.clampOffset(start);
+	end = doc.clampOffset(end);
+	if (end < start)
+		std::swap(start, end);
+	std::string out;
+	out.reserve(end - start);
+	Offset logical = 0;
+	for (std::size_t i = 0; i < doc.pieceCount() && logical < end; ++i) {
+		PieceChunkView chunk = doc.pieceChunk(i);
+		if (chunk.data == nullptr || chunk.length == 0)
+			continue;
+		Offset chunkStart = logical;
+		Offset chunkEnd = logical + chunk.length;
+		if (chunkEnd <= start) {
+			logical = chunkEnd;
+			continue;
+		}
+		Offset takeStart = std::max(start, chunkStart);
+		Offset takeEnd = std::min(end, chunkEnd);
+		if (takeEnd > takeStart)
+			out.append(chunk.data + (takeStart - chunkStart), takeEnd - takeStart);
+		logical = chunkEnd;
+	}
+	return out;
+}
 }
 
 struct MappedFileSource::State {
@@ -272,8 +467,7 @@ bool TextDocument::empty() const noexcept {
 char TextDocument::charAt(Offset pos) const noexcept {
 	if (const char *data = directTextData())
 		return pos < length_ ? data[pos] : '\0';
-	const std::string &flat = text();
-	return pos < flat.size() ? flat[pos] : '\0';
+	return piecewiseCharAt(*this, pos);
 }
 
 Snapshot TextDocument::snapshot() const {
@@ -303,7 +497,7 @@ ReadSnapshot TextDocument::readSnapshot() const {
 
 bool TextDocument::adoptLineIndexWarmup(const LineIndexWarmupData &warmup,
                                         std::size_t expectedVersion) noexcept {
-	if (!matchesVersion(expectedVersion) || !hasDirectOriginalView())
+	if (!matchesVersion(expectedVersion))
 		return false;
 	if (warmup.checkpoints.empty())
 		return false;
@@ -348,8 +542,7 @@ bool ReadSnapshot::empty() const noexcept {
 char ReadSnapshot::charAt(Offset pos) const noexcept {
 	if (const char *data = directTextData())
 		return pos < length_ ? data[pos] : '\0';
-	const std::string flat = text();
-	return pos < flat.size() ? flat[pos] : '\0';
+	return piecewiseCharAt(*this, pos);
 }
 
 std::string ReadSnapshot::text() const {
@@ -388,24 +581,8 @@ Offset ReadSnapshot::clampOffset(Offset pos) const noexcept {
 }
 
 std::size_t ReadSnapshot::lineCount() const noexcept {
-	if (const char *data = directTextData()) {
-		static_cast<void>(data);
-		ensureLazyIndexComplete();
-		return lazyTotalLineCount_;
-	}
-
-	const std::string flat = text();
-	std::size_t lines = 1;
-	for (Offset i = 0; i < flat.size(); ++i) {
-		if (flat[i] == '\n')
-			++lines;
-		else if (flat[i] == '\r') {
-			++lines;
-			if (i + 1 < flat.size() && flat[i + 1] == '\n')
-				++i;
-		}
-	}
-	return lines;
+	ensureLazyIndexComplete();
+	return lazyTotalLineCount_;
 }
 
 Offset ReadSnapshot::lineStart(Offset pos) const noexcept {
@@ -416,11 +593,7 @@ Offset ReadSnapshot::lineStart(Offset pos) const noexcept {
 		return pos;
 	}
 
-	const std::string flat = text();
-	pos = clampOffset(pos);
-	while (pos > 0 && !isLineBreakChar(flat[pos - 1]))
-		--pos;
-	return pos;
+	return piecewiseLineStart(*this, pos);
 }
 
 Offset ReadSnapshot::lineEnd(Offset pos) const noexcept {
@@ -431,11 +604,7 @@ Offset ReadSnapshot::lineEnd(Offset pos) const noexcept {
 		return pos;
 	}
 
-	const std::string flat = text();
-	pos = clampOffset(pos);
-	while (pos < flat.size() && !isLineBreakChar(flat[pos]))
-		++pos;
-	return pos;
+	return piecewiseLineEnd(*this, pos);
 }
 
 Offset ReadSnapshot::nextLine(Offset pos) const noexcept {
@@ -450,15 +619,7 @@ Offset ReadSnapshot::nextLine(Offset pos) const noexcept {
 		return pos;
 	}
 
-	const std::string flat = text();
-	pos = lineEnd(pos);
-	if (pos < flat.size()) {
-		if (flat[pos] == '\r' && pos + 1 < flat.size() && flat[pos + 1] == '\n')
-			pos += 2;
-		else
-			++pos;
-	}
-	return pos;
+	return piecewiseNextLine(*this, pos);
 }
 
 Offset ReadSnapshot::prevLine(Offset pos) const noexcept {
@@ -474,128 +635,86 @@ Offset ReadSnapshot::prevLine(Offset pos) const noexcept {
 		return pos;
 	}
 
-	const std::string flat = text();
-	pos = lineStart(pos);
-	if (pos == 0)
-		return 0;
-	--pos;
-	if (pos > 0 && flat[pos - 1] == '\r' && flat[pos] == '\n')
-		--pos;
-	return lineStart(pos);
+	return piecewisePrevLine(*this, pos);
 }
 
 std::size_t ReadSnapshot::lineIndex(Offset pos) const noexcept {
-	if (const char *data = directTextData()) {
-		pos = clampOffset(pos);
-		static_cast<void>(data);
-		ensureLazyIndexForOffset(pos);
-		if (lineIndexCheckpoints_.empty())
-			return 0;
-
-		std::size_t left = 0;
-		std::size_t right = lineIndexCheckpoints_.size();
-		while (left < right) {
-			std::size_t mid = left + (right - left) / 2;
-			if (lineIndexCheckpoints_[mid].offset <= pos)
-				left = mid + 1;
-			else
-				right = mid;
-		}
-		LineIndexCheckpoint checkpoint =
-		    lineIndexCheckpoints_[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
-		Offset cursor = checkpoint.offset;
-		std::size_t line = checkpoint.lineIndex;
-		while (cursor < pos) {
-			Offset next = cursor;
-			if (!directAdvanceLine(next) || next > pos)
-				break;
-			cursor = next;
-			++line;
-		}
-		return line;
-	}
-
-	const std::string flat = text();
-	std::size_t line = 0;
 	pos = clampOffset(pos);
-	for (Offset i = 0; i < pos; ++i) {
-		if (flat[i] == '\n')
-			++line;
-		else if (flat[i] == '\r') {
-			++line;
-			if (i + 1 < pos && flat[i + 1] == '\n')
-				++i;
-		}
+	ensureLazyIndexForOffset(pos);
+	if (lineIndexCheckpoints_.empty())
+		return 0;
+
+	std::size_t left = 0;
+	std::size_t right = lineIndexCheckpoints_.size();
+	while (left < right) {
+		std::size_t mid = left + (right - left) / 2;
+		if (lineIndexCheckpoints_[mid].offset <= pos)
+			left = mid + 1;
+		else
+			right = mid;
+	}
+	LineIndexCheckpoint checkpoint =
+	    lineIndexCheckpoints_[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
+	Offset cursor = checkpoint.offset;
+	std::size_t line = checkpoint.lineIndex;
+	while (cursor < pos) {
+		Offset next = cursor;
+		if (!advanceLine(next) || next > pos)
+			break;
+		cursor = next;
+		++line;
 	}
 	return line;
 }
 
 Offset ReadSnapshot::lineStartByIndex(std::size_t index) const noexcept {
-	if (const char *data = directTextData()) {
-		static_cast<void>(data);
-		ensureLazyIndexForLine(index);
-		if (lineIndexCheckpoints_.empty())
-			return 0;
-		if (lazyLineIndexComplete_ && index >= lazyTotalLineCount_)
-			index = lazyTotalLineCount_ > 0 ? lazyTotalLineCount_ - 1 : 0;
+	ensureLazyIndexForLine(index);
+	if (lineIndexCheckpoints_.empty())
+		return 0;
+	if (lazyLineIndexComplete_ && index >= lazyTotalLineCount_)
+		index = lazyTotalLineCount_ > 0 ? lazyTotalLineCount_ - 1 : 0;
 
-		std::size_t left = 0;
-		std::size_t right = lineIndexCheckpoints_.size();
-		while (left < right) {
-			std::size_t mid = left + (right - left) / 2;
-			if (lineIndexCheckpoints_[mid].lineIndex <= index)
-				left = mid + 1;
-			else
-				right = mid;
-		}
-		LineIndexCheckpoint checkpoint =
-		    lineIndexCheckpoints_[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
-		Offset cursor = checkpoint.offset;
-		std::size_t line = checkpoint.lineIndex;
-		while (line < index) {
-			Offset next = cursor;
-			if (!directAdvanceLine(next))
-				break;
-			cursor = next;
-			++line;
-		}
-		return cursor;
+	std::size_t left = 0;
+	std::size_t right = lineIndexCheckpoints_.size();
+	while (left < right) {
+		std::size_t mid = left + (right - left) / 2;
+		if (lineIndexCheckpoints_[mid].lineIndex <= index)
+			left = mid + 1;
+		else
+			right = mid;
 	}
-
-	std::size_t line = 0;
-	Offset pos = 0;
-	Offset len = length();
-	while (line < index && pos < len) {
-		Offset next = nextLine(pos);
-		if (next <= pos)
+	LineIndexCheckpoint checkpoint =
+	    lineIndexCheckpoints_[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
+	Offset cursor = checkpoint.offset;
+	std::size_t line = checkpoint.lineIndex;
+	while (line < index) {
+		Offset next = cursor;
+		if (!advanceLine(next))
 			break;
-		pos = next;
+		cursor = next;
 		++line;
 	}
-	return pos;
+	return cursor;
 }
 
 std::size_t ReadSnapshot::estimatedLineCount() const noexcept {
-	if (const char *data = directTextData()) {
-		static_cast<void>(data);
-		ensureLazyIndexSeeded();
-		if (lazyLineIndexComplete_)
-			return lazyTotalLineCount_;
-		if (lazyIndexedOffset_ == 0 || lazyIndexedLine_ == 0)
-			return std::max<std::size_t>(1, length_ / 80 + 1);
+	ensureLazyIndexSeeded();
+	if (lazyLineIndexComplete_)
+		return lazyTotalLineCount_;
+	if (!mappedOriginal_.mapped())
+		return piecewiseLineCount(*this);
+	if (lazyIndexedOffset_ == 0 || lazyIndexedLine_ == 0)
+		return std::max<std::size_t>(1, length_ / 80 + 1);
 
-		const std::size_t observedLines = lazyIndexedLine_ + 1;
-		const std::size_t estimated =
-		    static_cast<std::size_t>((static_cast<long double>(length_) * observedLines) /
-		                             std::max<Offset>(lazyIndexedOffset_, 1));
-		return std::max<std::size_t>(observedLines, estimated);
-	}
-
-	return lineCount();
+	const std::size_t observedLines = lazyIndexedLine_ + 1;
+	const std::size_t estimated =
+	    static_cast<std::size_t>((static_cast<long double>(length_) * observedLines) /
+	                             std::max<Offset>(lazyIndexedOffset_, 1));
+	return std::max<std::size_t>(observedLines, estimated);
 }
 
 bool ReadSnapshot::exactLineCountKnown() const noexcept {
-	return !hasDirectOriginalView() || lazyLineIndexComplete_;
+	return !mappedOriginal_.mapped() || lazyLineIndexComplete_;
 }
 
 std::size_t ReadSnapshot::column(Offset pos) const noexcept {
@@ -608,7 +727,7 @@ std::string ReadSnapshot::lineText(Offset pos) const {
 	Offset end = lineEnd(pos);
 	if (const char *data = directTextData())
 		return std::string(data + start, end - start);
-	return text().substr(start, end - start);
+	return piecewiseRangeText(*this, start, end);
 }
 
 LineIndexWarmupData ReadSnapshot::completeLineIndexWarmup() const {
@@ -645,6 +764,16 @@ void ReadSnapshot::resetLazyLineIndex() noexcept {
 	lazyTotalLineCount_ = 1;
 }
 
+bool ReadSnapshot::advanceLine(Offset &offset) const noexcept {
+	if (directAdvanceLine(offset))
+		return true;
+	Offset next = piecewiseNextLine(*this, offset);
+	if (next <= offset)
+		return false;
+	offset = next;
+	return true;
+}
+
 bool ReadSnapshot::directAdvanceLine(Offset &offset) const noexcept {
 	const char *data = directTextData();
 	if (data == nullptr)
@@ -664,20 +793,18 @@ bool ReadSnapshot::directAdvanceLine(Offset &offset) const noexcept {
 }
 
 void ReadSnapshot::ensureLazyIndexSeeded() const noexcept {
-	if (!hasDirectOriginalView())
-		return;
 	if (lineIndexCheckpoints_.empty())
 		const_cast<ReadSnapshot *>(this)->resetLazyLineIndex();
 }
 
 void ReadSnapshot::advanceLazyIndexByStride() const noexcept {
 	ensureLazyIndexSeeded();
-	if (!hasDirectOriginalView() || lazyLineIndexComplete_)
+	if (lazyLineIndexComplete_)
 		return;
 
 	for (std::size_t steps = 0; steps < kLazyLineIndexStride; ++steps) {
 		Offset next = lazyIndexedOffset_;
-		if (!directAdvanceLine(next)) {
+		if (!advanceLine(next)) {
 			lazyLineIndexComplete_ = true;
 			lazyTotalLineCount_ = lazyIndexedLine_ + 1;
 			return;
@@ -691,16 +818,12 @@ void ReadSnapshot::advanceLazyIndexByStride() const noexcept {
 
 void ReadSnapshot::ensureLazyIndexForLine(std::size_t targetLine) const noexcept {
 	ensureLazyIndexSeeded();
-	if (!hasDirectOriginalView())
-		return;
 	while (!lazyLineIndexComplete_ && lineIndexCheckpoints_.back().lineIndex < targetLine)
 		advanceLazyIndexByStride();
 }
 
 void ReadSnapshot::ensureLazyIndexForOffset(Offset targetOffset) const noexcept {
 	ensureLazyIndexSeeded();
-	if (!hasDirectOriginalView())
-		return;
 	targetOffset = clampOffset(targetOffset);
 	while (!lazyLineIndexComplete_ && lineIndexCheckpoints_.back().offset <= targetOffset)
 		advanceLazyIndexByStride();
@@ -708,8 +831,6 @@ void ReadSnapshot::ensureLazyIndexForOffset(Offset targetOffset) const noexcept 
 
 void ReadSnapshot::ensureLazyIndexComplete() const noexcept {
 	ensureLazyIndexSeeded();
-	if (!hasDirectOriginalView())
-		return;
 	while (!lazyLineIndexComplete_)
 		advanceLazyIndexByStride();
 }
@@ -928,24 +1049,8 @@ Offset TextDocument::clampOffset(Offset pos) const noexcept {
 }
 
 std::size_t TextDocument::lineCount() const noexcept {
-	if (const char *data = directTextData()) {
-		static_cast<void>(data);
-		ensureLazyIndexComplete();
-		return lazyTotalLineCount_;
-	}
-
-	const std::string &flat = text();
-	std::size_t lines = 1;
-	for (Offset i = 0; i < flat.size(); ++i) {
-		if (flat[i] == '\n')
-			++lines;
-		else if (flat[i] == '\r') {
-			++lines;
-			if (i + 1 < flat.size() && flat[i + 1] == '\n')
-				++i;
-		}
-	}
-	return lines;
+	ensureLazyIndexComplete();
+	return lazyTotalLineCount_;
 }
 
 Offset TextDocument::lineStart(Offset pos) const noexcept {
@@ -956,11 +1061,7 @@ Offset TextDocument::lineStart(Offset pos) const noexcept {
 		return pos;
 	}
 
-	const std::string &flat = text();
-	pos = clampOffset(pos);
-	while (pos > 0 && !isLineBreakChar(flat[pos - 1]))
-		--pos;
-	return pos;
+	return piecewiseLineStart(*this, pos);
 }
 
 Offset TextDocument::lineEnd(Offset pos) const noexcept {
@@ -971,11 +1072,7 @@ Offset TextDocument::lineEnd(Offset pos) const noexcept {
 		return pos;
 	}
 
-	const std::string &flat = text();
-	pos = clampOffset(pos);
-	while (pos < flat.size() && !isLineBreakChar(flat[pos]))
-		++pos;
-	return pos;
+	return piecewiseLineEnd(*this, pos);
 }
 
 Offset TextDocument::nextLine(Offset pos) const noexcept {
@@ -990,15 +1087,7 @@ Offset TextDocument::nextLine(Offset pos) const noexcept {
 		return pos;
 	}
 
-	const std::string &flat = text();
-	pos = lineEnd(pos);
-	if (pos < flat.size()) {
-		if (flat[pos] == '\r' && pos + 1 < flat.size() && flat[pos + 1] == '\n')
-			pos += 2;
-		else
-			++pos;
-	}
-	return pos;
+	return piecewiseNextLine(*this, pos);
 }
 
 Offset TextDocument::prevLine(Offset pos) const noexcept {
@@ -1014,128 +1103,86 @@ Offset TextDocument::prevLine(Offset pos) const noexcept {
 		return pos;
 	}
 
-	const std::string &flat = text();
-	pos = lineStart(pos);
-	if (pos == 0)
-		return 0;
-	--pos;
-	if (pos > 0 && flat[pos - 1] == '\r' && flat[pos] == '\n')
-		--pos;
-	return lineStart(pos);
+	return piecewisePrevLine(*this, pos);
 }
 
 std::size_t TextDocument::lineIndex(Offset pos) const noexcept {
-	if (const char *data = directTextData()) {
-		pos = clampOffset(pos);
-		static_cast<void>(data);
-		ensureLazyIndexForOffset(pos);
-		if (lineIndexCheckpoints_.empty())
-			return 0;
-
-		std::size_t left = 0;
-		std::size_t right = lineIndexCheckpoints_.size();
-		while (left < right) {
-			std::size_t mid = left + (right - left) / 2;
-			if (lineIndexCheckpoints_[mid].offset <= pos)
-				left = mid + 1;
-			else
-				right = mid;
-		}
-		LineIndexCheckpoint checkpoint =
-		    lineIndexCheckpoints_[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
-		Offset cursor = checkpoint.offset;
-		std::size_t line = checkpoint.lineIndex;
-		while (cursor < pos) {
-			Offset next = cursor;
-			if (!directAdvanceLine(next) || next > pos)
-				break;
-			cursor = next;
-			++line;
-		}
-		return line;
-	}
-
-	const std::string &flat = text();
-	std::size_t line = 0;
 	pos = clampOffset(pos);
-	for (Offset i = 0; i < pos; ++i) {
-		if (flat[i] == '\n')
-			++line;
-		else if (flat[i] == '\r') {
-			++line;
-			if (i + 1 < pos && flat[i + 1] == '\n')
-				++i;
-		}
+	ensureLazyIndexForOffset(pos);
+	if (lineIndexCheckpoints_.empty())
+		return 0;
+
+	std::size_t left = 0;
+	std::size_t right = lineIndexCheckpoints_.size();
+	while (left < right) {
+		std::size_t mid = left + (right - left) / 2;
+		if (lineIndexCheckpoints_[mid].offset <= pos)
+			left = mid + 1;
+		else
+			right = mid;
+	}
+	LineIndexCheckpoint checkpoint =
+	    lineIndexCheckpoints_[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
+	Offset cursor = checkpoint.offset;
+	std::size_t line = checkpoint.lineIndex;
+	while (cursor < pos) {
+		Offset next = cursor;
+		if (!advanceLine(next) || next > pos)
+			break;
+		cursor = next;
+		++line;
 	}
 	return line;
 }
 
 Offset TextDocument::lineStartByIndex(std::size_t index) const noexcept {
-	if (const char *data = directTextData()) {
-		static_cast<void>(data);
-		ensureLazyIndexForLine(index);
-		if (lineIndexCheckpoints_.empty())
-			return 0;
-		if (lazyLineIndexComplete_ && index >= lazyTotalLineCount_)
-			index = lazyTotalLineCount_ > 0 ? lazyTotalLineCount_ - 1 : 0;
+	ensureLazyIndexForLine(index);
+	if (lineIndexCheckpoints_.empty())
+		return 0;
+	if (lazyLineIndexComplete_ && index >= lazyTotalLineCount_)
+		index = lazyTotalLineCount_ > 0 ? lazyTotalLineCount_ - 1 : 0;
 
-		std::size_t left = 0;
-		std::size_t right = lineIndexCheckpoints_.size();
-		while (left < right) {
-			std::size_t mid = left + (right - left) / 2;
-			if (lineIndexCheckpoints_[mid].lineIndex <= index)
-				left = mid + 1;
-			else
-				right = mid;
-		}
-		LineIndexCheckpoint checkpoint =
-		    lineIndexCheckpoints_[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
-		Offset cursor = checkpoint.offset;
-		std::size_t line = checkpoint.lineIndex;
-		while (line < index) {
-			Offset next = cursor;
-			if (!directAdvanceLine(next))
-				break;
-			cursor = next;
-			++line;
-		}
-		return cursor;
+	std::size_t left = 0;
+	std::size_t right = lineIndexCheckpoints_.size();
+	while (left < right) {
+		std::size_t mid = left + (right - left) / 2;
+		if (lineIndexCheckpoints_[mid].lineIndex <= index)
+			left = mid + 1;
+		else
+			right = mid;
 	}
-
-	std::size_t line = 0;
-	Offset pos = 0;
-	Offset len = length();
-	while (line < index && pos < len) {
-		Offset next = nextLine(pos);
-		if (next <= pos)
+	LineIndexCheckpoint checkpoint =
+	    lineIndexCheckpoints_[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
+	Offset cursor = checkpoint.offset;
+	std::size_t line = checkpoint.lineIndex;
+	while (line < index) {
+		Offset next = cursor;
+		if (!advanceLine(next))
 			break;
-		pos = next;
+		cursor = next;
 		++line;
 	}
-	return pos;
+	return cursor;
 }
 
 std::size_t TextDocument::estimatedLineCount() const noexcept {
-	if (const char *data = directTextData()) {
-		static_cast<void>(data);
-		ensureLazyIndexSeeded();
-		if (lazyLineIndexComplete_)
-			return lazyTotalLineCount_;
-		if (lazyIndexedOffset_ == 0 || lazyIndexedLine_ == 0)
-			return std::max<std::size_t>(1, length_ / 80 + 1);
+	ensureLazyIndexSeeded();
+	if (lazyLineIndexComplete_)
+		return lazyTotalLineCount_;
+	if (!mappedOriginal_.mapped())
+		return piecewiseLineCount(*this);
+	if (lazyIndexedOffset_ == 0 || lazyIndexedLine_ == 0)
+		return std::max<std::size_t>(1, length_ / 80 + 1);
 
-		const std::size_t observedLines = lazyIndexedLine_ + 1;
-		const std::size_t estimated =
-		    static_cast<std::size_t>((static_cast<long double>(length_) * observedLines) /
-		                             std::max<Offset>(lazyIndexedOffset_, 1));
-		return std::max<std::size_t>(observedLines, estimated);
-	}
-
-	return lineCount();
+	const std::size_t observedLines = lazyIndexedLine_ + 1;
+	const std::size_t estimated =
+	    static_cast<std::size_t>((static_cast<long double>(length_) * observedLines) /
+	                             std::max<Offset>(lazyIndexedOffset_, 1));
+	return std::max<std::size_t>(observedLines, estimated);
 }
 
 bool TextDocument::exactLineCountKnown() const noexcept {
-	return !hasDirectOriginalView() || lazyLineIndexComplete_;
+	return !mappedOriginal_.mapped() || lazyLineIndexComplete_;
 }
 
 std::size_t TextDocument::column(Offset pos) const noexcept {
@@ -1148,7 +1195,7 @@ std::string TextDocument::lineText(Offset pos) const {
 	Offset end = lineEnd(pos);
 	if (const char *data = directTextData())
 		return std::string(data + start, end - start);
-	return text().substr(start, end - start);
+	return piecewiseRangeText(*this, start, end);
 }
 
 bool TextDocument::isLineBreakChar(char ch) const noexcept {
@@ -1198,7 +1245,6 @@ void TextDocument::bumpVersion() noexcept {
 
 void TextDocument::markDirty() noexcept {
 	cacheDirty_ = true;
-	resetLazyLineIndex();
 }
 
 void TextDocument::ensureMaterialized() const noexcept {
@@ -1304,6 +1350,7 @@ bool TextDocument::eraseNoVersionBump(Range range) {
 		              pieces_.begin() + static_cast<std::ptrdiff_t>(endIndex));
 	length_ -= bounded.end - bounded.start;
 	compactPieces();
+	invalidateLazyLineIndexFrom(bounded.start);
 	markDirty();
 	return true;
 }
@@ -1354,21 +1401,29 @@ bool TextDocument::directAdvanceLine(Offset &offset) const noexcept {
 	return true;
 }
 
+bool TextDocument::advanceLine(Offset &offset) const noexcept {
+	if (directAdvanceLine(offset))
+		return true;
+	Offset next = piecewiseNextLine(*this, offset);
+	if (next <= offset)
+		return false;
+	offset = next;
+	return true;
+}
+
 void TextDocument::ensureLazyIndexSeeded() const noexcept {
-	if (!hasDirectOriginalView())
-		return;
 	if (lineIndexCheckpoints_.empty())
 		const_cast<TextDocument *>(this)->resetLazyLineIndex();
 }
 
 void TextDocument::advanceLazyIndexByStride() const noexcept {
 	ensureLazyIndexSeeded();
-	if (!hasDirectOriginalView() || lazyLineIndexComplete_)
+	if (lazyLineIndexComplete_)
 		return;
 
 	for (std::size_t steps = 0; steps < kLazyLineIndexStride; ++steps) {
 		Offset next = lazyIndexedOffset_;
-		if (!directAdvanceLine(next)) {
+		if (!advanceLine(next)) {
 			lazyLineIndexComplete_ = true;
 			lazyTotalLineCount_ = lazyIndexedLine_ + 1;
 			return;
@@ -1382,16 +1437,12 @@ void TextDocument::advanceLazyIndexByStride() const noexcept {
 
 void TextDocument::ensureLazyIndexForLine(std::size_t targetLine) const noexcept {
 	ensureLazyIndexSeeded();
-	if (!hasDirectOriginalView())
-		return;
 	while (!lazyLineIndexComplete_ && lineIndexCheckpoints_.back().lineIndex < targetLine)
 		advanceLazyIndexByStride();
 }
 
 void TextDocument::ensureLazyIndexForOffset(Offset targetOffset) const noexcept {
 	ensureLazyIndexSeeded();
-	if (!hasDirectOriginalView())
-		return;
 	targetOffset = clampOffset(targetOffset);
 	while (!lazyLineIndexComplete_ && lineIndexCheckpoints_.back().offset <= targetOffset)
 		advanceLazyIndexByStride();
@@ -1399,10 +1450,33 @@ void TextDocument::ensureLazyIndexForOffset(Offset targetOffset) const noexcept 
 
 void TextDocument::ensureLazyIndexComplete() const noexcept {
 	ensureLazyIndexSeeded();
-	if (!hasDirectOriginalView())
-		return;
 	while (!lazyLineIndexComplete_)
 		advanceLazyIndexByStride();
+}
+
+void TextDocument::invalidateLazyLineIndexFrom(Offset offset) noexcept {
+	offset = clampOffset(offset);
+	if (lineIndexCheckpoints_.empty()) {
+		resetLazyLineIndex();
+		return;
+	}
+
+	std::vector<LineIndexCheckpoint>::iterator keepEnd =
+	    std::upper_bound(lineIndexCheckpoints_.begin(), lineIndexCheckpoints_.end(), offset,
+	                     [](Offset value, const LineIndexCheckpoint &checkpoint) {
+		                     return value < checkpoint.offset;
+	                     });
+	if (keepEnd == lineIndexCheckpoints_.begin())
+		++keepEnd;
+	lineIndexCheckpoints_.erase(keepEnd, lineIndexCheckpoints_.end());
+	if (lineIndexCheckpoints_.empty())
+		resetLazyLineIndex();
+	else {
+		lazyIndexedOffset_ = lineIndexCheckpoints_.back().offset;
+		lazyIndexedLine_ = lineIndexCheckpoints_.back().lineIndex;
+		lazyLineIndexComplete_ = false;
+		lazyTotalLineCount_ = std::max<std::size_t>(1, lazyIndexedLine_ + 1);
+	}
 }
 
 bool TextDocument::insertAddSpanNoVersionBump(Offset offset, TextSpan span) {
@@ -1417,6 +1491,7 @@ bool TextDocument::insertAddSpanNoVersionBump(Offset offset, TextSpan span) {
 
 	length_ += span.length;
 	compactPieces();
+	invalidateLazyLineIndexFrom(logical);
 	markDirty();
 	return true;
 }

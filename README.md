@@ -1,5 +1,12 @@
 ![mr logo](ui/mr.png)
 
+> [!NOTE]
+> - "I live again." Caleb (Blood)
+> - "It is never enough." Frank Cotton (Hellraiser)
+> - "C makes it easy to shoot yourself in the foot; C++ makes it harder, but when you do it blows your whole leg off.“ Bjarne Stroustrup
+> - „Talk is cheap. Show me the code.“ Linus Torvalds
+> - „My main conclusion after spending ten years of my life working on the TeX project is that software is hard. It's harder than anything else I've ever had to do.“ Donald Knuth
+> - "Coding makes me horny." Michael 'iDoc' Raus
 
 # Multi-Edit Revisited (mr) 
 

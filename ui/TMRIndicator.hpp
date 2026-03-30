@@ -51,8 +51,8 @@ class TMRIndicator : public TIndicator {
 		}
 
 		b.moveChar(0, frame, color, size.x);
-		if (modified)
-			b.putChar(0, '*');
+			if (modified)
+				b.moveStr(0, "✎", color, 2);
 		if (readOnly_ && (!readOnlyBlinkActive_ || readOnlyBlinkVisible_))
 			b.moveStr(2, "🔒", color, 2);
 		drawTaskMarkers(b, color, taskCountText);
@@ -119,7 +119,9 @@ class TMRIndicator : public TIndicator {
   private:
 	static constexpr char kDragFrame = '\xCD';
 	static constexpr char kNormalFrame = '\xC4';
-	static constexpr char kTaskMarkerIcon[] = "▣";
+		static constexpr char kTaskMarkerIcon[] = "🧠";
+	static constexpr auto kBlinkSlice = std::chrono::milliseconds(10);
+	static constexpr int kBlinkSlicesPerTick = 25;
 
 	static std::size_t allocateIndicatorId() noexcept {
 		static std::atomic<std::size_t> nextId(1);
@@ -165,7 +167,7 @@ class TMRIndicator : public TIndicator {
 			return;
 		}
 		for (std::size_t i = 0; i < taskDisplayCount_; ++i)
-			b.moveStr(static_cast<ushort>(5 + i), kTaskMarkerIcon, taskMarkerColor(i, baseColor), 2);
+			b.moveStr(static_cast<ushort>(5 + i * 2), kTaskMarkerIcon, taskMarkerColor(i, baseColor), 2);
 	}
 
 	int taskMarkerEndColumn() const noexcept {
@@ -176,7 +178,7 @@ class TMRIndicator : public TIndicator {
 			std::snprintf(taskCountText, sizeof(taskCountText), "%zu", taskDisplayCount_);
 			return 8 + static_cast<int>(std::strlen(taskCountText));
 		}
-		return 6 + static_cast<int>(taskDisplayCount_);
+		return 6 + static_cast<int>(taskDisplayCount_ * 2);
 	}
 
 	TColorAttr taskMarkerColor(std::size_t index, TColorAttr baseColor) const {
@@ -245,12 +247,12 @@ class TMRIndicator : public TIndicator {
 		                                           std::stop_token stopToken) {
 			    mr::coprocessor::Result result;
 			    result.task = info;
-			    for (int step = 0; step < 25; ++step) {
+			    for (int step = 0; step < kBlinkSlicesPerTick; ++step) {
 				    if (stopToken.stop_requested()) {
 					    result.status = mr::coprocessor::TaskStatus::Cancelled;
 					    return result;
 				    }
-				    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+				    std::this_thread::sleep_for(kBlinkSlice);
 			    }
 			    result.status = mr::coprocessor::TaskStatus::Completed;
 			    result.payload = std::make_shared<mr::coprocessor::IndicatorBlinkPayload>(
@@ -269,12 +271,12 @@ class TMRIndicator : public TIndicator {
 		                                           std::stop_token stopToken) {
 			    mr::coprocessor::Result result;
 			    result.task = info;
-			    for (int step = 0; step < 25; ++step) {
+			    for (int step = 0; step < kBlinkSlicesPerTick; ++step) {
 				    if (stopToken.stop_requested()) {
 					    result.status = mr::coprocessor::TaskStatus::Cancelled;
 					    return result;
 				    }
-				    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+				    std::this_thread::sleep_for(kBlinkSlice);
 			    }
 			    result.status = mr::coprocessor::TaskStatus::Completed;
 			    result.payload = std::make_shared<mr::coprocessor::IndicatorBlinkPayload>(

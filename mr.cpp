@@ -510,6 +510,30 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			mrTraceCoprocessorTaskRelease(static_cast<int>(result.task.documentId), result.task.id, "failed");
 	}
 
+	if (result.task.kind == mr::coprocessor::TaskKind::LineIndexWarmup) {
+		std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+		for (std::size_t i = 0; i < windows.size(); ++i) {
+			TMRFileEditor *editor = windows[i] != nullptr ? windows[i]->getEditor() : nullptr;
+			if (editor == nullptr)
+				continue;
+			if (editor->documentId() != result.task.documentId)
+				continue;
+			editor->clearLineIndexWarmupTask(result.task.id);
+		}
+	}
+
+	if (result.task.kind == mr::coprocessor::TaskKind::SyntaxWarmup) {
+		std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+		for (std::size_t i = 0; i < windows.size(); ++i) {
+			TMRFileEditor *editor = windows[i] != nullptr ? windows[i]->getEditor() : nullptr;
+			if (editor == nullptr)
+				continue;
+			if (editor->documentId() != result.task.documentId)
+				continue;
+			editor->clearSyntaxWarmupTask(result.task.id);
+		}
+	}
+
 	if (!result.failed())
 		return;
 

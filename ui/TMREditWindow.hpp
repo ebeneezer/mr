@@ -87,6 +87,7 @@ class TMREditWindow : public TWindow {
 	virtual void handleEvent(TEvent &event) override {
 		TWindow::handleEvent(event);
 		if (event.what == evBroadcast && event.message.command == cmUpdateTitle) {
+			updateTaskMarkers();
 			if (frame != nullptr)
 				frame->drawView();
 			clearEvent(event);
@@ -371,7 +372,7 @@ class TMREditWindow : public TWindow {
 			if (trackedCoprocessorTasks_[i] == taskId)
 				return;
 		trackedCoprocessorTasks_.push_back(taskId);
-			updateTaskMarkers();
+		updateTaskMarkers();
 	}
 
 	std::size_t trackedCoprocessorTaskCount() const noexcept {
@@ -573,8 +574,15 @@ class TMREditWindow : public TWindow {
 	}
 
 	void updateTaskMarkers() {
+		std::size_t taskCount = trackedCoprocessorTasks_.size();
+		if (editor != nullptr) {
+			if (editor->pendingLineIndexWarmupTaskId() != 0)
+				++taskCount;
+			if (editor->pendingSyntaxWarmupTaskId() != 0)
+				++taskCount;
+		}
 		if (indicator != nullptr)
-			indicator->setTaskCount(trackedCoprocessorTasks_.size());
+			indicator->setTaskCount(taskCount);
 	}
 
 	void cancelTrackedCoprocessorTasks() {

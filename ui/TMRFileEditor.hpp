@@ -344,6 +344,11 @@ class TMRFileEditor : public TScroller {
 		updateIndicator();
 	}
 
+	void notifyWindowTaskStateChanged() {
+		if (owner != nullptr)
+			message(owner, evBroadcast, cmUpdateTitle, 0);
+	}
+
 	std::string snapshotText() const {
 		return bufferModel_.text();
 	}
@@ -367,6 +372,7 @@ class TMRFileEditor : public TScroller {
 		lineIndexWarmupTaskId_ = 0;
 		lineIndexWarmupDocumentId_ = 0;
 		lineIndexWarmupVersion_ = 0;
+		notifyWindowTaskStateChanged();
 		updateMetrics();
 		updateIndicator();
 		drawView();
@@ -392,8 +398,34 @@ class TMRFileEditor : public TScroller {
 		syntaxWarmupTopLine_ = 0;
 		syntaxWarmupBottomLine_ = 0;
 		syntaxWarmupLanguage_ = TMRSyntaxLanguage::PlainText;
+		notifyWindowTaskStateChanged();
 		drawView();
 		return true;
+	}
+
+	void clearLineIndexWarmupTask(std::uint64_t expectedTaskId) noexcept {
+		if (expectedTaskId != 0 && lineIndexWarmupTaskId_ != expectedTaskId)
+			return;
+		if (lineIndexWarmupTaskId_ == 0)
+			return;
+		lineIndexWarmupTaskId_ = 0;
+		lineIndexWarmupDocumentId_ = 0;
+		lineIndexWarmupVersion_ = 0;
+		notifyWindowTaskStateChanged();
+	}
+
+	void clearSyntaxWarmupTask(std::uint64_t expectedTaskId) noexcept {
+		if (expectedTaskId != 0 && syntaxWarmupTaskId_ != expectedTaskId)
+			return;
+		if (syntaxWarmupTaskId_ == 0)
+			return;
+		syntaxWarmupTaskId_ = 0;
+		syntaxWarmupDocumentId_ = 0;
+		syntaxWarmupVersion_ = 0;
+		syntaxWarmupTopLine_ = 0;
+		syntaxWarmupBottomLine_ = 0;
+		syntaxWarmupLanguage_ = TMRSyntaxLanguage::PlainText;
+		notifyWindowTaskStateChanged();
 	}
 
 	void setSyntaxTitleHint(const std::string &title) {
@@ -465,7 +497,7 @@ class TMRFileEditor : public TScroller {
 
 	bool replaceBufferData(const char *data, uint length) {
 		std::string text;
-		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.snapshot(),
+		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
 		                                                 "replace-buffer-data");
 		TMRTextBufferModel::Document preview;
 
@@ -485,7 +517,7 @@ class TMRFileEditor : public TScroller {
 
 	bool appendBufferData(const char *data, uint length) {
 		std::string text;
-		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.snapshot(),
+		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
 		                                                 "append-buffer-data");
 		TMRTextBufferModel::Document preview;
 		std::size_t endPtr = bufferModel_.length();
@@ -509,7 +541,7 @@ class TMRFileEditor : public TScroller {
 
 	bool replaceRangeAndSelect(uint start, uint end, const char *data, uint length) {
 		std::string text;
-		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.snapshot(),
+		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
 		                                                 "replace-range-select");
 		TMRTextBufferModel::Document preview;
 		TMRTextBufferModel::Range range;
@@ -532,7 +564,7 @@ class TMRFileEditor : public TScroller {
 		std::size_t start = bufferModel_.cursor();
 		std::size_t end = start;
 		TMRTextBufferModel::Range range;
-		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.snapshot(),
+		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
 		                                                 "insert-buffer-text");
 		TMRTextBufferModel::Document preview;
 
@@ -561,7 +593,7 @@ class TMRFileEditor : public TScroller {
 	bool replaceCurrentLineText(const std::string &text) {
 		std::size_t start = bufferModel_.lineStart(bufferModel_.cursor());
 		std::size_t end = bufferModel_.lineEnd(bufferModel_.cursor());
-		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.snapshot(),
+		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
 		                                                 "replace-current-line");
 		TMRTextBufferModel::Document preview;
 
@@ -578,7 +610,7 @@ class TMRFileEditor : public TScroller {
 	bool deleteCharsAtCursor(int count) {
 		std::size_t start = bufferModel_.cursor();
 		std::size_t end = start;
-		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.snapshot(),
+		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
 		                                                 "delete-chars-at-cursor");
 		TMRTextBufferModel::Document preview;
 
@@ -601,7 +633,7 @@ class TMRFileEditor : public TScroller {
 	bool deleteCurrentLineText() {
 		std::size_t start = bufferModel_.lineStart(bufferModel_.cursor());
 		std::size_t end = bufferModel_.nextLine(bufferModel_.cursor());
-		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.snapshot(),
+		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
 		                                                 "delete-current-line");
 		TMRTextBufferModel::Document preview;
 
@@ -616,7 +648,7 @@ class TMRFileEditor : public TScroller {
 	}
 
 	bool replaceWholeBuffer(const std::string &text, std::size_t cursorPos) {
-		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.snapshot(),
+		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
 		                                                 "replace-whole-buffer");
 		TMRTextBufferModel::Document preview;
 
@@ -844,11 +876,14 @@ class TMRFileEditor : public TScroller {
 
 	void scheduleLineIndexWarmupIfNeeded() {
 		if (!bufferModel_.document().hasMappedOriginal() || bufferModel_.document().exactLineCountKnown()) {
+			bool hadTask = lineIndexWarmupTaskId_ != 0;
 			lineIndexWarmupTaskId_ = 0;
-				lineIndexWarmupDocumentId_ = 0;
-				lineIndexWarmupVersion_ = 0;
-				return;
-			}
+			lineIndexWarmupDocumentId_ = 0;
+			lineIndexWarmupVersion_ = 0;
+			if (hadTask)
+				notifyWindowTaskStateChanged();
+			return;
+		}
 
 			const std::size_t docId = bufferModel_.documentId();
 			const std::size_t version = bufferModel_.version();
@@ -857,6 +892,7 @@ class TMRFileEditor : public TScroller {
 				return;
 
 			TMRTextBufferModel::ReadSnapshot snapshot = bufferModel_.readSnapshot();
+			std::uint64_t previousTaskId = lineIndexWarmupTaskId_;
 			lineIndexWarmupDocumentId_ = docId;
 			lineIndexWarmupVersion_ = version;
 			lineIndexWarmupTaskId_ = mr::coprocessor::globalCoprocessor().submit(
@@ -879,6 +915,8 @@ class TMRFileEditor : public TScroller {
 				        std::make_shared<mr::coprocessor::LineIndexWarmupPayload>(warmup);
 				    return result;
 			    });
+			if (lineIndexWarmupTaskId_ != previousTaskId)
+				notifyWindowTaskStateChanged();
 	}
 
 	void scheduleSyntaxWarmupIfNeeded() {
@@ -898,12 +936,15 @@ class TMRFileEditor : public TScroller {
 
 		const std::size_t bottomLine = topLine + lineStarts.size();
 		if (hasSyntaxTokensForLineStarts(lineStarts)) {
+			bool hadTask = syntaxWarmupTaskId_ != 0;
 			syntaxWarmupTaskId_ = 0;
 			syntaxWarmupDocumentId_ = docId;
 			syntaxWarmupVersion_ = version;
 			syntaxWarmupTopLine_ = topLine;
 			syntaxWarmupBottomLine_ = bottomLine;
 			syntaxWarmupLanguage_ = language;
+			if (hadTask)
+				notifyWindowTaskStateChanged();
 			return;
 		}
 
@@ -913,6 +954,7 @@ class TMRFileEditor : public TScroller {
 			return;
 
 		TMRTextBufferModel::ReadSnapshot snapshot = bufferModel_.readSnapshot();
+		std::uint64_t previousTaskId = syntaxWarmupTaskId_;
 		syntaxWarmupDocumentId_ = docId;
 		syntaxWarmupVersion_ = version;
 		syntaxWarmupTopLine_ = topLine;
@@ -944,6 +986,8 @@ class TMRFileEditor : public TScroller {
 			        std::make_shared<mr::coprocessor::SyntaxWarmupPayload>(language, std::move(warmed));
 			    return result;
 		    });
+		if (syntaxWarmupTaskId_ != previousTaskId)
+			notifyWindowTaskStateChanged();
 	}
 
 	void updateMetrics() {
@@ -1422,6 +1466,7 @@ class TMRFileEditor : public TScroller {
 	}
 
 	void resetSyntaxWarmupState(bool clearCache) noexcept {
+		bool hadTask = syntaxWarmupTaskId_ != 0;
 		if (clearCache)
 			syntaxTokenCache_.clear();
 		syntaxWarmupTaskId_ = 0;
@@ -1430,6 +1475,8 @@ class TMRFileEditor : public TScroller {
 		syntaxWarmupTopLine_ = 0;
 		syntaxWarmupBottomLine_ = 0;
 		syntaxWarmupLanguage_ = TMRSyntaxLanguage::PlainText;
+		if (hadTask)
+			notifyWindowTaskStateChanged();
 	}
 
 	std::vector<std::size_t> syntaxWarmupLineStarts(std::size_t topLine, int rowCount) const {

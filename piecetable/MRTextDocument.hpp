@@ -427,14 +427,15 @@ class ReadSnapshot {
   private:
 	friend class TextDocument;
 
-	bool isLineBreakChar(char ch) const noexcept;
-	bool hasDirectOriginalView() const noexcept;
-	const char *directTextData() const noexcept;
-	void resetLazyLineIndex() noexcept;
-	bool directAdvanceLine(Offset &offset) const noexcept;
-	void ensureLazyIndexSeeded() const noexcept;
-	void advanceLazyIndexByStride() const noexcept;
-	void ensureLazyIndexForLine(std::size_t targetLine) const noexcept;
+		bool isLineBreakChar(char ch) const noexcept;
+		bool hasDirectOriginalView() const noexcept;
+		const char *directTextData() const noexcept;
+		void resetLazyLineIndex() noexcept;
+		bool advanceLine(Offset &offset) const noexcept;
+		bool directAdvanceLine(Offset &offset) const noexcept;
+		void ensureLazyIndexSeeded() const noexcept;
+		void advanceLazyIndexByStride() const noexcept;
+		void ensureLazyIndexForLine(std::size_t targetLine) const noexcept;
 	void ensureLazyIndexForOffset(Offset targetOffset) const noexcept;
 	void ensureLazyIndexComplete() const noexcept;
 	const char *originalData() const noexcept;
@@ -546,15 +547,17 @@ class TextDocument {
 	bool applyStagedOperationNoVersionBump(const StagedEditOperation &operation,
 	                                       const StagedAddBuffer &buffer);
 	bool replaceNoVersionBump(Range range, const std::string &text);
-	bool hasDirectOriginalView() const noexcept;
-	const char *directTextData() const noexcept;
-	void resetLazyLineIndex() noexcept;
-	bool directAdvanceLine(Offset &offset) const noexcept;
-	void ensureLazyIndexSeeded() const noexcept;
-	void advanceLazyIndexByStride() const noexcept;
-	void ensureLazyIndexForLine(std::size_t targetLine) const noexcept;
-	void ensureLazyIndexForOffset(Offset targetOffset) const noexcept;
-	void ensureLazyIndexComplete() const noexcept;
+		bool hasDirectOriginalView() const noexcept;
+		const char *directTextData() const noexcept;
+		void resetLazyLineIndex() noexcept;
+		bool advanceLine(Offset &offset) const noexcept;
+		bool directAdvanceLine(Offset &offset) const noexcept;
+		void ensureLazyIndexSeeded() const noexcept;
+		void advanceLazyIndexByStride() const noexcept;
+		void ensureLazyIndexForLine(std::size_t targetLine) const noexcept;
+		void ensureLazyIndexForOffset(Offset targetOffset) const noexcept;
+		void ensureLazyIndexComplete() const noexcept;
+		void invalidateLazyLineIndexFrom(Offset offset) noexcept;
 
 	std::size_t splitAt(Offset offset);
 	bool eraseNoVersionBump(Range range);

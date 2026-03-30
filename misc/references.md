@@ -1,0 +1,2 @@
+- I live again. Caleb (Blood)
+- It is never enough. Frank Cotton (Hellraiser)
