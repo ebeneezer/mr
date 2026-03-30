@@ -19,6 +19,7 @@ enum class Scope : unsigned char {
 
 enum class Outcome : unsigned char {
 	Completed,
+	Conflict,
 	Cancelled,
 	Failed
 };
@@ -67,6 +68,9 @@ void recordUiEvent(const std::string &action, std::size_t bufferId, std::size_t 
 void recordBackgroundResult(const mr::coprocessor::Result &result, const std::string &action,
                             std::size_t bufferId, std::size_t documentId, std::size_t bytes,
                             const std::string &detail = std::string());
+void recordBackgroundEvent(mr::coprocessor::Lane lane, Outcome outcome, const mr::coprocessor::TaskTiming &timing,
+                           const std::string &action, std::size_t bufferId, std::size_t documentId,
+                           std::size_t bytes, const std::string &detail = std::string());
 
 std::vector<Event> recentForWindow(std::size_t bufferId, std::size_t documentId, std::size_t maxCount = 6);
 std::vector<Event> recentGlobal(std::size_t maxCount = 6);

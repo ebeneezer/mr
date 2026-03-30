@@ -7,6 +7,7 @@
 
 #include "MRFileCommands.hpp"
 
+#include "MRDialogPaths.hpp"
 #include <chrono>
 #include <cctype>
 #include <cerrno>
@@ -89,8 +90,7 @@ std::string expandUserPath(const char *path) {
 bool promptForPath(const char *title, char *fileName, std::size_t fileNameSize) {
 	if (fileName == 0 || fileNameSize == 0)
 		return false;
-	std::memset(fileName, 0, fileNameSize);
-	strnzcpy(fileName, "*.*", fileNameSize);
+	initRememberedLoadDialogPath(fileName, fileNameSize, "*.*");
 	return execDialogWithDataLocal(new TFileDialog("*.*", title, "~N~ame", fdOpenButton, 100), fileName) !=
 	       cmCancel;
 }
@@ -109,6 +109,7 @@ bool resolveReadableExistingPath(const char *path, std::string &resolvedPath) {
 		messageBox(mfError | mfOKButton, "File is not readable:\n%s", resolvedPath.c_str());
 		return false;
 	}
+	rememberLoadDialogPath(resolvedPath.c_str());
 	return true;
 }
 

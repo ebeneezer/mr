@@ -298,6 +298,18 @@ std::vector<FileInformationPage> buildFileInformationPages(TMREditWindow *win) {
 	                           : std::string("<none>")));
 	page2.lines.push_back(std::string("Session saved : ") + yesNo(win != 0 && win->hasBeenSavedInSession()));
 	page2.lines.push_back(std::string("Tracked tasks : ") + formatTaskSummary(win));
+	page2.lines.push_back(std::string("Macro policy  : ") +
+	                      (win != 0 ? shortenForDialog(win->macroPolicySummary(), 64) : std::string("<n/a>")));
+	page2.lines.push_back(std::string("Conflict rule : ") +
+	                      (win != 0 ? shortenForDialog(win->macroConflictPolicySummary(), 64)
+	                                 : std::string("<n/a>")));
+	page2.lines.push_back(std::string("Cancel rule   : ") +
+	                      (win != 0 ? shortenForDialog(win->macroCancelPolicySummary(), 64)
+	                                 : std::string("<n/a>")));
+	page2.lines.push_back(std::string("Macro stats   : ") +
+	                      (win != 0 ? win->macroCounterSummary() : std::string("<n/a>")));
+	page2.lines.push_back(std::string("Macro recent  : ") +
+	                      (win != 0 ? shortenForDialog(win->lastMacroSummary(), 64) : std::string("<n/a>")));
 	page2.lines.push_back(formatWarmupState("Line index", win != 0 ? win->pendingLineIndexWarmupTaskId() : 0,
 	                                        win != 0 && win->exactLineCountKnown()));
 	page2.lines.push_back(formatWarmupState("Syntax", win != 0 ? win->pendingSyntaxWarmupTaskId() : 0));

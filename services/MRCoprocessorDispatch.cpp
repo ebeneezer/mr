@@ -64,6 +64,39 @@ void recordTaskPerformance(const mr::coprocessor::Result &result, const std::str
 	mr::performance::recordBackgroundResult(
 	    result, action, win != 0 ? static_cast<std::size_t>(win->bufferId()) : 0, documentId, bytes, detail);
 }
+
+void recordMacroPerformance(const mr::coprocessor::Result &result, TMREditWindow *win, std::size_t documentId,
+                            std::size_t bytes, const std::string &detail,
+                            mr::performance::Outcome outcome = mr::performance::Outcome::Completed) {
+	if (outcome == mr::performance::Outcome::Completed) {
+		recordTaskPerformance(result, "Background macro", win, documentId, bytes, detail);
+		return;
+	}
+	mr::performance::recordBackgroundEvent(
+	    result.task.lane, outcome, result.timing, "Background macro",
+	    win != 0 ? static_cast<std::size_t>(win->bufferId()) : 0, documentId, bytes, detail);
+}
+
+std::string formatTimingSummary(const mr::coprocessor::TaskTiming &timing) {
+	return " [q " + mr::performance::formatDuration(timing.queueMs()) + ", run " +
+	       mr::performance::formatDuration(timing.runMs()) + ", total " +
+	       mr::performance::formatDuration(timing.totalMs()) + "]";
+}
+
+void appendMacroLogLines(const std::vector<std::string> &logLines) {
+	for (std::size_t i = 0; i < logLines.size(); ++i) {
+		std::string prefixed = "  ";
+		prefixed += logLines[i];
+		mrLogMessage(prefixed.c_str());
+	}
+}
+
+void releaseMacroTask(TMREditWindow *win, const mr::coprocessor::Result &result, const char *state) {
+	int bufferId = win != 0 ? win->bufferId() : static_cast<int>(result.task.documentId);
+	if (win != 0)
+		win->releaseCoprocessorTask(result.task.id);
+	mrTraceCoprocessorTaskRelease(bufferId, result.task.id, state);
+}
 } // namespace
 
 void handleCoprocessorResult(const mr::coprocessor::Result &result) {
@@ -173,6 +206,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			bool accepted = false;
 			bool textChanged = false;
 			std::size_t currentVersion = 0;
+			std::string summary;
 
 			if (win != 0 && editor != 0) {
 				currentVersion = editor->documentVersion();
@@ -187,10 +221,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 					accepted = true;
 					textChanged = commit.applied();
 				}
-				win->releaseCoprocessorTask(result.task.id);
 			}
-			recordTaskPerformance(result, "Background macro", win, editor != 0 ? editor->documentId() : 0,
-			                      editor != 0 ? editor->bufferLength() : 0, staged->displayName);
 
 			line << "Background staged macro '" << staged->displayName << "'";
 			if (accepted) {
@@ -200,38 +231,47 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 					line << " applied state without text changes";
 				if (staged->hadError)
 					line << " with VM errors";
-				line << ".";
+				line << formatTimingSummary(result.timing) << ".";
+				summary = line.str();
+				recordMacroPerformance(result, win, editor != 0 ? editor->documentId() : 0,
+				                       editor != 0 ? editor->bufferLength() : 0, staged->displayName);
+				if (win != 0)
+					win->noteBackgroundMacroCompleted(summary);
+				releaseMacroTask(win, result, textChanged ? "committed" : "state-only");
 			} else {
 				line << " conflicted with a newer document state";
 				if (currentVersion != 0)
 					line << " (snapshot " << result.task.baseVersion << ", current " << currentVersion << ")";
-				line << ".";
+				line << "; commit aborted without rebase" << formatTimingSummary(result.timing) << ".";
+				summary = line.str();
+				recordMacroPerformance(result, win, editor != 0 ? editor->documentId() : 0,
+				                       editor != 0 ? editor->bufferLength() : 0, staged->displayName,
+				                       mr::performance::Outcome::Conflict);
+				if (win != 0)
+					win->noteBackgroundMacroConflict(summary);
+				releaseMacroTask(win, result, "conflict");
 			}
-			mrLogMessage(line.str().c_str());
-			for (std::size_t i = 0; i < staged->logLines.size(); ++i) {
-				std::string prefixed = "  ";
-				prefixed += staged->logLines[i];
-				mrLogMessage(prefixed.c_str());
-			}
+			mrLogMessage(summary.c_str());
+			appendMacroLogLines(staged->logLines);
 			return;
 		}
 		if (macro != nullptr) {
 			std::ostringstream line;
 			TMREditWindow *win = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
-			recordTaskPerformance(result, "Background macro", win, win != 0 ? win->documentId() : 0,
-			                      win != 0 ? win->bufferLength() : 0, macro->displayName);
-			if (win != 0)
-				win->releaseCoprocessorTask(result.task.id);
+			std::string summary;
+
+			recordMacroPerformance(result, win, win != 0 ? win->documentId() : 0,
+			                       win != 0 ? win->bufferLength() : 0, macro->displayName);
 			line << "Background macro '" << macro->displayName << "' finished";
 			if (macro->hadError)
 				line << " with VM errors";
-			line << ".";
-			mrLogMessage(line.str().c_str());
-			for (std::size_t i = 0; i < macro->logLines.size(); ++i) {
-				std::string prefixed = "  ";
-				prefixed += macro->logLines[i];
-				mrLogMessage(prefixed.c_str());
-			}
+			line << formatTimingSummary(result.timing) << ".";
+			summary = line.str();
+			if (win != 0)
+				win->noteBackgroundMacroCompleted(summary);
+			releaseMacroTask(win, result, "finished");
+			mrLogMessage(summary.c_str());
+			appendMacroLogLines(macro->logLines);
 			return;
 		}
 	}
@@ -262,23 +302,31 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 	if (result.task.kind == mr::coprocessor::TaskKind::MacroJob) {
 		TMREditWindow *win = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
 		std::string name = macroDisplayName(result.task);
-		recordTaskPerformance(result, "Background macro", win, win != 0 ? win->documentId() : 0,
-		                      win != 0 ? win->bufferLength() : 0, name);
-		if (win != 0) {
-			win->releaseCoprocessorTask(result.task.id);
-		}
+		std::string summary;
+
 		if (result.cancelled()) {
-			std::string line = "Background macro '";
-			line += name;
-			line += "' cancelled.";
-			mrLogMessage(line.c_str());
+			summary = "Background macro '" + name + "' cancelled" + formatTimingSummary(result.timing) + ".";
+			recordMacroPerformance(result, win, win != 0 ? win->documentId() : 0,
+			                       win != 0 ? win->bufferLength() : 0, name,
+			                       mr::performance::Outcome::Cancelled);
+			if (win != 0)
+				win->noteBackgroundMacroCancelled(summary);
+			releaseMacroTask(win, result, "cancelled");
+			mrLogMessage(summary.c_str());
 		} else if (result.failed()) {
 			std::ostringstream line;
 			line << "Background macro '" << name << "' failed";
 			if (!result.error.empty())
 				line << ": " << result.error;
-			line << ".";
-			mrLogMessage(line.str().c_str());
+			line << formatTimingSummary(result.timing) << ".";
+			summary = line.str();
+			recordMacroPerformance(result, win, win != 0 ? win->documentId() : 0,
+			                       win != 0 ? win->bufferLength() : 0, name,
+			                       mr::performance::Outcome::Failed);
+			if (win != 0)
+				win->noteBackgroundMacroFailed(summary);
+			releaseMacroTask(win, result, "failed");
+			mrLogMessage(summary.c_str());
 		}
 		if (result.failed())
 			return;

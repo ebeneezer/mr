@@ -73,7 +73,9 @@ CXX_SOURCES = \
 	app/MRAppState.cpp \
 	app/MRCommandRouter.cpp \
 	app/MRMenuFactory.cpp \
+	app/MRVersion.cpp \
 	app/TMREditorApp.cpp \
+	dialogs/MRAboutDialog.cpp \
 	dialogs/MRFileInformationDialog.cpp \
 	dialogs/MRMacroFileDialog.cpp \
 	dialogs/MRSetupDialogs.cpp \
@@ -81,6 +83,7 @@ CXX_SOURCES = \
 	dialogs/MRWindowListDialog.cpp \
 	mrmac/MRMacroRunner.cpp \
 	services/MRWindowCommands.cpp \
+	services/MRDialogPaths.cpp \
 	services/MRFileCommands.cpp \
 	services/MRExternalCommand.cpp \
 	services/MRPerformance.cpp \
@@ -180,16 +183,19 @@ mrmac/mrmac.o: mrmac/mrmac.c mrmac/parser.tab.h mrmac/mrmac.h
 # 3. Dependencies for C++ compilation
 mr.o: mr.cpp mrmac/mrvm.hpp app/TMREditorApp.hpp ui/MRPalette.hpp
 app/MRAppState.o: app/MRAppState.cpp app/MRAppState.hpp app/MRCommands.hpp services/MRWindowCommands.hpp ui/TMREditWindow.hpp
-app/MRCommandRouter.o: app/MRCommandRouter.cpp app/MRCommandRouter.hpp app/MRCommands.hpp dialogs/MRFileInformationDialog.hpp dialogs/MRMacroFileDialog.hpp dialogs/MRSetupDialogs.hpp dialogs/MRWindowListDialog.hpp mrmac/mrvm.hpp services/MRExternalCommand.hpp services/MRFileCommands.hpp services/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
+app/MRCommandRouter.o: app/MRCommandRouter.cpp app/MRCommandRouter.hpp app/MRCommands.hpp dialogs/MRAboutDialog.hpp dialogs/MRFileInformationDialog.hpp dialogs/MRMacroFileDialog.hpp dialogs/MRSetupDialogs.hpp dialogs/MRWindowListDialog.hpp mrmac/mrvm.hpp services/MRExternalCommand.hpp services/MRFileCommands.hpp services/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 app/MRMenuFactory.o: app/MRMenuFactory.cpp app/MRMenuFactory.hpp app/MRCommands.hpp ui/TMRMenuBar.hpp
+app/MRVersion.o: app/MRVersion.cpp app/MRVersion.hpp
 app/TMREditorApp.o: app/TMREditorApp.cpp app/TMREditorApp.hpp app/MRAppState.hpp app/MRCommandRouter.hpp app/MRCommands.hpp app/MRMenuFactory.hpp services/MRCoprocessorDispatch.hpp services/MRPerformance.hpp services/MRWindowCommands.hpp ui/TMRDeskTop.hpp ui/TMRStatusLine.hpp ui/MRPalette.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
+dialogs/MRAboutDialog.o: dialogs/MRAboutDialog.cpp dialogs/MRAboutDialog.hpp app/MRVersion.hpp
 dialogs/MRFileInformationDialog.o: dialogs/MRFileInformationDialog.cpp dialogs/MRFileInformationDialog.hpp app/MRCommands.hpp services/MRPerformance.hpp ui/TMREditWindow.hpp ui/TMRFileEditor.hpp ui/TMRTextBuffer.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 dialogs/MRMacroFileDialog.o: dialogs/MRMacroFileDialog.cpp dialogs/MRMacroFileDialog.hpp mrmac/MRMacroRunner.hpp
 dialogs/MRSetupDialogs.o: dialogs/MRSetupDialogs.cpp dialogs/MRSetupDialogs.hpp app/MRCommands.hpp ui/MRWindowSupport.hpp
 dialogs/MRWindowListDialog.o: dialogs/MRWindowListDialog.cpp dialogs/MRWindowListDialog.hpp services/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/MRWindowSupport.hpp
 mrmac/MRMacroRunner.o: mrmac/MRMacroRunner.cpp mrmac/MRMacroRunner.hpp mrmac/mrmac.h mrmac/mrvm.hpp services/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 services/MRWindowCommands.o: services/MRWindowCommands.cpp services/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/MRWindowSupport.hpp
-services/MRFileCommands.o: services/MRFileCommands.cpp services/MRFileCommands.hpp services/MRPerformance.hpp services/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/MRWindowSupport.hpp
+services/MRDialogPaths.o: services/MRDialogPaths.cpp services/MRDialogPaths.hpp
+services/MRFileCommands.o: services/MRFileCommands.cpp services/MRFileCommands.hpp services/MRDialogPaths.hpp services/MRPerformance.hpp services/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/MRWindowSupport.hpp
 services/MRExternalCommand.o: services/MRExternalCommand.cpp services/MRExternalCommand.hpp coprocessor/MRCoprocessor.hpp
 services/MRPerformance.o: services/MRPerformance.cpp services/MRPerformance.hpp coprocessor/MRCoprocessor.hpp
 services/MRCoprocessorDispatch.o: services/MRCoprocessorDispatch.cpp services/MRCoprocessorDispatch.hpp services/MRPerformance.hpp services/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/TMRIndicator.hpp ui/TMRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp

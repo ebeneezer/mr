@@ -102,6 +102,11 @@ bool readTextFile(const std::string &path, std::string &outContent, std::string 
 	return true;
 }
 
+const char *backgroundMacroPolicyText(bool staged) noexcept {
+	return staged ? "policy: snapshot + staged write, UI-thread commit, conflict=abort, cancel=cooperative"
+	              : "policy: snapshot read-only, cancel=cooperative";
+}
+
 void showErrorBox(const char *title, const char *text) {
 	char msg[1024];
 
@@ -173,13 +178,15 @@ bool runMacroSource(const char *displayName, const char *source) {
 		}
 		if (win != 0) {
 			win->trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::MacroJob, label);
+			win->noteQueuedBackgroundMacro(label, false);
 		}
 		{
 			std::string line = "Queued background-safe macro '";
 			line += label;
 			line += "' [task #";
 			line += std::to_string(taskId);
-			line += "]";
+			line += "] ";
+			line += backgroundMacroPolicyText(false);
 			mrLogMessage(line.c_str());
 		}
 		return true;
@@ -244,12 +251,14 @@ bool runMacroSource(const char *displayName, const char *source) {
 			return false;
 		}
 		win->trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::MacroJob, label);
+		win->noteQueuedBackgroundMacro(label, true);
 		{
 			std::string line = "Queued staged-write macro '";
 			line += label;
 			line += "' [task #";
 			line += std::to_string(taskId);
-			line += "]";
+			line += "] ";
+			line += backgroundMacroPolicyText(true);
 			mrLogMessage(line.c_str());
 		}
 		return true;

@@ -36,6 +36,8 @@
 #include "../dialogs/MRWindowListDialog.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
+TMREditWindow *createEditorWindow(const char *title);
+
 namespace {
 using Value = VirtualMachine::Value;
 
@@ -2313,18 +2315,11 @@ static bool currentWindowGeometry(int &x1, int &y1, int &x2, int &y2) {
 }
 
 static bool createEditWindow() {
-	TRect r;
-	int number;
 	TMREditWindow *win;
-	if (TProgram::deskTop == NULL)
+
+	win = createEditorWindow("?No-File?");
+	if (win == NULL || TProgram::deskTop == NULL)
 		return false;
-	r = TProgram::deskTop->getExtent();
-	r.grow(-2, -1);
-	number = countEditWindows() + 1;
-	win = new TMREditWindow(r, "?No-File?", number);
-	if (win == NULL)
-		return false;
-	TProgram::deskTop->insert(win);
 	TProgram::deskTop->setCurrent(win, TView::normalSelect);
 	return true;
 }
@@ -3954,6 +3949,7 @@ MRMacroJobResult mrvmRunBytecodeBackground(const unsigned char *bytecode, std::s
 		}
 	} cancelGuard(&stopToken, std::move(cancelFlag));
 
+	vm.setVerboseLogging(false);
 	vm.execute(bytecode, length);
 	result.logLines = vm.log;
 	result.cancelled = vm.wasCancelled();
@@ -4007,6 +4003,7 @@ MRMacroStagedJobResult mrvmRunBytecodeStagedBackground(const unsigned char *byte
 	session.fileChanged = input.fileChanged;
 	session.clampState();
 	SessionGuard sessionGuard(&session, &stopToken, std::move(cancelFlag));
+	vm.setVerboseLogging(false);
 	vm.execute(bytecode, length);
 
 	result.logLines = vm.log;
@@ -4046,7 +4043,22 @@ void mrvmSetProcessContext(int argc, char **argv) {
 VirtualMachine::Value::Value() : type(TYPE_INT), i(0), r(0.0), s(), c(0) {
 }
 
-VirtualMachine::VirtualMachine() : cancelledExecution(false) {
+VirtualMachine::VirtualMachine() : verboseLogging(true), logTruncated(false), cancelledExecution(false) {
+}
+
+void VirtualMachine::appendLogLine(const std::string &line, bool important) {
+	static const std::size_t kMaxLogLines = 256;
+
+	if (!important && !verboseLogging)
+		return;
+	if (log.size() < kMaxLogLines) {
+		log.push_back(line);
+		return;
+	}
+	if (!logTruncated) {
+		log.push_back("VM Notice: execution log truncated.");
+		logTruncated = true;
+	}
 }
 
 void VirtualMachine::push(const Value &value) {
@@ -4060,7 +4072,7 @@ VirtualMachine::Value VirtualMachine::pop() {
 		return value;
 	}
 
-	log.push_back("VM Error: Stack underflow.");
+	appendLogLine("VM Error: Stack underflow.", true);
 	return makeInt(0);
 }
 
@@ -4082,6 +4094,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 	cancelledExecution = false;
 	if (resetState) {
 		log.clear();
+		logTruncated = false;
 		g_runtimeEnv.globalEnumIndex = 0;
 		g_runtimeEnv.macroEnumIndex = 0;
 		g_runtimeEnv.parameterString.clear();
@@ -4125,7 +4138,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 		while (ip < length) {
 			if (backgroundMacroCancelRequested()) {
 				cancelledExecution = true;
-				log.push_back("VM Notice: Background macro cancelled.");
+				appendLogLine("VM Notice: Background macro cancelled.", true);
 				g_runtimeEnv.errorLevel = 5007;
 				break;
 			}
@@ -4135,24 +4148,24 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				int val;
 				readInt(val);
 				push(makeInt(val));
-				log.push_back("Push integer: " + std::to_string(val));
+				appendLogLine("Push integer: " + std::to_string(val));
 			} else if (opcode == OP_PUSH_R) {
 				double val;
 				readDouble(val);
 				push(makeReal(val));
-				log.push_back("Push real: " + valueAsString(makeReal(val)));
+				appendLogLine("Push real: " + valueAsString(makeReal(val)));
 			} else if (opcode == OP_PUSH_S) {
 				std::string str;
 				readCString(str);
 				enforceStringLength(str);
 				push(makeString(str));
-				log.push_back("Push string: " + str);
+				appendLogLine("Push string: " + str);
 			} else if (opcode == OP_DEF_VAR) {
 				std::string varName;
 				int varType = static_cast<int>(bytecode[ip++]);
 				readCString(varName);
 				variables[varName] = defaultValueForType(varType);
-				log.push_back("Define variable: " + varName);
+				appendLogLine("Define variable: " + varName);
 			} else if (opcode == OP_LOAD_VAR) {
 				std::string varName;
 				bool handled = false;
@@ -4167,7 +4180,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						variables[varName] = makeInt(0);
 					push(variables[varName]);
 				}
-				log.push_back("Load variable: " + varName);
+				appendLogLine("Load variable: " + varName);
 			} else if (opcode == OP_STORE_VAR) {
 				std::string varName;
 				int targetType = static_cast<int>(bytecode[ip++]);
@@ -4177,7 +4190,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					enforceStringLength(value.s);
 				if (!storeSpecialVariable(varName, value))
 					variables[varName] = value;
-				log.push_back("Store variable: " + varName);
+				appendLogLine("Store variable: " + varName);
 			} else if (opcode == OP_GOTO) {
 				int target;
 				readInt(target);
@@ -4810,7 +4823,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				unsigned char argc = bytecode[ip++];
 				std::vector<Value> args = popArgs(argc);
 
-				log.push_back("TVCALL: " + funcName + " (" + std::to_string(argc) + " params)");
+				appendLogLine("TVCALL: " + funcName + " (" + std::to_string(argc) + " params)");
 
 				if (funcName == "MessageBox") {
 					if (args.empty())
@@ -4826,7 +4839,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					}
 				}
 			} else if (opcode == OP_HALT) {
-				log.push_back("Program end reached.");
+				appendLogLine("Program end reached.");
 				break;
 			} else {
 				char hexOp[10];
@@ -4834,10 +4847,11 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				throw std::runtime_error(std::string("Unknown opcode ") + hexOp);
 			}
 
-			syncLinkedWindowsFrom(currentEditWindow());
+			if (g_backgroundMacroStopToken == NULL && currentBackgroundEditSession() == NULL)
+				syncLinkedWindowsFrom(currentEditWindow());
 		}
 	} catch (const std::exception &ex) {
-		log.push_back(std::string("VM Error: ") + ex.what());
+		appendLogLine(std::string("VM Error: ") + ex.what(), true);
 	}
 
 	g_runtimeEnv.parameterString = savedParameterString;

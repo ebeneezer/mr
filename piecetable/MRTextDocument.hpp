@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <stop_token>
 #include <string>
 #include <vector>
 
@@ -423,6 +424,7 @@ class ReadSnapshot {
 	std::size_t column(Offset pos) const noexcept;
 	std::string lineText(Offset pos) const;
 	LineIndexWarmupData completeLineIndexWarmup() const;
+	bool completeLineIndexWarmup(LineIndexWarmupData &warmup, std::stop_token stopToken) const;
 
   private:
 	friend class TextDocument;

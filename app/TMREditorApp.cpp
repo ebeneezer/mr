@@ -112,5 +112,10 @@ void TMREditorApp::idle() {
 
 TPalette &TMREditorApp::getPalette() const {
 	static TPalette palette(cpAppColor, sizeof(cpAppColor) - 1);
+	static bool initialized = false;
+	if (!initialized) {
+		palette[33] = 0x70;
+		initialized = true;
+	}
 	return palette;
 }

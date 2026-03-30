@@ -50,6 +50,8 @@ const char *baseNameOf(const std::string &path) {
 
 const char *outcomeLabel(Outcome outcome) {
 	switch (outcome) {
+		case Outcome::Conflict:
+			return "conflict";
 		case Outcome::Cancelled:
 			return "cancel";
 		case Outcome::Failed:
@@ -102,7 +104,7 @@ bool qualifiesForHero(const Event &event) {
 HeroKind heroKindFor(const Event &event) {
 	if (event.outcome == Outcome::Failed)
 		return HeroKind::Error;
-	if (event.outcome == Outcome::Cancelled)
+	if (event.outcome == Outcome::Cancelled || event.outcome == Outcome::Conflict)
 		return HeroKind::Warning;
 	if (event.scope == Scope::Ui)
 		return HeroKind::Success;
@@ -164,21 +166,29 @@ void recordUiEvent(const std::string &action, std::size_t bufferId, std::size_t 
 void recordBackgroundResult(const mr::coprocessor::Result &result, const std::string &action,
                             std::size_t bufferId, std::size_t documentId, std::size_t bytes,
                             const std::string &detail) {
+	Outcome outcome =
+	    result.failed() ? Outcome::Failed : (result.cancelled() ? Outcome::Cancelled : Outcome::Completed);
+	recordBackgroundEvent(result.task.lane, outcome, result.timing, action, bufferId, documentId, bytes, detail);
+}
+
+void recordBackgroundEvent(mr::coprocessor::Lane lane, Outcome outcome, const mr::coprocessor::TaskTiming &timing,
+                           const std::string &action, std::size_t bufferId, std::size_t documentId,
+                           std::size_t bytes, const std::string &detail) {
 	State &shared = state();
 	std::lock_guard<std::mutex> lock(shared.mutex);
 	Event event;
 
 	event.scope = Scope::Background;
-	event.outcome = result.failed() ? Outcome::Failed : (result.cancelled() ? Outcome::Cancelled : Outcome::Completed);
-	event.lane = result.task.lane;
+	event.outcome = outcome;
+	event.lane = lane;
 	event.action = action;
 	event.detail = detail;
 	event.bufferId = bufferId;
 	event.documentId = documentId;
 	event.bytes = bytes;
-	event.queueMs = result.timing.queueMs();
-	event.runMs = result.timing.runMs();
-	event.totalMs = result.timing.totalMs();
+	event.queueMs = timing.queueMs();
+	event.runMs = timing.runMs();
+	event.totalMs = timing.totalMs();
 	pushEvent(shared, event);
 	if (qualifiesForHero(shared.events.front())) {
 		shared.hero.active = true;

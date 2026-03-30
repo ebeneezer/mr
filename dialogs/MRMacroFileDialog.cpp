@@ -9,6 +9,7 @@
 #include "MRMacroFileDialog.hpp"
 
 #include "../mrmac/MRMacroRunner.hpp"
+#include "../services/MRDialogPaths.hpp"
 
 #include <cstring>
 
@@ -38,13 +39,15 @@ bool runMacroFileDialog() {
 	char fileName[FileNameBufferSize];
 	ushort dialogResult;
 
-	std::memset(fileName, 0, sizeof(fileName));
+	initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.mrmac");
 
 	dialogResult = runDialogWithData(
 	    new TFileDialog("*.mrmac", "Load Macro File", "~N~ame", fdOpenButton, 100), fileName);
 
 	if (dialogResult == cmCancel)
 		return false;
+
+	rememberLoadDialogPath(fileName);
 
 	return runMacroFileByPath(fileName);
 }

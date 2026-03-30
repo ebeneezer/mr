@@ -974,13 +974,13 @@ class TMRFileEditor : public TScroller {
 			    "line-index-warmup",
 			    [snapshot](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
 				    mr::coprocessor::Result result;
+				    mr::editor::LineIndexWarmupData warmup;
 				    result.task = info;
 				    if (stopToken.stop_requested()) {
 					    result.status = mr::coprocessor::TaskStatus::Cancelled;
 					    return result;
 				    }
-				    mr::editor::LineIndexWarmupData warmup = snapshot.completeLineIndexWarmup();
-				    if (stopToken.stop_requested()) {
+				    if (!snapshot.completeLineIndexWarmup(warmup, stopToken)) {
 					    result.status = mr::coprocessor::TaskStatus::Cancelled;
 					    return result;
 				    }

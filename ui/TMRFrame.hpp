@@ -78,6 +78,7 @@ class TMRFrame : public TFrame {
 	MarkerStateProvider markerStateProvider_;
 	TaskOverviewProvider taskOverviewProvider_;
 	TMRTaskOverviewWindow *taskOverviewPopup_;
+	TGroup *taskOverviewPopupOwner_;
 };
 
 #endif

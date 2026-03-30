@@ -61,7 +61,9 @@ class TMREditWindow : public TWindow {
 	      hScrollBar(nullptr), indicator(nullptr), editor(nullptr), bufferId_(allocateBufferId()),
 	      firstSaveDone_(false), temporaryFileUsed_(false), temporaryFileName_(), indentLevel_(1),
 	      blockMode_(bmNone), blockMarkingOn_(false), blockAnchor_(0), blockEnd_(0),
-	      trackedCoprocessorTasks_(), windowRole_(wrText), windowRoleDetail_() {
+	      trackedCoprocessorTasks_(), windowRole_(wrText), windowRoleDetail_(), macroQueuedCount_(0),
+	      macroCompletedCount_(0), macroConflictCount_(0), macroCancelledCount_(0), macroFailedCount_(0),
+	      lastMacroSummaryText_() {
 		options |= ofTileable;
 
 		std::strncpy(displayTitle, (title != nullptr && *title != '\0') ? title : "Untitled",
@@ -419,6 +421,42 @@ class TMREditWindow : public TWindow {
 		updateTaskMarkers();
 	}
 
+	void noteQueuedBackgroundMacro(const std::string &name, bool staged) {
+		++macroQueuedCount_;
+		lastMacroSummaryText_ = staged ? "Queued staged macro '" : "Queued background macro '";
+		lastMacroSummaryText_ += name;
+		lastMacroSummaryText_ += "'.";
+	}
+
+	void noteBackgroundMacroCompleted(const std::string &summary) {
+		++macroCompletedCount_;
+		lastMacroSummaryText_ = summary;
+	}
+
+	void noteBackgroundMacroConflict(const std::string &summary) {
+		++macroConflictCount_;
+		lastMacroSummaryText_ = summary;
+	}
+
+	void noteBackgroundMacroCancelled(const std::string &summary) {
+		++macroCancelledCount_;
+		lastMacroSummaryText_ = summary;
+	}
+
+	void noteBackgroundMacroFailed(const std::string &summary) {
+		++macroFailedCount_;
+		lastMacroSummaryText_ = summary;
+	}
+
+	void noteBackgroundMacroCancelRequested(std::size_t count) {
+		lastMacroSummaryText_ = "Cancel requested for ";
+		lastMacroSummaryText_ += std::to_string(count);
+		lastMacroSummaryText_ += " background macro task";
+		if (count != 1)
+			lastMacroSummaryText_ += "s";
+		lastMacroSummaryText_ += ".";
+	}
+
 	std::size_t trackedCoprocessorTaskCount() const noexcept {
 		return trackedCoprocessorTasks_.size();
 	}
@@ -437,6 +475,36 @@ class TMREditWindow : public TWindow {
 
 	bool hasTrackedMacroTasks() const noexcept {
 		return trackedMacroTaskCount() != 0;
+	}
+
+	std::string macroPolicySummary() const {
+		return "Single writer: background macros never write live state directly";
+	}
+
+	std::string macroConflictPolicySummary() const {
+		return "Staged commit on UI thread; version mismatch aborts, no rebase";
+	}
+
+	std::string macroCancelPolicySummary() const {
+		return "Cancel is cooperative at VM safe points";
+	}
+
+	std::string macroCounterSummary() const {
+		std::string text = "queued ";
+		text += std::to_string(macroQueuedCount_);
+		text += ", ok ";
+		text += std::to_string(macroCompletedCount_);
+		text += ", conflict ";
+		text += std::to_string(macroConflictCount_);
+		text += ", cancel ";
+		text += std::to_string(macroCancelledCount_);
+		text += ", fail ";
+		text += std::to_string(macroFailedCount_);
+		return text;
+	}
+
+	std::string lastMacroSummary() const {
+		return lastMacroSummaryText_.empty() ? std::string("<none>") : lastMacroSummaryText_;
 	}
 
 	std::vector<std::string> describeRunningTasks() const {
@@ -487,6 +555,7 @@ class TMREditWindow : public TWindow {
 
 	bool cancelTrackedMacroTasks() {
 		bool cancelledAny = false;
+		std::size_t macroCount = trackedMacroTaskCount();
 
 		for (std::size_t i = 0; i < trackedCoprocessorTasks_.size(); ++i) {
 			if (trackedCoprocessorTasks_[i].kind != mr::coprocessor::TaskKind::MacroJob)
@@ -495,6 +564,8 @@ class TMREditWindow : public TWindow {
 			if (mr::coprocessor::globalCoprocessor().cancelTask(trackedCoprocessorTasks_[i].id))
 				cancelledAny = true;
 		}
+		if (cancelledAny)
+			noteBackgroundMacroCancelRequested(macroCount);
 		return cancelledAny;
 	}
 
@@ -890,6 +961,12 @@ class TMREditWindow : public TWindow {
 	std::vector<TrackedTask> trackedCoprocessorTasks_;
 	WindowRole windowRole_;
 	std::string windowRoleDetail_;
+	std::size_t macroQueuedCount_;
+	std::size_t macroCompletedCount_;
+	std::size_t macroConflictCount_;
+	std::size_t macroCancelledCount_;
+	std::size_t macroFailedCount_;
+	std::string lastMacroSummaryText_;
 	char displayTitle[MAXPATH];
 };
 

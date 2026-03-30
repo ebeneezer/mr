@@ -14,6 +14,7 @@
 #include <string>
 
 #include "../dialogs/MRFileInformationDialog.hpp"
+#include "../dialogs/MRAboutDialog.hpp"
 #include "../dialogs/MRSetupDialogs.hpp"
 #include "../mrmac/mrvm.hpp"
 #include "../services/MRExternalCommand.hpp"
@@ -414,6 +415,10 @@ bool handleMRCommand(ushort command) {
 
 		case cmMrOtherInstallationAndSetup:
 			runInstallationAndSetupDialogFlow();
+			return true;
+
+		case cmMrHelpAbout:
+			showAboutDialog();
 			return true;
 
 		case cmMrOtherExecuteProgram:

@@ -744,13 +744,25 @@ std::string ReadSnapshot::lineText(Offset pos) const {
 
 LineIndexWarmupData ReadSnapshot::completeLineIndexWarmup() const {
 	LineIndexWarmupData warmup;
-	ensureLazyIndexComplete();
+	(void)completeLineIndexWarmup(warmup, std::stop_token());
+	return warmup;
+}
+
+bool ReadSnapshot::completeLineIndexWarmup(LineIndexWarmupData &warmup, std::stop_token stopToken) const {
+	ensureLazyIndexSeeded();
+	while (!lazyLineIndexComplete_) {
+		if (stopToken.stop_requested())
+			return false;
+		advanceLazyIndexByStride();
+	}
+	if (stopToken.stop_requested())
+		return false;
 	warmup.checkpoints = lineIndexCheckpoints_;
 	warmup.lazyIndexedOffset = lazyIndexedOffset_;
 	warmup.lazyIndexedLine = lazyIndexedLine_;
 	warmup.lazyLineIndexComplete = lazyLineIndexComplete_;
 	warmup.lazyTotalLineCount = lazyTotalLineCount_;
-	return warmup;
+	return true;
 }
 
 bool ReadSnapshot::isLineBreakChar(char ch) const noexcept {

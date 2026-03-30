@@ -31,8 +31,12 @@ int markerWidth(TStringView icon) noexcept {
 	return std::max(1, strwidth(icon));
 }
 
-int advanceMarkerX(int x, TStringView icon) noexcept {
-	return x + markerWidth(icon) + kMarkerGap;
+int markerSpan(TStringView icon, int minWidth = 1) noexcept {
+	return std::max(minWidth, markerWidth(icon));
+}
+
+int advanceMarkerX(int x, TStringView icon, int minWidth = 1) noexcept {
+	return x + markerSpan(icon, minWidth) + kMarkerGap;
 }
 
 } // namespace
@@ -71,8 +75,7 @@ void TMRTaskOverviewView::draw() {
 }
 
 TPalette &TMRTaskOverviewView::getPalette() const {
-	static const TColorAttr paletteData[] = {0x70};
-	static TPalette palette(paletteData, 1);
+	static TPalette palette("\x06", 1);
 	return palette;
 }
 
@@ -94,12 +97,13 @@ void TMRTaskOverviewWindow::setLines(const std::vector<std::string> &lines) {
 }
 
 TPalette &TMRTaskOverviewWindow::getPalette() const {
-	static TPalette paletteGray(cpGrayDialog, sizeof(cpGrayDialog) - 1);
+	static TPalette paletteGray("\x18\x18\x18\x18\x18\x18\x18\x18", 8);
 	return paletteGray;
 }
 
 TMRFrame::TMRFrame(const TRect &bounds) noexcept
-    : TFrame(bounds), markerStateProvider_(), taskOverviewProvider_(), taskOverviewPopup_(nullptr) {
+    : TFrame(bounds), markerStateProvider_(), taskOverviewProvider_(), taskOverviewPopup_(nullptr),
+      taskOverviewPopupOwner_(nullptr) {
 }
 
 TMRFrame::~TMRFrame() {
@@ -130,7 +134,7 @@ int TMRFrame::markerStartColumn() const noexcept {
 int TMRFrame::taskMarkerColumn(const MarkerState &state) const noexcept {
 	int x = markerStartColumn();
 	if (state.modified)
-		x = advanceMarkerX(x, kDirtyMarkerIcon);
+		x = advanceMarkerX(x, kDirtyMarkerIcon, 2);
 	if (state.insertMode)
 		x = advanceMarkerX(x, kInsertMarkerIcon);
 	if (state.background)
@@ -141,13 +145,13 @@ int TMRFrame::taskMarkerColumn(const MarkerState &state) const noexcept {
 int TMRFrame::markersEndColumn(const MarkerState &state) const noexcept {
 	int x = markerStartColumn();
 	if (state.modified)
-		x = advanceMarkerX(x, kDirtyMarkerIcon);
+		x = advanceMarkerX(x, kDirtyMarkerIcon, 2);
 	if (state.insertMode)
 		x = advanceMarkerX(x, kInsertMarkerIcon);
 	if (state.background)
-		x = advanceMarkerX(x, kTaskMarkerIcon);
+		x = advanceMarkerX(x, kTaskMarkerIcon, 2);
 	if (state.readOnly)
-		x = advanceMarkerX(x, "🔒");
+		x = advanceMarkerX(x, "🔒", 2);
 	return x;
 }
 
@@ -229,7 +233,7 @@ void TMRFrame::draw() {
 		short numberPos = (window->flags & wfZoom) != 0 ? width - 7 : width - 3;
 		if (numberPos >= 1 && numberPos < width - 1)
 			b.putChar(numberPos, window->number + '0');
-		titleReserveRight = numberPos - 2;
+		titleReserveRight = numberPos - 3;
 	}
 
 	if ((this->state & sfActive) != 0 && window != nullptr) {
@@ -248,24 +252,32 @@ void TMRFrame::draw() {
 
 	int markerX = markerStartColumn();
 	if (markers.modified) {
-		b.moveStr(static_cast<ushort>(markerX), kDirtyMarkerIcon, cTitle, markerWidth(kDirtyMarkerIcon));
-		markerX = advanceMarkerX(markerX, kDirtyMarkerIcon);
+		int span = markerSpan(kDirtyMarkerIcon, 2);
+		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
+		b.moveStr(static_cast<ushort>(markerX), kDirtyMarkerIcon, cTitle, span);
+		markerX = advanceMarkerX(markerX, kDirtyMarkerIcon, 2);
 	}
 	if (markers.insertMode) {
-		b.moveStr(static_cast<ushort>(markerX), kInsertMarkerIcon, cTitle, markerWidth(kInsertMarkerIcon));
+		int span = markerSpan(kInsertMarkerIcon);
+		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
+		b.moveStr(static_cast<ushort>(markerX), kInsertMarkerIcon, cTitle, span);
 		markerX = advanceMarkerX(markerX, kInsertMarkerIcon);
 	}
 	if (markers.background) {
 		TColorAttr taskColor = cTitle;
 		setFore(taskColor, TColorDesired(TColorRGB(0xFF, 0x79, 0xC6)));
 		setStyle(taskColor, getStyle(taskColor) | slBold);
-		b.moveStr(static_cast<ushort>(markerX), kTaskMarkerIcon, taskColor, markerWidth(kTaskMarkerIcon));
-		markerX = advanceMarkerX(markerX, kTaskMarkerIcon);
+		int span = markerSpan(kTaskMarkerIcon, 2);
+		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
+		b.moveStr(static_cast<ushort>(markerX), kTaskMarkerIcon, taskColor, span);
+		markerX = advanceMarkerX(markerX, kTaskMarkerIcon, 2);
 	}
 	if (markers.readOnly) {
 		static constexpr char kReadOnlyMarkerIcon[] = "🔒";
-		b.moveStr(static_cast<ushort>(markerX), kReadOnlyMarkerIcon, cTitle, markerWidth(kReadOnlyMarkerIcon));
-		markerX = advanceMarkerX(markerX, kReadOnlyMarkerIcon);
+		int span = markerSpan(kReadOnlyMarkerIcon, 2);
+		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
+		b.moveStr(static_cast<ushort>(markerX), kReadOnlyMarkerIcon, cTitle, span);
+		markerX = advanceMarkerX(markerX, kReadOnlyMarkerIcon, 2);
 	}
 
 	if (window != nullptr) {
@@ -356,7 +368,7 @@ void TMRFrame::setState(ushort aState, Boolean enable) {
 }
 
 void TMRFrame::showTaskOverview() {
-	TGroup *group = owner;
+	TGroup *group = owner != nullptr ? owner->owner : nullptr;
 	std::vector<std::string> lines;
 	MarkerState state = markerState();
 	int taskX = taskMarkerColumn(state);
@@ -377,32 +389,39 @@ void TMRFrame::showTaskOverview() {
 	int height = static_cast<int>(lines.size()) + 2;
 	if (height > group->size.y - 2)
 		height = std::max(3, group->size.y - 2);
-	int left = std::max(1, taskX - 1);
+	TPoint topLeft = makeGlobal(TPoint(std::max(1, taskX - 1), 1));
+	topLeft = group->makeLocal(topLeft);
+	int left = std::max(1, topLeft.x);
 	if (left + width > group->size.x - 1)
 		left = std::max(1, group->size.x - 1 - width);
-	int top = 1;
+	int top = std::max(1, topLeft.y);
+	if (top + height > group->size.y - 1)
+		top = std::max(1, group->size.y - 1 - height);
 	TRect bounds(left, top, left + width, top + height);
 
 	if (taskOverviewPopup_ != nullptr) {
-		group->remove(taskOverviewPopup_);
+		if (taskOverviewPopupOwner_ != nullptr)
+			taskOverviewPopupOwner_->remove(taskOverviewPopup_);
 		TObject::destroy(taskOverviewPopup_);
 		taskOverviewPopup_ = nullptr;
+		taskOverviewPopupOwner_ = nullptr;
 	}
-		taskOverviewPopup_ = new TMRTaskOverviewWindow(bounds);
-		taskOverviewPopup_->setLines(lines);
-		group->insert(taskOverviewPopup_);
-		taskOverviewPopup_->makeFirst();
-		taskOverviewPopup_->setState(sfActive, False);
+	taskOverviewPopup_ = new TMRTaskOverviewWindow(bounds);
+	taskOverviewPopup_->setLines(lines);
+	group->insert(taskOverviewPopup_);
+	taskOverviewPopupOwner_ = group;
+	taskOverviewPopup_->makeFirst();
+	taskOverviewPopup_->setState(sfActive, False);
 }
 
 void TMRFrame::hideTaskOverview() {
-	TGroup *group = owner;
 	if (taskOverviewPopup_ == nullptr)
 		return;
-	if (group != nullptr)
-		group->remove(taskOverviewPopup_);
+	if (taskOverviewPopupOwner_ != nullptr)
+		taskOverviewPopupOwner_->remove(taskOverviewPopup_);
 	TObject::destroy(taskOverviewPopup_);
 	taskOverviewPopup_ = nullptr;
+	taskOverviewPopupOwner_ = nullptr;
 }
 
 void TMRFrame::updateTaskHover(TPoint globalMouse, bool forceHide) {
@@ -418,7 +437,7 @@ void TMRFrame::updateTaskHover(TPoint globalMouse, bool forceHide) {
 		return;
 	}
 	TPoint local = makeLocal(globalMouse);
-	if (local.y != 0 || local.x < taskX || local.x >= taskX + markerWidth(kTaskMarkerIcon)) {
+	if (local.y != 0 || local.x < taskX || local.x >= taskX + markerSpan(kTaskMarkerIcon, 2)) {
 		hideTaskOverview();
 		return;
 	}

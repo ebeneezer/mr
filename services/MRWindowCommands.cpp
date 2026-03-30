@@ -5,6 +5,8 @@
 
 #include "MRWindowCommands.hpp"
 
+#include <limits>
+#include <set>
 #include <vector>
 
 #include "../ui/TMREditWindow.hpp"
@@ -30,6 +32,26 @@ std::vector<TMREditWindow *> allEditWindowsInZOrder() {
 	return windows;
 }
 
+namespace {
+short nextEditorWindowNumber() {
+	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+	std::set<short> used;
+	short candidate = 1;
+
+	for (std::size_t i = 0; i < windows.size(); ++i) {
+		if (windows[i] != 0 && windows[i]->number > 0)
+			used.insert(windows[i]->number);
+	}
+
+	while (used.find(candidate) != used.end()) {
+		if (candidate == std::numeric_limits<short>::max())
+			return candidate;
+		++candidate;
+	}
+	return candidate;
+}
+} // namespace
+
 TMREditWindow *createEditorWindow(const char *title) {
 	TRect bounds;
 	TMREditWindow *win;
@@ -38,7 +60,7 @@ TMREditWindow *createEditorWindow(const char *title) {
 		return 0;
 	bounds = TProgram::deskTop->getExtent();
 	bounds.grow(-2, -1);
-	win = new TMREditWindow(bounds, title, 1);
+	win = new TMREditWindow(bounds, title, nextEditorWindowNumber());
 	TProgram::deskTop->insert(win);
 	return win;
 }

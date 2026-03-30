@@ -26,6 +26,10 @@ class VirtualMachine {
   private:
 	std::vector<Value> stack;
 	std::map<std::string, Value> variables;
+	bool verboseLogging;
+	bool logTruncated;
+
+	void appendLogLine(const std::string &line, bool important = false);
 
 	void push(const Value &value);
 	Value pop();
@@ -35,6 +39,9 @@ class VirtualMachine {
 	bool cancelledExecution;
 
 	VirtualMachine();
+	void setVerboseLogging(bool enable) noexcept {
+		verboseLogging = enable;
+	}
 	void execute(const unsigned char *bytecode, size_t length);
 	void executeAt(const unsigned char *bytecode, size_t length, size_t entryOffset,
 	               const std::string &parameterString, const std::string &macroName,
