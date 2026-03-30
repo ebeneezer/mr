@@ -6,5 +6,5 @@ CXX_DEFINES = -DHAVE_GPM -DHAVE_NCURSES -DTVISION_NO_STL
 
 CXX_INCLUDES = -I/home/idoc/mr/tvision/include -I/home/idoc/mr/tvision/include/tvision -I/home/idoc/mr/tvision/include/tvision/compat/borland -I/home/idoc/mr/tvision/include/tvision/compat/windows
 
-CXX_FLAGS = -g -Wall -Wextra -Wno-deprecated -Wno-unknown-pragmas -Wno-pragmas -Wno-missing-field-initializers
+CXX_FLAGS = -g -std=gnu++20 -Wall -Wextra -Wno-deprecated -Wno-unknown-pragmas -Wno-pragmas -Wno-missing-field-initializers
 

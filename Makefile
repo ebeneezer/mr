@@ -37,8 +37,12 @@ endif
 # Include paths
 INCLUDES = -I$(TVISION_ACTIVE_SOURCE_DIR)/include -I./mrmac -I./piecetable -I./ui
 
+# Language/runtime configuration.
+CXXSTD ?= gnu++20
+PTHREAD_FLAGS ?= -pthread
+
 # Debug flags: -g for symbols, -O0 disables optimizations
-CXXFLAGS = -Wall -g -O0 $(INCLUDES)
+CXXFLAGS = -Wall -g -O0 -std=$(CXXSTD) $(PTHREAD_FLAGS) $(INCLUDES)
 CFLAGS = -Wall -g -O0 $(INCLUDES)
 
 TVISION_BUILD_DIR = $(TVISION_ACTIVE_BUILD_DIR)
@@ -47,6 +51,9 @@ TVISION_CMAKE_FLAGS = \
 	-DCMAKE_BUILD_TYPE=Debug \
 	-DCMAKE_C_COMPILER=$(CC) \
 	-DCMAKE_CXX_COMPILER=$(CXX) \
+	-DCMAKE_CXX_STANDARD=20 \
+	-DCMAKE_CXX_STANDARD_REQUIRED=ON \
+	-DCMAKE_CXX_EXTENSIONS=ON \
 	-DTV_BUILD_EXAMPLES=OFF \
 	-DTV_BUILD_TESTS=OFF \
 	-DTV_BUILD_AVSCOLOR=OFF \
@@ -56,51 +63,9 @@ TVISION_CMAKE_FLAGS = \
 NCURSESW_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libncursesw.so.6 ]; then echo -l:libncursesw.so.6; else echo -lncursesw; fi)
 GPM_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libgpm.so.2 ]; then echo -l:libgpm.so.2; else echo -lgpm; fi)
 TINFO_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libtinfo.so.6 ]; then echo -l:libtinfo.so.6; else echo -ltinfo; fi)
-LDFLAGS = $(TVISION_LIB) $(NCURSESW_LIB) $(GPM_LIB) $(TINFO_LIB)
+LDFLAGS = $(PTHREAD_FLAGS) $(TVISION_LIB) $(NCURSESW_LIB) $(GPM_LIB) $(TINFO_LIB)
 
 TARGET = mr
-CHAT_CONTEXT_ARCHIVE = mr-chat-context.tar.bz2
-TVISION_ARCHIVE = tvision.tar.bz2
-BISON_ARCHIVE = bison-system.tar.bz2
-FLEX_ARCHIVE = flex-system.tar.bz2
-
-# Files relevant for ChatGPT sync / review
-CHAT_CONTEXT_FILES = \
-	Makefile \
-	filelist.txt \
-	mr.cpp \
-	mrmac/mrmac.h \
-	mrmac/mrmac.c \
-	mrmac/parser.y \
-	mrmac/lexer.l \
-	mrmac/parser.tab.h \
-	mrmac/parser.tab.c \
-	mrmac/lex.yy.c \
-	mrmac/mrvm.cpp \
-	mrmac/mrvm.hpp \
-	ui/mrmacrotest.cpp \
-	ui/mrmacrotest.hpp \
-	ui/mrpalette.cpp \
-	ui/mrpalette.hpp \
-	ui/mrwindowlist.cpp \
-	ui/mrwindowlist.hpp \
-	mr.hlp \
-	ui/TMRMenuBar.hpp \
-	ui/TMRMenuBox.hpp \
-	ui/TMRFrame.hpp \
-	ui/TMRStatusLine.hpp \
-	ui/TMRDeskTop.hpp \
-	ui/TMREditWindow.hpp \
-	ui/TMRIndicator.hpp \
-	ui/TMRFileEditor.hpp \
-	ui/TMRSyntax.hpp \
-	ui/TMRSyntax.cpp \
-	tvision/include/tvision/internal/findfrst.h \
-	tvision/source/platform/findfrst.cpp \
-	tvision/source/platform/dir.cpp
-
-CHAT_CONTEXT_DIRS = \
-	mrmac/macros
 
 # C++ source files (Editor and VM)
 CXX_SOURCES = \
@@ -109,7 +74,8 @@ CXX_SOURCES = \
 	ui/mrpalette.cpp \
 	ui/mrmacrotest.cpp \
 	ui/mrwindowlist.cpp \
-	ui/TMRSyntax.cpp
+	ui/TMRSyntax.cpp \
+	piecetable/MRTextDocument.cpp
 
 CXX_OBJECTS = $(CXX_SOURCES:.cpp=.o)
 
@@ -121,19 +87,11 @@ C_SOURCES = \
 
 C_OBJECTS = $(C_SOURCES:.c=.o)
 
-.PHONY: all clean clean-root-bz2 clean-tvision clean-tvision-cache rebuild-tvision \
+.PHONY: all clean clean-tvision clean-tvision-cache rebuild-tvision \
 	tvision-upstream-init tvision-upstream-fetch tvision-vendor-clean tvision-vendor-export \
-	tvision-vendor-normalize tvision-vendor-patch tvision-vendor-prepare Synchronisation \
-	context-tar tvision-tar bison-tar flex-tar
+	tvision-vendor-normalize tvision-vendor-patch tvision-vendor-prepare
 
-CHAT_CONTEXT_GENERATED = mrmac/parser.tab.h mrmac/parser.tab.c mrmac/lex.yy.c
-
-all: clean-root-bz2 $(TARGET)
-
-Synchronisation: clean-root-bz2 context-tar tvision-tar bison-tar flex-tar
-
-clean-root-bz2:
-	rm -f ./*.bz2
+all: $(TARGET)
 
 # TVision: default local build or optional auto-synced vendor build.
 $(TVISION_SOURCE_DIR)/build/libtvision.a: $(TVISION_SOURCE_DIR)/CMakeLists.txt $(TVISION_SOURCE_DIR)/source/CMakeLists.txt
@@ -203,75 +161,17 @@ mrmac/parser.tab.o: mrmac/parser.tab.c mrmac/parser.tab.h mrmac/mrmac.h
 mrmac/mrmac.o: mrmac/mrmac.c mrmac/parser.tab.h mrmac/mrmac.h
 
 # 3. Dependencies for C++ compilation
-mr.o: mr.cpp mrmac/mrmac.h mrmac/mrvm.hpp ui/mrpalette.hpp ui/mrmacrotest.hpp ui/mrwindowlist.hpp ui/TMREditWindow.hpp ui/TMRIndicator.hpp ui/TMRFileEditor.hpp ui/TMRTextBuffer.hpp ui/TMRTextBufferModel.hpp ui/TMRSyntax.hpp
-mrmac/mrvm.o: mrmac/mrvm.cpp mrmac/mrvm.hpp mrmac/mrmac.h ui/mrwindowlist.hpp ui/TMREditWindow.hpp ui/TMRTextBuffer.hpp ui/TMRFileEditor.hpp ui/TMRTextBufferModel.hpp ui/TMRSyntax.hpp
+mr.o: mr.cpp mrmac/mrmac.h mrmac/mrvm.hpp ui/mrpalette.hpp ui/mrmacrotest.hpp ui/mrwindowlist.hpp ui/TMREditWindow.hpp ui/TMRIndicator.hpp ui/TMRFileEditor.hpp ui/TMRTextBuffer.hpp ui/TMRTextBufferModel.hpp ui/TMRSyntax.hpp piecetable/MRTextDocument.hpp
+mrmac/mrvm.o: mrmac/mrvm.cpp mrmac/mrvm.hpp mrmac/mrmac.h ui/mrwindowlist.hpp ui/TMREditWindow.hpp ui/TMRTextBuffer.hpp ui/TMRFileEditor.hpp ui/TMRTextBufferModel.hpp ui/TMRSyntax.hpp piecetable/MRTextDocument.hpp
 ui/mrpalette.o: ui/mrpalette.cpp ui/mrpalette.hpp
 ui/mrmacrotest.o: ui/mrmacrotest.cpp ui/mrmacrotest.hpp mrmac/mrmac.h mrmac/mrvm.hpp
-ui/mrwindowlist.o: ui/mrwindowlist.cpp ui/mrwindowlist.hpp ui/TMREditWindow.hpp ui/TMRIndicator.hpp ui/TMRFileEditor.hpp ui/TMRTextBuffer.hpp ui/TMRTextBufferModel.hpp ui/TMRSyntax.hpp
+ui/mrwindowlist.o: ui/mrwindowlist.cpp ui/mrwindowlist.hpp ui/TMREditWindow.hpp ui/TMRIndicator.hpp ui/TMRFileEditor.hpp ui/TMRTextBuffer.hpp ui/TMRTextBufferModel.hpp ui/TMRSyntax.hpp piecetable/MRTextDocument.hpp
 ui/TMRSyntax.o: ui/TMRSyntax.cpp ui/TMRSyntax.hpp
+piecetable/MRTextDocument.o: piecetable/MRTextDocument.cpp piecetable/MRTextDocument.hpp
 
 # 4. Linker call
 $(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS)
 	$(CXX) -o $@ $^ $(LDFLAGS)
-
-# 5. Create a tar archive with the files relevant for ChatGPT sync / review
-context-tar: clean-root-bz2 $(CHAT_CONTEXT_GENERATED)
-	@set -e; \
-	files=""; \
-	for f in $(CHAT_CONTEXT_FILES); do \
-		if [ -f "$$f" ]; then \
-			files="$$files $$f"; \
-		else \
-			echo "Skipping missing file: $$f"; \
-		fi; \
-	done; \
-	for d in $(CHAT_CONTEXT_DIRS); do \
-		if [ -d "$$d" ]; then \
-			files="$$files $$d"; \
-		else \
-			echo "Skipping missing directory: $$d"; \
-		fi; \
-	done; \
-	if [ -z "$$files" ]; then \
-		echo "No context files found for archive."; \
-		exit 1; \
-	fi; \
-	$(TAR) -cjf $(CHAT_CONTEXT_ARCHIVE) $$files; \
-	echo "Created $(CHAT_CONTEXT_ARCHIVE)"
-
-# 6. Create a tar archive with the complete tvision tree, including binaries
-tvision-tar: clean-root-bz2
-	@set -e; \
-	if [ ! -d tvision ]; then \
-		echo "Directory tvision not found."; \
-		exit 1; \
-	fi; \
-	$(TAR) -cjf $(TVISION_ARCHIVE) tvision; \
-	echo "Created $(TVISION_ARCHIVE)"
-
-# 7. Create a bzip2 tar archive with the system bison binary and support files
-bison-tar: clean-root-bz2
-	@set -e; \
-	if [ ! -x /usr/bin/bison ]; then \
-		echo "System binary /usr/bin/bison not found."; \
-		exit 1; \
-	fi; \
-	if [ ! -d /usr/share/bison ]; then \
-		echo "Directory /usr/share/bison not found."; \
-		exit 1; \
-	fi; \
-	$(TAR) -cjf $(BISON_ARCHIVE) /usr/bin/bison /usr/share/bison; \
-	echo "Created $(BISON_ARCHIVE)"
-
-# 8. Create a bzip2 tar archive with the system flex binary
-flex-tar: clean-root-bz2
-	@set -e; \
-	if [ ! -x /usr/bin/flex ]; then \
-		echo "System binary /usr/bin/flex not found."; \
-		exit 1; \
-	fi; \
-	$(TAR) -cjf $(FLEX_ARCHIVE) /usr/bin/flex; \
-	echo "Created $(FLEX_ARCHIVE)"
 
 # C++ compilation
 %.o: %.cpp
@@ -282,5 +182,5 @@ flex-tar: clean-root-bz2
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(CXX_OBJECTS) $(C_OBJECTS) $(TARGET) $(CHAT_CONTEXT_ARCHIVE) $(TVISION_ARCHIVE) $(BISON_ARCHIVE) $(FLEX_ARCHIVE) mrmac/lex.yy.c mrmac/parser.tab.c mrmac/parser.tab.h
+	rm -f $(CXX_OBJECTS) $(C_OBJECTS) $(TARGET) mrmac/lex.yy.c mrmac/parser.tab.c mrmac/parser.tab.h
 	rm -rf $(TVISION_VENDOR_ROOT)

@@ -49,23 +49,6 @@
 			}
 		},
 		{
-			"label": "Synchronisation",
-			"type": "shell",
-			"command": "make",
-			"args": [
-				"Synchronisation"
-			],
-			"group": "build",
-			"problemMatcher": [
-				"$gcc"
-			],
-			"presentation": {
-				"echo": true,
-				"reveal": "always",
-				"clear": true
-			}
-		},
-		{
 			"label": "Rebuild mr (Clean & Neu)",
 			"type": "shell",
 			"command": "make",

@@ -1,84 +1,141 @@
 #ifndef TMRTEXTBUFFERMODEL_HPP
 #define TMRTEXTBUFFERMODEL_HPP
 
-#include <algorithm>
 #include <cstddef>
 #include <string>
 
 #include "TMRSyntax.hpp"
+#include "MRTextDocument.hpp"
 
 class TMRTextBufferModel {
   public:
+	using Document = mr::editor::TextDocument;
+	using Cursor = mr::editor::Cursor;
+	using Range = mr::editor::Range;
+	using Selection = mr::editor::Selection;
+	using Snapshot = mr::editor::Snapshot;
+	using EditTransaction = mr::editor::EditTransaction;
+	using StagedAddBuffer = mr::editor::StagedAddBuffer;
+	using StagedTransaction = mr::editor::StagedEditTransaction;
+	using DocumentChangeSet = mr::editor::DocumentChangeSet;
+	using CommitResult = mr::editor::CommitResult;
+	using CommitStatus = mr::editor::CommitStatus;
+
 	TMRTextBufferModel() noexcept
-	    : text_(), cursor_(0), selectionStart_(0), selectionEnd_(0), modified_(false),
+	    : document_(), cursor_(), selection_(), modified_(false),
 	      language_(TMRSyntaxLanguage::PlainText), syntaxPathHint_(), syntaxTitleHint_() {
 	}
 
 	void setText(const char *data, std::size_t length) {
 		if (data == nullptr || length == 0)
-			text_.clear();
+			document_.setText(std::string());
 		else
-			text_.assign(data, length);
+			document_.setText(std::string(data, length));
 		clampState();
 	}
 
 	void setText(const std::string &text) {
-		text_ = text;
+		document_.setText(text);
 		clampState();
 	}
 
 	const std::string &text() const noexcept {
-		return text_;
+		return document_.text();
 	}
 
 	std::size_t length() const noexcept {
-		return text_.size();
+		return document_.length();
 	}
 
 	bool isEmpty() const noexcept {
-		return text_.empty();
+		return document_.empty();
 	}
 
 	char charAt(std::size_t pos) const noexcept {
-		return pos < text_.size() ? text_[pos] : '\0';
+		return document_.charAt(pos);
 	}
 
 	std::size_t lineCount() const noexcept {
-		std::size_t lines = 1;
-		for (std::size_t i = 0; i < text_.size(); ++i)
-			if (text_[i] == '\n')
-				++lines;
-		return lines;
+		return document_.lineCount();
+	}
+
+	const Document &document() const noexcept {
+		return document_;
+	}
+
+	Document &document() noexcept {
+		return document_;
+	}
+
+	Snapshot snapshot() const {
+		return document_.snapshot();
+	}
+
+	std::size_t version() const noexcept {
+		return document_.version();
+	}
+
+	bool matchesSnapshot(const Snapshot &snapshot) const noexcept {
+		return document_.matchesSnapshot(snapshot);
+	}
+
+	void applyEditTransaction(const EditTransaction &transaction) {
+		document_.apply(transaction);
+		modified_ = true;
+		clampState();
+	}
+
+	CommitResult tryApplyEditTransaction(const EditTransaction &transaction,
+	                                     std::size_t expectedVersion) {
+		CommitResult result = document_.tryApply(transaction, expectedVersion);
+		if (result.applied()) {
+			modified_ = true;
+			clampState();
+		}
+		return result;
+	}
+
+	CommitResult tryApplyStagedTransaction(const StagedTransaction &transaction) {
+		CommitResult result = document_.tryApply(transaction);
+		if (result.applied()) {
+			modified_ = true;
+			clampState();
+		}
+		return result;
 	}
 
 	std::size_t cursor() const noexcept {
-		return cursor_;
+		return cursor_.offset;
 	}
 
 	void setCursor(std::size_t pos) noexcept {
-		cursor_ = clampOffset(pos);
+		cursor_.offset = clampOffset(pos);
 	}
 
 	void setSelection(std::size_t start, std::size_t end) noexcept {
-		selectionStart_ = clampOffset(start);
-		selectionEnd_ = clampOffset(end);
+		selection_.anchor = clampOffset(start);
+		selection_.cursor = clampOffset(end);
 	}
 
 	void setCursorAndSelection(std::size_t cursor, std::size_t start, std::size_t end) noexcept {
-		cursor_ = clampOffset(cursor);
+		cursor_.offset = clampOffset(cursor);
 		setSelection(start, end);
 	}
 
 	bool hasSelection() const noexcept {
-		return selectionStart_ != selectionEnd_;
+		return !selection_.empty();
 	}
 
 	std::size_t selectionStart() const noexcept {
-		return selectionStart_;
+		return selection_.range().start;
 	}
 
 	std::size_t selectionEnd() const noexcept {
-		return selectionEnd_;
+		return selection_.range().end;
+	}
+
+	const Selection &selection() const noexcept {
+		return selection_;
 	}
 
 	bool isModified() const noexcept {
@@ -104,72 +161,62 @@ class TMRTextBufferModel {
 	}
 
 	TMRSyntaxTokenMap tokenMapForLine(std::size_t pos) const {
-		return tmrBuildTokenMapForLine(language_, text_, lineStart(pos));
+		return tmrBuildTokenMapForLine(language_, document_.text(), lineStart(pos));
 	}
 
 	std::size_t lineStart(std::size_t pos) const noexcept {
-		pos = clampOffset(pos);
-		while (pos > 0 && text_[pos - 1] != '\n')
-			--pos;
-		return pos;
+		return document_.lineStart(pos);
 	}
 
 	std::size_t lineEnd(std::size_t pos) const noexcept {
-		pos = clampOffset(pos);
-		while (pos < text_.size() && text_[pos] != '\n')
-			++pos;
-		return pos;
+		return document_.lineEnd(pos);
 	}
 
 	std::size_t nextLine(std::size_t pos) const noexcept {
-		pos = lineEnd(pos);
-		if (pos < text_.size() && text_[pos] == '\n')
-			++pos;
-		return pos;
+		return document_.nextLine(pos);
 	}
 
 	std::size_t prevLine(std::size_t pos) const noexcept {
-		pos = lineStart(pos);
-		if (pos == 0)
-			return 0;
-		return lineStart(pos - 1);
+		return document_.prevLine(pos);
 	}
 
 	std::size_t lineIndex(std::size_t pos) const noexcept {
-		std::size_t line = 0;
-		pos = clampOffset(pos);
-		for (std::size_t i = 0; i < pos; ++i)
-			if (text_[i] == '\n')
-				++line;
-		return line;
+		return document_.lineIndex(pos);
+	}
+
+	std::size_t lineStartByIndex(std::size_t index) const noexcept {
+		return document_.lineStartByIndex(index);
+	}
+
+	std::size_t estimatedLineCount() const noexcept {
+		return document_.estimatedLineCount();
+	}
+
+	bool exactLineCountKnown() const noexcept {
+		return document_.exactLineCountKnown();
 	}
 
 	std::size_t column(std::size_t pos) const noexcept {
-		pos = clampOffset(pos);
-		return pos - lineStart(pos);
+		return document_.column(pos);
 	}
 
 	std::string lineText(std::size_t pos) const {
-		std::size_t start = lineStart(pos);
-		std::size_t end = lineEnd(pos);
-		return text_.substr(start, end - start);
+		return document_.lineText(pos);
 	}
 
   private:
 	std::size_t clampOffset(std::size_t pos) const noexcept {
-		return std::min(pos, text_.size());
+		return document_.clampOffset(pos);
 	}
 
 	void clampState() noexcept {
-		cursor_ = clampOffset(cursor_);
-		selectionStart_ = clampOffset(selectionStart_);
-		selectionEnd_ = clampOffset(selectionEnd_);
+		cursor_.clamp(document_.length());
+		selection_.clamp(document_.length());
 	}
 
-	std::string text_;
-	std::size_t cursor_;
-	std::size_t selectionStart_;
-	std::size_t selectionEnd_;
+	Document document_;
+	Cursor cursor_;
+	Selection selection_;
 	bool modified_;
 	TMRSyntaxLanguage language_;
 	std::string syntaxPathHint_;

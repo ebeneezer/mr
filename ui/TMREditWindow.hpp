@@ -60,8 +60,8 @@ class TMREditWindow : public TWindow {
 	}
 
 	virtual const char *getTitle(short) override {
-		if (editor != nullptr && editor->fileName[0] != EOS)
-			return editor->fileName;
+		if (editor != nullptr && editor->hasPersistentFileName())
+			return editor->persistentFileName();
 		return displayTitle;
 	}
 
@@ -76,39 +76,24 @@ class TMREditWindow : public TWindow {
 
 	bool loadFromFile(const char *fileName) {
 		std::string expandedName;
-		TRect r;
-		TMRFileEditor *newEditor;
-		bool wasSelected;
+		std::string loadError;
 
 		if (editor == nullptr || fileName == nullptr || *fileName == '\0')
 			return false;
 
 		expandedName = fileName;
-		if (expandedName.size() >= sizeof(editor->fileName))
+		if (expandedName.size() >= editor->persistentFileNameCapacity())
 			return false;
 		char expandedPath[MAXPATH];
 		strnzcpy(expandedPath, expandedName.c_str(), sizeof(expandedPath));
 		fexpand(expandedPath);
 		expandedName = expandedPath;
 
-		r = editor->getBounds();
-		wasSelected = (editor->state & sfSelected) != 0;
-		newEditor = createEditor(r, expandedName.c_str());
-		if (newEditor == nullptr || newEditor->valid(cmValid) == False) {
-			TObject::destroy(newEditor);
+		if (!editor->loadMappedFile(expandedName.c_str(), loadError))
 			return false;
-		}
-		newEditor->syncFromEditorState();
-
-		remove(editor);
-		TObject::destroy(editor);
-		editor = newEditor;
-		insert(editor);
-		if (wasSelected)
-			editor->select();
 
 		resetTransientEditorState();
-		setReadOnly(isExistingPathReadOnly(editor->fileName));
+		setReadOnly(isExistingPathReadOnly(editor->persistentFileName()));
 		temporaryFileUsed_ = false;
 		temporaryFileName_.clear();
 		updateTitleFromEditor();
@@ -125,7 +110,7 @@ class TMREditWindow : public TWindow {
 		setReadOnly(false);
 		temporaryFileUsed_ = false;
 		temporaryFileName_.clear();
-		editor->fileName[0] = EOS;
+		editor->clearPersistentFileName();
 		if (title != nullptr && *title != '\0')
 			setDisplayTitle(title);
 		else
@@ -157,15 +142,15 @@ class TMREditWindow : public TWindow {
 			firstSaveDone_ = true;
 			temporaryFileUsed_ = false;
 			temporaryFileName_.clear();
-			setReadOnly(isExistingPathReadOnly(editor->fileName));
+			setReadOnly(isExistingPathReadOnly(editor->persistentFileName()));
 			updateTitleFromEditor();
 		}
 		return ok;
 	}
 
 	const char *currentFileName() const {
-		if (editor != nullptr && editor->fileName[0] != EOS)
-			return editor->fileName;
+		if (editor != nullptr && editor->hasPersistentFileName())
+			return editor->persistentFileName();
 		return "";
 	}
 
@@ -201,6 +186,14 @@ class TMREditWindow : public TWindow {
 		return buffer().cursorPoint();
 	}
 
+	unsigned long cursorLineNumber() const {
+		return buffer().cursorLineNumber();
+	}
+
+	unsigned long cursorColumnNumber() const {
+		return buffer().cursorColumnNumber();
+	}
+
 	const char *syntaxLanguageName() const {
 		return editor != nullptr ? editor->syntaxLanguageName() : "Plain Text";
 	}
@@ -230,10 +223,8 @@ class TMREditWindow : public TWindow {
 			editor->setReadOnly(readOnly);
 		if (indicator != nullptr)
 			indicator->setReadOnly(readOnly);
-		if (readOnly && editor != nullptr) {
-			editor->modified = False;
-			editor->update(ufUpdate);
-		}
+		if (readOnly && editor != nullptr)
+			editor->setDocumentModified(false);
 	}
 
 	bool hasBeenSavedInSession() const {
@@ -257,14 +248,12 @@ class TMREditWindow : public TWindow {
 	}
 
 	bool isFileChanged() const {
-		return editor != nullptr && !isReadOnly() && editor->modified == True;
+		return editor != nullptr && !isReadOnly() && editor->isDocumentModified();
 	}
 
 	void setFileChanged(bool changed) {
-		if (editor != nullptr) {
-			editor->modified = changed && !isReadOnly() ? True : False;
-			editor->update(ufUpdate);
-		}
+		if (editor != nullptr)
+			editor->setDocumentModified(changed && !isReadOnly());
 	}
 
 	void setCurrentFileName(const char *fileName) {
@@ -272,11 +261,9 @@ class TMREditWindow : public TWindow {
 			return;
 
 		if (fileName == nullptr || *fileName == '\0')
-			editor->fileName[0] = EOS;
-		else {
-			strnzcpy(editor->fileName, fileName, sizeof(editor->fileName));
-			fexpand(editor->fileName);
-		}
+			editor->clearPersistentFileName();
+		else
+			editor->setPersistentFileName(fileName);
 		updateTitleFromEditor();
 		refreshSyntaxContext();
 	}
@@ -338,7 +325,7 @@ class TMREditWindow : public TWindow {
 	void endBlock() {
 		if (editor == nullptr || blockMode_ == bmNone)
 			return;
-		blockEnd_ = editor->curPtr;
+		blockEnd_ = static_cast<uint>(editor->cursorOffset());
 		blockMarkingOn_ = false;
 		syncBlockVisual();
 	}
@@ -349,8 +336,8 @@ class TMREditWindow : public TWindow {
 		blockAnchor_ = 0;
 		blockEnd_ = 0;
 		if (editor != nullptr) {
-			editor->setSelect(editor->curPtr, editor->curPtr, False);
-			editor->trackCursor(True);
+			editor->setSelectionOffsets(editor->cursorOffset(), editor->cursorOffset(), False);
+			editor->revealCursor(True);
 			editor->update(ufView);
 		}
 	}
@@ -420,14 +407,13 @@ class TMREditWindow : public TWindow {
 	void resetTransientEditorState() {
 		if (editor == nullptr)
 			return;
-		editor->delCount = 0;
-		editor->insCount = 0;
+		editor->resetUndoState();
 		clearBlock();
 	}
 
 	void updateTitleFromEditor() {
-		if (editor != nullptr && editor->fileName[0] != EOS) {
-			std::strncpy(displayTitle, editor->fileName, sizeof(displayTitle) - 1);
+		if (editor != nullptr && editor->hasPersistentFileName()) {
+			std::strncpy(displayTitle, editor->persistentFileName(), sizeof(displayTitle) - 1);
 			displayTitle[sizeof(displayTitle) - 1] = '\0';
 		}
 		refreshSyntaxContext();
@@ -444,14 +430,14 @@ class TMREditWindow : public TWindow {
 			return;
 		blockMode_ = mode;
 		blockMarkingOn_ = true;
-		blockAnchor_ = editor->curPtr;
-		blockEnd_ = editor->curPtr;
+		blockAnchor_ = static_cast<uint>(editor->cursorOffset());
+		blockEnd_ = static_cast<uint>(editor->cursorOffset());
 		syncBlockVisual();
 	}
 
 	uint effectiveBlockEnd() const {
 		if (editor != nullptr && blockMarkingOn_)
-			return editor->curPtr;
+			return static_cast<uint>(editor->cursorOffset());
 		return blockEnd_;
 	}
 
@@ -467,10 +453,10 @@ class TMREditWindow : public TWindow {
 		int line = 1;
 		if (editor == nullptr)
 			return 0;
-		if (ptr > editor->bufLen)
-			ptr = editor->bufLen;
-		while (pos < ptr && pos < editor->bufLen) {
-			uint next = editor->nextLine(pos);
+		if (ptr > editor->bufferLength())
+			ptr = static_cast<uint>(editor->bufferLength());
+		while (pos < ptr && pos < editor->bufferLength()) {
+			uint next = static_cast<uint>(editor->nextLineOffset(pos));
 			if (next <= pos || next > ptr)
 				break;
 			pos = next;
@@ -483,10 +469,10 @@ class TMREditWindow : public TWindow {
 		uint start;
 		if (editor == nullptr)
 			return 0;
-		if (ptr > editor->bufLen)
-			ptr = editor->bufLen;
-		start = editor->lineStart(ptr);
-		return editor->charPos(start, ptr) + 1;
+		if (ptr > editor->bufferLength())
+			ptr = static_cast<uint>(editor->bufferLength());
+		start = static_cast<uint>(editor->lineStartOffset(ptr));
+		return editor->charColumn(start, ptr) + 1;
 	}
 
 	int normalizedBlockLine1() const {
@@ -536,17 +522,17 @@ class TMREditWindow : public TWindow {
 			return;
 		if (blockMode_ == bmStream) {
 			blockPtrRange(a, b);
-			editor->setSelect(a, b, False);
+			editor->setSelectionOffsets(a, b, False);
 		} else if (blockMode_ == bmLine) {
 			blockPtrRange(a, b);
-			a = editor->lineStart(a);
-			b = editor->nextLine(b);
-			if (b > editor->bufLen)
-				b = editor->bufLen;
-			editor->setSelect(a, b, False);
+			a = static_cast<uint>(editor->lineStartOffset(a));
+			b = static_cast<uint>(editor->nextLineOffset(b));
+			if (b > editor->bufferLength())
+				b = static_cast<uint>(editor->bufferLength());
+			editor->setSelectionOffsets(a, b, False);
 		} else
-			editor->setSelect(editor->curPtr, editor->curPtr, False);
-		editor->trackCursor(True);
+			editor->setSelectionOffsets(editor->cursorOffset(), editor->cursorOffset(), False);
+		editor->revealCursor(True);
 		editor->update(ufView);
 	}
 

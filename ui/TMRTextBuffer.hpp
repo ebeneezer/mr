@@ -21,6 +21,14 @@ class TMRTextBuffer {
 		return editor_;
 	}
 
+	TMRTextBufferModel::Snapshot snapshot() const {
+		return editor_ != nullptr ? editor_->bufferModel().snapshot() : TMRTextBufferModel::Snapshot();
+	}
+
+	TMRTextBufferModel::Range selectionRange() const noexcept {
+		return editor_ != nullptr ? editor_->bufferModel().selection().range() : TMRTextBufferModel::Range();
+	}
+
 	std::size_t length() const noexcept {
 		return editor_ != nullptr ? editor_->bufferModel().length() : 0;
 	}
@@ -34,7 +42,7 @@ class TMRTextBuffer {
 	}
 
 	bool hasUndoHistory() const noexcept {
-		return editor_ != nullptr && (editor_->delCount != 0 || editor_->insCount != 0);
+		return editor_ != nullptr && editor_->hasUndoHistoryState();
 	}
 
 	bool isModified() const noexcept {
@@ -52,13 +60,27 @@ class TMRTextBuffer {
 	void setModified(bool changed) noexcept {
 		if (editor_ == nullptr)
 			return;
-		editor_->modified = changed ? True : False;
-		editor_->syncFromEditorState(false);
-		editor_->update(ufUpdate);
+		editor_->setDocumentModified(changed);
 	}
 
 	uint cursor() const noexcept {
 		return editor_ != nullptr ? static_cast<uint>(editor_->bufferModel().cursor()) : 0;
+	}
+
+	unsigned long cursorLineNumber() const noexcept {
+		if (editor_ != nullptr) {
+			const TMRTextBufferModel &model = editor_->bufferModel();
+			return static_cast<unsigned long>(model.lineIndex(model.cursor())) + 1UL;
+		}
+		return 1UL;
+	}
+
+	unsigned long cursorColumnNumber() const noexcept {
+		if (editor_ != nullptr) {
+			const TMRTextBufferModel &model = editor_->bufferModel();
+			return static_cast<unsigned long>(model.column(model.cursor())) + 1UL;
+		}
+		return 1UL;
 	}
 
 	TPoint cursorPoint() const noexcept {

@@ -2,13 +2,6 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"name": "Synchronisation",
-			"type": "node-terminal",
-			"request": "launch",
-			"command": "make Synchronisation",
-			"cwd": "${workspaceFolder}"
-		},
-		{
 			"name": "Debug mr (GDB)",
 			"type": "cppdbg",
 			"request": "launch",
