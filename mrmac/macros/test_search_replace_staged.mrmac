@@ -1,0 +1,13 @@
+$MACRO SearchReplaceStaged;
+DEF_INT(FoundBack, FoundFwd);
+DEF_STR(Needle, Replacement);
+
+Needle := 'theme';
+Replacement := 'palette';
+IGNORE_CASE := TRUE;
+FoundFwd := SEARCH_FWD(Needle, 0);
+IF FoundFwd THEN
+    REPLACE(Replacement);
+END;
+FoundBack := SEARCH_BWD(Replacement, 0);
+END_MACRO;
