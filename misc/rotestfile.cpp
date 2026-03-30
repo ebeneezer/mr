@@ -35,9 +35,10 @@
 #include "ui/TMREditWindow.hpp"
 #include "ui/TMRMenuBar.hpp"
 #include "ui/TMRStatusLine.hpp"
-#include "ui/mrmacrotest.hpp"
-#include "ui/mrpalette.hpp"
-#include "ui/mrwindowlist.hpp"
+#include "dialogs/MRMacroFileDialog.hpp"
+#include "ui/MRPalette.hpp"
+#include "dialogs/MRWindowListDialog.hpp"
+#include "ui/MRWindowSupport.hpp"
 
 namespace {
 enum : ushort {

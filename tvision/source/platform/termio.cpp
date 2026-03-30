@@ -409,6 +409,7 @@ void TermIO::mouseOn(ConsoleCtl &con) noexcept {
 	TStringView seq = "\x1B[?1001s" // Save old highlight mouse reporting.
 	                  "\x1B[?1000h" // Enable mouse reporting.
 	                  "\x1B[?1002h" // Enable mouse drag reporting.
+	                  "\x1B[?1003h" // Enable any-motion mouse reporting.
 	                  "\x1B[?1006h" // Enable SGR extended mouse reporting.
 	    ;
 	con.write(seq.data(), seq.size());
@@ -416,6 +417,7 @@ void TermIO::mouseOn(ConsoleCtl &con) noexcept {
 
 void TermIO::mouseOff(ConsoleCtl &con) noexcept {
 	TStringView seq = "\x1B[?1006l" // Disable SGR extended mouse reporting.
+	                  "\x1B[?1003l" // Disable any-motion mouse reporting.
 	                  "\x1B[?1002l" // Disable mouse drag reporting.
 	                  "\x1B[?1000l" // Disable mouse reporting.
 	                  "\x1B[?1001r" // Restore old highlight mouse reporting.

@@ -2,7 +2,7 @@
 #define TMRDESKTOP_HPP
 #define Uses_TDeskTop
 #define Uses_TBackground
-#include "mrpalette.hpp"
+#include "MRPalette.hpp"
 #include <tvision/tv.h>
 
 class TMRDeskTop : public TDeskTop {

@@ -12,11 +12,14 @@
 #include <tvision/tv.h>
 
 #include <algorithm>
+#include <chrono>
+#include <cstdio>
 #include <cstdint>
 #include <cstring>
 #include <fstream>
 #include <iterator>
 #include <string>
+#include <utility>
 #include <unistd.h>
 #include <vector>
 
@@ -28,6 +31,21 @@ void mrTraceCoprocessorTaskCancel(int bufferId, std::uint64_t taskId);
 
 class TMREditWindow : public TWindow {
   public:
+	struct TrackedTask {
+		std::uint64_t id;
+		mr::coprocessor::TaskKind kind;
+		std::string label;
+		std::chrono::steady_clock::time_point startedAt;
+
+		TrackedTask() noexcept
+		    : id(0), kind(mr::coprocessor::TaskKind::Custom), label(), startedAt(std::chrono::steady_clock::now()) {
+		}
+
+		TrackedTask(std::uint64_t aId, mr::coprocessor::TaskKind aKind, std::string aLabel = std::string())
+		    : id(aId), kind(aKind), label(std::move(aLabel)), startedAt(std::chrono::steady_clock::now()) {
+		}
+	};
+
 	enum WindowRole {
 		wrText = 0,
 		wrFile,
@@ -50,7 +68,7 @@ class TMREditWindow : public TWindow {
 		             sizeof(displayTitle) - 1);
 		displayTitle[sizeof(displayTitle) - 1] = '\0';
 
-		hScrollBar = new TScrollBar(TRect(39, size.y - 1, size.x - 2, size.y));
+		hScrollBar = new TScrollBar(TRect(1, size.y - 1, size.x - 1, size.y));
 		hScrollBar->hide();
 		insert(hScrollBar);
 
@@ -61,6 +79,15 @@ class TMREditWindow : public TWindow {
 		indicator = new TMRIndicator(TRect(2, size.y - 1, 38, size.y));
 		indicator->hide();
 		insert(indicator);
+		if (frame != nullptr) {
+			TMRFrame *mrFrame = static_cast<TMRFrame *>(frame);
+			mrFrame->setMarkerStateProvider([this]() {
+				return TMRFrame::MarkerState(isFileChanged(), insertModeEnabled(),
+				                             indicator != nullptr && indicator->shouldDrawTaskMarker(),
+				                             indicator != nullptr && indicator->shouldDrawReadOnlyMarker());
+			});
+			mrFrame->setTaskOverviewProvider([this]() { return describeRunningTasks(); });
+		}
 
 		TRect r(getExtent());
 		r.grow(-1, -1);
@@ -85,6 +112,13 @@ class TMREditWindow : public TWindow {
 	}
 
 	virtual void handleEvent(TEvent &event) override {
+		if (frame != nullptr) {
+			TMRFrame *mrFrame = static_cast<TMRFrame *>(frame);
+			if ((event.what & (evMouseDown | evMouseMove | evMouseUp)) != 0)
+				mrFrame->updateTaskHover(event.mouse.where, false);
+			else if ((event.what & (evKeyDown | evCommand)) != 0)
+				mrFrame->updateTaskHover(TPoint(), true);
+		}
 		TWindow::handleEvent(event);
 		if (event.what == evBroadcast && event.message.command == cmUpdateTitle) {
 			updateTaskMarkers();
@@ -218,6 +252,10 @@ class TMREditWindow : public TWindow {
 		return buffer().cursorColumnNumber();
 	}
 
+	bool insertModeEnabled() const noexcept {
+		return editor != nullptr && editor->insertModeEnabled();
+	}
+
 	std::size_t cursorOffset() const noexcept {
 		return editor != nullptr ? editor->cursorOffset() : 0;
 	}
@@ -269,6 +307,10 @@ class TMREditWindow : public TWindow {
 
 	int bufferId() const {
 		return bufferId_;
+	}
+
+	std::size_t documentId() const noexcept {
+		return editor != nullptr ? editor->documentId() : 0;
 	}
 
 	WindowRole windowRole() const noexcept {
@@ -365,13 +407,15 @@ class TMREditWindow : public TWindow {
 		message(owner, evBroadcast, cmUpdateTitle, 0);
 	}
 
-	void trackCoprocessorTask(std::uint64_t taskId) {
+	void trackCoprocessorTask(std::uint64_t taskId,
+	                          mr::coprocessor::TaskKind kind = mr::coprocessor::TaskKind::Custom,
+	                          const std::string &label = std::string()) {
 		if (taskId == 0)
 			return;
 		for (std::size_t i = 0; i < trackedCoprocessorTasks_.size(); ++i)
-			if (trackedCoprocessorTasks_[i] == taskId)
+			if (trackedCoprocessorTasks_[i].id == taskId)
 				return;
-		trackedCoprocessorTasks_.push_back(taskId);
+		trackedCoprocessorTasks_.push_back(TrackedTask(taskId, kind, label));
 		updateTaskMarkers();
 	}
 
@@ -380,7 +424,83 @@ class TMREditWindow : public TWindow {
 	}
 
 	std::uint64_t trackedCoprocessorTaskId(std::size_t index) const noexcept {
-		return index < trackedCoprocessorTasks_.size() ? trackedCoprocessorTasks_[index] : 0;
+		return index < trackedCoprocessorTasks_.size() ? trackedCoprocessorTasks_[index].id : 0;
+	}
+
+	std::size_t trackedMacroTaskCount() const noexcept {
+		std::size_t count = 0;
+		for (std::size_t i = 0; i < trackedCoprocessorTasks_.size(); ++i)
+			if (trackedCoprocessorTasks_[i].kind == mr::coprocessor::TaskKind::MacroJob)
+				++count;
+		return count;
+	}
+
+	bool hasTrackedMacroTasks() const noexcept {
+		return trackedMacroTaskCount() != 0;
+	}
+
+	std::vector<std::string> describeRunningTasks() const {
+		std::vector<std::string> lines;
+		std::size_t i;
+
+		for (i = 0; i < trackedCoprocessorTasks_.size(); ++i) {
+			const TrackedTask &task = trackedCoprocessorTasks_[i];
+			std::string line;
+
+			switch (task.kind) {
+				case mr::coprocessor::TaskKind::MacroJob:
+					line = "Macro";
+					break;
+				case mr::coprocessor::TaskKind::ExternalIo:
+					line = "Program";
+					break;
+				case mr::coprocessor::TaskKind::IndicatorBlink:
+					line = "Indicator";
+					break;
+				case mr::coprocessor::TaskKind::SyntaxWarmup:
+					line = "Syntax";
+					break;
+				case mr::coprocessor::TaskKind::LineIndexWarmup:
+					line = "Line index";
+					break;
+				case mr::coprocessor::TaskKind::Custom:
+				default:
+					line = "Task";
+					break;
+			}
+			if (!task.label.empty()) {
+				line += ": ";
+				line += compactTaskLabel(task);
+			}
+			line += "  ";
+			line += formatTaskElapsed(task);
+			lines.push_back(line);
+		}
+		if (editor != nullptr) {
+			if (editor->pendingLineIndexWarmupTaskId() != 0)
+				lines.push_back("Line indexing  running");
+			if (editor->pendingSyntaxWarmupTaskId() != 0)
+				lines.push_back("Syntax warmup  running");
+		}
+		return lines;
+	}
+
+	bool cancelTrackedMacroTasks() {
+		bool cancelledAny = false;
+
+		for (std::size_t i = 0; i < trackedCoprocessorTasks_.size(); ++i) {
+			if (trackedCoprocessorTasks_[i].kind != mr::coprocessor::TaskKind::MacroJob)
+				continue;
+			mrTraceCoprocessorTaskCancel(bufferId_, trackedCoprocessorTasks_[i].id);
+			if (mr::coprocessor::globalCoprocessor().cancelTask(trackedCoprocessorTasks_[i].id))
+				cancelledAny = true;
+		}
+		return cancelledAny;
+	}
+
+	void showMacroNotice(const std::string &text, TMRIndicator::NoticeKind kind) {
+		if (indicator != nullptr)
+			indicator->showStatusNotice(text, kind);
 	}
 
 	std::size_t originalBufferLength() const noexcept {
@@ -430,9 +550,9 @@ class TMREditWindow : public TWindow {
 	}
 
 	void releaseCoprocessorTask(std::uint64_t taskId) {
-		for (std::vector<std::uint64_t>::iterator it = trackedCoprocessorTasks_.begin();
+		for (std::vector<TrackedTask>::iterator it = trackedCoprocessorTasks_.begin();
 		     it != trackedCoprocessorTasks_.end(); ++it)
-			if (*it == taskId) {
+			if (it->id == taskId) {
 				trackedCoprocessorTasks_.erase(it);
 				updateTaskMarkers();
 				return;
@@ -587,8 +707,8 @@ class TMREditWindow : public TWindow {
 
 	void cancelTrackedCoprocessorTasks() {
 		for (std::size_t i = 0; i < trackedCoprocessorTasks_.size(); ++i) {
-			mrTraceCoprocessorTaskCancel(bufferId_, trackedCoprocessorTasks_[i]);
-			mr::coprocessor::globalCoprocessor().cancelTask(trackedCoprocessorTasks_[i]);
+			mrTraceCoprocessorTaskCancel(bufferId_, trackedCoprocessorTasks_[i].id);
+			mr::coprocessor::globalCoprocessor().cancelTask(trackedCoprocessorTasks_[i].id);
 		}
 		trackedCoprocessorTasks_.clear();
 		updateTaskMarkers();
@@ -642,6 +762,55 @@ class TMREditWindow : public TWindow {
 			ptr = static_cast<uint>(editor->bufferLength());
 		start = static_cast<uint>(editor->lineStartOffset(ptr));
 		return editor->charColumn(start, ptr) + 1;
+	}
+
+	static std::string baseNameOf(const std::string &path) {
+		std::size_t pos = path.find_last_of("\\/");
+		return pos == std::string::npos ? path : path.substr(pos + 1);
+	}
+
+	static std::string stripExtension(const std::string &name) {
+		std::size_t dot = name.find_last_of('.');
+		if (dot == std::string::npos || dot == 0)
+			return name;
+		return name.substr(0, dot);
+	}
+
+	static std::string trimTaskLabel(const std::string &label) {
+		std::size_t start = label.find_first_not_of(' ');
+		std::size_t end = label.find_last_not_of(' ');
+		if (start == std::string::npos)
+			return std::string();
+		return label.substr(start, end - start + 1);
+	}
+
+	static std::string compactTaskLabel(const TrackedTask &task) {
+		std::string label = trimTaskLabel(task.label);
+
+		if (label.empty())
+			return label;
+		if (task.kind == mr::coprocessor::TaskKind::MacroJob)
+			return stripExtension(baseNameOf(label));
+		if (task.kind == mr::coprocessor::TaskKind::ExternalIo) {
+			std::size_t split = label.find_first_of(" \t");
+			std::string head = split == std::string::npos ? label : label.substr(0, split);
+			return baseNameOf(head);
+		}
+		return baseNameOf(label);
+	}
+
+	static std::string formatTaskElapsed(const TrackedTask &task) {
+		using namespace std::chrono;
+		char buffer[32];
+		double elapsedMs =
+		    duration_cast<milliseconds>(steady_clock::now() - task.startedAt).count();
+
+		if (elapsedMs < 1000.0) {
+			std::snprintf(buffer, sizeof(buffer), "%.0f ms", elapsedMs);
+			return buffer;
+		}
+		std::snprintf(buffer, sizeof(buffer), "%.2f s", elapsedMs / 1000.0);
+		return buffer;
 	}
 
 	int normalizedBlockLine1() const {
@@ -718,7 +887,7 @@ class TMREditWindow : public TWindow {
 	bool blockMarkingOn_;
 	uint blockAnchor_;
 	uint blockEnd_;
-	std::vector<std::uint64_t> trackedCoprocessorTasks_;
+	std::vector<TrackedTask> trackedCoprocessorTasks_;
 	WindowRole windowRole_;
 	std::string windowRoleDetail_;
 	char displayTitle[MAXPATH];

@@ -1,8 +1,15 @@
 *.tar
 *.bz2
+*.o
 .vendor-cache/
+build/
 build/vendor/
+mr
+mrmac/mrmac
 tvision/build/
 tvision/build-asan/
 tvision/build-debug/
 misc/enwik9
+*.o
+mr
+mrmac/mrmac

@@ -4,30 +4,106 @@
 #define Uses_TIndicator
 #define Uses_TDrawBuffer
 #define Uses_TEvent
+#define Uses_TView
+#define Uses_TGroup
+#define Uses_TPalette
+#define Uses_TFrame
+#define Uses_TWindow
 #include <tvision/tv.h>
 
 #include <chrono>
 #include <atomic>
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <functional>
 #include <mutex>
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "MRCoprocessor.hpp"
 
+class TMRTaskOverviewPopup : public TView {
+  public:
+	TMRTaskOverviewPopup(const TRect &bounds) noexcept : TView(bounds), lines_() {
+		eventMask = 0;
+		options |= ofBuffered;
+	}
+
+	void setLines(const std::vector<std::string> &lines) {
+		lines_ = lines;
+		drawView();
+	}
+
+	virtual void draw() override {
+		TDrawBuffer b;
+		TColorAttr border = getColor(1);
+		TColorAttr text = getColor(2);
+		std::size_t i;
+
+		for (int y = 0; y < size.y; ++y) {
+			b.moveChar(0, ' ', text, size.x);
+			if (y == 0 || y == size.y - 1) {
+				b.moveChar(0, '-', border, size.x);
+				b.moveChar(0, '+', border, 1);
+				b.moveChar(size.x - 1, '+', border, 1);
+			} else {
+				b.moveChar(0, '|', border, 1);
+				b.moveChar(size.x - 1, '|', border, 1);
+			}
+
+			if (y == 0)
+				b.moveStr(2, " Tasks ", border);
+			else if (y - 1 < static_cast<int>(lines_.size())) {
+				std::string textLine = lines_[static_cast<std::size_t>(y - 1)];
+				if (textLine.size() > static_cast<std::size_t>(std::max(0, size.x - 3)))
+					textLine.resize(static_cast<std::size_t>(std::max(0, size.x - 4)));
+				for (i = 0; i < textLine.size(); ++i)
+					if (static_cast<unsigned char>(textLine[i]) < 32)
+						textLine[i] = ' ';
+				b.moveStr(2, textLine.c_str(), text);
+			}
+
+			writeBuf(0, y, size.x, 1, b);
+		}
+	}
+
+	virtual TPalette &getPalette() const override {
+		static const TColorAttr paletteData[] = {0x1F, 0x1E};
+		static TPalette palette(paletteData, 2);
+		return palette;
+	}
+
+  private:
+	std::vector<std::string> lines_;
+};
+
 class TMRIndicator : public TIndicator {
   public:
+	enum class NoticeKind : unsigned char {
+		Info,
+		Success,
+		Warning,
+		Error
+	};
+
+	using TaskOverviewProvider = std::function<std::vector<std::string>()>;
+
 	TMRIndicator(const TRect &bounds) noexcept
 	    : TIndicator(bounds), readOnly_(false), displayColumn_(0), displayLine_(0),
 	      taskCount_(0), taskDisplayCount_(0), indicatorId_(allocateIndicatorId()), blinkGeneration_(0),
 	      taskBlinkGeneration_(0), readOnlyBlinkActive_(false), readOnlyBlinkVisible_(false),
-	      taskBlinkActive_(false), taskBlinkVisible_(false), readOnlyBlinkUntil_(), taskBlinkUntil_() {
+	      taskBlinkActive_(false), taskBlinkVisible_(false), statusNoticeGeneration_(0),
+	      statusNoticeActive_(false), statusNoticeText_(), statusNoticeKind_(NoticeKind::Info),
+	      taskOverviewProvider_(), taskOverviewPopup_(nullptr), readOnlyBlinkUntil_(), taskBlinkUntil_() {
 		registerIndicator(this);
 	}
 
 	virtual ~TMRIndicator() override {
+		hideTaskOverview();
 		cancelReadOnlyBlinkChain(false);
 		cancelTaskBlinkChain(false);
 		unregisterIndicator(indicatorId_);
@@ -38,9 +114,10 @@ class TMRIndicator : public TIndicator {
 		char frame;
 		TDrawBuffer b;
 		char cursorText[32];
-		char taskCountText[16];
 		int cursorX;
 		int cursorMinX;
+		int noticeStartX;
+		int noticeEndX;
 
 		if ((state & sfDragging) == 0) {
 			color = getColor(1);
@@ -51,17 +128,18 @@ class TMRIndicator : public TIndicator {
 		}
 
 		b.moveChar(0, frame, color, size.x);
-			if (modified)
-				b.moveStr(0, "✎", color, 2);
-		if (readOnly_ && (!readOnlyBlinkActive_ || readOnlyBlinkVisible_))
-			b.moveStr(2, "🔒", color, 2);
-		drawTaskMarkers(b, color, taskCountText);
+		noticeStartX = 1;
+		noticeEndX = noticeStartX;
+		if (statusNoticeActive_) {
+			drawStatusNotice(b, noticeStartX, color);
+			noticeEndX = noticeStartX + static_cast<int>(statusNoticeText_.size()) + 1;
+		}
 
 		std::snprintf(cursorText, sizeof(cursorText), " %lu:%lu ", displayLine_ + 1UL, displayColumn_ + 1UL);
 		cursorX = static_cast<int>(size.x) - static_cast<int>(std::strlen(cursorText));
-		cursorMinX = taskMarkerEndColumn();
-		if (cursorMinX < 12)
-			cursorMinX = 12;
+		cursorMinX = 1;
+		if (noticeEndX > cursorMinX)
+			cursorMinX = noticeEndX;
 		if (cursorX < cursorMinX)
 			cursorX = cursorMinX;
 		b.moveStr(cursorX, cursorText, color);
@@ -76,6 +154,7 @@ class TMRIndicator : public TIndicator {
 			location.x = short(column > static_cast<unsigned long>(SHRT_MAX) ? SHRT_MAX : column);
 			location.y = short(line > static_cast<unsigned long>(SHRT_MAX) ? SHRT_MAX : line);
 			drawView();
+			redrawFrame();
 		}
 	}
 
@@ -88,6 +167,7 @@ class TMRIndicator : public TIndicator {
 			else if (!readOnly_)
 				stopReadOnlyBlink();
 			drawView();
+			redrawFrame();
 		}
 	}
 
@@ -96,16 +176,65 @@ class TMRIndicator : public TIndicator {
 			std::size_t previousDisplayedCount = taskDisplayCount_;
 			taskCount_ = taskCount;
 			if (taskCount_ == 0 && previousDisplayedCount == 0) {
+				hideTaskOverview();
 				drawView();
 				return;
 			}
 			taskDisplayCount_ = taskCount_ != 0 ? taskCount_ : previousDisplayedCount;
+			if (taskCount_ == 0)
+				hideTaskOverview();
+			else if (taskOverviewPopup_ != nullptr)
+				showTaskOverview();
 			startTaskBlink();
+			redrawFrame();
 		}
+	}
+
+	void setTaskOverviewProvider(TaskOverviewProvider provider) {
+		taskOverviewProvider_ = std::move(provider);
+	}
+
+	void updateTaskHover(TPoint globalMouse, bool forceHide = false) {
+		if (forceHide || taskCount_ == 0 || !taskOverviewProvider_) {
+			hideTaskOverview();
+			return;
+		}
+		if (!mouseInView(globalMouse)) {
+			hideTaskOverview();
+			return;
+		}
+		TPoint local = makeLocal(globalMouse);
+		if (local.y != 0 || local.x < 5 || local.x >= 7) {
+			hideTaskOverview();
+			return;
+		}
+		showTaskOverview();
+	}
+
+	void showStatusNotice(const std::string &text, NoticeKind kind,
+	                      std::chrono::milliseconds duration = std::chrono::seconds(5)) {
+		if (text.empty()) {
+			cancelStatusNotice(true);
+			return;
+		}
+		++statusNoticeGeneration_;
+		statusNoticeActive_ = true;
+		statusNoticeText_ = text;
+		statusNoticeKind_ = kind;
+		drawView();
+		scheduleStatusNoticeClear(duration);
 	}
 
 	bool isReadOnly() const {
 		return readOnly_;
+	}
+
+	bool shouldDrawReadOnlyMarker() const noexcept {
+		return readOnly_ && (!readOnlyBlinkActive_ || readOnlyBlinkVisible_);
+	}
+
+	bool shouldDrawTaskMarker() const noexcept {
+		return taskDisplayCount_ != 0 && (!taskBlinkActive_ || taskBlinkVisible_);
 	}
 
 	static bool applyBlinkUpdate(std::size_t indicatorId, mr::coprocessor::IndicatorBlinkChannel channel,
@@ -119,7 +248,7 @@ class TMRIndicator : public TIndicator {
   private:
 	static constexpr char kDragFrame = '\xCD';
 	static constexpr char kNormalFrame = '\xC4';
-		static constexpr char kTaskMarkerIcon[] = "🧠";
+	static constexpr char kTaskMarkerIcon[] = "🧠";
 	static constexpr auto kBlinkSlice = std::chrono::milliseconds(10);
 	static constexpr int kBlinkSlicesPerTick = 25;
 
@@ -156,39 +285,112 @@ class TMRIndicator : public TIndicator {
 		return it != indicatorRegistry().end() ? it->second : nullptr;
 	}
 
-	void drawTaskMarkers(TDrawBuffer &b, TColorAttr baseColor, char *taskCountText) const {
+	void redrawFrame() {
+		TWindow *window = owner != nullptr ? static_cast<TWindow *>(owner) : nullptr;
+		if (window != nullptr && window->frame != nullptr)
+			window->frame->drawView();
+	}
+
+	void drawTaskMarkers(TDrawBuffer &b, TColorAttr baseColor) const {
 		if (taskDisplayCount_ == 0 || (taskBlinkActive_ && !taskBlinkVisible_))
 			return;
-		if (taskDisplayCount_ > 10) {
-			TColorAttr markerColor = taskMarkerColor(0, baseColor);
-			std::snprintf(taskCountText, 16, "%zu", taskDisplayCount_);
-			b.moveStr(5, kTaskMarkerIcon, markerColor, 2);
-			b.moveStr(7, taskCountText, markerColor);
-			return;
-		}
-		for (std::size_t i = 0; i < taskDisplayCount_; ++i)
-			b.moveStr(static_cast<ushort>(5 + i * 2), kTaskMarkerIcon, taskMarkerColor(i, baseColor), 2);
+		b.moveStr(5, kTaskMarkerIcon, taskMarkerColor(baseColor), 2);
 	}
 
 	int taskMarkerEndColumn() const noexcept {
 		if (taskDisplayCount_ == 0 || (taskBlinkActive_ && !taskBlinkVisible_))
 			return 5;
-		if (taskDisplayCount_ > 10) {
-			char taskCountText[16];
-			std::snprintf(taskCountText, sizeof(taskCountText), "%zu", taskDisplayCount_);
-			return 8 + static_cast<int>(std::strlen(taskCountText));
-		}
-		return 6 + static_cast<int>(taskDisplayCount_ * 2);
+		return 7;
 	}
 
-	TColorAttr taskMarkerColor(std::size_t index, TColorAttr baseColor) const {
-		static const TColorRGB taskColors[] = {
-		    TColorRGB(0x4D, 0xD8, 0xFF), TColorRGB(0xFF, 0xD3, 0x4D), TColorRGB(0x7D, 0xFF, 0x7A),
-		    TColorRGB(0xFF, 0x8A, 0x65), TColorRGB(0xFF, 0x79, 0xC6), TColorRGB(0xA8, 0xFF, 0x60)};
+	TColorAttr taskMarkerColor(TColorAttr baseColor) const {
 		TColorAttr taskColor = baseColor;
-		setFore(taskColor, TColorDesired(taskColors[index % (sizeof(taskColors) / sizeof(taskColors[0]))]));
+		setFore(taskColor, TColorDesired(TColorRGB(0xFF, 0x79, 0xC6)));
 		setStyle(taskColor, getStyle(taskColor) | slBold);
 		return taskColor;
+	}
+
+	void showTaskOverview() {
+		TGroup *group = owner;
+		std::vector<std::string> lines;
+		TRect bounds;
+		int width = 14;
+		int height;
+		int left;
+		int top;
+
+		if (group == nullptr || !taskOverviewProvider_)
+			return;
+		lines = taskOverviewProvider_();
+		if (lines.empty()) {
+			hideTaskOverview();
+			return;
+		}
+		for (std::size_t i = 0; i < lines.size(); ++i)
+			if (static_cast<int>(lines[i].size()) + 4 > width)
+				width = static_cast<int>(lines[i].size()) + 4;
+		if (width > group->size.x - 2)
+			width = std::max(12, group->size.x - 2);
+		height = static_cast<int>(lines.size()) + 2;
+		if (height > group->size.y - 2)
+			height = std::max(3, group->size.y - 2);
+		left = 1;
+		top = group->size.y - 2 - height;
+		if (top < 1)
+			top = 1;
+		bounds = TRect(left, top, left + width, top + height);
+
+		if (taskOverviewPopup_ != nullptr) {
+			group->remove(taskOverviewPopup_);
+			TObject::destroy(taskOverviewPopup_);
+			taskOverviewPopup_ = nullptr;
+		}
+		taskOverviewPopup_ = new TMRTaskOverviewPopup(bounds);
+		taskOverviewPopup_->setLines(lines);
+		group->insert(taskOverviewPopup_);
+		taskOverviewPopup_->makeFirst();
+	}
+
+	void hideTaskOverview() {
+		TGroup *group = owner;
+		if (taskOverviewPopup_ == nullptr)
+			return;
+		if (group != nullptr)
+			group->remove(taskOverviewPopup_);
+		TObject::destroy(taskOverviewPopup_);
+		taskOverviewPopup_ = nullptr;
+	}
+
+	void drawStatusNotice(TDrawBuffer &b, int x, TColorAttr baseColor) const {
+		TColorAttr noticeColor = baseColor;
+		std::string text;
+
+		if (!statusNoticeActive_ || x >= size.x)
+			return;
+
+		text = " ";
+		text += statusNoticeText_;
+		text += " ";
+		setStyle(noticeColor, getStyle(noticeColor) | slBold);
+		switch (statusNoticeKind_) {
+			case NoticeKind::Success:
+				setFore(noticeColor, TColorDesired(TColorRGB(0x7D, 0xFF, 0x7A)));
+				break;
+			case NoticeKind::Warning:
+				setFore(noticeColor, TColorDesired(TColorRGB(0xFF, 0xD3, 0x4D)));
+				break;
+			case NoticeKind::Error:
+				setFore(noticeColor, TColorDesired(TColorRGB(0xFF, 0x8A, 0x65)));
+				break;
+			case NoticeKind::Info:
+			default:
+				setFore(noticeColor, TColorDesired(TColorRGB(0x4D, 0xD8, 0xFF)));
+				break;
+		}
+		if (x + static_cast<int>(text.size()) > size.x)
+			text.resize(std::max(0, size.x - x));
+		if (!text.empty())
+			b.moveStr(static_cast<ushort>(x), text.c_str(), noticeColor);
 	}
 
 	void startReadOnlyBlink() {
@@ -204,8 +406,10 @@ class TMRIndicator : public TIndicator {
 		++blinkGeneration_;
 		readOnlyBlinkActive_ = false;
 		readOnlyBlinkVisible_ = true;
-		if (redraw)
+		if (redraw) {
 			drawView();
+			redrawFrame();
+		}
 	}
 
 	void stopReadOnlyBlink() {
@@ -218,6 +422,7 @@ class TMRIndicator : public TIndicator {
 		taskBlinkVisible_ = true;
 		taskBlinkUntil_ = std::chrono::steady_clock::now() + std::chrono::seconds(3);
 		drawView();
+		redrawFrame();
 		scheduleTaskBlinkTick(false);
 	}
 
@@ -229,12 +434,52 @@ class TMRIndicator : public TIndicator {
 			taskDisplayCount_ = 0;
 		else
 			taskDisplayCount_ = taskCount_;
-		if (redraw)
+		if (redraw) {
 			drawView();
+			redrawFrame();
+		}
 	}
 
 	void stopTaskBlink() {
 		cancelTaskBlinkChain(true);
+	}
+
+	void scheduleStatusNoticeClear(std::chrono::milliseconds duration) {
+		const std::size_t generation = statusNoticeGeneration_;
+		const std::size_t indicatorId = indicatorId_;
+
+		mr::coprocessor::globalCoprocessor().submit(
+		    mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::IndicatorBlink, 0, generation,
+		    "indicator-status-notice",
+		    [indicatorId, generation, duration](const mr::coprocessor::TaskInfo &info,
+		                                        std::stop_token stopToken) {
+			    mr::coprocessor::Result result;
+			    std::chrono::milliseconds elapsed(0);
+
+			    result.task = info;
+			    while (elapsed < duration) {
+				    if (stopToken.stop_requested()) {
+					    result.status = mr::coprocessor::TaskStatus::Cancelled;
+					    return result;
+				    }
+				    std::this_thread::sleep_for(kBlinkSlice);
+				    elapsed += kBlinkSlice;
+			    }
+			    result.status = mr::coprocessor::TaskStatus::Completed;
+			    result.payload = std::make_shared<mr::coprocessor::IndicatorBlinkPayload>(
+			        indicatorId, generation, false, mr::coprocessor::IndicatorBlinkChannel::StatusNotice);
+			    return result;
+		    });
+	}
+
+	void cancelStatusNotice(bool redraw) {
+		++statusNoticeGeneration_;
+		statusNoticeActive_ = false;
+		statusNoticeText_.clear();
+		if (redraw) {
+			drawView();
+			redrawFrame();
+		}
 	}
 
 	void scheduleReadOnlyBlinkTick(bool nextVisible) {
@@ -297,7 +542,13 @@ class TMRIndicator : public TIndicator {
 				}
 				taskBlinkVisible_ = visible;
 				drawView();
+				redrawFrame();
 				scheduleTaskBlinkTick(!visible);
+				return true;
+			case mr::coprocessor::IndicatorBlinkChannel::StatusNotice:
+				if (generation != statusNoticeGeneration_ || !statusNoticeActive_)
+					return false;
+				cancelStatusNotice(true);
 				return true;
 			case mr::coprocessor::IndicatorBlinkChannel::ReadOnly:
 			default:
@@ -309,6 +560,7 @@ class TMRIndicator : public TIndicator {
 				}
 				readOnlyBlinkVisible_ = visible;
 				drawView();
+				redrawFrame();
 				scheduleReadOnlyBlinkTick(!visible);
 				return true;
 		}
@@ -326,6 +578,12 @@ class TMRIndicator : public TIndicator {
 	bool readOnlyBlinkVisible_;
 	bool taskBlinkActive_;
 	bool taskBlinkVisible_;
+	std::size_t statusNoticeGeneration_;
+	bool statusNoticeActive_;
+	std::string statusNoticeText_;
+	NoticeKind statusNoticeKind_;
+	TaskOverviewProvider taskOverviewProvider_;
+	TMRTaskOverviewPopup *taskOverviewPopup_;
 	std::chrono::steady_clock::time_point readOnlyBlinkUntil_;
 	std::chrono::steady_clock::time_point taskBlinkUntil_;
 };

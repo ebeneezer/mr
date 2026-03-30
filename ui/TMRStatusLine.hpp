@@ -1,7 +1,7 @@
 #ifndef TMRSTATUSLINE_HPP
 #define TMRSTATUSLINE_HPP
 #define Uses_TStatusLine
-#include "mrpalette.hpp"
+#include "MRPalette.hpp"
 #include <tvision/tv.h>
 
 class TMRStatusLine : public TStatusLine {

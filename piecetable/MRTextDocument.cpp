@@ -135,6 +135,18 @@ Offset piecewiseNextLine(const Doc &doc, Offset pos) noexcept {
 }
 
 template <class Doc>
+bool piecewiseAdvanceLine(const Doc &doc, Offset &offset) noexcept {
+	Offset end = piecewiseLineEnd(doc, offset);
+	if (end >= doc.length())
+		return false;
+	if (piecewiseCharAt(doc, end) == '\r' && end + 1 < doc.length() && piecewiseCharAt(doc, end + 1) == '\n')
+		offset = end + 2;
+	else
+		offset = end + 1;
+	return true;
+}
+
+template <class Doc>
 Offset piecewisePrevLine(const Doc &doc, Offset pos) noexcept {
 	Offset start = piecewiseLineStart(doc, pos);
 	if (start == 0)
@@ -767,11 +779,7 @@ void ReadSnapshot::resetLazyLineIndex() noexcept {
 bool ReadSnapshot::advanceLine(Offset &offset) const noexcept {
 	if (directAdvanceLine(offset))
 		return true;
-	Offset next = piecewiseNextLine(*this, offset);
-	if (next <= offset)
-		return false;
-	offset = next;
-	return true;
+	return piecewiseAdvanceLine(*this, offset);
 }
 
 bool ReadSnapshot::directAdvanceLine(Offset &offset) const noexcept {
@@ -1404,11 +1412,7 @@ bool TextDocument::directAdvanceLine(Offset &offset) const noexcept {
 bool TextDocument::advanceLine(Offset &offset) const noexcept {
 	if (directAdvanceLine(offset))
 		return true;
-	Offset next = piecewiseNextLine(*this, offset);
-	if (next <= offset)
-		return false;
-	offset = next;
-	return true;
+	return piecewiseAdvanceLine(*this, offset);
 }
 
 void TextDocument::ensureLazyIndexSeeded() const noexcept {

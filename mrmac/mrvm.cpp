@@ -23,6 +23,7 @@
 #include <glob.h>
 #include <limits>
 #include <map>
+#include <mutex>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -32,7 +33,8 @@
 #include <vector>
 
 #include "../ui/TMREditWindow.hpp"
-#include "../ui/mrwindowlist.hpp"
+#include "../dialogs/MRWindowListDialog.hpp"
+#include "../ui/MRWindowSupport.hpp"
 
 namespace {
 using Value = VirtualMachine::Value;
@@ -63,6 +65,7 @@ struct LoadedMacroFile {
 	std::string resolvedPath;
 	std::vector<unsigned char> bytecode;
 	std::vector<std::string> macroNames;
+	MRMacroExecutionProfile profile;
 };
 
 struct MacroStackFrame {
@@ -129,7 +132,49 @@ struct SplitTextBuffer {
 	}
 };
 
+struct BackgroundEditSession {
+	mr::editor::TextDocument document;
+	mr::editor::StagedEditTransaction transaction;
+	std::size_t cursorOffset;
+	std::size_t selectionStart;
+	std::size_t selectionEnd;
+	bool insertMode;
+	int indentLevel;
+	int pageLines;
+	std::string fileName;
+	bool fileChanged;
+	std::vector<uint> markStack;
+
+	BackgroundEditSession()
+	    : document(), transaction(), cursorOffset(0), selectionStart(0), selectionEnd(0),
+	      insertMode(true), indentLevel(1), pageLines(20), fileName(), fileChanged(false),
+	      markStack() {
+	}
+
+	bool hasSelection() const noexcept {
+		return selectionEnd > selectionStart;
+	}
+
+	void clearSelection() noexcept {
+		selectionStart = cursorOffset;
+		selectionEnd = cursorOffset;
+	}
+
+	void clampState() noexcept {
+		std::size_t length = document.length();
+		cursorOffset = std::min(cursorOffset, length);
+		selectionStart = std::min(selectionStart, length);
+		selectionEnd = std::min(selectionEnd, length);
+		if (selectionEnd < selectionStart)
+			std::swap(selectionStart, selectionEnd);
+	}
+};
+
 static RuntimeEnvironment g_runtimeEnv;
+static std::recursive_mutex g_vmExecutionMutex;
+static thread_local BackgroundEditSession *g_backgroundEditSession = NULL;
+static thread_local const std::stop_token *g_backgroundMacroStopToken = NULL;
+static thread_local std::shared_ptr<std::atomic_bool> g_backgroundMacroCancelFlag;
 
 static std::string valueAsString(const Value &value);
 static int valueAsInt(const Value &value);
@@ -172,6 +217,16 @@ static int findFirstFileMatch(const std::string &pattern);
 static int findNextFileMatch();
 static TMREditWindow *currentEditWindow();
 static TMRFileEditor *currentEditor();
+static BackgroundEditSession *currentBackgroundEditSession() noexcept;
+static bool backgroundMacroCancelRequested() noexcept;
+static bool backgroundReplaceRange(const mr::editor::Range &range, const std::string &text,
+                                   std::size_t cursorPos);
+static bool backgroundSetCursor(std::size_t target);
+static std::size_t backgroundLineMoveOffset(std::size_t offset, int delta);
+static std::size_t backgroundCharPtrOffset(std::size_t lineStart, int column);
+static bool backgroundWordChar(char c) noexcept;
+static std::size_t backgroundPrevWordOffset(std::size_t offset);
+static std::size_t backgroundNextWordOffset(std::size_t offset);
 static std::string snapshotEditorText(TMRFileEditor *editor);
 static std::size_t searchLimitForward(const std::string &text, std::size_t start, int numLines) {
 	if (numLines <= 0)
@@ -288,6 +343,149 @@ static std::string upperKey(const std::string &value) {
 	for (std::string::size_type i = 0; i < out.size(); ++i)
 		out[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(out[i])));
 	return out;
+}
+
+static void appendUniqueString(std::vector<std::string> &values, const std::string &value) {
+	if (value.empty())
+		return;
+	if (std::find(values.begin(), values.end(), value) == values.end())
+		values.push_back(value);
+}
+
+static void noteExecutionFlags(MRMacroExecutionProfile &profile, unsigned flags,
+                               const std::string &symbol = std::string()) {
+	if (flags == 0)
+		return;
+	profile.flags |= flags;
+	if (symbol.empty())
+		return;
+	if ((flags & mrefStagedWrite) != 0)
+		appendUniqueString(profile.stagedWriteSymbols, symbol);
+	if ((flags & mrefUiAffinity) != 0)
+		appendUniqueString(profile.uiAffinitySymbols, symbol);
+	if ((flags & mrefExternalIo) != 0)
+		appendUniqueString(profile.externalIoSymbols, symbol);
+}
+
+static bool skipBytecodeBytes(std::size_t length, std::size_t &ip, std::size_t count) {
+	if (count > length || ip > length - count)
+		return false;
+	ip += count;
+	return true;
+}
+
+static bool readBytecodeCString(const unsigned char *bytecode, std::size_t length, std::size_t &ip,
+                                std::string &out) {
+	std::size_t start = ip;
+	if (bytecode == NULL || ip >= length)
+		return false;
+	while (ip < length && bytecode[ip] != '\0')
+		++ip;
+	if (ip >= length)
+		return false;
+	out.assign(reinterpret_cast<const char *>(bytecode + start), ip - start);
+	++ip;
+	return true;
+}
+
+static unsigned classifyPureOpcode(unsigned char opcode) {
+	switch (opcode) {
+		case OP_PUSH_I:
+		case OP_PUSH_R:
+		case OP_PUSH_S:
+		case OP_STORE_VAR:
+		case OP_LOAD_VAR:
+		case OP_GOTO:
+		case OP_DEF_VAR:
+		case OP_JZ:
+		case OP_CALL:
+		case OP_RET:
+		case OP_VAL:
+		case OP_RVAL:
+		case OP_FIRST_GLOBAL:
+		case OP_NEXT_GLOBAL:
+		case OP_HALT:
+		case OP_ADD:
+		case OP_SUB:
+		case OP_MUL:
+		case OP_DIV:
+		case OP_MOD:
+		case OP_NEG:
+		case OP_CMP_EQ:
+		case OP_CMP_NE:
+		case OP_CMP_LT:
+		case OP_CMP_GT:
+		case OP_CMP_LE:
+		case OP_CMP_GE:
+		case OP_AND:
+		case OP_OR:
+		case OP_NOT:
+		case OP_SHL:
+		case OP_SHR:
+			return mrefBackgroundSafe;
+		default:
+			return 0;
+	}
+}
+
+static unsigned classifyIntrinsicName(const std::string &name) {
+	if (name == "FILE_EXISTS" || name == "FIRST_FILE" || name == "NEXT_FILE" ||
+	    name == "GET_ENVIRONMENT")
+		return mrefExternalIo;
+	if (name == "SEARCH_FWD" || name == "SEARCH_BWD" || name == "GET_WORD")
+		return mrefUiAffinity;
+	return mrefBackgroundSafe;
+}
+
+static unsigned classifyProcVarName(const std::string &name) {
+	if (name == "CRUNCH_TABS" || name == "EXPAND_TABS" || name == "TABS_TO_SPACES")
+		return mrefBackgroundSafe;
+	return mrefUiAffinity;
+}
+
+static unsigned classifyProcName(const std::string &name) {
+	if (name == "SET_GLOBAL_STR" || name == "SET_GLOBAL_INT" || name == "UNLOAD_MACRO")
+		return mrefBackgroundSafe;
+	if (name == "LOAD_MACRO_FILE" || name == "CHANGE_DIR" || name == "DEL_FILE")
+		return mrefExternalIo;
+	if (name == "LOAD_FILE" || name == "SAVE_FILE" || name == "SAVE_BLOCK")
+		return mrefUiAffinity | mrefExternalIo;
+	if (name == "REPLACE" || name == "TEXT" || name == "PUT_LINE" || name == "CR" ||
+	    name == "DEL_CHAR" || name == "DEL_CHARS" || name == "DEL_LINE" || name == "INDENT" ||
+	    name == "UNDENT" || name == "COPY_BLOCK" || name == "MOVE_BLOCK" ||
+	    name == "DELETE_BLOCK" || name == "ERASE_WINDOW" || name == "WINDOW_COPY" ||
+	    name == "WINDOW_MOVE")
+		return mrefUiAffinity | mrefStagedWrite;
+	if (name == "RUN_MACRO")
+		return mrefUiAffinity | mrefStagedWrite;
+	if (name == "SET_INDENT_LEVEL" || name == "LEFT" || name == "RIGHT" || name == "UP" ||
+	    name == "DOWN" || name == "HOME" || name == "EOL" || name == "TOF" || name == "EOF" ||
+	    name == "WORD_LEFT" || name == "WORD_RIGHT" || name == "FIRST_WORD" ||
+	    name == "MARK_POS" || name == "GOTO_MARK" || name == "POP_MARK" ||
+	    name == "PAGE_UP" || name == "PAGE_DOWN" || name == "NEXT_PAGE_BREAK" ||
+	    name == "LAST_PAGE_BREAK" || name == "TAB_RIGHT" || name == "TAB_LEFT" ||
+	    name == "BLOCK_BEGIN" || name == "COL_BLOCK_BEGIN" || name == "STR_BLOCK_BEGIN" ||
+	    name == "BLOCK_END" || name == "BLOCK_OFF" || name == "CREATE_WINDOW" ||
+	    name == "DELETE_WINDOW" || name == "MODIFY_WINDOW" || name == "LINK_WINDOW" ||
+	    name == "UNLINK_WINDOW" || name == "ZOOM" || name == "REDRAW" || name == "NEW_SCREEN" ||
+	    name == "GOTO_LINE" || name == "GOTO_COL" || name == "SWITCH_WINDOW" ||
+	    name == "SIZE_WINDOW")
+		return mrefUiAffinity;
+	return mrefUiAffinity;
+}
+
+static unsigned classifyTvCallName(const std::string &name) {
+	if (name == "MESSAGEBOX")
+		return mrefUiAffinity;
+	return mrefUiAffinity;
+}
+
+static void logMacroProfileLine(const char *prefix, const LoadedMacroFile &file) {
+	if (TProgram::deskTop == NULL)
+		return;
+	std::string label = !file.displayName.empty() ? file.displayName : file.resolvedPath;
+	std::string line = std::string(prefix) + " '" + label + "': " + mrvmDescribeExecutionProfile(file.profile);
+	mrLogMessage(line.c_str());
 }
 
 static Value makeInt(int value) {
@@ -822,8 +1020,19 @@ static TMRFileEditor *currentEditor() {
 
 static TMREditWindow *currentEditWindow();
 
+static BackgroundEditSession *currentBackgroundEditSession() noexcept {
+	return g_backgroundEditSession;
+}
+
+static bool backgroundMacroCancelRequested() noexcept {
+	return (g_backgroundMacroStopToken != NULL && g_backgroundMacroStopToken->stop_requested()) ||
+	       (g_backgroundMacroCancelFlag != nullptr &&
+	        g_backgroundMacroCancelFlag->load(std::memory_order_acquire));
+}
+
 static Value loadCurrentFileState(const std::string &key) {
 	TMREditWindow *win = currentEditWindow();
+	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (key == "FIRST_SAVE")
 		return makeInt(win != NULL && win->hasBeenSavedInSession() ? 1 : 0);
 	if (key == "EOF_IN_MEM")
@@ -835,9 +1044,10 @@ static Value loadCurrentFileState(const std::string &key) {
 	if (key == "TMP_FILE_NAME")
 		return makeString(win != NULL ? win->temporaryFileName() : "");
 	if (key == "FILE_CHANGED")
-		return makeInt(win != NULL && win->isFileChanged() ? 1 : 0);
+		return makeInt(win != NULL ? (win->isFileChanged() ? 1 : 0)
+		                          : (session != NULL && session->fileChanged ? 1 : 0));
 	if (key == "FILE_NAME")
-		return makeString(win != NULL ? win->currentFileName() : "");
+		return makeString(win != NULL ? win->currentFileName() : (session != NULL ? session->fileName : ""));
 	return makeInt(0);
 }
 
@@ -948,11 +1158,114 @@ static bool replaceLastSearch(TMRFileEditor *editor, const std::string &replacem
 	return true;
 }
 
+static bool backgroundReplaceRange(const mr::editor::Range &range, const std::string &text,
+                                   std::size_t cursorPos) {
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (session == NULL)
+		return false;
+	session->transaction.replace(range, text);
+	session->document.replace(range, text);
+	session->cursorOffset = std::min(cursorPos, session->document.length());
+	session->fileChanged = true;
+	session->clearSelection();
+	return true;
+}
+
+static bool backgroundSetCursor(std::size_t target) {
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (session == NULL)
+		return false;
+	session->cursorOffset = session->document.clampOffset(target);
+	session->clearSelection();
+	return true;
+}
+
+static std::size_t backgroundCharPtrOffset(std::size_t lineStart, int column) {
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	std::size_t pos;
+	std::size_t lineEnd;
+	int target;
+
+	if (session == NULL)
+		return 0;
+	pos = session->document.lineStart(lineStart);
+	lineEnd = session->document.lineEnd(pos);
+	target = std::max(column, 0);
+	while (pos < lineEnd && target > 0) {
+		++pos;
+		--target;
+	}
+	return pos;
+}
+
+static std::size_t backgroundLineMoveOffset(std::size_t offset, int delta) {
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	std::size_t targetLine;
+	std::size_t currentLine;
+	std::size_t targetLineStart;
+	int visualColumn;
+
+	if (session == NULL)
+		return 0;
+	currentLine = session->document.lineIndex(offset);
+	visualColumn = static_cast<int>(session->document.column(offset));
+	if (delta < 0) {
+		std::size_t distance = static_cast<std::size_t>(-delta);
+		targetLine = currentLine > distance ? currentLine - distance : 0;
+	} else {
+		targetLine = currentLine + static_cast<std::size_t>(delta);
+	}
+	targetLineStart = session->document.lineStartByIndex(targetLine);
+	return backgroundCharPtrOffset(targetLineStart, visualColumn);
+}
+
+static bool backgroundWordChar(char c) noexcept {
+	unsigned char uc = static_cast<unsigned char>(c);
+	return std::isalnum(uc) != 0 || c == '_';
+}
+
+static std::size_t backgroundPrevWordOffset(std::size_t offset) {
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	std::size_t pos;
+
+	if (session == NULL)
+		return 0;
+	pos = session->document.clampOffset(offset);
+	while (pos > 0 && !backgroundWordChar(session->document.charAt(pos - 1)))
+		--pos;
+	while (pos > 0 && backgroundWordChar(session->document.charAt(pos - 1)))
+		--pos;
+	return pos;
+}
+
+static std::size_t backgroundNextWordOffset(std::size_t offset) {
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	std::size_t pos;
+	std::size_t len;
+
+	if (session == NULL)
+		return 0;
+	pos = session->document.clampOffset(offset);
+	len = session->document.length();
+	while (pos < len && backgroundWordChar(session->document.charAt(pos)))
+		++pos;
+	while (pos < len && !backgroundWordChar(session->document.charAt(pos)))
+		++pos;
+	return pos;
+}
+
 static Value currentEditorCharValue() {
 	TMRFileEditor *editor = currentEditor();
 	uint lineEnd;
-	if (editor == NULL)
-		return makeChar(static_cast<char>(255));
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor == NULL) {
+		if (session == NULL)
+			return makeChar(static_cast<char>(255));
+		lineEnd = static_cast<uint>(session->document.lineEnd(session->cursorOffset));
+		if (session->cursorOffset >= session->document.length() || session->cursorOffset >= lineEnd)
+			return makeChar(static_cast<char>(255));
+		return makeChar(session->document.charAt(session->cursorOffset));
+	}
 	lineEnd = editor->lineEndOffset(editor->cursorOffset());
 	if (editor->cursorOffset() >= editor->bufferLength() || editor->cursorOffset() >= lineEnd)
 		return makeChar(static_cast<char>(255));
@@ -1069,27 +1382,46 @@ static std::string tabsToSpacesString(const std::string &value) {
 
 static int currentEditorIndentLevel() {
 	TMREditWindow *win = currentEditWindow();
-	return win != NULL ? win->indentLevel() : 1;
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (win != NULL)
+		return win->indentLevel();
+	return session != NULL ? session->indentLevel : 1;
 }
 
 static bool setCurrentEditorIndentLevel(int level) {
 	TMREditWindow *win = currentEditWindow();
-	if (win == NULL)
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (win != NULL) {
+		win->setIndentLevel(level);
+		return true;
+	}
+	if (session == NULL)
 		return false;
-	win->setIndentLevel(level);
+	if (level < 1)
+		level = 1;
+	if (level > 254)
+		level = 254;
+	session->indentLevel = level;
 	return true;
 }
 
 static bool currentEditorInsertMode() {
 	TMRFileEditor *editor = currentEditor();
-	return editor != NULL ? editor->insertModeEnabled() : true;
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	return editor != NULL ? editor->insertModeEnabled()
+	                      : (session != NULL ? session->insertMode : true);
 }
 
 static bool setCurrentEditorInsertMode(bool on) {
 	TMRFileEditor *editor = currentEditor();
-	if (editor == NULL)
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor != NULL) {
+		editor->setInsertModeEnabled(on);
+		return true;
+	}
+	if (session == NULL)
 		return false;
-	editor->setInsertModeEnabled(on);
+	session->insertMode = on;
 	return true;
 }
 
@@ -1097,8 +1429,12 @@ static std::string currentEditorLineText(TMRFileEditor *editor) {
 	std::string out;
 	uint start;
 	uint end;
-	if (editor == NULL)
-		return out;
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor == NULL) {
+		if (session == NULL)
+			return out;
+		return session->document.lineText(session->cursorOffset);
+	}
 	start = editor->lineStartOffset(editor->cursorOffset());
 	end = editor->lineEndOffset(editor->cursorOffset());
 	out.reserve(end >= start ? end - start : 0);
@@ -1111,8 +1447,24 @@ static std::string currentEditorWord(TMRFileEditor *editor, const std::string &d
 	std::string out;
 	uint pos;
 	uint end;
-	if (editor == NULL)
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor == NULL) {
+		if (session == NULL)
+			return out;
+		pos = static_cast<uint>(session->cursorOffset);
+		end = static_cast<uint>(session->document.lineEnd(session->cursorOffset));
+		while (pos < end) {
+			char c = session->document.charAt(pos);
+			if (delimiters.find(c) != std::string::npos)
+				break;
+			out.push_back(c);
+			++pos;
+		}
+		session->cursorOffset = pos;
+		session->clearSelection();
+		enforceStringLength(out);
 		return out;
+	}
 	pos = editor->cursorOffset();
 	end = editor->lineEndOffset(pos);
 	while (pos < end) {
@@ -1129,47 +1481,79 @@ static std::string currentEditorWord(TMRFileEditor *editor, const std::string &d
 }
 
 static bool insertEditorText(TMRFileEditor *editor, const std::string &text) {
-	if (editor == NULL)
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor != NULL)
+		return editor->insertBufferText(text);
+	if (session == NULL)
 		return false;
-	return editor->insertBufferText(text);
+
+	std::size_t start = session->cursorOffset;
+	std::size_t end = start;
+	if (session->hasSelection()) {
+		start = session->selectionStart;
+		end = session->selectionEnd;
+	} else if (!session->insertMode) {
+		std::size_t lineEnd = session->document.lineEnd(start);
+		end = std::min(lineEnd, start + text.size());
+	}
+	return backgroundReplaceRange(mr::editor::Range(start, end), text, start + text.size());
 }
 
 static bool replaceEditorLine(TMRFileEditor *editor, const std::string &text) {
-	if (editor == NULL)
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor != NULL)
+		return editor->replaceCurrentLineText(text);
+	if (session == NULL)
 		return false;
-	return editor->replaceCurrentLineText(text);
+	std::size_t start = session->document.lineStart(session->cursorOffset);
+	std::size_t end = session->document.lineEnd(session->cursorOffset);
+	return backgroundReplaceRange(mr::editor::Range(start, end), text, start);
 }
 
 static bool deleteEditorChars(TMRFileEditor *editor, int count) {
-	if (editor == NULL)
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor != NULL)
+		return editor->deleteCharsAtCursor(count);
+	if (session == NULL)
 		return false;
-	return editor->deleteCharsAtCursor(count);
+	if (count <= 0)
+		return true;
+	std::size_t start = session->cursorOffset;
+	std::size_t end = std::min(session->document.length(), start + static_cast<std::size_t>(count));
+	return backgroundReplaceRange(mr::editor::Range(start, end), std::string(), start);
 }
 
 static bool deleteEditorLine(TMRFileEditor *editor) {
-	if (editor == NULL)
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor != NULL)
+		return editor->deleteCurrentLineText();
+	if (session == NULL)
 		return false;
-	return editor->deleteCurrentLineText();
+	std::size_t start = session->document.lineStart(session->cursorOffset);
+	std::size_t end = session->document.nextLine(session->cursorOffset);
+	return backgroundReplaceRange(mr::editor::Range(start, end), std::string(), start);
 }
 
 static int currentEditorColumn(TMRFileEditor *editor) {
 	uint lineStart;
+	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (editor == NULL)
-		return 1;
+		return session != NULL ? static_cast<int>(session->document.column(session->cursorOffset) + 1) : 1;
 	lineStart = editor->lineStartOffset(editor->cursorOffset());
 	return editor->charColumn(lineStart, editor->cursorOffset()) + 1;
 }
 
 static int currentEditorLineNumber(TMRFileEditor *editor) {
+	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (editor == NULL)
-		return 1;
+		return session != NULL ? static_cast<int>(session->document.lineIndex(session->cursorOffset) + 1) : 1;
 	return editor->currentLineNumber();
 }
 
 static bool setEditorCursor(TMRFileEditor *editor, uint target) {
 	TMREditWindow *win;
 	if (editor == NULL)
-		return false;
+		return backgroundSetCursor(target);
 	if (target > editor->bufferLength())
 		target = editor->bufferLength();
 	editor->setCursorOffset(target, 0);
@@ -1184,8 +1568,19 @@ static bool setEditorCursor(TMRFileEditor *editor, uint target) {
 static bool moveEditorLeft(TMRFileEditor *editor) {
 	uint start;
 	uint target;
-	if (editor == NULL)
-		return false;
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor == NULL) {
+		if (session == NULL)
+			return false;
+		start = static_cast<uint>(session->document.lineStart(session->cursorOffset));
+		if (session->cursorOffset > start)
+			target = static_cast<uint>(session->cursorOffset - 1);
+		else if (start > 0)
+			target = static_cast<uint>(session->document.lineEnd(session->document.prevLine(start)));
+		else
+			target = 0;
+		return setEditorCursor(NULL, target);
+	}
 	start = editor->lineStartOffset(editor->cursorOffset());
 	if (editor->cursorOffset() > start)
 		target = editor->prevCharOffset(editor->cursorOffset());
@@ -1199,8 +1594,17 @@ static bool moveEditorLeft(TMRFileEditor *editor) {
 static bool moveEditorRight(TMRFileEditor *editor) {
 	uint lineEnd;
 	uint target;
-	if (editor == NULL)
-		return false;
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor == NULL) {
+		if (session == NULL)
+			return false;
+		lineEnd = static_cast<uint>(session->document.lineEnd(session->cursorOffset));
+		if (session->cursorOffset < lineEnd)
+			target = static_cast<uint>(std::min(session->document.length(), session->cursorOffset + 1));
+		else
+			target = static_cast<uint>(session->cursorOffset);
+		return setEditorCursor(NULL, target);
+	}
 	lineEnd = editor->lineEndOffset(editor->cursorOffset());
 	if (editor->cursorOffset() < lineEnd)
 		target = editor->nextCharOffset(editor->cursorOffset());
@@ -1210,60 +1614,93 @@ static bool moveEditorRight(TMRFileEditor *editor) {
 }
 
 static bool moveEditorUp(TMRFileEditor *editor) {
-	if (editor == NULL)
-		return false;
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor == NULL) {
+		if (session == NULL)
+			return false;
+		return setEditorCursor(NULL, static_cast<uint>(backgroundLineMoveOffset(session->cursorOffset, -1)));
+	}
 	return setEditorCursor(editor, editor->lineMoveOffset(editor->cursorOffset(), -1));
 }
 
 static bool moveEditorDown(TMRFileEditor *editor) {
-	if (editor == NULL)
-		return false;
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor == NULL) {
+		if (session == NULL)
+			return false;
+		return setEditorCursor(NULL, static_cast<uint>(backgroundLineMoveOffset(session->cursorOffset, 1)));
+	}
 	return setEditorCursor(editor, editor->lineMoveOffset(editor->cursorOffset(), 1));
 }
 
 static bool moveEditorHome(TMRFileEditor *editor) {
 	uint start;
-	if (editor == NULL)
-		return false;
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor == NULL) {
+		if (session == NULL)
+			return false;
+		start = static_cast<uint>(session->document.lineStart(session->cursorOffset));
+		return setEditorCursor(NULL,
+		                       static_cast<uint>(backgroundCharPtrOffset(start, currentEditorIndentLevel() - 1)));
+	}
 	start = editor->lineStartOffset(editor->cursorOffset());
 	return setEditorCursor(editor, editor->charPtrOffset(start, currentEditorIndentLevel() - 1));
 }
 
 static bool moveEditorEol(TMRFileEditor *editor) {
+	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (editor == NULL)
-		return false;
+		return session != NULL ? setEditorCursor(NULL, static_cast<uint>(session->document.lineEnd(session->cursorOffset)))
+		                       : false;
 	return setEditorCursor(editor, editor->lineEndOffset(editor->cursorOffset()));
 }
 
 static bool moveEditorTof(TMRFileEditor *editor) {
 	if (editor == NULL)
-		return false;
+		return currentBackgroundEditSession() != NULL ? setEditorCursor(NULL, 0) : false;
 	return setEditorCursor(editor, 0);
 }
 
 static bool moveEditorEof(TMRFileEditor *editor) {
+	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (editor == NULL)
-		return false;
+		return session != NULL ? setEditorCursor(NULL, static_cast<uint>(session->document.length())) : false;
 	return setEditorCursor(editor, editor->bufferLength());
 }
 
 static bool moveEditorWordLeft(TMRFileEditor *editor) {
+	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (editor == NULL)
-		return false;
+		return session != NULL ? setEditorCursor(NULL, static_cast<uint>(backgroundPrevWordOffset(session->cursorOffset)))
+		                       : false;
 	return setEditorCursor(editor, editor->prevWordOffset(editor->cursorOffset()));
 }
 
 static bool moveEditorWordRight(TMRFileEditor *editor) {
+	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (editor == NULL)
-		return false;
+		return session != NULL ? setEditorCursor(NULL, static_cast<uint>(backgroundNextWordOffset(session->cursorOffset)))
+		                       : false;
 	return setEditorCursor(editor, editor->nextWordOffset(editor->cursorOffset()));
 }
 
 static bool moveEditorFirstWord(TMRFileEditor *editor) {
 	uint pos;
 	uint end;
-	if (editor == NULL)
-		return false;
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor == NULL) {
+		if (session == NULL)
+			return false;
+		pos = static_cast<uint>(session->document.lineStart(session->cursorOffset));
+		end = static_cast<uint>(session->document.lineEnd(session->cursorOffset));
+		while (pos < end) {
+			char c = session->document.charAt(pos);
+			if (c != ' ' && c != '\t')
+				break;
+			++pos;
+		}
+		return setEditorCursor(NULL, pos);
+	}
 	pos = editor->lineStartOffset(editor->cursorOffset());
 	end = editor->lineEndOffset(editor->cursorOffset());
 	while (pos < end) {
@@ -1277,8 +1714,15 @@ static bool moveEditorFirstWord(TMRFileEditor *editor) {
 
 static bool gotoEditorLine(TMRFileEditor *editor, int lineNum) {
 	uint pos = 0;
-	if (editor == NULL || lineNum < 1 || lineNum > 32767)
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (lineNum < 1)
 		return false;
+	if (editor == NULL) {
+		if (session == NULL)
+			return false;
+		pos = static_cast<uint>(session->document.lineStartByIndex(static_cast<std::size_t>(lineNum - 1)));
+		return setEditorCursor(NULL, pos);
+	}
 	for (int i = 1; i < lineNum && pos < editor->bufferLength(); ++i)
 		pos = editor->nextLineOffset(pos);
 	return setEditorCursor(editor, pos);
@@ -1286,32 +1730,51 @@ static bool gotoEditorLine(TMRFileEditor *editor, int lineNum) {
 
 static bool gotoEditorCol(TMRFileEditor *editor, int colNum) {
 	uint start;
-	if (editor == NULL || colNum < 1 || colNum > 254)
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (colNum < 1)
 		return false;
+	if (editor == NULL) {
+		if (session == NULL)
+			return false;
+		start = static_cast<uint>(session->document.lineStart(session->cursorOffset));
+		return setEditorCursor(NULL, static_cast<uint>(backgroundCharPtrOffset(start, colNum - 1)));
+	}
 	start = editor->lineStartOffset(editor->cursorOffset());
 	return setEditorCursor(editor, editor->charPtrOffset(start, colNum - 1));
 }
 
 static bool currentEditorAtEof(TMRFileEditor *editor) {
-	return editor == NULL || editor->cursorOffset() >= editor->bufferLength();
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor == NULL)
+		return session == NULL || session->cursorOffset >= session->document.length();
+	return editor->cursorOffset() >= editor->bufferLength();
 }
 
 static bool currentEditorAtEol(TMRFileEditor *editor) {
 	uint lineEnd;
+	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (editor == NULL)
-		return true;
+		return session == NULL || session->cursorOffset >= session->document.lineEnd(session->cursorOffset);
 	lineEnd = editor->lineEndOffset(editor->cursorOffset());
 	return editor->cursorOffset() >= lineEnd;
 }
 
 static int currentEditorRow(TMRFileEditor *editor) {
+	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (editor == NULL)
-		return 1;
+		return session != NULL ? static_cast<int>(session->document.lineIndex(session->cursorOffset) + 1) : 1;
 	return editor->currentViewRow();
 }
 
 static bool markEditorPosition(TMREditWindow *win, TMRFileEditor *editor) {
-	if (win == NULL || editor == NULL)
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor == NULL) {
+		if (session == NULL)
+			return false;
+		session->markStack.push_back(static_cast<uint>(session->cursorOffset));
+		return true;
+	}
+	if (win == NULL)
 		return false;
 	g_runtimeEnv.markStacks[win].push_back(editor->cursorOffset());
 	return true;
@@ -1320,7 +1783,15 @@ static bool markEditorPosition(TMREditWindow *win, TMRFileEditor *editor) {
 static bool gotoEditorMark(TMREditWindow *win, TMRFileEditor *editor) {
 	std::map<const void *, std::vector<uint>>::iterator it;
 	uint pos;
-	if (win == NULL || editor == NULL)
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor == NULL) {
+		if (session == NULL || session->markStack.empty())
+			return false;
+		pos = session->markStack.back();
+		session->markStack.pop_back();
+		return setEditorCursor(NULL, pos);
+	}
+	if (win == NULL)
 		return false;
 	it = g_runtimeEnv.markStacks.find(win);
 	if (it == g_runtimeEnv.markStacks.end() || it->second.empty())
@@ -1332,8 +1803,13 @@ static bool gotoEditorMark(TMREditWindow *win, TMRFileEditor *editor) {
 
 static bool popEditorMark(TMREditWindow *win) {
 	std::map<const void *, std::vector<uint>>::iterator it;
-	if (win == NULL)
-		return false;
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (win == NULL) {
+		if (session == NULL || session->markStack.empty())
+			return false;
+		session->markStack.pop_back();
+		return true;
+	}
 	it = g_runtimeEnv.markStacks.find(win);
 	if (it == g_runtimeEnv.markStacks.end() || it->second.empty())
 		return false;
@@ -1343,16 +1819,26 @@ static bool popEditorMark(TMREditWindow *win) {
 
 static bool moveEditorPageUp(TMRFileEditor *editor) {
 	int pageLines;
-	if (editor == NULL)
-		return false;
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor == NULL) {
+		if (session == NULL)
+			return false;
+		pageLines = std::max(1, session->pageLines);
+		return setEditorCursor(NULL, static_cast<uint>(backgroundLineMoveOffset(session->cursorOffset, -pageLines)));
+	}
 	pageLines = std::max(1, editor->size.y - 1);
 	return setEditorCursor(editor, editor->lineMoveOffset(editor->cursorOffset(), -pageLines));
 }
 
 static bool moveEditorPageDown(TMRFileEditor *editor) {
 	int pageLines;
-	if (editor == NULL)
-		return false;
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor == NULL) {
+		if (session == NULL)
+			return false;
+		pageLines = std::max(1, session->pageLines);
+		return setEditorCursor(NULL, static_cast<uint>(backgroundLineMoveOffset(session->cursorOffset, pageLines)));
+	}
 	pageLines = std::max(1, editor->size.y - 1);
 	return setEditorCursor(editor, editor->lineMoveOffset(editor->cursorOffset(), pageLines));
 }
@@ -1360,8 +1846,17 @@ static bool moveEditorPageDown(TMRFileEditor *editor) {
 static bool moveEditorNextPageBreak(TMRFileEditor *editor) {
 	std::string text;
 	std::string::size_type pos;
-	if (editor == NULL)
-		return false;
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor == NULL) {
+		if (session == NULL)
+			return false;
+		pos = static_cast<std::string::size_type>(session->cursorOffset);
+		while (pos < session->document.length() && session->document.charAt(pos) != '\f')
+			++pos;
+		if (pos >= session->document.length())
+			return false;
+		return setEditorCursor(NULL, static_cast<uint>(session->document.nextLine(pos)));
+	}
 	text = snapshotEditorText(editor);
 	pos = text.find('\f', std::min<std::size_t>(editor->cursorOffset(), text.size()));
 	if (pos == std::string::npos)
@@ -1373,8 +1868,23 @@ static bool moveEditorLastPageBreak(TMRFileEditor *editor) {
 	std::string text;
 	std::string::size_type pos;
 	std::size_t start;
-	if (editor == NULL)
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor == NULL) {
+		if (session == NULL)
+			return false;
+		start = std::min<std::size_t>(session->cursorOffset, session->document.length());
+		if (start == 0)
+			return false;
+		pos = start - 1;
+		for (;;) {
+			if (session->document.charAt(pos) == '\f')
+				return setEditorCursor(NULL, static_cast<uint>(session->document.nextLine(pos)));
+			if (pos == 0)
+				break;
+			--pos;
+		}
 		return false;
+	}
 	text = snapshotEditorText(editor);
 	start = std::min<std::size_t>(editor->cursorOffset(), text.size());
 	if (start == 0)
@@ -1387,9 +1897,12 @@ static bool moveEditorLastPageBreak(TMRFileEditor *editor) {
 
 static bool replaceEditorBuffer(TMRFileEditor *editor, const std::string &text,
                                 std::size_t cursorPos) {
-	if (editor == NULL)
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor != NULL)
+		return editor->replaceWholeBuffer(text, cursorPos);
+	if (session == NULL)
 		return false;
-	return editor->replaceWholeBuffer(text, cursorPos);
+	return backgroundReplaceRange(mr::editor::Range(0, session->document.length()), text, cursorPos);
 }
 static SplitTextBuffer splitBufferLines(const std::string &text) {
 	SplitTextBuffer out;
@@ -2295,15 +2808,20 @@ static bool moveEditorTabRight(TMRFileEditor *editor) {
 	int col;
 	int targetCol;
 	uint lineStart;
-	if (editor == NULL)
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor == NULL && session == NULL)
 		return false;
 	col = currentEditorColumn(editor);
 	targetCol = nextTabStopColumn(col);
-	if (editor->insertModeEnabled()) {
+	if (currentEditorInsertMode()) {
 		if (g_runtimeEnv.tabExpand)
 			return insertEditorText(editor, std::string(1, '	'));
 		return insertEditorText(editor,
 		                        std::string(static_cast<std::size_t>(targetCol - col), ' '));
+	}
+	if (editor == NULL) {
+		lineStart = static_cast<uint>(session->document.lineStart(session->cursorOffset));
+		return setEditorCursor(NULL, static_cast<uint>(backgroundCharPtrOffset(lineStart, targetCol - 1)));
 	}
 	lineStart = editor->lineStartOffset(editor->cursorOffset());
 	return setEditorCursor(editor, editor->charPtrOffset(lineStart, targetCol - 1));
@@ -2312,8 +2830,14 @@ static bool moveEditorTabRight(TMRFileEditor *editor) {
 static bool moveEditorTabLeft(TMRFileEditor *editor) {
 	uint lineStart;
 	int targetCol;
-	if (editor == NULL)
-		return false;
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor == NULL) {
+		if (session == NULL)
+			return false;
+		lineStart = static_cast<uint>(session->document.lineStart(session->cursorOffset));
+		targetCol = prevTabStopColumn(currentEditorColumn(NULL));
+		return setEditorCursor(NULL, static_cast<uint>(backgroundCharPtrOffset(lineStart, targetCol - 1)));
+	}
 	lineStart = editor->lineStartOffset(editor->cursorOffset());
 	targetCol = prevTabStopColumn(currentEditorColumn(editor));
 	return setEditorCursor(editor, editor->charPtrOffset(lineStart, targetCol - 1));
@@ -2334,11 +2858,11 @@ static bool undentEditor(TMRFileEditor *editor) {
 static bool carriageReturnEditor(TMRFileEditor *editor) {
 	int indentLevel;
 	std::string fill;
-	if (editor == NULL)
-		return false;
 	indentLevel = currentEditorIndentLevel();
 	fill = makeIndentFill(indentLevel, g_runtimeEnv.tabExpand);
-	return editor->newLineWithIndent(fill);
+	if (editor != NULL)
+		return editor->newLineWithIndent(fill);
+	return insertEditorText(NULL, std::string("\n") + fill);
 }
 
 static std::string formatCurrentDate() {
@@ -2525,14 +3049,20 @@ static bool storeSpecialVariable(const std::string &name, const Value &value) {
 	}
 	if (key == "FILE_CHANGED") {
 		TMREditWindow *win = currentEditWindow();
+		BackgroundEditSession *session = currentBackgroundEditSession();
 		if (win != NULL)
 			win->setFileChanged(valueAsInt(value) != 0);
+		else if (session != NULL)
+			session->fileChanged = valueAsInt(value) != 0;
 		return true;
 	}
 	if (key == "FILE_NAME") {
 		TMREditWindow *win = currentEditWindow();
+		BackgroundEditSession *session = currentBackgroundEditSession();
 		if (win != NULL)
 			win->setCurrentFileName(valueAsString(value).c_str());
+		else if (session != NULL)
+			session->fileName = valueAsString(value);
 		return true;
 	}
 	if (key == "FIRST_RUN" || key == "FIRST_MACRO" || key == "NEXT_MACRO" ||
@@ -2718,6 +3248,7 @@ static bool refreshLoadedFileBytecode(const std::string &fileKey) {
 
 	fit->second.bytecode.assign(compiled, compiled + compiledSize);
 	std::free(compiled);
+	fit->second.profile = mrvmAnalyzeBytecode(fit->second.bytecode.data(), fit->second.bytecode.size());
 
 	macroCount = get_compiled_macro_count();
 	for (int i = 0; i < macroCount; ++i) {
@@ -2741,6 +3272,7 @@ static bool refreshLoadedFileBytecode(const std::string &fileKey) {
 	}
 
 	g_runtimeEnv.errorLevel = 0;
+	logMacroProfileLine("Refreshed macro file", fit->second);
 	return true;
 }
 
@@ -2765,6 +3297,12 @@ static bool evictTransientFileImage(const std::string &fileKey) {
 	fit->second.bytecode.clear();
 	fit->second.bytecode.shrink_to_fit();
 	return true;
+}
+
+static bool currentBackgroundChildMacroAllowed(const LoadedMacroFile &file) noexcept {
+	if (currentBackgroundEditSession() != NULL)
+		return mrvmCanRunInBackground(file.profile) || mrvmCanRunStagedInBackground(file.profile);
+	return false;
 }
 
 static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *loadedFileKey) {
@@ -2825,6 +3363,7 @@ static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *load
 	newFile.resolvedPath = resolvedPath;
 	newFile.bytecode.assign(compiled, compiled + compiledSize);
 	std::free(compiled);
+	newFile.profile = mrvmAnalyzeBytecode(newFile.bytecode.data(), newFile.bytecode.size());
 
 	if (existingFile != g_runtimeEnv.loadedFiles.end()) {
 		std::vector<std::string> oldNames = existingFile->second.macroNames;
@@ -2858,6 +3397,7 @@ static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *load
 
 	g_runtimeEnv.loadedFiles[fileKey] = newFile;
 	g_runtimeEnv.errorLevel = 0;
+	logMacroProfileLine("Loaded macro file", newFile);
 	if (loadedFileKey != NULL)
 		*loadedFileKey = fileKey;
 	return true;
@@ -3145,7 +3685,7 @@ static Value applyIntrinsic(const std::string &name, const std::vector<Value> &a
 		if (args.size() != 1 || !isStringLike(args[0]))
 			throw std::runtime_error("GET_WORD expects one string argument.");
 		editor = currentEditor();
-		if (editor == NULL)
+		if (editor == NULL && currentBackgroundEditSession() == NULL)
 			return makeString("");
 		return makeString(currentEditorWord(editor, valueAsString(args[0])));
 	}
@@ -3209,6 +3749,285 @@ static Value applyIntrinsic(const std::string &name, const std::vector<Value> &a
 }
 } // namespace
 
+MRMacroExecutionProfile mrvmAnalyzeBytecode(const unsigned char *bytecode, std::size_t length) {
+	MRMacroExecutionProfile profile;
+	std::size_t ip = 0;
+
+	if (bytecode == NULL || length == 0)
+		return profile;
+
+	while (ip < length) {
+		unsigned char opcode = bytecode[ip++];
+		++profile.opcodeCount;
+		noteExecutionFlags(profile, classifyPureOpcode(opcode));
+
+		switch (opcode) {
+			case OP_PUSH_I:
+				if (!skipBytecodeBytes(length, ip, sizeof(int)))
+					return profile;
+				break;
+			case OP_PUSH_R:
+				if (!skipBytecodeBytes(length, ip, sizeof(double)))
+					return profile;
+				break;
+			case OP_PUSH_S:
+			case OP_STORE_VAR:
+			case OP_LOAD_VAR:
+			case OP_DEF_VAR:
+			case OP_VAL:
+			case OP_RVAL:
+			case OP_FIRST_GLOBAL:
+			case OP_NEXT_GLOBAL: {
+				std::string ignored;
+				if (!readBytecodeCString(bytecode, length, ip, ignored))
+					return profile;
+				break;
+			}
+			case OP_GOTO:
+			case OP_CALL:
+			case OP_JZ:
+				if (!skipBytecodeBytes(length, ip, sizeof(int)))
+					return profile;
+				break;
+			case OP_INTRINSIC: {
+				std::string name;
+				if (!readBytecodeCString(bytecode, length, ip, name) ||
+				    !skipBytecodeBytes(length, ip, sizeof(unsigned char)))
+					return profile;
+				++profile.intrinsicCount;
+				name = upperKey(name);
+				noteExecutionFlags(profile, classifyIntrinsicName(name), name);
+				break;
+			}
+			case OP_PROC_VAR: {
+				std::string name;
+				std::string variableName;
+				if (!readBytecodeCString(bytecode, length, ip, name) ||
+				    !readBytecodeCString(bytecode, length, ip, variableName))
+					return profile;
+				++profile.procVarCount;
+				name = upperKey(name);
+				noteExecutionFlags(profile, classifyProcVarName(name), name);
+				break;
+			}
+			case OP_PROC: {
+				std::string name;
+				if (!readBytecodeCString(bytecode, length, ip, name) ||
+				    !skipBytecodeBytes(length, ip, sizeof(unsigned char)))
+					return profile;
+				++profile.procCount;
+				name = upperKey(name);
+				noteExecutionFlags(profile, classifyProcName(name), name);
+				break;
+			}
+			case OP_TVCALL: {
+				std::string name;
+				if (!readBytecodeCString(bytecode, length, ip, name) ||
+				    !skipBytecodeBytes(length, ip, sizeof(unsigned char)))
+					return profile;
+				++profile.tvCallCount;
+				name = upperKey(name);
+				noteExecutionFlags(profile, classifyTvCallName(name), name);
+				break;
+			}
+			case OP_RET:
+			case OP_HALT:
+			case OP_ADD:
+			case OP_SUB:
+			case OP_MUL:
+			case OP_DIV:
+			case OP_MOD:
+			case OP_NEG:
+			case OP_CMP_EQ:
+			case OP_CMP_NE:
+			case OP_CMP_LT:
+			case OP_CMP_GT:
+			case OP_CMP_LE:
+			case OP_CMP_GE:
+			case OP_AND:
+			case OP_OR:
+			case OP_NOT:
+			case OP_SHL:
+			case OP_SHR:
+				break;
+			default: {
+				char unknownOp[32];
+				std::snprintf(unknownOp, sizeof(unknownOp), "UNKNOWN_OPCODE_%02X", opcode);
+				noteExecutionFlags(profile, mrefUiAffinity, unknownOp);
+				return profile;
+			}
+		}
+	}
+
+	return profile;
+}
+
+std::string mrvmDescribeExecutionProfile(const MRMacroExecutionProfile &profile) {
+	std::vector<std::string> parts;
+	std::ostringstream out;
+
+	if (profile.has(mrefBackgroundSafe))
+		parts.push_back("background-safe");
+	if (profile.has(mrefStagedWrite))
+		parts.push_back("staged-write");
+	if (profile.has(mrefUiAffinity))
+		parts.push_back("ui-affin");
+	if (profile.has(mrefExternalIo))
+		parts.push_back("external-io");
+	if (parts.empty())
+		parts.push_back("unclassified");
+
+	for (std::size_t i = 0; i < parts.size(); ++i) {
+		if (i != 0)
+			out << ", ";
+		out << parts[i];
+	}
+
+	out << " [ops=" << profile.opcodeCount << ", intr=" << profile.intrinsicCount
+	    << ", proc=" << profile.procCount << ", procvar=" << profile.procVarCount
+	    << ", tv=" << profile.tvCallCount << "]";
+	return out.str();
+}
+
+bool mrvmCanRunInBackground(const MRMacroExecutionProfile &profile) noexcept {
+	return profile.has(mrefBackgroundSafe) &&
+	       !profile.has(mrefStagedWrite | mrefUiAffinity | mrefExternalIo);
+}
+
+namespace {
+bool containsOnlySupportedStagedSymbols(const std::vector<std::string> &values) noexcept {
+	static const char *const kAllowed[] = {
+	    "TEXT",       "PUT_LINE",  "CR",         "DEL_CHAR",   "DEL_CHARS",
+	    "DEL_LINE",   "GET_LINE",  "CUR_CHAR",   "GET_WORD",   "C_COL",
+	    "C_LINE",     "AT_EOF",    "AT_EOL",     "SET_INDENT_LEVEL",
+	    "LEFT",       "RIGHT",     "UP",         "DOWN",       "HOME",
+	    "EOL",        "TOF",       "EOF",        "WORD_LEFT",  "WORD_RIGHT",
+	    "FIRST_WORD", "GOTO_LINE", "GOTO_COL",   "TAB_RIGHT",  "TAB_LEFT",
+	    "INDENT",     "UNDENT",    "MARK_POS",   "GOTO_MARK",  "POP_MARK",
+	    "PAGE_UP",    "PAGE_DOWN", "NEXT_PAGE_BREAK", "LAST_PAGE_BREAK",
+	    "RUN_MACRO"};
+
+	for (std::size_t i = 0; i < values.size(); ++i) {
+		bool allowed = false;
+		for (const char *symbol : kAllowed)
+			if (values[i] == symbol) {
+				allowed = true;
+				break;
+			}
+		if (!allowed)
+			return false;
+	}
+	return true;
+}
+} // namespace
+
+bool mrvmCanRunStagedInBackground(const MRMacroExecutionProfile &profile) noexcept {
+	if (profile.has(mrefExternalIo))
+		return false;
+	if (!profile.has(mrefStagedWrite | mrefUiAffinity))
+		return false;
+	if (!containsOnlySupportedStagedSymbols(profile.stagedWriteSymbols))
+		return false;
+	if (!containsOnlySupportedStagedSymbols(profile.uiAffinitySymbols))
+		return false;
+	return true;
+}
+
+MRMacroJobResult mrvmRunBytecodeBackground(const unsigned char *bytecode, std::size_t length,
+                                           std::stop_token stopToken,
+                                           std::shared_ptr<std::atomic_bool> cancelFlag) {
+	MRMacroJobResult result;
+	VirtualMachine vm;
+	struct CancelGuard {
+		const std::stop_token *savedToken;
+		std::shared_ptr<std::atomic_bool> savedFlag;
+
+		CancelGuard(const std::stop_token *token, std::shared_ptr<std::atomic_bool> flag)
+		    : savedToken(g_backgroundMacroStopToken), savedFlag(g_backgroundMacroCancelFlag) {
+			g_backgroundMacroStopToken = token;
+			g_backgroundMacroCancelFlag = std::move(flag);
+		}
+
+		~CancelGuard() {
+			g_backgroundMacroStopToken = savedToken;
+			g_backgroundMacroCancelFlag = savedFlag;
+		}
+	} cancelGuard(&stopToken, std::move(cancelFlag));
+
+	vm.execute(bytecode, length);
+	result.logLines = vm.log;
+	result.cancelled = vm.wasCancelled();
+	for (std::size_t i = 0; i < result.logLines.size(); ++i) {
+		if (result.logLines[i].rfind("VM Error:", 0) == 0) {
+			result.hadError = true;
+			break;
+		}
+	}
+	return result;
+}
+
+MRMacroStagedJobResult mrvmRunBytecodeStagedBackground(const unsigned char *bytecode,
+                                                       std::size_t length,
+                                                       const MRMacroStagedExecutionInput &input,
+                                                       std::stop_token stopToken,
+                                                       std::shared_ptr<std::atomic_bool> cancelFlag) {
+	MRMacroStagedJobResult result;
+	VirtualMachine vm;
+	BackgroundEditSession session;
+	struct SessionGuard {
+		BackgroundEditSession *previous;
+		const std::stop_token *savedToken;
+		std::shared_ptr<std::atomic_bool> savedFlag;
+
+		SessionGuard(BackgroundEditSession *next, const std::stop_token *token,
+		             std::shared_ptr<std::atomic_bool> flag) noexcept
+		    : previous(g_backgroundEditSession), savedToken(g_backgroundMacroStopToken),
+		      savedFlag(g_backgroundMacroCancelFlag) {
+			g_backgroundEditSession = next;
+			g_backgroundMacroStopToken = token;
+			g_backgroundMacroCancelFlag = std::move(flag);
+		}
+
+		~SessionGuard() {
+			g_backgroundEditSession = previous;
+			g_backgroundMacroStopToken = savedToken;
+			g_backgroundMacroCancelFlag = savedFlag;
+		}
+	};
+
+	session.document = input.document;
+	session.transaction = mr::editor::StagedEditTransaction(input.baseVersion, "macro-staged-write");
+	session.cursorOffset = input.cursorOffset;
+	session.selectionStart = input.selectionStart;
+	session.selectionEnd = input.selectionEnd;
+	session.insertMode = input.insertMode;
+	session.indentLevel = input.indentLevel;
+	session.pageLines = std::max(1, input.pageLines);
+	session.fileName = input.fileName;
+	session.fileChanged = input.fileChanged;
+	session.clampState();
+	SessionGuard sessionGuard(&session, &stopToken, std::move(cancelFlag));
+	vm.execute(bytecode, length);
+
+	result.logLines = vm.log;
+	result.cancelled = vm.wasCancelled();
+	for (std::size_t i = 0; i < result.logLines.size(); ++i) {
+		if (result.logLines[i].rfind("VM Error:", 0) == 0) {
+			result.hadError = true;
+			break;
+		}
+	}
+	result.transaction = session.transaction;
+	result.cursorOffset = session.cursorOffset;
+	result.selectionStart = session.selectionStart;
+	result.selectionEnd = session.selectionEnd;
+	result.insertMode = session.insertMode;
+	result.indentLevel = session.indentLevel;
+	result.fileName = session.fileName;
+	result.fileChanged = session.fileChanged;
+	return result;
+}
+
 void mrvmSetProcessContext(int argc, char **argv) {
 	g_runtimeEnv.startupCommand.clear();
 	g_runtimeEnv.processArgs.clear();
@@ -3227,7 +4046,7 @@ void mrvmSetProcessContext(int argc, char **argv) {
 VirtualMachine::Value::Value() : type(TYPE_INT), i(0), r(0.0), s(), c(0) {
 }
 
-VirtualMachine::VirtualMachine() {
+VirtualMachine::VirtualMachine() : cancelledExecution(false) {
 }
 
 void VirtualMachine::push(const Value &value) {
@@ -3252,6 +4071,7 @@ void VirtualMachine::execute(const unsigned char *bytecode, size_t length) {
 void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, size_t entryOffset,
                                const std::string &parameterString, const std::string &macroName,
                                bool resetState, bool firstRun) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
 	size_t ip = entryOffset;
 	std::vector<size_t> call_stack;
 	std::string savedParameterString = g_runtimeEnv.parameterString;
@@ -3259,6 +4079,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 
 	variables.clear();
 	stack.clear();
+	cancelledExecution = false;
 	if (resetState) {
 		log.clear();
 		g_runtimeEnv.globalEnumIndex = 0;
@@ -3302,6 +4123,12 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 
 	try {
 		while (ip < length) {
+			if (backgroundMacroCancelRequested()) {
+				cancelledExecution = true;
+				log.push_back("VM Notice: Background macro cancelled.");
+				g_runtimeEnv.errorLevel = 5007;
+				break;
+			}
 			unsigned char opcode = bytecode[ip++];
 
 			if (opcode == OP_PUSH_I) {
@@ -3672,7 +4499,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					if (args.size() != 1 || !isStringLike(args[0]))
 						throw std::runtime_error("TEXT expects one string argument.");
 					editor = currentEditor();
-					if (editor == NULL) {
+					if (editor == NULL && currentBackgroundEditSession() == NULL) {
 						g_runtimeEnv.errorLevel = 1001;
 						continue;
 					}
@@ -3683,7 +4510,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					if (args.size() != 1 || !isStringLike(args[0]))
 						throw std::runtime_error("PUT_LINE expects one string argument.");
 					editor = currentEditor();
-					if (editor == NULL) {
+					if (editor == NULL && currentBackgroundEditSession() == NULL) {
 						g_runtimeEnv.errorLevel = 1001;
 						continue;
 					}
@@ -3693,7 +4520,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					TMRFileEditor *editor = currentEditor();
 					if (!args.empty())
 						throw std::runtime_error("CR expects no arguments.");
-					if (editor == NULL) {
+					if (editor == NULL && currentBackgroundEditSession() == NULL) {
 						g_runtimeEnv.errorLevel = 1001;
 						continue;
 					}
@@ -3703,7 +4530,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					TMRFileEditor *editor = currentEditor();
 					if (!args.empty())
 						throw std::runtime_error("DEL_CHAR expects no arguments.");
-					if (editor == NULL) {
+					if (editor == NULL && currentBackgroundEditSession() == NULL) {
 						g_runtimeEnv.errorLevel = 1001;
 						continue;
 					}
@@ -3713,7 +4540,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					TMRFileEditor *editor = currentEditor();
 					if (args.size() != 1 || args[0].type != TYPE_INT)
 						throw std::runtime_error("DEL_CHARS expects one integer argument.");
-					if (editor == NULL) {
+					if (editor == NULL && currentBackgroundEditSession() == NULL) {
 						g_runtimeEnv.errorLevel = 1001;
 						continue;
 					}
@@ -3723,7 +4550,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					TMRFileEditor *editor = currentEditor();
 					if (!args.empty())
 						throw std::runtime_error("DEL_LINE expects no arguments.");
-					if (editor == NULL) {
+					if (editor == NULL && currentBackgroundEditSession() == NULL) {
 						g_runtimeEnv.errorLevel = 1001;
 						continue;
 					}
@@ -3747,7 +4574,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					bool ok = false;
 					if (!args.empty())
 						throw std::runtime_error((name + " expects no arguments.").c_str());
-					if (editor == NULL && name != "CREATE_WINDOW") {
+					if (editor == NULL && currentBackgroundEditSession() == NULL && name != "CREATE_WINDOW") {
 						g_runtimeEnv.errorLevel = 1001;
 						continue;
 					}
@@ -3839,7 +4666,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					TMRFileEditor *editor = currentEditor();
 					if (args.size() != 1 || args[0].type != TYPE_INT)
 						throw std::runtime_error("GOTO_LINE expects one integer argument.");
-					if (editor == NULL) {
+					if (editor == NULL && currentBackgroundEditSession() == NULL) {
 						g_runtimeEnv.errorLevel = 1001;
 						continue;
 					}
@@ -3849,7 +4676,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					TMRFileEditor *editor = currentEditor();
 					if (args.size() != 1 || args[0].type != TYPE_INT)
 						throw std::runtime_error("GOTO_COL expects one integer argument.");
-					if (editor == NULL) {
+					if (editor == NULL && currentBackgroundEditSession() == NULL) {
 						g_runtimeEnv.errorLevel = 1001;
 						continue;
 					}
@@ -3901,6 +4728,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					std::map<std::string, MacroRef>::iterator mit;
 					std::map<std::string, LoadedMacroFile>::iterator fit;
 					VirtualMachine childVm;
+					bool backgroundStaged = currentBackgroundEditSession() != NULL;
 
 					if (args.size() != 1 || !isStringLike(args[0]))
 						throw std::runtime_error("RUN_MACRO expects one string argument.");
@@ -3918,6 +4746,10 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					mit = g_runtimeEnv.loadedMacros.find(macroKey);
 					if (mit == g_runtimeEnv.loadedMacros.end() ||
 					    (!targetFileKey.empty() && mit->second.fileKey != targetFileKey)) {
+						if (backgroundStaged) {
+							g_runtimeEnv.errorLevel = 5001;
+							continue;
+						}
 						if (!filePart.empty()) {
 							if (!loadMacroFileIntoRegistry(filePart, &targetFileKey))
 								continue;
@@ -3939,7 +4771,12 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						g_runtimeEnv.errorLevel = 5001;
 						continue;
 					}
-					if (!ensureLoadedFileResident(mit->second.fileKey))
+					if (backgroundStaged) {
+						if (fit->second.bytecode.empty() || !currentBackgroundChildMacroAllowed(fit->second)) {
+							g_runtimeEnv.errorLevel = 5001;
+							continue;
+						}
+					} else if (!ensureLoadedFileResident(mit->second.fileKey))
 						continue;
 					fit = g_runtimeEnv.loadedFiles.find(mit->second.fileKey);
 					if (fit == g_runtimeEnv.loadedFiles.end() || fit->second.bytecode.empty()) {

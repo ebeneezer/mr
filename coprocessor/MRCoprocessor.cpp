@@ -1,10 +1,21 @@
 #include "MRCoprocessor.hpp"
 
+#include <chrono>
 #include <exception>
 #include <utility>
 
 namespace mr {
 namespace coprocessor {
+namespace {
+
+std::uint64_t nowMicros() noexcept {
+	return static_cast<std::uint64_t>(
+	    std::chrono::duration_cast<std::chrono::microseconds>(
+	        std::chrono::steady_clock::now().time_since_epoch())
+	        .count());
+}
+
+} // namespace
 
 Coprocessor::Coprocessor()
     : resultMutex_(), results_(), handlerMutex_(), resultHandler_(), nextTaskId_(1), nextTaskMutex_(),
@@ -45,6 +56,7 @@ std::uint64_t Coprocessor::submit(Lane lane, TaskKind kind, std::size_t document
 	request.task.baseVersion = baseVersion;
 	request.task.label = label;
 	request.fn = std::move(fn);
+	request.submittedMicros = nowMicros();
 
 	{
 		std::lock_guard<std::mutex> lock(taskCancelMutex_);
@@ -176,6 +188,8 @@ void Coprocessor::workerLoop(LaneState &lane, std::stop_token stopToken) {
 	for (;;) {
 		Request request;
 		Result result;
+		std::uint64_t startedMicros = 0;
+		std::uint64_t finishedMicros = 0;
 
 		{
 			std::unique_lock<std::mutex> lock(lane.mutex);
@@ -188,6 +202,7 @@ void Coprocessor::workerLoop(LaneState &lane, std::stop_token stopToken) {
 			lane.queue.pop_front();
 		}
 
+		startedMicros = nowMicros();
 		result.task = request.task;
 		try {
 			if (stopToken.stop_requested() || request.task.cancelRequested()) {
@@ -209,6 +224,13 @@ void Coprocessor::workerLoop(LaneState &lane, std::stop_token stopToken) {
 			result.status = TaskStatus::Failed;
 			result.error = "Unknown coprocessor failure.";
 		}
+		finishedMicros = nowMicros();
+		if (startedMicros >= request.submittedMicros)
+			result.timing.queueMicros = startedMicros - request.submittedMicros;
+		if (finishedMicros >= startedMicros)
+			result.timing.runMicros = finishedMicros - startedMicros;
+		if (finishedMicros >= request.submittedMicros)
+			result.timing.totalMicros = finishedMicros - request.submittedMicros;
 
 		forgetTask(request.task.id);
 		enqueueResult(std::move(result));

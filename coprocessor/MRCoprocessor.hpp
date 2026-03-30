@@ -69,7 +69,8 @@ class Payload {
 
 enum class IndicatorBlinkChannel : unsigned char {
 	ReadOnly,
-	TaskMarker
+	TaskMarker,
+	StatusNotice
 };
 
 struct IndicatorBlinkPayload final : Payload {
@@ -149,13 +150,77 @@ struct ExternalIoFinishedPayload final : Payload {
 	}
 };
 
+struct MacroJobFinishedPayload final : Payload {
+	std::string displayName;
+	std::vector<std::string> logLines;
+	bool hadError;
+
+	MacroJobFinishedPayload() noexcept : displayName(), logLines(), hadError(false) {
+	}
+
+	MacroJobFinishedPayload(std::string aDisplayName, std::vector<std::string> aLogLines, bool aHadError)
+	    : displayName(std::move(aDisplayName)), logLines(std::move(aLogLines)), hadError(aHadError) {
+	}
+};
+
+struct MacroJobStagedPayload final : Payload {
+	std::string displayName;
+	std::vector<std::string> logLines;
+	bool hadError;
+	mr::editor::StagedEditTransaction transaction;
+	std::size_t cursorOffset;
+	std::size_t selectionStart;
+	std::size_t selectionEnd;
+	bool insertMode;
+	int indentLevel;
+	std::string fileName;
+	bool fileChanged;
+
+	MacroJobStagedPayload() noexcept
+	    : displayName(), logLines(), hadError(false), transaction(), cursorOffset(0), selectionStart(0),
+	      selectionEnd(0), insertMode(true), indentLevel(1), fileName(), fileChanged(false) {
+	}
+
+	MacroJobStagedPayload(std::string aDisplayName, std::vector<std::string> aLogLines, bool aHadError,
+	                      mr::editor::StagedEditTransaction aTransaction, std::size_t aCursorOffset,
+	                      std::size_t aSelectionStart, std::size_t aSelectionEnd, bool aInsertMode,
+	                      int anIndentLevel, std::string aFileName, bool aFileChanged)
+	    : displayName(std::move(aDisplayName)), logLines(std::move(aLogLines)), hadError(aHadError),
+	      transaction(std::move(aTransaction)), cursorOffset(aCursorOffset),
+	      selectionStart(aSelectionStart), selectionEnd(aSelectionEnd), insertMode(aInsertMode),
+	      indentLevel(anIndentLevel), fileName(std::move(aFileName)), fileChanged(aFileChanged) {
+	}
+};
+
+struct TaskTiming {
+	std::uint64_t queueMicros;
+	std::uint64_t runMicros;
+	std::uint64_t totalMicros;
+
+	TaskTiming() noexcept : queueMicros(0), runMicros(0), totalMicros(0) {
+	}
+
+	double queueMs() const noexcept {
+		return static_cast<double>(queueMicros) / 1000.0;
+	}
+
+	double runMs() const noexcept {
+		return static_cast<double>(runMicros) / 1000.0;
+	}
+
+	double totalMs() const noexcept {
+		return static_cast<double>(totalMicros) / 1000.0;
+	}
+};
+
 struct Result {
 	TaskInfo task;
 	TaskStatus status;
 	std::string error;
 	std::shared_ptr<const Payload> payload;
+	TaskTiming timing;
 
-	Result() noexcept : task(), status(TaskStatus::Completed), error(), payload() {
+	Result() noexcept : task(), status(TaskStatus::Completed), error(), payload(), timing() {
 	}
 
 	bool completed() const noexcept {
@@ -196,6 +261,7 @@ class Coprocessor {
 	struct Request {
 		TaskInfo task;
 		TaskFn fn;
+		std::uint64_t submittedMicros;
 	};
 
 	struct LaneState {

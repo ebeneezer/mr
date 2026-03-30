@@ -1,0 +1,10 @@
+$MACRO BackgroundSpin;
+DEF_INT(I, LIMIT, ACC);
+I := 0;
+LIMIT := 250000000;
+ACC := 0;
+WHILE I < LIMIT DO
+    ACC := ACC + 1;
+    I := I + 1;
+END;
+END_MACRO;
