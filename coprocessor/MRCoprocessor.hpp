@@ -12,8 +12,12 @@
 #include <string>
 #include <thread>
 #include <atomic>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "MRTextDocument.hpp"
+#include "TMRSyntax.hpp"
 
 namespace mr {
 namespace coprocessor {
@@ -46,9 +50,15 @@ struct TaskInfo {
 	std::size_t documentId;
 	std::size_t baseVersion;
 	std::string label;
+	std::shared_ptr<std::atomic_bool> cancelFlag;
 
 	TaskInfo() noexcept
-	    : id(0), lane(Lane::Compute), kind(TaskKind::Custom), documentId(0), baseVersion(0), label() {
+	    : id(0), lane(Lane::Compute), kind(TaskKind::Custom), documentId(0), baseVersion(0), label(),
+	      cancelFlag() {
+	}
+
+	bool cancelRequested() const noexcept {
+		return cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire);
 	}
 };
 
@@ -57,16 +67,24 @@ class Payload {
 	virtual ~Payload() = default;
 };
 
+enum class IndicatorBlinkChannel : unsigned char {
+	ReadOnly,
+	TaskMarker
+};
+
 struct IndicatorBlinkPayload final : Payload {
 	std::size_t indicatorId;
 	std::size_t generation;
 	bool visible;
+	IndicatorBlinkChannel channel;
 
-	IndicatorBlinkPayload() noexcept : indicatorId(0), generation(0), visible(true) {
+	IndicatorBlinkPayload() noexcept
+	    : indicatorId(0), generation(0), visible(true), channel(IndicatorBlinkChannel::ReadOnly) {
 	}
 
-	IndicatorBlinkPayload(std::size_t aIndicatorId, std::size_t aGeneration, bool aVisible) noexcept
-	    : indicatorId(aIndicatorId), generation(aGeneration), visible(aVisible) {
+	IndicatorBlinkPayload(std::size_t aIndicatorId, std::size_t aGeneration, bool aVisible,
+	                      IndicatorBlinkChannel aChannel = IndicatorBlinkChannel::ReadOnly) noexcept
+	    : indicatorId(aIndicatorId), generation(aGeneration), visible(aVisible), channel(aChannel) {
 	}
 };
 
@@ -77,6 +95,57 @@ struct LineIndexWarmupPayload final : Payload {
 	}
 
 	explicit LineIndexWarmupPayload(const mr::editor::LineIndexWarmupData &aWarmup) : warmup(aWarmup) {
+	}
+};
+
+struct SyntaxWarmLine {
+	std::size_t lineStart;
+	TMRSyntaxTokenMap tokens;
+
+	SyntaxWarmLine() noexcept : lineStart(0), tokens() {
+	}
+
+	SyntaxWarmLine(std::size_t aLineStart, TMRSyntaxTokenMap aTokens)
+	    : lineStart(aLineStart), tokens(std::move(aTokens)) {
+	}
+};
+
+struct SyntaxWarmupPayload final : Payload {
+	TMRSyntaxLanguage language;
+	std::vector<SyntaxWarmLine> lines;
+
+	SyntaxWarmupPayload() noexcept : language(TMRSyntaxLanguage::PlainText), lines() {
+	}
+
+	SyntaxWarmupPayload(TMRSyntaxLanguage aLanguage, std::vector<SyntaxWarmLine> aLines)
+	    : language(aLanguage), lines(std::move(aLines)) {
+	}
+};
+
+struct ExternalIoChunkPayload final : Payload {
+	std::size_t channelId;
+	std::string text;
+
+	ExternalIoChunkPayload() noexcept : channelId(0), text() {
+	}
+
+	ExternalIoChunkPayload(std::size_t aChannelId, std::string aText)
+	    : channelId(aChannelId), text(std::move(aText)) {
+	}
+};
+
+struct ExternalIoFinishedPayload final : Payload {
+	std::size_t channelId;
+	int exitCode;
+	bool signaled;
+	int signalNumber;
+
+	ExternalIoFinishedPayload() noexcept : channelId(0), exitCode(0), signaled(false), signalNumber(0) {
+	}
+
+	ExternalIoFinishedPayload(std::size_t aChannelId, int aExitCode, bool aSignaled,
+	                          int aSignalNumber) noexcept
+	    : channelId(aChannelId), exitCode(aExitCode), signaled(aSignaled), signalNumber(aSignalNumber) {
 	}
 };
 
@@ -118,6 +187,8 @@ class Coprocessor {
 	                     const std::string &label, TaskFn fn);
 	std::size_t pump(std::size_t maxResults = 8);
 	std::size_t pendingResults() const noexcept;
+	void post(Result result);
+	bool cancelTask(std::uint64_t taskId);
 	void shutdown();
 	void cancelPending();
 
@@ -141,6 +212,7 @@ class Coprocessor {
 	void startLane(LaneState &lane);
 	void workerLoop(LaneState &lane, std::stop_token stopToken);
 	void enqueueResult(Result result);
+	void forgetTask(std::uint64_t taskId);
 	LaneState &laneState(Lane lane) noexcept;
 
 	mutable std::mutex resultMutex_;
@@ -151,6 +223,8 @@ class Coprocessor {
 
 	std::uint64_t nextTaskId_;
 	std::mutex nextTaskMutex_;
+	std::mutex taskCancelMutex_;
+	std::unordered_map<std::uint64_t, std::shared_ptr<std::atomic_bool>> taskCancelFlags_;
 	std::atomic<bool> shuttingDown_;
 
 	LaneState ioLane_;

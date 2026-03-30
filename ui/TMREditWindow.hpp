@@ -12,30 +12,45 @@
 #include <tvision/tv.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <fstream>
 #include <iterator>
 #include <string>
 #include <unistd.h>
+#include <vector>
 
 #include "TMRFrame.hpp"
 #include "TMRIndicator.hpp"
 #include "TMRTextBuffer.hpp"
 
+void mrTraceCoprocessorTaskCancel(int bufferId, std::uint64_t taskId);
+
 class TMREditWindow : public TWindow {
   public:
+	enum WindowRole {
+		wrText = 0,
+		wrFile,
+		wrCommunicationCommand,
+		wrCommunicationPipe,
+		wrCommunicationDevice,
+		wrLog,
+		wrHelp
+	};
+
 	TMREditWindow(const TRect &bounds, const char *title, int aNumber)
 	    : TWindowInit(&TMREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr),
 	      hScrollBar(nullptr), indicator(nullptr), editor(nullptr), bufferId_(allocateBufferId()),
 	      firstSaveDone_(false), temporaryFileUsed_(false), temporaryFileName_(), indentLevel_(1),
-	      blockMode_(bmNone), blockMarkingOn_(false), blockAnchor_(0), blockEnd_(0) {
+	      blockMode_(bmNone), blockMarkingOn_(false), blockAnchor_(0), blockEnd_(0),
+	      trackedCoprocessorTasks_(), windowRole_(wrText), windowRoleDetail_() {
 		options |= ofTileable;
 
 		std::strncpy(displayTitle, (title != nullptr && *title != '\0') ? title : "Untitled",
 		             sizeof(displayTitle) - 1);
 		displayTitle[sizeof(displayTitle) - 1] = '\0';
 
-		hScrollBar = new TScrollBar(TRect(18, size.y - 1, size.x - 2, size.y));
+		hScrollBar = new TScrollBar(TRect(39, size.y - 1, size.x - 2, size.y));
 		hScrollBar->hide();
 		insert(hScrollBar);
 
@@ -43,7 +58,7 @@ class TMREditWindow : public TWindow {
 		vScrollBar->hide();
 		insert(vScrollBar);
 
-		indicator = new TMRIndicator(TRect(2, size.y - 1, 16, size.y));
+		indicator = new TMRIndicator(TRect(2, size.y - 1, 38, size.y));
 		indicator->hide();
 		insert(indicator);
 
@@ -53,6 +68,10 @@ class TMREditWindow : public TWindow {
 		editor = createEditor(r, "");
 		insert(editor);
 		refreshSyntaxContext();
+	}
+
+	virtual ~TMREditWindow() override {
+		cancelTrackedCoprocessorTasks();
 	}
 
 	virtual TPalette &getPalette() const override {
@@ -96,6 +115,7 @@ class TMREditWindow : public TWindow {
 		setReadOnly(isExistingPathReadOnly(editor->persistentFileName()));
 		temporaryFileUsed_ = false;
 		temporaryFileName_.clear();
+		setWindowRole(wrFile);
 		updateTitleFromEditor();
 		return true;
 	}
@@ -111,6 +131,7 @@ class TMREditWindow : public TWindow {
 		temporaryFileUsed_ = false;
 		temporaryFileName_.clear();
 		editor->clearPersistentFileName();
+		setWindowRole(wrText);
 		if (title != nullptr && *title != '\0')
 			setDisplayTitle(title);
 		else
@@ -128,6 +149,7 @@ class TMREditWindow : public TWindow {
 			firstSaveDone_ = true;
 			temporaryFileUsed_ = false;
 			temporaryFileName_.clear();
+			setWindowRole(wrFile);
 			updateTitleFromEditor();
 		}
 		return ok;
@@ -143,6 +165,7 @@ class TMREditWindow : public TWindow {
 			temporaryFileUsed_ = false;
 			temporaryFileName_.clear();
 			setReadOnly(isExistingPathReadOnly(editor->persistentFileName()));
+			setWindowRole(wrFile);
 			updateTitleFromEditor();
 		}
 		return ok;
@@ -194,6 +217,14 @@ class TMREditWindow : public TWindow {
 		return buffer().cursorColumnNumber();
 	}
 
+	std::size_t cursorOffset() const noexcept {
+		return editor != nullptr ? editor->cursorOffset() : 0;
+	}
+
+	std::size_t selectionLength() const noexcept {
+		return editor != nullptr ? editor->selectionLength() : 0;
+	}
+
 	const char *syntaxLanguageName() const {
 		return editor != nullptr ? editor->syntaxLanguageName() : "Plain Text";
 	}
@@ -239,6 +270,39 @@ class TMREditWindow : public TWindow {
 		return bufferId_;
 	}
 
+	WindowRole windowRole() const noexcept {
+		return windowRole_;
+	}
+
+	const char *windowRoleName() const noexcept {
+		switch (windowRole_) {
+			case wrFile:
+				return "File text";
+			case wrCommunicationCommand:
+				return "Communication command";
+			case wrCommunicationPipe:
+				return "Communication pipe";
+			case wrCommunicationDevice:
+				return "Communication device";
+			case wrLog:
+				return "Log window";
+			case wrHelp:
+				return "Help window";
+			case wrText:
+			default:
+				return "Text window";
+		}
+	}
+
+	void setWindowRole(WindowRole role, const std::string &detail = std::string()) {
+		windowRole_ = role;
+		windowRoleDetail_ = detail;
+	}
+
+	const std::string &windowRoleDetail() const noexcept {
+		return windowRoleDetail_;
+	}
+
 	bool isTemporaryFile() const {
 		return temporaryFileUsed_;
 	}
@@ -262,8 +326,12 @@ class TMREditWindow : public TWindow {
 
 		if (fileName == nullptr || *fileName == '\0')
 			editor->clearPersistentFileName();
-		else
+		else {
 			editor->setPersistentFileName(fileName);
+			setWindowRole(wrFile);
+		}
+		if ((fileName == nullptr || *fileName == '\0') && windowRole_ == wrFile)
+			setWindowRole(wrText);
 		updateTitleFromEditor();
 		refreshSyntaxContext();
 	}
@@ -294,6 +362,80 @@ class TMREditWindow : public TWindow {
 		displayTitle[sizeof(displayTitle) - 1] = '\0';
 		refreshSyntaxContext();
 		message(owner, evBroadcast, cmUpdateTitle, 0);
+	}
+
+	void trackCoprocessorTask(std::uint64_t taskId) {
+		if (taskId == 0)
+			return;
+		for (std::size_t i = 0; i < trackedCoprocessorTasks_.size(); ++i)
+			if (trackedCoprocessorTasks_[i] == taskId)
+				return;
+		trackedCoprocessorTasks_.push_back(taskId);
+			updateTaskMarkers();
+	}
+
+	std::size_t trackedCoprocessorTaskCount() const noexcept {
+		return trackedCoprocessorTasks_.size();
+	}
+
+	std::uint64_t trackedCoprocessorTaskId(std::size_t index) const noexcept {
+		return index < trackedCoprocessorTasks_.size() ? trackedCoprocessorTasks_[index] : 0;
+	}
+
+	std::size_t originalBufferLength() const noexcept {
+		return editor != nullptr ? editor->originalBufferLength() : 0;
+	}
+
+	std::size_t addBufferLength() const noexcept {
+		return editor != nullptr ? editor->addBufferLength() : 0;
+	}
+
+	std::size_t pieceCount() const noexcept {
+		return editor != nullptr ? editor->pieceCount() : 0;
+	}
+
+	std::size_t documentVersion() const noexcept {
+		return editor != nullptr ? editor->documentVersion() : 0;
+	}
+
+	bool hasMappedOriginalSource() const noexcept {
+		return editor != nullptr && editor->hasMappedOriginalSource();
+	}
+
+	const std::string &mappedOriginalPath() const noexcept {
+		if (editor != nullptr)
+			return editor->mappedOriginalPath();
+		return emptyString();
+	}
+
+	std::size_t estimatedLineCount() const noexcept {
+		return editor != nullptr ? editor->estimatedLineCount() : 1;
+	}
+
+	bool exactLineCountKnown() const noexcept {
+		return editor != nullptr && editor->exactLineCountKnown();
+	}
+
+	std::uint64_t pendingLineIndexWarmupTaskId() const noexcept {
+		return editor != nullptr ? editor->pendingLineIndexWarmupTaskId() : 0;
+	}
+
+	std::uint64_t pendingSyntaxWarmupTaskId() const noexcept {
+		return editor != nullptr ? editor->pendingSyntaxWarmupTaskId() : 0;
+	}
+
+	bool usesApproximateMetrics() const noexcept {
+		return editor != nullptr && editor->usesApproximateMetrics();
+	}
+
+	void releaseCoprocessorTask(std::uint64_t taskId) {
+		for (std::vector<std::uint64_t>::iterator it = trackedCoprocessorTasks_.begin();
+		     it != trackedCoprocessorTasks_.end(); ++it)
+			if (*it == taskId) {
+				trackedCoprocessorTasks_.erase(it);
+				updateTaskMarkers();
+				return;
+			}
 	}
 
 	int indentLevel() const {
@@ -392,6 +534,11 @@ class TMREditWindow : public TWindow {
 		return nextId++;
 	}
 
+	static const std::string &emptyString() noexcept {
+		static const std::string value;
+		return value;
+	}
+
 	static TFrame *initFrame(TRect r) {
 		return new TMRFrame(r);
 	}
@@ -423,6 +570,20 @@ class TMREditWindow : public TWindow {
 	void refreshSyntaxContext() {
 		if (editor != nullptr)
 			editor->setSyntaxTitleHint(displayTitle);
+	}
+
+	void updateTaskMarkers() {
+		if (indicator != nullptr)
+			indicator->setTaskCount(trackedCoprocessorTasks_.size());
+	}
+
+	void cancelTrackedCoprocessorTasks() {
+		for (std::size_t i = 0; i < trackedCoprocessorTasks_.size(); ++i) {
+			mrTraceCoprocessorTaskCancel(bufferId_, trackedCoprocessorTasks_[i]);
+			mr::coprocessor::globalCoprocessor().cancelTask(trackedCoprocessorTasks_[i]);
+		}
+		trackedCoprocessorTasks_.clear();
+		updateTaskMarkers();
 	}
 
 	void beginBlock(BlockMode mode) {
@@ -549,6 +710,9 @@ class TMREditWindow : public TWindow {
 	bool blockMarkingOn_;
 	uint blockAnchor_;
 	uint blockEnd_;
+	std::vector<std::uint64_t> trackedCoprocessorTasks_;
+	WindowRole windowRole_;
+	std::string windowRoleDetail_;
 	char displayTitle[MAXPATH];
 };
 

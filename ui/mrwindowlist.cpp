@@ -255,6 +255,7 @@ TMREditWindow *ensureLogWindow(bool activate) {
 	if (win == nullptr)
 		return nullptr;
 	win->replaceTextBuffer(g_logBuffer.c_str(), kLogWindowTitle);
+	win->setWindowRole(TMREditWindow::wrLog);
 	win->setReadOnly(true);
 	win->setFileChanged(false);
 	if (activate)
@@ -586,6 +587,12 @@ class WindowListDialog : public TDialog {
 		TMREditWindow *win = currentSelection();
 		if (win == nullptr)
 			return;
+		if ((win->state & sfVisible) == 0) {
+			/* In the window list, "Hide" acts as a visibility toggle for already hidden windows. */
+			selected = win;
+			endModal(cmOK);
+			return;
+		}
 		hideWindow(win);
 		mrEnsureUsableWorkWindow();
 		refreshEntries();
@@ -650,6 +657,7 @@ bool mrShowProjectHelp() {
 		win->setReadOnly(true);
 		win->setFileChanged(false);
 	}
+	win->setWindowRole(TMREditWindow::wrHelp, helpPath);
 	mrActivateEditWindow(win);
 	return true;
 }

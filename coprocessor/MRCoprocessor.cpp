@@ -8,7 +8,8 @@ namespace coprocessor {
 
 Coprocessor::Coprocessor()
     : resultMutex_(), results_(), handlerMutex_(), resultHandler_(), nextTaskId_(1), nextTaskMutex_(),
-      shuttingDown_(false), ioLane_(Lane::Io), computeLane_(Lane::Compute), macroLane_(Lane::Macro) {
+      taskCancelMutex_(), taskCancelFlags_(), shuttingDown_(false), ioLane_(Lane::Io),
+      computeLane_(Lane::Compute), macroLane_(Lane::Macro) {
 	startLane(ioLane_);
 	startLane(computeLane_);
 	startLane(macroLane_);
@@ -37,12 +38,18 @@ std::uint64_t Coprocessor::submit(Lane lane, TaskKind kind, std::size_t document
 		assignedId = nextTaskId_++;
 		request.task.id = assignedId;
 	}
+	request.task.cancelFlag = std::make_shared<std::atomic_bool>(false);
 	request.task.lane = lane;
 	request.task.kind = kind;
 	request.task.documentId = documentId;
 	request.task.baseVersion = baseVersion;
 	request.task.label = label;
 	request.fn = std::move(fn);
+
+	{
+		std::lock_guard<std::mutex> lock(taskCancelMutex_);
+		taskCancelFlags_[assignedId] = request.task.cancelFlag;
+	}
 
 	{
 		std::lock_guard<std::mutex> lock(target.mutex);
@@ -85,8 +92,40 @@ std::size_t Coprocessor::pendingResults() const noexcept {
 	return results_.size();
 }
 
+void Coprocessor::post(Result result) {
+	enqueueResult(std::move(result));
+}
+
+bool Coprocessor::cancelTask(std::uint64_t taskId) {
+	std::shared_ptr<std::atomic_bool> cancelFlag;
+
+	{
+		std::lock_guard<std::mutex> lock(taskCancelMutex_);
+		std::unordered_map<std::uint64_t, std::shared_ptr<std::atomic_bool>>::iterator found =
+		    taskCancelFlags_.find(taskId);
+		if (found == taskCancelFlags_.end())
+			return false;
+		cancelFlag = found->second;
+	}
+	if (cancelFlag != nullptr)
+		cancelFlag->store(true, std::memory_order_release);
+	ioLane_.cv.notify_all();
+	computeLane_.cv.notify_all();
+	macroLane_.cv.notify_all();
+	return true;
+}
+
 void Coprocessor::cancelPending() {
 	LaneState *lanes[] = {&ioLane_, &computeLane_, &macroLane_};
+
+	{
+		std::lock_guard<std::mutex> lock(taskCancelMutex_);
+		for (std::unordered_map<std::uint64_t, std::shared_ptr<std::atomic_bool>>::iterator it =
+		         taskCancelFlags_.begin();
+		     it != taskCancelFlags_.end(); ++it)
+			if (it->second != nullptr)
+				it->second->store(true, std::memory_order_release);
+	}
 
 	for (LaneState *lane : lanes) {
 		if (lane->worker.joinable())
@@ -123,6 +162,10 @@ void Coprocessor::shutdown() {
 		std::lock_guard<std::mutex> lock(handlerMutex_);
 		resultHandler_ = ResultHandler();
 	}
+	{
+		std::lock_guard<std::mutex> lock(taskCancelMutex_);
+		taskCancelFlags_.clear();
+	}
 }
 
 void Coprocessor::startLane(LaneState &lane) {
@@ -147,7 +190,7 @@ void Coprocessor::workerLoop(LaneState &lane, std::stop_token stopToken) {
 
 		result.task = request.task;
 		try {
-			if (stopToken.stop_requested()) {
+			if (stopToken.stop_requested() || request.task.cancelRequested()) {
 				result.status = TaskStatus::Cancelled;
 			} else if (request.fn) {
 				result = request.fn(request.task, stopToken);
@@ -167,6 +210,7 @@ void Coprocessor::workerLoop(LaneState &lane, std::stop_token stopToken) {
 			result.error = "Unknown coprocessor failure.";
 		}
 
+		forgetTask(request.task.id);
 		enqueueResult(std::move(result));
 	}
 }
@@ -174,6 +218,11 @@ void Coprocessor::workerLoop(LaneState &lane, std::stop_token stopToken) {
 void Coprocessor::enqueueResult(Result result) {
 	std::lock_guard<std::mutex> lock(resultMutex_);
 	results_.push_back(std::move(result));
+}
+
+void Coprocessor::forgetTask(std::uint64_t taskId) {
+	std::lock_guard<std::mutex> lock(taskCancelMutex_);
+	taskCancelFlags_.erase(taskId);
 }
 
 Coprocessor::LaneState &Coprocessor::laneState(Lane lane) noexcept {

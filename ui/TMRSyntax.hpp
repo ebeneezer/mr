@@ -32,6 +32,7 @@ using TMRSyntaxTokenMap = std::vector<TMRSyntaxToken>;
 
 TMRSyntaxLanguage tmrDetectSyntaxLanguage(const std::string &path, const std::string &title = std::string());
 const char *tmrSyntaxLanguageName(TMRSyntaxLanguage language) noexcept;
+TMRSyntaxTokenMap tmrBuildTokenMapForTextLine(TMRSyntaxLanguage language, const std::string &line);
 TMRSyntaxTokenMap tmrBuildTokenMapForLine(TMRSyntaxLanguage language, const std::string &text,
                                           std::size_t lineStart);
 

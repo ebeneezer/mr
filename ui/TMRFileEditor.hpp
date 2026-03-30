@@ -13,9 +13,12 @@
 #include <algorithm>
 #include <cctype>
 #include <climits>
+#include <cstdint>
 #include <cstring>
 #include <fstream>
+#include <map>
 #include <string>
+#include <vector>
 
 #include "MRCoprocessor.hpp"
 #include "TMRIndicator.hpp"
@@ -23,12 +26,15 @@
 
 class TMRFileEditor : public TScroller {
   public:
-			TMRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar,
-			              TIndicator *aIndicator, TStringView aFileName) noexcept
-			    : TScroller(bounds, aHScrollBar, aVScrollBar), indicator_(aIndicator), readOnly_(false),
-			      insertMode_(true), autoIndent_(false), syntaxTitleHint_(), bufferModel_(), delCount_(0),
-			      insCount_(0), selectionAnchor_(0), indicatorUpdateInProgress_(false),
-			      lineIndexWarmupTaskId_(0), lineIndexWarmupDocumentId_(0), lineIndexWarmupVersion_(0) {
+	TMRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar,
+	              TIndicator *aIndicator, TStringView aFileName) noexcept
+	    : TScroller(bounds, aHScrollBar, aVScrollBar), indicator_(aIndicator), readOnly_(false),
+	      insertMode_(true), autoIndent_(false), syntaxTitleHint_(), bufferModel_(), delCount_(0),
+	      insCount_(0), selectionAnchor_(0), indicatorUpdateInProgress_(false),
+	      lineIndexWarmupTaskId_(0), lineIndexWarmupDocumentId_(0), lineIndexWarmupVersion_(0),
+	      syntaxTokenCache_(), syntaxWarmupTaskId_(0), syntaxWarmupDocumentId_(0),
+	      syntaxWarmupVersion_(0), syntaxWarmupTopLine_(0), syntaxWarmupBottomLine_(0),
+	      syntaxWarmupLanguage_(TMRSyntaxLanguage::PlainText) {
 		fileName[0] = EOS;
 		options |= ofFirstClick;
 		eventMask |= evMouse | evKeyboard | evCommand;
@@ -64,12 +70,12 @@ class TMRFileEditor : public TScroller {
 
 	void setPersistentFileName(TStringView name) noexcept {
 		strnzcpy(fileName, name, sizeof(fileName));
-		bufferModel_.setSyntaxContext(fileName, syntaxTitleHint_);
+		refreshSyntaxContext();
 	}
 
 	void clearPersistentFileName() noexcept {
 		fileName[0] = EOS;
-		bufferModel_.setSyntaxContext("", syntaxTitleHint_);
+		refreshSyntaxContext();
 	}
 
 	bool isDocumentModified() const noexcept {
@@ -96,6 +102,58 @@ class TMRFileEditor : public TScroller {
 
 	bool insertModeEnabled() const noexcept {
 		return insertMode_;
+	}
+
+	std::size_t originalBufferLength() const noexcept {
+		return bufferModel_.document().originalLength();
+	}
+
+	std::size_t addBufferLength() const noexcept {
+		return bufferModel_.document().addBufferLength();
+	}
+
+	std::size_t pieceCount() const noexcept {
+		return bufferModel_.document().pieceCount();
+	}
+
+	bool hasMappedOriginalSource() const noexcept {
+		return bufferModel_.document().hasMappedOriginal();
+	}
+
+	const std::string &mappedOriginalPath() const noexcept {
+		return bufferModel_.document().mappedPath();
+	}
+
+	std::size_t estimatedLineCount() const noexcept {
+		return bufferModel_.estimatedLineCount();
+	}
+
+	bool exactLineCountKnown() const noexcept {
+		return bufferModel_.exactLineCountKnown();
+	}
+
+	std::size_t selectionLength() const noexcept {
+		return bufferModel_.selection().range().length();
+	}
+
+	std::uint64_t pendingLineIndexWarmupTaskId() const noexcept {
+		return lineIndexWarmupTaskId_;
+	}
+
+	std::uint64_t pendingSyntaxWarmupTaskId() const noexcept {
+		return syntaxWarmupTaskId_;
+	}
+
+	bool lineIndexWarmupPending() const noexcept {
+		return lineIndexWarmupTaskId_ != 0;
+	}
+
+	bool syntaxWarmupPending() const noexcept {
+		return syntaxWarmupTaskId_ != 0;
+	}
+
+	bool usesApproximateMetrics() const noexcept {
+		return useApproximateLargeFileMetrics();
 	}
 
 	void setInsertModeEnabled(bool on) {
@@ -281,7 +339,7 @@ class TMRFileEditor : public TScroller {
 	}
 
 	void syncFromEditorState(bool = true) {
-		bufferModel_.setSyntaxContext(hasPersistentFileName() ? fileName : "", syntaxTitleHint_);
+		refreshSyntaxContext();
 		updateMetrics();
 		updateIndicator();
 	}
@@ -315,9 +373,34 @@ class TMRFileEditor : public TScroller {
 		return true;
 	}
 
+	bool applySyntaxWarmup(const mr::coprocessor::SyntaxWarmupPayload &warmup,
+	                       std::size_t expectedVersion, std::uint64_t expectedTaskId) {
+		if (expectedTaskId == 0 || syntaxWarmupTaskId_ != expectedTaskId)
+			return false;
+		if (bufferModel_.documentId() != syntaxWarmupDocumentId_ || bufferModel_.version() != expectedVersion)
+			return false;
+		if (bufferModel_.language() != warmup.language)
+			return false;
+
+		syntaxTokenCache_.clear();
+		for (std::size_t i = 0; i < warmup.lines.size(); ++i)
+			syntaxTokenCache_[warmup.lines[i].lineStart] = warmup.lines[i].tokens;
+
+		syntaxWarmupTaskId_ = 0;
+		syntaxWarmupDocumentId_ = 0;
+		syntaxWarmupVersion_ = 0;
+		syntaxWarmupTopLine_ = 0;
+		syntaxWarmupBottomLine_ = 0;
+		syntaxWarmupLanguage_ = TMRSyntaxLanguage::PlainText;
+		drawView();
+		return true;
+	}
+
 	void setSyntaxTitleHint(const std::string &title) {
 		syntaxTitleHint_ = title;
-		syncFromEditorState(false);
+		refreshSyntaxContext();
+		updateMetrics();
+		updateIndicator();
 	}
 
 	const char *syntaxLanguageName() const noexcept {
@@ -562,6 +645,7 @@ class TMRFileEditor : public TScroller {
 			if (linePtr < bufferModel_.length())
 				linePtr = bufferModel_.nextLine(linePtr);
 		}
+		scheduleSyntaxWarmupIfNeeded();
 		updateIndicator();
 	}
 
@@ -612,10 +696,12 @@ class TMRFileEditor : public TScroller {
 			delta.y = newDeltaY;
 			if (useApproximateLargeFileMetrics())
 				updateMetrics();
+			scheduleSyntaxWarmupIfNeeded();
 			drawView();
 		} else {
 			if (useApproximateLargeFileMetrics())
 				updateMetrics();
+			scheduleSyntaxWarmupIfNeeded();
 			updateIndicator();
 		}
 	}
@@ -756,9 +842,9 @@ class TMRFileEditor : public TScroller {
 		return std::max(std::max(size.x, 256), std::max(delta.x + size.x + 64, cursorColumn + 64));
 	}
 
-		void scheduleLineIndexWarmupIfNeeded() {
-			if (!bufferModel_.document().hasMappedOriginal() || bufferModel_.document().exactLineCountKnown()) {
-				lineIndexWarmupTaskId_ = 0;
+	void scheduleLineIndexWarmupIfNeeded() {
+		if (!bufferModel_.document().hasMappedOriginal() || bufferModel_.document().exactLineCountKnown()) {
+			lineIndexWarmupTaskId_ = 0;
 				lineIndexWarmupDocumentId_ = 0;
 				lineIndexWarmupVersion_ = 0;
 				return;
@@ -793,9 +879,74 @@ class TMRFileEditor : public TScroller {
 				        std::make_shared<mr::coprocessor::LineIndexWarmupPayload>(warmup);
 				    return result;
 			    });
+	}
+
+	void scheduleSyntaxWarmupIfNeeded() {
+		if (bufferModel_.language() == TMRSyntaxLanguage::PlainText || size.y <= 0) {
+			resetSyntaxWarmupState(true);
+			return;
 		}
 
-		void updateMetrics() {
+		const std::size_t docId = bufferModel_.documentId();
+		const std::size_t version = bufferModel_.version();
+		const TMRSyntaxLanguage language = bufferModel_.language();
+		const std::size_t topLine = static_cast<std::size_t>(std::max(delta.y - 4, 0));
+		const int rowBudget = std::max(size.y + 8, 8);
+		std::vector<std::size_t> lineStarts = syntaxWarmupLineStarts(topLine, rowBudget);
+		if (lineStarts.empty())
+			return;
+
+		const std::size_t bottomLine = topLine + lineStarts.size();
+		if (hasSyntaxTokensForLineStarts(lineStarts)) {
+			syntaxWarmupTaskId_ = 0;
+			syntaxWarmupDocumentId_ = docId;
+			syntaxWarmupVersion_ = version;
+			syntaxWarmupTopLine_ = topLine;
+			syntaxWarmupBottomLine_ = bottomLine;
+			syntaxWarmupLanguage_ = language;
+			return;
+		}
+
+		if (syntaxWarmupTaskId_ != 0 && syntaxWarmupDocumentId_ == docId &&
+		    syntaxWarmupVersion_ == version && syntaxWarmupLanguage_ == language &&
+		    topLine >= syntaxWarmupTopLine_ && bottomLine <= syntaxWarmupBottomLine_)
+			return;
+
+		TMRTextBufferModel::ReadSnapshot snapshot = bufferModel_.readSnapshot();
+		syntaxWarmupDocumentId_ = docId;
+		syntaxWarmupVersion_ = version;
+		syntaxWarmupTopLine_ = topLine;
+		syntaxWarmupBottomLine_ = bottomLine;
+		syntaxWarmupLanguage_ = language;
+		syntaxWarmupTaskId_ = mr::coprocessor::globalCoprocessor().submit(
+		    mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::SyntaxWarmup, docId, version,
+		    "syntax-warmup",
+		    [snapshot, language, lineStarts](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
+			    mr::coprocessor::Result result;
+			    std::vector<mr::coprocessor::SyntaxWarmLine> warmed;
+			    result.task = info;
+			    if (stopToken.stop_requested()) {
+				    result.status = mr::coprocessor::TaskStatus::Cancelled;
+				    return result;
+			    }
+			    warmed.reserve(lineStarts.size());
+			    for (std::size_t i = 0; i < lineStarts.size(); ++i) {
+				    if (stopToken.stop_requested()) {
+					    result.status = mr::coprocessor::TaskStatus::Cancelled;
+					    return result;
+				    }
+				    warmed.push_back(mr::coprocessor::SyntaxWarmLine(
+				        lineStarts[i],
+				        tmrBuildTokenMapForTextLine(language, snapshot.lineText(lineStarts[i]))));
+			    }
+			    result.status = mr::coprocessor::TaskStatus::Completed;
+			    result.payload =
+			        std::make_shared<mr::coprocessor::SyntaxWarmupPayload>(language, std::move(warmed));
+			    return result;
+		    });
+	}
+
+	void updateMetrics() {
 			int limitX = 1;
 			int limitY = 1;
 
@@ -884,6 +1035,7 @@ class TMRFileEditor : public TScroller {
 		if (useApproximateLargeFileMetrics())
 			updateMetrics();
 		ensureCursorVisible(centerCursor);
+		scheduleSyntaxWarmupIfNeeded();
 		updateIndicator();
 		drawView();
 	}
@@ -1262,8 +1414,58 @@ class TMRFileEditor : public TScroller {
 		}
 	}
 
+	void refreshSyntaxContext() {
+		TMRSyntaxLanguage oldLanguage = bufferModel_.language();
+		bufferModel_.setSyntaxContext(hasPersistentFileName() ? fileName : "", syntaxTitleHint_);
+		if (bufferModel_.language() != oldLanguage)
+			resetSyntaxWarmupState(true);
+	}
+
+	void resetSyntaxWarmupState(bool clearCache) noexcept {
+		if (clearCache)
+			syntaxTokenCache_.clear();
+		syntaxWarmupTaskId_ = 0;
+		syntaxWarmupDocumentId_ = 0;
+		syntaxWarmupVersion_ = 0;
+		syntaxWarmupTopLine_ = 0;
+		syntaxWarmupBottomLine_ = 0;
+		syntaxWarmupLanguage_ = TMRSyntaxLanguage::PlainText;
+	}
+
+	std::vector<std::size_t> syntaxWarmupLineStarts(std::size_t topLine, int rowCount) const {
+		std::vector<std::size_t> lineStarts;
+		if (rowCount <= 0)
+			return lineStarts;
+
+		std::size_t lineStart = lineStartForIndex(topLine);
+		for (int i = 0; i < rowCount; ++i) {
+			lineStarts.push_back(lineStart);
+			if (lineStart >= bufferModel_.length())
+				break;
+			std::size_t next = bufferModel_.nextLine(lineStart);
+			if (next <= lineStart)
+				break;
+			lineStart = next;
+		}
+		return lineStarts;
+	}
+
+	bool hasSyntaxTokensForLineStarts(const std::vector<std::size_t> &lineStarts) const {
+		for (std::size_t i = 0; i < lineStarts.size(); ++i)
+			if (syntaxTokenCache_.find(lineStarts[i]) == syntaxTokenCache_.end())
+				return false;
+		return true;
+	}
+
+	TMRSyntaxTokenMap syntaxTokensForLine(std::size_t lineStart) const {
+		std::map<std::size_t, TMRSyntaxTokenMap>::const_iterator found = syntaxTokenCache_.find(lineStart);
+		if (found != syntaxTokenCache_.end())
+			return found->second;
+		return bufferModel_.tokenMapForLine(lineStart);
+	}
+
 	void formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, int hScroll, int width) {
-		TMRSyntaxTokenMap tokens = bufferModel_.tokenMapForLine(lineStart);
+		TMRSyntaxTokenMap tokens = syntaxTokensForLine(lineStart);
 		TMRTextBufferModel::Range selection = bufferModel_.selection().range();
 		std::size_t lineEnd = bufferModel_.lineEnd(lineStart);
 		int visual = 0;
@@ -1307,15 +1509,17 @@ class TMRFileEditor : public TScroller {
 			std::swap(selStart, selEnd);
 
 		bufferModel_.document() = document;
-		bufferModel_.setSyntaxContext(hasPersistentFileName() ? fileName : "", syntaxTitleHint_);
+		resetSyntaxWarmupState(true);
+		refreshSyntaxContext();
 		bufferModel_.setCursorAndSelection(cursorPos, selStart, selEnd);
-			bufferModel_.setModified(modifiedState);
-			selectionAnchor_ = selStart;
-			updateMetrics();
-			scheduleLineIndexWarmupIfNeeded();
-			ensureCursorVisible(true);
-			updateIndicator();
-			drawView();
+		bufferModel_.setModified(modifiedState);
+		selectionAnchor_ = selStart;
+		updateMetrics();
+		scheduleLineIndexWarmupIfNeeded();
+		scheduleSyntaxWarmupIfNeeded();
+		ensureCursorVisible(true);
+		updateIndicator();
+		drawView();
 		return true;
 	}
 
@@ -1325,14 +1529,21 @@ class TMRFileEditor : public TScroller {
 	bool autoIndent_;
 	char fileName[MAXPATH];
 	std::string syntaxTitleHint_;
-		TMRTextBufferModel bufferModel_;
-			uint delCount_;
-			uint insCount_;
-			std::size_t selectionAnchor_;
-			bool indicatorUpdateInProgress_;
-			std::uint64_t lineIndexWarmupTaskId_;
-			std::size_t lineIndexWarmupDocumentId_;
-			std::size_t lineIndexWarmupVersion_;
-		};
+	TMRTextBufferModel bufferModel_;
+	uint delCount_;
+	uint insCount_;
+	std::size_t selectionAnchor_;
+	bool indicatorUpdateInProgress_;
+	std::uint64_t lineIndexWarmupTaskId_;
+	std::size_t lineIndexWarmupDocumentId_;
+	std::size_t lineIndexWarmupVersion_;
+	std::map<std::size_t, TMRSyntaxTokenMap> syntaxTokenCache_;
+	std::uint64_t syntaxWarmupTaskId_;
+	std::size_t syntaxWarmupDocumentId_;
+	std::size_t syntaxWarmupVersion_;
+	std::size_t syntaxWarmupTopLine_;
+	std::size_t syntaxWarmupBottomLine_;
+	TMRSyntaxLanguage syntaxWarmupLanguage_;
+};
 
 #endif

@@ -22,11 +22,17 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <cerrno>
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <string>
 #include <vector>
+#include <fcntl.h>
+#include <poll.h>
+#include <signal.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include "mrmac/mrmac.h"
@@ -39,6 +45,9 @@
 #include "ui/mrmacrotest.hpp"
 #include "ui/mrpalette.hpp"
 #include "ui/mrwindowlist.hpp"
+
+void mrTraceCoprocessorTaskCancel(int bufferId, std::uint64_t taskId);
+void mrTraceCoprocessorTaskRelease(int bufferId, std::uint64_t taskId, const char *state);
 
 namespace {
 enum : ushort {
@@ -139,8 +148,10 @@ enum : ushort {
 	cmMrColorHelpColors,
 	cmMrColorOtherColors,
 
-	cmMrDevRunMacro
-};
+	cmMrDevRunMacro,
+	cmMrPreviewPrev,
+	cmMrPreviewNext
+	};
 
 
 TRect centeredRect(int width, int height) {
@@ -219,6 +230,176 @@ std::string trimPathInput(const std::string &path) {
 	return result;
 }
 
+bool promptForCommandLine(char *command, std::size_t commandSize) {
+	uchar limit;
+
+	if (command == 0 || commandSize < 2)
+		return false;
+	std::memset(command, 0, commandSize);
+	limit = static_cast<uchar>(commandSize - 1 > 255 ? 255 : commandSize - 1);
+	return inputBox("EXECUTE PROGRAM", "~C~ommand", command, limit) != cmCancel;
+}
+
+std::string shortenCommandTitle(const std::string &command) {
+	std::string trimmed = trimPathInput(command);
+
+	if (trimmed.empty())
+		trimmed = "(empty)";
+	if (trimmed.size() > 54)
+		trimmed = trimmed.substr(0, 51) + "...";
+	return "CMD: " + trimmed;
+}
+
+TMREditWindow *findEditWindowByBufferId(int bufferId) {
+	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+	for (std::size_t i = 0; i < windows.size(); ++i)
+		if (windows[i] != 0 && windows[i]->bufferId() == bufferId)
+			return windows[i];
+	return 0;
+}
+
+std::string communicationExitLine(const mr::coprocessor::ExternalIoFinishedPayload &payload) {
+	std::ostringstream out;
+
+	out << "\n[process ";
+	if (payload.signaled)
+		out << "terminated by signal " << payload.signalNumber;
+	else
+		out << "exited with code " << payload.exitCode;
+	out << "]\n";
+	return out.str();
+}
+
+mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &info,
+                                               std::stop_token stopToken, std::size_t channelId,
+                                               const std::string &command) {
+	mr::coprocessor::Result result;
+	int pipeFds[2] = {-1, -1};
+	pid_t childPid = -1;
+	int waitStatus = 0;
+	int readFlags;
+	bool childExited = false;
+	bool pipeOpen = true;
+	bool cancellationRequested = false;
+	int stopPolls = 0;
+	char buffer[4096];
+
+	result.task = info;
+	if (::pipe(pipeFds) != 0) {
+		result.status = mr::coprocessor::TaskStatus::Failed;
+		result.error = std::string("pipe failed: ") + std::strerror(errno);
+		return result;
+	}
+
+	childPid = ::fork();
+	if (childPid < 0) {
+		::close(pipeFds[0]);
+		::close(pipeFds[1]);
+		result.status = mr::coprocessor::TaskStatus::Failed;
+		result.error = std::string("fork failed: ") + std::strerror(errno);
+		return result;
+	}
+
+	if (childPid == 0) {
+		::setpgid(0, 0);
+		::dup2(pipeFds[1], STDOUT_FILENO);
+		::dup2(pipeFds[1], STDERR_FILENO);
+		::close(pipeFds[0]);
+		::close(pipeFds[1]);
+		::execl("/bin/sh", "sh", "-lc", command.c_str(), static_cast<char *>(0));
+		::_exit(127);
+	}
+
+	::close(pipeFds[1]);
+	::setpgid(childPid, childPid);
+	readFlags = ::fcntl(pipeFds[0], F_GETFL, 0);
+	if (readFlags >= 0)
+		::fcntl(pipeFds[0], F_SETFL, readFlags | O_NONBLOCK);
+
+	while (pipeOpen || !childExited) {
+		struct pollfd pfd;
+		int pollResult;
+
+		if ((stopToken.stop_requested() || info.cancelRequested()) && !childExited) {
+			cancellationRequested = true;
+			if (stopPolls == 0)
+				::kill(-childPid, SIGTERM);
+			else if (stopPolls > 10)
+				::kill(-childPid, SIGKILL);
+			++stopPolls;
+		}
+
+		pfd.fd = pipeFds[0];
+		pfd.events = POLLIN | POLLHUP;
+		pfd.revents = 0;
+		pollResult = pipeOpen ? ::poll(&pfd, 1, 100) : 0;
+		if (pollResult < 0 && errno != EINTR) {
+			result.status = mr::coprocessor::TaskStatus::Failed;
+			result.error = std::string("poll failed: ") + std::strerror(errno);
+			break;
+		}
+
+		if (pipeOpen && (pollResult > 0 || childExited)) {
+			for (;;) {
+				ssize_t count = ::read(pipeFds[0], buffer, sizeof(buffer));
+				if (count > 0) {
+					mr::coprocessor::Result chunkResult;
+					chunkResult.task = info;
+					chunkResult.status = mr::coprocessor::TaskStatus::Completed;
+					chunkResult.payload = std::make_shared<mr::coprocessor::ExternalIoChunkPayload>(
+					    channelId, std::string(buffer, static_cast<std::size_t>(count)));
+					mr::coprocessor::globalCoprocessor().post(std::move(chunkResult));
+					continue;
+				}
+				if (count == 0) {
+					pipeOpen = false;
+					break;
+				}
+				if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+					break;
+				result.status = mr::coprocessor::TaskStatus::Failed;
+				result.error = std::string("read failed: ") + std::strerror(errno);
+				pipeOpen = false;
+				break;
+			}
+			if (result.failed())
+				break;
+		}
+
+		if (!childExited) {
+			pid_t waited = ::waitpid(childPid, &waitStatus, WNOHANG);
+			if (waited == childPid)
+				childExited = true;
+			else if (waited < 0 && errno != EINTR) {
+				result.status = mr::coprocessor::TaskStatus::Failed;
+				result.error = std::string("waitpid failed: ") + std::strerror(errno);
+				break;
+			}
+		}
+	}
+
+	if (pipeFds[0] >= 0)
+		::close(pipeFds[0]);
+	if (!childExited && childPid > 0) {
+		while (::waitpid(childPid, &waitStatus, 0) < 0 && errno == EINTR)
+			;
+		childExited = true;
+	}
+
+	if (result.failed())
+		return result;
+	if (cancellationRequested || stopToken.stop_requested() || info.cancelRequested()) {
+		result.status = mr::coprocessor::TaskStatus::Cancelled;
+		return result;
+	}
+
+	result.status = mr::coprocessor::TaskStatus::Completed;
+	result.payload = std::make_shared<mr::coprocessor::ExternalIoFinishedPayload>(
+	    channelId, WIFEXITED(waitStatus) ? WEXITSTATUS(waitStatus) : -1,
+	    WIFSIGNALED(waitStatus) != 0, WIFSIGNALED(waitStatus) ? WTERMSIG(waitStatus) : 0);
+	return result;
+}
+
 const char *coprocessorLaneName(mr::coprocessor::Lane lane) {
 	switch (lane) {
 		case mr::coprocessor::Lane::Io:
@@ -236,7 +417,8 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 		const mr::coprocessor::IndicatorBlinkPayload *blink =
 		    dynamic_cast<const mr::coprocessor::IndicatorBlinkPayload *>(result.payload.get());
 		if (blink != nullptr) {
-			TMRIndicator::applyBlinkUpdate(blink->indicatorId, blink->generation, blink->visible);
+			TMRIndicator::applyBlinkUpdate(blink->indicatorId, blink->channel, blink->generation,
+			                               blink->visible);
 			return;
 		}
 
@@ -255,6 +437,77 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			}
 			return;
 		}
+
+		const mr::coprocessor::SyntaxWarmupPayload *syntax =
+		    dynamic_cast<const mr::coprocessor::SyntaxWarmupPayload *>(result.payload.get());
+		if (syntax != nullptr) {
+			std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+			for (std::size_t i = 0; i < windows.size(); ++i) {
+				TMRFileEditor *editor = windows[i] != nullptr ? windows[i]->getEditor() : nullptr;
+				if (editor == nullptr)
+					continue;
+				if (editor->documentId() != result.task.documentId ||
+				    editor->documentVersion() != result.task.baseVersion)
+					continue;
+				editor->applySyntaxWarmup(*syntax, result.task.baseVersion, result.task.id);
+			}
+			return;
+		}
+
+		const mr::coprocessor::ExternalIoChunkPayload *chunk =
+		    dynamic_cast<const mr::coprocessor::ExternalIoChunkPayload *>(result.payload.get());
+		if (chunk != nullptr) {
+			TMREditWindow *win = findEditWindowByBufferId(static_cast<int>(chunk->channelId));
+			if (win != 0) {
+				win->appendTextBuffer(chunk->text.c_str());
+				win->setReadOnly(true);
+				win->setFileChanged(false);
+			}
+			return;
+		}
+
+		const mr::coprocessor::ExternalIoFinishedPayload *finished =
+		    dynamic_cast<const mr::coprocessor::ExternalIoFinishedPayload *>(result.payload.get());
+		if (finished != nullptr) {
+			std::ostringstream line;
+			TMREditWindow *win = findEditWindowByBufferId(static_cast<int>(finished->channelId));
+			if (win != 0) {
+				std::string exitLine = communicationExitLine(*finished);
+				win->appendTextBuffer(exitLine.c_str());
+				win->setReadOnly(true);
+				win->setFileChanged(false);
+				win->releaseCoprocessorTask(result.task.id);
+			}
+			mrTraceCoprocessorTaskRelease(static_cast<int>(finished->channelId), result.task.id, "finished");
+			line << "Communication session #" << finished->channelId << " ";
+			if (finished->signaled)
+				line << "terminated by signal " << finished->signalNumber;
+			else
+				line << "finished with exit code " << finished->exitCode;
+			mrLogMessage(line.str().c_str());
+			return;
+		}
+	}
+
+	if (result.task.kind == mr::coprocessor::TaskKind::ExternalIo) {
+		TMREditWindow *win = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
+		if (win != 0) {
+			win->releaseCoprocessorTask(result.task.id);
+			if (result.cancelled()) {
+				win->appendTextBuffer("\n[process cancelled]\n");
+				win->setReadOnly(true);
+				win->setFileChanged(false);
+			} else if (result.failed()) {
+				std::string line = "\n[process failed: " + result.error + "]\n";
+				win->appendTextBuffer(line.c_str());
+				win->setReadOnly(true);
+				win->setFileChanged(false);
+			}
+		}
+		if (result.cancelled())
+			mrTraceCoprocessorTaskRelease(static_cast<int>(result.task.documentId), result.task.id, "cancelled");
+		else if (result.failed())
+			mrTraceCoprocessorTaskRelease(static_cast<int>(result.task.documentId), result.task.id, "failed");
 	}
 
 	if (!result.failed())
@@ -575,6 +828,83 @@ std::string yesNo(bool value) {
 	return value ? "Yes" : "No";
 }
 
+std::string formatByteCount(std::size_t bytes) {
+	char field[128];
+	double scaled = static_cast<double>(bytes);
+
+	if (bytes >= static_cast<std::size_t>(1024) * 1024 * 1024) {
+		scaled /= 1024.0 * 1024.0 * 1024.0;
+		std::snprintf(field, sizeof(field), "%.2f GiB (%llu bytes)", scaled,
+		              static_cast<unsigned long long>(bytes));
+	} else if (bytes >= static_cast<std::size_t>(1024) * 1024) {
+		scaled /= 1024.0 * 1024.0;
+		std::snprintf(field, sizeof(field), "%.2f MiB (%llu bytes)", scaled,
+		              static_cast<unsigned long long>(bytes));
+	} else if (bytes >= static_cast<std::size_t>(1024)) {
+		scaled /= 1024.0;
+		std::snprintf(field, sizeof(field), "%.2f KiB (%llu bytes)", scaled,
+		              static_cast<unsigned long long>(bytes));
+	} else
+		std::snprintf(field, sizeof(field), "%llu bytes", static_cast<unsigned long long>(bytes));
+	return field;
+}
+
+std::string formatPercent(std::size_t part, std::size_t total) {
+	char field[32];
+	double percent = 0.0;
+
+	if (total != 0)
+		percent = (100.0 * static_cast<double>(part)) / static_cast<double>(total);
+	std::snprintf(field, sizeof(field), "%.1f%%", percent);
+	return field;
+}
+
+std::string formatContribution(std::size_t bytes, std::size_t total) {
+	if (total == 0)
+		return formatByteCount(bytes);
+	return formatByteCount(bytes) + " [" + formatPercent(bytes, total) + "]";
+}
+
+std::string formatCursorProgress(std::size_t cursorOffset, std::size_t currentLength,
+                                 bool hasDiskSize, std::size_t diskSize) {
+	std::ostringstream out;
+
+	out << formatByteCount(cursorOffset) << " of " << formatByteCount(currentLength) << " ("
+	    << formatPercent(cursorOffset, currentLength) << ")";
+	if (hasDiskSize && diskSize != currentLength)
+		out << ", disk ref " << formatPercent(std::min(cursorOffset, diskSize), diskSize);
+	return out.str();
+}
+
+std::string formatTaskSummary(TMREditWindow *win) {
+	std::ostringstream out;
+	const std::size_t count = win != 0 ? win->trackedCoprocessorTaskCount() : 0;
+
+	out << count;
+	if (count == 0)
+		return out.str();
+	out << " active";
+	for (std::size_t i = 0; i < count && i < 3; ++i)
+		out << (i == 0 ? " (#" : ", #") << win->trackedCoprocessorTaskId(i);
+	out << ")";
+	if (count > 3)
+		out << " ...";
+	return out.str();
+}
+
+std::string formatWarmupState(const char *label, std::uint64_t taskId, bool exactReady = false) {
+	std::ostringstream out;
+
+	out << label << ": ";
+	if (taskId != 0)
+		out << "running (#" << taskId << ")";
+	else if (exactReady)
+		out << "idle (exact)";
+	else
+		out << "idle";
+	return out.str();
+}
+
 const char *blockModeLabel(TMREditWindow *win) {
 	if (win == 0)
 		return "None";
@@ -590,51 +920,193 @@ const char *blockModeLabel(TMREditWindow *win) {
 	}
 }
 
-std::vector<std::string> buildFileInformationLines(TMREditWindow *win) {
+struct FileInformationPage {
+	std::string title;
 	std::vector<std::string> lines;
+};
+
+class FileInformationDialog : public TDialog {
+  public:
+	FileInformationDialog(const FileInformationPage &page, std::size_t pageIndex, std::size_t pageCount,
+	                      bool hasPrev, bool hasNext)
+	    : TWindowInit(&TDialog::initFrame),
+	      TDialog(centeredBounds(computeWidth(page), computeHeight(page)), "FILE INFORMATION"),
+	      hasPrev_(hasPrev), hasNext_(hasNext) {
+		int width = size.x;
+		int height = size.y;
+		int y = 2;
+		std::ostringstream header;
+
+		header << page.title << "  (" << (pageIndex + 1) << "/" << pageCount << ")";
+		insertStaticLine(this, 2, y++, header.str().c_str());
+		for (std::vector<std::string>::const_iterator it = page.lines.begin(); it != page.lines.end(); ++it, ++y)
+			insertStaticLine(this, 2, y, it->c_str());
+		if (hasPrev_)
+			insert(new TButton(TRect(width - 38, height - 3, width - 28, height - 1), "Prev<F7>",
+			                   cmMrPreviewPrev, bfNormal));
+		if (hasNext_)
+			insert(new TButton(TRect(width - 27, height - 3, width - 17, height - 1), "Next<F8>",
+			                   cmMrPreviewNext, bfNormal));
+		insert(new TButton(TRect(width - 16, height - 3, width - 2, height - 1), "Done<ESC>", cmOK,
+		                   bfDefault));
+	}
+
+	virtual void handleEvent(TEvent &event) override {
+		TDialog::handleEvent(event);
+		if (event.what != evKeyDown)
+			return;
+		switch (ctrlToArrow(event.keyDown.keyCode)) {
+			case kbF7:
+			case kbPgUp:
+				if (hasPrev_) {
+					endModal(cmMrPreviewPrev);
+					clearEvent(event);
+				}
+				break;
+			case kbF8:
+			case kbPgDn:
+				if (hasNext_) {
+					endModal(cmMrPreviewNext);
+					clearEvent(event);
+				}
+				break;
+		}
+	}
+
+  private:
+	static int computeWidth(const FileInformationPage &page) {
+		TRect desk = TProgram::deskTop->getExtent();
+		std::size_t maxLen = page.title.size();
+		for (std::vector<std::string>::const_iterator it = page.lines.begin(); it != page.lines.end(); ++it)
+			if (it->size() > maxLen)
+				maxLen = it->size();
+		return std::max(76, std::min(static_cast<int>(maxLen) + 6, (desk.b.x - desk.a.x) - 2));
+	}
+
+	static int computeHeight(const FileInformationPage &page) {
+		TRect desk = TProgram::deskTop->getExtent();
+		int desired = static_cast<int>(page.lines.size()) + 6;
+		return std::max(14, std::min(desired, (desk.b.y - desk.a.y) - 1));
+	}
+
+	static TRect centeredBounds(int width, int height) {
+		TRect desk = TProgram::deskTop->getExtent();
+		int left = desk.a.x + (desk.b.x - desk.a.x - width) / 2;
+		int top = desk.a.y + (desk.b.y - desk.a.y - height) / 2;
+		return TRect(left, top, left + width, top + height);
+	}
+
+	bool hasPrev_;
+	bool hasNext_;
+};
+
+std::vector<FileInformationPage> buildFileInformationPages(TMREditWindow *win) {
+	std::vector<FileInformationPage> pages;
+	FileInformationPage page1;
+	FileInformationPage page2;
 	TMRTextBuffer textBuffer = win != 0 ? win->buffer() : TMRTextBuffer();
 	std::string path = win != 0 ? win->currentFileName() : std::string();
 	std::string title = win != 0 && win->getTitle(0) != 0 ? win->getTitle(0) : "?No-File?";
+	std::string roleDetail = win != 0 ? win->windowRoleDetail() : std::string();
 	struct stat st;
 	bool hasStat = !path.empty() && ::stat(path.c_str(), &st) == 0;
-	char field[128];
 	unsigned long cursorLine = win != 0 ? win->cursorLineNumber() : 1UL;
 	unsigned long cursorColumn = win != 0 ? win->cursorColumnNumber() : 1UL;
+	const std::size_t currentLength = textBuffer.length();
+	const std::size_t diskSize = hasStat ? static_cast<std::size_t>(st.st_size) : 0;
+	const std::size_t lineCount = win != 0 ? win->bufferLineCount() : 1;
+	const std::size_t estimatedLineCount = win != 0 ? win->estimatedLineCount() : lineCount;
 
-	lines.push_back(std::string("Title         : ") + shortenForDialog(title, 56));
-	lines.push_back(std::string("Path          : ") +
-	                shortenForDialog(path.empty() ? std::string("<none>") : path, 56));
-	lines.push_back(std::string("Read-only     : ") + yesNo(win != 0 && win->isReadOnly()));
-	lines.push_back(std::string("Modified      : ") + yesNo(win != 0 && win->isFileChanged()));
-	lines.push_back(std::string("Save in place : ") + yesNo(win != 0 && win->canSaveInPlace()));
-	lines.push_back(std::string("Syntax        : ") + (win != 0 ? win->syntaxLanguageName() : "Plain Text"));
-	std::snprintf(field, sizeof(field), "%lu bytes", static_cast<unsigned long>(textBuffer.length()));
-	lines.push_back(std::string("Buffer size   : ") + field);
-	if (hasStat)
-		std::snprintf(field, sizeof(field), "%lld bytes", static_cast<long long>(st.st_size));
-	else
-		std::snprintf(field, sizeof(field), "<n/a>");
-	lines.push_back(std::string("On disk       : ") + field);
-	std::snprintf(field, sizeof(field), "%lu", static_cast<unsigned long>(win != 0 ? win->bufferLineCount() : 1));
-	lines.push_back(std::string("Lines         : ") + field);
-	if (win != 0)
-		std::snprintf(field, sizeof(field), "line %lu, column %lu", cursorLine, cursorColumn);
-	else
-		std::snprintf(field, sizeof(field), "<n/a>");
-	lines.push_back(std::string("Cursor        : ") + field);
-	std::snprintf(field, sizeof(field), "%d", win != 0 ? win->bufferId() : 0);
-	lines.push_back(std::string("Buffer id     : ") + field);
-	lines.push_back(std::string("Block mode    : ") + blockModeLabel(win));
-	lines.push_back(std::string("Visible       : ") + yesNo(win != 0 && (win->state & sfVisible) != 0));
-	return lines;
+	page1.title = "WINDOW / CURSOR";
+	page1.lines.push_back(std::string("Window kind   : ") + (win != 0 ? win->windowRoleName() : "Text window"));
+	if (!roleDetail.empty())
+		page1.lines.push_back(std::string("Role detail   : ") + shortenForDialog(roleDetail, 64));
+	page1.lines.push_back(std::string("Title         : ") + shortenForDialog(title, 64));
+	page1.lines.push_back(std::string("Path          : ") +
+	                      shortenForDialog(path.empty() ? std::string("<none>") : path, 64));
+	page1.lines.push_back(std::string("Visible       : ") + yesNo(win != 0 && (win->state & sfVisible) != 0));
+	page1.lines.push_back(std::string("Read-only     : ") + yesNo(win != 0 && win->isReadOnly()));
+	page1.lines.push_back(std::string("Modified      : ") + yesNo(win != 0 && win->isFileChanged()));
+	page1.lines.push_back(std::string("Save in place : ") + yesNo(win != 0 && win->canSaveInPlace()));
+	page1.lines.push_back(std::string("Syntax        : ") + (win != 0 ? win->syntaxLanguageName() : "Plain Text"));
+	page1.lines.push_back(std::string("Block mode    : ") + blockModeLabel(win));
+	page1.lines.push_back(std::string("Selection     : ") +
+	                      (win != 0 && win->hasSelection()
+	                           ? formatContribution(win->selectionLength(), currentLength)
+	                           : std::string("<none>")));
+	page1.lines.push_back(std::string("Undo history  : ") + yesNo(win != 0 && win->hasUndoHistory()));
+	page1.lines.push_back(std::string("Cursor        : line ") + std::to_string(cursorLine) + ", column " +
+	                      std::to_string(cursorColumn));
+	page1.lines.push_back(std::string("Offset        : ") +
+	                      formatCursorProgress(win != 0 ? win->cursorOffset() : 0, currentLength, hasStat, diskSize));
+	page1.lines.push_back(std::string("Lines         : ") +
+	                      (win != 0 && win->exactLineCountKnown()
+	                           ? std::to_string(lineCount) + " exact"
+	                           : std::to_string(lineCount) + " loaded, est. " + std::to_string(estimatedLineCount)));
+	page1.lines.push_back(std::string("Metrics       : ") +
+	                      (win != 0 && win->usesApproximateMetrics() ? "Approximate large-file mode" : "Exact"));
+
+	page2.title = "DOCUMENT / COPROCESSOR";
+	page2.lines.push_back(std::string("Current text  : ") + formatByteCount(currentLength));
+	page2.lines.push_back(std::string("Disk size     : ") +
+	                      (hasStat ? formatByteCount(diskSize) : std::string("<n/a>")));
+	page2.lines.push_back(std::string("Original buf  : ") +
+	                      (win != 0 ? formatContribution(win->originalBufferLength(), currentLength)
+	                                 : std::string("<n/a>")));
+	page2.lines.push_back(std::string("Add buffer    : ") +
+	                      (win != 0 ? formatContribution(win->addBufferLength(), currentLength)
+	                                 : std::string("<n/a>")));
+	page2.lines.push_back(std::string("Piece table   : ") +
+	                      (win != 0 ? std::to_string(win->pieceCount()) + " pieces" : std::string("<n/a>")));
+	page2.lines.push_back(std::string("Doc version   : ") +
+	                      (win != 0 ? std::to_string(win->documentVersion()) : std::string("0")));
+	page2.lines.push_back(std::string("Source        : ") +
+	                      (win != 0 && win->hasMappedOriginalSource() ? "mmap file" : "memory buffer"));
+	if (win != 0 && win->hasMappedOriginalSource())
+		page2.lines.push_back(std::string("Mapped path   : ") + shortenForDialog(win->mappedOriginalPath(), 64));
+	page2.lines.push_back(std::string("Temp file     : ") +
+	                      (win != 0 && win->isTemporaryFile()
+	                           ? shortenForDialog(win->temporaryFileName(), 64)
+	                           : std::string("<none>")));
+	page2.lines.push_back(std::string("Session saved : ") + yesNo(win != 0 && win->hasBeenSavedInSession()));
+	page2.lines.push_back(std::string("Tracked tasks : ") + formatTaskSummary(win));
+	page2.lines.push_back(formatWarmupState("Line index", win != 0 ? win->pendingLineIndexWarmupTaskId() : 0,
+	                                        win != 0 && win->exactLineCountKnown()));
+	page2.lines.push_back(formatWarmupState("Syntax", win != 0 ? win->pendingSyntaxWarmupTaskId() : 0));
+	page2.lines.push_back(std::string("Result queue  : ") +
+	                      std::to_string(mr::coprocessor::globalCoprocessor().pendingResults()) +
+	                      " pending result(s)");
+
+	pages.push_back(page1);
+	pages.push_back(page2);
+	return pages;
 }
 
 void showFileInformationDialog(TMREditWindow *win) {
+	std::vector<FileInformationPage> pages;
+	std::size_t pageIndex = 0;
+	ushort result;
+
 	if (win == 0) {
 		messageBox(mfInformation | mfOKButton, "No active file window.");
 		return;
 	}
-	execDialog(createSimplePreviewDialog("FILE INFORMATION", 74, 18, buildFileInformationLines(win)));
+	pages = buildFileInformationPages(win);
+	if (pages.empty())
+		return;
+	while (true) {
+		result = execDialog(new FileInformationDialog(pages[pageIndex], pageIndex, pages.size(),
+		                                              pageIndex > 0, pageIndex + 1 < pages.size()));
+		if (result == cmMrPreviewPrev && pageIndex > 0) {
+			--pageIndex;
+			continue;
+		}
+		if (result == cmMrPreviewNext && pageIndex + 1 < pages.size()) {
+			++pageIndex;
+			continue;
+		}
+		break;
+	}
 }
 
 TDialog *createSimplePreviewDialog(const char *title, int width, int height,
@@ -1154,6 +1626,23 @@ TSubMenu *createDevMenu() {
 }
 } // namespace
 
+void mrTraceCoprocessorTaskCancel(int bufferId, std::uint64_t taskId) {
+	std::ostringstream line;
+
+	line << "Cancelling coprocessor task #" << taskId << " for window #" << bufferId << ".";
+	mrLogMessage(line.str().c_str());
+}
+
+void mrTraceCoprocessorTaskRelease(int bufferId, std::uint64_t taskId, const char *state) {
+	std::ostringstream line;
+
+	line << "Released coprocessor task #" << taskId << " for window #" << bufferId;
+	if (state != 0 && *state != '\0')
+		line << " (" << state << ")";
+	line << ".";
+	mrLogMessage(line.str().c_str());
+}
+
 class TMREditorApp : public TApplication {
   public:
 	static TMenuBar *initMRMenuBar(TRect r) {
@@ -1260,8 +1749,8 @@ class TMREditorApp : public TApplication {
 		return true;
 	}
 
-		bool handleFileLoad() {
-			enum { FileNameBufferSize = MAXPATH };
+	bool handleFileLoad() {
+		enum { FileNameBufferSize = MAXPATH };
 			char fileName[FileNameBufferSize];
 			TMREditWindow *target = currentEditWindow();
 			std::string resolvedPath;
@@ -1288,6 +1777,61 @@ class TMREditorApp : public TApplication {
 		if (target->isReadOnly())
 			logLine += " [read-only]";
 		mrLogMessage(logLine.c_str());
+		return true;
+	}
+
+	bool handleExecuteProgram() {
+		enum { CommandBufferSize = 256 };
+		char command[CommandBufferSize];
+		std::string commandLine;
+		std::string title;
+		std::string initialText;
+		TRect bounds;
+		TMREditWindow *win;
+		std::ostringstream logLine;
+		std::uint64_t taskId;
+
+		if (!promptForCommandLine(command, sizeof(command)))
+			return true;
+		commandLine = trimPathInput(command);
+		if (commandLine.empty()) {
+			messageBox(mfInformation | mfOKButton, "No command specified.");
+			return true;
+		}
+
+		bounds = deskTop->getExtent();
+		bounds.grow(-2, -1);
+		title = shortenCommandTitle(commandLine);
+		win = new TMREditWindow(bounds, title.c_str(), 1);
+		deskTop->insert(win);
+		initialText = "$ " + commandLine + "\n\n";
+		if (!win->loadTextBuffer(initialText.c_str(), title.c_str())) {
+			message(win, evCommand, cmClose, 0);
+			messageBox(mfError | mfOKButton, "Unable to create communication window.");
+			return true;
+		}
+			win->setReadOnly(true);
+			win->setFileChanged(false);
+			win->setWindowRole(TMREditWindow::wrCommunicationCommand, commandLine);
+			mrActivateEditWindow(win);
+
+		taskId = mr::coprocessor::globalCoprocessor().submit(
+		    mr::coprocessor::Lane::Io, mr::coprocessor::TaskKind::ExternalIo,
+		    static_cast<std::size_t>(win->bufferId()), 0, std::string("external-io: ") + commandLine,
+		    [commandLine, channelId = static_cast<std::size_t>(win->bufferId())](
+		        const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
+			    return runExternalCommandTask(info, stopToken, channelId, commandLine);
+		    });
+		if (taskId == 0) {
+			message(win, evCommand, cmClose, 0);
+			messageBox(mfError | mfOKButton, "Unable to start external command worker.");
+			return true;
+		}
+		win->trackCoprocessorTask(taskId);
+
+		logLine << "Started external command in communication window #" << win->bufferId() << ": "
+		        << commandLine << " [task #" << taskId << "]";
+		mrLogMessage(logLine.str().c_str());
 		return true;
 	}
 
@@ -1427,6 +1971,9 @@ class TMREditorApp : public TApplication {
 			case cmMrOtherInstallationAndSetup:
 				runInstallationAndSetup();
 				return true;
+
+			case cmMrOtherExecuteProgram:
+				return handleExecuteProgram();
 
 			case cmMrDevRunMacro:
 				runMacroFileDialog();

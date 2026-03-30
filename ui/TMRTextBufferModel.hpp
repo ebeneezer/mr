@@ -175,7 +175,7 @@ class TMRTextBufferModel {
 	}
 
 	TMRSyntaxTokenMap tokenMapForLine(std::size_t pos) const {
-		return tmrBuildTokenMapForLine(language_, document_.text(), lineStart(pos));
+		return tmrBuildTokenMapForTextLine(language_, document_.lineText(pos));
 	}
 
 	std::size_t lineStart(std::size_t pos) const noexcept {

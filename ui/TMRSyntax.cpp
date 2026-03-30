@@ -412,7 +412,10 @@ TMRSyntaxTokenMap tmrBuildTokenMapForLine(TMRSyntaxLanguage language, const std:
 	if (lineStart > text.size())
 		lineStart = text.size();
 	std::size_t lineEnd = lineEndOf(text, lineStart);
-	std::string line = text.substr(lineStart, lineEnd - lineStart);
+	return tmrBuildTokenMapForTextLine(language, text.substr(lineStart, lineEnd - lineStart));
+}
+
+TMRSyntaxTokenMap tmrBuildTokenMapForTextLine(TMRSyntaxLanguage language, const std::string &line) {
 	TMRSyntaxTokenMap tokens(line.size(), TMRSyntaxToken::Text);
 
 	switch (language) {
