@@ -17,16 +17,18 @@
 #include <fstream>
 #include <string>
 
+#include "MRCoprocessor.hpp"
 #include "TMRIndicator.hpp"
 #include "TMRTextBufferModel.hpp"
 
 class TMRFileEditor : public TScroller {
   public:
-		TMRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar,
-		              TIndicator *aIndicator, TStringView aFileName) noexcept
-		    : TScroller(bounds, aHScrollBar, aVScrollBar), indicator_(aIndicator), readOnly_(false),
-		      insertMode_(true), autoIndent_(false), syntaxTitleHint_(), bufferModel_(), delCount_(0),
-		      insCount_(0), selectionAnchor_(0), indicatorUpdateInProgress_(false) {
+			TMRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar,
+			              TIndicator *aIndicator, TStringView aFileName) noexcept
+			    : TScroller(bounds, aHScrollBar, aVScrollBar), indicator_(aIndicator), readOnly_(false),
+			      insertMode_(true), autoIndent_(false), syntaxTitleHint_(), bufferModel_(), delCount_(0),
+			      insCount_(0), selectionAnchor_(0), indicatorUpdateInProgress_(false),
+			      lineIndexWarmupTaskId_(0), lineIndexWarmupDocumentId_(0), lineIndexWarmupVersion_(0) {
 		fileName[0] = EOS;
 		options |= ofFirstClick;
 		eventMask |= evMouse | evKeyboard | evCommand;
@@ -286,6 +288,31 @@ class TMRFileEditor : public TScroller {
 
 	std::string snapshotText() const {
 		return bufferModel_.text();
+	}
+
+	TMRTextBufferModel::ReadSnapshot readSnapshot() const {
+		return bufferModel_.readSnapshot();
+	}
+
+	std::size_t documentId() const noexcept {
+		return bufferModel_.documentId();
+	}
+
+	std::size_t documentVersion() const noexcept {
+		return bufferModel_.version();
+	}
+
+	bool applyLineIndexWarmup(const mr::editor::LineIndexWarmupData &warmup,
+	                          std::size_t expectedVersion) {
+		if (!bufferModel_.adoptLineIndexWarmup(warmup, expectedVersion))
+			return false;
+		lineIndexWarmupTaskId_ = 0;
+		lineIndexWarmupDocumentId_ = 0;
+		lineIndexWarmupVersion_ = 0;
+		updateMetrics();
+		updateIndicator();
+		drawView();
+		return true;
 	}
 
 	void setSyntaxTitleHint(const std::string &title) {
@@ -729,9 +756,48 @@ class TMRFileEditor : public TScroller {
 		return std::max(std::max(size.x, 256), std::max(delta.x + size.x + 64, cursorColumn + 64));
 	}
 
-	void updateMetrics() {
-		int limitX = 1;
-		int limitY = 1;
+		void scheduleLineIndexWarmupIfNeeded() {
+			if (!bufferModel_.document().hasMappedOriginal() || bufferModel_.document().exactLineCountKnown()) {
+				lineIndexWarmupTaskId_ = 0;
+				lineIndexWarmupDocumentId_ = 0;
+				lineIndexWarmupVersion_ = 0;
+				return;
+			}
+
+			const std::size_t docId = bufferModel_.documentId();
+			const std::size_t version = bufferModel_.version();
+			if (lineIndexWarmupTaskId_ != 0 && lineIndexWarmupDocumentId_ == docId &&
+			    lineIndexWarmupVersion_ == version)
+				return;
+
+			TMRTextBufferModel::ReadSnapshot snapshot = bufferModel_.readSnapshot();
+			lineIndexWarmupDocumentId_ = docId;
+			lineIndexWarmupVersion_ = version;
+			lineIndexWarmupTaskId_ = mr::coprocessor::globalCoprocessor().submit(
+			    mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::LineIndexWarmup, docId, version,
+			    "line-index-warmup",
+			    [snapshot](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
+				    mr::coprocessor::Result result;
+				    result.task = info;
+				    if (stopToken.stop_requested()) {
+					    result.status = mr::coprocessor::TaskStatus::Cancelled;
+					    return result;
+				    }
+				    mr::editor::LineIndexWarmupData warmup = snapshot.completeLineIndexWarmup();
+				    if (stopToken.stop_requested()) {
+					    result.status = mr::coprocessor::TaskStatus::Cancelled;
+					    return result;
+				    }
+				    result.status = mr::coprocessor::TaskStatus::Completed;
+				    result.payload =
+				        std::make_shared<mr::coprocessor::LineIndexWarmupPayload>(warmup);
+				    return result;
+			    });
+		}
+
+		void updateMetrics() {
+			int limitX = 1;
+			int limitY = 1;
 
 		if (useApproximateLargeFileMetrics()) {
 			limitX = dynamicLargeFileWidthLimit();
@@ -741,7 +807,7 @@ class TMRFileEditor : public TScroller {
 			limitY = std::max<int>(1, static_cast<int>(bufferModel_.lineCount()));
 		}
 
-		int maxX = std::max(0, limitX - size.x);
+			int maxX = std::max(0, limitX - size.x);
 		int maxY = std::max(0, limitY - size.y);
 		int newDeltaX = std::min(std::max(delta.x, 0), maxX);
 		int newDeltaY = std::min(std::max(delta.y, 0), maxY);
@@ -1243,12 +1309,13 @@ class TMRFileEditor : public TScroller {
 		bufferModel_.document() = document;
 		bufferModel_.setSyntaxContext(hasPersistentFileName() ? fileName : "", syntaxTitleHint_);
 		bufferModel_.setCursorAndSelection(cursorPos, selStart, selEnd);
-		bufferModel_.setModified(modifiedState);
-		selectionAnchor_ = selStart;
-		updateMetrics();
-		ensureCursorVisible(true);
-		updateIndicator();
-		drawView();
+			bufferModel_.setModified(modifiedState);
+			selectionAnchor_ = selStart;
+			updateMetrics();
+			scheduleLineIndexWarmupIfNeeded();
+			ensureCursorVisible(true);
+			updateIndicator();
+			drawView();
 		return true;
 	}
 
@@ -1259,10 +1326,13 @@ class TMRFileEditor : public TScroller {
 	char fileName[MAXPATH];
 	std::string syntaxTitleHint_;
 		TMRTextBufferModel bufferModel_;
-		uint delCount_;
-		uint insCount_;
-		std::size_t selectionAnchor_;
-		bool indicatorUpdateInProgress_;
-	};
+			uint delCount_;
+			uint insCount_;
+			std::size_t selectionAnchor_;
+			bool indicatorUpdateInProgress_;
+			std::uint64_t lineIndexWarmupTaskId_;
+			std::size_t lineIndexWarmupDocumentId_;
+			std::size_t lineIndexWarmupVersion_;
+		};
 
 #endif

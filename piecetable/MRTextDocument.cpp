@@ -1,6 +1,7 @@
 #include "MRTextDocument.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cerrno>
 #include <cstring>
 #include <fcntl.h>
@@ -13,6 +14,11 @@ namespace editor {
 
 namespace {
 constexpr std::size_t kLazyLineIndexStride = 4096;
+
+std::size_t allocateDocumentId() noexcept {
+	static std::atomic<std::size_t> nextId(1);
+	return nextId.fetch_add(1, std::memory_order_relaxed);
+}
 }
 
 struct MappedFileSource::State {
@@ -228,17 +234,24 @@ void StagedEditTransaction::replace(Range range, const std::string &text) {
 	    StagedEditOperation(EditKind::Replace, range, addBuffer_.append(text)));
 }
 
+StagedEditTransaction::StagedEditTransaction(const ReadSnapshot &snapshot,
+                                             const std::string &label)
+    : baseVersion_(snapshot.version()), label_(label), addBuffer_(), operations_() {
+}
+
 TextDocument::TextDocument() noexcept
-    : originalBuffer_(), mappedOriginal_(), addBuffer_(), pieces_(), length_(0), version_(0),
-      cacheDirty_(false), materializedText_(), lineIndexCheckpoints_(), lazyIndexedOffset_(0),
-      lazyIndexedLine_(0), lazyLineIndexComplete_(false), lazyTotalLineCount_(1) {
+    : originalBuffer_(), mappedOriginal_(), addBuffer_(), pieces_(), length_(0),
+      documentId_(allocateDocumentId()), version_(0), cacheDirty_(false), materializedText_(),
+      lineIndexCheckpoints_(), lazyIndexedOffset_(0), lazyIndexedLine_(0),
+      lazyLineIndexComplete_(false), lazyTotalLineCount_(1) {
 	resetLazyLineIndex();
 }
 
 TextDocument::TextDocument(const std::string &text)
-    : originalBuffer_(), mappedOriginal_(), addBuffer_(), pieces_(), length_(0), version_(0),
-      cacheDirty_(false), materializedText_(), lineIndexCheckpoints_(), lazyIndexedOffset_(0),
-      lazyIndexedLine_(0), lazyLineIndexComplete_(false), lazyTotalLineCount_(1) {
+    : originalBuffer_(), mappedOriginal_(), addBuffer_(), pieces_(), length_(0),
+      documentId_(allocateDocumentId()), version_(0), cacheDirty_(false), materializedText_(),
+      lineIndexCheckpoints_(), lazyIndexedOffset_(0), lazyIndexedLine_(0),
+      lazyLineIndexComplete_(false), lazyTotalLineCount_(1) {
 	resetLazyLineIndex();
 	initializeFromOriginal(text, true);
 }
@@ -265,6 +278,469 @@ char TextDocument::charAt(Offset pos) const noexcept {
 
 Snapshot TextDocument::snapshot() const {
 	return Snapshot(text(), version_);
+}
+
+ReadSnapshot TextDocument::readSnapshot() const {
+	ReadSnapshot snapshot;
+	snapshot.documentId_ = documentId_;
+	snapshot.version_ = version_;
+	snapshot.mappedOriginal_ = mappedOriginal_;
+	snapshot.originalBuffer_ = std::make_shared<const std::string>(originalBuffer_);
+	snapshot.addBuffer_ = std::make_shared<const std::string>(addBuffer_.text());
+	snapshot.pieces_ = std::make_shared<const std::vector<Piece>>(pieces_);
+	snapshot.length_ = length_;
+	snapshot.cacheDirty_ = cacheDirty_;
+	snapshot.materializedText_ = cacheDirty_ ? std::string() : materializedText_;
+	snapshot.lineIndexCheckpoints_ = lineIndexCheckpoints_;
+	snapshot.lazyIndexedOffset_ = lazyIndexedOffset_;
+	snapshot.lazyIndexedLine_ = lazyIndexedLine_;
+	snapshot.lazyLineIndexComplete_ = lazyLineIndexComplete_;
+	snapshot.lazyTotalLineCount_ = lazyTotalLineCount_;
+	if (snapshot.lineIndexCheckpoints_.empty())
+		snapshot.resetLazyLineIndex();
+	return snapshot;
+}
+
+bool TextDocument::adoptLineIndexWarmup(const LineIndexWarmupData &warmup,
+                                        std::size_t expectedVersion) noexcept {
+	if (!matchesVersion(expectedVersion) || !hasDirectOriginalView())
+		return false;
+	if (warmup.checkpoints.empty())
+		return false;
+
+	const bool currentComplete = lazyLineIndexComplete_;
+	const Offset currentOffset = lazyIndexedOffset_;
+	const std::size_t currentCheckpointCount = lineIndexCheckpoints_.size();
+
+	const bool incomingBetter = !currentComplete && warmup.lazyLineIndexComplete;
+	const bool incomingFurther = warmup.lazyIndexedOffset > currentOffset;
+	const bool incomingDenser = warmup.checkpoints.size() > currentCheckpointCount;
+
+	if (!incomingBetter && !incomingFurther && !incomingDenser)
+		return false;
+
+	lineIndexCheckpoints_ = warmup.checkpoints;
+	lazyIndexedOffset_ = warmup.lazyIndexedOffset;
+	lazyIndexedLine_ = warmup.lazyIndexedLine;
+	lazyLineIndexComplete_ = warmup.lazyLineIndexComplete;
+	lazyTotalLineCount_ = warmup.lazyTotalLineCount;
+	if (lineIndexCheckpoints_.empty())
+		resetLazyLineIndex();
+	return true;
+}
+
+ReadSnapshot::ReadSnapshot() noexcept
+    : documentId_(0), version_(0), mappedOriginal_(), originalBuffer_(), addBuffer_(), pieces_(),
+      length_(0), cacheDirty_(false), materializedText_(), lineIndexCheckpoints_(),
+      lazyIndexedOffset_(0), lazyIndexedLine_(0), lazyLineIndexComplete_(true),
+      lazyTotalLineCount_(1) {
+	resetLazyLineIndex();
+}
+
+Offset ReadSnapshot::length() const noexcept {
+	return length_;
+}
+
+bool ReadSnapshot::empty() const noexcept {
+	return length_ == 0;
+}
+
+char ReadSnapshot::charAt(Offset pos) const noexcept {
+	if (const char *data = directTextData())
+		return pos < length_ ? data[pos] : '\0';
+	const std::string flat = text();
+	return pos < flat.size() ? flat[pos] : '\0';
+}
+
+std::string ReadSnapshot::text() const {
+	ensureMaterialized();
+	return materializedText_;
+}
+
+std::size_t ReadSnapshot::addBufferLength() const noexcept {
+	return addBuffer_ != nullptr ? addBuffer_->size() : 0;
+}
+
+std::size_t ReadSnapshot::pieceCount() const noexcept {
+	return pieces_ != nullptr ? pieces_->size() : 0;
+}
+
+PieceChunkView ReadSnapshot::pieceChunk(std::size_t index) const noexcept {
+	if (pieces_ == nullptr || index >= pieces_->size())
+		return PieceChunkView();
+
+	const Piece &piece = (*pieces_)[index];
+	if (piece.empty())
+		return PieceChunkView();
+	if (piece.source == BufferKind::Original) {
+		const char *base = originalData();
+		if (base == nullptr)
+			return PieceChunkView();
+		return PieceChunkView(base + piece.span.start, piece.span.length);
+	}
+	if (addBuffer_ == nullptr || piece.span.start >= addBuffer_->size())
+		return PieceChunkView();
+	return PieceChunkView(addBuffer_->data() + piece.span.start, piece.span.length);
+}
+
+Offset ReadSnapshot::clampOffset(Offset pos) const noexcept {
+	return std::min(pos, length_);
+}
+
+std::size_t ReadSnapshot::lineCount() const noexcept {
+	if (const char *data = directTextData()) {
+		static_cast<void>(data);
+		ensureLazyIndexComplete();
+		return lazyTotalLineCount_;
+	}
+
+	const std::string flat = text();
+	std::size_t lines = 1;
+	for (Offset i = 0; i < flat.size(); ++i) {
+		if (flat[i] == '\n')
+			++lines;
+		else if (flat[i] == '\r') {
+			++lines;
+			if (i + 1 < flat.size() && flat[i + 1] == '\n')
+				++i;
+		}
+	}
+	return lines;
+}
+
+Offset ReadSnapshot::lineStart(Offset pos) const noexcept {
+	if (const char *data = directTextData()) {
+		pos = clampOffset(pos);
+		while (pos > 0 && !isLineBreakChar(data[pos - 1]))
+			--pos;
+		return pos;
+	}
+
+	const std::string flat = text();
+	pos = clampOffset(pos);
+	while (pos > 0 && !isLineBreakChar(flat[pos - 1]))
+		--pos;
+	return pos;
+}
+
+Offset ReadSnapshot::lineEnd(Offset pos) const noexcept {
+	if (const char *data = directTextData()) {
+		pos = clampOffset(pos);
+		while (pos < length_ && !isLineBreakChar(data[pos]))
+			++pos;
+		return pos;
+	}
+
+	const std::string flat = text();
+	pos = clampOffset(pos);
+	while (pos < flat.size() && !isLineBreakChar(flat[pos]))
+		++pos;
+	return pos;
+}
+
+Offset ReadSnapshot::nextLine(Offset pos) const noexcept {
+	if (const char *data = directTextData()) {
+		pos = lineEnd(pos);
+		if (pos < length_) {
+			if (data[pos] == '\r' && pos + 1 < length_ && data[pos + 1] == '\n')
+				pos += 2;
+			else
+				++pos;
+		}
+		return pos;
+	}
+
+	const std::string flat = text();
+	pos = lineEnd(pos);
+	if (pos < flat.size()) {
+		if (flat[pos] == '\r' && pos + 1 < flat.size() && flat[pos + 1] == '\n')
+			pos += 2;
+		else
+			++pos;
+	}
+	return pos;
+}
+
+Offset ReadSnapshot::prevLine(Offset pos) const noexcept {
+	if (const char *data = directTextData()) {
+		pos = lineStart(pos);
+		if (pos == 0)
+			return 0;
+		--pos;
+		if (pos > 0 && data[pos - 1] == '\r' && data[pos] == '\n')
+			--pos;
+		while (pos > 0 && !isLineBreakChar(data[pos - 1]))
+			--pos;
+		return pos;
+	}
+
+	const std::string flat = text();
+	pos = lineStart(pos);
+	if (pos == 0)
+		return 0;
+	--pos;
+	if (pos > 0 && flat[pos - 1] == '\r' && flat[pos] == '\n')
+		--pos;
+	return lineStart(pos);
+}
+
+std::size_t ReadSnapshot::lineIndex(Offset pos) const noexcept {
+	if (const char *data = directTextData()) {
+		pos = clampOffset(pos);
+		static_cast<void>(data);
+		ensureLazyIndexForOffset(pos);
+		if (lineIndexCheckpoints_.empty())
+			return 0;
+
+		std::size_t left = 0;
+		std::size_t right = lineIndexCheckpoints_.size();
+		while (left < right) {
+			std::size_t mid = left + (right - left) / 2;
+			if (lineIndexCheckpoints_[mid].offset <= pos)
+				left = mid + 1;
+			else
+				right = mid;
+		}
+		LineIndexCheckpoint checkpoint =
+		    lineIndexCheckpoints_[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
+		Offset cursor = checkpoint.offset;
+		std::size_t line = checkpoint.lineIndex;
+		while (cursor < pos) {
+			Offset next = cursor;
+			if (!directAdvanceLine(next) || next > pos)
+				break;
+			cursor = next;
+			++line;
+		}
+		return line;
+	}
+
+	const std::string flat = text();
+	std::size_t line = 0;
+	pos = clampOffset(pos);
+	for (Offset i = 0; i < pos; ++i) {
+		if (flat[i] == '\n')
+			++line;
+		else if (flat[i] == '\r') {
+			++line;
+			if (i + 1 < pos && flat[i + 1] == '\n')
+				++i;
+		}
+	}
+	return line;
+}
+
+Offset ReadSnapshot::lineStartByIndex(std::size_t index) const noexcept {
+	if (const char *data = directTextData()) {
+		static_cast<void>(data);
+		ensureLazyIndexForLine(index);
+		if (lineIndexCheckpoints_.empty())
+			return 0;
+		if (lazyLineIndexComplete_ && index >= lazyTotalLineCount_)
+			index = lazyTotalLineCount_ > 0 ? lazyTotalLineCount_ - 1 : 0;
+
+		std::size_t left = 0;
+		std::size_t right = lineIndexCheckpoints_.size();
+		while (left < right) {
+			std::size_t mid = left + (right - left) / 2;
+			if (lineIndexCheckpoints_[mid].lineIndex <= index)
+				left = mid + 1;
+			else
+				right = mid;
+		}
+		LineIndexCheckpoint checkpoint =
+		    lineIndexCheckpoints_[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
+		Offset cursor = checkpoint.offset;
+		std::size_t line = checkpoint.lineIndex;
+		while (line < index) {
+			Offset next = cursor;
+			if (!directAdvanceLine(next))
+				break;
+			cursor = next;
+			++line;
+		}
+		return cursor;
+	}
+
+	std::size_t line = 0;
+	Offset pos = 0;
+	Offset len = length();
+	while (line < index && pos < len) {
+		Offset next = nextLine(pos);
+		if (next <= pos)
+			break;
+		pos = next;
+		++line;
+	}
+	return pos;
+}
+
+std::size_t ReadSnapshot::estimatedLineCount() const noexcept {
+	if (const char *data = directTextData()) {
+		static_cast<void>(data);
+		ensureLazyIndexSeeded();
+		if (lazyLineIndexComplete_)
+			return lazyTotalLineCount_;
+		if (lazyIndexedOffset_ == 0 || lazyIndexedLine_ == 0)
+			return std::max<std::size_t>(1, length_ / 80 + 1);
+
+		const std::size_t observedLines = lazyIndexedLine_ + 1;
+		const std::size_t estimated =
+		    static_cast<std::size_t>((static_cast<long double>(length_) * observedLines) /
+		                             std::max<Offset>(lazyIndexedOffset_, 1));
+		return std::max<std::size_t>(observedLines, estimated);
+	}
+
+	return lineCount();
+}
+
+bool ReadSnapshot::exactLineCountKnown() const noexcept {
+	return !hasDirectOriginalView() || lazyLineIndexComplete_;
+}
+
+std::size_t ReadSnapshot::column(Offset pos) const noexcept {
+	pos = clampOffset(pos);
+	return pos - lineStart(pos);
+}
+
+std::string ReadSnapshot::lineText(Offset pos) const {
+	Offset start = lineStart(pos);
+	Offset end = lineEnd(pos);
+	if (const char *data = directTextData())
+		return std::string(data + start, end - start);
+	return text().substr(start, end - start);
+}
+
+LineIndexWarmupData ReadSnapshot::completeLineIndexWarmup() const {
+	LineIndexWarmupData warmup;
+	ensureLazyIndexComplete();
+	warmup.checkpoints = lineIndexCheckpoints_;
+	warmup.lazyIndexedOffset = lazyIndexedOffset_;
+	warmup.lazyIndexedLine = lazyIndexedLine_;
+	warmup.lazyLineIndexComplete = lazyLineIndexComplete_;
+	warmup.lazyTotalLineCount = lazyTotalLineCount_;
+	return warmup;
+}
+
+bool ReadSnapshot::isLineBreakChar(char ch) const noexcept {
+	return ch == '\n' || ch == '\r';
+}
+
+bool ReadSnapshot::hasDirectOriginalView() const noexcept {
+	return mappedOriginal_.mapped() && addBufferLength() == 0 && pieces_ != nullptr &&
+	       pieces_->size() == 1 && (*pieces_)[0].source == BufferKind::Original &&
+	       (*pieces_)[0].span.start == 0 && (*pieces_)[0].span.length == length_;
+}
+
+const char *ReadSnapshot::directTextData() const noexcept {
+	return hasDirectOriginalView() ? mappedOriginal_.data() : nullptr;
+}
+
+void ReadSnapshot::resetLazyLineIndex() noexcept {
+	lineIndexCheckpoints_.clear();
+	lineIndexCheckpoints_.push_back(LineIndexCheckpoint(0, 0));
+	lazyIndexedOffset_ = 0;
+	lazyIndexedLine_ = 0;
+	lazyLineIndexComplete_ = (length_ == 0);
+	lazyTotalLineCount_ = 1;
+}
+
+bool ReadSnapshot::directAdvanceLine(Offset &offset) const noexcept {
+	const char *data = directTextData();
+	if (data == nullptr)
+		return false;
+	if (offset >= length_)
+		return false;
+
+	while (offset < length_ && !isLineBreakChar(data[offset]))
+		++offset;
+	if (offset >= length_)
+		return false;
+	if (data[offset] == '\r' && offset + 1 < length_ && data[offset + 1] == '\n')
+		offset += 2;
+	else
+		++offset;
+	return true;
+}
+
+void ReadSnapshot::ensureLazyIndexSeeded() const noexcept {
+	if (!hasDirectOriginalView())
+		return;
+	if (lineIndexCheckpoints_.empty())
+		const_cast<ReadSnapshot *>(this)->resetLazyLineIndex();
+}
+
+void ReadSnapshot::advanceLazyIndexByStride() const noexcept {
+	ensureLazyIndexSeeded();
+	if (!hasDirectOriginalView() || lazyLineIndexComplete_)
+		return;
+
+	for (std::size_t steps = 0; steps < kLazyLineIndexStride; ++steps) {
+		Offset next = lazyIndexedOffset_;
+		if (!directAdvanceLine(next)) {
+			lazyLineIndexComplete_ = true;
+			lazyTotalLineCount_ = lazyIndexedLine_ + 1;
+			return;
+		}
+		lazyIndexedOffset_ = next;
+		++lazyIndexedLine_;
+		if ((lazyIndexedLine_ % kLazyLineIndexStride) == 0)
+			lineIndexCheckpoints_.push_back(LineIndexCheckpoint(lazyIndexedOffset_, lazyIndexedLine_));
+	}
+}
+
+void ReadSnapshot::ensureLazyIndexForLine(std::size_t targetLine) const noexcept {
+	ensureLazyIndexSeeded();
+	if (!hasDirectOriginalView())
+		return;
+	while (!lazyLineIndexComplete_ && lineIndexCheckpoints_.back().lineIndex < targetLine)
+		advanceLazyIndexByStride();
+}
+
+void ReadSnapshot::ensureLazyIndexForOffset(Offset targetOffset) const noexcept {
+	ensureLazyIndexSeeded();
+	if (!hasDirectOriginalView())
+		return;
+	targetOffset = clampOffset(targetOffset);
+	while (!lazyLineIndexComplete_ && lineIndexCheckpoints_.back().offset <= targetOffset)
+		advanceLazyIndexByStride();
+}
+
+void ReadSnapshot::ensureLazyIndexComplete() const noexcept {
+	ensureLazyIndexSeeded();
+	if (!hasDirectOriginalView())
+		return;
+	while (!lazyLineIndexComplete_)
+		advanceLazyIndexByStride();
+}
+
+const char *ReadSnapshot::originalData() const noexcept {
+	if (mappedOriginal_.mapped())
+		return mappedOriginal_.data();
+	return originalBuffer_ != nullptr ? originalBuffer_->data() : nullptr;
+}
+
+std::string ReadSnapshot::pieceText(const Piece &piece) const {
+	if (piece.source == BufferKind::Original) {
+		if (mappedOriginal_.mapped())
+			return mappedOriginal_.sliceText(piece.span);
+		if (originalBuffer_ != nullptr)
+			return originalBuffer_->substr(piece.span.start, piece.span.length);
+		return std::string();
+	}
+	return addBuffer_ != nullptr ? addBuffer_->substr(piece.span.start, piece.span.length) : std::string();
+}
+
+void ReadSnapshot::ensureMaterialized() const noexcept {
+	if (!cacheDirty_)
+		return;
+
+	materializedText_.clear();
+	materializedText_.reserve(length_);
+	if (pieces_ != nullptr)
+		for (std::size_t i = 0; i < pieces_->size(); ++i)
+			materializedText_ += pieceText((*pieces_)[i]);
+	cacheDirty_ = false;
 }
 
 bool TextDocument::loadMappedFile(const std::string &path, std::string &error) {

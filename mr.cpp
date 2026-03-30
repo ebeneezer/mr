@@ -31,6 +31,7 @@
 
 #include "mrmac/mrmac.h"
 #include "mrmac/mrvm.hpp"
+#include "MRCoprocessor.hpp"
 #include "ui/TMRDeskTop.hpp"
 #include "ui/TMREditWindow.hpp"
 #include "ui/TMRMenuBar.hpp"
@@ -216,6 +217,56 @@ std::string trimPathInput(const std::string &path) {
 	    ((result.front() == '"' && result.back() == '"') || (result.front() == '\'' && result.back() == '\'')))
 		result = result.substr(1, result.size() - 2);
 	return result;
+}
+
+const char *coprocessorLaneName(mr::coprocessor::Lane lane) {
+	switch (lane) {
+		case mr::coprocessor::Lane::Io:
+			return "io";
+		case mr::coprocessor::Lane::Macro:
+			return "macro";
+		case mr::coprocessor::Lane::Compute:
+		default:
+			return "compute";
+	}
+}
+
+void handleCoprocessorResult(const mr::coprocessor::Result &result) {
+	if (result.completed()) {
+		const mr::coprocessor::IndicatorBlinkPayload *blink =
+		    dynamic_cast<const mr::coprocessor::IndicatorBlinkPayload *>(result.payload.get());
+		if (blink != nullptr) {
+			TMRIndicator::applyBlinkUpdate(blink->indicatorId, blink->generation, blink->visible);
+			return;
+		}
+
+		const mr::coprocessor::LineIndexWarmupPayload *warmup =
+		    dynamic_cast<const mr::coprocessor::LineIndexWarmupPayload *>(result.payload.get());
+		if (warmup != nullptr) {
+			std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+			for (std::size_t i = 0; i < windows.size(); ++i) {
+				TMRFileEditor *editor = windows[i] != nullptr ? windows[i]->getEditor() : nullptr;
+				if (editor == nullptr)
+					continue;
+				if (editor->documentId() != result.task.documentId ||
+				    editor->documentVersion() != result.task.baseVersion)
+					continue;
+				editor->applyLineIndexWarmup(warmup->warmup, result.task.baseVersion);
+			}
+			return;
+		}
+	}
+
+	if (!result.failed())
+		return;
+
+	std::ostringstream line;
+	line << "Coprocessor[" << coprocessorLaneName(result.task.lane) << "] "
+	     << (result.task.label.empty() ? "task" : result.task.label)
+	     << " failed";
+	if (!result.error.empty())
+		line << ": " << result.error;
+	mrLogMessage(line.str().c_str());
 }
 
 std::string expandUserPath(const char *path) {
@@ -1130,10 +1181,15 @@ class TMREditorApp : public TApplication {
 	TMREditorApp()
 	    : TProgInit(&TMREditorApp::initMRStatusLine, &TMREditorApp::initMRMenuBar,
 	                &TMREditorApp::initMRDeskTop) {
+		mr::coprocessor::globalCoprocessor().setResultHandler(handleCoprocessorResult);
 		createEditorWindow("?No-File?");
 		mrEnsureLogWindow(false);
 		mrLogMessage("Editor session started.");
 		updateAppCommandState();
+	}
+
+	virtual ~TMREditorApp() override {
+		mr::coprocessor::globalCoprocessor().shutdown();
 	}
 
 	virtual void handleEvent(TEvent &event) override {
@@ -1149,6 +1205,7 @@ class TMREditorApp : public TApplication {
 
 	virtual void idle() override {
 		TApplication::idle();
+		mr::coprocessor::globalCoprocessor().pump(8);
 		updateAppCommandState();
 	}
 

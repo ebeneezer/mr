@@ -35,7 +35,7 @@ TVISION_ACTIVE_BUILD_DIR := $(TVISION_SOURCE_DIR)/build
 endif
 
 # Include paths
-INCLUDES = -I$(TVISION_ACTIVE_SOURCE_DIR)/include -I./mrmac -I./piecetable -I./ui
+INCLUDES = -I$(TVISION_ACTIVE_SOURCE_DIR)/include -I./mrmac -I./piecetable -I./ui -I./coprocessor
 
 # Language/runtime configuration.
 CXXSTD ?= gnu++20
@@ -75,6 +75,7 @@ CXX_SOURCES = \
 	ui/mrmacrotest.cpp \
 	ui/mrwindowlist.cpp \
 	ui/TMRSyntax.cpp \
+	coprocessor/MRCoprocessor.cpp \
 	piecetable/MRTextDocument.cpp
 
 CXX_OBJECTS = $(CXX_SOURCES:.cpp=.o)
@@ -161,12 +162,13 @@ mrmac/parser.tab.o: mrmac/parser.tab.c mrmac/parser.tab.h mrmac/mrmac.h
 mrmac/mrmac.o: mrmac/mrmac.c mrmac/parser.tab.h mrmac/mrmac.h
 
 # 3. Dependencies for C++ compilation
-mr.o: mr.cpp mrmac/mrmac.h mrmac/mrvm.hpp ui/mrpalette.hpp ui/mrmacrotest.hpp ui/mrwindowlist.hpp ui/TMREditWindow.hpp ui/TMRIndicator.hpp ui/TMRFileEditor.hpp ui/TMRTextBuffer.hpp ui/TMRTextBufferModel.hpp ui/TMRSyntax.hpp piecetable/MRTextDocument.hpp
+mr.o: mr.cpp mrmac/mrmac.h mrmac/mrvm.hpp ui/mrpalette.hpp ui/mrmacrotest.hpp ui/mrwindowlist.hpp ui/TMREditWindow.hpp ui/TMRIndicator.hpp ui/TMRFileEditor.hpp ui/TMRTextBuffer.hpp ui/TMRTextBufferModel.hpp ui/TMRSyntax.hpp piecetable/MRTextDocument.hpp coprocessor/MRCoprocessor.hpp
 mrmac/mrvm.o: mrmac/mrvm.cpp mrmac/mrvm.hpp mrmac/mrmac.h ui/mrwindowlist.hpp ui/TMREditWindow.hpp ui/TMRTextBuffer.hpp ui/TMRFileEditor.hpp ui/TMRTextBufferModel.hpp ui/TMRSyntax.hpp piecetable/MRTextDocument.hpp
 ui/mrpalette.o: ui/mrpalette.cpp ui/mrpalette.hpp
 ui/mrmacrotest.o: ui/mrmacrotest.cpp ui/mrmacrotest.hpp mrmac/mrmac.h mrmac/mrvm.hpp
 ui/mrwindowlist.o: ui/mrwindowlist.cpp ui/mrwindowlist.hpp ui/TMREditWindow.hpp ui/TMRIndicator.hpp ui/TMRFileEditor.hpp ui/TMRTextBuffer.hpp ui/TMRTextBufferModel.hpp ui/TMRSyntax.hpp piecetable/MRTextDocument.hpp
 ui/TMRSyntax.o: ui/TMRSyntax.cpp ui/TMRSyntax.hpp
+coprocessor/MRCoprocessor.o: coprocessor/MRCoprocessor.cpp coprocessor/MRCoprocessor.hpp piecetable/MRTextDocument.hpp
 piecetable/MRTextDocument.o: piecetable/MRTextDocument.cpp piecetable/MRTextDocument.hpp
 
 # 4. Linker call

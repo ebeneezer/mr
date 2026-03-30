@@ -10,6 +10,7 @@
 class TMRTextBufferModel {
   public:
 	using Document = mr::editor::TextDocument;
+	using ReadSnapshot = mr::editor::ReadSnapshot;
 	using Cursor = mr::editor::Cursor;
 	using Range = mr::editor::Range;
 	using Selection = mr::editor::Selection;
@@ -71,8 +72,16 @@ class TMRTextBufferModel {
 		return document_.snapshot();
 	}
 
+	ReadSnapshot readSnapshot() const {
+		return document_.readSnapshot();
+	}
+
 	std::size_t version() const noexcept {
 		return document_.version();
+	}
+
+	std::size_t documentId() const noexcept {
+		return document_.documentId();
 	}
 
 	bool matchesSnapshot(const Snapshot &snapshot) const noexcept {
@@ -102,6 +111,11 @@ class TMRTextBufferModel {
 			clampState();
 		}
 		return result;
+	}
+
+	bool adoptLineIndexWarmup(const mr::editor::LineIndexWarmupData &warmup,
+	                          std::size_t expectedVersion) noexcept {
+		return document_.adoptLineIndexWarmup(warmup, expectedVersion);
 	}
 
 	std::size_t cursor() const noexcept {

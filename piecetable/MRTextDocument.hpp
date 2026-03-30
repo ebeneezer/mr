@@ -147,6 +147,8 @@ class AppendBuffer {
 	std::string text_;
 };
 
+class ReadSnapshot;
+
 // Separate producer-side buffer for future async macro work; commits remain serialized.
 class StagedAddBuffer {
   public:
@@ -253,6 +255,9 @@ class StagedEditTransaction {
 	explicit StagedEditTransaction(const Snapshot &snapshot, const std::string &label = std::string())
 	    : baseVersion_(snapshot.version), label_(label), addBuffer_(), operations_() {
 	}
+
+	explicit StagedEditTransaction(const ReadSnapshot &snapshot,
+	                               const std::string &label = std::string());
 
 	std::size_t baseVersion() const noexcept {
 		return baseVersion_;
@@ -363,6 +368,95 @@ struct LineIndexCheckpoint {
 	}
 };
 
+struct LineIndexWarmupData {
+	std::vector<LineIndexCheckpoint> checkpoints;
+	Offset lazyIndexedOffset;
+	std::size_t lazyIndexedLine;
+	bool lazyLineIndexComplete;
+	std::size_t lazyTotalLineCount;
+
+	LineIndexWarmupData() noexcept
+	    : checkpoints(), lazyIndexedOffset(0), lazyIndexedLine(0), lazyLineIndexComplete(false),
+	      lazyTotalLineCount(1) {
+	}
+};
+
+class ReadSnapshot {
+  public:
+	ReadSnapshot() noexcept;
+
+	std::size_t documentId() const noexcept {
+		return documentId_;
+	}
+
+	std::size_t version() const noexcept {
+		return version_;
+	}
+
+	Offset length() const noexcept;
+	bool empty() const noexcept;
+	char charAt(Offset pos) const noexcept;
+	std::string text() const;
+
+	bool hasMappedOriginal() const noexcept {
+		return mappedOriginal_.mapped();
+	}
+
+	const std::string &mappedPath() const noexcept {
+		return mappedOriginal_.path();
+	}
+
+	std::size_t addBufferLength() const noexcept;
+	std::size_t pieceCount() const noexcept;
+	PieceChunkView pieceChunk(std::size_t index) const noexcept;
+
+	Offset clampOffset(Offset pos) const noexcept;
+	std::size_t lineCount() const noexcept;
+	Offset lineStart(Offset pos) const noexcept;
+	Offset lineEnd(Offset pos) const noexcept;
+	Offset nextLine(Offset pos) const noexcept;
+	Offset prevLine(Offset pos) const noexcept;
+	std::size_t lineIndex(Offset pos) const noexcept;
+	Offset lineStartByIndex(std::size_t index) const noexcept;
+	std::size_t estimatedLineCount() const noexcept;
+	bool exactLineCountKnown() const noexcept;
+	std::size_t column(Offset pos) const noexcept;
+	std::string lineText(Offset pos) const;
+	LineIndexWarmupData completeLineIndexWarmup() const;
+
+  private:
+	friend class TextDocument;
+
+	bool isLineBreakChar(char ch) const noexcept;
+	bool hasDirectOriginalView() const noexcept;
+	const char *directTextData() const noexcept;
+	void resetLazyLineIndex() noexcept;
+	bool directAdvanceLine(Offset &offset) const noexcept;
+	void ensureLazyIndexSeeded() const noexcept;
+	void advanceLazyIndexByStride() const noexcept;
+	void ensureLazyIndexForLine(std::size_t targetLine) const noexcept;
+	void ensureLazyIndexForOffset(Offset targetOffset) const noexcept;
+	void ensureLazyIndexComplete() const noexcept;
+	const char *originalData() const noexcept;
+	std::string pieceText(const Piece &piece) const;
+	void ensureMaterialized() const noexcept;
+
+	std::size_t documentId_;
+	std::size_t version_;
+	MappedFileSource mappedOriginal_;
+	std::shared_ptr<const std::string> originalBuffer_;
+	std::shared_ptr<const std::string> addBuffer_;
+	std::shared_ptr<const std::vector<Piece>> pieces_;
+	Offset length_;
+	mutable bool cacheDirty_;
+	mutable std::string materializedText_;
+	mutable std::vector<LineIndexCheckpoint> lineIndexCheckpoints_;
+	mutable Offset lazyIndexedOffset_;
+	mutable std::size_t lazyIndexedLine_;
+	mutable bool lazyLineIndexComplete_;
+	mutable std::size_t lazyTotalLineCount_;
+};
+
 class TextDocument {
   public:
 	TextDocument() noexcept;
@@ -373,9 +467,15 @@ class TextDocument {
 	bool empty() const noexcept;
 	char charAt(Offset pos) const noexcept;
 	Snapshot snapshot() const;
+	ReadSnapshot readSnapshot() const;
+	bool adoptLineIndexWarmup(const LineIndexWarmupData &warmup, std::size_t expectedVersion) noexcept;
 
 	std::size_t version() const noexcept {
 		return version_;
+	}
+
+	std::size_t documentId() const noexcept {
+		return documentId_;
 	}
 
 	bool matchesVersion(std::size_t expectedVersion) const noexcept {
@@ -466,6 +566,7 @@ class TextDocument {
 	AppendBuffer addBuffer_;
 	std::vector<Piece> pieces_;
 	Offset length_;
+	std::size_t documentId_;
 	std::size_t version_;
 	mutable bool cacheDirty_;
 	mutable std::string materializedText_;

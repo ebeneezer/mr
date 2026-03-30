@@ -25,6 +25,11 @@ class TMRTextBuffer {
 		return editor_ != nullptr ? editor_->bufferModel().snapshot() : TMRTextBufferModel::Snapshot();
 	}
 
+	TMRTextBufferModel::ReadSnapshot readSnapshot() const {
+		return editor_ != nullptr ? editor_->bufferModel().readSnapshot()
+		                         : TMRTextBufferModel::ReadSnapshot();
+	}
+
 	TMRTextBufferModel::Range selectionRange() const noexcept {
 		return editor_ != nullptr ? editor_->bufferModel().selection().range() : TMRTextBufferModel::Range();
 	}
