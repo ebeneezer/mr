@@ -84,9 +84,12 @@ class TMREditWindow : public TWindow {
 		if (frame != nullptr) {
 			TMRFrame *mrFrame = static_cast<TMRFrame *>(frame);
 			mrFrame->setMarkerStateProvider([this]() {
-				return TMRFrame::MarkerState(isFileChanged(), insertModeEnabled(),
-				                             indicator != nullptr && indicator->shouldDrawTaskMarker(),
-				                             indicator != nullptr && indicator->shouldDrawReadOnlyMarker());
+				const bool hasTaskSlot = indicator != nullptr && indicator->hasTaskMarkerSlot();
+				const bool showTaskIcon = indicator != nullptr && indicator->shouldDrawTaskMarker();
+				const bool hasReadOnlySlot = indicator != nullptr && indicator->hasReadOnlyMarkerSlot();
+				const bool showReadOnlyIcon = indicator != nullptr && indicator->shouldDrawReadOnlyMarker();
+				return TMRFrame::MarkerState(isFileChanged(), insertModeEnabled(), hasTaskSlot, showTaskIcon,
+				                             hasReadOnlySlot, showReadOnlyIcon);
 			});
 			mrFrame->setTaskOverviewProvider([this]() { return describeRunningTasks(); });
 		}

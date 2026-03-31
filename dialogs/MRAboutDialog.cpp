@@ -23,6 +23,8 @@ namespace {
 
 constexpr uint kAnimationTickMs = 100;
 constexpr uint kQuoteRotateMs = 10000;
+constexpr uint kDoneLongPressMs = 700;
+constexpr ushort cmAboutDone = 0x6A10;
 
 const char *const kAboutQuotes[] = {
     "\"I live again.\" Caleb (Blood)",
@@ -70,7 +72,7 @@ std::vector<std::string> wrapQuoteText(const std::string &text, int maxWidth) {
 class MRAboutQuoteBox : public TView {
   public:
 	MRAboutQuoteBox(const TRect &bounds) noexcept
-	    : TView(bounds), currentLines_(), targetLines_(), animationFrame_(0), animationFramesTotal_(14),
+	    : TView(bounds), currentLines_(), targetLines_(), animationFrame_(0), animationFramesTotal_(22),
 	      animating_(false), scrambleSeed_(0x00C0DA42u) {
 		options |= ofBuffered;
 	}
@@ -152,6 +154,54 @@ class MRAboutQuoteBox : public TView {
 	}
 
   private:
+	struct SweepState {
+		int tail;
+		int front;
+		int revealUntil;
+
+		SweepState() noexcept : tail(0), front(0), revealUntil(-1) {
+		}
+	};
+
+	SweepState sweepStateForLength(std::size_t totalChars) const noexcept {
+		SweepState s;
+		int travel;
+		s.tail = std::max<int>(6, static_cast<int>(totalChars) / 4);
+		travel = static_cast<int>(totalChars) + s.tail;
+		s.front = travel == 0 ? 0 : (travel * animationFrame_) / std::max(1, animationFramesTotal_);
+		s.revealUntil = s.front - s.tail;
+		return s;
+	}
+
+	static TColorAttr scrambleColor(std::uint32_t &seed) noexcept {
+		static const unsigned char kFgColors[] = {
+		    0x0F, // bright white
+		    0x0E, // yellow
+		    0x0D, // bright magenta
+		    0x0C, // bright red
+		    0x0B, // bright cyan
+		    0x0A, // bright green
+		    0x09  // bright blue
+		};
+		static const unsigned char kBgColors[] = {
+		    0x01, // blue
+		    0x02, // green
+		    0x03, // cyan
+		    0x04, // red
+		    0x05, // magenta
+		    0x06, // brown/yellow
+		    0x07  // light gray
+		};
+		unsigned char fg;
+		unsigned char bg;
+		seed = seed * 1664525u + 1013904223u;
+		fg = kFgColors[seed % (sizeof(kFgColors) / sizeof(kFgColors[0]))];
+		seed = seed * 1664525u + 1013904223u;
+		bg = kBgColors[seed % (sizeof(kBgColors) / sizeof(kBgColors[0]))];
+		// Preserve DOS-style 4-bit fg + 3-bit bg mapping; black background is excluded by table.
+		return static_cast<TColorAttr>(((bg & 0x07u) << 4u) | (fg & 0x0Fu));
+	}
+
 	static char scrambleGlyph(std::uint32_t value) noexcept {
 		static const char glyphs[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?@#$%&*+=<>/\\[]{}";
 		return glyphs[value % (sizeof(glyphs) - 1)];
@@ -168,11 +218,7 @@ class MRAboutQuoteBox : public TView {
 			return target;
 
 		std::string out = target;
-		std::size_t totalChars = target.size();
-		std::size_t revealCount = totalChars == 0
-		                              ? 0
-		                              : (totalChars * static_cast<std::size_t>(animationFrame_)) /
-		                                    static_cast<std::size_t>(animationFramesTotal_);
+		SweepState sweep = sweepStateForLength(target.size());
 		std::uint32_t localSeed =
 		    scrambleSeed_ ^ static_cast<std::uint32_t>(lineIndex * 131u) ^
 		    static_cast<std::uint32_t>(animationFrame_ * 977u);
@@ -180,13 +226,14 @@ class MRAboutQuoteBox : public TView {
 			unsigned char c = static_cast<unsigned char>(out[i]);
 			if (c == ' ')
 				continue;
-			if (i < revealCount)
+			if (static_cast<int>(i) <= sweep.revealUntil)
 				continue;
 			localSeed = localSeed * 1664525u + 1013904223u;
 			out[i] = scrambleGlyph(localSeed);
 		}
-		if (revealCount < out.size())
-			out[revealCount] = '_';
+		if (sweep.front >= 0 && sweep.front < static_cast<int>(out.size()) &&
+		    out[static_cast<std::size_t>(sweep.front)] != ' ')
+			out[static_cast<std::size_t>(sweep.front)] = '_';
 		return out;
 	}
 
@@ -195,16 +242,40 @@ class MRAboutQuoteBox : public TView {
 			int baseRow = centeredBaseRow(targetLines_);
 			int lineIndex = row - baseRow;
 			if (0 <= lineIndex && lineIndex < static_cast<int>(targetLines_.size())) {
-				std::string line = scrambledLine(targetLines_[static_cast<std::size_t>(lineIndex)],
+				const std::string &target = targetLines_[static_cast<std::size_t>(lineIndex)];
+				std::string line = scrambledLine(target,
 				                                 static_cast<std::size_t>(lineIndex));
-				b.moveStr(2, line.c_str(), color, size.x - 4);
+				SweepState sweep = sweepStateForLength(target.size());
+				std::uint32_t colorSeed = scrambleSeed_ ^
+				                          static_cast<std::uint32_t>(animationFrame_ * 4099u) ^
+				                          static_cast<std::uint32_t>(lineIndex * 97u);
+				int innerWidth = std::max(0, size.x - 4);
+				int textWidth = std::max(0, strwidth(line.c_str()));
+				int startX = 2 + std::max(0, (innerWidth - textWidth) / 2);
+				int limit = std::min<int>(static_cast<int>(line.size()), innerWidth);
+				for (int i = 0; i < limit; ++i) {
+					unsigned char ch = static_cast<unsigned char>(line[static_cast<std::size_t>(i)]);
+					TColorAttr attr = color;
+					if (ch != ' ') {
+						if (i <= sweep.revealUntil)
+							attr = color;
+						else
+						attr = scrambleColor(colorSeed);
+					}
+					b.putChar(static_cast<ushort>(startX + i), ch);
+					b.putAttribute(static_cast<ushort>(startX + i), attr);
+				}
 			}
 		} else {
 			int baseRow = centeredBaseRow(currentLines_);
 			int lineIndex = row - baseRow;
-			if (0 <= lineIndex && lineIndex < static_cast<int>(currentLines_.size()))
-				b.moveStr(2, currentLines_[static_cast<std::size_t>(lineIndex)].c_str(), color,
-				          size.x - 4);
+			if (0 <= lineIndex && lineIndex < static_cast<int>(currentLines_.size())) {
+				const std::string &line = currentLines_[static_cast<std::size_t>(lineIndex)];
+				int innerWidth = std::max(0, size.x - 4);
+				int textWidth = std::max(0, strwidth(line.c_str()));
+				int startX = 2 + std::max(0, (innerWidth - textWidth) / 2);
+				b.moveStr(static_cast<ushort>(startX), line.c_str(), color, innerWidth);
+			}
 		}
 	}
 
@@ -220,7 +291,9 @@ class MRAboutDialog : public TDialog {
   public:
 	MRAboutDialog() noexcept
 	    : TWindowInit(&TDialog::initFrame), TDialog(centeredRect(76, 16), "ABOUT"), quoteBox_(nullptr),
-	      quoteIndex_(0), rotationTimer_(0), nextRotationAt_(), rearmRotationAfterAnimation_(false) {
+	      doneButton_(nullptr), quoteIndex_(0), quoteModeEnabled_(false), rotationTimer_(0),
+	      nextRotationAt_(), rearmRotationAfterAnimation_(false), donePressTracking_(false),
+	      doneLongPressTriggered_(false), suppressNextDoneCommand_(false), donePressStartedAt_() {
 		eventMask |= evBroadcast;
 		insertCenteredStaticLine(this, size.x, 2,
 		                         std::string("Multi-Edit Revisited ") + mrDisplayVersion());
@@ -228,9 +301,11 @@ class MRAboutDialog : public TDialog {
 
 		quoteBox_ = new MRAboutQuoteBox(TRect(4, 5, size.x - 4, 10));
 		insert(quoteBox_);
-		quoteBox_->setQuoteImmediate(std::string());
+		quoteBox_->setQuoteImmediate(kAboutQuotes[0]);
 
-		insert(new TButton(TRect(size.x / 2 - 5, 12, size.x / 2 + 5, 14), "Done", cmOK, bfDefault));
+		doneButton_ =
+		    new TButton(TRect(size.x / 2 - 5, 12, size.x / 2 + 5, 14), "Done", cmAboutDone, bfDefault);
+		insert(doneButton_);
 	}
 
 	~MRAboutDialog() override {
@@ -248,6 +323,18 @@ class MRAboutDialog : public TDialog {
 	}
 
 	void handleEvent(TEvent &event) override {
+		if (event.what == evMouseDown || event.what == evMouseUp)
+			trackDonePress(event);
+		if (event.what == evCommand && event.message.command == cmAboutDone) {
+			if (suppressNextDoneCommand_) {
+				suppressNextDoneCommand_ = false;
+				clearEvent(event);
+				return;
+			}
+			endModal(cmOK);
+			clearEvent(event);
+			return;
+		}
 		TDialog::handleEvent(event);
 		if (event.what == evBroadcast && event.message.command == cmTimerExpired &&
 		    event.message.infoPtr == rotationTimer_) {
@@ -258,15 +345,49 @@ class MRAboutDialog : public TDialog {
 
   private:
 	void armRotationTimer() {
-		if (rotationTimer_ == 0 && owner != nullptr) {
+		if (rotationTimer_ == 0 && owner != nullptr)
 			rotationTimer_ = setTimer(kAnimationTickMs, kAnimationTickMs);
-			quoteBox_->beginQuoteTransition(kAboutQuotes[quoteIndex_]);
-			rearmRotationAfterAnimation_ = true;
+	}
+
+	void trackDonePress(const TEvent &event) {
+		if (doneButton_ == nullptr)
+			return;
+		TPoint local = makeLocal(event.mouse.where);
+		bool insideDone = doneButton_->getBounds().contains(local);
+		if (event.what == evMouseDown) {
+			if (insideDone) {
+				donePressTracking_ = true;
+				doneLongPressTriggered_ = false;
+				donePressStartedAt_ = std::chrono::steady_clock::now();
+			}
+			return;
+		}
+		if (donePressTracking_) {
+			if (doneLongPressTriggered_)
+				suppressNextDoneCommand_ = true;
+			donePressTracking_ = false;
 		}
 	}
 
+	void enableQuoteModeFromLongPress() {
+		if (quoteModeEnabled_ || quoteBox_ == nullptr)
+			return;
+		quoteModeEnabled_ = true;
+		quoteIndex_ = 1;
+		quoteBox_->beginQuoteTransition(kAboutQuotes[quoteIndex_]);
+		rearmRotationAfterAnimation_ = true;
+	}
+
 	void tickQuoteRotation() {
-		if (quoteBox_ == nullptr)
+		if (donePressTracking_ && !doneLongPressTriggered_) {
+			if (std::chrono::steady_clock::now() - donePressStartedAt_ >=
+			    std::chrono::milliseconds(kDoneLongPressMs)) {
+				doneLongPressTriggered_ = true;
+				suppressNextDoneCommand_ = true;
+				enableQuoteModeFromLongPress();
+			}
+		}
+		if (quoteBox_ == nullptr || !quoteModeEnabled_)
 			return;
 		if (quoteBox_->animating()) {
 			quoteBox_->tickTransition();
@@ -278,16 +399,24 @@ class MRAboutDialog : public TDialog {
 		}
 		if (std::chrono::steady_clock::now() < nextRotationAt_)
 			return;
-		quoteIndex_ = (quoteIndex_ + 1) % (sizeof(kAboutQuotes) / sizeof(kAboutQuotes[0]));
+		quoteIndex_++;
+		if (quoteIndex_ >= (sizeof(kAboutQuotes) / sizeof(kAboutQuotes[0])))
+			quoteIndex_ = 1;
 		quoteBox_->beginQuoteTransition(kAboutQuotes[quoteIndex_]);
 		rearmRotationAfterAnimation_ = true;
 	}
 
 	MRAboutQuoteBox *quoteBox_;
+	TButton *doneButton_;
 	std::size_t quoteIndex_;
+	bool quoteModeEnabled_;
 	TTimerId rotationTimer_;
 	std::chrono::steady_clock::time_point nextRotationAt_;
 	bool rearmRotationAfterAnimation_;
+	bool donePressTracking_;
+	bool doneLongPressTriggered_;
+	bool suppressNextDoneCommand_;
+	std::chrono::steady_clock::time_point donePressStartedAt_;
 };
 
 } // namespace

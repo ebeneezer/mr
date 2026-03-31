@@ -41,13 +41,19 @@ class TMRFrame : public TFrame {
 		bool modified;
 		bool insertMode;
 		bool background;
+		bool backgroundVisible;
 		bool readOnly;
+		bool readOnlyVisible;
 
-		MarkerState() noexcept : modified(false), insertMode(false), background(false), readOnly(false) {
+		MarkerState() noexcept
+		    : modified(false), insertMode(false), background(false), backgroundVisible(false), readOnly(false),
+		      readOnlyVisible(false) {
 		}
 
-		MarkerState(bool aModified, bool anInsertMode, bool aBackground, bool aReadOnly) noexcept
-		    : modified(aModified), insertMode(anInsertMode), background(aBackground), readOnly(aReadOnly) {
+		MarkerState(bool aModified, bool anInsertMode, bool aBackground, bool aBackgroundVisible, bool aReadOnly,
+		            bool aReadOnlyVisible) noexcept
+		    : modified(aModified), insertMode(anInsertMode), background(aBackground),
+		      backgroundVisible(aBackgroundVisible), readOnly(aReadOnly), readOnlyVisible(aReadOnlyVisible) {
 		}
 	};
 

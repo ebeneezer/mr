@@ -24,8 +24,11 @@ static const char *kDragLeftIcon = "~\xC0\xC4~";
 
 static constexpr char kDirtyMarkerIcon[] = "✍";
 static constexpr char kTaskMarkerIcon[] = "🧠";
-static constexpr char kInsertMarkerIcon[] = "⎀";
-static constexpr int kMarkerGap = 1;
+static constexpr char kInsertMarkerIcon[] = "✚";
+static constexpr int kInsertMarkerSlotWidth = 1;
+static constexpr char kMarkerLeftBracket = '[';
+static constexpr char kMarkerRightBracket = ']';
+static constexpr int kMarkerGap = 0;
 
 int markerWidth(TStringView icon) noexcept {
 	return std::max(1, strwidth(icon));
@@ -127,7 +130,7 @@ TMRFrame::MarkerState TMRFrame::markerState() const {
 int TMRFrame::markerStartColumn() const noexcept {
 	TWindow *window = static_cast<TWindow *>(owner);
 	if (window != nullptr && (window->flags & wfClose) != 0 && (state & sfActive) != 0)
-		return 6;
+		return 7;
 	return 2;
 }
 
@@ -136,8 +139,8 @@ int TMRFrame::taskMarkerColumn(const MarkerState &state) const noexcept {
 	if (state.modified)
 		x = advanceMarkerX(x, kDirtyMarkerIcon, 2);
 	if (state.insertMode)
-		x = advanceMarkerX(x, kInsertMarkerIcon);
-	if (state.background)
+		x = advanceMarkerX(x, kInsertMarkerIcon, kInsertMarkerSlotWidth);
+	if (state.backgroundVisible)
 		return x;
 	return -1;
 }
@@ -147,7 +150,7 @@ int TMRFrame::markersEndColumn(const MarkerState &state) const noexcept {
 	if (state.modified)
 		x = advanceMarkerX(x, kDirtyMarkerIcon, 2);
 	if (state.insertMode)
-		x = advanceMarkerX(x, kInsertMarkerIcon);
+		x = advanceMarkerX(x, kInsertMarkerIcon, kInsertMarkerSlotWidth);
 	if (state.background)
 		x = advanceMarkerX(x, kTaskMarkerIcon, 2);
 	if (state.readOnly)
@@ -251,6 +254,15 @@ void TMRFrame::draw() {
 	}
 
 	int markerX = markerStartColumn();
+	bool showMarkerBlock = markers.modified || markers.insertMode || markers.background || markers.readOnly;
+	if (showMarkerBlock) {
+		int leftSepX = markerX - 1;
+		int rightSepX = markersEndColumn(markers);
+		if (leftSepX + 1 <= rightSepX - 1)
+			b.moveChar(static_cast<ushort>(leftSepX + 1), ' ', cTitle, rightSepX - leftSepX - 1);
+		if (leftSepX >= 1 && leftSepX < width - 1)
+			b.putChar(static_cast<ushort>(leftSepX), kMarkerLeftBracket);
+	}
 	if (markers.modified) {
 		int span = markerSpan(kDirtyMarkerIcon, 2);
 		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
@@ -258,43 +270,52 @@ void TMRFrame::draw() {
 		markerX = advanceMarkerX(markerX, kDirtyMarkerIcon, 2);
 	}
 	if (markers.insertMode) {
-		int span = markerSpan(kInsertMarkerIcon);
+		int span = markerSpan(kInsertMarkerIcon, kInsertMarkerSlotWidth);
 		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
 		b.moveStr(static_cast<ushort>(markerX), kInsertMarkerIcon, cTitle, span);
-		markerX = advanceMarkerX(markerX, kInsertMarkerIcon);
+		markerX = advanceMarkerX(markerX, kInsertMarkerIcon, kInsertMarkerSlotWidth);
 	}
-	if (markers.background) {
+	if (markers.backgroundVisible) {
 		TColorAttr taskColor = cTitle;
 		setFore(taskColor, TColorDesired(TColorRGB(0xFF, 0x79, 0xC6)));
 		setStyle(taskColor, getStyle(taskColor) | slBold);
 		int span = markerSpan(kTaskMarkerIcon, 2);
 		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
 		b.moveStr(static_cast<ushort>(markerX), kTaskMarkerIcon, taskColor, span);
+	} 
+	if (markers.background) {
 		markerX = advanceMarkerX(markerX, kTaskMarkerIcon, 2);
 	}
-	if (markers.readOnly) {
+	if (markers.readOnlyVisible) {
 		static constexpr char kReadOnlyMarkerIcon[] = "🔒";
 		int span = markerSpan(kReadOnlyMarkerIcon, 2);
 		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
 		b.moveStr(static_cast<ushort>(markerX), kReadOnlyMarkerIcon, cTitle, span);
+	}
+	if (markers.readOnly) {
+		static constexpr char kReadOnlyMarkerIcon[] = "🔒";
 		markerX = advanceMarkerX(markerX, kReadOnlyMarkerIcon, 2);
+	}
+	if (showMarkerBlock) {
+		int rightSepX = markerX;
+		if (rightSepX >= 1 && rightSepX < width - 1)
+			b.putChar(static_cast<ushort>(rightSepX), kMarkerRightBracket);
+		markerX = rightSepX + 1;
 	}
 
 	if (window != nullptr) {
-		const char *title = window->getTitle(titleReserveRight);
+		int titleLeftLimit = std::max(markerX + (showMarkerBlock ? 1 : 0), 2);
+		int available = titleReserveRight - titleLeftLimit + 1;
+		int titleBudget = std::max(0, available - 4);
+		const char *title = window->getTitle(titleBudget);
 		if (title != nullptr && *title != '\0') {
-			int titleLeftLimit = std::max(markerX, 2);
-			int available = titleReserveRight - titleLeftLimit + 1;
 			if (available > 0) {
-				int len = std::min<int>(strwidth(title), available);
+				std::string decoratedTitle = "[ ";
+				decoratedTitle += title;
+				decoratedTitle += " ]";
+				int len = std::min<int>(strwidth(decoratedTitle.c_str()), available);
 				int titleX = titleReserveRight - len + 1;
-				if (titleX > titleLeftLimit)
-					b.putChar(titleX - 1, ' ');
-				b.moveStr(static_cast<ushort>(titleX), title, cTitle, len);
-				int titleRightPad = titleX + len;
-				int rightPadLimit = std::min<int>(titleReserveRight + 1, width - 2);
-				if (titleRightPad <= rightPadLimit)
-					b.putChar(titleRightPad, ' ');
+				b.moveStr(static_cast<ushort>(titleX), decoratedTitle.c_str(), cTitle, len);
 			}
 		}
 	}

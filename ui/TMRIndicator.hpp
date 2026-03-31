@@ -237,6 +237,14 @@ class TMRIndicator : public TIndicator {
 		return taskDisplayCount_ != 0 && (!taskBlinkActive_ || taskBlinkVisible_);
 	}
 
+	bool hasReadOnlyMarkerSlot() const noexcept {
+		return readOnly_;
+	}
+
+	bool hasTaskMarkerSlot() const noexcept {
+		return taskDisplayCount_ != 0;
+	}
+
 	static bool applyBlinkUpdate(std::size_t indicatorId, mr::coprocessor::IndicatorBlinkChannel channel,
 	                             std::size_t generation, bool visible) {
 		TMRIndicator *indicator = lookupIndicator(indicatorId);

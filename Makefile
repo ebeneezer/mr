@@ -76,10 +76,19 @@ CXX_SOURCES = \
 	app/MRVersion.cpp \
 	app/TMREditorApp.cpp \
 	dialogs/MRAboutDialog.cpp \
+	dialogs/MRColorSetupDialog.cpp \
+	dialogs/MRDisplaySetupDialog.cpp \
 	dialogs/MRFileInformationDialog.cpp \
+	dialogs/MRHelpColorsDialog.cpp \
+	dialogs/MRInstallationAndSetupDialog.cpp \
 	dialogs/MRMacroFileDialog.cpp \
+	dialogs/MRMenuDialogColorsDialog.cpp \
+	dialogs/MROtherColorsDialog.cpp \
+	dialogs/MREditSettingsDialog.cpp \
+	dialogs/MRSetupDialogCommon.cpp \
 	dialogs/MRSetupDialogs.cpp \
 	dialogs/MRUnsavedChangesDialog.cpp \
+	dialogs/MRWindowColorsDialog.cpp \
 	dialogs/MRWindowListDialog.cpp \
 	mrmac/MRMacroRunner.cpp \
 	services/MRWindowCommands.cpp \
@@ -188,9 +197,18 @@ app/MRMenuFactory.o: app/MRMenuFactory.cpp app/MRMenuFactory.hpp app/MRCommands.
 app/MRVersion.o: app/MRVersion.cpp app/MRVersion.hpp
 app/TMREditorApp.o: app/TMREditorApp.cpp app/TMREditorApp.hpp app/MRAppState.hpp app/MRCommandRouter.hpp app/MRCommands.hpp app/MRMenuFactory.hpp services/MRCoprocessorDispatch.hpp services/MRPerformance.hpp services/MRWindowCommands.hpp ui/TMRDeskTop.hpp ui/TMRStatusLine.hpp ui/MRPalette.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 dialogs/MRAboutDialog.o: dialogs/MRAboutDialog.cpp dialogs/MRAboutDialog.hpp app/MRVersion.hpp
+dialogs/MRColorSetupDialog.o: dialogs/MRColorSetupDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp app/MRCommands.hpp
+dialogs/MRDisplaySetupDialog.o: dialogs/MRDisplaySetupDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp
 dialogs/MRFileInformationDialog.o: dialogs/MRFileInformationDialog.cpp dialogs/MRFileInformationDialog.hpp app/MRCommands.hpp services/MRPerformance.hpp ui/TMREditWindow.hpp ui/TMRFileEditor.hpp ui/TMRTextBuffer.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
+dialogs/MRHelpColorsDialog.o: dialogs/MRHelpColorsDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp
+dialogs/MRInstallationAndSetupDialog.o: dialogs/MRInstallationAndSetupDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp app/MRCommands.hpp
 dialogs/MRMacroFileDialog.o: dialogs/MRMacroFileDialog.cpp dialogs/MRMacroFileDialog.hpp mrmac/MRMacroRunner.hpp
+dialogs/MRMenuDialogColorsDialog.o: dialogs/MRMenuDialogColorsDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp
+dialogs/MROtherColorsDialog.o: dialogs/MROtherColorsDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp
+dialogs/MREditSettingsDialog.o: dialogs/MREditSettingsDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp
+dialogs/MRSetupDialogCommon.o: dialogs/MRSetupDialogCommon.cpp dialogs/MRSetupDialogCommon.hpp
 dialogs/MRSetupDialogs.o: dialogs/MRSetupDialogs.cpp dialogs/MRSetupDialogs.hpp app/MRCommands.hpp ui/MRWindowSupport.hpp
+dialogs/MRWindowColorsDialog.o: dialogs/MRWindowColorsDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp
 dialogs/MRWindowListDialog.o: dialogs/MRWindowListDialog.cpp dialogs/MRWindowListDialog.hpp services/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/MRWindowSupport.hpp
 mrmac/MRMacroRunner.o: mrmac/MRMacroRunner.cpp mrmac/MRMacroRunner.hpp mrmac/mrmac.h mrmac/mrvm.hpp services/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 services/MRWindowCommands.o: services/MRWindowCommands.cpp services/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/MRWindowSupport.hpp
