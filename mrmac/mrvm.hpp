@@ -11,6 +11,8 @@
 
 #include "MRTextDocument.hpp"
 
+class TMREditWindow;
+
 class VirtualMachine {
   public:
 	struct Value {
@@ -84,6 +86,7 @@ MRMacroExecutionProfile mrvmAnalyzeBytecode(const unsigned char *bytecode, std::
 std::string mrvmDescribeExecutionProfile(const MRMacroExecutionProfile &profile);
 bool mrvmCanRunInBackground(const MRMacroExecutionProfile &profile) noexcept;
 bool mrvmCanRunStagedInBackground(const MRMacroExecutionProfile &profile) noexcept;
+std::vector<std::string> mrvmUnsupportedStagedSymbols(const MRMacroExecutionProfile &profile);
 
 struct MRMacroJobResult {
 	std::vector<std::string> logLines;
@@ -98,21 +101,87 @@ MRMacroJobResult mrvmRunBytecodeBackground(const unsigned char *bytecode, std::s
                                            std::stop_token stopToken = std::stop_token(),
                                            std::shared_ptr<std::atomic_bool> cancelFlag = nullptr);
 
+enum MRMacroDeferredUiCommandType {
+	mrducNone = 0,
+	mrducCreateWindow,
+	mrducDeleteWindow,
+	mrducModifyWindow,
+	mrducLinkWindow,
+	mrducUnlinkWindow,
+	mrducZoom,
+	mrducRedraw,
+	mrducNewScreen,
+	mrducSwitchWindow,
+	mrducSizeWindow
+};
+
+struct MRMacroDeferredUiCommand {
+	int type;
+	int a1;
+	int a2;
+	int a3;
+	int a4;
+
+	MRMacroDeferredUiCommand() noexcept : type(mrducNone), a1(0), a2(0), a3(0), a4(0) {
+	}
+
+	MRMacroDeferredUiCommand(int aType, int arg1 = 0, int arg2 = 0, int arg3 = 0,
+	                         int arg4 = 0) noexcept
+	    : type(aType), a1(arg1), a2(arg2), a3(arg3), a4(arg4) {
+	}
+};
+
 struct MRMacroStagedExecutionInput {
 	mr::editor::TextDocument document;
 	std::size_t baseVersion;
 	std::size_t cursorOffset;
 	std::size_t selectionStart;
 	std::size_t selectionEnd;
+	int blockMode;
+	bool blockMarkingOn;
+	std::size_t blockAnchor;
+	std::size_t blockEnd;
+	bool firstSave;
+	bool eofInMemory;
+	int bufferId;
+	bool temporaryFile;
+	std::string temporaryFileName;
+	int currentWindow;
+	int linkStatus;
+	int windowCount;
+	bool windowGeometryValid;
+	int windowX1;
+	int windowY1;
+	int windowX2;
+	int windowY2;
+	std::vector<std::string> globalOrder;
+	std::map<std::string, int> globalInts;
+	std::map<std::string, std::string> globalStrings;
+	std::vector<std::string> macroOrder;
+	std::map<std::string, std::string> macroDisplayNames;
+	bool lastSearchValid;
+	std::size_t lastSearchStart;
+	std::size_t lastSearchEnd;
+	std::size_t lastSearchCursor;
+	bool ignoreCase;
+	bool tabExpand;
+	std::vector<std::size_t> markStack;
 	bool insertMode;
 	int indentLevel;
 	int pageLines;
 	std::string fileName;
 	bool fileChanged;
 
-	MRMacroStagedExecutionInput() noexcept
+		MRMacroStagedExecutionInput() noexcept
 	    : document(), baseVersion(0), cursorOffset(0), selectionStart(0), selectionEnd(0),
-	      insertMode(true), indentLevel(1), pageLines(20), fileName(), fileChanged(false) {
+	      blockMode(0), blockMarkingOn(false), blockAnchor(0), blockEnd(0), firstSave(false),
+	      eofInMemory(false), bufferId(0), temporaryFile(false), temporaryFileName(),
+	      currentWindow(0), linkStatus(0), windowCount(0), windowGeometryValid(false),
+	      windowX1(0), windowY1(0), windowX2(0), windowY2(0), globalOrder(),
+	      globalInts(), globalStrings(), macroOrder(), macroDisplayNames(),
+	      lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0),
+	      ignoreCase(false), tabExpand(true), markStack(), insertMode(true), indentLevel(1),
+	      pageLines(20), fileName(), fileChanged(false) {
 	}
 };
 
@@ -124,6 +193,23 @@ struct MRMacroStagedJobResult {
 	std::size_t cursorOffset;
 	std::size_t selectionStart;
 	std::size_t selectionEnd;
+	int blockMode;
+	bool blockMarkingOn;
+	std::size_t blockAnchor;
+	std::size_t blockEnd;
+	std::vector<std::string> globalOrder;
+	std::map<std::string, int> globalInts;
+	std::map<std::string, std::string> globalStrings;
+	std::vector<std::string> macroOrder;
+	std::map<std::string, std::string> macroDisplayNames;
+	std::vector<MRMacroDeferredUiCommand> deferredUiCommands;
+	bool lastSearchValid;
+	std::size_t lastSearchStart;
+	std::size_t lastSearchEnd;
+	std::size_t lastSearchCursor;
+	bool ignoreCase;
+	bool tabExpand;
+	std::vector<std::size_t> markStack;
 	bool insertMode;
 	int indentLevel;
 	std::string fileName;
@@ -131,7 +217,12 @@ struct MRMacroStagedJobResult {
 
 	MRMacroStagedJobResult() noexcept
 	    : logLines(), hadError(false), cancelled(false), transaction(), cursorOffset(0), selectionStart(0),
-	      selectionEnd(0), insertMode(true), indentLevel(1), fileName(), fileChanged(false) {
+	      selectionEnd(0), blockMode(0), blockMarkingOn(false), blockAnchor(0), blockEnd(0),
+	      globalOrder(), globalInts(), globalStrings(), macroOrder(), macroDisplayNames(),
+	      deferredUiCommands(),
+	      lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0),
+	      ignoreCase(false), tabExpand(true), markStack(), insertMode(true), indentLevel(1),
+	      fileName(), fileChanged(false) {
 	}
 };
 
@@ -141,10 +232,41 @@ MRMacroStagedJobResult mrvmRunBytecodeStagedBackground(const unsigned char *byte
                                                        std::stop_token stopToken = std::stop_token(),
                                                        std::shared_ptr<std::atomic_bool> cancelFlag = nullptr);
 
+std::vector<std::size_t> mrvmUiCopyWindowMarkStack(const void *windowKey);
+void mrvmUiReplaceWindowMarkStack(const void *windowKey, const std::vector<std::size_t> &offsets);
+bool mrvmUiCopyWindowLastSearch(const void *windowKey, const std::string &fileName, std::size_t &start,
+                                std::size_t &end, std::size_t &cursor);
+void mrvmUiReplaceWindowLastSearch(const void *windowKey, const std::string &fileName, bool valid,
+                                   std::size_t start, std::size_t end, std::size_t cursor);
+void mrvmUiCopyGlobals(std::vector<std::string> &order, std::map<std::string, int> &ints,
+                       std::map<std::string, std::string> &strings);
+void mrvmUiCopyLoadedMacros(std::vector<std::string> &order,
+                            std::map<std::string, std::string> &displayNames);
+void mrvmUiReplaceGlobals(const std::vector<std::string> &order,
+                          const std::map<std::string, int> &ints,
+                          const std::map<std::string, std::string> &strings);
+void mrvmUiCopyRuntimeOptions(bool &ignoreCase, bool &tabExpand);
+void mrvmUiReplaceRuntimeOptions(bool ignoreCase, bool tabExpand);
+void mrvmUiSyncLinkedWindowsFrom(TMREditWindow *window);
+int mrvmUiCurrentWindowIndex(const void *windowKey);
+int mrvmUiWindowCount();
+int mrvmUiLinkStatus(const void *windowKey);
+bool mrvmUiWindowGeometry(const void *windowKey, int &x1, int &y1, int &x2, int &y2);
+bool mrvmUiSetCurrentWindow(const void *windowKey);
+bool mrvmUiCreateWindow();
+bool mrvmUiDeleteCurrentWindow();
+bool mrvmUiModifyCurrentWindow();
+bool mrvmUiSwitchWindow(int index);
+bool mrvmUiSizeCurrentWindow(int x1, int y1, int x2, int y2);
+
 bool mrvmUiLinkCurrentWindow();
 bool mrvmUiUnlinkCurrentWindow();
 bool mrvmUiZoomCurrentWindow();
 bool mrvmUiRedrawCurrentWindow();
 bool mrvmUiNewScreen();
+
+bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKeyState,
+                                std::string &executedMacroName,
+                                std::vector<std::string> *logLines = nullptr);
 
 #endif

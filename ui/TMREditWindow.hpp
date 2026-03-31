@@ -26,6 +26,7 @@
 #include "TMRFrame.hpp"
 #include "TMRIndicator.hpp"
 #include "TMRTextBuffer.hpp"
+#include "../mrmac/mrvm.hpp"
 
 void mrTraceCoprocessorTaskCancel(int bufferId, std::uint64_t taskId);
 
@@ -117,6 +118,14 @@ class TMREditWindow : public TWindow {
 	}
 
 	virtual void handleEvent(TEvent &event) override {
+		if (event.what == evKeyDown) {
+			std::string executedMacroName;
+			if (mrvmRunAssignedMacroForKey(event.keyDown.keyCode, event.keyDown.controlKeyState,
+			                               executedMacroName, nullptr)) {
+				clearEvent(event);
+				return;
+			}
+		}
 		if (frame != nullptr) {
 			TMRFrame *mrFrame = static_cast<TMRFrame *>(frame);
 			if ((event.what & (evMouseDown | evMouseMove | evMouseUp)) != 0)
@@ -351,6 +360,11 @@ class TMREditWindow : public TWindow {
 		return windowRoleDetail_;
 	}
 
+	bool isCommunicationWindow() const noexcept {
+		return windowRole_ == wrCommunicationCommand || windowRole_ == wrCommunicationPipe ||
+		       windowRole_ == wrCommunicationDevice;
+	}
+
 	bool isTemporaryFile() const {
 		return temporaryFileUsed_;
 	}
@@ -476,8 +490,20 @@ class TMREditWindow : public TWindow {
 		return count;
 	}
 
+	std::size_t trackedTaskCount(mr::coprocessor::TaskKind kind) const noexcept {
+		std::size_t count = 0;
+		for (std::size_t i = 0; i < trackedCoprocessorTasks_.size(); ++i)
+			if (trackedCoprocessorTasks_[i].kind == kind)
+				++count;
+		return count;
+	}
+
 	bool hasTrackedMacroTasks() const noexcept {
 		return trackedMacroTaskCount() != 0;
+	}
+
+	bool hasTrackedExternalIoTasks() const noexcept {
+		return trackedTaskCount(mr::coprocessor::TaskKind::ExternalIo) != 0;
 	}
 
 	std::string macroPolicySummary() const {
@@ -570,6 +596,47 @@ class TMREditWindow : public TWindow {
 		if (cancelledAny)
 			noteBackgroundMacroCancelRequested(macroCount);
 		return cancelledAny;
+	}
+
+	bool cancelTrackedExternalIoTasks() {
+		bool cancelledAny = false;
+
+		for (std::size_t i = 0; i < trackedCoprocessorTasks_.size(); ++i) {
+			if (trackedCoprocessorTasks_[i].kind != mr::coprocessor::TaskKind::ExternalIo)
+				continue;
+			mrTraceCoprocessorTaskCancel(bufferId_, trackedCoprocessorTasks_[i].id);
+			if (mr::coprocessor::globalCoprocessor().cancelTask(trackedCoprocessorTasks_[i].id))
+				cancelledAny = true;
+		}
+		return cancelledAny;
+	}
+
+	std::size_t prepareCoprocessorTasksForShutdown() {
+		std::size_t clearedCount = trackedCoprocessorTasks_.size();
+
+		for (std::size_t i = 0; i < trackedCoprocessorTasks_.size(); ++i) {
+			mrTraceCoprocessorTaskCancel(bufferId_, trackedCoprocessorTasks_[i].id);
+			mr::coprocessor::globalCoprocessor().cancelTask(trackedCoprocessorTasks_[i].id);
+		}
+		trackedCoprocessorTasks_.clear();
+		if (editor != nullptr) {
+			std::uint64_t lineIndexTaskId = editor->pendingLineIndexWarmupTaskId();
+			if (lineIndexTaskId != 0) {
+				mrTraceCoprocessorTaskCancel(bufferId_, lineIndexTaskId);
+				mr::coprocessor::globalCoprocessor().cancelTask(lineIndexTaskId);
+				editor->clearLineIndexWarmupTask(lineIndexTaskId);
+				++clearedCount;
+			}
+			std::uint64_t syntaxTaskId = editor->pendingSyntaxWarmupTaskId();
+			if (syntaxTaskId != 0) {
+				mrTraceCoprocessorTaskCancel(bufferId_, syntaxTaskId);
+				mr::coprocessor::globalCoprocessor().cancelTask(syntaxTaskId);
+				editor->clearSyntaxWarmupTask(syntaxTaskId);
+				++clearedCount;
+			}
+		}
+		updateTaskMarkers();
+		return clearedCount;
 	}
 
 	void showMacroNotice(const std::string &text, TMRIndicator::NoticeKind kind) {
@@ -716,6 +783,25 @@ class TMREditWindow : public TWindow {
 	}
 
 	void refreshBlockVisual() {
+		syncBlockVisual();
+	}
+
+	void applyCommittedBlockState(int mode, bool markingOn, uint anchor, uint end) {
+		if (editor == nullptr)
+			return;
+		if (mode < bmNone || mode > bmStream)
+			mode = bmNone;
+		blockMode_ = static_cast<BlockMode>(mode);
+		blockMarkingOn_ = blockMode_ != bmNone && markingOn;
+		blockAnchor_ = std::min<uint>(anchor, static_cast<uint>(editor->bufferLength()));
+		blockEnd_ = std::min<uint>(end, static_cast<uint>(editor->bufferLength()));
+		if (blockMode_ == bmNone) {
+			blockMarkingOn_ = false;
+			blockAnchor_ = 0;
+			blockEnd_ = 0;
+			editor->update(ufView);
+			return;
+		}
 		syncBlockVisual();
 	}
 

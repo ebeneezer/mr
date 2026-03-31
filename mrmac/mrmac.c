@@ -36,6 +36,8 @@ typedef struct {
 	char *name;
 	int entry_pos;
 	unsigned flags;
+	char *keyspec;
+	int mode;
 } CompiledMacroInfo;
 
 #define MAX_COMPILED_MACROS 256
@@ -165,25 +167,42 @@ static void reset_compiled_macro_info(void) {
 		g_compiled_macros[i].name = NULL;
 		g_compiled_macros[i].entry_pos = 0;
 		g_compiled_macros[i].flags = 0;
+		free(g_compiled_macros[i].keyspec);
+		g_compiled_macros[i].keyspec = NULL;
+		g_compiled_macros[i].mode = MACRO_MODE_EDIT;
 	}
 	g_compiled_macro_count = 0;
 	free(g_compiled_macro_file_name);
 	g_compiled_macro_file_name = NULL;
 }
 
-static int add_compiled_macro_info(const char *name, int entry_pos, unsigned flags) {
+static int add_compiled_macro_info(const char *name, int entry_pos, unsigned flags,
+                                   const char *keyspec, int mode) {
+	CompiledMacroInfo *slot;
+
 	if (g_compiled_macro_count >= MAX_COMPILED_MACROS) {
 		set_compile_error(0, "Too many macros in source.");
 		return -1;
 	}
 
-	g_compiled_macros[g_compiled_macro_count].name = xstrdup(name);
-	if (g_compiled_macros[g_compiled_macro_count].name == NULL) {
+	slot = &g_compiled_macros[g_compiled_macro_count];
+	slot->name = xstrdup(name);
+	if (slot->name == NULL) {
 		set_compile_error(0, "Out of memory.");
 		return -1;
 	}
-	g_compiled_macros[g_compiled_macro_count].entry_pos = entry_pos;
-	g_compiled_macros[g_compiled_macro_count].flags = flags;
+	slot->keyspec = xstrdup(keyspec != NULL ? keyspec : "");
+	if (slot->keyspec == NULL) {
+		free(slot->name);
+		slot->name = NULL;
+		set_compile_error(0, "Out of memory.");
+		return -1;
+	}
+	if (mode != MACRO_MODE_EDIT && mode != MACRO_MODE_DOS_SHELL && mode != MACRO_MODE_ALL)
+		mode = MACRO_MODE_EDIT;
+	slot->entry_pos = entry_pos;
+	slot->flags = flags;
+	slot->mode = mode;
 	g_compiled_macro_count++;
 	return 0;
 }
@@ -780,6 +799,12 @@ static int is_stringlike_type(int type) {
 
 static int validate_keyspec(const char *text, int line) {
 	size_t len;
+	char token[64];
+	size_t out = 0;
+	size_t i;
+	int changed = 1;
+	size_t tokenLen;
+	int fnNumber;
 
 	if (text == NULL) {
 		set_compile_error(line, "Keycode expected.");
@@ -791,7 +816,80 @@ static int validate_keyspec(const char *text, int line) {
 		set_compile_error(line, "Keycode expected.");
 		return -1;
 	}
-	return 0;
+
+	for (i = 1; i + 1 < len; ++i) {
+		unsigned char ch = (unsigned char)text[i];
+
+		if (isspace(ch) || ch == '_')
+			continue;
+		if (out + 1 >= sizeof(token)) {
+			set_compile_error(line, "Keycode not supported.");
+			return -1;
+		}
+		token[out++] = (char)toupper(ch);
+	}
+	token[out] = '\0';
+	if (token[0] == '\0') {
+		set_compile_error(line, "Keycode expected.");
+		return -1;
+	}
+
+	while (changed) {
+		changed = 0;
+		tokenLen = strlen(token);
+		if (tokenLen >= 5 && strncmp(token, "SHIFT", 5) == 0) {
+			memmove(token, token + 5, tokenLen - 4);
+			changed = 1;
+			continue;
+		}
+		if (tokenLen >= 4 && strncmp(token, "SHFT", 4) == 0) {
+			memmove(token, token + 4, tokenLen - 3);
+			changed = 1;
+			continue;
+		}
+		if (tokenLen >= 4 && strncmp(token, "CTRL", 4) == 0) {
+			memmove(token, token + 4, tokenLen - 3);
+			changed = 1;
+			continue;
+		}
+		if (tokenLen >= 3 && strncmp(token, "ALT", 3) == 0) {
+			memmove(token, token + 3, tokenLen - 2);
+			changed = 1;
+			continue;
+		}
+	}
+
+	if (token[0] == '\0') {
+		set_compile_error(line, "Keycode expected.");
+		return -1;
+	}
+
+	if (token[0] == 'F' && token[1] != '\0') {
+		char *endp = NULL;
+		fnNumber = (int)strtol(token + 1, &endp, 10);
+		if (endp != NULL && *endp == '\0' && fnNumber >= 1 && fnNumber <= 12)
+			return 0;
+	}
+
+	if (strcmp(token, "ENTER") == 0 || strcmp(token, "RETURN") == 0 || strcmp(token, "TAB") == 0 ||
+	    strcmp(token, "ESC") == 0 || strcmp(token, "BS") == 0 || strcmp(token, "BACK") == 0 ||
+	    strcmp(token, "BACKSPACE") == 0 || strcmp(token, "UP") == 0 ||
+	    strcmp(token, "DN") == 0 || strcmp(token, "DOWN") == 0 || strcmp(token, "LF") == 0 ||
+	    strcmp(token, "LEFT") == 0 || strcmp(token, "RT") == 0 ||
+	    strcmp(token, "RIGHT") == 0 || strcmp(token, "PGUP") == 0 ||
+	    strcmp(token, "PGDN") == 0 || strcmp(token, "HOME") == 0 ||
+	    strcmp(token, "END") == 0 || strcmp(token, "INS") == 0 ||
+	    strcmp(token, "DEL") == 0 || strcmp(token, "SPACE") == 0 ||
+	    strcmp(token, "MINUS") == 0 || strcmp(token, "EQUAL") == 0 ||
+	    strcmp(token, "GREY-") == 0 || strcmp(token, "GREY+") == 0 ||
+	    strcmp(token, "GREY*") == 0)
+		return 0;
+
+	if (token[1] == '\0' && isprint((unsigned char)token[0]) != 0)
+		return 0;
+
+	set_compile_error(line, "Keycode not supported.");
+	return -1;
 }
 
 static int validate_mode(const char *text, int line) {
@@ -804,6 +902,21 @@ static int validate_mode(const char *text, int line) {
 		return 0;
 	set_compile_error(line, "Mode expected.");
 	return -1;
+}
+
+static int macro_mode_from_identifier(const char *text, int line, int *out_mode) {
+	int mode;
+
+	if (validate_mode(text, line) != 0)
+		return -1;
+	mode = MACRO_MODE_EDIT;
+	if (strcasecmp(text, "DOS_SHELL") == 0)
+		mode = MACRO_MODE_DOS_SHELL;
+	else if (strcasecmp(text, "ALL") == 0)
+		mode = MACRO_MODE_ALL;
+	if (out_mode != NULL)
+		*out_mode = mode;
+	return 0;
 }
 
 static int find_label_index(const char *name) {
@@ -1887,6 +2000,14 @@ static int parse_proc_statement_after_name(Parser *ps, const char *name, int lin
 		emit_proc_call("TEXT", argc);
 		return 0;
 	}
+	if (strcasecmp(name, "KEY_IN") == 0) {
+		if (argc != 1 || !is_stringlike_type(args[0].type)) {
+			set_compile_error(line, "Type mismatch or syntax error.");
+			return -1;
+		}
+		emit_proc_call("KEY_IN", argc);
+		return 0;
+	}
 	if (strcasecmp(name, "PUT_LINE") == 0) {
 		if (argc != 1 || !is_stringlike_type(args[0].type)) {
 			set_compile_error(line, "Type mismatch or syntax error.");
@@ -2165,25 +2286,56 @@ static int parse_statement_list(Parser *ps, TokenKind end1, TokenKind end2, Toke
 	return 0;
 }
 
-static int parse_macro_header(Parser *ps, unsigned *out_flags) {
+static int parse_macro_header(Parser *ps, unsigned *out_flags, char **out_keyspec, int *out_mode) {
 	unsigned flags = 0;
+	char *keyspec = xstrdup("");
+	int mode = MACRO_MODE_EDIT;
+	int from_seen = 0;
+
+	if (keyspec == NULL) {
+		set_compile_error(ps->tok.line, "Out of memory.");
+		return -1;
+	}
 
 	while (ps->tok.kind != TOK_SEMICOLON && ps->tok.kind != TOK_EOF) {
 		if (parser_accept(ps, TOK_TO)) {
 			if (ps->tok.kind != TOK_KEYSPEC) {
+				free(keyspec);
 				set_compile_error(ps->tok.line, "Keycode expected.");
 				return -1;
 			}
-			if (validate_keyspec(ps->tok.text, ps->tok.line) != 0)
+			if (validate_keyspec(ps->tok.text, ps->tok.line) != 0) {
+				free(keyspec);
 				return -1;
+			}
+			if (keyspec[0] != '\0') {
+				free(keyspec);
+				set_compile_error(ps->tok.line, "Duplicate TO clause.");
+				return -1;
+			}
+			free(keyspec);
+			keyspec = xstrdup(ps->tok.text);
+			if (keyspec == NULL) {
+				set_compile_error(ps->tok.line, "Out of memory.");
+				return -1;
+			}
 			parser_next(ps);
 		} else if (parser_accept(ps, TOK_FROM)) {
 			if (ps->tok.kind != TOK_IDENTIFIER) {
+				free(keyspec);
 				set_compile_error(ps->tok.line, "Mode expected.");
 				return -1;
 			}
-			if (validate_mode(ps->tok.text, ps->tok.line) != 0)
+			if (from_seen) {
+				free(keyspec);
+				set_compile_error(ps->tok.line, "Duplicate FROM clause.");
 				return -1;
+			}
+			if (macro_mode_from_identifier(ps->tok.text, ps->tok.line, &mode) != 0) {
+				free(keyspec);
+				return -1;
+			}
+			from_seen = 1;
 			parser_next(ps);
 		} else if (ps->tok.kind == TOK_TRANS || ps->tok.kind == TOK_DUMP ||
 		           ps->tok.kind == TOK_PERM) {
@@ -2195,12 +2347,19 @@ static int parse_macro_header(Parser *ps, unsigned *out_flags) {
 				flags |= MACRO_ATTR_PERM;
 			parser_next(ps);
 		} else {
+			free(keyspec);
 			set_compile_error(ps->tok.line, "Syntax Error.");
 			return -1;
 		}
 	}
 	if (out_flags != NULL)
 		*out_flags = flags;
+	if (out_mode != NULL)
+		*out_mode = mode;
+	if (out_keyspec != NULL)
+		*out_keyspec = keyspec;
+	else
+		free(keyspec);
 	return 0;
 }
 
@@ -2224,7 +2383,9 @@ static int parse_macro_file_definition(Parser *ps) {
 
 static int parse_macro_definition(Parser *ps) {
 	char *name;
+	char *keyspec = NULL;
 	unsigned flags = 0;
+	int mode = MACRO_MODE_EDIT;
 
 	if (parser_expect(ps, TOK_MACRO, "Scommand expected.") != 0)
 		return -1;
@@ -2243,15 +2404,17 @@ static int parse_macro_definition(Parser *ps) {
 		return -1;
 	}
 	parser_next(ps);
-	if (parse_macro_header(ps, &flags) != 0) {
+	if (parse_macro_header(ps, &flags, &keyspec, &mode) != 0) {
 		free(name);
 		return -1;
 	}
 
-	if (add_compiled_macro_info(name, (int)emit_get_pos(), flags) != 0) {
+	if (add_compiled_macro_info(name, (int)emit_get_pos(), flags, keyspec, mode) != 0) {
+		free(keyspec);
 		free(name);
 		return -1;
 	}
+	free(keyspec);
 
 	if (parser_expect(ps, TOK_SEMICOLON, "; expected.") != 0) {
 		free(name);
@@ -2387,4 +2550,16 @@ int get_compiled_macro_flags(int index) {
 
 const char *get_compiled_macro_file_name(void) {
 	return g_compiled_macro_file_name;
+}
+
+const char *get_compiled_macro_keyspec(int index) {
+	if (index < 0 || index >= g_compiled_macro_count)
+		return NULL;
+	return g_compiled_macros[index].keyspec;
+}
+
+int get_compiled_macro_mode(int index) {
+	if (index < 0 || index >= g_compiled_macro_count)
+		return MACRO_MODE_EDIT;
+	return g_compiled_macros[index].mode;
 }

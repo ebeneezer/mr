@@ -28,6 +28,9 @@
 #include "MRCommands.hpp"
 
 namespace {
+bool startExternalCommandInWindow(TMREditWindow *win, const std::string &commandLine, bool replaceBuffer,
+                                  bool activate, bool closeOnFailure);
+
 const char *dummyCommandTitle(ushort command) {
 	switch (command) {
 		case cmMrFileOpen:
@@ -156,6 +159,12 @@ const char *dummyCommandTitle(ushort command) {
 			return "Other / Keystroke macros";
 		case cmMrOtherExecuteProgram:
 			return "Other / Execute program";
+		case cmMrOtherStopProgram:
+			return "Other / Stop current program";
+		case cmMrOtherRestartProgram:
+			return "Other / Restart current program";
+		case cmMrOtherClearOutput:
+			return "Other / Clear current output";
 		case cmMrOtherFindNextCompilerError:
 			return "Other / Find next compiler error";
 		case cmMrOtherMatchBraceOrParen:
@@ -271,11 +280,7 @@ bool handleFileLoad() {
 
 bool handleExecuteProgram() {
 	std::string commandLine;
-	std::string title;
-	std::string initialText;
 	TMREditWindow *win;
-	std::ostringstream logLine;
-	std::uint64_t taskId;
 
 	if (!promptForCommandLine(commandLine))
 		return true;
@@ -284,22 +289,39 @@ bool handleExecuteProgram() {
 		return true;
 	}
 
-	title = shortenCommandTitle(commandLine);
-	win = createEditorWindow(title.c_str());
+	win = createEditorWindow(shortenCommandTitle(commandLine).c_str());
 	if (win == 0) {
 		messageBox(mfError | mfOKButton, "Unable to create communication window.");
 		return true;
 	}
+	startExternalCommandInWindow(win, commandLine, true, true, true);
+	return true;
+}
+
+bool startExternalCommandInWindow(TMREditWindow *win, const std::string &commandLine, bool replaceBuffer,
+                                  bool activate, bool closeOnFailure) {
+	std::string title;
+	std::string initialText;
+	std::ostringstream logLine;
+	std::uint64_t taskId;
+
+	if (win == 0)
+		return false;
+	title = shortenCommandTitle(commandLine);
 	initialText = "$ " + commandLine + "\n\n";
-	if (!win->loadTextBuffer(initialText.c_str(), title.c_str())) {
-		message(win, evCommand, cmClose, 0);
-		messageBox(mfError | mfOKButton, "Unable to create communication window.");
-		return true;
+	if (replaceBuffer) {
+		if (!win->replaceTextBuffer(initialText.c_str(), title.c_str())) {
+			if (closeOnFailure)
+				message(win, evCommand, cmClose, 0);
+			messageBox(mfError | mfOKButton, "Unable to prepare communication window.");
+			return false;
+		}
 	}
 	win->setReadOnly(true);
 	win->setFileChanged(false);
 	win->setWindowRole(TMREditWindow::wrCommunicationCommand, commandLine);
-	mrActivateEditWindow(win);
+	if (activate)
+		mrActivateEditWindow(win);
 
 	taskId = mr::coprocessor::globalCoprocessor().submit(
 	    mr::coprocessor::Lane::Io, mr::coprocessor::TaskKind::ExternalIo,
@@ -309,9 +331,10 @@ bool handleExecuteProgram() {
 		    return runExternalCommandTask(info, stopToken, channelId, commandLine);
 	    });
 	if (taskId == 0) {
-		message(win, evCommand, cmClose, 0);
+		if (closeOnFailure)
+			message(win, evCommand, cmClose, 0);
 		messageBox(mfError | mfOKButton, "Unable to start external command worker.");
-		return true;
+		return false;
 	}
 	win->trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::ExternalIo, commandLine);
 
@@ -339,6 +362,76 @@ bool handleCancelBackgroundMacros() {
 	if (taskCount != 1)
 		line << "s";
 	line << " in window #" << win->bufferId() << ".";
+	mrLogMessage(line.str().c_str());
+	return true;
+}
+
+bool handleStopCurrentProgram() {
+	TMREditWindow *win = currentEditWindow();
+	std::ostringstream line;
+	std::size_t taskCount;
+
+	if (win == 0 || !win->isCommunicationWindow())
+		return true;
+	taskCount = win->trackedTaskCount(mr::coprocessor::TaskKind::ExternalIo);
+	if (taskCount == 0) {
+		messageBox(mfInformation | mfOKButton, "No external program task is running in this window.");
+		return true;
+	}
+	if (!win->cancelTrackedExternalIoTasks())
+		return true;
+	line << "Requested stop of " << taskCount << " external program task";
+	if (taskCount != 1)
+		line << "s";
+	line << " in communication window #" << win->bufferId() << ".";
+	mrLogMessage(line.str().c_str());
+	return true;
+}
+
+bool handleRestartCurrentProgram() {
+	TMREditWindow *win = currentEditWindow();
+
+	if (win == 0 || win->windowRole() != TMREditWindow::wrCommunicationCommand)
+		return true;
+	if (win->hasTrackedExternalIoTasks()) {
+		messageBox(mfInformation | mfOKButton, "Stop the current program before restarting it.");
+		return true;
+	}
+	if (win->windowRoleDetail().empty()) {
+		messageBox(mfInformation | mfOKButton, "No restartable command is associated with this window.");
+		return true;
+	}
+	startExternalCommandInWindow(win, win->windowRoleDetail(), true, true, false);
+	return true;
+}
+
+bool handleClearCurrentOutput() {
+	TMREditWindow *win = currentEditWindow();
+	std::ostringstream line;
+
+	if (win == 0)
+		return true;
+	if (win->windowRole() == TMREditWindow::wrLog) {
+		if (!mrClearLogWindow()) {
+			messageBox(mfError | mfOKButton, "Unable to clear log window.");
+			return true;
+		}
+		mrLogMessage("Log window cleared.");
+		return true;
+	}
+	if (!win->isCommunicationWindow())
+		return true;
+	if (win->hasTrackedExternalIoTasks()) {
+		messageBox(mfInformation | mfOKButton, "Stop the current program before clearing its output.");
+		return true;
+	}
+	if (!win->replaceTextBuffer("", win->getTitle(0))) {
+		messageBox(mfError | mfOKButton, "Unable to clear communication window.");
+		return true;
+	}
+	win->setReadOnly(true);
+	win->setFileChanged(false);
+	line << "Cleared communication window #" << win->bufferId() << ".";
 	mrLogMessage(line.str().c_str());
 	return true;
 }
@@ -423,6 +516,15 @@ bool handleMRCommand(ushort command) {
 
 		case cmMrOtherExecuteProgram:
 			return handleExecuteProgram();
+
+		case cmMrOtherStopProgram:
+			return handleStopCurrentProgram();
+
+		case cmMrOtherRestartProgram:
+			return handleRestartCurrentProgram();
+
+		case cmMrOtherClearOutput:
+			return handleClearCurrentOutput();
 
 		case cmMrDevRunMacro:
 			runMacroFileDialog();

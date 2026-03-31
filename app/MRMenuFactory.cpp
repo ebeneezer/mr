@@ -144,6 +144,9 @@ TSubMenu *createOtherMenu() {
 	    *new TMenuItem("~K~eystroke macros...", cmMrOtherKeystrokeMacros, kbNoKey, hcNoContext) +
 	    newLine() +
 	    *new TMenuItem("~E~xecute program...", cmMrOtherExecuteProgram, kbF9, hcNoContext, "F9") +
+	    *new TMenuItem("~S~top current program", cmMrOtherStopProgram, kbNoKey, hcNoContext) +
+	    *new TMenuItem("~R~estart current program", cmMrOtherRestartProgram, kbNoKey, hcNoContext) +
+	    *new TMenuItem("~C~lear current output", cmMrOtherClearOutput, kbNoKey, hcNoContext) +
 	    *new TMenuItem("find ne~X~t compiler error", cmMrOtherFindNextCompilerError, kbShiftF9,
 	                   hcNoContext, "ShiftF9") +
 	    *new TMenuItem("~M~atch brace or paren", cmMrOtherMatchBraceOrParen, kbCtrlF5, hcNoContext,

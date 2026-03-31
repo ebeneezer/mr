@@ -21,6 +21,11 @@ class TMREditorApp : public TApplication {
 	void handleEvent(TEvent &event) override;
 	void idle() override;
 	TPalette &getPalette() const override;
+
+ private:
+	void prepareForQuit();
+
+	bool exitPrepared_;
 };
 
 #endif

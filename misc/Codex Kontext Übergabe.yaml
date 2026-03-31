@@ -1,0 +1,68 @@
+session_handover:
+  project:
+    name: "mr"
+    display_name: "Multi-Edit Revisited"
+    path: "/home/idoc/mr"
+    branch: "main"
+    head_commit: "ec9fa4b"
+    git_status:
+      clean_tracked_files: true
+      untracked:
+        - "misc/Codex Kontext Übergabe.yaml"
+
+  decision_lock:
+    tvision_strategy: "vendoring_sync"
+    subtree_or_submodule: "nein"
+    note: "Kein git-subtree Workflow aktivieren; bestehende Vendoring-Sync-Logik beibehalten."
+
+  build_and_run:
+    build_command: "make mr"
+    main_binary: "/home/idoc/mr/mr"
+    expected_result: "Build erfolgreich"
+
+  tvision_integration:
+    default_mode: "lokale Quellen unter ./tvision, Build nach ./tvision/build"
+    optional_mode: "TVISION_AUTO_SYNC=1 (Mirror/Export/Patch in Vendor-Pfad)"
+    sync_mechanism:
+      upstream_url: "https://github.com/magiblot/tvision.git"
+      cache_repo: "./.vendor-cache/tvision.git"
+      vendor_root: "./build/vendor"
+      patches_dir: "./patches"
+    rules:
+      - "Keine git subtree Kommandos verwenden."
+      - "Build-Artefakte nicht als Upstream-Quell-Diff behandeln."
+
+  current_ui_state:
+    frame_markers:
+      dirty: "✍"
+      insert: "✚"
+      background: "🧠"
+      readonly: "🔒"
+      style: "Markerblock in eckigen Klammern"
+    known_visual_limit:
+      - "Das Gehirn-Glyph kann je nach Terminal/Font optisch unsauber wirken."
+      - "TVision arbeitet in Zeichenzellen, nicht pixelgenau."
+
+  recent_refactor_state:
+    dialogs_split: true
+    summary:
+      - "Setup-Dialoge in einzelne Dateien unter dialogs/ extrahiert."
+      - "Gemeinsame Helfer in dialogs/MRSetupDialogCommon.*."
+      - "Orchestrierung in dialogs/MRSetupDialogs.cpp."
+
+  collaboration_constraints:
+    formal_address_required: true
+    decisions_require_options_and_recommendation: true
+    no_plan_progress_without_approval: true
+
+  next_task:
+    track: "fachlicher Zug"
+    priority: "Stabilisierung zuerst"
+    first_step_new_session:
+      - "git status --short pruefen"
+      - "make mr ausfuehren"
+      - "freigegebenes Arbeitspaket starten"
+    package:
+      - "Marker-Rendering final stabilisieren"
+      - "Exit mit laufenden Coprozessor-Tasks robust verifizieren"
+      - "enwik9 Smoke-Test und Dialog-Konsistenz pruefen"

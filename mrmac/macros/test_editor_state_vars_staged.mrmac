@@ -1,0 +1,18 @@
+$MACRO EditorStateVarsStaged;
+DEF_INT(Col, LineNo, RowNo, AtEof, AtEol, BlockState, FileChanged, InsertMode, IndentLevel);
+DEF_STR(LineText, FileName);
+
+Col := C_COL;
+LineNo := C_LINE;
+RowNo := C_ROW;
+AtEof := AT_EOF;
+AtEol := AT_EOL;
+LineText := GET_LINE;
+BlockState := BLOCK_STAT;
+FileChanged := FILE_CHANGED;
+FileName := FILE_NAME;
+InsertMode := INSERT_MODE;
+IndentLevel := INDENT_LEVEL;
+FILE_CHANGED := FALSE;
+FILE_NAME := 'editor-state-vars-staged.txt';
+END_MACRO;

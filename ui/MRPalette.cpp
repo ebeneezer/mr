@@ -3,7 +3,7 @@
 MRPalette currentPalette;
 
 void loadDefaultMultiEditPalette() {
-	currentPalette.desktop = 0x70; // Grau
+	currentPalette.desktop = 0x90; // Heller Blau-Desktop mit schwarzen Punkten
 
 	// Menü (Blau auf Grau, Selektion Magenta)
 	currentPalette.menuBar[0] = 0x71;

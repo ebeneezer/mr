@@ -11,6 +11,7 @@
 #include "MRPerformance.hpp"
 #include "MRWindowCommands.hpp"
 
+#include "../mrmac/mrvm.hpp"
 #include "../ui/TMRFileEditor.hpp"
 #include "../ui/TMRIndicator.hpp"
 #include "../ui/TMREditWindow.hpp"
@@ -96,6 +97,60 @@ void releaseMacroTask(TMREditWindow *win, const mr::coprocessor::Result &result,
 	if (win != 0)
 		win->releaseCoprocessorTask(result.task.id);
 	mrTraceCoprocessorTaskRelease(bufferId, result.task.id, state);
+}
+
+const char *deferredUiCommandName(int type) {
+	switch (type) {
+		case mrducCreateWindow:
+			return "CREATE_WINDOW";
+		case mrducDeleteWindow:
+			return "DELETE_WINDOW";
+		case mrducModifyWindow:
+			return "MODIFY_WINDOW";
+		case mrducLinkWindow:
+			return "LINK_WINDOW";
+		case mrducUnlinkWindow:
+			return "UNLINK_WINDOW";
+		case mrducZoom:
+			return "ZOOM";
+		case mrducRedraw:
+			return "REDRAW";
+		case mrducNewScreen:
+			return "NEW_SCREEN";
+		case mrducSwitchWindow:
+			return "SWITCH_WINDOW";
+		case mrducSizeWindow:
+			return "SIZE_WINDOW";
+		default:
+			return "UNKNOWN";
+	}
+}
+
+bool applyDeferredUiCommand(const MRMacroDeferredUiCommand &command) {
+	switch (command.type) {
+		case mrducCreateWindow:
+			return mrvmUiCreateWindow();
+		case mrducDeleteWindow:
+			return mrvmUiDeleteCurrentWindow();
+		case mrducModifyWindow:
+			return mrvmUiModifyCurrentWindow();
+		case mrducLinkWindow:
+			return mrvmUiLinkCurrentWindow();
+		case mrducUnlinkWindow:
+			return mrvmUiUnlinkCurrentWindow();
+		case mrducZoom:
+			return mrvmUiZoomCurrentWindow();
+		case mrducRedraw:
+			return mrvmUiRedrawCurrentWindow();
+		case mrducNewScreen:
+			return mrvmUiNewScreen();
+		case mrducSwitchWindow:
+			return mrvmUiSwitchWindow(command.a1);
+		case mrducSizeWindow:
+			return mrvmUiSizeCurrentWindow(command.a1, command.a2, command.a3, command.a4);
+		default:
+			return false;
+	}
 }
 } // namespace
 
@@ -216,8 +271,17 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				if (!commit.conflicted()) {
 					editor->setInsertModeEnabled(staged->insertMode);
 					win->setIndentLevel(staged->indentLevel);
-					if (!staged->fileName.empty())
-						win->setCurrentFileName(staged->fileName.c_str());
+					win->setCurrentFileName(staged->fileName.c_str());
+					win->applyCommittedBlockState(staged->blockMode, staged->blockMarkingOn,
+					                             static_cast<uint>(staged->blockAnchor),
+					                             static_cast<uint>(staged->blockEnd));
+					mrvmUiReplaceGlobals(staged->globalOrder, staged->globalInts, staged->globalStrings);
+					mrvmUiReplaceWindowLastSearch(win, staged->fileName, staged->lastSearchValid,
+					                             staged->lastSearchStart, staged->lastSearchEnd,
+					                             staged->lastSearchCursor);
+					mrvmUiReplaceRuntimeOptions(staged->ignoreCase, staged->tabExpand);
+					mrvmUiReplaceWindowMarkStack(win, staged->markStack);
+					mrvmUiSyncLinkedWindowsFrom(win);
 					accepted = true;
 					textChanged = commit.applied();
 				}
@@ -238,6 +302,30 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				if (win != 0)
 					win->noteBackgroundMacroCompleted(summary);
 				releaseMacroTask(win, result, textChanged ? "committed" : "state-only");
+				if (!staged->deferredUiCommands.empty()) {
+					TMREditWindow *applyWin =
+					    findEditWindowByBufferId(static_cast<int>(result.task.documentId));
+					std::size_t applied = 0;
+					std::size_t failed = 0;
+					if (applyWin != 0)
+						mrvmUiSetCurrentWindow(applyWin);
+					for (std::size_t i = 0; i < staged->deferredUiCommands.size(); ++i) {
+						if (applyDeferredUiCommand(staged->deferredUiCommands[i]))
+							++applied;
+						else {
+							std::string line = std::string("Deferred UI command failed: ") +
+							                   deferredUiCommandName(staged->deferredUiCommands[i].type);
+							mrLogMessage(line.c_str());
+							++failed;
+						}
+					}
+					{
+						std::ostringstream uiLine;
+						uiLine << "Applied deferred UI commands for macro '" << staged->displayName
+						       << "': ok=" << applied << ", failed=" << failed << ".";
+						mrLogMessage(uiLine.str().c_str());
+					}
+				}
 			} else {
 				line << " conflicted with a newer document state";
 				if (currentVersion != 0)

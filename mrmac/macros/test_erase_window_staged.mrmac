@@ -1,0 +1,4 @@
+$MACRO EraseWindowStaged;
+ERASE_WINDOW;
+TEXT('after erase');
+END_MACRO;

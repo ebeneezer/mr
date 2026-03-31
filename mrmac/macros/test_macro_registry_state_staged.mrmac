@@ -1,0 +1,8 @@
+$MACRO MacroRegistryStateStaged;
+DEF_INT(Exists, Kind);
+DEF_STR(Name, NextName);
+
+Exists := INQ_MACRO('MacroRegistryStateStaged');
+Name := FIRST_MACRO;
+NextName := NEXT_MACRO;
+END_MACRO;

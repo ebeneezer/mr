@@ -218,6 +218,21 @@ bool mrEnsureLogWindow(bool activate) {
 	return ensureLogWindowInternal(activate) != nullptr;
 }
 
+bool mrClearLogWindow() {
+	TMREditWindow *win;
+
+	g_logBuffer = "MR/MEMAC log initialized.\n";
+	win = ensureLogWindowInternal(false);
+	if (win == nullptr)
+		return false;
+	if (!win->replaceTextBuffer(g_logBuffer.c_str(), kLogWindowTitle))
+		return false;
+	win->setWindowRole(TMREditWindow::wrLog);
+	win->setReadOnly(true);
+	win->setFileChanged(false);
+	return true;
+}
+
 bool mrEnsureUsableWorkWindow() {
 	TMREditWindow *current =
 	    dynamic_cast<TMREditWindow *>(TProgram::deskTop != nullptr ? TProgram::deskTop->current : nullptr);

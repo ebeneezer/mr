@@ -1,0 +1,8 @@
+$MACRO RuntimeOptionsStaged;
+DEF_INT(WasIgnore, WasTabs);
+
+WasIgnore := IGNORE_CASE;
+WasTabs := TAB_EXPAND;
+IGNORE_CASE := TRUE;
+TAB_EXPAND := FALSE;
+END_MACRO;

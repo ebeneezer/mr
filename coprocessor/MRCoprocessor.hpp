@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <deque>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <stop_token>
@@ -18,6 +19,7 @@
 
 #include "MRTextDocument.hpp"
 #include "TMRSyntax.hpp"
+#include "mrvm.hpp"
 
 namespace mr {
 namespace coprocessor {
@@ -171,6 +173,21 @@ struct MacroJobStagedPayload final : Payload {
 	std::size_t cursorOffset;
 	std::size_t selectionStart;
 	std::size_t selectionEnd;
+	int blockMode;
+	bool blockMarkingOn;
+	std::size_t blockAnchor;
+	std::size_t blockEnd;
+	std::vector<std::string> globalOrder;
+	std::map<std::string, int> globalInts;
+	std::map<std::string, std::string> globalStrings;
+	std::vector<MRMacroDeferredUiCommand> deferredUiCommands;
+	bool lastSearchValid;
+	std::size_t lastSearchStart;
+	std::size_t lastSearchEnd;
+	std::size_t lastSearchCursor;
+	bool ignoreCase;
+	bool tabExpand;
+	std::vector<std::size_t> markStack;
 	bool insertMode;
 	int indentLevel;
 	std::string fileName;
@@ -178,17 +195,38 @@ struct MacroJobStagedPayload final : Payload {
 
 	MacroJobStagedPayload() noexcept
 	    : displayName(), logLines(), hadError(false), transaction(), cursorOffset(0), selectionStart(0),
-	      selectionEnd(0), insertMode(true), indentLevel(1), fileName(), fileChanged(false) {
+	      selectionEnd(0), blockMode(0), blockMarkingOn(false), blockAnchor(0), blockEnd(0),
+	      globalOrder(), globalInts(), globalStrings(),
+	      deferredUiCommands(),
+	      lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0),
+	      ignoreCase(false), tabExpand(true), markStack(), insertMode(true), indentLevel(1),
+	      fileName(), fileChanged(false) {
 	}
 
 	MacroJobStagedPayload(std::string aDisplayName, std::vector<std::string> aLogLines, bool aHadError,
 	                      mr::editor::StagedEditTransaction aTransaction, std::size_t aCursorOffset,
-	                      std::size_t aSelectionStart, std::size_t aSelectionEnd, bool aInsertMode,
-	                      int anIndentLevel, std::string aFileName, bool aFileChanged)
+	                      std::size_t aSelectionStart, std::size_t aSelectionEnd, int aBlockMode,
+	                      bool aBlockMarkingOn, std::size_t aBlockAnchor, std::size_t aBlockEnd,
+	                      std::vector<std::string> aGlobalOrder, std::map<std::string, int> aGlobalInts,
+	                      std::map<std::string, std::string> aGlobalStrings,
+	                      std::vector<MRMacroDeferredUiCommand> aDeferredUiCommands,
+	                      bool aLastSearchValid, std::size_t aLastSearchStart,
+	                      std::size_t aLastSearchEnd, std::size_t aLastSearchCursor,
+	                      bool anIgnoreCase, bool aTabExpand, std::vector<std::size_t> aMarkStack,
+	                      bool aInsertMode, int anIndentLevel, std::string aFileName,
+	                      bool aFileChanged)
 	    : displayName(std::move(aDisplayName)), logLines(std::move(aLogLines)), hadError(aHadError),
 	      transaction(std::move(aTransaction)), cursorOffset(aCursorOffset),
-	      selectionStart(aSelectionStart), selectionEnd(aSelectionEnd), insertMode(aInsertMode),
-	      indentLevel(anIndentLevel), fileName(std::move(aFileName)), fileChanged(aFileChanged) {
+	      selectionStart(aSelectionStart), selectionEnd(aSelectionEnd), blockMode(aBlockMode),
+	      blockMarkingOn(aBlockMarkingOn), blockAnchor(aBlockAnchor), blockEnd(aBlockEnd),
+	      globalOrder(std::move(aGlobalOrder)), globalInts(std::move(aGlobalInts)),
+	      globalStrings(std::move(aGlobalStrings)),
+	      deferredUiCommands(std::move(aDeferredUiCommands)),
+	      lastSearchValid(aLastSearchValid), lastSearchStart(aLastSearchStart),
+	      lastSearchEnd(aLastSearchEnd), lastSearchCursor(aLastSearchCursor),
+	      ignoreCase(anIgnoreCase), tabExpand(aTabExpand), markStack(std::move(aMarkStack)),
+	      insertMode(aInsertMode), indentLevel(anIndentLevel), fileName(std::move(aFileName)),
+	      fileChanged(aFileChanged) {
 	}
 };
 
@@ -254,7 +292,7 @@ class Coprocessor {
 	std::size_t pendingResults() const noexcept;
 	void post(Result result);
 	bool cancelTask(std::uint64_t taskId);
-	void shutdown();
+	void shutdown(bool drainResults = false);
 	void cancelPending();
 
   private:

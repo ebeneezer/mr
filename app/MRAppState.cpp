@@ -17,11 +17,16 @@ struct AppCommandState {
 	bool hasUndo;
 	bool hasBlock;
 	bool hasMacroTasks;
+	bool hasExternalIoTasks;
+	bool isCommunicationWindow;
+	bool isCommunicationCommandWindow;
+	bool isLogWindow;
 
 	AppCommandState()
 	    : window(0), windowCount(0), hasEditableWindow(false), hasReadOnlyWindow(false),
 	      hasDirtyWindow(false), hasPersistentFileName(false), canSaveInPlace(false), hasSelection(false),
-	      hasUndo(false), hasBlock(false), hasMacroTasks(false) {
+	      hasUndo(false), hasBlock(false), hasMacroTasks(false), hasExternalIoTasks(false),
+	      isCommunicationWindow(false), isCommunicationCommandWindow(false), isLogWindow(false) {
 	}
 };
 
@@ -50,6 +55,10 @@ AppCommandState appCommandState() {
 	state.hasSelection = win->hasSelection();
 	state.hasUndo = win->hasUndoHistory();
 	state.hasMacroTasks = win->hasTrackedMacroTasks();
+	state.hasExternalIoTasks = win->hasTrackedExternalIoTasks();
+	state.isCommunicationWindow = win->isCommunicationWindow();
+	state.isCommunicationCommandWindow = win->windowRole() == TMREditWindow::wrCommunicationCommand;
+	state.isLogWindow = win->windowRole() == TMREditWindow::wrLog;
 	return state;
 }
 } // namespace
@@ -122,6 +131,12 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrTextCenterLine, canModify);
 	setCommandEnabled(cmMrTextTimeDateStamp, canModify);
 	setCommandEnabled(cmMrTextReformatParagraph, canModify);
+	setCommandEnabled(cmMrOtherStopProgram, hasWindow && state.hasExternalIoTasks);
+	setCommandEnabled(cmMrOtherRestartProgram,
+	                  hasWindow && state.isCommunicationCommandWindow && !state.hasExternalIoTasks &&
+	                      !state.window->windowRoleDetail().empty());
+	setCommandEnabled(cmMrOtherClearOutput,
+	                  hasWindow && ((state.isCommunicationWindow && !state.hasExternalIoTasks) || state.isLogWindow));
 	setCommandEnabled(cmMrDevRunMacro, true);
 	setCommandEnabled(cmMrDevCancelMacroTasks, hasWindow && state.hasMacroTasks);
 }

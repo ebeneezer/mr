@@ -10,6 +10,8 @@ tvision/build/
 tvision/build-asan/
 tvision/build-debug/
 misc/enwik9
+/misc/mr_stage_profile_probe
+/misc/mr_stage_profile_probe.o
 *.o
 mr
 mrmac/mrmac

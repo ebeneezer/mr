@@ -1,0 +1,3 @@
+$MACRO ReplaceLastSearchStaged;
+REPLACE('replaced-from-staged');
+END_MACRO;

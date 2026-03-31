@@ -1,0 +1,8 @@
+$MACRO GlobalRuntimeAffinity;
+DEF_INT(T, V);
+DEF_STR(K);
+
+SET_GLOBAL_INT('BGKEY', 7);
+V := GLOBAL_INT('BGKEY');
+K := FIRST_GLOBAL(T);
+END_MACRO;

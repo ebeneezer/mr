@@ -1,0 +1,21 @@
+$MACRO RunMacroSessionStateStaged;
+DEF_INT(R, E);
+DEF_STR(S);
+
+MPARM_STR := 'parent-before';
+RETURN_INT := 11;
+RETURN_STR := 'seed';
+ERROR_LEVEL := 77;
+RUN_MACRO('RunMacroSessionStateChild payload');
+R := RETURN_INT;
+S := RETURN_STR;
+E := ERROR_LEVEL;
+TEXT('R=' + STR(R) + ';S=' + S + ';E=' + STR(E) + ';P=' + MPARM_STR);
+END_MACRO;
+
+$MACRO RunMacroSessionStateChild;
+RETURN_INT := 23;
+RETURN_STR := 'child:' + MPARM_STR;
+ERROR_LEVEL := 5;
+MPARM_STR := 'child-mutated';
+END_MACRO;

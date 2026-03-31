@@ -107,6 +107,17 @@ const char *backgroundMacroPolicyText(bool staged) noexcept {
 	              : "policy: snapshot read-only, cancel=cooperative";
 }
 
+std::string joinNames(const std::vector<std::string> &names) {
+	std::ostringstream out;
+
+	for (std::size_t i = 0; i < names.size(); ++i) {
+		if (i != 0)
+			out << ", ";
+		out << names[i];
+	}
+	return out.str();
+}
+
 void showErrorBox(const char *title, const char *text) {
 	char msg[1024];
 
@@ -211,11 +222,34 @@ bool runMacroSource(const char *displayName, const char *source) {
 		stagedInput.cursorOffset = editor->cursorOffset();
 		stagedInput.selectionStart = editor->selectionStartOffset();
 		stagedInput.selectionEnd = editor->selectionEndOffset();
+		stagedInput.blockMode = win->blockStatus();
+		stagedInput.blockMarkingOn = win->isBlockMarking();
+		stagedInput.blockAnchor = win->blockAnchorPtr();
+		stagedInput.blockEnd = win->blockEffectiveEndPtr();
+		stagedInput.firstSave = win->hasBeenSavedInSession();
+		stagedInput.eofInMemory = win->eofInMemory();
+		stagedInput.bufferId = win->bufferId();
+		stagedInput.temporaryFile = win->isTemporaryFile();
+		stagedInput.temporaryFileName = win->temporaryFileName();
+		stagedInput.currentWindow = mrvmUiCurrentWindowIndex(win);
+		stagedInput.linkStatus = mrvmUiLinkStatus(win);
+		stagedInput.windowCount = mrvmUiWindowCount();
+		stagedInput.windowGeometryValid = mrvmUiWindowGeometry(
+		    win, stagedInput.windowX1, stagedInput.windowY1, stagedInput.windowX2,
+		    stagedInput.windowY2);
+		mrvmUiCopyGlobals(stagedInput.globalOrder, stagedInput.globalInts,
+		                  stagedInput.globalStrings);
+		mrvmUiCopyLoadedMacros(stagedInput.macroOrder, stagedInput.macroDisplayNames);
+		stagedInput.fileName = win->currentFileName();
+		stagedInput.fileChanged = win->isFileChanged();
+		stagedInput.lastSearchValid = mrvmUiCopyWindowLastSearch(
+		    win, stagedInput.fileName, stagedInput.lastSearchStart, stagedInput.lastSearchEnd,
+		    stagedInput.lastSearchCursor);
+		mrvmUiCopyRuntimeOptions(stagedInput.ignoreCase, stagedInput.tabExpand);
+		stagedInput.markStack = mrvmUiCopyWindowMarkStack(win);
 		stagedInput.insertMode = editor->insertModeEnabled();
 		stagedInput.indentLevel = win->indentLevel();
 		stagedInput.pageLines = std::max(1, editor->size.y - 1);
-		stagedInput.fileName = win->currentFileName();
-		stagedInput.fileChanged = win->isFileChanged();
 
 		taskId = mr::coprocessor::globalCoprocessor().submit(
 		    mr::coprocessor::Lane::Macro, mr::coprocessor::TaskKind::MacroJob,
@@ -242,8 +276,15 @@ bool runMacroSource(const char *displayName, const char *source) {
 			    result.payload = std::make_shared<mr::coprocessor::MacroJobStagedPayload>(
 			        label, std::move(runResult.logLines), runResult.hadError,
 			        std::move(runResult.transaction), runResult.cursorOffset, runResult.selectionStart,
-			        runResult.selectionEnd, runResult.insertMode, runResult.indentLevel,
-			        std::move(runResult.fileName), runResult.fileChanged);
+			        runResult.selectionEnd, runResult.blockMode, runResult.blockMarkingOn,
+			        runResult.blockAnchor, runResult.blockEnd, std::move(runResult.globalOrder),
+			        std::move(runResult.globalInts), std::move(runResult.globalStrings),
+			        std::move(runResult.deferredUiCommands),
+			        runResult.lastSearchValid,
+			        runResult.lastSearchStart, runResult.lastSearchEnd, runResult.lastSearchCursor,
+			        runResult.ignoreCase, runResult.tabExpand, std::move(runResult.markStack),
+			        runResult.insertMode,
+			        runResult.indentLevel, std::move(runResult.fileName), runResult.fileChanged);
 			    return result;
 		    });
 		if (taskId == 0) {
@@ -262,6 +303,17 @@ bool runMacroSource(const char *displayName, const char *source) {
 			mrLogMessage(line.c_str());
 		}
 		return true;
+	}
+
+	{
+		std::string line = "Running macro '" + label + "' on UI thread: " + mrvmDescribeExecutionProfile(profile);
+		std::vector<std::string> unsupported = mrvmUnsupportedStagedSymbols(profile);
+
+		if (!unsupported.empty())
+			line += " [unsupported staged symbols: " + joinNames(unsupported) + "]";
+		else if (profile.has(mrefExternalIo))
+			line += " [contains external I/O]";
+		mrLogMessage(line.c_str());
 	}
 
 	vm.execute(bytecode, bytecodeSize);

@@ -24,6 +24,11 @@
 	- keystroke macros
 	- and much much more coming up...
 
+## MRMAC v1 verification
+
+- run: `make mrmac-v1-check`
+- status and scope: `documentation/MRMAC_V1_STATUS.md`
+
 - I own a Multi-Edit license and all written documentation: Users manual and MEMAC (MRMAC) reference is also part of this repo. Please take a look!
 
 

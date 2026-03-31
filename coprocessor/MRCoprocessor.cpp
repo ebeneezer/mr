@@ -150,9 +150,13 @@ void Coprocessor::cancelPending() {
 	}
 }
 
-void Coprocessor::shutdown() {
-	if (shuttingDown_.exchange(true, std::memory_order_acq_rel))
+void Coprocessor::shutdown(bool drainResults) {
+	if (shuttingDown_.exchange(true, std::memory_order_acq_rel)) {
+		if (drainResults)
+			while (pump(64) != 0)
+				;
 		return;
+	}
 
 	cancelPending();
 
@@ -165,6 +169,10 @@ void Coprocessor::shutdown() {
 	stopLane(ioLane_);
 	stopLane(computeLane_);
 	stopLane(macroLane_);
+
+	if (drainResults)
+		while (pump(64) != 0)
+			;
 
 	{
 		std::lock_guard<std::mutex> lock(resultMutex_);

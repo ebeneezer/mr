@@ -75,7 +75,8 @@ TDeskTop *TMREditorApp::initMRDeskTop(TRect r) {
 
 TMREditorApp::TMREditorApp()
     : TProgInit(&TMREditorApp::initMRStatusLine, &TMREditorApp::initMRMenuBar,
-                &TMREditorApp::initMRDeskTop) {
+                &TMREditorApp::initMRDeskTop),
+      exitPrepared_(false) {
 	mr::coprocessor::globalCoprocessor().setResultHandler(handleCoprocessorResult);
 	createEditorWindow("?No-File?");
 	mrEnsureLogWindow(false);
@@ -84,10 +85,37 @@ TMREditorApp::TMREditorApp()
 }
 
 TMREditorApp::~TMREditorApp() {
-	mr::coprocessor::globalCoprocessor().shutdown();
+	prepareForQuit();
+	mr::coprocessor::globalCoprocessor().shutdown(true);
+}
+
+void TMREditorApp::prepareForQuit() {
+	if (exitPrepared_)
+		return;
+
+	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+	std::size_t pendingTaskCount = 0;
+
+	exitPrepared_ = true;
+	for (std::size_t i = 0; i < windows.size(); ++i)
+		if (windows[i] != nullptr)
+			pendingTaskCount += windows[i]->prepareCoprocessorTasksForShutdown();
+
+	if (pendingTaskCount != 0) {
+		std::string line = "Exit requested; cancelling ";
+		line += std::to_string(pendingTaskCount);
+		line += " running or pending coprocessor task";
+		if (pendingTaskCount != 1)
+			line += "s";
+		line += ".";
+		mrLogMessage(line.c_str());
+		mr::coprocessor::globalCoprocessor().pump(64);
+	}
 }
 
 void TMREditorApp::handleEvent(TEvent &event) {
+	if (event.what == evCommand && event.message.command == cmQuit)
+		prepareForQuit();
 	TApplication::handleEvent(event);
 
 	if (event.what != evCommand)
@@ -112,10 +140,6 @@ void TMREditorApp::idle() {
 
 TPalette &TMREditorApp::getPalette() const {
 	static TPalette palette(cpAppColor, sizeof(cpAppColor) - 1);
-	static bool initialized = false;
-	if (!initialized) {
-		palette[33] = 0x70;
-		initialized = true;
-	}
+	palette[1] = currentPalette.desktop;
 	return palette;
 }

@@ -59,6 +59,11 @@
 #define MACRO_ATTR_DUMP 0x02
 #define MACRO_ATTR_PERM 0x04
 
+/* Macro invocation modes used by $MACRO ... FROM ... */
+#define MACRO_MODE_EDIT 0
+#define MACRO_MODE_DOS_SHELL 1
+#define MACRO_MODE_ALL 255
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -89,6 +94,8 @@ int get_compiled_macro_count(void);
 const char *get_compiled_macro_name(int index);
 int get_compiled_macro_entry(int index);
 int get_compiled_macro_flags(int index);
+const char *get_compiled_macro_keyspec(int index);
+int get_compiled_macro_mode(int index);
 const char *get_compiled_macro_file_name(void);
 
 #ifdef __cplusplus

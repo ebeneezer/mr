@@ -1,0 +1,5 @@
+$MACRO MarkStackStaged;
+MARK_POS;
+DOWN;
+GOTO_MARK;
+END_MACRO;

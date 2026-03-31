@@ -8,6 +8,8 @@
 class TMRDeskTop : public TDeskTop {
   public:
 	TMRDeskTop(const TRect &r) : TDeskInit(&TDeskTop::initBackground), TDeskTop(r) {
+		if (background != nullptr)
+			background->pattern = '\xB0';
 	}
 };
 #endif

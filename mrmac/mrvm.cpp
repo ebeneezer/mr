@@ -16,6 +16,7 @@
 #include <cctype>
 #include <cerrno>
 #include <cmath>
+#include <cstdlib>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -50,13 +51,18 @@ struct MacroRef {
 	std::string fileKey;
 	std::string displayName;
 	std::size_t entryOffset;
+	std::string assignedKeySpec;
+	TKey assignedKey;
+	int fromMode;
+	bool hasAssignedKey;
 	bool firstRunPending;
 	bool transientAttr;
 	bool dumpAttr;
 	bool permAttr;
 
 	MacroRef()
-	    : fileKey(), displayName(), entryOffset(0), firstRunPending(true), transientAttr(false),
+	    : fileKey(), displayName(), entryOffset(0), assignedKeySpec(), assignedKey(),
+	      fromMode(MACRO_MODE_EDIT), hasAssignedKey(false), firstRunPending(true), transientAttr(false),
 	      dumpAttr(false), permAttr(false) {
 	}
 };
@@ -144,10 +150,32 @@ struct BackgroundEditSession {
 	std::size_t lastSearchStart;
 	std::size_t lastSearchEnd;
 	std::size_t lastSearchCursor;
+	bool ignoreCase;
+	bool tabExpand;
 	int blockMode;
 	bool blockMarkingOn;
 	std::size_t blockAnchor;
 	std::size_t blockEnd;
+	bool firstSave;
+	bool eofInMemory;
+	int bufferId;
+	bool temporaryFile;
+	std::string temporaryFileName;
+	int currentWindow;
+	int linkStatus;
+	int windowCount;
+	bool windowGeometryValid;
+	int windowX1;
+	int windowY1;
+	int windowX2;
+	int windowY2;
+	std::map<std::string, GlobalEntry> globals;
+	std::vector<std::string> globalOrder;
+	std::size_t globalEnumIndex;
+	std::map<std::string, std::string> loadedMacroDisplayNames;
+	std::vector<std::string> macroOrder;
+	std::size_t macroEnumIndex;
+	std::vector<MRMacroDeferredUiCommand> deferredUiCommands;
 	bool insertMode;
 	int indentLevel;
 	int pageLines;
@@ -158,8 +186,13 @@ struct BackgroundEditSession {
 	BackgroundEditSession()
 	    : document(), transaction(), cursorOffset(0), selectionStart(0), selectionEnd(0),
 	      lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0),
-	      blockMode(0), blockMarkingOn(false), blockAnchor(0), blockEnd(0), insertMode(true), indentLevel(1),
-	      pageLines(20), fileName(), fileChanged(false), markStack() {
+	      ignoreCase(false), tabExpand(true), blockMode(0), blockMarkingOn(false), blockAnchor(0),
+	      blockEnd(0), firstSave(false), eofInMemory(false), bufferId(0), temporaryFile(false),
+	      temporaryFileName(), currentWindow(0), linkStatus(0), windowCount(0),
+	      windowGeometryValid(false), windowX1(0), windowY1(0), windowX2(0), windowY2(0),
+	      globals(), globalOrder(), globalEnumIndex(0), loadedMacroDisplayNames(), macroOrder(),
+	      macroEnumIndex(0), deferredUiCommands(), insertMode(true), indentLevel(1), pageLines(20),
+	      fileName(), fileChanged(false), markStack() {
 	}
 
 	bool hasSelection() const noexcept {
@@ -188,11 +221,22 @@ struct BackgroundEditSession {
 	}
 };
 
+struct ExecutionState {
+	std::string parameterString;
+	int returnInt;
+	std::string returnStr;
+	int errorLevel;
+
+	ExecutionState() : parameterString(), returnInt(0), returnStr(), errorLevel(0) {
+	}
+};
+
 static RuntimeEnvironment g_runtimeEnv;
 static std::recursive_mutex g_vmExecutionMutex;
 static thread_local BackgroundEditSession *g_backgroundEditSession = NULL;
 static thread_local const std::stop_token *g_backgroundMacroStopToken = NULL;
 static thread_local std::shared_ptr<std::atomic_bool> g_backgroundMacroCancelFlag;
+static thread_local ExecutionState *g_executionState = NULL;
 
 static std::string valueAsString(const Value &value);
 static int valueAsInt(const Value &value);
@@ -215,6 +259,7 @@ static bool parseRunMacroSpec(const std::string &spec, std::string &filePart,
                               std::string &macroPart, std::string &paramPart);
 static bool ensureLoadedFileResident(const std::string &fileKey);
 static bool evictTransientFileImage(const std::string &fileKey);
+static bool currentBackgroundChildMacroAllowed(const LoadedMacroFile &file) noexcept;
 static std::string expandUserPath(const std::string &path);
 static bool fileExistsPath(const std::string &path);
 static std::vector<TMREditWindow *> allEditWindows();
@@ -236,6 +281,7 @@ static int findNextFileMatch();
 static TMREditWindow *currentEditWindow();
 static TMRFileEditor *currentEditor();
 static BackgroundEditSession *currentBackgroundEditSession() noexcept;
+static ExecutionState *currentExecutionState() noexcept;
 static bool backgroundMacroCancelRequested() noexcept;
 static bool backgroundReplaceRange(const mr::editor::Range &range, const std::string &text,
                                    std::size_t cursorPos);
@@ -350,12 +396,24 @@ static bool saveCurrentBlockToFile(TMREditWindow *win, TMRFileEditor *editor, co
 static int countEditWindows();
 static int currentEditWindowIndex();
 static bool currentWindowGeometry(int &x1, int &y1, int &x2, int &y2);
+static bool queueDeferredUiProcedure(const std::string &name, const std::vector<Value> &args,
+                                     int &errorCode);
 static bool createEditWindow();
 static bool switchEditWindow(int index);
 static bool sizeCurrentEditWindow(int x1, int y1, int x2, int y2);
 static bool deleteCurrentEditWindow();
 static bool eraseCurrentEditWindow();
 static bool modifyCurrentEditWindow();
+static std::string normalizeKeySpecToken(const std::string &spec);
+static bool parseAssignedKeySpec(const std::string &spec, TKey &outKey);
+static bool dispatchSyntheticKeyToUi(const TKey &key, const char *text = NULL,
+                                     std::size_t textLength = 0);
+static bool replayKeyInputSequence(const std::string &sequence);
+static int currentUiMacroMode();
+static bool macroAllowsUiMode(const MacroRef &macroRef, int mode) noexcept;
+static bool executeLoadedMacro(std::map<std::string, MacroRef>::iterator macroIt,
+                               const std::string &macroKey, const std::string &paramPart,
+                               std::vector<std::string> *logSink);
 
 static std::string upperKey(const std::string &value) {
 	std::string out = value;
@@ -451,6 +509,8 @@ static unsigned classifyIntrinsicName(const std::string &name) {
 	if (name == "FILE_EXISTS" || name == "FIRST_FILE" || name == "NEXT_FILE" ||
 	    name == "GET_ENVIRONMENT")
 		return mrefExternalIo;
+	if (name == "GLOBAL_STR" || name == "GLOBAL_INT" || name == "INQ_MACRO")
+		return mrefUiAffinity;
 	if (name == "SEARCH_FWD" || name == "SEARCH_BWD" || name == "GET_WORD")
 		return mrefUiAffinity;
 	return mrefBackgroundSafe;
@@ -462,18 +522,45 @@ static unsigned classifyProcVarName(const std::string &name) {
 	return mrefUiAffinity;
 }
 
+static unsigned classifyLoadVarName(const std::string &name) {
+	if (name == "FIRST_MACRO" || name == "NEXT_MACRO")
+		return mrefUiAffinity;
+	if (name == "IGNORE_CASE" || name == "TAB_EXPAND")
+		return mrefUiAffinity;
+	if (name == "INSERT_MODE" || name == "INDENT_LEVEL" || name == "GET_LINE" ||
+	    name == "CUR_CHAR" || name == "C_COL" || name == "C_LINE" || name == "C_ROW" ||
+	    name == "AT_EOF" || name == "AT_EOL" || name == "BLOCK_STAT" ||
+	    name == "BLOCK_LINE1" || name == "BLOCK_LINE2" || name == "BLOCK_COL1" ||
+	    name == "BLOCK_COL2" || name == "MARKING" || name == "FILE_CHANGED" ||
+	    name == "FILE_NAME")
+		return mrefUiAffinity;
+	if (name == "CUR_WINDOW" || name == "LINK_STAT" || name == "WIN_X1" || name == "WIN_Y1" ||
+	    name == "WIN_X2" || name == "WIN_Y2" || name == "WINDOW_COUNT" ||
+	    name == "FIRST_SAVE" || name == "EOF_IN_MEM" || name == "BUFFER_ID" ||
+	    name == "TMP_FILE" || name == "TMP_FILE_NAME")
+		return mrefUiAffinity;
+	return 0;
+}
+
+static unsigned classifyStoreVarName(const std::string &name) {
+	if (name == "IGNORE_CASE" || name == "TAB_EXPAND" || name == "INSERT_MODE" ||
+	    name == "INDENT_LEVEL" || name == "FILE_CHANGED" || name == "FILE_NAME")
+		return mrefUiAffinity | mrefStagedWrite;
+	return 0;
+}
+
 static unsigned classifyProcName(const std::string &name) {
 	if (name == "SET_GLOBAL_STR" || name == "SET_GLOBAL_INT" || name == "UNLOAD_MACRO")
-		return mrefBackgroundSafe;
+		return name == "UNLOAD_MACRO" ? mrefUiAffinity : (mrefUiAffinity | mrefStagedWrite);
 	if (name == "LOAD_MACRO_FILE" || name == "CHANGE_DIR" || name == "DEL_FILE")
 		return mrefExternalIo;
 	if (name == "LOAD_FILE" || name == "SAVE_FILE" || name == "SAVE_BLOCK")
 		return mrefUiAffinity | mrefExternalIo;
 	if (name == "REPLACE" || name == "TEXT" || name == "PUT_LINE" || name == "CR" ||
-	    name == "DEL_CHAR" || name == "DEL_CHARS" || name == "DEL_LINE" || name == "INDENT" ||
-	    name == "UNDENT" || name == "COPY_BLOCK" || name == "MOVE_BLOCK" ||
-	    name == "DELETE_BLOCK" || name == "ERASE_WINDOW" || name == "WINDOW_COPY" ||
-	    name == "WINDOW_MOVE")
+	    name == "KEY_IN" || name == "DEL_CHAR" || name == "DEL_CHARS" ||
+	    name == "DEL_LINE" || name == "INDENT" || name == "UNDENT" ||
+	    name == "COPY_BLOCK" || name == "MOVE_BLOCK" || name == "DELETE_BLOCK" ||
+	    name == "ERASE_WINDOW" || name == "WINDOW_COPY" || name == "WINDOW_MOVE")
 		return mrefUiAffinity | mrefStagedWrite;
 	if (name == "RUN_MACRO")
 		return mrefUiAffinity | mrefStagedWrite;
@@ -1043,6 +1130,30 @@ static BackgroundEditSession *currentBackgroundEditSession() noexcept {
 	return g_backgroundEditSession;
 }
 
+static ExecutionState *currentExecutionState() noexcept {
+	return g_executionState;
+}
+
+static std::string &runtimeParameterString() noexcept {
+	ExecutionState *state = currentExecutionState();
+	return state != NULL ? state->parameterString : g_runtimeEnv.parameterString;
+}
+
+static int &runtimeReturnInt() noexcept {
+	ExecutionState *state = currentExecutionState();
+	return state != NULL ? state->returnInt : g_runtimeEnv.returnInt;
+}
+
+static std::string &runtimeReturnStr() noexcept {
+	ExecutionState *state = currentExecutionState();
+	return state != NULL ? state->returnStr : g_runtimeEnv.returnStr;
+}
+
+static int &runtimeErrorLevel() noexcept {
+	ExecutionState *state = currentExecutionState();
+	return state != NULL ? state->errorLevel : g_runtimeEnv.errorLevel;
+}
+
 static char normalizeSearchChar(char c, bool ignoreCase) noexcept {
 	if (!ignoreCase)
 		return c;
@@ -1055,19 +1166,33 @@ static bool backgroundMacroCancelRequested() noexcept {
 	        g_backgroundMacroCancelFlag->load(std::memory_order_acquire));
 }
 
+static bool currentRuntimeIgnoreCase() noexcept {
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	return session != NULL ? session->ignoreCase : g_runtimeEnv.ignoreCase;
+}
+
+static bool currentRuntimeTabExpand() noexcept {
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	return session != NULL ? session->tabExpand : g_runtimeEnv.tabExpand;
+}
+
 static Value loadCurrentFileState(const std::string &key) {
 	TMREditWindow *win = currentEditWindow();
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (key == "FIRST_SAVE")
-		return makeInt(win != NULL && win->hasBeenSavedInSession() ? 1 : 0);
+		return makeInt(win != NULL ? (win->hasBeenSavedInSession() ? 1 : 0)
+		                          : (session != NULL && session->firstSave ? 1 : 0));
 	if (key == "EOF_IN_MEM")
-		return makeInt(win != NULL && win->eofInMemory() ? 1 : 0);
+		return makeInt(win != NULL ? (win->eofInMemory() ? 1 : 0)
+		                          : (session != NULL && session->eofInMemory ? 1 : 0));
 	if (key == "BUFFER_ID")
-		return makeInt(win != NULL ? win->bufferId() : 0);
+		return makeInt(win != NULL ? win->bufferId() : (session != NULL ? session->bufferId : 0));
 	if (key == "TMP_FILE")
-		return makeInt(win != NULL && win->isTemporaryFile() ? 1 : 0);
+		return makeInt(win != NULL ? (win->isTemporaryFile() ? 1 : 0)
+		                          : (session != NULL && session->temporaryFile ? 1 : 0));
 	if (key == "TMP_FILE_NAME")
-		return makeString(win != NULL ? win->temporaryFileName() : "");
+		return makeString(win != NULL ? win->temporaryFileName()
+		                             : (session != NULL ? session->temporaryFileName : ""));
 	if (key == "FILE_CHANGED")
 		return makeInt(win != NULL ? (win->isFileChanged() ? 1 : 0)
 		                          : (session != NULL && session->fileChanged ? 1 : 0));
@@ -2693,13 +2818,25 @@ static bool deleteCurrentEditWindow() {
 static bool eraseCurrentEditWindow() {
 	TMREditWindow *win = currentEditWindow();
 	TMRFileEditor *editor = currentEditor();
-	if (win == NULL || editor == NULL)
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor == NULL && session == NULL)
 		return false;
 	if (!replaceEditorBuffer(editor, std::string(), 0))
 		return false;
-	win->clearBlock();
-	win->setCurrentFileName("");
-	win->setFileChanged(false);
+	if (win != NULL) {
+		win->clearBlock();
+		win->setCurrentFileName("");
+		win->setFileChanged(false);
+	} else if (session != NULL) {
+		session->blockMode = 0;
+		session->blockMarkingOn = false;
+		session->blockAnchor = 0;
+		session->blockEnd = 0;
+		session->fileName.clear();
+		session->fileChanged = false;
+		session->clearSelection();
+		session->clearLastSearch();
+	}
 	return true;
 }
 
@@ -2709,6 +2846,100 @@ static bool modifyCurrentEditWindow() {
 		return false;
 	message(win, evCommand, cmResize, 0);
 	return true;
+}
+
+static bool queueDeferredUiProcedure(const std::string &name, const std::vector<Value> &args,
+                                     int &errorCode) {
+	BackgroundEditSession *session = currentBackgroundEditSession();
+
+	errorCode = 0;
+	if (session == NULL)
+		return false;
+
+	if (name == "CREATE_WINDOW") {
+		session->deferredUiCommands.push_back(MRMacroDeferredUiCommand(mrducCreateWindow));
+		if (session->windowCount < std::numeric_limits<int>::max())
+			++session->windowCount;
+		session->currentWindow = std::max(1, session->windowCount);
+		session->linkStatus = 0;
+		return true;
+	}
+	if (name == "DELETE_WINDOW") {
+		session->deferredUiCommands.push_back(MRMacroDeferredUiCommand(mrducDeleteWindow));
+		if (session->windowCount > 0)
+			--session->windowCount;
+		if (session->windowCount <= 0) {
+			session->windowCount = 0;
+			session->currentWindow = 0;
+			session->linkStatus = 0;
+		} else if (session->currentWindow > session->windowCount)
+			session->currentWindow = session->windowCount;
+		return true;
+	}
+	if (name == "MODIFY_WINDOW") {
+		session->deferredUiCommands.push_back(MRMacroDeferredUiCommand(mrducModifyWindow));
+		return true;
+	}
+	if (name == "LINK_WINDOW") {
+		session->deferredUiCommands.push_back(MRMacroDeferredUiCommand(mrducLinkWindow));
+		session->linkStatus = 1;
+		return true;
+	}
+	if (name == "UNLINK_WINDOW") {
+		session->deferredUiCommands.push_back(MRMacroDeferredUiCommand(mrducUnlinkWindow));
+		session->linkStatus = 0;
+		return true;
+	}
+	if (name == "ZOOM") {
+		session->deferredUiCommands.push_back(MRMacroDeferredUiCommand(mrducZoom));
+		return true;
+	}
+	if (name == "REDRAW") {
+		session->deferredUiCommands.push_back(MRMacroDeferredUiCommand(mrducRedraw));
+		return true;
+	}
+	if (name == "NEW_SCREEN") {
+		session->deferredUiCommands.push_back(MRMacroDeferredUiCommand(mrducNewScreen));
+		return true;
+	}
+	if (name == "SWITCH_WINDOW") {
+		int index;
+		int count;
+		if (args.size() != 1 || args[0].type != TYPE_INT)
+			throw std::runtime_error("SWITCH_WINDOW expects one integer argument.");
+		index = valueAsInt(args[0]);
+		count = session->windowCount;
+		if (count > 0) {
+			if (index <= 0)
+				index = 1;
+			if (index > count)
+				index = ((index - 1) % count) + 1;
+			session->currentWindow = index;
+		}
+		session->deferredUiCommands.push_back(MRMacroDeferredUiCommand(mrducSwitchWindow, index));
+		return true;
+	}
+	if (name == "SIZE_WINDOW") {
+		int x1;
+		int y1;
+		int x2;
+		int y2;
+		if (args.size() != 4 || args[0].type != TYPE_INT || args[1].type != TYPE_INT ||
+		    args[2].type != TYPE_INT || args[3].type != TYPE_INT)
+			throw std::runtime_error("SIZE_WINDOW expects four integer arguments.");
+		x1 = valueAsInt(args[0]);
+		y1 = valueAsInt(args[1]);
+		x2 = valueAsInt(args[2]);
+		y2 = valueAsInt(args[3]);
+		session->windowGeometryValid = true;
+		session->windowX1 = x1;
+		session->windowY1 = y1;
+		session->windowX2 = x2;
+		session->windowY2 = y2;
+		session->deferredUiCommands.push_back(MRMacroDeferredUiCommand(mrducSizeWindow, x1, y1, x2, y2));
+		return true;
+	}
+	return false;
 }
 
 static bool copyBlockFromWindow(TMREditWindow *srcWin, TMRFileEditor *srcEditor,
@@ -3125,7 +3356,7 @@ static bool moveEditorTabRight(TMRFileEditor *editor) {
 	col = currentEditorColumn(editor);
 	targetCol = nextTabStopColumn(col);
 	if (currentEditorInsertMode()) {
-		if (g_runtimeEnv.tabExpand)
+		if (currentRuntimeTabExpand())
 			return insertEditorText(editor, std::string(1, '	'));
 		return insertEditorText(editor,
 		                        std::string(static_cast<std::size_t>(targetCol - col), ' '));
@@ -3170,7 +3401,7 @@ static bool carriageReturnEditor(TMRFileEditor *editor) {
 	int indentLevel;
 	std::string fill;
 	indentLevel = currentEditorIndentLevel();
-	fill = makeIndentFill(indentLevel, g_runtimeEnv.tabExpand);
+	fill = makeIndentFill(indentLevel, currentRuntimeTabExpand());
 	if (editor != NULL)
 		return editor->newLineWithIndent(fill);
 	return insertEditorText(NULL, std::string("\n") + fill);
@@ -3203,21 +3434,21 @@ static Value loadSpecialVariable(const std::string &name, bool &handled) {
 	std::string key = upperKey(name);
 	handled = true;
 	if (key == "RETURN_INT")
-		return makeInt(g_runtimeEnv.returnInt);
+		return makeInt(runtimeReturnInt());
 	if (key == "RETURN_STR")
-		return makeString(g_runtimeEnv.returnStr);
+		return makeString(runtimeReturnStr());
 	if (key == "ERROR_LEVEL")
-		return makeInt(g_runtimeEnv.errorLevel);
+		return makeInt(runtimeErrorLevel());
 	if (key == "IGNORE_CASE")
-		return makeInt(g_runtimeEnv.ignoreCase ? 1 : 0);
+		return makeInt(currentRuntimeIgnoreCase() ? 1 : 0);
 	if (key == "TAB_EXPAND")
-		return makeInt(g_runtimeEnv.tabExpand ? 1 : 0);
+		return makeInt(currentRuntimeTabExpand() ? 1 : 0);
 	if (key == "INSERT_MODE")
 		return makeInt(currentEditorInsertMode() ? 1 : 0);
 	if (key == "INDENT_LEVEL")
 		return makeInt(currentEditorIndentLevel());
 	if (key == "MPARM_STR")
-		return makeString(g_runtimeEnv.parameterString);
+		return makeString(runtimeParameterString());
 	if (key == "DATE")
 		return makeString(formatCurrentDate());
 	if (key == "TIME")
@@ -3243,18 +3474,31 @@ static Value loadSpecialVariable(const std::string &name, bool &handled) {
 	if (key == "AT_EOL")
 		return makeInt(currentEditorAtEol(currentEditor()) ? 1 : 0);
 	if (key == "CUR_WINDOW")
-		return makeInt(currentEditWindowIndex());
+		return makeInt(currentBackgroundEditSession() != NULL ? currentBackgroundEditSession()->currentWindow
+		                                                     : currentEditWindowIndex());
 	if (key == "LINK_STAT")
-		return makeInt(currentLinkStatus());
+		return makeInt(currentBackgroundEditSession() != NULL ? currentBackgroundEditSession()->linkStatus
+		                                                     : currentLinkStatus());
 	if (key == "WINDOW_COUNT")
-		return makeInt(countEditWindows());
+		return makeInt(currentBackgroundEditSession() != NULL ? currentBackgroundEditSession()->windowCount
+		                                                     : countEditWindows());
 	if (key == "WIN_X1" || key == "WIN_Y1" || key == "WIN_X2" || key == "WIN_Y2") {
+		BackgroundEditSession *session = currentBackgroundEditSession();
 		int x1;
 		int y1;
 		int x2;
 		int y2;
-		if (!currentWindowGeometry(x1, y1, x2, y2))
-			return makeInt(0);
+		if (session != NULL) {
+			if (!session->windowGeometryValid)
+				return makeInt(0);
+			x1 = session->windowX1;
+			y1 = session->windowY1;
+			x2 = session->windowX2;
+			y2 = session->windowY2;
+		} else {
+			if (!currentWindowGeometry(x1, y1, x2, y2))
+				return makeInt(0);
+		}
 		if (key == "WIN_X1")
 			return makeInt(x1);
 		if (key == "WIN_Y1")
@@ -3302,23 +3546,46 @@ static Value loadSpecialVariable(const std::string &name, bool &handled) {
 		return makeInt(0);
 	}
 	if (key == "FIRST_MACRO") {
-		g_runtimeEnv.macroEnumIndex = 0;
-		while (g_runtimeEnv.macroEnumIndex < g_runtimeEnv.macroOrder.size()) {
-			const std::string &macroKey = g_runtimeEnv.macroOrder[g_runtimeEnv.macroEnumIndex++];
-			std::map<std::string, MacroRef>::const_iterator it =
-			    g_runtimeEnv.loadedMacros.find(macroKey);
-			if (it != g_runtimeEnv.loadedMacros.end())
-				return makeString(it->second.displayName);
+		BackgroundEditSession *session = currentBackgroundEditSession();
+		if (session != NULL) {
+			session->macroEnumIndex = 0;
+			while (session->macroEnumIndex < session->macroOrder.size()) {
+				const std::string &macroKey = session->macroOrder[session->macroEnumIndex++];
+				std::map<std::string, std::string>::const_iterator it =
+				    session->loadedMacroDisplayNames.find(macroKey);
+				if (it != session->loadedMacroDisplayNames.end())
+					return makeString(it->second);
+			}
+		} else {
+			g_runtimeEnv.macroEnumIndex = 0;
+			while (g_runtimeEnv.macroEnumIndex < g_runtimeEnv.macroOrder.size()) {
+				const std::string &macroKey = g_runtimeEnv.macroOrder[g_runtimeEnv.macroEnumIndex++];
+				std::map<std::string, MacroRef>::const_iterator it =
+				    g_runtimeEnv.loadedMacros.find(macroKey);
+				if (it != g_runtimeEnv.loadedMacros.end())
+					return makeString(it->second.displayName);
+			}
 		}
 		return makeString("");
 	}
 	if (key == "NEXT_MACRO") {
-		while (g_runtimeEnv.macroEnumIndex < g_runtimeEnv.macroOrder.size()) {
-			const std::string &macroKey = g_runtimeEnv.macroOrder[g_runtimeEnv.macroEnumIndex++];
-			std::map<std::string, MacroRef>::const_iterator it =
-			    g_runtimeEnv.loadedMacros.find(macroKey);
-			if (it != g_runtimeEnv.loadedMacros.end())
-				return makeString(it->second.displayName);
+		BackgroundEditSession *session = currentBackgroundEditSession();
+		if (session != NULL) {
+			while (session->macroEnumIndex < session->macroOrder.size()) {
+				const std::string &macroKey = session->macroOrder[session->macroEnumIndex++];
+				std::map<std::string, std::string>::const_iterator it =
+				    session->loadedMacroDisplayNames.find(macroKey);
+				if (it != session->loadedMacroDisplayNames.end())
+					return makeString(it->second);
+			}
+		} else {
+			while (g_runtimeEnv.macroEnumIndex < g_runtimeEnv.macroOrder.size()) {
+				const std::string &macroKey = g_runtimeEnv.macroOrder[g_runtimeEnv.macroEnumIndex++];
+				std::map<std::string, MacroRef>::const_iterator it =
+				    g_runtimeEnv.loadedMacros.find(macroKey);
+				if (it != g_runtimeEnv.loadedMacros.end())
+					return makeString(it->second.displayName);
+			}
 		}
 		return makeString("");
 	}
@@ -3329,24 +3596,32 @@ static Value loadSpecialVariable(const std::string &name, bool &handled) {
 static bool storeSpecialVariable(const std::string &name, const Value &value) {
 	std::string key = upperKey(name);
 	if (key == "RETURN_INT") {
-		g_runtimeEnv.returnInt = valueAsInt(value);
+		runtimeReturnInt() = valueAsInt(value);
 		return true;
 	}
 	if (key == "RETURN_STR") {
-		g_runtimeEnv.returnStr = valueAsString(value);
-		enforceStringLength(g_runtimeEnv.returnStr);
+		runtimeReturnStr() = valueAsString(value);
+		enforceStringLength(runtimeReturnStr());
 		return true;
 	}
 	if (key == "ERROR_LEVEL") {
-		g_runtimeEnv.errorLevel = valueAsInt(value);
+		runtimeErrorLevel() = valueAsInt(value);
 		return true;
 	}
 	if (key == "IGNORE_CASE") {
-		g_runtimeEnv.ignoreCase = valueAsInt(value) != 0;
+		BackgroundEditSession *session = currentBackgroundEditSession();
+		if (session != NULL)
+			session->ignoreCase = valueAsInt(value) != 0;
+		else
+			g_runtimeEnv.ignoreCase = valueAsInt(value) != 0;
 		return true;
 	}
 	if (key == "TAB_EXPAND") {
-		g_runtimeEnv.tabExpand = valueAsInt(value) != 0;
+		BackgroundEditSession *session = currentBackgroundEditSession();
+		if (session != NULL)
+			session->tabExpand = valueAsInt(value) != 0;
+		else
+			g_runtimeEnv.tabExpand = valueAsInt(value) != 0;
 		return true;
 	}
 	if (key == "INSERT_MODE")
@@ -3354,8 +3629,8 @@ static bool storeSpecialVariable(const std::string &name, const Value &value) {
 	if (key == "INDENT_LEVEL")
 		return setCurrentEditorIndentLevel(valueAsInt(value));
 	if (key == "MPARM_STR") {
-		g_runtimeEnv.parameterString = valueAsString(value);
-		enforceStringLength(g_runtimeEnv.parameterString);
+		runtimeParameterString() = valueAsString(value);
+		enforceStringLength(runtimeParameterString());
 		return true;
 	}
 	if (key == "FILE_CHANGED") {
@@ -3365,6 +3640,8 @@ static bool storeSpecialVariable(const std::string &name, const Value &value) {
 			win->setFileChanged(valueAsInt(value) != 0);
 		else if (session != NULL)
 			session->fileChanged = valueAsInt(value) != 0;
+		else
+			return false;
 		return true;
 	}
 	if (key == "FILE_NAME") {
@@ -3374,6 +3651,8 @@ static bool storeSpecialVariable(const std::string &name, const Value &value) {
 			win->setCurrentFileName(valueAsString(value).c_str());
 		else if (session != NULL)
 			session->fileName = valueAsString(value);
+		else
+			return false;
 		return true;
 	}
 	if (key == "FIRST_RUN" || key == "FIRST_MACRO" || key == "NEXT_MACRO" ||
@@ -3402,12 +3681,20 @@ static std::string parseNamedValue(const std::string &needle, const std::string 
 }
 
 static void setGlobalValue(const std::string &name, int type, const Value &value) {
+	BackgroundEditSession *session = currentBackgroundEditSession();
 	std::string key = upperKey(name);
-	if (g_runtimeEnv.globals.find(key) == g_runtimeEnv.globals.end())
-		g_runtimeEnv.globalOrder.push_back(key);
 	GlobalEntry entry;
+
 	entry.type = type;
 	entry.value = value;
+	if (session != NULL) {
+		if (session->globals.find(key) == session->globals.end())
+			session->globalOrder.push_back(key);
+		session->globals[key] = entry;
+		return;
+	}
+	if (g_runtimeEnv.globals.find(key) == g_runtimeEnv.globals.end())
+		g_runtimeEnv.globalOrder.push_back(key);
 	g_runtimeEnv.globals[key] = entry;
 }
 
@@ -3493,6 +3780,323 @@ static bool removeMacroFromRegistryByKey(const std::string &macroKey) {
 	return true;
 }
 
+static std::string normalizeKeySpecToken(const std::string &spec) {
+	std::string trimmed = trimAscii(spec);
+	std::string normalized;
+
+	if (trimmed.size() < 3 || trimmed.front() != '<' || trimmed.back() != '>')
+		return std::string();
+	trimmed = trimmed.substr(1, trimmed.size() - 2);
+	for (std::size_t i = 0; i < trimmed.size(); ++i) {
+		unsigned char ch = static_cast<unsigned char>(trimmed[i]);
+		if (std::isspace(ch) != 0 || ch == '_')
+			continue;
+		normalized.push_back(static_cast<char>(std::toupper(ch)));
+	}
+	return normalized;
+}
+
+static bool parseAssignedKeySpec(const std::string &spec, TKey &outKey) {
+	std::string token = normalizeKeySpecToken(spec);
+	bool wantShift = false;
+	bool wantCtrl = false;
+	bool wantAlt = false;
+	bool changed = true;
+	ushort baseCode = 0;
+	ushort modifiers = 0;
+
+	if (token.empty())
+		return false;
+
+	while (changed) {
+		changed = false;
+		if (token.rfind("SHIFT", 0) == 0) {
+			wantShift = true;
+			token.erase(0, 5);
+			changed = true;
+			continue;
+		}
+		if (token.rfind("SHFT", 0) == 0) {
+			wantShift = true;
+			token.erase(0, 4);
+			changed = true;
+			continue;
+		}
+		if (token.rfind("CTRL", 0) == 0) {
+			wantCtrl = true;
+			token.erase(0, 4);
+			changed = true;
+			continue;
+		}
+		if (token.rfind("ALT", 0) == 0) {
+			wantAlt = true;
+			token.erase(0, 3);
+			changed = true;
+			continue;
+		}
+	}
+
+	if (token.empty())
+		return false;
+
+	if (token.size() >= 2 && token[0] == 'F' &&
+	    std::all_of(token.begin() + 1, token.end(),
+	                [](char c) { return std::isdigit(static_cast<unsigned char>(c)) != 0; })) {
+		int number = std::atoi(token.c_str() + 1);
+		switch (number) {
+			case 1:
+				baseCode = kbF1;
+				break;
+			case 2:
+				baseCode = kbF2;
+				break;
+			case 3:
+				baseCode = kbF3;
+				break;
+			case 4:
+				baseCode = kbF4;
+				break;
+			case 5:
+				baseCode = kbF5;
+				break;
+			case 6:
+				baseCode = kbF6;
+				break;
+			case 7:
+				baseCode = kbF7;
+				break;
+			case 8:
+				baseCode = kbF8;
+				break;
+			case 9:
+				baseCode = kbF9;
+				break;
+			case 10:
+				baseCode = kbF10;
+				break;
+			case 11:
+				baseCode = kbF11;
+				break;
+			case 12:
+				baseCode = kbF12;
+				break;
+			default:
+				return false;
+		}
+	} else if (token == "ENTER" || token == "RETURN")
+		baseCode = kbEnter;
+	else if (token == "TAB")
+		baseCode = kbTab;
+	else if (token == "ESC")
+		baseCode = kbEsc;
+	else if (token == "BS" || token == "BACK" || token == "BACKSPACE")
+		baseCode = kbBack;
+	else if (token == "UP")
+		baseCode = kbUp;
+	else if (token == "DN" || token == "DOWN")
+		baseCode = kbDown;
+	else if (token == "LF" || token == "LEFT")
+		baseCode = kbLeft;
+	else if (token == "RT" || token == "RIGHT")
+		baseCode = kbRight;
+	else if (token == "PGUP")
+		baseCode = kbPgUp;
+	else if (token == "PGDN")
+		baseCode = kbPgDn;
+	else if (token == "HOME")
+		baseCode = kbHome;
+	else if (token == "END")
+		baseCode = kbEnd;
+	else if (token == "INS")
+		baseCode = kbIns;
+	else if (token == "DEL")
+		baseCode = kbDel;
+	else if (token == "GREY-")
+		baseCode = kbGrayMinus;
+	else if (token == "GREY+")
+		baseCode = kbGrayPlus;
+	else if (token == "GREY*")
+		baseCode = static_cast<ushort>('*');
+	else if (token == "SPACE")
+		baseCode = static_cast<ushort>(' ');
+	else if (token == "MINUS")
+		baseCode = static_cast<ushort>('-');
+	else if (token == "EQUAL")
+		baseCode = static_cast<ushort>('=');
+	else if (token.size() == 1)
+		baseCode = static_cast<ushort>(token[0]);
+	else
+		return false;
+
+	if (wantShift)
+		modifiers |= kbShift;
+	if (wantCtrl)
+		modifiers |= kbCtrlShift;
+	if (wantAlt)
+		modifiers |= kbAltShift;
+
+	outKey = TKey(baseCode, modifiers);
+	return true;
+}
+
+static bool dispatchSyntheticKeyToUi(const TKey &key, const char *text, std::size_t textLength) {
+	TMREditWindow *win = currentEditWindow();
+	TEvent event;
+
+	if (win == NULL || win->getEditor() == NULL)
+		return false;
+
+	std::memset(&event, 0, sizeof(event));
+	event.what = evKeyDown;
+	event.keyDown.keyCode = key.code;
+	event.keyDown.controlKeyState = key.mods;
+	if (text != NULL && textLength > 0) {
+		if (textLength > sizeof(event.keyDown.text))
+			textLength = sizeof(event.keyDown.text);
+		std::memcpy(event.keyDown.text, text, textLength);
+		event.keyDown.textLength = static_cast<uchar>(textLength);
+	}
+	win->handleEvent(event);
+	return true;
+}
+
+static bool replayKeyInputSequence(const std::string &sequence) {
+	std::size_t i = 0;
+
+	if (currentBackgroundEditSession() != NULL)
+		return false;
+	if (currentEditWindow() == NULL || currentEditor() == NULL)
+		return false;
+
+	while (i < sequence.size()) {
+		unsigned char ch = static_cast<unsigned char>(sequence[i]);
+		if (ch == '<') {
+			std::size_t closePos = sequence.find('>', i + 1);
+			if (closePos != std::string::npos) {
+				TKey key;
+				std::string token = sequence.substr(i, closePos - i + 1);
+				if (parseAssignedKeySpec(token, key)) {
+					if (!dispatchSyntheticKeyToUi(key))
+						return false;
+					i = closePos + 1;
+					continue;
+				}
+			}
+		}
+
+		if (ch == '\r') {
+			if (i + 1 < sequence.size() && sequence[i + 1] == '\n')
+				++i;
+			if (!dispatchSyntheticKeyToUi(TKey(kbEnter)))
+				return false;
+			++i;
+			continue;
+		}
+		if (ch == '\n') {
+			if (!dispatchSyntheticKeyToUi(TKey(kbEnter)))
+				return false;
+			++i;
+			continue;
+		}
+		if (ch == '\t') {
+			if (!dispatchSyntheticKeyToUi(TKey(kbTab)))
+				return false;
+			++i;
+			continue;
+		}
+		if (ch == '\b') {
+			if (!dispatchSyntheticKeyToUi(TKey(kbBack)))
+				return false;
+			++i;
+			continue;
+		}
+		if (ch == 27) {
+			if (!dispatchSyntheticKeyToUi(TKey(kbEsc)))
+				return false;
+			++i;
+			continue;
+		}
+		if (ch == 127) {
+			if (!dispatchSyntheticKeyToUi(TKey(kbDel)))
+				return false;
+			++i;
+			continue;
+		}
+
+		char textByte = static_cast<char>(ch);
+		if (!dispatchSyntheticKeyToUi(TKey(static_cast<ushort>(ch)), &textByte, 1))
+			return false;
+		++i;
+	}
+	return true;
+}
+
+static int currentUiMacroMode() {
+	TMREditWindow *win = currentEditWindow();
+	if (win != NULL && win->isCommunicationWindow())
+		return MACRO_MODE_DOS_SHELL;
+	return MACRO_MODE_EDIT;
+}
+
+static bool macroAllowsUiMode(const MacroRef &macroRef, int mode) noexcept {
+	return macroRef.fromMode == MACRO_MODE_ALL || macroRef.fromMode == mode;
+}
+
+static bool executeLoadedMacro(std::map<std::string, MacroRef>::iterator macroIt,
+                               const std::string &macroKey, const std::string &paramPart,
+                               std::vector<std::string> *logSink) {
+	std::map<std::string, LoadedMacroFile>::iterator fit;
+	VirtualMachine childVm;
+	bool backgroundStaged = currentBackgroundEditSession() != NULL;
+	bool childFirstRun;
+	bool childDump;
+	bool childTransient;
+	std::string childFileKey;
+
+	if (macroIt == g_runtimeEnv.loadedMacros.end()) {
+		runtimeErrorLevel() = 5001;
+		return false;
+	}
+
+	fit = g_runtimeEnv.loadedFiles.find(macroIt->second.fileKey);
+	if (fit == g_runtimeEnv.loadedFiles.end()) {
+		runtimeErrorLevel() = 5001;
+		return false;
+	}
+
+	if (backgroundStaged) {
+		if (fit->second.bytecode.empty() || !currentBackgroundChildMacroAllowed(fit->second)) {
+			runtimeErrorLevel() = 5001;
+			return false;
+		}
+	} else if (!ensureLoadedFileResident(macroIt->second.fileKey))
+		return false;
+
+	fit = g_runtimeEnv.loadedFiles.find(macroIt->second.fileKey);
+	if (fit == g_runtimeEnv.loadedFiles.end() || fit->second.bytecode.empty()) {
+		runtimeErrorLevel() = 5001;
+		return false;
+	}
+
+	childFirstRun = macroIt->second.firstRunPending;
+	childDump = macroIt->second.dumpAttr;
+	childTransient = macroIt->second.transientAttr;
+	childFileKey = macroIt->second.fileKey;
+	macroIt->second.firstRunPending = false;
+
+	childVm.executeAt(fit->second.bytecode.data(), fit->second.bytecode.size(),
+	                  macroIt->second.entryOffset, paramPart, macroIt->second.displayName, false,
+	                  childFirstRun);
+	if (logSink != NULL)
+		logSink->insert(logSink->end(), childVm.log.begin(), childVm.log.end());
+	if (childDump)
+		unloadMacroFromRegistry(macroKey);
+	else if (childTransient)
+		evictTransientFileImage(childFileKey);
+	runtimeErrorLevel() = 0;
+	return true;
+}
+
 static bool parseRunMacroSpec(const std::string &spec, std::string &filePart,
                               std::string &macroPart, std::string &paramPart) {
 	std::string trimmed = trimAscii(spec);
@@ -3547,13 +4151,13 @@ static bool refreshLoadedFileBytecode(const std::string &fileKey) {
 	if (fit == g_runtimeEnv.loadedFiles.end())
 		return false;
 	if (fit->second.resolvedPath.empty() || !readTextFile(fit->second.resolvedPath, source)) {
-		g_runtimeEnv.errorLevel = 5001;
+		runtimeErrorLevel() = 5001;
 		return false;
 	}
 
 	compiled = compile_macro_code(source.c_str(), &compiledSize);
 	if (compiled == NULL) {
-		g_runtimeEnv.errorLevel = 5005;
+		runtimeErrorLevel() = 5005;
 		return false;
 	}
 
@@ -3566,6 +4170,8 @@ static bool refreshLoadedFileBytecode(const std::string &fileKey) {
 		const char *macroNameText = get_compiled_macro_name(i);
 		int entry = get_compiled_macro_entry(i);
 		int flags = get_compiled_macro_flags(i);
+		const char *keyspecText = get_compiled_macro_keyspec(i);
+		int mode = get_compiled_macro_mode(i);
 		std::string displayName = macroNameText != NULL ? macroNameText : std::string();
 		std::string macroKey = upperKey(displayName);
 		std::map<std::string, MacroRef>::iterator mit = g_runtimeEnv.loadedMacros.find(macroKey);
@@ -3580,9 +4186,17 @@ static bool refreshLoadedFileBytecode(const std::string &fileKey) {
 		mit->second.transientAttr = (flags & MACRO_ATTR_TRANS) != 0;
 		mit->second.dumpAttr = (flags & MACRO_ATTR_DUMP) != 0;
 		mit->second.permAttr = (flags & MACRO_ATTR_PERM) != 0;
+		mit->second.assignedKeySpec = keyspecText != NULL ? keyspecText : std::string();
+		mit->second.fromMode = (mode == MACRO_MODE_DOS_SHELL || mode == MACRO_MODE_ALL)
+		                           ? mode
+		                           : MACRO_MODE_EDIT;
+		mit->second.hasAssignedKey = false;
+		if (!mit->second.assignedKeySpec.empty())
+			mit->second.hasAssignedKey =
+			    parseAssignedKeySpec(mit->second.assignedKeySpec, mit->second.assignedKey);
 	}
 
-	g_runtimeEnv.errorLevel = 0;
+	runtimeErrorLevel() = 0;
 	logMacroProfileLine("Refreshed macro file", fit->second);
 	return true;
 }
@@ -3629,7 +4243,7 @@ static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *load
 		loadedFileKey->clear();
 
 	if (resolvedPath.empty() || !readTextFile(resolvedPath, source)) {
-		g_runtimeEnv.errorLevel = 5001;
+		runtimeErrorLevel() = 5001;
 		return false;
 	}
 
@@ -3638,14 +4252,14 @@ static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *load
 	if (existingFile != g_runtimeEnv.loadedFiles.end()) {
 		for (std::size_t i = 0; i < existingFile->second.macroNames.size(); ++i)
 			if (macroIsRunning(existingFile->second.macroNames[i])) {
-				g_runtimeEnv.errorLevel = 5006;
+				runtimeErrorLevel() = 5006;
 				return false;
 			}
 	}
 
 	compiled = compile_macro_code(source.c_str(), &compiledSize);
 	if (compiled == NULL) {
-		g_runtimeEnv.errorLevel = 5005;
+		runtimeErrorLevel() = 5005;
 		return false;
 	}
 
@@ -3663,7 +4277,7 @@ static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *load
 		if (mit != g_runtimeEnv.loadedMacros.end()) {
 			if (macroIsRunning(macroKey) || mit->second.permAttr) {
 				std::free(compiled);
-				g_runtimeEnv.errorLevel = 5006;
+				runtimeErrorLevel() = 5006;
 				return false;
 			}
 		}
@@ -3686,6 +4300,8 @@ static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *load
 		const char *macroNameText = get_compiled_macro_name(i);
 		int entry = get_compiled_macro_entry(i);
 		int flags = get_compiled_macro_flags(i);
+		const char *keyspecText = get_compiled_macro_keyspec(i);
+		int mode = get_compiled_macro_mode(i);
 		std::string displayName = macroNameText != NULL ? macroNameText : std::string();
 		std::string macroKey = upperKey(displayName);
 		MacroRef ref;
@@ -3701,13 +4317,19 @@ static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *load
 		ref.transientAttr = (flags & MACRO_ATTR_TRANS) != 0;
 		ref.dumpAttr = (flags & MACRO_ATTR_DUMP) != 0;
 		ref.permAttr = (flags & MACRO_ATTR_PERM) != 0;
+		ref.assignedKeySpec = keyspecText != NULL ? keyspecText : std::string();
+		ref.fromMode =
+		    (mode == MACRO_MODE_DOS_SHELL || mode == MACRO_MODE_ALL) ? mode : MACRO_MODE_EDIT;
+		ref.hasAssignedKey = false;
+		if (!ref.assignedKeySpec.empty())
+			ref.hasAssignedKey = parseAssignedKeySpec(ref.assignedKeySpec, ref.assignedKey);
 		g_runtimeEnv.loadedMacros[macroKey] = ref;
 		g_runtimeEnv.macroOrder.push_back(macroKey);
 		newFile.macroNames.push_back(macroKey);
 	}
 
 	g_runtimeEnv.loadedFiles[fileKey] = newFile;
-	g_runtimeEnv.errorLevel = 0;
+	runtimeErrorLevel() = 0;
 	logMacroProfileLine("Loaded macro file", newFile);
 	if (loadedFileKey != NULL)
 		*loadedFileKey = fileKey;
@@ -3719,12 +4341,12 @@ static bool unloadMacroFromRegistry(const std::string &macroName) {
 	if (macroKey.empty())
 		return false;
 	if (macroIsRunning(macroKey)) {
-		g_runtimeEnv.errorLevel = 5006;
+		runtimeErrorLevel() = 5006;
 		return false;
 	}
 	if (!removeMacroFromRegistryByKey(macroKey))
 		return false;
-	g_runtimeEnv.errorLevel = 0;
+	runtimeErrorLevel() = 0;
 	return true;
 }
 
@@ -3927,7 +4549,7 @@ static Value applyIntrinsic(const std::string &name, const std::vector<Value> &a
 		if (args.size() != 2 || !isStringLike(args[0]) || args[1].type != TYPE_INT)
 			throw std::runtime_error("SEARCH_FWD expects (string, int).");
 		if (valueAsString(args[0]).empty()) {
-			g_runtimeEnv.errorLevel = 1010;
+			runtimeErrorLevel() = 1010;
 			return makeInt(0);
 		}
 		editor = currentEditor();
@@ -3935,12 +4557,12 @@ static Value applyIntrinsic(const std::string &name, const std::vector<Value> &a
 		if (editor == NULL && session == NULL)
 			return makeInt(0);
 		if (!searchEditorForward(editor, valueAsString(args[0]), valueAsInt(args[1]),
-		                         g_runtimeEnv.ignoreCase, matchStart, matchEnd)) {
+		                         currentRuntimeIgnoreCase(), matchStart, matchEnd)) {
 			if (session != NULL)
 				session->clearLastSearch();
 			else
 				g_runtimeEnv.lastSearchValid = false;
-			g_runtimeEnv.errorLevel = 0;
+			runtimeErrorLevel() = 0;
 			return makeInt(0);
 		}
 		if (editor != NULL) {
@@ -3967,7 +4589,7 @@ static Value applyIntrinsic(const std::string &name, const std::vector<Value> &a
 			g_runtimeEnv.lastSearchEnd = matchEnd;
 			g_runtimeEnv.lastSearchCursor = matchStart;
 		}
-		g_runtimeEnv.errorLevel = 0;
+		runtimeErrorLevel() = 0;
 		return makeInt(1);
 	}
 	if (name == "SEARCH_BWD") {
@@ -3979,7 +4601,7 @@ static Value applyIntrinsic(const std::string &name, const std::vector<Value> &a
 		if (args.size() != 2 || !isStringLike(args[0]) || args[1].type != TYPE_INT)
 			throw std::runtime_error("SEARCH_BWD expects (string, int).");
 		if (valueAsString(args[0]).empty()) {
-			g_runtimeEnv.errorLevel = 1010;
+			runtimeErrorLevel() = 1010;
 			return makeInt(0);
 		}
 		editor = currentEditor();
@@ -3987,12 +4609,12 @@ static Value applyIntrinsic(const std::string &name, const std::vector<Value> &a
 		if (editor == NULL && session == NULL)
 			return makeInt(0);
 		if (!searchEditorBackward(editor, valueAsString(args[0]), valueAsInt(args[1]),
-		                          g_runtimeEnv.ignoreCase, matchStart, matchEnd)) {
+		                          currentRuntimeIgnoreCase(), matchStart, matchEnd)) {
 			if (session != NULL)
 				session->clearLastSearch();
 			else
 				g_runtimeEnv.lastSearchValid = false;
-			g_runtimeEnv.errorLevel = 0;
+			runtimeErrorLevel() = 0;
 			return makeInt(0);
 		}
 		if (editor != NULL) {
@@ -4019,7 +4641,7 @@ static Value applyIntrinsic(const std::string &name, const std::vector<Value> &a
 			g_runtimeEnv.lastSearchEnd = matchEnd;
 			g_runtimeEnv.lastSearchCursor = matchStart;
 		}
-		g_runtimeEnv.errorLevel = 0;
+		runtimeErrorLevel() = 0;
 		return makeInt(1);
 	}
 	if (name == "GET_ENVIRONMENT") {
@@ -4048,20 +4670,34 @@ static Value applyIntrinsic(const std::string &name, const std::vector<Value> &a
 		return makeString(g_runtimeEnv.processArgs[static_cast<std::size_t>(index - 1)]);
 	}
 	if (name == "GLOBAL_STR") {
+		BackgroundEditSession *session;
+		std::map<std::string, GlobalEntry>::const_iterator it;
 		if (args.size() != 1 || !isStringLike(args[0]))
 			throw std::runtime_error("GLOBAL_STR expects one string argument.");
 		std::string key = upperKey(valueAsString(args[0]));
-		std::map<std::string, GlobalEntry>::const_iterator it = g_runtimeEnv.globals.find(key);
-		if (it == g_runtimeEnv.globals.end() || it->second.type != TYPE_STR)
+		session = currentBackgroundEditSession();
+		if (session != NULL)
+			it = session->globals.find(key);
+		else
+			it = g_runtimeEnv.globals.find(key);
+		if ((session != NULL && it == session->globals.end()) ||
+		    (session == NULL && it == g_runtimeEnv.globals.end()) || it->second.type != TYPE_STR)
 			return makeString("");
 		return makeString(valueAsString(it->second.value));
 	}
 	if (name == "GLOBAL_INT") {
+		BackgroundEditSession *session;
+		std::map<std::string, GlobalEntry>::const_iterator it;
 		if (args.size() != 1 || !isStringLike(args[0]))
 			throw std::runtime_error("GLOBAL_INT expects one string argument.");
 		std::string key = upperKey(valueAsString(args[0]));
-		std::map<std::string, GlobalEntry>::const_iterator it = g_runtimeEnv.globals.find(key);
-		if (it == g_runtimeEnv.globals.end() || it->second.type != TYPE_INT)
+		session = currentBackgroundEditSession();
+		if (session != NULL)
+			it = session->globals.find(key);
+		else
+			it = g_runtimeEnv.globals.find(key);
+		if ((session != NULL && it == session->globals.end()) ||
+		    (session == NULL && it == g_runtimeEnv.globals.end()) || it->second.type != TYPE_INT)
 			return makeInt(0);
 		return makeInt(valueAsInt(it->second.value));
 	}
@@ -4084,8 +4720,15 @@ static Value applyIntrinsic(const std::string &name, const std::vector<Value> &a
 		return makeInt(static_cast<int>(std::strtol(parsed.c_str(), NULL, 10)));
 	}
 	if (name == "INQ_MACRO") {
+		BackgroundEditSession *session;
 		if (args.size() != 1 || !isStringLike(args[0]))
 			throw std::runtime_error("INQ_MACRO expects one string argument.");
+		session = currentBackgroundEditSession();
+		if (session != NULL)
+			return makeInt(session->loadedMacroDisplayNames.find(upperKey(valueAsString(args[0]))) !=
+			                       session->loadedMacroDisplayNames.end()
+			                   ? 1
+			                   : 0);
 		return makeInt(g_runtimeEnv.loadedMacros.find(upperKey(valueAsString(args[0]))) !=
 		                       g_runtimeEnv.loadedMacros.end()
 		                   ? 1
@@ -4118,16 +4761,30 @@ MRMacroExecutionProfile mrvmAnalyzeBytecode(const unsigned char *bytecode, std::
 					return profile;
 				break;
 			case OP_PUSH_S:
-			case OP_STORE_VAR:
-			case OP_LOAD_VAR:
 			case OP_DEF_VAR:
 			case OP_VAL:
 			case OP_RVAL:
-			case OP_FIRST_GLOBAL:
-			case OP_NEXT_GLOBAL: {
+			{
 				std::string ignored;
 				if (!readBytecodeCString(bytecode, length, ip, ignored))
 					return profile;
+				break;
+			}
+			case OP_LOAD_VAR: {
+				std::string name;
+				if (!readBytecodeCString(bytecode, length, ip, name))
+					return profile;
+				name = upperKey(name);
+				noteExecutionFlags(profile, classifyLoadVarName(name), name);
+				break;
+			}
+			case OP_STORE_VAR: {
+				std::string name;
+				if (!skipBytecodeBytes(length, ip, sizeof(unsigned char)) ||
+				    !readBytecodeCString(bytecode, length, ip, name))
+					return profile;
+				name = upperKey(name);
+				noteExecutionFlags(profile, classifyStoreVarName(name), name);
 				break;
 			}
 			case OP_GOTO:
@@ -4136,6 +4793,22 @@ MRMacroExecutionProfile mrvmAnalyzeBytecode(const unsigned char *bytecode, std::
 				if (!skipBytecodeBytes(length, ip, sizeof(int)))
 					return profile;
 				break;
+			case OP_FIRST_GLOBAL:
+				{
+					std::string ignored;
+					if (!readBytecodeCString(bytecode, length, ip, ignored))
+						return profile;
+					noteExecutionFlags(profile, mrefUiAffinity, "FIRST_GLOBAL");
+					break;
+				}
+			case OP_NEXT_GLOBAL:
+				{
+					std::string ignored;
+					if (!readBytecodeCString(bytecode, length, ip, ignored))
+						return profile;
+					noteExecutionFlags(profile, mrefUiAffinity, "NEXT_GLOBAL");
+					break;
+				}
 			case OP_INTRINSIC: {
 				std::string name;
 				if (!readBytecodeCString(bytecode, length, ip, name) ||
@@ -4242,31 +4915,39 @@ bool mrvmCanRunInBackground(const MRMacroExecutionProfile &profile) noexcept {
 }
 
 namespace {
-bool containsOnlySupportedStagedSymbols(const std::vector<std::string> &values) noexcept {
+bool isSupportedStagedSymbol(const std::string &value) noexcept {
 	static const char *const kAllowed[] = {
-	    "TEXT",       "PUT_LINE",       "CR",             "DEL_CHAR",        "DEL_CHARS",
-	    "DEL_LINE",   "REPLACE",        "GET_LINE",       "CUR_CHAR",        "GET_WORD",
-	    "C_COL",      "C_LINE",         "AT_EOF",         "AT_EOL",          "SET_INDENT_LEVEL",
-	    "LEFT",       "RIGHT",          "UP",             "DOWN",            "HOME",
-	    "EOL",        "TOF",            "EOF",            "WORD_LEFT",       "WORD_RIGHT",
-	    "FIRST_WORD", "GOTO_LINE",      "GOTO_COL",       "TAB_RIGHT",       "TAB_LEFT",
-	    "INDENT",     "UNDENT",         "MARK_POS",       "GOTO_MARK",       "POP_MARK",
-	    "PAGE_UP",    "PAGE_DOWN",      "NEXT_PAGE_BREAK","LAST_PAGE_BREAK", "SEARCH_FWD",
-	    "SEARCH_BWD", "RUN_MACRO",      "BLOCK_BEGIN",    "COL_BLOCK_BEGIN", "STR_BLOCK_BEGIN",
-	    "BLOCK_END",  "BLOCK_OFF",      "COPY_BLOCK",     "MOVE_BLOCK",      "DELETE_BLOCK",
-	    "BLOCK_STAT", "BLOCK_LINE1",    "BLOCK_LINE2",    "BLOCK_COL1",      "BLOCK_COL2",
-	    "MARKING"};
+	    "TEXT",        "PUT_LINE",       "CR",             "DEL_CHAR",        "DEL_CHARS",
+	    "DEL_LINE",    "REPLACE",        "GET_LINE",       "CUR_CHAR",        "GET_WORD",
+	    "C_COL",       "C_LINE",         "C_ROW",          "AT_EOF",          "AT_EOL",
+	    "INSERT_MODE", "INDENT_LEVEL",   "SET_INDENT_LEVEL","LEFT",          "RIGHT",
+	    "UP",          "DOWN",           "HOME",           "EOL",             "TOF",
+	    "EOF",         "WORD_LEFT",      "WORD_RIGHT",     "FIRST_WORD",      "GOTO_LINE",
+	    "GOTO_COL",    "TAB_RIGHT",      "TAB_LEFT",       "INDENT",          "UNDENT",
+	    "MARK_POS",    "GOTO_MARK",      "POP_MARK",       "PAGE_UP",         "PAGE_DOWN",
+	    "NEXT_PAGE_BREAK","LAST_PAGE_BREAK","SEARCH_FWD",  "SEARCH_BWD",      "RUN_MACRO",
+	    "BLOCK_BEGIN", "COL_BLOCK_BEGIN","STR_BLOCK_BEGIN","BLOCK_END",       "BLOCK_OFF",
+	    "COPY_BLOCK",  "MOVE_BLOCK",     "DELETE_BLOCK",   "ERASE_WINDOW",    "BLOCK_STAT",
+	    "BLOCK_LINE1", "BLOCK_LINE2",    "BLOCK_COL1",     "BLOCK_COL2",      "MARKING",
+	    "FIRST_SAVE",  "EOF_IN_MEM",     "BUFFER_ID",      "TMP_FILE",        "TMP_FILE_NAME",
+	    "CUR_WINDOW",  "LINK_STAT",      "WINDOW_COUNT",   "WIN_X1",          "WIN_Y1",
+	    "WIN_X2",      "WIN_Y2",         "GLOBAL_STR",     "GLOBAL_INT",      "FIRST_GLOBAL",
+	    "NEXT_GLOBAL", "SET_GLOBAL_STR", "SET_GLOBAL_INT", "INQ_MACRO",       "FIRST_MACRO",
+	    "NEXT_MACRO",  "CREATE_WINDOW",  "DELETE_WINDOW",  "MODIFY_WINDOW",   "LINK_WINDOW",
+	    "UNLINK_WINDOW","ZOOM",          "REDRAW",         "NEW_SCREEN",      "SWITCH_WINDOW",
+	    "SIZE_WINDOW",
+	    "FILE_CHANGED","FILE_NAME",      "IGNORE_CASE",    "TAB_EXPAND"};
 
-	for (std::size_t i = 0; i < values.size(); ++i) {
-		bool allowed = false;
-		for (const char *symbol : kAllowed)
-			if (values[i] == symbol) {
-				allowed = true;
-				break;
-			}
-		if (!allowed)
+	for (const char *symbol : kAllowed)
+		if (value == symbol)
+			return true;
+	return false;
+}
+
+bool containsOnlySupportedStagedSymbols(const std::vector<std::string> &values) noexcept {
+	for (std::size_t i = 0; i < values.size(); ++i)
+		if (!isSupportedStagedSymbol(values[i]))
 			return false;
-	}
 	return true;
 }
 } // namespace
@@ -4281,6 +4962,18 @@ bool mrvmCanRunStagedInBackground(const MRMacroExecutionProfile &profile) noexce
 	if (!containsOnlySupportedStagedSymbols(profile.uiAffinitySymbols))
 		return false;
 	return true;
+}
+
+std::vector<std::string> mrvmUnsupportedStagedSymbols(const MRMacroExecutionProfile &profile) {
+	std::vector<std::string> unsupported;
+
+	for (std::size_t i = 0; i < profile.stagedWriteSymbols.size(); ++i)
+		if (!isSupportedStagedSymbol(profile.stagedWriteSymbols[i]))
+			appendUniqueString(unsupported, profile.stagedWriteSymbols[i]);
+	for (std::size_t i = 0; i < profile.uiAffinitySymbols.size(); ++i)
+		if (!isSupportedStagedSymbol(profile.uiAffinitySymbols[i]))
+			appendUniqueString(unsupported, profile.uiAffinitySymbols[i]);
+	return unsupported;
 }
 
 MRMacroJobResult mrvmRunBytecodeBackground(const unsigned char *bytecode, std::size_t length,
@@ -4351,6 +5044,71 @@ MRMacroStagedJobResult mrvmRunBytecodeStagedBackground(const unsigned char *byte
 	session.cursorOffset = input.cursorOffset;
 	session.selectionStart = input.selectionStart;
 	session.selectionEnd = input.selectionEnd;
+	session.blockMode = input.blockMode;
+	session.blockMarkingOn = input.blockMarkingOn;
+	session.blockAnchor = input.blockAnchor;
+	session.blockEnd = input.blockEnd;
+	session.firstSave = input.firstSave;
+	session.eofInMemory = input.eofInMemory;
+	session.bufferId = input.bufferId;
+	session.temporaryFile = input.temporaryFile;
+	session.temporaryFileName = input.temporaryFileName;
+	session.currentWindow = input.currentWindow;
+	session.linkStatus = input.linkStatus;
+	session.windowCount = input.windowCount;
+	session.windowGeometryValid = input.windowGeometryValid;
+	session.windowX1 = input.windowX1;
+	session.windowY1 = input.windowY1;
+	session.windowX2 = input.windowX2;
+	session.windowY2 = input.windowY2;
+	session.globals.clear();
+	session.globalOrder.clear();
+	session.globalEnumIndex = 0;
+	for (std::size_t i = 0; i < input.globalOrder.size(); ++i)
+		appendUniqueString(session.globalOrder, upperKey(input.globalOrder[i]));
+	for (std::map<std::string, int>::const_iterator it = input.globalInts.begin();
+	     it != input.globalInts.end(); ++it) {
+		GlobalEntry entry;
+		std::string key = upperKey(it->first);
+		entry.type = TYPE_INT;
+		entry.value = makeInt(it->second);
+		if (session.globals.find(key) == session.globals.end())
+			appendUniqueString(session.globalOrder, key);
+		session.globals[key] = entry;
+	}
+	for (std::map<std::string, std::string>::const_iterator it = input.globalStrings.begin();
+	     it != input.globalStrings.end(); ++it) {
+		GlobalEntry entry;
+		std::string key = upperKey(it->first);
+		entry.type = TYPE_STR;
+		entry.value = makeString(it->second);
+		if (session.globals.find(key) == session.globals.end())
+			appendUniqueString(session.globalOrder, key);
+		session.globals[key] = entry;
+	}
+	session.loadedMacroDisplayNames.clear();
+	session.macroOrder.clear();
+	session.macroEnumIndex = 0;
+	session.deferredUiCommands.clear();
+	for (std::size_t i = 0; i < input.macroOrder.size(); ++i)
+		appendUniqueString(session.macroOrder, upperKey(input.macroOrder[i]));
+	for (std::map<std::string, std::string>::const_iterator it = input.macroDisplayNames.begin();
+	     it != input.macroDisplayNames.end(); ++it) {
+		std::string key = upperKey(it->first);
+		session.loadedMacroDisplayNames[key] = it->second;
+		if (std::find(session.macroOrder.begin(), session.macroOrder.end(), key) ==
+		    session.macroOrder.end())
+			session.macroOrder.push_back(key);
+	}
+	session.lastSearchValid = input.lastSearchValid;
+	session.lastSearchStart = input.lastSearchStart;
+	session.lastSearchEnd = input.lastSearchEnd;
+	session.lastSearchCursor = input.lastSearchCursor;
+	session.ignoreCase = input.ignoreCase;
+	session.tabExpand = input.tabExpand;
+	session.markStack.clear();
+	for (std::size_t i = 0; i < input.markStack.size(); ++i)
+		session.markStack.push_back(static_cast<uint>(input.markStack[i]));
 	session.insertMode = input.insertMode;
 	session.indentLevel = input.indentLevel;
 	session.pageLines = std::max(1, input.pageLines);
@@ -4373,6 +5131,37 @@ MRMacroStagedJobResult mrvmRunBytecodeStagedBackground(const unsigned char *byte
 	result.cursorOffset = session.cursorOffset;
 	result.selectionStart = session.selectionStart;
 	result.selectionEnd = session.selectionEnd;
+	result.blockMode = session.blockMode;
+	result.blockMarkingOn = session.blockMarkingOn;
+	result.blockAnchor = session.blockAnchor;
+	result.blockEnd = session.blockEnd;
+	result.globalOrder.clear();
+	result.globalInts.clear();
+	result.globalStrings.clear();
+	result.globalOrder.reserve(session.globalOrder.size());
+	for (std::size_t i = 0; i < session.globalOrder.size(); ++i) {
+		const std::string &key = session.globalOrder[i];
+		std::map<std::string, GlobalEntry>::const_iterator it = session.globals.find(key);
+		if (it == session.globals.end())
+			continue;
+		result.globalOrder.push_back(key);
+		if (it->second.type == TYPE_INT)
+			result.globalInts[key] = valueAsInt(it->second.value);
+		else if (it->second.type == TYPE_STR)
+			result.globalStrings[key] = valueAsString(it->second.value);
+	}
+	result.macroOrder = session.macroOrder;
+	result.macroDisplayNames = session.loadedMacroDisplayNames;
+	result.deferredUiCommands = session.deferredUiCommands;
+	result.lastSearchValid = session.lastSearchValid;
+	result.lastSearchStart = session.lastSearchStart;
+	result.lastSearchEnd = session.lastSearchEnd;
+	result.lastSearchCursor = session.lastSearchCursor;
+	result.ignoreCase = session.ignoreCase;
+	result.tabExpand = session.tabExpand;
+	result.markStack.reserve(session.markStack.size());
+	for (std::size_t i = 0; i < session.markStack.size(); ++i)
+		result.markStack.push_back(static_cast<std::size_t>(session.markStack[i]));
 	result.insertMode = session.insertMode;
 	result.indentLevel = session.indentLevel;
 	result.fileName = session.fileName;
@@ -4441,8 +5230,33 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
 	size_t ip = entryOffset;
 	std::vector<size_t> call_stack;
-	std::string savedParameterString = g_runtimeEnv.parameterString;
+	ExecutionState state;
+	ExecutionState *parentState = currentExecutionState();
+	std::string savedParameterString =
+	    parentState != NULL ? parentState->parameterString : g_runtimeEnv.parameterString;
 	bool pushedMacroFrame = false;
+	struct ExecutionStateGuard {
+		ExecutionState *previous;
+
+		explicit ExecutionStateGuard(ExecutionState *next) noexcept : previous(g_executionState) {
+			g_executionState = next;
+		}
+
+		~ExecutionStateGuard() {
+			g_executionState = previous;
+		}
+	} executionStateGuard(&state);
+
+	state.parameterString = savedParameterString;
+	if (parentState != NULL) {
+		state.returnInt = parentState->returnInt;
+		state.returnStr = parentState->returnStr;
+		state.errorLevel = parentState->errorLevel;
+	} else {
+		state.returnInt = g_runtimeEnv.returnInt;
+		state.returnStr = g_runtimeEnv.returnStr;
+		state.errorLevel = g_runtimeEnv.errorLevel;
+	}
 
 	variables.clear();
 	stack.clear();
@@ -4452,17 +5266,17 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 		logTruncated = false;
 		g_runtimeEnv.globalEnumIndex = 0;
 		g_runtimeEnv.macroEnumIndex = 0;
-		g_runtimeEnv.parameterString.clear();
-		g_runtimeEnv.returnInt = 0;
-		g_runtimeEnv.returnStr.clear();
-		g_runtimeEnv.errorLevel = 0;
+		state.parameterString.clear();
+		state.returnInt = 0;
+		state.returnStr.clear();
+		state.errorLevel = 0;
 	}
 
 	if (!macroName.empty()) {
 		g_runtimeEnv.macroStack.push_back(MacroStackFrame(macroName, firstRun));
 		pushedMacroFrame = true;
 	}
-	g_runtimeEnv.parameterString = parameterString;
+	state.parameterString = parameterString;
 
 	auto readInt = [&](int &value) {
 		std::memcpy(&value, &bytecode[ip], sizeof(int));
@@ -4494,7 +5308,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 			if (backgroundMacroCancelRequested()) {
 				cancelledExecution = true;
 				appendLogLine("VM Notice: Background macro cancelled.", true);
-				g_runtimeEnv.errorLevel = 5007;
+				runtimeErrorLevel() = 5007;
 				break;
 			}
 			unsigned char opcode = bytecode[ip++];
@@ -4718,21 +5532,38 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				}
 				push(makeInt(resultCode));
 			} else if (opcode == OP_FIRST_GLOBAL || opcode == OP_NEXT_GLOBAL) {
+				BackgroundEditSession *session = currentBackgroundEditSession();
 				std::string targetVar;
 				readCString(targetVar);
-				if (opcode == OP_FIRST_GLOBAL)
-					g_runtimeEnv.globalEnumIndex = 0;
+				if (session != NULL) {
+					if (opcode == OP_FIRST_GLOBAL)
+						session->globalEnumIndex = 0;
 
-				while (g_runtimeEnv.globalEnumIndex < g_runtimeEnv.globalOrder.size()) {
-					const std::string &key =
-					    g_runtimeEnv.globalOrder[g_runtimeEnv.globalEnumIndex++];
-					std::map<std::string, GlobalEntry>::const_iterator it =
-					    g_runtimeEnv.globals.find(key);
-					if (it == g_runtimeEnv.globals.end())
-						continue;
-					variables[targetVar] = makeInt(it->second.type == TYPE_INT ? 1 : 0);
-					push(makeString(key));
-					goto handled_global_enum;
+					while (session->globalEnumIndex < session->globalOrder.size()) {
+						const std::string &key = session->globalOrder[session->globalEnumIndex++];
+						std::map<std::string, GlobalEntry>::const_iterator it =
+						    session->globals.find(key);
+						if (it == session->globals.end())
+							continue;
+						variables[targetVar] = makeInt(it->second.type == TYPE_INT ? 1 : 0);
+						push(makeString(key));
+						goto handled_global_enum;
+					}
+				} else {
+					if (opcode == OP_FIRST_GLOBAL)
+						g_runtimeEnv.globalEnumIndex = 0;
+
+					while (g_runtimeEnv.globalEnumIndex < g_runtimeEnv.globalOrder.size()) {
+						const std::string &key =
+						    g_runtimeEnv.globalOrder[g_runtimeEnv.globalEnumIndex++];
+						std::map<std::string, GlobalEntry>::const_iterator it =
+						    g_runtimeEnv.globals.find(key);
+						if (it == g_runtimeEnv.globals.end())
+							continue;
+						variables[targetVar] = makeInt(it->second.type == TYPE_INT ? 1 : 0);
+						push(makeString(key));
+						goto handled_global_enum;
+					}
 				}
 				variables[targetVar] = makeInt(0);
 				push(makeString(""));
@@ -4752,7 +5583,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					it->second = makeString(crunchTabsString(valueAsString(it->second)));
 				else if (name == "EXPAND_TABS")
 					it->second = makeString(
-					    expandTabsString(valueAsString(it->second), g_runtimeEnv.tabExpand));
+					    expandTabsString(valueAsString(it->second), currentRuntimeTabExpand()));
 				else if (name == "TABS_TO_SPACES")
 					it->second = makeString(tabsToSpacesString(valueAsString(it->second)));
 				else
@@ -4783,16 +5614,16 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					if (args.size() != 1 || !isStringLike(args[0]))
 						throw std::runtime_error("CHANGE_DIR expects one string argument.");
 					if (changeDirectoryPath(valueAsString(args[0])))
-						g_runtimeEnv.errorLevel = 0;
+						runtimeErrorLevel() = 0;
 					else
-						g_runtimeEnv.errorLevel = errno != 0 ? errno : 1;
+						runtimeErrorLevel() = errno != 0 ? errno : 1;
 				} else if (name == "DEL_FILE") {
 					if (args.size() != 1 || !isStringLike(args[0]))
 						throw std::runtime_error("DEL_FILE expects one string argument.");
 					if (deleteFilePath(valueAsString(args[0])))
-						g_runtimeEnv.errorLevel = 0;
+						runtimeErrorLevel() = 0;
 					else
-						g_runtimeEnv.errorLevel = errno != 0 ? errno : 1;
+						runtimeErrorLevel() = errno != 0 ? errno : 1;
 				} else if (name == "LOAD_FILE") {
 					TMREditWindow *win;
 					std::string path;
@@ -4801,33 +5632,33 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					path = expandUserPath(valueAsString(args[0]));
 					win = currentEditWindow();
 					if (win == NULL) {
-						g_runtimeEnv.errorLevel = 1001;
+						runtimeErrorLevel() = 1001;
 						continue;
 					}
 					if (!fileExistsPath(path)) {
-						g_runtimeEnv.errorLevel = 3002;
+						runtimeErrorLevel() = 3002;
 						continue;
 					}
 					if (!win->loadFromFile(path.c_str())) {
-						g_runtimeEnv.errorLevel = 3002;
+						runtimeErrorLevel() = 3002;
 						continue;
 					}
 					g_runtimeEnv.lastFileName = win->currentFileName();
-					g_runtimeEnv.errorLevel = 0;
+					runtimeErrorLevel() = 0;
 				} else if (name == "SAVE_FILE") {
 					TMREditWindow *win = currentEditWindow();
 					if (!args.empty())
 						throw std::runtime_error("SAVE_FILE expects no arguments.");
 					if (win == NULL) {
-						g_runtimeEnv.errorLevel = 1001;
+						runtimeErrorLevel() = 1001;
 						continue;
 					}
 					if (!win->saveCurrentFile()) {
-						g_runtimeEnv.errorLevel = 2002;
+						runtimeErrorLevel() = 2002;
 						continue;
 					}
 					g_runtimeEnv.lastFileName = win->currentFileName();
-					g_runtimeEnv.errorLevel = 0;
+					runtimeErrorLevel() = 0;
 				} else if (name == "SAVE_BLOCK") {
 					TMREditWindow *win = currentEditWindow();
 					TMRFileEditor *editor = currentEditor();
@@ -4835,20 +5666,20 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					if (args.size() != 1 || !isStringLike(args[0]))
 						throw std::runtime_error("SAVE_BLOCK expects one string argument.");
 					if (win == NULL || editor == NULL) {
-						g_runtimeEnv.errorLevel = 1001;
+						runtimeErrorLevel() = 1001;
 						continue;
 					}
 					path = expandUserPath(valueAsString(args[0]));
 					if (!saveCurrentBlockToFile(win, editor, path)) {
-						g_runtimeEnv.errorLevel = errno != 0 ? errno : 1010;
+						runtimeErrorLevel() = errno != 0 ? errno : 1010;
 						continue;
 					}
 					g_runtimeEnv.lastFileName = path;
-					g_runtimeEnv.errorLevel = 0;
+					runtimeErrorLevel() = 0;
 				} else if (name == "SET_INDENT_LEVEL") {
 					if (!args.empty())
 						throw std::runtime_error("SET_INDENT_LEVEL expects no arguments.");
-					g_runtimeEnv.errorLevel =
+					runtimeErrorLevel() =
 					    setCurrentEditorIndentLevel(currentEditorColumn(currentEditor())) ? 0
 					                                                                      : 1001;
 				} else if (name == "REPLACE") {
@@ -4859,10 +5690,10 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					editor = currentEditor();
 					session = currentBackgroundEditSession();
 					if (editor == NULL && session == NULL) {
-						g_runtimeEnv.errorLevel = 1001;
+						runtimeErrorLevel() = 1001;
 						continue;
 					}
-					g_runtimeEnv.errorLevel =
+					runtimeErrorLevel() =
 					    (editor != NULL ? replaceLastSearch(editor, valueAsString(args[0]))
 					                    : replaceLastSearchBackground(valueAsString(args[0])))
 					        ? 0
@@ -4873,62 +5704,71 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						throw std::runtime_error("TEXT expects one string argument.");
 					editor = currentEditor();
 					if (editor == NULL && currentBackgroundEditSession() == NULL) {
-						g_runtimeEnv.errorLevel = 1001;
+						runtimeErrorLevel() = 1001;
 						continue;
 					}
 					insertEditorText(editor, valueAsString(args[0]));
-					g_runtimeEnv.errorLevel = 0;
+					runtimeErrorLevel() = 0;
+				} else if (name == "KEY_IN") {
+					if (args.size() != 1 || !isStringLike(args[0]))
+						throw std::runtime_error("KEY_IN expects one string argument.");
+					if (!replayKeyInputSequence(valueAsString(args[0]))) {
+						runtimeErrorLevel() =
+						    currentBackgroundEditSession() != NULL ? 1010 : 1001;
+						continue;
+					}
+					runtimeErrorLevel() = 0;
 				} else if (name == "PUT_LINE") {
 					TMRFileEditor *editor;
 					if (args.size() != 1 || !isStringLike(args[0]))
 						throw std::runtime_error("PUT_LINE expects one string argument.");
 					editor = currentEditor();
 					if (editor == NULL && currentBackgroundEditSession() == NULL) {
-						g_runtimeEnv.errorLevel = 1001;
+						runtimeErrorLevel() = 1001;
 						continue;
 					}
 					replaceEditorLine(editor, valueAsString(args[0]));
-					g_runtimeEnv.errorLevel = 0;
+					runtimeErrorLevel() = 0;
 				} else if (name == "CR") {
 					TMRFileEditor *editor = currentEditor();
 					if (!args.empty())
 						throw std::runtime_error("CR expects no arguments.");
 					if (editor == NULL && currentBackgroundEditSession() == NULL) {
-						g_runtimeEnv.errorLevel = 1001;
+						runtimeErrorLevel() = 1001;
 						continue;
 					}
 					carriageReturnEditor(editor);
-					g_runtimeEnv.errorLevel = 0;
+					runtimeErrorLevel() = 0;
 				} else if (name == "DEL_CHAR") {
 					TMRFileEditor *editor = currentEditor();
 					if (!args.empty())
 						throw std::runtime_error("DEL_CHAR expects no arguments.");
 					if (editor == NULL && currentBackgroundEditSession() == NULL) {
-						g_runtimeEnv.errorLevel = 1001;
+						runtimeErrorLevel() = 1001;
 						continue;
 					}
 					deleteEditorChars(editor, 1);
-					g_runtimeEnv.errorLevel = 0;
+					runtimeErrorLevel() = 0;
 				} else if (name == "DEL_CHARS") {
 					TMRFileEditor *editor = currentEditor();
 					if (args.size() != 1 || args[0].type != TYPE_INT)
 						throw std::runtime_error("DEL_CHARS expects one integer argument.");
 					if (editor == NULL && currentBackgroundEditSession() == NULL) {
-						g_runtimeEnv.errorLevel = 1001;
+						runtimeErrorLevel() = 1001;
 						continue;
 					}
 					deleteEditorChars(editor, valueAsInt(args[0]));
-					g_runtimeEnv.errorLevel = 0;
+					runtimeErrorLevel() = 0;
 				} else if (name == "DEL_LINE") {
 					TMRFileEditor *editor = currentEditor();
 					if (!args.empty())
 						throw std::runtime_error("DEL_LINE expects no arguments.");
 					if (editor == NULL && currentBackgroundEditSession() == NULL) {
-						g_runtimeEnv.errorLevel = 1001;
+						runtimeErrorLevel() = 1001;
 						continue;
 					}
 					deleteEditorLine(editor);
-					g_runtimeEnv.errorLevel = 0;
+					runtimeErrorLevel() = 0;
 				} else if (name == "LEFT" || name == "RIGHT" || name == "UP" || name == "DOWN" ||
 				           name == "HOME" || name == "EOL" || name == "TOF" || name == "EOF" ||
 				           name == "WORD_LEFT" || name == "WORD_RIGHT" || name == "FIRST_WORD" ||
@@ -4945,10 +5785,15 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				           name == "ZOOM" || name == "REDRAW" || name == "NEW_SCREEN") {
 					TMRFileEditor *editor = currentEditor();
 					bool ok = false;
+					int deferredError = 0;
 					if (!args.empty())
 						throw std::runtime_error((name + " expects no arguments.").c_str());
+					if (queueDeferredUiProcedure(name, args, deferredError)) {
+						runtimeErrorLevel() = deferredError;
+						continue;
+					}
 					if (editor == NULL && currentBackgroundEditSession() == NULL && name != "CREATE_WINDOW") {
-						g_runtimeEnv.errorLevel = 1001;
+						runtimeErrorLevel() = 1001;
 						continue;
 					}
 					if (name == "LEFT")
@@ -5029,35 +5874,45 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						ok = redrawCurrentEditWindow();
 					else if (name == "NEW_SCREEN")
 						ok = redrawEntireScreen();
-					g_runtimeEnv.errorLevel = ok ? 0 : 1001;
+					runtimeErrorLevel() = ok ? 0 : 1001;
 				} else if (name == "GOTO_LINE") {
 					TMRFileEditor *editor = currentEditor();
 					if (args.size() != 1 || args[0].type != TYPE_INT)
 						throw std::runtime_error("GOTO_LINE expects one integer argument.");
 					if (editor == NULL && currentBackgroundEditSession() == NULL) {
-						g_runtimeEnv.errorLevel = 1001;
+						runtimeErrorLevel() = 1001;
 						continue;
 					}
-					g_runtimeEnv.errorLevel =
+					runtimeErrorLevel() =
 					    gotoEditorLine(editor, valueAsInt(args[0])) ? 0 : 1010;
 				} else if (name == "GOTO_COL") {
 					TMRFileEditor *editor = currentEditor();
 					if (args.size() != 1 || args[0].type != TYPE_INT)
 						throw std::runtime_error("GOTO_COL expects one integer argument.");
 					if (editor == NULL && currentBackgroundEditSession() == NULL) {
-						g_runtimeEnv.errorLevel = 1001;
+						runtimeErrorLevel() = 1001;
 						continue;
 					}
-					g_runtimeEnv.errorLevel = gotoEditorCol(editor, valueAsInt(args[0])) ? 0 : 1010;
+					runtimeErrorLevel() = gotoEditorCol(editor, valueAsInt(args[0])) ? 0 : 1010;
 				} else if (name == "SWITCH_WINDOW") {
+					int deferredError = 0;
+					if (queueDeferredUiProcedure(name, args, deferredError)) {
+						runtimeErrorLevel() = deferredError;
+						continue;
+					}
 					if (args.size() != 1 || args[0].type != TYPE_INT)
 						throw std::runtime_error("SWITCH_WINDOW expects one integer argument.");
-					g_runtimeEnv.errorLevel = switchEditWindow(valueAsInt(args[0])) ? 0 : 1001;
+					runtimeErrorLevel() = switchEditWindow(valueAsInt(args[0])) ? 0 : 1001;
 				} else if (name == "SIZE_WINDOW") {
+					int deferredError = 0;
+					if (queueDeferredUiProcedure(name, args, deferredError)) {
+						runtimeErrorLevel() = deferredError;
+						continue;
+					}
 					if (args.size() != 4 || args[0].type != TYPE_INT || args[1].type != TYPE_INT ||
 					    args[2].type != TYPE_INT || args[3].type != TYPE_INT)
 						throw std::runtime_error("SIZE_WINDOW expects four integer arguments.");
-					g_runtimeEnv.errorLevel =
+					runtimeErrorLevel() =
 					    sizeCurrentEditWindow(valueAsInt(args[0]), valueAsInt(args[1]),
 					                          valueAsInt(args[2]), valueAsInt(args[3]))
 					        ? 0
@@ -5072,20 +5927,20 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					if (args.size() != 1 || args[0].type != TYPE_INT)
 						throw std::runtime_error((name + " expects one integer argument.").c_str());
 					if (destWin == NULL || destEditor == NULL) {
-						g_runtimeEnv.errorLevel = 1001;
+						runtimeErrorLevel() = 1001;
 						continue;
 					}
 					windowNum = valueAsInt(args[0]);
 					srcWin = editWindowByIndex(windowNum);
 					srcEditor = srcWin != NULL ? srcWin->getEditor() : NULL;
 					if (srcWin == NULL || srcEditor == NULL) {
-						g_runtimeEnv.errorLevel = 1010;
+						runtimeErrorLevel() = 1010;
 						continue;
 					}
 					ok = (name == "WINDOW_COPY")
 					         ? copyBlockFromWindow(srcWin, srcEditor, destWin, destEditor)
 					         : moveBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
-					g_runtimeEnv.errorLevel = ok ? 0 : 1001;
+					runtimeErrorLevel() = ok ? 0 : 1001;
 				} else if (name == "RUN_MACRO") {
 					std::string spec;
 					std::string filePart;
@@ -5094,8 +5949,6 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					std::string targetFileKey;
 					std::string macroKey;
 					std::map<std::string, MacroRef>::iterator mit;
-					std::map<std::string, LoadedMacroFile>::iterator fit;
-					VirtualMachine childVm;
 					bool backgroundStaged = currentBackgroundEditSession() != NULL;
 
 					if (args.size() != 1 || !isStringLike(args[0]))
@@ -5103,7 +5956,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 
 					spec = valueAsString(args[0]);
 					if (!parseRunMacroSpec(spec, filePart, macroPart, paramPart)) {
-						g_runtimeEnv.errorLevel = 5001;
+						runtimeErrorLevel() = 5001;
 						continue;
 					}
 
@@ -5115,7 +5968,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					if (mit == g_runtimeEnv.loadedMacros.end() ||
 					    (!targetFileKey.empty() && mit->second.fileKey != targetFileKey)) {
 						if (backgroundStaged) {
-							g_runtimeEnv.errorLevel = 5001;
+							runtimeErrorLevel() = 5001;
 							continue;
 						}
 						if (!filePart.empty()) {
@@ -5130,45 +5983,11 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 
 					if (mit == g_runtimeEnv.loadedMacros.end() ||
 					    (!targetFileKey.empty() && mit->second.fileKey != targetFileKey)) {
-						g_runtimeEnv.errorLevel = 5001;
+						runtimeErrorLevel() = 5001;
 						continue;
 					}
-
-					fit = g_runtimeEnv.loadedFiles.find(mit->second.fileKey);
-					if (fit == g_runtimeEnv.loadedFiles.end()) {
-						g_runtimeEnv.errorLevel = 5001;
+					if (!executeLoadedMacro(mit, macroKey, paramPart, &log))
 						continue;
-					}
-					if (backgroundStaged) {
-						if (fit->second.bytecode.empty() || !currentBackgroundChildMacroAllowed(fit->second)) {
-							g_runtimeEnv.errorLevel = 5001;
-							continue;
-						}
-					} else if (!ensureLoadedFileResident(mit->second.fileKey))
-						continue;
-					fit = g_runtimeEnv.loadedFiles.find(mit->second.fileKey);
-					if (fit == g_runtimeEnv.loadedFiles.end() || fit->second.bytecode.empty()) {
-						g_runtimeEnv.errorLevel = 5001;
-						continue;
-					}
-
-					{
-						bool childFirstRun = mit->second.firstRunPending;
-						bool childDump = mit->second.dumpAttr;
-						bool childTransient = mit->second.transientAttr;
-						std::string childMacroKey = macroKey;
-						std::string childFileKey = mit->second.fileKey;
-						mit->second.firstRunPending = false;
-						childVm.executeAt(fit->second.bytecode.data(), fit->second.bytecode.size(),
-						                  mit->second.entryOffset, paramPart,
-						                  mit->second.displayName, false, childFirstRun);
-						log.insert(log.end(), childVm.log.begin(), childVm.log.end());
-						if (childDump)
-							unloadMacroFromRegistry(childMacroKey);
-						else if (childTransient)
-							evictTransientFileImage(childFileKey);
-					}
-					g_runtimeEnv.errorLevel = 0;
 				} else {
 					throw std::runtime_error("Unknown procedure: " + name);
 				}
@@ -5209,9 +6028,262 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 		appendLogLine(std::string("VM Error: ") + ex.what(), true);
 	}
 
-	g_runtimeEnv.parameterString = savedParameterString;
+	if (parentState != NULL) {
+		parentState->returnInt = state.returnInt;
+		parentState->returnStr = state.returnStr;
+		parentState->errorLevel = state.errorLevel;
+		parentState->parameterString = savedParameterString;
+	} else {
+		g_runtimeEnv.returnInt = state.returnInt;
+		g_runtimeEnv.returnStr = state.returnStr;
+		g_runtimeEnv.errorLevel = state.errorLevel;
+		g_runtimeEnv.parameterString = savedParameterString;
+	}
 	if (pushedMacroFrame)
 		g_runtimeEnv.macroStack.pop_back();
+}
+
+std::vector<std::size_t> mrvmUiCopyWindowMarkStack(const void *windowKey) {
+	std::vector<std::size_t> out;
+	std::map<const void *, std::vector<uint>>::const_iterator it;
+
+	if (windowKey == NULL)
+		return out;
+	it = g_runtimeEnv.markStacks.find(windowKey);
+	if (it == g_runtimeEnv.markStacks.end())
+		return out;
+	out.reserve(it->second.size());
+	for (std::size_t i = 0; i < it->second.size(); ++i)
+		out.push_back(static_cast<std::size_t>(it->second[i]));
+	return out;
+}
+
+bool mrvmUiCopyWindowLastSearch(const void *windowKey, const std::string &fileName, std::size_t &start,
+                                std::size_t &end, std::size_t &cursor) {
+	start = 0;
+	end = 0;
+	cursor = 0;
+	if (!g_runtimeEnv.lastSearchValid || windowKey == NULL)
+		return false;
+	if (g_runtimeEnv.lastSearchWindow != windowKey)
+		return false;
+	if (g_runtimeEnv.lastSearchFileName != fileName)
+		return false;
+	start = g_runtimeEnv.lastSearchStart;
+	end = g_runtimeEnv.lastSearchEnd;
+	cursor = g_runtimeEnv.lastSearchCursor;
+	return true;
+}
+
+void mrvmUiCopyGlobals(std::vector<std::string> &order, std::map<std::string, int> &ints,
+                       std::map<std::string, std::string> &strings) {
+	order.clear();
+	ints.clear();
+	strings.clear();
+	order.reserve(g_runtimeEnv.globalOrder.size());
+	for (std::size_t i = 0; i < g_runtimeEnv.globalOrder.size(); ++i) {
+		const std::string &key = g_runtimeEnv.globalOrder[i];
+		std::map<std::string, GlobalEntry>::const_iterator it = g_runtimeEnv.globals.find(key);
+		if (it == g_runtimeEnv.globals.end())
+			continue;
+		order.push_back(key);
+		if (it->second.type == TYPE_INT)
+			ints[key] = valueAsInt(it->second.value);
+		else if (it->second.type == TYPE_STR)
+			strings[key] = valueAsString(it->second.value);
+	}
+}
+
+void mrvmUiCopyLoadedMacros(std::vector<std::string> &order,
+                            std::map<std::string, std::string> &displayNames) {
+	order.clear();
+	displayNames.clear();
+	order.reserve(g_runtimeEnv.macroOrder.size());
+	for (std::size_t i = 0; i < g_runtimeEnv.macroOrder.size(); ++i) {
+		const std::string &key = g_runtimeEnv.macroOrder[i];
+		std::map<std::string, MacroRef>::const_iterator it = g_runtimeEnv.loadedMacros.find(key);
+		if (it == g_runtimeEnv.loadedMacros.end())
+			continue;
+		order.push_back(key);
+		displayNames[key] = it->second.displayName;
+	}
+}
+
+void mrvmUiCopyRuntimeOptions(bool &ignoreCase, bool &tabExpand) {
+	ignoreCase = g_runtimeEnv.ignoreCase;
+	tabExpand = g_runtimeEnv.tabExpand;
+}
+
+int mrvmUiCurrentWindowIndex(const void *windowKey) {
+	std::vector<TMREditWindow *> windows;
+
+	if (windowKey == NULL)
+		return currentEditWindowIndex();
+	windows = allEditWindows();
+	for (std::size_t i = 0; i < windows.size(); ++i)
+		if (windows[i] == windowKey)
+			return static_cast<int>(i) + 1;
+	return 0;
+}
+
+int mrvmUiWindowCount() {
+	return countEditWindows();
+}
+
+int mrvmUiLinkStatus(const void *windowKey) {
+	const TMREditWindow *win = static_cast<const TMREditWindow *>(windowKey);
+
+	if (windowKey == NULL)
+		return currentLinkStatus();
+	return isWindowLinked(const_cast<TMREditWindow *>(win)) ? 1 : 0;
+}
+
+bool mrvmUiWindowGeometry(const void *windowKey, int &x1, int &y1, int &x2, int &y2) {
+	TMREditWindow *win;
+	TRect bounds;
+
+	if (windowKey == NULL)
+		return currentWindowGeometry(x1, y1, x2, y2);
+	win = const_cast<TMREditWindow *>(static_cast<const TMREditWindow *>(windowKey));
+	if (win == NULL)
+		return false;
+	bounds = win->getBounds();
+	x1 = bounds.a.x + 1;
+	y1 = bounds.a.y + 1;
+	x2 = bounds.b.x;
+	y2 = bounds.b.y;
+	return true;
+}
+
+bool mrvmUiSetCurrentWindow(const void *windowKey) {
+	TMREditWindow *win;
+
+	if (TProgram::deskTop == NULL || windowKey == NULL)
+		return false;
+	win = const_cast<TMREditWindow *>(static_cast<const TMREditWindow *>(windowKey));
+	if (win == NULL)
+		return false;
+	TProgram::deskTop->setCurrent(win, TView::normalSelect);
+	return true;
+}
+
+bool mrvmUiCreateWindow() {
+	return createEditWindow();
+}
+
+bool mrvmUiDeleteCurrentWindow() {
+	return deleteCurrentEditWindow();
+}
+
+bool mrvmUiModifyCurrentWindow() {
+	return modifyCurrentEditWindow();
+}
+
+bool mrvmUiSwitchWindow(int index) {
+	return switchEditWindow(index);
+}
+
+bool mrvmUiSizeCurrentWindow(int x1, int y1, int x2, int y2) {
+	return sizeCurrentEditWindow(x1, y1, x2, y2);
+}
+
+void mrvmUiReplaceWindowMarkStack(const void *windowKey, const std::vector<std::size_t> &offsets) {
+	std::vector<uint> marks;
+
+	if (windowKey == NULL)
+		return;
+	if (offsets.empty()) {
+		g_runtimeEnv.markStacks.erase(windowKey);
+		return;
+	}
+	marks.reserve(offsets.size());
+	for (std::size_t i = 0; i < offsets.size(); ++i)
+		marks.push_back(static_cast<uint>(offsets[i]));
+	g_runtimeEnv.markStacks[windowKey] = marks;
+}
+
+void mrvmUiReplaceWindowLastSearch(const void *windowKey, const std::string &fileName, bool valid,
+                                   std::size_t start, std::size_t end, std::size_t cursor) {
+	if (!valid) {
+		if (g_runtimeEnv.lastSearchWindow == windowKey) {
+			g_runtimeEnv.lastSearchValid = false;
+			g_runtimeEnv.lastSearchWindow = NULL;
+			g_runtimeEnv.lastSearchFileName.clear();
+			g_runtimeEnv.lastSearchStart = 0;
+			g_runtimeEnv.lastSearchEnd = 0;
+			g_runtimeEnv.lastSearchCursor = 0;
+		}
+		return;
+	}
+	g_runtimeEnv.lastSearchValid = true;
+	g_runtimeEnv.lastSearchWindow = windowKey;
+	g_runtimeEnv.lastSearchFileName = fileName;
+	g_runtimeEnv.lastSearchStart = start;
+	g_runtimeEnv.lastSearchEnd = end;
+	g_runtimeEnv.lastSearchCursor = cursor;
+}
+
+void mrvmUiReplaceGlobals(const std::vector<std::string> &order,
+                          const std::map<std::string, int> &ints,
+                          const std::map<std::string, std::string> &strings) {
+	std::set<std::string> seen;
+
+	g_runtimeEnv.globals.clear();
+	g_runtimeEnv.globalOrder.clear();
+	g_runtimeEnv.globalEnumIndex = 0;
+
+	for (std::size_t i = 0; i < order.size(); ++i) {
+		const std::string key = upperKey(order[i]);
+		GlobalEntry entry;
+		std::map<std::string, int>::const_iterator intIt;
+		std::map<std::string, std::string>::const_iterator strIt;
+		if (!seen.insert(key).second)
+			continue;
+		intIt = ints.find(key);
+		if (intIt != ints.end()) {
+			entry.type = TYPE_INT;
+			entry.value = makeInt(intIt->second);
+		} else {
+			strIt = strings.find(key);
+			if (strIt == strings.end())
+				continue;
+			entry.type = TYPE_STR;
+			entry.value = makeString(strIt->second);
+		}
+		g_runtimeEnv.globalOrder.push_back(key);
+		g_runtimeEnv.globals[key] = entry;
+	}
+
+	for (std::map<std::string, int>::const_iterator it = ints.begin(); it != ints.end(); ++it) {
+		const std::string key = upperKey(it->first);
+		GlobalEntry entry;
+		if (!seen.insert(key).second)
+			continue;
+		entry.type = TYPE_INT;
+		entry.value = makeInt(it->second);
+		g_runtimeEnv.globalOrder.push_back(key);
+		g_runtimeEnv.globals[key] = entry;
+	}
+	for (std::map<std::string, std::string>::const_iterator it = strings.begin();
+	     it != strings.end(); ++it) {
+		const std::string key = upperKey(it->first);
+		GlobalEntry entry;
+		if (!seen.insert(key).second)
+			continue;
+		entry.type = TYPE_STR;
+		entry.value = makeString(it->second);
+		g_runtimeEnv.globalOrder.push_back(key);
+		g_runtimeEnv.globals[key] = entry;
+	}
+}
+
+void mrvmUiReplaceRuntimeOptions(bool ignoreCase, bool tabExpand) {
+	g_runtimeEnv.ignoreCase = ignoreCase;
+	g_runtimeEnv.tabExpand = tabExpand;
+}
+
+void mrvmUiSyncLinkedWindowsFrom(TMREditWindow *window) {
+	syncLinkedWindowsFrom(window);
 }
 
 bool mrvmUiLinkCurrentWindow() {
@@ -5232,4 +6304,35 @@ bool mrvmUiRedrawCurrentWindow() {
 
 bool mrvmUiNewScreen() {
 	return redrawEntireScreen();
+}
+
+bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKeyState,
+                                std::string &executedMacroName,
+                                std::vector<std::string> *logLines) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	TKey pressed(keyCode, controlKeyState);
+	int mode = currentUiMacroMode();
+
+	executedMacroName.clear();
+	if (logLines != NULL)
+		logLines->clear();
+
+	for (std::size_t i = g_runtimeEnv.macroOrder.size(); i > 0; --i) {
+		const std::string &macroKey = g_runtimeEnv.macroOrder[i - 1];
+		std::map<std::string, MacroRef>::iterator it = g_runtimeEnv.loadedMacros.find(macroKey);
+
+		if (it == g_runtimeEnv.loadedMacros.end())
+			continue;
+		if (!it->second.hasAssignedKey)
+			continue;
+		if (!macroAllowsUiMode(it->second, mode))
+			continue;
+		if (pressed != it->second.assignedKey)
+			continue;
+
+		executedMacroName = it->second.displayName;
+		executeLoadedMacro(it, macroKey, std::string(), logLines);
+		return true;
+	}
+	return false;
 }

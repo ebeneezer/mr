@@ -1,0 +1,11 @@
+$MACRO WindowStateVarsStaged;
+DEF_INT(CurWindow, LinkStat, WindowCount, X1, Y1, X2, Y2);
+
+CurWindow := CUR_WINDOW;
+LinkStat := LINK_STAT;
+WindowCount := WINDOW_COUNT;
+X1 := WIN_X1;
+Y1 := WIN_Y1;
+X2 := WIN_X2;
+Y2 := WIN_Y2;
+END_MACRO;
