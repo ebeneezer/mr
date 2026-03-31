@@ -26,6 +26,7 @@
 #include "TMRFrame.hpp"
 #include "TMRIndicator.hpp"
 #include "TMRTextBuffer.hpp"
+#include "MRWindowSupport.hpp"
 #include "../mrmac/mrvm.hpp"
 
 void mrTraceCoprocessorTaskCancel(int bufferId, std::uint64_t taskId);
@@ -89,8 +90,12 @@ class TMREditWindow : public TWindow {
 				const bool showTaskIcon = indicator != nullptr && indicator->shouldDrawTaskMarker();
 				const bool hasReadOnlySlot = indicator != nullptr && indicator->hasReadOnlyMarkerSlot();
 				const bool showReadOnlyIcon = indicator != nullptr && indicator->shouldDrawReadOnlyMarker();
+				const bool isActiveWindow = (this->state & sfActive) != 0;
+				const bool showRecordingSlot = isActiveWindow && mrIsKeystrokeRecordingActive();
+				const bool showRecordingIcon = showRecordingSlot && mrIsKeystrokeRecordingMarkerVisible();
 				return TMRFrame::MarkerState(isFileChanged(), insertModeEnabled(), hasTaskSlot, showTaskIcon,
-				                             hasReadOnlySlot, showReadOnlyIcon);
+				                             hasReadOnlySlot, showReadOnlyIcon, showRecordingSlot,
+				                             showRecordingIcon);
 			});
 			mrFrame->setTaskOverviewProvider([this]() { return describeRunningTasks(); });
 		}

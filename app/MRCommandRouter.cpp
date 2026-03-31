@@ -526,6 +526,9 @@ bool handleMRCommand(ushort command) {
 		case cmMrOtherClearOutput:
 			return handleClearCurrentOutput();
 
+		case cmMrOtherKeystrokeMacros:
+			return runKeystrokeMacroManagerDialog();
+
 		case cmMrDevRunMacro:
 			runMacroFileDialog();
 			return true;

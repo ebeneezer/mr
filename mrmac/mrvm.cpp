@@ -31,6 +31,7 @@
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <utility>
 #include <vector>
 
 #include "../ui/TMREditWindow.hpp"
@@ -76,6 +77,16 @@ struct LoadedMacroFile {
 	MRMacroExecutionProfile profile;
 };
 
+struct IndexedBoundMacroEntry {
+	TKey key;
+	std::string filePath;
+
+	IndexedBoundMacroEntry() : key(), filePath() {
+	}
+	IndexedBoundMacroEntry(const TKey &aKey, std::string aFilePath) : key(aKey), filePath(std::move(aFilePath)) {
+	}
+};
+
 struct MacroStackFrame {
 	std::string macroName;
 	bool firstRun;
@@ -98,6 +109,10 @@ struct RuntimeEnvironment {
 	std::map<std::string, LoadedMacroFile> loadedFiles;
 	std::map<std::string, MacroRef> loadedMacros;
 	std::vector<std::string> macroOrder;
+	std::vector<IndexedBoundMacroEntry> indexedBoundMacros;
+	std::vector<std::string> indexedBoundFiles;
+	std::size_t indexedWarmupCursor;
+	std::set<std::string> indexedWarmupAttemptedFiles;
 	std::size_t macroEnumIndex;
 	std::vector<MacroStackFrame> macroStack;
 	std::vector<std::string> fileMatches;
@@ -124,7 +139,9 @@ struct RuntimeEnvironment {
 	RuntimeEnvironment()
 	    : globals(), globalOrder(), globalEnumIndex(0), parameterString(), returnInt(0),
 	      returnStr(), errorLevel(0), loadedFiles(), loadedMacros(), macroOrder(),
-	      macroEnumIndex(0), macroStack(), fileMatches(), fileMatchIndex(0), lastFileName(),
+	      indexedBoundMacros(), indexedBoundFiles(), indexedWarmupCursor(0),
+	      indexedWarmupAttemptedFiles(), macroEnumIndex(0), macroStack(), fileMatches(),
+	      fileMatchIndex(0), lastFileName(),
 	      markStacks(), startupCommand(), processArgs(), executablePath(), executableDir(),
 	      shellPath(), shellVersion(), ignoreCase(false), tabExpand(true), lastSearchValid(false),
 	      lastSearchWindow(NULL), lastSearchFileName(), lastSearchStart(0), lastSearchEnd(0),
@@ -237,6 +254,7 @@ static thread_local BackgroundEditSession *g_backgroundEditSession = NULL;
 static thread_local const std::stop_token *g_backgroundMacroStopToken = NULL;
 static thread_local std::shared_ptr<std::atomic_bool> g_backgroundMacroCancelFlag;
 static thread_local ExecutionState *g_executionState = NULL;
+static thread_local int g_keyReplayDepth = 0;
 
 static std::string valueAsString(const Value &value);
 static int valueAsInt(const Value &value);
@@ -404,6 +422,8 @@ static bool sizeCurrentEditWindow(int x1, int y1, int x2, int y2);
 static bool deleteCurrentEditWindow();
 static bool eraseCurrentEditWindow();
 static bool modifyCurrentEditWindow();
+static bool parseIndexedBindingHeaders(const std::string &source, std::vector<TKey> &keys);
+static std::vector<std::string> listMrmacFilesInDirectory(const std::string &directoryPath);
 static std::string normalizeKeySpecToken(const std::string &spec);
 static bool parseAssignedKeySpec(const std::string &spec, TKey &outKey);
 static bool dispatchSyntheticKeyToUi(const TKey &key, const char *text = NULL,
@@ -414,12 +434,33 @@ static bool macroAllowsUiMode(const MacroRef &macroRef, int mode) noexcept;
 static bool executeLoadedMacro(std::map<std::string, MacroRef>::iterator macroIt,
                                const std::string &macroKey, const std::string &paramPart,
                                std::vector<std::string> *logSink);
+static bool tryLoadIndexedMacroForKey(const TKey &pressed);
 
 static std::string upperKey(const std::string &value) {
 	std::string out = value;
 	for (std::string::size_type i = 0; i < out.size(); ++i)
 		out[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(out[i])));
 	return out;
+}
+
+static bool startsWithTokenInsensitive(const std::string &text, std::size_t pos, const char *token) {
+	std::size_t i = 0;
+	if (token == NULL)
+		return false;
+	while (token[i] != '\0') {
+		if (pos + i >= text.size())
+			return false;
+		if (std::toupper(static_cast<unsigned char>(text[pos + i])) !=
+		    std::toupper(static_cast<unsigned char>(token[i])))
+			return false;
+		++i;
+	}
+	if (pos + i < text.size()) {
+		unsigned char ch = static_cast<unsigned char>(text[pos + i]);
+		if (std::isalnum(ch) != 0 || ch == '_')
+			return false;
+	}
+	return true;
 }
 
 static void appendUniqueString(std::vector<std::string> &values, const std::string &value) {
@@ -3736,6 +3777,47 @@ static bool readTextFile(const std::string &path, std::string &outContent) {
 	return true;
 }
 
+static bool hasMrmacExtension(const std::string &path) {
+	std::size_t dotPos = path.rfind('.');
+	if (dotPos == std::string::npos)
+		return false;
+	return upperKey(path.substr(dotPos)) == ".MRMAC";
+}
+
+static std::vector<std::string> listMrmacFilesInDirectory(const std::string &directoryPath) {
+	std::vector<std::string> files;
+	std::string dir = trimAscii(directoryPath);
+	std::string pattern;
+	glob_t matches;
+
+	if (dir.empty())
+		return files;
+	if (!dir.empty() && dir.back() == '/')
+		pattern = dir + "*";
+	else
+		pattern = dir + "/*";
+
+	std::memset(&matches, 0, sizeof(matches));
+	if (::glob(pattern.c_str(), 0, NULL, &matches) != 0) {
+		::globfree(&matches);
+		return files;
+	}
+	for (std::size_t i = 0; i < matches.gl_pathc; ++i) {
+		const char *pathText = matches.gl_pathv != NULL ? matches.gl_pathv[i] : NULL;
+		if (pathText == NULL || *pathText == '\0')
+			continue;
+		std::string path = pathText;
+		if (!hasMrmacExtension(path))
+			continue;
+		if (!fileExists(path))
+			continue;
+		files.push_back(path);
+	}
+	::globfree(&matches);
+	std::sort(files.begin(), files.end());
+	return files;
+}
+
 static std::string resolveMacroFilePath(const std::string &spec) {
 	std::string trimmed = trimAscii(spec);
 	if (trimmed.empty())
@@ -3939,6 +4021,65 @@ static bool parseAssignedKeySpec(const std::string &spec, TKey &outKey) {
 	return true;
 }
 
+static bool parseIndexedBindingHeaders(const std::string &source, std::vector<TKey> &keys) {
+	std::size_t i = 0;
+	bool foundAny = false;
+
+	keys.clear();
+	while (i < source.size()) {
+		std::size_t macroPos = source.find('$', i);
+		if (macroPos == std::string::npos)
+			break;
+		i = macroPos + 1;
+		if (!startsWithTokenInsensitive(source, macroPos, "$MACRO"))
+			continue;
+
+		std::size_t p = macroPos + 6;
+		while (p < source.size() && std::isspace(static_cast<unsigned char>(source[p])) != 0)
+			++p;
+		if (p >= source.size())
+			break;
+		std::size_t nameStart = p;
+		while (p < source.size()) {
+			unsigned char ch = static_cast<unsigned char>(source[p]);
+			if (std::isalnum(ch) == 0 && ch != '_')
+				break;
+			++p;
+		}
+		if (p == nameStart)
+			continue;
+
+		std::size_t semicolon = source.find(';', p);
+		if (semicolon == std::string::npos)
+			break;
+
+		std::istringstream header(source.substr(p, semicolon - p));
+		std::vector<std::string> tokens;
+		std::string token;
+		while (header >> token)
+			tokens.push_back(token);
+		for (std::size_t t = 0; t + 1 < tokens.size(); ++t) {
+			TKey parsed;
+			if (upperKey(tokens[t]) != "TO")
+				continue;
+			if (!parseAssignedKeySpec(tokens[t + 1], parsed))
+				continue;
+			bool duplicate = false;
+			for (std::size_t k = 0; k < keys.size(); ++k)
+				if (keys[k] == parsed) {
+					duplicate = true;
+					break;
+				}
+			if (!duplicate) {
+				keys.push_back(parsed);
+				foundAny = true;
+			}
+		}
+		i = semicolon + 1;
+	}
+	return foundAny;
+}
+
 static bool dispatchSyntheticKeyToUi(const TKey &key, const char *text, std::size_t textLength) {
 	TMREditWindow *win = currentEditWindow();
 	TEvent event;
@@ -3961,6 +4102,15 @@ static bool dispatchSyntheticKeyToUi(const TKey &key, const char *text, std::siz
 }
 
 static bool replayKeyInputSequence(const std::string &sequence) {
+	struct KeyReplayGuard {
+		KeyReplayGuard() noexcept {
+			++g_keyReplayDepth;
+		}
+		~KeyReplayGuard() {
+			--g_keyReplayDepth;
+		}
+	} replayGuard;
+
 	std::size_t i = 0;
 
 	if (currentBackgroundEditSession() != NULL)
@@ -4334,6 +4484,23 @@ static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *load
 	if (loadedFileKey != NULL)
 		*loadedFileKey = fileKey;
 	return true;
+}
+
+static bool tryLoadIndexedMacroForKey(const TKey &pressed) {
+	for (std::size_t i = 0; i < g_runtimeEnv.indexedBoundMacros.size(); ++i) {
+		const IndexedBoundMacroEntry &entry = g_runtimeEnv.indexedBoundMacros[i];
+		std::string fileKey;
+
+		if (entry.key != pressed)
+			continue;
+		fileKey = makeFileKey(entry.filePath);
+		if (g_runtimeEnv.loadedFiles.find(fileKey) != g_runtimeEnv.loadedFiles.end())
+			return true;
+		g_runtimeEnv.indexedWarmupAttemptedFiles.insert(fileKey);
+		if (loadMacroFileIntoRegistry(entry.filePath, NULL))
+			return true;
+	}
+	return false;
 }
 
 static bool unloadMacroFromRegistry(const std::string &macroName) {
@@ -6306,33 +6473,138 @@ bool mrvmUiNewScreen() {
 	return redrawEntireScreen();
 }
 
+void mrvmBootstrapBoundMacroIndex(const std::string &directoryPath, std::size_t *fileCount,
+                                  std::size_t *bindingCount) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	std::vector<std::string> files = listMrmacFilesInDirectory(directoryPath);
+	std::set<std::string> dedupe;
+
+	g_runtimeEnv.indexedBoundMacros.clear();
+	g_runtimeEnv.indexedBoundFiles.clear();
+	g_runtimeEnv.indexedWarmupCursor = 0;
+	g_runtimeEnv.indexedWarmupAttemptedFiles.clear();
+
+	for (std::size_t i = 0; i < files.size(); ++i) {
+		std::string source;
+		std::vector<TKey> keys;
+		std::string fileKey;
+
+		if (!readTextFile(files[i], source))
+			continue;
+		if (!parseIndexedBindingHeaders(source, keys) || keys.empty())
+			continue;
+		fileKey = makeFileKey(files[i]);
+		if (dedupe.insert(fileKey).second)
+			g_runtimeEnv.indexedBoundFiles.push_back(files[i]);
+		for (std::size_t k = 0; k < keys.size(); ++k)
+			g_runtimeEnv.indexedBoundMacros.push_back(IndexedBoundMacroEntry(keys[k], files[i]));
+	}
+
+	if (fileCount != NULL)
+		*fileCount = g_runtimeEnv.indexedBoundFiles.size();
+	if (bindingCount != NULL)
+		*bindingCount = g_runtimeEnv.indexedBoundMacros.size();
+}
+
+bool mrvmWarmLoadNextIndexedMacroFile(std::string *loadedFilePath, std::string *failedFilePath,
+                                      std::string *errorMessage) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+
+	if (loadedFilePath != NULL)
+		loadedFilePath->clear();
+	if (failedFilePath != NULL)
+		failedFilePath->clear();
+	if (errorMessage != NULL)
+		errorMessage->clear();
+
+	while (g_runtimeEnv.indexedWarmupCursor < g_runtimeEnv.indexedBoundFiles.size()) {
+		const std::string &filePath = g_runtimeEnv.indexedBoundFiles[g_runtimeEnv.indexedWarmupCursor++];
+		std::string fileKey = makeFileKey(filePath);
+		std::string localError;
+
+		if (!g_runtimeEnv.indexedWarmupAttemptedFiles.insert(fileKey).second)
+			continue;
+		if (g_runtimeEnv.loadedFiles.find(fileKey) != g_runtimeEnv.loadedFiles.end())
+			continue;
+		if (loadMacroFileIntoRegistry(filePath, NULL)) {
+			if (loadedFilePath != NULL)
+				*loadedFilePath = filePath;
+			return true;
+		}
+		if (failedFilePath != NULL)
+			*failedFilePath = filePath;
+		{
+			const char *compileError = get_last_compile_error();
+			if (compileError != NULL)
+				localError = compileError;
+		}
+		if (localError.empty())
+			localError = "Unable to load macro file.";
+		if (errorMessage != NULL)
+			*errorMessage = localError;
+		return false;
+	}
+	return false;
+}
+
+bool mrvmHasPendingIndexedMacroWarmup() {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	return g_runtimeEnv.indexedWarmupCursor < g_runtimeEnv.indexedBoundFiles.size();
+}
+
+bool mrvmLoadMacroFile(const std::string &spec, std::string *errorMessage) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+
+	if (!loadMacroFileIntoRegistry(spec, NULL)) {
+		if (errorMessage != NULL) {
+			const char *compileError = get_last_compile_error();
+			if (compileError != NULL && *compileError != '\0')
+				*errorMessage = compileError;
+			else
+				*errorMessage = "Unable to load macro file.";
+		}
+		return false;
+	}
+	if (errorMessage != NULL)
+		errorMessage->clear();
+	return true;
+}
+
 bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKeyState,
                                 std::string &executedMacroName,
                                 std::vector<std::string> *logLines) {
 	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
 	TKey pressed(keyCode, controlKeyState);
 	int mode = currentUiMacroMode();
+	auto dispatchLoadedBinding = [&]() -> bool {
+		for (std::size_t i = g_runtimeEnv.macroOrder.size(); i > 0; --i) {
+			const std::string &macroKey = g_runtimeEnv.macroOrder[i - 1];
+			std::map<std::string, MacroRef>::iterator it = g_runtimeEnv.loadedMacros.find(macroKey);
+
+			if (it == g_runtimeEnv.loadedMacros.end())
+				continue;
+			if (!it->second.hasAssignedKey)
+				continue;
+			if (!macroAllowsUiMode(it->second, mode))
+				continue;
+			if (pressed != it->second.assignedKey)
+				continue;
+
+			executedMacroName = it->second.displayName;
+			executeLoadedMacro(it, macroKey, std::string(), logLines);
+			return true;
+		}
+		return false;
+	};
 
 	executedMacroName.clear();
 	if (logLines != NULL)
 		logLines->clear();
-
-	for (std::size_t i = g_runtimeEnv.macroOrder.size(); i > 0; --i) {
-		const std::string &macroKey = g_runtimeEnv.macroOrder[i - 1];
-		std::map<std::string, MacroRef>::iterator it = g_runtimeEnv.loadedMacros.find(macroKey);
-
-		if (it == g_runtimeEnv.loadedMacros.end())
-			continue;
-		if (!it->second.hasAssignedKey)
-			continue;
-		if (!macroAllowsUiMode(it->second, mode))
-			continue;
-		if (pressed != it->second.assignedKey)
-			continue;
-
-		executedMacroName = it->second.displayName;
-		executeLoadedMacro(it, macroKey, std::string(), logLines);
+	if (g_keyReplayDepth > 0)
+		return false;
+	if (dispatchLoadedBinding())
 		return true;
-	}
-	return false;
+	if (!tryLoadIndexedMacroForKey(pressed))
+		return false;
+	return dispatchLoadedBinding();
 }

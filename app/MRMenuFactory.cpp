@@ -155,6 +155,15 @@ TSubMenu *createOtherMenu() {
 	    *new TMenuItem("~A~scii table", cmMrOtherAsciiTable, kbAltA, hcNoContext, "AltA"));
 }
 
+TSubMenu *createMacroMenu() {
+	return &(
+	    *new TSubMenu("~M~acro", kbAltM) +
+	    *new TMenuItem("Macro ~M~anager...", cmMrOtherKeystrokeMacros, kbNoKey, hcNoContext) +
+	    newLine() +
+	    *new TMenuItem("~R~ecording start/stop", cmMrMacroToggleRecording, kbAltF10, hcNoContext,
+	                   "AltF10"));
+}
+
 TSubMenu *createHelpMenu() {
 	return &(
 	    *new TSubMenu("~H~elp", kbAltH) +
@@ -177,5 +186,6 @@ TMenuBar *createMRMenuBar(TRect r) {
 	r.b.y = r.a.y + 1;
 	return new TMRMenuBar(r, *createFileMenu() + *createEditMenu() + *createWindowMenu() +
 	                             *createBlockMenu() + *createSearchMenu() + *createTextMenu() +
-	                             *createOtherMenu() + *createHelpMenu() + *createDevMenu());
+	                             *createOtherMenu() + *createMacroMenu() + *createHelpMenu() +
+	                             *createDevMenu());
 }

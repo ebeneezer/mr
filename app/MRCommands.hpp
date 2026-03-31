@@ -80,6 +80,8 @@ enum : ushort {
 	cmMrOtherMatchBraceOrParen,
 	cmMrOtherAsciiTable,
 
+	cmMrMacroToggleRecording,
+
 	cmMrHelpContents,
 	cmMrHelpKeys,
 	cmMrHelpDetailedIndex,

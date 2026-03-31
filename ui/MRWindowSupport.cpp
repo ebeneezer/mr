@@ -24,6 +24,8 @@ const char *kHelpFilePath = "mr.hlp";
 const char *kLogWindowTitle = "MR LOG";
 
 std::string g_logBuffer;
+bool g_keystrokeRecordingActive = false;
+bool g_keystrokeRecordingMarkerVisible = false;
 
 std::string currentWorkingDirectory() {
 	char cwd[1024];
@@ -267,4 +269,22 @@ void mrLogMessage(const char *message) {
 		win->setReadOnly(true);
 		win->setFileChanged(false);
 	}
+}
+
+void mrSetKeystrokeRecordingActive(bool active) {
+	g_keystrokeRecordingActive = active;
+	if (!active)
+		g_keystrokeRecordingMarkerVisible = false;
+}
+
+bool mrIsKeystrokeRecordingActive() {
+	return g_keystrokeRecordingActive;
+}
+
+void mrSetKeystrokeRecordingMarkerVisible(bool visible) {
+	g_keystrokeRecordingMarkerVisible = visible;
+}
+
+bool mrIsKeystrokeRecordingMarkerVisible() {
+	return g_keystrokeRecordingMarkerVisible;
 }

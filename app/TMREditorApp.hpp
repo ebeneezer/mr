@@ -8,6 +8,9 @@
 #define TMREDITORAPP_HPP
 
 #include <tvision/tv.h>
+#include <chrono>
+#include <string>
+#include <vector>
 
 class TMREditorApp : public TApplication {
  public:
@@ -24,8 +27,28 @@ class TMREditorApp : public TApplication {
 
  private:
 	void prepareForQuit();
+	bool isRecorderToggleKey(const TEvent &event) const;
+	bool isRecorderToggleCommand(const TEvent &event) const;
+	void startKeystrokeRecording();
+	void stopKeystrokeRecording();
+	void finalizeKeystrokeRecording();
+	void appendRecordedKeyEvent(const TEvent &event);
+	bool captureBindingKeySpec(std::string &keySpec);
+	void syncRecordingUiState();
+	void redrawRecordingMarkerFrames();
+	void updateRecordingBlink();
+	void bootstrapIndexedMacroBindings();
+	void warmIndexedMacroBindings();
 
 	bool exitPrepared_;
+	bool keystrokeRecording_;
+	bool recordingMarkerVisible_;
+	std::string recordedKeySequence_;
+	unsigned long recordedMacroCounter_;
+	std::vector<std::string> recordedSessionMacroFiles_;
+	std::chrono::steady_clock::time_point recordingBlinkToggleAt_;
+	bool indexedMacroWarmupActive_;
+	std::size_t indexedMacroWarmupLoadedFiles_;
 };
 
 #endif

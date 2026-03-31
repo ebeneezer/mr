@@ -137,6 +137,7 @@ void updateAppCommandState() {
 	                      !state.window->windowRoleDetail().empty());
 	setCommandEnabled(cmMrOtherClearOutput,
 	                  hasWindow && ((state.isCommunicationWindow && !state.hasExternalIoTasks) || state.isLogWindow));
+	setCommandEnabled(cmMrMacroToggleRecording, hasEditor);
 	setCommandEnabled(cmMrDevRunMacro, true);
 	setCommandEnabled(cmMrDevCancelMacroTasks, hasWindow && state.hasMacroTasks);
 }

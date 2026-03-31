@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include <string>
+#include <unistd.h>
 
 namespace {
 
@@ -60,4 +61,20 @@ void rememberLoadDialogPath(const char *path) {
 
 	if (!dir.empty())
 		rememberedLoadDirectory() = dir;
+}
+
+std::string defaultMacroDirectoryPath() {
+	char pathProbe[1024];
+	std::string probe;
+	std::string dir;
+
+	std::memset(pathProbe, 0, sizeof(pathProbe));
+	initRememberedLoadDialogPath(pathProbe, sizeof(pathProbe), "*.mrmac");
+	probe = normalizeDialogPath(pathProbe);
+	dir = directoryPartOf(probe);
+	if (!dir.empty() && ::access(dir.c_str(), R_OK) == 0)
+		return dir;
+	if (::access("mrmac/macros", R_OK) == 0)
+		return "mrmac/macros";
+	return ".";
 }

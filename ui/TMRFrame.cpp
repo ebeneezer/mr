@@ -23,10 +23,12 @@ static const char *kDragIcon = "~\xC4\xD9~";
 static const char *kDragLeftIcon = "~\xC0\xC4~";
 
 static constexpr char kDirtyMarkerIcon[] = "✍";
+static constexpr char kRecordingMarkerIcon[] = "📼";
 static constexpr char kTaskMarkerIcon[] = "🧠";
 static constexpr char kReadOnlyMarkerIcon[] = "🔒";
 static constexpr char kInsertMarkerIcon[] = "✚";
 static constexpr int kDirtyMarkerSlotWidth = 2;
+static constexpr int kRecordingMarkerSlotWidth = 2;
 static constexpr int kTaskMarkerSlotWidth = 2;
 static constexpr int kReadOnlyMarkerSlotWidth = 2;
 static constexpr int kInsertMarkerSlotWidth = 1;
@@ -47,7 +49,7 @@ int advanceMarkerX(int x, TStringView icon, int minWidth = 1) noexcept {
 }
 
 bool hasMarkerBlock(const TMRFrame::MarkerState &state) noexcept {
-	return state.modified || state.insertMode || state.background || state.readOnly;
+	return state.modified || state.insertMode || state.recording || state.background || state.readOnly;
 }
 
 } // namespace
@@ -148,6 +150,8 @@ int TMRFrame::taskMarkerColumn(const MarkerState &state) const noexcept {
 		x = advanceMarkerX(x, kDirtyMarkerIcon, kDirtyMarkerSlotWidth);
 	if (state.insertMode)
 		x = advanceMarkerX(x, kInsertMarkerIcon, kInsertMarkerSlotWidth);
+	if (state.recording)
+		x = advanceMarkerX(x, kRecordingMarkerIcon, kRecordingMarkerSlotWidth);
 	if (state.background)
 		return x;
 	return -1;
@@ -159,6 +163,8 @@ int TMRFrame::markersEndColumn(const MarkerState &state) const noexcept {
 		x = advanceMarkerX(x, kDirtyMarkerIcon, kDirtyMarkerSlotWidth);
 	if (state.insertMode)
 		x = advanceMarkerX(x, kInsertMarkerIcon, kInsertMarkerSlotWidth);
+	if (state.recording)
+		x = advanceMarkerX(x, kRecordingMarkerIcon, kRecordingMarkerSlotWidth);
 	if (state.background)
 		x = advanceMarkerX(x, kTaskMarkerIcon, kTaskMarkerSlotWidth);
 	if (state.readOnly)
@@ -218,12 +224,13 @@ void TMRFrame::draw() {
 	short width = size.x;
 	TDrawBuffer b;
 	MarkerState markers = markerState();
+	bool isSelected = (this->state & sfSelected) != 0;
 
 	if ((this->state & sfDragging) != 0) {
 		cFrame = 0x0505;
 		cTitle = 0x0005;
 		f = 0;
-	} else if ((this->state & sfActive) == 0) {
+	} else if (!isSelected) {
 		cFrame = 0x0101;
 		cTitle = 0x0002;
 		f = 0;
@@ -247,7 +254,7 @@ void TMRFrame::draw() {
 		titleReserveRight = numberPos - 3;
 	}
 
-	if ((this->state & sfActive) != 0 && window != nullptr) {
+	if (isSelected && window != nullptr) {
 		if ((window->flags & wfClose) != 0)
 			b.moveCStr(2, kCloseIcon, cFrame);
 		if ((window->flags & wfZoom) != 0) {
@@ -282,6 +289,16 @@ void TMRFrame::draw() {
 		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
 		b.moveStr(static_cast<ushort>(markerX), kInsertMarkerIcon, cTitle, span);
 		markerX = advanceMarkerX(markerX, kInsertMarkerIcon, kInsertMarkerSlotWidth);
+	}
+	if (markers.recording) {
+		TColorAttr recordingColor = cTitle;
+		setFore(recordingColor, TColorDesired(TColorRGB(0xFF, 0x55, 0x55)));
+		setStyle(recordingColor, getStyle(recordingColor) | slBold);
+		int span = markerSpan(kRecordingMarkerIcon, kRecordingMarkerSlotWidth);
+		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
+		if (markers.recordingVisible)
+			b.moveStr(static_cast<ushort>(markerX), kRecordingMarkerIcon, recordingColor, span);
+		markerX = advanceMarkerX(markerX, kRecordingMarkerIcon, kRecordingMarkerSlotWidth);
 	}
 	if (markers.background) {
 		TColorAttr taskColor = cTitle;
@@ -330,7 +347,7 @@ void TMRFrame::draw() {
 		writeLine(0, i, size.x, 1, b);
 	}
 	drawFrameLine(b, size.y - 1, f + 6, cFrame);
-	if ((this->state & sfActive) != 0 && window != nullptr && (window->flags & wfGrow) != 0) {
+	if (isSelected && window != nullptr && (window->flags & wfGrow) != 0) {
 		b.moveCStr(0, kDragLeftIcon, cFrame);
 		b.moveCStr(width - 2, kDragIcon, cFrame);
 	}

@@ -264,6 +264,13 @@ bool mrvmUiUnlinkCurrentWindow();
 bool mrvmUiZoomCurrentWindow();
 bool mrvmUiRedrawCurrentWindow();
 bool mrvmUiNewScreen();
+bool mrvmLoadMacroFile(const std::string &spec, std::string *errorMessage = nullptr);
+void mrvmBootstrapBoundMacroIndex(const std::string &directoryPath, std::size_t *fileCount = nullptr,
+                                  std::size_t *bindingCount = nullptr);
+bool mrvmWarmLoadNextIndexedMacroFile(std::string *loadedFilePath = nullptr,
+                                      std::string *failedFilePath = nullptr,
+                                      std::string *errorMessage = nullptr);
+bool mrvmHasPendingIndexedMacroWarmup();
 
 bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKeyState,
                                 std::string &executedMacroName,
