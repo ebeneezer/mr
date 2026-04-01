@@ -71,7 +71,7 @@ enum : ushort {
 	cmMrTextLowerCasePlaceholder,
 
 	cmMrOtherInstallationAndSetup,
-	cmMrOtherKeystrokeMacros,
+	cmMrOtherMacroManager,
 	cmMrOtherExecuteProgram,
 	cmMrOtherStopProgram,
 	cmMrOtherRestartProgram,
@@ -106,7 +106,6 @@ enum : ushort {
 	cmMrColorHelpColors,
 	cmMrColorOtherColors,
 
-	cmMrDevRunMacro,
 	cmMrDevCancelMacroTasks,
 	cmMrPreviewPrev,
 	cmMrPreviewNext

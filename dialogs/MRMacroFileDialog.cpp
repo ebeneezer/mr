@@ -621,7 +621,7 @@ class MacroManagerListView : public TListViewer {
 class MacroManagerDialog : public TDialog {
   public:
 	MacroManagerDialog()
-	    : TWindowInit(&TDialog::initFrame), TDialog(centeredBounds(), "KEYSTROKE MACRO MANAGER"),
+	    : TWindowInit(&TDialog::initFrame), TDialog(centeredBounds(), "MACRO MANAGER"),
 	      directory_(defaultMacroDirectoryPath()), entries_(), rows_(), listView_(NULL), scrollBar_(NULL),
 	      openPath_() {
 		int width = size.x;
@@ -776,7 +776,7 @@ class MacroManagerDialog : public TDialog {
 
 		std::memset(pathBuffer, 0, sizeof(pathBuffer));
 		std::strncpy(pathBuffer, "new_macro.mrmac", sizeof(pathBuffer) - 1);
-		if (inputBox("KEYSTROKE MACRO MANAGER", "~F~ile name", pathBuffer,
+		if (inputBox("MACRO MANAGER", "~F~ile name", pathBuffer,
 		             static_cast<uchar>(sizeof(pathBuffer) - 1)) == cmCancel)
 			return;
 
@@ -834,7 +834,7 @@ class MacroManagerDialog : public TDialog {
 
 		std::memset(pathBuffer, 0, sizeof(pathBuffer));
 		std::strncpy(pathBuffer, suggested.c_str(), sizeof(pathBuffer) - 1);
-		if (inputBox("KEYSTROKE MACRO MANAGER", "Copy to ~F~ile", pathBuffer,
+		if (inputBox("MACRO MANAGER", "Copy to ~F~ile", pathBuffer,
 		             static_cast<uchar>(sizeof(pathBuffer) - 1)) == cmCancel)
 			return;
 
@@ -916,7 +916,7 @@ bool runMacroFileDialog() {
 	return runMacroFileByPath(fileName);
 }
 
-bool runKeystrokeMacroManagerDialog() {
+bool runMacroManagerDialog() {
 	MacroManagerDialog *dialog = new MacroManagerDialog();
 	ushort result = cmCancel;
 	std::string openPath;

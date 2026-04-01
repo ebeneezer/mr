@@ -2,6 +2,6 @@
 #define MRMACROFILEDIALOG_HPP
 
 bool runMacroFileDialog();
-bool runKeystrokeMacroManagerDialog();
+bool runMacroManagerDialog();
 
 #endif

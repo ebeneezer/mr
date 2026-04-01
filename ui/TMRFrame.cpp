@@ -139,7 +139,12 @@ TMRFrame::MarkerState TMRFrame::markerState() const {
 
 int TMRFrame::markerStartColumn() const noexcept {
 	TWindow *window = static_cast<TWindow *>(owner);
-	if (window != nullptr && (window->flags & wfClose) != 0 && (state & sfActive) != 0)
+	bool controlsVisible = (state & (sfSelected | sfActive)) != 0;
+	if (!controlsVisible && window != nullptr)
+		controlsVisible = (window->state & (sfSelected | sfActive)) != 0;
+	if (!controlsVisible && window != nullptr)
+		controlsVisible = (window->state & sfActive) != 0 && (window->state & sfFocused) != 0;
+	if (window != nullptr && (window->flags & wfClose) != 0 && controlsVisible)
 		return 7;
 	return 2;
 }
@@ -224,7 +229,12 @@ void TMRFrame::draw() {
 	short width = size.x;
 	TDrawBuffer b;
 	MarkerState markers = markerState();
+	TWindow *window = static_cast<TWindow *>(owner);
 	bool isSelected = (this->state & sfSelected) != 0;
+	if (!isSelected && window != nullptr)
+		isSelected = (window->state & sfSelected) != 0;
+	if (!isSelected && window != nullptr)
+		isSelected = (window->state & sfActive) != 0 && (window->state & sfFocused) != 0;
 
 	if ((this->state & sfDragging) != 0) {
 		cFrame = 0x0505;
@@ -245,7 +255,11 @@ void TMRFrame::draw() {
 
 	drawFrameLine(b, 0, f, cFrame);
 
-	TWindow *window = static_cast<TWindow *>(owner);
+	bool controlsVisible = (state & (sfSelected | sfActive)) != 0;
+	if (!controlsVisible && window != nullptr)
+		controlsVisible = (window->state & (sfSelected | sfActive)) != 0;
+	if (!controlsVisible && window != nullptr)
+		controlsVisible = (window->state & sfActive) != 0 && (window->state & sfFocused) != 0;
 	short titleReserveRight = width - 2;
 	if (window != nullptr && window->number != wnNoNumber && window->number < 10) {
 		short numberPos = (window->flags & wfZoom) != 0 ? width - 7 : width - 3;
@@ -254,7 +268,7 @@ void TMRFrame::draw() {
 		titleReserveRight = numberPos - 3;
 	}
 
-	if (isSelected && window != nullptr) {
+	if (controlsVisible && window != nullptr) {
 		if ((window->flags & wfClose) != 0)
 			b.moveCStr(2, kCloseIcon, cFrame);
 		if ((window->flags & wfZoom) != 0) {
@@ -329,16 +343,16 @@ void TMRFrame::draw() {
 		int available = titleReserveRight - titleLeftLimit + 1;
 		int titleBudget = std::max(0, available - 4);
 		const char *title = window->getTitle(titleBudget);
-		if (title != nullptr && *title != '\0') {
-			if (available > 0) {
-				std::string decoratedTitle = "[ ";
-				decoratedTitle += title;
-				decoratedTitle += " ]";
-				int len = std::min<int>(strwidth(decoratedTitle.c_str()), available);
-				int titleX = titleReserveRight - len + 1;
-				b.moveStr(static_cast<ushort>(titleX), decoratedTitle.c_str(), cTitle, len);
+			if (title != nullptr && *title != '\0') {
+				if (available > 0) {
+					std::string decoratedTitle = "[";
+					decoratedTitle += title;
+					decoratedTitle += "]";
+					int len = std::min<int>(strwidth(decoratedTitle.c_str()), available);
+					int titleX = titleReserveRight - len + 1;
+					b.moveStr(static_cast<ushort>(titleX), decoratedTitle.c_str(), cTitle, len);
+				}
 			}
-		}
 	}
 
 	writeLine(0, 0, size.x, 1, b);
@@ -369,7 +383,12 @@ void TMRFrame::handleEvent(TEvent &event) {
 		TPoint mouse = makeLocal(event.mouse.where);
 		TWindow *window = static_cast<TWindow *>(owner);
 		if (mouse.y == 0 && window != nullptr) {
-			if ((window->flags & wfClose) != 0 && (state & sfActive) != 0 && mouse.x >= 2 && mouse.x <= 4) {
+			bool controlsVisible = (state & (sfSelected | sfActive)) != 0;
+			if (!controlsVisible)
+				controlsVisible = (window->state & (sfSelected | sfActive)) != 0;
+			if (!controlsVisible)
+				controlsVisible = (window->state & sfActive) != 0 && (window->state & sfFocused) != 0;
+			if ((window->flags & wfClose) != 0 && controlsVisible && mouse.x >= 2 && mouse.x <= 4) {
 				while (mouseEvent(event, evMouse))
 					;
 				mouse = makeLocal(event.mouse.where);
@@ -380,7 +399,7 @@ void TMRFrame::handleEvent(TEvent &event) {
 					putEvent(event);
 					clearEvent(event);
 				}
-			} else if ((window->flags & wfZoom) != 0 && (state & sfActive) != 0 &&
+			} else if ((window->flags & wfZoom) != 0 && controlsVisible &&
 			           ((mouse.x >= size.x - 5 && mouse.x <= size.x - 3) ||
 			            (event.mouse.eventFlags & meDoubleClick))) {
 				event.what = evCommand;

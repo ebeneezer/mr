@@ -36,6 +36,7 @@
 
 #include "../ui/TMREditWindow.hpp"
 #include "../dialogs/MRWindowListDialog.hpp"
+#include "../services/MRDialogPaths.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
 TMREditWindow *createEditorWindow(const char *title);
@@ -255,6 +256,7 @@ static thread_local const std::stop_token *g_backgroundMacroStopToken = NULL;
 static thread_local std::shared_ptr<std::atomic_bool> g_backgroundMacroCancelFlag;
 static thread_local ExecutionState *g_executionState = NULL;
 static thread_local int g_keyReplayDepth = 0;
+static thread_local bool g_startupSettingsMode = false;
 
 static std::string valueAsString(const Value &value);
 static int valueAsInt(const Value &value);
@@ -591,6 +593,8 @@ static unsigned classifyStoreVarName(const std::string &name) {
 }
 
 static unsigned classifyProcName(const std::string &name) {
+	if (name == "MRSETUP")
+		return mrefUiAffinity;
 	if (name == "SET_GLOBAL_STR" || name == "SET_GLOBAL_INT" || name == "UNLOAD_MACRO")
 		return name == "UNLOAD_MACRO" ? mrefUiAffinity : (mrefUiAffinity | mrefStagedWrite);
 	if (name == "LOAD_MACRO_FILE" || name == "CHANGE_DIR" || name == "DEL_FILE")
@@ -5351,6 +5355,14 @@ void mrvmSetProcessContext(int argc, char **argv) {
 	g_runtimeEnv.shellVersion = detectShellVersion(g_runtimeEnv.shellPath);
 }
 
+void mrvmSetStartupSettingsMode(bool enabled) noexcept {
+	g_startupSettingsMode = enabled;
+}
+
+bool mrvmIsStartupSettingsMode() noexcept {
+	return g_startupSettingsMode;
+}
+
 VirtualMachine::Value::Value() : type(TYPE_INT), i(0), r(0.0), s(), c(0) {
 }
 
@@ -5755,12 +5767,28 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					it->second = makeString(tabsToSpacesString(valueAsString(it->second)));
 				else
 					throw std::runtime_error("Unknown variable procedure.");
-			} else if (opcode == OP_PROC) {
-				std::string name;
-				readCString(name);
-				unsigned char argc = bytecode[ip++];
-				std::vector<Value> args = popArgs(argc);
-				if (name == "SET_GLOBAL_STR") {
+				} else if (opcode == OP_PROC) {
+					std::string name;
+					readCString(name);
+					unsigned char argc = bytecode[ip++];
+					std::vector<Value> args = popArgs(argc);
+					if (name == "MRSETUP") {
+						std::string setupKey;
+						std::string errorText;
+						if (!mrvmIsStartupSettingsMode())
+							throw std::runtime_error(
+							    "MRSETUP is only allowed in settings.mrmac during startup.");
+						if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1]))
+							throw std::runtime_error("MRSETUP expects (string, string).");
+						setupKey = upperKey(trimAscii(valueAsString(args[0])));
+					if (setupKey != "MACROPATH")
+						throw std::runtime_error("MRSETUP supports only key 'MACROPATH'.");
+					if (!setConfiguredMacroDirectoryPath(valueAsString(args[1]), &errorText))
+						throw std::runtime_error(
+						    "MRSETUP(MACROPATH) failed: " +
+						    (errorText.empty() ? std::string("invalid path.") : errorText));
+					runtimeErrorLevel() = 0;
+				} else if (name == "SET_GLOBAL_STR") {
 					if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1]))
 						throw std::runtime_error("SET_GLOBAL_STR expects (string, string).");
 					setGlobalValue(valueAsString(args[0]), TYPE_STR,

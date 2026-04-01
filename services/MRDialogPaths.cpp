@@ -1,6 +1,9 @@
 #include "MRDialogPaths.hpp"
 
+#include <cctype>
+#include <cstdlib>
 #include <cstring>
+#include <sys/stat.h>
 #include <string>
 #include <unistd.h>
 
@@ -11,12 +14,50 @@ std::string &rememberedLoadDirectory() {
 	return value;
 }
 
+std::string &configuredMacroDirectory() {
+	static std::string value;
+	return value;
+}
+
+std::string trimAscii(const std::string &value) {
+	std::size_t start = 0;
+	std::size_t end = value.size();
+
+	while (start < end && std::isspace(static_cast<unsigned char>(value[start])) != 0)
+		++start;
+	while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1])) != 0)
+		--end;
+	return value.substr(start, end - start);
+}
+
 std::string normalizeDialogPath(const char *path) {
 	std::string result = path != nullptr ? path : "";
 	for (std::size_t i = 0; i < result.size(); ++i)
 		if (result[i] == '\\')
 			result[i] = '/';
 	return result;
+}
+
+std::string expandUserPath(const std::string &input) {
+	std::string path = trimAscii(input);
+
+	if (path.size() >= 2 && path[0] == '~' && path[1] == '/') {
+		const char *home = std::getenv("HOME");
+		if (home != nullptr && *home != '\0')
+			return std::string(home) + path.substr(1);
+	}
+	return path;
+}
+
+bool isReadableDirectory(const std::string &path) {
+	struct stat st;
+	if (path.empty())
+		return false;
+	if (::stat(path.c_str(), &st) != 0)
+		return false;
+	if (!S_ISDIR(st.st_mode))
+		return false;
+	return ::access(path.c_str(), R_OK | X_OK) == 0;
 }
 
 std::string directoryPartOf(const std::string &path) {
@@ -63,10 +104,48 @@ void rememberLoadDialogPath(const char *path) {
 		rememberedLoadDirectory() = dir;
 }
 
+bool setConfiguredMacroDirectoryPath(const std::string &path, std::string *errorMessage) {
+	std::string normalized = normalizeDialogPath(expandUserPath(path).c_str());
+
+	if (normalized.empty()) {
+		if (errorMessage != nullptr)
+			*errorMessage = "Empty directory path.";
+		return false;
+	}
+	if (!isReadableDirectory(normalized)) {
+		if (errorMessage != nullptr)
+			*errorMessage = "Directory is missing or not readable: " + normalized;
+		return false;
+	}
+	configuredMacroDirectory() = normalized;
+	rememberedLoadDirectory() = normalized;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+std::string configuredMacroDirectoryPath() {
+	const std::string &configured = configuredMacroDirectory();
+	if (!isReadableDirectory(configured))
+		return std::string();
+	return configured;
+}
+
+std::string defaultSettingsMacroFilePath() {
+	const char *home = std::getenv("HOME");
+	if (home != nullptr && *home != '\0')
+		return std::string(home) + "/.config/mr/settings.mrmac";
+	return ".config/mr/settings.mrmac";
+}
+
 std::string defaultMacroDirectoryPath() {
 	char pathProbe[1024];
 	std::string probe;
 	std::string dir;
+	std::string configured = configuredMacroDirectoryPath();
+
+	if (!configured.empty())
+		return configured;
 
 	std::memset(pathProbe, 0, sizeof(pathProbe));
 	initRememberedLoadDialogPath(pathProbe, sizeof(pathProbe), "*.mrmac");

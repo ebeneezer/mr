@@ -155,8 +155,8 @@ const char *dummyCommandTitle(ushort command) {
 		case cmMrTextLowerCasePlaceholder:
 			return "Text / Lower case";
 
-		case cmMrOtherKeystrokeMacros:
-			return "Other / Keystroke macros";
+		case cmMrOtherMacroManager:
+			return "Other / Macro manager";
 		case cmMrOtherExecuteProgram:
 			return "Other / Execute program";
 		case cmMrOtherStopProgram:
@@ -526,12 +526,8 @@ bool handleMRCommand(ushort command) {
 		case cmMrOtherClearOutput:
 			return handleClearCurrentOutput();
 
-		case cmMrOtherKeystrokeMacros:
-			return runKeystrokeMacroManagerDialog();
-
-		case cmMrDevRunMacro:
-			runMacroFileDialog();
-			return true;
+		case cmMrOtherMacroManager:
+			return runMacroManagerDialog();
 
 		case cmMrDevCancelMacroTasks:
 			return handleCancelBackgroundMacros();

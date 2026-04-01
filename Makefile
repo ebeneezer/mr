@@ -79,6 +79,8 @@ KEYIN_PROBE_TARGET = misc/mr_keyin_probe
 KEYIN_PROBE_SOURCE = misc/mr_keyin_probe.cpp
 KEYIN_PROBE_OBJECT = misc/mr_keyin_probe.o
 MRMAC_V1_SUITE_SCRIPT = misc/run_mrmac_v1_suite.sh
+ABOUT_QUOTES_GENERATOR = misc/generate_about_quotes.sh
+ABOUT_QUOTES_GENERATED = app/MRAboutQuotes.generated.hpp
 
 # C++ source files (Editor and VM)
 CXX_SOURCES = \
@@ -204,6 +206,9 @@ mrmac/parser.tab.c mrmac/parser.tab.h: mrmac/parser.y
 mrmac/lex.yy.c: mrmac/lexer.l mrmac/parser.tab.h
 	$(FLEX) -o mrmac/lex.yy.c mrmac/lexer.l
 
+$(ABOUT_QUOTES_GENERATED): README.md $(ABOUT_QUOTES_GENERATOR)
+	bash $(ABOUT_QUOTES_GENERATOR) README.md $@
+
 # 2. Dependencies for C compilation
 mrmac/lex.yy.o: CFLAGS += -Wno-unused-function
 mrmac/lex.yy.o: mrmac/lex.yy.c mrmac/parser.tab.h
@@ -217,7 +222,7 @@ app/MRCommandRouter.o: app/MRCommandRouter.cpp app/MRCommandRouter.hpp app/MRCom
 app/MRMenuFactory.o: app/MRMenuFactory.cpp app/MRMenuFactory.hpp app/MRCommands.hpp ui/TMRMenuBar.hpp
 app/MRVersion.o: app/MRVersion.cpp app/MRVersion.hpp
 app/TMREditorApp.o: app/TMREditorApp.cpp app/TMREditorApp.hpp app/MRAppState.hpp app/MRCommandRouter.hpp app/MRCommands.hpp app/MRMenuFactory.hpp services/MRCoprocessorDispatch.hpp services/MRPerformance.hpp services/MRWindowCommands.hpp ui/TMRDeskTop.hpp ui/TMRStatusLine.hpp ui/MRPalette.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
-dialogs/MRAboutDialog.o: dialogs/MRAboutDialog.cpp dialogs/MRAboutDialog.hpp app/MRVersion.hpp
+dialogs/MRAboutDialog.o: dialogs/MRAboutDialog.cpp dialogs/MRAboutDialog.hpp app/MRVersion.hpp $(ABOUT_QUOTES_GENERATED)
 dialogs/MRColorSetupDialog.o: dialogs/MRColorSetupDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp app/MRCommands.hpp
 dialogs/MRDisplaySetupDialog.o: dialogs/MRDisplaySetupDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp
 dialogs/MRFileInformationDialog.o: dialogs/MRFileInformationDialog.cpp dialogs/MRFileInformationDialog.hpp app/MRCommands.hpp services/MRPerformance.hpp ui/TMREditWindow.hpp ui/TMRFileEditor.hpp ui/TMRTextBuffer.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
@@ -273,5 +278,6 @@ clean:
 	rm -f $(CXX_OBJECTS) $(C_OBJECTS) $(TARGET) $(STAGE_PROFILE_PROBE_OBJECT) \
 		$(STAGE_PROFILE_PROBE_TARGET) $(TOFROM_PROBE_OBJECT) $(TOFROM_PROBE_TARGET) \
 		$(TOFROM_DISPATCH_PROBE_OBJECT) $(TOFROM_DISPATCH_PROBE_TARGET) \
+		$(ABOUT_QUOTES_GENERATED) \
 		mrmac/lex.yy.c mrmac/parser.tab.c mrmac/parser.tab.h
 	rm -rf $(TVISION_VENDOR_ROOT)

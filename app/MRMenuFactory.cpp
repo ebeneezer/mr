@@ -141,7 +141,7 @@ TSubMenu *createOtherMenu() {
 	    *new TMenuItem("~I~nstallation and setup", cmMrOtherInstallationAndSetup, kbNoKey,
 	                   hcNoContext) +
 	    newLine() +
-	    *new TMenuItem("~K~eystroke macros...", cmMrOtherKeystrokeMacros, kbNoKey, hcNoContext) +
+	    *new TMenuItem("~M~acro manager...", cmMrOtherMacroManager, kbNoKey, hcNoContext) +
 	    newLine() +
 	    *new TMenuItem("~E~xecute program...", cmMrOtherExecuteProgram, kbF9, hcNoContext, "F9") +
 	    *new TMenuItem("~S~top current program", cmMrOtherStopProgram, kbNoKey, hcNoContext) +
@@ -158,7 +158,7 @@ TSubMenu *createOtherMenu() {
 TSubMenu *createMacroMenu() {
 	return &(
 	    *new TSubMenu("~M~acro", kbAltM) +
-	    *new TMenuItem("Macro ~M~anager...", cmMrOtherKeystrokeMacros, kbNoKey, hcNoContext) +
+	    *new TMenuItem("Macro ~M~anager...", cmMrOtherMacroManager, kbNoKey, hcNoContext) +
 	    newLine() +
 	    *new TMenuItem("~R~ecording start/stop", cmMrMacroToggleRecording, kbAltF10, hcNoContext,
 	                   "AltF10"));
@@ -177,7 +177,6 @@ TSubMenu *createHelpMenu() {
 
 TSubMenu *createDevMenu() {
 	return &(*new TSubMenu("De~V~", kbAltV) +
-	         *new TMenuItem("~R~un macro file...", cmMrDevRunMacro, kbCtrlT, hcNoContext, "CtrlT") +
 	         *new TMenuItem("~C~ancel background macros", cmMrDevCancelMacroTasks, kbNoKey, hcNoContext));
 }
 } // namespace

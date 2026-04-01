@@ -82,6 +82,8 @@ class VirtualMachine {
 	};
 
 void mrvmSetProcessContext(int argc, char **argv);
+void mrvmSetStartupSettingsMode(bool enabled) noexcept;
+bool mrvmIsStartupSettingsMode() noexcept;
 MRMacroExecutionProfile mrvmAnalyzeBytecode(const unsigned char *bytecode, std::size_t length);
 std::string mrvmDescribeExecutionProfile(const MRMacroExecutionProfile &profile);
 bool mrvmCanRunInBackground(const MRMacroExecutionProfile &profile) noexcept;

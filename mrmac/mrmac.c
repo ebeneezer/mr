@@ -1928,6 +1928,14 @@ static int parse_proc_statement_after_name(Parser *ps, const char *name, int lin
 		emit_proc_call("RUN_MACRO", argc);
 		return 0;
 	}
+	if (strcasecmp(name, "MRSETUP") == 0) {
+		if (argc != 2 || !is_stringlike_type(args[0].type) || !is_stringlike_type(args[1].type)) {
+			set_compile_error(line, "Type mismatch or syntax error.");
+			return -1;
+		}
+		emit_proc_call("MRSETUP", argc);
+		return 0;
+	}
 	if (strcasecmp(name, "LOAD_MACRO_FILE") == 0) {
 		if (argc != 1 || !is_stringlike_type(args[0].type)) {
 			set_compile_error(line, "Type mismatch or syntax error.");
