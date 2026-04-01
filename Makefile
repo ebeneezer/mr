@@ -69,15 +69,9 @@ TARGET = mr
 STAGE_PROFILE_PROBE_TARGET = misc/mr_stage_profile_probe
 STAGE_PROFILE_PROBE_SOURCE = misc/mr_stage_profile_probe.cpp
 STAGE_PROFILE_PROBE_OBJECT = misc/mr_stage_profile_probe.o
-TOFROM_PROBE_TARGET = misc/mr_tofrom_probe
-TOFROM_PROBE_SOURCE = misc/mr_tofrom_probe.cpp
-TOFROM_PROBE_OBJECT = misc/mr_tofrom_probe.o
-TOFROM_DISPATCH_PROBE_TARGET = misc/mr_tofrom_dispatch_probe
-TOFROM_DISPATCH_PROBE_SOURCE = misc/mr_tofrom_dispatch_probe.cpp
-TOFROM_DISPATCH_PROBE_OBJECT = misc/mr_tofrom_dispatch_probe.o
-KEYIN_PROBE_TARGET = misc/mr_keyin_probe
-KEYIN_PROBE_SOURCE = misc/mr_keyin_probe.cpp
-KEYIN_PROBE_OBJECT = misc/mr_keyin_probe.o
+REGRESSION_PROBE_TARGET = regression/mr_regression_probe
+REGRESSION_PROBE_SOURCE = regression/mr_regression_probe.cpp
+REGRESSION_PROBE_OBJECT = regression/mr_regression_probe.o
 MRMAC_V1_SUITE_SCRIPT = misc/run_mrmac_v1_suite.sh
 ABOUT_QUOTES_GENERATOR = misc/generate_about_quotes.sh
 ABOUT_QUOTES_GENERATED = app/MRAboutQuotes.generated.hpp
@@ -135,14 +129,14 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 .PHONY: all clean clean-tvision clean-tvision-cache rebuild-tvision \
 	tvision-upstream-init tvision-upstream-fetch tvision-vendor-clean tvision-vendor-export \
 	tvision-vendor-normalize tvision-vendor-patch tvision-vendor-prepare \
-	stage-profile-probe tofrom-probe tofrom-dispatch-probe keyin-probe mrmac-v1-check
+	stage-profile-probe regression-probe regression-check mrmac-v1-check
 
 all: $(TARGET)
 stage-profile-probe: $(STAGE_PROFILE_PROBE_TARGET)
-tofrom-probe: $(TOFROM_PROBE_TARGET)
-tofrom-dispatch-probe: $(TOFROM_DISPATCH_PROBE_TARGET)
-keyin-probe: $(KEYIN_PROBE_TARGET)
-mrmac-v1-check: $(TARGET) $(STAGE_PROFILE_PROBE_TARGET)
+regression-probe: $(REGRESSION_PROBE_TARGET)
+regression-check: $(REGRESSION_PROBE_TARGET)
+	./$(REGRESSION_PROBE_TARGET)
+mrmac-v1-check: $(TARGET) $(STAGE_PROFILE_PROBE_TARGET) regression-probe
 	$(MRMAC_V1_SUITE_SCRIPT)
 
 # TVision: default local build or optional auto-synced vendor build.
@@ -257,13 +251,7 @@ $(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS)
 $(STAGE_PROFILE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(STAGE_PROFILE_PROBE_OBJECT)
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
-$(TOFROM_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(TOFROM_PROBE_OBJECT)
-	$(CXX) -o $@ $^ $(LDFLAGS)
-
-$(TOFROM_DISPATCH_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(TOFROM_DISPATCH_PROBE_OBJECT)
-	$(CXX) -o $@ $^ $(LDFLAGS)
-
-$(KEYIN_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(KEYIN_PROBE_OBJECT)
+$(REGRESSION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(REGRESSION_PROBE_OBJECT)
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
 # C++ compilation
@@ -276,8 +264,11 @@ $(KEYIN_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(KEYIN_P
 
 clean:
 	rm -f $(CXX_OBJECTS) $(C_OBJECTS) $(TARGET) $(STAGE_PROFILE_PROBE_OBJECT) \
-		$(STAGE_PROFILE_PROBE_TARGET) $(TOFROM_PROBE_OBJECT) $(TOFROM_PROBE_TARGET) \
-		$(TOFROM_DISPATCH_PROBE_OBJECT) $(TOFROM_DISPATCH_PROBE_TARGET) \
+		$(STAGE_PROFILE_PROBE_TARGET) \
+		$(REGRESSION_PROBE_OBJECT) $(REGRESSION_PROBE_TARGET) \
+		misc/mr_keyin_probe.o misc/mr_tofrom_probe.o misc/mr_tofrom_dispatch_probe.o \
+		misc/mr_staged_nav_probe misc/mr_staged_mark_page_probe \
+		misc/mr_regression_probe misc/mr_regression_probe.o \
 		$(ABOUT_QUOTES_GENERATED) \
 		mrmac/lex.yy.c mrmac/parser.tab.c mrmac/parser.tab.h
 	rm -rf $(TVISION_VENDOR_ROOT)

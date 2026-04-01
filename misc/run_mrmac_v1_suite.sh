@@ -22,7 +22,7 @@ declare -a staged_macros=(
 )
 
 echo "[MRMAC v1] Build binaries"
-make mr stage-profile-probe
+make mr stage-profile-probe regression-probe
 
 echo "[MRMAC v1] Staged eligibility"
 staged_output="$(./misc/mr_stage_profile_probe "${staged_macros[@]}")"
@@ -49,7 +49,7 @@ if printf '%s\n' "${compile_output}" | rg -q "compile_error=|read_error"; then
 fi
 
 echo "[MRMAC v1] Background staged probes"
-./misc/mr_staged_nav_probe
-./misc/mr_staged_mark_page_probe
+./regression/mr_regression_probe --probe staged-nav
+./regression/mr_regression_probe --probe staged-mark-page
 
 echo "[MRMAC v1] PASS"

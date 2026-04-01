@@ -6188,13 +6188,15 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				}
 			} else if (opcode == OP_TVCALL) {
 				std::string funcName;
+				std::string funcNameUpper;
 				readCString(funcName);
 				unsigned char argc = bytecode[ip++];
 				std::vector<Value> args = popArgs(argc);
+				funcNameUpper = upperKey(funcName);
 
 				appendLogLine("TVCALL: " + funcName + " (" + std::to_string(argc) + " params)");
 
-				if (funcName == "MessageBox") {
+				if (funcNameUpper == "MESSAGEBOX") {
 					if (args.empty())
 						messageBox(mfInformation | mfOKButton, "%s", "");
 					else {

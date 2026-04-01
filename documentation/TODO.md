@@ -1,0 +1,7 @@
+- Setup
+- Unterschiede zu me Vollversion?
+- Treesitter
+- Laden multipler Dateien aus einer Liste die die Ausgabe eines Befehls oder Pipe ist. "Hol alle mrmac Dateien"
+- Save All mit Dialog/List Window
+- Line numbers
+- Mini map?
