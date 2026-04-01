@@ -49,7 +49,7 @@ if printf '%s\n' "${compile_output}" | rg -q "compile_error=|read_error"; then
 fi
 
 echo "[MRMAC v1] Background staged probes"
-./regression/mr_regression_probe --probe staged-nav
-./regression/mr_regression_probe --probe staged-mark-page
+./regression/mr-regression-checks --probe staged-nav
+./regression/mr-regression-checks --probe staged-mark-page
 
 echo "[MRMAC v1] PASS"

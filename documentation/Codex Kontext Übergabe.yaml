@@ -3,7 +3,11 @@ session_handover:
     created_on: "2026-04-01"
     purpose: "Kontextwechsel mit voller Projekt- und Stiluebergabe"
     related_docs:
+      - "/home/idoc/mr/documentation/CHANGELOG_CONTEXT.md"
       - "/home/idoc/mr/documentation/KONTEXTWECHSEL_2026-04-01.md"
+    warmup_priority:
+      - "Zuerst: /home/idoc/mr/documentation/CHANGELOG_CONTEXT.md lesen (laufendes Protokoll)."
+      - "Danach: /home/idoc/mr/documentation/Codex Kontext Übergabe.yaml und KONTEXTWECHSEL_2026-04-01.md."
 
   project:
     name: "mr"
@@ -28,6 +32,7 @@ session_handover:
     markdown_docs_location: "/home/idoc/mr/documentation"
     misc_policy: "misc ist nur temporaere Muellhalde/Probe-Ablage und keine dauerhafte Doku-Ablage."
     workspace_hygiene: "Workspace stets aufgeraeumt halten; keine Datei-Muellhalden, Artefakte und Probes nur bei Bedarf erzeugen und danach bereinigen."
+    running_protocol_file: "/home/idoc/mr/documentation/CHANGELOG_CONTEXT.md"
 
   decision_lock:
     tvision_strategy: "vendoring_sync"
@@ -42,8 +47,8 @@ session_handover:
       - "make mr"
       - "make regression-check"
       - "make regression-probe"
-      - "./regression/mr_regression_probe --probe staged-nav"
-      - "./regression/mr_regression_probe --probe staged-mark-page"
+      - "./regression/mr-regression-checks --probe staged-nav"
+      - "./regression/mr-regression-checks --probe staged-mark-page"
       - "make mrmac-v1-check"
 
   tvision_integration:
@@ -75,6 +80,7 @@ session_handover:
       - "RUN_MACRO + staged/background Profile aktiv"
       - "Bytecode nur in RAM, keine Persistenzdatei"
       - "KEY_IN Reentranzschutz aktiv (Segfault-Fix)"
+      - "TVCALL MESSAGEBOX ist case-insensitiv akzeptiert (MessageBox und MESSAGEBOX laufen identisch)."
     keystroke_recording:
       - "Alt-F10 Start/Stop"
       - "Statuszeilen-Hinweis vorhanden"
@@ -99,7 +105,7 @@ session_handover:
       background: "🧠"
       readonly: "🔒"
       style: "Markerblock in eckigen Klammern"
-    frame_focus_rule: "Auswahlzustand via sfSelected fuer modale Korrektheit"
+    frame_focus_rule: "Doppelrahmen/Controls strikt via sfSelected; kein sfActive/sfFocused-Fallback fuer Fokusdarstellung."
     dialog_contrast_rule: "Schwarz auf Grau fuer Lesbarkeit"
     visual_limit_notes:
       - "Terminal- und Font-Rendering beeinflussen Glyph-Look sichtbar"
@@ -149,3 +155,42 @@ session_handover:
     - "MRSETUP('MACROPATH', ...) mit Whitelist einbauen"
     - "Macro-Directory-Aufloesung auf Settingwert umstellen"
     - "Setup-Dialog als Editor/Generator fuer settings.mrmac anbinden"
+
+  language_gap_snapshot:
+    reference: "/home/idoc/mr/documentation/ME Macro Language Reference Guide.pdf"
+    status: "MRMAC v1 ist absichtlich nicht vollstaendig gegenueber dem Referenzhandbuch."
+    missing_or_partial_groups:
+      - "SCREEN OPERATIONS: weitgehend fehlend (z. B. PUT_BOX/WRITE/CLR_LINE/GOTOXY/SCROLL/CLEAR_SCREEN)."
+      - "USER INPUT AND INTERFACE: weitgehend fehlend (READ_KEY/CHECK_KEY/KEY1/KEY2/PUSH_KEY/PASS_KEY/BAR_MENU/V_MENU/STRING_IN)."
+      - "FUNCTION KEY LABEL OPERATIONS: fehlend (PUSH_LABELS/POP_LABELS/FLABEL)."
+      - "DOS SHELL OPERATIONS: weitgehend fehlend (ENTER_DOS_SHELL/EXIT_DOS_SHELL/DOS_UP.../DIR_*/MARK_FILE)."
+      - "KEY ASSIGNMENTS: klassische API (MACRO_TO_KEY) fehlt; Projekt nutzt TO/FROM Header-Bindings."
+      - "OPERATING SYSTEM INTERFACE: nur Teilmenge vorhanden; u. a. SHELL_TO_DOS/SAVE_DOS_SCREEN/REST_DOS_SCREEN/DOS_VERSION fehlen."
+      - "MISCELLANEOUS + SYSTEM VARIABLES: nur Teilmenge vorhanden."
+
+  protocol_log:
+    - date: "2026-04-01"
+      topic: "Workspace- und Doku-Konvention"
+      notes:
+        - "Markdown-Dokumente werden unter documentation/ gepflegt."
+        - "misc/ ist nur temporaere Muellhalde/Probe-Ablage."
+        - "Workspace-Hygiene als verbindliche Regel aufgenommen."
+    - date: "2026-04-01"
+      topic: "Regression- und Probe-Zentralisierung"
+      notes:
+        - "Legacy-Probes in misc entfernt und in regression/mr-regression-checks.cpp zentralisiert."
+        - "mrmac-v1-suite nutzt regression/mr-regression-checks --probe staged-nav|staged-mark-page."
+    - date: "2026-04-01"
+      topic: "TVCALL und Sprachstand"
+      notes:
+        - "VM-Dispatch fuer TVCALL MESSAGEBOX case-insensitiv umgesetzt."
+        - "MRMAC gegen Referenzhandbuch abgeglichen; fehlende/partielle Kommandogruppen dokumentiert."
+    - date: "2026-04-01"
+      topic: "Setup Paths + Runtime-Pfade"
+      notes:
+        - "Installation / Paths Subdialog implementiert: SETTINGSPATH, MACROPATH, HELPPATH, TEMPDIR, SHELLPATH."
+        - "Done schreibt settings.mrmac und reloadet Settings silent zur Laufzeit (kein Neustart)."
+        - "Cancel fragt bei geaenderten Feldern nach Verwerfen; Help zeigt Dummy-Screen."
+        - "MRSETUP-Whitelist erweitert um SETTINGSPATH/HELPPATH/TEMPDIR/SHELLPATH."
+        - "Runtime nutzt nun HELPPATH fuer Help-Datei, SHELLPATH fuer externe Kommandos, TEMPDIR fuer temporaere Record-Makros."
+        - "Fokusdarstellung: Doppelrahmen/Controls strikt an sfSelected gekoppelt."

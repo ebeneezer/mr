@@ -178,7 +178,7 @@ TDialog *createInstallationAndSetupDialog() {
 	                           cmMrSetupMouseKeyRepeat, bfNormal));
 	dialog->insert(new TButton(TRect(kRightX1, 11, kRightX2, 13), "Filename extensions...",
 	                           cmMrSetupFilenameExtensions, bfNormal));
-	dialog->insert(new TButton(TRect(kRightX1, 13, kRightX2, 15), "Swapping / EMS / XMS...",
+	dialog->insert(new TButton(TRect(kRightX1, 13, kRightX2, 15), "Paths",
 	                           cmMrSetupSwappingEmsXms, bfNormal));
 	dialog->insert(new TButton(TRect(kRightX1, 15, kRightX2, 17), "Backups / Temp / Autosave...",
 	                           cmMrSetupBackupsTempAutosave, bfNormal));

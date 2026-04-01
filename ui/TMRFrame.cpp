@@ -139,11 +139,9 @@ TMRFrame::MarkerState TMRFrame::markerState() const {
 
 int TMRFrame::markerStartColumn() const noexcept {
 	TWindow *window = static_cast<TWindow *>(owner);
-	bool controlsVisible = (state & (sfSelected | sfActive)) != 0;
+	bool controlsVisible = (state & sfSelected) != 0;
 	if (!controlsVisible && window != nullptr)
-		controlsVisible = (window->state & (sfSelected | sfActive)) != 0;
-	if (!controlsVisible && window != nullptr)
-		controlsVisible = (window->state & sfActive) != 0 && (window->state & sfFocused) != 0;
+		controlsVisible = (window->state & sfSelected) != 0;
 	if (window != nullptr && (window->flags & wfClose) != 0 && controlsVisible)
 		return 7;
 	return 2;
@@ -233,8 +231,6 @@ void TMRFrame::draw() {
 	bool isSelected = (this->state & sfSelected) != 0;
 	if (!isSelected && window != nullptr)
 		isSelected = (window->state & sfSelected) != 0;
-	if (!isSelected && window != nullptr)
-		isSelected = (window->state & sfActive) != 0 && (window->state & sfFocused) != 0;
 
 	if ((this->state & sfDragging) != 0) {
 		cFrame = 0x0505;
@@ -255,11 +251,9 @@ void TMRFrame::draw() {
 
 	drawFrameLine(b, 0, f, cFrame);
 
-	bool controlsVisible = (state & (sfSelected | sfActive)) != 0;
+	bool controlsVisible = (state & sfSelected) != 0;
 	if (!controlsVisible && window != nullptr)
-		controlsVisible = (window->state & (sfSelected | sfActive)) != 0;
-	if (!controlsVisible && window != nullptr)
-		controlsVisible = (window->state & sfActive) != 0 && (window->state & sfFocused) != 0;
+		controlsVisible = (window->state & sfSelected) != 0;
 	short titleReserveRight = width - 2;
 	if (window != nullptr && window->number != wnNoNumber && window->number < 10) {
 		short numberPos = (window->flags & wfZoom) != 0 ? width - 7 : width - 3;
@@ -383,11 +377,9 @@ void TMRFrame::handleEvent(TEvent &event) {
 		TPoint mouse = makeLocal(event.mouse.where);
 		TWindow *window = static_cast<TWindow *>(owner);
 		if (mouse.y == 0 && window != nullptr) {
-			bool controlsVisible = (state & (sfSelected | sfActive)) != 0;
+			bool controlsVisible = (state & sfSelected) != 0;
 			if (!controlsVisible)
-				controlsVisible = (window->state & (sfSelected | sfActive)) != 0;
-			if (!controlsVisible)
-				controlsVisible = (window->state & sfActive) != 0 && (window->state & sfFocused) != 0;
+				controlsVisible = (window->state & sfSelected) != 0;
 			if ((window->flags & wfClose) != 0 && controlsVisible && mouse.x >= 2 && mouse.x <= 4) {
 				while (mouseEvent(event, evMouse))
 					;

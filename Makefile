@@ -69,9 +69,9 @@ TARGET = mr
 STAGE_PROFILE_PROBE_TARGET = misc/mr_stage_profile_probe
 STAGE_PROFILE_PROBE_SOURCE = misc/mr_stage_profile_probe.cpp
 STAGE_PROFILE_PROBE_OBJECT = misc/mr_stage_profile_probe.o
-REGRESSION_PROBE_TARGET = regression/mr_regression_probe
-REGRESSION_PROBE_SOURCE = regression/mr_regression_probe.cpp
-REGRESSION_PROBE_OBJECT = regression/mr_regression_probe.o
+REGRESSION_PROBE_TARGET = regression/mr-regression-checks
+REGRESSION_PROBE_SOURCE = regression/mr-regression-checks.cpp
+REGRESSION_PROBE_OBJECT = regression/mr-regression-checks.o
 MRMAC_V1_SUITE_SCRIPT = misc/run_mrmac_v1_suite.sh
 ABOUT_QUOTES_GENERATOR = misc/generate_about_quotes.sh
 ABOUT_QUOTES_GENERATED = app/MRAboutQuotes.generated.hpp
@@ -227,19 +227,19 @@ dialogs/MRMenuDialogColorsDialog.o: dialogs/MRMenuDialogColorsDialog.cpp dialogs
 dialogs/MROtherColorsDialog.o: dialogs/MROtherColorsDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp
 dialogs/MREditSettingsDialog.o: dialogs/MREditSettingsDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp
 dialogs/MRSetupDialogCommon.o: dialogs/MRSetupDialogCommon.cpp dialogs/MRSetupDialogCommon.hpp
-dialogs/MRSetupDialogs.o: dialogs/MRSetupDialogs.cpp dialogs/MRSetupDialogs.hpp app/MRCommands.hpp ui/MRWindowSupport.hpp
+dialogs/MRSetupDialogs.o: dialogs/MRSetupDialogs.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp app/MRCommands.hpp app/TMREditorApp.hpp services/MRDialogPaths.hpp ui/MRWindowSupport.hpp
 dialogs/MRWindowColorsDialog.o: dialogs/MRWindowColorsDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp
 dialogs/MRWindowListDialog.o: dialogs/MRWindowListDialog.cpp dialogs/MRWindowListDialog.hpp services/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/MRWindowSupport.hpp
 mrmac/MRMacroRunner.o: mrmac/MRMacroRunner.cpp mrmac/MRMacroRunner.hpp mrmac/mrmac.h mrmac/mrvm.hpp services/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 services/MRWindowCommands.o: services/MRWindowCommands.cpp services/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/MRWindowSupport.hpp
 services/MRDialogPaths.o: services/MRDialogPaths.cpp services/MRDialogPaths.hpp
 services/MRFileCommands.o: services/MRFileCommands.cpp services/MRFileCommands.hpp services/MRDialogPaths.hpp services/MRPerformance.hpp services/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/MRWindowSupport.hpp
-services/MRExternalCommand.o: services/MRExternalCommand.cpp services/MRExternalCommand.hpp coprocessor/MRCoprocessor.hpp
+services/MRExternalCommand.o: services/MRExternalCommand.cpp services/MRExternalCommand.hpp services/MRDialogPaths.hpp coprocessor/MRCoprocessor.hpp
 services/MRPerformance.o: services/MRPerformance.cpp services/MRPerformance.hpp coprocessor/MRCoprocessor.hpp
 services/MRCoprocessorDispatch.o: services/MRCoprocessorDispatch.cpp services/MRCoprocessorDispatch.hpp services/MRPerformance.hpp services/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/TMRIndicator.hpp ui/TMRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 mrmac/mrvm.o: mrmac/mrvm.cpp mrmac/mrvm.hpp mrmac/mrmac.h dialogs/MRWindowListDialog.hpp ui/MRWindowSupport.hpp ui/TMREditWindow.hpp ui/TMRTextBuffer.hpp ui/TMRFileEditor.hpp ui/TMRTextBufferModel.hpp ui/TMRSyntax.hpp piecetable/MRTextDocument.hpp
 ui/MRPalette.o: ui/MRPalette.cpp ui/MRPalette.hpp
-ui/MRWindowSupport.o: ui/MRWindowSupport.cpp ui/MRWindowSupport.hpp services/MRWindowCommands.hpp ui/TMREditWindow.hpp
+ui/MRWindowSupport.o: ui/MRWindowSupport.cpp ui/MRWindowSupport.hpp services/MRDialogPaths.hpp services/MRWindowCommands.hpp ui/TMREditWindow.hpp
 ui/TMRSyntax.o: ui/TMRSyntax.cpp ui/TMRSyntax.hpp
 coprocessor/MRCoprocessor.o: coprocessor/MRCoprocessor.cpp coprocessor/MRCoprocessor.hpp piecetable/MRTextDocument.hpp
 piecetable/MRTextDocument.o: piecetable/MRTextDocument.cpp piecetable/MRTextDocument.hpp
@@ -268,7 +268,6 @@ clean:
 		$(REGRESSION_PROBE_OBJECT) $(REGRESSION_PROBE_TARGET) \
 		misc/mr_keyin_probe.o misc/mr_tofrom_probe.o misc/mr_tofrom_dispatch_probe.o \
 		misc/mr_staged_nav_probe misc/mr_staged_mark_page_probe \
-		misc/mr_regression_probe misc/mr_regression_probe.o \
 		$(ABOUT_QUOTES_GENERATED) \
 		mrmac/lex.yy.c mrmac/parser.tab.c mrmac/parser.tab.h
 	rm -rf $(TVISION_VENDOR_ROOT)

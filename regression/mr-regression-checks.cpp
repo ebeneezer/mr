@@ -348,7 +348,11 @@ int runStagedMarkPageProbeMode() {
 
 bool testMrsetupStartupOnly(std::string &failureReason) {
 	const std::string source = "$MACRO Setup;\n"
+	                           "MRSETUP('SETTINGSPATH', '/tmp/mr_settings_probe.mrmac');\n"
 	                           "MRSETUP('MACROPATH', '/tmp');\n"
+	                           "MRSETUP('HELPPATH', 'mr.hlp');\n"
+	                           "MRSETUP('TEMPDIR', '/tmp');\n"
+	                           "MRSETUP('SHELLPATH', '/bin/sh');\n"
 	                           "END_MACRO;\n";
 	std::vector<unsigned char> bytecode;
 	std::string macroName;
@@ -375,6 +379,22 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 		}
 		if (defaultMacroDirectoryPath() != "/tmp") {
 			failureReason = "Startup context should apply MACROPATH='/tmp', got: " + defaultMacroDirectoryPath();
+			return false;
+		}
+		if (configuredSettingsMacroFilePath() != "/tmp/mr_settings_probe.mrmac") {
+			failureReason = "Startup context should apply SETTINGSPATH='/tmp/mr_settings_probe.mrmac'.";
+			return false;
+		}
+		if (configuredHelpFilePath() != "mr.hlp") {
+			failureReason = "Startup context should apply HELPPATH='mr.hlp'.";
+			return false;
+		}
+		if (configuredTempDirectoryPath() != "/tmp") {
+			failureReason = "Startup context should apply TEMPDIR='/tmp'.";
+			return false;
+		}
+		if (configuredShellExecutablePath() != "/bin/sh") {
+			failureReason = "Startup context should apply SHELLPATH='/bin/sh'.";
 			return false;
 		}
 	}
@@ -669,7 +689,7 @@ int main(int argc, char **argv) {
 			if (std::strcmp(argv[2], "staged-mark-page") == 0)
 				return runStagedMarkPageProbeMode();
 		}
-		std::cerr << "usage: regression/mr_regression_probe [--probe staged-nav|staged-mark-page]\n";
+		std::cerr << "usage: regression/mr-regression-checks [--probe staged-nav|staged-mark-page]\n";
 		return 2;
 	}
 

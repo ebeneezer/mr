@@ -193,7 +193,7 @@ const char *dummyCommandTitle(ushort command) {
 		case cmMrSetupFilenameExtensions:
 			return "Installation / Filename extensions";
 		case cmMrSetupSwappingEmsXms:
-			return "Installation / Swapping / EMS / XMS";
+			return "Installation / Paths";
 		case cmMrSetupBackupsTempAutosave:
 			return "Installation / Backups / Temp files / Autosave";
 		case cmMrSetupUserInterfaceSettings:

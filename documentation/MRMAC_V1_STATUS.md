@@ -10,8 +10,8 @@ MRMAC v1 wird als stabiler Sprach- und Laufzeitstand eingefroren, mit reproduzie
   - `canStage=1`
   - `unsupported=<none>`
 - Navigations-/Markierungs-Probes laufen ohne Fehler:
-  - `regression/mr_regression_probe --probe staged-nav`
-  - `regression/mr_regression_probe --probe staged-mark-page`
+  - `regression/mr-regression-checks --probe staged-nav`
+  - `regression/mr-regression-checks --probe staged-mark-page`
 - Ein vollständiger Test-Makro-Compile-Sweep über `mrmac/macros/test*.mrmac` ist fehlerfrei.
 
 ## V1-Abdeckung (staged Snapshot-basiert)

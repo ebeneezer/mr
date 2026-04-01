@@ -15,17 +15,18 @@
 #include <unistd.h>
 #include <vector>
 
+#include "../services/MRDialogPaths.hpp"
 #include "../services/MRWindowCommands.hpp"
 #include "TMREditWindow.hpp"
 
 namespace {
 const char *kHelpWindowTitle = "MR HELP";
-const char *kHelpFilePath = "mr.hlp";
 const char *kLogWindowTitle = "MR LOG";
 
 std::string g_logBuffer;
 bool g_keystrokeRecordingActive = false;
 bool g_keystrokeRecordingMarkerVisible = false;
+std::string baseNameOf(const std::string &path);
 
 std::string currentWorkingDirectory() {
 	char cwd[1024];
@@ -49,21 +50,25 @@ std::string executableDirectory() {
 }
 
 std::string resolveHelpFilePath() {
+	std::string configured = configuredHelpFilePath();
 	std::string fromCwd = currentWorkingDirectory();
 	std::string fromExe = executableDirectory();
 	std::string candidate;
+	std::string configuredName = baseNameOf(configured);
 
+	if (!configured.empty() && ::access(configured.c_str(), R_OK) == 0)
+		return configured;
 	if (!fromCwd.empty()) {
-		candidate = fromCwd + "/" + kHelpFilePath;
+		candidate = fromCwd + "/" + configuredName;
 		if (::access(candidate.c_str(), R_OK) == 0)
 			return candidate;
 	}
 	if (!fromExe.empty()) {
-		candidate = fromExe + "/" + kHelpFilePath;
+		candidate = fromExe + "/" + configuredName;
 		if (::access(candidate.c_str(), R_OK) == 0)
 			return candidate;
 	}
-	return std::string(kHelpFilePath);
+	return configured;
 }
 
 std::string currentTimestamp() {
@@ -191,7 +196,7 @@ bool mrShowProjectHelp() {
 	if (win != nullptr) {
 		std::string currentFile = win->currentFileName();
 		const char *title = win->getTitle(0);
-		if ((!currentFile.empty() && baseNameOf(currentFile) == kHelpFilePath) ||
+		if ((!currentFile.empty() && baseNameOf(currentFile) == baseNameOf(helpPath)) ||
 		    (title != nullptr && std::strcmp(title, kHelpWindowTitle) == 0))
 			return true;
 	}

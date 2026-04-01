@@ -5775,18 +5775,41 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					if (name == "MRSETUP") {
 						std::string setupKey;
 						std::string errorText;
-						if (!mrvmIsStartupSettingsMode())
-							throw std::runtime_error(
-							    "MRSETUP is only allowed in settings.mrmac during startup.");
-						if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1]))
-							throw std::runtime_error("MRSETUP expects (string, string).");
-						setupKey = upperKey(trimAscii(valueAsString(args[0])));
-					if (setupKey != "MACROPATH")
-						throw std::runtime_error("MRSETUP supports only key 'MACROPATH'.");
-					if (!setConfiguredMacroDirectoryPath(valueAsString(args[1]), &errorText))
+					if (!mrvmIsStartupSettingsMode())
 						throw std::runtime_error(
-						    "MRSETUP(MACROPATH) failed: " +
-						    (errorText.empty() ? std::string("invalid path.") : errorText));
+						    "MRSETUP is only allowed in settings.mrmac during startup.");
+					if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1]))
+						throw std::runtime_error("MRSETUP expects (string, string).");
+					setupKey = upperKey(trimAscii(valueAsString(args[0])));
+					if (setupKey == "MACROPATH") {
+						if (!setConfiguredMacroDirectoryPath(valueAsString(args[1]), &errorText))
+							throw std::runtime_error(
+							    "MRSETUP(MACROPATH) failed: " +
+							    (errorText.empty() ? std::string("invalid path.") : errorText));
+					} else if (setupKey == "SETTINGSPATH") {
+						if (!setConfiguredSettingsMacroFilePath(valueAsString(args[1]), &errorText))
+							throw std::runtime_error(
+							    "MRSETUP(SETTINGSPATH) failed: " +
+							    (errorText.empty() ? std::string("invalid path.") : errorText));
+					} else if (setupKey == "HELPPATH") {
+						if (!setConfiguredHelpFilePath(valueAsString(args[1]), &errorText))
+							throw std::runtime_error(
+							    "MRSETUP(HELPPATH) failed: " +
+							    (errorText.empty() ? std::string("invalid path.") : errorText));
+					} else if (setupKey == "TEMPDIR") {
+						if (!setConfiguredTempDirectoryPath(valueAsString(args[1]), &errorText))
+							throw std::runtime_error(
+							    "MRSETUP(TEMPDIR) failed: " +
+							    (errorText.empty() ? std::string("invalid path.") : errorText));
+					} else if (setupKey == "SHELLPATH") {
+						if (!setConfiguredShellExecutablePath(valueAsString(args[1]), &errorText))
+							throw std::runtime_error(
+							    "MRSETUP(SHELLPATH) failed: " +
+							    (errorText.empty() ? std::string("invalid path.") : errorText));
+					} else
+						throw std::runtime_error(
+						    "MRSETUP supports keys: MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
+						    "SHELLPATH.");
 					runtimeErrorLevel() = 0;
 				} else if (name == "SET_GLOBAL_STR") {
 					if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1]))

@@ -315,8 +315,8 @@ class StartupSettingsModeGuard {
 	bool previous_;
 };
 
-void loadStartupSettingsMacro() {
-	std::string settingsPath = defaultSettingsMacroFilePath();
+bool loadStartupSettingsMacro(const std::string &overridePath, std::string *errorMessage) {
+	std::string settingsPath = overridePath.empty() ? defaultSettingsMacroFilePath() : overridePath;
 	std::string source;
 	std::string compileError;
 	std::string vmError;
@@ -325,26 +325,40 @@ void loadStartupSettingsMacro() {
 	int macroCount = 0;
 	VirtualMachine vm;
 
-	if (settingsPath.empty() || ::access(settingsPath.c_str(), F_OK) != 0)
-		return;
+	if (settingsPath.empty()) {
+		if (errorMessage != nullptr)
+			*errorMessage = "Settings path is empty.";
+		return false;
+	}
+	if (::access(settingsPath.c_str(), F_OK) != 0) {
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
+	}
 	if (!readTextFile(settingsPath, source)) {
-		mrLogMessage(("Settings load failed (read): " + settingsPath).c_str());
-		return;
+		if (errorMessage != nullptr)
+			*errorMessage = "Settings load failed (read): " + settingsPath;
+		mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings load failed (read).");
+		return false;
 	}
 
 	bytecode = compile_macro_code(source.c_str(), &bytecodeSize);
 	if (bytecode == nullptr) {
 		const char *err = get_last_compile_error();
 		compileError = (err != nullptr && *err != '\0') ? err : "Compilation failed.";
-		mrLogMessage(("Settings load failed (compile): " + compileError).c_str());
-		return;
+		if (errorMessage != nullptr)
+			*errorMessage = "Settings load failed (compile): " + compileError;
+		mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings load failed (compile).");
+		return false;
 	}
 
 	macroCount = get_compiled_macro_count();
 	if (macroCount <= 0) {
 		std::free(bytecode);
 		mrLogMessage("Settings file compiled, but contains no macros.");
-		return;
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
 	}
 
 	StartupSettingsModeGuard startupSettingsMode;
@@ -355,21 +369,29 @@ void loadStartupSettingsMacro() {
 
 		if (entry < 0 || static_cast<size_t>(entry) >= bytecodeSize) {
 			std::free(bytecode);
-			mrLogMessage("Settings load failed: invalid macro entry.");
-			return;
+			if (errorMessage != nullptr)
+				*errorMessage = "Settings load failed: invalid macro entry.";
+			mrLogMessage(errorMessage != nullptr ? errorMessage->c_str()
+			                                   : "Settings load failed: invalid macro entry.");
+			return false;
 		}
 		vm.executeAt(bytecode, bytecodeSize, static_cast<size_t>(entry), std::string(),
 		             macroName != nullptr ? macroName : std::string(), i == 0, true);
 		if (hasVmErrorLineSince(vm.log, logStart, vmError)) {
 			std::free(bytecode);
-			mrLogMessage(("Settings load failed (runtime): " + vmError).c_str());
-			return;
+			if (errorMessage != nullptr)
+				*errorMessage = "Settings load failed (runtime): " + vmError;
+			mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings load failed (runtime).");
+			return false;
 		}
 	}
 
 	std::free(bytecode);
 	mrLogMessage(("Settings loaded: " + settingsPath).c_str());
 	mrLogMessage(("Settings MACROPATH: " + defaultMacroDirectoryPath()).c_str());
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
 }
 
 std::string buildTopRightCursorStatus() {
@@ -427,7 +449,7 @@ TMREditorApp::TMREditorApp()
       recordingBlinkToggleAt_(std::chrono::steady_clock::now() + kRecordingBlinkInterval),
       indexedMacroWarmupActive_(false), indexedMacroWarmupLoadedFiles_(0) {
 	mr::coprocessor::globalCoprocessor().setResultHandler(handleCoprocessorResult);
-	loadStartupSettingsMacro();
+	loadStartupSettingsMacro(std::string(), nullptr);
 	bootstrapIndexedMacroBindings();
 	createEditorWindow("?No-File?");
 	mrEnsureLogWindow(false);
@@ -439,6 +461,13 @@ TMREditorApp::TMREditorApp()
 TMREditorApp::~TMREditorApp() {
 	prepareForQuit();
 	mr::coprocessor::globalCoprocessor().shutdown(true);
+}
+
+bool TMREditorApp::reloadSettingsMacroFromPath(const std::string &path, std::string *errorMessage) {
+	if (!loadStartupSettingsMacro(path, errorMessage))
+		return false;
+	bootstrapIndexedMacroBindings();
+	return true;
 }
 
 void TMREditorApp::prepareForQuit() {
@@ -623,7 +652,8 @@ void TMREditorApp::finalizeKeystrokeRecording() {
 		if (!savePath.empty())
 			sessionPath = savePath;
 		else {
-			sessionPath = "/tmp/mr_recorded_" + std::to_string(static_cast<long>(::getpid())) + "_" +
+			sessionPath = configuredTempDirectoryPath() + "/mr_recorded_" +
+			              std::to_string(static_cast<long>(::getpid())) + "_" +
 			              std::to_string(recordedMacroCounter_) + ".mrmac";
 			if (!writeTextFile(sessionPath, macroSource)) {
 				messageBox(mfError | mfOKButton, "Could not create session macro file.");

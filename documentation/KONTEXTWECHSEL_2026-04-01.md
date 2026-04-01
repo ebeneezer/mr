@@ -11,6 +11,7 @@ Dieses Dokument ist die Übergabe für einen neuen Codex-Kontext mit minimalem I
 - Fokus auf Pragmatik, technische Klarheit, kurze direkte Kommunikation.
 - Ablagekonvention: Markdown-Dokumentation liegt unter `documentation/`; `misc/` ist nur temporäre Müllhalde/Probe-Ablage.
 - Workspace-Hygiene: Workspace stets aufgeräumt halten; kein Herummüllen mit vielen Neben-/Artefaktdateien.
+- Warmup-Regel bei neuem Kontext: zuerst `documentation/CHANGELOG_CONTEXT.md` lesen (laufendes Protokoll), danach dieses Dokument und die YAML-Übergabe.
 
 ## 3) Projektstatus (aktuell)
 - Repository: `/home/idoc/mr`
@@ -18,7 +19,7 @@ Dieses Dokument ist die Übergabe für einen neuen Codex-Kontext mit minimalem I
 - HEAD: `6d68110`
 - Worktree: clean (`git status --short` leer)
 - Build: `make mr` grün.
-- Probe-Suite: zentral über `make regression-check` und `make mrmac-v1-check` (inkl. `regression/mr_regression_probe --probe ...`) zuletzt grün.
+- Probe-Suite: zentral über `make regression-check` und `make mrmac-v1-check` (inkl. `regression/mr-regression-checks --probe ...`) zuletzt grün.
 
 ## 4) Technischer Stand (funktional)
 
@@ -26,6 +27,7 @@ Dieses Dokument ist die Übergabe für einen neuen Codex-Kontext mit minimalem I
 - MRMAC ist breit implementiert; TO/FROM-Key-Bindings funktionieren.
 - Kein Bytecode-Write ins Filesystem: es werden nur `.mrmac`-Quellen gelesen/geschrieben.
 - Reentranzschutz für `KEY_IN`/Hotkey-Dispatch ist drin (Segfault-Loop wurde behoben).
+- `MRSETUP` unterstützt jetzt neben `MACROPATH` auch `SETTINGSPATH`, `HELPPATH`, `TEMPDIR`, `SHELLPATH`.
 
 ### 4.2 Keystroke Recording
 - Alt-F10 Start/Stop aktiv.
@@ -56,7 +58,7 @@ Dieses Dokument ist die Übergabe für einen neuen Codex-Kontext mit minimalem I
 
 ### 4.5 UI-/Darstellungsstand
 - Dialog-Kontrast für graue Dialoge angepasst: schwarz auf grau (lesbar).
-- Fokusrahmen: für modale Situationen auf `sfSelected`-Logik korrigiert (Hintergrundfenster wirken inaktiv).
+- Fokusrahmen: für modale Situationen strikt über `sfSelected` gesteuert (kein `sfActive`/`sfFocused`-Fallback bei Doppelrahmen/Controls).
 - Desktop-Pattern-Diskussion abgeschlossen:
   - Hauptursache für Abweichungen war terminal/font-rendering (v. a. VSCode internal terminal).
   - Externes Terminal ist Referenz für Abnahme.
@@ -124,3 +126,7 @@ Option 1.
 2. `MRSETUP("MACROPATH", "...")` implementieren (zunächst nur dieser Key).
 3. Aktuelle Macro-Directory-Auflösung auf den Setting-Wert umstellen.
 4. Setup-Dialog anschließend als Editor/Generator für `settings.mrmac` anbinden.
+
+## 10) Protokoll (laufend)
+- Das laufende Protokoll ist ab sofort ausgelagert nach `documentation/CHANGELOG_CONTEXT.md`.
+- Dieses Dokument enthaelt nur die stabilen Uebergaberegeln; Detailverlauf und Tagesfortschritt stehen im Changelog.

@@ -2,6 +2,7 @@
 #include <tvision/tv.h>
 
 #include "MRExternalCommand.hpp"
+#include "MRDialogPaths.hpp"
 
 #include <cctype>
 #include <cerrno>
@@ -89,12 +90,13 @@ mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &
 	}
 
 	if (childPid == 0) {
+		std::string shellPath = configuredShellExecutablePath();
 		::setpgid(0, 0);
 		::dup2(pipeFds[1], STDOUT_FILENO);
 		::dup2(pipeFds[1], STDERR_FILENO);
 		::close(pipeFds[0]);
 		::close(pipeFds[1]);
-		::execl("/bin/sh", "sh", "-lc", command.c_str(), static_cast<char *>(0));
+		::execl(shellPath.c_str(), shellPath.c_str(), "-lc", command.c_str(), static_cast<char *>(0));
 		::_exit(127);
 	}
 
