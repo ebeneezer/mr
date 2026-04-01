@@ -52,6 +52,22 @@ bool hasMarkerBlock(const TMRFrame::MarkerState &state) noexcept {
 	return state.modified || state.insertMode || state.recording || state.background || state.readOnly;
 }
 
+bool isFrameFocused(const TMRFrame *frame) noexcept {
+	const TView *owner = frame != nullptr ? frame->owner : nullptr;
+	const TView *top =
+	    frame != nullptr ? static_cast<const TView *>(const_cast<TMRFrame *>(frame)->TopView()) : nullptr;
+	const TWindow *window = frame != nullptr ? static_cast<const TWindow *>(frame->owner) : nullptr;
+
+	// During modal execView(), TopView points to the modal dialog.
+	// Enforce a single visual focus owner: only the modal top view draws as active.
+	if (top != nullptr && owner != nullptr && top->owner != nullptr && (top->state & sfModal) != 0)
+		return top == owner;
+
+	if (window != nullptr && (window->state & sfFocused) != 0)
+		return true;
+	return frame != nullptr && (frame->state & sfFocused) != 0;
+}
+
 } // namespace
 
 TMRTaskOverviewView::TMRTaskOverviewView(const TRect &bounds) noexcept : TView(bounds), lines_() {
@@ -139,9 +155,7 @@ TMRFrame::MarkerState TMRFrame::markerState() const {
 
 int TMRFrame::markerStartColumn() const noexcept {
 	TWindow *window = static_cast<TWindow *>(owner);
-	bool controlsVisible = (state & sfSelected) != 0;
-	if (!controlsVisible && window != nullptr)
-		controlsVisible = (window->state & sfSelected) != 0;
+	bool controlsVisible = isFrameFocused(this);
 	if (window != nullptr && (window->flags & wfClose) != 0 && controlsVisible)
 		return 7;
 	return 2;
@@ -228,15 +242,13 @@ void TMRFrame::draw() {
 	TDrawBuffer b;
 	MarkerState markers = markerState();
 	TWindow *window = static_cast<TWindow *>(owner);
-	bool isSelected = (this->state & sfSelected) != 0;
-	if (!isSelected && window != nullptr)
-		isSelected = (window->state & sfSelected) != 0;
+	bool isFocused = isFrameFocused(this);
 
 	if ((this->state & sfDragging) != 0) {
 		cFrame = 0x0505;
 		cTitle = 0x0005;
 		f = 0;
-	} else if (!isSelected) {
+	} else if (!isFocused) {
 		cFrame = 0x0101;
 		cTitle = 0x0002;
 		f = 0;
@@ -251,9 +263,7 @@ void TMRFrame::draw() {
 
 	drawFrameLine(b, 0, f, cFrame);
 
-	bool controlsVisible = (state & sfSelected) != 0;
-	if (!controlsVisible && window != nullptr)
-		controlsVisible = (window->state & sfSelected) != 0;
+	bool controlsVisible = isFocused;
 	short titleReserveRight = width - 2;
 	if (window != nullptr && window->number != wnNoNumber && window->number < 10) {
 		short numberPos = (window->flags & wfZoom) != 0 ? width - 7 : width - 3;
@@ -355,7 +365,7 @@ void TMRFrame::draw() {
 		writeLine(0, i, size.x, 1, b);
 	}
 	drawFrameLine(b, size.y - 1, f + 6, cFrame);
-	if (isSelected && window != nullptr && (window->flags & wfGrow) != 0) {
+	if (isFocused && window != nullptr && (window->flags & wfGrow) != 0) {
 		b.moveCStr(0, kDragLeftIcon, cFrame);
 		b.moveCStr(width - 2, kDragIcon, cFrame);
 	}
@@ -377,9 +387,7 @@ void TMRFrame::handleEvent(TEvent &event) {
 		TPoint mouse = makeLocal(event.mouse.where);
 		TWindow *window = static_cast<TWindow *>(owner);
 		if (mouse.y == 0 && window != nullptr) {
-			bool controlsVisible = (state & sfSelected) != 0;
-			if (!controlsVisible)
-				controlsVisible = (window->state & sfSelected) != 0;
+			bool controlsVisible = isFrameFocused(this);
 			if ((window->flags & wfClose) != 0 && controlsVisible && mouse.x >= 2 && mouse.x <= 4) {
 				while (mouseEvent(event, evMouse))
 					;
@@ -401,7 +409,7 @@ void TMRFrame::handleEvent(TEvent &event) {
 				clearEvent(event);
 			} else if ((window->flags & wfMove) != 0)
 				dragWindow(event, dmDragMove);
-		} else if ((state & sfActive) && (mouse.y >= size.y - 1) && window != nullptr &&
+		} else if (isFrameFocused(this) && (mouse.y >= size.y - 1) && window != nullptr &&
 		           (window->flags & wfGrow)) {
 			if (mouse.x >= size.x - 2)
 				dragWindow(event, dmDragGrow);
@@ -416,7 +424,7 @@ void TMRFrame::handleEvent(TEvent &event) {
 
 void TMRFrame::setState(ushort aState, Boolean enable) {
 	TView::setState(aState, enable);
-	if ((aState & (sfActive | sfDragging)) != 0)
+	if ((aState & (sfActive | sfFocused | sfDragging)) != 0)
 		drawView();
 }
 

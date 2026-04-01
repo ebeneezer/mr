@@ -26,7 +26,23 @@ session_handover:
       - "Dr. Raus"
     decisions_require_options_and_recommendation: true
     no_plan_progress_without_approval: true
+    report_only_after_self_test: true
+    report_only_after_self_test_note: "User wird erst adressiert, nachdem Codex die Aenderung im PTY selbst getestet hat."
     version_management_responsibility: "AI verwaltet die Versionsnummer des Compilats."
+    setup_settings_key_policy: "Wenn neue Setup-Settings hinzukommen, User mit Vorschlag fuer den exakten settings.mrmac-Key befragen (analog zu bestehenden Keys: 'SETTINGSPATH', 'MACROPATH', 'HELPPATH', 'TEMPDIR', 'SHELLPATH')."
+    setup_bool_value_policy: "Bool-Werte in settings.mrmac werden als true/false gefuehrt (nicht 1/0)."
+    edit_settings_keyset_v1:
+      - "PAGEBREAK"
+      - "WORDDELIMS"
+      - "DEFAULTEXTS"
+      - "TRUNCSPACES"
+      - "EOFCTRLZ"
+      - "EOFCRLF"
+      - "TABEXPAND"
+      - "COLBLOCKMOVE"
+      - "DEFAULTMODE"
+    setup_dialog_mnemonic_policy: "Neue Dialoge erhalten durch Codex geeignete Highlight-/Shortcut-Buchstaben autonom; dazu keine Rueckfrage an den User."
+    workspace_delete_policy: "Datei-Loeschungen im Workspace duerfen ohne vorherige Rueckfrage ausgefuehrt werden (User-Backups vorhanden)."
 
   repository_conventions:
     markdown_docs_location: "/home/idoc/mr/documentation"
@@ -105,7 +121,11 @@ session_handover:
       background: "🧠"
       readonly: "🔒"
       style: "Markerblock in eckigen Klammern"
-    frame_focus_rule: "Doppelrahmen/Controls strikt via sfSelected; kein sfActive/sfFocused-Fallback fuer Fokusdarstellung."
+    frame_focus_rule: "Zentralregel in ui/TMRFrame.cpp: visuelle Fokusdarstellung (Doppelrahmen/Controls) nur ueber Fokusstatus (sfFocused) plus Modal-TopView-Gate; nicht ueber sfActive/sfSelected; nie lokal pro Dialog patchen."
+    dialog_button_row_rule: "Dialog-Buttonreihen konsistent in einer zentrierten Zeile ausrichten (Done/Cancel/Help wie Window-List-Stil), keine rechts abdriftenden Einzelbuttons."
+    setup_defaults_rule: "Defaults fuer Setup-Pfade/URIs zentral ueber eine Routine bestimmen; Bootstrap und Setup-Dialog muessen dieselbe Default-Quelle nutzen."
+    path_uri_naming_rule: "Felder mit Datei (Pfad+Dateiname) als 'URI' benennen; reine Ordnerfelder als 'path'. Datei-URIs in Dialog-Vorbelegung absolut halten."
+    setup_layout_profile_rule: "Setup-Dialoge folgen einem zentralen compact/relaxed-Layoutstandard (80x25-first); keine separaten Dialog-Implementierungen, nur profilabhaengige Geometrie."
     dialog_contrast_rule: "Schwarz auf Grau fuer Lesbarkeit"
     visual_limit_notes:
       - "Terminal- und Font-Rendering beeinflussen Glyph-Look sichtbar"
@@ -170,6 +190,18 @@ session_handover:
 
   protocol_log:
     - date: "2026-04-01"
+      topic: "Edit-Settings Keyset v1"
+      notes:
+        - "Option 1 als vollstaendiges Keyset fuer Edit-Settings festgelegt: PAGEBREAK, WORDDELIMS, DEFAULTEXTS, TRUNCSPACES, EOFCTRLZ, EOFCRLF, TABEXPAND, COLBLOCKMOVE, DEFAULTMODE."
+        - "Bool-Werte in settings.mrmac werden verbindlich als true/false gefuehrt."
+    - date: "2026-04-01"
+      topic: "Setup-Defaults + Mnemonic-Policy"
+      notes:
+        - "Zentrale Default-Routine fuer Setup-Pfade eingefuehrt und von Bootstrap + Setup gemeinsam genutzt."
+        - "Fehlt settings.mrmac beim Start, wird sie mit Defaults automatisch erstellt."
+        - "Installation-and-Setup-Buttons verwenden TVision-Mnemonics (~X~)."
+        - "Neue Regel: Bei neuen Setup-Topics den User immer nach Mnemonic fragen und eine begruendete Empfehlung vorschlagen."
+    - date: "2026-04-01"
       topic: "Workspace- und Doku-Konvention"
       notes:
         - "Markdown-Dokumente werden unter documentation/ gepflegt."
@@ -193,4 +225,20 @@ session_handover:
         - "Cancel fragt bei geaenderten Feldern nach Verwerfen; Help zeigt Dummy-Screen."
         - "MRSETUP-Whitelist erweitert um SETTINGSPATH/HELPPATH/TEMPDIR/SHELLPATH."
         - "Runtime nutzt nun HELPPATH fuer Help-Datei, SHELLPATH fuer externe Kommandos, TEMPDIR fuer temporaere Record-Makros."
-        - "Fokusdarstellung: Doppelrahmen/Controls strikt an sfSelected gekoppelt."
+        - "Fokusdarstellung zentralisiert: Doppelrahmen/Controls nur ueber Fokusstatus (sfFocused) + Modal-TopView-Gate im TMRFrame."
+        - "TMREditWindow::setState redrawt den Frame bei sfFocused/sfSelected/sfActive fuer konsistente Sichtbarkeit nach Fokuswechsel."
+        - "Designvorgabe ergaenzt: Buttonzeile in Dialogen konsistent zentriert ausrichten (Done/Cancel/Help)."
+        - "Terminologievorgabe: Datei-Felder heissen URI, Ordnerfelder path; Datei-URI-Vorbelegungen absolut."
+        - "Settings-Generator auf MRMAC-konformes Single-Quote-Format fuer MRSETUP umgestellt; silent reload mit schreibbarer Settings-URI im PTY verifiziert."
+        - "Runtime-Pfadresolver ohne hartkodierte Datei-URI-Literale; Datei-Defaults werden dynamisch aus Env/CWD/Exe-Dir gebildet."
+        - "About-Zitate-Rotation: unseen-bag mit Seen-Tracking; keine Wiederholung, bevor alle anderen Zitate gezeigt wurden."
+    - date: "2026-04-01"
+      topic: "Setup Edit-Settings Option 1 implementiert"
+      notes:
+        - "MRSETUP-Whitelist erweitert um: PAGEBREAK, WORDDELIMS, DEFAULTEXTS, TRUNCSPACES, EOFCTRLZ, EOFCRLF, TABEXPAND, COLBLOCKMOVE, DEFAULTMODE."
+        - "settings.mrmac-Generator schreibt diese Keys mit Bool-Literalen true/false."
+        - "Installation/Setup -> Edit settings ist jetzt ein echter Dialog (Done/Cancel/Help) mit silent reload."
+        - "Open/Load nutzt DEFAULTEXTS als Fallbackliste, sofern kein expliziter Dateityp angegeben ist."
+        - "Neue Fenster uebernehmen DEFAULTMODE; Reload uebernimmt DEFAULTMODE auch fuer offene editierbare Fenster."
+        - "PAGEBREAK wird in NEXT_PAGE_BREAK/LAST_PAGE_BREAK runtime-seitig aus Settings gelesen."
+        - "Build/Test lokal geprueft: make mr und make regression-check (6/6 pass)."

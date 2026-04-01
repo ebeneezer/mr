@@ -2171,19 +2171,20 @@ static bool moveEditorPageDown(TMRFileEditor *editor) {
 static bool moveEditorNextPageBreak(TMRFileEditor *editor) {
 	std::string text;
 	std::string::size_type pos;
+	char pageBreak = configuredPageBreakCharacter();
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (editor == NULL) {
 		if (session == NULL)
 			return false;
 		pos = static_cast<std::string::size_type>(session->cursorOffset);
-		while (pos < session->document.length() && session->document.charAt(pos) != '\f')
+		while (pos < session->document.length() && session->document.charAt(pos) != pageBreak)
 			++pos;
 		if (pos >= session->document.length())
 			return false;
 		return setEditorCursor(NULL, static_cast<uint>(session->document.nextLine(pos)));
 	}
 	text = snapshotEditorText(editor);
-	pos = text.find('\f', std::min<std::size_t>(editor->cursorOffset(), text.size()));
+	pos = text.find(pageBreak, std::min<std::size_t>(editor->cursorOffset(), text.size()));
 	if (pos == std::string::npos)
 		return false;
 	return setEditorCursor(editor, editor->nextLineOffset(static_cast<uint>(pos)));
@@ -2193,6 +2194,7 @@ static bool moveEditorLastPageBreak(TMRFileEditor *editor) {
 	std::string text;
 	std::string::size_type pos;
 	std::size_t start;
+	char pageBreak = configuredPageBreakCharacter();
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (editor == NULL) {
 		if (session == NULL)
@@ -2202,7 +2204,7 @@ static bool moveEditorLastPageBreak(TMRFileEditor *editor) {
 			return false;
 		pos = start - 1;
 		for (;;) {
-			if (session->document.charAt(pos) == '\f')
+			if (session->document.charAt(pos) == pageBreak)
 				return setEditorCursor(NULL, static_cast<uint>(session->document.nextLine(pos)));
 			if (pos == 0)
 				break;
@@ -2214,7 +2216,7 @@ static bool moveEditorLastPageBreak(TMRFileEditor *editor) {
 	start = std::min<std::size_t>(editor->cursorOffset(), text.size());
 	if (start == 0)
 		return false;
-	pos = text.rfind('\f', start - 1);
+	pos = text.rfind(pageBreak, start - 1);
 	if (pos == std::string::npos)
 		return false;
 	return setEditorCursor(editor, editor->nextLineOffset(static_cast<uint>(pos)));
@@ -5806,10 +5808,27 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							throw std::runtime_error(
 							    "MRSETUP(SHELLPATH) failed: " +
 							    (errorText.empty() ? std::string("invalid path.") : errorText));
+					} else if (setupKey == "PAGEBREAK" || setupKey == "WORDDELIMS" ||
+					           setupKey == "DEFAULTEXTS" || setupKey == "TRUNCSPACES" ||
+					           setupKey == "EOFCTRLZ" || setupKey == "EOFCRLF" ||
+					           setupKey == "TABEXPAND" || setupKey == "COLBLOCKMOVE" ||
+					           setupKey == "DEFAULTMODE" || setupKey == "CURSORVISIBILITY") {
+						if (!applyConfiguredEditSetupValue(setupKey, valueAsString(args[1]), &errorText))
+							throw std::runtime_error(
+							    "MRSETUP(" + setupKey + ") failed: " +
+							    (errorText.empty() ? std::string("invalid value.") : errorText));
+						if (setupKey == "TABEXPAND") {
+							BackgroundEditSession *session = currentBackgroundEditSession();
+							if (session != NULL)
+								session->tabExpand = configuredTabExpandSetting();
+							else
+								g_runtimeEnv.tabExpand = configuredTabExpandSetting();
+						}
 					} else
 						throw std::runtime_error(
 						    "MRSETUP supports keys: MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
-						    "SHELLPATH.");
+						    "SHELLPATH, PAGEBREAK, WORDDELIMS, DEFAULTEXTS, TRUNCSPACES, EOFCTRLZ, "
+						    "EOFCRLF, TABEXPAND, COLBLOCKMOVE, DEFAULTMODE, CURSORVISIBILITY.");
 					runtimeErrorLevel() = 0;
 				} else if (name == "SET_GLOBAL_STR") {
 					if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1]))

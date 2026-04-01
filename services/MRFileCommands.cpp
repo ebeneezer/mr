@@ -8,13 +8,16 @@
 #include "MRFileCommands.hpp"
 
 #include "MRDialogPaths.hpp"
+#include <algorithm>
 #include <chrono>
 #include <cctype>
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
+#include <set>
 #include <string>
 #include <unistd.h>
+#include <vector>
 
 #include "MRWindowCommands.hpp"
 #include "MRPerformance.hpp"
@@ -85,6 +88,59 @@ std::string expandUserPath(const char *path) {
 	}
 	return result;
 }
+
+bool hasWildcardPattern(const std::string &path) {
+	return path.find('*') != std::string::npos || path.find('?') != std::string::npos;
+}
+
+std::size_t lastPathSeparator(const std::string &path) {
+	std::size_t slash = path.find_last_of('/');
+	std::size_t backslash = path.find_last_of('\\');
+
+	if (slash == std::string::npos)
+		return backslash;
+	if (backslash == std::string::npos)
+		return slash;
+	return std::max(slash, backslash);
+}
+
+bool hasExtensionInBaseName(const std::string &path) {
+	std::size_t sep = lastPathSeparator(path);
+	std::size_t dot = path.find_last_of('.');
+
+	return dot != std::string::npos && (sep == std::string::npos || dot > sep);
+}
+
+bool resolveWithConfiguredExtensions(const std::string &basePath, std::string &resolvedPath) {
+	std::vector<std::string> extensions = configuredDefaultExtensionList();
+	std::set<std::string> tried;
+
+	for (std::size_t i = 0; i < extensions.size(); ++i) {
+		std::string ext = extensions[i];
+		std::string candidates[3];
+
+		if (ext.empty())
+			continue;
+		candidates[0] = ext;
+		candidates[1] = ext;
+		candidates[2] = ext;
+		for (std::size_t p = 0; p < ext.size(); ++p) {
+			candidates[1][p] = static_cast<char>(std::tolower(static_cast<unsigned char>(ext[p])));
+			candidates[2][p] = static_cast<char>(std::toupper(static_cast<unsigned char>(ext[p])));
+		}
+
+		for (std::size_t c = 0; c < 3; ++c) {
+			std::string candidate = basePath + "." + candidates[c];
+			if (!tried.insert(candidate).second)
+				continue;
+			if (::access(candidate.c_str(), F_OK) == 0 && ::access(candidate.c_str(), R_OK) == 0) {
+				resolvedPath = candidate;
+				return true;
+			}
+		}
+	}
+	return false;
+}
 } // namespace
 
 bool promptForPath(const char *title, char *fileName, std::size_t fileNameSize) {
@@ -96,11 +152,21 @@ bool promptForPath(const char *title, char *fileName, std::size_t fileNameSize) 
 }
 
 bool resolveReadableExistingPath(const char *path, std::string &resolvedPath) {
-	resolvedPath = expandUserPath(path);
+	bool disableExtensionSearch = false;
+	std::string rawInput = expandUserPath(path);
+
+	resolvedPath = rawInput;
+	if (!resolvedPath.empty() && resolvedPath.back() == '.' && !hasWildcardPattern(resolvedPath)) {
+		disableExtensionSearch = true;
+		resolvedPath.pop_back();
+	}
 	if (resolvedPath.empty()) {
 		messageBox(mfError | mfOKButton, "No file name specified.");
 		return false;
 	}
+	if (::access(resolvedPath.c_str(), F_OK) != 0 && !disableExtensionSearch &&
+	    !hasWildcardPattern(resolvedPath) && !hasExtensionInBaseName(resolvedPath))
+		resolveWithConfiguredExtensions(resolvedPath, resolvedPath);
 	if (access(resolvedPath.c_str(), F_OK) != 0) {
 		messageBox(mfError | mfOKButton, "File does not exist:\n%s", resolvedPath.c_str());
 		return false;

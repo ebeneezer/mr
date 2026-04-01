@@ -32,6 +32,66 @@ Laufendes Projektprotokoll fuer Kontextwechsel und schnelle Wiederaufnahme.
     - Help-Datei-Aufloesung ueber konfigurierbaren `HELPPATH`.
     - Externer Kommando-Shell-Start ueber konfigurierbaren `SHELLPATH`.
     - Temporaere Record-Makrodateien ueber konfigurierbaren `TEMPDIR`.
-- Fokus-/Rahmenregel erneut fixiert:
-  - Doppelrahmen und Fenster-Controls richten sich strikt nach `sfSelected`.
-  - `sfActive`/`sfFocused` werden fuer diese Darstellungsentscheidung nicht mehr als Fallback genutzt.
+- Fokus-/Rahmenregel zentralisiert (nicht dialogweise):
+  - TVision-Standard gilt global in `ui/TMRFrame.cpp`.
+  - Hintergrund: modale `execView`-Abläufe koennen parallel `sfActive` auf mehr als einem Fenster lassen.
+  - Doppelrahmen + Fenster-Controls nur beim fokussierten Objekt (`sfFocused`).
+  - `sfActive`, `owner->state` und `sfSelected` werden fuer diese visuelle Darstellungsentscheidung nicht verwendet.
+- PTY-Test und Kommunikationsregel:
+  - Fix wurde im PTY durch Start von `./mr` und Oeffnen von `Other -> Installation and setup` selbst getestet.
+  - Verbindliche Regel: User erst adressieren, nachdem Codex die Aenderung im PTY selbst getestet hat.
+- Fokusdarstellung weiter zentralisiert (Modal-Fall):
+  - Root cause: In modalen `execView`-Phasen konnten visuell zwei aktive Frames erscheinen.
+  - Zentralfix in `ui/TMRFrame.cpp`:
+    - Modal-TopView-Gate: Bei aktivem modalen TopView darf nur dieser View als fokussiert aktiv gezeichnet werden.
+    - Fokusdarstellung nutzt `sfFocused`; `sfActive` ist fuer rein visuelle Aktivdarstellung in diesem Pfad nicht massgeblich.
+  - Zentralfix in `ui/TMREditWindow.hpp`:
+    - `setState`-Override triggert `frame->drawView()` bei `sfFocused/sfSelected/sfActive`, damit Fokuswechsel sofort sichtbar konsistent sind.
+- Neue UI-Designvorgabe aufgenommen:
+  - Dialog-Buttons (`Done/Cancel/Help`) in einer zentrierten Zeile ausrichten (analog Window-List), keine rechts versetzte Help-Position.
+- Terminologie-/Vorbelegungsregel aufgenommen:
+  - Datei-Felder als `URI` benennen, Ordnerfelder als `path`.
+  - Datei-URIs in Dialogen absolut vorbelegen (kein relatives `mr.hlp` als Default).
+  - Paths-Dialog labels bereinigt: `Settings macro URI`, `Macro path`, `Temporary path`; Zusatz `(path + filename)` entfernt.
+  - Zugehoerige Fehltexte in Path-Validierung ebenfalls auf `URI`/`path` ohne `directory` umgestellt.
+- Paths-Generator/Fallbacks korrigiert:
+  - `settings.mrmac`-Generator erzeugt MRMAC-konforme Single-Quoted Strings fuer `MRSETUP(...)`.
+  - `Done` + silent reload im PTY mit schreibbarer Settings-URI (`HOME=/tmp`) erfolgreich verifiziert.
+  - Help-URI-Default ist jetzt absolut vorbelegt (`/home/.../mr.hlp` statt `mr.hlp`).
+  - Runtime-Pfadresolver verwendet keine hartkodierten Datei-URI-Literale mehr; Datei-Defaults werden dynamisch aus Umgebung/CWD/Exe-Dir aufgebaut.
+- About-Dialog Zitate-Rotation gefixt:
+  - Statt naiver Shuffle-Bag nun "unseen bag" mit Seen-Tracking.
+  - Ein Zitat wird erst wieder zugelassen, nachdem alle anderen mindestens einmal gezeigt wurden.
+  - PTY-Test: Long-Press auf `Done` aktiviert Rotation; mehrere Folgezitate erschienen ohne fruehe Wiederholung.
+- Setup-Defaults/Bootstrap vereinheitlicht:
+  - Neue zentrale Default-Routine fuer Setup-Pfade/URIs in `services/MRDialogPaths`.
+  - Dieselbe Default-Quelle wird von Setup-Dialog und Bootstrap genutzt.
+  - Wenn `settings.mrmac` beim Start fehlt, wird sie automatisch mit Default-`MRSETUP(...)` erzeugt.
+  - Regression erweitert: `settings.mrmac auto-create on missing file` (in `regression/mr-regression-checks.cpp`).
+- Installation-and-Setup Mnemonics:
+  - Buttons nutzen jetzt TVision-Mnemonics via `~X~` (u. a. E/D/C/K/M fuer die ersten 5 Themen).
+  - Kontextregel ergaenzt: Bei neuen Setup-Topics User nach Mnemonic fragen + begruendete Empfehlung geben.
+- Kontextregel praezisiert:
+  - Neue Setup-Settings: User wird mit Vorschlag fuer den exakten Key-String in `settings.mrmac` befragt (Schema wie `"SETTINGSPATH"`, `"MACROPATH"`, ...).
+  - Neue Dialoge: Mnemonic-/Highlight-Buchstaben werden von Codex autonom vergeben, ohne Rueckfrage.
+  - Workspace-Loeschungen: Rueckfragen vor Loeschungen sind auf User-Wunsch deaktiviert.
+- Setup-Hauptdialog vervollstaendigt:
+  - `Save configuration` ist kein Dummy mehr: schreibt aktuelle Runtime-Settings nach `settings.mrmac`, reloadet silent und schliesst den Setup-Dialog.
+  - `Exit Setup` bleibt direkter Ausstieg ohne Speichern.
+  - Shortcut-Sichtbarkeit auf Dialog-Buttons erhoeht (helles Rot mit hoeherem Kontrast).
+- Edit-Settings Planung fixiert:
+  - Option 1 freigegeben: vollstaendiges Keyset fuer Edit-Settings (`PAGEBREAK`, `WORDDELIMS`, `DEFAULTEXTS`, `TRUNCSPACES`, `EOFCTRLZ`, `EOFCRLF`, `TABEXPAND`, `COLBLOCKMOVE`, `DEFAULTMODE`).
+  - Bool-Werte fuer Setup-Keys werden als `true/false` gefuehrt (nicht `1/0`).
+- Edit-Settings Option 1 umgesetzt:
+  - `MRSETUP` um Keyset erweitert: `PAGEBREAK`, `WORDDELIMS`, `DEFAULTEXTS`, `TRUNCSPACES`, `EOFCTRLZ`, `EOFCRLF`, `TABEXPAND`, `COLBLOCKMOVE`, `DEFAULTMODE`.
+  - `settings.mrmac`-Generator schreibt neue Keys inkl. Bool-Literale als `true/false`.
+  - `Installation and setup -> Edit settings` als echter Dialog umgesetzt (Done/Cancel/Help, Dirty-Check, silent reload).
+  - `DEFAULTEXTS` in Open/Load integriert (Fallback-Suche ohne explizite Dateiendung).
+  - `DEFAULTMODE` wirkt auf neu erzeugte Fenster und wird nach Reload auf offene editierbare Fenster angewandt.
+  - `PAGEBREAK` an Runtime-Navigation (`NEXT_PAGE_BREAK`/`LAST_PAGE_BREAK`) angebunden.
+  - Verifiziert via PTY: `make mr` und `make regression-check` (6/6 pass).
+  - UI-Korrektur gemaess Original-Referenz: Bool-Settings bleiben nur Serialisierung (`true/false` in settings.mrmac); der Setup-Dialog nutzt TVision-Controls (Checkboxes/RadioButtons) statt Bool-Textfelder.
+- Neuer Setup-Layoutstandard festgelegt:
+  - Zentraler Profilansatz `compact/relaxed` fuer Setup-Dialoge.
+  - `compact` ist der Standard fuer kleine Terminals (80x25-first).
+  - Keine doppelten Dialog-Versionen; nur profilabhaengige Geometrie in einer Implementierung.

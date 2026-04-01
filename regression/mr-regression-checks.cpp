@@ -2,6 +2,7 @@
 #include <tvision/tv.h>
 
 #include <algorithm>
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -11,6 +12,7 @@
 #include <limits.h>
 #include <map>
 #include <string>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <vector>
 
@@ -353,6 +355,16 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 	                           "MRSETUP('HELPPATH', 'mr.hlp');\n"
 	                           "MRSETUP('TEMPDIR', '/tmp');\n"
 	                           "MRSETUP('SHELLPATH', '/bin/sh');\n"
+	                           "MRSETUP('PAGEBREAK', '\\\\f');\n"
+	                           "MRSETUP('WORDDELIMS', '._-');\n"
+	                           "MRSETUP('DEFAULTEXTS', 'txt;md');\n"
+	                           "MRSETUP('TRUNCSPACES', 'true');\n"
+	                           "MRSETUP('EOFCTRLZ', 'false');\n"
+	                           "MRSETUP('EOFCRLF', 'true');\n"
+	                           "MRSETUP('TABEXPAND', 'false');\n"
+	                           "MRSETUP('COLBLOCKMOVE', 'LEAVE_SPACE');\n"
+	                           "MRSETUP('DEFAULTMODE', 'OVERWRITE');\n"
+	                           "MRSETUP('CURSORVISIBILITY', 'PROMINENT');\n"
 	                           "END_MACRO;\n";
 	std::vector<unsigned char> bytecode;
 	std::string macroName;
@@ -385,8 +397,8 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 			failureReason = "Startup context should apply SETTINGSPATH='/tmp/mr_settings_probe.mrmac'.";
 			return false;
 		}
-		if (configuredHelpFilePath() != "mr.hlp") {
-			failureReason = "Startup context should apply HELPPATH='mr.hlp'.";
+		if (configuredHelpFilePath() != absolutePathFromCwd("mr.hlp")) {
+			failureReason = "Startup context should apply HELPPATH as absolute URI from current path.";
 			return false;
 		}
 		if (configuredTempDirectoryPath() != "/tmp") {
@@ -396,6 +408,33 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 		if (configuredShellExecutablePath() != "/bin/sh") {
 			failureReason = "Startup context should apply SHELLPATH='/bin/sh'.";
 			return false;
+		}
+		if (configuredPageBreakCharacter() != '\f') {
+			failureReason = "Startup context should apply PAGEBREAK='\\\\f'.";
+			return false;
+		}
+		if (configuredTabExpandSetting()) {
+			failureReason = "Startup context should apply TABEXPAND='false'.";
+			return false;
+		}
+		if (configuredDefaultInsertMode()) {
+			failureReason = "Startup context should apply DEFAULTMODE='OVERWRITE'.";
+			return false;
+		}
+		if (configuredCursorVisibility() != "PROMINENT") {
+			failureReason = "Startup context should apply CURSORVISIBILITY='PROMINENT'.";
+			return false;
+		}
+		if (configuredCursorTypeCode() != 100U) {
+			failureReason = "Startup context should map CURSORVISIBILITY='PROMINENT' to cursor type 100.";
+			return false;
+		}
+		{
+			std::vector<std::string> exts = configuredDefaultExtensionList();
+			if (exts.size() < 2 || exts[0] != "TXT" || exts[1] != "MD") {
+				failureReason = "Startup context should apply DEFAULTEXTS='txt;md'.";
+				return false;
+			}
 		}
 	}
 
@@ -414,6 +453,168 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 			failureReason = "Runtime context produced unexpected error: " + vmError;
 			return false;
 		}
+	}
+
+	failureReason.clear();
+	return true;
+}
+
+bool testPathDefaultsFromEnvironment(std::string &failureReason) {
+	const std::string tmpdirProbe = "/tmp/mr_regression_env_tmpdir";
+	const char *oldTmpdir = std::getenv("TMPDIR");
+	const char *oldTemp = std::getenv("TEMP");
+	const char *oldTmp = std::getenv("TMP");
+	const char *oldShell = std::getenv("SHELL");
+	std::string oldTmpdirValue = oldTmpdir != nullptr ? oldTmpdir : "";
+	std::string oldTempValue = oldTemp != nullptr ? oldTemp : "";
+	std::string oldTmpValue = oldTmp != nullptr ? oldTmp : "";
+	std::string oldShellValue = oldShell != nullptr ? oldShell : "";
+	bool hadTmpdir = oldTmpdir != nullptr;
+	bool hadTemp = oldTemp != nullptr;
+	bool hadTmp = oldTmp != nullptr;
+	bool hadShell = oldShell != nullptr;
+
+	auto restoreEnvironment = [&]() {
+		if (hadTmpdir)
+			setenv("TMPDIR", oldTmpdirValue.c_str(), 1);
+		else
+			unsetenv("TMPDIR");
+		if (hadTemp)
+			setenv("TEMP", oldTempValue.c_str(), 1);
+		else
+			unsetenv("TEMP");
+		if (hadTmp)
+			setenv("TMP", oldTmpValue.c_str(), 1);
+		else
+			unsetenv("TMP");
+		if (hadShell)
+			setenv("SHELL", oldShellValue.c_str(), 1);
+		else
+			unsetenv("SHELL");
+	};
+
+	if (::mkdir(tmpdirProbe.c_str(), 0700) != 0 && errno != EEXIST) {
+		failureReason = "Unable to create TMPDIR probe directory.";
+		return false;
+	}
+
+	setenv("TMPDIR", tmpdirProbe.c_str(), 1);
+	unsetenv("TEMP");
+	unsetenv("TMP");
+	setenv("SHELL", "/bin/sh", 1);
+
+	if (configuredTempDirectoryPath() != tmpdirProbe) {
+		restoreEnvironment();
+		failureReason = "configuredTempDirectoryPath() did not use TMPDIR fallback.";
+		return false;
+	}
+	if (configuredShellExecutablePath() != "/bin/sh") {
+		restoreEnvironment();
+		failureReason = "configuredShellExecutablePath() did not use SHELL/OS fallback.";
+		return false;
+	}
+	if (configuredHelpFilePath().empty()) {
+		restoreEnvironment();
+		failureReason = "configuredHelpFilePath() returned an empty fallback.";
+		return false;
+	}
+	if (defaultMacroDirectoryPath().empty()) {
+		restoreEnvironment();
+		failureReason = "defaultMacroDirectoryPath() returned an empty fallback.";
+		return false;
+	}
+
+	restoreEnvironment();
+	failureReason.clear();
+	return true;
+}
+
+bool testSettingsMacroAutoCreate(std::string &failureReason) {
+	const std::string root = "/tmp/mr_regression_settings_bootstrap_" +
+	                         std::to_string(static_cast<long>(::getpid()));
+	const std::string settingsPath = root + "/cfg/mr/settings.mrmac";
+	const std::string expectedSettingLine =
+	    "MRSETUP('SETTINGSPATH', '" + settingsPath + "');";
+	std::string content;
+	std::string ioError;
+	struct stat st;
+
+	(void)::remove(settingsPath.c_str());
+	(void)::rmdir((root + "/cfg/mr").c_str());
+	(void)::rmdir((root + "/cfg").c_str());
+	(void)::rmdir(root.c_str());
+
+	if (::mkdir(root.c_str(), 0700) != 0 && errno != EEXIST) {
+		failureReason = "Unable to create bootstrap probe root directory.";
+		return false;
+	}
+	if (!ensureSettingsMacroFileExists(settingsPath, &failureReason))
+		return false;
+	if (::stat(settingsPath.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) {
+		failureReason = "Auto-created settings.mrmac is missing.";
+		return false;
+	}
+	if (!readTextFile(settingsPath, content, ioError)) {
+		failureReason = "Unable to read auto-created settings.mrmac: " + ioError;
+		return false;
+	}
+	if (content.find("$MACRO MR_SETTINGS FROM EDIT;") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac has no MR_SETTINGS macro header.";
+		return false;
+	}
+	if (content.find(expectedSettingLine) == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac did not persist the selected settings URI.";
+		return false;
+	}
+	if (content.find("MRSETUP('MACROPATH', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing MACROPATH.";
+		return false;
+	}
+	if (content.find("MRSETUP('HELPPATH', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing HELPPATH.";
+		return false;
+	}
+	if (content.find("MRSETUP('TEMPDIR', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing TEMPDIR.";
+		return false;
+	}
+	if (content.find("MRSETUP('SHELLPATH', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing SHELLPATH.";
+		return false;
+	}
+	if (content.find("MRSETUP('PAGEBREAK', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing PAGEBREAK.";
+		return false;
+	}
+	if (content.find("MRSETUP('WORDDELIMS', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing WORDDELIMS.";
+		return false;
+	}
+	if (content.find("MRSETUP('DEFAULTEXTS', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing DEFAULTEXTS.";
+		return false;
+	}
+	if (content.find("MRSETUP('TRUNCSPACES', 'true');") == std::string::npos &&
+	    content.find("MRSETUP('TRUNCSPACES', 'false');") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac should persist TRUNCSPACES as true/false.";
+		return false;
+	}
+	if (content.find("MRSETUP('TABEXPAND', 'true');") == std::string::npos &&
+	    content.find("MRSETUP('TABEXPAND', 'false');") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac should persist TABEXPAND as true/false.";
+		return false;
+	}
+	if (content.find("MRSETUP('COLBLOCKMOVE', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing COLBLOCKMOVE.";
+		return false;
+	}
+	if (content.find("MRSETUP('DEFAULTMODE', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing DEFAULTMODE.";
+		return false;
+	}
+	if (content.find("MRSETUP('CURSORVISIBILITY', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing CURSORVISIBILITY.";
+		return false;
 	}
 
 	failureReason.clear();
@@ -695,7 +896,9 @@ int main(int argc, char **argv) {
 
 	TestContext ctx;
 
+	runTest(ctx, "Path defaults from environment/OS", testPathDefaultsFromEnvironment);
 	runTest(ctx, "MRSETUP startup-only semantics", testMrsetupStartupOnly);
+	runTest(ctx, "settings.mrmac auto-create on missing file", testSettingsMacroAutoCreate);
 	runTest(ctx, "TO/FROM header parsing + compile guards", testToFromHeaders);
 	runTest(ctx, "TO/FROM runtime dispatch", testToFromDispatch);
 	runTest(ctx, "KEY_IN behavior + staging guards", testKeyIn);

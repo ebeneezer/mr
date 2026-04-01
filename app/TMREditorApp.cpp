@@ -9,6 +9,7 @@
 #define Uses_TStatusItem
 #define Uses_TStatusDef
 #define Uses_TDeskTop
+#define Uses_TScreen
 #include <tvision/tv.h>
 
 #include "TMREditorApp.hpp"
@@ -330,10 +331,10 @@ bool loadStartupSettingsMacro(const std::string &overridePath, std::string *erro
 			*errorMessage = "Settings path is empty.";
 		return false;
 	}
-	if (::access(settingsPath.c_str(), F_OK) != 0) {
-		if (errorMessage != nullptr)
-			errorMessage->clear();
-		return true;
+	if (!ensureSettingsMacroFileExists(settingsPath, errorMessage)) {
+		mrLogMessage(errorMessage != nullptr ? errorMessage->c_str()
+		                                   : "Settings bootstrap failed (create defaults).");
+		return false;
 	}
 	if (!readTextFile(settingsPath, source)) {
 		if (errorMessage != nullptr)
@@ -387,6 +388,9 @@ bool loadStartupSettingsMacro(const std::string &overridePath, std::string *erro
 	}
 
 	std::free(bytecode);
+	TScreen::setCursorType(configuredCursorTypeCode());
+	if (TProgram::deskTop != nullptr)
+		TProgram::deskTop->resetCursor();
 	mrLogMessage(("Settings loaded: " + settingsPath).c_str());
 	mrLogMessage(("Settings MACROPATH: " + defaultMacroDirectoryPath()).c_str());
 	if (errorMessage != nullptr)
@@ -464,8 +468,16 @@ TMREditorApp::~TMREditorApp() {
 }
 
 bool TMREditorApp::reloadSettingsMacroFromPath(const std::string &path, std::string *errorMessage) {
+	std::vector<TMREditWindow *> windows;
+	bool defaultInsertMode = true;
+
 	if (!loadStartupSettingsMacro(path, errorMessage))
 		return false;
+	defaultInsertMode = configuredDefaultInsertMode();
+	windows = allEditWindowsInZOrder();
+	for (std::size_t i = 0; i < windows.size(); ++i)
+		if (windows[i] != nullptr && windows[i]->getEditor() != nullptr && !windows[i]->isReadOnly())
+			windows[i]->getEditor()->setInsertModeEnabled(defaultInsertMode);
 	bootstrapIndexedMacroBindings();
 	return true;
 }
@@ -813,6 +825,7 @@ TPalette &TMREditorApp::getPalette() const {
 	palette[38] = static_cast<char>(0x70); // Label normal
 	palette[39] = static_cast<char>(0x70); // Label selected
 	palette[40] = static_cast<char>(0x70); // Label shortcut
+	palette[45] = static_cast<char>(0x2E); // Dialog button shortcut: yellow on green.
 	palette[1] = currentPalette.desktop;
 	return palette;
 }

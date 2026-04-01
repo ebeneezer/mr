@@ -24,5 +24,5 @@ TDialog *createMenuDialogColorsDialog() {
 	lines.push_back("Window  Menu  File  Block");
 	lines.push_back("(*) Select   ( ) Not-select");
 	lines.push_back("Button<KEY>");
-	return createSetupSimplePreviewDialog("MENU / DIALOG COLORS", 38, 21, lines, false);
+	return createSetupSimplePreviewDialogForProfile("MENU / DIALOG COLORS", 36, 19, 44, 23, lines, false);
 }

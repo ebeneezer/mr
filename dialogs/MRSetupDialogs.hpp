@@ -11,6 +11,7 @@ TDialog *createWindowColorsDialog();
 TDialog *createMenuDialogColorsDialog();
 TDialog *createHelpColorsDialog();
 TDialog *createOtherColorsDialog();
+void runEditSettingsDialogFlow();
 void runInstallationAndSetupDialogFlow();
 
 #endif

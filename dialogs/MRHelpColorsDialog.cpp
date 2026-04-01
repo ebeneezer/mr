@@ -23,5 +23,5 @@ TDialog *createHelpColorsDialog() {
 	lines.push_back("This is help text.");
 	lines.push_back("This is a LINK");
 	lines.push_back("Attr1, Attr2, Attr3");
-	return createSetupSimplePreviewDialog("HELP COLORS", 36, 20, lines, false);
+	return createSetupSimplePreviewDialogForProfile("HELP COLORS", 34, 18, 42, 22, lines, false);
 }

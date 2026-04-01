@@ -23,5 +23,5 @@ TDialog *createWindowColorsDialog() {
 	lines.push_back("Highlighted text");
 	lines.push_back("Current line");
 	lines.push_back("Current line in block");
-	return createSetupSimplePreviewDialog("WINDOW COLORS", 34, 20, lines, false);
+	return createSetupSimplePreviewDialogForProfile("WINDOW COLORS", 32, 18, 40, 22, lines, false);
 }

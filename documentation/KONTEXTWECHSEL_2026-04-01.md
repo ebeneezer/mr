@@ -7,11 +7,18 @@ Dieses Dokument ist die Übergabe für einen neuen Codex-Kontext mit minimalem I
 - Anrede: `Sie` oder `Dr. Raus` (kein Duzen).
 - Bei Entscheidungsfragen: immer Optionen mit Begründung + klare Empfehlung.
 - Ohne explizite Freigabe keine weiteren Ausbau-Schritte.
+- Rückmeldungspflicht: User erst adressieren, nachdem Codex die Änderung im PTY selbst getestet hat.
 - Verwaltung der Versionsnummer des Compilats liegt bei Codex/AI.
 - Fokus auf Pragmatik, technische Klarheit, kurze direkte Kommunikation.
 - Ablagekonvention: Markdown-Dokumentation liegt unter `documentation/`; `misc/` ist nur temporäre Müllhalde/Probe-Ablage.
 - Workspace-Hygiene: Workspace stets aufgeräumt halten; kein Herummüllen mit vielen Neben-/Artefaktdateien.
 - Warmup-Regel bei neuem Kontext: zuerst `documentation/CHANGELOG_CONTEXT.md` lesen (laufendes Protokoll), danach dieses Dokument und die YAML-Übergabe.
+- Setup-Defaults-Regel: Pfad-/URI-Defaults für Setup zentral in **einer** Routine ermitteln; Bootstrap und Setup-Dialog dürfen keine getrennten Default-Logiken haben.
+- Setup-Key-Regel: Bei neuen Setup-Settings den User mit Vorschlag fuer den exakten Key in `settings.mrmac` befragen (wie bestehend: `"SETTINGSPATH"`, `"MACROPATH"`, `"HELPPATH"`, `"TEMPDIR"`, `"SHELLPATH"`).
+- Edit-Settings Keyset v1 ist festgelegt: `"PAGEBREAK"`, `"WORDDELIMS"`, `"DEFAULTEXTS"`, `"TRUNCSPACES"`, `"EOFCTRLZ"`, `"EOFCRLF"`, `"TABEXPAND"`, `"COLBLOCKMOVE"`, `"DEFAULTMODE"`.
+- Bool-Format-Regel fuer Setup-Values: `true/false` (nicht `1/0`).
+- Setup-Dialog-Mnemonics: Neue Dialoge bekommen geeignete Highlight-/Shortcut-Buchstaben durch Codex ohne Rueckfrage.
+- Workspace-Loeschungen: Rueckfragen vor Datei-Loeschungen im Workspace sind deaktiviert (User-Freigabe erteilt).
 
 ## 3) Projektstatus (aktuell)
 - Repository: `/home/idoc/mr`
@@ -58,7 +65,12 @@ Dieses Dokument ist die Übergabe für einen neuen Codex-Kontext mit minimalem I
 
 ### 4.5 UI-/Darstellungsstand
 - Dialog-Kontrast für graue Dialoge angepasst: schwarz auf grau (lesbar).
-- Fokusrahmen: für modale Situationen strikt über `sfSelected` gesteuert (kein `sfActive`/`sfFocused`-Fallback bei Doppelrahmen/Controls).
+- Fokusrahmen: zentral in `ui/TMRFrame.cpp` ueber Fokusstatus (`sfFocused`) + Modal-TopView-Gate gesteuert. Doppelrahmen/Window-Controls nur beim fokussierten Objekt; keine dialogspezifischen Sonderpatches.
+- Button-Reihenregel fuer Dialoge: `Done/Cancel/Help` konsistent in einer zentrierten Zeile ausrichten (Window-List-Stil), keine versetzte/rechtsdriftende Help-Position.
+- Benennungsregel: Datei-Felder (Pfad + Dateiname) als `URI` benennen; reine Ordnerfelder als `path`. Datei-URI-Vorbelegung in Dialogen absolut.
+- Setup-Layout-Standard: Alle Setup-Dialoge nutzen zentral ein Profilmodell `compact/relaxed` (80x25-first) statt getrennter Dialog-Versionen; nur die Geometrie wechselt profilabhaengig.
+- Setup-Defaults zentralisiert: Bootstrap und Setup verwenden dieselbe Default-Routine zur Ermittlung von Settings-/Macro-/Help-/Temp-/Shell-Pfaden.
+- Wenn `settings.mrmac` fehlt, wird sie beim Start automatisch mit den Setup-Defaults erstellt.
 - Desktop-Pattern-Diskussion abgeschlossen:
   - Hauptursache für Abweichungen war terminal/font-rendering (v. a. VSCode internal terminal).
   - Externes Terminal ist Referenz für Abnahme.
@@ -130,3 +142,17 @@ Option 1.
 ## 10) Protokoll (laufend)
 - Das laufende Protokoll ist ab sofort ausgelagert nach `documentation/CHANGELOG_CONTEXT.md`.
 - Dieses Dokument enthaelt nur die stabilen Uebergaberegeln; Detailverlauf und Tagesfortschritt stehen im Changelog.
+
+## 11) Update 2026-04-01 (spaeter)
+- Setup `Edit settings` (Option 1) ist implementiert:
+  - Keys: `PAGEBREAK`, `WORDDELIMS`, `DEFAULTEXTS`, `TRUNCSPACES`, `EOFCTRLZ`, `EOFCRLF`,
+    `TABEXPAND`, `COLBLOCKMOVE`, `DEFAULTMODE`.
+  - Bool-Literale werden in `settings.mrmac` als `true/false` geschrieben.
+  - Dialog `Installation and setup -> Edit settings` ist funktional (`Done/Cancel/Help`) und reloadet silent.
+- Runtime-Anbindung:
+  - `PAGEBREAK` steuert `NEXT_PAGE_BREAK`/`LAST_PAGE_BREAK`.
+  - `DEFAULTMODE` wirkt auf neue Fenster und wird nach Settings-Reload auf offene editierbare Fenster angewandt.
+  - `DEFAULTEXTS` wird bei Open/Load als Dateiendungs-Fallback genutzt, wenn keine Endung angegeben wurde.
+- Verifikation:
+  - `make mr` grün.
+  - `make regression-check` grün (6/6).

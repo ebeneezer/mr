@@ -1,16 +1,22 @@
 #define Uses_TDialog
 #define Uses_TButton
+#define Uses_TEvent
+#define Uses_TScrollBar
+#define Uses_TStaticText
 #include <tvision/tv.h>
 
 #include "MRSetupDialogs.hpp"
 #include "MRSetupDialogCommon.hpp"
 
+#include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <set>
 #include <string>
 #include <sys/utsname.h>
 #include <unistd.h>
+#include <vector>
 
 #include "../app/MRCommands.hpp"
 
@@ -141,54 +147,172 @@ std::string fitSetupLine(const std::string &text, std::size_t maxChars) {
 std::string buildSetupInfoLine(const char *label, const std::string &value, std::size_t maxChars) {
 	return fitSetupLine(std::string(label) + " = " + value, maxChars);
 }
+
+bool isInstallationSetupModalCommand(ushort command) {
+	switch (command) {
+		case cmMrSetupEditSettings:
+		case cmMrSetupDisplaySetup:
+		case cmMrSetupColorSetup:
+		case cmMrSetupKeyMapping:
+		case cmMrSetupMouseKeyRepeat:
+		case cmMrSetupFilenameExtensions:
+		case cmMrSetupSwappingEmsXms:
+		case cmMrSetupBackupsTempAutosave:
+		case cmMrSetupSearchAndReplaceDefaults:
+		case cmMrSetupUserInterfaceSettings:
+		case cmMrSetupSaveConfigurationAndExit:
+			return true;
+		default:
+			return false;
+	}
+}
+
+class TInstallationAndSetupDialog : public TDialog {
+  public:
+	struct ManagedItem {
+		TView *view;
+		TRect base;
+	};
+
+	TInstallationAndSetupDialog(const TRect &bounds, const char *title, int virtualWidth,
+	                            int virtualHeight)
+	    : TWindowInit(&TDialog::initFrame), TDialog(bounds, title), virtualWidth_(virtualWidth),
+	      virtualHeight_(virtualHeight) {
+	}
+
+	void insertManaged(TView *view, const TRect &base) {
+		ManagedItem item;
+		item.view = view;
+		item.base = base;
+		managedViews_.push_back(item);
+		insert(view);
+	}
+
+	void initScrollIfNeeded() {
+		int maxDx = std::max(0, virtualWidth_ - size.x);
+		int maxDy = std::max(0, virtualHeight_ - size.y);
+
+		if (maxDx == 0 && maxDy == 0)
+			return;
+		hScrollBar_ = new TScrollBar(TRect(1, size.y - 2, size.x - 2, size.y - 1));
+		vScrollBar_ = new TScrollBar(TRect(size.x - 2, 1, size.x - 1, size.y - 2));
+		insert(hScrollBar_);
+		insert(vScrollBar_);
+		hScrollBar_->setParams(0, 0, maxDx, std::max(1, (size.x - 4) / 2), 1);
+		vScrollBar_->setParams(0, 0, maxDy, std::max(1, (size.y - 4) / 2), 1);
+		applyScroll();
+	}
+
+	void applyScroll() {
+		int dx = hScrollBar_ != nullptr ? hScrollBar_->value : 0;
+		int dy = vScrollBar_ != nullptr ? vScrollBar_->value : 0;
+
+		for (std::size_t i = 0; i < managedViews_.size(); ++i) {
+			TRect moved = managedViews_[i].base;
+			moved.move(-dx, -dy);
+			managedViews_[i].view->locate(moved);
+		}
+	}
+
+	void handleEvent(TEvent &event) override {
+		TDialog::handleEvent(event);
+		if (event.what == evCommand && isInstallationSetupModalCommand(event.message.command)) {
+			endModal(event.message.command);
+			clearEvent(event);
+		}
+		if (event.what == evBroadcast && event.message.command == cmScrollBarChanged &&
+		    (event.message.infoPtr == hScrollBar_ || event.message.infoPtr == vScrollBar_)) {
+			applyScroll();
+			clearEvent(event);
+		}
+	}
+
+  private:
+	int virtualWidth_ = 0;
+	int virtualHeight_ = 0;
+	std::vector<ManagedItem> managedViews_;
+	TScrollBar *hScrollBar_ = nullptr;
+	TScrollBar *vScrollBar_ = nullptr;
+};
 } // namespace
 
 TDialog *createInstallationAndSetupDialog() {
-	static constexpr int kDialogWidth = 72;
-	static constexpr int kDialogHeight = 23;
-	static constexpr int kLeftX1 = 2;
-	static constexpr int kLeftX2 = 35;
-	static constexpr int kRightX1 = 37;
-	static constexpr int kRightX2 = 70;
-	static constexpr std::size_t kInfoWidth = 67;
-	static constexpr std::size_t kColumnWidth = 30;
+	int dialogWidth = 84;
+	int dialogHeight = 24;
+	int leftX1 = 2;
+	int gap = 2;
+	int columnWidth = (dialogWidth - leftX1 * 2 - gap) / 2;
+	int leftX2 = leftX1 + columnWidth;
+	int rightX1 = leftX2 + gap;
+	int rightX2 = rightX1 + columnWidth;
+	int finalRowTop = dialogHeight - 3;
+	std::size_t infoWidth = static_cast<std::size_t>(std::max(10, dialogWidth - 5));
+	std::size_t columnInfoWidth = static_cast<std::size_t>(std::max(10, columnWidth - 3));
 
-	TDialog *dialog =
-	    new TDialog(centeredSetupDialogRect(kDialogWidth, kDialogHeight), "INSTALLATION AND SETUP");
+	TInstallationAndSetupDialog *dialog =
+	    new TInstallationAndSetupDialog(centeredSetupDialogRect(dialogWidth, dialogHeight),
+	                                    "INSTALLATION AND SETUP", dialogWidth, dialogHeight);
+	if (dialog == nullptr)
+		return nullptr;
 
-	insertSetupStaticLine(dialog, 2, 2, buildSetupInfoLine("OS", currentOsDescription(), kInfoWidth).c_str());
-	insertSetupStaticLine(
-	    dialog, 2, 3, buildSetupInfoLine("Shell", trimmedValue(std::getenv("SHELL")), kColumnWidth).c_str());
-	insertSetupStaticLine(
-	    dialog, 37, 3, buildSetupInfoLine("TERM", trimmedValue(std::getenv("TERM")), kColumnWidth).c_str());
-	insertSetupStaticLine(dialog, 2, 4,
-	                     buildSetupInfoLine("MR Path", currentWorkingDirectory(), kColumnWidth).c_str());
-	insertSetupStaticLine(dialog, 37, 4, buildSetupInfoLine("CPU", currentCpuDescription(), kColumnWidth).c_str());
-	insertSetupStaticLine(dialog, 2, 5, buildSetupInfoLine("RAM", currentRamDescription(), kColumnWidth).c_str());
+	std::string osLine = buildSetupInfoLine("OS", currentOsDescription(), infoWidth);
+	std::string shellLine = buildSetupInfoLine("Shell", trimmedValue(std::getenv("SHELL")), columnInfoWidth);
+	std::string termLine = buildSetupInfoLine("TERM", trimmedValue(std::getenv("TERM")), columnInfoWidth);
+	std::string mrPathLine = buildSetupInfoLine("MR Path", currentWorkingDirectory(), columnInfoWidth);
+	std::string cpuLine = buildSetupInfoLine("CPU", currentCpuDescription(), columnInfoWidth);
+	std::string ramLine = buildSetupInfoLine("RAM", currentRamDescription(), columnInfoWidth);
 
-	dialog->insert(
-	    new TButton(TRect(kLeftX1, 9, kLeftX2, 11), "Edit settings...", cmMrSetupEditSettings, bfNormal));
-	dialog->insert(
-	    new TButton(TRect(kLeftX1, 11, kLeftX2, 13), "Display setup...", cmMrSetupDisplaySetup, bfNormal));
-	dialog->insert(
-	    new TButton(TRect(kLeftX1, 13, kLeftX2, 15), "Color setup...", cmMrSetupColorSetup, bfNormal));
-	dialog->insert(
-	    new TButton(TRect(kLeftX1, 15, kLeftX2, 17), "Key mapping...", cmMrSetupKeyMapping, bfNormal));
-	dialog->insert(new TButton(TRect(kRightX1, 9, kRightX2, 11), "Mouse / Key repeat...",
-	                           cmMrSetupMouseKeyRepeat, bfNormal));
-	dialog->insert(new TButton(TRect(kRightX1, 11, kRightX2, 13), "Filename extensions...",
-	                           cmMrSetupFilenameExtensions, bfNormal));
-	dialog->insert(new TButton(TRect(kRightX1, 13, kRightX2, 15), "Paths",
-	                           cmMrSetupSwappingEmsXms, bfNormal));
-	dialog->insert(new TButton(TRect(kRightX1, 15, kRightX2, 17), "Backups / Temp / Autosave...",
-	                           cmMrSetupBackupsTempAutosave, bfNormal));
-	dialog->insert(new TButton(TRect(kLeftX1, 17, kLeftX2, 19), "Search and Replace...",
-	                           cmMrSetupSearchAndReplaceDefaults, bfNormal));
-	dialog->insert(new TButton(TRect(kRightX1, 17, kRightX2, 19), "User interface settings...",
-	                           cmMrSetupUserInterfaceSettings, bfNormal));
-	dialog->insert(new TButton(TRect(kLeftX1, 20, kLeftX2, 22), "Exit Setup", cmCancel, bfNormal));
-	dialog->insert(new TButton(TRect(kRightX1, 20, kRightX2, 22), "Save configuration",
-	                           cmMrSetupSaveConfigurationAndExit, bfDefault));
+	TRect osRect(2, 2, 2 + static_cast<short>(osLine.size() + 1), 3);
+	TRect shellRect(2, 3, 2 + static_cast<short>(shellLine.size() + 1), 4);
+	TRect termRect(rightX1, 3, rightX1 + static_cast<short>(termLine.size() + 1), 4);
+	TRect mrPathRect(2, 4, 2 + static_cast<short>(mrPathLine.size() + 1), 5);
+	TRect cpuRect(rightX1, 4, rightX1 + static_cast<short>(cpuLine.size() + 1), 5);
+	TRect ramRect(2, 5, 2 + static_cast<short>(ramLine.size() + 1), 6);
 
+	dialog->insertManaged(new TStaticText(osRect, osLine.c_str()), osRect);
+	dialog->insertManaged(new TStaticText(shellRect, shellLine.c_str()), shellRect);
+	dialog->insertManaged(new TStaticText(termRect, termLine.c_str()), termRect);
+	dialog->insertManaged(new TStaticText(mrPathRect, mrPathLine.c_str()), mrPathRect);
+	dialog->insertManaged(new TStaticText(cpuRect, cpuLine.c_str()), cpuRect);
+	dialog->insertManaged(new TStaticText(ramRect, ramLine.c_str()), ramRect);
+
+	dialog->insertManaged(
+	    new TButton(TRect(leftX1, 9, leftX2, 11), "~E~dit settings...", cmMrSetupEditSettings, bfNormal),
+	    TRect(leftX1, 9, leftX2, 11));
+	dialog->insertManaged(
+	    new TButton(TRect(leftX1, 11, leftX2, 13), "~D~isplay setup...", cmMrSetupDisplaySetup, bfNormal),
+	    TRect(leftX1, 11, leftX2, 13));
+	dialog->insertManaged(
+	    new TButton(TRect(leftX1, 13, leftX2, 15), "~C~olor setup...", cmMrSetupColorSetup, bfNormal),
+	    TRect(leftX1, 13, leftX2, 15));
+	dialog->insertManaged(
+	    new TButton(TRect(leftX1, 15, leftX2, 17), "~K~ey mapping...", cmMrSetupKeyMapping, bfNormal),
+	    TRect(leftX1, 15, leftX2, 17));
+	dialog->insertManaged(new TButton(TRect(rightX1, 9, rightX2, 11), "~M~ouse / Key repeat...",
+	                                  cmMrSetupMouseKeyRepeat, bfNormal),
+	                      TRect(rightX1, 9, rightX2, 11));
+	dialog->insertManaged(new TButton(TRect(rightX1, 11, rightX2, 13), "~F~ilename extensions...",
+	                                  cmMrSetupFilenameExtensions, bfNormal),
+	                      TRect(rightX1, 11, rightX2, 13));
+	dialog->insertManaged(new TButton(TRect(rightX1, 13, rightX2, 15), "~P~aths",
+	                                  cmMrSetupSwappingEmsXms, bfNormal),
+	                      TRect(rightX1, 13, rightX2, 15));
+	dialog->insertManaged(new TButton(TRect(rightX1, 15, rightX2, 17), "~B~ackups / Temp / Autosave...",
+	                                  cmMrSetupBackupsTempAutosave, bfNormal),
+	                      TRect(rightX1, 15, rightX2, 17));
+	dialog->insertManaged(new TButton(TRect(leftX1, 17, leftX2, 19), "~S~earch and Replace...",
+	                                  cmMrSetupSearchAndReplaceDefaults, bfNormal),
+	                      TRect(leftX1, 17, leftX2, 19));
+	dialog->insertManaged(new TButton(TRect(rightX1, 17, rightX2, 19), "~U~ser interface settings...",
+	                                  cmMrSetupUserInterfaceSettings, bfNormal),
+	                      TRect(rightX1, 17, rightX2, 19));
+	dialog->insertManaged(
+	    new TButton(TRect(leftX1, finalRowTop, leftX2, finalRowTop + 2), "E~x~it Setup", cmCancel, bfNormal),
+	    TRect(leftX1, finalRowTop, leftX2, finalRowTop + 2));
+	dialog->insertManaged(new TButton(TRect(rightX1, finalRowTop, rightX2, finalRowTop + 2),
+	                                  "Sa~V~e configuration", cmMrSetupSaveConfigurationAndExit, bfDefault),
+	                      TRect(rightX1, finalRowTop, rightX2, finalRowTop + 2));
+
+	dialog->initScrollIfNeeded();
 	return dialog;
 }

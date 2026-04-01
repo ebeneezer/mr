@@ -23,5 +23,5 @@ TDialog *createDisplaySetupDialog() {
 	lines.push_back("  [X] Left-hand border");
 	lines.push_back("  [X] Right-hand border");
 	lines.push_back("  [X] Bottom border");
-	return createSetupSimplePreviewDialog("DISPLAY SETUP", 60, 20, lines, true);
+	return createSetupSimplePreviewDialogForProfile("DISPLAY SETUP", 56, 18, 64, 22, lines, true);
 }

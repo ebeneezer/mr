@@ -122,6 +122,12 @@ class TMREditWindow : public TWindow {
 		return displayTitle;
 	}
 
+	void setState(ushort aState, Boolean enable) override {
+		TWindow::setState(aState, enable);
+		if ((aState & (sfFocused | sfSelected | sfActive)) != 0 && frame != nullptr)
+			frame->drawView();
+	}
+
 	virtual void handleEvent(TEvent &event) override {
 		if (event.what == evKeyDown) {
 			std::string executedMacroName;

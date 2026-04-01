@@ -390,6 +390,9 @@ class MRAboutDialog : public TDialog {
 		quoteBox_ = new MRAboutQuoteBox(TRect(4, 5, size.x - 4, 13));
 		insert(quoteBox_);
 		quoteBox_->setQuoteImmediate(kAboutQuotes[0]);
+		quoteSeen_.assign(kAboutQuoteCount, 0);
+		if (!quoteSeen_.empty())
+			quoteSeen_[0] = 1;
 		quoteRandomState_ = static_cast<std::uint32_t>(
 		    std::chrono::steady_clock::now().time_since_epoch().count()) ^
 		                   0xA39F1D5Bu;
@@ -476,14 +479,34 @@ class MRAboutDialog : public TDialog {
 			rebuildQuoteBag();
 		if (quoteBagCursor_ >= quoteBag_.size())
 			return (quoteIndex_ + 1) % kAboutQuoteCount;
-		return quoteBag_[quoteBagCursor_++];
+		std::size_t picked = quoteBag_[quoteBagCursor_++];
+		if (picked < quoteSeen_.size())
+			quoteSeen_[picked] = 1;
+		return picked;
 	}
 
 	void rebuildQuoteBag() {
+		bool hasUnseen = false;
+
 		quoteBag_.clear();
-		quoteBag_.reserve(kAboutQuoteCount);
+		quoteBag_.reserve(kAboutQuoteCount > 0 ? kAboutQuoteCount - 1 : 0);
+
+		for (std::size_t i = 0; i < quoteSeen_.size(); ++i) {
+			if (quoteSeen_[i] == 0) {
+				hasUnseen = true;
+				break;
+			}
+		}
+
+		if (!hasUnseen) {
+			std::fill(quoteSeen_.begin(), quoteSeen_.end(), static_cast<unsigned char>(0));
+			if (quoteIndex_ < quoteSeen_.size())
+				quoteSeen_[quoteIndex_] = 1;
+		}
+
 		for (std::size_t i = 0; i < kAboutQuoteCount; ++i)
-			quoteBag_.push_back(i);
+			if (i < quoteSeen_.size() && quoteSeen_[i] == 0)
+				quoteBag_.push_back(i);
 
 		if (quoteBag_.size() > 1) {
 			for (std::size_t i = quoteBag_.size() - 1; i > 0; --i) {
@@ -493,11 +516,6 @@ class MRAboutDialog : public TDialog {
 				std::size_t tmp = quoteBag_[i];
 				quoteBag_[i] = quoteBag_[j];
 				quoteBag_[j] = tmp;
-			}
-			if (quoteBag_[0] == quoteIndex_) {
-				std::size_t tmp = quoteBag_[0];
-				quoteBag_[0] = quoteBag_[1];
-				quoteBag_[1] = tmp;
 			}
 		}
 		quoteBagCursor_ = 0;
@@ -534,6 +552,7 @@ class MRAboutDialog : public TDialog {
 	std::size_t quoteIndex_;
 	std::uint32_t quoteRandomState_;
 	std::vector<std::size_t> quoteBag_;
+	std::vector<unsigned char> quoteSeen_;
 	std::size_t quoteBagCursor_ = 0;
 	bool quoteModeEnabled_;
 	TTimerId rotationTimer_;

@@ -9,6 +9,7 @@
 #include <set>
 #include <vector>
 
+#include "MRDialogPaths.hpp"
 #include "../ui/TMREditWindow.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
@@ -62,6 +63,8 @@ TMREditWindow *createEditorWindow(const char *title) {
 	bounds.grow(-2, -1);
 	win = new TMREditWindow(bounds, title, nextEditorWindowNumber());
 	TProgram::deskTop->insert(win);
+	if (win != 0 && win->getEditor() != 0)
+		win->getEditor()->setInsertModeEnabled(configuredDefaultInsertMode());
 	return win;
 }
 

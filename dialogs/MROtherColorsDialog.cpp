@@ -22,5 +22,5 @@ TDialog *createOtherColorsDialog() {
 	lines.push_back("Message  WORKING  L:333 C:10");
 	lines.push_back("ERROR BOX");
 	lines.push_back("1Help 2Save 3Load 4Indent");
-	return createSetupSimplePreviewDialog("OTHER COLORS", 36, 19, lines, false);
+	return createSetupSimplePreviewDialogForProfile("OTHER COLORS", 34, 18, 42, 22, lines, false);
 }
