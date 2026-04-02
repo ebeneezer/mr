@@ -1,1 +1,0 @@
-/usr/bin/c++ -Wl,--dependency-file=CMakeFiles/tvdemo.dir/link.d CMakeFiles/tvdemo.dir/Unity/unity_1_cxx.cxx.o CMakeFiles/tvdemo.dir/Unity/unity_0_cxx.cxx.o -o ../../tvdemo  ../../libtvision.a /usr/lib/libncursesw.so -ltinfo /usr/lib/libgpm.so

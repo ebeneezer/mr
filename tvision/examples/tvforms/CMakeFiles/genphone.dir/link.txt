@@ -1,1 +1,0 @@
-/usr/bin/c++ -Wl,--dependency-file=CMakeFiles/genphone.dir/link.d CMakeFiles/genphone.dir/Unity/unity_0_cxx.cxx.o -o ../../genphone  ../../libtvision.a /usr/lib/libncursesw.so -ltinfo /usr/lib/libgpm.so
