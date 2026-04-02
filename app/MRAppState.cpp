@@ -114,7 +114,7 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrBlockMarkStream, canModify);
 	setCommandEnabled(cmMrBlockEndMarking, hasEditor && state.hasBlock);
 	setCommandEnabled(cmMrBlockTurnMarkingOff, hasEditor && state.hasBlock);
-	setCommandEnabled(cmMrBlockPersistent, false);
+	setCommandEnabled(cmMrBlockPersistent, hasEditor);
 
 	setCommandEnabled(cmMrSearchFindText, hasEditor);
 	setCommandEnabled(cmMrSearchReplace, canModify);

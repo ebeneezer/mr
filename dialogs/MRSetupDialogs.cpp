@@ -69,6 +69,18 @@ std::string trimAscii(const std::string &value) {
 	return value.substr(start, end - start);
 }
 
+std::string ensureMrmacExtension(const std::string &path) {
+	std::size_t dotPos = path.find_last_of('.');
+	if (dotPos != std::string::npos) {
+		std::string ext = path.substr(dotPos);
+		for (std::size_t i = 0; i < ext.size(); ++i)
+			ext[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(ext[i])));
+		if (ext == ".mrmac")
+			return path;
+	}
+	return path + ".mrmac";
+}
+
 std::string readRecordField(const char *value) {
 	return trimAscii(value != nullptr ? value : "");
 }
@@ -214,6 +226,40 @@ bool browsePathWithDirectoryDialog(const std::string &currentValue, std::string 
 	return !selectedPath.empty();
 }
 
+bool chooseThemeFileForLoad(std::string &selectedUri) {
+	char fileName[MAXPATH];
+	std::string seed = configuredColorThemeFilePath();
+	ushort result;
+
+	if (seed.empty())
+		seed = "*.mrmac";
+	std::memset(fileName, 0, sizeof(fileName));
+	writeRecordField(fileName, sizeof(fileName), seed);
+	result = execDialogRawWithData(new TFileDialog("*.mrmac", "Load color theme", "~N~ame", fdOKButton, 232),
+	                               fileName);
+	if (result == cmCancel)
+		return false;
+	selectedUri = normalizeConfiguredPathInput(fileName);
+	return true;
+}
+
+bool chooseThemeFileForSave(std::string &selectedUri) {
+	char fileName[MAXPATH];
+	std::string seed = configuredColorThemeFilePath();
+	ushort result;
+
+	if (seed.empty())
+		seed = "*.mrmac";
+	std::memset(fileName, 0, sizeof(fileName));
+	writeRecordField(fileName, sizeof(fileName), seed);
+	result = execDialogRawWithData(new TFileDialog("*.mrmac", "Save color theme as", "~N~ame", fdOKButton, 233),
+	                               fileName);
+	if (result == cmCancel)
+		return false;
+	selectedUri = normalizeConfiguredPathInput(ensureMrmacExtension(fileName));
+	return true;
+}
+
 ushort execDialog(TDialog *dialog) {
 	ushort result = execDialogRaw(dialog);
 	if (result == cmHelp)
@@ -234,10 +280,24 @@ void applyDialogScrollbarSyncToPalette(TPalette &palette) {
 }
 
 TPalette buildColorSetupWorkingPalette() {
-	TPalette palette(cpAppColor, sizeof(cpAppColor) - 1);
+	static const TPalette basePalette = []() -> TPalette {
+		static const int kBaseSlots = 135;
+		static const int kTotalSlots = kMrPaletteChangedText;
+		static const char cp[] = cpAppColor;
+		TColorAttr data[kTotalSlots];
+		int i = 0;
+
+		for (i = 0; i < kBaseSlots; ++i)
+			data[i] = static_cast<unsigned char>(cp[i]);
+		data[kMrPaletteCurrentLine - 1] = data[10 - 1];
+		data[kMrPaletteCurrentLineInBlock - 1] = data[12 - 1];
+		data[kMrPaletteChangedText - 1] = data[14 - 1];
+		return TPalette(data, static_cast<ushort>(kTotalSlots));
+	}();
+	TPalette palette = basePalette;
 	unsigned char overrideValue = 0;
 
-	for (int slot = 1; slot <= 135; ++slot)
+	for (int slot = 1; slot <= kMrPaletteChangedText; ++slot)
 		if (configuredColorSlotOverride(static_cast<unsigned char>(slot), overrideValue))
 			palette[slot] = overrideValue;
 	applyDialogScrollbarSyncToPalette(palette);
@@ -304,9 +364,12 @@ class TPathsSetupDialog : public TDialog {
 		void draw() override {
 			TDrawBuffer b;
 			ushort color = getColor((state & sfFocused) != 0 ? 2 : 1);
+			int x = 0;
 
 			b.moveChar(0, ' ', color, size.x);
-			b.moveStr(0, glyph_.c_str(), color, size.x);
+			if (size.x > 1)
+				x = (size.x - 1) / 2;
+			b.moveStr(static_cast<ushort>(x), glyph_.c_str(), color, size.x - x);
 			writeLine(0, 0, size.x, size.y, b);
 		}
 
@@ -353,9 +416,10 @@ class TPathsSetupDialog : public TDialog {
 
 		int dialogWidth = kVirtualDialogWidth;
 		int inputLeft = 2;
+		int glyphWidth = 3;
 		int glyphRight = dialogWidth - 2;
-		int glyphLeft = glyphRight - 1;
-		int inputRight = glyphLeft;
+		int glyphLeft = glyphRight - glyphWidth;
+		int inputRight = glyphLeft - 1;
 		int doneLeft = dialogWidth / 2 - 17;
 		int cancelLeft = doneLeft + 12;
 		int helpLeft = cancelLeft + 14;
@@ -424,48 +488,49 @@ class TPathsSetupDialog : public TDialog {
 	}
 
 	void handleEvent(TEvent &event) override {
+		if (event.what == evCommand) {
+			switch (event.message.command) {
+				case cmMrSetupPathsHelp:
+					endModal(event.message.command);
+					clearEvent(event);
+					return;
+
+				case cmMrSetupPathsBrowseSettingsUri:
+					browseSettingsMacroUri();
+					clearEvent(event);
+					return;
+
+				case cmMrSetupPathsBrowseMacroPath:
+					browseMacroPath();
+					clearEvent(event);
+					return;
+
+				case cmMrSetupPathsBrowseHelpUri:
+					browseHelpUri();
+					clearEvent(event);
+					return;
+
+				case cmMrSetupPathsBrowseTempPath:
+					browseTempPath();
+					clearEvent(event);
+					return;
+
+				case cmMrSetupPathsBrowseShellUri:
+					browseShellUri();
+					clearEvent(event);
+					return;
+
+				default:
+					break;
+			}
+		}
+
 		TDialog::handleEvent(event);
 		if (event.what == evBroadcast && event.message.command == cmScrollBarChanged &&
 		    (event.message.infoPtr == hScrollBar_ || event.message.infoPtr == vScrollBar_)) {
 			applyScroll();
 			clearEvent(event);
 			return;
-		}
-		if (event.what != evCommand)
-			return;
-		switch (event.message.command) {
-			case cmMrSetupPathsHelp:
-				endModal(event.message.command);
-				clearEvent(event);
-				break;
-
-			case cmMrSetupPathsBrowseSettingsUri:
-				browseSettingsMacroUri();
-				clearEvent(event);
-				break;
-
-			case cmMrSetupPathsBrowseMacroPath:
-				browseMacroPath();
-				clearEvent(event);
-				break;
-
-			case cmMrSetupPathsBrowseHelpUri:
-				browseHelpUri();
-				clearEvent(event);
-				break;
-
-			case cmMrSetupPathsBrowseTempPath:
-				browseTempPath();
-				clearEvent(event);
-				break;
-
-			case cmMrSetupPathsBrowseShellUri:
-				browseShellUri();
-				clearEvent(event);
-				break;
-
-			default:
-				break;
 		}
 	}
 
@@ -710,6 +775,16 @@ void runPathsSetupDialogFlowLocal() {
 } // namespace
 
 void runColorSetupDialogFlowLocal() {
+	auto persistSettingsFileOnly = [](std::string &errorText) -> bool {
+		MRSetupPaths paths = resolveSetupPathDefaults();
+		paths.settingsMacroUri = configuredSettingsMacroFilePath();
+		paths.macroPath = defaultMacroDirectoryPath();
+		paths.helpUri = configuredHelpFilePath();
+		paths.tempPath = configuredTempDirectoryPath();
+		paths.shellUri = configuredShellExecutablePath();
+		return writeSettingsMacroFile(paths, &errorText);
+	};
+
 	bool running = true;
 
 	while (running) {
@@ -730,6 +805,42 @@ void runColorSetupDialogFlowLocal() {
 			case cmMrColorOtherColors:
 				runParameterizedColorPicker(MRColorSetupGroup::Other);
 				break;
+
+			case cmMrColorLoadTheme: {
+				std::string themeUri;
+				std::string errorText;
+
+				if (!chooseThemeFileForLoad(themeUri))
+					break;
+				if (!loadColorThemeFile(themeUri, &errorText)) {
+					messageBox(mfError | mfOKButton, "Color Setup / Load Theme\n\n%s", errorText.c_str());
+					break;
+				}
+				if (!persistSettingsFileOnly(errorText)) {
+					messageBox(mfError | mfOKButton, "Color Setup / Save settings\n\n%s", errorText.c_str());
+					break;
+				}
+				TProgram::application->redraw();
+				break;
+			}
+
+			case cmMrColorSaveTheme: {
+				std::string themeUri;
+				std::string errorText;
+
+				if (!chooseThemeFileForSave(themeUri))
+					break;
+				if (!writeColorThemeFile(themeUri, &errorText)) {
+					messageBox(mfError | mfOKButton, "Color Setup / Save Theme\n\n%s", errorText.c_str());
+					break;
+				}
+				if (!persistSettingsFileOnly(errorText)) {
+					messageBox(mfError | mfOKButton, "Color Setup / Save settings\n\n%s", errorText.c_str());
+					break;
+				}
+				TProgram::application->redraw();
+				break;
+			}
 
 			case cmCancel:
 			default:

@@ -5808,10 +5808,16 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							throw std::runtime_error(
 							    "MRSETUP(SHELLPATH) failed: " +
 							    (errorText.empty() ? std::string("invalid path.") : errorText));
+					} else if (setupKey == "COLORTHEMEURI") {
+						if (!setConfiguredColorThemeFilePath(valueAsString(args[1]), &errorText))
+							throw std::runtime_error(
+							    "MRSETUP(COLORTHEMEURI) failed: " +
+							    (errorText.empty() ? std::string("invalid path.") : errorText));
 						} else if (setupKey == "PAGEBREAK" || setupKey == "WORDDELIMS" ||
 						           setupKey == "DEFAULTEXTS" || setupKey == "TRUNCSPACES" ||
 						           setupKey == "EOFCTRLZ" || setupKey == "EOFCRLF" ||
-						           setupKey == "TABEXPAND" || setupKey == "COLBLOCKMOVE" ||
+						           setupKey == "TABEXPAND" || setupKey == "PERSISTBLOCKS" ||
+						           setupKey == "PERSISTENTBLOCKS" || setupKey == "COLBLOCKMOVE" ||
 						           setupKey == "DEFAULTMODE") {
 							if (!applyConfiguredEditSetupValue(setupKey, valueAsString(args[1]), &errorText))
 								throw std::runtime_error(
@@ -5838,8 +5844,8 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						} else
 							throw std::runtime_error(
 							    "MRSETUP supports keys: MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
-							    "SHELLPATH, PAGEBREAK, WORDDELIMS, DEFAULTEXTS, TRUNCSPACES, EOFCTRLZ, "
-							    "EOFCRLF, TABEXPAND, COLBLOCKMOVE, DEFAULTMODE, WINDOWCOLORS, "
+							    "SHELLPATH, COLORTHEMEURI, PAGEBREAK, WORDDELIMS, DEFAULTEXTS, TRUNCSPACES, EOFCTRLZ, "
+							    "EOFCRLF, TABEXPAND, PERSISTENTBLOCKS, COLBLOCKMOVE, DEFAULTMODE, WINDOWCOLORS, "
 							    "MENUDIALOGCOLORS, HELPCOLORS, OTHERCOLORS.");
 					runtimeErrorLevel() = 0;
 				} else if (name == "SET_GLOBAL_STR") {

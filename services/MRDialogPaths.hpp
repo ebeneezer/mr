@@ -22,12 +22,13 @@ struct MREditSetupSettings {
 	bool eofCtrlZ;
 	bool eofCrLf;
 	bool tabExpand;
+	bool persistentBlocks;
 	std::string columnBlockMove;
 	std::string defaultMode;
 
 	MREditSetupSettings() noexcept
 	    : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false),
-	      eofCrLf(false), tabExpand(true), columnBlockMove(), defaultMode() {
+	      eofCrLf(false), tabExpand(true), persistentBlocks(true), columnBlockMove(), defaultMode() {
 	}
 };
 
@@ -43,9 +44,15 @@ struct MRColorSetupItem {
 	unsigned char paletteIndex;
 };
 
+enum : unsigned char {
+	kMrPaletteCurrentLine = 136,
+	kMrPaletteCurrentLineInBlock = 137,
+	kMrPaletteChangedText = 138
+};
+
 struct MRColorSetupSettings {
 	static const std::size_t kWindowCount = 7;
-	static const std::size_t kMenuDialogCount = 11;
+	static const std::size_t kMenuDialogCount = 12;
 	static const std::size_t kHelpCount = 9;
 	static const std::size_t kOtherCount = 10;
 
@@ -78,10 +85,19 @@ const MRColorSetupItem *colorSetupGroupItems(MRColorSetupGroup group, std::size_
 bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned char *values,
                                         std::size_t count, std::string *errorMessage = nullptr);
 void configuredColorSetupGroupValues(MRColorSetupGroup group, unsigned char *values, std::size_t count);
+std::string configuredColorThemeFilePath();
+std::string configuredColorThemeDisplayName();
+std::string defaultColorThemeFilePath();
+bool validateColorThemeFilePath(const std::string &path, std::string *errorMessage = nullptr);
+bool setConfiguredColorThemeFilePath(const std::string &path, std::string *errorMessage = nullptr);
+bool writeColorThemeFile(const std::string &themeUri, std::string *errorMessage = nullptr);
+bool ensureColorThemeFileExists(const std::string &themeUri, std::string *errorMessage = nullptr);
+bool loadColorThemeFile(const std::string &themeUri, std::string *errorMessage = nullptr);
 std::string formatEditSetupBoolean(bool value);
 std::vector<std::string> configuredDefaultExtensionList();
 bool configuredDefaultInsertMode();
 bool configuredTabExpandSetting();
+bool configuredPersistentBlocksSetting();
 char configuredPageBreakCharacter();
 std::string buildSettingsMacroSource(const MRSetupPaths &paths);
 bool writeSettingsMacroFile(const MRSetupPaths &paths, std::string *errorMessage = nullptr);

@@ -25,6 +25,7 @@
 #include "MRUnsavedChangesDialog.hpp"
 #include "TMRIndicator.hpp"
 #include "TMRTextBufferModel.hpp"
+#include "../services/MRDialogPaths.hpp"
 
 class TMRFileEditor : public TScroller {
   public:
@@ -762,10 +763,9 @@ class TMRFileEditor : public TScroller {
 
 	virtual TPalette &getPalette() const override {
 		// 1..2: scroller text/selected text (window slots 6/7)
-		// 3: current line highlight (window slot 10)
-		// 4: current line in block highlight (window slot 12)
-		// 5: changed text highlight (window slot 14)
-		static TPalette palette("\x06\x07\x0A\x0C\x0E", 5);
+		// 3..5: editor-only highlight slots (window-local palette slots 9..11)
+		// mapped to app palette extension 136..138.
+		static TPalette palette("\x06\x07\x09\x0A\x0B", 5);
 		return palette;
 	}
 
@@ -1194,8 +1194,11 @@ class TMRFileEditor : public TScroller {
 			selectionAnchor_ = anchor;
 			bufferModel_.setCursorAndSelection(target, anchor, target);
 		} else {
+			if (configuredPersistentBlocksSetting() && bufferModel_.hasSelection())
+				bufferModel_.setCursor(target);
+			else
+				bufferModel_.setCursorAndSelection(target, target, target);
 			selectionAnchor_ = target;
-			bufferModel_.setCursorAndSelection(target, target, target);
 		}
 		if (useApproximateLargeFileMetrics())
 			updateMetrics();
@@ -1656,7 +1659,7 @@ class TMRFileEditor : public TScroller {
 		int x = 0;
 
 		if (currentLineInBlock)
-			basePair = getColor(0x0404);
+			basePair = getColor(0x0204);
 		else if (currentLine)
 			basePair = getColor(0x0303);
 		else if (changedLine)

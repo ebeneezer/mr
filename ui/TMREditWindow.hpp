@@ -27,6 +27,7 @@
 #include "TMRIndicator.hpp"
 #include "TMRTextBuffer.hpp"
 #include "MRWindowSupport.hpp"
+#include "../services/MRDialogPaths.hpp"
 #include "../mrmac/mrvm.hpp"
 
 void mrTraceCoprocessorTaskCancel(int bufferId, std::uint64_t taskId);
@@ -113,7 +114,11 @@ class TMREditWindow : public TWindow {
 	}
 
 	virtual TPalette &getPalette() const override {
-		return TWindow::getPalette();
+		static const TColorAttr blueExtended[] = {
+		    0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, kMrPaletteCurrentLine,
+		    kMrPaletteCurrentLineInBlock, kMrPaletteChangedText};
+		static TPalette palette(blueExtended, sizeof(blueExtended) / sizeof(blueExtended[0]));
+		return palette;
 	}
 
 	virtual const char *getTitle(short) override {

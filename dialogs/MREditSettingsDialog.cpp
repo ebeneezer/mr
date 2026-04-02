@@ -39,7 +39,8 @@ enum {
 enum : ushort {
 	kOptionTruncateSpaces = 0x0001,
 	kOptionEofCtrlZ = 0x0002,
-	kOptionEofCrLf = 0x0004
+	kOptionEofCrLf = 0x0004,
+	kOptionPersistentBlocks = 0x0008
 };
 
 enum : ushort {
@@ -121,6 +122,8 @@ void initEditSettingsDialogRecord(EditSettingsDialogRecord &record) {
 		record.optionsMask |= kOptionEofCtrlZ;
 	if (settings.eofCrLf)
 		record.optionsMask |= kOptionEofCrLf;
+	if (settings.persistentBlocks)
+		record.optionsMask |= kOptionPersistentBlocks;
 	record.tabExpandChoice = settings.tabExpand ? kTabExpandTabs : kTabExpandSpaces;
 	record.columnBlockMoveChoice =
 	    (columnMove == "LEAVE_SPACE") ? kColumnMoveLeaveSpace : kColumnMoveDeleteSpace;
@@ -137,6 +140,7 @@ bool recordToSettings(const EditSettingsDialogRecord &record, MREditSetupSetting
 	settings.truncateSpaces = (record.optionsMask & kOptionTruncateSpaces) != 0;
 	settings.eofCtrlZ = (record.optionsMask & kOptionEofCtrlZ) != 0;
 	settings.eofCrLf = (record.optionsMask & kOptionEofCrLf) != 0;
+	settings.persistentBlocks = (record.optionsMask & kOptionPersistentBlocks) != 0;
 	settings.tabExpand = record.tabExpandChoice == kTabExpandTabs;
 	settings.columnBlockMove =
 	    (record.columnBlockMoveChoice == kColumnMoveLeaveSpace) ? "LEAVE_SPACE" : "DELETE_SPACE";
@@ -221,7 +225,9 @@ class TEditSettingsDialog : public TDialog {
 		optionsField_ = new TCheckBoxes(
 		    TRect(optionsX, 9, dialogWidth - 2, 13),
 		    new TSItem("~T~runcate spaces",
-		               new TSItem("Control-~Z~ at EOF", new TSItem("~C~R/LF at EOF", nullptr))));
+		               new TSItem("Control-~Z~ at EOF",
+		                          new TSItem("~C~R/LF at EOF",
+		                                     new TSItem("~P~ersistent blocks", nullptr)))));
 		addManaged(optionsField_, TRect(optionsX, 9, dialogWidth - 2, 13));
 
 		addManaged(new TStaticText(TRect(2, 14, 22, 15), "Tab expand:"), TRect(2, 14, 22, 15));

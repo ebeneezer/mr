@@ -6,7 +6,11 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <iterator>
+#include <map>
 #include <pwd.h>
+#include <regex>
+#include <set>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <string>
@@ -41,6 +45,11 @@ std::string &configuredTempDirectory() {
 }
 
 std::string &configuredShellExecutable() {
+	static std::string value;
+	return value;
+}
+
+std::string &configuredColorThemeFile() {
 	static std::string value;
 	return value;
 }
@@ -260,6 +269,25 @@ std::string appendPathSegment(const std::string &base, const char *segment) {
 	return out;
 }
 
+std::string fileNamePartOf(const std::string &path) {
+	std::size_t pos;
+	if (path.empty())
+		return std::string();
+	pos = path.find_last_of('/');
+	if (pos == std::string::npos)
+		return path;
+	return path.substr(pos + 1);
+}
+
+std::string defaultColorThemePathForSettings(const std::string &settingsPath) {
+	std::string dir = directoryPartOf(makeAbsolutePath(settingsPath));
+	if (dir.empty())
+		dir = currentWorkingDirectory();
+	if (dir.empty())
+		dir = "/tmp";
+	return appendFileName(dir, "default-theme.mrmac");
+}
+
 std::string builtInTempDirectoryPath() {
 	std::string envValue = firstWritableDirectoryFromEnvironment();
 	std::string cwd;
@@ -331,6 +359,14 @@ bool writeTextFile(const std::string &path, const std::string &content) {
 	return out.good();
 }
 
+bool readTextFile(const std::string &path, std::string &content) {
+	std::ifstream in(path.c_str(), std::ios::in | std::ios::binary);
+	if (!in)
+		return false;
+	content.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+	return in.good() || in.eof();
+}
+
 std::string escapeMrmacSingleQuotedLiteral(const std::string &value) {
 	std::string out;
 	out.reserve(value.size() + 8);
@@ -357,6 +393,7 @@ static const char *const kColumnBlockMoveDelete = "DELETE_SPACE";
 static const char *const kColumnBlockMoveLeave = "LEAVE_SPACE";
 static const char *const kDefaultModeInsert = "INSERT";
 static const char *const kDefaultModeOverwrite = "OVERWRITE";
+static const char *const kThemeSettingsKey = "COLORTHEMEURI";
 
 struct ColorGroupDefinition {
 	MRColorSetupGroup group;
@@ -369,20 +406,35 @@ struct ColorGroupDefinition {
 static const MRColorSetupItem kWindowColorItems[] = {
     // TProgram palette layout:
     //   8..15  = TWindow(Blue), 16..23 = TWindow(Cyan), 24..31 = TWindow(Gray).
-    // Our editor windows use wpBlueWindow, so WINDOWCOLORS must target 8..15.
-    // End-Of-File marker color is intentionally not exposed here: in TVision's
-    // TWindow palette slot layout, slot 11 belongs to scrollbar page area.
-    {"Text", 13}, {"Changed-Text", 14}, {"Highlighted-Text", 15}, {"Window-border", 8},
-    {"window-Bold", 9}, {"cUrrent line", 10}, {"cuRrent line in block", 12},
+    // Our editor windows use wpBlueWindow, so frame/text colors map into 8..15.
+    // Current-line, current-line-in-block and changed-text intentionally use
+    // dedicated app palette extension slots (136..138) to avoid recoloring
+    // frame icons/scrollbar controls.
+    {"Text", 13},
+    {"Changed-Text", kMrPaletteChangedText},
+    {"Highlighted-Text", 14},
+    {"Window-border", 8},
+    {"window-Bold", 9},
+    {"cUrrent line", kMrPaletteCurrentLine},
+    {"cuRrent line in block", kMrPaletteCurrentLineInBlock},
 };
 
 static const MRColorSetupItem kMenuDialogColorItems[] = {
     // Mixed group by design:
     // - Menu/status palette slots 2..6.
     // - Gray dialog block (32..63), as TDialog defaults to dpGrayDialog.
-    {"Menu-Text", 2},      {"menu-Highlight", 3}, {"menu-Bold", 4},      {"menu-skip", 5},
-    {"Menu-border", 6},    {"bUtton", 41},        {"button-Key", 45},     {"button-shAdow", 46},
-    {"Select", 59},        {"Not-select", 57},    {"Checkbox bold", 49},
+    {"activeentry-text", 2},
+    {"inactiveentry-text", 3},
+    {"entry-hotkey", 4},
+    {"marker-active", 5},
+    {"marker-inactive", 6},
+    {"bUtton", 41},
+    {"button-Key", 45},
+    {"button-shAdow", 46},
+    {"Select", 59},
+    {"Not-select", 57},
+    {"Checkbox bold", 49},
+    {"List-cuRsor", 58},
 };
 
 static const MRColorSetupItem kHelpColorItems[] = {
@@ -437,6 +489,12 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 	    0x37, 0x3F, 0x3A, 0x13, 0x13, 0x30, 0x3E, 0x1E,
 	};
 
+	if (paletteIndex == kMrPaletteCurrentLine)
+		return defaults[10];
+	if (paletteIndex == kMrPaletteCurrentLineInBlock)
+		return defaults[12];
+	if (paletteIndex == kMrPaletteChangedText)
+		return defaults[14];
 	if (paletteIndex == 0 || paletteIndex >= sizeof(defaults) / sizeof(defaults[0]))
 		return 0x70;
 	return defaults[paletteIndex];
@@ -565,6 +623,88 @@ bool parseWindowColorListLiteral(const std::string &literal,
 	} else
 		return setError(errorMessage, "Unexpected WINDOWCOLORS list size.");
 
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+bool parseMenuDialogColorListLiteral(
+    const std::string &literal, std::array<unsigned char, MRColorSetupSettings::kMenuDialogCount> &outValues,
+    std::string *errorMessage) {
+	std::string text = trimAscii(literal);
+	std::size_t cursor = 0;
+	std::vector<unsigned char> parsed;
+	unsigned char value = 0;
+
+	if (text.rfind("v1:", 0) == 0 || text.rfind("V1:", 0) == 0)
+		text = text.substr(3);
+	if (text.empty())
+		return setError(errorMessage, "Empty color list.");
+
+	while (cursor <= text.size()) {
+		std::size_t comma = text.find(',', cursor);
+		std::string token = text.substr(cursor, comma == std::string::npos ? std::string::npos : comma - cursor);
+		if (!parseHexColorToken(token, value))
+			return setError(errorMessage, "Expected hex color list (e.g. v1:70,7F,...).");
+		parsed.push_back(value);
+		if (comma == std::string::npos)
+			break;
+		cursor = comma + 1;
+	}
+
+	// Accept current 12-value format and legacy 11-value format.
+	// Legacy format did not expose ListViewer focused color (list cursor, slot 58).
+	if (parsed.size() == MRColorSetupSettings::kMenuDialogCount)
+		for (std::size_t i = 0; i < outValues.size(); ++i)
+			outValues[i] = parsed[i];
+	else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 1) {
+		for (std::size_t i = 0; i < parsed.size(); ++i)
+			outValues[i] = parsed[i];
+		outValues[MRColorSetupSettings::kMenuDialogCount - 1] = defaultColorForSlot(58);
+	} else
+		return setError(errorMessage, "Unexpected MENUDIALOGCOLORS list size.");
+
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+std::string unescapeMrmacSingleQuotedLiteral(const std::string &value) {
+	std::string out;
+	out.reserve(value.size());
+	for (std::size_t i = 0; i < value.size(); ++i) {
+		char ch = value[i];
+		if (ch == '\'' && i + 1 < value.size() && value[i + 1] == '\'') {
+			out.push_back('\'');
+			++i;
+			continue;
+		}
+		out.push_back(ch);
+	}
+	return out;
+}
+
+bool parseThemeSetupAssignments(const std::string &source, std::map<std::string, std::string> &assignments,
+                                std::string *errorMessage) {
+	static const std::regex pattern(
+	    "MRSETUP\\s*\\(\\s*'([^']+)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)",
+	    std::regex_constants::ECMAScript | std::regex_constants::icase);
+	std::set<std::string> allowed = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS"};
+	std::sregex_iterator it(source.begin(), source.end(), pattern);
+	std::sregex_iterator end;
+
+	assignments.clear();
+	for (; it != end; ++it) {
+		std::string key = upperAscii(trimAscii((*it)[1].str()));
+		std::string value = unescapeMrmacSingleQuotedLiteral((*it)[2].str());
+
+		if (allowed.find(key) == allowed.end())
+			return setError(errorMessage, "Theme file contains unsupported MRSETUP key: " + key);
+		assignments[key] = value;
+	}
+	for (const std::string &required : allowed)
+		if (assignments.find(required) == assignments.end())
+			return setError(errorMessage, "Theme file must define MRSETUP('" + required + "', ...).");
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;
@@ -810,6 +950,7 @@ MREditSetupSettings resolveEditSetupDefaults() {
 	defaults.eofCtrlZ = false;
 	defaults.eofCrLf = false;
 	defaults.tabExpand = true;
+	defaults.persistentBlocks = true;
 	defaults.columnBlockMove = kColumnBlockMoveDelete;
 	defaults.defaultMode = kDefaultModeInsert;
 	return defaults;
@@ -866,6 +1007,9 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	if (!parseBooleanLiteral(settings.tabExpand ? "true" : "false", parsedBool, &boolError))
 		return setError(errorMessage, boolError);
 	normalized.tabExpand = parsedBool;
+	if (!parseBooleanLiteral(settings.persistentBlocks ? "true" : "false", parsedBool, &boolError))
+		return setError(errorMessage, boolError);
+	normalized.persistentBlocks = parsedBool;
 
 	normalized.pageBreak = pageBreak;
 	normalized.wordDelimiters = wordDelimiters;
@@ -940,6 +1084,129 @@ void configuredColorSetupGroupValues(MRColorSetupGroup group, unsigned char *val
 	}
 }
 
+std::string defaultColorThemeFilePath() {
+	return defaultColorThemePathForSettings(configuredSettingsMacroFilePath());
+}
+
+bool validateColorThemeFilePath(const std::string &path, std::string *errorMessage) {
+	std::string normalized = normalizeConfiguredPathInput(path);
+	struct stat st;
+
+	if (normalized.empty())
+		return setError(errorMessage, "Empty color theme URI.");
+	if (::stat(normalized.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
+		return setError(errorMessage, "Color theme URI must include a filename.");
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+bool setConfiguredColorThemeFilePath(const std::string &path, std::string *errorMessage) {
+	std::string normalized = normalizeConfiguredPathInput(path);
+
+	if (!validateColorThemeFilePath(path, errorMessage))
+		return false;
+	configuredColorThemeFile() = makeAbsolutePath(normalized);
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+std::string configuredColorThemeFilePath() {
+	const std::string &configured = configuredColorThemeFile();
+	if (!configured.empty())
+		return makeAbsolutePath(configured);
+	return defaultColorThemeFilePath();
+}
+
+std::string configuredColorThemeDisplayName() {
+	std::string path = configuredColorThemeFilePath();
+	std::string name = fileNamePartOf(path);
+
+	if (name.empty())
+		return std::string("<none>");
+	return name;
+}
+
+std::string buildColorThemeMacroSource() {
+	MRColorSetupSettings colors = configuredColorSetupSettings();
+	std::string source;
+
+	source += "$MACRO MR_COLOR_THEME FROM EDIT;\n";
+	source +=
+	    "MRSETUP('WINDOWCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.windowColors)) +
+	    "');\n";
+	source += "MRSETUP('MENUDIALOGCOLORS', '" +
+	          escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.menuDialogColors)) + "');\n";
+	source += "MRSETUP('HELPCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.helpColors)) +
+	          "');\n";
+	source +=
+	    "MRSETUP('OTHERCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.otherColors)) +
+	    "');\n";
+	source += "END_MACRO;\n";
+	return source;
+}
+
+bool writeColorThemeFile(const std::string &themeUri, std::string *errorMessage) {
+	std::string themePath = normalizeConfiguredPathInput(themeUri);
+	std::string themeDir = directoryPartOf(themePath);
+	std::string source;
+
+	if (!validateColorThemeFilePath(themePath, errorMessage))
+		return false;
+	if (!ensureDirectoryTree(themeDir, errorMessage))
+		return false;
+	source = buildColorThemeMacroSource();
+	if (!writeTextFile(themePath, source))
+		return setError(errorMessage, "Unable to write color theme file: " + themePath);
+	if (!setConfiguredColorThemeFilePath(themePath, errorMessage))
+		return false;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+bool ensureColorThemeFileExists(const std::string &themeUri, std::string *errorMessage) {
+	std::string normalized = normalizeConfiguredPathInput(themeUri);
+	struct stat st;
+
+	if (!validateColorThemeFilePath(normalized, errorMessage))
+		return false;
+	if (::stat(normalized.c_str(), &st) == 0) {
+		if (S_ISDIR(st.st_mode))
+			return setError(errorMessage, "Color theme URI must include a filename.");
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
+	}
+	return writeColorThemeFile(normalized, errorMessage);
+}
+
+bool loadColorThemeFile(const std::string &themeUri, std::string *errorMessage) {
+	std::string normalized = normalizeConfiguredPathInput(themeUri);
+	std::string source;
+	std::string applyError;
+	std::map<std::string, std::string> assignments;
+	static const char *const order[] = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS"};
+
+	if (!validateColorThemeFilePath(normalized, errorMessage))
+		return false;
+	if (!ensureColorThemeFileExists(normalized, errorMessage))
+		return false;
+	if (!readTextFile(normalized, source))
+		return setError(errorMessage, "Unable to read color theme file: " + normalized);
+	if (!parseThemeSetupAssignments(source, assignments, errorMessage))
+		return false;
+	for (const char *key : order)
+		if (!applyConfiguredColorSetupValue(key, assignments[key], &applyError))
+			return setError(errorMessage, "Theme apply failed for " + std::string(key) + ": " + applyError);
+	if (!setConfiguredColorThemeFilePath(normalized, errorMessage))
+		return false;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
 const char *colorSetupGroupTitle(MRColorSetupGroup group) {
 	const ColorGroupDefinition *definition = findColorGroupDefinition(group);
 	return definition != nullptr ? definition->title : "";
@@ -974,7 +1241,7 @@ bool applyConfiguredColorSetupValue(const std::string &key, const std::string &v
 				return false;
 			break;
 		case MRColorSetupGroup::MenuDialog:
-			if (!parseColorListLiteral(value, configured.menuDialogColors, errorMessage))
+			if (!parseMenuDialogColorListLiteral(value, configured.menuDialogColors, errorMessage))
 				return false;
 			break;
 		case MRColorSetupGroup::Help:
@@ -996,6 +1263,18 @@ bool applyConfiguredColorSetupValue(const std::string &key, const std::string &v
 
 bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &value) {
 	MRColorSetupSettings configured = configuredColorSetupSettings();
+
+	// Turbo Vision menu hotkeys use two app slots:
+	// - slot 4: shortcut text (normal item)
+	// - slot 7: shortcut selection (selected item)
+	// Our setup exposes a single "entry-hotkey" control (slot 4), so keep both in sync.
+	if (paletteIndex == 7) {
+		for (std::size_t i = 0; i < sizeof(kMenuDialogColorItems) / sizeof(kMenuDialogColorItems[0]); ++i)
+			if (kMenuDialogColorItems[i].paletteIndex == 4) {
+				value = configured.menuDialogColors[i];
+				return true;
+			}
+	}
 
 	for (std::size_t i = 0; i < sizeof(kWindowColorItems) / sizeof(kWindowColorItems[0]); ++i)
 		if (kWindowColorItems[i].paletteIndex == paletteIndex) {
@@ -1051,6 +1330,10 @@ bool applyConfiguredEditSetupValue(const std::string &key, const std::string &va
 		if (!parseBooleanLiteral(value, boolValue, errorMessage))
 			return false;
 		current.tabExpand = boolValue;
+	} else if (upperKeyName == "PERSISTBLOCKS" || upperKeyName == "PERSISTENTBLOCKS") {
+		if (!parseBooleanLiteral(value, boolValue, errorMessage))
+			return false;
+		current.persistentBlocks = boolValue;
 	} else if (upperKeyName == "COLBLOCKMOVE") {
 		normalized = normalizeColumnBlockMove(value);
 		if (normalized.empty())
@@ -1083,6 +1366,10 @@ bool configuredTabExpandSetting() {
 	return configuredEditSetupSettings().tabExpand;
 }
 
+bool configuredPersistentBlocksSetting() {
+	return configuredEditSetupSettings().persistentBlocks;
+}
+
 char configuredPageBreakCharacter() {
 	return decodePageBreakLiteral(configuredEditSetupSettings().pageBreak);
 }
@@ -1093,9 +1380,12 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	std::string helpPath = normalizeConfiguredPathInput(paths.helpUri);
 	std::string tempDir = normalizeConfiguredPathInput(paths.tempPath);
 	std::string shellPath = normalizeConfiguredPathInput(paths.shellUri);
+	std::string themePath = configuredColorThemeFile().empty() ? defaultColorThemePathForSettings(settingsPath)
+	                                                          : configuredColorThemeFilePath();
 	MREditSetupSettings edit = configuredEditSetupSettings();
-	MRColorSetupSettings colors = configuredColorSetupSettings();
 	std::string source;
+
+	themePath = normalizeConfiguredPathInput(themePath);
 
 	source += "$MACRO MR_SETTINGS FROM EDIT;\n";
 	source += "MRSETUP('SETTINGSPATH', '" + escapeMrmacSingleQuotedLiteral(settingsPath) + "');\n";
@@ -1117,18 +1407,12 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source +=
 	    "MRSETUP('TABEXPAND', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.tabExpand)) +
 	    "');\n";
+	source += "MRSETUP('PERSISTENTBLOCKS', '" +
+	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.persistentBlocks)) + "');\n";
 	source += "MRSETUP('COLBLOCKMOVE', '" + escapeMrmacSingleQuotedLiteral(edit.columnBlockMove) + "');\n";
 	source += "MRSETUP('DEFAULTMODE', '" + escapeMrmacSingleQuotedLiteral(edit.defaultMode) + "');\n";
-	source +=
-	    "MRSETUP('WINDOWCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.windowColors)) +
-	    "');\n";
-	source += "MRSETUP('MENUDIALOGCOLORS', '" +
-	          escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.menuDialogColors)) + "');\n";
-	source += "MRSETUP('HELPCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.helpColors)) +
-	          "');\n";
-	source +=
-	    "MRSETUP('OTHERCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.otherColors)) +
-	    "');\n";
+	source += "MRSETUP('" + std::string(kThemeSettingsKey) + "', '" +
+	          escapeMrmacSingleQuotedLiteral(themePath) + "');\n";
 	source += "END_MACRO;\n";
 	return source;
 }
@@ -1136,11 +1420,17 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 bool writeSettingsMacroFile(const MRSetupPaths &paths, std::string *errorMessage) {
 	std::string settingsPath = normalizeConfiguredPathInput(paths.settingsMacroUri);
 	std::string settingsDir = directoryPartOf(settingsPath);
+	std::string themePath = configuredColorThemeFile().empty() ? defaultColorThemePathForSettings(settingsPath)
+	                                                          : configuredColorThemeFilePath();
 	std::string source;
 
 	if (!validateSettingsMacroFilePath(settingsPath, errorMessage))
 		return false;
 	if (!ensureDirectoryTree(settingsDir, errorMessage))
+		return false;
+	if (!writeColorThemeFile(themePath, errorMessage))
+		return false;
+	if (!setConfiguredColorThemeFilePath(themePath, errorMessage))
 		return false;
 
 	source = buildSettingsMacroSource(paths);

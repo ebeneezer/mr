@@ -1,7 +1,9 @@
 #define Uses_TButton
 #define Uses_TDialog
+#define Uses_TDrawBuffer
 #define Uses_TEvent
 #define Uses_TGroup
+#define Uses_TProgram
 #define Uses_TRect
 #define Uses_TScrollBar
 #define Uses_TView
@@ -11,8 +13,10 @@
 #include "MRSetupDialogCommon.hpp"
 
 #include "../app/MRCommands.hpp"
+#include "../services/MRDialogPaths.hpp"
 
 #include <algorithm>
+#include <string>
 #include <vector>
 
 namespace {
@@ -22,11 +26,40 @@ bool isColorSetupModalCommand(ushort command) {
 		case cmMrColorMenuDialogColors:
 		case cmMrColorHelpColors:
 		case cmMrColorOtherColors:
+		case cmMrColorLoadTheme:
+		case cmMrColorSaveTheme:
 			return true;
 		default:
 			return false;
 	}
 }
+
+class TThemeNameField : public TView {
+  public:
+	TThemeNameField(const TRect &bounds, const std::string &text) : TView(bounds), text_(text) {
+	}
+
+	void draw() override {
+		TDrawBuffer buffer;
+		TColorAttr color = (TProgram::application != nullptr) ? TProgram::application->mapColor(2)
+		                                                      : TColorAttr(getColor(1));
+		std::string shown = "active: " + text_;
+		int start = 0;
+		buffer.moveChar(0, ' ', color, size.x);
+		if (size.x > 0) {
+			if (shown.size() > static_cast<std::size_t>(size.x))
+				shown = shown.substr(0, static_cast<std::size_t>(size.x));
+			start = (size.x - static_cast<int>(shown.size())) / 2;
+			if (start < 0)
+				start = 0;
+			buffer.moveStr(static_cast<ushort>(start), shown.c_str(), color, size.x - start);
+		}
+		writeLine(0, 0, size.x, 1, buffer);
+	}
+
+  private:
+	std::string text_;
+};
 
 class TColorSetupDialog : public TDialog {
   public:
@@ -150,13 +183,22 @@ class TColorSetupDialog : public TDialog {
 } // namespace
 
 TDialog *createColorSetupDialog() {
-	int width = 40;
-	int height = 13;
-	int left = 2;
-	int right = width - 2;
+	int width = 56;
+	int height = 15;
+	int left = 4;
+	int right = width - 4;
 	int row = 2;
 	TColorSetupDialog *dialog =
 	    new TColorSetupDialog(centeredSetupDialogRect(width, height), "COLOR SETUP", width, height);
+	std::string activeThemeName = configuredColorThemeDisplayName();
+	int fieldRow = 10;
+	int fieldLeft = 4;
+	int fieldRight = width - 4;
+	int buttonWidth = 13;
+	int buttonGap = 2;
+	int buttonsTotal = buttonWidth * 2 + buttonGap;
+	int buttonStart = (width - buttonsTotal) / 2;
+	int buttonRow = 11;
 
 	if (dialog == nullptr)
 		return nullptr;
@@ -172,6 +214,20 @@ TDialog *createColorSetupDialog() {
 	row += 2;
 	dialog->addManaged(new TButton(TRect(left, row, right, row + 2), "Other colors", cmMrColorOtherColors, bfNormal),
 	                   TRect(left, row, right, row + 2));
+
+	dialog->addManaged(new TThemeNameField(TRect(fieldLeft, fieldRow, fieldRight, fieldRow + 1), activeThemeName),
+	                   TRect(fieldLeft, fieldRow, fieldRight, fieldRow + 1));
+
+	dialog->addManaged(new TButton(TRect(buttonStart, buttonRow, buttonStart + buttonWidth, buttonRow + 2),
+	                               "Load Theme", cmMrColorLoadTheme, bfNormal),
+	                   TRect(buttonStart, buttonRow, buttonStart + buttonWidth, buttonRow + 2));
+	dialog->addManaged(
+	    new TButton(TRect(buttonStart + buttonWidth + buttonGap, buttonRow,
+	                      buttonStart + buttonWidth + buttonGap + buttonWidth, buttonRow + 2),
+	                "Save Theme", cmMrColorSaveTheme, bfNormal),
+	    TRect(buttonStart + buttonWidth + buttonGap, buttonRow,
+	          buttonStart + buttonWidth + buttonGap + buttonWidth, buttonRow + 2));
+
 	dialog->initScrollIfNeeded();
 	return dialog;
 }

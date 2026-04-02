@@ -106,20 +106,20 @@ Diese Bilder sollten im neuen Kontext verfügbar sein, damit UI-Stil/Farb-/Rahme
 ### A) Pflicht (primäre Stilanker)
 1. `/home/idoc/mr/screenshots/screenshot01.png`
 2. `/home/idoc/mr/screenshots/screenshot02.png`
-3. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260331_181602.png`
-4. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260331_211450.png`
-5. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260331_211704.png`
-6. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260331_211727.png`
-7. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260331_211906.png`
-8. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260331_211930.png`
-9. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260331_212519.png`
-10. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260331_212543.png`
-11. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260331_215102.png`
+3. `/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260331_181602.png`
+4. `/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260331_211450.png`
+5. `/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260331_211704.png`
+6. `/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260331_211727.png`
+7. `/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260331_211906.png`
+8. `/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260331_211930.png`
+9. `/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260331_212519.png`
+10. `/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260331_212543.png`
+11. `/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260331_215102.png`
 
 ### B) Sekundär (historische Referenz / Original-Look-Abgleich)
-12. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260327_161233.png`
-13. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260330_201518.png`
-14. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260328_200731.png`
+12. `/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260327_161233.png`
+13. `/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260330_201518.png`
+14. `/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260328_200731.png`
 
 Hinweis: Abnahme für Glyph-/Pattern-Look nicht im VSCode-internen Terminal, sondern im externen Terminal durchführen.
 

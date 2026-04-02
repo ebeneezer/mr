@@ -2,6 +2,8 @@
 #define Uses_MsgBox
 #define Uses_TDialog
 #define Uses_TStaticText
+#define Uses_TFileDialog
+#define Uses_TObject
 #define Uses_TApplication
 #define Uses_TEvent
 #define Uses_TRect
@@ -35,6 +37,7 @@
 #include <ctime>
 #include <chrono>
 #include <cctype>
+#include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -316,11 +319,84 @@ class StartupSettingsModeGuard {
 	bool previous_;
 };
 
+ushort execDialogWithData(TDialog *dialog, void *data) {
+	ushort result = cmCancel;
+
+	if (dialog == nullptr)
+		return cmCancel;
+	if (data != nullptr)
+		dialog->setData(data);
+	result = TProgram::deskTop->execView(dialog);
+	if (result != cmCancel && data != nullptr)
+		dialog->getData(data);
+	TObject::destroy(dialog);
+	return result;
+}
+
+ushort mrEditorDialog(int dialog, ...) {
+	va_list arg;
+	ushort result = cmCancel;
+
+	switch (dialog) {
+		case edOutOfMemory:
+			return messageBox(mfError | mfOKButton, "Out of memory.");
+		case edReadError: {
+			const char *path = nullptr;
+			va_start(arg, dialog);
+			path = va_arg(arg, const char *);
+			va_end(arg);
+			return messageBox(mfError | mfOKButton, "Error reading file:\n%s",
+			                  (path != nullptr && *path != '\0') ? path : "<unknown>");
+		}
+		case edWriteError: {
+			const char *path = nullptr;
+			va_start(arg, dialog);
+			path = va_arg(arg, const char *);
+			va_end(arg);
+			return messageBox(mfError | mfOKButton, "Error writing file:\n%s",
+			                  (path != nullptr && *path != '\0') ? path : "<unknown>");
+		}
+		case edCreateError: {
+			const char *path = nullptr;
+			va_start(arg, dialog);
+			path = va_arg(arg, const char *);
+			va_end(arg);
+			return messageBox(mfError | mfOKButton, "Error creating file:\n%s",
+			                  (path != nullptr && *path != '\0') ? path : "<unknown>");
+		}
+		case edSaveModify: {
+			const char *path = nullptr;
+			va_start(arg, dialog);
+			path = va_arg(arg, const char *);
+			va_end(arg);
+			return messageBox(mfInformation | mfYesNoCancel, "File modified. Save changes to:\n%s",
+			                  (path != nullptr && *path != '\0') ? path : "<unnamed>");
+		}
+		case edSaveUntitled:
+			return messageBox(mfInformation | mfYesNoCancel, "Save untitled file?");
+		case edSaveAs: {
+			char *target = nullptr;
+			va_start(arg, dialog);
+			target = va_arg(arg, char *);
+			va_end(arg);
+			if (target == nullptr)
+				return cmCancel;
+			result = execDialogWithData(
+			    new TFileDialog("*.*", "Save file as", "~N~ame", fdOKButton, 101), target);
+			return result;
+		}
+		default:
+			return cmCancel;
+	}
+}
+
 bool loadStartupSettingsMacro(const std::string &overridePath, std::string *errorMessage) {
 	std::string settingsPath = overridePath.empty() ? defaultSettingsMacroFilePath() : overridePath;
+	std::string themePath;
 	std::string source;
 	std::string compileError;
 	std::string vmError;
+	std::string themeError;
 	size_t bytecodeSize = 0;
 	unsigned char *bytecode = nullptr;
 	int macroCount = 0;
@@ -388,7 +464,15 @@ bool loadStartupSettingsMacro(const std::string &overridePath, std::string *erro
 	}
 
 	std::free(bytecode);
+	themePath = configuredColorThemeFilePath();
+	if (!loadColorThemeFile(themePath, &themeError)) {
+		if (errorMessage != nullptr)
+			*errorMessage = "Color theme load failed: " + themeError;
+		mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Color theme load failed.");
+		return false;
+	}
 	mrLogMessage(("Settings loaded: " + settingsPath).c_str());
+	mrLogMessage(("Color theme loaded: " + themePath).c_str());
 	mrLogMessage(("Settings MACROPATH: " + defaultMacroDirectoryPath()).c_str());
 	if (errorMessage != nullptr)
 		errorMessage->clear();
@@ -420,6 +504,25 @@ TMRMenuBar::HeroKind mapHeroKind(mr::performance::HeroKind kind) {
 			return TMRMenuBar::HeroKind::Info;
 	}
 }
+
+const TPalette &extendedAppBasePalette() {
+	static const TPalette palette = []() -> TPalette {
+		static const int kBaseSlots = 135;
+		static const int kTotalSlots = kMrPaletteChangedText;
+		static const char cp[] = cpAppColor;
+		TColorAttr data[kTotalSlots];
+		int i = 0;
+
+		for (i = 0; i < kBaseSlots; ++i)
+			data[i] = static_cast<unsigned char>(cp[i]);
+		// Dedicated editor-only accent slots (avoid window frame/scrollbar side effects).
+		data[kMrPaletteCurrentLine - 1] = data[10 - 1];
+		data[kMrPaletteCurrentLineInBlock - 1] = data[12 - 1];
+		data[kMrPaletteChangedText - 1] = data[14 - 1];
+		return TPalette(data, static_cast<ushort>(kTotalSlots));
+	}();
+	return palette;
+}
 } // namespace
 
 TMenuBar *TMREditorApp::initMRMenuBar(TRect r) {
@@ -449,6 +552,7 @@ TMREditorApp::TMREditorApp()
       recordedKeySequence_(), recordedMacroCounter_(0), recordedSessionMacroFiles_(),
       recordingBlinkToggleAt_(std::chrono::steady_clock::now() + kRecordingBlinkInterval),
       indexedMacroWarmupActive_(false), indexedMacroWarmupLoadedFiles_(0) {
+	TEditor::editorDialog = mrEditorDialog;
 	mr::coprocessor::globalCoprocessor().setResultHandler(handleCoprocessorResult);
 	loadStartupSettingsMacro(std::string(), nullptr);
 	applyConfiguredDisplayLayout();
@@ -858,11 +962,15 @@ void TMREditorApp::idle() {
 }
 
 TPalette &TMREditorApp::getPalette() const {
-	static TPalette palette(cpAppColor, sizeof(cpAppColor) - 1);
+	static const TPalette &basePalette = extendedAppBasePalette();
+	static TPalette palette = basePalette;
 	unsigned char overrideValue = 0;
 	int slot = 0;
 
-	for (slot = 1; slot <= 135; ++slot)
+	// Rebuild from TV default on every call so stale overrides never leak between frames.
+	palette = basePalette;
+
+	for (slot = 1; slot <= kMrPaletteChangedText; ++slot)
 		if (configuredColorSlotOverride(static_cast<unsigned char>(slot), overrideValue))
 			palette[slot] = overrideValue;
 

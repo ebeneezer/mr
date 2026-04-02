@@ -11,6 +11,7 @@
 #include <iterator>
 #include <limits.h>
 #include <map>
+#include <regex>
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -630,6 +631,34 @@ bool testSettingsMacroAutoCreate(std::string &failureReason) {
 		failureReason = "Auto-created settings.mrmac is missing DEFAULTMODE.";
 		return false;
 	}
+	if (content.find("MRSETUP('COLORTHEMEURI', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing COLORTHEMEURI.";
+		return false;
+	}
+	if (content.find("MRSETUP('WINDOWCOLORS', '") != std::string::npos ||
+	    content.find("MRSETUP('MENUDIALOGCOLORS', '") != std::string::npos ||
+	    content.find("MRSETUP('HELPCOLORS', '") != std::string::npos ||
+	    content.find("MRSETUP('OTHERCOLORS', '") != std::string::npos) {
+		failureReason = "settings.mrmac must not contain direct color lists after theme migration.";
+		return false;
+	}
+	{
+		static const std::regex themePattern(
+		    "MRSETUP\\('COLORTHEMEURI',\\s*'((?:''|[^'])*)'\\);",
+		    std::regex_constants::ECMAScript | std::regex_constants::icase);
+		std::smatch match;
+		std::string themePath;
+		struct stat themeStat;
+		if (!std::regex_search(content, match, themePattern) || match.size() < 2) {
+			failureReason = "Unable to parse COLORTHEMEURI from auto-created settings.mrmac.";
+			return false;
+		}
+		themePath = match[1].str();
+		if (::stat(themePath.c_str(), &themeStat) != 0 || !S_ISREG(themeStat.st_mode)) {
+			failureReason = "Auto-created COLORTHEMEURI target is missing.";
+			return false;
+		}
+	}
 	if (content.find("MRSETUP('CURSORVISIBILITY', '") != std::string::npos) {
 		failureReason = "Auto-created settings.mrmac must not include deprecated CURSORVISIBILITY.";
 		return false;
@@ -844,6 +873,19 @@ bool testDialogPaletteOverridesAbsent(std::string &failureReason) {
 		    "TMREditorApp.cpp must not hardcode dialog colors outside global scrollbar synchronization.";
 		return false;
 	}
+	if (content.find("static const TPalette basePalette(cpAppColor, sizeof(cpAppColor) - 1);") ==
+	        std::string::npos &&
+	    content.find("static const TPalette &basePalette = extendedAppBasePalette();") == std::string::npos) {
+		failureReason =
+		    "TMREditorApp::getPalette must use a stable base palette source before applying overrides.";
+		return false;
+	}
+	if (content.find("palette = basePalette;") == std::string::npos ||
+	    content.find("slot <= kMrPaletteChangedText") == std::string::npos) {
+		failureReason =
+		    "TMREditorApp::getPalette must rebuild each call and include extension slots up to kMrPaletteChangedText.";
+		return false;
+	}
 	failureReason.clear();
 	return true;
 }
@@ -876,15 +918,18 @@ bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
 	}
 
 	for (std::size_t i = 0; i < itemCount; ++i) {
+		unsigned char slot = items[i].paletteIndex;
+		bool isExpectedSlot = (slot == 8 || slot == 9 || slot == 13 || slot == 14 ||
+		                       slot == kMrPaletteCurrentLine || slot == kMrPaletteCurrentLineInBlock ||
+		                       slot == kMrPaletteChangedText);
 		if (!configuredColorSlotOverride(items[i].paletteIndex, value)) {
 			restore();
 			failureReason = "WINDOWCOLORS item must override its mapped palette slot.";
 			return false;
 		}
-		if (value != probeValues[i] || items[i].paletteIndex < 8 || items[i].paletteIndex > 15 ||
-		    items[i].paletteIndex == 11) {
+		if (value != probeValues[i] || !isExpectedSlot) {
 			restore();
-			failureReason = "WINDOWCOLORS blue slot mapping mismatch.";
+			failureReason = "WINDOWCOLORS slot mapping mismatch.";
 			return false;
 		}
 	}
@@ -900,7 +945,7 @@ bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
 
 bool testMenuDialogColorGroupTargetsExpectedSlots(std::string &failureReason) {
 	static const unsigned char probeValues[] = {0x61, 0x62, 0x63, 0x64, 0x65, 0x66,
-	                                            0x67, 0x68, 0x69, 0x6A, 0x6B};
+	                                            0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::size_t itemCount = 0;
 	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::MenuDialog, itemCount);
@@ -952,6 +997,78 @@ bool testMenuDialogColorGroupTargetsExpectedSlots(std::string &failureReason) {
 	return true;
 }
 
+bool testMenuDialogSemanticLabelsGuard(std::string &failureReason) {
+	static const char *const expectedLabels[] = {"activeentry-text", "inactiveentry-text", "entry-hotkey",
+	                                             "marker-active", "marker-inactive"};
+	static const unsigned char expectedSlots[] = {2, 3, 4, 5, 6};
+	std::size_t itemCount = 0;
+	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::MenuDialog, itemCount);
+
+	if (items == nullptr || itemCount < 5) {
+		failureReason = "MENUDIALOGCOLORS must expose semantic menu entries (active/inactive marker+text, hotkey).";
+		return false;
+	}
+	for (std::size_t i = 0; i < 5; ++i) {
+		if (items[i].label == nullptr || std::string(items[i].label) != expectedLabels[i]) {
+			failureReason = "MENUDIALOGCOLORS semantic label mismatch at index " + std::to_string(i) + ".";
+			return false;
+		}
+		if (items[i].paletteIndex != expectedSlots[i]) {
+			failureReason = "MENUDIALOGCOLORS semantic slot mismatch at index " + std::to_string(i) + ".";
+			return false;
+		}
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testMenuEntryHotkeySelectionAliasGuard(std::string &failureReason) {
+	static const unsigned char probeValues[] = {0x71, 0x72, 0x7B, 0x74, 0x75, 0x76,
+	                                            0x77, 0x78, 0x79, 0x7A, 0x7C, 0x7D};
+	MRColorSetupSettings previous = configuredColorSetupSettings();
+	std::string errorText;
+	unsigned char normalHotkey = 0;
+	unsigned char selectedHotkey = 0;
+	bool restoreOk = true;
+
+	auto restore = [&]() {
+		if (!restoreOk)
+			return;
+		restoreOk = setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog,
+		                                               previous.menuDialogColors.data(),
+		                                               previous.menuDialogColors.size(), &errorText);
+	};
+
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, probeValues,
+	                                        sizeof(probeValues) / sizeof(probeValues[0]), &errorText)) {
+		failureReason = "Unable to set MENUDIALOGCOLORS probe values: " + errorText;
+		return false;
+	}
+	if (!configuredColorSlotOverride(4, normalHotkey)) {
+		restore();
+		failureReason = "Palette slot 4 (entry-hotkey) must be overrideable.";
+		return false;
+	}
+	if (!configuredColorSlotOverride(7, selectedHotkey)) {
+		restore();
+		failureReason = "Palette slot 7 (selected entry-hotkey) must mirror entry-hotkey.";
+		return false;
+	}
+	if (normalHotkey != probeValues[2] || selectedHotkey != probeValues[2]) {
+		restore();
+		failureReason = "Entry-hotkey and selected entry-hotkey must resolve to the same configured color.";
+		return false;
+	}
+
+	restore();
+	if (!restoreOk) {
+		failureReason = "Unable to restore MENUDIALOGCOLORS after hotkey alias probe: " + errorText;
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
 bool testSetupScrollRefreshGuard(std::string &failureReason) {
 	static const char *const files[] = {"dialogs/MRSetupDialogCommon.cpp", "dialogs/MRInstallationAndSetupDialog.cpp",
 	                                    "dialogs/MRColorSetupDialog.cpp", "dialogs/MREditSettingsDialog.cpp",
@@ -979,6 +1096,39 @@ bool testSetupScrollRefreshGuard(std::string &failureReason) {
 	return true;
 }
 
+bool testPathsBrowseEventGuard(std::string &failureReason) {
+	const std::string sourcePath = absolutePathFromCwd("dialogs/MRSetupDialogs.cpp");
+	std::string content;
+	std::string ioError;
+	std::size_t classPos = std::string::npos;
+	std::size_t handlerPos = std::string::npos;
+	std::size_t browseCasePos = std::string::npos;
+	std::size_t baseCallPos = std::string::npos;
+
+	if (!readTextFile(sourcePath, content, ioError)) {
+		failureReason = "Unable to read MRSetupDialogs.cpp for path-browse guard: " + ioError;
+		return false;
+	}
+
+	classPos = content.find("class TPathsSetupDialog");
+	handlerPos = content.find("void handleEvent(TEvent &event) override", classPos);
+	browseCasePos = content.find("case cmMrSetupPathsBrowseSettingsUri:", handlerPos);
+	baseCallPos = content.find("TDialog::handleEvent(event);", handlerPos);
+	if (classPos == std::string::npos || handlerPos == std::string::npos || browseCasePos == std::string::npos ||
+	    baseCallPos == std::string::npos) {
+		failureReason = "Unable to validate path-browse event flow markers in TPathsSetupDialog::handleEvent.";
+		return false;
+	}
+	if (browseCasePos > baseCallPos) {
+		failureReason =
+		    "Path browse commands must be handled before TDialog::handleEvent to avoid losing inline-glyph clicks.";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
 bool testCurrentLineColorWiringGuard(std::string &failureReason) {
 	const std::string sourcePath = absolutePathFromCwd("ui/TMRFileEditor.hpp");
 	std::string content;
@@ -988,12 +1138,12 @@ bool testCurrentLineColorWiringGuard(std::string &failureReason) {
 		failureReason = "Unable to read TMRFileEditor.hpp for current-line color wiring guard: " + ioError;
 		return false;
 	}
-	if (content.find("TPalette palette(\"\\x06\\x07\\x0A\\x0C\\x0E\", 5);") == std::string::npos) {
+	if (content.find("TPalette palette(\"\\x06\\x07\\x09\\x0A\\x0B\", 5);") == std::string::npos) {
 		failureReason = "TMRFileEditor palette must expose current-line and changed-text slots.";
 		return false;
 	}
 	if (content.find("basePair = getColor(0x0303);") == std::string::npos ||
-	    content.find("basePair = getColor(0x0404);") == std::string::npos) {
+	    content.find("basePair = getColor(0x0204);") == std::string::npos) {
 		failureReason = "Current-line and current-line-in-block must be wired to dedicated palette pairs.";
 		return false;
 	}
@@ -1016,13 +1166,74 @@ bool testChangedTextColorWiringGuard(std::string &failureReason) {
 	}
 	if (content.find("else if (changedLine)") == std::string::npos ||
 	    content.find("basePair = getColor(0x0505);") == std::string::npos) {
-		failureReason = "Changed-text must drive background pair using dedicated palette entry 0x0E.";
+		failureReason = "Changed-text must drive background pair using dedicated editor palette slot.";
 		return false;
 	}
 	if (content.find("dirtyRanges_") == std::string::npos ||
 	    content.find("addDirtyRange(") == std::string::npos ||
 	    content.find("intersectsDirtyRanges(") == std::string::npos) {
 		failureReason = "Changed-text wiring requires dedicated dirty-range tracking in TMRFileEditor.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testPersistentBlocksWiringGuard(std::string &failureReason) {
+	const std::string settingsPath = absolutePathFromCwd("services/MRDialogPaths.cpp");
+	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
+	const std::string dialogPath = absolutePathFromCwd("dialogs/MREditSettingsDialog.cpp");
+	std::string settingsContent;
+	std::string vmContent;
+	std::string dialogContent;
+	std::string ioError;
+
+	if (!readTextFile(settingsPath, settingsContent, ioError)) {
+		failureReason = "Unable to read MRDialogPaths.cpp for persistent-blocks guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(vmPath, vmContent, ioError)) {
+		failureReason = "Unable to read mrvm.cpp for persistent-blocks guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(dialogPath, dialogContent, ioError)) {
+		failureReason = "Unable to read MREditSettingsDialog.cpp for persistent-blocks guard: " + ioError;
+		return false;
+	}
+	if (settingsContent.find("upperKeyName == \"PERSISTBLOCKS\" || upperKeyName == \"PERSISTENTBLOCKS\"") ==
+	        std::string::npos ||
+	    settingsContent.find("MRSETUP('PERSISTENTBLOCKS'") == std::string::npos) {
+		failureReason = "Persistent blocks must be parsed and serialized via MRSETUP in MRDialogPaths.";
+		return false;
+	}
+	if (vmContent.find("setupKey == \"PERSISTBLOCKS\"") == std::string::npos) {
+		failureReason = "MRVM startup whitelist must accept PERSISTBLOCKS.";
+		return false;
+	}
+	if (dialogContent.find("ersistent blocks") == std::string::npos) {
+		failureReason = "Edit settings dialog must expose a Persistent blocks option.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testEditClipboardCommandRoutingGuard(std::string &failureReason) {
+	const std::string sourcePath = absolutePathFromCwd("app/MRCommandRouter.cpp");
+	std::string content;
+	std::string ioError;
+
+	if (!readTextFile(sourcePath, content, ioError)) {
+		failureReason = "Unable to read MRCommandRouter.cpp for clipboard routing guard: " + ioError;
+		return false;
+	}
+	if (content.find("case cmMrEditCutToBuffer:") == std::string::npos ||
+	    content.find("dispatchEditorClipboardCommand(cmCut, true)") == std::string::npos ||
+	    content.find("case cmMrEditCopyToBuffer:") == std::string::npos ||
+	    content.find("dispatchEditorClipboardCommand(cmCopy, false)") == std::string::npos ||
+	    content.find("case cmMrEditPasteFromBuffer:") == std::string::npos ||
+	    content.find("dispatchEditorClipboardCommand(cmPaste, true)") == std::string::npos) {
+		failureReason = "Edit Cut/Copy/Paste commands must route to editor clipboard commands.";
 		return false;
 	}
 	failureReason.clear();
@@ -1146,9 +1357,14 @@ int main(int argc, char **argv) {
 	runTest(ctx, "Dialog palette guard (no 32..63 overrides)", testDialogPaletteOverridesAbsent);
 	runTest(ctx, "WINDOWCOLORS targets blue window palette", testWindowColorGroupTargetsBlueWindowPalette);
 	runTest(ctx, "MENUDIALOGCOLORS targets menu + gray dialog palette", testMenuDialogColorGroupTargetsExpectedSlots);
+	runTest(ctx, "MENUDIALOGCOLORS semantic labels guard", testMenuDialogSemanticLabelsGuard);
+	runTest(ctx, "MENUDIALOGCOLORS hotkey selection alias guard", testMenuEntryHotkeySelectionAliasGuard);
 	runTest(ctx, "Setup scroll refresh guard", testSetupScrollRefreshGuard);
+	runTest(ctx, "Paths browse event guard", testPathsBrowseEventGuard);
 	runTest(ctx, "Current-line color wiring guard", testCurrentLineColorWiringGuard);
 	runTest(ctx, "Changed-text color wiring guard", testChangedTextColorWiringGuard);
+	runTest(ctx, "Persistent blocks wiring guard", testPersistentBlocksWiringGuard);
+	runTest(ctx, "Edit clipboard routing guard", testEditClipboardCommandRoutingGuard);
 	runTest(ctx, "TO/FROM header parsing + compile guards", testToFromHeaders);
 	runTest(ctx, "TO/FROM runtime dispatch", testToFromDispatch);
 	runTest(ctx, "KEY_IN behavior + staging guards", testKeyIn);

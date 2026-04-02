@@ -16,6 +16,7 @@
 #include "../dialogs/MRFileInformationDialog.hpp"
 #include "../dialogs/MRAboutDialog.hpp"
 #include "../dialogs/MRSetupDialogs.hpp"
+#include "../services/MRDialogPaths.hpp"
 #include "../mrmac/mrvm.hpp"
 #include "../services/MRExternalCommand.hpp"
 #include "../services/MRFileCommands.hpp"
@@ -25,6 +26,7 @@
 #include "../ui/TMREditWindow.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "../coprocessor/MRCoprocessor.hpp"
+#include "TMREditorApp.hpp"
 #include "MRCommands.hpp"
 
 namespace {
@@ -366,6 +368,53 @@ bool handleCancelBackgroundMacros() {
 	return true;
 }
 
+bool dispatchEditorClipboardCommand(ushort editorCommand, bool requiresWritable) {
+	TMREditWindow *win = currentEditWindow();
+	TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+
+	if (win == nullptr || editor == nullptr)
+		return true;
+	if (requiresWritable && win->isReadOnly()) {
+		messageBox(mfInformation | mfOKButton, "Window is read-only.");
+		return true;
+	}
+	message(editor, evCommand, editorCommand, nullptr);
+	return true;
+}
+
+bool togglePersistentBlocksSetting() {
+	MREditSetupSettings settings = configuredEditSetupSettings();
+	MRSetupPaths paths;
+	TMREditorApp *app = dynamic_cast<TMREditorApp *>(TProgram::application);
+	std::string errorText;
+	bool enabled;
+
+	settings.persistentBlocks = !settings.persistentBlocks;
+	if (!setConfiguredEditSetupSettings(settings, &errorText)) {
+		messageBox(mfError | mfOKButton, "Persistent blocks update failed:\n%s", errorText.c_str());
+		return true;
+	}
+
+	paths.settingsMacroUri = configuredSettingsMacroFilePath();
+	paths.macroPath = defaultMacroDirectoryPath();
+	paths.helpUri = configuredHelpFilePath();
+	paths.tempPath = configuredTempDirectoryPath();
+	paths.shellUri = configuredShellExecutablePath();
+	if (!writeSettingsMacroFile(paths, &errorText)) {
+		messageBox(mfError | mfOKButton, "Settings save failed:\n%s", errorText.c_str());
+		return true;
+	}
+	if (app != nullptr && !app->reloadSettingsMacroFromPath(paths.settingsMacroUri, &errorText)) {
+		messageBox(mfError | mfOKButton, "Settings reload failed:\n%s", errorText.c_str());
+		return true;
+	}
+
+	enabled = configuredPersistentBlocksSetting();
+	mrLogMessage(enabled ? "Persistent blocks enabled." : "Persistent blocks disabled.");
+	messageBox(mfInformation | mfOKButton, "Persistent blocks: %s", enabled ? "ON" : "OFF");
+	return true;
+}
+
 bool handleStopCurrentProgram() {
 	TMREditWindow *win = currentEditWindow();
 	std::ostringstream line;
@@ -457,6 +506,18 @@ bool handleMRCommand(ushort command) {
 		case cmMrFileInformation:
 			showFileInformationDialog(currentEditWindow());
 			return true;
+
+		case cmMrEditCutToBuffer:
+			return dispatchEditorClipboardCommand(cmCut, true);
+
+		case cmMrEditCopyToBuffer:
+			return dispatchEditorClipboardCommand(cmCopy, false);
+
+		case cmMrEditPasteFromBuffer:
+			return dispatchEditorClipboardCommand(cmPaste, true);
+
+		case cmMrBlockPersistent:
+			return togglePersistentBlocksSetting();
 
 		case cmMrWindowOpen:
 			createEditorWindow("?No-File?");

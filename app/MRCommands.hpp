@@ -104,6 +104,8 @@ enum : ushort {
 	cmMrColorMenuDialogColors,
 	cmMrColorHelpColors,
 	cmMrColorOtherColors,
+	cmMrColorLoadTheme,
+	cmMrColorSaveTheme,
 
 	cmMrDevCancelMacroTasks,
 	cmMrPreviewPrev,
