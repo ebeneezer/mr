@@ -8,7 +8,8 @@
 class TMRStatusLine : public TStatusLine {
   public:
 	TMRStatusLine(const TRect &r, TStatusDef &aDef)
-	    : TStatusLine(r, aDef), recordingActive_(false), recordingVisible_(false) {
+	    : TStatusLine(r, aDef), recordingActive_(false), recordingVisible_(false),
+	      showFunctionKeyLabels_(true) {
 	}
 
 	void setRecordingState(bool active, bool visible) {
@@ -19,7 +20,20 @@ class TMRStatusLine : public TStatusLine {
 		drawView();
 	}
 
+	void setShowFunctionKeyLabels(bool enabled) {
+		if (showFunctionKeyLabels_ == enabled)
+			return;
+		showFunctionKeyLabels_ = enabled;
+		drawView();
+	}
+
 	virtual void draw() override {
+		if (!showFunctionKeyLabels_) {
+			TDrawBuffer b;
+			TColorAttr color = getColor(1);
+			b.moveChar(0, ' ', color, size.x);
+			writeLine(0, 0, size.x, 1, b);
+		} else
 		TStatusLine::draw();
 		if (!recordingActive_ || !recordingVisible_)
 			return;
@@ -40,5 +54,6 @@ class TMRStatusLine : public TStatusLine {
   private:
 	bool recordingActive_;
 	bool recordingVisible_;
+	bool showFunctionKeyLabels_;
 };
 #endif

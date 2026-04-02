@@ -40,6 +40,8 @@ class TMREditorApp : public TApplication {
 	void updateRecordingBlink();
 	void bootstrapIndexedMacroBindings();
 	void warmIndexedMacroBindings();
+	void applyConfiguredDisplayLayout();
+	void applyConfiguredWindowFramePolicy();
 
 	bool exitPrepared_;
 	bool keystrokeRecording_;

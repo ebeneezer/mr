@@ -31,15 +31,35 @@ struct MREditSetupSettings {
 	}
 };
 
+struct MRDisplaySetupSettings {
+	bool showStatusLine;
+	bool showMenuBar;
+	bool showFunctionKeyLabels;
+	bool showLeftBorder;
+	bool showRightBorder;
+	bool showBottomBorder;
+
+	MRDisplaySetupSettings() noexcept
+	    : showStatusLine(true), showMenuBar(true), showFunctionKeyLabels(true), showLeftBorder(true),
+	      showRightBorder(true), showBottomBorder(true) {
+	}
+};
+
 void initRememberedLoadDialogPath(char *buffer, std::size_t bufferSize, const char *pattern);
 void rememberLoadDialogPath(const char *path);
 std::string normalizeConfiguredPathInput(const std::string &input);
 MRSetupPaths resolveSetupPathDefaults();
 MREditSetupSettings resolveEditSetupDefaults();
+MRDisplaySetupSettings resolveDisplaySetupDefaults();
 MREditSetupSettings configuredEditSetupSettings();
+MRDisplaySetupSettings configuredDisplaySetupSettings();
 bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::string *errorMessage = nullptr);
+bool setConfiguredDisplaySetupSettings(const MRDisplaySetupSettings &settings,
+                                       std::string *errorMessage = nullptr);
 bool applyConfiguredEditSetupValue(const std::string &key, const std::string &value,
                                    std::string *errorMessage = nullptr);
+bool applyConfiguredDisplaySetupValue(const std::string &key, const std::string &value,
+                                      std::string *errorMessage = nullptr);
 std::string formatEditSetupBoolean(bool value);
 std::vector<std::string> configuredDefaultExtensionList();
 bool configuredDefaultInsertMode();

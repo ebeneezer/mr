@@ -50,6 +50,11 @@ MREditSetupSettings &configuredEditSettings() {
 	return value;
 }
 
+MRDisplaySetupSettings &configuredDisplaySettings() {
+	static MRDisplaySetupSettings value;
+	return value;
+}
+
 std::string trimAscii(const std::string &value) {
 	std::size_t start = 0;
 	std::size_t end = value.size();
@@ -602,12 +607,35 @@ MREditSetupSettings resolveEditSetupDefaults() {
 	return defaults;
 }
 
+MRDisplaySetupSettings resolveDisplaySetupDefaults() {
+	MRDisplaySetupSettings defaults;
+
+	defaults.showStatusLine = true;
+	defaults.showMenuBar = true;
+	defaults.showFunctionKeyLabels = true;
+	defaults.showLeftBorder = true;
+	defaults.showRightBorder = true;
+	defaults.showBottomBorder = true;
+	return defaults;
+}
+
 MREditSetupSettings configuredEditSetupSettings() {
 	static bool initialized = false;
 	MREditSetupSettings &configured = configuredEditSettings();
 
 	if (!initialized) {
 		configured = resolveEditSetupDefaults();
+		initialized = true;
+	}
+	return configured;
+}
+
+MRDisplaySetupSettings configuredDisplaySetupSettings() {
+	static bool initialized = false;
+	MRDisplaySetupSettings &configured = configuredDisplaySettings();
+
+	if (!initialized) {
+		configured = resolveDisplaySetupDefaults();
 		initialized = true;
 	}
 	return configured;
@@ -655,6 +683,36 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	normalized.defaultMode = defaultMode;
 	normalized.cursorVisibility = cursorVisibility;
 	configuredEditSettings() = normalized;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+bool setConfiguredDisplaySetupSettings(const MRDisplaySetupSettings &settings, std::string *errorMessage) {
+	MRDisplaySetupSettings normalized = settings;
+	std::string boolError;
+	bool parsedBool = false;
+
+	if (!parseBooleanLiteral(settings.showStatusLine ? "true" : "false", parsedBool, &boolError))
+		return setError(errorMessage, boolError);
+	normalized.showStatusLine = parsedBool;
+	if (!parseBooleanLiteral(settings.showMenuBar ? "true" : "false", parsedBool, &boolError))
+		return setError(errorMessage, boolError);
+	normalized.showMenuBar = parsedBool;
+	if (!parseBooleanLiteral(settings.showFunctionKeyLabels ? "true" : "false", parsedBool, &boolError))
+		return setError(errorMessage, boolError);
+	normalized.showFunctionKeyLabels = parsedBool;
+	if (!parseBooleanLiteral(settings.showLeftBorder ? "true" : "false", parsedBool, &boolError))
+		return setError(errorMessage, boolError);
+	normalized.showLeftBorder = parsedBool;
+	if (!parseBooleanLiteral(settings.showRightBorder ? "true" : "false", parsedBool, &boolError))
+		return setError(errorMessage, boolError);
+	normalized.showRightBorder = parsedBool;
+	if (!parseBooleanLiteral(settings.showBottomBorder ? "true" : "false", parsedBool, &boolError))
+		return setError(errorMessage, boolError);
+	normalized.showBottomBorder = parsedBool;
+
+	configuredDisplaySettings() = normalized;
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;
@@ -710,6 +768,32 @@ bool applyConfiguredEditSetupValue(const std::string &key, const std::string &va
 		return setError(errorMessage, "Unknown edit setting key.");
 
 	return setConfiguredEditSetupSettings(current, errorMessage);
+}
+
+bool applyConfiguredDisplaySetupValue(const std::string &key, const std::string &value,
+                                      std::string *errorMessage) {
+	MRDisplaySetupSettings current = configuredDisplaySetupSettings();
+	std::string upperKeyName = upperAscii(trimAscii(key));
+	bool boolValue = false;
+
+	if (!parseBooleanLiteral(value, boolValue, errorMessage))
+		return false;
+	if (upperKeyName == "SHOWSTATUSLINE")
+		current.showStatusLine = boolValue;
+	else if (upperKeyName == "SHOWMENUBAR")
+		current.showMenuBar = boolValue;
+	else if (upperKeyName == "SHOWFKEYLABELS")
+		current.showFunctionKeyLabels = boolValue;
+	else if (upperKeyName == "SHOWLEFTBORDER")
+		current.showLeftBorder = boolValue;
+	else if (upperKeyName == "SHOWRIGHTBORDER")
+		current.showRightBorder = boolValue;
+	else if (upperKeyName == "SHOWBOTTOMBORDER")
+		current.showBottomBorder = boolValue;
+	else
+		return setError(errorMessage, "Unknown display setting key.");
+
+	return setConfiguredDisplaySetupSettings(current, errorMessage);
 }
 
 std::string formatEditSetupBoolean(bool value) {
@@ -783,6 +867,30 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source += "MRSETUP('DEFAULTMODE', '" + escapeMrmacSingleQuotedLiteral(edit.defaultMode) + "');\n";
 	source +=
 	    "MRSETUP('CURSORVISIBILITY', '" + escapeMrmacSingleQuotedLiteral(edit.cursorVisibility) + "');\n";
+	source += "MRSETUP('SHOWSTATUSLINE', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              formatEditSetupBoolean(configuredDisplaySetupSettings().showStatusLine)) +
+	          "');\n";
+	source += "MRSETUP('SHOWMENUBAR', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              formatEditSetupBoolean(configuredDisplaySetupSettings().showMenuBar)) +
+	          "');\n";
+	source += "MRSETUP('SHOWFKEYLABELS', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              formatEditSetupBoolean(configuredDisplaySetupSettings().showFunctionKeyLabels)) +
+	          "');\n";
+	source += "MRSETUP('SHOWLEFTBORDER', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              formatEditSetupBoolean(configuredDisplaySetupSettings().showLeftBorder)) +
+	          "');\n";
+	source += "MRSETUP('SHOWRIGHTBORDER', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              formatEditSetupBoolean(configuredDisplaySetupSettings().showRightBorder)) +
+	          "');\n";
+	source += "MRSETUP('SHOWBOTTOMBORDER', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              formatEditSetupBoolean(configuredDisplaySetupSettings().showBottomBorder)) +
+	          "');\n";
 	source += "END_MACRO;\n";
 	return source;
 }

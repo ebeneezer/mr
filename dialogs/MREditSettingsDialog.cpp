@@ -1,6 +1,7 @@
 #define Uses_TButton
 #define Uses_TCheckBoxes
 #define Uses_TDialog
+#define Uses_TGroup
 #define Uses_TInputLine
 #define Uses_MsgBox
 #define Uses_TObject
@@ -194,16 +195,33 @@ bool saveAndReloadEditSettings(const EditSettingsDialogRecord &record, std::stri
 
 class TEditSettingsDialog : public TDialog {
   public:
+	class TDialogPaletteGroup : public TGroup {
+	  public:
+		explicit TDialogPaletteGroup(const TRect &bounds) : TGroup(bounds) {
+		}
+
+		TPalette &getPalette() const override {
+			if (owner != nullptr)
+				return owner->getPalette();
+			return TGroup::getPalette();
+		}
+	};
+
 	struct ManagedItem {
 		TView *view;
 		TRect base;
 	};
 
-		explicit TEditSettingsDialog(const EditSettingsDialogRecord &initialRecord)
+	explicit TEditSettingsDialog(const EditSettingsDialogRecord &initialRecord)
 	    : TWindowInit(&TDialog::initFrame),
 	      TDialog(centeredSetupDialogRect(kVirtualDialogWidth, kVirtualDialogHeight),
 	              "EDIT SETTINGS"),
 	      initialRecord_(initialRecord), currentRecord_(initialRecord) {
+		contentRect_ = TRect(1, 1, size.x - 1, size.y - 1);
+		content_ = new TDialogPaletteGroup(contentRect_);
+		if (content_ != nullptr)
+			insert(content_);
+
 		int dialogWidth = kVirtualDialogWidth;
 		int inputLeft = 32;
 		int inputRight = dialogWidth - 2;
@@ -305,7 +323,13 @@ class TEditSettingsDialog : public TDialog {
 		item.view = view;
 		item.base = base;
 		managedViews_.push_back(item);
-		insert(view);
+		if (content_ != nullptr) {
+			TRect local = base;
+			local.move(-contentRect_.a.x, -contentRect_.a.y);
+			view->locate(local);
+			content_->insert(view);
+		} else
+			insert(view);
 	}
 
 	void applyScroll() {
@@ -315,22 +339,61 @@ class TEditSettingsDialog : public TDialog {
 		for (std::size_t i = 0; i < managedViews_.size(); ++i) {
 			TRect moved = managedViews_[i].base;
 			moved.move(-dx, -dy);
+			moved.move(-contentRect_.a.x, -contentRect_.a.y);
 			managedViews_[i].view->locate(moved);
 		}
 	}
 
 	void initScrollIfNeeded() {
-		int maxDx = std::max(0, kVirtualDialogWidth - size.x);
-		int maxDy = std::max(0, kVirtualDialogHeight - size.y);
+		int virtualContentWidth = std::max(1, kVirtualDialogWidth - 2);
+		int virtualContentHeight = std::max(1, kVirtualDialogHeight - 2);
+		bool needH = false;
+		bool needV = false;
 
-		if (maxDx == 0 && maxDy == 0)
-			return;
-		hScrollBar_ = new TScrollBar(TRect(1, size.y - 2, size.x - 2, size.y - 1));
-		vScrollBar_ = new TScrollBar(TRect(size.x - 2, 1, size.x - 1, size.y - 2));
-		insert(hScrollBar_);
-		insert(vScrollBar_);
-		hScrollBar_->setParams(0, 0, maxDx, std::max(1, (size.x - 4) / 2), 1);
-		vScrollBar_->setParams(0, 0, maxDy, std::max(1, (size.y - 4) / 2), 1);
+		for (;;) {
+			bool prevH = needH;
+			bool prevV = needV;
+			int viewportWidth = std::max(1, size.x - 2 - (needV ? 1 : 0));
+			int viewportHeight = std::max(1, size.y - 2 - (needH ? 1 : 0));
+			needH = virtualContentWidth > viewportWidth;
+			needV = virtualContentHeight > viewportHeight;
+			if (needH == prevH && needV == prevV)
+				break;
+		}
+
+		contentRect_ = TRect(1, 1, size.x - 1 - (needV ? 1 : 0), size.y - 1 - (needH ? 1 : 0));
+		if (contentRect_.b.x <= contentRect_.a.x)
+			contentRect_.b.x = contentRect_.a.x + 1;
+		if (contentRect_.b.y <= contentRect_.a.y)
+			contentRect_.b.y = contentRect_.a.y + 1;
+		if (content_ != nullptr)
+			content_->locate(contentRect_);
+
+		if (needH) {
+			TRect hRect(1, size.y - 2, size.x - 1 - (needV ? 1 : 0), size.y - 1);
+			if (hScrollBar_ == nullptr) {
+				hScrollBar_ = new TScrollBar(hRect);
+				insert(hScrollBar_);
+			} else
+				hScrollBar_->locate(hRect);
+		}
+		if (needV) {
+			TRect vRect(size.x - 2, 1, size.x - 1, size.y - 1 - (needH ? 1 : 0));
+			if (vScrollBar_ == nullptr) {
+				vScrollBar_ = new TScrollBar(vRect);
+				insert(vScrollBar_);
+			} else
+				vScrollBar_->locate(vRect);
+		}
+
+		if (hScrollBar_ != nullptr) {
+			int maxDx = std::max(0, virtualContentWidth - std::max(1, contentRect_.b.x - contentRect_.a.x));
+			hScrollBar_->setParams(0, 0, maxDx, std::max(1, (contentRect_.b.x - contentRect_.a.x) / 2), 1);
+		}
+		if (vScrollBar_ != nullptr) {
+			int maxDy = std::max(0, virtualContentHeight - std::max(1, contentRect_.b.y - contentRect_.a.y));
+			vScrollBar_->setParams(0, 0, maxDy, std::max(1, (contentRect_.b.y - contentRect_.a.y) / 2), 1);
+		}
 		applyScroll();
 	}
 
@@ -370,6 +433,8 @@ class TEditSettingsDialog : public TDialog {
 
 	EditSettingsDialogRecord initialRecord_;
 	EditSettingsDialogRecord currentRecord_;
+	TRect contentRect_;
+	TDialogPaletteGroup *content_ = nullptr;
 	std::vector<ManagedItem> managedViews_;
 	TScrollBar *hScrollBar_ = nullptr;
 	TScrollBar *vScrollBar_ = nullptr;

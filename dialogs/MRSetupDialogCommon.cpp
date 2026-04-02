@@ -3,13 +3,145 @@
 #define Uses_TRect
 #define Uses_TDialog
 #define Uses_TButton
+#define Uses_TEvent
+#define Uses_TGroup
+#define Uses_TScrollBar
 #define Uses_TStaticText
+#define Uses_TView
 #include <tvision/tv.h>
 
 #include "MRSetupDialogCommon.hpp"
 
 #include <algorithm>
 #include <cstring>
+#include <vector>
+
+namespace {
+class TDialogPaletteGroup : public TGroup {
+  public:
+	explicit TDialogPaletteGroup(const TRect &bounds) : TGroup(bounds) {
+	}
+
+	TPalette &getPalette() const override {
+		if (owner != nullptr)
+			return owner->getPalette();
+		return TGroup::getPalette();
+	}
+};
+
+class TSetupScrollableDialog : public TDialog {
+  public:
+	struct ManagedItem {
+		TView *view;
+		TRect base;
+	};
+
+	TSetupScrollableDialog(const TRect &bounds, const char *title, int virtualWidth, int virtualHeight)
+	    : TWindowInit(&TDialog::initFrame), TDialog(bounds, title), virtualWidth_(virtualWidth),
+	      virtualHeight_(virtualHeight) {
+		contentRect_ = TRect(1, 1, size.x - 1, size.y - 1);
+		content_ = new TDialogPaletteGroup(contentRect_);
+		if (content_ != nullptr)
+			insert(content_);
+	}
+
+	void addManaged(TView *view, const TRect &base) {
+		ManagedItem item;
+		item.view = view;
+		item.base = base;
+		managedViews_.push_back(item);
+		if (content_ != nullptr) {
+			TRect local = base;
+			local.move(-contentRect_.a.x, -contentRect_.a.y);
+			view->locate(local);
+			content_->insert(view);
+		} else
+			insert(view);
+	}
+
+	void initScrollIfNeeded() {
+		int virtualContentWidth = std::max(1, virtualWidth_ - 2);
+		int virtualContentHeight = std::max(1, virtualHeight_ - 2);
+		bool needH = false;
+		bool needV = false;
+
+		for (;;) {
+			bool prevH = needH;
+			bool prevV = needV;
+			int viewportWidth = std::max(1, size.x - 2 - (needV ? 1 : 0));
+			int viewportHeight = std::max(1, size.y - 2 - (needH ? 1 : 0));
+			needH = virtualContentWidth > viewportWidth;
+			needV = virtualContentHeight > viewportHeight;
+			if (needH == prevH && needV == prevV)
+				break;
+		}
+
+		contentRect_ = TRect(1, 1, size.x - 1 - (needV ? 1 : 0), size.y - 1 - (needH ? 1 : 0));
+		if (contentRect_.b.x <= contentRect_.a.x)
+			contentRect_.b.x = contentRect_.a.x + 1;
+		if (contentRect_.b.y <= contentRect_.a.y)
+			contentRect_.b.y = contentRect_.a.y + 1;
+		if (content_ != nullptr)
+			content_->locate(contentRect_);
+
+		if (needH) {
+			TRect hRect(1, size.y - 2, size.x - 1 - (needV ? 1 : 0), size.y - 1);
+			if (hScrollBar_ == nullptr) {
+				hScrollBar_ = new TScrollBar(hRect);
+				insert(hScrollBar_);
+			} else
+				hScrollBar_->locate(hRect);
+		}
+		if (needV) {
+			TRect vRect(size.x - 2, 1, size.x - 1, size.y - 1 - (needH ? 1 : 0));
+			if (vScrollBar_ == nullptr) {
+				vScrollBar_ = new TScrollBar(vRect);
+				insert(vScrollBar_);
+			} else
+				vScrollBar_->locate(vRect);
+		}
+		if (hScrollBar_ != nullptr) {
+			int maxDx = std::max(0, virtualContentWidth - std::max(1, contentRect_.b.x - contentRect_.a.x));
+			hScrollBar_->setParams(0, 0, maxDx, std::max(1, (contentRect_.b.x - contentRect_.a.x) / 2), 1);
+		}
+		if (vScrollBar_ != nullptr) {
+			int maxDy = std::max(0, virtualContentHeight - std::max(1, contentRect_.b.y - contentRect_.a.y));
+			vScrollBar_->setParams(0, 0, maxDy, std::max(1, (contentRect_.b.y - contentRect_.a.y) / 2), 1);
+		}
+		applyScroll();
+	}
+
+	void handleEvent(TEvent &event) override {
+		TDialog::handleEvent(event);
+		if (event.what == evBroadcast && event.message.command == cmScrollBarChanged &&
+		    (event.message.infoPtr == hScrollBar_ || event.message.infoPtr == vScrollBar_)) {
+			applyScroll();
+			clearEvent(event);
+		}
+	}
+
+  private:
+	void applyScroll() {
+		int dx = hScrollBar_ != nullptr ? hScrollBar_->value : 0;
+		int dy = vScrollBar_ != nullptr ? vScrollBar_->value : 0;
+
+		for (std::size_t i = 0; i < managedViews_.size(); ++i) {
+			TRect moved = managedViews_[i].base;
+			moved.move(-dx, -dy);
+			moved.move(-contentRect_.a.x, -contentRect_.a.y);
+			managedViews_[i].view->locate(moved);
+		}
+	}
+
+	int virtualWidth_ = 0;
+	int virtualHeight_ = 0;
+	TRect contentRect_;
+	TDialogPaletteGroup *content_ = nullptr;
+	std::vector<ManagedItem> managedViews_;
+	TScrollBar *hScrollBar_ = nullptr;
+	TScrollBar *vScrollBar_ = nullptr;
+};
+} // namespace
 
 MRSetupLayoutProfile currentSetupLayoutProfile() {
 	static const int kCompactMaxWidth = 80;
@@ -62,26 +194,30 @@ void insertSetupStaticLine(TDialog *dialog, int x, int y, const char *text) {
 TDialog *createSetupSimplePreviewDialog(const char *title, int width, int height,
                                         const std::vector<std::string> &lines,
                                         bool showOkCancelHelp) {
-	TDialog *dialog = new TDialog(centeredSetupDialogRect(width, height), title);
-	int dialogWidth = dialog != nullptr ? dialog->size.x : width;
-	int dialogHeight = dialog != nullptr ? dialog->size.y : height;
+	TSetupScrollableDialog *dialog =
+	    new TSetupScrollableDialog(centeredSetupDialogRect(width, height), title, width, height);
 	int y = 2;
 
-	for (std::vector<std::string>::const_iterator it = lines.begin(); it != lines.end(); ++it, ++y)
-		insertSetupStaticLine(dialog, 2, y, it->c_str());
-
-	if (showOkCancelHelp) {
-		dialog->insert(new TButton(TRect(dialogWidth - 34, dialogHeight - 3, dialogWidth - 24, dialogHeight - 1), "OK",
-		                           cmOK, bfDefault));
-		dialog->insert(new TButton(TRect(dialogWidth - 23, dialogHeight - 3, dialogWidth - 10, dialogHeight - 1),
-		                           "Cancel", cmCancel, bfNormal));
-		dialog->insert(new TButton(TRect(dialogWidth - 9, dialogHeight - 3, dialogWidth - 2, dialogHeight - 1), "Help",
-		                           cmHelp, bfNormal));
-	} else {
-		dialog->insert(new TButton(TRect(dialogWidth / 2 - 4, dialogHeight - 3, dialogWidth / 2 + 4, dialogHeight - 1),
-		                           "Done", cmOK, bfDefault));
+	if (dialog == nullptr)
+		return nullptr;
+	for (std::vector<std::string>::const_iterator it = lines.begin(); it != lines.end(); ++it, ++y) {
+		TRect lineRect(2, y, 2 + std::strlen(it->c_str()) + 1, y + 1);
+		dialog->addManaged(new TStaticText(lineRect, it->c_str()), lineRect);
 	}
 
+	if (showOkCancelHelp) {
+		TRect okRect(width - 34, height - 3, width - 24, height - 1);
+		TRect cancelRect(width - 23, height - 3, width - 10, height - 1);
+		TRect helpRect(width - 9, height - 3, width - 2, height - 1);
+		dialog->addManaged(new TButton(okRect, "OK", cmOK, bfDefault), okRect);
+		dialog->addManaged(new TButton(cancelRect, "Cancel", cmCancel, bfNormal), cancelRect);
+		dialog->addManaged(new TButton(helpRect, "Help", cmHelp, bfNormal), helpRect);
+	} else {
+		TRect doneRect(width / 2 - 4, height - 3, width / 2 + 4, height - 1);
+		dialog->addManaged(new TButton(doneRect, "Done", cmOK, bfDefault), doneRect);
+	}
+
+	dialog->initScrollIfNeeded();
 	return dialog;
 }
 

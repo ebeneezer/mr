@@ -454,8 +454,10 @@ TMREditorApp::TMREditorApp()
       indexedMacroWarmupActive_(false), indexedMacroWarmupLoadedFiles_(0) {
 	mr::coprocessor::globalCoprocessor().setResultHandler(handleCoprocessorResult);
 	loadStartupSettingsMacro(std::string(), nullptr);
+	applyConfiguredDisplayLayout();
 	bootstrapIndexedMacroBindings();
 	createEditorWindow("?No-File?");
+	applyConfiguredDisplayLayout();
 	mrEnsureLogWindow(false);
 	syncRecordingUiState();
 	mrLogMessage("Editor session started.");
@@ -479,7 +481,65 @@ bool TMREditorApp::reloadSettingsMacroFromPath(const std::string &path, std::str
 		if (windows[i] != nullptr && windows[i]->getEditor() != nullptr && !windows[i]->isReadOnly())
 			windows[i]->getEditor()->setInsertModeEnabled(defaultInsertMode);
 	bootstrapIndexedMacroBindings();
+	applyConfiguredDisplayLayout();
 	return true;
+}
+
+void TMREditorApp::applyConfiguredWindowFramePolicy() {
+	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+	MRDisplaySetupSettings display = configuredDisplaySetupSettings();
+	bool lockFrames = !(display.showLeftBorder && display.showRightBorder && display.showBottomBorder);
+
+	for (std::size_t i = 0; i < windows.size(); ++i) {
+		TMREditWindow *win = windows[i];
+		if (win == nullptr)
+			continue;
+		if (lockFrames) {
+			TRect full(0, 0, TProgram::deskTop != nullptr ? TProgram::deskTop->size.x : win->size.x,
+			           TProgram::deskTop != nullptr ? TProgram::deskTop->size.y : win->size.y);
+			win->flags &= static_cast<ushort>(~(wfMove | wfGrow | wfZoom));
+			win->locate(full);
+		} else
+			win->flags |= (wfMove | wfGrow | wfZoom | wfClose);
+		if (win->frame != nullptr)
+			win->frame->drawView();
+	}
+}
+
+void TMREditorApp::applyConfiguredDisplayLayout() {
+	MRDisplaySetupSettings display = configuredDisplaySetupSettings();
+	bool statusVisible = display.showStatusLine || display.showFunctionKeyLabels;
+	TRect appRect = getExtent();
+	TRect desktopRect;
+
+	if (menuBar != nullptr) {
+		if (display.showMenuBar)
+			menuBar->show();
+		else
+			menuBar->hide();
+	}
+	if (auto *mrStatus = dynamic_cast<TMRStatusLine *>(statusLine)) {
+		mrStatus->setShowFunctionKeyLabels(display.showFunctionKeyLabels);
+		if (statusVisible)
+			mrStatus->show();
+		else
+			mrStatus->hide();
+	}
+	desktopRect.a.x = 0;
+	desktopRect.b.x = appRect.b.x - appRect.a.x;
+	desktopRect.a.y = display.showMenuBar ? 1 : 0;
+	desktopRect.b.y = appRect.b.y - appRect.a.y - (statusVisible ? 1 : 0);
+	if (desktopRect.b.y <= desktopRect.a.y)
+		desktopRect.b.y = desktopRect.a.y + 1;
+	if (deskTop != nullptr)
+		deskTop->locate(desktopRect);
+	applyConfiguredWindowFramePolicy();
+	if (deskTop != nullptr)
+		deskTop->drawView();
+	if (menuBar != nullptr)
+		menuBar->drawView();
+	if (statusLine != nullptr)
+		statusLine->drawView();
 }
 
 void TMREditorApp::prepareForQuit() {

@@ -5824,11 +5824,20 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							else
 								g_runtimeEnv.tabExpand = configuredTabExpandSetting();
 						}
+					} else if (setupKey == "SHOWSTATUSLINE" || setupKey == "SHOWMENUBAR" ||
+					           setupKey == "SHOWFKEYLABELS" || setupKey == "SHOWLEFTBORDER" ||
+					           setupKey == "SHOWRIGHTBORDER" || setupKey == "SHOWBOTTOMBORDER") {
+						if (!applyConfiguredDisplaySetupValue(setupKey, valueAsString(args[1]), &errorText))
+							throw std::runtime_error(
+							    "MRSETUP(" + setupKey + ") failed: " +
+							    (errorText.empty() ? std::string("invalid value.") : errorText));
 					} else
 						throw std::runtime_error(
 						    "MRSETUP supports keys: MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
 						    "SHELLPATH, PAGEBREAK, WORDDELIMS, DEFAULTEXTS, TRUNCSPACES, EOFCTRLZ, "
-						    "EOFCRLF, TABEXPAND, COLBLOCKMOVE, DEFAULTMODE, CURSORVISIBILITY.");
+						    "EOFCRLF, TABEXPAND, COLBLOCKMOVE, DEFAULTMODE, CURSORVISIBILITY, "
+						    "SHOWSTATUSLINE, SHOWMENUBAR, SHOWFKEYLABELS, SHOWLEFTBORDER, "
+						    "SHOWRIGHTBORDER, SHOWBOTTOMBORDER.");
 					runtimeErrorLevel() = 0;
 				} else if (name == "SET_GLOBAL_STR") {
 					if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1]))
