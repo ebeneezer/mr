@@ -3,7 +3,6 @@
 #define Uses_TText
 #define Uses_TDialog
 #include "TMRFrame.hpp"
-#include "../services/MRDialogPaths.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -228,17 +227,6 @@ void TMRFrame::drawFrameLine(TDrawBuffer &frameBuf, short y, short n, TColorAttr
 				}
 			}
 		}
-	}
-
-	if (owner != nullptr && (owner->options & ofTileable) != 0) {
-		MRDisplaySetupSettings display = configuredDisplaySetupSettings();
-		if (!display.showBottomBorder && y == size.y - 1)
-			for (int x = 0; x < size.x; ++x)
-				frameMask[static_cast<std::size_t>(x)] = 0;
-		if (!display.showLeftBorder)
-			frameMask[0] = 0;
-		if (!display.showRightBorder)
-			frameMask[static_cast<std::size_t>(size.x - 1)] = 0;
 	}
 
 	for (int x = 0; x < size.x; ++x) {

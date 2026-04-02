@@ -8,6 +8,7 @@
 #define Uses_TScrollBar
 #define Uses_TStaticText
 #define Uses_TView
+#define Uses_TDrawBuffer
 #include <tvision/tv.h>
 
 #include "MRSetupDialogCommon.hpp"
@@ -17,15 +18,21 @@
 #include <vector>
 
 namespace {
-class TDialogPaletteGroup : public TGroup {
+
+class TSetupDialogContentGroup : public TGroup {
   public:
-	explicit TDialogPaletteGroup(const TRect &bounds) : TGroup(bounds) {
+	explicit TSetupDialogContentGroup(const TRect &bounds) : TGroup(bounds) {
 	}
 
-	TPalette &getPalette() const override {
-		if (owner != nullptr)
-			return owner->getPalette();
-		return TGroup::getPalette();
+	void draw() override {
+		TDrawBuffer buffer;
+		TColorAttr color = owner != nullptr ? owner->mapColor(1) : mapColor(1);
+		TView *child = first();
+
+		buffer.moveChar(0, ' ', color, size.x);
+		for (short y = 0; y < size.y; ++y)
+			writeLine(0, y, size.x, 1, buffer);
+		drawSubViews(child, nullptr);
 	}
 };
 
@@ -40,7 +47,7 @@ class TSetupScrollableDialog : public TDialog {
 	    : TWindowInit(&TDialog::initFrame), TDialog(bounds, title), virtualWidth_(virtualWidth),
 	      virtualHeight_(virtualHeight) {
 		contentRect_ = TRect(1, 1, size.x - 1, size.y - 1);
-		content_ = new TDialogPaletteGroup(contentRect_);
+		content_ = createSetupDialogContentGroup(contentRect_);
 		if (content_ != nullptr)
 			insert(content_);
 	}
@@ -68,15 +75,15 @@ class TSetupScrollableDialog : public TDialog {
 		for (;;) {
 			bool prevH = needH;
 			bool prevV = needV;
-			int viewportWidth = std::max(1, size.x - 2 - (needV ? 1 : 0));
-			int viewportHeight = std::max(1, size.y - 2 - (needH ? 1 : 0));
+			int viewportWidth = std::max(1, size.x - 2);
+			int viewportHeight = std::max(1, size.y - 2);
 			needH = virtualContentWidth > viewportWidth;
 			needV = virtualContentHeight > viewportHeight;
 			if (needH == prevH && needV == prevV)
 				break;
 		}
 
-		contentRect_ = TRect(1, 1, size.x - 1 - (needV ? 1 : 0), size.y - 1 - (needH ? 1 : 0));
+		contentRect_ = TRect(1, 1, size.x - 1, size.y - 1);
 		if (contentRect_.b.x <= contentRect_.a.x)
 			contentRect_.b.x = contentRect_.a.x + 1;
 		if (contentRect_.b.y <= contentRect_.a.y)
@@ -85,7 +92,7 @@ class TSetupScrollableDialog : public TDialog {
 			content_->locate(contentRect_);
 
 		if (needH) {
-			TRect hRect(1, size.y - 2, size.x - 1 - (needV ? 1 : 0), size.y - 1);
+			TRect hRect(1, size.y - 1, size.x - 1, size.y);
 			if (hScrollBar_ == nullptr) {
 				hScrollBar_ = new TScrollBar(hRect);
 				insert(hScrollBar_);
@@ -93,7 +100,7 @@ class TSetupScrollableDialog : public TDialog {
 				hScrollBar_->locate(hRect);
 		}
 		if (needV) {
-			TRect vRect(size.x - 2, 1, size.x - 1, size.y - 1 - (needH ? 1 : 0));
+			TRect vRect(size.x - 1, 1, size.x, size.y - 1);
 			if (vScrollBar_ == nullptr) {
 				vScrollBar_ = new TScrollBar(vRect);
 				insert(vScrollBar_);
@@ -131,41 +138,22 @@ class TSetupScrollableDialog : public TDialog {
 			moved.move(-contentRect_.a.x, -contentRect_.a.y);
 			managedViews_[i].view->locate(moved);
 		}
+		if (content_ != nullptr)
+			content_->drawView();
 	}
 
 	int virtualWidth_ = 0;
 	int virtualHeight_ = 0;
 	TRect contentRect_;
-	TDialogPaletteGroup *content_ = nullptr;
+	TGroup *content_ = nullptr;
 	std::vector<ManagedItem> managedViews_;
 	TScrollBar *hScrollBar_ = nullptr;
 	TScrollBar *vScrollBar_ = nullptr;
 };
 } // namespace
 
-MRSetupLayoutProfile currentSetupLayoutProfile() {
-	static const int kCompactMaxWidth = 80;
-	static const int kCompactMaxHeight = 25;
-	static const int kRelaxedMinWidth = 84;
-	static const int kRelaxedMinHeight = 24;
-	TRect r;
-	int width;
-	int height;
-
-	if (TProgram::deskTop == nullptr)
-		return mrSetupLayoutCompact;
-	r = TProgram::deskTop->getExtent();
-	width = r.b.x - r.a.x;
-	height = r.b.y - r.a.y;
-	if (width <= kCompactMaxWidth && height <= kCompactMaxHeight)
-		return mrSetupLayoutCompact;
-	if (width < kRelaxedMinWidth || height < kRelaxedMinHeight)
-		return mrSetupLayoutCompact;
-	return mrSetupLayoutRelaxed;
-}
-
-bool isSetupLayoutCompact() {
-	return currentSetupLayoutProfile() == mrSetupLayoutCompact;
+TGroup *createSetupDialogContentGroup(const TRect &bounds) {
+	return new TSetupDialogContentGroup(bounds);
 }
 
 TRect centeredSetupDialogRect(int width, int height) {
@@ -182,8 +170,8 @@ TRect centeredSetupDialogRect(int width, int height) {
 
 TRect centeredSetupDialogRectForProfile(int compactWidth, int compactHeight, int relaxedWidth,
                                         int relaxedHeight) {
-	if (isSetupLayoutCompact())
-		return centeredSetupDialogRect(compactWidth, compactHeight);
+	(void)compactWidth;
+	(void)compactHeight;
 	return centeredSetupDialogRect(relaxedWidth, relaxedHeight);
 }
 
@@ -225,7 +213,7 @@ TDialog *createSetupSimplePreviewDialogForProfile(const char *title, int compact
                                                   int relaxedWidth, int relaxedHeight,
                                                   const std::vector<std::string> &lines,
                                                   bool showOkCancelHelp) {
-	if (isSetupLayoutCompact())
-		return createSetupSimplePreviewDialog(title, compactWidth, compactHeight, lines, showOkCancelHelp);
+	(void)compactWidth;
+	(void)compactHeight;
 	return createSetupSimplePreviewDialog(title, relaxedWidth, relaxedHeight, lines, showOkCancelHelp);
 }

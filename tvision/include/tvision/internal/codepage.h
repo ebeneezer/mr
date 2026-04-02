@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <tvision/tv.h>
 
 namespace tvision
 {

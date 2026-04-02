@@ -5808,14 +5808,14 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							throw std::runtime_error(
 							    "MRSETUP(SHELLPATH) failed: " +
 							    (errorText.empty() ? std::string("invalid path.") : errorText));
-					} else if (setupKey == "PAGEBREAK" || setupKey == "WORDDELIMS" ||
-					           setupKey == "DEFAULTEXTS" || setupKey == "TRUNCSPACES" ||
-					           setupKey == "EOFCTRLZ" || setupKey == "EOFCRLF" ||
-					           setupKey == "TABEXPAND" || setupKey == "COLBLOCKMOVE" ||
-					           setupKey == "DEFAULTMODE" || setupKey == "CURSORVISIBILITY") {
-						if (!applyConfiguredEditSetupValue(setupKey, valueAsString(args[1]), &errorText))
-							throw std::runtime_error(
-							    "MRSETUP(" + setupKey + ") failed: " +
+						} else if (setupKey == "PAGEBREAK" || setupKey == "WORDDELIMS" ||
+						           setupKey == "DEFAULTEXTS" || setupKey == "TRUNCSPACES" ||
+						           setupKey == "EOFCTRLZ" || setupKey == "EOFCRLF" ||
+						           setupKey == "TABEXPAND" || setupKey == "COLBLOCKMOVE" ||
+						           setupKey == "DEFAULTMODE") {
+							if (!applyConfiguredEditSetupValue(setupKey, valueAsString(args[1]), &errorText))
+								throw std::runtime_error(
+								    "MRSETUP(" + setupKey + ") failed: " +
 							    (errorText.empty() ? std::string("invalid value.") : errorText));
 						if (setupKey == "TABEXPAND") {
 							BackgroundEditSession *session = currentBackgroundEditSession();
@@ -5824,20 +5824,23 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							else
 								g_runtimeEnv.tabExpand = configuredTabExpandSetting();
 						}
-					} else if (setupKey == "SHOWSTATUSLINE" || setupKey == "SHOWMENUBAR" ||
-					           setupKey == "SHOWFKEYLABELS" || setupKey == "SHOWLEFTBORDER" ||
-					           setupKey == "SHOWRIGHTBORDER" || setupKey == "SHOWBOTTOMBORDER") {
-						if (!applyConfiguredDisplaySetupValue(setupKey, valueAsString(args[1]), &errorText))
+						} else if (setupKey == "WINDOWCOLORS" || setupKey == "MENUDIALOGCOLORS" ||
+						           setupKey == "HELPCOLORS" || setupKey == "OTHERCOLORS") {
+							if (!applyConfiguredColorSetupValue(setupKey, valueAsString(args[1]), &errorText))
+								throw std::runtime_error(
+								    "MRSETUP(" + setupKey + ") failed: " +
+								    (errorText.empty() ? std::string("invalid value.") : errorText));
+						} else if (setupKey == "SHOWSTATUSLINE" || setupKey == "SHOWMENUBAR" ||
+						           setupKey == "SHOWFKEYLABELS" || setupKey == "SHOWLEFTBORDER" ||
+						           setupKey == "SHOWRIGHTBORDER" || setupKey == "SHOWBOTTOMBORDER") {
+							// Deprecated compatibility keys: accepted but ignored.
+							(void)errorText;
+						} else
 							throw std::runtime_error(
-							    "MRSETUP(" + setupKey + ") failed: " +
-							    (errorText.empty() ? std::string("invalid value.") : errorText));
-					} else
-						throw std::runtime_error(
-						    "MRSETUP supports keys: MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
-						    "SHELLPATH, PAGEBREAK, WORDDELIMS, DEFAULTEXTS, TRUNCSPACES, EOFCTRLZ, "
-						    "EOFCRLF, TABEXPAND, COLBLOCKMOVE, DEFAULTMODE, CURSORVISIBILITY, "
-						    "SHOWSTATUSLINE, SHOWMENUBAR, SHOWFKEYLABELS, SHOWLEFTBORDER, "
-						    "SHOWRIGHTBORDER, SHOWBOTTOMBORDER.");
+							    "MRSETUP supports keys: MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
+							    "SHELLPATH, PAGEBREAK, WORDDELIMS, DEFAULTEXTS, TRUNCSPACES, EOFCTRLZ, "
+							    "EOFCRLF, TABEXPAND, COLBLOCKMOVE, DEFAULTMODE, WINDOWCOLORS, "
+							    "MENUDIALOGCOLORS, HELPCOLORS, OTHERCOLORS.");
 					runtimeErrorLevel() = 0;
 				} else if (name == "SET_GLOBAL_STR") {
 					if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1]))

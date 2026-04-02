@@ -5,18 +5,13 @@
 #include <vector>
 
 class TDialog;
+class TGroup;
 class TRect;
 
-enum MRSetupLayoutProfile {
-	mrSetupLayoutCompact = 0,
-	mrSetupLayoutRelaxed = 1
-};
-
-MRSetupLayoutProfile currentSetupLayoutProfile();
-bool isSetupLayoutCompact();
 TRect centeredSetupDialogRect(int width, int height);
 TRect centeredSetupDialogRectForProfile(int compactWidth, int compactHeight, int relaxedWidth,
                                         int relaxedHeight);
+TGroup *createSetupDialogContentGroup(const TRect &bounds);
 void insertSetupStaticLine(TDialog *dialog, int x, int y, const char *text);
 TDialog *createSetupSimplePreviewDialog(const char *title, int width, int height,
                                         const std::vector<std::string> &lines,

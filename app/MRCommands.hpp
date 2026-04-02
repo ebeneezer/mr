@@ -89,7 +89,6 @@ enum : ushort {
 	cmMrHelpAbout,
 
 	cmMrSetupEditSettings,
-	cmMrSetupDisplaySetup,
 	cmMrSetupColorSetup,
 	cmMrSetupKeyMapping,
 	cmMrSetupMouseKeyRepeat,

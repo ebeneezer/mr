@@ -28,8 +28,6 @@ MRMAC v1 wird als stabiler Sprach- und Laufzeitstand eingefroren, mit reproduzie
 - Globale Variablen: `GLOBAL_*`, `SET_GLOBAL_*`, `FIRST_GLOBAL`, `NEXT_GLOBAL`.
 - Makro-Registry-Lesezugriffe: `INQ_MACRO`, `FIRST_MACRO`, `NEXT_MACRO`.
 - `RUN_MACRO` in staged Pfaden (inkl. Session-State-Propagation).
-
-## Nicht Bestandteil von v1 (bewusst)
 - Externe I/O-Befehle und Dateisystem-Effekte:
   - `LOAD_FILE`, `SAVE_FILE`, `SAVE_BLOCK`, `LOAD_MACRO_FILE`, `CHANGE_DIR`, `DEL_FILE`
   - `FILE_EXISTS`, `FIRST_FILE`, `NEXT_FILE`, `GET_ENVIRONMENT`
@@ -37,7 +35,8 @@ MRMAC v1 wird als stabiler Sprach- und Laufzeitstand eingefroren, mit reproduzie
   - `CREATE_WINDOW`, `DELETE_WINDOW`, `MODIFY_WINDOW`, `LINK_WINDOW`, `UNLINK_WINDOW`
   - `ZOOM`, `REDRAW`, `NEW_SCREEN`, `SWITCH_WINDOW`, `SIZE_WINDOW`
   - TVision-Dialogaufrufe (`MessageBox`)
-
+- TVISION Elemente müssen über TVCALL aufrufbar sein.
+- es muss eine umfassende Referenz der mrmac Sprache in englischer Sprache erstellt werden mit Beispielen. Vorlage kann das Referenzhandbuch des Originals in documentation sein.
 ## Reproduzierbare Verifikation
 Empfohlener Gesamtcheck:
 

@@ -1,6 +1,7 @@
 #ifndef MRDIALOGPATHS_HPP
 #define MRDIALOGPATHS_HPP
 
+#include <array>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -23,25 +24,37 @@ struct MREditSetupSettings {
 	bool tabExpand;
 	std::string columnBlockMove;
 	std::string defaultMode;
-	std::string cursorVisibility;
 
 	MREditSetupSettings() noexcept
 	    : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false),
-	      eofCrLf(false), tabExpand(true), columnBlockMove(), defaultMode(), cursorVisibility() {
+	      eofCrLf(false), tabExpand(true), columnBlockMove(), defaultMode() {
 	}
 };
 
-struct MRDisplaySetupSettings {
-	bool showStatusLine;
-	bool showMenuBar;
-	bool showFunctionKeyLabels;
-	bool showLeftBorder;
-	bool showRightBorder;
-	bool showBottomBorder;
+enum class MRColorSetupGroup : unsigned char {
+	Window,
+	MenuDialog,
+	Help,
+	Other
+};
 
-	MRDisplaySetupSettings() noexcept
-	    : showStatusLine(true), showMenuBar(true), showFunctionKeyLabels(true), showLeftBorder(true),
-	      showRightBorder(true), showBottomBorder(true) {
+struct MRColorSetupItem {
+	const char *label;
+	unsigned char paletteIndex;
+};
+
+struct MRColorSetupSettings {
+	static const std::size_t kWindowCount = 7;
+	static const std::size_t kMenuDialogCount = 11;
+	static const std::size_t kHelpCount = 9;
+	static const std::size_t kOtherCount = 10;
+
+	std::array<unsigned char, kWindowCount> windowColors;
+	std::array<unsigned char, kMenuDialogCount> menuDialogColors;
+	std::array<unsigned char, kHelpCount> helpColors;
+	std::array<unsigned char, kOtherCount> otherColors;
+
+	MRColorSetupSettings() noexcept : windowColors(), menuDialogColors(), helpColors(), otherColors() {
 	}
 };
 
@@ -50,23 +63,26 @@ void rememberLoadDialogPath(const char *path);
 std::string normalizeConfiguredPathInput(const std::string &input);
 MRSetupPaths resolveSetupPathDefaults();
 MREditSetupSettings resolveEditSetupDefaults();
-MRDisplaySetupSettings resolveDisplaySetupDefaults();
+MRColorSetupSettings resolveColorSetupDefaults();
 MREditSetupSettings configuredEditSetupSettings();
-MRDisplaySetupSettings configuredDisplaySetupSettings();
+MRColorSetupSettings configuredColorSetupSettings();
 bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::string *errorMessage = nullptr);
-bool setConfiguredDisplaySetupSettings(const MRDisplaySetupSettings &settings,
-                                       std::string *errorMessage = nullptr);
 bool applyConfiguredEditSetupValue(const std::string &key, const std::string &value,
                                    std::string *errorMessage = nullptr);
-bool applyConfiguredDisplaySetupValue(const std::string &key, const std::string &value,
-                                      std::string *errorMessage = nullptr);
+bool applyConfiguredColorSetupValue(const std::string &key, const std::string &value,
+                                    std::string *errorMessage = nullptr);
+bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &value);
+const char *colorSetupGroupTitle(MRColorSetupGroup group);
+const char *colorSetupGroupKey(MRColorSetupGroup group);
+const MRColorSetupItem *colorSetupGroupItems(MRColorSetupGroup group, std::size_t &count);
+bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned char *values,
+                                        std::size_t count, std::string *errorMessage = nullptr);
+void configuredColorSetupGroupValues(MRColorSetupGroup group, unsigned char *values, std::size_t count);
 std::string formatEditSetupBoolean(bool value);
 std::vector<std::string> configuredDefaultExtensionList();
 bool configuredDefaultInsertMode();
 bool configuredTabExpandSetting();
 char configuredPageBreakCharacter();
-std::string configuredCursorVisibility();
-unsigned short configuredCursorTypeCode();
 std::string buildSettingsMacroSource(const MRSetupPaths &paths);
 bool writeSettingsMacroFile(const MRSetupPaths &paths, std::string *errorMessage = nullptr);
 bool ensureSettingsMacroFileExists(const std::string &settingsMacroUri, std::string *errorMessage = nullptr);

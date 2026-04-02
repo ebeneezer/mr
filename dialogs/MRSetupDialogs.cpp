@@ -6,6 +6,9 @@
 #define Uses_MsgBox
 #define Uses_TObject
 #define Uses_TButton
+#define Uses_TColorDialog
+#define Uses_TColorGroup
+#define Uses_TColorItem
 #define Uses_TDrawBuffer
 #define Uses_TGroup
 #define Uses_TInputLine
@@ -21,6 +24,7 @@
 #include "../app/MRCommands.hpp"
 #include "../app/TMREditorApp.hpp"
 #include "../services/MRDialogPaths.hpp"
+#include "../ui/MRPalette.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "MRSetupDialogCommon.hpp"
 
@@ -217,6 +221,70 @@ ushort execDialog(TDialog *dialog) {
 	return result;
 }
 
+void applyDialogScrollbarSyncToPalette(TPalette &palette) {
+	auto syncDialogScrollbarsToFrame = [&](int base) {
+		palette[base + 3] = palette[base + 0];
+		palette[base + 4] = palette[base + 0];
+		palette[base + 23] = palette[base + 0];
+		palette[base + 24] = palette[base + 0];
+	};
+	syncDialogScrollbarsToFrame(32);
+	syncDialogScrollbarsToFrame(64);
+	syncDialogScrollbarsToFrame(96);
+}
+
+TPalette buildColorSetupWorkingPalette() {
+	TPalette palette(cpAppColor, sizeof(cpAppColor) - 1);
+	unsigned char overrideValue = 0;
+
+	for (int slot = 1; slot <= 135; ++slot)
+		if (configuredColorSlotOverride(static_cast<unsigned char>(slot), overrideValue))
+			palette[slot] = overrideValue;
+	applyDialogScrollbarSyncToPalette(palette);
+	palette[1] = currentPalette.desktop;
+	return palette;
+}
+
+TDialog *createParameterizedColorPickerDialog(MRColorSetupGroup group) {
+	std::size_t count = 0;
+	const MRColorSetupItem *items = colorSetupGroupItems(group, count);
+	const char *title = colorSetupGroupTitle(group);
+	TColorItem *head = nullptr;
+	TColorGroup *groupHead = nullptr;
+
+	if (items == nullptr || count == 0)
+		return nullptr;
+	for (std::size_t i = count; i-- > 0;)
+		head = new TColorItem(items[i].label, items[i].paletteIndex, head);
+	groupHead = new TColorGroup(title, head, nullptr);
+	return new TColorDialog(nullptr, groupHead);
+}
+
+void runParameterizedColorPicker(MRColorSetupGroup group) {
+	std::size_t count = 0;
+	const MRColorSetupItem *items = colorSetupGroupItems(group, count);
+	std::string errorText;
+	std::vector<unsigned char> values;
+	TPalette workingPalette = buildColorSetupWorkingPalette();
+	ushort result;
+
+	if (items == nullptr || count == 0)
+		return;
+	result = execDialogRawWithData(createParameterizedColorPickerDialog(group), &workingPalette);
+	if (result != cmOK)
+		return;
+
+	values.assign(count, 0);
+	for (std::size_t i = 0; i < count; ++i)
+		values[i] = static_cast<unsigned char>(workingPalette[items[i].paletteIndex]);
+
+	if (!setConfiguredColorSetupGroupValues(group, values.data(), values.size(), &errorText)) {
+		messageBox(mfError | mfOKButton, "Installation / Color setup\n\n%s", errorText.c_str());
+		return;
+	}
+	TProgram::application->redraw();
+}
+
 class TPathsSetupDialog : public TDialog {
   public:
 	struct ManagedItem {
@@ -224,23 +292,12 @@ class TPathsSetupDialog : public TDialog {
 		TRect base;
 	};
 
-	class TDialogPaletteGroup : public TGroup {
-	  public:
-		explicit TDialogPaletteGroup(const TRect &bounds) : TGroup(bounds) {
-		}
-
-		TPalette &getPalette() const override {
-			if (owner != nullptr)
-				return owner->getPalette();
-			return TGroup::getPalette();
-		}
-	};
-
 	class TInlineGlyphButton : public TView {
 	  public:
 		TInlineGlyphButton(const TRect &bounds, const char *glyph, ushort command)
 		    : TView(bounds), glyph_(glyph != nullptr ? glyph : ""), command_(command) {
 			options |= ofSelectable;
+			options |= ofFirstClick;
 			eventMask |= evMouseDown | evKeyDown;
 		}
 
@@ -254,21 +311,32 @@ class TPathsSetupDialog : public TDialog {
 		}
 
 		void handleEvent(TEvent &event) override {
-			TView::handleEvent(event);
 			if (event.what == evMouseDown) {
-				message(owner, evCommand, command_, this);
+				dispatchCommand();
 				clearEvent(event);
-			} else if (event.what == evKeyDown) {
+				return;
+			}
+			if (event.what == evKeyDown) {
 				TKey key(event.keyDown);
 
 				if (key == TKey(kbEnter) || key == TKey(' ')) {
-					message(owner, evCommand, command_, this);
+					dispatchCommand();
 					clearEvent(event);
+					return;
 				}
 			}
+			TView::handleEvent(event);
 		}
 
 	  private:
+		void dispatchCommand() {
+			TView *target = owner;
+
+			while (target != nullptr && dynamic_cast<TDialog *>(target) == nullptr)
+				target = target->owner;
+			message(target != nullptr ? target : owner, evCommand, command_, this);
+		}
+
 		std::string glyph_;
 		ushort command_;
 	};
@@ -279,15 +347,15 @@ class TPathsSetupDialog : public TDialog {
 	              "PATHS"),
 	      initialRecord_(initialRecord), currentRecord_(initialRecord) {
 		contentRect_ = TRect(1, 1, size.x - 1, size.y - 1);
-		content_ = new TDialogPaletteGroup(contentRect_);
+		content_ = createSetupDialogContentGroup(contentRect_);
 		if (content_ != nullptr)
 			insert(content_);
 
 		int dialogWidth = kVirtualDialogWidth;
 		int inputLeft = 2;
-		int glyphLeft = dialogWidth - 4;
 		int glyphRight = dialogWidth - 2;
-		int inputRight = glyphLeft - 1;
+		int glyphLeft = glyphRight - 1;
+		int inputRight = glyphLeft;
 		int doneLeft = dialogWidth / 2 - 17;
 		int cancelLeft = doneLeft + 12;
 		int helpLeft = cancelLeft + 14;
@@ -427,6 +495,8 @@ class TPathsSetupDialog : public TDialog {
 			moved.move(-contentRect_.a.x, -contentRect_.a.y);
 			managedViews_[i].view->locate(moved);
 		}
+		if (content_ != nullptr)
+			content_->drawView();
 	}
 
 	void initScrollIfNeeded() {
@@ -438,15 +508,15 @@ class TPathsSetupDialog : public TDialog {
 		for (;;) {
 			bool prevH = needH;
 			bool prevV = needV;
-			int viewportWidth = std::max(1, size.x - 2 - (needV ? 1 : 0));
-			int viewportHeight = std::max(1, size.y - 2 - (needH ? 1 : 0));
+			int viewportWidth = std::max(1, size.x - 2);
+			int viewportHeight = std::max(1, size.y - 2);
 			needH = virtualContentWidth > viewportWidth;
 			needV = virtualContentHeight > viewportHeight;
 			if (needH == prevH && needV == prevV)
 				break;
 		}
 
-		contentRect_ = TRect(1, 1, size.x - 1 - (needV ? 1 : 0), size.y - 1 - (needH ? 1 : 0));
+		contentRect_ = TRect(1, 1, size.x - 1, size.y - 1);
 		if (contentRect_.b.x <= contentRect_.a.x)
 			contentRect_.b.x = contentRect_.a.x + 1;
 		if (contentRect_.b.y <= contentRect_.a.y)
@@ -455,7 +525,7 @@ class TPathsSetupDialog : public TDialog {
 			content_->locate(contentRect_);
 
 		if (needH) {
-			TRect hRect(1, size.y - 2, size.x - 1 - (needV ? 1 : 0), size.y - 1);
+			TRect hRect(1, size.y - 1, size.x - 1, size.y);
 			if (hScrollBar_ == nullptr) {
 				hScrollBar_ = new TScrollBar(hRect);
 				insert(hScrollBar_);
@@ -463,7 +533,7 @@ class TPathsSetupDialog : public TDialog {
 				hScrollBar_->locate(hRect);
 		}
 		if (needV) {
-			TRect vRect(size.x - 2, 1, size.x - 1, size.y - 1 - (needH ? 1 : 0));
+			TRect vRect(size.x - 1, 1, size.x, size.y - 1);
 			if (vScrollBar_ == nullptr) {
 				vScrollBar_ = new TScrollBar(vRect);
 				insert(vScrollBar_);
@@ -567,7 +637,7 @@ class TPathsSetupDialog : public TDialog {
 	PathsDialogRecord initialRecord_;
 	PathsDialogRecord currentRecord_;
 	TRect contentRect_;
-	TDialogPaletteGroup *content_ = nullptr;
+	TGroup *content_ = nullptr;
 	std::vector<ManagedItem> managedViews_;
 	TScrollBar *hScrollBar_ = nullptr;
 	TScrollBar *vScrollBar_ = nullptr;
@@ -646,19 +716,19 @@ void runColorSetupDialogFlowLocal() {
 		ushort result = execDialog(createColorSetupDialog());
 		switch (result) {
 			case cmMrColorWindowColors:
-				execDialog(createWindowColorsDialog());
+				runParameterizedColorPicker(MRColorSetupGroup::Window);
 				break;
 
 			case cmMrColorMenuDialogColors:
-				execDialog(createMenuDialogColorsDialog());
+				runParameterizedColorPicker(MRColorSetupGroup::MenuDialog);
 				break;
 
 			case cmMrColorHelpColors:
-				execDialog(createHelpColorsDialog());
+				runParameterizedColorPicker(MRColorSetupGroup::Help);
 				break;
 
 			case cmMrColorOtherColors:
-				execDialog(createOtherColorsDialog());
+				runParameterizedColorPicker(MRColorSetupGroup::Other);
 				break;
 
 			case cmCancel:
@@ -702,10 +772,6 @@ void runInstallationAndSetupDialogFlow() {
 		switch (result) {
 			case cmMrSetupEditSettings:
 				runEditSettingsDialogFlow();
-				break;
-
-			case cmMrSetupDisplaySetup:
-				runDisplaySetupDialogFlow();
 				break;
 
 			case cmMrSetupColorSetup:

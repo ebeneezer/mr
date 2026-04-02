@@ -50,9 +50,14 @@ MREditSetupSettings &configuredEditSettings() {
 	return value;
 }
 
-MRDisplaySetupSettings &configuredDisplaySettings() {
-	static MRDisplaySetupSettings value;
+MRColorSetupSettings &configuredColorSettings() {
+	static MRColorSetupSettings value;
 	return value;
+}
+
+bool &configuredColorSettingsInitialized() {
+	static bool initialized = false;
+	return initialized;
 }
 
 std::string trimAscii(const std::string &value) {
@@ -352,9 +357,225 @@ static const char *const kColumnBlockMoveDelete = "DELETE_SPACE";
 static const char *const kColumnBlockMoveLeave = "LEAVE_SPACE";
 static const char *const kDefaultModeInsert = "INSERT";
 static const char *const kDefaultModeOverwrite = "OVERWRITE";
-static const char *const kCursorVisibilityHidden = "HIDDEN";
-static const char *const kCursorVisibilityNormal = "NORMAL";
-static const char *const kCursorVisibilityProminent = "PROMINENT";
+
+struct ColorGroupDefinition {
+	MRColorSetupGroup group;
+	const char *title;
+	const char *key;
+	const MRColorSetupItem *items;
+	std::size_t count;
+};
+
+static const MRColorSetupItem kWindowColorItems[] = {
+    // TProgram palette layout:
+    //   8..15  = TWindow(Blue), 16..23 = TWindow(Cyan), 24..31 = TWindow(Gray).
+    // Our editor windows use wpBlueWindow, so WINDOWCOLORS must target 8..15.
+    // End-Of-File marker color is intentionally not exposed here: in TVision's
+    // TWindow palette slot layout, slot 11 belongs to scrollbar page area.
+    {"Text", 13}, {"Changed-Text", 14}, {"Highlighted-Text", 15}, {"Window-border", 8},
+    {"window-Bold", 9}, {"cUrrent line", 10}, {"cuRrent line in block", 12},
+};
+
+static const MRColorSetupItem kMenuDialogColorItems[] = {
+    // Mixed group by design:
+    // - Menu/status palette slots 2..6.
+    // - Gray dialog block (32..63), as TDialog defaults to dpGrayDialog.
+    {"Menu-Text", 2},      {"menu-Highlight", 3}, {"menu-Bold", 4},      {"menu-skip", 5},
+    {"Menu-border", 6},    {"bUtton", 41},        {"button-Key", 45},     {"button-shAdow", 46},
+    {"Select", 59},        {"Not-select", 57},    {"Checkbox bold", 49},
+};
+
+static const MRColorSetupItem kHelpColorItems[] = {
+    {"Help-Text", 133},     {"help-Highlight", 134}, {"help-Chapter", 135},
+    {"help-Border", 128},   {"help-Link", 134},      {"help-F-keys", 135},
+    {"help-attr-1", 133},   {"help-attr-2", 134},    {"help-attr-3", 135},
+};
+
+static const MRColorSetupItem kOtherColorItems[] = {
+    {"statusline", 2},        {"statusline-Bold", 3}, {"Fkey-Labels", 4}, {"fkey-Numbers", 5},
+    {"Error", 42},            {"Message", 43},        {"Working", 44},     {"shadow", 46},
+    {"shadow-Character", 47}, {"Background color", 32},
+};
+
+static const ColorGroupDefinition kColorGroups[] = {
+    {MRColorSetupGroup::Window, "WINDOW COLORS", "WINDOWCOLORS", kWindowColorItems,
+     sizeof(kWindowColorItems) / sizeof(kWindowColorItems[0])},
+    {MRColorSetupGroup::MenuDialog, "MENU / DIALOG COLORS", "MENUDIALOGCOLORS", kMenuDialogColorItems,
+     sizeof(kMenuDialogColorItems) / sizeof(kMenuDialogColorItems[0])},
+    {MRColorSetupGroup::Help, "HELP COLORS", "HELPCOLORS", kHelpColorItems,
+     sizeof(kHelpColorItems) / sizeof(kHelpColorItems[0])},
+    {MRColorSetupGroup::Other, "OTHER COLORS", "OTHERCOLORS", kOtherColorItems,
+     sizeof(kOtherColorItems) / sizeof(kOtherColorItems[0])},
+};
+
+const ColorGroupDefinition *findColorGroupDefinition(MRColorSetupGroup group) {
+	for (std::size_t i = 0; i < sizeof(kColorGroups) / sizeof(kColorGroups[0]); ++i)
+		if (kColorGroups[i].group == group)
+			return &kColorGroups[i];
+	return nullptr;
+}
+
+const ColorGroupDefinition *findColorGroupDefinitionByKey(const std::string &key) {
+	std::string upper = upperAscii(trimAscii(key));
+	for (std::size_t i = 0; i < sizeof(kColorGroups) / sizeof(kColorGroups[0]); ++i)
+		if (upper == kColorGroups[i].key)
+			return &kColorGroups[i];
+	return nullptr;
+}
+
+unsigned char defaultColorForSlot(unsigned char paletteIndex) {
+	// Defaults from cpAppColor (TVision app.h), expanded explicitly for stability.
+	static const unsigned char defaults[] = {
+	    0x00, 0x71, 0x70, 0x78, 0x74, 0x20, 0x28, 0x24, 0x17, 0x1F, 0x1A, 0x31, 0x31, 0x1E, 0x71, 0x1F,
+	    0x37, 0x3F, 0x3A, 0x13, 0x13, 0x3E, 0x21, 0x3F, 0x70, 0x7F, 0x7A, 0x13, 0x13, 0x70, 0x7F, 0x7E,
+	    0x70, 0x7F, 0x7A, 0x13, 0x13, 0x70, 0x70, 0x7F, 0x7E, 0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x70, 0x30,
+	    0x3F, 0x3E, 0x1F, 0x2F, 0x1A, 0x20, 0x72, 0x31, 0x31, 0x30, 0x2F, 0x3E, 0x31, 0x13, 0x38, 0x00,
+	    0x17, 0x1F, 0x1A, 0x71, 0x71, 0x1E, 0x17, 0x1F, 0x1E, 0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x10, 0x30,
+	    0x3F, 0x3E, 0x70, 0x2F, 0x7A, 0x20, 0x12, 0x31, 0x31, 0x30, 0x2F, 0x3E, 0x31, 0x13, 0x38, 0x00,
+	    0x37, 0x3F, 0x3A, 0x13, 0x13, 0x3E, 0x30, 0x3F, 0x3E, 0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x30, 0x70,
+	    0x7F, 0x7E, 0x1F, 0x2F, 0x1A, 0x20, 0x32, 0x31, 0x71, 0x70, 0x2F, 0x7E, 0x71, 0x13, 0x78, 0x00,
+	    0x37, 0x3F, 0x3A, 0x13, 0x13, 0x30, 0x3E, 0x1E,
+	};
+
+	if (paletteIndex == 0 || paletteIndex >= sizeof(defaults) / sizeof(defaults[0]))
+		return 0x70;
+	return defaults[paletteIndex];
+}
+
+MRColorSetupSettings defaultsFromColorGroups() {
+	MRColorSetupSettings settings;
+
+	for (std::size_t i = 0; i < settings.windowColors.size(); ++i)
+		settings.windowColors[i] = defaultColorForSlot(kWindowColorItems[i].paletteIndex);
+	for (std::size_t i = 0; i < settings.menuDialogColors.size(); ++i)
+		settings.menuDialogColors[i] = defaultColorForSlot(kMenuDialogColorItems[i].paletteIndex);
+	for (std::size_t i = 0; i < settings.helpColors.size(); ++i)
+		settings.helpColors[i] = defaultColorForSlot(kHelpColorItems[i].paletteIndex);
+	for (std::size_t i = 0; i < settings.otherColors.size(); ++i)
+		settings.otherColors[i] = defaultColorForSlot(kOtherColorItems[i].paletteIndex);
+	return settings;
+}
+
+bool parseHexColorToken(const std::string &token, unsigned char &outValue) {
+	std::string value = trimAscii(token);
+	unsigned int parsed = 0;
+
+	if (value.empty() || value.size() > 2)
+		return false;
+	for (std::size_t i = 0; i < value.size(); ++i)
+		if (!std::isxdigit(static_cast<unsigned char>(value[i])))
+			return false;
+	parsed = static_cast<unsigned int>(std::strtoul(value.c_str(), nullptr, 16));
+	if (parsed > 0xFF)
+		return false;
+	outValue = static_cast<unsigned char>(parsed);
+	return true;
+}
+
+template <std::size_t N>
+std::string formatColorListLiteral(const std::array<unsigned char, N> &values) {
+	static const char *const hex = "0123456789ABCDEF";
+	std::string out = "v1:";
+
+	for (std::size_t i = 0; i < N; ++i) {
+		unsigned char value = values[i];
+		if (i != 0)
+			out.push_back(',');
+		out.push_back(hex[(value >> 4) & 0x0F]);
+		out.push_back(hex[value & 0x0F]);
+	}
+	return out;
+}
+
+template <std::size_t N>
+bool parseColorListLiteral(const std::string &literal, std::array<unsigned char, N> &outValues,
+                           std::string *errorMessage) {
+	std::string text = trimAscii(literal);
+	std::size_t cursor = 0;
+	std::size_t itemIndex = 0;
+	std::array<unsigned char, N> parsed;
+
+	if (text.rfind("v1:", 0) == 0 || text.rfind("V1:", 0) == 0)
+		text = text.substr(3);
+	if (text.empty())
+		return setError(errorMessage, "Empty color list.");
+
+	while (cursor <= text.size() && itemIndex < N) {
+		std::size_t comma = text.find(',', cursor);
+		std::string token = text.substr(cursor, comma == std::string::npos ? std::string::npos : comma - cursor);
+		unsigned char value = 0;
+
+		if (!parseHexColorToken(token, value))
+			return setError(errorMessage, "Expected hex color list (e.g. v1:70,7F,...).");
+		parsed[itemIndex++] = value;
+		if (comma == std::string::npos)
+			break;
+		cursor = comma + 1;
+	}
+
+	if (itemIndex != N)
+		return setError(errorMessage, "Unexpected color list size.");
+	if (text.find(',', cursor) != std::string::npos)
+		return setError(errorMessage, "Too many color values in list.");
+
+	outValues = parsed;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+bool parseWindowColorListLiteral(const std::string &literal,
+                                 std::array<unsigned char, MRColorSetupSettings::kWindowCount> &outValues,
+                                 std::string *errorMessage) {
+	std::string text = trimAscii(literal);
+	std::size_t cursor = 0;
+	std::vector<unsigned char> parsed;
+	unsigned char value = 0;
+
+	if (text.rfind("v1:", 0) == 0 || text.rfind("V1:", 0) == 0)
+		text = text.substr(3);
+	if (text.empty())
+		return setError(errorMessage, "Empty color list.");
+
+	while (cursor <= text.size()) {
+		std::size_t comma = text.find(',', cursor);
+		std::string token = text.substr(cursor, comma == std::string::npos ? std::string::npos : comma - cursor);
+		if (!parseHexColorToken(token, value))
+			return setError(errorMessage, "Expected hex color list (e.g. v1:70,7F,...).");
+		parsed.push_back(value);
+		if (comma == std::string::npos)
+			break;
+		cursor = comma + 1;
+	}
+
+	// Accept current 7-value format and legacy 8-value format.
+	// Legacy format contained EOF marker color as 4th entry, which is no longer configurable
+	// because that slot maps to TWindow scrollbar page color.
+	if (parsed.size() == MRColorSetupSettings::kWindowCount)
+		for (std::size_t i = 0; i < outValues.size(); ++i)
+			outValues[i] = parsed[i];
+	else if (parsed.size() == MRColorSetupSettings::kWindowCount + 1) {
+		outValues[0] = parsed[0];
+		outValues[1] = parsed[1];
+		outValues[2] = parsed[2];
+		outValues[3] = parsed[4];
+		outValues[4] = parsed[5];
+		outValues[5] = parsed[6];
+		outValues[6] = parsed[7];
+	} else
+		return setError(errorMessage, "Unexpected WINDOWCOLORS list size.");
+
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+void ensureConfiguredColorSettingsInitialized() {
+	if (configuredColorSettingsInitialized())
+		return;
+	configuredColorSettings() = defaultsFromColorGroups();
+	configuredColorSettingsInitialized() = true;
+}
 
 bool parseBooleanLiteral(const std::string &value, bool &outValue, std::string *errorMessage) {
 	std::string upper = upperAscii(trimAscii(value));
@@ -403,18 +624,6 @@ std::string normalizeDefaultMode(const std::string &value) {
 		return kDefaultModeInsert;
 	if (key == "OVERWRITE" || key == "OVR")
 		return kDefaultModeOverwrite;
-	return std::string();
-}
-
-std::string normalizeCursorVisibility(const std::string &value) {
-	std::string key = upperAscii(trimAscii(value));
-
-	if (key == "HIDDEN" || key == "OFF" || key == "0")
-		return kCursorVisibilityHidden;
-	if (key == "NORMAL" || key == "1")
-		return kCursorVisibilityNormal;
-	if (key == "PROMINENT" || key == "VERY_VISIBLE" || key == "VERYVISIBLE" || key == "2")
-		return kCursorVisibilityProminent;
 	return std::string();
 }
 
@@ -603,20 +812,11 @@ MREditSetupSettings resolveEditSetupDefaults() {
 	defaults.tabExpand = true;
 	defaults.columnBlockMove = kColumnBlockMoveDelete;
 	defaults.defaultMode = kDefaultModeInsert;
-	defaults.cursorVisibility = kCursorVisibilityNormal;
 	return defaults;
 }
 
-MRDisplaySetupSettings resolveDisplaySetupDefaults() {
-	MRDisplaySetupSettings defaults;
-
-	defaults.showStatusLine = true;
-	defaults.showMenuBar = true;
-	defaults.showFunctionKeyLabels = true;
-	defaults.showLeftBorder = true;
-	defaults.showRightBorder = true;
-	defaults.showBottomBorder = true;
-	return defaults;
+MRColorSetupSettings resolveColorSetupDefaults() {
+	return defaultsFromColorGroups();
 }
 
 MREditSetupSettings configuredEditSetupSettings() {
@@ -630,15 +830,9 @@ MREditSetupSettings configuredEditSetupSettings() {
 	return configured;
 }
 
-MRDisplaySetupSettings configuredDisplaySetupSettings() {
-	static bool initialized = false;
-	MRDisplaySetupSettings &configured = configuredDisplaySettings();
-
-	if (!initialized) {
-		configured = resolveDisplaySetupDefaults();
-		initialized = true;
-	}
-	return configured;
+MRColorSetupSettings configuredColorSetupSettings() {
+	ensureConfiguredColorSettingsInitialized();
+	return configuredColorSettings();
 }
 
 bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::string *errorMessage) {
@@ -652,7 +846,6 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	std::string defaultExts = canonicalDefaultExtensionsLiteral(settings.defaultExtensions);
 	std::string columnStyle = normalizeColumnBlockMove(settings.columnBlockMove);
 	std::string defaultMode = normalizeDefaultMode(settings.defaultMode);
-	std::string cursorVisibility = normalizeCursorVisibility(settings.cursorVisibility);
 
 	if (wordDelimiters.empty())
 		return setError(errorMessage, "WORDDELIMS may not be empty.");
@@ -660,8 +853,6 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 		return setError(errorMessage, "COLBLOCKMOVE must be DELETE_SPACE or LEAVE_SPACE.");
 	if (defaultMode.empty())
 		return setError(errorMessage, "DEFAULTMODE must be INSERT or OVERWRITE.");
-	if (cursorVisibility.empty())
-		return setError(errorMessage, "CURSORVISIBILITY must be HIDDEN, NORMAL, or PROMINENT.");
 
 	if (!parseBooleanLiteral(settings.truncateSpaces ? "true" : "false", parsedBool, &boolError))
 		return setError(errorMessage, boolError);
@@ -681,41 +872,152 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	normalized.defaultExtensions = defaultExts;
 	normalized.columnBlockMove = columnStyle;
 	normalized.defaultMode = defaultMode;
-	normalized.cursorVisibility = cursorVisibility;
 	configuredEditSettings() = normalized;
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;
 }
 
-bool setConfiguredDisplaySetupSettings(const MRDisplaySetupSettings &settings, std::string *errorMessage) {
-	MRDisplaySetupSettings normalized = settings;
-	std::string boolError;
-	bool parsedBool = false;
+bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned char *values, std::size_t count,
+                                        std::string *errorMessage) {
+	const ColorGroupDefinition *definition = findColorGroupDefinition(group);
+	MRColorSetupSettings &configured = configuredColorSettings();
 
-	if (!parseBooleanLiteral(settings.showStatusLine ? "true" : "false", parsedBool, &boolError))
-		return setError(errorMessage, boolError);
-	normalized.showStatusLine = parsedBool;
-	if (!parseBooleanLiteral(settings.showMenuBar ? "true" : "false", parsedBool, &boolError))
-		return setError(errorMessage, boolError);
-	normalized.showMenuBar = parsedBool;
-	if (!parseBooleanLiteral(settings.showFunctionKeyLabels ? "true" : "false", parsedBool, &boolError))
-		return setError(errorMessage, boolError);
-	normalized.showFunctionKeyLabels = parsedBool;
-	if (!parseBooleanLiteral(settings.showLeftBorder ? "true" : "false", parsedBool, &boolError))
-		return setError(errorMessage, boolError);
-	normalized.showLeftBorder = parsedBool;
-	if (!parseBooleanLiteral(settings.showRightBorder ? "true" : "false", parsedBool, &boolError))
-		return setError(errorMessage, boolError);
-	normalized.showRightBorder = parsedBool;
-	if (!parseBooleanLiteral(settings.showBottomBorder ? "true" : "false", parsedBool, &boolError))
-		return setError(errorMessage, boolError);
-	normalized.showBottomBorder = parsedBool;
+	ensureConfiguredColorSettingsInitialized();
+	if (definition == nullptr)
+		return setError(errorMessage, "Unknown color setup group.");
+	if (values == nullptr || count != definition->count)
+		return setError(errorMessage, "Unexpected color setup group value count.");
 
-	configuredDisplaySettings() = normalized;
+	switch (group) {
+		case MRColorSetupGroup::Window:
+			for (std::size_t i = 0; i < configured.windowColors.size(); ++i)
+				configured.windowColors[i] = values[i];
+			break;
+		case MRColorSetupGroup::MenuDialog:
+			for (std::size_t i = 0; i < configured.menuDialogColors.size(); ++i)
+				configured.menuDialogColors[i] = values[i];
+			break;
+		case MRColorSetupGroup::Help:
+			for (std::size_t i = 0; i < configured.helpColors.size(); ++i)
+				configured.helpColors[i] = values[i];
+			break;
+		case MRColorSetupGroup::Other:
+			for (std::size_t i = 0; i < configured.otherColors.size(); ++i)
+				configured.otherColors[i] = values[i];
+			break;
+	}
+
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;
+}
+
+void configuredColorSetupGroupValues(MRColorSetupGroup group, unsigned char *values, std::size_t count) {
+	const ColorGroupDefinition *definition = findColorGroupDefinition(group);
+	MRColorSetupSettings configured = configuredColorSetupSettings();
+
+	if (values == nullptr || definition == nullptr || count != definition->count)
+		return;
+
+	switch (group) {
+		case MRColorSetupGroup::Window:
+			for (std::size_t i = 0; i < configured.windowColors.size(); ++i)
+				values[i] = configured.windowColors[i];
+			break;
+		case MRColorSetupGroup::MenuDialog:
+			for (std::size_t i = 0; i < configured.menuDialogColors.size(); ++i)
+				values[i] = configured.menuDialogColors[i];
+			break;
+		case MRColorSetupGroup::Help:
+			for (std::size_t i = 0; i < configured.helpColors.size(); ++i)
+				values[i] = configured.helpColors[i];
+			break;
+		case MRColorSetupGroup::Other:
+			for (std::size_t i = 0; i < configured.otherColors.size(); ++i)
+				values[i] = configured.otherColors[i];
+			break;
+	}
+}
+
+const char *colorSetupGroupTitle(MRColorSetupGroup group) {
+	const ColorGroupDefinition *definition = findColorGroupDefinition(group);
+	return definition != nullptr ? definition->title : "";
+}
+
+const char *colorSetupGroupKey(MRColorSetupGroup group) {
+	const ColorGroupDefinition *definition = findColorGroupDefinition(group);
+	return definition != nullptr ? definition->key : "";
+}
+
+const MRColorSetupItem *colorSetupGroupItems(MRColorSetupGroup group, std::size_t &count) {
+	const ColorGroupDefinition *definition = findColorGroupDefinition(group);
+	if (definition == nullptr) {
+		count = 0;
+		return nullptr;
+	}
+	count = definition->count;
+	return definition->items;
+}
+
+bool applyConfiguredColorSetupValue(const std::string &key, const std::string &value,
+                                    std::string *errorMessage) {
+	const ColorGroupDefinition *definition = findColorGroupDefinitionByKey(key);
+	MRColorSetupSettings configured = configuredColorSetupSettings();
+
+	if (definition == nullptr)
+		return setError(errorMessage, "Unknown color setup key.");
+
+	switch (definition->group) {
+		case MRColorSetupGroup::Window:
+			if (!parseWindowColorListLiteral(value, configured.windowColors, errorMessage))
+				return false;
+			break;
+		case MRColorSetupGroup::MenuDialog:
+			if (!parseColorListLiteral(value, configured.menuDialogColors, errorMessage))
+				return false;
+			break;
+		case MRColorSetupGroup::Help:
+			if (!parseColorListLiteral(value, configured.helpColors, errorMessage))
+				return false;
+			break;
+		case MRColorSetupGroup::Other:
+			if (!parseColorListLiteral(value, configured.otherColors, errorMessage))
+				return false;
+			break;
+	}
+
+	configuredColorSettings() = configured;
+	configuredColorSettingsInitialized() = true;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &value) {
+	MRColorSetupSettings configured = configuredColorSetupSettings();
+
+	for (std::size_t i = 0; i < sizeof(kWindowColorItems) / sizeof(kWindowColorItems[0]); ++i)
+		if (kWindowColorItems[i].paletteIndex == paletteIndex) {
+			value = configured.windowColors[i];
+			return true;
+		}
+	for (std::size_t i = 0; i < sizeof(kMenuDialogColorItems) / sizeof(kMenuDialogColorItems[0]); ++i)
+		if (kMenuDialogColorItems[i].paletteIndex == paletteIndex) {
+			value = configured.menuDialogColors[i];
+			return true;
+		}
+	for (std::size_t i = 0; i < sizeof(kHelpColorItems) / sizeof(kHelpColorItems[0]); ++i)
+		if (kHelpColorItems[i].paletteIndex == paletteIndex) {
+			value = configured.helpColors[i];
+			return true;
+		}
+	for (std::size_t i = 0; i < sizeof(kOtherColorItems) / sizeof(kOtherColorItems[0]); ++i)
+		if (kOtherColorItems[i].paletteIndex == paletteIndex) {
+			value = configured.otherColors[i];
+			return true;
+		}
+	return false;
 }
 
 bool applyConfiguredEditSetupValue(const std::string &key, const std::string &value,
@@ -759,41 +1061,10 @@ bool applyConfiguredEditSetupValue(const std::string &key, const std::string &va
 		if (normalized.empty())
 			return setError(errorMessage, "DEFAULTMODE must be INSERT or OVERWRITE.");
 		current.defaultMode = normalized;
-	} else if (upperKeyName == "CURSORVISIBILITY") {
-		normalized = normalizeCursorVisibility(value);
-		if (normalized.empty())
-			return setError(errorMessage, "CURSORVISIBILITY must be HIDDEN, NORMAL, or PROMINENT.");
-		current.cursorVisibility = normalized;
 	} else
 		return setError(errorMessage, "Unknown edit setting key.");
 
 	return setConfiguredEditSetupSettings(current, errorMessage);
-}
-
-bool applyConfiguredDisplaySetupValue(const std::string &key, const std::string &value,
-                                      std::string *errorMessage) {
-	MRDisplaySetupSettings current = configuredDisplaySetupSettings();
-	std::string upperKeyName = upperAscii(trimAscii(key));
-	bool boolValue = false;
-
-	if (!parseBooleanLiteral(value, boolValue, errorMessage))
-		return false;
-	if (upperKeyName == "SHOWSTATUSLINE")
-		current.showStatusLine = boolValue;
-	else if (upperKeyName == "SHOWMENUBAR")
-		current.showMenuBar = boolValue;
-	else if (upperKeyName == "SHOWFKEYLABELS")
-		current.showFunctionKeyLabels = boolValue;
-	else if (upperKeyName == "SHOWLEFTBORDER")
-		current.showLeftBorder = boolValue;
-	else if (upperKeyName == "SHOWRIGHTBORDER")
-		current.showRightBorder = boolValue;
-	else if (upperKeyName == "SHOWBOTTOMBORDER")
-		current.showBottomBorder = boolValue;
-	else
-		return setError(errorMessage, "Unknown display setting key.");
-
-	return setConfiguredDisplaySetupSettings(current, errorMessage);
 }
 
 std::string formatEditSetupBoolean(bool value) {
@@ -816,24 +1087,6 @@ char configuredPageBreakCharacter() {
 	return decodePageBreakLiteral(configuredEditSetupSettings().pageBreak);
 }
 
-std::string configuredCursorVisibility() {
-	std::string normalized = normalizeCursorVisibility(configuredEditSetupSettings().cursorVisibility);
-
-	if (!normalized.empty())
-		return normalized;
-	return kCursorVisibilityNormal;
-}
-
-unsigned short configuredCursorTypeCode() {
-	std::string cursorVisibility = configuredCursorVisibility();
-
-	if (cursorVisibility == kCursorVisibilityHidden)
-		return 0;
-	if (cursorVisibility == kCursorVisibilityProminent)
-		return 100;
-	return 1;
-}
-
 std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	std::string settingsPath = normalizeConfiguredPathInput(paths.settingsMacroUri);
 	std::string macroDir = normalizeConfiguredPathInput(paths.macroPath);
@@ -841,6 +1094,7 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	std::string tempDir = normalizeConfiguredPathInput(paths.tempPath);
 	std::string shellPath = normalizeConfiguredPathInput(paths.shellUri);
 	MREditSetupSettings edit = configuredEditSetupSettings();
+	MRColorSetupSettings colors = configuredColorSetupSettings();
 	std::string source;
 
 	source += "$MACRO MR_SETTINGS FROM EDIT;\n";
@@ -866,31 +1120,15 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source += "MRSETUP('COLBLOCKMOVE', '" + escapeMrmacSingleQuotedLiteral(edit.columnBlockMove) + "');\n";
 	source += "MRSETUP('DEFAULTMODE', '" + escapeMrmacSingleQuotedLiteral(edit.defaultMode) + "');\n";
 	source +=
-	    "MRSETUP('CURSORVISIBILITY', '" + escapeMrmacSingleQuotedLiteral(edit.cursorVisibility) + "');\n";
-	source += "MRSETUP('SHOWSTATUSLINE', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              formatEditSetupBoolean(configuredDisplaySetupSettings().showStatusLine)) +
+	    "MRSETUP('WINDOWCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.windowColors)) +
+	    "');\n";
+	source += "MRSETUP('MENUDIALOGCOLORS', '" +
+	          escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.menuDialogColors)) + "');\n";
+	source += "MRSETUP('HELPCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.helpColors)) +
 	          "');\n";
-	source += "MRSETUP('SHOWMENUBAR', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              formatEditSetupBoolean(configuredDisplaySetupSettings().showMenuBar)) +
-	          "');\n";
-	source += "MRSETUP('SHOWFKEYLABELS', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              formatEditSetupBoolean(configuredDisplaySetupSettings().showFunctionKeyLabels)) +
-	          "');\n";
-	source += "MRSETUP('SHOWLEFTBORDER', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              formatEditSetupBoolean(configuredDisplaySetupSettings().showLeftBorder)) +
-	          "');\n";
-	source += "MRSETUP('SHOWRIGHTBORDER', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              formatEditSetupBoolean(configuredDisplaySetupSettings().showRightBorder)) +
-	          "');\n";
-	source += "MRSETUP('SHOWBOTTOMBORDER', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              formatEditSetupBoolean(configuredDisplaySetupSettings().showBottomBorder)) +
-	          "');\n";
+	source +=
+	    "MRSETUP('OTHERCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.otherColors)) +
+	    "');\n";
 	source += "END_MACRO;\n";
 	return source;
 }

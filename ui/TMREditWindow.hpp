@@ -124,8 +124,26 @@ class TMREditWindow : public TWindow {
 
 	void setState(ushort aState, Boolean enable) override {
 		TWindow::setState(aState, enable);
-		if ((aState & (sfFocused | sfSelected | sfActive)) != 0 && frame != nullptr)
+		if ((aState & (sfFocused | sfSelected | sfActive)) != 0 && frame != nullptr) {
 			frame->drawView();
+			if (hScrollBar != nullptr)
+				hScrollBar->drawView();
+			if (vScrollBar != nullptr)
+				vScrollBar->drawView();
+			if (indicator != nullptr)
+				indicator->drawView();
+		}
+	}
+
+	void changeBounds(const TRect &bounds) override {
+		TWindow::changeBounds(bounds);
+		layoutEditorChrome();
+		if (hScrollBar != nullptr)
+			hScrollBar->drawView();
+		if (vScrollBar != nullptr)
+			vScrollBar->drawView();
+		if (indicator != nullptr)
+			indicator->drawView();
 	}
 
 	virtual void handleEvent(TEvent &event) override {
@@ -819,6 +837,27 @@ class TMREditWindow : public TWindow {
   private:
 	TMRFileEditor *createEditor(const TRect &bounds, const char *fileName) {
 		return new TMRFileEditor(bounds, hScrollBar, vScrollBar, indicator, fileName != nullptr ? fileName : "");
+	}
+
+	void layoutEditorChrome() {
+		if (hScrollBar != nullptr) {
+			TRect hRect(1, size.y - 1, size.x - 1, size.y);
+			hScrollBar->locate(hRect);
+		}
+		if (vScrollBar != nullptr) {
+			TRect vRect(size.x - 1, 1, size.x, size.y - 1);
+			vScrollBar->locate(vRect);
+		}
+		if (indicator != nullptr) {
+			short right = std::max<short>(3, std::min<short>(38, short(size.x - 1)));
+			TRect indicatorRect(2, size.y - 1, right, size.y);
+			indicator->locate(indicatorRect);
+		}
+		if (editor != nullptr) {
+			TRect r(getExtent());
+			r.grow(-1, -1);
+			editor->changeBounds(r);
+		}
 	}
 
 	static int allocateBufferId() {

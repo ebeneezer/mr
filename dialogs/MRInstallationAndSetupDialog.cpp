@@ -152,7 +152,6 @@ std::string buildSetupInfoLine(const char *label, const std::string &value, std:
 bool isInstallationSetupModalCommand(ushort command) {
 	switch (command) {
 		case cmMrSetupEditSettings:
-		case cmMrSetupDisplaySetup:
 		case cmMrSetupColorSetup:
 		case cmMrSetupKeyMapping:
 		case cmMrSetupMouseKeyRepeat:
@@ -168,18 +167,6 @@ bool isInstallationSetupModalCommand(ushort command) {
 	}
 }
 
-class TDialogPaletteGroup : public TGroup {
-  public:
-	explicit TDialogPaletteGroup(const TRect &bounds) : TGroup(bounds) {
-	}
-
-	TPalette &getPalette() const override {
-		if (owner != nullptr)
-			return owner->getPalette();
-		return TGroup::getPalette();
-	}
-};
-
 class TInstallationAndSetupDialog : public TDialog {
   public:
 	struct ManagedItem {
@@ -192,7 +179,7 @@ class TInstallationAndSetupDialog : public TDialog {
 	    : TWindowInit(&TDialog::initFrame), TDialog(bounds, title), virtualWidth_(virtualWidth),
 	      virtualHeight_(virtualHeight) {
 		contentRect_ = TRect(1, 1, size.x - 1, size.y - 1);
-		content_ = new TDialogPaletteGroup(contentRect_);
+		content_ = createSetupDialogContentGroup(contentRect_);
 		if (content_ != nullptr)
 			insert(content_);
 	}
@@ -220,15 +207,15 @@ class TInstallationAndSetupDialog : public TDialog {
 		for (;;) {
 			bool prevH = needH;
 			bool prevV = needV;
-			int viewportWidth = std::max(1, size.x - 2 - (needV ? 1 : 0));
-			int viewportHeight = std::max(1, size.y - 2 - (needH ? 1 : 0));
+			int viewportWidth = std::max(1, size.x - 2);
+			int viewportHeight = std::max(1, size.y - 2);
 			needH = virtualContentWidth > viewportWidth;
 			needV = virtualContentHeight > viewportHeight;
 			if (needH == prevH && needV == prevV)
 				break;
 		}
 
-		contentRect_ = TRect(1, 1, size.x - 1 - (needV ? 1 : 0), size.y - 1 - (needH ? 1 : 0));
+		contentRect_ = TRect(1, 1, size.x - 1, size.y - 1);
 		if (contentRect_.b.x <= contentRect_.a.x)
 			contentRect_.b.x = contentRect_.a.x + 1;
 		if (contentRect_.b.y <= contentRect_.a.y)
@@ -237,7 +224,7 @@ class TInstallationAndSetupDialog : public TDialog {
 			content_->locate(contentRect_);
 
 		if (needH) {
-			TRect hRect(1, size.y - 2, size.x - 1 - (needV ? 1 : 0), size.y - 1);
+			TRect hRect(1, size.y - 1, size.x - 1, size.y);
 			if (hScrollBar_ == nullptr) {
 				hScrollBar_ = new TScrollBar(hRect);
 				insert(hScrollBar_);
@@ -245,7 +232,7 @@ class TInstallationAndSetupDialog : public TDialog {
 				hScrollBar_->locate(hRect);
 		}
 		if (needV) {
-			TRect vRect(size.x - 2, 1, size.x - 1, size.y - 1 - (needH ? 1 : 0));
+			TRect vRect(size.x - 1, 1, size.x, size.y - 1);
 			if (vScrollBar_ == nullptr) {
 				vScrollBar_ = new TScrollBar(vRect);
 				insert(vScrollBar_);
@@ -274,6 +261,8 @@ class TInstallationAndSetupDialog : public TDialog {
 			moved.move(-contentRect_.a.x, -contentRect_.a.y);
 			managedViews_[i].view->locate(moved);
 		}
+		if (content_ != nullptr)
+			content_->drawView();
 	}
 
 	void handleEvent(TEvent &event) override {
@@ -293,7 +282,7 @@ class TInstallationAndSetupDialog : public TDialog {
 	int virtualWidth_ = 0;
 	int virtualHeight_ = 0;
 	TRect contentRect_;
-	TDialogPaletteGroup *content_ = nullptr;
+	TGroup *content_ = nullptr;
 	std::vector<ManagedItem> managedViews_;
 	TScrollBar *hScrollBar_ = nullptr;
 	TScrollBar *vScrollBar_ = nullptr;
@@ -344,13 +333,14 @@ TDialog *createInstallationAndSetupDialog() {
 	    new TButton(TRect(leftX1, 9, leftX2, 11), "~E~dit settings...", cmMrSetupEditSettings, bfNormal),
 	    TRect(leftX1, 9, leftX2, 11));
 	dialog->insertManaged(
-	    new TButton(TRect(leftX1, 11, leftX2, 13), "~D~isplay setup...", cmMrSetupDisplaySetup, bfNormal),
+	    new TButton(TRect(leftX1, 11, leftX2, 13), "~C~olor setup...", cmMrSetupColorSetup, bfNormal),
 	    TRect(leftX1, 11, leftX2, 13));
 	dialog->insertManaged(
-	    new TButton(TRect(leftX1, 13, leftX2, 15), "~C~olor setup...", cmMrSetupColorSetup, bfNormal),
+	    new TButton(TRect(leftX1, 13, leftX2, 15), "~K~ey mapping...", cmMrSetupKeyMapping, bfNormal),
 	    TRect(leftX1, 13, leftX2, 15));
 	dialog->insertManaged(
-	    new TButton(TRect(leftX1, 15, leftX2, 17), "~K~ey mapping...", cmMrSetupKeyMapping, bfNormal),
+	    new TButton(TRect(leftX1, 15, leftX2, 17), "~S~earch and Replace...",
+	                cmMrSetupSearchAndReplaceDefaults, bfNormal),
 	    TRect(leftX1, 15, leftX2, 17));
 	dialog->insertManaged(new TButton(TRect(rightX1, 9, rightX2, 11), "~M~ouse / Key repeat...",
 	                                  cmMrSetupMouseKeyRepeat, bfNormal),
@@ -364,9 +354,6 @@ TDialog *createInstallationAndSetupDialog() {
 	dialog->insertManaged(new TButton(TRect(rightX1, 15, rightX2, 17), "~B~ackups / Temp / Autosave...",
 	                                  cmMrSetupBackupsTempAutosave, bfNormal),
 	                      TRect(rightX1, 15, rightX2, 17));
-	dialog->insertManaged(new TButton(TRect(leftX1, 17, leftX2, 19), "~S~earch and Replace...",
-	                                  cmMrSetupSearchAndReplaceDefaults, bfNormal),
-	                      TRect(leftX1, 17, leftX2, 19));
 	dialog->insertManaged(new TButton(TRect(rightX1, 17, rightX2, 19), "~U~ser interface settings...",
 	                                  cmMrSetupUserInterfaceSettings, bfNormal),
 	                      TRect(rightX1, 17, rightX2, 19));

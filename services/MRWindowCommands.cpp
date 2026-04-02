@@ -56,8 +56,6 @@ short nextEditorWindowNumber() {
 TMREditWindow *createEditorWindow(const char *title) {
 	TRect bounds;
 	TMREditWindow *win;
-	MRDisplaySetupSettings display;
-	bool lockFrames;
 
 	if (TProgram::deskTop == 0)
 		return 0;
@@ -65,13 +63,8 @@ TMREditWindow *createEditorWindow(const char *title) {
 	bounds.grow(-2, -1);
 	win = new TMREditWindow(bounds, title, nextEditorWindowNumber());
 	TProgram::deskTop->insert(win);
-	display = configuredDisplaySetupSettings();
-	lockFrames = !(display.showLeftBorder && display.showRightBorder && display.showBottomBorder);
-	if (win != 0 && lockFrames) {
-		TRect full(0, 0, TProgram::deskTop->size.x, TProgram::deskTop->size.y);
-		win->flags &= static_cast<ushort>(~(wfMove | wfGrow | wfZoom));
-		win->locate(full);
-	}
+	if (win != 0)
+		win->flags |= (wfMove | wfGrow | wfZoom | wfClose);
 	if (win != 0 && win->getEditor() != 0)
 		win->getEditor()->setInsertModeEnabled(configuredDefaultInsertMode());
 	return win;

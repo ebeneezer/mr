@@ -388,9 +388,6 @@ bool loadStartupSettingsMacro(const std::string &overridePath, std::string *erro
 	}
 
 	std::free(bytecode);
-	TScreen::setCursorType(configuredCursorTypeCode());
-	if (TProgram::deskTop != nullptr)
-		TProgram::deskTop->resetCursor();
 	mrLogMessage(("Settings loaded: " + settingsPath).c_str());
 	mrLogMessage(("Settings MACROPATH: " + defaultMacroDirectoryPath()).c_str());
 	if (errorMessage != nullptr)
@@ -487,47 +484,32 @@ bool TMREditorApp::reloadSettingsMacroFromPath(const std::string &path, std::str
 
 void TMREditorApp::applyConfiguredWindowFramePolicy() {
 	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
-	MRDisplaySetupSettings display = configuredDisplaySetupSettings();
-	bool lockFrames = !(display.showLeftBorder && display.showRightBorder && display.showBottomBorder);
 
 	for (std::size_t i = 0; i < windows.size(); ++i) {
 		TMREditWindow *win = windows[i];
 		if (win == nullptr)
 			continue;
-		if (lockFrames) {
-			TRect full(0, 0, TProgram::deskTop != nullptr ? TProgram::deskTop->size.x : win->size.x,
-			           TProgram::deskTop != nullptr ? TProgram::deskTop->size.y : win->size.y);
-			win->flags &= static_cast<ushort>(~(wfMove | wfGrow | wfZoom));
-			win->locate(full);
-		} else
-			win->flags |= (wfMove | wfGrow | wfZoom | wfClose);
+		win->flags |= (wfMove | wfGrow | wfZoom | wfClose);
 		if (win->frame != nullptr)
 			win->frame->drawView();
 	}
 }
 
 void TMREditorApp::applyConfiguredDisplayLayout() {
-	MRDisplaySetupSettings display = configuredDisplaySetupSettings();
-	bool statusVisible = display.showStatusLine || display.showFunctionKeyLabels;
+	bool statusVisible = true;
 	TRect appRect = getExtent();
 	TRect desktopRect;
 
 	if (menuBar != nullptr) {
-		if (display.showMenuBar)
-			menuBar->show();
-		else
-			menuBar->hide();
+		menuBar->show();
 	}
 	if (auto *mrStatus = dynamic_cast<TMRStatusLine *>(statusLine)) {
-		mrStatus->setShowFunctionKeyLabels(display.showFunctionKeyLabels);
-		if (statusVisible)
-			mrStatus->show();
-		else
-			mrStatus->hide();
+		mrStatus->setShowFunctionKeyLabels(true);
+		mrStatus->show();
 	}
 	desktopRect.a.x = 0;
 	desktopRect.b.x = appRect.b.x - appRect.a.x;
-	desktopRect.a.y = display.showMenuBar ? 1 : 0;
+	desktopRect.a.y = 1;
 	desktopRect.b.y = appRect.b.y - appRect.a.y - (statusVisible ? 1 : 0);
 	if (desktopRect.b.y <= desktopRect.a.y)
 		desktopRect.b.y = desktopRect.a.y + 1;
@@ -877,15 +859,25 @@ void TMREditorApp::idle() {
 
 TPalette &TMREditorApp::getPalette() const {
 	static TPalette palette(cpAppColor, sizeof(cpAppColor) - 1);
-	// Force readable gray-dialog contrast: black on gray for frame/text/labels.
-	palette[32] = static_cast<char>(0x70); // Dialog frame passive
-	palette[33] = static_cast<char>(0x70); // Dialog frame active
-	palette[34] = static_cast<char>(0x70); // Dialog frame icon/title accents
-	palette[37] = static_cast<char>(0x70); // StaticText
-	palette[38] = static_cast<char>(0x70); // Label normal
-	palette[39] = static_cast<char>(0x70); // Label selected
-	palette[40] = static_cast<char>(0x70); // Label shortcut
-	palette[45] = static_cast<char>(0x2E); // Dialog button shortcut: yellow on green.
+	unsigned char overrideValue = 0;
+	int slot = 0;
+
+	for (slot = 1; slot <= 135; ++slot)
+		if (configuredColorSlotOverride(static_cast<unsigned char>(slot), overrideValue))
+			palette[slot] = overrideValue;
+
+	// TVision-wide policy: Dialog scrollbars follow dialog frame color globally.
+	// Applies to gray/blue/cyan dialog palette blocks, no per-view exceptions.
+	auto syncDialogScrollbarsToFrame = [&](int base) {
+		palette[base + 3] = palette[base + 0];  // slot 4: scrollbar page
+		palette[base + 4] = palette[base + 0];  // slot 5: scrollbar controls
+		palette[base + 23] = palette[base + 0]; // slot 24: history scrollbar page
+		palette[base + 24] = palette[base + 0]; // slot 25: history scrollbar controls
+	};
+	syncDialogScrollbarsToFrame(32);
+	syncDialogScrollbarsToFrame(64);
+	syncDialogScrollbarsToFrame(96);
+
 	palette[1] = currentPalette.desktop;
 	return palette;
 }

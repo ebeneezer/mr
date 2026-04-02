@@ -626,12 +626,26 @@ class MacroManagerDialog : public TDialog {
 	      openPath_() {
 		int width = size.x;
 		int height = size.y;
+		int listLeft = 3;
+		int listRight = width - 4;
+		int listWidth = std::max(1, listRight - listLeft);
+		int gap = 2;
+		int row1Width = 14 + gap + 14 + gap + 12;
+		int row1Left = listLeft + std::max(0, (listWidth - row1Width) / 2);
+		int row2Width = 12 + gap + 12;
+		int row2Left = listLeft + std::max(0, (listWidth - row2Width) / 2);
+		int bottomWidth = 16 + gap + 13 + gap + 12;
+		int bottomLeft = listLeft + std::max(0, (listWidth - bottomWidth) / 2);
 
-		insert(new TButton(TRect(6, 2, 20, 4), "Create<Ins>", cmMRMacroManagerCreate, bfNormal));
-		insert(new TButton(TRect(22, 2, 36, 4), "Delete<Del>", cmMRMacroManagerDelete, bfNormal));
-		insert(new TButton(TRect(38, 2, 50, 4), "Copy<F4>", cmMRMacroManagerCopy, bfNormal));
-		insert(new TButton(TRect(18, 4, 30, 6), "Edit<F3>", cmMRMacroManagerEdit, bfNormal));
-		insert(new TButton(TRect(32, 4, 44, 6), "Bind<F2>", cmMRMacroManagerBind, bfNormal));
+		insert(new TButton(TRect(row1Left, 2, row1Left + 14, 4), "Create<Ins>", cmMRMacroManagerCreate,
+		                   bfNormal));
+		insert(new TButton(TRect(row1Left + 14 + gap, 2, row1Left + 14 + gap + 14, 4), "Delete<Del>",
+		                   cmMRMacroManagerDelete, bfNormal));
+		insert(new TButton(TRect(row1Left + 14 + gap + 14 + gap, 2, row1Left + row1Width, 4), "Copy<F4>",
+		                   cmMRMacroManagerCopy, bfNormal));
+		insert(new TButton(TRect(row2Left, 4, row2Left + 12, 6), "Edit<F3>", cmMRMacroManagerEdit, bfNormal));
+		insert(new TButton(TRect(row2Left + 12 + gap, 4, row2Left + row2Width, 6), "Bind<F2>",
+		                   cmMRMacroManagerBind, bfNormal));
 
 		scrollBar_ = new TScrollBar(TRect(width - 4, 7, width - 3, height - 4));
 		insert(scrollBar_);
@@ -639,10 +653,13 @@ class MacroManagerDialog : public TDialog {
 		                                     std::vector<std::string>());
 		insert(listView_);
 
-		insert(new TButton(TRect(4, height - 3, 20, height - 1), "Playback<ENTER>",
+		insert(new TButton(TRect(bottomLeft, height - 3, bottomLeft + 16, height - 1), "Playback<ENTER>",
 		                   cmMRMacroManagerPlayback, bfDefault));
-		insert(new TButton(TRect(22, height - 3, 35, height - 1), "Done<ESC>", cmCancel, bfNormal));
-		insert(new TButton(TRect(37, height - 3, 49, height - 1), "Help<F1>", cmHelp, bfNormal));
+		insert(new TButton(TRect(bottomLeft + 16 + gap, height - 3, bottomLeft + 16 + gap + 13, height - 1),
+		                   "Done<ESC>", cmCancel, bfNormal));
+		insert(new TButton(TRect(bottomLeft + 16 + gap + 13 + gap, height - 3, bottomLeft + bottomWidth,
+		                         height - 1),
+		                   "Help<F1>", cmHelp, bfNormal));
 
 		refreshEntries(-1);
 		if (listView_ != NULL)

@@ -15,6 +15,12 @@
 #define Uses_TCommandSet
 #include <tvision/tv.h>
 
+static inline bool isValidCommand( int cmd ) noexcept
+{
+    enum { commandBits = 32 * 8 };
+    return cmd >= 0 && cmd < commandBits;
+}
+
 int _NEAR TCommandSet::masks[8] =
 {
     0x0001,
@@ -47,12 +53,13 @@ TCommandSet& TCommandSet::operator = ( const TCommandSet& tc ) noexcept
 
 Boolean TCommandSet::has( int cmd ) noexcept
 {
-    return Boolean( (cmds[ loc( cmd ) ] & mask( cmd )) != 0 );
+    return isValidCommand(cmd) ? Boolean( (cmds[ loc( cmd ) ] & mask( cmd )) != 0 ) : False;
 }
 
 void TCommandSet::disableCmd( int cmd ) noexcept
 {
-    cmds[ loc( cmd ) ] &= ~mask( cmd );
+    if( isValidCommand(cmd) )
+        cmds[ loc( cmd ) ] &= ~mask( cmd );
 }
 
 void TCommandSet::enableCmd( const TCommandSet& tc ) noexcept
@@ -69,7 +76,8 @@ void TCommandSet::disableCmd( const TCommandSet& tc ) noexcept
 
 void TCommandSet::enableCmd( int cmd ) noexcept
 {
-    cmds[ loc( cmd ) ] |= mask( cmd );
+    if( isValidCommand(cmd) )
+        cmds[ loc( cmd ) ] |= mask( cmd );
 }
 
 TCommandSet& TCommandSet::operator &= ( const TCommandSet& tc ) noexcept

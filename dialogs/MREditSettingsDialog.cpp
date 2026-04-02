@@ -57,12 +57,6 @@ enum : ushort {
 	kDefaultModeOverwrite = 1
 };
 
-enum : ushort {
-	kCursorVisibilityHidden = 0,
-	kCursorVisibilityNormal = 1,
-	kCursorVisibilityProminent = 2
-};
-
 struct EditSettingsDialogRecord {
 	char pageBreak[kPageBreakFieldSize];
 	char wordDelimiters[kWordDelimsFieldSize];
@@ -71,7 +65,6 @@ struct EditSettingsDialogRecord {
 	ushort tabExpandChoice;
 	ushort columnBlockMoveChoice;
 	ushort defaultModeChoice;
-	ushort cursorVisibilityChoice;
 };
 
 std::string trimAscii(const std::string &value) {
@@ -109,15 +102,13 @@ bool recordsEqual(const EditSettingsDialogRecord &lhs, const EditSettingsDialogR
 	       readRecordField(lhs.defaultExtensions) == readRecordField(rhs.defaultExtensions) &&
 	       lhs.optionsMask == rhs.optionsMask && lhs.tabExpandChoice == rhs.tabExpandChoice &&
 	       lhs.columnBlockMoveChoice == rhs.columnBlockMoveChoice &&
-	       lhs.defaultModeChoice == rhs.defaultModeChoice &&
-	       lhs.cursorVisibilityChoice == rhs.cursorVisibilityChoice;
+	       lhs.defaultModeChoice == rhs.defaultModeChoice;
 }
 
 void initEditSettingsDialogRecord(EditSettingsDialogRecord &record) {
 	MREditSetupSettings settings = configuredEditSetupSettings();
 	std::string columnMove = upperAscii(settings.columnBlockMove);
 	std::string defaultMode = upperAscii(settings.defaultMode);
-	std::string cursorVisibility = upperAscii(settings.cursorVisibility);
 
 	std::memset(&record, 0, sizeof(record));
 	writeRecordField(record.pageBreak, sizeof(record.pageBreak), settings.pageBreak);
@@ -135,11 +126,6 @@ void initEditSettingsDialogRecord(EditSettingsDialogRecord &record) {
 	    (columnMove == "LEAVE_SPACE") ? kColumnMoveLeaveSpace : kColumnMoveDeleteSpace;
 	record.defaultModeChoice =
 	    (defaultMode == "OVERWRITE") ? kDefaultModeOverwrite : kDefaultModeInsert;
-	record.cursorVisibilityChoice = kCursorVisibilityNormal;
-	if (cursorVisibility == "HIDDEN")
-		record.cursorVisibilityChoice = kCursorVisibilityHidden;
-	else if (cursorVisibility == "PROMINENT")
-		record.cursorVisibilityChoice = kCursorVisibilityProminent;
 }
 
 bool recordToSettings(const EditSettingsDialogRecord &record, MREditSetupSettings &settings,
@@ -156,11 +142,6 @@ bool recordToSettings(const EditSettingsDialogRecord &record, MREditSetupSetting
 	    (record.columnBlockMoveChoice == kColumnMoveLeaveSpace) ? "LEAVE_SPACE" : "DELETE_SPACE";
 	settings.defaultMode =
 	    (record.defaultModeChoice == kDefaultModeOverwrite) ? "OVERWRITE" : "INSERT";
-	settings.cursorVisibility = "NORMAL";
-	if (record.cursorVisibilityChoice == kCursorVisibilityHidden)
-		settings.cursorVisibility = "HIDDEN";
-	else if (record.cursorVisibilityChoice == kCursorVisibilityProminent)
-		settings.cursorVisibility = "PROMINENT";
 	errorText.clear();
 	return true;
 }
@@ -195,18 +176,6 @@ bool saveAndReloadEditSettings(const EditSettingsDialogRecord &record, std::stri
 
 class TEditSettingsDialog : public TDialog {
   public:
-	class TDialogPaletteGroup : public TGroup {
-	  public:
-		explicit TDialogPaletteGroup(const TRect &bounds) : TGroup(bounds) {
-		}
-
-		TPalette &getPalette() const override {
-			if (owner != nullptr)
-				return owner->getPalette();
-			return TGroup::getPalette();
-		}
-	};
-
 	struct ManagedItem {
 		TView *view;
 		TRect base;
@@ -218,7 +187,7 @@ class TEditSettingsDialog : public TDialog {
 	              "EDIT SETTINGS"),
 	      initialRecord_(initialRecord), currentRecord_(initialRecord) {
 		contentRect_ = TRect(1, 1, size.x - 1, size.y - 1);
-		content_ = new TDialogPaletteGroup(contentRect_);
+		content_ = createSetupDialogContentGroup(contentRect_);
 		if (content_ != nullptr)
 			insert(content_);
 
@@ -247,14 +216,8 @@ class TEditSettingsDialog : public TDialog {
 		defaultExtensionsField_ = new TInputLine(TRect(inputLeft, 6, inputRight, 7), kDefaultExtsFieldSize - 1);
 		addManaged(defaultExtensionsField_, TRect(inputLeft, 6, inputRight, 7));
 
-		addManaged(new TStaticText(TRect(2, 8, 30, 9), "Cursor visibility:"), TRect(2, 8, 30, 9));
-		cursorVisibilityField_ = new TRadioButtons(
-		    TRect(2, 9, 30, 13),
-		    new TSItem("~H~idden", new TSItem("~N~ormal", new TSItem("~P~rominent", nullptr))));
-		addManaged(cursorVisibilityField_, TRect(2, 9, 30, 13));
-
-		addManaged(new TStaticText(TRect(optionsX, 8, dialogWidth - 2, 9), "Options:"),
-		           TRect(optionsX, 8, dialogWidth - 2, 9));
+			addManaged(new TStaticText(TRect(optionsX, 8, dialogWidth - 2, 9), "Options:"),
+			           TRect(optionsX, 8, dialogWidth - 2, 9));
 		optionsField_ = new TCheckBoxes(
 		    TRect(optionsX, 9, dialogWidth - 2, 13),
 		    new TSItem("~T~runcate spaces",
@@ -342,6 +305,8 @@ class TEditSettingsDialog : public TDialog {
 			moved.move(-contentRect_.a.x, -contentRect_.a.y);
 			managedViews_[i].view->locate(moved);
 		}
+		if (content_ != nullptr)
+			content_->drawView();
 	}
 
 	void initScrollIfNeeded() {
@@ -353,15 +318,15 @@ class TEditSettingsDialog : public TDialog {
 		for (;;) {
 			bool prevH = needH;
 			bool prevV = needV;
-			int viewportWidth = std::max(1, size.x - 2 - (needV ? 1 : 0));
-			int viewportHeight = std::max(1, size.y - 2 - (needH ? 1 : 0));
+			int viewportWidth = std::max(1, size.x - 2);
+			int viewportHeight = std::max(1, size.y - 2);
 			needH = virtualContentWidth > viewportWidth;
 			needV = virtualContentHeight > viewportHeight;
 			if (needH == prevH && needV == prevV)
 				break;
 		}
 
-		contentRect_ = TRect(1, 1, size.x - 1 - (needV ? 1 : 0), size.y - 1 - (needH ? 1 : 0));
+		contentRect_ = TRect(1, 1, size.x - 1, size.y - 1);
 		if (contentRect_.b.x <= contentRect_.a.x)
 			contentRect_.b.x = contentRect_.a.x + 1;
 		if (contentRect_.b.y <= contentRect_.a.y)
@@ -370,7 +335,7 @@ class TEditSettingsDialog : public TDialog {
 			content_->locate(contentRect_);
 
 		if (needH) {
-			TRect hRect(1, size.y - 2, size.x - 1 - (needV ? 1 : 0), size.y - 1);
+			TRect hRect(1, size.y - 1, size.x - 1, size.y);
 			if (hScrollBar_ == nullptr) {
 				hScrollBar_ = new TScrollBar(hRect);
 				insert(hScrollBar_);
@@ -378,7 +343,7 @@ class TEditSettingsDialog : public TDialog {
 				hScrollBar_->locate(hRect);
 		}
 		if (needV) {
-			TRect vRect(size.x - 2, 1, size.x - 1, size.y - 1 - (needH ? 1 : 0));
+			TRect vRect(size.x - 1, 1, size.x, size.y - 1);
 			if (vScrollBar_ == nullptr) {
 				vScrollBar_ = new TScrollBar(vRect);
 				insert(vScrollBar_);
@@ -413,28 +378,26 @@ class TEditSettingsDialog : public TDialog {
 		setInputLineValue(pageBreakField_, record.pageBreak, sizeof(record.pageBreak));
 		setInputLineValue(wordDelimitersField_, record.wordDelimiters, sizeof(record.wordDelimiters));
 		setInputLineValue(defaultExtensionsField_, record.defaultExtensions, sizeof(record.defaultExtensions));
-		optionsField_->setData((void *)&record.optionsMask);
-		tabExpandField_->setData((void *)&record.tabExpandChoice);
-		columnBlockMoveField_->setData((void *)&record.columnBlockMoveChoice);
-		defaultModeField_->setData((void *)&record.defaultModeChoice);
-		cursorVisibilityField_->setData((void *)&record.cursorVisibilityChoice);
-	}
+			optionsField_->setData((void *)&record.optionsMask);
+			tabExpandField_->setData((void *)&record.tabExpandChoice);
+			columnBlockMoveField_->setData((void *)&record.columnBlockMoveChoice);
+			defaultModeField_->setData((void *)&record.defaultModeChoice);
+		}
 
 	void saveFieldsToRecord(EditSettingsDialogRecord &record) {
 		readInputLineValue(pageBreakField_, record.pageBreak, sizeof(record.pageBreak));
 		readInputLineValue(wordDelimitersField_, record.wordDelimiters, sizeof(record.wordDelimiters));
 		readInputLineValue(defaultExtensionsField_, record.defaultExtensions, sizeof(record.defaultExtensions));
-		optionsField_->getData((void *)&record.optionsMask);
-		tabExpandField_->getData((void *)&record.tabExpandChoice);
-		columnBlockMoveField_->getData((void *)&record.columnBlockMoveChoice);
-		defaultModeField_->getData((void *)&record.defaultModeChoice);
-		cursorVisibilityField_->getData((void *)&record.cursorVisibilityChoice);
-	}
+			optionsField_->getData((void *)&record.optionsMask);
+			tabExpandField_->getData((void *)&record.tabExpandChoice);
+			columnBlockMoveField_->getData((void *)&record.columnBlockMoveChoice);
+			defaultModeField_->getData((void *)&record.defaultModeChoice);
+		}
 
 	EditSettingsDialogRecord initialRecord_;
 	EditSettingsDialogRecord currentRecord_;
 	TRect contentRect_;
-	TDialogPaletteGroup *content_ = nullptr;
+	TGroup *content_ = nullptr;
 	std::vector<ManagedItem> managedViews_;
 	TScrollBar *hScrollBar_ = nullptr;
 	TScrollBar *vScrollBar_ = nullptr;
@@ -445,7 +408,6 @@ class TEditSettingsDialog : public TDialog {
 	TRadioButtons *tabExpandField_ = nullptr;
 	TRadioButtons *columnBlockMoveField_ = nullptr;
 	TRadioButtons *defaultModeField_ = nullptr;
-	TRadioButtons *cursorVisibilityField_ = nullptr;
 };
 
 void showEditSettingsHelpDummyDialog() {
@@ -453,7 +415,6 @@ void showEditSettingsHelpDummyDialog() {
 	lines.push_back("EDIT SETTINGS HELP");
 	lines.push_back("");
 	lines.push_back("Use checkboxes and radio groups to configure edit defaults.");
-	lines.push_back("Cursor visibility supports: Hidden, Normal, Prominent.");
 	lines.push_back("Done writes settings.mrmac and reloads silently.");
 	lines.push_back("Cancel asks for confirmation when fields were modified.");
 	TDialog *dialog =
