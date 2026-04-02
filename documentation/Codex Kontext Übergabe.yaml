@@ -5,9 +5,11 @@ session_handover:
     related_docs:
       - "/home/idoc/mr/documentation/CHANGELOG_CONTEXT.md"
       - "/home/idoc/mr/documentation/KONTEXTWECHSEL_2026-04-01.md"
+      - "/home/idoc/mr/documentation/MRMAC_V1_STATUS.md"
     warmup_priority:
       - "Zuerst: /home/idoc/mr/documentation/CHANGELOG_CONTEXT.md lesen (laufendes Protokoll)."
-      - "Danach: /home/idoc/mr/documentation/Codex Kontext Übergabe.yaml und KONTEXTWECHSEL_2026-04-01.md."
+      - "Danach: /home/idoc/mr/documentation/MRMAC_V1_STATUS.md lesen (verbindlicher Sprach-/VM-Status)."
+      - "Dann: /home/idoc/mr/documentation/Codex Kontext Übergabe.yaml und KONTEXTWECHSEL_2026-04-01.md."
 
   project:
     name: "mr"
@@ -43,6 +45,13 @@ session_handover:
       - "DEFAULTMODE"
     setup_dialog_mnemonic_policy: "Neue Dialoge erhalten durch Codex geeignete Highlight-/Shortcut-Buchstaben autonom; dazu keine Rueckfrage an den User."
     workspace_delete_policy: "Datei-Loeschungen im Workspace duerfen ohne vorherige Rueckfrage ausgefuehrt werden (User-Backups vorhanden)."
+    ui_uniform_treatment_policy: "Alle Dialoge und alle Fenster werden nach denselben zentralen UI-/Palette-Regeln behandelt; keine Sonderbehandlung einzelner Views/Dialoge/Fenster."
+    standards_deviation_warning_policy: "Wenn eine User-Forderung den zentralen UI-/Palette-Standard verlassen wuerde, muss Codex vor Umsetzung explizit warnen und den Tradeoff benennen."
+    tvision_palette_model_hard_gate:
+      - "zentrale Palette-Quelle"
+      - "keine per-View-Sonderfarben"
+      - "atomisches Anwenden auf Dialog-/Fenster-Gruppen"
+    tvision_palette_model_refuse_policy: "Codex verweigert jede Implementierung, die den obigen TVision-Paletten-Hard-Gate verletzt (Regressionsschutz)."
 
   repository_conventions:
     markdown_docs_location: "/home/idoc/mr/documentation"
@@ -51,9 +60,9 @@ session_handover:
     running_protocol_file: "/home/idoc/mr/documentation/CHANGELOG_CONTEXT.md"
 
   decision_lock:
-    tvision_strategy: "vendoring_sync"
-    subtree_or_submodule: "nein"
-    note: "Kein git-subtree Workflow aktivieren; bestehende Vendoring-Sync-Logik beibehalten."
+    tvision_strategy: "git_subtree_plus_patch_queue"
+    subtree_or_submodule: "subtree_ja_submodule_nein"
+    note: "TVision als git subtree unter ./tvision fuehren; lokale Abweichungen ausschliesslich als Patch-Queue in ./patches."
 
   build_and_run:
     build_command: "make mr"
@@ -69,25 +78,26 @@ session_handover:
 
   tvision_integration:
     default_mode: "lokale Quellen unter ./tvision, Build nach ./tvision/build"
-    optional_mode: "TVISION_AUTO_SYNC=1 (Mirror/Export/Patch in Vendor-Pfad)"
+    optional_mode: "kein separater Vendor-Cache-Modus"
     sync_mechanism:
       upstream_url: "https://github.com/magiblot/tvision.git"
-      cache_repo: "./.vendor-cache/tvision.git"
-      vendor_root: "./build/vendor"
+      subtree_prefix: "./tvision"
+      upstream_remote: "tvision-upstream"
       patches_dir: "./patches"
     rules:
-      - "Keine git subtree Kommandos verwenden."
+      - "git subtree ist der verbindliche Upstream-Pfad."
+      - "Kein git submodule fuer TVision."
       - "Build-Artefakte nicht als Upstream-Quell-Diff behandeln."
     operational_workflow:
       goal: "Lokale TVision-Weiterentwicklung bei gleichzeitig upstream-faehigen Diffs"
       steps:
-        - "1) TVision-Aenderungen nur unter ./tvision vornehmen und lokal mit make mr pruefen."
-        - "2) Bei Bedarf optionalen Sync mit TVISION_AUTO_SYNC=1 nutzen, um Mirror/Export/Patch-Pfad zu fahren."
-        - "3) Upstream-relevante Aenderungen als saubere, kleine Patches unter ./patches ablegen."
-        - "4) Vor Uebergabe sicherstellen: keine Build-Artefakte als Quell-Aenderung markieren."
-        - "5) Upstream-Abgleich immer ueber Cache-Repo ./.vendor-cache/tvision.git und vendor_root ./build/vendor."
+        - "1) Upstream holen: make tvision-upstream-fetch"
+        - "2) Subtree aktualisieren: make tvision-subtree-pull"
+        - "3) Lokale Patches anwenden: make tvision-apply-patches"
+        - "4) Sicherer Gesamtpfad: make tvision-sync-safe"
+        - "5) Vor Uebergabe sicherstellen: keine Build-Artefakte als Quell-Aenderung markieren."
       do_not:
-        - "Kein git subtree/submodule einfuehren."
+        - "Kein zweiter TVision-Quellpfad (Vendor-Mirror/Export) einfuehren."
         - "Keine TVision-Build-Ausgaben in Commit-Diffs aufnehmen."
 
   implemented_scope:
@@ -123,10 +133,14 @@ session_handover:
       style: "Markerblock in eckigen Klammern"
     frame_focus_rule: "Zentralregel in ui/TMRFrame.cpp: visuelle Fokusdarstellung (Doppelrahmen/Controls) nur ueber Fokusstatus (sfFocused) plus Modal-TopView-Gate; nicht ueber sfActive/sfSelected; nie lokal pro Dialog patchen."
     dialog_button_row_rule: "Dialog-Buttonreihen konsistent in einer zentrierten Zeile ausrichten (Done/Cancel/Help wie Window-List-Stil), keine rechts abdriftenden Einzelbuttons."
+    ui_quality_gate_rule: "Kein Fortschrittsbericht ohne lokalen PTY-Selbsttest der betroffenen Dialoge/Fenster. Pflichtkriterien: geometrisch sauber (Ausrichtung, Abstaende, Zentrierung), keine abgeschnittenen Controls, korrekte Scrollbars/Farben, Fokusrahmen nur am fokussierten Objekt."
+    ui_quality_gate_sizes_rule: "Pflichtgroessen fuer UI-Selbsttests: mindestens 80x25 sowie aktuelle Problemgrenzen. Bei Fehlern zuerst Fix, dann erst weiterer Planfortschritt."
+    ui_regression_zero_tolerance_rule: "UI-Regressionen haben Prioritaet 0. Neue Features duerfen erst weitergefuehrt werden, wenn die Darstellung stabil ist und alle betroffenen Oberflaechen lokal im PTY getestet wurden."
     setup_defaults_rule: "Defaults fuer Setup-Pfade/URIs zentral ueber eine Routine bestimmen; Bootstrap und Setup-Dialog muessen dieselbe Default-Quelle nutzen."
     path_uri_naming_rule: "Felder mit Datei (Pfad+Dateiname) als 'URI' benennen; reine Ordnerfelder als 'path'. Datei-URIs in Dialog-Vorbelegung absolut halten."
     setup_layout_profile_rule: "Setup-Dialoge folgen einem zentralen compact/relaxed-Layoutstandard (80x25-first); keine separaten Dialog-Implementierungen, nur profilabhaengige Geometrie."
     dialog_contrast_rule: "Schwarz auf Grau fuer Lesbarkeit"
+    dialog_scrollbar_palette_policy: "Dialog-Scrollbars werden TVision-weit zentral ueber die globale Dialog-Palette gesteuert und an Dialog-Rahmenfarben angeglichen; keine Einzelbehandlung einzelner Views/Dialoge."
     visual_limit_notes:
       - "Terminal- und Font-Rendering beeinflussen Glyph-Look sichtbar"
       - "VSCode internal terminal ist keine verlaessliche Pixelreferenz"

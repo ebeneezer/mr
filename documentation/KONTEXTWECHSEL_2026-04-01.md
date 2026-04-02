@@ -12,13 +12,17 @@ Dieses Dokument ist die Übergabe für einen neuen Codex-Kontext mit minimalem I
 - Fokus auf Pragmatik, technische Klarheit, kurze direkte Kommunikation.
 - Ablagekonvention: Markdown-Dokumentation liegt unter `documentation/`; `misc/` ist nur temporäre Müllhalde/Probe-Ablage.
 - Workspace-Hygiene: Workspace stets aufgeräumt halten; kein Herummüllen mit vielen Neben-/Artefaktdateien.
-- Warmup-Regel bei neuem Kontext: zuerst `documentation/CHANGELOG_CONTEXT.md` lesen (laufendes Protokoll), danach dieses Dokument und die YAML-Übergabe.
+- Warmup-Regel bei neuem Kontext: zuerst `documentation/CHANGELOG_CONTEXT.md` lesen (laufendes Protokoll), danach verbindlich `documentation/MRMAC_V1_STATUS.md`, dann dieses Dokument und die YAML-Übergabe.
 - Setup-Defaults-Regel: Pfad-/URI-Defaults für Setup zentral in **einer** Routine ermitteln; Bootstrap und Setup-Dialog dürfen keine getrennten Default-Logiken haben.
 - Setup-Key-Regel: Bei neuen Setup-Settings den User mit Vorschlag fuer den exakten Key in `settings.mrmac` befragen (wie bestehend: `"SETTINGSPATH"`, `"MACROPATH"`, `"HELPPATH"`, `"TEMPDIR"`, `"SHELLPATH"`).
 - Edit-Settings Keyset v1 ist festgelegt: `"PAGEBREAK"`, `"WORDDELIMS"`, `"DEFAULTEXTS"`, `"TRUNCSPACES"`, `"EOFCTRLZ"`, `"EOFCRLF"`, `"TABEXPAND"`, `"COLBLOCKMOVE"`, `"DEFAULTMODE"`.
 - Bool-Format-Regel fuer Setup-Values: `true/false` (nicht `1/0`).
 - Setup-Dialog-Mnemonics: Neue Dialoge bekommen geeignete Highlight-/Shortcut-Buchstaben durch Codex ohne Rueckfrage.
 - Workspace-Loeschungen: Rueckfragen vor Datei-Loeschungen im Workspace sind deaktiviert (User-Freigabe erteilt).
+- Einheitlichkeitsregel: Alle Dialoge und alle Fenster werden nach denselben zentralen UI-/Palette-Regeln behandelt; keine Sonderbehandlung einzelner Views/Dialoge/Fenster.
+- Abweichungswarnung: Wenn eine Forderung den zentralen UI-/Palette-Standard verlassen wuerde, muss Codex vor Umsetzung explizit warnen und den Tradeoff benennen.
+- TVision-Paletten-Hard-Gate (verbindlich): zentrale Palette-Quelle, keine per-View-Sonderfarben, atomisches Anwenden auf Dialog-/Fenster-Gruppen.
+- Verweigerungsregel (Regressionsschutz): Codex verweigert jede Implementierung, die den TVision-Paletten-Hard-Gate verletzt.
 
 ## 3) Projektstatus (aktuell)
 - Repository: `/home/idoc/mr`
@@ -67,8 +71,13 @@ Dieses Dokument ist die Übergabe für einen neuen Codex-Kontext mit minimalem I
 - Dialog-Kontrast für graue Dialoge angepasst: schwarz auf grau (lesbar).
 - Fokusrahmen: zentral in `ui/TMRFrame.cpp` ueber Fokusstatus (`sfFocused`) + Modal-TopView-Gate gesteuert. Doppelrahmen/Window-Controls nur beim fokussierten Objekt; keine dialogspezifischen Sonderpatches.
 - Button-Reihenregel fuer Dialoge: `Done/Cancel/Help` konsistent in einer zentrierten Zeile ausrichten (Window-List-Stil), keine versetzte/rechtsdriftende Help-Position.
+- UI-Qualitaetsgate verbindlich vor jeder Rueckmeldung: lokaler PTY-Selbsttest der betroffenen Dialoge/Fenster mit Pflichtkriterien
+  geometrisch sauber (Ausrichtung/Abstaende/Zentrierung), kein Clipping, korrekte Scrollbars/Farben, Fokusrahmen nur am fokussierten Objekt.
+- Pflichtgroessen fuer UI-Selbsttests: mindestens `80x25` sowie aktuelle Problemgrenzen; bei Fehlern zuerst Fix, dann erst weiterer Planfortschritt.
+- Null-Toleranz fuer UI-Regressionen: Prioritaet 0; neue Features erst nach Stabilisierung der Darstellung und bestandenen lokalen PTY-Tests aller betroffenen Oberflaechen.
 - Benennungsregel: Datei-Felder (Pfad + Dateiname) als `URI` benennen; reine Ordnerfelder als `path`. Datei-URI-Vorbelegung in Dialogen absolut.
 - Setup-Layout-Standard: Alle Setup-Dialoge nutzen zentral ein Profilmodell `compact/relaxed` (80x25-first) statt getrennter Dialog-Versionen; nur die Geometrie wechselt profilabhaengig.
+- Dialog-Scrollbar-Palette: Scrollbar-Farben in Dialogen werden zentral TVision-weit ueber die globale Dialog-Palette an die Rahmenfarbe angeglichen; keine Einzelbehandlung einzelner Views/Dialoge.
 - Setup-Defaults zentralisiert: Bootstrap und Setup verwenden dieselbe Default-Routine zur Ermittlung von Settings-/Macro-/Help-/Temp-/Shell-Pfaden.
 - Wenn `settings.mrmac` fehlt, wird sie beim Start automatisch mit den Setup-Defaults erstellt.
 - Desktop-Pattern-Diskussion abgeschlossen:
@@ -84,11 +93,12 @@ Dieses Dokument ist die Übergabe für einen neuen Codex-Kontext mit minimalem I
 
 ## 5.1 TVision-Workflow (lokal + upstream-kompatibel)
 1. TVision-Änderungen nur unter `./tvision` durchführen und immer mit `make mr` gegen das Gesamtprojekt validieren.
-2. Optionalen Sync-Pfad nur über `TVISION_AUTO_SYNC=1` nutzen (Mirror/Export/Patch in Vendor-Pfad).
-3. Upstream-relevante Änderungen als kleine, klare Patches unter `./patches` halten.
-4. Build-Artefakte strikt aus Quell-Diffs heraushalten.
-5. Upstream-Abgleich ausschließlich über `./.vendor-cache/tvision.git` und `./build/vendor`.
-6. Kein `git subtree`/Submodule einführen.
+2. Upstream-Remote ist `tvision-upstream` (`https://github.com/magiblot/tvision.git`).
+3. Upstream-Aktualisierung über `git subtree` (Prefix `./tvision`) durchführen.
+4. Lokale TVision-Abweichungen ausschließlich als kleine, klare Patches unter `./patches` halten.
+5. Build-Artefakte strikt aus Quell-Diffs heraushalten.
+6. Kein zweiter Vendor-Quellbaum und kein Submodule.
+7. Standardbefehl für sicheren Abgleich: `make tvision-sync-safe`.
 
 ## 6) Screenshot-Referenzsatz für neuen Kontext (Stilkonstanz)
 Diese Bilder sollten im neuen Kontext verfügbar sein, damit UI-Stil/Farb-/Rahmensemantik stabil bleibt.
@@ -96,20 +106,20 @@ Diese Bilder sollten im neuen Kontext verfügbar sein, damit UI-Stil/Farb-/Rahme
 ### A) Pflicht (primäre Stilanker)
 1. `/home/idoc/mr/screenshots/screenshot01.png`
 2. `/home/idoc/mr/screenshots/screenshot02.png`
-3. `/home/idoc/mr/documentation/Bildschirmfoto_20260331_181602.png`
-4. `/home/idoc/mr/documentation/Bildschirmfoto_20260331_211450.png`
-5. `/home/idoc/mr/documentation/Bildschirmfoto_20260331_211704.png`
-6. `/home/idoc/mr/documentation/Bildschirmfoto_20260331_211727.png`
-7. `/home/idoc/mr/documentation/Bildschirmfoto_20260331_211906.png`
-8. `/home/idoc/mr/documentation/Bildschirmfoto_20260331_211930.png`
-9. `/home/idoc/mr/documentation/Bildschirmfoto_20260331_212519.png`
-10. `/home/idoc/mr/documentation/Bildschirmfoto_20260331_212543.png`
-11. `/home/idoc/mr/documentation/Bildschirmfoto_20260331_215102.png`
+3. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260331_181602.png`
+4. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260331_211450.png`
+5. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260331_211704.png`
+6. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260331_211727.png`
+7. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260331_211906.png`
+8. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260331_211930.png`
+9. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260331_212519.png`
+10. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260331_212543.png`
+11. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260331_215102.png`
 
 ### B) Sekundär (historische Referenz / Original-Look-Abgleich)
-12. `/home/idoc/mr/documentation/Bildschirmfoto_20260327_161233.png`
-13. `/home/idoc/mr/documentation/Bildschirmfoto_20260330_201518.png`
-14. `/home/idoc/mr/documentation/Bildschirmfoto_20260328_200731.png`
+12. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260327_161233.png`
+13. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260330_201518.png`
+14. `/home/idoc/mr/documentation/pngjpegs/Bildschirmfoto_20260328_200731.png`
 
 Hinweis: Abnahme für Glyph-/Pattern-Look nicht im VSCode-internen Terminal, sondern im externen Terminal durchführen.
 

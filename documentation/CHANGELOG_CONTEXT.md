@@ -4,7 +4,42 @@ Laufendes Projektprotokoll fuer Kontextwechsel und schnelle Wiederaufnahme.
 
 ## Warmup-Regel
 - Vor jeder neuen Session zuerst diese Datei lesen.
-- Danach `Codex Kontext Übergabe.yaml` und `KONTEXTWECHSEL_2026-04-01.md` als Struktur-/Policy-Quelle nutzen.
+- Danach verbindlich `MRMAC_V1_STATUS.md` lesen.
+- Dann `Codex Kontext Übergabe.yaml` und `KONTEXTWECHSEL_2026-04-01.md` als Struktur-/Policy-Quelle nutzen.
+
+## 2026-04-02
+- TVision-Quellverwaltung auf `git subtree` umgestellt:
+  - `tvision-upstream` Remote aktiv.
+  - Subtree-Import unter `./tvision` erfolgt.
+  - Veraltete TVision-Planungsdateien entfernt und ersetzt durch `documentation/tvision-subtree-workflow.md`.
+  - `.vendor-cache` aus dem Workspace entfernt; Vendor-Cache-Pfad ist nicht mehr Teil des Standard-Workflows.
+- Neuer Ein-Befehl-Sync fuer TVision:
+  - Script: `misc/tvision-sync-safe.sh`.
+  - Make-Targets: `make tvision-sync-safe` und `make tvision-status`.
+  - Ablauf: stash -> fetch -> subtree pull -> patch queue -> stash restore.
+- MRMAC-Kontextregel verschaerft:
+  - `documentation/MRMAC_V1_STATUS.md` ist bei Kontextwechsel verbindlicher Warmup-Bestandteil.
+- Setup/UI-Korrekturstand nach Regressionen:
+  - `CURSORVISIBILITY` vollstaendig entfernt (kein Legacy-Fallback):
+    - entfernt aus `Edit settings` Dialog, Settings-Serialisierung, `MRSETUP`-Whitelist und Runtime-Cursorumschaltung.
+    - `settings.mrmac` Auto-Create schreibt den Key nicht mehr; Regression prueft explizit auf Abwesenheit.
+  - Dialog-Hintergrund repariert:
+    - Setup-Dialog-Content nutzt zentrale non-buffered Content-Group (`createSetupDialogContentGroup`), damit Dialogflaechen nicht schwarz ueberzeichnet werden.
+  - Dialog-Scrollview-Geometrie vereinheitlicht:
+    - Scrollbars auf dem Dialograhmen (analog Textfenster), nicht innerhalb der Contentflaeche.
+  - Textfenster-Resize gehaertet:
+    - `TMREditWindow::changeBounds` layoutet Editor-Chrome (H/V-Scrollbar + Indicator + Editor-Bounds) explizit nach.
+    - `TMRFileEditor` synchronisiert Scrollbar-Sichtbarkeit zusaetzlich mit `sfActive|sfSelected`.
+  - PTY-Selbsttest durchgefuehrt:
+    - Interaktiv: `Other -> Installation and setup -> Paths` und `Edit settings` geoeffnet.
+    - Verifiziert: Cursor-Option nicht mehr vorhanden.
+    - Starttests mit mehreren Terminalgroessen (u. a. `80x24`, `173x42`, `170x45`) ohne fehlende Scrollbars beim Initialaufbau.
+- UI-Qualitaetsgate als feste Vorgabe verankert:
+  - Kein Fortschrittsbericht ohne lokalen PTY-Selbsttest der betroffenen Dialoge/Fenster.
+  - Pflichtkriterien: saubere Ausrichtung/Abstaende/Zentrierung, kein Clipping, korrekte Scrollbars/Farben, Fokusrahmen nur am fokussierten Objekt.
+  - Pflichtgroessen: mindestens `80x25` plus aktuelle Problemgrenzen.
+  - Bei Fehlern: zuerst Fix, erst danach weiterer Planfortschritt.
+  - Zusaetzlich Null-Toleranz-Regel: UI-Regressionen Prioritaet 0; neue Features erst nach stabiler Darstellung und bestandenem PTY-Test der betroffenen Oberflaechen.
 
 ## 2026-04-01
 - Doku-/Ablageregel fixiert:

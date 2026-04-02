@@ -9,7 +9,6 @@ CXX = g++
 CC = gcc
 FLEX = flex
 BISON = bison
-TAR = tar
 CMAKE ?= cmake
 GIT ?= git
 PATCH ?= patch
@@ -18,21 +17,11 @@ NPROC ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
 TVISION_SOURCE_DIR = ./tvision
 TVISION_PATCH_DIR ?= ./patches
 TVISION_PATCHES := $(sort $(wildcard $(TVISION_PATCH_DIR)/*.patch))
+TVISION_LOCAL_PATCH_STAMP ?= $(TVISION_SOURCE_DIR)/.mr-patches-applied
 TVISION_UPSTREAM_URL ?= https://github.com/magiblot/tvision.git
 TVISION_UPSTREAM_REF ?= master
-TVISION_AUTO_SYNC ?= 0
-TVISION_CACHE_DIR ?= ./.vendor-cache/tvision.git
-TVISION_VENDOR_ROOT ?= ./build/vendor
-TVISION_VENDOR_SRC ?= $(TVISION_VENDOR_ROOT)/tvision-src
-TVISION_VENDOR_BUILD ?= $(TVISION_VENDOR_ROOT)/tvision-build
-
-ifeq ($(TVISION_AUTO_SYNC),1)
-TVISION_ACTIVE_SOURCE_DIR := $(TVISION_VENDOR_SRC)
-TVISION_ACTIVE_BUILD_DIR := $(TVISION_VENDOR_BUILD)
-else
 TVISION_ACTIVE_SOURCE_DIR := $(TVISION_SOURCE_DIR)
 TVISION_ACTIVE_BUILD_DIR := $(TVISION_SOURCE_DIR)/build
-endif
 
 # Include paths
 INCLUDES = -I$(TVISION_ACTIVE_SOURCE_DIR)/include -I./mrmac -I./piecetable -I./ui -I./coprocessor -I./app -I./dialogs -I./services
@@ -86,7 +75,6 @@ CXX_SOURCES = \
 	app/TMREditorApp.cpp \
 	dialogs/MRAboutDialog.cpp \
 	dialogs/MRColorSetupDialog.cpp \
-	dialogs/MRDisplaySetupDialog.cpp \
 	dialogs/MRFileInformationDialog.cpp \
 	dialogs/MRHelpColorsDialog.cpp \
 	dialogs/MRInstallationAndSetupDialog.cpp \
@@ -126,9 +114,9 @@ C_SOURCES = \
 
 C_OBJECTS = $(C_SOURCES:.c=.o)
 
-.PHONY: all clean clean-tvision clean-tvision-cache rebuild-tvision \
-	tvision-upstream-init tvision-upstream-fetch tvision-vendor-clean tvision-vendor-export \
-	tvision-vendor-normalize tvision-vendor-patch tvision-vendor-prepare \
+.PHONY: all clean clean-tvision rebuild-tvision \
+	tvision-upstream-init tvision-upstream-fetch tvision-subtree-pull tvision-apply-patches \
+	tvision-sync-safe tvision-status \
 	stage-profile-probe regression-probe regression-check mrmac-v1-check
 
 all: $(TARGET)
@@ -139,57 +127,62 @@ regression-check: $(REGRESSION_PROBE_TARGET)
 mrmac-v1-check: $(TARGET) $(STAGE_PROFILE_PROBE_TARGET) regression-probe
 	$(MRMAC_V1_SUITE_SCRIPT)
 
-# TVision: default local build or optional auto-synced vendor build.
-$(TVISION_SOURCE_DIR)/build/libtvision.a: $(TVISION_SOURCE_DIR)/CMakeLists.txt $(TVISION_SOURCE_DIR)/source/CMakeLists.txt
+# TVision: local subtree source + patch queue.
+$(TVISION_LOCAL_PATCH_STAMP): $(TVISION_PATCHES) Makefile
+	@set -e; \
+	mkdir -p $(dir $(TVISION_LOCAL_PATCH_STAMP)); \
+	if [ -n "$(strip $(TVISION_PATCHES))" ]; then \
+		for p in $(TVISION_PATCHES); do \
+			if $(PATCH) -d $(TVISION_SOURCE_DIR) -p1 -l -R --dry-run < "$$p" >/dev/null 2>&1; then \
+				echo "Patch already applied $$p"; \
+			elif $(PATCH) -d $(TVISION_SOURCE_DIR) -p1 -l --dry-run < "$$p" >/dev/null 2>&1; then \
+				echo "Applying $$p"; \
+				$(PATCH) -d $(TVISION_SOURCE_DIR) -p1 -l --forward < "$$p"; \
+			else \
+				echo "Unable to apply $$p cleanly to $(TVISION_SOURCE_DIR)." >&2; \
+				exit 1; \
+			fi; \
+		done; \
+	fi; \
+	touch $(TVISION_LOCAL_PATCH_STAMP)
+
+$(TVISION_SOURCE_DIR)/build/libtvision.a: $(TVISION_SOURCE_DIR)/CMakeLists.txt $(TVISION_SOURCE_DIR)/source/CMakeLists.txt $(TVISION_LOCAL_PATCH_STAMP)
 	@mkdir -p $(TVISION_SOURCE_DIR)/build
 	$(CMAKE) -S $(TVISION_SOURCE_DIR) -B $(TVISION_SOURCE_DIR)/build $(TVISION_CMAKE_FLAGS)
 	$(CMAKE) --build $(TVISION_SOURCE_DIR)/build --target tvision -j$(NPROC)
 
 tvision-upstream-init:
-	@mkdir -p $(dir $(TVISION_CACHE_DIR))
-	@if [ ! -d $(TVISION_CACHE_DIR) ]; then \
-		$(GIT) clone --mirror $(TVISION_UPSTREAM_URL) $(TVISION_CACHE_DIR); \
+	@if ! $(GIT) remote | grep -qx 'tvision-upstream'; then \
+		$(GIT) remote add tvision-upstream $(TVISION_UPSTREAM_URL); \
 	fi
 
 tvision-upstream-fetch: tvision-upstream-init
-	$(GIT) --git-dir=$(TVISION_CACHE_DIR) fetch --prune origin
+	$(GIT) fetch --prune tvision-upstream
 
-tvision-vendor-clean:
-	rm -rf $(TVISION_VENDOR_SRC) $(TVISION_VENDOR_BUILD)
+tvision-subtree-pull: tvision-upstream-fetch
+	$(GIT) subtree pull --prefix=tvision tvision-upstream $(TVISION_UPSTREAM_REF) --squash
+	rm -f $(TVISION_LOCAL_PATCH_STAMP)
 
-tvision-vendor-export: tvision-upstream-fetch
-	rm -rf $(TVISION_VENDOR_SRC)
-	@mkdir -p $(TVISION_VENDOR_SRC)
-	$(GIT) --git-dir=$(TVISION_CACHE_DIR) archive --format=tar $(TVISION_UPSTREAM_REF) | $(TAR) -xf - -C $(TVISION_VENDOR_SRC)
+tvision-apply-patches: $(TVISION_LOCAL_PATCH_STAMP)
 
-tvision-vendor-normalize: tvision-vendor-export
-	find $(TVISION_VENDOR_SRC) -type f \( -name '*.c' -o -name '*.cpp' -o -name '*.h' -o -name '*.hpp' -o -name '*.cmake' -o -name 'CMakeLists.txt' \) -exec sed -i 's/\r$$//' {} +
+tvision-status:
+	@echo "== TVision subtree status =="; \
+	$(GIT) remote -v | grep tvision-upstream || true; \
+	echo; \
+	echo "Subtree HEAD:"; \
+	$(GIT) log --oneline -n 1 -- tvision || true; \
+	echo; \
+	echo "Patch queue:"; \
+	ls -1 $(TVISION_PATCH_DIR)/*.patch 2>/dev/null || echo "(none)"; \
+	echo; \
+	echo "Patch stamp:"; \
+	if [ -f "$(TVISION_LOCAL_PATCH_STAMP)" ]; then echo "applied ($(TVISION_LOCAL_PATCH_STAMP))"; else echo "not applied"; fi
 
-tvision-vendor-patch: tvision-vendor-normalize
-	@set -e; \
-	if [ -n "$(strip $(TVISION_PATCHES))" ]; then \
-		for p in $(TVISION_PATCHES); do \
-			echo "Applying $$p"; \
-			$(PATCH) -d $(TVISION_VENDOR_SRC) -p1 --forward < "$$p"; \
-		done; \
-	fi
-
-$(TVISION_VENDOR_BUILD)/libtvision.a: tvision-vendor-patch
-	@mkdir -p $(TVISION_VENDOR_BUILD)
-	$(CMAKE) -S $(TVISION_VENDOR_SRC) -B $(TVISION_VENDOR_BUILD) $(TVISION_CMAKE_FLAGS)
-	$(CMAKE) --build $(TVISION_VENDOR_BUILD) --target tvision -j$(NPROC)
-
-tvision-vendor-prepare: $(TVISION_VENDOR_BUILD)/libtvision.a
-
-ifeq ($(TVISION_AUTO_SYNC),1)
-$(CXX_OBJECTS) $(C_OBJECTS): $(TVISION_LIB)
-endif
+tvision-sync-safe:
+	bash misc/tvision-sync-safe.sh
 
 clean-tvision:
-	rm -rf $(TVISION_SOURCE_DIR)/build $(TVISION_VENDOR_ROOT)
-
-clean-tvision-cache:
-	rm -rf $(TVISION_CACHE_DIR)
+	rm -rf $(TVISION_SOURCE_DIR)/build $(TVISION_LOCAL_PATCH_STAMP)
 
 rebuild-tvision: clean-tvision $(TVISION_LIB)
 
@@ -218,7 +211,6 @@ app/MRVersion.o: app/MRVersion.cpp app/MRVersion.hpp
 app/TMREditorApp.o: app/TMREditorApp.cpp app/TMREditorApp.hpp app/MRAppState.hpp app/MRCommandRouter.hpp app/MRCommands.hpp app/MRMenuFactory.hpp services/MRCoprocessorDispatch.hpp services/MRPerformance.hpp services/MRWindowCommands.hpp ui/TMRDeskTop.hpp ui/TMRStatusLine.hpp ui/MRPalette.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 dialogs/MRAboutDialog.o: dialogs/MRAboutDialog.cpp dialogs/MRAboutDialog.hpp app/MRVersion.hpp $(ABOUT_QUOTES_GENERATED)
 dialogs/MRColorSetupDialog.o: dialogs/MRColorSetupDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp app/MRCommands.hpp
-dialogs/MRDisplaySetupDialog.o: dialogs/MRDisplaySetupDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp
 dialogs/MRFileInformationDialog.o: dialogs/MRFileInformationDialog.cpp dialogs/MRFileInformationDialog.hpp app/MRCommands.hpp services/MRPerformance.hpp ui/TMREditWindow.hpp ui/TMRFileEditor.hpp ui/TMRTextBuffer.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 dialogs/MRHelpColorsDialog.o: dialogs/MRHelpColorsDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp
 dialogs/MRInstallationAndSetupDialog.o: dialogs/MRInstallationAndSetupDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp app/MRCommands.hpp
@@ -270,4 +262,3 @@ clean:
 		misc/mr_staged_nav_probe misc/mr_staged_mark_page_probe \
 		$(ABOUT_QUOTES_GENERATED) \
 		mrmac/lex.yy.c mrmac/parser.tab.c mrmac/parser.tab.h
-	rm -rf $(TVISION_VENDOR_ROOT)
