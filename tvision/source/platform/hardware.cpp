@@ -1,0 +1,138 @@
+#define Uses_TKeys
+#define Uses_TEvent
+#define Uses_TScreen
+#define Uses_THardwareInfo
+#include <tvision/tv.h>
+
+#include <internal/platform.h>
+#include <internal/getenv.h>
+#include <iostream.h>
+#include <chrono>
+
+TEvent THardwareInfo::eventQ[];
+size_t THardwareInfo::eventCount = 0;
+
+static bool alwaysFlush;
+static tvision::Platform *platf;
+
+THardwareInfo::THardwareInfo() noexcept
+{
+    using namespace tvision;
+    platf = &Platform::getInstance();
+    pendingEvent = 0;
+    alwaysFlush = getEnv<int>("TVISION_MAX_FPS", 0) < 0;
+}
+
+THardwareInfo::~THardwareInfo()
+{
+}
+
+void THardwareInfo::setCaretSize( ushort size ) noexcept { platf->setCaretSize(size); }
+void THardwareInfo::setCaretPosition( ushort x, ushort y ) noexcept { platf->setCaretPosition(x, y); }
+ushort THardwareInfo::getCaretSize() noexcept { return platf->getCaretSize(); }
+BOOL THardwareInfo::isCaretVisible() noexcept { return platf->isCaretVisible(); }
+ushort THardwareInfo::getScreenRows() noexcept { return platf->getScreenRows(); }
+ushort THardwareInfo::getScreenCols() noexcept { return platf->getScreenCols(); }
+ushort THardwareInfo::getScreenMode() noexcept { return platf->getScreenMode(); }
+void THardwareInfo::setScreenMode( ushort ) noexcept {}
+void THardwareInfo::clearScreen( ushort, ushort ) noexcept { platf->clearScreen(); }
+void THardwareInfo::screenWrite( ushort x, ushort y, TScreenCell *buf, DWORD len ) noexcept
+{
+    platf->screenWrite(x, y, buf, len);
+    if (alwaysFlush)
+        flushScreen();
+}
+TScreenCell *THardwareInfo::allocateScreenBuffer() noexcept { return platf->reloadScreenInfo(); }
+void THardwareInfo::freeScreenBuffer(TScreenCell *) noexcept { platf->freeScreenBuffer(); }
+// Turbo Vision only checks whether this is non-zero.
+DWORD THardwareInfo::getButtonCount() noexcept { return 2; }
+void THardwareInfo::cursorOn() noexcept {}
+void THardwareInfo::cursorOff() noexcept {}
+void THardwareInfo::flushScreen() noexcept { platf->flushScreen(); }
+void THardwareInfo::setUpConsole() noexcept { platf->setUpConsole(); }
+void THardwareInfo::restoreConsole() noexcept { platf->restoreConsole(); }
+
+BOOL THardwareInfo::getPendingEvent(TEvent &event, Boolean mouse) noexcept
+{
+    for (size_t i = 0; i < eventCount; ++i)
+        if (!!(eventQ[i].what & evMouse) == mouse)
+        {
+            event = eventQ[i];
+            for (; i + 1 < eventCount; ++i)
+                eventQ[i] = eventQ[i + 1];
+            --eventCount;
+            return True;
+        }
+    return False;
+}
+
+BOOL THardwareInfo::getMouseEvent( MouseEventType& event ) noexcept
+{
+    TEvent ev;
+    if (getPendingEvent(ev, True))
+    {
+        event = ev.mouse;
+        return True;
+    }
+    return False;
+}
+
+BOOL THardwareInfo::getKeyEvent( TEvent& event ) noexcept
+{
+    readEvents();
+    if (getPendingEvent(event, False))
+    {
+        if (event.what & evKeyboard)
+        {
+            if (event.keyDown.keyCode == kbIns)
+                insertState = !insertState;
+            if (insertState)
+                event.keyDown.controlKeyState |= kbInsState;
+        }
+        return event.what != evNothing;
+    }
+    return False;
+}
+
+void THardwareInfo::readEvents() noexcept
+{
+    // Do not read any more events until the queue is empty.
+    if (!eventCount)
+        while (eventCount < eventQSize && platf->getEvent(eventQ[eventCount]))
+            ++eventCount;
+}
+
+void THardwareInfo::waitForEvents( int timeoutMs ) noexcept
+{
+    if (!eventCount)
+    {
+        // Flush the screen once for every time all events have been processed,
+        // only when blocking for events.
+        flushScreen();
+        platf->waitForEvents(timeoutMs);
+    }
+}
+
+void THardwareInfo::interruptEventWait() noexcept
+{
+    platf->interruptEventWait();
+}
+
+uint64_t THardwareInfo::getTickCountMs() noexcept
+{
+    // This effectively gives a system time reference in milliseconds.
+    // steady_clock is best suited for measuring intervals.
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()
+    ).count();
+}
+
+BOOL THardwareInfo::setClipboardText( TStringView text ) noexcept
+{
+    return platf->setClipboardText(text);
+}
+
+BOOL THardwareInfo::requestClipboardText( void (&accept)(TStringView) ) noexcept
+{
+    return platf->requestClipboardText(accept);
+}
