@@ -19,10 +19,10 @@
 #include "../coprocessor/MRCoprocessor.hpp"
 #include "../mrmac/mrmac.h"
 #include "../mrmac/mrvm.hpp"
-#include "../services/MRCoprocessorDispatch.hpp"
-#include "../services/MRDialogPaths.hpp"
-#include "../services/MRPerformance.hpp"
-#include "../services/MRWindowCommands.hpp"
+#include "../coprocessor/MRCoprocessorDispatch.hpp"
+#include "../config/MRDialogPaths.hpp"
+#include "../coprocessor/MRPerformance.hpp"
+#include "../app/commands/MRWindowCommands.hpp"
 #include "../ui/TMRDeskTop.hpp"
 #include "../ui/TMREditWindow.hpp"
 #include "../ui/TMRMenuBar.hpp"
@@ -586,6 +586,17 @@ bool TMREditorApp::reloadSettingsMacroFromPath(const std::string &path, std::str
 	return true;
 }
 
+void TMREditorApp::setManualMarqueeStatus(const std::string &text) {
+	if (auto *mrMenuBar = dynamic_cast<TMRMenuBar *>(menuBar))
+		mrMenuBar->setManualMarqueeStatus(text);
+}
+
+std::string TMREditorApp::manualMarqueeStatus() const {
+	if (auto *mrMenuBar = dynamic_cast<TMRMenuBar *>(menuBar))
+		return mrMenuBar->manualMarqueeStatus();
+	return std::string();
+}
+
 void TMREditorApp::applyConfiguredWindowFramePolicy() {
 	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
 
@@ -957,6 +968,7 @@ void TMREditorApp::idle() {
 			mrMenuBar->setHeroStatus(hero.text, mapHeroKind(hero.kind));
 		else
 			mrMenuBar->setHeroStatus(std::string());
+		mrMenuBar->tickMarquee();
 	}
 	updateAppCommandState();
 }

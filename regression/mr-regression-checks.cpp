@@ -19,7 +19,7 @@
 
 #include "../mrmac/mrmac.h"
 #include "../mrmac/mrvm.hpp"
-#include "../services/MRDialogPaths.hpp"
+#include "../config/MRDialogPaths.hpp"
 
 namespace {
 
@@ -945,7 +945,8 @@ bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
 
 bool testMenuDialogColorGroupTargetsExpectedSlots(std::string &failureReason) {
 	static const unsigned char probeValues[] = {0x61, 0x62, 0x63, 0x64, 0x65, 0x66,
-	                                            0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C};
+	                                            0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C,
+	                                            0x6D, 0x6E, 0x6F};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::size_t itemCount = 0;
 	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::MenuDialog, itemCount);
@@ -998,17 +999,32 @@ bool testMenuDialogColorGroupTargetsExpectedSlots(std::string &failureReason) {
 }
 
 bool testMenuDialogSemanticLabelsGuard(std::string &failureReason) {
-	static const char *const expectedLabels[] = {"activeentry-text", "inactiveentry-text", "entry-hotkey",
-	                                             "marker-active", "marker-inactive"};
-	static const unsigned char expectedSlots[] = {2, 3, 4, 5, 6};
+	static const char *const expectedLabels[] = {
+	    "description of selectable menu element",
+	    "description of ghosted menu element",
+	    "hotkey of menu element",
+	    "menu selector on selectable menu element",
+	    "menu selector on ghosted menu element",
+	    "description of buttons",
+	    "hotkey on buttons",
+	    "button shadow",
+	    "selected element in unfocussed listbox",
+	    "element description in listbox",
+	    "hotkeys on radio buttons & check boxes",
+	    "listbox selector",
+	    "dialog frame",
+	    "dialog text",
+	    "dialog background",
+	};
+	static const unsigned char expectedSlots[] = {2, 3, 4, 5, 6, 41, 45, 46, 59, 57, 49, 58, 33, 37, 32};
 	std::size_t itemCount = 0;
 	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::MenuDialog, itemCount);
 
-	if (items == nullptr || itemCount < 5) {
-		failureReason = "MENUDIALOGCOLORS must expose semantic menu entries (active/inactive marker+text, hotkey).";
+	if (items == nullptr || itemCount < sizeof(expectedLabels) / sizeof(expectedLabels[0])) {
+		failureReason = "MENUDIALOGCOLORS must expose all semantic menu/dialog entries.";
 		return false;
 	}
-	for (std::size_t i = 0; i < 5; ++i) {
+	for (std::size_t i = 0; i < sizeof(expectedLabels) / sizeof(expectedLabels[0]); ++i) {
 		if (items[i].label == nullptr || std::string(items[i].label) != expectedLabels[i]) {
 			failureReason = "MENUDIALOGCOLORS semantic label mismatch at index " + std::to_string(i) + ".";
 			return false;
@@ -1024,7 +1040,8 @@ bool testMenuDialogSemanticLabelsGuard(std::string &failureReason) {
 
 bool testMenuEntryHotkeySelectionAliasGuard(std::string &failureReason) {
 	static const unsigned char probeValues[] = {0x71, 0x72, 0x7B, 0x74, 0x75, 0x76,
-	                                            0x77, 0x78, 0x79, 0x7A, 0x7C, 0x7D};
+	                                            0x77, 0x78, 0x79, 0x7A, 0x7C, 0x7D,
+	                                            0x7E, 0x7F, 0x70};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::string errorText;
 	unsigned char normalHotkey = 0;
@@ -1069,10 +1086,93 @@ bool testMenuEntryHotkeySelectionAliasGuard(std::string &failureReason) {
 	return true;
 }
 
+bool testDialogFrameAndBackgroundPropagationGuard(std::string &failureReason) {
+	MRColorSetupSettings previous = configuredColorSetupSettings();
+	std::string errorText;
+	unsigned char value = 0;
+	bool restoreOk = true;
+
+	auto restore = [&]() {
+		if (!restoreOk)
+			return;
+		restoreOk = setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog,
+		                                               previous.menuDialogColors.data(),
+		                                               previous.menuDialogColors.size(), &errorText);
+	};
+
+	// Set explicit probe colors for:
+	// - dialog frame (slot 33)
+	// - dialog text (slot 37)
+	// - dialog background (slot 32)
+	auto probe = previous.menuDialogColors;
+	if (probe.size() < 15) {
+		failureReason = "MENUDIALOGCOLORS must expose frame/text/background entries.";
+		return false;
+	}
+	probe[12] = 0x4A;
+	probe[13] = 0x3C;
+	probe[14] = 0x2D;
+
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, probe.data(), probe.size(),
+	                                        &errorText)) {
+		failureReason = "Unable to set MENUDIALOGCOLORS frame/background probe values: " + errorText;
+		return false;
+	}
+
+	static const unsigned char frameSlots[] = {33, 34, 65, 66, 97, 98};
+	for (unsigned char slot : frameSlots) {
+		if (!configuredColorSlotOverride(slot, value)) {
+			restore();
+			failureReason = "Dialog frame slot override missing.";
+			return false;
+		}
+		if (value != 0x4A) {
+			restore();
+			failureReason = "Dialog frame propagation mismatch.";
+			return false;
+		}
+	}
+
+	static const unsigned char textSlots[] = {37, 69, 101};
+	for (unsigned char slot : textSlots) {
+		if (!configuredColorSlotOverride(slot, value)) {
+			restore();
+			failureReason = "Dialog text slot override missing.";
+			return false;
+		}
+		if (value != 0x3C) {
+			restore();
+			failureReason = "Dialog text propagation mismatch.";
+			return false;
+		}
+	}
+
+	static const unsigned char backgroundSlots[] = {32, 64, 96};
+	for (unsigned char slot : backgroundSlots) {
+		if (!configuredColorSlotOverride(slot, value)) {
+			restore();
+			failureReason = "Dialog background slot override missing.";
+			return false;
+		}
+		if (value != 0x2D) {
+			restore();
+			failureReason = "Dialog background propagation mismatch.";
+			return false;
+		}
+	}
+
+	restore();
+	if (!restoreOk) {
+		failureReason = "Unable to restore MENUDIALOGCOLORS after frame/background probe: " + errorText;
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
 bool testSetupScrollRefreshGuard(std::string &failureReason) {
 	static const char *const files[] = {"dialogs/MRSetupDialogCommon.cpp", "dialogs/MRInstallationAndSetupDialog.cpp",
-	                                    "dialogs/MRColorSetupDialog.cpp", "dialogs/MREditSettingsDialog.cpp",
-	                                    "dialogs/MRSetupDialogs.cpp"};
+	                                    "dialogs/MREditSettingsDialog.cpp", "dialogs/MRSetupDialogs.cpp"};
 	static const char *const requiredMarker = "content_->drawView();";
 
 	for (const char *relPath : files) {
@@ -1180,7 +1280,7 @@ bool testChangedTextColorWiringGuard(std::string &failureReason) {
 }
 
 bool testPersistentBlocksWiringGuard(std::string &failureReason) {
-	const std::string settingsPath = absolutePathFromCwd("services/MRDialogPaths.cpp");
+	const std::string settingsPath = absolutePathFromCwd("config/MRDialogPaths.cpp");
 	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
 	const std::string dialogPath = absolutePathFromCwd("dialogs/MREditSettingsDialog.cpp");
 	std::string settingsContent;
@@ -1321,6 +1421,125 @@ bool testKeyIn(std::string &failureReason) {
 	return true;
 }
 
+bool testMarqueeProcWiringGuard(std::string &failureReason) {
+	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
+	std::string content;
+	std::string ioError;
+	std::vector<unsigned char> bytecode;
+	std::string compileError;
+	MRMacroExecutionProfile profile;
+	std::vector<std::string> unsupported;
+	static const char kSource[] = "$MACRO Probe;\n"
+	                              "MARQUEE('normal');\n"
+	                              "MARQUEE_WARNING('warn');\n"
+	                              "MARQUEE_ERROR('err');\n"
+	                              "END_MACRO;\n";
+
+	if (!readTextFile(vmPath, content, ioError)) {
+		failureReason = "Unable to read mrvm.cpp for MARQUEE proc guard: " + ioError;
+		return false;
+	}
+	if (content.find("name == \"MARQUEE\" || name == \"MARQUEE_WARNING\" || name == \"MARQUEE_ERROR\"") ==
+	    std::string::npos) {
+		failureReason = "MRVM OP_PROC dispatcher must handle MARQUEE, MARQUEE_WARNING and MARQUEE_ERROR.";
+		return false;
+	}
+	if (!compileBytecode(kSource, bytecode, compileError)) {
+		failureReason = "Unable to compile MARQUEE proc probe: " + compileError;
+		return false;
+	}
+	profile = mrvmAnalyzeBytecode(bytecode.data(), bytecode.size());
+	if (profile.procCount < 3 || profile.tvCallCount != 0) {
+		failureReason = "MARQUEE probe must compile as OP_PROC (not TVCALL).";
+		return false;
+	}
+	if (mrvmCanRunStagedInBackground(profile)) {
+		failureReason = "MARQUEE proc probe must remain UI-affine (not staged-background eligible).";
+		return false;
+	}
+	unsupported = mrvmUnsupportedStagedSymbols(profile);
+	if (!containsText(unsupported, "MARQUEE") || !containsText(unsupported, "MARQUEE_WARNING") ||
+	    !containsText(unsupported, "MARQUEE_ERROR")) {
+		failureReason = "MARQUEE proc names must be reported as unsupported staged symbols.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testTvCallSurfaceGuard(std::string &failureReason) {
+	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
+	std::string content;
+	std::string ioError;
+	std::size_t dispatchStart = std::string::npos;
+	std::size_t dispatchEnd = std::string::npos;
+	std::string dispatchBlock;
+	std::regex tvcallNamePattern("funcNameUpper\\s*==\\s*\"([A-Z0-9_]+)\"");
+	std::sregex_iterator it;
+	std::sregex_iterator end;
+	std::vector<std::string> names;
+
+	if (!readTextFile(vmPath, content, ioError)) {
+		failureReason = "Unable to read mrvm.cpp for TVCALL surface guard: " + ioError;
+		return false;
+	}
+	dispatchStart = content.find("} else if (opcode == OP_TVCALL) {");
+	if (dispatchStart == std::string::npos) {
+		failureReason = "Unable to locate OP_TVCALL runtime dispatch block.";
+		return false;
+	}
+	dispatchEnd = content.find("} else if (opcode == OP_HALT) {", dispatchStart);
+	if (dispatchEnd == std::string::npos || dispatchEnd <= dispatchStart) {
+		failureReason = "Unable to locate OP_TVCALL runtime dispatch block end marker.";
+		return false;
+	}
+	dispatchBlock = content.substr(dispatchStart, dispatchEnd - dispatchStart);
+	for (it = std::sregex_iterator(dispatchBlock.begin(), dispatchBlock.end(), tvcallNamePattern); it != end; ++it)
+		names.push_back((*it)[1].str());
+	std::sort(names.begin(), names.end());
+	names.erase(std::unique(names.begin(), names.end()), names.end());
+
+	if (names.size() != 1 || names[0] != "MESSAGEBOX") {
+		std::string found;
+		for (std::size_t i = 0; i < names.size(); ++i) {
+			if (i != 0)
+				found += ", ";
+			found += names[i];
+		}
+		failureReason = "TVCALL runtime surface must remain MESSAGEBOX-only; found: " + found;
+		return false;
+	}
+	if (dispatchBlock.find("MARQUEE") != std::string::npos) {
+		failureReason = "TVCALL runtime dispatch must not route MARQUEE* commands.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testMarqueeColorSourceGuard(std::string &failureReason) {
+	const std::string menuBarPath = absolutePathFromCwd("ui/TMRMenuBar.cpp");
+	std::string content;
+	std::string ioError;
+
+	if (!readTextFile(menuBarPath, content, ioError)) {
+		failureReason = "Unable to read TMRMenuBar.cpp for marquee color source guard: " + ioError;
+		return false;
+	}
+	if (content.find("configuredColorSlotOverride(slot, biosAttr)") == std::string::npos) {
+		failureReason = "Marquee colors must be sourced from configuredColorSlotOverride(42/43/44).";
+		return false;
+	}
+	if (content.find("getColor(0x2B2B)") != std::string::npos || content.find("getColor(0x2C2C)") != std::string::npos ||
+	    content.find("getColor(0x2A2A)") != std::string::npos) {
+		failureReason =
+		    "Marquee colors must not use raw getColor(0x2A2A/0x2B2B/0x2C2C) view-local lookup.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
 void runTest(TestContext &ctx, const char *name, bool (*fn)(std::string &)) {
 	std::string failure;
 
@@ -1359,6 +1578,8 @@ int main(int argc, char **argv) {
 	runTest(ctx, "MENUDIALOGCOLORS targets menu + gray dialog palette", testMenuDialogColorGroupTargetsExpectedSlots);
 	runTest(ctx, "MENUDIALOGCOLORS semantic labels guard", testMenuDialogSemanticLabelsGuard);
 	runTest(ctx, "MENUDIALOGCOLORS hotkey selection alias guard", testMenuEntryHotkeySelectionAliasGuard);
+	runTest(ctx, "MENUDIALOGCOLORS dialog frame/background propagation guard",
+	        testDialogFrameAndBackgroundPropagationGuard);
 	runTest(ctx, "Setup scroll refresh guard", testSetupScrollRefreshGuard);
 	runTest(ctx, "Paths browse event guard", testPathsBrowseEventGuard);
 	runTest(ctx, "Current-line color wiring guard", testCurrentLineColorWiringGuard);
@@ -1368,6 +1589,9 @@ int main(int argc, char **argv) {
 	runTest(ctx, "TO/FROM header parsing + compile guards", testToFromHeaders);
 	runTest(ctx, "TO/FROM runtime dispatch", testToFromDispatch);
 	runTest(ctx, "KEY_IN behavior + staging guards", testKeyIn);
+	runTest(ctx, "MARQUEE proc wiring guard", testMarqueeProcWiringGuard);
+	runTest(ctx, "TVCALL surface guard (MESSAGEBOX only)", testTvCallSurfaceGuard);
+	runTest(ctx, "Marquee color source guard", testMarqueeColorSourceGuard);
 
 	std::cout << "\nRegression summary: " << ctx.passed << " passed, " << ctx.failed << " failed.\n";
 	return ctx.failed == 0 ? 0 : 1;

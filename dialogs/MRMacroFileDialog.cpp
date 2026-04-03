@@ -21,8 +21,8 @@
 #include "../mrmac/MRMacroRunner.hpp"
 #include "../mrmac/mrmac.h"
 #include "../mrmac/mrvm.hpp"
-#include "../services/MRDialogPaths.hpp"
-#include "../services/MRWindowCommands.hpp"
+#include "../config/MRDialogPaths.hpp"
+#include "../app/commands/MRWindowCommands.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "../ui/TMREditWindow.hpp"
 
@@ -215,10 +215,9 @@ std::vector<MacroFileEntry> scanMacroFilesInDirectory(const std::string &directo
 }
 
 std::string rowTextFor(const MacroFileEntry &entry) {
-	std::string left = entry.macroName.empty() ? entry.fileName : entry.macroName;
-	if (!entry.compileError.empty())
-		left += " (!)";
-	return padRight(left, 28) + " " + padRight(entry.keySpec.empty() ? "<none>" : entry.keySpec, 14);
+	std::string left = (entry.compileError.empty() ? "  " : "! ");
+	left += entry.fileName;
+	return padRight(left, 30) + " " + padRight(entry.keySpec.empty() ? "<no key>" : entry.keySpec, 14);
 }
 
 std::string sanitizeMacroIdentifier(const std::string &name) {
@@ -587,18 +586,55 @@ bool openMacroSourceInEditor(const std::string &path) {
 class MacroManagerListView : public TListViewer {
   public:
 	MacroManagerListView(const TRect &bounds, TScrollBar *aVScrollBar,
-	                     const std::vector<std::string> &aItems) noexcept
-	    : TListViewer(bounds, 1, 0, aVScrollBar), items_(aItems) {
+	                     const std::vector<std::string> &aItems,
+	                     const std::vector<bool> &aErrorFlags) noexcept
+	    : TListViewer(bounds, 1, 0, aVScrollBar), items_(aItems), errorFlags_(aErrorFlags) {
 		setRange(static_cast<short>(items_.size()));
 	}
 
-	void setItems(const std::vector<std::string> &items) {
+	void setItems(const std::vector<std::string> &items, const std::vector<bool> &errorFlags) {
 		items_ = items;
+		errorFlags_ = errorFlags;
 		setRange(static_cast<short>(items_.size()));
 		if (items_.empty())
 			focusItemNum(0);
 		else if (focused >= range)
 			focusItemNum(range - 1);
+	}
+
+	void draw() override {
+		TListViewer::draw();
+
+		unsigned char errorBios = 0;
+		short indent = hScrollBar != NULL ? hScrollBar->value : 0;
+		short colWidth = size.x / numCols + 1;
+		TColorAttr errorColor;
+
+		if (!configuredColorSlotOverride(42, errorBios))
+			return;
+		errorColor = TColorAttr(errorBios);
+
+		for (short i = 0; i < size.y; ++i) {
+			for (short j = 0; j < numCols; ++j) {
+				short item = static_cast<short>(j * size.y + i + topItem);
+				short curCol = static_cast<short>(j * colWidth);
+				char text[256];
+				const int textPos = 0;
+				int visPos = 0;
+				TDrawBuffer mark;
+
+				if (item < 0 || item >= range || !hasCompileError(item))
+					continue;
+				getText(text, item, 255);
+				if (text[0] != '!')
+					continue;
+				visPos = textPos - indent;
+				if (visPos < 0 || visPos >= colWidth - 1)
+					continue;
+				mark.moveChar(0, '!', errorColor, 1);
+				writeLine(static_cast<short>(curCol + 1 + visPos), i, 1, 1, mark);
+			}
+		}
 	}
 
 	void getText(char *dest, short item, short maxLen) override {
@@ -615,15 +651,21 @@ class MacroManagerListView : public TListViewer {
 	}
 
   private:
+	bool hasCompileError(short item) const noexcept {
+		return item >= 0 && static_cast<std::size_t>(item) < errorFlags_.size() &&
+		       errorFlags_[static_cast<std::size_t>(item)];
+	}
+
 	std::vector<std::string> items_;
+	std::vector<bool> errorFlags_;
 };
 
 class MacroManagerDialog : public TDialog {
   public:
 	MacroManagerDialog()
 	    : TWindowInit(&TDialog::initFrame), TDialog(centeredBounds(), "MACRO MANAGER"),
-	      directory_(defaultMacroDirectoryPath()), entries_(), rows_(), listView_(NULL), scrollBar_(NULL),
-	      openPath_() {
+	      directory_(defaultMacroDirectoryPath()), entries_(), rows_(), rowHasCompileError_(), listView_(NULL),
+	      scrollBar_(NULL), openPath_() {
 		int width = size.x;
 		int height = size.y;
 		int listLeft = 3;
@@ -650,7 +692,7 @@ class MacroManagerDialog : public TDialog {
 		scrollBar_ = new TScrollBar(TRect(width - 4, 7, width - 3, height - 4));
 		insert(scrollBar_);
 		listView_ = new MacroManagerListView(TRect(3, 7, width - 4, height - 4), scrollBar_,
-		                                     std::vector<std::string>());
+		                                     std::vector<std::string>(), std::vector<bool>());
 		insert(listView_);
 
 		insert(new TButton(TRect(bottomLeft, height - 3, bottomLeft + 16, height - 1), "Playback<ENTER>",
@@ -770,13 +812,18 @@ class MacroManagerDialog : public TDialog {
 	void refreshEntries(int keepIndex) {
 		entries_ = scanMacroFilesInDirectory(directory_);
 		rows_.clear();
+		rowHasCompileError_.clear();
 		if (entries_.empty())
 			rows_.push_back("(none available)");
 		else
-			for (std::size_t i = 0; i < entries_.size(); ++i)
+			for (std::size_t i = 0; i < entries_.size(); ++i) {
 				rows_.push_back(rowTextFor(entries_[i]));
+				rowHasCompileError_.push_back(!entries_[i].compileError.empty());
+			}
+		if (entries_.empty())
+			rowHasCompileError_.push_back(false);
 		if (listView_ != NULL) {
-			listView_->setItems(rows_);
+			listView_->setItems(rows_, rowHasCompileError_);
 			if (!rows_.empty()) {
 				int target = keepIndex;
 				if (target < 0 || target >= static_cast<int>(rows_.size()))
@@ -913,6 +960,7 @@ class MacroManagerDialog : public TDialog {
 	std::string directory_;
 	std::vector<MacroFileEntry> entries_;
 	std::vector<std::string> rows_;
+	std::vector<bool> rowHasCompileError_;
 	MacroManagerListView *listView_;
 	TScrollBar *scrollBar_;
 	std::string openPath_;

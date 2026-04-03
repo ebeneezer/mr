@@ -27,7 +27,7 @@
 #include "TMRIndicator.hpp"
 #include "TMRTextBuffer.hpp"
 #include "MRWindowSupport.hpp"
-#include "../services/MRDialogPaths.hpp"
+#include "../config/MRDialogPaths.hpp"
 #include "../mrmac/mrvm.hpp"
 
 void mrTraceCoprocessorTaskCancel(int bufferId, std::uint64_t taskId);

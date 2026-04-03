@@ -21,7 +21,7 @@
 
 #include "../app/MRCommands.hpp"
 #include "../coprocessor/MRCoprocessor.hpp"
-#include "../services/MRPerformance.hpp"
+#include "../coprocessor/MRPerformance.hpp"
 #include "../ui/TMREditWindow.hpp"
 #include "../ui/TMRFileEditor.hpp"
 #include "../ui/TMRTextBuffer.hpp"

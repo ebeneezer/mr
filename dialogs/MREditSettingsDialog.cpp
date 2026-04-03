@@ -17,7 +17,7 @@
 #include "MRSetupDialogCommon.hpp"
 
 #include "../app/TMREditorApp.hpp"
-#include "../services/MRDialogPaths.hpp"
+#include "../config/MRDialogPaths.hpp"
 
 #include <algorithm>
 #include <cctype>

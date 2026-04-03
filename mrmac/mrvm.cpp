@@ -1,6 +1,7 @@
 #define Uses_MsgBox
 #define Uses_TKeys
 #define Uses_TProgram
+#define Uses_TApplication
 #define Uses_TDeskTop
 #define Uses_TDialog
 #define Uses_TButton
@@ -35,8 +36,9 @@
 #include <vector>
 
 #include "../ui/TMREditWindow.hpp"
+#include "../ui/TMRMenuBar.hpp"
 #include "../dialogs/MRWindowListDialog.hpp"
-#include "../services/MRDialogPaths.hpp"
+#include "../config/MRDialogPaths.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
 TMREditWindow *createEditorWindow(const char *title);
@@ -260,6 +262,7 @@ static thread_local bool g_startupSettingsMode = false;
 
 static std::string valueAsString(const Value &value);
 static int valueAsInt(const Value &value);
+static bool isStringLike(const Value &value);
 static void enforceStringLength(const std::string &s);
 static std::string trimAscii(const std::string &value);
 static std::string commandFirstLine(const std::string &command);
@@ -629,6 +632,27 @@ static unsigned classifyTvCallName(const std::string &name) {
 	if (name == "MESSAGEBOX")
 		return mrefUiAffinity;
 	return mrefUiAffinity;
+}
+
+static bool applyMarqueeProc(const std::string &name, const std::vector<Value> &args) {
+	TApplication *app = dynamic_cast<TApplication *>(TProgram::application);
+	TMRMenuBar *menuBar = NULL;
+	TMRMenuBar::HeroKind kind = TMRMenuBar::HeroKind::Info;
+
+	if (args.size() != 1 || !isStringLike(args[0]))
+		throw std::runtime_error(name + " expects one string argument.");
+	if (app != NULL)
+		menuBar = dynamic_cast<TMRMenuBar *>(app->menuBar);
+	if (menuBar == NULL)
+		throw std::runtime_error(name + " requires an active menu bar.");
+
+	if (name == "MARQUEE_WARNING")
+		kind = TMRMenuBar::HeroKind::Warning;
+	else if (name == "MARQUEE_ERROR")
+		kind = TMRMenuBar::HeroKind::Error;
+
+	menuBar->setManualMarqueeStatus(valueAsString(args[0]), kind);
+	return true;
 }
 
 static void logMacroProfileLine(const char *prefix, const LoadedMacroFile &file) {
@@ -5857,6 +5881,8 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					if (args.size() != 2 || !isStringLike(args[0]) || args[1].type != TYPE_INT)
 						throw std::runtime_error("SET_GLOBAL_INT expects (string, int).");
 					setGlobalValue(valueAsString(args[0]), TYPE_INT, makeInt(args[1].i));
+				} else if (name == "MARQUEE" || name == "MARQUEE_WARNING" || name == "MARQUEE_ERROR") {
+					applyMarqueeProc(name, args);
 				} else if (name == "LOAD_MACRO_FILE") {
 					if (args.size() != 1 || !isStringLike(args[0]))
 						throw std::runtime_error("LOAD_MACRO_FILE expects one string argument.");

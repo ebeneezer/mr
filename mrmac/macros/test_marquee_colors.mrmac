@@ -1,0 +1,82 @@
+$MACRO MarqueeColorProbe FROM EDIT;
+DEF_STR(PrevTime, CurTime);
+DEF_STR(ShortInfo, ShortWarn, ShortErr);
+DEF_STR(LongInfo, LongWarn, LongErr);
+DEF_INT(Ticks);
+
+ShortInfo := 'normal short';
+ShortWarn := 'warning short';
+ShortErr := 'error short';
+
+LongInfo := 'N1234567890123456789012345678901234567890123456789012345678901234567890123456789';
+LongWarn := 'W1234567890123456789012345678901234567890123456789012345678901234567890123456789';
+LongErr := 'E1234567890123456789012345678901234567890123456789012345678901234567890123456789';
+
+MARQUEE(ShortInfo);
+Ticks := 0;
+PrevTime := TIME;
+WHILE Ticks < 10 DO
+    CurTime := TIME;
+    IF POS(CurTime, PrevTime) = 0 THEN
+        PrevTime := CurTime;
+        Ticks := Ticks + 1;
+    END;
+END;
+
+MARQUEE_WARNING(ShortWarn);
+Ticks := 0;
+PrevTime := TIME;
+WHILE Ticks < 10 DO
+    CurTime := TIME;
+    IF POS(CurTime, PrevTime) = 0 THEN
+        PrevTime := CurTime;
+        Ticks := Ticks + 1;
+    END;
+END;
+
+MARQUEE_ERROR(ShortErr);
+Ticks := 0;
+PrevTime := TIME;
+WHILE Ticks < 10 DO
+    CurTime := TIME;
+    IF POS(CurTime, PrevTime) = 0 THEN
+        PrevTime := CurTime;
+        Ticks := Ticks + 1;
+    END;
+END;
+
+MARQUEE(LongInfo);
+Ticks := 0;
+PrevTime := TIME;
+WHILE Ticks < 10 DO
+    CurTime := TIME;
+    IF POS(CurTime, PrevTime) = 0 THEN
+        PrevTime := CurTime;
+        Ticks := Ticks + 1;
+    END;
+END;
+
+MARQUEE_WARNING(LongWarn);
+Ticks := 0;
+PrevTime := TIME;
+WHILE Ticks < 10 DO
+    CurTime := TIME;
+    IF POS(CurTime, PrevTime) = 0 THEN
+        PrevTime := CurTime;
+        Ticks := Ticks + 1;
+    END;
+END;
+
+MARQUEE_ERROR(LongErr);
+Ticks := 0;
+PrevTime := TIME;
+WHILE Ticks < 10 DO
+    CurTime := TIME;
+    IF POS(CurTime, PrevTime) = 0 THEN
+        PrevTime := CurTime;
+        Ticks := Ticks + 1;
+    END;
+END;
+
+MARQUEE('');
+END_MACRO;

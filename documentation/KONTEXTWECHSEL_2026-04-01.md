@@ -19,6 +19,7 @@ Dieses Dokument ist die Übergabe für einen neuen Codex-Kontext mit minimalem I
 - Bool-Format-Regel fuer Setup-Values: `true/false` (nicht `1/0`).
 - Setup-Dialog-Mnemonics: Neue Dialoge bekommen geeignete Highlight-/Shortcut-Buchstaben durch Codex ohne Rueckfrage.
 - Workspace-Loeschungen: Rueckfragen vor Datei-Loeschungen im Workspace sind deaktiviert (User-Freigabe erteilt).
+- Neue Source-Ordner: Vor dem Anlegen neuer Source-/Code-Ordner immer erst Rueckfrage mit kurzer Begruendung.
 - Einheitlichkeitsregel: Alle Dialoge und alle Fenster werden nach denselben zentralen UI-/Palette-Regeln behandelt; keine Sonderbehandlung einzelner Views/Dialoge/Fenster.
 - Abweichungswarnung: Wenn eine Forderung den zentralen UI-/Palette-Standard verlassen wuerde, muss Codex vor Umsetzung explizit warnen und den Tradeoff benennen.
 - TVision-Paletten-Hard-Gate (verbindlich): zentrale Palette-Quelle, keine per-View-Sonderfarben, atomisches Anwenden auf Dialog-/Fenster-Gruppen.

@@ -45,6 +45,7 @@ session_handover:
       - "DEFAULTMODE"
     setup_dialog_mnemonic_policy: "Neue Dialoge erhalten durch Codex geeignete Highlight-/Shortcut-Buchstaben autonom; dazu keine Rueckfrage an den User."
     workspace_delete_policy: "Datei-Loeschungen im Workspace duerfen ohne vorherige Rueckfrage ausgefuehrt werden (User-Backups vorhanden)."
+    new_source_directory_policy: "Neue Source-/Code-Ordner duerfen nur nach vorheriger Rueckfrage an den User mit kurzer Begruendung angelegt werden."
     ui_uniform_treatment_policy: "Alle Dialoge und alle Fenster werden nach denselben zentralen UI-/Palette-Regeln behandelt; keine Sonderbehandlung einzelner Views/Dialoge/Fenster."
     standards_deviation_warning_policy: "Wenn eine User-Forderung den zentralen UI-/Palette-Standard verlassen wuerde, muss Codex vor Umsetzung explizit warnen und den Tradeoff benennen."
     tvision_palette_model_hard_gate:

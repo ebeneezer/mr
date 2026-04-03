@@ -25,6 +25,8 @@ class TMREditorApp : public TApplication {
 	void idle() override;
 	TPalette &getPalette() const override;
 	bool reloadSettingsMacroFromPath(const std::string &path, std::string *errorMessage = nullptr);
+	void setManualMarqueeStatus(const std::string &text);
+	std::string manualMarqueeStatus() const;
 
  private:
 	void prepareForQuit();

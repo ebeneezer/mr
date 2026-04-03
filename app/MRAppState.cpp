@@ -1,6 +1,6 @@
 #include "MRAppState.hpp"
 
-#include "../services/MRWindowCommands.hpp"
+#include "../app/commands/MRWindowCommands.hpp"
 #include "../ui/TMREditWindow.hpp"
 #include "MRCommands.hpp"
 
@@ -139,4 +139,5 @@ void updateAppCommandState() {
 	                  hasWindow && ((state.isCommunicationWindow && !state.hasExternalIoTasks) || state.isLogWindow));
 	setCommandEnabled(cmMrMacroToggleRecording, hasEditor);
 	setCommandEnabled(cmMrDevCancelMacroTasks, hasWindow && state.hasMacroTasks);
+	setCommandEnabled(cmMrDevSetMarqueeText, true);
 }

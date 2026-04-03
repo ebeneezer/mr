@@ -6,7 +6,7 @@
 #include "mrmac.h"
 #include "mrvm.hpp"
 #include "../coprocessor/MRCoprocessor.hpp"
-#include "../services/MRWindowCommands.hpp"
+#include "../app/commands/MRWindowCommands.hpp"
 #include "../ui/TMREditWindow.hpp"
 #include "../ui/MRWindowSupport.hpp"
 

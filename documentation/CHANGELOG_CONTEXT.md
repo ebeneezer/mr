@@ -7,6 +7,14 @@ Laufendes Projektprotokoll fuer Kontextwechsel und schnelle Wiederaufnahme.
 - Danach verbindlich `MRMAC_V1_STATUS.md` lesen.
 - Dann `Codex Kontext Übergabe.yaml` und `KONTEXTWECHSEL_2026-04-01.md` als Struktur-/Policy-Quelle nutzen.
 
+## 2026-04-03
+- Ordnerstruktur bereinigt:
+  - `runtime/` als Source-Ordner aufgeloest.
+  - `MRPerformance.*` und `MRCoprocessorDispatch.*` nach `coprocessor/` verschoben.
+  - Build/Includes/Abhaengigkeiten auf `coprocessor/*` umgestellt.
+- Neue Kontextregel aufgenommen:
+  - Vor dem Anlegen neuer Source-/Code-Ordner immer erst Rueckfrage an den User mit kurzer Begruendung.
+
 ## 2026-04-02
 - TVision-Quellverwaltung auf `git subtree` umgestellt:
   - `tvision-upstream` Remote aktiv.

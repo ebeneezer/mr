@@ -10,6 +10,7 @@
 #include "MRUnsavedChangesDialog.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <string>
 
@@ -46,12 +47,48 @@ std::string shortenDetail(const char *detail, std::size_t maxLen) {
 	return value.substr(0, maxLen - 3) + "...";
 }
 
+std::string addMnemonic(const std::string &text, char preferred) {
+	std::size_t i = 0;
+	std::size_t mark = std::string::npos;
+
+	if (text.empty() || text.find('~') != std::string::npos)
+		return text;
+
+	for (i = 0; i < text.size(); ++i) {
+		unsigned char ch = static_cast<unsigned char>(text[i]);
+		if (std::tolower(ch) == std::tolower(static_cast<unsigned char>(preferred))) {
+			mark = i;
+			break;
+		}
+	}
+	if (mark == std::string::npos)
+		for (i = 0; i < text.size(); ++i)
+			if (std::isalpha(static_cast<unsigned char>(text[i])) != 0) {
+				mark = i;
+				break;
+			}
+	if (mark == std::string::npos)
+		return text;
+
+	std::string out;
+	out.reserve(text.size() + 2);
+	out.append(text, 0, mark);
+	out.push_back('~');
+	out.push_back(text[mark]);
+	out.push_back('~');
+	out.append(text, mark + 1, std::string::npos);
+	return out;
+}
+
 } // namespace
 
 UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const char *headline,
                                               const char *detail) {
 	const bool hasDetail = detail != nullptr && *detail != '\0';
 	std::string label = primaryLabel != nullptr && *primaryLabel != '\0' ? primaryLabel : "Save";
+	std::string primaryButtonLabel = addMnemonic(label, 's');
+	std::string discardButtonLabel = addMnemonic("Discard", 'd');
+	std::string cancelButtonLabel = addMnemonic("Cancel", 'c');
 	const int headlineWidth = headline != nullptr ? strwidth(headline) : strwidth("Window has unsaved changes.");
 	const int primaryButtonWidth = std::max(10, strwidth(label.c_str()) + 4);
 	const int discardButtonWidth = 11;
@@ -69,13 +106,13 @@ UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const ch
 	int buttonLeft = (width - buttonRowWidth) / 2;
 
 	dialog->insert(new TButton(TRect(buttonLeft, buttonY, buttonLeft + primaryButtonWidth, buttonY + 2),
-	                           label.c_str(), cmYes, bfDefault));
+	                           primaryButtonLabel.c_str(), cmYes, bfDefault));
 	buttonLeft += primaryButtonWidth + gap;
-	dialog->insert(new TButton(TRect(buttonLeft, buttonY, buttonLeft + discardButtonWidth, buttonY + 2), "Discard",
-	                           cmNo, bfNormal));
+	dialog->insert(new TButton(TRect(buttonLeft, buttonY, buttonLeft + discardButtonWidth, buttonY + 2),
+	                           discardButtonLabel.c_str(), cmNo, bfNormal));
 	buttonLeft += discardButtonWidth + gap;
-	dialog->insert(new TButton(TRect(buttonLeft, buttonY, buttonLeft + cancelButtonWidth, buttonY + 2), "Cancel",
-	                           cmCancel, bfNormal));
+	dialog->insert(new TButton(TRect(buttonLeft, buttonY, buttonLeft + cancelButtonWidth, buttonY + 2),
+	                           cancelButtonLabel.c_str(), cmCancel, bfNormal));
 
 	switch (execDialog(dialog)) {
 		case cmYes:

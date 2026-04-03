@@ -108,6 +108,7 @@ enum : ushort {
 	cmMrColorSaveTheme,
 
 	cmMrDevCancelMacroTasks,
+	cmMrDevSetMarqueeText,
 	cmMrPreviewPrev,
 	cmMrPreviewNext
 };

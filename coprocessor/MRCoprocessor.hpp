@@ -91,6 +91,16 @@ struct IndicatorBlinkPayload final : Payload {
 	}
 };
 
+struct MarqueeTickPayload final : Payload {
+	std::size_t generation;
+
+	MarqueeTickPayload() noexcept : generation(0) {
+	}
+
+	explicit MarqueeTickPayload(std::size_t aGeneration) noexcept : generation(aGeneration) {
+	}
+};
+
 struct LineIndexWarmupPayload final : Payload {
 	mr::editor::LineIndexWarmupData warmup;
 

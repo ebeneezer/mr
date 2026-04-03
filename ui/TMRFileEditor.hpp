@@ -25,7 +25,7 @@
 #include "MRUnsavedChangesDialog.hpp"
 #include "TMRIndicator.hpp"
 #include "TMRTextBufferModel.hpp"
-#include "../services/MRDialogPaths.hpp"
+#include "../config/MRDialogPaths.hpp"
 
 class TMRFileEditor : public TScroller {
   public:

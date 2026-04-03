@@ -23,7 +23,7 @@
 #include <vector>
 #include <unistd.h>
 
-#include "../services/MRWindowCommands.hpp"
+#include "../app/commands/MRWindowCommands.hpp"
 #include "../ui/TMREditWindow.hpp"
 #include "../ui/MRWindowSupport.hpp"
 

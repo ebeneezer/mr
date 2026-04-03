@@ -15,8 +15,8 @@
 #include <unistd.h>
 #include <vector>
 
-#include "../services/MRDialogPaths.hpp"
-#include "../services/MRWindowCommands.hpp"
+#include "../config/MRDialogPaths.hpp"
+#include "../app/commands/MRWindowCommands.hpp"
 #include "TMREditWindow.hpp"
 
 namespace {
