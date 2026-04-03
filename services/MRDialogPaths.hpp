@@ -54,7 +54,7 @@ struct MRColorSetupSettings {
 	static const std::size_t kWindowCount = 7;
 	static const std::size_t kMenuDialogCount = 12;
 	static const std::size_t kHelpCount = 9;
-	static const std::size_t kOtherCount = 10;
+	static const std::size_t kOtherCount = 7;
 
 	std::array<unsigned char, kWindowCount> windowColors;
 	std::array<unsigned char, kMenuDialogCount> menuDialogColors;

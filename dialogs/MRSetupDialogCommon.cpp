@@ -168,13 +168,6 @@ TRect centeredSetupDialogRect(int width, int height) {
 	return TRect(left, top, left + safeWidth, top + safeHeight);
 }
 
-TRect centeredSetupDialogRectForProfile(int compactWidth, int compactHeight, int relaxedWidth,
-                                        int relaxedHeight) {
-	(void)compactWidth;
-	(void)compactHeight;
-	return centeredSetupDialogRect(relaxedWidth, relaxedHeight);
-}
-
 void insertSetupStaticLine(TDialog *dialog, int x, int y, const char *text) {
 	dialog->insert(new TStaticText(TRect(x, y, x + std::strlen(text) + 1, y + 1), text));
 }
@@ -207,13 +200,4 @@ TDialog *createSetupSimplePreviewDialog(const char *title, int width, int height
 
 	dialog->initScrollIfNeeded();
 	return dialog;
-}
-
-TDialog *createSetupSimplePreviewDialogForProfile(const char *title, int compactWidth, int compactHeight,
-                                                  int relaxedWidth, int relaxedHeight,
-                                                  const std::vector<std::string> &lines,
-                                                  bool showOkCancelHelp) {
-	(void)compactWidth;
-	(void)compactHeight;
-	return createSetupSimplePreviewDialog(title, relaxedWidth, relaxedHeight, lines, showOkCancelHelp);
 }

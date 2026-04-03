@@ -368,7 +368,7 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 	                           "MRSETUP('WINDOWCOLORS', 'v1:10,11,12,13,14,15,16,17');\n"
 	                           "MRSETUP('MENUDIALOGCOLORS', 'v1:20,21,22,23,24,25,26,27,28,29,2A');\n"
 	                           "MRSETUP('HELPCOLORS', 'v1:30,31,32,33,34,35,36,37,38');\n"
-	                           "MRSETUP('OTHERCOLORS', 'v1:40,41,42,43,44,45,46,47,48,49');\n"
+	                           "MRSETUP('OTHERCOLORS', 'v1:40,41,42,43,44,45,46');\n"
 	                           "END_MACRO;\n";
 	std::vector<unsigned char> bytecode;
 	std::string macroName;
@@ -443,10 +443,10 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 				failureReason = "Startup context should apply HELPCOLORS list.";
 				return false;
 			}
-			if (colors.otherColors[0] != 0x40 || colors.otherColors[9] != 0x49) {
-				failureReason = "Startup context should apply OTHERCOLORS list.";
-				return false;
-			}
+				if (colors.otherColors[0] != 0x40 || colors.otherColors[6] != 0x46) {
+					failureReason = "Startup context should apply OTHERCOLORS list.";
+					return false;
+				}
 		}
 			{
 				std::vector<std::string> exts = configuredDefaultExtensionList();

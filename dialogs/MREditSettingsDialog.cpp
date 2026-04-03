@@ -423,20 +423,13 @@ void showEditSettingsHelpDummyDialog() {
 	lines.push_back("Use checkboxes and radio groups to configure edit defaults.");
 	lines.push_back("Done writes settings.mrmac and reloads silently.");
 	lines.push_back("Cancel asks for confirmation when fields were modified.");
-	TDialog *dialog =
-	    createSetupSimplePreviewDialogForProfile("EDIT SETTINGS HELP", 62, 13, 74, 16, lines, false);
+	TDialog *dialog = createSetupSimplePreviewDialog("EDIT SETTINGS HELP", 74, 16, lines, false);
 	if (dialog != nullptr) {
 		TProgram::deskTop->execView(dialog);
 		TObject::destroy(dialog);
 	}
 }
 } // namespace
-
-TDialog *createEditSettingsDialog() {
-	return createSetupSimplePreviewDialogForProfile(
-	    "EDIT SETTINGS", 50, 8, 56, 10,
-	    std::vector<std::string>(1, "Use Installation and Setup -> Edit settings."), false);
-}
 
 void runEditSettingsDialogFlow() {
 	bool running = true;

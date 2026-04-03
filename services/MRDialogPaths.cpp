@@ -414,9 +414,9 @@ static const MRColorSetupItem kWindowColorItems[] = {
     {"Changed-Text", kMrPaletteChangedText},
     {"Highlighted-Text", 14},
     {"Window-border", 8},
-    {"window-Bold", 9},
-    {"cUrrent line", kMrPaletteCurrentLine},
-    {"cuRrent line in block", kMrPaletteCurrentLineInBlock},
+    {"Window-Bold", 9},
+    {"Current line", kMrPaletteCurrentLine},
+    {"Current line in block", kMrPaletteCurrentLineInBlock},
 };
 
 static const MRColorSetupItem kMenuDialogColorItems[] = {
@@ -428,13 +428,13 @@ static const MRColorSetupItem kMenuDialogColorItems[] = {
     {"entry-hotkey", 4},
     {"marker-active", 5},
     {"marker-inactive", 6},
-    {"bUtton", 41},
-    {"button-Key", 45},
-    {"button-shAdow", 46},
+    {"button", 41},
+    {"button-key", 45},
+    {"button-shadow", 46},
     {"Select", 59},
-    {"Not-select", 57},
+    {"not-selected", 57},
     {"Checkbox bold", 49},
-    {"List-cuRsor", 58},
+    {"List-cursor", 58},
 };
 
 static const MRColorSetupItem kHelpColorItems[] = {
@@ -444,9 +444,13 @@ static const MRColorSetupItem kHelpColorItems[] = {
 };
 
 static const MRColorSetupItem kOtherColorItems[] = {
-    {"statusline", 2},        {"statusline-Bold", 3}, {"Fkey-Labels", 4}, {"fkey-Numbers", 5},
-    {"Error", 42},            {"Message", 43},        {"Working", 44},     {"shadow", 46},
-    {"shadow-Character", 47}, {"Background color", 32},
+    {"statusline", 2},
+    {"statusline-Bold", 3},
+    {"Function descriptions on statusline", 4},
+    {"Function keys on statusline", 5},
+    {"Error", 42},
+    {"Message", 43},
+    {"Working", 44},
 };
 
 static const ColorGroupDefinition kColorGroups[] = {
@@ -663,6 +667,47 @@ bool parseMenuDialogColorListLiteral(
 		outValues[MRColorSetupSettings::kMenuDialogCount - 1] = defaultColorForSlot(58);
 	} else
 		return setError(errorMessage, "Unexpected MENUDIALOGCOLORS list size.");
+
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+bool parseOtherColorListLiteral(const std::string &literal,
+                                std::array<unsigned char, MRColorSetupSettings::kOtherCount> &outValues,
+                                std::string *errorMessage) {
+	std::string text = trimAscii(literal);
+	std::size_t cursor = 0;
+	std::vector<unsigned char> parsed;
+	unsigned char value = 0;
+
+	if (text.rfind("v1:", 0) == 0 || text.rfind("V1:", 0) == 0)
+		text = text.substr(3);
+	if (text.empty())
+		return setError(errorMessage, "Empty color list.");
+
+	while (cursor <= text.size()) {
+		std::size_t comma = text.find(',', cursor);
+		std::string token = text.substr(cursor, comma == std::string::npos ? std::string::npos : comma - cursor);
+		if (!parseHexColorToken(token, value))
+			return setError(errorMessage, "Expected hex color list (e.g. v1:70,7F,...).");
+		parsed.push_back(value);
+		if (comma == std::string::npos)
+			break;
+		cursor = comma + 1;
+	}
+
+	// Accept current 7-value format and legacy 10-value format.
+	// Legacy format ended with shadow / shadow-character / background color entries,
+	// which are no longer configurable in OTHERCOLORS.
+	if (parsed.size() == MRColorSetupSettings::kOtherCount)
+		for (std::size_t i = 0; i < outValues.size(); ++i)
+			outValues[i] = parsed[i];
+	else if (parsed.size() == 10)
+		for (std::size_t i = 0; i < outValues.size(); ++i)
+			outValues[i] = parsed[i];
+	else
+		return setError(errorMessage, "Unexpected OTHERCOLORS list size.");
 
 	if (errorMessage != nullptr)
 		errorMessage->clear();
@@ -1249,7 +1294,7 @@ bool applyConfiguredColorSetupValue(const std::string &key, const std::string &v
 				return false;
 			break;
 		case MRColorSetupGroup::Other:
-			if (!parseColorListLiteral(value, configured.otherColors, errorMessage))
+			if (!parseOtherColorListLiteral(value, configured.otherColors, errorMessage))
 				return false;
 			break;
 	}

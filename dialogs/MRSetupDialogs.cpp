@@ -6,9 +6,14 @@
 #define Uses_MsgBox
 #define Uses_TObject
 #define Uses_TButton
-#define Uses_TColorDialog
 #define Uses_TColorGroup
+#define Uses_TColorGroupList
 #define Uses_TColorItem
+#define Uses_TColorItemList
+#define Uses_TColorDisplay
+#define Uses_TColorSelector
+#define Uses_TMonoSelector
+#define Uses_TLabel
 #define Uses_TDrawBuffer
 #define Uses_TGroup
 #define Uses_TInputLine
@@ -29,7 +34,6 @@
 #include "MRSetupDialogCommon.hpp"
 
 #include <cctype>
-#include <cstdio>
 #include <cstring>
 #include <limits.h>
 #include <string>
@@ -305,6 +309,106 @@ TPalette buildColorSetupWorkingPalette() {
 	return palette;
 }
 
+class TMRColorPickerDialog : public TDialog {
+  public:
+	TMRColorPickerDialog(const char *title, TColorGroup *groupsHead) noexcept
+	    : TWindowInit(&TDialog::initFrame), TDialog(TRect(0, 0, 76, 18), title) {
+		options |= ofCentered;
+
+		groupScroll_ = new TScrollBar(TRect(18, 3, 19, 14));
+		insert(groupScroll_);
+		groups_ = new TColorGroupList(TRect(3, 3, 18, 14), groupScroll_, groupsHead);
+		insert(groups_);
+		insert(new TLabel(TRect(2, 2, 8, 3), "~G~roup", groups_));
+
+		itemScroll_ = new TScrollBar(TRect(57, 3, 58, 14));
+		insert(itemScroll_);
+		itemList_ = new TColorItemList(TRect(21, 3, 57, 14), itemScroll_, groupsHead->items);
+		insert(itemList_);
+		insert(new TLabel(TRect(20, 2, 25, 3), "~I~tem", itemList_));
+
+		forSel_ = new TColorSelector(TRect(60, 3, 72, 7), TColorSelector::csForeground);
+		insert(forSel_);
+		forLabel_ = new TLabel(TRect(60, 2, 72, 3), "~F~oreground", forSel_);
+		insert(forLabel_);
+
+		bakSel_ = new TColorSelector(TRect(60, 9, 72, 11), TColorSelector::csBackground);
+		insert(bakSel_);
+		bakLabel_ = new TLabel(TRect(60, 8, 72, 9), "~B~ackground", bakSel_);
+		insert(bakLabel_);
+
+		display_ = new TColorDisplay(TRect(59, 12, 73, 14), "Text ");
+		insert(display_);
+
+		monoSel_ = new TMonoSelector(TRect(59, 3, 74, 7));
+		monoSel_->hide();
+		insert(monoSel_);
+		monoLabel_ = new TLabel(TRect(58, 2, 64, 3), "Color", monoSel_);
+		monoLabel_->hide();
+		insert(monoLabel_);
+
+		insert(new TButton(TRect(27, 15, 37, 17), "O~K~", cmOK, bfDefault));
+		insert(new TButton(TRect(39, 15, 49, 17), "Cancel", cmCancel, bfNormal));
+
+		selectNext(False);
+	}
+
+	~TMRColorPickerDialog() {
+		delete pal_;
+	}
+
+	ushort dataSize() override {
+		return pal_ != nullptr ? static_cast<ushort>(*pal_->data + 1) : 0;
+	}
+
+	void getData(void *rec) override {
+		if (rec != nullptr && pal_ != nullptr)
+			*static_cast<TPalette *>(rec) = *pal_;
+	}
+
+	void setData(void *rec) override {
+		if (rec == nullptr)
+			return;
+		if (pal_ == nullptr)
+			pal_ = new TPalette("", 0);
+		*pal_ = *static_cast<TPalette *>(rec);
+		display_->setColor(&pal_->data[groups_->getGroupIndex(groupIndex_)]);
+		groups_->focusItem(groupIndex_);
+		if (showMarkers) {
+			forLabel_->hide();
+			forSel_->hide();
+			bakLabel_->hide();
+			bakSel_->hide();
+			monoLabel_->show();
+			monoSel_->show();
+		}
+		groups_->select();
+	}
+
+	void handleEvent(TEvent &event) override {
+		if (event.what == evBroadcast && event.message.command == cmNewColorItem)
+			groupIndex_ = groups_->focused;
+		TDialog::handleEvent(event);
+		if (event.what == evBroadcast && event.message.command == cmNewColorIndex && pal_ != nullptr)
+			display_->setColor(&pal_->data[event.message.infoByte]);
+	}
+
+  private:
+	TPalette *pal_ = nullptr;
+	TColorDisplay *display_ = nullptr;
+	TColorGroupList *groups_ = nullptr;
+	TColorItemList *itemList_ = nullptr;
+	TScrollBar *groupScroll_ = nullptr;
+	TScrollBar *itemScroll_ = nullptr;
+	TLabel *forLabel_ = nullptr;
+	TColorSelector *forSel_ = nullptr;
+	TLabel *bakLabel_ = nullptr;
+	TColorSelector *bakSel_ = nullptr;
+	TLabel *monoLabel_ = nullptr;
+	TMonoSelector *monoSel_ = nullptr;
+	uchar groupIndex_ = 0;
+};
+
 TDialog *createParameterizedColorPickerDialog(MRColorSetupGroup group) {
 	std::size_t count = 0;
 	const MRColorSetupItem *items = colorSetupGroupItems(group, count);
@@ -312,12 +416,15 @@ TDialog *createParameterizedColorPickerDialog(MRColorSetupGroup group) {
 	TColorItem *head = nullptr;
 	TColorGroup *groupHead = nullptr;
 
+	TDialog *dialog = nullptr;
+
 	if (items == nullptr || count == 0)
 		return nullptr;
 	for (std::size_t i = count; i-- > 0;)
 		head = new TColorItem(items[i].label, items[i].paletteIndex, head);
 	groupHead = new TColorGroup(title, head, nullptr);
-	return new TColorDialog(nullptr, groupHead);
+	dialog = new TMRColorPickerDialog("Colors", groupHead);
+	return dialog;
 }
 
 void runParameterizedColorPicker(MRColorSetupGroup group) {
@@ -723,7 +830,7 @@ void showPathsHelpDummyDialog() {
 	lines.push_back("Configure settings URI, macro path, help URI, temp path and shell URI.");
 	lines.push_back("Done saves settings.mrmac and reloads silently.");
 	lines.push_back("Cancel asks for confirmation when fields were modified.");
-	execDialog(createSetupSimplePreviewDialogForProfile("PATHS HELP", 62, 13, 74, 16, lines, false));
+	execDialog(createSetupSimplePreviewDialog("PATHS HELP", 74, 16, lines, false));
 }
 
 void runPathsSetupDialogFlowLocal() {
