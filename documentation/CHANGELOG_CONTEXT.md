@@ -3,9 +3,25 @@
 Laufendes Projektprotokoll fuer Kontextwechsel und schnelle Wiederaufnahme.
 
 ## Warmup-Regel
-- Vor jeder neuen Session zuerst diese Datei lesen.
-- Danach verbindlich `MRMAC_V1_STATUS.md` lesen.
-- Dann `Codex Kontext Übergabe.yaml` und `KONTEXTWECHSEL_2026-04-01.md` als Struktur-/Policy-Quelle nutzen.
+- Verbindliche Regeln stehen ausschliesslich in `documentation/Codex Kontext Übergabe.yaml` (Single Source of Truth).
+- Diese Datei ist ein Verlaufsprotokoll und keine normative Regelquelle.
+- Warmup-Reihenfolge: zuerst YAML, dann dieses Changelog, danach `MRMAC_V1_STATUS.md`.
+
+## 2026-04-04
+- Neue verbindliche Coding-Style-Regel aufgenommen:
+  - `strict_no_guard_backpacks` ist aktiv.
+  - Keine symptomatischen Guard-Workarounds ("Guard-Rucksaecke").
+  - Fehler werden an der Ursache behoben.
+  - Guards sind nur fuer echte externe Randfaelle zulaessig (IO, Benutzerinput, OS/API-Vertraege), nicht zur Kaschierung interner Logikfehler.
+- Neue harte MRMAC-Dispatch-Stilregel aufgenommen:
+  - Lange String-Dispatch-Ketten in Parser-/Compiler-Pfaden (if/else oder OR-verknuepfte `strcasecmp`) sind untersagt.
+  - Verbindlich ist ein tabellengetriebenes Dispatch-/Signaturmodell mit zentraler Arity-/Typvalidierung.
+  - Neue Builtins/Intrinsics/Statements wachsen nur ueber Tabelleneintraege und gemeinsame Helfer.
+- Refactor-Trigger aufgenommen:
+  - Bei mehr als drei Name-Vergleichsaesten oder duplizierter Arity-/Typpruefung ist vor weiterem Feature-Ausbau auf das zentrale Tabellenmodell zu refaktorieren.
+- Neue If-Ketten Schwellwertregel:
+  - Ab mehr als 5 vergleichbaren if/else-Zweigen ist Refactor verpflichtend.
+  - `switch` nur bei gemeinsamem Diskriminator (Token/Enum), String-Dispatch bleibt tabellengetrieben.
 
 ## 2026-04-03
 - Ordnerstruktur bereinigt:

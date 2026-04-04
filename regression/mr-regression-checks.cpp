@@ -21,7 +21,10 @@
 
 #include "../mrmac/mrmac.h"
 #include "../mrmac/mrvm.hpp"
+#include "../app/TMREditorApp.hpp"
 #include "../config/MRDialogPaths.hpp"
+#include "../dialogs/MRSetupDialogs.hpp"
+#include "../piecetable/MRTextDocument.hpp"
 
 namespace {
 
@@ -170,6 +173,77 @@ std::string absolutePathFromCwd(const char *relativePath) {
 		out.push_back('/');
 	out += relativePath;
 	return out;
+}
+
+struct RuntimeSettingsSnapshot {
+	std::string settingsMacroFilePath;
+	std::string macroDirectoryPath;
+	std::string helpFilePath;
+	std::string tempDirectoryPath;
+	std::string shellExecutablePath;
+	std::string colorThemeFilePath;
+	MREditSetupSettings editSettings;
+	MRColorSetupSettings colorSettings;
+};
+
+enum : std::size_t {
+	kMenuDialogIndexListboxSelector = 11,
+	kMenuDialogIndexInactiveControls = 12,
+	kMenuDialogIndexDialogFrame = 13,
+	kMenuDialogIndexDialogText = 14,
+	kMenuDialogIndexDialogBackground = 15
+};
+
+enum : unsigned char {
+	kPaletteDialogInactiveControlsGray = 62,
+	kPaletteDialogInactiveControlsBlue = 94,
+	kPaletteDialogInactiveControlsCyan = 126
+};
+
+RuntimeSettingsSnapshot captureRuntimeSettingsSnapshot() {
+	RuntimeSettingsSnapshot snapshot;
+
+	snapshot.settingsMacroFilePath = configuredSettingsMacroFilePath();
+	snapshot.macroDirectoryPath = defaultMacroDirectoryPath();
+	snapshot.helpFilePath = configuredHelpFilePath();
+	snapshot.tempDirectoryPath = configuredTempDirectoryPath();
+	snapshot.shellExecutablePath = configuredShellExecutablePath();
+	snapshot.colorThemeFilePath = configuredColorThemeFilePath();
+	snapshot.editSettings = configuredEditSetupSettings();
+	snapshot.colorSettings = configuredColorSetupSettings();
+	return snapshot;
+}
+
+bool restoreRuntimeSettingsSnapshot(const RuntimeSettingsSnapshot &snapshot, std::string &errorText) {
+	if (!setConfiguredSettingsMacroFilePath(snapshot.settingsMacroFilePath, &errorText))
+		return false;
+	if (!setConfiguredMacroDirectoryPath(snapshot.macroDirectoryPath, &errorText))
+		return false;
+	if (!setConfiguredHelpFilePath(snapshot.helpFilePath, &errorText))
+		return false;
+	if (!setConfiguredTempDirectoryPath(snapshot.tempDirectoryPath, &errorText))
+		return false;
+	if (!setConfiguredShellExecutablePath(snapshot.shellExecutablePath, &errorText))
+		return false;
+	if (!setConfiguredEditSetupSettings(snapshot.editSettings, &errorText))
+		return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, snapshot.colorSettings.windowColors.data(),
+	                                        snapshot.colorSettings.windowColors.size(), &errorText))
+		return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog,
+	                                        snapshot.colorSettings.menuDialogColors.data(),
+	                                        snapshot.colorSettings.menuDialogColors.size(), &errorText))
+		return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Help, snapshot.colorSettings.helpColors.data(),
+	                                        snapshot.colorSettings.helpColors.size(), &errorText))
+		return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Other, snapshot.colorSettings.otherColors.data(),
+	                                        snapshot.colorSettings.otherColors.size(), &errorText))
+		return false;
+	if (!setConfiguredColorThemeFilePath(snapshot.colorThemeFilePath, &errorText))
+		return false;
+	errorText.clear();
+	return true;
 }
 
 bool printProfileLineForMacro(const std::string &path, bool requireStageable, std::string &failureReason) {
@@ -365,6 +439,11 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 	                           "MRSETUP('EOFCTRLZ', 'false');\n"
 	                           "MRSETUP('EOFCRLF', 'true');\n"
 	                           "MRSETUP('TABEXPAND', 'false');\n"
+	                           "MRSETUP('BACKUPFILES', 'false');\n"
+	                           "MRSETUP('SHOWEOFMARKER', 'true');\n"
+	                           "MRSETUP('SHOWEOFMARKEREMOJI', 'false');\n"
+	                           "MRSETUP('SHOWLINENUMBERS', 'true');\n"
+	                           "MRSETUP('LINENUMZEROFILL', 'true');\n"
 	                           "MRSETUP('COLBLOCKMOVE', 'LEAVE_SPACE');\n"
 	                           "MRSETUP('DEFAULTMODE', 'OVERWRITE');\n"
 	                           "MRSETUP('WINDOWCOLORS', 'v1:10,11,12,13,14,15,16,17');\n"
@@ -423,6 +502,29 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 			failureReason = "Startup context should apply TABEXPAND='false'.";
 			return false;
 		}
+		{
+			MREditSetupSettings settings = configuredEditSetupSettings();
+			if (settings.backupFiles) {
+				failureReason = "Startup context should apply BACKUPFILES='false'.";
+				return false;
+			}
+				if (!settings.showEofMarker) {
+					failureReason = "Startup context should apply SHOWEOFMARKER='true'.";
+					return false;
+				}
+				if (settings.showEofMarkerEmoji) {
+					failureReason = "Startup context should apply SHOWEOFMARKEREMOJI='false'.";
+					return false;
+				}
+				if (!settings.showLineNumbers) {
+					failureReason = "Startup context should apply SHOWLINENUMBERS='true'.";
+					return false;
+			}
+			if (!settings.lineNumZeroFill) {
+				failureReason = "Startup context should apply LINENUMZEROFILL='true'.";
+				return false;
+			}
+		}
 		if (configuredDefaultInsertMode()) {
 			failureReason = "Startup context should apply DEFAULTMODE='OVERWRITE'.";
 			return false;
@@ -430,13 +532,14 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 		{
 			MRColorSetupSettings colors = configuredColorSetupSettings();
 
-			if (colors.windowColors[0] != 0x10 || colors.windowColors[1] != 0x11 ||
-			    colors.windowColors[2] != 0x12 || colors.windowColors[3] != 0x14 ||
-			    colors.windowColors[4] != 0x15 || colors.windowColors[5] != 0x16 ||
-			    colors.windowColors[6] != 0x17) {
-				failureReason = "Startup context should apply WINDOWCOLORS list (including legacy migration).";
-				return false;
-			}
+				if (colors.windowColors[0] != 0x10 || colors.windowColors[1] != 0x11 ||
+				    colors.windowColors[2] != 0x12 || colors.windowColors[3] != 0x13 ||
+				    colors.windowColors[4] != 0x14 || colors.windowColors[5] != 0x15 ||
+				    colors.windowColors[6] != 0x16 || colors.windowColors[7] != 0x17 ||
+				    colors.windowColors[8] != 0x1F) {
+					failureReason = "Startup context should apply WINDOWCOLORS list (including legacy migration).";
+					return false;
+				}
 			if (colors.menuDialogColors[0] != 0x20 || colors.menuDialogColors[10] != 0x2A) {
 				failureReason = "Startup context should apply MENUDIALOGCOLORS list.";
 				return false;
@@ -623,6 +726,31 @@ bool testSettingsMacroAutoCreate(std::string &failureReason) {
 	if (content.find("MRSETUP('TABEXPAND', 'true');") == std::string::npos &&
 	    content.find("MRSETUP('TABEXPAND', 'false');") == std::string::npos) {
 		failureReason = "Auto-created settings.mrmac should persist TABEXPAND as true/false.";
+		return false;
+	}
+	if (content.find("MRSETUP('BACKUPFILES', 'true');") == std::string::npos &&
+	    content.find("MRSETUP('BACKUPFILES', 'false');") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac should persist BACKUPFILES as true/false.";
+		return false;
+	}
+	if (content.find("MRSETUP('SHOWEOFMARKER', 'true');") == std::string::npos &&
+	    content.find("MRSETUP('SHOWEOFMARKER', 'false');") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac should persist SHOWEOFMARKER as true/false.";
+		return false;
+	}
+	if (content.find("MRSETUP('SHOWEOFMARKEREMOJI', 'true');") == std::string::npos &&
+	    content.find("MRSETUP('SHOWEOFMARKEREMOJI', 'false');") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac should persist SHOWEOFMARKEREMOJI as true/false.";
+		return false;
+	}
+	if (content.find("MRSETUP('SHOWLINENUMBERS', 'true');") == std::string::npos &&
+	    content.find("MRSETUP('SHOWLINENUMBERS', 'false');") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac should persist SHOWLINENUMBERS as true/false.";
+		return false;
+	}
+	if (content.find("MRSETUP('LINENUMZEROFILL', 'true');") == std::string::npos &&
+	    content.find("MRSETUP('LINENUMZEROFILL', 'false');") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac should persist LINENUMZEROFILL as true/false.";
 		return false;
 	}
 	if (content.find("MRSETUP('COLBLOCKMOVE', '") == std::string::npos) {
@@ -834,6 +962,98 @@ bool testToFromDispatch(std::string &failureReason) {
 	return true;
 }
 
+bool testSettingsDiscrepancyMigrationGuard(std::string &failureReason) {
+	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
+	const std::string root =
+	    "/tmp/mr_regression_settings_migration_" + std::to_string(static_cast<long>(::getpid()));
+	const std::string settingsPath = root + "/cfg/settings.mrmac";
+	const std::string legacyThemePath = root + "/cfg/legacy-theme.mrmac";
+	const std::string legacySource = "$MACRO LegacySettings FROM EDIT;\n"
+	                                 "MRSETUP('SETTINGSPATH', '/tmp/ignored-by-migration.mrmac');\n"
+	                                 "MRSETUP('MACROPATH', '/tmp');\n"
+	                                 "MRSETUP('HELPPATH', 'mr.hlp');\n"
+	                                 "MRSETUP('TEMPDIR', '/tmp');\n"
+	                                 "MRSETUP('SHELLPATH', '/bin/sh');\n"
+	                                 "MRSETUP('TRUNCSPACES', 'false');\n"
+	                                 "MRSETUP('BACKUPFILES', 'false');\n"
+	                                 "MRSETUP('SHOWLINENUMBERS', 'true');\n"
+	                                 "MRSETUP('LINENUMZEROFILL', 'true');\n"
+	                                 "MRSETUP('COLORTHEMEURI', '" +
+	                                 legacyThemePath + "');\n"
+	                                 "MRSETUP('WINDOWCOLORS', 'v1:31,32,33,34,35,36,37,38');\n"
+	                                 "MRSETUP('UNKNOWNKEY', 'ignored');\n"
+	                                 "END_MACRO;\n";
+	std::string content;
+	std::string errorText;
+	std::string restoreError;
+	bool restored = false;
+
+	auto restore = [&]() {
+		if (!restored)
+			restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		return restored;
+	};
+
+	(void)::remove(settingsPath.c_str());
+	(void)::remove(legacyThemePath.c_str());
+
+	if (!mrMigrateSettingsMacroToCurrentVersionForTesting(settingsPath, legacySource, "regression-probe",
+	                                                      &errorText)) {
+		restore();
+		failureReason = "Settings migration probe failed: " + errorText;
+		return false;
+	}
+	if (!readTextFile(settingsPath, content, errorText)) {
+		restore();
+		failureReason = "Unable to read migrated settings.mrmac: " + errorText;
+		return false;
+	}
+	if (content.find("MRSETUP('SETTINGSPATH', '" + settingsPath + "');") == std::string::npos) {
+		restore();
+		failureReason = "Migrated settings.mrmac must anchor SETTINGSPATH to the active file.";
+		return false;
+	}
+	if (content.find("MRSETUP('SHOWLINENUMBERS', 'true');") == std::string::npos ||
+	    content.find("MRSETUP('LINENUMZEROFILL', 'true');") == std::string::npos ||
+	    content.find("MRSETUP('TRUNCSPACES', 'false');") == std::string::npos ||
+	    content.find("MRSETUP('BACKUPFILES', 'false');") == std::string::npos) {
+		restore();
+		failureReason = "Migrated settings.mrmac did not carry over recognized edit settings.";
+		return false;
+	}
+	if (content.find("UNKNOWNKEY") != std::string::npos) {
+		restore();
+		failureReason = "Migrated settings.mrmac must not keep unknown legacy keys.";
+		return false;
+	}
+	if (content.find("MRSETUP('PERSISTENTBLOCKS', '") == std::string::npos ||
+	    content.find("MRSETUP('DEFAULTMODE', '") == std::string::npos) {
+		restore();
+		failureReason = "Migrated settings.mrmac must include normalized defaults for required keys.";
+		return false;
+	}
+	if (!mrApplySettingsSourceForTesting(content, &errorText)) {
+		restore();
+		failureReason = "Migrated settings.mrmac should be loadable: " + errorText;
+		return false;
+	}
+	{
+		MREditSetupSettings edit = configuredEditSetupSettings();
+		if (!edit.showLineNumbers || !edit.lineNumZeroFill || edit.truncateSpaces || edit.backupFiles) {
+			restore();
+			failureReason = "Applying migrated settings should restore carried edit-setting values.";
+			return false;
+		}
+	}
+
+	if (!restore()) {
+		failureReason = "Unable to restore runtime settings after migration probe: " + restoreError;
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
 bool testDialogPaletteOverridesAbsent(std::string &failureReason) {
 	const std::string sourcePath = absolutePathFromCwd("app/TMREditorApp.cpp");
 	std::string content;
@@ -893,7 +1113,7 @@ bool testDialogPaletteOverridesAbsent(std::string &failureReason) {
 }
 
 bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
-	static const unsigned char probeValues[] = {0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57};
+	static const unsigned char probeValues[] = {0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::size_t itemCount = 0;
 	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::Window, itemCount);
@@ -921,9 +1141,10 @@ bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
 
 	for (std::size_t i = 0; i < itemCount; ++i) {
 		unsigned char slot = items[i].paletteIndex;
-		bool isExpectedSlot = (slot == 8 || slot == 9 || slot == 13 || slot == 14 ||
-		                       slot == kMrPaletteCurrentLine || slot == kMrPaletteCurrentLineInBlock ||
-		                       slot == kMrPaletteChangedText);
+			bool isExpectedSlot = (slot == 8 || slot == 9 || slot == 13 || slot == 14 ||
+			                       slot == kMrPaletteCurrentLine || slot == kMrPaletteCurrentLineInBlock ||
+			                       slot == kMrPaletteChangedText || slot == kMrPaletteLineNumbers ||
+			                       slot == kMrPaletteEofMarker);
 		if (!configuredColorSlotOverride(items[i].paletteIndex, value)) {
 			restore();
 			failureReason = "WINDOWCOLORS item must override its mapped palette slot.";
@@ -948,7 +1169,7 @@ bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
 bool testMenuDialogColorGroupTargetsExpectedSlots(std::string &failureReason) {
 	static const unsigned char probeValues[] = {0x61, 0x62, 0x63, 0x64, 0x65, 0x66,
 	                                            0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C,
-	                                            0x6D, 0x6E, 0x6F};
+	                                            0x6D, 0x6E, 0x6F, 0x70};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::size_t itemCount = 0;
 	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::MenuDialog, itemCount);
@@ -1001,40 +1222,64 @@ bool testMenuDialogColorGroupTargetsExpectedSlots(std::string &failureReason) {
 }
 
 bool testMenuDialogSemanticLabelsGuard(std::string &failureReason) {
-	static const char *const expectedLabels[] = {
-	    "description of selectable menu element",
-	    "description of ghosted menu element",
-	    "hotkey of menu element",
-	    "menu selector on selectable menu element",
-	    "menu selector on ghosted menu element",
-	    "description of buttons",
-	    "hotkey on buttons",
-	    "button shadow",
-	    "selected element in unfocussed listbox",
-	    "element description in listbox",
-	    "hotkeys on radio buttons & check boxes",
-	    "listbox selector",
-	    "dialog frame",
-	    "dialog text",
-	    "dialog background",
-	};
-	static const unsigned char expectedSlots[] = {2, 3, 4, 5, 6, 41, 45, 46, 59, 57, 49, 58, 33, 37, 32};
-	std::size_t itemCount = 0;
-	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::MenuDialog, itemCount);
+	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
+	MRColorSetupSettings defaults = resolveColorSetupDefaults();
+	MRColorSetupSettings configured;
+	std::string errorText;
+	std::string restoreError;
+	bool restored = false;
 
-	if (items == nullptr || itemCount < sizeof(expectedLabels) / sizeof(expectedLabels[0])) {
-		failureReason = "MENUDIALOGCOLORS must expose all semantic menu/dialog entries.";
+	auto restore = [&]() {
+		if (!restored)
+			restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		return restored;
+	};
+
+	if (!applyConfiguredColorSetupValue("MENUDIALOGCOLORS",
+	                                    "v1:10,11,12,13,14,15,16,17,18,19,1A,1B,1C,1D",
+	                                    &errorText)) {
+		restore();
+		failureReason = "Unable to apply 14-entry legacy MENUDIALOGCOLORS list: " + errorText;
 		return false;
 	}
-	for (std::size_t i = 0; i < sizeof(expectedLabels) / sizeof(expectedLabels[0]); ++i) {
-		if (items[i].label == nullptr || std::string(items[i].label) != expectedLabels[i]) {
-			failureReason = "MENUDIALOGCOLORS semantic label mismatch at index " + std::to_string(i) + ".";
-			return false;
-		}
-		if (items[i].paletteIndex != expectedSlots[i]) {
-			failureReason = "MENUDIALOGCOLORS semantic slot mismatch at index " + std::to_string(i) + ".";
-			return false;
-		}
+	configured = configuredColorSetupSettings();
+	if (configured.menuDialogColors[kMenuDialogIndexInactiveControls] !=
+	        defaults.menuDialogColors[kMenuDialogIndexInactiveControls] ||
+	    configured.menuDialogColors[kMenuDialogIndexDialogFrame] != 0x1C ||
+	    configured.menuDialogColors[kMenuDialogIndexDialogText] != 0x1D ||
+	    configured.menuDialogColors[kMenuDialogIndexDialogBackground] != 0x1C) {
+		restore();
+		failureReason =
+		    "14-entry MENUDIALOGCOLORS upgrade must inject inactive-controls default and map dialog background to legacy frame color.";
+		return false;
+	}
+
+	if (!applyConfiguredColorSetupValue("MENUDIALOGCOLORS",
+	                                    "v1:20,21,22,23,24,25,26,27,28,29,2A",
+	                                    &errorText)) {
+		restore();
+		failureReason = "Unable to apply 11-entry legacy MENUDIALOGCOLORS list: " + errorText;
+		return false;
+	}
+	configured = configuredColorSetupSettings();
+	if (configured.menuDialogColors[kMenuDialogIndexListboxSelector] !=
+	        defaults.menuDialogColors[kMenuDialogIndexListboxSelector] ||
+	    configured.menuDialogColors[kMenuDialogIndexInactiveControls] !=
+	        defaults.menuDialogColors[kMenuDialogIndexInactiveControls] ||
+	    configured.menuDialogColors[kMenuDialogIndexDialogFrame] !=
+	        defaults.menuDialogColors[kMenuDialogIndexDialogFrame] ||
+	    configured.menuDialogColors[kMenuDialogIndexDialogText] != defaults.menuDialogColors[kMenuDialogIndexDialogText] ||
+	    configured.menuDialogColors[kMenuDialogIndexDialogBackground] !=
+	        defaults.menuDialogColors[kMenuDialogIndexDialogBackground]) {
+		restore();
+		failureReason =
+		    "11-entry MENUDIALOGCOLORS upgrade must fill missing selector/inactive/frame/text/background defaults.";
+		return false;
+	}
+
+	if (!restore()) {
+		failureReason = "Unable to restore runtime settings after MENUDIALOG legacy probe: " + restoreError;
+		return false;
 	}
 	failureReason.clear();
 	return true;
@@ -1043,7 +1288,7 @@ bool testMenuDialogSemanticLabelsGuard(std::string &failureReason) {
 bool testMenuEntryHotkeySelectionAliasGuard(std::string &failureReason) {
 	static const unsigned char probeValues[] = {0x71, 0x72, 0x7B, 0x74, 0x75, 0x76,
 	                                            0x77, 0x78, 0x79, 0x7A, 0x7C, 0x7D,
-	                                            0x7E, 0x7F, 0x70};
+	                                            0x7E, 0x7F, 0x70, 0x71};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::string errorText;
 	unsigned char normalHotkey = 0;
@@ -1103,17 +1348,19 @@ bool testDialogFrameAndBackgroundPropagationGuard(std::string &failureReason) {
 	};
 
 	// Set explicit probe colors for:
+	// - inactive radio/checkbox controls (slot 62)
 	// - dialog frame (slot 33)
 	// - dialog text (slot 37)
 	// - dialog background (slot 32)
 	auto probe = previous.menuDialogColors;
-	if (probe.size() < 15) {
+	if (probe.size() < 16) {
 		failureReason = "MENUDIALOGCOLORS must expose frame/text/background entries.";
 		return false;
 	}
-	probe[12] = 0x4A;
-	probe[13] = 0x3C;
-	probe[14] = 0x2D;
+	probe[kMenuDialogIndexInactiveControls] = 0x5B;
+	probe[kMenuDialogIndexDialogFrame] = 0x4A;
+	probe[kMenuDialogIndexDialogText] = 0x3C;
+	probe[kMenuDialogIndexDialogBackground] = 0x2D;
 
 	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, probe.data(), probe.size(),
 	                                        &errorText)) {
@@ -1163,6 +1410,22 @@ bool testDialogFrameAndBackgroundPropagationGuard(std::string &failureReason) {
 		}
 	}
 
+	static const unsigned char inactiveControlSlots[] = {kPaletteDialogInactiveControlsGray,
+	                                                      kPaletteDialogInactiveControlsBlue,
+	                                                      kPaletteDialogInactiveControlsCyan};
+	for (unsigned char slot : inactiveControlSlots) {
+		if (!configuredColorSlotOverride(slot, value)) {
+			restore();
+			failureReason = "Dialog inactive-control slot override missing.";
+			return false;
+		}
+		if (value != 0x5B) {
+			restore();
+			failureReason = "Dialog inactive-control propagation mismatch.";
+			return false;
+		}
+	}
+
 	restore();
 	if (!restoreOk) {
 		failureReason = "Unable to restore MENUDIALOGCOLORS after frame/background probe: " + errorText;
@@ -1172,94 +1435,380 @@ bool testDialogFrameAndBackgroundPropagationGuard(std::string &failureReason) {
 	return true;
 }
 
+bool testTouchedRangeMidInsertGuard(std::string &failureReason) {
+	mr::editor::TextDocument document;
+	mr::editor::EditTransaction tx("mid-insert");
+	std::string initial = "alpha\nbeta\ngamma\n";
+	mr::editor::CommitResult result;
+
+	document.setText(initial);
+	tx.insert(6, "X");
+	result = document.tryApply(tx, document.version());
+	if (!result.applied() || !result.changed()) {
+		failureReason = "Mid-insert touched-range guard expected an applied change.";
+		return false;
+	}
+	if (result.change.touchedRange.start != 6 || result.change.touchedRange.end != 7) {
+		failureReason = "Touched range for mid-insert must stay local and must not extend to EOF.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
 bool testSetupScrollRefreshGuard(std::string &failureReason) {
-	static const char *const files[] = {"dialogs/MRSetupDialogCommon.cpp", "dialogs/MRInstallationAndSetupDialog.cpp",
-	                                    "dialogs/MREditSettingsDialog.cpp", "dialogs/MRSetupDialogs.cpp"};
-	static const char *const requiredMarker = "content_->drawView();";
+	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
+	const std::string root =
+	    "/tmp/mr_regression_edit_roundtrip_" + std::to_string(static_cast<long>(::getpid()));
+	const std::string settingsPath = root + "/cfg/settings.mrmac";
+	MREditSetupSettings probe = resolveEditSetupDefaults();
+	MREditSetupSettings loaded;
+	MRSetupPaths paths = resolveSetupPathDefaults();
+	std::string source;
+	std::string errorText;
+	std::string restoreError;
+	bool restored = false;
 
-	for (const char *relPath : files) {
-		const std::string sourcePath = absolutePathFromCwd(relPath);
-		std::string content;
-		std::string ioError;
+	auto restore = [&]() {
+		if (!restored)
+			restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		return restored;
+	};
 
-		if (!readTextFile(sourcePath, content, ioError)) {
-			failureReason = std::string("Unable to read ") + relPath + " for scroll refresh guard: " + ioError;
-			return false;
-		}
-		if (content.find("void applyScroll()") == std::string::npos ||
-		    content.find(requiredMarker) == std::string::npos) {
-			failureReason =
-			    std::string(relPath) + " must redraw content after scroll to avoid horizontal refresh artifacts.";
-			return false;
-		}
+	probe.pageBreak = "\\f";
+	probe.wordDelimiters = "._:-";
+	probe.defaultExtensions = "txt;md";
+	probe.truncateSpaces = false;
+	probe.eofCtrlZ = true;
+	probe.eofCrLf = true;
+	probe.tabExpand = false;
+	probe.backupFiles = false;
+	probe.showLineNumbers = true;
+	probe.lineNumZeroFill = true;
+	probe.persistentBlocks = false;
+	probe.columnBlockMove = "LEAVE_SPACE";
+	probe.defaultMode = "OVERWRITE";
+
+	if (!setConfiguredEditSetupSettings(probe, &errorText)) {
+		restore();
+		failureReason = "Unable to seed edit-settings roundtrip probe: " + errorText;
+		return false;
 	}
 
+	paths.settingsMacroUri = settingsPath;
+	paths.macroPath = "/tmp";
+	paths.helpUri = "mr.hlp";
+	paths.tempPath = "/tmp";
+	paths.shellUri = "/bin/sh";
+	source = buildSettingsMacroSource(paths);
+
+	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), &errorText)) {
+		restore();
+		failureReason = "Unable to reset edit settings before roundtrip apply: " + errorText;
+		return false;
+	}
+	if (!mrApplySettingsSourceForTesting(source, &errorText)) {
+		restore();
+		failureReason = "Unable to apply settings macro source in edit roundtrip probe: " + errorText;
+		return false;
+	}
+
+	loaded = configuredEditSetupSettings();
+	if (loaded.wordDelimiters != probe.wordDelimiters || loaded.defaultExtensions != "TXT;MD" ||
+	    loaded.truncateSpaces != probe.truncateSpaces || loaded.eofCtrlZ != probe.eofCtrlZ ||
+	    loaded.eofCrLf != probe.eofCrLf || loaded.tabExpand != probe.tabExpand ||
+	    loaded.backupFiles != probe.backupFiles ||
+	    loaded.showLineNumbers != probe.showLineNumbers ||
+	    loaded.lineNumZeroFill != probe.lineNumZeroFill ||
+	    loaded.persistentBlocks != probe.persistentBlocks || loaded.columnBlockMove != probe.columnBlockMove ||
+	    loaded.defaultMode != probe.defaultMode) {
+		restore();
+		failureReason = "Edit-settings roundtrip via settings.mrmac did not preserve configured values.";
+		return false;
+	}
+
+	if (!restore()) {
+		failureReason = "Unable to restore runtime settings after edit roundtrip probe: " + restoreError;
+		return false;
+	}
 	failureReason.clear();
 	return true;
 }
 
 bool testPathsBrowseEventGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("dialogs/MRSetupDialogs.cpp");
+	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
+	const std::string root =
+	    "/tmp/mr_regression_paths_roundtrip_" + std::to_string(static_cast<long>(::getpid()));
+	const std::string settingsPath = root + "/cfg/settings.mrmac";
+	const std::string macroPath = root + "/macros";
+	const std::string tempPath = root + "/tmp";
+	MRSetupPaths paths = resolveSetupPathDefaults();
 	std::string content;
-	std::string ioError;
-	std::size_t classPos = std::string::npos;
-	std::size_t handlerPos = std::string::npos;
-	std::size_t browseCasePos = std::string::npos;
-	std::size_t baseCallPos = std::string::npos;
+	std::string errorText;
+	std::string restoreError;
+	bool restored = false;
 
-	if (!readTextFile(sourcePath, content, ioError)) {
-		failureReason = "Unable to read MRSetupDialogs.cpp for path-browse guard: " + ioError;
+	auto restore = [&]() {
+		if (!restored)
+			restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		return restored;
+	};
+
+	paths.settingsMacroUri = settingsPath;
+	paths.macroPath = macroPath;
+	paths.helpUri = "mr.hlp";
+	paths.tempPath = tempPath;
+	paths.shellUri = "/bin/sh";
+	(void)::mkdir(root.c_str(), 0700);
+	(void)::mkdir(macroPath.c_str(), 0700);
+	(void)::mkdir(tempPath.c_str(), 0700);
+
+	if (!writeSettingsMacroFile(paths, &errorText)) {
+		restore();
+		failureReason = "Unable to write paths roundtrip settings.mrmac: " + errorText;
+		return false;
+	}
+	if (!readTextFile(settingsPath, content, errorText)) {
+		restore();
+		failureReason = "Unable to read paths roundtrip settings.mrmac: " + errorText;
+		return false;
+	}
+	if (!mrApplySettingsSourceForTesting(content, &errorText)) {
+		restore();
+		failureReason = "Unable to apply paths roundtrip settings.mrmac: " + errorText;
+		return false;
+	}
+	if (defaultMacroDirectoryPath() != macroPath) {
+		restore();
+		failureReason = "Paths roundtrip did not apply MACROPATH.";
+		return false;
+	}
+	if (configuredTempDirectoryPath() != tempPath) {
+		restore();
+		failureReason = "Paths roundtrip did not apply TEMPDIR.";
+		return false;
+	}
+	if (configuredShellExecutablePath() != "/bin/sh") {
+		restore();
+		failureReason = "Paths roundtrip did not apply SHELLPATH.";
+		return false;
+	}
+	if (configuredHelpFilePath() != absolutePathFromCwd("mr.hlp")) {
+		restore();
+		failureReason = "Paths roundtrip did not normalize and apply HELPPATH.";
 		return false;
 	}
 
-	classPos = content.find("class TPathsSetupDialog");
-	handlerPos = content.find("void handleEvent(TEvent &event) override", classPos);
-	browseCasePos = content.find("case cmMrSetupPathsBrowseSettingsUri:", handlerPos);
-	baseCallPos = content.find("TDialog::handleEvent(event);", handlerPos);
-	if (classPos == std::string::npos || handlerPos == std::string::npos || browseCasePos == std::string::npos ||
-	    baseCallPos == std::string::npos) {
-		failureReason = "Unable to validate path-browse event flow markers in TPathsSetupDialog::handleEvent.";
+	if (!restore()) {
+		failureReason = "Unable to restore runtime settings after paths roundtrip probe: " + restoreError;
 		return false;
 	}
-	if (browseCasePos > baseCallPos) {
-		failureReason =
-		    "Path browse commands must be handled before TDialog::handleEvent to avoid losing inline-glyph clicks.";
-		return false;
-	}
-
 	failureReason.clear();
 	return true;
 }
 
 bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) {
-	const std::string setupPath = absolutePathFromCwd("dialogs/MRSetupDialogs.cpp");
+	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
+	const std::string root =
+	    "/tmp/mr_regression_color_save_theme_" + std::to_string(static_cast<long>(::getpid()));
+	const std::string settingsPath = root + "/cfg/settings.mrmac";
+	const std::string themePath = root + "/cfg/probe-theme.mrmac";
+	static const MRColorSetupGroup groups[] = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog,
+	                                           MRColorSetupGroup::Help, MRColorSetupGroup::Other};
+	TColorAttr paletteData[kMrPaletteMax];
+	TPalette workingPalette(paletteData, static_cast<ushort>(kMrPaletteMax));
+	std::map<unsigned char, unsigned char> expectedBySlot;
+	MRSetupPaths paths = resolveSetupPathDefaults();
 	std::string content;
+	std::string errorText;
+	std::string restoreError;
+	bool restored = false;
+	unsigned char slotValue = 0;
+	unsigned char nextColor = 0x21;
+
+	auto restore = [&]() {
+		if (!restored)
+			restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		return restored;
+	};
+
+	for (int i = 0; i < kMrPaletteMax; ++i)
+		paletteData[i] = 0x70;
+
+	for (MRColorSetupGroup group : groups) {
+		std::size_t count = 0;
+		const MRColorSetupItem *items = colorSetupGroupItems(group, count);
+		if (items == nullptr || count == 0)
+			continue;
+		for (std::size_t i = 0; i < count; ++i) {
+			workingPalette[items[i].paletteIndex] = nextColor;
+			expectedBySlot[items[i].paletteIndex] = nextColor;
+			++nextColor;
+		}
+	}
+
+	paths.settingsMacroUri = settingsPath;
+	paths.macroPath = root + "/macros";
+	paths.helpUri = "mr.hlp";
+	paths.tempPath = root + "/tmp";
+	paths.shellUri = "/bin/sh";
+	(void)::mkdir(root.c_str(), 0700);
+	(void)::mkdir(paths.macroPath.c_str(), 0700);
+	(void)::mkdir(paths.tempPath.c_str(), 0700);
+	if (!setConfiguredSettingsMacroFilePath(settingsPath, &errorText)) {
+		restore();
+		failureReason = "Unable to configure settings path for Color Setup save-theme probe: " + errorText;
+		return false;
+	}
+	if (!writeSettingsMacroFile(paths, &errorText)) {
+		restore();
+		failureReason = "Unable to prime settings file for Color Setup save-theme probe: " + errorText;
+		return false;
+	}
+
+	if (!mrSaveColorThemeFromWorkingPaletteForTesting(workingPalette, themePath, &errorText)) {
+		restore();
+		failureReason = "Color Setup save-theme behavior probe failed: " + errorText;
+		return false;
+	}
+	if (!readTextFile(themePath, content, errorText)) {
+		restore();
+		failureReason = "Unable to read saved theme file after Color Setup save-theme probe: " + errorText;
+		return false;
+	}
+	if (content.find("MRSETUP('WINDOWCOLORS', '") == std::string::npos ||
+	    content.find("MRSETUP('MENUDIALOGCOLORS', '") == std::string::npos ||
+	    content.find("MRSETUP('HELPCOLORS', '") == std::string::npos ||
+	    content.find("MRSETUP('OTHERCOLORS', '") == std::string::npos) {
+		restore();
+		failureReason = "Saved color theme must contain all color group assignments.";
+		return false;
+	}
+
+	for (const auto &entry : expectedBySlot) {
+		if (!configuredColorSlotOverride(entry.first, slotValue) || slotValue != entry.second) {
+			restore();
+			failureReason = "Color Setup save-theme did not apply the working palette before persisting.";
+			return false;
+		}
+	}
+
+	if (!restore()) {
+		failureReason = "Unable to restore runtime settings after Color Setup save-theme probe: " + restoreError;
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureReason) {
+	const std::string themePath = "/tmp/mr-windowcolors-line-numbers-theme.mrmac";
+	const std::string windowColorsPrefix = "MRSETUP('WINDOWCOLORS', 'v3:";
+	MRColorSetupSettings previous = configuredColorSetupSettings();
+	std::string previousThemePath = configuredColorThemeFilePath();
+	const std::array<unsigned char, MRColorSetupSettings::kWindowCount> probeValues = {
+	    0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29};
+	std::string errorText;
+	std::string content;
+	unsigned char slotValue = 0;
+	bool restored = true;
+
+	auto restore = [&]() {
+		std::string restoreError;
+		if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, previous.windowColors.data(),
+		                                        previous.windowColors.size(), &restoreError))
+			restored = false;
+		if (!setConfiguredColorThemeFilePath(previousThemePath, &restoreError))
+			restored = false;
+	};
+
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, probeValues.data(), probeValues.size(),
+	                                        &errorText)) {
+		failureReason = "Unable to seed WINDOWCOLORS probe values: " + errorText;
+		restore();
+		return false;
+	}
+	if (!writeColorThemeFile(themePath, &errorText)) {
+		failureReason = "Unable to write color theme for WINDOWCOLORS probe: " + errorText;
+		restore();
+		return false;
+	}
+	if (!readTextFile(themePath, content, errorText)) {
+		failureReason = "Unable to read color theme file after write: " + errorText;
+		restore();
+		return false;
+	}
+	if (content.find(windowColorsPrefix) == std::string::npos) {
+		failureReason = "Saved theme must serialize WINDOWCOLORS using v3 list format.";
+		restore();
+		return false;
+	}
+
+	{
+		MRColorSetupSettings defaults = resolveColorSetupDefaults();
+		if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, defaults.windowColors.data(),
+		                                        defaults.windowColors.size(), &errorText)) {
+			failureReason = "Unable to reset WINDOWCOLORS before reload probe: " + errorText;
+			restore();
+			return false;
+		}
+	}
+	if (!loadColorThemeFile(themePath, &errorText)) {
+		failureReason = "Unable to load written color theme for WINDOWCOLORS probe: " + errorText;
+		restore();
+		return false;
+	}
+
+	{
+		MRColorSetupSettings loaded = configuredColorSetupSettings();
+			for (std::size_t i = 0; i < probeValues.size(); ++i)
+				if (loaded.windowColors[i] != probeValues[i]) {
+					failureReason = "WINDOWCOLORS v3 roundtrip mismatch after theme reload.";
+					restore();
+					return false;
+				}
+		}
+	if (!configuredColorSlotOverride(kMrPaletteLineNumbers, slotValue) || slotValue != probeValues.back()) {
+		failureReason = "Line-number palette slot must be restored from WINDOWCOLORS theme value.";
+		restore();
+		return false;
+	}
+
+	restore();
+	if (!restored) {
+		failureReason = "Unable to restore WINDOWCOLORS/theme path after roundtrip probe.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testIndicatorLineNumberColorWiringGuard(std::string &failureReason) {
+	const std::string indicatorPath = absolutePathFromCwd("ui/TMRIndicator.hpp");
+	const std::string windowPath = absolutePathFromCwd("ui/TMREditWindow.hpp");
+	std::string indicatorContent;
+	std::string windowContent;
 	std::string ioError;
-	std::size_t casePos = std::string::npos;
-	std::size_t writePos = std::string::npos;
-	std::size_t applyPos = std::string::npos;
 
-	if (!readTextFile(setupPath, content, ioError)) {
-		failureReason = "Unable to read MRSetupDialogs.cpp for Color Setup save guard: " + ioError;
+	if (!readTextFile(indicatorPath, indicatorContent, ioError)) {
+		failureReason = "Unable to read TMRIndicator.hpp for line-number wiring guard: " + ioError;
 		return false;
 	}
-
-	casePos = content.find("case cmMrColorSaveTheme:");
-	if (casePos == std::string::npos) {
-		failureReason = "Unable to locate cmMrColorSaveTheme case.";
+	if (!readTextFile(windowPath, windowContent, ioError)) {
+		failureReason = "Unable to read TMREditWindow.hpp for line-number wiring guard: " + ioError;
 		return false;
 	}
-
-	writePos = content.find("writeColorThemeFile(themeUri, &errorText)", casePos);
-	if (writePos == std::string::npos) {
-		failureReason = "Unable to locate writeColorThemeFile(...) inside save-theme case.";
+	if (indicatorContent.find("cursorColor = getColor(3);") == std::string::npos ||
+	    indicatorContent.find("b.moveStr(cursorX, cursorText, cursorColor);") == std::string::npos) {
+		failureReason = "TMRIndicator must draw line/column text from the dedicated line-number color slot.";
 		return false;
 	}
-
-	applyPos = content.find("applyWorkingColorPaletteToConfigured(workingPalette, errorText)", casePos);
-	if (applyPos == std::string::npos || applyPos > writePos) {
-		failureReason =
-		    "Color Setup save-theme must apply working palette before writeColorThemeFile(...).";
+	if (indicatorContent.find("TPalette palette(\"\\x02\\x03\\x0C\", 3);") == std::string::npos) {
+		failureReason = "TMRIndicator palette must expose line-number color as local slot 12.";
+		return false;
+	}
+	if (windowContent.find("kMrPaletteLineNumbers") == std::string::npos) {
+		failureReason = "TMREditWindow palette must include the line-number extension slot.";
 		return false;
 	}
 
@@ -1276,8 +1825,8 @@ bool testCurrentLineColorWiringGuard(std::string &failureReason) {
 		failureReason = "Unable to read TMRFileEditor.hpp for current-line color wiring guard: " + ioError;
 		return false;
 	}
-	if (content.find("TPalette palette(\"\\x06\\x07\\x09\\x0A\\x0B\", 5);") == std::string::npos) {
-		failureReason = "TMRFileEditor palette must expose current-line and changed-text slots.";
+	if (content.find("TPalette palette(\"\\x06\\x07\\x09\\x0A\\x0B\\x0C\", 6);") == std::string::npos) {
+		failureReason = "TMRFileEditor palette must expose current-line, changed-text and line-number slots.";
 		return false;
 	}
 	if (content.find("basePair = getColor(0x0303);") == std::string::npos ||
@@ -1302,15 +1851,181 @@ bool testChangedTextColorWiringGuard(std::string &failureReason) {
 		failureReason = "Unable to read TMRFileEditor.hpp for changed-text color wiring guard: " + ioError;
 		return false;
 	}
-	if (content.find("else if (changedLine)") == std::string::npos ||
-	    content.find("basePair = getColor(0x0505);") == std::string::npos) {
-		failureReason = "Changed-text must drive background pair using dedicated editor palette slot.";
+	if (content.find("TAttrPair changedPair = getColor(0x0505);") == std::string::npos ||
+	    content.find("bool changedChar = !currentLine && !currentLineInBlock && isDirtyOffset(documentPos);") ==
+	        std::string::npos ||
+	    content.find("TAttrPair effectivePair = changedChar ? changedPair : basePair;") ==
+	        std::string::npos) {
+		failureReason = "Changed-text must be applied per character via dedicated dirty-range lookup.";
 		return false;
 	}
 	if (content.find("dirtyRanges_") == std::string::npos ||
 	    content.find("addDirtyRange(") == std::string::npos ||
-	    content.find("intersectsDirtyRanges(") == std::string::npos) {
+	    content.find("isDirtyOffset(") == std::string::npos) {
 		failureReason = "Changed-text wiring requires dedicated dirty-range tracking in TMRFileEditor.";
+		return false;
+	}
+	if (content.find("remapDirtyRangesForAppliedChange(*changeSet);") == std::string::npos ||
+	    content.find("void remapDirtyRangesForAppliedChange(") == std::string::npos) {
+		failureReason = "Changed-text ranges must be remapped across edits to stay position-correct.";
+		return false;
+	}
+	if (content.find("if (pos >= bufferModel_.length())\n\t\t\treturn false;") == std::string::npos) {
+		failureReason = "Changed-text lookup must not clamp offsets beyond EOF into the last dirty character.";
+		return false;
+	}
+	if (content.find("else if (changedLine)") != std::string::npos) {
+		failureReason = "Changed-text must not color whole lines anymore.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testHighlightedTextSelectionWiringGuard(std::string &failureReason) {
+	const std::string sourcePath = absolutePathFromCwd("ui/TMRFileEditor.hpp");
+	std::string content;
+	std::string ioError;
+
+	if (!readTextFile(sourcePath, content, ioError)) {
+		failureReason = "Unable to read TMRFileEditor.hpp for highlighted-text selection guard: " + ioError;
+		return false;
+	}
+	if (content.find("TAttrPair selectionPair = getColor(0x0201);") == std::string::npos ||
+	    content.find("TAttrPair tokenPair = selected ? selectionPair : effectivePair;") ==
+	        std::string::npos) {
+		failureReason = "Marked blocks must use the dedicated highlighted-text color pair.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testEditorCursorViewportGuard(std::string &failureReason) {
+	const std::string sourcePath = absolutePathFromCwd("ui/TMRFileEditor.hpp");
+	std::string content;
+	std::string ioError;
+
+	if (!readTextFile(sourcePath, content, ioError)) {
+		failureReason = "Unable to read TMRFileEditor.hpp for cursor viewport guard: " + ioError;
+		return false;
+	}
+	if (content.find("bool shouldShowEditorCursor(long long x, long long y) const noexcept") ==
+	        std::string::npos ||
+	    content.find("const bool viewActive = (state & sfActive) != 0;") == std::string::npos ||
+	    content.find("const bool viewSelected = (state & sfSelected) != 0;") == std::string::npos ||
+	    content.find("if (shouldShowEditorCursor(localX, localY))") == std::string::npos) {
+		failureReason = "Editor cursor visibility must be gated by active/selected state and text viewport bounds.";
+		return false;
+	}
+	if (content.find("int column = textColumnFromLocalX(local.x);") == std::string::npos) {
+		failureReason = "Mouse-to-text mapping must be routed through text viewport conversion.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testEofVirtualLineColorGuard(std::string &failureReason) {
+	const std::string sourcePath = absolutePathFromCwd("ui/TMRFileEditor.hpp");
+	std::string content;
+	std::string ioError;
+
+	if (!readTextFile(sourcePath, content, ioError)) {
+		failureReason = "Unable to read TMRFileEditor.hpp for EOF virtual-line color guard: " + ioError;
+		return false;
+	}
+		if (content.find("bool isDocumentLine = lineIndex < totalLines;") ==
+		        std::string::npos ||
+		    content.find(
+		        "formatSyntaxLine(buffer, linePtr, delta.x, textWidth, gutterWidth, isDocumentLine, drawEofMarker,") ==
+		        std::string::npos) {
+		failureReason = "Draw path must pass document-line state into syntax line formatter.";
+		return false;
+	}
+	if (content.find("if (!isDocumentLine)") == std::string::npos) {
+		failureReason = "Virtual lines behind EOF must bypass current/changed-line color logic.";
+		return false;
+	}
+	if (content.find("cursorPos == documentLength && lineStart == cursorPos && lineEnd == cursorPos") ==
+	    std::string::npos) {
+		failureReason = "EOF current-line condition must be constrained to the actual EOF line.";
+		return false;
+	}
+	if (content.find("bool drawEofMarkerAsEmoji = drawEofMarker && editSettings.showEofMarkerEmoji;") ==
+	        std::string::npos ||
+	    content.find("if (!drawEmoji && configuredColorSlotOverride(kMrPaletteEofMarker, configuredMarkerColor))") ==
+	        std::string::npos) {
+		failureReason = "EOF marker must support emoji toggle with text-mode color override wiring.";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
+bool testSaveAsOverwriteAndBackupWiringGuard(std::string &failureReason) {
+	const std::string sourcePath = absolutePathFromCwd("ui/TMRFileEditor.hpp");
+	std::string content;
+	std::string ioError;
+
+	if (!readTextFile(sourcePath, content, ioError)) {
+		failureReason = "Unable to read TMRFileEditor.hpp for Save As overwrite/backup guard: " + ioError;
+		return false;
+	}
+	if (content.find("showUnsavedChangesDialog(\"Overwrite\", \"Target file exists. Overwrite?\",") ==
+	    std::string::npos) {
+		failureReason = "Save As must ask for overwrite confirmation via centralized UnsavedChanges dialog.";
+		return false;
+	}
+	if (content.find("if (!samePath(saveName, fileName) && !confirmOverwriteForSaveAs(saveName))") ==
+	    std::string::npos) {
+		failureReason = "Save As must guard existing target overwrite before writing.";
+		return false;
+	}
+	if (content.find("if (configuredBackupFilesSetting())") == std::string::npos ||
+	    content.find("fnmerge(backupName, drive, dir, file, \".bak\");") == std::string::npos) {
+		failureReason = "Backup file creation must be gated by configurable BACKUPFILES setting.";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
+bool testThemeAndMacroSaveOverwriteWiringGuard(std::string &failureReason) {
+	const std::string setupDialogsPath = absolutePathFromCwd("dialogs/MRSetupDialogs.cpp");
+	const std::string appPath = absolutePathFromCwd("app/TMREditorApp.cpp");
+	std::string setupContent;
+	std::string appContent;
+	std::string ioError;
+
+	if (!readTextFile(setupDialogsPath, setupContent, ioError)) {
+		failureReason = "Unable to read MRSetupDialogs.cpp for theme overwrite guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(appPath, appContent, ioError)) {
+		failureReason = "Unable to read TMREditorApp.cpp for macro overwrite guard: " + ioError;
+		return false;
+	}
+	if (setupContent.find("confirmOverwriteForPath(\"Overwrite\", \"Theme file exists. Overwrite?\", themeUri)") ==
+	    std::string::npos) {
+		failureReason = "Color Setup / Save Theme must ask for overwrite confirmation before writing.";
+		return false;
+	}
+	if (setupContent.find("showUnsavedChangesDialog(primaryLabel, headline, targetPath.c_str())") ==
+	    std::string::npos) {
+		failureReason = "Theme overwrite confirmation must use centralized UnsavedChanges dialog.";
+		return false;
+	}
+	if (appContent.find("confirmOverwriteForPath(\"Overwrite\", \"Macro file exists. Overwrite?\", savePath)") ==
+	    std::string::npos) {
+		failureReason = "Recorded macro save must ask for overwrite confirmation before writing.";
+		return false;
+	}
+	if (appContent.find("showUnsavedChangesDialog(primaryLabel, headline, targetPath.c_str())") ==
+	    std::string::npos) {
+		failureReason = "Macro overwrite confirmation must use centralized UnsavedChanges dialog.";
 		return false;
 	}
 	failureReason.clear();
@@ -1652,37 +2367,51 @@ void runTest(TestContext &ctx, const char *name, bool (*fn)(std::string &)) {
 		std::cout << "       " << failure << "\n";
 }
 
-} // namespace
+void runCoreSuite(TestContext &ctx) {
+	runTest(ctx, "MRSETUP startup-only semantics", testMrsetupStartupOnly);
+	runTest(ctx, "settings.mrmac auto-create on missing file", testSettingsMacroAutoCreate);
+	runTest(ctx, "settings discrepancy migration behavior", testSettingsDiscrepancyMigrationGuard);
+	runTest(ctx, "Edit settings roundtrip behavior", testSetupScrollRefreshGuard);
+	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
+	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
+	runTest(ctx, "WINDOWCOLORS v3 + line numbers theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
+	runTest(ctx, "Touched-range mid-insert guard", testTouchedRangeMidInsertGuard);
+	runTest(ctx, "Editor cursor viewport guard", testEditorCursorViewportGuard);
+	runTest(ctx, "EOF virtual-line color guard", testEofVirtualLineColorGuard);
+	runTest(ctx, "Save As overwrite/backup wiring guard", testSaveAsOverwriteAndBackupWiringGuard);
+	runTest(ctx, "Theme + macro save overwrite wiring guard", testThemeAndMacroSaveOverwriteWiringGuard);
+	runTest(ctx, "TO/FROM header parsing + compile guards", testToFromHeaders);
+	runTest(ctx, "TO/FROM runtime dispatch", testToFromDispatch);
+	runTest(ctx, "KEY_IN behavior + staging guards", testKeyIn);
+	runTest(ctx, "DELAY proc wiring guard", testDelayProcWiringGuard);
+	runTest(ctx, "TVCALL surface guard (MESSAGEBOX only)", testTvCallSurfaceGuard);
+}
 
-int main(int argc, char **argv) {
-	if (argc >= 2) {
-		if (argc == 3 && std::strcmp(argv[1], "--probe") == 0) {
-			if (std::strcmp(argv[2], "staged-nav") == 0)
-				return runStagedNavProbeMode();
-			if (std::strcmp(argv[2], "staged-mark-page") == 0)
-				return runStagedMarkPageProbeMode();
-		}
-		std::cerr << "usage: regression/mr-regression-checks [--probe staged-nav|staged-mark-page]\n";
-		return 2;
-	}
-
-	TestContext ctx;
-
+void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Path defaults from environment/OS", testPathDefaultsFromEnvironment);
 	runTest(ctx, "MRSETUP startup-only semantics", testMrsetupStartupOnly);
 	runTest(ctx, "settings.mrmac auto-create on missing file", testSettingsMacroAutoCreate);
+	runTest(ctx, "settings discrepancy migration behavior", testSettingsDiscrepancyMigrationGuard);
 	runTest(ctx, "Dialog palette guard (no 32..63 overrides)", testDialogPaletteOverridesAbsent);
 	runTest(ctx, "WINDOWCOLORS targets blue window palette", testWindowColorGroupTargetsBlueWindowPalette);
 	runTest(ctx, "MENUDIALOGCOLORS targets menu + gray dialog palette", testMenuDialogColorGroupTargetsExpectedSlots);
-	runTest(ctx, "MENUDIALOGCOLORS semantic labels guard", testMenuDialogSemanticLabelsGuard);
+	runTest(ctx, "MENUDIALOGCOLORS legacy list upgrade behavior", testMenuDialogSemanticLabelsGuard);
 	runTest(ctx, "MENUDIALOGCOLORS hotkey selection alias guard", testMenuEntryHotkeySelectionAliasGuard);
 	runTest(ctx, "MENUDIALOGCOLORS dialog frame/background propagation guard",
 	        testDialogFrameAndBackgroundPropagationGuard);
-	runTest(ctx, "Setup scroll refresh guard", testSetupScrollRefreshGuard);
-	runTest(ctx, "Paths browse event guard", testPathsBrowseEventGuard);
-	runTest(ctx, "Color setup save-theme commit guard", testColorSetupSaveThemeUsesWorkingPaletteGuard);
+	runTest(ctx, "Touched-range mid-insert guard", testTouchedRangeMidInsertGuard);
+	runTest(ctx, "Edit settings roundtrip behavior", testSetupScrollRefreshGuard);
+	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
+	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
+	runTest(ctx, "WINDOWCOLORS v3 + line numbers theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
+	runTest(ctx, "Indicator line-number color wiring guard", testIndicatorLineNumberColorWiringGuard);
 	runTest(ctx, "Current-line color wiring guard", testCurrentLineColorWiringGuard);
 	runTest(ctx, "Changed-text color wiring guard", testChangedTextColorWiringGuard);
+	runTest(ctx, "Highlighted-text selection wiring guard", testHighlightedTextSelectionWiringGuard);
+	runTest(ctx, "Editor cursor viewport guard", testEditorCursorViewportGuard);
+	runTest(ctx, "EOF virtual-line color guard", testEofVirtualLineColorGuard);
+	runTest(ctx, "Save As overwrite/backup wiring guard", testSaveAsOverwriteAndBackupWiringGuard);
+	runTest(ctx, "Theme + macro save overwrite wiring guard", testThemeAndMacroSaveOverwriteWiringGuard);
 	runTest(ctx, "Persistent blocks wiring guard", testPersistentBlocksWiringGuard);
 	runTest(ctx, "Edit clipboard routing guard", testEditClipboardCommandRoutingGuard);
 	runTest(ctx, "TO/FROM header parsing + compile guards", testToFromHeaders);
@@ -1693,6 +2422,36 @@ int main(int argc, char **argv) {
 	runTest(ctx, "TVCALL surface guard (MESSAGEBOX only)", testTvCallSurfaceGuard);
 	runTest(ctx, "Marquee color source guard", testMarqueeColorSourceGuard);
 	runTest(ctx, "OTHERCOLORS dedicated message slots guard", testOtherColorsDedicatedMessageSlotsGuard);
+}
+
+} // namespace
+
+int main(int argc, char **argv) {
+	bool runFull = false;
+
+	if (argc >= 2) {
+		if (argc == 3 && std::strcmp(argv[1], "--probe") == 0) {
+			if (std::strcmp(argv[2], "staged-nav") == 0)
+				return runStagedNavProbeMode();
+			if (std::strcmp(argv[2], "staged-mark-page") == 0)
+				return runStagedMarkPageProbeMode();
+		} else if (argc == 2 && std::strcmp(argv[1], "--full") == 0) {
+			runFull = true;
+		} else if (argc == 2 && std::strcmp(argv[1], "--core") == 0) {
+			runFull = false;
+		} else {
+			std::cerr << "usage: regression/mr-regression-checks "
+			             "[--core|--full|--probe staged-nav|staged-mark-page]\n";
+			return 2;
+		}
+	}
+
+	TestContext ctx;
+
+	if (runFull)
+		runFullSuite(ctx);
+	else
+		runCoreSuite(ctx);
 
 	std::cout << "\nRegression summary: " << ctx.passed << " passed, " << ctx.failed << " failed.\n";
 	return ctx.failed == 0 ? 0 : 1;

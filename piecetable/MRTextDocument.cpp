@@ -977,8 +977,7 @@ CommitResult TextDocument::tryApply(const EditTransaction &transaction, std::siz
 	result.change.oldLength = oldLength;
 	result.change.newLength = length_;
 	if (touched)
-		result.change.touchedRange =
-		    Range(touchStart, std::max(touchEnd, std::max(oldLength, length_))).normalized();
+		result.change.touchedRange = Range(touchStart, touchEnd).normalized();
 	return result;
 }
 
@@ -1034,8 +1033,7 @@ CommitResult TextDocument::tryApply(const StagedEditTransaction &transaction) {
 	result.change.oldLength = oldLength;
 	result.change.newLength = length_;
 	if (touched)
-		result.change.touchedRange =
-		    Range(touchStart, std::max(touchEnd, std::max(oldLength, length_))).normalized();
+		result.change.touchedRange = Range(touchStart, touchEnd).normalized();
 	return result;
 }
 

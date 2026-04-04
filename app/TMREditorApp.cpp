@@ -22,6 +22,7 @@
 #include "../mrmac/MRMacroRunner.hpp"
 #include "../coprocessor/MRCoprocessorDispatch.hpp"
 #include "../config/MRDialogPaths.hpp"
+#include "../dialogs/MRUnsavedChangesDialog.hpp"
 #include "../coprocessor/MRPerformance.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../ui/TMRDeskTop.hpp"
@@ -43,7 +44,11 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <map>
+#include <regex>
+#include <set>
 #include <sstream>
+#include <sys/stat.h>
 #include <unistd.h>
 
 namespace {
@@ -274,6 +279,21 @@ bool writeTextFile(const std::string &path, const std::string &content) {
 	return out.good();
 }
 
+bool pathIsRegularFile(const std::string &path) {
+	struct stat st;
+
+	if (path.empty())
+		return false;
+	return ::stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode);
+}
+
+bool confirmOverwriteForPath(const char *primaryLabel, const char *headline, const std::string &targetPath) {
+	if (!pathIsRegularFile(targetPath))
+		return true;
+	return mr::dialogs::showUnsavedChangesDialog(primaryLabel, headline, targetPath.c_str()) ==
+	       mr::dialogs::UnsavedChangesChoice::Save;
+}
+
 bool readTextFile(const std::string &path, std::string &out) {
 	std::ifstream in(path.c_str(), std::ios::in | std::ios::binary);
 	if (!in)
@@ -306,6 +326,101 @@ bool hasVmErrorLineSince(const std::vector<std::string> &lines, std::size_t star
 	return false;
 }
 
+std::string upperAscii(std::string value) {
+	for (std::size_t i = 0; i < value.size(); ++i)
+		value[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(value[i])));
+	return value;
+}
+
+std::string unescapeMrmacSingleQuotedLiteral(const std::string &value) {
+	std::string out;
+	out.reserve(value.size());
+	for (std::size_t i = 0; i < value.size(); ++i) {
+		char ch = value[i];
+		if (ch == '\'' && i + 1 < value.size() && value[i + 1] == '\'') {
+			out.push_back('\'');
+			++i;
+		} else
+			out.push_back(ch);
+	}
+	return out;
+}
+
+bool isMigratableMrsetupKey(const std::string &key) {
+	static const std::set<std::string> keys = {"MACROPATH",
+	                                           "SETTINGSPATH",
+	                                           "HELPPATH",
+	                                           "TEMPDIR",
+	                                           "SHELLPATH",
+	                                           "LASTFILEDIALOGPATH",
+	                                           "COLORTHEMEURI",
+	                                           "PAGEBREAK",
+	                                           "WORDDELIMS",
+	                                           "DEFAULTEXTS",
+	                                           "TRUNCSPACES",
+	                                           "EOFCTRLZ",
+	                                           "EOFCRLF",
+	                                           "TABEXPAND",
+	                                           "BACKUPFILES",
+	                                           "SHOWEOFMARKER",
+	                                           "SHOWEOFMARKEREMOJI",
+	                                           "SHOWLINENUMBERS",
+	                                           "LINENUMZEROFILL",
+	                                           "PERSISTBLOCKS",
+	                                           "PERSISTENTBLOCKS",
+	                                           "COLBLOCKMOVE",
+	                                           "DEFAULTMODE",
+	                                           "WINDOWCOLORS",
+	                                           "MENUDIALOGCOLORS",
+	                                           "HELPCOLORS",
+	                                           "OTHERCOLORS"};
+	return keys.find(key) != keys.end();
+}
+
+bool isCurrentSettingsKey(const std::string &key) {
+	static const std::set<std::string> keys = {"MACROPATH",
+	                                           "SETTINGSPATH",
+	                                           "HELPPATH",
+	                                           "TEMPDIR",
+	                                           "SHELLPATH",
+	                                           "LASTFILEDIALOGPATH",
+	                                           "COLORTHEMEURI",
+	                                           "PAGEBREAK",
+	                                           "WORDDELIMS",
+	                                           "DEFAULTEXTS",
+	                                           "TRUNCSPACES",
+	                                           "EOFCTRLZ",
+	                                           "EOFCRLF",
+	                                           "TABEXPAND",
+	                                           "BACKUPFILES",
+	                                           "SHOWEOFMARKER",
+	                                           "SHOWEOFMARKEREMOJI",
+	                                           "SHOWLINENUMBERS",
+	                                           "LINENUMZEROFILL",
+	                                           "PERSISTENTBLOCKS",
+	                                           "COLBLOCKMOVE",
+	                                           "DEFAULTMODE"};
+	return keys.find(key) != keys.end();
+}
+
+std::vector<std::pair<std::string, std::string>> parseMrsetupAssignments(const std::string &source) {
+	static const std::regex assignmentPattern(
+	    "MRSETUP\\s*\\(\\s*'([^']+)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
+	std::vector<std::pair<std::string, std::string>> assignments;
+	std::smatch match;
+	std::string remaining = source;
+
+	while (std::regex_search(remaining, match, assignmentPattern)) {
+		if (match.size() >= 3) {
+			std::string key = upperAscii(trimAscii(match[1].str()));
+			std::string value = unescapeMrmacSingleQuotedLiteral(match[2].str());
+			assignments.push_back(std::make_pair(key, value));
+		}
+		remaining = match.suffix().str();
+	}
+	return assignments;
+}
+
 class StartupSettingsModeGuard {
   public:
 	StartupSettingsModeGuard() noexcept : previous_(mrvmIsStartupSettingsMode()) {
@@ -319,6 +434,254 @@ class StartupSettingsModeGuard {
   private:
 	bool previous_;
 };
+
+bool validateCurrentSettingsSchema(const std::string &source, std::string &errorText) {
+	std::vector<std::pair<std::string, std::string>> assignments = parseMrsetupAssignments(source);
+	std::map<std::string, int> counts;
+	static const char *const requiredKeys[] = {"SETTINGSPATH",
+	                                           "MACROPATH",
+	                                           "HELPPATH",
+	                                           "TEMPDIR",
+	                                           "SHELLPATH",
+	                                           "LASTFILEDIALOGPATH",
+	                                           "PAGEBREAK",
+	                                           "WORDDELIMS",
+	                                           "DEFAULTEXTS",
+	                                           "TRUNCSPACES",
+	                                           "EOFCTRLZ",
+	                                           "EOFCRLF",
+	                                           "TABEXPAND",
+	                                           "BACKUPFILES",
+	                                           "SHOWEOFMARKER",
+	                                           "SHOWEOFMARKEREMOJI",
+	                                           "SHOWLINENUMBERS",
+	                                           "LINENUMZEROFILL",
+	                                           "PERSISTENTBLOCKS",
+	                                           "COLBLOCKMOVE",
+	                                           "DEFAULTMODE",
+	                                           "COLORTHEMEURI"};
+
+	if (assignments.empty()) {
+		errorText = "No MRSETUP assignments found.";
+		return false;
+	}
+	for (const std::pair<std::string, std::string> &assignment : assignments) {
+		if (!isCurrentSettingsKey(assignment.first)) {
+			errorText = "Unsupported MRSETUP key in settings.mrmac: " + assignment.first;
+			return false;
+		}
+		++counts[assignment.first];
+		if (counts[assignment.first] > 1) {
+			errorText = "Duplicate MRSETUP key in settings.mrmac: " + assignment.first;
+			return false;
+		}
+	}
+	for (const char *required : requiredKeys)
+		if (counts[required] != 1) {
+			errorText = "Missing required MRSETUP key in settings.mrmac: " + std::string(required);
+			return false;
+		}
+	errorText.clear();
+	return true;
+}
+
+bool setConfiguredColorSetupDefaults(std::string &errorText) {
+	MRColorSetupSettings defaults = resolveColorSetupDefaults();
+
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, defaults.windowColors.data(),
+	                                        defaults.windowColors.size(), &errorText))
+		return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, defaults.menuDialogColors.data(),
+	                                        defaults.menuDialogColors.size(), &errorText))
+		return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Help, defaults.helpColors.data(),
+	                                        defaults.helpColors.size(), &errorText))
+		return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Other, defaults.otherColors.data(),
+	                                        defaults.otherColors.size(), &errorText))
+		return false;
+	errorText.clear();
+	return true;
+}
+
+bool applyRecognizedSettingsAssignment(const std::string &key, const std::string &value, MRSetupPaths &paths,
+                                       std::string &errorText) {
+	std::string normalized;
+
+	if (key == "SETTINGSPATH") {
+		// Keep the active startup file as source of truth; ignore redirected settings URI.
+		(void)value;
+		errorText.clear();
+		return true;
+	}
+	if (key == "MACROPATH") {
+		if (!validateMacroDirectoryPath(value, &errorText))
+			return false;
+		paths.macroPath = normalizeConfiguredPathInput(value);
+		return true;
+	}
+	if (key == "HELPPATH") {
+		if (!validateHelpFilePath(value, &errorText))
+			return false;
+		paths.helpUri = normalizeConfiguredPathInput(value);
+		return true;
+	}
+	if (key == "TEMPDIR") {
+		if (!validateTempDirectoryPath(value, &errorText))
+			return false;
+		paths.tempPath = normalizeConfiguredPathInput(value);
+		return true;
+	}
+	if (key == "SHELLPATH") {
+		if (!validateShellExecutablePath(value, &errorText))
+			return false;
+		paths.shellUri = normalizeConfiguredPathInput(value);
+		return true;
+	}
+	if (key == "LASTFILEDIALOGPATH")
+		return setConfiguredLastFileDialogPath(value, &errorText);
+	if (key == "COLORTHEMEURI")
+		return setConfiguredColorThemeFilePath(value, &errorText);
+	if (key == "PAGEBREAK" || key == "WORDDELIMS" || key == "DEFAULTEXTS" || key == "TRUNCSPACES" ||
+	    key == "EOFCTRLZ" || key == "EOFCRLF" || key == "TABEXPAND" || key == "BACKUPFILES" ||
+	    key == "SHOWEOFMARKER" || key == "SHOWEOFMARKEREMOJI" || key == "SHOWLINENUMBERS" ||
+	    key == "LINENUMZEROFILL" || key == "PERSISTBLOCKS" || key == "PERSISTENTBLOCKS" ||
+	    key == "COLBLOCKMOVE" || key == "DEFAULTMODE")
+		return applyConfiguredEditSetupValue(key, value, &errorText);
+	if (key == "WINDOWCOLORS" || key == "MENUDIALOGCOLORS" || key == "HELPCOLORS" || key == "OTHERCOLORS")
+		return applyConfiguredColorSetupValue(key, value, &errorText);
+
+	errorText = "Unsupported key.";
+	return false;
+}
+
+bool migrateSettingsMacroToCurrentVersion(const std::string &settingsPath, const std::string &source,
+                                          const std::string &reason, std::string *errorMessage) {
+	std::string normalizedSettingsPath = normalizeConfiguredPathInput(settingsPath);
+	MRSetupPaths migratedPaths = resolveSetupPathDefaults();
+	std::vector<std::pair<std::string, std::string>> assignments = parseMrsetupAssignments(source);
+	std::string applyError;
+	std::string themeError;
+	std::string finalThemePath;
+	std::size_t migratedAssignments = 0;
+
+	migratedPaths.settingsMacroUri = normalizedSettingsPath;
+
+	if (!setConfiguredSettingsMacroFilePath(normalizedSettingsPath, &applyError))
+		goto fail;
+	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), &applyError))
+		goto fail;
+	if (!setConfiguredColorSetupDefaults(applyError))
+		goto fail;
+	if (!setConfiguredColorThemeFilePath(defaultColorThemeFilePath(), &applyError))
+		goto fail;
+
+	for (const std::pair<std::string, std::string> &assignment : assignments) {
+		if (!isMigratableMrsetupKey(assignment.first))
+			continue;
+		if (!applyRecognizedSettingsAssignment(assignment.first, assignment.second, migratedPaths, applyError)) {
+			mrLogMessage(("Settings migration ignored invalid value for key " + assignment.first + ": " +
+			              applyError)
+			                 .c_str());
+			continue;
+		}
+		++migratedAssignments;
+	}
+
+	finalThemePath = configuredColorThemeFilePath();
+	if (!loadColorThemeFile(finalThemePath, &themeError)) {
+		mrLogMessage(("Settings migration theme fallback: " + themeError).c_str());
+		if (!setConfiguredColorSetupDefaults(applyError))
+			goto fail;
+		if (!setConfiguredColorThemeFilePath(defaultColorThemeFilePath(), &applyError))
+			goto fail;
+	}
+
+	if (!writeSettingsMacroFile(migratedPaths, &applyError))
+		goto fail;
+
+	mrLogMessage(("Settings discrepancy detected, migrated to current version: " + reason).c_str());
+	mrLogMessage(("Settings migration carried over " + std::to_string(migratedAssignments) +
+	              " recognized assignment(s).")
+	                 .c_str());
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+
+fail:
+	if (errorMessage != nullptr)
+		*errorMessage = "Settings migration failed: " + applyError;
+	return false;
+}
+
+bool applySettingsSource(const std::string &source, std::string *errorMessage) {
+	std::string schemaError;
+	std::string compileError;
+	std::string vmError;
+	std::string themeError;
+	size_t bytecodeSize = 0;
+	unsigned char *bytecode = nullptr;
+	int macroCount = 0;
+	VirtualMachine vm;
+
+	if (!validateCurrentSettingsSchema(source, schemaError)) {
+		if (errorMessage != nullptr)
+			*errorMessage = "Settings schema mismatch: " + schemaError;
+		return false;
+	}
+
+	bytecode = compile_macro_code(source.c_str(), &bytecodeSize);
+	if (bytecode == nullptr) {
+		const char *err = get_last_compile_error();
+		compileError = (err != nullptr && *err != '\0') ? err : "Compilation failed.";
+		if (errorMessage != nullptr)
+			*errorMessage = "Settings load failed (compile): " + compileError;
+		return false;
+	}
+
+	macroCount = get_compiled_macro_count();
+	if (macroCount <= 0) {
+		std::free(bytecode);
+		if (errorMessage != nullptr)
+			*errorMessage = "Settings load failed: no macros found.";
+		return false;
+	}
+
+	{
+		StartupSettingsModeGuard startupSettingsMode;
+		for (int i = 0; i < macroCount; ++i) {
+			int entry = get_compiled_macro_entry(i);
+			const char *macroName = get_compiled_macro_name(i);
+			std::size_t logStart = vm.log.size();
+
+			if (entry < 0 || static_cast<size_t>(entry) >= bytecodeSize) {
+				std::free(bytecode);
+				if (errorMessage != nullptr)
+					*errorMessage = "Settings load failed: invalid macro entry.";
+				return false;
+			}
+			vm.executeAt(bytecode, bytecodeSize, static_cast<size_t>(entry), std::string(),
+			             macroName != nullptr ? macroName : std::string(), i == 0, true);
+			if (hasVmErrorLineSince(vm.log, logStart, vmError)) {
+				std::free(bytecode);
+				if (errorMessage != nullptr)
+					*errorMessage = "Settings load failed (runtime): " + vmError;
+				return false;
+			}
+		}
+	}
+
+	std::free(bytecode);
+	if (!loadColorThemeFile(configuredColorThemeFilePath(), &themeError)) {
+		if (errorMessage != nullptr)
+			*errorMessage = "Color theme load failed: " + themeError;
+		return false;
+	}
+
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
 
 ushort execDialogWithData(TDialog *dialog, void *data) {
 	ushort result = cmCancel;
@@ -393,15 +756,9 @@ ushort mrEditorDialog(int dialog, ...) {
 
 bool loadStartupSettingsMacro(const std::string &overridePath, std::string *errorMessage) {
 	std::string settingsPath = overridePath.empty() ? defaultSettingsMacroFilePath() : overridePath;
-	std::string themePath;
 	std::string source;
-	std::string compileError;
-	std::string vmError;
-	std::string themeError;
-	size_t bytecodeSize = 0;
-	unsigned char *bytecode = nullptr;
-	int macroCount = 0;
-	VirtualMachine vm;
+	std::string loadError;
+	std::string migrateError;
 
 	if (settingsPath.empty()) {
 		if (errorMessage != nullptr)
@@ -414,66 +771,41 @@ bool loadStartupSettingsMacro(const std::string &overridePath, std::string *erro
 		return false;
 	}
 	if (!readTextFile(settingsPath, source)) {
-		if (errorMessage != nullptr)
-			*errorMessage = "Settings load failed (read): " + settingsPath;
-		mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings load failed (read).");
-		return false;
-	}
-
-	bytecode = compile_macro_code(source.c_str(), &bytecodeSize);
-	if (bytecode == nullptr) {
-		const char *err = get_last_compile_error();
-		compileError = (err != nullptr && *err != '\0') ? err : "Compilation failed.";
-		if (errorMessage != nullptr)
-			*errorMessage = "Settings load failed (compile): " + compileError;
-		mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings load failed (compile).");
-		return false;
-	}
-
-	macroCount = get_compiled_macro_count();
-	if (macroCount <= 0) {
-		std::free(bytecode);
-		mrLogMessage("Settings file compiled, but contains no macros.");
+		source.clear();
+		loadError = "Settings load failed (read): " + settingsPath;
+	} else if (applySettingsSource(source, &loadError)) {
+		mrLogMessage(("Settings loaded: " + settingsPath).c_str());
+		mrLogMessage(("Color theme loaded: " + configuredColorThemeFilePath()).c_str());
+		mrLogMessage(("Settings MACROPATH: " + defaultMacroDirectoryPath()).c_str());
 		if (errorMessage != nullptr)
 			errorMessage->clear();
 		return true;
 	}
 
-	StartupSettingsModeGuard startupSettingsMode;
-	for (int i = 0; i < macroCount; ++i) {
-		int entry = get_compiled_macro_entry(i);
-		const char *macroName = get_compiled_macro_name(i);
-		std::size_t logStart = vm.log.size();
-
-		if (entry < 0 || static_cast<size_t>(entry) >= bytecodeSize) {
-			std::free(bytecode);
-			if (errorMessage != nullptr)
-				*errorMessage = "Settings load failed: invalid macro entry.";
-			mrLogMessage(errorMessage != nullptr ? errorMessage->c_str()
-			                                   : "Settings load failed: invalid macro entry.");
-			return false;
-		}
-		vm.executeAt(bytecode, bytecodeSize, static_cast<size_t>(entry), std::string(),
-		             macroName != nullptr ? macroName : std::string(), i == 0, true);
-		if (hasVmErrorLineSince(vm.log, logStart, vmError)) {
-			std::free(bytecode);
-			if (errorMessage != nullptr)
-				*errorMessage = "Settings load failed (runtime): " + vmError;
-			mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings load failed (runtime).");
-			return false;
-		}
-	}
-
-	std::free(bytecode);
-	themePath = configuredColorThemeFilePath();
-	if (!loadColorThemeFile(themePath, &themeError)) {
+	if (!migrateSettingsMacroToCurrentVersion(settingsPath, source, loadError, &migrateError)) {
 		if (errorMessage != nullptr)
-			*errorMessage = "Color theme load failed: " + themeError;
-		mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Color theme load failed.");
+			*errorMessage = migrateError;
+		mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings migration failed.");
 		return false;
 	}
+
+	if (!readTextFile(settingsPath, source)) {
+		if (errorMessage != nullptr)
+			*errorMessage = "Settings load failed after migration (read): " + settingsPath;
+		mrLogMessage(errorMessage != nullptr ? errorMessage->c_str()
+		                                   : "Settings load failed after migration (read).");
+		return false;
+	}
+	if (!applySettingsSource(source, &loadError)) {
+		if (errorMessage != nullptr)
+			*errorMessage = loadError;
+		mrLogMessage(errorMessage != nullptr ? errorMessage->c_str()
+		                                   : "Settings load failed after migration.");
+		return false;
+	}
+
 	mrLogMessage(("Settings loaded: " + settingsPath).c_str());
-	mrLogMessage(("Color theme loaded: " + themePath).c_str());
+	mrLogMessage(("Color theme loaded: " + configuredColorThemeFilePath()).c_str());
 	mrLogMessage(("Settings MACROPATH: " + defaultMacroDirectoryPath()).c_str());
 	if (errorMessage != nullptr)
 		errorMessage->clear();
@@ -523,6 +855,8 @@ const TPalette &extendedAppBasePalette() {
 		data[kMrPaletteMessageError - 1] = data[42 - 1];
 		data[kMrPaletteMessage - 1] = data[43 - 1];
 		data[kMrPaletteMessageWarning - 1] = data[44 - 1];
+		data[kMrPaletteLineNumbers - 1] = data[9 - 1];
+		data[kMrPaletteEofMarker - 1] = data[14 - 1];
 		return TPalette(data, static_cast<ushort>(kTotalSlots));
 	}();
 	return palette;
@@ -583,8 +917,11 @@ bool TMREditorApp::reloadSettingsMacroFromPath(const std::string &path, std::str
 	defaultInsertMode = configuredDefaultInsertMode();
 	windows = allEditWindowsInZOrder();
 	for (std::size_t i = 0; i < windows.size(); ++i)
-		if (windows[i] != nullptr && windows[i]->getEditor() != nullptr && !windows[i]->isReadOnly())
-			windows[i]->getEditor()->setInsertModeEnabled(defaultInsertMode);
+		if (windows[i] != nullptr && windows[i]->getEditor() != nullptr) {
+			if (!windows[i]->isReadOnly())
+				windows[i]->getEditor()->setInsertModeEnabled(defaultInsertMode);
+			windows[i]->getEditor()->refreshConfiguredVisualSettings();
+		}
 	bootstrapIndexedMacroBindings();
 	applyConfiguredDisplayLayout();
 	return true;
@@ -638,6 +975,10 @@ void TMREditorApp::prepareForQuit() {
 
 	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
 	std::size_t pendingTaskCount = 0;
+	std::string settingsError;
+
+	if (!persistConfiguredSettingsSnapshot(&settingsError) && !settingsError.empty())
+		mrLogMessage(("Settings snapshot on exit failed: " + settingsError).c_str());
 
 	exitPrepared_ = true;
 	for (std::size_t i = 0; i < windows.size(); ++i)
@@ -802,6 +1143,8 @@ void TMREditorApp::finalizeKeystrokeRecording() {
 	}
 
 	if (!savePath.empty()) {
+		if (!confirmOverwriteForPath("Overwrite", "Macro file exists. Overwrite?", savePath))
+			return;
 		if (!writeTextFile(savePath, macroSource)) {
 			messageBox(mfError | mfOKButton, "Could not save recorded macro:\n%s", savePath.c_str());
 			return;
@@ -995,4 +1338,15 @@ TPalette &TMREditorApp::getPalette() const {
 
 	palette[1] = currentPalette.desktop;
 	return palette;
+}
+
+bool mrApplySettingsSourceForTesting(const std::string &source, std::string *errorMessage) {
+	return applySettingsSource(source, errorMessage);
+}
+
+bool mrMigrateSettingsMacroToCurrentVersionForTesting(const std::string &settingsPath,
+                                                      const std::string &source,
+                                                      const std::string &reason,
+                                                      std::string *errorMessage) {
+	return migrateSettingsMacroToCurrentVersion(settingsPath, source, reason, errorMessage);
 }

@@ -15,10 +15,12 @@
 #include <cctype>
 #include <climits>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <map>
 #include <string>
+#include <sys/stat.h>
 #include <vector>
 
 #include "MRCoprocessor.hpp"
@@ -167,6 +169,13 @@ class TMRFileEditor : public TScroller {
 		syncFromEditorState(false);
 		if (owner != nullptr)
 			message(owner, evBroadcast, cmUpdateTitle, 0);
+	}
+
+	void refreshConfiguredVisualSettings() {
+		updateMetrics();
+		scheduleSyntaxWarmupIfNeeded();
+		updateIndicator();
+		drawView();
 	}
 
 	std::size_t cursorOffset() const noexcept {
@@ -532,12 +541,15 @@ class TMRFileEditor : public TScroller {
 		if (hasPersistentFileName())
 			strnzcpy(saveName, fileName, sizeof(saveName));
 		else
-			strnzcpy(saveName, "*.*", sizeof(saveName));
+			initRememberedLoadDialogPath(saveName, sizeof(saveName), "*.*");
 		if (TEditor::editorDialog(edSaveAs, saveName) == cmCancel)
 			return False;
 		fexpand(saveName);
+		if (!samePath(saveName, fileName) && !confirmOverwriteForSaveAs(saveName))
+			return False;
 		if (!writeDocumentToPath(saveName))
 			return False;
+		rememberLoadDialogPath(saveName);
 		setPersistentFileName(saveName);
 		if (owner != nullptr)
 			message((TView *)owner, evBroadcast, cmUpdateTitle, 0);
@@ -614,7 +626,7 @@ class TMRFileEditor : public TScroller {
 		if (!commit.applied())
 			return false;
 		return adoptCommittedDocument(preview, range.start, range.start, range.start + text.size(), true,
-		                              &commit.change.touchedRange);
+		                              &commit.change);
 	}
 
 	bool insertBufferText(const std::string &text) {
@@ -646,7 +658,7 @@ class TMRFileEditor : public TScroller {
 			return false;
 		bumpUndoCounters(range.length(), text.size());
 		start = range.start + text.size();
-		return adoptCommittedDocument(preview, start, start, start, true, &commit.change.touchedRange);
+		return adoptCommittedDocument(preview, start, start, start, true, &commit.change);
 	}
 
 	bool replaceCurrentLineText(const std::string &text) {
@@ -665,7 +677,7 @@ class TMRFileEditor : public TScroller {
 		if (!commit.applied())
 			return false;
 		bumpUndoCounters(end - start, text.size());
-		return adoptCommittedDocument(preview, start, start, start, true, &commit.change.touchedRange);
+		return adoptCommittedDocument(preview, start, start, start, true, &commit.change);
 	}
 
 	bool deleteCharsAtCursor(int count) {
@@ -690,7 +702,7 @@ class TMRFileEditor : public TScroller {
 		if (!commit.applied())
 			return false;
 		bumpUndoCounters(end - start, 0);
-		return adoptCommittedDocument(preview, start, start, start, true, &commit.change.touchedRange);
+		return adoptCommittedDocument(preview, start, start, start, true, &commit.change);
 	}
 
 	bool deleteCurrentLineText() {
@@ -709,7 +721,7 @@ class TMRFileEditor : public TScroller {
 		if (!commit.applied())
 			return false;
 		bumpUndoCounters(end - start, 0);
-		return adoptCommittedDocument(preview, start, start, start, true, &commit.change.touchedRange);
+		return adoptCommittedDocument(preview, start, start, start, true, &commit.change);
 	}
 
 	bool replaceWholeBuffer(const std::string &text, std::size_t cursorPos) {
@@ -727,7 +739,7 @@ class TMRFileEditor : public TScroller {
 			return false;
 		bumpUndoCounters(bufferModel_.length(), text.size());
 		cursorPos = std::min(cursorPos, text.size());
-		return adoptCommittedDocument(preview, cursorPos, cursorPos, cursorPos, true, &commit.change.touchedRange);
+		return adoptCommittedDocument(preview, cursorPos, cursorPos, cursorPos, true, &commit.change);
 	}
 
 	TMRTextBufferModel::CommitResult applyStagedTransaction(
@@ -738,7 +750,7 @@ class TMRFileEditor : public TScroller {
 
 		if (result.applied())
 			adoptCommittedDocument(preview, cursorPos, selStart, selEnd, modifiedState,
-			                       &result.change.touchedRange);
+			                       &result.change);
 		return result;
 	}
 
@@ -748,14 +760,30 @@ class TMRFileEditor : public TScroller {
 
 	virtual void draw() override {
 		syncScrollBarsToState();
-		std::size_t linePtr = lineStartForIndex(static_cast<std::size_t>(std::max(delta.y, 0)));
+		MREditSetupSettings editSettings = configuredEditSetupSettings();
+		std::size_t topLine = static_cast<std::size_t>(std::max(delta.y, 0));
+		std::size_t linePtr = lineStartForIndex(topLine);
+		std::size_t lineIndex = topLine;
+		std::size_t totalLines = std::max<std::size_t>(1, bufferModel_.lineCount());
+		bool showLineNumbers = editSettings.showLineNumbers;
+		bool zeroFillLineNumbers = showLineNumbers && editSettings.lineNumZeroFill;
+		int gutterWidth = lineNumberGutterWidthFor(showLineNumbers);
+		int textWidth = std::max(0, size.x - gutterWidth);
+		showLineNumbers = gutterWidth > 0;
 
-		for (int y = 0; y < size.y; ++y) {
-			TDrawBuffer buffer;
-			formatSyntaxLine(buffer, linePtr, delta.x, size.x);
-			writeBuf(0, y, size.x, 1, buffer);
-			if (linePtr < bufferModel_.length())
-				linePtr = bufferModel_.nextLine(linePtr);
+			for (int y = 0; y < size.y; ++y) {
+				TDrawBuffer buffer;
+				bool isDocumentLine = lineIndex < totalLines;
+				bool drawEofMarker = editSettings.showEofMarker && lineIndex == totalLines;
+				bool drawEofMarkerAsEmoji = drawEofMarker && editSettings.showEofMarkerEmoji;
+				if (showLineNumbers)
+					drawLineNumberGutter(buffer, lineIndex, isDocumentLine, gutterWidth, zeroFillLineNumbers);
+				formatSyntaxLine(buffer, linePtr, delta.x, textWidth, gutterWidth, isDocumentLine, drawEofMarker,
+				                 drawEofMarkerAsEmoji);
+				writeBuf(0, y, size.x, 1, buffer);
+				if (linePtr < bufferModel_.length())
+					linePtr = bufferModel_.nextLine(linePtr);
+			++lineIndex;
 		}
 		scheduleSyntaxWarmupIfNeeded();
 		updateIndicator();
@@ -765,7 +793,8 @@ class TMRFileEditor : public TScroller {
 		// 1..2: scroller text/selected text (window slots 6/7)
 		// 3..5: editor-only highlight slots (window-local palette slots 9..11)
 		// mapped to app palette extension 136..138.
-		static TPalette palette("\x06\x07\x09\x0A\x0B", 5);
+		// 6: line number gutter (window-local slot 12, app slot 142).
+		static TPalette palette("\x06\x07\x09\x0A\x0B\x0C", 6);
 		return palette;
 	}
 
@@ -877,6 +906,80 @@ class TMRFileEditor : public TScroller {
 		}
 	}
 
+	static int decimalDigits(std::size_t value) noexcept {
+		int digits = 1;
+		while (value >= 10) {
+			value /= 10;
+			++digits;
+		}
+		return digits;
+	}
+
+	bool configuredShowLineNumbers() const {
+		return configuredEditSetupSettings().showLineNumbers;
+	}
+
+	int lineNumberGutterWidthFor(bool showLineNumbers) const noexcept {
+		if (!showLineNumbers)
+			return 0;
+		std::size_t lines = std::max<std::size_t>(bufferModel_.lineCount(),
+		                                          static_cast<std::size_t>(std::max(delta.y, 0) + std::max(size.y, 1)));
+		int digits = decimalDigits(std::max<std::size_t>(lines, 1));
+		int gutter = digits + 1;
+		return std::min(gutter, std::max(0, size.x - 1));
+	}
+
+	int lineNumberGutterWidth() const {
+		return lineNumberGutterWidthFor(configuredShowLineNumbers());
+	}
+
+	int textViewportLeft() const noexcept {
+		return lineNumberGutterWidth();
+	}
+
+	int textViewportRight() const noexcept {
+		int left = textViewportLeft();
+		return std::max(left + 1, size.x);
+	}
+
+	bool isTextViewportX(long long x) const noexcept {
+		return x >= textViewportLeft() && x < textViewportRight();
+	}
+
+	bool shouldShowEditorCursor(long long x, long long y) const noexcept {
+		const bool viewActive = (state & sfActive) != 0;
+		const bool viewSelected = (state & sfSelected) != 0;
+		return viewActive && viewSelected && isTextViewportX(x) && y >= 0 && y < size.y;
+	}
+
+	int textColumnFromLocalX(int localX) const noexcept {
+		return std::max(0, localX - textViewportLeft()) + delta.x;
+	}
+
+	int textViewportWidth() const {
+		return std::max(1, textViewportRight() - textViewportLeft());
+	}
+
+	void drawLineNumberGutter(TDrawBuffer &b, std::size_t lineIndex, bool showNumber, int width,
+	                          bool zeroFill) {
+		TColorAttr color = static_cast<TColorAttr>(getColor(0x0606));
+		char numberBuffer[32];
+		int digits = std::max(1, width - 1);
+
+		if (width <= 0)
+			return;
+		b.moveChar(0, ' ', color, static_cast<ushort>(width));
+		if (!showNumber)
+			return;
+		if (zeroFill)
+			std::snprintf(numberBuffer, sizeof(numberBuffer), "%0*lu", digits,
+			              static_cast<unsigned long>(lineIndex + 1));
+		else
+			std::snprintf(numberBuffer, sizeof(numberBuffer), "%*lu", digits,
+			              static_cast<unsigned long>(lineIndex + 1));
+		b.moveStr(0, numberBuffer, color, static_cast<ushort>(width));
+	}
+
 	static bool nextDisplayChar(TStringView text, std::size_t &index, std::size_t &width,
 	                            int visualColumn) noexcept {
 		if (index >= text.size())
@@ -918,8 +1021,14 @@ class TMRFileEditor : public TScroller {
 		char dir[MAXDIR];
 		char file[MAXFILE];
 		char ext[MAXEXT];
+		MREditSetupSettings editSettings = configuredEditSetupSettings();
+		bool eofCtrlZ = editSettings.eofCtrlZ;
+		bool eofCrLf = editSettings.eofCrLf;
+		bool hasAnyByte = false;
+		bool hasLastOutputByte = false;
+		unsigned char lastOutputByte = 0;
 
-		if ((TEditor::editorFlags & efBackupFiles) != 0) {
+		if (configuredBackupFilesSetting()) {
 			fnsplit(targetPath, drive, dir, file, ext);
 			char backupName[MAXPATH];
 			fnmerge(backupName, drive, dir, file, ".bak");
@@ -933,15 +1042,111 @@ class TMRFileEditor : public TScroller {
 			return false;
 		}
 
-		for (std::size_t i = 0; i < bufferModel_.document().pieceCount(); ++i) {
-			mr::editor::PieceChunkView chunk = bufferModel_.document().pieceChunk(i);
-			writeChunk(out, chunk.data, chunk.length);
-			if (!out) {
-				TEditor::editorDialog(edWriteError, targetPath);
+		auto writeByte = [&](unsigned char byte) -> bool {
+			out.put(static_cast<char>(byte));
+			if (!out)
 				return false;
+			hasLastOutputByte = true;
+			lastOutputByte = byte;
+			return true;
+		};
+		auto failWrite = [&]() -> bool {
+			TEditor::editorDialog(edWriteError, targetPath);
+			return false;
+		};
+
+		if (!eofCrLf) {
+			for (std::size_t i = 0; i < bufferModel_.document().pieceCount(); ++i) {
+				mr::editor::PieceChunkView chunk = bufferModel_.document().pieceChunk(i);
+				writeChunk(out, chunk.data, chunk.length);
+				if (!out)
+					return failWrite();
+				if (chunk.length > 0) {
+					hasAnyByte = true;
+					hasLastOutputByte = true;
+					lastOutputByte = static_cast<unsigned char>(chunk.data[chunk.length - 1]);
+				}
+			}
+		} else {
+			bool hasPendingByte = false;
+			unsigned char pendingByte = 0;
+
+			for (std::size_t i = 0; i < bufferModel_.document().pieceCount(); ++i) {
+				mr::editor::PieceChunkView chunk = bufferModel_.document().pieceChunk(i);
+				for (std::size_t j = 0; j < chunk.length; ++j) {
+					unsigned char nextByte = static_cast<unsigned char>(chunk.data[j]);
+
+					if (hasPendingByte && !writeByte(pendingByte))
+						return failWrite();
+					pendingByte = nextByte;
+					hasPendingByte = true;
+					hasAnyByte = true;
+				}
+			}
+
+			if (eofCtrlZ && pendingByte == static_cast<unsigned char>(0x1A) && hasAnyByte) {
+				// Treat trailing Ctrl-Z as logical EOF marker and normalize EOL before final marker append.
+			} else if (!hasAnyByte) {
+				if (!writeByte('\r') || !writeByte('\n'))
+					return failWrite();
+			} else if (pendingByte == '\n') {
+				if (hasLastOutputByte && lastOutputByte == '\r') {
+					if (!writeByte('\n'))
+						return failWrite();
+				} else if (!writeByte('\r') || !writeByte('\n'))
+					return failWrite();
+			} else if (pendingByte == '\r') {
+				if (!writeByte('\r') || !writeByte('\n'))
+					return failWrite();
+			} else {
+				if (!writeByte(pendingByte) || !writeByte('\r') || !writeByte('\n'))
+					return failWrite();
 			}
 		}
+
+		if (eofCtrlZ && (!hasLastOutputByte || lastOutputByte != static_cast<unsigned char>(0x1A)))
+			if (!writeByte(static_cast<unsigned char>(0x1A)))
+				return failWrite();
 		return true;
+	}
+
+	static bool pathIsRegularFile(const char *path) noexcept {
+		struct stat st;
+		if (path == nullptr || *path == '\0')
+			return false;
+		return ::stat(path, &st) == 0 && S_ISREG(st.st_mode);
+	}
+
+	static bool samePath(const char *lhs, const char *rhs) noexcept {
+		struct stat lhsStat;
+		struct stat rhsStat;
+		char lhsExpanded[MAXPATH];
+		char rhsExpanded[MAXPATH];
+		std::size_t i = 0;
+
+		if (lhs == nullptr || rhs == nullptr)
+			return false;
+		if (::stat(lhs, &lhsStat) == 0 && ::stat(rhs, &rhsStat) == 0)
+			return lhsStat.st_dev == rhsStat.st_dev && lhsStat.st_ino == rhsStat.st_ino;
+
+		strnzcpy(lhsExpanded, lhs, sizeof(lhsExpanded));
+		strnzcpy(rhsExpanded, rhs, sizeof(rhsExpanded));
+		fexpand(lhsExpanded);
+		fexpand(rhsExpanded);
+		for (i = 0; lhsExpanded[i] != EOS; ++i)
+			if (lhsExpanded[i] == '\\')
+				lhsExpanded[i] = '/';
+		for (i = 0; rhsExpanded[i] != EOS; ++i)
+			if (rhsExpanded[i] == '\\')
+				rhsExpanded[i] = '/';
+		return std::strcmp(lhsExpanded, rhsExpanded) == 0;
+	}
+
+	bool confirmOverwriteForSaveAs(const char *targetPath) const {
+		if (!pathIsRegularFile(targetPath))
+			return true;
+		return mr::dialogs::showUnsavedChangesDialog("Overwrite", "Target file exists. Overwrite?",
+		                                             targetPath) == mr::dialogs::UnsavedChangesChoice::Save;
 	}
 
 	void bumpUndoCounters(std::size_t deletedBytes, std::size_t insertedBytes) noexcept {
@@ -989,10 +1194,12 @@ class TMRFileEditor : public TScroller {
 		return static_cast<int>(std::min<std::size_t>(limitValue, static_cast<std::size_t>(INT_MAX)));
 	}
 
-	int dynamicLargeFileWidthLimit() const noexcept {
+	int dynamicLargeFileWidthLimit() const {
 		const std::size_t cursor = bufferModel_.cursor();
 		const int cursorColumn = charColumn(bufferModel_.lineStart(cursor), cursor);
-		return std::max(std::max(size.x, 256), std::max(delta.x + size.x + 64, cursorColumn + 64));
+		const int viewportWidth = textViewportWidth();
+		return std::max(std::max(viewportWidth, 256),
+		                std::max(delta.x + viewportWidth + 64, cursorColumn + 64));
 	}
 
 	void scheduleLineIndexWarmupIfNeeded() {
@@ -1112,8 +1319,10 @@ class TMRFileEditor : public TScroller {
 	}
 
 	void updateMetrics() {
-			int limitX = 1;
-			int limitY = 1;
+		int limitX = 1;
+		int limitY = 1;
+		int gutterWidth = lineNumberGutterWidth();
+		int viewportWidth = std::max(1, size.x - gutterWidth);
 
 		if (useApproximateLargeFileMetrics()) {
 			limitX = dynamicLargeFileWidthLimit();
@@ -1123,12 +1332,12 @@ class TMRFileEditor : public TScroller {
 			limitY = std::max<int>(1, static_cast<int>(bufferModel_.lineCount()));
 		}
 
-			int maxX = std::max(0, limitX - size.x);
+		int maxX = std::max(0, limitX - viewportWidth);
 		int maxY = std::max(0, limitY - size.y);
 		int newDeltaX = std::min(std::max(delta.x, 0), maxX);
 		int newDeltaY = std::min(std::max(delta.y, 0), maxY);
 
-		setLimit(limitX, limitY);
+		setLimit(limitX + gutterWidth, limitY);
 		if (newDeltaX != delta.x || newDeltaY != delta.y)
 			scrollTo(newDeltaX, newDeltaY);
 	}
@@ -1141,7 +1350,7 @@ class TMRFileEditor : public TScroller {
 		unsigned long visualColumn =
 		    static_cast<unsigned long>(charColumn(bufferModel_.lineStart(cursor), cursor));
 		unsigned long line = static_cast<unsigned long>(bufferModel_.lineIndex(cursor));
-		long long localX = static_cast<long long>(visualColumn) - delta.x;
+		long long localX = static_cast<long long>(visualColumn) - delta.x + textViewportLeft();
 		long long localY = static_cast<long long>(line) - delta.y;
 
 		if (indicator_ != nullptr) {
@@ -1155,8 +1364,7 @@ class TMRFileEditor : public TScroller {
 			}
 		}
 
-		if ((state & (sfFocused | sfSelected)) != 0 && localX >= 0 && localX < size.x && localY >= 0 &&
-		    localY < size.y) {
+		if (shouldShowEditorCursor(localX, localY)) {
 			setCursor(static_cast<int>(localX), static_cast<int>(localY));
 			showCursor();
 		} else
@@ -1170,11 +1378,12 @@ class TMRFileEditor : public TScroller {
 		int line = static_cast<int>(bufferModel_.lineIndex(cursor));
 		int targetX = delta.x;
 		int targetY = delta.y;
+		int viewportWidth = textViewportWidth();
 
 		if (visualColumn < targetX)
 			targetX = visualColumn;
-		else if (visualColumn >= targetX + size.x)
-			targetX = visualColumn - size.x + 1;
+		else if (visualColumn >= targetX + viewportWidth)
+			targetX = visualColumn - viewportWidth + 1;
 
 		if (centerCursor)
 			targetY = std::max(0, line - size.y / 2);
@@ -1490,7 +1699,7 @@ class TMRFileEditor : public TScroller {
 
 	std::size_t mouseOffset(TPoint local) noexcept {
 		int row = std::max(0, local.y) + delta.y;
-		int column = std::max(0, local.x) + delta.x;
+		int column = textColumnFromLocalX(local.x);
 		std::size_t start = lineStartForIndex(static_cast<std::size_t>(std::max(row, 0)));
 		return canonicalCursorOffset(charPtrOffset(start, column));
 	}
@@ -1640,45 +1849,46 @@ class TMRFileEditor : public TScroller {
 		return bufferModel_.tokenMapForLine(lineStart);
 	}
 
-	void formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, int hScroll, int width) {
-		TMRSyntaxTokenMap tokens = syntaxTokensForLine(lineStart);
-		TMRTextBufferModel::Range selection = bufferModel_.selection().range();
-		std::size_t documentLength = bufferModel_.length();
-		std::size_t lineEnd = bufferModel_.nextLine(lineStart);
-		std::size_t cursorPos = bufferModel_.cursor();
-		bool currentLine =
-		    (lineStart <= cursorPos && cursorPos < lineEnd) || (cursorPos == documentLength && lineEnd == cursorPos);
-		bool currentLineInBlock = currentLine && selection.start < selection.end && selection.start < lineEnd &&
-		                          selection.end > lineStart;
-		bool changedLine = intersectsDirtyRanges(lineStart, lineEnd);
+	void formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, int hScroll, int width, int drawX,
+	                      bool isDocumentLine, bool drawEofMarker, bool drawEofMarkerAsEmoji) {
 		TAttrPair basePair = getColor(0x0201);
-		std::string lineText = bufferModel_.lineText(lineStart);
-		TStringView line(lineText.data(), lineText.size());
+		TAttrPair changedPair = getColor(0x0505);
+		TAttrPair selectionPair = getColor(0x0201);
+		TMRSyntaxTokenMap tokens;
+		TMRTextBufferModel::Range selection;
+		std::size_t documentLength = bufferModel_.length();
+		std::size_t lineEnd = lineStart;
+		std::size_t cursorPos = 0;
+		bool currentLine = false;
+		bool currentLineInBlock = false;
 		std::size_t bytePos = 0;
 		int visual = 0;
 		int x = 0;
 
+		hScroll = std::max(hScroll, 0);
+		width = std::max(width, 0);
+		drawX = std::max(drawX, 0);
+		if (!isDocumentLine) {
+			TColorAttr color = tokenColor(TMRSyntaxToken::Text, false, basePair);
+			b.moveChar(static_cast<ushort>(drawX), ' ', color, static_cast<ushort>(width));
+			if (drawEofMarker)
+				drawEofMarkerGlyph(b, hScroll, width, drawX, basePair, drawEofMarkerAsEmoji);
+			return;
+		}
+		std::string lineText = bufferModel_.lineText(lineStart);
+		TStringView line(lineText.data(), lineText.size());
+		tokens = syntaxTokensForLine(lineStart);
+		selection = bufferModel_.selection().range();
+		lineEnd = bufferModel_.nextLine(lineStart);
+		cursorPos = bufferModel_.cursor();
+		currentLine = (lineStart <= cursorPos && cursorPos < lineEnd) ||
+		              (cursorPos == documentLength && lineStart == cursorPos && lineEnd == cursorPos);
+		currentLineInBlock = currentLine && selection.start < selection.end && selection.start < lineEnd &&
+		                     selection.end > lineStart;
 		if (currentLineInBlock)
 			basePair = getColor(0x0204);
 		else if (currentLine)
 			basePair = getColor(0x0303);
-		else if (changedLine)
-			basePair = getColor(0x0505);
-
-		hScroll = std::max(hScroll, 0);
-		width = std::max(width, 0);
-		if (lineStart >= documentLength) {
-			bool eofLineExists = (documentLength == 0);
-			if (!eofLineExists && documentLength > 0) {
-				char last = bufferModel_.charAt(documentLength - 1);
-				eofLineExists = (last == '\n' || last == '\r');
-			}
-			if (!eofLineExists) {
-				TColorAttr color = tokenColor(TMRSyntaxToken::Text, false, basePair);
-				b.moveChar(0, ' ', color, static_cast<ushort>(width));
-				return;
-			}
-		}
 
 		while (bytePos < line.size() && x < width) {
 			std::size_t next = bytePos;
@@ -1692,14 +1902,17 @@ class TMRFileEditor : public TScroller {
 				std::size_t documentPos = lineStart + bytePos;
 				TMRSyntaxToken token =
 				    tokenIndex < tokens.size() ? tokens[tokenIndex] : TMRSyntaxToken::Text;
-				TColorAttr color =
-				    tokenColor(token, selection.start <= documentPos && documentPos < selection.end, basePair);
-				int visibleWidth = nextVisual - std::max(visual, hScroll);
+					bool selected = selection.start <= documentPos && documentPos < selection.end;
+					bool changedChar = !currentLine && !currentLineInBlock && isDirtyOffset(documentPos);
+					TAttrPair effectivePair = changedChar ? changedPair : basePair;
+					TAttrPair tokenPair = selected ? selectionPair : effectivePair;
+					TColorAttr color = tokenColor(token, selected, tokenPair);
+					int visibleWidth = nextVisual - std::max(visual, hScroll);
 
 				if (line[bytePos] == '\t' || visual < hScroll)
-					b.moveChar(static_cast<ushort>(x), ' ', color, static_cast<ushort>(visibleWidth));
+					b.moveChar(static_cast<ushort>(drawX + x), ' ', color, static_cast<ushort>(visibleWidth));
 				else
-					b.moveStr(static_cast<ushort>(x), line.substr(bytePos, next - bytePos), color,
+					b.moveStr(static_cast<ushort>(drawX + x), line.substr(bytePos, next - bytePos), color,
 					          static_cast<ushort>(visibleWidth));
 				x += visibleWidth;
 			}
@@ -1709,13 +1922,31 @@ class TMRFileEditor : public TScroller {
 
 		if (x < width) {
 			TColorAttr color = tokenColor(TMRSyntaxToken::Text, false, basePair);
-			b.moveChar(static_cast<ushort>(x), ' ', color, static_cast<ushort>(width - x));
+			b.moveChar(static_cast<ushort>(drawX + x), ' ', color, static_cast<ushort>(width - x));
 		}
+	}
+
+	void drawEofMarkerGlyph(TDrawBuffer &b, int hScroll, int width, int drawX, TAttrPair basePair,
+	                        bool drawEmoji) {
+		static const char *const kEofMarkerText = "EOF";
+		static const char *const kEofMarkerEmoji = "\xF0\x9F\x94\x9A";
+		const char *marker = drawEmoji ? kEofMarkerEmoji : kEofMarkerText;
+		int markerWidth = 0;
+		TColorAttr markerColor = tokenColor(TMRSyntaxToken::Text, false, basePair);
+		unsigned char configuredMarkerColor = 0;
+
+		if (width <= 0 || hScroll != 0)
+			return;
+		if (!drawEmoji && configuredColorSlotOverride(kMrPaletteEofMarker, configuredMarkerColor))
+			markerColor = static_cast<TColorAttr>(configuredMarkerColor);
+		markerWidth = std::max(1, strwidth(marker));
+		markerWidth = std::min(markerWidth, width);
+		b.moveStr(static_cast<ushort>(drawX), marker, markerColor, static_cast<ushort>(markerWidth));
 	}
 
 	bool adoptCommittedDocument(const TMRTextBufferModel::Document &document, std::size_t cursorPos,
 	                            std::size_t selStart, std::size_t selEnd, bool modifiedState,
-	                            const TMRTextBufferModel::Range *dirtyRange = nullptr) {
+	                            const TMRTextBufferModel::DocumentChangeSet *changeSet = nullptr) {
 		cursorPos = std::min(cursorPos, document.length());
 		selStart = std::min(selStart, document.length());
 		selEnd = std::min(selEnd, document.length());
@@ -1732,8 +1963,10 @@ class TMRFileEditor : public TScroller {
 		bufferModel_.setModified(modifiedState);
 		if (!modifiedState)
 			clearDirtyRanges();
-		else if (dirtyRange != nullptr)
-			addDirtyRange(*dirtyRange);
+		else if (changeSet != nullptr && changeSet->changed) {
+			remapDirtyRangesForAppliedChange(*changeSet);
+			addDirtyRange(changeSet->touchedRange);
+		}
 		selectionAnchor_ = selStart;
 		updateMetrics();
 		scheduleLineIndexWarmupIfNeeded();
@@ -1771,16 +2004,7 @@ class TMRFileEditor : public TScroller {
 		dirtyRanges_.clear();
 	}
 
-	void addDirtyRange(TMRTextBufferModel::Range range) {
-		if (bufferModel_.length() == 0)
-			return;
-		range = range.clamped(bufferModel_.length());
-		range.normalize();
-		if (range.empty()) {
-			std::size_t point = std::min(range.start, bufferModel_.length() - 1);
-			range = TMRTextBufferModel::Range(point, point + 1);
-		}
-		dirtyRanges_.push_back(range);
+	void normalizeDirtyRanges() {
 		std::sort(dirtyRanges_.begin(), dirtyRanges_.end(),
 		          [](const TMRTextBufferModel::Range &a, const TMRTextBufferModel::Range &b) {
 			          return a.start < b.start || (a.start == b.start && a.end < b.end);
@@ -1795,24 +2019,96 @@ class TMRFileEditor : public TScroller {
 		dirtyRanges_.swap(merged);
 	}
 
-	bool intersectsDirtyRanges(std::size_t start, std::size_t end) const noexcept {
+	void pushMappedDirtyRange(std::vector<TMRTextBufferModel::Range> &mapped, std::size_t start,
+	                          std::size_t end, std::size_t maxLength) {
+		start = std::min(start, maxLength);
+		end = std::min(end, maxLength);
+		if (end <= start)
+			return;
+		mapped.push_back(TMRTextBufferModel::Range(start, end));
+	}
+
+	void remapDirtyRangesForAppliedChange(const TMRTextBufferModel::DocumentChangeSet &change) {
+		const std::size_t oldLength = change.oldLength;
+		const std::size_t newLength = change.newLength;
+		const TMRTextBufferModel::Range touched = change.touchedRange.normalized();
+		const long long delta = static_cast<long long>(newLength) - static_cast<long long>(oldLength);
+		const std::size_t touchedLength = touched.length();
+		const std::size_t editStart = std::min(touched.start, oldLength);
+		std::size_t replacedOldLength = touchedLength;
+
 		if (dirtyRanges_.empty())
-			return false;
-		if (end < start)
-			std::swap(start, end);
-		if (end == start) {
-			if (bufferModel_.length() == 0)
-				return false;
-			if (start >= bufferModel_.length())
-				start = bufferModel_.length() - 1;
-			end = std::min(bufferModel_.length(), start + 1);
+			return;
+		if (delta >= 0) {
+			const std::size_t deltaUnsigned = static_cast<std::size_t>(delta);
+			replacedOldLength = touchedLength > deltaUnsigned ? touchedLength - deltaUnsigned : 0;
 		}
-		for (const TMRTextBufferModel::Range &item : dirtyRanges_) {
-			if (item.end <= start)
+		if (replacedOldLength > oldLength - editStart)
+			replacedOldLength = oldLength - editStart;
+		const std::size_t oldEditEnd = editStart + replacedOldLength;
+
+		std::vector<TMRTextBufferModel::Range> mapped;
+		mapped.reserve(dirtyRanges_.size() + 2);
+
+		for (std::size_t i = 0; i < dirtyRanges_.size(); ++i) {
+			TMRTextBufferModel::Range range = dirtyRanges_[i].clamped(oldLength).normalized();
+
+			if (range.end <= range.start)
 				continue;
-			if (item.start >= end)
+			if (range.end <= editStart) {
+				pushMappedDirtyRange(mapped, range.start, range.end, newLength);
+				continue;
+			}
+			if (range.start >= oldEditEnd) {
+				const long long shiftedStart = static_cast<long long>(range.start) + delta;
+				const long long shiftedEnd = static_cast<long long>(range.end) + delta;
+				if (shiftedEnd <= 0)
+					continue;
+				pushMappedDirtyRange(mapped, static_cast<std::size_t>(std::max<long long>(0, shiftedStart)),
+				                     static_cast<std::size_t>(std::max<long long>(0, shiftedEnd)), newLength);
+				continue;
+			}
+
+			if (range.start < editStart)
+				pushMappedDirtyRange(mapped, range.start, editStart, newLength);
+			if (range.end > oldEditEnd) {
+				const long long shiftedStart = static_cast<long long>(oldEditEnd) + delta;
+				const long long shiftedEnd = static_cast<long long>(range.end) + delta;
+				if (shiftedEnd > 0)
+					pushMappedDirtyRange(mapped,
+					                     static_cast<std::size_t>(std::max<long long>(0, shiftedStart)),
+					                     static_cast<std::size_t>(std::max<long long>(0, shiftedEnd)), newLength);
+			}
+		}
+
+		dirtyRanges_.swap(mapped);
+		normalizeDirtyRanges();
+	}
+
+	void addDirtyRange(TMRTextBufferModel::Range range) {
+		if (bufferModel_.length() == 0)
+			return;
+		range = range.clamped(bufferModel_.length());
+		range.normalize();
+		if (range.empty()) {
+			std::size_t point = std::min(range.start, bufferModel_.length() - 1);
+			range = TMRTextBufferModel::Range(point, point + 1);
+		}
+		dirtyRanges_.push_back(range);
+		normalizeDirtyRanges();
+	}
+
+	bool isDirtyOffset(std::size_t pos) const noexcept {
+		if (dirtyRanges_.empty() || bufferModel_.length() == 0)
+			return false;
+		if (pos >= bufferModel_.length())
+			return false;
+		for (const TMRTextBufferModel::Range &item : dirtyRanges_) {
+			if (item.end <= pos)
+				continue;
+			if (item.start > pos)
 				break;
-			return true;
+			return pos < item.end;
 		}
 		return false;
 	}

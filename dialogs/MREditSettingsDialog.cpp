@@ -40,7 +40,27 @@ enum : ushort {
 	kOptionTruncateSpaces = 0x0001,
 	kOptionEofCtrlZ = 0x0002,
 	kOptionEofCrLf = 0x0004,
-	kOptionPersistentBlocks = 0x0008
+	kOptionShowLineNumbers = 0x0008,
+	kOptionLineNumZeroFill = 0x0010,
+	kOptionPersistentBlocks = 0x0020,
+	kOptionBackupFiles = 0x0040,
+	kOptionShowEofMarker = 0x0080,
+	kOptionShowEofMarkerEmoji = 0x0100
+};
+
+enum : ushort {
+	kLeftOptionTruncateSpaces = 0x0001,
+	kLeftOptionEofCtrlZ = 0x0002,
+	kLeftOptionEofCrLf = 0x0004,
+	kLeftOptionBackupFiles = 0x0008,
+	kLeftOptionShowEofMarker = 0x0010
+};
+
+enum : ushort {
+	kRightOptionShowLineNumbers = 0x0001,
+	kRightOptionLineNumZeroFill = 0x0002,
+	kRightOptionPersistentBlocks = 0x0004,
+	kRightOptionShowEofMarkerEmoji = 0x0008
 };
 
 enum : ushort {
@@ -122,8 +142,18 @@ void initEditSettingsDialogRecord(EditSettingsDialogRecord &record) {
 		record.optionsMask |= kOptionEofCtrlZ;
 	if (settings.eofCrLf)
 		record.optionsMask |= kOptionEofCrLf;
+	if (settings.backupFiles)
+		record.optionsMask |= kOptionBackupFiles;
+	if (settings.showEofMarker)
+		record.optionsMask |= kOptionShowEofMarker;
+	if (settings.showEofMarkerEmoji)
+		record.optionsMask |= kOptionShowEofMarkerEmoji;
 	if (settings.persistentBlocks)
 		record.optionsMask |= kOptionPersistentBlocks;
+	if (settings.showLineNumbers)
+		record.optionsMask |= kOptionShowLineNumbers;
+	if (settings.lineNumZeroFill)
+		record.optionsMask |= kOptionLineNumZeroFill;
 	record.tabExpandChoice = settings.tabExpand ? kTabExpandTabs : kTabExpandSpaces;
 	record.columnBlockMoveChoice =
 	    (columnMove == "LEAVE_SPACE") ? kColumnMoveLeaveSpace : kColumnMoveDeleteSpace;
@@ -140,7 +170,12 @@ bool recordToSettings(const EditSettingsDialogRecord &record, MREditSetupSetting
 	settings.truncateSpaces = (record.optionsMask & kOptionTruncateSpaces) != 0;
 	settings.eofCtrlZ = (record.optionsMask & kOptionEofCtrlZ) != 0;
 	settings.eofCrLf = (record.optionsMask & kOptionEofCrLf) != 0;
+	settings.backupFiles = (record.optionsMask & kOptionBackupFiles) != 0;
+	settings.showEofMarker = (record.optionsMask & kOptionShowEofMarker) != 0;
+	settings.showEofMarkerEmoji = (record.optionsMask & kOptionShowEofMarkerEmoji) != 0;
 	settings.persistentBlocks = (record.optionsMask & kOptionPersistentBlocks) != 0;
+	settings.showLineNumbers = (record.optionsMask & kOptionShowLineNumbers) != 0;
+	settings.lineNumZeroFill = (record.optionsMask & kOptionLineNumZeroFill) != 0;
 	settings.tabExpand = record.tabExpandChoice == kTabExpandTabs;
 	settings.columnBlockMove =
 	    (record.columnBlockMoveChoice == kColumnMoveLeaveSpace) ? "LEAVE_SPACE" : "DELETE_SPACE";
@@ -198,12 +233,16 @@ class TEditSettingsDialog : public TDialog {
 		int dialogWidth = kVirtualDialogWidth;
 		int inputLeft = 32;
 		int inputRight = dialogWidth - 2;
-		int optionsX = std::max(40, dialogWidth - 35);
+		int optionsHeadingX = 2;
+		int leftOptionsLeft = 2;
+		int leftOptionsRight = std::min(dialogWidth - 2, 36);
+		int rightOptionsLeft = std::min(dialogWidth - 2, leftOptionsRight + 2);
+		int rightOptionsRight = dialogWidth - 2;
 		int doneLeft = dialogWidth / 2 - 17;
 		int cancelLeft = doneLeft + 12;
 		int helpLeft = cancelLeft + 14;
 		int buttonTop = size.y - 3;
-		int modeX = std::max(optionsX + 2, dialogWidth - 27);
+		int modeX = std::max(54, dialogWidth - 27);
 
 		addManaged(new TStaticText(TRect(2, 2, inputLeft - 2, 3), "Page break string:"),
 		           TRect(2, 2, inputLeft - 2, 3));
@@ -220,33 +259,43 @@ class TEditSettingsDialog : public TDialog {
 		defaultExtensionsField_ = new TInputLine(TRect(inputLeft, 6, inputRight, 7), kDefaultExtsFieldSize - 1);
 		addManaged(defaultExtensionsField_, TRect(inputLeft, 6, inputRight, 7));
 
-			addManaged(new TStaticText(TRect(optionsX, 8, dialogWidth - 2, 9), "Options:"),
-			           TRect(optionsX, 8, dialogWidth - 2, 9));
-		optionsField_ = new TCheckBoxes(
-		    TRect(optionsX, 9, dialogWidth - 2, 13),
+		addManaged(new TStaticText(TRect(optionsHeadingX, 8, dialogWidth - 2, 9), "Options:"),
+		           TRect(optionsHeadingX, 8, dialogWidth - 2, 9));
+		optionsLeftField_ = new TCheckBoxes(
+		    TRect(leftOptionsLeft, 9, leftOptionsRight, 14),
 		    new TSItem("~T~runcate spaces",
 		               new TSItem("Control-~Z~ at EOF",
 		                          new TSItem("~C~R/LF at EOF",
-		                                     new TSItem("~P~ersistent blocks", nullptr)))));
-		addManaged(optionsField_, TRect(optionsX, 9, dialogWidth - 2, 13));
+		                                     new TSItem("create ~B~ackup (.bak) on save",
+		                                                new TSItem("show ~E~OF marker", nullptr))))));
+		addManaged(optionsLeftField_, TRect(leftOptionsLeft, 9, leftOptionsRight, 14));
 
-		addManaged(new TStaticText(TRect(2, 14, 22, 15), "Tab expand:"), TRect(2, 14, 22, 15));
+		// Option blocks are filled top-to-bottom. Additional options continue in the right block first.
+		optionsRightField_ = new TCheckBoxes(
+		    TRect(rightOptionsLeft, 9, rightOptionsRight, 13),
+		    new TSItem("~L~ine numbers",
+		               new TSItem("line numbers with leading ~0~",
+		                          new TSItem("~P~ersistent blocks",
+		                                     new TSItem("~S~how \xF0\x9F\x94\x9A as EOF marker", nullptr)))));
+		addManaged(optionsRightField_, TRect(rightOptionsLeft, 9, rightOptionsRight, 13));
+
+		addManaged(new TStaticText(TRect(2, 18, 22, 19), "Tab expand:"), TRect(2, 18, 22, 19));
 		tabExpandField_ = new TRadioButtons(
-		    TRect(2, 15, 20, 18), new TSItem("~T~abs", new TSItem("~S~paces", nullptr)));
-		addManaged(tabExpandField_, TRect(2, 15, 20, 18));
+		    TRect(2, 19, 20, 22), new TSItem("~T~abs", new TSItem("~S~paces", nullptr)));
+		addManaged(tabExpandField_, TRect(2, 19, 20, 22));
 
-		addManaged(new TStaticText(TRect(22, 14, 48, 15), "Column block move style:"),
-		           TRect(22, 14, 48, 15));
+		addManaged(new TStaticText(TRect(22, 18, 48, 19), "Column block move style:"),
+		           TRect(22, 18, 48, 19));
 		columnBlockMoveField_ = new TRadioButtons(
-		    TRect(22, 15, 48, 18),
+		    TRect(22, 19, 48, 22),
 		    new TSItem("~D~elete space", new TSItem("~L~eave space", nullptr)));
-		addManaged(columnBlockMoveField_, TRect(22, 15, 48, 18));
+		addManaged(columnBlockMoveField_, TRect(22, 19, 48, 22));
 
-		addManaged(new TStaticText(TRect(modeX, 14, dialogWidth - 2, 15), "Default mode:"),
-		           TRect(modeX, 14, dialogWidth - 2, 15));
+		addManaged(new TStaticText(TRect(modeX, 18, dialogWidth - 2, 19), "Default mode:"),
+		           TRect(modeX, 18, dialogWidth - 2, 19));
 		defaultModeField_ = new TRadioButtons(
-		    TRect(modeX, 15, dialogWidth - 2, 18), new TSItem("~I~nsert", new TSItem("~O~verwrite", nullptr)));
-		addManaged(defaultModeField_, TRect(modeX, 15, dialogWidth - 2, 18));
+		    TRect(modeX, 19, dialogWidth - 2, 22), new TSItem("~I~nsert", new TSItem("~O~verwrite", nullptr)));
+		addManaged(defaultModeField_, TRect(modeX, 19, dialogWidth - 2, 22));
 
 		addManaged(new TButton(TRect(doneLeft, buttonTop, doneLeft + 10, buttonTop + 2), "~D~one", cmOK,
 		                       bfDefault),
@@ -270,22 +319,24 @@ class TEditSettingsDialog : public TDialog {
 		return result;
 	}
 
-		void handleEvent(TEvent &event) override {
-			TDialog::handleEvent(event);
-			if (event.what == evCommand && event.message.command == cmMrSetupEditSettingsHelp) {
-				endModal(event.message.command);
-				clearEvent(event);
-			}
-			if (event.what == evBroadcast && event.message.command == cmScrollBarChanged &&
-			    (event.message.infoPtr == hScrollBar_ || event.message.infoPtr == vScrollBar_)) {
-				applyScroll();
-				clearEvent(event);
-			}
+	void handleEvent(TEvent &event) override {
+		ushort beforeOptions = currentOptionsMask();
+		TDialog::handleEvent(event);
+		if (event.what == evCommand && event.message.command == cmMrSetupEditSettingsHelp) {
+			endModal(event.message.command);
+			clearEvent(event);
 		}
+		if (event.what == evBroadcast && event.message.command == cmScrollBarChanged &&
+		    (event.message.infoPtr == hScrollBar_ || event.message.infoPtr == vScrollBar_)) {
+			applyScroll();
+			clearEvent(event);
+		}
+		syncOptionDependencies(beforeOptions);
+	}
 
   private:
 	static const int kVirtualDialogWidth = 88;
-	static const int kVirtualDialogHeight = 24;
+	static const int kVirtualDialogHeight = 26;
 
 	void addManaged(TView *view, const TRect &base) {
 		ManagedItem item;
@@ -380,25 +431,118 @@ class TEditSettingsDialog : public TDialog {
 		writeRecordField(dest, destSize, readRecordField(buffer.data()));
 	}
 
+	ushort currentOptionsMask() noexcept {
+		ushort leftMask = 0;
+		ushort rightMask = 0;
+		ushort options = 0;
+		if (optionsLeftField_ != nullptr)
+			optionsLeftField_->getData((void *)&leftMask);
+		if (optionsRightField_ != nullptr)
+			optionsRightField_->getData((void *)&rightMask);
+
+		if ((leftMask & kLeftOptionTruncateSpaces) != 0)
+			options |= kOptionTruncateSpaces;
+		if ((leftMask & kLeftOptionEofCtrlZ) != 0)
+			options |= kOptionEofCtrlZ;
+		if ((leftMask & kLeftOptionEofCrLf) != 0)
+			options |= kOptionEofCrLf;
+		if ((leftMask & kLeftOptionBackupFiles) != 0)
+			options |= kOptionBackupFiles;
+		if ((leftMask & kLeftOptionShowEofMarker) != 0)
+			options |= kOptionShowEofMarker;
+
+		if ((rightMask & kRightOptionShowLineNumbers) != 0)
+			options |= kOptionShowLineNumbers;
+		if ((rightMask & kRightOptionLineNumZeroFill) != 0)
+			options |= kOptionLineNumZeroFill;
+		if ((rightMask & kRightOptionPersistentBlocks) != 0)
+			options |= kOptionPersistentBlocks;
+		if ((rightMask & kRightOptionShowEofMarkerEmoji) != 0)
+			options |= kOptionShowEofMarkerEmoji;
+		return options;
+	}
+
+	void setOptionsMask(ushort options) {
+		ushort leftMask = 0;
+		ushort rightMask = 0;
+
+		if ((options & kOptionTruncateSpaces) != 0)
+			leftMask |= kLeftOptionTruncateSpaces;
+		if ((options & kOptionEofCtrlZ) != 0)
+			leftMask |= kLeftOptionEofCtrlZ;
+		if ((options & kOptionEofCrLf) != 0)
+			leftMask |= kLeftOptionEofCrLf;
+		if ((options & kOptionBackupFiles) != 0)
+			leftMask |= kLeftOptionBackupFiles;
+		if ((options & kOptionShowEofMarker) != 0)
+			leftMask |= kLeftOptionShowEofMarker;
+
+		if ((options & kOptionShowLineNumbers) != 0)
+			rightMask |= kRightOptionShowLineNumbers;
+		if ((options & kOptionLineNumZeroFill) != 0)
+			rightMask |= kRightOptionLineNumZeroFill;
+		if ((options & kOptionPersistentBlocks) != 0)
+			rightMask |= kRightOptionPersistentBlocks;
+		if ((options & kOptionShowEofMarkerEmoji) != 0)
+			rightMask |= kRightOptionShowEofMarkerEmoji;
+
+		if (optionsLeftField_ != nullptr)
+			optionsLeftField_->setData((void *)&leftMask);
+		if (optionsRightField_ != nullptr)
+			optionsRightField_->setData((void *)&rightMask);
+	}
+
+	void syncOptionDependencies(ushort beforeOptions = 0) {
+		ushort options = currentOptionsMask();
+
+		// Keep zero-fill stable while line numbers are inactive.
+		if ((options & kOptionShowLineNumbers) == 0 && (beforeOptions & kOptionShowLineNumbers) == 0) {
+			ushort corrected = static_cast<ushort>((options & ~kOptionLineNumZeroFill) |
+			                                       (beforeOptions & kOptionLineNumZeroFill));
+			if (corrected != options) {
+				options = corrected;
+				setOptionsMask(options);
+			}
+		}
+		// Keep EOF-emoji selection stable while EOF marker is inactive.
+		if ((options & kOptionShowEofMarker) == 0 && (beforeOptions & kOptionShowEofMarker) == 0) {
+			ushort corrected = static_cast<ushort>((options & ~kOptionShowEofMarkerEmoji) |
+			                                       (beforeOptions & kOptionShowEofMarkerEmoji));
+			if (corrected != options) {
+				options = corrected;
+				setOptionsMask(options);
+			}
+		}
+		if (optionsRightField_ != nullptr) {
+			optionsRightField_->setButtonState(kRightOptionLineNumZeroFill,
+			                                   (options & kOptionShowLineNumbers) != 0 ? True : False);
+			optionsRightField_->setButtonState(kRightOptionShowEofMarkerEmoji,
+			                                   (options & kOptionShowEofMarker) != 0 ? True : False);
+			optionsRightField_->drawView();
+		}
+	}
+
 	void loadFieldsFromRecord(const EditSettingsDialogRecord &record) {
 		setInputLineValue(pageBreakField_, record.pageBreak, sizeof(record.pageBreak));
 		setInputLineValue(wordDelimitersField_, record.wordDelimiters, sizeof(record.wordDelimiters));
 		setInputLineValue(defaultExtensionsField_, record.defaultExtensions, sizeof(record.defaultExtensions));
-			optionsField_->setData((void *)&record.optionsMask);
-			tabExpandField_->setData((void *)&record.tabExpandChoice);
-			columnBlockMoveField_->setData((void *)&record.columnBlockMoveChoice);
-			defaultModeField_->setData((void *)&record.defaultModeChoice);
-		}
+		setOptionsMask(record.optionsMask);
+		tabExpandField_->setData((void *)&record.tabExpandChoice);
+		columnBlockMoveField_->setData((void *)&record.columnBlockMoveChoice);
+		defaultModeField_->setData((void *)&record.defaultModeChoice);
+		syncOptionDependencies(record.optionsMask);
+	}
 
 	void saveFieldsToRecord(EditSettingsDialogRecord &record) {
 		readInputLineValue(pageBreakField_, record.pageBreak, sizeof(record.pageBreak));
 		readInputLineValue(wordDelimitersField_, record.wordDelimiters, sizeof(record.wordDelimiters));
 		readInputLineValue(defaultExtensionsField_, record.defaultExtensions, sizeof(record.defaultExtensions));
-			optionsField_->getData((void *)&record.optionsMask);
-			tabExpandField_->getData((void *)&record.tabExpandChoice);
-			columnBlockMoveField_->getData((void *)&record.columnBlockMoveChoice);
-			defaultModeField_->getData((void *)&record.defaultModeChoice);
-		}
+		syncOptionDependencies(currentOptionsMask());
+		record.optionsMask = currentOptionsMask();
+		tabExpandField_->getData((void *)&record.tabExpandChoice);
+		columnBlockMoveField_->getData((void *)&record.columnBlockMoveChoice);
+		defaultModeField_->getData((void *)&record.defaultModeChoice);
+	}
 
 	EditSettingsDialogRecord initialRecord_;
 	EditSettingsDialogRecord currentRecord_;
@@ -410,7 +554,8 @@ class TEditSettingsDialog : public TDialog {
 	TInputLine *pageBreakField_ = nullptr;
 	TInputLine *wordDelimitersField_ = nullptr;
 	TInputLine *defaultExtensionsField_ = nullptr;
-	TCheckBoxes *optionsField_ = nullptr;
+	TCheckBoxes *optionsLeftField_ = nullptr;
+	TCheckBoxes *optionsRightField_ = nullptr;
 	TRadioButtons *tabExpandField_ = nullptr;
 	TRadioButtons *columnBlockMoveField_ = nullptr;
 	TRadioButtons *defaultModeField_ = nullptr;
@@ -421,6 +566,9 @@ void showEditSettingsHelpDummyDialog() {
 	lines.push_back("EDIT SETTINGS HELP");
 	lines.push_back("");
 	lines.push_back("Use checkboxes and radio groups to configure edit defaults.");
+	lines.push_back("Backup (.bak) creation on save is configured in Options.");
+	lines.push_back("EOF marker + optional emoji display are configured in Options.");
+	lines.push_back("Line numbers + leading zero fill are configured in Options.");
 	lines.push_back("Done writes settings.mrmac and reloads silently.");
 	lines.push_back("Cancel asks for confirmation when fields were modified.");
 	TDialog *dialog = createSetupSimplePreviewDialog("EDIT SETTINGS HELP", 74, 16, lines, false);

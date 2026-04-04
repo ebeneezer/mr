@@ -2,24 +2,26 @@ session_handover:
   meta:
     created_on: "2026-04-01"
     purpose: "Kontextwechsel mit voller Projekt- und Stiluebergabe"
+    authoritative_policy_source: "/home/idoc/mr/documentation/Codex Kontext Übergabe.yaml"
     related_docs:
       - "/home/idoc/mr/documentation/CHANGELOG_CONTEXT.md"
       - "/home/idoc/mr/documentation/KONTEXTWECHSEL_2026-04-01.md"
       - "/home/idoc/mr/documentation/MRMAC_V1_STATUS.md"
     warmup_priority:
-      - "Zuerst: /home/idoc/mr/documentation/CHANGELOG_CONTEXT.md lesen (laufendes Protokoll)."
+      - "Zuerst: /home/idoc/mr/documentation/Codex Kontext Übergabe.yaml lesen (einzige verbindliche Regelquelle)."
+      - "Danach: /home/idoc/mr/documentation/CHANGELOG_CONTEXT.md lesen (laufendes Protokoll)."
       - "Danach: /home/idoc/mr/documentation/MRMAC_V1_STATUS.md lesen (verbindlicher Sprach-/VM-Status)."
-      - "Dann: /home/idoc/mr/documentation/Codex Kontext Übergabe.yaml und KONTEXTWECHSEL_2026-04-01.md."
+      - "KONTEXTWECHSEL_2026-04-01.md nur bei Bedarf als historisches Archiv lesen."
 
   project:
     name: "mr"
     display_name: "Multi-Edit Revisited"
     path: "/home/idoc/mr"
     branch: "main"
-    head_commit: "6d68110"
+    head_commit: "dynamisch via git rev-parse --short HEAD"
     git_status:
-      clean_tracked_files: true
-      untracked: []
+      clean_tracked_files: "dynamisch via git status --short"
+      untracked: "dynamisch via git status --short"
 
   collaboration_constraints:
     formal_address_required: true
@@ -33,6 +35,7 @@ session_handover:
     version_management_responsibility: "AI verwaltet die Versionsnummer des Compilats."
     setup_settings_key_policy: "Wenn neue Setup-Settings hinzukommen, User mit Vorschlag fuer den exakten settings.mrmac-Key befragen (analog zu bestehenden Keys: 'SETTINGSPATH', 'MACROPATH', 'HELPPATH', 'TEMPDIR', 'SHELLPATH')."
     setup_bool_value_policy: "Bool-Werte in settings.mrmac werden als true/false gefuehrt (nicht 1/0)."
+    settings_schema_migration_policy: "Keine Legacy-settings.mrmac dauerhaft tolerieren: Bei Schema-Diskrepanz wird settings.mrmac auf die aktuelle Version normalisiert und ueberschrieben; erkannte MRSETUP-Keys werden mit ihren Werten uebernommen, fehlende/ungueltige/obsolete Eintraege fallen auf Defaults zurueck."
     edit_settings_keyset_v1:
       - "PAGEBREAK"
       - "WORDDELIMS"
@@ -53,6 +56,17 @@ session_handover:
       - "keine per-View-Sonderfarben"
       - "atomisches Anwenden auf Dialog-/Fenster-Gruppen"
     tvision_palette_model_refuse_policy: "Codex verweigert jede Implementierung, die den obigen TVision-Paletten-Hard-Gate verletzt (Regressionsschutz)."
+    no_agentic_slop_policy: "Kein agentic slop: keine toten Pfade, keine doppelten Implementierungen, keine ueberfluessigen String-Literale, keine halb-abgerissenen Restpfade."
+    strict_no_guard_backpacks: true
+    coding_style:
+      no_guard_backpacks_policy: "Keine symptomatischen Guard-Workarounds ('Guard-Rucksaecke'). Fehler werden an der Ursache behoben. Guards sind nur fuer echte externe Randfaelle zulaessig (IO, Benutzerinput, OS/API-Vertraege), nicht zur Kaschierung interner Logikfehler."
+    hard_efficiency_policy: "Hart effizient codieren: zuerst bestehende Routinen/Mechaniken wiederverwenden, dann minimal erweitern; keine funktionsgleichen Parallelpfade aufbauen."
+    single_path_policy: "Pro Feature ein klarer zentraler Ausfuehrungspfad; Duplikatlogik wird zusammengefuehrt statt kopiert."
+    dead_code_zero_tolerance_policy: "Unbenutzter Code/Variablen/Legacy-Zweige sind zu entfernen; neuer Code bleibt schlank, strukturiert und wartbar."
+    parser_dispatch_table_policy: "In Parser-/Compiler-Pfaden (insb. mrmac) sind lange String-Dispatch-Ketten per if/else oder OR-verknuepfter strcasecmp-Aufrufe verboten. Pflicht ist ein tabellengetriebenes Dispatch-/Signaturmodell mit zentraler Validierung (Name, Argumenttypen/Arity, Zielaktion). Neue Statements/Intrinsics/Builtins werden nur durch Tabelleneintraege und gemeinsame Helfer erweitert."
+    parser_dispatch_refactor_trigger_policy: "Wenn ein Dispatchpfad mehr als drei Name-Vergleichsaeste oder duplizierte Arity-/Typpruefung zeigt, muss vor weiterem Feature-Ausbau auf das zentrale Tabellenmodell refaktoriert werden."
+    if_chain_refactor_threshold_policy: "Wenn eine if/else-Kette mehr als 5 vergleichbare Zweige enthaelt, muss sie vor weiterem Ausbau refaktoriert werden."
+    conditional_dispatch_form_policy: "Dispatch-Regel: switch nur bei gemeinsamem Diskriminator (typisch enum/Token). Bei String-Dispatch ist statt switch verpflichtend ein tabellengetriebenes Modell mit zentraler Validierung zu verwenden."
 
   repository_conventions:
     markdown_docs_location: "/home/idoc/mr/documentation"
@@ -151,19 +165,19 @@ session_handover:
     mandatory_screenshots:
       - "/home/idoc/mr/screenshots/screenshot01.png"
       - "/home/idoc/mr/screenshots/screenshot02.png"
-      - "/home/idoc/mr/documentation/Bildschirmfoto_20260331_181602.png"
-      - "/home/idoc/mr/documentation/Bildschirmfoto_20260331_211450.png"
-      - "/home/idoc/mr/documentation/Bildschirmfoto_20260331_211704.png"
-      - "/home/idoc/mr/documentation/Bildschirmfoto_20260331_211727.png"
-      - "/home/idoc/mr/documentation/Bildschirmfoto_20260331_211906.png"
-      - "/home/idoc/mr/documentation/Bildschirmfoto_20260331_211930.png"
-      - "/home/idoc/mr/documentation/Bildschirmfoto_20260331_212519.png"
-      - "/home/idoc/mr/documentation/Bildschirmfoto_20260331_212543.png"
-      - "/home/idoc/mr/documentation/Bildschirmfoto_20260331_215102.png"
+      - "/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260331_181602.png"
+      - "/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260331_211450.png"
+      - "/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260331_211704.png"
+      - "/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260331_211727.png"
+      - "/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260331_211906.png"
+      - "/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260331_211930.png"
+      - "/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260331_212519.png"
+      - "/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260331_212543.png"
+      - "/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260331_215102.png"
     secondary_screenshots:
-      - "/home/idoc/mr/documentation/Bildschirmfoto_20260327_161233.png"
-      - "/home/idoc/mr/documentation/Bildschirmfoto_20260330_201518.png"
-      - "/home/idoc/mr/documentation/Bildschirmfoto_20260328_200731.png"
+      - "/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260327_161233.png"
+      - "/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260330_201518.png"
+      - "/home/idoc/mr/documentation/pngsjpegs/Bildschirmfoto_20260328_200731.png"
 
   next_topic:
     title: "Setup-Dialog und Konfigurationsmodell"
@@ -204,6 +218,30 @@ session_handover:
       - "MISCELLANEOUS + SYSTEM VARIABLES: nur Teilmenge vorhanden."
 
   protocol_log:
+    - date: "2026-04-04"
+      topic: "No-Guard-Backpacks Stilregel"
+      notes:
+        - "strict_no_guard_backpacks als verbindliche Regel aufgenommen."
+        - "Symptomatische Guard-Workarounds ('Guard-Rucksaecke') sind untersagt."
+        - "Fehler werden an der Ursache behoben; Guards nur fuer externe Randfaelle (IO, Benutzerinput, OS/API-Vertraege)."
+    - date: "2026-04-04"
+      topic: "Settings-Schema-Migration"
+      notes:
+        - "Bei Diskrepanz in settings.mrmac wird auf aktuelle Schema-Version normalisiert und die Datei ueberschrieben."
+        - "Erkannte MRSETUP-Keys aus veralteten Settings werden in die neue Version uebernommen."
+        - "Fehlende, ungueltige oder obsolete Eintraege fallen auf Defaults zurueck."
+    - date: "2026-04-04"
+      topic: "MRMAC Dispatch-Stilregel"
+      notes:
+        - "Parser-/Compiler-Dispatch ueber lange if/else-Stringketten ist untersagt."
+        - "Verbindlich ist ein tabellengetriebenes Signatur-/Dispatchmodell mit zentraler Arity-/Typvalidierung."
+        - "Neue Builtins/Intrinsics/Statements duerfen nur ueber Tabelleneintraege in den zentralen Dispatchpfad wachsen."
+    - date: "2026-04-04"
+      topic: "If-Ketten Schwellwertregel"
+      notes:
+        - "Ab mehr als 5 vergleichbaren if/else-Zweigen ist Refactor verpflichtend."
+        - "switch wird nur fuer gemeinsamen Token-/Enum-Dispatch genutzt."
+        - "String-Dispatch bleibt verpflichtend tabellengetrieben mit zentraler Validierung."
     - date: "2026-04-01"
       topic: "Edit-Settings Keyset v1"
       notes:

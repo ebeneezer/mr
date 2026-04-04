@@ -31,12 +31,14 @@
 #include "../config/MRDialogPaths.hpp"
 #include "../ui/MRPalette.hpp"
 #include "../ui/MRWindowSupport.hpp"
+#include "MRUnsavedChangesDialog.hpp"
 #include "MRSetupDialogCommon.hpp"
 
 #include <cctype>
 #include <cstring>
 #include <limits.h>
 #include <string>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <vector>
 
@@ -83,6 +85,21 @@ std::string ensureMrmacExtension(const std::string &path) {
 			return path;
 	}
 	return path + ".mrmac";
+}
+
+bool pathIsRegularFile(const std::string &path) {
+	struct stat st;
+
+	if (path.empty())
+		return false;
+	return ::stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode);
+}
+
+bool confirmOverwriteForPath(const char *primaryLabel, const char *headline, const std::string &targetPath) {
+	if (!pathIsRegularFile(targetPath))
+		return true;
+	return mr::dialogs::showUnsavedChangesDialog(primaryLabel, headline, targetPath.c_str()) ==
+	       mr::dialogs::UnsavedChangesChoice::Save;
 }
 
 std::string readRecordField(const char *value) {
@@ -201,13 +218,13 @@ bool browseUriWithFileDialog(const char *title, const std::string &currentValue,
 	std::string seed = trimAscii(currentValue);
 	ushort result;
 
-	if (seed.empty())
-		seed = "*.*";
-	std::memset(fileName, 0, sizeof(fileName));
-	writeRecordField(fileName, sizeof(fileName), seed);
+	initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.*");
+	if (!seed.empty())
+		writeRecordField(fileName, sizeof(fileName), seed);
 	result = execDialogRawWithData(new TFileDialog("*.*", title, "~N~ame", fdOKButton, 230), fileName);
 	if (result == cmCancel)
 		return false;
+	rememberLoadDialogPath(fileName);
 	selectedUri = normalizeConfiguredPathInput(fileName);
 	return true;
 }
@@ -232,34 +249,28 @@ bool browsePathWithDirectoryDialog(const std::string &currentValue, std::string 
 
 bool chooseThemeFileForLoad(std::string &selectedUri) {
 	char fileName[MAXPATH];
-	std::string seed = configuredColorThemeFilePath();
 	ushort result;
 
-	if (seed.empty())
-		seed = "*.mrmac";
-	std::memset(fileName, 0, sizeof(fileName));
-	writeRecordField(fileName, sizeof(fileName), seed);
+	initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.mrmac");
 	result = execDialogRawWithData(new TFileDialog("*.mrmac", "Load color theme", "~N~ame", fdOKButton, 232),
 	                               fileName);
 	if (result == cmCancel)
 		return false;
+	rememberLoadDialogPath(fileName);
 	selectedUri = normalizeConfiguredPathInput(fileName);
 	return true;
 }
 
 bool chooseThemeFileForSave(std::string &selectedUri) {
 	char fileName[MAXPATH];
-	std::string seed = configuredColorThemeFilePath();
 	ushort result;
 
-	if (seed.empty())
-		seed = "*.mrmac";
-	std::memset(fileName, 0, sizeof(fileName));
-	writeRecordField(fileName, sizeof(fileName), seed);
+	initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.mrmac");
 	result = execDialogRawWithData(new TFileDialog("*.mrmac", "Save color theme as", "~N~ame", fdOKButton, 233),
 	                               fileName);
 	if (result == cmCancel)
 		return false;
+	rememberLoadDialogPath(fileName);
 	selectedUri = normalizeConfiguredPathInput(ensureMrmacExtension(fileName));
 	return true;
 }
@@ -299,6 +310,7 @@ TPalette buildColorSetupWorkingPalette() {
 		data[kMrPaletteMessageError - 1] = data[42 - 1];
 		data[kMrPaletteMessage - 1] = data[43 - 1];
 		data[kMrPaletteMessageWarning - 1] = data[44 - 1];
+		data[kMrPaletteLineNumbers - 1] = data[9 - 1];
 		return TPalette(data, static_cast<ushort>(kTotalSlots));
 	}();
 	TPalette palette = basePalette;
@@ -812,6 +824,8 @@ void runColorSetupDialogFlowLocal() {
 
 				if (!chooseThemeFileForSave(themeUri))
 					break;
+				if (!confirmOverwriteForPath("Overwrite", "Theme file exists. Overwrite?", themeUri))
+					break;
 				if (!applyWorkingColorPaletteToConfigured(workingPalette, errorText)) {
 					messageBox(mfError | mfOKButton, "Color Setup / Save Theme\n\n%s", errorText.c_str());
 					break;
@@ -834,6 +848,39 @@ void runColorSetupDialogFlowLocal() {
 				break;
 		}
 	}
+}
+
+bool mrSaveColorThemeFromWorkingPaletteForTesting(const TPalette &workingPalette,
+                                                  const std::string &themeUri,
+                                                  std::string *errorMessage) {
+	std::string errorText;
+	MRSetupPaths paths = resolveSetupPathDefaults();
+
+	if (!applyWorkingColorPaletteToConfigured(workingPalette, errorText)) {
+		if (errorMessage != nullptr)
+			*errorMessage = errorText;
+		return false;
+	}
+	if (!writeColorThemeFile(themeUri, &errorText)) {
+		if (errorMessage != nullptr)
+			*errorMessage = errorText;
+		return false;
+	}
+
+	paths.settingsMacroUri = configuredSettingsMacroFilePath();
+	paths.macroPath = defaultMacroDirectoryPath();
+	paths.helpUri = configuredHelpFilePath();
+	paths.tempPath = configuredTempDirectoryPath();
+	paths.shellUri = configuredShellExecutablePath();
+	if (!writeSettingsMacroFile(paths, &errorText)) {
+		if (errorMessage != nullptr)
+			*errorMessage = errorText;
+		return false;
+	}
+
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
 }
 
 bool saveCurrentSetupConfiguration(std::string &errorText) {

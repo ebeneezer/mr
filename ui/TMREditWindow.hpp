@@ -116,7 +116,7 @@ class TMREditWindow : public TWindow {
 	virtual TPalette &getPalette() const override {
 		static const TColorAttr blueExtended[] = {
 		    0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, kMrPaletteCurrentLine,
-		    kMrPaletteCurrentLineInBlock, kMrPaletteChangedText};
+		    kMrPaletteCurrentLineInBlock, kMrPaletteChangedText, kMrPaletteLineNumbers};
 		static TPalette palette(blueExtended, sizeof(blueExtended) / sizeof(blueExtended[0]));
 		return palette;
 	}

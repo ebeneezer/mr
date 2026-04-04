@@ -54,4 +54,11 @@ class TMREditorApp : public TApplication {
 	std::size_t indexedMacroWarmupLoadedFiles_;
 };
 
+// Regression-only hooks used by regression/mr-regression-checks.cpp.
+bool mrApplySettingsSourceForTesting(const std::string &source, std::string *errorMessage = nullptr);
+bool mrMigrateSettingsMacroToCurrentVersionForTesting(const std::string &settingsPath,
+                                                      const std::string &source,
+                                                      const std::string &reason,
+                                                      std::string *errorMessage = nullptr);
+
 #endif

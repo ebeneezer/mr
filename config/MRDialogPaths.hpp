@@ -22,13 +22,20 @@ struct MREditSetupSettings {
 	bool eofCtrlZ;
 	bool eofCrLf;
 	bool tabExpand;
+	bool backupFiles;
+	bool showEofMarker;
+	bool showEofMarkerEmoji;
+	bool showLineNumbers;
+	bool lineNumZeroFill;
 	bool persistentBlocks;
 	std::string columnBlockMove;
 	std::string defaultMode;
 
 	MREditSetupSettings() noexcept
 	    : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false),
-	      eofCrLf(false), tabExpand(true), persistentBlocks(true), columnBlockMove(), defaultMode() {
+	      eofCrLf(false), tabExpand(true), backupFiles(true), showEofMarker(false), showEofMarkerEmoji(true),
+	      showLineNumbers(false), lineNumZeroFill(false), persistentBlocks(true), columnBlockMove(),
+	      defaultMode() {
 	}
 };
 
@@ -51,12 +58,14 @@ enum : unsigned char {
 	kMrPaletteMessageError = 139,
 	kMrPaletteMessage = 140,
 	kMrPaletteMessageWarning = 141,
-	kMrPaletteMax = kMrPaletteMessageWarning
+	kMrPaletteLineNumbers = 142,
+	kMrPaletteEofMarker = 143,
+	kMrPaletteMax = kMrPaletteEofMarker
 };
 
 struct MRColorSetupSettings {
-	static const std::size_t kWindowCount = 7;
-	static const std::size_t kMenuDialogCount = 15;
+	static const std::size_t kWindowCount = 9;
+	static const std::size_t kMenuDialogCount = 16;
 	static const std::size_t kHelpCount = 9;
 	static const std::size_t kOtherCount = 7;
 
@@ -101,9 +110,13 @@ std::string formatEditSetupBoolean(bool value);
 std::vector<std::string> configuredDefaultExtensionList();
 bool configuredDefaultInsertMode();
 bool configuredTabExpandSetting();
+bool configuredBackupFilesSetting();
 bool configuredPersistentBlocksSetting();
 char configuredPageBreakCharacter();
+bool setConfiguredLastFileDialogPath(const std::string &path, std::string *errorMessage = nullptr);
+std::string configuredLastFileDialogPath();
 std::string buildSettingsMacroSource(const MRSetupPaths &paths);
+bool persistConfiguredSettingsSnapshot(std::string *errorMessage = nullptr);
 bool writeSettingsMacroFile(const MRSetupPaths &paths, std::string *errorMessage = nullptr);
 bool ensureSettingsMacroFileExists(const std::string &settingsMacroUri, std::string *errorMessage = nullptr);
 bool validateSettingsMacroFilePath(const std::string &path, std::string *errorMessage = nullptr);

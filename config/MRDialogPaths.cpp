@@ -199,6 +199,40 @@ std::string makeAbsolutePath(const std::string &path) {
 	return cwd;
 }
 
+std::string fallbackRememberedLoadDirectory() {
+	std::string macroDir = makeAbsolutePath(configuredMacroDirectory());
+	std::string cwd = currentWorkingDirectory();
+
+	if (isReadableDirectory(macroDir))
+		return macroDir;
+	if (isReadableDirectory(cwd))
+		return cwd;
+	return std::string();
+}
+
+std::string effectiveRememberedLoadDirectory() {
+	std::string remembered = makeAbsolutePath(rememberedLoadDirectory());
+
+	if (isReadableDirectory(remembered))
+		return remembered;
+	return fallbackRememberedLoadDirectory();
+}
+
+std::string normalizedDialogDirectoryFromPath(const std::string &path) {
+	std::string normalized = normalizeConfiguredPathInput(path);
+	std::string dir;
+
+	if (normalized.empty())
+		return std::string();
+	if (isReadableDirectory(normalized))
+		return normalized;
+	dir = directoryPartOf(normalized);
+	if (dir.empty())
+		return std::string();
+	dir = makeAbsolutePath(dir);
+	return isReadableDirectory(dir) ? dir : std::string();
+}
+
 std::string executableDirectory() {
 	char path[4096];
 	ssize_t len = ::readlink("/proc/self/exe", path, sizeof(path) - 1);
@@ -394,6 +428,20 @@ static const char *const kColumnBlockMoveLeave = "LEAVE_SPACE";
 static const char *const kDefaultModeInsert = "INSERT";
 static const char *const kDefaultModeOverwrite = "OVERWRITE";
 static const char *const kThemeSettingsKey = "COLORTHEMEURI";
+static const unsigned char kPaletteDialogFrame = 33;
+static const unsigned char kPaletteDialogText = 37;
+static const unsigned char kPaletteDialogBackground = 32;
+static const unsigned char kPaletteDialogInactiveClusterGray = 62;
+static const unsigned char kPaletteDialogInactiveClusterBlue = 94;
+static const unsigned char kPaletteDialogInactiveClusterCyan = 126;
+
+enum : std::size_t {
+	kMenuDialogIndexListboxSelector = 11,
+	kMenuDialogIndexInactiveCluster = 12,
+	kMenuDialogIndexDialogFrame = 13,
+	kMenuDialogIndexDialogText = 14,
+	kMenuDialogIndexDialogBackground = 15
+};
 
 struct ColorGroupDefinition {
 	MRColorSetupGroup group;
@@ -410,13 +458,15 @@ static const MRColorSetupItem kWindowColorItems[] = {
     // Current-line, current-line-in-block and changed-text intentionally use
     // dedicated app palette extension slots (136..138) to avoid recoloring
     // frame icons/scrollbar controls.
-    {"text", 13},
-    {"changed text", kMrPaletteChangedText},
-    {"highlighted text", 14},
-    {"window border", 8},
-    {"window bold", 9},
-    {"current line", kMrPaletteCurrentLine},
-    {"current line in block", kMrPaletteCurrentLineInBlock},
+	{"text", 13},
+	{"changed text", kMrPaletteChangedText},
+	{"highlighted text", 14},
+	{"EOF marker", kMrPaletteEofMarker},
+	{"window border", 8},
+	{"window bold", 9},
+	{"current line", kMrPaletteCurrentLine},
+	{"current line in block", kMrPaletteCurrentLineInBlock},
+	{"line numbers", kMrPaletteLineNumbers},
 };
 
 static const MRColorSetupItem kMenuDialogColorItems[] = {
@@ -435,9 +485,10 @@ static const MRColorSetupItem kMenuDialogColorItems[] = {
     {"element description in listbox", 57},
     {"hotkeys on radio buttons & check boxes", 49},
     {"listbox selector", 58},
-    {"dialog frame", 33},
-    {"dialog text", 37},
-    {"dialog background", 32},
+    {"inactive radio buttons and checkboxes", kPaletteDialogInactiveClusterGray},
+    {"dialog frame", kPaletteDialogFrame},
+    {"dialog text", kPaletteDialogText},
+    {"dialog background", kPaletteDialogBackground},
 };
 
 static const MRColorSetupItem kHelpColorItems[] = {
@@ -508,6 +559,10 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 		return defaults[43];
 	if (paletteIndex == kMrPaletteMessageWarning)
 		return defaults[44];
+	if (paletteIndex == kMrPaletteLineNumbers)
+		return defaults[9];
+	if (paletteIndex == kMrPaletteEofMarker)
+		return defaults[14];
 	if (paletteIndex == 0 || paletteIndex >= sizeof(defaults) / sizeof(defaults[0]))
 		return 0x70;
 	return defaults[paletteIndex];
@@ -558,6 +613,16 @@ std::string formatColorListLiteral(const std::array<unsigned char, N> &values) {
 	return out;
 }
 
+std::string formatWindowColorListLiteral(
+    const std::array<unsigned char, MRColorSetupSettings::kWindowCount> &values) {
+	std::string out = formatColorListLiteral(values);
+
+	// WINDOWCOLORS uses v3 (adds EOF marker color to v2's 8-value layout).
+	if (out.size() >= 2 && out[0] == 'v')
+		out[1] = '3';
+	return out;
+}
+
 template <std::size_t N>
 bool parseColorListLiteral(const std::string &literal, std::array<unsigned char, N> &outValues,
                            std::string *errorMessage) {
@@ -601,9 +666,19 @@ bool parseWindowColorListLiteral(const std::string &literal,
 	std::string text = trimAscii(literal);
 	std::size_t cursor = 0;
 	std::vector<unsigned char> parsed;
+	const unsigned char defaultEofMarker = defaultColorForSlot(kMrPaletteEofMarker);
+	const unsigned char defaultLineNumbers = defaultColorForSlot(kMrPaletteLineNumbers);
 	unsigned char value = 0;
+	bool v3Format = false;
+	bool v2Format = false;
 
-	if (text.rfind("v1:", 0) == 0 || text.rfind("V1:", 0) == 0)
+	if (text.rfind("v3:", 0) == 0 || text.rfind("V3:", 0) == 0) {
+		text = text.substr(3);
+		v3Format = true;
+	} else if (text.rfind("v2:", 0) == 0 || text.rfind("V2:", 0) == 0) {
+		text = text.substr(3);
+		v2Format = true;
+	} else if (text.rfind("v1:", 0) == 0 || text.rfind("V1:", 0) == 0)
 		text = text.substr(3);
 	if (text.empty())
 		return setError(errorMessage, "Empty color list.");
@@ -619,20 +694,54 @@ bool parseWindowColorListLiteral(const std::string &literal,
 		cursor = comma + 1;
 	}
 
-	// Accept current 7-value format and legacy 8-value format.
-	// Legacy format contained EOF marker color as 4th entry, which is no longer configurable
-	// because that slot maps to TWindow scrollbar page color.
-	if (parsed.size() == MRColorSetupSettings::kWindowCount)
+	// Formats:
+	// - v3 + 9 values: current format (..., EOF marker, ..., line numbers)
+	// - v2 + 8 values: previous format (without EOF marker)
+	// - v1 + 7 values: legacy format (without EOF marker and line numbers)
+	// - v1 + 8 values: legacy format with EOF marker as 4th entry, no line numbers
+	if (v3Format) {
+		if (parsed.size() != MRColorSetupSettings::kWindowCount)
+			return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v3.");
 		for (std::size_t i = 0; i < outValues.size(); ++i)
 			outValues[i] = parsed[i];
-	else if (parsed.size() == MRColorSetupSettings::kWindowCount + 1) {
+	} else if (v2Format) {
+		if (parsed.size() != MRColorSetupSettings::kWindowCount - 1)
+			return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v2.");
 		outValues[0] = parsed[0];
 		outValues[1] = parsed[1];
 		outValues[2] = parsed[2];
-		outValues[3] = parsed[4];
-		outValues[4] = parsed[5];
-		outValues[5] = parsed[6];
-		outValues[6] = parsed[7];
+		outValues[3] = defaultEofMarker;
+		outValues[4] = parsed[3];
+		outValues[5] = parsed[4];
+		outValues[6] = parsed[5];
+		outValues[7] = parsed[6];
+		outValues[8] = parsed[7];
+	} else if (parsed.size() == MRColorSetupSettings::kWindowCount) {
+		// Accept unversioned current layout as a tolerant input.
+		for (std::size_t i = 0; i < outValues.size(); ++i)
+			outValues[i] = parsed[i];
+	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 1) {
+		// Legacy v1 with EOF marker and without line-number color.
+		outValues[0] = parsed[0];
+		outValues[1] = parsed[1];
+		outValues[2] = parsed[2];
+		outValues[3] = parsed[3];
+		outValues[4] = parsed[4];
+		outValues[5] = parsed[5];
+		outValues[6] = parsed[6];
+		outValues[7] = parsed[7];
+		outValues[8] = defaultLineNumbers;
+	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 2) {
+		// Legacy v1 without EOF marker and without line-number color.
+		outValues[0] = parsed[0];
+		outValues[1] = parsed[1];
+		outValues[2] = parsed[2];
+		outValues[3] = defaultEofMarker;
+		outValues[4] = parsed[3];
+		outValues[5] = parsed[4];
+		outValues[6] = parsed[5];
+		outValues[7] = parsed[6];
+		outValues[8] = defaultLineNumbers;
 	} else
 		return setError(errorMessage, "Unexpected WINDOWCOLORS list size.");
 
@@ -665,44 +774,47 @@ bool parseMenuDialogColorListLiteral(
 		cursor = comma + 1;
 	}
 
+	for (std::size_t i = 0; i < outValues.size(); ++i)
+		outValues[i] = defaultColorForSlot(kMenuDialogColorItems[i].paletteIndex);
+
 	// Accepted formats:
-	// - 15: current format (..., dialog frame, dialog text, dialog background)
+	// - 16: current format (..., listbox selector, inactive radio/checkbox, dialog frame/text/background)
+	// - 15: previous format without inactive radio/checkbox color
 	// - 14: legacy format (..., dialog frame, dialog background[old=dialog text])
-	//       -> new dialog background defaults to legacy dialog frame color.
+	//       -> dialog background inherits legacy dialog frame color.
 	// - 13: legacy format missing old dialog background(text)
-	//       -> dialog text defaults, dialog background adopts legacy frame color.
+	//       -> dialog text defaults, dialog background inherits legacy frame color.
 	// - 12: legacy format missing legacy frame + legacy background(text)
 	// - 11: legacy format missing listbox selector + legacy frame + legacy background(text)
-	if (parsed.size() == MRColorSetupSettings::kMenuDialogCount)
+	if (parsed.size() == MRColorSetupSettings::kMenuDialogCount) {
 		for (std::size_t i = 0; i < outValues.size(); ++i)
 			outValues[i] = parsed[i];
-	else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 1) {
-		for (std::size_t i = 0; i < parsed.size(); ++i)
+	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 1) {
+		for (std::size_t i = 0; i <= kMenuDialogIndexListboxSelector; ++i)
 			outValues[i] = parsed[i];
-		// New "dialog background" uses the old frame value for compatibility.
-		outValues[MRColorSetupSettings::kMenuDialogCount - 1] =
-		    outValues[MRColorSetupSettings::kMenuDialogCount - 3];
+		outValues[kMenuDialogIndexDialogFrame] = parsed[12];
+		outValues[kMenuDialogIndexDialogText] = parsed[13];
+		outValues[kMenuDialogIndexDialogBackground] = parsed[14];
 	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 2) {
-		for (std::size_t i = 0; i < parsed.size(); ++i)
+		for (std::size_t i = 0; i <= kMenuDialogIndexListboxSelector; ++i)
 			outValues[i] = parsed[i];
-		outValues[MRColorSetupSettings::kMenuDialogCount - 2] = defaultColorForSlot(37);
-		outValues[MRColorSetupSettings::kMenuDialogCount - 1] =
-		    outValues[MRColorSetupSettings::kMenuDialogCount - 3];
+		outValues[kMenuDialogIndexDialogFrame] = parsed[12];
+		outValues[kMenuDialogIndexDialogText] = parsed[13];
+		outValues[kMenuDialogIndexDialogBackground] = parsed[12];
 	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 3) {
-		for (std::size_t i = 0; i < parsed.size(); ++i)
+		for (std::size_t i = 0; i <= kMenuDialogIndexListboxSelector; ++i)
 			outValues[i] = parsed[i];
-		outValues[MRColorSetupSettings::kMenuDialogCount - 3] = defaultColorForSlot(33);
-		outValues[MRColorSetupSettings::kMenuDialogCount - 2] = defaultColorForSlot(37);
-		outValues[MRColorSetupSettings::kMenuDialogCount - 1] = defaultColorForSlot(32);
+		outValues[kMenuDialogIndexDialogFrame] = parsed[12];
+		outValues[kMenuDialogIndexDialogBackground] = parsed[12];
 	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 4) {
-		for (std::size_t i = 0; i < parsed.size(); ++i)
+		for (std::size_t i = 0; i <= kMenuDialogIndexListboxSelector; ++i)
 			outValues[i] = parsed[i];
-		outValues[11] = defaultColorForSlot(58);
-		outValues[MRColorSetupSettings::kMenuDialogCount - 3] = defaultColorForSlot(33);
-		outValues[MRColorSetupSettings::kMenuDialogCount - 2] = defaultColorForSlot(37);
-		outValues[MRColorSetupSettings::kMenuDialogCount - 1] = defaultColorForSlot(32);
-	} else
+	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 5) {
+		for (std::size_t i = 0; i < 11; ++i)
+			outValues[i] = parsed[i];
+	} else {
 		return setError(errorMessage, "Unexpected MENUDIALOGCOLORS list size.");
+	}
 
 	if (errorMessage != nullptr)
 		errorMessage->clear();
@@ -1031,6 +1143,11 @@ MREditSetupSettings resolveEditSetupDefaults() {
 	defaults.eofCtrlZ = false;
 	defaults.eofCrLf = false;
 	defaults.tabExpand = true;
+	defaults.backupFiles = true;
+	defaults.showEofMarker = false;
+	defaults.showEofMarkerEmoji = true;
+	defaults.showLineNumbers = false;
+	defaults.lineNumZeroFill = false;
 	defaults.persistentBlocks = true;
 	defaults.columnBlockMove = kColumnBlockMoveDelete;
 	defaults.defaultMode = kDefaultModeInsert;
@@ -1088,6 +1205,21 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	if (!parseBooleanLiteral(settings.tabExpand ? "true" : "false", parsedBool, &boolError))
 		return setError(errorMessage, boolError);
 	normalized.tabExpand = parsedBool;
+	if (!parseBooleanLiteral(settings.backupFiles ? "true" : "false", parsedBool, &boolError))
+		return setError(errorMessage, boolError);
+	normalized.backupFiles = parsedBool;
+	if (!parseBooleanLiteral(settings.showEofMarker ? "true" : "false", parsedBool, &boolError))
+		return setError(errorMessage, boolError);
+	normalized.showEofMarker = parsedBool;
+	if (!parseBooleanLiteral(settings.showEofMarkerEmoji ? "true" : "false", parsedBool, &boolError))
+		return setError(errorMessage, boolError);
+	normalized.showEofMarkerEmoji = parsedBool;
+	if (!parseBooleanLiteral(settings.showLineNumbers ? "true" : "false", parsedBool, &boolError))
+		return setError(errorMessage, boolError);
+	normalized.showLineNumbers = parsedBool;
+	if (!parseBooleanLiteral(settings.lineNumZeroFill ? "true" : "false", parsedBool, &boolError))
+		return setError(errorMessage, boolError);
+	normalized.lineNumZeroFill = parsedBool;
 	if (!parseBooleanLiteral(settings.persistentBlocks ? "true" : "false", parsedBool, &boolError))
 		return setError(errorMessage, boolError);
 	normalized.persistentBlocks = parsedBool;
@@ -1215,7 +1347,8 @@ std::string buildColorThemeMacroSource() {
 
 	source += "$MACRO MR_COLOR_THEME FROM EDIT;\n";
 	source +=
-	    "MRSETUP('WINDOWCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.windowColors)) +
+	    "MRSETUP('WINDOWCOLORS', '" +
+	    escapeMrmacSingleQuotedLiteral(formatWindowColorListLiteral(colors.windowColors)) +
 	    "');\n";
 	source += "MRSETUP('MENUDIALOGCOLORS', '" +
 	          escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.menuDialogColors)) + "');\n";
@@ -1347,6 +1480,7 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 	unsigned char dialogFrame = 0;
 	unsigned char dialogText = 0;
 	unsigned char dialogBackground = 0;
+	unsigned char dialogInactiveCluster = 0;
 
 	// Turbo Vision menu hotkeys use two app slots:
 	// - slot 4: shortcut text (normal item)
@@ -1361,16 +1495,18 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 	}
 
 	for (std::size_t i = 0; i < sizeof(kMenuDialogColorItems) / sizeof(kMenuDialogColorItems[0]); ++i) {
-		if (kMenuDialogColorItems[i].paletteIndex == 33)
+		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogFrame)
 			dialogFrame = configured.menuDialogColors[i];
-		if (kMenuDialogColorItems[i].paletteIndex == 37)
+		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogText)
 			dialogText = configured.menuDialogColors[i];
-		if (kMenuDialogColorItems[i].paletteIndex == 32)
+		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogBackground)
 			dialogBackground = configured.menuDialogColors[i];
+		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogInactiveClusterGray)
+			dialogInactiveCluster = configured.menuDialogColors[i];
 	}
 
 	switch (paletteIndex) {
-		case 33:
+		case kPaletteDialogFrame:
 		case 34:
 		case 65:
 		case 66:
@@ -1378,15 +1514,20 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 		case 98:
 			value = dialogFrame;
 			return true;
-		case 37:
+		case kPaletteDialogText:
 		case 69:
 		case 101:
 			value = dialogText;
 			return true;
-		case 32:
+		case kPaletteDialogBackground:
 		case 64:
 		case 96:
 			value = dialogBackground;
+			return true;
+		case kPaletteDialogInactiveClusterGray:
+		case kPaletteDialogInactiveClusterBlue:
+		case kPaletteDialogInactiveClusterCyan:
+			value = dialogInactiveCluster;
 			return true;
 		default:
 			break;
@@ -1446,6 +1587,27 @@ bool applyConfiguredEditSetupValue(const std::string &key, const std::string &va
 		if (!parseBooleanLiteral(value, boolValue, errorMessage))
 			return false;
 		current.tabExpand = boolValue;
+	} else if (upperKeyName == "BACKUPFILES") {
+		if (!parseBooleanLiteral(value, boolValue, errorMessage))
+			return false;
+		current.backupFiles = boolValue;
+	} else if (upperKeyName == "SHOWEOFMARKER" || upperKeyName == "EOFMARKER") {
+		if (!parseBooleanLiteral(value, boolValue, errorMessage))
+			return false;
+		current.showEofMarker = boolValue;
+	} else if (upperKeyName == "SHOWEOFMARKEREMOJI" || upperKeyName == "EOFMARKEREMOJI" ||
+	           upperKeyName == "SHOWEOFEMOJI") {
+		if (!parseBooleanLiteral(value, boolValue, errorMessage))
+			return false;
+		current.showEofMarkerEmoji = boolValue;
+	} else if (upperKeyName == "SHOWLINENUMBERS") {
+		if (!parseBooleanLiteral(value, boolValue, errorMessage))
+			return false;
+		current.showLineNumbers = boolValue;
+	} else if (upperKeyName == "LINENUMZEROFILL") {
+		if (!parseBooleanLiteral(value, boolValue, errorMessage))
+			return false;
+		current.lineNumZeroFill = boolValue;
 	} else if (upperKeyName == "PERSISTBLOCKS" || upperKeyName == "PERSISTENTBLOCKS") {
 		if (!parseBooleanLiteral(value, boolValue, errorMessage))
 			return false;
@@ -1482,12 +1644,36 @@ bool configuredTabExpandSetting() {
 	return configuredEditSetupSettings().tabExpand;
 }
 
+bool configuredBackupFilesSetting() {
+	return configuredEditSetupSettings().backupFiles;
+}
+
 bool configuredPersistentBlocksSetting() {
 	return configuredEditSetupSettings().persistentBlocks;
 }
 
 char configuredPageBreakCharacter() {
 	return decodePageBreakLiteral(configuredEditSetupSettings().pageBreak);
+}
+
+bool setConfiguredLastFileDialogPath(const std::string &path, std::string *errorMessage) {
+	std::string directory = normalizedDialogDirectoryFromPath(path);
+	std::string fallback;
+
+	if (!directory.empty())
+		rememberedLoadDirectory() = directory;
+	else {
+		fallback = fallbackRememberedLoadDirectory();
+		if (!fallback.empty())
+			rememberedLoadDirectory() = fallback;
+	}
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+std::string configuredLastFileDialogPath() {
+	return effectiveRememberedLoadDirectory();
 }
 
 std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
@@ -1509,6 +1695,8 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source += "MRSETUP('HELPPATH', '" + escapeMrmacSingleQuotedLiteral(helpPath) + "');\n";
 	source += "MRSETUP('TEMPDIR', '" + escapeMrmacSingleQuotedLiteral(tempDir) + "');\n";
 	source += "MRSETUP('SHELLPATH', '" + escapeMrmacSingleQuotedLiteral(shellPath) + "');\n";
+	source += "MRSETUP('LASTFILEDIALOGPATH', '" +
+	          escapeMrmacSingleQuotedLiteral(configuredLastFileDialogPath()) + "');\n";
 	source += "MRSETUP('PAGEBREAK', '" + escapeMrmacSingleQuotedLiteral(edit.pageBreak) + "');\n";
 	source += "MRSETUP('WORDDELIMS', '" + escapeMrmacSingleQuotedLiteral(edit.wordDelimiters) + "');\n";
 	source +=
@@ -1523,6 +1711,16 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source +=
 	    "MRSETUP('TABEXPAND', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.tabExpand)) +
 	    "');\n";
+	source += "MRSETUP('BACKUPFILES', '" +
+	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.backupFiles)) + "');\n";
+	source += "MRSETUP('SHOWEOFMARKER', '" +
+	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.showEofMarker)) + "');\n";
+	source += "MRSETUP('SHOWEOFMARKEREMOJI', '" +
+	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.showEofMarkerEmoji)) + "');\n";
+	source += "MRSETUP('SHOWLINENUMBERS', '" +
+	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.showLineNumbers)) + "');\n";
+	source += "MRSETUP('LINENUMZEROFILL', '" +
+	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.lineNumZeroFill)) + "');\n";
 	source += "MRSETUP('PERSISTENTBLOCKS', '" +
 	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.persistentBlocks)) + "');\n";
 	source += "MRSETUP('COLBLOCKMOVE', '" + escapeMrmacSingleQuotedLiteral(edit.columnBlockMove) + "');\n";
@@ -1531,6 +1729,30 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	          escapeMrmacSingleQuotedLiteral(themePath) + "');\n";
 	source += "END_MACRO;\n";
 	return source;
+}
+
+bool persistConfiguredSettingsSnapshot(std::string *errorMessage) {
+	MRSetupPaths paths;
+	std::string settingsPath = configuredSettingsMacroFilePath();
+	std::string settingsDir = directoryPartOf(settingsPath);
+	std::string source;
+
+	paths.settingsMacroUri = settingsPath;
+	paths.macroPath = defaultMacroDirectoryPath();
+	paths.helpUri = configuredHelpFilePath();
+	paths.tempPath = configuredTempDirectoryPath();
+	paths.shellUri = configuredShellExecutablePath();
+
+	if (!validateSettingsMacroFilePath(settingsPath, errorMessage))
+		return false;
+	if (!ensureDirectoryTree(settingsDir, errorMessage))
+		return false;
+	source = buildSettingsMacroSource(paths);
+	if (!writeTextFile(settingsPath, source))
+		return setError(errorMessage, "Unable to write settings macro file: " + settingsPath);
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
 }
 
 bool writeSettingsMacroFile(const MRSetupPaths &paths, std::string *errorMessage) {
@@ -1579,7 +1801,7 @@ bool ensureSettingsMacroFileExists(const std::string &settingsMacroUri, std::str
 
 void initRememberedLoadDialogPath(char *buffer, std::size_t bufferSize, const char *pattern) {
 	std::string initial;
-	const std::string &dir = rememberedLoadDirectory();
+	std::string dir = effectiveRememberedLoadDirectory();
 	const char *safePattern = (pattern != nullptr && *pattern != '\0') ? pattern : "*.*";
 
 	if (!dir.empty()) {
@@ -1593,8 +1815,7 @@ void initRememberedLoadDialogPath(char *buffer, std::size_t bufferSize, const ch
 }
 
 void rememberLoadDialogPath(const char *path) {
-	std::string normalized = normalizeDialogPath(path);
-	std::string dir = directoryPartOf(normalized);
+	std::string dir = normalizedDialogDirectoryFromPath(path != nullptr ? path : "");
 
 	if (!dir.empty())
 		rememberedLoadDirectory() = dir;
@@ -1649,7 +1870,8 @@ bool setConfiguredMacroDirectoryPath(const std::string &path, std::string *error
 	if (!validateMacroDirectoryPath(path, errorMessage))
 		return false;
 	configuredMacroDirectory() = makeAbsolutePath(normalized);
-	rememberedLoadDirectory() = configuredMacroDirectory();
+	if (!isReadableDirectory(makeAbsolutePath(rememberedLoadDirectory())))
+		rememberedLoadDirectory() = configuredMacroDirectory();
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;

@@ -5961,16 +5961,25 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							throw std::runtime_error(
 							    "MRSETUP(SHELLPATH) failed: " +
 							    (errorText.empty() ? std::string("invalid path.") : errorText));
+					} else if (setupKey == "LASTFILEDIALOGPATH") {
+						if (!setConfiguredLastFileDialogPath(valueAsString(args[1]), &errorText))
+							throw std::runtime_error(
+							    "MRSETUP(LASTFILEDIALOGPATH) failed: " +
+							    (errorText.empty() ? std::string("invalid path.") : errorText));
 					} else if (setupKey == "COLORTHEMEURI") {
 						if (!setConfiguredColorThemeFilePath(valueAsString(args[1]), &errorText))
 							throw std::runtime_error(
 							    "MRSETUP(COLORTHEMEURI) failed: " +
 							    (errorText.empty() ? std::string("invalid path.") : errorText));
-						} else if (setupKey == "PAGEBREAK" || setupKey == "WORDDELIMS" ||
-						           setupKey == "DEFAULTEXTS" || setupKey == "TRUNCSPACES" ||
-						           setupKey == "EOFCTRLZ" || setupKey == "EOFCRLF" ||
-						           setupKey == "TABEXPAND" || setupKey == "PERSISTBLOCKS" ||
-						           setupKey == "PERSISTENTBLOCKS" || setupKey == "COLBLOCKMOVE" ||
+							} else if (setupKey == "PAGEBREAK" || setupKey == "WORDDELIMS" ||
+							           setupKey == "DEFAULTEXTS" || setupKey == "TRUNCSPACES" ||
+							           setupKey == "EOFCTRLZ" || setupKey == "EOFCRLF" ||
+							           setupKey == "TABEXPAND" || setupKey == "BACKUPFILES" ||
+							           setupKey == "SHOWEOFMARKER" ||
+							           setupKey == "SHOWEOFMARKEREMOJI" ||
+							           setupKey == "SHOWLINENUMBERS" ||
+							           setupKey == "LINENUMZEROFILL" || setupKey == "PERSISTBLOCKS" ||
+							           setupKey == "PERSISTENTBLOCKS" || setupKey == "COLBLOCKMOVE" ||
 						           setupKey == "DEFAULTMODE") {
 							if (!applyConfiguredEditSetupValue(setupKey, valueAsString(args[1]), &errorText))
 								throw std::runtime_error(
@@ -5997,8 +6006,12 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						} else
 							throw std::runtime_error(
 							    "MRSETUP supports keys: MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
-							    "SHELLPATH, COLORTHEMEURI, PAGEBREAK, WORDDELIMS, DEFAULTEXTS, TRUNCSPACES, EOFCTRLZ, "
-							    "EOFCRLF, TABEXPAND, PERSISTENTBLOCKS, COLBLOCKMOVE, DEFAULTMODE, WINDOWCOLORS, "
+								    "SHELLPATH, LASTFILEDIALOGPATH, COLORTHEMEURI, PAGEBREAK, WORDDELIMS, DEFAULTEXTS, "
+								    "TRUNCSPACES, EOFCTRLZ, "
+								    "EOFCRLF, TABEXPAND, BACKUPFILES, SHOWEOFMARKER, SHOWEOFMARKEREMOJI, "
+								    "SHOWLINENUMBERS, "
+								    "LINENUMZEROFILL, PERSISTENTBLOCKS, "
+								    "COLBLOCKMOVE, DEFAULTMODE, WINDOWCOLORS, "
 							    "MENUDIALOGCOLORS, HELPCOLORS, OTHERCOLORS.");
 					runtimeErrorLevel() = 0;
 				} else if (name == "SET_GLOBAL_STR") {

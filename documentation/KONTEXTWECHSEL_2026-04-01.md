@@ -3,27 +3,10 @@
 ## 1) Ziel
 Dieses Dokument ist die Übergabe für einen neuen Codex-Kontext mit minimalem Informationsverlust.
 
-## 2) Verbindliche Zusammenarbeit (User-Vorgaben)
-- Anrede: `Sie` oder `Dr. Raus` (kein Duzen).
-- Bei Entscheidungsfragen: immer Optionen mit Begründung + klare Empfehlung.
-- Ohne explizite Freigabe keine weiteren Ausbau-Schritte.
-- Rückmeldungspflicht: User erst adressieren, nachdem Codex die Änderung im PTY selbst getestet hat.
-- Verwaltung der Versionsnummer des Compilats liegt bei Codex/AI.
-- Fokus auf Pragmatik, technische Klarheit, kurze direkte Kommunikation.
-- Ablagekonvention: Markdown-Dokumentation liegt unter `documentation/`; `misc/` ist nur temporäre Müllhalde/Probe-Ablage.
-- Workspace-Hygiene: Workspace stets aufgeräumt halten; kein Herummüllen mit vielen Neben-/Artefaktdateien.
-- Warmup-Regel bei neuem Kontext: zuerst `documentation/CHANGELOG_CONTEXT.md` lesen (laufendes Protokoll), danach verbindlich `documentation/MRMAC_V1_STATUS.md`, dann dieses Dokument und die YAML-Übergabe.
-- Setup-Defaults-Regel: Pfad-/URI-Defaults für Setup zentral in **einer** Routine ermitteln; Bootstrap und Setup-Dialog dürfen keine getrennten Default-Logiken haben.
-- Setup-Key-Regel: Bei neuen Setup-Settings den User mit Vorschlag fuer den exakten Key in `settings.mrmac` befragen (wie bestehend: `"SETTINGSPATH"`, `"MACROPATH"`, `"HELPPATH"`, `"TEMPDIR"`, `"SHELLPATH"`).
-- Edit-Settings Keyset v1 ist festgelegt: `"PAGEBREAK"`, `"WORDDELIMS"`, `"DEFAULTEXTS"`, `"TRUNCSPACES"`, `"EOFCTRLZ"`, `"EOFCRLF"`, `"TABEXPAND"`, `"COLBLOCKMOVE"`, `"DEFAULTMODE"`.
-- Bool-Format-Regel fuer Setup-Values: `true/false` (nicht `1/0`).
-- Setup-Dialog-Mnemonics: Neue Dialoge bekommen geeignete Highlight-/Shortcut-Buchstaben durch Codex ohne Rueckfrage.
-- Workspace-Loeschungen: Rueckfragen vor Datei-Loeschungen im Workspace sind deaktiviert (User-Freigabe erteilt).
-- Neue Source-Ordner: Vor dem Anlegen neuer Source-/Code-Ordner immer erst Rueckfrage mit kurzer Begruendung.
-- Einheitlichkeitsregel: Alle Dialoge und alle Fenster werden nach denselben zentralen UI-/Palette-Regeln behandelt; keine Sonderbehandlung einzelner Views/Dialoge/Fenster.
-- Abweichungswarnung: Wenn eine Forderung den zentralen UI-/Palette-Standard verlassen wuerde, muss Codex vor Umsetzung explizit warnen und den Tradeoff benennen.
-- TVision-Paletten-Hard-Gate (verbindlich): zentrale Palette-Quelle, keine per-View-Sonderfarben, atomisches Anwenden auf Dialog-/Fenster-Gruppen.
-- Verweigerungsregel (Regressionsschutz): Codex verweigert jede Implementierung, die den TVision-Paletten-Hard-Gate verletzt.
+## 2) Verbindliche Regeln (konsolidiert)
+- Verbindliche Kontext-/Zusammenarbeitsregeln stehen ausschliesslich in `documentation/Codex Kontext Übergabe.yaml`.
+- Dieses Dokument dient nur als historisches Uebergabe-/Statusarchiv.
+- Bei Konflikt zwischen Dokumenten gilt immer die YAML-Datei.
 
 ## 3) Projektstatus (aktuell)
 - Repository: `/home/idoc/mr`
@@ -152,7 +135,7 @@ Option 1.
 
 ## 10) Protokoll (laufend)
 - Das laufende Protokoll ist ab sofort ausgelagert nach `documentation/CHANGELOG_CONTEXT.md`.
-- Dieses Dokument enthaelt nur die stabilen Uebergaberegeln; Detailverlauf und Tagesfortschritt stehen im Changelog.
+- Dieses Dokument ist historisches Archiv; Detailverlauf steht im Changelog und verbindliche Regeln stehen in der YAML-Datei.
 
 ## 11) Update 2026-04-01 (spaeter)
 - Setup `Edit settings` (Option 1) ist implementiert:

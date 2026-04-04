@@ -1035,43 +1035,68 @@ static int lookup_builtin_constant(const char *name, int *out_value) {
 }
 
 static int lookup_builtin_variable(const char *name, int *out_type) {
-	if (strcasecmp(name, "RETURN_INT") == 0 || strcasecmp(name, "ERROR_LEVEL") == 0 ||
-	    strcasecmp(name, "FIRST_RUN") == 0 || strcasecmp(name, "IGNORE_CASE") == 0 ||
-	    strcasecmp(name, "FIRST_SAVE") == 0 || strcasecmp(name, "EOF_IN_MEM") == 0 ||
-	    strcasecmp(name, "BUFFER_ID") == 0 || strcasecmp(name, "TMP_FILE") == 0 ||
-	    strcasecmp(name, "FILE_CHANGED") == 0 || strcasecmp(name, "PARAM_COUNT") == 0 ||
-	    strcasecmp(name, "CPU") == 0 || strcasecmp(name, "C_COL") == 0 ||
-	    strcasecmp(name, "C_LINE") == 0 || strcasecmp(name, "C_ROW") == 0 ||
-	    strcasecmp(name, "AT_EOF") == 0 || strcasecmp(name, "AT_EOL") == 0 ||
-	    strcasecmp(name, "BLOCK_STAT") == 0 || strcasecmp(name, "BLOCK_LINE1") == 0 ||
-	    strcasecmp(name, "BLOCK_LINE2") == 0 || strcasecmp(name, "BLOCK_COL1") == 0 ||
-	    strcasecmp(name, "BLOCK_COL2") == 0 || strcasecmp(name, "MARKING") == 0 ||
-	    strcasecmp(name, "TAB_EXPAND") == 0 || strcasecmp(name, "INSERT_MODE") == 0 ||
-	    strcasecmp(name, "INDENT_LEVEL") == 0 || strcasecmp(name, "CUR_WINDOW") == 0 ||
-	    strcasecmp(name, "LINK_STAT") == 0 ||
-	    strcasecmp(name, "WIN_X1") == 0 || strcasecmp(name, "WIN_Y1") == 0 ||
-	    strcasecmp(name, "WIN_X2") == 0 || strcasecmp(name, "WIN_Y2") == 0 ||
-	    strcasecmp(name, "WINDOW_COUNT") == 0) {
-		if (out_type != NULL)
-			*out_type = TYPE_INT;
-		return 1;
+	struct BuiltinVariable {
+		const char *name;
+		int type;
+	};
+	static const struct BuiltinVariable variables[] = {
+	    {"RETURN_INT", TYPE_INT},     {"ERROR_LEVEL", TYPE_INT},    {"FIRST_RUN", TYPE_INT},
+	    {"IGNORE_CASE", TYPE_INT},    {"FIRST_SAVE", TYPE_INT},     {"EOF_IN_MEM", TYPE_INT},
+	    {"BUFFER_ID", TYPE_INT},      {"TMP_FILE", TYPE_INT},       {"FILE_CHANGED", TYPE_INT},
+	    {"PARAM_COUNT", TYPE_INT},    {"CPU", TYPE_INT},            {"C_COL", TYPE_INT},
+	    {"C_LINE", TYPE_INT},         {"C_ROW", TYPE_INT},          {"AT_EOF", TYPE_INT},
+	    {"AT_EOL", TYPE_INT},         {"BLOCK_STAT", TYPE_INT},     {"BLOCK_LINE1", TYPE_INT},
+	    {"BLOCK_LINE2", TYPE_INT},    {"BLOCK_COL1", TYPE_INT},     {"BLOCK_COL2", TYPE_INT},
+	    {"MARKING", TYPE_INT},        {"TAB_EXPAND", TYPE_INT},     {"INSERT_MODE", TYPE_INT},
+	    {"INDENT_LEVEL", TYPE_INT},   {"CUR_WINDOW", TYPE_INT},     {"LINK_STAT", TYPE_INT},
+	    {"WIN_X1", TYPE_INT},         {"WIN_Y1", TYPE_INT},         {"WIN_X2", TYPE_INT},
+	    {"WIN_Y2", TYPE_INT},         {"WINDOW_COUNT", TYPE_INT},   {"RETURN_STR", TYPE_STR},
+	    {"MPARM_STR", TYPE_STR},      {"DATE", TYPE_STR},           {"TIME", TYPE_STR},
+	    {"FIRST_MACRO", TYPE_STR},    {"NEXT_MACRO", TYPE_STR},     {"LAST_FILE_NAME", TYPE_STR},
+	    {"TMP_FILE_NAME", TYPE_STR},  {"FILE_NAME", TYPE_STR},      {"COMSPEC", TYPE_STR},
+	    {"MR_PATH", TYPE_STR},        {"OS_VERSION", TYPE_STR},     {"GET_LINE", TYPE_STR},
+	    {"CUR_CHAR", TYPE_CHAR},      {NULL, 0}};
+	int i;
+
+	for (i = 0; variables[i].name != NULL; ++i)
+		if (strcasecmp(name, variables[i].name) == 0) {
+			if (out_type != NULL)
+				*out_type = variables[i].type;
+			return 1;
+		}
+	return 0;
+}
+
+typedef enum {
+	CALL_ARG_NONE = 0,
+	CALL_ARG_INT,
+	CALL_ARG_REAL,
+	CALL_ARG_STRINGLIKE
+} CallArgKind;
+
+static int call_arg_matches_type(CallArgKind expected, int actual_type) {
+	if (expected == CALL_ARG_INT)
+		return actual_type == TYPE_INT;
+	if (expected == CALL_ARG_REAL)
+		return actual_type == TYPE_REAL;
+	if (expected == CALL_ARG_STRINGLIKE)
+		return is_stringlike_type(actual_type);
+	return 1;
+}
+
+static int validate_call_arguments(const CallArgKind *expected_args, int expected_argc,
+                                   const ExprInfo *args, int argc, int line) {
+	int i;
+
+	if (argc != expected_argc) {
+		set_compile_error(line, "Type mismatch or syntax error.");
+		return -1;
 	}
-	if (strcasecmp(name, "RETURN_STR") == 0 || strcasecmp(name, "MPARM_STR") == 0 ||
-	    strcasecmp(name, "DATE") == 0 || strcasecmp(name, "TIME") == 0 ||
-	    strcasecmp(name, "FIRST_MACRO") == 0 || strcasecmp(name, "NEXT_MACRO") == 0 ||
-	    strcasecmp(name, "LAST_FILE_NAME") == 0 || strcasecmp(name, "TMP_FILE_NAME") == 0 ||
-	    strcasecmp(name, "FILE_NAME") == 0 || strcasecmp(name, "COMSPEC") == 0 ||
-	    strcasecmp(name, "MR_PATH") == 0 || strcasecmp(name, "OS_VERSION") == 0 ||
-	    strcasecmp(name, "GET_LINE") == 0) {
-		if (out_type != NULL)
-			*out_type = TYPE_STR;
-		return 1;
-	}
-	if (strcasecmp(name, "CUR_CHAR") == 0) {
-		if (out_type != NULL)
-			*out_type = TYPE_CHAR;
-		return 1;
-	}
+	for (i = 0; i < argc; ++i)
+		if (!call_arg_matches_type(expected_args[i], args[i].type)) {
+			set_compile_error(line, "Type mismatch or syntax error.");
+			return -1;
+		}
 	return 0;
 }
 
@@ -1151,6 +1176,176 @@ static int parse_argument_expressions(Parser *ps, ExprInfo *arg_types, int *out_
 	return 0;
 }
 
+typedef struct {
+	const char *name;
+	int argc;
+	CallArgKind args[4];
+	int result_type;
+	int allow_without_parens;
+} IntrinsicSignature;
+
+#define INTR_SIG0(n, r) \
+	{ n, 0, {CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, r, 0 }
+#define INTR_SIG0_BARE(n, r) \
+	{ n, 0, {CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, r, 1 }
+#define INTR_SIG1(n, a0, r) \
+	{ n, 1, {a0, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, r, 0 }
+#define INTR_SIG2(n, a0, a1, r) { n, 2, {a0, a1, CALL_ARG_NONE, CALL_ARG_NONE}, r, 0 }
+#define INTR_SIG3(n, a0, a1, a2, r) { n, 3, {a0, a1, a2, CALL_ARG_NONE}, r, 0 }
+
+static const IntrinsicSignature kIntrinsicSignatures[] = {
+    INTR_SIG1("STR", CALL_ARG_INT, TYPE_STR),
+    INTR_SIG1("CHAR", CALL_ARG_INT, TYPE_CHAR),
+    INTR_SIG1("ASCII", CALL_ARG_STRINGLIKE, TYPE_INT),
+    INTR_SIG1("CAPS", CALL_ARG_STRINGLIKE, TYPE_STR),
+    INTR_SIG3("COPY", CALL_ARG_STRINGLIKE, CALL_ARG_INT, CALL_ARG_INT, TYPE_STR),
+    INTR_SIG1("LENGTH", CALL_ARG_STRINGLIKE, TYPE_INT),
+    INTR_SIG2("POS", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, TYPE_INT),
+    INTR_SIG3("XPOS", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_INT, TYPE_INT),
+    INTR_SIG3("STR_DEL", CALL_ARG_STRINGLIKE, CALL_ARG_INT, CALL_ARG_INT, TYPE_STR),
+    INTR_SIG3("STR_INS", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_INT, TYPE_STR),
+    INTR_SIG1("REAL_I", CALL_ARG_INT, TYPE_REAL),
+    INTR_SIG1("INT_R", CALL_ARG_REAL, TYPE_INT),
+    INTR_SIG3("RSTR", CALL_ARG_REAL, CALL_ARG_INT, CALL_ARG_INT, TYPE_STR),
+    INTR_SIG1("REMOVE_SPACE", CALL_ARG_STRINGLIKE, TYPE_STR),
+    INTR_SIG1("GET_EXTENSION", CALL_ARG_STRINGLIKE, TYPE_STR),
+    INTR_SIG1("GET_PATH", CALL_ARG_STRINGLIKE, TYPE_STR),
+    INTR_SIG1("TRUNCATE_EXTENSION", CALL_ARG_STRINGLIKE, TYPE_STR),
+    INTR_SIG1("TRUNCATE_PATH", CALL_ARG_STRINGLIKE, TYPE_STR),
+    INTR_SIG1("FILE_EXISTS", CALL_ARG_STRINGLIKE, TYPE_INT),
+    INTR_SIG1("FIRST_FILE", CALL_ARG_STRINGLIKE, TYPE_INT),
+    INTR_SIG0_BARE("NEXT_FILE", TYPE_INT),
+    INTR_SIG1("GET_ENVIRONMENT", CALL_ARG_STRINGLIKE, TYPE_STR),
+    INTR_SIG1("GET_WORD", CALL_ARG_STRINGLIKE, TYPE_STR),
+    INTR_SIG1("PARAM_STR", CALL_ARG_INT, TYPE_STR),
+    INTR_SIG1("GLOBAL_STR", CALL_ARG_STRINGLIKE, TYPE_STR),
+    INTR_SIG1("GLOBAL_INT", CALL_ARG_STRINGLIKE, TYPE_INT),
+    INTR_SIG2("PARSE_STR", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, TYPE_STR),
+    INTR_SIG2("PARSE_INT", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, TYPE_INT),
+    INTR_SIG1("INQ_MACRO", CALL_ARG_STRINGLIKE, TYPE_INT),
+    INTR_SIG2("SEARCH_FWD", CALL_ARG_STRINGLIKE, CALL_ARG_INT, TYPE_INT),
+    INTR_SIG2("SEARCH_BWD", CALL_ARG_STRINGLIKE, CALL_ARG_INT, TYPE_INT),
+};
+
+#undef INTR_SIG0
+#undef INTR_SIG0_BARE
+#undef INTR_SIG1
+#undef INTR_SIG2
+#undef INTR_SIG3
+
+static const IntrinsicSignature *find_intrinsic_signature(const char *name) {
+	size_t i;
+
+	for (i = 0; i < sizeof(kIntrinsicSignatures) / sizeof(kIntrinsicSignatures[0]); ++i)
+		if (strcasecmp(name, kIntrinsicSignatures[i].name) == 0)
+			return &kIntrinsicSignatures[i];
+	return NULL;
+}
+
+static int try_emit_bare_intrinsic_call(const char *name, ExprInfo *out) {
+	const IntrinsicSignature *spec = find_intrinsic_signature(name);
+	if (spec == NULL || !spec->allow_without_parens || spec->argc != 0)
+		return 0;
+	emit_intrinsic_call(spec->name, 0);
+	out->type = spec->result_type;
+	return 1;
+}
+
+static int is_val_like_intrinsic(const char *name) {
+	return strcasecmp(name, "VAL") == 0 || strcasecmp(name, "RVAL") == 0;
+}
+
+static int parse_val_like_intrinsic_call(Parser *ps, const char *name, int line, ExprInfo *out) {
+	char *target_name;
+	int target_type;
+	ExprInfo source_expr;
+	int is_real_target = (strcasecmp(name, "RVAL") == 0);
+	int expected_type = is_real_target ? TYPE_REAL : TYPE_INT;
+
+	if (ps->tok.kind != TOK_IDENTIFIER) {
+		set_compile_error(ps->tok.line, "Variable expected.");
+		return -1;
+	}
+
+	target_name = xstrdup(ps->tok.text);
+	if (target_name == NULL) {
+		set_compile_error(ps->tok.line, "Out of memory.");
+		return -1;
+	}
+	if (lookup_symbol(target_name, &target_type) < 0) {
+		set_compile_error(ps->tok.line, "Variable expected.");
+		free(target_name);
+		return -1;
+	}
+	if (target_type != expected_type) {
+		set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
+		free(target_name);
+		return -1;
+	}
+
+	parser_next(ps);
+	if (parser_expect(ps, TOK_COMMA, "',' expected.") != 0) {
+		free(target_name);
+		return -1;
+	}
+	if (parse_expression(ps, 1, &source_expr) != 0) {
+		free(target_name);
+		return -1;
+	}
+	if (!is_stringlike_type(source_expr.type)) {
+		set_compile_error(line, "Type mismatch or syntax error.");
+		free(target_name);
+		return -1;
+	}
+	if (parser_expect(ps, TOK_RPAREN, "')' expected.") != 0) {
+		free(target_name);
+		return -1;
+	}
+
+	emit_byte(is_real_target ? OP_RVAL : OP_VAL);
+	emit_string(target_name);
+	out->type = TYPE_INT;
+	free(target_name);
+	return 0;
+}
+
+static int is_global_iterator_intrinsic(const char *name) {
+	return strcasecmp(name, "FIRST_GLOBAL") == 0 || strcasecmp(name, "NEXT_GLOBAL") == 0;
+}
+
+static int parse_global_iterator_intrinsic_call(Parser *ps, const char *name, ExprInfo *out) {
+	char *target_name;
+	int target_type;
+
+	if (ps->tok.kind != TOK_IDENTIFIER) {
+		set_compile_error(ps->tok.line, "Variable expected.");
+		return -1;
+	}
+
+	target_name = xstrdup(ps->tok.text);
+	if (target_name == NULL) {
+		set_compile_error(ps->tok.line, "Out of memory.");
+		return -1;
+	}
+	if (lookup_symbol(target_name, &target_type) < 0 || target_type != TYPE_INT) {
+		set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
+		free(target_name);
+		return -1;
+	}
+
+	parser_next(ps);
+	if (parser_expect(ps, TOK_RPAREN, "')' expected.") != 0) {
+		free(target_name);
+		return -1;
+	}
+
+	emit_byte(strcasecmp(name, "FIRST_GLOBAL") == 0 ? OP_FIRST_GLOBAL : OP_NEXT_GLOBAL);
+	emit_string(target_name);
+	out->type = TYPE_STR;
+	free(target_name);
+	return 0;
+}
+
 static int parse_primary(Parser *ps, ExprInfo *out) {
 	char *name;
 	int var_type;
@@ -1189,6 +1384,7 @@ static int parse_primary(Parser *ps, ExprInfo *out) {
 		ExprInfo args[8];
 		int argc = 0;
 		int line = ps->tok.line;
+		const IntrinsicSignature *spec;
 		name = xstrdup(ps->tok.text);
 		if (name == NULL) {
 			set_compile_error(ps->tok.line, "Out of memory.");
@@ -1215,108 +1411,23 @@ static int parse_primary(Parser *ps, ExprInfo *out) {
 			}
 		}
 
-		if (strcasecmp(name, "NEXT_FILE") == 0) {
-			emit_intrinsic_call("NEXT_FILE", 0);
-			out->type = TYPE_INT;
+		if (try_emit_bare_intrinsic_call(name, out)) {
 			free(name);
 			return 0;
 		}
 
 		if (parser_accept(ps, TOK_LPAREN)) {
-			if (strcasecmp(name, "VAL") == 0 || strcasecmp(name, "RVAL") == 0) {
-				char *target_name;
-				int target_type;
-				ExprInfo source_expr;
-				int is_real_target = (strcasecmp(name, "RVAL") == 0);
-
-				if (ps->tok.kind != TOK_IDENTIFIER) {
-					set_compile_error(ps->tok.line, "Variable expected.");
-					free(name);
-					return -1;
-				}
-
-				target_name = xstrdup(ps->tok.text);
-				if (target_name == NULL) {
-					set_compile_error(ps->tok.line, "Out of memory.");
-					free(name);
-					return -1;
-				}
-				if (lookup_symbol(target_name, &target_type) < 0) {
-					set_compile_error(ps->tok.line, "Variable expected.");
-					free(target_name);
-					free(name);
-					return -1;
-				}
-				if ((is_real_target && target_type != TYPE_REAL) ||
-				    (!is_real_target && target_type != TYPE_INT)) {
-					set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
-					free(target_name);
-					free(name);
-					return -1;
-				}
-				parser_next(ps);
-				if (parser_expect(ps, TOK_COMMA, "',' expected.") != 0) {
-					free(target_name);
-					free(name);
-					return -1;
-				}
-				if (parse_expression(ps, 1, &source_expr) != 0) {
-					free(target_name);
-					free(name);
-					return -1;
-				}
-				if (!is_stringlike_type(source_expr.type)) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(target_name);
-					free(name);
-					return -1;
-				}
-				if (parser_expect(ps, TOK_RPAREN, "')' expected.") != 0) {
-					free(target_name);
-					free(name);
-					return -1;
-				}
-
-				emit_byte(is_real_target ? OP_RVAL : OP_VAL);
-				emit_string(target_name);
-				out->type = TYPE_INT;
-				free(target_name);
+			int rc;
+			if (is_val_like_intrinsic(name)) {
+				rc = parse_val_like_intrinsic_call(ps, name, line, out);
 				free(name);
-				return 0;
+				return rc;
 			}
 
-			if (strcasecmp(name, "FIRST_GLOBAL") == 0 || strcasecmp(name, "NEXT_GLOBAL") == 0) {
-				char *target_name;
-				int target_type;
-				if (ps->tok.kind != TOK_IDENTIFIER) {
-					set_compile_error(ps->tok.line, "Variable expected.");
-					free(name);
-					return -1;
-				}
-				target_name = xstrdup(ps->tok.text);
-				if (target_name == NULL) {
-					set_compile_error(ps->tok.line, "Out of memory.");
-					free(name);
-					return -1;
-				}
-				if (lookup_symbol(target_name, &target_type) < 0 || target_type != TYPE_INT) {
-					set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
-					free(target_name);
-					free(name);
-					return -1;
-				}
-				parser_next(ps);
-				if (parser_expect(ps, TOK_RPAREN, "')' expected.") != 0) {
-					free(target_name);
-					free(name);
-					return -1;
-				}
-				emit_byte(strcasecmp(name, "FIRST_GLOBAL") == 0 ? OP_FIRST_GLOBAL : OP_NEXT_GLOBAL);
-				emit_string(target_name);
-				out->type = TYPE_STR;
-				free(target_name);
+			if (is_global_iterator_intrinsic(name)) {
+				rc = parse_global_iterator_intrinsic_call(ps, name, out);
 				free(name);
-				return 0;
+				return rc;
 			}
 
 			if (parse_argument_expressions(ps, args, &argc, 8) != 0) {
@@ -1328,260 +1439,18 @@ static int parse_primary(Parser *ps, ExprInfo *out) {
 				return -1;
 			}
 
-			if (strcasecmp(name, "STR") == 0) {
-				if (argc != 1 || args[0].type != TYPE_INT) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("STR", argc);
-				out->type = TYPE_STR;
-			} else if (strcasecmp(name, "CHAR") == 0) {
-				if (argc != 1 || args[0].type != TYPE_INT) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("CHAR", argc);
-				out->type = TYPE_CHAR;
-			} else if (strcasecmp(name, "ASCII") == 0) {
-				if (argc != 1 || !is_stringlike_type(args[0].type)) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("ASCII", argc);
-				out->type = TYPE_INT;
-			} else if (strcasecmp(name, "CAPS") == 0) {
-				if (argc != 1 || !is_stringlike_type(args[0].type)) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("CAPS", argc);
-				out->type = TYPE_STR;
-			} else if (strcasecmp(name, "COPY") == 0) {
-				if (argc != 3 || !is_stringlike_type(args[0].type) || args[1].type != TYPE_INT ||
-				    args[2].type != TYPE_INT) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("COPY", argc);
-				out->type = TYPE_STR;
-			} else if (strcasecmp(name, "LENGTH") == 0) {
-				if (argc != 1 || !is_stringlike_type(args[0].type)) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("LENGTH", argc);
-				out->type = TYPE_INT;
-			} else if (strcasecmp(name, "POS") == 0) {
-				if (argc != 2 || !is_stringlike_type(args[0].type) ||
-				    !is_stringlike_type(args[1].type)) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("POS", argc);
-				out->type = TYPE_INT;
-			} else if (strcasecmp(name, "XPOS") == 0) {
-				if (argc != 3 || !is_stringlike_type(args[0].type) ||
-				    !is_stringlike_type(args[1].type) || args[2].type != TYPE_INT) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("XPOS", argc);
-				out->type = TYPE_INT;
-			} else if (strcasecmp(name, "STR_DEL") == 0) {
-				if (argc != 3 || !is_stringlike_type(args[0].type) || args[1].type != TYPE_INT ||
-				    args[2].type != TYPE_INT) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("STR_DEL", argc);
-				out->type = TYPE_STR;
-			} else if (strcasecmp(name, "STR_INS") == 0) {
-				if (argc != 3 || !is_stringlike_type(args[0].type) ||
-				    !is_stringlike_type(args[1].type) || args[2].type != TYPE_INT) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("STR_INS", argc);
-				out->type = TYPE_STR;
-			} else if (strcasecmp(name, "REAL_I") == 0) {
-				if (argc != 1 || args[0].type != TYPE_INT) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("REAL_I", argc);
-				out->type = TYPE_REAL;
-			} else if (strcasecmp(name, "INT_R") == 0) {
-				if (argc != 1 || args[0].type != TYPE_REAL) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("INT_R", argc);
-				out->type = TYPE_INT;
-			} else if (strcasecmp(name, "RSTR") == 0) {
-				if (argc != 3 || args[0].type != TYPE_REAL || args[1].type != TYPE_INT ||
-				    args[2].type != TYPE_INT) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("RSTR", argc);
-				out->type = TYPE_STR;
-			} else if (strcasecmp(name, "REMOVE_SPACE") == 0) {
-				if (argc != 1 || !is_stringlike_type(args[0].type)) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("REMOVE_SPACE", argc);
-				out->type = TYPE_STR;
-			} else if (strcasecmp(name, "GET_EXTENSION") == 0) {
-				if (argc != 1 || !is_stringlike_type(args[0].type)) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("GET_EXTENSION", argc);
-				out->type = TYPE_STR;
-			} else if (strcasecmp(name, "GET_PATH") == 0) {
-				if (argc != 1 || !is_stringlike_type(args[0].type)) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("GET_PATH", argc);
-				out->type = TYPE_STR;
-			} else if (strcasecmp(name, "TRUNCATE_EXTENSION") == 0) {
-				if (argc != 1 || !is_stringlike_type(args[0].type)) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("TRUNCATE_EXTENSION", argc);
-				out->type = TYPE_STR;
-			} else if (strcasecmp(name, "TRUNCATE_PATH") == 0) {
-				if (argc != 1 || !is_stringlike_type(args[0].type)) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("TRUNCATE_PATH", argc);
-				out->type = TYPE_STR;
-			} else if (strcasecmp(name, "FILE_EXISTS") == 0) {
-				if (argc != 1 || !is_stringlike_type(args[0].type)) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("FILE_EXISTS", argc);
-				out->type = TYPE_INT;
-			} else if (strcasecmp(name, "FIRST_FILE") == 0) {
-				if (argc != 1 || !is_stringlike_type(args[0].type)) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("FIRST_FILE", argc);
-				out->type = TYPE_INT;
-			} else if (strcasecmp(name, "NEXT_FILE") == 0) {
-				if (argc != 0) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("NEXT_FILE", argc);
-				out->type = TYPE_INT;
-			} else if (strcasecmp(name, "GET_ENVIRONMENT") == 0) {
-				if (argc != 1 || !is_stringlike_type(args[0].type)) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("GET_ENVIRONMENT", argc);
-				out->type = TYPE_STR;
-			} else if (strcasecmp(name, "GET_WORD") == 0) {
-				if (argc != 1 || !is_stringlike_type(args[0].type)) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("GET_WORD", argc);
-				out->type = TYPE_STR;
-			} else if (strcasecmp(name, "PARAM_STR") == 0) {
-				if (argc != 1 || args[0].type != TYPE_INT) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("PARAM_STR", argc);
-				out->type = TYPE_STR;
-			} else if (strcasecmp(name, "GLOBAL_STR") == 0) {
-				if (argc != 1 || !is_stringlike_type(args[0].type)) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("GLOBAL_STR", argc);
-				out->type = TYPE_STR;
-			} else if (strcasecmp(name, "GLOBAL_INT") == 0) {
-				if (argc != 1 || !is_stringlike_type(args[0].type)) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("GLOBAL_INT", argc);
-				out->type = TYPE_INT;
-			} else if (strcasecmp(name, "PARSE_STR") == 0) {
-				if (argc != 2 || !is_stringlike_type(args[0].type) ||
-				    !is_stringlike_type(args[1].type)) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("PARSE_STR", argc);
-				out->type = TYPE_STR;
-			} else if (strcasecmp(name, "PARSE_INT") == 0) {
-				if (argc != 2 || !is_stringlike_type(args[0].type) ||
-				    !is_stringlike_type(args[1].type)) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("PARSE_INT", argc);
-				out->type = TYPE_INT;
-			} else if (strcasecmp(name, "INQ_MACRO") == 0) {
-				if (argc != 1 || !is_stringlike_type(args[0].type)) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call("INQ_MACRO", argc);
-				out->type = TYPE_INT;
-			} else if (strcasecmp(name, "SEARCH_FWD") == 0 || strcasecmp(name, "SEARCH_BWD") == 0) {
-				if (argc != 2 || !is_stringlike_type(args[0].type) || args[1].type != TYPE_INT) {
-					set_compile_error(line, "Type mismatch or syntax error.");
-					free(name);
-					return -1;
-				}
-				emit_intrinsic_call(
-				    strcasecmp(name, "SEARCH_FWD") == 0 ? "SEARCH_FWD" : "SEARCH_BWD", argc);
-				out->type = TYPE_INT;
-			} else {
+			spec = find_intrinsic_signature(name);
+			if (spec == NULL) {
 				set_compile_error(line, "Type mismatch or syntax error.");
 				free(name);
 				return -1;
 			}
+			if (validate_call_arguments(spec->args, spec->argc, args, argc, line) != 0) {
+				free(name);
+				return -1;
+			}
+			emit_intrinsic_call(spec->name, argc);
+			out->type = spec->result_type;
 
 			free(name);
 			return 0;
@@ -1858,235 +1727,137 @@ static int parse_tvcall_statement(Parser *ps) {
 	return 0;
 }
 
+typedef struct {
+	const char *name;
+	int argc;
+	CallArgKind args[4];
+	const char *emit_name;
+} ProcSignature;
+
+static int is_proc_var_string_call(const char *name) {
+	static const char *const names[] = {"CRUNCH_TABS", "EXPAND_TABS", "TABS_TO_SPACES"};
+	size_t i;
+
+	for (i = 0; i < sizeof(names) / sizeof(names[0]); ++i)
+		if (strcasecmp(name, names[i]) == 0)
+			return 1;
+	return 0;
+}
+
+static int parse_proc_var_string_statement(Parser *ps, const char *name) {
+	char *var_name;
+	int var_type;
+
+	if (ps->tok.kind != TOK_IDENTIFIER) {
+		set_compile_error(ps->tok.line, "Variable expected.");
+		return -1;
+	}
+	var_name = xstrdup(ps->tok.text);
+	if (var_name == NULL) {
+		set_compile_error(ps->tok.line, "Out of memory.");
+		return -1;
+	}
+	if (lookup_symbol(var_name, &var_type) < 0 || var_type != TYPE_STR) {
+		free(var_name);
+		set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
+		return -1;
+	}
+	parser_next(ps);
+	if (parser_expect(ps, TOK_RPAREN, "')' expected.") != 0) {
+		free(var_name);
+		return -1;
+	}
+	emit_proc_var_call(name, var_name);
+	free(var_name);
+	return 0;
+}
+
+#define PROC_SIG0(n, e) { n, 0, {CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, e }
+#define PROC_SIG1(n, a0, e) { n, 1, {a0, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, e }
+#define PROC_SIG2(n, a0, a1, e) { n, 2, {a0, a1, CALL_ARG_NONE, CALL_ARG_NONE}, e }
+#define PROC_SIG4(n, a0, a1, a2, a3, e) { n, 4, {a0, a1, a2, a3}, e }
+
+static const ProcSignature kProcSignatures[] = {
+    PROC_SIG0("LINK_WINDOW", NULL),
+    PROC_SIG0("UNLINK_WINDOW", NULL),
+    PROC_SIG0("ZOOM", NULL),
+    PROC_SIG0("REDRAW", NULL),
+    PROC_SIG0("NEW_SCREEN", NULL),
+    PROC_SIG2("SET_GLOBAL_STR", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, "SET_GLOBAL_STR"),
+    PROC_SIG2("SET_GLOBAL_INT", CALL_ARG_STRINGLIKE, CALL_ARG_INT, "SET_GLOBAL_INT"),
+    PROC_SIG1("RUN_MACRO", CALL_ARG_STRINGLIKE, "RUN_MACRO"),
+    PROC_SIG1("MARQUEE", CALL_ARG_STRINGLIKE, NULL),
+    PROC_SIG1("MARQUEE_WARNING", CALL_ARG_STRINGLIKE, NULL),
+    PROC_SIG1("MARQUEE_ERROR", CALL_ARG_STRINGLIKE, NULL),
+    PROC_SIG1("DELAY", CALL_ARG_INT, "DELAY"),
+    PROC_SIG2("MRSETUP", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, "MRSETUP"),
+    PROC_SIG1("LOAD_MACRO_FILE", CALL_ARG_STRINGLIKE, "LOAD_MACRO_FILE"),
+    PROC_SIG1("UNLOAD_MACRO", CALL_ARG_STRINGLIKE, "UNLOAD_MACRO"),
+    PROC_SIG1("CHANGE_DIR", CALL_ARG_STRINGLIKE, "CHANGE_DIR"),
+    PROC_SIG1("DEL_FILE", CALL_ARG_STRINGLIKE, "DEL_FILE"),
+    PROC_SIG1("LOAD_FILE", CALL_ARG_STRINGLIKE, "LOAD_FILE"),
+    PROC_SIG0("SAVE_FILE", "SAVE_FILE"),
+    PROC_SIG0("SET_INDENT_LEVEL", "SET_INDENT_LEVEL"),
+    PROC_SIG1("REPLACE", CALL_ARG_STRINGLIKE, "REPLACE"),
+    PROC_SIG1("TEXT", CALL_ARG_STRINGLIKE, "TEXT"),
+    PROC_SIG1("KEY_IN", CALL_ARG_STRINGLIKE, "KEY_IN"),
+    PROC_SIG1("PUT_LINE", CALL_ARG_STRINGLIKE, "PUT_LINE"),
+    PROC_SIG1("DEL_CHARS", CALL_ARG_INT, "DEL_CHARS"),
+    PROC_SIG1("GOTO_LINE", CALL_ARG_INT, "GOTO_LINE"),
+    PROC_SIG1("GOTO_COL", CALL_ARG_INT, "GOTO_COL"),
+    PROC_SIG1("WINDOW_COPY", CALL_ARG_INT, NULL),
+    PROC_SIG1("WINDOW_MOVE", CALL_ARG_INT, NULL),
+    PROC_SIG1("SWITCH_WINDOW", CALL_ARG_INT, NULL),
+    PROC_SIG1("SAVE_BLOCK", CALL_ARG_STRINGLIKE, NULL),
+    PROC_SIG4("SIZE_WINDOW", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, NULL),
+};
+
+#undef PROC_SIG0
+#undef PROC_SIG1
+#undef PROC_SIG2
+#undef PROC_SIG4
+
+static const ProcSignature *find_proc_signature(const char *name) {
+	size_t i;
+
+	for (i = 0; i < sizeof(kProcSignatures) / sizeof(kProcSignatures[0]); ++i)
+		if (strcasecmp(name, kProcSignatures[i].name) == 0)
+			return &kProcSignatures[i];
+	return NULL;
+}
+
+static int validate_proc_signature(const ProcSignature *spec, const ExprInfo *args, int argc, int line) {
+	return validate_call_arguments(spec->args, spec->argc, args, argc, line);
+}
+
 static int parse_proc_statement_after_name(Parser *ps, const char *name, int line) {
 	ExprInfo args[8];
 	int argc = 0;
+	const ProcSignature *spec;
+	const char *emit_name;
 
 	if (parser_expect(ps, TOK_LPAREN, "'(' expected.") != 0)
 		return -1;
 
-	if (strcasecmp(name, "CRUNCH_TABS") == 0 || strcasecmp(name, "EXPAND_TABS") == 0 ||
-	    strcasecmp(name, "TABS_TO_SPACES") == 0) {
-		char *var_name;
-		int var_type;
-		if (ps->tok.kind != TOK_IDENTIFIER) {
-			set_compile_error(ps->tok.line, "Variable expected.");
-			return -1;
-		}
-		var_name = xstrdup(ps->tok.text);
-		if (var_name == NULL) {
-			set_compile_error(ps->tok.line, "Out of memory.");
-			return -1;
-		}
-		if (lookup_symbol(var_name, &var_type) < 0 || var_type != TYPE_STR) {
-			free(var_name);
-			set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
-			return -1;
-		}
-		parser_next(ps);
-		if (parser_expect(ps, TOK_RPAREN, "')' expected.") != 0) {
-			free(var_name);
-			return -1;
-		}
-		emit_proc_var_call(name, var_name);
-		free(var_name);
-		return 0;
-	}
+	if (is_proc_var_string_call(name))
+		return parse_proc_var_string_statement(ps, name);
 
 	if (parse_argument_expressions(ps, args, &argc, 8) != 0)
 		return -1;
 	if (parser_expect(ps, TOK_RPAREN, "')' expected.") != 0)
 		return -1;
 
-	if ((strcasecmp(name, "LINK_WINDOW") == 0 || strcasecmp(name, "UNLINK_WINDOW") == 0 ||
-	     strcasecmp(name, "ZOOM") == 0 || strcasecmp(name, "REDRAW") == 0 ||
-	     strcasecmp(name, "NEW_SCREEN") == 0) && argc == 0) {
-		emit_proc_call(name, argc);
-		return 0;
+	spec = find_proc_signature(name);
+	if (spec == NULL) {
+		set_compile_error(line, "Syntax Error.");
+		return -1;
 	}
-	if (strcasecmp(name, "SET_GLOBAL_STR") == 0) {
-		if (argc != 2 || !is_stringlike_type(args[0].type) || !is_stringlike_type(args[1].type)) {
-			set_compile_error(line, "Type mismatch or syntax error.");
-			return -1;
-		}
-		emit_proc_call("SET_GLOBAL_STR", argc);
-		return 0;
-	}
-	if (strcasecmp(name, "SET_GLOBAL_INT") == 0) {
-		if (argc != 2 || !is_stringlike_type(args[0].type) || args[1].type != TYPE_INT) {
-			set_compile_error(line, "Type mismatch or syntax error.");
-			return -1;
-		}
-		emit_proc_call("SET_GLOBAL_INT", argc);
-		return 0;
-	}
-	if (strcasecmp(name, "RUN_MACRO") == 0) {
-		if (argc != 1 || !is_stringlike_type(args[0].type)) {
-			set_compile_error(line, "Type mismatch or syntax error.");
-			return -1;
-		}
-		emit_proc_call("RUN_MACRO", argc);
-		return 0;
-	}
-	if (strcasecmp(name, "MARQUEE") == 0 || strcasecmp(name, "MARQUEE_WARNING") == 0 ||
-	    strcasecmp(name, "MARQUEE_ERROR") == 0) {
-		if (argc != 1 || !is_stringlike_type(args[0].type)) {
-			set_compile_error(line, "Type mismatch or syntax error.");
-			return -1;
-		}
-		emit_proc_call(name, argc);
-		return 0;
-	}
-	if (strcasecmp(name, "DELAY") == 0) {
-		if (argc != 1 || args[0].type != TYPE_INT) {
-			set_compile_error(line, "Type mismatch or syntax error.");
-			return -1;
-		}
-		emit_proc_call("DELAY", argc);
-		return 0;
-	}
-	if (strcasecmp(name, "MRSETUP") == 0) {
-		if (argc != 2 || !is_stringlike_type(args[0].type) || !is_stringlike_type(args[1].type)) {
-			set_compile_error(line, "Type mismatch or syntax error.");
-			return -1;
-		}
-		emit_proc_call("MRSETUP", argc);
-		return 0;
-	}
-	if (strcasecmp(name, "LOAD_MACRO_FILE") == 0) {
-		if (argc != 1 || !is_stringlike_type(args[0].type)) {
-			set_compile_error(line, "Type mismatch or syntax error.");
-			return -1;
-		}
-		emit_proc_call("LOAD_MACRO_FILE", argc);
-		return 0;
-	}
-	if (strcasecmp(name, "UNLOAD_MACRO") == 0) {
-		if (argc != 1 || !is_stringlike_type(args[0].type)) {
-			set_compile_error(line, "Type mismatch or syntax error.");
-			return -1;
-		}
-		emit_proc_call("UNLOAD_MACRO", argc);
-		return 0;
-	}
-	if (strcasecmp(name, "CHANGE_DIR") == 0) {
-		if (argc != 1 || !is_stringlike_type(args[0].type)) {
-			set_compile_error(line, "Type mismatch or syntax error.");
-			return -1;
-		}
-		emit_proc_call("CHANGE_DIR", argc);
-		return 0;
-	}
-	if (strcasecmp(name, "DEL_FILE") == 0) {
-		if (argc != 1 || !is_stringlike_type(args[0].type)) {
-			set_compile_error(line, "Type mismatch or syntax error.");
-			return -1;
-		}
-		emit_proc_call("DEL_FILE", argc);
-		return 0;
-	}
-	if (strcasecmp(name, "LOAD_FILE") == 0) {
-		if (argc != 1 || !is_stringlike_type(args[0].type)) {
-			set_compile_error(line, "Type mismatch or syntax error.");
-			return -1;
-		}
-		emit_proc_call("LOAD_FILE", argc);
-		return 0;
-	}
-	if (strcasecmp(name, "SAVE_FILE") == 0) {
-		if (argc != 0) {
-			set_compile_error(line, "Type mismatch or syntax error.");
-			return -1;
-		}
-		emit_proc_call("SAVE_FILE", argc);
-		return 0;
-	}
-	if (strcasecmp(name, "SET_INDENT_LEVEL") == 0) {
-		if (argc != 0) {
-			set_compile_error(line, "Type mismatch or syntax error.");
-			return -1;
-		}
-		emit_proc_call("SET_INDENT_LEVEL", argc);
-		return 0;
-	}
-	if (strcasecmp(name, "REPLACE") == 0) {
-		if (argc != 1 || !is_stringlike_type(args[0].type)) {
-			set_compile_error(line, "Type mismatch or syntax error.");
-			return -1;
-		}
-		emit_proc_call("REPLACE", argc);
-		return 0;
-	}
-	if (strcasecmp(name, "TEXT") == 0) {
-		if (argc != 1 || !is_stringlike_type(args[0].type)) {
-			set_compile_error(line, "Type mismatch or syntax error.");
-			return -1;
-		}
-		emit_proc_call("TEXT", argc);
-		return 0;
-	}
-	if (strcasecmp(name, "KEY_IN") == 0) {
-		if (argc != 1 || !is_stringlike_type(args[0].type)) {
-			set_compile_error(line, "Type mismatch or syntax error.");
-			return -1;
-		}
-		emit_proc_call("KEY_IN", argc);
-		return 0;
-	}
-	if (strcasecmp(name, "PUT_LINE") == 0) {
-		if (argc != 1 || !is_stringlike_type(args[0].type)) {
-			set_compile_error(line, "Type mismatch or syntax error.");
-			return -1;
-		}
-		emit_proc_call("PUT_LINE", argc);
-		return 0;
-	}
-	if (strcasecmp(name, "DEL_CHARS") == 0) {
-		if (argc != 1 || args[0].type != TYPE_INT) {
-			set_compile_error(line, "Type mismatch or syntax error.");
-			return -1;
-		}
-		emit_proc_call("DEL_CHARS", argc);
-		return 0;
-	}
-	if (strcasecmp(name, "GOTO_LINE") == 0) {
-		if (argc != 1 || args[0].type != TYPE_INT) {
-			set_compile_error(line, "Type mismatch or syntax error.");
-			return -1;
-		}
-		emit_proc_call("GOTO_LINE", argc);
-		return 0;
-	}
-	if (strcasecmp(name, "GOTO_COL") == 0) {
-		if (argc != 1 || args[0].type != TYPE_INT) {
-			set_compile_error(line, "Type mismatch or syntax error.");
-			return -1;
-		}
-		emit_proc_call("GOTO_COL", argc);
-		return 0;
-	}
-	if (strcasecmp(name, "WINDOW_COPY") == 0 || strcasecmp(name, "WINDOW_MOVE") == 0 ||
-	    strcasecmp(name, "SWITCH_WINDOW") == 0 || strcasecmp(name, "SAVE_BLOCK") == 0) {
-		if (argc != 1 || (args[0].type != TYPE_INT && strcasecmp(name, "SAVE_BLOCK") != 0) ||
-		    (strcasecmp(name, "SAVE_BLOCK") == 0 && !is_stringlike_type(args[0].type))) {
-			set_compile_error(line, "Type mismatch or syntax error.");
-			return -1;
-		}
-		emit_proc_call(name, argc);
-		return 0;
-	}
-	if (strcasecmp(name, "SIZE_WINDOW") == 0) {
-		if (argc != 4 || args[0].type != TYPE_INT || args[1].type != TYPE_INT ||
-		    args[2].type != TYPE_INT || args[3].type != TYPE_INT) {
-			set_compile_error(line, "Type mismatch or syntax error.");
-			return -1;
-		}
-		emit_proc_call(name, argc);
-		return 0;
-	}
+	if (validate_proc_signature(spec, args, argc, line) != 0)
+		return -1;
+	emit_name = spec->emit_name != NULL ? spec->emit_name : name;
+	emit_proc_call(emit_name, argc);
+	return 0;
 
-	set_compile_error(line, "Syntax Error.");
-	return -1;
 }
 
 static int parse_if_statement(Parser *ps) {
@@ -2163,143 +1934,209 @@ static int parse_while_statement(Parser *ps) {
 	return 0;
 }
 
-static int parse_statement(Parser *ps) {
+typedef struct {
+	const char *name;
+	const char *emit_name;
+} BareProcStatement;
+
+#define BARE_PROC(n) { n, n }
+
+static const BareProcStatement kBareProcStatements[] = {
+    BARE_PROC("SAVE_FILE"),
+    BARE_PROC("CR"),
+    BARE_PROC("SET_INDENT_LEVEL"),
+    BARE_PROC("DEL_CHAR"),
+    BARE_PROC("DEL_LINE"),
+    BARE_PROC("LEFT"),
+    BARE_PROC("RIGHT"),
+    BARE_PROC("UP"),
+    BARE_PROC("DOWN"),
+    BARE_PROC("HOME"),
+    BARE_PROC("EOL"),
+    BARE_PROC("TOF"),
+    BARE_PROC("EOF"),
+    BARE_PROC("WORD_LEFT"),
+    BARE_PROC("WORD_RIGHT"),
+    BARE_PROC("FIRST_WORD"),
+    BARE_PROC("MARK_POS"),
+    BARE_PROC("GOTO_MARK"),
+    BARE_PROC("POP_MARK"),
+    BARE_PROC("PAGE_UP"),
+    BARE_PROC("PAGE_DOWN"),
+    BARE_PROC("NEXT_PAGE_BREAK"),
+    BARE_PROC("LAST_PAGE_BREAK"),
+    BARE_PROC("TAB_RIGHT"),
+    BARE_PROC("TAB_LEFT"),
+    BARE_PROC("INDENT"),
+    BARE_PROC("UNDENT"),
+    BARE_PROC("BLOCK_BEGIN"),
+    BARE_PROC("COL_BLOCK_BEGIN"),
+    BARE_PROC("STR_BLOCK_BEGIN"),
+    BARE_PROC("BLOCK_END"),
+    BARE_PROC("BLOCK_OFF"),
+    BARE_PROC("COPY_BLOCK"),
+    BARE_PROC("MOVE_BLOCK"),
+    BARE_PROC("DELETE_BLOCK"),
+    BARE_PROC("CREATE_WINDOW"),
+    BARE_PROC("DELETE_WINDOW"),
+    BARE_PROC("ERASE_WINDOW"),
+    BARE_PROC("MODIFY_WINDOW"),
+    BARE_PROC("LINK_WINDOW"),
+    BARE_PROC("UNLINK_WINDOW"),
+    BARE_PROC("ZOOM"),
+    BARE_PROC("REDRAW"),
+    BARE_PROC("NEW_SCREEN"),
+};
+
+#undef BARE_PROC
+
+static const char *find_bare_proc_statement_emit_name(const char *name) {
+	size_t i;
+
+	for (i = 0; i < sizeof(kBareProcStatements) / sizeof(kBareProcStatements[0]); ++i)
+		if (strcasecmp(name, kBareProcStatements[i].name) == 0)
+			return kBareProcStatements[i].emit_name;
+	return NULL;
+}
+
+static int parse_identifier_statement(Parser *ps, int *out_needs_semicolon) {
 	char *name;
 	int line;
+	const char *bare_emit_name;
 
-	if (ps->tok.kind == TOK_DEF_INT) {
-		parser_next(ps);
-		if (parse_variable_declaration(ps, TYPE_INT) != 0)
-			return -1;
-		return parser_expect(ps, TOK_SEMICOLON, "; expected.");
-	}
-	if (ps->tok.kind == TOK_DEF_STR) {
-		parser_next(ps);
-		if (parse_variable_declaration(ps, TYPE_STR) != 0)
-			return -1;
-		return parser_expect(ps, TOK_SEMICOLON, "; expected.");
-	}
-	if (ps->tok.kind == TOK_DEF_CHAR) {
-		parser_next(ps);
-		if (parse_variable_declaration(ps, TYPE_CHAR) != 0)
-			return -1;
-		return parser_expect(ps, TOK_SEMICOLON, "; expected.");
-	}
-	if (ps->tok.kind == TOK_DEF_REAL) {
-		parser_next(ps);
-		if (parse_variable_declaration(ps, TYPE_REAL) != 0)
-			return -1;
-		return parser_expect(ps, TOK_SEMICOLON, "; expected.");
-	}
-	if (ps->tok.kind == TOK_GOTO) {
-		if (parse_goto_statement(ps) != 0)
-			return -1;
-		return parser_expect(ps, TOK_SEMICOLON, "; expected.");
-	}
-	if (ps->tok.kind == TOK_CALL) {
-		if (parse_call_statement(ps) != 0)
-			return -1;
-		return parser_expect(ps, TOK_SEMICOLON, "; expected.");
-	}
-	if (ps->tok.kind == TOK_TVCALL) {
-		if (parse_tvcall_statement(ps) != 0)
-			return -1;
-		return parser_expect(ps, TOK_SEMICOLON, "; expected.");
-	}
-	if (ps->tok.kind == TOK_RET) {
-		parser_next(ps);
-		emit_byte(OP_RET);
-		return parser_expect(ps, TOK_SEMICOLON, "; expected.");
-	}
-	if (ps->tok.kind == TOK_IF) {
-		if (parse_if_statement(ps) != 0)
-			return -1;
-		return parser_expect(ps, TOK_SEMICOLON, "; expected.");
-	}
-	if (ps->tok.kind == TOK_WHILE) {
-		if (parse_while_statement(ps) != 0)
-			return -1;
-		return parser_expect(ps, TOK_SEMICOLON, "; expected.");
-	}
-	if (ps->tok.kind == TOK_IDENTIFIER) {
-		name = xstrdup(ps->tok.text);
-		line = ps->tok.line;
-		parser_next(ps);
-		if (parser_accept(ps, TOK_COLON)) {
-			int rc = define_label(name, line);
-			free(name);
-			return rc;
-		}
-		if (ps->tok.kind == TOK_ASSIGN) {
-			int rc = parse_assignment_after_name(ps, name, line);
-			free(name);
-			if (rc != 0)
-				return -1;
-			return parser_expect(ps, TOK_SEMICOLON, "; expected.");
-		}
-		if (ps->tok.kind == TOK_LPAREN) {
-			int rc = parse_proc_statement_after_name(ps, name, line);
-			free(name);
-			if (rc != 0)
-				return -1;
-			return parser_expect(ps, TOK_SEMICOLON, "; expected.");
-		}
-		if (strcasecmp(name, "SAVE_FILE") == 0) {
-			emit_proc_call("SAVE_FILE", 0);
-			free(name);
-			return parser_expect(ps, TOK_SEMICOLON, "; expected.");
-		}
-		if (strcasecmp(name, "CR") == 0) {
-			emit_proc_call("CR", 0);
-			free(name);
-			return parser_expect(ps, TOK_SEMICOLON, "; expected.");
-		}
-		if (strcasecmp(name, "SET_INDENT_LEVEL") == 0) {
-			emit_proc_call("SET_INDENT_LEVEL", 0);
-			free(name);
-			return parser_expect(ps, TOK_SEMICOLON, "; expected.");
-		}
-		if (strcasecmp(name, "DEL_CHAR") == 0) {
-			emit_proc_call("DEL_CHAR", 0);
-			free(name);
-			return parser_expect(ps, TOK_SEMICOLON, "; expected.");
-		}
-		if (strcasecmp(name, "DEL_LINE") == 0) {
-			emit_proc_call("DEL_LINE", 0);
-			free(name);
-			return parser_expect(ps, TOK_SEMICOLON, "; expected.");
-		}
-		if (strcasecmp(name, "LEFT") == 0 || strcasecmp(name, "RIGHT") == 0 ||
-		    strcasecmp(name, "UP") == 0 || strcasecmp(name, "DOWN") == 0 ||
-		    strcasecmp(name, "HOME") == 0 || strcasecmp(name, "EOL") == 0 ||
-		    strcasecmp(name, "TOF") == 0 || strcasecmp(name, "EOF") == 0 ||
-		    strcasecmp(name, "WORD_LEFT") == 0 || strcasecmp(name, "WORD_RIGHT") == 0 ||
-		    strcasecmp(name, "FIRST_WORD") == 0 || strcasecmp(name, "MARK_POS") == 0 ||
-		    strcasecmp(name, "GOTO_MARK") == 0 || strcasecmp(name, "POP_MARK") == 0 ||
-		    strcasecmp(name, "PAGE_UP") == 0 || strcasecmp(name, "PAGE_DOWN") == 0 ||
-		    strcasecmp(name, "NEXT_PAGE_BREAK") == 0 || strcasecmp(name, "LAST_PAGE_BREAK") == 0 ||
-		    strcasecmp(name, "TAB_RIGHT") == 0 || strcasecmp(name, "TAB_LEFT") == 0 ||
-		    strcasecmp(name, "INDENT") == 0 || strcasecmp(name, "UNDENT") == 0 ||
-		    strcasecmp(name, "BLOCK_BEGIN") == 0 || strcasecmp(name, "COL_BLOCK_BEGIN") == 0 ||
-		    strcasecmp(name, "STR_BLOCK_BEGIN") == 0 || strcasecmp(name, "BLOCK_END") == 0 ||
-		    strcasecmp(name, "BLOCK_OFF") == 0 || strcasecmp(name, "COPY_BLOCK") == 0 ||
-		    strcasecmp(name, "MOVE_BLOCK") == 0 || strcasecmp(name, "DELETE_BLOCK") == 0 ||
-		    strcasecmp(name, "CREATE_WINDOW") == 0 || strcasecmp(name, "DELETE_WINDOW") == 0 ||
-		    strcasecmp(name, "ERASE_WINDOW") == 0 || strcasecmp(name, "MODIFY_WINDOW") == 0 ||
-		    strcasecmp(name, "LINK_WINDOW") == 0 || strcasecmp(name, "UNLINK_WINDOW") == 0 ||
-		    strcasecmp(name, "ZOOM") == 0 || strcasecmp(name, "REDRAW") == 0 ||
-		    strcasecmp(name, "NEW_SCREEN") == 0) {
-			emit_proc_call(name, 0);
-			free(name);
-			return parser_expect(ps, TOK_SEMICOLON, "; expected.");
-		}
-		free(name);
-		set_compile_error(line, "Syntax Error.");
+	name = xstrdup(ps->tok.text);
+	if (name == NULL) {
+		set_compile_error(ps->tok.line, "Out of memory.");
 		return -1;
 	}
+	line = ps->tok.line;
+	parser_next(ps);
+	if (parser_accept(ps, TOK_COLON)) {
+		int rc = define_label(name, line);
+		free(name);
+		if (out_needs_semicolon != NULL)
+			*out_needs_semicolon = 0;
+		return rc;
+	}
+	if (ps->tok.kind == TOK_ASSIGN) {
+		int rc = parse_assignment_after_name(ps, name, line);
+		free(name);
+		return rc;
+	}
+	if (ps->tok.kind == TOK_LPAREN) {
+		int rc = parse_proc_statement_after_name(ps, name, line);
+		free(name);
+		return rc;
+	}
 
-	set_compile_error(ps->tok.line, "Syntax Error.");
+	bare_emit_name = find_bare_proc_statement_emit_name(name);
+	if (bare_emit_name != NULL) {
+		emit_proc_call(bare_emit_name, 0);
+		free(name);
+		return 0;
+	}
+
+	free(name);
+	set_compile_error(line, "Syntax Error.");
 	return -1;
+}
+
+static int declaration_type_from_token(TokenKind kind, int *out_type) {
+	switch (kind) {
+		case TOK_DEF_INT:
+			*out_type = TYPE_INT;
+			return 0;
+		case TOK_DEF_STR:
+			*out_type = TYPE_STR;
+			return 0;
+		case TOK_DEF_CHAR:
+			*out_type = TYPE_CHAR;
+			return 0;
+		case TOK_DEF_REAL:
+			*out_type = TYPE_REAL;
+			return 0;
+		default:
+			return -1;
+	}
+}
+
+static int parse_typed_declaration_statement(Parser *ps, TokenKind kind) {
+	int type;
+
+	if (declaration_type_from_token(kind, &type) != 0) {
+		set_compile_error(ps->tok.line, "Syntax Error.");
+		return -1;
+	}
+	parser_next(ps);
+	return parse_variable_declaration(ps, type);
+}
+
+static int parse_ret_statement(Parser *ps) {
+	parser_next(ps);
+	emit_byte(OP_RET);
+	return 0;
+}
+
+typedef int (*KeywordStatementParserFn)(Parser *);
+
+typedef struct {
+	TokenKind token;
+	KeywordStatementParserFn parser;
+} KeywordStatementDispatch;
+
+static const KeywordStatementDispatch kKeywordStatementDispatch[] = {
+    {TOK_GOTO, parse_goto_statement},   {TOK_CALL, parse_call_statement},
+    {TOK_TVCALL, parse_tvcall_statement}, {TOK_RET, parse_ret_statement},
+    {TOK_IF, parse_if_statement},       {TOK_WHILE, parse_while_statement},
+};
+
+static int parse_keyword_statement(Parser *ps, int *out_handled) {
+	size_t i;
+
+	for (i = 0; i < sizeof(kKeywordStatementDispatch) / sizeof(kKeywordStatementDispatch[0]); ++i)
+		if (ps->tok.kind == kKeywordStatementDispatch[i].token) {
+			if (out_handled != NULL)
+				*out_handled = 1;
+			return kKeywordStatementDispatch[i].parser(ps);
+		}
+
+	if (out_handled != NULL)
+		*out_handled = 0;
+	return 0;
+}
+
+static int parse_statement(Parser *ps) {
+	int rc = 0;
+	int needs_semicolon = 1;
+	int keyword_handled = 0;
+
+	switch (ps->tok.kind) {
+		case TOK_DEF_INT:
+		case TOK_DEF_STR:
+		case TOK_DEF_CHAR:
+		case TOK_DEF_REAL:
+			rc = parse_typed_declaration_statement(ps, ps->tok.kind);
+			break;
+		case TOK_IDENTIFIER:
+			rc = parse_identifier_statement(ps, &needs_semicolon);
+			break;
+		default:
+			rc = parse_keyword_statement(ps, &keyword_handled);
+			if (rc != 0)
+				return -1;
+			if (!keyword_handled) {
+				set_compile_error(ps->tok.line, "Syntax Error.");
+				return -1;
+			}
+			break;
+	}
+
+	if (rc != 0)
+		return -1;
+	if (!needs_semicolon)
+		return 0;
+
+	return parser_expect(ps, TOK_SEMICOLON, "; expected.");
 }
 
 static int parse_statement_list(Parser *ps, TokenKind end1, TokenKind end2, TokenKind end3) {

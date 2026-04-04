@@ -111,6 +111,7 @@ class TMRIndicator : public TIndicator {
 
 	virtual void draw() override {
 		TColorAttr color;
+		TColorAttr cursorColor;
 		char frame;
 		TDrawBuffer b;
 		char cursorText[32];
@@ -126,6 +127,7 @@ class TMRIndicator : public TIndicator {
 			color = getColor(2);
 			frame = kNormalFrame;
 		}
+		cursorColor = getColor(3);
 
 		b.moveChar(0, frame, color, size.x);
 		noticeStartX = 1;
@@ -142,8 +144,15 @@ class TMRIndicator : public TIndicator {
 			cursorMinX = noticeEndX;
 		if (cursorX < cursorMinX)
 			cursorX = cursorMinX;
-		b.moveStr(cursorX, cursorText, color);
+		b.moveStr(cursorX, cursorText, cursorColor);
 		writeBuf(0, 0, size.x, 1, b);
+	}
+
+	virtual TPalette &getPalette() const override {
+		// 1..2 keep TIndicator semantics (frame passive/active).
+		// 3 maps cursor line/column text to window-local slot 12.
+		static TPalette palette("\x02\x03\x0C", 3);
+		return palette;
 	}
 
 	void setDisplayValue(unsigned long column, unsigned long line, Boolean aModified) {

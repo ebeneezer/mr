@@ -25,3 +25,5 @@
 
 ![mr running under vscode terminal](documentation/pngsjpegs/screenshot01.png)
 ![mr running in terminal showing menu structure](documentation/pngsjpegs/screenshot02.png)
+![mr showing color setup dialog](documentation/pngsjpegs/screenshot03.png)
+
