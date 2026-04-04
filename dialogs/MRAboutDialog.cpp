@@ -91,15 +91,15 @@ std::string normalizeSpaces(const std::string &value) {
 	bool pendingSpace = false;
 	bool hasOutput = false;
 
-	for (std::size_t i = 0; i < value.size(); ++i) {
-		unsigned char ch = static_cast<unsigned char>(value[i]);
+	for (char i : value) {
+		unsigned char ch = static_cast<unsigned char>(i);
 		if (std::isspace(ch) != 0) {
 			pendingSpace = true;
 			continue;
 		}
 		if (pendingSpace && hasOutput)
 			out << ' ';
-		out << value[i];
+		out << i;
 		hasOutput = true;
 		pendingSpace = false;
 	}
@@ -168,7 +168,7 @@ std::vector<std::string> buildQuoteDisplayLines(const std::string &raw, int maxW
 class MRAboutQuoteBox : public TView {
   public:
 	MRAboutQuoteBox(const TRect &bounds) noexcept
-	    : TView(bounds), currentLines_(), targetLines_(), animationFrame_(0), animationFramesTotal_(22),
+	    : TView(bounds),  animationFrame_(0), animationFramesTotal_(22),
 	      animating_(false), scrambleSeed_(0x00C0DA42u) {
 		options |= ofBuffered;
 	}
@@ -379,9 +379,9 @@ class MRAboutDialog : public TDialog {
   public:
 	MRAboutDialog() noexcept
 	    : TWindowInit(&TDialog::initFrame), TDialog(centeredRect(76, 16), "ABOUT"), quoteBox_(nullptr),
-	      doneButton_(nullptr), quoteIndex_(0), quoteRandomState_(0), quoteModeEnabled_(false), rotationTimer_(0),
-	      nextRotationAt_(), rearmRotationAfterAnimation_(false), donePressTracking_(false),
-	      doneLongPressTriggered_(false), suppressNextDoneCommand_(false), donePressStartedAt_() {
+	      doneButton_(nullptr), quoteIndex_(0), quoteRandomState_(0), quoteModeEnabled_(false), rotationTimer_(nullptr),
+	       rearmRotationAfterAnimation_(false), donePressTracking_(false),
+	      doneLongPressTriggered_(false), suppressNextDoneCommand_(false) {
 		eventMask |= evBroadcast;
 		insertCenteredStaticLine(this, size.x, 2,
 		                         std::string("Multi-Edit Revisited ") + mrDisplayVersion());
@@ -439,7 +439,7 @@ class MRAboutDialog : public TDialog {
 
   private:
 	void armRotationTimer() {
-		if (rotationTimer_ == 0 && owner != nullptr)
+		if (rotationTimer_ == nullptr && owner != nullptr)
 			rotationTimer_ = setTimer(kAnimationTickMs, kAnimationTickMs);
 	}
 
@@ -491,8 +491,8 @@ class MRAboutDialog : public TDialog {
 		quoteBag_.clear();
 		quoteBag_.reserve(kAboutQuoteCount > 0 ? kAboutQuoteCount - 1 : 0);
 
-		for (std::size_t i = 0; i < quoteSeen_.size(); ++i) {
-			if (quoteSeen_[i] == 0) {
+		for (unsigned char i : quoteSeen_) {
+			if (i == 0) {
 				hasUnseen = true;
 				break;
 			}

@@ -18,7 +18,7 @@ void collectEditWindowsInZOrder(TView *view, void *arg) {
 	std::vector<TMREditWindow *> *windows = static_cast<std::vector<TMREditWindow *> *>(arg);
 	TMREditWindow *win = dynamic_cast<TMREditWindow *>(view);
 
-	if (windows != 0 && win != 0)
+	if (windows != nullptr && win != nullptr)
 		windows->push_back(win);
 }
 } // namespace
@@ -26,7 +26,7 @@ void collectEditWindowsInZOrder(TView *view, void *arg) {
 std::vector<TMREditWindow *> allEditWindowsInZOrder() {
 	std::vector<TMREditWindow *> windows;
 
-	if (TProgram::deskTop == 0)
+	if (TProgram::deskTop == nullptr)
 		return windows;
 
 	TProgram::deskTop->forEach(collectEditWindowsInZOrder, &windows);
@@ -39,9 +39,9 @@ short nextEditorWindowNumber() {
 	std::set<short> used;
 	short candidate = 1;
 
-	for (std::size_t i = 0; i < windows.size(); ++i) {
-		if (windows[i] != 0 && windows[i]->number > 0)
-			used.insert(windows[i]->number);
+	for (auto & window : windows) {
+		if (window != nullptr && window->number > 0)
+			used.insert(window->number);
 	}
 
 	while (used.find(candidate) != used.end()) {
@@ -57,54 +57,54 @@ TMREditWindow *createEditorWindow(const char *title) {
 	TRect bounds;
 	TMREditWindow *win;
 
-	if (TProgram::deskTop == 0)
-		return 0;
+	if (TProgram::deskTop == nullptr)
+		return nullptr;
 	bounds = TProgram::deskTop->getExtent();
 	bounds.grow(-2, -1);
 	win = new TMREditWindow(bounds, title, nextEditorWindowNumber());
 	TProgram::deskTop->insert(win);
-	if (win != 0)
+	if (win != nullptr)
 		win->flags |= (wfMove | wfGrow | wfZoom | wfClose);
-	if (win != 0 && win->getEditor() != 0)
+	if (win != nullptr && win->getEditor() != nullptr)
 		win->getEditor()->setInsertModeEnabled(configuredDefaultInsertMode());
 	return win;
 }
 
 TMREditWindow *currentEditWindow() {
-	if (TProgram::deskTop == 0 || TProgram::deskTop->current == 0)
-		return 0;
+	if (TProgram::deskTop == nullptr || TProgram::deskTop->current == nullptr)
+		return nullptr;
 	return dynamic_cast<TMREditWindow *>(TProgram::deskTop->current);
 }
 
 TMREditWindow *findEditWindowByBufferId(int bufferId) {
 	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
-	for (std::size_t i = 0; i < windows.size(); ++i)
-		if (windows[i] != 0 && windows[i]->bufferId() == bufferId)
-			return windows[i];
-	return 0;
+	for (auto & window : windows)
+		if (window != nullptr && window->bufferId() == bufferId)
+			return window;
+	return nullptr;
 }
 
 bool isEmptyUntitledEditableWindow(TMREditWindow *win) {
-	if (win == 0 || win->isReadOnly() || win->currentFileName()[0] != '\0' || win->isFileChanged())
+	if (win == nullptr || win->isReadOnly() || win->currentFileName()[0] != '\0' || win->isFileChanged())
 		return false;
 	return win->isBufferEmpty();
 }
 
 TMREditWindow *findReusableEmptyWindow(TMREditWindow *preferred) {
 	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
-	if (preferred != 0 && isEmptyUntitledEditableWindow(preferred))
+	if (preferred != nullptr && isEmptyUntitledEditableWindow(preferred))
 		return preferred;
-	for (std::size_t i = 0; i < windows.size(); ++i)
-		if (isEmptyUntitledEditableWindow(windows[i]))
-			return windows[i];
-	return 0;
+	for (auto & window : windows)
+		if (isEmptyUntitledEditableWindow(window))
+			return window;
+	return nullptr;
 }
 
 bool closeCurrentEditWindow() {
 	TMREditWindow *win = currentEditWindow();
-	if (win == 0)
+	if (win == nullptr)
 		return false;
-	message(win, evCommand, cmClose, 0);
+	message(win, evCommand, cmClose, nullptr);
 	return mrEnsureUsableWorkWindow();
 }
 
@@ -115,7 +115,7 @@ bool activateRelativeEditWindow(int delta) {
 
 	if (windows.empty())
 		return false;
-	if (current == 0)
+	if (current == nullptr)
 		return mrActivateEditWindow(windows.front());
 
 	for (index = 0; index < windows.size(); ++index) {
@@ -134,7 +134,7 @@ bool activateRelativeEditWindow(int delta) {
 
 bool hideCurrentEditWindow() {
 	TMREditWindow *win = currentEditWindow();
-	if (win == 0)
+	if (win == nullptr)
 		return false;
 	win->hide();
 	return mrEnsureUsableWorkWindow();

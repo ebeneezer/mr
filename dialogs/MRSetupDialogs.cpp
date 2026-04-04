@@ -79,8 +79,8 @@ std::string ensureMrmacExtension(const std::string &path) {
 	std::size_t dotPos = path.find_last_of('.');
 	if (dotPos != std::string::npos) {
 		std::string ext = path.substr(dotPos);
-		for (std::size_t i = 0; i < ext.size(); ++i)
-			ext[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(ext[i])));
+		for (char & i : ext)
+			i = static_cast<char>(std::tolower(static_cast<unsigned char>(i)));
 		if (ext == ".mrmac")
 			return path;
 	}
@@ -185,7 +185,7 @@ bool saveAndReloadPathsRecord(const PathsDialogRecord &record, std::string &erro
 
 ushort execDialogRaw(TDialog *dialog) {
 	ushort result = cmCancel;
-	if (dialog != 0) {
+	if (dialog != nullptr) {
 		result = TProgram::deskTop->execView(dialog);
 		TObject::destroy(dialog);
 	}
@@ -194,7 +194,7 @@ ushort execDialogRaw(TDialog *dialog) {
 
 ushort execDialogRawWithData(TDialog *dialog, void *data) {
 	ushort result = cmCancel;
-	if (dialog != 0) {
+	if (dialog != nullptr) {
 		if (data != nullptr)
 			dialog->setData(data);
 		result = TProgram::deskTop->execView(dialog);
@@ -328,9 +328,9 @@ bool applyWorkingColorPaletteToConfigured(const TPalette &palette, std::string &
 	static const MRColorSetupGroup groups[] = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog,
 	                                           MRColorSetupGroup::Help, MRColorSetupGroup::Other};
 
-	for (std::size_t g = 0; g < sizeof(groups) / sizeof(groups[0]); ++g) {
+	for (auto group : groups) {
 		std::size_t count = 0;
-		const MRColorSetupItem *items = colorSetupGroupItems(groups[g], count);
+		const MRColorSetupItem *items = colorSetupGroupItems(group, count);
 		std::vector<unsigned char> values;
 
 		if (items == nullptr || count == 0)
@@ -338,7 +338,7 @@ bool applyWorkingColorPaletteToConfigured(const TPalette &palette, std::string &
 		values.assign(count, 0);
 		for (std::size_t i = 0; i < count; ++i)
 			values[i] = static_cast<unsigned char>(palette[items[i].paletteIndex]);
-		if (!setConfiguredColorSetupGroupValues(groups[g], values.data(), values.size(), &errorText))
+		if (!setConfiguredColorSetupGroupValues(group, values.data(), values.size(), &errorText))
 			return false;
 	}
 
@@ -555,11 +555,11 @@ class TPathsSetupDialog : public TDialog {
 		int dx = hScrollBar_ != nullptr ? hScrollBar_->value : 0;
 		int dy = vScrollBar_ != nullptr ? vScrollBar_->value : 0;
 
-		for (std::size_t i = 0; i < managedViews_.size(); ++i) {
-			TRect moved = managedViews_[i].base;
+		for (auto & managedView : managedViews_) {
+			TRect moved = managedView.base;
 			moved.move(-dx, -dy);
 			moved.move(-contentRect_.a.x, -contentRect_.a.y);
-			managedViews_[i].view->locate(moved);
+			managedView.view->locate(moved);
 		}
 		if (content_ != nullptr)
 			content_->drawView();

@@ -28,12 +28,12 @@
 namespace {
 ushort execDialogWithDataLocal(TDialog *dialog, void *data) {
 	ushort result = cmCancel;
-	if (dialog == 0)
+	if (dialog == nullptr)
 		return cmCancel;
-	if (data != 0)
+	if (data != nullptr)
 		dialog->setData(data);
 	result = TProgram::deskTop->execView(dialog);
-	if (result != cmCancel && data != 0)
+	if (result != cmCancel && data != nullptr)
 		dialog->getData(data);
 	TObject::destroy(dialog);
 	if (result == cmHelp)
@@ -78,12 +78,12 @@ std::string trimPathInput(const std::string &path) {
 std::string expandUserPath(const char *path) {
 	std::string result;
 
-	if (path == 0)
+	if (path == nullptr)
 		return std::string();
 	result = normalizeTvPath(trimPathInput(path));
 	if (result.size() >= 2 && result[0] == '~' && result[1] == '/') {
 		const char *home = std::getenv("HOME");
-		if (home != 0 && *home != '\0')
+		if (home != nullptr && *home != '\0')
 			return std::string(home) + result.substr(1);
 	}
 	return result;
@@ -115,9 +115,8 @@ bool resolveWithConfiguredExtensions(const std::string &basePath, std::string &r
 	std::vector<std::string> extensions = configuredDefaultExtensionList();
 	std::set<std::string> tried;
 
-	for (std::size_t i = 0; i < extensions.size(); ++i) {
-		std::string ext = extensions[i];
-		std::string candidates[3];
+	for (auto ext : extensions) {
+			std::string candidates[3];
 
 		if (ext.empty())
 			continue;
@@ -129,8 +128,8 @@ bool resolveWithConfiguredExtensions(const std::string &basePath, std::string &r
 			candidates[2][p] = static_cast<char>(std::toupper(static_cast<unsigned char>(ext[p])));
 		}
 
-		for (std::size_t c = 0; c < 3; ++c) {
-			std::string candidate = basePath + "." + candidates[c];
+		for (const auto & c : candidates) {
+			std::string candidate = basePath + "." + c;
 			if (!tried.insert(candidate).second)
 				continue;
 			if (::access(candidate.c_str(), F_OK) == 0 && ::access(candidate.c_str(), R_OK) == 0) {
@@ -144,7 +143,7 @@ bool resolveWithConfiguredExtensions(const std::string &basePath, std::string &r
 } // namespace
 
 bool promptForPath(const char *title, char *fileName, std::size_t fileNameSize) {
-	if (fileName == 0 || fileNameSize == 0)
+	if (fileName == nullptr || fileNameSize == 0)
 		return false;
 	initRememberedLoadDialogPath(fileName, fileNameSize, "*.*");
 	return execDialogWithDataLocal(new TFileDialog("*.*", title, "~N~ame", fdOpenButton, 100), fileName) !=
@@ -181,7 +180,7 @@ bool resolveReadableExistingPath(const char *path, std::string &resolvedPath) {
 
 bool loadResolvedFileIntoWindow(TMREditWindow *win, const std::string &resolvedPath, const char *operationLabel) {
 	auto startedAt = std::chrono::steady_clock::now();
-	if (win == 0)
+	if (win == nullptr)
 		return false;
 	if (!win->loadFromFile(resolvedPath.c_str())) {
 		messageBox(mfError | mfOKButton, "Unable to load file:\n%s", resolvedPath.c_str());
@@ -200,7 +199,7 @@ bool loadResolvedFileIntoWindow(TMREditWindow *win, const std::string &resolvedP
 bool saveCurrentEditWindow() {
 	TMREditWindow *win = currentEditWindow();
 
-	if (win == 0)
+	if (win == nullptr)
 		return false;
 	if (win->isReadOnly()) {
 		messageBox(mfInformation | mfOKButton, "Window is read-only.");
@@ -233,7 +232,7 @@ bool saveCurrentEditWindow() {
 bool saveCurrentEditWindowAs() {
 	TMREditWindow *win = currentEditWindow();
 
-	if (win == 0)
+	if (win == nullptr)
 		return false;
 	if (win->isReadOnly()) {
 		messageBox(mfInformation | mfOKButton, "Window is read-only.");

@@ -8,15 +8,15 @@ namespace {
 
 std::string lowerCopy(const std::string &value) {
 	std::string result = value;
-	for (std::size_t i = 0; i < result.size(); ++i)
-		result[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(result[i])));
+	for (char & i : result)
+		i = static_cast<char>(std::tolower(static_cast<unsigned char>(i)));
 	return result;
 }
 
 std::string upperCopy(const std::string &value) {
 	std::string result = value;
-	for (std::size_t i = 0; i < result.size(); ++i)
-		result[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(result[i])));
+	for (char & i : result)
+		i = static_cast<char>(std::toupper(static_cast<unsigned char>(i)));
 	return result;
 }
 

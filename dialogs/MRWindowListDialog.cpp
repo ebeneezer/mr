@@ -43,7 +43,7 @@ struct WindowListEntry {
 	bool hidden;
 
 	WindowListEntry()
-	    : window(nullptr), fileLabel(), slotLabel(), directoryLabel(), hidden(false) {
+	    : window(nullptr),  hidden(false) {
 	}
 };
 
@@ -114,15 +114,15 @@ TMREditWindow *preferredLinkTarget(TMREditWindow *current) {
 		return nullptr;
 	currentFile = current->currentFileName();
 
-	for (std::size_t i = 0; i < windows.size(); ++i) {
-		if (windows[i] == current)
+	for (auto & window : windows) {
+		if (window == current)
 			continue;
 		if (firstOther == nullptr)
-			firstOther = windows[i];
-		if (emptyUntitled == nullptr && isWindowEmptyUntitled(windows[i]))
-			emptyUntitled = windows[i];
-		if (!currentFile.empty() && sameFile == nullptr && currentFile == windows[i]->currentFileName())
-			sameFile = windows[i];
+			firstOther = window;
+		if (emptyUntitled == nullptr && isWindowEmptyUntitled(window))
+			emptyUntitled = window;
+		if (!currentFile.empty() && sameFile == nullptr && currentFile == window->currentFileName())
+			sameFile = window;
 	}
 	if (emptyUntitled != nullptr)
 		return emptyUntitled;
@@ -171,7 +171,7 @@ class WindowListView : public TListViewer {
   public:
 	WindowListView(const TRect &bounds, TScrollBar *aVScrollBar,
 	               const std::vector<std::string> &aItems) noexcept
-	    : TListViewer(bounds, 1, 0, aVScrollBar), items(aItems) {
+	    : TListViewer(bounds, 1, nullptr, aVScrollBar), items(aItems) {
 		setRange(static_cast<short>(items.size()));
 	}
 
@@ -435,8 +435,8 @@ class WindowListDialog : public TDialog {
 
 	void handleHideAll() {
 		std::vector<TMREditWindow *> windows = allEditWindows();
-		for (std::size_t i = 0; i < windows.size(); ++i)
-			hideWindow(windows[i]);
+		for (auto & window : windows)
+			hideWindow(window);
 		mrEnsureUsableWorkWindow();
 		refreshEntries();
 	}

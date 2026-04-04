@@ -70,7 +70,7 @@ bool isFrameFocused(const TMRFrame *frame) noexcept {
 
 } // namespace
 
-TMRTaskOverviewView::TMRTaskOverviewView(const TRect &bounds) noexcept : TView(bounds), lines_() {
+TMRTaskOverviewView::TMRTaskOverviewView(const TRect &bounds) noexcept : TView(bounds) {
 	eventMask = 0;
 	options |= ofBuffered;
 }
@@ -94,9 +94,9 @@ void TMRTaskOverviewView::draw() {
 					break;
 				textLine.resize(textLine.size() - nextLen);
 			}
-			for (std::size_t i = 0; i < textLine.size(); ++i)
-				if (static_cast<unsigned char>(textLine[i]) < 32)
-					textLine[i] = ' ';
+			for (char &ch : textLine)
+				if (static_cast<unsigned char>(ch) < 32)
+					ch = ' ';
 			b.moveStr(1, textLine.c_str(), text);
 		}
 		writeBuf(0, y, size.x, 1, b);
@@ -131,8 +131,7 @@ TPalette &TMRTaskOverviewWindow::getPalette() const {
 }
 
 TMRFrame::TMRFrame(const TRect &bounds) noexcept
-    : TFrame(bounds), markerStateProvider_(), taskOverviewProvider_(), taskOverviewPopup_(nullptr),
-      taskOverviewPopupOwner_(nullptr) {
+    : TFrame(bounds), taskOverviewPopup_(nullptr), taskOverviewPopupOwner_(nullptr) {
 }
 
 TMRFrame::~TMRFrame() {
@@ -442,9 +441,9 @@ void TMRFrame::showTaskOverview() {
 		hideTaskOverview();
 		return;
 	}
-	for (std::size_t i = 0; i < lines.size(); ++i)
-		if (strwidth(lines[i].c_str()) + 4 > width)
-			width = strwidth(lines[i].c_str()) + 4;
+	for (const std::string &line : lines)
+		if (strwidth(line.c_str()) + 4 > width)
+			width = strwidth(line.c_str()) + 4;
 	if (width > group->size.x - 2)
 		width = std::max(12, group->size.x - 2);
 	int height = static_cast<int>(lines.size()) + 2;

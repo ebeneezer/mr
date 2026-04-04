@@ -27,7 +27,7 @@ TRect centeredRect(int width, int height) {
 
 ushort execDialog(TDialog *dialog) {
 	ushort result = cmCancel;
-	if (dialog != 0) {
+	if (dialog != nullptr) {
 		result = TProgram::deskTop->execView(dialog);
 		TObject::destroy(dialog);
 	}

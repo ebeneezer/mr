@@ -18,7 +18,7 @@ struct MessageNoticeState {
 	std::chrono::steady_clock::time_point expiresAt;
 
 	MessageNoticeState() noexcept
-	    : active(false), kind(MessageNoticeKind::Info), text(), expiresAt(std::chrono::steady_clock::time_point::min()) {
+	    : active(false), kind(MessageNoticeKind::Info),  expiresAt(std::chrono::steady_clock::time_point::min()) {
 	}
 };
 
@@ -28,7 +28,7 @@ struct State {
 	std::uint64_t nextSequence;
 	MessageNoticeState messageNotice;
 
-	State() noexcept : mutex(), events(), nextSequence(1), messageNotice() {
+	State() noexcept :  nextSequence(1) {
 	}
 };
 
@@ -203,13 +203,13 @@ std::vector<Event> recentForWindow(std::size_t bufferId, std::size_t documentId,
 	std::vector<Event> result;
 	std::lock_guard<std::mutex> lock(shared.mutex);
 
-	for (std::deque<Event>::const_iterator it = shared.events.begin(); it != shared.events.end(); ++it) {
-		bool matchesBuffer = bufferId != 0 && it->bufferId != 0 && it->bufferId == bufferId;
-		bool matchesDocument = documentId != 0 && it->documentId != 0 && it->documentId == documentId;
+	for (const auto & event : shared.events) {
+		bool matchesBuffer = bufferId != 0 && event.bufferId != 0 && event.bufferId == bufferId;
+		bool matchesDocument = documentId != 0 && event.documentId != 0 && event.documentId == documentId;
 
 		if (!matchesBuffer && !matchesDocument)
 			continue;
-		result.push_back(*it);
+		result.push_back(event);
 		if (result.size() >= maxCount)
 			break;
 	}

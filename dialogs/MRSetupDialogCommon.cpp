@@ -132,11 +132,11 @@ class TSetupScrollableDialog : public TDialog {
 		int dx = hScrollBar_ != nullptr ? hScrollBar_->value : 0;
 		int dy = vScrollBar_ != nullptr ? vScrollBar_->value : 0;
 
-		for (std::size_t i = 0; i < managedViews_.size(); ++i) {
-			TRect moved = managedViews_[i].base;
+		for (auto & managedView : managedViews_) {
+			TRect moved = managedView.base;
 			moved.move(-dx, -dy);
 			moved.move(-contentRect_.a.x, -contentRect_.a.y);
-			managedViews_[i].view->locate(moved);
+			managedView.view->locate(moved);
 		}
 		if (content_ != nullptr)
 			content_->drawView();

@@ -234,7 +234,7 @@ struct MappedFileSource::State {
 	std::size_t size;
 	std::string path;
 
-	State() noexcept : fd(-1), data(nullptr), size(0), path() {
+	State() noexcept : fd(-1), data(nullptr), size(0) {
 	}
 
 	~State() {
@@ -443,21 +443,19 @@ void StagedEditTransaction::replace(Range range, const std::string &text) {
 
 StagedEditTransaction::StagedEditTransaction(const ReadSnapshot &snapshot,
                                              const std::string &label)
-    : baseVersion_(snapshot.version()), label_(label), addBuffer_(), operations_() {
+    : baseVersion_(snapshot.version()), label_(label) {
 }
 
 TextDocument::TextDocument() noexcept
-    : originalBuffer_(), mappedOriginal_(), addBuffer_(), pieces_(), length_(0),
-      documentId_(allocateDocumentId()), version_(0), cacheDirty_(false), materializedText_(),
-      lineIndexCheckpoints_(), lazyIndexedOffset_(0), lazyIndexedLine_(0),
+    :  length_(0),
+      documentId_(allocateDocumentId()), version_(0), cacheDirty_(false),  lazyIndexedOffset_(0), lazyIndexedLine_(0),
       lazyLineIndexComplete_(false), lazyTotalLineCount_(1) {
 	resetLazyLineIndex();
 }
 
 TextDocument::TextDocument(const std::string &text)
-    : originalBuffer_(), mappedOriginal_(), addBuffer_(), pieces_(), length_(0),
-      documentId_(allocateDocumentId()), version_(0), cacheDirty_(false), materializedText_(),
-      lineIndexCheckpoints_(), lazyIndexedOffset_(0), lazyIndexedLine_(0),
+    :  length_(0),
+      documentId_(allocateDocumentId()), version_(0), cacheDirty_(false),  lazyIndexedOffset_(0), lazyIndexedLine_(0),
       lazyLineIndexComplete_(false), lazyTotalLineCount_(1) {
 	resetLazyLineIndex();
 	initializeFromOriginal(text, true);
@@ -536,8 +534,8 @@ bool TextDocument::adoptLineIndexWarmup(const LineIndexWarmupData &warmup,
 }
 
 ReadSnapshot::ReadSnapshot() noexcept
-    : documentId_(0), version_(0), mappedOriginal_(), originalBuffer_(), addBuffer_(), pieces_(),
-      length_(0), cacheDirty_(false), materializedText_(), lineIndexCheckpoints_(),
+    : documentId_(0), version_(0), 
+      length_(0), cacheDirty_(false), 
       lazyIndexedOffset_(0), lazyIndexedLine_(0), lazyLineIndexComplete_(true),
       lazyTotalLineCount_(1) {
 	resetLazyLineIndex();
@@ -918,8 +916,8 @@ void TextDocument::setText(const std::string &text) {
 void TextDocument::apply(const EditTransaction &transaction) {
 	const std::vector<EditOperation> &ops = transaction.operations();
 	bool mutated = false;
-	for (std::size_t i = 0; i < ops.size(); ++i) {
-		mutated = applyOperationNoVersionBump(ops[i]) || mutated;
+	for (const auto & op : ops) {
+		mutated = applyOperationNoVersionBump(op) || mutated;
 	}
 	if (mutated)
 		bumpVersion();
@@ -942,9 +940,8 @@ CommitResult TextDocument::tryApply(const EditTransaction &transaction, std::siz
 	bool touched = false;
 
 	const std::vector<EditOperation> &ops = transaction.operations();
-	for (std::size_t i = 0; i < ops.size(); ++i) {
-		const EditOperation &op = ops[i];
-		if (op.kind == EditKind::SetText) {
+	for (const auto & op : ops) {
+			if (op.kind == EditKind::SetText) {
 			touchStart = 0;
 			touchEnd = std::max(oldLength, static_cast<Offset>(op.text.size()));
 			touched = true;
@@ -998,9 +995,8 @@ CommitResult TextDocument::tryApply(const StagedEditTransaction &transaction) {
 	bool touched = false;
 
 	const std::vector<StagedEditOperation> &ops = transaction.operations();
-	for (std::size_t i = 0; i < ops.size(); ++i) {
-		const StagedEditOperation &op = ops[i];
-		if (op.kind == EditKind::SetText) {
+	for (const auto & op : ops) {
+			if (op.kind == EditKind::SetText) {
 			touchStart = 0;
 			touchEnd = std::max(oldLength, op.span.length);
 			touched = true;
@@ -1271,8 +1267,8 @@ void TextDocument::ensureMaterialized() const noexcept {
 
 	materializedText_.clear();
 	materializedText_.reserve(length_);
-	for (std::size_t i = 0; i < pieces_.size(); ++i)
-		materializedText_ += pieceText(pieces_[i]);
+	for (const auto & piece : pieces_)
+		materializedText_ += pieceText(piece);
 	cacheDirty_ = false;
 }
 
@@ -1514,9 +1510,8 @@ void TextDocument::compactPieces() {
 	std::vector<Piece> compacted;
 	compacted.reserve(pieces_.size());
 
-	for (std::size_t i = 0; i < pieces_.size(); ++i) {
-		const Piece &piece = pieces_[i];
-		if (piece.empty())
+	for (const auto & piece : pieces_) {
+			if (piece.empty())
 			continue;
 		if (!compacted.empty() && compacted.back().source == piece.source &&
 		    compacted.back().span.end() == piece.span.start) {

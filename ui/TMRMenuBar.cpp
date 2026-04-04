@@ -164,11 +164,11 @@ void TMRMenuBar::draw() {
 	// Keep one blank column between the dynamic message lane and cursor status.
 	const int menuLimit = std::max(1, rightStart - 2);
 
-	if (menu != 0) {
+	if (menu != nullptr) {
 		x = 1;
 		p = menu->items;
-		while (p != 0) {
-			if (p->name != 0) {
+		while (p != nullptr) {
+			if (p->name != nullptr) {
 				l = cstrlen(p->name);
 				if (x + l < menuLimit) {
 					if (p->disabled)

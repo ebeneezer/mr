@@ -205,12 +205,12 @@ const char *dummyCommandTitle(ushort command) {
 			return "Installation / Search and Replace defaults";
 
 		default:
-			return 0;
+			return nullptr;
 	}
 }
 
 void showDummyCommandBox(const char *title) {
-	if (title == 0)
+	if (title == nullptr)
 		title = "Command";
 	messageBox(mfInformation | mfOKButton, "%s\n\nDummy implementation for now.", title);
 }
@@ -230,14 +230,14 @@ bool handleFileOpen() {
 		return true;
 
 	target = findReusableEmptyWindow(current);
-	if (target == 0) {
+	if (target == nullptr) {
 		target = createEditorWindow("?No-File?");
 		createdTarget = true;
 	}
 	if (!loadResolvedFileIntoWindow(target, resolvedPath, "Open file")) {
-		if (createdTarget && target != 0)
-			message(target, evCommand, cmClose, 0);
-		if (target != 0 && isEmptyUntitledEditableWindow(target) && current != target && current != 0)
+		if (createdTarget && target != nullptr)
+			message(target, evCommand, cmClose, nullptr);
+		if (target != nullptr && isEmptyUntitledEditableWindow(target) && current != target && current != nullptr)
 			mrActivateEditWindow(current);
 		return true;
 	}
@@ -262,14 +262,14 @@ bool handleFileLoad() {
 		return true;
 	if (!resolveReadableExistingPath(fileName, resolvedPath))
 		return true;
-	if (target == 0) {
+	if (target == nullptr) {
 		target = createEditorWindow("?No-File?");
 		createdTarget = true;
 	} else if (!target->confirmAbandonForReload())
 		return true;
 	if (!loadResolvedFileIntoWindow(target, resolvedPath, "Load file")) {
-		if (createdTarget && target != 0)
-			message(target, evCommand, cmClose, 0);
+		if (createdTarget && target != nullptr)
+			message(target, evCommand, cmClose, nullptr);
 		return true;
 	}
 	mrActivateEditWindow(target);
@@ -293,7 +293,7 @@ bool handleExecuteProgram() {
 	}
 
 	win = createEditorWindow(shortenCommandTitle(commandLine).c_str());
-	if (win == 0) {
+	if (win == nullptr) {
 		messageBox(mfError | mfOKButton, "Unable to create communication window.");
 		return true;
 	}
@@ -308,14 +308,14 @@ bool startExternalCommandInWindow(TMREditWindow *win, const std::string &command
 	std::ostringstream logLine;
 	std::uint64_t taskId;
 
-	if (win == 0)
+	if (win == nullptr)
 		return false;
 	title = shortenCommandTitle(commandLine);
 	initialText = "$ " + commandLine + "\n\n";
 	if (replaceBuffer) {
 		if (!win->replaceTextBuffer(initialText.c_str(), title.c_str())) {
 			if (closeOnFailure)
-				message(win, evCommand, cmClose, 0);
+				message(win, evCommand, cmClose, nullptr);
 			messageBox(mfError | mfOKButton, "Unable to prepare communication window.");
 			return false;
 		}
@@ -335,7 +335,7 @@ bool startExternalCommandInWindow(TMREditWindow *win, const std::string &command
 	    });
 	if (taskId == 0) {
 		if (closeOnFailure)
-			message(win, evCommand, cmClose, 0);
+			message(win, evCommand, cmClose, nullptr);
 		messageBox(mfError | mfOKButton, "Unable to start external command worker.");
 		return false;
 	}
@@ -352,7 +352,7 @@ bool handleCancelBackgroundMacros() {
 	std::ostringstream line;
 	std::size_t taskCount;
 
-	if (win == 0)
+	if (win == nullptr)
 		return true;
 	taskCount = win->trackedMacroTaskCount();
 	if (taskCount == 0) {
@@ -421,7 +421,7 @@ bool handleStopCurrentProgram() {
 	std::ostringstream line;
 	std::size_t taskCount;
 
-	if (win == 0 || !win->isCommunicationWindow())
+	if (win == nullptr || !win->isCommunicationWindow())
 		return true;
 	taskCount = win->trackedTaskCount(mr::coprocessor::TaskKind::ExternalIo);
 	if (taskCount == 0) {
@@ -441,7 +441,7 @@ bool handleStopCurrentProgram() {
 bool handleRestartCurrentProgram() {
 	TMREditWindow *win = currentEditWindow();
 
-	if (win == 0 || win->windowRole() != TMREditWindow::wrCommunicationCommand)
+	if (win == nullptr || win->windowRole() != TMREditWindow::wrCommunicationCommand)
 		return true;
 	if (win->hasTrackedExternalIoTasks()) {
 		messageBox(mfInformation | mfOKButton, "Stop the current program before restarting it.");
@@ -459,7 +459,7 @@ bool handleClearCurrentOutput() {
 	TMREditWindow *win = currentEditWindow();
 	std::ostringstream line;
 
-	if (win == 0)
+	if (win == nullptr)
 		return true;
 	if (win->windowRole() == TMREditWindow::wrLog) {
 		if (!mrClearLogWindow()) {
@@ -596,7 +596,7 @@ bool handleMRCommand(ushort command) {
 
 		default: {
 			const char *title = dummyCommandTitle(command);
-			if (title != 0) {
+			if (title != nullptr) {
 				showDummyCommandBox(title);
 				return true;
 			}

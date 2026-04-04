@@ -63,7 +63,7 @@ std::string externalIoDisplayName(const mr::coprocessor::TaskInfo &task) {
 void recordTaskPerformance(const mr::coprocessor::Result &result, const std::string &action, TMREditWindow *win,
                            std::size_t documentId, std::size_t bytes, const std::string &detail) {
 	mr::performance::recordBackgroundResult(
-	    result, action, win != 0 ? static_cast<std::size_t>(win->bufferId()) : 0, documentId, bytes, detail);
+	    result, action, win != nullptr ? static_cast<std::size_t>(win->bufferId()) : 0, documentId, bytes, detail);
 }
 
 void recordMacroPerformance(const mr::coprocessor::Result &result, TMREditWindow *win, std::size_t documentId,
@@ -75,7 +75,7 @@ void recordMacroPerformance(const mr::coprocessor::Result &result, TMREditWindow
 	}
 	mr::performance::recordBackgroundEvent(
 	    result.task.lane, outcome, result.timing, "Background macro",
-	    win != 0 ? static_cast<std::size_t>(win->bufferId()) : 0, documentId, bytes, detail);
+	    win != nullptr ? static_cast<std::size_t>(win->bufferId()) : 0, documentId, bytes, detail);
 }
 
 std::string formatTimingSummary(const mr::coprocessor::TaskTiming &timing) {
@@ -85,16 +85,16 @@ std::string formatTimingSummary(const mr::coprocessor::TaskTiming &timing) {
 }
 
 void appendMacroLogLines(const std::vector<std::string> &logLines) {
-	for (std::size_t i = 0; i < logLines.size(); ++i) {
+	for (const auto & logLine : logLines) {
 		std::string prefixed = "  ";
-		prefixed += logLines[i];
+		prefixed += logLine;
 		mrLogMessage(prefixed.c_str());
 	}
 }
 
 void releaseMacroTask(TMREditWindow *win, const mr::coprocessor::Result &result, const char *state) {
-	int bufferId = win != 0 ? win->bufferId() : static_cast<int>(result.task.documentId);
-	if (win != 0)
+	int bufferId = win != nullptr ? win->bufferId() : static_cast<int>(result.task.documentId);
+	if (win != nullptr)
 		win->releaseCoprocessorTask(result.task.id);
 	mrTraceCoprocessorTaskRelease(bufferId, result.task.id, state);
 }
@@ -169,8 +169,8 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 		if (warmup != nullptr) {
 			std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
 			bool recorded = false;
-			for (std::size_t i = 0; i < windows.size(); ++i) {
-				TMRFileEditor *editor = windows[i] != nullptr ? windows[i]->getEditor() : nullptr;
+			for (auto & window : windows) {
+				TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 				if (editor == nullptr)
 					continue;
 				if (editor->documentId() != result.task.documentId ||
@@ -178,13 +178,13 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 					continue;
 				editor->applyLineIndexWarmup(warmup->warmup, result.task.baseVersion);
 				if (!recorded) {
-					recordTaskPerformance(result, "Line index warmup", windows[i], editor->documentId(),
-					                      editor->bufferLength(), windows[i]->currentFileName());
+					recordTaskPerformance(result, "Line index warmup", window, editor->documentId(),
+					                      editor->bufferLength(), window->currentFileName());
 					recorded = true;
 				}
 			}
 			if (!recorded)
-				recordTaskPerformance(result, "Line index warmup", 0, result.task.documentId, 0, result.task.label);
+				recordTaskPerformance(result, "Line index warmup", nullptr, result.task.documentId, 0, result.task.label);
 			return;
 		}
 
@@ -193,8 +193,8 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 		if (syntax != nullptr) {
 			std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
 			bool recorded = false;
-			for (std::size_t i = 0; i < windows.size(); ++i) {
-				TMRFileEditor *editor = windows[i] != nullptr ? windows[i]->getEditor() : nullptr;
+			for (auto & window : windows) {
+				TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 				if (editor == nullptr)
 					continue;
 				if (editor->documentId() != result.task.documentId ||
@@ -202,13 +202,13 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 					continue;
 				editor->applySyntaxWarmup(*syntax, result.task.baseVersion, result.task.id);
 				if (!recorded) {
-					recordTaskPerformance(result, "Syntax warmup", windows[i], editor->documentId(),
-					                      editor->bufferLength(), windows[i]->currentFileName());
+					recordTaskPerformance(result, "Syntax warmup", window, editor->documentId(),
+					                      editor->bufferLength(), window->currentFileName());
 					recorded = true;
 				}
 			}
 			if (!recorded)
-				recordTaskPerformance(result, "Syntax warmup", 0, result.task.documentId, 0, result.task.label);
+				recordTaskPerformance(result, "Syntax warmup", nullptr, result.task.documentId, 0, result.task.label);
 			return;
 		}
 
@@ -216,7 +216,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 		    dynamic_cast<const mr::coprocessor::ExternalIoChunkPayload *>(result.payload.get());
 		if (chunk != nullptr) {
 			TMREditWindow *win = findEditWindowByBufferId(static_cast<int>(chunk->channelId));
-			if (win != 0) {
+			if (win != nullptr) {
 				win->appendTextBuffer(chunk->text.c_str());
 				win->setReadOnly(true);
 				win->setFileChanged(false);
@@ -229,7 +229,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 		if (finished != nullptr) {
 			std::ostringstream line;
 			TMREditWindow *win = findEditWindowByBufferId(static_cast<int>(finished->channelId));
-			if (win != 0) {
+			if (win != nullptr) {
 				std::string exitLine = communicationExitLine(*finished);
 				win->appendTextBuffer(exitLine.c_str());
 				win->setReadOnly(true);
@@ -238,7 +238,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				                      externalIoDisplayName(result.task));
 				win->releaseCoprocessorTask(result.task.id);
 			} else {
-				recordTaskPerformance(result, "External command", 0, 0, 0, externalIoDisplayName(result.task));
+				recordTaskPerformance(result, "External command", nullptr, 0, 0, externalIoDisplayName(result.task));
 			}
 			mrTraceCoprocessorTaskRelease(static_cast<int>(finished->channelId), result.task.id, "finished");
 			line << "Communication session #" << finished->channelId << " ";
@@ -257,13 +257,13 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 		if (staged != nullptr) {
 			std::ostringstream line;
 			TMREditWindow *win = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
-			TMRFileEditor *editor = win != 0 ? win->getEditor() : 0;
+			TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 			bool accepted = false;
 			bool textChanged = false;
 			std::size_t currentVersion = 0;
 			std::string summary;
 
-			if (win != 0 && editor != 0) {
+			if (win != nullptr && editor != nullptr) {
 				currentVersion = editor->documentVersion();
 				TMRTextBufferModel::CommitResult commit = editor->applyStagedTransaction(
 				    staged->transaction, staged->cursorOffset, staged->selectionStart,
@@ -297,9 +297,9 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 					line << " with VM errors";
 				line << formatTimingSummary(result.timing) << ".";
 				summary = line.str();
-				recordMacroPerformance(result, win, editor != 0 ? editor->documentId() : 0,
-				                       editor != 0 ? editor->bufferLength() : 0, staged->displayName);
-				if (win != 0)
+				recordMacroPerformance(result, win, editor != nullptr ? editor->documentId() : 0,
+				                       editor != nullptr ? editor->bufferLength() : 0, staged->displayName);
+				if (win != nullptr)
 					win->noteBackgroundMacroCompleted(summary);
 				releaseMacroTask(win, result, textChanged ? "committed" : "state-only");
 				if (!staged->deferredUiCommands.empty()) {
@@ -307,14 +307,14 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 					    findEditWindowByBufferId(static_cast<int>(result.task.documentId));
 					std::size_t applied = 0;
 					std::size_t failed = 0;
-					if (applyWin != 0)
+					if (applyWin != nullptr)
 						mrvmUiSetCurrentWindow(applyWin);
-					for (std::size_t i = 0; i < staged->deferredUiCommands.size(); ++i) {
-						if (applyDeferredUiCommand(staged->deferredUiCommands[i]))
+					for (const auto & deferredUiCommand : staged->deferredUiCommands) {
+						if (applyDeferredUiCommand(deferredUiCommand))
 							++applied;
 						else {
 							std::string line = std::string("Deferred UI command failed: ") +
-							                   deferredUiCommandName(staged->deferredUiCommands[i].type);
+							                   deferredUiCommandName(deferredUiCommand.type);
 							mrLogMessage(line.c_str());
 							++failed;
 						}
@@ -332,10 +332,10 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 					line << " (snapshot " << result.task.baseVersion << ", current " << currentVersion << ")";
 				line << "; commit aborted without rebase" << formatTimingSummary(result.timing) << ".";
 				summary = line.str();
-				recordMacroPerformance(result, win, editor != 0 ? editor->documentId() : 0,
-				                       editor != 0 ? editor->bufferLength() : 0, staged->displayName,
+				recordMacroPerformance(result, win, editor != nullptr ? editor->documentId() : 0,
+				                       editor != nullptr ? editor->bufferLength() : 0, staged->displayName,
 				                       mr::performance::Outcome::Conflict);
-				if (win != 0)
+				if (win != nullptr)
 					win->noteBackgroundMacroConflict(summary);
 				releaseMacroTask(win, result, "conflict");
 			}
@@ -348,14 +348,14 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			TMREditWindow *win = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
 			std::string summary;
 
-			recordMacroPerformance(result, win, win != 0 ? win->documentId() : 0,
-			                       win != 0 ? win->bufferLength() : 0, macro->displayName);
+			recordMacroPerformance(result, win, win != nullptr ? win->documentId() : 0,
+			                       win != nullptr ? win->bufferLength() : 0, macro->displayName);
 			line << "Background macro '" << macro->displayName << "' finished";
 			if (macro->hadError)
 				line << " with VM errors";
 			line << formatTimingSummary(result.timing) << ".";
 			summary = line.str();
-			if (win != 0)
+			if (win != nullptr)
 				win->noteBackgroundMacroCompleted(summary);
 			releaseMacroTask(win, result, "finished");
 			mrLogMessage(summary.c_str());
@@ -366,7 +366,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 
 	if (result.task.kind == mr::coprocessor::TaskKind::ExternalIo) {
 		TMREditWindow *win = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
-		if (win != 0) {
+		if (win != nullptr) {
 			win->releaseCoprocessorTask(result.task.id);
 			if (result.cancelled()) {
 				win->appendTextBuffer("\n[process cancelled]\n");
@@ -379,8 +379,8 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				win->setFileChanged(false);
 			}
 		}
-		recordTaskPerformance(result, "External command", win, win != 0 ? win->documentId() : 0,
-		                      win != 0 ? win->bufferLength() : 0, externalIoDisplayName(result.task));
+		recordTaskPerformance(result, "External command", win, win != nullptr ? win->documentId() : 0,
+		                      win != nullptr ? win->bufferLength() : 0, externalIoDisplayName(result.task));
 		if (result.cancelled())
 			mrTraceCoprocessorTaskRelease(static_cast<int>(result.task.documentId), result.task.id, "cancelled");
 		else if (result.failed())
@@ -394,10 +394,10 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 
 		if (result.cancelled()) {
 			summary = "Background macro '" + name + "' cancelled" + formatTimingSummary(result.timing) + ".";
-			recordMacroPerformance(result, win, win != 0 ? win->documentId() : 0,
-			                       win != 0 ? win->bufferLength() : 0, name,
+			recordMacroPerformance(result, win, win != nullptr ? win->documentId() : 0,
+			                       win != nullptr ? win->bufferLength() : 0, name,
 			                       mr::performance::Outcome::Cancelled);
-			if (win != 0)
+			if (win != nullptr)
 				win->noteBackgroundMacroCancelled(summary);
 			releaseMacroTask(win, result, "cancelled");
 			mrLogMessage(summary.c_str());
@@ -408,10 +408,10 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				line << ": " << result.error;
 			line << formatTimingSummary(result.timing) << ".";
 			summary = line.str();
-			recordMacroPerformance(result, win, win != 0 ? win->documentId() : 0,
-			                       win != 0 ? win->bufferLength() : 0, name,
+			recordMacroPerformance(result, win, win != nullptr ? win->documentId() : 0,
+			                       win != nullptr ? win->bufferLength() : 0, name,
 			                       mr::performance::Outcome::Failed);
-			if (win != 0)
+			if (win != nullptr)
 				win->noteBackgroundMacroFailed(summary);
 			releaseMacroTask(win, result, "failed");
 			mrLogMessage(summary.c_str());
@@ -423,41 +423,41 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 	if (result.task.kind == mr::coprocessor::TaskKind::LineIndexWarmup) {
 		std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
 		bool recorded = false;
-		for (std::size_t i = 0; i < windows.size(); ++i) {
-			TMRFileEditor *editor = windows[i] != nullptr ? windows[i]->getEditor() : nullptr;
+		for (auto & window : windows) {
+			TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 			if (editor == nullptr)
 				continue;
 			if (editor->documentId() != result.task.documentId)
 				continue;
 			if (!recorded) {
-				recordTaskPerformance(result, "Line index warmup", windows[i], editor->documentId(),
-				                      editor->bufferLength(), windows[i]->currentFileName());
+				recordTaskPerformance(result, "Line index warmup", window, editor->documentId(),
+				                      editor->bufferLength(), window->currentFileName());
 				recorded = true;
 			}
 			editor->clearLineIndexWarmupTask(result.task.id);
 		}
 		if (!recorded)
-			recordTaskPerformance(result, "Line index warmup", 0, result.task.documentId, 0, result.task.label);
+			recordTaskPerformance(result, "Line index warmup", nullptr, result.task.documentId, 0, result.task.label);
 	}
 
 	if (result.task.kind == mr::coprocessor::TaskKind::SyntaxWarmup) {
 		std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
 		bool recorded = false;
-		for (std::size_t i = 0; i < windows.size(); ++i) {
-			TMRFileEditor *editor = windows[i] != nullptr ? windows[i]->getEditor() : nullptr;
+		for (auto & window : windows) {
+			TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 			if (editor == nullptr)
 				continue;
 			if (editor->documentId() != result.task.documentId)
 				continue;
 			if (!recorded) {
-				recordTaskPerformance(result, "Syntax warmup", windows[i], editor->documentId(),
-				                      editor->bufferLength(), windows[i]->currentFileName());
+				recordTaskPerformance(result, "Syntax warmup", window, editor->documentId(),
+				                      editor->bufferLength(), window->currentFileName());
 				recorded = true;
 			}
 			editor->clearSyntaxWarmupTask(result.task.id);
 		}
 		if (!recorded)
-			recordTaskPerformance(result, "Syntax warmup", 0, result.task.documentId, 0, result.task.label);
+			recordTaskPerformance(result, "Syntax warmup", nullptr, result.task.documentId, 0, result.task.label);
 	}
 
 	if (!result.failed())
@@ -483,7 +483,7 @@ void mrTraceCoprocessorTaskRelease(int bufferId, std::uint64_t taskId, const cha
 	std::ostringstream line;
 
 	line << "Released coprocessor task #" << taskId << " for window #" << bufferId;
-	if (state != 0 && *state != '\0')
+	if (state != nullptr && *state != '\0')
 		line << " (" << state << ")";
 	line << ".";
 	mrLogMessage(line.str().c_str());

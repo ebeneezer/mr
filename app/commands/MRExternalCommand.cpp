@@ -96,7 +96,7 @@ mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &
 		::dup2(pipeFds[1], STDERR_FILENO);
 		::close(pipeFds[0]);
 		::close(pipeFds[1]);
-		::execl(shellPath.c_str(), shellPath.c_str(), "-lc", command.c_str(), static_cast<char *>(0));
+		::execl(shellPath.c_str(), shellPath.c_str(), "-lc", command.c_str(), static_cast<char *>(nullptr));
 		::_exit(127);
 	}
 

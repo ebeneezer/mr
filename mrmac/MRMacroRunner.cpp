@@ -24,7 +24,7 @@ struct PendingForegroundMacro {
 	std::string label;
 	std::shared_ptr<VirtualMachine> vm;
 
-	PendingForegroundMacro() : label(), vm() {
+	PendingForegroundMacro()  {
 	}
 
 	PendingForegroundMacro(std::string aLabel, std::shared_ptr<VirtualMachine> aVm)
@@ -42,9 +42,9 @@ bool hasMrmacExtension(const std::string &path) {
 		return false;
 
 	std::string ext = path.substr(pos);
-	for (std::string::size_type i = 0; i < ext.size(); ++i)
-		if (ext[i] >= 'A' && ext[i] <= 'Z')
-			ext[i] = static_cast<char>(ext[i] - 'A' + 'a');
+	for (char & i : ext)
+		if (i >= 'A' && i <= 'Z')
+			i = static_cast<char>(i - 'A' + 'a');
 
 	return ext == ".mrmac";
 }
@@ -86,13 +86,13 @@ std::string trimPathInput(const std::string &path) {
 std::string expandUserPath(const char *path) {
 	std::string result;
 
-	if (path == 0)
+	if (path == nullptr)
 		return std::string();
 
 	result = normalizeTvPath(trimPathInput(path));
 	if (result.size() >= 2 && result[0] == '~' && result[1] == '/') {
 		const char *home = std::getenv("HOME");
-		if (home != 0 && *home != '\0')
+		if (home != nullptr && *home != '\0')
 			return std::string(home) + result.substr(1);
 	}
 
@@ -138,9 +138,9 @@ std::string joinNames(const std::vector<std::string> &names) {
 void showErrorBox(const char *title, const char *text) {
 	char msg[1024];
 
-	if (title == 0)
+	if (title == nullptr)
 		title = "Error";
-	if (text == 0)
+	if (text == nullptr)
 		text = "Unknown error.";
 
 	std::snprintf(msg, sizeof(msg), "%s:\n\n%s", title, text);
@@ -149,15 +149,15 @@ void showErrorBox(const char *title, const char *text) {
 
 bool runMacroSource(const char *displayName, const char *source) {
 	size_t bytecodeSize = 0;
-	unsigned char *bytecode = 0;
+	unsigned char *bytecode = nullptr;
 	std::shared_ptr<VirtualMachine> vm = std::make_shared<VirtualMachine>();
 	MRMacroExecutionProfile profile;
 	std::vector<unsigned char> bytecodeCopy;
-	std::string label = displayName != 0 ? displayName : "Macro Loader";
+	std::string label = displayName != nullptr ? displayName : "Macro Loader";
 	TMREditWindow *win = currentEditWindow();
 	std::uint64_t taskId = 0;
 
-	if (source == 0) {
+	if (source == nullptr) {
 		showErrorBox("Macro Loader", "No macro source available.");
 		return false;
 	}
@@ -167,11 +167,11 @@ bool runMacroSource(const char *displayName, const char *source) {
 	}
 
 	bytecode = compile_macro_code(source, &bytecodeSize);
-	if (bytecode == 0) {
+	if (bytecode == nullptr) {
 		const char *err = get_last_compile_error();
-		if (err == 0 || *err == '\0')
+		if (err == nullptr || *err == '\0')
 			err = "Compilation failed.";
-		showErrorBox(displayName != 0 ? displayName : "Macro Loader", err);
+		showErrorBox(displayName != nullptr ? displayName : "Macro Loader", err);
 		return false;
 	}
 
@@ -179,10 +179,10 @@ bool runMacroSource(const char *displayName, const char *source) {
 	if (mrvmCanRunInBackground(profile)) {
 		bytecodeCopy.assign(bytecode, bytecode + bytecodeSize);
 		std::free(bytecode);
-		bytecode = 0;
+		bytecode = nullptr;
 		taskId = mr::coprocessor::globalCoprocessor().submit(
 		    mr::coprocessor::Lane::Macro, mr::coprocessor::TaskKind::MacroJob,
-		    win != 0 ? static_cast<std::size_t>(win->bufferId()) : 0, 0, std::string("macro: ") + label,
+		    win != nullptr ? static_cast<std::size_t>(win->bufferId()) : 0, 0, std::string("macro: ") + label,
 		    [label, bytecodeCopy = std::move(bytecodeCopy)](
 		        const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) mutable {
 			    mr::coprocessor::Result result;
@@ -208,7 +208,7 @@ bool runMacroSource(const char *displayName, const char *source) {
 			showErrorBox(label.c_str(), "Unable to start background macro worker.");
 			return false;
 		}
-		if (win != 0) {
+		if (win != nullptr) {
 			win->trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::MacroJob, label);
 			win->noteQueuedBackgroundMacro(label, false);
 		}
@@ -226,9 +226,9 @@ bool runMacroSource(const char *displayName, const char *source) {
 
 	if (mrvmCanRunStagedInBackground(profile)) {
 		MRMacroStagedExecutionInput stagedInput;
-		TMRFileEditor *editor = win != 0 ? win->getEditor() : 0;
+		TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 
-		if (win == 0 || editor == 0) {
+		if (win == nullptr || editor == nullptr) {
 			showErrorBox(label.c_str(), "No active editor window available for staged macro execution.");
 			std::free(bytecode);
 			return false;
@@ -236,7 +236,7 @@ bool runMacroSource(const char *displayName, const char *source) {
 
 		bytecodeCopy.assign(bytecode, bytecode + bytecodeSize);
 		std::free(bytecode);
-		bytecode = 0;
+		bytecode = nullptr;
 
 		stagedInput.document = editor->documentCopy();
 		stagedInput.baseVersion = editor->documentVersion();
@@ -377,9 +377,9 @@ void pumpForegroundMacroDelays() {
 void cancelForegroundMacroDelays() {
 	std::lock_guard<std::mutex> lock(g_pendingForegroundMacrosMutex);
 
-	for (std::size_t i = 0; i < g_pendingForegroundMacros.size(); ++i)
-		if (g_pendingForegroundMacros[i].vm)
-			g_pendingForegroundMacros[i].vm->cancelPendingDelay();
+	for (auto & g_pendingForegroundMacro : g_pendingForegroundMacros)
+		if (g_pendingForegroundMacro.vm)
+			g_pendingForegroundMacro.vm->cancelPendingDelay();
 	g_pendingForegroundMacros.clear();
 }
 

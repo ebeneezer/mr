@@ -99,10 +99,10 @@ std::string baseNameOf(const std::string &path) {
 
 TMREditWindow *findWindowByTitle(const char *title) {
 	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
-	for (std::size_t i = 0; i < windows.size(); ++i) {
-		const char *windowTitle = windows[i]->getTitle(0);
+	for (auto & window : windows) {
+		const char *windowTitle = window->getTitle(0);
 		if (title != nullptr && windowTitle != nullptr && std::strcmp(windowTitle, title) == 0)
-			return windows[i];
+			return window;
 	}
 	return nullptr;
 }
@@ -118,13 +118,13 @@ TMREditWindow *chooseFallbackWorkWindow() {
 	TMREditWindow *hiddenEditable = nullptr;
 	TMREditWindow *hiddenNonUtility = nullptr;
 
-	for (std::size_t i = 0; i < windows.size(); ++i) {
-		if ((windows[i]->state & sfVisible) != 0)
-			return windows[i];
-		if (hiddenEditable == nullptr && !windows[i]->isReadOnly())
-			hiddenEditable = windows[i];
-		if (hiddenNonUtility == nullptr && !isReservedUtilityWindow(windows[i]))
-			hiddenNonUtility = windows[i];
+	for (auto & window : windows) {
+		if ((window->state & sfVisible) != 0)
+			return window;
+		if (hiddenEditable == nullptr && !window->isReadOnly())
+			hiddenEditable = window;
+		if (hiddenNonUtility == nullptr && !isReservedUtilityWindow(window))
+			hiddenNonUtility = window;
 	}
 	if (hiddenEditable != nullptr)
 		return hiddenEditable;

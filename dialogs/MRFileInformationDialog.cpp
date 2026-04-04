@@ -39,7 +39,7 @@ void insertStaticLine(TDialog *dialog, int x, int y, const char *text) {
 
 ushort execDialog(TDialog *dialog) {
 	ushort result = cmCancel;
-	if (dialog != 0) {
+	if (dialog != nullptr) {
 		result = TProgram::deskTop->execView(dialog);
 		TObject::destroy(dialog);
 		if (result == cmHelp)
@@ -110,7 +110,7 @@ std::string formatCursorProgress(std::size_t cursorOffset, std::size_t currentLe
 
 std::string formatTaskSummary(TMREditWindow *win) {
 	std::ostringstream out;
-	const std::size_t count = win != 0 ? win->trackedCoprocessorTaskCount() : 0;
+	const std::size_t count = win != nullptr ? win->trackedCoprocessorTaskCount() : 0;
 
 	out << count;
 	if (count == 0)
@@ -138,7 +138,7 @@ std::string formatWarmupState(const char *label, std::uint64_t taskId, bool exac
 }
 
 const char *blockModeLabel(TMREditWindow *win) {
-	if (win == 0)
+	if (win == nullptr)
 		return "None";
 	switch (win->blockStatus()) {
 		case TMREditWindow::bmLine:
@@ -204,9 +204,9 @@ class FileInformationDialog : public TDialog {
 	static int computeWidth(const FileInformationPage &page) {
 		TRect desk = TProgram::deskTop->getExtent();
 		std::size_t maxLen = page.title.size();
-		for (std::vector<std::string>::const_iterator it = page.lines.begin(); it != page.lines.end(); ++it)
-			if (it->size() > maxLen)
-				maxLen = it->size();
+		for (const auto & line : page.lines)
+			if (line.size() > maxLen)
+				maxLen = line.size();
 		return std::max(76, std::min(static_cast<int>(maxLen) + 6, (desk.b.x - desk.a.x) - 2));
 	}
 
@@ -232,87 +232,87 @@ std::vector<FileInformationPage> buildFileInformationPages(TMREditWindow *win) {
 	FileInformationPage page1;
 	FileInformationPage page2;
 	FileInformationPage page3;
-	TMRTextBuffer textBuffer = win != 0 ? win->buffer() : TMRTextBuffer();
-	std::string path = win != 0 ? win->currentFileName() : std::string();
-	std::string title = win != 0 && win->getTitle(0) != 0 ? win->getTitle(0) : "?No-File?";
-	std::string roleDetail = win != 0 ? win->windowRoleDetail() : std::string();
+	TMRTextBuffer textBuffer = win != nullptr ? win->buffer() : TMRTextBuffer();
+	std::string path = win != nullptr ? win->currentFileName() : std::string();
+	std::string title = win != nullptr && win->getTitle(0) != nullptr ? win->getTitle(0) : "?No-File?";
+	std::string roleDetail = win != nullptr ? win->windowRoleDetail() : std::string();
 	struct stat st;
 	bool hasStat = !path.empty() && ::stat(path.c_str(), &st) == 0;
-	unsigned long cursorLine = win != 0 ? win->cursorLineNumber() : 1UL;
-	unsigned long cursorColumn = win != 0 ? win->cursorColumnNumber() : 1UL;
+	unsigned long cursorLine = win != nullptr ? win->cursorLineNumber() : 1UL;
+	unsigned long cursorColumn = win != nullptr ? win->cursorColumnNumber() : 1UL;
 	const std::size_t currentLength = textBuffer.length();
 	const std::size_t diskSize = hasStat ? static_cast<std::size_t>(st.st_size) : 0;
-	const std::size_t lineCount = win != 0 ? win->bufferLineCount() : 1;
-	const std::size_t estimatedLineCount = win != 0 ? win->estimatedLineCount() : lineCount;
+	const std::size_t lineCount = win != nullptr ? win->bufferLineCount() : 1;
+	const std::size_t estimatedLineCount = win != nullptr ? win->estimatedLineCount() : lineCount;
 
 	page1.title = "WINDOW / CURSOR";
-	page1.lines.push_back(std::string("Window kind   : ") + (win != 0 ? win->windowRoleName() : "Text window"));
+	page1.lines.push_back(std::string("Window kind   : ") + (win != nullptr ? win->windowRoleName() : "Text window"));
 	if (!roleDetail.empty())
 		page1.lines.push_back(std::string("Role detail   : ") + shortenForDialog(roleDetail, 64));
 	page1.lines.push_back(std::string("Title         : ") + shortenForDialog(title, 64));
 	page1.lines.push_back(std::string("Path          : ") +
 	                      shortenForDialog(path.empty() ? std::string("<none>") : path, 64));
-	page1.lines.push_back(std::string("Visible       : ") + yesNo(win != 0 && (win->state & sfVisible) != 0));
-	page1.lines.push_back(std::string("Read-only     : ") + yesNo(win != 0 && win->isReadOnly()));
-	page1.lines.push_back(std::string("Modified      : ") + yesNo(win != 0 && win->isFileChanged()));
-	page1.lines.push_back(std::string("Save in place : ") + yesNo(win != 0 && win->canSaveInPlace()));
-	page1.lines.push_back(std::string("Syntax        : ") + (win != 0 ? win->syntaxLanguageName() : "Plain Text"));
+	page1.lines.push_back(std::string("Visible       : ") + yesNo(win != nullptr && (win->state & sfVisible) != 0));
+	page1.lines.push_back(std::string("Read-only     : ") + yesNo(win != nullptr && win->isReadOnly()));
+	page1.lines.push_back(std::string("Modified      : ") + yesNo(win != nullptr && win->isFileChanged()));
+	page1.lines.push_back(std::string("Save in place : ") + yesNo(win != nullptr && win->canSaveInPlace()));
+	page1.lines.push_back(std::string("Syntax        : ") + (win != nullptr ? win->syntaxLanguageName() : "Plain Text"));
 	page1.lines.push_back(std::string("Block mode    : ") + blockModeLabel(win));
 	page1.lines.push_back(std::string("Selection     : ") +
-	                      (win != 0 && win->hasSelection()
+	                      (win != nullptr && win->hasSelection()
 	                           ? formatContribution(win->selectionLength(), currentLength)
 	                           : std::string("<none>")));
-	page1.lines.push_back(std::string("Undo history  : ") + yesNo(win != 0 && win->hasUndoHistory()));
+	page1.lines.push_back(std::string("Undo history  : ") + yesNo(win != nullptr && win->hasUndoHistory()));
 	page1.lines.push_back(std::string("Cursor        : line ") + std::to_string(cursorLine) + ", column " +
 	                      std::to_string(cursorColumn));
 	page1.lines.push_back(std::string("Offset        : ") +
-	                      formatCursorProgress(win != 0 ? win->cursorOffset() : 0, currentLength, hasStat, diskSize));
+	                      formatCursorProgress(win != nullptr ? win->cursorOffset() : 0, currentLength, hasStat, diskSize));
 	page1.lines.push_back(std::string("Lines         : ") +
-	                      (win != 0 && win->exactLineCountKnown()
+	                      (win != nullptr && win->exactLineCountKnown()
 	                           ? std::to_string(lineCount) + " exact"
 	                           : std::to_string(lineCount) + " loaded, est. " + std::to_string(estimatedLineCount)));
 	page1.lines.push_back(std::string("Metrics       : ") +
-	                      (win != 0 && win->usesApproximateMetrics() ? "Approximate large-file mode" : "Exact"));
+	                      (win != nullptr && win->usesApproximateMetrics() ? "Approximate large-file mode" : "Exact"));
 
 	page2.title = "DOCUMENT / COPROCESSOR";
 	page2.lines.push_back(std::string("Current text  : ") + formatByteCount(currentLength));
 	page2.lines.push_back(std::string("Disk size     : ") +
 	                      (hasStat ? formatByteCount(diskSize) : std::string("<n/a>")));
 	page2.lines.push_back(std::string("Original buf  : ") +
-	                      (win != 0 ? formatContribution(win->originalBufferLength(), currentLength)
+	                      (win != nullptr ? formatContribution(win->originalBufferLength(), currentLength)
 	                                 : std::string("<n/a>")));
 	page2.lines.push_back(std::string("Add buffer    : ") +
-	                      (win != 0 ? formatContribution(win->addBufferLength(), currentLength)
+	                      (win != nullptr ? formatContribution(win->addBufferLength(), currentLength)
 	                                 : std::string("<n/a>")));
 	page2.lines.push_back(std::string("Piece table   : ") +
-	                      (win != 0 ? std::to_string(win->pieceCount()) + " pieces" : std::string("<n/a>")));
+	                      (win != nullptr ? std::to_string(win->pieceCount()) + " pieces" : std::string("<n/a>")));
 	page2.lines.push_back(std::string("Doc version   : ") +
-	                      (win != 0 ? std::to_string(win->documentVersion()) : std::string("0")));
+	                      (win != nullptr ? std::to_string(win->documentVersion()) : std::string("0")));
 	page2.lines.push_back(std::string("Source        : ") +
-	                      (win != 0 && win->hasMappedOriginalSource() ? "mmap file" : "memory buffer"));
-	if (win != 0 && win->hasMappedOriginalSource())
+	                      (win != nullptr && win->hasMappedOriginalSource() ? "mmap file" : "memory buffer"));
+	if (win != nullptr && win->hasMappedOriginalSource())
 		page2.lines.push_back(std::string("Mapped path   : ") + shortenForDialog(win->mappedOriginalPath(), 64));
 	page2.lines.push_back(std::string("Temp file     : ") +
-	                      (win != 0 && win->isTemporaryFile()
+	                      (win != nullptr && win->isTemporaryFile()
 	                           ? shortenForDialog(win->temporaryFileName(), 64)
 	                           : std::string("<none>")));
-	page2.lines.push_back(std::string("Session saved : ") + yesNo(win != 0 && win->hasBeenSavedInSession()));
+	page2.lines.push_back(std::string("Session saved : ") + yesNo(win != nullptr && win->hasBeenSavedInSession()));
 	page2.lines.push_back(std::string("Tracked tasks : ") + formatTaskSummary(win));
 	page2.lines.push_back(std::string("Macro policy  : ") +
-	                      (win != 0 ? shortenForDialog(win->macroPolicySummary(), 64) : std::string("<n/a>")));
+	                      (win != nullptr ? shortenForDialog(win->macroPolicySummary(), 64) : std::string("<n/a>")));
 	page2.lines.push_back(std::string("Conflict rule : ") +
-	                      (win != 0 ? shortenForDialog(win->macroConflictPolicySummary(), 64)
+	                      (win != nullptr ? shortenForDialog(win->macroConflictPolicySummary(), 64)
 	                                 : std::string("<n/a>")));
 	page2.lines.push_back(std::string("Cancel rule   : ") +
-	                      (win != 0 ? shortenForDialog(win->macroCancelPolicySummary(), 64)
+	                      (win != nullptr ? shortenForDialog(win->macroCancelPolicySummary(), 64)
 	                                 : std::string("<n/a>")));
 	page2.lines.push_back(std::string("Macro stats   : ") +
-	                      (win != 0 ? win->macroCounterSummary() : std::string("<n/a>")));
+	                      (win != nullptr ? win->macroCounterSummary() : std::string("<n/a>")));
 	page2.lines.push_back(std::string("Macro recent  : ") +
-	                      (win != 0 ? shortenForDialog(win->lastMacroSummary(), 64) : std::string("<n/a>")));
-	page2.lines.push_back(formatWarmupState("Line index", win != 0 ? win->pendingLineIndexWarmupTaskId() : 0,
-	                                        win != 0 && win->exactLineCountKnown()));
-	page2.lines.push_back(formatWarmupState("Syntax", win != 0 ? win->pendingSyntaxWarmupTaskId() : 0));
+	                      (win != nullptr ? shortenForDialog(win->lastMacroSummary(), 64) : std::string("<n/a>")));
+	page2.lines.push_back(formatWarmupState("Line index", win != nullptr ? win->pendingLineIndexWarmupTaskId() : 0,
+	                                        win != nullptr && win->exactLineCountKnown()));
+	page2.lines.push_back(formatWarmupState("Syntax", win != nullptr ? win->pendingSyntaxWarmupTaskId() : 0));
 	page2.lines.push_back(std::string("Result queue  : ") +
 	                      std::to_string(mr::coprocessor::globalCoprocessor().pendingResults()) +
 	                      " pending result(s)");
@@ -321,7 +321,7 @@ std::vector<FileInformationPage> buildFileInformationPages(TMREditWindow *win) {
 	{
 		mr::performance::MessageLineNotice notice;
 		std::vector<mr::performance::Event> windowEvents = mr::performance::recentForWindow(
-		    win != 0 ? static_cast<std::size_t>(win->bufferId()) : 0, win != 0 ? win->documentId() : 0, 5);
+		    win != nullptr ? static_cast<std::size_t>(win->bufferId()) : 0, win != nullptr ? win->documentId() : 0, 5);
 		std::vector<mr::performance::Event> globalEvents = mr::performance::recentGlobal(4);
 
 		page3.lines.push_back(std::string("Active marquee: ") +
@@ -331,15 +331,15 @@ std::vector<FileInformationPage> buildFileInformationPages(TMREditWindow *win) {
 		if (windowEvents.empty())
 			page3.lines.push_back("  <none>");
 		else
-			for (std::size_t i = 0; i < windowEvents.size(); ++i)
-				page3.lines.push_back("  " + shortenForDialog(mr::performance::formatEventLine(windowEvents[i]), 68));
+			for (const auto & windowEvent : windowEvents)
+				page3.lines.push_back("  " + shortenForDialog(mr::performance::formatEventLine(windowEvent), 68));
 
 		page3.lines.push_back("Global recent :");
 		if (globalEvents.empty())
 			page3.lines.push_back("  <none>");
 		else
-			for (std::size_t i = 0; i < globalEvents.size(); ++i)
-				page3.lines.push_back("  " + shortenForDialog(mr::performance::formatEventLine(globalEvents[i]), 68));
+			for (const auto & globalEvent : globalEvents)
+				page3.lines.push_back("  " + shortenForDialog(mr::performance::formatEventLine(globalEvent), 68));
 	}
 
 	pages.push_back(page1);
@@ -354,7 +354,7 @@ void showFileInformationDialog(TMREditWindow *win) {
 	std::size_t pageIndex = 0;
 	ushort result;
 
-	if (win == 0) {
+	if (win == nullptr) {
 		messageBox(mfInformation | mfOKButton, "No active file window.");
 		return;
 	}

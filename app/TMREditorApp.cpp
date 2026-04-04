@@ -129,8 +129,8 @@ std::string ensureMrmacExtension(const std::string &path) {
 	std::size_t dotPos = path.rfind('.');
 	if (dotPos != std::string::npos) {
 		std::string ext = path.substr(dotPos);
-		for (std::size_t i = 0; i < ext.size(); ++i)
-			ext[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(ext[i])));
+		for (char & i : ext)
+			i = static_cast<char>(std::tolower(static_cast<unsigned char>(i)));
 		if (ext == ".mrmac")
 			return path;
 	}
@@ -327,8 +327,8 @@ bool hasVmErrorLineSince(const std::vector<std::string> &lines, std::size_t star
 }
 
 std::string upperAscii(std::string value) {
-	for (std::size_t i = 0; i < value.size(); ++i)
-		value[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(value[i])));
+	for (char & i : value)
+		i = static_cast<char>(std::toupper(static_cast<unsigned char>(i)));
 	return value;
 }
 
@@ -887,7 +887,7 @@ TMREditorApp::TMREditorApp()
     : TProgInit(&TMREditorApp::initMRStatusLine, &TMREditorApp::initMRMenuBar,
                 &TMREditorApp::initMRDeskTop),
       exitPrepared_(false), keystrokeRecording_(false), recordingMarkerVisible_(false),
-      recordedKeySequence_(), recordedMacroCounter_(0), recordedSessionMacroFiles_(),
+       recordedMacroCounter_(0), 
       recordingBlinkToggleAt_(std::chrono::steady_clock::now() + kRecordingBlinkInterval),
       indexedMacroWarmupActive_(false), indexedMacroWarmupLoadedFiles_(0) {
 	TEditor::editorDialog = mrEditorDialog;
@@ -916,11 +916,11 @@ bool TMREditorApp::reloadSettingsMacroFromPath(const std::string &path, std::str
 		return false;
 	defaultInsertMode = configuredDefaultInsertMode();
 	windows = allEditWindowsInZOrder();
-	for (std::size_t i = 0; i < windows.size(); ++i)
-		if (windows[i] != nullptr && windows[i]->getEditor() != nullptr) {
-			if (!windows[i]->isReadOnly())
-				windows[i]->getEditor()->setInsertModeEnabled(defaultInsertMode);
-			windows[i]->getEditor()->refreshConfiguredVisualSettings();
+	for (auto & window : windows)
+		if (window != nullptr && window->getEditor() != nullptr) {
+			if (!window->isReadOnly())
+				window->getEditor()->setInsertModeEnabled(defaultInsertMode);
+			window->getEditor()->refreshConfiguredVisualSettings();
 		}
 	bootstrapIndexedMacroBindings();
 	applyConfiguredDisplayLayout();
@@ -930,9 +930,8 @@ bool TMREditorApp::reloadSettingsMacroFromPath(const std::string &path, std::str
 void TMREditorApp::applyConfiguredWindowFramePolicy() {
 	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
 
-	for (std::size_t i = 0; i < windows.size(); ++i) {
-		TMREditWindow *win = windows[i];
-		if (win == nullptr)
+	for (auto win : windows) {
+			if (win == nullptr)
 			continue;
 		win->flags |= (wfMove | wfGrow | wfZoom | wfClose);
 		if (win->frame != nullptr)
@@ -981,9 +980,9 @@ void TMREditorApp::prepareForQuit() {
 		mrLogMessage(("Settings snapshot on exit failed: " + settingsError).c_str());
 
 	exitPrepared_ = true;
-	for (std::size_t i = 0; i < windows.size(); ++i)
-		if (windows[i] != nullptr)
-			pendingTaskCount += windows[i]->prepareCoprocessorTasksForShutdown();
+	for (auto & window : windows)
+		if (window != nullptr)
+			pendingTaskCount += window->prepareCoprocessorTasksForShutdown();
 
 	if (pendingTaskCount != 0) {
 		std::string line = "Exit requested; cancelling ";
@@ -1008,9 +1007,9 @@ bool TMREditorApp::isRecorderToggleCommand(const TEvent &event) const {
 
 void TMREditorApp::redrawRecordingMarkerFrames() {
 	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
-	for (std::size_t i = 0; i < windows.size(); ++i) {
-		if (windows[i] != nullptr && windows[i]->frame != nullptr)
-			windows[i]->frame->drawView();
+	for (auto & window : windows) {
+		if (window != nullptr && window->frame != nullptr)
+			window->frame->drawView();
 	}
 }
 

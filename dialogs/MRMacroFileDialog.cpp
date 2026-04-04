@@ -59,12 +59,12 @@ struct MacroFileEntry {
 ushort runDialogWithData(TDialog *dialog, void *data) {
 	ushort result = cmCancel;
 
-	if (dialog == 0)
+	if (dialog == nullptr)
 		return cmCancel;
-	if (data != 0)
+	if (data != nullptr)
 		dialog->setData(data);
 	result = TProgram::deskTop->execView(dialog);
-	if (result != cmCancel && data != 0)
+	if (result != cmCancel && data != nullptr)
 		dialog->getData(data);
 	TObject::destroy(dialog);
 	return result;
@@ -83,9 +83,9 @@ std::string trimAscii(const std::string &value) {
 
 std::string normalizePath(const std::string &value) {
 	std::string out = value;
-	for (std::size_t i = 0; i < out.size(); ++i)
-		if (out[i] == '\\')
-			out[i] = '/';
+	for (char & i : out)
+		if (i == '\\')
+			i = '/';
 	return out;
 }
 
@@ -94,8 +94,8 @@ bool hasMrmacExtension(const std::string &path) {
 	if (dotPos == std::string::npos)
 		return false;
 	std::string ext = path.substr(dotPos);
-	for (std::size_t i = 0; i < ext.size(); ++i)
-		ext[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(ext[i])));
+	for (char & i : ext)
+		i = static_cast<char>(std::tolower(static_cast<unsigned char>(i)));
 	return ext == ".mrmac";
 }
 
@@ -152,17 +152,17 @@ std::string firstMacroNameForSource(const std::string &source, std::string &keyS
 
 	keySpec.clear();
 	compileError.clear();
-	if (bytecode == NULL) {
+	if (bytecode == nullptr) {
 		const char *err = get_last_compile_error();
-		compileError = err != NULL ? err : "Compilation failed.";
+		compileError = err != nullptr ? err : "Compilation failed.";
 		return std::string();
 	}
 	int count = get_compiled_macro_count();
 	if (count > 0) {
 		const char *name = get_compiled_macro_name(0);
 		const char *key = get_compiled_macro_keyspec(0);
-		macroName = name != NULL ? name : std::string();
-		keySpec = key != NULL ? key : std::string();
+		macroName = name != nullptr ? name : std::string();
+		keySpec = key != nullptr ? key : std::string();
 	}
 	std::free(bytecode);
 	return macroName;
@@ -179,10 +179,10 @@ bool loadEntryMetadata(MacroFileEntry &entry) {
 bool fileNameLess(const MacroFileEntry &a, const MacroFileEntry &b) {
 	std::string lhs = a.fileName;
 	std::string rhs = b.fileName;
-	for (std::size_t i = 0; i < lhs.size(); ++i)
-		lhs[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(lhs[i])));
-	for (std::size_t i = 0; i < rhs.size(); ++i)
-		rhs[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(rhs[i])));
+	for (char & lh : lhs)
+		lh = static_cast<char>(std::tolower(static_cast<unsigned char>(lh)));
+	for (char & rh : rhs)
+		rh = static_cast<char>(std::tolower(static_cast<unsigned char>(rh)));
 	return lhs < rhs;
 }
 
@@ -190,11 +190,11 @@ std::vector<MacroFileEntry> scanMacroFilesInDirectory(const std::string &directo
 	std::vector<MacroFileEntry> entries;
 	DIR *dir = ::opendir(directoryPath.c_str());
 
-	if (dir == NULL)
+	if (dir == nullptr)
 		return entries;
 	for (;;) {
 		dirent *de = ::readdir(dir);
-		if (de == NULL)
+		if (de == nullptr)
 			break;
 		if (std::strcmp(de->d_name, ".") == 0 || std::strcmp(de->d_name, "..") == 0)
 			continue;
@@ -222,8 +222,8 @@ std::string rowTextFor(const MacroFileEntry &entry) {
 
 std::string sanitizeMacroIdentifier(const std::string &name) {
 	std::string out;
-	for (std::size_t i = 0; i < name.size(); ++i) {
-		unsigned char ch = static_cast<unsigned char>(name[i]);
+	for (char i : name) {
+		unsigned char ch = static_cast<unsigned char>(i);
 		if (std::isalnum(ch) != 0 || ch == '_')
 			out.push_back(static_cast<char>(ch));
 		else if (ch == '-' || ch == ' ' || ch == '.')
@@ -252,14 +252,14 @@ std::string createMacroTemplateForPath(const std::string &path) {
 
 std::string upperAscii(const std::string &value) {
 	std::string out = value;
-	for (std::size_t i = 0; i < out.size(); ++i)
-		out[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(out[i])));
+	for (char & i : out)
+		i = static_cast<char>(std::toupper(static_cast<unsigned char>(i)));
 	return out;
 }
 
 bool startsWithTokenInsensitive(const std::string &text, std::size_t pos, const char *token) {
 	std::size_t i = 0;
-	if (token == NULL)
+	if (token == nullptr)
 		return false;
 	while (token[i] != '\0') {
 		if (pos + i >= text.size())
@@ -511,7 +511,7 @@ bool captureBindingKeySpec(std::string &keySpec) {
 	ushort result;
 
 	keySpec.clear();
-	if (dialog == NULL)
+	if (dialog == nullptr)
 		return false;
 	result = TProgram::deskTop->execView(dialog);
 	bool captured = dialog->captured();
@@ -536,7 +536,7 @@ bool rebindMacroFileKey(const MacroFileEntry &entry, const std::string &keySpec,
 	std::string updatedSource;
 	std::string updatedHeader;
 	size_t bytecodeSize = 0;
-	unsigned char *bytecode = NULL;
+	unsigned char *bytecode = nullptr;
 
 	errorText.clear();
 	if (!readTextFile(entry.path, source)) {
@@ -552,9 +552,9 @@ bool rebindMacroFileKey(const MacroFileEntry &entry, const std::string &keySpec,
 	updatedSource = source.substr(0, headerStart) + updatedHeader + source.substr(headerEnd);
 
 	bytecode = compile_macro_code(updatedSource.c_str(), &bytecodeSize);
-	if (bytecode == NULL) {
+	if (bytecode == nullptr) {
 		const char *err = get_last_compile_error();
-		errorText = err != NULL ? err : "Compilation failed after binding update.";
+		errorText = err != nullptr ? err : "Compilation failed after binding update.";
 		return false;
 	}
 	std::free(bytecode);
@@ -571,9 +571,9 @@ bool rebindMacroFileKey(const MacroFileEntry &entry, const std::string &keySpec,
 
 bool openMacroSourceInEditor(const std::string &path) {
 	TMREditWindow *target = findReusableEmptyWindow(currentEditWindow());
-	if (target == NULL)
+	if (target == nullptr)
 		target = createEditorWindow(baseNameOf(path).c_str());
-	if (target == NULL)
+	if (target == nullptr)
 		return false;
 	if (!target->loadFromFile(path.c_str())) {
 		messageBox(mfError | mfOKButton, "Unable to load macro file:\n%s", path.c_str());
@@ -588,7 +588,7 @@ class MacroManagerListView : public TListViewer {
 	MacroManagerListView(const TRect &bounds, TScrollBar *aVScrollBar,
 	                     const std::vector<std::string> &aItems,
 	                     const std::vector<bool> &aErrorFlags) noexcept
-	    : TListViewer(bounds, 1, 0, aVScrollBar), items_(aItems), errorFlags_(aErrorFlags) {
+	    : TListViewer(bounds, 1, nullptr, aVScrollBar), items_(aItems), errorFlags_(aErrorFlags) {
 		setRange(static_cast<short>(items_.size()));
 	}
 
@@ -606,7 +606,7 @@ class MacroManagerListView : public TListViewer {
 		TListViewer::draw();
 
 		unsigned char errorBios = 0;
-		short indent = hScrollBar != NULL ? hScrollBar->value : 0;
+		short indent = hScrollBar != nullptr ? hScrollBar->value : 0;
 		short colWidth = size.x / numCols + 1;
 		TColorAttr errorColor;
 
@@ -639,7 +639,7 @@ class MacroManagerListView : public TListViewer {
 
 	void getText(char *dest, short item, short maxLen) override {
 		std::size_t copyLen;
-		if (dest == NULL || maxLen <= 0)
+		if (dest == nullptr || maxLen <= 0)
 			return;
 		if (item < 0 || static_cast<std::size_t>(item) >= items_.size()) {
 			dest[0] = EOS;
@@ -657,7 +657,7 @@ class MacroManagerListView : public TListViewer {
 
 		TListViewer::handleEvent(event);
 
-		if (!isDoubleClickPlayback || owner == NULL)
+		if (!isDoubleClickPlayback || owner == nullptr)
 			return;
 		message(owner, evCommand, cmMRMacroManagerPlayback, this);
 		clearEvent(event);
@@ -677,8 +677,8 @@ class MacroManagerDialog : public TDialog {
   public:
 	MacroManagerDialog()
 	    : TWindowInit(&TDialog::initFrame), TDialog(centeredBounds(), "MACRO MANAGER"),
-	      directory_(defaultMacroDirectoryPath()), entries_(), rows_(), rowHasCompileError_(), listView_(NULL),
-	      scrollBar_(NULL), openPath_() {
+	      directory_(defaultMacroDirectoryPath()),  listView_(nullptr),
+	      scrollBar_(nullptr) {
 		int width = size.x;
 		int height = size.y;
 		int listLeft = 3;
@@ -717,7 +717,7 @@ class MacroManagerDialog : public TDialog {
 		                   "Help<F1>", cmHelp, bfNormal));
 
 		refreshEntries(-1);
-		if (listView_ != NULL)
+		if (listView_ != nullptr)
 			listView_->select();
 	}
 
@@ -807,7 +807,7 @@ class MacroManagerDialog : public TDialog {
 	}
 
 	int selectedIndex() const {
-		if (listView_ == NULL)
+		if (listView_ == nullptr)
 			return -1;
 		short idx = listView_->focused;
 		if (idx < 0 || static_cast<std::size_t>(idx) >= entries_.size())
@@ -818,7 +818,7 @@ class MacroManagerDialog : public TDialog {
 	const MacroFileEntry *selectedEntry() const {
 		int idx = selectedIndex();
 		if (idx < 0)
-			return NULL;
+			return nullptr;
 		return &entries_[static_cast<std::size_t>(idx)];
 	}
 
@@ -829,13 +829,13 @@ class MacroManagerDialog : public TDialog {
 		if (entries_.empty())
 			rows_.push_back("(none available)");
 		else
-			for (std::size_t i = 0; i < entries_.size(); ++i) {
-				rows_.push_back(rowTextFor(entries_[i]));
-				rowHasCompileError_.push_back(!entries_[i].compileError.empty());
+			for (auto & entrie : entries_) {
+				rows_.push_back(rowTextFor(entrie));
+				rowHasCompileError_.push_back(!entrie.compileError.empty());
 			}
 		if (entries_.empty())
 			rowHasCompileError_.push_back(false);
-		if (listView_ != NULL) {
+		if (listView_ != nullptr) {
 			listView_->setItems(rows_, rowHasCompileError_);
 			if (!rows_.empty()) {
 				int target = keepIndex;
@@ -881,7 +881,7 @@ class MacroManagerDialog : public TDialog {
 
 	void handleDelete() {
 		const MacroFileEntry *entry = selectedEntry();
-		if (entry == NULL)
+		if (entry == nullptr)
 			return;
 		if (messageBox(mfConfirmation | mfYesButton | mfNoButton,
 		               "Delete macro file?\n%s", entry->path.c_str()) != cmYes)
@@ -899,7 +899,7 @@ class MacroManagerDialog : public TDialog {
 		char pathBuffer[BufferSize];
 		std::string destPath;
 		std::string suggested;
-		if (entry == NULL)
+		if (entry == nullptr)
 			return;
 
 		suggested = entry->fileName;
@@ -937,7 +937,7 @@ class MacroManagerDialog : public TDialog {
 
 	void handleEdit() {
 		const MacroFileEntry *entry = selectedEntry();
-		if (entry == NULL)
+		if (entry == nullptr)
 			return;
 		openPath_ = entry->path;
 		endModal(cmMRMacroManagerOpenEditor);
@@ -948,7 +948,7 @@ class MacroManagerDialog : public TDialog {
 		std::string keySpec;
 		std::string err;
 
-		if (entry == NULL)
+		if (entry == nullptr)
 			return;
 		if (!captureBindingKeySpec(keySpec))
 			return;
@@ -965,7 +965,7 @@ class MacroManagerDialog : public TDialog {
 
 	void handlePlayback() {
 		const MacroFileEntry *entry = selectedEntry();
-		if (entry == NULL)
+		if (entry == nullptr)
 			return;
 		runMacroFileByPath(entry->path.c_str());
 	}
@@ -999,7 +999,7 @@ bool runMacroManagerDialog() {
 	ushort result = cmCancel;
 	std::string openPath;
 
-	if (dialog == NULL)
+	if (dialog == nullptr)
 		return false;
 	result = TProgram::deskTop->execView(dialog);
 	openPath = dialog->openPath();

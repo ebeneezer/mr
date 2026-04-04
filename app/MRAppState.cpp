@@ -23,7 +23,7 @@ struct AppCommandState {
 	bool isLogWindow;
 
 	AppCommandState()
-	    : window(0), windowCount(0), hasEditableWindow(false), hasReadOnlyWindow(false),
+	    : window(nullptr), windowCount(0), hasEditableWindow(false), hasReadOnlyWindow(false),
 	      hasDirtyWindow(false), hasPersistentFileName(false), canSaveInPlace(false), hasSelection(false),
 	      hasUndo(false), hasBlock(false), hasMacroTasks(false), hasExternalIoTasks(false),
 	      isCommunicationWindow(false), isCommunicationCommandWindow(false), isLogWindow(false) {
@@ -43,7 +43,7 @@ AppCommandState appCommandState() {
 
 	state.window = win;
 	state.windowCount = allEditWindowsInZOrder().size();
-	if (win == 0)
+	if (win == nullptr)
 		return state;
 
 	state.hasReadOnlyWindow = win->isReadOnly();
@@ -65,7 +65,7 @@ AppCommandState appCommandState() {
 
 void updateAppCommandState() {
 	AppCommandState state = appCommandState();
-	bool hasWindow = state.window != 0;
+	bool hasWindow = state.window != nullptr;
 	bool hasEditor = hasWindow;
 	bool canModify = hasEditor && state.hasEditableWindow;
 	bool hasMultipleWindows = state.windowCount > 1;

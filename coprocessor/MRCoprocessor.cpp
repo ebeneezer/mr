@@ -18,8 +18,7 @@ std::uint64_t nowMicros() noexcept {
 } // namespace
 
 Coprocessor::Coprocessor()
-    : resultMutex_(), results_(), handlerMutex_(), resultHandler_(), nextTaskId_(1), nextTaskMutex_(),
-      taskCancelMutex_(), taskCancelFlags_(), shuttingDown_(false), ioLane_(Lane::Io),
+    :  nextTaskId_(1),  shuttingDown_(false), ioLane_(Lane::Io),
       computeLane_(Lane::Compute), macroLane_(Lane::Macro) {
 	startLane(ioLane_);
 	startLane(computeLane_);
@@ -132,11 +131,9 @@ void Coprocessor::cancelPending() {
 
 	{
 		std::lock_guard<std::mutex> lock(taskCancelMutex_);
-		for (std::unordered_map<std::uint64_t, std::shared_ptr<std::atomic_bool>>::iterator it =
-		         taskCancelFlags_.begin();
-		     it != taskCancelFlags_.end(); ++it)
-			if (it->second != nullptr)
-				it->second->store(true, std::memory_order_release);
+		for (auto & taskCancelFlag : taskCancelFlags_)
+			if (taskCancelFlag.second != nullptr)
+				taskCancelFlag.second->store(true, std::memory_order_release);
 	}
 
 	for (LaneState *lane : lanes) {

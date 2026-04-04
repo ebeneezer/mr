@@ -81,16 +81,16 @@ std::string trimAscii(const std::string &value) {
 }
 
 std::string upperAscii(std::string value) {
-	for (std::size_t i = 0; i < value.size(); ++i)
-		value[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(value[i])));
+	for (char & i : value)
+		i = static_cast<char>(std::toupper(static_cast<unsigned char>(i)));
 	return value;
 }
 
 std::string normalizeDialogPath(const char *path) {
 	std::string result = path != nullptr ? path : "";
-	for (std::size_t i = 0; i < result.size(); ++i)
-		if (result[i] == '\\')
-			result[i] = '/';
+	for (char & i : result)
+		if (i == '\\')
+			i = '/';
 	return result;
 }
 
@@ -259,8 +259,8 @@ std::string pathFromEnvironment(const char *name) {
 
 std::string firstWritableDirectoryFromEnvironment() {
 	static const char *const names[] = {"TMPDIR", "TEMP", "TMP"};
-	for (std::size_t i = 0; i < sizeof(names) / sizeof(names[0]); ++i) {
-		std::string value = pathFromEnvironment(names[i]);
+	for (auto name : names) {
+		std::string value = pathFromEnvironment(name);
 		if (isWritableDirectory(value))
 			return value;
 	}
@@ -404,9 +404,8 @@ bool readTextFile(const std::string &path, std::string &content) {
 std::string escapeMrmacSingleQuotedLiteral(const std::string &value) {
 	std::string out;
 	out.reserve(value.size() + 8);
-	for (std::size_t i = 0; i < value.size(); ++i) {
-		char ch = value[i];
-		if (ch == '\'')
+	for (char ch : value) {
+			if (ch == '\'')
 			out += "''";
 		else
 			out.push_back(ch);
@@ -519,17 +518,17 @@ static const ColorGroupDefinition kColorGroups[] = {
 };
 
 const ColorGroupDefinition *findColorGroupDefinition(MRColorSetupGroup group) {
-	for (std::size_t i = 0; i < sizeof(kColorGroups) / sizeof(kColorGroups[0]); ++i)
-		if (kColorGroups[i].group == group)
-			return &kColorGroups[i];
+	for (const auto & kColorGroup : kColorGroups)
+		if (kColorGroup.group == group)
+			return &kColorGroup;
 	return nullptr;
 }
 
 const ColorGroupDefinition *findColorGroupDefinitionByKey(const std::string &key) {
 	std::string upper = upperAscii(trimAscii(key));
-	for (std::size_t i = 0; i < sizeof(kColorGroups) / sizeof(kColorGroups[0]); ++i)
-		if (upper == kColorGroups[i].key)
-			return &kColorGroups[i];
+	for (const auto & kColorGroup : kColorGroups)
+		if (upper == kColorGroup.key)
+			return &kColorGroup;
 	return nullptr;
 }
 
@@ -588,8 +587,8 @@ bool parseHexColorToken(const std::string &token, unsigned char &outValue) {
 
 	if (value.empty() || value.size() > 2)
 		return false;
-	for (std::size_t i = 0; i < value.size(); ++i)
-		if (!std::isxdigit(static_cast<unsigned char>(value[i])))
+	for (char i : value)
+		if (!std::isxdigit(static_cast<unsigned char>(i)))
 			return false;
 	parsed = static_cast<unsigned int>(std::strtoul(value.c_str(), nullptr, 16));
 	if (parsed > 0xFF)
@@ -936,9 +935,8 @@ std::string normalizeColumnBlockMove(const std::string &value) {
 	std::string key = upperAscii(trimAscii(value));
 	std::string compact;
 
-	for (std::size_t i = 0; i < key.size(); ++i) {
-		char ch = key[i];
-		if (ch == '-' || ch == ' ')
+	for (char ch : key) {
+			if (ch == '-' || ch == ' ')
 			ch = '_';
 		compact.push_back(ch);
 	}
@@ -1027,8 +1025,8 @@ std::vector<std::string> parseDefaultExtensions(const std::string &value) {
 				ext.erase(ext.begin());
 			if (ext.empty())
 				continue;
-			for (std::size_t j = 0; j < out.size(); ++j)
-				if (out[j] == ext) {
+			for (const auto & j : out)
+				if (j == ext) {
 					duplicate = true;
 					break;
 				}
