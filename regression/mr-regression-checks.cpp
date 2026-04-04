@@ -439,6 +439,7 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 	                           "MRSETUP('EOFCTRLZ', 'false');\n"
 	                           "MRSETUP('EOFCRLF', 'true');\n"
 	                           "MRSETUP('TABEXPAND', 'false');\n"
+	                           "MRSETUP('TABSIZE', '6');\n"
 	                           "MRSETUP('BACKUPFILES', 'false');\n"
 	                           "MRSETUP('SHOWEOFMARKER', 'true');\n"
 	                           "MRSETUP('SHOWEOFMARKEREMOJI', 'false');\n"
@@ -500,6 +501,10 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 		}
 		if (configuredTabExpandSetting()) {
 			failureReason = "Startup context should apply TABEXPAND='false'.";
+			return false;
+		}
+		if (configuredTabSizeSetting() != 6) {
+			failureReason = "Startup context should apply TABSIZE='6'.";
 			return false;
 		}
 		{
@@ -726,6 +731,10 @@ bool testSettingsMacroAutoCreate(std::string &failureReason) {
 	if (content.find("MRSETUP('TABEXPAND', 'true');") == std::string::npos &&
 	    content.find("MRSETUP('TABEXPAND', 'false');") == std::string::npos) {
 		failureReason = "Auto-created settings.mrmac should persist TABEXPAND as true/false.";
+		return false;
+	}
+	if (content.find("MRSETUP('TABSIZE', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing TABSIZE.";
 		return false;
 	}
 	if (content.find("MRSETUP('BACKUPFILES', 'true');") == std::string::npos &&
@@ -975,6 +984,7 @@ bool testSettingsDiscrepancyMigrationGuard(std::string &failureReason) {
 	                                 "MRSETUP('TEMPDIR', '/tmp');\n"
 	                                 "MRSETUP('SHELLPATH', '/bin/sh');\n"
 	                                 "MRSETUP('TRUNCSPACES', 'false');\n"
+	                                 "MRSETUP('TABSIZE', '4');\n"
 	                                 "MRSETUP('BACKUPFILES', 'false');\n"
 	                                 "MRSETUP('SHOWLINENUMBERS', 'true');\n"
 	                                 "MRSETUP('LINENUMZEROFILL', 'true');\n"
@@ -1016,6 +1026,7 @@ bool testSettingsDiscrepancyMigrationGuard(std::string &failureReason) {
 	if (content.find("MRSETUP('SHOWLINENUMBERS', 'true');") == std::string::npos ||
 	    content.find("MRSETUP('LINENUMZEROFILL', 'true');") == std::string::npos ||
 	    content.find("MRSETUP('TRUNCSPACES', 'false');") == std::string::npos ||
+	    content.find("MRSETUP('TABSIZE', '4');") == std::string::npos ||
 	    content.find("MRSETUP('BACKUPFILES', 'false');") == std::string::npos) {
 		restore();
 		failureReason = "Migrated settings.mrmac did not carry over recognized edit settings.";
@@ -1039,7 +1050,8 @@ bool testSettingsDiscrepancyMigrationGuard(std::string &failureReason) {
 	}
 	{
 		MREditSetupSettings edit = configuredEditSetupSettings();
-		if (!edit.showLineNumbers || !edit.lineNumZeroFill || edit.truncateSpaces || edit.backupFiles) {
+		if (!edit.showLineNumbers || !edit.lineNumZeroFill || edit.truncateSpaces ||
+		    edit.tabSize != 4 || edit.backupFiles) {
 			restore();
 			failureReason = "Applying migrated settings should restore carried edit-setting values.";
 			return false;
@@ -1482,6 +1494,7 @@ bool testSetupScrollRefreshGuard(std::string &failureReason) {
 	probe.eofCtrlZ = true;
 	probe.eofCrLf = true;
 	probe.tabExpand = false;
+	probe.tabSize = 3;
 	probe.backupFiles = false;
 	probe.showLineNumbers = true;
 	probe.lineNumZeroFill = true;
@@ -1517,6 +1530,7 @@ bool testSetupScrollRefreshGuard(std::string &failureReason) {
 	if (loaded.wordDelimiters != probe.wordDelimiters || loaded.defaultExtensions != "TXT;MD" ||
 	    loaded.truncateSpaces != probe.truncateSpaces || loaded.eofCtrlZ != probe.eofCtrlZ ||
 	    loaded.eofCrLf != probe.eofCrLf || loaded.tabExpand != probe.tabExpand ||
+	    loaded.tabSize != probe.tabSize ||
 	    loaded.backupFiles != probe.backupFiles ||
 	    loaded.showLineNumbers != probe.showLineNumbers ||
 	    loaded.lineNumZeroFill != probe.lineNumZeroFill ||

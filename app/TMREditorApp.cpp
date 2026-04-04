@@ -358,10 +358,11 @@ bool isMigratableMrsetupKey(const std::string &key) {
 	                                           "WORDDELIMS",
 	                                           "DEFAULTEXTS",
 	                                           "TRUNCSPACES",
-	                                           "EOFCTRLZ",
-	                                           "EOFCRLF",
-	                                           "TABEXPAND",
-	                                           "BACKUPFILES",
+		                                           "EOFCTRLZ",
+		                                           "EOFCRLF",
+		                                           "TABEXPAND",
+		                                           "TABSIZE",
+		                                           "BACKUPFILES",
 	                                           "SHOWEOFMARKER",
 	                                           "SHOWEOFMARKEREMOJI",
 	                                           "SHOWLINENUMBERS",
@@ -389,10 +390,11 @@ bool isCurrentSettingsKey(const std::string &key) {
 	                                           "WORDDELIMS",
 	                                           "DEFAULTEXTS",
 	                                           "TRUNCSPACES",
-	                                           "EOFCTRLZ",
-	                                           "EOFCRLF",
-	                                           "TABEXPAND",
-	                                           "BACKUPFILES",
+		                                           "EOFCTRLZ",
+		                                           "EOFCRLF",
+		                                           "TABEXPAND",
+		                                           "TABSIZE",
+		                                           "BACKUPFILES",
 	                                           "SHOWEOFMARKER",
 	                                           "SHOWEOFMARKEREMOJI",
 	                                           "SHOWLINENUMBERS",
@@ -448,10 +450,11 @@ bool validateCurrentSettingsSchema(const std::string &source, std::string &error
 	                                           "WORDDELIMS",
 	                                           "DEFAULTEXTS",
 	                                           "TRUNCSPACES",
-	                                           "EOFCTRLZ",
-	                                           "EOFCRLF",
-	                                           "TABEXPAND",
-	                                           "BACKUPFILES",
+		                                           "EOFCTRLZ",
+		                                           "EOFCRLF",
+		                                           "TABEXPAND",
+		                                           "TABSIZE",
+		                                           "BACKUPFILES",
 	                                           "SHOWEOFMARKER",
 	                                           "SHOWEOFMARKEREMOJI",
 	                                           "SHOWLINENUMBERS",
@@ -543,10 +546,10 @@ bool applyRecognizedSettingsAssignment(const std::string &key, const std::string
 	if (key == "COLORTHEMEURI")
 		return setConfiguredColorThemeFilePath(value, &errorText);
 	if (key == "PAGEBREAK" || key == "WORDDELIMS" || key == "DEFAULTEXTS" || key == "TRUNCSPACES" ||
-	    key == "EOFCTRLZ" || key == "EOFCRLF" || key == "TABEXPAND" || key == "BACKUPFILES" ||
-	    key == "SHOWEOFMARKER" || key == "SHOWEOFMARKEREMOJI" || key == "SHOWLINENUMBERS" ||
-	    key == "LINENUMZEROFILL" || key == "PERSISTBLOCKS" || key == "PERSISTENTBLOCKS" ||
-	    key == "COLBLOCKMOVE" || key == "DEFAULTMODE")
+	    key == "EOFCTRLZ" || key == "EOFCRLF" || key == "TABEXPAND" || key == "TABSIZE" ||
+	    key == "BACKUPFILES" || key == "SHOWEOFMARKER" || key == "SHOWEOFMARKEREMOJI" ||
+	    key == "SHOWLINENUMBERS" || key == "LINENUMZEROFILL" || key == "PERSISTBLOCKS" ||
+	    key == "PERSISTENTBLOCKS" || key == "COLBLOCKMOVE" || key == "DEFAULTMODE")
 		return applyConfiguredEditSetupValue(key, value, &errorText);
 	if (key == "WINDOWCOLORS" || key == "MENUDIALOGCOLORS" || key == "HELPCOLORS" || key == "OTHERCOLORS")
 		return applyConfiguredColorSetupValue(key, value, &errorText);

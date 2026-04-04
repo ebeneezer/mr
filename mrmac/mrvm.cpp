@@ -1635,7 +1635,12 @@ static Value currentEditorCharValue() {
 }
 
 static int defaultTabWidth() {
-	return 8;
+	int width = configuredTabSizeSetting();
+	if (width < 1)
+		width = 1;
+	if (width > 32)
+		width = 32;
+	return width;
 }
 
 static bool isVirtualChar(char c) {
@@ -5992,16 +5997,16 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							throw std::runtime_error(
 							    "MRSETUP(COLORTHEMEURI) failed: " +
 							    (errorText.empty() ? std::string("invalid path.") : errorText));
-							} else if (setupKey == "PAGEBREAK" || setupKey == "WORDDELIMS" ||
-							           setupKey == "DEFAULTEXTS" || setupKey == "TRUNCSPACES" ||
-							           setupKey == "EOFCTRLZ" || setupKey == "EOFCRLF" ||
-							           setupKey == "TABEXPAND" || setupKey == "BACKUPFILES" ||
-							           setupKey == "SHOWEOFMARKER" ||
-							           setupKey == "SHOWEOFMARKEREMOJI" ||
-							           setupKey == "SHOWLINENUMBERS" ||
-							           setupKey == "LINENUMZEROFILL" || setupKey == "PERSISTBLOCKS" ||
-							           setupKey == "PERSISTENTBLOCKS" || setupKey == "COLBLOCKMOVE" ||
-						           setupKey == "DEFAULTMODE") {
+					} else if (setupKey == "PAGEBREAK" || setupKey == "WORDDELIMS" ||
+					           setupKey == "DEFAULTEXTS" || setupKey == "TRUNCSPACES" ||
+					           setupKey == "EOFCTRLZ" || setupKey == "EOFCRLF" ||
+					           setupKey == "TABEXPAND" || setupKey == "TABSIZE" ||
+					           setupKey == "BACKUPFILES" || setupKey == "SHOWEOFMARKER" ||
+					           setupKey == "SHOWEOFMARKEREMOJI" ||
+					           setupKey == "SHOWLINENUMBERS" ||
+					           setupKey == "LINENUMZEROFILL" || setupKey == "PERSISTBLOCKS" ||
+					           setupKey == "PERSISTENTBLOCKS" || setupKey == "COLBLOCKMOVE" ||
+					           setupKey == "DEFAULTMODE") {
 							if (!applyConfiguredEditSetupValue(setupKey, valueAsString(args[1]), &errorText))
 								throw std::runtime_error(
 								    "MRSETUP(" + setupKey + ") failed: " +
@@ -6024,16 +6029,14 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						           setupKey == "SHOWRIGHTBORDER" || setupKey == "SHOWBOTTOMBORDER") {
 							// Deprecated compatibility keys: accepted but ignored.
 							(void)errorText;
-						} else
-							throw std::runtime_error(
-							    "MRSETUP supports keys: MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
-								    "SHELLPATH, LASTFILEDIALOGPATH, COLORTHEMEURI, PAGEBREAK, WORDDELIMS, DEFAULTEXTS, "
-								    "TRUNCSPACES, EOFCTRLZ, "
-								    "EOFCRLF, TABEXPAND, BACKUPFILES, SHOWEOFMARKER, SHOWEOFMARKEREMOJI, "
-								    "SHOWLINENUMBERS, "
-								    "LINENUMZEROFILL, PERSISTENTBLOCKS, "
-								    "COLBLOCKMOVE, DEFAULTMODE, WINDOWCOLORS, "
-							    "MENUDIALOGCOLORS, HELPCOLORS, OTHERCOLORS.");
+					} else
+						throw std::runtime_error(
+						    "MRSETUP supports keys: MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
+						    "SHELLPATH, LASTFILEDIALOGPATH, COLORTHEMEURI, PAGEBREAK, WORDDELIMS, "
+						    "DEFAULTEXTS, TRUNCSPACES, EOFCTRLZ, EOFCRLF, TABEXPAND, TABSIZE, "
+						    "BACKUPFILES, SHOWEOFMARKER, SHOWEOFMARKEREMOJI, SHOWLINENUMBERS, "
+						    "LINENUMZEROFILL, PERSISTENTBLOCKS, COLBLOCKMOVE, DEFAULTMODE, "
+						    "WINDOWCOLORS, MENUDIALOGCOLORS, HELPCOLORS, OTHERCOLORS.");
 					runtimeErrorLevel() = 0;
 				} else if (name == "SET_GLOBAL_STR") {
 					if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1]))

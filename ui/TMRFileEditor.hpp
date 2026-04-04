@@ -314,11 +314,12 @@ class TMRFileEditor : public TScroller {
 		std::size_t p = 0;
 		int visual = 0;
 		int target = std::max(pos, 0);
+		int tabSize = configuredTabSize();
 
 		while (p < line.size()) {
 			std::size_t next = p;
 			std::size_t width = 0;
-			if (!nextDisplayChar(line, next, width, visual))
+			if (!nextDisplayChar(line, next, width, visual, tabSize))
 				break;
 			if (visual + static_cast<int>(width) > target)
 				break;
@@ -335,12 +336,13 @@ class TMRFileEditor : public TScroller {
 		std::size_t p = 0;
 		std::size_t end = std::min(pos, bufferModel_.length()) - lineStart;
 		int visual = 0;
+		int tabSize = configuredTabSize();
 
 		end = std::min(end, line.size());
 		while (p < end) {
 			std::size_t next = p;
 			std::size_t width = 0;
-			if (!nextDisplayChar(line, next, width, visual))
+			if (!nextDisplayChar(line, next, width, visual, tabSize))
 				break;
 			if (next > end)
 				break;
@@ -885,8 +887,17 @@ class TMRFileEditor : public TScroller {
 		return std::isalnum(uch) != 0 || ch == '_';
 	}
 
-	static int tabDisplayWidth(int visualColumn) noexcept {
-		int nextStop = ((visualColumn / 8) + 1) * 8;
+	static int configuredTabSize() noexcept {
+		int tabSize = configuredTabSizeSetting();
+		if (tabSize < 1)
+			tabSize = 1;
+		if (tabSize > 32)
+			tabSize = 32;
+		return tabSize;
+	}
+
+	static int tabDisplayWidth(int visualColumn, int tabSize) noexcept {
+		int nextStop = ((visualColumn / tabSize) + 1) * tabSize;
 		return std::max(1, nextStop - visualColumn);
 	}
 
@@ -1008,26 +1019,26 @@ class TMRFileEditor : public TScroller {
 		b.moveStr(0, numberBuffer, color, static_cast<ushort>(width));
 	}
 
-	static bool nextDisplayChar(TStringView text, std::size_t &index, std::size_t &width,
-	                            int visualColumn) noexcept {
+	static bool nextDisplayChar(TStringView text, std::size_t &index, std::size_t &width, int visualColumn,
+	                            int tabSize) noexcept {
 		if (index >= text.size())
 			return false;
 		if (text[index] == '\t') {
 			++index;
-			width = static_cast<std::size_t>(tabDisplayWidth(visualColumn));
+			width = static_cast<std::size_t>(tabDisplayWidth(visualColumn, tabSize));
 			return true;
 		}
 		return TText::next(text, index, width);
 	}
 
-	static int displayWidthForText(TStringView text) noexcept {
+	static int displayWidthForText(TStringView text, int tabSize) noexcept {
 		std::size_t index = 0;
 		int visual = 0;
 
 		while (index < text.size()) {
 			std::size_t next = index;
 			std::size_t width = 0;
-			if (!nextDisplayChar(text, next, width, visual))
+			if (!nextDisplayChar(text, next, width, visual, tabSize))
 				break;
 			visual += static_cast<int>(width);
 			index = next;
@@ -1190,9 +1201,10 @@ class TMRFileEditor : public TScroller {
 		std::size_t pos = 0;
 		std::size_t len = bufferModel_.length();
 		int maxWidth = 1;
+		int tabSize = configuredTabSize();
 
 		while (true) {
-			int width = displayWidthForText(bufferModel_.lineText(pos));
+			int width = displayWidthForText(bufferModel_.lineText(pos), tabSize);
 			maxWidth = std::max(maxWidth, width + 1);
 			if (pos >= len)
 				break;
@@ -1473,10 +1485,20 @@ class TMRFileEditor : public TScroller {
 		if (event.keyDown.textLength > 0)
 			insertBufferText(std::string(event.keyDown.text, event.keyDown.textLength));
 		else if (event.keyDown.keyCode == kbTab)
-			insertBufferText("\t");
+			insertBufferText(tabKeyText());
 		else
 			insertBufferText(std::string(1, static_cast<char>(event.keyDown.charScan.charCode)));
 		clearEvent(event);
+	}
+
+	std::string tabKeyText() const {
+		if (configuredTabExpandSetting())
+			return "\t";
+		std::size_t insertPos = bufferModel_.cursor();
+		if (bufferModel_.hasSelection())
+			insertPos = bufferModel_.selection().range().start;
+		int visualColumn = charColumn(bufferModel_.lineStart(insertPos), insertPos);
+		return std::string(static_cast<std::size_t>(tabDisplayWidth(visualColumn, configuredTabSize())), ' ');
 	}
 
 	void handleKeyDown(TEvent &event) {
@@ -1895,6 +1917,7 @@ class TMRFileEditor : public TScroller {
 		std::size_t bytePos = 0;
 		int visual = 0;
 		int x = 0;
+		int tabSize = configuredTabSize();
 
 		hScroll = std::max(hScroll, 0);
 		width = std::max(width, 0);
@@ -1924,7 +1947,7 @@ class TMRFileEditor : public TScroller {
 		while (bytePos < line.size() && x < width) {
 			std::size_t next = bytePos;
 			std::size_t charWidth = 0;
-			if (!nextDisplayChar(line, next, charWidth, visual))
+			if (!nextDisplayChar(line, next, charWidth, visual, tabSize))
 				break;
 
 			int nextVisual = visual + static_cast<int>(charWidth);

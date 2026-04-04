@@ -426,6 +426,9 @@ static const char *const kColumnBlockMoveDelete = "DELETE_SPACE";
 static const char *const kColumnBlockMoveLeave = "LEAVE_SPACE";
 static const char *const kDefaultModeInsert = "INSERT";
 static const char *const kDefaultModeOverwrite = "OVERWRITE";
+static const int kDefaultTabSize = 8;
+static const int kMinTabSize = 1;
+static const int kMaxTabSize = 32;
 static const char *const kThemeSettingsKey = "COLORTHEMEURI";
 static const unsigned char kPaletteDialogFrame = 33;
 static const unsigned char kPaletteDialogText = 37;
@@ -958,6 +961,24 @@ std::string normalizeDefaultMode(const std::string &value) {
 	return std::string();
 }
 
+bool parseTabSizeLiteral(const std::string &value, int &outValue, std::string *errorMessage) {
+	std::string text = trimAscii(value);
+	char *end = nullptr;
+	long parsed = 0;
+
+	if (text.empty())
+		return setError(errorMessage, "TABSIZE must be an integer between 1 and 32.");
+	parsed = std::strtol(text.c_str(), &end, 10);
+	if (end == text.c_str() || end == nullptr || *end != '\0')
+		return setError(errorMessage, "TABSIZE must be an integer between 1 and 32.");
+	if (parsed < kMinTabSize || parsed > kMaxTabSize)
+		return setError(errorMessage, "TABSIZE must be between 1 and 32.");
+	outValue = static_cast<int>(parsed);
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
 std::string normalizePageBreakLiteral(const std::string &value) {
 	std::string trimmed = trimAscii(value);
 
@@ -1141,6 +1162,7 @@ MREditSetupSettings resolveEditSetupDefaults() {
 	defaults.eofCtrlZ = false;
 	defaults.eofCrLf = false;
 	defaults.tabExpand = true;
+	defaults.tabSize = kDefaultTabSize;
 	defaults.backupFiles = true;
 	defaults.showEofMarker = false;
 	defaults.showEofMarkerEmoji = true;
@@ -1203,6 +1225,8 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	if (!parseBooleanLiteral(settings.tabExpand ? "true" : "false", parsedBool, &boolError))
 		return setError(errorMessage, boolError);
 	normalized.tabExpand = parsedBool;
+	if (settings.tabSize < kMinTabSize || settings.tabSize > kMaxTabSize)
+		return setError(errorMessage, "TABSIZE must be between 1 and 32.");
 	if (!parseBooleanLiteral(settings.backupFiles ? "true" : "false", parsedBool, &boolError))
 		return setError(errorMessage, boolError);
 	normalized.backupFiles = parsedBool;
@@ -1225,6 +1249,7 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	normalized.pageBreak = pageBreak;
 	normalized.wordDelimiters = wordDelimiters;
 	normalized.defaultExtensions = defaultExts;
+	normalized.tabSize = settings.tabSize;
 	normalized.columnBlockMove = columnStyle;
 	normalized.defaultMode = defaultMode;
 	configuredEditSettings() = normalized;
@@ -1585,6 +1610,11 @@ bool applyConfiguredEditSetupValue(const std::string &key, const std::string &va
 		if (!parseBooleanLiteral(value, boolValue, errorMessage))
 			return false;
 		current.tabExpand = boolValue;
+	} else if (upperKeyName == "TABSIZE") {
+		int tabSize = 0;
+		if (!parseTabSizeLiteral(value, tabSize, errorMessage))
+			return false;
+		current.tabSize = tabSize;
 	} else if (upperKeyName == "BACKUPFILES") {
 		if (!parseBooleanLiteral(value, boolValue, errorMessage))
 			return false;
@@ -1640,6 +1670,10 @@ bool configuredDefaultInsertMode() {
 
 bool configuredTabExpandSetting() {
 	return configuredEditSetupSettings().tabExpand;
+}
+
+int configuredTabSizeSetting() {
+	return configuredEditSetupSettings().tabSize;
 }
 
 bool configuredBackupFilesSetting() {
@@ -1709,6 +1743,7 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source +=
 	    "MRSETUP('TABEXPAND', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.tabExpand)) +
 	    "');\n";
+	source += "MRSETUP('TABSIZE', '" + std::to_string(edit.tabSize) + "');\n";
 	source += "MRSETUP('BACKUPFILES', '" +
 	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.backupFiles)) + "');\n";
 	source += "MRSETUP('SHOWEOFMARKER', '" +

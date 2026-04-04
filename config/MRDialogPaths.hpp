@@ -22,6 +22,7 @@ struct MREditSetupSettings {
 	bool eofCtrlZ;
 	bool eofCrLf;
 	bool tabExpand;
+	int tabSize;
 	bool backupFiles;
 	bool showEofMarker;
 	bool showEofMarkerEmoji;
@@ -33,7 +34,8 @@ struct MREditSetupSettings {
 
 	MREditSetupSettings() noexcept
 	    : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false),
-	      eofCrLf(false), tabExpand(true), backupFiles(true), showEofMarker(false), showEofMarkerEmoji(true),
+	      eofCrLf(false), tabExpand(true), tabSize(8), backupFiles(true), showEofMarker(false),
+	      showEofMarkerEmoji(true),
 	      showLineNumbers(false), lineNumZeroFill(false), persistentBlocks(true), columnBlockMove(),
 	      defaultMode() {
 	}
@@ -110,6 +112,7 @@ std::string formatEditSetupBoolean(bool value);
 std::vector<std::string> configuredDefaultExtensionList();
 bool configuredDefaultInsertMode();
 bool configuredTabExpandSetting();
+int configuredTabSizeSetting();
 bool configuredBackupFilesSetting();
 bool configuredPersistentBlocksSetting();
 char configuredPageBreakCharacter();

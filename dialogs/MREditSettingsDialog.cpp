@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -33,7 +34,8 @@ enum : ushort {
 enum {
 	kPageBreakFieldSize = 64,
 	kWordDelimsFieldSize = 256,
-	kDefaultExtsFieldSize = 256
+	kDefaultExtsFieldSize = 256,
+	kTabSizeFieldSize = 8
 };
 
 enum : ushort {
@@ -82,6 +84,7 @@ struct EditSettingsDialogRecord {
 	char pageBreak[kPageBreakFieldSize];
 	char wordDelimiters[kWordDelimsFieldSize];
 	char defaultExtensions[kDefaultExtsFieldSize];
+	char tabSize[kTabSizeFieldSize];
 	ushort optionsMask;
 	ushort tabExpandChoice;
 	ushort columnBlockMoveChoice;
@@ -121,6 +124,7 @@ bool recordsEqual(const EditSettingsDialogRecord &lhs, const EditSettingsDialogR
 	return readRecordField(lhs.pageBreak) == readRecordField(rhs.pageBreak) &&
 	       readRecordField(lhs.wordDelimiters) == readRecordField(rhs.wordDelimiters) &&
 	       readRecordField(lhs.defaultExtensions) == readRecordField(rhs.defaultExtensions) &&
+	       readRecordField(lhs.tabSize) == readRecordField(rhs.tabSize) &&
 	       lhs.optionsMask == rhs.optionsMask && lhs.tabExpandChoice == rhs.tabExpandChoice &&
 	       lhs.columnBlockMoveChoice == rhs.columnBlockMoveChoice &&
 	       lhs.defaultModeChoice == rhs.defaultModeChoice;
@@ -135,6 +139,7 @@ void initEditSettingsDialogRecord(EditSettingsDialogRecord &record) {
 	writeRecordField(record.pageBreak, sizeof(record.pageBreak), settings.pageBreak);
 	writeRecordField(record.wordDelimiters, sizeof(record.wordDelimiters), settings.wordDelimiters);
 	writeRecordField(record.defaultExtensions, sizeof(record.defaultExtensions), settings.defaultExtensions);
+	writeRecordField(record.tabSize, sizeof(record.tabSize), std::to_string(settings.tabSize));
 	record.optionsMask = 0;
 	if (settings.truncateSpaces)
 		record.optionsMask |= kOptionTruncateSpaces;
@@ -167,6 +172,21 @@ bool recordToSettings(const EditSettingsDialogRecord &record, MREditSetupSetting
 	settings.pageBreak = readRecordField(record.pageBreak);
 	settings.wordDelimiters = readRecordField(record.wordDelimiters);
 	settings.defaultExtensions = readRecordField(record.defaultExtensions);
+	{
+		std::string tabSizeText = readRecordField(record.tabSize);
+		char *end = nullptr;
+		long tabSize = 0;
+		if (tabSizeText.empty()) {
+			errorText = "TABSIZE must be between 1 and 32.";
+			return false;
+		}
+		tabSize = std::strtol(tabSizeText.c_str(), &end, 10);
+		if (end == tabSizeText.c_str() || end == nullptr || *end != '\0' || tabSize < 1 || tabSize > 32) {
+			errorText = "TABSIZE must be an integer between 1 and 32.";
+			return false;
+		}
+		settings.tabSize = static_cast<int>(tabSize);
+	}
 	settings.truncateSpaces = (record.optionsMask & kOptionTruncateSpaces) != 0;
 	settings.eofCtrlZ = (record.optionsMask & kOptionEofCtrlZ) != 0;
 	settings.eofCrLf = (record.optionsMask & kOptionEofCrLf) != 0;
@@ -258,6 +278,9 @@ class TEditSettingsDialog : public TDialog {
 		           TRect(2, 6, inputLeft - 2, 7));
 		defaultExtensionsField_ = new TInputLine(TRect(inputLeft, 6, inputRight, 7), kDefaultExtsFieldSize - 1);
 		addManaged(defaultExtensionsField_, TRect(inputLeft, 6, inputRight, 7));
+		addManaged(new TStaticText(TRect(2, 22, 12, 23), "Tab size:"), TRect(2, 22, 12, 23));
+		tabSizeField_ = new TInputLine(TRect(13, 22, 20, 23), kTabSizeFieldSize - 1);
+		addManaged(tabSizeField_, TRect(13, 22, 20, 23));
 
 		addManaged(new TStaticText(TRect(optionsHeadingX, 8, dialogWidth - 2, 9), "Options:"),
 		           TRect(optionsHeadingX, 8, dialogWidth - 2, 9));
@@ -526,6 +549,7 @@ class TEditSettingsDialog : public TDialog {
 		setInputLineValue(pageBreakField_, record.pageBreak, sizeof(record.pageBreak));
 		setInputLineValue(wordDelimitersField_, record.wordDelimiters, sizeof(record.wordDelimiters));
 		setInputLineValue(defaultExtensionsField_, record.defaultExtensions, sizeof(record.defaultExtensions));
+		setInputLineValue(tabSizeField_, record.tabSize, sizeof(record.tabSize));
 		setOptionsMask(record.optionsMask);
 		tabExpandField_->setData((void *)&record.tabExpandChoice);
 		columnBlockMoveField_->setData((void *)&record.columnBlockMoveChoice);
@@ -537,6 +561,7 @@ class TEditSettingsDialog : public TDialog {
 		readInputLineValue(pageBreakField_, record.pageBreak, sizeof(record.pageBreak));
 		readInputLineValue(wordDelimitersField_, record.wordDelimiters, sizeof(record.wordDelimiters));
 		readInputLineValue(defaultExtensionsField_, record.defaultExtensions, sizeof(record.defaultExtensions));
+		readInputLineValue(tabSizeField_, record.tabSize, sizeof(record.tabSize));
 		syncOptionDependencies(currentOptionsMask());
 		record.optionsMask = currentOptionsMask();
 		tabExpandField_->getData((void *)&record.tabExpandChoice);
@@ -554,6 +579,7 @@ class TEditSettingsDialog : public TDialog {
 	TInputLine *pageBreakField_ = nullptr;
 	TInputLine *wordDelimitersField_ = nullptr;
 	TInputLine *defaultExtensionsField_ = nullptr;
+	TInputLine *tabSizeField_ = nullptr;
 	TCheckBoxes *optionsLeftField_ = nullptr;
 	TCheckBoxes *optionsRightField_ = nullptr;
 	TRadioButtons *tabExpandField_ = nullptr;
