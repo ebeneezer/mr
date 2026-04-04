@@ -108,7 +108,7 @@ void tokenizeCFamily(TMRSyntaxTokenMap &tokens, const std::string &line) {
 		if (line[i] == '/' && i + 1 < line.size() && line[i + 1] == '*') {
 			std::size_t start = i;
 			i += 2;
-			while (i + 1 < line.size() && !(line[i] == '*' && line[i + 1] == '/'))
+			while (i + 1 < line.size() && (line[i] != '*' || line[i + 1] != '/'))
 				++i;
 			if (i + 1 < line.size())
 				i += 2;

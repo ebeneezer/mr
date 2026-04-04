@@ -46,7 +46,7 @@ std::string executableDirectory() {
 	pos = std::string(path).find_last_of('/');
 	if (pos == std::string::npos)
 		return std::string();
-	return std::string(path, static_cast<std::size_t>(pos));
+	return std::string(path, pos);
 }
 
 std::string resolveHelpFilePath() {

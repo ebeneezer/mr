@@ -101,7 +101,7 @@ UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const ch
 
 	insertStaticLine(dialog, 3, 2, headline != nullptr ? headline : "Window has unsaved changes.");
 	if (hasDetail)
-		insertStaticLine(dialog, 3, 4, shortenDetail(detail, static_cast<std::size_t>(width - 6)).c_str());
+		insertStaticLine(dialog, 3, 4, shortenDetail(detail, static_cast<std::size_t>(width - 6)));
 	int buttonY = height - 3;
 	int buttonLeft = (width - buttonRowWidth) / 2;
 
