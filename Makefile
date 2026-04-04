@@ -13,6 +13,9 @@ CMAKE ?= cmake
 GIT ?= git
 PATCH ?= patch
 NPROC ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
+CLANG_TIDY ?= clang-tidy
+BEAR ?= bear
+LINT_FILE ?= mrmac/mrvm.cpp
 
 TVISION_SOURCE_DIR = ./tvision
 TVISION_PATCH_DIR ?= ./patches
@@ -113,7 +116,8 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 .PHONY: all clean clean-tvision rebuild-tvision \
 	tvision-upstream-init tvision-upstream-fetch tvision-subtree-pull tvision-apply-patches \
 	tvision-sync-safe tvision-status \
-	stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check
+	stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check \
+	compile-commands lint-file
 
 all: $(TARGET)
 stage-profile-probe: $(STAGE_PROFILE_PROBE_TARGET)
@@ -126,6 +130,19 @@ regression-check-full: $(REGRESSION_PROBE_TARGET)
 	./$(REGRESSION_PROBE_TARGET) --full
 mrmac-v1-check: $(TARGET) $(STAGE_PROFILE_PROBE_TARGET) regression-probe
 	$(MRMAC_V1_SUITE_SCRIPT)
+compile-commands:
+	rm -f compile_commands.json
+	@if command -v $(BEAR) >/dev/null 2>&1; then \
+		$(BEAR) --output compile_commands.json -- make -B -j$(NPROC); \
+	else \
+		intercept-build --cdb compile_commands.json make -B -j$(NPROC); \
+	fi
+lint-file:
+	@if [ ! -f compile_commands.json ]; then \
+		echo "compile_commands.json fehlt. Erst 'make compile-commands' ausführen."; \
+		exit 2; \
+	fi
+	$(CLANG_TIDY) -p . $(LINT_FILE)
 
 # TVision: local subtree source + patch queue.
 $(TVISION_LOCAL_PATCH_STAMP): $(TVISION_PATCHES) Makefile
