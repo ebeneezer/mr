@@ -14,11 +14,28 @@
 #include <cstdlib>
 #include <fstream>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <vector>
 
 namespace {
+struct PendingForegroundMacro {
+	std::string label;
+	std::shared_ptr<VirtualMachine> vm;
+
+	PendingForegroundMacro() : label(), vm() {
+	}
+
+	PendingForegroundMacro(std::string aLabel, std::shared_ptr<VirtualMachine> aVm)
+	    : label(std::move(aLabel)), vm(std::move(aVm)) {
+	}
+};
+
+std::mutex g_pendingForegroundMacrosMutex;
+std::vector<PendingForegroundMacro> g_pendingForegroundMacros;
+void queuePendingForegroundMacro(const std::string &label, const std::shared_ptr<VirtualMachine> &vm);
+
 bool hasMrmacExtension(const std::string &path) {
 	std::string::size_type pos = path.rfind('.');
 	if (pos == std::string::npos)
@@ -133,7 +150,7 @@ void showErrorBox(const char *title, const char *text) {
 bool runMacroSource(const char *displayName, const char *source) {
 	size_t bytecodeSize = 0;
 	unsigned char *bytecode = 0;
-	VirtualMachine vm;
+	std::shared_ptr<VirtualMachine> vm = std::make_shared<VirtualMachine>();
 	MRMacroExecutionProfile profile;
 	std::vector<unsigned char> bytecodeCopy;
 	std::string label = displayName != 0 ? displayName : "Macro Loader";
@@ -142,6 +159,10 @@ bool runMacroSource(const char *displayName, const char *source) {
 
 	if (source == 0) {
 		showErrorBox("Macro Loader", "No macro source available.");
+		return false;
+	}
+	if (!vm) {
+		showErrorBox("Macro Loader", "Unable to create VM.");
 		return false;
 	}
 
@@ -316,11 +337,51 @@ bool runMacroSource(const char *displayName, const char *source) {
 		mrLogMessage(line.c_str());
 	}
 
-	vm.execute(bytecode, bytecodeSize);
+	vm->execute(bytecode, bytecodeSize);
 	std::free(bytecode);
+	if (vm->hasPendingDelay()) {
+		queuePendingForegroundMacro(label, vm);
+		mrLogMessage(("Macro '" + label + "' yielded on DELAY; execution will resume asynchronously.").c_str());
+	}
 	return true;
 }
+
+void queuePendingForegroundMacro(const std::string &label, const std::shared_ptr<VirtualMachine> &vm) {
+	std::lock_guard<std::mutex> lock(g_pendingForegroundMacrosMutex);
+	g_pendingForegroundMacros.push_back(PendingForegroundMacro(label, vm));
+}
 } // namespace
+
+void pumpForegroundMacroDelays() {
+	std::lock_guard<std::mutex> lock(g_pendingForegroundMacrosMutex);
+	std::size_t i = 0;
+
+	while (i < g_pendingForegroundMacros.size()) {
+		std::vector<PendingForegroundMacro>::difference_type index =
+		    static_cast<std::vector<PendingForegroundMacro>::difference_type>(i);
+		PendingForegroundMacro &pending = g_pendingForegroundMacros[i];
+		if (!pending.vm) {
+			g_pendingForegroundMacros.erase(g_pendingForegroundMacros.begin() + index);
+			continue;
+		}
+		if (pending.vm->hasPendingDelay()) {
+			if (pending.vm->resumePendingDelay()) {
+				++i;
+				continue;
+			}
+		}
+		g_pendingForegroundMacros.erase(g_pendingForegroundMacros.begin() + index);
+	}
+}
+
+void cancelForegroundMacroDelays() {
+	std::lock_guard<std::mutex> lock(g_pendingForegroundMacrosMutex);
+
+	for (std::size_t i = 0; i < g_pendingForegroundMacros.size(); ++i)
+		if (g_pendingForegroundMacros[i].vm)
+			g_pendingForegroundMacros[i].vm->cancelPendingDelay();
+	g_pendingForegroundMacros.clear();
+}
 
 bool runMacroFileByPath(const char *path) {
 	std::string resolvedPath = expandUserPath(path);

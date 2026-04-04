@@ -610,7 +610,7 @@ class MacroManagerListView : public TListViewer {
 		short colWidth = size.x / numCols + 1;
 		TColorAttr errorColor;
 
-		if (!configuredColorSlotOverride(42, errorBios))
+		if (!configuredColorSlotOverride(kMrPaletteMessageError, errorBios))
 			return;
 		errorColor = TColorAttr(errorBios);
 
@@ -648,6 +648,19 @@ class MacroManagerListView : public TListViewer {
 		copyLen = static_cast<std::size_t>(maxLen - 1);
 		std::strncpy(dest, items_[static_cast<std::size_t>(item)].c_str(), copyLen);
 		dest[copyLen] = EOS;
+	}
+
+	void handleEvent(TEvent &event) override {
+		const bool isDoubleClickPlayback = event.what == evMouseDown &&
+		                                   (event.mouse.buttons & mbLeftButton) != 0 &&
+		                                   (event.mouse.eventFlags & meDoubleClick) != 0;
+
+		TListViewer::handleEvent(event);
+
+		if (!isDoubleClickPlayback || owner == NULL)
+			return;
+		message(owner, evCommand, cmMRMacroManagerPlayback, this);
+		clearEvent(event);
 	}
 
   private:

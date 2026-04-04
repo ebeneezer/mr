@@ -2,6 +2,7 @@
 #include <tvision/tv.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
@@ -14,6 +15,7 @@
 #include <regex>
 #include <string>
 #include <sys/stat.h>
+#include <thread>
 #include <unistd.h>
 #include <vector>
 
@@ -881,9 +883,9 @@ bool testDialogPaletteOverridesAbsent(std::string &failureReason) {
 		return false;
 	}
 	if (content.find("palette = basePalette;") == std::string::npos ||
-	    content.find("slot <= kMrPaletteChangedText") == std::string::npos) {
+	    content.find("slot <= kMrPaletteMax") == std::string::npos) {
 		failureReason =
-		    "TMREditorApp::getPalette must rebuild each call and include extension slots up to kMrPaletteChangedText.";
+		    "TMREditorApp::getPalette must rebuild each call and include extension slots up to kMrPaletteMax.";
 		return false;
 	}
 	failureReason.clear();
@@ -1229,6 +1231,42 @@ bool testPathsBrowseEventGuard(std::string &failureReason) {
 	return true;
 }
 
+bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) {
+	const std::string setupPath = absolutePathFromCwd("dialogs/MRSetupDialogs.cpp");
+	std::string content;
+	std::string ioError;
+	std::size_t casePos = std::string::npos;
+	std::size_t writePos = std::string::npos;
+	std::size_t applyPos = std::string::npos;
+
+	if (!readTextFile(setupPath, content, ioError)) {
+		failureReason = "Unable to read MRSetupDialogs.cpp for Color Setup save guard: " + ioError;
+		return false;
+	}
+
+	casePos = content.find("case cmMrColorSaveTheme:");
+	if (casePos == std::string::npos) {
+		failureReason = "Unable to locate cmMrColorSaveTheme case.";
+		return false;
+	}
+
+	writePos = content.find("writeColorThemeFile(themeUri, &errorText)", casePos);
+	if (writePos == std::string::npos) {
+		failureReason = "Unable to locate writeColorThemeFile(...) inside save-theme case.";
+		return false;
+	}
+
+	applyPos = content.find("applyWorkingColorPaletteToConfigured(workingPalette, errorText)", casePos);
+	if (applyPos == std::string::npos || applyPos > writePos) {
+		failureReason =
+		    "Color Setup save-theme must apply working palette before writeColorThemeFile(...).";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
 bool testCurrentLineColorWiringGuard(std::string &failureReason) {
 	const std::string sourcePath = absolutePathFromCwd("ui/TMRFileEditor.hpp");
 	std::string content;
@@ -1527,13 +1565,73 @@ bool testMarqueeColorSourceGuard(std::string &failureReason) {
 		return false;
 	}
 	if (content.find("configuredColorSlotOverride(slot, biosAttr)") == std::string::npos) {
-		failureReason = "Marquee colors must be sourced from configuredColorSlotOverride(42/43/44).";
+		failureReason = "Marquee colors must be sourced from configuredColorSlotOverride(...).";
 		return false;
 	}
 	if (content.find("getColor(0x2B2B)") != std::string::npos || content.find("getColor(0x2C2C)") != std::string::npos ||
 	    content.find("getColor(0x2A2A)") != std::string::npos) {
 		failureReason =
 		    "Marquee colors must not use raw getColor(0x2A2A/0x2B2B/0x2C2C) view-local lookup.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testOtherColorsDedicatedMessageSlotsGuard(std::string &failureReason) {
+	const std::string sourcePath = absolutePathFromCwd("config/MRDialogPaths.cpp");
+	std::string content;
+	std::string ioError;
+
+	if (!readTextFile(sourcePath, content, ioError)) {
+		failureReason = "Unable to read MRDialogPaths.cpp for OTHERCOLORS slot guard: " + ioError;
+		return false;
+	}
+	if (content.find("{\"error message\", kMrPaletteMessageError}") == std::string::npos ||
+	    content.find("{\"message\", kMrPaletteMessage}") == std::string::npos ||
+	    content.find("{\"warning message\", kMrPaletteMessageWarning}") == std::string::npos) {
+		failureReason = "OTHERCOLORS message entries must target dedicated extension palette slots.";
+		return false;
+	}
+	if (content.find("{\"error message\", 42}") != std::string::npos ||
+	    content.find("{\"message\", 43}") != std::string::npos ||
+	    content.find("{\"warning message\", 44}") != std::string::npos) {
+		failureReason = "OTHERCOLORS message entries must not map directly to dialog palette slots 42/43/44.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testDelayProcWiringGuard(std::string &failureReason) {
+	const std::string source = "$MACRO DelayProbe FROM EDIT;\n"
+	                           "DELAY(20);\n"
+	                           "SET_GLOBAL_STR('DELAY_PROBE', 'ok');\n"
+	                           "END_MACRO;\n";
+	std::vector<unsigned char> bytecode;
+	std::string macroName;
+	std::string compileError;
+	int entryOffset = -1;
+	VirtualMachine vm;
+	std::string vmError;
+	auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+
+	if (!compileSource(source, bytecode, entryOffset, macroName, compileError)) {
+		failureReason = "Compile failed for DELAY probe: " + compileError;
+		return false;
+	}
+	vm.executeAt(bytecode.data(), bytecode.size(), static_cast<size_t>(entryOffset), std::string(), macroName,
+	             true, true);
+	while (vm.hasPendingDelay() && std::chrono::steady_clock::now() < deadline) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(2));
+		vm.resumePendingDelay();
+	}
+	if (vm.hasPendingDelay()) {
+		failureReason = "DELAY probe remained suspended after timeout.";
+		return false;
+	}
+	if (firstVmError(vm.log, vmError)) {
+		failureReason = "DELAY probe produced VM error: " + vmError;
 		return false;
 	}
 	failureReason.clear();
@@ -1582,6 +1680,7 @@ int main(int argc, char **argv) {
 	        testDialogFrameAndBackgroundPropagationGuard);
 	runTest(ctx, "Setup scroll refresh guard", testSetupScrollRefreshGuard);
 	runTest(ctx, "Paths browse event guard", testPathsBrowseEventGuard);
+	runTest(ctx, "Color setup save-theme commit guard", testColorSetupSaveThemeUsesWorkingPaletteGuard);
 	runTest(ctx, "Current-line color wiring guard", testCurrentLineColorWiringGuard);
 	runTest(ctx, "Changed-text color wiring guard", testChangedTextColorWiringGuard);
 	runTest(ctx, "Persistent blocks wiring guard", testPersistentBlocksWiringGuard);
@@ -1590,8 +1689,10 @@ int main(int argc, char **argv) {
 	runTest(ctx, "TO/FROM runtime dispatch", testToFromDispatch);
 	runTest(ctx, "KEY_IN behavior + staging guards", testKeyIn);
 	runTest(ctx, "MARQUEE proc wiring guard", testMarqueeProcWiringGuard);
+	runTest(ctx, "DELAY proc wiring guard", testDelayProcWiringGuard);
 	runTest(ctx, "TVCALL surface guard (MESSAGEBOX only)", testTvCallSurfaceGuard);
 	runTest(ctx, "Marquee color source guard", testMarqueeColorSourceGuard);
+	runTest(ctx, "OTHERCOLORS dedicated message slots guard", testOtherColorsDedicatedMessageSlotsGuard);
 
 	std::cout << "\nRegression summary: " << ctx.passed << " passed, " << ctx.failed << " failed.\n";
 	return ctx.failed == 0 ? 0 : 1;

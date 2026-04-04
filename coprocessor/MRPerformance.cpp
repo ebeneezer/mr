@@ -11,14 +11,14 @@ namespace mr {
 namespace performance {
 namespace {
 
-struct HeroState {
+struct MessageNoticeState {
 	bool active;
-	HeroKind kind;
+	MessageNoticeKind kind;
 	std::string text;
 	std::chrono::steady_clock::time_point expiresAt;
 
-	HeroState() noexcept
-	    : active(false), kind(HeroKind::Info), text(), expiresAt(std::chrono::steady_clock::time_point::min()) {
+	MessageNoticeState() noexcept
+	    : active(false), kind(MessageNoticeKind::Info), text(), expiresAt(std::chrono::steady_clock::time_point::min()) {
 	}
 };
 
@@ -26,15 +26,15 @@ struct State {
 	std::mutex mutex;
 	std::deque<Event> events;
 	std::uint64_t nextSequence;
-	HeroState hero;
+	MessageNoticeState messageNotice;
 
-	State() noexcept : mutex(), events(), nextSequence(1), hero() {
+	State() noexcept : mutex(), events(), nextSequence(1), messageNotice() {
 	}
 };
 
 static constexpr std::size_t kMaxEvents = 64;
-static constexpr std::size_t kUiHeroBytesThreshold = 8u * 1024u * 1024u;
-static constexpr std::size_t kWarmupHeroBytesThreshold = 64u * 1024u * 1024u;
+static constexpr std::size_t kUiNoticeBytesThreshold = 8u * 1024u * 1024u;
+static constexpr std::size_t kWarmupNoticeBytesThreshold = 64u * 1024u * 1024u;
 
 State &state() {
 	static State instance;
@@ -89,29 +89,29 @@ std::string formatWallClock(std::time_t when) {
 	return buffer;
 }
 
-bool qualifiesForHero(const Event &event) {
+bool qualifiesForNotice(const Event &event) {
 	if (event.outcome != Outcome::Completed)
 		return false;
 	if (event.scope == Scope::Ui)
-		return event.bytes >= kUiHeroBytesThreshold &&
+		return event.bytes >= kUiNoticeBytesThreshold &&
 		       (event.action == "Open file" || event.action == "Load file" || event.action == "Save file" ||
 		        event.action == "Save file as");
 	if (event.action == "Line index warmup")
-		return event.bytes >= kWarmupHeroBytesThreshold;
+		return event.bytes >= kWarmupNoticeBytesThreshold;
 	return false;
 }
 
-HeroKind heroKindFor(const Event &event) {
+MessageNoticeKind messageNoticeKindFor(const Event &event) {
 	if (event.outcome == Outcome::Failed)
-		return HeroKind::Error;
+		return MessageNoticeKind::Error;
 	if (event.outcome == Outcome::Cancelled || event.outcome == Outcome::Conflict)
-		return HeroKind::Warning;
+		return MessageNoticeKind::Warning;
 	if (event.scope == Scope::Ui)
-		return HeroKind::Success;
-	return HeroKind::Info;
+		return MessageNoticeKind::Success;
+	return MessageNoticeKind::Info;
 }
 
-std::string buildHeroText(const Event &event) {
+std::string buildMessageNoticeText(const Event &event) {
 	std::string name = event.detail.empty() ? std::string("<buffer>") : std::string(baseNameOf(event.detail));
 
 	if (event.action == "Open file")
@@ -155,11 +155,11 @@ void recordUiEvent(const std::string &action, std::size_t bufferId, std::size_t 
 	event.runMs = totalMs;
 	event.totalMs = totalMs;
 	pushEvent(shared, event);
-	if (qualifiesForHero(shared.events.front())) {
-		shared.hero.active = true;
-		shared.hero.kind = heroKindFor(shared.events.front());
-		shared.hero.text = buildHeroText(shared.events.front());
-		shared.hero.expiresAt = std::chrono::steady_clock::now() + std::chrono::seconds(4);
+	if (qualifiesForNotice(shared.events.front())) {
+		shared.messageNotice.active = true;
+		shared.messageNotice.kind = messageNoticeKindFor(shared.events.front());
+		shared.messageNotice.text = buildMessageNoticeText(shared.events.front());
+		shared.messageNotice.expiresAt = std::chrono::steady_clock::now() + std::chrono::seconds(4);
 	}
 }
 
@@ -190,11 +190,11 @@ void recordBackgroundEvent(mr::coprocessor::Lane lane, Outcome outcome, const mr
 	event.runMs = timing.runMs();
 	event.totalMs = timing.totalMs();
 	pushEvent(shared, event);
-	if (qualifiesForHero(shared.events.front())) {
-		shared.hero.active = true;
-		shared.hero.kind = heroKindFor(shared.events.front());
-		shared.hero.text = buildHeroText(shared.events.front());
-		shared.hero.expiresAt = std::chrono::steady_clock::now() + std::chrono::seconds(4);
+	if (qualifiesForNotice(shared.events.front())) {
+		shared.messageNotice.active = true;
+		shared.messageNotice.kind = messageNoticeKindFor(shared.events.front());
+		shared.messageNotice.text = buildMessageNoticeText(shared.events.front());
+		shared.messageNotice.expiresAt = std::chrono::steady_clock::now() + std::chrono::seconds(4);
 	}
 }
 
@@ -227,20 +227,20 @@ std::vector<Event> recentGlobal(std::size_t maxCount) {
 	return result;
 }
 
-bool currentHeroNotice(HeroNotice &out) {
+bool currentMessageLineNotice(MessageLineNotice &out) {
 	State &shared = state();
 	std::lock_guard<std::mutex> lock(shared.mutex);
 
-	if (!shared.hero.active)
+	if (!shared.messageNotice.active)
 		return false;
-	if (std::chrono::steady_clock::now() >= shared.hero.expiresAt) {
-		shared.hero.active = false;
-		shared.hero.text.clear();
+	if (std::chrono::steady_clock::now() >= shared.messageNotice.expiresAt) {
+		shared.messageNotice.active = false;
+		shared.messageNotice.text.clear();
 		return false;
 	}
 	out.active = true;
-	out.kind = shared.hero.kind;
-	out.text = shared.hero.text;
+	out.kind = shared.messageNotice.kind;
+	out.text = shared.messageNotice.text;
 	return true;
 }
 

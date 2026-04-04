@@ -188,8 +188,6 @@ const char *dummyCommandTitle(ushort command) {
 
 		case cmMrDevCancelMacroTasks:
 			return "Dev / Cancel background macros";
-		case cmMrDevSetMarqueeText:
-			return "Dev / Marquee text";
 
 		case cmMrSetupKeyMapping:
 			return "Installation / Key mapping";
@@ -488,26 +486,6 @@ bool handleClearCurrentOutput() {
 	return true;
 }
 
-bool handleSetDevMarqueeText() {
-	enum { kTextLimit = 255 };
-	char text[kTextLimit + 1];
-	TMREditorApp *app = dynamic_cast<TMREditorApp *>(TProgram::application);
-	std::string current;
-
-	text[0] = '\0';
-	if (app != 0) {
-		current = app->manualMarqueeStatus();
-		std::snprintf(text, sizeof(text), "%s", current.c_str());
-	}
-
-	if (inputBox("DEV / MARQUEE", "~T~ext (empty = Hero events)", text, kTextLimit) == cmCancel)
-		return true;
-
-	if (app != 0)
-		app->setManualMarqueeStatus(std::string(text));
-	return true;
-}
-
 } // namespace
 
 bool handleMRCommand(ushort command) {
@@ -615,8 +593,6 @@ bool handleMRCommand(ushort command) {
 
 		case cmMrDevCancelMacroTasks:
 			return handleCancelBackgroundMacros();
-		case cmMrDevSetMarqueeText:
-			return handleSetDevMarqueeText();
 
 		default: {
 			const char *title = dummyCommandTitle(command);

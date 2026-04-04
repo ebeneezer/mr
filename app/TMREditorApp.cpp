@@ -19,6 +19,7 @@
 #include "../coprocessor/MRCoprocessor.hpp"
 #include "../mrmac/mrmac.h"
 #include "../mrmac/mrvm.hpp"
+#include "../mrmac/MRMacroRunner.hpp"
 #include "../coprocessor/MRCoprocessorDispatch.hpp"
 #include "../config/MRDialogPaths.hpp"
 #include "../coprocessor/MRPerformance.hpp"
@@ -491,24 +492,24 @@ std::string buildTopRightCursorStatus() {
 	return std::string(buf);
 }
 
-TMRMenuBar::HeroKind mapHeroKind(mr::performance::HeroKind kind) {
+TMRMenuBar::MarqueeKind mapMessageNoticeKind(mr::performance::MessageNoticeKind kind) {
 	switch (kind) {
-		case mr::performance::HeroKind::Success:
-			return TMRMenuBar::HeroKind::Success;
-		case mr::performance::HeroKind::Warning:
-			return TMRMenuBar::HeroKind::Warning;
-		case mr::performance::HeroKind::Error:
-			return TMRMenuBar::HeroKind::Error;
-		case mr::performance::HeroKind::Info:
+		case mr::performance::MessageNoticeKind::Success:
+			return TMRMenuBar::MarqueeKind::Success;
+		case mr::performance::MessageNoticeKind::Warning:
+			return TMRMenuBar::MarqueeKind::Warning;
+		case mr::performance::MessageNoticeKind::Error:
+			return TMRMenuBar::MarqueeKind::Error;
+		case mr::performance::MessageNoticeKind::Info:
 		default:
-			return TMRMenuBar::HeroKind::Info;
+			return TMRMenuBar::MarqueeKind::Info;
 	}
 }
 
 const TPalette &extendedAppBasePalette() {
 	static const TPalette palette = []() -> TPalette {
 		static const int kBaseSlots = 135;
-		static const int kTotalSlots = kMrPaletteChangedText;
+		static const int kTotalSlots = kMrPaletteMax;
 		static const char cp[] = cpAppColor;
 		TColorAttr data[kTotalSlots];
 		int i = 0;
@@ -519,6 +520,9 @@ const TPalette &extendedAppBasePalette() {
 		data[kMrPaletteCurrentLine - 1] = data[10 - 1];
 		data[kMrPaletteCurrentLineInBlock - 1] = data[12 - 1];
 		data[kMrPaletteChangedText - 1] = data[14 - 1];
+		data[kMrPaletteMessageError - 1] = data[42 - 1];
+		data[kMrPaletteMessage - 1] = data[43 - 1];
+		data[kMrPaletteMessageWarning - 1] = data[44 - 1];
 		return TPalette(data, static_cast<ushort>(kTotalSlots));
 	}();
 	return palette;
@@ -586,17 +590,6 @@ bool TMREditorApp::reloadSettingsMacroFromPath(const std::string &path, std::str
 	return true;
 }
 
-void TMREditorApp::setManualMarqueeStatus(const std::string &text) {
-	if (auto *mrMenuBar = dynamic_cast<TMRMenuBar *>(menuBar))
-		mrMenuBar->setManualMarqueeStatus(text);
-}
-
-std::string TMREditorApp::manualMarqueeStatus() const {
-	if (auto *mrMenuBar = dynamic_cast<TMRMenuBar *>(menuBar))
-		return mrMenuBar->manualMarqueeStatus();
-	return std::string();
-}
-
 void TMREditorApp::applyConfiguredWindowFramePolicy() {
 	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
 
@@ -661,6 +654,7 @@ void TMREditorApp::prepareForQuit() {
 		mrLogMessage(line.c_str());
 		mr::coprocessor::globalCoprocessor().pump(64);
 	}
+	cancelForegroundMacroDelays();
 }
 
 bool TMREditorApp::isRecorderToggleKey(const TEvent &event) const {
@@ -958,16 +952,17 @@ void TMREditorApp::handleEvent(TEvent &event) {
 
 void TMREditorApp::idle() {
 	TApplication::idle();
+	pumpForegroundMacroDelays();
 	updateRecordingBlink();
 	warmIndexedMacroBindings();
 	mr::coprocessor::globalCoprocessor().pump(8);
 	if (auto *mrMenuBar = dynamic_cast<TMRMenuBar *>(menuBar)) {
-		mr::performance::HeroNotice hero;
+		mr::performance::MessageLineNotice notice;
 		mrMenuBar->setRightStatus(buildTopRightCursorStatus());
-		if (mr::performance::currentHeroNotice(hero))
-			mrMenuBar->setHeroStatus(hero.text, mapHeroKind(hero.kind));
+		if (mr::performance::currentMessageLineNotice(notice))
+			mrMenuBar->setAutoMarqueeStatus(notice.text, mapMessageNoticeKind(notice.kind));
 		else
-			mrMenuBar->setHeroStatus(std::string());
+			mrMenuBar->setAutoMarqueeStatus(std::string());
 		mrMenuBar->tickMarquee();
 	}
 	updateAppCommandState();
@@ -982,7 +977,7 @@ TPalette &TMREditorApp::getPalette() const {
 	// Rebuild from TV default on every call so stale overrides never leak between frames.
 	palette = basePalette;
 
-	for (slot = 1; slot <= kMrPaletteChangedText; ++slot)
+	for (slot = 1; slot <= kMrPaletteMax; ++slot)
 		if (configuredColorSlotOverride(static_cast<unsigned char>(slot), overrideValue))
 			palette[slot] = overrideValue;
 

@@ -319,13 +319,14 @@ std::vector<FileInformationPage> buildFileInformationPages(TMREditWindow *win) {
 
 	page3.title = "PERFORMANCE";
 	{
-		mr::performance::HeroNotice hero;
+		mr::performance::MessageLineNotice notice;
 		std::vector<mr::performance::Event> windowEvents = mr::performance::recentForWindow(
 		    win != 0 ? static_cast<std::size_t>(win->bufferId()) : 0, win != 0 ? win->documentId() : 0, 5);
 		std::vector<mr::performance::Event> globalEvents = mr::performance::recentGlobal(4);
 
-		page3.lines.push_back(std::string("Active hero   : ") +
-		                      (mr::performance::currentHeroNotice(hero) ? hero.text : std::string("<none>")));
+		page3.lines.push_back(std::string("Active marquee: ") +
+		                      (mr::performance::currentMessageLineNotice(notice) ? notice.text
+		                                                                        : std::string("<none>")));
 		page3.lines.push_back("Window recent :");
 		if (windowEvents.empty())
 			page3.lines.push_back("  <none>");

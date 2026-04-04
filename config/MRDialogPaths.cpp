@@ -451,9 +451,9 @@ static const MRColorSetupItem kOtherColorItems[] = {
     {"statusline bold", 3},
     {"function descriptions on statusline", 4},
     {"function keys on statusline", 5},
-    {"error message", 42},
-    {"message", 43},
-    {"warning message", 44},
+    {"error message", kMrPaletteMessageError},
+    {"message", kMrPaletteMessage},
+    {"warning message", kMrPaletteMessageWarning},
 };
 
 static const ColorGroupDefinition kColorGroups[] = {
@@ -502,6 +502,12 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 		return defaults[12];
 	if (paletteIndex == kMrPaletteChangedText)
 		return defaults[14];
+	if (paletteIndex == kMrPaletteMessageError)
+		return defaults[42];
+	if (paletteIndex == kMrPaletteMessage)
+		return defaults[43];
+	if (paletteIndex == kMrPaletteMessageWarning)
+		return defaults[44];
 	if (paletteIndex == 0 || paletteIndex >= sizeof(defaults) / sizeof(defaults[0]))
 		return 0x70;
 	return defaults[paletteIndex];

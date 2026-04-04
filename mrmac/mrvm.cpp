@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <cstdio>
@@ -31,6 +32,7 @@
 #include <stdexcept>
 #include <string>
 #include <sys/stat.h>
+#include <thread>
 #include <unistd.h>
 #include <utility>
 #include <vector>
@@ -40,6 +42,7 @@
 #include "../dialogs/MRWindowListDialog.hpp"
 #include "../config/MRDialogPaths.hpp"
 #include "../ui/MRWindowSupport.hpp"
+#include "../coprocessor/MRCoprocessor.hpp"
 
 TMREditWindow *createEditorWindow(const char *title);
 
@@ -612,6 +615,8 @@ static unsigned classifyProcName(const std::string &name) {
 		return mrefUiAffinity | mrefStagedWrite;
 	if (name == "RUN_MACRO")
 		return mrefUiAffinity | mrefStagedWrite;
+	if (name == "DELAY")
+		return mrefBackgroundSafe;
 	if (name == "SET_INDENT_LEVEL" || name == "LEFT" || name == "RIGHT" || name == "UP" ||
 	    name == "DOWN" || name == "HOME" || name == "EOL" || name == "TOF" || name == "EOF" ||
 	    name == "WORD_LEFT" || name == "WORD_RIGHT" || name == "FIRST_WORD" ||
@@ -637,7 +642,7 @@ static unsigned classifyTvCallName(const std::string &name) {
 static bool applyMarqueeProc(const std::string &name, const std::vector<Value> &args) {
 	TApplication *app = dynamic_cast<TApplication *>(TProgram::application);
 	TMRMenuBar *menuBar = NULL;
-	TMRMenuBar::HeroKind kind = TMRMenuBar::HeroKind::Info;
+	TMRMenuBar::MarqueeKind kind = TMRMenuBar::MarqueeKind::Info;
 
 	if (args.size() != 1 || !isStringLike(args[0]))
 		throw std::runtime_error(name + " expects one string argument.");
@@ -647,9 +652,9 @@ static bool applyMarqueeProc(const std::string &name, const std::vector<Value> &
 		throw std::runtime_error(name + " requires an active menu bar.");
 
 	if (name == "MARQUEE_WARNING")
-		kind = TMRMenuBar::HeroKind::Warning;
+		kind = TMRMenuBar::MarqueeKind::Warning;
 	else if (name == "MARQUEE_ERROR")
-		kind = TMRMenuBar::HeroKind::Error;
+		kind = TMRMenuBar::MarqueeKind::Error;
 
 	menuBar->setManualMarqueeStatus(valueAsString(args[0]), kind);
 	return true;
@@ -5392,7 +5397,12 @@ bool mrvmIsStartupSettingsMode() noexcept {
 VirtualMachine::Value::Value() : type(TYPE_INT), i(0), r(0.0), s(), c(0) {
 }
 
-VirtualMachine::VirtualMachine() : verboseLogging(true), logTruncated(false), cancelledExecution(false) {
+VirtualMachine::VirtualMachine()
+    : verboseLogging(true), logTruncated(false), asyncDelayPending_(false), asyncDelayReady_(false),
+      asyncBytecode_(), asyncLength_(0), asyncIp_(0), asyncCallStack_(), asyncReturnInt_(0),
+      asyncReturnStr_(), asyncErrorLevel_(0), asyncSavedParameterString_(), asyncMacroFramePushed_(false),
+      asyncDelayReadyFlag_(), asyncDelayCancelledFlag_(), asyncDelayTaskId_(0), asyncDelayGeneration_(0),
+      asyncDelayMillis_(0), cancelledExecution(false) {
 }
 
 void VirtualMachine::appendLogLine(const std::string &line, bool important) {
@@ -5425,21 +5435,116 @@ VirtualMachine::Value VirtualMachine::pop() {
 	return makeInt(0);
 }
 
+int VirtualMachine::normalizeDelayMillis(int millis) noexcept {
+	static const int kMaxDelayMillis = 60 * 60 * 1000; // 1 hour hard cap.
+	if (millis <= 0)
+		return 0;
+	if (millis > kMaxDelayMillis)
+		return kMaxDelayMillis;
+	return millis;
+}
+
+void VirtualMachine::clearAsyncDelayState() noexcept {
+	asyncDelayPending_ = false;
+	asyncDelayReady_ = false;
+	asyncBytecode_.clear();
+	asyncCallStack_.clear();
+	asyncLength_ = 0;
+	asyncIp_ = 0;
+	asyncReturnInt_ = 0;
+	asyncReturnStr_.clear();
+	asyncErrorLevel_ = 0;
+	asyncSavedParameterString_.clear();
+	asyncMacroFramePushed_ = false;
+	asyncDelayReadyFlag_.reset();
+	asyncDelayCancelledFlag_.reset();
+	asyncDelayTaskId_ = 0;
+	asyncDelayMillis_ = 0;
+}
+
+namespace {
+struct VmDelayYield {
+	int millis;
+	explicit VmDelayYield(int ms) noexcept : millis(ms) {
+	}
+};
+
+static bool sleepDelayBlocking(int millis) {
+	if (millis <= 0)
+		return true;
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(millis);
+	while (std::chrono::steady_clock::now() < deadline) {
+		if (backgroundMacroCancelRequested())
+			return false;
+		auto remaining = deadline - std::chrono::steady_clock::now();
+		auto slice = std::chrono::duration_cast<std::chrono::milliseconds>(remaining);
+		if (slice > std::chrono::milliseconds(10))
+			slice = std::chrono::milliseconds(10);
+		if (slice.count() <= 0)
+			break;
+		std::this_thread::sleep_for(slice);
+	}
+	return true;
+}
+} // namespace
+
 void VirtualMachine::execute(const unsigned char *bytecode, size_t length) {
+	cancelPendingDelay();
+	clearAsyncDelayState();
 	executeAt(bytecode, length, 0, std::string(), std::string(), true, false);
+}
+
+bool VirtualMachine::resumePendingDelay() {
+	if (!asyncDelayPending_)
+		return false;
+	if (!asyncDelayReady_ || asyncDelayReadyFlag_ == nullptr ||
+	    !asyncDelayReadyFlag_->load(std::memory_order_acquire))
+		return true;
+	if (asyncDelayCancelledFlag_ != nullptr && asyncDelayCancelledFlag_->load(std::memory_order_acquire)) {
+		cancelledExecution = true;
+		appendLogLine("VM Notice: DELAY cancelled before resume.", true);
+		runtimeErrorLevel() = 5007;
+		if (asyncMacroFramePushed_ && !g_runtimeEnv.macroStack.empty())
+			g_runtimeEnv.macroStack.pop_back();
+		clearAsyncDelayState();
+		return false;
+	}
+	executeAt(NULL, 0, 0, std::string(), std::string(), false, false);
+	return asyncDelayPending_;
+}
+
+bool VirtualMachine::cancelPendingDelay() {
+	bool hadPending = asyncDelayPending_;
+
+	if (!hadPending)
+		return false;
+	if (asyncDelayCancelledFlag_ != nullptr)
+		asyncDelayCancelledFlag_->store(true, std::memory_order_release);
+	if (asyncDelayTaskId_ != 0)
+		mr::coprocessor::globalCoprocessor().cancelTask(asyncDelayTaskId_);
+	if (asyncMacroFramePushed_ && !g_runtimeEnv.macroStack.empty())
+		g_runtimeEnv.macroStack.pop_back();
+	cancelledExecution = true;
+	runtimeErrorLevel() = 5007;
+	appendLogLine("VM Notice: pending DELAY cancelled.", true);
+	clearAsyncDelayState();
+	return true;
 }
 
 void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, size_t entryOffset,
                                const std::string &parameterString, const std::string &macroName,
                                bool resetState, bool firstRun) {
 	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	size_t ip = entryOffset;
+	bool resumeFromDelay = (bytecode == NULL && length == 0 && asyncDelayPending_ && asyncDelayReady_ &&
+	                        !asyncBytecode_.empty() && asyncIp_ <= asyncLength_);
+	std::uint64_t resumeGeneration = asyncDelayGeneration_;
+	size_t ip = resumeFromDelay ? asyncIp_ : entryOffset;
 	std::vector<size_t> call_stack;
 	ExecutionState state;
 	ExecutionState *parentState = currentExecutionState();
-	std::string savedParameterString =
-	    parentState != NULL ? parentState->parameterString : g_runtimeEnv.parameterString;
+	std::string savedParameterString;
 	bool pushedMacroFrame = false;
+	bool allowAsyncDelay = false;
 	struct ExecutionStateGuard {
 		ExecutionState *previous;
 
@@ -5452,36 +5557,60 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 		}
 	} executionStateGuard(&state);
 
-	state.parameterString = savedParameterString;
-	if (parentState != NULL) {
-		state.returnInt = parentState->returnInt;
-		state.returnStr = parentState->returnStr;
-		state.errorLevel = parentState->errorLevel;
+	if (resumeFromDelay) {
+		bytecode = asyncBytecode_.data();
+		length = asyncLength_;
+		call_stack = asyncCallStack_;
+		savedParameterString = asyncSavedParameterString_;
+		state.parameterString = asyncSavedParameterString_;
+		state.returnInt = asyncReturnInt_;
+		state.returnStr = asyncReturnStr_;
+		state.errorLevel = asyncErrorLevel_;
+		pushedMacroFrame = asyncMacroFramePushed_;
+		asyncDelayReady_ = false;
+		asyncDelayTaskId_ = 0;
 	} else {
-		state.returnInt = g_runtimeEnv.returnInt;
-		state.returnStr = g_runtimeEnv.returnStr;
-		state.errorLevel = g_runtimeEnv.errorLevel;
-	}
+		if (bytecode == NULL || length == 0 || entryOffset >= length)
+			return;
+		savedParameterString =
+		    parentState != NULL ? parentState->parameterString : g_runtimeEnv.parameterString;
+		state.parameterString = savedParameterString;
+		if (parentState != NULL) {
+			state.returnInt = parentState->returnInt;
+			state.returnStr = parentState->returnStr;
+			state.errorLevel = parentState->errorLevel;
+		} else {
+			state.returnInt = g_runtimeEnv.returnInt;
+			state.returnStr = g_runtimeEnv.returnStr;
+			state.errorLevel = g_runtimeEnv.errorLevel;
+		}
 
-	variables.clear();
-	stack.clear();
-	cancelledExecution = false;
-	if (resetState) {
-		log.clear();
-		logTruncated = false;
-		g_runtimeEnv.globalEnumIndex = 0;
-		g_runtimeEnv.macroEnumIndex = 0;
-		state.parameterString.clear();
-		state.returnInt = 0;
-		state.returnStr.clear();
-		state.errorLevel = 0;
-	}
+		variables.clear();
+		stack.clear();
+		cancelledExecution = false;
+		if (resetState) {
+			log.clear();
+			logTruncated = false;
+			g_runtimeEnv.globalEnumIndex = 0;
+			g_runtimeEnv.macroEnumIndex = 0;
+			state.parameterString.clear();
+			state.returnInt = 0;
+			state.returnStr.clear();
+			state.errorLevel = 0;
+		}
 
-	if (!macroName.empty()) {
-		g_runtimeEnv.macroStack.push_back(MacroStackFrame(macroName, firstRun));
-		pushedMacroFrame = true;
+		if (!macroName.empty()) {
+			g_runtimeEnv.macroStack.push_back(MacroStackFrame(macroName, firstRun));
+			pushedMacroFrame = true;
+		}
+		state.parameterString = parameterString;
 	}
-	state.parameterString = parameterString;
+	allowAsyncDelay = (parentState == NULL && currentBackgroundEditSession() == NULL &&
+	                   g_backgroundMacroStopToken == NULL);
+	if (allowAsyncDelay && !resumeFromDelay) {
+		asyncBytecode_.assign(bytecode, bytecode + length);
+		asyncLength_ = length;
+	}
 
 	auto readInt = [&](int &value) {
 		std::memcpy(&value, &bytecode[ip], sizeof(int));
@@ -5883,6 +6012,24 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					setGlobalValue(valueAsString(args[0]), TYPE_INT, makeInt(args[1].i));
 				} else if (name == "MARQUEE" || name == "MARQUEE_WARNING" || name == "MARQUEE_ERROR") {
 					applyMarqueeProc(name, args);
+					} else if (name == "DELAY") {
+						int millis = 0;
+						if (args.size() != 1 || args[0].type != TYPE_INT)
+							throw std::runtime_error("DELAY expects one integer argument.");
+						millis = normalizeDelayMillis(valueAsInt(args[0]));
+						if (millis == 0) {
+							runtimeErrorLevel() = 0;
+							continue;
+						}
+					if (allowAsyncDelay)
+						throw VmDelayYield(millis);
+					if (!sleepDelayBlocking(millis)) {
+						cancelledExecution = true;
+						appendLogLine("VM Notice: DELAY interrupted by cancellation.", true);
+						runtimeErrorLevel() = 5007;
+						break;
+					}
+					runtimeErrorLevel() = 0;
 				} else if (name == "LOAD_MACRO_FILE") {
 					if (args.size() != 1 || !isStringLike(args[0]))
 						throw std::runtime_error("LOAD_MACRO_FILE expects one string argument.");
@@ -6307,8 +6454,77 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 			if (g_backgroundMacroStopToken == NULL && currentBackgroundEditSession() == NULL)
 				syncLinkedWindowsFrom(currentEditWindow());
 		}
+	} catch (const VmDelayYield &yield) {
+		int millis = normalizeDelayMillis(yield.millis);
+		std::uint64_t taskId = 0;
+		std::shared_ptr<std::atomic_bool> ready = std::make_shared<std::atomic_bool>(false);
+		std::shared_ptr<std::atomic_bool> cancelled = std::make_shared<std::atomic_bool>(false);
+		std::uint64_t generation = asyncDelayGeneration_ + 1;
+
+		taskId = mr::coprocessor::globalCoprocessor().submit(
+		    mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::Custom, 0, generation, "macro-delay",
+		    [ready, cancelled, millis](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
+			    mr::coprocessor::Result result;
+			    result.task = info;
+			    if (millis > 0) {
+				    const auto deadline =
+				        std::chrono::steady_clock::now() + std::chrono::milliseconds(millis);
+					    while (std::chrono::steady_clock::now() < deadline) {
+						    if (stopToken.stop_requested() || info.cancelRequested()) {
+							    cancelled->store(true, std::memory_order_release);
+							    ready->store(true, std::memory_order_release);
+							    result.status = mr::coprocessor::TaskStatus::Cancelled;
+							    return result;
+					    }
+					    auto remaining = deadline - std::chrono::steady_clock::now();
+					    auto slice = std::chrono::duration_cast<std::chrono::milliseconds>(remaining);
+					    if (slice > std::chrono::milliseconds(10))
+						    slice = std::chrono::milliseconds(10);
+					    if (slice.count() <= 0)
+						    break;
+					    std::this_thread::sleep_for(slice);
+				    }
+			    }
+			    ready->store(true, std::memory_order_release);
+			    result.status = mr::coprocessor::TaskStatus::Completed;
+			    return result;
+		    });
+		if (taskId == 0 || ready == nullptr || cancelled == nullptr)
+			throw std::runtime_error("DELAY scheduling failed.");
+		appendLogLine("VM Notice: DELAY(" + std::to_string(millis) + ") yielded [gen " +
+		              std::to_string(generation) + "].", true);
+		asyncDelayPending_ = true;
+		asyncDelayReady_ = true;
+		asyncIp_ = ip;
+		asyncCallStack_ = call_stack;
+		asyncReturnInt_ = state.returnInt;
+		asyncReturnStr_ = state.returnStr;
+		asyncErrorLevel_ = state.errorLevel;
+		asyncSavedParameterString_ = savedParameterString;
+		asyncMacroFramePushed_ = pushedMacroFrame;
+		asyncDelayReadyFlag_ = ready;
+		asyncDelayCancelledFlag_ = cancelled;
+		asyncDelayTaskId_ = taskId;
+		asyncDelayGeneration_ = generation;
+		asyncDelayMillis_ = millis;
+		if (parentState != NULL) {
+			parentState->returnInt = state.returnInt;
+			parentState->returnStr = state.returnStr;
+			parentState->errorLevel = state.errorLevel;
+			parentState->parameterString = savedParameterString;
+		} else {
+			g_runtimeEnv.returnInt = state.returnInt;
+			g_runtimeEnv.returnStr = state.returnStr;
+			g_runtimeEnv.errorLevel = state.errorLevel;
+			g_runtimeEnv.parameterString = savedParameterString;
+		}
+		return;
 	} catch (const std::exception &ex) {
 		appendLogLine(std::string("VM Error: ") + ex.what(), true);
+	}
+
+	if (resumeFromDelay && resumeGeneration != asyncDelayGeneration_) {
+		appendLogLine("VM Notice: stale DELAY resume generation ignored.", true);
 	}
 
 	if (parentState != NULL) {
@@ -6322,6 +6538,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 		g_runtimeEnv.errorLevel = state.errorLevel;
 		g_runtimeEnv.parameterString = savedParameterString;
 	}
+	clearAsyncDelayState();
 	if (pushedMacroFrame)
 		g_runtimeEnv.macroStack.pop_back();
 }

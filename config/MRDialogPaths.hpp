@@ -47,7 +47,11 @@ struct MRColorSetupItem {
 enum : unsigned char {
 	kMrPaletteCurrentLine = 136,
 	kMrPaletteCurrentLineInBlock = 137,
-	kMrPaletteChangedText = 138
+	kMrPaletteChangedText = 138,
+	kMrPaletteMessageError = 139,
+	kMrPaletteMessage = 140,
+	kMrPaletteMessageWarning = 141,
+	kMrPaletteMax = kMrPaletteMessageWarning
 };
 
 struct MRColorSetupSettings {

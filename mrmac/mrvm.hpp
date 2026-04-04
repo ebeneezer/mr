@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <atomic>
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <stop_token>
@@ -30,8 +31,26 @@ class VirtualMachine {
 	std::map<std::string, Value> variables;
 	bool verboseLogging;
 	bool logTruncated;
+	bool asyncDelayPending_;
+	bool asyncDelayReady_;
+	std::vector<unsigned char> asyncBytecode_;
+	std::size_t asyncLength_;
+	std::size_t asyncIp_;
+	std::vector<std::size_t> asyncCallStack_;
+	int asyncReturnInt_;
+	std::string asyncReturnStr_;
+	int asyncErrorLevel_;
+	std::string asyncSavedParameterString_;
+	bool asyncMacroFramePushed_;
+	std::shared_ptr<std::atomic_bool> asyncDelayReadyFlag_;
+	std::shared_ptr<std::atomic_bool> asyncDelayCancelledFlag_;
+	std::uint64_t asyncDelayTaskId_;
+	std::uint64_t asyncDelayGeneration_;
+	int asyncDelayMillis_;
 
 	void appendLogLine(const std::string &line, bool important = false);
+	void clearAsyncDelayState() noexcept;
+	static int normalizeDelayMillis(int millis) noexcept;
 
 	void push(const Value &value);
 	Value pop();
@@ -48,6 +67,11 @@ class VirtualMachine {
 	void executeAt(const unsigned char *bytecode, size_t length, size_t entryOffset,
 	               const std::string &parameterString, const std::string &macroName,
 	               bool resetState, bool firstRun);
+	bool hasPendingDelay() const noexcept {
+		return asyncDelayPending_;
+	}
+	bool resumePendingDelay();
+	bool cancelPendingDelay();
 	bool wasCancelled() const noexcept {
 		return cancelledExecution;
 	}

@@ -14,7 +14,6 @@
 #include "../mrmac/mrvm.hpp"
 #include "../ui/TMRFileEditor.hpp"
 #include "../ui/TMRIndicator.hpp"
-#include "../ui/TMRMenuBar.hpp"
 #include "../ui/TMREditWindow.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
@@ -162,12 +161,6 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 		if (blink != nullptr) {
 			TMRIndicator::applyBlinkUpdate(blink->indicatorId, blink->channel, blink->generation,
 			                               blink->visible);
-			return;
-		}
-		const mr::coprocessor::MarqueeTickPayload *marquee =
-		    dynamic_cast<const mr::coprocessor::MarqueeTickPayload *>(result.payload.get());
-		if (marquee != nullptr) {
-			TMRMenuBar::applyMarqueeTick(marquee->generation);
 			return;
 		}
 

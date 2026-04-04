@@ -24,7 +24,7 @@ enum class Outcome : unsigned char {
 	Failed
 };
 
-enum class HeroKind : unsigned char {
+enum class MessageNoticeKind : unsigned char {
 	Info,
 	Success,
 	Warning,
@@ -53,12 +53,12 @@ struct Event {
 	}
 };
 
-struct HeroNotice {
+struct MessageLineNotice {
 	bool active;
-	HeroKind kind;
+	MessageNoticeKind kind;
 	std::string text;
 
-	HeroNotice() noexcept : active(false), kind(HeroKind::Info), text() {
+	MessageLineNotice() noexcept : active(false), kind(MessageNoticeKind::Info), text() {
 	}
 };
 
@@ -74,7 +74,7 @@ void recordBackgroundEvent(mr::coprocessor::Lane lane, Outcome outcome, const mr
 
 std::vector<Event> recentForWindow(std::size_t bufferId, std::size_t documentId, std::size_t maxCount = 6);
 std::vector<Event> recentGlobal(std::size_t maxCount = 6);
-bool currentHeroNotice(HeroNotice &out);
+bool currentMessageLineNotice(MessageLineNotice &out);
 
 std::string formatEventLine(const Event &event);
 std::string formatDuration(double totalMs);

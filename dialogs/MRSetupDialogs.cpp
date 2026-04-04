@@ -286,7 +286,7 @@ void applyDialogScrollbarSyncToPalette(TPalette &palette) {
 TPalette buildColorSetupWorkingPalette() {
 	static const TPalette basePalette = []() -> TPalette {
 		static const int kBaseSlots = 135;
-		static const int kTotalSlots = kMrPaletteChangedText;
+		static const int kTotalSlots = kMrPaletteMax;
 		static const char cp[] = cpAppColor;
 		TColorAttr data[kTotalSlots];
 		int i = 0;
@@ -296,12 +296,15 @@ TPalette buildColorSetupWorkingPalette() {
 		data[kMrPaletteCurrentLine - 1] = data[10 - 1];
 		data[kMrPaletteCurrentLineInBlock - 1] = data[12 - 1];
 		data[kMrPaletteChangedText - 1] = data[14 - 1];
+		data[kMrPaletteMessageError - 1] = data[42 - 1];
+		data[kMrPaletteMessage - 1] = data[43 - 1];
+		data[kMrPaletteMessageWarning - 1] = data[44 - 1];
 		return TPalette(data, static_cast<ushort>(kTotalSlots));
 	}();
 	TPalette palette = basePalette;
 	unsigned char overrideValue = 0;
 
-	for (int slot = 1; slot <= kMrPaletteChangedText; ++slot)
+	for (int slot = 1; slot <= kMrPaletteMax; ++slot)
 		if (configuredColorSlotOverride(static_cast<unsigned char>(slot), overrideValue))
 			palette[slot] = overrideValue;
 	applyDialogScrollbarSyncToPalette(palette);
@@ -809,6 +812,10 @@ void runColorSetupDialogFlowLocal() {
 
 				if (!chooseThemeFileForSave(themeUri))
 					break;
+				if (!applyWorkingColorPaletteToConfigured(workingPalette, errorText)) {
+					messageBox(mfError | mfOKButton, "Color Setup / Save Theme\n\n%s", errorText.c_str());
+					break;
+				}
 				if (!writeColorThemeFile(themeUri, &errorText)) {
 					messageBox(mfError | mfOKButton, "Color Setup / Save Theme\n\n%s", errorText.c_str());
 					break;
