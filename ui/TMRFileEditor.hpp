@@ -933,31 +933,59 @@ class TMRFileEditor : public TScroller {
 		return lineNumberGutterWidthFor(configuredShowLineNumbers());
 	}
 
-	int textViewportLeft() const noexcept {
-		return lineNumberGutterWidth();
+	struct TextViewportGeometry {
+		int gutterWidth = 0;
+		int textLeft = 0;
+		int textRight = 1;
+		int width = 1;
+		int deltaX = 0;
+		int deltaY = 0;
+
+		bool containsTextX(long long x) const noexcept {
+			return x >= textLeft && x < textRight;
+		}
+
+		bool containsTextPoint(long long x, long long y, int viewHeight) const noexcept {
+			return containsTextX(x) && y >= 0 && y < viewHeight;
+		}
+
+		int textColumnFromLocalX(int localX) const noexcept {
+			return std::max(0, localX - textLeft) + deltaX;
+		}
+
+		long long localXFromVisualColumn(long long visualColumn) const noexcept {
+			return visualColumn - deltaX + textLeft;
+		}
+	};
+
+	TextViewportGeometry textViewportGeometry() const noexcept {
+		TextViewportGeometry viewport;
+		viewport.gutterWidth = lineNumberGutterWidth();
+		viewport.textLeft = viewport.gutterWidth;
+		viewport.textRight = std::max(viewport.textLeft + 1, size.x);
+		viewport.width = std::max(1, viewport.textRight - viewport.textLeft);
+		viewport.deltaX = delta.x;
+		viewport.deltaY = delta.y;
+		return viewport;
 	}
 
-	int textViewportRight() const noexcept {
-		int left = textViewportLeft();
-		return std::max(left + 1, size.x);
-	}
-
-	bool isTextViewportX(long long x) const noexcept {
-		return x >= textViewportLeft() && x < textViewportRight();
+	bool shouldShowEditorCursor(long long x, long long y, const TextViewportGeometry &viewport) const noexcept {
+		const bool viewActive = (state & sfActive) != 0;
+		const bool viewSelected = (state & sfSelected) != 0;
+		return viewActive && viewSelected && viewport.containsTextPoint(x, y, size.y);
 	}
 
 	bool shouldShowEditorCursor(long long x, long long y) const noexcept {
-		const bool viewActive = (state & sfActive) != 0;
-		const bool viewSelected = (state & sfSelected) != 0;
-		return viewActive && viewSelected && isTextViewportX(x) && y >= 0 && y < size.y;
+		TextViewportGeometry viewport = textViewportGeometry();
+		return shouldShowEditorCursor(x, y, viewport);
 	}
 
 	int textColumnFromLocalX(int localX) const noexcept {
-		return std::max(0, localX - textViewportLeft()) + delta.x;
+		return textViewportGeometry().textColumnFromLocalX(localX);
 	}
 
 	int textViewportWidth() const {
-		return std::max(1, textViewportRight() - textViewportLeft());
+		return textViewportGeometry().width;
 	}
 
 	void drawLineNumberGutter(TDrawBuffer &b, std::size_t lineIndex, bool showNumber, int width,
@@ -1321,8 +1349,9 @@ class TMRFileEditor : public TScroller {
 	void updateMetrics() {
 		int limitX = 1;
 		int limitY = 1;
-		int gutterWidth = lineNumberGutterWidth();
-		int viewportWidth = std::max(1, size.x - gutterWidth);
+		TextViewportGeometry viewport = textViewportGeometry();
+		int gutterWidth = viewport.gutterWidth;
+		int viewportWidth = viewport.width;
 
 		if (useApproximateLargeFileMetrics()) {
 			limitX = dynamicLargeFileWidthLimit();
@@ -1346,11 +1375,12 @@ class TMRFileEditor : public TScroller {
 		if (indicatorUpdateInProgress_)
 			return;
 		indicatorUpdateInProgress_ = true;
+		TextViewportGeometry viewport = textViewportGeometry();
 		std::size_t cursor = bufferModel_.cursor();
 		unsigned long visualColumn =
 		    static_cast<unsigned long>(charColumn(bufferModel_.lineStart(cursor), cursor));
 		unsigned long line = static_cast<unsigned long>(bufferModel_.lineIndex(cursor));
-		long long localX = static_cast<long long>(visualColumn) - delta.x + textViewportLeft();
+		long long localX = viewport.localXFromVisualColumn(static_cast<long long>(visualColumn));
 		long long localY = static_cast<long long>(line) - delta.y;
 
 		if (indicator_ != nullptr) {
@@ -1364,7 +1394,7 @@ class TMRFileEditor : public TScroller {
 			}
 		}
 
-		if (shouldShowEditorCursor(localX, localY)) {
+		if (shouldShowEditorCursor(localX, localY, viewport)) {
 			setCursor(static_cast<int>(localX), static_cast<int>(localY));
 			showCursor();
 		} else
@@ -1698,8 +1728,9 @@ class TMRFileEditor : public TScroller {
 	}
 
 	std::size_t mouseOffset(TPoint local) noexcept {
+		TextViewportGeometry viewport = textViewportGeometry();
 		int row = std::max(0, local.y) + delta.y;
-		int column = textColumnFromLocalX(local.x);
+		int column = viewport.textColumnFromLocalX(local.x);
 		std::size_t start = lineStartForIndex(static_cast<std::size_t>(std::max(row, 0)));
 		return canonicalCursorOffset(charPtrOffset(start, column));
 	}

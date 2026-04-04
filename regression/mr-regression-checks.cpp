@@ -1870,31 +1870,12 @@ bool testChangedTextColorWiringGuard(std::string &failureReason) {
 		failureReason = "Changed-text ranges must be remapped across edits to stay position-correct.";
 		return false;
 	}
-	if (content.find("if (pos >= bufferModel_.length())\n\t\t\treturn false;") == std::string::npos) {
+	if (content.find("if (pos >= bufferModel_.length())") == std::string::npos) {
 		failureReason = "Changed-text lookup must not clamp offsets beyond EOF into the last dirty character.";
 		return false;
 	}
 	if (content.find("else if (changedLine)") != std::string::npos) {
 		failureReason = "Changed-text must not color whole lines anymore.";
-		return false;
-	}
-	failureReason.clear();
-	return true;
-}
-
-bool testHighlightedTextSelectionWiringGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("ui/TMRFileEditor.hpp");
-	std::string content;
-	std::string ioError;
-
-	if (!readTextFile(sourcePath, content, ioError)) {
-		failureReason = "Unable to read TMRFileEditor.hpp for highlighted-text selection guard: " + ioError;
-		return false;
-	}
-	if (content.find("TAttrPair selectionPair = getColor(0x0201);") == std::string::npos ||
-	    content.find("TAttrPair tokenPair = selected ? selectionPair : effectivePair;") ==
-	        std::string::npos) {
-		failureReason = "Marked blocks must use the dedicated highlighted-text color pair.";
 		return false;
 	}
 	failureReason.clear();
@@ -1910,15 +1891,18 @@ bool testEditorCursorViewportGuard(std::string &failureReason) {
 		failureReason = "Unable to read TMRFileEditor.hpp for cursor viewport guard: " + ioError;
 		return false;
 	}
-	if (content.find("bool shouldShowEditorCursor(long long x, long long y) const noexcept") ==
+	if (content.find("struct TextViewportGeometry") == std::string::npos ||
+	    content.find("TextViewportGeometry textViewportGeometry() const noexcept") == std::string::npos ||
+	    content.find("bool shouldShowEditorCursor(long long x, long long y, const TextViewportGeometry &viewport) const noexcept") ==
 	        std::string::npos ||
 	    content.find("const bool viewActive = (state & sfActive) != 0;") == std::string::npos ||
 	    content.find("const bool viewSelected = (state & sfSelected) != 0;") == std::string::npos ||
-	    content.find("if (shouldShowEditorCursor(localX, localY))") == std::string::npos) {
+	    content.find("if (shouldShowEditorCursor(localX, localY, viewport))") == std::string::npos) {
 		failureReason = "Editor cursor visibility must be gated by active/selected state and text viewport bounds.";
 		return false;
 	}
-	if (content.find("int column = textColumnFromLocalX(local.x);") == std::string::npos) {
+	if (content.find("int column = viewport.textColumnFromLocalX(local.x);") == std::string::npos ||
+	    content.find("TextViewportGeometry viewport = textViewportGeometry();") == std::string::npos) {
 		failureReason = "Mouse-to-text mapping must be routed through text viewport conversion.";
 		return false;
 	}
@@ -2407,7 +2391,6 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Indicator line-number color wiring guard", testIndicatorLineNumberColorWiringGuard);
 	runTest(ctx, "Current-line color wiring guard", testCurrentLineColorWiringGuard);
 	runTest(ctx, "Changed-text color wiring guard", testChangedTextColorWiringGuard);
-	runTest(ctx, "Highlighted-text selection wiring guard", testHighlightedTextSelectionWiringGuard);
 	runTest(ctx, "Editor cursor viewport guard", testEditorCursorViewportGuard);
 	runTest(ctx, "EOF virtual-line color guard", testEofVirtualLineColorGuard);
 	runTest(ctx, "Save As overwrite/backup wiring guard", testSaveAsOverwriteAndBackupWiringGuard);

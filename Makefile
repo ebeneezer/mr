@@ -113,12 +113,14 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 .PHONY: all clean clean-tvision rebuild-tvision \
 	tvision-upstream-init tvision-upstream-fetch tvision-subtree-pull tvision-apply-patches \
 	tvision-sync-safe tvision-status \
-	stage-profile-probe regression-probe regression-check regression-check-full mrmac-v1-check
+	stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check
 
 all: $(TARGET)
 stage-profile-probe: $(STAGE_PROFILE_PROBE_TARGET)
 regression-probe: $(REGRESSION_PROBE_TARGET)
 regression-check: $(REGRESSION_PROBE_TARGET)
+	./$(REGRESSION_PROBE_TARGET) --full
+regression-check-core: $(REGRESSION_PROBE_TARGET)
 	./$(REGRESSION_PROBE_TARGET)
 regression-check-full: $(REGRESSION_PROBE_TARGET)
 	./$(REGRESSION_PROBE_TARGET) --full
