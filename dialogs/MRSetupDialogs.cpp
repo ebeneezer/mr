@@ -346,13 +346,8 @@ bool applyWorkingColorPaletteToConfigured(const TPalette &palette, std::string &
 	return true;
 }
 
-class TPathsSetupDialog : public TDialog {
+class TPathsSetupDialog : public MRScrollableDialog {
   public:
-	struct ManagedItem {
-		TView *view;
-		TRect base;
-	};
-
 	class TInlineGlyphButton : public TView {
 	  public:
 		TInlineGlyphButton(const TRect &bounds, const char *glyph, ushort command)
@@ -407,77 +402,13 @@ class TPathsSetupDialog : public TDialog {
 
 	explicit TPathsSetupDialog(const PathsDialogRecord &initialRecord)
 	    : TWindowInit(&TDialog::initFrame),
-	      TDialog(centeredSetupDialogRect(kVirtualDialogWidth, kVirtualDialogHeight),
-	              "PATHS"),
+	      MRScrollableDialog(centeredSetupDialogRect(kVirtualDialogWidth, kVirtualDialogHeight),
+	                         "PATHS", kVirtualDialogWidth, kVirtualDialogHeight),
 	      initialRecord_(initialRecord), currentRecord_(initialRecord) {
-		contentRect_ = TRect(1, 1, size.x - 1, size.y - 1);
-		content_ = createSetupDialogContentGroup(contentRect_);
-		if (content_ != nullptr)
-			insert(content_);
-
-		int dialogWidth = kVirtualDialogWidth;
-		int inputLeft = 2;
-		int glyphWidth = 3;
-		int glyphRight = dialogWidth - 2;
-		int glyphLeft = glyphRight - glyphWidth;
-		int inputRight = glyphLeft - 1;
-		int doneLeft = dialogWidth / 2 - 17;
-		int cancelLeft = doneLeft + 12;
-		int helpLeft = cancelLeft + 14;
-		int buttonTop = size.y - 3;
-
-		addManaged(new TStaticText(TRect(2, 2, dialogWidth - 2, 3), "Settings macro URI:"),
-		           TRect(2, 2, dialogWidth - 2, 3));
-		settingsMacroPathField_ = new TInputLine(TRect(inputLeft, 3, inputRight, 4), kPathFieldSize - 1);
-		addManaged(settingsMacroPathField_, TRect(inputLeft, 3, inputRight, 4));
-		addManaged(new TInlineGlyphButton(TRect(glyphLeft, 3, glyphRight, 4), "🔎",
-		                                  cmMrSetupPathsBrowseSettingsUri),
-		           TRect(glyphLeft, 3, glyphRight, 4));
-
-		addManaged(new TStaticText(TRect(2, 5, dialogWidth - 2, 6), "Macro path (*.mrmac):"),
-		           TRect(2, 5, dialogWidth - 2, 6));
-		macroDirectoryPathField_ = new TInputLine(TRect(inputLeft, 6, inputRight, 7), kPathFieldSize - 1);
-		addManaged(macroDirectoryPathField_, TRect(inputLeft, 6, inputRight, 7));
-		addManaged(new TInlineGlyphButton(TRect(glyphLeft, 6, glyphRight, 7), "🔎",
-		                                  cmMrSetupPathsBrowseMacroPath),
-		           TRect(glyphLeft, 6, glyphRight, 7));
-
-		addManaged(new TStaticText(TRect(2, 8, dialogWidth - 2, 9), "Help file URI:"),
-		           TRect(2, 8, dialogWidth - 2, 9));
-		helpFilePathField_ = new TInputLine(TRect(inputLeft, 9, inputRight, 10), kPathFieldSize - 1);
-		addManaged(helpFilePathField_, TRect(inputLeft, 9, inputRight, 10));
-		addManaged(new TInlineGlyphButton(TRect(glyphLeft, 9, glyphRight, 10), "🔎",
-		                                  cmMrSetupPathsBrowseHelpUri),
-		           TRect(glyphLeft, 9, glyphRight, 10));
-
-		addManaged(new TStaticText(TRect(2, 11, dialogWidth - 2, 12), "Temporary path:"),
-		           TRect(2, 11, dialogWidth - 2, 12));
-		tempDirectoryPathField_ = new TInputLine(TRect(inputLeft, 12, inputRight, 13), kPathFieldSize - 1);
-		addManaged(tempDirectoryPathField_, TRect(inputLeft, 12, inputRight, 13));
-		addManaged(new TInlineGlyphButton(TRect(glyphLeft, 12, glyphRight, 13), "🔎",
-		                                  cmMrSetupPathsBrowseTempPath),
-		           TRect(glyphLeft, 12, glyphRight, 13));
-
-		addManaged(new TStaticText(TRect(2, 14, dialogWidth - 2, 15), "Shell executable URI:"),
-		           TRect(2, 14, dialogWidth - 2, 15));
-		shellExecutablePathField_ = new TInputLine(TRect(inputLeft, 15, inputRight, 16), kPathFieldSize - 1);
-		addManaged(shellExecutablePathField_, TRect(inputLeft, 15, inputRight, 16));
-		addManaged(new TInlineGlyphButton(TRect(glyphLeft, 15, glyphRight, 16), "🔎",
-		                                  cmMrSetupPathsBrowseShellUri),
-		           TRect(glyphLeft, 15, glyphRight, 16));
-
-		addManaged(new TButton(TRect(doneLeft, buttonTop, doneLeft + 10, buttonTop + 2), "Done", cmOK,
-		                       bfDefault),
-		           TRect(doneLeft, buttonTop, doneLeft + 10, buttonTop + 2));
-		addManaged(new TButton(TRect(cancelLeft, buttonTop, cancelLeft + 12, buttonTop + 2), "Cancel",
-		                       cmCancel, bfNormal),
-		           TRect(cancelLeft, buttonTop, cancelLeft + 12, buttonTop + 2));
-		addManaged(new TButton(TRect(helpLeft, buttonTop, helpLeft + 8, buttonTop + 2), "Help",
-		                       cmMrSetupPathsHelp, bfNormal),
-		           TRect(helpLeft, buttonTop, helpLeft + 8, buttonTop + 2));
-
+		buildViews();
 		loadFieldsFromRecord(currentRecord_);
 		initScrollIfNeeded();
+		selectContent();
 	}
 
 	ushort run(PathsDialogRecord &outRecord, bool &changed) {
@@ -489,133 +420,109 @@ class TPathsSetupDialog : public TDialog {
 	}
 
 	void handleEvent(TEvent &event) override {
-		if (event.what == evCommand) {
-			switch (event.message.command) {
-				case cmMrSetupPathsHelp:
-					endModal(event.message.command);
-					clearEvent(event);
-					return;
+		MRScrollableDialog::handleEvent(event);
 
-				case cmMrSetupPathsBrowseSettingsUri:
-					browseSettingsMacroUri();
-					clearEvent(event);
-					return;
-
-				case cmMrSetupPathsBrowseMacroPath:
-					browseMacroPath();
-					clearEvent(event);
-					return;
-
-				case cmMrSetupPathsBrowseHelpUri:
-					browseHelpUri();
-					clearEvent(event);
-					return;
-
-				case cmMrSetupPathsBrowseTempPath:
-					browseTempPath();
-					clearEvent(event);
-					return;
-
-				case cmMrSetupPathsBrowseShellUri:
-					browseShellUri();
-					clearEvent(event);
-					return;
-
-				default:
-					break;
-			}
-		}
-
-		TDialog::handleEvent(event);
-		if (event.what == evBroadcast && event.message.command == cmScrollBarChanged &&
-		    (event.message.infoPtr == hScrollBar_ || event.message.infoPtr == vScrollBar_)) {
-			applyScroll();
-			clearEvent(event);
+		if (event.what != evCommand)
 			return;
+
+		switch (event.message.command) {
+			case cmMrSetupPathsHelp:
+				endModal(event.message.command);
+				clearEvent(event);
+				return;
+
+			case cmMrSetupPathsBrowseSettingsUri:
+				browseSettingsMacroUri();
+				clearEvent(event);
+				return;
+
+			case cmMrSetupPathsBrowseMacroPath:
+				browseMacroPath();
+				clearEvent(event);
+				return;
+
+			case cmMrSetupPathsBrowseHelpUri:
+				browseHelpUri();
+				clearEvent(event);
+				return;
+
+			case cmMrSetupPathsBrowseTempPath:
+				browseTempPath();
+				clearEvent(event);
+				return;
+
+			case cmMrSetupPathsBrowseShellUri:
+				browseShellUri();
+				clearEvent(event);
+				return;
+
+			default:
+				return;
 		}
 	}
 
   private:
-	void addManaged(TView *view, const TRect &base) {
-		ManagedItem item;
-
-		item.view = view;
-		item.base = base;
-		managedViews_.push_back(item);
-		if (content_ != nullptr) {
-			TRect local = base;
-			local.move(-contentRect_.a.x, -contentRect_.a.y);
-			view->locate(local);
-			content_->insert(view);
-		} else
-			insert(view);
+	TStaticText *addLabel(const TRect &rect, const char *text) {
+		TStaticText *view = new TStaticText(rect, text);
+		addManaged(view, rect);
+		return view;
 	}
 
-	void applyScroll() {
-		int dx = hScrollBar_ != nullptr ? hScrollBar_->value : 0;
-		int dy = vScrollBar_ != nullptr ? vScrollBar_->value : 0;
-
-		for (auto & managedView : managedViews_) {
-			TRect moved = managedView.base;
-			moved.move(-dx, -dy);
-			moved.move(-contentRect_.a.x, -contentRect_.a.y);
-			managedView.view->locate(moved);
-		}
-		if (content_ != nullptr)
-			content_->drawView();
+	TInputLine *addInput(const TRect &rect) {
+		TInputLine *view = new TInputLine(rect, kPathFieldSize - 1);
+		addManaged(view, rect);
+		return view;
 	}
 
-	void initScrollIfNeeded() {
-		int virtualContentWidth = std::max(1, kVirtualDialogWidth - 2);
-		int virtualContentHeight = std::max(1, kVirtualDialogHeight - 2);
-		bool needH = false;
-		bool needV = false;
+	TInlineGlyphButton *addBrowseButton(const TRect &rect, ushort command) {
+		TInlineGlyphButton *view = new TInlineGlyphButton(rect, "🔎", command);
+		addManaged(view, rect);
+		return view;
+	}
 
-		for (;;) {
-			bool prevH = needH;
-			bool prevV = needV;
-			int viewportWidth = std::max(1, size.x - 2);
-			int viewportHeight = std::max(1, size.y - 2);
-			needH = virtualContentWidth > viewportWidth;
-			needV = virtualContentHeight > viewportHeight;
-			if (needH == prevH && needV == prevV)
-				break;
-		}
+	TButton *addButton(const TRect &rect, const char *title, ushort command, ushort flags) {
+		TButton *view = new TButton(rect, title, command, flags);
+		addManaged(view, rect);
+		return view;
+	}
 
-		contentRect_ = TRect(1, 1, size.x - 1, size.y - 1);
-		if (contentRect_.b.x <= contentRect_.a.x)
-			contentRect_.b.x = contentRect_.a.x + 1;
-		if (contentRect_.b.y <= contentRect_.a.y)
-			contentRect_.b.y = contentRect_.a.y + 1;
-		if (content_ != nullptr)
-			content_->locate(contentRect_);
+	void buildViews() {
+		int dialogWidth = kVirtualDialogWidth;
+		int inputLeft = 2;
+		int glyphWidth = 3;
+		int glyphRight = dialogWidth - 2;
+		int glyphLeft = glyphRight - glyphWidth;
+		int inputRight = glyphLeft - 1;
+		int doneLeft = dialogWidth / 2 - 17;
+		int cancelLeft = doneLeft + 12;
+		int helpLeft = cancelLeft + 14;
+		int buttonTop = kVirtualDialogHeight - 3;
 
-		if (needH) {
-			TRect hRect(1, size.y - 1, size.x - 1, size.y);
-			if (hScrollBar_ == nullptr) {
-				hScrollBar_ = new TScrollBar(hRect);
-				insert(hScrollBar_);
-			} else
-				hScrollBar_->locate(hRect);
-		}
-		if (needV) {
-			TRect vRect(size.x - 1, 1, size.x, size.y - 1);
-			if (vScrollBar_ == nullptr) {
-				vScrollBar_ = new TScrollBar(vRect);
-				insert(vScrollBar_);
-			} else
-				vScrollBar_->locate(vRect);
-		}
+		addLabel(TRect(2, 2, dialogWidth - 2, 3), "Settings macro URI:");
+		settingsMacroPathField_ = addInput(TRect(inputLeft, 3, inputRight, 4));
+		addBrowseButton(TRect(glyphLeft, 3, glyphRight, 4), cmMrSetupPathsBrowseSettingsUri);
 
-		if (hScrollBar_ != nullptr) {
-			int maxDx = std::max(0, virtualContentWidth - std::max(1, contentRect_.b.x - contentRect_.a.x));
-			hScrollBar_->setParams(0, 0, maxDx, std::max(1, (contentRect_.b.x - contentRect_.a.x) / 2), 1);
-		}
-		if (vScrollBar_ != nullptr) {
-			int maxDy = std::max(0, virtualContentHeight - std::max(1, contentRect_.b.y - contentRect_.a.y));
-			vScrollBar_->setParams(0, 0, maxDy, std::max(1, (contentRect_.b.y - contentRect_.a.y) / 2), 1);
-		}
-		applyScroll();
+		addLabel(TRect(2, 5, dialogWidth - 2, 6), "Macro path (*.mrmac):");
+		macroDirectoryPathField_ = addInput(TRect(inputLeft, 6, inputRight, 7));
+		addBrowseButton(TRect(glyphLeft, 6, glyphRight, 7), cmMrSetupPathsBrowseMacroPath);
+
+		addLabel(TRect(2, 8, dialogWidth - 2, 9), "Help file URI:");
+		helpFilePathField_ = addInput(TRect(inputLeft, 9, inputRight, 10));
+		addBrowseButton(TRect(glyphLeft, 9, glyphRight, 10), cmMrSetupPathsBrowseHelpUri);
+
+		addLabel(TRect(2, 11, dialogWidth - 2, 12), "Temporary path:");
+		tempDirectoryPathField_ = addInput(TRect(inputLeft, 12, inputRight, 13));
+		addBrowseButton(TRect(glyphLeft, 12, glyphRight, 13), cmMrSetupPathsBrowseTempPath);
+
+		addLabel(TRect(2, 14, dialogWidth - 2, 15), "Shell executable URI:");
+		shellExecutablePathField_ = addInput(TRect(inputLeft, 15, inputRight, 16));
+		addBrowseButton(TRect(glyphLeft, 15, glyphRight, 16), cmMrSetupPathsBrowseShellUri);
+
+		addButton(TRect(doneLeft, buttonTop, doneLeft + 10, buttonTop + 2), "Done", cmOK, bfDefault);
+		addButton(TRect(cancelLeft, buttonTop, cancelLeft + 12, buttonTop + 2), "Cancel", cmCancel,
+		          bfNormal);
+		addButton(TRect(helpLeft, buttonTop, helpLeft + 8, buttonTop + 2), "Help",
+		          cmMrSetupPathsHelp, bfNormal);
 	}
 
 	static void setInputLineValue(TInputLine *inputLine, const char *value) {
@@ -643,11 +550,13 @@ class TPathsSetupDialog : public TDialog {
 	}
 
 	void saveFieldsToRecord(PathsDialogRecord &record) {
-		readInputLineValue(settingsMacroPathField_, record.settingsMacroPath, sizeof(record.settingsMacroPath));
+		readInputLineValue(settingsMacroPathField_, record.settingsMacroPath,
+		                   sizeof(record.settingsMacroPath));
 		readInputLineValue(macroDirectoryPathField_, record.macroDirectoryPath,
 		                   sizeof(record.macroDirectoryPath));
 		readInputLineValue(helpFilePathField_, record.helpFilePath, sizeof(record.helpFilePath));
-		readInputLineValue(tempDirectoryPathField_, record.tempDirectoryPath, sizeof(record.tempDirectoryPath));
+		readInputLineValue(tempDirectoryPathField_, record.tempDirectoryPath,
+		                   sizeof(record.tempDirectoryPath));
 		readInputLineValue(shellExecutablePathField_, record.shellExecutablePath,
 		                   sizeof(record.shellExecutablePath));
 	}
@@ -702,11 +611,6 @@ class TPathsSetupDialog : public TDialog {
 
 	PathsDialogRecord initialRecord_;
 	PathsDialogRecord currentRecord_;
-	TRect contentRect_;
-	TGroup *content_ = nullptr;
-	std::vector<ManagedItem> managedViews_;
-	TScrollBar *hScrollBar_ = nullptr;
-	TScrollBar *vScrollBar_ = nullptr;
 	static const int kVirtualDialogWidth = 84;
 	static const int kVirtualDialogHeight = 23;
 	TInputLine *settingsMacroPathField_ = nullptr;

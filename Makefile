@@ -133,6 +133,7 @@ mrmac-v1-check: $(TARGET) $(STAGE_PROFILE_PROBE_TARGET) regression-probe
 	$(MRMAC_V1_SUITE_SCRIPT)
 
 CONTEXT_ARCHIVE ?= codebase-context.tar.bzip2
+CONTEXT_GIT_INFO_NAME ?= CONTEXT_GIT_INFO.txt
 CONTEXT_ARCHIVE_ITEMS = \
 	.clang-format \
 	.clang-tidy \
@@ -159,6 +160,25 @@ CONTEXT_ARCHIVE_ITEMS = \
 context-tar tar-archives:
 	@set -e; \
 	rm -f $(CONTEXT_ARCHIVE); \
+	tmpdir=$$(mktemp -d ./.context-archive.XXXXXX); \
+	trap 'rm -rf "$$tmpdir"' EXIT INT TERM HUP; \
+	git_info_file="$$tmpdir/$(CONTEXT_GIT_INFO_NAME)"; \
+	{ \
+		echo "MR / Multi-Edit Revisited Context Archive"; \
+		echo; \
+		if command -v $(GIT) >/dev/null 2>&1 && [ -d .git ]; then \
+			echo "git branch: $$( $(GIT) rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown )"; \
+			echo "git commit: $$( $(GIT) rev-parse HEAD 2>/dev/null || echo unknown )"; \
+			echo "git describe: $$( $(GIT) describe --always --dirty --tags 2>/dev/null || echo unknown )"; \
+			echo "git last commit: $$( $(GIT) log -1 --oneline 2>/dev/null || echo unknown )"; \
+			echo; \
+			echo "git status --short:"; \
+			$(GIT) status --short 2>/dev/null || true; \
+		else \
+			echo "Git metadata unavailable in this working tree."; \
+			echo "Expected source checkout with .git directory."; \
+		fi; \
+	} > "$$git_info_file"; \
 	items=""; \
 	for entry in $(CONTEXT_ARCHIVE_ITEMS); do \
 		if [ -e "$$entry" ]; then \
@@ -174,14 +194,17 @@ context-tar tar-archives:
 		--exclude=.codex \
 		--exclude=compile_commands.json \
 		--exclude=mr \
+		--exclude=misc \
 		--exclude=mrmac/mrmac \
 		--exclude=tvision/build \
 		--exclude='*.o' \
 		--exclude='*.a' \
 		--exclude='*.so' \
+		--exclude='*.tar' \
 		--exclude='*.tar.gz' \
 		--exclude='*.tar.bzip2' \
-		$$items; \
+		$$items \
+		-C "$$tmpdir" $(CONTEXT_GIT_INFO_NAME); \
 	echo "Wrote $(CONTEXT_ARCHIVE)"
 compile-commands:
 	rm -f compile_commands.json

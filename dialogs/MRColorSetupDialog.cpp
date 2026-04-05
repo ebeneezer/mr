@@ -17,6 +17,7 @@
 #define Uses_TView
 #include <tvision/tv.h>
 
+#include "MRSetupDialogCommon.hpp"
 #include "MRSetupDialogs.hpp"
 
 #include "../app/MRCommands.hpp"
@@ -25,6 +26,51 @@
 #include <string>
 
 namespace {
+
+class TRelayColorGroupList : public TColorGroupList {
+  public:
+	TRelayColorGroupList(const TRect &bounds, TScrollBar *scrollBar, TColorGroup *groups, TView *relay) noexcept
+	    : TColorGroupList(bounds, scrollBar, groups), relay_(relay) {
+	}
+
+	void focusItem(short item) override {
+		TColorGroupList::focusItem(item);
+		if (relay_ == nullptr)
+			return;
+		TColorGroup *curGroup = groups;
+		short index = item;
+		while (curGroup != nullptr && index-- > 0)
+			curGroup = curGroup->next;
+		if (curGroup != nullptr)
+			message(relay_, evBroadcast, cmNewColorItem, curGroup);
+	}
+
+  private:
+	TView *relay_ = nullptr;
+};
+
+class TRelayColorItemList : public TColorItemList {
+  public:
+	TRelayColorItemList(const TRect &bounds, TScrollBar *scrollBar, TColorItem *items, TView *relay) noexcept
+	    : TColorItemList(bounds, scrollBar, items), relay_(relay) {
+	}
+
+	void focusItem(short item) override {
+		TColorItemList::focusItem(item);
+		if (relay_ == nullptr)
+			return;
+		message(relay_, evBroadcast, cmSaveColorIndex, (void *)(size_t) item);
+		TColorItem *curItem = items;
+		short index = item;
+		while (curItem != nullptr && index-- > 0)
+			curItem = curItem->next;
+		if (curItem != nullptr)
+			message(relay_, evBroadcast, cmNewColorIndex, (void *)(size_t) (curItem->index));
+	}
+
+  private:
+	TView *relay_ = nullptr;
+};
 
 class TThemeNameField : public TView {
   public:
@@ -59,55 +105,20 @@ class TThemeNameField : public TView {
 	std::string text_;
 };
 
-class TUnifiedColorSetupDialog : public TDialog {
+class TUnifiedColorSetupDialog : public MRScrollableDialog {
   public:
+	static const int kDialogWidth = 76;
+	static const int kDialogHeight = 21;
+
 	TUnifiedColorSetupDialog(const char *title, TColorGroup *groupsHead) noexcept
-	    : TWindowInit(&TDialog::initFrame), TDialog(TRect(0, 0, 76, 21), title) {
+	    : TWindowInit(&TDialog::initFrame),
+	      MRScrollableDialog(centeredSetupDialogRect(kDialogWidth, kDialogHeight), title,
+	                         kDialogWidth, kDialogHeight) {
 		for (TColorGroup *group = groupsHead; group != nullptr; group = group->next)
 			group->index = 0;
-		options |= ofCentered;
-
-		groupScroll_ = new TScrollBar(TRect(18, 3, 19, 14));
-		insert(groupScroll_);
-		groups_ = new TColorGroupList(TRect(3, 3, 18, 14), groupScroll_, groupsHead);
-		insert(groups_);
-		insert(new TLabel(TRect(2, 2, 8, 3), "~G~roup", groups_));
-
-		itemScroll_ = new TScrollBar(TRect(57, 3, 58, 14));
-		insert(itemScroll_);
-		itemList_ = new TColorItemList(TRect(21, 3, 57, 14), itemScroll_, groupsHead->items);
-		insert(itemList_);
-		insert(new TLabel(TRect(20, 2, 25, 3), "~I~tem", itemList_));
-
-		forSel_ = new TColorSelector(TRect(60, 3, 72, 7), TColorSelector::csForeground);
-		insert(forSel_);
-		forLabel_ = new TLabel(TRect(60, 2, 72, 3), "~F~oreground", forSel_);
-		insert(forLabel_);
-
-		bakSel_ = new TColorSelector(TRect(60, 9, 72, 11), TColorSelector::csBackground);
-		insert(bakSel_);
-		bakLabel_ = new TLabel(TRect(60, 8, 72, 9), "~B~ackground", bakSel_);
-		insert(bakLabel_);
-
-		display_ = new TColorDisplay(TRect(59, 12, 73, 14), "Text ");
-		insert(display_);
-
-		monoSel_ = new TMonoSelector(TRect(59, 3, 74, 7));
-		monoSel_->hide();
-		insert(monoSel_);
-		monoLabel_ = new TLabel(TRect(58, 2, 64, 3), "Color", monoSel_);
-		monoLabel_->hide();
-		insert(monoLabel_);
-
-		insert(new TButton(TRect(6, 16, 19, 18), "~L~oad Theme", cmMrColorLoadTheme, bfNormal));
-		insert(new TButton(TRect(21, 16, 34, 18), "~S~ave Theme", cmMrColorSaveTheme, bfNormal));
-		insert(new TButton(TRect(41, 16, 51, 18), "~O~K", cmOK, bfDefault));
-		insert(new TButton(TRect(53, 16, 67, 18), "~C~ancel", cmCancel, bfNormal));
-
-		themeField_ = new TThemeNameField(TRect(5, 18, 71, 19), configuredColorThemeDisplayName());
-		insert(themeField_);
-
-		selectNext(False);
+		buildViews(groupsHead);
+		initScrollIfNeeded();
+		selectContent();
 	}
 
 	~TUnifiedColorSetupDialog() {
@@ -144,22 +155,9 @@ class TUnifiedColorSetupDialog : public TDialog {
 	}
 
 	void handleEvent(TEvent &event) override {
-		if (event.what == evKeyDown) {
-			ushort keyCode = event.keyDown.keyCode;
-			if (keyCode == kbTab || keyCode == kbCtrlI) {
-				selectNext(False);
-				clearEvent(event);
-				return;
-			}
-			if (keyCode == kbShiftTab) {
-				selectNext(True);
-				clearEvent(event);
-				return;
-			}
-		}
 		if (event.what == evBroadcast && event.message.command == cmNewColorItem)
 			groupIndex_ = groups_->focused;
-		TDialog::handleEvent(event);
+		MRScrollableDialog::handleEvent(event);
 		if (event.what == evCommand &&
 		    (event.message.command == cmMrColorLoadTheme || event.message.command == cmMrColorSaveTheme)) {
 			endModal(event.message.command);
@@ -171,6 +169,60 @@ class TUnifiedColorSetupDialog : public TDialog {
 	}
 
   private:
+	TLabel *addLabel(const TRect &rect, const char *title, TView *link) {
+		TLabel *view = new TLabel(rect, title, link);
+		addManaged(view, rect);
+		return view;
+	}
+
+	TButton *addButton(const TRect &rect, const char *title, ushort command, ushort flags) {
+		TButton *view = new TButton(rect, title, command, flags);
+		addManaged(view, rect);
+		return view;
+	}
+
+	void buildViews(TColorGroup *groupsHead) {
+		groupScroll_ = new TScrollBar(TRect(18, 3, 19, 14));
+		addManaged(groupScroll_, TRect(18, 3, 19, 14));
+
+		groups_ = new TRelayColorGroupList(TRect(3, 3, 18, 14), groupScroll_, groupsHead, this);
+		addManaged(groups_, TRect(3, 3, 18, 14));
+		addLabel(TRect(2, 2, 8, 3), "~G~roup", groups_);
+
+		itemScroll_ = new TScrollBar(TRect(57, 3, 58, 14));
+		addManaged(itemScroll_, TRect(57, 3, 58, 14));
+
+		itemList_ = new TRelayColorItemList(TRect(21, 3, 57, 14), itemScroll_, groupsHead->items, this);
+		addManaged(itemList_, TRect(21, 3, 57, 14));
+		addLabel(TRect(20, 2, 25, 3), "~I~tem", itemList_);
+
+		forSel_ = new TColorSelector(TRect(60, 3, 72, 7), TColorSelector::csForeground);
+		addManaged(forSel_, TRect(60, 3, 72, 7));
+		forLabel_ = addLabel(TRect(60, 2, 72, 3), "~F~oreground", forSel_);
+
+		bakSel_ = new TColorSelector(TRect(60, 9, 72, 11), TColorSelector::csBackground);
+		addManaged(bakSel_, TRect(60, 9, 72, 11));
+		bakLabel_ = addLabel(TRect(60, 8, 72, 9), "~B~ackground", bakSel_);
+
+		display_ = new TColorDisplay(TRect(59, 12, 73, 14), "Text ");
+		addManaged(display_, TRect(59, 12, 73, 14));
+
+		monoSel_ = new TMonoSelector(TRect(59, 3, 74, 7));
+		monoSel_->hide();
+		addManaged(monoSel_, TRect(59, 3, 74, 7));
+
+		monoLabel_ = addLabel(TRect(58, 2, 64, 3), "Color", monoSel_);
+		monoLabel_->hide();
+
+		addButton(TRect(6, 16, 19, 18), "~L~oad Theme", cmMrColorLoadTheme, bfNormal);
+		addButton(TRect(21, 16, 34, 18), "~S~ave Theme", cmMrColorSaveTheme, bfNormal);
+		addButton(TRect(41, 16, 51, 18), "~O~K", cmOK, bfDefault);
+		addButton(TRect(53, 16, 67, 18), "~C~ancel", cmCancel, bfNormal);
+
+		themeField_ = new TThemeNameField(TRect(5, 18, 71, 19), configuredColorThemeDisplayName());
+		addManaged(themeField_, TRect(5, 18, 71, 19));
+	}
+
 	TPalette *pal_ = nullptr;
 	TColorDisplay *display_ = nullptr;
 	TColorGroupList *groups_ = nullptr;
