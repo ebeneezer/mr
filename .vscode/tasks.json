@@ -1,91 +1,121 @@
 {
-	"version": "2.0.0",
-	"inputs": [
-		{
-			"id": "compilerSelection",
-			"type": "pickString",
-			"description": "Wählen Sie den Compiler für diesen Durchlauf:",
-			"options": [
-				"g++",
-				"clang++"
-			],
-			"default": "g++"
-		}
-	],
-	"tasks": [
-		{
-			"label": "Build mr (Inkrementell)",
-			"type": "shell",
-			"command": "make",
-			"args": [
-				"CXX=${input:compilerSelection}"
-			],
-			"group": "build",
-			"problemMatcher": [
-				"$gcc"
-			],
-			"presentation": {
-				"echo": true,
-				"reveal": "always",
-				"clear": true
-			}
-		},
-		{
-			"label": "Build mr (mit TVision Auto-Sync)",
-			"type": "shell",
-			"command": "make",
-			"args": [
-				"TVISION_AUTO_SYNC=1",
-				"CXX=${input:compilerSelection}"
-			],
-			"group": "build",
-			"problemMatcher": [
-				"$gcc"
-			],
-			"presentation": {
-				"echo": true,
-				"reveal": "always",
-				"clear": true
-			}
-		},
-		{
-			"label": "Rebuild mr (Clean & Neu)",
-			"type": "shell",
-			"command": "make",
-			"args": [
-				"clean",
-				"all",
-				"CXX=${input:compilerSelection}"
-			],
-			"group": "build",
-			"problemMatcher": [
-				"$gcc"
-			],
-			"presentation": {
-				"echo": true,
-				"reveal": "always",
-				"clear": true
-			}
-		},
-		{
-			"label": "Rebuild mr (Clean & Neu, mit TVision Auto-Sync)",
-			"type": "shell",
-			"command": "make",
-			"args": [
-				"clean",
-				"all",
-				"TVISION_AUTO_SYNC=1",
-				"CXX=${input:compilerSelection}"
-			],
-			"group": "build",
-			"problemMatcher": [
-				"$gcc"
-			],
-			"presentation": {
-				"echo": true,
-				"reveal": "always",
-				"clear": true
-			}
-		}
-	]
+    "version": "2.0.0",
+    "inputs": [
+        {
+            "id": "compilerSelection",
+            "type": "pickString",
+            "description": "Wählen Sie den Compiler für diesen Durchlauf:",
+            "options": [
+                "g++",
+                "clang++"
+            ],
+            "default": "g++"
+        }
+    ],
+    "tasks": [
+        {
+            "label": "Build mr (Inkrementell)",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "CXX=${input:compilerSelection}"
+            ],
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "clear": true
+            }
+        },
+        {
+            "label": "Build mr (mit TVision Auto-Sync)",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "TVISION_AUTO_SYNC=1",
+                "CXX=${input:compilerSelection}"
+            ],
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "clear": true
+            }
+        },
+        {
+            "label": "Rebuild mr (Clean & Neu)",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "clean",
+                "all",
+                "CXX=${input:compilerSelection}"
+            ],
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "clear": true
+            }
+        },
+        {
+            "label": "Rebuild mr (Clean & Neu, mit TVision Auto-Sync)",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "clean",
+                "all",
+                "TVISION_AUTO_SYNC=1",
+                "CXX=${input:compilerSelection}"
+            ],
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "clear": true
+            }
+        },
+        {
+            "label": "Make context tar archive",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "context-tar"
+            ],
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "clear": true
+            }
+        },
+        {
+            "label": "Make tar archives",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "tar-archives"
+            ],
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "clear": true
+            }
+        }
+    ]
 }

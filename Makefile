@@ -82,6 +82,7 @@ CXX_SOURCES = \
 	dialogs/MRInstallationAndSetupDialog.cpp \
 	dialogs/MRMacroFileDialog.cpp \
 	dialogs/MREditSettingsDialog.cpp \
+	dialogs/MREditSettingsDialogSupport.cpp \
 	dialogs/MRSetupDialogCommon.cpp \
 	dialogs/MRSetupDialogs.cpp \
 	dialogs/MRUnsavedChangesDialog.cpp \
@@ -117,7 +118,7 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 	tvision-upstream-init tvision-upstream-fetch tvision-subtree-pull tvision-apply-patches \
 	tvision-sync-safe tvision-status \
 	stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check \
-	compile-commands lint-file
+	compile-commands lint-file context-tar tar-archives
 
 all: $(TARGET)
 stage-profile-probe: $(STAGE_PROFILE_PROBE_TARGET)
@@ -130,6 +131,58 @@ regression-check-full: $(REGRESSION_PROBE_TARGET)
 	./$(REGRESSION_PROBE_TARGET) --full
 mrmac-v1-check: $(TARGET) $(STAGE_PROFILE_PROBE_TARGET) regression-probe
 	$(MRMAC_V1_SUITE_SCRIPT)
+
+CONTEXT_ARCHIVE ?= codebase-context.tar.bzip2
+CONTEXT_ARCHIVE_ITEMS = \
+	.clang-format \
+	.clang-tidy \
+	.gitignore \
+	mr.code-workspace \
+	.vscode \
+	Makefile \
+	README.md \
+	mr.cpp \
+	mr.hlp \
+	app \
+	config \
+	coprocessor \
+	dialogs \
+	documentation \
+	misc \
+	mrmac \
+	patches \
+	piecetable \
+	regression \
+	ui \
+	tvision
+
+context-tar tar-archives:
+	@set -e; \
+	rm -f $(CONTEXT_ARCHIVE); \
+	items=""; \
+	for entry in $(CONTEXT_ARCHIVE_ITEMS); do \
+		if [ -e "$$entry" ]; then \
+			items="$$items $$entry"; \
+		fi; \
+	done; \
+	if [ -z "$$items" ]; then \
+		echo "No context archive inputs found." >&2; \
+		exit 1; \
+	fi; \
+	tar -cjf $(CONTEXT_ARCHIVE) \
+		--exclude-vcs \
+		--exclude=.codex \
+		--exclude=compile_commands.json \
+		--exclude=mr \
+		--exclude=mrmac/mrmac \
+		--exclude=tvision/build \
+		--exclude='*.o' \
+		--exclude='*.a' \
+		--exclude='*.so' \
+		--exclude='*.tar.gz' \
+		--exclude='*.tar.bzip2' \
+		$$items; \
+	echo "Wrote $(CONTEXT_ARCHIVE)"
 compile-commands:
 	rm -f compile_commands.json
 	@if command -v $(BEAR) >/dev/null 2>&1; then \
@@ -231,7 +284,8 @@ dialogs/MRColorSetupDialog.o: dialogs/MRColorSetupDialog.cpp dialogs/MRSetupDial
 dialogs/MRFileInformationDialog.o: dialogs/MRFileInformationDialog.cpp dialogs/MRFileInformationDialog.hpp app/MRCommands.hpp coprocessor/MRPerformance.hpp ui/TMREditWindow.hpp ui/TMRFileEditor.hpp ui/TMRTextBuffer.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 dialogs/MRInstallationAndSetupDialog.o: dialogs/MRInstallationAndSetupDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp app/MRCommands.hpp
 dialogs/MRMacroFileDialog.o: dialogs/MRMacroFileDialog.cpp dialogs/MRMacroFileDialog.hpp mrmac/MRMacroRunner.hpp
-dialogs/MREditSettingsDialog.o: dialogs/MREditSettingsDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp
+dialogs/MREditSettingsDialog.o: dialogs/MREditSettingsDialog.cpp dialogs/MREditSettingsDialogInternal.hpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp
+dialogs/MREditSettingsDialogSupport.o: dialogs/MREditSettingsDialogSupport.cpp dialogs/MREditSettingsDialogInternal.hpp dialogs/MRSetupDialogs.hpp config/MRDialogPaths.hpp app/TMREditorApp.hpp
 dialogs/MRSetupDialogCommon.o: dialogs/MRSetupDialogCommon.cpp dialogs/MRSetupDialogCommon.hpp
 dialogs/MRSetupDialogs.o: dialogs/MRSetupDialogs.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp app/MRCommands.hpp app/TMREditorApp.hpp config/MRDialogPaths.hpp ui/MRWindowSupport.hpp
 dialogs/MRWindowListDialog.o: dialogs/MRWindowListDialog.cpp dialogs/MRWindowListDialog.hpp app/commands/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/MRWindowSupport.hpp

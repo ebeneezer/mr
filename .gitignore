@@ -1,5 +1,6 @@
 *.tar
 *.bz2
+*.bzip2
 *.o
 .vendor-cache/
 build/
