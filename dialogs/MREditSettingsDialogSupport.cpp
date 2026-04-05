@@ -50,6 +50,74 @@ bool recordsEqual(const EditSettingsDialogRecord &lhs, const EditSettingsDialogR
 	       lhs.defaultModeChoice == rhs.defaultModeChoice;
 }
 
+ushort buildOptionsMask(ushort leftMask, ushort lineNumbersChoice, ushort eofMarkerChoice) noexcept {
+	ushort options = 0;
+
+	if ((leftMask & kLeftOptionTruncateSpaces) != 0)
+		options |= kOptionTruncateSpaces;
+	if ((leftMask & kLeftOptionEofCtrlZ) != 0)
+		options |= kOptionEofCtrlZ;
+	if ((leftMask & kLeftOptionEofCrLf) != 0)
+		options |= kOptionEofCrLf;
+	if ((leftMask & kLeftOptionBackupFiles) != 0)
+		options |= kOptionBackupFiles;
+	if ((leftMask & kLeftOptionPersistentBlocks) != 0)
+		options |= kOptionPersistentBlocks;
+
+	switch (lineNumbersChoice) {
+		case kLineNumbersOn:
+			options |= kOptionShowLineNumbers;
+			break;
+		case kLineNumbersLeadingZero:
+			options |= kOptionShowLineNumbers;
+			options |= kOptionLineNumZeroFill;
+			break;
+		default:
+			break;
+	}
+
+	switch (eofMarkerChoice) {
+		case kEofMarkerPlain:
+			options |= kOptionShowEofMarker;
+			break;
+		case kEofMarkerEmoji:
+			options |= kOptionShowEofMarker;
+			options |= kOptionShowEofMarkerEmoji;
+			break;
+		default:
+			break;
+	}
+
+	return options;
+}
+
+void splitOptionsMask(ushort options, ushort &leftMask, ushort &lineNumbersChoice,
+                      ushort &eofMarkerChoice) noexcept {
+	leftMask = 0;
+	lineNumbersChoice = kLineNumbersOff;
+	eofMarkerChoice = kEofMarkerOff;
+
+	if ((options & kOptionTruncateSpaces) != 0)
+		leftMask |= kLeftOptionTruncateSpaces;
+	if ((options & kOptionEofCtrlZ) != 0)
+		leftMask |= kLeftOptionEofCtrlZ;
+	if ((options & kOptionEofCrLf) != 0)
+		leftMask |= kLeftOptionEofCrLf;
+	if ((options & kOptionBackupFiles) != 0)
+		leftMask |= kLeftOptionBackupFiles;
+	if ((options & kOptionPersistentBlocks) != 0)
+		leftMask |= kLeftOptionPersistentBlocks;
+
+	if ((options & kOptionShowLineNumbers) != 0) {
+		lineNumbersChoice = ((options & kOptionLineNumZeroFill) != 0) ? kLineNumbersLeadingZero
+		                                                              : kLineNumbersOn;
+	}
+	if ((options & kOptionShowEofMarker) != 0) {
+		eofMarkerChoice = ((options & kOptionShowEofMarkerEmoji) != 0) ? kEofMarkerEmoji
+		                                                              : kEofMarkerPlain;
+	}
+}
+
 void initEditSettingsDialogRecord(EditSettingsDialogRecord &record) {
 	MREditSetupSettings settings = configuredEditSetupSettings();
 	std::string columnMove = upperAscii(settings.columnBlockMove);
@@ -61,7 +129,6 @@ void initEditSettingsDialogRecord(EditSettingsDialogRecord &record) {
 	writeRecordField(record.defaultExtensions, sizeof(record.defaultExtensions),
 	                 settings.defaultExtensions);
 	writeRecordField(record.tabSize, sizeof(record.tabSize), std::to_string(settings.tabSize));
-
 	record.optionsMask = 0;
 	if (settings.truncateSpaces)
 		record.optionsMask |= kOptionTruncateSpaces;
@@ -81,7 +148,6 @@ void initEditSettingsDialogRecord(EditSettingsDialogRecord &record) {
 		record.optionsMask |= kOptionShowLineNumbers;
 	if (settings.lineNumZeroFill)
 		record.optionsMask |= kOptionLineNumZeroFill;
-
 	record.tabExpandChoice = settings.tabExpand ? kTabExpandTabs : kTabExpandSpaces;
 	record.columnBlockMoveChoice =
 	    (columnMove == "LEAVE_SPACE") ? kColumnMoveLeaveSpace : kColumnMoveDeleteSpace;
@@ -95,7 +161,6 @@ bool recordToSettings(const EditSettingsDialogRecord &record, MREditSetupSetting
 	settings.pageBreak = readRecordField(record.pageBreak);
 	settings.wordDelimiters = readRecordField(record.wordDelimiters);
 	settings.defaultExtensions = readRecordField(record.defaultExtensions);
-
 	{
 		std::string tabSizeText = readRecordField(record.tabSize);
 		char *end = nullptr;
@@ -112,7 +177,6 @@ bool recordToSettings(const EditSettingsDialogRecord &record, MREditSetupSetting
 		}
 		settings.tabSize = static_cast<int>(tabSize);
 	}
-
 	settings.truncateSpaces = (record.optionsMask & kOptionTruncateSpaces) != 0;
 	settings.eofCtrlZ = (record.optionsMask & kOptionEofCtrlZ) != 0;
 	settings.eofCrLf = (record.optionsMask & kOptionEofCrLf) != 0;
@@ -127,7 +191,6 @@ bool recordToSettings(const EditSettingsDialogRecord &record, MREditSetupSetting
 	    (record.columnBlockMoveChoice == kColumnMoveLeaveSpace) ? "LEAVE_SPACE" : "DELETE_SPACE";
 	settings.defaultMode =
 	    (record.defaultModeChoice == kDefaultModeOverwrite) ? "OVERWRITE" : "INSERT";
-
 	errorText.clear();
 	return true;
 }
@@ -156,7 +219,6 @@ bool saveAndReloadEditSettings(const EditSettingsDialogRecord &record, std::stri
 	}
 	if (!app->reloadSettingsMacroFromPath(paths.settingsMacroUri, &errorText))
 		return false;
-
 	errorText.clear();
 	return true;
 }
