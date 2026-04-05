@@ -2051,14 +2051,14 @@ bool testPersistentBlocksWiringGuard(std::string &failureReason) {
 		failureReason = "Unable to read MREditSettingsDialog.cpp for persistent-blocks guard: " + ioError;
 		return false;
 	}
-	if (settingsContent.find("upperKeyName == \"PERSISTBLOCKS\" || upperKeyName == \"PERSISTENTBLOCKS\"") ==
+	if (settingsContent.find("upperKeyName == \"PERSISTENTBLOCKS\"") ==
 	        std::string::npos ||
 	    settingsContent.find("MRSETUP('PERSISTENTBLOCKS'") == std::string::npos) {
 		failureReason = "Persistent blocks must be parsed and serialized via MRSETUP in MRDialogPaths.";
 		return false;
 	}
-	if (vmContent.find("setupKey == \"PERSISTBLOCKS\"") == std::string::npos) {
-		failureReason = "MRVM startup whitelist must accept PERSISTBLOCKS.";
+	if (vmContent.find("setupKey == \"PERSISTENTBLOCKS\"") == std::string::npos) {
+		failureReason = "MRVM startup whitelist must accept PERSISTENTBLOCKS.";
 		return false;
 	}
 	if (dialogContent.find("ersistent blocks") == std::string::npos) {

@@ -5962,7 +5962,10 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1]))
 						throw std::runtime_error("MRSETUP expects (string, string).");
 					setupKey = upperKey(trimAscii(valueAsString(args[0])));
-					if (setupKey == "MACROPATH") {
+					if (setupKey == "SETTINGS_VERSION") {
+						if (trimAscii(valueAsString(args[1])) != "2")
+							throw std::runtime_error("MRSETUP(SETTINGS_VERSION) supports only version 2.");
+					} else if (setupKey == "MACROPATH") {
 						if (!setConfiguredMacroDirectoryPath(valueAsString(args[1]), &errorText))
 							throw std::runtime_error(
 							    "MRSETUP(MACROPATH) failed: " +
@@ -6004,8 +6007,8 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					           setupKey == "BACKUPFILES" || setupKey == "SHOWEOFMARKER" ||
 					           setupKey == "SHOWEOFMARKEREMOJI" ||
 					           setupKey == "SHOWLINENUMBERS" ||
-					           setupKey == "LINENUMZEROFILL" || setupKey == "PERSISTBLOCKS" ||
-					           setupKey == "PERSISTENTBLOCKS" || setupKey == "COLBLOCKMOVE" ||
+					           setupKey == "LINENUMZEROFILL" || setupKey == "PERSISTENTBLOCKS" ||
+					           setupKey == "COLBLOCKMOVE" ||
 					           setupKey == "DEFAULTMODE") {
 							if (!applyConfiguredEditSetupValue(setupKey, valueAsString(args[1]), &errorText))
 								throw std::runtime_error(
@@ -6024,19 +6027,30 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 								throw std::runtime_error(
 								    "MRSETUP(" + setupKey + ") failed: " +
 								    (errorText.empty() ? std::string("invalid value.") : errorText));
-						} else if (setupKey == "SHOWSTATUSLINE" || setupKey == "SHOWMENUBAR" ||
-						           setupKey == "SHOWFKEYLABELS" || setupKey == "SHOWLEFTBORDER" ||
-						           setupKey == "SHOWRIGHTBORDER" || setupKey == "SHOWBOTTOMBORDER") {
-							// Deprecated compatibility keys: accepted but ignored.
-							(void)errorText;
 					} else
 						throw std::runtime_error(
-						    "MRSETUP supports keys: MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
+						    "MRSETUP supports keys: SETTINGS_VERSION, MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
 						    "SHELLPATH, LASTFILEDIALOGPATH, COLORTHEMEURI, PAGEBREAK, WORDDELIMS, "
 						    "DEFAULTEXTS, TRUNCSPACES, EOFCTRLZ, EOFCRLF, TABEXPAND, TABSIZE, "
 						    "BACKUPFILES, SHOWEOFMARKER, SHOWEOFMARKEREMOJI, SHOWLINENUMBERS, "
 						    "LINENUMZEROFILL, PERSISTENTBLOCKS, COLBLOCKMOVE, DEFAULTMODE, "
 						    "WINDOWCOLORS, MENUDIALOGCOLORS, HELPCOLORS, OTHERCOLORS.");
+					runtimeErrorLevel() = 0;
+				} else if (name == "MREDITPROFILE") {
+					std::string errorText;
+					if (!mrvmIsStartupSettingsMode())
+						throw std::runtime_error(
+						    "MREDITPROFILE is only allowed in settings.mrmac during startup.");
+					if (args.size() != 4 || !isStringLike(args[0]) || !isStringLike(args[1]) ||
+					    !isStringLike(args[2]) || !isStringLike(args[3]))
+						throw std::runtime_error(
+						    "MREDITPROFILE expects (string, string, string, string).");
+					if (!applyConfiguredEditExtensionProfileDirective(valueAsString(args[0]), valueAsString(args[1]),
+					                                              valueAsString(args[2]), valueAsString(args[3]),
+					                                              &errorText))
+						throw std::runtime_error(
+						    "MREDITPROFILE failed: " +
+						    (errorText.empty() ? std::string("invalid directive.") : errorText));
 					runtimeErrorLevel() = 0;
 				} else if (name == "SET_GLOBAL_STR") {
 					if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1]))

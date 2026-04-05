@@ -346,40 +346,15 @@ std::string unescapeMrmacSingleQuotedLiteral(const std::string &value) {
 	return out;
 }
 
+bool isCurrentSettingsKey(const std::string &key);
+
 bool isMigratableMrsetupKey(const std::string &key) {
-	static const std::set<std::string> keys = {"MACROPATH",
-	                                           "SETTINGSPATH",
-	                                           "HELPPATH",
-	                                           "TEMPDIR",
-	                                           "SHELLPATH",
-	                                           "LASTFILEDIALOGPATH",
-	                                           "COLORTHEMEURI",
-	                                           "PAGEBREAK",
-	                                           "WORDDELIMS",
-	                                           "DEFAULTEXTS",
-	                                           "TRUNCSPACES",
-		                                           "EOFCTRLZ",
-		                                           "EOFCRLF",
-		                                           "TABEXPAND",
-		                                           "TABSIZE",
-		                                           "BACKUPFILES",
-	                                           "SHOWEOFMARKER",
-	                                           "SHOWEOFMARKEREMOJI",
-	                                           "SHOWLINENUMBERS",
-	                                           "LINENUMZEROFILL",
-	                                           "PERSISTBLOCKS",
-	                                           "PERSISTENTBLOCKS",
-	                                           "COLBLOCKMOVE",
-	                                           "DEFAULTMODE",
-	                                           "WINDOWCOLORS",
-	                                           "MENUDIALOGCOLORS",
-	                                           "HELPCOLORS",
-	                                           "OTHERCOLORS"};
-	return keys.find(key) != keys.end();
+	return isCurrentSettingsKey(key);
 }
 
 bool isCurrentSettingsKey(const std::string &key) {
-	static const std::set<std::string> keys = {"MACROPATH",
+	static const std::set<std::string> keys = {"SETTINGS_VERSION",
+	                                           "MACROPATH",
 	                                           "SETTINGSPATH",
 	                                           "HELPPATH",
 	                                           "TEMPDIR",
@@ -405,6 +380,13 @@ bool isCurrentSettingsKey(const std::string &key) {
 	return keys.find(key) != keys.end();
 }
 
+struct ParsedEditProfileDirective {
+	std::string operation;
+	std::string profileName;
+	std::string arg3;
+	std::string arg4;
+};
+
 std::vector<std::pair<std::string, std::string>> parseMrsetupAssignments(const std::string &source) {
 	static const std::regex assignmentPattern(
 	    "MRSETUP\\s*\\(\\s*'([^']+)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
@@ -423,6 +405,28 @@ std::vector<std::pair<std::string, std::string>> parseMrsetupAssignments(const s
 	return assignments;
 }
 
+std::vector<ParsedEditProfileDirective> parseMreditProfileDirectives(const std::string &source) {
+	static const std::regex directivePattern(
+	    "MREDITPROFILE\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)",
+	    std::regex::icase);
+	std::vector<ParsedEditProfileDirective> directives;
+	std::smatch match;
+	std::string remaining = source;
+
+	while (std::regex_search(remaining, match, directivePattern)) {
+		if (match.size() >= 5) {
+			ParsedEditProfileDirective directive;
+			directive.operation = unescapeMrmacSingleQuotedLiteral(match[1].str());
+			directive.profileName = unescapeMrmacSingleQuotedLiteral(match[2].str());
+			directive.arg3 = unescapeMrmacSingleQuotedLiteral(match[3].str());
+			directive.arg4 = unescapeMrmacSingleQuotedLiteral(match[4].str());
+			directives.push_back(directive);
+		}
+		remaining = match.suffix().str();
+	}
+	return directives;
+}
+
 class StartupSettingsModeGuard {
   public:
 	StartupSettingsModeGuard() noexcept : previous_(mrvmIsStartupSettingsMode()) {
@@ -439,8 +443,9 @@ class StartupSettingsModeGuard {
 
 bool validateCurrentSettingsSchema(const std::string &source, std::string &errorText) {
 	std::vector<std::pair<std::string, std::string>> assignments = parseMrsetupAssignments(source);
-	std::map<std::string, int> counts;
-	static const char *const requiredKeys[] = {"SETTINGSPATH",
+		std::map<std::string, int> counts;
+	static const char *const requiredKeys[] = {"SETTINGS_VERSION",
+	                                           "SETTINGSPATH",
 	                                           "MACROPATH",
 	                                           "HELPPATH",
 	                                           "TEMPDIR",
@@ -484,6 +489,11 @@ bool validateCurrentSettingsSchema(const std::string &source, std::string &error
 			errorText = "Missing required MRSETUP key in settings.mrmac: " + std::string(required);
 			return false;
 		}
+	for (const std::pair<std::string, std::string> &assignment : assignments)
+		if (assignment.first == "SETTINGS_VERSION" && assignment.second != "2") {
+			errorText = "Unsupported settings.mrmac version: " + assignment.second;
+			return false;
+		}
 	errorText.clear();
 	return true;
 }
@@ -511,6 +521,14 @@ bool applyRecognizedSettingsAssignment(const std::string &key, const std::string
                                        std::string &errorText) {
 	std::string normalized;
 
+	if (key == "SETTINGS_VERSION") {
+		if (value != "2") {
+			errorText = "Unsupported settings version.";
+			return false;
+		}
+		errorText.clear();
+		return true;
+	}
 	if (key == "SETTINGSPATH") {
 		// Keep the active startup file as source of truth; ignore redirected settings URI.
 		(void)value;
@@ -548,7 +566,7 @@ bool applyRecognizedSettingsAssignment(const std::string &key, const std::string
 	if (key == "PAGEBREAK" || key == "WORDDELIMS" || key == "DEFAULTEXTS" || key == "TRUNCSPACES" ||
 	    key == "EOFCTRLZ" || key == "EOFCRLF" || key == "TABEXPAND" || key == "TABSIZE" ||
 	    key == "BACKUPFILES" || key == "SHOWEOFMARKER" || key == "SHOWEOFMARKEREMOJI" ||
-	    key == "SHOWLINENUMBERS" || key == "LINENUMZEROFILL" || key == "PERSISTBLOCKS" ||
+	    key == "SHOWLINENUMBERS" || key == "LINENUMZEROFILL" ||
 	    key == "PERSISTENTBLOCKS" || key == "COLBLOCKMOVE" || key == "DEFAULTMODE")
 		return applyConfiguredEditSetupValue(key, value, &errorText);
 	if (key == "WINDOWCOLORS" || key == "MENUDIALOGCOLORS" || key == "HELPCOLORS" || key == "OTHERCOLORS")
@@ -563,6 +581,7 @@ bool migrateSettingsMacroToCurrentVersion(const std::string &settingsPath, const
 	std::string normalizedSettingsPath = normalizeConfiguredPathInput(settingsPath);
 	MRSetupPaths migratedPaths = resolveSetupPathDefaults();
 	std::vector<std::pair<std::string, std::string>> assignments = parseMrsetupAssignments(source);
+	std::vector<ParsedEditProfileDirective> profileDirectives = parseMreditProfileDirectives(source);
 	std::string applyError;
 	std::string themeError;
 	std::string finalThemePath;
@@ -575,6 +594,8 @@ bool migrateSettingsMacroToCurrentVersion(const std::string &settingsPath, const
 	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), &applyError))
 		goto fail;
 	if (!setConfiguredColorSetupDefaults(applyError))
+		goto fail;
+	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(), &applyError))
 		goto fail;
 	if (!setConfiguredColorThemeFilePath(defaultColorThemeFilePath(), &applyError))
 		goto fail;
@@ -590,6 +611,12 @@ bool migrateSettingsMacroToCurrentVersion(const std::string &settingsPath, const
 		}
 		++migratedAssignments;
 	}
+	for (const ParsedEditProfileDirective &directive : profileDirectives)
+		if (!applyConfiguredEditExtensionProfileDirective(directive.operation, directive.profileName, directive.arg3,
+		                                                 directive.arg4, &applyError))
+			mrLogMessage(("Settings migration ignored invalid MREDITPROFILE directive for profile " +
+			              directive.profileName + ": " + applyError)
+			                 .c_str());
 
 	finalThemePath = configuredColorThemeFilePath();
 	if (!loadColorThemeFile(finalThemePath, &themeError)) {
