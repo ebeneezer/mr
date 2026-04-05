@@ -1,0 +1,7 @@
+Refactor scope:
+- Centralized conditional scrolling/content viewport into MRScrollableDialog in MRSetupDialogCommon.
+- Migrated MRInstallationAndSetupDialog to inherit from MRScrollableDialog.
+- Added small layout struct + builder helpers inside MRInstallationAndSetupDialog.
+
+Build verification performed in the synced project tree:
+  make dialogs/MRSetupDialogCommon.o dialogs/MRInstallationAndSetupDialog.o -j2

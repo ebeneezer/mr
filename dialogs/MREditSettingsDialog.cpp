@@ -1,16 +1,12 @@
 #define Uses_TButton
 #define Uses_TCheckBoxes
-#define Uses_TDialog
 #define Uses_TDeskTop
-#define Uses_TGroup
 #define Uses_TInputLine
-#define Uses_TKeys
 #define Uses_MsgBox
 #define Uses_TObject
 #define Uses_TProgram
 #define Uses_TRadioButtons
 #define Uses_TRect
-#define Uses_TScrollBar
 #define Uses_TStaticText
 #define Uses_TSItem
 #include <tvision/tv.h>
@@ -30,9 +26,11 @@ enum : ushort {
 };
 
 struct EditSettingsLayout {
-	int dialogWidth = 88;
+	static const int kDialogWidth = 88;
+	static const int kDialogHeight = 26;
+
 	int inputLeft = 32;
-	int inputRight = dialogWidth - 2;
+	int inputRight = kDialogWidth - 2;
 	int optionsHeadingX = 2;
 	int optionsLeft = 2;
 	int optionsRight = optionsLeft + 28;
@@ -46,34 +44,25 @@ struct EditSettingsLayout {
 	int tabExpandRight = tabExpandLeft + 15;
 	int columnBlockMoveLeft = optionsLeft;
 	int columnBlockMoveRight = optionsLeft + 18;
-	int doneLeft = dialogWidth / 2 - 17;
+	int doneLeft = kDialogWidth / 2 - 17;
 	int cancelLeft = doneLeft + 12;
 	int helpLeft = cancelLeft + 14;
+	int buttonTop = kDialogHeight - 3;
 };
 
-class TEditSettingsDialog : public TDialog {
+class TEditSettingsDialog : public MRScrollableDialog {
   public:
-	struct ManagedItem {
-		TView *view;
-		TRect base;
-	};
-
 	explicit TEditSettingsDialog(const EditSettingsDialogRecord &initialRecord)
 	    : TWindowInit(&TDialog::initFrame),
-	      TDialog(centeredSetupDialogRect(kVirtualDialogWidth, kVirtualDialogHeight),
-	              "EDIT SETTINGS"),
+	      MRScrollableDialog(centeredSetupDialogRect(EditSettingsLayout::kDialogWidth,
+	                                                 EditSettingsLayout::kDialogHeight),
+	                         "EDIT SETTINGS", EditSettingsLayout::kDialogWidth,
+	                         EditSettingsLayout::kDialogHeight),
 	      initialRecord_(initialRecord), currentRecord_(initialRecord) {
-		contentRect_ = TRect(1, 1, size.x - 1, size.y - 1);
-		content_ = createSetupDialogContentGroup(contentRect_);
-		if (content_ != nullptr) {
-			content_->options |= ofSelectable;
-			insert(content_);
-		}
-
-		buildDialog();
+		buildViews();
 		loadFieldsFromRecord(currentRecord_);
 		initScrollIfNeeded();
-		initializeFocus();
+		selectContent();
 	}
 
 	ushort run(EditSettingsDialogRecord &outRecord, bool &changed) {
@@ -85,219 +74,103 @@ class TEditSettingsDialog : public TDialog {
 	}
 
 	void handleEvent(TEvent &event) override {
-		if (event.what == evKeyDown && content_ != nullptr) {
-			ushort keyCode = event.keyDown.keyCode;
-
-			if (keyCode == kbTab || keyCode == kbCtrlI) {
-				content_->selectNext(False);
-				clearEvent(event);
-				return;
-			}
-			if (keyCode == kbShiftTab) {
-				content_->selectNext(True);
-				clearEvent(event);
-				return;
-			}
-		}
-
-		TDialog::handleEvent(event);
+		MRScrollableDialog::handleEvent(event);
 
 		if (event.what == evCommand && event.message.command == cmMrSetupEditSettingsHelp) {
 			endModal(event.message.command);
 			clearEvent(event);
 		}
-		if (event.what == evBroadcast && event.message.command == cmScrollBarChanged &&
-		    (event.message.infoPtr == hScrollBar_ || event.message.infoPtr == vScrollBar_)) {
-			applyScroll();
-			clearEvent(event);
-		}
 	}
 
   private:
-	static const int kVirtualDialogWidth = 88;
-	static const int kVirtualDialogHeight = 26;
-	static const int kButtonTop = kVirtualDialogHeight - 3;
+	TStaticText *addLabel(const TRect &rect, const char *text) {
+		TStaticText *view = new TStaticText(rect, text);
+		addManaged(view, rect);
+		return view;
+	}
 
-	void buildDialog() {
-		EditSettingsLayout l;
+	TInputLine *addInput(const TRect &rect, int maxLen) {
+		TInputLine *view = new TInputLine(rect, maxLen);
+		addManaged(view, rect);
+		return view;
+	}
 
-		addStaticText(TRect(2, 2, l.inputLeft - 2, 3), "Page break string:");
-		pageBreakField_ = addInputLine(TRect(l.inputLeft, 2, l.inputRight, 3), kPageBreakFieldSize - 1);
+	TCheckBoxes *addCheckGroup(const TRect &rect, TSItem *items) {
+		TCheckBoxes *view = new TCheckBoxes(rect, items);
+		addManaged(view, rect);
+		return view;
+	}
 
-		addStaticText(TRect(2, 4, l.inputLeft - 2, 5), "Word delimiters:");
+	TRadioButtons *addRadioGroup(const TRect &rect, TSItem *items) {
+		TRadioButtons *view = new TRadioButtons(rect, items);
+		addManaged(view, rect);
+		return view;
+	}
+
+	TButton *addButton(const TRect &rect, const char *title, ushort command, ushort flags) {
+		TButton *view = new TButton(rect, title, command, flags);
+		addManaged(view, rect);
+		return view;
+	}
+
+	void buildViews() {
+		const EditSettingsLayout g;
+
+		addLabel(TRect(2, 2, g.inputLeft - 2, 3), "Page break string:");
+		pageBreakField_ = addInput(TRect(g.inputLeft, 2, g.inputRight, 3), kPageBreakFieldSize - 1);
+
+		addLabel(TRect(2, 4, g.inputLeft - 2, 5), "Word delimiters:");
 		wordDelimitersField_ =
-		    addInputLine(TRect(l.inputLeft, 4, l.inputRight, 5), kWordDelimsFieldSize - 1);
+		    addInput(TRect(g.inputLeft, 4, g.inputRight, 5), kWordDelimsFieldSize - 1);
 
-		addStaticText(TRect(2, 6, l.inputLeft - 2, 7), "Default file extension(s):");
+		addLabel(TRect(2, 6, g.inputLeft - 2, 7), "Default file extension(s):");
 		defaultExtensionsField_ =
-		    addInputLine(TRect(l.inputLeft, 6, l.inputRight, 7), kDefaultExtsFieldSize - 1);
+		    addInput(TRect(g.inputLeft, 6, g.inputRight, 7), kDefaultExtsFieldSize - 1);
 
-		addStaticText(TRect(l.optionsHeadingX, 8, l.dialogWidth - 2, 9), "Options:");
+		addLabel(TRect(g.optionsHeadingX, 8, EditSettingsLayout::kDialogWidth - 2, 9), "Options:");
 
-		addStaticText(TRect(l.lineNumbersLeft, 8, l.lineNumbersRight, 9), "Line numbers:");
-		addStaticText(TRect(l.eofMarkerLeft, 8, l.eofMarkerRight, 9), "EOF marker:");
-		addStaticText(TRect(l.defaultModeLeft, 8, l.defaultModeRight, 9), "Default mode:");
-		addStaticText(TRect(l.tabExpandLeft, 13, l.tabExpandRight, 14), "Tab expand:");
-		addStaticText(TRect(l.columnBlockMoveLeft, 18, l.columnBlockMoveRight, 19),
-		              "Column block move:");
-		addStaticText(TRect(2, 23, 12, 24), "Tab size:");
-
-		optionsLeftField_ = addCheckBoxes(
-		    TRect(l.optionsLeft, 9, l.optionsRight, 14),
+		optionsLeftField_ = addCheckGroup(
+		    TRect(g.optionsLeft, 9, g.optionsRight, 14),
 		    new TSItem("~T~runcate spaces",
 		               new TSItem("Control-~Z~ at EOF",
 		                          new TSItem("~C~R/LF at EOF",
 		                                     new TSItem("create ~B~ackup (.bak) on save",
 		                                                new TSItem("~P~ersistent blocks", nullptr))))));
 
-		lineNumbersField_ = addRadioButtons(
-		    TRect(l.lineNumbersLeft, 9, l.lineNumbersRight, 12),
+		addLabel(TRect(g.lineNumbersLeft, 8, g.lineNumbersRight, 9), "Line numbers:");
+		lineNumbersField_ = addRadioGroup(
+		    TRect(g.lineNumbersLeft, 9, g.lineNumbersRight, 12),
 		    new TSItem("~O~ff", new TSItem("O~n~", new TSItem("Leading ~0~", nullptr))));
 
-		eofMarkerField_ = addRadioButtons(
-		    TRect(l.eofMarkerLeft, 9, l.eofMarkerRight, 12),
+		addLabel(TRect(g.eofMarkerLeft, 8, g.eofMarkerRight, 9), "EOF marker:");
+		eofMarkerField_ = addRadioGroup(
+		    TRect(g.eofMarkerLeft, 9, g.eofMarkerRight, 12),
 		    new TSItem("~O~ff", new TSItem("~P~lain", new TSItem("~E~moji", nullptr))));
 
-		defaultModeField_ = addRadioButtons(
-		    TRect(l.defaultModeLeft, 9, l.defaultModeRight, 12),
+		addLabel(TRect(g.defaultModeLeft, 8, g.defaultModeRight, 9), "Default mode:");
+		defaultModeField_ = addRadioGroup(
+		    TRect(g.defaultModeLeft, 9, g.defaultModeRight, 12),
 		    new TSItem("~I~nsert", new TSItem("~O~verwrite", nullptr)));
 
-		tabExpandField_ = addRadioButtons(
-		    TRect(l.tabExpandLeft, 14, l.tabExpandRight, 17),
+		addLabel(TRect(g.tabExpandLeft, 13, g.tabExpandRight, 14), "Tab expand:");
+		tabExpandField_ = addRadioGroup(
+		    TRect(g.tabExpandLeft, 14, g.tabExpandRight, 17),
 		    new TSItem("~T~abs", new TSItem("~S~paces", nullptr)));
 
-		columnBlockMoveField_ = addRadioButtons(
-		    TRect(l.columnBlockMoveLeft, 19, l.columnBlockMoveRight, 22),
+		addLabel(TRect(g.columnBlockMoveLeft, 18, g.columnBlockMoveRight, 19), "Column block move:");
+		columnBlockMoveField_ = addRadioGroup(
+		    TRect(g.columnBlockMoveLeft, 19, g.columnBlockMoveRight, 22),
 		    new TSItem("~D~elete space", new TSItem("~L~eave space", nullptr)));
 
-		tabSizeField_ = addInputLine(TRect(13, 23, 20, 24), kTabSizeFieldSize - 1);
+		addLabel(TRect(2, 23, 12, 24), "Tab size:");
+		tabSizeField_ = addInput(TRect(13, 23, 20, 24), kTabSizeFieldSize - 1);
 
-		addButton(TRect(l.doneLeft, kButtonTop, l.doneLeft + 10, kButtonTop + 2), "~D~one", cmOK,
+		addButton(TRect(g.doneLeft, g.buttonTop, g.doneLeft + 10, g.buttonTop + 2), "~D~one", cmOK,
 		          bfDefault);
-		addButton(TRect(l.cancelLeft, kButtonTop, l.cancelLeft + 12, kButtonTop + 2), "~C~ancel",
-		          cmCancel, bfNormal);
-		addButton(TRect(l.helpLeft, kButtonTop, l.helpLeft + 8, kButtonTop + 2), "~H~elp",
+		addButton(TRect(g.cancelLeft, g.buttonTop, g.cancelLeft + 12, g.buttonTop + 2),
+		          "~C~ancel", cmCancel, bfNormal);
+		addButton(TRect(g.helpLeft, g.buttonTop, g.helpLeft + 8, g.buttonTop + 2), "~H~elp",
 		          cmMrSetupEditSettingsHelp, bfNormal);
-	}
-
-	void initializeFocus() {
-		if (content_ != nullptr) {
-			content_->resetCurrent();
-			content_->select();
-		}
-	}
-
-	void addManaged(TView *view, const TRect &base) {
-		ManagedItem item;
-		item.view = view;
-		item.base = base;
-		managedViews_.push_back(item);
-		if (content_ != nullptr) {
-			TRect local = base;
-			local.move(-contentRect_.a.x, -contentRect_.a.y);
-			view->locate(local);
-			content_->insert(view);
-		} else
-			insert(view);
-	}
-
-	void addStaticText(const TRect &bounds, const char *text) {
-		addManaged(new TStaticText(bounds, text), bounds);
-	}
-
-	TInputLine *addInputLine(const TRect &bounds, int maxLen) {
-		TInputLine *view = new TInputLine(bounds, maxLen);
-		addManaged(view, bounds);
-		return view;
-	}
-
-	TCheckBoxes *addCheckBoxes(const TRect &bounds, TSItem *items) {
-		TCheckBoxes *view = new TCheckBoxes(bounds, items);
-		addManaged(view, bounds);
-		return view;
-	}
-
-	TRadioButtons *addRadioButtons(const TRect &bounds, TSItem *items) {
-		TRadioButtons *view = new TRadioButtons(bounds, items);
-		addManaged(view, bounds);
-		return view;
-	}
-
-	TButton *addButton(const TRect &bounds, const char *title, ushort command, ushort flags) {
-		TButton *view = new TButton(bounds, title, command, flags);
-		addManaged(view, bounds);
-		return view;
-	}
-
-	void applyScroll() {
-		int dx = hScrollBar_ != nullptr ? hScrollBar_->value : 0;
-		int dy = vScrollBar_ != nullptr ? vScrollBar_->value : 0;
-
-		for (auto &managedView : managedViews_) {
-			TRect moved = managedView.base;
-			moved.move(-dx, -dy);
-			moved.move(-contentRect_.a.x, -contentRect_.a.y);
-			managedView.view->locate(moved);
-		}
-		if (content_ != nullptr)
-			content_->drawView();
-	}
-
-	void initScrollIfNeeded() {
-		int virtualContentWidth = std::max(1, kVirtualDialogWidth - 2);
-		int virtualContentHeight = std::max(1, kVirtualDialogHeight - 2);
-		bool needH = false;
-		bool needV = false;
-
-		for (;;) {
-			bool prevH = needH;
-			bool prevV = needV;
-			int viewportWidth = std::max(1, size.x - 2);
-			int viewportHeight = std::max(1, size.y - 2);
-			needH = virtualContentWidth > viewportWidth;
-			needV = virtualContentHeight > viewportHeight;
-			if (needH == prevH && needV == prevV)
-				break;
-		}
-
-		contentRect_ = TRect(1, 1, size.x - 1, size.y - 1);
-		if (contentRect_.b.x <= contentRect_.a.x)
-			contentRect_.b.x = contentRect_.a.x + 1;
-		if (contentRect_.b.y <= contentRect_.a.y)
-			contentRect_.b.y = contentRect_.a.y + 1;
-		if (content_ != nullptr)
-			content_->locate(contentRect_);
-
-		if (needH) {
-			TRect hRect(1, size.y - 1, size.x - 1, size.y);
-			if (hScrollBar_ == nullptr) {
-				hScrollBar_ = new TScrollBar(hRect);
-				insert(hScrollBar_);
-			} else
-				hScrollBar_->locate(hRect);
-		}
-		if (needV) {
-			TRect vRect(size.x - 1, 1, size.x, size.y - 1);
-			if (vScrollBar_ == nullptr) {
-				vScrollBar_ = new TScrollBar(vRect);
-				insert(vScrollBar_);
-			} else
-				vScrollBar_->locate(vRect);
-		}
-
-		if (hScrollBar_ != nullptr) {
-			int maxDx =
-			    std::max(0, virtualContentWidth - std::max(1, contentRect_.b.x - contentRect_.a.x));
-			hScrollBar_->setParams(0, 0, maxDx,
-			                       std::max(1, (contentRect_.b.x - contentRect_.a.x) / 2), 1);
-		}
-		if (vScrollBar_ != nullptr) {
-			int maxDy =
-			    std::max(0, virtualContentHeight - std::max(1, contentRect_.b.y - contentRect_.a.y));
-			vScrollBar_->setParams(0, 0, maxDy,
-			                       std::max(1, (contentRect_.b.y - contentRect_.a.y) / 2), 1);
-		}
-		applyScroll();
 	}
 
 	static void setInputLineValue(TInputLine *inputLine, const char *value, std::size_t capacity) {
@@ -312,10 +185,11 @@ class TEditSettingsDialog : public TDialog {
 		writeRecordField(dest, destSize, readRecordField(buffer.data()));
 	}
 
-	ushort currentOptionsMask() const noexcept {
+	ushort currentOptionsMask() noexcept {
 		ushort leftMask = 0;
 		ushort lineNumbersChoice = kLineNumbersOff;
 		ushort eofMarkerChoice = kEofMarkerOff;
+		ushort options = 0;
 
 		if (optionsLeftField_ != nullptr)
 			optionsLeftField_->getData((void *)&leftMask);
@@ -324,7 +198,42 @@ class TEditSettingsDialog : public TDialog {
 		if (eofMarkerField_ != nullptr)
 			eofMarkerField_->getData((void *)&eofMarkerChoice);
 
-		return buildOptionsMask(leftMask, lineNumbersChoice, eofMarkerChoice);
+		if ((leftMask & kLeftOptionTruncateSpaces) != 0)
+			options |= kOptionTruncateSpaces;
+		if ((leftMask & kLeftOptionEofCtrlZ) != 0)
+			options |= kOptionEofCtrlZ;
+		if ((leftMask & kLeftOptionEofCrLf) != 0)
+			options |= kOptionEofCrLf;
+		if ((leftMask & kLeftOptionBackupFiles) != 0)
+			options |= kOptionBackupFiles;
+		if ((leftMask & kLeftOptionPersistentBlocks) != 0)
+			options |= kOptionPersistentBlocks;
+
+		switch (lineNumbersChoice) {
+			case kLineNumbersOn:
+				options |= kOptionShowLineNumbers;
+				break;
+			case kLineNumbersLeadingZero:
+				options |= kOptionShowLineNumbers;
+				options |= kOptionLineNumZeroFill;
+				break;
+			default:
+				break;
+		}
+
+		switch (eofMarkerChoice) {
+			case kEofMarkerPlain:
+				options |= kOptionShowEofMarker;
+				break;
+			case kEofMarkerEmoji:
+				options |= kOptionShowEofMarker;
+				options |= kOptionShowEofMarkerEmoji;
+				break;
+			default:
+				break;
+		}
+
+		return options;
 	}
 
 	void setOptionsMask(ushort options) {
@@ -332,7 +241,23 @@ class TEditSettingsDialog : public TDialog {
 		ushort lineNumbersChoice = kLineNumbersOff;
 		ushort eofMarkerChoice = kEofMarkerOff;
 
-		splitOptionsMask(options, leftMask, lineNumbersChoice, eofMarkerChoice);
+		if ((options & kOptionTruncateSpaces) != 0)
+			leftMask |= kLeftOptionTruncateSpaces;
+		if ((options & kOptionEofCtrlZ) != 0)
+			leftMask |= kLeftOptionEofCtrlZ;
+		if ((options & kOptionEofCrLf) != 0)
+			leftMask |= kLeftOptionEofCrLf;
+		if ((options & kOptionBackupFiles) != 0)
+			leftMask |= kLeftOptionBackupFiles;
+		if ((options & kOptionPersistentBlocks) != 0)
+			leftMask |= kLeftOptionPersistentBlocks;
+
+		if ((options & kOptionShowLineNumbers) != 0)
+			lineNumbersChoice = ((options & kOptionLineNumZeroFill) != 0) ? kLineNumbersLeadingZero
+			                                                             : kLineNumbersOn;
+		if ((options & kOptionShowEofMarker) != 0)
+			eofMarkerChoice = ((options & kOptionShowEofMarkerEmoji) != 0) ? kEofMarkerEmoji
+			                                                              : kEofMarkerPlain;
 
 		if (optionsLeftField_ != nullptr)
 			optionsLeftField_->setData((void *)&leftMask);
@@ -344,8 +269,7 @@ class TEditSettingsDialog : public TDialog {
 
 	void loadFieldsFromRecord(const EditSettingsDialogRecord &record) {
 		setInputLineValue(pageBreakField_, record.pageBreak, sizeof(record.pageBreak));
-		setInputLineValue(wordDelimitersField_, record.wordDelimiters,
-		                  sizeof(record.wordDelimiters));
+		setInputLineValue(wordDelimitersField_, record.wordDelimiters, sizeof(record.wordDelimiters));
 		setInputLineValue(defaultExtensionsField_, record.defaultExtensions,
 		                  sizeof(record.defaultExtensions));
 		setInputLineValue(tabSizeField_, record.tabSize, sizeof(record.tabSize));
@@ -370,11 +294,6 @@ class TEditSettingsDialog : public TDialog {
 
 	EditSettingsDialogRecord initialRecord_;
 	EditSettingsDialogRecord currentRecord_;
-	TRect contentRect_;
-	TGroup *content_ = nullptr;
-	std::vector<ManagedItem> managedViews_;
-	TScrollBar *hScrollBar_ = nullptr;
-	TScrollBar *vScrollBar_ = nullptr;
 	TInputLine *pageBreakField_ = nullptr;
 	TInputLine *wordDelimitersField_ = nullptr;
 	TInputLine *defaultExtensionsField_ = nullptr;

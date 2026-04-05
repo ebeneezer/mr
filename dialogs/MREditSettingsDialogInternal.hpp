@@ -85,10 +85,6 @@ bool recordToSettings(const EditSettingsDialogRecord &record, MREditSetupSetting
                       std::string &errorText);
 bool saveAndReloadEditSettings(const EditSettingsDialogRecord &record, std::string &errorText);
 
-ushort buildOptionsMask(ushort leftMask, ushort lineNumbersChoice, ushort eofMarkerChoice) noexcept;
-void splitOptionsMask(ushort options, ushort &leftMask, ushort &lineNumbersChoice,
-                      ushort &eofMarkerChoice) noexcept;
-
 } // namespace MREditSettingsDialogInternal
 
 #endif
