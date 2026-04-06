@@ -39,6 +39,7 @@
 
 #include "../ui/TMREditWindow.hpp"
 #include "../ui/TMRMenuBar.hpp"
+#include "../ui/MRMessageLineController.hpp"
 #include "../dialogs/MRWindowListDialog.hpp"
 #include "../config/MRDialogPaths.hpp"
 #include "../ui/MRWindowSupport.hpp"
@@ -638,22 +639,25 @@ static unsigned classifyTvCallName(const std::string &name) {
 
 static bool applyMarqueeProc(const std::string &name, const std::vector<Value> &args) {
 	TApplication *app = dynamic_cast<TApplication *>(TProgram::application);
-	TMRMenuBar *menuBar = nullptr;
-	TMRMenuBar::MarqueeKind kind = TMRMenuBar::MarqueeKind::Info;
+	mr::messageline::Kind kind = mr::messageline::Kind::Info;
+	std::string text;
 
 	if (args.size() != 1 || !isStringLike(args[0]))
 		throw std::runtime_error(name + " expects one string argument.");
-	if (app != nullptr)
-		menuBar = dynamic_cast<TMRMenuBar *>(app->menuBar);
-	if (menuBar == nullptr)
+	if (app == nullptr || dynamic_cast<TMRMenuBar *>(app->menuBar) == nullptr)
 		throw std::runtime_error(name + " requires an active menu bar.");
 
 	if (name == "MARQUEE_WARNING")
-		kind = TMRMenuBar::MarqueeKind::Warning;
+		kind = mr::messageline::Kind::Warning;
 	else if (name == "MARQUEE_ERROR")
-		kind = TMRMenuBar::MarqueeKind::Error;
+		kind = mr::messageline::Kind::Error;
 
-	menuBar->setManualMarqueeStatus(valueAsString(args[0]), kind);
+	text = valueAsString(args[0]);
+	if (text.empty())
+		mr::messageline::clearOwner(mr::messageline::Owner::MacroMarquee);
+	else
+		mr::messageline::postSticky(mr::messageline::Owner::MacroMarquee, text, kind,
+		                            mr::messageline::kPriorityMedium);
 	return true;
 }
 
@@ -5995,26 +5999,31 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							throw std::runtime_error(
 							    "MRSETUP(LASTFILEDIALOGPATH) failed: " +
 							    (errorText.empty() ? std::string("invalid path.") : errorText));
+					} else if (setupKey == "DEFAULT_PROFILE_DESCRIPTION") {
+						if (!setConfiguredDefaultProfileDescription(valueAsString(args[1]), &errorText))
+							throw std::runtime_error(
+							    "MRSETUP(DEFAULT_PROFILE_DESCRIPTION) failed: " +
+							    (errorText.empty() ? std::string("invalid value.") : errorText));
 					} else if (setupKey == "COLORTHEMEURI") {
 						if (!setConfiguredColorThemeFilePath(valueAsString(args[1]), &errorText))
 							throw std::runtime_error(
 							    "MRSETUP(COLORTHEMEURI) failed: " +
 							    (errorText.empty() ? std::string("invalid path.") : errorText));
-					} else if (setupKey == "PAGEBREAK" || setupKey == "WORDDELIMS" ||
-					           setupKey == "DEFAULTEXTS" || setupKey == "TRUNCSPACES" ||
-					           setupKey == "EOFCTRLZ" || setupKey == "EOFCRLF" ||
-					           setupKey == "TABEXPAND" || setupKey == "TABSIZE" ||
-					           setupKey == "BACKUPFILES" || setupKey == "SHOWEOFMARKER" ||
-					           setupKey == "SHOWEOFMARKEREMOJI" ||
-					           setupKey == "SHOWLINENUMBERS" ||
-					           setupKey == "LINENUMZEROFILL" || setupKey == "PERSISTENTBLOCKS" ||
-					           setupKey == "COLBLOCKMOVE" ||
-					           setupKey == "DEFAULTMODE") {
+					} else if (setupKey == "PAGE_BREAK" || setupKey == "WORD_DELIMITERS" ||
+					           setupKey == "DEFAULT_EXTENSIONS" || setupKey == "TRUNCATE_SPACES" ||
+					           setupKey == "EOF_CTRL_Z" || setupKey == "EOF_CR_LF" ||
+					           setupKey == "TAB_EXPAND" || setupKey == "TAB_SIZE" ||
+					           setupKey == "BACKUP_FILES" || setupKey == "SHOW_EOF_MARKER" ||
+					           setupKey == "SHOW_EOF_MARKER_EMOJI" ||
+					           setupKey == "SHOW_LINE_NUMBERS" ||
+					           setupKey == "LINE_NUM_ZERO_FILL" || setupKey == "PERSISTENT_BLOCKS" ||
+					           setupKey == "CODE_FOLDING" || setupKey == "COLUMN_BLOCK_MOVE" ||
+					           setupKey == "DEFAULT_MODE") {
 							if (!applyConfiguredEditSetupValue(setupKey, valueAsString(args[1]), &errorText))
 								throw std::runtime_error(
 								    "MRSETUP(" + setupKey + ") failed: " +
 							    (errorText.empty() ? std::string("invalid value.") : errorText));
-						if (setupKey == "TABEXPAND") {
+						if (setupKey == "TAB_EXPAND") {
 							BackgroundEditSession *session = currentBackgroundEditSession();
 							if (session != nullptr)
 								session->tabExpand = configuredTabExpandSetting();
@@ -6030,10 +6039,10 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					} else
 						throw std::runtime_error(
 						    "MRSETUP supports keys: SETTINGS_VERSION, MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
-						    "SHELLPATH, LASTFILEDIALOGPATH, COLORTHEMEURI, PAGEBREAK, WORDDELIMS, "
-						    "DEFAULTEXTS, TRUNCSPACES, EOFCTRLZ, EOFCRLF, TABEXPAND, TABSIZE, "
-						    "BACKUPFILES, SHOWEOFMARKER, SHOWEOFMARKEREMOJI, SHOWLINENUMBERS, "
-						    "LINENUMZEROFILL, PERSISTENTBLOCKS, COLBLOCKMOVE, DEFAULTMODE, "
+						    "SHELLPATH, LASTFILEDIALOGPATH, DEFAULT_PROFILE_DESCRIPTION, COLORTHEMEURI, PAGE_BREAK, WORD_DELIMITERS, "
+						    "DEFAULT_EXTENSIONS, TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, TAB_SIZE, "
+						    "BACKUP_FILES, SHOW_EOF_MARKER, SHOW_EOF_MARKER_EMOJI, SHOW_LINE_NUMBERS, "
+						    "LINE_NUM_ZERO_FILL, PERSISTENT_BLOCKS, CODE_FOLDING, COLUMN_BLOCK_MOVE, DEFAULT_MODE, "
 						    "WINDOWCOLORS, MENUDIALOGCOLORS, HELPCOLORS, OTHERCOLORS.");
 					runtimeErrorLevel() = 0;
 				} else if (name == "MREDITPROFILE") {

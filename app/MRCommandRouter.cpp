@@ -9,6 +9,7 @@
 
 #include "MRCommandRouter.hpp"
 
+#include <chrono>
 #include <cstddef>
 #include <cstdio>
 #include <sstream>
@@ -27,6 +28,7 @@
 #include "../ui/TMREditWindow.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "../coprocessor/MRCoprocessor.hpp"
+#include "../ui/MRMessageLineController.hpp"
 #include "TMREditorApp.hpp"
 #include "MRCommands.hpp"
 
@@ -188,6 +190,8 @@ const char *dummyCommandTitle(ushort command) {
 
 		case cmMrDevCancelMacroTasks:
 			return "Dev / Cancel background macros";
+		case cmMrDevHeroEventProbe:
+			return "Dev / Test hero event";
 
 		case cmMrSetupKeyMapping:
 			return "Installation / Key mapping";
@@ -366,6 +370,13 @@ bool handleCancelBackgroundMacros() {
 		line << "s";
 	line << " in window #" << win->bufferId() << ".";
 	mrLogMessage(line.str().c_str());
+	return true;
+}
+
+bool handleHeroEventProbe() {
+	mr::messageline::postTimed(mr::messageline::Owner::HeroEvent, "Hero event probe",
+	                          mr::messageline::Kind::Info, std::chrono::seconds(10),
+	                          mr::messageline::kPriorityLow);
 	return true;
 }
 
@@ -593,6 +604,9 @@ bool handleMRCommand(ushort command) {
 
 		case cmMrDevCancelMacroTasks:
 			return handleCancelBackgroundMacros();
+
+		case cmMrDevHeroEventProbe:
+			return handleHeroEventProbe();
 
 		default: {
 			const char *title = dummyCommandTitle(command);

@@ -139,4 +139,5 @@ void updateAppCommandState() {
 	                  hasWindow && ((state.isCommunicationWindow && !state.hasExternalIoTasks) || state.isLogWindow));
 	setCommandEnabled(cmMrMacroToggleRecording, hasEditor);
 	setCommandEnabled(cmMrDevCancelMacroTasks, hasWindow && state.hasMacroTasks);
+	setCommandEnabled(cmMrDevHeroEventProbe, true);
 }

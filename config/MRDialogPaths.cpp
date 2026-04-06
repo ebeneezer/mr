@@ -64,6 +64,11 @@ std::vector<MREditExtensionProfile> &configuredEditProfiles() {
 	return value;
 }
 
+std::string &configuredDefaultProfileDescriptionValue() {
+	static std::string value = "Global defaults";
+	return value;
+}
+
 MRColorSetupSettings &configuredColorSettings() {
 	static MRColorSetupSettings value;
 	return value;
@@ -432,41 +437,44 @@ static const char *const kColumnBlockMoveLeave = "LEAVE_SPACE";
 static const char *const kDefaultModeInsert = "INSERT";
 static const char *const kDefaultModeOverwrite = "OVERWRITE";
 static const int kDefaultTabSize = 8;
-static const int kMinTabSize = 1;
+static const int kMinTabSize = 2;
 static const int kMaxTabSize = 32;
 static const char *const kThemeSettingsKey = "COLORTHEMEURI";
+static const char *const kWindowColorThemeProfileKey = "WINDOW_COLORTHEME_URI";
 static const char *const kSettingsVersionKey = "SETTINGS_VERSION";
 static const char *const kCurrentSettingsVersion = "2";
 
 static const MREditSettingDescriptor kEditSettingDescriptors[] = {
-    {"PAGEBREAK", "Page break", MREditSettingSection::Text, MREditSettingKind::String, true, kOvPageBreak},
-    {"WORDDELIMS", "Word delimiters", MREditSettingSection::Text, MREditSettingKind::String, true,
+    {"PAGE_BREAK", "Page break", MREditSettingSection::Text, MREditSettingKind::String, true, kOvPageBreak},
+    {"WORD_DELIMITERS", "Word delimiters", MREditSettingSection::Text, MREditSettingKind::String, true,
      kOvWordDelimiters},
-    {"DEFAULTEXTS", "Filename extension fallback", MREditSettingSection::OpenFile, MREditSettingKind::String,
-     false, kOvNone},
-    {"TRUNCSPACES", "Truncate spaces", MREditSettingSection::Save, MREditSettingKind::Boolean, true,
+    {"DEFAULT_EXTENSIONS", "Filename extension fallback", MREditSettingSection::OpenFile, MREditSettingKind::String,
+     true, kOvDefaultExtensions},
+    {"TRUNCATE_SPACES", "Truncate spaces", MREditSettingSection::Save, MREditSettingKind::Boolean, true,
      kOvTruncateSpaces},
-    {"EOFCTRLZ", "Write Ctrl+Z EOF", MREditSettingSection::Save, MREditSettingKind::Boolean, true,
+    {"EOF_CTRL_Z", "Write Ctrl+Z EOF", MREditSettingSection::Save, MREditSettingKind::Boolean, true,
      kOvEofCtrlZ},
-    {"EOFCRLF", "Write CR/LF", MREditSettingSection::Save, MREditSettingKind::Boolean, true, kOvEofCrLf},
-    {"TABEXPAND", "Expand tabs", MREditSettingSection::Tabs, MREditSettingKind::Boolean, true,
+    {"EOF_CR_LF", "Write CR/LF", MREditSettingSection::Save, MREditSettingKind::Boolean, true, kOvEofCrLf},
+    {"TAB_EXPAND", "Expand tabs", MREditSettingSection::Tabs, MREditSettingKind::Boolean, true,
      kOvTabExpand},
-    {"TABSIZE", "Tab size", MREditSettingSection::Tabs, MREditSettingKind::Integer, true, kOvTabSize},
-    {"BACKUPFILES", "Backup files", MREditSettingSection::Save, MREditSettingKind::Boolean, true,
+    {"TAB_SIZE", "Tab size", MREditSettingSection::Tabs, MREditSettingKind::Integer, true, kOvTabSize},
+    {"BACKUP_FILES", "Backup files", MREditSettingSection::Save, MREditSettingKind::Boolean, true,
      kOvBackupFiles},
-    {"SHOWEOFMARKER", "Show EOF marker", MREditSettingSection::Display, MREditSettingKind::Boolean, true,
+    {"SHOW_EOF_MARKER", "Show EOF marker", MREditSettingSection::Display, MREditSettingKind::Boolean, true,
      kOvShowEofMarker},
-    {"SHOWEOFMARKEREMOJI", "EOF marker emoji", MREditSettingSection::Display, MREditSettingKind::Boolean, true,
+    {"SHOW_EOF_MARKER_EMOJI", "EOF marker emoji", MREditSettingSection::Display, MREditSettingKind::Boolean, true,
      kOvShowEofMarkerEmoji},
-    {"SHOWLINENUMBERS", "Show line numbers", MREditSettingSection::Display, MREditSettingKind::Boolean, true,
+    {"SHOW_LINE_NUMBERS", "Show line numbers", MREditSettingSection::Display, MREditSettingKind::Boolean, true,
      kOvShowLineNumbers},
-    {"LINENUMZEROFILL", "Zero-fill line numbers", MREditSettingSection::Display, MREditSettingKind::Boolean,
+    {"LINE_NUM_ZERO_FILL", "Zero-fill line numbers", MREditSettingSection::Display, MREditSettingKind::Boolean,
      true, kOvLineNumZeroFill},
-    {"PERSISTENTBLOCKS", "Persistent blocks", MREditSettingSection::Blocks, MREditSettingKind::Boolean, true,
+    {"PERSISTENT_BLOCKS", "Persistent blocks", MREditSettingSection::Blocks, MREditSettingKind::Boolean, true,
      kOvPersistentBlocks},
-    {"COLBLOCKMOVE", "Column block move", MREditSettingSection::Blocks, MREditSettingKind::Choice, true,
+    {"CODE_FOLDING", "Code folding", MREditSettingSection::Display, MREditSettingKind::Boolean, true,
+     kOvCodeFolding},
+    {"COLUMN_BLOCK_MOVE", "Column block move", MREditSettingSection::Blocks, MREditSettingKind::Choice, true,
      kOvColumnBlockMove},
-    {"DEFAULTMODE", "Default mode", MREditSettingSection::Mode, MREditSettingKind::Choice, true,
+    {"DEFAULT_MODE", "Default mode", MREditSettingSection::Mode, MREditSettingKind::Choice, true,
      kOvDefaultMode},
 };
 
@@ -528,6 +536,7 @@ static const MRColorSetupItem kMenuDialogColorItems[] = {
     {"hotkeys on radio buttons & check boxes", 49},
     {"listbox selector", 58},
     {"inactive radio buttons and checkboxes", kPaletteDialogInactiveClusterGray},
+    {"inactive dialog elements", kMrPaletteDialogInactiveElements},
     {"dialog frame", kPaletteDialogFrame},
     {"dialog text", kPaletteDialogText},
     {"dialog background", kPaletteDialogBackground},
@@ -605,6 +614,8 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 		return defaults[9];
 	if (paletteIndex == kMrPaletteEofMarker)
 		return defaults[14];
+	if (paletteIndex == kMrPaletteDialogInactiveElements)
+		return defaults[kPaletteDialogInactiveClusterGray];
 	if (paletteIndex == 0 || paletteIndex >= sizeof(defaults) / sizeof(defaults[0]))
 		return 0x70;
 	return defaults[paletteIndex];
@@ -1007,12 +1018,12 @@ bool parseTabSizeLiteral(const std::string &value, int &outValue, std::string *e
 	long parsed = 0;
 
 	if (text.empty())
-		return setError(errorMessage, "TABSIZE must be an integer between 1 and 32.");
+		return setError(errorMessage, "TAB_SIZE must be an integer between 2 and 32.");
 	parsed = std::strtol(text.c_str(), &end, 10);
 	if (end == text.c_str() || end == nullptr || *end != '\0')
-		return setError(errorMessage, "TABSIZE must be an integer between 1 and 32.");
+		return setError(errorMessage, "TAB_SIZE must be an integer between 2 and 32.");
 	if (parsed < kMinTabSize || parsed > kMaxTabSize)
-		return setError(errorMessage, "TABSIZE must be between 1 and 32.");
+		return setError(errorMessage, "TAB_SIZE must be between 2 and 32.");
 	outValue = static_cast<int>(parsed);
 	if (errorMessage != nullptr)
 		errorMessage->clear();
@@ -1121,12 +1132,23 @@ const MREditSettingDescriptor *editSettingDescriptorByKeyInternal(const std::str
 	return nullptr;
 }
 
+std::string canonicalEditProfileId(const std::string &value) {
+	return trimAscii(value);
+}
+
+std::string profileIdLookupKey(const std::string &value) {
+	return canonicalEditProfileId(value);
+}
+
 std::string canonicalEditProfileName(const std::string &value) {
 	return trimAscii(value);
 }
 
-std::string profileNameLookupKey(const std::string &value) {
-	return upperAscii(canonicalEditProfileName(value));
+std::string canonicalWindowColorThemeUri(const std::string &value) {
+	std::string trimmed = trimAscii(value);
+	if (trimmed.empty())
+		return std::string();
+	return normalizeConfiguredPathInput(trimmed);
 }
 
 std::string normalizeEditExtensionSelectorValue(const std::string &value) {
@@ -1173,69 +1195,73 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 	bool boolValue = false;
 	std::string normalized;
 
-	if (upperKeyName == "PAGEBREAK")
+	if (upperKeyName == "PAGE_BREAK")
 		current.pageBreak = normalizePageBreakLiteral(value);
-	else if (upperKeyName == "WORDDELIMS") {
+	else if (upperKeyName == "WORD_DELIMITERS") {
 		if (trimAscii(value).empty())
 			current.wordDelimiters = resolveEditSetupDefaults().wordDelimiters;
 		else
 			current.wordDelimiters = value;
-	} else if (upperKeyName == "DEFAULTEXTS")
+	} else if (upperKeyName == "DEFAULT_EXTENSIONS")
 		current.defaultExtensions = canonicalDefaultExtensionsLiteral(value);
-	else if (upperKeyName == "TRUNCSPACES") {
+	else if (upperKeyName == "TRUNCATE_SPACES") {
 		if (!parseBooleanLiteral(value, boolValue, errorMessage))
 			return false;
 		current.truncateSpaces = boolValue;
-	} else if (upperKeyName == "EOFCTRLZ") {
+	} else if (upperKeyName == "EOF_CTRL_Z") {
 		if (!parseBooleanLiteral(value, boolValue, errorMessage))
 			return false;
 		current.eofCtrlZ = boolValue;
-	} else if (upperKeyName == "EOFCRLF") {
+	} else if (upperKeyName == "EOF_CR_LF") {
 		if (!parseBooleanLiteral(value, boolValue, errorMessage))
 			return false;
 		current.eofCrLf = boolValue;
-	} else if (upperKeyName == "TABEXPAND") {
+	} else if (upperKeyName == "TAB_EXPAND") {
 		if (!parseBooleanLiteral(value, boolValue, errorMessage))
 			return false;
 		current.tabExpand = boolValue;
-	} else if (upperKeyName == "TABSIZE") {
+	} else if (upperKeyName == "TAB_SIZE") {
 		int tabSize = 0;
 		if (!parseTabSizeLiteral(value, tabSize, errorMessage))
 			return false;
 		current.tabSize = tabSize;
-	} else if (upperKeyName == "BACKUPFILES") {
+	} else if (upperKeyName == "BACKUP_FILES") {
 		if (!parseBooleanLiteral(value, boolValue, errorMessage))
 			return false;
 		current.backupFiles = boolValue;
-	} else if (upperKeyName == "SHOWEOFMARKER") {
+	} else if (upperKeyName == "SHOW_EOF_MARKER") {
 		if (!parseBooleanLiteral(value, boolValue, errorMessage))
 			return false;
 		current.showEofMarker = boolValue;
-	} else if (upperKeyName == "SHOWEOFMARKEREMOJI") {
+	} else if (upperKeyName == "SHOW_EOF_MARKER_EMOJI") {
 		if (!parseBooleanLiteral(value, boolValue, errorMessage))
 			return false;
 		current.showEofMarkerEmoji = boolValue;
-	} else if (upperKeyName == "SHOWLINENUMBERS") {
+	} else if (upperKeyName == "SHOW_LINE_NUMBERS") {
 		if (!parseBooleanLiteral(value, boolValue, errorMessage))
 			return false;
 		current.showLineNumbers = boolValue;
-	} else if (upperKeyName == "LINENUMZEROFILL") {
+	} else if (upperKeyName == "LINE_NUM_ZERO_FILL") {
 		if (!parseBooleanLiteral(value, boolValue, errorMessage))
 			return false;
 		current.lineNumZeroFill = boolValue;
-	} else if (upperKeyName == "PERSISTENTBLOCKS") {
+	} else if (upperKeyName == "PERSISTENT_BLOCKS") {
 		if (!parseBooleanLiteral(value, boolValue, errorMessage))
 			return false;
 		current.persistentBlocks = boolValue;
-	} else if (upperKeyName == "COLBLOCKMOVE") {
+	} else if (upperKeyName == "CODE_FOLDING") {
+		if (!parseBooleanLiteral(value, boolValue, errorMessage))
+			return false;
+		current.codeFolding = boolValue;
+	} else if (upperKeyName == "COLUMN_BLOCK_MOVE") {
 		normalized = normalizeColumnBlockMove(value);
 		if (normalized.empty())
-			return setError(errorMessage, "COLBLOCKMOVE must be DELETE_SPACE or LEAVE_SPACE.");
+			return setError(errorMessage, "COLUMN_BLOCK_MOVE must be DELETE_SPACE or LEAVE_SPACE.");
 		current.columnBlockMove = normalized;
-	} else if (upperKeyName == "DEFAULTMODE") {
+	} else if (upperKeyName == "DEFAULT_MODE") {
 		normalized = normalizeDefaultMode(value);
 		if (normalized.empty())
-			return setError(errorMessage, "DEFAULTMODE must be INSERT or OVERWRITE.");
+			return setError(errorMessage, "DEFAULT_MODE must be INSERT or OVERWRITE.");
 		current.defaultMode = normalized;
 	} else
 		return setError(errorMessage, "Unknown edit setting key.");
@@ -1245,21 +1271,111 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 	return true;
 }
 
+std::string editSetupValueLiteral(const MREditSetupSettings &settings, const char *key) {
+	std::string upperKey = upperAscii(trimAscii(key != nullptr ? key : ""));
+
+	if (upperKey == "PAGE_BREAK")
+		return settings.pageBreak;
+	if (upperKey == "WORD_DELIMITERS")
+		return settings.wordDelimiters;
+	if (upperKey == "DEFAULT_EXTENSIONS")
+		return settings.defaultExtensions;
+	if (upperKey == "TRUNCATE_SPACES")
+		return formatEditSetupBoolean(settings.truncateSpaces);
+	if (upperKey == "EOF_CTRL_Z")
+		return formatEditSetupBoolean(settings.eofCtrlZ);
+	if (upperKey == "EOF_CR_LF")
+		return formatEditSetupBoolean(settings.eofCrLf);
+	if (upperKey == "TAB_EXPAND")
+		return formatEditSetupBoolean(settings.tabExpand);
+	if (upperKey == "TAB_SIZE")
+		return std::to_string(settings.tabSize);
+	if (upperKey == "BACKUP_FILES")
+		return formatEditSetupBoolean(settings.backupFiles);
+	if (upperKey == "SHOW_EOF_MARKER")
+		return formatEditSetupBoolean(settings.showEofMarker);
+	if (upperKey == "SHOW_EOF_MARKER_EMOJI")
+		return formatEditSetupBoolean(settings.showEofMarkerEmoji);
+	if (upperKey == "SHOW_LINE_NUMBERS")
+		return formatEditSetupBoolean(settings.showLineNumbers);
+	if (upperKey == "LINE_NUM_ZERO_FILL")
+		return formatEditSetupBoolean(settings.lineNumZeroFill);
+	if (upperKey == "PERSISTENT_BLOCKS")
+		return formatEditSetupBoolean(settings.persistentBlocks);
+	if (upperKey == "CODE_FOLDING")
+		return formatEditSetupBoolean(settings.codeFolding);
+	if (upperKey == "COLUMN_BLOCK_MOVE")
+		return settings.columnBlockMove;
+	if (upperKey == "DEFAULT_MODE")
+		return settings.defaultMode;
+	return std::string();
+}
+
+unsigned int supportedEditProfileOverrideMask() noexcept {
+	static constexpr unsigned int mask = kOvPageBreak | kOvWordDelimiters | kOvDefaultExtensions | kOvTruncateSpaces |
+	                                     kOvEofCtrlZ | kOvEofCrLf | kOvTabExpand | kOvTabSize | kOvBackupFiles |
+	                                     kOvShowEofMarker | kOvShowEofMarkerEmoji | kOvShowLineNumbers |
+	                                     kOvLineNumZeroFill | kOvPersistentBlocks | kOvCodeFolding | kOvColumnBlockMove |
+	                                     kOvDefaultMode;
+	return mask;
+}
+
+bool normalizeEditProfileOverridesInPlace(MREditExtensionProfile &profile, std::string *errorMessage) {
+	std::size_t descriptorCount = 0;
+	const MREditSettingDescriptor *descriptors = editSettingDescriptors(descriptorCount);
+	MREditSetupSettings normalizedValues = resolveEditSetupDefaults();
+	unsigned int mask = profile.overrides.mask;
+
+	if ((mask & ~supportedEditProfileOverrideMask()) != 0)
+		return setError(errorMessage, "Extension profile override mask contains unsupported bits.");
+
+	for (std::size_t i = 0; i < descriptorCount; ++i) {
+		const MREditSettingDescriptor &descriptor = descriptors[i];
+
+		if (!descriptor.profileSupported)
+			continue;
+		if ((mask & descriptor.overrideBit) == 0)
+			continue;
+		if (!applyEditSetupValueInternal(normalizedValues, descriptor.key,
+		                               editSetupValueLiteral(profile.overrides.values, descriptor.key),
+		                               errorMessage))
+			return false;
+	}
+
+	profile.overrides.mask = mask;
+	profile.overrides.values = normalizedValues;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
 bool validateNormalizedEditProfiles(const std::vector<MREditExtensionProfile> &profiles, std::string *errorMessage) {
-	std::set<std::string> profileNames;
+	std::set<std::string> profileIds;
 	std::set<std::string> selectors;
 
-	for (const auto & profile : profiles) {
-		std::string name = canonicalEditProfileName(profile.name);
-		std::string lookup = profileNameLookupKey(name);
+	std::map<std::string, std::string> selectorOwners;
 
+	for (const auto & profile : profiles) {
+		std::string id = canonicalEditProfileId(profile.id);
+		std::string name = canonicalEditProfileName(profile.name);
+		std::string lookup = profileIdLookupKey(id);
+
+		if (id.empty())
+			return setError(errorMessage, "Extension profile id may not be empty.");
 		if (name.empty())
 			return setError(errorMessage, "Extension profile name may not be empty.");
-		if (!profileNames.insert(lookup).second)
-			return setError(errorMessage, "Duplicate extension profile name: " + name);
-		for (const std::string & ext : profile.extensions)
-			if (!selectors.insert(ext).second)
-				return setError(errorMessage, "Extension selector is assigned more than once: " + ext);
+		if (!profileIds.insert(lookup).second)
+			return setError(errorMessage, "Duplicate extension profile id: " + id + " (" + name + ")");
+		if (!profile.windowColorThemeUri.empty() &&
+		    !validateColorThemeFilePath(profile.windowColorThemeUri, errorMessage))
+			return false;
+		for (const std::string & ext : profile.extensions) {
+			std::string ownerLabel = id + " (" + name + ")";
+			auto it = selectorOwners.find(ext);
+			if (it != selectorOwners.end())
+				return setError(errorMessage, "Duplicate profile extension '" + ext + "': " + it->second + " and " + ownerLabel);
+			selectorOwners.insert(std::make_pair(ext, ownerLabel));
+		}
 	}
 	if (errorMessage != nullptr)
 		errorMessage->clear();
@@ -1363,6 +1479,7 @@ MREditSetupSettings resolveEditSetupDefaults() {
 	defaults.showLineNumbers = false;
 	defaults.lineNumZeroFill = false;
 	defaults.persistentBlocks = true;
+	defaults.codeFolding = false;
 	defaults.columnBlockMove = kColumnBlockMoveDelete;
 	defaults.defaultMode = kDefaultModeInsert;
 	return defaults;
@@ -1397,6 +1514,8 @@ MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults,
 		merged.pageBreak = overrides.values.pageBreak;
 	if ((overrides.mask & kOvWordDelimiters) != 0)
 		merged.wordDelimiters = overrides.values.wordDelimiters;
+	if ((overrides.mask & kOvDefaultExtensions) != 0)
+		merged.defaultExtensions = overrides.values.defaultExtensions;
 	if ((overrides.mask & kOvTruncateSpaces) != 0)
 		merged.truncateSpaces = overrides.values.truncateSpaces;
 	if ((overrides.mask & kOvEofCtrlZ) != 0)
@@ -1419,6 +1538,8 @@ MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults,
 		merged.lineNumZeroFill = overrides.values.lineNumZeroFill;
 	if ((overrides.mask & kOvPersistentBlocks) != 0)
 		merged.persistentBlocks = overrides.values.persistentBlocks;
+	if ((overrides.mask & kOvCodeFolding) != 0)
+		merged.codeFolding = overrides.values.codeFolding;
 	if ((overrides.mask & kOvColumnBlockMove) != 0)
 		merged.columnBlockMove = overrides.values.columnBlockMove;
 	if ((overrides.mask & kOvDefaultMode) != 0)
@@ -1435,8 +1556,12 @@ bool setConfiguredEditExtensionProfiles(const std::vector<MREditExtensionProfile
 	std::vector<MREditExtensionProfile> normalized = profiles;
 
 	for (auto & profile : normalized) {
+		profile.id = canonicalEditProfileId(profile.id);
 		profile.name = canonicalEditProfileName(profile.name);
+		profile.windowColorThemeUri = canonicalWindowColorThemeUri(profile.windowColorThemeUri);
 		if (!normalizeEditExtensionSelectorsInPlace(profile.extensions, errorMessage))
+			return false;
+		if (!normalizeEditProfileOverridesInPlace(profile, errorMessage))
 			return false;
 	}
 	if (!validateNormalizedEditProfiles(normalized, errorMessage))
@@ -1447,30 +1572,48 @@ bool setConfiguredEditExtensionProfiles(const std::vector<MREditExtensionProfile
 	return true;
 }
 
-bool applyConfiguredEditExtensionProfileDirective(const std::string &operation, const std::string &profileName,
+std::string configuredDefaultProfileDescription() {
+	return configuredDefaultProfileDescriptionValue();
+}
+
+bool setConfiguredDefaultProfileDescription(const std::string &value, std::string *errorMessage) {
+	configuredDefaultProfileDescriptionValue() = trimAscii(value);
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+bool applyConfiguredEditExtensionProfileDirective(const std::string &operation, const std::string &profileId,
                                                   const std::string &arg3, const std::string &arg4,
                                                   std::string *errorMessage) {
 	std::string op = upperAscii(trimAscii(operation));
-	std::string name = canonicalEditProfileName(profileName);
+	std::string id = canonicalEditProfileId(profileId);
 	std::vector<MREditExtensionProfile> profiles = configuredEditProfiles();
 	MREditExtensionProfile *profile = nullptr;
 	std::size_t i = 0;
 
 	if (op.empty())
 		return setError(errorMessage, "MREDITPROFILE operation may not be empty.");
-	if (name.empty())
-		return setError(errorMessage, "MREDITPROFILE profile name may not be empty.");
+	if (id.empty())
+		return setError(errorMessage, "MREDITPROFILE profile id may not be empty.");
 
 	for (i = 0; i < profiles.size(); ++i)
-		if (profileNameLookupKey(profiles[i].name) == profileNameLookupKey(name)) {
+		if (profileIdLookupKey(profiles[i].id) == profileIdLookupKey(id)) {
 			profile = &profiles[i];
 			break;
 		}
 
 	if (op == "DEFINE") {
+		std::string name = canonicalEditProfileName(arg3);
+
+		if (name.empty() && trimAscii(arg4).empty())
+			name = id;
+		if (name.empty())
+			return setError(errorMessage, "MREDITPROFILE DEFINE requires a non-empty display name.");
 		if (profile != nullptr)
-			return setError(errorMessage, "Duplicate extension profile definition: " + name);
+			return setError(errorMessage, "Duplicate extension profile id: " + id);
 		MREditExtensionProfile created;
+		created.id = id;
 		created.name = name;
 		created.overrides.values = resolveEditSetupDefaults();
 		profiles.push_back(created);
@@ -1478,7 +1621,7 @@ bool applyConfiguredEditExtensionProfileDirective(const std::string &operation, 
 	}
 
 	if (profile == nullptr)
-		return setError(errorMessage, "Unknown extension profile: " + name);
+		return setError(errorMessage, "Unknown extension profile id: " + id);
 
 	if (op == "EXT") {
 		profile->extensions.push_back(arg3);
@@ -1486,6 +1629,14 @@ bool applyConfiguredEditExtensionProfileDirective(const std::string &operation, 
 	}
 
 	if (op == "SET") {
+		if (upperAscii(trimAscii(arg3)) == kWindowColorThemeProfileKey) {
+			std::string normalizedTheme = canonicalWindowColorThemeUri(arg4);
+			if (!normalizedTheme.empty() && !validateColorThemeFilePath(normalizedTheme, errorMessage))
+				return false;
+			profile->windowColorThemeUri = normalizedTheme;
+			return setConfiguredEditExtensionProfiles(profiles, errorMessage);
+		}
+
 		const MREditSettingDescriptor *descriptor = editSettingDescriptorByKeyInternal(arg3);
 
 		if (descriptor == nullptr)
@@ -1502,27 +1653,56 @@ bool applyConfiguredEditExtensionProfileDirective(const std::string &operation, 
 	return setError(errorMessage, "MREDITPROFILE supports operations DEFINE, EXT and SET.");
 }
 
-MREditSetupSettings effectiveEditSetupSettingsForPath(const std::string &path, std::string *matchedProfileName) {
+bool effectiveEditSetupSettingsForPath(const std::string &path, MREditSetupSettings &out,
+                                       std::string *matchedProfileName) {
 	MREditSetupSettings defaults = configuredEditSetupSettings();
 	std::string normalized = normalizeDialogPath(path.c_str());
 	std::size_t sep = normalized.find_last_of("/\\");
 	std::string base = sep == std::string::npos ? normalized : normalized.substr(sep + 1);
 	std::size_t dot = base.find_last_of('.');
 
+	out = defaults;
 	if (matchedProfileName != nullptr)
 		matchedProfileName->clear();
 	if (base.empty() || dot == std::string::npos || dot + 1 >= base.size())
-		return defaults;
+		return true;
 
 	std::string ext = base.substr(dot + 1);
 	for (const auto & profile : configuredEditProfiles())
 		for (const std::string & selector : profile.extensions)
 			if (selector == ext) {
+				out = mergeEditSetupSettings(defaults, profile.overrides);
 				if (matchedProfileName != nullptr)
 					*matchedProfileName = profile.name;
-				return mergeEditSetupSettings(defaults, profile.overrides);
+				return true;
 			}
-	return defaults;
+	return true;
+}
+
+bool effectiveEditWindowColorThemePathForPath(const std::string &path, std::string &themeUri,
+                                              std::string *matchedProfileName) {
+	std::string normalized = normalizeDialogPath(path.c_str());
+	std::size_t sep = normalized.find_last_of("/\\");
+	std::string base = sep == std::string::npos ? normalized : normalized.substr(sep + 1);
+	std::size_t dot = base.find_last_of('.');
+
+	themeUri = configuredColorThemeFilePath();
+	if (matchedProfileName != nullptr)
+		matchedProfileName->clear();
+	if (base.empty() || dot == std::string::npos || dot + 1 >= base.size())
+		return true;
+
+	std::string ext = base.substr(dot + 1);
+	for (const auto & profile : configuredEditProfiles())
+		for (const std::string & selector : profile.extensions)
+			if (selector == ext) {
+				if (!profile.windowColorThemeUri.empty())
+					themeUri = profile.windowColorThemeUri;
+				if (matchedProfileName != nullptr)
+					*matchedProfileName = profile.name;
+				return true;
+			}
+	return true;
 }
 
 MREditSetupSettings configuredEditSetupSettings() {
@@ -1554,11 +1734,11 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	std::string defaultMode = normalizeDefaultMode(settings.defaultMode);
 
 	if (wordDelimiters.empty())
-		return setError(errorMessage, "WORDDELIMS may not be empty.");
+		return setError(errorMessage, "WORD_DELIMITERS may not be empty.");
 	if (columnStyle.empty())
-		return setError(errorMessage, "COLBLOCKMOVE must be DELETE_SPACE or LEAVE_SPACE.");
+		return setError(errorMessage, "COLUMN_BLOCK_MOVE must be DELETE_SPACE or LEAVE_SPACE.");
 	if (defaultMode.empty())
-		return setError(errorMessage, "DEFAULTMODE must be INSERT or OVERWRITE.");
+		return setError(errorMessage, "DEFAULT_MODE must be INSERT or OVERWRITE.");
 
 	if (!parseBooleanLiteral(settings.truncateSpaces ? "true" : "false", parsedBool, &boolError))
 		return setError(errorMessage, boolError);
@@ -1573,7 +1753,7 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 		return setError(errorMessage, boolError);
 	normalized.tabExpand = parsedBool;
 	if (settings.tabSize < kMinTabSize || settings.tabSize > kMaxTabSize)
-		return setError(errorMessage, "TABSIZE must be between 1 and 32.");
+		return setError(errorMessage, "TAB_SIZE must be between 2 and 32.");
 	if (!parseBooleanLiteral(settings.backupFiles ? "true" : "false", parsedBool, &boolError))
 		return setError(errorMessage, boolError);
 	normalized.backupFiles = parsedBool;
@@ -1592,6 +1772,9 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	if (!parseBooleanLiteral(settings.persistentBlocks ? "true" : "false", parsedBool, &boolError))
 		return setError(errorMessage, boolError);
 	normalized.persistentBlocks = parsedBool;
+	if (!parseBooleanLiteral(settings.codeFolding ? "true" : "false", parsedBool, &boolError))
+		return setError(errorMessage, boolError);
+	normalized.codeFolding = parsedBool;
 
 	normalized.pageBreak = pageBreak;
 	normalized.wordDelimiters = wordDelimiters;
@@ -1791,6 +1974,28 @@ bool loadColorThemeFile(const std::string &themeUri, std::string *errorMessage) 
 	return true;
 }
 
+bool loadWindowColorThemeGroupValues(const std::string &themeUri,
+                                     std::array<unsigned char, MRColorSetupSettings::kWindowCount> &outValues,
+                                     std::string *errorMessage) {
+	std::string normalized = normalizeConfiguredPathInput(themeUri);
+	std::string source;
+	std::map<std::string, std::string> assignments;
+
+	if (!validateColorThemeFilePath(normalized, errorMessage))
+		return false;
+	if (!ensureColorThemeFileExists(normalized, errorMessage))
+		return false;
+	if (!readTextFile(normalized, source))
+		return setError(errorMessage, "Unable to read color theme file: " + normalized);
+	if (!parseThemeSetupAssignments(source, assignments, errorMessage))
+		return false;
+	if (!parseWindowColorListLiteral(assignments["WINDOWCOLORS"], outValues, errorMessage))
+		return false;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
 const char *colorSetupGroupTitle(MRColorSetupGroup group) {
 	const ColorGroupDefinition *definition = findColorGroupDefinition(group);
 	return definition != nullptr ? definition->title : "";
@@ -1851,6 +2056,7 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 	unsigned char dialogText = 0;
 	unsigned char dialogBackground = 0;
 	unsigned char dialogInactiveCluster = 0;
+	unsigned char dialogInactiveElements = 0;
 
 	// Turbo Vision menu hotkeys use two app slots:
 	// - slot 4: shortcut text (normal item)
@@ -1873,6 +2079,8 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 			dialogBackground = configured.menuDialogColors[i];
 		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogInactiveClusterGray)
 			dialogInactiveCluster = configured.menuDialogColors[i];
+		if (kMenuDialogColorItems[i].paletteIndex == kMrPaletteDialogInactiveElements)
+			dialogInactiveElements = configured.menuDialogColors[i];
 	}
 
 	switch (paletteIndex) {
@@ -1897,7 +2105,10 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 		case kPaletteDialogInactiveClusterGray:
 		case kPaletteDialogInactiveClusterBlue:
 		case kPaletteDialogInactiveClusterCyan:
-			value = dialogInactiveCluster;
+			value = dialogInactiveElements != 0 ? dialogInactiveElements : dialogInactiveCluster;
+			return true;
+		case kMrPaletteDialogInactiveElements:
+			value = dialogInactiveElements;
 			return true;
 		default:
 			break;
@@ -2012,80 +2223,92 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source += "MRSETUP('SHELLPATH', '" + escapeMrmacSingleQuotedLiteral(shellPath) + "');\n";
 	source += "MRSETUP('LASTFILEDIALOGPATH', '" +
 	          escapeMrmacSingleQuotedLiteral(configuredLastFileDialogPath()) + "');\n";
-	source += "MRSETUP('PAGEBREAK', '" + escapeMrmacSingleQuotedLiteral(edit.pageBreak) + "');\n";
-	source += "MRSETUP('WORDDELIMS', '" + escapeMrmacSingleQuotedLiteral(edit.wordDelimiters) + "');\n";
+	source += "MRSETUP('DEFAULT_PROFILE_DESCRIPTION', '" +
+	          escapeMrmacSingleQuotedLiteral(configuredDefaultProfileDescription()) + "');\n";
+	source += "MRSETUP('PAGE_BREAK', '" + escapeMrmacSingleQuotedLiteral(edit.pageBreak) + "');\n";
+	source += "MRSETUP('WORD_DELIMITERS', '" + escapeMrmacSingleQuotedLiteral(edit.wordDelimiters) + "');\n";
 	source +=
-	    "MRSETUP('DEFAULTEXTS', '" + escapeMrmacSingleQuotedLiteral(edit.defaultExtensions) + "');\n";
-	source += "MRSETUP('TRUNCSPACES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.truncateSpaces)) +
+	    "MRSETUP('DEFAULT_EXTENSIONS', '" + escapeMrmacSingleQuotedLiteral(edit.defaultExtensions) + "');\n";
+	source += "MRSETUP('TRUNCATE_SPACES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.truncateSpaces)) +
 	          "');\n";
 	source +=
-	    "MRSETUP('EOFCTRLZ', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.eofCtrlZ)) +
+	    "MRSETUP('EOF_CTRL_Z', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.eofCtrlZ)) +
 	    "');\n";
-	source += "MRSETUP('EOFCRLF', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.eofCrLf)) +
+	source += "MRSETUP('EOF_CR_LF', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.eofCrLf)) +
 	          "');\n";
 	source +=
-	    "MRSETUP('TABEXPAND', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.tabExpand)) +
+	    "MRSETUP('TAB_EXPAND', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.tabExpand)) +
 	    "');\n";
-	source += "MRSETUP('TABSIZE', '" + std::to_string(edit.tabSize) + "');\n";
-	source += "MRSETUP('BACKUPFILES', '" +
+	source += "MRSETUP('TAB_SIZE', '" + std::to_string(edit.tabSize) + "');\n";
+	source += "MRSETUP('BACKUP_FILES', '" +
 	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.backupFiles)) + "');\n";
-	source += "MRSETUP('SHOWEOFMARKER', '" +
+	source += "MRSETUP('SHOW_EOF_MARKER', '" +
 	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.showEofMarker)) + "');\n";
-	source += "MRSETUP('SHOWEOFMARKEREMOJI', '" +
+	source += "MRSETUP('SHOW_EOF_MARKER_EMOJI', '" +
 	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.showEofMarkerEmoji)) + "');\n";
-	source += "MRSETUP('SHOWLINENUMBERS', '" +
+	source += "MRSETUP('SHOW_LINE_NUMBERS', '" +
 	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.showLineNumbers)) + "');\n";
-	source += "MRSETUP('LINENUMZEROFILL', '" +
+	source += "MRSETUP('LINE_NUM_ZERO_FILL', '" +
 	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.lineNumZeroFill)) + "');\n";
-	source += "MRSETUP('PERSISTENTBLOCKS', '" +
+	source += "MRSETUP('PERSISTENT_BLOCKS', '" +
 	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.persistentBlocks)) + "');\n";
-	source += "MRSETUP('COLBLOCKMOVE', '" + escapeMrmacSingleQuotedLiteral(edit.columnBlockMove) + "');\n";
-	source += "MRSETUP('DEFAULTMODE', '" + escapeMrmacSingleQuotedLiteral(edit.defaultMode) + "');\n";
+	source += "MRSETUP('CODE_FOLDING', '" +
+	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.codeFolding)) + "');\n";
+	source += "MRSETUP('COLUMN_BLOCK_MOVE', '" + escapeMrmacSingleQuotedLiteral(edit.columnBlockMove) + "');\n";
+	source += "MRSETUP('DEFAULT_MODE', '" + escapeMrmacSingleQuotedLiteral(edit.defaultMode) + "');\n";
 	source += "MRSETUP('" + std::string(kThemeSettingsKey) + "', '" +
 	          escapeMrmacSingleQuotedLiteral(themePath) + "');\n";
 
 	for (const auto & profile : configuredEditExtensionProfiles()) {
-		source += "MREDITPROFILE('DEFINE', '" + escapeMrmacSingleQuotedLiteral(profile.name) +
-	          "', '', '');\n";
+		source += "MREDITPROFILE('DEFINE', '" + escapeMrmacSingleQuotedLiteral(profile.id) +
+		          "', '" + escapeMrmacSingleQuotedLiteral(profile.name) + "', '');\n";
 		for (const std::string & ext : profile.extensions)
-			source += "MREDITPROFILE('EXT', '" + escapeMrmacSingleQuotedLiteral(profile.name) + "', '" +
-		          escapeMrmacSingleQuotedLiteral(ext) + "', '');\n";
+			source += "MREDITPROFILE('EXT', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', '" +
+			          escapeMrmacSingleQuotedLiteral(ext) + "', '');\n";
+		if (!profile.windowColorThemeUri.empty())
+			source += "MREDITPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', '" +
+			          std::string(kWindowColorThemeProfileKey) + "', '" +
+			          escapeMrmacSingleQuotedLiteral(profile.windowColorThemeUri) + "');\n";
 		for (std::size_t i = 0; i < descriptorCount; ++i)
 			if (descriptors[i].profileSupported && (profile.overrides.mask & descriptors[i].overrideBit) != 0) {
 				std::string value;
 
-				if (std::string(descriptors[i].key) == "PAGEBREAK")
+				if (std::string(descriptors[i].key) == "PAGE_BREAK")
 					value = profile.overrides.values.pageBreak;
-				else if (std::string(descriptors[i].key) == "WORDDELIMS")
+				else if (std::string(descriptors[i].key) == "WORD_DELIMITERS")
 					value = profile.overrides.values.wordDelimiters;
-				else if (std::string(descriptors[i].key) == "TRUNCSPACES")
+				else if (std::string(descriptors[i].key) == "DEFAULT_EXTENSIONS")
+					value = profile.overrides.values.defaultExtensions;
+				else if (std::string(descriptors[i].key) == "TRUNCATE_SPACES")
 					value = formatEditSetupBoolean(profile.overrides.values.truncateSpaces);
-				else if (std::string(descriptors[i].key) == "EOFCTRLZ")
+				else if (std::string(descriptors[i].key) == "EOF_CTRL_Z")
 					value = formatEditSetupBoolean(profile.overrides.values.eofCtrlZ);
-				else if (std::string(descriptors[i].key) == "EOFCRLF")
+				else if (std::string(descriptors[i].key) == "EOF_CR_LF")
 					value = formatEditSetupBoolean(profile.overrides.values.eofCrLf);
-				else if (std::string(descriptors[i].key) == "TABEXPAND")
+				else if (std::string(descriptors[i].key) == "TAB_EXPAND")
 					value = formatEditSetupBoolean(profile.overrides.values.tabExpand);
-				else if (std::string(descriptors[i].key) == "TABSIZE")
+				else if (std::string(descriptors[i].key) == "TAB_SIZE")
 					value = std::to_string(profile.overrides.values.tabSize);
-				else if (std::string(descriptors[i].key) == "BACKUPFILES")
+				else if (std::string(descriptors[i].key) == "BACKUP_FILES")
 					value = formatEditSetupBoolean(profile.overrides.values.backupFiles);
-				else if (std::string(descriptors[i].key) == "SHOWEOFMARKER")
+				else if (std::string(descriptors[i].key) == "SHOW_EOF_MARKER")
 					value = formatEditSetupBoolean(profile.overrides.values.showEofMarker);
-				else if (std::string(descriptors[i].key) == "SHOWEOFMARKEREMOJI")
+				else if (std::string(descriptors[i].key) == "SHOW_EOF_MARKER_EMOJI")
 					value = formatEditSetupBoolean(profile.overrides.values.showEofMarkerEmoji);
-				else if (std::string(descriptors[i].key) == "SHOWLINENUMBERS")
+				else if (std::string(descriptors[i].key) == "SHOW_LINE_NUMBERS")
 					value = formatEditSetupBoolean(profile.overrides.values.showLineNumbers);
-				else if (std::string(descriptors[i].key) == "LINENUMZEROFILL")
+				else if (std::string(descriptors[i].key) == "LINE_NUM_ZERO_FILL")
 					value = formatEditSetupBoolean(profile.overrides.values.lineNumZeroFill);
-				else if (std::string(descriptors[i].key) == "PERSISTENTBLOCKS")
+				else if (std::string(descriptors[i].key) == "PERSISTENT_BLOCKS")
 					value = formatEditSetupBoolean(profile.overrides.values.persistentBlocks);
-				else if (std::string(descriptors[i].key) == "COLBLOCKMOVE")
+				else if (std::string(descriptors[i].key) == "CODE_FOLDING")
+					value = formatEditSetupBoolean(profile.overrides.values.codeFolding);
+				else if (std::string(descriptors[i].key) == "COLUMN_BLOCK_MOVE")
 					value = profile.overrides.values.columnBlockMove;
-				else if (std::string(descriptors[i].key) == "DEFAULTMODE")
+				else if (std::string(descriptors[i].key) == "DEFAULT_MODE")
 					value = profile.overrides.values.defaultMode;
 
-				source += "MREDITPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.name) + "', '" +
+				source += "MREDITPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', '" +
 				          descriptors[i].key + "', '" + escapeMrmacSingleQuotedLiteral(value) + "');\n";
 			}
 	}

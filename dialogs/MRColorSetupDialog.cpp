@@ -251,8 +251,11 @@ TColorGroup *buildAllColorGroups() {
 
 		if (items == nullptr || count == 0)
 			continue;
-		for (std::size_t i = count; i-- > 0;)
+		for (std::size_t i = count; i-- > 0;) {
+			if (groups[g] == MRColorSetupGroup::MenuDialog && items[i].paletteIndex == 62)
+				continue;
 			itemHead = new TColorItem(items[i].label, items[i].paletteIndex, itemHead);
+		}
 		head = new TColorGroup(colorSetupGroupTitle(groups[g]), itemHead, head);
 	}
 	return head;

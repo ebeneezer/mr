@@ -236,13 +236,11 @@ class TInstallationAndSetupDialog : public MRScrollableDialog {
 		addLine(TRect(g.rightX1, 4, g.rightX1 + static_cast<short>(cpuLine.size() + 1), 5), cpuLine);
 		addLine(TRect(2, 5, 2 + static_cast<short>(ramLine.size() + 1), 6), ramLine);
 
-		addButton(TRect(g.kLeftX1, 9, g.leftX2, 11), "~E~dit settings...", cmMrSetupEditSettings,
+		addButton(TRect(g.kLeftX1, 9, g.leftX2, 11), "~C~olor setup...", cmMrSetupColorSetup,
 		          bfNormal);
-		addButton(TRect(g.kLeftX1, 11, g.leftX2, 13), "~C~olor setup...", cmMrSetupColorSetup,
+		addButton(TRect(g.kLeftX1, 11, g.leftX2, 13), "~K~ey mapping...", cmMrSetupKeyMapping,
 		          bfNormal);
-		addButton(TRect(g.kLeftX1, 13, g.leftX2, 15), "~K~ey mapping...", cmMrSetupKeyMapping,
-		          bfNormal);
-		addButton(TRect(g.kLeftX1, 15, g.leftX2, 17), "~S~earch and Replace...",
+		addButton(TRect(g.kLeftX1, 13, g.leftX2, 15), "~S~earch and Replace...",
 		          cmMrSetupSearchAndReplaceDefaults, bfNormal);
 
 		addButton(TRect(g.rightX1, 9, g.rightX2, 11), "~M~ouse / Key repeat...",

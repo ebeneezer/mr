@@ -1,0 +1,117 @@
+MR / Multi-Edit Revisited – Kontextwechsel-Handoff
+Datum: 2026-04-06
+
+WICHTIG / VERBINDLICHE PROJEKTREGEL
+- Standardnähe zu magiblot/TVision ist zwingend.
+- Keine nicht standardnahen UI-Workarounds oder Overlay-Konstruktionen, wenn eine TVision-nahe Lösung möglich ist.
+- Dieses Projekt optimiert nicht auf Geschwindigkeit der Fertigstellung.
+- Priorität hat technische Exzellenz, saubere Architektur und robuste, standardnahe Implementierung.
+- Diese Regel in künftigen Handoffs immer ausdrücklich mitschreiben.
+
+AKTUELLER STAND
+- Der aktuelle Arbeitszug rund um den Filename-Extensions-/Profile-/DEFAULT-Dialog ("FE-Dialog") ist nach langem Reparaturzug jetzt in einem sehr guten Zustand.
+- Nutzerurteil zuletzt:
+  - "Das ist Perfektion!"
+  - "UI stabil"
+  - "Fehler: 0"
+- Dieser Stand ist als neuer sauberer Basispunkt zu behandeln.
+
+BESTÄTIGT FUNKTIONIEREND
+1. Read-only / TVision-Standardnähe
+- Frühere Overlay-/Fake-View-Konstruktionen wurden als architektonisch falsch erkannt.
+- Der aktuelle gute Stand ist TVision-näher und ruhig im Verhalten.
+- Read-only ist gefixt.
+- Dialogaufbau wurde vom Nutzer ausdrücklich als "wunderschöner sauberer ruhiger Dialogaufbau" gelobt.
+
+2. Dirty / Cancel / Exit-Verhalten
+- Dirty Exit ist gefixt.
+- Der problematische FE-Dialog -> Dirty-Dialog -> Cancel-Zustandsautomat wurde bereinigt.
+
+3. Farben / Palette-Walk
+- Die Falschfarben-/Palette-Walk-Regressionsserie wurde gefixt.
+- Nutzerbefund: Farben sehen nun gut aus; ggf. später nochmals fein prüfen, aber strukturell offenbar in Ordnung.
+
+4. Validatoren / Done-Ghosting
+- Letzter erfolgreicher Reparaturzug: round12 validator hardening.
+- Nutzerbefund final:
+  - Profile-ID-Validator feuert direkt im Feld, ohne TAB-Abhängigkeit.
+  - Profile-ID-Prüfung ist case-insensitiv.
+  - Extension-Validator feuert direkt im Feld.
+  - Extension-Prüfung ist case-sensitiv.
+  - Done ghostet instantan.
+  - UI stabil.
+  - Fehler: 0.
+
+5. Build
+- Nutzerseitiger echter Build-Log war erfolgreich; `mr` linkt vollständig.
+- Damit sind die offenen Punkte nicht mehr Build-Blocker, sondern nur noch zukünftige Funktions-/Architekturarbeiten.
+
+RELEVANTE HANDOFF-ARTEFAKTE DIESES ZUGS
+- round11: mr-filename-extensions-round11-tv-standard-readonly-ghosting-dirty.tar.bz2
+  Schwerpunkt:
+  - TVision-nähere Read-only-Mechanik
+  - Dirty-Cancel-Baseline
+  - Palette-Walk-/Window-Farbpfad stabilisiert
+- round12: mr-filename-extensions-round12-validator-hardening.tar.bz2
+  Schwerpunkt:
+  - echte Feldänderungserkennung in TNotifyingInputLine
+  - harte Save-/Save-All-Absicherung gegen invaliden Draft
+  - Validator-/Ghosting-Härtung
+
+WAS JETZT ALS REFERENZ / VORLAGE GELTEN SOLL
+Der FE-Dialog soll als Vorlage für noch kommende Dialoge dienen. Nicht nur optisch, sondern architektonisch.
+
+VERBINDLICHE EIGENSCHAFTEN DIESER VORLAGE
+1. TVision-Standardnähe
+- Keine Overlays als Ersatz für fehlende Dialogsemantik.
+- Keine Trick-Views über editierbaren Feldern.
+- Keine instabilen Fokus-/Sichtbarkeitskonstruktionen, wenn sich das Problem TVision-näher lösen lässt.
+
+2. Ruhiger, klarer Dialogaufbau
+- Saubere Ausrichtung.
+- Klare Gruppierung.
+- Kein hektisches oder fragiles Reaktionsverhalten.
+- Geometrie/Fokus/Padding bewusst und konsistent.
+
+3. Validatorstrategie
+- Validatoren feuern direkt am Feldzustand, nicht erst bei Done.
+- Done-Ghosting spiegelt Invalid-Zustände sofort.
+- Save-/Save-All-Pfad darf Invalid-Zustände redundant NICHT durchlassen.
+- Message-Line/Marquee statt alter modaler Validator-Popups.
+
+4. Dirty-State-Strategie
+- Draft-Zustand sauber von gespeicherter Baseline trennen.
+- Cancel in Unterdialogen oder Abfragen darf den Dirty-Zustand nicht versehentlich verlieren.
+
+5. Browse-/Picker-Verhalten
+- Funktionierende, schöne TVision-nahe Browse-Lösung aus den guten Dialogen wiederverwenden.
+- Keine hässlichen Ausweich-Buttons, wenn der etablierte Standard bereits vorhanden ist.
+
+6. Farb-/Palette-Pfade
+- Palette-Anwendung nur standardnah und nachvollziehbar.
+- Kein unkontrollierter Palette-Walk.
+- Farben nicht über ad-hoc-Mischungen stabilisieren, wenn sauberer Slot-/Mapping-Fix möglich ist.
+
+EMPFEHLUNG FÜR DIE NÄCHSTE ARBEITSPHASE
+- Nicht sofort neue Funktionalität in den FE-Dialog kippen.
+- Zuerst bewusst festhalten, welche Teile des FE-Dialogs als wiederverwendbares Muster extrahiert werden sollen.
+- Mögliche Kandidaten:
+  - Layout-Rhythmus / Label-Feld-Ausrichtung
+  - TVision-nahe notifying input lines
+  - Validator-/Ghosting-Muster
+  - Dirty-Baseline-Muster
+  - Browse-/Picker-Anbindung
+  - Message-Line-Integration
+
+SINNVOLLER NÄCHSTER SCHRITT IM NEUEN CHAT
+- Den bestätigten guten FE-Dialog-Stand als Referenz festschreiben.
+- Dann prüfen, welche Hilfsklassen / kleinen Dialog-Bausteine aus diesem Dialog generalisiert werden können, OHNE in einen neuen Abstraktionsmonolithen zu kippen.
+- Ziel: kommende Dialoge sollen dieselbe Ruhe, Standardnähe und Robustheit bekommen.
+
+WICHTIGER HINWEIS ZUM START IM NEUEN CHAT
+- Exakt auf dem hochgeladenen aktuellen Sync-Stand plus den zuletzt validierten Reparaturzügen aufsetzen.
+- Nicht auf alte Round5-10-Fehlerstände zurückfallen.
+- Im Zweifel den aktuell funktionierenden FE-Dialog-Zustand als Quellwahrheit behandeln.
+
+EMPFOHLENER STARTTEXT FÜR DEN NÄCHSTEN CHAT
+"Fortsetzung MR / Multi-Edit Revisited. Bitte exakt auf dem hochgeladenen aktuellen Sync-Stand plus dem zuletzt validierten FE-Dialog-Reparaturstand aufsetzen, nicht auf alten Chats. Der Filename-Extensions-/Profile-/DEFAULT-Dialog gilt jetzt als bestätigter Referenzdialog und soll als Vorlage für kommende Dialoge dienen. Verbindliche Projektregel: Standardnähe zu magiblot/TVision ist zwingend; keine nicht standardnahen UI-Workarounds oder Overlay-Konstruktionen, wenn eine TVision-nahe Lösung möglich ist. Priorität ist technische Exzellenz und saubere Architektur, nicht Geschwindigkeit. Bitte zuerst den Handoff lesen und dann den FE-Dialog-Stand als Muster für Generalisierung/Weiterarbeit reflektieren." 

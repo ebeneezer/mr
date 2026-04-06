@@ -183,6 +183,7 @@ struct RuntimeSettingsSnapshot {
 	std::string shellExecutablePath;
 	std::string colorThemeFilePath;
 	MREditSetupSettings editSettings;
+	std::vector<MREditExtensionProfile> editExtensionProfiles;
 	MRColorSetupSettings colorSettings;
 };
 
@@ -210,6 +211,7 @@ RuntimeSettingsSnapshot captureRuntimeSettingsSnapshot() {
 	snapshot.shellExecutablePath = configuredShellExecutablePath();
 	snapshot.colorThemeFilePath = configuredColorThemeFilePath();
 	snapshot.editSettings = configuredEditSetupSettings();
+	snapshot.editExtensionProfiles = configuredEditExtensionProfiles();
 	snapshot.colorSettings = configuredColorSetupSettings();
 	return snapshot;
 }
@@ -226,6 +228,8 @@ bool restoreRuntimeSettingsSnapshot(const RuntimeSettingsSnapshot &snapshot, std
 	if (!setConfiguredShellExecutablePath(snapshot.shellExecutablePath, &errorText))
 		return false;
 	if (!setConfiguredEditSetupSettings(snapshot.editSettings, &errorText))
+		return false;
+	if (!setConfiguredEditExtensionProfiles(snapshot.editExtensionProfiles, &errorText))
 		return false;
 	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, snapshot.colorSettings.windowColors.data(),
 	                                        snapshot.colorSettings.windowColors.size(), &errorText))
@@ -432,21 +436,21 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 	                           "MRSETUP('HELPPATH', 'mr.hlp');\n"
 	                           "MRSETUP('TEMPDIR', '/tmp');\n"
 	                           "MRSETUP('SHELLPATH', '/bin/sh');\n"
-	                           "MRSETUP('PAGEBREAK', '\\\\f');\n"
-	                           "MRSETUP('WORDDELIMS', '._-');\n"
-	                           "MRSETUP('DEFAULTEXTS', 'txt;md');\n"
-	                           "MRSETUP('TRUNCSPACES', 'true');\n"
-	                           "MRSETUP('EOFCTRLZ', 'false');\n"
-	                           "MRSETUP('EOFCRLF', 'true');\n"
-	                           "MRSETUP('TABEXPAND', 'false');\n"
-	                           "MRSETUP('TABSIZE', '6');\n"
-	                           "MRSETUP('BACKUPFILES', 'false');\n"
-	                           "MRSETUP('SHOWEOFMARKER', 'true');\n"
-	                           "MRSETUP('SHOWEOFMARKEREMOJI', 'false');\n"
-	                           "MRSETUP('SHOWLINENUMBERS', 'true');\n"
-	                           "MRSETUP('LINENUMZEROFILL', 'true');\n"
-	                           "MRSETUP('COLBLOCKMOVE', 'LEAVE_SPACE');\n"
-	                           "MRSETUP('DEFAULTMODE', 'OVERWRITE');\n"
+	                           "MRSETUP('PAGE_BREAK', '\\\\f');\n"
+	                           "MRSETUP('WORD_DELIMITERS', '._-');\n"
+	                           "MRSETUP('DEFAULT_EXTENSIONS', 'txt;md');\n"
+	                           "MRSETUP('TRUNCATE_SPACES', 'true');\n"
+	                           "MRSETUP('EOF_CTRL_Z', 'false');\n"
+	                           "MRSETUP('EOF_CR_LF', 'true');\n"
+	                           "MRSETUP('TAB_EXPAND', 'false');\n"
+	                           "MRSETUP('TAB_SIZE', '6');\n"
+	                           "MRSETUP('BACKUP_FILES', 'false');\n"
+	                           "MRSETUP('SHOW_EOF_MARKER', 'true');\n"
+	                           "MRSETUP('SHOW_EOF_MARKEREMOJI', 'false');\n"
+	                           "MRSETUP('SHOW_LINE_NUMBERS', 'true');\n"
+	                           "MRSETUP('LINE_NUM_ZERO_FILL', 'true');\n"
+	                           "MRSETUP('COLUMN_BLOCK_MOVE', 'LEAVE_SPACE');\n"
+	                           "MRSETUP('DEFAULT_MODE', 'OVERWRITE');\n"
 	                           "MRSETUP('WINDOWCOLORS', 'v1:10,11,12,13,14,15,16,17');\n"
 	                           "MRSETUP('MENUDIALOGCOLORS', 'v1:20,21,22,23,24,25,26,27,28,29,2A');\n"
 	                           "MRSETUP('HELPCOLORS', 'v1:30,31,32,33,34,35,36,37,38');\n"
@@ -496,42 +500,42 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 			return false;
 		}
 		if (configuredPageBreakCharacter() != '\f') {
-			failureReason = "Startup context should apply PAGEBREAK='\\\\f'.";
+			failureReason = "Startup context should apply PAGE_BREAK='\\\\f'.";
 			return false;
 		}
 		if (configuredTabExpandSetting()) {
-			failureReason = "Startup context should apply TABEXPAND='false'.";
+			failureReason = "Startup context should apply TAB_EXPAND='false'.";
 			return false;
 		}
 		if (configuredTabSizeSetting() != 6) {
-			failureReason = "Startup context should apply TABSIZE='6'.";
+			failureReason = "Startup context should apply TAB_SIZE='6'.";
 			return false;
 		}
 		{
 			MREditSetupSettings settings = configuredEditSetupSettings();
 			if (settings.backupFiles) {
-				failureReason = "Startup context should apply BACKUPFILES='false'.";
+				failureReason = "Startup context should apply BACKUP_FILES='false'.";
 				return false;
 			}
 				if (!settings.showEofMarker) {
-					failureReason = "Startup context should apply SHOWEOFMARKER='true'.";
+					failureReason = "Startup context should apply SHOW_EOF_MARKER='true'.";
 					return false;
 				}
 				if (settings.showEofMarkerEmoji) {
-					failureReason = "Startup context should apply SHOWEOFMARKEREMOJI='false'.";
+					failureReason = "Startup context should apply SHOW_EOF_MARKEREMOJI='false'.";
 					return false;
 				}
 				if (!settings.showLineNumbers) {
-					failureReason = "Startup context should apply SHOWLINENUMBERS='true'.";
+					failureReason = "Startup context should apply SHOW_LINE_NUMBERS='true'.";
 					return false;
 			}
 			if (!settings.lineNumZeroFill) {
-				failureReason = "Startup context should apply LINENUMZEROFILL='true'.";
+				failureReason = "Startup context should apply LINE_NUM_ZERO_FILL='true'.";
 				return false;
 			}
 		}
 		if (configuredDefaultInsertMode()) {
-			failureReason = "Startup context should apply DEFAULTMODE='OVERWRITE'.";
+			failureReason = "Startup context should apply DEFAULT_MODE='OVERWRITE'.";
 			return false;
 		}
 		{
@@ -561,7 +565,7 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 			{
 				std::vector<std::string> exts = configuredDefaultExtensionList();
 				if (exts.size() < 2 || exts[0] != "TXT" || exts[1] != "MD") {
-				failureReason = "Startup context should apply DEFAULTEXTS='txt;md'.";
+				failureReason = "Startup context should apply DEFAULT_EXTENSIONS='txt;md'.";
 				return false;
 			}
 		}
@@ -711,63 +715,63 @@ bool testSettingsMacroAutoCreate(std::string &failureReason) {
 		failureReason = "Auto-created settings.mrmac is missing SHELLPATH.";
 		return false;
 	}
-	if (content.find("MRSETUP('PAGEBREAK', '") == std::string::npos) {
-		failureReason = "Auto-created settings.mrmac is missing PAGEBREAK.";
+	if (content.find("MRSETUP('PAGE_BREAK', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing PAGE_BREAK.";
 		return false;
 	}
-	if (content.find("MRSETUP('WORDDELIMS', '") == std::string::npos) {
-		failureReason = "Auto-created settings.mrmac is missing WORDDELIMS.";
+	if (content.find("MRSETUP('WORD_DELIMITERS', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing WORD_DELIMITERS.";
 		return false;
 	}
-	if (content.find("MRSETUP('DEFAULTEXTS', '") == std::string::npos) {
-		failureReason = "Auto-created settings.mrmac is missing DEFAULTEXTS.";
+	if (content.find("MRSETUP('DEFAULT_EXTENSIONS', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing DEFAULT_EXTENSIONS.";
 		return false;
 	}
-	if (content.find("MRSETUP('TRUNCSPACES', 'true');") == std::string::npos &&
-	    content.find("MRSETUP('TRUNCSPACES', 'false');") == std::string::npos) {
-		failureReason = "Auto-created settings.mrmac should persist TRUNCSPACES as true/false.";
+	if (content.find("MRSETUP('TRUNCATE_SPACES', 'true');") == std::string::npos &&
+	    content.find("MRSETUP('TRUNCATE_SPACES', 'false');") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac should persist TRUNCATE_SPACES as true/false.";
 		return false;
 	}
-	if (content.find("MRSETUP('TABEXPAND', 'true');") == std::string::npos &&
-	    content.find("MRSETUP('TABEXPAND', 'false');") == std::string::npos) {
-		failureReason = "Auto-created settings.mrmac should persist TABEXPAND as true/false.";
+	if (content.find("MRSETUP('TAB_EXPAND', 'true');") == std::string::npos &&
+	    content.find("MRSETUP('TAB_EXPAND', 'false');") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac should persist TAB_EXPAND as true/false.";
 		return false;
 	}
-	if (content.find("MRSETUP('TABSIZE', '") == std::string::npos) {
-		failureReason = "Auto-created settings.mrmac is missing TABSIZE.";
+	if (content.find("MRSETUP('TAB_SIZE', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing TAB_SIZE.";
 		return false;
 	}
-	if (content.find("MRSETUP('BACKUPFILES', 'true');") == std::string::npos &&
-	    content.find("MRSETUP('BACKUPFILES', 'false');") == std::string::npos) {
-		failureReason = "Auto-created settings.mrmac should persist BACKUPFILES as true/false.";
+	if (content.find("MRSETUP('BACKUP_FILES', 'true');") == std::string::npos &&
+	    content.find("MRSETUP('BACKUP_FILES', 'false');") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac should persist BACKUP_FILES as true/false.";
 		return false;
 	}
-	if (content.find("MRSETUP('SHOWEOFMARKER', 'true');") == std::string::npos &&
-	    content.find("MRSETUP('SHOWEOFMARKER', 'false');") == std::string::npos) {
-		failureReason = "Auto-created settings.mrmac should persist SHOWEOFMARKER as true/false.";
+	if (content.find("MRSETUP('SHOW_EOF_MARKER', 'true');") == std::string::npos &&
+	    content.find("MRSETUP('SHOW_EOF_MARKER', 'false');") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac should persist SHOW_EOF_MARKER as true/false.";
 		return false;
 	}
-	if (content.find("MRSETUP('SHOWEOFMARKEREMOJI', 'true');") == std::string::npos &&
-	    content.find("MRSETUP('SHOWEOFMARKEREMOJI', 'false');") == std::string::npos) {
-		failureReason = "Auto-created settings.mrmac should persist SHOWEOFMARKEREMOJI as true/false.";
+	if (content.find("MRSETUP('SHOW_EOF_MARKEREMOJI', 'true');") == std::string::npos &&
+	    content.find("MRSETUP('SHOW_EOF_MARKEREMOJI', 'false');") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac should persist SHOW_EOF_MARKEREMOJI as true/false.";
 		return false;
 	}
-	if (content.find("MRSETUP('SHOWLINENUMBERS', 'true');") == std::string::npos &&
-	    content.find("MRSETUP('SHOWLINENUMBERS', 'false');") == std::string::npos) {
-		failureReason = "Auto-created settings.mrmac should persist SHOWLINENUMBERS as true/false.";
+	if (content.find("MRSETUP('SHOW_LINE_NUMBERS', 'true');") == std::string::npos &&
+	    content.find("MRSETUP('SHOW_LINE_NUMBERS', 'false');") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac should persist SHOW_LINE_NUMBERS as true/false.";
 		return false;
 	}
-	if (content.find("MRSETUP('LINENUMZEROFILL', 'true');") == std::string::npos &&
-	    content.find("MRSETUP('LINENUMZEROFILL', 'false');") == std::string::npos) {
-		failureReason = "Auto-created settings.mrmac should persist LINENUMZEROFILL as true/false.";
+	if (content.find("MRSETUP('LINE_NUM_ZERO_FILL', 'true');") == std::string::npos &&
+	    content.find("MRSETUP('LINE_NUM_ZERO_FILL', 'false');") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac should persist LINE_NUM_ZERO_FILL as true/false.";
 		return false;
 	}
-	if (content.find("MRSETUP('COLBLOCKMOVE', '") == std::string::npos) {
-		failureReason = "Auto-created settings.mrmac is missing COLBLOCKMOVE.";
+	if (content.find("MRSETUP('COLUMN_BLOCK_MOVE', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing COLUMN_BLOCK_MOVE.";
 		return false;
 	}
-	if (content.find("MRSETUP('DEFAULTMODE', '") == std::string::npos) {
-		failureReason = "Auto-created settings.mrmac is missing DEFAULTMODE.";
+	if (content.find("MRSETUP('DEFAULT_MODE', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing DEFAULT_MODE.";
 		return false;
 	}
 	if (content.find("MRSETUP('COLORTHEMEURI', '") == std::string::npos) {
@@ -800,6 +804,25 @@ bool testSettingsMacroAutoCreate(std::string &failureReason) {
 	}
 	if (content.find("MRSETUP('CURSORVISIBILITY', '") != std::string::npos) {
 		failureReason = "Auto-created settings.mrmac must not include deprecated CURSORVISIBILITY.";
+		return false;
+	}
+	if (content.find("MRSETUP('PAGEBREAK', '") != std::string::npos ||
+	    content.find("MRSETUP('WORDDELIMS', '") != std::string::npos ||
+	    content.find("MRSETUP('DEFAULTEXTS', '") != std::string::npos ||
+	    content.find("MRSETUP('TRUNCSPACES', '") != std::string::npos ||
+	    content.find("MRSETUP('EOFCTRLZ', '") != std::string::npos ||
+	    content.find("MRSETUP('EOFCRLF', '") != std::string::npos ||
+	    content.find("MRSETUP('TABEXPAND', '") != std::string::npos ||
+	    content.find("MRSETUP('TABSIZE', '") != std::string::npos ||
+	    content.find("MRSETUP('BACKUPFILES', '") != std::string::npos ||
+	    content.find("MRSETUP('SHOWEOFMARKER', '") != std::string::npos ||
+	    content.find("MRSETUP('SHOWEOFMARKEREMOJI', '") != std::string::npos ||
+	    content.find("MRSETUP('SHOWLINENUMBERS', '") != std::string::npos ||
+	    content.find("MRSETUP('LINENUMZEROFILL', '") != std::string::npos ||
+	    content.find("MRSETUP('PERSISTENTBLOCKS', '") != std::string::npos ||
+	    content.find("MRSETUP('COLBLOCKMOVE', '") != std::string::npos ||
+	    content.find("MRSETUP('DEFAULTMODE', '") != std::string::npos) {
+		failureReason = "Auto-created settings.mrmac must not rewrite deprecated edit-setting keys.";
 		return false;
 	}
 
@@ -983,11 +1006,11 @@ bool testSettingsDiscrepancyMigrationGuard(std::string &failureReason) {
 	                                 "MRSETUP('HELPPATH', 'mr.hlp');\n"
 	                                 "MRSETUP('TEMPDIR', '/tmp');\n"
 	                                 "MRSETUP('SHELLPATH', '/bin/sh');\n"
-	                                 "MRSETUP('TRUNCSPACES', 'false');\n"
-	                                 "MRSETUP('TABSIZE', '4');\n"
-	                                 "MRSETUP('BACKUPFILES', 'false');\n"
-	                                 "MRSETUP('SHOWLINENUMBERS', 'true');\n"
-	                                 "MRSETUP('LINENUMZEROFILL', 'true');\n"
+	                                 "MRSETUP('TRUNCATE_SPACES', 'false');\n"
+	                                 "MRSETUP('TAB_SIZE', '4');\n"
+	                                 "MRSETUP('BACKUP_FILES', 'false');\n"
+	                                 "MRSETUP('SHOW_LINE_NUMBERS', 'true');\n"
+	                                 "MRSETUP('LINE_NUM_ZERO_FILL', 'true');\n"
 	                                 "MRSETUP('COLORTHEMEURI', '" +
 	                                 legacyThemePath + "');\n"
 	                                 "MRSETUP('WINDOWCOLORS', 'v1:31,32,33,34,35,36,37,38');\n"
@@ -1023,11 +1046,11 @@ bool testSettingsDiscrepancyMigrationGuard(std::string &failureReason) {
 		failureReason = "Migrated settings.mrmac must anchor SETTINGSPATH to the active file.";
 		return false;
 	}
-	if (content.find("MRSETUP('SHOWLINENUMBERS', 'true');") == std::string::npos ||
-	    content.find("MRSETUP('LINENUMZEROFILL', 'true');") == std::string::npos ||
-	    content.find("MRSETUP('TRUNCSPACES', 'false');") == std::string::npos ||
-	    content.find("MRSETUP('TABSIZE', '4');") == std::string::npos ||
-	    content.find("MRSETUP('BACKUPFILES', 'false');") == std::string::npos) {
+	if (content.find("MRSETUP('SHOW_LINE_NUMBERS', 'true');") == std::string::npos ||
+	    content.find("MRSETUP('LINE_NUM_ZERO_FILL', 'true');") == std::string::npos ||
+	    content.find("MRSETUP('TRUNCATE_SPACES', 'false');") == std::string::npos ||
+	    content.find("MRSETUP('TAB_SIZE', '4');") == std::string::npos ||
+	    content.find("MRSETUP('BACKUP_FILES', 'false');") == std::string::npos) {
 		restore();
 		failureReason = "Migrated settings.mrmac did not carry over recognized edit settings.";
 		return false;
@@ -1037,8 +1060,8 @@ bool testSettingsDiscrepancyMigrationGuard(std::string &failureReason) {
 		failureReason = "Migrated settings.mrmac must not keep unknown legacy keys.";
 		return false;
 	}
-	if (content.find("MRSETUP('PERSISTENTBLOCKS', '") == std::string::npos ||
-	    content.find("MRSETUP('DEFAULTMODE', '") == std::string::npos) {
+	if (content.find("MRSETUP('PERSISTENT_BLOCKS', '") == std::string::npos ||
+	    content.find("MRSETUP('DEFAULT_MODE', '") == std::string::npos) {
 		restore();
 		failureReason = "Migrated settings.mrmac must include normalized defaults for required keys.";
 		return false;
@@ -1514,6 +1537,21 @@ bool testSetupScrollRefreshGuard(std::string &failureReason) {
 	paths.tempPath = "/tmp";
 	paths.shellUri = "/bin/sh";
 	source = buildSettingsMacroSource(paths);
+	if (source.find("MRSETUP('TAB_SIZE', '") == std::string::npos ||
+	    source.find("MRSETUP('SHOW_LINE_NUMBERS', '") == std::string::npos ||
+	    source.find("MREDITPROFILE('SET', 'perl_profile', 'TAB_SIZE', '3');") == std::string::npos ||
+	    source.find("MREDITPROFILE('SET', 'perl_profile', 'SHOW_LINE_NUMBERS', 'true');") == std::string::npos) {
+		restore();
+		failureReason = "Profile roundtrip source did not use canonical edit-setting keys.";
+		return false;
+	}
+	if (source.find("MRSETUP('TABSIZE', '") != std::string::npos ||
+	    source.find("MRSETUP('SHOWLINENUMBERS', '") != std::string::npos ||
+	    source.find("MREDITPROFILE('SET', 'perl_profile', 'TABSIZE', '3');") != std::string::npos) {
+		restore();
+		failureReason = "Profile roundtrip source still emitted deprecated edit-setting keys.";
+		return false;
+	}
 
 	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), &errorText)) {
 		restore();
@@ -1543,6 +1581,397 @@ bool testSetupScrollRefreshGuard(std::string &failureReason) {
 
 	if (!restore()) {
 		failureReason = "Unable to restore runtime settings after edit roundtrip probe: " + restoreError;
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testEditProfileDirectApiValidationGuard(std::string &failureReason) {
+	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
+	MREditExtensionProfile profile;
+	std::string errorText;
+	std::string restoreError;
+	bool restored = false;
+
+	auto restore = [&]() {
+		if (!restored)
+			restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		return restored;
+	};
+
+	profile.id = "broken_profile";
+	profile.name = "Broken";
+	profile.extensions.push_back("txt");
+	profile.overrides.mask = kOvTabSize;
+	profile.overrides.values.tabSize = 0;
+
+	if (setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(1, profile), &errorText)) {
+		restore();
+		failureReason = "Direct profile API accepted invalid TAB_SIZE override.";
+		return false;
+	}
+	if (errorText.find("TAB_SIZE") == std::string::npos) {
+		restore();
+		failureReason = "Invalid profile override should report the normalized TAB_SIZE validation error.";
+		return false;
+	}
+	if (!restore()) {
+		failureReason = "Unable to restore runtime settings after invalid profile API probe: " + restoreError;
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testEditProfileRoundtripGuard(std::string &failureReason) {
+	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
+	MREditSetupSettings globalSettings = resolveEditSetupDefaults();
+	MREditExtensionProfile profile;
+	MRSetupPaths paths = resolveSetupPathDefaults();
+	std::string source;
+	std::string errorText;
+	std::string restoreError;
+	bool restored = false;
+	std::string matchedProfile;
+	MREditSetupSettings effective;
+	MREditSetupSettings fallback;
+
+	auto restore = [&]() {
+		if (!restored)
+			restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		return restored;
+	};
+
+	globalSettings.tabSize = 8;
+	globalSettings.showLineNumbers = false;
+	globalSettings.defaultMode = "INSERT";
+	if (!setConfiguredEditSetupSettings(globalSettings, &errorText)) {
+		restore();
+		failureReason = "Unable to seed global edit settings for profile roundtrip probe: " + errorText;
+		return false;
+	}
+
+	profile.id = "perl_profile";
+	profile.name = "Perl";
+	profile.extensions.push_back("pl");
+	profile.extensions.push_back("pm");
+	profile.overrides.values = resolveEditSetupDefaults();
+	profile.overrides.values.tabSize = 3;
+	profile.overrides.values.showLineNumbers = true;
+	profile.overrides.values.defaultMode = "overwrite";
+	profile.overrides.mask = kOvTabSize | kOvShowLineNumbers | kOvDefaultMode;
+	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(1, profile), &errorText)) {
+		restore();
+		failureReason = "Unable to seed extension profile roundtrip probe: " + errorText;
+		return false;
+	}
+
+	paths.settingsMacroUri = snapshot.settingsMacroFilePath;
+	paths.macroPath = defaultMacroDirectoryPath();
+	paths.helpUri = configuredHelpFilePath();
+	paths.tempPath = configuredTempDirectoryPath();
+	paths.shellUri = configuredShellExecutablePath();
+	source = buildSettingsMacroSource(paths);
+
+	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), &errorText)) {
+		restore();
+		failureReason = "Unable to reset global edit settings before profile roundtrip apply: " + errorText;
+		return false;
+	}
+	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(), &errorText)) {
+		restore();
+		failureReason = "Unable to clear extension profiles before profile roundtrip apply: " + errorText;
+		return false;
+	}
+	if (!mrApplySettingsSourceForTesting(source, &errorText)) {
+		restore();
+		failureReason = "Unable to apply settings macro source in profile roundtrip probe: " + errorText;
+		return false;
+	}
+
+	if (configuredEditExtensionProfiles().size() != 1) {
+		restore();
+		failureReason = "Profile roundtrip did not restore exactly one extension profile.";
+		return false;
+	}
+	if (configuredEditExtensionProfiles()[0].id != "perl_profile") {
+		restore();
+		failureReason = "Profile roundtrip did not preserve the profile id.";
+		return false;
+	}
+	if (configuredEditExtensionProfiles()[0].name != "Perl") {
+		restore();
+		failureReason = "Profile roundtrip did not preserve the profile name.";
+		return false;
+	}
+	if (configuredEditExtensionProfiles()[0].extensions.size() != 2 ||
+		configuredEditExtensionProfiles()[0].extensions[0] != "pl" ||
+		configuredEditExtensionProfiles()[0].extensions[1] != "pm") {
+		restore();
+		failureReason = "Profile roundtrip did not preserve the extension selector list.";
+		return false;
+	}
+
+	if (!effectiveEditSetupSettingsForPath("/tmp/example.pl", effective, &matchedProfile)) {
+		restore();
+		failureReason = "Effective profile lookup failed for matching file.";
+		return false;
+	}
+	if (matchedProfile != "Perl") {
+		restore();
+		failureReason = "Effective profile lookup did not report the matching profile name.";
+		return false;
+	}
+	if (effective.tabSize != 3 || !effective.showLineNumbers || effective.defaultMode != "OVERWRITE") {
+		restore();
+		failureReason = "Effective edit settings did not merge profile overrides onto globals.";
+		return false;
+	}
+
+	if (!effectiveEditSetupSettingsForPath("/tmp/example.txt", fallback, &matchedProfile)) {
+		restore();
+		failureReason = "Effective profile lookup failed for non-matching file.";
+		return false;
+	}
+	if (!matchedProfile.empty()) {
+		restore();
+		failureReason = "Non-matching file unexpectedly reported an edit profile match.";
+		return false;
+	}
+	if (fallback.tabSize != globalSettings.tabSize || fallback.showLineNumbers != globalSettings.showLineNumbers ||
+		fallback.defaultMode != globalSettings.defaultMode) {
+		restore();
+		failureReason = "Non-matching file did not fall back to the global edit settings.";
+		return false;
+	}
+
+	if (!restore()) {
+		failureReason = "Unable to restore runtime settings after profile roundtrip probe: " + restoreError;
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testEditProfileCaseSensitiveExtensionMatchGuard(std::string &failureReason) {
+	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
+	MREditSetupSettings globalSettings = resolveEditSetupDefaults();
+	MREditExtensionProfile lowerProfile;
+	MREditExtensionProfile upperProfile;
+	std::string errorText;
+	std::string restoreError;
+	bool restored = false;
+	MREditSetupSettings effective;
+	std::string matchedProfile;
+
+	auto restore = [&]() {
+		if (!restored)
+			restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		return restored;
+	};
+
+	globalSettings.tabSize = 8;
+	if (!setConfiguredEditSetupSettings(globalSettings, &errorText)) {
+		restore();
+		failureReason = "Unable to seed globals for case-sensitive extension probe: " + errorText;
+		return false;
+	}
+
+	lowerProfile.id = "c_lower";
+	lowerProfile.name = "Lower C";
+	lowerProfile.extensions.push_back("c");
+	lowerProfile.overrides.values = resolveEditSetupDefaults();
+	lowerProfile.overrides.values.tabSize = 2;
+	lowerProfile.overrides.mask = kOvTabSize;
+
+	upperProfile.id = "c_upper";
+	upperProfile.name = "Upper C";
+	upperProfile.extensions.push_back("C");
+	upperProfile.overrides.values = resolveEditSetupDefaults();
+	upperProfile.overrides.values.tabSize = 6;
+	upperProfile.overrides.mask = kOvTabSize;
+
+	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>{lowerProfile, upperProfile},
+	                                       &errorText)) {
+		restore();
+		failureReason = "Unable to seed case-sensitive extension profiles: " + errorText;
+		return false;
+	}
+
+	if (!effectiveEditSetupSettingsForPath("/tmp/example.c", effective, &matchedProfile)) {
+		restore();
+		failureReason = "Effective profile lookup failed for .c.";
+		return false;
+	}
+	if (matchedProfile != "Lower C" || effective.tabSize != 2) {
+		restore();
+		failureReason = "Lower-case extension did not resolve to the exact lower-case profile.";
+		return false;
+	}
+
+	if (!effectiveEditSetupSettingsForPath("/tmp/example.C", effective, &matchedProfile)) {
+		restore();
+		failureReason = "Effective profile lookup failed for .C.";
+		return false;
+	}
+	if (matchedProfile != "Upper C" || effective.tabSize != 6) {
+		restore();
+		failureReason = "Upper-case extension did not resolve to the exact upper-case profile.";
+		return false;
+	}
+
+	if (!restore()) {
+		failureReason = "Unable to restore runtime settings after case-sensitive extension probe: " + restoreError;
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+
+bool testEditProfileCaseSensitiveMacroRoundtripGuard(std::string &failureReason) {
+	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
+	MRSetupPaths paths = resolveSetupPathDefaults();
+	std::string source = "$MACRO MR_SETTINGS FROM EDIT;\n"
+	                     "MRSETUP('SETTINGS_VERSION', '2');\n"
+	                     "MRSETUP('TAB_SIZE', '8');\n"
+	                     "MREDITPROFILE('DEFINE', 'c_lower', 'Lower C', '');\n"
+	                     "MREDITPROFILE('EXT', 'c_lower', 'c', '');\n"
+	                     "MREDITPROFILE('SET', 'c_lower', 'TAB_SIZE', '2');\n"
+	                     "MREDITPROFILE('DEFINE', 'c_upper', 'Upper C', '');\n"
+	                     "MREDITPROFILE('EXT', 'c_upper', 'C', '');\n"
+	                     "MREDITPROFILE('SET', 'c_upper', 'TAB_SIZE', '6');\n"
+	                     "END_MACRO;\n";
+	std::string errorText;
+	std::string restoreError;
+	bool restored = false;
+	MREditSetupSettings effective;
+	std::string matchedProfile;
+	std::string rewritten;
+
+	auto restore = [&]() {
+		if (!restored)
+			restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		return restored;
+	};
+
+	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), &errorText)) {
+		restore();
+		failureReason = "Unable to reset global edit settings before case-sensitive macro probe: " + errorText;
+		return false;
+	}
+	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(), &errorText)) {
+		restore();
+		failureReason = "Unable to clear extension profiles before case-sensitive macro probe: " + errorText;
+		return false;
+	}
+	if (!mrApplySettingsSourceForTesting(source, &errorText)) {
+		restore();
+		failureReason = "Unable to apply case-sensitive profile macro source: " + errorText;
+		return false;
+	}
+
+	if (configuredEditExtensionProfiles().size() != 2) {
+		restore();
+		failureReason = "Case-sensitive macro source did not restore exactly two extension profiles.";
+		return false;
+	}
+	if (configuredEditExtensionProfiles()[0].id != "c_lower" || configuredEditExtensionProfiles()[1].id != "c_upper") {
+		restore();
+		failureReason = "Case-sensitive macro source did not preserve profile ids.";
+		return false;
+	}
+	if (configuredEditExtensionProfiles()[0].extensions.size() != 1 ||
+		configuredEditExtensionProfiles()[0].extensions[0] != "c" ||
+		configuredEditExtensionProfiles()[1].extensions.size() != 1 ||
+		configuredEditExtensionProfiles()[1].extensions[0] != "C") {
+		restore();
+		failureReason = "Case-sensitive macro source did not preserve exact extension selectors.";
+		return false;
+	}
+
+	if (!effectiveEditSetupSettingsForPath("/tmp/example.c", effective, &matchedProfile)) {
+		restore();
+		failureReason = "Effective profile lookup failed for macro-defined .c profile.";
+		return false;
+	}
+	if (matchedProfile != "Lower C" || effective.tabSize != 2) {
+		restore();
+		failureReason = "Macro-defined lower-case profile did not resolve exactly.";
+		return false;
+	}
+
+	if (!effectiveEditSetupSettingsForPath("/tmp/example.C", effective, &matchedProfile)) {
+		restore();
+		failureReason = "Effective profile lookup failed for macro-defined .C profile.";
+		return false;
+	}
+	if (matchedProfile != "Upper C" || effective.tabSize != 6) {
+		restore();
+		failureReason = "Macro-defined upper-case profile did not resolve exactly.";
+		return false;
+	}
+
+	paths.settingsMacroUri = snapshot.settingsMacroFilePath;
+	paths.macroPath = defaultMacroDirectoryPath();
+	paths.helpUri = configuredHelpFilePath();
+	paths.tempPath = configuredTempDirectoryPath();
+	paths.shellUri = configuredShellExecutablePath();
+	rewritten = buildSettingsMacroSource(paths);
+	if (rewritten.find("MREDITPROFILE('EXT', 'c_lower', 'c', '');") == std::string::npos ||
+	    rewritten.find("MREDITPROFILE('EXT', 'c_upper', 'C', '');") == std::string::npos) {
+		restore();
+		failureReason = "Case-sensitive macro rewrite did not preserve exact extension selectors.";
+		return false;
+	}
+	if (rewritten.find("MREDITPROFILE('SET', 'c_lower', 'TAB_SIZE', '2');") == std::string::npos ||
+	    rewritten.find("MREDITPROFILE('SET', 'c_upper', 'TAB_SIZE', '6');") == std::string::npos) {
+		restore();
+		failureReason = "Case-sensitive macro rewrite did not preserve profile override values.";
+		return false;
+	}
+
+	if (!restore()) {
+		failureReason = "Unable to restore runtime settings after case-sensitive macro probe: " + restoreError;
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testEditProfileDuplicateExactExtensionMacroGuard(std::string &failureReason) {
+	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
+	std::string source = "$MACRO MR_SETTINGS FROM EDIT;\n"
+	                     "MRSETUP('SETTINGS_VERSION', '2');\n"
+	                     "MREDITPROFILE('DEFINE', 'c_one', 'One', '');\n"
+	                     "MREDITPROFILE('EXT', 'c_one', 'c', '');\n"
+	                     "MREDITPROFILE('DEFINE', 'c_two', 'Two', '');\n"
+	                     "MREDITPROFILE('EXT', 'c_two', 'c', '');\n"
+	                     "END_MACRO;\n";
+	std::string errorText;
+	std::string restoreError;
+	bool restored = false;
+
+	auto restore = [&]() {
+		if (!restored)
+			restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		return restored;
+	};
+
+	if (mrApplySettingsSourceForTesting(source, &errorText)) {
+		restore();
+		failureReason = "Duplicate exact extension assignment was accepted from macro source.";
+		return false;
+	}
+	if (errorText.find("assigned more than once: c") == std::string::npos) {
+		restore();
+		failureReason = "Duplicate exact extension assignment should report the conflicting selector.";
+		return false;
+	}
+
+	if (!restore()) {
+		failureReason = "Unable to restore runtime settings after duplicate extension macro probe: " + restoreError;
 		return false;
 	}
 	failureReason.clear();
@@ -1983,7 +2412,7 @@ bool testSaveAsOverwriteAndBackupWiringGuard(std::string &failureReason) {
 	}
 	if (content.find("if (configuredBackupFilesSetting())") == std::string::npos ||
 	    content.find("fnmerge(backupName, drive, dir, file, \".bak\");") == std::string::npos) {
-		failureReason = "Backup file creation must be gated by configurable BACKUPFILES setting.";
+		failureReason = "Backup file creation must be gated by configurable BACKUP_FILES setting.";
 		return false;
 	}
 
@@ -2051,14 +2480,14 @@ bool testPersistentBlocksWiringGuard(std::string &failureReason) {
 		failureReason = "Unable to read MREditSettingsDialog.cpp for persistent-blocks guard: " + ioError;
 		return false;
 	}
-	if (settingsContent.find("upperKeyName == \"PERSISTENTBLOCKS\"") ==
+	if (settingsContent.find("upperKeyName == \"PERSISTENT_BLOCKS\"") ==
 	        std::string::npos ||
-	    settingsContent.find("MRSETUP('PERSISTENTBLOCKS'") == std::string::npos) {
+	    settingsContent.find("MRSETUP('PERSISTENT_BLOCKS'") == std::string::npos) {
 		failureReason = "Persistent blocks must be parsed and serialized via MRSETUP in MRDialogPaths.";
 		return false;
 	}
-	if (vmContent.find("setupKey == \"PERSISTENTBLOCKS\"") == std::string::npos) {
-		failureReason = "MRVM startup whitelist must accept PERSISTENTBLOCKS.";
+	if (vmContent.find("setupKey == \"PERSISTENT_BLOCKS\"") == std::string::npos) {
+		failureReason = "MRVM startup whitelist must accept PERSISTENT_BLOCKS.";
 		return false;
 	}
 	if (dialogContent.find("ersistent blocks") == std::string::npos) {
@@ -2370,6 +2799,11 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "settings.mrmac auto-create on missing file", testSettingsMacroAutoCreate);
 	runTest(ctx, "settings discrepancy migration behavior", testSettingsDiscrepancyMigrationGuard);
 	runTest(ctx, "Edit settings roundtrip behavior", testSetupScrollRefreshGuard);
+	runTest(ctx, "Edit profile direct API validation", testEditProfileDirectApiValidationGuard);
+	runTest(ctx, "Edit profile roundtrip behavior", testEditProfileRoundtripGuard);
+	runTest(ctx, "Edit profile case-sensitive extension matching", testEditProfileCaseSensitiveExtensionMatchGuard);
+	runTest(ctx, "Edit profile case-sensitive macro roundtrip", testEditProfileCaseSensitiveMacroRoundtripGuard);
+	runTest(ctx, "Edit profile duplicate exact extension rejection", testEditProfileDuplicateExactExtensionMacroGuard);
 	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
 	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
 	runTest(ctx, "WINDOWCOLORS v3 + line numbers theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
@@ -2399,6 +2833,11 @@ void runFullSuite(TestContext &ctx) {
 	        testDialogFrameAndBackgroundPropagationGuard);
 	runTest(ctx, "Touched-range mid-insert guard", testTouchedRangeMidInsertGuard);
 	runTest(ctx, "Edit settings roundtrip behavior", testSetupScrollRefreshGuard);
+	runTest(ctx, "Edit profile direct API validation", testEditProfileDirectApiValidationGuard);
+	runTest(ctx, "Edit profile roundtrip behavior", testEditProfileRoundtripGuard);
+	runTest(ctx, "Edit profile case-sensitive extension matching", testEditProfileCaseSensitiveExtensionMatchGuard);
+	runTest(ctx, "Edit profile case-sensitive macro roundtrip", testEditProfileCaseSensitiveMacroRoundtripGuard);
+	runTest(ctx, "Edit profile duplicate exact extension rejection", testEditProfileDuplicateExactExtensionMacroGuard);
 	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
 	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
 	runTest(ctx, "WINDOWCOLORS v3 + line numbers theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);

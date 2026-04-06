@@ -52,6 +52,12 @@ class TMRFileEditor : public TScroller {
 		return readOnly_;
 	}
 
+	void setWindowEofMarkerColorOverride(bool enabled, TColorAttr color = 0) {
+		customWindowEofMarkerColorOverrideValid_ = enabled;
+		customWindowEofMarkerColorOverride_ = color;
+		drawView();
+	}
+
 	void setReadOnly(bool readOnly) {
 		if (readOnly_ != readOnly) {
 			readOnly_ = readOnly;
@@ -1991,7 +1997,9 @@ class TMRFileEditor : public TScroller {
 
 		if (width <= 0 || hScroll != 0)
 			return;
-		if (!drawEmoji && configuredColorSlotOverride(kMrPaletteEofMarker, configuredMarkerColor))
+		if (!drawEmoji && customWindowEofMarkerColorOverrideValid_)
+			markerColor = customWindowEofMarkerColorOverride_;
+		else if (!drawEmoji && configuredColorSlotOverride(kMrPaletteEofMarker, configuredMarkerColor))
 			markerColor = static_cast<TColorAttr>(configuredMarkerColor);
 		markerWidth = std::max(1, strwidth(marker));
 		markerWidth = std::min(markerWidth, width);
@@ -2033,6 +2041,8 @@ class TMRFileEditor : public TScroller {
 
 	TIndicator *indicator_;
 	bool readOnly_;
+	bool customWindowEofMarkerColorOverrideValid_ = false;
+	TColorAttr customWindowEofMarkerColorOverride_ = 0;
 	bool insertMode_;
 	bool autoIndent_;
 	char fileName[MAXPATH];

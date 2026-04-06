@@ -77,6 +77,8 @@ void initEditSettingsDialogRecord(EditSettingsDialogRecord &record) {
 		record.optionsMask |= kOptionShowEofMarkerEmoji;
 	if (settings.persistentBlocks)
 		record.optionsMask |= kOptionPersistentBlocks;
+	if (settings.codeFolding)
+		record.optionsMask |= kOptionCodeFolding;
 	if (settings.showLineNumbers)
 		record.optionsMask |= kOptionShowLineNumbers;
 	if (settings.lineNumZeroFill)
@@ -101,13 +103,13 @@ bool recordToSettings(const EditSettingsDialogRecord &record, MREditSetupSetting
 		char *end = nullptr;
 		long tabSize = 0;
 		if (tabSizeText.empty()) {
-			errorText = "TABSIZE must be between 1 and 32.";
+			errorText = "TABSIZE must be between 2 and 32.";
 			return false;
 		}
 		tabSize = std::strtol(tabSizeText.c_str(), &end, 10);
-		if (end == tabSizeText.c_str() || end == nullptr || *end != '\0' || tabSize < 1 ||
+		if (end == tabSizeText.c_str() || end == nullptr || *end != '\0' || tabSize < 2 ||
 		    tabSize > 32) {
-			errorText = "TABSIZE must be an integer between 1 and 32.";
+			errorText = "TABSIZE must be an integer between 2 and 32.";
 			return false;
 		}
 		settings.tabSize = static_cast<int>(tabSize);
@@ -120,6 +122,7 @@ bool recordToSettings(const EditSettingsDialogRecord &record, MREditSetupSetting
 	settings.showEofMarker = (record.optionsMask & kOptionShowEofMarker) != 0;
 	settings.showEofMarkerEmoji = (record.optionsMask & kOptionShowEofMarkerEmoji) != 0;
 	settings.persistentBlocks = (record.optionsMask & kOptionPersistentBlocks) != 0;
+	settings.codeFolding = (record.optionsMask & kOptionCodeFolding) != 0;
 	settings.showLineNumbers = (record.optionsMask & kOptionShowLineNumbers) != 0;
 	settings.lineNumZeroFill = (record.optionsMask & kOptionLineNumZeroFill) != 0;
 	settings.tabExpand = record.tabExpandChoice == kTabExpandTabs;

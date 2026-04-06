@@ -7,8 +7,18 @@
 #include <string>
 
 struct MREditSetupSettings;
+class MRScrollableDialog;
+class TCheckBoxes;
+class TInputLine;
+class TRadioButtons;
+class TView;
 
 namespace MREditSettingsDialogInternal {
+
+enum : ushort {
+	cmMrEditSettingsPanelChanged = 3860,
+	cmMrEditSettingsPanelFocusChanged
+};
 
 enum {
 	kPageBreakFieldSize = 64,
@@ -25,8 +35,9 @@ enum : ushort {
 	kOptionLineNumZeroFill = 0x0010,
 	kOptionPersistentBlocks = 0x0020,
 	kOptionBackupFiles = 0x0040,
-	kOptionShowEofMarker = 0x0080,
-	kOptionShowEofMarkerEmoji = 0x0100
+	kOptionCodeFolding = 0x0080,
+	kOptionShowEofMarker = 0x0100,
+	kOptionShowEofMarkerEmoji = 0x0200
 };
 
 enum : ushort {
@@ -34,7 +45,8 @@ enum : ushort {
 	kLeftOptionEofCtrlZ = 0x0002,
 	kLeftOptionEofCrLf = 0x0004,
 	kLeftOptionBackupFiles = 0x0008,
-	kLeftOptionPersistentBlocks = 0x0010
+	kLeftOptionPersistentBlocks = 0x0010,
+	kLeftOptionCodeFolding = 0x0020
 };
 
 enum : ushort {
@@ -73,6 +85,48 @@ struct EditSettingsDialogRecord {
 	ushort tabExpandChoice;
 	ushort columnBlockMoveChoice;
 	ushort defaultModeChoice;
+};
+
+struct EditSettingsPanelConfig {
+	int topY = 2;
+	int dialogWidth = 88;
+	int labelLeft = 2;
+	int inputLeft = 32;
+	int inputRight = -1;
+	int clusterLeft = -1;
+	int clusterTopY = -1;
+	int tabSizeY = -1;
+	int tabSizeFieldWidth = 4;
+	bool includeDefaultExtensions = true;
+	bool compactTextRows = false;
+	bool tabExpandBesideDefaultMode = false;
+};
+
+class EditSettingsPanel {
+  public:
+	explicit EditSettingsPanel(const EditSettingsPanelConfig &config = EditSettingsPanelConfig());
+	void buildViews(MRScrollableDialog &dialog);
+	void loadFieldsFromRecord(const EditSettingsDialogRecord &record);
+	void saveFieldsToRecord(EditSettingsDialogRecord &record) const;
+	TView *primaryView() const noexcept;
+
+  private:
+	ushort currentOptionsMask() const noexcept;
+	void setOptionsMask(ushort options);
+	static void setInputLineValue(TInputLine *inputLine, const char *value, std::size_t capacity);
+	static void readInputLineValue(TInputLine *inputLine, char *dest, std::size_t destSize);
+
+	EditSettingsPanelConfig config_;
+	TInputLine *pageBreakField_ = nullptr;
+	TInputLine *wordDelimitersField_ = nullptr;
+	TInputLine *defaultExtensionsField_ = nullptr;
+	TInputLine *tabSizeField_ = nullptr;
+	TCheckBoxes *optionsLeftField_ = nullptr;
+	TRadioButtons *lineNumbersField_ = nullptr;
+	TRadioButtons *eofMarkerField_ = nullptr;
+	TRadioButtons *tabExpandField_ = nullptr;
+	TRadioButtons *columnBlockMoveField_ = nullptr;
+	TRadioButtons *defaultModeField_ = nullptr;
 };
 
 std::string trimAscii(const std::string &value);

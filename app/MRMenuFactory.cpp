@@ -177,7 +177,8 @@ TSubMenu *createHelpMenu() {
 
 TSubMenu *createDevMenu() {
 	return &(*new TSubMenu("De~V~", kbAltV) +
-	         *new TMenuItem("~C~ancel background macros", cmMrDevCancelMacroTasks, kbNoKey, hcNoContext));
+	         *new TMenuItem("~C~ancel background macros", cmMrDevCancelMacroTasks, kbNoKey, hcNoContext) +
+	         *new TMenuItem("Test ~H~ero event", cmMrDevHeroEventProbe, kbNoKey, hcNoContext));
 }
 } // namespace
 

@@ -29,6 +29,7 @@ struct MREditSetupSettings {
 	bool showLineNumbers;
 	bool lineNumZeroFill;
 	bool persistentBlocks;
+	bool codeFolding;
 	std::string columnBlockMove;
 	std::string defaultMode;
 
@@ -36,9 +37,74 @@ struct MREditSetupSettings {
 	    : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false),
 	      eofCrLf(false), tabExpand(true), tabSize(8), backupFiles(true), showEofMarker(false),
 	      showEofMarkerEmoji(true),
-	      showLineNumbers(false), lineNumZeroFill(false), persistentBlocks(true), columnBlockMove(),
+	      showLineNumbers(false), lineNumZeroFill(false), persistentBlocks(true), codeFolding(false), columnBlockMove(),
 	      defaultMode() {
 	}
+};
+
+
+
+enum class MREditSettingSection : unsigned char {
+	Text,
+	OpenFile,
+	Save,
+	Tabs,
+	Display,
+	Blocks,
+	Mode
+};
+
+enum class MREditSettingKind : unsigned char {
+	String,
+	Boolean,
+	Integer,
+	Choice
+};
+
+enum MREditSetupOverrideMask : unsigned int {
+	kOvNone = 0,
+	kOvPageBreak = 1u << 0,
+	kOvWordDelimiters = 1u << 1,
+	kOvDefaultExtensions = 1u << 2,
+	kOvTruncateSpaces = 1u << 3,
+	kOvEofCtrlZ = 1u << 4,
+	kOvEofCrLf = 1u << 5,
+	kOvTabExpand = 1u << 6,
+	kOvTabSize = 1u << 7,
+	kOvBackupFiles = 1u << 8,
+	kOvShowEofMarker = 1u << 9,
+	kOvShowEofMarkerEmoji = 1u << 10,
+	kOvShowLineNumbers = 1u << 11,
+	kOvLineNumZeroFill = 1u << 12,
+	kOvPersistentBlocks = 1u << 13,
+	kOvCodeFolding = 1u << 14,
+	kOvColumnBlockMove = 1u << 15,
+	kOvDefaultMode = 1u << 16,
+};
+
+struct MREditSettingDescriptor {
+	const char *key;
+	const char *label;
+	MREditSettingSection section;
+	MREditSettingKind kind;
+	bool profileSupported;
+	unsigned int overrideBit;
+};
+
+struct MREditSetupOverrides {
+	MREditSetupSettings values;
+	unsigned int mask;
+
+	MREditSetupOverrides() noexcept : values(), mask(kOvNone) {
+	}
+};
+
+struct MREditExtensionProfile {
+	std::string id;
+	std::string name;
+	std::vector<std::string> extensions;
+	std::string windowColorThemeUri;
+	MREditSetupOverrides overrides;
 };
 
 enum class MRColorSetupGroup : unsigned char {
@@ -62,12 +128,13 @@ enum : unsigned char {
 	kMrPaletteMessageWarning = 141,
 	kMrPaletteLineNumbers = 142,
 	kMrPaletteEofMarker = 143,
-	kMrPaletteMax = kMrPaletteEofMarker
+	kMrPaletteDialogInactiveElements = 144,
+	kMrPaletteMax = kMrPaletteDialogInactiveElements
 };
 
 struct MRColorSetupSettings {
 	static const std::size_t kWindowCount = 9;
-	static const std::size_t kMenuDialogCount = 16;
+	static const std::size_t kMenuDialogCount = 17;
 	static const std::size_t kHelpCount = 9;
 	static const std::size_t kOtherCount = 7;
 
@@ -108,6 +175,29 @@ bool setConfiguredColorThemeFilePath(const std::string &path, std::string *error
 bool writeColorThemeFile(const std::string &themeUri, std::string *errorMessage = nullptr);
 bool ensureColorThemeFileExists(const std::string &themeUri, std::string *errorMessage = nullptr);
 bool loadColorThemeFile(const std::string &themeUri, std::string *errorMessage = nullptr);
+bool loadWindowColorThemeGroupValues(const std::string &themeUri,
+                                     std::array<unsigned char, MRColorSetupSettings::kWindowCount> &outValues,
+                                     std::string *errorMessage = nullptr);
+
+const MREditSettingDescriptor *editSettingDescriptors(std::size_t &count);
+const MREditSettingDescriptor *findEditSettingDescriptorByKey(const std::string &key);
+std::string normalizeEditExtensionSelector(const std::string &value);
+bool normalizeEditExtensionSelectors(std::vector<std::string> &selectors, std::string *errorMessage = nullptr);
+MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults,
+                                           const MREditSetupOverrides &overrides);
+const std::vector<MREditExtensionProfile> &configuredEditExtensionProfiles();
+bool setConfiguredEditExtensionProfiles(const std::vector<MREditExtensionProfile> &profiles,
+                                        std::string *errorMessage = nullptr);
+std::string configuredDefaultProfileDescription();
+bool setConfiguredDefaultProfileDescription(const std::string &value,
+                                            std::string *errorMessage = nullptr);
+bool applyConfiguredEditExtensionProfileDirective(const std::string &operation, const std::string &profileId,
+                                                  const std::string &arg3, const std::string &arg4,
+                                                  std::string *errorMessage = nullptr);
+bool effectiveEditSetupSettingsForPath(const std::string &path, MREditSetupSettings &out,
+                                       std::string *matchedProfileName = nullptr);
+bool effectiveEditWindowColorThemePathForPath(const std::string &path, std::string &themeUri,
+                                              std::string *matchedProfileName = nullptr);
 std::string formatEditSetupBoolean(bool value);
 std::vector<std::string> configuredDefaultExtensionList();
 bool configuredDefaultInsertMode();

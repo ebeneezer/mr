@@ -28,6 +28,7 @@
 #include "../ui/TMRDeskTop.hpp"
 #include "../ui/TMREditWindow.hpp"
 #include "../ui/TMRMenuBar.hpp"
+#include "../ui/MRMessageLineController.hpp"
 #include "../ui/TMRStatusLine.hpp"
 #include "../ui/MRPalette.hpp"
 #include "../ui/MRWindowSupport.hpp"
@@ -360,29 +361,31 @@ bool isCurrentSettingsKey(const std::string &key) {
 	                                           "TEMPDIR",
 	                                           "SHELLPATH",
 	                                           "LASTFILEDIALOGPATH",
+	                                           "DEFAULT_PROFILE_DESCRIPTION",
 	                                           "COLORTHEMEURI",
-	                                           "PAGEBREAK",
-	                                           "WORDDELIMS",
-	                                           "DEFAULTEXTS",
-	                                           "TRUNCSPACES",
-		                                           "EOFCTRLZ",
-		                                           "EOFCRLF",
-		                                           "TABEXPAND",
-		                                           "TABSIZE",
-		                                           "BACKUPFILES",
-	                                           "SHOWEOFMARKER",
-	                                           "SHOWEOFMARKEREMOJI",
-	                                           "SHOWLINENUMBERS",
-	                                           "LINENUMZEROFILL",
-	                                           "PERSISTENTBLOCKS",
-	                                           "COLBLOCKMOVE",
-	                                           "DEFAULTMODE"};
+	                                           "PAGE_BREAK",
+	                                           "WORD_DELIMITERS",
+	                                           "DEFAULT_EXTENSIONS",
+	                                           "TRUNCATE_SPACES",
+		                                           "EOF_CTRL_Z",
+		                                           "EOF_CR_LF",
+		                                           "TAB_EXPAND",
+		                                           "TAB_SIZE",
+		                                           "BACKUP_FILES",
+	                                           "SHOW_EOF_MARKER",
+	                                           "SHOW_EOF_MARKER_EMOJI",
+	                                           "SHOW_LINE_NUMBERS",
+	                                           "LINE_NUM_ZERO_FILL",
+	                                           "PERSISTENT_BLOCKS",
+	                                           "CODE_FOLDING",
+	                                           "COLUMN_BLOCK_MOVE",
+	                                           "DEFAULT_MODE"};
 	return keys.find(key) != keys.end();
 }
 
 struct ParsedEditProfileDirective {
 	std::string operation;
-	std::string profileName;
+	std::string profileId;
 	std::string arg3;
 	std::string arg4;
 };
@@ -417,7 +420,7 @@ std::vector<ParsedEditProfileDirective> parseMreditProfileDirectives(const std::
 		if (match.size() >= 5) {
 			ParsedEditProfileDirective directive;
 			directive.operation = unescapeMrmacSingleQuotedLiteral(match[1].str());
-			directive.profileName = unescapeMrmacSingleQuotedLiteral(match[2].str());
+			directive.profileId = unescapeMrmacSingleQuotedLiteral(match[2].str());
 			directive.arg3 = unescapeMrmacSingleQuotedLiteral(match[3].str());
 			directive.arg4 = unescapeMrmacSingleQuotedLiteral(match[4].str());
 			directives.push_back(directive);
@@ -451,22 +454,24 @@ bool validateCurrentSettingsSchema(const std::string &source, std::string &error
 	                                           "TEMPDIR",
 	                                           "SHELLPATH",
 	                                           "LASTFILEDIALOGPATH",
-	                                           "PAGEBREAK",
-	                                           "WORDDELIMS",
-	                                           "DEFAULTEXTS",
-	                                           "TRUNCSPACES",
-		                                           "EOFCTRLZ",
-		                                           "EOFCRLF",
-		                                           "TABEXPAND",
-		                                           "TABSIZE",
-		                                           "BACKUPFILES",
-	                                           "SHOWEOFMARKER",
-	                                           "SHOWEOFMARKEREMOJI",
-	                                           "SHOWLINENUMBERS",
-	                                           "LINENUMZEROFILL",
-	                                           "PERSISTENTBLOCKS",
-	                                           "COLBLOCKMOVE",
-	                                           "DEFAULTMODE",
+	                                           "DEFAULT_PROFILE_DESCRIPTION",
+	                                           "PAGE_BREAK",
+	                                           "WORD_DELIMITERS",
+	                                           "DEFAULT_EXTENSIONS",
+	                                           "TRUNCATE_SPACES",
+		                                           "EOF_CTRL_Z",
+		                                           "EOF_CR_LF",
+		                                           "TAB_EXPAND",
+		                                           "TAB_SIZE",
+		                                           "BACKUP_FILES",
+	                                           "SHOW_EOF_MARKER",
+	                                           "SHOW_EOF_MARKER_EMOJI",
+	                                           "SHOW_LINE_NUMBERS",
+	                                           "LINE_NUM_ZERO_FILL",
+	                                           "PERSISTENT_BLOCKS",
+	                                           "CODE_FOLDING",
+	                                           "COLUMN_BLOCK_MOVE",
+	                                           "DEFAULT_MODE",
 	                                           "COLORTHEMEURI"};
 
 	if (assignments.empty()) {
@@ -561,13 +566,16 @@ bool applyRecognizedSettingsAssignment(const std::string &key, const std::string
 	}
 	if (key == "LASTFILEDIALOGPATH")
 		return setConfiguredLastFileDialogPath(value, &errorText);
+	if (key == "DEFAULT_PROFILE_DESCRIPTION")
+		return setConfiguredDefaultProfileDescription(value, &errorText);
 	if (key == "COLORTHEMEURI")
 		return setConfiguredColorThemeFilePath(value, &errorText);
-	if (key == "PAGEBREAK" || key == "WORDDELIMS" || key == "DEFAULTEXTS" || key == "TRUNCSPACES" ||
-	    key == "EOFCTRLZ" || key == "EOFCRLF" || key == "TABEXPAND" || key == "TABSIZE" ||
-	    key == "BACKUPFILES" || key == "SHOWEOFMARKER" || key == "SHOWEOFMARKEREMOJI" ||
-	    key == "SHOWLINENUMBERS" || key == "LINENUMZEROFILL" ||
-	    key == "PERSISTENTBLOCKS" || key == "COLBLOCKMOVE" || key == "DEFAULTMODE")
+	if (key == "PAGE_BREAK" || key == "WORD_DELIMITERS" || key == "DEFAULT_EXTENSIONS" ||
+	    key == "TRUNCATE_SPACES" || key == "EOF_CTRL_Z" || key == "EOF_CR_LF" ||
+	    key == "TAB_EXPAND" || key == "TAB_SIZE" || key == "BACKUP_FILES" ||
+	    key == "SHOW_EOF_MARKER" || key == "SHOW_EOF_MARKER_EMOJI" ||
+	    key == "SHOW_LINE_NUMBERS" || key == "LINE_NUM_ZERO_FILL" ||
+	    key == "PERSISTENT_BLOCKS" || key == "CODE_FOLDING" || key == "COLUMN_BLOCK_MOVE" || key == "DEFAULT_MODE")
 		return applyConfiguredEditSetupValue(key, value, &errorText);
 	if (key == "WINDOWCOLORS" || key == "MENUDIALOGCOLORS" || key == "HELPCOLORS" || key == "OTHERCOLORS")
 		return applyConfiguredColorSetupValue(key, value, &errorText);
@@ -612,10 +620,10 @@ bool migrateSettingsMacroToCurrentVersion(const std::string &settingsPath, const
 		++migratedAssignments;
 	}
 	for (const ParsedEditProfileDirective &directive : profileDirectives)
-		if (!applyConfiguredEditExtensionProfileDirective(directive.operation, directive.profileName, directive.arg3,
+		if (!applyConfiguredEditExtensionProfileDirective(directive.operation, directive.profileId, directive.arg3,
 		                                                 directive.arg4, &applyError))
-			mrLogMessage(("Settings migration ignored invalid MREDITPROFILE directive for profile " +
-			              directive.profileName + ": " + applyError)
+			mrLogMessage(("Settings migration ignored invalid MREDITPROFILE directive for profile id " +
+			              directive.profileId + ": " + applyError)
 			                 .c_str());
 
 	finalThemePath = configuredColorThemeFilePath();
@@ -674,6 +682,17 @@ bool applySettingsSource(const std::string &source, std::string *errorMessage) {
 		std::free(bytecode);
 		if (errorMessage != nullptr)
 			*errorMessage = "Settings load failed: no macros found.";
+		return false;
+	}
+
+	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), &vmError) ||
+	    !setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(), &vmError) ||
+	    !setConfiguredDefaultProfileDescription("Global defaults", &vmError) ||
+	    !setConfiguredColorSetupDefaults(vmError) ||
+	    !setConfiguredColorThemeFilePath(defaultColorThemeFilePath(), &vmError)) {
+		std::free(bytecode);
+		if (errorMessage != nullptr)
+			*errorMessage = "Settings load failed (reset): " + vmError;
 		return false;
 	}
 
@@ -854,15 +873,15 @@ std::string buildTopRightCursorStatus() {
 	return std::string(buf);
 }
 
-TMRMenuBar::MarqueeKind mapMessageNoticeKind(mr::performance::MessageNoticeKind kind) {
+TMRMenuBar::MarqueeKind mapMessageNoticeKind(mr::messageline::Kind kind) {
 	switch (kind) {
-		case mr::performance::MessageNoticeKind::Success:
+		case mr::messageline::Kind::Success:
 			return TMRMenuBar::MarqueeKind::Success;
-		case mr::performance::MessageNoticeKind::Warning:
+		case mr::messageline::Kind::Warning:
 			return TMRMenuBar::MarqueeKind::Warning;
-		case mr::performance::MessageNoticeKind::Error:
+		case mr::messageline::Kind::Error:
 			return TMRMenuBar::MarqueeKind::Error;
-		case mr::performance::MessageNoticeKind::Info:
+		case mr::messageline::Kind::Info:
 		default:
 			return TMRMenuBar::MarqueeKind::Info;
 	}
@@ -1329,10 +1348,10 @@ void TMREditorApp::idle() {
 	warmIndexedMacroBindings();
 	mr::coprocessor::globalCoprocessor().pump(8);
 	if (auto *mrMenuBar = dynamic_cast<TMRMenuBar *>(menuBar)) {
-		mr::performance::MessageLineNotice notice;
+		mr::messageline::VisibleMessage message;
 		mrMenuBar->setRightStatus(buildTopRightCursorStatus());
-		if (mr::performance::currentMessageLineNotice(notice))
-			mrMenuBar->setAutoMarqueeStatus(notice.text, mapMessageNoticeKind(notice.kind));
+		if (mr::messageline::currentVisibleMessage(message))
+			mrMenuBar->setAutoMarqueeStatus(message.text, mapMessageNoticeKind(message.kind));
 		else
 			mrMenuBar->setAutoMarqueeStatus(std::string());
 		mrMenuBar->tickMarquee();
@@ -1361,9 +1380,17 @@ TPalette &TMREditorApp::getPalette() const {
 		palette[base + 23] = palette[base + 0]; // slot 24: history scrollbar page
 		palette[base + 24] = palette[base + 0]; // slot 25: history scrollbar controls
 	};
+	// Blue/cyan/gray window scrollbars should not drift away from the window frame.
+	auto syncWindowScrollbarsToFrame = [&](int base) {
+		palette[base + 2] = palette[base + 0]; // slot 3: scrollbar page
+		palette[base + 3] = palette[base + 0]; // slot 4: scrollbar controls / thumb
+	};
 	syncDialogScrollbarsToFrame(32);
 	syncDialogScrollbarsToFrame(64);
 	syncDialogScrollbarsToFrame(96);
+	syncWindowScrollbarsToFrame(8);
+	syncWindowScrollbarsToFrame(16);
+	syncWindowScrollbarsToFrame(24);
 
 	palette[1] = currentPalette.desktop;
 	return palette;

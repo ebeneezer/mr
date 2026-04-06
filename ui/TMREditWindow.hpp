@@ -12,6 +12,7 @@
 #include <tvision/tv.h>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdio>
 #include <cstdint>
@@ -66,7 +67,9 @@ class TMREditWindow : public TWindow {
 	      blockMode_(bmNone), blockMarkingOn_(false), blockAnchor_(0), blockEnd_(0),
 	      trackedCoprocessorTasks_(), windowRole_(wrText), windowRoleDetail_(), macroQueuedCount_(0),
 	      macroCompletedCount_(0), macroConflictCount_(0), macroCancelledCount_(0), macroFailedCount_(0),
-	      lastMacroSummaryText_() {
+	      lastMacroSummaryText_(), windowPaletteData_(defaultWindowPaletteData()),
+	      windowPalette_(windowPaletteData_.data(), static_cast<ushort>(windowPaletteData_.size())),
+	      customEofMarkerColorValid_(false), customEofMarkerColor_(0) {
 		options |= ofTileable;
 
 		std::strncpy(displayTitle, (title != nullptr && *title != '\0') ? title : "Untitled",
@@ -106,6 +109,7 @@ class TMREditWindow : public TWindow {
 
 		editor = createEditor(r, "");
 		insert(editor);
+		resetWindowColorsToConfiguredDefaults();
 		refreshSyntaxContext();
 	}
 
@@ -114,11 +118,13 @@ class TMREditWindow : public TWindow {
 	}
 
 	virtual TPalette &getPalette() const override {
-		static const TColorAttr blueExtended[] = {
-		    0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, kMrPaletteCurrentLine,
-		    kMrPaletteCurrentLineInBlock, kMrPaletteChangedText, kMrPaletteLineNumbers};
-		static TPalette palette(blueExtended, sizeof(blueExtended) / sizeof(blueExtended[0]));
-		return palette;
+		return windowPalette_;
+	}
+
+	virtual TColorAttr mapColor(uchar index) override {
+		if (index >= 1 && index <= windowPaletteData_.size())
+			return windowPaletteData_[index - 1];
+		return TWindow::mapColor(index);
 	}
 
 	virtual const char *getTitle(short) override {
@@ -194,6 +200,7 @@ class TMREditWindow : public TWindow {
 		if (!editor->loadMappedFile(expandedName.c_str(), loadError))
 			return false;
 
+		applyWindowColorThemeForPath(expandedName);
 		resetTransientEditorState();
 		setReadOnly(isExistingPathReadOnly(editor->persistentFileName()));
 		temporaryFileUsed_ = false;
@@ -209,6 +216,7 @@ class TMREditWindow : public TWindow {
 		if (!editor->replaceBufferText(text))
 			return false;
 
+		resetWindowColorsToConfiguredDefaults();
 		resetTransientEditorState();
 		setReadOnly(false);
 		temporaryFileUsed_ = false;
@@ -839,7 +847,126 @@ class TMREditWindow : public TWindow {
 		syncBlockVisual();
 	}
 
+
+	void resetWindowColorsToConfiguredDefaults() {
+		windowPaletteData_ = defaultWindowPaletteData();
+		rebuildWindowPalette();
+		customEofMarkerColorValid_ = false;
+		if (editor != nullptr)
+			editor->setWindowEofMarkerColorOverride(false);
+		refreshWindowPaletteViews();
+	}
+
+	void applyWindowColorThemeForPath(const std::string &path) {
+		std::array<unsigned char, MRColorSetupSettings::kWindowCount> colors;
+		std::string themePath;
+		std::string errorText;
+		resetWindowColorsToConfiguredDefaults();
+		if (!effectiveEditWindowColorThemePathForPath(path, themePath, nullptr) || themePath.empty())
+			return;
+		if (!loadWindowColorThemeGroupValues(themePath, colors, &errorText)) {
+			mrLogMessage(("Window color theme load failed: " + themePath + " (" + errorText + ")").c_str());
+			return;
+		}
+
+		const TColorAttr framePassive = static_cast<TColorAttr>(colors[4]);
+		const TColorAttr frameActive = static_cast<TColorAttr>(colors[5]);
+		const TColorAttr textNormal = static_cast<TColorAttr>(colors[0]);
+		const TColorAttr textSelected = static_cast<TColorAttr>(colors[2]);
+
+		windowPaletteData_[0] = framePassive;
+		windowPaletteData_[1] = frameActive;
+		windowPaletteData_[2] = frameActive;
+		windowPaletteData_[3] = framePassive;
+		windowPaletteData_[4] = frameActive;
+		windowPaletteData_[5] = textNormal;
+		windowPaletteData_[6] = textSelected;
+		windowPaletteData_[7] = textSelected;
+		windowPaletteData_[8] = static_cast<TColorAttr>(colors[6]);
+		windowPaletteData_[9] = static_cast<TColorAttr>(colors[7]);
+		windowPaletteData_[10] = static_cast<TColorAttr>(colors[1]);
+		windowPaletteData_[11] = static_cast<TColorAttr>(colors[8]);
+		customEofMarkerColorValid_ = true;
+		customEofMarkerColor_ = static_cast<TColorAttr>(colors[3]);
+		rebuildWindowPalette();
+		if (editor != nullptr)
+			editor->setWindowEofMarkerColorOverride(true, customEofMarkerColor_);
+		refreshWindowPaletteViews();
+	}
+
   private:
+	static TColorAttr configuredWindowPaletteSlot(unsigned char slot) noexcept {
+		unsigned char value = 0x07;
+		unsigned char overrideValue = 0;
+
+		switch (slot) {
+			case 8:
+				value = 0x17;
+				break;
+			case 9:
+				value = 0x1F;
+				break;
+			case 10:
+			case kMrPaletteCurrentLine:
+				value = 0x1A;
+				break;
+			case 11:
+				value = 0x31;
+				break;
+			case 12:
+			case kMrPaletteCurrentLineInBlock:
+				value = 0x31;
+				break;
+			case 13:
+				value = 0x1E;
+				break;
+			case 14:
+			case kMrPaletteChangedText:
+			case kMrPaletteEofMarker:
+				value = 0x71;
+				break;
+			case 15:
+				value = 0x1F;
+				break;
+			case kMrPaletteLineNumbers:
+				value = 0x1F;
+				break;
+			default:
+				break;
+		}
+		if (configuredColorSlotOverride(slot, overrideValue))
+			value = overrideValue;
+		return static_cast<TColorAttr>(value);
+	}
+
+	static std::array<TColorAttr, 12> defaultWindowPaletteData() noexcept {
+		return {configuredWindowPaletteSlot(8), configuredWindowPaletteSlot(9), configuredWindowPaletteSlot(10),
+		        configuredWindowPaletteSlot(11), configuredWindowPaletteSlot(12), configuredWindowPaletteSlot(13),
+		        configuredWindowPaletteSlot(14), configuredWindowPaletteSlot(15),
+		        configuredWindowPaletteSlot(kMrPaletteCurrentLine),
+		        configuredWindowPaletteSlot(kMrPaletteCurrentLineInBlock),
+		        configuredWindowPaletteSlot(kMrPaletteChangedText),
+		        configuredWindowPaletteSlot(kMrPaletteLineNumbers)};
+	}
+
+	void rebuildWindowPalette() {
+		windowPalette_ = TPalette(windowPaletteData_.data(), static_cast<ushort>(windowPaletteData_.size()));
+	}
+
+	void refreshWindowPaletteViews() {
+		drawView();
+		if (frame != nullptr)
+			frame->drawView();
+		if (hScrollBar != nullptr)
+			hScrollBar->drawView();
+		if (vScrollBar != nullptr)
+			vScrollBar->drawView();
+		if (indicator != nullptr)
+			indicator->drawView();
+		if (editor != nullptr)
+			editor->drawView();
+	}
+
 	TMRFileEditor *createEditor(const TRect &bounds, const char *fileName) {
 		return new TMRFileEditor(bounds, hScrollBar, vScrollBar, indicator, fileName != nullptr ? fileName : "");
 	}
@@ -1111,6 +1238,10 @@ class TMREditWindow : public TWindow {
 	std::size_t macroCancelledCount_;
 	std::size_t macroFailedCount_;
 	std::string lastMacroSummaryText_;
+	mutable std::array<TColorAttr, 12> windowPaletteData_;
+	mutable TPalette windowPalette_;
+	bool customEofMarkerColorValid_;
+	TColorAttr customEofMarkerColor_;
 	char displayTitle[MAXPATH];
 };
 

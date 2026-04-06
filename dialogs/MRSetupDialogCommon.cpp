@@ -75,6 +75,14 @@ void MRScrollableDialog::selectContent() {
 	}
 }
 
+void MRScrollableDialog::scrollToOrigin() {
+	if (hScrollBar_ != nullptr)
+		hScrollBar_->setValue(0);
+	if (vScrollBar_ != nullptr)
+		vScrollBar_->setValue(0);
+	applyScroll();
+}
+
 void MRScrollableDialog::initScrollIfNeeded() {
 	int virtualContentWidth = std::max(1, virtualWidth_ - 2);
 	int virtualContentHeight = std::max(1, virtualHeight_ - 2);
@@ -130,18 +138,27 @@ void MRScrollableDialog::initScrollIfNeeded() {
 }
 
 void MRScrollableDialog::handleEvent(TEvent &event) {
-	if (event.what == evKeyDown && content_ != nullptr) {
+	if (event.what == evKeyDown) {
 		ushort keyCode = event.keyDown.keyCode;
 
-		if (keyCode == kbTab || keyCode == kbCtrlI) {
-			content_->selectNext(False);
+		if (keyCode == kbEsc) {
+			endModal(cmCancel);
 			clearEvent(event);
 			return;
 		}
-		if (keyCode == kbShiftTab) {
-			content_->selectNext(True);
-			clearEvent(event);
-			return;
+		if (content_ != nullptr) {
+			if (keyCode == kbTab || keyCode == kbCtrlI) {
+				content_->selectNext(False);
+				ensureCurrentVisible();
+				clearEvent(event);
+				return;
+			}
+			if (keyCode == kbShiftTab) {
+				content_->selectNext(True);
+				ensureCurrentVisible();
+				clearEvent(event);
+				return;
+			}
 		}
 	}
 
@@ -150,7 +167,53 @@ void MRScrollableDialog::handleEvent(TEvent &event) {
 	    (event.message.infoPtr == hScrollBar_ || event.message.infoPtr == vScrollBar_)) {
 		applyScroll();
 		clearEvent(event);
+		return;
 	}
+	if (event.what == evKeyDown || event.what == evCommand || event.what == evMouseDown || event.what == evMouseUp)
+		ensureCurrentVisible();
+}
+
+void MRScrollableDialog::ensureViewVisible(TView *view) {
+	if (view == nullptr || content_ == nullptr)
+		return;
+	for (const auto &managedView : managedViews_)
+		if (managedView.view == view) {
+			int dx = hScrollBar_ != nullptr ? hScrollBar_->value : 0;
+			int dy = vScrollBar_ != nullptr ? vScrollBar_->value : 0;
+			int viewportWidth = std::max(1, contentRect_.b.x - contentRect_.a.x);
+			int viewportHeight = std::max(1, contentRect_.b.y - contentRect_.a.y);
+			int left = managedView.base.a.x - contentRect_.a.x;
+			int right = managedView.base.b.x - contentRect_.a.x;
+			int top = managedView.base.a.y - contentRect_.a.y;
+			int bottom = managedView.base.b.y - contentRect_.a.y;
+
+			if (hScrollBar_ != nullptr) {
+				if (left < dx)
+					hScrollBar_->setValue(std::max(0, left));
+				else if (right > dx + viewportWidth)
+					hScrollBar_->setValue(std::max(0, right - viewportWidth));
+			}
+			if (vScrollBar_ != nullptr) {
+				if (top < dy)
+					vScrollBar_->setValue(std::max(0, top));
+				else if (bottom > dy + viewportHeight)
+					vScrollBar_->setValue(std::max(0, bottom - viewportHeight));
+			}
+			applyScroll();
+			return;
+		}
+}
+
+void MRScrollableDialog::ensureCurrentVisible() {
+	TView *view = content_ != nullptr ? content_->current : nullptr;
+
+	while (view != nullptr) {
+		TGroup *group = dynamic_cast<TGroup *>(view);
+		if (group == nullptr || group->current == nullptr)
+			break;
+		view = group->current;
+	}
+	ensureViewVisible(view);
 }
 
 void MRScrollableDialog::applyScroll() {

@@ -82,6 +82,7 @@ CXX_SOURCES = \
 	dialogs/MRInstallationAndSetupDialog.cpp \
 	dialogs/MRMacroFileDialog.cpp \
 	dialogs/MREditSettingsDialog.cpp \
+	dialogs/MREditProfilesDialog.cpp \
 	dialogs/MREditSettingsDialogSupport.cpp \
 	dialogs/MRSetupDialogCommon.cpp \
 	dialogs/MRSetupDialogs.cpp \
@@ -97,6 +98,7 @@ CXX_SOURCES = \
 	mrmac/mrvm.cpp \
 	ui/TMRFrame.cpp \
 	ui/TMRMenuBar.cpp \
+	ui/MRMessageLineController.cpp \
 	ui/MRPalette.cpp \
 	ui/MRWindowSupport.cpp \
 	ui/TMRSyntax.cpp \
@@ -328,6 +330,7 @@ piecetable/MRTextDocument.o: piecetable/MRTextDocument.cpp piecetable/MRTextDocu
 
 # 4. Linker call
 $(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS)
+	killall mr || true
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
 $(STAGE_PROFILE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(STAGE_PROFILE_PROBE_OBJECT)

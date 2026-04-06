@@ -7,28 +7,18 @@
 #include <deque>
 #include <mutex>
 
+#include "../ui/MRMessageLineController.hpp"
+
 namespace mr {
 namespace performance {
 namespace {
-
-struct MessageNoticeState {
-	bool active;
-	MessageNoticeKind kind;
-	std::string text;
-	std::chrono::steady_clock::time_point expiresAt;
-
-	MessageNoticeState() noexcept
-	    : active(false), kind(MessageNoticeKind::Info),  expiresAt(std::chrono::steady_clock::time_point::min()) {
-	}
-};
 
 struct State {
 	std::mutex mutex;
 	std::deque<Event> events;
 	std::uint64_t nextSequence;
-	MessageNoticeState messageNotice;
 
-	State() noexcept :  nextSequence(1) {
+	State() noexcept : nextSequence(1) {
 	}
 };
 
@@ -155,12 +145,11 @@ void recordUiEvent(const std::string &action, std::size_t bufferId, std::size_t 
 	event.runMs = totalMs;
 	event.totalMs = totalMs;
 	pushEvent(shared, event);
-	if (qualifiesForNotice(shared.events.front())) {
-		shared.messageNotice.active = true;
-		shared.messageNotice.kind = messageNoticeKindFor(shared.events.front());
-		shared.messageNotice.text = buildMessageNoticeText(shared.events.front());
-		shared.messageNotice.expiresAt = std::chrono::steady_clock::now() + std::chrono::seconds(4);
-	}
+	if (qualifiesForNotice(shared.events.front()))
+		mr::messageline::postTimed(mr::messageline::Owner::HeroEvent,
+		                          buildMessageNoticeText(shared.events.front()),
+		                          static_cast<mr::messageline::Kind>(messageNoticeKindFor(shared.events.front())),
+		                          std::chrono::seconds(4), mr::messageline::kPriorityLow);
 }
 
 void recordBackgroundResult(const mr::coprocessor::Result &result, const std::string &action,
@@ -190,12 +179,11 @@ void recordBackgroundEvent(mr::coprocessor::Lane lane, Outcome outcome, const mr
 	event.runMs = timing.runMs();
 	event.totalMs = timing.totalMs();
 	pushEvent(shared, event);
-	if (qualifiesForNotice(shared.events.front())) {
-		shared.messageNotice.active = true;
-		shared.messageNotice.kind = messageNoticeKindFor(shared.events.front());
-		shared.messageNotice.text = buildMessageNoticeText(shared.events.front());
-		shared.messageNotice.expiresAt = std::chrono::steady_clock::now() + std::chrono::seconds(4);
-	}
+	if (qualifiesForNotice(shared.events.front()))
+		mr::messageline::postTimed(mr::messageline::Owner::HeroEvent,
+		                          buildMessageNoticeText(shared.events.front()),
+		                          static_cast<mr::messageline::Kind>(messageNoticeKindFor(shared.events.front())),
+		                          std::chrono::seconds(4), mr::messageline::kPriorityLow);
 }
 
 std::vector<Event> recentForWindow(std::size_t bufferId, std::size_t documentId, std::size_t maxCount) {
@@ -228,19 +216,13 @@ std::vector<Event> recentGlobal(std::size_t maxCount) {
 }
 
 bool currentMessageLineNotice(MessageLineNotice &out) {
-	State &shared = state();
-	std::lock_guard<std::mutex> lock(shared.mutex);
+	mr::messageline::VisibleMessage message;
 
-	if (!shared.messageNotice.active)
+	if (!mr::messageline::currentOwnerMessage(mr::messageline::Owner::HeroEvent, message))
 		return false;
-	if (std::chrono::steady_clock::now() >= shared.messageNotice.expiresAt) {
-		shared.messageNotice.active = false;
-		shared.messageNotice.text.clear();
-		return false;
-	}
 	out.active = true;
-	out.kind = shared.messageNotice.kind;
-	out.text = shared.messageNotice.text;
+	out.kind = static_cast<MessageNoticeKind>(message.kind);
+	out.text = message.text;
 	return true;
 }
 

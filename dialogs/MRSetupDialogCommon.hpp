@@ -37,10 +37,13 @@ class MRScrollableDialog : public TDialog {
 	void addManaged(TView *view, const TRect &base);
 	void initScrollIfNeeded();
 	void selectContent();
+	void scrollToOrigin();
 	TGroup *managedContent() const noexcept { return content_; }
 
   private:
 	void applyScroll();
+	void ensureViewVisible(TView *view);
+	void ensureCurrentVisible();
 
 	int virtualWidth_ = 0;
 	int virtualHeight_ = 0;

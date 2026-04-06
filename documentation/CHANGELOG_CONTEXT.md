@@ -7,6 +7,14 @@ Laufendes Projektprotokoll fuer Kontextwechsel und schnelle Wiederaufnahme.
 - Diese Datei ist ein Verlaufsprotokoll und keine normative Regelquelle.
 - Warmup-Reihenfolge: zuerst YAML, dann dieses Changelog, danach `MRMAC_V1_STATUS.md`.
 
+
+## 2026-04-06
+- Neue verbindliche TVision-Standardregel aufgenommen:
+  - Standardnaehe zu magiblot/TVision ist zwingend.
+  - Keine nicht standardnahen UI-Workarounds oder Overlay-Konstruktionen, wenn eine TVision-nahe Loesung moeglich ist.
+  - Dieses Projekt optimiert nicht auf Geschwindigkeit der Fertigstellung.
+  - Prioritaet hat technische Exzellenz, saubere Architektur und robuste, standardnahe Implementierung.
+
 ## 2026-04-04
 - Neue verbindliche Coding-Style-Regel aufgenommen:
   - `strict_no_guard_backpacks` ist aktiv.

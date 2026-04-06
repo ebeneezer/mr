@@ -1,7 +1,13 @@
 - Setup
-- Unterschiede zu me Vollversion?
 - Treesitter
 - Laden multipler Dateien aus einer Liste die die Ausgabe eines Befehls oder Pipe ist. "Hol alle mrmac Dateien"
 - Save All mit Dialog/List Window
-- Line numbers
 - Mini map?
+- snapshotting: snapper, borg etc. freie kommandozeile mit intervall
+- hex editor
+- device terminal
+- shell terminal (libvterm !!)
+- ascii table
+- emoji table
+- font?
+- code folding (pro file extension profil)

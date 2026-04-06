@@ -109,6 +109,7 @@ enum : ushort {
 
 	cmMrDevCancelMacroTasks,
 	cmMrDevSetMarqueeText,
+	cmMrDevHeroEventProbe,
 	cmMrPreviewPrev,
 	cmMrPreviewNext
 };

@@ -16,3 +16,4 @@ misc/enwik9
 *.o
 mr
 mrmac/mrmac
+HANDOFF*txt

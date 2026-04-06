@@ -819,7 +819,8 @@ void runInstallationAndSetupDialogFlow() {
 		ushort result = execDialog(createInstallationAndSetupDialog());
 		switch (result) {
 			case cmMrSetupEditSettings:
-				runEditSettingsDialogFlow();
+			case cmMrSetupFilenameExtensions:
+				runEditExtensionProfilesDialogFlow();
 				break;
 
 			case cmMrSetupColorSetup:
