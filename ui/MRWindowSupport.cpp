@@ -8,10 +8,12 @@
 #include "MRWindowSupport.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstring>
 #include <ctime>
 #include <string>
+#include <string_view>
 #include <unistd.h>
 #include <vector>
 
@@ -20,41 +22,41 @@
 #include "TMREditWindow.hpp"
 
 namespace {
-const char *kHelpWindowTitle = "MR HELP";
-const char *kLogWindowTitle = "MR LOG";
+constexpr std::string_view kHelpWindowTitle = "MR HELP";
+constexpr std::string_view kLogWindowTitle = "MR LOG";
 
 std::string g_logBuffer;
 bool g_keystrokeRecordingActive = false;
 bool g_keystrokeRecordingMarkerVisible = false;
-std::string baseNameOf(const std::string &path);
+[[nodiscard]] std::string baseNameOf(std::string_view path);
 
-std::string currentWorkingDirectory() {
-	char cwd[1024];
-	if (::getcwd(cwd, sizeof(cwd)) == nullptr)
+[[nodiscard]] std::string currentWorkingDirectory() {
+	std::array<char, 1024> cwd{};
+	if (::getcwd(cwd.data(), cwd.size()) == nullptr)
 		return std::string();
-	return std::string(cwd);
+	return std::string(cwd.data());
 }
 
-std::string executableDirectory() {
-	char path[4096];
-	ssize_t len = ::readlink("/proc/self/exe", path, sizeof(path) - 1);
+[[nodiscard]] std::string executableDirectory() {
+	std::array<char, 4096> path{};
+	const ssize_t len = ::readlink("/proc/self/exe", path.data(), path.size() - 1);
 	std::size_t pos;
 
 	if (len <= 0)
 		return std::string();
-	path[len] = '\0';
-	pos = std::string(path).find_last_of('/');
-	if (pos == std::string::npos)
+	path[static_cast<std::size_t>(len)] = '\0';
+	pos = std::string_view(path.data()).find_last_of('/');
+	if (pos == std::string_view::npos)
 		return std::string();
-	return std::string(path, pos);
+	return std::string(path.data(), pos);
 }
 
-std::string resolveHelpFilePath() {
-	std::string configured = configuredHelpFilePath();
-	std::string fromCwd = currentWorkingDirectory();
-	std::string fromExe = executableDirectory();
+[[nodiscard]] std::string resolveHelpFilePath() {
+	const std::string configured = configuredHelpFilePath();
+	const std::string fromCwd = currentWorkingDirectory();
+	const std::string fromExe = executableDirectory();
 	std::string candidate;
-	std::string configuredName = baseNameOf(configured);
+	const std::string configuredName = baseNameOf(configured);
 
 	if (!configured.empty() && ::access(configured.c_str(), R_OK) == 0)
 		return configured;
@@ -71,54 +73,53 @@ std::string resolveHelpFilePath() {
 	return configured;
 }
 
-std::string currentTimestamp() {
-	char buffer[32];
-	std::time_t now = std::time(nullptr);
-	std::tm *tmNow = std::localtime(&now);
+[[nodiscard]] std::string currentTimestamp() {
+	std::array<char, 32> buffer{};
+	const std::time_t now = std::time(nullptr);
+	const std::tm *tmNow = std::localtime(&now);
 
 	if (tmNow == nullptr)
 		return std::string("--:--:--");
-	if (std::strftime(buffer, sizeof(buffer), "%H:%M:%S", tmNow) == 0)
+	if (std::strftime(buffer.data(), buffer.size(), "%H:%M:%S", tmNow) == 0)
 		return std::string("--:--:--");
-	return std::string(buffer);
+	return std::string(buffer.data());
 }
 
-std::string normalizeLogLine(const char *message) {
-	std::string line = message != nullptr ? message : "";
+[[nodiscard]] std::string normalizeLogLine(std::string_view message) {
+	std::string line(message);
 	while (!line.empty() && (line.back() == '\n' || line.back() == '\r'))
 		line.pop_back();
 	return line;
 }
 
-std::string baseNameOf(const std::string &path) {
-	std::size_t pos = path.find_last_of("\\/");
-	if (pos == std::string::npos)
-		return path;
-	return path.substr(pos + 1);
+[[nodiscard]] std::string baseNameOf(std::string_view path) {
+	const std::size_t pos = path.find_last_of("\\/");
+	if (pos == std::string_view::npos)
+		return std::string(path);
+	return std::string(path.substr(pos + 1));
 }
 
-TMREditWindow *findWindowByTitle(const char *title) {
-	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
-	for (auto & window : windows) {
-		const char *windowTitle = window->getTitle(0);
-		if (title != nullptr && windowTitle != nullptr && std::strcmp(windowTitle, title) == 0)
+[[nodiscard]] TMREditWindow *findWindowByTitle(std::string_view title) {
+	const std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+	for (TMREditWindow *window : windows) {
+		const char *windowTitle = window != nullptr ? window->getTitle(0) : nullptr;
+		if (windowTitle != nullptr && title == windowTitle)
 			return window;
 	}
 	return nullptr;
 }
 
-bool isReservedUtilityWindow(TMREditWindow *win) {
+[[nodiscard]] bool isReservedUtilityWindow(TMREditWindow *win) {
 	const char *title = win != nullptr ? win->getTitle(0) : nullptr;
-	return title != nullptr &&
-	       (std::strcmp(title, kHelpWindowTitle) == 0 || std::strcmp(title, kLogWindowTitle) == 0);
+	return title != nullptr && (kHelpWindowTitle == title || kLogWindowTitle == title);
 }
 
-TMREditWindow *chooseFallbackWorkWindow() {
-	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+[[nodiscard]] TMREditWindow *chooseFallbackWorkWindow() {
+	const std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
 	TMREditWindow *hiddenEditable = nullptr;
 	TMREditWindow *hiddenNonUtility = nullptr;
 
-	for (auto & window : windows) {
+	for (TMREditWindow *window : windows) {
 		if ((window->state & sfVisible) != 0)
 			return window;
 		if (hiddenEditable == nullptr && !window->isReadOnly())
@@ -133,7 +134,7 @@ TMREditWindow *chooseFallbackWorkWindow() {
 	return nullptr;
 }
 
-TMREditWindow *createReadOnlyTextWindow(const char *title, const char *text, bool hidden) {
+[[nodiscard]] TMREditWindow *createReadOnlyTextWindow(const char *title, const char *text, bool hidden) {
 	TMREditWindow *previous;
 	TMREditWindow *win;
 
@@ -153,25 +154,25 @@ TMREditWindow *createReadOnlyTextWindow(const char *title, const char *text, boo
 	if (hidden)
 		win->hide();
 	if (hidden && previous != nullptr && previous != win)
-		mrActivateEditWindow(previous);
+		static_cast<void>(mrActivateEditWindow(previous));
 	return win;
 }
 
-TMREditWindow *ensureLogWindowInternal(bool activate) {
+[[nodiscard]] TMREditWindow *ensureLogWindowInternal(bool activate) {
 	TMREditWindow *win = findWindowByTitle(kLogWindowTitle);
 
 	if (g_logBuffer.empty())
 		g_logBuffer = "MR/MEMAC log initialized.\n";
 	if (win == nullptr)
-		win = createReadOnlyTextWindow(kLogWindowTitle, g_logBuffer.c_str(), !activate);
+		win = createReadOnlyTextWindow(kLogWindowTitle.data(), g_logBuffer.c_str(), !activate);
 	if (win == nullptr)
 		return nullptr;
-	win->replaceTextBuffer(g_logBuffer.c_str(), kLogWindowTitle);
+	win->replaceTextBuffer(g_logBuffer.c_str(), kLogWindowTitle.data());
 	win->setWindowRole(TMREditWindow::wrLog);
 	win->setReadOnly(true);
 	win->setFileChanged(false);
 	if (activate)
-		mrActivateEditWindow(win);
+		static_cast<void>(mrActivateEditWindow(win));
 	return win;
 }
 } // namespace
@@ -187,23 +188,23 @@ bool mrActivateEditWindow(TMREditWindow *win) {
 
 bool mrShowProjectHelp() {
 	TMREditWindow *win;
-	std::string helpPath = resolveHelpFilePath();
+	const std::string helpPath = resolveHelpFilePath();
 
 	if (TProgram::deskTop == nullptr)
 		return false;
 
 	win = dynamic_cast<TMREditWindow *>(TProgram::deskTop->current);
 	if (win != nullptr) {
-		std::string currentFile = win->currentFileName();
+		const std::string currentFile = win->currentFileName();
 		const char *title = win->getTitle(0);
 		if ((!currentFile.empty() && baseNameOf(currentFile) == baseNameOf(helpPath)) ||
-		    (title != nullptr && std::strcmp(title, kHelpWindowTitle) == 0))
+		    (title != nullptr && kHelpWindowTitle == title))
 			return true;
 	}
 
 	win = findWindowByTitle(kHelpWindowTitle);
 	if (win == nullptr) {
-		win = createEditorWindow(kHelpWindowTitle);
+		win = createEditorWindow(kHelpWindowTitle.data());
 		if (win == nullptr)
 			return false;
 
@@ -217,7 +218,7 @@ bool mrShowProjectHelp() {
 		win->setFileChanged(false);
 	}
 	win->setWindowRole(TMREditWindow::wrHelp, helpPath);
-	mrActivateEditWindow(win);
+	static_cast<void>(mrActivateEditWindow(win));
 	return true;
 }
 
@@ -232,7 +233,7 @@ bool mrClearLogWindow() {
 	win = ensureLogWindowInternal(false);
 	if (win == nullptr)
 		return false;
-	if (!win->replaceTextBuffer(g_logBuffer.c_str(), kLogWindowTitle))
+	if (!win->replaceTextBuffer(g_logBuffer.c_str(), kLogWindowTitle.data()))
 		return false;
 	win->setWindowRole(TMREditWindow::wrLog);
 	win->setReadOnly(true);
@@ -259,8 +260,8 @@ bool mrEnsureUsableWorkWindow() {
 	return mrActivateEditWindow(fallback);
 }
 
-void mrLogMessage(const char *message) {
-	std::string line = normalizeLogLine(message);
+void mrLogMessage(std::string_view message) {
+	const std::string line = normalizeLogLine(message);
 	TMREditWindow *win;
 
 	if (line.empty())
@@ -270,7 +271,7 @@ void mrLogMessage(const char *message) {
 	g_logBuffer += "[" + currentTimestamp() + "] " + line + "\n";
 	win = ensureLogWindowInternal(false);
 	if (win != nullptr) {
-		win->replaceTextBuffer(g_logBuffer.c_str(), kLogWindowTitle);
+		win->replaceTextBuffer(g_logBuffer.c_str(), kLogWindowTitle.data());
 		win->setReadOnly(true);
 		win->setFileChanged(false);
 	}

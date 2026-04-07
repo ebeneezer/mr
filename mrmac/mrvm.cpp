@@ -5551,7 +5551,7 @@ bool VirtualMachine::cancelPendingDelay() {
 	if (asyncDelayCancelledFlag_ != nullptr)
 		asyncDelayCancelledFlag_->store(true, std::memory_order_release);
 	if (asyncDelayTaskId_ != 0)
-		mr::coprocessor::globalCoprocessor().cancelTask(asyncDelayTaskId_);
+		(void) mr::coprocessor::globalCoprocessor().cancelTask(asyncDelayTaskId_);
 	if (asyncMacroFramePushed_ && !g_runtimeEnv.macroStack.empty())
 		g_runtimeEnv.macroStack.pop_back();
 	cancelledExecution = true;

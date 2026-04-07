@@ -3,6 +3,7 @@
 #include <array>
 #include <chrono>
 #include <mutex>
+#include <string_view>
 
 namespace mr {
 namespace messageline {
@@ -57,7 +58,7 @@ bool exportSlot(const Slot &slot, VisibleMessage &out) {
 
 } // namespace
 
-Token postTimed(Owner owner, const std::string &text, Kind kind, std::chrono::milliseconds duration,
+Token postTimed(Owner owner, std::string_view text, Kind kind, std::chrono::milliseconds duration,
                 int priority) {
     State &shared = state();
     std::lock_guard<std::mutex> lock(shared.mutex);
@@ -76,7 +77,7 @@ Token postTimed(Owner owner, const std::string &text, Kind kind, std::chrono::mi
     return slot.token;
 }
 
-Token postSticky(Owner owner, const std::string &text, Kind kind, int priority) {
+Token postSticky(Owner owner, std::string_view text, Kind kind, int priority) {
     State &shared = state();
     std::lock_guard<std::mutex> lock(shared.mutex);
     Slot &slot = shared.slots[ownerIndex(owner)];

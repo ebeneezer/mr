@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <ctime>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "../coprocessor/MRCoprocessor.hpp"
@@ -62,23 +63,22 @@ struct MessageLineNotice {
 	}
 };
 
-void recordUiEvent(const std::string &action, std::size_t bufferId, std::size_t documentId, std::size_t bytes,
-                   double totalMs, const std::string &detail = std::string(),
-                   Outcome outcome = Outcome::Completed);
-void recordBackgroundResult(const mr::coprocessor::Result &result, const std::string &action,
+void recordUiEvent(std::string_view action, std::size_t bufferId, std::size_t documentId, std::size_t bytes,
+                   double totalMs, std::string_view detail = {}, Outcome outcome = Outcome::Completed);
+void recordBackgroundResult(const mr::coprocessor::Result &result, std::string_view action,
                             std::size_t bufferId, std::size_t documentId, std::size_t bytes,
-                            const std::string &detail = std::string());
+                            std::string_view detail = {});
 void recordBackgroundEvent(mr::coprocessor::Lane lane, Outcome outcome, const mr::coprocessor::TaskTiming &timing,
-                           const std::string &action, std::size_t bufferId, std::size_t documentId,
-                           std::size_t bytes, const std::string &detail = std::string());
+                           std::string_view action, std::size_t bufferId, std::size_t documentId,
+                           std::size_t bytes, std::string_view detail = {});
 
-std::vector<Event> recentForWindow(std::size_t bufferId, std::size_t documentId, std::size_t maxCount = 6);
-std::vector<Event> recentGlobal(std::size_t maxCount = 6);
-bool currentMessageLineNotice(MessageLineNotice &out);
+[[nodiscard]] std::vector<Event> recentForWindow(std::size_t bufferId, std::size_t documentId, std::size_t maxCount = 6);
+[[nodiscard]] std::vector<Event> recentGlobal(std::size_t maxCount = 6);
+[[nodiscard]] bool currentMessageLineNotice(MessageLineNotice &out);
 
-std::string formatEventLine(const Event &event);
-std::string formatDuration(double totalMs);
-std::string formatThroughput(std::size_t bytes, double totalMs);
+[[nodiscard]] std::string formatEventLine(const Event &event);
+[[nodiscard]] std::string formatDuration(double totalMs);
+[[nodiscard]] std::string formatThroughput(std::size_t bytes, double totalMs);
 
 } // namespace performance
 } // namespace mr

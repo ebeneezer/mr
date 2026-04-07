@@ -65,7 +65,7 @@ REGRESSION_PROBE_TARGET = regression/mr-regression-checks
 REGRESSION_PROBE_SOURCE = regression/mr-regression-checks.cpp
 REGRESSION_PROBE_OBJECT = regression/mr-regression-checks.o
 MRMAC_V1_SUITE_SCRIPT = misc/run_mrmac_v1_suite.sh
-ABOUT_QUOTES_GENERATOR = misc/generate_about_quotes.sh
+ABOUT_QUOTES_GENERATOR = ./generate_about_quotes.sh
 ABOUT_QUOTES_GENERATED = app/MRAboutQuotes.generated.hpp
 
 # C++ source files (Editor and VM)
@@ -78,12 +78,14 @@ CXX_SOURCES = \
 	app/TMREditorApp.cpp \
 	dialogs/MRAboutDialog.cpp \
 	dialogs/MRColorSetupDialog.cpp \
+	dialogs/MRNumericSlider.cpp \
 	dialogs/MRFileInformationDialog.cpp \
 	dialogs/MRInstallationAndSetupDialog.cpp \
 	dialogs/MRMacroFileDialog.cpp \
-	dialogs/MREditSettingsDialog.cpp \
 	dialogs/MREditProfilesDialog.cpp \
-	dialogs/MREditSettingsDialogSupport.cpp \
+	dialogs/MREditProfilesPanel.cpp \
+	dialogs/MREditProfilesRecordSupport.cpp \
+	dialogs/MREditProfilesDraftSupport.cpp \
 	dialogs/MRSetupDialogCommon.cpp \
 	dialogs/MRSetupDialogs.cpp \
 	dialogs/MRUnsavedChangesDialog.cpp \
@@ -144,6 +146,7 @@ CONTEXT_ARCHIVE_ITEMS = \
 	.vscode \
 	Makefile \
 	README.md \
+	generate_about_quotes.sh \
 	mr.cpp \
 	mr.hlp \
 	app \
@@ -151,7 +154,6 @@ CONTEXT_ARCHIVE_ITEMS = \
 	coprocessor \
 	dialogs \
 	documentation \
-	misc \
 	mrmac \
 	patches \
 	piecetable \
@@ -305,12 +307,14 @@ app/MRMenuFactory.o: app/MRMenuFactory.cpp app/MRMenuFactory.hpp app/MRCommands.
 app/MRVersion.o: app/MRVersion.cpp app/MRVersion.hpp
 app/TMREditorApp.o: app/TMREditorApp.cpp app/TMREditorApp.hpp app/MRAppState.hpp app/MRCommandRouter.hpp app/MRCommands.hpp app/MRMenuFactory.hpp coprocessor/MRCoprocessorDispatch.hpp coprocessor/MRPerformance.hpp app/commands/MRWindowCommands.hpp ui/TMRDeskTop.hpp ui/TMRStatusLine.hpp ui/MRPalette.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 dialogs/MRAboutDialog.o: dialogs/MRAboutDialog.cpp dialogs/MRAboutDialog.hpp app/MRVersion.hpp $(ABOUT_QUOTES_GENERATED)
+dialogs/MRNumericSlider.o: dialogs/MRNumericSlider.cpp dialogs/MRNumericSlider.hpp
 dialogs/MRColorSetupDialog.o: dialogs/MRColorSetupDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp app/MRCommands.hpp
 dialogs/MRFileInformationDialog.o: dialogs/MRFileInformationDialog.cpp dialogs/MRFileInformationDialog.hpp app/MRCommands.hpp coprocessor/MRPerformance.hpp ui/TMREditWindow.hpp ui/TMRFileEditor.hpp ui/TMRTextBuffer.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 dialogs/MRInstallationAndSetupDialog.o: dialogs/MRInstallationAndSetupDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp app/MRCommands.hpp
 dialogs/MRMacroFileDialog.o: dialogs/MRMacroFileDialog.cpp dialogs/MRMacroFileDialog.hpp mrmac/MRMacroRunner.hpp
-dialogs/MREditSettingsDialog.o: dialogs/MREditSettingsDialog.cpp dialogs/MREditSettingsDialogInternal.hpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp
-dialogs/MREditSettingsDialogSupport.o: dialogs/MREditSettingsDialogSupport.cpp dialogs/MREditSettingsDialogInternal.hpp dialogs/MRSetupDialogs.hpp config/MRDialogPaths.hpp app/TMREditorApp.hpp
+dialogs/MREditProfilesPanel.o: dialogs/MREditProfilesPanel.cpp dialogs/MREditProfilesPanelInternal.hpp dialogs/MRNumericSlider.hpp dialogs/MRSetupDialogCommon.hpp
+dialogs/MREditProfilesRecordSupport.o: dialogs/MREditProfilesRecordSupport.cpp dialogs/MREditProfilesPanelInternal.hpp dialogs/MREditProfilesRecordSupport.hpp dialogs/MRSetupDialogs.hpp config/MRDialogPaths.hpp app/TMREditorApp.hpp
+dialogs/MREditProfilesDraftSupport.o: dialogs/MREditProfilesDraftSupport.cpp dialogs/MREditProfilesDraftSupport.hpp dialogs/MREditProfilesPanelInternal.hpp dialogs/MREditProfilesRecordSupport.hpp config/MRDialogPaths.hpp app/TMREditorApp.hpp
 dialogs/MRSetupDialogCommon.o: dialogs/MRSetupDialogCommon.cpp dialogs/MRSetupDialogCommon.hpp
 dialogs/MRSetupDialogs.o: dialogs/MRSetupDialogs.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp app/MRCommands.hpp app/TMREditorApp.hpp config/MRDialogPaths.hpp ui/MRWindowSupport.hpp
 dialogs/MRWindowListDialog.o: dialogs/MRWindowListDialog.cpp dialogs/MRWindowListDialog.hpp app/commands/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/MRWindowSupport.hpp
@@ -330,8 +334,8 @@ piecetable/MRTextDocument.o: piecetable/MRTextDocument.cpp piecetable/MRTextDocu
 
 # 4. Linker call
 $(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS)
-	killall mr || true
 	$(CXX) -o $@ $^ $(LDFLAGS)
+	killall mr 2> /dev/null || true
 
 $(STAGE_PROFILE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(STAGE_PROFILE_PROBE_OBJECT)
 	$(CXX) -o $@ $^ $(LDFLAGS)

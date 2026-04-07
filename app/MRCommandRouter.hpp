@@ -3,6 +3,6 @@
 
 #include <tvision/tv.h>
 
-bool handleMRCommand(ushort command);
+[[nodiscard]] bool handleMRCommand(ushort command);
 
 #endif

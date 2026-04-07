@@ -5,6 +5,7 @@
 #include <memory>
 #include <stop_token>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace mr {
@@ -22,11 +23,11 @@ struct Range {
 	Range(Offset aStart, Offset aEnd) noexcept : start(aStart), end(aEnd) {
 	}
 
-	bool empty() const noexcept;
-	Offset length() const noexcept;
+	[[nodiscard]] bool empty() const noexcept;
+	[[nodiscard]] Offset length() const noexcept;
 	void normalize() noexcept;
-	Range normalized() const noexcept;
-	Range clamped(Offset maxOffset) const noexcept;
+	[[nodiscard]] Range normalized() const noexcept;
+	[[nodiscard]] Range clamped(Offset maxOffset) const noexcept;
 };
 
 struct Cursor {
@@ -51,8 +52,8 @@ struct Selection {
 	Selection(Offset anAnchor, Offset aCursor) noexcept : anchor(anAnchor), cursor(aCursor) {
 	}
 
-	bool empty() const noexcept;
-	Range range() const noexcept;
+	[[nodiscard]] bool empty() const noexcept;
+	[[nodiscard]] Range range() const noexcept;
 	void clamp(Offset maxOffset) noexcept;
 };
 
@@ -82,9 +83,9 @@ struct TextSpan {
 	TextSpan(Offset aStart, Offset aLength) noexcept : start(aStart), length(aLength) {
 	}
 
-	bool empty() const noexcept;
-	Offset end() const noexcept;
-	TextSpan clamped(Offset maxLength) const noexcept;
+	[[nodiscard]] bool empty() const noexcept;
+	[[nodiscard]] Offset end() const noexcept;
+	[[nodiscard]] TextSpan clamped(Offset maxLength) const noexcept;
 };
 
 struct Piece {
@@ -97,7 +98,7 @@ struct Piece {
 	Piece(BufferKind aSource, TextSpan aSpan) noexcept : source(aSource), span(aSpan) {
 	}
 
-	bool empty() const noexcept;
+	[[nodiscard]] bool empty() const noexcept;
 };
 
 class MappedFileSource {
@@ -108,18 +109,18 @@ class MappedFileSource {
 	bool openReadOnly(const std::string &path, std::string &error);
 	void reset() noexcept;
 
-	bool mapped() const noexcept {
+	[[nodiscard]] bool mapped() const noexcept {
 		return static_cast<bool>(state_);
 	}
 
-	bool empty() const noexcept {
+	[[nodiscard]] bool empty() const noexcept {
 		return size() == 0;
 	}
 
-	std::size_t size() const noexcept;
-	const char *data() const noexcept;
-	const std::string &path() const noexcept;
-	std::string sliceText(TextSpan span) const;
+	[[nodiscard]] std::size_t size() const noexcept;
+	[[nodiscard]] const char *data() const noexcept;
+	[[nodiscard]] const std::string &path() const noexcept;
+	[[nodiscard]] std::string sliceText(TextSpan span) const;
 
   private:
 	struct State;
@@ -131,18 +132,18 @@ class AppendBuffer {
 	AppendBuffer() noexcept : text_() {
 	}
 
-	TextSpan append(const std::string &text);
+	TextSpan append(std::string_view text);
 	void clear() noexcept;
 
-	const std::string &text() const noexcept {
+	[[nodiscard]] const std::string &text() const noexcept {
 		return text_;
 	}
 
-	std::size_t size() const noexcept {
+	[[nodiscard]] std::size_t size() const noexcept {
 		return text_.size();
 	}
 
-	std::string sliceText(TextSpan span) const;
+	[[nodiscard]] std::string sliceText(TextSpan span) const;
 
  private:
 	std::string text_;
@@ -156,22 +157,22 @@ class StagedAddBuffer {
 	StagedAddBuffer() noexcept : text_() {
 	}
 
-	TextSpan append(const std::string &text);
+	TextSpan append(std::string_view text);
 	void clear() noexcept;
 
-	bool empty() const noexcept {
+	[[nodiscard]] bool empty() const noexcept {
 		return text_.empty();
 	}
 
-	std::size_t size() const noexcept {
+	[[nodiscard]] std::size_t size() const noexcept {
 		return text_.size();
 	}
 
-	const std::string &text() const noexcept {
+	[[nodiscard]] const std::string &text() const noexcept {
 		return text_;
 	}
 
-	std::string sliceText(TextSpan span) const;
+	[[nodiscard]] std::string sliceText(TextSpan span) const;
 
   private:
 	std::string text_;
@@ -192,7 +193,7 @@ struct EditOperation {
 	EditOperation() noexcept : kind(EditKind::Replace), range(), text() {
 	}
 
-	EditOperation(EditKind aKind, Range aRange, const std::string &aText)
+	EditOperation(EditKind aKind, Range aRange, std::string_view aText)
 	    : kind(aKind), range(aRange), text(aText) {
 	}
 };
@@ -202,29 +203,29 @@ class EditTransaction {
 	EditTransaction() noexcept : label_(), operations_() {
 	}
 
-	explicit EditTransaction(const std::string &label) : label_(label), operations_() {
+	explicit EditTransaction(std::string_view label) : label_(label), operations_() {
 	}
 
-	const std::string &label() const noexcept {
+	[[nodiscard]] const std::string &label() const noexcept {
 		return label_;
 	}
 
-	void setLabel(const std::string &label) {
+	void setLabel(std::string_view label) {
 		label_ = label;
 	}
 
-	bool empty() const noexcept {
+	[[nodiscard]] bool empty() const noexcept {
 		return operations_.empty();
 	}
 
-	const std::vector<EditOperation> &operations() const noexcept {
+	[[nodiscard]] const std::vector<EditOperation> &operations() const noexcept {
 		return operations_;
 	}
 
-	void setText(const std::string &text);
-	void insert(Offset offset, const std::string &text);
+	void setText(std::string_view text);
+	void insert(Offset offset, std::string_view text);
 	void erase(Range range);
-	void replace(Range range, const std::string &text);
+	void replace(Range range, std::string_view text);
 
   private:
 	std::string label_;
@@ -249,16 +250,16 @@ class StagedEditTransaction {
 	StagedEditTransaction() noexcept : baseVersion_(0), label_(), addBuffer_(), operations_() {
 	}
 
-	explicit StagedEditTransaction(std::size_t aBaseVersion, const std::string &label = std::string())
+	explicit StagedEditTransaction(std::size_t aBaseVersion, std::string_view label = {})
 	    : baseVersion_(aBaseVersion), label_(label), addBuffer_(), operations_() {
 	}
 
-	explicit StagedEditTransaction(const Snapshot &snapshot, const std::string &label = std::string())
+	explicit StagedEditTransaction(const Snapshot &snapshot, std::string_view label = {})
 	    : baseVersion_(snapshot.version), label_(label), addBuffer_(), operations_() {
 	}
 
 	explicit StagedEditTransaction(const ReadSnapshot &snapshot,
-	                               const std::string &label = std::string());
+	                               std::string_view label = {});
 
 	std::size_t baseVersion() const noexcept {
 		return baseVersion_;
@@ -268,34 +269,34 @@ class StagedEditTransaction {
 		baseVersion_ = value;
 	}
 
-	const std::string &label() const noexcept {
+	[[nodiscard]] const std::string &label() const noexcept {
 		return label_;
 	}
 
-	void setLabel(const std::string &label) {
+	void setLabel(std::string_view label) {
 		label_ = label;
 	}
 
-	bool empty() const noexcept {
+	[[nodiscard]] bool empty() const noexcept {
 		return operations_.empty();
 	}
 
-	const StagedAddBuffer &buffer() const noexcept {
+	[[nodiscard]] const StagedAddBuffer &buffer() const noexcept {
 		return addBuffer_;
 	}
 
-	StagedAddBuffer &buffer() noexcept {
+	[[nodiscard]] StagedAddBuffer &buffer() noexcept {
 		return addBuffer_;
 	}
 
-	const std::vector<StagedEditOperation> &operations() const noexcept {
+	[[nodiscard]] const std::vector<StagedEditOperation> &operations() const noexcept {
 		return operations_;
 	}
 
-	void setText(const std::string &text);
-	void insert(Offset offset, const std::string &text);
+	void setText(std::string_view text);
+	void insert(Offset offset, std::string_view text);
 	void erase(Range range);
-	void replace(Range range, const std::string &text);
+	void replace(Range range, std::string_view text);
 
   private:
 	std::size_t baseVersion_;
@@ -333,15 +334,15 @@ struct CommitResult {
 	    : status(CommitStatus::NoOp), expectedVersion(0), actualVersion(0), change() {
 	}
 
-	bool applied() const noexcept {
+	[[nodiscard]] bool applied() const noexcept {
 		return status == CommitStatus::Applied;
 	}
 
-	bool conflicted() const noexcept {
+	[[nodiscard]] bool conflicted() const noexcept {
 		return status == CommitStatus::VersionConflict;
 	}
 
-	bool changed() const noexcept {
+	[[nodiscard]] bool changed() const noexcept {
 		return change.changed;
 	}
 };
@@ -386,44 +387,44 @@ class ReadSnapshot {
   public:
 	ReadSnapshot() noexcept;
 
-	std::size_t documentId() const noexcept {
+	[[nodiscard]] std::size_t documentId() const noexcept {
 		return documentId_;
 	}
 
-	std::size_t version() const noexcept {
+	[[nodiscard]] std::size_t version() const noexcept {
 		return version_;
 	}
 
-	Offset length() const noexcept;
-	bool empty() const noexcept;
-	char charAt(Offset pos) const noexcept;
-	std::string text() const;
+	[[nodiscard]] Offset length() const noexcept;
+	[[nodiscard]] bool empty() const noexcept;
+	[[nodiscard]] char charAt(Offset pos) const noexcept;
+	[[nodiscard]] std::string text() const;
 
-	bool hasMappedOriginal() const noexcept {
+	[[nodiscard]] bool hasMappedOriginal() const noexcept {
 		return mappedOriginal_.mapped();
 	}
 
-	const std::string &mappedPath() const noexcept {
+	[[nodiscard]] const std::string &mappedPath() const noexcept {
 		return mappedOriginal_.path();
 	}
 
-	std::size_t addBufferLength() const noexcept;
-	std::size_t pieceCount() const noexcept;
-	PieceChunkView pieceChunk(std::size_t index) const noexcept;
+	[[nodiscard]] std::size_t addBufferLength() const noexcept;
+	[[nodiscard]] std::size_t pieceCount() const noexcept;
+	[[nodiscard]] PieceChunkView pieceChunk(std::size_t index) const noexcept;
 
-	Offset clampOffset(Offset pos) const noexcept;
-	std::size_t lineCount() const noexcept;
-	Offset lineStart(Offset pos) const noexcept;
-	Offset lineEnd(Offset pos) const noexcept;
-	Offset nextLine(Offset pos) const noexcept;
-	Offset prevLine(Offset pos) const noexcept;
-	std::size_t lineIndex(Offset pos) const noexcept;
-	Offset lineStartByIndex(std::size_t index) const noexcept;
-	std::size_t estimatedLineCount() const noexcept;
-	bool exactLineCountKnown() const noexcept;
-	std::size_t column(Offset pos) const noexcept;
-	std::string lineText(Offset pos) const;
-	LineIndexWarmupData completeLineIndexWarmup() const;
+	[[nodiscard]] Offset clampOffset(Offset pos) const noexcept;
+	[[nodiscard]] std::size_t lineCount() const noexcept;
+	[[nodiscard]] Offset lineStart(Offset pos) const noexcept;
+	[[nodiscard]] Offset lineEnd(Offset pos) const noexcept;
+	[[nodiscard]] Offset nextLine(Offset pos) const noexcept;
+	[[nodiscard]] Offset prevLine(Offset pos) const noexcept;
+	[[nodiscard]] std::size_t lineIndex(Offset pos) const noexcept;
+	[[nodiscard]] Offset lineStartByIndex(std::size_t index) const noexcept;
+	[[nodiscard]] std::size_t estimatedLineCount() const noexcept;
+	[[nodiscard]] bool exactLineCountKnown() const noexcept;
+	[[nodiscard]] std::size_t column(Offset pos) const noexcept;
+	[[nodiscard]] std::string lineText(Offset pos) const;
+	[[nodiscard]] LineIndexWarmupData completeLineIndexWarmup() const;
 	bool completeLineIndexWarmup(LineIndexWarmupData &warmup, std::stop_token stopToken) const;
 
   private:
@@ -463,92 +464,92 @@ class ReadSnapshot {
 class TextDocument {
   public:
 	TextDocument() noexcept;
-	explicit TextDocument(const std::string &text);
+	explicit TextDocument(std::string_view text);
 
-	const std::string &text() const noexcept;
-	Offset length() const noexcept;
-	bool empty() const noexcept;
-	char charAt(Offset pos) const noexcept;
-	Snapshot snapshot() const;
-	ReadSnapshot readSnapshot() const;
-	bool adoptLineIndexWarmup(const LineIndexWarmupData &warmup, std::size_t expectedVersion) noexcept;
+	[[nodiscard]] const std::string &text() const noexcept;
+	[[nodiscard]] Offset length() const noexcept;
+	[[nodiscard]] bool empty() const noexcept;
+	[[nodiscard]] char charAt(Offset pos) const noexcept;
+	[[nodiscard]] Snapshot snapshot() const;
+	[[nodiscard]] ReadSnapshot readSnapshot() const;
+	[[nodiscard]] bool adoptLineIndexWarmup(const LineIndexWarmupData &warmup, std::size_t expectedVersion) noexcept;
 
-	std::size_t version() const noexcept {
+	[[nodiscard]] std::size_t version() const noexcept {
 		return version_;
 	}
 
-	std::size_t documentId() const noexcept {
+	[[nodiscard]] std::size_t documentId() const noexcept {
 		return documentId_;
 	}
 
-	bool matchesVersion(std::size_t expectedVersion) const noexcept {
+	[[nodiscard]] bool matchesVersion(std::size_t expectedVersion) const noexcept {
 		return expectedVersion == version_;
 	}
 
-	bool matchesSnapshot(const Snapshot &snapshot) const noexcept {
+	[[nodiscard]] bool matchesSnapshot(const Snapshot &snapshot) const noexcept {
 		return matchesVersion(snapshot.version);
 	}
 
-	std::size_t originalLength() const noexcept {
+	[[nodiscard]] std::size_t originalLength() const noexcept {
 		return mappedOriginal_.mapped() ? mappedOriginal_.size() : originalBuffer_.size();
 	}
 
-	std::size_t addBufferLength() const noexcept {
+	[[nodiscard]] std::size_t addBufferLength() const noexcept {
 		return addBuffer_.size();
 	}
 
-	std::size_t pieceCount() const noexcept {
+	[[nodiscard]] std::size_t pieceCount() const noexcept {
 		return pieces_.size();
 	}
 
 	bool loadMappedFile(const std::string &path, std::string &error);
-	bool hasMappedOriginal() const noexcept {
+	[[nodiscard]] bool hasMappedOriginal() const noexcept {
 		return mappedOriginal_.mapped();
 	}
 
-	const std::string &mappedPath() const noexcept {
+	[[nodiscard]] const std::string &mappedPath() const noexcept {
 		return mappedOriginal_.path();
 	}
 
-	PieceChunkView pieceChunk(std::size_t index) const noexcept;
+	[[nodiscard]] PieceChunkView pieceChunk(std::size_t index) const noexcept;
 
-	void setText(const std::string &text);
+	void setText(std::string_view text);
 	void apply(const EditTransaction &transaction);
-	CommitResult tryApply(const EditTransaction &transaction, std::size_t expectedVersion);
-	CommitResult tryApply(const StagedEditTransaction &transaction);
-	void insert(Offset offset, const std::string &text);
+	[[nodiscard]] CommitResult tryApply(const EditTransaction &transaction, std::size_t expectedVersion);
+	[[nodiscard]] CommitResult tryApply(const StagedEditTransaction &transaction);
+	void insert(Offset offset, std::string_view text);
 	void erase(Range range);
-	void replace(Range range, const std::string &text);
+	void replace(Range range, std::string_view text);
 	void insertFromStaged(Offset offset, const StagedAddBuffer &buffer, TextSpan span);
 	void replaceFromStaged(Range range, const StagedAddBuffer &buffer, TextSpan span);
 
-	Offset clampOffset(Offset pos) const noexcept;
-	std::size_t lineCount() const noexcept;
-	Offset lineStart(Offset pos) const noexcept;
-	Offset lineEnd(Offset pos) const noexcept;
-	Offset nextLine(Offset pos) const noexcept;
-	Offset prevLine(Offset pos) const noexcept;
-	std::size_t lineIndex(Offset pos) const noexcept;
-	Offset lineStartByIndex(std::size_t index) const noexcept;
-	std::size_t estimatedLineCount() const noexcept;
-	bool exactLineCountKnown() const noexcept;
-	std::size_t column(Offset pos) const noexcept;
-	std::string lineText(Offset pos) const;
+	[[nodiscard]] Offset clampOffset(Offset pos) const noexcept;
+	[[nodiscard]] std::size_t lineCount() const noexcept;
+	[[nodiscard]] Offset lineStart(Offset pos) const noexcept;
+	[[nodiscard]] Offset lineEnd(Offset pos) const noexcept;
+	[[nodiscard]] Offset nextLine(Offset pos) const noexcept;
+	[[nodiscard]] Offset prevLine(Offset pos) const noexcept;
+	[[nodiscard]] std::size_t lineIndex(Offset pos) const noexcept;
+	[[nodiscard]] Offset lineStartByIndex(std::size_t index) const noexcept;
+	[[nodiscard]] std::size_t estimatedLineCount() const noexcept;
+	[[nodiscard]] bool exactLineCountKnown() const noexcept;
+	[[nodiscard]] std::size_t column(Offset pos) const noexcept;
+	[[nodiscard]] std::string lineText(Offset pos) const;
 
   private:
 	bool isLineBreakChar(char ch) const noexcept;
-	void initializeFromOriginal(const std::string &text, bool bumpVersionFlag);
+	void initializeFromOriginal(std::string_view text, bool bumpVersionFlag);
 	void initializeFromMappedSource(const MappedFileSource &source, bool bumpVersionFlag);
 	void bumpVersion() noexcept;
 	void markDirty() noexcept;
 	void ensureMaterialized() const noexcept;
 	std::string pieceText(const Piece &piece) const;
 	const char *originalData() const noexcept;
-	bool setTextNoVersionBump(const std::string &text);
+	bool setTextNoVersionBump(std::string_view text);
 	bool applyOperationNoVersionBump(const EditOperation &operation);
 	bool applyStagedOperationNoVersionBump(const StagedEditOperation &operation,
 	                                       const StagedAddBuffer &buffer);
-	bool replaceNoVersionBump(Range range, const std::string &text);
+	bool replaceNoVersionBump(Range range, std::string_view text);
 		bool hasDirectOriginalView() const noexcept;
 		const char *directTextData() const noexcept;
 		void resetLazyLineIndex() noexcept;

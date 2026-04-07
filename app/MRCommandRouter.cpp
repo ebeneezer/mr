@@ -242,10 +242,10 @@ bool handleFileOpen() {
 		if (createdTarget && target != nullptr)
 			message(target, evCommand, cmClose, nullptr);
 		if (target != nullptr && isEmptyUntitledEditableWindow(target) && current != target && current != nullptr)
-			mrActivateEditWindow(current);
+			static_cast<void>(mrActivateEditWindow(current));
 		return true;
 	}
-	mrActivateEditWindow(target);
+	static_cast<void>(mrActivateEditWindow(target));
 	logLine = "Opened file: ";
 	logLine += target->currentFileName();
 	if (target->isReadOnly())
@@ -276,7 +276,7 @@ bool handleFileLoad() {
 			message(target, evCommand, cmClose, nullptr);
 		return true;
 	}
-	mrActivateEditWindow(target);
+	static_cast<void>(mrActivateEditWindow(target));
 	logLine = "Loaded file into active window: ";
 	logLine += target->currentFileName();
 	if (target->isReadOnly())
@@ -328,7 +328,7 @@ bool startExternalCommandInWindow(TMREditWindow *win, const std::string &command
 	win->setFileChanged(false);
 	win->setWindowRole(TMREditWindow::wrCommunicationCommand, commandLine);
 	if (activate)
-		mrActivateEditWindow(win);
+		static_cast<void>(mrActivateEditWindow(win));
 
 	taskId = mr::coprocessor::globalCoprocessor().submit(
 	    mr::coprocessor::Lane::Io, mr::coprocessor::TaskKind::ExternalIo,
@@ -508,11 +508,11 @@ bool handleMRCommand(ushort command) {
 			return handleFileLoad();
 
 		case cmMrFileSave:
-			saveCurrentEditWindow();
+			static_cast<void>(saveCurrentEditWindow());
 			return true;
 
 		case cmMrFileSaveAs:
-			saveCurrentEditWindowAs();
+			static_cast<void>(saveCurrentEditWindowAs());
 			return true;
 
 		case cmMrFileInformation:
@@ -532,31 +532,31 @@ bool handleMRCommand(ushort command) {
 			return togglePersistentBlocksSetting();
 
 		case cmMrWindowOpen:
-			createEditorWindow("?No-File?");
+			static_cast<void>(createEditorWindow("?No-File?"));
 			mrLogMessage("New empty window opened.");
 			return true;
 
 		case cmMrWindowClose:
-			closeCurrentEditWindow();
+			static_cast<void>(closeCurrentEditWindow());
 			return true;
 
 		case cmMrWindowList: {
 			TMREditWindow *selected = mrShowWindowListDialog(mrwlActivateWindow, currentEditWindow());
 			if (selected != nullptr)
-				mrActivateEditWindow(selected);
+				static_cast<void>(mrActivateEditWindow(selected));
 			return true;
 		}
 
 		case cmMrWindowNext:
-			activateRelativeEditWindow(1);
+			static_cast<void>(activateRelativeEditWindow(1));
 			return true;
 
 		case cmMrWindowPrevious:
-			activateRelativeEditWindow(-1);
+			static_cast<void>(activateRelativeEditWindow(-1));
 			return true;
 
 		case cmMrWindowHide:
-			hideCurrentEditWindow();
+			static_cast<void>(hideCurrentEditWindow());
 			return true;
 
 		case cmMrWindowZoom:
@@ -576,7 +576,7 @@ bool handleMRCommand(ushort command) {
 		case cmMrHelpDetailedIndex:
 		case cmMrHelpPreviousTopic:
 		case cmHelp:
-			mrShowProjectHelp();
+			static_cast<void>(mrShowProjectHelp());
 			return true;
 
 		case cmMrOtherInstallationAndSetup:

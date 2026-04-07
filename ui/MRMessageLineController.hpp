@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 namespace mr {
 namespace messageline {
@@ -37,13 +38,13 @@ static constexpr int kPriorityLow = 10;
 static constexpr int kPriorityMedium = 20;
 static constexpr int kPriorityHigh = 30;
 
-Token postTimed(Owner owner, const std::string &text, Kind kind, std::chrono::milliseconds duration,
+Token postTimed(Owner owner, std::string_view text, Kind kind, std::chrono::milliseconds duration,
                 int priority);
-Token postSticky(Owner owner, const std::string &text, Kind kind, int priority);
+Token postSticky(Owner owner, std::string_view text, Kind kind, int priority);
 void clearOwner(Owner owner);
 void clearOwnerToken(Owner owner, Token token);
-bool currentVisibleMessage(VisibleMessage &out);
-bool currentOwnerMessage(Owner owner, VisibleMessage &out);
+[[nodiscard]] bool currentVisibleMessage(VisibleMessage &out);
+[[nodiscard]] bool currentOwnerMessage(Owner owner, VisibleMessage &out);
 
 } // namespace messageline
 } // namespace mr

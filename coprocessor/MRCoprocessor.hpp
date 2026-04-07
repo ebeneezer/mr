@@ -13,6 +13,7 @@
 #include <string>
 #include <thread>
 #include <atomic>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -59,7 +60,7 @@ struct TaskInfo {
 	      cancelFlag() {
 	}
 
-	bool cancelRequested() const noexcept {
+	[[nodiscard]] bool cancelRequested() const noexcept {
 		return cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire);
 	}
 };
@@ -261,15 +262,15 @@ struct Result {
 	Result() noexcept : task(), status(TaskStatus::Completed), error(), payload(), timing() {
 	}
 
-	bool completed() const noexcept {
+	[[nodiscard]] bool completed() const noexcept {
 		return status == TaskStatus::Completed;
 	}
 
-	bool cancelled() const noexcept {
+	[[nodiscard]] bool cancelled() const noexcept {
 		return status == TaskStatus::Cancelled;
 	}
 
-	bool failed() const noexcept {
+	[[nodiscard]] bool failed() const noexcept {
 		return status == TaskStatus::Failed;
 	}
 };
@@ -287,9 +288,9 @@ class Coprocessor {
 
 	void setResultHandler(ResultHandler handler);
 	std::uint64_t submit(Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion,
-	                     const std::string &label, TaskFn fn);
+	                     std::string_view label, TaskFn fn);
 	std::size_t pump(std::size_t maxResults = 8);
-	std::size_t pendingResults() const noexcept;
+	[[nodiscard]] std::size_t pendingResults() const noexcept;
 	void post(Result result);
 	bool cancelTask(std::uint64_t taskId);
 	void shutdown(bool drainResults = false);

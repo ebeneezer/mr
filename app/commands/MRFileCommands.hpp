@@ -6,11 +6,11 @@
 
 class TMREditWindow;
 
-bool promptForPath(const char *title, char *fileName, std::size_t fileNameSize);
-bool resolveReadableExistingPath(const char *path, std::string &resolvedPath);
-bool loadResolvedFileIntoWindow(TMREditWindow *win, const std::string &resolvedPath,
-                                const char *operationLabel = "Load file");
-bool saveCurrentEditWindow();
-bool saveCurrentEditWindowAs();
+[[nodiscard]] bool promptForPath(const char *title, char *fileName, std::size_t fileNameSize);
+[[nodiscard]] bool resolveReadableExistingPath(const char *path, std::string &resolvedPath);
+[[nodiscard]] bool loadResolvedFileIntoWindow(TMREditWindow *win, const std::string &resolvedPath,
+                                              const char *operationLabel = "Load file");
+[[nodiscard]] bool saveCurrentEditWindow();
+[[nodiscard]] bool saveCurrentEditWindowAs();
 
 #endif

@@ -372,9 +372,9 @@ std::string MappedFileSource::sliceText(TextSpan span) const {
 	return std::string(data() + bounded.start, bounded.length);
 }
 
-TextSpan AppendBuffer::append(const std::string &text) {
+TextSpan AppendBuffer::append(std::string_view text) {
 	TextSpan span(text_.size(), text.size());
-	text_ += text;
+	text_.append(text.data(), text.size());
 	return span;
 }
 
@@ -387,9 +387,9 @@ std::string AppendBuffer::sliceText(TextSpan span) const {
 	return text_.substr(bounded.start, bounded.length);
 }
 
-TextSpan StagedAddBuffer::append(const std::string &text) {
+TextSpan StagedAddBuffer::append(std::string_view text) {
 	TextSpan span(text_.size(), text.size());
-	text_ += text;
+	text_.append(text.data(), text.size());
 	return span;
 }
 
@@ -402,11 +402,11 @@ std::string StagedAddBuffer::sliceText(TextSpan span) const {
 	return text_.substr(bounded.start, bounded.length);
 }
 
-void EditTransaction::setText(const std::string &text) {
+void EditTransaction::setText(std::string_view text) {
 	operations_.push_back(EditOperation(EditKind::SetText, Range(), text));
 }
 
-void EditTransaction::insert(Offset offset, const std::string &text) {
+void EditTransaction::insert(Offset offset, std::string_view text) {
 	operations_.push_back(EditOperation(EditKind::Insert, Range(offset, offset), text));
 }
 
@@ -415,17 +415,17 @@ void EditTransaction::erase(Range range) {
 	operations_.push_back(EditOperation(EditKind::Erase, range, std::string()));
 }
 
-void EditTransaction::replace(Range range, const std::string &text) {
+void EditTransaction::replace(Range range, std::string_view text) {
 	range.normalize();
 	operations_.push_back(EditOperation(EditKind::Replace, range, text));
 }
 
-void StagedEditTransaction::setText(const std::string &text) {
+void StagedEditTransaction::setText(std::string_view text) {
 	operations_.push_back(
 	    StagedEditOperation(EditKind::SetText, Range(), addBuffer_.append(text)));
 }
 
-void StagedEditTransaction::insert(Offset offset, const std::string &text) {
+void StagedEditTransaction::insert(Offset offset, std::string_view text) {
 	operations_.push_back(
 	    StagedEditOperation(EditKind::Insert, Range(offset, offset), addBuffer_.append(text)));
 }
@@ -435,14 +435,14 @@ void StagedEditTransaction::erase(Range range) {
 	operations_.push_back(StagedEditOperation(EditKind::Erase, range, TextSpan()));
 }
 
-void StagedEditTransaction::replace(Range range, const std::string &text) {
+void StagedEditTransaction::replace(Range range, std::string_view text) {
 	range.normalize();
 	operations_.push_back(
 	    StagedEditOperation(EditKind::Replace, range, addBuffer_.append(text)));
 }
 
 StagedEditTransaction::StagedEditTransaction(const ReadSnapshot &snapshot,
-                                             const std::string &label)
+                                             std::string_view label)
     : baseVersion_(snapshot.version()), label_(label) {
 }
 
@@ -453,7 +453,7 @@ TextDocument::TextDocument() noexcept
 	resetLazyLineIndex();
 }
 
-TextDocument::TextDocument(const std::string &text)
+TextDocument::TextDocument(std::string_view text)
     :  length_(0),
       documentId_(allocateDocumentId()), version_(0), cacheDirty_(false),  lazyIndexedOffset_(0), lazyIndexedLine_(0),
       lazyLineIndexComplete_(false), lazyTotalLineCount_(1) {
@@ -908,7 +908,7 @@ PieceChunkView TextDocument::pieceChunk(std::size_t index) const noexcept {
 	return PieceChunkView(addBuffer_.text().data() + piece.span.start, piece.span.length);
 }
 
-void TextDocument::setText(const std::string &text) {
+void TextDocument::setText(std::string_view text) {
 	if (setTextNoVersionBump(text))
 		bumpVersion();
 }
@@ -1033,7 +1033,7 @@ CommitResult TextDocument::tryApply(const StagedEditTransaction &transaction) {
 	return result;
 }
 
-void TextDocument::insert(Offset offset, const std::string &text) {
+void TextDocument::insert(Offset offset, std::string_view text) {
 	if (text.empty())
 		return;
 	if (insertAddSpanNoVersionBump(offset, addBuffer_.append(text)))
@@ -1045,7 +1045,7 @@ void TextDocument::erase(Range range) {
 		bumpVersion();
 }
 
-void TextDocument::replace(Range range, const std::string &text) {
+void TextDocument::replace(Range range, std::string_view text) {
 	if (replaceNoVersionBump(range, text))
 		bumpVersion();
 }
@@ -1216,15 +1216,15 @@ bool TextDocument::isLineBreakChar(char ch) const noexcept {
 	return ch == '\n' || ch == '\r';
 }
 
-bool TextDocument::setTextNoVersionBump(const std::string &text) {
+bool TextDocument::setTextNoVersionBump(std::string_view text) {
 	if (text == this->text())
 		return false;
 	initializeFromOriginal(text, false);
 	return true;
 }
 
-void TextDocument::initializeFromOriginal(const std::string &text, bool bumpVersionFlag) {
-	originalBuffer_ = text;
+void TextDocument::initializeFromOriginal(std::string_view text, bool bumpVersionFlag) {
+	originalBuffer_.assign(text.data(), text.size());
 	mappedOriginal_.reset();
 	addBuffer_.clear();
 	pieces_.clear();
@@ -1369,7 +1369,7 @@ bool TextDocument::eraseNoVersionBump(Range range) {
 	return true;
 }
 
-bool TextDocument::replaceNoVersionBump(Range range, const std::string &text) {
+bool TextDocument::replaceNoVersionBump(Range range, std::string_view text) {
 	Range bounded = range.clamped(length_);
 	bool removed = eraseNoVersionBump(bounded);
 	if (text.empty())

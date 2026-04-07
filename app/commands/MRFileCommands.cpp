@@ -9,6 +9,7 @@
 
 #include "MRDialogPaths.hpp"
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cctype>
 #include <cerrno>
@@ -16,6 +17,7 @@
 #include <cstring>
 #include <set>
 #include <string>
+#include <string_view>
 #include <unistd.h>
 #include <vector>
 
@@ -37,17 +39,16 @@ ushort execDialogWithDataLocal(TDialog *dialog, void *data) {
 		dialog->getData(data);
 	TObject::destroy(dialog);
 	if (result == cmHelp)
-		mrShowProjectHelp();
+		static_cast<void>(mrShowProjectHelp());
 	return result;
 }
 
-std::string normalizeTvPath(const std::string &path) {
-	std::string result = path;
-	std::size_t i;
+[[nodiscard]] std::string normalizeTvPath(std::string_view path) {
+	std::string result(path);
 
-	for (i = 0; i < result.size(); ++i)
-		if (result[i] == '\\')
-			result[i] = '/';
+	for (char &ch : result)
+		if (ch == '\\')
+			ch = '/';
 #ifdef __unix__
 	if (result.size() >= 2 && ((result[0] >= 'A' && result[0] <= 'Z') ||
 	                           (result[0] >= 'a' && result[0] <= 'z')) &&
@@ -57,7 +58,7 @@ std::string normalizeTvPath(const std::string &path) {
 	return result;
 }
 
-std::string trimPathInput(const std::string &path) {
+[[nodiscard]] std::string trimPathInput(std::string_view path) {
 	std::size_t start = 0;
 	std::size_t end = path.size();
 
@@ -68,17 +69,17 @@ std::string trimPathInput(const std::string &path) {
 	        static_cast<unsigned char>(path[end - 1]) < 32))
 		--end;
 
-	std::string result = path.substr(start, end - start);
+	std::string result(path.substr(start, end - start));
 	if (result.size() >= 2 &&
 	    ((result.front() == '"' && result.back() == '"') || (result.front() == '\'' && result.back() == '\'')))
 		result = result.substr(1, result.size() - 2);
 	return result;
 }
 
-std::string expandUserPath(const char *path) {
+[[nodiscard]] std::string expandUserPath(std::string_view path) {
 	std::string result;
 
-	if (path == nullptr)
+	if (path.empty())
 		return std::string();
 	result = normalizeTvPath(trimPathInput(path));
 	if (result.size() >= 2 && result[0] == '~' && result[1] == '/') {
@@ -89,47 +90,44 @@ std::string expandUserPath(const char *path) {
 	return result;
 }
 
-bool hasWildcardPattern(const std::string &path) {
-	return path.find('*') != std::string::npos || path.find('?') != std::string::npos;
+[[nodiscard]] bool hasWildcardPattern(std::string_view path) {
+	return path.find('*') != std::string_view::npos || path.find('?') != std::string_view::npos;
 }
 
-std::size_t lastPathSeparator(const std::string &path) {
-	std::size_t slash = path.find_last_of('/');
-	std::size_t backslash = path.find_last_of('\\');
+[[nodiscard]] std::size_t lastPathSeparator(std::string_view path) {
+	const std::size_t slash = path.find_last_of('/');
+	const std::size_t backslash = path.find_last_of('\\');
 
-	if (slash == std::string::npos)
+	if (slash == std::string_view::npos)
 		return backslash;
-	if (backslash == std::string::npos)
+	if (backslash == std::string_view::npos)
 		return slash;
 	return std::max(slash, backslash);
 }
 
-bool hasExtensionInBaseName(const std::string &path) {
-	std::size_t sep = lastPathSeparator(path);
-	std::size_t dot = path.find_last_of('.');
+[[nodiscard]] bool hasExtensionInBaseName(std::string_view path) {
+	const std::size_t sep = lastPathSeparator(path);
+	const std::size_t dot = path.find_last_of('.');
 
-	return dot != std::string::npos && (sep == std::string::npos || dot > sep);
+	return dot != std::string_view::npos && (sep == std::string_view::npos || dot > sep);
 }
 
-bool resolveWithConfiguredExtensions(const std::string &basePath, std::string &resolvedPath) {
-	std::vector<std::string> extensions = configuredDefaultExtensionList();
+[[nodiscard]] bool resolveWithConfiguredExtensions(const std::string &basePath, std::string &resolvedPath) {
+	const std::vector<std::string> extensions = configuredDefaultExtensionList();
 	std::set<std::string> tried;
 
-	for (auto ext : extensions) {
-			std::string candidates[3];
+	for (const std::string &ext : extensions) {
+		std::array<std::string, 3> candidates = {ext, ext, ext};
 
 		if (ext.empty())
 			continue;
-		candidates[0] = ext;
-		candidates[1] = ext;
-		candidates[2] = ext;
 		for (std::size_t p = 0; p < ext.size(); ++p) {
 			candidates[1][p] = static_cast<char>(std::tolower(static_cast<unsigned char>(ext[p])));
 			candidates[2][p] = static_cast<char>(std::toupper(static_cast<unsigned char>(ext[p])));
 		}
 
-		for (const auto & c : candidates) {
-			std::string candidate = basePath + "." + c;
+		for (const std::string &candidateExt : candidates) {
+			std::string candidate = basePath + "." + candidateExt;
 			if (!tried.insert(candidate).second)
 				continue;
 			if (::access(candidate.c_str(), F_OK) == 0 && ::access(candidate.c_str(), R_OK) == 0) {
@@ -152,7 +150,7 @@ bool promptForPath(const char *title, char *fileName, std::size_t fileNameSize) 
 
 bool resolveReadableExistingPath(const char *path, std::string &resolvedPath) {
 	bool disableExtensionSearch = false;
-	std::string rawInput = expandUserPath(path);
+	std::string rawInput = expandUserPath(path != nullptr ? std::string_view(path) : std::string_view());
 
 	resolvedPath = rawInput;
 	if (!resolvedPath.empty() && resolvedPath.back() == '.' && !hasWildcardPattern(resolvedPath)) {
@@ -165,7 +163,7 @@ bool resolveReadableExistingPath(const char *path, std::string &resolvedPath) {
 	}
 	if (::access(resolvedPath.c_str(), F_OK) != 0 && !disableExtensionSearch &&
 	    !hasWildcardPattern(resolvedPath) && !hasExtensionInBaseName(resolvedPath))
-		resolveWithConfiguredExtensions(resolvedPath, resolvedPath);
+		static_cast<void>(resolveWithConfiguredExtensions(resolvedPath, resolvedPath));
 	if (access(resolvedPath.c_str(), F_OK) != 0) {
 		messageBox(mfError | mfOKButton, "File does not exist:\n%s", resolvedPath.c_str());
 		return false;

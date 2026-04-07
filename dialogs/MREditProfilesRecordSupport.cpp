@@ -1,5 +1,6 @@
-#include "MREditSettingsDialogInternal.hpp"
+#include "MREditProfilesRecordSupport.hpp"
 
+#include "MRSetupDialogCommon.hpp"
 #include "MRSetupDialogs.hpp"
 
 #include "../app/TMREditorApp.hpp"
@@ -9,17 +10,10 @@
 #include <cstdlib>
 #include <cstring>
 
-namespace MREditSettingsDialogInternal {
+namespace MREditProfilesDialogInternal {
 
 std::string trimAscii(const std::string &value) {
-	std::size_t start = 0;
-	std::size_t end = value.size();
-
-	while (start < end && std::isspace(static_cast<unsigned char>(value[start])) != 0)
-		++start;
-	while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1])) != 0)
-		--end;
-	return value.substr(start, end - start);
+	return mr::dialogs::trimAscii(value);
 }
 
 std::string upperAscii(std::string value) {
@@ -29,15 +23,11 @@ std::string upperAscii(std::string value) {
 }
 
 std::string readRecordField(const char *value) {
-	return trimAscii(value != nullptr ? value : "");
+	return mr::dialogs::readRecordField(value);
 }
 
 void writeRecordField(char *dest, std::size_t destSize, const std::string &value) {
-	if (dest == nullptr || destSize == 0)
-		return;
-	std::memset(dest, 0, destSize);
-	std::strncpy(dest, value.c_str(), destSize - 1);
-	dest[destSize - 1] = '\0';
+	mr::dialogs::writeRecordField(dest, destSize, value);
 }
 
 bool recordsEqual(const EditSettingsDialogRecord &lhs, const EditSettingsDialogRecord &rhs) {
@@ -164,4 +154,4 @@ bool saveAndReloadEditSettings(const EditSettingsDialogRecord &record, std::stri
 	return true;
 }
 
-} // namespace MREditSettingsDialogInternal
+} // namespace MREditProfilesDialogInternal

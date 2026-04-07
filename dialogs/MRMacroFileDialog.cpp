@@ -17,6 +17,7 @@
 #include <tvision/tv.h>
 
 #include "MRMacroFileDialog.hpp"
+#include "MRSetupDialogCommon.hpp"
 
 #include "../mrmac/MRMacroRunner.hpp"
 #include "../mrmac/mrmac.h"
@@ -38,6 +39,10 @@
 #include <vector>
 
 namespace {
+using mr::dialogs::ensureMrmacExtension;
+using mr::dialogs::hasMrmacExtension;
+using mr::dialogs::normalizeTvPathSeparators;
+using mr::dialogs::trimAscii;
 enum : ushort {
 	cmMRMacroManagerCreate = 220,
 	cmMRMacroManagerDelete,
@@ -55,53 +60,6 @@ struct MacroFileEntry {
 	std::string keySpec;
 	std::string compileError;
 };
-
-ushort runDialogWithData(TDialog *dialog, void *data) {
-	ushort result = cmCancel;
-
-	if (dialog == nullptr)
-		return cmCancel;
-	if (data != nullptr)
-		dialog->setData(data);
-	result = TProgram::deskTop->execView(dialog);
-	if (result != cmCancel && data != nullptr)
-		dialog->getData(data);
-	TObject::destroy(dialog);
-	return result;
-}
-
-std::string trimAscii(const std::string &value) {
-	std::size_t start = 0;
-	std::size_t end = value.size();
-
-	while (start < end && std::isspace(static_cast<unsigned char>(value[start])) != 0)
-		++start;
-	while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1])) != 0)
-		--end;
-	return value.substr(start, end - start);
-}
-
-std::string normalizePath(const std::string &value) {
-	std::string out = value;
-	for (char & i : out)
-		if (i == '\\')
-			i = '/';
-	return out;
-}
-
-bool hasMrmacExtension(const std::string &path) {
-	std::size_t dotPos = path.rfind('.');
-	if (dotPos == std::string::npos)
-		return false;
-	std::string ext = path.substr(dotPos);
-	for (char & i : ext)
-		i = static_cast<char>(std::tolower(static_cast<unsigned char>(i)));
-	return ext == ".mrmac";
-}
-
-std::string ensureMrmacExtension(const std::string &path) {
-	return hasMrmacExtension(path) ? path : path + ".mrmac";
-}
 
 std::string baseNameOf(const std::string &path) {
 	std::size_t pos = path.find_last_of('/');
@@ -205,7 +163,7 @@ std::vector<MacroFileEntry> scanMacroFilesInDirectory(const std::string &directo
 
 		MacroFileEntry entry;
 		entry.fileName = fileName;
-		entry.path = normalizePath(directoryPath + "/" + fileName);
+		entry.path = normalizeTvPathSeparators(directoryPath + "/" + fileName);
 		loadEntryMetadata(entry);
 		entries.push_back(entry);
 	}
@@ -579,7 +537,7 @@ bool openMacroSourceInEditor(const std::string &path) {
 		messageBox(mfError | mfOKButton, "Unable to load macro file:\n%s", path.c_str());
 		return false;
 	}
-	mrActivateEditWindow(target);
+	static_cast<void>(mrActivateEditWindow(target));
 	return true;
 }
 
@@ -755,7 +713,7 @@ class MacroManagerDialog : public TDialog {
 					clearEvent(event);
 					return;
 				case kbF1:
-					mrShowProjectHelp();
+					static_cast<void>(mrShowProjectHelp());
 					clearEvent(event);
 					return;
 			}
@@ -790,7 +748,7 @@ class MacroManagerDialog : public TDialog {
 				clearEvent(event);
 				break;
 			case cmHelp:
-				mrShowProjectHelp();
+				static_cast<void>(mrShowProjectHelp());
 				clearEvent(event);
 				break;
 		}
@@ -863,7 +821,7 @@ class MacroManagerDialog : public TDialog {
 		path = ensureMrmacExtension(path);
 		if (path.find('/') == std::string::npos)
 			path = directory_ + "/" + path;
-		path = normalizePath(path);
+		path = normalizeTvPathSeparators(path);
 
 		if (fileExists(path)) {
 			if (messageBox(mfConfirmation | mfYesButton | mfNoButton,
@@ -921,7 +879,7 @@ class MacroManagerDialog : public TDialog {
 		destPath = ensureMrmacExtension(destPath);
 		if (destPath.find('/') == std::string::npos)
 			destPath = directory_ + "/" + destPath;
-		destPath = normalizePath(destPath);
+		destPath = normalizeTvPathSeparators(destPath);
 
 		if (fileExists(destPath)) {
 			if (messageBox(mfConfirmation | mfYesButton | mfNoButton,
@@ -986,7 +944,7 @@ bool runMacroFileDialog() {
 	ushort dialogResult;
 
 	initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.mrmac");
-	dialogResult = runDialogWithData(
+	dialogResult = mr::dialogs::execDialogRawWithData(
 	    new TFileDialog("*.mrmac", "Load Macro File", "~N~ame", fdOpenButton, 100), fileName);
 	if (dialogResult == cmCancel)
 		return false;
@@ -1008,6 +966,6 @@ bool runMacroManagerDialog() {
 	if (result == cmMRMacroManagerOpenEditor && !openPath.empty())
 		return openMacroSourceInEditor(openPath);
 	if (result == cmHelp)
-		mrShowProjectHelp();
+		static_cast<void>(mrShowProjectHelp());
 	return result != cmCancel;
 }

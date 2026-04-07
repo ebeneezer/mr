@@ -1,11 +1,13 @@
 #include "MRPerformance.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <deque>
 #include <mutex>
+#include <string_view>
 
 #include "../ui/MRMessageLineController.hpp"
 
@@ -31,11 +33,11 @@ State &state() {
 	return instance;
 }
 
-const char *baseNameOf(const std::string &path) {
+std::string_view baseNameOf(std::string_view path) {
 	std::size_t pos = path.find_last_of("\\/");
-	if (pos == std::string::npos)
-		return path.c_str();
-	return path.c_str() + pos + 1;
+	if (pos == std::string_view::npos)
+		return path;
+	return path.substr(pos + 1);
 }
 
 const char *outcomeLabel(Outcome outcome) {
@@ -69,14 +71,14 @@ const char *laneLabel(mr::coprocessor::Lane lane) {
 }
 
 std::string formatWallClock(std::time_t when) {
-	char buffer[32];
+	std::array<char, 32> buffer{};
 	std::tm *tmNow = std::localtime(&when);
 
 	if (tmNow == nullptr)
 		return "--:--:--";
-	if (std::strftime(buffer, sizeof(buffer), "%H:%M:%S", tmNow) == 0)
+	if (std::strftime(buffer.data(), buffer.size(), "%H:%M:%S", tmNow) == 0)
 		return "--:--:--";
-	return buffer;
+	return buffer.data();
 }
 
 bool qualifiesForNotice(const Event &event) {
@@ -128,8 +130,8 @@ void pushEvent(State &shared, Event event) {
 
 } // namespace
 
-void recordUiEvent(const std::string &action, std::size_t bufferId, std::size_t documentId, std::size_t bytes,
-                   double totalMs, const std::string &detail, Outcome outcome) {
+void recordUiEvent(std::string_view action, std::size_t bufferId, std::size_t documentId, std::size_t bytes,
+                   double totalMs, std::string_view detail, Outcome outcome) {
 	State &shared = state();
 	std::lock_guard<std::mutex> lock(shared.mutex);
 	Event event;
@@ -152,17 +154,17 @@ void recordUiEvent(const std::string &action, std::size_t bufferId, std::size_t 
 		                          std::chrono::seconds(4), mr::messageline::kPriorityLow);
 }
 
-void recordBackgroundResult(const mr::coprocessor::Result &result, const std::string &action,
+void recordBackgroundResult(const mr::coprocessor::Result &result, std::string_view action,
                             std::size_t bufferId, std::size_t documentId, std::size_t bytes,
-                            const std::string &detail) {
+                            std::string_view detail) {
 	Outcome outcome =
 	    result.failed() ? Outcome::Failed : (result.cancelled() ? Outcome::Cancelled : Outcome::Completed);
 	recordBackgroundEvent(result.task.lane, outcome, result.timing, action, bufferId, documentId, bytes, detail);
 }
 
 void recordBackgroundEvent(mr::coprocessor::Lane lane, Outcome outcome, const mr::coprocessor::TaskTiming &timing,
-                           const std::string &action, std::size_t bufferId, std::size_t documentId,
-                           std::size_t bytes, const std::string &detail) {
+                           std::string_view action, std::size_t bufferId, std::size_t documentId,
+                           std::size_t bytes, std::string_view detail) {
 	State &shared = state();
 	std::lock_guard<std::mutex> lock(shared.mutex);
 	Event event;
@@ -227,22 +229,22 @@ bool currentMessageLineNotice(MessageLineNotice &out) {
 }
 
 std::string formatDuration(double totalMs) {
-	char buffer[64];
+	std::array<char, 64> buffer{};
 
 	if (totalMs < 1000.0) {
-		std::snprintf(buffer, sizeof(buffer), "%.0f ms", totalMs);
-		return buffer;
+		std::snprintf(buffer.data(), buffer.size(), "%.0f ms", totalMs);
+		return buffer.data();
 	}
 	if (totalMs < 10000.0) {
-		std::snprintf(buffer, sizeof(buffer), "%.2f s", totalMs / 1000.0);
-		return buffer;
+		std::snprintf(buffer.data(), buffer.size(), "%.2f s", totalMs / 1000.0);
+		return buffer.data();
 	}
-	std::snprintf(buffer, sizeof(buffer), "%.1f s", totalMs / 1000.0);
-	return buffer;
+	std::snprintf(buffer.data(), buffer.size(), "%.1f s", totalMs / 1000.0);
+	return buffer.data();
 }
 
 std::string formatThroughput(std::size_t bytes, double totalMs) {
-	char buffer[64];
+	std::array<char, 64> buffer{};
 	double seconds = totalMs / 1000.0;
 	double mibPerSecond;
 
@@ -251,8 +253,8 @@ std::string formatThroughput(std::size_t bytes, double totalMs) {
 	mibPerSecond = (static_cast<double>(bytes) / (1024.0 * 1024.0)) / seconds;
 	if (!std::isfinite(mibPerSecond) || mibPerSecond <= 0.0)
 		return std::string();
-	std::snprintf(buffer, sizeof(buffer), "%.1f MiB/s", mibPerSecond);
-	return buffer;
+	std::snprintf(buffer.data(), buffer.size(), "%.1f MiB/s", mibPerSecond);
+	return buffer.data();
 }
 
 std::string formatEventLine(const Event &event) {

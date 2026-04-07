@@ -1,19 +1,18 @@
-#ifndef MREDITSETTINGSDIALOGINTERNAL_HPP
-#define MREDITSETTINGSDIALOGINTERNAL_HPP
+#ifndef MREDITPROFILESPANELINTERNAL_HPP
+#define MREDITPROFILESPANELINTERNAL_HPP
 
 #include <tvision/tv.h>
 
 #include <cstddef>
-#include <string>
 
-struct MREditSetupSettings;
 class MRScrollableDialog;
+class MRNumericSlider;
 class TCheckBoxes;
 class TInputLine;
 class TRadioButtons;
 class TView;
 
-namespace MREditSettingsDialogInternal {
+namespace MREditProfilesDialogInternal {
 
 enum : ushort {
 	cmMrEditSettingsPanelChanged = 3860,
@@ -96,7 +95,6 @@ struct EditSettingsPanelConfig {
 	int clusterLeft = -1;
 	int clusterTopY = -1;
 	int tabSizeY = -1;
-	int tabSizeFieldWidth = 4;
 	bool includeDefaultExtensions = true;
 	bool compactTextRows = false;
 	bool tabExpandBesideDefaultMode = false;
@@ -111,7 +109,7 @@ class EditSettingsPanel {
 	TView *primaryView() const noexcept;
 
   private:
-	ushort currentOptionsMask() const noexcept;
+	[[nodiscard]] ushort currentOptionsMask() const noexcept;
 	void setOptionsMask(ushort options);
 	static void setInputLineValue(TInputLine *inputLine, const char *value, std::size_t capacity);
 	static void readInputLineValue(TInputLine *inputLine, char *dest, std::size_t destSize);
@@ -120,7 +118,7 @@ class EditSettingsPanel {
 	TInputLine *pageBreakField_ = nullptr;
 	TInputLine *wordDelimitersField_ = nullptr;
 	TInputLine *defaultExtensionsField_ = nullptr;
-	TInputLine *tabSizeField_ = nullptr;
+	MRNumericSlider *tabSizeSlider_ = nullptr;
 	TCheckBoxes *optionsLeftField_ = nullptr;
 	TRadioButtons *lineNumbersField_ = nullptr;
 	TRadioButtons *eofMarkerField_ = nullptr;
@@ -129,16 +127,6 @@ class EditSettingsPanel {
 	TRadioButtons *defaultModeField_ = nullptr;
 };
 
-std::string trimAscii(const std::string &value);
-std::string upperAscii(std::string value);
-std::string readRecordField(const char *value);
-void writeRecordField(char *dest, std::size_t destSize, const std::string &value);
-bool recordsEqual(const EditSettingsDialogRecord &lhs, const EditSettingsDialogRecord &rhs);
-void initEditSettingsDialogRecord(EditSettingsDialogRecord &record);
-bool recordToSettings(const EditSettingsDialogRecord &record, MREditSetupSettings &settings,
-                      std::string &errorText);
-bool saveAndReloadEditSettings(const EditSettingsDialogRecord &record, std::string &errorText);
-
-} // namespace MREditSettingsDialogInternal
+} // namespace MREditProfilesDialogInternal
 
 #endif

@@ -43,7 +43,7 @@ ushort execDialog(TDialog *dialog) {
 		result = TProgram::deskTop->execView(dialog);
 		TObject::destroy(dialog);
 		if (result == cmHelp)
-			mrShowProjectHelp();
+			static_cast<void>(mrShowProjectHelp());
 	}
 	return result;
 }

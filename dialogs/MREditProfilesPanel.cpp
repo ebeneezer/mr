@@ -1,30 +1,29 @@
-#define Uses_TButton
 #define Uses_TCheckBoxes
-#define Uses_TDeskTop
 #define Uses_TInputLine
-#define Uses_TKeys
-#define Uses_MsgBox
-#define Uses_TObject
-#define Uses_TProgram
 #define Uses_TRadioButtons
 #define Uses_TRect
 #define Uses_TStaticText
 #define Uses_TSItem
+#define Uses_TView
 #include <tvision/tv.h>
 
-#include "MREditSettingsDialogInternal.hpp"
+#include "MREditProfilesPanelInternal.hpp"
+#include "MRNumericSlider.hpp"
 #include "MRSetupDialogCommon.hpp"
-#include "MRSetupDialogs.hpp"
 
 #include <algorithm>
+#include <cstdlib>
+#include <string>
 #include <vector>
 
 namespace {
-using namespace MREditSettingsDialogInternal;
+using namespace MREditProfilesDialogInternal;
+using mr::dialogs::readRecordField;
+using mr::dialogs::writeRecordField;
 
-enum : ushort {
-	cmMrSetupEditSettingsHelp = 3810
-};
+constexpr int kMinimumTabSize = 2;
+constexpr int kMaximumTabSize = 32;
+constexpr int kDefaultTabSize = 8;
 
 struct EditSettingsLayout {
 	static const int kDialogWidth = 88;
@@ -37,14 +36,16 @@ struct EditSettingsLayout {
 	      optionsLeft(optionsHeadingX), optionsRight(optionsLeft + 28), lineNumbersLeft(optionsRight + 3),
 	      lineNumbersRight(lineNumbersLeft + 15), eofMarkerLeft(lineNumbersRight + 3),
 	      eofMarkerRight(eofMarkerLeft + 15), defaultModeLeft(eofMarkerRight + 3),
-	      defaultModeRight(defaultModeLeft + 15), tabExpandLeft(lineNumbersLeft),
-	      tabExpandRight(tabExpandLeft + 15), columnBlockMoveLeft(optionsLeft),
-	      columnBlockMoveRight(optionsLeft + 18), buttonTop(kDialogHeight - 3), topY(config.topY),
+	      defaultModeRight(defaultModeLeft + 15),
+	      tabExpandLeft(config.tabExpandBesideDefaultMode ? defaultModeRight + 3 : lineNumbersLeft),
+	      tabExpandRight(tabExpandLeft + 15), columnBlockMoveLeft(lineNumbersLeft),
+	      columnBlockMoveRight(columnBlockMoveLeft + 18), buttonTop(kDialogHeight - 3), topY(config.topY),
 	      pageBreakY(topY), wordDelimitersY(pageBreakY + (config.compactTextRows ? 1 : 2)),
 	      defaultExtensionsY(config.includeDefaultExtensions ? wordDelimitersY + (config.compactTextRows ? 1 : 2) : -1),
 	      optionsHeadingY(config.clusterTopY >= 0 ? config.clusterTopY :
 	                     (config.includeDefaultExtensions ? defaultExtensionsY + 2 : wordDelimitersY + 2)),
-	      optionsBodyY(optionsHeadingY + 1), tabExpandHeadingY(optionsBodyY + 5),
+	      optionsBodyY(optionsHeadingY + 1),
+	      tabExpandHeadingY(config.tabExpandBesideDefaultMode ? optionsHeadingY : optionsBodyY + 5),
 	      tabExpandBodyY(tabExpandHeadingY + 1), columnBlockMoveHeadingY(tabExpandBodyY + 4),
 	      columnBlockMoveBodyY(columnBlockMoveHeadingY + 1),
 	      tabSizeY(config.tabSizeY >= 0 ? config.tabSizeY : columnBlockMoveBodyY + 4),
@@ -99,30 +100,12 @@ TInputLine *addPanelInput(MRScrollableDialog &dialog, const TRect &rect, int max
 	return view;
 }
 
-class TNumericInputLine : public TInputLine {
-  public:
-	TNumericInputLine(const TRect &bounds, int maxLen) noexcept : TInputLine(bounds, maxLen) {
-	}
-
-	void handleEvent(TEvent &event) override {
-		if (event.what == evKeyDown) {
-			const ushort keyCode = event.keyDown.keyCode;
-			const unsigned char ch = static_cast<unsigned char>(event.keyDown.charScan.charCode);
-			if ((ch >= '0' && ch <= '9') || keyCode == kbBack || keyCode == kbDel || keyCode == kbLeft ||
-			    keyCode == kbRight || keyCode == kbHome || keyCode == kbEnd || keyCode == kbTab ||
-			    keyCode == kbShiftTab || keyCode == kbCtrlI || keyCode == kbEnter) {
-				TInputLine::handleEvent(event);
-				return;
-			}
-			clearEvent(event);
-			return;
-		}
-		TInputLine::handleEvent(event);
-	}
-};
-
-TInputLine *addNumericPanelInput(MRScrollableDialog &dialog, const TRect &rect, int maxLen) {
-	TInputLine *view = new TNumericInputLine(rect, maxLen);
+MRNumericSlider *addPanelNumericSlider(MRScrollableDialog &dialog, const TRect &rect, int32_t minValue,
+                                          int32_t maxValue, int32_t initialValue, int32_t step,
+                                          int32_t pageStep, ushort changedCmd) {
+	MRNumericSlider *view =
+	    new MRNumericSlider(rect, minValue, maxValue, initialValue, step, pageStep,
+	                        MRNumericSlider::fmtRaw, changedCmd);
 	dialog.addManaged(view, rect);
 	return view;
 }
@@ -138,82 +121,9 @@ TRadioButtons *addPanelRadioGroup(MRScrollableDialog &dialog, const TRect &rect,
 	dialog.addManaged(view, rect);
 	return view;
 }
-
-class TEditSettingsDialog : public MRScrollableDialog {
-  public:
-	explicit TEditSettingsDialog(const EditSettingsDialogRecord &initialRecord)
-	    : TWindowInit(&TDialog::initFrame),
-	      MRScrollableDialog(centeredSetupDialogRect(EditSettingsLayout::kDialogWidth,
-	                                                 EditSettingsLayout::kDialogHeight),
-	                         "EDIT SETTINGS", EditSettingsLayout::kDialogWidth,
-	                         EditSettingsLayout::kDialogHeight),
-	      initialRecord_(initialRecord), currentRecord_(initialRecord) {
-		buildViews();
-		panel_.loadFieldsFromRecord(currentRecord_);
-		initScrollIfNeeded();
-		panel_.primaryView() != nullptr ? panel_.primaryView()->select() : selectContent();
-	}
-
-	ushort run(EditSettingsDialogRecord &outRecord, bool &changed) {
-		ushort result = TProgram::deskTop->execView(this);
-		panel_.saveFieldsToRecord(currentRecord_);
-		outRecord = currentRecord_;
-		changed = !recordsEqual(initialRecord_, currentRecord_);
-		return result;
-	}
-
-	void handleEvent(TEvent &event) override {
-		MRScrollableDialog::handleEvent(event);
-
-		if (event.what == evCommand && event.message.command == cmMrSetupEditSettingsHelp) {
-			endModal(event.message.command);
-			clearEvent(event);
-		}
-	}
-
-  private:
-	TButton *addButton(const TRect &rect, const char *title, ushort command, ushort flags) {
-		TButton *view = new TButton(rect, title, command, flags);
-		addManaged(view, rect);
-		return view;
-	}
-
-	void buildViews() {
-		const EditSettingsLayout g((EditSettingsPanelConfig()));
-
-		panel_.buildViews(*this);
-		addButton(TRect(g.doneLeft, g.buttonTop, g.doneLeft + 10, g.buttonTop + 2), "~D~one", cmOK,
-		          bfDefault);
-		addButton(TRect(g.cancelLeft, g.buttonTop, g.cancelLeft + 12, g.buttonTop + 2),
-		          "~C~ancel", cmCancel, bfNormal);
-		addButton(TRect(g.helpLeft, g.buttonTop, g.helpLeft + 8, g.buttonTop + 2), "~H~elp",
-		          cmMrSetupEditSettingsHelp, bfNormal);
-	}
-
-	EditSettingsDialogRecord initialRecord_;
-	EditSettingsDialogRecord currentRecord_;
-	EditSettingsPanel panel_;
-};
-
-void showEditSettingsHelpDummyDialog() {
-	std::vector<std::string> lines;
-	lines.push_back("EDIT SETTINGS HELP");
-	lines.push_back("");
-	lines.push_back("Use checkboxes and radio groups to configure edit defaults.");
-	lines.push_back("Backup (.bak) creation on save is configured in Options.");
-	lines.push_back("EOF marker style is configured with a radio group.");
-	lines.push_back("Line number style is configured with a radio group.");
-	lines.push_back("Done writes settings.mrmac and reloads silently.");
-	lines.push_back("Cancel asks for confirmation when fields were modified.");
-	TDialog *dialog = createSetupSimplePreviewDialog("EDIT SETTINGS HELP", 74, 16, lines, false);
-	if (dialog != nullptr) {
-		TProgram::deskTop->execView(dialog);
-		TObject::destroy(dialog);
-	}
-}
 } // namespace
 
-namespace MREditSettingsDialogInternal {
+namespace MREditProfilesDialogInternal {
 
 EditSettingsPanel::EditSettingsPanel(const EditSettingsPanelConfig &config) : config_(config) {
 }
@@ -244,10 +154,10 @@ void EditSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	}
 
 	addPanelLabel(dialog, TRect(g.labelLeft, g.tabSizeY, g.inputLeft - 2, g.tabSizeY + 1), "Tab size:");
-	tabSizeField_ = addNumericPanelInput(dialog,
-	                             TRect(g.inputLeft, g.tabSizeY, g.inputLeft + config_.tabSizeFieldWidth,
-	                                   g.tabSizeY + 1),
-	                             kTabSizeFieldSize - 1);
+	tabSizeSlider_ = addPanelNumericSlider(
+	    dialog, TRect(g.inputLeft, g.tabSizeY, g.inputRight, g.tabSizeY + 1), kMinimumTabSize,
+	    kMaximumTabSize, kDefaultTabSize, 1, 4,
+	    cmMrEditSettingsPanelChanged);
 
 	addPanelLabel(dialog,
 	              TRect(g.optionsHeadingX, g.optionsHeadingY, config_.dialogWidth - 2, g.optionsHeadingY + 1),
@@ -316,6 +226,24 @@ void EditSettingsPanel::readInputLineValue(TInputLine *inputLine, char *dest, st
 	std::vector<char> buffer(destSize, '\0');
 	inputLine->getData(buffer.data());
 	writeRecordField(dest, destSize, readRecordField(buffer.data()));
+}
+
+[[nodiscard]] int parseTabSizeOrDefault(const char *value, int fallback = kDefaultTabSize) {
+	std::string text = readRecordField(value);
+	if (text.empty())
+		return fallback;
+	char *end = nullptr;
+	long parsed = std::strtol(text.c_str(), &end, 10);
+	if (end == text.c_str() || end == nullptr || *end != '\0')
+		return fallback;
+	return std::clamp(static_cast<int>(parsed), kMinimumTabSize, kMaximumTabSize);
+}
+
+void writeTabSizeValue(MRNumericSlider *slider, char *dest, std::size_t destSize) {
+	int32_t value = 8;
+	if (slider != nullptr)
+		slider->getData(&value);
+	writeRecordField(dest, destSize, std::to_string(value));
 }
 
 ushort EditSettingsPanel::currentOptionsMask() const noexcept {
@@ -410,7 +338,10 @@ void EditSettingsPanel::loadFieldsFromRecord(const EditSettingsDialogRecord &rec
 	if (defaultExtensionsField_ != nullptr)
 		setInputLineValue(defaultExtensionsField_, record.defaultExtensions,
 		                  sizeof(record.defaultExtensions));
-	setInputLineValue(tabSizeField_, record.tabSize, sizeof(record.tabSize));
+	if (tabSizeSlider_ != nullptr) {
+		int32_t value = parseTabSizeOrDefault(record.tabSize, kDefaultTabSize);
+		tabSizeSlider_->setData(&value);
+	}
 	setOptionsMask(record.optionsMask);
 	if (tabExpandField_ != nullptr)
 		tabExpandField_->setData((void *)&record.tabExpandChoice);
@@ -426,7 +357,7 @@ void EditSettingsPanel::saveFieldsToRecord(EditSettingsDialogRecord &record) con
 	if (defaultExtensionsField_ != nullptr)
 		readInputLineValue(defaultExtensionsField_, record.defaultExtensions,
 		                   sizeof(record.defaultExtensions));
-	readInputLineValue(tabSizeField_, record.tabSize, sizeof(record.tabSize));
+	writeTabSizeValue(tabSizeSlider_, record.tabSize, sizeof(record.tabSize));
 	record.optionsMask = currentOptionsMask();
 	if (tabExpandField_ != nullptr)
 		tabExpandField_->getData((void *)&record.tabExpandChoice);
@@ -436,51 +367,5 @@ void EditSettingsPanel::saveFieldsToRecord(EditSettingsDialogRecord &record) con
 		defaultModeField_->getData((void *)&record.defaultModeChoice);
 }
 
-} // namespace MREditSettingsDialogInternal
+} // namespace MREditProfilesDialogInternal
 
-void runEditSettingsDialogFlow() {
-	using namespace MREditSettingsDialogInternal;
-
-	bool running = true;
-	EditSettingsDialogRecord workingRecord;
-
-	initEditSettingsDialogRecord(workingRecord);
-	while (running) {
-		ushort result;
-		bool changed = false;
-		EditSettingsDialogRecord editedRecord = workingRecord;
-		std::string errorText;
-		TEditSettingsDialog *dialog = new TEditSettingsDialog(workingRecord);
-
-		if (dialog == nullptr)
-			return;
-		result = dialog->run(editedRecord, changed);
-		TObject::destroy(dialog);
-		workingRecord = editedRecord;
-
-		switch (result) {
-			case cmMrSetupEditSettingsHelp:
-				showEditSettingsHelpDummyDialog();
-				break;
-			case cmOK:
-				if (!saveAndReloadEditSettings(workingRecord, errorText)) {
-					messageBox(mfError | mfOKButton, "Installation / Edit settings\n\n%s",
-					           errorText.c_str());
-					break;
-				}
-				running = false;
-				break;
-			case cmCancel:
-				if (changed) {
-					if (messageBox(mfConfirmation | mfYesButton | mfNoButton,
-					               "Discard changed edit settings?") != cmYes)
-						break;
-				}
-				running = false;
-				break;
-			default:
-				running = false;
-				break;
-		}
-	}
-}

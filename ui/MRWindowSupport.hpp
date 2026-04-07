@@ -1,17 +1,19 @@
 #ifndef MRWINDOWSUPPORT_HPP
 #define MRWINDOWSUPPORT_HPP
 
+#include <string_view>
+
 class TMREditWindow;
 
-bool mrActivateEditWindow(TMREditWindow *win);
-bool mrShowProjectHelp();
-bool mrEnsureLogWindow(bool activate = true);
-bool mrEnsureUsableWorkWindow();
-bool mrClearLogWindow();
-void mrLogMessage(const char *message);
+[[nodiscard]] bool mrActivateEditWindow(TMREditWindow *win);
+[[nodiscard]] bool mrShowProjectHelp();
+[[nodiscard]] bool mrEnsureLogWindow(bool activate = true);
+[[nodiscard]] bool mrEnsureUsableWorkWindow();
+[[nodiscard]] bool mrClearLogWindow();
+void mrLogMessage(std::string_view message);
 void mrSetKeystrokeRecordingActive(bool active);
-bool mrIsKeystrokeRecordingActive();
+[[nodiscard]] bool mrIsKeystrokeRecordingActive();
 void mrSetKeystrokeRecordingMarkerVisible(bool visible);
-bool mrIsKeystrokeRecordingMarkerVisible();
+[[nodiscard]] bool mrIsKeystrokeRecordingMarkerVisible();
 
 #endif

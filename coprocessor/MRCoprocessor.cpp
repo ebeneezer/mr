@@ -35,7 +35,7 @@ void Coprocessor::setResultHandler(ResultHandler handler) {
 }
 
 std::uint64_t Coprocessor::submit(Lane lane, TaskKind kind, std::size_t documentId,
-                                  std::size_t baseVersion, const std::string &label, TaskFn fn) {
+                                  std::size_t baseVersion, std::string_view label, TaskFn fn) {
 	if (shuttingDown_.load(std::memory_order_acquire))
 		return 0;
 

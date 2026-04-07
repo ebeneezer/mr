@@ -2462,7 +2462,7 @@ bool testThemeAndMacroSaveOverwriteWiringGuard(std::string &failureReason) {
 bool testPersistentBlocksWiringGuard(std::string &failureReason) {
 	const std::string settingsPath = absolutePathFromCwd("config/MRDialogPaths.cpp");
 	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
-	const std::string dialogPath = absolutePathFromCwd("dialogs/MREditSettingsDialog.cpp");
+	const std::string dialogPath = absolutePathFromCwd("dialogs/MREditProfilesDialog.cpp");
 	std::string settingsContent;
 	std::string vmContent;
 	std::string dialogContent;
@@ -2477,7 +2477,7 @@ bool testPersistentBlocksWiringGuard(std::string &failureReason) {
 		return false;
 	}
 	if (!readTextFile(dialogPath, dialogContent, ioError)) {
-		failureReason = "Unable to read MREditSettingsDialog.cpp for persistent-blocks guard: " + ioError;
+		failureReason = "Unable to read MREditProfilesDialog.cpp for persistent-blocks guard: " + ioError;
 		return false;
 	}
 	if (settingsContent.find("upperKeyName == \"PERSISTENT_BLOCKS\"") ==
@@ -2491,7 +2491,7 @@ bool testPersistentBlocksWiringGuard(std::string &failureReason) {
 		return false;
 	}
 	if (dialogContent.find("ersistent blocks") == std::string::npos) {
-		failureReason = "Edit settings dialog must expose a Persistent blocks option.";
+		failureReason = "Edit profiles dialog must expose a Persistent blocks option.";
 		return false;
 	}
 	failureReason.clear();

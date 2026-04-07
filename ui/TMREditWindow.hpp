@@ -658,21 +658,21 @@ class TMREditWindow : public TWindow {
 
 		for (std::size_t i = 0; i < trackedCoprocessorTasks_.size(); ++i) {
 			mrTraceCoprocessorTaskCancel(bufferId_, trackedCoprocessorTasks_[i].id);
-			mr::coprocessor::globalCoprocessor().cancelTask(trackedCoprocessorTasks_[i].id);
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(trackedCoprocessorTasks_[i].id));
 		}
 		trackedCoprocessorTasks_.clear();
 		if (editor != nullptr) {
 			std::uint64_t lineIndexTaskId = editor->pendingLineIndexWarmupTaskId();
 			if (lineIndexTaskId != 0) {
 				mrTraceCoprocessorTaskCancel(bufferId_, lineIndexTaskId);
-				mr::coprocessor::globalCoprocessor().cancelTask(lineIndexTaskId);
+				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(lineIndexTaskId));
 				editor->clearLineIndexWarmupTask(lineIndexTaskId);
 				++clearedCount;
 			}
 			std::uint64_t syntaxTaskId = editor->pendingSyntaxWarmupTaskId();
 			if (syntaxTaskId != 0) {
 				mrTraceCoprocessorTaskCancel(bufferId_, syntaxTaskId);
-				mr::coprocessor::globalCoprocessor().cancelTask(syntaxTaskId);
+				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(syntaxTaskId));
 				editor->clearSyntaxWarmupTask(syntaxTaskId);
 				++clearedCount;
 			}
@@ -1050,7 +1050,7 @@ class TMREditWindow : public TWindow {
 	void cancelTrackedCoprocessorTasks() {
 		for (std::size_t i = 0; i < trackedCoprocessorTasks_.size(); ++i) {
 			mrTraceCoprocessorTaskCancel(bufferId_, trackedCoprocessorTasks_[i].id);
-			mr::coprocessor::globalCoprocessor().cancelTask(trackedCoprocessorTasks_[i].id);
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(trackedCoprocessorTasks_[i].id));
 		}
 		trackedCoprocessorTasks_.clear();
 		updateTaskMarkers();

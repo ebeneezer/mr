@@ -39,6 +39,7 @@
 
 #include <ctime>
 #include <chrono>
+#include <array>
 #include <cctype>
 #include <cstdarg>
 #include <cstdio>
@@ -49,6 +50,7 @@
 #include <regex>
 #include <set>
 #include <sstream>
+#include <string_view>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -105,7 +107,7 @@ class TMacroBindCaptureDialog : public TDialog {
 	ushort controlState_;
 };
 
-std::string trimAscii(const std::string &value) {
+std::string trimAscii(std::string_view value) {
 	std::size_t start = 0;
 	std::size_t end = value.size();
 
@@ -113,10 +115,10 @@ std::string trimAscii(const std::string &value) {
 		++start;
 	while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1])) != 0)
 		--end;
-	return value.substr(start, end - start);
+	return std::string(value.substr(start, end - start));
 }
 
-std::string expandUserPath(const std::string &input) {
+std::string expandUserPath(std::string_view input) {
 	std::string path = trimAscii(input);
 	if (path.size() >= 2 && path[0] == '~' && path[1] == '/') {
 		const char *home = std::getenv("HOME");
@@ -126,7 +128,8 @@ std::string expandUserPath(const std::string &input) {
 	return path;
 }
 
-std::string ensureMrmacExtension(const std::string &path) {
+std::string ensureMrmacExtension(std::string_view pathView) {
+	std::string path(pathView);
 	std::size_t dotPos = path.rfind('.');
 	if (dotPos != std::string::npos) {
 		std::string ext = path.substr(dotPos);
@@ -139,7 +142,7 @@ std::string ensureMrmacExtension(const std::string &path) {
 }
 
 std::string makeRecordedMacroName(unsigned long counter) {
-	char timePart[32];
+	std::array<char, 32> timePart{};
 	std::time_t now = std::time(nullptr);
 	std::tm tmNow;
 
@@ -148,8 +151,8 @@ std::string makeRecordedMacroName(unsigned long counter) {
 #else
 	tmNow = *std::localtime(&now);
 #endif
-	std::strftime(timePart, sizeof(timePart), "Recorded_%Y%m%d_%H%M%S", &tmNow);
-	return std::string(timePart) + "_" + std::to_string(counter);
+	std::strftime(timePart.data(), timePart.size(), "Recorded_%Y%m%d_%H%M%S", &tmNow);
+	return std::string(timePart.data()) + "_" + std::to_string(counter);
 }
 
 void appendEscapedKeyInChar(std::string &out, unsigned char ch) {
@@ -272,20 +275,20 @@ bool keyInTokenFromEvent(ushort keyCode, ushort controlKeyState, std::string &ou
 	return false;
 }
 
-bool writeTextFile(const std::string &path, const std::string &content) {
-	std::ofstream out(path.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
+bool writeTextFile(std::string_view path, std::string_view content) {
+	std::ofstream out(std::string(path).c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
 	if (!out)
 		return false;
 	out << content;
 	return out.good();
 }
 
-bool pathIsRegularFile(const std::string &path) {
+bool pathIsRegularFile(std::string_view path) {
 	struct stat st;
 
 	if (path.empty())
 		return false;
-	return ::stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode);
+	return ::stat(std::string(path).c_str(), &st) == 0 && S_ISREG(st.st_mode);
 }
 
 bool confirmOverwriteForPath(const char *primaryLabel, const char *headline, const std::string &targetPath) {
@@ -295,17 +298,18 @@ bool confirmOverwriteForPath(const char *primaryLabel, const char *headline, con
 	       mr::dialogs::UnsavedChangesChoice::Save;
 }
 
-bool readTextFile(const std::string &path, std::string &out) {
-	std::ifstream in(path.c_str(), std::ios::in | std::ios::binary);
+bool readTextFile(std::string_view path, std::string &out) {
+	std::ifstream in(std::string(path).c_str(), std::ios::in | std::ios::binary);
 	if (!in)
 		return false;
 	out.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 	return in.good() || in.eof();
 }
 
-bool validateMacroSource(const std::string &source, std::string &errorText) {
+bool validateMacroSource(std::string_view source, std::string &errorText) {
 	size_t bytecodeSize = 0;
-	unsigned char *bytecode = compile_macro_code(source.c_str(), &bytecodeSize);
+	std::string sourceText(source);
+	unsigned char *bytecode = compile_macro_code(sourceText.c_str(), &bytecodeSize);
 
 	if (bytecode == nullptr) {
 		const char *err = get_last_compile_error();
@@ -317,10 +321,10 @@ bool validateMacroSource(const std::string &source, std::string &errorText) {
 	return true;
 }
 
-bool hasVmErrorLineSince(const std::vector<std::string> &lines, std::size_t start, std::string &outError) {
-	static const std::string prefix = "VM Error:";
+[[nodiscard]] bool hasVmErrorLineSince(const std::vector<std::string> &lines, std::size_t start, std::string &outError) {
+	static constexpr std::string_view prefix = "VM Error:";
 	for (std::size_t i = start; i < lines.size(); ++i)
-		if (lines[i].compare(0, prefix.size(), prefix) == 0) {
+		if (lines[i].compare(0, prefix.size(), prefix.data(), prefix.size()) == 0) {
 			outError = lines[i];
 			return true;
 		}
@@ -347,14 +351,14 @@ std::string unescapeMrmacSingleQuotedLiteral(const std::string &value) {
 	return out;
 }
 
-bool isCurrentSettingsKey(const std::string &key);
+[[nodiscard]] bool isCurrentSettingsKey(std::string_view key);
 
-bool isMigratableMrsetupKey(const std::string &key) {
+[[nodiscard]] bool isMigratableMrsetupKey(std::string_view key) {
 	return isCurrentSettingsKey(key);
 }
 
-bool isCurrentSettingsKey(const std::string &key) {
-	static const std::set<std::string> keys = {"SETTINGS_VERSION",
+bool isCurrentSettingsKey(std::string_view key) {
+	static constexpr std::array<std::string_view, 26> keys = {"SETTINGS_VERSION",
 	                                           "MACROPATH",
 	                                           "SETTINGSPATH",
 	                                           "HELPPATH",
@@ -380,7 +384,7 @@ bool isCurrentSettingsKey(const std::string &key) {
 	                                           "CODE_FOLDING",
 	                                           "COLUMN_BLOCK_MOVE",
 	                                           "DEFAULT_MODE"};
-	return keys.find(key) != keys.end();
+	return std::find(keys.begin(), keys.end(), key) != keys.end();
 }
 
 struct ParsedEditProfileDirective {
@@ -390,12 +394,12 @@ struct ParsedEditProfileDirective {
 	std::string arg4;
 };
 
-std::vector<std::pair<std::string, std::string>> parseMrsetupAssignments(const std::string &source) {
+std::vector<std::pair<std::string, std::string>> parseMrsetupAssignments(std::string_view source) {
 	static const std::regex assignmentPattern(
 	    "MRSETUP\\s*\\(\\s*'([^']+)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
 	std::vector<std::pair<std::string, std::string>> assignments;
 	std::smatch match;
-	std::string remaining = source;
+	std::string remaining(source);
 
 	while (std::regex_search(remaining, match, assignmentPattern)) {
 		if (match.size() >= 3) {
@@ -408,13 +412,13 @@ std::vector<std::pair<std::string, std::string>> parseMrsetupAssignments(const s
 	return assignments;
 }
 
-std::vector<ParsedEditProfileDirective> parseMreditProfileDirectives(const std::string &source) {
+std::vector<ParsedEditProfileDirective> parseMreditProfileDirectives(std::string_view source) {
 	static const std::regex directivePattern(
 	    "MREDITPROFILE\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)",
 	    std::regex::icase);
 	std::vector<ParsedEditProfileDirective> directives;
 	std::smatch match;
-	std::string remaining = source;
+	std::string remaining(source);
 
 	while (std::regex_search(remaining, match, directivePattern)) {
 		if (match.size() >= 5) {
@@ -446,8 +450,8 @@ class StartupSettingsModeGuard {
 
 bool validateCurrentSettingsSchema(const std::string &source, std::string &errorText) {
 	std::vector<std::pair<std::string, std::string>> assignments = parseMrsetupAssignments(source);
-		std::map<std::string, int> counts;
-	static const char *const requiredKeys[] = {"SETTINGS_VERSION",
+	std::map<std::string, int> counts;
+	static constexpr std::array<std::string_view, 26> requiredKeys = {"SETTINGS_VERSION",
 	                                           "SETTINGSPATH",
 	                                           "MACROPATH",
 	                                           "HELPPATH",
@@ -489,8 +493,8 @@ bool validateCurrentSettingsSchema(const std::string &source, std::string &error
 			return false;
 		}
 	}
-	for (const char *required : requiredKeys)
-		if (counts[required] != 1) {
+	for (std::string_view required : requiredKeys)
+		if (counts[std::string(required)] != 1) {
 			errorText = "Missing required MRSETUP key in settings.mrmac: " + std::string(required);
 			return false;
 		}
@@ -524,7 +528,12 @@ bool setConfiguredColorSetupDefaults(std::string &errorText) {
 
 bool applyRecognizedSettingsAssignment(const std::string &key, const std::string &value, MRSetupPaths &paths,
                                        std::string &errorText) {
-	std::string normalized;
+	auto applyValidatedNormalizedPath = [&](auto validator, std::string &target) {
+		if (!validator(value, &errorText))
+			return false;
+		target = normalizeConfiguredPathInput(value);
+		return true;
+	};
 
 	if (key == "SETTINGS_VERSION") {
 		if (value != "2") {
@@ -540,30 +549,14 @@ bool applyRecognizedSettingsAssignment(const std::string &key, const std::string
 		errorText.clear();
 		return true;
 	}
-	if (key == "MACROPATH") {
-		if (!validateMacroDirectoryPath(value, &errorText))
-			return false;
-		paths.macroPath = normalizeConfiguredPathInput(value);
-		return true;
-	}
-	if (key == "HELPPATH") {
-		if (!validateHelpFilePath(value, &errorText))
-			return false;
-		paths.helpUri = normalizeConfiguredPathInput(value);
-		return true;
-	}
-	if (key == "TEMPDIR") {
-		if (!validateTempDirectoryPath(value, &errorText))
-			return false;
-		paths.tempPath = normalizeConfiguredPathInput(value);
-		return true;
-	}
-	if (key == "SHELLPATH") {
-		if (!validateShellExecutablePath(value, &errorText))
-			return false;
-		paths.shellUri = normalizeConfiguredPathInput(value);
-		return true;
-	}
+	if (key == "MACROPATH")
+		return applyValidatedNormalizedPath(validateMacroDirectoryPath, paths.macroPath);
+	if (key == "HELPPATH")
+		return applyValidatedNormalizedPath(validateHelpFilePath, paths.helpUri);
+	if (key == "TEMPDIR")
+		return applyValidatedNormalizedPath(validateTempDirectoryPath, paths.tempPath);
+	if (key == "SHELLPATH")
+		return applyValidatedNormalizedPath(validateShellExecutablePath, paths.shellUri);
 	if (key == "LASTFILEDIALOGPATH")
 		return setConfiguredLastFileDialogPath(value, &errorText);
 	if (key == "DEFAULT_PROFILE_DESCRIPTION")
@@ -944,9 +937,9 @@ TMREditorApp::TMREditorApp()
 	loadStartupSettingsMacro(std::string(), nullptr);
 	applyConfiguredDisplayLayout();
 	bootstrapIndexedMacroBindings();
-	createEditorWindow("?No-File?");
+	static_cast<void>(createEditorWindow("?No-File?"));
 	applyConfiguredDisplayLayout();
-	mrEnsureLogWindow(false);
+	static_cast<void>(mrEnsureLogWindow(false));
 	syncRecordingUiState();
 	mrLogMessage("Editor session started.");
 	updateAppCommandState();

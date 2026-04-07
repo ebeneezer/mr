@@ -4,6 +4,7 @@
 #include "MRExternalCommand.hpp"
 #include "MRDialogPaths.hpp"
 
+#include <array>
 #include <cctype>
 #include <cerrno>
 #include <cstring>
@@ -12,11 +13,12 @@
 #include <signal.h>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <sys/wait.h>
 #include <unistd.h>
 
 namespace {
-std::string trimPathInput(const std::string &path) {
+[[nodiscard]] std::string trimPathInput(std::string_view path) {
 	std::size_t start = 0;
 	std::size_t end = path.size();
 
@@ -27,7 +29,7 @@ std::string trimPathInput(const std::string &path) {
 	        static_cast<unsigned char>(path[end - 1]) < 32))
 		--end;
 
-	std::string result = path.substr(start, end - start);
+	std::string result(path.substr(start, end - start));
 	if (result.size() >= 2 &&
 	    ((result.front() == '"' && result.back() == '"') || (result.front() == '\'' && result.back() == '\'')))
 		result = result.substr(1, result.size() - 2);
@@ -36,20 +38,19 @@ std::string trimPathInput(const std::string &path) {
 } // namespace
 
 bool promptForCommandLine(std::string &commandLine) {
-	enum { CommandBufferSize = 256 };
-	char command[CommandBufferSize];
+	constexpr std::size_t CommandBufferSize = 256;
+	std::array<char, CommandBufferSize> command{};
 	uchar limit;
 
 	commandLine.clear();
-	std::memset(command, 0, sizeof(command));
-	limit = static_cast<uchar>(sizeof(command) - 1);
-	if (inputBox("EXECUTE PROGRAM", "~C~ommand", command, limit) == cmCancel)
+	limit = static_cast<uchar>(command.size() - 1);
+	if (inputBox("EXECUTE PROGRAM", "~C~ommand", command.data(), limit) == cmCancel)
 		return false;
-	commandLine = trimPathInput(command);
+	commandLine = trimPathInput(command.data());
 	return true;
 }
 
-std::string shortenCommandTitle(const std::string &command) {
+std::string shortenCommandTitle(std::string_view command) {
 	std::string trimmed = trimPathInput(command);
 
 	if (trimmed.empty())
@@ -71,7 +72,7 @@ mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &
 	bool pipeOpen = true;
 	bool cancellationRequested = false;
 	int stopPolls = 0;
-	char buffer[4096];
+	std::array<char, 4096> buffer{};
 
 	result.task = info;
 	if (::pipe(pipeFds) != 0) {
@@ -131,13 +132,13 @@ mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &
 
 		if (pipeOpen && (pollResult > 0 || childExited)) {
 			for (;;) {
-				ssize_t count = ::read(pipeFds[0], buffer, sizeof(buffer));
+				ssize_t count = ::read(pipeFds[0], buffer.data(), buffer.size());
 				if (count > 0) {
 					mr::coprocessor::Result chunkResult;
 					chunkResult.task = info;
 					chunkResult.status = mr::coprocessor::TaskStatus::Completed;
 					chunkResult.payload = std::make_shared<mr::coprocessor::ExternalIoChunkPayload>(
-					    channelId, std::string(buffer, static_cast<std::size_t>(count)));
+					    channelId, std::string(buffer.data(), static_cast<std::size_t>(count)));
 					mr::coprocessor::globalCoprocessor().post(std::move(chunkResult));
 					continue;
 				}

@@ -272,7 +272,7 @@ class WindowListDialog : public TDialog {
 					clearEvent(event);
 					return;
 				case kbF1:
-					mrShowProjectHelp();
+					static_cast<void>(mrShowProjectHelp());
 					clearEvent(event);
 					return;
 			}
@@ -304,7 +304,7 @@ class WindowListDialog : public TDialog {
 					clearEvent(event);
 				break;
 			case cmHelp:
-				mrShowProjectHelp();
+				static_cast<void>(mrShowProjectHelp());
 				clearEvent(event);
 				break;
 		}
@@ -407,7 +407,7 @@ class WindowListDialog : public TDialog {
 		if (win == nullptr)
 			return;
 		closeWindow(win);
-		mrEnsureUsableWorkWindow();
+		static_cast<void>(mrEnsureUsableWorkWindow());
 		refreshEntries();
 	}
 
@@ -429,7 +429,7 @@ class WindowListDialog : public TDialog {
 			return;
 		}
 		hideWindow(win);
-		mrEnsureUsableWorkWindow();
+		static_cast<void>(mrEnsureUsableWorkWindow());
 		refreshEntries();
 	}
 
@@ -437,7 +437,7 @@ class WindowListDialog : public TDialog {
 		std::vector<TMREditWindow *> windows = allEditWindows();
 		for (auto & window : windows)
 			hideWindow(window);
-		mrEnsureUsableWorkWindow();
+		static_cast<void>(mrEnsureUsableWorkWindow());
 		refreshEntries();
 	}
 
@@ -467,7 +467,7 @@ TMREditWindow *mrShowWindowListDialog(MRWindowListMode mode, TMREditWindow *curr
 	TObject::destroy(dialog);
 
 	if (result == cmHelp) {
-		mrShowProjectHelp();
+		static_cast<void>(mrShowProjectHelp());
 		return nullptr;
 	}
 	if (result != cmOK)

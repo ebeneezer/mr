@@ -4,6 +4,7 @@
 #include <array>
 #include <cstddef>
 #include <string>
+#include <string_view>
 #include <vector>
 
 struct MRSetupPaths {
@@ -149,12 +150,12 @@ struct MRColorSetupSettings {
 
 void initRememberedLoadDialogPath(char *buffer, std::size_t bufferSize, const char *pattern);
 void rememberLoadDialogPath(const char *path);
-std::string normalizeConfiguredPathInput(const std::string &input);
-MRSetupPaths resolveSetupPathDefaults();
-MREditSetupSettings resolveEditSetupDefaults();
-MRColorSetupSettings resolveColorSetupDefaults();
-MREditSetupSettings configuredEditSetupSettings();
-MRColorSetupSettings configuredColorSetupSettings();
+[[nodiscard]] std::string normalizeConfiguredPathInput(std::string_view input);
+[[nodiscard]] MRSetupPaths resolveSetupPathDefaults();
+[[nodiscard]] MREditSetupSettings resolveEditSetupDefaults();
+[[nodiscard]] MRColorSetupSettings resolveColorSetupDefaults();
+[[nodiscard]] MREditSetupSettings configuredEditSetupSettings();
+[[nodiscard]] MRColorSetupSettings configuredColorSetupSettings();
 bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::string *errorMessage = nullptr);
 bool applyConfiguredEditSetupValue(const std::string &key, const std::string &value,
                                    std::string *errorMessage = nullptr);
@@ -167,9 +168,9 @@ const MRColorSetupItem *colorSetupGroupItems(MRColorSetupGroup group, std::size_
 bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned char *values,
                                         std::size_t count, std::string *errorMessage = nullptr);
 void configuredColorSetupGroupValues(MRColorSetupGroup group, unsigned char *values, std::size_t count);
-std::string configuredColorThemeFilePath();
-std::string configuredColorThemeDisplayName();
-std::string defaultColorThemeFilePath();
+[[nodiscard]] std::string configuredColorThemeFilePath();
+[[nodiscard]] std::string configuredColorThemeDisplayName();
+[[nodiscard]] std::string defaultColorThemeFilePath();
 bool validateColorThemeFilePath(const std::string &path, std::string *errorMessage = nullptr);
 bool setConfiguredColorThemeFilePath(const std::string &path, std::string *errorMessage = nullptr);
 bool writeColorThemeFile(const std::string &themeUri, std::string *errorMessage = nullptr);
@@ -180,15 +181,15 @@ bool loadWindowColorThemeGroupValues(const std::string &themeUri,
                                      std::string *errorMessage = nullptr);
 
 const MREditSettingDescriptor *editSettingDescriptors(std::size_t &count);
-const MREditSettingDescriptor *findEditSettingDescriptorByKey(const std::string &key);
-std::string normalizeEditExtensionSelector(const std::string &value);
+[[nodiscard]] const MREditSettingDescriptor *findEditSettingDescriptorByKey(std::string_view key);
+[[nodiscard]] std::string normalizeEditExtensionSelector(std::string_view value);
 bool normalizeEditExtensionSelectors(std::vector<std::string> &selectors, std::string *errorMessage = nullptr);
 MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults,
                                            const MREditSetupOverrides &overrides);
 const std::vector<MREditExtensionProfile> &configuredEditExtensionProfiles();
 bool setConfiguredEditExtensionProfiles(const std::vector<MREditExtensionProfile> &profiles,
                                         std::string *errorMessage = nullptr);
-std::string configuredDefaultProfileDescription();
+[[nodiscard]] std::string configuredDefaultProfileDescription();
 bool setConfiguredDefaultProfileDescription(const std::string &value,
                                             std::string *errorMessage = nullptr);
 bool applyConfiguredEditExtensionProfileDirective(const std::string &operation, const std::string &profileId,
@@ -198,36 +199,36 @@ bool effectiveEditSetupSettingsForPath(const std::string &path, MREditSetupSetti
                                        std::string *matchedProfileName = nullptr);
 bool effectiveEditWindowColorThemePathForPath(const std::string &path, std::string &themeUri,
                                               std::string *matchedProfileName = nullptr);
-std::string formatEditSetupBoolean(bool value);
+[[nodiscard]] std::string formatEditSetupBoolean(bool value);
 std::vector<std::string> configuredDefaultExtensionList();
-bool configuredDefaultInsertMode();
-bool configuredTabExpandSetting();
-int configuredTabSizeSetting();
-bool configuredBackupFilesSetting();
-bool configuredPersistentBlocksSetting();
-char configuredPageBreakCharacter();
+[[nodiscard]] bool configuredDefaultInsertMode();
+[[nodiscard]] bool configuredTabExpandSetting();
+[[nodiscard]] int configuredTabSizeSetting();
+[[nodiscard]] bool configuredBackupFilesSetting();
+[[nodiscard]] bool configuredPersistentBlocksSetting();
+[[nodiscard]] char configuredPageBreakCharacter();
 bool setConfiguredLastFileDialogPath(const std::string &path, std::string *errorMessage = nullptr);
-std::string configuredLastFileDialogPath();
-std::string buildSettingsMacroSource(const MRSetupPaths &paths);
+[[nodiscard]] std::string configuredLastFileDialogPath();
+[[nodiscard]] std::string buildSettingsMacroSource(const MRSetupPaths &paths);
 bool persistConfiguredSettingsSnapshot(std::string *errorMessage = nullptr);
 bool writeSettingsMacroFile(const MRSetupPaths &paths, std::string *errorMessage = nullptr);
 bool ensureSettingsMacroFileExists(const std::string &settingsMacroUri, std::string *errorMessage = nullptr);
 bool validateSettingsMacroFilePath(const std::string &path, std::string *errorMessage = nullptr);
 bool setConfiguredSettingsMacroFilePath(const std::string &path, std::string *errorMessage = nullptr);
-std::string configuredSettingsMacroFilePath();
+[[nodiscard]] std::string configuredSettingsMacroFilePath();
 bool validateMacroDirectoryPath(const std::string &path, std::string *errorMessage = nullptr);
 bool setConfiguredMacroDirectoryPath(const std::string &path, std::string *errorMessage = nullptr);
-std::string configuredMacroDirectoryPath();
+[[nodiscard]] std::string configuredMacroDirectoryPath();
 bool validateHelpFilePath(const std::string &path, std::string *errorMessage = nullptr);
 bool setConfiguredHelpFilePath(const std::string &path, std::string *errorMessage = nullptr);
-std::string configuredHelpFilePath();
+[[nodiscard]] std::string configuredHelpFilePath();
 bool validateTempDirectoryPath(const std::string &path, std::string *errorMessage = nullptr);
 bool setConfiguredTempDirectoryPath(const std::string &path, std::string *errorMessage = nullptr);
-std::string configuredTempDirectoryPath();
+[[nodiscard]] std::string configuredTempDirectoryPath();
 bool validateShellExecutablePath(const std::string &path, std::string *errorMessage = nullptr);
 bool setConfiguredShellExecutablePath(const std::string &path, std::string *errorMessage = nullptr);
-std::string configuredShellExecutablePath();
-std::string defaultSettingsMacroFilePath();
-std::string defaultMacroDirectoryPath();
+[[nodiscard]] std::string configuredShellExecutablePath();
+[[nodiscard]] std::string defaultSettingsMacroFilePath();
+[[nodiscard]] std::string defaultMacroDirectoryPath();
 
 #endif

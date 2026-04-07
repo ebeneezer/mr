@@ -43,6 +43,12 @@
 #include <vector>
 
 namespace {
+using mr::dialogs::execDialogRaw;
+using mr::dialogs::execDialogRawWithData;
+using mr::dialogs::ensureMrmacExtension;
+using mr::dialogs::readRecordField;
+using mr::dialogs::trimAscii;
+using mr::dialogs::writeRecordField;
 enum : ushort {
 	cmMrSetupPathsHelp = 3800,
 	cmMrSetupPathsBrowseSettingsUri,
@@ -64,29 +70,6 @@ struct PathsDialogRecord {
 	char shellExecutablePath[kPathFieldSize];
 };
 
-std::string trimAscii(const std::string &value) {
-	std::size_t start = 0;
-	std::size_t end = value.size();
-
-	while (start < end && std::isspace(static_cast<unsigned char>(value[start])) != 0)
-		++start;
-	while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1])) != 0)
-		--end;
-	return value.substr(start, end - start);
-}
-
-std::string ensureMrmacExtension(const std::string &path) {
-	std::size_t dotPos = path.find_last_of('.');
-	if (dotPos != std::string::npos) {
-		std::string ext = path.substr(dotPos);
-		for (char & i : ext)
-			i = static_cast<char>(std::tolower(static_cast<unsigned char>(i)));
-		if (ext == ".mrmac")
-			return path;
-	}
-	return path + ".mrmac";
-}
-
 bool pathIsRegularFile(const std::string &path) {
 	struct stat st;
 
@@ -100,18 +83,6 @@ bool confirmOverwriteForPath(const char *primaryLabel, const char *headline, con
 		return true;
 	return mr::dialogs::showUnsavedChangesDialog(primaryLabel, headline, targetPath.c_str()) ==
 	       mr::dialogs::UnsavedChangesChoice::Save;
-}
-
-std::string readRecordField(const char *value) {
-	return trimAscii(value != nullptr ? value : "");
-}
-
-void writeRecordField(char *dest, std::size_t destSize, const std::string &value) {
-	if (dest == nullptr || destSize == 0)
-		return;
-	std::memset(dest, 0, destSize);
-	std::strncpy(dest, value.c_str(), destSize - 1);
-	dest[destSize - 1] = '\0';
 }
 
 bool recordsEqual(const PathsDialogRecord &lhs, const PathsDialogRecord &rhs) {
@@ -181,28 +152,6 @@ bool saveAndReloadPathsRecord(const PathsDialogRecord &record, std::string &erro
 
 	errorText.clear();
 	return true;
-}
-
-ushort execDialogRaw(TDialog *dialog) {
-	ushort result = cmCancel;
-	if (dialog != nullptr) {
-		result = TProgram::deskTop->execView(dialog);
-		TObject::destroy(dialog);
-	}
-	return result;
-}
-
-ushort execDialogRawWithData(TDialog *dialog, void *data) {
-	ushort result = cmCancel;
-	if (dialog != nullptr) {
-		if (data != nullptr)
-			dialog->setData(data);
-		result = TProgram::deskTop->execView(dialog);
-		if (result != cmCancel && data != nullptr)
-			dialog->getData(data);
-		TObject::destroy(dialog);
-	}
-	return result;
 }
 
 std::string currentWorkingDirectoryLocal() {
@@ -278,7 +227,7 @@ bool chooseThemeFileForSave(std::string &selectedUri) {
 ushort execDialog(TDialog *dialog) {
 	ushort result = execDialogRaw(dialog);
 	if (result == cmHelp)
-		mrShowProjectHelp();
+		static_cast<void>(mrShowProjectHelp());
 	return result;
 }
 

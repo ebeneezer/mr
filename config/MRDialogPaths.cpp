@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <string>
+#include <string_view>
 #include <unistd.h>
 #include <vector>
 
@@ -79,7 +80,7 @@ bool &configuredColorSettingsInitialized() {
 	return initialized;
 }
 
-std::string trimAscii(const std::string &value) {
+std::string trimAscii(std::string_view value) {
 	std::size_t start = 0;
 	std::size_t end = value.size();
 
@@ -87,7 +88,7 @@ std::string trimAscii(const std::string &value) {
 		++start;
 	while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1])) != 0)
 		--end;
-	return value.substr(start, end - start);
+	return std::string(value.substr(start, end - start));
 }
 
 std::string upperAscii(std::string value) {
@@ -104,7 +105,7 @@ std::string normalizeDialogPath(const char *path) {
 	return result;
 }
 
-std::string expandUserPath(const std::string &input) {
+std::string expandUserPath(std::string_view input) {
 	std::string path = trimAscii(input);
 
 	if (path.size() >= 2 && path[0] == '~' && path[1] == '/') {
@@ -115,51 +116,55 @@ std::string expandUserPath(const std::string &input) {
 	return path;
 }
 
-bool isReadableDirectory(const std::string &path) {
+[[nodiscard]] bool isReadableDirectory(std::string_view path) {
+	const std::string pathString(path);
 	struct stat st;
 	if (path.empty())
 		return false;
-	if (::stat(path.c_str(), &st) != 0)
+	if (::stat(pathString.c_str(), &st) != 0)
 		return false;
 	if (!S_ISDIR(st.st_mode))
 		return false;
-	return ::access(path.c_str(), R_OK | X_OK) == 0;
+	return ::access(pathString.c_str(), R_OK | X_OK) == 0;
 }
 
-bool isWritableDirectory(const std::string &path) {
+[[nodiscard]] bool isWritableDirectory(std::string_view path) {
+	const std::string pathString(path);
 	struct stat st;
 	if (path.empty())
 		return false;
-	if (::stat(path.c_str(), &st) != 0)
+	if (::stat(pathString.c_str(), &st) != 0)
 		return false;
 	if (!S_ISDIR(st.st_mode))
 		return false;
-	return ::access(path.c_str(), R_OK | W_OK | X_OK) == 0;
+	return ::access(pathString.c_str(), R_OK | W_OK | X_OK) == 0;
 }
 
-bool isReadableFile(const std::string &path) {
+[[nodiscard]] bool isReadableFile(std::string_view path) {
+	const std::string pathString(path);
 	struct stat st;
 	if (path.empty())
 		return false;
-	if (::stat(path.c_str(), &st) != 0)
+	if (::stat(pathString.c_str(), &st) != 0)
 		return false;
 	if (!S_ISREG(st.st_mode))
 		return false;
-	return ::access(path.c_str(), R_OK) == 0;
+	return ::access(pathString.c_str(), R_OK) == 0;
 }
 
-bool isExecutableFile(const std::string &path) {
+[[nodiscard]] bool isExecutableFile(std::string_view path) {
+	const std::string pathString(path);
 	struct stat st;
 	if (path.empty())
 		return false;
-	if (::stat(path.c_str(), &st) != 0)
+	if (::stat(pathString.c_str(), &st) != 0)
 		return false;
 	if (!S_ISREG(st.st_mode))
 		return false;
-	return ::access(path.c_str(), X_OK) == 0;
+	return ::access(pathString.c_str(), X_OK) == 0;
 }
 
-std::string directoryPartOf(const std::string &path) {
+std::string directoryPartOf(std::string_view path) {
 	if (path.empty())
 		return std::string();
 	std::size_t pos = path.find_last_of('/');
@@ -167,10 +172,10 @@ std::string directoryPartOf(const std::string &path) {
 		return std::string();
 	if (pos == 0)
 		return "/";
-	return path.substr(0, pos);
+	return std::string(path.substr(0, pos));
 }
 
-bool hasDirectorySeparator(const std::string &path) {
+[[nodiscard]] bool hasDirectorySeparator(std::string_view path) {
 	return path.find('/') != std::string::npos;
 }
 
@@ -190,7 +195,7 @@ std::string currentWorkingDirectory() {
 	return normalizeDialogPath(cwd);
 }
 
-bool isAbsolutePath(const std::string &path) {
+[[nodiscard]] bool isAbsolutePath(std::string_view path) {
 	return !path.empty() && path[0] == '/';
 }
 
@@ -268,8 +273,8 @@ std::string pathFromEnvironment(const char *name) {
 }
 
 std::string firstWritableDirectoryFromEnvironment() {
-	static const char *const names[] = {"TMPDIR", "TEMP", "TMP"};
-	for (auto name : names) {
+	static constexpr std::array<const char *, 3> names = {"TMPDIR", "TEMP", "TMP"};
+	for (const char *name : names) {
 		std::string value = pathFromEnvironment(name);
 		if (isWritableDirectory(value))
 			return value;
@@ -287,8 +292,8 @@ std::string shellFromUserDatabase() {
 
 std::string builtInTempDirectoryPath();
 
-std::string appendFileName(const std::string &directory, const char *fileName) {
-	std::string base = directory;
+std::string appendFileName(std::string_view directory, const char *fileName) {
+	std::string base(directory);
 
 	if (fileName == nullptr || *fileName == '\0')
 		return base;
@@ -300,8 +305,8 @@ std::string appendFileName(const std::string &directory, const char *fileName) {
 	return base;
 }
 
-std::string appendPathSegment(const std::string &base, const char *segment) {
-	std::string out = base;
+std::string appendPathSegment(std::string_view base, const char *segment) {
+	std::string out(base);
 
 	if (segment == nullptr || *segment == '\0')
 		return out;
@@ -313,18 +318,18 @@ std::string appendPathSegment(const std::string &base, const char *segment) {
 	return out;
 }
 
-std::string fileNamePartOf(const std::string &path) {
+std::string fileNamePartOf(std::string_view path) {
 	std::size_t pos;
 	if (path.empty())
 		return std::string();
 	pos = path.find_last_of('/');
 	if (pos == std::string::npos)
-		return path;
-	return path.substr(pos + 1);
+		return std::string(path);
+	return std::string(path.substr(pos + 1));
 }
 
-std::string defaultColorThemePathForSettings(const std::string &settingsPath) {
-	std::string dir = directoryPartOf(makeAbsolutePath(settingsPath));
+std::string defaultColorThemePathForSettings(std::string_view settingsPath) {
+	std::string dir = directoryPartOf(makeAbsolutePath(std::string(settingsPath)));
 	if (dir.empty())
 		dir = currentWorkingDirectory();
 	if (dir.empty())
@@ -534,7 +539,7 @@ static const MRColorSetupItem kMenuDialogColorItems[] = {
     {"selected element in unfocussed listbox", 59},
     {"element description in listbox", 57},
     {"hotkeys on radio buttons & check boxes", 49},
-    {"listbox selector", 58},
+    {"dialog selector", 58},
     {"inactive radio buttons and checkboxes", kPaletteDialogInactiveClusterGray},
     {"inactive dialog elements", kMrPaletteDialogInactiveElements},
     {"dialog frame", kPaletteDialogFrame},
@@ -560,13 +565,13 @@ static const MRColorSetupItem kOtherColorItems[] = {
 
 static const ColorGroupDefinition kColorGroups[] = {
     {MRColorSetupGroup::Window, "WINDOW COLORS", "WINDOWCOLORS", kWindowColorItems,
-     sizeof(kWindowColorItems) / sizeof(kWindowColorItems[0])},
+     std::size(kWindowColorItems)},
     {MRColorSetupGroup::MenuDialog, "MENU / DIALOG COLORS", "MENUDIALOGCOLORS", kMenuDialogColorItems,
-     sizeof(kMenuDialogColorItems) / sizeof(kMenuDialogColorItems[0])},
+     std::size(kMenuDialogColorItems)},
     {MRColorSetupGroup::Help, "HELP COLORS", "HELPCOLORS", kHelpColorItems,
-     sizeof(kHelpColorItems) / sizeof(kHelpColorItems[0])},
+     std::size(kHelpColorItems)},
     {MRColorSetupGroup::Other, "OTHER COLORS", "OTHERCOLORS", kOtherColorItems,
-     sizeof(kOtherColorItems) / sizeof(kOtherColorItems[0])},
+     std::size(kOtherColorItems)},
 };
 
 const ColorGroupDefinition *findColorGroupDefinition(MRColorSetupGroup group) {
@@ -586,7 +591,7 @@ const ColorGroupDefinition *findColorGroupDefinitionByKey(const std::string &key
 
 unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 	// Defaults from cpAppColor (TVision app.h), expanded explicitly for stability.
-	static const unsigned char defaults[] = {
+	static constexpr std::array<unsigned char, 146> defaults = {
 	    0x00, 0x71, 0x70, 0x78, 0x74, 0x20, 0x28, 0x24, 0x17, 0x1F, 0x1A, 0x31, 0x31, 0x1E, 0x71, 0x1F,
 	    0x37, 0x3F, 0x3A, 0x13, 0x13, 0x3E, 0x21, 0x3F, 0x70, 0x7F, 0x7A, 0x13, 0x13, 0x70, 0x7F, 0x7E,
 	    0x70, 0x7F, 0x7A, 0x13, 0x13, 0x70, 0x70, 0x7F, 0x7E, 0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x70, 0x30,
@@ -616,7 +621,7 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 		return defaults[14];
 	if (paletteIndex == kMrPaletteDialogInactiveElements)
 		return defaults[kPaletteDialogInactiveClusterGray];
-	if (paletteIndex == 0 || paletteIndex >= sizeof(defaults) / sizeof(defaults[0]))
+	if (paletteIndex == 0 || paletteIndex >= std::size(defaults))
 		return 0x70;
 	return defaults[paletteIndex];
 }
@@ -831,14 +836,14 @@ bool parseMenuDialogColorListLiteral(
 		outValues[i] = defaultColorForSlot(kMenuDialogColorItems[i].paletteIndex);
 
 	// Accepted formats:
-	// - 16: current format (..., listbox selector, inactive radio/checkbox, dialog frame/text/background)
+	// - 16: current format (..., dialog selector, inactive radio/checkbox, dialog frame/text/background)
 	// - 15: previous format without inactive radio/checkbox color
 	// - 14: legacy format (..., dialog frame, dialog background[old=dialog text])
 	//       -> dialog background inherits legacy dialog frame color.
 	// - 13: legacy format missing old dialog background(text)
 	//       -> dialog text defaults, dialog background inherits legacy frame color.
 	// - 12: legacy format missing legacy frame + legacy background(text)
-	// - 11: legacy format missing listbox selector + legacy frame + legacy background(text)
+	// - 11: legacy format missing dialog selector + legacy frame + legacy background(text)
 	if (parsed.size() == MRColorSetupSettings::kMenuDialogCount) {
 		for (std::size_t i = 0; i < outValues.size(); ++i)
 			outValues[i] = parsed[i];
@@ -1087,7 +1092,7 @@ std::vector<std::string> parseDefaultExtensions(const std::string &value) {
 	for (i = 0; i <= text.size(); ++i) {
 		char ch = (i < text.size()) ? text[i] : ';';
 		if (ch == ';' || ch == ':' || ch == ',' || std::isspace(static_cast<unsigned char>(ch)) != 0) {
-			std::string ext = upperAscii(trimAscii(token));
+			std::string ext = trimAscii(token);
 			bool duplicate = false;
 
 			token.clear();
@@ -1095,6 +1100,7 @@ std::vector<std::string> parseDefaultExtensions(const std::string &value) {
 				continue;
 			while (!ext.empty() && ext[0] == '.')
 				ext.erase(ext.begin());
+			ext = trimAscii(ext);
 			if (ext.empty())
 				continue;
 			for (const auto & j : out)
@@ -1189,10 +1195,31 @@ bool normalizeEditExtensionSelectorsInPlace(std::vector<std::string> &selectors,
 	return true;
 }
 
+bool parseAndAssignBooleanLiteral(const std::string &value, bool &target, std::string *errorMessage) {
+	bool parsed = false;
+
+	if (!parseBooleanLiteral(value, parsed, errorMessage))
+		return false;
+	target = parsed;
+	return true;
+}
+
+std::string extensionSelectorForPath(std::string_view path) {
+	std::string normalized = normalizeDialogPath(std::string(path).c_str());
+	std::string_view base = normalized;
+	std::size_t sep = base.find_last_of("/\\");
+
+	if (sep != std::string::npos)
+		base.remove_prefix(sep + 1);
+	std::size_t dot = base.find_last_of('.');
+	if (base.empty() || dot == std::string::npos || dot + 1 >= base.size())
+		return std::string();
+	return std::string(base.substr(dot + 1));
+}
+
 bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string &keyName, const std::string &value,
                                  std::string *errorMessage) {
 	std::string upperKeyName = upperAscii(trimAscii(keyName));
-	bool boolValue = false;
 	std::string normalized;
 
 	if (upperKeyName == "PAGE_BREAK")
@@ -1205,54 +1232,43 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 	} else if (upperKeyName == "DEFAULT_EXTENSIONS")
 		current.defaultExtensions = canonicalDefaultExtensionsLiteral(value);
 	else if (upperKeyName == "TRUNCATE_SPACES") {
-		if (!parseBooleanLiteral(value, boolValue, errorMessage))
+		if (!parseAndAssignBooleanLiteral(value, current.truncateSpaces, errorMessage))
 			return false;
-		current.truncateSpaces = boolValue;
 	} else if (upperKeyName == "EOF_CTRL_Z") {
-		if (!parseBooleanLiteral(value, boolValue, errorMessage))
+		if (!parseAndAssignBooleanLiteral(value, current.eofCtrlZ, errorMessage))
 			return false;
-		current.eofCtrlZ = boolValue;
 	} else if (upperKeyName == "EOF_CR_LF") {
-		if (!parseBooleanLiteral(value, boolValue, errorMessage))
+		if (!parseAndAssignBooleanLiteral(value, current.eofCrLf, errorMessage))
 			return false;
-		current.eofCrLf = boolValue;
 	} else if (upperKeyName == "TAB_EXPAND") {
-		if (!parseBooleanLiteral(value, boolValue, errorMessage))
+		if (!parseAndAssignBooleanLiteral(value, current.tabExpand, errorMessage))
 			return false;
-		current.tabExpand = boolValue;
 	} else if (upperKeyName == "TAB_SIZE") {
 		int tabSize = 0;
 		if (!parseTabSizeLiteral(value, tabSize, errorMessage))
 			return false;
 		current.tabSize = tabSize;
 	} else if (upperKeyName == "BACKUP_FILES") {
-		if (!parseBooleanLiteral(value, boolValue, errorMessage))
+		if (!parseAndAssignBooleanLiteral(value, current.backupFiles, errorMessage))
 			return false;
-		current.backupFiles = boolValue;
 	} else if (upperKeyName == "SHOW_EOF_MARKER") {
-		if (!parseBooleanLiteral(value, boolValue, errorMessage))
+		if (!parseAndAssignBooleanLiteral(value, current.showEofMarker, errorMessage))
 			return false;
-		current.showEofMarker = boolValue;
 	} else if (upperKeyName == "SHOW_EOF_MARKER_EMOJI") {
-		if (!parseBooleanLiteral(value, boolValue, errorMessage))
+		if (!parseAndAssignBooleanLiteral(value, current.showEofMarkerEmoji, errorMessage))
 			return false;
-		current.showEofMarkerEmoji = boolValue;
 	} else if (upperKeyName == "SHOW_LINE_NUMBERS") {
-		if (!parseBooleanLiteral(value, boolValue, errorMessage))
+		if (!parseAndAssignBooleanLiteral(value, current.showLineNumbers, errorMessage))
 			return false;
-		current.showLineNumbers = boolValue;
 	} else if (upperKeyName == "LINE_NUM_ZERO_FILL") {
-		if (!parseBooleanLiteral(value, boolValue, errorMessage))
+		if (!parseAndAssignBooleanLiteral(value, current.lineNumZeroFill, errorMessage))
 			return false;
-		current.lineNumZeroFill = boolValue;
 	} else if (upperKeyName == "PERSISTENT_BLOCKS") {
-		if (!parseBooleanLiteral(value, boolValue, errorMessage))
+		if (!parseAndAssignBooleanLiteral(value, current.persistentBlocks, errorMessage))
 			return false;
-		current.persistentBlocks = boolValue;
 	} else if (upperKeyName == "CODE_FOLDING") {
-		if (!parseBooleanLiteral(value, boolValue, errorMessage))
+		if (!parseAndAssignBooleanLiteral(value, current.codeFolding, errorMessage))
 			return false;
-		current.codeFolding = boolValue;
 	} else if (upperKeyName == "COLUMN_BLOCK_MOVE") {
 		normalized = normalizeColumnBlockMove(value);
 		if (normalized.empty())
@@ -1384,7 +1400,7 @@ bool validateNormalizedEditProfiles(const std::vector<MREditExtensionProfile> &p
 
 } // namespace
 
-std::string normalizeConfiguredPathInput(const std::string &input) {
+std::string normalizeConfiguredPathInput(std::string_view input) {
 	return makeAbsolutePath(normalizeDialogPath(expandUserPath(input).c_str()));
 }
 
@@ -1490,16 +1506,16 @@ MRColorSetupSettings resolveColorSetupDefaults() {
 }
 
 const MREditSettingDescriptor *editSettingDescriptors(std::size_t &count) {
-	count = sizeof(kEditSettingDescriptors) / sizeof(kEditSettingDescriptors[0]);
+	count = std::size(kEditSettingDescriptors);
 	return kEditSettingDescriptors;
 }
 
-const MREditSettingDescriptor *findEditSettingDescriptorByKey(const std::string &key) {
-	return editSettingDescriptorByKeyInternal(key);
+const MREditSettingDescriptor *findEditSettingDescriptorByKey(std::string_view key) {
+		return editSettingDescriptorByKeyInternal(std::string(key));
 }
 
-std::string normalizeEditExtensionSelector(const std::string &value) {
-	return normalizeEditExtensionSelectorValue(value);
+std::string normalizeEditExtensionSelector(std::string_view value) {
+		return normalizeEditExtensionSelectorValue(std::string(value));
 }
 
 bool normalizeEditExtensionSelectors(std::vector<std::string> &selectors, std::string *errorMessage) {
@@ -1656,18 +1672,13 @@ bool applyConfiguredEditExtensionProfileDirective(const std::string &operation, 
 bool effectiveEditSetupSettingsForPath(const std::string &path, MREditSetupSettings &out,
                                        std::string *matchedProfileName) {
 	MREditSetupSettings defaults = configuredEditSetupSettings();
-	std::string normalized = normalizeDialogPath(path.c_str());
-	std::size_t sep = normalized.find_last_of("/\\");
-	std::string base = sep == std::string::npos ? normalized : normalized.substr(sep + 1);
-	std::size_t dot = base.find_last_of('.');
+	std::string ext = extensionSelectorForPath(path);
 
 	out = defaults;
 	if (matchedProfileName != nullptr)
 		matchedProfileName->clear();
-	if (base.empty() || dot == std::string::npos || dot + 1 >= base.size())
+	if (ext.empty())
 		return true;
-
-	std::string ext = base.substr(dot + 1);
 	for (const auto & profile : configuredEditProfiles())
 		for (const std::string & selector : profile.extensions)
 			if (selector == ext) {
@@ -1681,18 +1692,13 @@ bool effectiveEditSetupSettingsForPath(const std::string &path, MREditSetupSetti
 
 bool effectiveEditWindowColorThemePathForPath(const std::string &path, std::string &themeUri,
                                               std::string *matchedProfileName) {
-	std::string normalized = normalizeDialogPath(path.c_str());
-	std::size_t sep = normalized.find_last_of("/\\");
-	std::string base = sep == std::string::npos ? normalized : normalized.substr(sep + 1);
-	std::size_t dot = base.find_last_of('.');
+	std::string ext = extensionSelectorForPath(path);
 
 	themeUri = configuredColorThemeFilePath();
 	if (matchedProfileName != nullptr)
 		matchedProfileName->clear();
-	if (base.empty() || dot == std::string::npos || dot + 1 >= base.size())
+	if (ext.empty())
 		return true;
-
-	std::string ext = base.substr(dot + 1);
 	for (const auto & profile : configuredEditProfiles())
 		for (const std::string & selector : profile.extensions)
 			if (selector == ext) {
@@ -1724,8 +1730,6 @@ MRColorSetupSettings configuredColorSetupSettings() {
 bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::string *errorMessage) {
 	MREditSetupSettings defaults = resolveEditSetupDefaults();
 	MREditSetupSettings normalized = settings;
-	std::string boolError;
-	bool parsedBool = false;
 	std::string pageBreak = normalizePageBreakLiteral(settings.pageBreak);
 	std::string wordDelimiters = settings.wordDelimiters.empty() ? defaults.wordDelimiters
 	                                                             : settings.wordDelimiters;
@@ -1740,41 +1744,19 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	if (defaultMode.empty())
 		return setError(errorMessage, "DEFAULT_MODE must be INSERT or OVERWRITE.");
 
-	if (!parseBooleanLiteral(settings.truncateSpaces ? "true" : "false", parsedBool, &boolError))
-		return setError(errorMessage, boolError);
-	normalized.truncateSpaces = parsedBool;
-	if (!parseBooleanLiteral(settings.eofCtrlZ ? "true" : "false", parsedBool, &boolError))
-		return setError(errorMessage, boolError);
-	normalized.eofCtrlZ = parsedBool;
-	if (!parseBooleanLiteral(settings.eofCrLf ? "true" : "false", parsedBool, &boolError))
-		return setError(errorMessage, boolError);
-	normalized.eofCrLf = parsedBool;
-	if (!parseBooleanLiteral(settings.tabExpand ? "true" : "false", parsedBool, &boolError))
-		return setError(errorMessage, boolError);
-	normalized.tabExpand = parsedBool;
+	normalized.truncateSpaces = settings.truncateSpaces;
+	normalized.eofCtrlZ = settings.eofCtrlZ;
+	normalized.eofCrLf = settings.eofCrLf;
+	normalized.tabExpand = settings.tabExpand;
 	if (settings.tabSize < kMinTabSize || settings.tabSize > kMaxTabSize)
 		return setError(errorMessage, "TAB_SIZE must be between 2 and 32.");
-	if (!parseBooleanLiteral(settings.backupFiles ? "true" : "false", parsedBool, &boolError))
-		return setError(errorMessage, boolError);
-	normalized.backupFiles = parsedBool;
-	if (!parseBooleanLiteral(settings.showEofMarker ? "true" : "false", parsedBool, &boolError))
-		return setError(errorMessage, boolError);
-	normalized.showEofMarker = parsedBool;
-	if (!parseBooleanLiteral(settings.showEofMarkerEmoji ? "true" : "false", parsedBool, &boolError))
-		return setError(errorMessage, boolError);
-	normalized.showEofMarkerEmoji = parsedBool;
-	if (!parseBooleanLiteral(settings.showLineNumbers ? "true" : "false", parsedBool, &boolError))
-		return setError(errorMessage, boolError);
-	normalized.showLineNumbers = parsedBool;
-	if (!parseBooleanLiteral(settings.lineNumZeroFill ? "true" : "false", parsedBool, &boolError))
-		return setError(errorMessage, boolError);
-	normalized.lineNumZeroFill = parsedBool;
-	if (!parseBooleanLiteral(settings.persistentBlocks ? "true" : "false", parsedBool, &boolError))
-		return setError(errorMessage, boolError);
-	normalized.persistentBlocks = parsedBool;
-	if (!parseBooleanLiteral(settings.codeFolding ? "true" : "false", parsedBool, &boolError))
-		return setError(errorMessage, boolError);
-	normalized.codeFolding = parsedBool;
+	normalized.backupFiles = settings.backupFiles;
+	normalized.showEofMarker = settings.showEofMarker;
+	normalized.showEofMarkerEmoji = settings.showEofMarkerEmoji;
+	normalized.showLineNumbers = settings.showLineNumbers;
+	normalized.lineNumZeroFill = settings.lineNumZeroFill;
+	normalized.persistentBlocks = settings.persistentBlocks;
+	normalized.codeFolding = settings.codeFolding;
 
 	normalized.pageBreak = pageBreak;
 	normalized.wordDelimiters = wordDelimiters;
@@ -2063,14 +2045,14 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 	// - slot 7: shortcut selection (selected item)
 	// Our setup exposes a single "entry-hotkey" control (slot 4), so keep both in sync.
 	if (paletteIndex == 7) {
-		for (std::size_t i = 0; i < sizeof(kMenuDialogColorItems) / sizeof(kMenuDialogColorItems[0]); ++i)
+		for (std::size_t i = 0; i < std::size(kMenuDialogColorItems); ++i)
 			if (kMenuDialogColorItems[i].paletteIndex == 4) {
 				value = configured.menuDialogColors[i];
 				return true;
 			}
 	}
 
-	for (std::size_t i = 0; i < sizeof(kMenuDialogColorItems) / sizeof(kMenuDialogColorItems[0]); ++i) {
+	for (std::size_t i = 0; i < std::size(kMenuDialogColorItems); ++i) {
 		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogFrame)
 			dialogFrame = configured.menuDialogColors[i];
 		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogText)
@@ -2114,22 +2096,22 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 			break;
 	}
 
-	for (std::size_t i = 0; i < sizeof(kWindowColorItems) / sizeof(kWindowColorItems[0]); ++i)
+	for (std::size_t i = 0; i < std::size(kWindowColorItems); ++i)
 		if (kWindowColorItems[i].paletteIndex == paletteIndex) {
 			value = configured.windowColors[i];
 			return true;
 		}
-	for (std::size_t i = 0; i < sizeof(kMenuDialogColorItems) / sizeof(kMenuDialogColorItems[0]); ++i)
+	for (std::size_t i = 0; i < std::size(kMenuDialogColorItems); ++i)
 		if (kMenuDialogColorItems[i].paletteIndex == paletteIndex) {
 			value = configured.menuDialogColors[i];
 			return true;
 		}
-	for (std::size_t i = 0; i < sizeof(kHelpColorItems) / sizeof(kHelpColorItems[0]); ++i)
+	for (std::size_t i = 0; i < std::size(kHelpColorItems); ++i)
 		if (kHelpColorItems[i].paletteIndex == paletteIndex) {
 			value = configured.helpColors[i];
 			return true;
 		}
-	for (std::size_t i = 0; i < sizeof(kOtherColorItems) / sizeof(kOtherColorItems[0]); ++i)
+	for (std::size_t i = 0; i < std::size(kOtherColorItems); ++i)
 		if (kOtherColorItems[i].paletteIndex == paletteIndex) {
 			value = configured.otherColors[i];
 			return true;

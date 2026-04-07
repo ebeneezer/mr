@@ -9,6 +9,7 @@
 #include <tvision/tv.h>
 
 #include "MRAboutDialog.hpp"
+#include "MRSetupDialogCommon.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -23,6 +24,7 @@
 #include "../app/MRAboutQuotes.generated.hpp"
 
 namespace {
+using mr::dialogs::trimAscii;
 
 constexpr uint kAnimationTickMs = 100;
 constexpr uint kQuoteRotateMs = 10000;
@@ -62,16 +64,6 @@ std::vector<std::string> wrapQuoteText(const std::string &text, int maxWidth) {
 	if (lines.empty())
 		lines.push_back(std::string());
 	return lines;
-}
-
-std::string trimAscii(const std::string &value) {
-	std::size_t start = 0;
-	std::size_t end = value.size();
-	while (start < end && std::isspace(static_cast<unsigned char>(value[start])) != 0)
-		++start;
-	while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1])) != 0)
-		--end;
-	return value.substr(start, end - start);
 }
 
 bool consumeQuoteToken(const std::string &text, std::size_t &pos) {

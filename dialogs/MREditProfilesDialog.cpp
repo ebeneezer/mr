@@ -1,4 +1,5 @@
 #define Uses_TButton
+#define Uses_TCheckBoxes
 #define Uses_TCollection
 #define Uses_TDeskTop
 #define Uses_TDialog
@@ -9,6 +10,7 @@
 #define Uses_MsgBox
 #define Uses_TObject
 #define Uses_TProgram
+#define Uses_TRadioButtons
 #define Uses_TRect
 #define Uses_TScrollBar
 #define Uses_TStaticText
@@ -16,7 +18,9 @@
 #define Uses_TView
 #include <tvision/tv.h>
 
-#include "MREditSettingsDialogInternal.hpp"
+#include "MREditProfilesDraftSupport.hpp"
+#include "MREditProfilesPanelInternal.hpp"
+#include "MREditProfilesRecordSupport.hpp"
 #include "MRSetupDialogCommon.hpp"
 
 #include "../app/TMREditorApp.hpp"
@@ -25,15 +29,17 @@
 #include "../ui/TMRMenuBar.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cctype>
+#include <cstdlib>
 #include <cstring>
 #include <map>
 #include <string>
 #include <vector>
 
 namespace {
-using namespace MREditSettingsDialogInternal;
+using namespace MREditProfilesDialogInternal;
 
 enum : ushort {
 	cmMrSetupFilenameProfilesHelp = 3820,
@@ -56,15 +62,6 @@ enum {
 const char *kDefaultProfileId = "DEFAULT";
 
 std::chrono::milliseconds marqueeDurationForText(const std::string &text);
-
-struct EditProfileDraft {
-	bool isDefault = false;
-	std::string id;
-	std::string name;
-	std::string extensionsLiteral;
-	std::string colorThemeUri;
-	EditSettingsDialogRecord settingsRecord;
-};
 
 char *dupCString(const std::string &value) {
 	char *copy = new char[value.size() + 1];
@@ -356,237 +353,6 @@ bool browseColorThemeUri(const std::string &currentValue, std::string &selectedU
 	return true;
 }
 
-std::vector<std::string> splitExtensionLiteral(const std::string &literal) {
-	std::vector<std::string> values;
-	std::string current;
-
-	for (char ch : literal) {
-		if (ch == ';' || ch == ',') {
-			std::string token = trimAscii(current);
-			if (!token.empty())
-				values.push_back(token);
-			current.clear();
-		} else
-			current.push_back(ch);
-	}
-	current = trimAscii(current);
-	if (!current.empty())
-		values.push_back(current);
-	return values;
-}
-
-bool validateProfileIdLiteral(const EditProfileDraft &draft, std::string &errorText) {
-	std::string id = trimAscii(draft.id);
-
-	if (draft.isDefault) {
-		errorText.clear();
-		return true;
-	}
-	if (id.empty()) {
-		errorText = "Profile ID may not be empty.";
-		return false;
-	}
-	for (char ch : id)
-		if (!(std::isalnum(static_cast<unsigned char>(ch)) != 0 || ch == '_' || ch == '-' || ch == '.')) {
-			errorText = "Profile ID allows only letters, digits, '_', '-' and '.'.";
-			return false;
-		}
-	errorText.clear();
-	return true;
-}
-
-bool validateProfileNameLiteral(const EditProfileDraft &draft, std::string &errorText) {
-	if (draft.isDefault) {
-		errorText.clear();
-		return true;
-	}
-	if (trimAscii(draft.name).empty()) {
-		errorText = "Description may not be empty.";
-		return false;
-	}
-	errorText.clear();
-	return true;
-}
-
-bool validateProfileExtensionsLiteral(const EditProfileDraft &draft, std::string &errorText) {
-	std::vector<std::string> selectors;
-
-	if (draft.isDefault) {
-		errorText.clear();
-		return true;
-	}
-	selectors = splitExtensionLiteral(draft.extensionsLiteral);
-	if (selectors.size() > 1) {
-		errorText = "Profile extension accepts exactly one selector.";
-		return false;
-	}
-	if (!normalizeEditExtensionSelectors(selectors, &errorText)) {
-		if (errorText.rfind("Extensions", 0) == 0)
-			errorText.replace(0, std::strlen("Extensions"), "Extension");
-		return false;
-	}
-	errorText.clear();
-	return true;
-}
-
-bool validateProfileColorThemeLiteral(const EditProfileDraft &draft, std::string &errorText) {
-	std::string themeUri = trimAscii(draft.colorThemeUri);
-
-	if (themeUri.empty()) {
-		errorText.clear();
-		return true;
-	}
-	return validateColorThemeFilePath(themeUri, &errorText);
-}
-
-bool validateDraftRecordFields(const EditProfileDraft &draft, std::string &errorText) {
-	MREditSetupSettings ignored;
-	return recordToSettings(draft.settingsRecord, ignored, errorText);
-}
-
-bool validateDraftLocally(const EditProfileDraft &draft, std::string &errorText) {
-	if (!validateProfileIdLiteral(draft, errorText))
-		return false;
-	if (!validateProfileNameLiteral(draft, errorText))
-		return false;
-	if (!validateProfileExtensionsLiteral(draft, errorText))
-		return false;
-	if (!validateProfileColorThemeLiteral(draft, errorText))
-		return false;
-	if (!validateDraftRecordFields(draft, errorText))
-		return false;
-	errorText.clear();
-	return true;
-}
-
-unsigned int computeOverrideMask(const MREditSetupSettings &defaults, const MREditSetupSettings &effective) {
-	unsigned int mask = kOvNone;
-
-	if (effective.pageBreak != defaults.pageBreak)
-		mask |= kOvPageBreak;
-	if (effective.wordDelimiters != defaults.wordDelimiters)
-		mask |= kOvWordDelimiters;
-	if (effective.defaultExtensions != defaults.defaultExtensions)
-		mask |= kOvDefaultExtensions;
-	if (effective.truncateSpaces != defaults.truncateSpaces)
-		mask |= kOvTruncateSpaces;
-	if (effective.eofCtrlZ != defaults.eofCtrlZ)
-		mask |= kOvEofCtrlZ;
-	if (effective.eofCrLf != defaults.eofCrLf)
-		mask |= kOvEofCrLf;
-	if (effective.tabExpand != defaults.tabExpand)
-		mask |= kOvTabExpand;
-	if (effective.tabSize != defaults.tabSize)
-		mask |= kOvTabSize;
-	if (effective.backupFiles != defaults.backupFiles)
-		mask |= kOvBackupFiles;
-	if (effective.showEofMarker != defaults.showEofMarker)
-		mask |= kOvShowEofMarker;
-	if (effective.showEofMarkerEmoji != defaults.showEofMarkerEmoji)
-		mask |= kOvShowEofMarkerEmoji;
-	if (effective.showLineNumbers != defaults.showLineNumbers)
-		mask |= kOvShowLineNumbers;
-	if (effective.lineNumZeroFill != defaults.lineNumZeroFill)
-		mask |= kOvLineNumZeroFill;
-	if (effective.persistentBlocks != defaults.persistentBlocks)
-		mask |= kOvPersistentBlocks;
-	if (effective.codeFolding != defaults.codeFolding)
-		mask |= kOvCodeFolding;
-	if (upperAscii(effective.columnBlockMove) != upperAscii(defaults.columnBlockMove))
-		mask |= kOvColumnBlockMove;
-	if (upperAscii(effective.defaultMode) != upperAscii(defaults.defaultMode))
-		mask |= kOvDefaultMode;
-	return mask;
-}
-
-void settingsToRecordLocal(const MREditSetupSettings &settings, EditSettingsDialogRecord &record) {
-	std::string columnMove = upperAscii(settings.columnBlockMove);
-	std::string defaultMode = upperAscii(settings.defaultMode);
-
-	std::memset(&record, 0, sizeof(record));
-	writeRecordField(record.pageBreak, sizeof(record.pageBreak), settings.pageBreak);
-	writeRecordField(record.wordDelimiters, sizeof(record.wordDelimiters), settings.wordDelimiters);
-	writeRecordField(record.defaultExtensions, sizeof(record.defaultExtensions), settings.defaultExtensions);
-	writeRecordField(record.tabSize, sizeof(record.tabSize), std::to_string(settings.tabSize));
-	record.optionsMask = 0;
-	if (settings.truncateSpaces)
-		record.optionsMask |= kOptionTruncateSpaces;
-	if (settings.eofCtrlZ)
-		record.optionsMask |= kOptionEofCtrlZ;
-	if (settings.eofCrLf)
-		record.optionsMask |= kOptionEofCrLf;
-	if (settings.backupFiles)
-		record.optionsMask |= kOptionBackupFiles;
-	if (settings.showEofMarker)
-		record.optionsMask |= kOptionShowEofMarker;
-	if (settings.showEofMarkerEmoji)
-		record.optionsMask |= kOptionShowEofMarkerEmoji;
-	if (settings.persistentBlocks)
-		record.optionsMask |= kOptionPersistentBlocks;
-	if (settings.codeFolding)
-		record.optionsMask |= kOptionCodeFolding;
-	if (settings.showLineNumbers)
-		record.optionsMask |= kOptionShowLineNumbers;
-	if (settings.lineNumZeroFill)
-		record.optionsMask |= kOptionLineNumZeroFill;
-	record.tabExpandChoice = settings.tabExpand ? kTabExpandTabs : kTabExpandSpaces;
-	record.columnBlockMoveChoice = (columnMove == "LEAVE_SPACE") ? kColumnMoveLeaveSpace : kColumnMoveDeleteSpace;
-	record.defaultModeChoice = (defaultMode == "OVERWRITE") ? kDefaultModeOverwrite : kDefaultModeInsert;
-}
-
-std::string joinExtensionsLiteral(const std::vector<std::string> &extensions) {
-	std::string out;
-
-	for (std::size_t i = 0; i < extensions.size(); ++i) {
-		if (i != 0)
-			out += ';';
-		out += extensions[i];
-	}
-	return out;
-}
-
-bool draftsEqual(const EditProfileDraft &lhs, const EditProfileDraft &rhs) {
-	return lhs.isDefault == rhs.isDefault && trimAscii(lhs.id) == trimAscii(rhs.id) &&
-	       trimAscii(lhs.name) == trimAscii(rhs.name) &&
-	       trimAscii(lhs.extensionsLiteral) == trimAscii(rhs.extensionsLiteral) &&
-	       trimAscii(lhs.colorThemeUri) == trimAscii(rhs.colorThemeUri) &&
-	       recordsEqual(lhs.settingsRecord, rhs.settingsRecord);
-}
-
-bool draftListsEqual(const std::vector<EditProfileDraft> &lhs, const std::vector<EditProfileDraft> &rhs) {
-	if (lhs.size() != rhs.size())
-		return false;
-	for (std::size_t i = 0; i < lhs.size(); ++i)
-		if (!draftsEqual(lhs[i], rhs[i]))
-			return false;
-	return true;
-}
-
-EditProfileDraft draftFromProfile(const MREditExtensionProfile &profile) {
-	EditProfileDraft draft;
-	MREditSetupSettings effective = mergeEditSetupSettings(configuredEditSetupSettings(), profile.overrides);
-
-	draft.isDefault = false;
-	draft.id = profile.id;
-	draft.name = profile.name;
-	draft.extensionsLiteral = joinExtensionsLiteral(profile.extensions);
-	draft.colorThemeUri = profile.windowColorThemeUri;
-	settingsToRecordLocal(effective, draft.settingsRecord);
-	return draft;
-}
-
-EditProfileDraft makeDefaultDraft() {
-	EditProfileDraft draft;
-
-	draft.isDefault = true;
-	draft.id = kDefaultProfileId;
-	draft.name = configuredDefaultProfileDescription();
-	draft.extensionsLiteral.clear();
-	draft.colorThemeUri = configuredColorThemeFilePath();
-	settingsToRecordLocal(configuredEditSetupSettings(), draft.settingsRecord);
-	return draft;
-}
-
 EditSettingsPanelConfig makeProfilesPanelConfig(int dialogWidth, int labelLeft, int inputLeft, int inputRight,
                                                 int topY) {
 	EditSettingsPanelConfig config;
@@ -598,71 +364,12 @@ EditSettingsPanelConfig makeProfilesPanelConfig(int dialogWidth, int labelLeft, 
 	config.clusterLeft = 2;
 	config.clusterTopY = 13;
 	config.tabSizeY = topY + 3;
-	config.tabSizeFieldWidth = 4;
 	config.includeDefaultExtensions = true;
 	config.compactTextRows = true;
 	config.tabExpandBesideDefaultMode = true;
 	return config;
 }
 
-std::string padRightAscii(const std::string &value, std::size_t width) {
-	if (value.size() >= width)
-		return value;
-	return value + std::string(width - value.size(), ' ');
-}
-
-std::string buildProfileListLabel(const EditProfileDraft &draft, std::size_t idWidth) {
-	std::string id = draft.isDefault ? std::string("DEFAULT") : trimAscii(draft.id);
-	std::string name = trimAscii(draft.name);
-	std::string label = padRightAscii(id.empty() ? std::string("<empty>") : id, idWidth);
-
-	if (!name.empty())
-		label += " " + name;
-	return label;
-}
-
-std::string nextUniqueProfileId(const std::vector<EditProfileDraft> &existingDrafts, const std::string &seed) {
-	std::string trimmedSeed = trimAscii(seed).empty() ? "profile" : trimAscii(seed);
-	std::string candidate = trimmedSeed;
-	int ordinal = 2;
-	bool unique = false;
-
-	while (!unique) {
-		unique = true;
-		for (const EditProfileDraft &existing : existingDrafts)
-			if (!existing.isDefault && upperAscii(trimAscii(existing.id)) == upperAscii(candidate)) {
-				unique = false;
-				break;
-			}
-		if (!unique)
-			candidate = trimmedSeed + "_" + std::to_string(ordinal++);
-	}
-	return candidate;
-}
-
-EditProfileDraft makeNewDraft(const std::vector<EditProfileDraft> &existingDrafts) {
-	EditProfileDraft draft;
-
-	draft.isDefault = false;
-	draft.id = nextUniqueProfileId(existingDrafts, "profile");
-	draft.name = "New profile";
-	draft.extensionsLiteral.clear();
-	draft.colorThemeUri = configuredColorThemeFilePath();
-	settingsToRecordLocal(configuredEditSetupSettings(), draft.settingsRecord);
-	return draft;
-}
-
-EditProfileDraft makeCopiedDraft(const EditProfileDraft &source, const std::vector<EditProfileDraft> &existingDrafts) {
-	EditProfileDraft draft = source;
-	std::string baseId = trimAscii(source.id).empty() ? "profile" : trimAscii(source.id) + "_copy";
-	std::string baseName = trimAscii(source.name).empty() ? "Copied profile" : trimAscii(source.name) + " Copy";
-
-	draft.isDefault = false;
-	draft.id = nextUniqueProfileId(existingDrafts, baseId);
-	draft.name = baseName;
-	draft.extensionsLiteral.clear();
-	return draft;
-}
 
 mr::messageline::Kind toMessageLineKind(TMRMenuBar::MarqueeKind kind) {
 	switch (kind) {
@@ -695,229 +402,12 @@ void clearDialogStatus() {
 	mr::messageline::clearOwner(mr::messageline::Owner::DialogValidation);
 }
 
-bool draftsToConfiguredState(const std::vector<EditProfileDraft> &drafts, MREditSetupSettings &defaultsOut,
-                             std::vector<MREditExtensionProfile> &profilesOut, std::string &defaultThemePathOut,
-                             std::string &errorText) {
-	bool haveDefault = false;
-	std::string defaultDescription;
-
-	profilesOut.clear();
-	defaultThemePathOut.clear();
-	for (const EditProfileDraft &draft : drafts) {
-		if (!validateDraftLocally(draft, errorText)) {
-			std::string label = draft.isDefault ? std::string("DEFAULT") : trimAscii(draft.id);
-			errorText = label + ": " + errorText;
-			return false;
-		}
-		if (draft.isDefault) {
-			if (!recordToSettings(draft.settingsRecord, defaultsOut, errorText)) {
-				errorText = "DEFAULT: " + errorText;
-				return false;
-			}
-			defaultDescription = trimAscii(draft.name);
-			defaultThemePathOut = trimAscii(draft.colorThemeUri);
-			if (defaultThemePathOut.empty())
-				defaultThemePathOut = defaultColorThemeFilePath();
-			if (!validateColorThemeFilePath(defaultThemePathOut, &errorText)) {
-				errorText = "DEFAULT: " + errorText;
-				return false;
-			}
-			haveDefault = true;
-			break;
-		}
-	}
-
-	if (!haveDefault) {
-		errorText = "DEFAULT profile is missing.";
-		return false;
-	}
-
-	for (const EditProfileDraft &draft : drafts) {
-		MREditSetupSettings effective;
-		MREditExtensionProfile profile;
-
-		if (draft.isDefault)
-			continue;
-		if (!recordToSettings(draft.settingsRecord, effective, errorText)) {
-			errorText = trimAscii(draft.id) + ": " + errorText;
-			return false;
-		}
-		profile.id = trimAscii(draft.id);
-		profile.name = trimAscii(draft.name);
-		profile.extensions = splitExtensionLiteral(draft.extensionsLiteral);
-		profile.windowColorThemeUri = trimAscii(draft.colorThemeUri);
-		profile.overrides.values = effective;
-		profile.overrides.mask = computeOverrideMask(defaultsOut, effective);
-		profilesOut.push_back(profile);
-	}
-
-	if (!setConfiguredDefaultProfileDescription(defaultDescription, &errorText))
-		return false;
-	if (!setConfiguredColorThemeFilePath(defaultThemePathOut, &errorText))
-		return false;
-	if (!setConfiguredEditSetupSettings(defaultsOut, &errorText))
-		return false;
-	if (!setConfiguredEditExtensionProfiles(profilesOut, &errorText))
-		return false;
-	return true;
-}
-
-std::string joinCommaSeparated(const std::vector<std::string> &values);
-
-std::string profileOwnerLabel(const EditProfileDraft &draft) {
-	std::string id = trimAscii(draft.id);
-	std::string name = trimAscii(draft.name);
-
-	if (draft.isDefault)
-		return "DEFAULT";
-	if (id.empty())
-		id = "<empty>";
-	if (name.empty())
-		return id;
-	return id + " (" + name + ")";
-}
-
-bool validateDraftsForUi(const std::vector<EditProfileDraft> &drafts, int currentIndex, std::string &errorText) {
-	std::map<std::string, std::vector<std::size_t>> ids;
-	std::map<std::string, std::vector<std::size_t>> exts;
-	std::vector<std::size_t> order;
-
-	order.reserve(drafts.size());
-	if (currentIndex >= 0 && currentIndex < static_cast<int>(drafts.size()))
-		order.push_back(static_cast<std::size_t>(currentIndex));
-	for (std::size_t i = 0; i < drafts.size(); ++i)
-		if (static_cast<int>(i) != currentIndex)
-			order.push_back(i);
-
-	for (std::size_t i : order) {
-		std::string localError;
-		if (!validateDraftLocally(drafts[i], localError)) {
-			if (static_cast<int>(i) == currentIndex)
-				errorText = localError;
-			else
-				errorText = profileOwnerLabel(drafts[i]) + ": " + localError;
-			return false;
-		}
-	}
-
-	for (std::size_t i = 0; i < drafts.size(); ++i) {
-		if (drafts[i].isDefault)
-			continue;
-		ids[upperAscii(trimAscii(drafts[i].id))].push_back(i);
-		{
-			std::vector<std::string> selectors = splitExtensionLiteral(drafts[i].extensionsLiteral);
-			std::string extError;
-			if (!normalizeEditExtensionSelectors(selectors, &extError)) {
-				if (extError.rfind("Extensions", 0) == 0)
-					extError.replace(0, std::strlen("Extensions"), "Extension");
-				if (static_cast<int>(i) == currentIndex)
-					errorText = extError;
-				else
-					errorText = profileOwnerLabel(drafts[i]) + ": " + extError;
-				return false;
-			}
-			if (!selectors.empty())
-				exts[selectors.front()].push_back(i);
-		}
-	}
-
-	for (const auto &entry : ids)
-		if (entry.second.size() > 1) {
-			std::vector<std::string> owners;
-			for (std::size_t idx : entry.second)
-				if (static_cast<int>(idx) != currentIndex)
-					owners.push_back(profileOwnerLabel(drafts[idx]));
-			if (currentIndex >= 0 && std::find(entry.second.begin(), entry.second.end(), static_cast<std::size_t>(currentIndex)) != entry.second.end()) {
-				errorText = "Duplicate profile ID '" + trimAscii(drafts[currentIndex].id) + "': " + joinCommaSeparated(owners);
-				return false;
-			}
-			errorText = "Duplicate profile ID '" + trimAscii(drafts[entry.second.front()].id) + "': " + joinCommaSeparated(owners);
-			return false;
-		}
-
-	for (const auto &entry : exts)
-		if (entry.second.size() > 1) {
-			std::vector<std::string> owners;
-			for (std::size_t idx : entry.second)
-				if (static_cast<int>(idx) != currentIndex)
-					owners.push_back(profileOwnerLabel(drafts[idx]));
-			if (currentIndex >= 0 && std::find(entry.second.begin(), entry.second.end(), static_cast<std::size_t>(currentIndex)) != entry.second.end()) {
-				errorText = "Duplicate profile extension '" + entry.first + "': " + joinCommaSeparated(owners);
-				return false;
-			}
-			errorText = "Duplicate profile extension '" + entry.first + "': " + joinCommaSeparated(owners);
-			return false;
-		}
-
-	errorText.clear();
-	return true;
-}
-
-bool validateDraftsForSave(const std::vector<EditProfileDraft> &drafts, std::string &errorText) {
-	if (!validateDraftsForUi(drafts, -1, errorText))
-		return false;
-	errorText.clear();
-	return true;
-}
-
-bool saveAndReloadEditProfiles(const std::vector<EditProfileDraft> &drafts, std::string &errorText) {
-	TMREditorApp *app = dynamic_cast<TMREditorApp *>(TProgram::application);
-	MRSetupPaths paths;
-	MREditSetupSettings defaultsCandidate;
-	std::vector<MREditExtensionProfile> profilesCandidate;
-	std::string defaultThemePathCandidate;
-
-	if (app == nullptr) {
-		errorText = "Application error: TMREditorApp is unavailable.";
-		return false;
-	}
-	if (!draftsToConfiguredState(drafts, defaultsCandidate, profilesCandidate, defaultThemePathCandidate, errorText))
-		return false;
-
-	paths.settingsMacroUri = configuredSettingsMacroFilePath();
-	paths.macroPath = defaultMacroDirectoryPath();
-	paths.helpUri = configuredHelpFilePath();
-	paths.tempPath = configuredTempDirectoryPath();
-	paths.shellUri = configuredShellExecutablePath();
-
-	if (!writeSettingsMacroFile(paths, &errorText))
-		return false;
-	if (!app->reloadSettingsMacroFromPath(paths.settingsMacroUri, &errorText))
-		return false;
-
-	errorText.clear();
-	return true;
-}
-
-std::vector<std::string> dirtyDraftIds(const std::vector<EditProfileDraft> &initialDrafts,
-	                                  const std::vector<EditProfileDraft> &drafts) {
-	std::vector<std::string> out;
-	std::size_t count = std::max(initialDrafts.size(), drafts.size());
-	for (std::size_t i = 0; i < count; ++i) {
-		const EditProfileDraft *initial = i < initialDrafts.size() ? &initialDrafts[i] : nullptr;
-		const EditProfileDraft *current = i < drafts.size() ? &drafts[i] : nullptr;
-		if (initial != nullptr && current != nullptr && draftsEqual(*initial, *current))
-			continue;
-		std::string id;
-		if (current != nullptr)
-			id = trimAscii(current->id);
-		if (id.empty() && initial != nullptr)
-			id = trimAscii(initial->id);
-		if (id.empty())
-			id = "<empty>";
-		out.push_back(id);
-	}
-	return out;
-}
-
-std::string joinCommaSeparated(const std::vector<std::string> &values) {
-	std::string out;
-	for (std::size_t i = 0; i < values.size(); ++i) {
-		if (i != 0)
-			out += ", ";
-		out += values[i];
-	}
-	return out;
+void postValidationWarning(const std::string &text) {
+	if (text.empty())
+		return;
+	mr::messageline::postTimed(mr::messageline::Owner::DialogValidation, text,
+	                          mr::messageline::Kind::Warning,
+	                          marqueeDurationForText(text), mr::messageline::kPriorityHigh);
 }
 
 ushort runDirtyProfilesDialog(const std::vector<std::string> &dirtyIds) {
@@ -950,7 +440,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	      MRScrollableDialog(centeredSetupDialogRect(kDialogWidth, kVisibleHeight), "FILENAME EXTENSIONS",
 	                         kDialogWidth, kVirtualHeight),
 	      initialDrafts_(initialDrafts), drafts_(workingDrafts),
-	      panel_(makeProfilesPanelConfig(kDialogWidth - 1, 32, 45, kDialogWidth - 6, 6)) {
+	      panel_(makeProfilesPanelConfig(kDialogWidth - 1, 33, 46, kDialogWidth - 5, 6)) {
 		buildViews();
 		if (!drafts_.empty())
 			currentIndex_ = 0;
@@ -1094,12 +584,12 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		const int listLeft = 2;
 		const int listWidth = 27;
 		const int listBottom = 8;
-		const int rightLeft = 32;
+		const int rightLeft = 33;
 		const int rightRight = kDialogWidth - 2;
-		const int fieldLeft = 45;
+		const int fieldLeft = 46;
 		const int glyphWidth = 3;
 		const int colorGlyphLeft = rightRight - glyphWidth;
-		const int fieldRight = colorGlyphLeft - 1;
+		const int fieldRight = colorGlyphLeft;
 		const int buttonRow = 9;
 		const int bottomTop = kVirtualHeight - 3;
 		const int doneLeft = kDialogWidth / 2 - 17;
@@ -1141,6 +631,57 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		          bfNormal);
 	}
 
+	void setLabelInactive(TInactiveStaticText *label, bool inactive) {
+		if (label != nullptr)
+			label->setInactive(inactive ? True : False);
+	}
+
+	void applyFieldState(TInputLine *input, bool readOnly, const std::string &warningText) {
+		if (input == nullptr)
+			return;
+		input->setState(sfVisible, True);
+		input->setState(sfDisabled, False);
+		setInputReadOnly(input, readOnly, warningText);
+	}
+
+	void loadCurrentDraftFieldValues(const EditProfileDraft &draft) {
+		writeInputLineString(profileIdField_, draft.id, kProfileIdFieldSize);
+		writeInputLineString(profileNameField_, draft.name, kProfileNameFieldSize);
+		writeInputLineString(profileExtensionsField_, draft.extensionsLiteral, kProfileExtensionsFieldSize);
+		writeInputLineString(profileColorThemeField_, draft.colorThemeUri, kProfileColorThemeFieldSize);
+		panel_.loadFieldsFromRecord(draft.settingsRecord);
+	}
+
+	void applyCurrentDraftWidgetState(bool isDefault) {
+		applyFieldState(profileIdField_, isDefault, "read-only with DEFAULT profile");
+		applyFieldState(profileNameField_, false, "");
+		applyFieldState(profileExtensionsField_, isDefault, "read-only with DEFAULT profile");
+		applyFieldState(profileColorThemeField_, false, "");
+		if (profileColorThemeBrowseButton_ != nullptr) {
+			profileColorThemeBrowseButton_->setState(sfVisible, True);
+			profileColorThemeBrowseButton_->setState(sfDisabled, False);
+		}
+		setLabelInactive(profileIdLabel_, isDefault);
+		setLabelInactive(profileNameLabel_, false);
+		setLabelInactive(profileExtensionsLabel_, isDefault);
+		setLabelInactive(profileColorThemeLabel_, false);
+		if (deleteButton_ != nullptr)
+			deleteButton_->setState(sfDisabled, isDefault ? True : False);
+	}
+
+	void setValidationState(bool valid, const std::string &errorText) {
+		isValid_ = valid;
+		if (doneButton_ != nullptr)
+			doneButton_->setState(sfDisabled, valid ? False : True);
+		if (valid) {
+			lastValidationText_.clear();
+			clearDialogStatus();
+		} else if (errorText != lastValidationText_) {
+			setDialogStatus(errorText, TMRMenuBar::MarqueeKind::Warning);
+			lastValidationText_ = errorText;
+		}
+	}
+
 	void saveWidgetsToCurrentDraft() {
 		if (currentIndex_ < 0 || currentIndex_ >= static_cast<int>(drafts_.size()))
 			return;
@@ -1164,47 +705,9 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		if (currentIndex_ < 0 || currentIndex_ >= static_cast<int>(drafts_.size()))
 			return;
 		const EditProfileDraft &draft = drafts_[currentIndex_];
-		const bool isDefault = draft.isDefault;
 
-		writeInputLineString(profileIdField_, draft.id, kProfileIdFieldSize);
-		writeInputLineString(profileNameField_, draft.name, kProfileNameFieldSize);
-		writeInputLineString(profileExtensionsField_, draft.extensionsLiteral, kProfileExtensionsFieldSize);
-		writeInputLineString(profileColorThemeField_, draft.colorThemeUri, kProfileColorThemeFieldSize);
-		panel_.loadFieldsFromRecord(draft.settingsRecord);
-		if (profileIdField_ != nullptr) {
-			profileIdField_->setState(sfVisible, True);
-			profileIdField_->setState(sfDisabled, False);
-			setInputReadOnly(profileIdField_, isDefault, "read-only with DEFAULT profile");
-		}
-		if (profileNameField_ != nullptr) {
-			profileNameField_->setState(sfVisible, True);
-			profileNameField_->setState(sfDisabled, False);
-			setInputReadOnly(profileNameField_, false, "");
-		}
-		if (profileExtensionsField_ != nullptr) {
-			profileExtensionsField_->setState(sfVisible, True);
-			profileExtensionsField_->setState(sfDisabled, False);
-			setInputReadOnly(profileExtensionsField_, isDefault, "read-only with DEFAULT profile");
-		}
-		if (profileColorThemeField_ != nullptr) {
-			profileColorThemeField_->setState(sfVisible, True);
-			profileColorThemeField_->setState(sfDisabled, False);
-			setInputReadOnly(profileColorThemeField_, false, "");
-		}
-		if (profileColorThemeBrowseButton_ != nullptr) {
-			profileColorThemeBrowseButton_->setState(sfVisible, True);
-			profileColorThemeBrowseButton_->setState(sfDisabled, False);
-		}
-		if (profileIdLabel_ != nullptr)
-			profileIdLabel_->setInactive(isDefault);
-		if (profileNameLabel_ != nullptr)
-			profileNameLabel_->setInactive(False);
-		if (profileExtensionsLabel_ != nullptr)
-			profileExtensionsLabel_->setInactive(isDefault);
-		if (profileColorThemeLabel_ != nullptr)
-			profileColorThemeLabel_->setInactive(False);
-		if (deleteButton_ != nullptr)
-			deleteButton_->setState(sfDisabled, isDefault ? True : False);
+		loadCurrentDraftFieldValues(draft);
+		applyCurrentDraftWidgetState(draft.isDefault);
 	}
 
 	void refreshProfileList() {
@@ -1329,21 +832,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 		saveWidgetsToCurrentDraft();
 		refreshProfileList();
-		if (!validateDraftsForUi(drafts_, currentIndex_, errorText)) {
-			isValid_ = false;
-			if (doneButton_ != nullptr)
-				doneButton_->setState(sfDisabled, True);
-			if (errorText != lastValidationText_) {
-				setDialogStatus(errorText, TMRMenuBar::MarqueeKind::Warning);
-				lastValidationText_ = errorText;
-			}
-		} else {
-			isValid_ = true;
-			if (doneButton_ != nullptr)
-				doneButton_->setState(sfDisabled, False);
-			lastValidationText_.clear();
-			clearDialogStatus();
-		}
+		setValidationState(validateDraftsForUi(drafts_, currentIndex_, errorText), errorText);
 	}
 
 	std::vector<EditProfileDraft> initialDrafts_;
@@ -1382,7 +871,7 @@ void showEditProfilesHelpDialog() {
 	}
 }
 
-} // namespace
+} // namespace MREditProfilesDialogInternal
 
 void runEditExtensionProfilesDialogFlow() {
 	std::vector<EditProfileDraft> baselineDrafts;
@@ -1414,10 +903,7 @@ void runEditExtensionProfilesDialogFlow() {
 			case cmOK:
 				workingDrafts = editedDrafts;
 				if (!saveAndReloadEditProfiles(workingDrafts, errorText)) {
-					mr::messageline::postTimed(mr::messageline::Owner::DialogValidation, errorText,
-					                          mr::messageline::Kind::Warning,
-					                          marqueeDurationForText(errorText),
-					                          mr::messageline::kPriorityHigh);
+					postValidationWarning(errorText);
 					break;
 				}
 				baselineDrafts = workingDrafts;

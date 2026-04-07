@@ -5,14 +5,14 @@
 
 class TMREditWindow;
 
-TMREditWindow *createEditorWindow(const char *title);
-std::vector<TMREditWindow *> allEditWindowsInZOrder();
-TMREditWindow *currentEditWindow();
-TMREditWindow *findEditWindowByBufferId(int bufferId);
-bool isEmptyUntitledEditableWindow(TMREditWindow *win);
-TMREditWindow *findReusableEmptyWindow(TMREditWindow *preferred);
-bool closeCurrentEditWindow();
-bool activateRelativeEditWindow(int delta);
-bool hideCurrentEditWindow();
+[[nodiscard]] TMREditWindow *createEditorWindow(const char *title);
+[[nodiscard]] std::vector<TMREditWindow *> allEditWindowsInZOrder();
+[[nodiscard]] TMREditWindow *currentEditWindow();
+[[nodiscard]] TMREditWindow *findEditWindowByBufferId(int bufferId);
+[[nodiscard]] bool isEmptyUntitledEditableWindow(TMREditWindow *win);
+[[nodiscard]] TMREditWindow *findReusableEmptyWindow(TMREditWindow *preferred);
+[[nodiscard]] bool closeCurrentEditWindow();
+[[nodiscard]] bool activateRelativeEditWindow(int delta);
+[[nodiscard]] bool hideCurrentEditWindow();
 
 #endif
