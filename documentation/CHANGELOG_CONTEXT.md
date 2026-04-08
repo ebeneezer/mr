@@ -8,6 +8,29 @@ Laufendes Projektprotokoll fuer Kontextwechsel und schnelle Wiederaufnahme.
 - Warmup-Reihenfolge: zuerst YAML, dann dieses Changelog, danach `MRMAC_V1_STATUS.md`.
 
 
+
+## 2026-04-08
+- Neue verbindliche Handoff-Regel aufgenommen:
+  - Kein Handoff mehr als Tar-Archiv.
+  - Handoffs werden als komprimierter Patch uebergeben.
+  - Zu jedem Handoff wird immer auch die passende Befehlskette zur Anwendung des Patches mitgeliefert.
+- Settings-/Bootstrap-Architektur fuer den naechsten Zug festgezogen:
+  - Compile-Defaults sind das Schema.
+  - Unbekannte Keys aus `settings.mrmac` werden beim Laden still verworfen.
+  - Fehlende Keys werden still mit den Defaults des Compilats aufgefuellt.
+  - Die geladene `SETTINGS_VERSION` wird intern auf die Version des Compilats normalisiert und beim Speichern entsprechend geschrieben.
+  - Beim Speichern werden immer alle bekannten globalen Key/Value-Paare vollstaendig nach `settings.mrmac` geschrieben.
+  - Extension-Profile werden ebenfalls immer vollstaendig geschrieben; fehlende Profil-Keys werden dadurch nach einem Upgrade automatisch ergaenzt.
+  - Load, Save und Bootstrap docken an denselben zentralen Key/Value-Stores an.
+  - Keine Registry und keine zweite allgemeine Metaschicht aufbauen.
+  - Die Compile-Default-Hashes definieren die erlaubten Keys; ein Key ist gueltig, wenn er im passenden Default-Store existiert.
+  - Keine semantische Migration veralteter oder unbekannter Keys; Legacy-Ballast wird abgeschnitten und durch Compile-Defaults ersetzt.
+- Architekturprioritaet fuer den kommenden Zug festgelegt:
+  - Vor weiterer mrmac-Vervollstaendigung muessen vollstaendige Pfade fuer Load / Save / Upgrading der Settings geschlossen werden.
+  - Bei der Umsetzung maximal auf gehärteten C++20-Code, einfache Datenwege und Entfernung alten Boilerplates achten.
+  - Keine neue Infrastruktur in die heissen Dateilade-/Line-Indexierungs-Pfade ziehen.
+
+
 ## 2026-04-06
 - Neue verbindliche TVision-Standardregel aufgenommen:
   - Standardnaehe zu magiblot/TVision ist zwingend.

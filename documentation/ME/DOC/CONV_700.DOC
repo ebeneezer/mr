@@ -1,0 +1,39 @@
+It is recommended that if you have not made extensive
+customizations, you NOT convert your old configuration.
+Starting from scratch will help familiarize you with the new
+features, and will help prevent conflicts with outdated
+keymapping, etc.
+
+To convert your old configuration, you must first have installed
+version 7.0 in a DIFFERENT directory than the previous version.
+If you answered the install prompt for updating a previous
+version then you will have been taken to convert directly.  The
+macro CONV_700 is what is run to perform the conversion.  If you
+manually run CONV_700, it really should be done BEFORE
+installing VCS support, but AFTER the Wordstar or Brief
+emulations.
+
+If you are converting a network version, with multiple user
+setups, you need to take special precautions.  CONV_700 MUST
+ONLY BE RUN BY SOMEONE WITH SUPERVISOR RIGHTS!  Also, it only
+needs to be run only once.  Individual users need not, and
+should not run CONV_700.
+
+NOTE: The CONV_700 macro is no longer installed by Module
+Installation.  It is done automatically during the initial
+installation.
+
+Press <F10> to proceed.
+
+Proceed through Module Installation.  Install all of your
+desired options EXCEPT VCS support.
+³
+ÀÄÄÄÄÄ DO NOT INSTALL VCS SUPPORT UNTIL AFTER THE CONVERSION
+	IS COMPLETE!
+
+After you have completed Module Installation, you will be taken
+directly to the 7.0 conversion utility.  After the conversion is
+complete, you may go back to Module Installation and install VCS
+support.
+
+Press <F10> to proceed.

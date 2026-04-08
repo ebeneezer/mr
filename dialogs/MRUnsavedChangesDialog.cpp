@@ -13,6 +13,7 @@
 #include <cctype>
 #include <cstring>
 #include <string>
+#include <vector>
 
 namespace mr {
 namespace dialogs {
@@ -38,13 +39,39 @@ void insertStaticLine(TDialog *dialog, int x, int y, const std::string &text) {
 	dialog->insert(new TStaticText(TRect(x, y, x + static_cast<int>(text.size()) + 1, y + 1), text.c_str()));
 }
 
-std::string shortenDetail(const char *detail, std::size_t maxLen) {
-	std::string value = detail != nullptr ? detail : "";
-	if (value.size() <= maxLen)
-		return value;
-	if (maxLen <= 3)
-		return value.substr(0, maxLen);
-	return value.substr(0, maxLen - 3) + "...";
+std::vector<std::string> wrapText(const char *text, std::size_t maxLen) {
+	std::vector<std::string> lines;
+	std::string value = text != nullptr ? text : "";
+
+	if (value.empty())
+		return lines;
+	if (maxLen == 0) {
+		lines.push_back(value);
+		return lines;
+	}
+
+	while (!value.empty()) {
+		if (value.size() <= maxLen) {
+			lines.push_back(value);
+			break;
+		}
+		std::size_t cut = value.rfind(' ', maxLen);
+		if (cut == std::string::npos || cut == 0)
+			cut = maxLen;
+		lines.push_back(value.substr(0, cut));
+		value.erase(0, cut);
+		while (!value.empty() && value.front() == ' ')
+			value.erase(value.begin());
+	}
+	return lines;
+}
+
+int widestLineWidth(const std::vector<std::string> &lines) {
+	int width = 0;
+
+	for (const std::string &line : lines)
+		width = std::max(width, strwidth(line.c_str()));
+	return width;
 }
 
 std::string addMnemonic(const std::string &text, char preferred) {
@@ -89,19 +116,29 @@ UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const ch
 	std::string primaryButtonLabel = addMnemonic(label, 's');
 	std::string discardButtonLabel = addMnemonic("Discard", 'd');
 	std::string cancelButtonLabel = addMnemonic("Cancel", 'c');
-	const int headlineWidth = headline != nullptr ? strwidth(headline) : strwidth("Window has unsaved changes.");
 	const int primaryButtonWidth = std::max(10, strwidth(label.c_str()) + 4);
 	const int discardButtonWidth = 11;
 	const int cancelButtonWidth = 10;
 	const int gap = 2;
 	const int buttonRowWidth = primaryButtonWidth + discardButtonWidth + cancelButtonWidth + 2 * gap;
-	const int width = std::min(50, std::max(hasDetail ? 44 : 40, std::max(headlineWidth + 6, buttonRowWidth + 6)));
-	const int height = hasDetail ? 9 : 8;
-	TDialog *dialog = new TDialog(centeredRect(width, height), "Confirm");
+	const int desktopWidth = TProgram::deskTop != nullptr ? TProgram::deskTop->size.x : 80;
+	const int maxTextWidth = std::max(32, desktopWidth - 12);
+	std::vector<std::string> textLines = wrapText(headline != nullptr ? headline : "Window has unsaved changes.",
+	                                              static_cast<std::size_t>(maxTextWidth));
 
-	insertStaticLine(dialog, 3, 2, headline != nullptr ? headline : "Window has unsaved changes.");
-	if (hasDetail)
-		insertStaticLine(dialog, 3, 4, shortenDetail(detail, static_cast<std::size_t>(width - 6)));
+	if (hasDetail) {
+		std::vector<std::string> detailLines = wrapText(detail, static_cast<std::size_t>(maxTextWidth));
+		textLines.insert(textLines.end(), detailLines.begin(), detailLines.end());
+	}
+
+	const int textWidth = std::max(widestLineWidth(textLines), buttonRowWidth);
+	const int width = std::min(std::max(46, textWidth + 6), std::max(46, desktopWidth - 4));
+	const int height = std::max(hasDetail ? 10 : 8, static_cast<int>(textLines.size()) + 6);
+	TDialog *dialog = new TDialog(centeredRect(width, height), "Confirm");
+	int y = 2;
+
+	for (const std::string &line : textLines)
+		insertStaticLine(dialog, 3, y++, line);
 	int buttonY = height - 3;
 	int buttonLeft = (width - buttonRowWidth) / 2;
 

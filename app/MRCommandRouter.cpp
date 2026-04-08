@@ -202,7 +202,7 @@ const char *dummyCommandTitle(ushort command) {
 		case cmMrSetupSwappingEmsXms:
 			return "Installation / Paths";
 		case cmMrSetupBackupsTempAutosave:
-			return "Installation / Backups / Temp files / Autosave";
+			return "Installation / Backups / Autosave";
 		case cmMrSetupUserInterfaceSettings:
 			return "Installation / User interface settings";
 		case cmMrSetupSearchAndReplacePlaceholder:

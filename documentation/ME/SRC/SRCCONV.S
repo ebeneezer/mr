@@ -1,0 +1,301 @@
+macro srcconv {
+/*******************************************************************************
+																MULTI_EDIT MACRO
+
+Name:  SRCCONV
+
+Description:  Converts old MEMAC source (in the current window) to CMAC source.
+							If a block is marked then srcconv will will process the currently
+							marked block.
+
+							 (C) Copyright 1991 by American Cybernetics, Inc.
+*******************************************************************************/
+	int
+			jx,
+			parm_pos = 0, parm_line = 0,
+			char_pushed = FALSE,
+			macro_done = FALSE,
+			t_reg_exp_stat = reg_exp_stat,
+			t_ignore_case = ignore_case,
+			t_insert_mode = insert_mode,
+			bc = box_count,
+			ignore_quotes = FALSE
+			;
+
+	char
+			Current_Mac_Char;
+
+	str
+			current_parm = "",
+			new_parm,
+			operator_set = ":%^<>!-=+/*|&",
+			t_word_delimits = word_delimits
+			;
+
+	refresh = FALSE;
+	reg_exp_stat = true;
+	ignore_case = true;
+	insert_mode = true;
+	word_delimits = ' |255|9,()';
+	RM("MEERROR^MESSAGEBOX /NW=1/T=.SRC TO .S CONVERSION/M=Scanning file for reserved words used as variable names...");
+
+	tof;
+	while (search_fwd("DEF_",0)) {
+		if (search_fwd("(",0)) {
+MORE_VARS:
+			Word_Right;
+			if (at_eol) {
+				Word_Right;
+			}
+			current_parm = Caps(get_word(word_delimits));
+			if (xpos("" + current_parm + "","DOTHEN$MACRO_FILEANDORSHRSHLMODXOR",0)) {
+				Kill_Box;
+				Refresh = True;
+				redraw;
+				RM("MEERROR^MESSAGEBOX /B=2/T=FATAL ERROR/M=The reserved word """
+						+ current_parm + """ was used as a variable name.  Please change all occurances and restart the conversion.");
+				goto EXIT;
+			}
+
+FIND_VAR_END:
+			if (search_Fwd(')||,||(',0)) {
+				if (found_str == ',') {
+					goto MORE_VARS;
+				} else if (found_str == "(") {
+					search_fwd(")",0);
+					right;
+					goto FIND_VAR_END;
+				}
+			}
+		}
+
+	}
+
+	Kill_Box;
+	word_delimits = t_word_delimits;
+	current_parm = "";
+
+	file_name = truncate_extension( file_name ) + '.S';
+	push_undo;
+
+	if ( !Block_Stat )
+	{
+		TOF;
+		Block_Begin;
+		EOF;
+		Block_End;
+	}
+
+	refresh = FALSE;
+	Goto_Line(Block_Line1);
+	Goto_Col(1);
+	redraw;
+/*
+	make_message('Converting...');
+*/
+	RM("MEERROR^MESSAGEBOX /NW=1/T=.SRC TO .S CONVERSION/M=Converting " +
+			truncate_extension(file_name) + "...");
+	working;
+	Mark_Pos;
+
+	while( C_Line < Block_Line2 ) {
+		call get_next_parm;
+		new_parm = parse_str('|127' + current_parm + '|175',
+			'IF¯if( ELSIF¯} else if( :=¯==¯==ELSE¯} else {WHILE¯while( DO¯ ) {THEN¯ ) {END¯}END_MACRO¯}$MACRO_FILE¯macro_file<>¯!=AND¯&OR¯||SHR¯>>SHL¯<<MOD¯%XOR¯^'
+				);
+		if( svl(new_parm) != 0) {
+			call replace_parm;
+		}
+		else if( current_parm == "{" ) {
+			call do_comment;
+			ignore_quotes = FALSE;
+		}
+		else if( current_parm == '$MACRO') {
+			new_parm = 'macro';
+			call replace_parm;
+			while( (current_parm != ';') && !at_eof ) {
+				call get_next_parm;
+			}
+			new_parm = ' {';
+			call replace_parm;
+		}
+		else if( current_parm == 'DEF_CHAR') {
+			new_parm = 'char';
+			call replace_parm;
+			while( (current_parm != '(') && !at_eof ) {
+				call get_next_parm;
+			}
+			new_parm = ' ';
+			call replace_parm;
+			mark_pos;
+			if( search_fwd( ');', 0) )
+				del_char;
+			goto_mark;
+		}
+		else if( current_parm == 'DEF_REAL') {
+			new_parm = 'real';
+			call replace_parm;
+			while( (current_parm != '(') && !at_eof ) {
+				call get_next_parm;
+			}
+			new_parm = ' ';
+			call replace_parm;
+			mark_pos;
+			if( search_fwd( ');', 0) )
+				del_char;
+			goto_mark;
+		}
+		else if( current_parm == 'DEF_INT') {
+			new_parm = 'int';
+			call replace_parm;
+			while( (current_parm != '(') && !at_eof ) {
+				call get_next_parm;
+			}
+			new_parm = ' ';
+			call replace_parm;
+			mark_pos;
+			if( search_fwd( ');', 0) )
+				del_char;
+			goto_mark;
+		}
+		else if( current_parm == 'DEF_STR') {
+			new_parm = 'str';
+			call replace_parm;
+			while( (current_parm != '(') && !at_eof ) {
+				call get_next_parm;
+			}
+			new_parm = ' ';
+			call replace_parm;
+			mark_pos;
+			if( search_fwd( ');', 0) )
+				del_char;
+			goto_mark;
+		}
+	}
+
+	make_message('Done.');
+	goto exit;
+
+replace_parm:
+	goto_line( parm_line );
+	goto_col( parm_pos );
+	del_chars( length( current_parm ) );
+	text( new_parm );
+	ret;
+
+do_comment:
+	ignore_quotes = TRUE;
+	new_parm = "/* ";  /**/
+	call replace_parm;
+	while ((current_parm != "}") && !at_eof) {
+			call get_next_parm;
+			if( current_parm == "'" ) {
+				text('''');
+			}
+			else if (current_parm == "{") {
+				call do_comment;
+				call get_next_parm;
+			}
+	}
+	new_parm = " */";
+	call replace_parm;
+	ret;
+
+Mac_Get_Next_Char:
+	{
+		again:
+			If (at_eol)
+				{
+					Current_Mac_Char = ' ';
+					down;
+					put_line_num( c_line );
+					goto_col(1);
+					forward_till_not(' |9|255');
+					ret;
+				}
+			Current_Mac_Char = cur_char;
+			right;
+		ret;
+	}
+
+
+get_next_parm:
+		{
+			int end_quote;
+			char x_char;
+parm_again:
+			Current_Parm = '';
+			forward_till_not( ' |9|255');
+			while (at_eol) {
+				down;
+				put_line_num( c_line );
+				goto_col(1);
+				forward_till_not( ' |9|255');
+				if( at_eof )
+					ret;
+			}
+			current_mac_char = cur_char;
+			parm_pos = c_col;
+			right;
+			parm_line = c_line;
+			if( xpos(current_mac_char, '{}()[];,',1)) {
+				current_parm = current_mac_char;
+				ret;
+			}
+
+			if( xpos(Current_Mac_char, Operator_Set, 1))
+				{
+					do {
+						Current_Parm += Current_Mac_Char;
+						if(  (current_parm == '{') || (current_parm == '}'))
+							ret;
+						call mac_get_next_char;
+					} while ( (xpos(current_mac_char, Operator_Set, 1)) && !at_eof );
+					left;
+					ret;
+				}
+
+			if( ignore_quotes ) {
+				current_parm = current_mac_char;
+			} 
+			else if(  Current_Mac_Char == ''''  )
+				{
+					end_quote = false;
+					do {
+						forward_till('''');
+						if (at_eol) {
+							down;
+							goto_col(1);
+							end_quote = TRUE;
+						}
+						else if(  Cur_Char == ''''  )
+							{
+								right;
+								if(  Cur_Char != ''''  ) {
+									end_quote = True;
+								} else {
+									right;
+								}
+							}
+					} while( !end_quote && !at_eof);
+					if (!at_eof)
+							goto parm_again;
+				}
+			else
+				{
+					current_parm = Caps(current_mac_char + get_word('|9{}, )([];|0|255''' + operator_set));
+				}
+			ret;
+		}
+
+exit:
+	while (box_count > bc) {
+		kill_box;
+	}
+	word_delimits = t_word_delimits;
+	reg_exp_stat = t_reg_exp_stat;
+	ignore_case = t_ignore_case;
+	insert_mode = t_insert_mode;
+	pop_undo;
+	Goto_Mark;
+}

@@ -35,7 +35,14 @@ bool recordsEqual(const EditSettingsDialogRecord &lhs, const EditSettingsDialogR
 	       readRecordField(lhs.wordDelimiters) == readRecordField(rhs.wordDelimiters) &&
 	       readRecordField(lhs.defaultExtensions) == readRecordField(rhs.defaultExtensions) &&
 	       readRecordField(lhs.tabSize) == readRecordField(rhs.tabSize) &&
+	       readRecordField(lhs.rightMargin) == readRecordField(rhs.rightMargin) &&
+	       readRecordField(lhs.binaryRecordLength) == readRecordField(rhs.binaryRecordLength) &&
+	       readRecordField(lhs.postLoadMacro) == readRecordField(rhs.postLoadMacro) &&
+	       readRecordField(lhs.preSaveMacro) == readRecordField(rhs.preSaveMacro) &&
+	       readRecordField(lhs.defaultPath) == readRecordField(rhs.defaultPath) &&
+	       readRecordField(lhs.formatLine) == readRecordField(rhs.formatLine) &&
 	       lhs.optionsMask == rhs.optionsMask && lhs.tabExpandChoice == rhs.tabExpandChoice &&
+	       lhs.indentStyleChoice == rhs.indentStyleChoice && lhs.fileTypeChoice == rhs.fileTypeChoice &&
 	       lhs.columnBlockMoveChoice == rhs.columnBlockMoveChoice &&
 	       lhs.defaultModeChoice == rhs.defaultModeChoice;
 }
@@ -44,6 +51,8 @@ void initEditSettingsDialogRecord(EditSettingsDialogRecord &record) {
 	MREditSetupSettings settings = configuredEditSetupSettings();
 	std::string columnMove = upperAscii(settings.columnBlockMove);
 	std::string defaultMode = upperAscii(settings.defaultMode);
+	std::string indentStyle = upperAscii(settings.indentStyle);
+	std::string fileType = upperAscii(settings.fileType);
 
 	std::memset(&record, 0, sizeof(record));
 	writeRecordField(record.pageBreak, sizeof(record.pageBreak), settings.pageBreak);
@@ -51,6 +60,13 @@ void initEditSettingsDialogRecord(EditSettingsDialogRecord &record) {
 	writeRecordField(record.defaultExtensions, sizeof(record.defaultExtensions),
 	                 settings.defaultExtensions);
 	writeRecordField(record.tabSize, sizeof(record.tabSize), std::to_string(settings.tabSize));
+	writeRecordField(record.rightMargin, sizeof(record.rightMargin), std::to_string(settings.rightMargin));
+	writeRecordField(record.binaryRecordLength, sizeof(record.binaryRecordLength),
+	                 std::to_string(settings.binaryRecordLength));
+	writeRecordField(record.postLoadMacro, sizeof(record.postLoadMacro), settings.postLoadMacro);
+	writeRecordField(record.preSaveMacro, sizeof(record.preSaveMacro), settings.preSaveMacro);
+	writeRecordField(record.defaultPath, sizeof(record.defaultPath), settings.defaultPath);
+	writeRecordField(record.formatLine, sizeof(record.formatLine), settings.formatLine);
 
 	record.optionsMask = 0;
 	if (settings.truncateSpaces)
@@ -59,6 +75,8 @@ void initEditSettingsDialogRecord(EditSettingsDialogRecord &record) {
 		record.optionsMask |= kOptionEofCtrlZ;
 	if (settings.eofCrLf)
 		record.optionsMask |= kOptionEofCrLf;
+	if (settings.wordWrap)
+		record.optionsMask |= kOptionWordWrap;
 	if (settings.backupFiles)
 		record.optionsMask |= kOptionBackupFiles;
 	if (settings.showEofMarker)
@@ -75,6 +93,12 @@ void initEditSettingsDialogRecord(EditSettingsDialogRecord &record) {
 		record.optionsMask |= kOptionLineNumZeroFill;
 
 	record.tabExpandChoice = settings.tabExpand ? kTabExpandTabs : kTabExpandSpaces;
+	record.indentStyleChoice = (indentStyle == "AUTOMATIC") ? kIndentStyleAutomatic
+	                       : (indentStyle == "SMART") ? kIndentStyleSmart
+	                                                  : kIndentStyleOff;
+	record.fileTypeChoice = (fileType == "LEGACY_TEXT") ? kFileTypeLegacyText
+	                    : (fileType == "BINARY") ? kFileTypeBinary
+	                                             : kFileTypeUnix;
 	record.columnBlockMoveChoice =
 	    (columnMove == "LEAVE_SPACE") ? kColumnMoveLeaveSpace : kColumnMoveDeleteSpace;
 	record.defaultModeChoice =
@@ -105,9 +129,59 @@ bool recordToSettings(const EditSettingsDialogRecord &record, MREditSetupSetting
 		settings.tabSize = static_cast<int>(tabSize);
 	}
 
+	{
+		std::string rightMarginText = readRecordField(record.rightMargin);
+		char *end = nullptr;
+		long rightMargin = 0;
+		if (rightMarginText.empty()) {
+			errorText = "RIGHT_MARGIN must be between 1 and 999.";
+			return false;
+		}
+		rightMargin = std::strtol(rightMarginText.c_str(), &end, 10);
+		if (end == rightMarginText.c_str() || end == nullptr || *end != '\0' || rightMargin < 1 ||
+		    rightMargin > 999) {
+			errorText = "RIGHT_MARGIN must be an integer between 1 and 999.";
+			return false;
+		}
+		settings.rightMargin = static_cast<int>(rightMargin);
+	}
+
+	{
+		std::string binaryRecordLengthText = readRecordField(record.binaryRecordLength);
+		char *end = nullptr;
+		long binaryRecordLength = 0;
+		if (binaryRecordLengthText.empty()) {
+			errorText = "BINARY_RECORD_LENGTH must be between 1 and 99999.";
+			return false;
+		}
+		binaryRecordLength = std::strtol(binaryRecordLengthText.c_str(), &end, 10);
+		if (end == binaryRecordLengthText.c_str() || end == nullptr || *end != '\0' || binaryRecordLength < 1 ||
+		    binaryRecordLength > 99999) {
+			errorText = "BINARY_RECORD_LENGTH must be an integer between 1 and 99999.";
+			return false;
+		}
+		settings.binaryRecordLength = static_cast<int>(binaryRecordLength);
+	}
+
+	settings.postLoadMacro = readRecordField(record.postLoadMacro);
+	settings.preSaveMacro = readRecordField(record.preSaveMacro);
+	settings.defaultPath = readRecordField(record.defaultPath);
+	settings.formatLine = readRecordField(record.formatLine);
+	if (trimAscii(settings.formatLine).empty())
+		settings.formatLine = std::string(8, ' ');
+	if (!settings.postLoadMacro.empty() && !mr::dialogs::hasMrmacExtension(settings.postLoadMacro)) {
+		errorText = "POST_LOAD_MACRO must end with .mrmac.";
+		return false;
+	}
+	if (!settings.preSaveMacro.empty() && !mr::dialogs::hasMrmacExtension(settings.preSaveMacro)) {
+		errorText = "PRE_SAVE_MACRO must end with .mrmac.";
+		return false;
+	}
+
 	settings.truncateSpaces = (record.optionsMask & kOptionTruncateSpaces) != 0;
 	settings.eofCtrlZ = (record.optionsMask & kOptionEofCtrlZ) != 0;
 	settings.eofCrLf = (record.optionsMask & kOptionEofCrLf) != 0;
+	settings.wordWrap = (record.optionsMask & kOptionWordWrap) != 0;
 	settings.backupFiles = (record.optionsMask & kOptionBackupFiles) != 0;
 	settings.showEofMarker = (record.optionsMask & kOptionShowEofMarker) != 0;
 	settings.showEofMarkerEmoji = (record.optionsMask & kOptionShowEofMarkerEmoji) != 0;
@@ -116,6 +190,12 @@ bool recordToSettings(const EditSettingsDialogRecord &record, MREditSetupSetting
 	settings.showLineNumbers = (record.optionsMask & kOptionShowLineNumbers) != 0;
 	settings.lineNumZeroFill = (record.optionsMask & kOptionLineNumZeroFill) != 0;
 	settings.tabExpand = record.tabExpandChoice == kTabExpandTabs;
+	settings.indentStyle = (record.indentStyleChoice == kIndentStyleAutomatic) ? "AUTOMATIC"
+	                    : (record.indentStyleChoice == kIndentStyleSmart) ? "SMART"
+	                                                                   : "OFF";
+	settings.fileType = (record.fileTypeChoice == kFileTypeLegacyText) ? "LEGACY_TEXT"
+	                  : (record.fileTypeChoice == kFileTypeBinary) ? "BINARY"
+	                                                             : "UNIX";
 	settings.columnBlockMove =
 	    (record.columnBlockMoveChoice == kColumnMoveLeaveSpace) ? "LEAVE_SPACE" : "DELETE_SPACE";
 	settings.defaultMode =

@@ -1,5 +1,6 @@
 #define Uses_TButton
 #define Uses_TCheckBoxes
+#define Uses_TChDirDialog
 #define Uses_TCollection
 #define Uses_TDeskTop
 #define Uses_TDialog
@@ -34,8 +35,10 @@
 #include <cctype>
 #include <cstdlib>
 #include <cstring>
+#include <limits.h>
 #include <map>
 #include <string>
+#include <unistd.h>
 #include <vector>
 
 namespace {
@@ -47,6 +50,9 @@ enum : ushort {
 	cmMrSetupFilenameProfilesCopy,
 	cmMrSetupFilenameProfilesDelete,
 	cmMrSetupFilenameProfilesBrowseColorTheme,
+	cmMrSetupFilenameProfilesBrowsePostLoadMacro,
+	cmMrSetupFilenameProfilesBrowsePreSaveMacro,
+	cmMrSetupFilenameProfilesBrowseDefaultPath,
 	cmMrSetupFilenameProfilesSelectionChanged,
 	cmMrSetupFilenameProfilesFieldChanged,
 	cmMrSetupFilenameProfilesFieldFocusChanged
@@ -317,6 +323,52 @@ void writeInputLineString(TInputLine *inputLine, const std::string &value, std::
 	inputLine->setData(buffer.data());
 }
 
+
+std::string currentWorkingDirectoryLocal() {
+	char cwd[PATH_MAX];
+
+	if (::getcwd(cwd, sizeof(cwd)) == nullptr)
+		return std::string();
+	return std::string(cwd);
+}
+
+bool browseMrmacFileUri(const char *title, const std::string &currentValue, std::string &selectedUri) {
+	char fileName[MAXPATH];
+	std::string seed = trimAscii(currentValue);
+	ushort result;
+
+	if (!seed.empty())
+		seed = normalizeConfiguredPathInput(seed);
+	if (!seed.empty())
+		writeRecordField(fileName, sizeof(fileName), seed);
+	else
+		initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.mrmac");
+	result = mr::dialogs::execDialogRawWithData(new TFileDialog("*.mrmac", title, "~N~ame", fdOKButton, 234), fileName);
+	if (result == cmCancel)
+		return false;
+	rememberLoadDialogPath(fileName);
+	selectedUri = normalizeConfiguredPathInput(fileName);
+	return !selectedUri.empty();
+}
+
+bool browseDirectoryPath(const std::string &currentValue, std::string &selectedPath) {
+	std::string originalCwd = currentWorkingDirectoryLocal();
+	std::string seed = normalizeConfiguredPathInput(trimAscii(currentValue));
+	std::string picked;
+	ushort result;
+
+	if (!seed.empty())
+		(void)::chdir(seed.c_str());
+	result = mr::dialogs::execDialogRaw(new TChDirDialog(cdNormal, 235));
+	picked = currentWorkingDirectoryLocal();
+	if (!originalCwd.empty())
+		(void)::chdir(originalCwd.c_str());
+	if (result == cmCancel)
+		return false;
+	selectedPath = normalizeConfiguredPathInput(picked);
+	return !selectedPath.empty();
+}
+
 bool browseColorThemeUri(const std::string &currentValue, std::string &selectedUri) {
 	char fileName[MAXPATH];
 	std::string seed = trimAscii(currentValue);
@@ -362,7 +414,7 @@ EditSettingsPanelConfig makeProfilesPanelConfig(int dialogWidth, int labelLeft, 
 	config.inputLeft = inputLeft;
 	config.inputRight = inputRight;
 	config.clusterLeft = 2;
-	config.clusterTopY = 13;
+	config.clusterTopY = -1;
 	config.tabSizeY = topY + 3;
 	config.includeDefaultExtensions = true;
 	config.compactTextRows = true;
@@ -440,7 +492,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	      MRScrollableDialog(centeredSetupDialogRect(kDialogWidth, kVisibleHeight), "FILENAME EXTENSIONS",
 	                         kDialogWidth, kVirtualHeight),
 	      initialDrafts_(initialDrafts), drafts_(workingDrafts),
-	      panel_(makeProfilesPanelConfig(kDialogWidth - 1, 33, 46, kDialogWidth - 5, 6)) {
+	      panel_(makeProfilesPanelConfig(kDialogWidth - 1, 30, 49, kDialogWidth - 2, 6)) {
 		buildViews();
 		if (!drafts_.empty())
 			currentIndex_ = 0;
@@ -495,6 +547,18 @@ class TEditProfilesDialog : public MRScrollableDialog {
 					browseCurrentColorTheme();
 					clearEvent(event);
 					return;
+				case cmMrEditSettingsPanelBrowsePostLoadMacro:
+					browseCurrentPostLoadMacro();
+					clearEvent(event);
+					return;
+				case cmMrEditSettingsPanelBrowsePreSaveMacro:
+					browseCurrentPreSaveMacro();
+					clearEvent(event);
+					return;
+				case cmMrEditSettingsPanelBrowseDefaultPath:
+					browseCurrentDefaultPath();
+					clearEvent(event);
+					return;
 				case cmMrSetupFilenameProfilesHelp:
 					endModal(event.message.command);
 					clearEvent(event);
@@ -532,9 +596,9 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	}
 
   private:
-	static const int kDialogWidth = 104;
+	static const int kDialogWidth = 107;
 	static const int kVisibleHeight = 24;
-	static const int kVirtualHeight = 34;
+	static const int kVirtualHeight = 40;
 
 	TInactiveStaticText *addLabel(const TRect &rect, const char *text) {
 		TInactiveStaticText *view = new TInactiveStaticText(rect, text);
@@ -582,15 +646,15 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 	void buildViews() {
 		const int listLeft = 2;
-		const int listWidth = 27;
-		const int listBottom = 8;
-		const int rightLeft = 33;
-		const int rightRight = kDialogWidth - 2;
-		const int fieldLeft = 46;
-		const int glyphWidth = 3;
-		const int colorGlyphLeft = rightRight - glyphWidth;
+		const int listWidth = 25;
+		const int listBottom = 13;
+		const int rightLeft = 31;
+		const int fieldLeft = 49;
+		const int glyphWidth = 2;
+		const int colorGlyphRight = kDialogWidth - 2;
+		const int colorGlyphLeft = colorGlyphRight - glyphWidth;
 		const int fieldRight = colorGlyphLeft;
-		const int buttonRow = 9;
+		const int buttonRow = 14;
 		const int bottomTop = kVirtualHeight - 3;
 		const int doneLeft = kDialogWidth / 2 - 17;
 		const int cancelLeft = doneLeft + 12;
@@ -618,7 +682,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 		profileColorThemeLabel_ = addLabel(TRect(rightLeft, 5, fieldLeft - 1, 6), "Colortheme:");
 		profileColorThemeField_ = addInput(TRect(fieldLeft, 5, fieldRight, 6), kProfileColorThemeFieldSize - 1);
-		profileColorThemeBrowseButton_ = addGlyphButton(TRect(colorGlyphLeft, 5, rightRight, 6),
+		profileColorThemeBrowseButton_ = addGlyphButton(TRect(colorGlyphLeft, 5, colorGlyphRight, 6),
 		                                             cmMrSetupFilenameProfilesBrowseColorTheme);
 
 		panel_.buildViews(*this);
@@ -708,6 +772,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 		loadCurrentDraftFieldValues(draft);
 		applyCurrentDraftWidgetState(draft.isDefault);
+		panel_.syncDynamicStates();
 	}
 
 	void refreshProfileList() {
@@ -827,10 +892,38 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		refreshValidationState();
 	}
 
+	void browseCurrentPostLoadMacro() {
+		std::string selectedUri;
+		if (!browseMrmacFileUri("Select post-load macro", panel_.postLoadMacroValue(), selectedUri))
+			return;
+		panel_.setPostLoadMacroValue(selectedUri);
+		saveWidgetsToCurrentDraft();
+		refreshValidationState();
+	}
+
+	void browseCurrentPreSaveMacro() {
+		std::string selectedUri;
+		if (!browseMrmacFileUri("Select pre-save macro", panel_.preSaveMacroValue(), selectedUri))
+			return;
+		panel_.setPreSaveMacroValue(selectedUri);
+		saveWidgetsToCurrentDraft();
+		refreshValidationState();
+	}
+
+	void browseCurrentDefaultPath() {
+		std::string selectedPath;
+		if (!browseDirectoryPath(panel_.defaultPathValue(), selectedPath))
+			return;
+		panel_.setDefaultPathValue(selectedPath);
+		saveWidgetsToCurrentDraft();
+		refreshValidationState();
+	}
+
 	void refreshValidationState() {
 		std::string errorText;
 
 		saveWidgetsToCurrentDraft();
+		panel_.syncDynamicStates();
 		refreshProfileList();
 		setValidationState(validateDraftsForUi(drafts_, currentIndex_, errorText), errorText);
 	}
@@ -863,6 +956,7 @@ void showEditProfilesHelpDialog() {
 	lines.push_back("DEFAULT contains the global edit settings and cannot be deleted.");
 	lines.push_back("Each additional profile has its own ID, description and exact extension list.");
 	lines.push_back("Extension matching is exact and case-sensitive.");
+	lines.push_back("Right margin, word wrap, macros and default path are profile-specific.");
 	lines.push_back("Done writes settings.mrmac and reloads the configuration.");
 	TDialog *dialog = createSetupSimplePreviewDialog("FILENAME EXTENSIONS HELP", 78, 14, lines, false);
 	if (dialog != nullptr) {

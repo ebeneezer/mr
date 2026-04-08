@@ -35,7 +35,13 @@ session_handover:
     version_management_responsibility: "AI verwaltet die Versionsnummer des Compilats."
     setup_settings_key_policy: "Wenn neue Setup-Settings hinzukommen, User mit Vorschlag fuer den exakten settings.mrmac-Key befragen (analog zu bestehenden Keys: 'SETTINGSPATH', 'MACROPATH', 'HELPPATH', 'TEMPDIR', 'SHELLPATH')."
     setup_bool_value_policy: "Bool-Werte in settings.mrmac werden als true/false gefuehrt (nicht 1/0)."
-    settings_schema_migration_policy: "Keine Legacy-settings.mrmac dauerhaft tolerieren: Bei Schema-Diskrepanz wird settings.mrmac auf die aktuelle Version normalisiert und ueberschrieben; erkannte MRSETUP-Keys werden mit ihren Werten uebernommen, fehlende/ungueltige/obsolete Eintraege fallen auf Defaults zurueck."
+    settings_schema_migration_policy: "Legacy-Ballast in settings.mrmac wird abgeschnitten: Compile-Defaults sind das Schema. Beim Laden werden nur bekannte Keys in die zentralen Stores uebernommen; unbekannte Keys werden still verworfen, fehlende Keys still mit Compile-Defaults aufgefuellt. SETTINGS_VERSION wird auf die Version des Compilats normalisiert und beim Speichern entsprechend geschrieben."
+    settings_store_architecture_policy: "Load, Save und Bootstrap/Upgrade docken an dieselben zentralen Key/Value-Stores an. Compile-Default-Hashes definieren die erlaubten Keys und zugleich den vollstaendigen Zielzustand."
+    settings_save_policy: "Beim Speichern werden immer alle bekannten globalen Key/Value-Paare vollstaendig nach settings.mrmac geschrieben; Extension-Profile werden ebenfalls immer vollstaendig geschrieben, so dass fehlende Keys nach einem Upgrade automatisch ergaenzt werden."
+    settings_store_shape_policy: "Keine Registry und keine zweite allgemeine Metaschicht aufbauen. Fuer globale Settings einen zentralen Default-/Werte-Hash verwenden; fuer Extension-Profile einfache Profile-Records mit validierter Profil-ID und eigenem Key/Value-Store verwenden."
+    settings_load_validation_policy: "Ein Key ist gueltig, wenn er im passenden Compile-Default-Store existiert. Unbekannte Keys werden verworfen. Bei bekannten Keys wird beim Load keine zusaetzliche semantische Migration oder Normalisierung von Legacy-Werten betrieben; unbekannte oder fehlende Eintraege fallen auf Compile-Defaults zurueck."
+    handoff_patch_policy: "Kein Handoff mehr als Tar-Archiv. Handoffs werden als komprimierter Patch uebergeben; die passende Befehlskette zur Anwendung des Patches ist immer mitzuliefern."
+    performance_protection_policy: "Bei neuen Infrastrukturzuegen (insb. Settings) keinen Boilerplate-Apparat aufbauen und nichts in heisse Dateilade-/Line-Indexierungs-Pfade ziehen. Gehärteter C++20-Code, einfache Datenwege, alte Pfade entfernen statt parallel weitertragen."
     edit_settings_keyset_v1:
       - "PAGEBREAK"
       - "WORDDELIMS"
@@ -202,10 +208,11 @@ session_handover:
     recommended_option: "A"
 
   next_session_plan:
-    - "Startup-Loader fuer ~/.config/mr/settings.mrmac implementieren"
-    - "MRSETUP('MACROPATH', ...) mit Whitelist einbauen"
-    - "Macro-Directory-Aufloesung auf Settingwert umstellen"
-    - "Setup-Dialog als Editor/Generator fuer settings.mrmac anbinden"
+    - "Zentrale Compile-Default-Stores fuer globale Settings und Extension-Profile definieren"
+    - "Load / Save / Bootstrap an dieselben Key/Value-Stores anbinden"
+    - "Alte verstreute Key-Listen / Legacy-Migrationsreste entfernen"
+    - "Backups & Autosave auf denselben globalen Settings-Store heben"
+    - "Erst danach mrmac weiter vervollstaendigen"
 
   language_gap_snapshot:
     reference: "/home/idoc/mr/documentation/ME Macro Language Reference Guide.pdf"
@@ -220,6 +227,21 @@ session_handover:
       - "MISCELLANEOUS + SYSTEM VARIABLES: nur Teilmenge vorhanden."
 
   protocol_log:
+    - date: "2026-04-08"
+      topic: "Handoff-Regel auf komprimierte Patches umgestellt"
+      notes:
+        - "Kein Handoff mehr als Tar-Archiv."
+        - "Uebergaben erfolgen als komprimierter Patch mit mitgelieferter Befehlskette zur Anwendung."
+    - date: "2026-04-08"
+      topic: "Settings-Store/Bootstrap-Architektur festgezogen"
+      notes:
+        - "Compile-Defaults sind das Schema."
+        - "Unbekannte Keys aus settings.mrmac werden still verworfen."
+        - "Fehlende Keys werden still aus den Defaults des Compilats aufgefuellt."
+        - "SETTINGS_VERSION wird auf die Version des Compilats normalisiert."
+        - "Load, Save und Bootstrap docken an denselben zentralen Key/Value-Stores an."
+        - "Keine Registry und keine zweite allgemeine Metaschicht."
+        - "Vollstaendige Load-/Save-/Upgrade-Pfade sind Voraussetzung vor weiterer mrmac-Vervollstaendigung."
     - date: "2026-04-04"
       topic: "No-Guard-Backpacks Stilregel"
       notes:

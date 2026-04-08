@@ -24,6 +24,15 @@ struct MREditSetupSettings {
 	bool eofCrLf;
 	bool tabExpand;
 	int tabSize;
+	int rightMargin;
+	bool wordWrap;
+	std::string indentStyle;
+	std::string fileType;
+	int binaryRecordLength;
+	std::string postLoadMacro;
+	std::string preSaveMacro;
+	std::string defaultPath;
+	std::string formatLine;
 	bool backupFiles;
 	bool showEofMarker;
 	bool showEofMarkerEmoji;
@@ -36,7 +45,9 @@ struct MREditSetupSettings {
 
 	MREditSetupSettings() noexcept
 	    : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false),
-	      eofCrLf(false), tabExpand(true), tabSize(8), backupFiles(true), showEofMarker(false),
+	      eofCrLf(false), tabExpand(true), tabSize(8), rightMargin(78), wordWrap(true), indentStyle(),
+	      fileType(), binaryRecordLength(78), postLoadMacro(), preSaveMacro(), defaultPath(), formatLine(),
+	      backupFiles(true), showEofMarker(false),
 	      showEofMarkerEmoji(true),
 	      showLineNumbers(false), lineNumZeroFill(false), persistentBlocks(true), codeFolding(false), columnBlockMove(),
 	      defaultMode() {
@@ -50,6 +61,9 @@ enum class MREditSettingSection : unsigned char {
 	OpenFile,
 	Save,
 	Tabs,
+	Formatting,
+	Macros,
+	Paths,
 	Display,
 	Blocks,
 	Mode
@@ -72,15 +86,24 @@ enum MREditSetupOverrideMask : unsigned int {
 	kOvEofCrLf = 1u << 5,
 	kOvTabExpand = 1u << 6,
 	kOvTabSize = 1u << 7,
-	kOvBackupFiles = 1u << 8,
-	kOvShowEofMarker = 1u << 9,
-	kOvShowEofMarkerEmoji = 1u << 10,
-	kOvShowLineNumbers = 1u << 11,
-	kOvLineNumZeroFill = 1u << 12,
-	kOvPersistentBlocks = 1u << 13,
-	kOvCodeFolding = 1u << 14,
-	kOvColumnBlockMove = 1u << 15,
-	kOvDefaultMode = 1u << 16,
+	kOvRightMargin = 1u << 8,
+	kOvWordWrap = 1u << 9,
+	kOvIndentStyle = 1u << 10,
+	kOvFileType = 1u << 11,
+	kOvBinaryRecordLength = 1u << 12,
+	kOvPostLoadMacro = 1u << 13,
+	kOvPreSaveMacro = 1u << 14,
+	kOvDefaultPath = 1u << 15,
+	kOvFormatLine = 1u << 16,
+	kOvBackupFiles = 1u << 17,
+	kOvShowEofMarker = 1u << 18,
+	kOvShowEofMarkerEmoji = 1u << 19,
+	kOvShowLineNumbers = 1u << 20,
+	kOvLineNumZeroFill = 1u << 21,
+	kOvPersistentBlocks = 1u << 22,
+	kOvCodeFolding = 1u << 23,
+	kOvColumnBlockMove = 1u << 24,
+	kOvDefaultMode = 1u << 25,
 };
 
 struct MREditSettingDescriptor {

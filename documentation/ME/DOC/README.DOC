@@ -1,0 +1,643 @@
+Multi-Edit Version 7.00h                                       03/07/94
+
+
+Hi there!  This file contains important notes, additions and changes to
+the printed manual, known bugs, and information about converting
+Version 5 and 6 macros to Version 7.
+
+NOTE:  All additional .DOC files are stored in the subdirectory DOC\.
+
+
+ษออออออออออออออออออออออออออTECHNICAL SUPPORTอออออออออออออออออออออออออออออป
+บ                                                                        บ
+บ The preferred way to report bugs and get tech support is via our       บ
+บ Compuserve Forum section 11 in PCVENE (GO CYBERNET).  You may just     บ
+บ send email to 71333,10, which is also available via INTERNET.  Faxes   บ
+บ are also a very effective method of tech support.  Just fax your       บ
+บ problem to 602-966-1654. Faxing tends to reduce long distance          บ
+บ charges.  You may, of course, feel free to call us here at             บ
+บ 602-968-1945, between 10am and 4pm (mountain standard time) and ask    บ
+บ for Tech-Support.                                                      บ
+บ                                                                        บ
+ศออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออผ
+
+!NEW! COBOL SUPPORT HELP FILE
+        There is a new help file for COBOL support.  It is
+        automatically installed when you install the COBOL support
+        module.
+
+!FLASH! MULTI-EDIT AND WINDOWS
+        It was recently discovered that the driver SHARE.EXE (we've
+        tested the version that comes with DOS version 6.0 and 6.2),
+        which is very commonly used for Windows, has a serious memory
+        overwrite bug related to setting the attributes of open files.
+        One of the ways that this is manifested is that it causes DOS
+        programs running in a window to suddenly switch into full
+        screen during file loading or saving.  It is suspected that
+        less benign behavior (like crashing) is possible.  Version
+        7.00f has a work-around that seems to have rectified the
+        problem.  Please use SHARE.EXE only if you absolutely must.  We
+        can't be sure if there are not other bugs as well.
+
+!NEW! TAGGING FILES IN THE FILE OPEN PROMPT:
+        Most file prompts for opening files now support file tagging.
+        File prompts for saving files do NOT support file tagging.  To
+        tag files, simply move into the Directory List box, and press
+        the space bar (or click with the right mouse button) to tag or
+        un-tag the desired files.  You may navigate through directories
+        and tag files as needed.  After files have been tagged,
+        pressing the <ENTER> or selecting OK with the mouse will open
+        all of the tagged files.
+
+!NEW! LOAD MULTIPLE FILES WITH A FILE LIST
+        From the command line, you may now use the /@filename switch to
+        use a "list file" to specify the files to be loaded.  For
+        example, if you had a file called FILES.LST that contained the
+        following:
+
+                TEST1.S
+                README.DOC
+                WOW.C
+
+        And then you start me with the commandline:
+
+                ME /@FILES.LST
+
+        Then the three files that where in FILES.LST will be loaded.
+
+!NEW! PRINTING OPTIONS
+        The print dialog box has 2 new check boxes:
+
+                [ ] print in Hex
+
+        This allows you to print your file in hexadecimal notation,
+        just like it is displayed in hex mode (menu - Text - heX mode).
+        The print dialog box automatically senses when you are in a hex
+        window and checks this for you.  You can print in hex, however
+        from a normal window as well.  You can also override the
+        default for this by setting the global variable:
+
+                global_int("@PRN_HEX_MODE")
+
+        See the section below titled "!NEW! STARTUP MACRO STUFF" for
+        more details about this global variable.
+
+                [ ] fIlter control chars
+
+        If this box is checked, all characters in the file whose ASCII
+        code is less than 32 (20h) will be replaced by a space
+        character.  This guards against your printer "choking" on
+        control characters as most normally do.  If you wish to have a
+        different character replace the control characters, you can use
+        the global variable:
+
+                global_int("@PRN_FILTER_CHAR")
+
+        There is also a global variable that can force this check box to
+        be enabled as a default:
+
+                global_int("@PRN_FILTER")
+
+        See the section below titled "!NEW! STARTUP MACRO STUFF" for
+        more details about these global variables.
+
+
+!NEW! STARTUP MACRO STUFF
+
+                global_int("@PRN_HEX_MODE")
+        If this is set to 1, the default for the hex printing check box
+        in the print dialog box will be turned off.  If 2, it will be
+        turned on.  In either case, the automatic detection of display
+        mode (hex vs normal) is disabled.
+
+                global_int("@PRN_FILTER")
+        If this is set to 1, the default for the filter control chars
+        check box in the print dialog box will be turned on.
+
+                global_int("@PRN_FILTER_CHAR")
+        If set > 0, it will override the ASCII code of the character
+        used as the substitute character when the filter control chars
+        check box in the print dialog box is turned on.  A value of -1
+        will cause the null character to be used.
+
+                global_int("PRN_LINE_NUMBERS")
+        Set this one if you want Multi-Edit to print files with line
+        numbers by default.  A value of 1 or 2 behaves the same when
+        printing the entire file.  A value of 1 causes block printing
+        to put line numbers relative to the top of the block.  A value
+        of 2 causes blocks to have line numbers relative to the top of
+        the file.
+
+                global_int("@MOU_SCRL_BAR_DELAY")
+        If this is set > 0, it will introduce a delay in milliseconds
+        when the mouse button is held down on a scroll bar.
+
+                global_int("@NO_BEEPS")
+        If set to 1, it will disable most of the beeps that occur.
+        Note: this will not disable the beep() macro command, just the
+        macro BEEPS which is used for almost all beeps in the system
+        macros.
+
+                global_int("@PRN_USE_WIN_TERM")
+        If set to 1, the line terminator sent to the printer will
+        be the same as the line terminator in the current window.
+        Otherwise, the line terminator will always be CR,LF.
+
+!NEW! BRIEF EMULATION STUFF
+        We've improved the emulation of Brief windowing and bookmarks.
+        Bookmarks will now be restored between sessions (if restore is
+        enabled).
+
+        For those who prefer the old style (6.10 and before) Brief
+        windowing, that is actually Multi-Edit style windowing, we've
+        added a new #define to BRIEF.S:
+
+                #define B_WINDOW_STYLE 1
+
+        If you change it to 0, and recompile BRIEF.S, the Brief
+        windowing operations will be mapped to Multi-Edit window
+        operations.
+
+CONVERTING YOUR SETUP FROM 6.x TO 7.0
+	See the file CONV_700.DOC.
+
+ME386.EXE
+	ME386.EXE is special version of Multi-Edit that has been
+	compiled and specially optimized for 386 (or greater)
+	processors.  If you are running on a 386, 486 or Pentium based
+	machine, we highly recommend that you use ME386.EXE instead of
+	ME.EXE.  You can even rename ME386.EXE to ME.EXE.  Please note:
+        ME386.EXE will not run under current releases of Windows NT, as
+        Windows NT only emulates 286 mode for DOS apps.
+
+MOUSE SUPPORT IN > 80 COLUMN VIDEO MODES
+        Multi-Edit now fully supports the mouse in wide screen video
+        modes.  If you experience any problems with Multi-Edit and your
+        video mode, or mouse, try starting ME with the /MF switch.
+
+MULTI-FILE SEARCH DOES NOT SUPPORT CROSS-LINE REGULAR EXPRESSIONS
+        Currently multi-file search does not support regular
+        expressions that span lines.  Normal search with a file that
+        is already loaded into Multi-Edit does.  This limitation will
+        be addressed in the future.
+
+IMPORTING MACROS YOU HAVE WRITTEN
+	Most macros compiled under 6.0 and 6.1 are fully compatible
+	with 7.0.  All you need to do is copy the .MAC files to the MAC
+	subdirectory under the main Multi-Edit directory.  Most of you
+	will want to copy the .S files into the SRC subdirectory also.
+
+	See the Converting Macros section of this file for information
+	on differences and compatibility issues.
+
+MULTI-EDIT PRO MACRO SOURCE
+	The macro source and macro debugger for Multi-Edit Pro are
+	installed automatically.  If you do not want the macro source
+	(which takes up about 1.5 meg of disk space) you may delete it.
+	The only file in the SRC directory that you really need is
+	STARTUP.S.
+
+IMPORTING ADD-ONS (Evolve, Multi-Tags, NameIt!, 50+ Macros)
+	Copy the appropriate files from the old into the new directory.
+	If a file is in the MAC, SRC, HELP, or DOC subdirectory under
+	the old main Multi-Edit directory, make sure the file ends up
+	in that same subdirectory under the new main Multi-Edit
+	directory.
+
+	Here is a list of the files for each package including the
+	directory (assuming the old Multi-Edit is in C:\ME):
+
+	EVOLVE 6.1: - Note:	It is highly recommended that users
+				currently using Evolve 5.1 upgrade to
+				Evolve 6.1, which works only with
+				Multi-Edit 6.10b or later.
+
+		C:\ME\EV*.* C:\ME\EVOLVE\*.* C:\ME\MAC\EV*.MAC
+		C:\ME\MAC\STDLIBR.MAC
+		C:\ME\HELP\EV*.HLZ
+
+		Plus... After you copy all the files, run the macro:
+		EV_INST^EV_MOD_STARTUP
+
+		Network version users:  The user specific files will
+		be as follows (xxx = user id):
+			C:\ME\xxx.USR\EV*.*
+
+	MULTI-TAGS:
+		Multi-Tags is now a standard part of Multi-Edit
+		professional.  You need to install the new version of
+		Multi-Tags from scratch.  You may then copy over your
+		METAGS.DB configuration file.
+
+		PLUS... Don't forget to check to see if Multi-Tags is
+		in your user menu and the keys are assigned.  The macro
+		command for Multi-Tags, in case you have to run it
+		manually is:
+
+			METAGS
+
+		Also, depending on the way you use Multi-Edit and
+		Multi-Tags, there may be some .TAG files in the old
+		main Multi-Edit directory.  If so, copy them over.
+
+		Network version users:  The user specific files will
+		be as follows (xxx = user id):
+			C:\ME\xxx.USR\METAGS.DB
+
+	NAMEIT!:
+		C:\ME\FILEMNGR.DB
+		C:\ME\HELP\FILEMNGR.HLZ
+		C:\ME\MAC\FILEMNGR.MAC
+		C:\ME\SRC\FILEMNGR.S
+
+		Network version users:  The user specific files will
+		be as follows (xxx = user id):
+			C:\ME\xxx.USR\FILEMNGR.DB
+
+		!!!NOTE: In order for the NAMEIT button to appear in
+		the file dialog, you must now add the following to your
+		STARTUP macro:
+
+			Load_Macro_File('FILEMNGR');
+
+		Be sure to recompile STARTUP.S after making the change.
+
+	50+ MACROS (assuming you installed all of them):
+		We recommend simply re-installing the macros.  However,
+		you may simply copy over the desired .S files.  Plus...
+		Any of the above .S files that were compiled will also
+		have a .MAC file in the MAC subdirectory under the main
+		Multi-Edit directory.
+
+THE TEMPLATE LANGUAGE
+	Much of our language specific template expansion is now done in
+	a special "template language" that allows easy user changes.
+	This "language" is explained in detail in TEMPLATE.DOC.
+
+CONFIGURING C INDENT AND TEMPLATE STYLES
+	You can modify the C indenting and template expansion to a
+	couple of common styles very quickly by changing a couple of
+	#defines near the top of C.S (right after the header that
+	describes what macros are in the file).   The #defines are
+	commented.
+
+
+CLIPPER USERS
+	We have recently improved the DBASE language support to include
+	support for the Clipper version 5 dialect.  This includes
+	support for "While" instead of "DO While", "End" instead of
+	"Endxx", and C style comments "/* */" and "//".  To enable
+	these capabilities, you must place the following line in the
+	STARTUP.S file:
+
+		Set_Global_Int('!DBASE_DIALECT',1);
+
+	Then you must recompile STARTUP.S.  See the manual for
+	details on compiling macros.
+
+MICROSOFT WINDOWS 3.0, OS/2, DESQview
+	Multi-Edit works best as a FULL-SCREEN application under
+	WINDOWS.  There is a 'PIF' file for use in WINDOWS in the
+	Multi-Edit subdirectory (also included is the file ME.ICO,
+	which is a Multi-Edit ICON for Windows 3.0).  Multi-Edit also
+	works fine in the DOS compatibility box of OS/2 and under
+	DESQview.
+
+	For DESQview, set the "Writes directly to screen" and
+	"Virtualize Text/Graphics" options to "N" (this is done inside
+	DESQview).  The Multi-Edit "/D" command line option must NOT be
+	used in this case (if /D is used, both questions should be set
+	to "Y").  Also, be sure to NOT set the protection level (in the
+	Advanced Setup Screen of DESQview) greater than 1.
+
+	NOTE:  You should allocate at least 350K (preferably 400K) of
+	RAM to Multi-Edit when running from WINDOWS or DESQview.
+
+PC-KWIK
+	There may be an incompatibility between this caching program and
+	Multi-Edit's disk swapping management routines.  Report is that
+	their version 1.58 works fine with Multi-Edit.  Some versions
+	may require the use of the L- switch in order to work properly.
+	Note that some versions of PC-KWIK are also incompatible with
+	WINDOW's HIMEM.SYS program.
+
+COREFAST
+	The CFTIME scheduler used with this CORE backup utility is not
+	compatible with Multi-Edit.
+
+DOS PRINT & MODE
+	These DOS commands affect the current state of memory, and like
+	all "TSR's", must NOT be run for the first time when shelled out
+	of Multi-Edit.  They must be "loaded" before invoking
+	Multi-Edit, and then can be run from within the editor.
+
+USER MENU
+	Multi-Edit is shipped with a number of macros already on the
+	User Menu.  They may be deleted and/or additional programs
+	added.
+
+	NoteBook:  Our cool note organizer.
+
+	Convert keystroke macro to macro source code:
+		This macro lets you convert keystroke macros to KEY_IN
+		statements in the macro language.  See the MACRO
+		LANGUAGE REFERENCE GUIDE for detailed information on
+		KEY_IN.
+
+	List unassigned keys in EDIT mode:
+		This is real handy when you want to assign keys for
+		your own Keystroke or other macros.  Tells what keys
+		are available.
+
+	Phone - Address list:
+		Check out the little phone/address directory we threw
+		in.
+
+DATAFLEX
+	To compile with Dataflex you must use the provided batch file
+	DFLEX.BAT for your compile command line.  For example:
+		DFLEX <FILE> <EXT>
+	Make sure the CR/LF at eof is turned ON. You will find this
+	toggle in the Edit Settings sub-menu of the Install menu.
+	While you are in the Install menu, create a Filename Extension
+	setup and compiler setup for Dataflex.
+
+CLARION
+	To compile with CLARION you must use the provided batch file
+	CLARC.BAT for your compile command line.  For example:
+		CLARC <FILE>
+	(The CLARC.BAT file assumes a .CLA extension)
+
+ALSYS ADA
+	To compile with ALSYS ADA you must use the provided batch file
+	ADACOMP.BAT for your compile command line.  For example:
+		ADACOMP <FILE>
+	(The ADACOMP.BAT file assumes a .ADA extension)
+
+
+	If you use a BATCH file to compile, you will probably have to
+	add <NR> to your command line (in Filename Extension Setup -
+	Install-Filename extension-F3-Compiler/prog setup) where you
+	specify the Batch file, to avoid double re-direction.
+
+HISTORY LISTS
+	If you add the following global integer to your STARTUP macro,
+	you can set the maximum length of the history list:
+
+		Set_Global_Int("@HISTORY_LENGTH",15);
+
+	The value of 15 shown above is the default.  Any value greater
+	than 0 is legal.
+
+		 CONVERTING 5.0 AND 6.x MACROS TO 7.0
+
+If you are working in the MEMAC language, we recommend changing to
+CMAC, as MEMAC support is being phased out.  If you chose to do so, the
+macro SRCCONV will do most of the conversion for you.  You MUST install
+SRCCONV from Module Installation.
+
+The MEMAC.EXE compiler is no longer included with Multi-Edit.  However,
+the version 6.x MEMAC compiler is compatible with Multi-Edit 7.0.
+Also, MEMAC.EXE is available on CompuServe or our BBS.
+
+NOTE:  The system function calls between MEMAC and CMAC are identical.
+
+
+There are a few changes to the system function calls (from 5.0 to 6.x)
+that may effect your macros:
+
+        TOGGLE_VIDEO            No longer exists!!!!
+
+        VIDEO_MODE              Returns an integer:
+                                0 = 25 lines
+                                1 = 30/33 lines
+                                2 = 43/50 lines
+
+                                255 = #of lines overridden with /X /Y
+                                      switches.
+	SET_VIDEO_MODE( mode )  New!!
+				0 = 25 lines
+				1 = 30/33 lines
+				2 = 43/50 lines
+
+				Should NOT be used, instead use the
+				macro
+					SETUP^TGLVID /M=n
+				where "n" is the video mode to switch
+				to!
+
+	BLOCK_STAT is now a variable.
+
+	PERSISTENT_BLOCKS	If your macro relies on a block
+				remaining on while the cursor is moved,
+				then you need to save the old status of
+				PERSISTENT_BLOCKS, set it to TRUE, and
+				then restore it when you are done.  See
+				the docs for more info on
+				PERSISTENT_BLOCKS.
+
+There are a few changes to the system function calls (from 6.x to 7.0)
+that may effect your macros:
+
+	SEARCH_FILE		Documented in the 7.0 addendum
+
+	SET_KEYWORDS		This call has changed extensively.
+
+SET_KEYWORDS( name, case_sens, reserved_word_scan_chars, scan_chars,
+	      reserved_words1, reserved_words2, reserved_words3,
+	      reserved_words4, special_chars, reserved_words_attr,
+	      symbols, symbols_attr, string_chars, string_attr,
+	      literal_char, eol_comment, eol_comment_attr,
+	      eol_comment_col, eol2_comment, eol2_comment_attr,
+	      eol2_comment_col, open_comment1, close_comment1,
+	      comment1_attr, open_comment2, close_comment2,
+	      comment2_attr, numeric_chars, numeric_attr )  void function
+
+	This function initializes a KEYWORDS data structure.  Not all
+	programming languages require every parameter in this data
+	structure and any unneeded parameters should be set to a null
+	string or a zero integer.
+
+	Name can be any string expression and is what you set
+	KEYWORDS_STR to.
+
+	Case_sens is an integer that, if true, will cause Multi-Edit to
+	consider the reserved words to be case-sensitive.
+
+	Reserved_word_scan_chars is a string of characters that are
+	taken from the first characters of each of the separate words
+	in reserved_words1 and reserved_words2.  The reasoning behind
+	scan characters is to significantly speed up scanning for
+	reserved words, symbols, etc.
+
+	Scan_chars is a string of characters that are taken from all of
+	the strings in this structure other than the reserved words.
+
+	Reserved_words1 a set of alphanumeric words separated by
+	spaces.  The set must be preceded and followed by a space.  The
+	maximum length of the set is 255 characters.
+
+	Reserved_words2,3 and 4 are the same as reserved_words1.  They
+	are used if there are more reserved words than will fit in
+	reserved_words1.
+
+	Special_Chars should contain any non-alpha-numeric characters
+	that appear in any of the reserved words.
+
+	Reserved_words_attr is the color attribute integer value.  All
+	color attributes in this data structure are 16-bit integers.
+	Bits 0-3 are the foreground color.  Bits 4-7 are the background
+	color.  Bit 8 activates the foreground color.  Bit 9 activates
+	background color.
+
+	Symbols is a string containing single-character symbols like
+	numeric operators, parentheses, braces, etc.
+
+	Symbols_attr is the color attribute for symbols.  See
+	reserved_words_attr for an explanation of the color attribute.
+
+	String_chars is a string containing characters that denote
+	string constants.  This the single quote (') and/or double
+	quote (") in most cases.
+
+	String_attr is the color attribute for string_chars.  See
+	reserved_words_attr for an explanation of the color attribute.
+
+	Literal_char:  If the programming language has a special
+	character (often called an escape character) that allows you to
+	imbed a character from the string_chars parameter (above) in a
+	string constant by preceding it with the special character,
+	define it here.
+
+	Example:  In C, the escape character is the backslash (\).  If
+	you wish to imbed a double quote inside a string constant, you
+	would do something like this:  mystr = "This is a quote\"";
+
+	It is the backslash character that should be in the
+	literal_char parameter.
+
+	Eol_comment is a sequence of characters that denotes the
+	beginning of an end-of-line comment.
+
+	Eol_comment_attr is the color attribute for eol_comment.  See
+	reserved_words_attr for an explanation of the color attribute.
+
+	Eol_Comment_Col is the column that a EOL comment must start at
+	to be valid.  If it is zero, then the column is ignored.  If it
+	is -1, then the eol comment will be matched only if it is the
+	first  NON-WHITESPACE character set on the line.
+
+	eol2_comment, eol2_comment_attr, eol2_comment_col are identical
+	to the above.
+
+	Open_comment1 is a sequence of characters that denotes the
+	start of a multi-line comment
+
+	Close_comment1 is a character sequence that defines the end of
+	a multi-line comment.
+
+	Comment1_attr is the color attribute for open_comment1 and
+	close_comment1.  See reserved_words_attr for an explanation of
+	the color attribute.
+
+	Open_comment2, close_comment2 and comment2_attr are the same as
+	above and are used if the language has a second set of
+	open/close comment character sequences.
+
+	Numeric_Chars defines character OTHER than 0-9 that are to be
+	highlighted as numeric constants.  These characters only count
+	if they are the  first character of the item to be highlighted.
+	This would be used, for example to have $ highlight hex
+	constants in PASCAL.
+
+	Numeric_Chars_Attr is the attribute for highlighting numeric
+	constants.
+
+
+KEY_MACRO_NUM	integer function
+	KEY_MACRO_NUM returns the nesting levels of keystroke macros.
+	Normally it returns 0.   It returns non-zero if a keystroke
+	macro is being executed.
+
+
+
+
+			  K N O W N   B U G S
+
+
+	    ฤฤฤฟ       ณ       ฺฤฤ
+	       ณ       ณ       ณ
+	       ณ       ณ       ณ                  /
+	   ฺฤฤฤมฤฤฤฤฤฤฤมฤฤฤฤฤฤฤมฤฤฤฟ  ฺฤฤฤฤฤฤฟ  /
+           ณ                       รฤฤด    (ณ/
+	 ฤฤด Don't Tread On Me...  ณ  ณ      ณ
+           ณ                       รฤฤด    (ณ\
+	   ภฤฤฤยฤฤฤฤฤฤฤยฤฤฤฤฤฤฤยฤฤฤู  ภฤฤฤฤฤฤู  \
+	       ณ       ณ       ณ                  \
+	       ณ       ณ       ณ
+	     ฤฤู       ณ       ภฤฤ
+
+
+MULTI-FILE SEARCH SWITCHES
+	Multi-File search switches effect regular search switches.
+	i.e., if you have regular expressions turned off by default,
+	then you do a Multi-File search with expressions turned on, the
+	normal search dialog box will show regular expressions as being
+	on.  This is not actually a bug, as the change to the defaults
+	is necessary in order for the "Repeat Previous Search" function
+	to work in conjunction with Multi-File search.
+
+<CtrlShft> AND <AltShft> KEY COMBINATIONS On some keyboards, not all
+	keys may be able to be used with the <CtrlShft> and <AltShft>
+	combinations.  This is due to differences in various
+	manufacturers BIOS.  We will try to get all of the
+	possibilities in as we find out about them.  The /KX switch
+	will disable capturing INT 9.  This will disable all of the
+	CtrlShft and AltShft keys, and the ShftGreyArrow keys.
+	However, it may solve some compatibility issues.
+
+<CtrlShft> AND <AltShft> MOUSE BUTTON COMBINATIONS
+	<CtrlShft> and <AltShft> mouse button combinations are not
+	currently supported.
+
+OS/2
+	It has been reported that when you run Multi-Edit on some
+	configurations of OS/2, it may take as long as 25 seconds for
+	it to load.  Of all the reported cases so far, the use of the
+	/KN command line switch fixes the problem.
+
+	There is a problem with Multi-Edit and IBM OS/2 version 2.0
+	("GA") with the "Service Pack", otherwise known as the IBM OS/2
+	Base Operating System version 2.00.1 at CSD Level XRX6055 (you
+	can find your current CSD level by typing "SYSLEVEL" at the
+	prompt in any OS/2 or DOS character-mode session).  If you are
+	using this version, you will not be able to load a file whose
+	fully-qualified name is longer than 31 characters.  This is a
+	bug in OS/2's emulation of DOS's INT21/4E ("FindFirst") call.
+	The problem has been acknowledged and corrected by IBM.  We
+	recommend that you check with your IBM Representative for
+        further information on updating.  This problem DOES NOT EXIST
+        in OS/2 2.1.
+
+SUN PC-NFS
+	There is a known bug in PC-NFS version 4.0 and 5.0 that won't
+	allow Multi-Edit versions 7.00 - 7.00e to edit files from the
+	root directory.  Multi-Edit version 7.00g has a work-around for
+	this, but you might want to contact your Sun representative
+	about the 5.0b patch that will fix the problem for the benefit
+	of other programs.
+
+NORTON COMMANDER
+        There have been reports that the Multi-Edit installation
+        program fails when run under Norton Commander version 4.  We
+        will attempt a work-around for a future release, but in the
+        mean time, please exit Norton Commander before installing
+        Multi-Edit.
+
+DIRECTORY LIST LIMITATION
+	Directory lists in the File Manager and File Load/Save prompts
+        are limited to 740 entries.  The reason for this is that in
+	order to keep the display and sorting fast enough to be
+	acceptable for most users, the memory block used for a
+	directory list must be confined to one data segment, which
+        happens to equate to approximately 740 entries.

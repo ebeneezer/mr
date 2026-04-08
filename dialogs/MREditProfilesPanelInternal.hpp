@@ -16,14 +16,22 @@ namespace MREditProfilesDialogInternal {
 
 enum : ushort {
 	cmMrEditSettingsPanelChanged = 3860,
-	cmMrEditSettingsPanelFocusChanged
+	cmMrEditSettingsPanelFocusChanged,
+	cmMrEditSettingsPanelBrowsePostLoadMacro,
+	cmMrEditSettingsPanelBrowsePreSaveMacro,
+	cmMrEditSettingsPanelBrowseDefaultPath
 };
 
 enum {
 	kPageBreakFieldSize = 64,
 	kWordDelimsFieldSize = 256,
 	kDefaultExtsFieldSize = 256,
-	kTabSizeFieldSize = 8
+	kTabSizeFieldSize = 8,
+	kRightMarginFieldSize = 8,
+	kBinaryRecordLengthFieldSize = 8,
+	kMacroFieldSize = 256,
+	kDefaultPathFieldSize = 256,
+	kFormatLineFieldSize = 256
 };
 
 enum : ushort {
@@ -36,7 +44,8 @@ enum : ushort {
 	kOptionBackupFiles = 0x0040,
 	kOptionCodeFolding = 0x0080,
 	kOptionShowEofMarker = 0x0100,
-	kOptionShowEofMarkerEmoji = 0x0200
+	kOptionShowEofMarkerEmoji = 0x0200,
+	kOptionWordWrap = 0x0400
 };
 
 enum : ushort {
@@ -45,7 +54,8 @@ enum : ushort {
 	kLeftOptionEofCrLf = 0x0004,
 	kLeftOptionBackupFiles = 0x0008,
 	kLeftOptionPersistentBlocks = 0x0010,
-	kLeftOptionCodeFolding = 0x0020
+	kLeftOptionCodeFolding = 0x0020,
+	kLeftOptionWordWrap = 0x0040
 };
 
 enum : ushort {
@@ -66,6 +76,18 @@ enum : ushort {
 };
 
 enum : ushort {
+	kIndentStyleOff = 0,
+	kIndentStyleAutomatic = 1,
+	kIndentStyleSmart = 2
+};
+
+enum : ushort {
+	kFileTypeLegacyText = 0,
+	kFileTypeUnix = 1,
+	kFileTypeBinary = 2
+};
+
+enum : ushort {
 	kColumnMoveDeleteSpace = 0,
 	kColumnMoveLeaveSpace = 1
 };
@@ -80,8 +102,16 @@ struct EditSettingsDialogRecord {
 	char wordDelimiters[kWordDelimsFieldSize];
 	char defaultExtensions[kDefaultExtsFieldSize];
 	char tabSize[kTabSizeFieldSize];
+	char rightMargin[kRightMarginFieldSize];
+	char binaryRecordLength[kBinaryRecordLengthFieldSize];
+	char postLoadMacro[kMacroFieldSize];
+	char preSaveMacro[kMacroFieldSize];
+	char defaultPath[kDefaultPathFieldSize];
+	char formatLine[kFormatLineFieldSize];
 	ushort optionsMask;
 	ushort tabExpandChoice;
+	ushort indentStyleChoice;
+	ushort fileTypeChoice;
 	ushort columnBlockMoveChoice;
 	ushort defaultModeChoice;
 };
@@ -106,6 +136,13 @@ class EditSettingsPanel {
 	void buildViews(MRScrollableDialog &dialog);
 	void loadFieldsFromRecord(const EditSettingsDialogRecord &record);
 	void saveFieldsToRecord(EditSettingsDialogRecord &record) const;
+	[[nodiscard]] std::string postLoadMacroValue() const;
+	[[nodiscard]] std::string preSaveMacroValue() const;
+	[[nodiscard]] std::string defaultPathValue() const;
+	void setPostLoadMacroValue(const std::string &value);
+	void setPreSaveMacroValue(const std::string &value);
+	void setDefaultPathValue(const std::string &value);
+	void syncDynamicStates();
 	TView *primaryView() const noexcept;
 
   private:
@@ -119,10 +156,22 @@ class EditSettingsPanel {
 	TInputLine *wordDelimitersField_ = nullptr;
 	TInputLine *defaultExtensionsField_ = nullptr;
 	MRNumericSlider *tabSizeSlider_ = nullptr;
+	TInputLine *rightMarginField_ = nullptr;
+	TInputLine *binaryRecordLengthField_ = nullptr;
+	ushort preservedOptionsMask_ = 0;
+	TInputLine *postLoadMacroField_ = nullptr;
+	TInputLine *preSaveMacroField_ = nullptr;
+	TInputLine *defaultPathField_ = nullptr;
+	TInputLine *formatLineField_ = nullptr;
+	TView *postLoadMacroBrowseButton_ = nullptr;
+	TView *preSaveMacroBrowseButton_ = nullptr;
+	TView *defaultPathBrowseButton_ = nullptr;
 	TCheckBoxes *optionsLeftField_ = nullptr;
 	TRadioButtons *lineNumbersField_ = nullptr;
 	TRadioButtons *eofMarkerField_ = nullptr;
 	TRadioButtons *tabExpandField_ = nullptr;
+	TRadioButtons *indentStyleField_ = nullptr;
+	TRadioButtons *fileTypeField_ = nullptr;
 	TRadioButtons *columnBlockMoveField_ = nullptr;
 	TRadioButtons *defaultModeField_ = nullptr;
 };

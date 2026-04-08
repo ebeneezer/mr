@@ -441,6 +441,12 @@ static const char *const kColumnBlockMoveDelete = "DELETE_SPACE";
 static const char *const kColumnBlockMoveLeave = "LEAVE_SPACE";
 static const char *const kDefaultModeInsert = "INSERT";
 static const char *const kDefaultModeOverwrite = "OVERWRITE";
+static const char *const kIndentStyleOff = "OFF";
+static const char *const kIndentStyleAutomatic = "AUTOMATIC";
+static const char *const kIndentStyleSmart = "SMART";
+static const char *const kFileTypeLegacyText = "LEGACY_TEXT";
+static const char *const kFileTypeUnix = "UNIX";
+static const char *const kFileTypeBinary = "BINARY";
 static const int kDefaultTabSize = 8;
 static const int kMinTabSize = 2;
 static const int kMaxTabSize = 32;
@@ -463,6 +469,24 @@ static const MREditSettingDescriptor kEditSettingDescriptors[] = {
     {"TAB_EXPAND", "Expand tabs", MREditSettingSection::Tabs, MREditSettingKind::Boolean, true,
      kOvTabExpand},
     {"TAB_SIZE", "Tab size", MREditSettingSection::Tabs, MREditSettingKind::Integer, true, kOvTabSize},
+    {"RIGHT_MARGIN", "Right margin", MREditSettingSection::Formatting, MREditSettingKind::Integer, true,
+     kOvRightMargin},
+    {"WORD_WRAP", "Word wrap", MREditSettingSection::Formatting, MREditSettingKind::Boolean, true,
+     kOvWordWrap},
+    {"INDENT_STYLE", "Indent style", MREditSettingSection::Formatting, MREditSettingKind::Choice, true,
+     kOvIndentStyle},
+    {"FILE_TYPE", "File type", MREditSettingSection::Formatting, MREditSettingKind::Choice, true,
+     kOvFileType},
+    {"BINARY_RECORD_LENGTH", "Binary record length", MREditSettingSection::Formatting, MREditSettingKind::Integer, true,
+     kOvBinaryRecordLength},
+    {"POST_LOAD_MACRO", "Post-load macro", MREditSettingSection::Macros, MREditSettingKind::String, true,
+     kOvPostLoadMacro},
+    {"PRE_SAVE_MACRO", "Pre-save macro", MREditSettingSection::Macros, MREditSettingKind::String, true,
+     kOvPreSaveMacro},
+    {"DEFAULT_PATH", "Default path", MREditSettingSection::Paths, MREditSettingKind::String, true,
+     kOvDefaultPath},
+    {"FORMAT_LINE", "Format line", MREditSettingSection::Formatting, MREditSettingKind::String, true,
+     kOvFormatLine},
     {"BACKUP_FILES", "Backup files", MREditSettingSection::Save, MREditSettingKind::Boolean, true,
      kOvBackupFiles},
     {"SHOW_EOF_MARKER", "Show EOF marker", MREditSettingSection::Display, MREditSettingKind::Boolean, true,
@@ -1017,6 +1041,58 @@ std::string normalizeDefaultMode(const std::string &value) {
 	return std::string();
 }
 
+std::string normalizeIndentStyle(const std::string &value) {
+	std::string key = upperAscii(trimAscii(value));
+
+	if (key == "OFF")
+		return kIndentStyleOff;
+	if (key == "AUTOMATIC" || key == "AUTO")
+		return kIndentStyleAutomatic;
+	if (key == "SMART")
+		return kIndentStyleSmart;
+	return std::string();
+}
+
+std::string normalizeFileType(const std::string &value) {
+	std::string key = upperAscii(trimAscii(value));
+
+	if (key == "LEGACY_TEXT" || key == "LEGACY" || key == "CRLF" || key == "TEXT")
+		return kFileTypeLegacyText;
+	if (key == "UNIX" || key == "LF")
+		return kFileTypeUnix;
+	if (key == "BINARY" || key == "BIN")
+		return kFileTypeBinary;
+	return std::string();
+}
+
+constexpr int kDefaultBinaryRecordLength = 78;
+constexpr int kMinBinaryRecordLength = 1;
+constexpr int kMaxBinaryRecordLength = 99999;
+
+bool parseBinaryRecordLengthLiteral(const std::string &value, int &outValue, std::string *errorMessage) {
+	std::string text = trimAscii(value);
+	char *end = nullptr;
+	long parsed = 0;
+
+	if (text.empty())
+		return setError(errorMessage, "BINARY_RECORD_LENGTH must be an integer between 1 and 99999.");
+	parsed = std::strtol(text.c_str(), &end, 10);
+	if (end == text.c_str() || end == nullptr || *end != '\0')
+		return setError(errorMessage, "BINARY_RECORD_LENGTH must be an integer between 1 and 99999.");
+	if (parsed < kMinBinaryRecordLength || parsed > kMaxBinaryRecordLength)
+		return setError(errorMessage, "BINARY_RECORD_LENGTH must be between 1 and 99999.");
+	outValue = static_cast<int>(parsed);
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+std::string normalizeFormatLine(const std::string &value) {
+	if (trimAscii(value).empty())
+		return std::string(8, ' ');
+	return value;
+}
+
 bool parseTabSizeLiteral(const std::string &value, int &outValue, std::string *errorMessage) {
 	std::string text = trimAscii(value);
 	char *end = nullptr;
@@ -1029,6 +1105,28 @@ bool parseTabSizeLiteral(const std::string &value, int &outValue, std::string *e
 		return setError(errorMessage, "TAB_SIZE must be an integer between 2 and 32.");
 	if (parsed < kMinTabSize || parsed > kMaxTabSize)
 		return setError(errorMessage, "TAB_SIZE must be between 2 and 32.");
+	outValue = static_cast<int>(parsed);
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+constexpr int kDefaultRightMargin = 78;
+constexpr int kMinRightMargin = 1;
+constexpr int kMaxRightMargin = 999;
+
+bool parseRightMarginLiteral(const std::string &value, int &outValue, std::string *errorMessage) {
+	std::string text = trimAscii(value);
+	char *end = nullptr;
+	long parsed = 0;
+
+	if (text.empty())
+		return setError(errorMessage, "RIGHT_MARGIN must be an integer between 1 and 999.");
+	parsed = std::strtol(text.c_str(), &end, 10);
+	if (end == text.c_str() || end == nullptr || *end != '\0')
+		return setError(errorMessage, "RIGHT_MARGIN must be an integer between 1 and 999.");
+	if (parsed < kMinRightMargin || parsed > kMaxRightMargin)
+		return setError(errorMessage, "RIGHT_MARGIN must be between 1 and 999.");
 	outValue = static_cast<int>(parsed);
 	if (errorMessage != nullptr)
 		errorMessage->clear();
@@ -1248,7 +1346,38 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 		if (!parseTabSizeLiteral(value, tabSize, errorMessage))
 			return false;
 		current.tabSize = tabSize;
-	} else if (upperKeyName == "BACKUP_FILES") {
+	} else if (upperKeyName == "RIGHT_MARGIN") {
+		int rightMargin = 0;
+		if (!parseRightMarginLiteral(value, rightMargin, errorMessage))
+			return false;
+		current.rightMargin = rightMargin;
+	} else if (upperKeyName == "WORD_WRAP") {
+		if (!parseAndAssignBooleanLiteral(value, current.wordWrap, errorMessage))
+			return false;
+	} else if (upperKeyName == "INDENT_STYLE") {
+		normalized = normalizeIndentStyle(value);
+		if (normalized.empty())
+			return setError(errorMessage, "INDENT_STYLE must be OFF, AUTOMATIC or SMART.");
+		current.indentStyle = normalized;
+	} else if (upperKeyName == "FILE_TYPE") {
+		normalized = normalizeFileType(value);
+		if (normalized.empty())
+			return setError(errorMessage, "FILE_TYPE must be LEGACY_TEXT, UNIX or BINARY.");
+		current.fileType = normalized;
+	} else if (upperKeyName == "BINARY_RECORD_LENGTH") {
+		int binaryRecordLength = 0;
+		if (!parseBinaryRecordLengthLiteral(value, binaryRecordLength, errorMessage))
+			return false;
+		current.binaryRecordLength = binaryRecordLength;
+	} else if (upperKeyName == "POST_LOAD_MACRO")
+		current.postLoadMacro = trimAscii(value).empty() ? std::string() : normalizeConfiguredPathInput(value);
+	else if (upperKeyName == "PRE_SAVE_MACRO")
+		current.preSaveMacro = trimAscii(value).empty() ? std::string() : normalizeConfiguredPathInput(value);
+	else if (upperKeyName == "DEFAULT_PATH")
+		current.defaultPath = trimAscii(value).empty() ? std::string() : normalizeConfiguredPathInput(value);
+	else if (upperKeyName == "FORMAT_LINE")
+		current.formatLine = normalizeFormatLine(value);
+	else if (upperKeyName == "BACKUP_FILES") {
 		if (!parseAndAssignBooleanLiteral(value, current.backupFiles, errorMessage))
 			return false;
 	} else if (upperKeyName == "SHOW_EOF_MARKER") {
@@ -1306,6 +1435,24 @@ std::string editSetupValueLiteral(const MREditSetupSettings &settings, const cha
 		return formatEditSetupBoolean(settings.tabExpand);
 	if (upperKey == "TAB_SIZE")
 		return std::to_string(settings.tabSize);
+	if (upperKey == "RIGHT_MARGIN")
+		return std::to_string(settings.rightMargin);
+	if (upperKey == "WORD_WRAP")
+		return formatEditSetupBoolean(settings.wordWrap);
+	if (upperKey == "INDENT_STYLE")
+		return settings.indentStyle;
+	if (upperKey == "FILE_TYPE")
+		return settings.fileType;
+	if (upperKey == "BINARY_RECORD_LENGTH")
+		return std::to_string(settings.binaryRecordLength);
+	if (upperKey == "POST_LOAD_MACRO")
+		return settings.postLoadMacro;
+	if (upperKey == "PRE_SAVE_MACRO")
+		return settings.preSaveMacro;
+	if (upperKey == "DEFAULT_PATH")
+		return settings.defaultPath;
+	if (upperKey == "FORMAT_LINE")
+		return settings.formatLine;
 	if (upperKey == "BACKUP_FILES")
 		return formatEditSetupBoolean(settings.backupFiles);
 	if (upperKey == "SHOW_EOF_MARKER")
@@ -1329,8 +1476,10 @@ std::string editSetupValueLiteral(const MREditSetupSettings &settings, const cha
 
 unsigned int supportedEditProfileOverrideMask() noexcept {
 	static constexpr unsigned int mask = kOvPageBreak | kOvWordDelimiters | kOvDefaultExtensions | kOvTruncateSpaces |
-	                                     kOvEofCtrlZ | kOvEofCrLf | kOvTabExpand | kOvTabSize | kOvBackupFiles |
-	                                     kOvShowEofMarker | kOvShowEofMarkerEmoji | kOvShowLineNumbers |
+	                                     kOvEofCtrlZ | kOvEofCrLf | kOvTabExpand | kOvTabSize | kOvRightMargin |
+	                                     kOvWordWrap | kOvIndentStyle | kOvFileType | kOvBinaryRecordLength |
+	                                     kOvPostLoadMacro | kOvPreSaveMacro | kOvDefaultPath | kOvFormatLine |
+	                                     kOvBackupFiles | kOvShowEofMarker | kOvShowEofMarkerEmoji | kOvShowLineNumbers |
 	                                     kOvLineNumZeroFill | kOvPersistentBlocks | kOvCodeFolding | kOvColumnBlockMove |
 	                                     kOvDefaultMode;
 	return mask;
@@ -1489,6 +1638,15 @@ MREditSetupSettings resolveEditSetupDefaults() {
 	defaults.eofCrLf = false;
 	defaults.tabExpand = true;
 	defaults.tabSize = kDefaultTabSize;
+	defaults.rightMargin = kDefaultRightMargin;
+	defaults.wordWrap = true;
+	defaults.indentStyle = kIndentStyleOff;
+	defaults.fileType = kFileTypeUnix;
+	defaults.binaryRecordLength = kDefaultBinaryRecordLength;
+	defaults.postLoadMacro.clear();
+	defaults.preSaveMacro.clear();
+	defaults.defaultPath.clear();
+	defaults.formatLine = std::string(8, ' ');
 	defaults.backupFiles = true;
 	defaults.showEofMarker = false;
 	defaults.showEofMarkerEmoji = true;
@@ -1542,6 +1700,24 @@ MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults,
 		merged.tabExpand = overrides.values.tabExpand;
 	if ((overrides.mask & kOvTabSize) != 0)
 		merged.tabSize = overrides.values.tabSize;
+	if ((overrides.mask & kOvRightMargin) != 0)
+		merged.rightMargin = overrides.values.rightMargin;
+	if ((overrides.mask & kOvWordWrap) != 0)
+		merged.wordWrap = overrides.values.wordWrap;
+	if ((overrides.mask & kOvIndentStyle) != 0)
+		merged.indentStyle = overrides.values.indentStyle;
+	if ((overrides.mask & kOvFileType) != 0)
+		merged.fileType = overrides.values.fileType;
+	if ((overrides.mask & kOvBinaryRecordLength) != 0)
+		merged.binaryRecordLength = overrides.values.binaryRecordLength;
+	if ((overrides.mask & kOvPostLoadMacro) != 0)
+		merged.postLoadMacro = overrides.values.postLoadMacro;
+	if ((overrides.mask & kOvPreSaveMacro) != 0)
+		merged.preSaveMacro = overrides.values.preSaveMacro;
+	if ((overrides.mask & kOvDefaultPath) != 0)
+		merged.defaultPath = overrides.values.defaultPath;
+	if ((overrides.mask & kOvFormatLine) != 0)
+		merged.formatLine = overrides.values.formatLine;
 	if ((overrides.mask & kOvBackupFiles) != 0)
 		merged.backupFiles = overrides.values.backupFiles;
 	if ((overrides.mask & kOvShowEofMarker) != 0)
@@ -1736,6 +1912,15 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	std::string defaultExts = canonicalDefaultExtensionsLiteral(settings.defaultExtensions);
 	std::string columnStyle = normalizeColumnBlockMove(settings.columnBlockMove);
 	std::string defaultMode = normalizeDefaultMode(settings.defaultMode);
+	std::string indentStyle = normalizeIndentStyle(settings.indentStyle);
+	std::string fileType = normalizeFileType(settings.fileType);
+	std::string formatLine = normalizeFormatLine(settings.formatLine);
+	std::string postLoadMacro = trimAscii(settings.postLoadMacro).empty() ? std::string()
+	                                                                  : normalizeConfiguredPathInput(settings.postLoadMacro);
+	std::string preSaveMacro = trimAscii(settings.preSaveMacro).empty() ? std::string()
+	                                                                : normalizeConfiguredPathInput(settings.preSaveMacro);
+	std::string defaultPath = trimAscii(settings.defaultPath).empty() ? std::string()
+	                                                              : normalizeConfiguredPathInput(settings.defaultPath);
 
 	if (wordDelimiters.empty())
 		return setError(errorMessage, "WORD_DELIMITERS may not be empty.");
@@ -1743,13 +1928,31 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 		return setError(errorMessage, "COLUMN_BLOCK_MOVE must be DELETE_SPACE or LEAVE_SPACE.");
 	if (defaultMode.empty())
 		return setError(errorMessage, "DEFAULT_MODE must be INSERT or OVERWRITE.");
+	if (indentStyle.empty())
+		return setError(errorMessage, "INDENT_STYLE must be OFF, AUTOMATIC or SMART.");
+	if (fileType.empty())
+		return setError(errorMessage, "FILE_TYPE must be LEGACY_TEXT, UNIX or BINARY.");
+	if (settings.binaryRecordLength < kMinBinaryRecordLength || settings.binaryRecordLength > kMaxBinaryRecordLength)
+		return setError(errorMessage, "BINARY_RECORD_LENGTH must be between 1 and 99999.");
+	if (settings.tabSize < kMinTabSize || settings.tabSize > kMaxTabSize)
+		return setError(errorMessage, "TAB_SIZE must be between 2 and 32.");
+	if (settings.rightMargin < kMinRightMargin || settings.rightMargin > kMaxRightMargin)
+		return setError(errorMessage, "RIGHT_MARGIN must be between 1 and 999.");
 
 	normalized.truncateSpaces = settings.truncateSpaces;
 	normalized.eofCtrlZ = settings.eofCtrlZ;
 	normalized.eofCrLf = settings.eofCrLf;
 	normalized.tabExpand = settings.tabExpand;
-	if (settings.tabSize < kMinTabSize || settings.tabSize > kMaxTabSize)
-		return setError(errorMessage, "TAB_SIZE must be between 2 and 32.");
+	normalized.tabSize = settings.tabSize;
+	normalized.rightMargin = settings.rightMargin;
+	normalized.wordWrap = settings.wordWrap;
+	normalized.indentStyle = indentStyle;
+	normalized.fileType = fileType;
+	normalized.binaryRecordLength = settings.binaryRecordLength;
+	normalized.postLoadMacro = postLoadMacro;
+	normalized.preSaveMacro = preSaveMacro;
+	normalized.defaultPath = defaultPath;
+	normalized.formatLine = formatLine;
 	normalized.backupFiles = settings.backupFiles;
 	normalized.showEofMarker = settings.showEofMarker;
 	normalized.showEofMarkerEmoji = settings.showEofMarkerEmoji;
@@ -1761,7 +1964,6 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	normalized.pageBreak = pageBreak;
 	normalized.wordDelimiters = wordDelimiters;
 	normalized.defaultExtensions = defaultExts;
-	normalized.tabSize = settings.tabSize;
 	normalized.columnBlockMove = columnStyle;
 	normalized.defaultMode = defaultMode;
 	configuredEditSettings() = normalized;
@@ -2222,6 +2424,16 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	    "MRSETUP('TAB_EXPAND', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.tabExpand)) +
 	    "');\n";
 	source += "MRSETUP('TAB_SIZE', '" + std::to_string(edit.tabSize) + "');\n";
+	source += "MRSETUP('RIGHT_MARGIN', '" + std::to_string(edit.rightMargin) + "');\n";
+	source += "MRSETUP('WORD_WRAP', '" +
+	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.wordWrap)) + "');\n";
+	source += "MRSETUP('INDENT_STYLE', '" + escapeMrmacSingleQuotedLiteral(edit.indentStyle) + "');\n";
+	source += "MRSETUP('FILE_TYPE', '" + escapeMrmacSingleQuotedLiteral(edit.fileType) + "');\n";
+	source += "MRSETUP('BINARY_RECORD_LENGTH', '" + std::to_string(edit.binaryRecordLength) + "');\n";
+	source += "MRSETUP('POST_LOAD_MACRO', '" + escapeMrmacSingleQuotedLiteral(edit.postLoadMacro) + "');\n";
+	source += "MRSETUP('PRE_SAVE_MACRO', '" + escapeMrmacSingleQuotedLiteral(edit.preSaveMacro) + "');\n";
+	source += "MRSETUP('DEFAULT_PATH', '" + escapeMrmacSingleQuotedLiteral(edit.defaultPath) + "');\n";
+	source += "MRSETUP('FORMAT_LINE', '" + escapeMrmacSingleQuotedLiteral(edit.formatLine) + "');\n";
 	source += "MRSETUP('BACKUP_FILES', '" +
 	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.backupFiles)) + "');\n";
 	source += "MRSETUP('SHOW_EOF_MARKER', '" +
@@ -2271,6 +2483,24 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 					value = formatEditSetupBoolean(profile.overrides.values.tabExpand);
 				else if (std::string(descriptors[i].key) == "TAB_SIZE")
 					value = std::to_string(profile.overrides.values.tabSize);
+				else if (std::string(descriptors[i].key) == "RIGHT_MARGIN")
+					value = std::to_string(profile.overrides.values.rightMargin);
+				else if (std::string(descriptors[i].key) == "WORD_WRAP")
+					value = formatEditSetupBoolean(profile.overrides.values.wordWrap);
+				else if (std::string(descriptors[i].key) == "INDENT_STYLE")
+					value = profile.overrides.values.indentStyle;
+				else if (std::string(descriptors[i].key) == "FILE_TYPE")
+					value = profile.overrides.values.fileType;
+				else if (std::string(descriptors[i].key) == "BINARY_RECORD_LENGTH")
+					value = std::to_string(profile.overrides.values.binaryRecordLength);
+				else if (std::string(descriptors[i].key) == "POST_LOAD_MACRO")
+					value = profile.overrides.values.postLoadMacro;
+				else if (std::string(descriptors[i].key) == "PRE_SAVE_MACRO")
+					value = profile.overrides.values.preSaveMacro;
+				else if (std::string(descriptors[i].key) == "DEFAULT_PATH")
+					value = profile.overrides.values.defaultPath;
+				else if (std::string(descriptors[i].key) == "FORMAT_LINE")
+					value = profile.overrides.values.formatLine;
 				else if (std::string(descriptors[i].key) == "BACKUP_FILES")
 					value = formatEditSetupBoolean(profile.overrides.values.backupFiles);
 				else if (std::string(descriptors[i].key) == "SHOW_EOF_MARKER")

@@ -21,6 +21,8 @@
 #define Uses_TRect
 #define Uses_TScrollBar
 #define Uses_TStaticText
+#define Uses_TRadioButtons
+#define Uses_TSItem
 #define Uses_TView
 #include <tvision/tv.h>
 
@@ -30,10 +32,14 @@
 #include "../app/TMREditorApp.hpp"
 #include "../config/MRDialogPaths.hpp"
 #include "../ui/MRPalette.hpp"
+#include "../ui/MRMessageLineController.hpp"
+#include "../ui/TMRMenuBar.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "MRUnsavedChangesDialog.hpp"
 #include "MRSetupDialogCommon.hpp"
+#include "MRNumericSlider.hpp"
 
+#include <chrono>
 #include <cctype>
 #include <cstring>
 #include <limits.h>
@@ -55,11 +61,17 @@ enum : ushort {
 	cmMrSetupPathsBrowseMacroPath,
 	cmMrSetupPathsBrowseHelpUri,
 	cmMrSetupPathsBrowseTempPath,
-	cmMrSetupPathsBrowseShellUri
+	cmMrSetupPathsBrowseShellUri,
+	cmMrSetupBackupsAutosaveHelp = 3810,
+	cmMrSetupBackupsAutosaveBrowseDirectory,
+	cmMrSetupFieldChanged
 };
 
 enum {
-	kPathFieldSize = 256
+	kPathFieldSize = 256,
+	kBackupDirectoryFieldSize = 256,
+	kBackupExtensionFieldSize = 32,
+	kAutosaveNumberFieldSize = 16
 };
 
 struct PathsDialogRecord {
@@ -68,6 +80,26 @@ struct PathsDialogRecord {
 	char helpFilePath[kPathFieldSize];
 	char tempDirectoryPath[kPathFieldSize];
 	char shellExecutablePath[kPathFieldSize];
+};
+
+enum : ushort {
+	kBackupMethodOff = 0,
+	kBackupMethodBakFile,
+	kBackupMethodDirectory
+};
+
+enum : ushort {
+	kBackupFrequencyFirstSaveOnly = 0,
+	kBackupFrequencyEverySave
+};
+
+struct BackupsAutosaveDialogRecord {
+	ushort backupMethodChoice;
+	ushort backupFrequencyChoice;
+	char backupFileExtension[kBackupExtensionFieldSize];
+	char backupDirectoryPath[kBackupDirectoryFieldSize];
+	char inactivitySeconds[kAutosaveNumberFieldSize];
+	char absoluteIntervalSeconds[kAutosaveNumberFieldSize];
 };
 
 bool pathIsRegularFile(const std::string &path) {
@@ -83,6 +115,38 @@ bool confirmOverwriteForPath(const char *primaryLabel, const char *headline, con
 		return true;
 	return mr::dialogs::showUnsavedChangesDialog(primaryLabel, headline, targetPath.c_str()) ==
 	       mr::dialogs::UnsavedChangesChoice::Save;
+}
+
+
+mr::messageline::Kind toSetupMessageLineKind(TMRMenuBar::MarqueeKind kind) {
+	switch (kind) {
+		case TMRMenuBar::MarqueeKind::Success:
+			return mr::messageline::Kind::Success;
+		case TMRMenuBar::MarqueeKind::Warning:
+			return mr::messageline::Kind::Warning;
+		case TMRMenuBar::MarqueeKind::Error:
+			return mr::messageline::Kind::Error;
+		case TMRMenuBar::MarqueeKind::Info:
+		default:
+			return mr::messageline::Kind::Info;
+	}
+}
+
+std::chrono::milliseconds setupMarqueeDurationForText(const std::string &text) {
+	return std::chrono::milliseconds(static_cast<long long>(text.size()) * 100);
+}
+
+void setSetupDialogStatus(const std::string &text, TMRMenuBar::MarqueeKind kind) {
+	if (text.empty()) {
+		mr::messageline::clearOwner(mr::messageline::Owner::DialogValidation);
+		return;
+	}
+	mr::messageline::postTimed(mr::messageline::Owner::DialogValidation, text, toSetupMessageLineKind(kind),
+	                          setupMarqueeDurationForText(text), mr::messageline::kPriorityHigh);
+}
+
+void clearSetupDialogStatus() {
+	mr::messageline::clearOwner(mr::messageline::Owner::DialogValidation);
 }
 
 bool recordsEqual(const PathsDialogRecord &lhs, const PathsDialogRecord &rhs) {
@@ -110,6 +174,87 @@ void initPathsDialogRecord(PathsDialogRecord &record) {
 	writeRecordField(record.helpFilePath, sizeof(record.helpFilePath), configuredHelpFilePath());
 	writeRecordField(record.tempDirectoryPath, sizeof(record.tempDirectoryPath), configuredTempDirectoryPath());
 	writeRecordField(record.shellExecutablePath, sizeof(record.shellExecutablePath), configuredShellExecutablePath());
+}
+
+bool recordsEqual(const BackupsAutosaveDialogRecord &lhs, const BackupsAutosaveDialogRecord &rhs) {
+	return lhs.backupMethodChoice == rhs.backupMethodChoice &&
+	       lhs.backupFrequencyChoice == rhs.backupFrequencyChoice &&
+	       readRecordField(lhs.backupFileExtension) == readRecordField(rhs.backupFileExtension) &&
+	       readRecordField(lhs.backupDirectoryPath) == readRecordField(rhs.backupDirectoryPath) &&
+	       readRecordField(lhs.inactivitySeconds) == readRecordField(rhs.inactivitySeconds) &&
+	       readRecordField(lhs.absoluteIntervalSeconds) == readRecordField(rhs.absoluteIntervalSeconds);
+}
+
+BackupsAutosaveDialogRecord &sessionBackupsAutosaveRecord() {
+	static BackupsAutosaveDialogRecord record;
+	static bool initialized = false;
+
+	if (!initialized) {
+		std::memset(&record, 0, sizeof(record));
+		record.backupMethodChoice = configuredBackupFilesSetting() ? kBackupMethodBakFile : kBackupMethodOff;
+		record.backupFrequencyChoice = kBackupFrequencyFirstSaveOnly;
+		writeRecordField(record.backupFileExtension, sizeof(record.backupFileExtension), "bak");
+		writeRecordField(record.inactivitySeconds, sizeof(record.inactivitySeconds), "15");
+		writeRecordField(record.absoluteIntervalSeconds, sizeof(record.absoluteIntervalSeconds), "180");
+		initialized = true;
+	}
+	return record;
+}
+
+[[nodiscard]] bool parseNonNegativeIntegerField(const std::string &text, int &valueOut) {
+	if (text.empty())
+		return false;
+	for (char ch : text)
+		if (!std::isdigit(static_cast<unsigned char>(ch)))
+			return false;
+	char *end = nullptr;
+	long value = std::strtol(text.c_str(), &end, 10);
+	if (end == nullptr || *end != '\0' || value < 0 || value > INT_MAX)
+		return false;
+	valueOut = static_cast<int>(value);
+	return true;
+}
+
+bool validateBackupsAutosaveRecord(const BackupsAutosaveDialogRecord &record, std::string &errorText) {
+	int numericValue = 0;
+	std::string backupExtension = trimAscii(readRecordField(record.backupFileExtension));
+	std::string backupDirectory = normalizeConfiguredPathInput(readRecordField(record.backupDirectoryPath));
+	std::string inactivity = trimAscii(readRecordField(record.inactivitySeconds));
+	std::string absoluteInterval = trimAscii(readRecordField(record.absoluteIntervalSeconds));
+
+	if (record.backupMethodChoice == kBackupMethodBakFile && backupExtension.empty()) {
+		errorText = "Backup file extension is required for 'create backup file'.";
+		return false;
+	}
+	if (record.backupMethodChoice == kBackupMethodDirectory) {
+		if (backupDirectory.empty()) {
+			errorText = "Backup path is required for 'move to backup path'.";
+			return false;
+		}
+		if (!validateTempDirectoryPath(backupDirectory, &errorText)) {
+			if (errorText.rfind("Temp path", 0) == 0)
+				errorText.replace(0, std::strlen("Temp path"), "Backup path");
+			return false;
+		}
+	}
+	if (!parseNonNegativeIntegerField(inactivity, numericValue)) {
+		errorText = "Keyboard inactivity must be a non-negative integer.";
+		return false;
+	}
+	if (numericValue != 0 && (numericValue < 5 || numericValue > 100)) {
+		errorText = "Keyboard inactivity must be 0 or within 5..100 seconds.";
+		return false;
+	}
+	if (!parseNonNegativeIntegerField(absoluteInterval, numericValue)) {
+		errorText = "Absolute interval must be a non-negative integer.";
+		return false;
+	}
+	if (numericValue != 0 && (numericValue < 100 || numericValue > 300)) {
+		errorText = "Absolute interval must be 0 or within 100..300 seconds.";
+		return false;
+	}
+	errorText.clear();
+	return true;
 }
 
 bool validatePathsRecord(const PathsDialogRecord &record, std::string &errorText) {
@@ -162,6 +307,31 @@ std::string currentWorkingDirectoryLocal() {
 	return std::string(cwd);
 }
 
+namespace {
+
+void discardQueuedCancelEventsForTarget(TView *target) {
+	TEvent event;
+
+	if (target == nullptr)
+		return;
+	while (target->eventAvail()) {
+		target->getEvent(event);
+		if ((event.what == evKeyDown && TKey(event.keyDown) == TKey(kbEsc)) ||
+		    (event.what == evCommand && event.message.command == cmCancel))
+			continue;
+		target->putEvent(event);
+		break;
+	}
+}
+
+} // namespace
+
+void discardQueuedCancelEvent() {
+	discardQueuedCancelEventsForTarget(TProgram::application != nullptr ? static_cast<TView *>(TProgram::application)
+	                                                           : static_cast<TView *>(TProgram::deskTop));
+	discardQueuedCancelEventsForTarget(static_cast<TView *>(TProgram::deskTop));
+}
+
 bool browseUriWithFileDialog(const char *title, const std::string &currentValue, std::string &selectedUri) {
 	char fileName[MAXPATH];
 	std::string seed = trimAscii(currentValue);
@@ -171,8 +341,10 @@ bool browseUriWithFileDialog(const char *title, const std::string &currentValue,
 	if (!seed.empty())
 		writeRecordField(fileName, sizeof(fileName), seed);
 	result = execDialogRawWithData(new TFileDialog("*.*", title, "~N~ame", fdOKButton, 230), fileName);
-	if (result == cmCancel)
+	if (result == cmCancel) {
+		discardQueuedCancelEvent();
 		return false;
+	}
 	rememberLoadDialogPath(fileName);
 	selectedUri = normalizeConfiguredPathInput(fileName);
 	return true;
@@ -190,8 +362,10 @@ bool browsePathWithDirectoryDialog(const std::string &currentValue, std::string 
 	picked = currentWorkingDirectoryLocal();
 	if (!originalCwd.empty())
 		(void)::chdir(originalCwd.c_str());
-	if (result == cmCancel)
+	if (result == cmCancel) {
+		discardQueuedCancelEvent();
 		return false;
+	}
 	selectedPath = normalizeConfiguredPathInput(picked);
 	return !selectedPath.empty();
 }
@@ -203,8 +377,10 @@ bool chooseThemeFileForLoad(std::string &selectedUri) {
 	initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.mrmac");
 	result = execDialogRawWithData(new TFileDialog("*.mrmac", "Load color theme", "~N~ame", fdOKButton, 232),
 	                               fileName);
-	if (result == cmCancel)
+	if (result == cmCancel) {
+		discardQueuedCancelEvent();
 		return false;
+	}
 	rememberLoadDialogPath(fileName);
 	selectedUri = normalizeConfiguredPathInput(fileName);
 	return true;
@@ -217,8 +393,10 @@ bool chooseThemeFileForSave(std::string &selectedUri) {
 	initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.mrmac");
 	result = execDialogRawWithData(new TFileDialog("*.mrmac", "Save color theme as", "~N~ame", fdOKButton, 233),
 	                               fileName);
-	if (result == cmCancel)
+	if (result == cmCancel) {
+		discardQueuedCancelEvent();
 		return false;
+	}
 	rememberLoadDialogPath(fileName);
 	selectedUri = normalizeConfiguredPathInput(ensureMrmacExtension(fileName));
 	return true;
@@ -309,11 +487,10 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		void draw() override {
 			TDrawBuffer b;
 			ushort color = getColor((state & sfFocused) != 0 ? 2 : 1);
-			int x = 0;
+			int glyphWidth = strwidth(glyph_.c_str());
+			int x = std::max(0, (size.x - glyphWidth) / 2);
 
 			b.moveChar(0, ' ', color, size.x);
-			if (size.x > 1)
-				x = (size.x - 1) / 2;
 			b.moveStr(static_cast<ushort>(x), glyph_.c_str(), color, size.x - x);
 			writeLine(0, 0, size.x, size.y, b);
 		}
@@ -349,11 +526,11 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		ushort command_;
 	};
 
-	explicit TPathsSetupDialog(const PathsDialogRecord &initialRecord)
+	TPathsSetupDialog(const PathsDialogRecord &baselineRecord, const PathsDialogRecord &initialRecord)
 	    : TWindowInit(&TDialog::initFrame),
 	      MRScrollableDialog(centeredSetupDialogRect(kVirtualDialogWidth, kVirtualDialogHeight),
 	                         "PATHS", kVirtualDialogWidth, kVirtualDialogHeight),
-	      initialRecord_(initialRecord), currentRecord_(initialRecord) {
+	      baselineRecord_(baselineRecord), currentRecord_(initialRecord) {
 		buildViews();
 		loadFieldsFromRecord(currentRecord_);
 		initScrollIfNeeded();
@@ -364,7 +541,7 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		ushort result = TProgram::deskTop->execView(this);
 		saveFieldsToRecord(currentRecord_);
 		outRecord = currentRecord_;
-		changed = !recordsEqual(initialRecord_, currentRecord_);
+		changed = !recordsEqual(baselineRecord_, currentRecord_);
 		return result;
 	}
 
@@ -425,6 +602,7 @@ class TPathsSetupDialog : public MRScrollableDialog {
 
 	TInlineGlyphButton *addBrowseButton(const TRect &rect, ushort command) {
 		TInlineGlyphButton *view = new TInlineGlyphButton(rect, "🔎", command);
+		view->options &= ~ofSelectable;
 		addManaged(view, rect);
 		return view;
 	}
@@ -438,10 +616,10 @@ class TPathsSetupDialog : public MRScrollableDialog {
 	void buildViews() {
 		int dialogWidth = kVirtualDialogWidth;
 		int inputLeft = 2;
-		int glyphWidth = 3;
+		int glyphWidth = 2;
 		int glyphRight = dialogWidth - 2;
 		int glyphLeft = glyphRight - glyphWidth;
-		int inputRight = glyphLeft - 1;
+		int inputRight = glyphLeft;
 		int doneLeft = dialogWidth / 2 - 17;
 		int cancelLeft = doneLeft + 12;
 		int helpLeft = cancelLeft + 14;
@@ -558,7 +736,7 @@ class TPathsSetupDialog : public MRScrollableDialog {
 			setInputValue(shellExecutablePathField_, selected);
 	}
 
-	PathsDialogRecord initialRecord_;
+	PathsDialogRecord baselineRecord_;
 	PathsDialogRecord currentRecord_;
 	static const int kVirtualDialogWidth = 84;
 	static const int kVirtualDialogHeight = 23;
@@ -583,27 +761,30 @@ void showPathsHelpDummyDialog() {
 void runPathsSetupDialogFlowLocal() {
 	bool running = true;
 	std::string errorText;
+	PathsDialogRecord baselineRecord;
 	PathsDialogRecord workingRecord;
 
-	initPathsDialogRecord(workingRecord);
+	initPathsDialogRecord(baselineRecord);
+	workingRecord = baselineRecord;
 	while (running) {
 		ushort result;
 		bool changed = false;
 		PathsDialogRecord editedRecord = workingRecord;
-		TPathsSetupDialog *dialog = new TPathsSetupDialog(workingRecord);
+		TPathsSetupDialog *dialog = new TPathsSetupDialog(baselineRecord, workingRecord);
 
 		if (dialog == nullptr)
 			return;
 		result = dialog->run(editedRecord, changed);
 		TObject::destroy(dialog);
-		workingRecord = editedRecord;
 
 		switch (result) {
 			case cmMrSetupPathsHelp:
+				workingRecord = editedRecord;
 				showPathsHelpDummyDialog();
 				break;
 
 			case cmOK:
+				workingRecord = editedRecord;
 				if (!saveAndReloadPathsRecord(workingRecord, errorText)) {
 					messageBox(mfError | mfOKButton, "Installation / Paths\n\n%s", errorText.c_str());
 					break;
@@ -612,12 +793,571 @@ void runPathsSetupDialogFlowLocal() {
 				break;
 
 			case cmCancel:
-				if (changed) {
-					if (messageBox(mfConfirmation | mfYesButton | mfNoButton,
-					               "Discard changed path settings?") != cmYes)
+				if (!changed) {
+					running = false;
+					break;
+				}
+				switch (mr::dialogs::showUnsavedChangesDialog(
+				    "Save", "Path settings have unsaved changes.")) {
+					case mr::dialogs::UnsavedChangesChoice::Save:
+						workingRecord = editedRecord;
+						if (!saveAndReloadPathsRecord(workingRecord, errorText)) {
+							messageBox(mfError | mfOKButton, "Installation / Paths\n\n%s", errorText.c_str());
+							break;
+						}
+						running = false;
+						break;
+					case mr::dialogs::UnsavedChangesChoice::Discard:
+						running = false;
+						break;
+					case mr::dialogs::UnsavedChangesChoice::Cancel:
+						workingRecord = editedRecord;
+						discardQueuedCancelEvent();
+						break;
+					default:
 						break;
 				}
+				break;
+
+			default:
 				running = false;
+				break;
+		}
+	}
+}
+class TNotifyingInputLine : public TInputLine {
+  public:
+	TNotifyingInputLine(const TRect &bounds, int maxLen, ushort changeCommand) noexcept
+	    : TInputLine(bounds, maxLen), capacity_(maxLen + 1), changeCommand_(changeCommand) {
+	}
+
+	void handleEvent(TEvent &event) override {
+		std::string beforeText = currentText();
+		TView *target = owner;
+
+		TInputLine::handleEvent(event);
+		while (target != nullptr && dynamic_cast<TDialog *>(target) == nullptr)
+			target = target->owner;
+
+		if (currentText() != beforeText)
+			message(target != nullptr ? target : owner, evBroadcast, changeCommand_, this);
+	}
+
+  private:
+	std::string currentText() const {
+		std::vector<char> buffer(capacity_, '\0');
+		const_cast<TNotifyingInputLine *>(this)->getData(buffer.data());
+		return std::string(buffer.data());
+	}
+
+	std::size_t capacity_ = 0;
+	ushort changeCommand_ = 0;
+};
+
+void showBackupsAutosaveHelpDialog() {
+	std::vector<std::string> lines;
+	lines.push_back("BACKUPS & AUTOSAVE HELP");
+	lines.push_back("");
+	lines.push_back("This dialog models global backup and autosave policy.");
+	lines.push_back("Backup method covers Off, create-backup-file and move-to-backup-path.");
+	lines.push_back("Backup file extension and backup path are modeled separately.");
+	lines.push_back("Autosave is modeled as keyboard inactivity and an absolute interval.");
+	lines.push_back("A value of 0 turns the respective autosave trigger off.");
+	execDialog(createSetupSimplePreviewDialog("BACKUPS & AUTOSAVE HELP", 88, 15, lines, false));
+}
+
+class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
+  public:
+	class TInlineGlyphButton : public TView {
+	  public:
+		TInlineGlyphButton(const TRect &bounds, const char *glyph, ushort command)
+		    : TView(bounds), glyph_(glyph != nullptr ? glyph : ""), command_(command) {
+			options |= ofSelectable;
+			options |= ofFirstClick;
+			eventMask |= evMouseDown | evKeyDown;
+		}
+
+		void draw() override {
+			TDrawBuffer b;
+			ushort color = getColor((state & sfFocused) != 0 ? 2 : 1);
+			int glyphWidth = strwidth(glyph_.c_str());
+			int x = std::max(0, (size.x - glyphWidth) / 2);
+
+			b.moveChar(0, ' ', color, size.x);
+			b.moveStr(static_cast<ushort>(x), glyph_.c_str(), color, size.x - x);
+			writeLine(0, 0, size.x, size.y, b);
+		}
+
+		void handleEvent(TEvent &event) override {
+			if (event.what == evMouseDown) {
+				dispatchCommand();
+				clearEvent(event);
+				return;
+			}
+			if (event.what == evKeyDown) {
+				TKey key(event.keyDown);
+
+				if (key == TKey(kbEnter) || key == TKey(' ')) {
+					dispatchCommand();
+					clearEvent(event);
+					return;
+				}
+			}
+			TView::handleEvent(event);
+		}
+
+	  private:
+		void dispatchCommand() {
+			TView *target = owner;
+
+			while (target != nullptr && dynamic_cast<TDialog *>(target) == nullptr)
+				target = target->owner;
+			message(target != nullptr ? target : owner, evCommand, command_, this);
+		}
+
+		std::string glyph_;
+		ushort command_;
+	};
+
+	TBackupsAutosaveSetupDialog(const BackupsAutosaveDialogRecord &baselineRecord,
+	                           const BackupsAutosaveDialogRecord &initialRecord)
+	    : TWindowInit(&TDialog::initFrame),
+	      MRScrollableDialog(centeredSetupDialogRect(kVirtualDialogWidth, kVirtualDialogHeight),
+	                         "BACKUPS & AUTOSAVE", kVirtualDialogWidth, kVirtualDialogHeight),
+	      baselineRecord_(baselineRecord), currentRecord_(initialRecord) {
+		buildViews();
+		loadFieldsFromRecord(currentRecord_);
+		updateBackupFieldState();
+		initScrollIfNeeded();
+		selectContent();
+		refreshValidationState();
+	}
+
+	~TBackupsAutosaveSetupDialog() override {
+		clearSetupDialogStatus();
+	}
+
+	ushort run(BackupsAutosaveDialogRecord &outRecord, bool &changed) {
+		ushort result = TProgram::deskTop->execView(this);
+		saveFieldsToRecord(currentRecord_);
+		outRecord = currentRecord_;
+		changed = !recordsEqual(baselineRecord_, currentRecord_);
+		return result;
+	}
+
+	void handleEvent(TEvent &event) override {
+		ushort originalWhat = event.what;
+		ushort originalCommand = (event.what == evCommand || event.what == evBroadcast) ? event.message.command : 0;
+		void *originalInfoPtr = event.what == evBroadcast ? event.message.infoPtr : nullptr;
+		ushort originalKey = event.what == evKeyDown ? event.keyDown.keyCode : 0;
+		ushort backupMethod = currentBackupMethod();
+		bool forwardTab = event.what == evKeyDown &&
+		                 (event.keyDown.keyCode == kbTab || event.keyDown.keyCode == kbCtrlI);
+		bool backwardTab = event.what == evKeyDown && event.keyDown.keyCode == kbShiftTab;
+
+		if (forwardTab) {
+			if (current == backupFrequencyField_) {
+				if (backupMethod == kBackupMethodBakFile && backupExtensionField_ != nullptr)
+					backupExtensionField_->select();
+				else if (inactivitySecondsSlider_ != nullptr)
+					inactivitySecondsSlider_->select();
+				clearEvent(event);
+				refreshValidationState();
+				return;
+			}
+			if (current == backupExtensionField_ || current == backupDirectoryField_ ||
+			    current == backupDirectoryBrowseButton_) {
+				if (inactivitySecondsSlider_ != nullptr)
+					inactivitySecondsSlider_->select();
+				clearEvent(event);
+				refreshValidationState();
+				return;
+			}
+		}
+
+		if (backwardTab) {
+			if (current == inactivitySecondsSlider_) {
+				if (backupMethod == kBackupMethodBakFile && backupExtensionField_ != nullptr &&
+				    (backupExtensionField_->state & sfDisabled) == 0)
+					backupExtensionField_->select();
+				else if (backupFrequencyField_ != nullptr)
+					backupFrequencyField_->select();
+				clearEvent(event);
+				refreshValidationState();
+				return;
+			}
+			if (current == backupExtensionField_ || current == backupDirectoryField_ ||
+			    current == backupDirectoryBrowseButton_) {
+				if (backupFrequencyField_ != nullptr)
+					backupFrequencyField_->select();
+				clearEvent(event);
+				refreshValidationState();
+				return;
+			}
+		}
+
+		if (event.what == evMouseDown && mouseHitsBackupBrowseButton(event)) {
+			browseBackupDirectory();
+			updateBackupFieldState();
+			refreshValidationState();
+			clearEvent(event);
+			return;
+		}
+
+		MRScrollableDialog::handleEvent(event);
+
+		if (originalWhat == evCommand && originalCommand == cmOK) {
+			refreshValidationState();
+			if (!isValid_) {
+				clearEvent(event);
+				return;
+			}
+		}
+
+		if (event.what == evCommand) {
+			switch (event.message.command) {
+				case cmMrSetupBackupsAutosaveHelp:
+					endModal(event.message.command);
+					clearEvent(event);
+					return;
+
+				case cmMrSetupBackupsAutosaveBrowseDirectory:
+					browseBackupDirectory();
+					updateBackupFieldState();
+					refreshValidationState();
+					clearEvent(event);
+					return;
+
+				default:
+					break;
+			}
+		}
+
+		if (originalWhat == evCommand || originalWhat == evKeyDown || originalWhat == evMouseDown ||
+		    originalWhat == evMouseUp || originalWhat == evBroadcast)
+			updateBackupFieldState();
+		if (originalWhat == evCommand || originalWhat == evKeyDown || originalWhat == evMouseDown ||
+		    originalWhat == evMouseUp || originalWhat == evBroadcast)
+			refreshValidationState();
+		if (originalWhat == evBroadcast &&
+		    (originalCommand == cmReleasedFocus || originalCommand == cmReceivedFocus ||
+		     originalCommand == cmMRNumericSliderChanged) &&
+		    originalInfoPtr != backupDirectoryBrowseButton_)
+			refreshValidationState();
+		if (originalWhat == evKeyDown &&
+		    (originalKey == kbTab || originalKey == kbCtrlI || originalKey == kbShiftTab))
+			refreshValidationState();
+	}
+
+  private:
+	TStaticText *addLabel(const TRect &rect, const char *text) {
+		TStaticText *view = new TStaticText(rect, text);
+		addManaged(view, rect);
+		return view;
+	}
+
+	TInputLine *addInput(const TRect &rect, int maxLen) {
+		TInputLine *view = new TNotifyingInputLine(rect, maxLen, cmMrSetupFieldChanged);
+		addManaged(view, rect);
+		return view;
+	}
+
+	MRNumericSlider *addNumericSlider(const TRect &rect, int32_t minValue, int32_t maxValue, int32_t initialValue,
+	                                 int32_t step, int32_t pageStep) {
+		MRNumericSlider *view = new MRNumericSlider(rect, minValue, maxValue, initialValue, step, pageStep,
+		                                            MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
+		addManaged(view, rect);
+		return view;
+	}
+
+	TRadioButtons *addRadioGroup(const TRect &rect, TSItem *items) {
+		TRadioButtons *view = new TRadioButtons(rect, items);
+		addManaged(view, rect);
+		return view;
+	}
+
+	TInlineGlyphButton *addBrowseButton(const TRect &rect, ushort command) {
+		TInlineGlyphButton *view = new TInlineGlyphButton(rect, "🔎", command);
+		view->options &= ~ofSelectable;
+		addManaged(view, rect);
+		return view;
+	}
+
+	TButton *addButton(const TRect &rect, const char *title, ushort command, ushort flags) {
+		TButton *view = new TButton(rect, title, command, flags);
+		addManaged(view, rect);
+		return view;
+	}
+
+	void buildViews() {
+		const int dialogWidth = kVirtualDialogWidth;
+		const int leftGroupLeft = 2;
+		const int leftGroupRight = 28;
+		const int rightGroupLeft = 31;
+		const int rightGroupRight = 53;
+		const int textFieldLeft = 23;
+		const int backupExtFieldRight = textFieldLeft + 12;
+		const int glyphWidth = 2;
+		const int glyphRight = dialogWidth - 2;
+		const int glyphLeft = glyphRight - glyphWidth;
+		const int backupPathFieldRight = glyphLeft;
+		const int autosaveFieldRight = dialogWidth - 2;
+		const int doneLeft = dialogWidth / 2 - 17;
+		const int cancelLeft = doneLeft + 12;
+		const int helpLeft = cancelLeft + 14;
+		const int buttonTop = kVirtualDialogHeight - 3;
+
+		addLabel(TRect(leftGroupLeft, 2, leftGroupRight, 3), "Backup method:");
+		backupMethodField_ = addRadioGroup(TRect(leftGroupLeft, 3, leftGroupRight, 6),
+		                                  new TSItem("~O~ff",
+		                                             new TSItem("create ~B~ackup file",
+		                                                        new TSItem("move to backup ~P~ath", nullptr))));
+
+		addLabel(TRect(rightGroupLeft, 2, rightGroupRight, 3), "Backup frequency:");
+		backupFrequencyField_ = addRadioGroup(TRect(rightGroupLeft, 3, rightGroupRight, 5),
+		                                     new TSItem("~F~irst save only",
+		                                                new TSItem("E~v~ery save", nullptr)));
+
+		addLabel(TRect(2, 7, textFieldLeft - 1, 8), "Backup file ext.:");
+		backupExtensionField_ = addInput(TRect(textFieldLeft, 7, backupExtFieldRight, 8),
+		                                kBackupExtensionFieldSize - 1);
+
+		addLabel(TRect(2, 8, textFieldLeft - 1, 9), "Backup path:");
+		backupDirectoryField_ = addInput(TRect(textFieldLeft, 8, backupPathFieldRight, 9),
+		                                kBackupDirectoryFieldSize - 1);
+		backupDirectoryBrowseButton_ =
+		    addBrowseButton(TRect(glyphLeft, 8, glyphRight, 9), cmMrSetupBackupsAutosaveBrowseDirectory);
+
+		addLabel(TRect(2, 10, dialogWidth - 2, 11), "Autosave in seconds, 0 = OFF:");
+		addLabel(TRect(2, 11, textFieldLeft - 1, 12), "Keyboard inactivity:");
+		inactivitySecondsSlider_ = addNumericSlider(TRect(textFieldLeft, 11, autosaveFieldRight, 12), 0, 100,
+		                                           15, 5, 10);
+		addLabel(TRect(2, 12, textFieldLeft - 1, 13), "Intervall auto save:");
+		absoluteIntervalSlider_ = addNumericSlider(TRect(textFieldLeft, 12, autosaveFieldRight, 13), 0, 300,
+		                                         180, 10, 50);
+
+		doneButton_ = addButton(TRect(doneLeft, buttonTop, doneLeft + 10, buttonTop + 2), "O~K~", cmOK, bfDefault);
+		addButton(TRect(cancelLeft, buttonTop, cancelLeft + 12, buttonTop + 2), "~C~ancel", cmCancel,
+		          bfNormal);
+		addButton(TRect(helpLeft, buttonTop, helpLeft + 8, buttonTop + 2), "~H~elp",
+		          cmMrSetupBackupsAutosaveHelp, bfNormal);
+	}
+
+	static void setInputLineValue(TInputLine *inputLine, const char *value, std::size_t capacity) {
+		std::vector<char> buffer(capacity, '\0');
+		writeRecordField(buffer.data(), buffer.size(), readRecordField(value));
+		inputLine->setData(buffer.data());
+	}
+
+	static void readInputLineValue(TInputLine *inputLine, char *dest, std::size_t destSize) {
+		std::vector<char> buffer(destSize, '\0');
+		inputLine->getData(buffer.data());
+		writeRecordField(dest, destSize, readRecordField(buffer.data()));
+	}
+
+	void setValidationState(bool valid, const std::string &errorText) {
+		isValid_ = valid;
+		if (doneButton_ != nullptr) {
+			const bool wasDisabled = (doneButton_->state & sfDisabled) != 0;
+			const bool shouldDisable = !valid;
+			if (wasDisabled != shouldDisable) {
+				doneButton_->setState(sfDisabled, shouldDisable ? True : False);
+				doneButton_->drawView();
+			}
+		}
+		if (valid) {
+			lastValidationText_.clear();
+			clearSetupDialogStatus();
+		} else if (errorText != lastValidationText_) {
+			setSetupDialogStatus(errorText, TMRMenuBar::MarqueeKind::Warning);
+			lastValidationText_ = errorText;
+		}
+	}
+
+	void refreshValidationState() {
+		std::string errorText;
+
+		saveFieldsToRecord(currentRecord_);
+		setValidationState(validateBackupsAutosaveRecord(currentRecord_, errorText), errorText);
+	}
+
+	static int parseSliderValueOrDefault(const char *value, int fallback, int minimumEnabled, int maximumEnabled) {
+		int parsed = fallback;
+		if (!parseNonNegativeIntegerField(trimAscii(readRecordField(value)), parsed))
+			parsed = fallback;
+		if (parsed == 0)
+			return 0;
+		if (parsed < minimumEnabled)
+			return minimumEnabled;
+		if (parsed > maximumEnabled)
+			return maximumEnabled;
+		return parsed;
+	}
+
+	static void writeSliderValue(MRNumericSlider *slider, char *dest, std::size_t destSize, int fallback,
+	                            int minimumEnabled, int maximumEnabled) {
+		int32_t value = fallback;
+		if (slider != nullptr)
+			slider->getData(&value);
+		int normalized = static_cast<int>(value);
+		if (normalized != 0)
+			normalized = std::clamp(normalized, minimumEnabled, maximumEnabled);
+		writeRecordField(dest, destSize, std::to_string(normalized));
+	}
+
+	std::string currentInputValue(TInputLine *inputLine, std::size_t capacity) const {
+		std::vector<char> buffer(capacity, '\0');
+		if (inputLine == nullptr)
+			return std::string();
+		inputLine->getData(buffer.data());
+		return readRecordField(buffer.data());
+	}
+
+	void setInputValue(TInputLine *inputLine, std::size_t capacity, const std::string &value) {
+		std::vector<char> buffer(capacity, '\0');
+		writeRecordField(buffer.data(), buffer.size(), value);
+		inputLine->setData(buffer.data());
+	}
+
+	void loadFieldsFromRecord(const BackupsAutosaveDialogRecord &record) {
+		if (backupMethodField_ != nullptr)
+			backupMethodField_->setData((void *)&record.backupMethodChoice);
+		if (backupFrequencyField_ != nullptr)
+			backupFrequencyField_->setData((void *)&record.backupFrequencyChoice);
+		setInputLineValue(backupExtensionField_, record.backupFileExtension, sizeof(record.backupFileExtension));
+		setInputLineValue(backupDirectoryField_, record.backupDirectoryPath, sizeof(record.backupDirectoryPath));
+		if (inactivitySecondsSlider_ != nullptr) {
+			int32_t value = parseSliderValueOrDefault(record.inactivitySeconds, 15, 5, 100);
+			inactivitySecondsSlider_->setData(&value);
+		}
+		if (absoluteIntervalSlider_ != nullptr) {
+			int32_t value = parseSliderValueOrDefault(record.absoluteIntervalSeconds, 180, 100, 300);
+			absoluteIntervalSlider_->setData(&value);
+		}
+	}
+
+	void saveFieldsToRecord(BackupsAutosaveDialogRecord &record) {
+		if (backupMethodField_ != nullptr)
+			backupMethodField_->getData((void *)&record.backupMethodChoice);
+		if (backupFrequencyField_ != nullptr)
+			backupFrequencyField_->getData((void *)&record.backupFrequencyChoice);
+		readInputLineValue(backupExtensionField_, record.backupFileExtension, sizeof(record.backupFileExtension));
+		readInputLineValue(backupDirectoryField_, record.backupDirectoryPath, sizeof(record.backupDirectoryPath));
+		writeSliderValue(inactivitySecondsSlider_, record.inactivitySeconds, sizeof(record.inactivitySeconds), 15,
+		                5, 100);
+		writeSliderValue(absoluteIntervalSlider_, record.absoluteIntervalSeconds,
+		                sizeof(record.absoluteIntervalSeconds), 180, 100, 300);
+	}
+
+	ushort currentBackupMethod() const {
+		ushort method = kBackupMethodOff;
+		if (backupMethodField_ != nullptr)
+			backupMethodField_->getData((void *)&method);
+		return method;
+	}
+
+	void updateBackupFieldState() {
+		ushort method = currentBackupMethod();
+		const bool extensionEnabled = method == kBackupMethodBakFile;
+		const bool pathEnabled = method == kBackupMethodDirectory;
+		if (backupExtensionField_ != nullptr)
+			backupExtensionField_->setState(sfDisabled, extensionEnabled ? False : True);
+		if (backupDirectoryField_ != nullptr)
+			backupDirectoryField_->setState(sfDisabled, pathEnabled ? False : True);
+		if (backupDirectoryBrowseButton_ != nullptr)
+			backupDirectoryBrowseButton_->setState(sfDisabled, pathEnabled ? False : True);
+	}
+
+	bool mouseHitsBackupBrowseButton(TEvent &event) {
+		return event.what == evMouseDown && backupDirectoryBrowseButton_ != nullptr &&
+		       (backupDirectoryBrowseButton_->state & sfDisabled) == 0 &&
+		       backupDirectoryBrowseButton_->containsMouse(event);
+	}
+
+	void browseBackupDirectory() {
+		std::string selected;
+		if (browsePathWithDirectoryDialog(currentInputValue(backupDirectoryField_, kBackupDirectoryFieldSize), selected))
+			setInputValue(backupDirectoryField_, kBackupDirectoryFieldSize, selected);
+		if (backupDirectoryField_ != nullptr)
+			backupDirectoryField_->select();
+	}
+
+	BackupsAutosaveDialogRecord baselineRecord_;
+	BackupsAutosaveDialogRecord currentRecord_;
+	static const int kVirtualDialogWidth = 96;
+	static const int kVirtualDialogHeight = 17;
+	bool isValid_ = true;
+	std::string lastValidationText_;
+	TRadioButtons *backupMethodField_ = nullptr;
+	TRadioButtons *backupFrequencyField_ = nullptr;
+	TInputLine *backupExtensionField_ = nullptr;
+	TInputLine *backupDirectoryField_ = nullptr;
+	TView *backupDirectoryBrowseButton_ = nullptr;
+	MRNumericSlider *inactivitySecondsSlider_ = nullptr;
+	MRNumericSlider *absoluteIntervalSlider_ = nullptr;
+	TButton *doneButton_ = nullptr;
+};
+
+void runBackupsAutosaveDialogFlowLocal() {
+	bool running = true;
+	std::string errorText;
+	BackupsAutosaveDialogRecord baselineRecord = sessionBackupsAutosaveRecord();
+	BackupsAutosaveDialogRecord workingRecord = baselineRecord;
+
+	while (running) {
+		ushort result;
+		bool changed = false;
+		BackupsAutosaveDialogRecord editedRecord = workingRecord;
+		TBackupsAutosaveSetupDialog *dialog = new TBackupsAutosaveSetupDialog(baselineRecord, workingRecord);
+
+		if (dialog == nullptr)
+			return;
+		result = dialog->run(editedRecord, changed);
+		TObject::destroy(dialog);
+
+		switch (result) {
+			case cmMrSetupBackupsAutosaveHelp:
+				workingRecord = editedRecord;
+				showBackupsAutosaveHelpDialog();
+				break;
+
+			case cmOK:
+				workingRecord = editedRecord;
+				if (!validateBackupsAutosaveRecord(workingRecord, errorText)) {
+					messageBox(mfError | mfOKButton, "Installation / Backups / Autosave\n\n%s", errorText.c_str());
+					break;
+				}
+				sessionBackupsAutosaveRecord() = workingRecord;
+				running = false;
+				break;
+
+			case cmCancel:
+				if (!changed) {
+					running = false;
+					break;
+				}
+				switch (mr::dialogs::showUnsavedChangesDialog(
+				    "Save", "Backup and autosave settings have unsaved changes.")) {
+					case mr::dialogs::UnsavedChangesChoice::Save:
+						workingRecord = editedRecord;
+						if (!validateBackupsAutosaveRecord(workingRecord, errorText)) {
+							messageBox(mfError | mfOKButton,
+							           "Installation / Backups / Autosave\n\n%s", errorText.c_str());
+							break;
+						}
+						sessionBackupsAutosaveRecord() = workingRecord;
+						running = false;
+						break;
+					case mr::dialogs::UnsavedChangesChoice::Discard:
+						running = false;
+						break;
+					case mr::dialogs::UnsavedChangesChoice::Cancel:
+						workingRecord = editedRecord;
+						discardQueuedCancelEvent();
+						break;
+					default:
+						break;
+				}
 				break;
 
 			default:
@@ -778,6 +1518,10 @@ void runInstallationAndSetupDialogFlow() {
 
 			case cmMrSetupSwappingEmsXms:
 				runPathsSetupDialogFlowLocal();
+				break;
+
+			case cmMrSetupBackupsTempAutosave:
+				runBackupsAutosaveDialogFlowLocal();
 				break;
 
 			case cmMrSetupSearchAndReplaceDefaults:

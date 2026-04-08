@@ -1,0 +1,24 @@
+ûSpellcheck module              SRC\SPELL.S HELP\SPELL.HLZ ME.DIC COMMON.DIC UTILS\SPELLCMP.EXE UTILS\SPELLMRG.EXE UTILS\SPELLEXP.EXE UTILS\MAKEDIC.BAT /C=SRC\SPELL.S
+ûDocument formatter             SRC\DOCUMENT.S HELP\PRNFORM.HLZ DOC\SAMPLE.DOC /C=SRC\DOCUMENT.S
+ûCommunications module          SRC\COMMOD.S SRC\COMMENUS.S SRC\COMUTIL.S SRC\MECOM.DB HELP\MECOM.HLZ HELP\MECOMMAC.HLZ HELP\COMMOD.HLP /C=SRC\COMUTIL.S/C=SRC\COMMOD.S
+ûVCS Support                    vcs.dat vcmpr.exe src\vcs.s src\vcs_inst.s src\cdiff.s help\vcs.HLZ help\vcs_inst.hlz/C=SRC\VCS/C=SRC\VCS_INST/C=SRC\CDIFF/R=VCS_INST
+ûMulti-Tags                     src\metags.s help\metags.hlz doc\metags.doc metags.db /C=SRC\METAGS.S/R=METAGS^TAG_CONFIGURE
+ --------------------------------------þ
+ Assembler support              SRC\ASM.S HELP\ASM.HLZ /C=SRC\ASM.S
+ûC support(already installed)                        þ
+ûCMAC support(already installed)                          þ
+ BASIC support                  SRC\BASIC.S HELP\BASIC.HLZ /C=SRC\BASIC.S
+ FORTRAN support                SRC\FORTRAN.S HELP\FORTRAN.HLZ /C=SRC\FORTRAN.S
+ûPASCAL support                 SRC\PASCAL.S HELP\PASCAL.HLZ /C=SRC\PASCAL.S
+ dBASE support                  HELP\DBASE.HLZ SRC\DBASE.S /C=SRC\DBASE.S
+ MODULA 2 support               SRC\MODULA_2.S HELP\MODULA_2.HLZ /C=SRC\MODULA_2.S
+ COBOL support                  SRC\COBOL.S /C=SRC\COBOL.S
+ûWordstar Keymap                SRC\WORDSTAR.S HELP\WORDSTAR.HLZ WORDSTAR.DB /C=SRC\WORDSTAR.S/R=INSTALL_KEYMAP KN=WORDSTARFN=WORDSTAR
+ Brief Keymap                   SRC\BRIEF.S HELP\BRIEF.HLZ BRIEF.DB  /C=SRC\BRIEF.S/R=INSTALL_KEYMAP KN=BRIEFFN=BRIEF
+ûHypertext Compiler-DeCompiler	UTILS\HELPCX.EXE UTILS\HELPDX.EXE
+ûMacro Language-Source Help  	HELP\MACRO.HLZ HELP\SRC.HLZ HELP\SOURCE.HLZ
+ûUser interface macro examples	SRC\EXAMPLE.S
+ Dataflex Batch File        	DFLEX.BAT
+ Clarion Batch File		CLARC.BAT
+ ALSYS ADA Batch File		ADACOMP.BAT
+ûMEMAC to CMAC source converter SRC\SRCCONV.S /C=SRC\SRCCONV.S

@@ -1,0 +1,227 @@
+.np.tc 75 1 1 1 0 0 5 0 5 2 5 0 5 0
+.np ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+.np ³ A Table of Contents is defined above.  It has 3   ³
+.np ³ levels of entries, all in different styles        ³
+.np ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+.np.tm4.hm2.lm5.rm79.bm58.pl60.fm60.ff1
+.np ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+.np ³ Notice that the footer margin (fm60) is greater than the bottom ³
+.np ³ margin (bm58) AND the header margin (hm2) is less than the top  ³
+.np ³ margin (tm4).                                                   ³
+.np ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+.np.dh1                                                  MULTI-EDIT VERSION 5.0
+.np.dh2MULTI-EDIT VERSION 5.0
+.np ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+.np ³ A Primary and Secondary Header is defined above (dh1 & dh2)   ³
+.np ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+.np.df1ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ Page .pa
+.np.df2Page .pa ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+.np ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+.np ³ A Primary and Secondary Footer are defined above. Both  ³
+.np ³ will print the word 'Page' followed by the Page Number. ³
+.np ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+.np.du1ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+.np ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+.np ³ The code above defines a line of dashes (-).      ³
+.np ³ Each time a 'ud1' code is encountered in the text,³
+.np ³ it will execute this code by printing the line    ³
+.np ³ across the page.                                  ³
+.np ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+.ud1
+.np ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+.np ³ The code above executes the user code previously  ³
+.np ³ defined above.  It will print a line across the   ³
+.np ³ top of the page.                                  ³
+.np ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+
+
+.te1.ceTHE PRINT FORMATTER AND FORMAT CODES
+
+.np ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+.np ³ The code above indicates the first entry for the       ³
+.np ³ Table of Contents.  The (1) tells the Print-formatter  ³
+.np ³ that this entry should be at level one of the Table    ³
+.np ³ of Contents                                            ³
+.np ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+
+ The Print-formatter is a macro which allows you to enhance document printing
+ within Multi-Edit.  Special format codes when inserted into a file, and
+ converted by the print formatter, allow you to:
+
+	 GENERATE A TABLE OF CONTENTS AND AN INDEX;
+
+  	 CREATE HEADERS AND FOOTERS;
+
+	 INSERT VARIABLE INFORMATION into your document such as the
+	  current filename, the date and time, and the page number;
+
+	 CREATE YOUR OWN USER-DEFINED FORMATTING CODES;
+
+	 Print text in Emphasized (Bold), Italicized, Underlined, or
+	  virtually any other mode supported by your printer;
+
+  	 DEFINE YOUR PAGE SETUP including the Line Spacing, Page
+	  Length, Right and Left Margin, Top and Bottom Margin, and
+	  the insertion of Form Feeds.
+
+
+
+
+.ud1
+
+.te2.ceINSERTING FORMAT CODES
+
+.np ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+.np ³ The (2) in the table entry above tells the Print-formatter   ³
+.np ³ that this table entry is at level 2 of the Table of Contents ³
+.np ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+
+Format Codes can be entered maually or they can be entered via the 'Format
+Codes' Menu which can be selected from the 'Layout Menu'.  Once selected,
+the following will appear:
+
+ ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄINSERT PRINT FORMATTER CODESÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ·
+ ³Misc Variables Attributes Page-setup Headers-footers Table-of-contents º±±
+ ÔÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍCancel<ESC>ÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¼±±
+   ±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±
+
+
+
+
+.ud1
+
+.te3.ceTHE MISCELLANEOUS SUB-MENU
+
+This menu allows you to insert format codes to enter page breaks, center
+lines of text, enter comment or ignore line codes, and define and execute
+User-defined codes.
+
+
+.ceÚÄÄÄÄMISCELLANEOUSÄÄÄÄ·
+.ce³                     º
+.ce³  Page Breaks        º
+.ce³  Center line        º
+.ce³  Comment line       º
+.ce³  Ignore line        º
+.ce³  Define user code   º
+.ce³  Execute user code  º
+.ceÔÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¼
+
+
+.ud1
+
+.te3.ceTHE VARIABLES SUB-MENU
+
+		This menu allows you to insert format codes to:
+
+	        PRINT THE CURRENT FILENAME
+
+		 The current filename is...  .fn
+
+	        PRINT THE CURRENT TIME AND DATE
+
+		 The current time is...  .ti
+
+		 The current date is...  .da
+
+
+
+.ud1
+
+.te3.ceTHE ATTRIBUTES SUB-MENU
+
+The attributes sub-menu enables you to insert format codes to enhance
+the printing of text:
+
+
+		 .u1You can UNDERLINE text.u0
+
+		 .e1You can EMPHASIZE text.e0
+
+		 .i1And even ITALICIZE text.i0
+
+
+.np ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+.np ³ The codes above turn the print-attribute commands on and off.   ³
+.np ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+
+
+
+From the Attributes menu you can insert format codes to change to any
+mode that is supported by your printer.
+
+
+
+.ud1
+
+.te3.ceTHE PAGE-SETUP SUB-MENU
+
+The page setup (shown below) allows you to set the line spacing, page
+length, right margin, left margin, top margin, bottom margin, and use of
+form feeds.
+
+.ceÚÄÄÄPAGE SETUPÄÄÄÄ·
+.ce³                 º
+.ce³  Line Spacing.X[THE PAGE SETUP MENU^Line Spacing]   º
+.ce³  Page Length.X[THE PAGE SETUP MENU^Page Length]    º
+.ce³  Right Margin.X[THE PAGE SETUP MENU^Right Margin]   º
+.ce³  Left Margin.X[THE PAGE SETUP MENU^Left Margin]    º
+.ce³  Top Margin.X[THE PAGE SETUP MENU^Top Margin]     º
+.ce³  Bottom Margin.X[THE PAGE SETUP MENU^Bottom Margin]  º
+.ce³  Form Feeds.X[THE PAGE SETUP MENU^Form Feeds]     º
+.ceÔÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¼
+
+.np ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+.np ³ The X[] entries shown above indicate index items. ³
+.np ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+
+
+.ud1
+
+.te3.ceTHE HEADERS-FOOTERS SUB-MENU
+
+
+This sub-menu enables you to insert format codes to define headers and
+footers, set the header and footer margins, and suppress headers and
+footers on the current page.
+
+
+.ceÚÄÄHEADERS/FOOTERSÄ·
+.ce³                  º
+.ce³  Define Header.X[THE HEADERS-FOOTERS SUB-MENU^Define Header]   º
+.ce³  Define Footer.X[THE HEADERS-FOOTERS SUB-MENU^Define Footer]   º
+.ce³  Suppress Header.X[THE HEADERS-FOOTERS SUB-MENU^Suppress Header] º
+.ce³  Suppress Footer.X[THE HEADERS-FOOTERS SUB-MENU^Suppress] º
+.ce³  Header Margin.X[THE HEADERS-FOOTERS SUB-MENU^Header Margin]   º
+.ce³  Footer Margin.X[THE HEADERS-FOOTERS SUB-MENU^Footer Margin]   º
+.ceÔÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¼
+
+
+
+.ud1
+
+.te3.ceTHE TABLE-OF-CONTENTS SUB-MENU
+
+This menu enables you to insert format codes to define a Table of
+Contents and the Table entries.
+
+			   ÚÄTABLE OF CONTENTSÄ·
+			   ³                   º
+			   ³  Define Table.X[TABLE OF CONTENTS^Define Table]     º
+			   ³  Table Entry.X[TABLE OF CONTENTS^Table Entry]      º
+			   ÔÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¼
+
+
+.ud1
+
+.te3.ceTHE INDEX GENERATOR
+
+	The index generator allows you to create an index for your document.
+	It is sorted by heading and sub-heading.  The index for this document
+      will follow.

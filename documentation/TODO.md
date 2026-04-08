@@ -1,5 +1,6 @@
-- Setup
+- Setup vollständig: Übersicht über Aufwand der Implementierung.
 - Treesitter
+- code folding (pro file extension profil)
 - Laden multipler Dateien aus einer Liste die die Ausgabe eines Befehls oder Pipe ist. "Hol alle mrmac Dateien"
 - Save All mit Dialog/List Window
 - Mini map?
@@ -10,4 +11,5 @@
 - ascii table
 - emoji table
 - font?
-- code folding (pro file extension profil)
+- compiler
+- code prettyfier: wie syntaxregeln definieren?

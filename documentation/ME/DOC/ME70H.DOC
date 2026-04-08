@@ -1,0 +1,24 @@
+7.0H PRO UPDATE INFORMATION
+
+This release contains lots of bug fixes, PLUS file tagging in the file
+open prompt (see README.DOC or ME.HLP).
+
+This release now allows for the transfer of network license info via
+the NETXFER.EXE utility.
+
+If you are using VCS support, then you should run VCS_INST in order to
+update your menus with new features.
+
+If you are wondering why we are not using RTPATCH on this update file,
+it is simple.  There have been 7.00, a, b, c, d, e and f releases.
+That's a lot of patch variants, making  for a pretty big file.  In
+addition, our experience with using patch software on a product as
+complex as Multi-Edit has not been good.  There are just too many
+opportunities for people to modify the source code, or menus, etc.
+Every time we release a patch update that patches more than a couple of
+files, we get DOZENS of individual messages asking us if we could email
+this file or that file because the patch didn't work right.  That was
+just during the beta cycle.  We've now shipped thousands of copies of
+7.0x.
+
+Thanks for your support.

@@ -249,7 +249,7 @@ class TInstallationAndSetupDialog : public MRScrollableDialog {
 		          cmMrSetupFilenameExtensions, bfNormal);
 		addButton(TRect(g.rightX1, 13, g.rightX2, 15), "~P~aths", cmMrSetupSwappingEmsXms,
 		          bfNormal);
-		addButton(TRect(g.rightX1, 15, g.rightX2, 17), "~B~ackups / Temp / Autosave...",
+		addButton(TRect(g.rightX1, 15, g.rightX2, 17), "~B~ackups / Autosave...",
 		          cmMrSetupBackupsTempAutosave, bfNormal);
 		addButton(TRect(g.rightX1, 17, g.rightX2, 19), "~U~ser interface settings...",
 		          cmMrSetupUserInterfaceSettings, bfNormal);

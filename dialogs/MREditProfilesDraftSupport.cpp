@@ -18,23 +18,32 @@ const char *kDefaultProfileId = "DEFAULT";
 
 enum : unsigned int {
 	kOvNone = 0x0000,
-	kOvPageBreak = 0x0001,
-	kOvWordDelimiters = 0x0002,
-	kOvDefaultExtensions = 0x0004,
-	kOvTruncateSpaces = 0x0008,
-	kOvEofCtrlZ = 0x0010,
-	kOvEofCrLf = 0x0020,
-	kOvTabExpand = 0x0040,
-	kOvTabSize = 0x0080,
-	kOvBackupFiles = 0x0100,
-	kOvShowEofMarker = 0x0200,
-	kOvShowEofMarkerEmoji = 0x0400,
-	kOvShowLineNumbers = 0x0800,
-	kOvLineNumZeroFill = 0x1000,
-	kOvPersistentBlocks = 0x2000,
-	kOvCodeFolding = 0x4000,
-	kOvColumnBlockMove = 0x8000,
-	kOvDefaultMode = 0x10000
+	kOvPageBreak = ::kOvPageBreak,
+	kOvWordDelimiters = ::kOvWordDelimiters,
+	kOvDefaultExtensions = ::kOvDefaultExtensions,
+	kOvTruncateSpaces = ::kOvTruncateSpaces,
+	kOvEofCtrlZ = ::kOvEofCtrlZ,
+	kOvEofCrLf = ::kOvEofCrLf,
+	kOvTabExpand = ::kOvTabExpand,
+	kOvTabSize = ::kOvTabSize,
+	kOvRightMargin = ::kOvRightMargin,
+	kOvWordWrap = ::kOvWordWrap,
+	kOvIndentStyle = ::kOvIndentStyle,
+	kOvFileType = ::kOvFileType,
+	kOvBinaryRecordLength = ::kOvBinaryRecordLength,
+	kOvPostLoadMacro = ::kOvPostLoadMacro,
+	kOvPreSaveMacro = ::kOvPreSaveMacro,
+	kOvDefaultPath = ::kOvDefaultPath,
+	kOvFormatLine = ::kOvFormatLine,
+	kOvBackupFiles = ::kOvBackupFiles,
+	kOvShowEofMarker = ::kOvShowEofMarker,
+	kOvShowEofMarkerEmoji = ::kOvShowEofMarkerEmoji,
+	kOvShowLineNumbers = ::kOvShowLineNumbers,
+	kOvLineNumZeroFill = ::kOvLineNumZeroFill,
+	kOvPersistentBlocks = ::kOvPersistentBlocks,
+	kOvCodeFolding = ::kOvCodeFolding,
+	kOvColumnBlockMove = ::kOvColumnBlockMove,
+	kOvDefaultMode = ::kOvDefaultMode
 };
 
 [[nodiscard]] bool validateProfileIdLiteral(const EditProfileDraft &draft, std::string &errorText) {
@@ -141,6 +150,24 @@ enum : unsigned int {
 		mask |= kOvTabExpand;
 	if (effective.tabSize != defaults.tabSize)
 		mask |= kOvTabSize;
+	if (effective.rightMargin != defaults.rightMargin)
+		mask |= kOvRightMargin;
+	if (effective.wordWrap != defaults.wordWrap)
+		mask |= kOvWordWrap;
+	if (upperAscii(effective.indentStyle) != upperAscii(defaults.indentStyle))
+		mask |= kOvIndentStyle;
+	if (upperAscii(effective.fileType) != upperAscii(defaults.fileType))
+		mask |= kOvFileType;
+	if (effective.binaryRecordLength != defaults.binaryRecordLength)
+		mask |= kOvBinaryRecordLength;
+	if (trimAscii(effective.postLoadMacro) != trimAscii(defaults.postLoadMacro))
+		mask |= kOvPostLoadMacro;
+	if (trimAscii(effective.preSaveMacro) != trimAscii(defaults.preSaveMacro))
+		mask |= kOvPreSaveMacro;
+	if (trimAscii(effective.defaultPath) != trimAscii(defaults.defaultPath))
+		mask |= kOvDefaultPath;
+	if (effective.formatLine != defaults.formatLine)
+		mask |= kOvFormatLine;
 	if (effective.backupFiles != defaults.backupFiles)
 		mask |= kOvBackupFiles;
 	if (effective.showEofMarker != defaults.showEofMarker)
@@ -315,6 +342,10 @@ void settingsToRecordLocal(const MREditSetupSettings &settings, EditSettingsDial
 	writeRecordField(record.wordDelimiters, sizeof(record.wordDelimiters), settings.wordDelimiters);
 	writeRecordField(record.defaultExtensions, sizeof(record.defaultExtensions), settings.defaultExtensions);
 	writeRecordField(record.tabSize, sizeof(record.tabSize), std::to_string(settings.tabSize));
+	writeRecordField(record.rightMargin, sizeof(record.rightMargin), std::to_string(settings.rightMargin));
+	writeRecordField(record.postLoadMacro, sizeof(record.postLoadMacro), settings.postLoadMacro);
+	writeRecordField(record.preSaveMacro, sizeof(record.preSaveMacro), settings.preSaveMacro);
+	writeRecordField(record.defaultPath, sizeof(record.defaultPath), settings.defaultPath);
 	record.optionsMask = 0;
 	if (settings.truncateSpaces)
 		record.optionsMask |= kOptionTruncateSpaces;
@@ -322,6 +353,8 @@ void settingsToRecordLocal(const MREditSetupSettings &settings, EditSettingsDial
 		record.optionsMask |= kOptionEofCtrlZ;
 	if (settings.eofCrLf)
 		record.optionsMask |= kOptionEofCrLf;
+	if (settings.wordWrap)
+		record.optionsMask |= kOptionWordWrap;
 	if (settings.backupFiles)
 		record.optionsMask |= kOptionBackupFiles;
 	if (settings.showEofMarker)
