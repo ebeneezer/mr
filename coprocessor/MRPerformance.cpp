@@ -25,8 +25,6 @@ struct State {
 };
 
 static constexpr std::size_t kMaxEvents = 64;
-static constexpr std::size_t kUiNoticeBytesThreshold = 8u * 1024u * 1024u;
-static constexpr std::size_t kWarmupNoticeBytesThreshold = 64u * 1024u * 1024u;
 
 State &state() {
 	static State instance;
@@ -81,45 +79,6 @@ std::string formatWallClock(std::time_t when) {
 	return buffer.data();
 }
 
-bool qualifiesForNotice(const Event &event) {
-	if (event.outcome != Outcome::Completed)
-		return false;
-	if (event.scope == Scope::Ui)
-		return event.bytes >= kUiNoticeBytesThreshold &&
-		       (event.action == "Open file" || event.action == "Load file" || event.action == "Save file" ||
-		        event.action == "Save file as");
-	if (event.action == "Line index warmup")
-		return event.bytes >= kWarmupNoticeBytesThreshold;
-	return false;
-}
-
-MessageNoticeKind messageNoticeKindFor(const Event &event) {
-	if (event.outcome == Outcome::Failed)
-		return MessageNoticeKind::Error;
-	if (event.outcome == Outcome::Cancelled || event.outcome == Outcome::Conflict)
-		return MessageNoticeKind::Warning;
-	if (event.scope == Scope::Ui)
-		return MessageNoticeKind::Success;
-	return MessageNoticeKind::Info;
-}
-
-std::string buildMessageNoticeText(const Event &event) {
-	std::string name = event.detail.empty() ? std::string("<buffer>") : std::string(baseNameOf(event.detail));
-
-	if (event.action == "Open file")
-		return "Opened " + name + " in " + formatDuration(event.totalMs) +
-		       (event.bytes != 0 ? " (" + formatThroughput(event.bytes, event.totalMs) + ")" : std::string());
-	if (event.action == "Load file")
-		return "Loaded " + name + " in " + formatDuration(event.totalMs) +
-		       (event.bytes != 0 ? " (" + formatThroughput(event.bytes, event.totalMs) + ")" : std::string());
-	if (event.action == "Save file" || event.action == "Save file as")
-		return "Saved " + name + " in " + formatDuration(event.totalMs) +
-		       (event.bytes != 0 ? " (" + formatThroughput(event.bytes, event.totalMs) + ")" : std::string());
-	if (event.action == "Line index warmup")
-		return "Indexed " + name + " in " + formatDuration(event.totalMs);
-	return std::string();
-}
-
 void pushEvent(State &shared, Event event) {
 	event.sequence = shared.nextSequence++;
 	event.wallClock = std::time(nullptr);
@@ -147,11 +106,6 @@ void recordUiEvent(std::string_view action, std::size_t bufferId, std::size_t do
 	event.runMs = totalMs;
 	event.totalMs = totalMs;
 	pushEvent(shared, event);
-	if (qualifiesForNotice(shared.events.front()))
-		mr::messageline::postTimed(mr::messageline::Owner::HeroEvent,
-		                          buildMessageNoticeText(shared.events.front()),
-		                          static_cast<mr::messageline::Kind>(messageNoticeKindFor(shared.events.front())),
-		                          std::chrono::seconds(4), mr::messageline::kPriorityLow);
 }
 
 void recordBackgroundResult(const mr::coprocessor::Result &result, std::string_view action,
@@ -181,11 +135,6 @@ void recordBackgroundEvent(mr::coprocessor::Lane lane, Outcome outcome, const mr
 	event.runMs = timing.runMs();
 	event.totalMs = timing.totalMs();
 	pushEvent(shared, event);
-	if (qualifiesForNotice(shared.events.front()))
-		mr::messageline::postTimed(mr::messageline::Owner::HeroEvent,
-		                          buildMessageNoticeText(shared.events.front()),
-		                          static_cast<mr::messageline::Kind>(messageNoticeKindFor(shared.events.front())),
-		                          std::chrono::seconds(4), mr::messageline::kPriorityLow);
 }
 
 std::vector<Event> recentForWindow(std::size_t bufferId, std::size_t documentId, std::size_t maxCount) {

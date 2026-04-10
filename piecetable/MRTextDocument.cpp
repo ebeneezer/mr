@@ -4,10 +4,15 @@
 #include <atomic>
 #include <cerrno>
 #include <cstring>
+#include <limits>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+#if defined(__SSE2__) && (defined(__x86_64__) || defined(__i386__))
+#include <emmintrin.h>
+#endif
 
 namespace mr {
 namespace editor {
@@ -39,6 +44,99 @@ char piecewiseCharAt(const Doc &doc, Offset pos) noexcept {
 
 inline bool isLineBreakByte(char ch) noexcept {
 	return ch == '\n' || ch == '\r';
+}
+
+inline void appendLineCheckpoint(std::vector<LineIndexCheckpoint> &checkpoints, Offset lineStart,
+                                 std::size_t lineIndex) {
+	if ((lineIndex % kLazyLineIndexStride) == 0)
+		checkpoints.push_back(LineIndexCheckpoint(lineStart, lineIndex));
+}
+
+inline void applyLineBreakAt(const char *data, Offset length, Offset breakOffset, Offset &lineStart,
+                             std::size_t &lineIndex, std::vector<LineIndexCheckpoint> &checkpoints,
+                             Offset &skipLfAt) {
+	const char ch = data[breakOffset];
+	Offset nextLineStart = breakOffset + 1;
+
+	if (ch == '\r' && breakOffset + 1 < length && data[breakOffset + 1] == '\n') {
+		nextLineStart = breakOffset + 2;
+		skipLfAt = breakOffset + 1;
+	}
+	lineStart = nextLineStart;
+	++lineIndex;
+	appendLineCheckpoint(checkpoints, lineStart, lineIndex);
+}
+
+[[maybe_unused]] void buildDirectInitialLineIndexScalar(const char *data, Offset length,
+                                                        std::vector<LineIndexCheckpoint> &checkpoints,
+                                                        Offset &lineStart, std::size_t &lineIndex) {
+	Offset skipLfAt = std::numeric_limits<Offset>::max();
+
+	for (Offset i = 0; i < length; ++i) {
+		if (i == skipLfAt) {
+			skipLfAt = std::numeric_limits<Offset>::max();
+			continue;
+		}
+		if (!isLineBreakByte(data[i]))
+			continue;
+		applyLineBreakAt(data, length, i, lineStart, lineIndex, checkpoints, skipLfAt);
+	}
+}
+
+#if defined(__SSE2__) && (defined(__x86_64__) || defined(__i386__))
+void buildDirectInitialLineIndexSse2(const char *data, Offset length,
+                                     std::vector<LineIndexCheckpoint> &checkpoints, Offset &lineStart,
+                                     std::size_t &lineIndex) {
+	const __m128i cr = _mm_set1_epi8('\r');
+	const __m128i lf = _mm_set1_epi8('\n');
+	const Offset width = 16;
+	Offset i = 0;
+	Offset skipLfAt = std::numeric_limits<Offset>::max();
+
+	for (; i + width <= length; i += width) {
+		const __m128i bytes = _mm_loadu_si128(reinterpret_cast<const __m128i *>(data + i));
+		const __m128i isCr = _mm_cmpeq_epi8(bytes, cr);
+		const __m128i isLf = _mm_cmpeq_epi8(bytes, lf);
+		unsigned int mask = static_cast<unsigned int>(_mm_movemask_epi8(_mm_or_si128(isCr, isLf)));
+
+		while (mask != 0) {
+			const unsigned int bit = static_cast<unsigned int>(__builtin_ctz(mask));
+			const Offset at = i + static_cast<Offset>(bit);
+
+			mask &= (mask - 1);
+			if (at == skipLfAt) {
+				skipLfAt = std::numeric_limits<Offset>::max();
+				continue;
+			}
+			applyLineBreakAt(data, length, at, lineStart, lineIndex, checkpoints, skipLfAt);
+		}
+	}
+	for (; i < length; ++i) {
+		if (i == skipLfAt) {
+			skipLfAt = std::numeric_limits<Offset>::max();
+			continue;
+		}
+		if (!isLineBreakByte(data[i]))
+			continue;
+		applyLineBreakAt(data, length, i, lineStart, lineIndex, checkpoints, skipLfAt);
+	}
+}
+#endif
+
+void buildDirectInitialLineIndex(const char *data, Offset length,
+                                 std::vector<LineIndexCheckpoint> &checkpoints, Offset &indexedOffset,
+                                 std::size_t &indexedLine, std::size_t &totalLines) {
+	checkpoints.clear();
+	checkpoints.push_back(LineIndexCheckpoint(0, 0));
+	indexedOffset = 0;
+	indexedLine = 0;
+
+#if defined(__SSE2__) && (defined(__x86_64__) || defined(__i386__))
+	buildDirectInitialLineIndexSse2(data, length, checkpoints, indexedOffset, indexedLine);
+#else
+	buildDirectInitialLineIndexScalar(data, length, checkpoints, indexedOffset, indexedLine);
+#endif
+	totalLines = indexedLine + 1;
 }
 
 template <class Doc>
@@ -849,6 +947,15 @@ void ReadSnapshot::ensureLazyIndexForOffset(Offset targetOffset) const noexcept 
 
 void ReadSnapshot::ensureLazyIndexComplete() const noexcept {
 	ensureLazyIndexSeeded();
+	if (!lazyLineIndexComplete_ && lineIndexCheckpoints_.size() == 1 && lineIndexCheckpoints_[0].offset == 0 &&
+	    lineIndexCheckpoints_[0].lineIndex == 0 && lazyIndexedOffset_ == 0 && lazyIndexedLine_ == 0) {
+		if (const char *data = directTextData()) {
+			buildDirectInitialLineIndex(data, length_, lineIndexCheckpoints_, lazyIndexedOffset_,
+			                           lazyIndexedLine_, lazyTotalLineCount_);
+			lazyLineIndexComplete_ = true;
+			return;
+		}
+	}
 	while (!lazyLineIndexComplete_)
 		advanceLazyIndexByStride();
 }
@@ -1460,6 +1567,15 @@ void TextDocument::ensureLazyIndexForOffset(Offset targetOffset) const noexcept 
 
 void TextDocument::ensureLazyIndexComplete() const noexcept {
 	ensureLazyIndexSeeded();
+	if (!lazyLineIndexComplete_ && lineIndexCheckpoints_.size() == 1 && lineIndexCheckpoints_[0].offset == 0 &&
+	    lineIndexCheckpoints_[0].lineIndex == 0 && lazyIndexedOffset_ == 0 && lazyIndexedLine_ == 0) {
+		if (const char *data = directTextData()) {
+			buildDirectInitialLineIndex(data, length_, lineIndexCheckpoints_, lazyIndexedOffset_,
+			                           lazyIndexedLine_, lazyTotalLineCount_);
+			lazyLineIndexComplete_ = true;
+			return;
+		}
+	}
 	while (!lazyLineIndexComplete_)
 		advanceLazyIndexByStride();
 }

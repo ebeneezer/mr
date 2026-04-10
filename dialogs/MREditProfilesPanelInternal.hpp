@@ -31,7 +31,8 @@ enum {
 	kBinaryRecordLengthFieldSize = 8,
 	kMacroFieldSize = 256,
 	kDefaultPathFieldSize = 256,
-	kFormatLineFieldSize = 256
+	kFormatLineFieldSize = 256,
+	kCursorStatusColorFieldSize = 8
 };
 
 enum : ushort {
@@ -108,6 +109,7 @@ struct EditSettingsDialogRecord {
 	char preSaveMacro[kMacroFieldSize];
 	char defaultPath[kDefaultPathFieldSize];
 	char formatLine[kFormatLineFieldSize];
+	char cursorStatusColor[kCursorStatusColorFieldSize];
 	ushort optionsMask;
 	ushort tabExpandChoice;
 	ushort indentStyleChoice;
@@ -163,6 +165,7 @@ class EditSettingsPanel {
 	TInputLine *preSaveMacroField_ = nullptr;
 	TInputLine *defaultPathField_ = nullptr;
 	TInputLine *formatLineField_ = nullptr;
+	TInputLine *cursorStatusColorField_ = nullptr;
 	TView *postLoadMacroBrowseButton_ = nullptr;
 	TView *preSaveMacroBrowseButton_ = nullptr;
 	TView *defaultPathBrowseButton_ = nullptr;

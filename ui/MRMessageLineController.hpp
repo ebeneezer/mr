@@ -18,6 +18,7 @@ enum class Kind : unsigned char {
 
 enum class Owner : unsigned char {
     HeroEvent,
+    HeroEventFollowup,
     MacroMarquee,
     DialogValidation,
     DialogInteraction
@@ -41,6 +42,13 @@ static constexpr int kPriorityHigh = 30;
 Token postTimed(Owner owner, std::string_view text, Kind kind, std::chrono::milliseconds duration,
                 int priority);
 Token postSticky(Owner owner, std::string_view text, Kind kind, int priority);
+[[nodiscard]] std::chrono::milliseconds autoDurationForText(
+    std::string_view text, std::chrono::milliseconds perCharacter = std::chrono::milliseconds(100));
+Token postAutoTimed(Owner owner, std::string_view text, Kind kind, int priority,
+                    std::chrono::milliseconds perCharacter = std::chrono::milliseconds(100));
+Token postAutoTimedAfter(Owner owner, std::string_view text, Kind kind, std::chrono::milliseconds delay,
+                         int priority,
+                         std::chrono::milliseconds perCharacter = std::chrono::milliseconds(100));
 void clearOwner(Owner owner);
 void clearOwnerToken(Owner owner, Token token);
 [[nodiscard]] bool currentVisibleMessage(VisibleMessage &out);

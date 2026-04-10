@@ -358,7 +358,7 @@ std::string unescapeMrmacSingleQuotedLiteral(const std::string &value) {
 }
 
 bool isCurrentSettingsKey(std::string_view key) {
-	static constexpr std::array<std::string_view, 26> keys = {"SETTINGS_VERSION",
+	static constexpr std::array<std::string_view, 27> keys = {"SETTINGS_VERSION",
 	                                           "MACROPATH",
 	                                           "SETTINGSPATH",
 	                                           "HELPPATH",
@@ -383,7 +383,8 @@ bool isCurrentSettingsKey(std::string_view key) {
 	                                           "PERSISTENT_BLOCKS",
 	                                           "CODE_FOLDING",
 	                                           "COLUMN_BLOCK_MOVE",
-	                                           "DEFAULT_MODE"};
+	                                           "DEFAULT_MODE",
+	                                           "CURSOR_STATUS_COLOR"};
 	return std::find(keys.begin(), keys.end(), key) != keys.end();
 }
 
@@ -568,7 +569,8 @@ bool applyRecognizedSettingsAssignment(const std::string &key, const std::string
 	    key == "TAB_EXPAND" || key == "TAB_SIZE" || key == "BACKUP_FILES" ||
 	    key == "SHOW_EOF_MARKER" || key == "SHOW_EOF_MARKER_EMOJI" ||
 	    key == "SHOW_LINE_NUMBERS" || key == "LINE_NUM_ZERO_FILL" ||
-	    key == "PERSISTENT_BLOCKS" || key == "CODE_FOLDING" || key == "COLUMN_BLOCK_MOVE" || key == "DEFAULT_MODE")
+	    key == "PERSISTENT_BLOCKS" || key == "CODE_FOLDING" || key == "COLUMN_BLOCK_MOVE" ||
+	    key == "DEFAULT_MODE" || key == "CURSOR_STATUS_COLOR")
 		return applyConfiguredEditSetupValue(key, value, &errorText);
 	if (key == "WINDOWCOLORS" || key == "MENUDIALOGCOLORS" || key == "HELPCOLORS" || key == "OTHERCOLORS")
 		return applyConfiguredColorSetupValue(key, value, &errorText);
@@ -866,6 +868,35 @@ std::string buildTopRightCursorStatus() {
 	return std::string(buf);
 }
 
+bool parseCursorStatusColorOverride(std::string_view value, unsigned char &out) {
+	std::string text = trimAscii(value);
+	unsigned int parsed = 0;
+
+	if (text.empty() || text.size() > 2)
+		return false;
+	for (char ch : text)
+		if (std::isxdigit(static_cast<unsigned char>(ch)) == 0)
+			return false;
+	parsed = static_cast<unsigned int>(std::strtoul(text.c_str(), nullptr, 16));
+	if (parsed > 0xFF)
+		return false;
+	out = static_cast<unsigned char>(parsed);
+	return true;
+}
+
+bool currentCursorStatusColorOverride(unsigned char &out) {
+	TMREditWindow *win = currentEditWindow();
+	MREditSetupSettings effective;
+	std::string path;
+
+	if (win == nullptr || win->getEditor() == nullptr || !win->hasPersistentFileName())
+		return false;
+	path = win->currentFileName();
+	if (!effectiveEditSetupSettingsForPath(path, effective, nullptr))
+		return false;
+	return parseCursorStatusColorOverride(effective.cursorStatusColor, out);
+}
+
 TMRMenuBar::MarqueeKind mapMessageNoticeKind(mr::messageline::Kind kind) {
 	switch (kind) {
 		case mr::messageline::Kind::Success:
@@ -878,6 +909,17 @@ TMRMenuBar::MarqueeKind mapMessageNoticeKind(mr::messageline::Kind kind) {
 		default:
 			return TMRMenuBar::MarqueeKind::Info;
 	}
+}
+
+bool isHeroVisibleMessage(const mr::messageline::VisibleMessage &visible) {
+	mr::messageline::VisibleMessage ownerMessage;
+	if (mr::messageline::currentOwnerMessage(mr::messageline::Owner::HeroEvent, ownerMessage) &&
+	    ownerMessage.kind == visible.kind && ownerMessage.text == visible.text)
+		return true;
+	if (mr::messageline::currentOwnerMessage(mr::messageline::Owner::HeroEventFollowup, ownerMessage) &&
+	    ownerMessage.kind == visible.kind && ownerMessage.text == visible.text)
+		return true;
+	return false;
 }
 
 const TPalette &extendedAppBasePalette() {
@@ -897,6 +939,7 @@ const TPalette &extendedAppBasePalette() {
 		data[kMrPaletteMessageError - 1] = data[42 - 1];
 		data[kMrPaletteMessage - 1] = data[43 - 1];
 		data[kMrPaletteMessageWarning - 1] = data[44 - 1];
+		data[kMrPaletteMessageHero - 1] = data[43 - 1];
 		data[kMrPaletteLineNumbers - 1] = data[9 - 1];
 		data[kMrPaletteEofMarker - 1] = data[14 - 1];
 		return TPalette(data, static_cast<ushort>(kTotalSlots));
@@ -1342,9 +1385,16 @@ void TMREditorApp::idle() {
 	mr::coprocessor::globalCoprocessor().pump(8);
 	if (auto *mrMenuBar = dynamic_cast<TMRMenuBar *>(menuBar)) {
 		mr::messageline::VisibleMessage message;
-		mrMenuBar->setRightStatus(buildTopRightCursorStatus());
-		if (mr::messageline::currentVisibleMessage(message))
-			mrMenuBar->setAutoMarqueeStatus(message.text, mapMessageNoticeKind(message.kind));
+		unsigned char cursorStatusColor = 0;
+		std::string rightStatus = buildTopRightCursorStatus();
+		mrMenuBar->setRightStatus(rightStatus, currentCursorStatusColorOverride(cursorStatusColor),
+		                         TColorAttr(cursorStatusColor));
+		if (mr::messageline::currentVisibleMessage(message)) {
+			TMRMenuBar::MarqueeKind marqueeKind = mapMessageNoticeKind(message.kind);
+			if (isHeroVisibleMessage(message))
+				marqueeKind = TMRMenuBar::MarqueeKind::Hero;
+			mrMenuBar->setAutoMarqueeStatus(message.text, marqueeKind);
+		}
 		else
 			mrMenuBar->setAutoMarqueeStatus(std::string());
 		mrMenuBar->tickMarquee();

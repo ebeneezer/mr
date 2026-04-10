@@ -42,6 +42,7 @@ struct MREditSetupSettings {
 	bool codeFolding;
 	std::string columnBlockMove;
 	std::string defaultMode;
+	std::string cursorStatusColor;
 
 	MREditSetupSettings() noexcept
 	    : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false),
@@ -50,7 +51,7 @@ struct MREditSetupSettings {
 	      backupFiles(true), showEofMarker(false),
 	      showEofMarkerEmoji(true),
 	      showLineNumbers(false), lineNumZeroFill(false), persistentBlocks(true), codeFolding(false), columnBlockMove(),
-	      defaultMode() {
+	      defaultMode(), cursorStatusColor() {
 	}
 };
 
@@ -104,6 +105,7 @@ enum MREditSetupOverrideMask : unsigned int {
 	kOvCodeFolding = 1u << 23,
 	kOvColumnBlockMove = 1u << 24,
 	kOvDefaultMode = 1u << 25,
+	kOvCursorStatusColor = 1u << 26,
 };
 
 struct MREditSettingDescriptor {
@@ -153,14 +155,15 @@ enum : unsigned char {
 	kMrPaletteLineNumbers = 142,
 	kMrPaletteEofMarker = 143,
 	kMrPaletteDialogInactiveElements = 144,
-	kMrPaletteMax = kMrPaletteDialogInactiveElements
+	kMrPaletteMessageHero = 145,
+	kMrPaletteMax = kMrPaletteMessageHero
 };
 
 struct MRColorSetupSettings {
 	static const std::size_t kWindowCount = 9;
 	static const std::size_t kMenuDialogCount = 17;
 	static const std::size_t kHelpCount = 9;
-	static const std::size_t kOtherCount = 7;
+	static const std::size_t kOtherCount = 8;
 
 	std::array<unsigned char, kWindowCount> windowColors;
 	std::array<unsigned char, kMenuDialogCount> menuDialogColors;

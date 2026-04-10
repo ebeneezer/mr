@@ -288,6 +288,10 @@ class TMREditWindow : public TWindow {
 		return buffer().lineCount();
 	}
 
+	TMRFileEditor::LoadTiming lastLoadTiming() const noexcept {
+		return editor != nullptr ? editor->lastLoadTiming() : TMRFileEditor::LoadTiming();
+	}
+
 	bool hasSelection() const {
 		return buffer().hasSelection();
 	}

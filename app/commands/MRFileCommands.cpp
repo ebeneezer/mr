@@ -24,6 +24,7 @@
 #include "MRWindowCommands.hpp"
 #include "MRPerformance.hpp"
 
+#include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/TMREditWindow.hpp"
 #include "../../ui/MRWindowSupport.hpp"
 
@@ -105,6 +106,37 @@ ushort execDialogWithDataLocal(TDialog *dialog, void *data) {
 	return std::max(slash, backslash);
 }
 
+[[nodiscard]] std::string baseNameForDisplay(const std::string &path) {
+	const std::size_t sep = lastPathSeparator(path);
+
+	if (sep == std::string::npos || sep + 1 >= path.size())
+		return path;
+	return path.substr(sep + 1);
+}
+
+[[nodiscard]] long long roundedMilliseconds(double valueMs) {
+	if (valueMs <= 0.0)
+		return 0;
+	return static_cast<long long>(valueMs + 0.5);
+}
+
+void postLoadHeroEvents(const std::string &resolvedPath, std::size_t bytes, double loadMs, std::size_t lineCount,
+                        double lineCountMs) {
+	const std::string fileName = baseNameForDisplay(resolvedPath);
+	const std::string loadText =
+	    "loaded " + fileName + " in " + (roundedMilliseconds(loadMs) >= 1 ? std::to_string(roundedMilliseconds(loadMs)) : "<1") + " ms";
+	const std::string lineText = "indexed " + std::to_string(bytes) + " bytes, " +
+	                             std::to_string(lineCount) + " lines, " +
+	                             std::to_string(roundedMilliseconds(lineCountMs)) + " ms";
+	const std::chrono::milliseconds loadDuration = mr::messageline::autoDurationForText(loadText);
+
+	mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEvent, loadText, mr::messageline::Kind::Success,
+	                              mr::messageline::kPriorityHigh);
+	mr::messageline::postAutoTimedAfter(mr::messageline::Owner::HeroEventFollowup, lineText,
+	                                   mr::messageline::Kind::Info, loadDuration,
+	                                   mr::messageline::kPriorityLow);
+}
+
 [[nodiscard]] bool hasExtensionInBaseName(std::string_view path) {
 	const std::size_t sep = lastPathSeparator(path);
 	const std::size_t dot = path.find_last_of('.');
@@ -177,20 +209,40 @@ bool resolveReadableExistingPath(const char *path, std::string &resolvedPath) {
 }
 
 bool loadResolvedFileIntoWindow(TMREditWindow *win, const std::string &resolvedPath, const char *operationLabel) {
-	auto startedAt = std::chrono::steady_clock::now();
+	const auto fallbackLoadStartedAt = std::chrono::steady_clock::now();
 	if (win == nullptr)
 		return false;
 	if (!win->loadFromFile(resolvedPath.c_str())) {
 		messageBox(mfError | mfOKButton, "Unable to load file:\n%s", resolvedPath.c_str());
 		return false;
 	}
+	const TMRFileEditor::LoadTiming timing = win->lastLoadTiming();
+	std::size_t bytes = win->bufferLength();
+	std::size_t lines = 0;
+	double loadMs = 0.0;
+	double lineCountMs = 0.0;
+
+	if (timing.valid) {
+		bytes = timing.bytes;
+		lines = timing.lines;
+		loadMs = timing.mappedLoadMs;
+		lineCountMs = timing.lineCountMs;
+	} else {
+		loadMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() -
+		                                                   fallbackLoadStartedAt)
+		             .count();
+		const auto lineCountStartedAt = std::chrono::steady_clock::now();
+		lines = win->bufferLineCount();
+		lineCountMs =
+		    std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - lineCountStartedAt).count();
+	}
+
 	mr::performance::recordUiEvent(operationLabel != nullptr ? operationLabel : "Load file",
-	                               static_cast<std::size_t>(win->bufferId()), win->documentId(),
-	                               win->bufferLength(),
-	                               std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() -
-	                                                                         startedAt)
-	                                   .count(),
+	                               static_cast<std::size_t>(win->bufferId()), win->documentId(), bytes, loadMs,
 	                               resolvedPath);
+	mr::performance::recordUiEvent("Line count", static_cast<std::size_t>(win->bufferId()), win->documentId(), bytes,
+	                               lineCountMs, resolvedPath);
+	postLoadHeroEvents(resolvedPath, bytes, loadMs, lines, lineCountMs);
 	return true;
 }
 

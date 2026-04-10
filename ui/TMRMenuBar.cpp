@@ -155,6 +155,8 @@ void TMRMenuBar::draw() {
 	int rightStart = size.x;
 	int menuEnd = 0;
 
+	if (rightStatusColorOverrideEnabled_)
+		cStatus = rightStatusColorOverride_;
 	setStyle(cStatus, getStyle(cStatus) | slBold);
 
 	b.moveChar(0, ' ', cNormal, size.x);
@@ -299,6 +301,10 @@ void TMRMenuBar::draw() {
 				case MarqueeKind::Error:
 					slot = kMrPaletteMessageError;
 					biosAttr = colors.otherColors[4];
+					break;
+				case MarqueeKind::Hero:
+					slot = kMrPaletteMessageHero;
+					biosAttr = colors.otherColors[7];
 					break;
 				case MarqueeKind::Success:
 				case MarqueeKind::Info:

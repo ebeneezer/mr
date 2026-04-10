@@ -126,14 +126,11 @@ mr::messageline::Kind toSetupMessageLineKind(TMRMenuBar::MarqueeKind kind) {
 			return mr::messageline::Kind::Warning;
 		case TMRMenuBar::MarqueeKind::Error:
 			return mr::messageline::Kind::Error;
+		case TMRMenuBar::MarqueeKind::Hero:
 		case TMRMenuBar::MarqueeKind::Info:
 		default:
 			return mr::messageline::Kind::Info;
 	}
-}
-
-std::chrono::milliseconds setupMarqueeDurationForText(const std::string &text) {
-	return std::chrono::milliseconds(static_cast<long long>(text.size()) * 100);
 }
 
 void setSetupDialogStatus(const std::string &text, TMRMenuBar::MarqueeKind kind) {
@@ -141,8 +138,8 @@ void setSetupDialogStatus(const std::string &text, TMRMenuBar::MarqueeKind kind)
 		mr::messageline::clearOwner(mr::messageline::Owner::DialogValidation);
 		return;
 	}
-	mr::messageline::postTimed(mr::messageline::Owner::DialogValidation, text, toSetupMessageLineKind(kind),
-	                          setupMarqueeDurationForText(text), mr::messageline::kPriorityHigh);
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogValidation, text,
+	                              toSetupMessageLineKind(kind), mr::messageline::kPriorityHigh);
 }
 
 void clearSetupDialogStatus() {
@@ -437,6 +434,7 @@ TPalette buildColorSetupWorkingPalette() {
 		data[kMrPaletteMessageError - 1] = data[42 - 1];
 		data[kMrPaletteMessage - 1] = data[43 - 1];
 		data[kMrPaletteMessageWarning - 1] = data[44 - 1];
+		data[kMrPaletteMessageHero - 1] = data[43 - 1];
 		data[kMrPaletteLineNumbers - 1] = data[9 - 1];
 		return TPalette(data, static_cast<ushort>(kTotalSlots));
 	}();

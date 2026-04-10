@@ -67,8 +67,6 @@ enum {
 
 const char *kDefaultProfileId = "DEFAULT";
 
-std::chrono::milliseconds marqueeDurationForText(const std::string &text);
-
 char *dupCString(const std::string &value) {
 	char *copy = new char[value.size() + 1];
 	std::memcpy(copy, value.c_str(), value.size() + 1);
@@ -295,10 +293,8 @@ class TReadOnlyAwareInputLine : public TNotifyingInputLine {
 	void postWarning() const {
 		if (warningText_.empty())
 			return;
-		mr::messageline::postTimed(mr::messageline::Owner::DialogInteraction, warningText_,
-		                          mr::messageline::Kind::Warning,
-		                          marqueeDurationForText(warningText_),
-		                          mr::messageline::kPriorityHigh);
+		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, warningText_,
+		                              mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
 	}
 
 	bool readOnly_ = false;
@@ -431,14 +427,11 @@ mr::messageline::Kind toMessageLineKind(TMRMenuBar::MarqueeKind kind) {
 			return mr::messageline::Kind::Warning;
 		case TMRMenuBar::MarqueeKind::Error:
 			return mr::messageline::Kind::Error;
+		case TMRMenuBar::MarqueeKind::Hero:
 		case TMRMenuBar::MarqueeKind::Info:
 		default:
 			return mr::messageline::Kind::Info;
 	}
-}
-
-std::chrono::milliseconds marqueeDurationForText(const std::string &text) {
-	return std::chrono::milliseconds(static_cast<long long>(text.size()) * 100);
 }
 
 void setDialogStatus(const std::string &text, TMRMenuBar::MarqueeKind kind) {
@@ -446,8 +439,8 @@ void setDialogStatus(const std::string &text, TMRMenuBar::MarqueeKind kind) {
 		mr::messageline::clearOwner(mr::messageline::Owner::DialogValidation);
 		return;
 	}
-	mr::messageline::postTimed(mr::messageline::Owner::DialogValidation, text, toMessageLineKind(kind),
-	                          marqueeDurationForText(text), mr::messageline::kPriorityHigh);
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogValidation, text, toMessageLineKind(kind),
+	                              mr::messageline::kPriorityHigh);
 }
 
 void clearDialogStatus() {
@@ -457,9 +450,8 @@ void clearDialogStatus() {
 void postValidationWarning(const std::string &text) {
 	if (text.empty())
 		return;
-	mr::messageline::postTimed(mr::messageline::Owner::DialogValidation, text,
-	                          mr::messageline::Kind::Warning,
-	                          marqueeDurationForText(text), mr::messageline::kPriorityHigh);
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogValidation, text,
+	                              mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
 }
 
 ushort runDirtyProfilesDialog(const std::vector<std::string> &dirtyIds) {
@@ -1012,10 +1004,9 @@ void runEditExtensionProfilesDialogFlow() {
 					if (discardResult == cmYes) {
 						workingDrafts = editedDrafts;
 						if (!saveAndReloadEditProfiles(workingDrafts, errorText)) {
-							mr::messageline::postTimed(mr::messageline::Owner::DialogValidation, errorText,
-							                          mr::messageline::Kind::Warning,
-							                          marqueeDurationForText(errorText),
-							                          mr::messageline::kPriorityHigh);
+							mr::messageline::postAutoTimed(mr::messageline::Owner::DialogValidation, errorText,
+							                              mr::messageline::Kind::Warning,
+							                              mr::messageline::kPriorityHigh);
 							break;
 						}
 						running = false;

@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <climits>
 #include <cstdint>
 #include <cstdio>
@@ -31,6 +32,17 @@
 
 class TMRFileEditor : public TScroller {
   public:
+	struct LoadTiming {
+		bool valid;
+		std::size_t bytes;
+		std::size_t lines;
+		double mappedLoadMs;
+		double lineCountMs;
+
+		LoadTiming() noexcept : valid(false), bytes(0), lines(0), mappedLoadMs(0.0), lineCountMs(0.0) {
+		}
+	};
+
 	TMRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar,
 	              TIndicator *aIndicator, TStringView aFileName) noexcept
 	    : TScroller(bounds, aHScrollBar, aVScrollBar), indicator_(aIndicator), readOnly_(false),
@@ -39,7 +51,7 @@ class TMRFileEditor : public TScroller {
 	      lineIndexWarmupTaskId_(0), lineIndexWarmupDocumentId_(0), lineIndexWarmupVersion_(0),
 	      syntaxTokenCache_(), syntaxWarmupTaskId_(0), syntaxWarmupDocumentId_(0),
 	      syntaxWarmupVersion_(0), syntaxWarmupTopLine_(0), syntaxWarmupBottomLine_(0),
-	      syntaxWarmupLanguage_(TMRSyntaxLanguage::PlainText) {
+	      syntaxWarmupLanguage_(TMRSyntaxLanguage::PlainText), lastLoadTiming_() {
 		fileName[0] = EOS;
 		options |= ofFirstClick;
 		eventMask |= evMouse | evKeyboard | evCommand;
@@ -432,6 +444,10 @@ class TMRFileEditor : public TScroller {
 		return bufferModel_.version();
 	}
 
+	LoadTiming lastLoadTiming() const noexcept {
+		return lastLoadTiming_;
+	}
+
 	bool applyLineIndexWarmup(const mr::editor::LineIndexWarmupData &warmup,
 	                          std::size_t expectedVersion) {
 		if (!bufferModel_.adoptLineIndexWarmup(warmup, expectedVersion))
@@ -520,12 +536,28 @@ class TMRFileEditor : public TScroller {
 
 	bool loadMappedFile(TStringView path, std::string &error) {
 		TMRTextBufferModel::Document document;
+		const auto mapStartedAt = std::chrono::steady_clock::now();
+
+		lastLoadTiming_ = LoadTiming();
 
 		if (!document.loadMappedFile(path, error))
 			return false;
+		const double mappedLoadMs =
+		    std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - mapStartedAt).count();
+		const auto lineCountStartedAt = std::chrono::steady_clock::now();
+		const std::size_t lines = document.lineCount();
+		const double lineCountMs =
+		    std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - lineCountStartedAt).count();
+
+		lastLoadTiming_.valid = true;
+		lastLoadTiming_.bytes = document.length();
+		lastLoadTiming_.lines = lines;
+		lastLoadTiming_.mappedLoadMs = mappedLoadMs;
+		lastLoadTiming_.lineCountMs = lineCountMs;
 		setPersistentFileName(path);
 		if (!adoptCommittedDocument(document, 0, 0, 0, false)) {
 			clearPersistentFileName();
+			lastLoadTiming_ = LoadTiming();
 			error = "Unable to adopt mapped document.";
 			return false;
 		}
@@ -2063,6 +2095,7 @@ class TMRFileEditor : public TScroller {
 	std::size_t syntaxWarmupBottomLine_;
 	TMRSyntaxLanguage syntaxWarmupLanguage_;
 	std::vector<TMRTextBufferModel::Range> dirtyRanges_;
+	LoadTiming lastLoadTiming_;
 
 	void clearDirtyRanges() noexcept {
 		dirtyRanges_.clear();

@@ -41,6 +41,7 @@ bool recordsEqual(const EditSettingsDialogRecord &lhs, const EditSettingsDialogR
 	       readRecordField(lhs.preSaveMacro) == readRecordField(rhs.preSaveMacro) &&
 	       readRecordField(lhs.defaultPath) == readRecordField(rhs.defaultPath) &&
 	       readRecordField(lhs.formatLine) == readRecordField(rhs.formatLine) &&
+	       readRecordField(lhs.cursorStatusColor) == readRecordField(rhs.cursorStatusColor) &&
 	       lhs.optionsMask == rhs.optionsMask && lhs.tabExpandChoice == rhs.tabExpandChoice &&
 	       lhs.indentStyleChoice == rhs.indentStyleChoice && lhs.fileTypeChoice == rhs.fileTypeChoice &&
 	       lhs.columnBlockMoveChoice == rhs.columnBlockMoveChoice &&
@@ -67,6 +68,7 @@ void initEditSettingsDialogRecord(EditSettingsDialogRecord &record) {
 	writeRecordField(record.preSaveMacro, sizeof(record.preSaveMacro), settings.preSaveMacro);
 	writeRecordField(record.defaultPath, sizeof(record.defaultPath), settings.defaultPath);
 	writeRecordField(record.formatLine, sizeof(record.formatLine), settings.formatLine);
+	writeRecordField(record.cursorStatusColor, sizeof(record.cursorStatusColor), settings.cursorStatusColor);
 
 	record.optionsMask = 0;
 	if (settings.truncateSpaces)
@@ -167,6 +169,28 @@ bool recordToSettings(const EditSettingsDialogRecord &record, MREditSetupSetting
 	settings.preSaveMacro = readRecordField(record.preSaveMacro);
 	settings.defaultPath = readRecordField(record.defaultPath);
 	settings.formatLine = readRecordField(record.formatLine);
+	settings.cursorStatusColor = upperAscii(trimAscii(readRecordField(record.cursorStatusColor)));
+	if (!settings.cursorStatusColor.empty()) {
+		unsigned int parsed = 0;
+		static const char *const hex = "0123456789ABCDEF";
+		if (settings.cursorStatusColor.size() > 2) {
+			errorText = "CURSOR_STATUS_COLOR must be hex 00..FF or empty.";
+			return false;
+		}
+		for (char ch : settings.cursorStatusColor)
+			if (std::isxdigit(static_cast<unsigned char>(ch)) == 0) {
+				errorText = "CURSOR_STATUS_COLOR must be hex 00..FF or empty.";
+				return false;
+			}
+		parsed = static_cast<unsigned int>(std::strtoul(settings.cursorStatusColor.c_str(), nullptr, 16));
+		if (parsed > 0xFF) {
+			errorText = "CURSOR_STATUS_COLOR must be hex 00..FF or empty.";
+			return false;
+		}
+		settings.cursorStatusColor.clear();
+		settings.cursorStatusColor.push_back(hex[(parsed >> 4) & 0x0F]);
+		settings.cursorStatusColor.push_back(hex[parsed & 0x0F]);
+	}
 	if (trimAscii(settings.formatLine).empty())
 		settings.formatLine = std::string(8, ' ');
 	if (!settings.postLoadMacro.empty() && !mr::dialogs::hasMrmacExtension(settings.postLoadMacro)) {

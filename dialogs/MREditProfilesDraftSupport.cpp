@@ -346,6 +346,7 @@ void settingsToRecordLocal(const MREditSetupSettings &settings, EditSettingsDial
 	writeRecordField(record.postLoadMacro, sizeof(record.postLoadMacro), settings.postLoadMacro);
 	writeRecordField(record.preSaveMacro, sizeof(record.preSaveMacro), settings.preSaveMacro);
 	writeRecordField(record.defaultPath, sizeof(record.defaultPath), settings.defaultPath);
+	writeRecordField(record.cursorStatusColor, sizeof(record.cursorStatusColor), settings.cursorStatusColor);
 	record.optionsMask = 0;
 	if (settings.truncateSpaces)
 		record.optionsMask |= kOptionTruncateSpaces;

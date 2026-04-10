@@ -14,7 +14,8 @@ class TMRMenuBar : public TMenuBar {
 		Info,
 		Success,
 		Warning,
-		Error
+		Error,
+		Hero
 	};
 
 	TMRMenuBar(const TRect &r, TSubMenu &aMenu)
@@ -26,8 +27,15 @@ class TMRMenuBar : public TMenuBar {
 	void tickMarquee();
 
 	void setRightStatus(const std::string &status) {
-		if (rightStatus_ != status) {
+		setRightStatus(status, false, TColorAttr(0));
+	}
+
+	void setRightStatus(const std::string &status, bool hasColorOverride, TColorAttr colorOverride) {
+		if (rightStatus_ != status || rightStatusColorOverrideEnabled_ != hasColorOverride ||
+		    rightStatusColorOverride_ != colorOverride) {
 			rightStatus_ = status;
+			rightStatusColorOverrideEnabled_ = hasColorOverride;
+			rightStatusColorOverride_ = colorOverride;
 			drawView();
 		}
 	}
@@ -100,6 +108,8 @@ class TMRMenuBar : public TMenuBar {
 	}
 
 	std::string rightStatus_;
+	bool rightStatusColorOverrideEnabled_ = false;
+	TColorAttr rightStatusColorOverride_ = 0;
 	std::string autoMarqueeStatus_;
 	std::string manualMarqueeStatus_;
 	MarqueeKind manualMarqueeKind_ = MarqueeKind::Info;

@@ -450,6 +450,7 @@ static const char *const kFileTypeBinary = "BINARY";
 static const int kDefaultTabSize = 8;
 static const int kMinTabSize = 2;
 static const int kMaxTabSize = 32;
+static const char *const kDefaultCursorStatusColor = "";
 static const char *const kThemeSettingsKey = "COLORTHEMEURI";
 static const char *const kWindowColorThemeProfileKey = "WINDOW_COLORTHEME_URI";
 static const char *const kSettingsVersionKey = "SETTINGS_VERSION";
@@ -505,6 +506,8 @@ static const MREditSettingDescriptor kEditSettingDescriptors[] = {
      kOvColumnBlockMove},
     {"DEFAULT_MODE", "Default mode", MREditSettingSection::Mode, MREditSettingKind::Choice, true,
      kOvDefaultMode},
+    {"CURSOR_STATUS_COLOR", "Cursor status color", MREditSettingSection::Display, MREditSettingKind::String, true,
+     kOvCursorStatusColor},
 };
 
 static const unsigned char kPaletteDialogFrame = 33;
@@ -585,6 +588,7 @@ static const MRColorSetupItem kOtherColorItems[] = {
     {"error message", kMrPaletteMessageError},
     {"message", kMrPaletteMessage},
     {"warning message", kMrPaletteMessageWarning},
+    {"hero events", kMrPaletteMessageHero},
 };
 
 static const ColorGroupDefinition kColorGroups[] = {
@@ -639,6 +643,8 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 		return defaults[43];
 	if (paletteIndex == kMrPaletteMessageWarning)
 		return defaults[44];
+	if (paletteIndex == kMrPaletteMessageHero)
+		return defaults[43];
 	if (paletteIndex == kMrPaletteLineNumbers)
 		return defaults[9];
 	if (paletteIndex == kMrPaletteEofMarker)
@@ -927,15 +933,22 @@ bool parseOtherColorListLiteral(const std::string &literal,
 		cursor = comma + 1;
 	}
 
-	// Accept current 7-value format and legacy 10-value format.
+	// Accept current 8-value format, prior 7-value format and legacy 10-value format.
 	// Legacy format ended with shadow / shadow-character / background color entries,
 	// which are no longer configurable in OTHERCOLORS.
 	if (parsed.size() == MRColorSetupSettings::kOtherCount)
 		for (std::size_t i = 0; i < outValues.size(); ++i)
 			outValues[i] = parsed[i];
-	else if (parsed.size() == 10)
-		for (std::size_t i = 0; i < outValues.size(); ++i)
+	else if (parsed.size() == MRColorSetupSettings::kOtherCount - 1) {
+		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
+		outValues[MRColorSetupSettings::kOtherCount - 1] = defaultColorForSlot(kMrPaletteMessageHero);
+	}
+	else if (parsed.size() == 10) {
+		for (std::size_t i = 0; i < MRColorSetupSettings::kOtherCount - 1; ++i)
+			outValues[i] = parsed[i];
+		outValues[MRColorSetupSettings::kOtherCount - 1] = defaultColorForSlot(kMrPaletteMessageHero);
+	}
 	else
 		return setError(errorMessage, "Unexpected OTHERCOLORS list size.");
 
@@ -1091,6 +1104,27 @@ std::string normalizeFormatLine(const std::string &value) {
 	if (trimAscii(value).empty())
 		return std::string(8, ' ');
 	return value;
+}
+
+bool normalizeCursorStatusColor(const std::string &value, std::string &outValue, std::string *errorMessage) {
+	std::string normalized = upperAscii(trimAscii(value));
+	unsigned char parsed = 0;
+	static const char *const hex = "0123456789ABCDEF";
+
+	if (normalized.empty()) {
+		outValue.clear();
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
+	}
+	if (!parseHexColorToken(normalized, parsed))
+		return setError(errorMessage, "CURSOR_STATUS_COLOR must be a hex byte (00..FF) or empty.");
+	outValue.clear();
+	outValue.push_back(hex[(parsed >> 4) & 0x0F]);
+	outValue.push_back(hex[parsed & 0x0F]);
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
 }
 
 bool parseTabSizeLiteral(const std::string &value, int &outValue, std::string *errorMessage) {
@@ -1408,6 +1442,10 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 		if (normalized.empty())
 			return setError(errorMessage, "DEFAULT_MODE must be INSERT or OVERWRITE.");
 		current.defaultMode = normalized;
+	} else if (upperKeyName == "CURSOR_STATUS_COLOR") {
+		if (!normalizeCursorStatusColor(value, normalized, errorMessage))
+			return false;
+		current.cursorStatusColor = normalized;
 	} else
 		return setError(errorMessage, "Unknown edit setting key.");
 
@@ -1471,6 +1509,8 @@ std::string editSetupValueLiteral(const MREditSetupSettings &settings, const cha
 		return settings.columnBlockMove;
 	if (upperKey == "DEFAULT_MODE")
 		return settings.defaultMode;
+	if (upperKey == "CURSOR_STATUS_COLOR")
+		return settings.cursorStatusColor;
 	return std::string();
 }
 
@@ -1481,7 +1521,7 @@ unsigned int supportedEditProfileOverrideMask() noexcept {
 	                                     kOvPostLoadMacro | kOvPreSaveMacro | kOvDefaultPath | kOvFormatLine |
 	                                     kOvBackupFiles | kOvShowEofMarker | kOvShowEofMarkerEmoji | kOvShowLineNumbers |
 	                                     kOvLineNumZeroFill | kOvPersistentBlocks | kOvCodeFolding | kOvColumnBlockMove |
-	                                     kOvDefaultMode;
+	                                     kOvDefaultMode | kOvCursorStatusColor;
 	return mask;
 }
 
@@ -1656,6 +1696,7 @@ MREditSetupSettings resolveEditSetupDefaults() {
 	defaults.codeFolding = false;
 	defaults.columnBlockMove = kColumnBlockMoveDelete;
 	defaults.defaultMode = kDefaultModeInsert;
+	defaults.cursorStatusColor = kDefaultCursorStatusColor;
 	return defaults;
 }
 
@@ -1736,6 +1777,8 @@ MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults,
 		merged.columnBlockMove = overrides.values.columnBlockMove;
 	if ((overrides.mask & kOvDefaultMode) != 0)
 		merged.defaultMode = overrides.values.defaultMode;
+	if ((overrides.mask & kOvCursorStatusColor) != 0)
+		merged.cursorStatusColor = overrides.values.cursorStatusColor;
 	return merged;
 }
 
@@ -1915,6 +1958,7 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	std::string indentStyle = normalizeIndentStyle(settings.indentStyle);
 	std::string fileType = normalizeFileType(settings.fileType);
 	std::string formatLine = normalizeFormatLine(settings.formatLine);
+	std::string cursorStatusColor;
 	std::string postLoadMacro = trimAscii(settings.postLoadMacro).empty() ? std::string()
 	                                                                  : normalizeConfiguredPathInput(settings.postLoadMacro);
 	std::string preSaveMacro = trimAscii(settings.preSaveMacro).empty() ? std::string()
@@ -1932,6 +1976,8 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 		return setError(errorMessage, "INDENT_STYLE must be OFF, AUTOMATIC or SMART.");
 	if (fileType.empty())
 		return setError(errorMessage, "FILE_TYPE must be LEGACY_TEXT, UNIX or BINARY.");
+	if (!normalizeCursorStatusColor(settings.cursorStatusColor, cursorStatusColor, errorMessage))
+		return false;
 	if (settings.binaryRecordLength < kMinBinaryRecordLength || settings.binaryRecordLength > kMaxBinaryRecordLength)
 		return setError(errorMessage, "BINARY_RECORD_LENGTH must be between 1 and 99999.");
 	if (settings.tabSize < kMinTabSize || settings.tabSize > kMaxTabSize)
@@ -1966,6 +2012,7 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	normalized.defaultExtensions = defaultExts;
 	normalized.columnBlockMove = columnStyle;
 	normalized.defaultMode = defaultMode;
+	normalized.cursorStatusColor = cursorStatusColor;
 	configuredEditSettings() = normalized;
 	if (errorMessage != nullptr)
 		errorMessage->clear();
@@ -2450,6 +2497,7 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.codeFolding)) + "');\n";
 	source += "MRSETUP('COLUMN_BLOCK_MOVE', '" + escapeMrmacSingleQuotedLiteral(edit.columnBlockMove) + "');\n";
 	source += "MRSETUP('DEFAULT_MODE', '" + escapeMrmacSingleQuotedLiteral(edit.defaultMode) + "');\n";
+	source += "MRSETUP('CURSOR_STATUS_COLOR', '" + escapeMrmacSingleQuotedLiteral(edit.cursorStatusColor) + "');\n";
 	source += "MRSETUP('" + std::string(kThemeSettingsKey) + "', '" +
 	          escapeMrmacSingleQuotedLiteral(themePath) + "');\n";
 
@@ -2519,6 +2567,8 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 					value = profile.overrides.values.columnBlockMove;
 				else if (std::string(descriptors[i].key) == "DEFAULT_MODE")
 					value = profile.overrides.values.defaultMode;
+				else if (std::string(descriptors[i].key) == "CURSOR_STATUS_COLOR")
+					value = profile.overrides.values.cursorStatusColor;
 
 				source += "MREDITPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', '" +
 				          descriptors[i].key + "', '" + escapeMrmacSingleQuotedLiteral(value) + "');\n";

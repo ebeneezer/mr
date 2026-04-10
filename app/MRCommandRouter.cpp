@@ -374,9 +374,8 @@ bool handleCancelBackgroundMacros() {
 }
 
 bool handleHeroEventProbe() {
-	mr::messageline::postTimed(mr::messageline::Owner::HeroEvent, "Hero event probe",
-	                          mr::messageline::Kind::Info, std::chrono::seconds(10),
-	                          mr::messageline::kPriorityLow);
+	mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEvent, "Hero event probe",
+	                              mr::messageline::Kind::Info, mr::messageline::kPriorityLow);
 	return true;
 }
 

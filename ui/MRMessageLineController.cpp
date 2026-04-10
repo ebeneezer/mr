@@ -1,5 +1,6 @@
 #include "MRMessageLineController.hpp"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <mutex>
@@ -8,6 +9,8 @@
 namespace mr {
 namespace messageline {
 namespace {
+
+constexpr std::size_t kOwnerCount = static_cast<std::size_t>(Owner::DialogInteraction) + 1;
 
 struct Slot {
     bool active = false;
@@ -22,7 +25,7 @@ struct Slot {
 
 struct State {
     std::mutex mutex;
-    std::array<Slot, 4> slots;
+    std::array<Slot, kOwnerCount> slots;
     Token nextToken = 1;
     std::uint64_t nextSequence = 1;
 };
@@ -91,6 +94,22 @@ Token postSticky(Owner owner, std::string_view text, Kind kind, int priority) {
     slot.token = shared.nextToken++;
     slot.sequence = shared.nextSequence++;
     return slot.token;
+}
+
+std::chrono::milliseconds autoDurationForText(std::string_view text, std::chrono::milliseconds perCharacter) {
+    const long long perCharMs = std::max<long long>(1, perCharacter.count());
+    const long long textLen = static_cast<long long>(text.size());
+    return std::chrono::milliseconds(std::max<long long>(perCharMs, textLen * perCharMs));
+}
+
+Token postAutoTimed(Owner owner, std::string_view text, Kind kind, int priority,
+                    std::chrono::milliseconds perCharacter) {
+    return postTimed(owner, text, kind, autoDurationForText(text, perCharacter), priority);
+}
+
+Token postAutoTimedAfter(Owner owner, std::string_view text, Kind kind, std::chrono::milliseconds delay,
+                         int priority, std::chrono::milliseconds perCharacter) {
+    return postTimed(owner, text, kind, delay + autoDurationForText(text, perCharacter), priority);
 }
 
 void clearOwner(Owner owner) {
