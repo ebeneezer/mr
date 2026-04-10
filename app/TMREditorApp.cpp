@@ -61,7 +61,7 @@ class TMacroBindCaptureDialog : public TDialog {
   public:
 	TMacroBindCaptureDialog()
 	    : TWindowInit(&TDialog::initFrame), TDialog(TRect(0, 0, 52, 8), "Bind Recorded Macro Key"),
-	      hasCaptured_(false), keyCode_(kbNoKey), controlState_(0) {
+	      captureAccepted(false), capturedKeyCode(kbNoKey), capturedControlState(0) {
 		options |= ofCentered;
 		insert(new TStaticText(TRect(2, 2, 50, 6),
 		                       "Press key to bind the recorded macro.\nEsc = no binding."));
@@ -79,9 +79,9 @@ class TMacroBindCaptureDialog : public TDialog {
 				clearEvent(event);
 				return;
 			}
-			hasCaptured_ = true;
-			keyCode_ = event.keyDown.keyCode;
-			controlState_ = event.keyDown.controlKeyState;
+			captureAccepted = true;
+			capturedKeyCode = event.keyDown.keyCode;
+			capturedControlState = event.keyDown.controlKeyState;
 			endModal(cmOK);
 			clearEvent(event);
 			return;
@@ -90,21 +90,21 @@ class TMacroBindCaptureDialog : public TDialog {
 	}
 
 	bool hasCaptured() const noexcept {
-		return hasCaptured_;
+		return captureAccepted;
 	}
 
 	ushort keyCode() const noexcept {
-		return keyCode_;
+		return capturedKeyCode;
 	}
 
 	ushort controlState() const noexcept {
-		return controlState_;
+		return capturedControlState;
 	}
 
   private:
-	bool hasCaptured_;
-	ushort keyCode_;
-	ushort controlState_;
+	bool captureAccepted;
+	ushort capturedKeyCode;
+	ushort capturedControlState;
 };
 
 std::string trimAscii(std::string_view value) {
@@ -437,16 +437,16 @@ std::vector<ParsedEditProfileDirective> parseMreditProfileDirectives(std::string
 
 class StartupSettingsModeGuard {
   public:
-	StartupSettingsModeGuard() noexcept : previous_(mrvmIsStartupSettingsMode()) {
+	StartupSettingsModeGuard() noexcept : previous(mrvmIsStartupSettingsMode()) {
 		mrvmSetStartupSettingsMode(true);
 	}
 
 	~StartupSettingsModeGuard() {
-		mrvmSetStartupSettingsMode(previous_);
+		mrvmSetStartupSettingsMode(previous);
 	}
 
   private:
-	bool previous_;
+	bool previous;
 };
 
 bool validateCurrentSettingsSchema(const std::string &source, std::string &errorText) {
@@ -943,10 +943,10 @@ TDeskTop *TMREditorApp::initMRDeskTop(TRect r) {
 TMREditorApp::TMREditorApp()
     : TProgInit(&TMREditorApp::initMRStatusLine, &TMREditorApp::initMRMenuBar,
                 &TMREditorApp::initMRDeskTop),
-      exitPrepared_(false), keystrokeRecording_(false), recordingMarkerVisible_(false),
-       recordedMacroCounter_(0), 
-      recordingBlinkToggleAt_(std::chrono::steady_clock::now() + kRecordingBlinkInterval),
-      indexedMacroWarmupActive_(false), indexedMacroWarmupLoadedFiles_(0) {
+      exitPrepared(false), keystrokeRecording(false), recordingMarkerVisible(false),
+       recordedMacroCounter(0), 
+      recordingBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval),
+      indexedMacroWarmupActive(false), indexedMacroWarmupLoadedFiles(0) {
 	TEditor::editorDialog = mrEditorDialog;
 	mr::coprocessor::globalCoprocessor().setResultHandler(handleCoprocessorResult);
 	loadStartupSettingsMacro(std::string(), nullptr);
@@ -1026,7 +1026,7 @@ void TMREditorApp::applyConfiguredDisplayLayout() {
 }
 
 void TMREditorApp::prepareForQuit() {
-	if (exitPrepared_)
+	if (exitPrepared)
 		return;
 
 	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
@@ -1036,7 +1036,7 @@ void TMREditorApp::prepareForQuit() {
 	if (!persistConfiguredSettingsSnapshot(&settingsError) && !settingsError.empty())
 		mrLogMessage(("Settings snapshot on exit failed: " + settingsError).c_str());
 
-	exitPrepared_ = true;
+	exitPrepared = true;
 	for (auto & window : windows)
 		if (window != nullptr)
 			pendingTaskCount += window->prepareCoprocessorTasksForShutdown();
@@ -1071,35 +1071,35 @@ void TMREditorApp::redrawRecordingMarkerFrames() {
 }
 
 void TMREditorApp::syncRecordingUiState() {
-	mrSetKeystrokeRecordingActive(keystrokeRecording_);
-	mrSetKeystrokeRecordingMarkerVisible(keystrokeRecording_ && recordingMarkerVisible_);
+	mrSetKeystrokeRecordingActive(keystrokeRecording);
+	mrSetKeystrokeRecordingMarkerVisible(keystrokeRecording && recordingMarkerVisible);
 	if (auto *mrStatusLine = dynamic_cast<TMRStatusLine *>(statusLine))
-		mrStatusLine->setRecordingState(keystrokeRecording_, recordingMarkerVisible_);
+		mrStatusLine->setRecordingState(keystrokeRecording, recordingMarkerVisible);
 	redrawRecordingMarkerFrames();
 }
 
 void TMREditorApp::updateRecordingBlink() {
 	std::chrono::steady_clock::time_point now;
-	if (!keystrokeRecording_)
+	if (!keystrokeRecording)
 		return;
 
 	now = std::chrono::steady_clock::now();
-	if (now < recordingBlinkToggleAt_)
+	if (now < recordingBlinkToggleAt)
 		return;
 
-	recordingMarkerVisible_ = !recordingMarkerVisible_;
-	recordingBlinkToggleAt_ = now + kRecordingBlinkInterval;
-	mrSetKeystrokeRecordingMarkerVisible(recordingMarkerVisible_);
+	recordingMarkerVisible = !recordingMarkerVisible;
+	recordingBlinkToggleAt = now + kRecordingBlinkInterval;
+	mrSetKeystrokeRecordingMarkerVisible(recordingMarkerVisible);
 	if (auto *mrStatusLine = dynamic_cast<TMRStatusLine *>(statusLine))
-		mrStatusLine->setRecordingState(keystrokeRecording_, recordingMarkerVisible_);
+		mrStatusLine->setRecordingState(keystrokeRecording, recordingMarkerVisible);
 	redrawRecordingMarkerFrames();
 }
 
 void TMREditorApp::startKeystrokeRecording() {
-	keystrokeRecording_ = true;
-	recordingMarkerVisible_ = true;
-	recordingBlinkToggleAt_ = std::chrono::steady_clock::now() + kRecordingBlinkInterval;
-	recordedKeySequence_.clear();
+	keystrokeRecording = true;
+	recordingMarkerVisible = true;
+	recordingBlinkToggleAt = std::chrono::steady_clock::now() + kRecordingBlinkInterval;
+	recordedKeySequence.clear();
 	syncRecordingUiState();
 	mrLogMessage("Keystroke recording started (Alt-F10 to stop).");
 }
@@ -1114,16 +1114,16 @@ void TMREditorApp::appendRecordedKeyEvent(const TEvent &event) {
 
 	if ((state & kbPaste) != 0 && event.keyDown.textLength > 0) {
 		for (uchar i = 0; i < event.keyDown.textLength; ++i)
-			appendEscapedKeyInChar(recordedKeySequence_, static_cast<unsigned char>(event.keyDown.text[i]));
+			appendEscapedKeyInChar(recordedKeySequence, static_cast<unsigned char>(event.keyDown.text[i]));
 		return;
 	}
 	if (event.keyDown.textLength > 0) {
 		for (uchar i = 0; i < event.keyDown.textLength; ++i)
-			appendEscapedKeyInChar(recordedKeySequence_, static_cast<unsigned char>(event.keyDown.text[i]));
+			appendEscapedKeyInChar(recordedKeySequence, static_cast<unsigned char>(event.keyDown.text[i]));
 		return;
 	}
 	if (keyInTokenFromEvent(event.keyDown.keyCode, state, keyToken))
-		recordedKeySequence_ += keyToken;
+		recordedKeySequence += keyToken;
 }
 
 bool TMREditorApp::captureBindingKeySpec(std::string &keySpec) {
@@ -1166,7 +1166,7 @@ void TMREditorApp::finalizeKeystrokeRecording() {
 	std::string loadError;
 	std::string summary;
 
-	if (recordedKeySequence_.empty()) {
+	if (recordedKeySequence.empty()) {
 		messageBox(mfInformation | mfOKButton,
 		           "Keystroke recording is empty.\n\nNothing to bind or save.");
 		return;
@@ -1182,14 +1182,14 @@ void TMREditorApp::finalizeKeystrokeRecording() {
 	if (!savePath.empty())
 		savePath = ensureMrmacExtension(expandUserPath(savePath));
 
-	macroName = makeRecordedMacroName(++recordedMacroCounter_);
+	macroName = makeRecordedMacroName(++recordedMacroCounter);
 	source << "$MACRO " << macroName;
 	if (!keySpec.empty())
 		source << " TO " << keySpec << " FROM EDIT";
 	else
 		source << " FROM EDIT";
 	source << ";\n";
-	source << "KEY_IN('" << recordedKeySequence_ << "');\n";
+	source << "KEY_IN('" << recordedKeySequence << "');\n";
 	source << "END_MACRO;\n";
 	macroSource = source.str();
 
@@ -1216,12 +1216,12 @@ void TMREditorApp::finalizeKeystrokeRecording() {
 		else {
 			sessionPath = configuredTempDirectoryPath() + "/mr_recorded_" +
 			              std::to_string(static_cast<long>(::getpid())) + "_" +
-			              std::to_string(recordedMacroCounter_) + ".mrmac";
+			              std::to_string(recordedMacroCounter) + ".mrmac";
 			if (!writeTextFile(sessionPath, macroSource)) {
 				messageBox(mfError | mfOKButton, "Could not create session macro file.");
 				return;
 			}
-			recordedSessionMacroFiles_.push_back(sessionPath);
+			recordedSessionMacroFiles.push_back(sessionPath);
 		}
 
 		if (!mrvmLoadMacroFile(sessionPath, &loadError)) {
@@ -1246,12 +1246,12 @@ void TMREditorApp::finalizeKeystrokeRecording() {
 }
 
 void TMREditorApp::stopKeystrokeRecording() {
-	keystrokeRecording_ = false;
-	recordingMarkerVisible_ = false;
+	keystrokeRecording = false;
+	recordingMarkerVisible = false;
 	syncRecordingUiState();
 	mrLogMessage("Keystroke recording stopped.");
 	finalizeKeystrokeRecording();
-	recordedKeySequence_.clear();
+	recordedKeySequence.clear();
 }
 
 void TMREditorApp::bootstrapIndexedMacroBindings() {
@@ -1260,8 +1260,8 @@ void TMREditorApp::bootstrapIndexedMacroBindings() {
 	std::string directory = defaultMacroDirectoryPath();
 
 	mrvmBootstrapBoundMacroIndex(directory, &fileCount, &bindingCount);
-	indexedMacroWarmupLoadedFiles_ = 0;
-	indexedMacroWarmupActive_ = (fileCount != 0);
+	indexedMacroWarmupLoadedFiles = 0;
+	indexedMacroWarmupActive = (fileCount != 0);
 
 	if (fileCount == 0) {
 		mrLogMessage("Macro bootstrap: no bound .mrmac files found.");
@@ -1291,11 +1291,11 @@ void TMREditorApp::warmIndexedMacroBindings() {
 	std::string failedPath;
 	std::string errorText;
 
-	if (!indexedMacroWarmupActive_)
+	if (!indexedMacroWarmupActive)
 		return;
 
 	if (mrvmWarmLoadNextIndexedMacroFile(&loadedPath, &failedPath, &errorText)) {
-		++indexedMacroWarmupLoadedFiles_;
+		++indexedMacroWarmupLoadedFiles;
 		return;
 	}
 
@@ -1309,19 +1309,19 @@ void TMREditorApp::warmIndexedMacroBindings() {
 
 	if (!mrvmHasPendingIndexedMacroWarmup()) {
 		std::string line = "Macro warmup completed: ";
-		line += std::to_string(indexedMacroWarmupLoadedFiles_);
+		line += std::to_string(indexedMacroWarmupLoadedFiles);
 		line += " file";
-		if (indexedMacroWarmupLoadedFiles_ != 1)
+		if (indexedMacroWarmupLoadedFiles != 1)
 			line += "s";
 		line += " loaded.";
 		mrLogMessage(line.c_str());
-		indexedMacroWarmupActive_ = false;
+		indexedMacroWarmupActive = false;
 	}
 }
 
 void TMREditorApp::handleEvent(TEvent &event) {
 	if (isRecorderToggleCommand(event)) {
-		if (keystrokeRecording_)
+		if (keystrokeRecording)
 			stopKeystrokeRecording();
 		else
 			startKeystrokeRecording();
@@ -1329,14 +1329,14 @@ void TMREditorApp::handleEvent(TEvent &event) {
 		return;
 	}
 	if (isRecorderToggleKey(event)) {
-		if (keystrokeRecording_)
+		if (keystrokeRecording)
 			stopKeystrokeRecording();
 		else
 			startKeystrokeRecording();
 		clearEvent(event);
 		return;
 	}
-	if (keystrokeRecording_ && event.what == evKeyDown)
+	if (keystrokeRecording && event.what == evKeyDown)
 		appendRecordedKeyEvent(event);
 
 	if (event.what == evCommand && event.message.command == cmQuit)

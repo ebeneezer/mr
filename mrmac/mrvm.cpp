@@ -6009,16 +6009,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							throw std::runtime_error(
 							    "MRSETUP(COLORTHEMEURI) failed: " +
 							    (errorText.empty() ? std::string("invalid path.") : errorText));
-					} else if (setupKey == "PAGE_BREAK" || setupKey == "WORD_DELIMITERS" ||
-					           setupKey == "DEFAULT_EXTENSIONS" || setupKey == "TRUNCATE_SPACES" ||
-					           setupKey == "EOF_CTRL_Z" || setupKey == "EOF_CR_LF" ||
-					           setupKey == "TAB_EXPAND" || setupKey == "TAB_SIZE" ||
-					           setupKey == "BACKUP_FILES" || setupKey == "SHOW_EOF_MARKER" ||
-					           setupKey == "SHOW_EOF_MARKER_EMOJI" ||
-					           setupKey == "SHOW_LINE_NUMBERS" ||
-					           setupKey == "LINE_NUM_ZERO_FILL" || setupKey == "PERSISTENT_BLOCKS" ||
-					           setupKey == "CODE_FOLDING" || setupKey == "COLUMN_BLOCK_MOVE" ||
-					           setupKey == "DEFAULT_MODE") {
+					} else if (findEditSettingDescriptorByKey(setupKey) != nullptr) {
 							if (!applyConfiguredEditSetupValue(setupKey, valueAsString(args[1]), &errorText))
 								throw std::runtime_error(
 								    "MRSETUP(" + setupKey + ") failed: " +
@@ -6040,9 +6031,10 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						throw std::runtime_error(
 						    "MRSETUP supports keys: SETTINGS_VERSION, MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
 						    "SHELLPATH, LASTFILEDIALOGPATH, DEFAULT_PROFILE_DESCRIPTION, COLORTHEMEURI, PAGE_BREAK, WORD_DELIMITERS, "
-						    "DEFAULT_EXTENSIONS, TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, TAB_SIZE, "
-						    "BACKUP_FILES, SHOW_EOF_MARKER, SHOW_EOF_MARKER_EMOJI, SHOW_LINE_NUMBERS, "
-						    "LINE_NUM_ZERO_FILL, PERSISTENT_BLOCKS, CODE_FOLDING, COLUMN_BLOCK_MOVE, DEFAULT_MODE, "
+						    "DEFAULT_EXTENSIONS, TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, TAB_SIZE, RIGHT_MARGIN, "
+						    "WORD_WRAP, INDENT_STYLE, FILE_TYPE, BINARY_RECORD_LENGTH, POST_LOAD_MACRO, PRE_SAVE_MACRO, DEFAULT_PATH, "
+						    "FORMAT_LINE, BACKUP_FILES, SHOW_EOF_MARKER, SHOW_EOF_MARKER_EMOJI, SHOW_LINE_NUMBERS, "
+						    "LINE_NUM_ZERO_FILL, PERSISTENT_BLOCKS, CODE_FOLDING, COLUMN_BLOCK_MOVE, DEFAULT_MODE, CURSOR_STATUS_COLOR, "
 						    "WINDOWCOLORS, MENUDIALOGCOLORS, HELPCOLORS, OTHERCOLORS.");
 					runtimeErrorLevel() = 0;
 				} else if (name == "MREDITPROFILE") {

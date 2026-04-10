@@ -233,26 +233,27 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 		const mr::coprocessor::ExternalIoFinishedPayload *finished =
 		    dynamic_cast<const mr::coprocessor::ExternalIoFinishedPayload *>(result.payload.get());
 		if (finished != nullptr) {
-			std::ostringstream line;
-			TMREditWindow *win = findEditWindowByBufferId(static_cast<int>(finished->channelId));
-			if (win != nullptr) {
+			std::ostringstream statusLine;
+			TMREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(finished->channelId));
+			if (targetWindow != nullptr) {
 				std::string exitLine = communicationExitLine(*finished);
-				win->appendTextBuffer(exitLine.c_str());
-				win->setReadOnly(true);
-				win->setFileChanged(false);
-				recordTaskPerformance(result, "External command", win, win->documentId(), win->bufferLength(),
+				targetWindow->appendTextBuffer(exitLine.c_str());
+				targetWindow->setReadOnly(true);
+				targetWindow->setFileChanged(false);
+				recordTaskPerformance(result, "External command", targetWindow, targetWindow->documentId(),
+				                      targetWindow->bufferLength(),
 				                      externalIoDisplayName(result.task));
-				win->releaseCoprocessorTask(result.task.id);
+				targetWindow->releaseCoprocessorTask(result.task.id);
 			} else {
 				recordTaskPerformance(result, "External command", nullptr, 0, 0, externalIoDisplayName(result.task));
 			}
 			mrTraceCoprocessorTaskRelease(static_cast<int>(finished->channelId), result.task.id, "finished");
-			line << "Communication session #" << finished->channelId << " ";
+			statusLine << "Communication session #" << finished->channelId << " ";
 			if (finished->signaled)
-				line << "terminated by signal " << finished->signalNumber;
+				statusLine << "terminated by signal " << finished->signalNumber;
 			else
-				line << "finished with exit code " << finished->exitCode;
-			mrLogMessage(line.str().c_str());
+				statusLine << "finished with exit code " << finished->exitCode;
+			mrLogMessage(statusLine.str().c_str());
 			return;
 		}
 
@@ -261,53 +262,55 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 		const mr::coprocessor::MacroJobStagedPayload *staged =
 		    dynamic_cast<const mr::coprocessor::MacroJobStagedPayload *>(result.payload.get());
 		if (staged != nullptr) {
-			std::ostringstream line;
-			TMREditWindow *win = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
-			TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+			std::ostringstream statusLine;
+			TMREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
+			TMRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
 			bool accepted = false;
 			bool textChanged = false;
 			std::size_t currentVersion = 0;
-			std::string summary;
+			std::string statusSummary;
 
-			if (win != nullptr && editor != nullptr) {
-				currentVersion = editor->documentVersion();
-				TMRTextBufferModel::CommitResult commit = editor->applyStagedTransaction(
+			if (targetWindow != nullptr && targetEditor != nullptr) {
+				currentVersion = targetEditor->documentVersion();
+				TMRTextBufferModel::CommitResult commit = targetEditor->applyStagedTransaction(
 				    staged->transaction, staged->cursorOffset, staged->selectionStart,
 				    staged->selectionEnd, staged->fileChanged);
 				if (!commit.conflicted()) {
-					editor->setInsertModeEnabled(staged->insertMode);
-					win->setIndentLevel(staged->indentLevel);
-					win->setCurrentFileName(staged->fileName.c_str());
-					win->applyCommittedBlockState(staged->blockMode, staged->blockMarkingOn,
+					targetEditor->setInsertModeEnabled(staged->insertMode);
+					targetWindow->setIndentLevel(staged->indentLevel);
+					targetWindow->setCurrentFileName(staged->fileName.c_str());
+					targetWindow->applyCommittedBlockState(staged->blockMode, staged->blockMarkingOn,
 					                             static_cast<uint>(staged->blockAnchor),
 					                             static_cast<uint>(staged->blockEnd));
 					mrvmUiReplaceGlobals(staged->globalOrder, staged->globalInts, staged->globalStrings);
-					mrvmUiReplaceWindowLastSearch(win, staged->fileName, staged->lastSearchValid,
+					mrvmUiReplaceWindowLastSearch(targetWindow, staged->fileName, staged->lastSearchValid,
 					                             staged->lastSearchStart, staged->lastSearchEnd,
 					                             staged->lastSearchCursor);
 					mrvmUiReplaceRuntimeOptions(staged->ignoreCase, staged->tabExpand);
-					mrvmUiReplaceWindowMarkStack(win, staged->markStack);
-					mrvmUiSyncLinkedWindowsFrom(win);
+					mrvmUiReplaceWindowMarkStack(targetWindow, staged->markStack);
+					mrvmUiSyncLinkedWindowsFrom(targetWindow);
 					accepted = true;
 					textChanged = commit.applied();
 				}
 			}
 
-			line << "Background staged macro '" << staged->displayName << "'";
+			statusLine << "Background staged macro '" << staged->displayName << "'";
 			if (accepted) {
 				if (textChanged)
-					line << " committed";
+					statusLine << " committed";
 				else
-					line << " applied state without text changes";
+					statusLine << " applied state without text changes";
 				if (staged->hadError)
-					line << " with VM errors";
-				line << formatTimingSummary(result.timing) << ".";
-				summary = line.str();
-				recordMacroPerformance(result, win, editor != nullptr ? editor->documentId() : 0,
-				                       editor != nullptr ? editor->bufferLength() : 0, staged->displayName);
-				if (win != nullptr)
-					win->noteBackgroundMacroCompleted(summary);
-				releaseMacroTask(win, result, textChanged ? "committed" : "state-only");
+					statusLine << " with VM errors";
+				statusLine << formatTimingSummary(result.timing) << ".";
+				statusSummary = statusLine.str();
+				recordMacroPerformance(result, targetWindow,
+				                       targetEditor != nullptr ? targetEditor->documentId() : 0,
+				                       targetEditor != nullptr ? targetEditor->bufferLength() : 0,
+				                       staged->displayName);
+				if (targetWindow != nullptr)
+					targetWindow->noteBackgroundMacroCompleted(statusSummary);
+				releaseMacroTask(targetWindow, result, textChanged ? "committed" : "state-only");
 				if (!staged->deferredUiCommands.empty()) {
 					TMREditWindow *applyWin =
 					    findEditWindowByBufferId(static_cast<int>(result.task.documentId));
@@ -333,60 +336,64 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 					}
 				}
 			} else {
-				line << " conflicted with a newer document state";
+				statusLine << " conflicted with a newer document state";
 				if (currentVersion != 0)
-					line << " (snapshot " << result.task.baseVersion << ", current " << currentVersion << ")";
-				line << "; commit aborted without rebase" << formatTimingSummary(result.timing) << ".";
-				summary = line.str();
-				recordMacroPerformance(result, win, editor != nullptr ? editor->documentId() : 0,
-				                       editor != nullptr ? editor->bufferLength() : 0, staged->displayName,
+					statusLine << " (snapshot " << result.task.baseVersion << ", current " << currentVersion << ")";
+				statusLine << "; commit aborted without rebase" << formatTimingSummary(result.timing) << ".";
+				statusSummary = statusLine.str();
+				recordMacroPerformance(result, targetWindow,
+				                       targetEditor != nullptr ? targetEditor->documentId() : 0,
+				                       targetEditor != nullptr ? targetEditor->bufferLength() : 0, staged->displayName,
 				                       mr::performance::Outcome::Conflict);
-				if (win != nullptr)
-					win->noteBackgroundMacroConflict(summary);
-				releaseMacroTask(win, result, "conflict");
+				if (targetWindow != nullptr)
+					targetWindow->noteBackgroundMacroConflict(statusSummary);
+				releaseMacroTask(targetWindow, result, "conflict");
 			}
-			mrLogMessage(summary.c_str());
+			mrLogMessage(statusSummary.c_str());
 			appendMacroLogLines(staged->logLines);
 			return;
 		}
 		if (macro != nullptr) {
-			std::ostringstream line;
-			TMREditWindow *win = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
-			std::string summary;
+			std::ostringstream statusLine;
+			TMREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
+			std::string statusSummary;
 
-			recordMacroPerformance(result, win, win != nullptr ? win->documentId() : 0,
-			                       win != nullptr ? win->bufferLength() : 0, macro->displayName);
-			line << "Background macro '" << macro->displayName << "' finished";
+			recordMacroPerformance(result, targetWindow, targetWindow != nullptr ? targetWindow->documentId() : 0,
+			                       targetWindow != nullptr ? targetWindow->bufferLength() : 0,
+			                       macro->displayName);
+			statusLine << "Background macro '" << macro->displayName << "' finished";
 			if (macro->hadError)
-				line << " with VM errors";
-			line << formatTimingSummary(result.timing) << ".";
-			summary = line.str();
-			if (win != nullptr)
-				win->noteBackgroundMacroCompleted(summary);
-			releaseMacroTask(win, result, "finished");
-			mrLogMessage(summary.c_str());
+				statusLine << " with VM errors";
+			statusLine << formatTimingSummary(result.timing) << ".";
+			statusSummary = statusLine.str();
+			if (targetWindow != nullptr)
+				targetWindow->noteBackgroundMacroCompleted(statusSummary);
+			releaseMacroTask(targetWindow, result, "finished");
+			mrLogMessage(statusSummary.c_str());
 			appendMacroLogLines(macro->logLines);
 			return;
 		}
 	}
 
 	if (result.task.kind == mr::coprocessor::TaskKind::ExternalIo) {
-		TMREditWindow *win = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
-		if (win != nullptr) {
-			win->releaseCoprocessorTask(result.task.id);
+		TMREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
+		if (targetWindow != nullptr) {
+			targetWindow->releaseCoprocessorTask(result.task.id);
 			if (result.cancelled()) {
-				win->appendTextBuffer("\n[process cancelled]\n");
-				win->setReadOnly(true);
-				win->setFileChanged(false);
+				targetWindow->appendTextBuffer("\n[process cancelled]\n");
+				targetWindow->setReadOnly(true);
+				targetWindow->setFileChanged(false);
 			} else if (result.failed()) {
-				std::string line = "\n[process failed: " + result.error + "]\n";
-				win->appendTextBuffer(line.c_str());
-				win->setReadOnly(true);
-				win->setFileChanged(false);
+				std::string failureLine = "\n[process failed: " + result.error + "]\n";
+				targetWindow->appendTextBuffer(failureLine.c_str());
+				targetWindow->setReadOnly(true);
+				targetWindow->setFileChanged(false);
 			}
 		}
-		recordTaskPerformance(result, "External command", win, win != nullptr ? win->documentId() : 0,
-		                      win != nullptr ? win->bufferLength() : 0, externalIoDisplayName(result.task));
+		recordTaskPerformance(result, "External command", targetWindow,
+		                      targetWindow != nullptr ? targetWindow->documentId() : 0,
+		                      targetWindow != nullptr ? targetWindow->bufferLength() : 0,
+		                      externalIoDisplayName(result.task));
 		if (result.cancelled())
 			mrTraceCoprocessorTaskRelease(static_cast<int>(result.task.documentId), result.task.id, "cancelled");
 		else if (result.failed())
@@ -394,33 +401,35 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 	}
 
 	if (result.task.kind == mr::coprocessor::TaskKind::MacroJob) {
-		TMREditWindow *win = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
-		std::string name = macroDisplayName(result.task);
-		std::string summary;
+		TMREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
+		std::string displayName = macroDisplayName(result.task);
+		std::string statusSummary;
 
 		if (result.cancelled()) {
-			summary = "Background macro '" + name + "' cancelled" + formatTimingSummary(result.timing) + ".";
-			recordMacroPerformance(result, win, win != nullptr ? win->documentId() : 0,
-			                       win != nullptr ? win->bufferLength() : 0, name,
+			statusSummary = "Background macro '" + displayName + "' cancelled" +
+			                formatTimingSummary(result.timing) + ".";
+			recordMacroPerformance(result, targetWindow, targetWindow != nullptr ? targetWindow->documentId() : 0,
+			                       targetWindow != nullptr ? targetWindow->bufferLength() : 0, displayName,
 			                       mr::performance::Outcome::Cancelled);
-			if (win != nullptr)
-				win->noteBackgroundMacroCancelled(summary);
-			releaseMacroTask(win, result, "cancelled");
-			mrLogMessage(summary.c_str());
+			if (targetWindow != nullptr)
+				targetWindow->noteBackgroundMacroCancelled(statusSummary);
+			releaseMacroTask(targetWindow, result, "cancelled");
+			mrLogMessage(statusSummary.c_str());
 		} else if (result.failed()) {
-			std::ostringstream line;
-			line << "Background macro '" << name << "' failed";
+			std::ostringstream failureLine;
+			failureLine << "Background macro '" << displayName << "' failed";
 			if (!result.error.empty())
-				line << ": " << result.error;
-			line << formatTimingSummary(result.timing) << ".";
-			summary = line.str();
-			recordMacroPerformance(result, win, win != nullptr ? win->documentId() : 0,
-			                       win != nullptr ? win->bufferLength() : 0, name,
+				failureLine << ": " << result.error;
+			failureLine << formatTimingSummary(result.timing) << ".";
+			statusSummary = failureLine.str();
+			recordMacroPerformance(result, targetWindow,
+			                       targetWindow != nullptr ? targetWindow->documentId() : 0,
+			                       targetWindow != nullptr ? targetWindow->bufferLength() : 0, displayName,
 			                       mr::performance::Outcome::Failed);
-			if (win != nullptr)
-				win->noteBackgroundMacroFailed(summary);
-			releaseMacroTask(win, result, "failed");
-			mrLogMessage(summary.c_str());
+			if (targetWindow != nullptr)
+				targetWindow->noteBackgroundMacroFailed(statusSummary);
+			releaseMacroTask(targetWindow, result, "failed");
+			mrLogMessage(statusSummary.c_str());
 		}
 		if (result.failed())
 			return;

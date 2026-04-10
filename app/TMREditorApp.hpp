@@ -43,15 +43,15 @@ class TMREditorApp : public TApplication {
 	void applyConfiguredDisplayLayout();
 	void applyConfiguredWindowFramePolicy();
 
-	bool exitPrepared_;
-	bool keystrokeRecording_;
-	bool recordingMarkerVisible_;
-	std::string recordedKeySequence_;
-	unsigned long recordedMacroCounter_;
-	std::vector<std::string> recordedSessionMacroFiles_;
-	std::chrono::steady_clock::time_point recordingBlinkToggleAt_;
-	bool indexedMacroWarmupActive_;
-	std::size_t indexedMacroWarmupLoadedFiles_;
+	bool exitPrepared;
+	bool keystrokeRecording;
+	bool recordingMarkerVisible;
+	std::string recordedKeySequence;
+	unsigned long recordedMacroCounter;
+	std::vector<std::string> recordedSessionMacroFiles;
+	std::chrono::steady_clock::time_point recordingBlinkToggleAt;
+	bool indexedMacroWarmupActive;
+	std::size_t indexedMacroWarmupLoadedFiles;
 };
 
 // Regression-only hooks used by regression/mr-regression-checks.cpp.

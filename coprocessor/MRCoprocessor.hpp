@@ -320,21 +320,21 @@ class Coprocessor {
 	void forgetTask(std::uint64_t taskId);
 	LaneState &laneState(Lane lane) noexcept;
 
-	mutable std::mutex resultMutex_;
-	std::deque<Result> results_;
+	mutable std::mutex resultMutex;
+	std::deque<Result> results;
 
-	mutable std::mutex handlerMutex_;
-	ResultHandler resultHandler_;
+	mutable std::mutex handlerMutex;
+	ResultHandler resultHandler;
 
-	std::uint64_t nextTaskId_;
-	std::mutex nextTaskMutex_;
-	std::mutex taskCancelMutex_;
-	std::unordered_map<std::uint64_t, std::shared_ptr<std::atomic_bool>> taskCancelFlags_;
-	std::atomic<bool> shuttingDown_;
+	std::uint64_t nextTaskId;
+	std::mutex nextTaskMutex;
+	std::mutex taskCancelMutex;
+	std::unordered_map<std::uint64_t, std::shared_ptr<std::atomic_bool>> taskCancelFlags;
+	std::atomic<bool> shuttingDown;
 
-	LaneState ioLane_;
-	LaneState computeLane_;
-	LaneState macroLane_;
+	LaneState ioLane;
+	LaneState computeLane;
+	LaneState macroLane;
 };
 
 Coprocessor &globalCoprocessor();

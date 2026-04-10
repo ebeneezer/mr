@@ -226,7 +226,7 @@ void writeIntegerInputValue(TInputLine *inputLine, char *dest, std::size_t destS
 	writeRecordField(dest, destSize, std::to_string(value));
 }
 
-std::string currentInputValueLocal(TInputLine *inputLine) {
+std::string readInputFieldValue(TInputLine *inputLine) {
 	std::vector<char> buffer(512, '\0');
 
 	if (inputLine == nullptr)
@@ -235,7 +235,7 @@ std::string currentInputValueLocal(TInputLine *inputLine) {
 	return readRecordField(buffer.data());
 }
 
-void setInputValueLocal(TInputLine *inputLine, const std::string &value) {
+void writeInputFieldValue(TInputLine *inputLine, const std::string &value) {
 	std::vector<char> buffer(512, '\0');
 
 	if (inputLine == nullptr)
@@ -561,30 +561,30 @@ void EditSettingsPanel::syncDynamicStates() {
 }
 
 std::string EditSettingsPanel::postLoadMacroValue() const {
-	return currentInputValueLocal(postLoadMacroField_);
+	return readInputFieldValue(postLoadMacroField_);
 }
 
 std::string EditSettingsPanel::preSaveMacroValue() const {
-	return currentInputValueLocal(preSaveMacroField_);
+	return readInputFieldValue(preSaveMacroField_);
 }
 
 std::string EditSettingsPanel::defaultPathValue() const {
-	return currentInputValueLocal(defaultPathField_);
+	return readInputFieldValue(defaultPathField_);
 }
 
 void EditSettingsPanel::setPostLoadMacroValue(const std::string &value) {
 	if (postLoadMacroField_ != nullptr)
-		setInputValueLocal(postLoadMacroField_, value);
+		writeInputFieldValue(postLoadMacroField_, value);
 }
 
 void EditSettingsPanel::setPreSaveMacroValue(const std::string &value) {
 	if (preSaveMacroField_ != nullptr)
-		setInputValueLocal(preSaveMacroField_, value);
+		writeInputFieldValue(preSaveMacroField_, value);
 }
 
 void EditSettingsPanel::setDefaultPathValue(const std::string &value) {
 	if (defaultPathField_ != nullptr)
-		setInputValueLocal(defaultPathField_, value);
+		writeInputFieldValue(defaultPathField_, value);
 }
 
 } // namespace MREditProfilesDialogInternal

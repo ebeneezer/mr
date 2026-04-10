@@ -15,23 +15,23 @@ namespace mr {
 namespace performance {
 namespace {
 
-struct State {
+struct EventStore {
 	std::mutex mutex;
 	std::deque<Event> events;
 	std::uint64_t nextSequence;
 
-	State() noexcept : nextSequence(1) {
+	EventStore() noexcept : nextSequence(1) {
 	}
 };
 
 static constexpr std::size_t kMaxEvents = 64;
 
-State &state() {
-	static State instance;
+EventStore &eventStore() {
+	static EventStore instance;
 	return instance;
 }
 
-std::string_view baseNameOf(std::string_view path) {
+std::string_view leafNameOf(std::string_view path) {
 	std::size_t pos = path.find_last_of("\\/");
 	if (pos == std::string_view::npos)
 		return path;
@@ -79,20 +79,20 @@ std::string formatWallClock(std::time_t when) {
 	return buffer.data();
 }
 
-void pushEvent(State &shared, Event event) {
-	event.sequence = shared.nextSequence++;
+void appendEvent(EventStore &store, Event event) {
+	event.sequence = store.nextSequence++;
 	event.wallClock = std::time(nullptr);
-	shared.events.push_front(std::move(event));
-	while (shared.events.size() > kMaxEvents)
-		shared.events.pop_back();
+	store.events.push_front(std::move(event));
+	while (store.events.size() > kMaxEvents)
+		store.events.pop_back();
 }
 
 } // namespace
 
 void recordUiEvent(std::string_view action, std::size_t bufferId, std::size_t documentId, std::size_t bytes,
                    double totalMs, std::string_view detail, Outcome outcome) {
-	State &shared = state();
-	std::lock_guard<std::mutex> lock(shared.mutex);
+	EventStore &store = eventStore();
+	std::lock_guard<std::mutex> lock(store.mutex);
 	Event event;
 
 	event.scope = Scope::Ui;
@@ -105,7 +105,7 @@ void recordUiEvent(std::string_view action, std::size_t bufferId, std::size_t do
 	event.bytes = bytes;
 	event.runMs = totalMs;
 	event.totalMs = totalMs;
-	pushEvent(shared, event);
+	appendEvent(store, event);
 }
 
 void recordBackgroundResult(const mr::coprocessor::Result &result, std::string_view action,
@@ -119,8 +119,8 @@ void recordBackgroundResult(const mr::coprocessor::Result &result, std::string_v
 void recordBackgroundEvent(mr::coprocessor::Lane lane, Outcome outcome, const mr::coprocessor::TaskTiming &timing,
                            std::string_view action, std::size_t bufferId, std::size_t documentId,
                            std::size_t bytes, std::string_view detail) {
-	State &shared = state();
-	std::lock_guard<std::mutex> lock(shared.mutex);
+	EventStore &store = eventStore();
+	std::lock_guard<std::mutex> lock(store.mutex);
 	Event event;
 
 	event.scope = Scope::Background;
@@ -134,15 +134,15 @@ void recordBackgroundEvent(mr::coprocessor::Lane lane, Outcome outcome, const mr
 	event.queueMs = timing.queueMs();
 	event.runMs = timing.runMs();
 	event.totalMs = timing.totalMs();
-	pushEvent(shared, event);
+	appendEvent(store, event);
 }
 
 std::vector<Event> recentForWindow(std::size_t bufferId, std::size_t documentId, std::size_t maxCount) {
-	State &shared = state();
+	EventStore &store = eventStore();
 	std::vector<Event> result;
-	std::lock_guard<std::mutex> lock(shared.mutex);
+	std::lock_guard<std::mutex> lock(store.mutex);
 
-	for (const auto & event : shared.events) {
+	for (const auto & event : store.events) {
 		bool matchesBuffer = bufferId != 0 && event.bufferId != 0 && event.bufferId == bufferId;
 		bool matchesDocument = documentId != 0 && event.documentId != 0 && event.documentId == documentId;
 
@@ -156,12 +156,12 @@ std::vector<Event> recentForWindow(std::size_t bufferId, std::size_t documentId,
 }
 
 std::vector<Event> recentGlobal(std::size_t maxCount) {
-	State &shared = state();
+	EventStore &store = eventStore();
 	std::vector<Event> result;
-	std::lock_guard<std::mutex> lock(shared.mutex);
+	std::lock_guard<std::mutex> lock(store.mutex);
 
-	for (std::deque<Event>::const_iterator it = shared.events.begin();
-	     it != shared.events.end() && result.size() < maxCount; ++it)
+	for (std::deque<Event>::const_iterator it = store.events.begin();
+	     it != store.events.end() && result.size() < maxCount; ++it)
 		result.push_back(*it);
 	return result;
 }
@@ -233,7 +233,7 @@ std::string formatEventLine(const Event &event) {
 	}
 	if (!event.detail.empty()) {
 		line += " ";
-		line += baseNameOf(event.detail);
+		line += leafNameOf(event.detail);
 	}
 	return line;
 }

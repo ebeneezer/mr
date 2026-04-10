@@ -296,7 +296,7 @@ bool saveAndReloadPathsRecord(const PathsDialogRecord &record, std::string &erro
 	return true;
 }
 
-std::string currentWorkingDirectoryLocal() {
+std::string readCurrentWorkingDirectory() {
 	char cwd[PATH_MAX];
 
 	if (::getcwd(cwd, sizeof(cwd)) == nullptr)
@@ -348,7 +348,7 @@ bool browseUriWithFileDialog(const char *title, const std::string &currentValue,
 }
 
 bool browsePathWithDirectoryDialog(const std::string &currentValue, std::string &selectedPath) {
-	std::string originalCwd = currentWorkingDirectoryLocal();
+	std::string originalCwd = readCurrentWorkingDirectory();
 	std::string seed = normalizeConfiguredPathInput(trimAscii(currentValue));
 	std::string picked;
 	ushort result;
@@ -356,7 +356,7 @@ bool browsePathWithDirectoryDialog(const std::string &currentValue, std::string 
 	if (!seed.empty())
 		(void)::chdir(seed.c_str());
 	result = execDialogRaw(new TChDirDialog(cdNormal, 231));
-	picked = currentWorkingDirectoryLocal();
+	picked = readCurrentWorkingDirectory();
 	if (!originalCwd.empty())
 		(void)::chdir(originalCwd.c_str());
 	if (result == cmCancel) {
@@ -401,6 +401,21 @@ bool chooseThemeFileForSave(std::string &selectedUri) {
 
 ushort execDialog(TDialog *dialog) {
 	ushort result = execDialogRaw(dialog);
+	if (result == cmHelp)
+		static_cast<void>(mrShowProjectHelp());
+	return result;
+}
+
+ushort execDialogWithDataCapture(TDialog *dialog, void *data) {
+	ushort result = cmCancel;
+	if (dialog == nullptr)
+		return result;
+	if (data != nullptr)
+		dialog->setData(data);
+	result = TProgram::deskTop->execView(dialog);
+	if (data != nullptr)
+		dialog->getData(data);
+	TObject::destroy(dialog);
 	if (result == cmHelp)
 		static_cast<void>(mrShowProjectHelp());
 	return result;
@@ -756,7 +771,7 @@ void showPathsHelpDummyDialog() {
 	execDialog(createSetupSimplePreviewDialog("PATHS HELP", 74, 16, lines, false));
 }
 
-void runPathsSetupDialogFlowLocal() {
+void runPathsSetupDialogFlow() {
 	bool running = true;
 	std::string errorText;
 	PathsDialogRecord baselineRecord;
@@ -1296,7 +1311,7 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 	TButton *doneButton_ = nullptr;
 };
 
-void runBackupsAutosaveDialogFlowLocal() {
+void runBackupsAutosaveDialogFlow() {
 	bool running = true;
 	std::string errorText;
 	BackupsAutosaveDialogRecord baselineRecord = sessionBackupsAutosaveRecord();
@@ -1366,7 +1381,7 @@ void runBackupsAutosaveDialogFlowLocal() {
 }
 } // namespace
 
-void runColorSetupDialogFlowLocal() {
+void runColorSetupDialogFlow() {
 	auto persistSettingsFileOnly = [](std::string &errorText) -> bool {
 		MRSetupPaths paths = resolveSetupPathDefaults();
 		paths.settingsMacroUri = configuredSettingsMacroFilePath();
@@ -1379,17 +1394,26 @@ void runColorSetupDialogFlowLocal() {
 
 	bool running = true;
 	std::string errorText;
+	TPalette pendingPalette = buildColorSetupWorkingPalette();
+	bool havePendingPalette = false;
 
 	while (running) {
-		TPalette workingPalette = buildColorSetupWorkingPalette();
-		ushort result = execDialogRawWithData(createColorSetupDialog(), &workingPalette);
+		TPalette baselinePalette = buildColorSetupWorkingPalette();
+		TPalette workingPalette = havePendingPalette ? pendingPalette : baselinePalette;
+		ushort result = execDialogWithDataCapture(createColorSetupDialog(), &workingPalette);
+
 		switch (result) {
 			case cmOK:
 				if (!applyWorkingColorPaletteToConfigured(workingPalette, errorText)) {
 					messageBox(mfError | mfOKButton, "Installation / Color setup\n\n%s", errorText.c_str());
 					break;
 				}
+				if (!persistSettingsFileOnly(errorText)) {
+					messageBox(mfError | mfOKButton, "Color Setup / Save settings\n\n%s", errorText.c_str());
+					break;
+				}
 				TProgram::application->redraw();
+				havePendingPalette = false;
 				running = false;
 				break;
 
@@ -1412,11 +1436,15 @@ void runColorSetupDialogFlowLocal() {
 
 			case cmMrColorSaveTheme: {
 				std::string themeUri;
+				std::string activeThemeUri = normalizeConfiguredPathInput(configuredColorThemeFilePath());
+				bool overwriteActiveTheme = false;
 
 				if (!chooseThemeFileForSave(themeUri))
 					break;
 				if (!confirmOverwriteForPath("Overwrite", "Theme file exists. Overwrite?", themeUri))
 					break;
+				overwriteActiveTheme =
+				    normalizeConfiguredPathInput(themeUri) == activeThemeUri;
 				if (!applyWorkingColorPaletteToConfigured(workingPalette, errorText)) {
 					messageBox(mfError | mfOKButton, "Color Setup / Save Theme\n\n%s", errorText.c_str());
 					break;
@@ -1425,16 +1453,28 @@ void runColorSetupDialogFlowLocal() {
 					messageBox(mfError | mfOKButton, "Color Setup / Save Theme\n\n%s", errorText.c_str());
 					break;
 				}
-				if (!persistSettingsFileOnly(errorText)) {
-					messageBox(mfError | mfOKButton, "Color Setup / Save settings\n\n%s", errorText.c_str());
-					break;
+				if (overwriteActiveTheme) {
+					if (!persistSettingsFileOnly(errorText)) {
+						messageBox(mfError | mfOKButton, "Color Setup / Save settings\n\n%s", errorText.c_str());
+						break;
+					}
+					TProgram::application->redraw();
 				}
-				TProgram::application->redraw();
+				pendingPalette = workingPalette;
+				havePendingPalette = true;
 				break;
 			}
 
-			case cmCancel:
+			case cmCancel: {
+				// Color setup uses explicit commit actions only (OK / Load Theme / Save Theme).
+				// Cancel always discards in-dialog edits without a dirty prompt.
+				havePendingPalette = false;
+				running = false;
+				break;
+			}
+
 			default:
+				havePendingPalette = false;
 				running = false;
 				break;
 		}
@@ -1474,33 +1514,8 @@ bool mrSaveColorThemeFromWorkingPaletteForTesting(const TPalette &workingPalette
 	return true;
 }
 
-bool saveCurrentSetupConfiguration(std::string &errorText) {
-	TMREditorApp *app = dynamic_cast<TMREditorApp *>(TProgram::application);
-	MRSetupPaths paths = resolveSetupPathDefaults();
-
-	if (app == nullptr) {
-		errorText = "Application error: TMREditorApp is unavailable.";
-		return false;
-	}
-
-	paths.settingsMacroUri = configuredSettingsMacroFilePath();
-	paths.macroPath = defaultMacroDirectoryPath();
-	paths.helpUri = configuredHelpFilePath();
-	paths.tempPath = configuredTempDirectoryPath();
-	paths.shellUri = configuredShellExecutablePath();
-
-	if (!writeSettingsMacroFile(paths, &errorText))
-		return false;
-	if (!app->reloadSettingsMacroFromPath(paths.settingsMacroUri, &errorText))
-		return false;
-
-	errorText.clear();
-	return true;
-}
-
 void runInstallationAndSetupDialogFlow() {
 	bool running = true;
-	std::string errorText;
 
 	while (running) {
 		ushort result = execDialog(createInstallationAndSetupDialog());
@@ -1511,29 +1526,20 @@ void runInstallationAndSetupDialogFlow() {
 				break;
 
 			case cmMrSetupColorSetup:
-				runColorSetupDialogFlowLocal();
+				runColorSetupDialogFlow();
 				break;
 
 			case cmMrSetupSwappingEmsXms:
-				runPathsSetupDialogFlowLocal();
+				runPathsSetupDialogFlow();
 				break;
 
 			case cmMrSetupBackupsTempAutosave:
-				runBackupsAutosaveDialogFlowLocal();
+				runBackupsAutosaveDialogFlow();
 				break;
 
 			case cmMrSetupSearchAndReplaceDefaults:
 				messageBox(mfInformation | mfOKButton,
 				           "Installation / Search and Replace defaults\n\nDummy implementation for now.");
-				break;
-
-			case cmMrSetupSaveConfigurationAndExit:
-				if (!saveCurrentSetupConfiguration(errorText)) {
-					messageBox(mfError | mfOKButton, "Installation / Save configuration\n\n%s",
-					           errorText.c_str());
-					break;
-				}
-				running = false;
 				break;
 
 			case cmCancel:
@@ -1542,4 +1548,266 @@ void runInstallationAndSetupDialogFlow() {
 				break;
 		}
 	}
+}
+
+
+// ---- Consolidated from MRSetupDialogCommon.cpp ----
+
+namespace {
+
+class TSetupDialogContentGroup : public TGroup {
+  public:
+	explicit TSetupDialogContentGroup(const TRect &bounds) : TGroup(bounds) {
+	}
+
+	void draw() override {
+		TDrawBuffer buffer;
+		TColorAttr color = owner != nullptr ? owner->mapColor(1) : mapColor(1);
+		TView *child = first();
+
+		buffer.moveChar(0, ' ', color, size.x);
+		for (short y = 0; y < size.y; ++y)
+			writeLine(0, y, size.x, 1, buffer);
+		drawSubViews(child, nullptr);
+	}
+};
+
+} // namespace
+
+TGroup *createSetupDialogContentGroup(const TRect &bounds) {
+	return new TSetupDialogContentGroup(bounds);
+}
+
+MRScrollableDialog::MRScrollableDialog(const TRect &bounds, const char *title, int virtualWidth,
+                                       int virtualHeight)
+    : TWindowInit(&TDialog::initFrame), TDialog(bounds, title), virtualWidth_(virtualWidth),
+      virtualHeight_(virtualHeight), contentRect_(1, 1, size.x - 1, size.y - 1) {
+	content_ = createSetupDialogContentGroup(contentRect_);
+	if (content_ != nullptr) {
+		content_->options |= ofSelectable;
+		insert(content_);
+	}
+}
+
+void MRScrollableDialog::addManaged(TView *view, const TRect &base) {
+	ManagedItem item;
+	item.view = view;
+	item.base = base;
+	managedViews_.push_back(item);
+	if (content_ != nullptr) {
+		TRect local = base;
+		local.move(-contentRect_.a.x, -contentRect_.a.y);
+		view->locate(local);
+		content_->insert(view);
+	} else
+		insert(view);
+}
+
+void MRScrollableDialog::selectContent() {
+	if (content_ != nullptr) {
+		content_->resetCurrent();
+		content_->select();
+	}
+}
+
+void MRScrollableDialog::scrollToOrigin() {
+	if (hScrollBar_ != nullptr)
+		hScrollBar_->setValue(0);
+	if (vScrollBar_ != nullptr)
+		vScrollBar_->setValue(0);
+	applyScroll();
+}
+
+void MRScrollableDialog::initScrollIfNeeded() {
+	int virtualContentWidth = std::max(1, virtualWidth_ - 2);
+	int virtualContentHeight = std::max(1, virtualHeight_ - 2);
+	bool needH = false;
+	bool needV = false;
+
+	for (;;) {
+		bool prevH = needH;
+		bool prevV = needV;
+		int viewportWidth = std::max(1, size.x - 2);
+		int viewportHeight = std::max(1, size.y - 2);
+		needH = virtualContentWidth > viewportWidth;
+		needV = virtualContentHeight > viewportHeight;
+		if (needH == prevH && needV == prevV)
+			break;
+	}
+
+	contentRect_ = TRect(1, 1, size.x - 1, size.y - 1);
+	if (contentRect_.b.x <= contentRect_.a.x)
+		contentRect_.b.x = contentRect_.a.x + 1;
+	if (contentRect_.b.y <= contentRect_.a.y)
+		contentRect_.b.y = contentRect_.a.y + 1;
+	if (content_ != nullptr)
+		content_->locate(contentRect_);
+
+	if (needH) {
+		TRect hRect(1, size.y - 1, size.x - 1, size.y);
+		if (hScrollBar_ == nullptr) {
+			hScrollBar_ = new TScrollBar(hRect);
+			insert(hScrollBar_);
+		} else
+			hScrollBar_->locate(hRect);
+	}
+	if (needV) {
+		TRect vRect(size.x - 1, 1, size.x, size.y - 1);
+		if (vScrollBar_ == nullptr) {
+			vScrollBar_ = new TScrollBar(vRect);
+			insert(vScrollBar_);
+		} else
+			vScrollBar_->locate(vRect);
+	}
+	if (hScrollBar_ != nullptr) {
+		int maxDx = std::max(0, virtualContentWidth - std::max(1, contentRect_.b.x - contentRect_.a.x));
+		hScrollBar_->setParams(0, 0, maxDx,
+		                       std::max(1, (contentRect_.b.x - contentRect_.a.x) / 2), 1);
+	}
+	if (vScrollBar_ != nullptr) {
+		int maxDy = std::max(0, virtualContentHeight - std::max(1, contentRect_.b.y - contentRect_.a.y));
+		vScrollBar_->setParams(0, 0, maxDy,
+		                       std::max(1, (contentRect_.b.y - contentRect_.a.y) / 2), 1);
+	}
+	applyScroll();
+}
+
+void MRScrollableDialog::handleEvent(TEvent &event) {
+	if (event.what == evKeyDown) {
+		ushort keyCode = event.keyDown.keyCode;
+
+		if (keyCode == kbEsc) {
+			endModal(cmCancel);
+			clearEvent(event);
+			return;
+		}
+		if (content_ != nullptr) {
+			if (keyCode == kbTab || keyCode == kbCtrlI) {
+				content_->selectNext(False);
+				ensureCurrentVisible();
+				clearEvent(event);
+				return;
+			}
+			if (keyCode == kbShiftTab) {
+				content_->selectNext(True);
+				ensureCurrentVisible();
+				clearEvent(event);
+				return;
+			}
+		}
+	}
+
+	TDialog::handleEvent(event);
+	if (event.what == evBroadcast && event.message.command == cmScrollBarChanged &&
+	    (event.message.infoPtr == hScrollBar_ || event.message.infoPtr == vScrollBar_)) {
+		applyScroll();
+		clearEvent(event);
+		return;
+	}
+	if (event.what == evKeyDown || event.what == evCommand || event.what == evMouseDown || event.what == evMouseUp)
+		ensureCurrentVisible();
+}
+
+void MRScrollableDialog::ensureViewVisible(TView *view) {
+	if (view == nullptr || content_ == nullptr)
+		return;
+	for (const auto &managedView : managedViews_)
+		if (managedView.view == view) {
+			int dx = hScrollBar_ != nullptr ? hScrollBar_->value : 0;
+			int dy = vScrollBar_ != nullptr ? vScrollBar_->value : 0;
+			int viewportWidth = std::max(1, contentRect_.b.x - contentRect_.a.x);
+			int viewportHeight = std::max(1, contentRect_.b.y - contentRect_.a.y);
+			int left = managedView.base.a.x - contentRect_.a.x;
+			int right = managedView.base.b.x - contentRect_.a.x;
+			int top = managedView.base.a.y - contentRect_.a.y;
+			int bottom = managedView.base.b.y - contentRect_.a.y;
+
+			if (hScrollBar_ != nullptr) {
+				if (left < dx)
+					hScrollBar_->setValue(std::max(0, left));
+				else if (right > dx + viewportWidth)
+					hScrollBar_->setValue(std::max(0, right - viewportWidth));
+			}
+			if (vScrollBar_ != nullptr) {
+				if (top < dy)
+					vScrollBar_->setValue(std::max(0, top));
+				else if (bottom > dy + viewportHeight)
+					vScrollBar_->setValue(std::max(0, bottom - viewportHeight));
+			}
+			applyScroll();
+			return;
+		}
+}
+
+void MRScrollableDialog::ensureCurrentVisible() {
+	TView *view = content_ != nullptr ? content_->current : nullptr;
+
+	while (view != nullptr) {
+		TGroup *group = dynamic_cast<TGroup *>(view);
+		if (group == nullptr || group->current == nullptr)
+			break;
+		view = group->current;
+	}
+	ensureViewVisible(view);
+}
+
+void MRScrollableDialog::applyScroll() {
+	int dx = hScrollBar_ != nullptr ? hScrollBar_->value : 0;
+	int dy = vScrollBar_ != nullptr ? vScrollBar_->value : 0;
+
+	for (auto &managedView : managedViews_) {
+		TRect moved = managedView.base;
+		moved.move(-dx, -dy);
+		moved.move(-contentRect_.a.x, -contentRect_.a.y);
+		managedView.view->locate(moved);
+	}
+	if (content_ != nullptr)
+		content_->drawView();
+}
+
+TRect centeredSetupDialogRect(int width, int height) {
+	TRect r = TProgram::deskTop != nullptr ? TProgram::deskTop->getExtent() : TRect(0, 0, 80, 25);
+	int availableWidth = std::max(1, r.b.x - r.a.x);
+	int availableHeight = std::max(1, r.b.y - r.a.y);
+	int safeWidth = std::max(10, std::min(width, availableWidth));
+	int safeHeight = std::max(6, std::min(height, availableHeight));
+	int left = r.a.x + std::max(0, (availableWidth - safeWidth) / 2);
+	int top = r.a.y + std::max(0, (availableHeight - safeHeight) / 2);
+
+	return TRect(left, top, left + safeWidth, top + safeHeight);
+}
+
+void insertSetupStaticLine(TDialog *dialog, int x, int y, const char *text) {
+	dialog->insert(new TStaticText(TRect(x, y, x + std::strlen(text) + 1, y + 1), text));
+}
+
+TDialog *createSetupSimplePreviewDialog(const char *title, int width, int height,
+                                        const std::vector<std::string> &lines,
+                                        bool showOkCancelHelp) {
+	MRScrollableDialog *dialog =
+	    new MRScrollableDialog(centeredSetupDialogRect(width, height), title, width, height);
+	int y = 2;
+
+	if (dialog == nullptr)
+		return nullptr;
+	for (std::vector<std::string>::const_iterator it = lines.begin(); it != lines.end(); ++it, ++y) {
+		TRect lineRect(2, y, 2 + std::strlen(it->c_str()) + 1, y + 1);
+		dialog->addManaged(new TStaticText(lineRect, it->c_str()), lineRect);
+	}
+
+	if (showOkCancelHelp) {
+		TRect okRect(width - 34, height - 3, width - 24, height - 1);
+		TRect cancelRect(width - 23, height - 3, width - 10, height - 1);
+		TRect helpRect(width - 9, height - 3, width - 2, height - 1);
+		dialog->addManaged(new TButton(okRect, "OK", cmOK, bfDefault), okRect);
+		dialog->addManaged(new TButton(cancelRect, "Cancel", cmCancel, bfNormal), cancelRect);
+		dialog->addManaged(new TButton(helpRect, "Help", cmHelp, bfNormal), helpRect);
+	} else {
+		TRect doneRect(width / 2 - 4, height - 3, width / 2 + 4, height - 1);
+		dialog->addManaged(new TButton(doneRect, "Done", cmOK, bfDefault), doneRect);
+	}
+
+	dialog->initScrollIfNeeded();
+	dialog->selectContent();
+	return dialog;
 }

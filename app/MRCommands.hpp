@@ -97,7 +97,6 @@ enum : ushort {
 	cmMrSetupBackupsTempAutosave,
 	cmMrSetupSearchAndReplaceDefaults,
 	cmMrSetupUserInterfaceSettings,
-	cmMrSetupSaveConfigurationAndExit,
 	cmMrSetupSearchAndReplacePlaceholder,
 
 	cmMrColorWindowColors,

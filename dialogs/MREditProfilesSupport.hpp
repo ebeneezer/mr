@@ -1,5 +1,5 @@
-#ifndef MREDITPROFILESDRAFTSUPPORT_HPP
-#define MREDITPROFILESDRAFTSUPPORT_HPP
+#ifndef MREDITPROFILESSUPPORT_HPP
+#define MREDITPROFILESSUPPORT_HPP
 
 #include "MREditProfilesPanelInternal.hpp"
 
@@ -21,8 +21,19 @@ struct EditProfileDraft {
 	EditSettingsDialogRecord settingsRecord;
 };
 
+[[nodiscard]] std::string trimAscii(const std::string &value);
+[[nodiscard]] std::string upperAscii(std::string value);
+[[nodiscard]] std::string readRecordField(const char *value);
+void writeRecordField(char *dest, std::size_t destSize, const std::string &value);
+[[nodiscard]] bool recordsEqual(const EditSettingsDialogRecord &lhs, const EditSettingsDialogRecord &rhs);
+void initEditSettingsDialogRecord(EditSettingsDialogRecord &record);
+[[nodiscard]] bool recordToSettings(const EditSettingsDialogRecord &record, MREditSetupSettings &settings,
+                                    std::string &errorText);
+[[nodiscard]] bool saveAndReloadEditSettings(const EditSettingsDialogRecord &record,
+                                             std::string &errorText);
+
 [[nodiscard]] std::vector<std::string> splitExtensionLiteral(const std::string &literal);
-void settingsToRecordLocal(const MREditSetupSettings &settings, EditSettingsDialogRecord &record);
+void settingsToDialogRecord(const MREditSetupSettings &settings, EditSettingsDialogRecord &record);
 [[nodiscard]] bool draftsEqual(const EditProfileDraft &lhs, const EditProfileDraft &rhs);
 [[nodiscard]] bool draftListsEqual(const std::vector<EditProfileDraft> &lhs,
                                    const std::vector<EditProfileDraft> &rhs);

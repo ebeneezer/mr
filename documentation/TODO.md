@@ -2,6 +2,7 @@
 - Treesitter
 - code folding (pro file extension profil)
 - Laden multipler Dateien aus einer Liste die die Ausgabe eines Befehls oder Pipe ist. "Hol alle mrmac Dateien"
+- picker listbox der x letzten dateien bzw. pfade zum auswählen (n elemente, n in settings dialog konfigurierbar)
 - Save All mit Dialog/List Window
 - Mini map!
 - snapshotting: snapper, borg etc. freie kommandozeile mit intervall
@@ -13,13 +14,4 @@
 - font?
 - compiler profile? error parsing? folding einblendung des errors and der error stelle?
 - code prettyfier: wie syntaxregeln definieren?
-
-- code refactor: 
-- komplette codebase aber nicht TVISION (hier upstream treue)
-- geschachtelte klassen, aussagekräftige bezeichner, trailing und leading _ weg
-- semantische zuordnung auf dateien und ordner
-- code refactor: kein AI Boilerplate. Code Reuse ermöglichen durch Kapselung in Klassen - zuordnung in neue Dateien mit semantisch korrekten namen
-- code refactor: C++20 Konstrukte konsequent nutzen
-
-
 - code refactor: intrinsics vorschlagen wo es sinn macht!

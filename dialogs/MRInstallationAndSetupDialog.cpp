@@ -161,7 +161,6 @@ bool isInstallationSetupModalCommand(ushort command) {
 		case cmMrSetupBackupsTempAutosave:
 		case cmMrSetupSearchAndReplaceDefaults:
 		case cmMrSetupUserInterfaceSettings:
-		case cmMrSetupSaveConfigurationAndExit:
 			return true;
 		default:
 			return false;
@@ -255,9 +254,7 @@ class TInstallationAndSetupDialog : public MRScrollableDialog {
 		          cmMrSetupUserInterfaceSettings, bfNormal);
 
 		addButton(TRect(g.kLeftX1, g.finalRowTop, g.leftX2, g.finalRowTop + 2), "E~x~it Setup",
-		          cmCancel, bfNormal);
-		addButton(TRect(g.rightX1, g.finalRowTop, g.rightX2, g.finalRowTop + 2),
-		          "Sa~V~e configuration", cmMrSetupSaveConfigurationAndExit, bfDefault);
+		          cmCancel, bfDefault);
 	}
 };
 

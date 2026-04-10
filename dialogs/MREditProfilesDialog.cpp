@@ -19,9 +19,8 @@
 #define Uses_TView
 #include <tvision/tv.h>
 
-#include "MREditProfilesDraftSupport.hpp"
 #include "MREditProfilesPanelInternal.hpp"
-#include "MREditProfilesRecordSupport.hpp"
+#include "MREditProfilesSupport.hpp"
 #include "MRSetupDialogCommon.hpp"
 
 #include "../app/TMREditorApp.hpp"
@@ -320,7 +319,7 @@ void writeInputLineString(TInputLine *inputLine, const std::string &value, std::
 }
 
 
-std::string currentWorkingDirectoryLocal() {
+std::string readCurrentWorkingDirectory() {
 	char cwd[PATH_MAX];
 
 	if (::getcwd(cwd, sizeof(cwd)) == nullptr)
@@ -348,7 +347,7 @@ bool browseMrmacFileUri(const char *title, const std::string &currentValue, std:
 }
 
 bool browseDirectoryPath(const std::string &currentValue, std::string &selectedPath) {
-	std::string originalCwd = currentWorkingDirectoryLocal();
+	std::string originalCwd = readCurrentWorkingDirectory();
 	std::string seed = normalizeConfiguredPathInput(trimAscii(currentValue));
 	std::string picked;
 	ushort result;
@@ -356,7 +355,7 @@ bool browseDirectoryPath(const std::string &currentValue, std::string &selectedP
 	if (!seed.empty())
 		(void)::chdir(seed.c_str());
 	result = mr::dialogs::execDialogRaw(new TChDirDialog(cdNormal, 235));
-	picked = currentWorkingDirectoryLocal();
+	picked = readCurrentWorkingDirectory();
 	if (!originalCwd.empty())
 		(void)::chdir(originalCwd.c_str());
 	if (result == cmCancel)
