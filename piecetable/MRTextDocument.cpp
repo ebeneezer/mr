@@ -139,28 +139,175 @@ void buildDirectInitialLineIndex(const char *data, Offset length,
 	totalLines = indexedLine + 1;
 }
 
+Offset directFindNextLineBreak(const char *data, Offset length, Offset start) noexcept {
+	if (data == nullptr || start >= length)
+		return length;
+
+#if defined(__SSE2__) && (defined(__x86_64__) || defined(__i386__))
+	const __m128i cr = _mm_set1_epi8('\r');
+	const __m128i lf = _mm_set1_epi8('\n');
+	Offset i = start;
+
+	for (; i + 16 <= length; i += 16) {
+		const __m128i bytes = _mm_loadu_si128(reinterpret_cast<const __m128i *>(data + i));
+		const __m128i maskVec = _mm_or_si128(_mm_cmpeq_epi8(bytes, cr), _mm_cmpeq_epi8(bytes, lf));
+		unsigned int mask = static_cast<unsigned int>(_mm_movemask_epi8(maskVec));
+		if (mask != 0)
+			return i + static_cast<Offset>(__builtin_ctz(mask));
+	}
+	for (; i < length; ++i)
+		if (isLineBreakByte(data[i]))
+			return i;
+	return length;
+#else
+	for (Offset i = start; i < length; ++i)
+		if (isLineBreakByte(data[i]))
+			return i;
+	return length;
+#endif
+}
+
+Offset directFindPrevLineBreak(const char *data, Offset endExclusive) noexcept {
+	if (data == nullptr || endExclusive == 0)
+		return static_cast<Offset>(-1);
+
+#if defined(__SSE2__) && (defined(__x86_64__) || defined(__i386__))
+	const __m128i cr = _mm_set1_epi8('\r');
+	const __m128i lf = _mm_set1_epi8('\n');
+	Offset i = endExclusive;
+
+	while (i >= 16) {
+		const Offset blockStart = i - 16;
+		const __m128i bytes = _mm_loadu_si128(reinterpret_cast<const __m128i *>(data + blockStart));
+		const __m128i maskVec = _mm_or_si128(_mm_cmpeq_epi8(bytes, cr), _mm_cmpeq_epi8(bytes, lf));
+		unsigned int mask = static_cast<unsigned int>(_mm_movemask_epi8(maskVec));
+		if (mask != 0) {
+			const unsigned int highestBit = 31u - static_cast<unsigned int>(__builtin_clz(mask));
+			return blockStart + static_cast<Offset>(highestBit);
+		}
+		i = blockStart;
+	}
+	for (Offset j = i; j > 0; --j)
+		if (isLineBreakByte(data[j - 1]))
+			return j - 1;
+	return static_cast<Offset>(-1);
+#else
+	for (Offset i = endExclusive; i > 0; --i)
+		if (isLineBreakByte(data[i - 1]))
+			return i - 1;
+	return static_cast<Offset>(-1);
+#endif
+}
+
+inline std::size_t countLineBreaksScalar(const char *data, Offset length, bool &prevWasCR) noexcept {
+	std::size_t count = 0;
+	for (Offset i = 0; i < length; ++i) {
+		const char ch = data[i];
+		if (ch == '\n') {
+			if (!prevWasCR)
+				++count;
+			prevWasCR = false;
+		} else if (ch == '\r') {
+			++count;
+			prevWasCR = true;
+		} else
+			prevWasCR = false;
+	}
+	return count;
+}
+
+#if defined(__SSE2__) && (defined(__x86_64__) || defined(__i386__))
+inline std::size_t countLineBreaksSse2(const char *data, Offset length, bool &prevWasCR) noexcept {
+	const __m128i cr = _mm_set1_epi8('\r');
+	const __m128i lf = _mm_set1_epi8('\n');
+	const Offset width = 16;
+	Offset i = 0;
+	std::size_t count = 0;
+
+	for (; i + width <= length; i += width) {
+		const __m128i bytes = _mm_loadu_si128(reinterpret_cast<const __m128i *>(data + i));
+		const unsigned int crMask =
+		    static_cast<unsigned int>(_mm_movemask_epi8(_mm_cmpeq_epi8(bytes, cr)));
+		const unsigned int lfMask =
+		    static_cast<unsigned int>(_mm_movemask_epi8(_mm_cmpeq_epi8(bytes, lf)));
+		unsigned int lfNotAfterCr = lfMask & ~(crMask << 1);
+		if (prevWasCR)
+			lfNotAfterCr &= ~1u;
+		count += static_cast<std::size_t>(__builtin_popcount(crMask));
+		count += static_cast<std::size_t>(__builtin_popcount(lfNotAfterCr));
+		prevWasCR = (crMask & (1u << 15)) != 0;
+	}
+	count += countLineBreaksScalar(data + i, length - i, prevWasCR);
+	return count;
+}
+#endif
+
+inline std::size_t countLineBreaksChunk(const char *data, Offset length, bool &prevWasCR) noexcept {
+	if (data == nullptr || length == 0)
+		return 0;
+#if defined(__SSE2__) && (defined(__x86_64__) || defined(__i386__))
+	return countLineBreaksSse2(data, length, prevWasCR);
+#else
+	return countLineBreaksScalar(data, length, prevWasCR);
+#endif
+}
+
+inline std::size_t directCountLineBreaksInRange(const char *data, Offset length, Offset start,
+                                                Offset end) noexcept {
+	if (data == nullptr || length == 0)
+		return 0;
+	start = std::min(start, length);
+	end = std::min(end, length);
+	if (end <= start)
+		return 0;
+	bool prevWasCR = start > 0 && data[start - 1] == '\r';
+	return countLineBreaksChunk(data + start, end - start, prevWasCR);
+}
+
+template <class Doc>
+std::size_t piecewiseCountLineBreaksInRange(const Doc &doc, Offset start, Offset end) noexcept {
+	start = doc.clampOffset(start);
+	end = doc.clampOffset(end);
+	if (end <= start)
+		return 0;
+
+	bool prevWasCR = false;
+	if (start > 0)
+		prevWasCR = piecewiseCharAt(doc, start - 1) == '\r';
+
+	std::size_t count = 0;
+	Offset logical = 0;
+	for (std::size_t i = 0; i < doc.pieceCount() && logical < end; ++i) {
+		PieceChunkView chunk = doc.pieceChunk(i);
+		if (chunk.data == nullptr || chunk.length == 0)
+			continue;
+		const Offset chunkStart = logical;
+		const Offset chunkEnd = logical + chunk.length;
+		if (chunkEnd <= start) {
+			logical = chunkEnd;
+			continue;
+		}
+		const Offset takeStart = std::max(start, chunkStart);
+		const Offset takeEnd = std::min(end, chunkEnd);
+		if (takeEnd > takeStart)
+			count += countLineBreaksChunk(chunk.data + (takeStart - chunkStart),
+			                              takeEnd - takeStart, prevWasCR);
+		logical = chunkEnd;
+	}
+	return count;
+}
+
 template <class Doc>
 std::size_t piecewiseLineCount(const Doc &doc) noexcept {
-	std::size_t lines = 1;
 	bool prevWasCR = false;
+	std::size_t breaks = 0;
 	for (std::size_t i = 0; i < doc.pieceCount(); ++i) {
 		PieceChunkView chunk = doc.pieceChunk(i);
 		if (chunk.data == nullptr || chunk.length == 0)
 			continue;
-		for (Offset j = 0; j < chunk.length; ++j) {
-			char ch = chunk.data[j];
-			if (ch == '\n') {
-				if (!prevWasCR)
-					++lines;
-				prevWasCR = false;
-			} else if (ch == '\r') {
-				++lines;
-				prevWasCR = true;
-			} else
-				prevWasCR = false;
-		}
+		breaks += countLineBreaksChunk(chunk.data, chunk.length, prevWasCR);
 	}
-	return lines;
+	return breaks + 1;
 }
 
 template <class Doc>
@@ -181,9 +328,9 @@ Offset piecewiseLineStart(const Doc &doc, Offset pos) noexcept {
 		}
 
 		Offset localLimit = std::min(chunk.length, pos - chunkStart);
-		for (Offset j = localLimit; j > 0; --j)
-			if (isLineBreakByte(chunk.data[j - 1]))
-				return chunkStart + j;
+		const Offset breakPos = directFindPrevLineBreak(chunk.data, localLimit);
+		if (breakPos != static_cast<Offset>(-1))
+			return chunkStart + breakPos + 1;
 
 		pos = chunkStart;
 		logicalEnd = chunkStart;
@@ -211,9 +358,9 @@ Offset piecewiseLineEnd(const Doc &doc, Offset pos) noexcept {
 			start = pos - logical;
 			active = true;
 		}
-		for (Offset j = start; j < chunk.length; ++j)
-			if (isLineBreakByte(chunk.data[j]))
-				return logical + j;
+		const Offset breakPos = directFindNextLineBreak(chunk.data, chunk.length, start);
+		if (breakPos < chunk.length)
+			return logical + breakPos;
 		logical += chunk.length;
 	}
 	return doc.length();
@@ -696,9 +843,8 @@ std::size_t ReadSnapshot::lineCount() const noexcept {
 Offset ReadSnapshot::lineStart(Offset pos) const noexcept {
 	if (const char *data = directTextData()) {
 		pos = clampOffset(pos);
-		while (pos > 0 && !isLineBreakChar(data[pos - 1]))
-			--pos;
-		return pos;
+		Offset breakPos = directFindPrevLineBreak(data, pos);
+		return breakPos == static_cast<Offset>(-1) ? 0 : breakPos + 1;
 	}
 
 	return piecewiseLineStart(*this, pos);
@@ -707,9 +853,7 @@ Offset ReadSnapshot::lineStart(Offset pos) const noexcept {
 Offset ReadSnapshot::lineEnd(Offset pos) const noexcept {
 	if (const char *data = directTextData()) {
 		pos = clampOffset(pos);
-		while (pos < length_ && !isLineBreakChar(data[pos]))
-			++pos;
-		return pos;
+		return directFindNextLineBreak(data, length_, pos);
 	}
 
 	return piecewiseLineEnd(*this, pos);
@@ -738,9 +882,8 @@ Offset ReadSnapshot::prevLine(Offset pos) const noexcept {
 		--pos;
 		if (pos > 0 && data[pos - 1] == '\r' && data[pos] == '\n')
 			--pos;
-		while (pos > 0 && !isLineBreakChar(data[pos - 1]))
-			--pos;
-		return pos;
+		Offset breakPos = directFindPrevLineBreak(data, pos);
+		return breakPos == static_cast<Offset>(-1) ? 0 : breakPos + 1;
 	}
 
 	return piecewisePrevLine(*this, pos);
@@ -748,7 +891,7 @@ Offset ReadSnapshot::prevLine(Offset pos) const noexcept {
 
 std::size_t ReadSnapshot::lineIndex(Offset pos) const noexcept {
 	pos = clampOffset(pos);
-	ensureLazyIndexForOffset(pos);
+	ensureLazyIndexSeeded();
 	if (lineIndexCheckpoints_.empty())
 		return 0;
 
@@ -763,16 +906,14 @@ std::size_t ReadSnapshot::lineIndex(Offset pos) const noexcept {
 	}
 	LineIndexCheckpoint checkpoint =
 	    lineIndexCheckpoints_[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
-	Offset cursor = checkpoint.offset;
-	std::size_t line = checkpoint.lineIndex;
-	while (cursor < pos) {
-		Offset next = cursor;
-		if (!advanceLine(next) || next > pos)
-			break;
-		cursor = next;
-		++line;
+	if (checkpoint.offset >= pos)
+		return checkpoint.lineIndex;
+	if (const char *data = directTextData()) {
+		const std::size_t delta =
+		    directCountLineBreaksInRange(data, length_, checkpoint.offset, pos);
+		return checkpoint.lineIndex + delta;
 	}
-	return line;
+	return checkpoint.lineIndex + piecewiseCountLineBreaksInRange(*this, checkpoint.offset, pos);
 }
 
 Offset ReadSnapshot::lineStartByIndex(std::size_t index) const noexcept {
@@ -897,14 +1038,13 @@ bool ReadSnapshot::directAdvanceLine(Offset &offset) const noexcept {
 	if (offset >= length_)
 		return false;
 
-	while (offset < length_ && !isLineBreakChar(data[offset]))
-		++offset;
-	if (offset >= length_)
+	Offset breakPos = directFindNextLineBreak(data, length_, offset);
+	if (breakPos >= length_)
 		return false;
-	if (data[offset] == '\r' && offset + 1 < length_ && data[offset + 1] == '\n')
-		offset += 2;
+	if (data[breakPos] == '\r' && breakPos + 1 < length_ && data[breakPos + 1] == '\n')
+		offset = breakPos + 2;
 	else
-		++offset;
+		offset = breakPos + 1;
 	return true;
 }
 
@@ -1177,9 +1317,8 @@ std::size_t TextDocument::lineCount() const noexcept {
 Offset TextDocument::lineStart(Offset pos) const noexcept {
 	if (const char *data = directTextData()) {
 		pos = clampOffset(pos);
-		while (pos > 0 && !isLineBreakChar(data[pos - 1]))
-			--pos;
-		return pos;
+		Offset breakPos = directFindPrevLineBreak(data, pos);
+		return breakPos == static_cast<Offset>(-1) ? 0 : breakPos + 1;
 	}
 
 	return piecewiseLineStart(*this, pos);
@@ -1188,9 +1327,7 @@ Offset TextDocument::lineStart(Offset pos) const noexcept {
 Offset TextDocument::lineEnd(Offset pos) const noexcept {
 	if (const char *data = directTextData()) {
 		pos = clampOffset(pos);
-		while (pos < length_ && !isLineBreakChar(data[pos]))
-			++pos;
-		return pos;
+		return directFindNextLineBreak(data, length_, pos);
 	}
 
 	return piecewiseLineEnd(*this, pos);
@@ -1219,9 +1356,8 @@ Offset TextDocument::prevLine(Offset pos) const noexcept {
 		--pos;
 		if (pos > 0 && data[pos - 1] == '\r' && data[pos] == '\n')
 			--pos;
-		while (pos > 0 && !isLineBreakChar(data[pos - 1]))
-			--pos;
-		return pos;
+		Offset breakPos = directFindPrevLineBreak(data, pos);
+		return breakPos == static_cast<Offset>(-1) ? 0 : breakPos + 1;
 	}
 
 	return piecewisePrevLine(*this, pos);
@@ -1229,7 +1365,7 @@ Offset TextDocument::prevLine(Offset pos) const noexcept {
 
 std::size_t TextDocument::lineIndex(Offset pos) const noexcept {
 	pos = clampOffset(pos);
-	ensureLazyIndexForOffset(pos);
+	ensureLazyIndexSeeded();
 	if (lineIndexCheckpoints_.empty())
 		return 0;
 
@@ -1244,16 +1380,14 @@ std::size_t TextDocument::lineIndex(Offset pos) const noexcept {
 	}
 	LineIndexCheckpoint checkpoint =
 	    lineIndexCheckpoints_[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
-	Offset cursor = checkpoint.offset;
-	std::size_t line = checkpoint.lineIndex;
-	while (cursor < pos) {
-		Offset next = cursor;
-		if (!advanceLine(next) || next > pos)
-			break;
-		cursor = next;
-		++line;
+	if (checkpoint.offset >= pos)
+		return checkpoint.lineIndex;
+	if (const char *data = directTextData()) {
+		const std::size_t delta =
+		    directCountLineBreaksInRange(data, length_, checkpoint.offset, pos);
+		return checkpoint.lineIndex + delta;
 	}
-	return line;
+	return checkpoint.lineIndex + piecewiseCountLineBreaksInRange(*this, checkpoint.offset, pos);
 }
 
 Offset TextDocument::lineStartByIndex(std::size_t index) const noexcept {
@@ -1511,14 +1645,13 @@ bool TextDocument::directAdvanceLine(Offset &offset) const noexcept {
 	if (offset >= length_)
 		return false;
 
-	while (offset < length_ && !isLineBreakChar(data[offset]))
-		++offset;
-	if (offset >= length_)
+	Offset breakPos = directFindNextLineBreak(data, length_, offset);
+	if (breakPos >= length_)
 		return false;
-	if (data[offset] == '\r' && offset + 1 < length_ && data[offset + 1] == '\n')
-		offset += 2;
+	if (data[breakPos] == '\r' && breakPos + 1 < length_ && data[breakPos + 1] == '\n')
+		offset = breakPos + 2;
 	else
-		++offset;
+		offset = breakPos + 1;
 	return true;
 }
 

@@ -56,8 +56,8 @@ struct EditSettingsLayout {
 	      tabSizeY(config.tabSizeY >= 0 ? config.tabSizeY
 	                                   : (config.includeDefaultExtensions ? defaultExtensionsY + 1 : wordDelimitersY + 1)),
 	      rightMarginY(tabSizeY + 1), postLoadMacroY(rightMarginY + 1), preSaveMacroY(postLoadMacroY + 1),
-	      defaultPathY(preSaveMacroY + 1), formatLineY(defaultPathY + 1), cursorStatusColorY(formatLineY + 1),
-	      optionsHeadingY(config.clusterTopY >= 0 ? config.clusterTopY : cursorStatusColorY + 2), optionsBodyY(optionsHeadingY + 1),
+	      defaultPathY(preSaveMacroY + 1), formatLineY(defaultPathY + 1),
+	      optionsHeadingY(config.clusterTopY >= 0 ? config.clusterTopY : formatLineY + 2), optionsBodyY(optionsHeadingY + 1),
 	      tabExpandHeadingY(optionsHeadingY), tabExpandBodyY(optionsBodyY), columnBlockMoveHeadingY(optionsBodyY + 4),
 	      columnBlockMoveBodyY(columnBlockMoveHeadingY + 1), indentStyleHeadingY(optionsBodyY + 4),
 	      indentStyleBodyY(indentStyleHeadingY + 1), fileTypeHeadingY(optionsBodyY + 4),
@@ -94,7 +94,6 @@ struct EditSettingsLayout {
 	int preSaveMacroY;
 	int defaultPathY;
 	int formatLineY;
-	int cursorStatusColorY;
 	int optionsHeadingY;
 	int optionsBodyY;
 	int tabExpandHeadingY;
@@ -335,12 +334,6 @@ void EditSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	                               TRect(g.inputLeft, g.formatLineY, browseFieldRight - 2, g.formatLineY + 1),
 	                               kFormatLineFieldSize - 1);
 
-	addPanelLabel(dialog, TRect(g.labelLeft + 1, g.cursorStatusColorY, g.inputLeft - 2, g.cursorStatusColorY + 1),
-	              "Cursor pos color:");
-	cursorStatusColorField_ = addPanelInput(
-	    dialog, TRect(g.inputLeft, g.cursorStatusColorY, g.inputLeft + 4, g.cursorStatusColorY + 1),
-	    kCursorStatusColorFieldSize - 1);
-
 	addPanelLabel(dialog, TRect(g.optionsHeadingX, g.optionsHeadingY, config_.dialogWidth - 2, g.optionsHeadingY + 1),
 	              "Options:");
 	optionsLeftField_ = addPanelCheckGroup(
@@ -515,7 +508,6 @@ void EditSettingsPanel::loadFieldsFromRecord(const EditSettingsDialogRecord &rec
 	setInputLineValue(preSaveMacroField_, record.preSaveMacro, sizeof(record.preSaveMacro));
 	setInputLineValue(defaultPathField_, record.defaultPath, sizeof(record.defaultPath));
 	setInputLineValue(formatLineField_, record.formatLine, sizeof(record.formatLine));
-	setInputLineValue(cursorStatusColorField_, record.cursorStatusColor, sizeof(record.cursorStatusColor));
 	setOptionsMask(record.optionsMask);
 	if (tabExpandField_ != nullptr)
 		tabExpandField_->setData((void *)&record.tabExpandChoice);
@@ -544,7 +536,6 @@ void EditSettingsPanel::saveFieldsToRecord(EditSettingsDialogRecord &record) con
 	readInputLineValue(preSaveMacroField_, record.preSaveMacro, sizeof(record.preSaveMacro));
 	readInputLineValue(defaultPathField_, record.defaultPath, sizeof(record.defaultPath));
 	readInputLineValue(formatLineField_, record.formatLine, sizeof(record.formatLine));
-	readInputLineValue(cursorStatusColorField_, record.cursorStatusColor, sizeof(record.cursorStatusColor));
 	record.optionsMask = currentOptionsMask();
 	if (tabExpandField_ != nullptr)
 		tabExpandField_->getData((void *)&record.tabExpandChoice);

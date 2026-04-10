@@ -13,10 +13,13 @@
 - font?
 - compiler profile? error parsing? folding einblendung des errors and der error stelle?
 - code prettyfier: wie syntaxregeln definieren?
-- code refactor: geschachtelte klassen
-- code refactor: aussagekräftige bezeichner
-- code refactor: semantische zuordnung auf dateien und ordner
-- code refactor: _ entfernen
+
+- code refactor: 
+- komplette codebase aber nicht TVISION (hier upstream treue)
+- geschachtelte klassen, aussagekräftige bezeichner, trailing und leading _ weg
+- semantische zuordnung auf dateien und ordner
 - code refactor: kein AI Boilerplate. Code Reuse ermöglichen durch Kapselung in Klassen - zuordnung in neue Dateien mit semantisch korrekten namen
 - code refactor: C++20 Konstrukte konsequent nutzen
+
+
 - code refactor: intrinsics vorschlagen wo es sinn macht!

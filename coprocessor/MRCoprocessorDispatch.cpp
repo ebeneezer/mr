@@ -173,10 +173,13 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 				if (editor == nullptr)
 					continue;
-				if (editor->documentId() != result.task.documentId ||
-				    editor->documentVersion() != result.task.baseVersion)
+				if (editor->documentId() != result.task.documentId)
 					continue;
-				editor->applyLineIndexWarmup(warmup->warmup, result.task.baseVersion);
+				bool applied = false;
+				if (editor->documentVersion() == result.task.baseVersion)
+					applied = editor->applyLineIndexWarmup(warmup->warmup, result.task.baseVersion);
+				if (!applied)
+					editor->clearLineIndexWarmupTask(result.task.id);
 				if (!recorded) {
 					recordTaskPerformance(result, "Line index warmup", window, editor->documentId(),
 					                      editor->bufferLength(), window->currentFileName());
@@ -197,10 +200,13 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 				if (editor == nullptr)
 					continue;
-				if (editor->documentId() != result.task.documentId ||
-				    editor->documentVersion() != result.task.baseVersion)
+				if (editor->documentId() != result.task.documentId)
 					continue;
-				editor->applySyntaxWarmup(*syntax, result.task.baseVersion, result.task.id);
+				bool applied = false;
+				if (editor->documentVersion() == result.task.baseVersion)
+					applied = editor->applySyntaxWarmup(*syntax, result.task.baseVersion, result.task.id);
+				if (!applied)
+					editor->clearSyntaxWarmupTask(result.task.id);
 				if (!recorded) {
 					recordTaskPerformance(result, "Syntax warmup", window, editor->documentId(),
 					                      editor->bufferLength(), window->currentFileName());

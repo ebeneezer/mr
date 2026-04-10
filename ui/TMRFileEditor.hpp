@@ -804,25 +804,31 @@ class TMRFileEditor : public TScroller {
 		std::size_t topLine = static_cast<std::size_t>(std::max(delta.y, 0));
 		std::size_t linePtr = lineStartForIndex(topLine);
 		std::size_t lineIndex = topLine;
-		std::size_t totalLines = std::max<std::size_t>(1, bufferModel_.lineCount());
+		std::size_t totalLines = 1;
 		bool showLineNumbers = editSettings.showLineNumbers;
 		bool zeroFillLineNumbers = showLineNumbers && editSettings.lineNumZeroFill;
 		int gutterWidth = lineNumberGutterWidthFor(showLineNumbers);
 		int textWidth = std::max(0, size.x - gutterWidth);
 		showLineNumbers = gutterWidth > 0;
+		if (bufferModel_.exactLineCountKnown())
+			totalLines = std::max<std::size_t>(1, bufferModel_.lineCount());
+		else
+			totalLines = std::max<std::size_t>(
+			    1, std::max<std::size_t>(bufferModel_.estimatedLineCount(),
+			                             topLine + static_cast<std::size_t>(std::max(size.y, 1))));
 
-			for (int y = 0; y < size.y; ++y) {
-				TDrawBuffer buffer;
-				bool isDocumentLine = lineIndex < totalLines;
-				bool drawEofMarker = editSettings.showEofMarker && lineIndex == totalLines;
-				bool drawEofMarkerAsEmoji = drawEofMarker && editSettings.showEofMarkerEmoji;
-				if (showLineNumbers)
-					drawLineNumberGutter(buffer, lineIndex, isDocumentLine, gutterWidth, zeroFillLineNumbers);
-				formatSyntaxLine(buffer, linePtr, delta.x, textWidth, gutterWidth, isDocumentLine, drawEofMarker,
-				                 drawEofMarkerAsEmoji);
-				writeBuf(0, y, size.x, 1, buffer);
-				if (linePtr < bufferModel_.length())
-					linePtr = bufferModel_.nextLine(linePtr);
+		for (int y = 0; y < size.y; ++y) {
+			TDrawBuffer buffer;
+			bool isDocumentLine = lineIndex < totalLines;
+			bool drawEofMarker = editSettings.showEofMarker && lineIndex == totalLines;
+			bool drawEofMarkerAsEmoji = drawEofMarker && editSettings.showEofMarkerEmoji;
+			if (showLineNumbers)
+				drawLineNumberGutter(buffer, lineIndex, isDocumentLine, gutterWidth, zeroFillLineNumbers);
+			formatSyntaxLine(buffer, linePtr, delta.x, textWidth, gutterWidth, isDocumentLine, drawEofMarker,
+			                 drawEofMarkerAsEmoji);
+			writeBuf(0, y, size.x, 1, buffer);
+			if (linePtr < bufferModel_.length())
+				linePtr = bufferModel_.nextLine(linePtr);
 			++lineIndex;
 		}
 		scheduleSyntaxWarmupIfNeeded();
@@ -971,8 +977,13 @@ class TMRFileEditor : public TScroller {
 	int lineNumberGutterWidthFor(bool showLineNumbers) const noexcept {
 		if (!showLineNumbers)
 			return 0;
-		std::size_t lines = std::max<std::size_t>(bufferModel_.lineCount(),
-		                                          static_cast<std::size_t>(std::max(delta.y, 0) + std::max(size.y, 1)));
+		std::size_t visibleEnd =
+		    static_cast<std::size_t>(std::max(delta.y, 0) + std::max(size.y, 1));
+		std::size_t lines = 0;
+		if (bufferModel_.exactLineCountKnown())
+			lines = std::max<std::size_t>(bufferModel_.lineCount(), visibleEnd);
+		else
+			lines = std::max<std::size_t>(bufferModel_.estimatedLineCount(), visibleEnd);
 		int digits = decimalDigits(std::max<std::size_t>(lines, 1));
 		int gutter = digits + 1;
 		return std::min(gutter, std::max(0, size.x - 1));

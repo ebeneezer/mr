@@ -155,8 +155,12 @@ void TMRMenuBar::draw() {
 	int rightStart = size.x;
 	int menuEnd = 0;
 
-	if (rightStatusColorOverrideEnabled_)
-		cStatus = rightStatusColorOverride_;
+	{
+		const MRColorSetupSettings colors = configuredColorSetupSettings();
+		unsigned char biosAttr = colors.otherColors[8];
+		(void)configuredColorSlotOverride(kMrPaletteCursorPositionMarker, biosAttr);
+		cStatus = TColorAttr(biosAttr);
+	}
 	setStyle(cStatus, getStyle(cStatus) | slBold);
 
 	b.moveChar(0, ' ', cNormal, size.x);

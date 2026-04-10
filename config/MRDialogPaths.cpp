@@ -589,6 +589,7 @@ static const MRColorSetupItem kOtherColorItems[] = {
     {"message", kMrPaletteMessage},
     {"warning message", kMrPaletteMessageWarning},
     {"hero events", kMrPaletteMessageHero},
+    {"cursor position marker", kMrPaletteCursorPositionMarker},
 };
 
 static const ColorGroupDefinition kColorGroups[] = {
@@ -645,6 +646,8 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 		return defaults[44];
 	if (paletteIndex == kMrPaletteMessageHero)
 		return defaults[43];
+	if (paletteIndex == kMrPaletteCursorPositionMarker)
+		return defaults[3];
 	if (paletteIndex == kMrPaletteLineNumbers)
 		return defaults[9];
 	if (paletteIndex == kMrPaletteEofMarker)
@@ -933,7 +936,7 @@ bool parseOtherColorListLiteral(const std::string &literal,
 		cursor = comma + 1;
 	}
 
-	// Accept current 8-value format, prior 7-value format and legacy 10-value format.
+	// Accept current 9-value format, prior 8/7-value formats and legacy 10-value format.
 	// Legacy format ended with shadow / shadow-character / background color entries,
 	// which are no longer configurable in OTHERCOLORS.
 	if (parsed.size() == MRColorSetupSettings::kOtherCount)
@@ -942,12 +945,21 @@ bool parseOtherColorListLiteral(const std::string &literal,
 	else if (parsed.size() == MRColorSetupSettings::kOtherCount - 1) {
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
-		outValues[MRColorSetupSettings::kOtherCount - 1] = defaultColorForSlot(kMrPaletteMessageHero);
+		outValues[MRColorSetupSettings::kOtherCount - 1] =
+		    defaultColorForSlot(kMrPaletteCursorPositionMarker);
+	}
+	else if (parsed.size() == MRColorSetupSettings::kOtherCount - 2) {
+		for (std::size_t i = 0; i < parsed.size(); ++i)
+			outValues[i] = parsed[i];
+		outValues[MRColorSetupSettings::kOtherCount - 2] = defaultColorForSlot(kMrPaletteMessageHero);
+		outValues[MRColorSetupSettings::kOtherCount - 1] =
+		    defaultColorForSlot(kMrPaletteCursorPositionMarker);
 	}
 	else if (parsed.size() == 10) {
-		for (std::size_t i = 0; i < MRColorSetupSettings::kOtherCount - 1; ++i)
+		for (std::size_t i = 0; i < 7; ++i)
 			outValues[i] = parsed[i];
-		outValues[MRColorSetupSettings::kOtherCount - 1] = defaultColorForSlot(kMrPaletteMessageHero);
+		outValues[7] = defaultColorForSlot(kMrPaletteMessageHero);
+		outValues[8] = defaultColorForSlot(kMrPaletteCursorPositionMarker);
 	}
 	else
 		return setError(errorMessage, "Unexpected OTHERCOLORS list size.");

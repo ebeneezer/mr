@@ -156,14 +156,15 @@ enum : unsigned char {
 	kMrPaletteEofMarker = 143,
 	kMrPaletteDialogInactiveElements = 144,
 	kMrPaletteMessageHero = 145,
-	kMrPaletteMax = kMrPaletteMessageHero
+	kMrPaletteCursorPositionMarker = 146,
+	kMrPaletteMax = kMrPaletteCursorPositionMarker
 };
 
 struct MRColorSetupSettings {
 	static const std::size_t kWindowCount = 9;
 	static const std::size_t kMenuDialogCount = 17;
 	static const std::size_t kHelpCount = 9;
-	static const std::size_t kOtherCount = 8;
+	static const std::size_t kOtherCount = 9;
 
 	std::array<unsigned char, kWindowCount> windowColors;
 	std::array<unsigned char, kMenuDialogCount> menuDialogColors;
