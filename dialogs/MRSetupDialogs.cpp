@@ -560,7 +560,8 @@ TPalette buildColorSetupWorkingPalette() {
 
 bool applyWorkingColorPaletteToConfigured(const TPalette &palette, std::string &errorText) {
 	static const MRColorSetupGroup groups[] = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog,
-	                                           MRColorSetupGroup::Help, MRColorSetupGroup::Other};
+	                                           MRColorSetupGroup::Help, MRColorSetupGroup::Other,
+	                                           MRColorSetupGroup::MiniMap};
 
 	for (auto group : groups) {
 		std::size_t count = 0;

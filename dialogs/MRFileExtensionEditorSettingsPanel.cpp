@@ -33,6 +33,9 @@ constexpr int kDefaultRightMargin = 78;
 constexpr int kMinimumBinaryRecordLength = 1;
 constexpr int kMaximumBinaryRecordLength = 99999;
 constexpr int kDefaultBinaryRecordLength = 100;
+constexpr int kMinimumMiniMapWidth = 2;
+constexpr int kMaximumMiniMapWidth = 10;
+constexpr int kDefaultMiniMapWidth = 4;
 constexpr ushort kUiManagedOptionsMask =
     kOptionTruncateSpaces | kOptionEofCtrlZ | kOptionEofCrLf | kOptionPersistentBlocks |
     kOptionCodeFolding | kOptionWordWrap | kOptionShowLineNumbers | kOptionLineNumZeroFill |
@@ -58,11 +61,12 @@ struct FileExtensionEditorSettingsPanelLayout {
 	      rightMarginY(tabSizeY + 1), postLoadMacroY(rightMarginY + 1), preSaveMacroY(postLoadMacroY + 1),
 	      defaultPathY(preSaveMacroY + 1), formatLineY(defaultPathY + 1),
 	      optionsHeadingY(config.clusterTopY >= 0 ? config.clusterTopY : formatLineY + 2), optionsBodyY(optionsHeadingY + 1),
-	      tabExpandHeadingY(optionsHeadingY), tabExpandBodyY(optionsBodyY), columnBlockMoveHeadingY(optionsBodyY + 4),
-	      columnBlockMoveBodyY(columnBlockMoveHeadingY + 1), indentStyleHeadingY(optionsBodyY + 4),
-	      indentStyleBodyY(indentStyleHeadingY + 1), fileTypeHeadingY(optionsBodyY + 4),
-	      fileTypeBodyY(fileTypeHeadingY + 1), contentBottomY(std::max(optionsBodyY + 6, fileTypeBodyY + 3)) {
-	}
+		      tabExpandHeadingY(optionsHeadingY), tabExpandBodyY(optionsBodyY), columnBlockMoveHeadingY(optionsBodyY + 4),
+		      columnBlockMoveBodyY(columnBlockMoveHeadingY + 1), indentStyleHeadingY(optionsBodyY + 4),
+		      indentStyleBodyY(indentStyleHeadingY + 1), fileTypeHeadingY(optionsBodyY + 4),
+		      fileTypeBodyY(fileTypeHeadingY + 1), miniMapHeadingY(std::max(optionsBodyY + 8, fileTypeBodyY + 4)),
+		      miniMapBodyY(miniMapHeadingY + 1), contentBottomY(miniMapBodyY + 3) {
+		}
 
 	int labelLeft;
 	int inputLeft;
@@ -104,6 +108,8 @@ struct FileExtensionEditorSettingsPanelLayout {
 	int indentStyleBodyY;
 	int fileTypeHeadingY;
 	int fileTypeBodyY;
+	int miniMapHeadingY;
+	int miniMapBodyY;
 	int contentBottomY;
 };
 
@@ -389,6 +395,23 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	fileTypeField = addPanelRadioGroup(
 	    dialog, TRect(g.fileTypeLeft, g.fileTypeBodyY, g.fileTypeRight, g.fileTypeBodyY + 3),
 	    new TSItem("legacy text (CR/LF)", new TSItem("UNIX (LF)", new TSItem("binary", nullptr))));
+
+	addPanelLabel(dialog, TRect(g.optionsLeft, g.miniMapHeadingY, g.optionsLeft + 18, g.miniMapHeadingY + 1),
+	              "Mini map:");
+	miniMapPositionField = addPanelRadioGroup(
+	    dialog, TRect(g.optionsLeft, g.miniMapBodyY, g.optionsLeft + 18, g.miniMapBodyY + 3),
+	    new TSItem("~O~ff", new TSItem("~L~eading", new TSItem("~T~railing", nullptr))));
+	addPanelLabel(dialog, TRect(g.optionsLeft + 21, g.miniMapHeadingY, g.optionsLeft + 30, g.miniMapHeadingY + 1),
+	              "Width:");
+	miniMapWidthSlider = addPanelNumericSlider(
+	    dialog, TRect(g.optionsLeft + 21, g.miniMapBodyY, g.optionsLeft + 39, g.miniMapBodyY + 1),
+	    kMinimumMiniMapWidth, kMaximumMiniMapWidth, kDefaultMiniMapWidth, 1, 2,
+	    cmMrFileExtensionEditorSettingsPanelChanged);
+	addPanelLabel(dialog, TRect(g.optionsLeft + 42, g.miniMapHeadingY, g.optionsLeft + 54, g.miniMapHeadingY + 1),
+	              "Marker:");
+	miniMapMarkerGlyphField = addPanelInput(
+	    dialog, TRect(g.optionsLeft + 42, g.miniMapBodyY, g.optionsLeft + 50, g.miniMapBodyY + 1),
+	    kMiniMapMarkerGlyphFieldSize - 1);
 }
 
 TView *FileExtensionEditorSettingsPanel::primaryView() const noexcept {
@@ -519,6 +542,14 @@ void FileExtensionEditorSettingsPanel::loadFieldsFromRecord(const FileExtensionE
 		columnBlockMoveField->setData((void *)&record.columnBlockMoveChoice);
 	if (defaultModeField != nullptr)
 		defaultModeField->setData((void *)&record.defaultModeChoice);
+	if (miniMapPositionField != nullptr)
+		miniMapPositionField->setData((void *)&record.miniMapPositionChoice);
+	if (miniMapWidthSlider != nullptr) {
+		int32_t value =
+		    parseIntegerOrDefault(record.miniMapWidth, kDefaultMiniMapWidth, kMinimumMiniMapWidth, kMaximumMiniMapWidth);
+		miniMapWidthSlider->setData(&value);
+	}
+	setInputLineValue(miniMapMarkerGlyphField, record.miniMapMarkerGlyph, sizeof(record.miniMapMarkerGlyph));
 	syncDynamicStates();
 }
 
@@ -547,6 +578,10 @@ void FileExtensionEditorSettingsPanel::saveFieldsToRecord(FileExtensionEditorSet
 		columnBlockMoveField->getData((void *)&record.columnBlockMoveChoice);
 	if (defaultModeField != nullptr)
 		defaultModeField->getData((void *)&record.defaultModeChoice);
+	if (miniMapPositionField != nullptr)
+		miniMapPositionField->getData((void *)&record.miniMapPositionChoice);
+	writeSliderValue(miniMapWidthSlider, record.miniMapWidth, sizeof(record.miniMapWidth), kDefaultMiniMapWidth);
+	readInputLineValue(miniMapMarkerGlyphField, record.miniMapMarkerGlyph, sizeof(record.miniMapMarkerGlyph));
 }
 
 void FileExtensionEditorSettingsPanel::syncDynamicStates() {

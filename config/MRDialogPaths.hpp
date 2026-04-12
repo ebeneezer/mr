@@ -49,6 +49,9 @@ struct MREditSetupSettings {
 	std::string columnBlockMove;
 	std::string defaultMode;
 	std::string cursorStatusColor;
+	std::string miniMapPosition;
+	int miniMapWidth;
+	std::string miniMapMarkerGlyph;
 
 	MREditSetupSettings() noexcept
 	    : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false),
@@ -58,7 +61,7 @@ struct MREditSetupSettings {
 	      autosaveInactivitySeconds(15), autosaveIntervalSeconds(180), backupFiles(true), showEofMarker(false),
 	      showEofMarkerEmoji(true),
 	      showLineNumbers(false), lineNumZeroFill(false), persistentBlocks(true), codeFolding(false), columnBlockMove(),
-	      defaultMode(), cursorStatusColor() {
+	      defaultMode(), cursorStatusColor(), miniMapPosition("OFF"), miniMapWidth(4), miniMapMarkerGlyph("│") {
 	}
 };
 
@@ -119,6 +122,9 @@ enum MREditSetupOverrideMask : unsigned long long {
 	kOvBackupDirectory = 1ull << 30,
 	kOvAutosaveInactivitySeconds = 1ull << 31,
 	kOvAutosaveIntervalSeconds = 1ull << 32,
+	kOvMiniMapPosition = 1ull << 33,
+	kOvMiniMapWidth = 1ull << 34,
+	kOvMiniMapMarkerGlyph = 1ull << 35,
 };
 
 struct MREditSettingDescriptor {
@@ -150,7 +156,8 @@ enum class MRColorSetupGroup : unsigned char {
 	Window,
 	MenuDialog,
 	Help,
-	Other
+	Other,
+	MiniMap
 };
 
 enum class MRSettingsKeyClass : unsigned char {
@@ -179,7 +186,12 @@ enum : unsigned char {
 	kMrPaletteDialogInactiveElements = 144,
 	kMrPaletteMessageHero = 145,
 	kMrPaletteCursorPositionMarker = 146,
-	kMrPaletteMax = kMrPaletteCursorPositionMarker
+	kMrPaletteMiniMapNormal = 147,
+	kMrPaletteMiniMapViewport = 148,
+	kMrPaletteMiniMapChanged = 149,
+	kMrPaletteMiniMapFindMarker = 150,
+	kMrPaletteMiniMapErrorMarker = 151,
+	kMrPaletteMax = kMrPaletteMiniMapErrorMarker
 };
 
 struct MRColorSetupSettings {
@@ -187,13 +199,15 @@ struct MRColorSetupSettings {
 	static const std::size_t kMenuDialogCount = 17;
 	static const std::size_t kHelpCount = 9;
 	static const std::size_t kOtherCount = 9;
+	static const std::size_t kMiniMapCount = 5;
 
 	std::array<unsigned char, kWindowCount> windowColors;
 	std::array<unsigned char, kMenuDialogCount> menuDialogColors;
 	std::array<unsigned char, kHelpCount> helpColors;
 	std::array<unsigned char, kOtherCount> otherColors;
+	std::array<unsigned char, kMiniMapCount> miniMapColors;
 
-	MRColorSetupSettings() noexcept : windowColors(), menuDialogColors(), helpColors(), otherColors() {
+	MRColorSetupSettings() noexcept : windowColors(), menuDialogColors(), helpColors(), otherColors(), miniMapColors() {
 	}
 };
 

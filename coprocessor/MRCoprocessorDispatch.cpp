@@ -4,6 +4,7 @@
 
 #include "MRCoprocessorDispatch.hpp"
 
+#include <chrono>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -12,6 +13,7 @@
 #include "MRWindowCommands.hpp"
 
 #include "../mrmac/mrvm.hpp"
+#include "../ui/MRMessageLineController.hpp"
 #include "../ui/TMRFileEditor.hpp"
 #include "../ui/TMRIndicator.hpp"
 #include "../ui/TMREditWindow.hpp"
@@ -82,6 +84,28 @@ std::string formatTimingSummary(const mr::coprocessor::TaskTiming &timing) {
 	return " [q " + mr::performance::formatDuration(timing.queueMs()) + ", run " +
 	       mr::performance::formatDuration(timing.runMs()) + ", total " +
 	       mr::performance::formatDuration(timing.totalMs()) + "]";
+}
+
+long long roundedMilliseconds(double valueMs) {
+	if (valueMs <= 0.0)
+		return 0;
+	return static_cast<long long>(valueMs + 0.5);
+}
+
+void postMiniMapHeroEvent(const mr::coprocessor::TaskTiming &timing, const mr::coprocessor::MiniMapWarmupPayload &payload) {
+	const long long totalMs = roundedMilliseconds(timing.totalMs());
+	const std::string heroText =
+	    "mini map initial render " + (totalMs >= 1 ? std::to_string(totalMs) : std::string("<1")) + " ms";
+	const std::string followupText =
+	    "rows " + std::to_string(payload.rowCount) + ", width " + std::to_string(payload.bodyWidth) +
+	    ", lines " + std::to_string(payload.totalLines);
+	const std::chrono::milliseconds heroDuration = mr::messageline::autoDurationForText(heroText);
+
+	mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEvent, heroText, mr::messageline::Kind::Success,
+	                               mr::messageline::kPriorityHigh);
+	mr::messageline::postAutoTimedAfter(mr::messageline::Owner::HeroEventFollowup, followupText,
+	                                    mr::messageline::Kind::Info, heroDuration,
+	                                    mr::messageline::kPriorityLow);
 }
 
 void appendMacroLogLines(const std::vector<std::string> &logLines) {
@@ -191,9 +215,9 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			return;
 		}
 
-		const mr::coprocessor::SyntaxWarmupPayload *syntax =
-		    dynamic_cast<const mr::coprocessor::SyntaxWarmupPayload *>(result.payload.get());
-		if (syntax != nullptr) {
+			const mr::coprocessor::SyntaxWarmupPayload *syntax =
+			    dynamic_cast<const mr::coprocessor::SyntaxWarmupPayload *>(result.payload.get());
+			if (syntax != nullptr) {
 			std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
 			bool recorded = false;
 			for (auto & window : windows) {
@@ -213,10 +237,47 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 					recorded = true;
 				}
 			}
-			if (!recorded)
-				recordTaskPerformance(result, "Syntax warmup", nullptr, result.task.documentId, 0, result.task.label);
-			return;
-		}
+				if (!recorded)
+					recordTaskPerformance(result, "Syntax warmup", nullptr, result.task.documentId, 0, result.task.label);
+				return;
+			}
+
+			const mr::coprocessor::MiniMapWarmupPayload *miniMap =
+			    dynamic_cast<const mr::coprocessor::MiniMapWarmupPayload *>(result.payload.get());
+			if (miniMap != nullptr) {
+				std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+				bool recorded = false;
+				bool postedHero = false;
+				for (auto &window : windows) {
+					TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+					if (editor == nullptr)
+						continue;
+					if (editor->documentId() != result.task.documentId)
+						continue;
+					bool applied = false;
+					if (editor->documentVersion() == result.task.baseVersion)
+						applied = editor->applyMiniMapWarmup(*miniMap, result.task.baseVersion, result.task.id);
+					if (!applied)
+						editor->clearMiniMapWarmupTask(result.task.id);
+					if (applied) {
+						const bool shouldPostHero = editor->shouldReportMiniMapInitialRender();
+						editor->markMiniMapInitialRenderReported();
+						if (shouldPostHero && !postedHero) {
+							postMiniMapHeroEvent(result.timing, *miniMap);
+							postedHero = true;
+						}
+					}
+					if (!recorded) {
+						recordTaskPerformance(result, "Mini map render", window, editor->documentId(),
+						                      editor->bufferLength(), window->currentFileName());
+						recorded = true;
+					}
+				}
+				if (!recorded)
+					recordTaskPerformance(result, "Mini map render", nullptr, result.task.documentId, 0,
+					                      result.task.label);
+				return;
+			}
 
 		const mr::coprocessor::ExternalIoChunkPayload *chunk =
 		    dynamic_cast<const mr::coprocessor::ExternalIoChunkPayload *>(result.payload.get());
@@ -473,6 +534,26 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 		}
 		if (!recorded)
 			recordTaskPerformance(result, "Syntax warmup", nullptr, result.task.documentId, 0, result.task.label);
+	}
+
+	if (result.task.kind == mr::coprocessor::TaskKind::MiniMapWarmup) {
+		std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+		bool recorded = false;
+		for (auto &window : windows) {
+			TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+			if (editor == nullptr)
+				continue;
+			if (editor->documentId() != result.task.documentId)
+				continue;
+			if (!recorded) {
+				recordTaskPerformance(result, "Mini map render", window, editor->documentId(),
+				                      editor->bufferLength(), window->currentFileName());
+				recorded = true;
+			}
+			editor->clearMiniMapWarmupTask(result.task.id);
+		}
+		if (!recorded)
+			recordTaskPerformance(result, "Mini map render", nullptr, result.task.documentId, 0, result.task.label);
 	}
 
 	if (!result.failed())

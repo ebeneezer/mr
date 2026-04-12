@@ -690,12 +690,17 @@ const TPalette &extendedAppBasePalette() {
 			data[kMrPaletteMessageError - 1] = data[42 - 1];
 			data[kMrPaletteMessage - 1] = data[43 - 1];
 			data[kMrPaletteMessageWarning - 1] = data[44 - 1];
-			data[kMrPaletteMessageHero - 1] = data[43 - 1];
-			data[kMrPaletteCursorPositionMarker - 1] = data[3 - 1];
-			data[kMrPaletteLineNumbers - 1] = data[9 - 1];
-			data[kMrPaletteEofMarker - 1] = data[14 - 1];
-			return TPalette(data, static_cast<ushort>(kTotalSlots));
-		}();
+				data[kMrPaletteMessageHero - 1] = data[43 - 1];
+				data[kMrPaletteCursorPositionMarker - 1] = data[3 - 1];
+				data[kMrPaletteLineNumbers - 1] = data[9 - 1];
+				data[kMrPaletteEofMarker - 1] = data[14 - 1];
+				data[kMrPaletteMiniMapNormal - 1] = data[13 - 1];
+				data[kMrPaletteMiniMapViewport - 1] = data[11 - 1];
+				data[kMrPaletteMiniMapChanged - 1] = data[14 - 1];
+				data[kMrPaletteMiniMapFindMarker - 1] = data[5 - 1];
+				data[kMrPaletteMiniMapErrorMarker - 1] = data[42 - 1];
+				return TPalette(data, static_cast<ushort>(kTotalSlots));
+			}();
 	return palette;
 }
 } // namespace

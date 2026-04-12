@@ -603,6 +603,9 @@ class TMREditWindow : public TWindow {
 				case mr::coprocessor::TaskKind::SyntaxWarmup:
 					line = "Syntax";
 					break;
+				case mr::coprocessor::TaskKind::MiniMapWarmup:
+					line = "Mini map";
+					break;
 				case mr::coprocessor::TaskKind::LineIndexWarmup:
 					line = "Line index";
 					break;
@@ -624,6 +627,8 @@ class TMREditWindow : public TWindow {
 				lines.push_back("Line indexing  running");
 			if (editor->pendingSyntaxWarmupTaskId() != 0)
 				lines.push_back("Syntax warmup  running");
+			if (editor->pendingMiniMapWarmupTaskId() != 0)
+				lines.push_back("rendering mini map");
 		}
 		return lines;
 	}
@@ -680,6 +685,13 @@ class TMREditWindow : public TWindow {
 				editor->clearSyntaxWarmupTask(syntaxTaskId);
 				++clearedCount;
 			}
+			std::uint64_t miniMapTaskId = editor->pendingMiniMapWarmupTaskId();
+			if (miniMapTaskId != 0) {
+				mrTraceCoprocessorTaskCancel(bufferId_, miniMapTaskId);
+				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(miniMapTaskId));
+				editor->clearMiniMapWarmupTask(miniMapTaskId);
+				++clearedCount;
+			}
 		}
 		updateTaskMarkers();
 		return clearedCount;
@@ -730,6 +742,10 @@ class TMREditWindow : public TWindow {
 
 	std::uint64_t pendingSyntaxWarmupTaskId() const noexcept {
 		return editor != nullptr ? editor->pendingSyntaxWarmupTaskId() : 0;
+	}
+
+	std::uint64_t pendingMiniMapWarmupTaskId() const noexcept {
+		return editor != nullptr ? editor->pendingMiniMapWarmupTaskId() : 0;
 	}
 
 	bool usesApproximateMetrics() const noexcept {
@@ -1045,6 +1061,8 @@ class TMREditWindow : public TWindow {
 			if (editor->pendingLineIndexWarmupTaskId() != 0)
 				++taskCount;
 			if (editor->pendingSyntaxWarmupTaskId() != 0)
+				++taskCount;
+			if (editor->pendingMiniMapWarmupTaskId() != 0)
 				++taskCount;
 		}
 		if (indicator != nullptr)

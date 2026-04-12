@@ -565,6 +565,9 @@ static const char *const kColumnBlockMoveDelete = "DELETE_SPACE";
 static const char *const kColumnBlockMoveLeave = "LEAVE_SPACE";
 static const char *const kDefaultModeInsert = "INSERT";
 static const char *const kDefaultModeOverwrite = "OVERWRITE";
+static const char *const kMiniMapPositionOff = "OFF";
+static const char *const kMiniMapPositionLeading = "LEADING";
+static const char *const kMiniMapPositionTrailing = "TRAILING";
 static const char *const kIndentStyleOff = "OFF";
 static const char *const kIndentStyleAutomatic = "AUTOMATIC";
 static const char *const kIndentStyleSmart = "SMART";
@@ -574,6 +577,9 @@ static const char *const kFileTypeBinary = "BINARY";
 static const int kDefaultTabSize = 8;
 static const int kMinTabSize = 2;
 static const int kMaxTabSize = 32;
+static const int kDefaultMiniMapWidth = 4;
+static const int kMinMiniMapWidth = 2;
+static const int kMaxMiniMapWidth = 10;
 static const char *const kDefaultCursorStatusColor = "";
 static const char *const kThemeSettingsKey = "COLORTHEMEURI";
 static const char *const kWindowColorThemeProfileKey = "WINDOW_COLORTHEME_URI";
@@ -604,6 +610,7 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"MENUDIALOGCOLORS", MRSettingsKeyClass::ColorInline, false},
     {"HELPCOLORS", MRSettingsKeyClass::ColorInline, false},
     {"OTHERCOLORS", MRSettingsKeyClass::ColorInline, false},
+    {"MINIMAPCOLORS", MRSettingsKeyClass::ColorInline, false},
 };
 
 const MREditSettingDescriptor *editSettingDescriptorByKeyInternal(const std::string &key);
@@ -662,6 +669,12 @@ static const MREditSettingDescriptor kEditSettingDescriptors[] = {
      kOvShowLineNumbers},
     {"LINE_NUM_ZERO_FILL", "Zero-fill line numbers", MREditSettingSection::Display, MREditSettingKind::Boolean,
      true, kOvLineNumZeroFill},
+    {"MINIMAP_POSITION", "Minimap position", MREditSettingSection::Display, MREditSettingKind::Choice, true,
+     kOvMiniMapPosition},
+    {"MINIMAP_WIDTH", "Minimap width", MREditSettingSection::Display, MREditSettingKind::Integer, true,
+     kOvMiniMapWidth},
+    {"MINIMAP_MARKER_GLYPH", "Minimap marker glyph", MREditSettingSection::Display, MREditSettingKind::String, true,
+     kOvMiniMapMarkerGlyph},
     {"PERSISTENT_BLOCKS", "Persistent blocks", MREditSettingSection::Blocks, MREditSettingKind::Boolean, true,
      kOvPersistentBlocks},
     {"CODE_FOLDING", "Code folding", MREditSettingSection::Display, MREditSettingKind::Boolean, true,
@@ -756,6 +769,14 @@ static const MRColorSetupItem kOtherColorItems[] = {
     {"cursor position marker", kMrPaletteCursorPositionMarker},
 };
 
+static const MRColorSetupItem kMiniMapColorItems[] = {
+    {"normal", kMrPaletteMiniMapNormal},
+    {"viewport", kMrPaletteMiniMapViewport},
+    {"changed", kMrPaletteMiniMapChanged},
+    {"find marker", kMrPaletteMiniMapFindMarker},
+    {"error marker", kMrPaletteMiniMapErrorMarker},
+};
+
 static const ColorGroupDefinition kColorGroups[] = {
     {MRColorSetupGroup::Window, "WINDOW COLORS", "WINDOWCOLORS", kWindowColorItems,
      std::size(kWindowColorItems)},
@@ -765,6 +786,8 @@ static const ColorGroupDefinition kColorGroups[] = {
      std::size(kHelpColorItems)},
     {MRColorSetupGroup::Other, "OTHER COLORS", "OTHERCOLORS", kOtherColorItems,
      std::size(kOtherColorItems)},
+    {MRColorSetupGroup::MiniMap, "MINIMAP COLORS", "MINIMAPCOLORS", kMiniMapColorItems,
+     std::size(kMiniMapColorItems)},
 };
 
 const ColorGroupDefinition *findColorGroupDefinition(MRColorSetupGroup group) {
@@ -816,6 +839,16 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 		return defaults[9];
 	if (paletteIndex == kMrPaletteEofMarker)
 		return defaults[14];
+	if (paletteIndex == kMrPaletteMiniMapNormal)
+		return defaults[13];
+	if (paletteIndex == kMrPaletteMiniMapViewport)
+		return defaults[11];
+	if (paletteIndex == kMrPaletteMiniMapChanged)
+		return defaults[14];
+	if (paletteIndex == kMrPaletteMiniMapFindMarker)
+		return defaults[5];
+	if (paletteIndex == kMrPaletteMiniMapErrorMarker)
+		return defaults[42];
 	if (paletteIndex == kMrPaletteDialogInactiveElements)
 		return defaults[kPaletteDialogInactiveClusterGray];
 	if (paletteIndex == 0 || paletteIndex >= std::size(defaults))
@@ -834,6 +867,8 @@ MRColorSetupSettings defaultsFromColorGroups() {
 		settings.helpColors[i] = defaultColorForSlot(kHelpColorItems[i].paletteIndex);
 	for (std::size_t i = 0; i < settings.otherColors.size(); ++i)
 		settings.otherColors[i] = defaultColorForSlot(kOtherColorItems[i].paletteIndex);
+	for (std::size_t i = 0; i < settings.miniMapColors.size(); ++i)
+		settings.miniMapColors[i] = defaultColorForSlot(kMiniMapColorItems[i].paletteIndex);
 	return settings;
 }
 
@@ -1153,7 +1188,9 @@ bool parseThemeSetupAssignments(const std::string &source, std::map<std::string,
 	static const std::regex pattern(
 	    "MRSETUP\\s*\\(\\s*'([^']+)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)",
 	    std::regex_constants::ECMAScript | std::regex_constants::icase);
-	std::set<std::string> allowed = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS"};
+	std::set<std::string> allowed = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS",
+	                                 "MINIMAPCOLORS"};
+	std::set<std::string> required = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS"};
 	std::sregex_iterator it(source.begin(), source.end(), pattern);
 	std::sregex_iterator end;
 
@@ -1166,9 +1203,13 @@ bool parseThemeSetupAssignments(const std::string &source, std::map<std::string,
 			return setError(errorMessage, "Theme file contains unsupported MRSETUP key: " + key);
 		assignments[key] = value;
 	}
-	for (const std::string &required : allowed)
-		if (assignments.find(required) == assignments.end())
-			return setError(errorMessage, "Theme file must define MRSETUP('" + required + "', ...).");
+	for (const std::string &key : required)
+		if (assignments.find(key) == assignments.end())
+			return setError(errorMessage, "Theme file must define MRSETUP('" + key + "', ...).");
+	if (assignments.find("MINIMAPCOLORS") == assignments.end()) {
+		MRColorSetupSettings defaults = resolveColorSetupDefaults();
+		assignments["MINIMAPCOLORS"] = formatColorListLiteral(defaults.miniMapColors);
+	}
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;
@@ -1228,6 +1269,56 @@ std::string normalizeDefaultMode(const std::string &value) {
 	if (key == "OVERWRITE" || key == "OVR")
 		return kDefaultModeOverwrite;
 	return std::string();
+}
+
+std::string normalizeMiniMapPosition(const std::string &value) {
+	std::string key = upperAscii(trimAscii(value));
+
+	if (key == "OFF")
+		return kMiniMapPositionOff;
+	if (key == "LEADING" || key == "LEFT")
+		return kMiniMapPositionLeading;
+	if (key == "TRAILING" || key == "RIGHT")
+		return kMiniMapPositionTrailing;
+	return std::string();
+}
+
+int utf8CodepointLength(unsigned char lead) {
+	if ((lead & 0x80u) == 0u)
+		return 1;
+	if ((lead & 0xE0u) == 0xC0u)
+		return 2;
+	if ((lead & 0xF0u) == 0xE0u)
+		return 3;
+	if ((lead & 0xF8u) == 0xF0u)
+		return 4;
+	return 0;
+}
+
+bool normalizeMiniMapMarkerGlyph(const std::string &value, std::string &outGlyph, std::string *errorMessage) {
+	const std::string trimmed = trimAscii(value);
+
+	if (trimmed.empty()) {
+		outGlyph = "│";
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
+	}
+	const unsigned char lead = static_cast<unsigned char>(trimmed[0]);
+	const int cpLen = utf8CodepointLength(lead);
+	if (cpLen == 0 || trimmed.size() != static_cast<std::size_t>(cpLen))
+		return setError(errorMessage, "MINIMAP_MARKER_GLYPH must be exactly one UTF-8 character.");
+	for (int i = 1; i < cpLen; ++i) {
+		const unsigned char ch = static_cast<unsigned char>(trimmed[static_cast<std::size_t>(i)]);
+		if ((ch & 0xC0u) != 0x80u)
+			return setError(errorMessage, "MINIMAP_MARKER_GLYPH must be valid UTF-8.");
+	}
+	if (cpLen == 1 && std::iscntrl(lead) != 0)
+		return setError(errorMessage, "MINIMAP_MARKER_GLYPH may not be a control character.");
+	outGlyph = trimmed;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
 }
 
 std::string normalizeIndentStyle(const std::string &value) {
@@ -1407,6 +1498,24 @@ bool parseTabSizeLiteral(const std::string &value, int &outValue, std::string *e
 		return setError(errorMessage, "TAB_SIZE must be an integer between 2 and 32.");
 	if (parsed < kMinTabSize || parsed > kMaxTabSize)
 		return setError(errorMessage, "TAB_SIZE must be between 2 and 32.");
+	outValue = static_cast<int>(parsed);
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+bool parseMiniMapWidthLiteral(const std::string &value, int &outValue, std::string *errorMessage) {
+	std::string text = trimAscii(value);
+	char *end = nullptr;
+	long parsed = 0;
+
+	if (text.empty())
+		return setError(errorMessage, "MINIMAP_WIDTH must be between 2 and 10.");
+	parsed = std::strtol(text.c_str(), &end, 10);
+	if (end == text.c_str() || end == nullptr || *end != '\0')
+		return setError(errorMessage, "MINIMAP_WIDTH must be an integer between 2 and 10.");
+	if (parsed < kMinMiniMapWidth || parsed > kMaxMiniMapWidth)
+		return setError(errorMessage, "MINIMAP_WIDTH must be between 2 and 10.");
 	outValue = static_cast<int>(parsed);
 	if (errorMessage != nullptr)
 		errorMessage->clear();
@@ -1725,6 +1834,20 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 	} else if (upperKeyName == "LINE_NUM_ZERO_FILL") {
 		if (!parseAndAssignBooleanLiteral(value, current.lineNumZeroFill, errorMessage))
 			return false;
+	} else if (upperKeyName == "MINIMAP_POSITION") {
+		normalized = normalizeMiniMapPosition(value);
+		if (normalized.empty())
+			return setError(errorMessage, "MINIMAP_POSITION must be OFF, LEADING or TRAILING.");
+		current.miniMapPosition = normalized;
+	} else if (upperKeyName == "MINIMAP_WIDTH") {
+		int miniMapWidth = 0;
+		if (!parseMiniMapWidthLiteral(value, miniMapWidth, errorMessage))
+			return false;
+		current.miniMapWidth = miniMapWidth;
+	} else if (upperKeyName == "MINIMAP_MARKER_GLYPH") {
+		if (!normalizeMiniMapMarkerGlyph(value, normalized, errorMessage))
+			return false;
+		current.miniMapMarkerGlyph = normalized;
 	} else if (upperKeyName == "PERSISTENT_BLOCKS") {
 		if (!parseAndAssignBooleanLiteral(value, current.persistentBlocks, errorMessage))
 			return false;
@@ -1812,6 +1935,12 @@ std::string editSetupValueLiteral(const MREditSetupSettings &settings, const cha
 		return formatEditSetupBoolean(settings.showLineNumbers);
 	if (upperKey == "LINE_NUM_ZERO_FILL")
 		return formatEditSetupBoolean(settings.lineNumZeroFill);
+	if (upperKey == "MINIMAP_POSITION")
+		return settings.miniMapPosition;
+	if (upperKey == "MINIMAP_WIDTH")
+		return std::to_string(settings.miniMapWidth);
+	if (upperKey == "MINIMAP_MARKER_GLYPH")
+		return settings.miniMapMarkerGlyph;
 	if (upperKey == "PERSISTENT_BLOCKS")
 		return formatEditSetupBoolean(settings.persistentBlocks);
 	if (upperKey == "CODE_FOLDING")
@@ -1831,8 +1960,9 @@ unsigned long long supportedEditProfileOverrideMask() noexcept {
 	                                     kOvWordWrap | kOvIndentStyle | kOvFileType | kOvBinaryRecordLength |
 	                                     kOvPostLoadMacro | kOvPreSaveMacro | kOvDefaultPath | kOvFormatLine |
 	                                     kOvBackupFiles | kOvShowEofMarker | kOvShowEofMarkerEmoji | kOvShowLineNumbers |
-	                                     kOvLineNumZeroFill | kOvPersistentBlocks | kOvCodeFolding | kOvColumnBlockMove |
-	                                     kOvDefaultMode | kOvCursorStatusColor;
+	                                     kOvLineNumZeroFill | kOvMiniMapPosition | kOvMiniMapWidth |
+	                                     kOvMiniMapMarkerGlyph | kOvPersistentBlocks | kOvCodeFolding |
+	                                     kOvColumnBlockMove | kOvDefaultMode | kOvCursorStatusColor;
 	return mask;
 }
 
@@ -2014,6 +2144,9 @@ MREditSetupSettings resolveEditSetupDefaults() {
 	defaults.showEofMarkerEmoji = true;
 	defaults.showLineNumbers = false;
 	defaults.lineNumZeroFill = false;
+	defaults.miniMapPosition = kMiniMapPositionOff;
+	defaults.miniMapWidth = kDefaultMiniMapWidth;
+	defaults.miniMapMarkerGlyph = "│";
 	defaults.persistentBlocks = true;
 	defaults.codeFolding = false;
 	defaults.columnBlockMove = kColumnBlockMoveDelete;
@@ -2262,6 +2395,12 @@ MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults,
 		merged.showLineNumbers = overrides.values.showLineNumbers;
 	if ((overrides.mask & kOvLineNumZeroFill) != 0)
 		merged.lineNumZeroFill = overrides.values.lineNumZeroFill;
+	if ((overrides.mask & kOvMiniMapPosition) != 0)
+		merged.miniMapPosition = overrides.values.miniMapPosition;
+	if ((overrides.mask & kOvMiniMapWidth) != 0)
+		merged.miniMapWidth = overrides.values.miniMapWidth;
+	if ((overrides.mask & kOvMiniMapMarkerGlyph) != 0)
+		merged.miniMapMarkerGlyph = overrides.values.miniMapMarkerGlyph;
 	if ((overrides.mask & kOvPersistentBlocks) != 0)
 		merged.persistentBlocks = overrides.values.persistentBlocks;
 	if ((overrides.mask & kOvCodeFolding) != 0)
@@ -2450,8 +2589,10 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	std::string defaultMode = normalizeDefaultMode(settings.defaultMode);
 	std::string indentStyle = normalizeIndentStyle(settings.indentStyle);
 	std::string fileType = normalizeFileType(settings.fileType);
+	std::string miniMapPosition = normalizeMiniMapPosition(settings.miniMapPosition);
 	std::string formatLine = normalizeFormatLine(settings.formatLine);
 	std::string cursorStatusColor;
+	std::string miniMapMarkerGlyph;
 	std::string postLoadMacro = trimAscii(settings.postLoadMacro).empty() ? std::string()
 	                                                                  : normalizeConfiguredPathInput(settings.postLoadMacro);
 	std::string preSaveMacro = trimAscii(settings.preSaveMacro).empty() ? std::string()
@@ -2469,7 +2610,11 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 		return setError(errorMessage, "INDENT_STYLE must be OFF, AUTOMATIC or SMART.");
 	if (fileType.empty())
 		return setError(errorMessage, "FILE_TYPE must be LEGACY_TEXT, UNIX or BINARY.");
+	if (miniMapPosition.empty())
+		return setError(errorMessage, "MINIMAP_POSITION must be OFF, LEADING or TRAILING.");
 	if (!normalizeCursorStatusColor(settings.cursorStatusColor, cursorStatusColor, errorMessage))
+		return false;
+	if (!normalizeMiniMapMarkerGlyph(settings.miniMapMarkerGlyph, miniMapMarkerGlyph, errorMessage))
 		return false;
 	if (settings.binaryRecordLength < kMinBinaryRecordLength || settings.binaryRecordLength > kMaxBinaryRecordLength)
 		return setError(errorMessage, "BINARY_RECORD_LENGTH must be between 1 and 99999.");
@@ -2477,6 +2622,8 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 		return setError(errorMessage, "TAB_SIZE must be between 2 and 32.");
 	if (settings.rightMargin < kMinRightMargin || settings.rightMargin > kMaxRightMargin)
 		return setError(errorMessage, "RIGHT_MARGIN must be between 1 and 999.");
+	if (settings.miniMapWidth < kMinMiniMapWidth || settings.miniMapWidth > kMaxMiniMapWidth)
+		return setError(errorMessage, "MINIMAP_WIDTH must be between 2 and 10.");
 
 	normalized.truncateSpaces = settings.truncateSpaces;
 	normalized.eofCtrlZ = settings.eofCtrlZ;
@@ -2522,6 +2669,9 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	normalized.showEofMarkerEmoji = settings.showEofMarkerEmoji;
 	normalized.showLineNumbers = settings.showLineNumbers;
 	normalized.lineNumZeroFill = settings.lineNumZeroFill;
+	normalized.miniMapPosition = miniMapPosition;
+	normalized.miniMapWidth = settings.miniMapWidth;
+	normalized.miniMapMarkerGlyph = miniMapMarkerGlyph;
 	normalized.persistentBlocks = settings.persistentBlocks;
 	normalized.codeFolding = settings.codeFolding;
 
@@ -2565,6 +2715,10 @@ bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned 
 			for (std::size_t i = 0; i < configured.otherColors.size(); ++i)
 				configured.otherColors[i] = values[i];
 			break;
+		case MRColorSetupGroup::MiniMap:
+			for (std::size_t i = 0; i < configured.miniMapColors.size(); ++i)
+				configured.miniMapColors[i] = values[i];
+			break;
 	}
 
 	if (errorMessage != nullptr)
@@ -2595,6 +2749,10 @@ void configuredColorSetupGroupValues(MRColorSetupGroup group, unsigned char *val
 		case MRColorSetupGroup::Other:
 			for (std::size_t i = 0; i < configured.otherColors.size(); ++i)
 				values[i] = configured.otherColors[i];
+			break;
+		case MRColorSetupGroup::MiniMap:
+			for (std::size_t i = 0; i < configured.miniMapColors.size(); ++i)
+				values[i] = configured.miniMapColors[i];
 			break;
 	}
 }
@@ -2659,6 +2817,9 @@ std::string buildColorThemeMacroSource() {
 	source +=
 	    "MRSETUP('OTHERCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.otherColors)) +
 	    "');\n";
+	source +=
+	    "MRSETUP('MINIMAPCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.miniMapColors)) +
+	    "');\n";
 	source += "END_MACRO;\n";
 	return source;
 }
@@ -2703,7 +2864,8 @@ bool loadColorThemeFile(const std::string &themeUri, std::string *errorMessage) 
 	std::string source;
 	std::string applyError;
 	std::map<std::string, std::string> assignments;
-	static const char *const order[] = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS"};
+	static const char *const order[] = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS",
+	                                    "MINIMAPCOLORS"};
 
 	if (!validateColorThemeFilePath(normalized, errorMessage))
 		return false;
@@ -2788,6 +2950,10 @@ bool applyConfiguredColorSetupValue(const std::string &key, const std::string &v
 			break;
 		case MRColorSetupGroup::Other:
 			if (!parseOtherColorListLiteral(value, configured.otherColors, errorMessage))
+				return false;
+			break;
+		case MRColorSetupGroup::MiniMap:
+			if (!parseColorListLiteral(value, configured.miniMapColors, errorMessage))
 				return false;
 			break;
 	}
@@ -2881,6 +3047,11 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 	for (std::size_t i = 0; i < std::size(kOtherColorItems); ++i)
 		if (kOtherColorItems[i].paletteIndex == paletteIndex) {
 			value = configured.otherColors[i];
+			return true;
+		}
+	for (std::size_t i = 0; i < std::size(kMiniMapColorItems); ++i)
+		if (kMiniMapColorItems[i].paletteIndex == paletteIndex) {
+			value = configured.miniMapColors[i];
 			return true;
 		}
 	return false;
@@ -3089,6 +3260,10 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.showLineNumbers)) + "');\n";
 	source += "MRSETUP('LINE_NUM_ZERO_FILL', '" +
 	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.lineNumZeroFill)) + "');\n";
+	source += "MRSETUP('MINIMAP_POSITION', '" + escapeMrmacSingleQuotedLiteral(edit.miniMapPosition) + "');\n";
+	source += "MRSETUP('MINIMAP_WIDTH', '" + std::to_string(edit.miniMapWidth) + "');\n";
+	source += "MRSETUP('MINIMAP_MARKER_GLYPH', '" + escapeMrmacSingleQuotedLiteral(edit.miniMapMarkerGlyph) +
+	          "');\n";
 	source += "MRSETUP('PERSISTENT_BLOCKS', '" +
 	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.persistentBlocks)) + "');\n";
 	source += "MRSETUP('CODE_FOLDING', '" +
@@ -3157,6 +3332,12 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 					value = formatEditSetupBoolean(profile.overrides.values.showLineNumbers);
 				else if (std::string(descriptors[i].key) == "LINE_NUM_ZERO_FILL")
 					value = formatEditSetupBoolean(profile.overrides.values.lineNumZeroFill);
+				else if (std::string(descriptors[i].key) == "MINIMAP_POSITION")
+					value = profile.overrides.values.miniMapPosition;
+				else if (std::string(descriptors[i].key) == "MINIMAP_WIDTH")
+					value = std::to_string(profile.overrides.values.miniMapWidth);
+				else if (std::string(descriptors[i].key) == "MINIMAP_MARKER_GLYPH")
+					value = profile.overrides.values.miniMapMarkerGlyph;
 				else if (std::string(descriptors[i].key) == "PERSISTENT_BLOCKS")
 					value = formatEditSetupBoolean(profile.overrides.values.persistentBlocks);
 				else if (std::string(descriptors[i].key) == "CODE_FOLDING")

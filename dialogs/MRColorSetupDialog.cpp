@@ -241,7 +241,8 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 
 TColorGroup *buildAllColorGroups() {
 	static const MRColorSetupGroup groups[] = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog,
-	                                           MRColorSetupGroup::Help, MRColorSetupGroup::Other};
+	                                           MRColorSetupGroup::Help, MRColorSetupGroup::Other,
+	                                           MRColorSetupGroup::MiniMap};
 	TColorGroup *head = nullptr;
 
 	for (std::size_t g = sizeof(groups) / sizeof(groups[0]); g-- > 0;) {

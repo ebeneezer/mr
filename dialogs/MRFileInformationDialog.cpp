@@ -313,6 +313,7 @@ std::vector<FileInformationPage> buildFileInformationPages(TMREditWindow *win) {
 	page2.lines.push_back(formatWarmupState("Line index", win != nullptr ? win->pendingLineIndexWarmupTaskId() : 0,
 	                                        win != nullptr && win->exactLineCountKnown()));
 	page2.lines.push_back(formatWarmupState("Syntax", win != nullptr ? win->pendingSyntaxWarmupTaskId() : 0));
+	page2.lines.push_back(formatWarmupState("Mini map", win != nullptr ? win->pendingMiniMapWarmupTaskId() : 0));
 	page2.lines.push_back(std::string("Result queue  : ") +
 	                      std::to_string(mr::coprocessor::globalCoprocessor().pendingResults()) +
 	                      " pending result(s)");

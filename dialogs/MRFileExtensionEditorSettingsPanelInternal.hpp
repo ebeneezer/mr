@@ -32,7 +32,9 @@ enum {
 	kMacroFieldSize = 256,
 	kDefaultPathFieldSize = 256,
 	kFormatLineFieldSize = 256,
-	kCursorStatusColorFieldSize = 8
+	kCursorStatusColorFieldSize = 8,
+	kMiniMapWidthFieldSize = 8,
+	kMiniMapMarkerGlyphFieldSize = 16
 };
 
 enum : ushort {
@@ -96,6 +98,12 @@ enum : ushort {
 	kDefaultModeOverwrite = 1
 };
 
+enum : ushort {
+	kMiniMapOff = 0,
+	kMiniMapLeading = 1,
+	kMiniMapTrailing = 2
+};
+
 struct FileExtensionEditorSettingsDialogRecord {
 	char pageBreak[kPageBreakFieldSize];
 	char wordDelimiters[kWordDelimsFieldSize];
@@ -108,12 +116,15 @@ struct FileExtensionEditorSettingsDialogRecord {
 	char defaultPath[kDefaultPathFieldSize];
 	char formatLine[kFormatLineFieldSize];
 	char cursorStatusColor[kCursorStatusColorFieldSize];
+	char miniMapWidth[kMiniMapWidthFieldSize];
+	char miniMapMarkerGlyph[kMiniMapMarkerGlyphFieldSize];
 	ushort optionsMask;
 	ushort tabExpandChoice;
 	ushort indentStyleChoice;
 	ushort fileTypeChoice;
 	ushort columnBlockMoveChoice;
 	ushort defaultModeChoice;
+	ushort miniMapPositionChoice;
 };
 
 struct FileExtensionEditorSettingsPanelConfig {
@@ -166,14 +177,17 @@ class FileExtensionEditorSettingsPanel {
 		TView *postLoadMacroBrowseButton = nullptr;
 		TView *preSaveMacroBrowseButton = nullptr;
 		TView *defaultPathBrowseButton = nullptr;
-	TCheckBoxes *optionsLeftField = nullptr;
-	TRadioButtons *lineNumbersField = nullptr;
-	TRadioButtons *eofMarkerField = nullptr;
-	TRadioButtons *tabExpandField = nullptr;
-	TRadioButtons *indentStyleField = nullptr;
-	TRadioButtons *fileTypeField = nullptr;
-	TRadioButtons *columnBlockMoveField = nullptr;
-	TRadioButtons *defaultModeField = nullptr;
+		TCheckBoxes *optionsLeftField = nullptr;
+		TRadioButtons *lineNumbersField = nullptr;
+		TRadioButtons *miniMapPositionField = nullptr;
+		TRadioButtons *eofMarkerField = nullptr;
+		TRadioButtons *tabExpandField = nullptr;
+		TRadioButtons *indentStyleField = nullptr;
+		TRadioButtons *fileTypeField = nullptr;
+		TRadioButtons *columnBlockMoveField = nullptr;
+		TRadioButtons *defaultModeField = nullptr;
+		MRNumericSlider *miniMapWidthSlider = nullptr;
+		TInputLine *miniMapMarkerGlyphField = nullptr;
 };
 
 } // namespace MRFileExtensionProfilesDialogInternal

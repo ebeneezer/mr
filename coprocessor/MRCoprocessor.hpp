@@ -35,6 +35,7 @@ enum class TaskKind : unsigned char {
 	Custom,
 	LineIndexWarmup,
 	SyntaxWarmup,
+	MiniMapWarmup,
 	IndicatorBlink,
 	ExternalIo,
 	MacroJob
@@ -123,6 +124,30 @@ struct SyntaxWarmupPayload final : Payload {
 
 	SyntaxWarmupPayload(TMRSyntaxLanguage aLanguage, std::vector<SyntaxWarmLine> aLines)
 	    : language(aLanguage), lines(std::move(aLines)) {
+	}
+};
+
+struct MiniMapWarmupPayload final : Payload {
+	bool braille;
+	int rowCount;
+	int bodyWidth;
+	std::size_t totalLines;
+	int viewportWidth;
+	std::vector<unsigned char> rowPatterns;
+	std::vector<std::size_t> rowLineStarts;
+	std::vector<std::size_t> rowLineEnds;
+
+	MiniMapWarmupPayload() noexcept
+	    : braille(true), rowCount(0), bodyWidth(0), totalLines(1), viewportWidth(1), rowPatterns(),
+	      rowLineStarts(), rowLineEnds() {
+	}
+
+	MiniMapWarmupPayload(bool aBraille, int aRowCount, int aBodyWidth, std::size_t aTotalLines,
+	                     int aViewportWidth, std::vector<unsigned char> aRowPatterns,
+	                     std::vector<std::size_t> aRowLineStarts, std::vector<std::size_t> aRowLineEnds)
+	    : braille(aBraille), rowCount(aRowCount), bodyWidth(aBodyWidth), totalLines(aTotalLines),
+	      viewportWidth(aViewportWidth), rowPatterns(std::move(aRowPatterns)),
+	      rowLineStarts(std::move(aRowLineStarts)), rowLineEnds(std::move(aRowLineEnds)) {
 	}
 };
 
