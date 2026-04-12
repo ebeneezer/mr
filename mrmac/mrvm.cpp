@@ -6009,8 +6009,8 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							throw std::runtime_error(
 							    "MRSETUP(COLORTHEMEURI) failed: " +
 							    (errorText.empty() ? std::string("invalid path.") : errorText));
-					} else if (findFileExtensionEditorSettingDescriptorByKey(setupKey) != nullptr) {
-							if (!applyConfiguredFileExtensionEditorSettingValue(setupKey, valueAsString(args[1]), &errorText))
+					} else if (findEditSettingDescriptorByKey(setupKey) != nullptr) {
+							if (!applyConfiguredEditSetupValue(setupKey, valueAsString(args[1]), &errorText))
 								throw std::runtime_error(
 								    "MRSETUP(" + setupKey + ") failed: " +
 							    (errorText.empty() ? std::string("invalid value.") : errorText));
@@ -6033,7 +6033,8 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						    "SHELLPATH, LASTFILEDIALOGPATH, DEFAULT_PROFILE_DESCRIPTION, COLORTHEMEURI, PAGE_BREAK, WORD_DELIMITERS, "
 						    "DEFAULT_EXTENSIONS, TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, TAB_SIZE, RIGHT_MARGIN, "
 						    "WORD_WRAP, INDENT_STYLE, FILE_TYPE, BINARY_RECORD_LENGTH, POST_LOAD_MACRO, PRE_SAVE_MACRO, DEFAULT_PATH, "
-						    "FORMAT_LINE, BACKUP_METHOD, BACKUP_FREQUENCY, BACKUP_EXTENSION, BACKUP_DIRECTORY, AUTOSAVE_INACTIVITY_SECONDS, AUTOSAVE_INTERVAL_SECONDS, SHOW_EOF_MARKER, SHOW_EOF_MARKER_EMOJI, SHOW_LINE_NUMBERS, "
+						    "FORMAT_LINE, BACKUP_METHOD, BACKUP_FREQUENCY, BACKUP_EXTENSION, BACKUP_DIRECTORY, "
+						    "AUTOSAVE_INACTIVITY_SECONDS, AUTOSAVE_INTERVAL_SECONDS, BACKUP_FILES, SHOW_EOF_MARKER, SHOW_EOF_MARKER_EMOJI, SHOW_LINE_NUMBERS, "
 						    "LINE_NUM_ZERO_FILL, PERSISTENT_BLOCKS, CODE_FOLDING, COLUMN_BLOCK_MOVE, DEFAULT_MODE, CURSOR_STATUS_COLOR, "
 						    "WINDOWCOLORS, MENUDIALOGCOLORS, HELPCOLORS, OTHERCOLORS.");
 					runtimeErrorLevel() = 0;
@@ -6046,7 +6047,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					    !isStringLike(args[2]) || !isStringLike(args[3]))
 						throw std::runtime_error(
 						    "MRFEPROFILE expects (string, string, string, string).");
-					if (!applyConfiguredFileExtensionProfileDirective(valueAsString(args[0]), valueAsString(args[1]),
+					if (!applyConfiguredEditExtensionProfileDirective(valueAsString(args[0]), valueAsString(args[1]),
 					                                              valueAsString(args[2]), valueAsString(args[3]),
 					                                              &errorText))
 						throw std::runtime_error(

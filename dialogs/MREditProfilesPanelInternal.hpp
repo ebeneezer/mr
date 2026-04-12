@@ -42,19 +42,21 @@ enum : ushort {
 	kOptionShowLineNumbers = 0x0008,
 	kOptionLineNumZeroFill = 0x0010,
 	kOptionPersistentBlocks = 0x0020,
-	kOptionCodeFolding = 0x0040,
-	kOptionShowEofMarker = 0x0080,
-	kOptionShowEofMarkerEmoji = 0x0100,
-	kOptionWordWrap = 0x0200
+	kOptionBackupFiles = 0x0040,
+	kOptionCodeFolding = 0x0080,
+	kOptionShowEofMarker = 0x0100,
+	kOptionShowEofMarkerEmoji = 0x0200,
+	kOptionWordWrap = 0x0400
 };
 
 enum : ushort {
 	kLeftOptionTruncateSpaces = 0x0001,
 	kLeftOptionEofCtrlZ = 0x0002,
 	kLeftOptionEofCrLf = 0x0004,
-	kLeftOptionPersistentBlocks = 0x0008,
-	kLeftOptionCodeFolding = 0x0010,
-	kLeftOptionWordWrap = 0x0020
+	kLeftOptionBackupFiles = 0x0008,
+	kLeftOptionPersistentBlocks = 0x0010,
+	kLeftOptionCodeFolding = 0x0020,
+	kLeftOptionWordWrap = 0x0040
 };
 
 enum : ushort {

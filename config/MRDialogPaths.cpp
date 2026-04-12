@@ -56,13 +56,13 @@ std::string &configuredColorThemeFile() {
 	return value;
 }
 
-MRFileExtensionEditorSettings &configuredFileExtensionEditorSettingsState() {
-	static MRFileExtensionEditorSettings value;
+MREditSetupSettings &configuredEditSettings() {
+	static MREditSetupSettings value;
 	return value;
 }
 
-std::vector<MRFileExtensionProfile> &configuredEditProfiles() {
-	static std::vector<MRFileExtensionProfile> value;
+std::vector<MREditExtensionProfile> &configuredEditProfiles() {
+	static std::vector<MREditExtensionProfile> value;
 	return value;
 }
 
@@ -485,18 +485,6 @@ static const char *const kIndentStyleSmart = "SMART";
 static const char *const kFileTypeLegacyText = "LEGACY_TEXT";
 static const char *const kFileTypeUnix = "UNIX";
 static const char *const kFileTypeBinary = "BINARY";
-static const char *const kBackupMethodOff = "OFF";
-static const char *const kBackupMethodBakFile = "BAK_FILE";
-static const char *const kBackupMethodDirectory = "DIRECTORY";
-static const char *const kBackupFrequencyFirstSaveOnly = "FIRST_SAVE_ONLY";
-static const char *const kBackupFrequencyEverySave = "EVERY_SAVE";
-static const char *const kDefaultBackupExtension = "bak";
-static const int kDefaultAutosaveInactivitySeconds = 15;
-static const int kMinAutosaveInactivitySeconds = 5;
-static const int kMaxAutosaveInactivitySeconds = 100;
-static const int kDefaultAutosaveIntervalSeconds = 180;
-static const int kMinAutosaveIntervalSeconds = 100;
-static const int kMaxAutosaveIntervalSeconds = 300;
 static const int kDefaultTabSize = 8;
 static const int kMinTabSize = 2;
 static const int kMaxTabSize = 32;
@@ -528,69 +516,71 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"OTHERCOLORS", MRSettingsKeyClass::ColorInline, false},
 };
 
-const MRFileExtensionEditorSettingDescriptor *fileExtensionEditorSettingDescriptorByKeyInternal(const std::string &key);
+const MREditSettingDescriptor *editSettingDescriptorByKeyInternal(const std::string &key);
 
-static const MRFileExtensionEditorSettingDescriptor kEditSettingDescriptors[] = {
-    {"PAGE_BREAK", "Page break", MRFileExtensionEditorSettingSection::Text, MRFileExtensionEditorSettingKind::String, true, kOvPageBreak},
-    {"WORD_DELIMITERS", "Word delimiters", MRFileExtensionEditorSettingSection::Text, MRFileExtensionEditorSettingKind::String, true,
+static const MREditSettingDescriptor kEditSettingDescriptors[] = {
+    {"PAGE_BREAK", "Page break", MREditSettingSection::Text, MREditSettingKind::String, true, kOvPageBreak},
+    {"WORD_DELIMITERS", "Word delimiters", MREditSettingSection::Text, MREditSettingKind::String, true,
      kOvWordDelimiters},
-    {"DEFAULT_EXTENSIONS", "Filename extension fallback", MRFileExtensionEditorSettingSection::OpenFile, MRFileExtensionEditorSettingKind::String,
+    {"DEFAULT_EXTENSIONS", "Filename extension fallback", MREditSettingSection::OpenFile, MREditSettingKind::String,
      true, kOvDefaultExtensions},
-    {"TRUNCATE_SPACES", "Truncate spaces", MRFileExtensionEditorSettingSection::Save, MRFileExtensionEditorSettingKind::Boolean, true,
+    {"TRUNCATE_SPACES", "Truncate spaces", MREditSettingSection::Save, MREditSettingKind::Boolean, true,
      kOvTruncateSpaces},
-    {"EOF_CTRL_Z", "Write Ctrl+Z EOF", MRFileExtensionEditorSettingSection::Save, MRFileExtensionEditorSettingKind::Boolean, true,
+    {"EOF_CTRL_Z", "Write Ctrl+Z EOF", MREditSettingSection::Save, MREditSettingKind::Boolean, true,
      kOvEofCtrlZ},
-    {"EOF_CR_LF", "Write CR/LF", MRFileExtensionEditorSettingSection::Save, MRFileExtensionEditorSettingKind::Boolean, true, kOvEofCrLf},
-    {"TAB_EXPAND", "Expand tabs", MRFileExtensionEditorSettingSection::Tabs, MRFileExtensionEditorSettingKind::Boolean, true,
+    {"EOF_CR_LF", "Write CR/LF", MREditSettingSection::Save, MREditSettingKind::Boolean, true, kOvEofCrLf},
+    {"TAB_EXPAND", "Expand tabs", MREditSettingSection::Tabs, MREditSettingKind::Boolean, true,
      kOvTabExpand},
-    {"TAB_SIZE", "Tab size", MRFileExtensionEditorSettingSection::Tabs, MRFileExtensionEditorSettingKind::Integer, true, kOvTabSize},
-    {"RIGHT_MARGIN", "Right margin", MRFileExtensionEditorSettingSection::Formatting, MRFileExtensionEditorSettingKind::Integer, true,
+    {"TAB_SIZE", "Tab size", MREditSettingSection::Tabs, MREditSettingKind::Integer, true, kOvTabSize},
+    {"RIGHT_MARGIN", "Right margin", MREditSettingSection::Formatting, MREditSettingKind::Integer, true,
      kOvRightMargin},
-    {"WORD_WRAP", "Word wrap", MRFileExtensionEditorSettingSection::Formatting, MRFileExtensionEditorSettingKind::Boolean, true,
+    {"WORD_WRAP", "Word wrap", MREditSettingSection::Formatting, MREditSettingKind::Boolean, true,
      kOvWordWrap},
-    {"INDENT_STYLE", "Indent style", MRFileExtensionEditorSettingSection::Formatting, MRFileExtensionEditorSettingKind::Choice, true,
+    {"INDENT_STYLE", "Indent style", MREditSettingSection::Formatting, MREditSettingKind::Choice, true,
      kOvIndentStyle},
-    {"FILE_TYPE", "File type", MRFileExtensionEditorSettingSection::Formatting, MRFileExtensionEditorSettingKind::Choice, true,
+    {"FILE_TYPE", "File type", MREditSettingSection::Formatting, MREditSettingKind::Choice, true,
      kOvFileType},
-    {"BINARY_RECORD_LENGTH", "Binary record length", MRFileExtensionEditorSettingSection::Formatting, MRFileExtensionEditorSettingKind::Integer, true,
+    {"BINARY_RECORD_LENGTH", "Binary record length", MREditSettingSection::Formatting, MREditSettingKind::Integer, true,
      kOvBinaryRecordLength},
-    {"POST_LOAD_MACRO", "Post-load macro", MRFileExtensionEditorSettingSection::Macros, MRFileExtensionEditorSettingKind::String, true,
+    {"POST_LOAD_MACRO", "Post-load macro", MREditSettingSection::Macros, MREditSettingKind::String, true,
      kOvPostLoadMacro},
-    {"PRE_SAVE_MACRO", "Pre-save macro", MRFileExtensionEditorSettingSection::Macros, MRFileExtensionEditorSettingKind::String, true,
+    {"PRE_SAVE_MACRO", "Pre-save macro", MREditSettingSection::Macros, MREditSettingKind::String, true,
      kOvPreSaveMacro},
-    {"DEFAULT_PATH", "Default path", MRFileExtensionEditorSettingSection::Paths, MRFileExtensionEditorSettingKind::String, true,
+    {"DEFAULT_PATH", "Default path", MREditSettingSection::Paths, MREditSettingKind::String, true,
      kOvDefaultPath},
-    {"FORMAT_LINE", "Format line", MRFileExtensionEditorSettingSection::Formatting, MRFileExtensionEditorSettingKind::String, true,
+    {"FORMAT_LINE", "Format line", MREditSettingSection::Formatting, MREditSettingKind::String, true,
      kOvFormatLine},
-    {"BACKUP_METHOD", "Backup method", MRFileExtensionEditorSettingSection::Save, MRFileExtensionEditorSettingKind::Choice, false,
+    {"BACKUP_FILES", "Backup files", MREditSettingSection::Save, MREditSettingKind::Boolean, true,
+     kOvBackupFiles},
+    {"BACKUP_METHOD", "Backup method", MREditSettingSection::Save, MREditSettingKind::Choice, false,
      kOvBackupMethod},
-    {"BACKUP_FREQUENCY", "Backup frequency", MRFileExtensionEditorSettingSection::Save, MRFileExtensionEditorSettingKind::Choice, false,
+    {"BACKUP_FREQUENCY", "Backup frequency", MREditSettingSection::Save, MREditSettingKind::Choice, false,
      kOvBackupFrequency},
-    {"BACKUP_EXTENSION", "Backup extension", MRFileExtensionEditorSettingSection::Save, MRFileExtensionEditorSettingKind::String, false,
+    {"BACKUP_EXTENSION", "Backup extension", MREditSettingSection::Save, MREditSettingKind::String, false,
      kOvBackupExtension},
-    {"BACKUP_DIRECTORY", "Backup directory", MRFileExtensionEditorSettingSection::Save, MRFileExtensionEditorSettingKind::String, false,
+    {"BACKUP_DIRECTORY", "Backup directory", MREditSettingSection::Save, MREditSettingKind::String, false,
      kOvBackupDirectory},
-    {"AUTOSAVE_INACTIVITY_SECONDS", "Autosave inactivity seconds", MRFileExtensionEditorSettingSection::Save,
-     MRFileExtensionEditorSettingKind::Integer, false, kOvAutosaveInactivitySeconds},
-    {"AUTOSAVE_INTERVAL_SECONDS", "Autosave interval seconds", MRFileExtensionEditorSettingSection::Save,
-     MRFileExtensionEditorSettingKind::Integer, false, kOvAutosaveIntervalSeconds},
-    {"SHOW_EOF_MARKER", "Show EOF marker", MRFileExtensionEditorSettingSection::Display, MRFileExtensionEditorSettingKind::Boolean, true,
+    {"AUTOSAVE_INACTIVITY_SECONDS", "Autosave inactivity", MREditSettingSection::Save, MREditSettingKind::Integer, false,
+     kOvAutosaveInactivitySeconds},
+    {"AUTOSAVE_INTERVAL_SECONDS", "Autosave interval", MREditSettingSection::Save, MREditSettingKind::Integer, false,
+     kOvAutosaveIntervalSeconds},
+    {"SHOW_EOF_MARKER", "Show EOF marker", MREditSettingSection::Display, MREditSettingKind::Boolean, true,
      kOvShowEofMarker},
-    {"SHOW_EOF_MARKER_EMOJI", "EOF marker emoji", MRFileExtensionEditorSettingSection::Display, MRFileExtensionEditorSettingKind::Boolean, true,
+    {"SHOW_EOF_MARKER_EMOJI", "EOF marker emoji", MREditSettingSection::Display, MREditSettingKind::Boolean, true,
      kOvShowEofMarkerEmoji},
-    {"SHOW_LINE_NUMBERS", "Show line numbers", MRFileExtensionEditorSettingSection::Display, MRFileExtensionEditorSettingKind::Boolean, true,
+    {"SHOW_LINE_NUMBERS", "Show line numbers", MREditSettingSection::Display, MREditSettingKind::Boolean, true,
      kOvShowLineNumbers},
-    {"LINE_NUM_ZERO_FILL", "Zero-fill line numbers", MRFileExtensionEditorSettingSection::Display, MRFileExtensionEditorSettingKind::Boolean,
+    {"LINE_NUM_ZERO_FILL", "Zero-fill line numbers", MREditSettingSection::Display, MREditSettingKind::Boolean,
      true, kOvLineNumZeroFill},
-    {"PERSISTENT_BLOCKS", "Persistent blocks", MRFileExtensionEditorSettingSection::Blocks, MRFileExtensionEditorSettingKind::Boolean, true,
+    {"PERSISTENT_BLOCKS", "Persistent blocks", MREditSettingSection::Blocks, MREditSettingKind::Boolean, true,
      kOvPersistentBlocks},
-    {"CODE_FOLDING", "Code folding", MRFileExtensionEditorSettingSection::Display, MRFileExtensionEditorSettingKind::Boolean, true,
+    {"CODE_FOLDING", "Code folding", MREditSettingSection::Display, MREditSettingKind::Boolean, true,
      kOvCodeFolding},
-    {"COLUMN_BLOCK_MOVE", "Column block move", MRFileExtensionEditorSettingSection::Blocks, MRFileExtensionEditorSettingKind::Choice, true,
+    {"COLUMN_BLOCK_MOVE", "Column block move", MREditSettingSection::Blocks, MREditSettingKind::Choice, true,
      kOvColumnBlockMove},
-    {"DEFAULT_MODE", "Default mode", MRFileExtensionEditorSettingSection::Mode, MRFileExtensionEditorSettingKind::Choice, true,
+    {"DEFAULT_MODE", "Default mode", MREditSettingSection::Mode, MREditSettingKind::Choice, true,
      kOvDefaultMode},
-    {"CURSOR_STATUS_COLOR", "Cursor status color", MRFileExtensionEditorSettingSection::Display, MRFileExtensionEditorSettingKind::String, true,
+    {"CURSOR_STATUS_COLOR", "Cursor status color", MREditSettingSection::Display, MREditSettingKind::String, true,
      kOvCursorStatusColor},
 };
 
@@ -1174,12 +1164,24 @@ std::string normalizeFileType(const std::string &value) {
 	return std::string();
 }
 
+constexpr const char *kBackupMethodOff = "OFF";
+constexpr const char *kBackupMethodBakFile = "BAK_FILE";
+constexpr const char *kBackupMethodDirectory = "DIRECTORY";
+constexpr const char *kBackupFrequencyFirstSaveOnly = "FIRST_SAVE_ONLY";
+constexpr const char *kBackupFrequencyEverySave = "EVERY_SAVE";
+constexpr int kDefaultAutosaveInactivitySeconds = 15;
+constexpr int kDefaultAutosaveIntervalSeconds = 180;
+constexpr int kMinAutosaveInactivitySeconds = 5;
+constexpr int kMaxAutosaveInactivitySeconds = 100;
+constexpr int kMinAutosaveIntervalSeconds = 100;
+constexpr int kMaxAutosaveIntervalSeconds = 300;
+
 std::string normalizeBackupMethod(const std::string &value) {
 	std::string key = upperAscii(trimAscii(value));
 
-	if (key == "OFF" || key == "NONE")
+	if (key == "OFF")
 		return kBackupMethodOff;
-	if (key == "BAK_FILE" || key == "BAK" || key == "FILE")
+	if (key == "BAK_FILE" || key == "BAKFILE" || key == "FILE")
 		return kBackupMethodBakFile;
 	if (key == "DIRECTORY" || key == "DIR" || key == "PATH")
 		return kBackupMethodDirectory;
@@ -1196,60 +1198,59 @@ std::string normalizeBackupFrequency(const std::string &value) {
 	return std::string();
 }
 
-bool normalizeBackupExtensionLiteral(const std::string &value, std::string &outValue, std::string *errorMessage) {
-	static const std::string invalidChars = "\\/*?:\"<>|";
+bool normalizeAutosaveSeconds(const std::string &value, int minValue, int maxValue, int &outValue,
+                              const char *fieldName, std::string *errorMessage) {
+	std::string text = trimAscii(value);
+	char *end = nullptr;
+	long parsed = 0;
+
+	if (text.empty())
+		return setError(errorMessage, std::string(fieldName) + " must be 0 or within " + std::to_string(minValue) +
+		                               ".." + std::to_string(maxValue) + " seconds.");
+	parsed = std::strtol(text.c_str(), &end, 10);
+	if (end == text.c_str() || end == nullptr || *end != '\0')
+		return setError(errorMessage, std::string(fieldName) + " must be 0 or within " + std::to_string(minValue) +
+		                               ".." + std::to_string(maxValue) + " seconds.");
+	if (parsed != 0 && (parsed < minValue || parsed > maxValue))
+		return setError(errorMessage, std::string(fieldName) + " must be 0 or within " + std::to_string(minValue) +
+		                               ".." + std::to_string(maxValue) + " seconds.");
+	outValue = static_cast<int>(parsed);
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+std::string normalizeBackupExtension(const std::string &value) {
 	std::string normalized = trimAscii(value);
 
 	while (!normalized.empty() && normalized.front() == '.')
 		normalized.erase(normalized.begin());
-	if (normalized.empty()) {
-		outValue.clear();
-		if (errorMessage != nullptr)
-			errorMessage->clear();
-		return true;
-	}
+	return normalized;
+}
+
+bool validateBackupExtension(const std::string &value, std::string *errorMessage) {
+	static const std::string invalidChars = std::string("\\") + "/*?:\"<>|";
+	std::string normalized = normalizeBackupExtension(value);
+
+	if (normalized.empty())
+		return setError(errorMessage, "BACKUP_EXTENSION may not be empty when BACKUP_METHOD=BAK_FILE.");
 	if (normalized.size() > 255)
 		return setError(errorMessage, "BACKUP_EXTENSION may not exceed 255 characters.");
 	for (char ch : normalized)
 		if (invalidChars.find(ch) != std::string::npos)
-			return setError(errorMessage, "BACKUP_EXTENSION contains an invalid filename character.");
-	outValue = normalized;
+			return setError(errorMessage, "BACKUP_EXTENSION contains invalid filename characters.");
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;
 }
 
-bool parseAutosaveInactivitySecondsLiteral(const std::string &value, int &outValue, std::string *errorMessage) {
-	std::string text = trimAscii(value);
-	char *end = nullptr;
-	long parsed = 0;
+bool validateWritableDirectoryPath(const std::string &path, const char *label, std::string *errorMessage) {
+	std::string normalized = normalizeConfiguredPathInput(path);
 
-	if (text.empty())
-		return setError(errorMessage, "AUTOSAVE_INACTIVITY_SECONDS must be 0 or between 5 and 100.");
-	parsed = std::strtol(text.c_str(), &end, 10);
-	if (end == text.c_str() || end == nullptr || *end != '\0')
-		return setError(errorMessage, "AUTOSAVE_INACTIVITY_SECONDS must be 0 or between 5 and 100.");
-	if (parsed != 0 && (parsed < kMinAutosaveInactivitySeconds || parsed > kMaxAutosaveInactivitySeconds))
-		return setError(errorMessage, "AUTOSAVE_INACTIVITY_SECONDS must be 0 or between 5 and 100.");
-	outValue = static_cast<int>(parsed);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
-	return true;
-}
-
-bool parseAutosaveIntervalSecondsLiteral(const std::string &value, int &outValue, std::string *errorMessage) {
-	std::string text = trimAscii(value);
-	char *end = nullptr;
-	long parsed = 0;
-
-	if (text.empty())
-		return setError(errorMessage, "AUTOSAVE_INTERVAL_SECONDS must be 0 or between 100 and 300.");
-	parsed = std::strtol(text.c_str(), &end, 10);
-	if (end == text.c_str() || end == nullptr || *end != '\0')
-		return setError(errorMessage, "AUTOSAVE_INTERVAL_SECONDS must be 0 or between 100 and 300.");
-	if (parsed != 0 && (parsed < kMinAutosaveIntervalSeconds || parsed > kMaxAutosaveIntervalSeconds))
-		return setError(errorMessage, "AUTOSAVE_INTERVAL_SECONDS must be 0 or between 100 and 300.");
-	outValue = static_cast<int>(parsed);
+	if (normalized.empty())
+		return setError(errorMessage, std::string(label) + " may not be empty.");
+	if (!isWritableDirectory(normalized))
+		return setError(errorMessage, std::string(label) + " is missing or not writable: " + normalized);
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;
@@ -1438,7 +1439,7 @@ std::string canonicalDefaultExtensionsLiteral(const std::string &value) {
 	return out;
 }
 
-const MRFileExtensionEditorSettingDescriptor *fileExtensionEditorSettingDescriptorByKeyInternal(const std::string &key) {
+const MREditSettingDescriptor *editSettingDescriptorByKeyInternal(const std::string &key) {
 	std::string upper = upperAscii(trimAscii(key));
 
 		for (const auto & descriptor : kEditSettingDescriptors)
@@ -1526,7 +1527,7 @@ std::string extensionSelectorForPath(std::string_view path) {
 	return std::string(base.substr(dot + 1));
 }
 
-bool applyFileExtensionEditorSettingValueInternal(MRFileExtensionEditorSettings &current, const std::string &keyName, const std::string &value,
+bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string &keyName, const std::string &value,
                                  std::string *errorMessage) {
 	std::string upperKeyName = upperAscii(trimAscii(keyName));
 	std::string normalized;
@@ -1535,7 +1536,7 @@ bool applyFileExtensionEditorSettingValueInternal(MRFileExtensionEditorSettings 
 		current.pageBreak = normalizePageBreakLiteral(value);
 	else if (upperKeyName == "WORD_DELIMITERS") {
 		if (trimAscii(value).empty())
-			current.wordDelimiters = resolveFileExtensionEditorSettingsDefaults().wordDelimiters;
+			current.wordDelimiters = resolveEditSetupDefaults().wordDelimiters;
 		else
 			current.wordDelimiters = value;
 	} else if (upperKeyName == "DEFAULT_EXTENSIONS")
@@ -1588,32 +1589,40 @@ bool applyFileExtensionEditorSettingValueInternal(MRFileExtensionEditorSettings 
 		current.defaultPath = trimAscii(value).empty() ? std::string() : normalizeConfiguredPathInput(value);
 	else if (upperKeyName == "FORMAT_LINE")
 		current.formatLine = normalizeFormatLine(value);
-	else if (upperKeyName == "BACKUP_METHOD") {
+	else if (upperKeyName == "BACKUP_FILES") {
+		if (!parseAndAssignBooleanLiteral(value, current.backupFiles, errorMessage))
+			return false;
+		if (!current.backupFiles)
+			current.backupMethod = kBackupMethodOff;
+		else if (normalizeBackupMethod(current.backupMethod).empty() || current.backupMethod == kBackupMethodOff)
+			current.backupMethod = kBackupMethodBakFile;
+	} else if (upperKeyName == "BACKUP_METHOD") {
 		normalized = normalizeBackupMethod(value);
 		if (normalized.empty())
 			return setError(errorMessage, "BACKUP_METHOD must be OFF, BAK_FILE or DIRECTORY.");
 		current.backupMethod = normalized;
+		current.backupFiles = normalized != kBackupMethodOff;
 	} else if (upperKeyName == "BACKUP_FREQUENCY") {
 		normalized = normalizeBackupFrequency(value);
 		if (normalized.empty())
 			return setError(errorMessage, "BACKUP_FREQUENCY must be FIRST_SAVE_ONLY or EVERY_SAVE.");
 		current.backupFrequency = normalized;
-	} else if (upperKeyName == "BACKUP_EXTENSION") {
-		if (!normalizeBackupExtensionLiteral(value, normalized, errorMessage))
-			return false;
-		current.backupExtension = normalized;
-	} else if (upperKeyName == "BACKUP_DIRECTORY")
+	} else if (upperKeyName == "BACKUP_EXTENSION")
+		current.backupExtension = normalizeBackupExtension(value);
+	else if (upperKeyName == "BACKUP_DIRECTORY")
 		current.backupDirectory = trimAscii(value).empty() ? std::string() : normalizeConfiguredPathInput(value);
 	else if (upperKeyName == "AUTOSAVE_INACTIVITY_SECONDS") {
-		int autosaveSeconds = 0;
-		if (!parseAutosaveInactivitySecondsLiteral(value, autosaveSeconds, errorMessage))
+		int parsedSeconds = 0;
+		if (!normalizeAutosaveSeconds(value, kMinAutosaveInactivitySeconds, kMaxAutosaveInactivitySeconds, parsedSeconds,
+		                             "AUTOSAVE_INACTIVITY_SECONDS", errorMessage))
 			return false;
-		current.autosaveInactivitySeconds = autosaveSeconds;
+		current.autosaveInactivitySeconds = parsedSeconds;
 	} else if (upperKeyName == "AUTOSAVE_INTERVAL_SECONDS") {
-		int autosaveSeconds = 0;
-		if (!parseAutosaveIntervalSecondsLiteral(value, autosaveSeconds, errorMessage))
+		int parsedSeconds = 0;
+		if (!normalizeAutosaveSeconds(value, kMinAutosaveIntervalSeconds, kMaxAutosaveIntervalSeconds, parsedSeconds,
+		                             "AUTOSAVE_INTERVAL_SECONDS", errorMessage))
 			return false;
-		current.autosaveIntervalSeconds = autosaveSeconds;
+		current.autosaveIntervalSeconds = parsedSeconds;
 	} else if (upperKeyName == "SHOW_EOF_MARKER") {
 		if (!parseAndAssignBooleanLiteral(value, current.showEofMarker, errorMessage))
 			return false;
@@ -1654,7 +1663,7 @@ bool applyFileExtensionEditorSettingValueInternal(MRFileExtensionEditorSettings 
 	return true;
 }
 
-std::string fileExtensionEditorSettingValueLiteral(const MRFileExtensionEditorSettings &settings, const char *key) {
+std::string editSetupValueLiteral(const MREditSetupSettings &settings, const char *key) {
 	std::string upperKey = upperAscii(trimAscii(key != nullptr ? key : ""));
 
 	if (upperKey == "PAGE_BREAK")
@@ -1664,19 +1673,19 @@ std::string fileExtensionEditorSettingValueLiteral(const MRFileExtensionEditorSe
 	if (upperKey == "DEFAULT_EXTENSIONS")
 		return settings.defaultExtensions;
 	if (upperKey == "TRUNCATE_SPACES")
-		return formatFileExtensionEditorSettingBoolean(settings.truncateSpaces);
+		return formatEditSetupBoolean(settings.truncateSpaces);
 	if (upperKey == "EOF_CTRL_Z")
-		return formatFileExtensionEditorSettingBoolean(settings.eofCtrlZ);
+		return formatEditSetupBoolean(settings.eofCtrlZ);
 	if (upperKey == "EOF_CR_LF")
-		return formatFileExtensionEditorSettingBoolean(settings.eofCrLf);
+		return formatEditSetupBoolean(settings.eofCrLf);
 	if (upperKey == "TAB_EXPAND")
-		return formatFileExtensionEditorSettingBoolean(settings.tabExpand);
+		return formatEditSetupBoolean(settings.tabExpand);
 	if (upperKey == "TAB_SIZE")
 		return std::to_string(settings.tabSize);
 	if (upperKey == "RIGHT_MARGIN")
 		return std::to_string(settings.rightMargin);
 	if (upperKey == "WORD_WRAP")
-		return formatFileExtensionEditorSettingBoolean(settings.wordWrap);
+		return formatEditSetupBoolean(settings.wordWrap);
 	if (upperKey == "INDENT_STYLE")
 		return settings.indentStyle;
 	if (upperKey == "FILE_TYPE")
@@ -1691,6 +1700,8 @@ std::string fileExtensionEditorSettingValueLiteral(const MRFileExtensionEditorSe
 		return settings.defaultPath;
 	if (upperKey == "FORMAT_LINE")
 		return settings.formatLine;
+	if (upperKey == "BACKUP_FILES")
+		return formatEditSetupBoolean(settings.backupFiles);
 	if (upperKey == "BACKUP_METHOD")
 		return settings.backupMethod;
 	if (upperKey == "BACKUP_FREQUENCY")
@@ -1704,17 +1715,17 @@ std::string fileExtensionEditorSettingValueLiteral(const MRFileExtensionEditorSe
 	if (upperKey == "AUTOSAVE_INTERVAL_SECONDS")
 		return std::to_string(settings.autosaveIntervalSeconds);
 	if (upperKey == "SHOW_EOF_MARKER")
-		return formatFileExtensionEditorSettingBoolean(settings.showEofMarker);
+		return formatEditSetupBoolean(settings.showEofMarker);
 	if (upperKey == "SHOW_EOF_MARKER_EMOJI")
-		return formatFileExtensionEditorSettingBoolean(settings.showEofMarkerEmoji);
+		return formatEditSetupBoolean(settings.showEofMarkerEmoji);
 	if (upperKey == "SHOW_LINE_NUMBERS")
-		return formatFileExtensionEditorSettingBoolean(settings.showLineNumbers);
+		return formatEditSetupBoolean(settings.showLineNumbers);
 	if (upperKey == "LINE_NUM_ZERO_FILL")
-		return formatFileExtensionEditorSettingBoolean(settings.lineNumZeroFill);
+		return formatEditSetupBoolean(settings.lineNumZeroFill);
 	if (upperKey == "PERSISTENT_BLOCKS")
-		return formatFileExtensionEditorSettingBoolean(settings.persistentBlocks);
+		return formatEditSetupBoolean(settings.persistentBlocks);
 	if (upperKey == "CODE_FOLDING")
-		return formatFileExtensionEditorSettingBoolean(settings.codeFolding);
+		return formatEditSetupBoolean(settings.codeFolding);
 	if (upperKey == "COLUMN_BLOCK_MOVE")
 		return settings.columnBlockMove;
 	if (upperKey == "DEFAULT_MODE")
@@ -1729,30 +1740,30 @@ unsigned long long supportedEditProfileOverrideMask() noexcept {
 	                                     kOvEofCtrlZ | kOvEofCrLf | kOvTabExpand | kOvTabSize | kOvRightMargin |
 	                                     kOvWordWrap | kOvIndentStyle | kOvFileType | kOvBinaryRecordLength |
 	                                     kOvPostLoadMacro | kOvPreSaveMacro | kOvDefaultPath | kOvFormatLine |
-	                                     kOvShowEofMarker | kOvShowEofMarkerEmoji | kOvShowLineNumbers |
+	                                     kOvBackupFiles | kOvShowEofMarker | kOvShowEofMarkerEmoji | kOvShowLineNumbers |
 	                                     kOvLineNumZeroFill | kOvPersistentBlocks | kOvCodeFolding | kOvColumnBlockMove |
 	                                     kOvDefaultMode | kOvCursorStatusColor;
 	return mask;
 }
 
-bool normalizeFileExtensionProfileOverridesInPlace(MRFileExtensionProfile &profile, std::string *errorMessage) {
+bool normalizeEditProfileOverridesInPlace(MREditExtensionProfile &profile, std::string *errorMessage) {
 	std::size_t descriptorCount = 0;
-	const MRFileExtensionEditorSettingDescriptor *descriptors = fileExtensionEditorSettingDescriptors(descriptorCount);
-	MRFileExtensionEditorSettings normalizedValues = resolveFileExtensionEditorSettingsDefaults();
+	const MREditSettingDescriptor *descriptors = editSettingDescriptors(descriptorCount);
+	MREditSetupSettings normalizedValues = resolveEditSetupDefaults();
 	unsigned long long mask = profile.overrides.mask;
 
 	if ((mask & ~supportedEditProfileOverrideMask()) != 0)
 		return setError(errorMessage, "Extension profile override mask contains unsupported bits.");
 
 	for (std::size_t i = 0; i < descriptorCount; ++i) {
-		const MRFileExtensionEditorSettingDescriptor &descriptor = descriptors[i];
+		const MREditSettingDescriptor &descriptor = descriptors[i];
 
 		if (!descriptor.profileSupported)
 			continue;
 		if ((mask & descriptor.overrideBit) == 0)
 			continue;
-		if (!applyFileExtensionEditorSettingValueInternal(normalizedValues, descriptor.key,
-		                               fileExtensionEditorSettingValueLiteral(profile.overrides.values, descriptor.key),
+		if (!applyEditSetupValueInternal(normalizedValues, descriptor.key,
+		                               editSetupValueLiteral(profile.overrides.values, descriptor.key),
 		                               errorMessage))
 			return false;
 	}
@@ -1764,7 +1775,7 @@ bool normalizeFileExtensionProfileOverridesInPlace(MRFileExtensionProfile &profi
 	return true;
 }
 
-bool validateNormalizedFileExtensionProfiles(const std::vector<MRFileExtensionProfile> &profiles, std::string *errorMessage) {
+bool validateNormalizedEditProfiles(const std::vector<MREditExtensionProfile> &profiles, std::string *errorMessage) {
 	std::set<std::string> profileIds;
 	std::set<std::string> selectors;
 
@@ -1798,10 +1809,6 @@ bool validateNormalizedFileExtensionProfiles(const std::vector<MRFileExtensionPr
 }
 
 } // namespace
-
-bool normalizeBackupExtension(const std::string &value, std::string &outValue, std::string *errorMessage) {
-	return normalizeBackupExtensionLiteral(value, outValue, errorMessage);
-}
 
 std::string normalizeConfiguredPathInput(std::string_view input) {
 	return makeAbsolutePath(normalizeDialogPath(expandUserPath(input).c_str()));
@@ -1881,8 +1888,8 @@ MRSetupPaths resolveSetupPathDefaults() {
 	return defaults;
 }
 
-MRFileExtensionEditorSettings resolveFileExtensionEditorSettingsDefaults() {
-	MRFileExtensionEditorSettings defaults;
+MREditSetupSettings resolveEditSetupDefaults() {
+	MREditSetupSettings defaults;
 
 	defaults.pageBreak = kDefaultPageBreakLiteral;
 	defaults.wordDelimiters = kDefaultWordDelimiters;
@@ -1903,10 +1910,11 @@ MRFileExtensionEditorSettings resolveFileExtensionEditorSettingsDefaults() {
 	defaults.formatLine = std::string(8, ' ');
 	defaults.backupMethod = kBackupMethodBakFile;
 	defaults.backupFrequency = kBackupFrequencyFirstSaveOnly;
-	defaults.backupExtension = kDefaultBackupExtension;
+	defaults.backupExtension = "bak";
 	defaults.backupDirectory.clear();
 	defaults.autosaveInactivitySeconds = kDefaultAutosaveInactivitySeconds;
 	defaults.autosaveIntervalSeconds = kDefaultAutosaveIntervalSeconds;
+	defaults.backupFiles = true;
 	defaults.showEofMarker = false;
 	defaults.showEofMarkerEmoji = true;
 	defaults.showLineNumbers = false;
@@ -1931,7 +1939,7 @@ MRSettingsKeyClass classifySettingsKey(std::string_view key) {
 	for (const auto & descriptor : kFixedSettingsKeyDescriptors)
 		if (upper == descriptor.key)
 			return descriptor.keyClass;
-	return fileExtensionEditorSettingDescriptorByKeyInternal(upper) != nullptr ? MRSettingsKeyClass::Edit
+	return editSettingDescriptorByKeyInternal(upper) != nullptr ? MRSettingsKeyClass::Edit
 	                                                           : MRSettingsKeyClass::Unknown;
 }
 
@@ -1943,7 +1951,7 @@ bool isCanonicalSerializedSettingsKey(std::string_view key) {
 	for (const auto & descriptor : kFixedSettingsKeyDescriptors)
 		if (upper == descriptor.key)
 			return descriptor.serialized;
-	return fileExtensionEditorSettingDescriptorByKeyInternal(upper) != nullptr;
+	return editSettingDescriptorByKeyInternal(upper) != nullptr;
 }
 
 std::size_t canonicalSerializedSettingsKeyCount() {
@@ -1953,7 +1961,7 @@ std::size_t canonicalSerializedSettingsKeyCount() {
 	for (const auto & descriptor : kFixedSettingsKeyDescriptors)
 		if (descriptor.serialized)
 			++fixedSerializedCount;
-	(void)fileExtensionEditorSettingDescriptors(editDescriptorCount);
+	(void)editSettingDescriptors(editDescriptorCount);
 	return fixedSerializedCount + editDescriptorCount;
 }
 
@@ -1976,11 +1984,11 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 		return false;
 	if (!setConfiguredDefaultProfileDescription("Global defaults", errorMessage))
 		return false;
-	if (!setConfiguredFileExtensionEditorSettings(resolveFileExtensionEditorSettingsDefaults(), errorMessage))
+	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), errorMessage))
 		return false;
 	configuredColorSettings() = defaultsFromColorGroups();
 	configuredColorSettingsInitialized() = true;
-	if (!setConfiguredFileExtensionProfiles(std::vector<MRFileExtensionProfile>(), errorMessage))
+	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(), errorMessage))
 		return false;
 	if (!setConfiguredColorThemeFilePath(defaultColorThemeFilePath(), errorMessage))
 		return false;
@@ -2046,20 +2054,20 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 			break;
 		}
 		case MRSettingsKeyClass::Edit:
-			return applyConfiguredFileExtensionEditorSettingValue(key, value, errorMessage);
+			return applyConfiguredEditSetupValue(key, value, errorMessage);
 		case MRSettingsKeyClass::ColorInline:
 			return applyConfiguredColorSetupValue(key, value, errorMessage);
 	}
 	return setError(errorMessage, "Unsupported MRSETUP key.");
 }
 
-const MRFileExtensionEditorSettingDescriptor *fileExtensionEditorSettingDescriptors(std::size_t &count) {
+const MREditSettingDescriptor *editSettingDescriptors(std::size_t &count) {
 	count = std::size(kEditSettingDescriptors);
 	return kEditSettingDescriptors;
 }
 
-const MRFileExtensionEditorSettingDescriptor *findFileExtensionEditorSettingDescriptorByKey(std::string_view key) {
-		return fileExtensionEditorSettingDescriptorByKeyInternal(std::string(key));
+const MREditSettingDescriptor *findEditSettingDescriptorByKey(std::string_view key) {
+		return editSettingDescriptorByKeyInternal(std::string(key));
 }
 
 std::string normalizeEditExtensionSelector(std::string_view value) {
@@ -2070,9 +2078,9 @@ bool normalizeEditExtensionSelectors(std::vector<std::string> &selectors, std::s
 	return normalizeEditExtensionSelectorsInPlace(selectors, errorMessage);
 }
 
-MRFileExtensionEditorSettings mergeFileExtensionEditorSettings(const MRFileExtensionEditorSettings &defaults,
-                                           const MRFileExtensionEditorSettingsOverrides &overrides) {
-	MRFileExtensionEditorSettings merged = defaults;
+MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults,
+                                           const MREditSetupOverrides &overrides) {
+	MREditSetupSettings merged = defaults;
 
 	if ((overrides.mask & kOvPageBreak) != 0)
 		merged.pageBreak = overrides.values.pageBreak;
@@ -2108,6 +2116,8 @@ MRFileExtensionEditorSettings mergeFileExtensionEditorSettings(const MRFileExten
 		merged.defaultPath = overrides.values.defaultPath;
 	if ((overrides.mask & kOvFormatLine) != 0)
 		merged.formatLine = overrides.values.formatLine;
+	if ((overrides.mask & kOvBackupFiles) != 0)
+		merged.backupFiles = overrides.values.backupFiles;
 	if ((overrides.mask & kOvBackupMethod) != 0)
 		merged.backupMethod = overrides.values.backupMethod;
 	if ((overrides.mask & kOvBackupFrequency) != 0)
@@ -2141,13 +2151,13 @@ MRFileExtensionEditorSettings mergeFileExtensionEditorSettings(const MRFileExten
 	return merged;
 }
 
-const std::vector<MRFileExtensionProfile> &configuredFileExtensionProfiles() {
+const std::vector<MREditExtensionProfile> &configuredEditExtensionProfiles() {
 	return configuredEditProfiles();
 }
 
-bool setConfiguredFileExtensionProfiles(const std::vector<MRFileExtensionProfile> &profiles,
+bool setConfiguredEditExtensionProfiles(const std::vector<MREditExtensionProfile> &profiles,
                                         std::string *errorMessage) {
-	std::vector<MRFileExtensionProfile> normalized = profiles;
+	std::vector<MREditExtensionProfile> normalized = profiles;
 
 	for (auto & profile : normalized) {
 		profile.id = canonicalEditProfileId(profile.id);
@@ -2155,10 +2165,10 @@ bool setConfiguredFileExtensionProfiles(const std::vector<MRFileExtensionProfile
 		profile.windowColorThemeUri = canonicalWindowColorThemeUri(profile.windowColorThemeUri);
 		if (!normalizeEditExtensionSelectorsInPlace(profile.extensions, errorMessage))
 			return false;
-		if (!normalizeFileExtensionProfileOverridesInPlace(profile, errorMessage))
+		if (!normalizeEditProfileOverridesInPlace(profile, errorMessage))
 			return false;
 	}
-	if (!validateNormalizedFileExtensionProfiles(normalized, errorMessage))
+	if (!validateNormalizedEditProfiles(normalized, errorMessage))
 		return false;
 	configuredEditProfiles() = normalized;
 	if (errorMessage != nullptr)
@@ -2177,13 +2187,13 @@ bool setConfiguredDefaultProfileDescription(const std::string &value, std::strin
 	return true;
 }
 
-bool applyConfiguredFileExtensionProfileDirective(const std::string &operation, const std::string &profileId,
+bool applyConfiguredEditExtensionProfileDirective(const std::string &operation, const std::string &profileId,
                                                   const std::string &arg3, const std::string &arg4,
                                                   std::string *errorMessage) {
 	std::string op = upperAscii(trimAscii(operation));
 	std::string id = canonicalEditProfileId(profileId);
-	std::vector<MRFileExtensionProfile> profiles = configuredEditProfiles();
-	MRFileExtensionProfile *profile = nullptr;
+	std::vector<MREditExtensionProfile> profiles = configuredEditProfiles();
+	MREditExtensionProfile *profile = nullptr;
 	std::size_t i = 0;
 
 	if (op.empty())
@@ -2206,12 +2216,12 @@ bool applyConfiguredFileExtensionProfileDirective(const std::string &operation, 
 			return setError(errorMessage, "MRFEPROFILE DEFINE requires a non-empty display name.");
 		if (profile != nullptr)
 			return setError(errorMessage, "Duplicate extension profile id: " + id);
-		MRFileExtensionProfile created;
+		MREditExtensionProfile created;
 		created.id = id;
 		created.name = name;
-		created.overrides.values = resolveFileExtensionEditorSettingsDefaults();
+		created.overrides.values = resolveEditSetupDefaults();
 		profiles.push_back(created);
-		return setConfiguredFileExtensionProfiles(profiles, errorMessage);
+		return setConfiguredEditExtensionProfiles(profiles, errorMessage);
 	}
 
 	if (profile == nullptr)
@@ -2219,7 +2229,7 @@ bool applyConfiguredFileExtensionProfileDirective(const std::string &operation, 
 
 	if (op == "EXT") {
 		profile->extensions.push_back(arg3);
-		return setConfiguredFileExtensionProfiles(profiles, errorMessage);
+		return setConfiguredEditExtensionProfiles(profiles, errorMessage);
 	}
 
 	if (op == "SET") {
@@ -2228,28 +2238,28 @@ bool applyConfiguredFileExtensionProfileDirective(const std::string &operation, 
 			if (!normalizedTheme.empty() && !validateColorThemeFilePath(normalizedTheme, errorMessage))
 				return false;
 			profile->windowColorThemeUri = normalizedTheme;
-			return setConfiguredFileExtensionProfiles(profiles, errorMessage);
+			return setConfiguredEditExtensionProfiles(profiles, errorMessage);
 		}
 
-		const MRFileExtensionEditorSettingDescriptor *descriptor = fileExtensionEditorSettingDescriptorByKeyInternal(arg3);
+		const MREditSettingDescriptor *descriptor = editSettingDescriptorByKeyInternal(arg3);
 
 		if (descriptor == nullptr)
 			return setError(errorMessage, "Unknown edit setting key for extension profile.");
 		if (!descriptor->profileSupported)
 			return setError(errorMessage, std::string("Setting is global-only and cannot be overridden: ") +
 			                             descriptor->key);
-		if (!applyFileExtensionEditorSettingValueInternal(profile->overrides.values, descriptor->key, arg4, errorMessage))
+		if (!applyEditSetupValueInternal(profile->overrides.values, descriptor->key, arg4, errorMessage))
 			return false;
 		profile->overrides.mask |= descriptor->overrideBit;
-		return setConfiguredFileExtensionProfiles(profiles, errorMessage);
+		return setConfiguredEditExtensionProfiles(profiles, errorMessage);
 	}
 
 	return setError(errorMessage, "MRFEPROFILE supports operations DEFINE, EXT and SET.");
 }
 
-bool effectiveFileExtensionEditorSettingsForPath(const std::string &path, MRFileExtensionEditorSettings &out,
+bool effectiveEditSetupSettingsForPath(const std::string &path, MREditSetupSettings &out,
                                        std::string *matchedProfileName) {
-	MRFileExtensionEditorSettings defaults = configuredFileExtensionEditorSettings();
+	MREditSetupSettings defaults = configuredEditSetupSettings();
 	std::string ext = extensionSelectorForPath(path);
 
 	out = defaults;
@@ -2260,7 +2270,7 @@ bool effectiveFileExtensionEditorSettingsForPath(const std::string &path, MRFile
 	for (const auto & profile : configuredEditProfiles())
 		for (const std::string & selector : profile.extensions)
 			if (selector == ext) {
-				out = mergeFileExtensionEditorSettings(defaults, profile.overrides);
+				out = mergeEditSetupSettings(defaults, profile.overrides);
 				if (matchedProfileName != nullptr)
 					*matchedProfileName = profile.name;
 				return true;
@@ -2289,12 +2299,12 @@ bool effectiveEditWindowColorThemePathForPath(const std::string &path, std::stri
 	return true;
 }
 
-MRFileExtensionEditorSettings configuredFileExtensionEditorSettings() {
+MREditSetupSettings configuredEditSetupSettings() {
 	static bool initialized = false;
-	MRFileExtensionEditorSettings &configured = configuredFileExtensionEditorSettingsState();
+	MREditSetupSettings &configured = configuredEditSettings();
 
 	if (!initialized) {
-		configured = resolveFileExtensionEditorSettingsDefaults();
+		configured = resolveEditSetupDefaults();
 		initialized = true;
 	}
 	return configured;
@@ -2305,9 +2315,9 @@ MRColorSetupSettings configuredColorSetupSettings() {
 	return configuredColorSettings();
 }
 
-bool setConfiguredFileExtensionEditorSettings(const MRFileExtensionEditorSettings &settings, std::string *errorMessage) {
-	MRFileExtensionEditorSettings defaults = resolveFileExtensionEditorSettingsDefaults();
-	MRFileExtensionEditorSettings normalized = settings;
+bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::string *errorMessage) {
+	MREditSetupSettings defaults = resolveEditSetupDefaults();
+	MREditSetupSettings normalized = settings;
 	std::string pageBreak = normalizePageBreakLiteral(settings.pageBreak);
 	std::string wordDelimiters = settings.wordDelimiters.empty() ? defaults.wordDelimiters
 	                                                             : settings.wordDelimiters;
@@ -2316,9 +2326,6 @@ bool setConfiguredFileExtensionEditorSettings(const MRFileExtensionEditorSetting
 	std::string defaultMode = normalizeDefaultMode(settings.defaultMode);
 	std::string indentStyle = normalizeIndentStyle(settings.indentStyle);
 	std::string fileType = normalizeFileType(settings.fileType);
-	std::string backupMethod = normalizeBackupMethod(settings.backupMethod);
-	std::string backupFrequency = normalizeBackupFrequency(settings.backupFrequency);
-	std::string backupExtension;
 	std::string formatLine = normalizeFormatLine(settings.formatLine);
 	std::string cursorStatusColor;
 	std::string postLoadMacro = trimAscii(settings.postLoadMacro).empty() ? std::string()
@@ -2327,8 +2334,6 @@ bool setConfiguredFileExtensionEditorSettings(const MRFileExtensionEditorSetting
 	                                                                : normalizeConfiguredPathInput(settings.preSaveMacro);
 	std::string defaultPath = trimAscii(settings.defaultPath).empty() ? std::string()
 	                                                              : normalizeConfiguredPathInput(settings.defaultPath);
-	std::string backupDirectory = trimAscii(settings.backupDirectory).empty() ? std::string()
-	                                                               : normalizeConfiguredPathInput(settings.backupDirectory);
 
 	if (wordDelimiters.empty())
 		return setError(errorMessage, "WORD_DELIMITERS may not be empty.");
@@ -2340,12 +2345,6 @@ bool setConfiguredFileExtensionEditorSettings(const MRFileExtensionEditorSetting
 		return setError(errorMessage, "INDENT_STYLE must be OFF, AUTOMATIC or SMART.");
 	if (fileType.empty())
 		return setError(errorMessage, "FILE_TYPE must be LEGACY_TEXT, UNIX or BINARY.");
-	if (backupMethod.empty())
-		return setError(errorMessage, "BACKUP_METHOD must be OFF, BAK_FILE or DIRECTORY.");
-	if (backupFrequency.empty())
-		return setError(errorMessage, "BACKUP_FREQUENCY must be FIRST_SAVE_ONLY or EVERY_SAVE.");
-	if (!normalizeBackupExtensionLiteral(settings.backupExtension, backupExtension, errorMessage))
-		return false;
 	if (!normalizeCursorStatusColor(settings.cursorStatusColor, cursorStatusColor, errorMessage))
 		return false;
 	if (settings.binaryRecordLength < kMinBinaryRecordLength || settings.binaryRecordLength > kMaxBinaryRecordLength)
@@ -2354,22 +2353,6 @@ bool setConfiguredFileExtensionEditorSettings(const MRFileExtensionEditorSetting
 		return setError(errorMessage, "TAB_SIZE must be between 2 and 32.");
 	if (settings.rightMargin < kMinRightMargin || settings.rightMargin > kMaxRightMargin)
 		return setError(errorMessage, "RIGHT_MARGIN must be between 1 and 999.");
-	if (settings.autosaveInactivitySeconds != 0 &&
-	    (settings.autosaveInactivitySeconds < kMinAutosaveInactivitySeconds ||
-	     settings.autosaveInactivitySeconds > kMaxAutosaveInactivitySeconds))
-		return setError(errorMessage, "AUTOSAVE_INACTIVITY_SECONDS must be 0 or between 5 and 100.");
-	if (settings.autosaveIntervalSeconds != 0 &&
-	    (settings.autosaveIntervalSeconds < kMinAutosaveIntervalSeconds ||
-	     settings.autosaveIntervalSeconds > kMaxAutosaveIntervalSeconds))
-		return setError(errorMessage, "AUTOSAVE_INTERVAL_SECONDS must be 0 or between 100 and 300.");
-	if (backupMethod == kBackupMethodBakFile && backupExtension.empty())
-		return setError(errorMessage, "BACKUP_EXTENSION is required for BACKUP_METHOD=BAK_FILE.");
-	if (backupMethod == kBackupMethodDirectory) {
-		if (backupDirectory.empty())
-			return setError(errorMessage, "BACKUP_DIRECTORY is required for BACKUP_METHOD=DIRECTORY.");
-		if (!validateBackupDirectoryPath(backupDirectory, errorMessage))
-			return false;
-	}
 
 	normalized.truncateSpaces = settings.truncateSpaces;
 	normalized.eofCtrlZ = settings.eofCtrlZ;
@@ -2385,12 +2368,32 @@ bool setConfiguredFileExtensionEditorSettings(const MRFileExtensionEditorSetting
 	normalized.preSaveMacro = preSaveMacro;
 	normalized.defaultPath = defaultPath;
 	normalized.formatLine = formatLine;
-	normalized.backupMethod = backupMethod;
-	normalized.backupFrequency = backupFrequency;
-	normalized.backupExtension = backupExtension.empty() ? std::string(kDefaultBackupExtension) : backupExtension;
-	normalized.backupDirectory = backupDirectory;
+	normalized.backupMethod = normalizeBackupMethod(settings.backupMethod);
+	if (normalized.backupMethod.empty())
+		return setError(errorMessage, "BACKUP_METHOD must be OFF, BAK_FILE or DIRECTORY.");
+	normalized.backupFrequency = normalizeBackupFrequency(settings.backupFrequency);
+	if (normalized.backupFrequency.empty())
+		return setError(errorMessage, "BACKUP_FREQUENCY must be FIRST_SAVE_ONLY or EVERY_SAVE.");
+	normalized.backupExtension = normalizeBackupExtension(settings.backupExtension);
+	normalized.backupDirectory = trimAscii(settings.backupDirectory).empty() ? std::string() : normalizeConfiguredPathInput(settings.backupDirectory);
+	if (normalized.backupMethod == kBackupMethodBakFile && !validateBackupExtension(normalized.backupExtension, errorMessage))
+		return false;
+	if (normalized.backupMethod == kBackupMethodDirectory &&
+	    !validateWritableDirectoryPath(normalized.backupDirectory, "BACKUP_DIRECTORY", errorMessage))
+		return false;
+	if (normalized.backupMethod != kBackupMethodBakFile)
+		normalized.backupExtension = normalizeBackupExtension(settings.backupExtension).empty() ? defaults.backupExtension : normalizeBackupExtension(settings.backupExtension);
+	if (normalized.backupMethod != kBackupMethodDirectory && trimAscii(normalized.backupDirectory).empty())
+		normalized.backupDirectory.clear();
+	if (settings.autosaveInactivitySeconds != 0 &&
+	    (settings.autosaveInactivitySeconds < kMinAutosaveInactivitySeconds || settings.autosaveInactivitySeconds > kMaxAutosaveInactivitySeconds))
+		return setError(errorMessage, "AUTOSAVE_INACTIVITY_SECONDS must be 0 or within 5..100 seconds.");
+	if (settings.autosaveIntervalSeconds != 0 &&
+	    (settings.autosaveIntervalSeconds < kMinAutosaveIntervalSeconds || settings.autosaveIntervalSeconds > kMaxAutosaveIntervalSeconds))
+		return setError(errorMessage, "AUTOSAVE_INTERVAL_SECONDS must be 0 or within 100..300 seconds.");
 	normalized.autosaveInactivitySeconds = settings.autosaveInactivitySeconds;
 	normalized.autosaveIntervalSeconds = settings.autosaveIntervalSeconds;
+	normalized.backupFiles = normalized.backupMethod != kBackupMethodOff;
 	normalized.showEofMarker = settings.showEofMarker;
 	normalized.showEofMarkerEmoji = settings.showEofMarkerEmoji;
 	normalized.showLineNumbers = settings.showLineNumbers;
@@ -2404,7 +2407,7 @@ bool setConfiguredFileExtensionEditorSettings(const MRFileExtensionEditorSetting
 	normalized.columnBlockMove = columnStyle;
 	normalized.defaultMode = defaultMode;
 	normalized.cursorStatusColor = cursorStatusColor;
-	configuredFileExtensionEditorSettingsState() = normalized;
+	configuredEditSettings() = normalized;
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;
@@ -2759,41 +2762,45 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 	return false;
 }
 
-bool applyConfiguredFileExtensionEditorSettingValue(const std::string &key, const std::string &value,
+bool applyConfiguredEditSetupValue(const std::string &key, const std::string &value,
                                    std::string *errorMessage) {
-	MRFileExtensionEditorSettings current = configuredFileExtensionEditorSettings();
+	MREditSetupSettings current = configuredEditSetupSettings();
 
-	if (!applyFileExtensionEditorSettingValueInternal(current, key, value, errorMessage))
+	if (!applyEditSetupValueInternal(current, key, value, errorMessage))
 		return false;
-	return setConfiguredFileExtensionEditorSettings(current, errorMessage);
+	return setConfiguredEditSetupSettings(current, errorMessage);
 }
 
-std::string formatFileExtensionEditorSettingBoolean(bool value) {
+std::string formatEditSetupBoolean(bool value) {
 	return canonicalBooleanLiteral(value);
 }
 
 std::vector<std::string> configuredDefaultExtensionList() {
-	return parseDefaultExtensions(configuredFileExtensionEditorSettings().defaultExtensions);
+	return parseDefaultExtensions(configuredEditSetupSettings().defaultExtensions);
 }
 
 bool configuredDefaultInsertMode() {
-	return upperAscii(configuredFileExtensionEditorSettings().defaultMode) != kDefaultModeOverwrite;
+	return upperAscii(configuredEditSetupSettings().defaultMode) != kDefaultModeOverwrite;
 }
 
 bool configuredTabExpandSetting() {
-	return configuredFileExtensionEditorSettings().tabExpand;
+	return configuredEditSetupSettings().tabExpand;
 }
 
 int configuredTabSizeSetting() {
-	return configuredFileExtensionEditorSettings().tabSize;
+	return configuredEditSetupSettings().tabSize;
+}
+
+bool configuredBackupFilesSetting() {
+	return configuredEditSetupSettings().backupFiles;
 }
 
 bool configuredPersistentBlocksSetting() {
-	return configuredFileExtensionEditorSettings().persistentBlocks;
+	return configuredEditSetupSettings().persistentBlocks;
 }
 
 char configuredPageBreakCharacter() {
-	return decodePageBreakLiteral(configuredFileExtensionEditorSettings().pageBreak);
+	return decodePageBreakLiteral(configuredEditSetupSettings().pageBreak);
 }
 
 bool setConfiguredLastFileDialogPath(const std::string &path, std::string *errorMessage) {
@@ -2824,10 +2831,10 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	std::string shellPath = normalizeConfiguredPathInput(paths.shellUri);
 	std::string themePath = configuredColorThemeFile().empty() ? defaultColorThemePathForSettings(settingsPath)
 	                                                          : configuredColorThemeFilePath();
-	MRFileExtensionEditorSettings edit = configuredFileExtensionEditorSettings();
+	MREditSetupSettings edit = configuredEditSetupSettings();
 	std::string source;
 	std::size_t descriptorCount = 0;
-	const MRFileExtensionEditorSettingDescriptor *descriptors = fileExtensionEditorSettingDescriptors(descriptorCount);
+	const MREditSettingDescriptor *descriptors = editSettingDescriptors(descriptorCount);
 
 	themePath = normalizeConfiguredPathInput(themePath);
 
@@ -2847,20 +2854,20 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source += "MRSETUP('WORD_DELIMITERS', '" + escapeMrmacSingleQuotedLiteral(edit.wordDelimiters) + "');\n";
 	source +=
 	    "MRSETUP('DEFAULT_EXTENSIONS', '" + escapeMrmacSingleQuotedLiteral(edit.defaultExtensions) + "');\n";
-	source += "MRSETUP('TRUNCATE_SPACES', '" + escapeMrmacSingleQuotedLiteral(formatFileExtensionEditorSettingBoolean(edit.truncateSpaces)) +
+	source += "MRSETUP('TRUNCATE_SPACES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.truncateSpaces)) +
 	          "');\n";
 	source +=
-	    "MRSETUP('EOF_CTRL_Z', '" + escapeMrmacSingleQuotedLiteral(formatFileExtensionEditorSettingBoolean(edit.eofCtrlZ)) +
+	    "MRSETUP('EOF_CTRL_Z', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.eofCtrlZ)) +
 	    "');\n";
-	source += "MRSETUP('EOF_CR_LF', '" + escapeMrmacSingleQuotedLiteral(formatFileExtensionEditorSettingBoolean(edit.eofCrLf)) +
+	source += "MRSETUP('EOF_CR_LF', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.eofCrLf)) +
 	          "');\n";
 	source +=
-	    "MRSETUP('TAB_EXPAND', '" + escapeMrmacSingleQuotedLiteral(formatFileExtensionEditorSettingBoolean(edit.tabExpand)) +
+	    "MRSETUP('TAB_EXPAND', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.tabExpand)) +
 	    "');\n";
 	source += "MRSETUP('TAB_SIZE', '" + std::to_string(edit.tabSize) + "');\n";
 	source += "MRSETUP('RIGHT_MARGIN', '" + std::to_string(edit.rightMargin) + "');\n";
 	source += "MRSETUP('WORD_WRAP', '" +
-	          escapeMrmacSingleQuotedLiteral(formatFileExtensionEditorSettingBoolean(edit.wordWrap)) + "');\n";
+	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.wordWrap)) + "');\n";
 	source += "MRSETUP('INDENT_STYLE', '" + escapeMrmacSingleQuotedLiteral(edit.indentStyle) + "');\n";
 	source += "MRSETUP('FILE_TYPE', '" + escapeMrmacSingleQuotedLiteral(edit.fileType) + "');\n";
 	source += "MRSETUP('BINARY_RECORD_LENGTH', '" + std::to_string(edit.binaryRecordLength) + "');\n";
@@ -2874,25 +2881,27 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source += "MRSETUP('BACKUP_DIRECTORY', '" + escapeMrmacSingleQuotedLiteral(edit.backupDirectory) + "');\n";
 	source += "MRSETUP('AUTOSAVE_INACTIVITY_SECONDS', '" + std::to_string(edit.autosaveInactivitySeconds) + "');\n";
 	source += "MRSETUP('AUTOSAVE_INTERVAL_SECONDS', '" + std::to_string(edit.autosaveIntervalSeconds) + "');\n";
+	source += "MRSETUP('BACKUP_FILES', '" +
+	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.backupFiles)) + "');\n";
 	source += "MRSETUP('SHOW_EOF_MARKER', '" +
-	          escapeMrmacSingleQuotedLiteral(formatFileExtensionEditorSettingBoolean(edit.showEofMarker)) + "');\n";
+	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.showEofMarker)) + "');\n";
 	source += "MRSETUP('SHOW_EOF_MARKER_EMOJI', '" +
-	          escapeMrmacSingleQuotedLiteral(formatFileExtensionEditorSettingBoolean(edit.showEofMarkerEmoji)) + "');\n";
+	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.showEofMarkerEmoji)) + "');\n";
 	source += "MRSETUP('SHOW_LINE_NUMBERS', '" +
-	          escapeMrmacSingleQuotedLiteral(formatFileExtensionEditorSettingBoolean(edit.showLineNumbers)) + "');\n";
+	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.showLineNumbers)) + "');\n";
 	source += "MRSETUP('LINE_NUM_ZERO_FILL', '" +
-	          escapeMrmacSingleQuotedLiteral(formatFileExtensionEditorSettingBoolean(edit.lineNumZeroFill)) + "');\n";
+	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.lineNumZeroFill)) + "');\n";
 	source += "MRSETUP('PERSISTENT_BLOCKS', '" +
-	          escapeMrmacSingleQuotedLiteral(formatFileExtensionEditorSettingBoolean(edit.persistentBlocks)) + "');\n";
+	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.persistentBlocks)) + "');\n";
 	source += "MRSETUP('CODE_FOLDING', '" +
-	          escapeMrmacSingleQuotedLiteral(formatFileExtensionEditorSettingBoolean(edit.codeFolding)) + "');\n";
+	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.codeFolding)) + "');\n";
 	source += "MRSETUP('COLUMN_BLOCK_MOVE', '" + escapeMrmacSingleQuotedLiteral(edit.columnBlockMove) + "');\n";
 	source += "MRSETUP('DEFAULT_MODE', '" + escapeMrmacSingleQuotedLiteral(edit.defaultMode) + "');\n";
 	source += "MRSETUP('CURSOR_STATUS_COLOR', '" + escapeMrmacSingleQuotedLiteral(edit.cursorStatusColor) + "');\n";
 	source += "MRSETUP('" + std::string(kThemeSettingsKey) + "', '" +
 	          escapeMrmacSingleQuotedLiteral(themePath) + "');\n";
 
-	for (const auto & profile : configuredFileExtensionProfiles()) {
+	for (const auto & profile : configuredEditExtensionProfiles()) {
 		source += "MRFEPROFILE('DEFINE', '" + escapeMrmacSingleQuotedLiteral(profile.id) +
 		          "', '" + escapeMrmacSingleQuotedLiteral(profile.name) + "', '');\n";
 		for (const std::string & ext : profile.extensions)
@@ -2913,19 +2922,19 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 				else if (std::string(descriptors[i].key) == "DEFAULT_EXTENSIONS")
 					value = profile.overrides.values.defaultExtensions;
 				else if (std::string(descriptors[i].key) == "TRUNCATE_SPACES")
-					value = formatFileExtensionEditorSettingBoolean(profile.overrides.values.truncateSpaces);
+					value = formatEditSetupBoolean(profile.overrides.values.truncateSpaces);
 				else if (std::string(descriptors[i].key) == "EOF_CTRL_Z")
-					value = formatFileExtensionEditorSettingBoolean(profile.overrides.values.eofCtrlZ);
+					value = formatEditSetupBoolean(profile.overrides.values.eofCtrlZ);
 				else if (std::string(descriptors[i].key) == "EOF_CR_LF")
-					value = formatFileExtensionEditorSettingBoolean(profile.overrides.values.eofCrLf);
+					value = formatEditSetupBoolean(profile.overrides.values.eofCrLf);
 				else if (std::string(descriptors[i].key) == "TAB_EXPAND")
-					value = formatFileExtensionEditorSettingBoolean(profile.overrides.values.tabExpand);
+					value = formatEditSetupBoolean(profile.overrides.values.tabExpand);
 				else if (std::string(descriptors[i].key) == "TAB_SIZE")
 					value = std::to_string(profile.overrides.values.tabSize);
 				else if (std::string(descriptors[i].key) == "RIGHT_MARGIN")
 					value = std::to_string(profile.overrides.values.rightMargin);
 				else if (std::string(descriptors[i].key) == "WORD_WRAP")
-					value = formatFileExtensionEditorSettingBoolean(profile.overrides.values.wordWrap);
+					value = formatEditSetupBoolean(profile.overrides.values.wordWrap);
 				else if (std::string(descriptors[i].key) == "INDENT_STYLE")
 					value = profile.overrides.values.indentStyle;
 				else if (std::string(descriptors[i].key) == "FILE_TYPE")
@@ -2940,30 +2949,20 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 					value = profile.overrides.values.defaultPath;
 				else if (std::string(descriptors[i].key) == "FORMAT_LINE")
 					value = profile.overrides.values.formatLine;
-				else if (std::string(descriptors[i].key) == "BACKUP_METHOD")
-					value = profile.overrides.values.backupMethod;
-				else if (std::string(descriptors[i].key) == "BACKUP_FREQUENCY")
-					value = profile.overrides.values.backupFrequency;
-				else if (std::string(descriptors[i].key) == "BACKUP_EXTENSION")
-					value = profile.overrides.values.backupExtension;
-				else if (std::string(descriptors[i].key) == "BACKUP_DIRECTORY")
-					value = profile.overrides.values.backupDirectory;
-				else if (std::string(descriptors[i].key) == "AUTOSAVE_INACTIVITY_SECONDS")
-					value = std::to_string(profile.overrides.values.autosaveInactivitySeconds);
-				else if (std::string(descriptors[i].key) == "AUTOSAVE_INTERVAL_SECONDS")
-					value = std::to_string(profile.overrides.values.autosaveIntervalSeconds);
+				else if (std::string(descriptors[i].key) == "BACKUP_FILES")
+					value = formatEditSetupBoolean(profile.overrides.values.backupFiles);
 				else if (std::string(descriptors[i].key) == "SHOW_EOF_MARKER")
-					value = formatFileExtensionEditorSettingBoolean(profile.overrides.values.showEofMarker);
+					value = formatEditSetupBoolean(profile.overrides.values.showEofMarker);
 				else if (std::string(descriptors[i].key) == "SHOW_EOF_MARKER_EMOJI")
-					value = formatFileExtensionEditorSettingBoolean(profile.overrides.values.showEofMarkerEmoji);
+					value = formatEditSetupBoolean(profile.overrides.values.showEofMarkerEmoji);
 				else if (std::string(descriptors[i].key) == "SHOW_LINE_NUMBERS")
-					value = formatFileExtensionEditorSettingBoolean(profile.overrides.values.showLineNumbers);
+					value = formatEditSetupBoolean(profile.overrides.values.showLineNumbers);
 				else if (std::string(descriptors[i].key) == "LINE_NUM_ZERO_FILL")
-					value = formatFileExtensionEditorSettingBoolean(profile.overrides.values.lineNumZeroFill);
+					value = formatEditSetupBoolean(profile.overrides.values.lineNumZeroFill);
 				else if (std::string(descriptors[i].key) == "PERSISTENT_BLOCKS")
-					value = formatFileExtensionEditorSettingBoolean(profile.overrides.values.persistentBlocks);
+					value = formatEditSetupBoolean(profile.overrides.values.persistentBlocks);
 				else if (std::string(descriptors[i].key) == "CODE_FOLDING")
-					value = formatFileExtensionEditorSettingBoolean(profile.overrides.values.codeFolding);
+					value = formatEditSetupBoolean(profile.overrides.values.codeFolding);
 				else if (std::string(descriptors[i].key) == "COLUMN_BLOCK_MOVE")
 					value = profile.overrides.values.columnBlockMove;
 				else if (std::string(descriptors[i].key) == "DEFAULT_MODE")
@@ -3169,24 +3168,16 @@ std::string configuredHelpFilePath() {
 	return resolveSetupPathDefaults().helpUri;
 }
 
-bool validateWritableDirectoryPath(const std::string &path, const std::string &fieldLabel, std::string *errorMessage) {
+bool validateTempDirectoryPath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 
 	if (normalized.empty())
-		return setError(errorMessage, fieldLabel + " is empty.");
+		return setError(errorMessage, "Empty temp path.");
 	if (!isWritableDirectory(normalized))
-		return setError(errorMessage, fieldLabel + " is missing or not writable: " + normalized);
+		return setError(errorMessage, "Temp path is missing or not writable: " + normalized);
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;
-}
-
-bool validateBackupDirectoryPath(const std::string &path, std::string *errorMessage) {
-	return validateWritableDirectoryPath(path, "BACKUP_DIRECTORY", errorMessage);
-}
-
-bool validateTempDirectoryPath(const std::string &path, std::string *errorMessage) {
-	return validateWritableDirectoryPath(path, "Temp path", errorMessage);
 }
 
 bool setConfiguredTempDirectoryPath(const std::string &path, std::string *errorMessage) {

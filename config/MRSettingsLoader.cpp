@@ -275,6 +275,8 @@ bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::
 	std::string themeError;
 
 	activeReport = MRSettingsLoadReport();
+	if (countLegacyFeProfileDirectives(source) != 0)
+		markFlag(activeReport, MRSettingsLoadReport::ObsoleteFeProfileDropped);
 	if (!resetConfiguredSettingsModel(activeSettingsPath, activePaths, errorMessage))
 		return false;
 
@@ -303,7 +305,7 @@ bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::
 	}
 
 	for (const MRParsedEditProfileDirective &directive : document.profileDirectives)
-		if (!applyConfiguredFileExtensionProfileDirective(directive.operation, directive.profileId, directive.arg3,
+		if (!applyConfiguredEditExtensionProfileDirective(directive.operation, directive.profileId, directive.arg3,
 		                                                 directive.arg4, errorMessage))
 			return false;
 
@@ -351,6 +353,8 @@ std::string describeSettingsLoadReport(const MRSettingsLoadReport &report) {
 		parts.emplace_back("theme fallback applied");
 	if (hasFlag(report, MRSettingsLoadReport::AnchoredSettingsPath))
 		parts.emplace_back("settings path anchored to active file");
+	if (hasFlag(report, MRSettingsLoadReport::ObsoleteFeProfileDropped))
+		parts.emplace_back("obsolete MREDITPROFILE directives dropped; FE profile defaults restored");
 	if (parts.empty())
 		return std::string();
 	for (std::size_t i = 0; i < parts.size(); ++i) {

@@ -1,14 +1,39 @@
-#ifndef MREDITPROFILESSUPPORT_HPP
-#define MREDITPROFILESSUPPORT_HPP
+#ifndef MRFILEEXTENSIONPROFILESSUPPORT_HPP
+#define MRFILEEXTENSIONPROFILESSUPPORT_HPP
 
-#include "MRFileExtensionProfilesPanelInternal.hpp"
+#include "MRFileExtensionEditorSettingsPanelInternal.hpp"
+
+#include "../config/MRDialogPaths.hpp"
 
 #include <cstddef>
 #include <string>
 #include <vector>
 
-struct MRFileExtensionProfile;
-struct MRFileExtensionEditorSettings;
+using MRFileExtensionProfile = MREditExtensionProfile;
+using MRFileExtensionEditorSettings = MREditSetupSettings;
+
+inline MRFileExtensionEditorSettings configuredFileExtensionEditorSettings() {
+	return configuredEditSetupSettings();
+}
+
+inline MRFileExtensionEditorSettings mergeFileExtensionEditorSettings(const MRFileExtensionEditorSettings &defaults,
+	                                                             const MREditSetupOverrides &overrides) {
+	return mergeEditSetupSettings(defaults, overrides);
+}
+
+inline const std::vector<MRFileExtensionProfile> &configuredFileExtensionProfiles() {
+	return configuredEditExtensionProfiles();
+}
+
+inline bool setConfiguredFileExtensionEditorSettings(const MRFileExtensionEditorSettings &settings,
+	                                             std::string *errorMessage = nullptr) {
+	return setConfiguredEditSetupSettings(settings, errorMessage);
+}
+
+inline bool setConfiguredFileExtensionProfiles(const std::vector<MRFileExtensionProfile> &profiles,
+	                                       std::string *errorMessage = nullptr) {
+	return setConfiguredEditExtensionProfiles(profiles, errorMessage);
+}
 
 namespace MRFileExtensionProfilesDialogInternal {
 
@@ -18,22 +43,19 @@ struct EditProfileDraft {
 	std::string name;
 	std::string extensionsLiteral;
 	std::string colorThemeUri;
-	EditSettingsDialogRecord settingsRecord;
+	FileExtensionEditorSettingsDialogRecord settingsRecord;
 };
 
 [[nodiscard]] std::string trimAscii(const std::string &value);
 [[nodiscard]] std::string upperAscii(std::string value);
 [[nodiscard]] std::string readRecordField(const char *value);
 void writeRecordField(char *dest, std::size_t destSize, const std::string &value);
-[[nodiscard]] bool recordsEqual(const EditSettingsDialogRecord &lhs, const EditSettingsDialogRecord &rhs);
-void initEditSettingsDialogRecord(EditSettingsDialogRecord &record);
-[[nodiscard]] bool recordToSettings(const EditSettingsDialogRecord &record, MRFileExtensionEditorSettings &settings,
-                                    std::string &errorText);
-[[nodiscard]] bool saveAndReloadEditSettings(const EditSettingsDialogRecord &record,
-                                             std::string &errorText);
-
+[[nodiscard]] bool fileExtensionEditorSettingsDialogRecordsEqual(const FileExtensionEditorSettingsDialogRecord &lhs, const FileExtensionEditorSettingsDialogRecord &rhs);
+void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDialogRecord &record);
+[[nodiscard]] bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditorSettingsDialogRecord &record, MRFileExtensionEditorSettings &settings,
+                                                      std::string &errorText);
 [[nodiscard]] std::vector<std::string> splitExtensionLiteral(const std::string &literal);
-void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, EditSettingsDialogRecord &record);
+void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileExtensionEditorSettingsDialogRecord &record);
 [[nodiscard]] bool draftsEqual(const EditProfileDraft &lhs, const EditProfileDraft &rhs);
 [[nodiscard]] bool draftListsEqual(const std::vector<EditProfileDraft> &lhs,
                                    const std::vector<EditProfileDraft> &rhs);

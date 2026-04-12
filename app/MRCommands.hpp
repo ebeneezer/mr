@@ -93,11 +93,10 @@ enum : ushort {
 	cmMrSetupKeyMapping,
 	cmMrSetupMouseKeyRepeat,
 	cmMrSetupFilenameExtensions,
-	cmMrSetupSwappingEmsXms,
-	cmMrSetupBackupsTempAutosave,
+	cmMrSetupPaths,
+	cmMrSetupBackupsAutosave,
 	cmMrSetupSearchAndReplaceDefaults,
 	cmMrSetupUserInterfaceSettings,
-	cmMrSetupSearchAndReplacePlaceholder,
 
 	cmMrColorWindowColors,
 	cmMrColorMenuDialogColors,

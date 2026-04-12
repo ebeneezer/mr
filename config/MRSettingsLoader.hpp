@@ -15,6 +15,7 @@ struct MRSettingsLoadReport {
 		LegacyInlineColorsSeen = 1u << 4,
 		ThemeFallbackUsed = 1u << 5,
 		AnchoredSettingsPath = 1u << 6,
+		ObsoleteFeProfileDropped = 1u << 7,
 	};
 
 	unsigned int flags = None;

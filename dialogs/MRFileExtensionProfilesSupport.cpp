@@ -34,7 +34,7 @@ void writeRecordField(char *dest, std::size_t destSize, const std::string &value
 	mr::dialogs::writeRecordField(dest, destSize, value);
 }
 
-bool recordsEqual(const EditSettingsDialogRecord &lhs, const EditSettingsDialogRecord &rhs) {
+bool fileExtensionEditorSettingsDialogRecordsEqual(const FileExtensionEditorSettingsDialogRecord &lhs, const FileExtensionEditorSettingsDialogRecord &rhs) {
 	return readRecordField(lhs.pageBreak) == readRecordField(rhs.pageBreak) &&
 	       readRecordField(lhs.wordDelimiters) == readRecordField(rhs.wordDelimiters) &&
 	       readRecordField(lhs.defaultExtensions) == readRecordField(rhs.defaultExtensions) &&
@@ -52,7 +52,7 @@ bool recordsEqual(const EditSettingsDialogRecord &lhs, const EditSettingsDialogR
 	       lhs.defaultModeChoice == rhs.defaultModeChoice;
 }
 
-void initEditSettingsDialogRecord(EditSettingsDialogRecord &record) {
+void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDialogRecord &record) {
 	MRFileExtensionEditorSettings settings = configuredFileExtensionEditorSettings();
 	std::string columnMove = upperAscii(settings.columnBlockMove);
 	std::string defaultMode = upperAscii(settings.defaultMode);
@@ -109,8 +109,8 @@ void initEditSettingsDialogRecord(EditSettingsDialogRecord &record) {
 	    (defaultMode == "OVERWRITE") ? kDefaultModeOverwrite : kDefaultModeInsert;
 }
 
-bool recordToSettings(const EditSettingsDialogRecord &record, MRFileExtensionEditorSettings &settings,
-                      std::string &errorText) {
+bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditorSettingsDialogRecord &record, MRFileExtensionEditorSettings &settings,
+                                                     std::string &errorText) {
 	settings = configuredFileExtensionEditorSettings();
 	settings.pageBreak = readRecordField(record.pageBreak);
 	settings.wordDelimiters = readRecordField(record.wordDelimiters);
@@ -230,37 +230,6 @@ bool recordToSettings(const EditSettingsDialogRecord &record, MRFileExtensionEdi
 	return true;
 }
 
-bool saveAndReloadEditSettings(const EditSettingsDialogRecord &record, std::string &errorText) {
-	MRFileExtensionEditorSettings settings;
-	MRSetupPaths paths;
-	MRSettingsWriteReport writeReport;
-	TMREditorApp *app = dynamic_cast<TMREditorApp *>(TProgram::application);
-
-	if (!recordToSettings(record, settings, errorText))
-		return false;
-	if (!setConfiguredFileExtensionEditorSettings(settings, &errorText))
-		return false;
-
-	paths.settingsMacroUri = configuredSettingsMacroFilePath();
-	paths.macroPath = defaultMacroDirectoryPath();
-	paths.helpUri = configuredHelpFilePath();
-	paths.tempPath = configuredTempDirectoryPath();
-	paths.shellUri = configuredShellExecutablePath();
-
-	if (!writeSettingsMacroFile(paths, &errorText, &writeReport))
-		return false;
-	mrLogSettingsWriteReport("edit settings", writeReport);
-	if (app == nullptr) {
-		errorText = "Application error: TMREditorApp is unavailable.";
-		return false;
-	}
-	if (!app->reloadSettingsMacroFromPath(paths.settingsMacroUri, &errorText))
-		return false;
-
-	errorText.clear();
-	return true;
-}
-
 } // namespace MRFileExtensionProfilesDialogInternal
 
 namespace MRFileExtensionProfilesDialogInternal {
@@ -363,7 +332,7 @@ enum : unsigned int {
 
 [[nodiscard]] bool validateDraftRecordFields(const EditProfileDraft &draft, std::string &errorText) {
 	MRFileExtensionEditorSettings ignored;
-	return recordToSettings(draft.settingsRecord, ignored, errorText);
+	return fileExtensionEditorSettingsDialogRecordToSettings(draft.settingsRecord, ignored, errorText);
 }
 
 [[nodiscard]] bool validateDraftLocally(const EditProfileDraft &draft, std::string &errorText) {
@@ -381,9 +350,9 @@ enum : unsigned int {
 	return true;
 }
 
-[[nodiscard]] unsigned int computeOverrideMask(const MRFileExtensionEditorSettings &defaults,
+[[nodiscard]] unsigned long long computeOverrideMask(const MRFileExtensionEditorSettings &defaults,
                                                const MRFileExtensionEditorSettings &effective) {
-	unsigned int mask = kOvNone;
+	unsigned long long mask = kOvNone;
 
 	if (effective.pageBreak != defaults.pageBreak)
 		mask |= kOvPageBreak;
@@ -482,7 +451,7 @@ enum : unsigned int {
 			return false;
 		}
 		if (draft.isDefault) {
-			if (!recordToSettings(draft.settingsRecord, defaultsOut, errorText)) {
+			if (!fileExtensionEditorSettingsDialogRecordToSettings(draft.settingsRecord, defaultsOut, errorText)) {
 				errorText = "DEFAULT: " + errorText;
 				return false;
 			}
@@ -510,7 +479,7 @@ enum : unsigned int {
 
 		if (draft.isDefault)
 			continue;
-		if (!recordToSettings(draft.settingsRecord, effective, errorText)) {
+		if (!fileExtensionEditorSettingsDialogRecordToSettings(draft.settingsRecord, effective, errorText)) {
 			errorText = trimAscii(draft.id) + ": " + errorText;
 			return false;
 		}
@@ -582,9 +551,11 @@ std::vector<std::string> splitExtensionLiteral(const std::string &literal) {
 	return values;
 }
 
-void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, EditSettingsDialogRecord &record) {
+void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileExtensionEditorSettingsDialogRecord &record) {
 	std::string columnMove = upperAscii(settings.columnBlockMove);
 	std::string defaultMode = upperAscii(settings.defaultMode);
+	std::string indentStyle = upperAscii(settings.indentStyle);
+	std::string fileType = upperAscii(settings.fileType);
 
 	std::memset(&record, 0, sizeof(record));
 	writeRecordField(record.pageBreak, sizeof(record.pageBreak), settings.pageBreak);
@@ -592,10 +563,13 @@ void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, EditS
 	writeRecordField(record.defaultExtensions, sizeof(record.defaultExtensions), settings.defaultExtensions);
 	writeRecordField(record.tabSize, sizeof(record.tabSize), std::to_string(settings.tabSize));
 	writeRecordField(record.rightMargin, sizeof(record.rightMargin), std::to_string(settings.rightMargin));
+	writeRecordField(record.binaryRecordLength, sizeof(record.binaryRecordLength), std::to_string(settings.binaryRecordLength));
 	writeRecordField(record.postLoadMacro, sizeof(record.postLoadMacro), settings.postLoadMacro);
 	writeRecordField(record.preSaveMacro, sizeof(record.preSaveMacro), settings.preSaveMacro);
 	writeRecordField(record.defaultPath, sizeof(record.defaultPath), settings.defaultPath);
+	writeRecordField(record.formatLine, sizeof(record.formatLine), settings.formatLine);
 	writeRecordField(record.cursorStatusColor, sizeof(record.cursorStatusColor), settings.cursorStatusColor);
+
 	record.optionsMask = 0;
 	if (settings.truncateSpaces)
 		record.optionsMask |= kOptionTruncateSpaces;
@@ -617,7 +591,14 @@ void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, EditS
 		record.optionsMask |= kOptionShowLineNumbers;
 	if (settings.lineNumZeroFill)
 		record.optionsMask |= kOptionLineNumZeroFill;
-	record.tabExpandChoice = settings.tabExpand ? kTabExpandSpaces : kTabExpandTabs;
+
+	record.tabExpandChoice = settings.tabExpand ? kTabExpandTabs : kTabExpandSpaces;
+	record.indentStyleChoice = (indentStyle == "AUTOMATIC") ? kIndentStyleAutomatic
+	                       : (indentStyle == "SMART") ? kIndentStyleSmart
+	                                                  : kIndentStyleOff;
+	record.fileTypeChoice = (fileType == "LEGACY_TEXT") ? kFileTypeLegacyText
+	                    : (fileType == "BINARY") ? kFileTypeBinary
+	                                             : kFileTypeUnix;
 	record.columnBlockMoveChoice = (columnMove == "LEAVE_SPACE") ? kColumnMoveLeaveSpace : kColumnMoveDeleteSpace;
 	record.defaultModeChoice = (defaultMode == "OVERWRITE") ? kDefaultModeOverwrite : kDefaultModeInsert;
 }
@@ -627,7 +608,7 @@ bool draftsEqual(const EditProfileDraft &lhs, const EditProfileDraft &rhs) {
 	       trimAscii(lhs.name) == trimAscii(rhs.name) &&
 	       trimAscii(lhs.extensionsLiteral) == trimAscii(rhs.extensionsLiteral) &&
 	       trimAscii(lhs.colorThemeUri) == trimAscii(rhs.colorThemeUri) &&
-	       recordsEqual(lhs.settingsRecord, rhs.settingsRecord);
+	       fileExtensionEditorSettingsDialogRecordsEqual(lhs.settingsRecord, rhs.settingsRecord);
 }
 
 bool draftListsEqual(const std::vector<EditProfileDraft> &lhs, const std::vector<EditProfileDraft> &rhs) {

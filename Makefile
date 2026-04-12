@@ -83,7 +83,7 @@ CXX_SOURCES = \
 	dialogs/MRInstallationAndSetupDialog.cpp \
 	dialogs/MRMacroFileDialog.cpp \
 	dialogs/MRFileExtensionProfilesDialog.cpp \
-	dialogs/MRFileExtensionProfilesPanel.cpp \
+	dialogs/MRFileExtensionEditorSettingsPanel.cpp \
 	dialogs/MRFileExtensionProfilesSupport.cpp \
 	dialogs/MRSetupDialogs.cpp \
 	dialogs/MRUnsavedChangesDialog.cpp \
@@ -310,8 +310,8 @@ dialogs/MRColorSetupDialog.o: dialogs/MRColorSetupDialog.cpp dialogs/MRSetupDial
 dialogs/MRFileInformationDialog.o: dialogs/MRFileInformationDialog.cpp dialogs/MRFileInformationDialog.hpp app/MRCommands.hpp coprocessor/MRPerformance.hpp ui/TMREditWindow.hpp ui/TMRFileEditor.hpp ui/TMRTextBuffer.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 dialogs/MRInstallationAndSetupDialog.o: dialogs/MRInstallationAndSetupDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp app/MRCommands.hpp
 dialogs/MRMacroFileDialog.o: dialogs/MRMacroFileDialog.cpp dialogs/MRMacroFileDialog.hpp mrmac/MRMacroRunner.hpp
-dialogs/MRFileExtensionProfilesPanel.o: dialogs/MRFileExtensionProfilesPanel.cpp dialogs/MRFileExtensionProfilesPanelInternal.hpp dialogs/MRNumericSlider.hpp dialogs/MRSetupDialogCommon.hpp
-dialogs/MRFileExtensionProfilesSupport.o: dialogs/MRFileExtensionProfilesSupport.cpp dialogs/MRFileExtensionProfilesSupport.hpp dialogs/MRFileExtensionProfilesPanelInternal.hpp dialogs/MRSetupDialogs.hpp config/MRDialogPaths.hpp app/TMREditorApp.hpp
+dialogs/MRFileExtensionEditorSettingsPanel.o: dialogs/MRFileExtensionEditorSettingsPanel.cpp dialogs/MRFileExtensionEditorSettingsPanelInternal.hpp dialogs/MRNumericSlider.hpp dialogs/MRSetupDialogCommon.hpp
+dialogs/MRFileExtensionProfilesSupport.o: dialogs/MRFileExtensionProfilesSupport.cpp dialogs/MRFileExtensionProfilesSupport.hpp dialogs/MRFileExtensionEditorSettingsPanelInternal.hpp dialogs/MRSetupDialogs.hpp config/MRDialogPaths.hpp app/TMREditorApp.hpp
 dialogs/MRSetupDialogs.o: dialogs/MRSetupDialogs.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp app/MRCommands.hpp app/TMREditorApp.hpp config/MRDialogPaths.hpp ui/MRWindowSupport.hpp
 dialogs/MRWindowListDialog.o: dialogs/MRWindowListDialog.cpp dialogs/MRWindowListDialog.hpp app/commands/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/MRWindowSupport.hpp
 mrmac/MRMacroRunner.o: mrmac/MRMacroRunner.cpp mrmac/MRMacroRunner.hpp mrmac/mrmac.h mrmac/mrvm.hpp app/commands/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp

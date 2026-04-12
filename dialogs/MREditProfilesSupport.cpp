@@ -83,6 +83,8 @@ void initEditSettingsDialogRecord(EditSettingsDialogRecord &record) {
 		record.optionsMask |= kOptionEofCrLf;
 	if (settings.wordWrap)
 		record.optionsMask |= kOptionWordWrap;
+	if (settings.backupFiles)
+		record.optionsMask |= kOptionBackupFiles;
 	if (settings.showEofMarker)
 		record.optionsMask |= kOptionShowEofMarker;
 	if (settings.showEofMarkerEmoji)
@@ -208,6 +210,7 @@ bool recordToSettings(const EditSettingsDialogRecord &record, MREditSetupSetting
 	settings.eofCtrlZ = (record.optionsMask & kOptionEofCtrlZ) != 0;
 	settings.eofCrLf = (record.optionsMask & kOptionEofCrLf) != 0;
 	settings.wordWrap = (record.optionsMask & kOptionWordWrap) != 0;
+	settings.backupFiles = (record.optionsMask & kOptionBackupFiles) != 0;
 	settings.showEofMarker = (record.optionsMask & kOptionShowEofMarker) != 0;
 	settings.showEofMarkerEmoji = (record.optionsMask & kOptionShowEofMarkerEmoji) != 0;
 	settings.persistentBlocks = (record.optionsMask & kOptionPersistentBlocks) != 0;
@@ -287,6 +290,7 @@ enum : unsigned int {
 	kOvPreSaveMacro = ::kOvPreSaveMacro,
 	kOvDefaultPath = ::kOvDefaultPath,
 	kOvFormatLine = ::kOvFormatLine,
+	kOvBackupFiles = ::kOvBackupFiles,
 	kOvShowEofMarker = ::kOvShowEofMarker,
 	kOvShowEofMarkerEmoji = ::kOvShowEofMarkerEmoji,
 	kOvShowLineNumbers = ::kOvShowLineNumbers,
@@ -419,6 +423,8 @@ enum : unsigned int {
 		mask |= kOvDefaultPath;
 	if (effective.formatLine != defaults.formatLine)
 		mask |= kOvFormatLine;
+	if (effective.backupFiles != defaults.backupFiles)
+		mask |= kOvBackupFiles;
 	if (effective.showEofMarker != defaults.showEofMarker)
 		mask |= kOvShowEofMarker;
 	if (effective.showEofMarkerEmoji != defaults.showEofMarkerEmoji)
@@ -605,6 +611,8 @@ void settingsToDialogRecord(const MREditSetupSettings &settings, EditSettingsDia
 		record.optionsMask |= kOptionEofCrLf;
 	if (settings.wordWrap)
 		record.optionsMask |= kOptionWordWrap;
+	if (settings.backupFiles)
+		record.optionsMask |= kOptionBackupFiles;
 	if (settings.showEofMarker)
 		record.optionsMask |= kOptionShowEofMarker;
 	if (settings.showEofMarkerEmoji)

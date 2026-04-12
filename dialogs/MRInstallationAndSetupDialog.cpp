@@ -157,8 +157,8 @@ bool isInstallationSetupModalCommand(ushort command) {
 		case cmMrSetupKeyMapping:
 		case cmMrSetupMouseKeyRepeat:
 		case cmMrSetupFilenameExtensions:
-		case cmMrSetupSwappingEmsXms:
-		case cmMrSetupBackupsTempAutosave:
+		case cmMrSetupPaths:
+		case cmMrSetupBackupsAutosave:
 		case cmMrSetupSearchAndReplaceDefaults:
 		case cmMrSetupUserInterfaceSettings:
 			return true;
@@ -235,26 +235,24 @@ class TInstallationAndSetupDialog : public MRScrollableDialog {
 		addLine(TRect(g.rightX1, 4, g.rightX1 + static_cast<short>(cpuLine.size() + 1), 5), cpuLine);
 		addLine(TRect(2, 5, 2 + static_cast<short>(ramLine.size() + 1), 6), ramLine);
 
-		addButton(TRect(g.kLeftX1, 9, g.leftX2, 11), "~C~olor setup...", cmMrSetupColorSetup,
+		addButton(TRect(g.kLeftX1, 9, g.leftX2, 11), "~C~olor setup", cmMrSetupColorSetup,
 		          bfNormal);
-		addButton(TRect(g.kLeftX1, 11, g.leftX2, 13), "~K~ey mapping...", cmMrSetupKeyMapping,
+		addButton(TRect(g.kLeftX1, 11, g.leftX2, 13), "~K~ey mapping", cmMrSetupKeyMapping,
 		          bfNormal);
-		addButton(TRect(g.kLeftX1, 13, g.leftX2, 15), "~S~earch and Replace...",
+		addButton(TRect(g.kLeftX1, 13, g.leftX2, 15), "~S~earch and Replace",
 		          cmMrSetupSearchAndReplaceDefaults, bfNormal);
 
-		addButton(TRect(g.rightX1, 9, g.rightX2, 11), "~M~ouse / Key repeat...",
+		addButton(TRect(g.rightX1, 9, g.rightX2, 11), "~M~ouse / Key repeat",
 		          cmMrSetupMouseKeyRepeat, bfNormal);
-		addButton(TRect(g.rightX1, 11, g.rightX2, 13), "~F~ilename extensions...",
+		addButton(TRect(g.rightX1, 11, g.rightX2, 13), "~F~ilename extensions",
 		          cmMrSetupFilenameExtensions, bfNormal);
-		addButton(TRect(g.rightX1, 13, g.rightX2, 15), "~P~aths", cmMrSetupSwappingEmsXms,
+		addButton(TRect(g.rightX1, 13, g.rightX2, 15), "~P~aths", cmMrSetupPaths,
 		          bfNormal);
-		addButton(TRect(g.rightX1, 15, g.rightX2, 17), "~B~ackups / Autosave...",
-		          cmMrSetupBackupsTempAutosave, bfNormal);
-		addButton(TRect(g.rightX1, 17, g.rightX2, 19), "~U~ser interface settings...",
+		addButton(TRect(g.rightX1, 15, g.rightX2, 17), "~B~ackups / Autosave",
+		          cmMrSetupBackupsAutosave, bfNormal);
+		addButton(TRect(g.rightX1, 17, g.rightX2, 19), "~U~ser interface settings",
 		          cmMrSetupUserInterfaceSettings, bfNormal);
 
-		addButton(TRect(g.kLeftX1, g.finalRowTop, g.leftX2, g.finalRowTop + 2), "E~x~it Setup",
-		          cmCancel, bfDefault);
 	}
 };
 

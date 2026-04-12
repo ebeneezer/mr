@@ -1,21 +1,6 @@
 {
   "lists": [
     {
-      "id": "09ddf949-7114-4e16-a461-48b91c909f7e",
-      "title": "Regression/Errors",
-      "cards": [
-        {
-          "id": "14f529c0-2a06-414e-ae80-132081d6af4d",
-          "listId": "09ddf949-7114-4e16-a461-48b91c909f7e",
-          "title": "FE Dialog dirty on entry",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        }
-      ]
-    },
-    {
       "id": "442a00f0-c411-4725-9424-3182418b486d",
       "title": "Backlog",
       "cards": [
@@ -125,6 +110,15 @@
       "title": "To Do",
       "cards": [
         {
+          "id": "1d3bb61c-ed49-4456-b7f8-d1727517161a",
+          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+          "title": "Setup vervollständigt",
+          "description": "Gibt Rahmen und Übersicht über Aufwand der Implementierung.\n",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
           "id": "6a72c579-f9a7-4c5b-ac6b-2a4b0ead65ef",
           "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
           "title": "Hex Editor",
@@ -164,18 +158,8 @@
     },
     {
       "id": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-      "title": "Coding",
-      "cards": [
-        {
-          "id": "1d3bb61c-ed49-4456-b7f8-d1727517161a",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Setup vervollständigt",
-          "description": "Gibt Rahmen und Übersicht über Aufwand der Implementierung.\n",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        }
-      ]
+      "title": "Doing",
+      "cards": []
     },
     {
       "id": "126a5e5b-401b-45cd-8c2d-3a943712d14c",

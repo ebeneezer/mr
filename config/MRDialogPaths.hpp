@@ -15,7 +15,7 @@ struct MRSetupPaths {
 	std::string shellUri;
 };
 
-struct MRFileExtensionEditorSettings {
+struct MREditSetupSettings {
 	std::string pageBreak;
 	std::string wordDelimiters;
 	std::string defaultExtensions;
@@ -39,6 +39,7 @@ struct MRFileExtensionEditorSettings {
 	std::string backupDirectory;
 	int autosaveInactivitySeconds;
 	int autosaveIntervalSeconds;
+	bool backupFiles;
 	bool showEofMarker;
 	bool showEofMarkerEmoji;
 	bool showLineNumbers;
@@ -49,13 +50,12 @@ struct MRFileExtensionEditorSettings {
 	std::string defaultMode;
 	std::string cursorStatusColor;
 
-	MRFileExtensionEditorSettings() noexcept
+	MREditSetupSettings() noexcept
 	    : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false),
 	      eofCrLf(false), tabExpand(true), tabSize(8), rightMargin(78), wordWrap(true), indentStyle(),
 	      fileType(), binaryRecordLength(100), postLoadMacro(), preSaveMacro(), defaultPath(), formatLine(),
-	      backupMethod("BAK_FILE"), backupFrequency("FIRST_SAVE_ONLY"),
-	      backupExtension("bak"), backupDirectory(), autosaveInactivitySeconds(15),
-	      autosaveIntervalSeconds(180), showEofMarker(false),
+	      backupMethod("BAK_FILE"), backupFrequency("FIRST_SAVE_ONLY"), backupExtension("bak"), backupDirectory(),
+	      autosaveInactivitySeconds(15), autosaveIntervalSeconds(180), backupFiles(true), showEofMarker(false),
 	      showEofMarkerEmoji(true),
 	      showLineNumbers(false), lineNumZeroFill(false), persistentBlocks(true), codeFolding(false), columnBlockMove(),
 	      defaultMode(), cursorStatusColor() {
@@ -64,7 +64,7 @@ struct MRFileExtensionEditorSettings {
 
 
 
-enum class MRFileExtensionEditorSettingSection : unsigned char {
+enum class MREditSettingSection : unsigned char {
 	Text,
 	OpenFile,
 	Save,
@@ -77,72 +77,73 @@ enum class MRFileExtensionEditorSettingSection : unsigned char {
 	Mode
 };
 
-enum class MRFileExtensionEditorSettingKind : unsigned char {
+enum class MREditSettingKind : unsigned char {
 	String,
 	Boolean,
 	Integer,
 	Choice
 };
 
-enum MRFileExtensionEditorSettingsOverrideMask : unsigned long long {
+enum MREditSetupOverrideMask : unsigned long long {
 	kOvNone = 0,
-	kOvPageBreak = 1u << 0,
-	kOvWordDelimiters = 1u << 1,
-	kOvDefaultExtensions = 1u << 2,
-	kOvTruncateSpaces = 1u << 3,
-	kOvEofCtrlZ = 1u << 4,
-	kOvEofCrLf = 1u << 5,
-	kOvTabExpand = 1u << 6,
-	kOvTabSize = 1u << 7,
-	kOvRightMargin = 1u << 8,
-	kOvWordWrap = 1u << 9,
-	kOvIndentStyle = 1u << 10,
-	kOvFileType = 1u << 11,
-	kOvBinaryRecordLength = 1u << 12,
-	kOvPostLoadMacro = 1u << 13,
-	kOvPreSaveMacro = 1u << 14,
-	kOvDefaultPath = 1u << 15,
-	kOvFormatLine = 1u << 16,
-	kOvBackupMethod = 1u << 18,
-	kOvBackupFrequency = 1u << 19,
-	kOvBackupExtension = 1u << 20,
-	kOvBackupDirectory = 1u << 21,
-	kOvAutosaveInactivitySeconds = 1u << 22,
-	kOvAutosaveIntervalSeconds = 1u << 23,
-	kOvShowEofMarker = 1u << 24,
-	kOvShowEofMarkerEmoji = 1u << 25,
-	kOvShowLineNumbers = 1u << 26,
-	kOvLineNumZeroFill = 1u << 27,
-	kOvPersistentBlocks = 1u << 28,
-	kOvCodeFolding = 1u << 29,
-	kOvColumnBlockMove = 1u << 30,
-	kOvDefaultMode = 1u << 31,
-	kOvCursorStatusColor = 1ull << 32,
+	kOvPageBreak = 1ull << 0,
+	kOvWordDelimiters = 1ull << 1,
+	kOvDefaultExtensions = 1ull << 2,
+	kOvTruncateSpaces = 1ull << 3,
+	kOvEofCtrlZ = 1ull << 4,
+	kOvEofCrLf = 1ull << 5,
+	kOvTabExpand = 1ull << 6,
+	kOvTabSize = 1ull << 7,
+	kOvRightMargin = 1ull << 8,
+	kOvWordWrap = 1ull << 9,
+	kOvIndentStyle = 1ull << 10,
+	kOvFileType = 1ull << 11,
+	kOvBinaryRecordLength = 1ull << 12,
+	kOvPostLoadMacro = 1ull << 13,
+	kOvPreSaveMacro = 1ull << 14,
+	kOvDefaultPath = 1ull << 15,
+	kOvFormatLine = 1ull << 16,
+	kOvBackupFiles = 1ull << 17,
+	kOvShowEofMarker = 1ull << 18,
+	kOvShowEofMarkerEmoji = 1ull << 19,
+	kOvShowLineNumbers = 1ull << 20,
+	kOvLineNumZeroFill = 1ull << 21,
+	kOvPersistentBlocks = 1ull << 22,
+	kOvCodeFolding = 1ull << 23,
+	kOvColumnBlockMove = 1ull << 24,
+	kOvDefaultMode = 1ull << 25,
+	kOvCursorStatusColor = 1ull << 26,
+	kOvBackupMethod = 1ull << 27,
+	kOvBackupFrequency = 1ull << 28,
+	kOvBackupExtension = 1ull << 29,
+	kOvBackupDirectory = 1ull << 30,
+	kOvAutosaveInactivitySeconds = 1ull << 31,
+	kOvAutosaveIntervalSeconds = 1ull << 32,
 };
 
-struct MRFileExtensionEditorSettingDescriptor {
+struct MREditSettingDescriptor {
 	const char *key;
 	const char *label;
-	MRFileExtensionEditorSettingSection section;
-	MRFileExtensionEditorSettingKind kind;
+	MREditSettingSection section;
+	MREditSettingKind kind;
 	bool profileSupported;
 	unsigned long long overrideBit;
 };
 
-struct MRFileExtensionEditorSettingsOverrides {
-	MRFileExtensionEditorSettings values;
+struct MREditSetupOverrides {
+	MREditSetupSettings values;
 	unsigned long long mask;
 
-	MRFileExtensionEditorSettingsOverrides() noexcept : values(), mask(kOvNone) {
+	MREditSetupOverrides() noexcept : values(), mask(kOvNone) {
 	}
 };
 
-struct MRFileExtensionProfile {
+struct MREditExtensionProfile {
 	std::string id;
 	std::string name;
 	std::vector<std::string> extensions;
 	std::string windowColorThemeUri;
-	MRFileExtensionEditorSettingsOverrides overrides;
+	MREditSetupOverrides overrides;
 };
 
 enum class MRColorSetupGroup : unsigned char {
@@ -200,12 +201,12 @@ void initRememberedLoadDialogPath(char *buffer, std::size_t bufferSize, const ch
 void rememberLoadDialogPath(const char *path);
 [[nodiscard]] std::string normalizeConfiguredPathInput(std::string_view input);
 [[nodiscard]] MRSetupPaths resolveSetupPathDefaults();
-[[nodiscard]] MRFileExtensionEditorSettings resolveFileExtensionEditorSettingsDefaults();
+[[nodiscard]] MREditSetupSettings resolveEditSetupDefaults();
 [[nodiscard]] MRColorSetupSettings resolveColorSetupDefaults();
-[[nodiscard]] MRFileExtensionEditorSettings configuredFileExtensionEditorSettings();
+[[nodiscard]] MREditSetupSettings configuredEditSetupSettings();
 [[nodiscard]] MRColorSetupSettings configuredColorSetupSettings();
-bool setConfiguredFileExtensionEditorSettings(const MRFileExtensionEditorSettings &settings, std::string *errorMessage = nullptr);
-bool applyConfiguredFileExtensionEditorSettingValue(const std::string &key, const std::string &value,
+bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::string *errorMessage = nullptr);
+bool applyConfiguredEditSetupValue(const std::string &key, const std::string &value,
                                    std::string *errorMessage = nullptr);
 bool applyConfiguredColorSetupValue(const std::string &key, const std::string &value,
                                     std::string *errorMessage = nullptr);
@@ -236,30 +237,31 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 bool applyConfiguredSettingsAssignment(const std::string &key, const std::string &value, MRSetupPaths &paths,
                                        std::string *errorMessage = nullptr);
 
-const MRFileExtensionEditorSettingDescriptor *fileExtensionEditorSettingDescriptors(std::size_t &count);
-[[nodiscard]] const MRFileExtensionEditorSettingDescriptor *findFileExtensionEditorSettingDescriptorByKey(std::string_view key);
+const MREditSettingDescriptor *editSettingDescriptors(std::size_t &count);
+[[nodiscard]] const MREditSettingDescriptor *findEditSettingDescriptorByKey(std::string_view key);
 [[nodiscard]] std::string normalizeEditExtensionSelector(std::string_view value);
 bool normalizeEditExtensionSelectors(std::vector<std::string> &selectors, std::string *errorMessage = nullptr);
-MRFileExtensionEditorSettings mergeFileExtensionEditorSettings(const MRFileExtensionEditorSettings &defaults,
-                                           const MRFileExtensionEditorSettingsOverrides &overrides);
-const std::vector<MRFileExtensionProfile> &configuredFileExtensionProfiles();
-bool setConfiguredFileExtensionProfiles(const std::vector<MRFileExtensionProfile> &profiles,
+MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults,
+                                           const MREditSetupOverrides &overrides);
+const std::vector<MREditExtensionProfile> &configuredEditExtensionProfiles();
+bool setConfiguredEditExtensionProfiles(const std::vector<MREditExtensionProfile> &profiles,
                                         std::string *errorMessage = nullptr);
 [[nodiscard]] std::string configuredDefaultProfileDescription();
 bool setConfiguredDefaultProfileDescription(const std::string &value,
                                             std::string *errorMessage = nullptr);
-bool applyConfiguredFileExtensionProfileDirective(const std::string &operation, const std::string &profileId,
+bool applyConfiguredEditExtensionProfileDirective(const std::string &operation, const std::string &profileId,
                                                   const std::string &arg3, const std::string &arg4,
                                                   std::string *errorMessage = nullptr);
-bool effectiveFileExtensionEditorSettingsForPath(const std::string &path, MRFileExtensionEditorSettings &out,
+bool effectiveEditSetupSettingsForPath(const std::string &path, MREditSetupSettings &out,
                                        std::string *matchedProfileName = nullptr);
 bool effectiveEditWindowColorThemePathForPath(const std::string &path, std::string &themeUri,
                                               std::string *matchedProfileName = nullptr);
-[[nodiscard]] std::string formatFileExtensionEditorSettingBoolean(bool value);
+[[nodiscard]] std::string formatEditSetupBoolean(bool value);
 std::vector<std::string> configuredDefaultExtensionList();
 [[nodiscard]] bool configuredDefaultInsertMode();
 [[nodiscard]] bool configuredTabExpandSetting();
 [[nodiscard]] int configuredTabSizeSetting();
+[[nodiscard]] bool configuredBackupFilesSetting();
 [[nodiscard]] bool configuredPersistentBlocksSetting();
 [[nodiscard]] char configuredPageBreakCharacter();
 bool setConfiguredLastFileDialogPath(const std::string &path, std::string *errorMessage = nullptr);
@@ -289,9 +291,6 @@ bool setConfiguredMacroDirectoryPath(const std::string &path, std::string *error
 bool validateHelpFilePath(const std::string &path, std::string *errorMessage = nullptr);
 bool setConfiguredHelpFilePath(const std::string &path, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string configuredHelpFilePath();
-bool normalizeBackupExtension(const std::string &value, std::string &outValue, std::string *errorMessage = nullptr);
-bool validateWritableDirectoryPath(const std::string &path, const std::string &fieldLabel, std::string *errorMessage = nullptr);
-bool validateBackupDirectoryPath(const std::string &path, std::string *errorMessage = nullptr);
 bool validateTempDirectoryPath(const std::string &path, std::string *errorMessage = nullptr);
 bool setConfiguredTempDirectoryPath(const std::string &path, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string configuredTempDirectoryPath();

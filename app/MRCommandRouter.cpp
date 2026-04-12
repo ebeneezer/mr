@@ -36,7 +36,7 @@ namespace {
 bool startExternalCommandInWindow(TMREditWindow *win, const std::string &commandLine, bool replaceBuffer,
                                   bool activate, bool closeOnFailure);
 
-const char *dummyCommandTitle(ushort command) {
+const char *placeholderCommandTitle(ushort command) {
 	switch (command) {
 		case cmMrFileOpen:
 			return "File / Open";
@@ -199,13 +199,13 @@ const char *dummyCommandTitle(ushort command) {
 			return "Installation / Mouse / Key repeat setup";
 		case cmMrSetupFilenameExtensions:
 			return "Installation / Filename extensions";
-		case cmMrSetupSwappingEmsXms:
+		case cmMrSetupPaths:
 			return "Installation / Paths";
-		case cmMrSetupBackupsTempAutosave:
+		case cmMrSetupBackupsAutosave:
 			return "Installation / Backups / Autosave";
 		case cmMrSetupUserInterfaceSettings:
 			return "Installation / User interface settings";
-		case cmMrSetupSearchAndReplacePlaceholder:
+		case cmMrSetupSearchAndReplaceDefaults:
 			return "Installation / Search and Replace defaults";
 
 		default:
@@ -213,10 +213,10 @@ const char *dummyCommandTitle(ushort command) {
 	}
 }
 
-void showDummyCommandBox(const char *title) {
+void showPlaceholderCommandBox(const char *title) {
 	if (title == nullptr)
 		title = "Command";
-	messageBox(mfInformation | mfOKButton, "%s\n\nDummy implementation for now.", title);
+	messageBox(mfInformation | mfOKButton, "%s\n\nPlaceholder implementation for now.", title);
 }
 
 bool handleFileOpen() {
@@ -394,7 +394,7 @@ bool dispatchEditorClipboardCommand(ushort editorCommand, bool requiresWritable)
 }
 
 bool togglePersistentBlocksSetting() {
-	MRFileExtensionEditorSettings settings = configuredFileExtensionEditorSettings();
+	MREditSetupSettings settings = configuredEditSetupSettings();
 	MRSetupPaths paths;
 	MRSettingsWriteReport writeReport;
 	TMREditorApp *app = dynamic_cast<TMREditorApp *>(TProgram::application);
@@ -402,7 +402,7 @@ bool togglePersistentBlocksSetting() {
 	bool enabled;
 
 	settings.persistentBlocks = !settings.persistentBlocks;
-	if (!setConfiguredFileExtensionEditorSettings(settings, &errorText)) {
+	if (!setConfiguredEditSetupSettings(settings, &errorText)) {
 		messageBox(mfError | mfOKButton, "Persistent blocks update failed:\n%s", errorText.c_str());
 		return true;
 	}
@@ -609,12 +609,12 @@ bool handleMRCommand(ushort command) {
 		case cmMrDevHeroEventProbe:
 			return handleHeroEventProbe();
 
-		default: {
-			const char *title = dummyCommandTitle(command);
-			if (title != nullptr) {
-				showDummyCommandBox(title);
-				return true;
-			}
+				default: {
+					const char *title = placeholderCommandTitle(command);
+				if (title != nullptr) {
+					showPlaceholderCommandBox(title);
+					return true;
+				}
 			return false;
 		}
 	}
