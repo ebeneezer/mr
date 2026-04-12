@@ -308,7 +308,7 @@ bool promptForPath(const char *title, char *fileName, std::size_t fileNameSize) 
 	if (fileName == nullptr || fileNameSize == 0)
 		return false;
 	initRememberedLoadDialogPath(fileName, fileNameSize, "*.*");
-	return execDialogWithPayload(new TFileDialog("*.*", title, "~N~ame", fdOpenButton, 100), fileName) !=
+	return execDialogWithPayload(new TFileDialog("*.*", title, "~N~ame", fdOpenButton, kFileDialogHistoryId), fileName) !=
 	       cmCancel;
 }
 

@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <cctype>
+#include <ctime>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -21,8 +22,37 @@
 
 namespace {
 
-std::string &rememberedLoadDirectory() {
-	static std::string value;
+struct MRDialogHistoryEntry {
+	std::string value;
+	long long epoch = 0;
+};
+
+constexpr int kHistoryLimitMin = 5;
+constexpr int kHistoryLimitMax = 50;
+constexpr int kHistoryLimitDefault = 15;
+
+std::vector<MRDialogHistoryEntry> &configuredPathHistoryStorage() {
+	static std::vector<MRDialogHistoryEntry> value;
+	return value;
+}
+
+std::vector<MRDialogHistoryEntry> &configuredFileHistoryStorage() {
+	static std::vector<MRDialogHistoryEntry> value;
+	return value;
+}
+
+int &configuredPathHistoryLimit() {
+	static int value = kHistoryLimitDefault;
+	return value;
+}
+
+int &configuredFileHistoryLimit() {
+	static int value = kHistoryLimitDefault;
+	return value;
+}
+
+long long &configuredHistoryEpochCounter() {
+	static long long value = 0;
 	return value;
 }
 
@@ -215,25 +245,6 @@ std::string makeAbsolutePath(const std::string &path) {
 	return cwd;
 }
 
-std::string fallbackRememberedLoadDirectory() {
-	std::string macroDir = makeAbsolutePath(configuredMacroDirectory());
-	std::string cwd = currentWorkingDirectory();
-
-	if (isReadableDirectory(macroDir))
-		return macroDir;
-	if (isReadableDirectory(cwd))
-		return cwd;
-	return std::string();
-}
-
-std::string effectiveRememberedLoadDirectory() {
-	std::string remembered = makeAbsolutePath(rememberedLoadDirectory());
-
-	if (isReadableDirectory(remembered))
-		return remembered;
-	return fallbackRememberedLoadDirectory();
-}
-
 std::string normalizedDialogDirectoryFromPath(const std::string &path) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 	std::string dir;
@@ -247,6 +258,81 @@ std::string normalizedDialogDirectoryFromPath(const std::string &path) {
 		return std::string();
 	dir = makeAbsolutePath(dir);
 	return isReadableDirectory(dir) ? dir : std::string();
+}
+
+std::string fallbackRememberedLoadDirectory() {
+	std::string macroDir = makeAbsolutePath(configuredMacroDirectory());
+	std::string cwd = currentWorkingDirectory();
+
+	if (isReadableDirectory(macroDir))
+		return macroDir;
+	if (isReadableDirectory(cwd))
+		return cwd;
+	return std::string();
+}
+
+long long nextHistoryEpoch() {
+	long long nowEpoch = static_cast<long long>(std::time(nullptr));
+	long long &counter = configuredHistoryEpochCounter();
+	counter = std::max(counter + 1, nowEpoch);
+	return counter;
+}
+
+void trimHistoryToLimit(std::vector<MRDialogHistoryEntry> &entries, int limit) {
+	if (limit < 0)
+		limit = 0;
+	if (entries.size() > static_cast<std::size_t>(limit))
+		entries.resize(static_cast<std::size_t>(limit));
+}
+
+void addHistoryEntry(std::vector<MRDialogHistoryEntry> &entries, const std::string &value, int limit) {
+	if (value.empty())
+		return;
+	entries.erase(std::remove_if(entries.begin(), entries.end(),
+	                             [&](const MRDialogHistoryEntry &entry) { return entry.value == value; }),
+	              entries.end());
+	entries.insert(entries.begin(), MRDialogHistoryEntry{value, nextHistoryEpoch()});
+	trimHistoryToLimit(entries, limit);
+}
+
+void addSerializedHistoryEntry(std::vector<MRDialogHistoryEntry> &entries, const std::string &value, int limit) {
+	const std::string normalized = normalizeConfiguredPathInput(value);
+
+	if (normalized.empty())
+		return;
+	for (const MRDialogHistoryEntry &entry : entries)
+		if (entry.value == normalized)
+			return;
+	entries.push_back(MRDialogHistoryEntry{normalized, nextHistoryEpoch()});
+	trimHistoryToLimit(entries, limit);
+}
+
+std::string latestReadableHistoryPath(const std::vector<MRDialogHistoryEntry> &entries) {
+	for (const MRDialogHistoryEntry &entry : entries) {
+		const std::string normalized = makeAbsolutePath(entry.value);
+		if (isReadableDirectory(normalized))
+			return normalized;
+	}
+	return std::string();
+}
+
+std::string latestReadableHistoryFileDirectory(const std::vector<MRDialogHistoryEntry> &entries) {
+	for (const MRDialogHistoryEntry &entry : entries) {
+		std::string dir = normalizedDialogDirectoryFromPath(entry.value);
+		if (!dir.empty())
+			return dir;
+	}
+	return std::string();
+}
+
+std::string effectiveRememberedLoadDirectory() {
+	std::string remembered = latestReadableHistoryPath(configuredPathHistoryStorage());
+	if (!remembered.empty())
+		return remembered;
+	remembered = latestReadableHistoryFileDirectory(configuredFileHistoryStorage());
+	if (!remembered.empty())
+		return remembered;
+	return fallbackRememberedLoadDirectory();
 }
 
 std::string executableDirectory() {
@@ -506,10 +592,14 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"MACROPATH", MRSettingsKeyClass::Path, true},
     {"HELPPATH", MRSettingsKeyClass::Path, true},
     {"TEMPDIR", MRSettingsKeyClass::Path, true},
-    {"SHELLPATH", MRSettingsKeyClass::Path, true},
-    {"LASTFILEDIALOGPATH", MRSettingsKeyClass::Global, true},
-    {"DEFAULT_PROFILE_DESCRIPTION", MRSettingsKeyClass::Global, true},
-    {kThemeSettingsKey, MRSettingsKeyClass::Global, true},
+	{"SHELLPATH", MRSettingsKeyClass::Path, true},
+	{"LASTFILEDIALOGPATH", MRSettingsKeyClass::Global, true},
+	{"MAX_PATH_HISTORY", MRSettingsKeyClass::Global, true},
+	{"MAX_FILE_HISTORY", MRSettingsKeyClass::Global, true},
+	{"PATH_HISTORY", MRSettingsKeyClass::Global, false},
+	{"FILE_HISTORY", MRSettingsKeyClass::Global, false},
+	{"DEFAULT_PROFILE_DESCRIPTION", MRSettingsKeyClass::Global, true},
+	{kThemeSettingsKey, MRSettingsKeyClass::Global, true},
     {"WINDOWCOLORS", MRSettingsKeyClass::ColorInline, false},
     {"MENUDIALOGCOLORS", MRSettingsKeyClass::ColorInline, false},
     {"HELPCOLORS", MRSettingsKeyClass::ColorInline, false},
@@ -1810,6 +1900,11 @@ bool validateNormalizedEditProfiles(const std::vector<MREditExtensionProfile> &p
 
 } // namespace
 
+bool parseHistoryLimitLiteral(const std::string &value, int &outValue, std::string *errorMessage,
+                              const char *keyName);
+bool setConfiguredPathHistoryLimitValue(int value, std::string *errorMessage);
+bool setConfiguredFileHistoryLimitValue(int value, std::string *errorMessage);
+
 std::string normalizeConfiguredPathInput(std::string_view input) {
 	return makeAbsolutePath(normalizeDialogPath(expandUserPath(input).c_str()));
 }
@@ -1992,6 +2087,11 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 		return false;
 	if (!setConfiguredColorThemeFilePath(defaultColorThemeFilePath(), errorMessage))
 		return false;
+	configuredPathHistoryLimit() = kHistoryLimitDefault;
+	configuredFileHistoryLimit() = kHistoryLimitDefault;
+	configuredPathHistoryStorage().clear();
+	configuredFileHistoryStorage().clear();
+	configuredHistoryEpochCounter() = std::max(static_cast<long long>(0), static_cast<long long>(std::time(nullptr)));
 	paths.settingsMacroUri = configuredSettingsMacroFilePath();
 	paths.macroPath = configuredMacroDirectoryPath();
 	paths.helpUri = configuredHelpFilePath();
@@ -2047,6 +2147,30 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 			std::string upper = upperAscii(trimAscii(key));
 			if (upper == "LASTFILEDIALOGPATH")
 				return setConfiguredLastFileDialogPath(value, errorMessage);
+			if (upper == "MAX_PATH_HISTORY") {
+				int parsed = 0;
+				if (!parseHistoryLimitLiteral(value, parsed, errorMessage, "MAX_PATH_HISTORY"))
+					return false;
+				return setConfiguredPathHistoryLimitValue(parsed, errorMessage);
+			}
+			if (upper == "MAX_FILE_HISTORY") {
+				int parsed = 0;
+				if (!parseHistoryLimitLiteral(value, parsed, errorMessage, "MAX_FILE_HISTORY"))
+					return false;
+				return setConfiguredFileHistoryLimitValue(parsed, errorMessage);
+			}
+			if (upper == "PATH_HISTORY") {
+				addSerializedHistoryEntry(configuredPathHistoryStorage(), value, configuredPathHistoryLimit());
+				if (errorMessage != nullptr)
+					errorMessage->clear();
+				return true;
+			}
+			if (upper == "FILE_HISTORY") {
+				addSerializedHistoryEntry(configuredFileHistoryStorage(), value, configuredFileHistoryLimit());
+				if (errorMessage != nullptr)
+					errorMessage->clear();
+				return true;
+			}
 			if (upper == "DEFAULT_PROFILE_DESCRIPTION")
 				return setConfiguredDefaultProfileDescription(value, errorMessage);
 			if (upper == kThemeSettingsKey)
@@ -2803,16 +2927,80 @@ char configuredPageBreakCharacter() {
 	return decodePageBreakLiteral(configuredEditSetupSettings().pageBreak);
 }
 
-bool setConfiguredLastFileDialogPath(const std::string &path, std::string *errorMessage) {
-	std::string directory = normalizedDialogDirectoryFromPath(path);
-	std::string fallback;
+bool parseHistoryLimitLiteral(const std::string &value, int &outValue, std::string *errorMessage,
+                              const char *keyName) {
+	std::string text = trimAscii(value);
+	char *end = nullptr;
+	long parsed = 0;
 
-	if (!directory.empty())
-		rememberedLoadDirectory() = directory;
-	else {
-		fallback = fallbackRememberedLoadDirectory();
-		if (!fallback.empty())
-			rememberedLoadDirectory() = fallback;
+	if (text.empty())
+		return setError(errorMessage, std::string(keyName) + " must be an integer within 5..50.");
+	parsed = std::strtol(text.c_str(), &end, 10);
+	if (end == text.c_str() || end == nullptr || *end != '\0')
+		return setError(errorMessage, std::string(keyName) + " must be an integer within 5..50.");
+	if (parsed < kHistoryLimitMin || parsed > kHistoryLimitMax)
+		return setError(errorMessage, std::string(keyName) + " must be within 5..50.");
+	outValue = static_cast<int>(parsed);
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+bool setConfiguredPathHistoryLimitValue(int value, std::string *errorMessage) {
+	if (value < kHistoryLimitMin || value > kHistoryLimitMax)
+		return setError(errorMessage, "MAX_PATH_HISTORY must be within 5..50.");
+	configuredPathHistoryLimit() = value;
+	trimHistoryToLimit(configuredPathHistoryStorage(), value);
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+bool setConfiguredFileHistoryLimitValue(int value, std::string *errorMessage) {
+	if (value < kHistoryLimitMin || value > kHistoryLimitMax)
+		return setError(errorMessage, "MAX_FILE_HISTORY must be within 5..50.");
+	configuredFileHistoryLimit() = value;
+	trimHistoryToLimit(configuredFileHistoryStorage(), value);
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+int configuredMaxPathHistory() {
+	return configuredPathHistoryLimit();
+}
+
+int configuredMaxFileHistory() {
+	return configuredFileHistoryLimit();
+}
+
+void configuredPathHistoryEntries(std::vector<std::string> &outValues) {
+	outValues.clear();
+	for (const MRDialogHistoryEntry &entry : configuredPathHistoryStorage())
+		outValues.push_back(entry.value);
+}
+
+void configuredFileHistoryEntries(std::vector<std::string> &outValues) {
+	outValues.clear();
+	for (const MRDialogHistoryEntry &entry : configuredFileHistoryStorage())
+		outValues.push_back(entry.value);
+}
+
+bool setConfiguredLastFileDialogPath(const std::string &path, std::string *errorMessage) {
+	std::string normalized = normalizeConfiguredPathInput(path);
+	std::string directory;
+
+	if (!normalized.empty() && isReadableDirectory(normalized))
+		addHistoryEntry(configuredPathHistoryStorage(), normalized, configuredPathHistoryLimit());
+	else if (!normalized.empty()) {
+		addHistoryEntry(configuredFileHistoryStorage(), normalized, configuredFileHistoryLimit());
+		directory = normalizedDialogDirectoryFromPath(normalized);
+		if (!directory.empty())
+			addHistoryEntry(configuredPathHistoryStorage(), directory, configuredPathHistoryLimit());
+	} else {
+		directory = fallbackRememberedLoadDirectory();
+		if (!directory.empty())
+			addHistoryEntry(configuredPathHistoryStorage(), directory, configuredPathHistoryLimit());
 	}
 	if (errorMessage != nullptr)
 		errorMessage->clear();
@@ -2833,10 +3021,14 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	                                                          : configuredColorThemeFilePath();
 	MREditSetupSettings edit = configuredEditSetupSettings();
 	std::string source;
+	std::vector<std::string> pathHistory;
+	std::vector<std::string> fileHistory;
 	std::size_t descriptorCount = 0;
 	const MREditSettingDescriptor *descriptors = editSettingDescriptors(descriptorCount);
 
 	themePath = normalizeConfiguredPathInput(themePath);
+	configuredPathHistoryEntries(pathHistory);
+	configuredFileHistoryEntries(fileHistory);
 
 	source += "$MACRO MR_SETTINGS FROM EDIT;\n";
 	source += "MRSETUP('" + std::string(kSettingsVersionKey) + "', '" +
@@ -2848,6 +3040,12 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source += "MRSETUP('SHELLPATH', '" + escapeMrmacSingleQuotedLiteral(shellPath) + "');\n";
 	source += "MRSETUP('LASTFILEDIALOGPATH', '" +
 	          escapeMrmacSingleQuotedLiteral(configuredLastFileDialogPath()) + "');\n";
+	source += "MRSETUP('MAX_PATH_HISTORY', '" + std::to_string(configuredMaxPathHistory()) + "');\n";
+	source += "MRSETUP('MAX_FILE_HISTORY', '" + std::to_string(configuredMaxFileHistory()) + "');\n";
+	for (std::size_t i = 0; i < pathHistory.size(); ++i)
+		source += "MRSETUP('PATH_HISTORY', '" + escapeMrmacSingleQuotedLiteral(pathHistory[i]) + "');\n";
+	for (std::size_t i = 0; i < fileHistory.size(); ++i)
+		source += "MRSETUP('FILE_HISTORY', '" + escapeMrmacSingleQuotedLiteral(fileHistory[i]) + "');\n";
 	source += "MRSETUP('DEFAULT_PROFILE_DESCRIPTION', '" +
 	          escapeMrmacSingleQuotedLiteral(configuredDefaultProfileDescription()) + "');\n";
 	source += "MRSETUP('PAGE_BREAK', '" + escapeMrmacSingleQuotedLiteral(edit.pageBreak) + "');\n";
@@ -3054,10 +3252,15 @@ bool ensureSettingsMacroFileExists(const std::string &settingsMacroUri, std::str
 
 void initRememberedLoadDialogPath(char *buffer, std::size_t bufferSize, const char *pattern) {
 	std::string initial;
+	std::string latestFile;
 	std::string dir = effectiveRememberedLoadDirectory();
 	const char *safePattern = (pattern != nullptr && *pattern != '\0') ? pattern : "*.*";
 
-	if (!dir.empty()) {
+	if (!configuredFileHistoryStorage().empty())
+		latestFile = makeAbsolutePath(configuredFileHistoryStorage().front().value);
+	if (!latestFile.empty())
+		initial = latestFile;
+	else if (!dir.empty()) {
 		initial = dir;
 		if (initial.back() != '/')
 			initial += '/';
@@ -3068,10 +3271,7 @@ void initRememberedLoadDialogPath(char *buffer, std::size_t bufferSize, const ch
 }
 
 void rememberLoadDialogPath(const char *path) {
-	std::string dir = normalizedDialogDirectoryFromPath(path != nullptr ? path : "");
-
-	if (!dir.empty())
-		rememberedLoadDirectory() = dir;
+	static_cast<void>(setConfiguredLastFileDialogPath(path != nullptr ? path : "", nullptr));
 }
 
 bool validateSettingsMacroFilePath(const std::string &path, std::string *errorMessage) {
@@ -3123,8 +3323,8 @@ bool setConfiguredMacroDirectoryPath(const std::string &path, std::string *error
 	if (!validateMacroDirectoryPath(path, errorMessage))
 		return false;
 	configuredMacroDirectory() = makeAbsolutePath(normalized);
-	if (!isReadableDirectory(makeAbsolutePath(rememberedLoadDirectory())))
-		rememberedLoadDirectory() = configuredMacroDirectory();
+	if (configuredPathHistoryStorage().empty() && isReadableDirectory(configuredMacroDirectory()))
+		addHistoryEntry(configuredPathHistoryStorage(), configuredMacroDirectory(), configuredPathHistoryLimit());
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;

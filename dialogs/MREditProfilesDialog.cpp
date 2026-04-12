@@ -338,7 +338,7 @@ bool browseMrmacFileUri(const char *title, const std::string &currentValue, std:
 		writeRecordField(fileName, sizeof(fileName), seed);
 	else
 		initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.mrmac");
-	result = mr::dialogs::execDialogRawWithData(new TFileDialog("*.mrmac", title, "~N~ame", fdOKButton, 234), fileName);
+	result = mr::dialogs::execDialogRawWithData(new TFileDialog("*.mrmac", title, "~N~ame", fdOKButton, kFileDialogHistoryId), fileName);
 	if (result == cmCancel)
 		return false;
 	rememberLoadDialogPath(fileName);
@@ -352,15 +352,19 @@ bool browseDirectoryPath(const std::string &currentValue, std::string &selectedP
 	std::string picked;
 	ushort result;
 
+	if (seed.empty())
+		seed = configuredLastFileDialogPath();
 	if (!seed.empty())
 		(void)::chdir(seed.c_str());
-	result = mr::dialogs::execDialogRaw(new TChDirDialog(cdNormal, 235));
+	result = mr::dialogs::execDialogRaw(new TChDirDialog(cdNormal, kPathDialogHistoryId));
 	picked = readCurrentWorkingDirectory();
 	if (!originalCwd.empty())
 		(void)::chdir(originalCwd.c_str());
 	if (result == cmCancel)
 		return false;
 	selectedPath = normalizeConfiguredPathInput(picked);
+	if (!selectedPath.empty())
+		rememberLoadDialogPath(selectedPath.c_str());
 	return !selectedPath.empty();
 }
 
@@ -385,7 +389,7 @@ bool browseColorThemeUri(const std::string &currentValue, std::string &selectedU
 			writeRecordField(fileName, sizeof(fileName), macroPath);
 		}
 	}
-	dialog = new TFileDialog("*.mrmac", "Color theme file", "~N~ame", fdOKButton, 232);
+	dialog = new TFileDialog("*.mrmac", "Color theme file", "~N~ame", fdOKButton, kFileDialogHistoryId);
 	if (dialog == nullptr)
 		return false;
 	dialog->setData(fileName);

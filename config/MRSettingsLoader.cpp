@@ -141,9 +141,16 @@ std::size_t countLegacyFeProfileDirectives(std::string_view source) {
 
 MRFlattenedSettingsDocument flattenSettingsDocument(const MRParsedSettingsDocument &document) {
 	MRFlattenedSettingsDocument flattened;
+	std::size_t pathHistoryIndex = 1;
+	std::size_t fileHistoryIndex = 1;
 
 	for (const MRParsedSettingsAssignment &assignment : document.assignments)
-		flattened.globals[assignment.key] = assignment.value;
+		if (assignment.key == "PATH_HISTORY")
+			flattened.globals[assignment.key + "[" + std::to_string(pathHistoryIndex++) + "]"] = assignment.value;
+		else if (assignment.key == "FILE_HISTORY")
+			flattened.globals[assignment.key + "[" + std::to_string(fileHistoryIndex++) + "]"] = assignment.value;
+		else
+			flattened.globals[assignment.key] = assignment.value;
 
 	for (const MRParsedEditProfileDirective &directive : document.profileDirectives) {
 		const std::string op = upperAscii(trimAscii(directive.operation));

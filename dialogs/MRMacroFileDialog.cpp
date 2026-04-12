@@ -945,7 +945,7 @@ bool runMacroFileDialog() {
 
 	initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.mrmac");
 	dialogResult = mr::dialogs::execDialogRawWithData(
-	    new TFileDialog("*.mrmac", "Load Macro File", "~N~ame", fdOpenButton, 100), fileName);
+	    new TFileDialog("*.mrmac", "Load Macro File", "~N~ame", fdOpenButton, kFileDialogHistoryId), fileName);
 	if (dialogResult == cmCancel)
 		return false;
 	rememberLoadDialogPath(fileName);

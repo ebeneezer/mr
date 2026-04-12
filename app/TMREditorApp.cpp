@@ -558,7 +558,9 @@ ushort mrEditorDialog(int dialog, ...) {
 			if (target == nullptr)
 				return cmCancel;
 			result = execDialogWithData(
-			    new TFileDialog("*.*", "Save file as", "~N~ame", fdOKButton, 101), target);
+			    new TFileDialog("*.*", "Save file as", "~N~ame", fdOKButton, kFileDialogHistoryId), target);
+			if (result != cmCancel)
+				rememberLoadDialogPath(target);
 			return result;
 		}
 		default:

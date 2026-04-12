@@ -197,6 +197,11 @@ struct MRColorSetupSettings {
 	}
 };
 
+enum : unsigned char {
+	kFileDialogHistoryId = 100,
+	kPathDialogHistoryId = 231
+};
+
 void initRememberedLoadDialogPath(char *buffer, std::size_t bufferSize, const char *pattern);
 void rememberLoadDialogPath(const char *path);
 [[nodiscard]] std::string normalizeConfiguredPathInput(std::string_view input);
@@ -264,6 +269,10 @@ std::vector<std::string> configuredDefaultExtensionList();
 [[nodiscard]] bool configuredBackupFilesSetting();
 [[nodiscard]] bool configuredPersistentBlocksSetting();
 [[nodiscard]] char configuredPageBreakCharacter();
+[[nodiscard]] int configuredMaxPathHistory();
+[[nodiscard]] int configuredMaxFileHistory();
+void configuredPathHistoryEntries(std::vector<std::string> &outValues);
+void configuredFileHistoryEntries(std::vector<std::string> &outValues);
 bool setConfiguredLastFileDialogPath(const std::string &path, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string configuredLastFileDialogPath();
 struct MRSettingsWriteReport {

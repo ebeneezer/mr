@@ -5960,85 +5960,96 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					if (name == "MRSETUP") {
 						std::string setupKey;
 						std::string errorText;
-					if (!mrvmIsStartupSettingsMode())
-						throw std::runtime_error(
-						    "MRSETUP is only allowed in settings.mrmac during startup.");
-					if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1]))
-						throw std::runtime_error("MRSETUP expects (string, string).");
-					setupKey = upperKey(trimAscii(valueAsString(args[0])));
-					if (setupKey == "SETTINGS_VERSION") {
-						if (trimAscii(valueAsString(args[1])) != "2")
-							throw std::runtime_error("MRSETUP(SETTINGS_VERSION) supports only version 2.");
-					} else if (setupKey == "MACROPATH") {
-						if (!setConfiguredMacroDirectoryPath(valueAsString(args[1]), &errorText))
+						MRSetupPaths dummyPaths = resolveSetupPathDefaults();
+
+						if (!mrvmIsStartupSettingsMode())
 							throw std::runtime_error(
-							    "MRSETUP(MACROPATH) failed: " +
-							    (errorText.empty() ? std::string("invalid path.") : errorText));
-					} else if (setupKey == "SETTINGSPATH") {
-						if (!setConfiguredSettingsMacroFilePath(valueAsString(args[1]), &errorText))
-							throw std::runtime_error(
-							    "MRSETUP(SETTINGSPATH) failed: " +
-							    (errorText.empty() ? std::string("invalid path.") : errorText));
-					} else if (setupKey == "HELPPATH") {
-						if (!setConfiguredHelpFilePath(valueAsString(args[1]), &errorText))
-							throw std::runtime_error(
-							    "MRSETUP(HELPPATH) failed: " +
-							    (errorText.empty() ? std::string("invalid path.") : errorText));
-					} else if (setupKey == "TEMPDIR") {
-						if (!setConfiguredTempDirectoryPath(valueAsString(args[1]), &errorText))
-							throw std::runtime_error(
-							    "MRSETUP(TEMPDIR) failed: " +
-							    (errorText.empty() ? std::string("invalid path.") : errorText));
-					} else if (setupKey == "SHELLPATH") {
-						if (!setConfiguredShellExecutablePath(valueAsString(args[1]), &errorText))
-							throw std::runtime_error(
-							    "MRSETUP(SHELLPATH) failed: " +
-							    (errorText.empty() ? std::string("invalid path.") : errorText));
-					} else if (setupKey == "LASTFILEDIALOGPATH") {
-						if (!setConfiguredLastFileDialogPath(valueAsString(args[1]), &errorText))
-							throw std::runtime_error(
-							    "MRSETUP(LASTFILEDIALOGPATH) failed: " +
-							    (errorText.empty() ? std::string("invalid path.") : errorText));
-					} else if (setupKey == "DEFAULT_PROFILE_DESCRIPTION") {
-						if (!setConfiguredDefaultProfileDescription(valueAsString(args[1]), &errorText))
-							throw std::runtime_error(
-							    "MRSETUP(DEFAULT_PROFILE_DESCRIPTION) failed: " +
-							    (errorText.empty() ? std::string("invalid value.") : errorText));
-					} else if (setupKey == "COLORTHEMEURI") {
-						if (!setConfiguredColorThemeFilePath(valueAsString(args[1]), &errorText))
-							throw std::runtime_error(
-							    "MRSETUP(COLORTHEMEURI) failed: " +
-							    (errorText.empty() ? std::string("invalid path.") : errorText));
-					} else if (findEditSettingDescriptorByKey(setupKey) != nullptr) {
+							    "MRSETUP is only allowed in settings.mrmac during startup.");
+						if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1]))
+							throw std::runtime_error("MRSETUP expects (string, string).");
+						setupKey = upperKey(trimAscii(valueAsString(args[0])));
+						if (setupKey == "SETTINGS_VERSION") {
+							if (trimAscii(valueAsString(args[1])) != "2")
+								throw std::runtime_error("MRSETUP(SETTINGS_VERSION) supports only version 2.");
+						} else if (setupKey == "MACROPATH") {
+							if (!setConfiguredMacroDirectoryPath(valueAsString(args[1]), &errorText))
+								throw std::runtime_error(
+								    "MRSETUP(MACROPATH) failed: " +
+								    (errorText.empty() ? std::string("invalid path.") : errorText));
+						} else if (setupKey == "SETTINGSPATH") {
+							if (!setConfiguredSettingsMacroFilePath(valueAsString(args[1]), &errorText))
+								throw std::runtime_error(
+								    "MRSETUP(SETTINGSPATH) failed: " +
+								    (errorText.empty() ? std::string("invalid path.") : errorText));
+						} else if (setupKey == "HELPPATH") {
+							if (!setConfiguredHelpFilePath(valueAsString(args[1]), &errorText))
+								throw std::runtime_error(
+								    "MRSETUP(HELPPATH) failed: " +
+								    (errorText.empty() ? std::string("invalid path.") : errorText));
+						} else if (setupKey == "TEMPDIR") {
+							if (!setConfiguredTempDirectoryPath(valueAsString(args[1]), &errorText))
+								throw std::runtime_error(
+								    "MRSETUP(TEMPDIR) failed: " +
+								    (errorText.empty() ? std::string("invalid path.") : errorText));
+						} else if (setupKey == "SHELLPATH") {
+							if (!setConfiguredShellExecutablePath(valueAsString(args[1]), &errorText))
+								throw std::runtime_error(
+								    "MRSETUP(SHELLPATH) failed: " +
+								    (errorText.empty() ? std::string("invalid path.") : errorText));
+						} else if (setupKey == "LASTFILEDIALOGPATH") {
+							if (!setConfiguredLastFileDialogPath(valueAsString(args[1]), &errorText))
+								throw std::runtime_error(
+								    "MRSETUP(LASTFILEDIALOGPATH) failed: " +
+								    (errorText.empty() ? std::string("invalid path.") : errorText));
+						} else if (setupKey == "MAX_PATH_HISTORY" || setupKey == "MAX_FILE_HISTORY" ||
+						           setupKey == "PATH_HISTORY" || setupKey == "FILE_HISTORY") {
+							if (!applyConfiguredSettingsAssignment(setupKey, valueAsString(args[1]), dummyPaths,
+							                                      &errorText))
+								throw std::runtime_error(
+								    "MRSETUP(" + setupKey + ") failed: " +
+								    (errorText.empty() ? std::string("invalid value.") : errorText));
+						} else if (setupKey == "DEFAULT_PROFILE_DESCRIPTION") {
+							if (!setConfiguredDefaultProfileDescription(valueAsString(args[1]), &errorText))
+								throw std::runtime_error(
+								    "MRSETUP(DEFAULT_PROFILE_DESCRIPTION) failed: " +
+								    (errorText.empty() ? std::string("invalid value.") : errorText));
+						} else if (setupKey == "COLORTHEMEURI") {
+							if (!setConfiguredColorThemeFilePath(valueAsString(args[1]), &errorText))
+								throw std::runtime_error(
+								    "MRSETUP(COLORTHEMEURI) failed: " +
+								    (errorText.empty() ? std::string("invalid path.") : errorText));
+						} else if (findEditSettingDescriptorByKey(setupKey) != nullptr) {
 							if (!applyConfiguredEditSetupValue(setupKey, valueAsString(args[1]), &errorText))
 								throw std::runtime_error(
 								    "MRSETUP(" + setupKey + ") failed: " +
-							    (errorText.empty() ? std::string("invalid value.") : errorText));
-						if (setupKey == "TAB_EXPAND") {
-							BackgroundEditSession *session = currentBackgroundEditSession();
-							if (session != nullptr)
-								session->tabExpand = configuredTabExpandSetting();
-							else
-								g_runtimeEnv.tabExpand = configuredTabExpandSetting();
-						}
+								    (errorText.empty() ? std::string("invalid value.") : errorText));
+							if (setupKey == "TAB_EXPAND") {
+								BackgroundEditSession *session = currentBackgroundEditSession();
+								if (session != nullptr)
+									session->tabExpand = configuredTabExpandSetting();
+								else
+									g_runtimeEnv.tabExpand = configuredTabExpandSetting();
+							}
 						} else if (setupKey == "WINDOWCOLORS" || setupKey == "MENUDIALOGCOLORS" ||
 						           setupKey == "HELPCOLORS" || setupKey == "OTHERCOLORS") {
 							if (!applyConfiguredColorSetupValue(setupKey, valueAsString(args[1]), &errorText))
 								throw std::runtime_error(
 								    "MRSETUP(" + setupKey + ") failed: " +
 								    (errorText.empty() ? std::string("invalid value.") : errorText));
-					} else
-						throw std::runtime_error(
-						    "MRSETUP supports keys: SETTINGS_VERSION, MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
-						    "SHELLPATH, LASTFILEDIALOGPATH, DEFAULT_PROFILE_DESCRIPTION, COLORTHEMEURI, PAGE_BREAK, WORD_DELIMITERS, "
-						    "DEFAULT_EXTENSIONS, TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, TAB_SIZE, RIGHT_MARGIN, "
-						    "WORD_WRAP, INDENT_STYLE, FILE_TYPE, BINARY_RECORD_LENGTH, POST_LOAD_MACRO, PRE_SAVE_MACRO, DEFAULT_PATH, "
-						    "FORMAT_LINE, BACKUP_METHOD, BACKUP_FREQUENCY, BACKUP_EXTENSION, BACKUP_DIRECTORY, "
-						    "AUTOSAVE_INACTIVITY_SECONDS, AUTOSAVE_INTERVAL_SECONDS, BACKUP_FILES, SHOW_EOF_MARKER, SHOW_EOF_MARKER_EMOJI, SHOW_LINE_NUMBERS, "
-						    "LINE_NUM_ZERO_FILL, PERSISTENT_BLOCKS, CODE_FOLDING, COLUMN_BLOCK_MOVE, DEFAULT_MODE, CURSOR_STATUS_COLOR, "
-						    "WINDOWCOLORS, MENUDIALOGCOLORS, HELPCOLORS, OTHERCOLORS.");
-					runtimeErrorLevel() = 0;
-				} else if (name == "MRFEPROFILE") {
+						} else
+							throw std::runtime_error(
+							    "MRSETUP supports keys: SETTINGS_VERSION, MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
+							    "SHELLPATH, LASTFILEDIALOGPATH, MAX_PATH_HISTORY, MAX_FILE_HISTORY, PATH_HISTORY, FILE_HISTORY, "
+							    "DEFAULT_PROFILE_DESCRIPTION, COLORTHEMEURI, PAGE_BREAK, WORD_DELIMITERS, DEFAULT_EXTENSIONS, "
+							    "TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, TAB_SIZE, RIGHT_MARGIN, WORD_WRAP, "
+							    "INDENT_STYLE, FILE_TYPE, BINARY_RECORD_LENGTH, POST_LOAD_MACRO, PRE_SAVE_MACRO, DEFAULT_PATH, "
+							    "FORMAT_LINE, BACKUP_METHOD, BACKUP_FREQUENCY, BACKUP_EXTENSION, BACKUP_DIRECTORY, "
+							    "AUTOSAVE_INACTIVITY_SECONDS, AUTOSAVE_INTERVAL_SECONDS, BACKUP_FILES, SHOW_EOF_MARKER, "
+							    "SHOW_EOF_MARKER_EMOJI, SHOW_LINE_NUMBERS, LINE_NUM_ZERO_FILL, PERSISTENT_BLOCKS, CODE_FOLDING, "
+							    "COLUMN_BLOCK_MOVE, DEFAULT_MODE, CURSOR_STATUS_COLOR, WINDOWCOLORS, MENUDIALOGCOLORS, "
+							    "HELPCOLORS, OTHERCOLORS.");
+						runtimeErrorLevel() = 0;
+					} else if (name == "MRFEPROFILE") {
 					std::string errorText;
 					if (!mrvmIsStartupSettingsMode())
 						throw std::runtime_error(
