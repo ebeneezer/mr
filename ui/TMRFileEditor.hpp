@@ -50,12 +50,13 @@ class TMRFileEditor : public TScroller {
 	      insertMode_(true), autoIndent_(false), syntaxTitleHint_(), bufferModel_(), delCount_(0),
 	      insCount_(0), selectionAnchor_(0), indicatorUpdateInProgress_(false),
 	      lineIndexWarmupTaskId_(0), lineIndexWarmupDocumentId_(0), lineIndexWarmupVersion_(0),
-	      syntaxTokenCache_(), syntaxWarmupTaskId_(0), syntaxWarmupDocumentId_(0),
-	      syntaxWarmupVersion_(0), syntaxWarmupTopLine_(0), syntaxWarmupBottomLine_(0),
-		      syntaxWarmupLanguage_(TMRSyntaxLanguage::PlainText), miniMapWarmupTaskId_(0),
-		      miniMapWarmupDocumentId_(0), miniMapWarmupVersion_(0), miniMapWarmupRows_(0),
-		      miniMapWarmupBodyWidth_(0), miniMapWarmupViewportWidth_(0), miniMapWarmupBraille_(true), miniMapCache_(),
-		      miniMapInitialRenderReportedDocumentId_(0), lastLoadTiming_() {
+		      syntaxTokenCache_(), syntaxWarmupTaskId_(0), syntaxWarmupDocumentId_(0),
+		      syntaxWarmupVersion_(0), syntaxWarmupTopLine_(0), syntaxWarmupBottomLine_(0),
+			      syntaxWarmupLanguage_(TMRSyntaxLanguage::PlainText), miniMapWarmupTaskId_(0),
+			      miniMapWarmupDocumentId_(0), miniMapWarmupVersion_(0), miniMapWarmupRows_(0),
+			      miniMapWarmupBodyWidth_(0), miniMapWarmupViewportWidth_(0), miniMapWarmupBraille_(true),
+			      miniMapWarmupReschedulePending_(false), miniMapCache_(),
+			      miniMapInitialRenderReportedDocumentId_(0), lastLoadTiming_() {
 		fileName[0] = EOS;
 		options |= ofFirstClick;
 		eventMask |= evMouse | evKeyboard | evCommand;
@@ -843,12 +844,13 @@ class TMRFileEditor : public TScroller {
 		const bool drawMiniMap = viewport.miniMapBodyWidth > 0 && viewport.miniMapInfoX >= 0;
 		const bool miniMapUseBraille = useBrailleMiniMapRenderer();
 		std::string viewportMarkerGlyph = normalizedMiniMapViewportMarkerGlyph(editSettings.miniMapMarkerGlyph);
+		const int miniMapRows = std::max(0, miniMapViewportRows());
 		if (bufferModel_.exactLineCountKnown())
 			totalLines = std::max<std::size_t>(1, bufferModel_.lineCount());
 		else
 			totalLines = std::max<std::size_t>(
 			    1, std::max<std::size_t>(bufferModel_.estimatedLineCount(),
-			                             topLine + static_cast<std::size_t>(std::max(size.y, 1))));
+			                             topLine + static_cast<std::size_t>(std::max(miniMapRows, 1))));
 		if (drawMiniMap)
 			scheduleMiniMapWarmupIfNeeded(viewport, miniMapUseBraille, totalLines);
 		MiniMapOverlayState miniMapOverlay = computeMiniMapOverlayState(selection, totalLines);
@@ -862,7 +864,7 @@ class TMRFileEditor : public TScroller {
 				drawLineNumberGutter(buffer, lineIndex, isDocumentLine, viewport.lineNumberX, viewport.lineNumberWidth,
 				                     zeroFillLineNumbers);
 			if (drawMiniMap)
-				drawMiniMapGutter(buffer, y, viewport, totalLines, topLine, miniMapUseBraille,
+				drawMiniMapGutter(buffer, y, miniMapRows, viewport, totalLines, topLine, miniMapUseBraille,
 				                  viewportMarkerGlyph, miniMapPalette, miniMapOverlay);
 			formatSyntaxLine(buffer, linePtr, delta.x, textWidth, viewport.textLeft, isDocumentLine, drawEofMarker,
 			                 drawEofMarkerAsEmoji);
@@ -1329,11 +1331,19 @@ class TMRFileEditor : public TScroller {
 	}
 
 	bool miniMapCacheReadyForViewport(const TextViewportGeometry &viewport, bool braille) const noexcept {
+		const int rowCount = std::max(0, miniMapViewportRows());
 		return miniMapCache_.valid && miniMapCache_.documentId == bufferModel_.documentId() &&
 		       miniMapCache_.documentVersion == bufferModel_.version() &&
-		       miniMapCache_.rowCount == std::max(size.y, 0) &&
+		       miniMapCache_.rowCount == rowCount &&
 		       miniMapCache_.bodyWidth == viewport.miniMapBodyWidth &&
 		       miniMapCache_.viewportWidth == std::max(1, viewport.width) && miniMapCache_.braille == braille;
+	}
+
+	int miniMapViewportRows() const noexcept {
+		int rows = std::max(size.y, 0);
+		if (hScrollBar != nullptr && (hScrollBar->state & sfVisible) != 0)
+			rows = std::max(0, rows - 1);
+		return rows;
 	}
 
 	void clearMiniMapWarmupTaskInternal(std::uint64_t expectedTaskId) noexcept {
@@ -1341,6 +1351,7 @@ class TMRFileEditor : public TScroller {
 			return;
 		if (miniMapWarmupTaskId_ == 0)
 			return;
+		const bool shouldReschedule = miniMapWarmupReschedulePending_;
 		miniMapWarmupTaskId_ = 0;
 		miniMapWarmupDocumentId_ = 0;
 		miniMapWarmupVersion_ = 0;
@@ -1348,7 +1359,10 @@ class TMRFileEditor : public TScroller {
 		miniMapWarmupBodyWidth_ = 0;
 		miniMapWarmupViewportWidth_ = 0;
 		miniMapWarmupBraille_ = true;
+		miniMapWarmupReschedulePending_ = false;
 		notifyWindowTaskStateChanged();
+		if (shouldReschedule)
+			drawView();
 	}
 
 	void invalidateMiniMapCache(bool cancelTask) {
@@ -1356,6 +1370,7 @@ class TMRFileEditor : public TScroller {
 		miniMapCache_.rowPatterns.clear();
 		miniMapCache_.rowLineStarts.clear();
 		miniMapCache_.rowLineEnds.clear();
+		miniMapWarmupReschedulePending_ = false;
 		if (cancelTask && miniMapWarmupTaskId_ != 0) {
 			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(miniMapWarmupTaskId_));
 			clearMiniMapWarmupTaskInternal(miniMapWarmupTaskId_);
@@ -1388,7 +1403,8 @@ class TMRFileEditor : public TScroller {
 
 	void scheduleMiniMapWarmupIfNeeded(const TextViewportGeometry &viewport, bool useBraille,
 	                                   std::size_t totalLinesHint) {
-		if (viewport.miniMapBodyWidth <= 0 || size.y <= 0) {
+		const int rowCount = miniMapViewportRows();
+		if (viewport.miniMapBodyWidth <= 0 || rowCount <= 0) {
 			invalidateMiniMapCache(true);
 			return;
 		}
@@ -1397,14 +1413,17 @@ class TMRFileEditor : public TScroller {
 
 		const std::size_t docId = bufferModel_.documentId();
 		const std::size_t version = bufferModel_.version();
-		const int rowCount = std::max(size.y, 0);
 		const int bodyWidth = viewport.miniMapBodyWidth;
 		const int viewportWidth = std::max(1, viewport.width);
 		const int tabSize = configuredTabSize();
-		if (miniMapWarmupTaskId_ != 0 && miniMapWarmupDocumentId_ == docId && miniMapWarmupVersion_ == version &&
-		    miniMapWarmupRows_ == rowCount && miniMapWarmupBodyWidth_ == bodyWidth &&
-		    miniMapWarmupViewportWidth_ == viewportWidth && miniMapWarmupBraille_ == useBraille)
+		if (miniMapWarmupTaskId_ != 0) {
+			if (miniMapWarmupDocumentId_ == docId && miniMapWarmupVersion_ == version &&
+			    miniMapWarmupRows_ == rowCount && miniMapWarmupBodyWidth_ == bodyWidth &&
+			    miniMapWarmupViewportWidth_ == viewportWidth && miniMapWarmupBraille_ == useBraille)
+				return;
+			miniMapWarmupReschedulePending_ = true;
 			return;
+		}
 
 		TMRTextBufferModel::ReadSnapshot snapshot = bufferModel_.readSnapshot();
 		std::uint64_t previousTaskId = miniMapWarmupTaskId_;
@@ -1414,8 +1433,9 @@ class TMRFileEditor : public TScroller {
 		miniMapWarmupBodyWidth_ = bodyWidth;
 		miniMapWarmupViewportWidth_ = viewportWidth;
 		miniMapWarmupBraille_ = useBraille;
+		miniMapWarmupReschedulePending_ = false;
 		miniMapWarmupTaskId_ = mr::coprocessor::globalCoprocessor().submit(
-		    mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::MiniMapWarmup, docId, version,
+		    mr::coprocessor::Lane::MiniMap, mr::coprocessor::TaskKind::MiniMapWarmup, docId, version,
 		    "rendering mini map",
 		    [snapshot, rowCount, bodyWidth, viewportWidth, useBraille, tabSize,
 		     totalLinesHint](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
@@ -1427,9 +1447,10 @@ class TMRFileEditor : public TScroller {
 			    const int dotRows = useBraille ? std::max(1, rowCount * 4) : std::max(1, rowCount);
 			    const int dotCols = useBraille ? std::max(1, bodyWidth * 2) : std::max(1, bodyWidth);
 			    std::size_t totalLines = std::max<std::size_t>(1, totalLinesHint);
+			    auto shouldStop = [&]() noexcept { return stopToken.stop_requested() || info.cancelRequested(); };
 			    result.task = info;
 
-			    if (stopToken.stop_requested()) {
+			    if (shouldStop()) {
 				    result.status = mr::coprocessor::TaskStatus::Cancelled;
 				    return result;
 			    }
@@ -1452,7 +1473,7 @@ class TMRFileEditor : public TScroller {
 			    };
 
 			    for (int y = 0; y < rowCount; ++y) {
-				    if (stopToken.stop_requested()) {
+				    if (shouldStop()) {
 					    result.status = mr::coprocessor::TaskStatus::Cancelled;
 					    return result;
 				    }
@@ -1531,11 +1552,12 @@ class TMRFileEditor : public TScroller {
 		return false;
 	}
 
-	void drawMiniMapGutter(TDrawBuffer &b, int y, const TextViewportGeometry &viewport, std::size_t totalLines,
-	                       std::size_t topLine, bool useBraille, const std::string &viewportMarkerGlyph,
+	void drawMiniMapGutter(TDrawBuffer &b, int y, int miniMapRows, const TextViewportGeometry &viewport,
+	                       std::size_t totalLines, std::size_t topLine, bool useBraille,
+	                       const std::string &viewportMarkerGlyph,
 	                       const MiniMapPalette &palette, const MiniMapOverlayState &overlay) {
 		if (viewport.miniMapBodyWidth <= 0 || viewport.miniMapBodyX < 0 || viewport.miniMapInfoX < 0 || totalLines == 0 ||
-		    size.y <= 0)
+		    miniMapRows <= 0)
 			return;
 
 		const std::array<std::string, 256> &glyphTable = brailleGlyphTable();
@@ -1545,13 +1567,21 @@ class TMRFileEditor : public TScroller {
 		std::size_t rowLineStart = 0;
 		std::size_t rowLineEnd = 0;
 
+		if (y >= miniMapRows) {
+			b.moveChar(static_cast<ushort>(bodyX), ' ', palette.normal, static_cast<ushort>(bodyWidth));
+			if (viewport.miniMapSeparatorX >= 0 && viewport.miniMapSeparatorX < size.x)
+				b.moveChar(static_cast<ushort>(viewport.miniMapSeparatorX), ' ', palette.normal, 1);
+			b.moveChar(static_cast<ushort>(viewport.miniMapInfoX), ' ', palette.normal, 1);
+			return;
+		}
+
 		if (cacheReady && static_cast<std::size_t>(y) < miniMapCache_.rowLineStarts.size() &&
 		    static_cast<std::size_t>(y) < miniMapCache_.rowLineEnds.size()) {
 			rowLineStart = miniMapCache_.rowLineStarts[static_cast<std::size_t>(y)];
 			rowLineEnd = miniMapCache_.rowLineEnds[static_cast<std::size_t>(y)];
 		} else {
-			std::pair<std::size_t, std::size_t> rowSpan =
-			    scaledInterval(static_cast<std::size_t>(y), static_cast<std::size_t>(std::max(size.y, 1)), totalLines);
+			std::pair<std::size_t, std::size_t> rowSpan = scaledInterval(
+			    static_cast<std::size_t>(y), static_cast<std::size_t>(std::max(miniMapRows, 1)), totalLines);
 			rowLineStart = rowSpan.first;
 			rowLineEnd = rowSpan.second;
 		}
@@ -1587,9 +1617,9 @@ class TMRFileEditor : public TScroller {
 			b.moveChar(static_cast<ushort>(viewport.miniMapSeparatorX), ' ', palette.normal, 1);
 
 		std::size_t clampedTopLine = std::min(topLine, totalLines - 1);
-		std::size_t visibleLines = static_cast<std::size_t>(std::max(size.y, 1));
+		std::size_t visibleLines = static_cast<std::size_t>(std::max(miniMapRows, 1));
 		std::size_t viewportLineEnd = std::min(totalLines, clampedTopLine + visibleLines);
-		const int markerUnits = useBraille ? std::max(1, size.y * 4) : std::max(1, size.y);
+		const int markerUnits = useBraille ? std::max(1, miniMapRows * 4) : std::max(1, miniMapRows);
 		std::size_t markerStartUnit = (clampedTopLine * static_cast<std::size_t>(markerUnits)) / totalLines;
 		std::size_t markerEndUnit =
 		    (viewportLineEnd * static_cast<std::size_t>(markerUnits) + totalLines - 1) / totalLines;
@@ -1829,12 +1859,15 @@ class TMRFileEditor : public TScroller {
 
 	void scheduleLineIndexWarmupIfNeeded() {
 		if (!bufferModel_.document().hasMappedOriginal() || bufferModel_.document().exactLineCountKnown()) {
-			bool hadTask = lineIndexWarmupTaskId_ != 0;
+			std::uint64_t cancelledTaskId = lineIndexWarmupTaskId_;
+			bool hadTask = cancelledTaskId != 0;
 			lineIndexWarmupTaskId_ = 0;
 			lineIndexWarmupDocumentId_ = 0;
 			lineIndexWarmupVersion_ = 0;
-			if (hadTask)
+			if (hadTask) {
+				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledTaskId));
 				notifyWindowTaskStateChanged();
+			}
 			return;
 		}
 
@@ -1846,6 +1879,8 @@ class TMRFileEditor : public TScroller {
 
 			TMRTextBufferModel::ReadSnapshot snapshot = bufferModel_.readSnapshot();
 			std::uint64_t previousTaskId = lineIndexWarmupTaskId_;
+			if (previousTaskId != 0)
+				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
 			lineIndexWarmupDocumentId_ = docId;
 			lineIndexWarmupVersion_ = version;
 			lineIndexWarmupTaskId_ = mr::coprocessor::globalCoprocessor().submit(
@@ -1855,11 +1890,11 @@ class TMRFileEditor : public TScroller {
 				    mr::coprocessor::Result result;
 				    mr::editor::LineIndexWarmupData warmup;
 				    result.task = info;
-				    if (stopToken.stop_requested()) {
+				    if (stopToken.stop_requested() || info.cancelRequested()) {
 					    result.status = mr::coprocessor::TaskStatus::Cancelled;
 					    return result;
 				    }
-				    if (!snapshot.completeLineIndexWarmup(warmup, stopToken)) {
+				    if (!snapshot.completeLineIndexWarmup(warmup, stopToken, info.cancelFlag.get())) {
 					    result.status = mr::coprocessor::TaskStatus::Cancelled;
 					    return result;
 				    }
@@ -1889,15 +1924,18 @@ class TMRFileEditor : public TScroller {
 
 		const std::size_t bottomLine = topLine + lineStarts.size();
 		if (hasSyntaxTokensForLineStarts(lineStarts)) {
-			bool hadTask = syntaxWarmupTaskId_ != 0;
+			std::uint64_t previousTaskId = syntaxWarmupTaskId_;
+			bool hadTask = previousTaskId != 0;
 			syntaxWarmupTaskId_ = 0;
 			syntaxWarmupDocumentId_ = docId;
 			syntaxWarmupVersion_ = version;
 			syntaxWarmupTopLine_ = topLine;
 			syntaxWarmupBottomLine_ = bottomLine;
 			syntaxWarmupLanguage_ = language;
-			if (hadTask)
+			if (hadTask) {
+				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
 				notifyWindowTaskStateChanged();
+			}
 			return;
 		}
 
@@ -1908,6 +1946,8 @@ class TMRFileEditor : public TScroller {
 
 		TMRTextBufferModel::ReadSnapshot snapshot = bufferModel_.readSnapshot();
 		std::uint64_t previousTaskId = syntaxWarmupTaskId_;
+		if (previousTaskId != 0)
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
 		syntaxWarmupDocumentId_ = docId;
 		syntaxWarmupVersion_ = version;
 		syntaxWarmupTopLine_ = topLine;
@@ -1919,14 +1959,15 @@ class TMRFileEditor : public TScroller {
 		    [snapshot, language, lineStarts](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
 			    mr::coprocessor::Result result;
 			    std::vector<mr::coprocessor::SyntaxWarmLine> warmed;
+			    auto shouldStop = [&]() noexcept { return stopToken.stop_requested() || info.cancelRequested(); };
 			    result.task = info;
-			    if (stopToken.stop_requested()) {
+			    if (shouldStop()) {
 				    result.status = mr::coprocessor::TaskStatus::Cancelled;
 				    return result;
 			    }
 			    warmed.reserve(lineStarts.size());
 			    for (std::size_t i = 0; i < lineStarts.size(); ++i) {
-				    if (stopToken.stop_requested()) {
+				    if (shouldStop()) {
 					    result.status = mr::coprocessor::TaskStatus::Cancelled;
 					    return result;
 				    }
@@ -2443,7 +2484,8 @@ class TMRFileEditor : public TScroller {
 	}
 
 	void resetSyntaxWarmupState(bool clearCache) noexcept {
-		bool hadTask = syntaxWarmupTaskId_ != 0;
+		std::uint64_t cancelledTaskId = syntaxWarmupTaskId_;
+		bool hadTask = cancelledTaskId != 0;
 		if (clearCache)
 			syntaxTokenCache_.clear();
 		syntaxWarmupTaskId_ = 0;
@@ -2452,8 +2494,10 @@ class TMRFileEditor : public TScroller {
 		syntaxWarmupTopLine_ = 0;
 		syntaxWarmupBottomLine_ = 0;
 		syntaxWarmupLanguage_ = TMRSyntaxLanguage::PlainText;
-		if (hadTask)
+		if (hadTask) {
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledTaskId));
 			notifyWindowTaskStateChanged();
+		}
 	}
 
 	std::vector<std::size_t> syntaxWarmupLineStarts(std::size_t topLine, int rowCount) const {
@@ -2597,7 +2641,7 @@ class TMRFileEditor : public TScroller {
 
 		bufferModel_.document() = document;
 		resetSyntaxWarmupState(true);
-		invalidateMiniMapCache(true);
+		invalidateMiniMapCache(false);
 		refreshSyntaxContext();
 		cursorPos = canonicalCursorOffset(cursorPos);
 		selStart = canonicalCursorOffset(selStart);
@@ -2650,6 +2694,7 @@ class TMRFileEditor : public TScroller {
 	int miniMapWarmupBodyWidth_;
 	int miniMapWarmupViewportWidth_;
 	bool miniMapWarmupBraille_;
+	bool miniMapWarmupReschedulePending_;
 	MiniMapRenderCache miniMapCache_;
 	std::size_t miniMapInitialRenderReportedDocumentId_;
 	std::vector<TMRTextBufferModel::Range> dirtyRanges_;

@@ -585,6 +585,7 @@ class TMREditWindow : public TWindow {
 	std::vector<std::string> describeRunningTasks() const {
 		std::vector<std::string> lines;
 		std::size_t i;
+		const std::string bullet = taskActivityBullet();
 
 		for (i = 0; i < trackedCoprocessorTasks_.size(); ++i) {
 			const TrackedTask &task = trackedCoprocessorTasks_[i];
@@ -618,17 +619,19 @@ class TMREditWindow : public TWindow {
 				line += ": ";
 				line += compactTaskLabel(task);
 			}
-			line += "  ";
-			line += formatTaskElapsed(task);
+			line = bullet + " " + line + "  " + formatTaskElapsed(task);
 			lines.push_back(line);
 		}
 		if (editor != nullptr) {
-			if (editor->pendingLineIndexWarmupTaskId() != 0)
-				lines.push_back("Line indexing  running");
-			if (editor->pendingSyntaxWarmupTaskId() != 0)
-				lines.push_back("Syntax warmup  running");
-			if (editor->pendingMiniMapWarmupTaskId() != 0)
-				lines.push_back("rendering mini map");
+			if (editor->pendingLineIndexWarmupTaskId() != 0 &&
+			    trackedTaskCount(mr::coprocessor::TaskKind::LineIndexWarmup) == 0)
+				lines.push_back(bullet + " Line index warmup  in progress");
+			if (editor->pendingSyntaxWarmupTaskId() != 0 &&
+			    trackedTaskCount(mr::coprocessor::TaskKind::SyntaxWarmup) == 0)
+				lines.push_back(bullet + " Syntax warmup  in progress");
+			if (editor->pendingMiniMapWarmupTaskId() != 0 &&
+			    trackedTaskCount(mr::coprocessor::TaskKind::MiniMapWarmup) == 0)
+				lines.push_back(bullet + " Mini map render  in progress");
 		}
 		return lines;
 	}
@@ -1175,6 +1178,20 @@ class TMREditWindow : public TWindow {
 		}
 		std::snprintf(buffer, sizeof(buffer), "%.2f s", elapsedMs / 1000.0);
 		return buffer;
+	}
+
+	static std::string taskActivityBullet() {
+		using namespace std::chrono;
+		static const std::array<const char *, 12> kClockFrames = {
+		    "🕛", "🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗", "🕘", "🕙", "🕚"};
+		static const std::array<const char *, 4> kAsciiFrames = {"|", "/", "-", "\\"};
+		const long long elapsedMs =
+		    duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
+		const std::size_t frame = static_cast<std::size_t>((elapsedMs / 200) % kClockFrames.size());
+
+		if (strwidth(kClockFrames[0]) >= 1)
+			return kClockFrames[frame];
+		return kAsciiFrames[frame % kAsciiFrames.size()];
 	}
 
 	int normalizedBlockLine1() const {

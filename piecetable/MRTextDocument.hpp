@@ -1,6 +1,7 @@
 #ifndef MRTEXTDOCUMENT_HPP
 #define MRTEXTDOCUMENT_HPP
 
+#include <atomic>
 #include <cstddef>
 #include <memory>
 #include <stop_token>
@@ -425,7 +426,8 @@ class ReadSnapshot {
 	[[nodiscard]] std::size_t column(Offset pos) const noexcept;
 	[[nodiscard]] std::string lineText(Offset pos) const;
 	[[nodiscard]] LineIndexWarmupData completeLineIndexWarmup() const;
-	bool completeLineIndexWarmup(LineIndexWarmupData &warmup, std::stop_token stopToken) const;
+	bool completeLineIndexWarmup(LineIndexWarmupData &warmup, std::stop_token stopToken,
+	                             const std::atomic_bool *cancelFlag = nullptr) const;
 
   private:
 	friend class TextDocument;

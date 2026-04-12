@@ -985,14 +985,15 @@ LineIndexWarmupData ReadSnapshot::completeLineIndexWarmup() const {
 	return warmup;
 }
 
-bool ReadSnapshot::completeLineIndexWarmup(LineIndexWarmupData &warmup, std::stop_token stopToken) const {
+bool ReadSnapshot::completeLineIndexWarmup(LineIndexWarmupData &warmup, std::stop_token stopToken,
+                                           const std::atomic_bool *cancelFlag) const {
 	ensureLazyIndexSeeded();
 	while (!lazyLineIndexComplete_) {
-		if (stopToken.stop_requested())
+		if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire)))
 			return false;
 		advanceLazyIndexByStride();
 	}
-	if (stopToken.stop_requested())
+	if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire)))
 		return false;
 	warmup.checkpoints = lineIndexCheckpoints_;
 	warmup.lazyIndexedOffset = lazyIndexedOffset_;

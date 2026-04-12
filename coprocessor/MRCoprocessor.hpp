@@ -28,6 +28,7 @@ namespace coprocessor {
 enum class Lane : unsigned char {
 	Io,
 	Compute,
+	MiniMap,
 	Macro
 };
 
@@ -359,6 +360,7 @@ class Coprocessor {
 
 	LaneState ioLane;
 	LaneState computeLane;
+	LaneState miniMapLane;
 	LaneState macroLane;
 };
 

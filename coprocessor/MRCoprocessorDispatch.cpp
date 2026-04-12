@@ -24,6 +24,8 @@ const char *coprocessorLaneName(mr::coprocessor::Lane lane) {
 	switch (lane) {
 		case mr::coprocessor::Lane::Io:
 			return "io";
+		case mr::coprocessor::Lane::MiniMap:
+			return "minimap";
 		case mr::coprocessor::Lane::Macro:
 			return "macro";
 		case mr::coprocessor::Lane::Compute:

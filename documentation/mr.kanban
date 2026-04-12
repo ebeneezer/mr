@@ -43,20 +43,30 @@
         {
           "id": "fa88fc7a-9995-45e3-83ff-85df18a8a05b",
           "listId": "442a00f0-c411-4725-9424-3182418b486d",
-          "title": "Laden multipler Dateien aus einer Liste die die Ausgabe eines Befehls oder Pipe ist",
+          "title": "Batch Loading / Acquire",
           "description": "\"Hol alle mrmac Dateien\"\n",
           "labels": [],
           "checkboxes": [],
-          "comments": []
+          "comments": [
+            {
+              "id": "2a3bd92d-ad44-4ab1-88c1-e24a47fbaa5a",
+              "comment": "Laden multipler Dateien aus einer Liste die die Ausgabe eines Befehls oder Pipe ist"
+            }
+          ]
         },
         {
           "id": "d85ea707-6dff-4837-98e6-b3121eaeedea",
           "listId": "442a00f0-c411-4725-9424-3182418b486d",
-          "title": "Snapshotting: snapper, borg etc. ",
+          "title": "Snapshotting",
           "description": "freie kommandozeile mit intervall",
           "labels": [],
           "checkboxes": [],
-          "comments": []
+          "comments": [
+            {
+              "id": "aa175946-a3a3-4053-87c3-d692c0a6e637",
+              "comment": "* Snapper\n* Borg"
+            }
+          ]
         },
         {
           "id": "584b6d76-6d62-4487-a23a-8a66b4a9fb55",
@@ -79,20 +89,30 @@
         {
           "id": "4837d859-b453-4072-a9a2-f473b9a8342a",
           "listId": "442a00f0-c411-4725-9424-3182418b486d",
-          "title": "compiler profile? error parsing? folding einblendung des errors and der error stelle?",
+          "title": "Compiler Profiles",
           "description": "",
           "labels": [],
           "checkboxes": [],
-          "comments": []
+          "comments": [
+            {
+              "id": "c36c5b72-5512-4018-97a8-a0669d1441ee",
+              "comment": "\nerror parsing? \nfolding einblendung des errors and der error stelle?\nVerbindung via FE Profile"
+            }
+          ]
         },
         {
           "id": "f9883d7e-c8f9-43e7-8856-bbd3bcdb789c",
           "listId": "442a00f0-c411-4725-9424-3182418b486d",
-          "title": "- code prettyfier: wie syntaxregeln definieren?",
+          "title": "Code Prettifier",
           "description": "",
           "labels": [],
           "checkboxes": [],
-          "comments": []
+          "comments": [
+            {
+              "id": "2830a7bb-cc8d-4593-b100-453287e41049",
+              "comment": "- code prettyfier: wie syntaxregeln definieren?"
+            }
+          ]
         }
       ]
     },
@@ -139,6 +159,11 @@
       ]
     },
     {
+      "id": "b721e070-ae21-4123-a1f3-27b926375a16",
+      "title": "Regression / Errors",
+      "cards": []
+    },
+    {
       "id": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
       "title": "Doing",
       "cards": [
@@ -158,7 +183,12 @@
           "description": "",
           "labels": [],
           "checkboxes": [],
-          "comments": []
+          "comments": [
+            {
+              "id": "b7f43857-a811-4abb-9583-565969758660",
+              "comment": "Architekturzug: eigene Lane für MiniMap.\nEntkoppelt dauerhaft von Syntax.\nGrößerer Umbau, nicht nötig als erster Schritt.\n\nIntrinsics"
+            }
+          ]
         }
       ]
     },
@@ -176,11 +206,6 @@
           "comments": []
         }
       ]
-    },
-    {
-      "id": "b721e070-ae21-4123-a1f3-27b926375a16",
-      "title": "Regression / Errors",
-      "cards": []
     }
   ],
   "archive": {

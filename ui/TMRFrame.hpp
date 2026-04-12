@@ -73,6 +73,7 @@ class TMRFrame : public TFrame {
 	void setMarkerStateProvider(MarkerStateProvider provider);
 	void setTaskOverviewProvider(TaskOverviewProvider provider);
 	void updateTaskHover(TPoint globalMouse, bool forceHide = false);
+	void tickTaskOverviewAnimation();
 
   private:
 	void drawFrameLine(TDrawBuffer &frameBuf, short y, short n, TColorAttr color);

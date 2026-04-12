@@ -19,9 +19,10 @@ std::uint64_t nowMicros() noexcept {
 
 Coprocessor::Coprocessor()
     :  nextTaskId(1),  shuttingDown(false), ioLane(Lane::Io),
-      computeLane(Lane::Compute), macroLane(Lane::Macro) {
+      computeLane(Lane::Compute), miniMapLane(Lane::MiniMap), macroLane(Lane::Macro) {
 	startLane(ioLane);
 	startLane(computeLane);
+	startLane(miniMapLane);
 	startLane(macroLane);
 }
 
@@ -122,12 +123,13 @@ bool Coprocessor::cancelTask(std::uint64_t taskId) {
 		cancelFlag->store(true, std::memory_order_release);
 	ioLane.cv.notify_all();
 	computeLane.cv.notify_all();
+	miniMapLane.cv.notify_all();
 	macroLane.cv.notify_all();
 	return true;
 }
 
 void Coprocessor::cancelPending() {
-	LaneState *laneStates[] = {&ioLane, &computeLane, &macroLane};
+	LaneState *laneStates[] = {&ioLane, &computeLane, &miniMapLane, &macroLane};
 
 	{
 		std::lock_guard<std::mutex> lock(taskCancelMutex);
@@ -165,6 +167,7 @@ void Coprocessor::shutdown(bool drainResults) {
 
 	joinLaneWorker(ioLane);
 	joinLaneWorker(computeLane);
+	joinLaneWorker(miniMapLane);
 	joinLaneWorker(macroLane);
 
 	if (drainResults)
@@ -256,6 +259,8 @@ Coprocessor::LaneState &Coprocessor::laneState(Lane lane) noexcept {
 	switch (lane) {
 		case Lane::Io:
 			return ioLane;
+		case Lane::MiniMap:
+			return miniMapLane;
 		case Lane::Macro:
 			return macroLane;
 		case Lane::Compute:

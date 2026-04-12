@@ -5,6 +5,8 @@
 #include "TMRFrame.hpp"
 
 #include <algorithm>
+#include <array>
+#include <chrono>
 #include <cstring>
 #include <vector>
 
@@ -76,6 +78,8 @@ TMRTaskOverviewView::TMRTaskOverviewView(const TRect &bounds) noexcept : TView(b
 }
 
 void TMRTaskOverviewView::setLines(const std::vector<std::string> &lines) {
+	if (lines_ == lines)
+		return;
 	lines_ = lines;
 	drawView();
 }
@@ -369,6 +373,11 @@ void TMRFrame::draw() {
 		b.moveCStr(width - 2, kDragIcon, cFrame);
 	}
 	writeLine(0, size.y - 1, size.x, 1, b);
+	if (taskOverviewPopup_ != nullptr && taskOverviewProvider_) {
+		std::vector<std::string> lines = taskOverviewProvider_();
+		if (!lines.empty())
+			taskOverviewPopup_->setLines(lines);
+	}
 }
 
 void TMRFrame::dragWindow(TEvent &event, uchar mode) {
@@ -502,4 +511,15 @@ void TMRFrame::updateTaskHover(TPoint globalMouse, bool forceHide) {
 		return;
 	}
 	showTaskOverview();
+}
+
+void TMRFrame::tickTaskOverviewAnimation() {
+	if (taskOverviewPopup_ == nullptr || !taskOverviewProvider_)
+		return;
+	std::vector<std::string> lines = taskOverviewProvider_();
+	if (lines.empty()) {
+		hideTaskOverview();
+		return;
+	}
+	taskOverviewPopup_->setLines(lines);
 }

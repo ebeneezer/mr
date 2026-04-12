@@ -1157,6 +1157,15 @@ void TMREditorApp::idle() {
 			mrMenuBar->setAutoMarqueeStatus(std::string());
 		mrMenuBar->tickMarquee();
 	}
+	{
+		std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+		for (auto *window : windows) {
+			if (window == nullptr || window->frame == nullptr)
+				continue;
+			if (auto *mrFrame = dynamic_cast<TMRFrame *>(window->frame))
+				mrFrame->tickTaskOverviewAnimation();
+		}
+	}
 	updateAppCommandState();
 }
 
