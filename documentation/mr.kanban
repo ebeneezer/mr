@@ -1,0 +1,199 @@
+{
+  "lists": [
+    {
+      "id": "09ddf949-7114-4e16-a461-48b91c909f7e",
+      "title": "Regression/Errors",
+      "cards": [
+        {
+          "id": "14f529c0-2a06-414e-ae80-132081d6af4d",
+          "listId": "09ddf949-7114-4e16-a461-48b91c909f7e",
+          "title": "FE Dialog dirty on entry",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        }
+      ]
+    },
+    {
+      "id": "442a00f0-c411-4725-9424-3182418b486d",
+      "title": "Backlog",
+      "cards": [
+        {
+          "id": "602988a6-2cff-4eed-865a-5ebe4888117d",
+          "listId": "442a00f0-c411-4725-9424-3182418b486d",
+          "title": "Treesitter Integration",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "d9673699-ede3-4290-b4aa-1d84ab83ec8a",
+          "listId": "442a00f0-c411-4725-9424-3182418b486d",
+          "title": "Code Folding",
+          "description": "Konfigurierbar für jedes FE Profil.",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "717e7166-6ff0-49ad-9d36-c0f3b3322249",
+          "listId": "442a00f0-c411-4725-9424-3182418b486d",
+          "title": "Picker listbox der x letzten dateien bzw. pfade zum auswählen",
+          "description": "n elemente, n in settings dialog konfigurierbar\n",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "e582ea46-09dc-4e28-bce7-3227dac67813",
+          "listId": "442a00f0-c411-4725-9424-3182418b486d",
+          "title": "Save All mit Dialog/List Window",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "fa88fc7a-9995-45e3-83ff-85df18a8a05b",
+          "listId": "442a00f0-c411-4725-9424-3182418b486d",
+          "title": "Laden multipler Dateien aus einer Liste die die Ausgabe eines Befehls oder Pipe ist",
+          "description": "\"Hol alle mrmac Dateien\"\n",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "1c4f0efa-1820-41e8-9750-7a0d685ce41e",
+          "listId": "442a00f0-c411-4725-9424-3182418b486d",
+          "title": "Minimap",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "d85ea707-6dff-4837-98e6-b3121eaeedea",
+          "listId": "442a00f0-c411-4725-9424-3182418b486d",
+          "title": "Snapshotting: snapper, borg etc. ",
+          "description": "freie kommandozeile mit intervall",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "584b6d76-6d62-4487-a23a-8a66b4a9fb55",
+          "listId": "442a00f0-c411-4725-9424-3182418b486d",
+          "title": "Device Terminal",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "0e7f8ecd-c78d-48da-b684-22fcfaefbb08",
+          "listId": "442a00f0-c411-4725-9424-3182418b486d",
+          "title": "Font Konfiguration?",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "4837d859-b453-4072-a9a2-f473b9a8342a",
+          "listId": "442a00f0-c411-4725-9424-3182418b486d",
+          "title": "compiler profile? error parsing? folding einblendung des errors and der error stelle?",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "f9883d7e-c8f9-43e7-8856-bbd3bcdb789c",
+          "listId": "442a00f0-c411-4725-9424-3182418b486d",
+          "title": "- code prettyfier: wie syntaxregeln definieren?",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        }
+      ]
+    },
+    {
+      "id": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+      "title": "To Do",
+      "cards": [
+        {
+          "id": "6a72c579-f9a7-4c5b-ac6b-2a4b0ead65ef",
+          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+          "title": "Hex Editor",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "8bae11ac-3fe5-4353-aaf4-75a7bbb39e5f",
+          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+          "title": "Shell Terminal",
+          "description": "libvterm !!",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "14dbb8a3-d0d9-44c1-969d-a787e7d64e4b",
+          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+          "title": "ASCII Table & Emoji Table",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "894819d8-5602-4020-a529-8a115b2ab661",
+          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+          "title": "Refactoring: Intrinsics vorschlagen wo es Sinn macht",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        }
+      ]
+    },
+    {
+      "id": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
+      "title": "Coding",
+      "cards": [
+        {
+          "id": "1d3bb61c-ed49-4456-b7f8-d1727517161a",
+          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
+          "title": "Setup vervollständigt",
+          "description": "Gibt Rahmen und Übersicht über Aufwand der Implementierung.\n",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        }
+      ]
+    },
+    {
+      "id": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+      "title": "Done",
+      "cards": []
+    }
+  ],
+  "archive": {
+    "lists": [],
+    "cards": []
+  },
+  "settings": {
+    "labels": [
+      {
+        "id": "e4c690bd-b8df-4c47-8220-cfd1d6b909be",
+        "title": "",
+        "color": "#61bd4f"
+      }
+    ]
+  }
+}

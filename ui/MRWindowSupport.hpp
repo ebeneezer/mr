@@ -4,6 +4,7 @@
 #include <string_view>
 
 class TMREditWindow;
+struct MRSettingsWriteReport;
 
 [[nodiscard]] bool mrActivateEditWindow(TMREditWindow *win);
 [[nodiscard]] bool mrShowProjectHelp();
@@ -11,6 +12,7 @@ class TMREditWindow;
 [[nodiscard]] bool mrEnsureUsableWorkWindow();
 [[nodiscard]] bool mrClearLogWindow();
 void mrLogMessage(std::string_view message);
+void mrLogSettingsWriteReport(std::string_view reason, const MRSettingsWriteReport &report);
 void mrSetKeystrokeRecordingActive(bool active);
 [[nodiscard]] bool mrIsKeystrokeRecordingActive();
 void mrSetKeystrokeRecordingMarkerVisible(bool visible);

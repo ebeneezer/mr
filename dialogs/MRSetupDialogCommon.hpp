@@ -121,20 +121,20 @@ class MRScrollableDialog : public TDialog {
 	void initScrollIfNeeded();
 	void selectContent();
 	void scrollToOrigin();
-	[[nodiscard]] TGroup *managedContent() const noexcept { return content_; }
+	[[nodiscard]] TGroup *managedContent() const noexcept { return contentGroup; }
 
   private:
 	void applyScroll();
 	void ensureViewVisible(TView *view);
 	void ensureCurrentVisible();
 
-	int virtualWidth_ = 0;
-	int virtualHeight_ = 0;
-	TRect contentRect_;
-	TGroup *content_ = nullptr;
-	std::vector<ManagedItem> managedViews_;
-	TScrollBar *hScrollBar_ = nullptr;
-	TScrollBar *vScrollBar_ = nullptr;
+	int virtualWidth = 0;
+	int virtualHeight = 0;
+	TRect contentRect;
+	TGroup *contentGroup = nullptr;
+	std::vector<ManagedItem> managedViews;
+	TScrollBar *horizontalScrollBar = nullptr;
+	TScrollBar *verticalScrollBar = nullptr;
 };
 
 #endif

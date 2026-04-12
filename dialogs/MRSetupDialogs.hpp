@@ -8,7 +8,7 @@ class TPalette;
 
 TDialog *createInstallationAndSetupDialog();
 TDialog *createColorSetupDialog();
-void runEditExtensionProfilesDialogFlow();
+void runFileExtensionProfilesDialogFlow();
 void runInstallationAndSetupDialogFlow();
 
 // Regression-only hook used by regression/mr-regression-checks.cpp.

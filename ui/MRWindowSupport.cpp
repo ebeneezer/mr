@@ -277,6 +277,15 @@ void mrLogMessage(std::string_view message) {
 	}
 }
 
+void mrLogSettingsWriteReport(std::string_view reason, const MRSettingsWriteReport &report) {
+	if (!report.contentChanged && report.logLines.empty())
+		return;
+	if (!reason.empty())
+		mrLogMessage(std::string("settings.mrmac write (") + std::string(reason) + "): " + report.settingsPath);
+	for (const std::string &line : report.logLines)
+		mrLogMessage(line);
+}
+
 void mrSetKeystrokeRecordingActive(bool active) {
 	g_keystrokeRecordingActive = active;
 	if (!active)

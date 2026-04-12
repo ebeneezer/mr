@@ -394,14 +394,15 @@ bool dispatchEditorClipboardCommand(ushort editorCommand, bool requiresWritable)
 }
 
 bool togglePersistentBlocksSetting() {
-	MREditSetupSettings settings = configuredEditSetupSettings();
+	MRFileExtensionEditorSettings settings = configuredFileExtensionEditorSettings();
 	MRSetupPaths paths;
+	MRSettingsWriteReport writeReport;
 	TMREditorApp *app = dynamic_cast<TMREditorApp *>(TProgram::application);
 	std::string errorText;
 	bool enabled;
 
 	settings.persistentBlocks = !settings.persistentBlocks;
-	if (!setConfiguredEditSetupSettings(settings, &errorText)) {
+	if (!setConfiguredFileExtensionEditorSettings(settings, &errorText)) {
 		messageBox(mfError | mfOKButton, "Persistent blocks update failed:\n%s", errorText.c_str());
 		return true;
 	}
@@ -411,10 +412,11 @@ bool togglePersistentBlocksSetting() {
 	paths.helpUri = configuredHelpFilePath();
 	paths.tempPath = configuredTempDirectoryPath();
 	paths.shellUri = configuredShellExecutablePath();
-	if (!writeSettingsMacroFile(paths, &errorText)) {
+	if (!writeSettingsMacroFile(paths, &errorText, &writeReport)) {
 		messageBox(mfError | mfOKButton, "Settings save failed:\n%s", errorText.c_str());
 		return true;
 	}
+	mrLogSettingsWriteReport("persistent blocks toggle", writeReport);
 	if (app != nullptr && !app->reloadSettingsMacroFromPath(paths.settingsMacroUri, &errorText)) {
 		messageBox(mfError | mfOKButton, "Settings reload failed:\n%s", errorText.c_str());
 		return true;

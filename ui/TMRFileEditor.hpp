@@ -800,7 +800,7 @@ class TMRFileEditor : public TScroller {
 
 	virtual void draw() override {
 		syncScrollBarsToState();
-		MREditSetupSettings editSettings = configuredEditSetupSettings();
+		MRFileExtensionEditorSettings editSettings = configuredFileExtensionEditorSettings();
 		std::size_t topLine = static_cast<std::size_t>(std::max(delta.y, 0));
 		std::size_t linePtr = lineStartForIndex(topLine);
 		std::size_t lineIndex = topLine;
@@ -971,7 +971,7 @@ class TMRFileEditor : public TScroller {
 	}
 
 	bool configuredShowLineNumbers() const {
-		return configuredEditSetupSettings().showLineNumbers;
+		return configuredFileExtensionEditorSettings().showLineNumbers;
 	}
 
 	int lineNumberGutterWidthFor(bool showLineNumbers) const noexcept {
@@ -1109,19 +1109,32 @@ class TMRFileEditor : public TScroller {
 		char dir[MAXDIR];
 		char file[MAXFILE];
 		char ext[MAXEXT];
-		MREditSetupSettings editSettings = configuredEditSetupSettings();
+		MRFileExtensionEditorSettings editSettings = configuredFileExtensionEditorSettings();
 		bool eofCtrlZ = editSettings.eofCtrlZ;
 		bool eofCrLf = editSettings.eofCrLf;
 		bool hasAnyByte = false;
 		bool hasLastOutputByte = false;
 		unsigned char lastOutputByte = 0;
 
-		if (configuredBackupFilesSetting()) {
+		if (editSettings.backupMethod == "BAK_FILE") {
 			fnsplit(targetPath, drive, dir, file, ext);
 			char backupName[MAXPATH];
-			fnmerge(backupName, drive, dir, file, ".bak");
+			std::string backupExtension = editSettings.backupExtension.empty() ? std::string("bak")
+			                                                             : editSettings.backupExtension;
+			if (!backupExtension.empty() && backupExtension.front() != '.')
+				backupExtension.insert(backupExtension.begin(), '.');
+			fnmerge(backupName, drive, dir, file, backupExtension.c_str());
 			unlink(backupName);
 			rename(targetPath, backupName);
+		} else if (editSettings.backupMethod == "DIRECTORY") {
+			fnsplit(targetPath, drive, dir, file, ext);
+			std::string backupName = editSettings.backupDirectory;
+			if (!backupName.empty() && backupName.back() != '/')
+				backupName.push_back('/');
+			backupName += file;
+			backupName += ext;
+			unlink(backupName.c_str());
+			rename(targetPath, backupName.c_str());
 		}
 
 		std::ofstream out(targetPath, std::ios::out | std::ios::binary | std::ios::trunc);
