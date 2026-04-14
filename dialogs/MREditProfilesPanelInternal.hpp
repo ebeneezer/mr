@@ -55,14 +55,20 @@ enum : ushort {
 	kLeftOptionEofCrLf = 0x0004,
 	kLeftOptionBackupFiles = 0x0008,
 	kLeftOptionPersistentBlocks = 0x0010,
-	kLeftOptionCodeFolding = 0x0020,
+	kLeftOptionLineNumZeroFill = 0x0020,
 	kLeftOptionWordWrap = 0x0040
 };
 
 enum : ushort {
 	kLineNumbersOff = 0,
-	kLineNumbersOn = 1,
-	kLineNumbersLeadingZero = 2
+	kLineNumbersLeading = 1,
+	kLineNumbersTrailing = 2
+};
+
+enum : ushort {
+	kCodeFoldingOff = 0,
+	kCodeFoldingLeading = 1,
+	kCodeFoldingTrailing = 2
 };
 
 enum : ushort {
@@ -116,6 +122,8 @@ struct EditSettingsDialogRecord {
 	ushort fileTypeChoice;
 	ushort columnBlockMoveChoice;
 	ushort defaultModeChoice;
+	ushort lineNumbersPositionChoice;
+	ushort codeFoldingPositionChoice;
 };
 
 struct EditSettingsPanelConfig {
@@ -170,12 +178,14 @@ class EditSettingsPanel {
 		TView *defaultPathBrowseButton_ = nullptr;
 	TCheckBoxes *optionsLeftField_ = nullptr;
 	TRadioButtons *lineNumbersField_ = nullptr;
+	TRadioButtons *codeFoldingPositionField_ = nullptr;
 	TRadioButtons *eofMarkerField_ = nullptr;
 	TRadioButtons *tabExpandField_ = nullptr;
 	TRadioButtons *indentStyleField_ = nullptr;
 	TRadioButtons *fileTypeField_ = nullptr;
 	TRadioButtons *columnBlockMoveField_ = nullptr;
 	TRadioButtons *defaultModeField_ = nullptr;
+	int lastKnownTabSizeForFormatLine_ = 8;
 };
 
 } // namespace MREditProfilesDialogInternal

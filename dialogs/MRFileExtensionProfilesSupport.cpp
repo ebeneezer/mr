@@ -34,6 +34,22 @@ void writeRecordField(char *dest, std::size_t destSize, const std::string &value
 	mr::dialogs::writeRecordField(dest, destSize, value);
 }
 
+std::string defaultFormatLineForTabSize(int tabSize) {
+	const int normalizedTabSize = std::max(1, std::min(tabSize, 32));
+	const int targetWidth = 80;
+	std::string out("!");
+
+	while (static_cast<int>(out.size()) + normalizedTabSize + 1 <= targetWidth) {
+		out.append(static_cast<std::size_t>(normalizedTabSize), '-');
+		out.push_back('!');
+	}
+	if (out.size() == 1) {
+		out.append(static_cast<std::size_t>(normalizedTabSize), '-');
+		out.push_back('!');
+	}
+	return out;
+}
+
 bool fileExtensionEditorSettingsDialogRecordsEqual(const FileExtensionEditorSettingsDialogRecord &lhs, const FileExtensionEditorSettingsDialogRecord &rhs) {
 	return readRecordField(lhs.pageBreak) == readRecordField(rhs.pageBreak) &&
 	       readRecordField(lhs.wordDelimiters) == readRecordField(rhs.wordDelimiters) &&
@@ -48,10 +64,13 @@ bool fileExtensionEditorSettingsDialogRecordsEqual(const FileExtensionEditorSett
 	       readRecordField(lhs.cursorStatusColor) == readRecordField(rhs.cursorStatusColor) &&
 	       readRecordField(lhs.miniMapWidth) == readRecordField(rhs.miniMapWidth) &&
 	       readRecordField(lhs.miniMapMarkerGlyph) == readRecordField(rhs.miniMapMarkerGlyph) &&
+	       readRecordField(lhs.gutters) == readRecordField(rhs.gutters) &&
 	       lhs.optionsMask == rhs.optionsMask && lhs.tabExpandChoice == rhs.tabExpandChoice &&
 	       lhs.indentStyleChoice == rhs.indentStyleChoice && lhs.fileTypeChoice == rhs.fileTypeChoice &&
 	       lhs.columnBlockMoveChoice == rhs.columnBlockMoveChoice &&
 	       lhs.defaultModeChoice == rhs.defaultModeChoice &&
+	       lhs.lineNumbersPositionChoice == rhs.lineNumbersPositionChoice &&
+	       lhs.codeFoldingPositionChoice == rhs.codeFoldingPositionChoice &&
 	       lhs.miniMapPositionChoice == rhs.miniMapPositionChoice;
 }
 
@@ -61,6 +80,8 @@ void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDial
 	std::string defaultMode = upperAscii(settings.defaultMode);
 	std::string indentStyle = upperAscii(settings.indentStyle);
 	std::string fileType = upperAscii(settings.fileType);
+	std::string lineNumbersPosition = upperAscii(settings.lineNumbersPosition);
+	std::string codeFoldingPosition = upperAscii(settings.codeFoldingPosition);
 	std::string miniMapPosition = upperAscii(settings.miniMapPosition);
 
 	std::memset(&record, 0, sizeof(record));
@@ -79,6 +100,7 @@ void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDial
 	writeRecordField(record.cursorStatusColor, sizeof(record.cursorStatusColor), settings.cursorStatusColor);
 	writeRecordField(record.miniMapWidth, sizeof(record.miniMapWidth), std::to_string(settings.miniMapWidth));
 	writeRecordField(record.miniMapMarkerGlyph, sizeof(record.miniMapMarkerGlyph), settings.miniMapMarkerGlyph);
+	writeRecordField(record.gutters, sizeof(record.gutters), settings.gutters);
 
 	record.optionsMask = 0;
 	if (settings.truncateSpaces)
@@ -95,9 +117,9 @@ void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDial
 		record.optionsMask |= kOptionShowEofMarkerEmoji;
 	if (settings.persistentBlocks)
 		record.optionsMask |= kOptionPersistentBlocks;
-	if (settings.codeFolding)
+	if (settings.codeFoldingPosition != "OFF")
 		record.optionsMask |= kOptionCodeFolding;
-	if (settings.showLineNumbers)
+	if (settings.lineNumbersPosition != "OFF")
 		record.optionsMask |= kOptionShowLineNumbers;
 	if (settings.lineNumZeroFill)
 		record.optionsMask |= kOptionLineNumZeroFill;
@@ -113,6 +135,14 @@ void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDial
 	    (columnMove == "LEAVE_SPACE") ? kColumnMoveLeaveSpace : kColumnMoveDeleteSpace;
 	record.defaultModeChoice =
 	    (defaultMode == "OVERWRITE") ? kDefaultModeOverwrite : kDefaultModeInsert;
+	record.lineNumbersPositionChoice =
+	    (lineNumbersPosition == "LEADING") ? kLineNumbersLeading
+	                                       : (lineNumbersPosition == "TRAILING") ? kLineNumbersTrailing
+	                                                                             : kLineNumbersOff;
+	record.codeFoldingPositionChoice =
+	    (codeFoldingPosition == "LEADING") ? kCodeFoldingLeading
+	                                       : (codeFoldingPosition == "TRAILING") ? kCodeFoldingTrailing
+	                                                                             : kCodeFoldingOff;
 	record.miniMapPositionChoice = (miniMapPosition == "LEADING") ? kMiniMapLeading
 	                            : (miniMapPosition == "TRAILING") ? kMiniMapTrailing
 	                                                               : kMiniMapOff;
@@ -182,6 +212,7 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.formatLine = readRecordField(record.formatLine);
 	settings.cursorStatusColor = upperAscii(trimAscii(readRecordField(record.cursorStatusColor)));
 	settings.miniMapMarkerGlyph = readRecordField(record.miniMapMarkerGlyph);
+	settings.gutters = readRecordField(record.gutters);
 	if (!settings.cursorStatusColor.empty()) {
 		unsigned int parsed = 0;
 		static const char *const hex = "0123456789ABCDEF";
@@ -204,7 +235,7 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 		settings.cursorStatusColor.push_back(hex[parsed & 0x0F]);
 	}
 	if (trimAscii(settings.formatLine).empty())
-		settings.formatLine = std::string(8, ' ');
+		settings.formatLine = defaultFormatLineForTabSize(settings.tabSize);
 	if (!settings.postLoadMacro.empty() && !mr::dialogs::hasMrmacExtension(settings.postLoadMacro)) {
 		errorText = "POST_LOAD_MACRO must end with .mrmac.";
 		return false;
@@ -218,13 +249,13 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 		char *end = nullptr;
 		long miniMapWidth = 0;
 		if (miniMapWidthText.empty()) {
-			errorText = "MINIMAP_WIDTH must be between 2 and 10.";
+			errorText = "MINIMAP_WIDTH must be between 2 and 20.";
 			return false;
 		}
 		miniMapWidth = std::strtol(miniMapWidthText.c_str(), &end, 10);
 		if (end == miniMapWidthText.c_str() || end == nullptr || *end != '\0' || miniMapWidth < 2 ||
-		    miniMapWidth > 10) {
-			errorText = "MINIMAP_WIDTH must be an integer between 2 and 10.";
+		    miniMapWidth > 20) {
+			errorText = "MINIMAP_WIDTH must be an integer between 2 and 20.";
 			return false;
 		}
 		settings.miniMapWidth = static_cast<int>(miniMapWidth);
@@ -234,6 +265,9 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	                                                                      : "OFF";
 	if (trimAscii(settings.miniMapMarkerGlyph).empty())
 		settings.miniMapMarkerGlyph = "│";
+	settings.gutters = upperAscii(settings.gutters);
+	if (trimAscii(settings.gutters).empty())
+		settings.gutters = "LCM";
 
 	settings.truncateSpaces = (record.optionsMask & kOptionTruncateSpaces) != 0;
 	settings.eofCtrlZ = (record.optionsMask & kOptionEofCtrlZ) != 0;
@@ -241,10 +275,20 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.wordWrap = (record.optionsMask & kOptionWordWrap) != 0;
 	settings.showEofMarker = (record.optionsMask & kOptionShowEofMarker) != 0;
 	settings.showEofMarkerEmoji = (record.optionsMask & kOptionShowEofMarkerEmoji) != 0;
-	settings.persistentBlocks = (record.optionsMask & kOptionPersistentBlocks) != 0;
-	settings.codeFolding = (record.optionsMask & kOptionCodeFolding) != 0;
-	settings.showLineNumbers = (record.optionsMask & kOptionShowLineNumbers) != 0;
 	settings.lineNumZeroFill = (record.optionsMask & kOptionLineNumZeroFill) != 0;
+	settings.lineNumbersPosition = (record.lineNumbersPositionChoice == kLineNumbersLeading) ? "LEADING"
+	                         : (record.lineNumbersPositionChoice == kLineNumbersTrailing) ? "TRAILING"
+	                                                                                      : "OFF";
+	if (settings.lineNumbersPosition == "OFF" && (record.optionsMask & kOptionShowLineNumbers) != 0)
+		settings.lineNumbersPosition = "LEADING";
+	settings.showLineNumbers = settings.lineNumbersPosition != "OFF";
+	settings.codeFoldingPosition = (record.codeFoldingPositionChoice == kCodeFoldingLeading) ? "LEADING"
+	                         : (record.codeFoldingPositionChoice == kCodeFoldingTrailing) ? "TRAILING"
+	                                                                                      : "OFF";
+	if (settings.codeFoldingPosition == "OFF" && (record.optionsMask & kOptionCodeFolding) != 0)
+		settings.codeFoldingPosition = "LEADING";
+	settings.codeFolding = settings.codeFoldingPosition != "OFF";
+	settings.persistentBlocks = (record.optionsMask & kOptionPersistentBlocks) != 0;
 	settings.tabExpand = record.tabExpandChoice == kTabExpandTabs;
 	settings.indentStyle = (record.indentStyleChoice == kIndentStyleAutomatic) ? "AUTOMATIC"
 	                    : (record.indentStyleChoice == kIndentStyleSmart) ? "SMART"
@@ -289,15 +333,16 @@ enum : unsigned long long {
 	kOvFormatLine = ::kOvFormatLine,
 	kOvShowEofMarker = ::kOvShowEofMarker,
 	kOvShowEofMarkerEmoji = ::kOvShowEofMarkerEmoji,
-	kOvShowLineNumbers = ::kOvShowLineNumbers,
+	kOvLineNumbersPosition = ::kOvLineNumbersPosition,
 	kOvLineNumZeroFill = ::kOvLineNumZeroFill,
 	kOvPersistentBlocks = ::kOvPersistentBlocks,
-	kOvCodeFolding = ::kOvCodeFolding,
+	kOvCodeFoldingPosition = ::kOvCodeFoldingPosition,
 	kOvColumnBlockMove = ::kOvColumnBlockMove,
 	kOvDefaultMode = ::kOvDefaultMode,
 	kOvMiniMapPosition = ::kOvMiniMapPosition,
 	kOvMiniMapWidth = ::kOvMiniMapWidth,
-	kOvMiniMapMarkerGlyph = ::kOvMiniMapMarkerGlyph
+	kOvMiniMapMarkerGlyph = ::kOvMiniMapMarkerGlyph,
+	kOvGutters = ::kOvGutters
 };
 
 [[nodiscard]] bool validateProfileIdLiteral(const EditProfileDraft &draft, std::string &errorText) {
@@ -426,14 +471,14 @@ enum : unsigned long long {
 		mask |= kOvShowEofMarker;
 	if (effective.showEofMarkerEmoji != defaults.showEofMarkerEmoji)
 		mask |= kOvShowEofMarkerEmoji;
-	if (effective.showLineNumbers != defaults.showLineNumbers)
-		mask |= kOvShowLineNumbers;
+	if (upperAscii(effective.lineNumbersPosition) != upperAscii(defaults.lineNumbersPosition))
+		mask |= kOvLineNumbersPosition;
 	if (effective.lineNumZeroFill != defaults.lineNumZeroFill)
 		mask |= kOvLineNumZeroFill;
 	if (effective.persistentBlocks != defaults.persistentBlocks)
 		mask |= kOvPersistentBlocks;
-	if (effective.codeFolding != defaults.codeFolding)
-		mask |= kOvCodeFolding;
+	if (upperAscii(effective.codeFoldingPosition) != upperAscii(defaults.codeFoldingPosition))
+		mask |= kOvCodeFoldingPosition;
 	if (upperAscii(effective.columnBlockMove) != upperAscii(defaults.columnBlockMove))
 		mask |= kOvColumnBlockMove;
 	if (upperAscii(effective.defaultMode) != upperAscii(defaults.defaultMode))
@@ -444,6 +489,8 @@ enum : unsigned long long {
 		mask |= kOvMiniMapWidth;
 	if (trimAscii(effective.miniMapMarkerGlyph) != trimAscii(defaults.miniMapMarkerGlyph))
 		mask |= kOvMiniMapMarkerGlyph;
+	if (upperAscii(trimAscii(effective.gutters)) != upperAscii(trimAscii(defaults.gutters)))
+		mask |= kOvGutters;
 	return mask;
 }
 
@@ -596,6 +643,8 @@ void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileE
 	std::string defaultMode = upperAscii(settings.defaultMode);
 	std::string indentStyle = upperAscii(settings.indentStyle);
 	std::string fileType = upperAscii(settings.fileType);
+	std::string lineNumbersPosition = upperAscii(settings.lineNumbersPosition);
+	std::string codeFoldingPosition = upperAscii(settings.codeFoldingPosition);
 	std::string miniMapPosition = upperAscii(settings.miniMapPosition);
 
 	std::memset(&record, 0, sizeof(record));
@@ -612,6 +661,7 @@ void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileE
 	writeRecordField(record.cursorStatusColor, sizeof(record.cursorStatusColor), settings.cursorStatusColor);
 	writeRecordField(record.miniMapWidth, sizeof(record.miniMapWidth), std::to_string(settings.miniMapWidth));
 	writeRecordField(record.miniMapMarkerGlyph, sizeof(record.miniMapMarkerGlyph), settings.miniMapMarkerGlyph);
+	writeRecordField(record.gutters, sizeof(record.gutters), settings.gutters);
 
 	record.optionsMask = 0;
 	if (settings.truncateSpaces)
@@ -628,9 +678,9 @@ void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileE
 		record.optionsMask |= kOptionShowEofMarkerEmoji;
 	if (settings.persistentBlocks)
 		record.optionsMask |= kOptionPersistentBlocks;
-	if (settings.codeFolding)
+	if (settings.codeFoldingPosition != "OFF")
 		record.optionsMask |= kOptionCodeFolding;
-	if (settings.showLineNumbers)
+	if (settings.lineNumbersPosition != "OFF")
 		record.optionsMask |= kOptionShowLineNumbers;
 	if (settings.lineNumZeroFill)
 		record.optionsMask |= kOptionLineNumZeroFill;
@@ -644,6 +694,14 @@ void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileE
 	                                             : kFileTypeUnix;
 	record.columnBlockMoveChoice = (columnMove == "LEAVE_SPACE") ? kColumnMoveLeaveSpace : kColumnMoveDeleteSpace;
 	record.defaultModeChoice = (defaultMode == "OVERWRITE") ? kDefaultModeOverwrite : kDefaultModeInsert;
+	record.lineNumbersPositionChoice =
+	    (lineNumbersPosition == "LEADING") ? kLineNumbersLeading
+	                                       : (lineNumbersPosition == "TRAILING") ? kLineNumbersTrailing
+	                                                                             : kLineNumbersOff;
+	record.codeFoldingPositionChoice =
+	    (codeFoldingPosition == "LEADING") ? kCodeFoldingLeading
+	                                       : (codeFoldingPosition == "TRAILING") ? kCodeFoldingTrailing
+	                                                                             : kCodeFoldingOff;
 	record.miniMapPositionChoice = (miniMapPosition == "LEADING") ? kMiniMapLeading
 	                            : (miniMapPosition == "TRAILING") ? kMiniMapTrailing
 	                                                               : kMiniMapOff;

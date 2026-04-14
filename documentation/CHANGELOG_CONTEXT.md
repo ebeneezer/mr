@@ -7,6 +7,19 @@ Laufendes Projektprotokoll fuer Kontextwechsel und schnelle Wiederaufnahme.
 - Diese Datei ist ein Verlaufsprotokoll und keine normative Regelquelle.
 - Warmup-Reihenfolge: zuerst YAML, dann dieses Changelog, danach `MRMAC_V1_STATUS.md`.
 
+## Code-Generierung
+- Zielbild fuer neu erzeugten oder refaktorierten Code:
+  - harter C++20-Code, performance-orientiert, fuer Menschen gut lesbar.
+  - keine verstreuten String-/Key-Literale; zentrale Konstanten oder tabellengetriebene Kapselung.
+  - keine Boilerplate-Helfer ohne klaren Mehrwert.
+  - keine unklaren Bezeichner; Semantik muss direkt aus dem Namen folgen.
+  - keine kuenstlichen Legacy-Pfade fuer abgeloeste Settings-Keys.
+  - ungenutzte Member/Methoden sofort entfernen.
+  - OOP-Kapselung fuer Querschnittsthemen (z. B. Gutter-Verwaltung) zentral halten.
+- Intrinsics:
+  - nur nach Profiling/Baseline-Ereignis einsetzen.
+  - zuerst algorithmische Reduktion und Cache-/Datenlayout optimieren, dann SIMD/Intrinsics pruefen.
+
 
 
 ## 2026-04-08

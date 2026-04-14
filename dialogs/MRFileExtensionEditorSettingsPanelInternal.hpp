@@ -34,7 +34,8 @@ enum {
 	kFormatLineFieldSize = 256,
 	kCursorStatusColorFieldSize = 8,
 	kMiniMapWidthFieldSize = 8,
-	kMiniMapMarkerGlyphFieldSize = 16
+	kMiniMapMarkerGlyphFieldSize = 5,
+	kGuttersFieldSize = 8
 };
 
 enum : ushort {
@@ -55,14 +56,14 @@ enum : ushort {
 	kLeftOptionEofCtrlZ = 0x0002,
 	kLeftOptionEofCrLf = 0x0004,
 	kLeftOptionPersistentBlocks = 0x0008,
-	kLeftOptionCodeFolding = 0x0010,
+	kLeftOptionLineNumZeroFill = 0x0010,
 	kLeftOptionWordWrap = 0x0020
 };
 
 enum : ushort {
 	kLineNumbersOff = 0,
-	kLineNumbersOn = 1,
-	kLineNumbersLeadingZero = 2
+	kLineNumbersLeading = 1,
+	kLineNumbersTrailing = 2
 };
 
 enum : ushort {
@@ -104,6 +105,12 @@ enum : ushort {
 	kMiniMapTrailing = 2
 };
 
+enum : ushort {
+	kCodeFoldingOff = 0,
+	kCodeFoldingLeading = 1,
+	kCodeFoldingTrailing = 2
+};
+
 struct FileExtensionEditorSettingsDialogRecord {
 	char pageBreak[kPageBreakFieldSize];
 	char wordDelimiters[kWordDelimsFieldSize];
@@ -118,12 +125,15 @@ struct FileExtensionEditorSettingsDialogRecord {
 	char cursorStatusColor[kCursorStatusColorFieldSize];
 	char miniMapWidth[kMiniMapWidthFieldSize];
 	char miniMapMarkerGlyph[kMiniMapMarkerGlyphFieldSize];
+	char gutters[kGuttersFieldSize];
 	ushort optionsMask;
 	ushort tabExpandChoice;
 	ushort indentStyleChoice;
 	ushort fileTypeChoice;
 	ushort columnBlockMoveChoice;
 	ushort defaultModeChoice;
+	ushort lineNumbersPositionChoice;
+	ushort codeFoldingPositionChoice;
 	ushort miniMapPositionChoice;
 };
 
@@ -179,6 +189,7 @@ class FileExtensionEditorSettingsPanel {
 		TView *defaultPathBrowseButton = nullptr;
 		TCheckBoxes *optionsLeftField = nullptr;
 		TRadioButtons *lineNumbersField = nullptr;
+		TRadioButtons *codeFoldingPositionField = nullptr;
 		TRadioButtons *miniMapPositionField = nullptr;
 		TRadioButtons *eofMarkerField = nullptr;
 		TRadioButtons *tabExpandField = nullptr;
@@ -188,6 +199,8 @@ class FileExtensionEditorSettingsPanel {
 		TRadioButtons *defaultModeField = nullptr;
 		MRNumericSlider *miniMapWidthSlider = nullptr;
 		TInputLine *miniMapMarkerGlyphField = nullptr;
+		TInputLine *guttersField = nullptr;
+		int lastKnownTabSizeForFormatLine = 8;
 };
 
 } // namespace MRFileExtensionProfilesDialogInternal

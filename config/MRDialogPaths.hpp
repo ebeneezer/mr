@@ -43,15 +43,18 @@ struct MREditSetupSettings {
 	bool showEofMarker;
 	bool showEofMarkerEmoji;
 	bool showLineNumbers;
+	std::string lineNumbersPosition;
 	bool lineNumZeroFill;
 	bool persistentBlocks;
 	bool codeFolding;
+	std::string codeFoldingPosition;
 	std::string columnBlockMove;
 	std::string defaultMode;
 	std::string cursorStatusColor;
 	std::string miniMapPosition;
 	int miniMapWidth;
 	std::string miniMapMarkerGlyph;
+	std::string gutters;
 
 	MREditSetupSettings() noexcept
 	    : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false),
@@ -59,9 +62,10 @@ struct MREditSetupSettings {
 	      fileType(), binaryRecordLength(100), postLoadMacro(), preSaveMacro(), defaultPath(), formatLine(),
 	      backupMethod("BAK_FILE"), backupFrequency("FIRST_SAVE_ONLY"), backupExtension("bak"), backupDirectory(),
 	      autosaveInactivitySeconds(15), autosaveIntervalSeconds(180), backupFiles(true), showEofMarker(false),
-	      showEofMarkerEmoji(true),
-	      showLineNumbers(false), lineNumZeroFill(false), persistentBlocks(true), codeFolding(false), columnBlockMove(),
-	      defaultMode(), cursorStatusColor(), miniMapPosition("OFF"), miniMapWidth(4), miniMapMarkerGlyph("│") {
+	      showEofMarkerEmoji(true), showLineNumbers(false), lineNumbersPosition("OFF"), lineNumZeroFill(false),
+	      persistentBlocks(true), codeFolding(false), codeFoldingPosition("OFF"), columnBlockMove(),
+	      defaultMode(), cursorStatusColor(), miniMapPosition("OFF"), miniMapWidth(4), miniMapMarkerGlyph("│"),
+	      gutters("LCM") {
 	}
 };
 
@@ -125,6 +129,9 @@ enum MREditSetupOverrideMask : unsigned long long {
 	kOvMiniMapPosition = 1ull << 33,
 	kOvMiniMapWidth = 1ull << 34,
 	kOvMiniMapMarkerGlyph = 1ull << 35,
+	kOvLineNumbersPosition = 1ull << 36,
+	kOvCodeFoldingPosition = 1ull << 37,
+	kOvGutters = 1ull << 38,
 };
 
 struct MREditSettingDescriptor {
@@ -191,11 +198,12 @@ enum : unsigned char {
 	kMrPaletteMiniMapChanged = 149,
 	kMrPaletteMiniMapFindMarker = 150,
 	kMrPaletteMiniMapErrorMarker = 151,
-	kMrPaletteMax = kMrPaletteMiniMapErrorMarker
+	kMrPaletteCodeFolding = 152,
+	kMrPaletteMax = kMrPaletteCodeFolding
 };
 
 struct MRColorSetupSettings {
-	static const std::size_t kWindowCount = 9;
+	static const std::size_t kWindowCount = 10;
 	static const std::size_t kMenuDialogCount = 17;
 	static const std::size_t kHelpCount = 9;
 	static const std::size_t kOtherCount = 9;

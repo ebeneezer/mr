@@ -209,6 +209,22 @@ TView *addPanelGlyphButton(MRScrollableDialog &dialog, const TRect &rect, const 
 	return std::clamp(static_cast<int>(parsed), minimum, maximum);
 }
 
+[[nodiscard]] std::string defaultFormatLineForTabSize(int tabSize) {
+	const int normalizedTabSize = std::max(1, std::min(tabSize, kMaximumTabSize));
+	const int targetWidth = 80;
+	std::string out("!");
+
+	while (static_cast<int>(out.size()) + normalizedTabSize + 1 <= targetWidth) {
+		out.append(static_cast<std::size_t>(normalizedTabSize), '-');
+		out.push_back('!');
+	}
+	if (out.size() == 1) {
+		out.append(static_cast<std::size_t>(normalizedTabSize), '-');
+		out.push_back('!');
+	}
+	return out;
+}
+
 void writeSliderValue(MRNumericSlider *slider, char *dest, std::size_t destSize, int fallback) {
 	int32_t value = fallback;
 	if (slider != nullptr)
@@ -342,14 +358,14 @@ void EditSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	               new TSItem("Control-~Z~ at EOF",
 	                          new TSItem("~C~R/LF at EOF",
 	                                     new TSItem("Persistent ~B~locks",
-	                                                new TSItem("code foldin~G~",
+	                                                new TSItem("leading ~0~ fill",
 	                                                         new TSItem("word wrap", nullptr)))))));
 
 	addPanelLabel(dialog, TRect(g.lineNumbersLeft, g.optionsHeadingY, g.lineNumbersRight, g.optionsHeadingY + 1),
 	              "Line numbers:");
 	lineNumbersField_ = addPanelRadioGroup(
 	    dialog, TRect(g.lineNumbersLeft, g.optionsBodyY, g.lineNumbersRight, g.optionsBodyY + 3),
-	    new TSItem("~O~ff", new TSItem("~S~how", new TSItem("Leading ~0~", nullptr))));
+	    new TSItem("~O~ff", new TSItem("~L~eading", new TSItem("~T~railing", nullptr))));
 
 	addPanelLabel(dialog, TRect(g.eofMarkerLeft, g.optionsHeadingY, g.eofMarkerRight, g.optionsHeadingY + 1),
 	              "EOF marker:");
@@ -362,6 +378,12 @@ void EditSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	defaultModeField_ = addPanelRadioGroup(
 	    dialog, TRect(g.defaultModeLeft, g.optionsBodyY, g.defaultModeRight, g.optionsBodyY + 3),
 	    new TSItem("~I~nsert", new TSItem("Ove~R~write", nullptr)));
+
+	addPanelLabel(dialog, TRect(g.defaultModeLeft, g.columnBlockMoveHeadingY, g.defaultModeRight, g.columnBlockMoveHeadingY + 1),
+	              "Code folding:");
+	codeFoldingPositionField_ = addPanelRadioGroup(
+	    dialog, TRect(g.defaultModeLeft, g.columnBlockMoveBodyY, g.defaultModeRight, g.columnBlockMoveBodyY + 3),
+	    new TSItem("~O~ff", new TSItem("~L~eading", new TSItem("~T~railing", nullptr))));
 
 	addPanelLabel(dialog, TRect(g.tabExpandLeft, g.tabExpandHeadingY, g.tabExpandRight, g.tabExpandHeadingY + 1),
 	              "Tab expand:");
@@ -410,6 +432,7 @@ void EditSettingsPanel::readInputLineValue(TInputLine *inputLine, char *dest, st
 ushort EditSettingsPanel::currentOptionsMask() const noexcept {
 	ushort leftMask = 0;
 	ushort lineNumbersChoice = kLineNumbersOff;
+	ushort codeFoldingChoice = kCodeFoldingOff;
 	ushort eofMarkerChoice = kEofMarkerOff;
 	ushort options = 0;
 
@@ -417,6 +440,8 @@ ushort EditSettingsPanel::currentOptionsMask() const noexcept {
 		optionsLeftField_->getData((void *)&leftMask);
 	if (lineNumbersField_ != nullptr)
 		lineNumbersField_->getData((void *)&lineNumbersChoice);
+	if (codeFoldingPositionField_ != nullptr)
+		codeFoldingPositionField_->getData((void *)&codeFoldingChoice);
 	if (eofMarkerField_ != nullptr)
 		eofMarkerField_->getData((void *)&eofMarkerChoice);
 
@@ -428,22 +453,23 @@ ushort EditSettingsPanel::currentOptionsMask() const noexcept {
 		options |= kOptionEofCrLf;
 	if ((leftMask & kLeftOptionPersistentBlocks) != 0)
 		options |= kOptionPersistentBlocks;
-	if ((leftMask & kLeftOptionCodeFolding) != 0)
-		options |= kOptionCodeFolding;
+	if ((leftMask & kLeftOptionLineNumZeroFill) != 0)
+		options |= kOptionLineNumZeroFill;
 	if ((leftMask & kLeftOptionWordWrap) != 0)
 		options |= kOptionWordWrap;
 
 	switch (lineNumbersChoice) {
-		case kLineNumbersOn:
+		case kLineNumbersLeading:
 			options |= kOptionShowLineNumbers;
 			break;
-		case kLineNumbersLeadingZero:
+		case kLineNumbersTrailing:
 			options |= kOptionShowLineNumbers;
-			options |= kOptionLineNumZeroFill;
 			break;
 		default:
 			break;
 	}
+	if (codeFoldingChoice != kCodeFoldingOff)
+		options |= kOptionCodeFolding;
 
 	switch (eofMarkerChoice) {
 		case kEofMarkerPlain:
@@ -463,6 +489,7 @@ ushort EditSettingsPanel::currentOptionsMask() const noexcept {
 void EditSettingsPanel::setOptionsMask(ushort options) {
 	ushort leftMask = 0;
 	ushort lineNumbersChoice = kLineNumbersOff;
+	ushort codeFoldingChoice = kCodeFoldingOff;
 	ushort eofMarkerChoice = kEofMarkerOff;
 
 	if ((options & kOptionTruncateSpaces) != 0)
@@ -473,13 +500,15 @@ void EditSettingsPanel::setOptionsMask(ushort options) {
 		leftMask |= kLeftOptionEofCrLf;
 	if ((options & kOptionPersistentBlocks) != 0)
 		leftMask |= kLeftOptionPersistentBlocks;
-	if ((options & kOptionCodeFolding) != 0)
-		leftMask |= kLeftOptionCodeFolding;
+	if ((options & kOptionLineNumZeroFill) != 0)
+		leftMask |= kLeftOptionLineNumZeroFill;
 	if ((options & kOptionWordWrap) != 0)
 		leftMask |= kLeftOptionWordWrap;
 
 	if ((options & kOptionShowLineNumbers) != 0)
-		lineNumbersChoice = ((options & kOptionLineNumZeroFill) != 0) ? kLineNumbersLeadingZero : kLineNumbersOn;
+		lineNumbersChoice = kLineNumbersLeading;
+	if ((options & kOptionCodeFolding) != 0)
+		codeFoldingChoice = kCodeFoldingLeading;
 	if ((options & kOptionShowEofMarker) != 0)
 		eofMarkerChoice = ((options & kOptionShowEofMarkerEmoji) != 0) ? kEofMarkerEmoji : kEofMarkerPlain;
 
@@ -489,6 +518,8 @@ void EditSettingsPanel::setOptionsMask(ushort options) {
 		optionsLeftField_->setData((void *)&leftMask);
 	if (lineNumbersField_ != nullptr)
 		lineNumbersField_->setData((void *)&lineNumbersChoice);
+	if (codeFoldingPositionField_ != nullptr)
+		codeFoldingPositionField_->setData((void *)&codeFoldingChoice);
 	if (eofMarkerField_ != nullptr)
 		eofMarkerField_->setData((void *)&eofMarkerChoice);
 }
@@ -501,6 +532,7 @@ void EditSettingsPanel::loadFieldsFromRecord(const EditSettingsDialogRecord &rec
 	if (tabSizeSlider_ != nullptr) {
 		int32_t value = parseIntegerOrDefault(record.tabSize, kDefaultTabSize, kMinimumTabSize, kMaximumTabSize);
 		tabSizeSlider_->setData(&value);
+		lastKnownTabSizeForFormatLine_ = static_cast<int>(value);
 	}
 	setInputLineValue(rightMarginField_, record.rightMargin, sizeof(record.rightMargin));
 	setInputLineValue(binaryRecordLengthField_, record.binaryRecordLength, sizeof(record.binaryRecordLength));
@@ -509,6 +541,10 @@ void EditSettingsPanel::loadFieldsFromRecord(const EditSettingsDialogRecord &rec
 	setInputLineValue(defaultPathField_, record.defaultPath, sizeof(record.defaultPath));
 	setInputLineValue(formatLineField_, record.formatLine, sizeof(record.formatLine));
 	setOptionsMask(record.optionsMask);
+	if (lineNumbersField_ != nullptr)
+		lineNumbersField_->setData((void *)&record.lineNumbersPositionChoice);
+	if (codeFoldingPositionField_ != nullptr)
+		codeFoldingPositionField_->setData((void *)&record.codeFoldingPositionChoice);
 	if (tabExpandField_ != nullptr)
 		tabExpandField_->setData((void *)&record.tabExpandChoice);
 	if (indentStyleField_ != nullptr)
@@ -537,6 +573,10 @@ void EditSettingsPanel::saveFieldsToRecord(EditSettingsDialogRecord &record) con
 	readInputLineValue(defaultPathField_, record.defaultPath, sizeof(record.defaultPath));
 	readInputLineValue(formatLineField_, record.formatLine, sizeof(record.formatLine));
 	record.optionsMask = currentOptionsMask();
+	if (lineNumbersField_ != nullptr)
+		lineNumbersField_->getData((void *)&record.lineNumbersPositionChoice);
+	if (codeFoldingPositionField_ != nullptr)
+		codeFoldingPositionField_->getData((void *)&record.codeFoldingPositionChoice);
 	if (tabExpandField_ != nullptr)
 		tabExpandField_->getData((void *)&record.tabExpandChoice);
 	if (indentStyleField_ != nullptr)
@@ -555,6 +595,17 @@ void EditSettingsPanel::syncDynamicStates() {
 		fileTypeField_->getData((void *)&fileTypeChoice);
 		return fileTypeChoice == kFileTypeBinary;
 	})();
+	int32_t currentTabSize = lastKnownTabSizeForFormatLine_;
+	std::string previousAutoFormat = defaultFormatLineForTabSize(lastKnownTabSizeForFormatLine_);
+	std::string currentFormatLine = readInputFieldValue(formatLineField_);
+	const bool formatLineBlank =
+	    currentFormatLine.find_first_not_of(" \t\r\n") == std::string::npos;
+
+	if (tabSizeSlider_ != nullptr)
+		tabSizeSlider_->getData(&currentTabSize);
+	if (formatLineBlank || currentFormatLine == previousAutoFormat)
+		writeInputFieldValue(formatLineField_, defaultFormatLineForTabSize(static_cast<int>(currentTabSize)));
+	lastKnownTabSizeForFormatLine_ = static_cast<int>(currentTabSize);
 
 	if (binaryRecordLengthField_ != nullptr)
 		binaryRecordLengthField_->setState(sfDisabled, binaryEnabled ? False : True);

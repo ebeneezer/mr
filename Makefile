@@ -300,7 +300,7 @@ mrmac/mrmac.o: mrmac/mrmac.c mrmac/parser.tab.h mrmac/mrmac.h
 # 3. Dependencies for C++ compilation
 mr.o: mr.cpp mrmac/mrvm.hpp app/TMREditorApp.hpp ui/MRPalette.hpp
 app/MRAppState.o: app/MRAppState.cpp app/MRAppState.hpp app/MRCommands.hpp app/commands/MRWindowCommands.hpp ui/TMREditWindow.hpp
-app/MRCommandRouter.o: app/MRCommandRouter.cpp app/MRCommandRouter.hpp app/MRCommands.hpp dialogs/MRAboutDialog.hpp dialogs/MRFileInformationDialog.hpp dialogs/MRMacroFileDialog.hpp dialogs/MRSetupDialogs.hpp dialogs/MRWindowListDialog.hpp mrmac/mrvm.hpp app/commands/MRExternalCommand.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
+app/MRCommandRouter.o: app/MRCommandRouter.cpp app/MRCommandRouter.hpp app/MRCommands.hpp dialogs/MRAboutDialog.hpp dialogs/MRFileInformationDialog.hpp dialogs/MRMacroFileDialog.hpp dialogs/MRSetupDialogs.hpp dialogs/MRWindowListDialog.hpp mrmac/mrvm.hpp app/commands/MRExternalCommand.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/TMRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 app/MRMenuFactory.o: app/MRMenuFactory.cpp app/MRMenuFactory.hpp app/MRCommands.hpp ui/TMRMenuBar.hpp
 app/MRVersion.o: app/MRVersion.cpp app/MRVersion.hpp
 app/TMREditorApp.o: app/TMREditorApp.cpp app/TMREditorApp.hpp app/MRAppState.hpp app/MRCommandRouter.hpp app/MRCommands.hpp app/MRMenuFactory.hpp coprocessor/MRCoprocessorDispatch.hpp coprocessor/MRPerformance.hpp app/commands/MRWindowCommands.hpp config/MRDialogPaths.hpp config/MRSettingsLoader.hpp ui/TMRDeskTop.hpp ui/TMRStatusLine.hpp ui/MRPalette.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
@@ -330,7 +330,7 @@ piecetable/MRTextDocument.o: piecetable/MRTextDocument.cpp piecetable/MRTextDocu
 
 # 4. Linker call
 $(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS)
-	$(CXX) -o $@ $^ $(LDFLAGS)
+	$(CXX) -o $@ $^ $(LDFLAGS) || { paplay --volume=40000 /usr/share/sounds/freedesktop/stereo/phone-outgoing-calling.oga; exit 1; }
 	killall mr 2> /dev/null || true
 	paplay --volume=40000 /usr/share/sounds/freedesktop/stereo/service-login.oga || true
 
@@ -342,11 +342,11 @@ $(REGRESSION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(RE
 
 # C++ compilation
 %.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -c $< -o $@ || { paplay --volume=40000 /usr/share/sounds/freedesktop/stereo/phone-outgoing-calling.oga; exit 1; }
 
 # C compilation
 %.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@ || { paplay --volume=40000 /usr/share/sounds/freedesktop/stereo/phone-outgoing-calling.oga; exit 1; }
 
 clean:
 	rm -f $(CXX_OBJECTS) $(C_OBJECTS) $(TARGET) $(STAGE_PROFILE_PROBE_OBJECT) \

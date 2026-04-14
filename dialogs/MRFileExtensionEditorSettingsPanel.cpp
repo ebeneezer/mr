@@ -34,7 +34,7 @@ constexpr int kMinimumBinaryRecordLength = 1;
 constexpr int kMaximumBinaryRecordLength = 99999;
 constexpr int kDefaultBinaryRecordLength = 100;
 constexpr int kMinimumMiniMapWidth = 2;
-constexpr int kMaximumMiniMapWidth = 10;
+constexpr int kMaximumMiniMapWidth = 20;
 constexpr int kDefaultMiniMapWidth = 4;
 constexpr ushort kUiManagedOptionsMask =
     kOptionTruncateSpaces | kOptionEofCtrlZ | kOptionEofCrLf | kOptionPersistentBlocks |
@@ -64,8 +64,8 @@ struct FileExtensionEditorSettingsPanelLayout {
 		      tabExpandHeadingY(optionsHeadingY), tabExpandBodyY(optionsBodyY), columnBlockMoveHeadingY(optionsBodyY + 4),
 		      columnBlockMoveBodyY(columnBlockMoveHeadingY + 1), indentStyleHeadingY(optionsBodyY + 4),
 		      indentStyleBodyY(indentStyleHeadingY + 1), fileTypeHeadingY(optionsBodyY + 4),
-		      fileTypeBodyY(fileTypeHeadingY + 1), miniMapHeadingY(std::max(optionsBodyY + 8, fileTypeBodyY + 4)),
-		      miniMapBodyY(miniMapHeadingY + 1), contentBottomY(miniMapBodyY + 3) {
+	      fileTypeBodyY(fileTypeHeadingY + 1), miniMapHeadingY(std::max(optionsBodyY + 8, fileTypeBodyY + 4)),
+	      miniMapBodyY(miniMapHeadingY + 1), contentBottomY(miniMapBodyY + 7) {
 		}
 
 	int labelLeft;
@@ -215,6 +215,22 @@ TView *addPanelGlyphButton(MRScrollableDialog &dialog, const TRect &rect, const 
 	return std::clamp(static_cast<int>(parsed), minimum, maximum);
 }
 
+[[nodiscard]] std::string defaultFormatLineForTabSize(int tabSize) {
+	const int normalizedTabSize = std::max(1, std::min(tabSize, kMaximumTabSize));
+	const int targetWidth = 80;
+	std::string out("!");
+
+	while (static_cast<int>(out.size()) + normalizedTabSize + 1 <= targetWidth) {
+		out.append(static_cast<std::size_t>(normalizedTabSize), '-');
+		out.push_back('!');
+	}
+	if (out.size() == 1) {
+		out.append(static_cast<std::size_t>(normalizedTabSize), '-');
+		out.push_back('!');
+	}
+	return out;
+}
+
 void writeSliderValue(MRNumericSlider *slider, char *dest, std::size_t destSize, int fallback) {
 	int32_t value = fallback;
 	if (slider != nullptr)
@@ -348,14 +364,14 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	               new TSItem("Control-~Z~ at EOF",
 	                          new TSItem("~C~R/LF at EOF",
 	                                     new TSItem("Persistent ~B~locks",
-	                                                new TSItem("code foldin~G~",
+	                                                new TSItem("leading ~0~ fill",
 	                                                         new TSItem("word wrap", nullptr)))))));
 
 	addPanelLabel(dialog, TRect(g.lineNumbersLeft, g.optionsHeadingY, g.lineNumbersRight, g.optionsHeadingY + 1),
 	              "Line numbers:");
 	lineNumbersField = addPanelRadioGroup(
 	    dialog, TRect(g.lineNumbersLeft, g.optionsBodyY, g.lineNumbersRight, g.optionsBodyY + 3),
-	    new TSItem("~O~ff", new TSItem("~S~how", new TSItem("Leading ~0~", nullptr))));
+	    new TSItem("~O~ff", new TSItem("~L~eading", new TSItem("~T~railing", nullptr))));
 
 	addPanelLabel(dialog, TRect(g.eofMarkerLeft, g.optionsHeadingY, g.eofMarkerRight, g.optionsHeadingY + 1),
 	              "EOF marker:");
@@ -401,17 +417,30 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	miniMapPositionField = addPanelRadioGroup(
 	    dialog, TRect(g.optionsLeft, g.miniMapBodyY, g.optionsLeft + 18, g.miniMapBodyY + 3),
 	    new TSItem("~O~ff", new TSItem("~L~eading", new TSItem("~T~railing", nullptr))));
-	addPanelLabel(dialog, TRect(g.optionsLeft + 21, g.miniMapHeadingY, g.optionsLeft + 30, g.miniMapHeadingY + 1),
+	addPanelLabel(dialog, TRect(g.optionsLeft + 21, g.miniMapHeadingY, g.optionsLeft + 38, g.miniMapHeadingY + 1),
+	              "Code folding:");
+	codeFoldingPositionField = addPanelRadioGroup(
+	    dialog, TRect(g.optionsLeft + 21, g.miniMapBodyY, g.optionsLeft + 38, g.miniMapBodyY + 3),
+	    new TSItem("~O~ff", new TSItem("~L~eading", new TSItem("~T~railing", nullptr))));
+	addPanelLabel(dialog,
+	              TRect(g.optionsLeft, g.miniMapBodyY + 4, g.optionsLeft + 8, g.miniMapBodyY + 5),
 	              "Width:");
 	miniMapWidthSlider = addPanelNumericSlider(
-	    dialog, TRect(g.optionsLeft + 21, g.miniMapBodyY, g.optionsLeft + 39, g.miniMapBodyY + 1),
+	    dialog, TRect(g.optionsLeft + 8, g.miniMapBodyY + 4, g.optionsLeft + 24, g.miniMapBodyY + 5),
 	    kMinimumMiniMapWidth, kMaximumMiniMapWidth, kDefaultMiniMapWidth, 1, 2,
-	    cmMrFileExtensionEditorSettingsPanelChanged);
-	addPanelLabel(dialog, TRect(g.optionsLeft + 42, g.miniMapHeadingY, g.optionsLeft + 54, g.miniMapHeadingY + 1),
-	              "Marker:");
+	                                     cmMrFileExtensionEditorSettingsPanelChanged);
+	addPanelLabel(dialog,
+	              TRect(g.optionsLeft + 26, g.miniMapBodyY + 4, g.optionsLeft + 43, g.miniMapBodyY + 5),
+	              "Viewport cursor:");
 	miniMapMarkerGlyphField = addPanelInput(
-	    dialog, TRect(g.optionsLeft + 42, g.miniMapBodyY, g.optionsLeft + 50, g.miniMapBodyY + 1),
+	    dialog, TRect(g.optionsLeft + 43, g.miniMapBodyY + 4, g.optionsLeft + 48, g.miniMapBodyY + 5),
 	    kMiniMapMarkerGlyphFieldSize - 1);
+	addPanelLabel(dialog,
+	              TRect(g.optionsLeft, g.miniMapBodyY + 6, g.optionsLeft + 8, g.miniMapBodyY + 7),
+	              "Gutters:");
+	guttersField = addPanelInput(
+	    dialog, TRect(g.optionsLeft + 8, g.miniMapBodyY + 6, g.optionsLeft + 16, g.miniMapBodyY + 7),
+	    kGuttersFieldSize - 1);
 }
 
 TView *FileExtensionEditorSettingsPanel::primaryView() const noexcept {
@@ -433,6 +462,7 @@ void FileExtensionEditorSettingsPanel::readInputLineValue(TInputLine *inputLine,
 ushort FileExtensionEditorSettingsPanel::currentOptionsMask() const noexcept {
 	ushort leftMask = 0;
 	ushort lineNumbersChoice = kLineNumbersOff;
+	ushort codeFoldingChoice = kCodeFoldingOff;
 	ushort eofMarkerChoice = kEofMarkerOff;
 	ushort options = 0;
 
@@ -440,6 +470,8 @@ ushort FileExtensionEditorSettingsPanel::currentOptionsMask() const noexcept {
 		optionsLeftField->getData((void *)&leftMask);
 	if (lineNumbersField != nullptr)
 		lineNumbersField->getData((void *)&lineNumbersChoice);
+	if (codeFoldingPositionField != nullptr)
+		codeFoldingPositionField->getData((void *)&codeFoldingChoice);
 	if (eofMarkerField != nullptr)
 		eofMarkerField->getData((void *)&eofMarkerChoice);
 
@@ -451,22 +483,23 @@ ushort FileExtensionEditorSettingsPanel::currentOptionsMask() const noexcept {
 		options |= kOptionEofCrLf;
 	if ((leftMask & kLeftOptionPersistentBlocks) != 0)
 		options |= kOptionPersistentBlocks;
-	if ((leftMask & kLeftOptionCodeFolding) != 0)
-		options |= kOptionCodeFolding;
+	if ((leftMask & kLeftOptionLineNumZeroFill) != 0)
+		options |= kOptionLineNumZeroFill;
 	if ((leftMask & kLeftOptionWordWrap) != 0)
 		options |= kOptionWordWrap;
 
 	switch (lineNumbersChoice) {
-		case kLineNumbersOn:
+		case kLineNumbersLeading:
 			options |= kOptionShowLineNumbers;
 			break;
-		case kLineNumbersLeadingZero:
+		case kLineNumbersTrailing:
 			options |= kOptionShowLineNumbers;
-			options |= kOptionLineNumZeroFill;
 			break;
 		default:
 			break;
 	}
+	if (codeFoldingChoice != kCodeFoldingOff)
+		options |= kOptionCodeFolding;
 
 	switch (eofMarkerChoice) {
 		case kEofMarkerPlain:
@@ -486,6 +519,7 @@ ushort FileExtensionEditorSettingsPanel::currentOptionsMask() const noexcept {
 void FileExtensionEditorSettingsPanel::setOptionsMask(ushort options) {
 	ushort leftMask = 0;
 	ushort lineNumbersChoice = kLineNumbersOff;
+	ushort codeFoldingChoice = kCodeFoldingOff;
 	ushort eofMarkerChoice = kEofMarkerOff;
 
 	if ((options & kOptionTruncateSpaces) != 0)
@@ -496,13 +530,15 @@ void FileExtensionEditorSettingsPanel::setOptionsMask(ushort options) {
 		leftMask |= kLeftOptionEofCrLf;
 	if ((options & kOptionPersistentBlocks) != 0)
 		leftMask |= kLeftOptionPersistentBlocks;
-	if ((options & kOptionCodeFolding) != 0)
-		leftMask |= kLeftOptionCodeFolding;
+	if ((options & kOptionLineNumZeroFill) != 0)
+		leftMask |= kLeftOptionLineNumZeroFill;
 	if ((options & kOptionWordWrap) != 0)
 		leftMask |= kLeftOptionWordWrap;
 
 	if ((options & kOptionShowLineNumbers) != 0)
-		lineNumbersChoice = ((options & kOptionLineNumZeroFill) != 0) ? kLineNumbersLeadingZero : kLineNumbersOn;
+		lineNumbersChoice = kLineNumbersLeading;
+	if ((options & kOptionCodeFolding) != 0)
+		codeFoldingChoice = kCodeFoldingLeading;
 	if ((options & kOptionShowEofMarker) != 0)
 		eofMarkerChoice = ((options & kOptionShowEofMarkerEmoji) != 0) ? kEofMarkerEmoji : kEofMarkerPlain;
 
@@ -512,6 +548,8 @@ void FileExtensionEditorSettingsPanel::setOptionsMask(ushort options) {
 		optionsLeftField->setData((void *)&leftMask);
 	if (lineNumbersField != nullptr)
 		lineNumbersField->setData((void *)&lineNumbersChoice);
+	if (codeFoldingPositionField != nullptr)
+		codeFoldingPositionField->setData((void *)&codeFoldingChoice);
 	if (eofMarkerField != nullptr)
 		eofMarkerField->setData((void *)&eofMarkerChoice);
 }
@@ -524,6 +562,7 @@ void FileExtensionEditorSettingsPanel::loadFieldsFromRecord(const FileExtensionE
 	if (tabSizeSlider != nullptr) {
 		int32_t value = parseIntegerOrDefault(record.tabSize, kDefaultTabSize, kMinimumTabSize, kMaximumTabSize);
 		tabSizeSlider->setData(&value);
+		lastKnownTabSizeForFormatLine = static_cast<int>(value);
 	}
 	setInputLineValue(rightMarginField, record.rightMargin, sizeof(record.rightMargin));
 	setInputLineValue(binaryRecordLengthField, record.binaryRecordLength, sizeof(record.binaryRecordLength));
@@ -532,6 +571,10 @@ void FileExtensionEditorSettingsPanel::loadFieldsFromRecord(const FileExtensionE
 	setInputLineValue(defaultPathField, record.defaultPath, sizeof(record.defaultPath));
 	setInputLineValue(formatLineField, record.formatLine, sizeof(record.formatLine));
 	setOptionsMask(record.optionsMask);
+	if (lineNumbersField != nullptr)
+		lineNumbersField->setData((void *)&record.lineNumbersPositionChoice);
+	if (codeFoldingPositionField != nullptr)
+		codeFoldingPositionField->setData((void *)&record.codeFoldingPositionChoice);
 	if (tabExpandField != nullptr)
 		tabExpandField->setData((void *)&record.tabExpandChoice);
 	if (indentStyleField != nullptr)
@@ -550,6 +593,7 @@ void FileExtensionEditorSettingsPanel::loadFieldsFromRecord(const FileExtensionE
 		miniMapWidthSlider->setData(&value);
 	}
 	setInputLineValue(miniMapMarkerGlyphField, record.miniMapMarkerGlyph, sizeof(record.miniMapMarkerGlyph));
+	setInputLineValue(guttersField, record.gutters, sizeof(record.gutters));
 	syncDynamicStates();
 }
 
@@ -568,6 +612,10 @@ void FileExtensionEditorSettingsPanel::saveFieldsToRecord(FileExtensionEditorSet
 	readInputLineValue(defaultPathField, record.defaultPath, sizeof(record.defaultPath));
 	readInputLineValue(formatLineField, record.formatLine, sizeof(record.formatLine));
 	record.optionsMask = currentOptionsMask();
+	if (lineNumbersField != nullptr)
+		lineNumbersField->getData((void *)&record.lineNumbersPositionChoice);
+	if (codeFoldingPositionField != nullptr)
+		codeFoldingPositionField->getData((void *)&record.codeFoldingPositionChoice);
 	if (tabExpandField != nullptr)
 		tabExpandField->getData((void *)&record.tabExpandChoice);
 	if (indentStyleField != nullptr)
@@ -582,6 +630,7 @@ void FileExtensionEditorSettingsPanel::saveFieldsToRecord(FileExtensionEditorSet
 		miniMapPositionField->getData((void *)&record.miniMapPositionChoice);
 	writeSliderValue(miniMapWidthSlider, record.miniMapWidth, sizeof(record.miniMapWidth), kDefaultMiniMapWidth);
 	readInputLineValue(miniMapMarkerGlyphField, record.miniMapMarkerGlyph, sizeof(record.miniMapMarkerGlyph));
+	readInputLineValue(guttersField, record.gutters, sizeof(record.gutters));
 }
 
 void FileExtensionEditorSettingsPanel::syncDynamicStates() {
@@ -590,6 +639,17 @@ void FileExtensionEditorSettingsPanel::syncDynamicStates() {
 		fileTypeField->getData((void *)&fileTypeChoice);
 		return fileTypeChoice == kFileTypeBinary;
 	})();
+	int32_t currentTabSize = lastKnownTabSizeForFormatLine;
+	std::string previousAutoFormat = defaultFormatLineForTabSize(lastKnownTabSizeForFormatLine);
+	std::string currentFormatLine = readInputFieldValue(formatLineField);
+
+	if (tabSizeSlider != nullptr)
+		tabSizeSlider->getData(&currentTabSize);
+	const bool formatLineBlank =
+	    currentFormatLine.find_first_not_of(" \t\r\n") == std::string::npos;
+	if (formatLineBlank || currentFormatLine == previousAutoFormat)
+		writeInputFieldValue(formatLineField, defaultFormatLineForTabSize(static_cast<int>(currentTabSize)));
+	lastKnownTabSizeForFormatLine = static_cast<int>(currentTabSize);
 
 	if (binaryRecordLengthField != nullptr)
 		binaryRecordLengthField->setState(sfDisabled, binaryEnabled ? False : True);

@@ -625,13 +625,13 @@ class TMREditWindow : public TWindow {
 		if (editor != nullptr) {
 			if (editor->pendingLineIndexWarmupTaskId() != 0 &&
 			    trackedTaskCount(mr::coprocessor::TaskKind::LineIndexWarmup) == 0)
-				lines.push_back(bullet + " Line index warmup  in progress");
+				lines.push_back(bullet + " " + lineIndexWarmingLabel());
 			if (editor->pendingSyntaxWarmupTaskId() != 0 &&
 			    trackedTaskCount(mr::coprocessor::TaskKind::SyntaxWarmup) == 0)
-				lines.push_back(bullet + " Syntax warmup  in progress");
+				lines.push_back(bullet + " " + syntaxWarmingLabel());
 			if (editor->pendingMiniMapWarmupTaskId() != 0 &&
 			    trackedTaskCount(mr::coprocessor::TaskKind::MiniMapWarmup) == 0)
-				lines.push_back(bullet + " Mini map render  in progress");
+				lines.push_back(bullet + " " + miniMapRenderingLabel());
 		}
 		return lines;
 	}
@@ -1192,6 +1192,18 @@ class TMREditWindow : public TWindow {
 		if (strwidth(kClockFrames[0]) >= 1)
 			return kClockFrames[frame];
 		return kAsciiFrames[frame % kAsciiFrames.size()];
+	}
+
+	static const char *lineIndexWarmingLabel() noexcept {
+		return "Line index warming";
+	}
+
+	static const char *syntaxWarmingLabel() noexcept {
+		return "Syntax warming";
+	}
+
+	static const char *miniMapRenderingLabel() noexcept {
+		return "Mini map rendering";
 	}
 
 	int normalizedBlockLine1() const {

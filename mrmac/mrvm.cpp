@@ -6031,7 +6031,8 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 									g_runtimeEnv.tabExpand = configuredTabExpandSetting();
 							}
 						} else if (setupKey == "WINDOWCOLORS" || setupKey == "MENUDIALOGCOLORS" ||
-						           setupKey == "HELPCOLORS" || setupKey == "OTHERCOLORS") {
+						           setupKey == "HELPCOLORS" || setupKey == "OTHERCOLORS" ||
+						           setupKey == "MINIMAPCOLORS") {
 							if (!applyConfiguredColorSetupValue(setupKey, valueAsString(args[1]), &errorText))
 								throw std::runtime_error(
 								    "MRSETUP(" + setupKey + ") failed: " +
@@ -6045,9 +6046,11 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							    "INDENT_STYLE, FILE_TYPE, BINARY_RECORD_LENGTH, POST_LOAD_MACRO, PRE_SAVE_MACRO, DEFAULT_PATH, "
 							    "FORMAT_LINE, BACKUP_METHOD, BACKUP_FREQUENCY, BACKUP_EXTENSION, BACKUP_DIRECTORY, "
 							    "AUTOSAVE_INACTIVITY_SECONDS, AUTOSAVE_INTERVAL_SECONDS, BACKUP_FILES, SHOW_EOF_MARKER, "
-							    "SHOW_EOF_MARKER_EMOJI, SHOW_LINE_NUMBERS, LINE_NUM_ZERO_FILL, PERSISTENT_BLOCKS, CODE_FOLDING, "
+							    "SHOW_EOF_MARKER_EMOJI, LINE_NUMBERS_POSITION, LINE_NUM_ZERO_FILL, "
+							    "MINIMAP_POSITION, MINIMAP_WIDTH, MINIMAP_MARKER_GLYPH, GUTTERS, PERSISTENT_BLOCKS, "
+							    "CODE_FOLDING_POSITION, "
 							    "COLUMN_BLOCK_MOVE, DEFAULT_MODE, CURSOR_STATUS_COLOR, WINDOWCOLORS, MENUDIALOGCOLORS, "
-							    "HELPCOLORS, OTHERCOLORS.");
+							    "HELPCOLORS, OTHERCOLORS, MINIMAPCOLORS.");
 						runtimeErrorLevel() = 0;
 					} else if (name == "MRFEPROFILE") {
 					std::string errorText;

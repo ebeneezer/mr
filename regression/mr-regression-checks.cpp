@@ -190,9 +190,10 @@ struct RuntimeSettingsSnapshot {
 enum : std::size_t {
 	kMenuDialogIndexListboxSelector = 11,
 	kMenuDialogIndexInactiveControls = 12,
-	kMenuDialogIndexDialogFrame = 13,
-	kMenuDialogIndexDialogText = 14,
-	kMenuDialogIndexDialogBackground = 15
+	kMenuDialogIndexInactiveElements = 13,
+	kMenuDialogIndexDialogFrame = 14,
+	kMenuDialogIndexDialogText = 15,
+	kMenuDialogIndexDialogBackground = 16
 };
 
 enum : unsigned char {
@@ -243,6 +244,9 @@ bool restoreRuntimeSettingsSnapshot(const RuntimeSettingsSnapshot &snapshot, std
 		return false;
 	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Other, snapshot.colorSettings.otherColors.data(),
 	                                        snapshot.colorSettings.otherColors.size(), &errorText))
+		return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MiniMap, snapshot.colorSettings.miniMapColors.data(),
+	                                        snapshot.colorSettings.miniMapColors.size(), &errorText))
 		return false;
 	if (!setConfiguredColorThemeFilePath(snapshot.colorThemeFilePath, &errorText))
 		return false;
@@ -446,8 +450,8 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 	                           "MRSETUP('TAB_SIZE', '6');\n"
 	                           "MRSETUP('BACKUP_FILES', 'false');\n"
 	                           "MRSETUP('SHOW_EOF_MARKER', 'true');\n"
-	                           "MRSETUP('SHOW_EOF_MARKEREMOJI', 'false');\n"
-	                           "MRSETUP('SHOW_LINE_NUMBERS', 'true');\n"
+	                           "MRSETUP('SHOW_EOF_MARKER_EMOJI', 'false');\n"
+	                           "MRSETUP('LINE_NUMBERS_POSITION', 'LEADING');\n"
 	                           "MRSETUP('LINE_NUM_ZERO_FILL', 'true');\n"
 	                           "MRSETUP('COLUMN_BLOCK_MOVE', 'LEAVE_SPACE');\n"
 	                           "MRSETUP('DEFAULT_MODE', 'OVERWRITE');\n"
@@ -522,13 +526,13 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 					return false;
 				}
 				if (settings.showEofMarkerEmoji) {
-					failureReason = "Startup context should apply SHOW_EOF_MARKEREMOJI='false'.";
+					failureReason = "Startup context should apply SHOW_EOF_MARKER_EMOJI='false'.";
 					return false;
 				}
-				if (!settings.showLineNumbers) {
-					failureReason = "Startup context should apply SHOW_LINE_NUMBERS='true'.";
+				if (!settings.showLineNumbers || settings.lineNumbersPosition != "LEADING") {
+					failureReason = "Startup context should apply LINE_NUMBERS_POSITION='LEADING'.";
 					return false;
-			}
+				}
 			if (!settings.lineNumZeroFill) {
 				failureReason = "Startup context should apply LINE_NUM_ZERO_FILL='true'.";
 				return false;
@@ -545,7 +549,7 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 				    colors.windowColors[2] != 0x12 || colors.windowColors[3] != 0x13 ||
 				    colors.windowColors[4] != 0x14 || colors.windowColors[5] != 0x15 ||
 				    colors.windowColors[6] != 0x16 || colors.windowColors[7] != 0x17 ||
-				    colors.windowColors[8] != 0x1F) {
+				    colors.windowColors[8] != 0x1F || colors.windowColors[9] != 0x1F) {
 					failureReason = "Startup context should apply WINDOWCOLORS list (including legacy migration).";
 					return false;
 				}
@@ -564,7 +568,7 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 		}
 			{
 				std::vector<std::string> exts = configuredDefaultExtensionList();
-				if (exts.size() < 2 || exts[0] != "TXT" || exts[1] != "MD") {
+				if (exts.size() < 2 || exts[0] != "txt" || exts[1] != "md") {
 				failureReason = "Startup context should apply DEFAULT_EXTENSIONS='txt;md'.";
 				return false;
 			}
@@ -751,14 +755,15 @@ bool testSettingsMacroAutoCreate(std::string &failureReason) {
 		failureReason = "Auto-created settings.mrmac should persist SHOW_EOF_MARKER as true/false.";
 		return false;
 	}
-	if (content.find("MRSETUP('SHOW_EOF_MARKEREMOJI', 'true');") == std::string::npos &&
-	    content.find("MRSETUP('SHOW_EOF_MARKEREMOJI', 'false');") == std::string::npos) {
-		failureReason = "Auto-created settings.mrmac should persist SHOW_EOF_MARKEREMOJI as true/false.";
+	if (content.find("MRSETUP('SHOW_EOF_MARKER_EMOJI', 'true');") == std::string::npos &&
+	    content.find("MRSETUP('SHOW_EOF_MARKER_EMOJI', 'false');") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac should persist SHOW_EOF_MARKER_EMOJI as true/false.";
 		return false;
 	}
-	if (content.find("MRSETUP('SHOW_LINE_NUMBERS', 'true');") == std::string::npos &&
-	    content.find("MRSETUP('SHOW_LINE_NUMBERS', 'false');") == std::string::npos) {
-		failureReason = "Auto-created settings.mrmac should persist SHOW_LINE_NUMBERS as true/false.";
+	if (content.find("MRSETUP('LINE_NUMBERS_POSITION', 'OFF');") == std::string::npos &&
+	    content.find("MRSETUP('LINE_NUMBERS_POSITION', 'LEADING');") == std::string::npos &&
+	    content.find("MRSETUP('LINE_NUMBERS_POSITION', 'TRAILING');") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac should persist LINE_NUMBERS_POSITION as OFF/LEADING/TRAILING.";
 		return false;
 	}
 	if (content.find("MRSETUP('LINE_NUM_ZERO_FILL', 'true');") == std::string::npos &&
@@ -1009,7 +1014,7 @@ bool testSettingsDiscrepancyMigrationGuard(std::string &failureReason) {
 	                                 "MRSETUP('TRUNCATE_SPACES', 'false');\n"
 	                                 "MRSETUP('TAB_SIZE', '4');\n"
 	                                 "MRSETUP('BACKUP_FILES', 'false');\n"
-	                                 "MRSETUP('SHOW_LINE_NUMBERS', 'true');\n"
+	                                 "MRSETUP('LINE_NUMBERS_POSITION', 'LEADING');\n"
 	                                 "MRSETUP('LINE_NUM_ZERO_FILL', 'true');\n"
 	                                 "MRSETUP('COLORTHEMEURI', '" +
 	                                 legacyThemePath + "');\n"
@@ -1046,7 +1051,7 @@ bool testSettingsDiscrepancyMigrationGuard(std::string &failureReason) {
 		failureReason = "Migrated settings.mrmac must anchor SETTINGSPATH to the active file.";
 		return false;
 	}
-	if (content.find("MRSETUP('SHOW_LINE_NUMBERS', 'true');") == std::string::npos ||
+	if (content.find("MRSETUP('LINE_NUMBERS_POSITION', 'LEADING');") == std::string::npos ||
 	    content.find("MRSETUP('LINE_NUM_ZERO_FILL', 'true');") == std::string::npos ||
 	    content.find("MRSETUP('TRUNCATE_SPACES', 'false');") == std::string::npos ||
 	    content.find("MRSETUP('TAB_SIZE', '4');") == std::string::npos ||
@@ -1148,7 +1153,8 @@ bool testDialogPaletteOverridesAbsent(std::string &failureReason) {
 }
 
 bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
-	static const unsigned char probeValues[] = {0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59};
+	static const unsigned char probeValues[] = {0x51, 0x52, 0x53, 0x54, 0x55,
+	                                            0x56, 0x57, 0x58, 0x59, 0x5A};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::size_t itemCount = 0;
 	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::Window, itemCount);
@@ -1179,7 +1185,7 @@ bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
 			bool isExpectedSlot = (slot == 8 || slot == 9 || slot == 13 || slot == 14 ||
 			                       slot == kMrPaletteCurrentLine || slot == kMrPaletteCurrentLineInBlock ||
 			                       slot == kMrPaletteChangedText || slot == kMrPaletteLineNumbers ||
-			                       slot == kMrPaletteEofMarker);
+			                       slot == kMrPaletteEofMarker || slot == kMrPaletteCodeFolding);
 		if (!configuredColorSlotOverride(items[i].paletteIndex, value)) {
 			restore();
 			failureReason = "WINDOWCOLORS item must override its mapped palette slot.";
@@ -1204,7 +1210,7 @@ bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
 bool testMenuDialogColorGroupTargetsExpectedSlots(std::string &failureReason) {
 	static const unsigned char probeValues[] = {0x61, 0x62, 0x63, 0x64, 0x65, 0x66,
 	                                            0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C,
-	                                            0x6D, 0x6E, 0x6F, 0x70};
+	                                            0x6D, 0x6E, 0x6F, 0x70, 0x71};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::size_t itemCount = 0;
 	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::MenuDialog, itemCount);
@@ -1235,12 +1241,13 @@ bool testMenuDialogColorGroupTargetsExpectedSlots(std::string &failureReason) {
 		unsigned char slot = items[i].paletteIndex;
 		bool isMenuSlot = slot >= 2 && slot <= 6;
 		bool isGrayDialogSlot = slot >= 32 && slot <= 63;
+		bool isExtendedDialogSlot = slot == kMrPaletteDialogInactiveElements;
 		if (!configuredColorSlotOverride(slot, value)) {
 			restore();
 			failureReason = "MENUDIALOGCOLORS item must override its mapped palette slot.";
 			return false;
 		}
-		if (value != probeValues[i] || (!isMenuSlot && !isGrayDialogSlot)) {
+		if (value != probeValues[i] || (!isMenuSlot && !isGrayDialogSlot && !isExtendedDialogSlot)) {
 			restore();
 			failureReason = "MENUDIALOGCOLORS slot mapping mismatch.";
 			return false;
@@ -1280,6 +1287,8 @@ bool testMenuDialogSemanticLabelsGuard(std::string &failureReason) {
 	configured = configuredColorSetupSettings();
 	if (configured.menuDialogColors[kMenuDialogIndexInactiveControls] !=
 	        defaults.menuDialogColors[kMenuDialogIndexInactiveControls] ||
+	    configured.menuDialogColors[kMenuDialogIndexInactiveElements] !=
+	        defaults.menuDialogColors[kMenuDialogIndexInactiveElements] ||
 	    configured.menuDialogColors[kMenuDialogIndexDialogFrame] != 0x1C ||
 	    configured.menuDialogColors[kMenuDialogIndexDialogText] != 0x1D ||
 	    configured.menuDialogColors[kMenuDialogIndexDialogBackground] != 0x1C) {
@@ -1301,6 +1310,8 @@ bool testMenuDialogSemanticLabelsGuard(std::string &failureReason) {
 	        defaults.menuDialogColors[kMenuDialogIndexListboxSelector] ||
 	    configured.menuDialogColors[kMenuDialogIndexInactiveControls] !=
 	        defaults.menuDialogColors[kMenuDialogIndexInactiveControls] ||
+	    configured.menuDialogColors[kMenuDialogIndexInactiveElements] !=
+	        defaults.menuDialogColors[kMenuDialogIndexInactiveElements] ||
 	    configured.menuDialogColors[kMenuDialogIndexDialogFrame] !=
 	        defaults.menuDialogColors[kMenuDialogIndexDialogFrame] ||
 	    configured.menuDialogColors[kMenuDialogIndexDialogText] != defaults.menuDialogColors[kMenuDialogIndexDialogText] ||
@@ -1323,7 +1334,7 @@ bool testMenuDialogSemanticLabelsGuard(std::string &failureReason) {
 bool testMenuEntryHotkeySelectionAliasGuard(std::string &failureReason) {
 	static const unsigned char probeValues[] = {0x71, 0x72, 0x7B, 0x74, 0x75, 0x76,
 	                                            0x77, 0x78, 0x79, 0x7A, 0x7C, 0x7D,
-	                                            0x7E, 0x7F, 0x70, 0x71};
+	                                            0x7E, 0x7F, 0x70, 0x71, 0x72};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::string errorText;
 	unsigned char normalHotkey = 0;
@@ -1388,7 +1399,7 @@ bool testDialogFrameAndBackgroundPropagationGuard(std::string &failureReason) {
 	// - dialog text (slot 37)
 	// - dialog background (slot 32)
 	auto probe = previous.menuDialogColors;
-	if (probe.size() < 16) {
+	if (probe.size() < 17) {
 		failureReason = "MENUDIALOGCOLORS must expose frame/text/background entries.";
 		return false;
 	}
@@ -1519,7 +1530,9 @@ bool testSetupScrollRefreshGuard(std::string &failureReason) {
 	probe.tabExpand = false;
 	probe.tabSize = 3;
 	probe.backupFiles = false;
+	probe.backupMethod = "OFF";
 	probe.showLineNumbers = true;
+	probe.lineNumbersPosition = "LEADING";
 	probe.lineNumZeroFill = true;
 	probe.persistentBlocks = false;
 	probe.columnBlockMove = "LEAVE_SPACE";
@@ -1538,14 +1551,13 @@ bool testSetupScrollRefreshGuard(std::string &failureReason) {
 	paths.shellUri = "/bin/sh";
 	source = buildSettingsMacroSource(paths);
 	if (source.find("MRSETUP('TAB_SIZE', '") == std::string::npos ||
-	    source.find("MRSETUP('SHOW_LINE_NUMBERS', '") == std::string::npos ||
-	    source.find("MRFEPROFILE('SET', 'perl_profile', 'TAB_SIZE', '3');") == std::string::npos ||
-	    source.find("MRFEPROFILE('SET', 'perl_profile', 'SHOW_LINE_NUMBERS', 'true');") == std::string::npos) {
+	    source.find("MRSETUP('LINE_NUMBERS_POSITION', '") == std::string::npos) {
 		restore();
-		failureReason = "Profile roundtrip source did not use canonical edit-setting keys.";
+		failureReason = "Edit-settings roundtrip source did not use canonical edit-setting keys.";
 		return false;
 	}
 	if (source.find("MRSETUP('TABSIZE', '") != std::string::npos ||
+	    source.find("MRSETUP('SHOW_LINE_NUMBERS', '") != std::string::npos ||
 	    source.find("MRSETUP('SHOWLINENUMBERS', '") != std::string::npos ||
 	    source.find("MRFEPROFILE('SET', 'perl_profile', 'TABSIZE', '3');") != std::string::npos) {
 		restore();
@@ -1565,17 +1577,69 @@ bool testSetupScrollRefreshGuard(std::string &failureReason) {
 	}
 
 	loaded = configuredEditSetupSettings();
-	if (loaded.wordDelimiters != probe.wordDelimiters || loaded.defaultExtensions != "TXT;MD" ||
-	    loaded.truncateSpaces != probe.truncateSpaces || loaded.eofCtrlZ != probe.eofCtrlZ ||
-	    loaded.eofCrLf != probe.eofCrLf || loaded.tabExpand != probe.tabExpand ||
-	    loaded.tabSize != probe.tabSize ||
-	    loaded.backupFiles != probe.backupFiles ||
-	    loaded.showLineNumbers != probe.showLineNumbers ||
-	    loaded.lineNumZeroFill != probe.lineNumZeroFill ||
-	    loaded.persistentBlocks != probe.persistentBlocks || loaded.columnBlockMove != probe.columnBlockMove ||
-	    loaded.defaultMode != probe.defaultMode) {
+	if (loaded.wordDelimiters != probe.wordDelimiters) {
 		restore();
-		failureReason = "Edit-settings roundtrip via settings.mrmac did not preserve configured values.";
+		failureReason = "Word delimiters mismatch after roundtrip.";
+		return false;
+	}
+	if (loaded.defaultExtensions != "txt;md") {
+		restore();
+		failureReason = "Default extensions mismatch after roundtrip.";
+		return false;
+	}
+	if (loaded.truncateSpaces != probe.truncateSpaces) {
+		restore();
+		failureReason = "Truncate-spaces mismatch after roundtrip.";
+		return false;
+	}
+	if (loaded.eofCtrlZ != probe.eofCtrlZ) {
+		restore();
+		failureReason = "EOF_CTRL_Z mismatch after roundtrip.";
+		return false;
+	}
+	if (loaded.eofCrLf != probe.eofCrLf) {
+		restore();
+		failureReason = "EOF_CR_LF mismatch after roundtrip.";
+		return false;
+	}
+	if (loaded.tabExpand != probe.tabExpand) {
+		restore();
+		failureReason = "TAB_EXPAND mismatch after roundtrip.";
+		return false;
+	}
+	if (loaded.tabSize != probe.tabSize) {
+		restore();
+		failureReason = "TAB_SIZE mismatch after roundtrip.";
+		return false;
+	}
+	if (loaded.backupFiles != probe.backupFiles) {
+		restore();
+		failureReason = "BACKUP_FILES mismatch after roundtrip.";
+		return false;
+	}
+	if (loaded.lineNumZeroFill != probe.lineNumZeroFill) {
+		restore();
+		failureReason = "LINE_NUM_ZERO_FILL mismatch after roundtrip.";
+		return false;
+	}
+	if (loaded.persistentBlocks != probe.persistentBlocks) {
+		restore();
+		failureReason = "PERSISTENT_BLOCKS mismatch after roundtrip.";
+		return false;
+	}
+	if (loaded.columnBlockMove != probe.columnBlockMove) {
+		restore();
+		failureReason = "COLUMN_BLOCK_MOVE mismatch after roundtrip.";
+		return false;
+	}
+	if (loaded.defaultMode != probe.defaultMode) {
+		restore();
+		failureReason = "DEFAULT_MODE mismatch after roundtrip.";
+		return false;
+	}
+	if (loaded.lineNumbersPosition != "LEADING" || !loaded.showLineNumbers) {
+		restore();
+		failureReason = "Line-number position/show flag mismatch after roundtrip.";
 		return false;
 	}
 
@@ -1637,7 +1701,7 @@ bool testExtendedSettingsRoundtripGuard(std::string &failureReason) {
 	    source.find("MRSETUP('POST_LOAD_MACRO', '") == std::string::npos ||
 	    source.find("MRSETUP('PRE_SAVE_MACRO', '") == std::string::npos ||
 	    source.find("MRSETUP('DEFAULT_PATH', '") == std::string::npos ||
-	    source.find("MRSETUP('FORMAT_LINE', '12345678');") == std::string::npos ||
+	    source.find("MRSETUP('FORMAT_LINE', '1234567890');") == std::string::npos ||
 	    source.find("MRSETUP('CURSOR_STATUS_COLOR', '7F');") == std::string::npos) {
 		restore();
 		failureReason = "Extended settings serializer did not emit the expected canonical keys.";
@@ -1661,7 +1725,7 @@ bool testExtendedSettingsRoundtripGuard(std::string &failureReason) {
 	    loaded.postLoadMacro != normalizeConfiguredPathInput(probe.postLoadMacro) ||
 	    loaded.preSaveMacro != normalizeConfiguredPathInput(probe.preSaveMacro) ||
 	    loaded.defaultPath != normalizeConfiguredPathInput(probe.defaultPath) ||
-	    loaded.formatLine != "12345678" || loaded.cursorStatusColor != "7F") {
+	    loaded.formatLine != "1234567890" || loaded.cursorStatusColor != "7F") {
 		restore();
 		failureReason = "Extended settings roundtrip lost one or more serialized edit settings.";
 		return false;
@@ -1733,6 +1797,7 @@ bool testEditProfileRoundtripGuard(std::string &failureReason) {
 
 	globalSettings.tabSize = 8;
 	globalSettings.showLineNumbers = false;
+	globalSettings.lineNumbersPosition = "OFF";
 	globalSettings.defaultMode = "INSERT";
 	if (!setConfiguredEditSetupSettings(globalSettings, &errorText)) {
 		restore();
@@ -1746,9 +1811,10 @@ bool testEditProfileRoundtripGuard(std::string &failureReason) {
 	profile.extensions.push_back("pm");
 	profile.overrides.values = resolveEditSetupDefaults();
 	profile.overrides.values.tabSize = 3;
+	profile.overrides.values.lineNumbersPosition = "LEADING";
 	profile.overrides.values.showLineNumbers = true;
 	profile.overrides.values.defaultMode = "overwrite";
-	profile.overrides.mask = kOvTabSize | kOvShowLineNumbers | kOvDefaultMode;
+	profile.overrides.mask = kOvTabSize | kOvLineNumbersPosition | kOvDefaultMode;
 	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(1, profile), &errorText)) {
 		restore();
 		failureReason = "Unable to seed extension profile roundtrip probe: " + errorText;
@@ -2103,7 +2169,7 @@ bool testEditProfileDuplicateExactExtensionMacroGuard(std::string &failureReason
 		failureReason = "Duplicate exact extension assignment was accepted from macro source.";
 		return false;
 	}
-	if (errorText.find("assigned more than once: c") == std::string::npos) {
+	if (errorText.find("Duplicate profile extension 'c'") == std::string::npos) {
 		restore();
 		failureReason = "Duplicate exact extension assignment should report the conflicting selector.";
 		return false;
@@ -2196,16 +2262,15 @@ bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) 
 	const std::string settingsPath = root + "/cfg/settings.mrmac";
 	const std::string themePath = root + "/cfg/probe-theme.mrmac";
 	static const MRColorSetupGroup groups[] = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog,
-	                                           MRColorSetupGroup::Help, MRColorSetupGroup::Other};
+	                                           MRColorSetupGroup::Help, MRColorSetupGroup::Other,
+	                                           MRColorSetupGroup::MiniMap};
 	TColorAttr paletteData[kMrPaletteMax];
 	TPalette workingPalette(paletteData, static_cast<ushort>(kMrPaletteMax));
-	std::map<unsigned char, unsigned char> expectedBySlot;
 	MRSetupPaths paths = resolveSetupPathDefaults();
 	std::string content;
 	std::string errorText;
 	std::string restoreError;
 	bool restored = false;
-	unsigned char slotValue = 0;
 	unsigned char nextColor = 0x21;
 
 	auto restore = [&]() {
@@ -2224,7 +2289,6 @@ bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) 
 			continue;
 		for (std::size_t i = 0; i < count; ++i) {
 			workingPalette[items[i].paletteIndex] = nextColor;
-			expectedBySlot[items[i].paletteIndex] = nextColor;
 			++nextColor;
 		}
 	}
@@ -2261,17 +2325,46 @@ bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) 
 	if (content.find("MRSETUP('WINDOWCOLORS', '") == std::string::npos ||
 	    content.find("MRSETUP('MENUDIALOGCOLORS', '") == std::string::npos ||
 	    content.find("MRSETUP('HELPCOLORS', '") == std::string::npos ||
-	    content.find("MRSETUP('OTHERCOLORS', '") == std::string::npos) {
+	    content.find("MRSETUP('OTHERCOLORS', '") == std::string::npos ||
+	    content.find("MRSETUP('MINIMAPCOLORS', '") == std::string::npos) {
 		restore();
 		failureReason = "Saved color theme must contain all color group assignments.";
 		return false;
 	}
 
-	for (const auto &entry : expectedBySlot) {
-		if (!configuredColorSlotOverride(entry.first, slotValue) || slotValue != entry.second) {
-			restore();
-			failureReason = "Color Setup save-theme did not apply the working palette before persisting.";
-			return false;
+	{
+		const MRColorSetupSettings configured = configuredColorSetupSettings();
+		for (MRColorSetupGroup group : groups) {
+			std::size_t count = 0;
+			const MRColorSetupItem *items = colorSetupGroupItems(group, count);
+			if (items == nullptr || count == 0)
+				continue;
+			for (std::size_t i = 0; i < count; ++i) {
+				const unsigned char expected = static_cast<unsigned char>(workingPalette[items[i].paletteIndex]);
+				unsigned char actual = 0;
+				switch (group) {
+					case MRColorSetupGroup::Window:
+						actual = configured.windowColors[i];
+						break;
+					case MRColorSetupGroup::MenuDialog:
+						actual = configured.menuDialogColors[i];
+						break;
+					case MRColorSetupGroup::Help:
+						actual = configured.helpColors[i];
+						break;
+					case MRColorSetupGroup::Other:
+						actual = configured.otherColors[i];
+						break;
+					case MRColorSetupGroup::MiniMap:
+						actual = configured.miniMapColors[i];
+						break;
+				}
+				if (actual != expected) {
+					restore();
+					failureReason = "Color Setup save-theme did not apply the working palette before persisting.";
+					return false;
+				}
+			}
 		}
 	}
 
@@ -2289,7 +2382,7 @@ bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureRea
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::string previousThemePath = configuredColorThemeFilePath();
 	const std::array<unsigned char, MRColorSetupSettings::kWindowCount> probeValues = {
-	    0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29};
+	    0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A};
 	std::string errorText;
 	std::string content;
 	unsigned char slotValue = 0;
@@ -2350,8 +2443,13 @@ bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureRea
 					return false;
 				}
 		}
-	if (!configuredColorSlotOverride(kMrPaletteLineNumbers, slotValue) || slotValue != probeValues.back()) {
+	if (!configuredColorSlotOverride(kMrPaletteLineNumbers, slotValue) || slotValue != probeValues[8]) {
 		failureReason = "Line-number palette slot must be restored from WINDOWCOLORS theme value.";
+		restore();
+		return false;
+	}
+	if (!configuredColorSlotOverride(kMrPaletteCodeFolding, slotValue) || slotValue != probeValues[9]) {
+		failureReason = "Code-folding palette slot must be restored from WINDOWCOLORS theme value.";
 		restore();
 		return false;
 	}
@@ -2504,7 +2602,7 @@ bool testEofVirtualLineColorGuard(std::string &failureReason) {
 		if (content.find("bool isDocumentLine = lineIndex < totalLines;") ==
 		        std::string::npos ||
 		    content.find(
-		        "formatSyntaxLine(buffer, linePtr, delta.x, textWidth, gutterWidth, isDocumentLine, drawEofMarker,") ==
+		        "formatSyntaxLine(buffer, linePtr, delta.x, textWidth, viewport.textLeft, isDocumentLine, drawEofMarker,") ==
 		        std::string::npos) {
 		failureReason = "Draw path must pass document-line state into syntax line formatter.";
 		return false;
@@ -2601,10 +2699,10 @@ bool testThemeAndMacroSaveOverwriteWiringGuard(std::string &failureReason) {
 bool testPersistentBlocksWiringGuard(std::string &failureReason) {
 	const std::string settingsPath = absolutePathFromCwd("config/MRDialogPaths.cpp");
 	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
-	const std::string dialogPath = absolutePathFromCwd("dialogs/MREditProfilesDialog.cpp");
+	const std::string panelPath = absolutePathFromCwd("dialogs/MREditProfilesPanel.cpp");
 	std::string settingsContent;
 	std::string vmContent;
-	std::string dialogContent;
+	std::string panelContent;
 	std::string ioError;
 
 	if (!readTextFile(settingsPath, settingsContent, ioError)) {
@@ -2615,8 +2713,8 @@ bool testPersistentBlocksWiringGuard(std::string &failureReason) {
 		failureReason = "Unable to read mrvm.cpp for persistent-blocks guard: " + ioError;
 		return false;
 	}
-	if (!readTextFile(dialogPath, dialogContent, ioError)) {
-		failureReason = "Unable to read MREditProfilesDialog.cpp for persistent-blocks guard: " + ioError;
+	if (!readTextFile(panelPath, panelContent, ioError)) {
+		failureReason = "Unable to read MREditProfilesPanel.cpp for persistent-blocks guard: " + ioError;
 		return false;
 	}
 	if (settingsContent.find("upperKeyName == \"PERSISTENT_BLOCKS\"") ==
@@ -2625,12 +2723,14 @@ bool testPersistentBlocksWiringGuard(std::string &failureReason) {
 		failureReason = "Persistent blocks must be parsed and serialized via MRSETUP in MRDialogPaths.";
 		return false;
 	}
-	if (vmContent.find("setupKey == \"PERSISTENT_BLOCKS\"") == std::string::npos) {
+	if (vmContent.find("findEditSettingDescriptorByKey(setupKey)") == std::string::npos ||
+	    vmContent.find("PERSISTENT_BLOCKS") == std::string::npos) {
 		failureReason = "MRVM startup whitelist must accept PERSISTENT_BLOCKS.";
 		return false;
 	}
-	if (dialogContent.find("ersistent blocks") == std::string::npos) {
-		failureReason = "Edit profiles dialog must expose a Persistent blocks option.";
+	if (panelContent.find("Persistent ~B~locks") == std::string::npos ||
+	    panelContent.find("kOptionPersistentBlocks") == std::string::npos) {
+		failureReason = "Edit profiles panel must expose and wire a Persistent blocks option.";
 		return false;
 	}
 	failureReason.clear();

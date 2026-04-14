@@ -75,6 +75,17 @@ session_handover:
     conditional_dispatch_form_policy: "Dispatch-Regel: switch nur bei gemeinsamem Diskriminator (typisch enum/Token). Bei String-Dispatch ist statt switch verpflichtend ein tabellengetriebenes Modell mit zentraler Validierung zu verwenden."
     tvision_standard_nearness_policy: "Standardnaehe zu magiblot/TVision ist zwingend. Keine nicht standardnahen UI-Workarounds oder Overlay-Konstruktionen, wenn eine TVision-nahe Loesung moeglich ist."
     engineering_priority_policy: "Dieses Projekt optimiert nicht auf Geschwindigkeit der Fertigstellung. Prioritaet haben technische Exzellenz, saubere Architektur und robuste, standardnahe Implementierung."
+    coding_assistant_generation_policy:
+      - "Harter Code, optimiert, human readability."
+      - "Keine verstreuten Literale und keine Boilerplate-Methoden."
+      - "Keine unverstaendlichen Bezeichner."
+      - "Keine trailing/leading Underscores in neuem Code."
+      - "Maximale Kapselung von OOP-Konstrukten."
+      - "C++20-Mechaniken und Namespaces aktiv nutzen."
+      - "Semantisch korrekte Bezeichner erzwingen."
+      - "Refactoring bei Bedarf explizit empfehlen."
+      - "Intrinsics pruefen und bei Eignung empfehlen."
+      - "Unbenutzte Methoden und Member umgehend aus der Codebase entfernen."
 
   repository_conventions:
     markdown_docs_location: "/home/idoc/mr/documentation"

@@ -34,6 +34,22 @@ void writeRecordField(char *dest, std::size_t destSize, const std::string &value
 	mr::dialogs::writeRecordField(dest, destSize, value);
 }
 
+std::string defaultFormatLineForTabSize(int tabSize) {
+	const int normalizedTabSize = std::max(1, std::min(tabSize, 32));
+	const int targetWidth = 80;
+	std::string out("!");
+
+	while (static_cast<int>(out.size()) + normalizedTabSize + 1 <= targetWidth) {
+		out.append(static_cast<std::size_t>(normalizedTabSize), '-');
+		out.push_back('!');
+	}
+	if (out.size() == 1) {
+		out.append(static_cast<std::size_t>(normalizedTabSize), '-');
+		out.push_back('!');
+	}
+	return out;
+}
+
 bool recordsEqual(const EditSettingsDialogRecord &lhs, const EditSettingsDialogRecord &rhs) {
 	return readRecordField(lhs.pageBreak) == readRecordField(rhs.pageBreak) &&
 	       readRecordField(lhs.wordDelimiters) == readRecordField(rhs.wordDelimiters) &&
@@ -49,7 +65,9 @@ bool recordsEqual(const EditSettingsDialogRecord &lhs, const EditSettingsDialogR
 	       lhs.optionsMask == rhs.optionsMask && lhs.tabExpandChoice == rhs.tabExpandChoice &&
 	       lhs.indentStyleChoice == rhs.indentStyleChoice && lhs.fileTypeChoice == rhs.fileTypeChoice &&
 	       lhs.columnBlockMoveChoice == rhs.columnBlockMoveChoice &&
-	       lhs.defaultModeChoice == rhs.defaultModeChoice;
+	       lhs.defaultModeChoice == rhs.defaultModeChoice &&
+	       lhs.lineNumbersPositionChoice == rhs.lineNumbersPositionChoice &&
+	       lhs.codeFoldingPositionChoice == rhs.codeFoldingPositionChoice;
 }
 
 void initEditSettingsDialogRecord(EditSettingsDialogRecord &record) {
@@ -58,6 +76,8 @@ void initEditSettingsDialogRecord(EditSettingsDialogRecord &record) {
 	std::string defaultMode = upperAscii(settings.defaultMode);
 	std::string indentStyle = upperAscii(settings.indentStyle);
 	std::string fileType = upperAscii(settings.fileType);
+	std::string lineNumbersPosition = upperAscii(settings.lineNumbersPosition);
+	std::string codeFoldingPosition = upperAscii(settings.codeFoldingPosition);
 
 	std::memset(&record, 0, sizeof(record));
 	writeRecordField(record.pageBreak, sizeof(record.pageBreak), settings.pageBreak);
@@ -91,9 +111,9 @@ void initEditSettingsDialogRecord(EditSettingsDialogRecord &record) {
 		record.optionsMask |= kOptionShowEofMarkerEmoji;
 	if (settings.persistentBlocks)
 		record.optionsMask |= kOptionPersistentBlocks;
-	if (settings.codeFolding)
+	if (settings.codeFoldingPosition != "OFF")
 		record.optionsMask |= kOptionCodeFolding;
-	if (settings.showLineNumbers)
+	if (settings.lineNumbersPosition != "OFF")
 		record.optionsMask |= kOptionShowLineNumbers;
 	if (settings.lineNumZeroFill)
 		record.optionsMask |= kOptionLineNumZeroFill;
@@ -109,6 +129,14 @@ void initEditSettingsDialogRecord(EditSettingsDialogRecord &record) {
 	    (columnMove == "LEAVE_SPACE") ? kColumnMoveLeaveSpace : kColumnMoveDeleteSpace;
 	record.defaultModeChoice =
 	    (defaultMode == "OVERWRITE") ? kDefaultModeOverwrite : kDefaultModeInsert;
+	record.lineNumbersPositionChoice =
+	    (lineNumbersPosition == "LEADING") ? kLineNumbersLeading
+	                                       : (lineNumbersPosition == "TRAILING") ? kLineNumbersTrailing
+	                                                                             : kLineNumbersOff;
+	record.codeFoldingPositionChoice =
+	    (codeFoldingPosition == "LEADING") ? kCodeFoldingLeading
+	                                       : (codeFoldingPosition == "TRAILING") ? kCodeFoldingTrailing
+	                                                                             : kCodeFoldingOff;
 }
 
 bool recordToSettings(const EditSettingsDialogRecord &record, MREditSetupSettings &settings,
@@ -196,7 +224,7 @@ bool recordToSettings(const EditSettingsDialogRecord &record, MREditSetupSetting
 		settings.cursorStatusColor.push_back(hex[parsed & 0x0F]);
 	}
 	if (trimAscii(settings.formatLine).empty())
-		settings.formatLine = std::string(8, ' ');
+		settings.formatLine = defaultFormatLineForTabSize(settings.tabSize);
 	if (!settings.postLoadMacro.empty() && !mr::dialogs::hasMrmacExtension(settings.postLoadMacro)) {
 		errorText = "POST_LOAD_MACRO must end with .mrmac.";
 		return false;
@@ -214,9 +242,19 @@ bool recordToSettings(const EditSettingsDialogRecord &record, MREditSetupSetting
 	settings.showEofMarker = (record.optionsMask & kOptionShowEofMarker) != 0;
 	settings.showEofMarkerEmoji = (record.optionsMask & kOptionShowEofMarkerEmoji) != 0;
 	settings.persistentBlocks = (record.optionsMask & kOptionPersistentBlocks) != 0;
-	settings.codeFolding = (record.optionsMask & kOptionCodeFolding) != 0;
-	settings.showLineNumbers = (record.optionsMask & kOptionShowLineNumbers) != 0;
 	settings.lineNumZeroFill = (record.optionsMask & kOptionLineNumZeroFill) != 0;
+	settings.lineNumbersPosition = (record.lineNumbersPositionChoice == kLineNumbersLeading) ? "LEADING"
+	                         : (record.lineNumbersPositionChoice == kLineNumbersTrailing) ? "TRAILING"
+	                                                                                      : "OFF";
+	if (settings.lineNumbersPosition == "OFF" && (record.optionsMask & kOptionShowLineNumbers) != 0)
+		settings.lineNumbersPosition = "LEADING";
+	settings.showLineNumbers = settings.lineNumbersPosition != "OFF";
+	settings.codeFoldingPosition = (record.codeFoldingPositionChoice == kCodeFoldingLeading) ? "LEADING"
+	                         : (record.codeFoldingPositionChoice == kCodeFoldingTrailing) ? "TRAILING"
+	                                                                                      : "OFF";
+	if (settings.codeFoldingPosition == "OFF" && (record.optionsMask & kOptionCodeFolding) != 0)
+		settings.codeFoldingPosition = "LEADING";
+	settings.codeFolding = settings.codeFoldingPosition != "OFF";
 	settings.tabExpand = record.tabExpandChoice == kTabExpandTabs;
 	settings.indentStyle = (record.indentStyleChoice == kIndentStyleAutomatic) ? "AUTOMATIC"
 	                    : (record.indentStyleChoice == kIndentStyleSmart) ? "SMART"
@@ -271,7 +309,7 @@ namespace {
 
 const char *kDefaultProfileId = "DEFAULT";
 
-enum : unsigned int {
+enum : unsigned long long {
 	kOvNone = 0x0000,
 	kOvPageBreak = ::kOvPageBreak,
 	kOvWordDelimiters = ::kOvWordDelimiters,
@@ -293,12 +331,13 @@ enum : unsigned int {
 	kOvBackupFiles = ::kOvBackupFiles,
 	kOvShowEofMarker = ::kOvShowEofMarker,
 	kOvShowEofMarkerEmoji = ::kOvShowEofMarkerEmoji,
-	kOvShowLineNumbers = ::kOvShowLineNumbers,
+	kOvLineNumbersPosition = ::kOvLineNumbersPosition,
 	kOvLineNumZeroFill = ::kOvLineNumZeroFill,
 	kOvPersistentBlocks = ::kOvPersistentBlocks,
-	kOvCodeFolding = ::kOvCodeFolding,
+	kOvCodeFoldingPosition = ::kOvCodeFoldingPosition,
 	kOvColumnBlockMove = ::kOvColumnBlockMove,
-	kOvDefaultMode = ::kOvDefaultMode
+	kOvDefaultMode = ::kOvDefaultMode,
+	kOvGutters = ::kOvGutters
 };
 
 [[nodiscard]] bool validateProfileIdLiteral(const EditProfileDraft &draft, std::string &errorText) {
@@ -385,9 +424,9 @@ enum : unsigned int {
 	return true;
 }
 
-[[nodiscard]] unsigned int computeOverrideMask(const MREditSetupSettings &defaults,
+[[nodiscard]] unsigned long long computeOverrideMask(const MREditSetupSettings &defaults,
                                                const MREditSetupSettings &effective) {
-	unsigned int mask = kOvNone;
+	unsigned long long mask = kOvNone;
 
 	if (effective.pageBreak != defaults.pageBreak)
 		mask |= kOvPageBreak;
@@ -429,14 +468,16 @@ enum : unsigned int {
 		mask |= kOvShowEofMarker;
 	if (effective.showEofMarkerEmoji != defaults.showEofMarkerEmoji)
 		mask |= kOvShowEofMarkerEmoji;
-	if (effective.showLineNumbers != defaults.showLineNumbers)
-		mask |= kOvShowLineNumbers;
+	if (upperAscii(effective.lineNumbersPosition) != upperAscii(defaults.lineNumbersPosition))
+		mask |= kOvLineNumbersPosition;
 	if (effective.lineNumZeroFill != defaults.lineNumZeroFill)
 		mask |= kOvLineNumZeroFill;
 	if (effective.persistentBlocks != defaults.persistentBlocks)
 		mask |= kOvPersistentBlocks;
-	if (effective.codeFolding != defaults.codeFolding)
-		mask |= kOvCodeFolding;
+	if (upperAscii(effective.codeFoldingPosition) != upperAscii(defaults.codeFoldingPosition))
+		mask |= kOvCodeFoldingPosition;
+	if (upperAscii(trimAscii(effective.gutters)) != upperAscii(trimAscii(defaults.gutters)))
+		mask |= kOvGutters;
 	if (upperAscii(effective.columnBlockMove) != upperAscii(defaults.columnBlockMove))
 		mask |= kOvColumnBlockMove;
 	if (upperAscii(effective.defaultMode) != upperAscii(defaults.defaultMode))
@@ -591,6 +632,8 @@ std::vector<std::string> splitExtensionLiteral(const std::string &literal) {
 void settingsToDialogRecord(const MREditSetupSettings &settings, EditSettingsDialogRecord &record) {
 	std::string columnMove = upperAscii(settings.columnBlockMove);
 	std::string defaultMode = upperAscii(settings.defaultMode);
+	std::string lineNumbersPosition = upperAscii(settings.lineNumbersPosition);
+	std::string codeFoldingPosition = upperAscii(settings.codeFoldingPosition);
 
 	std::memset(&record, 0, sizeof(record));
 	writeRecordField(record.pageBreak, sizeof(record.pageBreak), settings.pageBreak);
@@ -619,15 +662,23 @@ void settingsToDialogRecord(const MREditSetupSettings &settings, EditSettingsDia
 		record.optionsMask |= kOptionShowEofMarkerEmoji;
 	if (settings.persistentBlocks)
 		record.optionsMask |= kOptionPersistentBlocks;
-	if (settings.codeFolding)
+	if (settings.codeFoldingPosition != "OFF")
 		record.optionsMask |= kOptionCodeFolding;
-	if (settings.showLineNumbers)
+	if (settings.lineNumbersPosition != "OFF")
 		record.optionsMask |= kOptionShowLineNumbers;
 	if (settings.lineNumZeroFill)
 		record.optionsMask |= kOptionLineNumZeroFill;
 	record.tabExpandChoice = settings.tabExpand ? kTabExpandSpaces : kTabExpandTabs;
 	record.columnBlockMoveChoice = (columnMove == "LEAVE_SPACE") ? kColumnMoveLeaveSpace : kColumnMoveDeleteSpace;
 	record.defaultModeChoice = (defaultMode == "OVERWRITE") ? kDefaultModeOverwrite : kDefaultModeInsert;
+	record.lineNumbersPositionChoice =
+	    (lineNumbersPosition == "LEADING") ? kLineNumbersLeading
+	                                       : (lineNumbersPosition == "TRAILING") ? kLineNumbersTrailing
+	                                                                             : kLineNumbersOff;
+	record.codeFoldingPositionChoice =
+	    (codeFoldingPosition == "LEADING") ? kCodeFoldingLeading
+	                                       : (codeFoldingPosition == "TRAILING") ? kCodeFoldingTrailing
+	                                                                             : kCodeFoldingOff;
 }
 
 bool draftsEqual(const EditProfileDraft &lhs, const EditProfileDraft &rhs) {

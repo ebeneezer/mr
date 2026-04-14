@@ -133,21 +133,26 @@ struct MiniMapWarmupPayload final : Payload {
 	int rowCount;
 	int bodyWidth;
 	std::size_t totalLines;
+	std::size_t windowStartLine;
+	std::size_t windowLineCount;
 	int viewportWidth;
 	std::vector<unsigned char> rowPatterns;
 	std::vector<std::size_t> rowLineStarts;
 	std::vector<std::size_t> rowLineEnds;
 
 	MiniMapWarmupPayload() noexcept
-	    : braille(true), rowCount(0), bodyWidth(0), totalLines(1), viewportWidth(1), rowPatterns(),
+	    : braille(true), rowCount(0), bodyWidth(0), totalLines(1), windowStartLine(0), windowLineCount(1),
+	      viewportWidth(1), rowPatterns(),
 	      rowLineStarts(), rowLineEnds() {
 	}
 
 	MiniMapWarmupPayload(bool aBraille, int aRowCount, int aBodyWidth, std::size_t aTotalLines,
-	                     int aViewportWidth, std::vector<unsigned char> aRowPatterns,
+	                     std::size_t aWindowStartLine, std::size_t aWindowLineCount, int aViewportWidth,
+	                     std::vector<unsigned char> aRowPatterns,
 	                     std::vector<std::size_t> aRowLineStarts, std::vector<std::size_t> aRowLineEnds)
 	    : braille(aBraille), rowCount(aRowCount), bodyWidth(aBodyWidth), totalLines(aTotalLines),
-	      viewportWidth(aViewportWidth), rowPatterns(std::move(aRowPatterns)),
+	      windowStartLine(aWindowStartLine), windowLineCount(aWindowLineCount), viewportWidth(aViewportWidth),
+	      rowPatterns(std::move(aRowPatterns)),
 	      rowLineStarts(std::move(aRowLineStarts)), rowLineEnds(std::move(aRowLineEnds)) {
 	}
 };

@@ -20,6 +20,10 @@
 #include "../ui/MRWindowSupport.hpp"
 
 namespace {
+const char *kLineIndexWarmAction = "Line index warming";
+const char *kSyntaxWarmAction = "Syntax warming";
+const char *kMiniMapRenderAction = "Mini map rendering";
+
 const char *coprocessorLaneName(mr::coprocessor::Lane lane) {
 	switch (lane) {
 		case mr::coprocessor::Lane::Io:
@@ -199,21 +203,24 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 				if (editor == nullptr)
 					continue;
-				if (editor->documentId() != result.task.documentId)
+				if (editor->documentId() != result.task.documentId) {
+					editor->clearLineIndexWarmupTask(result.task.id);
 					continue;
+				}
 				bool applied = false;
 				if (editor->documentVersion() == result.task.baseVersion)
 					applied = editor->applyLineIndexWarmup(warmup->warmup, result.task.baseVersion);
 				if (!applied)
 					editor->clearLineIndexWarmupTask(result.task.id);
 				if (!recorded) {
-					recordTaskPerformance(result, "Line index warmup", window, editor->documentId(),
+					recordTaskPerformance(result, kLineIndexWarmAction, window, editor->documentId(),
 					                      editor->bufferLength(), window->currentFileName());
 					recorded = true;
 				}
 			}
 			if (!recorded)
-				recordTaskPerformance(result, "Line index warmup", nullptr, result.task.documentId, 0, result.task.label);
+				recordTaskPerformance(result, kLineIndexWarmAction, nullptr, result.task.documentId, 0,
+				                      result.task.label);
 			return;
 		}
 
@@ -226,21 +233,24 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 				if (editor == nullptr)
 					continue;
-				if (editor->documentId() != result.task.documentId)
+				if (editor->documentId() != result.task.documentId) {
+					editor->clearSyntaxWarmupTask(result.task.id);
 					continue;
+				}
 				bool applied = false;
 				if (editor->documentVersion() == result.task.baseVersion)
 					applied = editor->applySyntaxWarmup(*syntax, result.task.baseVersion, result.task.id);
 				if (!applied)
 					editor->clearSyntaxWarmupTask(result.task.id);
 				if (!recorded) {
-					recordTaskPerformance(result, "Syntax warmup", window, editor->documentId(),
+					recordTaskPerformance(result, kSyntaxWarmAction, window, editor->documentId(),
 					                      editor->bufferLength(), window->currentFileName());
 					recorded = true;
 				}
 			}
 				if (!recorded)
-					recordTaskPerformance(result, "Syntax warmup", nullptr, result.task.documentId, 0, result.task.label);
+					recordTaskPerformance(result, kSyntaxWarmAction, nullptr, result.task.documentId, 0,
+					                      result.task.label);
 				return;
 			}
 
@@ -254,8 +264,10 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 					TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 					if (editor == nullptr)
 						continue;
-					if (editor->documentId() != result.task.documentId)
+					if (editor->documentId() != result.task.documentId) {
+						editor->clearMiniMapWarmupTask(result.task.id);
 						continue;
+					}
 					bool applied = false;
 					if (editor->documentVersion() == result.task.baseVersion)
 						applied = editor->applyMiniMapWarmup(*miniMap, result.task.baseVersion, result.task.id);
@@ -270,13 +282,13 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 						}
 					}
 					if (!recorded) {
-						recordTaskPerformance(result, "Mini map render", window, editor->documentId(),
+						recordTaskPerformance(result, kMiniMapRenderAction, window, editor->documentId(),
 						                      editor->bufferLength(), window->currentFileName());
 						recorded = true;
 					}
 				}
 				if (!recorded)
-					recordTaskPerformance(result, "Mini map render", nullptr, result.task.documentId, 0,
+					recordTaskPerformance(result, kMiniMapRenderAction, nullptr, result.task.documentId, 0,
 					                      result.task.label);
 				return;
 			}
@@ -505,17 +517,15 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 			if (editor == nullptr)
 				continue;
-			if (editor->documentId() != result.task.documentId)
-				continue;
-			if (!recorded) {
-				recordTaskPerformance(result, "Line index warmup", window, editor->documentId(),
+			if (!recorded && editor->documentId() == result.task.documentId) {
+				recordTaskPerformance(result, kLineIndexWarmAction, window, editor->documentId(),
 				                      editor->bufferLength(), window->currentFileName());
 				recorded = true;
 			}
 			editor->clearLineIndexWarmupTask(result.task.id);
 		}
 		if (!recorded)
-			recordTaskPerformance(result, "Line index warmup", nullptr, result.task.documentId, 0, result.task.label);
+			recordTaskPerformance(result, kLineIndexWarmAction, nullptr, result.task.documentId, 0, result.task.label);
 	}
 
 	if (result.task.kind == mr::coprocessor::TaskKind::SyntaxWarmup) {
@@ -525,17 +535,15 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 			if (editor == nullptr)
 				continue;
-			if (editor->documentId() != result.task.documentId)
-				continue;
-			if (!recorded) {
-				recordTaskPerformance(result, "Syntax warmup", window, editor->documentId(),
+			if (!recorded && editor->documentId() == result.task.documentId) {
+				recordTaskPerformance(result, kSyntaxWarmAction, window, editor->documentId(),
 				                      editor->bufferLength(), window->currentFileName());
 				recorded = true;
 			}
 			editor->clearSyntaxWarmupTask(result.task.id);
 		}
 		if (!recorded)
-			recordTaskPerformance(result, "Syntax warmup", nullptr, result.task.documentId, 0, result.task.label);
+			recordTaskPerformance(result, kSyntaxWarmAction, nullptr, result.task.documentId, 0, result.task.label);
 	}
 
 	if (result.task.kind == mr::coprocessor::TaskKind::MiniMapWarmup) {
@@ -545,17 +553,15 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 			if (editor == nullptr)
 				continue;
-			if (editor->documentId() != result.task.documentId)
-				continue;
-			if (!recorded) {
-				recordTaskPerformance(result, "Mini map render", window, editor->documentId(),
+			if (!recorded && editor->documentId() == result.task.documentId) {
+				recordTaskPerformance(result, kMiniMapRenderAction, window, editor->documentId(),
 				                      editor->bufferLength(), window->currentFileName());
 				recorded = true;
 			}
 			editor->clearMiniMapWarmupTask(result.task.id);
 		}
 		if (!recorded)
-			recordTaskPerformance(result, "Mini map render", nullptr, result.task.documentId, 0, result.task.label);
+			recordTaskPerformance(result, kMiniMapRenderAction, nullptr, result.task.documentId, 0, result.task.label);
 	}
 
 	if (!result.failed())
