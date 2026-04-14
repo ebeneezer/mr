@@ -379,7 +379,7 @@ bool handleHeroEventProbe() {
 	return true;
 }
 
-bool dispatchEditorClipboardCommand(ushort editorCommand, bool requiresWritable) {
+bool dispatchEditorCommand(ushort editorCommand, bool requiresWritable) {
 	TMREditWindow *win = currentEditWindow();
 	TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 
@@ -391,6 +391,10 @@ bool dispatchEditorClipboardCommand(ushort editorCommand, bool requiresWritable)
 	}
 	message(editor, evCommand, editorCommand, nullptr);
 	return true;
+}
+
+bool dispatchEditorClipboardCommand(ushort editorCommand, bool requiresWritable) {
+	return dispatchEditorCommand(editorCommand, requiresWritable);
 }
 
 bool togglePersistentBlocksSetting() {
@@ -563,6 +567,12 @@ bool handleMRCommand(ushort command) {
 		case cmMrWindowZoom:
 			mrvmUiZoomCurrentWindow();
 			return true;
+
+		case cmMrTextUpperCaseMenu:
+			return dispatchEditorCommand(cmMrTextUpperCaseMenu, true);
+
+		case cmMrTextLowerCaseMenu:
+			return dispatchEditorCommand(cmMrTextLowerCaseMenu, true);
 
 		case cmMrWindowLink:
 			mrvmUiLinkCurrentWindow();

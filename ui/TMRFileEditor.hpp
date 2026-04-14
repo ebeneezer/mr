@@ -30,6 +30,7 @@
 #include "TMRIndicator.hpp"
 #include "TMRTextBufferModel.hpp"
 #include "../config/MRDialogPaths.hpp"
+#include "../app/MRCommands.hpp"
 
 class TMRFileEditor : public TScroller {
   public:
@@ -2524,6 +2525,12 @@ class TMRFileEditor : public TScroller {
 				break;
 			case cmUndo:
 				break;
+			case cmMrTextUpperCaseMenu:
+				convertSelectionToUpperCase();
+				break;
+			case cmMrTextLowerCaseMenu:
+				convertSelectionToLowerCase();
+				break;
 			case cmClear:
 				if (!readOnly_)
 					replaceSelectionText(std::string());
@@ -2706,6 +2713,28 @@ class TMRFileEditor : public TScroller {
 		TMRTextBufferModel::Range range = bufferModel_.selection().range();
 		replaceRangeAndSelect(static_cast<uint>(range.start), static_cast<uint>(range.end), text.data(),
 		                      static_cast<uint>(text.size()));
+	}
+
+	void convertSelectionToUpperCase() {
+		if (readOnly_ || !bufferModel_.hasSelection())
+			return;
+		TMRTextBufferModel::Range range = bufferModel_.selection().range();
+		std::string text = bufferModel_.text().substr(range.start, range.length());
+		for (char &c : text)
+			c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+		replaceSelectionText(text);
+		setSelectionOffsets(range.start, range.start + text.length());
+	}
+
+	void convertSelectionToLowerCase() {
+		if (readOnly_ || !bufferModel_.hasSelection())
+			return;
+		TMRTextBufferModel::Range range = bufferModel_.selection().range();
+		std::string text = bufferModel_.text().substr(range.start, range.length());
+		for (char &c : text)
+			c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+		replaceSelectionText(text);
+		setSelectionOffsets(range.start, range.start + text.length());
 	}
 
 	Boolean confirmSaveOrDiscardUntitled() {
