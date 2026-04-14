@@ -98,7 +98,8 @@ class TMRIndicator : public TIndicator {
 	      taskBlinkGeneration_(0), readOnlyBlinkActive_(false), readOnlyBlinkVisible_(false),
 	      taskBlinkActive_(false), taskBlinkVisible_(false), statusNoticeGeneration_(0),
 	      statusNoticeActive_(false), statusNoticeText_(), statusNoticeKind_(NoticeKind::Info),
-	      taskOverviewProvider_(), taskOverviewPopup_(nullptr), readOnlyBlinkUntil_(), taskBlinkUntil_() {
+	      taskOverviewProvider_(), taskOverviewPopup_(nullptr), readOnlyBlinkUntil_(), taskBlinkUntil_(),
+	      taskBlinkTaskId_(0), readOnlyBlinkTaskId_(0), statusNoticeTaskId_(0) {
 		registerIndicator(this);
 	}
 
@@ -423,6 +424,10 @@ class TMRIndicator : public TIndicator {
 		++blinkGeneration_;
 		readOnlyBlinkActive_ = false;
 		readOnlyBlinkVisible_ = true;
+		if (readOnlyBlinkTaskId_ != 0) {
+			mr::coprocessor::globalCoprocessor().cancelTask(readOnlyBlinkTaskId_);
+			readOnlyBlinkTaskId_ = 0;
+		}
 		if (redraw) {
 			drawView();
 			redrawFrame();
@@ -434,6 +439,10 @@ class TMRIndicator : public TIndicator {
 	}
 
 	void startTaskBlink() {
+		if (taskBlinkTaskId_ != 0) {
+			mr::coprocessor::globalCoprocessor().cancelTask(taskBlinkTaskId_);
+			taskBlinkTaskId_ = 0;
+		}
 		++taskBlinkGeneration_;
 		taskBlinkActive_ = true;
 		taskBlinkVisible_ = true;
@@ -447,6 +456,10 @@ class TMRIndicator : public TIndicator {
 		++taskBlinkGeneration_;
 		taskBlinkActive_ = false;
 		taskBlinkVisible_ = true;
+		if (taskBlinkTaskId_ != 0) {
+			mr::coprocessor::globalCoprocessor().cancelTask(taskBlinkTaskId_);
+			taskBlinkTaskId_ = 0;
+		}
 		if (taskCount_ == 0)
 			taskDisplayCount_ = 0;
 		else
@@ -462,10 +475,14 @@ class TMRIndicator : public TIndicator {
 	}
 
 	void scheduleStatusNoticeClear(std::chrono::milliseconds duration) {
+		if (statusNoticeTaskId_ != 0) {
+			mr::coprocessor::globalCoprocessor().cancelTask(statusNoticeTaskId_);
+			statusNoticeTaskId_ = 0;
+		}
 		const std::size_t generation = statusNoticeGeneration_;
 		const std::size_t indicatorId = indicatorId_;
 
-		mr::coprocessor::globalCoprocessor().submit(
+		statusNoticeTaskId_ = mr::coprocessor::globalCoprocessor().submit(
 		    mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::IndicatorBlink, 0, generation,
 		    "indicator-status-notice",
 		    [indicatorId, generation, duration](const mr::coprocessor::TaskInfo &info,
@@ -475,7 +492,7 @@ class TMRIndicator : public TIndicator {
 
 			    result.task = info;
 			    while (elapsed < duration) {
-				    if (stopToken.stop_requested()) {
+				    if (stopToken.stop_requested() || info.cancelRequested()) {
 					    result.status = mr::coprocessor::TaskStatus::Cancelled;
 					    return result;
 				    }
@@ -493,6 +510,10 @@ class TMRIndicator : public TIndicator {
 		++statusNoticeGeneration_;
 		statusNoticeActive_ = false;
 		statusNoticeText_.clear();
+		if (statusNoticeTaskId_ != 0) {
+			mr::coprocessor::globalCoprocessor().cancelTask(statusNoticeTaskId_);
+			statusNoticeTaskId_ = 0;
+		}
 		if (redraw) {
 			drawView();
 			redrawFrame();
@@ -502,7 +523,7 @@ class TMRIndicator : public TIndicator {
 	void scheduleReadOnlyBlinkTick(bool nextVisible) {
 		const std::size_t generation = blinkGeneration_;
 		const std::size_t indicatorId = indicatorId_;
-		mr::coprocessor::globalCoprocessor().submit(
+		readOnlyBlinkTaskId_ = mr::coprocessor::globalCoprocessor().submit(
 		    mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::IndicatorBlink, 0, generation,
 		    "indicator-blink-readonly",
 		    [indicatorId, generation, nextVisible](const mr::coprocessor::TaskInfo &info,
@@ -510,7 +531,7 @@ class TMRIndicator : public TIndicator {
 			    mr::coprocessor::Result result;
 			    result.task = info;
 			    for (int step = 0; step < kBlinkSlicesPerTick; ++step) {
-				    if (stopToken.stop_requested()) {
+				    if (stopToken.stop_requested() || info.cancelRequested()) {
 					    result.status = mr::coprocessor::TaskStatus::Cancelled;
 					    return result;
 				    }
@@ -526,7 +547,7 @@ class TMRIndicator : public TIndicator {
 	void scheduleTaskBlinkTick(bool nextVisible) {
 		const std::size_t generation = taskBlinkGeneration_;
 		const std::size_t indicatorId = indicatorId_;
-		mr::coprocessor::globalCoprocessor().submit(
+		taskBlinkTaskId_ = mr::coprocessor::globalCoprocessor().submit(
 		    mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::IndicatorBlink, 0, generation,
 		    "indicator-blink-task",
 		    [indicatorId, generation, nextVisible](const mr::coprocessor::TaskInfo &info,
@@ -534,7 +555,7 @@ class TMRIndicator : public TIndicator {
 			    mr::coprocessor::Result result;
 			    result.task = info;
 			    for (int step = 0; step < kBlinkSlicesPerTick; ++step) {
-				    if (stopToken.stop_requested()) {
+				    if (stopToken.stop_requested() || info.cancelRequested()) {
 					    result.status = mr::coprocessor::TaskStatus::Cancelled;
 					    return result;
 				    }
@@ -553,6 +574,7 @@ class TMRIndicator : public TIndicator {
 			case mr::coprocessor::IndicatorBlinkChannel::TaskMarker:
 				if (generation != taskBlinkGeneration_ || !taskBlinkActive_)
 					return false;
+				taskBlinkTaskId_ = 0;
 				if (std::chrono::steady_clock::now() >= taskBlinkUntil_) {
 					stopTaskBlink();
 					return true;
@@ -565,12 +587,14 @@ class TMRIndicator : public TIndicator {
 			case mr::coprocessor::IndicatorBlinkChannel::StatusNotice:
 				if (generation != statusNoticeGeneration_ || !statusNoticeActive_)
 					return false;
+				statusNoticeTaskId_ = 0;
 				cancelStatusNotice(true);
 				return true;
 			case mr::coprocessor::IndicatorBlinkChannel::ReadOnly:
 			default:
 				if (generation != blinkGeneration_ || !readOnly_ || !readOnlyBlinkActive_)
 					return false;
+				readOnlyBlinkTaskId_ = 0;
 				if (std::chrono::steady_clock::now() >= readOnlyBlinkUntil_) {
 					stopReadOnlyBlink();
 					return true;
@@ -603,6 +627,9 @@ class TMRIndicator : public TIndicator {
 	TMRTaskOverviewPopup *taskOverviewPopup_;
 	std::chrono::steady_clock::time_point readOnlyBlinkUntil_;
 	std::chrono::steady_clock::time_point taskBlinkUntil_;
+	std::uint64_t taskBlinkTaskId_;
+	std::uint64_t readOnlyBlinkTaskId_;
+	std::uint64_t statusNoticeTaskId_;
 };
 
 #endif

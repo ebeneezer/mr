@@ -1513,12 +1513,12 @@ class TMRFileEditor : public TScroller {
 	                                                      int rowCount, bool useBraille) noexcept {
 		const std::size_t normalizedTotalLines = std::max<std::size_t>(1, totalLines);
 		const std::size_t normalizedRowCount = std::max<std::size_t>(1, static_cast<std::size_t>(std::max(rowCount, 1)));
-		const std::size_t dotRows = useBraille ? normalizedRowCount * 4u : normalizedRowCount;
+		const std::size_t samplingRowCount = useBraille ? normalizedRowCount * 4u : normalizedRowCount;
 		const std::size_t maxWindowLineCount = normalizedRowCount * 9u;
 		MiniMapSamplingWindow window;
 		if (normalizedTotalLines <= maxWindowLineCount) {
 			window.startLine = 0;
-			window.lineCount = std::max(normalizedTotalLines, dotRows);
+			window.lineCount = std::max(normalizedTotalLines, samplingRowCount);
 			return window;
 		}
 		window.lineCount = std::max<std::size_t>(1, maxWindowLineCount);
@@ -1566,8 +1566,7 @@ class TMRFileEditor : public TScroller {
 	}
 
 	int miniMapViewportRows() const noexcept {
-		const int reservedBottomRow = hScrollBar != nullptr ? 1 : 0;
-		return std::max(0, visibleTextRows() - reservedBottomRow);
+		return std::max(0, visibleTextRows());
 	}
 
 	void clearMiniMapWarmupTaskInternal(std::uint64_t expectedTaskId) noexcept {
@@ -1681,9 +1680,7 @@ class TMRFileEditor : public TScroller {
 		     totalLines, samplingWindow](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
 			    mr::coprocessor::Result result;
 			    struct MiniMapLineSample {
-				    int contentWidth = 0;
-				    int firstContentColumn = -1;
-				    bool hasContent = false;
+				    std::uint64_t dotColumnBits = 0;
 			    };
 			    std::map<std::size_t, MiniMapLineSample> sampledLineSamples;
 			    std::vector<unsigned char> rowPatterns;
@@ -1724,18 +1721,19 @@ class TMRFileEditor : public TScroller {
 						    if (!nextDisplayChar(lineText, next, width, visualColumn, tabSize))
 							    break;
 						    unsigned char ch = static_cast<unsigned char>(lineText[current]);
-						    const bool whitespace = std::isspace(ch) != 0;
-						    if (!whitespace && !sample.hasContent) {
-							    sample.hasContent = true;
-							    sample.firstContentColumn = visualColumn;
+						    if (std::isspace(ch) == 0) {
+							    const long long c = static_cast<long long>(visualColumn);
+							    const long long w = static_cast<long long>(width);
+							    const long long n = static_cast<long long>(dotCols);
+							    const long long v = static_cast<long long>(viewportWidth);
+							    const int dotColStart = static_cast<int>(c * n / v);
+							    const int dotColEnd = static_cast<int>(((c + w) * n - 1) / v);
+							    for (int dc = std::max(0, dotColStart); dc <= std::min(63, dotColEnd); ++dc)
+								    sample.dotColumnBits |= (1ULL << dc);
 						    }
-						    if (!whitespace)
-							    sample.contentWidth = visualColumn + static_cast<int>(width);
 						    visualColumn += static_cast<int>(width);
 						    index = next;
 					    }
-					    if (sample.hasContent && sample.firstContentColumn < 0)
-						    sample.firstContentColumn = 0;
 				    }
 				    auto inserted = sampledLineSamples.insert(std::make_pair(lineIndex, sample));
 				    return inserted.first->second;
@@ -1759,27 +1757,27 @@ class TMRFileEditor : public TScroller {
 						        {0x01, 0x08}, {0x02, 0x10}, {0x04, 0x20}, {0x40, 0x80}};
 						    for (int py = 0; py < 4; ++py) {
 							    std::size_t sampleRow = static_cast<std::size_t>(y * 4 + py);
+							    if (sampleRow >= windowLineCount)
+								    continue;
 							    std::size_t lineIndex =
 							        windowStartLine +
 							        scaledMidpoint(sampleRow, static_cast<std::size_t>(dotRows), windowLineCount);
 							    const MiniMapLineSample &sample = lineSampleAt(lineIndex);
-							    int lineWidth = sample.contentWidth;
-							    int firstCol = sample.firstContentColumn;
 							    for (int px = 0; px < 2; ++px) {
-								    int dotColumn = x * 2 + px;
-								    if (ratioCellInRange(firstCol, lineWidth, viewportWidth, dotColumn, dotCols))
+								    const int dotColumn = x * 2 + px;
+								    if (dotColumn < 64 && (sample.dotColumnBits & (1ULL << dotColumn)) != 0)
 									    pattern |= dotBits[py][px];
 							    }
 						    }
 					    } else {
-						    std::size_t lineIndex = windowStartLine +
-						                            scaledMidpoint(static_cast<std::size_t>(y),
-						                                           static_cast<std::size_t>(rowCount), windowLineCount);
-						    const MiniMapLineSample &sample = lineSampleAt(lineIndex);
-						    int lineWidth = sample.contentWidth;
-						    int firstCol = sample.firstContentColumn;
-						    if (ratioCellInRange(firstCol, lineWidth, viewportWidth, x, bodyWidth))
-							    pattern = 1;
+						    if (static_cast<std::size_t>(y) < windowLineCount) {
+							    std::size_t lineIndex = windowStartLine +
+							                            scaledMidpoint(static_cast<std::size_t>(y),
+							                                           static_cast<std::size_t>(rowCount), windowLineCount);
+							    const MiniMapLineSample &sample = lineSampleAt(lineIndex);
+							    if (x < 64 && (sample.dotColumnBits & (1ULL << x)) != 0)
+								    pattern = 1;
+						    }
 					    }
 					    rowPatterns[static_cast<std::size_t>(y * bodyWidth + x)] = pattern;
 					    }

@@ -24,23 +24,32 @@ Laufendes Projektprotokoll fuer Kontextwechsel und schnelle Wiederaufnahme.
 
 ## 2026-04-08
 - Neue verbindliche Handoff-Regel aufgenommen:
-  - Kein Handoff mehr als Tar-Archiv.
-  - Handoffs werden als komprimierter Patch uebergeben.
-  - Zu jedem Handoff wird immer auch die passende Befehlskette zur Anwendung des Patches mitgeliefert.
+  - nur Handoffs als Tar Bzip2 Archiv.
+  - Pfade müssen stimmen, so dass ein decompress im Codebase root alle Dateien korrekt überschreibt welche verändert wurden
+
 - Settings-/Bootstrap-Architektur fuer den naechsten Zug festgezogen:
-  - Compile-Defaults sind das Schema.
   - Unbekannte Keys aus `settings.mrmac` werden beim Laden still verworfen.
   - Fehlende Keys werden still mit den Defaults des Compilats aufgefuellt.
   - Die geladene `SETTINGS_VERSION` wird intern auf die Version des Compilats normalisiert und beim Speichern entsprechend geschrieben.
   - Beim Speichern werden immer alle bekannten globalen Key/Value-Paare vollstaendig nach `settings.mrmac` geschrieben.
   - Extension-Profile werden ebenfalls immer vollstaendig geschrieben; fehlende Profil-Keys werden dadurch nach einem Upgrade automatisch ergaenzt.
-  - Load, Save und Bootstrap docken an denselben zentralen Key/Value-Stores an.
+  - Load, Save und Bootstrap docken an denselben zentralen Key/Value-Stores im RAM an. 
+  - Es gibt keinen anderen Ort für geltende Konfigurations Key/Value Pairs.
   - Keine Registry und keine zweite allgemeine Metaschicht aufbauen.
   - Die Compile-Default-Hashes definieren die erlaubten Keys; ein Key ist gueltig, wenn er im passenden Default-Store existiert.
   - Keine semantische Migration veralteter oder unbekannter Keys; Legacy-Ballast wird abgeschnitten und durch Compile-Defaults ersetzt.
+
 - Architekturprioritaet fuer den kommenden Zug festgelegt:
   - Vor weiterer mrmac-Vervollstaendigung muessen vollstaendige Pfade fuer Load / Save / Upgrading der Settings geschlossen werden.
-  - Bei der Umsetzung maximal auf gehärteten C++20-Code, einfache Datenwege und Entfernung alten Boilerplates achten.
+
+- Code Stil
+  - Der agentic coding assistant hat sich zwingend an folgende Regeln zu halten:
+  		- semantisch sinnvolle Bezeichner, kein AI Boilerplate
+		- maximale Wartbarkeit und human readybility
+		- gehärteter C und C++ Code
+		- Nutzung von C++20 Konstrukten
+		- maximale Kapselung und Geheimnisprinzip bei OOP Konstrukten
+		- Prüfung auf den sinnhaften Einsatz von Intrinsics. Der agent muss hier explizit eine begründete Empfehlung abgeben und um Erlaubnis bitten.
   - Keine neue Infrastruktur in die heissen Dateilade-/Line-Indexierungs-Pfade ziehen.
 
 
@@ -68,14 +77,12 @@ Laufendes Projektprotokoll fuer Kontextwechsel und schnelle Wiederaufnahme.
   - `switch` nur bei gemeinsamem Diskriminator (Token/Enum), String-Dispatch bleibt tabellengetrieben.
 
 ## 2026-04-03
-- Ordnerstruktur bereinigt:
-  - `runtime/` als Source-Ordner aufgeloest.
-  - `MRPerformance.*` und `MRCoprocessorDispatch.*` nach `coprocessor/` verschoben.
-  - Build/Includes/Abhaengigkeiten auf `coprocessor/*` umgestellt.
+
 - Neue Kontextregel aufgenommen:
   - Vor dem Anlegen neuer Source-/Code-Ordner immer erst Rueckfrage an den User mit kurzer Begruendung.
 
 ## 2026-04-02
+
 - TVision-Quellverwaltung auf `git subtree` umgestellt:
   - `tvision-upstream` Remote aktiv.
   - Subtree-Import unter `./tvision` erfolgt.
