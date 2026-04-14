@@ -126,8 +126,8 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrSearchGotoLineNumber, hasEditor);
 
 	setCommandEnabled(cmMrTextLayout, hasEditor);
-	setCommandEnabled(cmMrTextUpperCaseMenu, canModify);
-	setCommandEnabled(cmMrTextLowerCaseMenu, canModify);
+	setCommandEnabled(cmMrTextUpperCaseMenu, canModify && state.hasSelection);
+	setCommandEnabled(cmMrTextLowerCaseMenu, canModify && state.hasSelection);
 	setCommandEnabled(cmMrTextCenterLine, canModify);
 	setCommandEnabled(cmMrTextTimeDateStamp, canModify);
 	setCommandEnabled(cmMrTextReformatParagraph, canModify);
