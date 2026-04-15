@@ -38,6 +38,7 @@
 #include "MRUnsavedChangesDialog.hpp"
 #include "MRSetupDialogCommon.hpp"
 #include "MRNumericSlider.hpp"
+#include "../app/commands/MRWindowCommands.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -1563,6 +1564,7 @@ void runColorSetupDialogFlow() {
 					break;
 				}
 				TProgram::application->redraw();
+				mrUpdateAllWindowsColorTheme();
 				havePendingPalette = false;
 				running = false;
 				break;
@@ -1581,6 +1583,7 @@ void runColorSetupDialogFlow() {
 					break;
 				}
 				TProgram::application->redraw();
+				mrUpdateAllWindowsColorTheme();
 				break;
 			}
 
@@ -1609,6 +1612,7 @@ void runColorSetupDialogFlow() {
 						break;
 					}
 					TProgram::application->redraw();
+					mrUpdateAllWindowsColorTheme();
 				}
 				pendingPalette = workingPalette;
 				havePendingPalette = true;
