@@ -24,7 +24,7 @@ Checks: >
   ,modernize-use-emplace
   ,modernize-loop-convert
 WarningsAsErrors: ''
-HeaderFilterRegex: '^(?!.*\/tvision\/).*$'
+HeaderFilterRegex: '^(?!.*(\/tvision\/|parser\.tab\.h)).*$'
 FormatStyle: none
 CheckOptions:
   - key: readability-else-after-return.WarnOnUnfixable

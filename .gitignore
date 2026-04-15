@@ -17,3 +17,6 @@ misc/enwik9
 mr
 mrmac/mrmac
 HANDOFF*txt
+mrmac/lex.yy.c
+mrmac/parser.tab.c
+mrmac/parser.tab.h
