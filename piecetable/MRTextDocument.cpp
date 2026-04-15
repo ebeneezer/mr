@@ -404,30 +404,8 @@ Offset piecewisePrevLine(const Doc &doc, Offset pos) noexcept {
 
 template <class Doc>
 std::size_t piecewiseLineIndex(const Doc &doc, Offset pos) noexcept {
-	std::size_t line = 0;
-	bool prevWasCR = false;
 	pos = doc.clampOffset(pos);
-	Offset logical = 0;
-	for (std::size_t i = 0; i < doc.pieceCount() && logical < pos; ++i) {
-		PieceChunkView chunk = doc.pieceChunk(i);
-		if (chunk.data == nullptr || chunk.length == 0)
-			continue;
-		Offset localLimit = std::min(chunk.length, pos - logical);
-		for (Offset j = 0; j < localLimit; ++j) {
-			char ch = chunk.data[j];
-			if (ch == '\n') {
-				if (!prevWasCR)
-					++line;
-				prevWasCR = false;
-			} else if (ch == '\r') {
-				++line;
-				prevWasCR = true;
-			} else
-				prevWasCR = false;
-		}
-		logical += chunk.length;
-	}
-	return line;
+	return piecewiseCountLineBreaksInRange(doc, 0, pos);
 }
 
 template <class Doc>
