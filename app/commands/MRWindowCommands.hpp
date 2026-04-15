@@ -14,5 +14,6 @@ class TMREditWindow;
 [[nodiscard]] bool closeCurrentEditWindow();
 [[nodiscard]] bool activateRelativeEditWindow(int delta);
 [[nodiscard]] bool hideCurrentEditWindow();
+void mrUpdateAllWindowsColorTheme();
 
 #endif

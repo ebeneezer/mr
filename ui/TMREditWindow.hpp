@@ -1050,6 +1050,7 @@ class TMREditWindow : public TWindow {
 			displayTitle[sizeof(displayTitle) - 1] = '\0';
 		}
 		refreshSyntaxContext();
+		applyWindowColorThemeForPath(currentFileName());
 		message(owner, evBroadcast, cmUpdateTitle, 0);
 	}
 

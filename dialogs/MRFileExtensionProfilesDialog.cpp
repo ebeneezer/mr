@@ -27,6 +27,7 @@
 #include "../config/MRDialogPaths.hpp"
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/TMRMenuBar.hpp"
+#include "../app/commands/MRWindowCommands.hpp"
 
 #include <algorithm>
 #include <array>
@@ -995,6 +996,7 @@ void runFileExtensionProfilesDialogFlow() {
 					postValidationWarning(errorText);
 					break;
 				}
+				mrUpdateAllWindowsColorTheme();
 				baselineDrafts = workingDrafts;
 				running = false;
 				break;
@@ -1012,6 +1014,7 @@ void runFileExtensionProfilesDialogFlow() {
 							                              mr::messageline::kPriorityHigh);
 							break;
 						}
+						mrUpdateAllWindowsColorTheme();
 						running = false;
 						break;
 					}
