@@ -433,6 +433,124 @@ int runStagedMarkPageProbeMode() {
 	return 0;
 }
 
+bool validateMrsetupCorePaths(std::string &failureReason) {
+	if (defaultMacroDirectoryPath() != "/tmp") {
+		failureReason = "Startup context should apply MACROPATH='/tmp', got: " + defaultMacroDirectoryPath();
+		return false;
+	}
+	if (configuredSettingsMacroFilePath() != "/tmp/mr_settings_probe.mrmac") {
+		failureReason = "Startup context should apply SETTINGSPATH='/tmp/mr_settings_probe.mrmac'.";
+		return false;
+	}
+	if (configuredHelpFilePath() != absolutePathFromCwd("mr.hlp")) {
+		failureReason = "Startup context should apply HELPPATH as absolute URI from current path.";
+		return false;
+	}
+	if (configuredTempDirectoryPath() != "/tmp") {
+		failureReason = "Startup context should apply TEMPDIR='/tmp'.";
+		return false;
+	}
+	if (configuredShellExecutablePath() != "/bin/sh") {
+		failureReason = "Startup context should apply SHELLPATH='/bin/sh'.";
+		return false;
+	}
+	if (configuredPageBreakCharacter() != '\f') {
+		failureReason = "Startup context should apply PAGE_BREAK='\\\\f'.";
+		return false;
+	}
+	return true;
+}
+
+bool validateMrsetupEditorSettings(std::string &failureReason) {
+	if (configuredTabExpandSetting()) {
+		failureReason = "Startup context should apply TAB_EXPAND='false'.";
+		return false;
+	}
+	if (configuredTabSizeSetting() != 6) {
+		failureReason = "Startup context should apply TAB_SIZE='6'.";
+		return false;
+	}
+	{
+		MREditSetupSettings settings = configuredEditSetupSettings();
+		if (settings.backupFiles) {
+			failureReason = "Startup context should apply BACKUP_FILES='false'.";
+			return false;
+		}
+		if (!settings.showEofMarker) {
+			failureReason = "Startup context should apply SHOW_EOF_MARKER='true'.";
+			return false;
+		}
+		if (settings.showEofMarkerEmoji) {
+			failureReason = "Startup context should apply SHOW_EOF_MARKER_EMOJI='false'.";
+			return false;
+		}
+		if (!settings.showLineNumbers || settings.lineNumbersPosition != "LEADING") {
+			failureReason = "Startup context should apply LINE_NUMBERS_POSITION='LEADING'.";
+			return false;
+		}
+		if (!settings.lineNumZeroFill) {
+			failureReason = "Startup context should apply LINE_NUM_ZERO_FILL='true'.";
+			return false;
+		}
+	}
+	if (configuredDefaultInsertMode()) {
+		failureReason = "Startup context should apply DEFAULT_MODE='OVERWRITE'.";
+		return false;
+	}
+	{
+		std::vector<std::string> exts = configuredDefaultExtensionList();
+		if (exts.size() < 2 || exts[0] != "txt" || exts[1] != "md") {
+			failureReason = "Startup context should apply DEFAULT_EXTENSIONS='txt;md'.";
+			return false;
+		}
+	}
+	return true;
+}
+
+bool validateMrsetupColorSettings(std::string &failureReason) {
+	MRColorSetupSettings colors = configuredColorSetupSettings();
+
+	if (colors.windowColors[0] != 0x10 || colors.windowColors[1] != 0x11 ||
+	    colors.windowColors[2] != 0x12 || colors.windowColors[3] != 0x13 ||
+	    colors.windowColors[4] != 0x14 || colors.windowColors[5] != 0x15 ||
+	    colors.windowColors[6] != 0x16 || colors.windowColors[7] != 0x17 ||
+	    colors.windowColors[8] != 0x1F || colors.windowColors[9] != 0x1F) {
+		failureReason = "Startup context should apply WINDOWCOLORS list (including legacy migration).";
+		return false;
+	}
+	if (colors.menuDialogColors[0] != 0x20 || colors.menuDialogColors[10] != 0x2A) {
+		failureReason = "Startup context should apply MENUDIALOGCOLORS list.";
+		return false;
+	}
+	if (colors.helpColors[0] != 0x30 || colors.helpColors[8] != 0x38) {
+		failureReason = "Startup context should apply HELPCOLORS list.";
+		return false;
+	}
+	if (colors.otherColors[0] != 0x40 || colors.otherColors[6] != 0x46) {
+		failureReason = "Startup context should apply OTHERCOLORS list.";
+		return false;
+	}
+	return true;
+}
+
+bool validateMrsetupRuntimeRejection(const std::vector<unsigned char> &bytecode, int entryOffset, const std::string &macroName, std::string &failureReason) {
+	VirtualMachine vm;
+	std::string vmError;
+
+	mrvmSetStartupSettingsMode(false);
+	vm.executeAt(bytecode.data(), bytecode.size(), static_cast<size_t>(entryOffset), std::string(), macroName,
+	             true, true);
+	if (!firstVmError(vm.log, vmError)) {
+		failureReason = "Runtime context should reject MRSETUP, but no VM Error occurred.";
+		return false;
+	}
+	if (vmError.find("MRSETUP is only allowed in settings.mrmac during startup.") == std::string::npos) {
+		failureReason = "Runtime context produced unexpected error: " + vmError;
+		return false;
+	}
+	return true;
+}
+
 bool testMrsetupStartupOnly(std::string &failureReason) {
 	const std::string source = "$MACRO Setup;\n"
 	                           "MRSETUP('SETTINGSPATH', '/tmp/mr_settings_probe.mrmac');\n"
@@ -483,114 +601,13 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 			failureReason = "Startup context should allow MRSETUP, got: " + vmError;
 			return false;
 		}
-		if (defaultMacroDirectoryPath() != "/tmp") {
-			failureReason = "Startup context should apply MACROPATH='/tmp', got: " + defaultMacroDirectoryPath();
-			return false;
-		}
-		if (configuredSettingsMacroFilePath() != "/tmp/mr_settings_probe.mrmac") {
-			failureReason = "Startup context should apply SETTINGSPATH='/tmp/mr_settings_probe.mrmac'.";
-			return false;
-		}
-		if (configuredHelpFilePath() != absolutePathFromCwd("mr.hlp")) {
-			failureReason = "Startup context should apply HELPPATH as absolute URI from current path.";
-			return false;
-		}
-		if (configuredTempDirectoryPath() != "/tmp") {
-			failureReason = "Startup context should apply TEMPDIR='/tmp'.";
-			return false;
-		}
-		if (configuredShellExecutablePath() != "/bin/sh") {
-			failureReason = "Startup context should apply SHELLPATH='/bin/sh'.";
-			return false;
-		}
-		if (configuredPageBreakCharacter() != '\f') {
-			failureReason = "Startup context should apply PAGE_BREAK='\\\\f'.";
-			return false;
-		}
-		if (configuredTabExpandSetting()) {
-			failureReason = "Startup context should apply TAB_EXPAND='false'.";
-			return false;
-		}
-		if (configuredTabSizeSetting() != 6) {
-			failureReason = "Startup context should apply TAB_SIZE='6'.";
-			return false;
-		}
-		{
-			MREditSetupSettings settings = configuredEditSetupSettings();
-			if (settings.backupFiles) {
-				failureReason = "Startup context should apply BACKUP_FILES='false'.";
-				return false;
-			}
-				if (!settings.showEofMarker) {
-					failureReason = "Startup context should apply SHOW_EOF_MARKER='true'.";
-					return false;
-				}
-				if (settings.showEofMarkerEmoji) {
-					failureReason = "Startup context should apply SHOW_EOF_MARKER_EMOJI='false'.";
-					return false;
-				}
-				if (!settings.showLineNumbers || settings.lineNumbersPosition != "LEADING") {
-					failureReason = "Startup context should apply LINE_NUMBERS_POSITION='LEADING'.";
-					return false;
-				}
-			if (!settings.lineNumZeroFill) {
-				failureReason = "Startup context should apply LINE_NUM_ZERO_FILL='true'.";
-				return false;
-			}
-		}
-		if (configuredDefaultInsertMode()) {
-			failureReason = "Startup context should apply DEFAULT_MODE='OVERWRITE'.";
-			return false;
-		}
-		{
-			MRColorSetupSettings colors = configuredColorSetupSettings();
 
-				if (colors.windowColors[0] != 0x10 || colors.windowColors[1] != 0x11 ||
-				    colors.windowColors[2] != 0x12 || colors.windowColors[3] != 0x13 ||
-				    colors.windowColors[4] != 0x14 || colors.windowColors[5] != 0x15 ||
-				    colors.windowColors[6] != 0x16 || colors.windowColors[7] != 0x17 ||
-				    colors.windowColors[8] != 0x1F || colors.windowColors[9] != 0x1F) {
-					failureReason = "Startup context should apply WINDOWCOLORS list (including legacy migration).";
-					return false;
-				}
-			if (colors.menuDialogColors[0] != 0x20 || colors.menuDialogColors[10] != 0x2A) {
-				failureReason = "Startup context should apply MENUDIALOGCOLORS list.";
-				return false;
-			}
-			if (colors.helpColors[0] != 0x30 || colors.helpColors[8] != 0x38) {
-				failureReason = "Startup context should apply HELPCOLORS list.";
-				return false;
-			}
-				if (colors.otherColors[0] != 0x40 || colors.otherColors[6] != 0x46) {
-					failureReason = "Startup context should apply OTHERCOLORS list.";
-					return false;
-				}
-		}
-			{
-				std::vector<std::string> exts = configuredDefaultExtensionList();
-				if (exts.size() < 2 || exts[0] != "txt" || exts[1] != "md") {
-				failureReason = "Startup context should apply DEFAULT_EXTENSIONS='txt;md'.";
-				return false;
-			}
-		}
+		if (!validateMrsetupCorePaths(failureReason)) return false;
+		if (!validateMrsetupEditorSettings(failureReason)) return false;
+		if (!validateMrsetupColorSettings(failureReason)) return false;
 	}
 
-	{
-		VirtualMachine vm;
-		std::string vmError;
-
-		mrvmSetStartupSettingsMode(false);
-		vm.executeAt(bytecode.data(), bytecode.size(), static_cast<size_t>(entryOffset), std::string(), macroName,
-		             true, true);
-		if (!firstVmError(vm.log, vmError)) {
-			failureReason = "Runtime context should reject MRSETUP, but no VM Error occurred.";
-			return false;
-		}
-		if (vmError.find("MRSETUP is only allowed in settings.mrmac during startup.") == std::string::npos) {
-			failureReason = "Runtime context produced unexpected error: " + vmError;
-			return false;
-		}
-	}
+	if (!validateMrsetupRuntimeRejection(bytecode, entryOffset, macroName, failureReason)) return false;
 
 	failureReason.clear();
 	return true;
