@@ -1147,7 +1147,7 @@ void TMREditorApp::idle() {
 		mr::messageline::VisibleMessage message;
 		std::string rightStatus = buildTopRightCursorStatus();
 		mrMenuBar->setRightStatus(rightStatus);
-		if (mr::messageline::currentVisibleMessage(message)) {
+		if (configuredEditSetupSettings().menulineMessages && mr::messageline::currentVisibleMessage(message)) {
 			TMRMenuBar::MarqueeKind marqueeKind = mapMessageNoticeKind(message.kind);
 			if (isHeroVisibleMessage(message))
 				marqueeKind = TMRMenuBar::MarqueeKind::Hero;

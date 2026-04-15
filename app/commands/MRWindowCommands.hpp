@@ -3,7 +3,29 @@
 
 #include <vector>
 
+#define Uses_TEvent
+#define Uses_TRect
+#define Uses_TPoint
+#include <tvision/tv.h>
+
 class TMREditWindow;
+
+class MRWindowManager {
+  public:
+    static MRWindowManager& instance();
+
+    void dragWindow(TMREditWindow* window, TEvent& event, uchar mode);
+
+  private:
+    MRWindowManager() = default;
+    ~MRWindowManager() = default;
+
+    MRWindowManager(const MRWindowManager&) = delete;
+    MRWindowManager& operator=(const MRWindowManager&) = delete;
+
+    void snapToEdges(TMREditWindow* window, TRect limits, const TPoint& mousePos, TPoint minSize, TPoint maxSize, TRect& outBounds, bool& isSnapped);
+    void animateBoundsChange(TMREditWindow* window, const TRect& targetBounds);
+};
 
 [[nodiscard]] TMREditWindow *createEditorWindow(const char *title);
 [[nodiscard]] std::vector<TMREditWindow *> allEditWindowsInZOrder();

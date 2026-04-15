@@ -1,3 +1,4 @@
+void runUserInterfaceSettingsDialogFlow();
 #define Uses_TApplication
 #define Uses_TChDirDialog
 #define Uses_TDeskTop
@@ -21,6 +22,7 @@
 #define Uses_TRect
 #define Uses_TScrollBar
 #define Uses_TStaticText
+#define Uses_TCheckBoxes
 #define Uses_TRadioButtons
 #define Uses_TSItem
 #define Uses_TView
@@ -65,6 +67,7 @@ enum : ushort {
 	cmMrSetupPathsBrowseShellUri,
 	cmMrSetupBackupsAutosaveHelp = 3810,
 	cmMrSetupBackupsAutosaveBrowseDirectory,
+	cmMrSetupUserInterfaceHelp = 3820,
 	cmMrSetupFieldChanged
 };
 
@@ -104,6 +107,11 @@ struct BackupsAutosaveDialogRecord {
 	char backupDirectoryPath[kBackupDirectoryFieldSize];
 	char inactivitySeconds[kAutosaveNumberFieldSize];
 	char absoluteIntervalSeconds[kAutosaveNumberFieldSize];
+};
+
+struct UserInterfaceSettingsDialogRecord {
+	ushort windowManagerEnabled;
+	ushort menulineMessagesEnabled;
 };
 
 bool pathIsRegularFile(const std::string &path) {
@@ -218,6 +226,18 @@ bool recordsEqual(const BackupsAutosaveDialogRecord &lhs, const BackupsAutosaveD
 	return left.method == right.method && left.frequency == right.frequency &&
 	       left.extension == right.extension && left.directory == right.directory &&
 	       left.inactivity == right.inactivity && left.interval == right.interval;
+}
+
+bool recordsEqual(const UserInterfaceSettingsDialogRecord &lhs, const UserInterfaceSettingsDialogRecord &rhs) {
+	return lhs.windowManagerEnabled == rhs.windowManagerEnabled &&
+	       lhs.menulineMessagesEnabled == rhs.menulineMessagesEnabled;
+}
+
+void initUserInterfaceSettingsDialogRecord(UserInterfaceSettingsDialogRecord &record) {
+	MREditSetupSettings settings = configuredEditSetupSettings();
+	std::memset(&record, 0, sizeof(record));
+	record.windowManagerEnabled = settings.windowManager ? 1 : 0;
+	record.menulineMessagesEnabled = settings.menulineMessages ? 1 : 0;
 }
 
 void initBackupsAutosaveDialogRecord(BackupsAutosaveDialogRecord &record) {
@@ -1695,8 +1715,7 @@ void runInstallationAndSetupDialogFlow() {
 				break;
 
 			case cmMrSetupUserInterfaceSettings:
-				messageBox(mfInformation | mfOKButton,
-				           "Installation / User interface settings\n\nPlaceholder implementation for now.");
+				runUserInterfaceSettingsDialogFlow();
 				break;
 
 			case cmCancel:
@@ -1967,4 +1986,179 @@ TDialog *createSetupSimplePreviewDialog(const char *title, int width, int height
 	dialog->initScrollIfNeeded();
 	dialog->selectContent();
 	return dialog;
+}
+
+class TUserInterfaceSettingsDialog : public MRScrollableDialog {
+  public:
+	TUserInterfaceSettingsDialog(const UserInterfaceSettingsDialogRecord &baselineRecord, const UserInterfaceSettingsDialogRecord &initialRecord)
+	    : TWindowInit(&TDialog::initFrame),
+	      MRScrollableDialog(centeredSetupDialogRect(40, 10),
+	                         "USER INTERFACE", 40, 10),
+	      baselineRecord_(baselineRecord), currentRecord_(initialRecord) {
+		buildViews();
+		loadFieldsFromRecord(currentRecord_);
+		initScrollIfNeeded();
+		selectContent();
+	}
+
+	ushort run(UserInterfaceSettingsDialogRecord &outRecord, bool &changed) {
+		ushort result = TProgram::deskTop->execView(this);
+		saveFieldsToRecord(currentRecord_);
+		outRecord = currentRecord_;
+		changed = !recordsEqual(baselineRecord_, currentRecord_);
+		return result;
+	}
+
+	void handleEvent(TEvent &event) override {
+		MRScrollableDialog::handleEvent(event);
+
+		if (event.what != evCommand)
+			return;
+
+		switch (event.message.command) {
+			case cmMrSetupUserInterfaceHelp:
+				endModal(event.message.command);
+				clearEvent(event);
+				return;
+
+			case cmOK:
+			case cmCancel:
+				endModal(event.message.command);
+				clearEvent(event);
+				return;
+		}
+	}
+
+  private:
+	void buildViews() {
+		TCheckBoxes *cb = new TCheckBoxes(TRect(2, 2, 38, 4),
+		                                  new TSItem("~W~indow Manager",
+		                                  new TSItem("~M~enuline messages", nullptr)));
+		addManaged(cb, TRect(2, 2, 38, 4));
+		checkBoxes_ = cb;
+
+		TButton *okBtn = new TButton(TRect(3, 6, 13, 8), "O~K~", cmOK, bfDefault);
+		addManaged(okBtn, TRect(3, 6, 13, 8));
+		TButton *cancelBtn = new TButton(TRect(15, 6, 25, 8), "~C~ancel", cmCancel, bfNormal);
+		addManaged(cancelBtn, TRect(15, 6, 25, 8));
+		TButton *helpBtn = new TButton(TRect(27, 6, 37, 8), "~H~elp", cmMrSetupUserInterfaceHelp, bfNormal);
+		addManaged(helpBtn, TRect(27, 6, 37, 8));
+	}
+
+	void loadFieldsFromRecord(const UserInterfaceSettingsDialogRecord &record) {
+		ushort cbVal = 0;
+		if (record.windowManagerEnabled) cbVal |= 1;
+		if (record.menulineMessagesEnabled) cbVal |= 2;
+		checkBoxes_->setData(&cbVal);
+	}
+
+	void saveFieldsToRecord(UserInterfaceSettingsDialogRecord &record) {
+		ushort cbVal = 0;
+		checkBoxes_->getData(&cbVal);
+		record.windowManagerEnabled = (cbVal & 1) ? 1 : 0;
+		record.menulineMessagesEnabled = (cbVal & 2) ? 1 : 0;
+	}
+
+	UserInterfaceSettingsDialogRecord baselineRecord_;
+	UserInterfaceSettingsDialogRecord currentRecord_;
+	TCheckBoxes *checkBoxes_;
+};
+
+bool persistUserInterfaceSettingsRecord(const UserInterfaceSettingsDialogRecord &record, std::string &errorText) {
+	MREditSetupSettings configuredSettings = configuredEditSetupSettings();
+	MREditSetupSettings updatedSettings = configuredSettings;
+    updatedSettings.windowManager = (record.windowManagerEnabled != 0);
+    updatedSettings.menulineMessages = (record.menulineMessagesEnabled != 0);
+
+	MRSetupPaths paths = resolveSetupPathDefaults();
+	MRSettingsWriteReport writeReport;
+
+	if (!setConfiguredEditSetupSettings(updatedSettings, &errorText))
+		return false;
+
+	paths.settingsMacroUri = configuredSettingsMacroFilePath();
+	paths.macroPath = defaultMacroDirectoryPath();
+	paths.helpUri = configuredHelpFilePath();
+	paths.tempPath = configuredTempDirectoryPath();
+	paths.shellUri = configuredShellExecutablePath();
+	if (!writeSettingsMacroFile(paths, &errorText, &writeReport)) {
+		(void)setConfiguredEditSetupSettings(configuredSettings, nullptr);
+		return false;
+	}
+	mrLogSettingsWriteReport("installation/setup user-interface", writeReport);
+	errorText.clear();
+	return true;
+}
+
+void showUserInterfaceHelpDialog() {
+	messageBox(mfInformation | mfOKButton, "User Interface Settings Help\n\nConfigures window manager and messages.");
+}
+
+void runUserInterfaceSettingsDialogFlow() {
+	bool running = true;
+	std::string errorText;
+	UserInterfaceSettingsDialogRecord baselineRecord;
+	UserInterfaceSettingsDialogRecord workingRecord;
+	initUserInterfaceSettingsDialogRecord(baselineRecord);
+	workingRecord = baselineRecord;
+
+	while (running) {
+		ushort result;
+		bool changed = false;
+		UserInterfaceSettingsDialogRecord editedRecord = workingRecord;
+		TUserInterfaceSettingsDialog *dialog = new TUserInterfaceSettingsDialog(baselineRecord, workingRecord);
+
+		if (dialog == nullptr)
+			return;
+		result = dialog->run(editedRecord, changed);
+		TObject::destroy(dialog);
+
+		switch (result) {
+			case cmMrSetupUserInterfaceHelp:
+				workingRecord = editedRecord;
+				showUserInterfaceHelpDialog();
+				break;
+
+			case cmOK:
+				workingRecord = editedRecord;
+				if (!persistUserInterfaceSettingsRecord(workingRecord, errorText)) {
+					messageBox(mfError | mfOKButton, "Installation / User Interface\n\n%s", errorText.c_str());
+					break;
+				}
+				baselineRecord = workingRecord;
+				running = false;
+				break;
+
+			case cmCancel:
+				if (!changed) {
+					running = false;
+					break;
+				}
+				switch (mr::dialogs::showUnsavedChangesDialog(
+				    "Save", "User Interface settings have unsaved changes.")) {
+					case mr::dialogs::UnsavedChangesChoice::Save:
+						workingRecord = editedRecord;
+						if (!persistUserInterfaceSettingsRecord(workingRecord, errorText)) {
+							messageBox(mfError | mfOKButton, "Installation / User Interface\n\n%s", errorText.c_str());
+							break;
+						}
+						running = false;
+						break;
+					case mr::dialogs::UnsavedChangesChoice::Discard:
+						running = false;
+						break;
+					case mr::dialogs::UnsavedChangesChoice::Cancel:
+						workingRecord = editedRecord;
+						discardQueuedCancelEvent();
+						break;
+					default:
+						break;
+				}
+				break;
+
+			default:
+				running = false;
+				break;
+		}
+	}
 }

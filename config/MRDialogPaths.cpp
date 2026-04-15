@@ -693,6 +693,10 @@ static const MREditSettingDescriptor kEditSettingDescriptors[] = {
      kOvDefaultMode},
     {"CURSOR_STATUS_COLOR", "Cursor status color", MREditSettingSection::Display, MREditSettingKind::String, true,
      kOvCursorStatusColor},
+    {"WINDOW_MANAGER", "Window manager", MREditSettingSection::Display, MREditSettingKind::Boolean, false,
+     kOvWindowManager},
+    {"MENULINE_MESSAGES", "Menuline messages", MREditSettingSection::Display, MREditSettingKind::Boolean, false,
+     kOvMenulineMessages},
 };
 
 static const unsigned char kPaletteDialogFrame = 33;
@@ -1975,6 +1979,12 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 		if (!normalizeCursorStatusColor(value, normalized, errorMessage))
 			return false;
 		current.cursorStatusColor = normalized;
+	} else if (upperKeyName == "WINDOW_MANAGER") {
+		if (!parseAndAssignBooleanLiteral(value, current.windowManager, errorMessage))
+			return false;
+	} else if (upperKeyName == "MENULINE_MESSAGES") {
+		if (!parseAndAssignBooleanLiteral(value, current.menulineMessages, errorMessage))
+			return false;
 	} else
 		return setError(errorMessage, "Unknown edit setting key.");
 
@@ -2060,6 +2070,10 @@ std::string editSetupValueLiteral(const MREditSetupSettings &settings, const cha
 		return settings.defaultMode;
 	if (upperKey == "CURSOR_STATUS_COLOR")
 		return settings.cursorStatusColor;
+	if (upperKey == "WINDOW_MANAGER")
+		return formatEditSetupBoolean(settings.windowManager);
+	if (upperKey == "MENULINE_MESSAGES")
+		return formatEditSetupBoolean(settings.menulineMessages);
 	return std::string();
 }
 
@@ -2529,6 +2543,10 @@ MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults,
 		merged.defaultMode = overrides.values.defaultMode;
 	if ((overrides.mask & kOvCursorStatusColor) != 0)
 		merged.cursorStatusColor = overrides.values.cursorStatusColor;
+	if ((overrides.mask & kOvWindowManager) != 0)
+		merged.windowManager = overrides.values.windowManager;
+	if ((overrides.mask & kOvMenulineMessages) != 0)
+		merged.menulineMessages = overrides.values.menulineMessages;
 	{
 		std::string lineNumbersPosition = normalizeLineNumbersPosition(merged.lineNumbersPosition);
 		if (lineNumbersPosition.empty())
@@ -3414,6 +3432,8 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source += "MRSETUP('COLUMN_BLOCK_MOVE', '" + escapeMrmacSingleQuotedLiteral(edit.columnBlockMove) + "');\n";
 	source += "MRSETUP('DEFAULT_MODE', '" + escapeMrmacSingleQuotedLiteral(edit.defaultMode) + "');\n";
 	source += "MRSETUP('CURSOR_STATUS_COLOR', '" + escapeMrmacSingleQuotedLiteral(edit.cursorStatusColor) + "');\n";
+	source += "MRSETUP('WINDOW_MANAGER', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.windowManager)) + "');\n";
+	source += "MRSETUP('MENULINE_MESSAGES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.menulineMessages)) + "');\n";
 	source += "MRSETUP('" + std::string(kThemeSettingsKey) + "', '" +
 	          escapeMrmacSingleQuotedLiteral(themePath) + "');\n";
 

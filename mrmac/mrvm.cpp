@@ -302,7 +302,6 @@ static bool redrawEntireScreen();
 static bool zoomCurrentEditWindow();
 static int findFirstFileMatch(const std::string &pattern);
 static int findNextFileMatch();
-static TMREditWindow *currentEditWindow();
 static TMRFileEditor *currentEditor();
 static BackgroundEditSession *currentBackgroundEditSession() noexcept;
 static ExecutionState *currentExecutionState() noexcept;
@@ -1186,12 +1185,6 @@ static int findNextFileMatch() {
 	++g_runtimeEnv.fileMatchIndex;
 	g_runtimeEnv.lastFileName = g_runtimeEnv.fileMatches[g_runtimeEnv.fileMatchIndex];
 	return 0;
-}
-
-static TMREditWindow *currentEditWindow() {
-	if (TProgram::deskTop == nullptr || TProgram::deskTop->current == nullptr)
-		return nullptr;
-	return dynamic_cast<TMREditWindow *>(TProgram::deskTop->current);
 }
 
 static TMRFileEditor *currentEditor() {

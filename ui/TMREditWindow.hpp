@@ -28,6 +28,7 @@
 #include "TMRIndicator.hpp"
 #include "TMRTextBuffer.hpp"
 #include "MRWindowSupport.hpp"
+#include "../app/commands/MRWindowCommands.hpp"
 #include "../config/MRDialogPaths.hpp"
 #include "../mrmac/mrvm.hpp"
 
@@ -155,6 +156,15 @@ class TMREditWindow : public TWindow {
 			vScrollBar->drawView();
 		if (indicator != nullptr)
 			indicator->drawView();
+	}
+
+	virtual void dragView(TEvent &event, uchar mode, TRect &limits, TPoint minSize, TPoint maxSize) override {
+		if ((mode & dmDragMove) != 0) {
+			MRWindowManager::instance().dragWindow(this, event, mode);
+			clearEvent(event);
+		} else {
+			TWindow::dragView(event, mode, limits, minSize, maxSize);
+		}
 	}
 
 	virtual void handleEvent(TEvent &event) override {

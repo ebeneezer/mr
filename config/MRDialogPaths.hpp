@@ -55,6 +55,8 @@ struct MREditSetupSettings {
 	int miniMapWidth;
 	std::string miniMapMarkerGlyph;
 	std::string gutters;
+	bool windowManager;
+	bool menulineMessages;
 
 	MREditSetupSettings() noexcept
 	    : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false),
@@ -65,7 +67,7 @@ struct MREditSetupSettings {
 	      showEofMarkerEmoji(true), showLineNumbers(false), lineNumbersPosition("OFF"), lineNumZeroFill(false),
 	      persistentBlocks(true), codeFolding(false), codeFoldingPosition("OFF"), columnBlockMove(),
 	      defaultMode(), cursorStatusColor(), miniMapPosition("OFF"), miniMapWidth(4), miniMapMarkerGlyph("│"),
-	      gutters("LCM") {
+	      gutters("LCM"), windowManager(false), menulineMessages(true) {
 	}
 };
 
@@ -132,6 +134,8 @@ enum MREditSetupOverrideMask : unsigned long long {
 	kOvLineNumbersPosition = 1ull << 36,
 	kOvCodeFoldingPosition = 1ull << 37,
 	kOvGutters = 1ull << 38,
+	kOvWindowManager = 1ull << 39,
+	kOvMenulineMessages = 1ull << 40,
 };
 
 struct MREditSettingDescriptor {

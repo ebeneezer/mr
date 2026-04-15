@@ -11,6 +11,9 @@
 #include "MRWindowCommands.hpp"
 
 #include <algorithm>
+#include <chrono>
+#include <thread>
+#include <cmath>
 #include <array>
 #include <chrono>
 #include <cctype>
@@ -29,6 +32,126 @@
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/TMREditWindow.hpp"
 #include "../../ui/MRWindowSupport.hpp"
+
+MRWindowManager& MRWindowManager::instance() {
+    static MRWindowManager inst;
+    return inst;
+}
+
+void MRWindowManager::snapToEdges(TMREditWindow* window, TRect limits, const TPoint& mousePos, TPoint minSize, TPoint maxSize, TRect& outBounds, bool& isSnapped) {
+    if (window == nullptr) return;
+
+    int halfWidth = (limits.b.x - limits.a.x) / 2;
+    int halfHeight = (limits.b.y - limits.a.y) / 2;
+
+    isSnapped = true;
+
+    if (mousePos.x <= limits.a.x) {
+        // Snap left
+        outBounds = TRect(limits.a.x, limits.a.y, limits.a.x + halfWidth, limits.b.y);
+    } else if (mousePos.x >= limits.b.x - 1) {
+        // Snap right
+        outBounds = TRect(limits.a.x + halfWidth, limits.a.y, limits.b.x, limits.b.y);
+    } else if (mousePos.y <= limits.a.y) {
+        // Snap top
+        outBounds = TRect(limits.a.x, limits.a.y, limits.b.x, limits.a.y + halfHeight);
+    } else if (mousePos.y >= limits.b.y - 1) {
+        // Snap bottom
+        outBounds = TRect(limits.a.x, limits.a.y + halfHeight, limits.b.x, limits.b.y);
+    } else {
+        isSnapped = false;
+    }
+}
+
+void MRWindowManager::animateBoundsChange(TMREditWindow* window, const TRect& targetBounds) {
+    TRect startBounds = window->getBounds();
+    if (startBounds == targetBounds) return;
+
+    int steps = 5;
+    for (int i = 1; i <= steps; ++i) {
+        TRect currentBounds;
+        currentBounds.a.x = startBounds.a.x + (targetBounds.a.x - startBounds.a.x) * i / steps;
+        currentBounds.a.y = startBounds.a.y + (targetBounds.a.y - startBounds.a.y) * i / steps;
+        currentBounds.b.x = startBounds.b.x + (targetBounds.b.x - startBounds.b.x) * i / steps;
+        currentBounds.b.y = startBounds.b.y + (targetBounds.b.y - startBounds.b.y) * i / steps;
+
+        window->locate(currentBounds);
+        if (TProgram::deskTop != nullptr) {
+            TProgram::deskTop->drawView(); // Ensure the desktop is updated
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(15));
+    }
+}
+
+void MRWindowManager::dragWindow(TMREditWindow* window, TEvent& event, uchar mode) {
+    if (window == nullptr || TProgram::deskTop == nullptr) return;
+
+    bool windowManagerEnabled = configuredEditSetupSettings().windowManager;
+
+    TRect limits = window->owner->getExtent();
+    TPoint minSize, maxSize;
+    window->sizeLimits(minSize, maxSize);
+
+    if (!windowManagerEnabled) {
+        window->dragView(event, window->dragMode | mode, limits, minSize, maxSize);
+        return;
+    }
+
+    TRect originalBounds = window->getBounds();
+    TRect currentBounds = originalBounds;
+    bool currentlySnapped = false;
+    TRect snappedBounds;
+
+    window->setState(sfDragging, True);
+
+    if (event.what == evMouseDown) {
+        if ((mode & dmDragMove) != 0) {
+            TPoint p = window->origin - event.mouse.where;
+            do {
+                event.mouse.where += p;
+
+                bool shouldSnap = false;
+                TPoint globalMouse = window->owner->makeGlobal(event.mouse.where);
+                TRect globalLimits = window->owner->getExtent(); // Assuming owner is desktop
+
+                snapToEdges(window, globalLimits, globalMouse, minSize, maxSize, snappedBounds, shouldSnap);
+
+                if (shouldSnap) {
+                    if (!currentlySnapped) {
+                        animateBoundsChange(window, snappedBounds);
+                        currentlySnapped = true;
+                        currentBounds = snappedBounds;
+                    }
+                } else {
+                    if (currentlySnapped) {
+                        animateBoundsChange(window, originalBounds);
+                        currentlySnapped = false;
+                        currentBounds = originalBounds;
+                    }
+
+                    // We can't call moveGrow directly since it is private.
+                    // However, we only need to drag the window natively. If we are not snapped,
+                    // we'll update bounds manually mimicking dmDragMove behavior
+                    TPoint newOrigin = event.mouse.where + p;
+                    TRect r(newOrigin.x, newOrigin.y, newOrigin.x + window->size.x, newOrigin.y + window->size.y);
+
+                    // Apply limits
+                    r.a.x = std::max(limits.a.x, std::min(r.a.x, limits.b.x - window->size.x + 1));
+                    r.a.y = std::max(limits.a.y, std::min(r.a.y, limits.b.y - window->size.y + 1));
+                    r.b.x = r.a.x + window->size.x;
+                    r.b.y = r.a.y + window->size.y;
+
+                    window->locate(r);
+                    originalBounds = window->getBounds();
+                }
+            } while (window->mouseEvent(event, evMouseMove));
+        } else {
+            window->dragView(event, window->dragMode | mode, limits, minSize, maxSize);
+        }
+    }
+
+    window->setState(sfDragging, False);
+}
 
 namespace {
 void collectEditWindowsInZOrder(TView *view, void *arg) {
