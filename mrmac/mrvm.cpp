@@ -4133,7 +4133,7 @@ static bool parseIndexedBindingHeaders(const std::string &source, std::vector<TK
 			if (!parseAssignedKeySpec(tokens[t + 1], parsed))
 				continue;
 			bool duplicate = false;
-			for (auto key : keys)
+			for (const auto &key : keys)
 				if (key == parsed) {
 					duplicate = true;
 					break;
@@ -6896,7 +6896,7 @@ void mrvmBootstrapBoundMacroIndex(const std::string &directoryPath, std::size_t 
 		fileKey = makeFileKey(file);
 		if (dedupe.insert(fileKey).second)
 			g_runtimeEnv.indexedBoundFiles.push_back(file);
-		for (auto key : keys)
+		for (const auto &key : keys)
 			g_runtimeEnv.indexedBoundMacros.emplace_back(key, file);
 	}
 
