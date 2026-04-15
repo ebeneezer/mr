@@ -415,18 +415,18 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	addPanelLabel(dialog, TRect(g.optionsLeft, g.miniMapHeadingY, g.optionsLeft + 18, g.miniMapHeadingY + 1),
 	              "Mini map:");
 	miniMapPositionField = addPanelRadioGroup(
-	    dialog, TRect(g.optionsLeft, g.miniMapBodyY, g.optionsLeft + 18, g.miniMapBodyY + 3),
+	    dialog, TRect(g.optionsLeft, g.miniMapBodyY, g.optionsLeft + 24, g.miniMapBodyY + 3),
 	    new TSItem("~O~ff", new TSItem("~L~eading", new TSItem("~T~railing", nullptr))));
-	addPanelLabel(dialog, TRect(g.optionsLeft + 21, g.miniMapHeadingY, g.optionsLeft + 38, g.miniMapHeadingY + 1),
+	addPanelLabel(dialog, TRect(g.optionsLeft + 27, g.miniMapHeadingY, g.optionsLeft + 44, g.miniMapHeadingY + 1),
 	              "Code folding:");
 	codeFoldingPositionField = addPanelRadioGroup(
-	    dialog, TRect(g.optionsLeft + 21, g.miniMapBodyY, g.optionsLeft + 38, g.miniMapBodyY + 3),
+	    dialog, TRect(g.optionsLeft + 27, g.miniMapBodyY, g.optionsLeft + 44, g.miniMapBodyY + 3),
 	    new TSItem("~O~ff", new TSItem("~L~eading", new TSItem("~T~railing", nullptr))));
 	addPanelLabel(dialog,
-	              TRect(g.optionsLeft, g.miniMapBodyY + 4, g.optionsLeft + 8, g.miniMapBodyY + 5),
+	              TRect(g.optionsLeft, g.miniMapBodyY + 3, g.optionsLeft + 24, g.miniMapBodyY + 4),
 	              "Width:");
 	miniMapWidthSlider = addPanelNumericSlider(
-	    dialog, TRect(g.optionsLeft + 8, g.miniMapBodyY + 4, g.optionsLeft + 24, g.miniMapBodyY + 5),
+	    dialog, TRect(g.optionsLeft, g.miniMapBodyY + 4, g.optionsLeft + 24, g.miniMapBodyY + 5),
 	    kMinimumMiniMapWidth, kMaximumMiniMapWidth, kDefaultMiniMapWidth, 1, 2,
 	                                     cmMrFileExtensionEditorSettingsPanelChanged);
 	addPanelLabel(dialog,
@@ -436,10 +436,10 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	    dialog, TRect(g.optionsLeft + 43, g.miniMapBodyY + 4, g.optionsLeft + 48, g.miniMapBodyY + 5),
 	    kMiniMapMarkerGlyphFieldSize - 1);
 	addPanelLabel(dialog,
-	              TRect(g.optionsLeft, g.miniMapBodyY + 6, g.optionsLeft + 8, g.miniMapBodyY + 7),
+	              TRect(g.optionsLeft + 50, g.miniMapBodyY + 4, g.optionsLeft + 58, g.miniMapBodyY + 5),
 	              "Gutters:");
 	guttersField = addPanelInput(
-	    dialog, TRect(g.optionsLeft + 8, g.miniMapBodyY + 6, g.optionsLeft + 16, g.miniMapBodyY + 7),
+	    dialog, TRect(g.optionsLeft + 58, g.miniMapBodyY + 4, g.optionsLeft + 66, g.miniMapBodyY + 5),
 	    kGuttersFieldSize - 1);
 }
 
