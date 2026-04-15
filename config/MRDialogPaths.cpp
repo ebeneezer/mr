@@ -1787,7 +1787,7 @@ bool normalizeEditExtensionSelectorsInPlace(std::vector<std::string> &selectors,
 			continue;
 		if (containsAsciiSpace(ext))
 			return setError(errorMessage, "Extensions may not contain whitespace.");
-		if (ext.find('/') != std::string::npos || ext.find('\\') != std::string::npos)
+		if (ext.find_first_of("/\\") != std::string::npos)
 			return setError(errorMessage, "Extensions may not contain path separators.");
 		if (seen.insert(ext).second)
 			normalized.push_back(ext);
