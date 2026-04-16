@@ -236,6 +236,14 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	}
 	if (trimAscii(settings.formatLine).empty())
 		settings.formatLine = defaultFormatLineForTabSize(settings.tabSize);
+	else {
+		for (char ch : settings.formatLine) {
+			if (ch != '-' && ch != '|' && ch != 'R') {
+				errorText = "FORMAT_LINE is invalid. Only '-', '|', and 'R' are allowed.";
+				return false;
+			}
+		}
+	}
 	if (!settings.postLoadMacro.empty() && !mr::dialogs::hasMrmacExtension(settings.postLoadMacro)) {
 		errorText = "POST_LOAD_MACRO must end with .mrmac.";
 		return false;
