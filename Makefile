@@ -13,6 +13,7 @@ CMAKE ?= cmake
 GIT ?= git
 PATCH ?= patch
 NPROC ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
+MAKEFLAGS += -j$(NPROC)
 CLANG_TIDY ?= clang-tidy
 BEAR ?= bear
 LINT_FILE ?= mrmac/mrvm.cpp

@@ -38,6 +38,7 @@
 #include "MRUnsavedChangesDialog.hpp"
 #include "MRSetupDialogCommon.hpp"
 #include "MRNumericSlider.hpp"
+#include "../app/commands/MRWindowCommands.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -1563,6 +1564,7 @@ void runColorSetupDialogFlow() {
 					break;
 				}
 				TProgram::application->redraw();
+				mrUpdateAllWindowsColorTheme();
 				havePendingPalette = false;
 				running = false;
 				break;
@@ -1581,6 +1583,7 @@ void runColorSetupDialogFlow() {
 					break;
 				}
 				TProgram::application->redraw();
+				mrUpdateAllWindowsColorTheme();
 				break;
 			}
 
@@ -1609,6 +1612,7 @@ void runColorSetupDialogFlow() {
 						break;
 					}
 					TProgram::application->redraw();
+					mrUpdateAllWindowsColorTheme();
 				}
 				pendingPalette = workingPalette;
 				havePendingPalette = true;
@@ -1956,12 +1960,12 @@ TDialog *createSetupSimplePreviewDialog(const char *title, int width, int height
 		TRect okRect(width - 34, height - 3, width - 24, height - 1);
 		TRect cancelRect(width - 23, height - 3, width - 10, height - 1);
 		TRect helpRect(width - 9, height - 3, width - 2, height - 1);
-		dialog->addManaged(new TButton(okRect, "OK", cmOK, bfDefault), okRect);
-		dialog->addManaged(new TButton(cancelRect, "Cancel", cmCancel, bfNormal), cancelRect);
-		dialog->addManaged(new TButton(helpRect, "Help", cmHelp, bfNormal), helpRect);
+		dialog->addManaged(new TButton(okRect, "O~K~", cmOK, bfDefault), okRect);
+		dialog->addManaged(new TButton(cancelRect, "~C~ancel", cmCancel, bfNormal), cancelRect);
+		dialog->addManaged(new TButton(helpRect, "~H~elp", cmHelp, bfNormal), helpRect);
 	} else {
 		TRect doneRect(width / 2 - 4, height - 3, width / 2 + 4, height - 1);
-		dialog->addManaged(new TButton(doneRect, "Done", cmOK, bfDefault), doneRect);
+		dialog->addManaged(new TButton(doneRect, "~D~one", cmOK, bfDefault), doneRect);
 	}
 
 	dialog->initScrollIfNeeded();

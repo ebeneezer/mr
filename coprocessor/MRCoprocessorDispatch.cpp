@@ -99,19 +99,18 @@ long long roundedMilliseconds(double valueMs) {
 }
 
 void postMiniMapHeroEvent(const mr::coprocessor::TaskTiming &timing, const mr::coprocessor::MiniMapWarmupPayload &payload) {
+	if (payload.totalLines <= 1)
+		return;
 	const long long totalMs = roundedMilliseconds(timing.totalMs());
+	const std::string timeStr = totalMs >= 1 ? std::to_string(totalMs) : "< 1";
 	const std::string heroText =
-	    "mini map initial render " + (totalMs >= 1 ? std::to_string(totalMs) : std::string("<1")) + " ms";
-	const std::string followupText =
-	    "rows " + std::to_string(payload.rowCount) + ", width " + std::to_string(payload.bodyWidth) +
-	    ", lines " + std::to_string(payload.totalLines);
-	const std::chrono::milliseconds heroDuration = mr::messageline::autoDurationForText(heroText);
+	    "mini map render " + timeStr + " ms, " +
+	    std::to_string(payload.rowCount) + "x" + std::to_string(payload.bodyWidth) + " glyphs, " +
+	    std::to_string(payload.totalLines) + " lines";
 
 	mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEvent, heroText, mr::messageline::Kind::Success,
 	                               mr::messageline::kPriorityHigh);
-	mr::messageline::postAutoTimedAfter(mr::messageline::Owner::HeroEventFollowup, followupText,
-	                                    mr::messageline::Kind::Info, heroDuration,
-	                                    mr::messageline::kPriorityLow);
+	mr::messageline::clearOwner(mr::messageline::Owner::HeroEventFollowup);
 }
 
 void appendMacroLogLines(const std::vector<std::string> &logLines) {

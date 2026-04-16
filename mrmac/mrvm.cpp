@@ -391,6 +391,8 @@ static bool gotoEditorCol(TMRFileEditor *editor, int colNum);
 static bool currentEditorAtEof(TMRFileEditor *editor);
 static bool currentEditorAtEol(TMRFileEditor *editor);
 static int currentEditorRow(TMRFileEditor *editor);
+static int currentEditorPage(TMRFileEditor *editor);
+static int currentEditorPageLine(TMRFileEditor *editor);
 static bool markEditorPosition(TMREditWindow *win, TMRFileEditor *editor);
 static bool gotoEditorMark(TMREditWindow *win, TMRFileEditor *editor);
 static bool popEditorMark(TMREditWindow *win);
@@ -576,7 +578,8 @@ static unsigned classifyLoadVarName(const std::string &name) {
 		return mrefUiAffinity;
 	if (name == "INSERT_MODE" || name == "INDENT_LEVEL" || name == "GET_LINE" ||
 	    name == "CUR_CHAR" || name == "C_COL" || name == "C_LINE" || name == "C_ROW" ||
-	    name == "AT_EOF" || name == "AT_EOL" || name == "BLOCK_STAT" ||
+	    name == "C_PAGE" || name == "PG_LINE" || name == "AT_EOF" || name == "AT_EOL" ||
+	    name == "BLOCK_STAT" ||
 	    name == "BLOCK_LINE1" || name == "BLOCK_LINE2" || name == "BLOCK_COL1" ||
 	    name == "BLOCK_COL2" || name == "MARKING" || name == "FILE_CHANGED" ||
 	    name == "FILE_NAME")
@@ -2147,6 +2150,45 @@ static int currentEditorRow(TMRFileEditor *editor) {
 	return editor->currentViewRow();
 }
 
+static int currentEditorPage(TMRFileEditor *editor) {
+	std::string text = snapshotEditorText(editor);
+	std::size_t end = currentEditorCursorOffset(editor);
+	std::size_t pos = 0;
+	int page = 1;
+	char pageBreak = configuredPageBreakCharacter();
+
+	if (end > text.size())
+		end = text.size();
+
+	while ((pos = text.find(pageBreak, pos)) != std::string::npos && pos < end) {
+		++page;
+		++pos;
+	}
+	return page;
+}
+
+static int currentEditorPageLine(TMRFileEditor *editor) {
+	std::string text = snapshotEditorText(editor);
+	std::size_t end = currentEditorCursorOffset(editor);
+	std::size_t pos = 0;
+	std::size_t lastBreak = std::string::npos;
+	char pageBreak = configuredPageBreakCharacter();
+	int currentLine = currentEditorLineNumber(editor);
+
+	if (end > text.size())
+		end = text.size();
+
+	while ((pos = text.find(pageBreak, pos)) != std::string::npos && pos < end) {
+		lastBreak = pos;
+		++pos;
+	}
+
+	if (lastBreak == std::string::npos)
+		return currentLine;
+
+	return currentLine - lineIndexForPtr(editor, static_cast<uint>(lastBreak));
+}
+
 static bool markEditorPosition(TMREditWindow *win, TMRFileEditor *editor) {
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (editor == nullptr) {
@@ -3578,6 +3620,10 @@ static Value loadSpecialVariable(const std::string &name, bool &handled) {
 		return makeInt(currentEditorLineNumber(currentEditor()));
 	if (key == "C_ROW")
 		return makeInt(currentEditorRow(currentEditor()));
+	if (key == "C_PAGE")
+		return makeInt(currentEditorPage(currentEditor()));
+	if (key == "PG_LINE")
+		return makeInt(currentEditorPageLine(currentEditor()));
 	if (key == "AT_EOF")
 		return makeInt(currentEditorAtEof(currentEditor()) ? 1 : 0);
 	if (key == "AT_EOL")
@@ -3766,7 +3812,8 @@ static bool storeSpecialVariable(const std::string &name, const Value &value) {
 	}
 	if (key == "FIRST_RUN" || key == "FIRST_MACRO" || key == "NEXT_MACRO" ||
 	    key == "LAST_FILE_NAME" || key == "GET_LINE" || key == "CUR_CHAR" || key == "C_COL" ||
-	    key == "C_LINE" || key == "C_ROW" || key == "AT_EOF" || key == "AT_EOL" ||
+	    key == "C_LINE" || key == "C_ROW" || key == "C_PAGE" || key == "PG_LINE" ||
+	    key == "AT_EOF" || key == "AT_EOL" ||
 	    key == "CUR_WINDOW" || key == "LINK_STAT" || key == "WIN_X1" || key == "WIN_Y1" || key == "WIN_X2" ||
 	    key == "WIN_Y2" || key == "WINDOW_COUNT" || key == "BLOCK_STAT" ||
 	    key == "BLOCK_LINE1" || key == "BLOCK_LINE2" || key == "BLOCK_COL1" ||
@@ -5154,7 +5201,8 @@ bool isSupportedStagedSymbol(const std::string &value) noexcept {
 	static const char *const kAllowed[] = {
 	    "TEXT",        "PUT_LINE",       "CR",             "DEL_CHAR",        "DEL_CHARS",
 	    "DEL_LINE",    "REPLACE",        "GET_LINE",       "CUR_CHAR",        "GET_WORD",
-	    "C_COL",       "C_LINE",         "C_ROW",          "AT_EOF",          "AT_EOL",
+	    "C_COL",       "C_LINE",         "C_ROW",          "C_PAGE",          "PG_LINE",
+	    "AT_EOF",      "AT_EOL",
 	    "INSERT_MODE", "INDENT_LEVEL",   "SET_INDENT_LEVEL","LEFT",          "RIGHT",
 	    "UP",          "DOWN",           "HOME",           "EOL",             "TOF",
 	    "EOF",         "WORD_LEFT",      "WORD_RIGHT",     "FIRST_WORD",      "GOTO_LINE",

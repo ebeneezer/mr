@@ -157,6 +157,15 @@ bool hideCurrentEditWindow() {
 	return mrEnsureUsableWorkWindow();
 }
 
+void mrUpdateAllWindowsColorTheme() {
+	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+	for (auto & window : windows) {
+		if (window != nullptr) {
+			window->applyWindowColorThemeForPath(window->currentFileName());
+		}
+	}
+}
+
 
 // ---- Consolidated from MRFileCommands.cpp ----
 
