@@ -1495,9 +1495,8 @@ bool validateBackupExtension(const std::string &value, std::string *errorMessage
 		return setError(errorMessage, "BACKUP_EXTENSION may not be empty when BACKUP_METHOD=BAK_FILE.");
 	if (normalized.size() > 255)
 		return setError(errorMessage, "BACKUP_EXTENSION may not exceed 255 characters.");
-	for (char ch : normalized)
-		if (invalidChars.find(ch) != std::string::npos)
-			return setError(errorMessage, "BACKUP_EXTENSION contains invalid filename characters.");
+	if (normalized.find_first_of(invalidChars) != std::string::npos)
+		return setError(errorMessage, "BACKUP_EXTENSION contains invalid filename characters.");
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;
