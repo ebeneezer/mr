@@ -430,16 +430,16 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	    kMinimumMiniMapWidth, kMaximumMiniMapWidth, kDefaultMiniMapWidth, 1, 2,
 	                                     cmMrFileExtensionEditorSettingsPanelChanged);
 	addPanelLabel(dialog,
-	              TRect(g.optionsLeft + 26, g.miniMapBodyY + 4, g.optionsLeft + 43, g.miniMapBodyY + 5),
+	              TRect(g.optionsLeft, g.miniMapBodyY + 5, g.optionsLeft + 17, g.miniMapBodyY + 6),
 	              "Viewport cursor:");
 	miniMapMarkerGlyphField = addPanelInput(
-	    dialog, TRect(g.optionsLeft + 43, g.miniMapBodyY + 4, g.optionsLeft + 48, g.miniMapBodyY + 5),
+	    dialog, TRect(g.optionsLeft + 17, g.miniMapBodyY + 5, g.optionsLeft + 22, g.miniMapBodyY + 6),
 	    kMiniMapMarkerGlyphFieldSize - 1);
 	addPanelLabel(dialog,
-	              TRect(g.optionsLeft + 50, g.miniMapBodyY + 4, g.optionsLeft + 58, g.miniMapBodyY + 5),
+	              TRect(g.optionsLeft + 24, g.miniMapBodyY + 5, g.optionsLeft + 32, g.miniMapBodyY + 6),
 	              "Gutters:");
 	guttersField = addPanelInput(
-	    dialog, TRect(g.optionsLeft + 58, g.miniMapBodyY + 4, g.optionsLeft + 66, g.miniMapBodyY + 5),
+	    dialog, TRect(g.optionsLeft + 32, g.miniMapBodyY + 5, g.optionsLeft + 40, g.miniMapBodyY + 6),
 	    kGuttersFieldSize - 1);
 }
 
