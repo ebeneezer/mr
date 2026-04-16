@@ -78,14 +78,14 @@ void MRWindowManager::dragWindow(TMREditWindow* window, TEvent& event, uchar mod
 
     if (event.what == evMouseDown) {
         if ((mode & dmDragMove) != 0) {
-            TPoint offset = window->origin - event.mouse.where;
+            TGroup* desktopGroup = window->owner != nullptr ? window->owner : TProgram::deskTop;
+            TPoint localStartMouse = desktopGroup ? desktopGroup->makeLocal(event.mouse.where) : event.mouse.where;
+            TPoint offset = window->origin - localStartMouse;
             do {
-                TPoint currentMouse = event.mouse.where;
+                TPoint currentMouse = desktopGroup ? desktopGroup->makeLocal(event.mouse.where) : event.mouse.where;
 
                 bool shouldSnap = false;
-                TGroup* desktopGroup = window->owner != nullptr ? window->owner : TProgram::deskTop;
                 if (desktopGroup) {
-                    // event.mouse.where is local to the desktop group, so local limits match.
                     TRect localLimits = desktopGroup->getExtent();
 
                     snapToEdges(window, localLimits, currentMouse, minSize, maxSize, snappedBounds, shouldSnap);
@@ -93,13 +93,13 @@ void MRWindowManager::dragWindow(TMREditWindow* window, TEvent& event, uchar mod
 
                 if (shouldSnap) {
                     if (!currentlySnapped) {
-                        window->locate(snappedBounds);
+                        window->changeBounds(snappedBounds);
                         currentlySnapped = true;
                         currentBounds = snappedBounds;
                     }
                 } else {
                     if (currentlySnapped) {
-                        window->locate(originalBounds);
+                        window->changeBounds(originalBounds);
                         currentlySnapped = false;
                         currentBounds = originalBounds;
                     }
@@ -113,7 +113,7 @@ void MRWindowManager::dragWindow(TMREditWindow* window, TEvent& event, uchar mod
                     r.b.x = r.a.x + window->size.x;
                     r.b.y = r.a.y + window->size.y;
 
-                    window->locate(r);
+                    window->changeBounds(r);
                     originalBounds = window->getBounds();
                 }
             } while (window->mouseEvent(event, evMouseMove));
