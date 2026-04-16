@@ -313,7 +313,12 @@ void tokenizeIni(TMRSyntaxTokenMap &tokens, const std::string &line) {
 		return;
 	}
 
-	std::size_t sep = line.find_first_of("=:", trimmed);
+	// Optimization: In GCC/libstdc++, multiple find(char) calls are significantly
+	// faster than a single find_first_of() due to SIMD/memchr acceleration.
+	// Reduces syntax highlighting overhead for INI files.
+	std::size_t sepEq = line.find('=', trimmed);
+	std::size_t sepColon = line.find(':', trimmed);
+	std::size_t sep = std::min(sepEq, sepColon);
 	if (sep != std::string::npos)
 		paint(tokens, trimmed, sep, TMRSyntaxToken::Key);
 
