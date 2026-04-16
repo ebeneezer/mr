@@ -17,4 +17,6 @@ static const char *const kAboutQuotes[] = {
 
 constexpr std::size_t kAboutQuoteCount = sizeof(kAboutQuotes) / sizeof(kAboutQuotes[0]);
 
+
+
 #endif

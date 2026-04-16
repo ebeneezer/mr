@@ -104,6 +104,20 @@
               "comment": "- code prettyfier: wie syntaxregeln definieren?"
             }
           ]
+        },
+        {
+          "id": "d2168d40-7377-4678-b6b5-8e72ee20daff",
+          "listId": "442a00f0-c411-4725-9424-3182418b486d",
+          "title": "Windowanimations",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": [
+            {
+              "id": "0ec235fb-d8f5-43e7-b8c9-e35c0194bb8a",
+              "comment": "Explode, Magic Lamp?, Slide in/out?"
+            }
+          ]
         }
       ]
     },
@@ -181,6 +195,10 @@
             {
               "id": "5af646a4-0ebc-4089-ae7f-b5801d821c67",
               "comment": "Tile links, rechts, oben, unten\nStack\nSpread"
+            },
+            {
+              "id": "727f7620-666a-45ee-980a-8bcbd9d48eb0",
+              "comment": "Minimize/Restore? Wohin? In die F-Tasten Zeile? Srollbare F-Tasten Zeile??"
             }
           ]
         },
