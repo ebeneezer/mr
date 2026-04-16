@@ -436,10 +436,10 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	    dialog, TRect(g.optionsLeft + 17, g.miniMapBodyY + 5, g.optionsLeft + 22, g.miniMapBodyY + 6),
 	    kMiniMapMarkerGlyphFieldSize - 1);
 	addPanelLabel(dialog,
-	              TRect(g.optionsLeft + 24, g.miniMapBodyY + 5, g.optionsLeft + 32, g.miniMapBodyY + 6),
+	              TRect(g.optionsLeft + 27, g.miniMapBodyY + 5, g.optionsLeft + 35, g.miniMapBodyY + 6),
 	              "Gutters:");
 	guttersField = addPanelInput(
-	    dialog, TRect(g.optionsLeft + 32, g.miniMapBodyY + 5, g.optionsLeft + 40, g.miniMapBodyY + 6),
+	    dialog, TRect(g.optionsLeft + 35, g.miniMapBodyY + 5, g.optionsLeft + 43, g.miniMapBodyY + 6),
 	    kGuttersFieldSize - 1);
 }
 
