@@ -86,16 +86,10 @@ void MRWindowManager::animateBoundsChange(TMREditWindow* window, const TRect& ta
 void MRWindowManager::dragWindow(TMREditWindow* window, TEvent& event, uchar mode) {
     if (window == nullptr || TProgram::deskTop == nullptr) return;
 
-    bool windowManagerEnabled = configuredEditSetupSettings().windowManager;
-
-    TRect limits = window->owner->getExtent();
+    TRect limits = window->owner != nullptr ? window->owner->getExtent() : TProgram::deskTop->getExtent();
     TPoint minSize, maxSize;
     window->sizeLimits(minSize, maxSize);
 
-    if (!windowManagerEnabled) {
-        window->dragView(event, window->dragMode | mode, limits, minSize, maxSize);
-        return;
-    }
 
     TRect originalBounds = window->getBounds();
     TRect currentBounds = originalBounds;
@@ -106,15 +100,18 @@ void MRWindowManager::dragWindow(TMREditWindow* window, TEvent& event, uchar mod
 
     if (event.what == evMouseDown) {
         if ((mode & dmDragMove) != 0) {
-            TPoint p = window->origin - event.mouse.where;
+            TPoint offset = window->origin - event.mouse.where;
             do {
-                event.mouse.where += p;
+                TPoint currentMouse = event.mouse.where;
 
                 bool shouldSnap = false;
-                TPoint globalMouse = window->owner->makeGlobal(event.mouse.where);
-                TRect globalLimits = window->owner->getExtent(); // Assuming owner is desktop
+                TGroup* desktopGroup = window->owner != nullptr ? window->owner : TProgram::deskTop;
+                if (desktopGroup) {
+                    // event.mouse.where is local to the desktop group, so local limits match.
+                    TRect localLimits = desktopGroup->getExtent();
 
-                snapToEdges(window, globalLimits, globalMouse, minSize, maxSize, snappedBounds, shouldSnap);
+                    snapToEdges(window, localLimits, currentMouse, minSize, maxSize, snappedBounds, shouldSnap);
+                }
 
                 if (shouldSnap) {
                     if (!currentlySnapped) {
@@ -129,10 +126,7 @@ void MRWindowManager::dragWindow(TMREditWindow* window, TEvent& event, uchar mod
                         currentBounds = originalBounds;
                     }
 
-                    // We can't call moveGrow directly since it is private.
-                    // However, we only need to drag the window natively. If we are not snapped,
-                    // we'll update bounds manually mimicking dmDragMove behavior
-                    TPoint newOrigin = event.mouse.where + p;
+                    TPoint newOrigin = currentMouse + offset;
                     TRect r(newOrigin.x, newOrigin.y, newOrigin.x + window->size.x, newOrigin.y + window->size.y);
 
                     // Apply limits

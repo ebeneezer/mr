@@ -159,7 +159,7 @@ class TMREditWindow : public TWindow {
 	}
 
 	virtual void dragView(TEvent &event, uchar mode, TRect &limits, TPoint minSize, TPoint maxSize) override {
-		if ((mode & dmDragMove) != 0) {
+		if ((mode & dmDragMove) != 0 && configuredEditSetupSettings().windowManager) {
 			MRWindowManager::instance().dragWindow(this, event, mode);
 			clearEvent(event);
 		} else {
