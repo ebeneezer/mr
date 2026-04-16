@@ -3368,10 +3368,7 @@ static bool moveCurrentBlock(TMREditWindow *win, TMRFileEditor *editor) {
 				std::size_t avail =
 				    std::min<std::size_t>(static_cast<std::size_t>(width), line.size() - startCol);
 				slice.replace(0, avail, line.substr(startCol, avail));
-				if (configuredEditSetupSettings().columnBlockMove == "LEAVE_SPACE")
-					line.replace(startCol, avail, std::string(avail, ' '));
-				else
-					line.erase(startCol, avail);
+				line.erase(startCol, avail);
 			}
 			slices.push_back(slice);
 		}
@@ -3445,13 +3442,9 @@ static bool deleteCurrentBlock(TMREditWindow *win, TMRFileEditor *editor) {
 		for (int row = row1; row <= row2; ++row) {
 			std::string &line = buf.lines[static_cast<std::size_t>(row)];
 			std::size_t startCol = static_cast<std::size_t>(std::max(0, col1 - 1));
-			if (startCol < line.size()) {
-				std::size_t avail = std::min<std::size_t>(static_cast<std::size_t>(width), line.size() - startCol);
-				if (configuredEditSetupSettings().columnBlockMove == "LEAVE_SPACE")
-					line.replace(startCol, avail, std::string(avail, ' '));
-				else
-					line.erase(startCol, avail);
-			}
+			if (startCol < line.size())
+				line.erase(startCol, std::min<std::size_t>(static_cast<std::size_t>(width),
+				                                           line.size() - startCol));
 		}
 		if (!replaceEditorBuffer(editor, joinBufferLines(buf),
 		                         bufferOffsetForLineColumn(buf, row1, std::max(0, col1 - 1))))
@@ -6878,6 +6871,17 @@ bool mrvmUiRedrawCurrentWindow() {
 
 bool mrvmUiNewScreen() {
 	return redrawEntireScreen();
+}
+
+bool mrvmUiDispatchMacro(const std::string &name, const std::string &args) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	std::vector<Value> valueArgs;
+	if (!args.empty())
+		valueArgs.push_back(makeString(args));
+	int errorCode = 0;
+	if (!queueDeferredUiProcedure(name, valueArgs, errorCode))
+		return false;
+	return true;
 }
 
 void mrvmBootstrapBoundMacroIndex(const std::string &directoryPath, std::size_t *fileCount,

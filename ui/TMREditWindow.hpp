@@ -188,6 +188,18 @@ class TMREditWindow : public TWindow {
 					clearBlock();
 					clearEvent(event);
 					return;
+				case cmMrBlockCopy:
+					mrvmUiDispatchMacro("COPY_BLOCK", "");
+					clearEvent(event);
+					return;
+				case cmMrBlockMove:
+					mrvmUiDispatchMacro("MOVE_BLOCK", "");
+					clearEvent(event);
+					return;
+				case cmMrBlockDelete:
+					mrvmUiDispatchMacro("DELETE_BLOCK", "");
+					clearEvent(event);
+					return;
 			}
 		}
 		if (frame != nullptr) {
@@ -1276,26 +1288,18 @@ class TMREditWindow : public TWindow {
 		uint b;
 		if (editor == nullptr)
 			return;
-		if (blockMode_ == bmColumn) {
-			editor->setBlockModeOverride(2, normalizedBlockLine1(), normalizedBlockLine2(),
-			                             normalizedBlockCol1(), normalizedBlockCol2());
+		if (blockMode_ == bmStream) {
+			blockPtrRange(a, b);
+			editor->setSelectionOffsets(a, b, False);
+		} else if (blockMode_ == bmLine) {
+			blockPtrRange(a, b);
+			a = static_cast<uint>(editor->lineStartOffset(a));
+			b = static_cast<uint>(editor->nextLineOffset(b));
+			if (b > editor->bufferLength())
+				b = static_cast<uint>(editor->bufferLength());
+			editor->setSelectionOffsets(a, b, False);
+		} else
 			editor->setSelectionOffsets(editor->cursorOffset(), editor->cursorOffset(), False);
-		} else {
-			editor->setBlockModeOverride(0, 0, 0, 0, 0);
-			if (blockMode_ == bmStream) {
-				blockPtrRange(a, b);
-				editor->setSelectionOffsets(a, b, False);
-			} else if (blockMode_ == bmLine) {
-				blockPtrRange(a, b);
-				a = static_cast<uint>(editor->lineStartOffset(a));
-				b = static_cast<uint>(editor->nextLineOffset(b));
-				if (b > editor->bufferLength())
-					b = static_cast<uint>(editor->bufferLength());
-				editor->setSelectionOffsets(a, b, False);
-			} else {
-				editor->setSelectionOffsets(editor->cursorOffset(), editor->cursorOffset(), False);
-			}
-		}
 		editor->revealCursor(True);
 		editor->update(ufView);
 	}

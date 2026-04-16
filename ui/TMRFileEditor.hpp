@@ -77,14 +77,6 @@ class TMRFileEditor : public TScroller {
 		drawView();
 	}
 
-	void setBlockModeOverride(int mode, int line1, int line2, int col1, int col2) noexcept {
-		blockModeOverride_ = mode;
-		blockLine1Override_ = line1;
-		blockLine2Override_ = line2;
-		blockCol1Override_ = col1;
-		blockCol2Override_ = col2;
-	}
-
 	void setReadOnly(bool readOnly) {
 		if (readOnly_ != readOnly) {
 			readOnly_ = readOnly;
@@ -2908,25 +2900,12 @@ class TMRFileEditor : public TScroller {
 				std::size_t documentPos = lineStart + bytePos;
 				TMRSyntaxToken token =
 				    tokenIndex < tokens.size() ? tokens[tokenIndex] : TMRSyntaxToken::Text;
-
-				bool selected = false;
-				if (blockModeOverride_ == 2) {
-					int col = visual + 1;
-					int lineNum = static_cast<int>(bufferModel_.lineIndex(lineStart)) + 1;
-					if (lineNum >= std::min(blockLine1Override_, blockLine2Override_) &&
-					    lineNum <= std::max(blockLine1Override_, blockLine2Override_) &&
-					    col >= std::min(blockCol1Override_, blockCol2Override_) &&
-					    col <= std::max(blockCol1Override_, blockCol2Override_))
-						selected = true;
-				} else {
-					selected = selection.start <= documentPos && documentPos < selection.end;
-				}
-
-				bool changedChar = !currentLine && !currentLineInBlock && isDirtyOffset(documentPos);
-				TAttrPair effectivePair = changedChar ? changedPair : basePair;
-				TAttrPair tokenPair = selected ? selectionPair : effectivePair;
-				TColorAttr color = tokenColor(token, selected, tokenPair);
-				int visibleWidth = nextVisual - std::max(visual, hScroll);
+					bool selected = selection.start <= documentPos && documentPos < selection.end;
+					bool changedChar = !currentLine && !currentLineInBlock && isDirtyOffset(documentPos);
+					TAttrPair effectivePair = changedChar ? changedPair : basePair;
+					TAttrPair tokenPair = selected ? selectionPair : effectivePair;
+					TColorAttr color = tokenColor(token, selected, tokenPair);
+					int visibleWidth = nextVisual - std::max(visual, hScroll);
 
 				if (line[bytePos] == '\t' || visual < hScroll)
 					b.moveChar(static_cast<ushort>(drawX + x), ' ', color, static_cast<ushort>(visibleWidth));
@@ -3003,11 +2982,6 @@ class TMRFileEditor : public TScroller {
 	bool readOnly_;
 	bool customWindowEofMarkerColorOverrideValid_ = false;
 	TColorAttr customWindowEofMarkerColorOverride_ = 0;
-	int blockModeOverride_ = 0;
-	int blockLine1Override_ = 0;
-	int blockLine2Override_ = 0;
-	int blockCol1Override_ = 0;
-	int blockCol2Override_ = 0;
 	bool insertMode_;
 	bool autoIndent_;
 	char fileName[MAXPATH];

@@ -541,6 +541,11 @@ bool handleMRCommand(ushort command) {
 		case cmMrEditPasteFromBuffer:
 			return dispatchEditorClipboardCommand(cmPaste, true);
 
+		case cmMrBlockCopy:
+		case cmMrBlockMove:
+		case cmMrBlockDelete:
+			return dispatchWindowCommand(command);
+
 		case cmMrBlockMarkLines:
 			return dispatchWindowCommand(cmMrBlockMarkLines);
 
@@ -555,11 +560,6 @@ bool handleMRCommand(ushort command) {
 
 		case cmMrBlockTurnMarkingOff:
 			return dispatchWindowCommand(cmMrBlockTurnMarkingOff);
-
-		case cmMrBlockCopy:
-		case cmMrBlockMove:
-		case cmMrBlockDelete:
-			return dispatchWindowCommand(command);
 
 		case cmMrBlockSaveToDisk:
 		case cmMrBlockIndent:

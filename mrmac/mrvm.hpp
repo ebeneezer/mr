@@ -290,6 +290,7 @@ bool mrvmUiUnlinkCurrentWindow();
 bool mrvmUiZoomCurrentWindow();
 bool mrvmUiRedrawCurrentWindow();
 bool mrvmUiNewScreen();
+bool mrvmUiDispatchMacro(const std::string &name, const std::string &args);
 bool mrvmLoadMacroFile(const std::string &spec, std::string *errorMessage = nullptr);
 void mrvmBootstrapBoundMacroIndex(const std::string &directoryPath, std::size_t *fileCount = nullptr,
                                   std::size_t *bindingCount = nullptr);
