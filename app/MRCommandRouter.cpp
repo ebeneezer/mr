@@ -556,6 +556,16 @@ bool handleMRCommand(ushort command) {
 		case cmMrBlockTurnMarkingOff:
 			return dispatchWindowCommand(cmMrBlockTurnMarkingOff);
 
+		case cmMrBlockCopy:
+		case cmMrBlockMove:
+		case cmMrBlockDelete:
+			return dispatchWindowCommand(command);
+
+		case cmMrBlockSaveToDisk:
+		case cmMrBlockIndent:
+		case cmMrBlockUndent:
+			return dispatchEditorCommand(command, true);
+
 		case cmMrBlockPersistent:
 			return togglePersistentBlocksSetting();
 
