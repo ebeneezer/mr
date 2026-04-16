@@ -24,7 +24,6 @@ class MRWindowManager {
     MRWindowManager& operator=(const MRWindowManager&) = delete;
 
     void snapToEdges(TMREditWindow* window, TRect limits, const TPoint& mousePos, TPoint minSize, TPoint maxSize, TRect& outBounds, bool& isSnapped);
-    void animateBoundsChange(TMREditWindow* window, const TRect& targetBounds);
 };
 
 [[nodiscard]] TMREditWindow *createEditorWindow(const char *title);

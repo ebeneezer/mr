@@ -11,8 +11,6 @@
 #include "MRWindowCommands.hpp"
 
 #include <algorithm>
-#include <chrono>
-#include <thread>
 #include <cmath>
 #include <array>
 #include <chrono>
@@ -63,26 +61,6 @@ void MRWindowManager::snapToEdges(TMREditWindow* window, TRect limits, const TPo
     }
 }
 
-void MRWindowManager::animateBoundsChange(TMREditWindow* window, const TRect& targetBounds) {
-    TRect startBounds = window->getBounds();
-    if (startBounds == targetBounds) return;
-
-    int steps = 5;
-    for (int i = 1; i <= steps; ++i) {
-        TRect currentBounds;
-        currentBounds.a.x = startBounds.a.x + (targetBounds.a.x - startBounds.a.x) * i / steps;
-        currentBounds.a.y = startBounds.a.y + (targetBounds.a.y - startBounds.a.y) * i / steps;
-        currentBounds.b.x = startBounds.b.x + (targetBounds.b.x - startBounds.b.x) * i / steps;
-        currentBounds.b.y = startBounds.b.y + (targetBounds.b.y - startBounds.b.y) * i / steps;
-
-        window->locate(currentBounds);
-        if (TProgram::deskTop != nullptr) {
-            TProgram::deskTop->drawView(); // Ensure the desktop is updated
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(15));
-    }
-}
-
 void MRWindowManager::dragWindow(TMREditWindow* window, TEvent& event, uchar mode) {
     if (window == nullptr || TProgram::deskTop == nullptr) return;
 
@@ -115,13 +93,13 @@ void MRWindowManager::dragWindow(TMREditWindow* window, TEvent& event, uchar mod
 
                 if (shouldSnap) {
                     if (!currentlySnapped) {
-                        animateBoundsChange(window, snappedBounds);
+                        window->locate(snappedBounds);
                         currentlySnapped = true;
                         currentBounds = snappedBounds;
                     }
                 } else {
                     if (currentlySnapped) {
-                        animateBoundsChange(window, originalBounds);
+                        window->locate(originalBounds);
                         currentlySnapped = false;
                         currentBounds = originalBounds;
                     }
