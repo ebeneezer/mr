@@ -331,9 +331,9 @@ piecetable/MRTextDocument.o: piecetable/MRTextDocument.cpp piecetable/MRTextDocu
 
 # 4. Linker call
 $(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS)
-	$(CXX) -o $@ $^ $(LDFLAGS) || { paplay --volume=40000 /usr/share/sounds/ocean/stereo/battery-caution.oga; exit 1; }
+	$(CXX) -o $@ $^ $(LDFLAGS) || { paplay --volume=25000 /usr/share/sounds/ocean/stereo/battery-caution.oga; exit 1; }
 	killall mr 2> /dev/null || true
-	paplay --volume=40000 /usr/share/sounds/freedesktop/stereo/service-login.oga || true
+	paplay --volume=25000 /usr/share/sounds/freedesktop/stereo/service-login.oga || true
 
 $(STAGE_PROFILE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(STAGE_PROFILE_PROBE_OBJECT)
 	$(CXX) -o $@ $^ $(LDFLAGS)
@@ -341,13 +341,14 @@ $(STAGE_PROFILE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $
 $(REGRESSION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(REGRESSION_PROBE_OBJECT)
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
-# C++ compilation
+
+# C++ compilations
 %.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@ || { paplay --volume=40000 /usr/share/sounds/ocean/stereo/battery-caution.oga; exit 1; }
+	$(CXX) $(CXXFLAGS) -c $< -o $@ || { paplay --volume=25000 /usr/share/sounds/ocean/stereo/battery-caution.oga; exit 1; }
 
 # C compilation
 %.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@ || { paplay --volume=40000 /usr/share/sounds/ocean/stereo/battery-caution.oga; exit 1; }
+	$(CC) $(CFLAGS) -c $< -o $@ || { paplay --volume=25000 /usr/share/sounds/ocean/stereo/battery-caution.oga; exit 1; }
 
 clean:
 	rm -f $(CXX_OBJECTS) $(C_OBJECTS) $(TARGET) $(STAGE_PROFILE_PROBE_OBJECT) \
