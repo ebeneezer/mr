@@ -341,7 +341,8 @@ int add_symbol(const char *name, int type) {
 		return -1;
 	}
 
-	strcpy(g_symbols[g_symbol_count].name, name);
+	strncpy(g_symbols[g_symbol_count].name, name, MAX_SYMBOL_NAME);
+	g_symbols[g_symbol_count].name[MAX_SYMBOL_NAME] = '\0';
 	g_symbols[g_symbol_count].type = type;
 	g_symbol_count++;
 	return 0;
