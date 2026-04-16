@@ -2607,6 +2607,12 @@ class TMRFileEditor : public TScroller {
 			case cmMrTextLowerCaseMenu:
 				convertSelectionToLowerCase();
 				break;
+			case cmMrTextReformatParagraph:
+				if (!readOnly_) {
+					int margin = configuredEditSetupSettings().rightMargin;
+					formatParagraph(margin > 0 ? margin : 78);
+				}
+				break;
 			case cmClear:
 				if (!readOnly_)
 					replaceSelectionText(std::string());
