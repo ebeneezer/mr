@@ -1,0 +1,7 @@
+$MACRO test_backspace;
+TEXT("Hello World!");
+LEFT;
+LEFT;
+LEFT;
+BACK_SPACE;
+END_MACRO;

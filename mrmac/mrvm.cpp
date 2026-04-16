@@ -1887,6 +1887,117 @@ static bool replaceEditorLine(TMRFileEditor *editor, const std::string &text) {
 	return backgroundReplaceRange(mr::editor::Range(start, end), text, start);
 }
 
+static bool wordWrapEditorLine(TMRFileEditor *editor) {
+	MREditSetupSettings settings = configuredEditSetupSettings();
+	int margin = settings.rightMargin > 0 ? settings.rightMargin : 78;
+
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor != nullptr) {
+		return editor->formatParagraph(margin);
+	}
+
+	if (session == nullptr)
+		return false;
+
+	// In background sessions, WORD_WRAP_LINE is technically supported
+	// but it is extremely complex to reimplement paragraph reformatting correctly via BackgroundEditSession methods.
+	// For background safety we just break the current line if it's too long as a fallback.
+	std::size_t cursor = session->cursorOffset;
+	std::size_t start = session->document.lineStart(cursor);
+	std::string line = session->document.lineText(cursor);
+
+	if (line.length() <= static_cast<std::size_t>(margin))
+		return true;
+
+	std::size_t breakPos = margin;
+	while (breakPos > 0 && line[breakPos] != ' ' && line[breakPos] != '\t')
+		breakPos--;
+
+	if (breakPos == 0)
+		breakPos = margin;
+
+	if (breakPos < line.length() && (line[breakPos] == ' ' || line[breakPos] == '\t')) {
+		backgroundReplaceRange(mr::editor::Range(start + breakPos, start + breakPos + 1), "\n", start + breakPos + 1);
+	} else {
+		backgroundReplaceRange(mr::editor::Range(start + breakPos, start + breakPos), "\n", start + breakPos + 1);
+	}
+
+	return true;
+}
+
+static std::size_t prevCharOffsetFallback(const mr::editor::TextDocument &document, std::size_t pos) {
+	if (pos == 0)
+		return 0;
+	if (pos > 1 && document.charAt(pos - 2) == '\r' && document.charAt(pos - 1) == '\n')
+		return pos - 2;
+
+	std::size_t step = 1;
+	char lastChar = document.charAt(pos - 1);
+
+	if ((lastChar & 0x80) == 0) {
+		step = 1;
+	} else if ((lastChar & 0xC0) == 0x80) {
+		std::size_t maxCheck = std::min<std::size_t>(pos, 4);
+		step = 1;
+		for (std::size_t i = 1; i < maxCheck; ++i) {
+			char ch = document.charAt(pos - 1 - i);
+			if ((ch & 0xC0) != 0x80) {
+				step = i + 1;
+				break;
+			}
+		}
+	}
+
+	return pos - std::max<std::size_t>(step, 1);
+}
+
+static bool backspaceEditor(TMRFileEditor *editor) {
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	bool insertMode = currentEditorInsertMode();
+
+	if (editor != nullptr) {
+		std::size_t offset = editor->cursorOffset();
+		std::size_t lineStart = editor->lineStartOffset(offset);
+		if (offset == 0)
+			return true;
+		if (insertMode) {
+			editor->setCursorOffset(editor->prevCharOffset(offset), 0);
+			editor->deleteCharsAtCursor(1);
+		} else {
+			if (offset > lineStart) {
+				editor->setCursorOffset(editor->prevCharOffset(offset), 0);
+				editor->deleteCharsAtCursor(1);
+				editor->insertBufferText(" ");
+				editor->setCursorOffset(editor->prevCharOffset(editor->cursorOffset()), 0);
+			} else {
+				editor->setCursorOffset(editor->prevCharOffset(offset), 0);
+			}
+		}
+		return true;
+	}
+
+	if (session == nullptr)
+		return false;
+
+	std::size_t offset = session->cursorOffset;
+	std::size_t lineStart = session->document.lineStart(offset);
+	if (offset == 0)
+		return true;
+
+	std::size_t target = prevCharOffsetFallback(session->document, offset);
+
+	if (insertMode) {
+		backgroundReplaceRange(mr::editor::Range(target, offset), std::string(), target);
+	} else {
+		if (offset > lineStart) {
+			backgroundReplaceRange(mr::editor::Range(target, offset), " ", target);
+		} else {
+			backgroundSetCursor(target);
+		}
+	}
+	return true;
+}
+
 static bool deleteEditorChars(TMRFileEditor *editor, int count) {
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (editor != nullptr)
@@ -6312,6 +6423,26 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						continue;
 					}
 					deleteEditorLine(editor);
+					runtimeErrorLevel() = 0;
+				} else if (name == "BACK_SPACE") {
+					TMRFileEditor *editor = currentEditor();
+					if (!args.empty())
+						throw std::runtime_error("BACK_SPACE expects no arguments.");
+					if (editor == nullptr && currentBackgroundEditSession() == nullptr) {
+						runtimeErrorLevel() = 1001;
+						continue;
+					}
+					backspaceEditor(editor);
+					runtimeErrorLevel() = 0;
+				} else if (name == "WORD_WRAP_LINE") {
+					TMRFileEditor *editor = currentEditor();
+					if (!args.empty())
+						throw std::runtime_error("WORD_WRAP_LINE expects no arguments.");
+					if (editor == nullptr && currentBackgroundEditSession() == nullptr) {
+						runtimeErrorLevel() = 1001;
+						continue;
+					}
+					wordWrapEditorLine(editor);
 					runtimeErrorLevel() = 0;
 				} else if (name == "LEFT" || name == "RIGHT" || name == "UP" || name == "DOWN" ||
 				           name == "HOME" || name == "EOL" || name == "TOF" || name == "EOF" ||
