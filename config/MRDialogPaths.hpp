@@ -23,6 +23,7 @@ struct MREditSetupSettings {
 	bool eofCtrlZ;
 	bool eofCrLf;
 	bool tabExpand;
+	bool displayTabs;
 	int tabSize;
 	int rightMargin;
 	bool wordWrap;
@@ -132,6 +133,7 @@ enum MREditSetupOverrideMask : unsigned long long {
 	kOvLineNumbersPosition = 1ull << 36,
 	kOvCodeFoldingPosition = 1ull << 37,
 	kOvGutters = 1ull << 38,
+	kOvDisplayTabs = 1ull << 39,
 };
 
 struct MREditSettingDescriptor {
@@ -287,6 +289,7 @@ bool effectiveEditWindowColorThemePathForPath(const std::string &path, std::stri
 std::vector<std::string> configuredDefaultExtensionList();
 [[nodiscard]] bool configuredDefaultInsertMode();
 [[nodiscard]] bool configuredTabExpandSetting();
+[[nodiscard]] bool configuredDisplayTabsSetting();
 [[nodiscard]] int configuredTabSizeSetting();
 [[nodiscard]] bool configuredBackupFilesSetting();
 [[nodiscard]] bool configuredPersistentBlocksSetting();

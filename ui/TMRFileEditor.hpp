@@ -873,7 +873,7 @@ class TMRFileEditor : public TScroller {
 				drawMiniMapGutter(buffer, y, miniMapRows, viewport, totalLines, topLine, miniMapUseBraille,
 				                  viewportMarkerGlyph, miniMapPalette, miniMapOverlay);
 			formatSyntaxLine(buffer, linePtr, delta.x, textWidth, viewport.textLeft, isDocumentLine, drawEofMarker,
-			                 drawEofMarkerAsEmoji);
+			                 drawEofMarkerAsEmoji, editSettings.displayTabs);
 			writeBuf(0, y, size.x, 1, buffer);
 			if (linePtr < bufferModel_.length())
 				linePtr = bufferModel_.nextLine(linePtr);
@@ -2847,7 +2847,7 @@ class TMRFileEditor : public TScroller {
 	}
 
 	void formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, int hScroll, int width, int drawX,
-	                      bool isDocumentLine, bool drawEofMarker, bool drawEofMarkerAsEmoji) {
+	                      bool isDocumentLine, bool drawEofMarker, bool drawEofMarkerAsEmoji, bool displayTabs) {
 		TAttrPair basePair = getColor(0x0201);
 		TAttrPair changedPair = getColor(0x0505);
 		TAttrPair selectionPair = getColor(0x0201);
@@ -2907,11 +2907,20 @@ class TMRFileEditor : public TScroller {
 					TColorAttr color = tokenColor(token, selected, tokenPair);
 					int visibleWidth = nextVisual - std::max(visual, hScroll);
 
-				if (line[bytePos] == '\t' || visual < hScroll)
+				if (visual < hScroll) {
 					b.moveChar(static_cast<ushort>(drawX + x), ' ', color, static_cast<ushort>(visibleWidth));
-				else
+				} else if (line[bytePos] == '\t') {
+					if (displayTabs) {
+						b.moveChar(static_cast<ushort>(drawX + x), '\x10', color, 1);
+						if (visibleWidth > 1)
+							b.moveChar(static_cast<ushort>(drawX + x + 1), ' ', color, static_cast<ushort>(visibleWidth - 1));
+					} else {
+						b.moveChar(static_cast<ushort>(drawX + x), ' ', color, static_cast<ushort>(visibleWidth));
+					}
+				} else {
 					b.moveStr(static_cast<ushort>(drawX + x), line.substr(bytePos, next - bytePos), color,
 					          static_cast<ushort>(visibleWidth));
+				}
 				x += visibleWidth;
 			}
 			visual = nextVisual;

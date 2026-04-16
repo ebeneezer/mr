@@ -219,6 +219,7 @@ struct MacroJobStagedPayload final : Payload {
 	std::size_t lastSearchCursor;
 	bool ignoreCase;
 	bool tabExpand;
+	bool displayTabs;
 	std::vector<std::size_t> markStack;
 	bool insertMode;
 	int indentLevel;
@@ -231,7 +232,7 @@ struct MacroJobStagedPayload final : Payload {
 	      globalOrder(), globalInts(), globalStrings(),
 	      deferredUiCommands(),
 	      lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0),
-	      ignoreCase(false), tabExpand(true), markStack(), insertMode(true), indentLevel(1),
+	      ignoreCase(false), tabExpand(true), displayTabs(false), markStack(), insertMode(true), indentLevel(1),
 	      fileName(), fileChanged(false) {
 	}
 
