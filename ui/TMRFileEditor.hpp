@@ -78,11 +78,11 @@ class TMRFileEditor : public TScroller {
 	}
 
 	void setBlockModeOverride(int mode, int line1, int line2, int col1, int col2) noexcept {
-		blockModeOverride_ = mode;
-		blockLine1Override_ = line1;
-		blockLine2Override_ = line2;
-		blockCol1Override_ = col1;
-		blockCol2Override_ = col2;
+		blockModeOverride = mode;
+		blockLine1Override = line1;
+		blockLine2Override = line2;
+		blockCol1Override = col1;
+		blockCol2Override = col2;
 		drawView();
 	}
 
@@ -2911,13 +2911,13 @@ class TMRFileEditor : public TScroller {
 				    tokenIndex < tokens.size() ? tokens[tokenIndex] : TMRSyntaxToken::Text;
 
 				bool selected = false;
-				if (blockModeOverride_ == 2) {
+				if (blockModeOverride == 2) {
 					int col = visual + 1;
 					int lineNum = static_cast<int>(bufferModel_.lineIndex(lineStart)) + 1;
-					if (lineNum >= std::min(blockLine1Override_, blockLine2Override_) &&
-					    lineNum <= std::max(blockLine1Override_, blockLine2Override_) &&
-					    col >= std::min(blockCol1Override_, blockCol2Override_) &&
-					    col <= std::max(blockCol1Override_, blockCol2Override_))
+					if (lineNum >= std::min(blockLine1Override, blockLine2Override) &&
+					    lineNum <= std::max(blockLine1Override, blockLine2Override) &&
+					    col >= std::min(blockCol1Override, blockCol2Override) &&
+					    col <= std::max(blockCol1Override, blockCol2Override))
 						selected = true;
 				} else {
 					selected = selection.start <= documentPos && documentPos < selection.end;
@@ -3004,11 +3004,11 @@ class TMRFileEditor : public TScroller {
 	bool readOnly_;
 	bool customWindowEofMarkerColorOverrideValid_ = false;
 	TColorAttr customWindowEofMarkerColorOverride_ = 0;
-	int blockModeOverride_ = 0;
-	int blockLine1Override_ = 0;
-	int blockLine2Override_ = 0;
-	int blockCol1Override_ = 0;
-	int blockCol2Override_ = 0;
+	int blockModeOverride = 0;
+	int blockLine1Override = 0;
+	int blockLine2Override = 0;
+	int blockCol1Override = 0;
+	int blockCol2Override = 0;
 	bool insertMode_;
 	bool autoIndent_;
 	char fileName[MAXPATH];
