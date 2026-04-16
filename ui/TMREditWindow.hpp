@@ -166,6 +166,30 @@ class TMREditWindow : public TWindow {
 				return;
 			}
 		}
+		if (event.what == evCommand) {
+			switch (event.message.command) {
+				case cmMrBlockMarkLines:
+					beginLineBlock();
+					clearEvent(event);
+					return;
+				case cmMrBlockMarkColumns:
+					beginColumnBlock();
+					clearEvent(event);
+					return;
+				case cmMrBlockMarkStream:
+					beginStreamBlock();
+					clearEvent(event);
+					return;
+				case cmMrBlockEndMarking:
+					endBlock();
+					clearEvent(event);
+					return;
+				case cmMrBlockTurnMarkingOff:
+					clearBlock();
+					clearEvent(event);
+					return;
+			}
+		}
 		if (frame != nullptr) {
 			TMRFrame *mrFrame = static_cast<TMRFrame *>(frame);
 			if ((event.what & (evMouseDown | evMouseMove | evMouseUp)) != 0)

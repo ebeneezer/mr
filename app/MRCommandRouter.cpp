@@ -393,6 +393,14 @@ bool dispatchEditorCommand(ushort editorCommand, bool requiresWritable) {
 	return true;
 }
 
+bool dispatchWindowCommand(ushort windowCommand) {
+	TMREditWindow *win = currentEditWindow();
+	if (win == nullptr)
+		return true;
+	message(win, evCommand, windowCommand, nullptr);
+	return true;
+}
+
 bool dispatchEditorClipboardCommand(ushort editorCommand, bool requiresWritable) {
 	return dispatchEditorCommand(editorCommand, requiresWritable);
 }
@@ -532,6 +540,21 @@ bool handleMRCommand(ushort command) {
 
 		case cmMrEditPasteFromBuffer:
 			return dispatchEditorClipboardCommand(cmPaste, true);
+
+		case cmMrBlockMarkLines:
+			return dispatchWindowCommand(cmMrBlockMarkLines);
+
+		case cmMrBlockMarkColumns:
+			return dispatchWindowCommand(cmMrBlockMarkColumns);
+
+		case cmMrBlockMarkStream:
+			return dispatchWindowCommand(cmMrBlockMarkStream);
+
+		case cmMrBlockEndMarking:
+			return dispatchWindowCommand(cmMrBlockEndMarking);
+
+		case cmMrBlockTurnMarkingOff:
+			return dispatchWindowCommand(cmMrBlockTurnMarkingOff);
 
 		case cmMrBlockPersistent:
 			return togglePersistentBlocksSetting();
