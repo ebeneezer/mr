@@ -90,16 +90,24 @@ CpuTopologyInfo currentCpuTopology() {
 			std::size_t pos = line.find(':');
 			if (pos != std::string::npos)
 				physicalId = trimmedValue(line.c_str() + pos + 1, "");
-			if (!physicalId.empty() && physicalId[0] == ' ')
-				physicalId.erase(0, physicalId.find_first_not_of(' '));
+			// Optimization: manual loop is faster than find_first_not_of
+			std::size_t trimPos = 0;
+			while (trimPos < physicalId.size() && physicalId[trimPos] == ' ')
+				++trimPos;
+			if (trimPos > 0)
+				physicalId.erase(0, trimPos);
 			continue;
 		}
 		if (line.rfind("core id", 0) == 0) {
 			std::size_t pos = line.find(':');
 			if (pos != std::string::npos)
 				coreId = trimmedValue(line.c_str() + pos + 1, "");
-			if (!coreId.empty() && coreId[0] == ' ')
-				coreId.erase(0, coreId.find_first_not_of(' '));
+			// Optimization: manual loop is faster than find_first_not_of
+			std::size_t trimPos = 0;
+			while (trimPos < coreId.size() && coreId[trimPos] == ' ')
+				++trimPos;
+			if (trimPos > 0)
+				coreId.erase(0, trimPos);
 			continue;
 		}
 	}

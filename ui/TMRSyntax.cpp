@@ -120,9 +120,15 @@ void tokenizeCFamily(TMRSyntaxTokenMap &tokens, const std::string &line) {
 			tokenizeString(tokens, line, i, quote);
 			continue;
 		}
-		if ((line[i] == '#' && line.find_first_not_of(" \t") == i)) {
-			paint(tokens, i, line.size(), TMRSyntaxToken::Directive);
-			break;
+		if (line[i] == '#') {
+			// Optimization: manual loop is faster than find_first_not_of
+			std::size_t trimmed = 0;
+			while (trimmed < line.size() && (line[trimmed] == ' ' || line[trimmed] == '\t'))
+				++trimmed;
+			if (trimmed == i) {
+				paint(tokens, i, line.size(), TMRSyntaxToken::Directive);
+				break;
+			}
 		}
 		if (std::isdigit(static_cast<unsigned char>(line[i]))) {
 			std::size_t start = i++;
@@ -221,8 +227,11 @@ void tokenizeMRMAC(TMRSyntaxTokenMap &tokens, const std::string &line) {
 }
 
 void tokenizeMake(TMRSyntaxTokenMap &tokens, const std::string &line) {
-	std::size_t trimmed = line.find_first_not_of(" \t");
-	if (trimmed != std::string::npos && line[trimmed] == '#') {
+	// Optimization: manual loop is faster than find_first_not_of
+	std::size_t trimmed = 0;
+	while (trimmed < line.size() && (line[trimmed] == ' ' || line[trimmed] == '\t'))
+		++trimmed;
+	if (trimmed < line.size() && line[trimmed] == '#') {
 		paint(tokens, trimmed, line.size(), TMRSyntaxToken::Comment);
 		return;
 	}
@@ -296,8 +305,11 @@ void tokenizeJson(TMRSyntaxTokenMap &tokens, const std::string &line) {
 }
 
 void tokenizeIni(TMRSyntaxTokenMap &tokens, const std::string &line) {
-	std::size_t trimmed = line.find_first_not_of(" \t");
-	if (trimmed == std::string::npos)
+	// Optimization: manual loop is faster than find_first_not_of
+	std::size_t trimmed = 0;
+	while (trimmed < line.size() && (line[trimmed] == ' ' || line[trimmed] == '\t'))
+		++trimmed;
+	if (trimmed == line.size())
 		return;
 	if (line[trimmed] == ';' || line[trimmed] == '#') {
 		paint(tokens, trimmed, line.size(), TMRSyntaxToken::Comment);
@@ -340,8 +352,11 @@ void tokenizeIni(TMRSyntaxTokenMap &tokens, const std::string &line) {
 }
 
 void tokenizeMarkdown(TMRSyntaxTokenMap &tokens, const std::string &line) {
-	std::size_t trimmed = line.find_first_not_of(" \t");
-	if (trimmed == std::string::npos)
+	// Optimization: manual loop is faster than find_first_not_of
+	std::size_t trimmed = 0;
+	while (trimmed < line.size() && (line[trimmed] == ' ' || line[trimmed] == '\t'))
+		++trimmed;
+	if (trimmed == line.size())
 		return;
 	if (line.compare(trimmed, 3, "```") == 0) {
 		paint(tokens, trimmed, line.size(), TMRSyntaxToken::Directive);

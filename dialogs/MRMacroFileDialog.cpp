@@ -650,14 +650,14 @@ class MacroManagerDialog : public TDialog {
 		int bottomWidth = 16 + gap + 13 + gap + 12;
 		int bottomLeft = listLeft + std::max(0, (listWidth - bottomWidth) / 2);
 
-		insert(new TButton(TRect(row1Left, 2, row1Left + 14, 4), "Create<Ins>", cmMRMacroManagerCreate,
+		insert(new TButton(TRect(row1Left, 2, row1Left + 14, 4), "~C~reate<Ins>", cmMRMacroManagerCreate,
 		                   bfNormal));
-		insert(new TButton(TRect(row1Left + 14 + gap, 2, row1Left + 14 + gap + 14, 4), "Delete<Del>",
+		insert(new TButton(TRect(row1Left + 14 + gap, 2, row1Left + 14 + gap + 14, 4), "~D~elete<Del>",
 		                   cmMRMacroManagerDelete, bfNormal));
-		insert(new TButton(TRect(row1Left + 14 + gap + 14 + gap, 2, row1Left + row1Width, 4), "Copy<F4>",
+		insert(new TButton(TRect(row1Left + 14 + gap + 14 + gap, 2, row1Left + row1Width, 4), "C~o~py<F4>",
 		                   cmMRMacroManagerCopy, bfNormal));
-		insert(new TButton(TRect(row2Left, 4, row2Left + 12, 6), "Edit<F3>", cmMRMacroManagerEdit, bfNormal));
-		insert(new TButton(TRect(row2Left + 12 + gap, 4, row2Left + row2Width, 6), "Bind<F2>",
+		insert(new TButton(TRect(row2Left, 4, row2Left + 12, 6), "~E~dit<F3>", cmMRMacroManagerEdit, bfNormal));
+		insert(new TButton(TRect(row2Left + 12 + gap, 4, row2Left + row2Width, 6), "~B~ind<F2>",
 		                   cmMRMacroManagerBind, bfNormal));
 
 		scrollBar_ = new TScrollBar(TRect(width - 4, 7, width - 3, height - 4));

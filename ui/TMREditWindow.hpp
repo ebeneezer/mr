@@ -1145,10 +1145,15 @@ class TMREditWindow : public TWindow {
 	}
 
 	static std::string trimTaskLabel(const std::string &label) {
-		std::size_t start = label.find_first_not_of(' ');
-		std::size_t end = label.find_last_not_of(' ');
-		if (start == std::string::npos)
+		// Optimization: manual loop is faster than find_first_not_of
+		std::size_t start = 0;
+		while (start < label.size() && label[start] == ' ')
+			++start;
+		if (start == label.size())
 			return std::string();
+		std::size_t end = label.size() - 1;
+		while (end > start && label[end] == ' ')
+			--end;
 		return label.substr(start, end - start + 1);
 	}
 
