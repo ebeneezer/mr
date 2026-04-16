@@ -1949,6 +1949,8 @@ static const BareProcStatement kBareProcStatements[] = {
     BARE_PROC("SET_INDENT_LEVEL"),
     BARE_PROC("DEL_CHAR"),
     BARE_PROC("DEL_LINE"),
+    BARE_PROC("BACK_SPACE"),
+    BARE_PROC("WORD_WRAP_LINE"),
     BARE_PROC("LEFT"),
     BARE_PROC("RIGHT"),
     BARE_PROC("UP"),

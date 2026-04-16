@@ -752,6 +752,82 @@ class TMRFileEditor : public TScroller {
 		return adoptCommittedDocument(preview, start, start, start, true, &commit.change);
 	}
 
+	bool formatParagraph(int rightMargin) {
+		if (readOnly_)
+			return false;
+
+		std::size_t start = bufferModel_.cursor();
+		std::size_t end = start;
+
+		while (start > 0) {
+			std::size_t prevLineStart = bufferModel_.lineStart(bufferModel_.prevLine(start));
+			if (bufferModel_.lineText(prevLineStart).find_first_not_of(" \t\r\n") == std::string::npos)
+				break;
+			start = prevLineStart;
+		}
+
+		while (end < bufferModel_.length()) {
+			std::size_t nextLineStart = bufferModel_.nextLine(end);
+			if (bufferModel_.lineText(end).find_first_not_of(" \t\r\n") == std::string::npos)
+				break;
+			end = nextLineStart;
+		}
+
+		if (start == end)
+			return true;
+
+		std::string paragraphText;
+		paragraphText.reserve(end - start);
+		std::size_t current = start;
+		while (current < end) {
+			std::string chunk = bufferModel_.document().lineText(current);
+			paragraphText += chunk;
+			current = bufferModel_.document().nextLine(current);
+		}
+
+		std::string formattedText;
+		std::string word;
+		std::size_t currentLineLength = 0;
+
+		for (std::size_t i = 0; i <= paragraphText.length(); ++i) {
+			if (i == paragraphText.length() || std::isspace(static_cast<unsigned char>(paragraphText[i]))) {
+				if (!word.empty()) {
+					if (currentLineLength > 0 && currentLineLength + 1 + word.length() > static_cast<std::size_t>(rightMargin)) {
+						formattedText += "\n";
+						currentLineLength = 0;
+					} else if (currentLineLength > 0) {
+						formattedText += " ";
+						currentLineLength++;
+					}
+					formattedText += word;
+					currentLineLength += word.length();
+					word.clear();
+				}
+				if (i < paragraphText.length() && paragraphText[i] == '\n' && i > 0 && paragraphText[i-1] == '\n') {
+					formattedText += "\n\n";
+					currentLineLength = 0;
+				}
+			} else {
+				word += paragraphText[i];
+			}
+		}
+
+		if (paragraphText.back() == '\n')
+			formattedText += "\n";
+
+		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(), "format-paragraph");
+		transaction.replace(TMRTextBufferModel::Range(start, end), formattedText);
+
+		TMRTextBufferModel::Document preview = bufferModel_.document();
+		TMRTextBufferModel::CommitResult commit = preview.tryApply(transaction);
+
+		if (!commit.applied())
+			return false;
+
+		bumpUndoCounters(end - start, formattedText.size());
+		return adoptCommittedDocument(preview, start, start, start, true, &commit.change);
+	}
+
 	bool deleteCharsAtCursor(int count) {
 		std::size_t start = bufferModel_.cursor();
 		std::size_t end = start;
