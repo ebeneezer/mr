@@ -3,11 +3,10 @@ import re
 with open("ui/MRWindowManager.cpp", "r") as f:
     content = f.read()
 
-# Let's check the logic inside handleDragView.
-# Wait, `window->TWindow::dragView` starts an internal event loop. It only returns when the drag is completely over!
-# The mouse coordinates `event.mouse.where` will be the position *at the end of the drag*!
-# This is what I did in my first version but wait, I used `event.mouse.where`.
-# Is `event.mouse.where` the global coordinate at the time of `evMouseUp`? Yes.
-# Does `window->owner->makeLocal(event.mouse.where)` correctly map it to desktop coordinates?
-# Wait, `window->owner` is `TDeskTop`. Yes, makeLocal should map it to `TDeskTop` coordinates.
-# Let's check my logic:
+# Currently MRWindowManager::handleDragView relies on `window->TWindow::dragView` completely taking over the modal loop,
+# and checks the final bounds afterwards.
+# The user wants "live" snapping while dragging, depending ONLY on the MOUSE position, not the window bounds.
+# And if the mouse moves away from the edge, it should restore the original size and continue dragging.
+# To achieve this "live" preview while still maintaining the drag, we must handle the evMouseMove loop ourselves,
+# just like TView::dragView does.
+print("Writing a custom drag loop in handleDragView...")

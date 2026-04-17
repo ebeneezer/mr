@@ -4,59 +4,74 @@
 
 #define Uses_TProgram
 #define Uses_TDeskTop
+#define Uses_TEvent
 #include <tvision/tv.h>
 #include <algorithm>
 
 void MRWindowManager::handleDragView(TMREditWindow* window, TEvent& event, uchar mode, TRect& limits, TPoint minSize, TPoint maxSize) {
-    if (!configuredWindowManager()) {
+    if (!configuredWindowManager() || (mode & dmDragMove) == 0 || event.what != evMouseDown) {
         window->TWindow::dragView(event, mode, limits, minSize, maxSize);
         return;
     }
 
-    window->TWindow::dragView(event, mode, limits, minSize, maxSize);
+    TRect originalBounds = window->getBounds();
+    TPoint offset = window->origin - event.mouse.where;
 
-    // Only snap on move, not grow
-    if ((mode & dmDragMove) == 0) {
-        return;
-    }
+    window->setState(sfDragging, True);
 
-    TRect deskExtent = window->owner->getExtent(); // Desktop extent
+    do {
+        TPoint currentMouse = event.mouse.where;
+        TPoint mouseLocal = window->owner->makeLocal(currentMouse);
+        TRect deskExtent = window->owner->getExtent();
 
-    bool touchedEdge = false;
-    TRect snappedBounds = window->getBounds();
+        bool snapped = false;
+        TRect targetBounds = originalBounds;
 
-    // In TView::dragView, event.mouse.where gets modified to be the top-left origin of the view.
-    // So we can just check if the window bounds touched the edge.
-    // The user instruction: "Werden diese mit der Maus an die Seitenränder des Desktops gezogen..."
-    // Wait, let's use the window's final origin/bounds to determine if it hit an edge.
+        if (mouseLocal.x <= 0) {
+            targetBounds.a.x = 0;
+            targetBounds.a.y = 0;
+            targetBounds.b.x = deskExtent.b.x / 2;
+            targetBounds.b.y = deskExtent.b.y;
+            snapped = true;
+        } else if (mouseLocal.x >= deskExtent.b.x - 1) {
+            targetBounds.a.x = deskExtent.b.x / 2;
+            targetBounds.a.y = 0;
+            targetBounds.b.x = deskExtent.b.x;
+            targetBounds.b.y = deskExtent.b.y;
+            snapped = true;
+        } else if (mouseLocal.y <= 0) {
+            targetBounds.a.x = 0;
+            targetBounds.a.y = 0;
+            targetBounds.b.x = deskExtent.b.x;
+            targetBounds.b.y = deskExtent.b.y / 2;
+            snapped = true;
+        } else if (mouseLocal.y >= deskExtent.b.y - 1) {
+            targetBounds.a.x = 0;
+            targetBounds.a.y = deskExtent.b.y / 2;
+            targetBounds.b.x = deskExtent.b.x;
+            targetBounds.b.y = deskExtent.b.y;
+            snapped = true;
+        }
 
-    if (snappedBounds.a.x <= deskExtent.a.x) {
-        snappedBounds.a.x = deskExtent.a.x;
-        snappedBounds.a.y = deskExtent.a.y;
-        snappedBounds.b.x = deskExtent.b.x / 2;
-        snappedBounds.b.y = deskExtent.b.y;
-        touchedEdge = true;
-    } else if (snappedBounds.b.x >= deskExtent.b.x) {
-        snappedBounds.a.x = deskExtent.b.x / 2;
-        snappedBounds.a.y = deskExtent.a.y;
-        snappedBounds.b.x = deskExtent.b.x;
-        snappedBounds.b.y = deskExtent.b.y;
-        touchedEdge = true;
-    } else if (snappedBounds.a.y <= deskExtent.a.y) {
-        snappedBounds.a.x = deskExtent.a.x;
-        snappedBounds.a.y = deskExtent.a.y;
-        snappedBounds.b.x = deskExtent.b.x;
-        snappedBounds.b.y = deskExtent.b.y / 2;
-        touchedEdge = true;
-    } else if (snappedBounds.b.y >= deskExtent.b.y) {
-        snappedBounds.a.x = deskExtent.a.x;
-        snappedBounds.a.y = deskExtent.b.y / 2;
-        snappedBounds.b.x = deskExtent.b.x;
-        snappedBounds.b.y = deskExtent.b.y;
-        touchedEdge = true;
-    }
+        if (!snapped) {
+            TPoint newOrigin = currentMouse + offset;
 
-    if (touchedEdge) {
-        window->changeBounds(snappedBounds);
-    }
+            // Limit the window movement bounds just like moveGrow
+            newOrigin.x = std::max(newOrigin.x, limits.a.x);
+            newOrigin.y = std::max(newOrigin.y, limits.a.y);
+            newOrigin.x = std::min(newOrigin.x, limits.b.x - window->size.x);
+            newOrigin.y = std::min(newOrigin.y, limits.b.y - window->size.y);
+
+            targetBounds.a = newOrigin;
+            targetBounds.b.x = newOrigin.x + window->size.x;
+            targetBounds.b.y = newOrigin.y + window->size.y;
+        }
+
+        if (targetBounds != window->getBounds()) {
+            window->locate(targetBounds);
+        }
+
+    } while (window->mouseEvent(event, evMouseMove));
+
+    window->setState(sfDragging, False);
 }
