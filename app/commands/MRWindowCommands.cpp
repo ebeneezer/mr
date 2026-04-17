@@ -11,6 +11,8 @@
 #include "MRWindowCommands.hpp"
 
 #include <algorithm>
+#include <chrono>
+#include <thread>
 #include <cmath>
 #include <array>
 #include <chrono>
@@ -68,7 +70,6 @@ void MRWindowManager::dragWindow(TMREditWindow* window, TEvent& event, uchar mod
     TPoint minSize, maxSize;
     window->sizeLimits(minSize, maxSize);
 
-
     TRect originalBounds = window->getBounds();
     TRect currentBounds = originalBounds;
     bool currentlySnapped = false;
@@ -93,13 +94,13 @@ void MRWindowManager::dragWindow(TMREditWindow* window, TEvent& event, uchar mod
 
                 if (shouldSnap) {
                     if (!currentlySnapped) {
-                        window->changeBounds(snappedBounds);
+                        window->locate(snappedBounds);
                         currentlySnapped = true;
                         currentBounds = snappedBounds;
                     }
                 } else {
                     if (currentlySnapped) {
-                        window->changeBounds(originalBounds);
+                        window->locate(originalBounds);
                         currentlySnapped = false;
                         currentBounds = originalBounds;
                     }
@@ -107,13 +108,23 @@ void MRWindowManager::dragWindow(TMREditWindow* window, TEvent& event, uchar mod
                     TPoint newOrigin = currentMouse + offset;
                     TRect r(newOrigin.x, newOrigin.y, newOrigin.x + window->size.x, newOrigin.y + window->size.y);
 
-                    // Apply limits
-                    r.a.x = std::max(limits.a.x, std::min(r.a.x, limits.b.x - window->size.x + 1));
-                    r.a.y = std::max(limits.a.y, std::min(r.a.y, limits.b.y - window->size.y + 1));
+                    // Apply limits like TView::moveGrow does
+                    r.a.x = std::min(std::max(r.a.x, limits.a.x - window->size.x + 1), limits.b.x - 1);
+                    r.a.y = std::min(std::max(r.a.y, limits.a.y - window->size.y + 1), limits.b.y - 1);
+
+                    if ((mode & dmLimitLoX) != 0)
+                        r.a.x = std::max(r.a.x, limits.a.x);
+                    if ((mode & dmLimitLoY) != 0)
+                        r.a.y = std::max(r.a.y, limits.a.y);
+                    if ((mode & dmLimitHiX) != 0)
+                        r.a.x = std::min(r.a.x, limits.b.x - window->size.x);
+                    if ((mode & dmLimitHiY) != 0)
+                        r.a.y = std::min(r.a.y, limits.b.y - window->size.y);
+
                     r.b.x = r.a.x + window->size.x;
                     r.b.y = r.a.y + window->size.y;
 
-                    window->changeBounds(r);
+                    window->locate(r);
                     originalBounds = window->getBounds();
                 }
             } while (window->mouseEvent(event, evMouseMove));
