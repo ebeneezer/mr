@@ -2716,7 +2716,7 @@ bool testThemeAndMacroSaveOverwriteWiringGuard(std::string &failureReason) {
 bool testPersistentBlocksWiringGuard(std::string &failureReason) {
 	const std::string settingsPath = absolutePathFromCwd("config/MRDialogPaths.cpp");
 	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
-	const std::string panelPath = absolutePathFromCwd("dialogs/MREditProfilesPanel.cpp");
+	const std::string panelPath = absolutePathFromCwd("dialogs/MRFileExtensionEditorSettingsPanel.cpp");
 	std::string settingsContent;
 	std::string vmContent;
 	std::string panelContent;
@@ -2731,7 +2731,9 @@ bool testPersistentBlocksWiringGuard(std::string &failureReason) {
 		return false;
 	}
 	if (!readTextFile(panelPath, panelContent, ioError)) {
-		failureReason = "Unable to read MREditProfilesPanel.cpp for persistent-blocks guard: " + ioError;
+		failureReason =
+		    "Unable to read MRFileExtensionEditorSettingsPanel.cpp for persistent-blocks guard: " +
+		    ioError;
 		return false;
 	}
 	if (settingsContent.find("upperKeyName == \"PERSISTENT_BLOCKS\"") ==
@@ -2747,7 +2749,8 @@ bool testPersistentBlocksWiringGuard(std::string &failureReason) {
 	}
 	if (panelContent.find("Persistent ~B~locks") == std::string::npos ||
 	    panelContent.find("kOptionPersistentBlocks") == std::string::npos) {
-		failureReason = "Edit profiles panel must expose and wire a Persistent blocks option.";
+		failureReason =
+		    "File extension editor settings panel must expose and wire a Persistent blocks option.";
 		return false;
 	}
 	failureReason.clear();
@@ -2770,6 +2773,81 @@ bool testEditClipboardCommandRoutingGuard(std::string &failureReason) {
 	    content.find("case cmMrEditPasteFromBuffer:") == std::string::npos ||
 	    content.find("dispatchEditorClipboardCommand(cmPaste, true)") == std::string::npos) {
 		failureReason = "Edit Cut/Copy/Paste commands must route to editor clipboard commands.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testBlockHotkeyModifierRoutingGuard(std::string &failureReason) {
+	const std::string sourcePath = absolutePathFromCwd("ui/TMREditWindow.hpp");
+	std::string content;
+	std::string ioError;
+
+	if (!readTextFile(sourcePath, content, ioError)) {
+		failureReason = "Unable to read TMREditWindow.hpp for block-hotkey guard: " + ioError;
+		return false;
+	}
+	if (content.find("bool handleBuiltInBlockHotkeys(TEvent &event)") == std::string::npos ||
+	    content.find("keyCode == kbCtrlF7 || (keyCode == kbF7 && ctrl && !shift)") == std::string::npos ||
+	    content.find("keyCode == kbShiftF7 || (keyCode == kbF7 && shift && !ctrl)") == std::string::npos ||
+	    content.find("keyCode == kbF7 && !shift && !ctrl") == std::string::npos ||
+	    content.find("keyCode == kbCtrlF9 || (keyCode == kbF9 && ctrl && !shift)") == std::string::npos) {
+		failureReason =
+		    "Block hotkey routing must distinguish F7/Shift+F7/Ctrl+F7 and Ctrl+F9 by modifier state.";
+		return false;
+	}
+	if (content.find("if (originalEvent == evMouseDown && blockMode_ == bmNone)") == std::string::npos ||
+	    content.find("// Mouse drag selection without an explicit mode defaults to stream block.") ==
+	        std::string::npos) {
+		failureReason =
+		    "Mouse-drag default to stream block must only apply when no explicit block mode is active.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testInterWindowBlockSourceTargetGuard(std::string &failureReason) {
+	const std::string sourcePath = absolutePathFromCwd("app/MRCommandRouter.cpp");
+	std::string content;
+	std::string ioError;
+
+	if (!readTextFile(sourcePath, content, ioError)) {
+		failureReason = "Unable to read MRCommandRouter.cpp for inter-window block guard: " + ioError;
+		return false;
+	}
+	if (content.find("bool chooseInterWindowBlockTarget(int &sourceWindowIndex)") == std::string::npos ||
+	    content.find("TMREditWindow *targetWin = currentEditWindow();") == std::string::npos ||
+	    content.find("sourceWin = mrShowWindowListDialog(mrwlActivateWindow, targetWin);") ==
+	        std::string::npos ||
+	    content.find("No block marked in the selected source window.") == std::string::npos ||
+	    content.find("mrActivateEditWindow(targetWin)") == std::string::npos) {
+		failureReason =
+		    "Inter-window block copy/move must keep the current window as target and select source from window list.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testColumnUndentPolicyGuard(std::string &failureReason) {
+	const std::string sourcePath = absolutePathFromCwd("mrmac/mrvm.cpp");
+	std::string content;
+	std::string ioError;
+
+	if (!readTextFile(sourcePath, content, ioError)) {
+		failureReason = "Unable to read mrvm.cpp for column-undent policy guard: " + ioError;
+		return false;
+	}
+	if (content.find("if (mode == TMREditWindow::bmColumn)") == std::string::npos ||
+	    content.find("bool leaveColumnSpace = undent && configuredColumnBlockMoveLeavesSpace();") ==
+	        std::string::npos ||
+	    content.find("if (leaveColumnSpace)") == std::string::npos ||
+	    content.find("line.replace(start, static_cast<std::size_t>(removeCount),") == std::string::npos ||
+	    content.find("line.erase(start, static_cast<std::size_t>(removeCount));") == std::string::npos) {
+		failureReason =
+		    "Column UNDENT must honor COLUMN_BLOCK_MOVE policy (leave-space vs remove) in block indent logic.";
 		return false;
 	}
 	failureReason.clear();
@@ -3070,6 +3148,9 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "EOF virtual-line color guard", testEofVirtualLineColorGuard);
 	runTest(ctx, "Save As overwrite/backup wiring guard", testSaveAsOverwriteAndBackupWiringGuard);
 	runTest(ctx, "Theme + macro save overwrite wiring guard", testThemeAndMacroSaveOverwriteWiringGuard);
+	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
+	runTest(ctx, "Inter-window block source/target guard", testInterWindowBlockSourceTargetGuard);
+	runTest(ctx, "Column UNDENT policy guard", testColumnUndentPolicyGuard);
 	runTest(ctx, "TO/FROM header parsing + compile guards", testToFromHeaders);
 	runTest(ctx, "TO/FROM runtime dispatch", testToFromDispatch);
 	runTest(ctx, "KEY_IN behavior + staging guards", testKeyIn);
@@ -3110,6 +3191,9 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Theme + macro save overwrite wiring guard", testThemeAndMacroSaveOverwriteWiringGuard);
 	runTest(ctx, "Persistent blocks wiring guard", testPersistentBlocksWiringGuard);
 	runTest(ctx, "Edit clipboard routing guard", testEditClipboardCommandRoutingGuard);
+	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
+	runTest(ctx, "Inter-window block source/target guard", testInterWindowBlockSourceTargetGuard);
+	runTest(ctx, "Column UNDENT policy guard", testColumnUndentPolicyGuard);
 	runTest(ctx, "TO/FROM header parsing + compile guards", testToFromHeaders);
 	runTest(ctx, "TO/FROM runtime dispatch", testToFromDispatch);
 	runTest(ctx, "KEY_IN behavior + staging guards", testKeyIn);

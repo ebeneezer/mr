@@ -412,7 +412,10 @@ static bool currentBlockInfo(TMREditWindow *win, TMRFileEditor *editor, int &mod
                              uint &end);
 static bool copyCurrentBlock(TMREditWindow *win, TMRFileEditor *editor);
 static bool moveCurrentBlock(TMREditWindow *win, TMRFileEditor *editor);
-static bool deleteCurrentBlock(TMREditWindow *win, TMRFileEditor *editor);
+static bool deleteCurrentBlock(TMREditWindow *win, TMRFileEditor *editor,
+                               bool leaveColumnSpace = false);
+static bool indentCurrentBlock(TMREditWindow *win, TMRFileEditor *editor);
+static bool undentCurrentBlock(TMREditWindow *win, TMRFileEditor *editor);
 static bool copyBlockFromWindow(TMREditWindow *srcWin, TMRFileEditor *srcEditor,
                                 TMREditWindow *destWin, TMRFileEditor *destEditor);
 static bool moveBlockFromWindow(TMREditWindow *srcWin, TMRFileEditor *srcEditor,
@@ -624,8 +627,9 @@ static unsigned classifyProcName(const std::string &name) {
 	    name == "MARK_POS" || name == "GOTO_MARK" || name == "POP_MARK" ||
 	    name == "PAGE_UP" || name == "PAGE_DOWN" || name == "NEXT_PAGE_BREAK" ||
 	    name == "LAST_PAGE_BREAK" || name == "TAB_RIGHT" || name == "TAB_LEFT" ||
-	    name == "BLOCK_BEGIN" || name == "COL_BLOCK_BEGIN" || name == "STR_BLOCK_BEGIN" ||
-	    name == "BLOCK_END" || name == "BLOCK_OFF" || name == "CREATE_WINDOW" ||
+	    name == "BLOCK_BEGIN" || name == "BLOCK_LINE" || name == "COL_BLOCK_BEGIN" ||
+	    name == "BLOCK_COL" || name == "STR_BLOCK_BEGIN" || name == "BLOCK_END" ||
+	    name == "BLOCK_OFF" || name == "CREATE_WINDOW" ||
 	    name == "DELETE_WINDOW" || name == "MODIFY_WINDOW" || name == "LINK_WINDOW" ||
 	    name == "UNLINK_WINDOW" || name == "ZOOM" || name == "REDRAW" || name == "NEW_SCREEN" ||
 	    name == "GOTO_LINE" || name == "GOTO_COL" || name == "SWITCH_WINDOW" ||
@@ -2498,6 +2502,56 @@ static std::size_t bufferOffsetForLineColumn(const SplitTextBuffer &buffer, int 
 	return offset + col;
 }
 
+static std::size_t applyStreamPaste(std::string &text, std::size_t dest, const std::string &blockText,
+                                    bool insertMode) {
+	dest = std::min(dest, text.size());
+	if (insertMode)
+		text.insert(dest, blockText);
+	else {
+		std::size_t replaceLen = std::min(blockText.size(), text.size() - dest);
+		text.replace(dest, replaceLen, blockText);
+	}
+	return dest + blockText.size();
+}
+
+static void applyLinePaste(SplitTextBuffer &buffer, int destLine,
+                           const std::vector<std::string> &blockLines, bool insertMode) {
+	if (blockLines.empty())
+		return;
+	if (insertMode) {
+		destLine = std::max(0, std::min(destLine, static_cast<int>(buffer.lines.size())));
+		buffer.lines.insert(buffer.lines.begin() + destLine, blockLines.begin(), blockLines.end());
+		return;
+	}
+
+	destLine = std::max(0, destLine);
+	while (static_cast<int>(buffer.lines.size()) < destLine + static_cast<int>(blockLines.size()))
+		buffer.lines.emplace_back();
+	for (std::size_t i = 0; i < blockLines.size(); ++i)
+		buffer.lines[static_cast<std::size_t>(destLine) + i] = blockLines[i];
+}
+
+static void applyColumnPaste(SplitTextBuffer &buffer, int destRow, int destCol,
+                             const std::vector<std::string> &slices, bool insertMode) {
+	destRow = std::max(0, destRow);
+	destCol = std::max(0, destCol);
+	while (static_cast<int>(buffer.lines.size()) < destRow + static_cast<int>(slices.size()))
+		buffer.lines.emplace_back();
+	for (std::size_t i = 0; i < slices.size(); ++i) {
+		std::string &line = buffer.lines[static_cast<std::size_t>(destRow) + i];
+		std::size_t startCol = static_cast<std::size_t>(destCol);
+		if (line.size() < startCol)
+			line.append(startCol - line.size(), ' ');
+		if (insertMode) {
+			line.insert(startCol, slices[i]);
+			continue;
+		}
+		if (line.size() < startCol + slices[i].size())
+			line.append(startCol + slices[i].size() - line.size(), ' ');
+		line.replace(startCol, slices[i].size(), slices[i]);
+	}
+}
+
 static int lineIndexForPtr(TMRFileEditor *editor, uint ptr) {
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	uint pos = 0;
@@ -2517,6 +2571,19 @@ static int lineIndexForPtr(TMRFileEditor *editor, uint ptr) {
 		++line;
 	}
 	return line;
+}
+
+static int columnIndexForPtr(TMRFileEditor *editor, uint ptr) {
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor == nullptr) {
+		if (session == nullptr)
+			return 0;
+		ptr = std::min<std::size_t>(ptr, session->document.length());
+		return static_cast<int>(session->document.column(ptr));
+	}
+	if (ptr > editor->bufferLength())
+		ptr = editor->bufferLength();
+	return editor->charColumn(editor->lineStartOffset(ptr), ptr);
 }
 
 static int blockStatusValue(TMREditWindow *win) {
@@ -2604,8 +2671,8 @@ static int blockCol2Value(TMREditWindow *win, TMRFileEditor *editor) {
 		return win->blockCol2();
 	if (session == nullptr || session->blockMode == 0)
 		return 0;
-	if (session->blockMode != 2)
-		return 256;
+	if (session->blockMode == 1)
+		return 1000;
 	aCol = static_cast<int>(session->document.column(blockAnchorValue(nullptr)) + 1);
 	bCol = static_cast<int>(session->document.column(blockEffectiveEndValue(nullptr)) + 1);
 	return std::max(aCol, bCol);
@@ -2663,6 +2730,29 @@ static bool clearCurrentBlockMode() {
 	session->blockEnd = 0;
 	session->clearSelection();
 	return true;
+}
+
+static bool setCurrentBlockState(int mode, bool markingOn, uint anchor, uint end) {
+	TMREditWindow *win = currentEditWindow();
+	BackgroundEditSession *session = currentBackgroundEditSession();
+
+	if (mode <= 0)
+		return clearCurrentBlockMode();
+	if (win != nullptr) {
+		win->applyCommittedBlockState(mode, markingOn, anchor, end);
+		return true;
+	}
+	if (session == nullptr)
+		return false;
+	session->blockMode = mode;
+	session->blockMarkingOn = markingOn;
+	session->blockAnchor = std::min<std::size_t>(anchor, session->document.length());
+	session->blockEnd = std::min<std::size_t>(end, session->document.length());
+	return true;
+}
+
+static bool shouldKeepTargetBlockAfterCopyMove() {
+	return configuredPersistentBlocksSetting();
 }
 
 static bool currentBlockInfo(TMREditWindow *win, TMRFileEditor *editor, int &mode, uint &anchor,
@@ -3198,14 +3288,25 @@ static bool queueDeferredUiProcedure(const std::string &name, const std::vector<
 	return false;
 }
 
+static bool configuredColumnBlockMoveLeavesSpace() {
+	std::string mode = upperKey(configuredEditSetupSettings().columnBlockMove);
+	return mode == "LEAVE_SPACE" || mode == "LEAVE";
+}
+
+static bool shouldLeaveColumnSpaceForDelete(TMREditWindow *win) {
+	return blockStatusValue(win) == TMREditWindow::bmColumn && configuredColumnBlockMoveLeavesSpace();
+}
+
 static bool copyBlockFromWindow(TMREditWindow *srcWin, TMRFileEditor *srcEditor,
                                 TMREditWindow *destWin, TMRFileEditor *destEditor) {
 	int mode;
 	uint anchor;
 	uint end;
 	std::string sourceText;
-	if (srcWin == nullptr || srcEditor == nullptr || destEditor == nullptr)
+	bool insertMode;
+	if (srcWin == nullptr || srcEditor == nullptr || destWin == nullptr || destEditor == nullptr)
 		return false;
+	insertMode = destEditor->insertModeEnabled();
 	if (srcWin == destWin)
 		return copyCurrentBlock(srcWin, destEditor);
 	if (!currentBlockInfo(srcWin, srcEditor, mode, anchor, end))
@@ -3217,8 +3318,16 @@ static bool copyBlockFromWindow(TMREditWindow *srcWin, TMRFileEditor *srcEditor,
 		std::size_t dest = std::min<std::size_t>(destEditor->cursorOffset(), destEditor->bufferLength());
 		std::string destText = snapshotEditorText(destEditor);
 		std::string blockText = sourceText.substr(start, finish - start);
-		destText.insert(dest, blockText);
-		return replaceEditorBuffer(destEditor, destText, dest + blockText.size());
+		bool keepTarget = shouldKeepTargetBlockAfterCopyMove();
+		std::size_t cursorTarget = applyStreamPaste(destText, dest, blockText, insertMode);
+		if (!replaceEditorBuffer(destEditor, destText, cursorTarget))
+			return false;
+		if (keepTarget)
+			destWin->applyCommittedBlockState(mode, false, static_cast<uint>(dest),
+			                                  static_cast<uint>(dest + blockText.size()));
+		else
+			destWin->clearBlock();
+		return true;
 	}
 	if (mode == TMREditWindow::bmLine) {
 		SplitTextBuffer srcBuf = splitBufferLines(sourceText);
@@ -3227,16 +3336,27 @@ static bool copyBlockFromWindow(TMREditWindow *srcWin, TMRFileEditor *srcEditor,
 		int line2 = std::max(lineIndexForPtr(srcEditor, anchor), lineIndexForPtr(srcEditor, end));
 		int destLine = lineIndexForPtr(destEditor, destEditor->cursorOffset());
 		std::vector<std::string> blockLines;
+		bool keepTarget = shouldKeepTargetBlockAfterCopyMove();
+		uint targetAnchor = 0;
+		uint targetEnd = 0;
 		if (srcBuf.lines.empty())
 			return false;
 		line1 = std::max(0, std::min(line1, static_cast<int>(srcBuf.lines.size()) - 1));
 		line2 = std::max(line1, std::min(line2, static_cast<int>(srcBuf.lines.size()) - 1));
 		destLine = std::max(0, std::min(destLine, static_cast<int>(destBuf.lines.size())));
 		blockLines.assign(srcBuf.lines.begin() + line1, srcBuf.lines.begin() + line2 + 1);
-		destBuf.lines.insert(destBuf.lines.begin() + destLine, blockLines.begin(),
-		                     blockLines.end());
-		return replaceEditorBuffer(destEditor, joinBufferLines(destBuf),
-		                           bufferOffsetForLine(destBuf, destLine));
+		applyLinePaste(destBuf, destLine, blockLines, insertMode);
+		targetAnchor = static_cast<uint>(bufferOffsetForLine(destBuf, destLine));
+		targetEnd = static_cast<uint>(bufferOffsetForLine(
+		    destBuf, destLine + static_cast<int>(blockLines.size()) - 1));
+		if (!replaceEditorBuffer(destEditor, joinBufferLines(destBuf),
+		                         bufferOffsetForLine(destBuf, destLine)))
+			return false;
+		if (keepTarget)
+			destWin->applyCommittedBlockState(mode, false, targetAnchor, targetEnd);
+		else
+			destWin->clearBlock();
+		return true;
 	}
 	if (mode == TMREditWindow::bmColumn) {
 		SplitTextBuffer srcBuf = splitBufferLines(sourceText);
@@ -3249,6 +3369,9 @@ static bool copyBlockFromWindow(TMREditWindow *srcWin, TMRFileEditor *srcEditor,
 		int destRow = lineIndexForPtr(destEditor, destEditor->cursorOffset());
 		int destCol = std::max(0, currentEditorColumn(destEditor) - 1);
 		std::vector<std::string> slices;
+		bool keepTarget = shouldKeepTargetBlockAfterCopyMove();
+		uint targetAnchor = 0;
+		uint targetEnd = 0;
 		if (srcBuf.lines.empty())
 			return false;
 		row1 = std::max(0, std::min(row1, static_cast<int>(srcBuf.lines.size()) - 1));
@@ -3264,29 +3387,36 @@ static bool copyBlockFromWindow(TMREditWindow *srcWin, TMRFileEditor *srcEditor,
 			}
 			slices.push_back(slice);
 		}
-		while (static_cast<int>(destBuf.lines.size()) < destRow + static_cast<int>(slices.size()))
-			destBuf.lines.emplace_back();
-		for (std::size_t i = 0; i < slices.size(); ++i) {
-			std::string &line = destBuf.lines[static_cast<std::size_t>(destRow) + i];
-			if (line.size() < static_cast<std::size_t>(destCol))
-				line.append(static_cast<std::size_t>(destCol) - line.size(), ' ');
-			line.insert(static_cast<std::size_t>(destCol), slices[i]);
-		}
-		return replaceEditorBuffer(destEditor, joinBufferLines(destBuf),
-		                           bufferOffsetForLineColumn(destBuf, destRow, destCol));
+		if (slices.empty())
+			return false;
+		applyColumnPaste(destBuf, destRow, destCol, slices, insertMode);
+		targetAnchor = static_cast<uint>(bufferOffsetForLineColumn(destBuf, destRow, destCol));
+		targetEnd = static_cast<uint>(bufferOffsetForLineColumn(
+		    destBuf, destRow + static_cast<int>(slices.size()) - 1, destCol + width));
+		if (!replaceEditorBuffer(destEditor, joinBufferLines(destBuf),
+		                         bufferOffsetForLineColumn(destBuf, destRow, destCol)))
+			return false;
+		if (keepTarget)
+			destWin->applyCommittedBlockState(mode, false, targetAnchor, targetEnd);
+		else
+			destWin->clearBlock();
+		return true;
 	}
 	return false;
 }
 
 static bool moveBlockFromWindow(TMREditWindow *srcWin, TMRFileEditor *srcEditor,
                                 TMREditWindow *destWin, TMRFileEditor *destEditor) {
-	if (srcWin == nullptr || srcEditor == nullptr || destEditor == nullptr)
+	bool leaveColumnSpace = false;
+	if (srcWin == nullptr || srcEditor == nullptr || destWin == nullptr || destEditor == nullptr)
 		return false;
 	if (srcWin == destWin)
 		return moveCurrentBlock(srcWin, destEditor);
 	if (!copyBlockFromWindow(srcWin, srcEditor, destWin, destEditor))
 		return false;
-	if (!deleteCurrentBlock(srcWin, srcEditor))
+	leaveColumnSpace =
+	    srcWin->blockStatus() == TMREditWindow::bmColumn && configuredColumnBlockMoveLeavesSpace();
+	if (!deleteCurrentBlock(srcWin, srcEditor, leaveColumnSpace))
 		return false;
 	srcWin->clearBlock();
 	return true;
@@ -3369,6 +3499,8 @@ static bool copyCurrentBlock(TMREditWindow *win, TMRFileEditor *editor) {
 	uint anchor;
 	uint end;
 	std::string text;
+	bool keepTarget = shouldKeepTargetBlockAfterCopyMove();
+	bool insertMode = currentEditorInsertMode();
 	if (!currentBlockInfo(win, editor, mode, anchor, end))
 		return false;
 	text = snapshotEditorText(editor);
@@ -3377,9 +3509,12 @@ static bool copyCurrentBlock(TMREditWindow *win, TMRFileEditor *editor) {
 		std::size_t finish = std::max<std::size_t>(anchor, end);
 		std::size_t dest = std::min<std::size_t>(currentEditorCursorOffset(editor), text.size());
 		std::string blockText = text.substr(start, finish - start);
-		text.insert(dest, blockText);
-		if (!replaceEditorBuffer(editor, text, dest + blockText.size()))
+		std::size_t cursorTarget = applyStreamPaste(text, dest, blockText, insertMode);
+		if (!replaceEditorBuffer(editor, text, cursorTarget))
 			return false;
+		if (keepTarget)
+			return setCurrentBlockState(mode, false, static_cast<uint>(dest),
+			                            static_cast<uint>(dest + blockText.size()));
 		clearCurrentBlockMode();
 		return true;
 	}
@@ -3395,9 +3530,13 @@ static bool copyCurrentBlock(TMREditWindow *win, TMRFileEditor *editor) {
 		line2 = std::max(line1, std::min(line2, static_cast<int>(buf.lines.size()) - 1));
 		destLine = std::max(0, std::min(destLine, static_cast<int>(buf.lines.size())));
 		blockLines.assign(buf.lines.begin() + line1, buf.lines.begin() + line2 + 1);
-		buf.lines.insert(buf.lines.begin() + destLine, blockLines.begin(), blockLines.end());
+		applyLinePaste(buf, destLine, blockLines, insertMode);
 		if (!replaceEditorBuffer(editor, joinBufferLines(buf), bufferOffsetForLine(buf, destLine)))
 			return false;
+		if (keepTarget)
+			return setCurrentBlockState(
+			    mode, false, static_cast<uint>(bufferOffsetForLine(buf, destLine)),
+			    static_cast<uint>(bufferOffsetForLine(buf, destLine + static_cast<int>(blockLines.size()) - 1)));
 		clearCurrentBlockMode();
 		return true;
 	}
@@ -3426,17 +3565,16 @@ static bool copyCurrentBlock(TMREditWindow *win, TMRFileEditor *editor) {
 			}
 			slices.push_back(slice);
 		}
-		while (static_cast<int>(buf.lines.size()) < destRow + static_cast<int>(slices.size()))
-			buf.lines.emplace_back();
-		for (std::size_t i = 0; i < slices.size(); ++i) {
-			std::string &line = buf.lines[static_cast<std::size_t>(destRow) + i];
-			if (line.size() < static_cast<std::size_t>(destCol))
-				line.append(static_cast<std::size_t>(destCol) - line.size(), ' ');
-			line.insert(static_cast<std::size_t>(destCol), slices[i]);
-		}
+		applyColumnPaste(buf, destRow, destCol, slices, insertMode);
 		if (!replaceEditorBuffer(editor, joinBufferLines(buf),
 		                         bufferOffsetForLineColumn(buf, destRow, destCol)))
 			return false;
+		if (keepTarget)
+			return setCurrentBlockState(mode, false,
+			                            static_cast<uint>(bufferOffsetForLineColumn(buf, destRow, destCol)),
+			                            static_cast<uint>(bufferOffsetForLineColumn(
+			                                buf, destRow + static_cast<int>(slices.size()) - 1,
+			                                destCol + width)));
 		clearCurrentBlockMode();
 		return true;
 	}
@@ -3448,6 +3586,8 @@ static bool moveCurrentBlock(TMREditWindow *win, TMRFileEditor *editor) {
 	uint anchor;
 	uint end;
 	std::string text;
+	bool keepTarget = shouldKeepTargetBlockAfterCopyMove();
+	bool insertMode = currentEditorInsertMode();
 	if (!currentBlockInfo(win, editor, mode, anchor, end))
 		return false;
 	text = snapshotEditorText(editor);
@@ -3461,9 +3601,12 @@ static bool moveCurrentBlock(TMREditWindow *win, TMRFileEditor *editor) {
 		text.erase(start, finish - start);
 		if (dest > finish)
 			dest -= (finish - start);
-		text.insert(dest, blockText);
-		if (!replaceEditorBuffer(editor, text, dest + blockText.size()))
+		std::size_t cursorTarget = applyStreamPaste(text, dest, blockText, insertMode);
+		if (!replaceEditorBuffer(editor, text, cursorTarget))
 			return false;
+		if (keepTarget)
+			return setCurrentBlockState(mode, false, static_cast<uint>(dest),
+			                            static_cast<uint>(dest + blockText.size()));
 		clearCurrentBlockMode();
 		return true;
 	}
@@ -3488,9 +3631,13 @@ static bool moveCurrentBlock(TMREditWindow *win, TMRFileEditor *editor) {
 		if (destLine > line2)
 			destLine -= count;
 		destLine = std::max(0, std::min(destLine, static_cast<int>(buf.lines.size())));
-		buf.lines.insert(buf.lines.begin() + destLine, blockLines.begin(), blockLines.end());
+		applyLinePaste(buf, destLine, blockLines, insertMode);
 		if (!replaceEditorBuffer(editor, joinBufferLines(buf), bufferOffsetForLine(buf, destLine)))
 			return false;
+		if (keepTarget)
+			return setCurrentBlockState(
+			    mode, false, static_cast<uint>(bufferOffsetForLine(buf, destLine)),
+			    static_cast<uint>(bufferOffsetForLine(buf, destLine + static_cast<int>(blockLines.size()) - 1)));
 		clearCurrentBlockMode();
 		return true;
 	}
@@ -3503,6 +3650,7 @@ static bool moveCurrentBlock(TMREditWindow *win, TMRFileEditor *editor) {
 		int width = std::max(1, col2 - col1);
 		int destRow = lineIndexForPtr(editor, static_cast<uint>(currentEditorCursorOffset(editor)));
 		int destCol = std::max(0, currentEditorColumn(editor) - 1);
+		bool leaveColumnSpace = configuredColumnBlockMoveLeavesSpace();
 		std::vector<std::string> slices;
 		int height;
 		if (buf.lines.empty())
@@ -3517,34 +3665,44 @@ static bool moveCurrentBlock(TMREditWindow *win, TMRFileEditor *editor) {
 			std::string &line = buf.lines[static_cast<std::size_t>(row)];
 			std::size_t startCol = static_cast<std::size_t>(std::max(0, col1 - 1));
 			std::string slice(static_cast<std::size_t>(width), ' ');
+			if (leaveColumnSpace) {
+				if (line.size() < startCol)
+					line.append(startCol - line.size(), ' ');
+				if (line.size() < startCol + static_cast<std::size_t>(width))
+					line.append(startCol + static_cast<std::size_t>(width) - line.size(), ' ');
+			}
 			if (startCol < line.size()) {
 				std::size_t avail =
 				    std::min<std::size_t>(static_cast<std::size_t>(width), line.size() - startCol);
 				slice.replace(0, avail, line.substr(startCol, avail));
-				line.erase(startCol, avail);
+				if (leaveColumnSpace)
+					line.replace(startCol, static_cast<std::size_t>(width),
+					             static_cast<std::size_t>(width), ' ');
+				else
+					line.erase(startCol, avail);
 			}
 			slices.push_back(slice);
 		}
-		if (destRow + height - 1 >= row1 && destRow <= row2 && destCol > col1 - 1)
+		if (!leaveColumnSpace && destRow + height - 1 >= row1 && destRow <= row2 &&
+		    destCol > col1 - 1)
 			destCol = std::max(0, destCol - width);
-		while (static_cast<int>(buf.lines.size()) < destRow + static_cast<int>(slices.size()))
-			buf.lines.emplace_back();
-		for (std::size_t i = 0; i < slices.size(); ++i) {
-			std::string &line = buf.lines[static_cast<std::size_t>(destRow) + i];
-			if (line.size() < static_cast<std::size_t>(destCol))
-				line.append(static_cast<std::size_t>(destCol) - line.size(), ' ');
-			line.insert(static_cast<std::size_t>(destCol), slices[i]);
-		}
+		applyColumnPaste(buf, destRow, destCol, slices, insertMode);
 		if (!replaceEditorBuffer(editor, joinBufferLines(buf),
 		                         bufferOffsetForLineColumn(buf, destRow, destCol)))
 			return false;
+		if (keepTarget)
+			return setCurrentBlockState(mode, false,
+			                            static_cast<uint>(bufferOffsetForLineColumn(buf, destRow, destCol)),
+			                            static_cast<uint>(bufferOffsetForLineColumn(
+			                                buf, destRow + static_cast<int>(slices.size()) - 1,
+			                                destCol + width)));
 		clearCurrentBlockMode();
 		return true;
 	}
 	return false;
 }
 
-static bool deleteCurrentBlock(TMREditWindow *win, TMRFileEditor *editor) {
+static bool deleteCurrentBlock(TMREditWindow *win, TMRFileEditor *editor, bool leaveColumnSpace) {
 	int mode;
 	uint anchor;
 	uint end;
@@ -3595,9 +3753,20 @@ static bool deleteCurrentBlock(TMREditWindow *win, TMRFileEditor *editor) {
 		for (int row = row1; row <= row2; ++row) {
 			std::string &line = buf.lines[static_cast<std::size_t>(row)];
 			std::size_t startCol = static_cast<std::size_t>(std::max(0, col1 - 1));
-			if (startCol < line.size())
-				line.erase(startCol, std::min<std::size_t>(static_cast<std::size_t>(width),
-				                                           line.size() - startCol));
+			if (leaveColumnSpace) {
+				if (line.size() < startCol)
+					line.append(startCol - line.size(), ' ');
+				if (line.size() < startCol + static_cast<std::size_t>(width))
+					line.append(startCol + static_cast<std::size_t>(width) - line.size(), ' ');
+			}
+			if (startCol < line.size()) {
+				if (leaveColumnSpace)
+					line.replace(startCol, static_cast<std::size_t>(width),
+					             static_cast<std::size_t>(width), ' ');
+				else
+					line.erase(startCol, std::min<std::size_t>(static_cast<std::size_t>(width),
+					                                           line.size() - startCol));
+			}
 		}
 		if (!replaceEditorBuffer(editor, joinBufferLines(buf),
 		                         bufferOffsetForLineColumn(buf, row1, std::max(0, col1 - 1))))
@@ -3606,6 +3775,163 @@ static bool deleteCurrentBlock(TMREditWindow *win, TMRFileEditor *editor) {
 		return true;
 	}
 	return false;
+}
+
+static bool shiftCurrentBlockIndent(TMREditWindow *win, TMRFileEditor *editor, bool undent) {
+	int mode;
+	uint anchor;
+	uint end;
+	std::string text;
+	SplitTextBuffer buf;
+	int line1;
+	int line2;
+	int anchorLine;
+	int endLine;
+	int anchorCol;
+	int endCol;
+	std::string indentUnit;
+	int indentWidth;
+	std::vector<int> columnDelta;
+
+	if (!currentBlockInfo(win, editor, mode, anchor, end))
+		return false;
+	text = snapshotEditorText(editor);
+	buf = splitBufferLines(text);
+	if (buf.lines.empty())
+		return false;
+
+	anchorLine = lineIndexForPtr(editor, anchor);
+	endLine = lineIndexForPtr(editor, end);
+	anchorCol = columnIndexForPtr(editor, anchor);
+	endCol = columnIndexForPtr(editor, end);
+	anchorLine = std::max(0, std::min(anchorLine, static_cast<int>(buf.lines.size()) - 1));
+	endLine = std::max(0, std::min(endLine, static_cast<int>(buf.lines.size()) - 1));
+
+	line1 = std::min(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
+	line2 = std::max(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
+	line1 = std::max(0, std::min(line1, static_cast<int>(buf.lines.size()) - 1));
+	line2 = std::max(line1, std::min(line2, static_cast<int>(buf.lines.size()) - 1));
+
+	indentWidth = std::max(1, configuredTabSizeSetting());
+	if (configuredTabExpandSetting())
+		indentUnit = "\t";
+	else
+		indentUnit.assign(static_cast<std::size_t>(indentWidth), ' ');
+	columnDelta.assign(static_cast<std::size_t>(line2 - line1 + 1), 0);
+
+	if (mode == TMREditWindow::bmColumn) {
+		int col1 = std::min(blockCol1Value(win, editor), blockCol2Value(win, editor));
+		int col2 = std::max(blockCol1Value(win, editor), blockCol2Value(win, editor));
+		int startCol = std::max(0, col1 - 1);
+		bool leaveColumnSpace = undent && configuredColumnBlockMoveLeavesSpace();
+
+		(void) col2;
+		for (int lineIndex = line1; lineIndex <= line2; ++lineIndex) {
+			std::string &line = buf.lines[static_cast<std::size_t>(lineIndex)];
+			int deltaIndex = lineIndex - line1;
+			std::size_t start = static_cast<std::size_t>(startCol);
+
+			if (!undent) {
+				if (line.size() < start)
+					line.append(start - line.size(), ' ');
+				line.insert(start, indentUnit);
+				columnDelta[static_cast<std::size_t>(deltaIndex)] = indentWidth;
+				continue;
+			}
+
+			if (start >= line.size())
+				continue;
+
+			if (line[start] == '\t') {
+				if (leaveColumnSpace)
+					line.replace(start, 1, 1, ' ');
+				else {
+					line.erase(start, 1);
+					columnDelta[static_cast<std::size_t>(deltaIndex)] = -indentWidth;
+				}
+				continue;
+			}
+
+			int removeCount = 0;
+			while (removeCount < indentWidth &&
+			       start + static_cast<std::size_t>(removeCount) < line.size() &&
+			       line[start + static_cast<std::size_t>(removeCount)] == ' ')
+				++removeCount;
+			if (removeCount <= 0)
+				continue;
+			if (leaveColumnSpace)
+				line.replace(start, static_cast<std::size_t>(removeCount),
+				             static_cast<std::size_t>(removeCount), ' ');
+			else {
+				line.erase(start, static_cast<std::size_t>(removeCount));
+				columnDelta[static_cast<std::size_t>(deltaIndex)] = -removeCount;
+			}
+		}
+
+		if (!replaceEditorBuffer(editor, joinBufferLines(buf),
+		                         bufferOffsetForLineColumn(buf, line1, startCol)))
+			return false;
+		auto adjustedColumn = [&](int lineIndex, int originalCol) {
+			int adjusted = std::max(0, originalCol);
+			if (lineIndex < line1 || lineIndex > line2 || adjusted < startCol)
+				return adjusted;
+			adjusted += columnDelta[static_cast<std::size_t>(lineIndex - line1)];
+			return std::max(startCol, adjusted);
+		};
+		return setCurrentBlockState(
+		    mode, false, static_cast<uint>(bufferOffsetForLineColumn(
+		                     buf, anchorLine, adjustedColumn(anchorLine, anchorCol))),
+		    static_cast<uint>(bufferOffsetForLineColumn(buf, endLine, adjustedColumn(endLine, endCol))));
+	}
+
+	for (int lineIndex = line1; lineIndex <= line2; ++lineIndex) {
+		std::string &line = buf.lines[static_cast<std::size_t>(lineIndex)];
+		int deltaIndex = lineIndex - line1;
+
+		if (!undent) {
+			line.insert(0, indentUnit);
+			columnDelta[static_cast<std::size_t>(deltaIndex)] = indentWidth;
+			continue;
+		}
+		if (line.empty())
+			continue;
+		if (line[0] == '\t') {
+			line.erase(0, 1);
+			columnDelta[static_cast<std::size_t>(deltaIndex)] = -indentWidth;
+			continue;
+		}
+		int removeCount = 0;
+		while (removeCount < indentWidth && removeCount < static_cast<int>(line.size()) &&
+		       line[static_cast<std::size_t>(removeCount)] == ' ')
+			++removeCount;
+		if (removeCount > 0) {
+			line.erase(0, static_cast<std::size_t>(removeCount));
+			columnDelta[static_cast<std::size_t>(deltaIndex)] = -removeCount;
+		}
+	}
+
+	if (!replaceEditorBuffer(editor, joinBufferLines(buf), bufferOffsetForLine(buf, line1)))
+		return false;
+	auto adjustedColumn = [&](int lineIndex, int originalCol) {
+		int adjusted = std::max(0, originalCol);
+		if (lineIndex < line1 || lineIndex > line2)
+			return adjusted;
+		adjusted += columnDelta[static_cast<std::size_t>(lineIndex - line1)];
+		return std::max(0, adjusted);
+	};
+
+	return setCurrentBlockState(
+	    mode, false, static_cast<uint>(bufferOffsetForLineColumn(
+	                     buf, anchorLine, adjustedColumn(anchorLine, anchorCol))),
+	    static_cast<uint>(bufferOffsetForLineColumn(buf, endLine, adjustedColumn(endLine, endCol))));
+}
+
+static bool indentCurrentBlock(TMREditWindow *win, TMRFileEditor *editor) {
+	return shiftCurrentBlockIndent(win, editor, false);
+}
+
+static bool undentCurrentBlock(TMREditWindow *win, TMRFileEditor *editor) {
+	return shiftCurrentBlockIndent(win, editor, true);
 }
 
 static bool moveEditorTabRight(TMRFileEditor *editor) {
@@ -5320,7 +5646,8 @@ bool isSupportedStagedSymbol(const std::string &value) noexcept {
 	    "GOTO_COL",    "TAB_RIGHT",      "TAB_LEFT",       "INDENT",          "UNDENT",
 	    "MARK_POS",    "GOTO_MARK",      "POP_MARK",       "PAGE_UP",         "PAGE_DOWN",
 	    "NEXT_PAGE_BREAK","LAST_PAGE_BREAK","SEARCH_FWD",  "SEARCH_BWD",      "RUN_MACRO",
-	    "BLOCK_BEGIN", "COL_BLOCK_BEGIN","STR_BLOCK_BEGIN","BLOCK_END",       "BLOCK_OFF",
+	    "BLOCK_BEGIN", "BLOCK_LINE",    "COL_BLOCK_BEGIN","BLOCK_COL",       "STR_BLOCK_BEGIN",
+	    "BLOCK_END",   "BLOCK_OFF",
 	    "COPY_BLOCK",  "MOVE_BLOCK",     "DELETE_BLOCK",   "ERASE_WINDOW",    "BLOCK_STAT",
 	    "BLOCK_LINE1", "BLOCK_LINE2",    "BLOCK_COL1",     "BLOCK_COL2",      "MARKING",
 	    "FIRST_SAVE",  "EOF_IN_MEM",     "BUFFER_ID",      "TMP_FILE",        "TMP_FILE_NAME",
@@ -6451,9 +6778,10 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				           name == "PAGE_UP" || name == "PAGE_DOWN" || name == "NEXT_PAGE_BREAK" ||
 				           name == "LAST_PAGE_BREAK" || name == "TAB_RIGHT" || name == "TAB_LEFT" ||
 				           name == "INDENT" || name == "UNDENT" || name == "BLOCK_BEGIN" ||
-				           name == "COL_BLOCK_BEGIN" || name == "STR_BLOCK_BEGIN" ||
-				           name == "BLOCK_END" || name == "BLOCK_OFF" || name == "COPY_BLOCK" ||
-				           name == "MOVE_BLOCK" || name == "DELETE_BLOCK" ||
+				           name == "BLOCK_LINE" || name == "COL_BLOCK_BEGIN" ||
+				           name == "BLOCK_COL" || name == "STR_BLOCK_BEGIN" ||
+				           name == "BLOCK_END" || name == "BLOCK_OFF" || name == "BLOCK_STAT" ||
+				           name == "COPY_BLOCK" || name == "MOVE_BLOCK" || name == "DELETE_BLOCK" ||
 				           name == "CREATE_WINDOW" || name == "DELETE_WINDOW" ||
 				           name == "ERASE_WINDOW" || name == "MODIFY_WINDOW" ||
 				           name == "LINK_WINDOW" || name == "UNLINK_WINDOW" ||
@@ -6467,7 +6795,8 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						runtimeErrorLevel() = deferredError;
 						continue;
 					}
-					if (editor == nullptr && currentBackgroundEditSession() == nullptr && name != "CREATE_WINDOW") {
+					if (editor == nullptr && currentBackgroundEditSession() == nullptr &&
+					    name != "CREATE_WINDOW" && name != "BLOCK_STAT") {
 						runtimeErrorLevel() = 1001;
 						continue;
 					}
@@ -6515,9 +6844,9 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						ok = indentEditor(editor);
 					else if (name == "UNDENT")
 						ok = undentEditor(editor);
-					else if (name == "BLOCK_BEGIN") {
+					else if (name == "BLOCK_BEGIN" || name == "BLOCK_LINE") {
 						ok = beginCurrentBlockMode(TMREditWindow::bmLine);
-					} else if (name == "COL_BLOCK_BEGIN") {
+					} else if (name == "COL_BLOCK_BEGIN" || name == "BLOCK_COL") {
 						ok = beginCurrentBlockMode(TMREditWindow::bmColumn);
 					} else if (name == "STR_BLOCK_BEGIN") {
 						ok = beginCurrentBlockMode(TMREditWindow::bmStream);
@@ -6525,12 +6854,16 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						ok = endCurrentBlockMode();
 					} else if (name == "BLOCK_OFF") {
 						ok = clearCurrentBlockMode();
+					} else if (name == "BLOCK_STAT") {
+						ok = true;
+						runtimeReturnInt() = blockStatusValue(currentEditWindow());
 					} else if (name == "COPY_BLOCK")
 						ok = copyCurrentBlock(currentEditWindow(), editor);
 					else if (name == "MOVE_BLOCK")
 						ok = moveCurrentBlock(currentEditWindow(), editor);
 					else if (name == "DELETE_BLOCK")
-						ok = deleteCurrentBlock(currentEditWindow(), editor);
+						ok = deleteCurrentBlock(currentEditWindow(), editor,
+						                        shouldLeaveColumnSpaceForDelete(currentEditWindow()));
 					else if (name == "CREATE_WINDOW")
 						ok = createEditWindow();
 					else if (name == "DELETE_WINDOW")
@@ -6932,6 +7265,150 @@ bool mrvmUiSwitchWindow(int index) {
 
 bool mrvmUiSizeCurrentWindow(int x1, int y1, int x2, int y2) {
 	return sizeCurrentEditWindow(x1, y1, x2, y2);
+}
+
+bool mrvmUiBlockBeginLine() {
+	return beginCurrentBlockMode(TMREditWindow::bmLine);
+}
+
+bool mrvmUiBlockBeginColumn() {
+	return beginCurrentBlockMode(TMREditWindow::bmColumn);
+}
+
+bool mrvmUiBlockBeginStream() {
+	return beginCurrentBlockMode(TMREditWindow::bmStream);
+}
+
+bool mrvmUiBlockEndMarking() {
+	return endCurrentBlockMode();
+}
+
+bool mrvmUiBlockTurnMarkingOff() {
+	return clearCurrentBlockMode();
+}
+
+bool mrvmUiCopyBlock() {
+	TMREditWindow *win = currentEditWindow();
+	TMRFileEditor *editor = currentEditor();
+	if (win == nullptr || editor == nullptr)
+		return false;
+	return copyCurrentBlock(win, editor);
+}
+
+bool mrvmUiMoveBlock() {
+	TMREditWindow *win = currentEditWindow();
+	TMRFileEditor *editor = currentEditor();
+	if (win == nullptr || editor == nullptr)
+		return false;
+	return moveCurrentBlock(win, editor);
+}
+
+bool mrvmUiDeleteBlock() {
+	TMREditWindow *win = currentEditWindow();
+	TMRFileEditor *editor = currentEditor();
+	if (win == nullptr || editor == nullptr)
+		return false;
+	return deleteCurrentBlock(win, editor, shouldLeaveColumnSpaceForDelete(win));
+}
+
+bool mrvmUiIndentBlock() {
+	TMREditWindow *win = currentEditWindow();
+	TMRFileEditor *editor = currentEditor();
+	if (win == nullptr || editor == nullptr)
+		return false;
+	return indentCurrentBlock(win, editor);
+}
+
+bool mrvmUiUndentBlock() {
+	TMREditWindow *win = currentEditWindow();
+	TMRFileEditor *editor = currentEditor();
+	if (win == nullptr || editor == nullptr)
+		return false;
+	return undentCurrentBlock(win, editor);
+}
+
+bool mrvmUiWindowCopyBlock(int sourceWindowIndex) {
+	TMREditWindow *destWin = currentEditWindow();
+	TMRFileEditor *destEditor = currentEditor();
+	TMREditWindow *srcWin = editWindowByIndex(sourceWindowIndex);
+	TMRFileEditor *srcEditor = srcWin != nullptr ? srcWin->getEditor() : nullptr;
+	if (destWin == nullptr || destEditor == nullptr || srcWin == nullptr || srcEditor == nullptr)
+		return false;
+	if (srcWin == destWin)
+		return false;
+	return copyBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
+}
+
+bool mrvmUiWindowMoveBlock(int sourceWindowIndex) {
+	TMREditWindow *destWin = currentEditWindow();
+	TMRFileEditor *destEditor = currentEditor();
+	TMREditWindow *srcWin = editWindowByIndex(sourceWindowIndex);
+	TMRFileEditor *srcEditor = srcWin != nullptr ? srcWin->getEditor() : nullptr;
+	if (destWin == nullptr || destEditor == nullptr || srcWin == nullptr || srcEditor == nullptr)
+		return false;
+	if (srcWin == destWin)
+		return false;
+	return moveBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
+}
+
+bool mrvmUiWindowCopyBlockFromWindow(const void *sourceWindowKey) {
+	TMREditWindow *destWin = currentEditWindow();
+	TMRFileEditor *destEditor = currentEditor();
+	TMREditWindow *srcWin = const_cast<TMREditWindow *>(static_cast<const TMREditWindow *>(sourceWindowKey));
+	TMRFileEditor *srcEditor = srcWin != nullptr ? srcWin->getEditor() : nullptr;
+	if (destWin == nullptr || destEditor == nullptr || srcWin == nullptr || srcEditor == nullptr)
+		return false;
+	if (srcWin == destWin)
+		return false;
+	return copyBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
+}
+
+bool mrvmUiWindowMoveBlockFromWindow(const void *sourceWindowKey) {
+	TMREditWindow *destWin = currentEditWindow();
+	TMRFileEditor *destEditor = currentEditor();
+	TMREditWindow *srcWin = const_cast<TMREditWindow *>(static_cast<const TMREditWindow *>(sourceWindowKey));
+	TMRFileEditor *srcEditor = srcWin != nullptr ? srcWin->getEditor() : nullptr;
+	if (destWin == nullptr || destEditor == nullptr || srcWin == nullptr || srcEditor == nullptr)
+		return false;
+	if (srcWin == destWin)
+		return false;
+	return moveBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
+}
+
+bool mrvmUiWindowCopyBlockBetween(const void *sourceWindowKey, const void *targetWindowKey) {
+	TMREditWindow *srcWin = const_cast<TMREditWindow *>(static_cast<const TMREditWindow *>(sourceWindowKey));
+	TMREditWindow *destWin = const_cast<TMREditWindow *>(static_cast<const TMREditWindow *>(targetWindowKey));
+	TMRFileEditor *srcEditor = srcWin != nullptr ? srcWin->getEditor() : nullptr;
+	TMRFileEditor *destEditor = destWin != nullptr ? destWin->getEditor() : nullptr;
+	if (destWin == nullptr || destEditor == nullptr || srcWin == nullptr || srcEditor == nullptr)
+		return false;
+	if (srcWin == destWin)
+		return false;
+	return copyBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
+}
+
+bool mrvmUiWindowMoveBlockBetween(const void *sourceWindowKey, const void *targetWindowKey) {
+	TMREditWindow *srcWin = const_cast<TMREditWindow *>(static_cast<const TMREditWindow *>(sourceWindowKey));
+	TMREditWindow *destWin = const_cast<TMREditWindow *>(static_cast<const TMREditWindow *>(targetWindowKey));
+	TMRFileEditor *srcEditor = srcWin != nullptr ? srcWin->getEditor() : nullptr;
+	TMRFileEditor *destEditor = destWin != nullptr ? destWin->getEditor() : nullptr;
+	if (destWin == nullptr || destEditor == nullptr || srcWin == nullptr || srcEditor == nullptr)
+		return false;
+	if (srcWin == destWin)
+		return false;
+	return moveBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
+}
+
+bool mrvmUiSaveBlockToFile(const std::string &pathSpec) {
+	TMREditWindow *win = currentEditWindow();
+	TMRFileEditor *editor = currentEditor();
+	std::string path;
+	if (win == nullptr || editor == nullptr)
+		return false;
+	path = expandUserPath(pathSpec);
+	if (path.empty())
+		return false;
+	return saveCurrentBlockToFile(win, editor, path);
 }
 
 void mrvmUiReplaceWindowMarkStack(const void *windowKey, const std::vector<std::size_t> &offsets) {

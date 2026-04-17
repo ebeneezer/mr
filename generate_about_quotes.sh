@@ -6,7 +6,9 @@ OUTPUT_PATH="${2:-app/MRAboutQuotes.generated.hpp}"
 FIRST_QUOTE='"I live again." Caleb (Blood)'
 
 tmp_quotes="$(mktemp)"
-trap 'rm -f "$tmp_quotes"' EXIT
+mkdir -p "$(dirname "$OUTPUT_PATH")"
+tmp_output="$(mktemp "$(dirname "$OUTPUT_PATH")/.MRAboutQuotes.generated.hpp.XXXXXX")"
+trap 'rm -f "$tmp_quotes" "$tmp_output"' EXIT
 
 awk -v first_quote="$FIRST_QUOTE" '
 function trim(s) {
@@ -76,4 +78,6 @@ END {
 	echo "constexpr std::size_t kAboutQuoteCount = sizeof(kAboutQuotes) / sizeof(kAboutQuotes[0]);"
 	echo
 	echo "#endif"
-} > "$OUTPUT_PATH"
+} > "$tmp_output"
+
+mv "$tmp_output" "$OUTPUT_PATH"

@@ -58,7 +58,9 @@ class TMRFileEditor : public TScroller {
 				      miniMapWarmupBodyWidth_(0), miniMapWarmupViewportWidth_(0), miniMapWarmupBraille_(true),
 				      miniMapWarmupWindowStartLine_(0), miniMapWarmupWindowLineCount_(0),
 				      miniMapWarmupReschedulePending_(false), miniMapCache_(),
-				      miniMapInitialRenderReportedDocumentId_(0), lastLoadTiming_() {
+		      miniMapInitialRenderReportedDocumentId_(0), blockOverlayActive_(false),
+		      blockOverlayMode_(0), blockOverlayAnchor_(0), blockOverlayEnd_(0),
+		      blockOverlayTrackingCursor_(false), lastLoadTiming_() {
 		fileName[0] = EOS;
 		options |= ofFirstClick;
 		eventMask |= evMouse | evKeyboard | evCommand;
@@ -395,6 +397,31 @@ class TMRFileEditor : public TScroller {
 
 	void setCursorOffset(std::size_t pos, int = 0) {
 		moveCursor(std::min(pos, bufferModel_.length()), false, false);
+	}
+
+	std::size_t offsetForGlobalPoint(TPoint where) noexcept {
+		return mouseOffset(makeLocal(where));
+	}
+
+	void setBlockOverlayState(int mode, std::size_t anchor, std::size_t end, bool active,
+	                          bool trackCursor = false) {
+		const std::size_t length = bufferModel_.length();
+
+		if (!active || mode < 1 || mode > 3) {
+			blockOverlayActive_ = false;
+			blockOverlayMode_ = 0;
+			blockOverlayAnchor_ = 0;
+			blockOverlayEnd_ = 0;
+			blockOverlayTrackingCursor_ = false;
+			drawView();
+			return;
+		}
+		blockOverlayActive_ = true;
+		blockOverlayMode_ = mode;
+		blockOverlayAnchor_ = std::min(anchor, length);
+		blockOverlayEnd_ = std::min(end, length);
+		blockOverlayTrackingCursor_ = trackCursor;
+		drawView();
 	}
 
 	void setSelectionOffsets(std::size_t start, std::size_t end, Boolean = False) {
@@ -2938,8 +2965,17 @@ class TMRFileEditor : public TScroller {
 		std::size_t documentLength = bufferModel_.length();
 		std::size_t lineEnd = lineStart;
 		std::size_t cursorPos = 0;
+		std::size_t lineIndex = 0;
 		bool currentLine = false;
 		bool currentLineInBlock = false;
+		bool overlayActive = false;
+		int overlayMode = 0;
+		std::size_t overlayStart = 0;
+		std::size_t overlayEnd = 0;
+		std::size_t overlayLine1 = 0;
+		std::size_t overlayLine2 = 0;
+		int overlayCol1 = 0;
+		int overlayCol2Exclusive = 0;
 		std::size_t bytePos = 0;
 		int visual = 0;
 		int x = 0;
@@ -2960,11 +2996,45 @@ class TMRFileEditor : public TScroller {
 		tokens = syntaxTokensForLine(lineStart);
 		selection = bufferModel_.selection().range();
 		lineEnd = bufferModel_.nextLine(lineStart);
+		lineIndex = bufferModel_.lineIndex(lineStart);
 		cursorPos = bufferModel_.cursor();
+		overlayActive = blockOverlayActive_ && blockOverlayMode_ >= 1 && blockOverlayMode_ <= 3;
+		if (overlayActive) {
+			const std::size_t trackedEnd =
+			    blockOverlayTrackingCursor_ ? std::min(bufferModel_.cursor(), documentLength)
+			                                : std::min(blockOverlayEnd_, documentLength);
+			const std::size_t trackedAnchor = std::min(blockOverlayAnchor_, documentLength);
+			overlayMode = blockOverlayMode_;
+			overlayStart = std::min(trackedAnchor, trackedEnd);
+			overlayEnd = std::max(trackedAnchor, trackedEnd);
+			if (overlayMode == 1 || overlayMode == 2) {
+				overlayLine1 = std::min(bufferModel_.lineIndex(trackedAnchor),
+				                        bufferModel_.lineIndex(trackedEnd));
+				overlayLine2 = std::max(bufferModel_.lineIndex(trackedAnchor),
+				                        bufferModel_.lineIndex(trackedEnd));
+			}
+			if (overlayMode == 2) {
+				const std::size_t aLineStart = bufferModel_.lineStart(trackedAnchor);
+				const std::size_t bLineStart = bufferModel_.lineStart(trackedEnd);
+				const int aCol = charColumn(aLineStart, trackedAnchor);
+				const int bCol = charColumn(bLineStart, trackedEnd);
+				overlayCol1 = std::min(aCol, bCol);
+				overlayCol2Exclusive = std::max(aCol, bCol);
+				if (overlayCol2Exclusive <= overlayCol1)
+					overlayCol2Exclusive = overlayCol1 + 1;
+			}
+		}
 		currentLine = (lineStart <= cursorPos && cursorPos < lineEnd) ||
 		              (cursorPos == documentLength && lineStart == cursorPos && lineEnd == cursorPos);
-		currentLineInBlock = currentLine && selection.start < selection.end && selection.start < lineEnd &&
-		                     selection.end > lineStart;
+		if (overlayActive) {
+			if (overlayMode == 3)
+				currentLineInBlock = currentLine && overlayStart < overlayEnd && overlayStart < lineEnd &&
+				                     overlayEnd > lineStart;
+			else
+				currentLineInBlock = currentLine && overlayLine1 <= lineIndex && lineIndex <= overlayLine2;
+		} else
+			currentLineInBlock = currentLine && selection.start < selection.end && selection.start < lineEnd &&
+			                     selection.end > lineStart;
 		if (currentLineInBlock)
 			basePair = getColor(0x0204);
 		else if (currentLine)
@@ -2982,12 +3052,28 @@ class TMRFileEditor : public TScroller {
 				std::size_t documentPos = lineStart + bytePos;
 				TMRSyntaxToken token =
 				    tokenIndex < tokens.size() ? tokens[tokenIndex] : TMRSyntaxToken::Text;
-					bool selected = selection.start <= documentPos && documentPos < selection.end;
-					bool changedChar = !currentLine && !currentLineInBlock && isDirtyOffset(documentPos);
-					TAttrPair effectivePair = changedChar ? changedPair : basePair;
-					TAttrPair tokenPair = selected ? selectionPair : effectivePair;
-					TColorAttr color = tokenColor(token, selected, tokenPair);
-					int visibleWidth = nextVisual - std::max(visual, hScroll);
+				bool selected = false;
+				bool changedChar = false;
+				TAttrPair effectivePair;
+				TAttrPair tokenPair;
+				TColorAttr color;
+				int visibleWidth = 0;
+
+				if (overlayActive) {
+					if (overlayMode == 3)
+						selected = overlayStart <= documentPos && documentPos < overlayEnd;
+					else if (overlayMode == 1)
+						selected = overlayLine1 <= lineIndex && lineIndex <= overlayLine2;
+					else if (overlayMode == 2)
+						selected = overlayLine1 <= lineIndex && lineIndex <= overlayLine2 &&
+						           visual < overlayCol2Exclusive && nextVisual > overlayCol1;
+				} else
+					selected = selection.start <= documentPos && documentPos < selection.end;
+				changedChar = !currentLine && !currentLineInBlock && isDirtyOffset(documentPos);
+				effectivePair = changedChar ? changedPair : basePair;
+				tokenPair = selected ? selectionPair : effectivePair;
+				color = tokenColor(token, selected, tokenPair);
+				visibleWidth = nextVisual - std::max(visual, hScroll);
 
 				if (line[bytePos] == '\t' || visual < hScroll)
 					b.moveChar(static_cast<ushort>(drawX + x), ' ', color, static_cast<ushort>(visibleWidth));
@@ -3095,6 +3181,11 @@ class TMRFileEditor : public TScroller {
 	bool miniMapWarmupReschedulePending_;
 	MiniMapRenderCache miniMapCache_;
 	std::size_t miniMapInitialRenderReportedDocumentId_;
+	bool blockOverlayActive_;
+	int blockOverlayMode_;
+	std::size_t blockOverlayAnchor_;
+	std::size_t blockOverlayEnd_;
+	bool blockOverlayTrackingCursor_;
 	std::vector<TMRTextBufferModel::Range> dirtyRanges_;
 	LoadTiming lastLoadTiming_;
 

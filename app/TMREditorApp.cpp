@@ -741,6 +741,8 @@ TMREditorApp::TMREditorApp()
 	applyConfiguredDisplayLayout();
 	static_cast<void>(mrEnsureLogWindow(false));
 	syncRecordingUiState();
+	if (auto *mrMenuBar = dynamic_cast<TMRMenuBar *>(menuBar))
+		mrMenuBar->setPersistentBlocksMenuState(configuredPersistentBlocksSetting());
 	mrLogMessage("Editor session started.");
 	updateAppCommandState();
 }
@@ -1147,6 +1149,7 @@ void TMREditorApp::idle() {
 		mr::messageline::VisibleMessage message;
 		std::string rightStatus = buildTopRightCursorStatus();
 		mrMenuBar->setRightStatus(rightStatus);
+		mrMenuBar->setPersistentBlocksMenuState(configuredPersistentBlocksSetting());
 		if (mr::messageline::currentVisibleMessage(message)) {
 			TMRMenuBar::MarqueeKind marqueeKind = mapMessageNoticeKind(message.kind);
 			if (isHeroVisibleMessage(message))

@@ -59,9 +59,9 @@ TINFO_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libtinfo.so.6 ]; then echo -l
 LDFLAGS = $(PTHREAD_FLAGS) $(TVISION_LIB) $(NCURSESW_LIB) $(GPM_LIB) $(TINFO_LIB)
 
 TARGET = mr
-STAGE_PROFILE_PROBE_TARGET = misc/mr_stage_profile_probe
-STAGE_PROFILE_PROBE_SOURCE = misc/mr_stage_profile_probe.cpp
-STAGE_PROFILE_PROBE_OBJECT = misc/mr_stage_profile_probe.o
+STAGE_PROFILE_PROBE_TARGET = regression/mr_stage_profile_probe
+STAGE_PROFILE_PROBE_SOURCE = regression/mr_stage_profile_probe.cpp
+STAGE_PROFILE_PROBE_OBJECT = regression/mr_stage_profile_probe.o
 REGRESSION_PROBE_TARGET = regression/mr-regression-checks
 REGRESSION_PROBE_SOURCE = regression/mr-regression-checks.cpp
 REGRESSION_PROBE_OBJECT = regression/mr-regression-checks.o
@@ -283,13 +283,14 @@ clean-tvision:
 rebuild-tvision: clean-tvision $(TVISION_LIB)
 
 # 1. Flex and Bison generation
-mrmac/parser.tab.c mrmac/parser.tab.h: mrmac/parser.y
+mrmac/parser.tab.c mrmac/parser.tab.h &: mrmac/parser.y
 	$(BISON) -d -o mrmac/parser.tab.c mrmac/parser.y
 
 mrmac/lex.yy.c: mrmac/lexer.l mrmac/parser.tab.h
 	$(FLEX) -o mrmac/lex.yy.c mrmac/lexer.l
 
 $(ABOUT_QUOTES_GENERATED): README.md $(ABOUT_QUOTES_GENERATOR)
+	@mkdir -p $(dir $@)
 	bash $(ABOUT_QUOTES_GENERATOR) README.md $@
 
 # 2. Dependencies for C compilation
@@ -299,6 +300,8 @@ mrmac/parser.tab.o: mrmac/parser.tab.c mrmac/parser.tab.h mrmac/mrmac.h
 mrmac/mrmac.o: mrmac/mrmac.c mrmac/parser.tab.h mrmac/mrmac.h
 
 # 3. Dependencies for C++ compilation
+$(CXX_OBJECTS): | $(ABOUT_QUOTES_GENERATED)
+
 mr.o: mr.cpp mrmac/mrvm.hpp app/TMREditorApp.hpp ui/MRPalette.hpp
 app/MRAppState.o: app/MRAppState.cpp app/MRAppState.hpp app/MRCommands.hpp app/commands/MRWindowCommands.hpp ui/TMREditWindow.hpp
 app/MRCommandRouter.o: app/MRCommandRouter.cpp app/MRCommandRouter.hpp app/MRCommands.hpp dialogs/MRAboutDialog.hpp dialogs/MRFileInformationDialog.hpp dialogs/MRMacroFileDialog.hpp dialogs/MRSetupDialogs.hpp dialogs/MRWindowListDialog.hpp mrmac/mrvm.hpp app/commands/MRExternalCommand.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/TMRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp

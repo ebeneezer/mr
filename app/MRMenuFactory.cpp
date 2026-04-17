@@ -9,6 +9,9 @@
 #include "MRCommands.hpp"
 #include "MRMenuFactory.hpp"
 
+#include <string>
+
+#include "../config/MRDialogPaths.hpp"
 #include "../ui/TMRMenuBar.hpp"
 
 namespace {
@@ -77,6 +80,8 @@ TSubMenu *createWindowMenu() {
 }
 
 TSubMenu *createBlockMenu() {
+	std::string persistentLabel =
+	    configuredPersistentBlocksSetting() ? "~P~ersistent blocks [ON]" : "~P~ersistent blocks [OFF]";
 	return &(
 	    *new TSubMenu("~B~lock", kbAltB) +
 	    *new TMenuItem("~C~opy block", cmMrBlockCopy, kbF8, hcNoContext, "F8") +
@@ -97,9 +102,10 @@ TSubMenu *createBlockMenu() {
 	    *new TMenuItem("mark ~S~tream of text", cmMrBlockMarkStream, kbCtrlF7, hcNoContext,
 	                   "CtrlF7") +
 	    *new TMenuItem("~E~nd marking", cmMrBlockEndMarking, kbF7, hcNoContext, "F7") +
-	    *new TMenuItem("~t~urn marking off", cmMrBlockTurnMarkingOff, kbNoKey, hcNoContext) +
+	    *new TMenuItem("~t~urn marking off", cmMrBlockTurnMarkingOff, kbCtrlF9, hcNoContext,
+	                   "CtrlF9") +
 	    newLine() +
-	    *new TMenuItem("~P~ersistent blocks", cmMrBlockPersistent, kbNoKey, hcNoContext));
+	    *new TMenuItem(persistentLabel.c_str(), cmMrBlockPersistent, kbNoKey, hcNoContext));
 }
 
 TSubMenu *createSearchMenu() {

@@ -185,6 +185,15 @@
           ]
         },
         {
+          "id": "d9673699-ede3-4290-b4aa-1d84ab83ec8a",
+          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+          "title": "Code Folding",
+          "description": "Konfigurierbar für jedes FE Profil.",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
           "id": "d9b649ab-4a78-42b4-97eb-8fcaf7ed1943",
           "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
           "title": "Suchen & Ersetzen",
@@ -197,6 +206,15 @@
               "comment": "RegEx\nAlternativ: Shell EInzelier eingebbar (z.B. Perl)"
             }
           ]
+        },
+        {
+          "id": "49430a5d-ab87-421a-9eb6-728ed5339eb9",
+          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+          "title": "Key Mapping",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
         }
       ]
     },
@@ -219,27 +237,9 @@
           "comments": []
         },
         {
-          "id": "d9673699-ede3-4290-b4aa-1d84ab83ec8a",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Code Folding",
-          "description": "Konfigurierbar für jedes FE Profil.",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
-          "id": "1c4f0efa-1820-41e8-9750-7a0d685ce41e",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Minimap",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
           "id": "08c3a6f6-9f77-4c0a-a219-b2a46356ce21",
           "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Block Markierungen",
+          "title": "Block Operationen",
           "description": "",
           "labels": [],
           "checkboxes": [],
@@ -295,6 +295,15 @@
           "id": "df174a30-9a9b-4856-a5fe-21ffbba49c6b",
           "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
           "title": "Paths und File History",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "1c4f0efa-1820-41e8-9750-7a0d685ce41e",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Minimap Grundfunktionen",
           "description": "",
           "labels": [],
           "checkboxes": [],
