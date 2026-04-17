@@ -63,6 +63,15 @@ std::size_t lineEndOf(const std::string &text, std::size_t lineStart) {
 	return lineStart;
 }
 
+// Optimization: skipWhitespace replaces find_first_not_of(" \t").
+// Iterating manually avoids the overhead of std::string::find_first_not_of
+// which performs poorly in hot paths like syntax highlighting.
+static std::size_t skipWhitespace(const std::string &text, std::size_t pos = 0) {
+	while (pos < text.size() && (text[pos] == ' ' || text[pos] == '\t'))
+		++pos;
+	return pos == text.size() ? std::string::npos : pos;
+}
+
 void tokenizeString(TMRSyntaxTokenMap &tokens, const std::string &line, std::size_t &i, char quote,
                     bool doubledQuoteEscape = false) {
 	std::size_t start = i++;
@@ -120,7 +129,7 @@ void tokenizeCFamily(TMRSyntaxTokenMap &tokens, const std::string &line) {
 			tokenizeString(tokens, line, i, quote);
 			continue;
 		}
-		if ((line[i] == '#' && line.find_first_not_of(" \t") == i)) {
+		if ((line[i] == '#' && skipWhitespace(line) == i)) {
 			paint(tokens, i, line.size(), TMRSyntaxToken::Directive);
 			break;
 		}
@@ -221,7 +230,7 @@ void tokenizeMRMAC(TMRSyntaxTokenMap &tokens, const std::string &line) {
 }
 
 void tokenizeMake(TMRSyntaxTokenMap &tokens, const std::string &line) {
-	std::size_t trimmed = line.find_first_not_of(" \t");
+	std::size_t trimmed = skipWhitespace(line);
 	if (trimmed != std::string::npos && line[trimmed] == '#') {
 		paint(tokens, trimmed, line.size(), TMRSyntaxToken::Comment);
 		return;
@@ -296,7 +305,7 @@ void tokenizeJson(TMRSyntaxTokenMap &tokens, const std::string &line) {
 }
 
 void tokenizeIni(TMRSyntaxTokenMap &tokens, const std::string &line) {
-	std::size_t trimmed = line.find_first_not_of(" \t");
+	std::size_t trimmed = skipWhitespace(line);
 	if (trimmed == std::string::npos)
 		return;
 	if (line[trimmed] == ';' || line[trimmed] == '#') {
@@ -340,7 +349,7 @@ void tokenizeIni(TMRSyntaxTokenMap &tokens, const std::string &line) {
 }
 
 void tokenizeMarkdown(TMRSyntaxTokenMap &tokens, const std::string &line) {
-	std::size_t trimmed = line.find_first_not_of(" \t");
+	std::size_t trimmed = skipWhitespace(line);
 	if (trimmed == std::string::npos)
 		return;
 	if (line.compare(trimmed, 3, "```") == 0) {

@@ -1,0 +1,6 @@
+$MACRO test_word_wrap;
+DEF_STR(lineText);
+TEXT("This is a long test string that we hope will get wrapped correctly because it is way longer than 20 characters which we will set as the test margin if possible.");
+HOME;
+WORD_WRAP_LINE;
+END_MACRO;

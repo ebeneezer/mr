@@ -224,10 +224,10 @@ class WindowListDialog : public TDialog {
 		int listTop = 6;
 		int listBottom = height - 4;
 
-		insert(new TButton(TRect(3, 2, 16, 4), "Delete<DEL>", cmMRWindowListDelete, bfNormal));
-		insert(new TButton(TRect(18, 2, 29, 4), "Save<F3>", cmMRWindowListSave, bfNormal));
-		insert(new TButton(TRect(31, 2, 49, 4), "Hide window<F4>", cmMRWindowListHide, bfNormal));
-		insert(new TButton(TRect(51, 2, 66, 4), "Hide all<F5>", cmMRWindowListHideAll, bfNormal));
+		insert(new TButton(TRect(3, 2, 16, 4), "~D~elete<DEL>", cmMRWindowListDelete, bfNormal));
+		insert(new TButton(TRect(18, 2, 29, 4), "~S~ave<F3>", cmMRWindowListSave, bfNormal));
+		insert(new TButton(TRect(31, 2, 49, 4), "Hide ~w~indow<F4>", cmMRWindowListHide, bfNormal));
+		insert(new TButton(TRect(51, 2, 66, 4), "Hide ~a~ll<F5>", cmMRWindowListHideAll, bfNormal));
 		insert(new TStaticText(TRect(2, 5, 18, 6), "Select window:"));
 
 		scrollBar = new TScrollBar(TRect(width - 3, listTop, width - 2, listBottom));
@@ -236,10 +236,10 @@ class WindowListDialog : public TDialog {
 		                              std::vector<std::string>());
 		insert(listView);
 
-		insert(new TButton(TRect(22, height - 3, 35, height - 1), "OK<ENTER>", cmOK, bfDefault));
-		insert(new TButton(TRect(37, height - 3, 51, height - 1), "Cancel<ESC>", cmCancel,
+		insert(new TButton(TRect(22, height - 3, 35, height - 1), "~O~K<ENTER>", cmOK, bfDefault));
+		insert(new TButton(TRect(37, height - 3, 51, height - 1), "~C~ancel<ESC>", cmCancel,
 		                   bfNormal));
-		insert(new TButton(TRect(53, height - 3, 65, height - 1), "Help<F1>", cmHelp, bfNormal));
+		insert(new TButton(TRect(53, height - 3, 65, height - 1), "~H~elp<F1>", cmHelp, bfNormal));
 
 		refreshEntries();
 		focusPreferred();
