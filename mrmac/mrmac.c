@@ -342,7 +342,7 @@ int add_symbol(const char *name, int type) {
 	}
 
 	strncpy(g_symbols[g_symbol_count].name, name, MAX_SYMBOL_NAME);
-	g_symbols[g_symbol_count].name[MAX_SYMBOL_NAME] = '\0';
+	g_symbols[g_symbol_count].name[sizeof(g_symbols[g_symbol_count].name) - 1] = '\0';
 	g_symbols[g_symbol_count].type = type;
 	g_symbol_count++;
 	return 0;
@@ -945,7 +945,7 @@ static int define_label(const char *name, int line) {
 	}
 
 	strncpy(g_labels[g_label_count].name, name, MAX_SYMBOL_NAME);
-	g_labels[g_label_count].name[MAX_SYMBOL_NAME] = '\0';
+	g_labels[g_label_count].name[sizeof(g_labels[g_label_count].name) - 1] = '\0';
 	g_labels[g_label_count].target_pos = (int)emit_get_pos();
 	g_label_count++;
 	return 0;
@@ -964,7 +964,7 @@ static int add_pending_ref(const char *name, size_t patch_pos, int line, Pending
 	}
 
 	strncpy(g_pending_refs[g_pending_ref_count].name, name, MAX_SYMBOL_NAME);
-	g_pending_refs[g_pending_ref_count].name[MAX_SYMBOL_NAME] = '\0';
+	g_pending_refs[g_pending_ref_count].name[sizeof(g_pending_refs[g_pending_ref_count].name) - 1] = '\0';
 	g_pending_refs[g_pending_ref_count].patch_pos = patch_pos;
 	g_pending_refs[g_pending_ref_count].line = line;
 	g_pending_refs[g_pending_ref_count].kind = kind;
