@@ -634,8 +634,6 @@ static const MREditSettingDescriptor kEditSettingDescriptors[] = {
     {"EOF_CR_LF", "Write CR/LF", MREditSettingSection::Save, MREditSettingKind::Boolean, true, kOvEofCrLf},
     {"TAB_EXPAND", "Expand tabs", MREditSettingSection::Tabs, MREditSettingKind::Boolean, true,
      kOvTabExpand},
-    {"DISPLAY_TABS", "Display tabs", MREditSettingSection::Tabs, MREditSettingKind::Boolean, true,
-     kOvDisplayTabs},
     {"TAB_SIZE", "Tab size", MREditSettingSection::Tabs, MREditSettingKind::Integer, true, kOvTabSize},
     {"RIGHT_MARGIN", "Right margin", MREditSettingSection::Formatting, MREditSettingKind::Integer, true,
      kOvRightMargin},
@@ -1847,9 +1845,6 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 	} else if (upperKeyName == "TAB_EXPAND") {
 		if (!parseAndAssignBooleanLiteral(value, current.tabExpand, errorMessage))
 			return false;
-	} else if (upperKeyName == "DISPLAY_TABS") {
-		if (!parseAndAssignBooleanLiteral(value, current.displayTabs, errorMessage))
-			return false;
 	} else if (upperKeyName == "TAB_SIZE") {
 		const int previousTabSize = current.tabSize;
 		const std::string previousFormatLine = current.formatLine;
@@ -2004,8 +1999,6 @@ std::string editSetupValueLiteral(const MREditSetupSettings &settings, const cha
 		return formatEditSetupBoolean(settings.eofCrLf);
 	if (upperKey == "TAB_EXPAND")
 		return formatEditSetupBoolean(settings.tabExpand);
-	if (upperKey == "DISPLAY_TABS")
-		return formatEditSetupBoolean(settings.displayTabs);
 	if (upperKey == "TAB_SIZE")
 		return std::to_string(settings.tabSize);
 	if (upperKey == "RIGHT_MARGIN")
@@ -2774,7 +2767,6 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	normalized.eofCtrlZ = settings.eofCtrlZ;
 	normalized.eofCrLf = settings.eofCrLf;
 	normalized.tabExpand = settings.tabExpand;
-	normalized.displayTabs = settings.displayTabs;
 	normalized.tabSize = settings.tabSize;
 	normalized.rightMargin = settings.rightMargin;
 	normalized.wordWrap = settings.wordWrap;
@@ -3231,10 +3223,6 @@ bool configuredTabExpandSetting() {
 	return configuredEditSetupSettings().tabExpand;
 }
 
-bool configuredDisplayTabsSetting() {
-	return configuredEditSetupSettings().displayTabs;
-}
-
 int configuredTabSizeSetting() {
 	return configuredEditSetupSettings().tabSize;
 }
@@ -3386,9 +3374,6 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source +=
 	    "MRSETUP('TAB_EXPAND', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.tabExpand)) +
 	    "');\n";
-	source +=
-	    "MRSETUP('DISPLAY_TABS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.displayTabs)) +
-	    "');\n";
 	source += "MRSETUP('TAB_SIZE', '" + std::to_string(edit.tabSize) + "');\n";
 	source += "MRSETUP('RIGHT_MARGIN', '" + std::to_string(edit.rightMargin) + "');\n";
 	source += "MRSETUP('WORD_WRAP', '" +
@@ -3459,8 +3444,6 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 					value = formatEditSetupBoolean(profile.overrides.values.eofCrLf);
 				else if (std::string(descriptors[i].key) == "TAB_EXPAND")
 					value = formatEditSetupBoolean(profile.overrides.values.tabExpand);
-				else if (std::string(descriptors[i].key) == "DISPLAY_TABS")
-					value = formatEditSetupBoolean(profile.overrides.values.displayTabs);
 				else if (std::string(descriptors[i].key) == "TAB_SIZE")
 					value = std::to_string(profile.overrides.values.tabSize);
 				else if (std::string(descriptors[i].key) == "RIGHT_MARGIN")
