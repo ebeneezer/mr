@@ -736,6 +736,14 @@ bool testSettingsMacroAutoCreate(std::string &failureReason) {
 		failureReason = "Auto-created settings.mrmac is missing SHELLPATH.";
 		return false;
 	}
+	if (content.find("MRSETUP('WINDOW_MANAGER', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing WINDOW_MANAGER.";
+		return false;
+	}
+	if (content.find("MRSETUP('MENULINE_MESSAGES', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing MENULINE_MESSAGES.";
+		return false;
+	}
 	if (content.find("MRSETUP('PAGE_BREAK', '") == std::string::npos) {
 		failureReason = "Auto-created settings.mrmac is missing PAGE_BREAK.";
 		return false;

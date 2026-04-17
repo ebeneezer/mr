@@ -6487,7 +6487,8 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 								throw std::runtime_error(
 								    "MRSETUP(LASTFILEDIALOGPATH) failed: " +
 								    (errorText.empty() ? std::string("invalid path.") : errorText));
-						} else if (setupKey == "MAX_PATH_HISTORY" || setupKey == "MAX_FILE_HISTORY" ||
+						} else if (setupKey == "WINDOW_MANAGER" || setupKey == "MENULINE_MESSAGES" ||
+						           setupKey == "MAX_PATH_HISTORY" || setupKey == "MAX_FILE_HISTORY" ||
 						           setupKey == "PATH_HISTORY" || setupKey == "FILE_HISTORY") {
 							if (!applyConfiguredSettingsAssignment(setupKey, valueAsString(args[1]), dummyPaths,
 							                                      &errorText))
@@ -6526,7 +6527,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						} else
 							throw std::runtime_error(
 							    "MRSETUP supports keys: SETTINGS_VERSION, MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
-							    "SHELLPATH, LASTFILEDIALOGPATH, MAX_PATH_HISTORY, MAX_FILE_HISTORY, PATH_HISTORY, FILE_HISTORY, "
+							    "SHELLPATH, WINDOW_MANAGER, MENULINE_MESSAGES, LASTFILEDIALOGPATH, MAX_PATH_HISTORY, MAX_FILE_HISTORY, PATH_HISTORY, FILE_HISTORY, "
 							    "DEFAULT_PROFILE_DESCRIPTION, COLORTHEMEURI, PAGE_BREAK, WORD_DELIMITERS, DEFAULT_EXTENSIONS, "
 							    "TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, TAB_SIZE, RIGHT_MARGIN, WORD_WRAP, "
 							    "INDENT_STYLE, FILE_TYPE, BINARY_RECORD_LENGTH, POST_LOAD_MACRO, PRE_SAVE_MACRO, DEFAULT_PATH, "

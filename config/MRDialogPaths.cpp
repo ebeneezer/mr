@@ -31,6 +31,9 @@ constexpr int kHistoryLimitMin = 5;
 constexpr int kHistoryLimitMax = 50;
 constexpr int kHistoryLimitDefault = 15;
 
+static bool g_windowManagerEnabled = true;
+static bool g_menulineMessagesEnabled = true;
+
 std::vector<MRDialogHistoryEntry> &configuredPathHistoryStorage() {
 	static std::vector<MRDialogHistoryEntry> value;
 	return value;
@@ -605,6 +608,8 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"HELPPATH", MRSettingsKeyClass::Path, true},
     {"TEMPDIR", MRSettingsKeyClass::Path, true},
 	{"SHELLPATH", MRSettingsKeyClass::Path, true},
+	{"WINDOW_MANAGER", MRSettingsKeyClass::Global, true},
+	{"MENULINE_MESSAGES", MRSettingsKeyClass::Global, true},
 	{"LASTFILEDIALOGPATH", MRSettingsKeyClass::Global, true},
 	{"MAX_PATH_HISTORY", MRSettingsKeyClass::Global, true},
 	{"MAX_FILE_HISTORY", MRSettingsKeyClass::Global, true},
@@ -2393,6 +2398,18 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 		}
 		case MRSettingsKeyClass::Global: {
 			std::string upper = upperAscii(trimAscii(key));
+			if (upper == "WINDOW_MANAGER") {
+				bool parsed = true;
+				if (!parseBooleanLiteral(value, parsed, errorMessage))
+					return false;
+				return setConfiguredWindowManager(parsed, errorMessage);
+			}
+			if (upper == "MENULINE_MESSAGES") {
+				bool parsed = true;
+				if (!parseBooleanLiteral(value, parsed, errorMessage))
+					return false;
+				return setConfiguredMenulineMessages(parsed, errorMessage);
+			}
 			if (upper == "LASTFILEDIALOGPATH")
 				return setConfiguredLastFileDialogPath(value, errorMessage);
 			if (upper == "MAX_PATH_HISTORY") {
@@ -3298,6 +3315,28 @@ void configuredFileHistoryEntries(std::vector<std::string> &outValues) {
 		outValues.push_back(entry.value);
 }
 
+bool setConfiguredWindowManager(bool enabled, std::string *errorMessage) {
+	g_windowManagerEnabled = enabled;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+bool configuredWindowManager() {
+	return g_windowManagerEnabled;
+}
+
+bool setConfiguredMenulineMessages(bool enabled, std::string *errorMessage) {
+	g_menulineMessagesEnabled = enabled;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+bool configuredMenulineMessages() {
+	return g_menulineMessagesEnabled;
+}
+
 bool setConfiguredLastFileDialogPath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 	std::string directory;
@@ -3350,6 +3389,8 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source += "MRSETUP('HELPPATH', '" + escapeMrmacSingleQuotedLiteral(helpPath) + "');\n";
 	source += "MRSETUP('TEMPDIR', '" + escapeMrmacSingleQuotedLiteral(tempDir) + "');\n";
 	source += "MRSETUP('SHELLPATH', '" + escapeMrmacSingleQuotedLiteral(shellPath) + "');\n";
+	source += "MRSETUP('WINDOW_MANAGER', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredWindowManager())) + "');\n";
+	source += "MRSETUP('MENULINE_MESSAGES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMenulineMessages())) + "');\n";
 	source += "MRSETUP('LASTFILEDIALOGPATH', '" +
 	          escapeMrmacSingleQuotedLiteral(configuredLastFileDialogPath()) + "');\n";
 	source += "MRSETUP('MAX_PATH_HISTORY', '" + std::to_string(configuredMaxPathHistory()) + "');\n";

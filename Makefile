@@ -100,6 +100,7 @@ CXX_SOURCES = \
 	ui/TMRFrame.cpp \
 	ui/TMRMenuBar.cpp \
 	ui/MRMessageLineController.cpp \
+	ui/MRWindowManager.cpp \
 	ui/MRPalette.cpp \
 	ui/MRWindowSupport.cpp \
 	ui/TMRSyntax.cpp \
