@@ -123,6 +123,8 @@ void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDial
 		record.optionsMask |= kOptionShowLineNumbers;
 	if (settings.lineNumZeroFill)
 		record.optionsMask |= kOptionLineNumZeroFill;
+	if (settings.displayTabs)
+		record.optionsMask |= kOptionDisplayTabs;
 
 	record.tabExpandChoice = settings.tabExpand ? kTabExpandTabs : kTabExpandSpaces;
 	record.indentStyleChoice = (indentStyle == "AUTOMATIC") ? kIndentStyleAutomatic
@@ -276,6 +278,7 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.showEofMarker = (record.optionsMask & kOptionShowEofMarker) != 0;
 	settings.showEofMarkerEmoji = (record.optionsMask & kOptionShowEofMarkerEmoji) != 0;
 	settings.lineNumZeroFill = (record.optionsMask & kOptionLineNumZeroFill) != 0;
+	settings.displayTabs = (record.optionsMask & kOptionDisplayTabs) != 0;
 	settings.lineNumbersPosition = (record.lineNumbersPositionChoice == kLineNumbersLeading) ? "LEADING"
 	                         : (record.lineNumbersPositionChoice == kLineNumbersTrailing) ? "TRAILING"
 	                                                                                      : "OFF";
@@ -683,6 +686,8 @@ void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileE
 		record.optionsMask |= kOptionShowLineNumbers;
 	if (settings.lineNumZeroFill)
 		record.optionsMask |= kOptionLineNumZeroFill;
+	if (settings.displayTabs)
+		record.optionsMask |= kOptionDisplayTabs;
 
 	record.tabExpandChoice = settings.tabExpand ? kTabExpandTabs : kTabExpandSpaces;
 	record.indentStyleChoice = (indentStyle == "AUTOMATIC") ? kIndentStyleAutomatic

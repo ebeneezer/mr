@@ -266,7 +266,7 @@ bool runMacroSource(const char *displayName, const char *source) {
 		stagedInput.lastSearchValid = mrvmUiCopyWindowLastSearch(
 		    win, stagedInput.fileName, stagedInput.lastSearchStart, stagedInput.lastSearchEnd,
 		    stagedInput.lastSearchCursor);
-		mrvmUiCopyRuntimeOptions(stagedInput.ignoreCase, stagedInput.tabExpand);
+		mrvmUiCopyRuntimeOptions(stagedInput.ignoreCase, stagedInput.tabExpand, stagedInput.displayTabs);
 		stagedInput.markStack = mrvmUiCopyWindowMarkStack(win);
 		stagedInput.insertMode = editor->insertModeEnabled();
 		stagedInput.indentLevel = win->indentLevel();

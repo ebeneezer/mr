@@ -360,7 +360,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 					mrvmUiReplaceWindowLastSearch(targetWindow, staged->fileName, staged->lastSearchValid,
 					                             staged->lastSearchStart, staged->lastSearchEnd,
 					                             staged->lastSearchCursor);
-					mrvmUiReplaceRuntimeOptions(staged->ignoreCase, staged->tabExpand);
+					mrvmUiReplaceRuntimeOptions(staged->ignoreCase, staged->tabExpand, staged->displayTabs);
 					mrvmUiReplaceWindowMarkStack(targetWindow, staged->markStack);
 					mrvmUiSyncLinkedWindowsFrom(targetWindow);
 					accepted = true;

@@ -134,6 +134,7 @@ struct RuntimeEnvironment {
 	std::string shellVersion;
 	bool ignoreCase;
 	bool tabExpand;
+	bool displayTabs;
 	bool lastSearchValid;
 	const void *lastSearchWindow;
 	std::string lastSearchFileName;
@@ -147,7 +148,7 @@ struct RuntimeEnvironment {
 	    :  globalEnumIndex(0),  returnInt(0),
 	       errorLevel(0),  indexedWarmupCursor(0),
 	       macroEnumIndex(0), 
-	      fileMatchIndex(0),  ignoreCase(false), tabExpand(true), lastSearchValid(false),
+	      fileMatchIndex(0),  ignoreCase(false), tabExpand(true), displayTabs(false), lastSearchValid(false),
 	      lastSearchWindow(nullptr),  lastSearchStart(0), lastSearchEnd(0),
 	      lastSearchCursor(0),  nextWindowLinkGroupId(1) {
 	}
@@ -173,6 +174,7 @@ struct BackgroundEditSession {
 	std::size_t lastSearchCursor;
 	bool ignoreCase;
 	bool tabExpand;
+	bool displayTabs;
 	int blockMode;
 	bool blockMarkingOn;
 	std::size_t blockAnchor;
@@ -207,7 +209,7 @@ struct BackgroundEditSession {
 	BackgroundEditSession()
 	    : document(),  cursorOffset(0), selectionStart(0), selectionEnd(0),
 	      lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0),
-	      ignoreCase(false), tabExpand(true), blockMode(0), blockMarkingOn(false), blockAnchor(0),
+	      ignoreCase(false), tabExpand(true), displayTabs(false), blockMode(0), blockMarkingOn(false), blockAnchor(0),
 	      blockEnd(0), firstSave(false), eofInMemory(false), bufferId(0), temporaryFile(false),
 	       currentWindow(0), linkStatus(0), windowCount(0),
 	      windowGeometryValid(false), windowX1(0), windowY1(0), windowX2(0), windowY2(0),
@@ -574,7 +576,7 @@ static unsigned classifyProcVarName(const std::string &name) {
 static unsigned classifyLoadVarName(const std::string &name) {
 	if (name == "FIRST_MACRO" || name == "NEXT_MACRO")
 		return mrefUiAffinity;
-	if (name == "IGNORE_CASE" || name == "TAB_EXPAND")
+	if (name == "IGNORE_CASE" || name == "TAB_EXPAND" || name == "DISPLAY_TABS")
 		return mrefUiAffinity;
 	if (name == "INSERT_MODE" || name == "INDENT_LEVEL" || name == "GET_LINE" ||
 	    name == "CUR_CHAR" || name == "C_COL" || name == "C_LINE" || name == "C_ROW" ||
@@ -593,8 +595,9 @@ static unsigned classifyLoadVarName(const std::string &name) {
 }
 
 static unsigned classifyStoreVarName(const std::string &name) {
-	if (name == "IGNORE_CASE" || name == "TAB_EXPAND" || name == "INSERT_MODE" ||
-	    name == "INDENT_LEVEL" || name == "FILE_CHANGED" || name == "FILE_NAME")
+	if (name == "IGNORE_CASE" || name == "TAB_EXPAND" || name == "DISPLAY_TABS" ||
+	    name == "INSERT_MODE" || name == "INDENT_LEVEL" || name == "FILE_CHANGED" ||
+	    name == "FILE_NAME")
 		return mrefUiAffinity | mrefStagedWrite;
 	return 0;
 }
@@ -1252,6 +1255,11 @@ static bool currentRuntimeIgnoreCase() noexcept {
 static bool currentRuntimeTabExpand() noexcept {
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	return session != nullptr ? session->tabExpand : g_runtimeEnv.tabExpand;
+}
+
+static bool currentRuntimeDisplayTabs() noexcept {
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	return session != nullptr ? session->displayTabs : g_runtimeEnv.displayTabs;
 }
 
 static Value loadCurrentFileState(const std::string &key) {
@@ -3705,6 +3713,8 @@ static Value loadSpecialVariable(const std::string &name, bool &handled) {
 		return makeInt(currentRuntimeIgnoreCase() ? 1 : 0);
 	if (key == "TAB_EXPAND")
 		return makeInt(currentRuntimeTabExpand() ? 1 : 0);
+	if (key == "DISPLAY_TABS")
+		return makeInt(currentRuntimeDisplayTabs() ? 1 : 0);
 	if (key == "INSERT_MODE")
 		return makeInt(currentEditorInsertMode() ? 1 : 0);
 	if (key == "INDENT_LEVEL")
@@ -3888,6 +3898,14 @@ static bool storeSpecialVariable(const std::string &name, const Value &value) {
 			session->tabExpand = valueAsInt(value) != 0;
 		else
 			g_runtimeEnv.tabExpand = valueAsInt(value) != 0;
+		return true;
+	}
+	if (key == "DISPLAY_TABS") {
+		BackgroundEditSession *session = currentBackgroundEditSession();
+		if (session != nullptr)
+			session->displayTabs = valueAsInt(value) != 0;
+		else
+			g_runtimeEnv.displayTabs = valueAsInt(value) != 0;
 		return true;
 	}
 	if (key == "INSERT_MODE")
@@ -5330,7 +5348,7 @@ bool isSupportedStagedSymbol(const std::string &value) noexcept {
 	    "NEXT_MACRO",  "CREATE_WINDOW",  "DELETE_WINDOW",  "MODIFY_WINDOW",   "LINK_WINDOW",
 	    "UNLINK_WINDOW","ZOOM",          "REDRAW",         "NEW_SCREEN",      "SWITCH_WINDOW",
 	    "SIZE_WINDOW",
-	    "FILE_CHANGED","FILE_NAME",      "IGNORE_CASE",    "TAB_EXPAND"};
+	    "FILE_CHANGED","FILE_NAME",      "IGNORE_CASE",    "TAB_EXPAND",      "DISPLAY_TABS"};
 
 	for (const char *symbol : kAllowed)
 		if (value == symbol)
@@ -5497,6 +5515,7 @@ MRMacroStagedJobResult mrvmRunBytecodeStagedBackground(const unsigned char *byte
 	session.lastSearchCursor = input.lastSearchCursor;
 	session.ignoreCase = input.ignoreCase;
 	session.tabExpand = input.tabExpand;
+	session.displayTabs = input.displayTabs;
 	session.markStack.clear();
 	for (unsigned long i : input.markStack)
 		session.markStack.push_back(static_cast<uint>(i));
@@ -5550,6 +5569,7 @@ MRMacroStagedJobResult mrvmRunBytecodeStagedBackground(const unsigned char *byte
 	result.lastSearchCursor = session.lastSearchCursor;
 	result.ignoreCase = session.ignoreCase;
 	result.tabExpand = session.tabExpand;
+	result.displayTabs = session.displayTabs;
 	result.markStack.reserve(session.markStack.size());
 	for (unsigned int i : session.markStack)
 		result.markStack.push_back(static_cast<std::size_t>(i));
@@ -6188,6 +6208,12 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 									session->tabExpand = configuredTabExpandSetting();
 								else
 									g_runtimeEnv.tabExpand = configuredTabExpandSetting();
+							} else if (setupKey == "DISPLAY_TABS") {
+								BackgroundEditSession *session = currentBackgroundEditSession();
+								if (session != nullptr)
+									session->displayTabs = configuredDisplayTabsSetting();
+								else
+									g_runtimeEnv.displayTabs = configuredDisplayTabsSetting();
 							}
 						} else if (setupKey == "WINDOWCOLORS" || setupKey == "MENUDIALOGCOLORS" ||
 						           setupKey == "HELPCOLORS" || setupKey == "OTHERCOLORS" ||
@@ -6201,7 +6227,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							    "MRSETUP supports keys: SETTINGS_VERSION, MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
 							    "SHELLPATH, LASTFILEDIALOGPATH, MAX_PATH_HISTORY, MAX_FILE_HISTORY, PATH_HISTORY, FILE_HISTORY, "
 							    "DEFAULT_PROFILE_DESCRIPTION, COLORTHEMEURI, PAGE_BREAK, WORD_DELIMITERS, DEFAULT_EXTENSIONS, "
-							    "TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, TAB_SIZE, RIGHT_MARGIN, WORD_WRAP, "
+							    "TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, DISPLAY_TABS, TAB_SIZE, RIGHT_MARGIN, WORD_WRAP, "
 							    "INDENT_STYLE, FILE_TYPE, BINARY_RECORD_LENGTH, POST_LOAD_MACRO, PRE_SAVE_MACRO, DEFAULT_PATH, "
 							    "FORMAT_LINE, BACKUP_METHOD, BACKUP_FREQUENCY, BACKUP_EXTENSION, BACKUP_DIRECTORY, "
 							    "AUTOSAVE_INACTIVITY_SECONDS, AUTOSAVE_INTERVAL_SECONDS, BACKUP_FILES, SHOW_EOF_MARKER, "
@@ -6856,9 +6882,10 @@ void mrvmUiCopyLoadedMacros(std::vector<std::string> &order,
 	}
 }
 
-void mrvmUiCopyRuntimeOptions(bool &ignoreCase, bool &tabExpand) {
+void mrvmUiCopyRuntimeOptions(bool &ignoreCase, bool &tabExpand, bool &displayTabs) {
 	ignoreCase = g_runtimeEnv.ignoreCase;
 	tabExpand = g_runtimeEnv.tabExpand;
+	displayTabs = g_runtimeEnv.displayTabs;
 }
 
 int mrvmUiCurrentWindowIndex(const void *windowKey) {
@@ -7023,9 +7050,10 @@ void mrvmUiReplaceGlobals(const std::vector<std::string> &order,
 	}
 }
 
-void mrvmUiReplaceRuntimeOptions(bool ignoreCase, bool tabExpand) {
+void mrvmUiReplaceRuntimeOptions(bool ignoreCase, bool tabExpand, bool displayTabs) {
 	g_runtimeEnv.ignoreCase = ignoreCase;
 	g_runtimeEnv.tabExpand = tabExpand;
+	g_runtimeEnv.displayTabs = displayTabs;
 }
 
 void mrvmUiSyncLinkedWindowsFrom(TMREditWindow *window) {

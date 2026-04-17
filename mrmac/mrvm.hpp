@@ -191,6 +191,7 @@ struct MRMacroStagedExecutionInput {
 	std::size_t lastSearchCursor;
 	bool ignoreCase;
 	bool tabExpand;
+	bool displayTabs;
 	std::vector<std::size_t> markStack;
 	bool insertMode;
 	int indentLevel;
@@ -206,7 +207,7 @@ struct MRMacroStagedExecutionInput {
 	      windowX1(0), windowY1(0), windowX2(0), windowY2(0), globalOrder(),
 	      globalInts(), globalStrings(), macroOrder(), macroDisplayNames(),
 	      lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0),
-	      ignoreCase(false), tabExpand(true), markStack(), insertMode(true), indentLevel(1),
+	      ignoreCase(false), tabExpand(true), displayTabs(false), markStack(), insertMode(true), indentLevel(1),
 	      pageLines(20), fileName(), fileChanged(false) {
 	}
 };
@@ -235,6 +236,7 @@ struct MRMacroStagedJobResult {
 	std::size_t lastSearchCursor;
 	bool ignoreCase;
 	bool tabExpand;
+	bool displayTabs;
 	std::vector<std::size_t> markStack;
 	bool insertMode;
 	int indentLevel;
@@ -247,7 +249,7 @@ struct MRMacroStagedJobResult {
 	      globalOrder(), globalInts(), globalStrings(), macroOrder(), macroDisplayNames(),
 	      deferredUiCommands(),
 	      lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0),
-	      ignoreCase(false), tabExpand(true), markStack(), insertMode(true), indentLevel(1),
+	      ignoreCase(false), tabExpand(true), displayTabs(false), markStack(), insertMode(true), indentLevel(1),
 	      fileName(), fileChanged(false) {
 	}
 };
@@ -271,8 +273,8 @@ void mrvmUiCopyLoadedMacros(std::vector<std::string> &order,
 void mrvmUiReplaceGlobals(const std::vector<std::string> &order,
                           const std::map<std::string, int> &ints,
                           const std::map<std::string, std::string> &strings);
-void mrvmUiCopyRuntimeOptions(bool &ignoreCase, bool &tabExpand);
-void mrvmUiReplaceRuntimeOptions(bool ignoreCase, bool tabExpand);
+void mrvmUiCopyRuntimeOptions(bool &ignoreCase, bool &tabExpand, bool &displayTabs);
+void mrvmUiReplaceRuntimeOptions(bool ignoreCase, bool tabExpand, bool displayTabs);
 void mrvmUiSyncLinkedWindowsFrom(TMREditWindow *window);
 int mrvmUiCurrentWindowIndex(const void *windowKey);
 int mrvmUiWindowCount();
