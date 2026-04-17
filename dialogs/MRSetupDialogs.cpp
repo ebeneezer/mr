@@ -1685,12 +1685,6 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		    new TSItem("~W~indow Manager",
 		    new TSItem("~M~enuline messages", nullptr)));
 
-		ushort cbData = 0;
-		if (initialWindowManager)
-			cbData |= 1;
-		if (initialMenulineMessages)
-			cbData |= 2;
-		cb->setData(&cbData);
 		addManaged(cb, cb->getBounds());
 
 		int buttonRow = 6;
@@ -1713,13 +1707,15 @@ static void runUserInterfaceSettingsDialogFlow() {
 		bool currentMm = configuredMenulineMessages();
 
 		TUserInterfaceSettingsDialog *dialog = new TUserInterfaceSettingsDialog(currentWm, currentMm);
-		ushort result = execDialog(dialog);
+		ushort cbData = 0;
+		if (currentWm)
+			cbData |= 1;
+		if (currentMm)
+			cbData |= 2;
+
+		ushort result = execDialogWithDataCapture(dialog, &cbData);
 
 		if (result == cmOK) {
-			ushort cbData = 0;
-			if (dialog != nullptr) {
-				dialog->getData(&cbData);
-			}
 
 			bool newWm = (cbData & 1) != 0;
 			bool newMm = (cbData & 2) != 0;
