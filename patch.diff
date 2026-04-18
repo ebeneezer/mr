@@ -1,0 +1,318 @@
+--- dialogs/MRFileExtensionEditorSettingsPanelInternal.hpp
++++ dialogs/MRFileExtensionEditorSettingsPanelInternal.hpp
+@@ -28,6 +28,7 @@
+	kDefaultExtsFieldSize = 256,
+	kTabSizeFieldSize = 8,
+	kRightMarginFieldSize = 8,
++	kPrintMarginFieldSize = 8,
+	kBinaryRecordLengthFieldSize = 8,
+	kMacroFieldSize = 256,
+	kDefaultPathFieldSize = 256,
+@@ -117,6 +118,7 @@
+	char defaultExtensions[kDefaultExtsFieldSize];
+	char tabSize[kTabSizeFieldSize];
+	char rightMargin[kRightMarginFieldSize];
++	char printMargin[kPrintMarginFieldSize];
+	char binaryRecordLength[kBinaryRecordLengthFieldSize];
+	char postLoadMacro[kMacroFieldSize];
+	char preSaveMacro[kMacroFieldSize];
+@@ -178,6 +180,7 @@
+	TInputLine *defaultExtensionsField = nullptr;
+	MRNumericSlider *tabSizeSlider = nullptr;
+	TInputLine *rightMarginField = nullptr;
++	TInputLine *printMarginField = nullptr;
+	TInputLine *binaryRecordLengthField = nullptr;
+	ushort preservedOptionsMask = 0;
+		TInputLine *postLoadMacroField = nullptr;
+--- config/MRDialogPaths.hpp
++++ config/MRDialogPaths.hpp
+@@ -25,6 +25,7 @@
+	bool tabExpand;
+	int tabSize;
+	int rightMargin;
++	int printMargin;
+	bool wordWrap;
+	std::string indentStyle;
+	std::string fileType;
+@@ -58,7 +59,7 @@
+
+	MREditSetupSettings() noexcept
+	    : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false),
+-	      eofCrLf(false), tabExpand(true), tabSize(8), rightMargin(78), wordWrap(true), indentStyle(),
++	      eofCrLf(false), tabExpand(true), tabSize(8), rightMargin(78), printMargin(78), wordWrap(true), indentStyle(),
+	      fileType(), binaryRecordLength(100), postLoadMacro(), preSaveMacro(), defaultPath(), formatLine(),
+	      backupMethod("BAK_FILE"), backupFrequency("FIRST_SAVE_ONLY"), backupExtension("bak"), backupDirectory(),
+	      autosaveInactivitySeconds(15), autosaveIntervalSeconds(180), backupFiles(true), showEofMarker(false),
+@@ -132,6 +133,7 @@
+	kOvLineNumbersPosition = 1ull << 36,
+	kOvCodeFoldingPosition = 1ull << 37,
+	kOvGutters = 1ull << 38,
++	kOvPrintMargin = 1ull << 39,
+ };
+
+ struct MREditSettingDescriptor {
+--- config/MRDialogPaths.cpp
++++ config/MRDialogPaths.cpp
+@@ -637,6 +637,8 @@
+     {"TAB_SIZE", "Tab size", MREditSettingSection::Tabs, MREditSettingKind::Integer, true, kOvTabSize},
+     {"RIGHT_MARGIN", "Right margin", MREditSettingSection::Formatting, MREditSettingKind::Integer, true,
+      kOvRightMargin},
++    {"PRINT_MARGIN", "Print margin", MREditSettingSection::Formatting, MREditSettingKind::Integer, true,
++     kOvPrintMargin},
+     {"WORD_WRAP", "Word wrap", MREditSettingSection::Formatting, MREditSettingKind::Boolean, true,
+      kOvWordWrap},
+     {"INDENT_STYLE", "Indent style", MREditSettingSection::Formatting, MREditSettingKind::Choice, true,
+@@ -899,6 +901,22 @@
+	outValue = static_cast<unsigned char>(parsed);
+	return true;
+ }
++
++bool parsePrintMarginLiteral(const std::string &value, int &outValue, std::string *errorMessage) {
++	std::string text = trimAscii(value);
++	char *end = nullptr;
++	long parsed = 0;
++
++	if (text.empty())
++		return setError(errorMessage, "PRINT_MARGIN must be an integer between 1 and 999.");
++	parsed = std::strtol(text.c_str(), &end, 10);
++	if (end == text.c_str() || end == nullptr || *end != '\0')
++		return setError(errorMessage, "PRINT_MARGIN must be an integer between 1 and 999.");
++	if (parsed < kMinRightMargin || parsed > kMaxRightMargin)
++		return setError(errorMessage, "PRINT_MARGIN must be an integer between 1 and 999.");
++	outValue = static_cast<int>(parsed);
++	return true;
++}
+
+ template <std::size_t N>
+ std::string formatColorListLiteral(const std::array<unsigned char, N> &values) {
+@@ -1860,6 +1878,11 @@
+		if (!parseRightMarginLiteral(value, rightMargin, errorMessage))
+			return false;
+		current.rightMargin = rightMargin;
++	} else if (upperKeyName == "PRINT_MARGIN") {
++		int printMargin = 0;
++		if (!parsePrintMarginLiteral(value, printMargin, errorMessage))
++			return false;
++		current.printMargin = printMargin;
+	} else if (upperKeyName == "WORD_WRAP") {
+		if (!parseAndAssignBooleanLiteral(value, current.wordWrap, errorMessage))
+			return false;
+@@ -2003,6 +2026,8 @@
+		return std::to_string(settings.tabSize);
+	if (upperKey == "RIGHT_MARGIN")
+		return std::to_string(settings.rightMargin);
++	if (upperKey == "PRINT_MARGIN")
++		return std::to_string(settings.printMargin);
+	if (upperKey == "WORD_WRAP")
+		return formatEditSetupBoolean(settings.wordWrap);
+	if (upperKey == "INDENT_STYLE")
+@@ -2243,6 +2268,7 @@
+	defaults.tabExpand = true;
+	defaults.tabSize = kDefaultTabSize;
+	defaults.rightMargin = kDefaultRightMargin;
++	defaults.printMargin = kDefaultRightMargin;
+	defaults.wordWrap = true;
+	defaults.indentStyle = kIndentStyleOff;
+	defaults.fileType = kFileTypeUnix;
+@@ -2472,6 +2498,8 @@
+		merged.tabSize = overrides.values.tabSize;
+	if ((overrides.mask & kOvRightMargin) != 0)
+		merged.rightMargin = overrides.values.rightMargin;
++	if ((overrides.mask & kOvPrintMargin) != 0)
++		merged.printMargin = overrides.values.printMargin;
+	if ((overrides.mask & kOvWordWrap) != 0)
+		merged.wordWrap = overrides.values.wordWrap;
+	if ((overrides.mask & kOvIndentStyle) != 0)
+@@ -2769,6 +2797,7 @@
+	normalized.tabExpand = settings.tabExpand;
+	normalized.tabSize = settings.tabSize;
+	normalized.rightMargin = settings.rightMargin;
++	normalized.printMargin = settings.printMargin;
+	normalized.wordWrap = settings.wordWrap;
+	normalized.indentStyle = indentStyle;
+	normalized.fileType = fileType;
+@@ -3376,6 +3405,7 @@
+	    "');\n";
+	source += "MRSETUP('TAB_SIZE', '" + std::to_string(edit.tabSize) + "');\n";
+	source += "MRSETUP('RIGHT_MARGIN', '" + std::to_string(edit.rightMargin) + "');\n";
++	source += "MRSETUP('PRINT_MARGIN', '" + std::to_string(edit.printMargin) + "');\n";
+	source += "MRSETUP('WORD_WRAP', '" +
+	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.wordWrap)) + "');\n";
+	source += "MRSETUP('INDENT_STYLE', '" + escapeMrmacSingleQuotedLiteral(edit.indentStyle) + "');\n";
+@@ -3448,6 +3478,8 @@
+					value = std::to_string(profile.overrides.values.tabSize);
+				else if (std::string(descriptors[i].key) == "RIGHT_MARGIN")
+					value = std::to_string(profile.overrides.values.rightMargin);
++				else if (std::string(descriptors[i].key) == "PRINT_MARGIN")
++					value = std::to_string(profile.overrides.values.printMargin);
+				else if (std::string(descriptors[i].key) == "WORD_WRAP")
+					value = formatEditSetupBoolean(profile.overrides.values.wordWrap);
+				else if (std::string(descriptors[i].key) == "INDENT_STYLE")
+--- dialogs/MRFileExtensionProfilesSupport.cpp
++++ dialogs/MRFileExtensionProfilesSupport.cpp
+@@ -91,6 +91,7 @@
+	                 settings.defaultExtensions);
+	writeRecordField(record.tabSize, sizeof(record.tabSize), std::to_string(settings.tabSize));
+	writeRecordField(record.rightMargin, sizeof(record.rightMargin), std::to_string(settings.rightMargin));
++	writeRecordField(record.printMargin, sizeof(record.printMargin), std::to_string(settings.printMargin));
+	writeRecordField(record.binaryRecordLength, sizeof(record.binaryRecordLength),
+	                 std::to_string(settings.binaryRecordLength));
+	writeRecordField(record.postLoadMacro, sizeof(record.postLoadMacro), settings.postLoadMacro);
+@@ -188,6 +189,23 @@
+		}
+		settings.rightMargin = static_cast<int>(rightMargin);
+	}
++
++	{
++		std::string printMarginText = readRecordField(record.printMargin);
++		char *end = nullptr;
++		long printMargin = 0;
++		if (printMarginText.empty()) {
++			errorText = "PRINT_MARGIN must be between 1 and 999.";
++			return false;
++		}
++		printMargin = std::strtol(printMarginText.c_str(), &end, 10);
++		if (end == printMarginText.c_str() || end == nullptr || *end != '\0' || printMargin < 1 ||
++		    printMargin > 999) {
++			errorText = "PRINT_MARGIN must be an integer between 1 and 999.";
++			return false;
++		}
++		settings.printMargin = static_cast<int>(printMargin);
++	}
+
+	if (record.fileTypeChoice == kFileTypeBinary) {
+		std::string binaryRecordLengthText = readRecordField(record.binaryRecordLength);
+@@ -410,7 +428,27 @@
+
+ [[nodiscard]] bool validateDraftRecordFields(const EditProfileDraft &draft, std::string &errorText) {
+	MRFileExtensionEditorSettings ignored;
+-	return fileExtensionEditorSettingsDialogRecordToSettings(draft.settingsRecord, ignored, errorText);
++	if (!fileExtensionEditorSettingsDialogRecordToSettings(draft.settingsRecord, ignored, errorText))
++		return false;
++
++	std::string formatLine = readRecordField(draft.settingsRecord.formatLine);
++	if (!formatLine.empty()) {
++		int rCount = 0;
++		for (char ch : formatLine) {
++			if (ch == 'R') {
++				rCount++;
++			} else if (ch != '-' && ch != '|') {
++				errorText = "FORMAT_LINE contains invalid characters. Allowed: '-', '|' and one 'R'.";
++				return false;
++			}
++		}
++		if (rCount > 1) {
++			errorText = "FORMAT_LINE contains invalid characters. Allowed: '-', '|' and one 'R'.";
++			return false;
++		}
++	}
++
++	return true;
+ }
+
+ [[nodiscard]] bool validateDraftLocally(const EditProfileDraft &draft, std::string &errorText) {
+@@ -450,6 +488,8 @@
+		mask |= kOvTabSize;
+	if (effective.rightMargin != defaults.rightMargin)
+		mask |= kOvRightMargin;
++	if (effective.printMargin != defaults.printMargin)
++		mask |= kOvPrintMargin;
+	if (effective.wordWrap != defaults.wordWrap)
+		mask |= kOvWordWrap;
+	if (upperAscii(effective.indentStyle) != upperAscii(defaults.indentStyle))
+@@ -652,6 +692,7 @@
+	writeRecordField(record.defaultExtensions, sizeof(record.defaultExtensions), settings.defaultExtensions);
+	writeRecordField(record.tabSize, sizeof(record.tabSize), std::to_string(settings.tabSize));
+	writeRecordField(record.rightMargin, sizeof(record.rightMargin), std::to_string(settings.rightMargin));
++	writeRecordField(record.printMargin, sizeof(record.printMargin), std::to_string(settings.printMargin));
+	writeRecordField(record.binaryRecordLength, sizeof(record.binaryRecordLength), std::to_string(settings.binaryRecordLength));
+	writeRecordField(record.postLoadMacro, sizeof(record.postLoadMacro), settings.postLoadMacro);
+	writeRecordField(record.preSaveMacro, sizeof(record.preSaveMacro), settings.preSaveMacro);
+--- dialogs/MRFileExtensionEditorSettingsPanel.cpp
++++ dialogs/MRFileExtensionEditorSettingsPanel.cpp
+@@ -285,6 +285,8 @@
+	const int binaryLabelLeft = rightMarginFieldRight + 2;
+	const int binaryFieldLeft = binaryLabelLeft + 23;
+	const int binaryFieldRight = binaryFieldLeft + 5;
++	const int printMarginFieldLeft = g.inputRight - (kPrintMarginFieldSize - 1);
++	const int printMarginLabelLeft = printMarginFieldLeft - 14;
+
+	addPanelLabel(dialog, TRect(g.labelLeft + 1, g.pageBreakY, g.inputLeft - 2, g.pageBreakY + 1),
+	              "Page break:");
+@@ -292,6 +294,12 @@
+	                               TRect(g.inputLeft, g.pageBreakY, pageBreakRight, g.pageBreakY + 1),
+	                               kPageBreakFieldSize - 1);
+
++	addPanelLabel(dialog, TRect(printMarginLabelLeft, g.pageBreakY, printMarginFieldLeft - 1, g.pageBreakY + 1),
++	              "Print Margin:");
++	printMarginField = addPanelInput(dialog,
++	                                 TRect(printMarginFieldLeft, g.pageBreakY, g.inputRight, g.pageBreakY + 1),
++	                                 kPrintMarginFieldSize - 1);
++
+	addPanelLabel(dialog, TRect(g.labelLeft + 1, g.wordDelimitersY, g.inputLeft - 2, g.wordDelimitersY + 1),
+	              "Word delim:");
+	wordDelimitersField = addPanelInput(dialog,
+@@ -564,6 +572,7 @@
+
+ void FileExtensionEditorSettingsPanel::loadFieldsFromRecord(const FileExtensionEditorSettingsDialogRecord &record) {
+	setInputLineValue(pageBreakField, record.pageBreak, sizeof(record.pageBreak));
++	setInputLineValue(printMarginField, record.printMargin, sizeof(record.printMargin));
+	setInputLineValue(wordDelimitersField, record.wordDelimiters, sizeof(record.wordDelimiters));
+	if (defaultExtensionsField != nullptr)
+		setInputLineValue(defaultExtensionsField, record.defaultExtensions, sizeof(record.defaultExtensions));
+@@ -613,6 +622,8 @@
+	writeSliderValue(tabSizeSlider, record.tabSize, sizeof(record.tabSize), kDefaultTabSize);
+	writeIntegerInputValue(rightMarginField, record.rightMargin, sizeof(record.rightMargin), kDefaultRightMargin,
+	                      kMinimumRightMargin, kMaximumRightMargin);
++	writeIntegerInputValue(printMarginField, record.printMargin, sizeof(record.printMargin), kDefaultRightMargin,
++	                      kMinimumRightMargin, kMaximumRightMargin);
+	writeIntegerInputValue(binaryRecordLengthField, record.binaryRecordLength, sizeof(record.binaryRecordLength),
+	                      kDefaultBinaryRecordLength, kMinimumBinaryRecordLength, kMaximumBinaryRecordLength);
+	readInputLineValue(postLoadMacroField, record.postLoadMacro, sizeof(record.postLoadMacro));
+--- mrmac/mrvm.cpp
++++ mrmac/mrvm.cpp
+@@ -579,6 +579,8 @@
+		return mrefUiAffinity;
+	if (name == "IGNORE_CASE" || name == "TAB_EXPAND")
+		return mrefUiAffinity;
++	if (name == "FORMAT_LINE" || name == "WORD_DELIMITS" || name == "PRINT_MARGIN" || name == "PAGE_STRING")
++		return mrefUiAffinity;
+	if (name == "INSERT_MODE" || name == "INDENT_LEVEL" || name == "GET_LINE" ||
+	    name == "CUR_CHAR" || name == "C_COL" || name == "C_LINE" || name == "C_ROW" ||
+	    name == "C_PAGE" || name == "PG_LINE" || name == "AT_EOF" || name == "AT_EOL" ||
+@@ -4023,6 +4025,18 @@
+ static Value loadSpecialVariable(const std::string &name, bool &handled) {
+	std::string key = upperKey(name);
+	handled = true;
++	if (key == "FORMAT_LINE" || key == "WORD_DELIMITS" || key == "PRINT_MARGIN" || key == "PAGE_STRING") {
++		MREditSetupSettings settings;
++		effectiveEditSetupSettingsForPath(valueAsString(loadCurrentFileState("FILE_NAME")), settings);
++		if (key == "FORMAT_LINE")
++			return makeString(settings.formatLine);
++		if (key == "WORD_DELIMITS")
++			return makeString(settings.wordDelimiters);
++		if (key == "PRINT_MARGIN")
++			return makeInt(settings.printMargin);
++		if (key == "PAGE_STRING")
++			return makeString(settings.pageBreak);
++	}
+	if (key == "RETURN_INT")
+		return makeInt(runtimeReturnInt());
+	if (key == "RETURN_STR")
+@@ -4251,6 +4265,7 @@
+	    key == "LAST_FILE_NAME" || key == "GET_LINE" || key == "CUR_CHAR" || key == "C_COL" ||
+	    key == "C_LINE" || key == "C_ROW" || key == "C_PAGE" || key == "PG_LINE" ||
+	    key == "AT_EOF" || key == "AT_EOL" ||
++	    key == "FORMAT_LINE" || key == "WORD_DELIMITS" || key == "PRINT_MARGIN" || key == "PAGE_STRING" ||
+	    key == "CUR_WINDOW" || key == "LINK_STAT" || key == "WIN_X1" || key == "WIN_Y1" || key == "WIN_X2" ||
+	    key == "WIN_Y2" || key == "WINDOW_COUNT" || key == "BLOCK_STAT" ||
+	    key == "BLOCK_LINE1" || key == "BLOCK_LINE2" || key == "BLOCK_COL1" ||
+@@ -6531,7 +6546,7 @@
+							    "MRSETUP supports keys: SETTINGS_VERSION, MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
+							    "SHELLPATH, LASTFILEDIALOGPATH, MAX_PATH_HISTORY, MAX_FILE_HISTORY, PATH_HISTORY, FILE_HISTORY, "
+							    "DEFAULT_PROFILE_DESCRIPTION, COLORTHEMEURI, PAGE_BREAK, WORD_DELIMITERS, DEFAULT_EXTENSIONS, "
+-							    "TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, TAB_SIZE, RIGHT_MARGIN, WORD_WRAP, "
++								    "TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, TAB_SIZE, RIGHT_MARGIN, PRINT_MARGIN, WORD_WRAP, "
+							    "INDENT_STYLE, FILE_TYPE, BINARY_RECORD_LENGTH, POST_LOAD_MACRO, PRE_SAVE_MACRO, DEFAULT_PATH, "
+							    "FORMAT_LINE, BACKUP_METHOD, BACKUP_FREQUENCY, BACKUP_EXTENSION, BACKUP_DIRECTORY, "
+							    "AUTOSAVE_INACTIVITY_SECONDS, AUTOSAVE_INTERVAL_SECONDS, BACKUP_FILES, SHOW_EOF_MARKER, "

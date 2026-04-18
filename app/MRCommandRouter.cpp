@@ -463,36 +463,30 @@ bool promptBlockSavePath(std::string &outPath) {
 	return !outPath.empty();
 }
 
-bool chooseInterWindowBlockTarget(int &sourceWindowIndex) {
-	TMREditWindow *targetWin = currentEditWindow();
-	TMREditWindow *sourceWin = nullptr;
-
-	sourceWindowIndex = -1;
-	if (targetWin == nullptr)
-		return false;
-	sourceWin = mrShowWindowListDialog(mrwlActivateWindow, targetWin);
-	if (sourceWin == nullptr)
-		return false;
-
-	if (!hasMarkedTextForBlockOperation(sourceWin)) {
-		messageBox(mfWarning | mfOKButton, "No block marked in the selected source window.");
-		return false;
-	}
-	sourceWindowIndex = indexOfEditWindow(sourceWin);
-	mrActivateEditWindow(targetWin);
-	return true;
-}
-
 bool chooseInterWindowBlockWindows(TMREditWindow *&sourceWin, TMREditWindow *&targetWin) {
-	int sourceWindowIndex = -1;
-	if (!chooseInterWindowBlockTarget(sourceWindowIndex)) {
-		sourceWin = nullptr;
-		targetWin = nullptr;
+	TMREditWindow *currentWin = currentEditWindow();
+	TMREditWindow *selectedWin = nullptr;
+
+	sourceWin = nullptr;
+	targetWin = nullptr;
+	if (currentWin == nullptr)
+		return false;
+	selectedWin = mrShowWindowListDialog(mrwlSelectLinkTarget, currentWin);
+	if (selectedWin == nullptr)
+		return false;
+	if (selectedWin == currentWin) {
+		messageBox(mfInformation | mfOKButton, "Choose another window for inter-window block operation.");
 		return false;
 	}
-	sourceWin = editWindowByIndex(sourceWindowIndex);
-	targetWin = currentEditWindow();
-	return sourceWin != nullptr && targetWin != nullptr;
+
+	sourceWin = selectedWin;
+	targetWin = currentWin;
+	if (!hasMarkedTextForBlockOperation(sourceWin)) {
+		postNoMarkedTextForBlockOperationWarning();
+		return false;
+	}
+	static_cast<void>(mrActivateEditWindow(targetWin));
+	return true;
 }
 
 bool togglePersistentBlocksSetting() {

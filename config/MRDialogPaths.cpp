@@ -637,6 +637,8 @@ static const MREditSettingDescriptor kEditSettingDescriptors[] = {
     {"TAB_SIZE", "Tab size", MREditSettingSection::Tabs, MREditSettingKind::Integer, true, kOvTabSize},
     {"RIGHT_MARGIN", "Right margin", MREditSettingSection::Formatting, MREditSettingKind::Integer, true,
      kOvRightMargin},
+    {"PRINT_MARGIN", "Print margin", MREditSettingSection::Formatting, MREditSettingKind::Integer, true,
+     kOvPrintMargin},
     {"WORD_WRAP", "Word wrap", MREditSettingSection::Formatting, MREditSettingKind::Boolean, true,
      kOvWordWrap},
     {"INDENT_STYLE", "Indent style", MREditSettingSection::Formatting, MREditSettingKind::Choice, true,
@@ -900,6 +902,7 @@ bool parseHexColorToken(const std::string &token, unsigned char &outValue) {
 	return true;
 }
 
+
 template <std::size_t N>
 std::string formatColorListLiteral(const std::array<unsigned char, N> &values) {
 	static const char *const hex = "0123456789ABCDEF";
@@ -961,6 +964,8 @@ bool parseColorListLiteral(const std::string &literal, std::array<unsigned char,
 		errorMessage->clear();
 	return true;
 }
+
+
 
 bool parseWindowColorListLiteral(const std::string &literal,
                                  std::array<unsigned char, MRColorSetupSettings::kWindowCount> &outValues,
@@ -1860,6 +1865,12 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 		if (!parseRightMarginLiteral(value, rightMargin, errorMessage))
 			return false;
 		current.rightMargin = rightMargin;
+	} else if (upperKeyName == "PRINT_MARGIN") {
+		int printMargin = 0;
+		if (!parseRightMarginLiteral(value, printMargin, errorMessage)) {
+			return setError(errorMessage, "PRINT_MARGIN must be an integer between 1 and 999.");
+		}
+		current.printMargin = printMargin;
 	} else if (upperKeyName == "WORD_WRAP") {
 		if (!parseAndAssignBooleanLiteral(value, current.wordWrap, errorMessage))
 			return false;
@@ -2003,6 +2014,8 @@ std::string editSetupValueLiteral(const MREditSetupSettings &settings, const cha
 		return std::to_string(settings.tabSize);
 	if (upperKey == "RIGHT_MARGIN")
 		return std::to_string(settings.rightMargin);
+	if (upperKey == "PRINT_MARGIN")
+		return std::to_string(settings.printMargin);
 	if (upperKey == "WORD_WRAP")
 		return formatEditSetupBoolean(settings.wordWrap);
 	if (upperKey == "INDENT_STYLE")
@@ -2234,6 +2247,7 @@ MREditSetupSettings resolveEditSetupDefaults() {
 	defaults.tabExpand = true;
 	defaults.tabSize = kDefaultTabSize;
 	defaults.rightMargin = kDefaultRightMargin;
+	defaults.printMargin = kDefaultRightMargin;
 	defaults.wordWrap = true;
 	defaults.indentStyle = kIndentStyleOff;
 	defaults.fileType = kFileTypeUnix;
@@ -2472,6 +2486,8 @@ MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults,
 		merged.tabSize = overrides.values.tabSize;
 	if ((overrides.mask & kOvRightMargin) != 0)
 		merged.rightMargin = overrides.values.rightMargin;
+	if ((overrides.mask & kOvPrintMargin) != 0)
+		merged.printMargin = overrides.values.printMargin;
 	if ((overrides.mask & kOvWordWrap) != 0)
 		merged.wordWrap = overrides.values.wordWrap;
 	if ((overrides.mask & kOvIndentStyle) != 0)
@@ -2769,6 +2785,9 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	normalized.tabExpand = settings.tabExpand;
 	normalized.tabSize = settings.tabSize;
 	normalized.rightMargin = settings.rightMargin;
+	if (settings.printMargin < kMinRightMargin || settings.printMargin > kMaxRightMargin)
+		return setError(errorMessage, "PRINT_MARGIN must be an integer between 1 and 999.");
+	normalized.printMargin = settings.printMargin;
 	normalized.wordWrap = settings.wordWrap;
 	normalized.indentStyle = indentStyle;
 	normalized.fileType = fileType;
@@ -3376,6 +3395,7 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	    "');\n";
 	source += "MRSETUP('TAB_SIZE', '" + std::to_string(edit.tabSize) + "');\n";
 	source += "MRSETUP('RIGHT_MARGIN', '" + std::to_string(edit.rightMargin) + "');\n";
+	source += "MRSETUP('PRINT_MARGIN', '" + std::to_string(edit.printMargin) + "');\n";
 	source += "MRSETUP('WORD_WRAP', '" +
 	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.wordWrap)) + "');\n";
 	source += "MRSETUP('INDENT_STYLE', '" + escapeMrmacSingleQuotedLiteral(edit.indentStyle) + "');\n";
@@ -3448,6 +3468,8 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 					value = std::to_string(profile.overrides.values.tabSize);
 				else if (std::string(descriptors[i].key) == "RIGHT_MARGIN")
 					value = std::to_string(profile.overrides.values.rightMargin);
+				else if (std::string(descriptors[i].key) == "PRINT_MARGIN")
+					value = std::to_string(profile.overrides.values.printMargin);
 				else if (std::string(descriptors[i].key) == "WORD_WRAP")
 					value = formatEditSetupBoolean(profile.overrides.values.wordWrap);
 				else if (std::string(descriptors[i].key) == "INDENT_STYLE")

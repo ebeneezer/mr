@@ -4023,6 +4023,18 @@ static std::string formatCurrentTime() {
 static Value loadSpecialVariable(const std::string &name, bool &handled) {
 	std::string key = upperKey(name);
 	handled = true;
+	if (key == "FORMAT_LINE" || key == "WORD_DELIMITS" || key == "PRINT_MARGIN" || key == "PAGE_STRING") {
+		MREditSetupSettings settings;
+		effectiveEditSetupSettingsForPath(valueAsString(loadCurrentFileState("FILE_NAME")), settings);
+		if (key == "FORMAT_LINE")
+			return makeString(settings.formatLine);
+		if (key == "WORD_DELIMITS")
+			return makeString(settings.wordDelimiters);
+		if (key == "PRINT_MARGIN")
+			return makeInt(settings.printMargin);
+		if (key == "PAGE_STRING")
+			return makeString(settings.pageBreak);
+	}
 	if (key == "RETURN_INT")
 		return makeInt(runtimeReturnInt());
 	if (key == "RETURN_STR")

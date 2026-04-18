@@ -91,6 +91,7 @@ void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDial
 	                 settings.defaultExtensions);
 	writeRecordField(record.tabSize, sizeof(record.tabSize), std::to_string(settings.tabSize));
 	writeRecordField(record.rightMargin, sizeof(record.rightMargin), std::to_string(settings.rightMargin));
+	writeRecordField(record.printMargin, sizeof(record.printMargin), std::to_string(settings.printMargin));
 	writeRecordField(record.binaryRecordLength, sizeof(record.binaryRecordLength),
 	                 std::to_string(settings.binaryRecordLength));
 	writeRecordField(record.postLoadMacro, sizeof(record.postLoadMacro), settings.postLoadMacro);
@@ -187,6 +188,23 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 			return false;
 		}
 		settings.rightMargin = static_cast<int>(rightMargin);
+	}
+
+	{
+		std::string printMarginText = readRecordField(record.printMargin);
+		char *end = nullptr;
+		long printMargin = 0;
+		if (printMarginText.empty()) {
+			errorText = "PRINT_MARGIN must be between 1 and 999.";
+			return false;
+		}
+		printMargin = std::strtol(printMarginText.c_str(), &end, 10);
+		if (end == printMarginText.c_str() || end == nullptr || *end != '\0' || printMargin < 1 ||
+		    printMargin > 999) {
+			errorText = "PRINT_MARGIN must be an integer between 1 and 999.";
+			return false;
+		}
+		settings.printMargin = static_cast<int>(printMargin);
 	}
 
 	if (record.fileTypeChoice == kFileTypeBinary) {
@@ -410,7 +428,27 @@ enum : unsigned long long {
 
 [[nodiscard]] bool validateDraftRecordFields(const EditProfileDraft &draft, std::string &errorText) {
 	MRFileExtensionEditorSettings ignored;
-	return fileExtensionEditorSettingsDialogRecordToSettings(draft.settingsRecord, ignored, errorText);
+	if (!fileExtensionEditorSettingsDialogRecordToSettings(draft.settingsRecord, ignored, errorText))
+		return false;
+
+	std::string formatLine = readRecordField(draft.settingsRecord.formatLine);
+	if (!formatLine.empty()) {
+		int rCount = 0;
+		for (char ch : formatLine) {
+			if (ch == 'R') {
+				rCount++;
+			} else if (ch != '-' && ch != '|') {
+				errorText = "FORMAT_LINE contains invalid characters. Allowed: '-', '|' and one 'R'.";
+				return false;
+			}
+		}
+		if (rCount > 1) {
+			errorText = "FORMAT_LINE contains invalid characters. Allowed: '-', '|' and one 'R'.";
+			return false;
+		}
+	}
+
+	return true;
 }
 
 [[nodiscard]] bool validateDraftLocally(const EditProfileDraft &draft, std::string &errorText) {
@@ -450,6 +488,8 @@ enum : unsigned long long {
 		mask |= kOvTabSize;
 	if (effective.rightMargin != defaults.rightMargin)
 		mask |= kOvRightMargin;
+	if (effective.printMargin != defaults.printMargin)
+		mask |= kOvPrintMargin;
 	if (effective.wordWrap != defaults.wordWrap)
 		mask |= kOvWordWrap;
 	if (upperAscii(effective.indentStyle) != upperAscii(defaults.indentStyle))
@@ -652,6 +692,7 @@ void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileE
 	writeRecordField(record.defaultExtensions, sizeof(record.defaultExtensions), settings.defaultExtensions);
 	writeRecordField(record.tabSize, sizeof(record.tabSize), std::to_string(settings.tabSize));
 	writeRecordField(record.rightMargin, sizeof(record.rightMargin), std::to_string(settings.rightMargin));
+	writeRecordField(record.printMargin, sizeof(record.printMargin), std::to_string(settings.printMargin));
 	writeRecordField(record.binaryRecordLength, sizeof(record.binaryRecordLength), std::to_string(settings.binaryRecordLength));
 	writeRecordField(record.postLoadMacro, sizeof(record.postLoadMacro), settings.postLoadMacro);
 	writeRecordField(record.preSaveMacro, sizeof(record.preSaveMacro), settings.preSaveMacro);
