@@ -169,12 +169,12 @@ class FileInformationDialog : public TDialog {
 		for (std::vector<std::string>::const_iterator it = page.lines.begin(); it != page.lines.end(); ++it, ++y)
 			insertStaticLine(this, 2, y, it->c_str());
 		if (hasPrevInfo)
-			insert(new TButton(TRect(width - 38, height - 3, width - 28, height - 1), "~P~rev<F7>",
+			insert(new TButton(TRect(width - 38, height - 3, width - 28, height - 1), "~P~rev",
 			                   cmMrPreviewPrev, bfNormal));
 		if (hasNextInfo)
-			insert(new TButton(TRect(width - 27, height - 3, width - 17, height - 1), "~N~ext<F8>",
+			insert(new TButton(TRect(width - 27, height - 3, width - 17, height - 1), "~N~ext",
 			                   cmMrPreviewNext, bfNormal));
-		insert(new TButton(TRect(width - 16, height - 3, width - 2, height - 1), "~D~one<ESC>", cmOK,
+		insert(new TButton(TRect(width - 16, height - 3, width - 2, height - 1), "~D~one", cmOK,
 		                   bfDefault));
 	}
 
