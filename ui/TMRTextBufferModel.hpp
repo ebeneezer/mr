@@ -27,6 +27,10 @@ class TMRTextBufferModel {
 		std::size_t cursor;
 		std::size_t selAnchor;
 		std::size_t selCursor;
+		int blockMode = 0;
+		std::size_t blockAnchor = 0;
+		std::size_t blockEnd = 0;
+		bool blockMarkingOn = false;
 	};
 
 	TMRTextBufferModel() noexcept
@@ -191,7 +195,7 @@ class TMRTextBufferModel {
 			undoStack_.pop_back();
 	}
 
-	bool undo() {
+	bool undo(CustomUndoRecord *outRecord = nullptr) {
 		if (undoStack_.empty())
 			return false;
 
@@ -208,6 +212,8 @@ class TMRTextBufferModel {
 		cursor_.offset = undoRecord.cursor;
 		selection_.anchor = undoRecord.selAnchor;
 		selection_.cursor = undoRecord.selCursor;
+		if (outRecord)
+			*outRecord = undoRecord;
 
 		undoStack_.pop_back();
 		modified_ = true;
@@ -215,7 +221,7 @@ class TMRTextBufferModel {
 		return true;
 	}
 
-	bool redo() {
+	bool redo(CustomUndoRecord *outRecord = nullptr) {
 		if (redoStack_.empty())
 			return false;
 
@@ -232,6 +238,8 @@ class TMRTextBufferModel {
 		cursor_.offset = redoRecord.cursor;
 		selection_.anchor = redoRecord.selAnchor;
 		selection_.cursor = redoRecord.selCursor;
+		if (outRecord)
+			*outRecord = redoRecord;
 
 		redoStack_.pop_back();
 		modified_ = true;

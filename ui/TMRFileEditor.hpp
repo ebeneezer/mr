@@ -32,6 +32,8 @@
 #include "../config/MRDialogPaths.hpp"
 #include "../app/MRCommands.hpp"
 
+class TMREditWindow;
+
 class TMRFileEditor : public TScroller {
   public:
 	struct LoadTiming {
@@ -665,6 +667,12 @@ class TMRFileEditor : public TScroller {
 		} else {
 			record.selAnchor = 0;
 			record.selCursor = 0;
+		}
+		if (owner != nullptr) {
+			record.blockMode = blockOverlayMode_;
+			record.blockAnchor = blockOverlayAnchor_;
+			record.blockEnd = blockOverlayEnd_;
+			record.blockMarkingOn = blockOverlayActive_;
 		}
 		bufferModel_.pushUndoSnapshot(record);
 	}
@@ -2659,20 +2667,32 @@ class TMRFileEditor : public TScroller {
 			case cmPaste:
 				pasteClipboard();
 				break;
-			case cmMrEditUndo:
-				if (bufferModel_.undo()) {
+			case cmMrEditUndo: {
+				TMRTextBufferModel::CustomUndoRecord record;
+				if (bufferModel_.undo(&record)) {
 					adoptCommittedDocument(bufferModel_.document(), bufferModel_.cursor(),
 					                       bufferModel_.selectionStart(), bufferModel_.selectionEnd(),
 					                       true);
+					if (owner != nullptr) {
+						setBlockOverlayState(record.blockMode, record.blockAnchor,
+						                     record.blockEnd, record.blockMarkingOn, false);
+					}
 				}
 				break;
-			case cmMrEditRedo:
-				if (bufferModel_.redo()) {
+			}
+			case cmMrEditRedo: {
+				TMRTextBufferModel::CustomUndoRecord record;
+				if (bufferModel_.redo(&record)) {
 					adoptCommittedDocument(bufferModel_.document(), bufferModel_.cursor(),
 					                       bufferModel_.selectionStart(), bufferModel_.selectionEnd(),
 					                       true);
+					if (owner != nullptr) {
+						setBlockOverlayState(record.blockMode, record.blockAnchor,
+						                     record.blockEnd, record.blockMarkingOn, false);
+					}
 				}
 				break;
+			}
 			case cmMrTextUpperCaseMenu:
 				convertSelectionToUpperCase();
 				break;
