@@ -652,7 +652,7 @@ class MacroManagerDialog : public TDialog {
 
 		insert(new TButton(TRect(row1Left, 2, row1Left + 14, 4), "~C~reate<Ins>", cmMRMacroManagerCreate,
 		                   bfNormal));
-		insert(new TButton(TRect(row1Left + 14 + gap, 2, row1Left + 14 + gap + 14, 4), "~D~elete<Del>",
+		insert(new TButton(TRect(row1Left + 14 + gap, 2, row1Left + 14 + gap + 14, 4), "De~l~ete<Del>",
 		                   cmMRMacroManagerDelete, bfNormal));
 		insert(new TButton(TRect(row1Left + 14 + gap + 14 + gap, 2, row1Left + row1Width, 4), "C~o~py<F4>",
 		                   cmMRMacroManagerCopy, bfNormal));
@@ -669,7 +669,7 @@ class MacroManagerDialog : public TDialog {
 		insert(new TButton(TRect(bottomLeft, height - 3, bottomLeft + 16, height - 1), "~P~layback<ENTER>",
 		                   cmMRMacroManagerPlayback, bfDefault));
 		insert(new TButton(TRect(bottomLeft + 16 + gap, height - 3, bottomLeft + 16 + gap + 13, height - 1),
-		                   "Do~n~e<ESC>", cmCancel, bfNormal));
+		                   "~D~one<ESC>", cmCancel, bfNormal));
 		insert(new TButton(TRect(bottomLeft + 16 + gap + 13 + gap, height - 3, bottomLeft + bottomWidth,
 		                         height - 1),
 		                   "~H~elp<F1>", cmHelp, bfNormal));
