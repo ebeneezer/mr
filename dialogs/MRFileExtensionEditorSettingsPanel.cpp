@@ -39,7 +39,7 @@ constexpr int kDefaultMiniMapWidth = 4;
 constexpr ushort kUiManagedOptionsMask =
     kOptionTruncateSpaces | kOptionEofCtrlZ | kOptionEofCrLf | kOptionPersistentBlocks |
     kOptionCodeFolding | kOptionWordWrap | kOptionShowLineNumbers | kOptionLineNumZeroFill |
-    kOptionShowEofMarker | kOptionShowEofMarkerEmoji | kOptionDisplayTabs;
+    kOptionShowEofMarker | kOptionShowEofMarkerEmoji;
 
 struct FileExtensionEditorSettingsPanelLayout {
 	explicit FileExtensionEditorSettingsPanelLayout(const FileExtensionEditorSettingsPanelConfig &config)
@@ -116,7 +116,7 @@ struct FileExtensionEditorSettingsPanelLayout {
 class TPanelGlyphButton : public TView {
   public:
 	TPanelGlyphButton(const TRect &bounds, const char *glyph, ushort command)
-	    : TView(bounds), glyph_(glyph != nullptr ? glyph : ""), command_(command) {
+	    : TView(bounds), glyphId(glyph != nullptr ? glyph : ""), commandId(command) {
 		options |= ofSelectable;
 		options |= ofFirstClick;
 		eventMask |= evMouseDown | evKeyDown;
@@ -125,11 +125,11 @@ class TPanelGlyphButton : public TView {
 	void draw() override {
 		TDrawBuffer buffer;
 		ushort color = getColor((state & sfFocused) != 0 ? 2 : 1);
-		int glyphWidth = strwidth(glyph_.c_str());
+		int glyphWidth = strwidth(glyphId.c_str());
 		int x = std::max(0, (size.x - glyphWidth) / 2);
 
 		buffer.moveChar(0, ' ', color, size.x);
-		buffer.moveStr(static_cast<ushort>(x), glyph_.c_str(), color, size.x - x);
+		buffer.moveStr(static_cast<ushort>(x), glyphId.c_str(), color, size.x - x);
 		writeLine(0, 0, size.x, size.y, buffer);
 	}
 
@@ -157,11 +157,11 @@ class TPanelGlyphButton : public TView {
 
 		while (target != nullptr && dynamic_cast<TDialog *>(target) == nullptr)
 			target = target->owner;
-		message(target != nullptr ? target : owner, evCommand, command_, this);
+		message(target != nullptr ? target : owner, evCommand, commandId, this);
 	}
 
-	std::string glyph_;
-	ushort command_;
+	std::string glyphId;
+	ushort commandId;
 };
 
 TStaticText *addPanelLabel(MRScrollableDialog &dialog, const TRect &rect, const char *text) {
@@ -359,14 +359,13 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	addPanelLabel(dialog, TRect(g.optionsHeadingX, g.optionsHeadingY, config.dialogWidth - 2, g.optionsHeadingY + 1),
 	              "Options:");
 	optionsLeftField = addPanelCheckGroup(
-	    dialog, TRect(g.optionsLeft, g.optionsBodyY, g.optionsRight, g.optionsBodyY + 7),
+	    dialog, TRect(g.optionsLeft, g.optionsBodyY, g.optionsRight, g.optionsBodyY + 6),
 	    new TSItem("~T~runcate spaces",
 	               new TSItem("Control-~Z~ at EOF",
 	                          new TSItem("~C~R/LF at EOF",
 	                                     new TSItem("Persistent ~B~locks",
 	                                                new TSItem("leading ~0~ fill",
-	                                                         new TSItem("word wrap",
-	                                                                    new TSItem("D~i~splay tabs", nullptr))))))));
+	                                                         new TSItem("word wrap", nullptr)))))));
 
 	addPanelLabel(dialog, TRect(g.lineNumbersLeft, g.optionsHeadingY, g.lineNumbersRight, g.optionsHeadingY + 1),
 	              "Line numbers:");
@@ -488,8 +487,6 @@ ushort FileExtensionEditorSettingsPanel::currentOptionsMask() const noexcept {
 		options |= kOptionLineNumZeroFill;
 	if ((leftMask & kLeftOptionWordWrap) != 0)
 		options |= kOptionWordWrap;
-	if ((leftMask & kLeftOptionDisplayTabs) != 0)
-		options |= kOptionDisplayTabs;
 
 	switch (lineNumbersChoice) {
 		case kLineNumbersLeading:
@@ -537,8 +534,6 @@ void FileExtensionEditorSettingsPanel::setOptionsMask(ushort options) {
 		leftMask |= kLeftOptionLineNumZeroFill;
 	if ((options & kOptionWordWrap) != 0)
 		leftMask |= kLeftOptionWordWrap;
-	if ((options & kOptionDisplayTabs) != 0)
-		leftMask |= kLeftOptionDisplayTabs;
 
 	if ((options & kOptionShowLineNumbers) != 0)
 		lineNumbersChoice = kLineNumbersLeading;

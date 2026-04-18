@@ -1,3 +1,4 @@
+#include "../config/MRDialogPaths.hpp"
 #include "MRMessageLineController.hpp"
 
 #include <algorithm>
@@ -63,6 +64,8 @@ bool exportSlot(const Slot &slot, VisibleMessage &out) {
 
 Token postTimed(Owner owner, std::string_view text, Kind kind, std::chrono::milliseconds duration,
                 int priority) {
+    if (!configuredMenulineMessages())
+        return 0;
     State &shared = state();
     std::lock_guard<std::mutex> lock(shared.mutex);
     const auto now = std::chrono::steady_clock::now();
@@ -81,6 +84,8 @@ Token postTimed(Owner owner, std::string_view text, Kind kind, std::chrono::mill
 }
 
 Token postSticky(Owner owner, std::string_view text, Kind kind, int priority) {
+    if (!configuredMenulineMessages())
+        return 0;
     State &shared = state();
     std::lock_guard<std::mutex> lock(shared.mutex);
     Slot &slot = shared.slots[ownerIndex(owner)];

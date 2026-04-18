@@ -219,7 +219,6 @@ struct MacroJobStagedPayload final : Payload {
 	std::size_t lastSearchCursor;
 	bool ignoreCase;
 	bool tabExpand;
-	bool displayTabs;
 	std::vector<std::size_t> markStack;
 	bool insertMode;
 	int indentLevel;
@@ -232,7 +231,7 @@ struct MacroJobStagedPayload final : Payload {
 	      globalOrder(), globalInts(), globalStrings(),
 	      deferredUiCommands(),
 	      lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0),
-	      ignoreCase(false), tabExpand(true), displayTabs(false), markStack(), insertMode(true), indentLevel(1),
+	      ignoreCase(false), tabExpand(true), markStack(), insertMode(true), indentLevel(1),
 	      fileName(), fileChanged(false) {
 	}
 
@@ -245,7 +244,7 @@ struct MacroJobStagedPayload final : Payload {
 	                      std::vector<MRMacroDeferredUiCommand> aDeferredUiCommands,
 	                      bool aLastSearchValid, std::size_t aLastSearchStart,
 	                      std::size_t aLastSearchEnd, std::size_t aLastSearchCursor,
-	                      bool anIgnoreCase, bool aTabExpand, bool aDisplayTabs, std::vector<std::size_t> aMarkStack,
+	                      bool anIgnoreCase, bool aTabExpand, std::vector<std::size_t> aMarkStack,
 	                      bool aInsertMode, int anIndentLevel, std::string aFileName,
 	                      bool aFileChanged)
 	    : displayName(std::move(aDisplayName)), logLines(std::move(aLogLines)), hadError(aHadError),
@@ -257,7 +256,7 @@ struct MacroJobStagedPayload final : Payload {
 	      deferredUiCommands(std::move(aDeferredUiCommands)),
 	      lastSearchValid(aLastSearchValid), lastSearchStart(aLastSearchStart),
 	      lastSearchEnd(aLastSearchEnd), lastSearchCursor(aLastSearchCursor),
-	      ignoreCase(anIgnoreCase), tabExpand(aTabExpand), displayTabs(aDisplayTabs), markStack(std::move(aMarkStack)),
+	      ignoreCase(anIgnoreCase), tabExpand(aTabExpand), markStack(std::move(aMarkStack)),
 	      insertMode(aInsertMode), indentLevel(anIndentLevel), fileName(std::move(aFileName)),
 	      fileChanged(aFileChanged) {
 	}

@@ -1,3 +1,4 @@
+#include "../app/utils/MRFileIOUtils.hpp"
 #define Uses_MsgBox
 #include <tvision/tv.h>
 
@@ -99,25 +100,6 @@ std::string expandUserPath(const char *path) {
 	return result;
 }
 
-bool readTextFile(const std::string &path, std::string &outContent, std::string &outError) {
-	std::ifstream in(path.c_str(), std::ios::in | std::ios::binary);
-	std::ostringstream buffer;
-
-	if (!in) {
-		outError = "Could not open file.";
-		return false;
-	}
-
-	buffer << in.rdbuf();
-
-	if (!in.good() && !in.eof()) {
-		outError = "Error while reading file.";
-		return false;
-	}
-
-	outContent = buffer.str();
-	return true;
-}
 
 const char *backgroundMacroPolicyText(bool staged) noexcept {
 	return staged ? "policy: snapshot + staged write, UI-thread commit, conflict=abort, cancel=cooperative"
@@ -303,7 +285,7 @@ bool runMacroSource(const char *displayName, const char *source) {
 			        std::move(runResult.deferredUiCommands),
 			        runResult.lastSearchValid,
 			        runResult.lastSearchStart, runResult.lastSearchEnd, runResult.lastSearchCursor,
-			        runResult.ignoreCase, runResult.tabExpand, runResult.displayTabs, std::move(runResult.markStack),
+			        runResult.ignoreCase, runResult.tabExpand, std::move(runResult.markStack),
 			        runResult.insertMode,
 			        runResult.indentLevel, std::move(runResult.fileName), runResult.fileChanged);
 			    return result;

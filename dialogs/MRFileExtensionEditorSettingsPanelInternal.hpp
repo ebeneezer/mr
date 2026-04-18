@@ -48,8 +48,7 @@ enum : ushort {
 	kOptionCodeFolding = 0x0040,
 	kOptionShowEofMarker = 0x0080,
 	kOptionShowEofMarkerEmoji = 0x0100,
-	kOptionWordWrap = 0x0200,
-	kOptionDisplayTabs = 0x0400
+	kOptionWordWrap = 0x0200
 };
 
 enum : ushort {
@@ -58,8 +57,7 @@ enum : ushort {
 	kLeftOptionEofCrLf = 0x0004,
 	kLeftOptionPersistentBlocks = 0x0008,
 	kLeftOptionLineNumZeroFill = 0x0010,
-	kLeftOptionWordWrap = 0x0020,
-	kLeftOptionDisplayTabs = 0x0040
+	kLeftOptionWordWrap = 0x0020
 };
 
 enum : ushort {

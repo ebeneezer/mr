@@ -311,6 +311,10 @@ std::vector<std::string> configuredDefaultExtensionList();
 [[nodiscard]] int configuredMaxFileHistory();
 void configuredPathHistoryEntries(std::vector<std::string> &outValues);
 void configuredFileHistoryEntries(std::vector<std::string> &outValues);
+bool setConfiguredWindowManager(bool enabled, std::string *errorMessage = nullptr);
+[[nodiscard]] bool configuredWindowManager();
+bool setConfiguredMenulineMessages(bool enabled, std::string *errorMessage = nullptr);
+[[nodiscard]] bool configuredMenulineMessages();
 bool setConfiguredLastFileDialogPath(const std::string &path, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string configuredLastFileDialogPath();
 struct MRSettingsWriteReport {

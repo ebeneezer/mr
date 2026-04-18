@@ -1,3 +1,5 @@
+#include "../app/utils/MRFileIOUtils.hpp"
+#include "../app/utils/MRStringUtils.hpp"
 #include "MRDialogPaths.hpp"
 #include "MRSettingsLoader.hpp"
 
@@ -30,6 +32,9 @@ struct MRDialogHistoryEntry {
 constexpr int kHistoryLimitMin = 5;
 constexpr int kHistoryLimitMax = 50;
 constexpr int kHistoryLimitDefault = 15;
+
+static bool g_windowManagerEnabled = true;
+static bool g_menulineMessagesEnabled = true;
 
 std::vector<MRDialogHistoryEntry> &configuredPathHistoryStorage() {
 	static std::vector<MRDialogHistoryEntry> value;
@@ -111,22 +116,7 @@ bool &configuredColorSettingsInitialized() {
 	return initialized;
 }
 
-std::string trimAscii(std::string_view value) {
-	std::size_t start = 0;
-	std::size_t end = value.size();
 
-	while (start < end && std::isspace(static_cast<unsigned char>(value[start])) != 0)
-		++start;
-	while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1])) != 0)
-		--end;
-	return std::string(value.substr(start, end - start));
-}
-
-std::string upperAscii(std::string value) {
-	for (char & i : value)
-		i = static_cast<char>(std::toupper(static_cast<unsigned char>(i)));
-	return value;
-}
 
 std::string normalizeDialogPath(const char *path) {
 	std::string result = path != nullptr ? path : "";
@@ -487,21 +477,7 @@ bool ensureDirectoryTree(const std::string &directoryPath, std::string *errorMes
 	return true;
 }
 
-bool writeTextFile(const std::string &path, const std::string &content) {
-	std::ofstream out(path.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
-	if (!out)
-		return false;
-	out << content;
-	return out.good();
-}
 
-bool readTextFile(const std::string &path, std::string &content) {
-	std::ifstream in(path.c_str(), std::ios::in | std::ios::binary);
-	if (!in)
-		return false;
-	content.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
-	return in.good() || in.eof();
-}
 
 void accumulateSettingsChangeCounts(const std::vector<MRSettingsChangeEntry> &changes, std::size_t &addedCount,
                                     std::size_t &removedCount, std::size_t &changedCount) {
@@ -605,6 +581,8 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"HELPPATH", MRSettingsKeyClass::Path, true},
     {"TEMPDIR", MRSettingsKeyClass::Path, true},
 	{"SHELLPATH", MRSettingsKeyClass::Path, true},
+	{"WINDOW_MANAGER", MRSettingsKeyClass::Global, true},
+	{"MENULINE_MESSAGES", MRSettingsKeyClass::Global, true},
 	{"LASTFILEDIALOGPATH", MRSettingsKeyClass::Global, true},
 	{"MAX_PATH_HISTORY", MRSettingsKeyClass::Global, true},
 	{"MAX_FILE_HISTORY", MRSettingsKeyClass::Global, true},
@@ -634,8 +612,6 @@ static const MREditSettingDescriptor kEditSettingDescriptors[] = {
     {"EOF_CR_LF", "Write CR/LF", MREditSettingSection::Save, MREditSettingKind::Boolean, true, kOvEofCrLf},
     {"TAB_EXPAND", "Expand tabs", MREditSettingSection::Tabs, MREditSettingKind::Boolean, true,
      kOvTabExpand},
-    {"DISPLAY_TABS", "Display tabs", MREditSettingSection::Tabs, MREditSettingKind::Boolean, true,
-     kOvDisplayTabs},
     {"TAB_SIZE", "Tab size", MREditSettingSection::Tabs, MREditSettingKind::Integer, true, kOvTabSize},
     {"RIGHT_MARGIN", "Right margin", MREditSettingSection::Formatting, MREditSettingKind::Integer, true,
      kOvRightMargin},
@@ -1847,9 +1823,6 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 	} else if (upperKeyName == "TAB_EXPAND") {
 		if (!parseAndAssignBooleanLiteral(value, current.tabExpand, errorMessage))
 			return false;
-	} else if (upperKeyName == "DISPLAY_TABS") {
-		if (!parseAndAssignBooleanLiteral(value, current.displayTabs, errorMessage))
-			return false;
 	} else if (upperKeyName == "TAB_SIZE") {
 		const int previousTabSize = current.tabSize;
 		const std::string previousFormatLine = current.formatLine;
@@ -2004,8 +1977,6 @@ std::string editSetupValueLiteral(const MREditSetupSettings &settings, const cha
 		return formatEditSetupBoolean(settings.eofCrLf);
 	if (upperKey == "TAB_EXPAND")
 		return formatEditSetupBoolean(settings.tabExpand);
-	if (upperKey == "DISPLAY_TABS")
-		return formatEditSetupBoolean(settings.displayTabs);
 	if (upperKey == "TAB_SIZE")
 		return std::to_string(settings.tabSize);
 	if (upperKey == "RIGHT_MARGIN")
@@ -2071,7 +2042,7 @@ std::string editSetupValueLiteral(const MREditSetupSettings &settings, const cha
 
 unsigned long long supportedEditProfileOverrideMask() noexcept {
 static constexpr unsigned long long mask = kOvPageBreak | kOvWordDelimiters | kOvDefaultExtensions | kOvTruncateSpaces |
-	                                     kOvEofCtrlZ | kOvEofCrLf | kOvTabExpand | kOvDisplayTabs | kOvTabSize | kOvRightMargin |
+	                                     kOvEofCtrlZ | kOvEofCrLf | kOvTabExpand | kOvTabSize | kOvRightMargin |
 	                                     kOvWordWrap | kOvIndentStyle | kOvFileType | kOvBinaryRecordLength |
 	                                     kOvPostLoadMacro | kOvPreSaveMacro | kOvDefaultPath | kOvFormatLine |
 	                                     kOvBackupFiles | kOvShowEofMarker | kOvShowEofMarkerEmoji | kOvLineNumZeroFill |
@@ -2400,6 +2371,18 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 		}
 		case MRSettingsKeyClass::Global: {
 			std::string upper = upperAscii(trimAscii(key));
+			if (upper == "WINDOW_MANAGER") {
+				bool parsed = true;
+				if (!parseBooleanLiteral(value, parsed, errorMessage))
+					return false;
+				return setConfiguredWindowManager(parsed, errorMessage);
+			}
+			if (upper == "MENULINE_MESSAGES") {
+				bool parsed = true;
+				if (!parseBooleanLiteral(value, parsed, errorMessage))
+					return false;
+				return setConfiguredMenulineMessages(parsed, errorMessage);
+			}
 			if (upper == "LASTFILEDIALOGPATH")
 				return setConfiguredLastFileDialogPath(value, errorMessage);
 			if (upper == "MAX_PATH_HISTORY") {
@@ -2475,8 +2458,6 @@ MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults,
 		merged.eofCrLf = overrides.values.eofCrLf;
 	if ((overrides.mask & kOvTabExpand) != 0)
 		merged.tabExpand = overrides.values.tabExpand;
-	if ((overrides.mask & kOvDisplayTabs) != 0)
-		merged.displayTabs = overrides.values.displayTabs;
 	if ((overrides.mask & kOvTabSize) != 0)
 		merged.tabSize = overrides.values.tabSize;
 	if ((overrides.mask & kOvRightMargin) != 0)
@@ -3311,6 +3292,28 @@ void configuredFileHistoryEntries(std::vector<std::string> &outValues) {
 		outValues.push_back(entry.value);
 }
 
+bool setConfiguredWindowManager(bool enabled, std::string *errorMessage) {
+	g_windowManagerEnabled = enabled;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+bool configuredWindowManager() {
+	return g_windowManagerEnabled;
+}
+
+bool setConfiguredMenulineMessages(bool enabled, std::string *errorMessage) {
+	g_menulineMessagesEnabled = enabled;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+bool configuredMenulineMessages() {
+	return g_menulineMessagesEnabled;
+}
+
 bool setConfiguredLastFileDialogPath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 	std::string directory;
@@ -3363,6 +3366,8 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source += "MRSETUP('HELPPATH', '" + escapeMrmacSingleQuotedLiteral(helpPath) + "');\n";
 	source += "MRSETUP('TEMPDIR', '" + escapeMrmacSingleQuotedLiteral(tempDir) + "');\n";
 	source += "MRSETUP('SHELLPATH', '" + escapeMrmacSingleQuotedLiteral(shellPath) + "');\n";
+	source += "MRSETUP('WINDOW_MANAGER', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredWindowManager())) + "');\n";
+	source += "MRSETUP('MENULINE_MESSAGES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMenulineMessages())) + "');\n";
 	source += "MRSETUP('LASTFILEDIALOGPATH', '" +
 	          escapeMrmacSingleQuotedLiteral(configuredLastFileDialogPath()) + "');\n";
 	source += "MRSETUP('MAX_PATH_HISTORY', '" + std::to_string(configuredMaxPathHistory()) + "');\n";
@@ -3386,9 +3391,6 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	          "');\n";
 	source +=
 	    "MRSETUP('TAB_EXPAND', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.tabExpand)) +
-	    "');\n";
-	source +=
-	    "MRSETUP('DISPLAY_TABS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.displayTabs)) +
 	    "');\n";
 	source += "MRSETUP('TAB_SIZE', '" + std::to_string(edit.tabSize) + "');\n";
 	source += "MRSETUP('RIGHT_MARGIN', '" + std::to_string(edit.rightMargin) + "');\n";
@@ -3460,8 +3462,6 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 					value = formatEditSetupBoolean(profile.overrides.values.eofCrLf);
 				else if (std::string(descriptors[i].key) == "TAB_EXPAND")
 					value = formatEditSetupBoolean(profile.overrides.values.tabExpand);
-				else if (std::string(descriptors[i].key) == "DISPLAY_TABS")
-					value = formatEditSetupBoolean(profile.overrides.values.displayTabs);
 				else if (std::string(descriptors[i].key) == "TAB_SIZE")
 					value = std::to_string(profile.overrides.values.tabSize);
 				else if (std::string(descriptors[i].key) == "RIGHT_MARGIN")
