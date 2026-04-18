@@ -14,6 +14,7 @@ enum : ushort {
 	cmMrFileShellToDos,
 
 	cmMrEditUndo,
+	cmMrEditRedo,
 	cmMrEditCutToBuffer,
 	cmMrEditCopyToBuffer,
 	cmMrEditAppendToBuffer,

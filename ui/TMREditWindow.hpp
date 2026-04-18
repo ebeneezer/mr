@@ -326,6 +326,10 @@ class TMREditWindow : public TWindow {
 		return buffer().hasUndoHistory();
 	}
 
+	bool hasRedoHistory() const {
+		return buffer().hasRedoHistory();
+	}
+
 	TPoint cursorPoint() const {
 		return buffer().cursorPoint();
 	}
@@ -1069,7 +1073,6 @@ class TMREditWindow : public TWindow {
 	void resetTransientEditorState() {
 		if (editor == nullptr)
 			return;
-		editor->resetUndoState();
 		clearBlock();
 	}
 
@@ -1144,7 +1147,7 @@ class TMREditWindow : public TWindow {
 	                               std::size_t cursorBefore, ushort keyCodeBefore) {
 		if (editor == nullptr)
 			return;
-		if (originalEvent == evMouseDown && !blockMarkingOn_) {
+		if (originalEvent == evMouseDown && blockMode_ == bmNone) {
 			const std::size_t selectionStartNow = editor->selectionStartOffset();
 			const std::size_t selectionEndNow = editor->selectionEndOffset();
 

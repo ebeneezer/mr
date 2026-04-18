@@ -1284,6 +1284,23 @@ void TextDocument::replaceFromStaged(Range range, const StagedAddBuffer &buffer,
 	replace(range, buffer.sliceText(span));
 }
 
+void TextDocument::flatten() {
+	if (pieces_.size() <= 1 && addBuffer_.size() == 0 && !mappedOriginal_.mapped())
+		return;
+
+	std::string currentText = text();
+	originalBuffer_ = std::move(currentText);
+	mappedOriginal_.reset();
+	addBuffer_.clear();
+
+	pieces_.clear();
+	pieces_.emplace_back(BufferKind::Original, TextSpan(0, originalBuffer_.length()));
+	length_ = originalBuffer_.length();
+
+	markDirty();
+	bumpVersion();
+}
+
 Offset TextDocument::clampOffset(Offset pos) const noexcept {
 	return std::min(pos, length_);
 }
