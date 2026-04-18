@@ -3,10 +3,16 @@ import re
 with open("ui/MRWindowManager.cpp", "r") as f:
     content = f.read()
 
-# Currently MRWindowManager::handleDragView relies on `window->TWindow::dragView` completely taking over the modal loop,
-# and checks the final bounds afterwards.
-# The user wants "live" snapping while dragging, depending ONLY on the MOUSE position, not the window bounds.
-# And if the mouse moves away from the edge, it should restore the original size and continue dragging.
-# To achieve this "live" preview while still maintaining the drag, we must handle the evMouseMove loop ourselves,
-# just like TView::dragView does.
-print("Writing a custom drag loop in handleDragView...")
+# Let's see what happens to the size when NOT snapped.
+# In the do-while loop:
+# targetBounds = originalBounds;
+# newOrigin.x = ...
+# targetBounds.a = newOrigin;
+# targetBounds.b.x = newOrigin.x + window->size.x;
+# targetBounds.b.y = newOrigin.y + window->size.y;
+
+# BUT window->size was already updated to the snapped size during the previous locate() call!
+# If it snapped, `window->size` changed.
+# So if it leaves the snap zone, it calculates `targetBounds.b.x = newOrigin.x + window->size.x`
+# using the SNAPPED size, not the original size!
+# We should use `originalBounds.b.x - originalBounds.a.x` for the original size.
