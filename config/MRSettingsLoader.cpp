@@ -1,3 +1,4 @@
+#include "../app/utils/MRStringUtils.hpp"
 #include "MRSettingsLoader.hpp"
 
 #include "MRDialogPaths.hpp"
@@ -43,22 +44,7 @@ struct MRFlattenedSettingsDocument {
 	std::map<std::string, MRFlattenedEditProfile> profiles;
 };
 
-std::string trimAscii(std::string_view value) {
-	std::size_t start = 0;
-	std::size_t end = value.size();
 
-	while (start < end && std::isspace(static_cast<unsigned char>(value[start])) != 0)
-		++start;
-	while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1])) != 0)
-		--end;
-	return std::string(value.substr(start, end - start));
-}
-
-std::string upperAscii(std::string value) {
-	for (char &ch : value)
-		ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
-	return value;
-}
 
 std::string unescapeMrmacSingleQuotedLiteral(const std::string &value) {
 	std::string out;

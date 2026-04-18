@@ -55,7 +55,7 @@ using mr::dialogs::execDialogRaw;
 using mr::dialogs::execDialogRawWithData;
 using mr::dialogs::ensureMrmacExtension;
 using mr::dialogs::readRecordField;
-using mr::dialogs::trimAscii;
+
 using mr::dialogs::writeRecordField;
 enum : ushort {
 	cmMrSetupPathsHelp = 3800,
