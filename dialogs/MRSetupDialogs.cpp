@@ -22,8 +22,9 @@
 #define Uses_TScrollBar
 #define Uses_TStaticText
 #define Uses_TRadioButtons
-#define Uses_TSItem
 #define Uses_TView
+#define Uses_TCheckBoxes
+#define Uses_TSItem
 #include <tvision/tv.h>
 
 #include "MRSetupDialogs.hpp"
@@ -1670,6 +1671,73 @@ bool mrSaveColorThemeFromWorkingPaletteForTesting(const TPalette &workingPalette
 	return true;
 }
 
+
+namespace {
+
+class TUserInterfaceSettingsDialog : public MRScrollableDialog {
+  public:
+	TUserInterfaceSettingsDialog(bool initialWindowManager, bool initialMenulineMessages)
+	    : TWindowInit(&TUserInterfaceSettingsDialog::initFrame), MRScrollableDialog(centeredSetupDialogRect(50, 10), "User interface settings", 48, 8) {
+
+		int const yStart = 2;
+
+		TCheckBoxes *cb = new TCheckBoxes(TRect(2, yStart, 46, yStart + 2),
+		    new TSItem("~W~indow Manager",
+		    new TSItem("~M~enuline messages", nullptr)));
+
+		addManaged(cb, cb->getBounds());
+
+		int buttonRow = 6;
+		addManaged(new TButton(TRect(2, buttonRow, 12, buttonRow + 2), "~O~K", cmOK, bfDefault),
+		           TRect(2, buttonRow, 12, buttonRow + 2));
+		addManaged(new TButton(TRect(14, buttonRow, 24, buttonRow + 2), "~C~ancel", cmCancel, bfNormal),
+		           TRect(14, buttonRow, 24, buttonRow + 2));
+
+		selectContent();
+	}
+};
+
+} // namespace
+
+static void runUserInterfaceSettingsDialogFlow() {
+	bool running = true;
+
+	while (running) {
+		bool currentWm = configuredWindowManager();
+		bool currentMm = configuredMenulineMessages();
+
+		TUserInterfaceSettingsDialog *dialog = new TUserInterfaceSettingsDialog(currentWm, currentMm);
+		ushort cbData = 0;
+		if (currentWm)
+			cbData |= 1;
+		if (currentMm)
+			cbData |= 2;
+
+		ushort result = execDialogWithDataCapture(dialog, &cbData);
+
+		if (result == cmOK) {
+
+			bool newWm = (cbData & 1) != 0;
+			bool newMm = (cbData & 2) != 0;
+
+			bool changed = (newWm != currentWm) || (newMm != currentMm);
+
+			if (changed) {
+				std::string errorText;
+				setConfiguredWindowManager(newWm, &errorText);
+				setConfiguredMenulineMessages(newMm, &errorText);
+
+				if (!persistConfiguredSettingsSnapshot(&errorText)) {
+					messageBox(mfError | mfOKButton, "Installation / User interface settings\n\n%s", errorText.c_str());
+				}
+			}
+			running = false;
+		} else {
+			running = false; // Cancel
+		}
+	}
+}
+
 void runInstallationAndSetupDialogFlow() {
 	bool running = true;
 
@@ -1699,8 +1767,7 @@ void runInstallationAndSetupDialogFlow() {
 				break;
 
 			case cmMrSetupUserInterfaceSettings:
-				messageBox(mfInformation | mfOKButton,
-				           "Installation / User interface settings\n\nPlaceholder implementation for now.");
+				runUserInterfaceSettingsDialogFlow();
 				break;
 
 			case cmCancel:

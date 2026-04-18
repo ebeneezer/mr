@@ -27,6 +27,7 @@
 #include "TMRFrame.hpp"
 #include "TMRIndicator.hpp"
 #include "TMRTextBuffer.hpp"
+#include "MRWindowManager.hpp"
 #include "MRWindowSupport.hpp"
 #include "../config/MRDialogPaths.hpp"
 #include "../mrmac/mrvm.hpp"
@@ -144,6 +145,10 @@ class TMREditWindow : public TWindow {
 			if (indicator != nullptr)
 				indicator->drawView();
 		}
+	}
+
+	void dragView(TEvent &event, uchar mode, TRect &limits, TPoint minSize, TPoint maxSize) override {
+		MRWindowManager::handleDragView(this, event, mode, limits, minSize, maxSize);
 	}
 
 	void changeBounds(const TRect &bounds) override {
