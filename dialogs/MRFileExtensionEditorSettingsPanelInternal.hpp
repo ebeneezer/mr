@@ -28,6 +28,7 @@ enum {
 	kDefaultExtsFieldSize = 256,
 	kTabSizeFieldSize = 8,
 	kRightMarginFieldSize = 8,
+	kPrintMarginFieldSize = 8,
 	kBinaryRecordLengthFieldSize = 8,
 	kMacroFieldSize = 256,
 	kDefaultPathFieldSize = 256,
@@ -117,6 +118,7 @@ struct FileExtensionEditorSettingsDialogRecord {
 	char defaultExtensions[kDefaultExtsFieldSize];
 	char tabSize[kTabSizeFieldSize];
 	char rightMargin[kRightMarginFieldSize];
+	char printMargin[kPrintMarginFieldSize];
 	char binaryRecordLength[kBinaryRecordLengthFieldSize];
 	char postLoadMacro[kMacroFieldSize];
 	char preSaveMacro[kMacroFieldSize];
@@ -178,6 +180,7 @@ class FileExtensionEditorSettingsPanel {
 	TInputLine *defaultExtensionsField = nullptr;
 	MRNumericSlider *tabSizeSlider = nullptr;
 	TInputLine *rightMarginField = nullptr;
+	TInputLine *printMarginField = nullptr;
 	TInputLine *binaryRecordLengthField = nullptr;
 	ushort preservedOptionsMask = 0;
 		TInputLine *postLoadMacroField = nullptr;

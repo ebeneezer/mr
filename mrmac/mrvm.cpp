@@ -579,6 +579,8 @@ static unsigned classifyLoadVarName(const std::string &name) {
 		return mrefUiAffinity;
 	if (name == "IGNORE_CASE" || name == "TAB_EXPAND")
 		return mrefUiAffinity;
+	if (name == "FORMAT_LINE" || name == "WORD_DELIMITS" || name == "PRINT_MARGIN" || name == "PAGE_STRING")
+		return mrefUiAffinity;
 	if (name == "INSERT_MODE" || name == "INDENT_LEVEL" || name == "GET_LINE" ||
 	    name == "CUR_CHAR" || name == "C_COL" || name == "C_LINE" || name == "C_ROW" ||
 	    name == "C_PAGE" || name == "PG_LINE" || name == "AT_EOF" || name == "AT_EOL" ||
@@ -4251,6 +4253,7 @@ static bool storeSpecialVariable(const std::string &name, const Value &value) {
 	    key == "LAST_FILE_NAME" || key == "GET_LINE" || key == "CUR_CHAR" || key == "C_COL" ||
 	    key == "C_LINE" || key == "C_ROW" || key == "C_PAGE" || key == "PG_LINE" ||
 	    key == "AT_EOF" || key == "AT_EOL" ||
+	    key == "FORMAT_LINE" || key == "WORD_DELIMITS" || key == "PRINT_MARGIN" || key == "PAGE_STRING" ||
 	    key == "CUR_WINDOW" || key == "LINK_STAT" || key == "WIN_X1" || key == "WIN_Y1" || key == "WIN_X2" ||
 	    key == "WIN_Y2" || key == "WINDOW_COUNT" || key == "BLOCK_STAT" ||
 	    key == "BLOCK_LINE1" || key == "BLOCK_LINE2" || key == "BLOCK_COL1" ||
@@ -6528,7 +6531,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							    "MRSETUP supports keys: SETTINGS_VERSION, MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
 							    "SHELLPATH, LASTFILEDIALOGPATH, MAX_PATH_HISTORY, MAX_FILE_HISTORY, PATH_HISTORY, FILE_HISTORY, "
 							    "DEFAULT_PROFILE_DESCRIPTION, COLORTHEMEURI, PAGE_BREAK, WORD_DELIMITERS, DEFAULT_EXTENSIONS, "
-							    "TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, TAB_SIZE, RIGHT_MARGIN, WORD_WRAP, "
+								    "TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, TAB_SIZE, RIGHT_MARGIN, PRINT_MARGIN, WORD_WRAP, "
 							    "INDENT_STYLE, FILE_TYPE, BINARY_RECORD_LENGTH, POST_LOAD_MACRO, PRE_SAVE_MACRO, DEFAULT_PATH, "
 							    "FORMAT_LINE, BACKUP_METHOD, BACKUP_FREQUENCY, BACKUP_EXTENSION, BACKUP_DIRECTORY, "
 							    "AUTOSAVE_INACTIVITY_SECONDS, AUTOSAVE_INTERVAL_SECONDS, BACKUP_FILES, SHOW_EOF_MARKER, "

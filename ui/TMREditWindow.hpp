@@ -1144,7 +1144,7 @@ class TMREditWindow : public TWindow {
 	                               std::size_t cursorBefore, ushort keyCodeBefore) {
 		if (editor == nullptr)
 			return;
-		if (originalEvent == evMouseDown && !blockMarkingOn_) {
+		if (originalEvent == evMouseDown && blockMode_ == bmNone && !blockMarkingOn_) {
 			const std::size_t selectionStartNow = editor->selectionStartOffset();
 			const std::size_t selectionEndNow = editor->selectionEndOffset();
 
