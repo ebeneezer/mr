@@ -1,3 +1,7 @@
+#include <unordered_map>
+#include "../app/utils/MRConstants.hpp"
+#include "../app/utils/MRFileIOUtils.hpp"
+#include "../app/utils/MRStringUtils.hpp"
 #define Uses_MsgBox
 #define Uses_TKeys
 #define Uses_TProgram
@@ -265,7 +269,6 @@ static std::string valueAsString(const Value &value);
 static int valueAsInt(const Value &value);
 static bool isStringLike(const Value &value);
 static void enforceStringLength(const std::string &s);
-static std::string trimAscii(const std::string &value);
 static std::string commandFirstLine(const std::string &command);
 static std::string detectExecutablePathFromProc();
 static std::string normalizeDirPath(const std::string &path);
@@ -4282,7 +4285,15 @@ static std::string parseNamedValue(const std::string &needle, const std::string 
 	if (pos == std::string::npos)
 		return std::string();
 	pos += needle.size();
-	std::size_t end = source.find_first_of(" \t\r\n", pos);
+
+	// Optimization: In GCC/libstdc++, multiple find(char) calls are significantly
+	// faster than a single find_first_of() due to SIMD/memchr acceleration.
+	std::size_t endSpace = source.find(' ', pos);
+	std::size_t endTab = source.find('\t', pos);
+	std::size_t endCr = source.find('\r', pos);
+	std::size_t endLf = source.find('\n', pos);
+	std::size_t end = std::min({endSpace, endTab, endCr, endLf});
+
 	if (end == std::string::npos)
 		end = source.size();
 	return source.substr(pos, end - pos);
@@ -4311,15 +4322,6 @@ static bool fileExists(const std::string &path) {
 	return in.good();
 }
 
-static std::string trimAscii(const std::string &value) {
-	std::size_t start = 0;
-	std::size_t end = value.size();
-	while (start < end && std::isspace(static_cast<unsigned char>(value[start])))
-		++start;
-	while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1])))
-		--end;
-	return value.substr(start, end - start);
-}
 
 static std::string stripMrmacExtension(const std::string &value) {
 	std::string upper = upperKey(value);
@@ -4332,17 +4334,6 @@ static std::string makeFileKey(const std::string &value) {
 	return upperKey(stripMrmacExtension(trimAscii(value)));
 }
 
-static bool readTextFile(const std::string &path, std::string &outContent) {
-	std::ifstream in(path.c_str(), std::ios::in | std::ios::binary);
-	std::ostringstream buffer;
-	if (!in)
-		return false;
-	buffer << in.rdbuf();
-	if (!in.good() && !in.eof())
-		return false;
-	outContent = buffer.str();
-	return true;
-}
 
 static bool hasMrmacExtension(const std::string &path) {
 	std::size_t dotPos = path.rfind('.');
@@ -4534,48 +4525,26 @@ static bool parseAssignedKeySpec(const std::string &spec, TKey &outKey) {
 		}
 	} else if (token == "ENTER" || token == "RETURN")
 		baseCode = kbEnter;
-	else if (token == "TAB")
-		baseCode = kbTab;
-	else if (token == "ESC")
-		baseCode = kbEsc;
-	else if (token == "BS" || token == "BACK" || token == "BACKSPACE")
-		baseCode = kbBack;
-	else if (token == "UP")
-		baseCode = kbUp;
-	else if (token == "DN" || token == "DOWN")
-		baseCode = kbDown;
-	else if (token == "LF" || token == "LEFT")
-		baseCode = kbLeft;
-	else if (token == "RT" || token == "RIGHT")
-		baseCode = kbRight;
-	else if (token == "PGUP")
-		baseCode = kbPgUp;
-	else if (token == "PGDN")
-		baseCode = kbPgDn;
-	else if (token == "HOME")
-		baseCode = kbHome;
-	else if (token == "END")
-		baseCode = kbEnd;
-	else if (token == "INS")
-		baseCode = kbIns;
-	else if (token == "DEL")
-		baseCode = kbDel;
-	else if (token == "GREY-")
-		baseCode = kbGrayMinus;
-	else if (token == "GREY+")
-		baseCode = kbGrayPlus;
-	else if (token == "GREY*")
-		baseCode = static_cast<ushort>('*');
-	else if (token == "SPACE")
-		baseCode = static_cast<ushort>(' ');
-	else if (token == "MINUS")
-		baseCode = static_cast<ushort>('-');
-	else if (token == "EQUAL")
-		baseCode = static_cast<ushort>('=');
-	else if (token.size() == 1)
-		baseCode = static_cast<ushort>(token[0]);
-	else
-		return false;
+	else {
+		static const std::unordered_map<std::string_view, ushort> tokenToBaseCode = {
+			{"TAB", kbTab}, {"ESC", kbEsc},
+			{"BS", kbBack}, {"BACK", kbBack}, {"BACKSPACE", kbBack},
+			{"UP", kbUp}, {"DN", kbDown}, {"DOWN", kbDown},
+			{"LF", kbLeft}, {"LEFT", kbLeft}, {"RT", kbRight}, {"RIGHT", kbRight},
+			{"PGUP", kbPgUp}, {"PGDN", kbPgDn}, {"HOME", kbHome}, {"END", kbEnd},
+			{"INS", kbIns}, {"DEL", kbDel},
+			{"GREY-", kbGrayMinus}, {"GREY+", kbGrayPlus}, {"GREY*", static_cast<ushort>('*')},
+			{"SPACE", static_cast<ushort>(' ')}, {"MINUS", static_cast<ushort>('-')}, {"EQUAL", static_cast<ushort>('=')}
+		};
+		auto it = tokenToBaseCode.find(token);
+		if (it != tokenToBaseCode.end()) {
+			baseCode = it->second;
+		} else if (token.size() == 1) {
+			baseCode = static_cast<ushort>(token[0]);
+		} else {
+			return false;
+		}
+	}
 
 	if (wantShift)
 		modifiers |= kbShift;
@@ -6267,12 +6236,12 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					else
 						push(makeInt(a.i + b.i));
 				} else
-					throw std::runtime_error("Type mismatch or syntax error.");
+					throw std::runtime_error(MRConstants::kErrorTypeMismatch);
 			} else if (opcode == OP_SUB) {
 				Value b = pop();
 				Value a = pop();
 				if (!isNumeric(a) || !isNumeric(b))
-					throw std::runtime_error("Type mismatch or syntax error.");
+					throw std::runtime_error(MRConstants::kErrorTypeMismatch);
 				if (a.type == TYPE_REAL || b.type == TYPE_REAL)
 					push(makeReal(valueAsReal(a) - valueAsReal(b)));
 				else
@@ -6281,7 +6250,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				Value b = pop();
 				Value a = pop();
 				if (!isNumeric(a) || !isNumeric(b))
-					throw std::runtime_error("Type mismatch or syntax error.");
+					throw std::runtime_error(MRConstants::kErrorTypeMismatch);
 				if (a.type == TYPE_REAL || b.type == TYPE_REAL)
 					push(makeReal(valueAsReal(a) * valueAsReal(b)));
 				else
@@ -6290,7 +6259,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				Value b = pop();
 				Value a = pop();
 				if (!isNumeric(a) || !isNumeric(b))
-					throw std::runtime_error("Type mismatch or syntax error.");
+					throw std::runtime_error(MRConstants::kErrorTypeMismatch);
 				if ((b.type == TYPE_REAL && b.r == 0.0) || (b.type == TYPE_INT && b.i == 0))
 					throw std::runtime_error("Division by zero.");
 				if (a.type == TYPE_REAL || b.type == TYPE_REAL)
@@ -6301,14 +6270,14 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				Value b = pop();
 				Value a = pop();
 				if (a.type != TYPE_INT || b.type != TYPE_INT)
-					throw std::runtime_error("Type mismatch or syntax error.");
+					throw std::runtime_error(MRConstants::kErrorTypeMismatch);
 				if (b.i == 0)
 					throw std::runtime_error("Modulo by zero.");
 				push(makeInt(a.i % b.i));
 			} else if (opcode == OP_NEG) {
 				Value a = pop();
 				if (!isNumeric(a))
-					throw std::runtime_error("Type mismatch or syntax error.");
+					throw std::runtime_error(MRConstants::kErrorTypeMismatch);
 				if (a.type == TYPE_REAL)
 					push(makeReal(-a.r));
 				else
@@ -6372,7 +6341,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				readCString(varName);
 				source = pop();
 				if (!isStringLike(source))
-					throw std::runtime_error("Type mismatch or syntax error.");
+					throw std::runtime_error(MRConstants::kErrorTypeMismatch);
 
 				std::string textValue = valueAsString(source);
 				if (opcode == OP_VAL) {
@@ -6443,7 +6412,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				if (it == variables.end())
 					throw std::runtime_error("Variable expected.");
 				if (it->second.type != TYPE_STR)
-					throw std::runtime_error("Type mismatch or syntax error.");
+					throw std::runtime_error(MRConstants::kErrorTypeMismatch);
 				if (name == "CRUNCH_TABS")
 					it->second = makeString(crunchTabsString(valueAsString(it->second)));
 				else if (name == "EXPAND_TABS")
@@ -6502,7 +6471,8 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 								throw std::runtime_error(
 								    "MRSETUP(LASTFILEDIALOGPATH) failed: " +
 								    (errorText.empty() ? std::string("invalid path.") : errorText));
-						} else if (setupKey == "MAX_PATH_HISTORY" || setupKey == "MAX_FILE_HISTORY" ||
+						} else if (setupKey == "WINDOW_MANAGER" || setupKey == "MENULINE_MESSAGES" ||
+						           setupKey == "MAX_PATH_HISTORY" || setupKey == "MAX_FILE_HISTORY" ||
 						           setupKey == "PATH_HISTORY" || setupKey == "FILE_HISTORY") {
 							if (!applyConfiguredSettingsAssignment(setupKey, valueAsString(args[1]), dummyPaths,
 							                                      &errorText))
@@ -6541,7 +6511,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						} else
 							throw std::runtime_error(
 							    "MRSETUP supports keys: SETTINGS_VERSION, MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
-							    "SHELLPATH, LASTFILEDIALOGPATH, MAX_PATH_HISTORY, MAX_FILE_HISTORY, PATH_HISTORY, FILE_HISTORY, "
+							    "SHELLPATH, WINDOW_MANAGER, MENULINE_MESSAGES, LASTFILEDIALOGPATH, MAX_PATH_HISTORY, MAX_FILE_HISTORY, PATH_HISTORY, FILE_HISTORY, "
 							    "DEFAULT_PROFILE_DESCRIPTION, COLORTHEMEURI, PAGE_BREAK, WORD_DELIMITERS, DEFAULT_EXTENSIONS, "
 								    "TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, TAB_SIZE, RIGHT_MARGIN, PRINT_MARGIN, WORD_WRAP, "
 							    "INDENT_STYLE, FILE_TYPE, BINARY_RECORD_LENGTH, POST_LOAD_MACRO, PRE_SAVE_MACRO, DEFAULT_PATH, "

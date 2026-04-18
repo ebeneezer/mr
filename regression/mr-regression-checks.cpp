@@ -1,3 +1,4 @@
+#include "../app/utils/MRFileIOUtils.hpp"
 #define Uses_TKeys
 #include <tvision/tv.h>
 
@@ -103,13 +104,6 @@ bool expectCompileError(const std::string &source, const std::string &expectedPa
 	return true;
 }
 
-bool writeTextFile(const std::string &path, const std::string &content) {
-	std::ofstream out(path.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
-	if (!out)
-		return false;
-	out << content;
-	return out.good();
-}
 
 bool containsText(const std::vector<std::string> &values, const char *needle) {
 	return std::find(values.begin(), values.end(), std::string(needle)) != values.end();
@@ -130,20 +124,6 @@ bool checkGlobalInt(const std::map<std::string, int> &ints, const char *name, in
 	return true;
 }
 
-bool readTextFile(const std::string &path, std::string &content, std::string &errorReason) {
-	std::ifstream in(path.c_str(), std::ios::in | std::ios::binary);
-	if (!in) {
-		errorReason = "Unable to open file.";
-		return false;
-	}
-	content.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
-	if (!in.good() && !in.eof()) {
-		errorReason = "Unable to read file.";
-		return false;
-	}
-	errorReason.clear();
-	return true;
-}
 
 bool compileBytecode(const std::string &source, std::vector<unsigned char> &bytecode, std::string &errorReason) {
 	size_t bytecodeSize = 0;
@@ -734,6 +714,14 @@ bool testSettingsMacroAutoCreate(std::string &failureReason) {
 	}
 	if (content.find("MRSETUP('SHELLPATH', '") == std::string::npos) {
 		failureReason = "Auto-created settings.mrmac is missing SHELLPATH.";
+		return false;
+	}
+	if (content.find("MRSETUP('WINDOW_MANAGER', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing WINDOW_MANAGER.";
+		return false;
+	}
+	if (content.find("MRSETUP('MENULINE_MESSAGES', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing MENULINE_MESSAGES.";
 		return false;
 	}
 	if (content.find("MRSETUP('PAGE_BREAK', '") == std::string::npos) {
@@ -2889,7 +2877,7 @@ bool testKeyIn(std::string &failureReason) {
 	}
 	std::free(bytecode);
 
-	if (!writeTextFile(macroPath, source)) {
+	if (!writeTextFile(std::string(macroPath), std::string(source))) {
 		failureReason = "Unable to create KEY_IN probe macro file.";
 		return false;
 	}

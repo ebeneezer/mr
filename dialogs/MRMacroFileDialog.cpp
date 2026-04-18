@@ -1,3 +1,5 @@
+#include "../app/utils/MRStringUtils.hpp"
+#include "../app/utils/MRFileIOUtils.hpp"
 #define Uses_Dialogs
 #define Uses_MsgBox
 #define Uses_TApplication
@@ -42,7 +44,7 @@ namespace {
 using mr::dialogs::ensureMrmacExtension;
 using mr::dialogs::hasMrmacExtension;
 using mr::dialogs::normalizeTvPathSeparators;
-using mr::dialogs::trimAscii;
+
 enum : ushort {
 	cmMRMacroManagerCreate = 220,
 	cmMRMacroManagerDelete,
@@ -72,21 +74,7 @@ bool fileExists(const std::string &path) {
 	return ::access(path.c_str(), F_OK) == 0;
 }
 
-bool readTextFile(const std::string &path, std::string &out) {
-	std::ifstream in(path.c_str(), std::ios::in | std::ios::binary);
-	if (!in)
-		return false;
-	out.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
-	return in.good() || in.eof();
-}
 
-bool writeTextFile(const std::string &path, const std::string &content) {
-	std::ofstream out(path.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
-	if (!out)
-		return false;
-	out << content;
-	return out.good();
-}
 
 bool copyFileBinary(const std::string &source, const std::string &dest) {
 	std::ifstream in(source.c_str(), std::ios::in | std::ios::binary);
@@ -208,12 +196,6 @@ std::string createMacroTemplateForPath(const std::string &path) {
 	return source;
 }
 
-std::string upperAscii(const std::string &value) {
-	std::string out = value;
-	for (char & i : out)
-		i = static_cast<char>(std::toupper(static_cast<unsigned char>(i)));
-	return out;
-}
 
 bool startsWithTokenInsensitive(const std::string &text, std::size_t pos, const char *token) {
 	std::size_t i = 0;
@@ -652,7 +634,7 @@ class MacroManagerDialog : public TDialog {
 
 		insert(new TButton(TRect(row1Left, 2, row1Left + 14, 4), "~C~reate<Ins>", cmMRMacroManagerCreate,
 		                   bfNormal));
-		insert(new TButton(TRect(row1Left + 14 + gap, 2, row1Left + 14 + gap + 14, 4), "~D~elete<Del>",
+		insert(new TButton(TRect(row1Left + 14 + gap, 2, row1Left + 14 + gap + 14, 4), "De~l~ete<Del>",
 		                   cmMRMacroManagerDelete, bfNormal));
 		insert(new TButton(TRect(row1Left + 14 + gap + 14 + gap, 2, row1Left + row1Width, 4), "C~o~py<F4>",
 		                   cmMRMacroManagerCopy, bfNormal));
@@ -669,7 +651,7 @@ class MacroManagerDialog : public TDialog {
 		insert(new TButton(TRect(bottomLeft, height - 3, bottomLeft + 16, height - 1), "~P~layback<ENTER>",
 		                   cmMRMacroManagerPlayback, bfDefault));
 		insert(new TButton(TRect(bottomLeft + 16 + gap, height - 3, bottomLeft + 16 + gap + 13, height - 1),
-		                   "Do~n~e<ESC>", cmCancel, bfNormal));
+		                   "~D~one<ESC>", cmCancel, bfNormal));
 		insert(new TButton(TRect(bottomLeft + 16 + gap + 13 + gap, height - 3, bottomLeft + bottomWidth,
 		                         height - 1),
 		                   "~H~elp<F1>", cmHelp, bfNormal));
