@@ -74,6 +74,8 @@ ABOUT_QUOTES_GENERATED = app/MRAboutQuotes.generated.hpp
 
 # C++ source files (Editor and VM)
 CXX_SOURCES = \
+	app/utils/MRStringUtils.cpp \
+	app/utils/MRFileIOUtils.cpp \
 	mr.cpp \
 	app/MRAppState.cpp \
 	app/MRCommandRouter.cpp \
