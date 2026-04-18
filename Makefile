@@ -40,10 +40,13 @@ CFLAGS = -Wall -g -O0 $(INCLUDES)
 
 TVISION_BUILD_DIR = $(TVISION_ACTIVE_BUILD_DIR)
 TVISION_LIB = $(TVISION_BUILD_DIR)/libtvision.a
+TVISION_TOOLCHAIN_STAMP = $(TVISION_BUILD_DIR)/.mr-toolchain
+TVISION_C_COMPILER := $(shell command -v $(CC) 2>/dev/null || echo $(CC))
+TVISION_CXX_COMPILER := $(shell command -v $(CXX) 2>/dev/null || echo $(CXX))
 TVISION_CMAKE_FLAGS = \
 	-DCMAKE_BUILD_TYPE=Debug \
-	-DCMAKE_C_COMPILER=$(CC) \
-	-DCMAKE_CXX_COMPILER=$(CXX) \
+	-DCMAKE_C_COMPILER=$(TVISION_C_COMPILER) \
+	-DCMAKE_CXX_COMPILER=$(TVISION_CXX_COMPILER) \
 	-DCMAKE_CXX_STANDARD=20 \
 	-DCMAKE_CXX_STANDARD_REQUIRED=ON \
 	-DCMAKE_CXX_EXTENSIONS=ON \
@@ -71,6 +74,8 @@ ABOUT_QUOTES_GENERATED = app/MRAboutQuotes.generated.hpp
 
 # C++ source files (Editor and VM)
 CXX_SOURCES = \
+	app/utils/MRStringUtils.cpp \
+	app/utils/MRFileIOUtils.cpp \
 	mr.cpp \
 	app/MRAppState.cpp \
 	app/MRCommandRouter.cpp \
@@ -117,7 +122,7 @@ C_SOURCES = \
 
 C_OBJECTS = $(C_SOURCES:.c=.o)
 
-.PHONY: all clean clean-tvision rebuild-tvision \
+.PHONY: all clean clean-tvision rebuild-tvision tvision-build \
 	tvision-upstream-init tvision-upstream-fetch tvision-subtree-pull tvision-apply-patches \
 	tvision-sync-safe tvision-status \
 	stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check \
@@ -242,10 +247,20 @@ $(TVISION_LOCAL_PATCH_STAMP): $(TVISION_PATCHES) Makefile
 	fi; \
 	touch $(TVISION_LOCAL_PATCH_STAMP)
 
-$(TVISION_SOURCE_DIR)/build/libtvision.a: $(TVISION_SOURCE_DIR)/CMakeLists.txt $(TVISION_SOURCE_DIR)/source/CMakeLists.txt $(TVISION_LOCAL_PATCH_STAMP)
+tvision-build: $(TVISION_SOURCE_DIR)/CMakeLists.txt $(TVISION_SOURCE_DIR)/source/CMakeLists.txt $(TVISION_LOCAL_PATCH_STAMP)
 	@mkdir -p $(TVISION_SOURCE_DIR)/build
-	$(CMAKE) -S $(TVISION_SOURCE_DIR) -B $(TVISION_SOURCE_DIR)/build $(TVISION_CMAKE_FLAGS)
+	@if [ ! -f $(TVISION_SOURCE_DIR)/build/CMakeCache.txt ] || \
+		[ $(TVISION_SOURCE_DIR)/CMakeLists.txt -nt $(TVISION_SOURCE_DIR)/build/CMakeCache.txt ] || \
+		[ $(TVISION_SOURCE_DIR)/source/CMakeLists.txt -nt $(TVISION_SOURCE_DIR)/build/CMakeCache.txt ] || \
+		[ ! -f $(TVISION_TOOLCHAIN_STAMP) ] || \
+		[ "$$(cat $(TVISION_TOOLCHAIN_STAMP) 2>/dev/null)" != "$(TVISION_C_COMPILER)|$(TVISION_CXX_COMPILER)" ]; then \
+		$(CMAKE) -S $(TVISION_SOURCE_DIR) -B $(TVISION_SOURCE_DIR)/build $(TVISION_CMAKE_FLAGS); \
+		printf '%s\n' "$(TVISION_C_COMPILER)|$(TVISION_CXX_COMPILER)" > $(TVISION_TOOLCHAIN_STAMP); \
+	fi
 	$(CMAKE) --build $(TVISION_SOURCE_DIR)/build --target tvision -j$(NPROC)
+
+$(TVISION_LIB): tvision-build
+	@test -f $(TVISION_LIB)
 
 tvision-upstream-init:
 	@if ! $(GIT) remote | grep -qx 'tvision-upstream'; then \

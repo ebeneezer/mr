@@ -17,7 +17,7 @@
 namespace {
 TMenuItem *createOrganizeMenuItem() {
 	return new TMenuItem("or~G~anize", kbNoKey,
-	                     new TMenu(*new TMenuItem("Placeholder", cmMrWindowOrganizePlaceholder,
+	                     new TMenu(*new TMenuItem("~P~laceholder", cmMrWindowOrganizePlaceholder,
 	                                              kbNoKey, hcNoContext)),
 	                     hcNoContext);
 }

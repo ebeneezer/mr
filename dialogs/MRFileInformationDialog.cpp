@@ -158,7 +158,7 @@ class FileInformationDialog : public TDialog {
 	                      bool hasPrev, bool hasNext)
 	    : TWindowInit(&TDialog::initFrame),
 	      TDialog(centeredBounds(computeWidth(page), computeHeight(page)), "FILE INFORMATION"),
-	      hasPrev_(hasPrev), hasNext_(hasNext) {
+	      hasPrevInfo(hasPrev), hasNextInfo(hasNext) {
 		int width = size.x;
 		int height = size.y;
 		int y = 2;
@@ -168,10 +168,10 @@ class FileInformationDialog : public TDialog {
 		insertStaticLine(this, 2, y++, header.str().c_str());
 		for (std::vector<std::string>::const_iterator it = page.lines.begin(); it != page.lines.end(); ++it, ++y)
 			insertStaticLine(this, 2, y, it->c_str());
-		if (hasPrev_)
+		if (hasPrevInfo)
 			insert(new TButton(TRect(width - 38, height - 3, width - 28, height - 1), "~P~rev<F7>",
 			                   cmMrPreviewPrev, bfNormal));
-		if (hasNext_)
+		if (hasNextInfo)
 			insert(new TButton(TRect(width - 27, height - 3, width - 17, height - 1), "~N~ext<F8>",
 			                   cmMrPreviewNext, bfNormal));
 		insert(new TButton(TRect(width - 16, height - 3, width - 2, height - 1), "~D~one<ESC>", cmOK,
@@ -185,14 +185,14 @@ class FileInformationDialog : public TDialog {
 		switch (ctrlToArrow(event.keyDown.keyCode)) {
 			case kbF7:
 			case kbPgUp:
-				if (hasPrev_) {
+				if (hasPrevInfo) {
 					endModal(cmMrPreviewPrev);
 					clearEvent(event);
 				}
 				break;
 			case kbF8:
 			case kbPgDn:
-				if (hasNext_) {
+				if (hasNextInfo) {
 					endModal(cmMrPreviewNext);
 					clearEvent(event);
 				}
@@ -223,8 +223,8 @@ class FileInformationDialog : public TDialog {
 		return TRect(left, top, left + width, top + height);
 	}
 
-	bool hasPrev_;
-	bool hasNext_;
+	bool hasPrevInfo;
+	bool hasNextInfo;
 };
 
 std::vector<FileInformationPage> buildFileInformationPages(TMREditWindow *win) {
