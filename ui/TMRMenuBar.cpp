@@ -29,6 +29,25 @@ TMenuItem *findMenuItemByCommand(TMenu *menu, ushort command) {
 }
 } // namespace
 
+void TMRMenuBar::setWindowManagerMenuState(bool enabled) {
+	const std::string wantedLabel = enabled ? "~W~indow manager [ON]" : "~W~indow manager [OFF]";
+	TMenuItem *item = findMenuItemByCommand(menu, cmMrWindowOrganizeWindowManager);
+
+	if (item == nullptr || item->command != cmMrWindowOrganizeWindowManager)
+		return;
+
+	if (item->name != nullptr && wantedLabel == item->name)
+		return;
+	if (item->name != nullptr) {
+		delete[] item->name;
+		item->name = nullptr;
+	}
+	char *newName = new char[wantedLabel.size() + 1];
+	strcpy(newName, wantedLabel.c_str());
+	item->name = newName;
+	drawView();
+}
+
 void TMRMenuBar::setPersistentBlocksMenuState(bool enabled) {
 	const std::string wantedLabel = enabled ? "~P~ersistent blocks [ON]" : "~P~ersistent blocks [OFF]";
 	TMenuItem *item = findMenuItemByCommand(menu, cmMrBlockPersistent);

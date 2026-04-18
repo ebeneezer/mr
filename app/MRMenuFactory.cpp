@@ -16,9 +16,13 @@
 
 namespace {
 TMenuItem *createOrganizeMenuItem() {
+	std::string wmLabel =
+	    configuredWindowManager() ? "~W~indow manager [ON]" : "~W~indow manager [OFF]";
 	return new TMenuItem("or~G~anize", kbNoKey,
-	                     new TMenu(*new TMenuItem("Placeholder", cmMrWindowOrganizePlaceholder,
-	                                              kbNoKey, hcNoContext)),
+	                     new TMenu(*new TMenuItem(wmLabel.c_str(), cmMrWindowOrganizeWindowManager, kbNoKey, hcNoContext) +
+	                               newLine() +
+	                               *new TMenuItem("~C~ascade windows", cmMrWindowOrganizeCascade, kbNoKey, hcNoContext) +
+	                               *new TMenuItem("~T~ile windows", cmMrWindowOrganizeTile, kbNoKey, hcNoContext)),
 	                     hcNoContext);
 }
 

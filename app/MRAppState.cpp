@@ -100,7 +100,7 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrWindowModifySize, hasWindow);
 	setCommandEnabled(cmMrWindowZoom, hasWindow);
 	setCommandEnabled(cmMrWindowMinimize, false);
-	setCommandEnabled(cmMrWindowOrganizePlaceholder, false);
+
 	setCommandEnabled(cmMrWindowLink, hasMultipleWindows && hasEditor);
 	setCommandEnabled(cmMrWindowUnlink, hasWindow);
 
@@ -118,6 +118,11 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrBlockEndMarking, hasEditor && state.blockMarking);
 	setCommandEnabled(cmMrBlockTurnMarkingOff, hasEditor && state.hasBlock);
 	setCommandEnabled(cmMrBlockPersistent, hasEditor);
+
+	setCommandEnabled(cmMrWindowOrganizeCascade, hasEditor);
+	std::size_t numWindows = allEditWindowsInZOrder().size();
+	setCommandEnabled(cmMrWindowOrganizeTile, hasEditor && numWindows < 10);
+	setCommandEnabled(cmMrWindowOrganizeWindowManager, true);
 
 	setCommandEnabled(cmMrSearchFindText, hasEditor);
 	setCommandEnabled(cmMrSearchReplace, canModify);

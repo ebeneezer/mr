@@ -92,8 +92,10 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Window / Zoom";
 		case cmMrWindowMinimize:
 			return "Window / Minimize";
-		case cmMrWindowOrganizePlaceholder:
-			return "Window / Organize";
+		case cmMrWindowOrganizeTile:
+			return "Window / Organize / Tile";
+		case cmMrWindowOrganizeCascade:
+			return "Window / Organize / Cascade";
 		case cmMrWindowLink:
 			return "Window / Link";
 		case cmMrWindowUnlink:
@@ -418,6 +420,11 @@ void syncPersistentBlocksMenuState() {
 		mrMenuBar->setPersistentBlocksMenuState(configuredPersistentBlocksSetting());
 }
 
+void syncWindowManagerMenuState() {
+	if (auto *mrMenuBar = dynamic_cast<TMRMenuBar *>(TProgram::menuBar))
+		mrMenuBar->setWindowManagerMenuState(configuredWindowManager());
+}
+
 bool handleBlockAction(bool ok, const char *failureText) {
 	if (!ok && failureText != nullptr && *failureText != '\0')
 		messageBox(mfInformation | mfOKButton, "%s", failureText);
@@ -489,11 +496,32 @@ bool chooseInterWindowBlockWindows(TMREditWindow *&sourceWin, TMREditWindow *&ta
 	return true;
 }
 
+bool toggleWindowManagerSetting() {
+	std::string errorText;
+	bool enabled = !configuredWindowManager();
+
+	if (!setConfiguredWindowManager(enabled, &errorText)) {
+		messageBox(mfError | mfOKButton, "Window manager update failed:\n%s", errorText.c_str());
+		return true;
+	}
+	if (!persistConfiguredSettingsSnapshot(&errorText)) {
+		messageBox(mfError | mfOKButton, "Settings save failed:\n%s", errorText.c_str());
+		return true;
+	}
+
+	mrLogMessage(enabled ? "Window manager enabled." : "Window manager disabled.");
+	syncWindowManagerMenuState();
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction,
+	                               enabled ? "Window manager: ON" : "Window manager: OFF",
+	                               mr::messageline::Kind::Info, mr::messageline::kPriorityLow);
+	return true;
+}
+
 bool togglePersistentBlocksSetting() {
+	TMREditorApp *app = dynamic_cast<TMREditorApp *>(TProgram::application);
 	MREditSetupSettings settings = configuredEditSetupSettings();
 	MRSetupPaths paths;
 	MRSettingsWriteReport writeReport;
-	TMREditorApp *app = dynamic_cast<TMREditorApp *>(TProgram::application);
 	std::string errorText;
 	bool enabled;
 
@@ -701,6 +729,8 @@ bool handleMRCommand(ushort command) {
 		case cmMrBlockTurnMarkingOff:
 			return handleBlockAction(mrvmUiBlockTurnMarkingOff(), "No block marked.");
 
+		case cmMrWindowOrganizeWindowManager:
+			return toggleWindowManagerSetting();
 		case cmMrBlockPersistent:
 			return togglePersistentBlocksSetting();
 
