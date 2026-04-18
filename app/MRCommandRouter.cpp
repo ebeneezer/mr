@@ -92,6 +92,8 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Window / Zoom";
 		case cmMrWindowMinimize:
 			return "Window / Minimize";
+		case cmMrWindowOrganizeWindowManager:
+			return "Window / Organize / Window manager";
 		case cmMrWindowOrganizeTile:
 			return "Window / Organize / Tile";
 		case cmMrWindowOrganizeCascade:
