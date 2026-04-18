@@ -28,6 +28,7 @@
 #include "TMRIndicator.hpp"
 #include "TMRTextBuffer.hpp"
 #include "MRWindowManager.hpp"
+#include "MRWindowManager.hpp"
 #include "MRWindowSupport.hpp"
 #include "../config/MRDialogPaths.hpp"
 #include "../mrmac/mrvm.hpp"
@@ -1149,7 +1150,6 @@ class TMREditWindow : public TWindow {
 		return false;
 	}
 
-
 		static bool isBlockShiftNavigationKey(ushort keyCode, ushort keyModifiers) {
 			if ((keyModifiers & kbShift) == 0 || (keyModifiers & kbPaste) != 0)
 				return false;
@@ -1171,7 +1171,6 @@ class TMREditWindow : public TWindow {
 					return false;
 			}
 		}
-
 
 		void applyPostInputBlockPolicy(bool markingBefore, ushort originalEvent,
 		                               std::size_t selectionStartBefore,
@@ -1197,7 +1196,7 @@ class TMREditWindow : public TWindow {
 				syncBlockVisual();
 				return;
 			}
-			if (originalEvent == evMouseDown && blockMode_ == bmNone) {
+			if (originalEvent == evMouseDown && !blockMarkingOn_) {
 				const std::size_t selectionStartNow = editor->selectionStartOffset();
 				const std::size_t selectionEndNow = editor->selectionEndOffset();
 
