@@ -111,6 +111,8 @@ void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDial
 		record.optionsMask |= kOptionEofCrLf;
 	if (settings.wordWrap)
 		record.optionsMask |= kOptionWordWrap;
+	if (settings.displayTabs)
+		record.optionsMask |= kOptionDisplayTabs;
 	if (settings.showEofMarker)
 		record.optionsMask |= kOptionShowEofMarker;
 	if (settings.showEofMarkerEmoji)
@@ -273,6 +275,7 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.eofCtrlZ = (record.optionsMask & kOptionEofCtrlZ) != 0;
 	settings.eofCrLf = (record.optionsMask & kOptionEofCrLf) != 0;
 	settings.wordWrap = (record.optionsMask & kOptionWordWrap) != 0;
+	settings.displayTabs = (record.optionsMask & kOptionDisplayTabs) != 0;
 	settings.showEofMarker = (record.optionsMask & kOptionShowEofMarker) != 0;
 	settings.showEofMarkerEmoji = (record.optionsMask & kOptionShowEofMarkerEmoji) != 0;
 	settings.lineNumZeroFill = (record.optionsMask & kOptionLineNumZeroFill) != 0;
@@ -671,6 +674,8 @@ void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileE
 		record.optionsMask |= kOptionEofCrLf;
 	if (settings.wordWrap)
 		record.optionsMask |= kOptionWordWrap;
+	if (settings.displayTabs)
+		record.optionsMask |= kOptionDisplayTabs;
 	if (settings.showEofMarker)
 		record.optionsMask |= kOptionShowEofMarker;
 	if (settings.showEofMarkerEmoji)

@@ -23,6 +23,7 @@ struct MREditSetupSettings {
 	bool eofCtrlZ;
 	bool eofCrLf;
 	bool tabExpand;
+	bool displayTabs;
 	int tabSize;
 	int rightMargin;
 	bool wordWrap;
@@ -58,7 +59,7 @@ struct MREditSetupSettings {
 
 	MREditSetupSettings() noexcept
 	    : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false),
-	      eofCrLf(false), tabExpand(true), tabSize(8), rightMargin(78), wordWrap(true), indentStyle(),
+	      eofCrLf(false), tabExpand(true), displayTabs(false), tabSize(8), rightMargin(78), wordWrap(true), indentStyle(),
 	      fileType(), binaryRecordLength(100), postLoadMacro(), preSaveMacro(), defaultPath(), formatLine(),
 	      backupMethod("BAK_FILE"), backupFrequency("FIRST_SAVE_ONLY"), backupExtension("bak"), backupDirectory(),
 	      autosaveInactivitySeconds(15), autosaveIntervalSeconds(180), backupFiles(true), showEofMarker(false),
@@ -67,6 +68,11 @@ struct MREditSetupSettings {
 	      defaultMode(), cursorStatusColor(), miniMapPosition("OFF"), miniMapWidth(4), miniMapMarkerGlyph("│"),
 	      gutters("LCM") {
 	}
+
+	MREditSetupSettings(const MREditSetupSettings &) = default;
+	MREditSetupSettings &operator=(const MREditSetupSettings &) = default;
+	MREditSetupSettings(MREditSetupSettings &&) = default;
+	MREditSetupSettings &operator=(MREditSetupSettings &&) = default;
 };
 
 
@@ -100,38 +106,39 @@ enum MREditSetupOverrideMask : unsigned long long {
 	kOvEofCtrlZ = 1ull << 4,
 	kOvEofCrLf = 1ull << 5,
 	kOvTabExpand = 1ull << 6,
-	kOvTabSize = 1ull << 7,
-	kOvRightMargin = 1ull << 8,
-	kOvWordWrap = 1ull << 9,
-	kOvIndentStyle = 1ull << 10,
-	kOvFileType = 1ull << 11,
-	kOvBinaryRecordLength = 1ull << 12,
-	kOvPostLoadMacro = 1ull << 13,
-	kOvPreSaveMacro = 1ull << 14,
-	kOvDefaultPath = 1ull << 15,
-	kOvFormatLine = 1ull << 16,
-	kOvBackupFiles = 1ull << 17,
-	kOvShowEofMarker = 1ull << 18,
-	kOvShowEofMarkerEmoji = 1ull << 19,
-	kOvShowLineNumbers = 1ull << 20,
-	kOvLineNumZeroFill = 1ull << 21,
-	kOvPersistentBlocks = 1ull << 22,
-	kOvCodeFolding = 1ull << 23,
-	kOvColumnBlockMove = 1ull << 24,
-	kOvDefaultMode = 1ull << 25,
-	kOvCursorStatusColor = 1ull << 26,
-	kOvBackupMethod = 1ull << 27,
-	kOvBackupFrequency = 1ull << 28,
-	kOvBackupExtension = 1ull << 29,
-	kOvBackupDirectory = 1ull << 30,
-	kOvAutosaveInactivitySeconds = 1ull << 31,
-	kOvAutosaveIntervalSeconds = 1ull << 32,
-	kOvMiniMapPosition = 1ull << 33,
-	kOvMiniMapWidth = 1ull << 34,
-	kOvMiniMapMarkerGlyph = 1ull << 35,
-	kOvLineNumbersPosition = 1ull << 36,
-	kOvCodeFoldingPosition = 1ull << 37,
-	kOvGutters = 1ull << 38,
+	kOvDisplayTabs = 1ull << 7,
+	kOvTabSize = 1ull << 8,
+	kOvRightMargin = 1ull << 9,
+	kOvWordWrap = 1ull << 10,
+	kOvIndentStyle = 1ull << 11,
+	kOvFileType = 1ull << 12,
+	kOvBinaryRecordLength = 1ull << 13,
+	kOvPostLoadMacro = 1ull << 14,
+	kOvPreSaveMacro = 1ull << 15,
+	kOvDefaultPath = 1ull << 16,
+	kOvFormatLine = 1ull << 17,
+	kOvBackupFiles = 1ull << 18,
+	kOvShowEofMarker = 1ull << 19,
+	kOvShowEofMarkerEmoji = 1ull << 20,
+	kOvShowLineNumbers = 1ull << 21,
+	kOvLineNumZeroFill = 1ull << 22,
+	kOvPersistentBlocks = 1ull << 23,
+	kOvCodeFolding = 1ull << 24,
+	kOvColumnBlockMove = 1ull << 25,
+	kOvDefaultMode = 1ull << 26,
+	kOvCursorStatusColor = 1ull << 27,
+	kOvBackupMethod = 1ull << 28,
+	kOvBackupFrequency = 1ull << 29,
+	kOvBackupExtension = 1ull << 30,
+	kOvBackupDirectory = 1ull << 31,
+	kOvAutosaveInactivitySeconds = 1ull << 32,
+	kOvAutosaveIntervalSeconds = 1ull << 33,
+	kOvMiniMapPosition = 1ull << 34,
+	kOvMiniMapWidth = 1ull << 35,
+	kOvMiniMapMarkerGlyph = 1ull << 36,
+	kOvLineNumbersPosition = 1ull << 37,
+	kOvCodeFoldingPosition = 1ull << 38,
+	kOvGutters = 1ull << 39,
 };
 
 struct MREditSettingDescriptor {
@@ -157,6 +164,14 @@ struct MREditExtensionProfile {
 	std::vector<std::string> extensions;
 	std::string windowColorThemeUri;
 	MREditSetupOverrides overrides;
+
+	MREditExtensionProfile() noexcept : id(), name(), extensions(), windowColorThemeUri(), overrides() {
+	}
+
+	MREditExtensionProfile(const MREditExtensionProfile &) = default;
+	MREditExtensionProfile &operator=(const MREditExtensionProfile &) = default;
+	MREditExtensionProfile(MREditExtensionProfile &&) = default;
+	MREditExtensionProfile &operator=(MREditExtensionProfile &&) = default;
 };
 
 enum class MRColorSetupGroup : unsigned char {
@@ -287,6 +302,7 @@ bool effectiveEditWindowColorThemePathForPath(const std::string &path, std::stri
 std::vector<std::string> configuredDefaultExtensionList();
 [[nodiscard]] bool configuredDefaultInsertMode();
 [[nodiscard]] bool configuredTabExpandSetting();
+[[nodiscard]] bool configuredDisplayTabsSetting();
 [[nodiscard]] int configuredTabSizeSetting();
 [[nodiscard]] bool configuredBackupFilesSetting();
 [[nodiscard]] bool configuredPersistentBlocksSetting();

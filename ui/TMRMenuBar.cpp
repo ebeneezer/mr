@@ -9,8 +9,38 @@
 #include "TMRMenuBar.hpp"
 
 #include <algorithm>
+#include <string>
 
+#include "../app/MRCommands.hpp"
 #include "../config/MRDialogPaths.hpp"
+
+namespace {
+TMenuItem *findMenuItemByCommand(TMenu *menu, ushort command) {
+	for (TMenuItem *item = menu != nullptr ? menu->items : nullptr; item != nullptr; item = item->next) {
+		if (item->command == command)
+			return item;
+		if (item->command == 0) {
+			TMenuItem *match = findMenuItemByCommand(item->subMenu, command);
+			if (match != nullptr)
+				return match;
+		}
+	}
+	return nullptr;
+}
+} // namespace
+
+void TMRMenuBar::setPersistentBlocksMenuState(bool enabled) {
+	const std::string wantedLabel = enabled ? "~P~ersistent blocks [ON]" : "~P~ersistent blocks [OFF]";
+	TMenuItem *item = findMenuItemByCommand(menu, cmMrBlockPersistent);
+
+	if (item == nullptr || item->command != cmMrBlockPersistent)
+		return;
+	if (item->name != nullptr && wantedLabel == item->name)
+		return;
+	delete[] const_cast<char *>(item->name);
+	item->name = newStr(wantedLabel.c_str());
+	drawView();
+}
 
 void TMRMenuBar::tickMarquee() {
 	const int textLen = static_cast<int>(marqueeActiveText_.size());

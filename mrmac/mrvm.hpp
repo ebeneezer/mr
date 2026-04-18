@@ -191,6 +191,7 @@ struct MRMacroStagedExecutionInput {
 	std::size_t lastSearchCursor;
 	bool ignoreCase;
 	bool tabExpand;
+	bool displayTabs;
 	std::vector<std::size_t> markStack;
 	bool insertMode;
 	int indentLevel;
@@ -206,7 +207,7 @@ struct MRMacroStagedExecutionInput {
 	      windowX1(0), windowY1(0), windowX2(0), windowY2(0), globalOrder(),
 	      globalInts(), globalStrings(), macroOrder(), macroDisplayNames(),
 	      lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0),
-	      ignoreCase(false), tabExpand(true), markStack(), insertMode(true), indentLevel(1),
+	      ignoreCase(false), tabExpand(true), displayTabs(false), markStack(), insertMode(true), indentLevel(1),
 	      pageLines(20), fileName(), fileChanged(false) {
 	}
 };
@@ -235,6 +236,7 @@ struct MRMacroStagedJobResult {
 	std::size_t lastSearchCursor;
 	bool ignoreCase;
 	bool tabExpand;
+	bool displayTabs;
 	std::vector<std::size_t> markStack;
 	bool insertMode;
 	int indentLevel;
@@ -247,7 +249,7 @@ struct MRMacroStagedJobResult {
 	      globalOrder(), globalInts(), globalStrings(), macroOrder(), macroDisplayNames(),
 	      deferredUiCommands(),
 	      lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0),
-	      ignoreCase(false), tabExpand(true), markStack(), insertMode(true), indentLevel(1),
+	      ignoreCase(false), tabExpand(true), displayTabs(false), markStack(), insertMode(true), indentLevel(1),
 	      fileName(), fileChanged(false) {
 	}
 };
@@ -284,6 +286,23 @@ bool mrvmUiDeleteCurrentWindow();
 bool mrvmUiModifyCurrentWindow();
 bool mrvmUiSwitchWindow(int index);
 bool mrvmUiSizeCurrentWindow(int x1, int y1, int x2, int y2);
+bool mrvmUiBlockBeginLine();
+bool mrvmUiBlockBeginColumn();
+bool mrvmUiBlockBeginStream();
+bool mrvmUiBlockEndMarking();
+bool mrvmUiBlockTurnMarkingOff();
+bool mrvmUiCopyBlock();
+bool mrvmUiMoveBlock();
+bool mrvmUiDeleteBlock();
+bool mrvmUiIndentBlock();
+bool mrvmUiUndentBlock();
+bool mrvmUiWindowCopyBlock(int sourceWindowIndex);
+bool mrvmUiWindowMoveBlock(int sourceWindowIndex);
+bool mrvmUiWindowCopyBlockFromWindow(const void *sourceWindowKey);
+bool mrvmUiWindowMoveBlockFromWindow(const void *sourceWindowKey);
+bool mrvmUiWindowCopyBlockBetween(const void *sourceWindowKey, const void *targetWindowKey);
+bool mrvmUiWindowMoveBlockBetween(const void *sourceWindowKey, const void *targetWindowKey);
+bool mrvmUiSaveBlockToFile(const std::string &pathSpec);
 
 bool mrvmUiLinkCurrentWindow();
 bool mrvmUiUnlinkCurrentWindow();

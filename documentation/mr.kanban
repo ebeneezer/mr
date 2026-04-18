@@ -185,6 +185,15 @@
           ]
         },
         {
+          "id": "d9673699-ede3-4290-b4aa-1d84ab83ec8a",
+          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+          "title": "Code Folding",
+          "description": "Konfigurierbar für jedes FE Profil.",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
           "id": "d9b649ab-4a78-42b4-97eb-8fcaf7ed1943",
           "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
           "title": "Suchen & Ersetzen",
@@ -197,13 +206,32 @@
               "comment": "RegEx\nAlternativ: Shell EInzelier eingebbar (z.B. Perl)"
             }
           ]
+        },
+        {
+          "id": "49430a5d-ab87-421a-9eb6-728ed5339eb9",
+          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+          "title": "Key Mapping",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
         }
       ]
     },
     {
       "id": "b721e070-ae21-4123-a1f3-27b926375a16",
       "title": "Regression / Errors",
-      "cards": []
+      "cards": [
+        {
+          "id": "28a6b270-021b-4a7c-92cf-27bf2ea73641",
+          "listId": "b721e070-ae21-4123-a1f3-27b926375a16",
+          "title": "Shift Cursor scheint keinen Block zu markieren - nur Textfärbung",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        }
+      ]
     },
     {
       "id": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
@@ -217,50 +245,25 @@
           "labels": [],
           "checkboxes": [],
           "comments": []
-        },
+        }
+      ]
+    },
+    {
+      "id": "b3fff5c3-7e9f-4644-b72f-4aad620d1847",
+      "title": "Jules",
+      "cards": [
         {
-          "id": "d9673699-ede3-4290-b4aa-1d84ab83ec8a",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Code Folding",
-          "description": "Konfigurierbar für jedes FE Profil.",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
-          "id": "1c4f0efa-1820-41e8-9750-7a0d685ce41e",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Minimap",
+          "id": "b40ab658-75af-4404-8f56-8e618f4551bc",
+          "listId": "b3fff5c3-7e9f-4644-b72f-4aad620d1847",
+          "title": "Undo/Redo",
           "description": "",
           "labels": [],
           "checkboxes": [],
           "comments": []
-        },
-        {
-          "id": "08c3a6f6-9f77-4c0a-a219-b2a46356ce21",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Block Markierungen",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": [
-            {
-              "id": "3713b283-8fcd-4614-8727-90a7376eb95a",
-              "comment": "Auch für manuelles Folding nutzen"
-            },
-            {
-              "id": "0e84fc64-b72e-41a0-88f5-918ca7964399",
-              "comment": "Streamblock"
-            },
-            {
-              "id": "966401fd-cee7-4a99-9127-ff76cb2a88af",
-              "comment": "Columnblock"
-            }
-          ]
         },
         {
           "id": "adecbc95-314f-47b7-9f0b-ff99ffb8475d",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
+          "listId": "b3fff5c3-7e9f-4644-b72f-4aad620d1847",
           "title": "Window Manager",
           "description": "via Menüleiste, bindbaren Hotkeys (mrmac Erweiterung!) sowie ziehen von Fenstern an die Desktop Ränder.\n",
           "labels": [],
@@ -275,6 +278,24 @@
               "comment": "Minimize/Restore? Wohin? In die F-Tasten Zeile? Srollbare F-Tasten Zeile??"
             }
           ]
+        },
+        {
+          "id": "59d21140-ea8b-4538-b436-fec99a2e4681",
+          "listId": "b3fff5c3-7e9f-4644-b72f-4aad620d1847",
+          "title": "weitere MRMAC Kommandos und Variablen",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "84d5de40-0a02-4e1a-822a-e17ed5a1e531",
+          "listId": "b3fff5c3-7e9f-4644-b72f-4aad620d1847",
+          "title": "Visuelle Tabs",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
         }
       ]
     },
@@ -295,6 +316,37 @@
           "id": "df174a30-9a9b-4856-a5fe-21ffbba49c6b",
           "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
           "title": "Paths und File History",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "08c3a6f6-9f77-4c0a-a219-b2a46356ce21",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Block Operationen",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": [
+            {
+              "id": "3713b283-8fcd-4614-8727-90a7376eb95a",
+              "comment": "Auch für manuelles Folding nutzen"
+            },
+            {
+              "id": "0e84fc64-b72e-41a0-88f5-918ca7964399",
+              "comment": "Streamblock"
+            },
+            {
+              "id": "966401fd-cee7-4a99-9127-ff76cb2a88af",
+              "comment": "Columnblock"
+            }
+          ]
+        },
+        {
+          "id": "1c4f0efa-1820-41e8-9750-7a0d685ce41e",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Minimap Grundfunktionen",
           "description": "",
           "labels": [],
           "checkboxes": [],

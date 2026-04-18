@@ -25,6 +25,7 @@ class TMRMenuBar : public TMenuBar {
 
 	virtual void draw() override;
 	void tickMarquee();
+	void setPersistentBlocksMenuState(bool enabled);
 
 	void setRightStatus(const std::string &status) {
 		if (rightStatus_ != status) {

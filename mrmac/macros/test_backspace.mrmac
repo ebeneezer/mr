@@ -1,5 +1,5 @@
 $MACRO test_backspace;
-TEXT("Hello World!");
+TEXT('Hello World!');
 LEFT;
 LEFT;
 LEFT;

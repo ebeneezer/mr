@@ -51,11 +51,10 @@
         {
             "label": "Rebuild mr (Clean & Neu)",
             "type": "shell",
-            "command": "make",
+            "command": "bash",
             "args": [
-                "clean",
-                "all",
-                "CXX=${input:compilerSelection}"
+                "-lc",
+                "make clean CXX=${input:compilerSelection} && make -j16 all CXX=${input:compilerSelection}"
             ],
             "group": "build",
             "problemMatcher": [
@@ -70,12 +69,10 @@
         {
             "label": "Rebuild mr (Clean & Neu, mit TVision Auto-Sync)",
             "type": "shell",
-            "command": "make",
+            "command": "bash",
             "args": [
-                "clean",
-                "all",
-                "TVISION_AUTO_SYNC=1",
-                "CXX=${input:compilerSelection}"
+                "-lc",
+                "make clean TVISION_AUTO_SYNC=1 CXX=${input:compilerSelection} && make -j16 all TVISION_AUTO_SYNC=1 CXX=${input:compilerSelection}"
             ],
             "group": "build",
             "problemMatcher": [

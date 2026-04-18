@@ -247,10 +247,20 @@ class WindowListDialog : public TDialog {
 	}
 
 	TMREditWindow *selectedWindow() const {
-		return selected;
+		if (selected != nullptr)
+			return selected;
+		return currentSelection();
 	}
 
 	void handleEvent(TEvent &event) override {
+		if (event.what == evCommand && event.message.command == cmOK) {
+			selected = currentSelection();
+			if (selected == nullptr) {
+				clearEvent(event);
+				return;
+			}
+		}
+
 		TDialog::handleEvent(event);
 
 		if (event.what == evKeyDown) {
@@ -297,11 +307,6 @@ class WindowListDialog : public TDialog {
 			case cmMRWindowListHideAll:
 				handleHideAll();
 				clearEvent(event);
-				break;
-			case cmOK:
-				selected = currentSelection();
-				if (selected == nullptr)
-					clearEvent(event);
 				break;
 			case cmHelp:
 				static_cast<void>(mrShowProjectHelp());

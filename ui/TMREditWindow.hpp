@@ -158,13 +158,35 @@ class TMREditWindow : public TWindow {
 	}
 
 	virtual void handleEvent(TEvent &event) override {
+		const ushort originalEvent = event.what;
+		const ushort keyCodeBefore =
+		    event.what == evKeyDown ? ctrlToArrow(event.keyDown.keyCode) : static_cast<ushort>(0);
+		const bool markingBefore = blockMarkingOn_;
+		const std::size_t bufferLengthBefore = editor != nullptr ? editor->bufferLength() : 0;
+		const std::size_t cursorBefore = editor != nullptr ? editor->cursorOffset() : 0;
+		const std::size_t selectionStartBefore =
+		    editor != nullptr ? editor->selectionStartOffset() : 0;
+		const std::size_t selectionEndBefore =
+		    editor != nullptr ? editor->selectionEndOffset() : 0;
+		if (event.what == evMouseDown && editor != nullptr && (event.mouse.buttons & mbLeftButton) != 0 &&
+		    blockMode_ != bmNone && !blockMarkingOn_) {
+			// Keep state, but hide committed block overlay while the mouse selection loop runs,
+			// so the live growing selection is visible.
+			editor->setBlockOverlayState(0, 0, 0, false, false);
+		}
 		if (event.what == evKeyDown) {
+			if (handleBuiltInBlockHotkeys(event))
+				return;
 			std::string executedMacroName;
 			if (mrvmRunAssignedMacroForKey(event.keyDown.keyCode, event.keyDown.controlKeyState,
 			                               executedMacroName, nullptr)) {
 				clearEvent(event);
 				return;
 			}
+		}
+		if (shouldCollapseSelectionBeforeEditorInput(event)) {
+			const std::size_t cursor = editor->cursorOffset();
+			editor->setSelectionOffsets(cursor, cursor, False);
 		}
 		if (frame != nullptr) {
 			TMRFrame *mrFrame = static_cast<TMRFrame *>(frame);
@@ -174,6 +196,10 @@ class TMREditWindow : public TWindow {
 				mrFrame->updateTaskHover(TPoint(), true);
 		}
 		TWindow::handleEvent(event);
+		if ((originalEvent & (evKeyDown | evMouseDown | evMouseMove | evMouseUp)) != 0)
+			applyPostInputBlockPolicy(markingBefore, originalEvent, selectionStartBefore,
+			                          selectionEndBefore, bufferLengthBefore, cursorBefore,
+			                          keyCodeBefore);
 		if (event.what == evBroadcast && event.message.command == cmUpdateTitle) {
 			updateTaskMarkers();
 			if (frame != nullptr)
@@ -805,6 +831,7 @@ class TMREditWindow : public TWindow {
 		blockAnchor_ = 0;
 		blockEnd_ = 0;
 		if (editor != nullptr) {
+			editor->setBlockOverlayState(0, 0, 0, false);
 			editor->setSelectionOffsets(editor->cursorOffset(), editor->cursorOffset(), False);
 			editor->revealCursor(True);
 			editor->update(ufView);
@@ -864,6 +891,8 @@ class TMREditWindow : public TWindow {
 			blockMarkingOn_ = false;
 			blockAnchor_ = 0;
 			blockEnd_ = 0;
+			editor->setBlockOverlayState(0, 0, 0, false, false);
+			editor->setSelectionOffsets(editor->cursorOffset(), editor->cursorOffset(), False);
 			editor->update(ufView);
 			return;
 		}
@@ -1059,6 +1088,127 @@ class TMREditWindow : public TWindow {
 			editor->setSyntaxTitleHint(displayTitle);
 	}
 
+	bool shouldCollapseSelectionBeforeEditorInput(const TEvent &event) const {
+		ushort key = 0;
+		unsigned char ch = 0;
+
+		if (editor == nullptr || blockMode_ == bmNone || blockMarkingOn_ || event.what != evKeyDown)
+			return false;
+		key = ctrlToArrow(event.keyDown.keyCode);
+		ch = static_cast<unsigned char>(event.keyDown.charScan.charCode);
+		if ((event.keyDown.controlKeyState & kbPaste) != 0 || event.keyDown.textLength > 0)
+			return true;
+		if (key == kbBack || key == kbDel || key == kbEnter || key == kbTab)
+			return true;
+		return ch >= 32 && ch < 255;
+	}
+
+	bool handleBuiltInBlockHotkeys(TEvent &event) {
+		ushort keyCode = event.keyDown.keyCode;
+		ushort mods = event.keyDown.controlKeyState;
+		bool shift = (mods & kbShift) != 0;
+		bool ctrl = (mods & kbCtrlShift) != 0;
+
+		if (editor == nullptr || event.what != evKeyDown)
+			return false;
+		if (keyCode == kbCtrlF7 || (keyCode == kbF7 && ctrl && !shift)) {
+			beginStreamBlock();
+			clearEvent(event);
+			return true;
+		}
+		if (keyCode == kbShiftF7 || (keyCode == kbF7 && shift && !ctrl)) {
+			beginColumnBlock();
+			clearEvent(event);
+			return true;
+		}
+		if (keyCode == kbF7 && !shift && !ctrl) {
+			if (blockMode_ != bmNone && blockMarkingOn_)
+				endBlock();
+			else
+				beginLineBlock();
+			clearEvent(event);
+			return true;
+		}
+		if (keyCode == kbCtrlF9 || (keyCode == kbF9 && ctrl && !shift)) {
+			clearBlock();
+			clearEvent(event);
+			return true;
+		}
+		return false;
+	}
+
+	void applyPostInputBlockPolicy(bool markingBefore, ushort originalEvent,
+	                               std::size_t selectionStartBefore,
+	                               std::size_t selectionEndBefore,
+	                               std::size_t bufferLengthBefore,
+	                               std::size_t cursorBefore, ushort keyCodeBefore) {
+		if (editor == nullptr)
+			return;
+		if (originalEvent == evMouseDown && !blockMarkingOn_) {
+			const std::size_t selectionStartNow = editor->selectionStartOffset();
+			const std::size_t selectionEndNow = editor->selectionEndOffset();
+
+			// Mouse drag selection without an explicit mode defaults to stream block.
+			if (selectionStartNow != selectionEndNow &&
+			    (selectionStartNow != selectionStartBefore ||
+			     selectionEndNow != selectionEndBefore)) {
+				blockMode_ = bmStream;
+				blockMarkingOn_ = false;
+				blockAnchor_ = static_cast<uint>(selectionStartNow);
+				blockEnd_ = static_cast<uint>(selectionEndNow);
+				syncBlockVisual();
+				return;
+			}
+		}
+		if (originalEvent == evKeyDown && blockMode_ != bmNone && !blockMarkingOn_ &&
+		    bufferLengthBefore != editor->bufferLength()) {
+			const std::size_t currentLength = editor->bufferLength();
+			const std::size_t normalizedCursorBefore = std::min(cursorBefore, bufferLengthBefore);
+			std::size_t changePos = selectionStartBefore;
+			long delta = static_cast<long>(currentLength) - static_cast<long>(bufferLengthBefore);
+			uint startPtr = 0;
+			uint endPtr = 0;
+			uint normalizedStart = 0;
+			uint normalizedEnd = 0;
+			auto shiftPtr = [&](uint &ptr) {
+				long shifted = static_cast<long>(ptr) + delta;
+				if (shifted < 0)
+					shifted = 0;
+				if (shifted > static_cast<long>(currentLength))
+					shifted = static_cast<long>(currentLength);
+				ptr = static_cast<uint>(shifted);
+			};
+
+			if (selectionStartBefore == selectionEndBefore) {
+				changePos = normalizedCursorBefore;
+				if (keyCodeBefore == kbBack && normalizedCursorBefore > 0)
+					changePos = normalizedCursorBefore - 1;
+			}
+
+			startPtr = std::min(blockAnchor_, blockEnd_);
+			endPtr = std::max(blockAnchor_, blockEnd_);
+			normalizedStart = startPtr;
+			normalizedEnd = endPtr;
+
+			if (changePos <= normalizedStart) {
+				shiftPtr(blockAnchor_);
+				shiftPtr(blockEnd_);
+			} else if (changePos < normalizedEnd && blockMode_ == bmStream) {
+				if (blockAnchor_ <= blockEnd_)
+					shiftPtr(blockEnd_);
+				else
+					shiftPtr(blockAnchor_);
+			}
+		}
+		// Drag-release with the mouse finalizes marking in the active block mode.
+		if (markingBefore && originalEvent == evMouseDown && blockMarkingOn_) {
+			endBlock();
+			return;
+		}
+		if (blockMode_ != bmNone)
+			syncBlockVisual();
+	}
+
 	void updateTaskMarkers() {
 		std::size_t taskCount = trackedCoprocessorTasks_.size();
 		if (editor != nullptr) {
@@ -1240,8 +1390,8 @@ class TMREditWindow : public TWindow {
 		int bCol;
 		if (blockMode_ == bmNone)
 			return 0;
-		if (blockMode_ != bmColumn)
-			return 256;
+		if (blockMode_ == bmLine)
+			return 1000;
 		aCol = columnForPtr(blockAnchor_);
 		bCol = columnForPtr(effectiveBlockEnd());
 		return std::max(aCol, bCol);
@@ -1254,17 +1404,25 @@ class TMREditWindow : public TWindow {
 			return;
 		if (blockMode_ == bmStream) {
 			blockPtrRange(a, b);
+			editor->setBlockOverlayState(static_cast<int>(blockMode_), a, b, true, blockMarkingOn_);
 			editor->setSelectionOffsets(a, b, False);
 		} else if (blockMode_ == bmLine) {
 			blockPtrRange(a, b);
+			editor->setBlockOverlayState(static_cast<int>(blockMode_), a, b, true, blockMarkingOn_);
 			a = static_cast<uint>(editor->lineStartOffset(a));
 			b = static_cast<uint>(editor->nextLineOffset(b));
 			if (b > editor->bufferLength())
 				b = static_cast<uint>(editor->bufferLength());
 			editor->setSelectionOffsets(a, b, False);
-		} else
+		} else if (blockMode_ == bmColumn) {
+			blockPtrRange(a, b);
+			editor->setBlockOverlayState(static_cast<int>(blockMode_), a, b, true, blockMarkingOn_);
 			editor->setSelectionOffsets(editor->cursorOffset(), editor->cursorOffset(), False);
-		editor->revealCursor(True);
+		} else {
+			editor->setBlockOverlayState(0, 0, 0, false, false);
+			editor->setSelectionOffsets(editor->cursorOffset(), editor->cursorOffset(), False);
+		}
+		editor->revealCursor(False);
 		editor->update(ufView);
 	}
 

@@ -303,7 +303,7 @@ bool runMacroSource(const char *displayName, const char *source) {
 			        std::move(runResult.deferredUiCommands),
 			        runResult.lastSearchValid,
 			        runResult.lastSearchStart, runResult.lastSearchEnd, runResult.lastSearchCursor,
-			        runResult.ignoreCase, runResult.tabExpand, std::move(runResult.markStack),
+			        runResult.ignoreCase, runResult.tabExpand, runResult.displayTabs, std::move(runResult.markStack),
 			        runResult.insertMode,
 			        runResult.indentLevel, std::move(runResult.fileName), runResult.fileChanged);
 			    return result;

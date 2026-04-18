@@ -17,6 +17,7 @@
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <limits>
 #include <set>
 #include <string>
@@ -321,6 +322,48 @@ bool promptForPath(const char *title, char *fileName, std::size_t fileNameSize) 
 	       cmCancel;
 }
 
+bool promptForSaveAsPath(const char *title, const char *initialPath, std::string &outResolvedPath) {
+	char fileName[MAXPATH] = {0};
+	ushort result = cmCancel;
+
+	outResolvedPath.clear();
+	if (initialPath != nullptr && *initialPath != '\0')
+		strnzcpy(fileName, initialPath, sizeof(fileName));
+	else
+		initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.*");
+	result = execDialogWithPayload(new TFileDialog("*.*", title, "~N~ame", fdOKButton, kFileDialogHistoryId),
+	                               fileName);
+	if (result == cmCancel)
+		return false;
+	outResolvedPath = expandUserPath(fileName);
+	if (outResolvedPath.empty()) {
+		messageBox(mfError | mfOKButton, "No file name specified.");
+		return false;
+	}
+	if (hasWildcardPattern(outResolvedPath)) {
+		messageBox(mfError | mfOKButton, "Wildcards are not allowed in save file names.");
+		return false;
+	}
+	rememberLoadDialogPath(outResolvedPath.c_str());
+	return true;
+}
+
+bool saveWindowSnapshotToPath(TMREditWindow *win, const std::string &resolvedPath) {
+	std::ofstream outFile;
+	std::string text;
+	TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+
+	if (win == nullptr || editor == nullptr || resolvedPath.empty())
+		return false;
+	text = editor->snapshotText();
+	outFile.open(resolvedPath.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
+	if (!outFile.is_open())
+		return false;
+	outFile.write(text.data(), static_cast<std::streamsize>(text.size()));
+	outFile.close();
+	return outFile.good();
+}
+
 bool resolveReadableExistingPath(const char *path, std::string &resolvedPath) {
 	bool disableExtensionSearch = false;
 	std::string rawInput = expandUserPath(path != nullptr ? std::string_view(path) : std::string_view());
@@ -422,13 +465,32 @@ bool saveCurrentEditWindow() {
 
 bool saveCurrentEditWindowAs() {
 	TMREditWindow *win = currentEditWindow();
+	std::string resolvedPath;
+	bool isLogWindow = false;
 
 	if (win == nullptr)
 		return false;
+	isLogWindow = win->windowRole() == TMREditWindow::wrLog;
 	if (win->isReadOnly()) {
-		messageBox(mfInformation | mfOKButton, "Window is read-only.");
-		mrLogMessage("Save As rejected for read-only window.");
-		return false;
+		if (!isLogWindow) {
+			messageBox(mfInformation | mfOKButton, "Window is read-only.");
+			mrLogMessage("Save As rejected for read-only window.");
+			return false;
+		}
+		if (!promptForSaveAsPath("Save log as", win->currentFileName(), resolvedPath))
+			return false;
+		auto startedAt = std::chrono::steady_clock::now();
+		if (!saveWindowSnapshotToPath(win, resolvedPath)) {
+			messageBox(mfError | mfOKButton, "Unable to save log file:\n%s", resolvedPath.c_str());
+			mrLogMessage("Save As failed.");
+			return false;
+		}
+		mr::performance::recordUiEvent(
+		    "Save log as", static_cast<std::size_t>(win->bufferId()), win->documentId(), win->bufferLength(),
+		    std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count(),
+		    resolvedPath);
+		mrLogMessage("Log window saved as a new file.");
+		return true;
 	}
 	auto startedAt = std::chrono::steady_clock::now();
 	if (!win->saveCurrentFileAs()) {

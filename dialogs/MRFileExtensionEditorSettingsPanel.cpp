@@ -39,7 +39,7 @@ constexpr int kDefaultMiniMapWidth = 4;
 constexpr ushort kUiManagedOptionsMask =
     kOptionTruncateSpaces | kOptionEofCtrlZ | kOptionEofCrLf | kOptionPersistentBlocks |
     kOptionCodeFolding | kOptionWordWrap | kOptionShowLineNumbers | kOptionLineNumZeroFill |
-    kOptionShowEofMarker | kOptionShowEofMarkerEmoji;
+    kOptionShowEofMarker | kOptionShowEofMarkerEmoji | kOptionDisplayTabs;
 
 struct FileExtensionEditorSettingsPanelLayout {
 	explicit FileExtensionEditorSettingsPanelLayout(const FileExtensionEditorSettingsPanelConfig &config)
@@ -359,13 +359,14 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	addPanelLabel(dialog, TRect(g.optionsHeadingX, g.optionsHeadingY, config.dialogWidth - 2, g.optionsHeadingY + 1),
 	              "Options:");
 	optionsLeftField = addPanelCheckGroup(
-	    dialog, TRect(g.optionsLeft, g.optionsBodyY, g.optionsRight, g.optionsBodyY + 6),
+	    dialog, TRect(g.optionsLeft, g.optionsBodyY, g.optionsRight, g.optionsBodyY + 7),
 	    new TSItem("~T~runcate spaces",
 	               new TSItem("Control-~Z~ at EOF",
 	                          new TSItem("~C~R/LF at EOF",
 	                                     new TSItem("Persistent ~B~locks",
 	                                                new TSItem("leading ~0~ fill",
-	                                                         new TSItem("word wrap", nullptr)))))));
+	                                                         new TSItem("word wrap",
+	                                                                    new TSItem("D~i~splay tabs", nullptr))))))));
 
 	addPanelLabel(dialog, TRect(g.lineNumbersLeft, g.optionsHeadingY, g.lineNumbersRight, g.optionsHeadingY + 1),
 	              "Line numbers:");
@@ -487,6 +488,8 @@ ushort FileExtensionEditorSettingsPanel::currentOptionsMask() const noexcept {
 		options |= kOptionLineNumZeroFill;
 	if ((leftMask & kLeftOptionWordWrap) != 0)
 		options |= kOptionWordWrap;
+	if ((leftMask & kLeftOptionDisplayTabs) != 0)
+		options |= kOptionDisplayTabs;
 
 	switch (lineNumbersChoice) {
 		case kLineNumbersLeading:
@@ -534,6 +537,8 @@ void FileExtensionEditorSettingsPanel::setOptionsMask(ushort options) {
 		leftMask |= kLeftOptionLineNumZeroFill;
 	if ((options & kOptionWordWrap) != 0)
 		leftMask |= kLeftOptionWordWrap;
+	if ((options & kOptionDisplayTabs) != 0)
+		leftMask |= kLeftOptionDisplayTabs;
 
 	if ((options & kOptionShowLineNumbers) != 0)
 		lineNumbersChoice = kLineNumbersLeading;
