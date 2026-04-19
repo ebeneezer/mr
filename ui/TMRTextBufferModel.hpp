@@ -22,9 +22,21 @@ class TMRTextBufferModel {
 	using CommitResult = mr::editor::CommitResult;
 	using CommitStatus = mr::editor::CommitStatus;
 
+	struct CustomUndoRecord {
+		mr::editor::ReadSnapshot preSnapshot;
+		std::size_t cursor;
+		std::size_t selAnchor;
+		std::size_t selCursor;
+		int blockMode = 0;
+		std::size_t blockAnchor = 0;
+		std::size_t blockEnd = 0;
+		bool blockMarkingOn = false;
+	};
+
 	TMRTextBufferModel() noexcept
 	    : document_(), cursor_(), selection_(), modified_(false),
-	      language_(TMRSyntaxLanguage::PlainText), syntaxPathHint_(), syntaxTitleHint_() {
+	      language_(TMRSyntaxLanguage::PlainText), syntaxPathHint_(), syntaxTitleHint_(),
+	      undoStack_(), redoStack_() {
 	}
 
 	void setText(const char *data, std::size_t length) {
@@ -160,6 +172,81 @@ class TMRTextBufferModel {
 		modified_ = changed;
 	}
 
+	std::size_t undoStackDepth() const noexcept {
+		return undoStack_.size();
+	}
+
+	std::size_t redoStackDepth() const noexcept {
+		return redoStack_.size();
+	}
+
+	void clearUndoRedo() noexcept {
+		undoStack_.clear();
+		redoStack_.clear();
+	}
+
+	void pushUndoSnapshot(const CustomUndoRecord &record) {
+		undoStack_.push_back(record);
+		redoStack_.clear();
+	}
+
+	void popUndoSnapshot() {
+		if (!undoStack_.empty())
+			undoStack_.pop_back();
+	}
+
+	bool undo(CustomUndoRecord *outRecord = nullptr) {
+		if (undoStack_.empty())
+			return false;
+
+		CustomUndoRecord redoRecord;
+		redoRecord.preSnapshot = document_.readSnapshot();
+		redoRecord.cursor = cursor_.offset;
+		redoRecord.selAnchor = selection_.anchor;
+		redoRecord.selCursor = selection_.cursor;
+		redoStack_.push_back(redoRecord);
+
+		const CustomUndoRecord &undoRecord = undoStack_.back();
+		document_.restoreFromSnapshot(undoRecord.preSnapshot);
+		static_cast<void>(document_.adoptLineIndexWarmup(undoRecord.preSnapshot.completeLineIndexWarmup(), 0));
+		cursor_.offset = undoRecord.cursor;
+		selection_.anchor = undoRecord.selAnchor;
+		selection_.cursor = undoRecord.selCursor;
+		if (outRecord)
+			*outRecord = undoRecord;
+
+		undoStack_.pop_back();
+		modified_ = true;
+		clampState();
+		return true;
+	}
+
+	bool redo(CustomUndoRecord *outRecord = nullptr) {
+		if (redoStack_.empty())
+			return false;
+
+		CustomUndoRecord undoRecord;
+		undoRecord.preSnapshot = document_.readSnapshot();
+		undoRecord.cursor = cursor_.offset;
+		undoRecord.selAnchor = selection_.anchor;
+		undoRecord.selCursor = selection_.cursor;
+		undoStack_.push_back(undoRecord);
+
+		const CustomUndoRecord &redoRecord = redoStack_.back();
+		document_.restoreFromSnapshot(redoRecord.preSnapshot);
+		static_cast<void>(document_.adoptLineIndexWarmup(redoRecord.preSnapshot.completeLineIndexWarmup(), 0));
+		cursor_.offset = redoRecord.cursor;
+		selection_.anchor = redoRecord.selAnchor;
+		selection_.cursor = redoRecord.selCursor;
+		if (outRecord)
+			*outRecord = redoRecord;
+
+		redoStack_.pop_back();
+		modified_ = true;
+		clampState();
+		return true;
+	}
+
 	void setSyntaxContext(const std::string &path, const std::string &title = std::string()) {
 		syntaxPathHint_ = path;
 		syntaxTitleHint_ = title;
@@ -235,6 +322,8 @@ class TMRTextBufferModel {
 	TMRSyntaxLanguage language_;
 	std::string syntaxPathHint_;
 	std::string syntaxTitleHint_;
+	std::vector<CustomUndoRecord> undoStack_;
+	std::vector<CustomUndoRecord> redoStack_;
 };
 
 #endif

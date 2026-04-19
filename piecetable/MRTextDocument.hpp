@@ -474,6 +474,7 @@ class TextDocument {
 	[[nodiscard]] char charAt(Offset pos) const noexcept;
 	[[nodiscard]] Snapshot snapshot() const;
 	[[nodiscard]] ReadSnapshot readSnapshot() const;
+	void restoreFromSnapshot(const ReadSnapshot &snapshot);
 	[[nodiscard]] bool adoptLineIndexWarmup(const LineIndexWarmupData &warmup, std::size_t expectedVersion) noexcept;
 
 	[[nodiscard]] std::size_t version() const noexcept {
@@ -524,6 +525,7 @@ class TextDocument {
 	void replace(Range range, std::string_view text);
 	void insertFromStaged(Offset offset, const StagedAddBuffer &buffer, TextSpan span);
 	void replaceFromStaged(Range range, const StagedAddBuffer &buffer, TextSpan span);
+	void flatten();
 
 	[[nodiscard]] Offset clampOffset(Offset pos) const noexcept;
 	[[nodiscard]] std::size_t lineCount() const noexcept;
