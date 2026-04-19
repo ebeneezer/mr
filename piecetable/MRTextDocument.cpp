@@ -728,6 +728,38 @@ ReadSnapshot TextDocument::readSnapshot() const {
 	return snapshot;
 }
 
+void TextDocument::restoreFromSnapshot(const ReadSnapshot &snapshot) {
+	if (snapshot.empty() && snapshot.length() == 0) {
+		setTextNoVersionBump("");
+	} else {
+		documentId_ = snapshot.documentId_;
+		version_ = snapshot.version_;
+		mappedOriginal_ = snapshot.mappedOriginal_;
+		if (snapshot.originalBuffer_)
+			originalBuffer_ = *snapshot.originalBuffer_;
+		else
+			originalBuffer_.clear();
+
+		addBuffer_.clear();
+		if (snapshot.addBuffer_)
+			addBuffer_.append(*snapshot.addBuffer_);
+
+		if (snapshot.pieces_)
+			pieces_ = *snapshot.pieces_;
+		else
+			pieces_.clear();
+
+		length_ = snapshot.length_;
+		cacheDirty_ = snapshot.cacheDirty_;
+		materializedText_ = snapshot.materializedText_;
+		lineIndexCheckpoints_ = snapshot.lineIndexCheckpoints_;
+		lazyIndexedOffset_ = snapshot.lazyIndexedOffset_;
+		lazyIndexedLine_ = snapshot.lazyIndexedLine_;
+		lazyLineIndexComplete_ = snapshot.lazyLineIndexComplete_;
+		lazyTotalLineCount_ = snapshot.lazyTotalLineCount_;
+	}
+}
+
 bool TextDocument::adoptLineIndexWarmup(const LineIndexWarmupData &warmup,
                                         std::size_t expectedVersion) noexcept {
 	if (!matchesVersion(expectedVersion))
@@ -1282,6 +1314,23 @@ void TextDocument::insertFromStaged(Offset offset, const StagedAddBuffer &buffer
 
 void TextDocument::replaceFromStaged(Range range, const StagedAddBuffer &buffer, TextSpan span) {
 	replace(range, buffer.sliceText(span));
+}
+
+void TextDocument::flatten() {
+	if (pieces_.size() <= 1 && addBuffer_.size() == 0 && !mappedOriginal_.mapped())
+		return;
+
+	std::string currentText = text();
+	originalBuffer_ = std::move(currentText);
+	mappedOriginal_.reset();
+	addBuffer_.clear();
+
+	pieces_.clear();
+	pieces_.emplace_back(BufferKind::Original, TextSpan(0, originalBuffer_.length()));
+	length_ = originalBuffer_.length();
+
+	markDirty();
+	bumpVersion();
 }
 
 Offset TextDocument::clampOffset(Offset pos) const noexcept {

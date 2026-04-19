@@ -1,3 +1,4 @@
+#include "../app/utils/MRStringUtils.hpp"
 #ifndef MRSETUPDIALOGCOMMON_HPP
 #define MRSETUPDIALOGCOMMON_HPP
 
@@ -24,16 +25,6 @@ class TRect;
 
 namespace mr::dialogs {
 
-[[nodiscard]] inline std::string trimAscii(std::string_view value) {
-	std::size_t start = 0;
-	std::size_t end = value.size();
-
-	while (start < end && std::isspace(static_cast<unsigned char>(value[start])) != 0)
-		++start;
-	while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1])) != 0)
-		--end;
-	return std::string(value.substr(start, end - start));
-}
 
 [[nodiscard]] inline std::string normalizeTvPathSeparators(std::string_view value) {
 	std::string path(value);

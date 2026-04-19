@@ -158,7 +158,7 @@ class FileInformationDialog : public TDialog {
 	                      bool hasPrev, bool hasNext)
 	    : TWindowInit(&TDialog::initFrame),
 	      TDialog(centeredBounds(computeWidth(page), computeHeight(page)), "FILE INFORMATION"),
-	      hasPrev_(hasPrev), hasNext_(hasNext) {
+	      hasPrevInfo(hasPrev), hasNextInfo(hasNext) {
 		int width = size.x;
 		int height = size.y;
 		int y = 2;
@@ -168,13 +168,13 @@ class FileInformationDialog : public TDialog {
 		insertStaticLine(this, 2, y++, header.str().c_str());
 		for (std::vector<std::string>::const_iterator it = page.lines.begin(); it != page.lines.end(); ++it, ++y)
 			insertStaticLine(this, 2, y, it->c_str());
-		if (hasPrev_)
-			insert(new TButton(TRect(width - 38, height - 3, width - 28, height - 1), "~P~rev<F7>",
+		if (hasPrevInfo)
+			insert(new TButton(TRect(width - 38, height - 3, width - 28, height - 1), "~P~rev",
 			                   cmMrPreviewPrev, bfNormal));
-		if (hasNext_)
-			insert(new TButton(TRect(width - 27, height - 3, width - 17, height - 1), "~N~ext<F8>",
+		if (hasNextInfo)
+			insert(new TButton(TRect(width - 27, height - 3, width - 17, height - 1), "~N~ext",
 			                   cmMrPreviewNext, bfNormal));
-		insert(new TButton(TRect(width - 16, height - 3, width - 2, height - 1), "~D~one<ESC>", cmOK,
+		insert(new TButton(TRect(width - 16, height - 3, width - 2, height - 1), "~D~one", cmOK,
 		                   bfDefault));
 	}
 
@@ -185,14 +185,14 @@ class FileInformationDialog : public TDialog {
 		switch (ctrlToArrow(event.keyDown.keyCode)) {
 			case kbF7:
 			case kbPgUp:
-				if (hasPrev_) {
+				if (hasPrevInfo) {
 					endModal(cmMrPreviewPrev);
 					clearEvent(event);
 				}
 				break;
 			case kbF8:
 			case kbPgDn:
-				if (hasNext_) {
+				if (hasNextInfo) {
 					endModal(cmMrPreviewNext);
 					clearEvent(event);
 				}
@@ -223,8 +223,8 @@ class FileInformationDialog : public TDialog {
 		return TRect(left, top, left + width, top + height);
 	}
 
-	bool hasPrev_;
-	bool hasNext_;
+	bool hasPrevInfo;
+	bool hasNextInfo;
 };
 
 std::vector<FileInformationPage> buildFileInformationPages(TMREditWindow *win) {
@@ -288,6 +288,10 @@ std::vector<FileInformationPage> buildFileInformationPages(TMREditWindow *win) {
 	                      (win != nullptr ? std::to_string(win->pieceCount()) + " pieces" : std::string("<n/a>")));
 	page2.lines.push_back(std::string("Doc version   : ") +
 	                      (win != nullptr ? std::to_string(win->documentVersion()) : std::string("0")));
+	page2.lines.push_back(std::string("Undo stack    : ") +
+	                      (win != nullptr ? std::to_string(win->buffer().undoStackDepth()) + " items" : std::string("0")));
+	page2.lines.push_back(std::string("Redo stack    : ") +
+	                      (win != nullptr ? std::to_string(win->buffer().redoStackDepth()) + " items" : std::string("0")));
 	page2.lines.push_back(std::string("Source        : ") +
 	                      (win != nullptr && win->hasMappedOriginalSource() ? "mmap file" : "memory buffer"));
 	if (win != nullptr && win->hasMappedOriginalSource())

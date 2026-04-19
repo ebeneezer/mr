@@ -59,6 +59,8 @@ const char *placeholderCommandTitle(ushort command) {
 
 		case cmMrEditUndo:
 			return "Edit / Undo";
+		case cmMrEditRedo:
+			return "Edit / Redo";
 		case cmMrEditCutToBuffer:
 			return "Edit / Cut to buffer";
 		case cmMrEditCopyToBuffer:
@@ -433,13 +435,6 @@ bool handleBlockAction(bool ok, const char *failureText) {
 	return true;
 }
 
-void postNoMarkedTextForBlockOperationWarning() {
-	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogValidation,
-	                               "no marked text for block operation",
-	                               mr::messageline::Kind::Warning,
-	                               mr::messageline::kPriorityHigh + 10);
-}
-
 bool hasMarkedTextForBlockOperation(TMREditWindow *win) {
 	if (win == nullptr || !win->hasBlock())
 		return false;
@@ -472,28 +467,25 @@ bool promptBlockSavePath(std::string &outPath) {
 	return !outPath.empty();
 }
 
-bool chooseInterWindowBlockWindows(TMREditWindow *&sourceWin, TMREditWindow *&targetWin) {
-	TMREditWindow *currentWin = currentEditWindow();
-	TMREditWindow *selectedWin = nullptr;
+bool chooseInterWindowBlockTarget(int &sourceWindowIndex) {
+	TMREditWindow *targetWin = currentEditWindow();
+	TMREditWindow *sourceWin = nullptr;
 
-	sourceWin = nullptr;
-	targetWin = nullptr;
-	if (currentWin == nullptr)
+	sourceWindowIndex = 0;
+	if (targetWin == nullptr)
 		return false;
-	selectedWin = mrShowWindowListDialog(mrwlSelectLinkTarget, currentWin);
-	if (selectedWin == nullptr)
+	sourceWin = mrShowWindowListDialog(mrwlActivateWindow, targetWin);
+	if (sourceWin == nullptr)
 		return false;
-	if (selectedWin == currentWin) {
+	if (sourceWin == targetWin) {
 		messageBox(mfInformation | mfOKButton, "Choose another window for inter-window block operation.");
 		return false;
 	}
-
-	sourceWin = selectedWin;
-	targetWin = currentWin;
 	if (!hasMarkedTextForBlockOperation(sourceWin)) {
-		postNoMarkedTextForBlockOperationWarning();
+		messageBox(mfInformation | mfOKButton, "No block marked in the selected source window.");
 		return false;
 	}
+	sourceWindowIndex = mrvmUiCurrentWindowIndex(sourceWin);
 	static_cast<void>(mrActivateEditWindow(targetWin));
 	return true;
 }
@@ -649,6 +641,12 @@ bool handleMRCommand(ushort command) {
 			showFileInformationDialog(currentEditWindow());
 			return true;
 
+		case cmMrEditUndo:
+			return dispatchEditorCommand(cmMrEditUndo, true);
+
+		case cmMrEditRedo:
+			return dispatchEditorCommand(cmMrEditRedo, true);
+
 		case cmMrEditCutToBuffer:
 			return dispatchEditorClipboardCommand(cmCut, true);
 
@@ -681,38 +679,22 @@ bool handleMRCommand(ushort command) {
 			return handleBlockAction(mrvmUiUndentBlock(), "Unable to undent block.");
 
 		case cmMrBlockWindowCopy: {
-			TMREditWindow *sourceWindow = nullptr;
-			TMREditWindow *targetWindow = nullptr;
 			bool ok = false;
 			int sourceWindowIndex = 0;
-			if (!chooseInterWindowBlockWindows(sourceWindow, targetWindow))
+			if (!chooseInterWindowBlockTarget(sourceWindowIndex))
 				return true;
-			ok = mrvmUiWindowCopyBlockBetween(sourceWindow, targetWindow);
-			if (!ok) {
-				sourceWindowIndex = mrvmUiCurrentWindowIndex(sourceWindow);
-				if (sourceWindowIndex > 0) {
-					static_cast<void>(mrActivateEditWindow(targetWindow));
-					ok = mrvmUiWindowCopyBlock(sourceWindowIndex);
-				}
-			}
+			if (sourceWindowIndex > 0)
+				ok = mrvmUiWindowCopyBlock(sourceWindowIndex);
 			return handleBlockAction(ok, "Inter-window block copy failed.");
 		}
 
 		case cmMrBlockWindowMove: {
-			TMREditWindow *sourceWindow = nullptr;
-			TMREditWindow *targetWindow = nullptr;
 			bool ok = false;
 			int sourceWindowIndex = 0;
-			if (!chooseInterWindowBlockWindows(sourceWindow, targetWindow))
+			if (!chooseInterWindowBlockTarget(sourceWindowIndex))
 				return true;
-			ok = mrvmUiWindowMoveBlockBetween(sourceWindow, targetWindow);
-			if (!ok) {
-				sourceWindowIndex = mrvmUiCurrentWindowIndex(sourceWindow);
-				if (sourceWindowIndex > 0) {
-					static_cast<void>(mrActivateEditWindow(targetWindow));
-					ok = mrvmUiWindowMoveBlock(sourceWindowIndex);
-				}
-			}
+			if (sourceWindowIndex > 0)
+				ok = mrvmUiWindowMoveBlock(sourceWindowIndex);
 			return handleBlockAction(ok, "Inter-window block move failed.");
 		}
 
