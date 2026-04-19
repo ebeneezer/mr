@@ -47,19 +47,7 @@ class TMRTextBuffer {
 	}
 
 	bool hasUndoHistory() const noexcept {
-		return editor_ != nullptr && editor_->hasUndoHistory();
-	}
-
-	bool hasRedoHistory() const noexcept {
-		return editor_ != nullptr && editor_->hasRedoHistory();
-	}
-
-	std::size_t undoStackDepth() const noexcept {
-		return editor_ != nullptr ? editor_->bufferModel().undoStackDepth() : 0;
-	}
-
-	std::size_t redoStackDepth() const noexcept {
-		return editor_ != nullptr ? editor_->bufferModel().redoStackDepth() : 0;
+		return editor_ != nullptr && editor_->hasUndoHistoryState();
 	}
 
 	bool isModified() const noexcept {

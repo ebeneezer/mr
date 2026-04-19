@@ -22,7 +22,6 @@
 #include "MRFileExtensionEditorSettingsPanelInternal.hpp"
 #include "MRFileExtensionProfilesSupport.hpp"
 #include "MRSetupDialogCommon.hpp"
-#include "../app/utils/MRStringUtils.hpp"
 
 #include "../app/TMREditorApp.hpp"
 #include "../config/MRDialogPaths.hpp"

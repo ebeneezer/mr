@@ -1,4 +1,3 @@
-#include "../app/utils/MRStringUtils.hpp"
 #include "MRFileExtensionProfilesSupport.hpp"
 
 #include "MRSetupDialogCommon.hpp"
@@ -17,7 +16,15 @@
 
 namespace MRFileExtensionProfilesDialogInternal {
 
+std::string trimAscii(const std::string &value) {
+	return mr::dialogs::trimAscii(value);
+}
 
+std::string upperAscii(std::string value) {
+	for (char &i : value)
+		i = static_cast<char>(std::toupper(static_cast<unsigned char>(i)));
+	return value;
+}
 
 std::string readRecordField(const char *value) {
 	return mr::dialogs::readRecordField(value);

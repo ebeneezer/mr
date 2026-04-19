@@ -50,8 +50,7 @@ TSubMenu *createFileMenu() {
 TSubMenu *createEditMenu() {
 	return &(
 	    *new TSubMenu("~E~dit", kbAltE) +
-	    *new TMenuItem("~U~ndo", cmMrEditUndo, kbCtrlZ, hcNoContext, "CtrlZ") +
-	    *new TMenuItem("~R~edo", cmMrEditRedo, TKey('Z', kbCtrlShift | kbShift), hcNoContext, "ShiftCtrlZ") + newLine() +
+	    *new TMenuItem("~U~ndo", cmMrEditUndo, kbCtrlU, hcNoContext, "CtrlU") + newLine() +
 	    *new TMenuItem("~C~ut to buffer", cmMrEditCutToBuffer, kbCtrlIns, hcNoContext, "CtrlIns") +
 	    *new TMenuItem("co~P~y to buffer", cmMrEditCopyToBuffer, kbNoKey, hcNoContext,
 	                   "CtrlGrey+") +

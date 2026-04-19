@@ -1,5 +1,3 @@
-#include "../app/utils/MRFileIOUtils.hpp"
-#include "../app/utils/MRStringUtils.hpp"
 #include "MRDialogPaths.hpp"
 #include "MRSettingsLoader.hpp"
 
@@ -116,7 +114,22 @@ bool &configuredColorSettingsInitialized() {
 	return initialized;
 }
 
+std::string trimAscii(std::string_view value) {
+	std::size_t start = 0;
+	std::size_t end = value.size();
 
+	while (start < end && std::isspace(static_cast<unsigned char>(value[start])) != 0)
+		++start;
+	while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1])) != 0)
+		--end;
+	return std::string(value.substr(start, end - start));
+}
+
+std::string upperAscii(std::string value) {
+	for (char & i : value)
+		i = static_cast<char>(std::toupper(static_cast<unsigned char>(i)));
+	return value;
+}
 
 std::string normalizeDialogPath(const char *path) {
 	std::string result = path != nullptr ? path : "";
@@ -477,7 +490,21 @@ bool ensureDirectoryTree(const std::string &directoryPath, std::string *errorMes
 	return true;
 }
 
+bool writeTextFile(const std::string &path, const std::string &content) {
+	std::ofstream out(path.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
+	if (!out)
+		return false;
+	out << content;
+	return out.good();
+}
 
+bool readTextFile(const std::string &path, std::string &content) {
+	std::ifstream in(path.c_str(), std::ios::in | std::ios::binary);
+	if (!in)
+		return false;
+	content.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+	return in.good() || in.eof();
+}
 
 void accumulateSettingsChangeCounts(const std::vector<MRSettingsChangeEntry> &changes, std::size_t &addedCount,
                                     std::size_t &removedCount, std::size_t &changedCount) {

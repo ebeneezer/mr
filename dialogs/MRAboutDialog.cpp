@@ -1,4 +1,3 @@
-#include "../app/utils/MRStringUtils.hpp"
 #define Uses_TApplication
 #define Uses_TDeskTop
 #define Uses_TRect
@@ -25,7 +24,7 @@
 #include "../app/MRAboutQuotes.generated.hpp"
 
 namespace {
-
+using mr::dialogs::trimAscii;
 
 constexpr uint kAnimationTickMs = 100;
 constexpr uint kQuoteRotateMs = 10000;

@@ -1,4 +1,3 @@
-#include "../app/utils/MRStringUtils.hpp"
 #ifndef MRFILEEXTENSIONPROFILESSUPPORT_HPP
 #define MRFILEEXTENSIONPROFILESSUPPORT_HPP
 
@@ -47,6 +46,8 @@ struct EditProfileDraft {
 	FileExtensionEditorSettingsDialogRecord settingsRecord;
 };
 
+[[nodiscard]] std::string trimAscii(const std::string &value);
+[[nodiscard]] std::string upperAscii(std::string value);
 [[nodiscard]] std::string readRecordField(const char *value);
 void writeRecordField(char *dest, std::size_t destSize, const std::string &value);
 [[nodiscard]] bool fileExtensionEditorSettingsDialogRecordsEqual(const FileExtensionEditorSettingsDialogRecord &lhs, const FileExtensionEditorSettingsDialogRecord &rhs);

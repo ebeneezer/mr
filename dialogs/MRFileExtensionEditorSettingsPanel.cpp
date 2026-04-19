@@ -116,7 +116,7 @@ struct FileExtensionEditorSettingsPanelLayout {
 class TPanelGlyphButton : public TView {
   public:
 	TPanelGlyphButton(const TRect &bounds, const char *glyph, ushort command)
-	    : TView(bounds), glyphId(glyph != nullptr ? glyph : ""), commandId(command) {
+	    : TView(bounds), glyph_(glyph != nullptr ? glyph : ""), command_(command) {
 		options |= ofSelectable;
 		options |= ofFirstClick;
 		eventMask |= evMouseDown | evKeyDown;
@@ -125,11 +125,11 @@ class TPanelGlyphButton : public TView {
 	void draw() override {
 		TDrawBuffer buffer;
 		ushort color = getColor((state & sfFocused) != 0 ? 2 : 1);
-		int glyphWidth = strwidth(glyphId.c_str());
+		int glyphWidth = strwidth(glyph_.c_str());
 		int x = std::max(0, (size.x - glyphWidth) / 2);
 
 		buffer.moveChar(0, ' ', color, size.x);
-		buffer.moveStr(static_cast<ushort>(x), glyphId.c_str(), color, size.x - x);
+		buffer.moveStr(static_cast<ushort>(x), glyph_.c_str(), color, size.x - x);
 		writeLine(0, 0, size.x, size.y, buffer);
 	}
 
@@ -157,11 +157,11 @@ class TPanelGlyphButton : public TView {
 
 		while (target != nullptr && dynamic_cast<TDialog *>(target) == nullptr)
 			target = target->owner;
-		message(target != nullptr ? target : owner, evCommand, commandId, this);
+		message(target != nullptr ? target : owner, evCommand, command_, this);
 	}
 
-	std::string glyphId;
-	ushort commandId;
+	std::string glyph_;
+	ushort command_;
 };
 
 TStaticText *addPanelLabel(MRScrollableDialog &dialog, const TRect &rect, const char *text) {
