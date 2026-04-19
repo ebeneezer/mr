@@ -134,6 +134,10 @@ TSubMenu *createSearchMenu() {
 TSubMenu *createTextMenu() {
 	return &(*new TSubMenu("~T~ext", kbAltT) +
 	         *new TMenuItem("~L~ayout...", cmMrTextLayout, kbCtrlF3, hcNoContext, "CtrlF3") +
+	         *new TMenuItem("p~U~sh position onto marker stack", cmMrSearchPushMarker, kbF4,
+	                        hcNoContext, "F4") +
+	         *new TMenuItem("~G~et position from marker stack", cmMrSearchGetMarker, kbShiftF4,
+	                        hcNoContext, "ShiftF4") +
 	         newLine() + *createUpperCaseItem() + *createLowerCaseItem() +
 	         *new TMenuItem("cen~T~er line", cmMrTextCenterLine, kbNoKey, hcNoContext) +
 	         *new TMenuItem("time/~D~ate stamp", cmMrTextTimeDateStamp, kbNoKey, hcNoContext) +
