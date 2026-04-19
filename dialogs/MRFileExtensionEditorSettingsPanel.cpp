@@ -285,7 +285,7 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	const int binaryLabelLeft = rightMarginFieldRight + 2;
 	const int binaryFieldLeft = binaryLabelLeft + 23;
 	const int binaryFieldRight = binaryFieldLeft + 5;
-	const int printMarginFieldLeft = g.inputRight - 4;
+	const int printMarginFieldLeft = g.inputRight - 5;
 	const int printMarginLabelLeft = printMarginFieldLeft - 14;
 
 	addPanelLabel(dialog, TRect(g.labelLeft + 1, g.pageBreakY, g.inputLeft - 2, g.pageBreakY + 1),
@@ -297,8 +297,8 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	addPanelLabel(dialog, TRect(printMarginLabelLeft, g.pageBreakY, printMarginFieldLeft - 1, g.pageBreakY + 1),
 	              "Print Margin:");
 	printMarginField = addPanelInput(dialog,
-	                                 TRect(printMarginFieldLeft, g.pageBreakY, g.inputRight, g.pageBreakY + 1),
-	                                 4);
+	                                 TRect(printMarginFieldLeft, g.pageBreakY, g.inputRight + 1, g.pageBreakY + 1),
+	                                 5);
 
 	addPanelLabel(dialog, TRect(g.labelLeft + 1, g.wordDelimitersY, g.inputLeft - 2, g.wordDelimitersY + 1),
 	              "Word delim:");

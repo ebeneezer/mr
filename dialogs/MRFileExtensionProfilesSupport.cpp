@@ -441,6 +441,7 @@ enum : unsigned long long {
 		}
 	}
 
+	errorText.clear();
 	return true;
 }
 
