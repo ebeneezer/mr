@@ -304,6 +304,8 @@ std::vector<std::string> configuredDefaultExtensionList();
 [[nodiscard]] bool configuredTabExpandSetting();
 [[nodiscard]] bool configuredDisplayTabsSetting();
 [[nodiscard]] int configuredTabSizeSetting();
+[[nodiscard]] std::string configuredFormatLineSetting();
+[[nodiscard]] const std::string &configuredFormatLineSettingRef();
 [[nodiscard]] bool configuredBackupFilesSetting();
 [[nodiscard]] bool configuredPersistentBlocksSetting();
 [[nodiscard]] char configuredPageBreakCharacter();

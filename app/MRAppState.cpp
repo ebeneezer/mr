@@ -15,6 +15,7 @@ struct AppCommandState {
 	bool canSaveInPlace;
 	bool hasSelection;
 	bool hasUndo;
+	bool hasRedo;
 	bool hasBlock;
 	bool blockMarking;
 	bool hasMacroTasks;
@@ -26,7 +27,7 @@ struct AppCommandState {
 	AppCommandState()
 	    : window(nullptr), windowCount(0), hasEditableWindow(false), hasReadOnlyWindow(false),
 	      hasDirtyWindow(false), hasPersistentFileName(false), canSaveInPlace(false), hasSelection(false),
-	      hasUndo(false), hasBlock(false), blockMarking(false), hasMacroTasks(false), hasExternalIoTasks(false),
+	      hasUndo(false), hasRedo(false), hasBlock(false), blockMarking(false), hasMacroTasks(false), hasExternalIoTasks(false),
 	      isCommunicationWindow(false), isCommunicationCommandWindow(false), isLogWindow(false) {
 	}
 };
@@ -56,6 +57,7 @@ AppCommandState appCommandState() {
 	state.blockMarking = win->isBlockMarking();
 	state.hasSelection = win->hasSelection();
 	state.hasUndo = win->hasUndoHistory();
+	state.hasRedo = win->hasRedoHistory();
 	state.hasMacroTasks = win->hasTrackedMacroTasks();
 	state.hasExternalIoTasks = win->hasTrackedExternalIoTasks();
 	state.isCommunicationWindow = win->isCommunicationWindow();
@@ -83,6 +85,7 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrFileShellToDos, true);
 
 	setCommandEnabled(cmMrEditUndo, canModify && state.hasUndo);
+	setCommandEnabled(cmMrEditRedo, canModify && state.hasRedo);
 	setCommandEnabled(cmMrEditCutToBuffer, canModify && state.hasSelection);
 	setCommandEnabled(cmMrEditCopyToBuffer, hasEditor && state.hasSelection);
 	setCommandEnabled(cmMrEditAppendToBuffer, canModify && state.hasSelection);

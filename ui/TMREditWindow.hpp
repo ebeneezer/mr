@@ -28,6 +28,7 @@
 #include "TMRIndicator.hpp"
 #include "TMRTextBuffer.hpp"
 #include "MRWindowManager.hpp"
+#include "MRWindowManager.hpp"
 #include "MRWindowSupport.hpp"
 #include "../config/MRDialogPaths.hpp"
 #include "../mrmac/mrvm.hpp"
@@ -333,6 +334,10 @@ class TMREditWindow : public TWindow {
 
 	bool hasUndoHistory() const {
 		return buffer().hasUndoHistory();
+	}
+
+	bool hasRedoHistory() const {
+		return buffer().hasRedoHistory();
 	}
 
 	TPoint cursorPoint() const {
@@ -1078,7 +1083,6 @@ class TMREditWindow : public TWindow {
 	void resetTransientEditorState() {
 		if (editor == nullptr)
 			return;
-		editor->resetUndoState();
 		clearBlock();
 	}
 

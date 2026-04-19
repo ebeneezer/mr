@@ -32,6 +32,8 @@
 #include "../config/MRDialogPaths.hpp"
 #include "../app/MRCommands.hpp"
 
+class TMREditWindow;
+
 class TMRFileEditor : public TScroller {
   public:
 	struct LoadTiming {
@@ -48,8 +50,8 @@ class TMRFileEditor : public TScroller {
 	TMRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar,
 	              TIndicator *aIndicator, TStringView aFileName) noexcept
 	    : TScroller(bounds, aHScrollBar, aVScrollBar), indicator_(aIndicator), readOnly_(false),
-	      insertMode_(true), autoIndent_(false), syntaxTitleHint_(), bufferModel_(), delCount_(0),
-	      insCount_(0), selectionAnchor_(0), indicatorUpdateInProgress_(false),
+	      insertMode_(true), autoIndent_(false), syntaxTitleHint_(), bufferModel_(),
+	      selectionAnchor_(0), indicatorUpdateInProgress_(false),
 	      lineIndexWarmupTaskId_(0), lineIndexWarmupDocumentId_(0), lineIndexWarmupVersion_(0),
 		      syntaxTokenCache_(), syntaxWarmupTaskId_(0), syntaxWarmupDocumentId_(0),
 			      syntaxWarmupVersion_(0), syntaxWarmupTopLine_(0), syntaxWarmupBottomLine_(0),
@@ -117,20 +119,19 @@ class TMRFileEditor : public TScroller {
 	void setDocumentModified(bool changed) {
 		bufferModel_.setModified(changed);
 		if (!changed) {
-			delCount_ = 0;
-			insCount_ = 0;
+			bufferModel_.document().flatten();
+			bufferModel_.clearUndoRedo();
 			clearDirtyRanges();
 		}
 		syncFromEditorState(false);
 	}
 
-	bool hasUndoHistoryState() const noexcept {
-		return delCount_ != 0 || insCount_ != 0;
+	bool hasUndoHistory() const noexcept {
+		return bufferModel_.undoStackDepth() > 0;
 	}
 
-	void resetUndoState() noexcept {
-		delCount_ = 0;
-		insCount_ = 0;
+	bool hasRedoHistory() const noexcept {
+		return bufferModel_.redoStackDepth() > 0;
 	}
 
 	bool insertModeEnabled() const noexcept {
@@ -656,6 +657,26 @@ class TMRFileEditor : public TScroller {
 		return True;
 	}
 
+	void pushUndoSnapshot() {
+		TMRTextBufferModel::CustomUndoRecord record;
+		record.preSnapshot = bufferModel_.readSnapshot();
+		record.cursor = bufferModel_.cursor();
+		if (bufferModel_.hasSelection()) {
+			record.selAnchor = bufferModel_.selection().range().start;
+			record.selCursor = bufferModel_.selection().range().end;
+		} else {
+			record.selAnchor = 0;
+			record.selCursor = 0;
+		}
+		if (owner != nullptr) {
+			record.blockMode = blockOverlayMode_;
+			record.blockAnchor = blockOverlayAnchor_;
+			record.blockEnd = blockOverlayEnd_;
+			record.blockMarkingOn = blockOverlayActive_;
+		}
+		bufferModel_.pushUndoSnapshot(record);
+	}
+
 	bool replaceBufferData(const char *data, uint length) {
 		std::string text;
 		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
@@ -667,9 +688,12 @@ class TMRFileEditor : public TScroller {
 			text.assign(data, length);
 		transaction.setText(text);
 		preview = bufferModel_.document();
+		pushUndoSnapshot();
 		commit = preview.tryApply(transaction);
-		if (!commit.applied())
+		if (!commit.applied()) {
+			bufferModel_.popUndoSnapshot();
 			return false;
+		}
 		return adoptCommittedDocument(preview, 0, 0, 0, false);
 	}
 
@@ -692,9 +716,12 @@ class TMRFileEditor : public TScroller {
 			text.assign(data, length);
 		transaction.insert(endPtr, text);
 		preview = bufferModel_.document();
+		pushUndoSnapshot();
 		commit = preview.tryApply(transaction);
-		if (!commit.applied())
+		if (!commit.applied()) {
+			bufferModel_.popUndoSnapshot();
 			return false;
+		}
 		return adoptCommittedDocument(preview, endPtr + text.size(), endPtr + text.size(),
 		                              endPtr + text.size(), false);
 	}
@@ -721,9 +748,12 @@ class TMRFileEditor : public TScroller {
 			text.assign(data, length);
 		transaction.replace(range, text);
 		preview = bufferModel_.document();
+		pushUndoSnapshot();
 		commit = preview.tryApply(transaction);
-		if (!commit.applied())
+		if (!commit.applied()) {
+			bufferModel_.popUndoSnapshot();
 			return false;
+		}
 		return adoptCommittedDocument(preview, range.start, range.start, range.start + text.size(), true,
 		                              &commit.change);
 	}
@@ -752,10 +782,12 @@ class TMRFileEditor : public TScroller {
 		range = TMRTextBufferModel::Range(start, end).clamped(bufferModel_.length());
 		transaction.replace(range, text);
 		preview = bufferModel_.document();
+		pushUndoSnapshot();
 		commit = preview.tryApply(transaction);
-		if (!commit.applied())
+		if (!commit.applied()) {
+			bufferModel_.popUndoSnapshot();
 			return false;
-		bumpUndoCounters(range.length(), text.size());
+		}
 		start = range.start + text.size();
 		return adoptCommittedDocument(preview, start, start, start, true, &commit.change);
 	}
@@ -772,10 +804,12 @@ class TMRFileEditor : public TScroller {
 			return false;
 		transaction.replace(TMRTextBufferModel::Range(start, end), text);
 		preview = bufferModel_.document();
+		pushUndoSnapshot();
 		commit = preview.tryApply(transaction);
-		if (!commit.applied())
+		if (!commit.applied()) {
+			bufferModel_.popUndoSnapshot();
 			return false;
-		bumpUndoCounters(end - start, text.size());
+		}
 		return adoptCommittedDocument(preview, start, start, start, true, &commit.change);
 	}
 
@@ -846,12 +880,14 @@ class TMRFileEditor : public TScroller {
 		transaction.replace(TMRTextBufferModel::Range(start, end), formattedText);
 
 		TMRTextBufferModel::Document preview = bufferModel_.document();
+		pushUndoSnapshot();
 		TMRTextBufferModel::CommitResult commit = preview.tryApply(transaction);
 
-		if (!commit.applied())
+		if (!commit.applied()) {
+			bufferModel_.popUndoSnapshot();
 			return false;
+		}
 
-		bumpUndoCounters(end - start, formattedText.size());
 		return adoptCommittedDocument(preview, start, start, start, true, &commit.change);
 	}
 
@@ -873,10 +909,12 @@ class TMRFileEditor : public TScroller {
 			return true;
 		transaction.erase(TMRTextBufferModel::Range(start, end));
 		preview = bufferModel_.document();
+		pushUndoSnapshot();
 		commit = preview.tryApply(transaction);
-		if (!commit.applied())
+		if (!commit.applied()) {
+			bufferModel_.popUndoSnapshot();
 			return false;
-		bumpUndoCounters(end - start, 0);
+		}
 		return adoptCommittedDocument(preview, start, start, start, true, &commit.change);
 	}
 
@@ -892,10 +930,12 @@ class TMRFileEditor : public TScroller {
 			return false;
 		transaction.erase(TMRTextBufferModel::Range(start, end));
 		preview = bufferModel_.document();
+		pushUndoSnapshot();
 		commit = preview.tryApply(transaction);
-		if (!commit.applied())
+		if (!commit.applied()) {
+			bufferModel_.popUndoSnapshot();
 			return false;
-		bumpUndoCounters(end - start, 0);
+		}
 		return adoptCommittedDocument(preview, start, start, start, true, &commit.change);
 	}
 
@@ -909,10 +949,12 @@ class TMRFileEditor : public TScroller {
 			return false;
 		transaction.setText(text);
 		preview = bufferModel_.document();
+		pushUndoSnapshot();
 		commit = preview.tryApply(transaction);
-		if (!commit.applied())
+		if (!commit.applied()) {
+			bufferModel_.popUndoSnapshot();
 			return false;
-		bumpUndoCounters(bufferModel_.length(), text.size());
+		}
 		cursorPos = std::min(cursorPos, text.size());
 		return adoptCommittedDocument(preview, cursorPos, cursorPos, cursorPos, true, &commit.change);
 	}
@@ -921,11 +963,15 @@ class TMRFileEditor : public TScroller {
 	    const TMRTextBufferModel::StagedTransaction &transaction, std::size_t cursorPos,
 	    std::size_t selStart, std::size_t selEnd, bool modifiedState = true) {
 		TMRTextBufferModel::Document preview = bufferModel_.document();
+		pushUndoSnapshot();
 		TMRTextBufferModel::CommitResult result = preview.tryApply(transaction);
 
-		if (result.applied())
+		if (result.applied()) {
 			adoptCommittedDocument(preview, cursorPos, selStart, selEnd, modifiedState,
 			                       &result.change);
+		} else {
+			bufferModel_.popUndoSnapshot();
+		}
 		return result;
 	}
 
@@ -1092,8 +1138,24 @@ class TMRFileEditor : public TScroller {
 	}
 
 	static int tabDisplayWidth(int visualColumn, int tabSize) noexcept {
+		const std::string &formatLine = configuredFormatLineSettingRef();
+		for (std::size_t i = static_cast<std::size_t>(visualColumn) + 1; i < formatLine.size(); ++i) {
+			if (formatLine[i] == '|')
+				return static_cast<int>(i) - visualColumn;
+		}
 		int nextStop = ((visualColumn / tabSize) + 1) * tabSize;
 		return std::max(1, nextStop - visualColumn);
+	}
+
+	static int reverseTabDisplayWidth(int visualColumn, int tabSize) noexcept {
+		if (visualColumn <= 0) return 0;
+		const std::string &formatLine = configuredFormatLineSettingRef();
+		for (int i = visualColumn - 1; i > 0; --i) {
+			if (i < static_cast<int>(formatLine.size()) && formatLine[i] == '|')
+				return visualColumn - i;
+		}
+		int prevStop = ((visualColumn - 1) / tabSize) * tabSize;
+		return std::max(1, visualColumn - prevStop);
 	}
 
 	int visibleTextRows() const noexcept {
@@ -2183,11 +2245,6 @@ class TMRFileEditor : public TScroller {
 		                                             targetPath) == mr::dialogs::UnsavedChangesChoice::Save;
 	}
 
-	void bumpUndoCounters(std::size_t deletedBytes, std::size_t insertedBytes) noexcept {
-		delCount_ += static_cast<uint>(std::min<std::size_t>(deletedBytes, UINT_MAX));
-		insCount_ += static_cast<uint>(std::min<std::size_t>(insertedBytes, UINT_MAX));
-	}
-
 	std::size_t lineStartForIndex(std::size_t index) const noexcept {
 		return bufferModel_.lineStartByIndex(index);
 	}
@@ -2515,12 +2572,28 @@ class TMRFileEditor : public TScroller {
 		return std::string(static_cast<std::size_t>(tabDisplayWidth(visualColumn, configuredTabSize())), ' ');
 	}
 
+	std::size_t shiftTabOffset(std::size_t offset) noexcept {
+		std::size_t lineStart = bufferModel_.lineStart(offset);
+		int visualColumn = charColumn(lineStart, offset);
+		if (visualColumn <= 0)
+			return offset;
+		int width = reverseTabDisplayWidth(visualColumn, configuredTabSize());
+		int targetVisual = std::max(0, visualColumn - width);
+		return charPtrOffset(lineStart, targetVisual);
+	}
+
 	void handleKeyDown(TEvent &event) {
 		ushort key = ctrlToArrow(event.keyDown.keyCode);
 		bool extend = (event.keyDown.controlKeyState & kbShift) != 0;
 
 		if (isTextInputEvent(event)) {
 			handleTextInput(event);
+			return;
+		}
+
+		if (event.keyDown.keyCode == kbShiftTab) {
+			moveCursor(shiftTabOffset(cursorOffset()), extend, false);
+			clearEvent(event);
 			return;
 		}
 
@@ -2626,8 +2699,32 @@ class TMRFileEditor : public TScroller {
 			case cmPaste:
 				pasteClipboard();
 				break;
-			case cmUndo:
+			case cmMrEditUndo: {
+				TMRTextBufferModel::CustomUndoRecord record;
+				if (bufferModel_.undo(&record)) {
+					adoptCommittedDocument(bufferModel_.document(), bufferModel_.cursor(),
+					                       bufferModel_.selectionStart(), bufferModel_.selectionEnd(),
+					                       true);
+					if (owner != nullptr) {
+						setBlockOverlayState(record.blockMode, record.blockAnchor,
+						                     record.blockEnd, record.blockMarkingOn, false);
+					}
+				}
 				break;
+			}
+			case cmMrEditRedo: {
+				TMRTextBufferModel::CustomUndoRecord record;
+				if (bufferModel_.redo(&record)) {
+					adoptCommittedDocument(bufferModel_.document(), bufferModel_.cursor(),
+					                       bufferModel_.selectionStart(), bufferModel_.selectionEnd(),
+					                       true);
+					if (owner != nullptr) {
+						setBlockOverlayState(record.blockMode, record.blockAnchor,
+						                     record.blockEnd, record.blockMarkingOn, false);
+					}
+				}
+				break;
+			}
 			case cmMrTextUpperCaseMenu:
 				convertSelectionToUpperCase();
 				break;
@@ -3162,8 +3259,6 @@ class TMRFileEditor : public TScroller {
 	char fileName[MAXPATH];
 	std::string syntaxTitleHint_;
 	TMRTextBufferModel bufferModel_;
-	uint delCount_;
-	uint insCount_;
 	std::size_t selectionAnchor_;
 	bool indicatorUpdateInProgress_;
 	std::uint64_t lineIndexWarmupTaskId_;

@@ -4815,15 +4815,13 @@ static bool fileContainsOnlyTransientMacros(const LoadedMacroFile &file) {
 static bool refreshLoadedFileBytecode(const std::string &fileKey) {
 	std::map<std::string, LoadedMacroFile>::iterator fit = g_runtimeEnv.loadedFiles.find(fileKey);
 	std::string source;
-	std::string ioError;
 	unsigned char *compiled = nullptr;
 	size_t compiledSize = 0;
 	int macroCount;
 
 	if (fit == g_runtimeEnv.loadedFiles.end())
 		return false;
-	if (fit->second.resolvedPath.empty() ||
-	    !readTextFile(fit->second.resolvedPath, source, ioError)) {
+	if (fit->second.resolvedPath.empty() || !readTextFile(fit->second.resolvedPath, source)) {
 		runtimeErrorLevel() = 5001;
 		return false;
 	}
@@ -4907,7 +4905,6 @@ static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *load
 	std::string resolvedPath = resolveMacroFilePath(spec);
 	std::string fileKey = makeFileKey(spec);
 	std::string source;
-	std::string ioError;
 	LoadedMacroFile newFile;
 	unsigned char *compiled = nullptr;
 	size_t compiledSize = 0;
@@ -4916,7 +4913,7 @@ static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *load
 	if (loadedFileKey != nullptr)
 		loadedFileKey->clear();
 
-	if (resolvedPath.empty() || !readTextFile(resolvedPath, source, ioError)) {
+	if (resolvedPath.empty() || !readTextFile(resolvedPath, source)) {
 		runtimeErrorLevel() = 5001;
 		return false;
 	}
@@ -7515,11 +7512,10 @@ void mrvmBootstrapBoundMacroIndex(const std::string &directoryPath, std::size_t 
 
 	for (const auto & file : files) {
 		std::string source;
-		std::string ioError;
 		std::vector<TKey> keys;
 		std::string fileKey;
 
-		if (!readTextFile(file, source, ioError))
+		if (!readTextFile(file, source))
 			continue;
 		if (!parseIndexedBindingHeaders(source, keys) || keys.empty())
 			continue;
