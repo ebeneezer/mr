@@ -288,6 +288,10 @@ std::vector<FileInformationPage> buildFileInformationPages(TMREditWindow *win) {
 	                      (win != nullptr ? std::to_string(win->pieceCount()) + " pieces" : std::string("<n/a>")));
 	page2.lines.push_back(std::string("Doc version   : ") +
 	                      (win != nullptr ? std::to_string(win->documentVersion()) : std::string("0")));
+	page2.lines.push_back(std::string("Undo stack    : ") +
+	                      (win != nullptr ? std::to_string(win->buffer().undoStackDepth()) + " items" : std::string("0")));
+	page2.lines.push_back(std::string("Redo stack    : ") +
+	                      (win != nullptr ? std::to_string(win->buffer().redoStackDepth()) + " items" : std::string("0")));
 	page2.lines.push_back(std::string("Source        : ") +
 	                      (win != nullptr && win->hasMappedOriginalSource() ? "mmap file" : "memory buffer"));
 	if (win != nullptr && win->hasMappedOriginalSource())
