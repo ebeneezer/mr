@@ -2,6 +2,7 @@
 #include "../app/utils/MRStringUtils.hpp"
 #include "MRDialogPaths.hpp"
 #include "MRSettingsLoader.hpp"
+#include "../ui/MRMessageLineController.hpp"
 
 #include <algorithm>
 #include <cerrno>
@@ -532,6 +533,13 @@ bool setError(std::string *errorMessage, const std::string &message) {
 	if (errorMessage != nullptr)
 		*errorMessage = message;
 	return false;
+}
+
+void postDialogInteractionError(std::string_view text) {
+	if (!g_menulineMessagesEnabled || text.empty())
+		return;
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text,
+	                               mr::messageline::Kind::Error, mr::messageline::kPriorityMedium);
 }
 
 static const char *const kDefaultPageBreakLiteral = "\\f";
@@ -2993,6 +3001,7 @@ bool ensureColorThemeFileExists(const std::string &themeUri, std::string *errorM
 bool loadColorThemeFile(const std::string &themeUri, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(themeUri);
 	std::string source;
+	std::string ioError;
 	std::string applyError;
 	std::map<std::string, std::string> assignments;
 	static const char *const order[] = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS",
@@ -3002,8 +3011,11 @@ bool loadColorThemeFile(const std::string &themeUri, std::string *errorMessage) 
 		return false;
 	if (!ensureColorThemeFileExists(normalized, errorMessage))
 		return false;
-	if (!readTextFile(normalized, source))
-		return setError(errorMessage, "Unable to read color theme file: " + normalized);
+	if (!readTextFile(normalized, source, ioError)) {
+		const std::string message = "Unable to read color theme file: " + ioError;
+		postDialogInteractionError(message);
+		return setError(errorMessage, message);
+	}
 	if (!parseThemeSetupAssignments(source, assignments, errorMessage))
 		return false;
 	for (const char *key : order)
@@ -3021,14 +3033,18 @@ bool loadWindowColorThemeGroupValues(const std::string &themeUri,
                                      std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(themeUri);
 	std::string source;
+	std::string ioError;
 	std::map<std::string, std::string> assignments;
 
 	if (!validateColorThemeFilePath(normalized, errorMessage))
 		return false;
 	if (!ensureColorThemeFileExists(normalized, errorMessage))
 		return false;
-	if (!readTextFile(normalized, source))
-		return setError(errorMessage, "Unable to read color theme file: " + normalized);
+	if (!readTextFile(normalized, source, ioError)) {
+		const std::string message = "Unable to read color theme file: " + ioError;
+		postDialogInteractionError(message);
+		return setError(errorMessage, message);
+	}
 	if (!parseThemeSetupAssignments(source, assignments, errorMessage))
 		return false;
 	if (!parseWindowColorListLiteral(assignments["WINDOWCOLORS"], outValues, errorMessage))

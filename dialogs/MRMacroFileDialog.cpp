@@ -28,6 +28,7 @@
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "../ui/TMREditWindow.hpp"
+#include "../ui/MRMessageLineController.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -116,8 +117,13 @@ std::string firstMacroNameForSource(const std::string &source, std::string &keyS
 
 bool loadEntryMetadata(MacroFileEntry &entry) {
 	std::string source;
-	if (!readTextFile(entry.path, source))
+	std::string ioError;
+	if (!readTextFile(entry.path, source, ioError)) {
+		entry.macroName.clear();
+		entry.keySpec.clear();
+		entry.compileError = ioError.empty() ? "Unable to read macro file." : ioError;
 		return false;
+	}
 	entry.macroName = firstMacroNameForSource(source, entry.keySpec, entry.compileError);
 	return true;
 }
@@ -470,6 +476,7 @@ bool captureBindingKeySpec(std::string &keySpec) {
 
 bool rebindMacroFileKey(const MacroFileEntry &entry, const std::string &keySpec, std::string &errorText) {
 	std::string source;
+	std::string ioError;
 	std::size_t headerStart = 0;
 	std::size_t headerEnd = 0;
 	std::string macroName;
@@ -479,8 +486,8 @@ bool rebindMacroFileKey(const MacroFileEntry &entry, const std::string &keySpec,
 	unsigned char *bytecode = nullptr;
 
 	errorText.clear();
-	if (!readTextFile(entry.path, source)) {
-		errorText = "Unable to read macro file.";
+	if (!readTextFile(entry.path, source, ioError)) {
+		errorText = "Unable to read macro file: " + ioError;
 		return false;
 	}
 	if (!findFirstMacroHeader(source, entry.macroName, headerStart, headerEnd, macroName)) {
@@ -895,6 +902,8 @@ class MacroManagerDialog : public TDialog {
 		if (keySpec.empty())
 			return;
 		if (!rebindMacroFileKey(*entry, keySpec, err)) {
+			mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, err,
+			                               mr::messageline::Kind::Error, mr::messageline::kPriorityMedium);
 			messageBox(mfError | mfOKButton, "Unable to bind macro:\n\n%s", err.c_str());
 			return;
 		}

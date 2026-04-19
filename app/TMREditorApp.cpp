@@ -550,6 +550,7 @@ bool loadStartupSettingsMacro(const std::string &overridePath, std::string *erro
 	std::string settingsPath = overridePath.empty() ? defaultSettingsMacroFilePath() : overridePath;
 	std::string source;
 	std::string loadError;
+	std::string ioError;
 	MRSettingsLoadReport report;
 	std::string summary;
 	std::string canonicalSource;
@@ -566,8 +567,8 @@ bool loadStartupSettingsMacro(const std::string &overridePath, std::string *erro
 		                                   : "Settings bootstrap failed (create defaults).");
 		return false;
 	}
-	if (!readTextFile(settingsPath, source)) {
-		loadError = "Settings load failed (read): " + settingsPath;
+	if (!readTextFile(settingsPath, source, ioError)) {
+		loadError = "Settings load failed (read): " + ioError;
 		source.clear();
 	}
 	if (!buildCanonicalSettingsSource(settingsPath, source, &report, canonicalSource, &loadError)) {
@@ -575,11 +576,14 @@ bool loadStartupSettingsMacro(const std::string &overridePath, std::string *erro
 			mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings normalization failed.");
 			return false;
 		}
-		if (!readTextFile(settingsPath, source)) {
+		if (!readTextFile(settingsPath, source, ioError)) {
 			if (errorMessage != nullptr)
-				*errorMessage = "Settings load failed after normalization (read): " + settingsPath;
+				*errorMessage = "Settings load failed after normalization (read): " + ioError;
 			mrLogMessage(errorMessage != nullptr ? errorMessage->c_str()
 			                                   : "Settings load failed after normalization (read).");
+			if (errorMessage != nullptr)
+				mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, *errorMessage,
+				                               mr::messageline::Kind::Error, mr::messageline::kPriorityMedium);
 			return false;
 		}
 		if (!buildCanonicalSettingsSource(settingsPath, source, &report, canonicalSource, errorMessage)) {
