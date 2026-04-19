@@ -4,3 +4,4 @@
 
 std::string trimAscii(std::string_view value);
 std::string upperAscii(std::string value);
+bool isBlankString(std::string_view value);

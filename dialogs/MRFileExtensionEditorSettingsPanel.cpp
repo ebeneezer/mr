@@ -645,8 +645,7 @@ void FileExtensionEditorSettingsPanel::syncDynamicStates() {
 
 	if (tabSizeSlider != nullptr)
 		tabSizeSlider->getData(&currentTabSize);
-	const bool formatLineBlank =
-	    currentFormatLine.find_first_not_of(" \t\r\n") == std::string::npos;
+	const bool formatLineBlank = isBlankString(currentFormatLine);
 	if (formatLineBlank || currentFormatLine == previousAutoFormat)
 		writeInputFieldValue(formatLineField, defaultFormatLineForTabSize(static_cast<int>(currentTabSize)));
 	lastKnownTabSizeForFormatLine = static_cast<int>(currentTabSize);

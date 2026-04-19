@@ -22,3 +22,12 @@ std::string upperAscii(std::string value) {
     }
     return value;
 }
+
+bool isBlankString(std::string_view value) {
+    for (char c : value) {
+        if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
+            return false;
+        }
+    }
+    return true;
+}

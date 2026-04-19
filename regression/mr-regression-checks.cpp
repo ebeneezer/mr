@@ -942,7 +942,7 @@ bool testToFromDispatch(std::string &failureReason) {
 	std::string executedMacroName;
 	bool ok = false;
 
-	if (!writeTextFile(macroPath, macroSource)) {
+	if (!writeTextFile(std::string_view(macroPath), std::string_view(macroSource))) {
 		failureReason = "Unable to create TO/FROM dispatch probe macro file.";
 		return false;
 	}
@@ -2877,7 +2877,7 @@ bool testKeyIn(std::string &failureReason) {
 	}
 	std::free(bytecode);
 
-	if (!writeTextFile(macroPath, source)) {
+	if (!writeTextFile(std::string_view(macroPath), std::string_view(source))) {
 		failureReason = "Unable to create KEY_IN probe macro file.";
 		return false;
 	}

@@ -31,6 +31,7 @@
 #include "TMRTextBufferModel.hpp"
 #include "../config/MRDialogPaths.hpp"
 #include "../app/MRCommands.hpp"
+#include "../app/utils/MRStringUtils.hpp"
 
 class TMRFileEditor : public TScroller {
   public:
@@ -788,14 +789,14 @@ class TMRFileEditor : public TScroller {
 
 		while (start > 0) {
 			std::size_t prevLineStart = bufferModel_.lineStart(bufferModel_.prevLine(start));
-			if (bufferModel_.lineText(prevLineStart).find_first_not_of(" \t\r\n") == std::string::npos)
+			if (isBlankString(bufferModel_.lineText(prevLineStart)))
 				break;
 			start = prevLineStart;
 		}
 
 		while (end < bufferModel_.length()) {
 			std::size_t nextLineStart = bufferModel_.nextLine(end);
-			if (bufferModel_.lineText(end).find_first_not_of(" \t\r\n") == std::string::npos)
+			if (isBlankString(bufferModel_.lineText(end)))
 				break;
 			end = nextLineStart;
 		}
