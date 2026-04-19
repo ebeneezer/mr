@@ -582,7 +582,7 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"TEMPDIR", MRSettingsKeyClass::Path, true},
 	{"SHELLPATH", MRSettingsKeyClass::Path, true},
 	{"WINDOW_MANAGER", MRSettingsKeyClass::Global, true},
-	{"MENULINE_MESSAGES", MRSettingsKeyClass::Global, true},
+	{"MESSAGES", MRSettingsKeyClass::Global, true},
 	{"LASTFILEDIALOGPATH", MRSettingsKeyClass::Global, true},
 	{"MAX_PATH_HISTORY", MRSettingsKeyClass::Global, true},
 	{"MAX_FILE_HISTORY", MRSettingsKeyClass::Global, true},
@@ -2377,7 +2377,7 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 					return false;
 				return setConfiguredWindowManager(parsed, errorMessage);
 			}
-			if (upper == "MENULINE_MESSAGES") {
+			if (upper == "MESSAGES") {
 				bool parsed = true;
 				if (!parseBooleanLiteral(value, parsed, errorMessage))
 					return false;
@@ -3363,7 +3363,7 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source += "MRSETUP('TEMPDIR', '" + escapeMrmacSingleQuotedLiteral(tempDir) + "');\n";
 	source += "MRSETUP('SHELLPATH', '" + escapeMrmacSingleQuotedLiteral(shellPath) + "');\n";
 	source += "MRSETUP('WINDOW_MANAGER', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredWindowManager())) + "');\n";
-	source += "MRSETUP('MENULINE_MESSAGES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMenulineMessages())) + "');\n";
+	source += "MRSETUP('MESSAGES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMenulineMessages())) + "');\n";
 	source += "MRSETUP('LASTFILEDIALOGPATH', '" +
 	          escapeMrmacSingleQuotedLiteral(configuredLastFileDialogPath()) + "');\n";
 	source += "MRSETUP('MAX_PATH_HISTORY', '" + std::to_string(configuredMaxPathHistory()) + "');\n";

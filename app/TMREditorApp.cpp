@@ -28,6 +28,7 @@
 #include "../dialogs/MRUnsavedChangesDialog.hpp"
 #include "../coprocessor/MRPerformance.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
+#include "../app/commands/MRFileCommands.hpp"
 #include "../ui/TMRDeskTop.hpp"
 #include "../ui/TMREditWindow.hpp"
 #include "../ui/TMRMenuBar.hpp"
@@ -40,6 +41,7 @@
 #include "MRCommands.hpp"
 #include "MRMenuFactory.hpp"
 
+#include <algorithm>
 #include <ctime>
 #include <chrono>
 #include <array>
@@ -48,7 +50,10 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
+#include <fnmatch.h>
+#include <glob.h>
 #include <map>
 #include <regex>
 #include <set>
@@ -614,6 +619,222 @@ bool loadStartupSettingsMacro(const std::string &overridePath, std::string *erro
 	return true;
 }
 
+struct StartupLoadRequest {
+	bool recursive;
+	std::vector<std::string> specs;
+
+	StartupLoadRequest() : recursive(false), specs() {
+	}
+};
+
+bool hasGlobWildcard(std::string_view pathSpec) {
+	return pathSpec.find_first_of("*?[") != std::string::npos;
+}
+
+bool isReadableRegularFile(const std::filesystem::path &path) {
+	std::error_code ec;
+	std::string pathString = path.string();
+
+	if (pathString.empty())
+		return false;
+	if (!std::filesystem::is_regular_file(path, ec) || ec)
+		return false;
+	return ::access(pathString.c_str(), R_OK) == 0;
+}
+
+std::string normalizePathForLoad(const std::filesystem::path &path) {
+	std::error_code ec;
+	std::filesystem::path normalized = std::filesystem::weakly_canonical(path, ec);
+
+	if (ec || normalized.empty())
+		normalized = path.lexically_normal();
+	return normalized.string();
+}
+
+void appendUniqueFilePath(const std::filesystem::path &path, std::vector<std::string> &paths,
+                          std::set<std::string> &seen) {
+	std::string normalized;
+
+	if (!isReadableRegularFile(path))
+		return;
+	normalized = normalizePathForLoad(path);
+	if (normalized.empty())
+		return;
+	if (seen.insert(normalized).second)
+		paths.push_back(normalized);
+}
+
+void appendGlobMatchesFlat(const std::string &pattern, std::vector<std::string> &paths,
+                           std::set<std::string> &seen) {
+	glob_t globResult{};
+	int result = ::glob(pattern.c_str(), 0, nullptr, &globResult);
+
+	if (result == 0) {
+		for (std::size_t i = 0; i < globResult.gl_pathc; ++i)
+			appendUniqueFilePath(std::filesystem::path(globResult.gl_pathv[i]), paths, seen);
+	} else if (result != GLOB_NOMATCH) {
+		std::string line = "Startup glob failed for pattern: ";
+		line += pattern;
+		mrLogMessage(line.c_str());
+	}
+	globfree(&globResult);
+}
+
+std::filesystem::path recursiveRootForPattern(const std::string &pattern) {
+	std::size_t wildcardPos = pattern.find_first_of("*?[");
+	std::size_t slashPos;
+
+	if (wildcardPos == std::string::npos)
+		return std::filesystem::path(pattern);
+	slashPos = pattern.rfind('/', wildcardPos);
+	if (slashPos == std::string::npos)
+		return std::filesystem::path(".");
+	if (slashPos == 0)
+		return std::filesystem::path("/");
+	return std::filesystem::path(pattern.substr(0, slashPos));
+}
+
+void appendRecursiveGlobMatches(const std::string &pattern, std::vector<std::string> &paths,
+                                std::set<std::string> &seen) {
+	std::filesystem::path rootPath = recursiveRootForPattern(pattern);
+	std::size_t wildcardPos = pattern.find_first_of("*?[");
+	std::size_t rootSlashPos = pattern.rfind('/', wildcardPos);
+	std::string patternSuffix = rootSlashPos == std::string::npos ? pattern : pattern.substr(rootSlashPos + 1);
+	const bool matchBaseName = patternSuffix.find('/') == std::string::npos;
+	std::error_code ec;
+	auto matchesPattern = [&](const std::filesystem::path &candidatePath, const std::filesystem::path &basePath) -> bool {
+		std::string candidate;
+		if (matchBaseName)
+			candidate = candidatePath.filename().string();
+		else {
+			std::error_code relEc;
+			std::filesystem::path relativePath = std::filesystem::relative(candidatePath, basePath, relEc);
+			candidate = relEc ? candidatePath.lexically_normal().string() : relativePath.lexically_normal().string();
+		}
+		if (candidate.empty())
+			return false;
+		return fnmatch(patternSuffix.c_str(), candidate.c_str(), 0) == 0;
+	};
+
+	if (rootPath.empty())
+		rootPath = ".";
+	if (!std::filesystem::exists(rootPath, ec) || ec)
+		return;
+	if (!std::filesystem::is_directory(rootPath, ec) || ec) {
+		if (matchesPattern(rootPath, rootPath.parent_path()))
+			appendUniqueFilePath(rootPath, paths, seen);
+		return;
+	}
+
+	std::filesystem::recursive_directory_iterator it(rootPath, std::filesystem::directory_options::skip_permission_denied,
+	                                                 ec);
+	std::filesystem::recursive_directory_iterator end;
+	for (; !ec && it != end; it.increment(ec)) {
+		if (!it->is_regular_file(ec) || ec) {
+			ec.clear();
+			continue;
+		}
+		std::filesystem::path candidatePath = it->path().lexically_normal();
+		if (matchesPattern(candidatePath, rootPath))
+			appendUniqueFilePath(candidatePath, paths, seen);
+	}
+}
+
+void appendRecursivePathFiles(const std::filesystem::path &path, std::vector<std::string> &paths,
+                              std::set<std::string> &seen) {
+	std::error_code ec;
+
+	if (isReadableRegularFile(path)) {
+		appendUniqueFilePath(path, paths, seen);
+		return;
+	}
+	if (!std::filesystem::is_directory(path, ec) || ec)
+		return;
+	std::filesystem::recursive_directory_iterator it(path, std::filesystem::directory_options::skip_permission_denied,
+	                                                 ec);
+	std::filesystem::recursive_directory_iterator end;
+	for (; !ec && it != end; it.increment(ec)) {
+		if (!it->is_regular_file(ec) || ec) {
+			ec.clear();
+			continue;
+		}
+		appendUniqueFilePath(it->path(), paths, seen);
+	}
+}
+
+StartupLoadRequest parseStartupLoadRequest() {
+	StartupLoadRequest request;
+	std::vector<std::string> args = mrvmProcessArguments();
+
+	for (const std::string &arg : args) {
+		if (arg == "--load-recursive" || arg == "-lr") {
+			request.recursive = true;
+			continue;
+		}
+		if (!arg.empty())
+			request.specs.push_back(arg);
+	}
+	return request;
+}
+
+std::vector<std::string> collectStartupFilesFromRequest(const StartupLoadRequest &request) {
+	std::vector<std::string> paths;
+	std::set<std::string> seen;
+
+	for (const std::string &specRaw : request.specs) {
+		std::string spec = expandUserPath(specRaw);
+		std::filesystem::path specPath(spec);
+
+		if (spec.empty())
+			continue;
+		if (request.recursive) {
+			if (hasGlobWildcard(spec))
+				appendRecursiveGlobMatches(spec, paths, seen);
+			else
+				appendRecursivePathFiles(specPath, paths, seen);
+			continue;
+		}
+		if (hasGlobWildcard(spec)) {
+			appendGlobMatchesFlat(spec, paths, seen);
+			continue;
+		}
+		appendUniqueFilePath(specPath, paths, seen);
+	}
+	return paths;
+}
+
+std::size_t loadStartupFilesFromCommandLine() {
+	StartupLoadRequest request = parseStartupLoadRequest();
+	std::vector<std::string> files;
+	std::size_t loadedCount = 0;
+	TMREditWindow *lastLoadedWindow = nullptr;
+
+	if (request.specs.empty())
+		return 0;
+
+	files = collectStartupFilesFromRequest(request);
+	if (files.empty()) {
+		mrLogMessage("No readable startup files matched command-line arguments.");
+		return 0;
+	}
+	for (const std::string &file : files) {
+		TMREditWindow *win = createEditorWindow(file.c_str());
+		if (win == nullptr) {
+			mrLogMessage("Startup load aborted: unable to create editor window.");
+			break;
+		}
+		if (!loadResolvedFileIntoWindow(win, file, "Startup load")) {
+			message(win, evCommand, cmClose, nullptr);
+			continue;
+		}
+		lastLoadedWindow = win;
+		++loadedCount;
+	}
+	if (lastLoadedWindow != nullptr)
+		static_cast<void>(mrActivateEditWindow(lastLoadedWindow));
+	return loadedCount;
+}
+
 std::string buildTopRightCursorStatus() {
 	TMREditWindow *win = currentEditWindow();
 	if (win == nullptr || win->getEditor() == nullptr)
@@ -715,7 +936,7 @@ TMREditorApp::TMREditorApp()
 	loadStartupSettingsMacro(std::string(), nullptr);
 	applyConfiguredDisplayLayout();
 	bootstrapIndexedMacroBindings();
-	static_cast<void>(createEditorWindow("?No-File?"));
+	static_cast<void>(loadStartupFilesFromCommandLine());
 	applyConfiguredDisplayLayout();
 	static_cast<void>(mrEnsureLogWindow(false));
 	syncRecordingUiState();

@@ -608,7 +608,7 @@ static unsigned classifyStoreVarName(const std::string &name) {
 static unsigned classifyProcName(const std::string &name) {
 	if (name == "MRSETUP")
 		return mrefUiAffinity;
-	if (name == "SET_GLOBAL_STR" || name == "SET_GLOBAL_INT" || name == "UNLOAD_MACRO")
+	if (name == "CREATE_GLOBAL_STR" || name == "SET_GLOBAL_STR" || name == "SET_GLOBAL_INT" || name == "UNLOAD_MACRO")
 		return name == "UNLOAD_MACRO" ? mrefUiAffinity : (mrefUiAffinity | mrefStagedWrite);
 	if (name == "LOAD_MACRO_FILE" || name == "CHANGE_DIR" || name == "DEL_FILE")
 		return mrefExternalIo;
@@ -5622,7 +5622,7 @@ bool isSupportedStagedSymbol(const std::string &value) noexcept {
 	    "FIRST_SAVE",  "EOF_IN_MEM",     "BUFFER_ID",      "TMP_FILE",        "TMP_FILE_NAME",
 	    "CUR_WINDOW",  "LINK_STAT",      "WINDOW_COUNT",   "WIN_X1",          "WIN_Y1",
 	    "WIN_X2",      "WIN_Y2",         "GLOBAL_STR",     "GLOBAL_INT",      "FIRST_GLOBAL",
-	    "NEXT_GLOBAL", "SET_GLOBAL_STR", "SET_GLOBAL_INT", "INQ_MACRO",       "FIRST_MACRO",
+	    "NEXT_GLOBAL", "CREATE_GLOBAL_STR", "SET_GLOBAL_STR", "SET_GLOBAL_INT", "INQ_MACRO", "FIRST_MACRO",
 	    "NEXT_MACRO",  "CREATE_WINDOW",  "DELETE_WINDOW",  "MODIFY_WINDOW",   "LINK_WINDOW",
 	    "UNLINK_WINDOW","ZOOM",          "REDRAW",         "NEW_SCREEN",      "SWITCH_WINDOW",
 	    "SIZE_WINDOW",
@@ -5869,6 +5869,10 @@ void mrvmSetProcessContext(int argc, char **argv) {
 	g_runtimeEnv.executableDir = detectExecutableDir(g_runtimeEnv.startupCommand);
 	g_runtimeEnv.shellPath = detectShellPath();
 	g_runtimeEnv.shellVersion = detectShellVersion(g_runtimeEnv.shellPath);
+}
+
+std::vector<std::string> mrvmProcessArguments() {
+	return g_runtimeEnv.processArgs;
 }
 
 void mrvmSetStartupSettingsMode(bool enabled) noexcept {
@@ -6456,7 +6460,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 								throw std::runtime_error(
 								    "MRSETUP(LASTFILEDIALOGPATH) failed: " +
 								    (errorText.empty() ? std::string("invalid path.") : errorText));
-						} else if (setupKey == "WINDOW_MANAGER" || setupKey == "MENULINE_MESSAGES" ||
+						} else if (setupKey == "WINDOW_MANAGER" || setupKey == "MESSAGES" ||
 						           setupKey == "MAX_PATH_HISTORY" || setupKey == "MAX_FILE_HISTORY" ||
 						           setupKey == "PATH_HISTORY" || setupKey == "FILE_HISTORY") {
 							if (!applyConfiguredSettingsAssignment(setupKey, valueAsString(args[1]), dummyPaths,
@@ -6496,7 +6500,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						} else
 							throw std::runtime_error(
 							    "MRSETUP supports keys: SETTINGS_VERSION, MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
-							    "SHELLPATH, WINDOW_MANAGER, MENULINE_MESSAGES, LASTFILEDIALOGPATH, MAX_PATH_HISTORY, MAX_FILE_HISTORY, PATH_HISTORY, FILE_HISTORY, "
+							    "SHELLPATH, WINDOW_MANAGER, MESSAGES, LASTFILEDIALOGPATH, MAX_PATH_HISTORY, MAX_FILE_HISTORY, PATH_HISTORY, FILE_HISTORY, "
 							    "DEFAULT_PROFILE_DESCRIPTION, COLORTHEMEURI, PAGE_BREAK, WORD_DELIMITERS, DEFAULT_EXTENSIONS, "
 							    "TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, TAB_SIZE, RIGHT_MARGIN, WORD_WRAP, "
 							    "INDENT_STYLE, FILE_TYPE, BINARY_RECORD_LENGTH, POST_LOAD_MACRO, PRE_SAVE_MACRO, DEFAULT_PATH, "
@@ -6524,9 +6528,9 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						    "MRFEPROFILE failed: " +
 						    (errorText.empty() ? std::string("invalid directive.") : errorText));
 					runtimeErrorLevel() = 0;
-				} else if (name == "SET_GLOBAL_STR") {
+				} else if (name == "CREATE_GLOBAL_STR" || name == "SET_GLOBAL_STR") {
 					if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1]))
-						throw std::runtime_error("SET_GLOBAL_STR expects (string, string).");
+						throw std::runtime_error(name + " expects (string, string).");
 					setGlobalValue(valueAsString(args[0]), TYPE_STR,
 					               makeString(valueAsString(args[1])));
 				} else if (name == "SET_GLOBAL_INT") {

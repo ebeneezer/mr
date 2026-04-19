@@ -18,6 +18,7 @@
 #include <sys/stat.h>
 #include <thread>
 #include <unistd.h>
+#include <utility>
 #include <vector>
 
 #include "../mrmac/mrmac.h"
@@ -720,8 +721,8 @@ bool testSettingsMacroAutoCreate(std::string &failureReason) {
 		failureReason = "Auto-created settings.mrmac is missing WINDOW_MANAGER.";
 		return false;
 	}
-	if (content.find("MRSETUP('MENULINE_MESSAGES', '") == std::string::npos) {
-		failureReason = "Auto-created settings.mrmac is missing MENULINE_MESSAGES.";
+	if (content.find("MRSETUP('MESSAGES', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing MESSAGES.";
 		return false;
 	}
 	if (content.find("MRSETUP('PAGE_BREAK', '") == std::string::npos) {
@@ -2959,6 +2960,101 @@ bool testKeyIn(std::string &failureReason) {
 	return true;
 }
 
+bool testCreateGlobalStrOperation(std::string &failureReason) {
+	const std::string source = "$MACRO CreateGlobalStrProbe;\n"
+	                           "DEF_INT(Kind, Seen);\n"
+	                           "DEF_STR(Name);\n"
+	                           "CREATE_GLOBAL_STR('CSTR_PROBE', 'Alpha');\n"
+	                           "Seen := 0;\n"
+	                           "Name := FIRST_GLOBAL(Kind);\n"
+	                           "WHILE LENGTH(Name) > 0 DO\n"
+	                           "  IF (Name = 'CSTR_PROBE') AND (Kind = 0) THEN\n"
+	                           "    Seen := 1;\n"
+	                           "    Name := '';\n"
+	                           "  ELSE\n"
+	                           "    Name := NEXT_GLOBAL(Kind);\n"
+	                           "  END;\n"
+	                           "END;\n"
+	                           "SET_GLOBAL_INT('CSTR_PROBE_SEEN', Seen);\n"
+	                           "SET_GLOBAL_INT('CSTR_PROBE_LEN', LENGTH(GLOBAL_STR('CSTR_PROBE')));\n"
+	                           "END_MACRO;\n";
+	std::vector<unsigned char> bytecode;
+	int entryOffset = -1;
+	std::string macroName;
+	std::string compileError;
+	VirtualMachine vm;
+	std::string vmError;
+	MRMacroExecutionProfile profile;
+	std::vector<std::string> unsupported;
+	std::vector<std::string> savedOrder;
+	std::map<std::string, int> savedInts;
+	std::map<std::string, std::string> savedStrings;
+	std::vector<std::string> globalOrder;
+	std::map<std::string, int> globalInts;
+	std::map<std::string, std::string> globalStrings;
+	std::map<std::string, std::string>::const_iterator strIt;
+
+	if (!compileSource(source, bytecode, entryOffset, macroName, compileError)) {
+		failureReason = "Compile failed for CREATE_GLOBAL_STR probe: " + compileError;
+		return false;
+	}
+	profile = mrvmAnalyzeBytecode(bytecode.data(), bytecode.size());
+	if (!mrvmCanRunStagedInBackground(profile)) {
+		unsupported = mrvmUnsupportedStagedSymbols(profile);
+		failureReason = "CREATE_GLOBAL_STR probe should be staged-background eligible.";
+		if (!unsupported.empty())
+			failureReason += " Unsupported symbol example: " + unsupported.front() + ".";
+		return false;
+	}
+	unsupported = mrvmUnsupportedStagedSymbols(profile);
+	if (containsText(unsupported, "CREATE_GLOBAL_STR")) {
+		failureReason = "CREATE_GLOBAL_STR must be treated as supported staged symbol.";
+		return false;
+	}
+
+	mrvmUiCopyGlobals(savedOrder, savedInts, savedStrings);
+	struct GlobalsRestore {
+		std::vector<std::string> order;
+		std::map<std::string, int> ints;
+		std::map<std::string, std::string> strings;
+
+		GlobalsRestore(std::vector<std::string> savedOrderRef, std::map<std::string, int> savedIntsRef,
+		               std::map<std::string, std::string> savedStringsRef)
+		    : order(std::move(savedOrderRef)), ints(std::move(savedIntsRef)),
+		      strings(std::move(savedStringsRef)) {
+		}
+
+		~GlobalsRestore() {
+			mrvmUiReplaceGlobals(order, ints, strings);
+		}
+	} restoreGuard(savedOrder, savedInts, savedStrings);
+
+	vm.executeAt(bytecode.data(), bytecode.size(), static_cast<size_t>(entryOffset), std::string(),
+	             macroName, true, true);
+	if (firstVmError(vm.log, vmError)) {
+		failureReason = "CREATE_GLOBAL_STR probe produced VM error: " + vmError;
+		return false;
+	}
+
+	mrvmUiCopyGlobals(globalOrder, globalInts, globalStrings);
+	if (!checkGlobalInt(globalInts, "CSTR_PROBE_SEEN", 1, failureReason))
+		return false;
+	if (!checkGlobalInt(globalInts, "CSTR_PROBE_LEN", 5, failureReason))
+		return false;
+	strIt = globalStrings.find("CSTR_PROBE");
+	if (strIt == globalStrings.end() || strIt->second != "Alpha") {
+		failureReason = "CREATE_GLOBAL_STR did not persist expected string value.";
+		return false;
+	}
+
+	if (!expectCompileError("$MACRO Bad;\nCREATE_GLOBAL_STR('X', 1);\nEND_MACRO;\n",
+	                        "Type mismatch or syntax error.", failureReason))
+		return false;
+
+	failureReason.clear();
+	return true;
+}
+
 bool testMarqueeProcWiringGuard(std::string &failureReason) {
 	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
 	std::string content;
@@ -3138,6 +3234,86 @@ bool testDelayProcWiringGuard(std::string &failureReason) {
 	return true;
 }
 
+bool testStartupCliLoadRecursiveGuard(std::string &failureReason) {
+	const std::string appSourcePath = absolutePathFromCwd("app/TMREditorApp.cpp");
+	const std::string mainSourcePath = absolutePathFromCwd("mr.cpp");
+	const std::string makefilePath = absolutePathFromCwd("Makefile");
+	const std::string vmHeaderPath = absolutePathFromCwd("mrmac/mrvm.hpp");
+	const std::string vmSourcePath = absolutePathFromCwd("mrmac/mrvm.cpp");
+	std::string appContent;
+	std::string mainContent;
+	std::string makefileContent;
+	std::string vmHeaderContent;
+	std::string vmSourceContent;
+	std::string ioError;
+
+	if (!readTextFile(appSourcePath, appContent, ioError)) {
+		failureReason = "Unable to read TMREditorApp.cpp for startup CLI guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(mainSourcePath, mainContent, ioError)) {
+		failureReason = "Unable to read mr.cpp for startup CLI guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(makefilePath, makefileContent, ioError)) {
+		failureReason = "Unable to read Makefile for startup CLI guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(vmHeaderPath, vmHeaderContent, ioError)) {
+		failureReason = "Unable to read mrvm.hpp for startup CLI guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(vmSourcePath, vmSourceContent, ioError)) {
+		failureReason = "Unable to read mrvm.cpp for startup CLI guard: " + ioError;
+		return false;
+	}
+	if (appContent.find("--load-recursive") == std::string::npos ||
+	    appContent.find("-lr") == std::string::npos ||
+	    appContent.find("recursive_directory_iterator") == std::string::npos ||
+	    appContent.find("fnmatch(") == std::string::npos) {
+		failureReason =
+		    "TMREditorApp startup loading must support --load-recursive/-lr with recursive glob matching.";
+		return false;
+	}
+	if (appContent.find("patternSuffix.find('/') == std::string::npos") == std::string::npos ||
+	    appContent.find("candidatePath.filename().string()") == std::string::npos ||
+	    appContent.find("std::filesystem::relative(candidatePath, basePath") == std::string::npos) {
+		failureReason =
+		    "Recursive glob must match by basename without path prefix and by relative path for path patterns.";
+		return false;
+	}
+	if (appContent.find("mrvmProcessArguments()") == std::string::npos) {
+		failureReason = "TMREditorApp startup loading must consume CLI args via mrvmProcessArguments().";
+		return false;
+	}
+	if (appContent.find("static_cast<void>(loadStartupFilesFromCommandLine());") == std::string::npos) {
+		failureReason = "TMREditorApp constructor must load startup files from CLI.";
+		return false;
+	}
+	if (appContent.find("createEditorWindow(\"?No-File?\")") != std::string::npos) {
+		failureReason = "TMREditorApp must not create an empty placeholder editor window on startup.";
+		return false;
+	}
+	if (vmHeaderContent.find("mrvmProcessArguments();") == std::string::npos ||
+	    vmSourceContent.find("std::vector<std::string> mrvmProcessArguments()") == std::string::npos) {
+		failureReason = "mrvm process-argument getter must be declared and implemented.";
+		return false;
+	}
+	if (mainContent.find("--help") == std::string::npos || mainContent.find("-h") == std::string::npos ||
+	    mainContent.find("kMrEmbeddedHelpMarkdown") == std::string::npos) {
+		failureReason = "mr.cpp must provide --help/-h and print embedded markdown help.";
+		return false;
+	}
+	if (makefileContent.find("app/mrhelp.md") == std::string::npos ||
+	    makefileContent.find("app/MRHelp.generated.hpp") == std::string::npos ||
+	    makefileContent.find("generate_help_markdown.sh") == std::string::npos) {
+		failureReason = "Makefile must regenerate embedded help header from app/mrhelp.md.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
 void runTest(TestContext &ctx, const char *name, bool (*fn)(std::string &)) {
 	std::string failure;
 
@@ -3179,6 +3355,8 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "TO/FROM header parsing + compile guards", testToFromHeaders);
 	runTest(ctx, "TO/FROM runtime dispatch", testToFromDispatch);
 	runTest(ctx, "KEY_IN behavior + staging guards", testKeyIn);
+	runTest(ctx, "CREATE_GLOBAL_STR operation + staging guards", testCreateGlobalStrOperation);
+	runTest(ctx, "Startup CLI + recursive load wiring guard", testStartupCliLoadRecursiveGuard);
 	runTest(ctx, "DELAY proc wiring guard", testDelayProcWiringGuard);
 	runTest(ctx, "TVCALL surface guard (MESSAGEBOX only)", testTvCallSurfaceGuard);
 }
@@ -3223,6 +3401,8 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "TO/FROM header parsing + compile guards", testToFromHeaders);
 	runTest(ctx, "TO/FROM runtime dispatch", testToFromDispatch);
 	runTest(ctx, "KEY_IN behavior + staging guards", testKeyIn);
+	runTest(ctx, "CREATE_GLOBAL_STR operation + staging guards", testCreateGlobalStrOperation);
+	runTest(ctx, "Startup CLI + recursive load wiring guard", testStartupCliLoadRecursiveGuard);
 	runTest(ctx, "MARQUEE proc wiring guard", testMarqueeProcWiringGuard);
 	runTest(ctx, "DELAY proc wiring guard", testDelayProcWiringGuard);
 	runTest(ctx, "TVCALL surface guard (MESSAGEBOX only)", testTvCallSurfaceGuard);

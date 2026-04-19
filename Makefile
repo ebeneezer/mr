@@ -71,6 +71,9 @@ REGRESSION_PROBE_OBJECT = regression/mr-regression-checks.o
 MRMAC_V1_SUITE_SCRIPT = misc/run_mrmac_v1_suite.sh
 ABOUT_QUOTES_GENERATOR = ./generate_about_quotes.sh
 ABOUT_QUOTES_GENERATED = app/MRAboutQuotes.generated.hpp
+HELP_MARKDOWN_GENERATOR = ./generate_help_markdown.sh
+HELP_MARKDOWN_SOURCE = app/mrhelp.md
+HELP_MARKDOWN_GENERATED = app/MRHelp.generated.hpp
 
 # C++ source files (Editor and VM)
 CXX_SOURCES = \
@@ -309,6 +312,10 @@ $(ABOUT_QUOTES_GENERATED): README.md $(ABOUT_QUOTES_GENERATOR)
 	@mkdir -p $(dir $@)
 	bash $(ABOUT_QUOTES_GENERATOR) README.md $@
 
+$(HELP_MARKDOWN_GENERATED): $(HELP_MARKDOWN_SOURCE) $(HELP_MARKDOWN_GENERATOR)
+	@mkdir -p $(dir $@)
+	bash $(HELP_MARKDOWN_GENERATOR) $(HELP_MARKDOWN_SOURCE) $@
+
 # 2. Dependencies for C compilation
 mrmac/lex.yy.o: CFLAGS += -Wno-unused-function
 mrmac/lex.yy.o: mrmac/lex.yy.c mrmac/parser.tab.h
@@ -316,9 +323,9 @@ mrmac/parser.tab.o: mrmac/parser.tab.c mrmac/parser.tab.h mrmac/mrmac.h
 mrmac/mrmac.o: mrmac/mrmac.c mrmac/parser.tab.h mrmac/mrmac.h
 
 # 3. Dependencies for C++ compilation
-$(CXX_OBJECTS): | $(ABOUT_QUOTES_GENERATED)
+$(CXX_OBJECTS): | $(ABOUT_QUOTES_GENERATED) $(HELP_MARKDOWN_GENERATED)
 
-mr.o: mr.cpp mrmac/mrvm.hpp app/TMREditorApp.hpp ui/MRPalette.hpp
+mr.o: mr.cpp mrmac/mrvm.hpp app/TMREditorApp.hpp ui/MRPalette.hpp $(HELP_MARKDOWN_GENERATED)
 app/MRAppState.o: app/MRAppState.cpp app/MRAppState.hpp app/MRCommands.hpp app/commands/MRWindowCommands.hpp ui/TMREditWindow.hpp
 app/MRCommandRouter.o: app/MRCommandRouter.cpp app/MRCommandRouter.hpp app/MRCommands.hpp dialogs/MRAboutDialog.hpp dialogs/MRFileInformationDialog.hpp dialogs/MRMacroFileDialog.hpp dialogs/MRSetupDialogs.hpp dialogs/MRWindowListDialog.hpp mrmac/mrvm.hpp app/commands/MRExternalCommand.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp ui/TMREditWindow.hpp ui/TMRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 app/MRMenuFactory.o: app/MRMenuFactory.cpp app/MRMenuFactory.hpp app/MRCommands.hpp ui/TMRMenuBar.hpp
@@ -376,4 +383,5 @@ clean:
 		misc/mr_keyin_probe.o misc/mr_tofrom_probe.o misc/mr_tofrom_dispatch_probe.o \
 		misc/mr_staged_nav_probe misc/mr_staged_mark_page_probe \
 		$(ABOUT_QUOTES_GENERATED) \
+		$(HELP_MARKDOWN_GENERATED) \
 		mrmac/lex.yy.c mrmac/parser.tab.c mrmac/parser.tab.h
