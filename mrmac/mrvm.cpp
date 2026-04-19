@@ -7237,6 +7237,14 @@ bool mrvmUiSizeCurrentWindow(int x1, int y1, int x2, int y2) {
 	return sizeCurrentEditWindow(x1, y1, x2, y2);
 }
 
+bool mrvmUiPushMarker() {
+	return markEditorPosition(currentEditWindow(), currentEditor());
+}
+
+bool mrvmUiGetMarker() {
+	return gotoEditorMark(currentEditWindow(), currentEditor());
+}
+
 bool mrvmUiBlockBeginLine() {
 	return beginCurrentBlockMode(TMREditWindow::bmLine);
 }

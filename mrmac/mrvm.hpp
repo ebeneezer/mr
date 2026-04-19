@@ -284,6 +284,8 @@ bool mrvmUiDeleteCurrentWindow();
 bool mrvmUiModifyCurrentWindow();
 bool mrvmUiSwitchWindow(int index);
 bool mrvmUiSizeCurrentWindow(int x1, int y1, int x2, int y2);
+bool mrvmUiPushMarker();
+bool mrvmUiGetMarker();
 bool mrvmUiBlockBeginLine();
 bool mrvmUiBlockBeginColumn();
 bool mrvmUiBlockBeginStream();

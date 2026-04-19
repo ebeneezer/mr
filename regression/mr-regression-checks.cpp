@@ -2767,6 +2767,42 @@ bool testEditClipboardCommandRoutingGuard(std::string &failureReason) {
 	return true;
 }
 
+bool testSearchMarkerRoutingAndTextMenuGuard(std::string &failureReason) {
+	const std::string routerPath = absolutePathFromCwd("app/MRCommandRouter.cpp");
+	const std::string menuPath = absolutePathFromCwd("app/MRMenuFactory.cpp");
+	std::string routerContent;
+	std::string menuContent;
+	std::string ioError;
+
+	if (!readTextFile(routerPath, routerContent, ioError)) {
+		failureReason = "Unable to read MRCommandRouter.cpp for search-marker routing guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(menuPath, menuContent, ioError)) {
+		failureReason = "Unable to read MRMenuFactory.cpp for text-menu F4/ShiftF4 guard: " + ioError;
+		return false;
+	}
+	if (routerContent.find("case cmMrSearchPushMarker:") == std::string::npos ||
+	    routerContent.find(
+	        "handleBlockAction(mrvmUiPushMarker(), \"Unable to push position onto marker stack.\")") ==
+	        std::string::npos ||
+	    routerContent.find("case cmMrSearchGetMarker:") == std::string::npos ||
+	    routerContent.find("handleBlockAction(mrvmUiGetMarker(), \"No marker position on stack.\")") ==
+	        std::string::npos) {
+		failureReason =
+		    "Search marker commands must route through MRCommandRouter to mrvmUiPushMarker/mrvmUiGetMarker.";
+		return false;
+	}
+	if (menuContent.find("TSubMenu *createTextMenu()") == std::string::npos ||
+	    menuContent.find("cmMrSearchPushMarker, kbF4") == std::string::npos ||
+	    menuContent.find("cmMrSearchGetMarker, kbShiftF4") == std::string::npos) {
+		failureReason = "Text menu must expose F4/ShiftF4 marker stack actions.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
 bool testBlockHotkeyModifierRoutingGuard(std::string &failureReason) {
 	const std::string sourcePath = absolutePathFromCwd("ui/TMREditWindow.hpp");
 	std::string content;
@@ -3136,6 +3172,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "EOF virtual-line color guard", testEofVirtualLineColorGuard);
 	runTest(ctx, "Save As overwrite/backup wiring guard", testSaveAsOverwriteAndBackupWiringGuard);
 	runTest(ctx, "Theme + macro save overwrite wiring guard", testThemeAndMacroSaveOverwriteWiringGuard);
+	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
 	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
 	runTest(ctx, "Inter-window block source/target guard", testInterWindowBlockSourceTargetGuard);
 	runTest(ctx, "Column UNDENT policy guard", testColumnUndentPolicyGuard);
@@ -3179,6 +3216,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Theme + macro save overwrite wiring guard", testThemeAndMacroSaveOverwriteWiringGuard);
 	runTest(ctx, "Persistent blocks wiring guard", testPersistentBlocksWiringGuard);
 	runTest(ctx, "Edit clipboard routing guard", testEditClipboardCommandRoutingGuard);
+	runTest(ctx, "Search marker routing + Text menu F4 wiring guard", testSearchMarkerRoutingAndTextMenuGuard);
 	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
 	runTest(ctx, "Inter-window block source/target guard", testInterWindowBlockSourceTargetGuard);
 	runTest(ctx, "Column UNDENT policy guard", testColumnUndentPolicyGuard);

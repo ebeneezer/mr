@@ -626,6 +626,12 @@ bool handleMRCommand(ushort command) {
 		case cmMrEditPasteFromBuffer:
 			return dispatchEditorClipboardCommand(cmPaste, true);
 
+		case cmMrSearchPushMarker:
+			return handleBlockAction(mrvmUiPushMarker(), "Unable to push position onto marker stack.");
+
+		case cmMrSearchGetMarker:
+			return handleBlockAction(mrvmUiGetMarker(), "No marker position on stack.");
+
 		case cmMrBlockCopy:
 			return handleBlockAction(mrvmUiCopyBlock(), "No block marked.");
 
