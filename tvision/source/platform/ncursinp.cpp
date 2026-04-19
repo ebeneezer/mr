@@ -293,7 +293,6 @@ NcursesInput::NcursesInput( ConsoleCtl &aCon, NcursesDisplay &,
      * special key sequences, I believe. */
     set_escdelay(getEnv<int>("ESCDELAY", 10));
 
-    TermIO::keyModsOn(con);
     if (mouseEnabled)
         TermIO::mouseOn(con);
 }
@@ -302,7 +301,6 @@ NcursesInput::~NcursesInput()
 {
     if (mouseEnabled)
         TermIO::mouseOff(con);
-    TermIO::keyModsOff(con);
     TermIO::consumeUnprocessedInput(con, in, state);
 }
 

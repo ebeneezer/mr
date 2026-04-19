@@ -16,6 +16,7 @@ struct AppCommandState {
 	bool hasSelection;
 	bool hasUndo;
 	bool hasBlock;
+	bool blockMarking;
 	bool hasMacroTasks;
 	bool hasExternalIoTasks;
 	bool isCommunicationWindow;
@@ -25,7 +26,7 @@ struct AppCommandState {
 	AppCommandState()
 	    : window(nullptr), windowCount(0), hasEditableWindow(false), hasReadOnlyWindow(false),
 	      hasDirtyWindow(false), hasPersistentFileName(false), canSaveInPlace(false), hasSelection(false),
-	      hasUndo(false), hasBlock(false), hasMacroTasks(false), hasExternalIoTasks(false),
+	      hasUndo(false), hasBlock(false), blockMarking(false), hasMacroTasks(false), hasExternalIoTasks(false),
 	      isCommunicationWindow(false), isCommunicationCommandWindow(false), isLogWindow(false) {
 	}
 };
@@ -52,6 +53,7 @@ AppCommandState appCommandState() {
 	state.hasPersistentFileName = win->hasPersistentFileName();
 	state.canSaveInPlace = win->canSaveInPlace();
 	state.hasBlock = win->hasBlock();
+	state.blockMarking = win->isBlockMarking();
 	state.hasSelection = win->hasSelection();
 	state.hasUndo = win->hasUndoHistory();
 	state.hasMacroTasks = win->hasTrackedMacroTasks();
@@ -68,12 +70,13 @@ void updateAppCommandState() {
 	bool hasWindow = state.window != nullptr;
 	bool hasEditor = hasWindow;
 	bool canModify = hasEditor && state.hasEditableWindow;
+	bool canSaveAs = hasEditor && (state.hasEditableWindow || state.isLogWindow);
 	bool hasMultipleWindows = state.windowCount > 1;
 
 	setCommandEnabled(cmMrFileOpen, true);
 	setCommandEnabled(cmMrFileLoad, true);
 	setCommandEnabled(cmMrFileSave, canModify && state.hasDirtyWindow);
-	setCommandEnabled(cmMrFileSaveAs, canModify);
+	setCommandEnabled(cmMrFileSaveAs, canSaveAs);
 	setCommandEnabled(cmMrFileInformation, hasEditor);
 	setCommandEnabled(cmMrFileMerge, hasEditor);
 	setCommandEnabled(cmMrFilePrint, hasEditor);
@@ -107,12 +110,12 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrBlockSaveToDisk, hasEditor && state.hasBlock);
 	setCommandEnabled(cmMrBlockIndent, canModify && state.hasBlock);
 	setCommandEnabled(cmMrBlockUndent, canModify && state.hasBlock);
-	setCommandEnabled(cmMrBlockWindowCopy, hasEditor && state.hasBlock && hasMultipleWindows);
-	setCommandEnabled(cmMrBlockWindowMove, canModify && state.hasBlock && hasMultipleWindows);
-	setCommandEnabled(cmMrBlockMarkLines, canModify);
+	setCommandEnabled(cmMrBlockWindowCopy, hasEditor && hasMultipleWindows);
+	setCommandEnabled(cmMrBlockWindowMove, canModify && hasMultipleWindows);
+	setCommandEnabled(cmMrBlockMarkLines, canModify && !state.blockMarking);
 	setCommandEnabled(cmMrBlockMarkColumns, canModify);
 	setCommandEnabled(cmMrBlockMarkStream, canModify);
-	setCommandEnabled(cmMrBlockEndMarking, hasEditor && state.hasBlock);
+	setCommandEnabled(cmMrBlockEndMarking, hasEditor && state.blockMarking);
 	setCommandEnabled(cmMrBlockTurnMarkingOff, hasEditor && state.hasBlock);
 	setCommandEnabled(cmMrBlockPersistent, hasEditor);
 

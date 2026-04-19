@@ -25,7 +25,7 @@ echo "[MRMAC v1] Build binaries"
 make mr stage-profile-probe regression-probe
 
 echo "[MRMAC v1] Staged eligibility"
-staged_output="$(./misc/mr_stage_profile_probe "${staged_macros[@]}")"
+staged_output="$(./regression/mr_stage_profile_probe "${staged_macros[@]}")"
 printf '%s\n' "${staged_output}"
 
 staged_fail=0
@@ -40,7 +40,7 @@ if [[ "${staged_fail}" -ne 0 ]]; then
 fi
 
 echo "[MRMAC v1] Macro compile sweep"
-compile_output="$(./misc/mr_stage_profile_probe mrmac/macros/test*.mrmac)"
+compile_output="$(./regression/mr_stage_profile_probe mrmac/macros/test*.mrmac)"
 printf '%s\n' "${compile_output}" >/dev/null
 if printf '%s\n' "${compile_output}" | rg -q "compile_error=|read_error"; then
   printf '%s\n' "${compile_output}" | rg "compile_error=|read_error"

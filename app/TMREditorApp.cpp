@@ -1,3 +1,5 @@
+#include "utils/MRFileIOUtils.hpp"
+#include "utils/MRStringUtils.hpp"
 #define Uses_TKeys
 #define Uses_MsgBox
 #define Uses_TDialog
@@ -108,16 +110,6 @@ class TMacroBindCaptureDialog : public TDialog {
 	ushort capturedControlState;
 };
 
-std::string trimAscii(std::string_view value) {
-	std::size_t start = 0;
-	std::size_t end = value.size();
-
-	while (start < end && std::isspace(static_cast<unsigned char>(value[start])) != 0)
-		++start;
-	while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1])) != 0)
-		--end;
-	return std::string(value.substr(start, end - start));
-}
 
 std::string expandUserPath(std::string_view input) {
 	std::string path = trimAscii(input);
@@ -276,13 +268,6 @@ bool keyInTokenFromEvent(ushort keyCode, ushort controlKeyState, std::string &ou
 	return false;
 }
 
-bool writeTextFile(std::string_view path, std::string_view content) {
-	std::ofstream out(std::string(path).c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
-	if (!out)
-		return false;
-	out << content;
-	return out.good();
-}
 
 bool pathIsRegularFile(std::string_view path) {
 	struct stat st;
@@ -299,13 +284,6 @@ bool confirmOverwriteForPath(const char *primaryLabel, const char *headline, con
 	       mr::dialogs::UnsavedChangesChoice::Save;
 }
 
-bool readTextFile(std::string_view path, std::string &out) {
-	std::ifstream in(std::string(path).c_str(), std::ios::in | std::ios::binary);
-	if (!in)
-		return false;
-	out.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
-	return in.good() || in.eof();
-}
 
 bool validateMacroSource(std::string_view source, std::string &errorText) {
 	size_t bytecodeSize = 0;
@@ -741,6 +719,8 @@ TMREditorApp::TMREditorApp()
 	applyConfiguredDisplayLayout();
 	static_cast<void>(mrEnsureLogWindow(false));
 	syncRecordingUiState();
+	if (auto *mrMenuBar = dynamic_cast<TMRMenuBar *>(menuBar))
+		mrMenuBar->setPersistentBlocksMenuState(configuredPersistentBlocksSetting());
 	mrLogMessage("Editor session started.");
 	updateAppCommandState();
 }
@@ -1147,6 +1127,7 @@ void TMREditorApp::idle() {
 		mr::messageline::VisibleMessage message;
 		std::string rightStatus = buildTopRightCursorStatus();
 		mrMenuBar->setRightStatus(rightStatus);
+		mrMenuBar->setPersistentBlocksMenuState(configuredPersistentBlocksSetting());
 		if (mr::messageline::currentVisibleMessage(message)) {
 			TMRMenuBar::MarqueeKind marqueeKind = mapMessageNoticeKind(message.kind);
 			if (isHeroVisibleMessage(message))

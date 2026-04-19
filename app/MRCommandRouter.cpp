@@ -4,6 +4,7 @@
 #define Uses_TObject
 #define Uses_TEvent
 #define Uses_TRect
+#define Uses_TFileDialog
 #define Uses_MsgBox
 #include <tvision/tv.h>
 
@@ -26,6 +27,7 @@
 #include "../dialogs/MRMacroFileDialog.hpp"
 #include "../dialogs/MRWindowListDialog.hpp"
 #include "../ui/TMREditWindow.hpp"
+#include "../ui/TMRMenuBar.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "../coprocessor/MRCoprocessor.hpp"
 #include "../ui/MRMessageLineController.hpp"
@@ -397,6 +399,96 @@ bool dispatchEditorClipboardCommand(ushort editorCommand, bool requiresWritable)
 	return dispatchEditorCommand(editorCommand, requiresWritable);
 }
 
+ushort execDialogWithDataLocal(TDialog *dialog, void *data) {
+	ushort result = cmCancel;
+
+	if (dialog == nullptr || TProgram::deskTop == nullptr)
+		return cmCancel;
+	if (data != nullptr)
+		dialog->setData(data);
+	result = TProgram::deskTop->execView(dialog);
+	if (result != cmCancel && data != nullptr)
+		dialog->getData(data);
+	TObject::destroy(dialog);
+	return result;
+}
+
+void syncPersistentBlocksMenuState() {
+	if (auto *mrMenuBar = dynamic_cast<TMRMenuBar *>(TProgram::menuBar))
+		mrMenuBar->setPersistentBlocksMenuState(configuredPersistentBlocksSetting());
+}
+
+bool handleBlockAction(bool ok, const char *failureText) {
+	if (!ok && failureText != nullptr && *failureText != '\0')
+		messageBox(mfInformation | mfOKButton, "%s", failureText);
+	return true;
+}
+
+void postNoMarkedTextForBlockOperationWarning() {
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogValidation,
+	                               "no marked text for block operation",
+	                               mr::messageline::Kind::Warning,
+	                               mr::messageline::kPriorityHigh + 10);
+}
+
+bool hasMarkedTextForBlockOperation(TMREditWindow *win) {
+	if (win == nullptr || !win->hasBlock())
+		return false;
+	if (win->blockStatus() == TMREditWindow::bmStream &&
+	    win->blockAnchorPtr() == win->blockEffectiveEndPtr())
+		return false;
+	return true;
+}
+
+bool promptBlockSavePath(std::string &outPath) {
+	char buffer[MAXPATH] = {0};
+	ushort result = cmCancel;
+	static constexpr ushort kBlockSaveDialogHistoryId = 45;
+	TMREditWindow *win = currentEditWindow();
+
+	outPath.clear();
+	if (win != nullptr && win->currentFileName() != nullptr && *win->currentFileName() != '\0')
+		strnzcpy(buffer, win->currentFileName(), sizeof(buffer));
+	else
+		initRememberedLoadDialogPath(buffer, sizeof(buffer), "*.*");
+	result = execDialogWithDataLocal(
+	    new TFileDialog("*.*", "Save block as", "~N~ame", fdOKButton, kBlockSaveDialogHistoryId), buffer);
+	if (result == cmCancel)
+		return false;
+	fexpand(buffer);
+	rememberLoadDialogPath(buffer);
+	outPath = buffer;
+	if (outPath.find('*') != std::string::npos || outPath.find('?') != std::string::npos)
+		return false;
+	return !outPath.empty();
+}
+
+bool chooseInterWindowBlockWindows(TMREditWindow *&sourceWin, TMREditWindow *&targetWin) {
+	TMREditWindow *currentWin = currentEditWindow();
+	TMREditWindow *selectedWin = nullptr;
+
+	sourceWin = nullptr;
+	targetWin = nullptr;
+	if (currentWin == nullptr)
+		return false;
+	selectedWin = mrShowWindowListDialog(mrwlSelectLinkTarget, currentWin);
+	if (selectedWin == nullptr)
+		return false;
+	if (selectedWin == currentWin) {
+		messageBox(mfInformation | mfOKButton, "Choose another window for inter-window block operation.");
+		return false;
+	}
+
+	sourceWin = selectedWin;
+	targetWin = currentWin;
+	if (!hasMarkedTextForBlockOperation(sourceWin)) {
+		postNoMarkedTextForBlockOperationWarning();
+		return false;
+	}
+	static_cast<void>(mrActivateEditWindow(targetWin));
+	return true;
+}
+
 bool togglePersistentBlocksSetting() {
 	MREditSetupSettings settings = configuredEditSetupSettings();
 	MRSetupPaths paths;
@@ -428,7 +520,10 @@ bool togglePersistentBlocksSetting() {
 
 	enabled = configuredPersistentBlocksSetting();
 	mrLogMessage(enabled ? "Persistent blocks enabled." : "Persistent blocks disabled.");
-	messageBox(mfInformation | mfOKButton, "Persistent blocks: %s", enabled ? "ON" : "OFF");
+	syncPersistentBlocksMenuState();
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction,
+	                               enabled ? "Persistent blocks: ON" : "Persistent blocks: OFF",
+	                               mr::messageline::Kind::Info, mr::messageline::kPriorityLow);
 	return true;
 }
 
@@ -532,6 +627,79 @@ bool handleMRCommand(ushort command) {
 
 		case cmMrEditPasteFromBuffer:
 			return dispatchEditorClipboardCommand(cmPaste, true);
+
+		case cmMrBlockCopy:
+			return handleBlockAction(mrvmUiCopyBlock(), "No block marked.");
+
+		case cmMrBlockMove:
+			return handleBlockAction(mrvmUiMoveBlock(), "Unable to move block.");
+
+		case cmMrBlockDelete:
+			return handleBlockAction(mrvmUiDeleteBlock(), "Unable to delete block.");
+
+		case cmMrBlockSaveToDisk: {
+			std::string savePath;
+			if (!promptBlockSavePath(savePath))
+				return true;
+			return handleBlockAction(mrvmUiSaveBlockToFile(savePath), "Unable to save block.");
+		}
+
+		case cmMrBlockIndent:
+			return handleBlockAction(mrvmUiIndentBlock(), "Unable to indent block.");
+
+		case cmMrBlockUndent:
+			return handleBlockAction(mrvmUiUndentBlock(), "Unable to undent block.");
+
+		case cmMrBlockWindowCopy: {
+			TMREditWindow *sourceWindow = nullptr;
+			TMREditWindow *targetWindow = nullptr;
+			bool ok = false;
+			int sourceWindowIndex = 0;
+			if (!chooseInterWindowBlockWindows(sourceWindow, targetWindow))
+				return true;
+			ok = mrvmUiWindowCopyBlockBetween(sourceWindow, targetWindow);
+			if (!ok) {
+				sourceWindowIndex = mrvmUiCurrentWindowIndex(sourceWindow);
+				if (sourceWindowIndex > 0) {
+					static_cast<void>(mrActivateEditWindow(targetWindow));
+					ok = mrvmUiWindowCopyBlock(sourceWindowIndex);
+				}
+			}
+			return handleBlockAction(ok, "Inter-window block copy failed.");
+		}
+
+		case cmMrBlockWindowMove: {
+			TMREditWindow *sourceWindow = nullptr;
+			TMREditWindow *targetWindow = nullptr;
+			bool ok = false;
+			int sourceWindowIndex = 0;
+			if (!chooseInterWindowBlockWindows(sourceWindow, targetWindow))
+				return true;
+			ok = mrvmUiWindowMoveBlockBetween(sourceWindow, targetWindow);
+			if (!ok) {
+				sourceWindowIndex = mrvmUiCurrentWindowIndex(sourceWindow);
+				if (sourceWindowIndex > 0) {
+					static_cast<void>(mrActivateEditWindow(targetWindow));
+					ok = mrvmUiWindowMoveBlock(sourceWindowIndex);
+				}
+			}
+			return handleBlockAction(ok, "Inter-window block move failed.");
+		}
+
+		case cmMrBlockMarkLines:
+			return handleBlockAction(mrvmUiBlockBeginLine(), "Unable to start line block marking.");
+
+		case cmMrBlockMarkColumns:
+			return handleBlockAction(mrvmUiBlockBeginColumn(), "Unable to start column block marking.");
+
+		case cmMrBlockMarkStream:
+			return handleBlockAction(mrvmUiBlockBeginStream(), "Unable to start stream block marking.");
+
+		case cmMrBlockEndMarking:
+			return handleBlockAction(mrvmUiBlockEndMarking(), "No active block marking.");
+
+		case cmMrBlockTurnMarkingOff:
+			return handleBlockAction(mrvmUiBlockTurnMarkingOff(), "No block marked.");
 
 		case cmMrBlockPersistent:
 			return togglePersistentBlocksSetting();
