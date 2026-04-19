@@ -39,7 +39,7 @@ constexpr int kDefaultMiniMapWidth = 4;
 constexpr ushort kUiManagedOptionsMask =
     kOptionTruncateSpaces | kOptionEofCtrlZ | kOptionEofCrLf | kOptionPersistentBlocks |
     kOptionCodeFolding | kOptionWordWrap | kOptionShowLineNumbers | kOptionLineNumZeroFill |
-    kOptionShowEofMarker | kOptionShowEofMarkerEmoji;
+    kOptionShowEofMarker | kOptionShowEofMarkerEmoji | kOptionDisplayTabs;
 
 struct FileExtensionEditorSettingsPanelLayout {
 	explicit FileExtensionEditorSettingsPanelLayout(const FileExtensionEditorSettingsPanelConfig &config)
@@ -215,20 +215,52 @@ TView *addPanelGlyphButton(MRScrollableDialog &dialog, const TRect &rect, const 
 	return std::clamp(static_cast<int>(parsed), minimum, maximum);
 }
 
-[[nodiscard]] std::string defaultFormatLineForTabSize(int tabSize) {
-	const int normalizedTabSize = std::max(1, std::min(tabSize, kMaximumTabSize));
-	const int targetWidth = 80;
-	std::string out("!");
+[[nodiscard]] int clampFormatTabSize(int tabSize) {
+	return std::max(kMinimumTabSize, std::min(tabSize, kMaximumTabSize));
+}
 
-	while (static_cast<int>(out.size()) + normalizedTabSize + 1 <= targetWidth) {
-		out.append(static_cast<std::size_t>(normalizedTabSize), '-');
-		out.push_back('!');
-	}
-	if (out.size() == 1) {
-		out.append(static_cast<std::size_t>(normalizedTabSize), '-');
-		out.push_back('!');
-	}
+[[nodiscard]] int clampFormatRightMargin(int rightMargin) {
+	return std::max(kMinimumRightMargin, std::min(rightMargin, kMaximumRightMargin));
+}
+
+[[nodiscard]] std::string defaultFormatLineForSettings(int tabSize, int rightMargin) {
+	const int normalizedTabSize = clampFormatTabSize(tabSize);
+	const int normalizedRightMargin = clampFormatRightMargin(rightMargin);
+	std::string out(static_cast<std::size_t>(normalizedRightMargin), '.');
+
+	for (int col = normalizedTabSize; col <= normalizedRightMargin; col += normalizedTabSize)
+		out[static_cast<std::size_t>(col - 1)] = '|';
+	out[static_cast<std::size_t>(normalizedRightMargin - 1)] = 'R';
 	return out;
+}
+
+[[nodiscard]] std::string synchronizeFormatLineRightMargin(const std::string &formatLine, int rightMargin,
+                                                           int tabSize) {
+	const int normalizedRightMargin = clampFormatRightMargin(rightMargin);
+	std::string out = trimAscii(formatLine);
+
+	if (out.empty())
+		return defaultFormatLineForSettings(tabSize, normalizedRightMargin);
+	for (char &ch : out)
+		if (ch == 'R')
+			ch = '.';
+	if (static_cast<int>(out.size()) < normalizedRightMargin)
+		out.append(static_cast<std::size_t>(normalizedRightMargin - static_cast<int>(out.size())), '.');
+	out[static_cast<std::size_t>(normalizedRightMargin - 1)] = 'R';
+	return out;
+}
+
+[[nodiscard]] int parseIntegerTextOrDefault(const std::string &value, int fallback, int minimum, int maximum) {
+	std::string text = trimAscii(value);
+	char *end = nullptr;
+	long parsed = 0;
+
+	if (text.empty())
+		return fallback;
+	parsed = std::strtol(text.c_str(), &end, 10);
+	if (end == text.c_str() || end == nullptr || *end != '\0')
+		return fallback;
+	return std::clamp(static_cast<int>(parsed), minimum, maximum);
 }
 
 void writeSliderValue(MRNumericSlider *slider, char *dest, std::size_t destSize, int fallback) {
@@ -281,6 +313,7 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	const int pageBreakRight = std::min(g.inputRight, g.inputLeft + 7);
 	const int wordDelimitersRight = std::min(g.inputRight, g.inputLeft + 16);
 	const int autoExtensionsRight = std::min(g.inputRight, g.inputLeft + 12);
+	const int tabSizeSliderRight = std::max(g.inputLeft + 1, g.inputRight - 2);
 	const int rightMarginFieldRight = g.inputLeft + 6;
 	const int binaryLabelLeft = rightMarginFieldRight + 2;
 	const int binaryFieldLeft = binaryLabelLeft + 23;
@@ -308,7 +341,7 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	}
 
 	addPanelLabel(dialog, TRect(g.labelLeft + 1, g.tabSizeY, g.inputLeft - 2, g.tabSizeY + 1), "Tab size:");
-	tabSizeSlider = addPanelNumericSlider(dialog, TRect(g.inputLeft, g.tabSizeY, g.inputRight, g.tabSizeY + 1),
+	tabSizeSlider = addPanelNumericSlider(dialog, TRect(g.inputLeft, g.tabSizeY, tabSizeSliderRight, g.tabSizeY + 1),
 	                                     kMinimumTabSize, kMaximumTabSize, kDefaultTabSize, 1, 4,
 	                                     cmMrFileExtensionEditorSettingsPanelChanged);
 
@@ -359,13 +392,14 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	addPanelLabel(dialog, TRect(g.optionsHeadingX, g.optionsHeadingY, config.dialogWidth - 2, g.optionsHeadingY + 1),
 	              "Options:");
 	optionsLeftField = addPanelCheckGroup(
-	    dialog, TRect(g.optionsLeft, g.optionsBodyY, g.optionsRight, g.optionsBodyY + 6),
-	    new TSItem("~T~runcate spaces",
+	    dialog, TRect(g.optionsLeft, g.optionsBodyY, g.optionsRight, g.optionsBodyY + 7),
+	    new TSItem("~T~runcate whitespace",
 	               new TSItem("Control-~Z~ at EOF",
 	                          new TSItem("~C~R/LF at EOF",
 	                                     new TSItem("Persistent ~B~locks",
 	                                                new TSItem("leading ~0~ fill",
-	                                                         new TSItem("word wrap", nullptr)))))));
+	                                                         new TSItem("word wrap",
+	                                                                    new TSItem("~D~isplay tabs", nullptr))))))));
 
 	addPanelLabel(dialog, TRect(g.lineNumbersLeft, g.optionsHeadingY, g.lineNumbersRight, g.optionsHeadingY + 1),
 	              "Line numbers:");
@@ -487,6 +521,8 @@ ushort FileExtensionEditorSettingsPanel::currentOptionsMask() const noexcept {
 		options |= kOptionLineNumZeroFill;
 	if ((leftMask & kLeftOptionWordWrap) != 0)
 		options |= kOptionWordWrap;
+	if ((leftMask & kLeftOptionDisplayTabs) != 0)
+		options |= kOptionDisplayTabs;
 
 	switch (lineNumbersChoice) {
 		case kLineNumbersLeading:
@@ -534,6 +570,8 @@ void FileExtensionEditorSettingsPanel::setOptionsMask(ushort options) {
 		leftMask |= kLeftOptionLineNumZeroFill;
 	if ((options & kOptionWordWrap) != 0)
 		leftMask |= kLeftOptionWordWrap;
+	if ((options & kOptionDisplayTabs) != 0)
+		leftMask |= kLeftOptionDisplayTabs;
 
 	if ((options & kOptionShowLineNumbers) != 0)
 		lineNumbersChoice = kLineNumbersLeading;
@@ -564,6 +602,8 @@ void FileExtensionEditorSettingsPanel::loadFieldsFromRecord(const FileExtensionE
 		tabSizeSlider->setData(&value);
 		lastKnownTabSizeForFormatLine = static_cast<int>(value);
 	}
+	lastKnownRightMarginForFormatLine =
+	    parseIntegerOrDefault(record.rightMargin, kDefaultRightMargin, kMinimumRightMargin, kMaximumRightMargin);
 	setInputLineValue(rightMarginField, record.rightMargin, sizeof(record.rightMargin));
 	setInputLineValue(binaryRecordLengthField, record.binaryRecordLength, sizeof(record.binaryRecordLength));
 	setInputLineValue(postLoadMacroField, record.postLoadMacro, sizeof(record.postLoadMacro));
@@ -640,15 +680,26 @@ void FileExtensionEditorSettingsPanel::syncDynamicStates() {
 		return fileTypeChoice == kFileTypeBinary;
 	})();
 	int32_t currentTabSize = lastKnownTabSizeForFormatLine;
-	std::string previousAutoFormat = defaultFormatLineForTabSize(lastKnownTabSizeForFormatLine);
+	int currentRightMargin = lastKnownRightMarginForFormatLine;
 	std::string currentFormatLine = readInputFieldValue(formatLineField);
 
 	if (tabSizeSlider != nullptr)
 		tabSizeSlider->getData(&currentTabSize);
-	const bool formatLineBlank = isBlankString(currentFormatLine);
-	if (formatLineBlank || currentFormatLine == previousAutoFormat)
-		writeInputFieldValue(formatLineField, defaultFormatLineForTabSize(static_cast<int>(currentTabSize)));
+	currentRightMargin = parseIntegerTextOrDefault(readInputFieldValue(rightMarginField),
+	                                               lastKnownRightMarginForFormatLine, kMinimumRightMargin,
+	                                               kMaximumRightMargin);
+	if (currentTabSize != lastKnownTabSizeForFormatLine) {
+		writeInputFieldValue(formatLineField, defaultFormatLineForSettings(static_cast<int>(currentTabSize),
+		                                                                  currentRightMargin));
+	} else if (currentRightMargin != lastKnownRightMarginForFormatLine) {
+		writeInputFieldValue(formatLineField,
+		                     synchronizeFormatLineRightMargin(currentFormatLine, currentRightMargin,
+		                                                     static_cast<int>(currentTabSize)));
+	} else if (isBlankString(currentFormatLine))
+		writeInputFieldValue(formatLineField, defaultFormatLineForSettings(static_cast<int>(currentTabSize),
+		                                                                  currentRightMargin));
 	lastKnownTabSizeForFormatLine = static_cast<int>(currentTabSize);
+	lastKnownRightMarginForFormatLine = currentRightMargin;
 
 	if (binaryRecordLengthField != nullptr)
 		binaryRecordLengthField->setState(sfDisabled, binaryEnabled ? False : True);

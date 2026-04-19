@@ -48,7 +48,8 @@ enum : ushort {
 	kOptionCodeFolding = 0x0040,
 	kOptionShowEofMarker = 0x0080,
 	kOptionShowEofMarkerEmoji = 0x0100,
-	kOptionWordWrap = 0x0200
+	kOptionWordWrap = 0x0200,
+	kOptionDisplayTabs = 0x0400
 };
 
 enum : ushort {
@@ -57,7 +58,8 @@ enum : ushort {
 	kLeftOptionEofCrLf = 0x0004,
 	kLeftOptionPersistentBlocks = 0x0008,
 	kLeftOptionLineNumZeroFill = 0x0010,
-	kLeftOptionWordWrap = 0x0020
+	kLeftOptionWordWrap = 0x0020,
+	kLeftOptionDisplayTabs = 0x0040
 };
 
 enum : ushort {
@@ -201,6 +203,7 @@ class FileExtensionEditorSettingsPanel {
 		TInputLine *miniMapMarkerGlyphField = nullptr;
 		TInputLine *guttersField = nullptr;
 		int lastKnownTabSizeForFormatLine = 8;
+		int lastKnownRightMarginForFormatLine = 78;
 };
 
 } // namespace MRFileExtensionProfilesDialogInternal

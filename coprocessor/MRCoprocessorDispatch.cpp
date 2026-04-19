@@ -23,6 +23,7 @@ namespace {
 const char *kLineIndexWarmAction = "Line index warming";
 const char *kSyntaxWarmAction = "Syntax warming";
 const char *kMiniMapRenderAction = "Mini map rendering";
+const char *kSaveNormalizationWarmAction = "Save normalization warming";
 
 const char *coprocessorLaneName(mr::coprocessor::Lane lane) {
 	switch (lane) {
@@ -288,6 +289,38 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				}
 				if (!recorded)
 					recordTaskPerformance(result, kMiniMapRenderAction, nullptr, result.task.documentId, 0,
+					                      result.task.label);
+				return;
+			}
+
+			const mr::coprocessor::SaveNormalizationWarmupPayload *saveNormalization =
+			    dynamic_cast<const mr::coprocessor::SaveNormalizationWarmupPayload *>(result.payload.get());
+			if (saveNormalization != nullptr) {
+				std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+				bool recorded = false;
+				for (auto & window : windows) {
+					TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+					if (editor == nullptr)
+						continue;
+					if (editor->documentId() != result.task.documentId) {
+						editor->clearSaveNormalizationWarmupTask(result.task.id);
+						continue;
+					}
+					bool applied = false;
+					if (editor->documentVersion() == result.task.baseVersion)
+						applied = editor->applySaveNormalizationWarmup(
+						    *saveNormalization, result.task.baseVersion, result.task.id,
+						    static_cast<double>(result.timing.runMicros));
+					if (!applied)
+						editor->clearSaveNormalizationWarmupTask(result.task.id);
+					if (!recorded) {
+						recordTaskPerformance(result, kSaveNormalizationWarmAction, window, editor->documentId(),
+						                      saveNormalization->sourceBytes, window->currentFileName());
+						recorded = true;
+					}
+				}
+				if (!recorded)
+					recordTaskPerformance(result, kSaveNormalizationWarmAction, nullptr, result.task.documentId, 0,
 					                      result.task.label);
 				return;
 			}
@@ -561,6 +594,25 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 		}
 		if (!recorded)
 			recordTaskPerformance(result, kMiniMapRenderAction, nullptr, result.task.documentId, 0, result.task.label);
+	}
+
+	if (result.task.kind == mr::coprocessor::TaskKind::SaveNormalizationWarmup) {
+		std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+		bool recorded = false;
+		for (auto &window : windows) {
+			TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+			if (editor == nullptr)
+				continue;
+			if (!recorded && editor->documentId() == result.task.documentId) {
+				recordTaskPerformance(result, kSaveNormalizationWarmAction, window, editor->documentId(),
+				                      editor->bufferLength(), window->currentFileName());
+				recorded = true;
+			}
+			editor->clearSaveNormalizationWarmupTask(result.task.id);
+		}
+		if (!recorded)
+			recordTaskPerformance(result, kSaveNormalizationWarmAction, nullptr, result.task.documentId, 0,
+			                      result.task.label);
 	}
 
 	if (!result.failed())

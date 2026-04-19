@@ -37,6 +37,7 @@ enum class TaskKind : unsigned char {
 	LineIndexWarmup,
 	SyntaxWarmup,
 	MiniMapWarmup,
+	SaveNormalizationWarmup,
 	IndicatorBlink,
 	ExternalIo,
 	MacroJob
@@ -154,6 +155,20 @@ struct MiniMapWarmupPayload final : Payload {
 	      windowStartLine(aWindowStartLine), windowLineCount(aWindowLineCount), viewportWidth(aViewportWidth),
 	      rowPatterns(std::move(aRowPatterns)),
 	      rowLineStarts(std::move(aRowLineStarts)), rowLineEnds(std::move(aRowLineEnds)) {
+	}
+};
+
+struct SaveNormalizationWarmupPayload final : Payload {
+	std::size_t optionsHash;
+	std::size_t sourceBytes;
+	std::shared_ptr<std::string> normalizedText;
+
+	SaveNormalizationWarmupPayload() noexcept : optionsHash(0), sourceBytes(0), normalizedText() {
+	}
+
+	SaveNormalizationWarmupPayload(std::size_t aOptionsHash, std::size_t aSourceBytes,
+	                               std::shared_ptr<std::string> aNormalizedText) noexcept
+	    : optionsHash(aOptionsHash), sourceBytes(aSourceBytes), normalizedText(std::move(aNormalizedText)) {
 	}
 };
 

@@ -1534,6 +1534,7 @@ bool testSetupScrollRefreshGuard(std::string &failureReason) {
 	probe.eofCtrlZ = true;
 	probe.eofCrLf = true;
 	probe.tabExpand = false;
+	probe.displayTabs = true;
 	probe.tabSize = 3;
 	probe.backupFiles = false;
 	probe.backupMethod = "OFF";
@@ -1556,7 +1557,8 @@ bool testSetupScrollRefreshGuard(std::string &failureReason) {
 	paths.tempPath = "/tmp";
 	paths.shellUri = "/bin/sh";
 	source = buildSettingsMacroSource(paths);
-	if (source.find("MRSETUP('TAB_SIZE', '") == std::string::npos ||
+	if (source.find("MRSETUP('DISPLAY_TABS', 'true');") == std::string::npos ||
+	    source.find("MRSETUP('TAB_SIZE', '") == std::string::npos ||
 	    source.find("MRSETUP('LINE_NUMBERS_POSITION', '") == std::string::npos) {
 		restore();
 		failureReason = "Edit-settings roundtrip source did not use canonical edit-setting keys.";
@@ -1616,6 +1618,11 @@ bool testSetupScrollRefreshGuard(std::string &failureReason) {
 	if (loaded.tabSize != probe.tabSize) {
 		restore();
 		failureReason = "TAB_SIZE mismatch after roundtrip.";
+		return false;
+	}
+	if (loaded.displayTabs != probe.displayTabs) {
+		restore();
+		failureReason = "DISPLAY_TABS mismatch after roundtrip.";
 		return false;
 	}
 	if (loaded.backupFiles != probe.backupFiles) {
@@ -1684,7 +1691,7 @@ bool testExtendedSettingsRoundtripGuard(std::string &failureReason) {
 	probe.postLoadMacro = root + "/hooks/post-load.mrmac";
 	probe.preSaveMacro = root + "/hooks/pre-save.mrmac";
 	probe.defaultPath = root + "/workspace";
-	probe.formatLine = "1234567890";
+	probe.formatLine = std::string(90, '.') + "R";
 	probe.cursorStatusColor = "7f";
 
 	if (!setConfiguredEditSetupSettings(probe, &errorText)) {
@@ -1699,6 +1706,8 @@ bool testExtendedSettingsRoundtripGuard(std::string &failureReason) {
 	paths.tempPath = "/tmp";
 	paths.shellUri = "/bin/sh";
 	source = buildSettingsMacroSource(paths);
+	const std::string expectedFormatLineSetting =
+	    "MRSETUP('FORMAT_LINE', '" + probe.formatLine + "');";
 	if (source.find("MRSETUP('RIGHT_MARGIN', '91');") == std::string::npos ||
 	    source.find("MRSETUP('WORD_WRAP', 'false');") == std::string::npos ||
 	    source.find("MRSETUP('INDENT_STYLE', 'SMART');") == std::string::npos ||
@@ -1707,7 +1716,7 @@ bool testExtendedSettingsRoundtripGuard(std::string &failureReason) {
 	    source.find("MRSETUP('POST_LOAD_MACRO', '") == std::string::npos ||
 	    source.find("MRSETUP('PRE_SAVE_MACRO', '") == std::string::npos ||
 	    source.find("MRSETUP('DEFAULT_PATH', '") == std::string::npos ||
-	    source.find("MRSETUP('FORMAT_LINE', '1234567890');") == std::string::npos ||
+	    source.find(expectedFormatLineSetting) == std::string::npos ||
 	    source.find("MRSETUP('CURSOR_STATUS_COLOR', '7F');") == std::string::npos) {
 		restore();
 		failureReason = "Extended settings serializer did not emit the expected canonical keys.";
@@ -1731,7 +1740,7 @@ bool testExtendedSettingsRoundtripGuard(std::string &failureReason) {
 	    loaded.postLoadMacro != normalizeConfiguredPathInput(probe.postLoadMacro) ||
 	    loaded.preSaveMacro != normalizeConfiguredPathInput(probe.preSaveMacro) ||
 	    loaded.defaultPath != normalizeConfiguredPathInput(probe.defaultPath) ||
-	    loaded.formatLine != "1234567890" || loaded.cursorStatusColor != "7F") {
+	    loaded.formatLine != probe.formatLine || loaded.cursorStatusColor != "7F") {
 		restore();
 		failureReason = "Extended settings roundtrip lost one or more serialized edit settings.";
 		return false;

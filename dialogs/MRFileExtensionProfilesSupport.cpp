@@ -27,20 +27,72 @@ void writeRecordField(char *dest, std::size_t destSize, const std::string &value
 	mr::dialogs::writeRecordField(dest, destSize, value);
 }
 
-std::string defaultFormatLineForTabSize(int tabSize) {
-	const int normalizedTabSize = std::max(1, std::min(tabSize, 32));
-	const int targetWidth = 80;
-	std::string out("!");
+int clampFormatTabSize(int tabSize) {
+	return std::max(2, std::min(tabSize, 32));
+}
 
-	while (static_cast<int>(out.size()) + normalizedTabSize + 1 <= targetWidth) {
-		out.append(static_cast<std::size_t>(normalizedTabSize), '-');
-		out.push_back('!');
-	}
-	if (out.size() == 1) {
-		out.append(static_cast<std::size_t>(normalizedTabSize), '-');
-		out.push_back('!');
-	}
+int clampFormatRightMargin(int rightMargin) {
+	return std::max(1, std::min(rightMargin, 999));
+}
+
+std::string defaultFormatLineForSettings(int tabSize, int rightMargin) {
+	const int normalizedTabSize = clampFormatTabSize(tabSize);
+	const int normalizedRightMargin = clampFormatRightMargin(rightMargin);
+	std::string out(static_cast<std::size_t>(normalizedRightMargin), '.');
+
+	for (int col = normalizedTabSize; col <= normalizedRightMargin; col += normalizedTabSize)
+		out[static_cast<std::size_t>(col - 1)] = '|';
+	out[static_cast<std::size_t>(normalizedRightMargin - 1)] = 'R';
 	return out;
+}
+
+bool validateAndNormalizeFormatLine(const std::string &value, int rightMargin, int tabSize,
+                                    std::string &outFormatLine, std::string &errorText) {
+	std::string line = trimAscii(value);
+	const int normalizedRightMargin = clampFormatRightMargin(rightMargin);
+	int rCount = 0;
+	int rIndex = -1;
+
+	if (line.empty()) {
+		outFormatLine = defaultFormatLineForSettings(tabSize, normalizedRightMargin);
+		errorText.clear();
+		return true;
+	}
+	{
+		bool legacy = true;
+		for (char ch : line)
+			if (ch != '!' && ch != '-') {
+				legacy = false;
+				break;
+			}
+		if (legacy) {
+			outFormatLine = defaultFormatLineForSettings(tabSize, normalizedRightMargin);
+			errorText.clear();
+			return true;
+		}
+	}
+	for (std::size_t i = 0; i < line.size(); ++i) {
+		char ch = line[i];
+		if (ch != '.' && ch != '|' && ch != 'R') {
+			errorText = "FORMAT_LINE may only contain '.', '|' and 'R'.";
+			return false;
+		}
+		if (ch == 'R') {
+			++rCount;
+			rIndex = static_cast<int>(i);
+		}
+	}
+	if (rCount != 1) {
+		errorText = "FORMAT_LINE must contain exactly one 'R'.";
+		return false;
+	}
+	if (rIndex + 1 != normalizedRightMargin) {
+		errorText = "FORMAT_LINE must place 'R' at RIGHT_MARGIN.";
+		return false;
+	}
+	outFormatLine = line;
+	errorText.clear();
+	return true;
 }
 
 bool fileExtensionEditorSettingsDialogRecordsEqual(const FileExtensionEditorSettingsDialogRecord &lhs, const FileExtensionEditorSettingsDialogRecord &rhs) {
@@ -116,6 +168,8 @@ void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDial
 		record.optionsMask |= kOptionShowLineNumbers;
 	if (settings.lineNumZeroFill)
 		record.optionsMask |= kOptionLineNumZeroFill;
+	if (settings.displayTabs)
+		record.optionsMask |= kOptionDisplayTabs;
 
 	record.tabExpandChoice = settings.tabExpand ? kTabExpandTabs : kTabExpandSpaces;
 	record.indentStyleChoice = (indentStyle == "AUTOMATIC") ? kIndentStyleAutomatic
@@ -203,6 +257,9 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.preSaveMacro = readRecordField(record.preSaveMacro);
 	settings.defaultPath = readRecordField(record.defaultPath);
 	settings.formatLine = readRecordField(record.formatLine);
+	if (!validateAndNormalizeFormatLine(settings.formatLine, settings.rightMargin, settings.tabSize,
+	                                    settings.formatLine, errorText))
+		return false;
 	settings.cursorStatusColor = upperAscii(trimAscii(readRecordField(record.cursorStatusColor)));
 	settings.miniMapMarkerGlyph = readRecordField(record.miniMapMarkerGlyph);
 	settings.gutters = readRecordField(record.gutters);
@@ -227,8 +284,6 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 		settings.cursorStatusColor.push_back(hex[(parsed >> 4) & 0x0F]);
 		settings.cursorStatusColor.push_back(hex[parsed & 0x0F]);
 	}
-	if (trimAscii(settings.formatLine).empty())
-		settings.formatLine = defaultFormatLineForTabSize(settings.tabSize);
 	if (!settings.postLoadMacro.empty() && !mr::dialogs::hasMrmacExtension(settings.postLoadMacro)) {
 		errorText = "POST_LOAD_MACRO must end with .mrmac.";
 		return false;
@@ -269,6 +324,7 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.showEofMarker = (record.optionsMask & kOptionShowEofMarker) != 0;
 	settings.showEofMarkerEmoji = (record.optionsMask & kOptionShowEofMarkerEmoji) != 0;
 	settings.lineNumZeroFill = (record.optionsMask & kOptionLineNumZeroFill) != 0;
+	settings.displayTabs = (record.optionsMask & kOptionDisplayTabs) != 0;
 	settings.lineNumbersPosition = (record.lineNumbersPositionChoice == kLineNumbersLeading) ? "LEADING"
 	                         : (record.lineNumbersPositionChoice == kLineNumbersTrailing) ? "TRAILING"
 	                                                                                      : "OFF";
@@ -314,6 +370,7 @@ enum : unsigned long long {
 	kOvEofCtrlZ = ::kOvEofCtrlZ,
 	kOvEofCrLf = ::kOvEofCrLf,
 	kOvTabExpand = ::kOvTabExpand,
+	kOvDisplayTabs = ::kOvDisplayTabs,
 	kOvTabSize = ::kOvTabSize,
 	kOvRightMargin = ::kOvRightMargin,
 	kOvWordWrap = ::kOvWordWrap,
@@ -439,6 +496,8 @@ enum : unsigned long long {
 		mask |= kOvEofCrLf;
 	if (effective.tabExpand != defaults.tabExpand)
 		mask |= kOvTabExpand;
+	if (effective.displayTabs != defaults.displayTabs)
+		mask |= kOvDisplayTabs;
 	if (effective.tabSize != defaults.tabSize)
 		mask |= kOvTabSize;
 	if (effective.rightMargin != defaults.rightMargin)
@@ -676,6 +735,8 @@ void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileE
 		record.optionsMask |= kOptionShowLineNumbers;
 	if (settings.lineNumZeroFill)
 		record.optionsMask |= kOptionLineNumZeroFill;
+	if (settings.displayTabs)
+		record.optionsMask |= kOptionDisplayTabs;
 
 	record.tabExpandChoice = settings.tabExpand ? kTabExpandTabs : kTabExpandSpaces;
 	record.indentStyleChoice = (indentStyle == "AUTOMATIC") ? kIndentStyleAutomatic

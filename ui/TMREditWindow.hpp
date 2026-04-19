@@ -183,6 +183,9 @@ class TMREditWindow : public TWindow {
 				// so the live growing selection is visible.
 				editor->setBlockOverlayState(0, 0, 0, false, false);
 			}
+			if (event.what == evKeyDown && (event.keyDown.controlKeyState & kbShift) != 0 &&
+			    (event.keyDown.keyCode == kbTab || event.keyDown.keyCode == kbCtrlI))
+				event.keyDown.keyCode = kbShiftTab;
 			if (event.what == evKeyDown) {
 				if (handleBuiltInBlockHotkeys(event))
 					return;
@@ -647,6 +650,9 @@ class TMREditWindow : public TWindow {
 				case mr::coprocessor::TaskKind::MiniMapWarmup:
 					line = "Mini map";
 					break;
+				case mr::coprocessor::TaskKind::SaveNormalizationWarmup:
+					line = "Save cache";
+					break;
 				case mr::coprocessor::TaskKind::LineIndexWarmup:
 					line = "Line index";
 					break;
@@ -662,17 +668,20 @@ class TMREditWindow : public TWindow {
 			line = bullet + " " + line + "  " + formatTaskElapsed(task);
 			lines.push_back(line);
 		}
-		if (editor != nullptr) {
-			if (editor->pendingLineIndexWarmupTaskId() != 0 &&
-			    trackedTaskCount(mr::coprocessor::TaskKind::LineIndexWarmup) == 0)
-				lines.push_back(bullet + " " + lineIndexWarmingLabel());
-			if (editor->pendingSyntaxWarmupTaskId() != 0 &&
-			    trackedTaskCount(mr::coprocessor::TaskKind::SyntaxWarmup) == 0)
-				lines.push_back(bullet + " " + syntaxWarmingLabel());
-			if (editor->pendingMiniMapWarmupTaskId() != 0 &&
-			    trackedTaskCount(mr::coprocessor::TaskKind::MiniMapWarmup) == 0)
-				lines.push_back(bullet + " " + miniMapRenderingLabel());
-		}
+			if (editor != nullptr) {
+				if (editor->pendingLineIndexWarmupTaskId() != 0 &&
+				    trackedTaskCount(mr::coprocessor::TaskKind::LineIndexWarmup) == 0)
+					lines.push_back(bullet + " " + lineIndexWarmingLabel());
+				if (editor->pendingSyntaxWarmupTaskId() != 0 &&
+				    trackedTaskCount(mr::coprocessor::TaskKind::SyntaxWarmup) == 0)
+					lines.push_back(bullet + " " + syntaxWarmingLabel());
+				if (editor->pendingMiniMapWarmupTaskId() != 0 &&
+				    trackedTaskCount(mr::coprocessor::TaskKind::MiniMapWarmup) == 0)
+					lines.push_back(bullet + " " + miniMapRenderingLabel());
+				if (editor->pendingSaveNormalizationWarmupTaskId() != 0 &&
+				    trackedTaskCount(mr::coprocessor::TaskKind::SaveNormalizationWarmup) == 0)
+					lines.push_back(bullet + " " + saveNormalizationWarmingLabel());
+			}
 		return lines;
 	}
 
@@ -728,14 +737,21 @@ class TMREditWindow : public TWindow {
 				editor->clearSyntaxWarmupTask(syntaxTaskId);
 				++clearedCount;
 			}
-			std::uint64_t miniMapTaskId = editor->pendingMiniMapWarmupTaskId();
-			if (miniMapTaskId != 0) {
-				mrTraceCoprocessorTaskCancel(bufferId_, miniMapTaskId);
-				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(miniMapTaskId));
-				editor->clearMiniMapWarmupTask(miniMapTaskId);
-				++clearedCount;
+				std::uint64_t miniMapTaskId = editor->pendingMiniMapWarmupTaskId();
+				if (miniMapTaskId != 0) {
+					mrTraceCoprocessorTaskCancel(bufferId_, miniMapTaskId);
+					static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(miniMapTaskId));
+					editor->clearMiniMapWarmupTask(miniMapTaskId);
+					++clearedCount;
+				}
+				std::uint64_t saveNormalizationTaskId = editor->pendingSaveNormalizationWarmupTaskId();
+				if (saveNormalizationTaskId != 0) {
+					mrTraceCoprocessorTaskCancel(bufferId_, saveNormalizationTaskId);
+					static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(saveNormalizationTaskId));
+					editor->clearSaveNormalizationWarmupTask(saveNormalizationTaskId);
+					++clearedCount;
+				}
 			}
-		}
 		updateTaskMarkers();
 		return clearedCount;
 	}
@@ -789,6 +805,10 @@ class TMREditWindow : public TWindow {
 
 	std::uint64_t pendingMiniMapWarmupTaskId() const noexcept {
 		return editor != nullptr ? editor->pendingMiniMapWarmupTaskId() : 0;
+	}
+
+	std::uint64_t pendingSaveNormalizationWarmupTaskId() const noexcept {
+		return editor != nullptr ? editor->pendingSaveNormalizationWarmupTaskId() : 0;
 	}
 
 	bool usesApproximateMetrics() const noexcept {
@@ -1196,7 +1216,7 @@ class TMREditWindow : public TWindow {
 				syncBlockVisual();
 				return;
 			}
-			if (originalEvent == evMouseDown && !blockMarkingOn_) {
+			if (originalEvent == evMouseDown && blockMode_ == bmNone) {
 				const std::size_t selectionStartNow = editor->selectionStartOffset();
 				const std::size_t selectionEndNow = editor->selectionEndOffset();
 
@@ -1269,6 +1289,8 @@ class TMREditWindow : public TWindow {
 			if (editor->pendingSyntaxWarmupTaskId() != 0)
 				++taskCount;
 			if (editor->pendingMiniMapWarmupTaskId() != 0)
+				++taskCount;
+			if (editor->pendingSaveNormalizationWarmupTaskId() != 0)
 				++taskCount;
 		}
 		if (indicator != nullptr)
@@ -1407,6 +1429,10 @@ class TMREditWindow : public TWindow {
 
 	static const char *miniMapRenderingLabel() noexcept {
 		return "Mini map rendering";
+	}
+
+	static const char *saveNormalizationWarmingLabel() noexcept {
+		return "Save cache warming";
 	}
 
 	int normalizedBlockLine1() const {

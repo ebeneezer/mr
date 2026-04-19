@@ -139,6 +139,10 @@ std::string ensureMrmacExtension(std::string_view pathView) {
 	return path + ".mrmac";
 }
 
+bool writeTextFileWithConfiguredSaveOptions(const std::string &path, const std::string &content) {
+	return writeTextFile(path, normalizeTextForSave(content, effectiveTextSaveOptionsForPath(path)));
+}
+
 std::string makeRecordedMacroName(unsigned long counter) {
 	std::array<char, 32> timePart{};
 	std::time_t now = std::time(nullptr);
@@ -1190,7 +1194,7 @@ void TMREditorApp::finalizeKeystrokeRecording() {
 	if (!savePath.empty()) {
 		if (!confirmOverwriteForPath("Overwrite", "Macro file exists. Overwrite?", savePath))
 			return;
-		if (!writeTextFile(savePath, macroSource)) {
+		if (!writeTextFileWithConfiguredSaveOptions(savePath, macroSource)) {
 			messageBox(mfError | mfOKButton, "Could not save recorded macro:\n%s", savePath.c_str());
 			return;
 		}
@@ -1206,7 +1210,7 @@ void TMREditorApp::finalizeKeystrokeRecording() {
 			sessionPath = configuredTempDirectoryPath() + "/mr_recorded_" +
 			              std::to_string(static_cast<long>(::getpid())) + "_" +
 			              std::to_string(recordedMacroCounter) + ".mrmac";
-			if (!writeTextFile(sessionPath, macroSource)) {
+				if (!writeTextFileWithConfiguredSaveOptions(sessionPath, macroSource)) {
 				messageBox(mfError | mfOKButton, "Could not create session macro file.");
 				return;
 			}

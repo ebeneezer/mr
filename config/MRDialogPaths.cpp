@@ -605,13 +605,15 @@ static const MREditSettingDescriptor kEditSettingDescriptors[] = {
      kOvWordDelimiters},
     {"DEFAULT_EXTENSIONS", "Filename extension fallback", MREditSettingSection::OpenFile, MREditSettingKind::String,
      true, kOvDefaultExtensions},
-    {"TRUNCATE_SPACES", "Truncate spaces", MREditSettingSection::Save, MREditSettingKind::Boolean, true,
+    {"TRUNCATE_SPACES", "Truncate whitespace", MREditSettingSection::Save, MREditSettingKind::Boolean, true,
      kOvTruncateSpaces},
     {"EOF_CTRL_Z", "Write Ctrl+Z EOF", MREditSettingSection::Save, MREditSettingKind::Boolean, true,
      kOvEofCtrlZ},
     {"EOF_CR_LF", "Write CR/LF", MREditSettingSection::Save, MREditSettingKind::Boolean, true, kOvEofCrLf},
     {"TAB_EXPAND", "Expand tabs", MREditSettingSection::Tabs, MREditSettingKind::Boolean, true,
      kOvTabExpand},
+    {"DISPLAY_TABS", "Display tabs", MREditSettingSection::Tabs, MREditSettingKind::Boolean, true,
+     kOvDisplayTabs},
     {"TAB_SIZE", "Tab size", MREditSettingSection::Tabs, MREditSettingKind::Integer, true, kOvTabSize},
     {"RIGHT_MARGIN", "Right margin", MREditSettingSection::Formatting, MREditSettingKind::Integer, true,
      kOvRightMargin},
@@ -1514,26 +1516,83 @@ bool parseBinaryRecordLengthLiteral(const std::string &value, int &outValue, std
 	return true;
 }
 
-std::string defaultFormatLineForTabSize(int tabSize) {
-	const int normalizedTabSize = std::max(1, std::min(tabSize, 32));
-	const int targetWidth = 80;
-	std::string out("!");
+int clampFormatTabSize(int tabSize) noexcept {
+	return std::max(2, std::min(tabSize, 32));
+}
 
-	while (static_cast<int>(out.size()) + normalizedTabSize + 1 <= targetWidth) {
-		out.append(static_cast<std::size_t>(normalizedTabSize), '-');
-		out.push_back('!');
-	}
-	if (out.size() == 1) {
-		out.append(static_cast<std::size_t>(normalizedTabSize), '-');
-		out.push_back('!');
-	}
+int clampFormatRightMargin(int rightMargin) noexcept {
+	return std::max(1, std::min(rightMargin, 999));
+}
+
+std::string defaultFormatLineForTabSize(int tabSize, int rightMargin) {
+	const int normalizedTabSize = clampFormatTabSize(tabSize);
+	const int normalizedRightMargin = clampFormatRightMargin(rightMargin);
+	std::string out(static_cast<std::size_t>(normalizedRightMargin), '.');
+
+	for (int col = normalizedTabSize; col <= normalizedRightMargin; col += normalizedTabSize)
+		out[static_cast<std::size_t>(col - 1)] = '|';
+	out[static_cast<std::size_t>(normalizedRightMargin - 1)] = 'R';
 	return out;
 }
 
-std::string normalizeFormatLine(const std::string &value, int tabSize = kDefaultTabSize) {
-	if (trimAscii(value).empty())
-		return defaultFormatLineForTabSize(tabSize);
-	return value;
+bool normalizeFormatLine(const std::string &value, int tabSize, int rightMargin, std::string &outValue,
+                         std::string *errorMessage) {
+	std::string out = trimAscii(value);
+	int normalizedRightMargin = clampFormatRightMargin(rightMargin);
+	int rCount = 0;
+	int rIndex = -1;
+
+	if (out.empty()) {
+		outValue = defaultFormatLineForTabSize(tabSize, normalizedRightMargin);
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
+	}
+	{
+		bool legacy = true;
+		for (char ch : out)
+			if (ch != '!' && ch != '-') {
+				legacy = false;
+				break;
+			}
+		if (legacy) {
+			outValue = defaultFormatLineForTabSize(tabSize, normalizedRightMargin);
+			if (errorMessage != nullptr)
+				errorMessage->clear();
+			return true;
+		}
+	}
+	for (std::size_t i = 0; i < out.size(); ++i) {
+		char ch = out[i];
+		if (ch != '.' && ch != '|' && ch != 'R')
+			return setError(errorMessage, "FORMAT_LINE may only contain '.', '|' and 'R'.");
+		if (ch == 'R') {
+			++rCount;
+			rIndex = static_cast<int>(i);
+		}
+	}
+	if (rCount != 1)
+		return setError(errorMessage, "FORMAT_LINE must contain exactly one 'R'.");
+	if (rIndex + 1 != normalizedRightMargin)
+		return setError(errorMessage, "FORMAT_LINE must place 'R' at RIGHT_MARGIN.");
+	outValue = out;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+std::string synchronizeFormatLineRightMargin(const std::string &value, int rightMargin, int tabSize) {
+	const int normalizedRightMargin = clampFormatRightMargin(rightMargin);
+	std::string out = trimAscii(value);
+	if (out.empty())
+		return defaultFormatLineForTabSize(tabSize, normalizedRightMargin);
+	for (char &ch : out)
+		if (ch == 'R')
+			ch = '.';
+	if (static_cast<int>(out.size()) < normalizedRightMargin)
+		out.append(static_cast<std::size_t>(normalizedRightMargin - static_cast<int>(out.size())), '.');
+	out[static_cast<std::size_t>(normalizedRightMargin - 1)] = 'R';
+	return out;
 }
 
 bool normalizeCursorStatusColor(const std::string &value, std::string &outValue, std::string *errorMessage) {
@@ -1823,21 +1882,23 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 	} else if (upperKeyName == "TAB_EXPAND") {
 		if (!parseAndAssignBooleanLiteral(value, current.tabExpand, errorMessage))
 			return false;
+	} else if (upperKeyName == "DISPLAY_TABS") {
+		if (!parseAndAssignBooleanLiteral(value, current.displayTabs, errorMessage))
+			return false;
 	} else if (upperKeyName == "TAB_SIZE") {
-		const int previousTabSize = current.tabSize;
-		const std::string previousFormatLine = current.formatLine;
 		int tabSize = 0;
 		if (!parseTabSizeLiteral(value, tabSize, errorMessage))
 			return false;
 		current.tabSize = tabSize;
-		if (trimAscii(previousFormatLine).empty() ||
-		    previousFormatLine == defaultFormatLineForTabSize(previousTabSize))
-			current.formatLine = defaultFormatLineForTabSize(tabSize);
+		// Changing tab size resets the format line to the canonical tab/margin layout.
+		current.formatLine = defaultFormatLineForTabSize(current.tabSize, current.rightMargin);
 	} else if (upperKeyName == "RIGHT_MARGIN") {
 		int rightMargin = 0;
 		if (!parseRightMarginLiteral(value, rightMargin, errorMessage))
 			return false;
 		current.rightMargin = rightMargin;
+		current.formatLine =
+		    synchronizeFormatLineRightMargin(current.formatLine, current.rightMargin, current.tabSize);
 	} else if (upperKeyName == "WORD_WRAP") {
 		if (!parseAndAssignBooleanLiteral(value, current.wordWrap, errorMessage))
 			return false;
@@ -1862,8 +1923,11 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 		current.preSaveMacro = trimAscii(value).empty() ? std::string() : normalizeConfiguredPathInput(value);
 	else if (upperKeyName == "DEFAULT_PATH")
 		current.defaultPath = trimAscii(value).empty() ? std::string() : normalizeConfiguredPathInput(value);
-	else if (upperKeyName == "FORMAT_LINE")
-		current.formatLine = normalizeFormatLine(value, current.tabSize);
+	else if (upperKeyName == "FORMAT_LINE") {
+		if (!normalizeFormatLine(value, current.tabSize, current.rightMargin, normalized, errorMessage))
+			return false;
+		current.formatLine = normalized;
+	}
 	else if (upperKeyName == "BACKUP_FILES") {
 		if (!parseAndAssignBooleanLiteral(value, current.backupFiles, errorMessage))
 			return false;
@@ -1977,6 +2041,8 @@ std::string editSetupValueLiteral(const MREditSetupSettings &settings, const cha
 		return formatEditSetupBoolean(settings.eofCrLf);
 	if (upperKey == "TAB_EXPAND")
 		return formatEditSetupBoolean(settings.tabExpand);
+	if (upperKey == "DISPLAY_TABS")
+		return formatEditSetupBoolean(settings.displayTabs);
 	if (upperKey == "TAB_SIZE")
 		return std::to_string(settings.tabSize);
 	if (upperKey == "RIGHT_MARGIN")
@@ -2042,7 +2108,7 @@ std::string editSetupValueLiteral(const MREditSetupSettings &settings, const cha
 
 unsigned long long supportedEditProfileOverrideMask() noexcept {
 static constexpr unsigned long long mask = kOvPageBreak | kOvWordDelimiters | kOvDefaultExtensions | kOvTruncateSpaces |
-	                                     kOvEofCtrlZ | kOvEofCrLf | kOvTabExpand | kOvTabSize | kOvRightMargin |
+	                                     kOvEofCtrlZ | kOvEofCrLf | kOvTabExpand | kOvDisplayTabs | kOvTabSize | kOvRightMargin |
 	                                     kOvWordWrap | kOvIndentStyle | kOvFileType | kOvBinaryRecordLength |
 	                                     kOvPostLoadMacro | kOvPreSaveMacro | kOvDefaultPath | kOvFormatLine |
 	                                     kOvBackupFiles | kOvShowEofMarker | kOvShowEofMarkerEmoji | kOvLineNumZeroFill |
@@ -2210,6 +2276,7 @@ MREditSetupSettings resolveEditSetupDefaults() {
 	defaults.eofCtrlZ = false;
 	defaults.eofCrLf = false;
 	defaults.tabExpand = true;
+	defaults.displayTabs = false;
 	defaults.tabSize = kDefaultTabSize;
 	defaults.rightMargin = kDefaultRightMargin;
 	defaults.wordWrap = true;
@@ -2219,7 +2286,7 @@ MREditSetupSettings resolveEditSetupDefaults() {
 	defaults.postLoadMacro.clear();
 	defaults.preSaveMacro.clear();
 	defaults.defaultPath.clear();
-	defaults.formatLine = defaultFormatLineForTabSize(defaults.tabSize);
+	defaults.formatLine = defaultFormatLineForTabSize(defaults.tabSize, defaults.rightMargin);
 	defaults.backupMethod = kBackupMethodBakFile;
 	defaults.backupFrequency = kBackupFrequencyFirstSaveOnly;
 	defaults.backupExtension = "bak";
@@ -2458,6 +2525,8 @@ MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults,
 		merged.eofCrLf = overrides.values.eofCrLf;
 	if ((overrides.mask & kOvTabExpand) != 0)
 		merged.tabExpand = overrides.values.tabExpand;
+	if ((overrides.mask & kOvDisplayTabs) != 0)
+		merged.displayTabs = overrides.values.displayTabs;
 	if ((overrides.mask & kOvTabSize) != 0)
 		merged.tabSize = overrides.values.tabSize;
 	if ((overrides.mask & kOvRightMargin) != 0)
@@ -2714,7 +2783,7 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	std::string miniMapPosition = normalizeMiniMapPosition(settings.miniMapPosition);
 	std::string codeFoldingPosition = normalizeCodeFoldingPosition(settings.codeFoldingPosition);
 	std::string gutters = normalizeGuttersOrder(settings.gutters);
-	std::string formatLine = normalizeFormatLine(settings.formatLine, settings.tabSize);
+	std::string formatLine;
 	std::string cursorStatusColor;
 	std::string miniMapMarkerGlyph;
 	std::string postLoadMacro = trimAscii(settings.postLoadMacro).empty() ? std::string()
@@ -2750,6 +2819,9 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 		return setError(errorMessage, "TAB_SIZE must be between 2 and 32.");
 	if (settings.rightMargin < kMinRightMargin || settings.rightMargin > kMaxRightMargin)
 		return setError(errorMessage, "RIGHT_MARGIN must be between 1 and 999.");
+	if (!normalizeFormatLine(settings.formatLine, settings.tabSize, settings.rightMargin, formatLine,
+	                         errorMessage))
+		return false;
 	if (settings.miniMapWidth < kMinMiniMapWidth || settings.miniMapWidth > kMaxMiniMapWidth)
 		return setError(errorMessage, "MINIMAP_WIDTH must be between 2 and 20.");
 
@@ -2757,6 +2829,7 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	normalized.eofCtrlZ = settings.eofCtrlZ;
 	normalized.eofCrLf = settings.eofCrLf;
 	normalized.tabExpand = settings.tabExpand;
+	normalized.displayTabs = settings.displayTabs;
 	normalized.tabSize = settings.tabSize;
 	normalized.rightMargin = settings.rightMargin;
 	normalized.wordWrap = settings.wordWrap;
@@ -3213,6 +3286,10 @@ bool configuredTabExpandSetting() {
 	return configuredEditSetupSettings().tabExpand;
 }
 
+bool configuredDisplayTabsSetting() {
+	return configuredEditSetupSettings().displayTabs;
+}
+
 int configuredTabSizeSetting() {
 	return configuredEditSetupSettings().tabSize;
 }
@@ -3388,6 +3465,9 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source +=
 	    "MRSETUP('TAB_EXPAND', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.tabExpand)) +
 	    "');\n";
+	source +=
+	    "MRSETUP('DISPLAY_TABS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.displayTabs)) +
+	    "');\n";
 	source += "MRSETUP('TAB_SIZE', '" + std::to_string(edit.tabSize) + "');\n";
 	source += "MRSETUP('RIGHT_MARGIN', '" + std::to_string(edit.rightMargin) + "');\n";
 	source += "MRSETUP('WORD_WRAP', '" +
@@ -3458,6 +3538,8 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 					value = formatEditSetupBoolean(profile.overrides.values.eofCrLf);
 				else if (std::string(descriptors[i].key) == "TAB_EXPAND")
 					value = formatEditSetupBoolean(profile.overrides.values.tabExpand);
+				else if (std::string(descriptors[i].key) == "DISPLAY_TABS")
+					value = formatEditSetupBoolean(profile.overrides.values.displayTabs);
 				else if (std::string(descriptors[i].key) == "TAB_SIZE")
 					value = std::to_string(profile.overrides.values.tabSize);
 				else if (std::string(descriptors[i].key) == "RIGHT_MARGIN")

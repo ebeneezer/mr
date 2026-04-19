@@ -580,7 +580,7 @@ static unsigned classifyProcVarName(const std::string &name) {
 static unsigned classifyLoadVarName(const std::string &name) {
 	if (name == "FIRST_MACRO" || name == "NEXT_MACRO")
 		return mrefUiAffinity;
-	if (name == "IGNORE_CASE" || name == "TAB_EXPAND")
+	if (name == "IGNORE_CASE" || name == "TAB_EXPAND" || name == "DISPLAY_TABS")
 		return mrefUiAffinity;
 	if (name == "INSERT_MODE" || name == "INDENT_LEVEL" || name == "GET_LINE" ||
 	    name == "CUR_CHAR" || name == "C_COL" || name == "C_LINE" || name == "C_ROW" ||
@@ -4034,6 +4034,8 @@ static Value loadSpecialVariable(const std::string &name, bool &handled) {
 		return makeInt(currentRuntimeIgnoreCase() ? 1 : 0);
 	if (key == "TAB_EXPAND")
 		return makeInt(currentRuntimeTabExpand() ? 1 : 0);
+	if (key == "DISPLAY_TABS")
+		return makeInt(configuredDisplayTabsSetting() ? 1 : 0);
 	if (key == "INSERT_MODE")
 		return makeInt(currentEditorInsertMode() ? 1 : 0);
 	if (key == "INDENT_LEVEL")
@@ -4260,7 +4262,7 @@ static bool storeSpecialVariable(const std::string &name, const Value &value) {
 	    key == "BLOCK_COL2" || key == "MARKING" || key == "FIRST_SAVE" ||
 	    key == "EOF_IN_MEM" || key == "BUFFER_ID" || key == "TMP_FILE" || key == "TMP_FILE_NAME" ||
 	    key == "COMSPEC" || key == "MR_PATH" || key == "OS_VERSION" || key == "PARAM_COUNT" ||
-	    key == "CPU")
+	    key == "CPU" || key == "DISPLAY_TABS")
 		throw std::runtime_error("Attempt to assign to read-only system variable.");
 	return false;
 }
@@ -5626,7 +5628,7 @@ bool isSupportedStagedSymbol(const std::string &value) noexcept {
 	    "NEXT_MACRO",  "CREATE_WINDOW",  "DELETE_WINDOW",  "MODIFY_WINDOW",   "LINK_WINDOW",
 	    "UNLINK_WINDOW","ZOOM",          "REDRAW",         "NEW_SCREEN",      "SWITCH_WINDOW",
 	    "SIZE_WINDOW",
-	    "FILE_CHANGED","FILE_NAME",      "IGNORE_CASE",    "TAB_EXPAND"};
+	    "FILE_CHANGED","FILE_NAME",      "IGNORE_CASE",    "TAB_EXPAND",      "DISPLAY_TABS"};
 
 	for (const char *symbol : kAllowed)
 		if (value == symbol)
@@ -6502,7 +6504,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							    "MRSETUP supports keys: SETTINGS_VERSION, MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
 							    "SHELLPATH, WINDOW_MANAGER, MESSAGES, LASTFILEDIALOGPATH, MAX_PATH_HISTORY, MAX_FILE_HISTORY, PATH_HISTORY, FILE_HISTORY, "
 							    "DEFAULT_PROFILE_DESCRIPTION, COLORTHEMEURI, PAGE_BREAK, WORD_DELIMITERS, DEFAULT_EXTENSIONS, "
-							    "TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, TAB_SIZE, RIGHT_MARGIN, WORD_WRAP, "
+							    "TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, DISPLAY_TABS, TAB_SIZE, RIGHT_MARGIN, WORD_WRAP, "
 							    "INDENT_STYLE, FILE_TYPE, BINARY_RECORD_LENGTH, POST_LOAD_MACRO, PRE_SAVE_MACRO, DEFAULT_PATH, "
 							    "FORMAT_LINE, BACKUP_METHOD, BACKUP_FREQUENCY, BACKUP_EXTENSION, BACKUP_DIRECTORY, "
 							    "AUTOSAVE_INACTIVITY_SECONDS, AUTOSAVE_INTERVAL_SECONDS, BACKUP_FILES, SHOW_EOF_MARKER, "

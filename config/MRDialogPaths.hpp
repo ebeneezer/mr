@@ -23,6 +23,7 @@ struct MREditSetupSettings {
 	bool eofCtrlZ;
 	bool eofCrLf;
 	bool tabExpand;
+	bool displayTabs;
 	int tabSize;
 	int rightMargin;
 	bool wordWrap;
@@ -58,7 +59,7 @@ struct MREditSetupSettings {
 
 	MREditSetupSettings() noexcept
 	    : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false),
-	      eofCrLf(false), tabExpand(true), tabSize(8), rightMargin(78), wordWrap(true), indentStyle(),
+	      eofCrLf(false), tabExpand(true), displayTabs(false), tabSize(8), rightMargin(78), wordWrap(true), indentStyle(),
 	      fileType(), binaryRecordLength(100), postLoadMacro(), preSaveMacro(), defaultPath(), formatLine(),
 	      backupMethod("BAK_FILE"), backupFrequency("FIRST_SAVE_ONLY"), backupExtension("bak"), backupDirectory(),
 	      autosaveInactivitySeconds(15), autosaveIntervalSeconds(180), backupFiles(true), showEofMarker(false),
@@ -132,6 +133,7 @@ enum MREditSetupOverrideMask : unsigned long long {
 	kOvLineNumbersPosition = 1ull << 36,
 	kOvCodeFoldingPosition = 1ull << 37,
 	kOvGutters = 1ull << 38,
+	kOvDisplayTabs = 1ull << 39,
 };
 
 struct MREditSettingDescriptor {
@@ -287,6 +289,7 @@ bool effectiveEditWindowColorThemePathForPath(const std::string &path, std::stri
 std::vector<std::string> configuredDefaultExtensionList();
 [[nodiscard]] bool configuredDefaultInsertMode();
 [[nodiscard]] bool configuredTabExpandSetting();
+[[nodiscard]] bool configuredDisplayTabsSetting();
 [[nodiscard]] int configuredTabSizeSetting();
 [[nodiscard]] bool configuredBackupFilesSetting();
 [[nodiscard]] bool configuredPersistentBlocksSetting();

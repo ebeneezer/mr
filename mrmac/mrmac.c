@@ -1980,6 +1980,7 @@ static const BareProcStatement kBareProcStatements[] = {
     BARE_PROC("LAST_PAGE_BREAK"),
     BARE_PROC("TAB_RIGHT"),
     BARE_PROC("TAB_LEFT"),
+    { "REVERSE_TAB", "TAB_LEFT" },
     BARE_PROC("INDENT"),
     BARE_PROC("UNDENT"),
     BARE_PROC("BLOCK_BEGIN"),
