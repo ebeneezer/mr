@@ -36,8 +36,7 @@ enum : ushort {
 	cmMrWindowOrganize,
 	cmMrWindowLink,
 	cmMrWindowUnlink,
-	cmMrWindowCascade,
-	cmMrWindowTile,
+	cmMrWindowOrganizePlaceholder,
 
 	cmMrBlockCopy,
 	cmMrBlockMove,

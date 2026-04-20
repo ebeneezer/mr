@@ -103,8 +103,7 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrWindowModifySize, hasWindow);
 	setCommandEnabled(cmMrWindowZoom, hasWindow);
 	setCommandEnabled(cmMrWindowMinimize, false);
-	setCommandEnabled(cmMrWindowCascade, hasWindow);
-	setCommandEnabled(cmMrWindowTile, hasWindow);
+	setCommandEnabled(cmMrWindowOrganizePlaceholder, false);
 	setCommandEnabled(cmMrWindowLink, hasMultipleWindows && hasEditor);
 	setCommandEnabled(cmMrWindowUnlink, hasWindow);
 
