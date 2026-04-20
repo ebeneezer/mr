@@ -2,6 +2,7 @@
 #define MRWINDOWCOMMANDS_HPP
 
 #include <vector>
+#include <string>
 
 class TMREditWindow;
 
@@ -17,5 +18,15 @@ class TMREditWindow;
 void mrUpdateAllWindowsColorTheme();
 [[nodiscard]] bool handleWindowCascade();
 [[nodiscard]] bool handleWindowTile();
+
+[[nodiscard]] int currentVirtualDesktop();
+void setCurrentVirtualDesktop(int vd);
+[[nodiscard]] bool moveToNextVirtualDesktop();
+[[nodiscard]] bool moveToPrevVirtualDesktop();
+[[nodiscard]] bool viewportRight();
+[[nodiscard]] bool viewportLeft();
+void syncVirtualDesktopVisibility();
+void mrSaveWorkspace(const std::string &filename);
+void mrLoadWorkspace(const std::string &filename);
 
 #endif

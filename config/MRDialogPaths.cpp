@@ -35,6 +35,8 @@ constexpr int kHistoryLimitDefault = 15;
 
 static bool g_windowManagerEnabled = true;
 static bool g_menulineMessagesEnabled = true;
+static int g_virtualDesktops = 1;
+static bool g_autoloadWorkspace = false;
 
 std::vector<MRDialogHistoryEntry> &configuredPathHistoryStorage() {
 	static std::vector<MRDialogHistoryEntry> value;
@@ -583,7 +585,10 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
 	{"SHELLPATH", MRSettingsKeyClass::Path, true},
 	{"WINDOW_MANAGER", MRSettingsKeyClass::Global, true},
 	{"MESSAGES", MRSettingsKeyClass::Global, true},
+	{"VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
+	{"AUTOLOAD_WORKSPACE", MRSettingsKeyClass::Global, true},
 	{"LASTFILEDIALOGPATH", MRSettingsKeyClass::Global, true},
+	{"WORKSPACE", MRSettingsKeyClass::Global, false},
 	{"MAX_PATH_HISTORY", MRSettingsKeyClass::Global, true},
 	{"MAX_FILE_HISTORY", MRSettingsKeyClass::Global, true},
 	{"PATH_HISTORY", MRSettingsKeyClass::Global, false},
@@ -2450,8 +2455,30 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 					return false;
 				return setConfiguredMenulineMessages(parsed, errorMessage);
 			}
+			if (upper == "VIRTUAL_DESKTOPS") {
+				int parsed = 1;
+				try {
+					parsed = std::stoi(value);
+				} catch (...) {
+					parsed = 1;
+				}
+				if (parsed < 1) parsed = 1;
+				if (parsed > 9) parsed = 9;
+				return setConfiguredVirtualDesktops(parsed, errorMessage);
+			}
+			if (upper == "AUTOLOAD_WORKSPACE") {
+				bool parsed = false;
+				if (!parseBooleanLiteral(value, parsed, errorMessage))
+					return false;
+				return setConfiguredAutoloadWorkspace(parsed, errorMessage);
+			}
 			if (upper == "LASTFILEDIALOGPATH")
 				return setConfiguredLastFileDialogPath(value, errorMessage);
+			if (upper == "WORKSPACE") {
+				if (errorMessage != nullptr)
+					errorMessage->clear();
+				return true;
+			}
 			if (upper == "MAX_PATH_HISTORY") {
 				int parsed = 0;
 				if (!parseHistoryLimitLiteral(value, parsed, errorMessage, "MAX_PATH_HISTORY"))
@@ -3387,6 +3414,30 @@ bool configuredMenulineMessages() {
 	return g_menulineMessagesEnabled;
 }
 
+bool setConfiguredVirtualDesktops(int count, std::string *errorMessage) {
+	if (count < 1) count = 1;
+	if (count > 9) count = 9;
+	g_virtualDesktops = count;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+int configuredVirtualDesktops() {
+	return g_virtualDesktops;
+}
+
+bool setConfiguredAutoloadWorkspace(bool enabled, std::string *errorMessage) {
+	g_autoloadWorkspace = enabled;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+bool configuredAutoloadWorkspace() {
+	return g_autoloadWorkspace;
+}
+
 bool setConfiguredLastFileDialogPath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 	std::string directory;
@@ -3441,6 +3492,8 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source += "MRSETUP('SHELLPATH', '" + escapeMrmacSingleQuotedLiteral(shellPath) + "');\n";
 	source += "MRSETUP('WINDOW_MANAGER', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredWindowManager())) + "');\n";
 	source += "MRSETUP('MESSAGES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMenulineMessages())) + "');\n";
+	source += "MRSETUP('VIRTUAL_DESKTOPS', '" + std::to_string(configuredVirtualDesktops()) + "');\n";
+	source += "MRSETUP('AUTOLOAD_WORKSPACE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredAutoloadWorkspace())) + "');\n";
 	source += "MRSETUP('LASTFILEDIALOGPATH', '" +
 	          escapeMrmacSingleQuotedLiteral(configuredLastFileDialogPath()) + "');\n";
 	source += "MRSETUP('MAX_PATH_HISTORY', '" + std::to_string(configuredMaxPathHistory()) + "');\n";

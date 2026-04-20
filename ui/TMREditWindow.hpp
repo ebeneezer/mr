@@ -1356,6 +1356,7 @@ class TMREditWindow : public TWindow {
 		return editor->charColumn(start, ptr) + 1;
 	}
 
+  public:
 	static std::string baseNameOf(const std::string &path) {
 		std::size_t pos = path.find_last_of("\\/");
 		return pos == std::string::npos ? path : path.substr(pos + 1);
@@ -1475,6 +1476,9 @@ class TMREditWindow : public TWindow {
 		return std::max(aCol, bCol);
 	}
 
+  public:
+	int virtualDesktop_ = 1;
+  private:
 	void syncBlockVisual() {
 		uint a;
 		uint b;

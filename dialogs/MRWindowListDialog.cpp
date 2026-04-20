@@ -11,6 +11,7 @@
 #define Uses_TRect
 #define Uses_TScrollBar
 #define Uses_TStaticText
+#define Uses_TFileDialog
 #include <tvision/tv.h>
 
 #include "MRWindowListDialog.hpp"
@@ -32,7 +33,11 @@ enum : ushort {
 	cmMRWindowListDelete = 200,
 	cmMRWindowListSave,
 	cmMRWindowListHide,
-	cmMRWindowListHideAll
+	cmMRWindowListHideAll,
+	cmMRWorkspaceSave,
+	cmMRWorkspaceSaveAs,
+	cmMRWorkspaceLoad,
+	cmMRWorkspaceLoadFrom
 };
 
 struct WindowListEntry {
@@ -214,6 +219,27 @@ class WindowListView : public TListViewer {
 
 class WindowListDialog : public TDialog {
   public:
+	void handleWorkspaceCustom(ushort cmd) {
+		char fileName[MAXPATH];
+		fileName[0] = '\0';
+		if (cmd == cmMRWorkspaceSaveAs) {
+			if (TEditor::editorDialog(edSaveAs, fileName) != cmCancel) {
+				std::string name(fileName);
+				if (name.find(".mrmac") == std::string::npos) name += ".mrmac";
+				mrSaveWorkspace(name);
+			}
+		} else {
+			initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.mrmac");
+			TFileDialog *dialog = new TFileDialog(fileName, "Load workspace from...", "~N~ame", fdOpenButton, kFileDialogHistoryId);
+			if (TProgram::deskTop->execView(dialog) != cmCancel) {
+			    dialog->getFileName(fileName);
+				std::string name(fileName);
+				mrLoadWorkspace(name);
+			}
+			TObject::destroy(dialog);
+		}
+	}
+
 	WindowListDialog(MRWindowListMode aMode, TMREditWindow *aCurrent, TMREditWindow *aPreferred)
 	    : TWindowInit(&TDialog::initFrame),
 	      TDialog(centeredBounds(computeWidth(), computeHeight(aMode, aCurrent)), "WINDOW LIST"),
@@ -222,7 +248,7 @@ class WindowListDialog : public TDialog {
 		int width = size.x;
 		int height = size.y;
 		int listTop = 6;
-		int listBottom = height - 4;
+		int listBottom = height - 6;
 
 		insert(new TButton(TRect(3, 2, 16, 4), "~D~elete<DEL>", cmMRWindowListDelete, bfNormal));
 		insert(new TButton(TRect(18, 2, 29, 4), "~S~ave<F3>", cmMRWindowListSave, bfNormal));
@@ -235,6 +261,11 @@ class WindowListDialog : public TDialog {
 		listView = new WindowListView(TRect(2, listTop, width - 3, listBottom), scrollBar,
 		                              std::vector<std::string>());
 		insert(listView);
+
+		insert(new TButton(TRect(3, height - 5, 18, height - 3), "Sa~v~e workspace", cmMRWorkspaceSave, bfNormal));
+		insert(new TButton(TRect(19, height - 5, 34, height - 3), "~L~oad workspace", cmMRWorkspaceLoad, bfNormal));
+		insert(new TButton(TRect(35, height - 5, 52, height - 3), "Save workspace ~a~s", cmMRWorkspaceSaveAs, bfNormal));
+		insert(new TButton(TRect(53, height - 5, 70, height - 3), "Load workspace ~f~rom", cmMRWorkspaceLoadFrom, bfNormal));
 
 		insert(new TButton(TRect(22, height - 3, 35, height - 1), "~O~K<ENTER>", cmOK, bfDefault));
 		insert(new TButton(TRect(37, height - 3, 51, height - 1), "~C~ancel<ESC>", cmCancel,
@@ -306,6 +337,19 @@ class WindowListDialog : public TDialog {
 				break;
 			case cmMRWindowListHideAll:
 				handleHideAll();
+				clearEvent(event);
+				break;
+			case cmMRWorkspaceSave:
+				mrSaveWorkspace("");
+				clearEvent(event);
+				break;
+			case cmMRWorkspaceLoad:
+				mrLoadWorkspace("");
+				clearEvent(event);
+				break;
+			case cmMRWorkspaceSaveAs:
+			case cmMRWorkspaceLoadFrom:
+				handleWorkspaceCustom(event.message.command);
 				clearEvent(event);
 				break;
 			case cmHelp:

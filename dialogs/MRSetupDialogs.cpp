@@ -1676,18 +1676,21 @@ namespace {
 
 class TUserInterfaceSettingsDialog : public MRScrollableDialog {
   public:
-	TUserInterfaceSettingsDialog(bool initialWindowManager, bool initialMenulineMessages)
-	    : TWindowInit(&TUserInterfaceSettingsDialog::initFrame), MRScrollableDialog(centeredSetupDialogRect(50, 10), "User interface settings", 48, 8) {
+	TUserInterfaceSettingsDialog(bool initialWindowManager, bool initialMenulineMessages, int initialVirtualDesktops, bool initialAutoloadWorkspace)
+	    : TWindowInit(&TUserInterfaceSettingsDialog::initFrame), MRScrollableDialog(centeredSetupDialogRect(50, 14), "User interface settings", 48, 12) {
 
 		int const yStart = 2;
 
-		TCheckBoxes *cb = new TCheckBoxes(TRect(2, yStart, 46, yStart + 2),
+		TCheckBoxes *cb = new TCheckBoxes(TRect(2, yStart, 46, yStart + 3),
 		    new TSItem("~W~indow Manager",
-		    new TSItem("~M~enuline messages", nullptr)));
+		    new TSItem("~M~enuline messages",
+		    new TSItem("~A~uto load workspace", nullptr))));
 
 		addManaged(cb, cb->getBounds());
 
-		int buttonRow = 6;
+		addManaged(new TLabel(TRect(2, 6, 20, 7), "~V~irtual desktops", virtualDesktopsSlider_ = new MRNumericSlider(TRect(21, 6, 46, 7), 1, 9, initialVirtualDesktops, 1, 1, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged)), TRect(2, 6, 46, 7));
+
+		int buttonRow = 9;
 		addManaged(new TButton(TRect(2, buttonRow, 12, buttonRow + 2), "~O~K", cmOK, bfDefault),
 		           TRect(2, buttonRow, 12, buttonRow + 2));
 		addManaged(new TButton(TRect(14, buttonRow, 24, buttonRow + 2), "~C~ancel", cmCancel, bfNormal),
@@ -1695,6 +1698,27 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 
 		selectContent();
 	}
+
+	void getData(void *rec) override {
+		MRScrollableDialog::getData(rec);
+		ushort *data = (ushort *)rec;
+		if (virtualDesktopsSlider_ != nullptr) {
+			int32_t val = 1;
+			virtualDesktopsSlider_->getData(&val);
+			data[1] = static_cast<ushort>(val);
+		}
+	}
+
+	void setData(void *rec) override {
+		MRScrollableDialog::setData(rec);
+		ushort *data = (ushort *)rec;
+		if (virtualDesktopsSlider_ != nullptr) {
+			int32_t val = data[1];
+			virtualDesktopsSlider_->setData(&val);
+		}
+	}
+
+	MRNumericSlider *virtualDesktopsSlider_ = nullptr;
 };
 
 } // namespace
@@ -1705,27 +1729,37 @@ static void runUserInterfaceSettingsDialogFlow() {
 	while (running) {
 		bool currentWm = configuredWindowManager();
 		bool currentMm = configuredMenulineMessages();
+		int currentVd = configuredVirtualDesktops();
+		bool currentAw = configuredAutoloadWorkspace();
 
-		TUserInterfaceSettingsDialog *dialog = new TUserInterfaceSettingsDialog(currentWm, currentMm);
-		ushort cbData = 0;
+		TUserInterfaceSettingsDialog *dialog = new TUserInterfaceSettingsDialog(currentWm, currentMm, currentVd, currentAw);
+		ushort dialogData[2] = {0, 0};
 		if (currentWm)
-			cbData |= 1;
+			dialogData[0] |= 1;
 		if (currentMm)
-			cbData |= 2;
+			dialogData[0] |= 2;
+		if (currentAw)
+			dialogData[0] |= 4;
 
-		ushort result = execDialogWithDataCapture(dialog, &cbData);
+		dialogData[1] = static_cast<ushort>(currentVd);
+
+		ushort result = execDialogWithDataCapture(dialog, dialogData);
 
 		if (result == cmOK) {
 
-			bool newWm = (cbData & 1) != 0;
-			bool newMm = (cbData & 2) != 0;
+			bool newWm = (dialogData[0] & 1) != 0;
+			bool newMm = (dialogData[0] & 2) != 0;
+			bool newAw = (dialogData[0] & 4) != 0;
+			int newVd = static_cast<int>(dialogData[1]);
 
-			bool changed = (newWm != currentWm) || (newMm != currentMm);
+			bool changed = (newWm != currentWm) || (newMm != currentMm) || (newAw != currentAw) || (newVd != currentVd);
 
 			if (changed) {
 				std::string errorText;
 				setConfiguredWindowManager(newWm, &errorText);
 				setConfiguredMenulineMessages(newMm, &errorText);
+				setConfiguredAutoloadWorkspace(newAw, &errorText);
+				setConfiguredVirtualDesktops(newVd, &errorText);
 
 				if (!persistConfiguredSettingsSnapshot(&errorText)) {
 					messageBox(mfError | mfOKButton, "Installation / User interface settings\n\n%s", errorText.c_str());

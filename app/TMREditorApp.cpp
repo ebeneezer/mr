@@ -946,6 +946,10 @@ TMREditorApp::TMREditorApp()
 	syncRecordingUiState();
 	if (auto *mrMenuBar = dynamic_cast<TMRMenuBar *>(menuBar))
 		mrMenuBar->setPersistentBlocksMenuState(configuredPersistentBlocksSetting());
+
+	if (configuredAutoloadWorkspace()) {
+		mrLoadWorkspace("");
+	}
 	mrLogMessage("Editor session started.");
 	updateAppCommandState();
 }

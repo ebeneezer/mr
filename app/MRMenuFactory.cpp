@@ -18,7 +18,11 @@ namespace {
 TMenuItem *createOrganizeMenuItem() {
 	return new TMenuItem("or~G~anize", kbNoKey,
 	                     new TMenu(*new TMenuItem("~C~ascade windows", cmMrWindowCascade, kbNoKey, hcNoContext) +
-	                               *new TMenuItem("~T~ile windows", cmMrWindowTile, kbNoKey, hcNoContext)),
+	                               *new TMenuItem("~T~ile windows", cmMrWindowTile, kbNoKey, hcNoContext) + newLine() +
+	                               *new TMenuItem("~N~ext workspace", cmMrWindowNextDesktop, kbNoKey, hcNoContext) +
+	                               *new TMenuItem("~P~rev workspace", cmMrWindowPrevDesktop, kbNoKey, hcNoContext) +
+	                               *new TMenuItem("Move to ne~X~t workspace", cmMrWindowMoveToNextDesktop, kbNoKey, hcNoContext) +
+	                               *new TMenuItem("Move to p~R~ev workspace", cmMrWindowMoveToPrevDesktop, kbNoKey, hcNoContext)),
 	                     hcNoContext);
 }
 

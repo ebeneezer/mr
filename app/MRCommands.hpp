@@ -38,6 +38,10 @@ enum : ushort {
 	cmMrWindowUnlink,
 	cmMrWindowCascade,
 	cmMrWindowTile,
+	cmMrWindowNextDesktop,
+	cmMrWindowPrevDesktop,
+	cmMrWindowMoveToNextDesktop,
+	cmMrWindowMoveToPrevDesktop,
 
 	cmMrBlockCopy,
 	cmMrBlockMove,

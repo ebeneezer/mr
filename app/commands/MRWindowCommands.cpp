@@ -71,6 +71,223 @@ short nextEditorWindowNumber() {
 }
 } // namespace
 
+#include "../utils/MRFileIOUtils.hpp"
+#include "../config/MRDialogPaths.hpp"
+#include "../config/MRSettingsLoader.hpp"
+#include "../ui/MRMessageLineController.hpp"
+#include <sstream>
+
+static int g_currentVirtualDesktop = 1;
+
+int currentVirtualDesktop() {
+	return g_currentVirtualDesktop;
+}
+
+void syncVirtualDesktopVisibility() {
+	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+	for (TMREditWindow *win : windows) {
+		if (win->virtualDesktop_ == g_currentVirtualDesktop) {
+			if ((win->state & sfVisible) == 0) {
+				win->show();
+			}
+		} else {
+			if ((win->state & sfVisible) != 0) {
+				win->hide();
+			}
+		}
+	}
+	if (TProgram::deskTop != nullptr) {
+		TProgram::deskTop->drawView();
+	}
+}
+
+void setCurrentVirtualDesktop(int vd) {
+	if (vd < 1) vd = 1;
+	int maxVd = configuredVirtualDesktops();
+	if (maxVd < 1) maxVd = 1;
+	if (vd > maxVd) vd = maxVd;
+	g_currentVirtualDesktop = vd;
+	syncVirtualDesktopVisibility();
+}
+
+bool moveToNextVirtualDesktop() {
+	TMREditWindow *win = currentEditWindow();
+	if (win == nullptr) return false;
+	int maxVd = configuredVirtualDesktops();
+	if (win->virtualDesktop_ >= maxVd) return false;
+	win->virtualDesktop_++;
+	syncVirtualDesktopVisibility();
+	return true;
+}
+
+bool moveToPrevVirtualDesktop() {
+	TMREditWindow *win = currentEditWindow();
+	if (win == nullptr) return false;
+	if (win->virtualDesktop_ <= 1) return false;
+	win->virtualDesktop_--;
+	syncVirtualDesktopVisibility();
+	return true;
+}
+
+bool viewportRight() {
+	int maxVd = configuredVirtualDesktops();
+	if (g_currentVirtualDesktop >= maxVd) return false;
+	g_currentVirtualDesktop++;
+	syncVirtualDesktopVisibility();
+	return true;
+}
+
+bool viewportLeft() {
+	if (g_currentVirtualDesktop <= 1) return false;
+	g_currentVirtualDesktop--;
+	syncVirtualDesktopVisibility();
+	return true;
+}
+
+void mrSaveWorkspace(const std::string &filename) {
+	std::string settingsPath = filename;
+	if (settingsPath.empty()) {
+		settingsPath = configuredSettingsMacroFilePath();
+	}
+	std::string dest = settingsPath;
+	if (dest.find(".mrmac") == std::string::npos) {
+		dest += ".mrmac";
+	}
+
+	std::string currentContent;
+	std::string errorText;
+	readTextFile(dest, currentContent, errorText);
+
+	std::vector<std::string> lines;
+	std::istringstream iss(currentContent);
+	std::string line;
+	while (std::getline(iss, line)) {
+		if (line.find("MRSETUP('WORKSPACE'") == std::string::npos) {
+			lines.push_back(line);
+		}
+	}
+
+	for (TMREditWindow *win : allEditWindowsInZOrder()) {
+		TMRFileEditor *editor = win->getEditor();
+		if (editor == nullptr) continue;
+		std::string url = editor->persistentFileName();
+        if (url.empty()) continue;
+		TRect r = win->getBounds();
+		int cx = editor->cursor.x;
+		int cy = editor->cursor.y;
+		int vd = win->virtualDesktop_;
+
+        std::string e_url;
+        for (char c : url) {
+            if (c == '\'') e_url += "''";
+            else e_url += c;
+        }
+
+		std::string wsLine = "MRSETUP('WORKSPACE', 'URL=" + e_url +
+		" size=" + std::to_string(r.b.x - r.a.x) + "," + std::to_string(r.b.y - r.a.y) +
+		" pos=" + std::to_string(r.a.x) + "," + std::to_string(r.a.y) +
+		" cursor=" + std::to_string(cx) + "," + std::to_string(cy) +
+		" vd=" + std::to_string(vd) + "');";
+		lines.push_back(wsLine);
+	}
+
+	std::string newContent;
+	for (const std::string &l : lines) {
+		newContent += l + "\n";
+	}
+	writeTextFile(dest, newContent);
+}
+
+void mrLoadWorkspace(const std::string &filename) {
+	std::string settingsPath = filename;
+	if (settingsPath.empty()) {
+		settingsPath = configuredSettingsMacroFilePath();
+	}
+	std::string dest = settingsPath;
+	if (dest.find(".mrmac") == std::string::npos) {
+		dest += ".mrmac";
+	}
+
+	std::string currentContent;
+	std::string errorText;
+	if (!readTextFile(dest, currentContent, errorText)) {
+		return;
+	}
+
+	std::istringstream iss(currentContent);
+	std::string line;
+	std::string failedFiles = "";
+	while (std::getline(iss, line)) {
+		if (line.find("MRSETUP('WORKSPACE'") != std::string::npos) {
+			size_t start = line.find("URL=");
+			if (start != std::string::npos) {
+				size_t space = line.find(" ", start);
+				std::string url = line.substr(start + 4, space - (start + 4));
+
+                std::string u_url;
+                for (size_t i = 0; i < url.length(); ++i) {
+                    if (url[i] == '\'' && i + 1 < url.length() && url[i+1] == '\'') {
+                        u_url += '\'';
+                        ++i;
+                    } else {
+                        u_url += url[i];
+                    }
+                }
+                url = u_url;
+
+				TMREditWindow *win = createEditorWindow(url.c_str());
+				if (win != nullptr) {
+					std::string err;
+					TMRFileEditor *editor = win->getEditor();
+					if (editor != nullptr) {
+                        editor->loadMappedFile(url, err);
+                    }
+                    if (editor == nullptr || editor->persistentFileName()[0] == '\0') {
+						if (!failedFiles.empty()) failedFiles += ", ";
+						size_t pos = url.find_last_of("\\/");
+						failedFiles += (pos == std::string::npos ? url : url.substr(pos + 1));
+					}
+
+					int width = -1, height = -1;
+					size_t sizeStart = line.find("size=");
+					if (sizeStart != std::string::npos) {
+						sscanf(line.c_str() + sizeStart, "size=%d,%d", &width, &height);
+					}
+					int x = -1, y = -1;
+					size_t posStart = line.find("pos=");
+					if (posStart != std::string::npos) {
+						sscanf(line.c_str() + posStart, "pos=%d,%d", &x, &y);
+					}
+					int cx = -1, cy = -1;
+					size_t curStart = line.find("cursor=");
+					if (curStart != std::string::npos) {
+						sscanf(line.c_str() + curStart, "cursor=%d,%d", &cx, &cy);
+					}
+					int vd = 1;
+					size_t vdStart = line.find("vd=");
+					if (vdStart != std::string::npos) {
+						sscanf(line.c_str() + vdStart, "vd=%d", &vd);
+					}
+
+					if (width != -1 && height != -1 && x != -1 && y != -1) {
+						win->changeBounds(TRect(x, y, x + width, y + height));
+					}
+					if (cx != -1 && cy != -1 && win->getEditor() != nullptr) {
+						win->getEditor()->cursor.x = cx;
+						win->getEditor()->cursor.y = cy;
+					}
+					win->virtualDesktop_ = vd;
+				}
+			}
+		}
+	}
+	if (!failedFiles.empty()) {
+		mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEvent, "Failed to load workspace files: " + failedFiles,
+		    mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+	}
+	syncVirtualDesktopVisibility();
+}
+
 TMREditWindow *createEditorWindow(const char *title) {
 	TRect bounds;
 	TMREditWindow *win;

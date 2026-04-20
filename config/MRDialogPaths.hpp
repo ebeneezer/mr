@@ -302,6 +302,10 @@ bool setConfiguredWindowManager(bool enabled, std::string *errorMessage = nullpt
 [[nodiscard]] bool configuredWindowManager();
 bool setConfiguredMenulineMessages(bool enabled, std::string *errorMessage = nullptr);
 [[nodiscard]] bool configuredMenulineMessages();
+bool setConfiguredVirtualDesktops(int count, std::string *errorMessage = nullptr);
+[[nodiscard]] int configuredVirtualDesktops();
+bool setConfiguredAutoloadWorkspace(bool enabled, std::string *errorMessage = nullptr);
+[[nodiscard]] bool configuredAutoloadWorkspace();
 bool setConfiguredLastFileDialogPath(const std::string &path, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string configuredLastFileDialogPath();
 struct MRSettingsWriteReport {

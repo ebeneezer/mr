@@ -725,6 +725,14 @@ bool testSettingsMacroAutoCreate(std::string &failureReason) {
 		failureReason = "Auto-created settings.mrmac is missing MESSAGES.";
 		return false;
 	}
+	if (content.find("MRSETUP('VIRTUAL_DESKTOPS', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing VIRTUAL_DESKTOPS.";
+		return false;
+	}
+	if (content.find("MRSETUP('AUTOLOAD_WORKSPACE', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing AUTOLOAD_WORKSPACE.";
+		return false;
+	}
 	if (content.find("MRSETUP('PAGE_BREAK', '") == std::string::npos) {
 		failureReason = "Auto-created settings.mrmac is missing PAGE_BREAK.";
 		return false;
