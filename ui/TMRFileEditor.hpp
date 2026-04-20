@@ -583,14 +583,6 @@ class TMRFileEditor : public TScroller {
 			return false;
 		if (saveNormalizationWarmupOptionsHash_ != payload.optionsHash)
 			return false;
-		if (payload.normalizedText == nullptr)
-			return false;
-		saveNormalizationCache_.valid = true;
-		saveNormalizationCache_.documentId = saveNormalizationWarmupDocumentId_;
-		saveNormalizationCache_.version = expectedVersion;
-		saveNormalizationCache_.optionsHash = payload.optionsHash;
-		saveNormalizationCache_.sourceBytes = payload.sourceBytes;
-		saveNormalizationCache_.normalizedText = payload.normalizedText;
 		noteSaveNormalizationThroughput(payload.sourceBytes, runMicros);
 		clearSaveNormalizationWarmupTask(expectedTaskId);
 		return true;
@@ -655,7 +647,16 @@ class TMRFileEditor : public TScroller {
 	}
 
 	bool canSaveInPlace() const {
-		return !readOnly_ && hasPersistentFileName();
+		std::string persistentName;
+
+		if (readOnly_ || !hasPersistentFileName())
+			return false;
+		persistentName = trimAscii(fileName);
+		if (upperAscii(persistentName) == "?NO-FILE?")
+			return false;
+		if (looksLikeUri(persistentName))
+			return false;
+		return true;
 	}
 
 	bool canSaveAs() const {
@@ -1111,6 +1112,18 @@ class TMRFileEditor : public TScroller {
 	}
 
 	virtual void handleEvent(TEvent &event) override {
+		if (event.what == evKeyDown) {
+			const ushort mods = event.keyDown.controlKeyState;
+			const bool shiftTabPressed =
+			    event.keyDown.keyCode == kbShiftTab ||
+			    ((event.keyDown.keyCode == kbTab || event.keyDown.keyCode == kbCtrlI) &&
+			     hasShiftModifier(mods));
+			if (shiftTabPressed) {
+				handleKeyDown(event);
+				return;
+			}
+		}
+
 		TScroller::handleEvent(event);
 
 		if (event.what == evBroadcast) {
@@ -1181,7 +1194,7 @@ class TMRFileEditor : public TScroller {
 			return True;
 		if (readOnly_ || !bufferModel_.isModified())
 			return True;
-		if (!hasPersistentFileName())
+		if (!canSaveInPlace())
 			return confirmSaveOrDiscardUntitled();
 		return confirmSaveOrDiscardNamed();
 	}
@@ -1195,6 +1208,10 @@ class TMRFileEditor : public TScroller {
 	static bool isWordByte(char ch) noexcept {
 		unsigned char uch = static_cast<unsigned char>(ch);
 		return std::isalnum(uch) != 0 || ch == '_';
+	}
+
+	static bool hasShiftModifier(ushort mods) noexcept {
+		return (mods & (kbShift | kbCtrlShift | kbAltShift)) != 0;
 	}
 
 	static int configuredTabSize() noexcept {
@@ -1320,7 +1337,6 @@ class TMRFileEditor : public TScroller {
 		std::size_t version = 0;
 		std::size_t optionsHash = 0;
 		std::size_t sourceBytes = 0;
-		std::shared_ptr<std::string> normalizedText;
 	};
 
 	struct TextViewportGeometry {
@@ -2202,12 +2218,9 @@ class TMRFileEditor : public TScroller {
 		char file[MAXFILE];
 		char ext[MAXEXT];
 		MRTextSaveOptions saveOptions;
-		std::size_t saveOptionsHash = 0;
-		const std::size_t docId = bufferModel_.documentId();
-		const std::size_t version = bufferModel_.version();
 		const std::size_t pieceCount = bufferModel_.document().pieceCount();
 
-		resolveSaveOptionsForPath(targetPath, saveOptions, saveOptionsHash);
+		resolveSaveOptionsForPath(targetPath, saveOptions);
 
 		if (configuredBackupFilesSetting()) {
 			fnsplit(targetPath, drive, dir, file, ext);
@@ -2236,78 +2249,38 @@ class TMRFileEditor : public TScroller {
 			}
 			return true;
 		}
-		const std::string *normalizedView = nullptr;
-		std::string normalizedBuffer;
+		const std::size_t sourceBytes = bufferModel_.document().length();
+		const auto normalizeStartedAt = std::chrono::steady_clock::now();
+		const std::size_t flushThresholdBytes = static_cast<std::size_t>(256) * 1024;
+		MRTextSaveStreamState normalizeState;
+		std::string outputBuffer;
+		auto flushOutput = [&]() -> bool {
+			if (outputBuffer.empty())
+				return true;
+			writeChunk(out, outputBuffer.data(), outputBuffer.size());
+			outputBuffer.clear();
+			return static_cast<bool>(out);
+		};
 
-		if (hasSaveNormalizationCache(docId, version, saveOptionsHash))
-			normalizedView = saveNormalizationCache_.normalizedText.get();
-		else {
-			const std::size_t sourceBytes = bufferModel_.document().length();
-			const bool warmupWasPending =
-			    saveNormalizationWarmupTaskId_ != 0 &&
-			    saveNormalizationWarmupDocumentId_ == docId &&
-			    saveNormalizationWarmupVersion_ == version &&
-			    saveNormalizationWarmupOptionsHash_ == saveOptionsHash &&
-			    saveNormalizationWarmupSourceBytes_ == sourceBytes;
-			const bool overCacheLimit = sourceBytes > saveNormalizationCacheMaxBytes();
-			const bool pathSpecificCacheUnavailable =
-			    !hasPersistentFileName() || !samePath(targetPath, fileName);
-			double estimatedMicros = estimateSaveNormalizationMicros(sourceBytes);
-			const char *fallbackReason = "cache miss";
-
-			if (warmupWasPending &&
-			    saveNormalizationWarmupStartedAt_ != std::chrono::steady_clock::time_point()) {
-				const double elapsedMicros = static_cast<double>(
-				    std::chrono::duration_cast<std::chrono::microseconds>(
-				        std::chrono::steady_clock::now() - saveNormalizationWarmupStartedAt_)
-				        .count());
-				estimatedMicros = std::max(0.0, estimatedMicros - elapsedMicros);
-			}
-			if (overCacheLimit)
-				fallbackReason = "cache disabled for large file";
-			else if (warmupWasPending)
-				fallbackReason = "background normalization not ready";
-			else if (pathSpecificCacheUnavailable)
-				fallbackReason = "path-specific cache unavailable";
-			postSaveFallbackNotice(fallbackReason, estimatedMicros);
-			if (warmupWasPending) {
-				std::uint64_t taskId = saveNormalizationWarmupTaskId_;
-				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(taskId));
-				clearSaveNormalizationWarmupTask(taskId);
-			}
-
-			std::string source;
-			const auto normalizeStartedAt = std::chrono::steady_clock::now();
-
-			source.reserve(sourceBytes);
-			for (std::size_t i = 0; i < pieceCount; ++i) {
-				mr::editor::PieceChunkView chunk = bufferModel_.document().pieceChunk(i);
-				if (chunk.length != 0)
-					source.append(chunk.data, chunk.length);
-			}
-			normalizedBuffer = normalizeTextForSave(source, saveOptions);
-			noteSaveNormalizationThroughput(
-			    sourceBytes,
-			    static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(
-			                            std::chrono::steady_clock::now() - normalizeStartedAt)
-			                            .count()));
-			if (sourceBytes <= saveNormalizationCacheMaxBytes()) {
-				saveNormalizationCache_.valid = true;
-				saveNormalizationCache_.documentId = docId;
-				saveNormalizationCache_.version = version;
-				saveNormalizationCache_.optionsHash = saveOptionsHash;
-				saveNormalizationCache_.sourceBytes = sourceBytes;
-				saveNormalizationCache_.normalizedText =
-				    std::make_shared<std::string>(std::move(normalizedBuffer));
-				normalizedView = saveNormalizationCache_.normalizedText.get();
-			} else {
-				invalidateSaveNormalizationCache();
-				normalizedView = &normalizedBuffer;
-			}
+		outputBuffer.reserve(flushThresholdBytes + 1024);
+		for (std::size_t i = 0; i < pieceCount; ++i) {
+			mr::editor::PieceChunkView chunk = bufferModel_.document().pieceChunk(i);
+			if (chunk.length == 0)
+				continue;
+			appendNormalizedTextSaveChunk(std::string_view(chunk.data, chunk.length), saveOptions,
+			                              normalizeState, outputBuffer);
+			if (outputBuffer.size() >= flushThresholdBytes && !flushOutput())
+				return failWrite();
 		}
+		finalizeNormalizedTextSaveStream(saveOptions, normalizeState, outputBuffer);
+		if (!flushOutput())
+			return failWrite();
 
-		if (normalizedView != nullptr && !normalizedView->empty())
-			writeChunk(out, normalizedView->data(), normalizedView->size());
+		noteSaveNormalizationThroughput(
+		    sourceBytes,
+		    static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(
+		                            std::chrono::steady_clock::now() - normalizeStartedAt)
+		                            .count()));
 		if (!out)
 			return failWrite();
 		return true;
@@ -2530,22 +2503,10 @@ class TMRFileEditor : public TScroller {
 			notifyWindowTaskStateChanged();
 	}
 
-	static constexpr std::size_t saveNormalizationCacheMaxBytes() noexcept {
-		return static_cast<std::size_t>(64) * 1024 * 1024;
-	}
-
 	bool resolveSaveOptionsForPath(const char *path, MRTextSaveOptions &options,
-	                               std::size_t &optionsHash) const {
-		options = effectiveTextSaveOptionsForPath(path != nullptr ? path : "", &optionsHash);
+	                               std::size_t *optionsHash = nullptr) const {
+		options = effectiveTextSaveOptionsForPath(path != nullptr ? path : "", optionsHash);
 		return true;
-	}
-
-	bool hasSaveNormalizationCache(std::size_t documentId, std::size_t version,
-	                               std::size_t optionsHash) const noexcept {
-		return saveNormalizationCache_.valid && saveNormalizationCache_.normalizedText != nullptr &&
-		       saveNormalizationCache_.documentId == documentId &&
-		       saveNormalizationCache_.version == version &&
-		       saveNormalizationCache_.optionsHash == optionsHash;
 	}
 
 	void invalidateSaveNormalizationCache() noexcept {
@@ -2554,7 +2515,6 @@ class TMRFileEditor : public TScroller {
 		saveNormalizationCache_.version = 0;
 		saveNormalizationCache_.optionsHash = 0;
 		saveNormalizationCache_.sourceBytes = 0;
-		saveNormalizationCache_.normalizedText.reset();
 	}
 
 	void noteSaveNormalizationThroughput(std::size_t sourceBytes, double runMicros) noexcept {
@@ -2570,108 +2530,13 @@ class TMRFileEditor : public TScroller {
 		++saveNormalizationThroughputSamples_;
 	}
 
-	double estimateSaveNormalizationMicros(std::size_t sourceBytes) const noexcept {
-		const double defaultBytesPerMicro = (120.0 * 1024.0 * 1024.0) / 1000000.0;
-		const double rate =
-		    saveNormalizationThroughputBytesPerMicro_ > 0.0 ? saveNormalizationThroughputBytesPerMicro_
-		                                                    : defaultBytesPerMicro;
-		return rate > 0.0 ? static_cast<double>(sourceBytes) / rate : 0.0;
-	}
-
-	static std::string formatDurationEstimate(double micros) {
-		std::ostringstream line;
-		const double millis = std::max(0.0, micros / 1000.0);
-		if (millis < 1000.0)
-			line << static_cast<long long>(millis + 0.5) << " ms";
-		else
-			line << std::fixed << std::setprecision(2) << (millis / 1000.0) << " s";
-		return line.str();
-	}
-
-	void postSaveFallbackNotice(const char *reason, double estimatedMicros) const {
-		std::string text = "Save fallback: ";
-		text += reason != nullptr ? reason : "normalization cache unavailable";
-		text += " (est. normalize ";
-		text += formatDurationEstimate(estimatedMicros);
-		text += ").";
-		mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEventFollowup, text,
-		                               mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
-	}
-
 	void scheduleSaveNormalizationWarmupIfNeeded() {
-		MRTextSaveOptions options;
-		std::size_t optionsHash = 0;
-		const char *targetPath = hasPersistentFileName() ? fileName : nullptr;
-		const std::size_t docId = bufferModel_.documentId();
-		const std::size_t version = bufferModel_.version();
-		const std::size_t sourceBytes = bufferModel_.length();
-		const bool overCacheLimit = sourceBytes > saveNormalizationCacheMaxBytes();
-
-		resolveSaveOptionsForPath(targetPath, options, optionsHash);
-		if (options.binaryMode || overCacheLimit || sourceBytes == 0) {
-			invalidateSaveNormalizationCache();
-			if (saveNormalizationWarmupTaskId_ != 0) {
-				std::uint64_t cancelledTaskId = saveNormalizationWarmupTaskId_;
-				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledTaskId));
-				clearSaveNormalizationWarmupTask(cancelledTaskId);
-			}
+		invalidateSaveNormalizationCache();
+		if (saveNormalizationWarmupTaskId_ == 0)
 			return;
-		}
-		if (hasSaveNormalizationCache(docId, version, optionsHash))
-			return;
-		if (saveNormalizationWarmupTaskId_ != 0 && saveNormalizationWarmupDocumentId_ == docId &&
-		    saveNormalizationWarmupVersion_ == version &&
-		    saveNormalizationWarmupOptionsHash_ == optionsHash &&
-		    saveNormalizationWarmupSourceBytes_ == sourceBytes)
-			return;
-
-		TMRTextBufferModel::ReadSnapshot snapshot = bufferModel_.readSnapshot();
-		std::uint64_t previousTaskId = saveNormalizationWarmupTaskId_;
-		if (previousTaskId != 0)
-			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
-		saveNormalizationWarmupDocumentId_ = docId;
-		saveNormalizationWarmupVersion_ = version;
-		saveNormalizationWarmupOptionsHash_ = optionsHash;
-		saveNormalizationWarmupSourceBytes_ = sourceBytes;
-		saveNormalizationWarmupStartedAt_ = std::chrono::steady_clock::now();
-		saveNormalizationWarmupTaskId_ = mr::coprocessor::globalCoprocessor().submit(
-		    mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::SaveNormalizationWarmup,
-		    docId, version, saveNormalizationWarmupTaskLabel(),
-		    [snapshot, options, optionsHash, sourceBytes](const mr::coprocessor::TaskInfo &info,
-		                                                  std::stop_token stopToken) {
-			    mr::coprocessor::Result result;
-			    std::string source;
-			    std::string normalized;
-			    auto shouldStop = [&]() noexcept { return stopToken.stop_requested() || info.cancelRequested(); };
-
-			    result.task = info;
-			    if (shouldStop()) {
-				    result.status = mr::coprocessor::TaskStatus::Cancelled;
-				    return result;
-			    }
-			    source.reserve(sourceBytes);
-			    for (std::size_t i = 0; i < snapshot.pieceCount(); ++i) {
-				    mr::editor::PieceChunkView chunk = snapshot.pieceChunk(i);
-				    if (chunk.length != 0)
-					    source.append(chunk.data, chunk.length);
-				    if ((i % 16u) == 0u && shouldStop()) {
-					    result.status = mr::coprocessor::TaskStatus::Cancelled;
-					    return result;
-				    }
-			    }
-			    normalized = normalizeTextForSave(source, options);
-			    if (shouldStop()) {
-				    result.status = mr::coprocessor::TaskStatus::Cancelled;
-				    return result;
-			    }
-			    result.status = mr::coprocessor::TaskStatus::Completed;
-			    result.payload = std::make_shared<mr::coprocessor::SaveNormalizationWarmupPayload>(
-			        optionsHash, sourceBytes,
-			        std::make_shared<std::string>(std::move(normalized)));
-			    return result;
-		    });
-		if (saveNormalizationWarmupTaskId_ != previousTaskId)
-			notifyWindowTaskStateChanged();
+		std::uint64_t cancelledTaskId = saveNormalizationWarmupTaskId_;
+		static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledTaskId));
+		clearSaveNormalizationWarmupTask(cancelledTaskId);
 	}
 
 	void updateMetrics() {
@@ -2834,11 +2699,12 @@ class TMRFileEditor : public TScroller {
 
 	void handleKeyDown(TEvent &event) {
 			ushort key = ctrlToArrow(event.keyDown.keyCode);
-			bool extend = (event.keyDown.controlKeyState & kbShift) != 0;
+			const ushort mods = event.keyDown.controlKeyState;
+			bool extend = hasShiftModifier(mods);
 			const bool shiftTabPressed =
 			    event.keyDown.keyCode == kbShiftTab ||
 			    ((event.keyDown.keyCode == kbTab || event.keyDown.keyCode == kbCtrlI) &&
-			     (event.keyDown.controlKeyState & kbShift) != 0);
+			     hasShiftModifier(mods));
 
 		if (shiftTabPressed) {
 			moveCursor(tabStopMoveOffset(cursorOffset(), false), false, false);
@@ -3198,7 +3064,15 @@ class TMRFileEditor : public TScroller {
 	}
 
 	Boolean confirmSaveOrDiscardUntitled() {
-		switch (mr::dialogs::showUnsavedChangesDialog("Save As", "Window has unsaved changes.")) {
+		const char *detail = nullptr;
+		std::string persistentName;
+
+		if (hasPersistentFileName()) {
+			persistentName = trimAscii(fileName);
+			if (!persistentName.empty() && upperAscii(persistentName) != "?NO-FILE?")
+				detail = persistentName.c_str();
+		}
+		switch (mr::dialogs::showUnsavedChangesDialog("Save As", "Window has unsaved changes.", detail)) {
 			case mr::dialogs::UnsavedChangesChoice::Save:
 				return saveAsWithPrompt();
 			case mr::dialogs::UnsavedChangesChoice::Discard:

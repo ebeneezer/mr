@@ -2888,6 +2888,141 @@ bool testColumnUndentPolicyGuard(std::string &failureReason) {
 	return true;
 }
 
+bool testTabstopIndentingOps(std::string &failureReason) {
+	const std::string source = "$MACRO TabstopOpsProbe;\n"
+	                           "DEF_STR(S);\n"
+	                           "DEF_INT(I);\n"
+	                           "TAB_EXPAND := TRUE;\n"
+	                           "S := CHAR(9) + 'A';\n"
+	                           "I := 2;\n"
+	                           "EXPAND_TABS(S, I);\n"
+	                           "SET_GLOBAL_INT('TABOPS_EXP_I', I);\n"
+	                           "SET_GLOBAL_INT('TABOPS_EXP_LEN', LENGTH(S));\n"
+	                           "SET_GLOBAL_INT('TABOPS_EXP_POSA', POS('A', S));\n"
+	                           "SET_GLOBAL_INT('TABOPS_EXP_FIRST', ASCII(COPY(S, 1, 1)));\n"
+	                           "TABS_TO_SPACES(S);\n"
+	                           "SET_GLOBAL_INT('TABOPS_SPC_FIRST', ASCII(COPY(S, 1, 1)));\n"
+	                           "SET_GLOBAL_INT('TABOPS_SPC_POSA', POS('A', S));\n"
+	                           "SET_GLOBAL_INT('TABOPS_SPC_LEN', LENGTH(S));\n"
+	                           "INSERT_MODE := FALSE;\n"
+	                           "TAB_RIGHT;\n"
+	                           "SET_GLOBAL_INT('TABOPS_COL_AFTER_TAB', C_COL);\n"
+	                           "SET_GLOBAL_INT('TABOPS_TABCHAR', ASCII(COPY(GET_LINE, 1, 1)));\n"
+	                           "TAB_LEFT;\n"
+	                           "INDENT;\n"
+	                           "UNDENT;\n"
+	                           "SET_INDENT_LEVEL;\n"
+	                           "SET_GLOBAL_INT('TABOPS_INDENT', INDENT_LEVEL);\n"
+	                           "END_MACRO;\n";
+	std::vector<unsigned char> bytecode;
+	int entryOffset = -1;
+	std::string entryName;
+	std::string compileError;
+	MRMacroExecutionProfile profile;
+	std::vector<std::string> unsupported;
+	MRMacroStagedExecutionInput input;
+	MRMacroStagedJobResult result;
+	mr::editor::CommitResult commit;
+	std::string vmError;
+	int tabWidth = configuredTabSizeSetting();
+	int expectedPosA = 0;
+	std::vector<std::string> savedOrder;
+	std::map<std::string, int> savedInts;
+	std::map<std::string, std::string> savedStrings;
+
+	if (!compileSource(source, bytecode, entryOffset, entryName, compileError)) {
+		failureReason = "Compile failed for tabstop/indenting probe: " + compileError;
+		return false;
+	}
+
+	profile = mrvmAnalyzeBytecode(bytecode.data(), bytecode.size());
+	if (!mrvmCanRunStagedInBackground(profile)) {
+		unsupported = mrvmUnsupportedStagedSymbols(profile);
+		failureReason = "Tabstop/indenting probe should be staged-background eligible.";
+		if (!unsupported.empty())
+			failureReason += " Unsupported symbol example: " + unsupported.front() + ".";
+		return false;
+	}
+
+	mrvmUiCopyGlobals(savedOrder, savedInts, savedStrings);
+	struct GlobalsRestore {
+		std::vector<std::string> order;
+		std::map<std::string, int> ints;
+		std::map<std::string, std::string> strings;
+
+		GlobalsRestore(std::vector<std::string> savedOrderRef, std::map<std::string, int> savedIntsRef,
+		               std::map<std::string, std::string> savedStringsRef)
+		    : order(std::move(savedOrderRef)), ints(std::move(savedIntsRef)),
+		      strings(std::move(savedStringsRef)) {
+		}
+
+		~GlobalsRestore() {
+			mrvmUiReplaceGlobals(order, ints, strings);
+		}
+	} restoreGuard(savedOrder, savedInts, savedStrings);
+
+	input.document.setText("abcd\n");
+	input.baseVersion = input.document.version();
+	input.cursorOffset = 0;
+	input.selectionStart = 0;
+	input.selectionEnd = 0;
+	input.tabExpand = true;
+	input.insertMode = false;
+	input.indentLevel = 1;
+	input.pageLines = 20;
+	input.fileName = "/tmp/tabstop_ops_probe.txt";
+
+	result = mrvmRunBytecodeStagedBackground(
+	    bytecode.data() + static_cast<std::size_t>(entryOffset),
+	    bytecode.size() - static_cast<std::size_t>(entryOffset), input);
+	if (result.hadError) {
+		if (firstVmError(result.logLines, vmError))
+			failureReason = "Tabstop/indenting probe produced VM error: " + vmError;
+		else
+			failureReason = "Tabstop/indenting probe produced VM error.";
+		return false;
+	}
+	commit = input.document.tryApply(result.transaction);
+	if (!commit.applied()) {
+		failureReason = "Tabstop/indenting probe should modify the staged document.";
+		return false;
+	}
+
+	if (tabWidth < 1)
+		tabWidth = 1;
+	if (tabWidth > 32)
+		tabWidth = 32;
+	expectedPosA = tabWidth + 1;
+
+	if (!checkGlobalInt(result.globalInts, "TABOPS_EXP_I", expectedPosA, failureReason))
+		return false;
+	if (!checkGlobalInt(result.globalInts, "TABOPS_EXP_LEN", expectedPosA, failureReason))
+		return false;
+	if (!checkGlobalInt(result.globalInts, "TABOPS_EXP_POSA", expectedPosA, failureReason))
+		return false;
+	if (!checkGlobalInt(result.globalInts, "TABOPS_EXP_FIRST", 9, failureReason))
+		return false;
+	if (!checkGlobalInt(result.globalInts, "TABOPS_SPC_FIRST", 32, failureReason))
+		return false;
+	if (!checkGlobalInt(result.globalInts, "TABOPS_SPC_POSA", expectedPosA, failureReason))
+		return false;
+	if (!checkGlobalInt(result.globalInts, "TABOPS_SPC_LEN", expectedPosA, failureReason))
+		return false;
+	if (!checkGlobalInt(result.globalInts, "TABOPS_COL_AFTER_TAB", 2, failureReason))
+		return false;
+	if (!checkGlobalInt(result.globalInts, "TABOPS_TABCHAR", 9, failureReason))
+		return false;
+	if (!checkGlobalInt(result.globalInts, "TABOPS_INDENT", 1, failureReason))
+		return false;
+
+	if (!expectCompileError("$MACRO Bad;\nDEF_STR(S);\nEXPAND_TABS(S, S);\nEND_MACRO;\n",
+	                        "Type mismatch or syntax error.", failureReason))
+		return false;
+
+	failureReason.clear();
+	return true;
+}
+
 bool testKeyIn(std::string &failureReason) {
 	static const char source[] = "$MACRO KeyOnCtrlP TO <CtrlP> FROM EDIT;\n"
 	                             "KEY_IN('X<Enter>Y');\n"
@@ -3361,6 +3496,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
 	runTest(ctx, "Inter-window block source/target guard", testInterWindowBlockSourceTargetGuard);
 	runTest(ctx, "Column UNDENT policy guard", testColumnUndentPolicyGuard);
+	runTest(ctx, "Tabstop + indenting operations", testTabstopIndentingOps);
 	runTest(ctx, "TO/FROM header parsing + compile guards", testToFromHeaders);
 	runTest(ctx, "TO/FROM runtime dispatch", testToFromDispatch);
 	runTest(ctx, "KEY_IN behavior + staging guards", testKeyIn);
@@ -3407,6 +3543,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Block hotkey modifier routing guard", testBlockHotkeyModifierRoutingGuard);
 	runTest(ctx, "Inter-window block source/target guard", testInterWindowBlockSourceTargetGuard);
 	runTest(ctx, "Column UNDENT policy guard", testColumnUndentPolicyGuard);
+	runTest(ctx, "Tabstop + indenting operations", testTabstopIndentingOps);
 	runTest(ctx, "TO/FROM header parsing + compile guards", testToFromHeaders);
 	runTest(ctx, "TO/FROM runtime dispatch", testToFromDispatch);
 	runTest(ctx, "KEY_IN behavior + staging guards", testKeyIn);

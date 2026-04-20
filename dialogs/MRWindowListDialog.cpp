@@ -218,7 +218,7 @@ class WindowListDialog : public TDialog {
 	    : TWindowInit(&TDialog::initFrame),
 	      TDialog(centeredBounds(computeWidth(), computeHeight(aMode, aCurrent)), "WINDOW LIST"),
 	      mode(aMode), current(aCurrent), preferred(aPreferred), listView(nullptr),
-	      scrollBar(nullptr), selected(nullptr) {
+	      scrollBar(nullptr), hideToggleButton(nullptr), selected(nullptr), lastFocusedIndex(-1) {
 		int width = size.x;
 		int height = size.y;
 		int listTop = 6;
@@ -226,7 +226,9 @@ class WindowListDialog : public TDialog {
 
 		insert(new TButton(TRect(3, 2, 16, 4), "~D~elete<DEL>", cmMRWindowListDelete, bfNormal));
 		insert(new TButton(TRect(18, 2, 29, 4), "~S~ave<F3>", cmMRWindowListSave, bfNormal));
-		insert(new TButton(TRect(31, 2, 49, 4), "Hide ~w~indow<F4>", cmMRWindowListHide, bfNormal));
+		hideToggleButton =
+		    new TButton(TRect(31, 2, 49, 4), "Un/~H~ide<F4>", cmMRWindowListHide, bfNormal);
+		insert(hideToggleButton);
 		insert(new TButton(TRect(51, 2, 66, 4), "Hide ~a~ll<F5>", cmMRWindowListHideAll, bfNormal));
 		insert(new TStaticText(TRect(2, 5, 18, 6), "Select window:"));
 
@@ -244,6 +246,7 @@ class WindowListDialog : public TDialog {
 		refreshEntries();
 		focusPreferred();
 		listView->select();
+		updateHideToggleState();
 	}
 
 	TMREditWindow *selectedWindow() const {
@@ -263,6 +266,9 @@ class WindowListDialog : public TDialog {
 
 		TDialog::handleEvent(event);
 
+		if (listView != nullptr && listView->focused != lastFocusedIndex)
+			updateHideToggleState();
+
 		if (event.what == evKeyDown) {
 			switch (ctrlToArrow(event.keyDown.keyCode)) {
 				case kbDel:
@@ -274,7 +280,8 @@ class WindowListDialog : public TDialog {
 					clearEvent(event);
 					return;
 				case kbF4:
-					handleHide();
+					if (canHideCurrentSelection())
+						handleHide();
 					clearEvent(event);
 					return;
 				case kbF5:
@@ -301,7 +308,8 @@ class WindowListDialog : public TDialog {
 				clearEvent(event);
 				break;
 			case cmMRWindowListHide:
-				handleHide();
+				if (canHideCurrentSelection())
+					handleHide();
 				clearEvent(event);
 				break;
 			case cmMRWindowListHideAll:
@@ -385,6 +393,7 @@ class WindowListDialog : public TDialog {
 		if (oldFocus >= static_cast<int>(entries.size()))
 			oldFocus = static_cast<int>(entries.size()) - 1;
 		listView->focusItemNum(static_cast<short>(oldFocus));
+		updateHideToggleState();
 	}
 
 	void focusPreferred() {
@@ -428,14 +437,25 @@ class WindowListDialog : public TDialog {
 		TMREditWindow *win = currentSelection();
 		if (win == nullptr)
 			return;
-		if ((win->state & sfVisible) == 0) {
-			selected = win;
-			endModal(cmOK);
+		if ((win->state & sfVisible) == 0)
 			return;
-		}
 		hideWindow(win);
 		static_cast<void>(mrEnsureUsableWorkWindow());
 		refreshEntries();
+	}
+
+	bool canHideCurrentSelection() const {
+		TMREditWindow *win = currentSelection();
+		if (win == nullptr)
+			return false;
+		return (win->state & sfVisible) != 0;
+	}
+
+	void updateHideToggleState() {
+		const bool enabled = canHideCurrentSelection();
+		if (hideToggleButton != nullptr)
+			hideToggleButton->setState(sfDisabled, enabled ? False : True);
+		lastFocusedIndex = listView != nullptr ? listView->focused : -1;
 	}
 
 	void handleHideAll() {
@@ -451,7 +471,9 @@ class WindowListDialog : public TDialog {
 	TMREditWindow *preferred;
 	WindowListView *listView;
 	TScrollBar *scrollBar;
+	TButton *hideToggleButton;
 	TMREditWindow *selected;
+	int lastFocusedIndex;
 	std::vector<WindowListEntry> entries;
 	std::vector<std::string> rows;
 };

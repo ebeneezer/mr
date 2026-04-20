@@ -27,6 +27,9 @@ TVISION_UPSTREAM_REF ?= master
 TVISION_ACTIVE_SOURCE_DIR := $(TVISION_SOURCE_DIR)
 TVISION_ACTIVE_BUILD_DIR := $(TVISION_SOURCE_DIR)/build
 
+PCRE2_LIB ?= /usr/lib/libpcre2-8.so
+PCRE2_HEADER ?= /usr/include/pcre2.h
+
 # Include paths
 INCLUDES = -I$(TVISION_ACTIVE_SOURCE_DIR)/include -I./mrmac -I./piecetable -I./ui -I./coprocessor -I./app -I./app/commands -I./dialogs -I./config
 
@@ -59,7 +62,7 @@ TVISION_CMAKE_FLAGS = \
 NCURSESW_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libncursesw.so.6 ]; then echo -l:libncursesw.so.6; else echo -lncursesw; fi)
 GPM_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libgpm.so.2 ]; then echo -l:libgpm.so.2; else echo -lgpm; fi)
 TINFO_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libtinfo.so.6 ]; then echo -l:libtinfo.so.6; else echo -ltinfo; fi)
-LDFLAGS = $(PTHREAD_FLAGS) $(TVISION_LIB) $(NCURSESW_LIB) $(GPM_LIB) $(TINFO_LIB)
+LDFLAGS = $(PTHREAD_FLAGS) $(TVISION_LIB) $(PCRE2_LIB) $(NCURSESW_LIB) $(GPM_LIB) $(TINFO_LIB)
 
 TARGET = mr
 STAGE_PROFILE_PROBE_TARGET = regression/mr_stage_profile_probe
@@ -129,6 +132,7 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 .PHONY: all clean clean-tvision rebuild-tvision tvision-build \
 	tvision-upstream-init tvision-upstream-fetch tvision-subtree-pull tvision-apply-patches \
 	tvision-sync-safe tvision-status \
+	pcre2-check \
 	stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check \
 	compile-commands lint-file context-tar tar-archives
 
@@ -266,6 +270,11 @@ tvision-build: $(TVISION_SOURCE_DIR)/CMakeLists.txt $(TVISION_SOURCE_DIR)/source
 $(TVISION_LIB): tvision-build
 	@test -f $(TVISION_LIB)
 
+pcre2-check:
+	@test -f $(PCRE2_LIB)
+	@test -f $(PCRE2_HEADER)
+	@echo "Using system PCRE2: $(PCRE2_LIB) / $(PCRE2_HEADER)"
+
 tvision-upstream-init:
 	@if ! $(GIT) remote | grep -qx 'tvision-upstream'; then \
 		$(GIT) remote add tvision-upstream $(TVISION_UPSTREAM_URL); \
@@ -356,15 +365,15 @@ coprocessor/MRCoprocessor.o: coprocessor/MRCoprocessor.cpp coprocessor/MRCoproce
 piecetable/MRTextDocument.o: piecetable/MRTextDocument.cpp piecetable/MRTextDocument.hpp
 
 # 4. Linker call
-$(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS)
+$(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS) | pcre2-check
 	$(CXX) -o $@ $^ $(LDFLAGS) || { paplay --volume=25000 /usr/share/sounds/ocean/stereo/battery-caution.oga; exit 1; }
 	killall mr 2> /dev/null || true
 	paplay --volume=25000 /usr/share/sounds/freedesktop/stereo/service-login.oga || true
 
-$(STAGE_PROFILE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(STAGE_PROFILE_PROBE_OBJECT)
+$(STAGE_PROFILE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(STAGE_PROFILE_PROBE_OBJECT) | pcre2-check
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
-$(REGRESSION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(REGRESSION_PROBE_OBJECT)
+$(REGRESSION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(REGRESSION_PROBE_OBJECT) | pcre2-check
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
 

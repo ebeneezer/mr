@@ -1147,7 +1147,17 @@ static int emit_proc_call(const char *name, int argc) {
 static int emit_proc_var_call(const char *name, const char *var_name) {
 	emit_byte(OP_PROC_VAR);
 	emit_string(name);
+	emit_byte(1);
 	emit_string(var_name);
+	return 0;
+}
+
+static int emit_proc_var_call2(const char *name, const char *var_name1, const char *var_name2) {
+	emit_byte(OP_PROC_VAR);
+	emit_string(name);
+	emit_byte(2);
+	emit_string(var_name1);
+	emit_string(var_name2);
 	return 0;
 }
 
@@ -1737,7 +1747,7 @@ typedef struct {
 } ProcSignature;
 
 static int is_proc_var_string_call(const char *name) {
-	static const char *const names[] = {"CRUNCH_TABS", "EXPAND_TABS", "TABS_TO_SPACES"};
+	static const char *const names[] = {"EXPAND_TABS", "TABS_TO_SPACES"};
 	size_t i;
 
 	for (i = 0; i < sizeof(names) / sizeof(names[0]); ++i)
@@ -1747,8 +1757,12 @@ static int is_proc_var_string_call(const char *name) {
 }
 
 static int parse_proc_var_string_statement(Parser *ps, const char *name) {
-	char *var_name;
-	int var_type;
+	char *var_name = NULL;
+	char *index_var_name = NULL;
+	int var_type = 0;
+	int index_var_type = 0;
+	int is_expand_tabs = strcasecmp(name, "EXPAND_TABS") == 0;
+	int has_index_arg = 0;
 
 	if (ps->tok.kind != TOK_IDENTIFIER) {
 		set_compile_error(ps->tok.line, "Variable expected.");
@@ -1765,11 +1779,42 @@ static int parse_proc_var_string_statement(Parser *ps, const char *name) {
 		return -1;
 	}
 	parser_next(ps);
+	if (parser_accept(ps, TOK_COMMA)) {
+		if (!is_expand_tabs) {
+			free(var_name);
+			set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
+			return -1;
+		}
+		if (ps->tok.kind != TOK_IDENTIFIER) {
+			free(var_name);
+			set_compile_error(ps->tok.line, "Variable expected.");
+			return -1;
+		}
+		index_var_name = xstrdup(ps->tok.text);
+		if (index_var_name == NULL) {
+			free(var_name);
+			set_compile_error(ps->tok.line, "Out of memory.");
+			return -1;
+		}
+		if (lookup_symbol(index_var_name, &index_var_type) < 0 || index_var_type != TYPE_INT) {
+			free(index_var_name);
+			free(var_name);
+			set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
+			return -1;
+		}
+		has_index_arg = 1;
+		parser_next(ps);
+	}
 	if (parser_expect(ps, TOK_RPAREN, "')' expected.") != 0) {
+		free(index_var_name);
 		free(var_name);
 		return -1;
 	}
-	emit_proc_var_call(name, var_name);
+	if (has_index_arg)
+		emit_proc_var_call2(name, var_name, index_var_name);
+	else
+		emit_proc_var_call(name, var_name);
+	free(index_var_name);
 	free(var_name);
 	return 0;
 }

@@ -365,9 +365,9 @@ static bool isVirtualChar(char c);
 static int nextTabStopColumn(int col);
 static int prevTabStopColumn(int col);
 static std::string makeIndentFill(int targetCol, bool preferTabs);
-static std::string crunchTabsString(const std::string &value);
 static std::string expandTabsString(const std::string &value, bool toVirtuals);
 static std::string tabsToSpacesString(const std::string &value);
+static int expandedTabsAdjustedIndex(const std::string &value, int index);
 static int currentEditorIndentLevel();
 static bool setCurrentEditorIndentLevel(int level);
 static bool currentEditorInsertMode();
@@ -572,7 +572,7 @@ static unsigned classifyIntrinsicName(const std::string &name) {
 }
 
 static unsigned classifyProcVarName(const std::string &name) {
-	if (name == "CRUNCH_TABS" || name == "EXPAND_TABS" || name == "TABS_TO_SPACES")
+	if (name == "EXPAND_TABS" || name == "TABS_TO_SPACES")
 		return mrefBackgroundSafe;
 	return mrefUiAffinity;
 }
@@ -1693,15 +1693,6 @@ static std::string makeIndentFill(int targetCol, bool preferTabs) {
 	return out;
 }
 
-static std::string crunchTabsString(const std::string &value) {
-	std::string out;
-	out.reserve(value.size());
-	for (char i : value)
-		if (!isVirtualChar(i))
-			out.push_back(i);
-	return out;
-}
-
 static std::string expandTabsString(const std::string &value, bool toVirtuals) {
 	std::string out;
 	int col = 1;
@@ -1759,6 +1750,34 @@ static std::string tabsToSpacesString(const std::string &value) {
 	}
 	enforceStringLength(out);
 	return out;
+}
+
+static int expandedTabsAdjustedIndex(const std::string &value, int index) {
+	int sourcePos = 1;
+	int mappedPos = 1;
+	int col = 1;
+	int clampedIndex = std::max(1, std::min(index, 255));
+
+	for (char i : value) {
+		unsigned char ch = static_cast<unsigned char>(i);
+		if (sourcePos >= clampedIndex)
+			break;
+		if (ch == '\t') {
+			int next = nextTabStopColumn(col);
+			mappedPos += next - col;
+			col = next;
+		} else {
+			++mappedPos;
+			if (ch == '\n' || ch == '\r')
+				col = 1;
+			else
+				++col;
+		}
+		++sourcePos;
+	}
+	if (clampedIndex > sourcePos)
+		mappedPos += clampedIndex - sourcePos;
+	return std::max(1, std::min(mappedPos, 255));
 }
 
 static int currentEditorIndentLevel() {
@@ -3941,17 +3960,20 @@ static bool moveEditorTabRight(TMRFileEditor *editor) {
 	int col;
 	int targetCol;
 	uint lineStart;
+	bool tabExpand = currentRuntimeTabExpand();
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (editor == nullptr && session == nullptr)
 		return false;
 	col = currentEditorColumn(editor);
 	targetCol = nextTabStopColumn(col);
 	if (currentEditorInsertMode()) {
-		if (currentRuntimeTabExpand())
+		if (tabExpand)
 			return insertEditorText(editor, std::string(1, '	'));
 		return insertEditorText(editor,
 		                        std::string(static_cast<std::size_t>(targetCol - col), ' '));
 	}
+	if (tabExpand)
+		return insertEditorText(editor, std::string(1, '	'));
 	if (editor == nullptr) {
 		lineStart = static_cast<uint>(session->document.lineStart(session->cursorOffset));
 		return setEditorCursor(nullptr, static_cast<uint>(backgroundCharPtrOffset(lineStart, targetCol - 1)));
@@ -4329,6 +4351,15 @@ static bool hasMrmacExtension(const std::string &path) {
 	return upperKey(path.substr(dotPos)) == ".MRMAC";
 }
 
+static bool isBootstrapIndexedMacroFile(const std::string &path) {
+	const std::string baseName = upperKey(truncatePathPart(path));
+
+	// Regression fixtures in mrmac/macros/test*.mrmac should not auto-bind at app startup.
+	if (baseName.size() >= 4 && baseName.compare(0, 4, "TEST") == 0)
+		return false;
+	return true;
+}
+
 static std::vector<std::string> listMrmacFilesInDirectory(const std::string &directoryPath) {
 	std::vector<std::string> files;
 	std::string dir = trimAscii(directoryPath);
@@ -4353,6 +4384,8 @@ static std::vector<std::string> listMrmacFilesInDirectory(const std::string &dir
 			continue;
 		std::string path = pathText;
 		if (!hasMrmacExtension(path))
+			continue;
+		if (!isBootstrapIndexedMacroFile(path))
 			continue;
 		if (!fileExists(path))
 			continue;
@@ -5512,9 +5545,20 @@ MRMacroExecutionProfile mrvmAnalyzeBytecode(const unsigned char *bytecode, std::
 			case OP_PROC_VAR: {
 				std::string name;
 				std::string variableName;
+				unsigned char argc = 0;
 				if (!readBytecodeCString(bytecode, length, ip, name) ||
-				    !readBytecodeCString(bytecode, length, ip, variableName))
+				    !skipBytecodeBytes(length, ip, sizeof(unsigned char)))
 					return profile;
+				argc = bytecode[ip - 1];
+				if (argc == 0 || argc > 2)
+					return profile;
+				if (!readBytecodeCString(bytecode, length, ip, variableName))
+					return profile;
+				if (argc > 1) {
+					std::string ignored;
+					if (!readBytecodeCString(bytecode, length, ip, ignored))
+						return profile;
+				}
 				++profile.procVarCount;
 				name = upperKey(name);
 				noteExecutionFlags(profile, classifyProcVarName(name), name);
@@ -6396,22 +6440,38 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 			} else if (opcode == OP_PROC_VAR) {
 				std::string name;
 				std::string varName;
+				std::string indexVarName;
+				unsigned char varArgc = 0;
 				std::map<std::string, Value>::iterator it;
 				readCString(name);
+				varArgc = bytecode[ip++];
+				if (varArgc == 0 || varArgc > 2)
+					throw std::runtime_error("Malformed variable procedure call.");
 				readCString(varName);
+				if (varArgc > 1)
+					readCString(indexVarName);
 				it = variables.find(varName);
 				if (it == variables.end())
 					throw std::runtime_error("Variable expected.");
 				if (it->second.type != TYPE_STR)
 					throw std::runtime_error(MRConstants::kErrorTypeMismatch);
-				if (name == "CRUNCH_TABS")
-					it->second = makeString(crunchTabsString(valueAsString(it->second)));
-				else if (name == "EXPAND_TABS")
-					it->second = makeString(
-					    expandTabsString(valueAsString(it->second), currentRuntimeTabExpand()));
-				else if (name == "TABS_TO_SPACES")
+				if (name == "EXPAND_TABS") {
+					std::string source = valueAsString(it->second);
+					bool toVirtuals = currentRuntimeTabExpand();
+					it->second = makeString(expandTabsString(source, toVirtuals));
+					if (varArgc > 1) {
+						std::map<std::string, Value>::iterator indexIt = variables.find(indexVarName);
+						if (indexIt == variables.end())
+							throw std::runtime_error("Variable expected.");
+						if (indexIt->second.type != TYPE_INT)
+							throw std::runtime_error(MRConstants::kErrorTypeMismatch);
+						indexIt->second = makeInt(expandedTabsAdjustedIndex(source, indexIt->second.i));
+					}
+				} else if (name == "TABS_TO_SPACES") {
+					if (varArgc != 1)
+						throw std::runtime_error("TABS_TO_SPACES expects one variable argument.");
 					it->second = makeString(tabsToSpacesString(valueAsString(it->second)));
-				else
+				} else
 					throw std::runtime_error("Unknown variable procedure.");
 				} else if (opcode == OP_PROC) {
 					std::string name;
