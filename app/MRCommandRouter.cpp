@@ -94,6 +94,8 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Window / Zoom";
 		case cmMrWindowMinimize:
 			return "Window / Minimize";
+		case cmMrWindowOrganizePlaceholder:
+			return "Window / Organize";
 		case cmMrWindowLink:
 			return "Window / Link";
 		case cmMrWindowUnlink:
@@ -721,12 +723,6 @@ bool handleMRCommand(ushort command) {
 		case cmMrWindowZoom:
 			mrvmUiZoomCurrentWindow();
 			return true;
-
-		case cmMrWindowCascade:
-			return handleWindowCascade();
-
-		case cmMrWindowTile:
-			return handleWindowTile();
 
 		case cmMrTextUpperCaseMenu:
 			return dispatchEditorCommand(cmMrTextUpperCaseMenu, true);
