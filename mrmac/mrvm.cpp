@@ -6463,6 +6463,8 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 								    "MRSETUP(LASTFILEDIALOGPATH) failed: " +
 								    (errorText.empty() ? std::string("invalid path.") : errorText));
 						} else if (setupKey == "WINDOW_MANAGER" || setupKey == "MESSAGES" ||
+						           setupKey == "VIRTUAL_DESKTOPS" || setupKey == "AUTOLOAD_WORKSPACE" ||
+						           setupKey == "WORKSPACE" ||
 						           setupKey == "MAX_PATH_HISTORY" || setupKey == "MAX_FILE_HISTORY" ||
 						           setupKey == "PATH_HISTORY" || setupKey == "FILE_HISTORY") {
 							if (!applyConfiguredSettingsAssignment(setupKey, valueAsString(args[1]), dummyPaths,
