@@ -31,3 +31,17 @@ bool isBlankString(std::string_view value) {
     }
     return true;
 }
+
+bool looksLikeUri(std::string_view value) {
+    std::string trimmed = trimAscii(value);
+    std::size_t schemeSep = trimmed.find("://");
+
+    if (schemeSep == std::string::npos || schemeSep == 0)
+        return false;
+    for (std::size_t i = 0; i < schemeSep; ++i) {
+        unsigned char ch = static_cast<unsigned char>(trimmed[i]);
+        if (std::isalnum(ch) == 0 && ch != '+' && ch != '-' && ch != '.')
+            return false;
+    }
+    return true;
+}

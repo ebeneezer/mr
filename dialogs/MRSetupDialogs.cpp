@@ -1688,7 +1688,9 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 
 		addManaged(cb, cb->getBounds());
 
-		addManaged(new TLabel(TRect(2, 6, 20, 7), "~V~irtual desktops", virtualDesktopsSlider_ = new MRNumericSlider(TRect(21, 6, 46, 7), 1, 9, initialVirtualDesktops, 1, 1, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged)), TRect(2, 6, 46, 7));
+		virtualDesktopsSlider_ = new MRNumericSlider(TRect(21, 6, 46, 7), 1, 9, initialVirtualDesktops, 1, 1, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
+		addManaged(virtualDesktopsSlider_, TRect(21, 6, 46, 7));
+		addManaged(new TLabel(TRect(2, 6, 20, 7), "~V~irtual desktops", virtualDesktopsSlider_), TRect(2, 6, 20, 7));
 
 		int buttonRow = 9;
 		addManaged(new TButton(TRect(2, buttonRow, 12, buttonRow + 2), "~O~K", cmOK, bfDefault),

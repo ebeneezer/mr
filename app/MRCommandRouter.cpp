@@ -11,15 +11,19 @@
 #include "MRCommandRouter.hpp"
 
 #include <chrono>
+#include <cstdlib>
 #include <cstddef>
 #include <cstdio>
+#include <cstring>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include "../dialogs/MRFileInformationDialog.hpp"
 #include "../dialogs/MRAboutDialog.hpp"
 #include "../dialogs/MRSetupDialogs.hpp"
 #include "../config/MRDialogPaths.hpp"
+#include "../app/utils/MRStringUtils.hpp"
 #include "../mrmac/mrvm.hpp"
 #include "../app/commands/MRExternalCommand.hpp"
 #include "../app/commands/MRFileCommands.hpp"
@@ -34,9 +38,22 @@
 #include "TMREditorApp.hpp"
 #include "MRCommands.hpp"
 
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include <pcre2.h>
+
 namespace {
 bool startExternalCommandInWindow(TMREditWindow *win, const std::string &commandLine, bool replaceBuffer,
                                   bool activate, bool closeOnFailure);
+
+struct SearchUiState {
+	bool hasPrevious = false;
+	std::string pattern;
+	std::string replacement;
+	std::size_t lastStart = 0;
+	std::size_t lastEnd = 0;
+};
+
+SearchUiState g_searchUiState;
 
 const char *placeholderCommandTitle(ushort command) {
 	switch (command) {
@@ -219,6 +236,309 @@ void showPlaceholderCommandBox(const char *title) {
 	if (title == nullptr)
 		title = "Command";
 	messageBox(mfInformation | mfOKButton, "%s\n\nPlaceholder implementation for now.", title);
+}
+
+bool promptSearchPattern(std::string &pattern) {
+	enum { kInputBufferSize = 256 };
+	char input[kInputBufferSize];
+	uchar limit = static_cast<uchar>(kInputBufferSize - 1);
+
+	std::memset(input, 0, sizeof(input));
+	if (!g_searchUiState.pattern.empty())
+		strnzcpy(input, g_searchUiState.pattern.c_str(), sizeof(input));
+	if (inputBox("SEARCH", "~T~ext", input, limit) == cmCancel)
+		return false;
+	pattern = trimAscii(input);
+	return true;
+}
+
+bool promptReplaceValues(std::string &pattern, std::string &replacement) {
+	enum { kPatternBufferSize = 256, kReplacementBufferSize = 256 };
+	char patternInput[kPatternBufferSize];
+	char replacementInput[kReplacementBufferSize];
+	uchar patternLimit = static_cast<uchar>(kPatternBufferSize - 1);
+	uchar replacementLimit = static_cast<uchar>(kReplacementBufferSize - 1);
+
+	std::memset(patternInput, 0, sizeof(patternInput));
+	std::memset(replacementInput, 0, sizeof(replacementInput));
+	if (!g_searchUiState.pattern.empty())
+		strnzcpy(patternInput, g_searchUiState.pattern.c_str(), sizeof(patternInput));
+	if (!g_searchUiState.replacement.empty())
+		strnzcpy(replacementInput, g_searchUiState.replacement.c_str(), sizeof(replacementInput));
+	if (inputBox("SEARCH AND REPLACE", "Search ~t~ext", patternInput, patternLimit) == cmCancel)
+		return false;
+	if (inputBox("SEARCH AND REPLACE", "~R~eplace with", replacementInput, replacementLimit) == cmCancel)
+		return false;
+	pattern = trimAscii(patternInput);
+	replacement = replacementInput;
+	return true;
+}
+
+bool promptGotoLineNumber(long &lineNumber) {
+	enum { kInputBufferSize = 32 };
+	char input[kInputBufferSize];
+	char *endPtr = nullptr;
+	long parsed = 0;
+	std::string tail;
+	uchar limit = static_cast<uchar>(kInputBufferSize - 1);
+
+	std::memset(input, 0, sizeof(input));
+	if (inputBox("GOTO LINE NUMBER", "~L~ine", input, limit) == cmCancel)
+		return false;
+	parsed = std::strtol(input, &endPtr, 10);
+	tail = trimAscii(endPtr != nullptr ? endPtr : "");
+	if (endPtr == input || !tail.empty() || parsed < 1) {
+		messageBox(mfError | mfOKButton, "Please enter a valid line number.");
+		return false;
+	}
+	lineNumber = parsed;
+	return true;
+}
+
+bool compileSearchRegex(const std::string &pattern, bool ignoreCase, pcre2_code **outCode,
+                        std::string &errorText) {
+	int errorCode = 0;
+	PCRE2_SIZE errorOffset = 0;
+	uint32_t options = PCRE2_UTF | PCRE2_UCP;
+	char errorBuffer[256];
+	int messageLength = 0;
+
+	*outCode = nullptr;
+	if (ignoreCase)
+		options |= PCRE2_CASELESS;
+	*outCode = pcre2_compile(reinterpret_cast<PCRE2_SPTR>(pattern.c_str()),
+	                         static_cast<PCRE2_SIZE>(pattern.size()), options, &errorCode,
+	                         &errorOffset, nullptr);
+	if (*outCode != nullptr) {
+		errorText.clear();
+		return true;
+	}
+	std::memset(errorBuffer, 0, sizeof(errorBuffer));
+	messageLength = static_cast<int>(
+	    pcre2_get_error_message(errorCode, reinterpret_cast<PCRE2_UCHAR *>(errorBuffer), sizeof(errorBuffer)));
+	if (messageLength < 0)
+		errorText = "Regex compile error.";
+	else
+		errorText = std::string(errorBuffer, static_cast<std::size_t>(messageLength));
+	errorText += " (offset ";
+	errorText += std::to_string(static_cast<unsigned long long>(errorOffset));
+	errorText += ")";
+	return false;
+}
+
+bool findRegexForward(const std::string &text, pcre2_code *code, std::size_t startOffset,
+                      std::size_t &matchStart, std::size_t &matchEnd) {
+	pcre2_match_data *matchData = nullptr;
+	PCRE2_SIZE *ovector = nullptr;
+	int rc = 0;
+	const std::size_t safeStart = std::min(startOffset, text.size());
+
+	matchData = pcre2_match_data_create_from_pattern(code, nullptr);
+	if (matchData == nullptr)
+		return false;
+	rc = pcre2_match(code, reinterpret_cast<PCRE2_SPTR>(text.data()), static_cast<PCRE2_SIZE>(text.size()),
+	                 static_cast<PCRE2_SIZE>(safeStart), 0, matchData, nullptr);
+	if (rc < 0) {
+		pcre2_match_data_free(matchData);
+		return false;
+	}
+	ovector = pcre2_get_ovector_pointer(matchData);
+	matchStart = static_cast<std::size_t>(ovector[0]);
+	matchEnd = static_cast<std::size_t>(ovector[1]);
+	pcre2_match_data_free(matchData);
+	return matchEnd >= matchStart;
+}
+
+bool findRegexWithWrap(const std::string &text, pcre2_code *code, std::size_t startOffset,
+                       std::size_t &matchStart, std::size_t &matchEnd, bool &wrapped) {
+	wrapped = false;
+	if (findRegexForward(text, code, startOffset, matchStart, matchEnd))
+		return true;
+	if (startOffset == 0)
+		return false;
+	if (findRegexForward(text, code, 0, matchStart, matchEnd)) {
+		wrapped = true;
+		return true;
+	}
+	return false;
+}
+
+void syncVmLastSearch(TMREditWindow *win, bool valid, std::size_t start, std::size_t end,
+                      std::size_t cursor) {
+	std::string fileName;
+	if (win == nullptr)
+		return;
+	fileName = win->currentFileName();
+	mrvmUiReplaceWindowLastSearch(win, fileName, valid, start, end, cursor);
+}
+
+bool performSearch(TMREditWindow *win, const std::string &pattern, std::size_t startOffset, bool updateState,
+                   bool showNotFoundMessage, bool *outWrapped = nullptr) {
+	TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	bool ignoreCase = false;
+	bool tabExpandIgnored = false;
+	pcre2_code *code = nullptr;
+	std::string regexError;
+	std::string text;
+	std::size_t matchStart = 0;
+	std::size_t matchEnd = 0;
+	bool wrapped = false;
+
+	if (outWrapped != nullptr)
+		*outWrapped = false;
+	if (editor == nullptr)
+		return false;
+	if (pattern.empty()) {
+		messageBox(mfError | mfOKButton, "Search text must not be empty.");
+		return false;
+	}
+	mrvmUiCopyRuntimeOptions(ignoreCase, tabExpandIgnored);
+	if (!compileSearchRegex(pattern, ignoreCase, &code, regexError)) {
+		messageBox(mfError | mfOKButton, "Invalid search pattern:\n%s", regexError.c_str());
+		return false;
+	}
+	text = editor->snapshotText();
+	if (!findRegexWithWrap(text, code, startOffset, matchStart, matchEnd, wrapped)) {
+		pcre2_code_free(code);
+		if (showNotFoundMessage)
+			messageBox(mfInformation | mfOKButton, "No match found.");
+		syncVmLastSearch(win, false, 0, 0, 0);
+		return false;
+	}
+	if (matchEnd == matchStart) {
+		if (matchEnd < text.size())
+			++matchEnd;
+		else if (matchStart > 0)
+			--matchStart;
+	}
+	editor->setCursorOffset(matchStart);
+	editor->setSelectionOffsets(matchStart, matchEnd);
+	editor->revealCursor(True);
+	syncVmLastSearch(win, true, matchStart, matchEnd, matchStart);
+	if (updateState) {
+		g_searchUiState.hasPrevious = true;
+		g_searchUiState.pattern = pattern;
+		g_searchUiState.lastStart = matchStart;
+		g_searchUiState.lastEnd = matchEnd;
+	}
+	pcre2_code_free(code);
+	if (outWrapped != nullptr)
+		*outWrapped = wrapped;
+	return true;
+}
+
+bool handleSearchFindText() {
+	TMREditWindow *win = currentEditWindow();
+	TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	std::string pattern;
+	bool wrapped = false;
+
+	if (editor == nullptr)
+		return true;
+	if (!promptSearchPattern(pattern))
+		return true;
+	if (!performSearch(win, pattern, editor->cursorOffset(), true, true, &wrapped))
+		return true;
+	if (wrapped)
+		mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEventFollowup,
+		                               "Search wrapped to start of document.",
+		                               mr::messageline::Kind::Info, mr::messageline::kPriorityLow);
+	return true;
+}
+
+bool handleSearchRepeatPrevious() {
+	TMREditWindow *win = currentEditWindow();
+	TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	std::size_t startOffset = 0;
+	bool wrapped = false;
+
+	if (editor == nullptr)
+		return true;
+	if (!g_searchUiState.hasPrevious || g_searchUiState.pattern.empty()) {
+		messageBox(mfInformation | mfOKButton, "No previous search.");
+		return true;
+	}
+	startOffset = g_searchUiState.lastEnd;
+	if (g_searchUiState.lastEnd <= g_searchUiState.lastStart)
+		startOffset = std::min(editor->bufferLength(), g_searchUiState.lastStart + 1);
+	if (!performSearch(win, g_searchUiState.pattern, startOffset, true, true, &wrapped))
+		return true;
+	if (wrapped)
+		mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEventFollowup,
+		                               "Search wrapped to start of document.",
+		                               mr::messageline::Kind::Info, mr::messageline::kPriorityLow);
+	return true;
+}
+
+bool handleSearchReplace() {
+	TMREditWindow *win = currentEditWindow();
+	TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	std::string pattern;
+	std::string replacement;
+	std::size_t start = 0;
+	std::size_t end = 0;
+	bool found = false;
+
+	if (editor == nullptr || win == nullptr)
+		return true;
+	if (!promptReplaceValues(pattern, replacement))
+		return true;
+	if (pattern.empty()) {
+		messageBox(mfError | mfOKButton, "Search text must not be empty.");
+		return true;
+	}
+	found = performSearch(win, pattern, editor->cursorOffset(), false, true, nullptr);
+	if (!found)
+		return true;
+	start = editor->selectionStartOffset();
+	end = editor->selectionEndOffset();
+	if (end < start)
+		std::swap(start, end);
+	if (!editor->replaceRangeAndSelect(static_cast<uint>(start), static_cast<uint>(end),
+	                                   replacement.data(), static_cast<uint>(replacement.size()))) {
+		messageBox(mfError | mfOKButton, "Replace failed.");
+		return true;
+	}
+	editor->setCursorOffset(start);
+	editor->setSelectionOffsets(start, start + replacement.size());
+	editor->revealCursor(True);
+	g_searchUiState.hasPrevious = true;
+	g_searchUiState.pattern = pattern;
+	g_searchUiState.replacement = replacement;
+	g_searchUiState.lastStart = start;
+	g_searchUiState.lastEnd = start + replacement.size();
+	syncVmLastSearch(win, true, g_searchUiState.lastStart, g_searchUiState.lastEnd,
+	                 g_searchUiState.lastStart);
+	return true;
+}
+
+bool handleSearchGotoLineNumber() {
+	TMREditWindow *win = currentEditWindow();
+	TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	long lineNumber = 0;
+	std::size_t offset = 0;
+	std::size_t line = 1;
+	std::size_t length = 0;
+
+	if (editor == nullptr)
+		return true;
+	if (!promptGotoLineNumber(lineNumber))
+		return true;
+
+	length = editor->bufferLength();
+	offset = 0;
+	line = 1;
+	while (line < static_cast<std::size_t>(lineNumber) && offset < length) {
+		std::size_t next = editor->nextLineOffset(offset);
+		if (next <= offset)
+			break;
+		offset = next;
+		++line;
+	}
+	editor->setCursorOffset(offset);
+	editor->setSelectionOffsets(offset, offset);
+	editor->revealCursor(True);
+	return true;
 }
 
 bool handleFileOpen() {
@@ -629,6 +949,18 @@ bool handleMRCommand(ushort command) {
 
 		case cmMrSearchGetMarker:
 			return handleBlockAction(mrvmUiGetMarker(), "No marker position on stack.");
+
+		case cmMrSearchFindText:
+			return handleSearchFindText();
+
+		case cmMrSearchReplace:
+			return handleSearchReplace();
+
+		case cmMrSearchRepeatPrevious:
+			return handleSearchRepeatPrevious();
+
+		case cmMrSearchGotoLineNumber:
+			return handleSearchGotoLineNumber();
 
 		case cmMrBlockCopy:
 			return handleBlockAction(mrvmUiCopyBlock(), "No block marked.");

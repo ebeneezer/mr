@@ -721,7 +721,6 @@ bool saveCurrentEditWindowAs() {
 	mrLogMessage("Window saved as a new file.");
 	return true;
 }
-#include "MRWindowCommands.hpp"
 
 bool handleWindowCascade() {
 	std::vector<TMREditWindow *> allWindows = allEditWindowsInZOrder();
@@ -744,15 +743,17 @@ bool handleWindowCascade() {
 		return true;
 
 	int cascadeIndex = 0;
+	TProgram::deskTop->lock();
 	for (TMREditWindow *win : visibleWindows) {
 		TRect bounds;
 		bounds.a.x = desktopBounds.a.x + cascadeIndex;
 		bounds.a.y = desktopBounds.a.y + cascadeIndex;
 		bounds.b.x = desktopBounds.b.x;
 		bounds.b.y = desktopBounds.b.y;
-		win->setBounds(bounds);
+		win->locate(bounds);
 		cascadeIndex++;
 	}
+	TProgram::deskTop->unlock();
 
 	return true;
 }
@@ -857,9 +858,11 @@ bool handleWindowTile() {
 			break;
 	}
 
+	TProgram::deskTop->lock();
 	for (int i = 0; i < count; i++) {
-		visibleWindows[i]->setBounds(rects[i]);
+		visibleWindows[i]->locate(rects[i]);
 	}
+	TProgram::deskTop->unlock();
 
 	return true;
 }

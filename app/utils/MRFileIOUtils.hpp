@@ -14,6 +14,17 @@ struct MRTextSaveOptions {
 	int tabSize = 8;
 };
 
+struct MRTextSaveStreamState {
+	std::string currentLine;
+	std::string bufferedLine;
+	std::string expandedScratch;
+	bool hasBufferedLine = false;
+	bool pendingCarriageReturn = false;
+	bool deferredCtrlZ = false;
+	bool emittedAnyByte = false;
+	unsigned char lastEmittedByte = 0;
+};
+
 bool readTextFile(const std::string &path, std::string &out);
 bool readTextFile(const std::string &path, std::string &out, std::string &outError);
 bool writeTextFile(std::string_view path, std::string_view content);
@@ -22,4 +33,9 @@ MRTextSaveOptions textSaveOptionsFromEditSettings(const MREditSetupSettings &set
 MRTextSaveOptions effectiveTextSaveOptionsForPath(std::string_view path,
                                                   std::size_t *outOptionsHash = nullptr);
 std::size_t hashTextSaveOptions(const MRTextSaveOptions &options);
+void resetTextSaveStreamState(MRTextSaveStreamState &state);
+void appendNormalizedTextSaveChunk(std::string_view chunk, const MRTextSaveOptions &options,
+                                   MRTextSaveStreamState &state, std::string &output);
+void finalizeNormalizedTextSaveStream(const MRTextSaveOptions &options,
+                                      MRTextSaveStreamState &state, std::string &output);
 std::string normalizeTextForSave(std::string_view content, const MRTextSaveOptions &options);

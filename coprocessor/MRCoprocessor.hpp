@@ -161,14 +161,12 @@ struct MiniMapWarmupPayload final : Payload {
 struct SaveNormalizationWarmupPayload final : Payload {
 	std::size_t optionsHash;
 	std::size_t sourceBytes;
-	std::shared_ptr<std::string> normalizedText;
 
-	SaveNormalizationWarmupPayload() noexcept : optionsHash(0), sourceBytes(0), normalizedText() {
+	SaveNormalizationWarmupPayload() noexcept : optionsHash(0), sourceBytes(0) {
 	}
 
-	SaveNormalizationWarmupPayload(std::size_t aOptionsHash, std::size_t aSourceBytes,
-	                               std::shared_ptr<std::string> aNormalizedText) noexcept
-	    : optionsHash(aOptionsHash), sourceBytes(aSourceBytes), normalizedText(std::move(aNormalizedText)) {
+	SaveNormalizationWarmupPayload(std::size_t aOptionsHash, std::size_t aSourceBytes) noexcept
+	    : optionsHash(aOptionsHash), sourceBytes(aSourceBytes) {
 	}
 };
 
