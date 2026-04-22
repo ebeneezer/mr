@@ -1698,12 +1698,12 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 	                             bool initialCyclicVirtualDesktops,
 	                             const std::string &initialCursorPositionMarker)
 	    : TWindowInit(&TUserInterfaceSettingsDialog::initFrame),
-	      MRScrollableDialog(centeredSetupDialogRect(68, 18), "User interface settings", 66, 16) {
+	      MRScrollableDialog(centeredSetupDialogRect(68, 14), "User interface settings", 66, 12) {
 
-		int const yStart = 2;
+		int const yStart = 1;
 
 		TCheckBoxes *cb = new TCheckBoxes(
-		    TRect(2, yStart, 37, yStart + 4),
+		    TRect(3, yStart, 34, yStart + 4),
 		    new TSItem("~W~indow Manager",
 		               new TSItem("~M~enuline messages",
 		                          new TSItem("~A~uto load workspace",
@@ -1713,22 +1713,22 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		addManaged(optionsField_, optionsField_->getBounds());
 
 		virtualDesktopsSlider_ =
-		    new MRNumericSlider(TRect(22, 8, 64, 9), 1, 9, initialVirtualDesktops, 1, 1,
+		    new MRNumericSlider(TRect(26, 6, 63, 7), 1, 9, initialVirtualDesktops, 1, 1,
 		                       MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
-		addManaged(virtualDesktopsSlider_, TRect(22, 8, 64, 9));
-		addManaged(new TLabel(TRect(1, 8, 22, 9), "~V~irtual desktops:", virtualDesktopsSlider_),
-		           TRect(1, 8, 22, 9));
+		addManaged(virtualDesktopsSlider_, TRect(26, 6, 63, 7));
+		addManaged(new TLabel(TRect(3, 6, 25, 7), "~V~irtual desktops:", virtualDesktopsSlider_),
+		           TRect(3, 6, 25, 7));
 
-		cursorPositionMarkerField_ = new TInputLine(TRect(25, 10, 36, 11), 11);
-		addManaged(cursorPositionMarkerField_, TRect(25, 10, 36, 11));
-		addManaged(new TLabel(TRect(1, 10, 25, 11), "Cursor position ~m~arker:", cursorPositionMarkerField_),
-		           TRect(1, 10, 25, 11));
+		cursorPositionMarkerField_ = new TInputLine(TRect(28, 8, 42, 9), 11);
+		addManaged(cursorPositionMarkerField_, TRect(28, 8, 42, 9));
+		addManaged(new TLabel(TRect(3, 8, 27, 9), "Cursor position ~m~arker: ", cursorPositionMarkerField_),
+		           TRect(3, 8, 27, 9));
 
-		int buttonRow = 12;
-		addManaged(new TButton(TRect(24, buttonRow, 34, buttonRow + 2), "~D~one", cmOK, bfDefault),
-		           TRect(24, buttonRow, 34, buttonRow + 2));
-		addManaged(new TButton(TRect(36, buttonRow, 48, buttonRow + 2), "~C~ancel", cmCancel, bfNormal),
-		           TRect(36, buttonRow, 48, buttonRow + 2));
+		int buttonRow = 10;
+		addManaged(new TButton(TRect(21, buttonRow, 31, buttonRow + 2), "~D~one", cmOK, bfDefault),
+		           TRect(21, buttonRow, 31, buttonRow + 2));
+		addManaged(new TButton(TRect(33, buttonRow, 45, buttonRow + 2), "~C~ancel", cmCancel, bfNormal),
+		           TRect(33, buttonRow, 45, buttonRow + 2));
 
 		writeRecordField(dataCursorMarker_, sizeof(dataCursorMarker_), initialCursorPositionMarker);
 
@@ -1815,7 +1815,7 @@ static void runUserInterfaceSettingsDialogFlow() {
 			if (changed) {
 				std::string errorText;
 				if (!setConfiguredCursorPositionMarker(newCp, &errorText)) {
-					messageBox(mfError | mfOKButton, "Installation / User interface settings\n\n%s", errorText.c_str());
+					setSetupDialogStatus(errorText, TMRMenuBar::MarqueeKind::Warning);
 					continue;
 				}
 				setConfiguredWindowManager(newWm, &errorText);
@@ -1833,6 +1833,7 @@ static void runUserInterfaceSettingsDialogFlow() {
 			running = false; // Cancel
 		}
 	}
+	clearSetupDialogStatus();
 }
 
 void runInstallationAndSetupDialogFlow() {

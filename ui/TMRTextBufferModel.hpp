@@ -27,6 +27,7 @@ class TMRTextBufferModel {
 		std::size_t cursor;
 		std::size_t selAnchor;
 		std::size_t selCursor;
+		bool modifiedState = false;
 		int blockMode = 0;
 		std::size_t blockAnchor = 0;
 		std::size_t blockEnd = 0;
@@ -204,6 +205,7 @@ class TMRTextBufferModel {
 		redoRecord.cursor = cursor_.offset;
 		redoRecord.selAnchor = selection_.anchor;
 		redoRecord.selCursor = selection_.cursor;
+		redoRecord.modifiedState = modified_;
 		redoStack_.push_back(redoRecord);
 
 		const CustomUndoRecord &undoRecord = undoStack_.back();
@@ -212,11 +214,11 @@ class TMRTextBufferModel {
 		cursor_.offset = undoRecord.cursor;
 		selection_.anchor = undoRecord.selAnchor;
 		selection_.cursor = undoRecord.selCursor;
+		modified_ = undoRecord.modifiedState;
 		if (outRecord)
 			*outRecord = undoRecord;
 
 		undoStack_.pop_back();
-		modified_ = true;
 		clampState();
 		return true;
 	}
@@ -230,6 +232,7 @@ class TMRTextBufferModel {
 		undoRecord.cursor = cursor_.offset;
 		undoRecord.selAnchor = selection_.anchor;
 		undoRecord.selCursor = selection_.cursor;
+		undoRecord.modifiedState = modified_;
 		undoStack_.push_back(undoRecord);
 
 		const CustomUndoRecord &redoRecord = redoStack_.back();
@@ -238,11 +241,11 @@ class TMRTextBufferModel {
 		cursor_.offset = redoRecord.cursor;
 		selection_.anchor = redoRecord.selAnchor;
 		selection_.cursor = redoRecord.selCursor;
+		modified_ = redoRecord.modifiedState;
 		if (outRecord)
 			*outRecord = redoRecord;
 
 		redoStack_.pop_back();
-		modified_ = true;
 		clampState();
 		return true;
 	}

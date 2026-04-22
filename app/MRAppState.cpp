@@ -110,10 +110,15 @@ void updateAppCommandState() {
 		const int desktopCount = configuredVirtualDesktops();
 		const int currentDesktop = currentVirtualDesktop();
 		const bool hasMultipleDesktops = desktopCount > 1;
+		const bool cyclicViewport =
+		    hasMultipleDesktops && configuredCyclicVirtualDesktops();
 		const int windowDesktop = hasWindow ? state.window->virtualDesktop_ : 1;
 
-		setCommandEnabled(cmMrWindowNextDesktop, hasMultipleDesktops && currentDesktop < desktopCount);
-		setCommandEnabled(cmMrWindowPrevDesktop, hasMultipleDesktops && currentDesktop > 1);
+		setCommandEnabled(cmMrWindowNextDesktop,
+		                  hasMultipleDesktops &&
+		                      (currentDesktop < desktopCount || cyclicViewport));
+		setCommandEnabled(cmMrWindowPrevDesktop,
+		                  hasMultipleDesktops && (currentDesktop > 1 || cyclicViewport));
 		setCommandEnabled(cmMrWindowMoveToNextDesktop,
 		                  hasWindow && hasMultipleDesktops && windowDesktop < desktopCount);
 		setCommandEnabled(cmMrWindowMoveToPrevDesktop,

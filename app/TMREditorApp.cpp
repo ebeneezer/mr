@@ -846,9 +846,23 @@ std::string buildTopRightCursorStatus() {
 	if (isEmptyUntitledEditableWindow(win))
 		return std::string();
 
-	char buf[64];
-	std::snprintf(buf, sizeof(buf), "%lu|%lu", win->cursorLineNumber(), win->cursorColumnNumber());
-	return std::string(buf);
+	std::string format = configuredCursorPositionMarker();
+	std::string out;
+	const std::string rowText = std::to_string(win->cursorLineNumber());
+	const std::string colText = std::to_string(win->cursorColumnNumber());
+
+	if (format.empty())
+		format = "R:C";
+	out.reserve(format.size() + rowText.size() + colText.size());
+	for (char ch : format) {
+		if (ch == 'R')
+			out += rowText;
+		else if (ch == 'C')
+			out += colText;
+		else
+			out.push_back(ch);
+	}
+	return out;
 }
 
 TMRMenuBar::MarqueeKind mapMessageNoticeKind(mr::messageline::Kind kind) {

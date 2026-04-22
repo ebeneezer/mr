@@ -763,6 +763,7 @@ class TMRFileEditor : public TScroller {
 		TMRTextBufferModel::CustomUndoRecord record;
 		record.preSnapshot = bufferModel_.readSnapshot();
 		record.cursor = bufferModel_.cursor();
+		record.modifiedState = bufferModel_.isModified();
 		if (bufferModel_.hasSelection()) {
 			record.selAnchor = bufferModel_.selection().range().start;
 			record.selCursor = bufferModel_.selection().range().end;

@@ -323,6 +323,8 @@ struct SearchPreviewParts {
 	std::string text;
 	std::size_t matchOffset = 0;
 	std::size_t matchLength = 0;
+	std::size_t matchLineOffset = 0;
+	std::size_t matchLineLength = 0;
 	std::string previousLine;
 	std::string matchLine;
 	std::string nextLine;
@@ -330,26 +332,42 @@ struct SearchPreviewParts {
 
 SearchPreviewParts previewForMatch(const std::string &text, std::size_t start, std::size_t end) {
 	auto sanitizeLine = [](std::string value) {
-		for (char &ch : value)
-			if (ch == '\t' || ch == '\r' || ch == '\n')
+		for (char &ch : value) {
+			unsigned char uch = static_cast<unsigned char>(ch);
+			if (ch == '\t' || ch == '\r' || ch == '\n' || uch < 32 || uch >= 127)
 				ch = ' ';
+		}
 		return value;
 	};
 	const std::size_t safeStart = std::min(start, text.size());
 	const std::size_t safeEnd = std::min(std::max(end, safeStart), text.size());
-	const std::size_t lineStart = text.rfind('\n', safeStart == 0 ? 0 : safeStart - 1);
+	std::size_t highlightStart = safeStart;
+	std::size_t highlightEnd = safeEnd;
+
+	if (highlightEnd <= highlightStart && !text.empty()) {
+		if (highlightStart < text.size())
+			highlightEnd = highlightStart + 1;
+		else {
+			highlightStart = text.size() - 1;
+			highlightEnd = text.size();
+		}
+	}
+
+	const std::size_t lineStart = text.rfind('\n', highlightStart == 0 ? 0 : highlightStart - 1);
 	const std::size_t left = (lineStart == std::string::npos) ? 0 : lineStart + 1;
-	const std::size_t lineEnd = text.find('\n', safeStart);
+	const std::size_t lineEnd = text.find('\n', highlightStart);
 	const std::size_t right = (lineEnd == std::string::npos) ? text.size() : lineEnd;
-	const std::size_t windowLeft = safeStart > 24 ? safeStart - 24 : left;
-	const std::size_t windowRight = std::min(right, safeEnd + 24);
-	std::string leftText = text.substr(windowLeft, safeStart - windowLeft);
-	std::string matchText = text.substr(safeStart, safeEnd - safeStart);
-	std::string rightText = text.substr(safeEnd, windowRight - safeEnd);
+	const std::size_t windowLeft = highlightStart > 24 ? highlightStart - 24 : left;
+	const std::size_t windowRight = std::min(right, highlightEnd + 24);
+	std::string leftText = text.substr(windowLeft, highlightStart - windowLeft);
+	std::string matchText = text.substr(highlightStart, highlightEnd - highlightStart);
+	std::string rightText = text.substr(highlightEnd, windowRight - highlightEnd);
 	SearchPreviewParts parts;
 
 	parts.matchOffset = leftText.size();
 	parts.matchLength = matchText.size();
+	parts.matchLineOffset = highlightStart >= left ? highlightStart - left : 0;
+	parts.matchLineLength = highlightEnd - highlightStart;
 	parts.text = leftText + matchText + rightText;
 	parts.text = sanitizeLine(parts.text);
 	parts.matchLine = sanitizeLine(text.substr(left, right - left));
@@ -595,8 +613,8 @@ PromptReplaceDecision promptReplaceDecisionDialog(const std::string &title, cons
 	  public:
 		PromptPreviewView(const TRect &bounds, const SearchPreviewParts &preview,
 		                  const std::string &replacement)
-		    : TView(bounds), before_(preview.matchLine), beforeMatchOffset_(preview.matchOffset),
-		      beforeMatchLength_(preview.matchLength), after_(), afterMatchOffset_(preview.matchOffset),
+		    : TView(bounds), before_(preview.matchLine), beforeMatchOffset_(preview.matchLineOffset),
+		      beforeMatchLength_(preview.matchLineLength), after_(), afterMatchOffset_(preview.matchLineOffset),
 		      afterMatchLength_(replacement.size()) {
 			const std::size_t safeOffset = std::min(beforeMatchOffset_, before_.size());
 			const std::size_t safeLength = std::min(beforeMatchLength_, before_.size() - safeOffset);
@@ -606,7 +624,9 @@ PromptReplaceDecision promptReplaceDecisionDialog(const std::string &title, cons
 			if (safeOffset + safeLength <= before_.size())
 				after_ += before_.substr(safeOffset + safeLength);
 			for (char &ch : after_)
-				if (ch == '\t' || ch == '\r' || ch == '\n')
+				if (ch == '\t' || ch == '\r' || ch == '\n' ||
+				    static_cast<unsigned char>(ch) < 32 ||
+				    static_cast<unsigned char>(ch) >= 127)
 					ch = ' ';
 			beforeMatchOffset_ = safeOffset;
 			beforeMatchLength_ = safeLength;
@@ -615,15 +635,17 @@ PromptReplaceDecision promptReplaceDecisionDialog(const std::string &title, cons
 		void draw() override {
 			TDrawBuffer b;
 			const TColorAttr normal = getColor(1);
-			const TColorAttr accent = getColor(3);
+			const TColorAttr accent = static_cast<TColorAttr>(getColor(3));
 			const std::size_t width = static_cast<std::size_t>(std::max<int>(0, size.x));
 			const std::size_t beforeLeft = centeredPreviewLeft(before_, beforeMatchOffset_, beforeMatchLength_, width);
 			const std::size_t afterLeft = centeredPreviewLeft(after_, afterMatchOffset_, afterMatchLength_, width);
 			auto drawLine = [&](short y, const std::string &line, std::size_t lineLeft, std::size_t markOffset,
 			                    std::size_t markLength) {
+				const std::size_t effectiveLeft =
+				    line.size() <= width ? 0 : std::min(lineLeft, line.size() - width);
 				b.moveChar(0, ' ', normal, size.x);
 				for (ushort x = 0; x < static_cast<ushort>(size.x); ++x) {
-					const std::size_t source = lineLeft + static_cast<std::size_t>(x);
+					const std::size_t source = effectiveLeft + static_cast<std::size_t>(x);
 					char ch = source < line.size() ? line[source] : ' ';
 					const bool inMark = source >= markOffset && source < (markOffset + markLength);
 					b.putChar(x, static_cast<uchar>(ch));
@@ -640,7 +662,7 @@ PromptReplaceDecision promptReplaceDecisionDialog(const std::string &title, cons
 			drawLine(static_cast<short>(std::max(0, centerY - 1)), before_, beforeLeft, beforeMatchOffset_,
 			         beforeMatchLength_);
 			b.moveChar(0, ' ', normal, size.x);
-			b.moveStr(static_cast<ushort>(std::max(0, (size.x - 2) / 2)), "->", accent, size.x);
+			b.moveStr(static_cast<ushort>(std::max(0, (size.x - 2) / 2)), "->", getColor(3), size.x);
 			writeLine(0, centerY, size.x, 1, b);
 			drawLine(static_cast<short>(std::min<int>(size.y - 1, centerY + 1)), after_, afterLeft,
 			         afterMatchOffset_, afterMatchLength_);
@@ -660,12 +682,12 @@ PromptReplaceDecision promptReplaceDecisionDialog(const std::string &title, cons
 
 	if (TProgram::deskTop == nullptr)
 		return PromptReplaceDecision::Cancel;
-	dialog = new TDialog(centeredDialogRect(88, 14), title.c_str());
-	dialog->insert(new PromptPreviewView(TRect(2, 2, 86, 8), preview, replacement));
-	dialog->insert(new TButton(TRect(10, 10, 24, 12), "~R~eplace", cmOK, bfDefault));
-	dialog->insert(new TButton(TRect(26, 10, 38, 12), "~S~kip", cmNo, bfNormal));
-	dialog->insert(new TButton(TRect(40, 10, 58, 12), "Replace ~A~ll", cmYes, bfNormal));
-	dialog->insert(new TButton(TRect(60, 10, 74, 12), "~C~ancel", cmCancel, bfNormal));
+	dialog = new TDialog(centeredDialogRect(88, 10), title.c_str());
+	dialog->insert(new PromptPreviewView(TRect(2, 2, 86, 5), preview, replacement));
+	dialog->insert(new TButton(TRect(12, 6, 26, 8), "~R~eplace", cmOK, bfDefault));
+	dialog->insert(new TButton(TRect(28, 6, 40, 8), "~S~kip", cmNo, bfNormal));
+	dialog->insert(new TButton(TRect(42, 6, 60, 8), "Replace ~A~ll", cmYes, bfNormal));
+	dialog->insert(new TButton(TRect(62, 6, 76, 8), "~C~ancel", cmCancel, bfNormal));
 	result = TProgram::deskTop->execView(dialog);
 	TObject::destroy(dialog);
 	if (result == cmOK)
@@ -687,18 +709,20 @@ PromptSearchDecision promptSearchDecisionDialog(const SearchPreviewParts &previe
 		void draw() override {
 			TDrawBuffer b;
 			const TColorAttr normal = getColor(1);
-			const TColorAttr accent = getColor(3);
+			const TColorAttr accent = static_cast<TColorAttr>(getColor(3));
 			const std::size_t width = static_cast<std::size_t>(std::max<int>(0, size.x));
 			const std::size_t lineLeft =
-			    centeredPreviewLeft(preview_.matchLine, preview_.matchOffset, preview_.matchLength, width);
+			    centeredPreviewLeft(preview_.matchLine, preview_.matchLineOffset, preview_.matchLineLength, width);
 			auto drawLine = [&](short y, const std::string &line, bool highlightMatch) {
+				const std::size_t effectiveLeft =
+				    line.size() <= width ? 0 : std::min(lineLeft, line.size() - width);
 				b.moveChar(0, ' ', normal, size.x);
 				for (ushort x = 0; x < static_cast<ushort>(size.x); ++x) {
-					const std::size_t source = lineLeft + static_cast<std::size_t>(x);
+					const std::size_t source = effectiveLeft + static_cast<std::size_t>(x);
 					char ch = source < line.size() ? line[source] : ' ';
 					const bool inMatch =
-					    highlightMatch && source >= preview_.matchOffset &&
-					    source < (preview_.matchOffset + preview_.matchLength);
+					    highlightMatch && source >= preview_.matchLineOffset &&
+					    source < (preview_.matchLineOffset + preview_.matchLineLength);
 					b.putChar(x, static_cast<uchar>(ch));
 					b.putAttribute(x, inMatch ? accent : normal);
 				}
@@ -724,11 +748,11 @@ PromptSearchDecision promptSearchDecisionDialog(const SearchPreviewParts &previe
 
 	if (TProgram::deskTop == nullptr)
 		return PromptSearchDecision::Cancel;
-	dialog = new TDialog(centeredDialogRect(88, 13), "SEARCH");
-	dialog->insert(new SearchPromptPreviewView(TRect(2, 2, 86, 9), preview));
-	dialog->insert(new TButton(TRect(20, 10, 32, 12), "~N~ext", cmOK, bfDefault));
-	dialog->insert(new TButton(TRect(34, 10, 46, 12), "~S~top", cmNo, bfNormal));
-	dialog->insert(new TButton(TRect(48, 10, 62, 12), "~C~ancel", cmCancel, bfNormal));
+	dialog = new TDialog(centeredDialogRect(88, 10), "SEARCH");
+	dialog->insert(new SearchPromptPreviewView(TRect(2, 2, 86, 5), preview));
+	dialog->insert(new TButton(TRect(23, 6, 35, 8), "~N~ext", cmOK, bfDefault));
+	dialog->insert(new TButton(TRect(37, 6, 49, 8), "~S~top", cmNo, bfNormal));
+	dialog->insert(new TButton(TRect(51, 6, 65, 8), "~C~ancel", cmCancel, bfNormal));
 	result = TProgram::deskTop->execView(dialog);
 	TObject::destroy(dialog);
 	if (result == cmOK)
@@ -790,37 +814,37 @@ bool promptSearchPattern(std::string &pattern, MRSearchDialogOptions &options) {
 	if (options.searchAllWindows)
 		optionMask |= 0x0008;
 
-	dialog = new TDialog(centeredDialogRect(94, 22), "SEARCH");
-	patternField = new TInputLine(TRect(17, 2, 92, 3), kInputBufferSize - 1);
-	dialog->insert(new TLabel(TRect(4, 2, 17, 3), "Search ~f~or:", patternField));
+	dialog = new TDialog(centeredDialogRect(96, 22), "SEARCH");
+	patternField = new TInputLine(TRect(15, 2, 93, 3), kInputBufferSize - 1);
+	dialog->insert(new TLabel(TRect(2, 2, 15, 3), "Search ~f~or:", patternField));
 	dialog->insert(patternField);
-	dialog->insert(new TStaticText(TRect(4, 4, 11, 5), "Type:"));
+	dialog->insert(new TStaticText(TRect(3, 4, 10, 5), "Type:"));
 	typeField = new TRadioButtons(
-	    TRect(4, 5, 41, 8),
+	    TRect(3, 5, 40, 8),
 	    new TSItem(" ~L~iteral",
 	               new TSItem(" ~R~egular expressions (PCRE)",
 	                          new TSItem(" ~W~ord/Phrase search", nullptr))));
 	dialog->insert(typeField);
-	dialog->insert(new TStaticText(TRect(43, 4, 54, 5), "Direction:"));
-	directionField = new TRadioButtons(TRect(43, 5, 60, 8),
+	dialog->insert(new TStaticText(TRect(42, 4, 53, 5), "Direction:"));
+	directionField = new TRadioButtons(TRect(42, 5, 59, 8),
 	                                   new TSItem(" ~F~orward", new TSItem(" ~B~ackward", nullptr)));
 	dialog->insert(directionField);
-	dialog->insert(new TStaticText(TRect(62, 4, 68, 5), "Mode:"));
-	modeField = new TRadioButtons(TRect(62, 5, 92, 8),
+	dialog->insert(new TStaticText(TRect(61, 4, 67, 5), "Mode:"));
+	modeField = new TRadioButtons(TRect(61, 5, 93, 8),
 	                              new TSItem(" ~S~top on first occurrence",
 	                                         new TSItem(" ~P~rompt for next match",
 	                                                    new TSItem(" L~i~st all occurrences", nullptr))));
 	dialog->insert(modeField);
-	dialog->insert(new TStaticText(TRect(4, 10, 13, 11), "Options:"));
+	dialog->insert(new TStaticText(TRect(3, 10, 12, 11), "Options:"));
 	optionsField = new TCheckBoxes(
-	    TRect(4, 11, 41, 16),
+	    TRect(3, 11, 40, 16),
 	    new TSItem("~C~ase sensitive",
 	               new TSItem("~G~lobal search",
 	                          new TSItem("~R~estrict to marked block",
 	                                     new TSItem("Search all ~w~indows", nullptr)))));
 	dialog->insert(optionsField);
-	dialog->insert(new TButton(TRect(36, 18, 48, 20), "~O~K", cmOK, bfDefault));
-	dialog->insert(new TButton(TRect(51, 18, 64, 20), "~C~ancel", cmCancel, bfNormal));
+	dialog->insert(new TButton(TRect(34, 18, 46, 20), "~O~K", cmOK, bfDefault));
+	dialog->insert(new TButton(TRect(49, 18, 62, 20), "~C~ancel", cmCancel, bfNormal));
 	patternField->setData(patternInput);
 	typeField->setData(&typeChoice);
 	directionField->setData(&directionChoice);
@@ -936,7 +960,7 @@ bool promptReplaceValues(std::string &pattern, std::string &replacement, MRSarDi
 	dialog->insert(modeField);
 	dialog->insert(new TStaticText(TRect(3, 12, 20, 13), "Leave cursor at:"));
 	leaveCursorField =
-	    new TRadioButtons(TRect(3, 13, 37, 16),
+	    new TRadioButtons(TRect(3, 13, 37, 15),
 	                      new TSItem(" ~E~nd of replace string",
 	                                 new TSItem(" ~S~tart of replace string", nullptr)));
 	dialog->insert(leaveCursorField);
@@ -948,8 +972,8 @@ bool promptReplaceValues(std::string &pattern, std::string &replacement, MRSarDi
 	                          new TSItem("~R~estrict to marked block",
 	                                     new TSItem("Search all ~w~indows", nullptr)))));
 	dialog->insert(optionsField);
-	dialog->insert(new TButton(TRect(34, 19, 46, 21), "~O~K", cmOK, bfDefault));
-	dialog->insert(new TButton(TRect(49, 19, 64, 21), "~C~ancel", cmCancel, bfNormal));
+	dialog->insert(new TButton(TRect(31, 20, 43, 22), "~O~K", cmOK, bfDefault));
+	dialog->insert(new TButton(TRect(46, 20, 61, 22), "~C~ancel", cmCancel, bfNormal));
 	patternField->setData(patternInput);
 	replacementField->setData(replacementInput);
 	typeField->setData(&typeChoice);
@@ -1161,10 +1185,12 @@ bool findRegexWithWrap(const std::string &text, pcre2_code *code, std::size_t st
 
 void syncVmLastSearch(TMREditWindow *win, bool valid, std::size_t start, std::size_t end,
                       std::size_t cursor) {
+	TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	std::string fileName;
 	if (win == nullptr)
 		return;
-	fileName = win->currentFileName();
+	if (editor != nullptr && editor->hasPersistentFileName())
+		fileName = editor->persistentFileName();
 	mrvmUiReplaceWindowLastSearch(win, fileName, valid, start, end, cursor);
 }
 
@@ -1176,6 +1202,8 @@ void clearSearchSelection(TMREditWindow *win) {
 		return;
 	editor->setSelectionOffsets(cursor, cursor);
 	syncVmLastSearch(win, false, 0, 0, cursor);
+	editor->clearFindMarkerRanges();
+	editor->refreshViewState();
 }
 
 void updateMiniMapFindMarkers(TMREditWindow *win, const std::string &pattern,
@@ -1385,6 +1413,8 @@ bool handleSearchFindText() {
 		}
 		if (showFoundListDialog(win, pattern, options, matches, selectedIndex))
 			activateMatch(win, matches[selectedIndex], pattern, options);
+		else
+			clearSearchSelection(win);
 		return true;
 	}
 
@@ -1642,8 +1672,9 @@ bool handleSearchReplace() {
 					         static_cast<long long>(match.end - match.start);
 			}
 			if (replacedCount == 0) {
-				if (cancelledByUser)
+				if (cancelledByUser) {
 					clearSearchSelection(win);
+				}
 				postSearchWarning("No replacements.");
 				return true;
 			}
@@ -1664,7 +1695,10 @@ bool handleSearchReplace() {
 		g_searchUiState.lastEnd = cursorTargetEnd;
 		g_searchUiState.lastOptions = searchOptions;
 		syncVmLastSearch(win, true, cursorTargetStart, cursorTargetEnd, editor->cursorOffset());
-		updateMiniMapFindMarkers(win, pattern, searchOptions);
+		if (cancelledByUser) {
+			clearSearchSelection(win);
+		} else
+			updateMiniMapFindMarkers(win, pattern, searchOptions);
 		postSearchWarning(std::to_string(replacedCount) + " replacements");
 	}
 	return true;
