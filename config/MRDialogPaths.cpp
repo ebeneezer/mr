@@ -1,5 +1,7 @@
 #include "../app/utils/MRFileIOUtils.hpp"
 #include "../app/utils/MRStringUtils.hpp"
+#include "../app/commands/MRWindowCommands.hpp"
+#include "../ui/MRMessageLineController.hpp"
 #include "MRDialogPaths.hpp"
 #include "MRSettingsLoader.hpp"
 
@@ -35,7 +37,11 @@ constexpr int kHistoryLimitDefault = 15;
 
 static bool g_windowManagerEnabled = true;
 static bool g_menulineMessagesEnabled = true;
+static MRSearchDialogOptions g_searchDialogOptions;
+static MRSarDialogOptions g_sarDialogOptions;
 static int g_virtualDesktops = 1;
+static bool g_cyclicVirtualDesktops = false;
+static std::string g_cursorPositionMarker = "R:C";
 static bool g_autoloadWorkspace = false;
 
 std::vector<MRDialogHistoryEntry> &configuredPathHistoryStorage() {
@@ -569,6 +575,19 @@ static const char *const kThemeSettingsKey = "COLORTHEMEURI";
 static const char *const kWindowColorThemeProfileKey = "WINDOW_COLORTHEME_URI";
 static const char *const kSettingsVersionKey = "SETTINGS_VERSION";
 static const char *const kCurrentSettingsVersion = "2";
+static const char *const kSearchTextTypeLiteral = "LITERAL";
+static const char *const kSearchTextTypePcre = "PCRE";
+static const char *const kSearchTextTypeWord = "WORD";
+static const char *const kSearchDirectionForward = "FORWARD";
+static const char *const kSearchDirectionBackward = "BACKWARD";
+static const char *const kSearchModeStopFirst = "STOP_FIRST_OCCURRENCE";
+static const char *const kSearchModePromptNext = "PROMPT_FOR_NEXT_MATCH";
+static const char *const kSearchModeListAll = "LIST_ALL_OCCURRENCES";
+static const char *const kSarModeReplaceFirst = "REPLACE_FIRST_OCCURRENCE";
+static const char *const kSarModePromptEach = "PROMPT_FOR_EACH_REPLACE";
+static const char *const kSarModeReplaceAll = "REPLACE_ALL_OCCURRENCES";
+static const char *const kSarLeaveCursorEnd = "END_OF_REPLACE_STRING";
+static const char *const kSarLeaveCursorStart = "START_OF_REPLACE_STRING";
 
 struct MRSettingsKeyDescriptor {
 	const char *key;
@@ -585,8 +604,29 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
 	{"SHELLPATH", MRSettingsKeyClass::Path, true},
 	{"WINDOW_MANAGER", MRSettingsKeyClass::Global, true},
 	{"MESSAGES", MRSettingsKeyClass::Global, true},
-	{"VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
-	{"AUTOLOAD_WORKSPACE", MRSettingsKeyClass::Global, true},
+	{"SEARCH_TEXT_TYPE", MRSettingsKeyClass::Global, true},
+	{"SEARCH_DIRECTION", MRSettingsKeyClass::Global, true},
+	{"SEARCH_MODE", MRSettingsKeyClass::Global, true},
+	{"SEARCH_CASE_SENSITIVE", MRSettingsKeyClass::Global, true},
+	{"SEARCH_GLOBAL_SEARCH", MRSettingsKeyClass::Global, true},
+	{"SEARCH_RESTRICT_MARKED_BLOCK", MRSettingsKeyClass::Global, true},
+	{"SEARCH_ALL_WINDOWS", MRSettingsKeyClass::Global, true},
+	{"SEARCH_LIST_ALL_OCCURRENCES", MRSettingsKeyClass::Global, false},
+	{"SAR_TEXT_TYPE", MRSettingsKeyClass::Global, true},
+	{"SAR_DIRECTION", MRSettingsKeyClass::Global, true},
+	{"SAR_MODE", MRSettingsKeyClass::Global, true},
+	{"SAR_LEAVE_CURSOR_AT", MRSettingsKeyClass::Global, true},
+	{"SAR_CASE_SENSITIVE", MRSettingsKeyClass::Global, true},
+	{"SAR_GLOBAL_SEARCH", MRSettingsKeyClass::Global, true},
+	{"SAR_RESTRICT_MARKED_BLOCK", MRSettingsKeyClass::Global, true},
+	{"SAR_ALL_WINDOWS", MRSettingsKeyClass::Global, true},
+	{"SAR_REPLACE_MODE", MRSettingsKeyClass::Global, false},
+	{"SAR_PROMPT_EACH_REPLACE", MRSettingsKeyClass::Global, false},
+		{"VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
+		{"CYCLIC_VIRTUAL_DESKTOP", MRSettingsKeyClass::Global, false},
+		{"CYCLIC_VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
+		{"CURSOR_POSITION_MARKER", MRSettingsKeyClass::Global, true},
+		{"AUTOLOAD_WORKSPACE", MRSettingsKeyClass::Global, true},
 	{"LASTFILEDIALOGPATH", MRSettingsKeyClass::Global, true},
 	{"WORKSPACE", MRSettingsKeyClass::Global, false},
 	{"MAX_PATH_HISTORY", MRSettingsKeyClass::Global, true},
@@ -762,6 +802,8 @@ static const MRColorSetupItem kOtherColorItems[] = {
     {"warning message", kMrPaletteMessageWarning},
     {"hero events", kMrPaletteMessageHero},
     {"cursor position marker", kMrPaletteCursorPositionMarker},
+    {"desktop background", kMrPaletteDesktop},
+    {"virtual desktop marker", kMrPaletteVirtualDesktopMarker},
 };
 
 static const MRColorSetupItem kMiniMapColorItems[] = {
@@ -848,6 +890,10 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 		return defaults[42];
 	if (paletteIndex == kMrPaletteDialogInactiveElements)
 		return defaults[kPaletteDialogInactiveClusterGray];
+	if (paletteIndex == kMrPaletteDesktop)
+		return 0x90;
+	if (paletteIndex == kMrPaletteVirtualDesktopMarker)
+		return 0x9F;
 	if (paletteIndex == 0 || paletteIndex >= std::size(defaults))
 		return 0x70;
 	return defaults[paletteIndex];
@@ -1147,30 +1193,40 @@ bool parseOtherColorListLiteral(const std::string &literal,
 		cursor = comma + 1;
 	}
 
-	// Accept current 9-value format, prior 8/7-value formats and legacy 10-value format.
+	// Accept current 11-value format, prior 9/8/7-value formats and legacy 10-value format.
 	// Legacy format ended with shadow / shadow-character / background color entries,
 	// which are no longer configurable in OTHERCOLORS.
 	if (parsed.size() == MRColorSetupSettings::kOtherCount)
 		for (std::size_t i = 0; i < outValues.size(); ++i)
 			outValues[i] = parsed[i];
-	else if (parsed.size() == MRColorSetupSettings::kOtherCount - 1) {
+	else if (parsed.size() == 9) {
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
-		outValues[MRColorSetupSettings::kOtherCount - 1] =
-		    defaultColorForSlot(kMrPaletteCursorPositionMarker);
+		outValues[9] = defaultColorForSlot(kMrPaletteDesktop);
+		outValues[10] = defaultColorForSlot(kMrPaletteVirtualDesktopMarker);
 	}
-	else if (parsed.size() == MRColorSetupSettings::kOtherCount - 2) {
+	else if (parsed.size() == 8) {
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
-		outValues[MRColorSetupSettings::kOtherCount - 2] = defaultColorForSlot(kMrPaletteMessageHero);
-		outValues[MRColorSetupSettings::kOtherCount - 1] =
-		    defaultColorForSlot(kMrPaletteCursorPositionMarker);
+		outValues[8] = defaultColorForSlot(kMrPaletteCursorPositionMarker);
+		outValues[9] = defaultColorForSlot(kMrPaletteDesktop);
+		outValues[10] = defaultColorForSlot(kMrPaletteVirtualDesktopMarker);
+	}
+	else if (parsed.size() == 7) {
+		for (std::size_t i = 0; i < parsed.size(); ++i)
+			outValues[i] = parsed[i];
+		outValues[7] = defaultColorForSlot(kMrPaletteMessageHero);
+		outValues[8] = defaultColorForSlot(kMrPaletteCursorPositionMarker);
+		outValues[9] = defaultColorForSlot(kMrPaletteDesktop);
+		outValues[10] = defaultColorForSlot(kMrPaletteVirtualDesktopMarker);
 	}
 	else if (parsed.size() == 10) {
 		for (std::size_t i = 0; i < 7; ++i)
 			outValues[i] = parsed[i];
 		outValues[7] = defaultColorForSlot(kMrPaletteMessageHero);
 		outValues[8] = defaultColorForSlot(kMrPaletteCursorPositionMarker);
+		outValues[9] = defaultColorForSlot(kMrPaletteDesktop);
+		outValues[10] = defaultColorForSlot(kMrPaletteVirtualDesktopMarker);
 	}
 	else
 		return setError(errorMessage, "Unexpected OTHERCOLORS list size.");
@@ -1254,6 +1310,188 @@ bool parseBooleanLiteral(const std::string &value, bool &outValue, std::string *
 
 std::string canonicalBooleanLiteral(bool value) {
 	return value ? "true" : "false";
+}
+
+std::string formatSearchTextType(MRSearchTextType value) {
+	if (value == MRSearchTextType::Word)
+		return kSearchTextTypeWord;
+	if (value == MRSearchTextType::Pcre)
+		return kSearchTextTypePcre;
+	return kSearchTextTypeLiteral;
+}
+
+bool parseSearchTextTypeLiteral(const std::string &value, MRSearchTextType &outValue,
+                                std::string *errorMessage) {
+	std::string upper = upperAscii(trimAscii(value));
+
+	if (upper == kSearchTextTypeLiteral) {
+		outValue = MRSearchTextType::Literal;
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
+	}
+	if (upper == kSearchTextTypeWord) {
+		outValue = MRSearchTextType::Word;
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
+	}
+	if (upper == kSearchTextTypePcre || upper == "REGEX" || upper == "REGULAR_EXPRESSION") {
+		outValue = MRSearchTextType::Pcre;
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
+	}
+	return setError(errorMessage, "SEARCH_TEXT_TYPE/SAR_TEXT_TYPE must be LITERAL, PCRE or WORD.");
+}
+
+std::string formatSearchDirection(MRSearchDirection value) {
+	return value == MRSearchDirection::Backward ? kSearchDirectionBackward : kSearchDirectionForward;
+}
+
+bool parseSearchDirectionLiteral(const std::string &value, MRSearchDirection &outValue,
+                                 std::string *errorMessage) {
+	std::string upper = upperAscii(trimAscii(value));
+
+	if (upper == kSearchDirectionForward) {
+		outValue = MRSearchDirection::Forward;
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
+	}
+	if (upper == kSearchDirectionBackward) {
+		outValue = MRSearchDirection::Backward;
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
+	}
+	return setError(errorMessage, "SEARCH_DIRECTION/SAR_DIRECTION must be FORWARD or BACKWARD.");
+}
+
+std::string formatSearchMode(MRSearchMode value) {
+	if (value == MRSearchMode::PromptNext)
+		return kSearchModePromptNext;
+	if (value == MRSearchMode::ListAll)
+		return kSearchModeListAll;
+	return kSearchModeStopFirst;
+}
+
+bool parseSearchModeLiteral(const std::string &value, MRSearchMode &outValue,
+                            std::string *errorMessage) {
+	std::string upper = upperAscii(trimAscii(value));
+
+	if (upper == kSearchModeStopFirst || upper == "STOP_FIRST") {
+		outValue = MRSearchMode::StopFirst;
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
+	}
+	if (upper == kSearchModePromptNext || upper == "PROMPT_NEXT") {
+		outValue = MRSearchMode::PromptNext;
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
+	}
+	if (upper == kSearchModeListAll || upper == "LIST_ALL") {
+		outValue = MRSearchMode::ListAll;
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
+	}
+	return setError(errorMessage, "SEARCH_MODE must be STOP_FIRST_OCCURRENCE, PROMPT_FOR_NEXT_MATCH or LIST_ALL_OCCURRENCES.");
+}
+
+std::string formatSarMode(MRSarMode value) {
+	if (value == MRSarMode::PromptEach)
+		return kSarModePromptEach;
+	if (value == MRSarMode::ReplaceAll)
+		return kSarModeReplaceAll;
+	return kSarModeReplaceFirst;
+}
+
+bool parseSarModeLiteral(const std::string &value, MRSarMode &outValue,
+                         std::string *errorMessage) {
+	std::string upper = upperAscii(trimAscii(value));
+
+	if (upper == kSarModeReplaceFirst || upper == "FIRST") {
+		outValue = MRSarMode::ReplaceFirst;
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
+	}
+	if (upper == kSarModePromptEach || upper == "PROMPT_EACH") {
+		outValue = MRSarMode::PromptEach;
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
+	}
+	if (upper == kSarModeReplaceAll || upper == "ALL") {
+		outValue = MRSarMode::ReplaceAll;
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
+	}
+	return setError(errorMessage, "SAR_MODE must be REPLACE_FIRST_OCCURRENCE, PROMPT_FOR_EACH_REPLACE or REPLACE_ALL_OCCURRENCES.");
+}
+
+std::string formatSarLeaveCursor(MRSarLeaveCursor value) {
+	return value == MRSarLeaveCursor::StartOfReplaceString ? kSarLeaveCursorStart
+	                                                       : kSarLeaveCursorEnd;
+}
+
+bool parseSarLeaveCursorLiteral(const std::string &value, MRSarLeaveCursor &outValue,
+                                std::string *errorMessage) {
+	std::string upper = upperAscii(trimAscii(value));
+
+	if (upper == kSarLeaveCursorEnd || upper == "END") {
+		outValue = MRSarLeaveCursor::EndOfReplaceString;
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
+	}
+	if (upper == kSarLeaveCursorStart || upper == "START") {
+		outValue = MRSarLeaveCursor::StartOfReplaceString;
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
+	}
+	return setError(errorMessage, "SAR_LEAVE_CURSOR_AT must be END_OF_REPLACE_STRING or START_OF_REPLACE_STRING.");
+}
+
+bool normalizeCursorPositionMarker(const std::string &value, std::string &out,
+                                   std::string *errorMessage) {
+	std::string trimmed = trimAscii(value);
+	int rCount = 0;
+	int cCount = 0;
+
+	if (trimmed.empty())
+		return setError(errorMessage, "must not be empty.");
+	if (trimmed.size() > 10)
+		return setError(errorMessage, "must be at most 10 characters.");
+	out.clear();
+	out.reserve(trimmed.size());
+	for (char ch : trimmed) {
+		if (ch == 'R') {
+			++rCount;
+			if (rCount > 1)
+				return setError(errorMessage, "R placeholder may appear only once.");
+			out.push_back(ch);
+			continue;
+		}
+		if (ch == 'C') {
+			++cCount;
+			if (cCount > 1)
+				return setError(errorMessage, "C placeholder may appear only once.");
+			out.push_back(ch);
+			continue;
+		}
+		out.push_back(ch);
+	}
+	if (rCount == 0 || cCount == 0)
+		return setError(errorMessage, "must contain R and C placeholder.");
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
 }
 
 std::string normalizeColumnBlockMove(const std::string &value) {
@@ -2377,6 +2615,12 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 		return false;
 	if (!setConfiguredDefaultProfileDescription("Global defaults", errorMessage))
 		return false;
+	if (!setConfiguredSearchDialogOptions(MRSearchDialogOptions(), errorMessage))
+		return false;
+	if (!setConfiguredSarDialogOptions(MRSarDialogOptions(), errorMessage))
+		return false;
+	if (!setConfiguredCursorPositionMarker("R:C", errorMessage))
+		return false;
 	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), errorMessage))
 		return false;
 	configuredColorSettings() = defaultsFromColorGroups();
@@ -2455,6 +2699,123 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 					return false;
 				return setConfiguredMenulineMessages(parsed, errorMessage);
 			}
+			if (upper == "SEARCH_TEXT_TYPE") {
+				MRSearchDialogOptions options = configuredSearchDialogOptions();
+				if (!parseSearchTextTypeLiteral(value, options.textType, errorMessage))
+					return false;
+				return setConfiguredSearchDialogOptions(options, errorMessage);
+			}
+			if (upper == "SEARCH_DIRECTION") {
+				MRSearchDialogOptions options = configuredSearchDialogOptions();
+				if (!parseSearchDirectionLiteral(value, options.direction, errorMessage))
+					return false;
+				return setConfiguredSearchDialogOptions(options, errorMessage);
+			}
+			if (upper == "SEARCH_MODE") {
+				MRSearchDialogOptions options = configuredSearchDialogOptions();
+				if (!parseSearchModeLiteral(value, options.mode, errorMessage))
+					return false;
+				return setConfiguredSearchDialogOptions(options, errorMessage);
+			}
+			if (upper == "SEARCH_CASE_SENSITIVE") {
+				MRSearchDialogOptions options = configuredSearchDialogOptions();
+				if (!parseBooleanLiteral(value, options.caseSensitive, errorMessage))
+					return false;
+				return setConfiguredSearchDialogOptions(options, errorMessage);
+			}
+			if (upper == "SEARCH_GLOBAL_SEARCH") {
+				MRSearchDialogOptions options = configuredSearchDialogOptions();
+				if (!parseBooleanLiteral(value, options.globalSearch, errorMessage))
+					return false;
+				return setConfiguredSearchDialogOptions(options, errorMessage);
+			}
+			if (upper == "SEARCH_RESTRICT_MARKED_BLOCK") {
+				MRSearchDialogOptions options = configuredSearchDialogOptions();
+				if (!parseBooleanLiteral(value, options.restrictToMarkedBlock, errorMessage))
+					return false;
+				return setConfiguredSearchDialogOptions(options, errorMessage);
+			}
+			if (upper == "SEARCH_ALL_WINDOWS") {
+				MRSearchDialogOptions options = configuredSearchDialogOptions();
+				if (!parseBooleanLiteral(value, options.searchAllWindows, errorMessage))
+					return false;
+				return setConfiguredSearchDialogOptions(options, errorMessage);
+			}
+			if (upper == "SEARCH_LIST_ALL_OCCURRENCES") {
+				MRSearchDialogOptions options = configuredSearchDialogOptions();
+				bool listAll = false;
+				if (!parseBooleanLiteral(value, listAll, errorMessage))
+					return false;
+				options.mode = listAll ? MRSearchMode::ListAll : MRSearchMode::StopFirst;
+				return setConfiguredSearchDialogOptions(options, errorMessage);
+			}
+			if (upper == "SAR_TEXT_TYPE") {
+				MRSarDialogOptions options = configuredSarDialogOptions();
+				if (!parseSearchTextTypeLiteral(value, options.textType, errorMessage))
+					return false;
+				return setConfiguredSarDialogOptions(options, errorMessage);
+			}
+			if (upper == "SAR_DIRECTION") {
+				MRSarDialogOptions options = configuredSarDialogOptions();
+				if (!parseSearchDirectionLiteral(value, options.direction, errorMessage))
+					return false;
+				return setConfiguredSarDialogOptions(options, errorMessage);
+			}
+			if (upper == "SAR_MODE") {
+				MRSarDialogOptions options = configuredSarDialogOptions();
+				if (!parseSarModeLiteral(value, options.mode, errorMessage))
+					return false;
+				return setConfiguredSarDialogOptions(options, errorMessage);
+			}
+			if (upper == "SAR_LEAVE_CURSOR_AT") {
+				MRSarDialogOptions options = configuredSarDialogOptions();
+				if (!parseSarLeaveCursorLiteral(value, options.leaveCursorAt, errorMessage))
+					return false;
+				return setConfiguredSarDialogOptions(options, errorMessage);
+			}
+			if (upper == "SAR_CASE_SENSITIVE") {
+				MRSarDialogOptions options = configuredSarDialogOptions();
+				if (!parseBooleanLiteral(value, options.caseSensitive, errorMessage))
+					return false;
+				return setConfiguredSarDialogOptions(options, errorMessage);
+			}
+			if (upper == "SAR_GLOBAL_SEARCH") {
+				MRSarDialogOptions options = configuredSarDialogOptions();
+				if (!parseBooleanLiteral(value, options.globalSearch, errorMessage))
+					return false;
+				return setConfiguredSarDialogOptions(options, errorMessage);
+			}
+			if (upper == "SAR_RESTRICT_MARKED_BLOCK") {
+				MRSarDialogOptions options = configuredSarDialogOptions();
+				if (!parseBooleanLiteral(value, options.restrictToMarkedBlock, errorMessage))
+					return false;
+				return setConfiguredSarDialogOptions(options, errorMessage);
+			}
+			if (upper == "SAR_ALL_WINDOWS") {
+				MRSarDialogOptions options = configuredSarDialogOptions();
+				if (!parseBooleanLiteral(value, options.searchAllWindows, errorMessage))
+					return false;
+				return setConfiguredSarDialogOptions(options, errorMessage);
+			}
+			if (upper == "SAR_REPLACE_MODE") {
+				MRSarDialogOptions options = configuredSarDialogOptions();
+				MRSarMode mode = MRSarMode::ReplaceFirst;
+				if (!parseSarModeLiteral(value, mode, errorMessage))
+					return false;
+				options.mode = mode == MRSarMode::ReplaceAll ? MRSarMode::ReplaceAll : MRSarMode::ReplaceFirst;
+				return setConfiguredSarDialogOptions(options, errorMessage);
+			}
+			if (upper == "SAR_PROMPT_EACH_REPLACE") {
+				MRSarDialogOptions options = configuredSarDialogOptions();
+				bool promptEach = false;
+				if (!parseBooleanLiteral(value, promptEach, errorMessage))
+					return false;
+				if (promptEach)
+					options.mode = MRSarMode::PromptEach;
+				else if (options.mode == MRSarMode::PromptEach)
+					options.mode = MRSarMode::ReplaceFirst;
+				return setConfiguredSarDialogOptions(options, errorMessage);
+			}
 			if (upper == "VIRTUAL_DESKTOPS") {
 				int parsed = 1;
 				try {
@@ -2464,11 +2825,22 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				}
 				if (parsed < 1) parsed = 1;
 				if (parsed > 9) parsed = 9;
-				return setConfiguredVirtualDesktops(parsed, errorMessage);
+				applyVirtualDesktopConfigurationChange(parsed);
+				if (errorMessage != nullptr)
+					errorMessage->clear();
+				return true;
 			}
-			if (upper == "AUTOLOAD_WORKSPACE") {
-				bool parsed = false;
-				if (!parseBooleanLiteral(value, parsed, errorMessage))
+				if (upper == "CYCLIC_VIRTUAL_DESKTOP" || upper == "CYCLIC_VIRTUAL_DESKTOPS") {
+					bool parsed = false;
+					if (!parseBooleanLiteral(value, parsed, errorMessage))
+						return false;
+					return setConfiguredCyclicVirtualDesktops(parsed, errorMessage);
+				}
+				if (upper == "CURSOR_POSITION_MARKER")
+					return setConfiguredCursorPositionMarker(value, errorMessage);
+				if (upper == "AUTOLOAD_WORKSPACE") {
+					bool parsed = false;
+					if (!parseBooleanLiteral(value, parsed, errorMessage))
 					return false;
 				return setConfiguredAutoloadWorkspace(parsed, errorMessage);
 			}
@@ -3256,6 +3628,12 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 		case kMrPaletteDialogInactiveElements:
 			value = dialogInactiveElements;
 			return true;
+		case kMrPaletteDesktop:
+			value = configured.otherColors[MRColorSetupSettings::kOtherCount - 2];
+			return true;
+		case kMrPaletteVirtualDesktopMarker:
+			value = configured.otherColors[MRColorSetupSettings::kOtherCount - 1];
+			return true;
 		default:
 			break;
 	}
@@ -3404,6 +3782,13 @@ bool configuredWindowManager() {
 }
 
 bool setConfiguredMenulineMessages(bool enabled, std::string *errorMessage) {
+	if (!enabled) {
+		mr::messageline::clearOwner(mr::messageline::Owner::HeroEvent);
+		mr::messageline::clearOwner(mr::messageline::Owner::HeroEventFollowup);
+		mr::messageline::clearOwner(mr::messageline::Owner::MacroMarquee);
+		mr::messageline::clearOwner(mr::messageline::Owner::DialogValidation);
+		mr::messageline::clearOwner(mr::messageline::Owner::DialogInteraction);
+	}
 	g_menulineMessagesEnabled = enabled;
 	if (errorMessage != nullptr)
 		errorMessage->clear();
@@ -3412,6 +3797,28 @@ bool setConfiguredMenulineMessages(bool enabled, std::string *errorMessage) {
 
 bool configuredMenulineMessages() {
 	return g_menulineMessagesEnabled;
+}
+
+bool setConfiguredSearchDialogOptions(const MRSearchDialogOptions &options, std::string *errorMessage) {
+	g_searchDialogOptions = options;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+MRSearchDialogOptions configuredSearchDialogOptions() {
+	return g_searchDialogOptions;
+}
+
+bool setConfiguredSarDialogOptions(const MRSarDialogOptions &options, std::string *errorMessage) {
+	g_sarDialogOptions = options;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+MRSarDialogOptions configuredSarDialogOptions() {
+	return g_sarDialogOptions;
 }
 
 bool setConfiguredVirtualDesktops(int count, std::string *errorMessage) {
@@ -3425,6 +3832,32 @@ bool setConfiguredVirtualDesktops(int count, std::string *errorMessage) {
 
 int configuredVirtualDesktops() {
 	return g_virtualDesktops;
+}
+
+bool setConfiguredCyclicVirtualDesktops(bool enabled, std::string *errorMessage) {
+	g_cyclicVirtualDesktops = enabled;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+bool configuredCyclicVirtualDesktops() {
+	return g_cyclicVirtualDesktops;
+}
+
+bool setConfiguredCursorPositionMarker(const std::string &value, std::string *errorMessage) {
+	std::string normalized;
+
+	if (!normalizeCursorPositionMarker(value, normalized, errorMessage))
+		return false;
+	g_cursorPositionMarker = normalized;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+std::string configuredCursorPositionMarker() {
+	return g_cursorPositionMarker;
 }
 
 bool setConfiguredAutoloadWorkspace(bool enabled, std::string *errorMessage) {
@@ -3492,7 +3925,57 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source += "MRSETUP('SHELLPATH', '" + escapeMrmacSingleQuotedLiteral(shellPath) + "');\n";
 	source += "MRSETUP('WINDOW_MANAGER', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredWindowManager())) + "');\n";
 	source += "MRSETUP('MESSAGES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMenulineMessages())) + "');\n";
+	source += "MRSETUP('SEARCH_TEXT_TYPE', '" +
+	          escapeMrmacSingleQuotedLiteral(formatSearchTextType(configuredSearchDialogOptions().textType)) + "');\n";
+	source += "MRSETUP('SEARCH_DIRECTION', '" +
+	          escapeMrmacSingleQuotedLiteral(formatSearchDirection(configuredSearchDialogOptions().direction)) + "');\n";
+	source += "MRSETUP('SEARCH_MODE', '" +
+	          escapeMrmacSingleQuotedLiteral(formatSearchMode(configuredSearchDialogOptions().mode)) + "');\n";
+	source += "MRSETUP('SEARCH_CASE_SENSITIVE', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              formatEditSetupBoolean(configuredSearchDialogOptions().caseSensitive)) +
+	          "');\n";
+	source += "MRSETUP('SEARCH_GLOBAL_SEARCH', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              formatEditSetupBoolean(configuredSearchDialogOptions().globalSearch)) +
+	          "');\n";
+	source += "MRSETUP('SEARCH_RESTRICT_MARKED_BLOCK', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              formatEditSetupBoolean(configuredSearchDialogOptions().restrictToMarkedBlock)) +
+	          "');\n";
+	source += "MRSETUP('SEARCH_ALL_WINDOWS', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              formatEditSetupBoolean(configuredSearchDialogOptions().searchAllWindows)) +
+	          "');\n";
+	source += "MRSETUP('SAR_TEXT_TYPE', '" +
+	          escapeMrmacSingleQuotedLiteral(formatSearchTextType(configuredSarDialogOptions().textType)) + "');\n";
+	source += "MRSETUP('SAR_DIRECTION', '" +
+	          escapeMrmacSingleQuotedLiteral(formatSearchDirection(configuredSarDialogOptions().direction)) + "');\n";
+	source += "MRSETUP('SAR_MODE', '" +
+	          escapeMrmacSingleQuotedLiteral(formatSarMode(configuredSarDialogOptions().mode)) + "');\n";
+	source += "MRSETUP('SAR_LEAVE_CURSOR_AT', '" +
+	          escapeMrmacSingleQuotedLiteral(formatSarLeaveCursor(configuredSarDialogOptions().leaveCursorAt)) + "');\n";
+	source += "MRSETUP('SAR_CASE_SENSITIVE', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              formatEditSetupBoolean(configuredSarDialogOptions().caseSensitive)) +
+	          "');\n";
+	source += "MRSETUP('SAR_GLOBAL_SEARCH', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              formatEditSetupBoolean(configuredSarDialogOptions().globalSearch)) +
+	          "');\n";
+	source += "MRSETUP('SAR_RESTRICT_MARKED_BLOCK', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              formatEditSetupBoolean(configuredSarDialogOptions().restrictToMarkedBlock)) +
+	          "');\n";
+	source += "MRSETUP('SAR_ALL_WINDOWS', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              formatEditSetupBoolean(configuredSarDialogOptions().searchAllWindows)) +
+	          "');\n";
 	source += "MRSETUP('VIRTUAL_DESKTOPS', '" + std::to_string(configuredVirtualDesktops()) + "');\n";
+	source += "MRSETUP('CYCLIC_VIRTUAL_DESKTOPS', '" +
+	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredCyclicVirtualDesktops())) + "');\n";
+	source += "MRSETUP('CURSOR_POSITION_MARKER', '" +
+	          escapeMrmacSingleQuotedLiteral(configuredCursorPositionMarker()) + "');\n";
 	source += "MRSETUP('AUTOLOAD_WORKSPACE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredAutoloadWorkspace())) + "');\n";
 	source += "MRSETUP('LASTFILEDIALOGPATH', '" +
 	          escapeMrmacSingleQuotedLiteral(configuredLastFileDialogPath()) + "');\n";
@@ -3671,6 +4154,10 @@ bool persistConfiguredSettingsSnapshot(std::string *errorMessage, MRSettingsWrit
 	source = buildSettingsMacroSource(paths);
 	if (!writeTextFile(settingsPath, source))
 		return setError(errorMessage, "Unable to write settings macro file: " + settingsPath);
+	if (configuredAutoloadWorkspace()) {
+		mrSaveWorkspace(settingsPath);
+		static_cast<void>(readTextFile(settingsPath, source));
+	}
 	populateSettingsWriteReport(settingsPath, previousSource, source, report);
 	if (errorMessage != nullptr)
 		errorMessage->clear();
@@ -3698,6 +4185,10 @@ bool writeSettingsMacroFile(const MRSetupPaths &paths, std::string *errorMessage
 	source = buildSettingsMacroSource(paths);
 	if (!writeTextFile(settingsPath, source))
 		return setError(errorMessage, "Unable to write settings macro file: " + settingsPath);
+	if (configuredAutoloadWorkspace()) {
+		mrSaveWorkspace(settingsPath);
+		static_cast<void>(readTextFile(settingsPath, source));
+	}
 	populateSettingsWriteReport(settingsPath, previousSource, source, report);
 	if (errorMessage != nullptr)
 		errorMessage->clear();

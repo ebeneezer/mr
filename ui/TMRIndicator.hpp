@@ -24,6 +24,7 @@
 #include <utility>
 #include <vector>
 
+#include "../config/MRDialogPaths.hpp"
 #include "MRCoprocessor.hpp"
 
 class TMRTaskOverviewPopup : public TView {
@@ -115,7 +116,7 @@ class TMRIndicator : public TIndicator {
 		TColorAttr cursorColor;
 		char frame;
 		TDrawBuffer b;
-		char cursorText[32];
+		std::string cursorText;
 		int cursorX;
 		int cursorMinX;
 		int noticeStartX;
@@ -138,14 +139,14 @@ class TMRIndicator : public TIndicator {
 			noticeEndX = noticeStartX + static_cast<int>(statusNoticeText_.size()) + 1;
 		}
 
-		std::snprintf(cursorText, sizeof(cursorText), " %lu:%lu ", displayLine_ + 1UL, displayColumn_ + 1UL);
-		cursorX = static_cast<int>(size.x) - static_cast<int>(std::strlen(cursorText));
+		cursorText = resolvedCursorPositionMarkerText(displayLine_ + 1UL, displayColumn_ + 1UL);
+		cursorX = static_cast<int>(size.x) - static_cast<int>(cursorText.size());
 		cursorMinX = 1;
 		if (noticeEndX > cursorMinX)
 			cursorMinX = noticeEndX;
 		if (cursorX < cursorMinX)
 			cursorX = cursorMinX;
-		b.moveStr(cursorX, cursorText, cursorColor);
+		b.moveStr(cursorX, cursorText.c_str(), cursorColor);
 		writeBuf(0, 0, size.x, 1, b);
 	}
 
@@ -409,6 +410,29 @@ class TMRIndicator : public TIndicator {
 			text.resize(std::max(0, size.x - x));
 		if (!text.empty())
 			b.moveStr(static_cast<ushort>(x), text.c_str(), noticeColor);
+	}
+
+	static std::string resolvedCursorPositionMarkerText(unsigned long row,
+	                                                    unsigned long column) {
+		std::string format = configuredCursorPositionMarker();
+		std::string out;
+		const std::string rowText = std::to_string(row);
+		const std::string colText = std::to_string(column);
+
+		if (format.empty())
+			format = "R:C";
+		out.reserve(format.size() + rowText.size() + colText.size() + 2);
+		out.push_back(' ');
+		for (char ch : format) {
+			if (ch == 'R')
+				out += rowText;
+			else if (ch == 'C')
+				out += colText;
+			else
+				out.push_back(ch);
+		}
+		out.push_back(' ');
+		return out;
 	}
 
 	void startReadOnlyBlink() {

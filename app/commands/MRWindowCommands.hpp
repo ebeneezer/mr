@@ -18,6 +18,9 @@ class TMREditWindow;
 void mrUpdateAllWindowsColorTheme();
 [[nodiscard]] bool handleWindowCascade();
 [[nodiscard]] bool handleWindowTile();
+void applyVirtualDesktopConfigurationChange(int count);
+void setWindowManuallyHidden(TMREditWindow *win, bool hidden);
+[[nodiscard]] bool isWindowManuallyHidden(const TMREditWindow *win);
 
 [[nodiscard]] int currentVirtualDesktop();
 void setCurrentVirtualDesktop(int vd);

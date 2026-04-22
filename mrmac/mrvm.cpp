@@ -50,6 +50,13 @@
 #include "../coprocessor/MRCoprocessor.hpp"
 
 TMREditWindow *createEditorWindow(const char *title);
+bool moveToNextVirtualDesktop();
+bool moveToPrevVirtualDesktop();
+bool viewportRight();
+bool viewportLeft();
+void mrSaveWorkspace(const std::string &filename);
+void mrLoadWorkspace(const std::string &filename);
+void applyVirtualDesktopConfigurationChange(int count);
 
 namespace {
 using Value = VirtualMachine::Value;
@@ -582,6 +589,9 @@ static unsigned classifyLoadVarName(const std::string &name) {
 		return mrefUiAffinity;
 	if (name == "IGNORE_CASE" || name == "TAB_EXPAND" || name == "DISPLAY_TABS")
 		return mrefUiAffinity;
+	if (name == "VIRTUAL_DESKTOPS" || name == "CYCLIC_VIRTUAL_DESKTOP" ||
+	    name == "CYCLIC_VIRTUAL_DESKTOPS")
+		return mrefUiAffinity;
 	if (name == "INSERT_MODE" || name == "INDENT_LEVEL" || name == "GET_LINE" ||
 	    name == "CUR_CHAR" || name == "C_COL" || name == "C_LINE" || name == "C_ROW" ||
 	    name == "C_PAGE" || name == "PG_LINE" || name == "AT_EOF" || name == "AT_EOL" ||
@@ -600,7 +610,9 @@ static unsigned classifyLoadVarName(const std::string &name) {
 
 static unsigned classifyStoreVarName(const std::string &name) {
 	if (name == "IGNORE_CASE" || name == "TAB_EXPAND" || name == "INSERT_MODE" ||
-	    name == "INDENT_LEVEL" || name == "FILE_CHANGED" || name == "FILE_NAME")
+	    name == "INDENT_LEVEL" || name == "FILE_CHANGED" || name == "FILE_NAME" ||
+	    name == "VIRTUAL_DESKTOPS" || name == "CYCLIC_VIRTUAL_DESKTOP" ||
+	    name == "CYCLIC_VIRTUAL_DESKTOPS")
 		return mrefUiAffinity | mrefStagedWrite;
 	return 0;
 }
@@ -636,7 +648,10 @@ static unsigned classifyProcName(const std::string &name) {
 	    name == "DELETE_WINDOW" || name == "MODIFY_WINDOW" || name == "LINK_WINDOW" ||
 	    name == "UNLINK_WINDOW" || name == "ZOOM" || name == "REDRAW" || name == "NEW_SCREEN" ||
 	    name == "GOTO_LINE" || name == "GOTO_COL" || name == "SWITCH_WINDOW" ||
-	    name == "SIZE_WINDOW")
+	    name == "SIZE_WINDOW" || name == "MOVE_WIN_TO_NEXT_DESKTOP" ||
+	    name == "MOVE_WIN_TO_PREV_DESKTOP" || name == "MOVE_VIEWPORT_RIGHT" ||
+	    name == "MOVE_VIEWPORT_LEFT" || name == "SAVE_WORKSPACE" ||
+	    name == "LOAD_WORKSPACE")
 		return mrefUiAffinity;
 	return mrefUiAffinity;
 }
@@ -4101,6 +4116,10 @@ static Value loadSpecialVariable(const std::string &name, bool &handled) {
 	if (key == "WINDOW_COUNT")
 		return makeInt(currentBackgroundEditSession() != nullptr ? currentBackgroundEditSession()->windowCount
 		                                                     : countEditWindows());
+	if (key == "VIRTUAL_DESKTOPS")
+		return makeInt(configuredVirtualDesktops());
+	if (key == "CYCLIC_VIRTUAL_DESKTOP" || key == "CYCLIC_VIRTUAL_DESKTOPS")
+		return makeInt(configuredCyclicVirtualDesktops() ? 1 : 0);
 	if (key == "WIN_X1" || key == "WIN_Y1" || key == "WIN_X2" || key == "WIN_Y2") {
 		BackgroundEditSession *session = currentBackgroundEditSession();
 		int x1;
@@ -4272,6 +4291,18 @@ static bool storeSpecialVariable(const std::string &name, const Value &value) {
 			session->fileName = valueAsString(value);
 		else
 			return false;
+		return true;
+	}
+	if (key == "VIRTUAL_DESKTOPS") {
+		if (currentBackgroundEditSession() != nullptr)
+			throw std::runtime_error("VIRTUAL_DESKTOPS cannot be changed in background mode.");
+		applyVirtualDesktopConfigurationChange(valueAsInt(value));
+		return true;
+	}
+	if (key == "CYCLIC_VIRTUAL_DESKTOP" || key == "CYCLIC_VIRTUAL_DESKTOPS") {
+		if (currentBackgroundEditSession() != nullptr)
+			throw std::runtime_error("CYCLIC_VIRTUAL_DESKTOPS cannot be changed in background mode.");
+		setConfiguredCyclicVirtualDesktops(valueAsInt(value) != 0, nullptr);
 		return true;
 	}
 	if (key == "FIRST_RUN" || key == "FIRST_MACRO" || key == "NEXT_MACRO" ||
@@ -5666,12 +5697,15 @@ bool isSupportedStagedSymbol(const std::string &value) noexcept {
 	    "COPY_BLOCK",  "MOVE_BLOCK",     "DELETE_BLOCK",   "ERASE_WINDOW",    "BLOCK_STAT",
 	    "BLOCK_LINE1", "BLOCK_LINE2",    "BLOCK_COL1",     "BLOCK_COL2",      "MARKING",
 	    "FIRST_SAVE",  "EOF_IN_MEM",     "BUFFER_ID",      "TMP_FILE",        "TMP_FILE_NAME",
-	    "CUR_WINDOW",  "LINK_STAT",      "WINDOW_COUNT",   "WIN_X1",          "WIN_Y1",
+	    "CUR_WINDOW",  "LINK_STAT",      "WINDOW_COUNT",   "VIRTUAL_DESKTOPS","CYCLIC_VIRTUAL_DESKTOP",
+	    "CYCLIC_VIRTUAL_DESKTOPS",
+	    "WIN_X1",          "WIN_Y1",
 	    "WIN_X2",      "WIN_Y2",         "GLOBAL_STR",     "GLOBAL_INT",      "FIRST_GLOBAL",
 	    "NEXT_GLOBAL", "CREATE_GLOBAL_STR", "SET_GLOBAL_STR", "SET_GLOBAL_INT", "INQ_MACRO", "FIRST_MACRO",
 	    "NEXT_MACRO",  "CREATE_WINDOW",  "DELETE_WINDOW",  "MODIFY_WINDOW",   "LINK_WINDOW",
 	    "UNLINK_WINDOW","ZOOM",          "REDRAW",         "NEW_SCREEN",      "SWITCH_WINDOW",
-	    "SIZE_WINDOW",
+	    "SIZE_WINDOW", "MOVE_WIN_TO_NEXT_DESKTOP", "MOVE_WIN_TO_PREV_DESKTOP",
+	    "MOVE_VIEWPORT_RIGHT", "MOVE_VIEWPORT_LEFT", "SAVE_WORKSPACE", "LOAD_WORKSPACE",
 	    "FILE_CHANGED","FILE_NAME",      "IGNORE_CASE",    "TAB_EXPAND",      "DISPLAY_TABS"};
 
 	for (const char *symbol : kAllowed)
@@ -6523,7 +6557,22 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 								    "MRSETUP(LASTFILEDIALOGPATH) failed: " +
 								    (errorText.empty() ? std::string("invalid path.") : errorText));
 						} else if (setupKey == "WINDOW_MANAGER" || setupKey == "MESSAGES" ||
-						           setupKey == "VIRTUAL_DESKTOPS" || setupKey == "AUTOLOAD_WORKSPACE" ||
+						           setupKey == "SEARCH_TEXT_TYPE" || setupKey == "SEARCH_DIRECTION" ||
+						           setupKey == "SEARCH_MODE" || setupKey == "SEARCH_CASE_SENSITIVE" ||
+						           setupKey == "SEARCH_GLOBAL_SEARCH" ||
+						           setupKey == "SEARCH_RESTRICT_MARKED_BLOCK" ||
+						           setupKey == "SEARCH_ALL_WINDOWS" ||
+						           setupKey == "SEARCH_LIST_ALL_OCCURRENCES" ||
+						           setupKey == "SAR_TEXT_TYPE" || setupKey == "SAR_DIRECTION" ||
+						           setupKey == "SAR_MODE" || setupKey == "SAR_LEAVE_CURSOR_AT" ||
+						           setupKey == "SAR_CASE_SENSITIVE" || setupKey == "SAR_GLOBAL_SEARCH" ||
+						           setupKey == "SAR_RESTRICT_MARKED_BLOCK" ||
+						           setupKey == "SAR_ALL_WINDOWS" ||
+						           setupKey == "SAR_REPLACE_MODE" || setupKey == "SAR_PROMPT_EACH_REPLACE" ||
+						           setupKey == "VIRTUAL_DESKTOPS" || setupKey == "CYCLIC_VIRTUAL_DESKTOP" ||
+						           setupKey == "CYCLIC_VIRTUAL_DESKTOPS" ||
+						           setupKey == "CURSOR_POSITION_MARKER" ||
+						           setupKey == "AUTOLOAD_WORKSPACE" ||
 						           setupKey == "WORKSPACE" ||
 						           setupKey == "MAX_PATH_HISTORY" || setupKey == "MAX_FILE_HISTORY" ||
 						           setupKey == "PATH_HISTORY" || setupKey == "FILE_HISTORY") {
@@ -6564,7 +6613,14 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						} else
 							throw std::runtime_error(
 							    "MRSETUP supports keys: SETTINGS_VERSION, MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
-							    "SHELLPATH, WINDOW_MANAGER, MESSAGES, LASTFILEDIALOGPATH, MAX_PATH_HISTORY, MAX_FILE_HISTORY, PATH_HISTORY, FILE_HISTORY, "
+							    "SHELLPATH, WINDOW_MANAGER, MESSAGES, SEARCH_TEXT_TYPE, SEARCH_DIRECTION, "
+							    "SEARCH_MODE, SEARCH_CASE_SENSITIVE, SEARCH_GLOBAL_SEARCH, "
+							    "SEARCH_RESTRICT_MARKED_BLOCK, SEARCH_ALL_WINDOWS, "
+							    "SAR_TEXT_TYPE, SAR_DIRECTION, SAR_MODE, SAR_LEAVE_CURSOR_AT, "
+							    "SAR_CASE_SENSITIVE, SAR_GLOBAL_SEARCH, SAR_RESTRICT_MARKED_BLOCK, "
+							    "SAR_ALL_WINDOWS, VIRTUAL_DESKTOPS, CYCLIC_VIRTUAL_DESKTOPS, "
+							    "CURSOR_POSITION_MARKER, LASTFILEDIALOGPATH, "
+							    "MAX_PATH_HISTORY, MAX_FILE_HISTORY, PATH_HISTORY, FILE_HISTORY, "
 							    "DEFAULT_PROFILE_DESCRIPTION, COLORTHEMEURI, PAGE_BREAK, WORD_DELIMITERS, DEFAULT_EXTENSIONS, "
 							    "TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, DISPLAY_TABS, TAB_SIZE, RIGHT_MARGIN, WORD_WRAP, "
 							    "INDENT_STYLE, FILE_TYPE, BINARY_RECORD_LENGTH, POST_LOAD_MACRO, PRE_SAVE_MACRO, DEFAULT_PATH, "
@@ -6823,7 +6879,10 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				           name == "CREATE_WINDOW" || name == "DELETE_WINDOW" ||
 				           name == "ERASE_WINDOW" || name == "MODIFY_WINDOW" ||
 				           name == "LINK_WINDOW" || name == "UNLINK_WINDOW" ||
-				           name == "ZOOM" || name == "REDRAW" || name == "NEW_SCREEN") {
+				           name == "ZOOM" || name == "REDRAW" || name == "NEW_SCREEN" ||
+				           name == "MOVE_WIN_TO_NEXT_DESKTOP" || name == "MOVE_WIN_TO_PREV_DESKTOP" ||
+				           name == "MOVE_VIEWPORT_RIGHT" || name == "MOVE_VIEWPORT_LEFT" ||
+				           name == "SAVE_WORKSPACE" || name == "LOAD_WORKSPACE") {
 					TMRFileEditor *editor = currentEditor();
 					bool ok = false;
 					int deferredError = 0;
@@ -6920,6 +6979,22 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						ok = redrawCurrentEditWindow();
 					else if (name == "NEW_SCREEN")
 						ok = redrawEntireScreen();
+					else if (name == "MOVE_WIN_TO_NEXT_DESKTOP")
+						ok = moveToNextVirtualDesktop();
+					else if (name == "MOVE_WIN_TO_PREV_DESKTOP")
+						ok = moveToPrevVirtualDesktop();
+					else if (name == "MOVE_VIEWPORT_RIGHT")
+						ok = viewportRight();
+					else if (name == "MOVE_VIEWPORT_LEFT")
+						ok = viewportLeft();
+					else if (name == "SAVE_WORKSPACE") {
+						mrSaveWorkspace("");
+						ok = true;
+					}
+					else if (name == "LOAD_WORKSPACE") {
+						mrLoadWorkspace("");
+						ok = true;
+					}
 					runtimeErrorLevel() = ok ? 0 : 1001;
 				} else if (name == "GOTO_LINE") {
 					TMRFileEditor *editor = currentEditor();

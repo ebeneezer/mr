@@ -1,6 +1,7 @@
 #include "MRAppState.hpp"
 
 #include "../app/commands/MRWindowCommands.hpp"
+#include "../config/MRDialogPaths.hpp"
 #include "../ui/TMREditWindow.hpp"
 #include "MRCommands.hpp"
 
@@ -105,6 +106,19 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrWindowMinimize, false);
 	setCommandEnabled(cmMrWindowCascade, hasWindow);
 	setCommandEnabled(cmMrWindowTile, hasWindow);
+	{
+		const int desktopCount = configuredVirtualDesktops();
+		const int currentDesktop = currentVirtualDesktop();
+		const bool hasMultipleDesktops = desktopCount > 1;
+		const int windowDesktop = hasWindow ? state.window->virtualDesktop_ : 1;
+
+		setCommandEnabled(cmMrWindowNextDesktop, hasMultipleDesktops && currentDesktop < desktopCount);
+		setCommandEnabled(cmMrWindowPrevDesktop, hasMultipleDesktops && currentDesktop > 1);
+		setCommandEnabled(cmMrWindowMoveToNextDesktop,
+		                  hasWindow && hasMultipleDesktops && windowDesktop < desktopCount);
+		setCommandEnabled(cmMrWindowMoveToPrevDesktop,
+		                  hasWindow && hasMultipleDesktops && windowDesktop > 1);
+	}
 	setCommandEnabled(cmMrWindowLink, hasMultipleWindows && hasEditor);
 	setCommandEnabled(cmMrWindowUnlink, hasWindow);
 

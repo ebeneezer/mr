@@ -547,6 +547,17 @@ TPalette buildColorSetupWorkingPalette() {
 		data[kMrPaletteMessageWarning - 1] = data[44 - 1];
 		data[kMrPaletteMessageHero - 1] = data[43 - 1];
 		data[kMrPaletteLineNumbers - 1] = data[9 - 1];
+		data[kMrPaletteEofMarker - 1] = data[14 - 1];
+		data[kMrPaletteCursorPositionMarker - 1] = data[3 - 1];
+		data[kMrPaletteDialogInactiveElements - 1] = data[62 - 1];
+		data[kMrPaletteMiniMapNormal - 1] = data[13 - 1];
+		data[kMrPaletteMiniMapViewport - 1] = data[11 - 1];
+		data[kMrPaletteMiniMapChanged - 1] = data[14 - 1];
+		data[kMrPaletteMiniMapFindMarker - 1] = data[5 - 1];
+		data[kMrPaletteMiniMapErrorMarker - 1] = data[42 - 1];
+		data[kMrPaletteCodeFolding - 1] = data[9 - 1];
+		data[kMrPaletteDesktop - 1] = 0x90;
+		data[kMrPaletteVirtualDesktopMarker - 1] = 0x9F;
 		return TPalette(data, static_cast<ushort>(kTotalSlots));
 	}();
 	TPalette palette = basePalette;
@@ -556,7 +567,7 @@ TPalette buildColorSetupWorkingPalette() {
 		if (configuredColorSlotOverride(static_cast<unsigned char>(slot), overrideValue))
 			palette[slot] = overrideValue;
 	applyDialogScrollbarSyncToPalette(palette);
-	palette[1] = currentPalette.desktop;
+	palette[1] = palette[kMrPaletteDesktop];
 	return palette;
 }
 
@@ -1674,53 +1685,89 @@ bool mrSaveColorThemeFromWorkingPaletteForTesting(const TPalette &workingPalette
 
 namespace {
 
+struct UserInterfaceSettingsDialogData {
+	ushort flags = 0;
+	ushort virtualDesktops = 1;
+	char cursorPositionMarker[12] = {0};
+};
+
 class TUserInterfaceSettingsDialog : public MRScrollableDialog {
   public:
-	TUserInterfaceSettingsDialog(bool initialWindowManager, bool initialMenulineMessages, int initialVirtualDesktops, bool initialAutoloadWorkspace)
-	    : TWindowInit(&TUserInterfaceSettingsDialog::initFrame), MRScrollableDialog(centeredSetupDialogRect(50, 14), "User interface settings", 48, 12) {
+	TUserInterfaceSettingsDialog(bool initialWindowManager, bool initialMenulineMessages,
+	                             int initialVirtualDesktops, bool initialAutoloadWorkspace,
+	                             bool initialCyclicVirtualDesktops,
+	                             const std::string &initialCursorPositionMarker)
+	    : TWindowInit(&TUserInterfaceSettingsDialog::initFrame),
+	      MRScrollableDialog(centeredSetupDialogRect(68, 18), "User interface settings", 66, 16) {
 
 		int const yStart = 2;
 
-		TCheckBoxes *cb = new TCheckBoxes(TRect(2, yStart, 46, yStart + 3),
+		TCheckBoxes *cb = new TCheckBoxes(
+		    TRect(2, yStart, 37, yStart + 4),
 		    new TSItem("~W~indow Manager",
-		    new TSItem("~M~enuline messages",
-		    new TSItem("~A~uto load workspace", nullptr))));
+		               new TSItem("~M~enuline messages",
+		                          new TSItem("~A~uto load workspace",
+		                                     new TSItem("~C~ycle virtual desktops", nullptr)))));
 
-		addManaged(cb, cb->getBounds());
+		optionsField_ = cb;
+		addManaged(optionsField_, optionsField_->getBounds());
 
-		virtualDesktopsSlider_ = new MRNumericSlider(TRect(21, 6, 46, 7), 1, 9, initialVirtualDesktops, 1, 1, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
-		addManaged(virtualDesktopsSlider_, TRect(21, 6, 46, 7));
-		addManaged(new TLabel(TRect(2, 6, 20, 7), "~V~irtual desktops", virtualDesktopsSlider_), TRect(2, 6, 20, 7));
+		virtualDesktopsSlider_ =
+		    new MRNumericSlider(TRect(22, 8, 64, 9), 1, 9, initialVirtualDesktops, 1, 1,
+		                       MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
+		addManaged(virtualDesktopsSlider_, TRect(22, 8, 64, 9));
+		addManaged(new TLabel(TRect(1, 8, 22, 9), "~V~irtual desktops:", virtualDesktopsSlider_),
+		           TRect(1, 8, 22, 9));
 
-		int buttonRow = 9;
-		addManaged(new TButton(TRect(2, buttonRow, 12, buttonRow + 2), "~O~K", cmOK, bfDefault),
-		           TRect(2, buttonRow, 12, buttonRow + 2));
-		addManaged(new TButton(TRect(14, buttonRow, 24, buttonRow + 2), "~C~ancel", cmCancel, bfNormal),
-		           TRect(14, buttonRow, 24, buttonRow + 2));
+		cursorPositionMarkerField_ = new TInputLine(TRect(25, 10, 36, 11), 11);
+		addManaged(cursorPositionMarkerField_, TRect(25, 10, 36, 11));
+		addManaged(new TLabel(TRect(1, 10, 25, 11), "Cursor position ~m~arker:", cursorPositionMarkerField_),
+		           TRect(1, 10, 25, 11));
+
+		int buttonRow = 12;
+		addManaged(new TButton(TRect(24, buttonRow, 34, buttonRow + 2), "~D~one", cmOK, bfDefault),
+		           TRect(24, buttonRow, 34, buttonRow + 2));
+		addManaged(new TButton(TRect(36, buttonRow, 48, buttonRow + 2), "~C~ancel", cmCancel, bfNormal),
+		           TRect(36, buttonRow, 48, buttonRow + 2));
+
+		writeRecordField(dataCursorMarker_, sizeof(dataCursorMarker_), initialCursorPositionMarker);
 
 		selectContent();
 	}
 
 	void getData(void *rec) override {
-		MRScrollableDialog::getData(rec);
-		ushort *data = (ushort *)rec;
+		UserInterfaceSettingsDialogData *data = static_cast<UserInterfaceSettingsDialogData *>(rec);
+		if (optionsField_ != nullptr)
+			optionsField_->getData(&data->flags);
 		if (virtualDesktopsSlider_ != nullptr) {
 			int32_t val = 1;
 			virtualDesktopsSlider_->getData(&val);
-			data[1] = static_cast<ushort>(val);
+			data->virtualDesktops = static_cast<ushort>(val);
 		}
+		if (cursorPositionMarkerField_ != nullptr)
+			cursorPositionMarkerField_->getData(data->cursorPositionMarker);
 	}
 
 	void setData(void *rec) override {
-		MRScrollableDialog::setData(rec);
-		ushort *data = (ushort *)rec;
+		UserInterfaceSettingsDialogData *data = static_cast<UserInterfaceSettingsDialogData *>(rec);
+		if (optionsField_ != nullptr)
+			optionsField_->setData(&data->flags);
 		if (virtualDesktopsSlider_ != nullptr) {
-			int32_t val = data[1];
+			int32_t val = data->virtualDesktops;
 			virtualDesktopsSlider_->setData(&val);
+		}
+		if (cursorPositionMarkerField_ != nullptr) {
+			if (data->cursorPositionMarker[0] == '\0')
+				writeRecordField(data->cursorPositionMarker, sizeof(data->cursorPositionMarker),
+				                dataCursorMarker_);
+			cursorPositionMarkerField_->setData(data->cursorPositionMarker);
 		}
 	}
 
+	TCheckBoxes *optionsField_ = nullptr;
 	MRNumericSlider *virtualDesktopsSlider_ = nullptr;
+	TInputLine *cursorPositionMarkerField_ = nullptr;
+	char dataCursorMarker_[12] = {0};
 };
 
 } // namespace
@@ -1733,35 +1780,49 @@ static void runUserInterfaceSettingsDialogFlow() {
 		bool currentMm = configuredMenulineMessages();
 		int currentVd = configuredVirtualDesktops();
 		bool currentAw = configuredAutoloadWorkspace();
+		bool currentCv = configuredCyclicVirtualDesktops();
+		std::string currentCp = configuredCursorPositionMarker();
 
-		TUserInterfaceSettingsDialog *dialog = new TUserInterfaceSettingsDialog(currentWm, currentMm, currentVd, currentAw);
-		ushort dialogData[2] = {0, 0};
+		TUserInterfaceSettingsDialog *dialog =
+		    new TUserInterfaceSettingsDialog(currentWm, currentMm, currentVd, currentAw, currentCv, currentCp);
+		UserInterfaceSettingsDialogData dialogData;
 		if (currentWm)
-			dialogData[0] |= 1;
+			dialogData.flags |= 1;
 		if (currentMm)
-			dialogData[0] |= 2;
+			dialogData.flags |= 2;
 		if (currentAw)
-			dialogData[0] |= 4;
+			dialogData.flags |= 4;
+		if (currentCv)
+			dialogData.flags |= 8;
 
-		dialogData[1] = static_cast<ushort>(currentVd);
+		dialogData.virtualDesktops = static_cast<ushort>(currentVd);
+		writeRecordField(dialogData.cursorPositionMarker, sizeof(dialogData.cursorPositionMarker), currentCp);
 
-		ushort result = execDialogWithDataCapture(dialog, dialogData);
+		ushort result = execDialogWithDataCapture(dialog, &dialogData);
 
 		if (result == cmOK) {
 
-			bool newWm = (dialogData[0] & 1) != 0;
-			bool newMm = (dialogData[0] & 2) != 0;
-			bool newAw = (dialogData[0] & 4) != 0;
-			int newVd = static_cast<int>(dialogData[1]);
+			bool newWm = (dialogData.flags & 1) != 0;
+			bool newMm = (dialogData.flags & 2) != 0;
+			bool newAw = (dialogData.flags & 4) != 0;
+			bool newCv = (dialogData.flags & 8) != 0;
+			int newVd = static_cast<int>(dialogData.virtualDesktops);
+			std::string newCp = readRecordField(dialogData.cursorPositionMarker);
 
-			bool changed = (newWm != currentWm) || (newMm != currentMm) || (newAw != currentAw) || (newVd != currentVd);
+			bool changed = (newWm != currentWm) || (newMm != currentMm) || (newAw != currentAw) ||
+			               (newCv != currentCv) || (newVd != currentVd) || (newCp != currentCp);
 
 			if (changed) {
 				std::string errorText;
+				if (!setConfiguredCursorPositionMarker(newCp, &errorText)) {
+					messageBox(mfError | mfOKButton, "Installation / User interface settings\n\n%s", errorText.c_str());
+					continue;
+				}
 				setConfiguredWindowManager(newWm, &errorText);
 				setConfiguredMenulineMessages(newMm, &errorText);
 				setConfiguredAutoloadWorkspace(newAw, &errorText);
-				setConfiguredVirtualDesktops(newVd, &errorText);
+				setConfiguredCyclicVirtualDesktops(newCv, &errorText);
+				applyVirtualDesktopConfigurationChange(newVd);
 
 				if (!persistConfiguredSettingsSnapshot(&errorText)) {
 					messageBox(mfError | mfOKButton, "Installation / User interface settings\n\n%s", errorText.c_str());

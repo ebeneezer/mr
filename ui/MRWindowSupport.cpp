@@ -151,6 +151,7 @@ bool g_keystrokeRecordingMarkerVisible = false;
 	}
 	win->setReadOnly(true);
 	win->setFileChanged(false);
+	setWindowManuallyHidden(win, hidden);
 	if (hidden)
 		win->hide();
 	if (hidden && previous != nullptr && previous != win)
@@ -180,6 +181,8 @@ bool g_keystrokeRecordingMarkerVisible = false;
 bool mrActivateEditWindow(TMREditWindow *win) {
 	if (win == nullptr)
 		return false;
+	setWindowManuallyHidden(win, false);
+	setCurrentVirtualDesktop(win->virtualDesktop_);
 	if ((win->state & sfVisible) == 0)
 		win->show();
 	win->select();

@@ -102,9 +102,11 @@ Token postSticky(Owner owner, std::string_view text, Kind kind, int priority) {
 }
 
 std::chrono::milliseconds autoDurationForText(std::string_view text, std::chrono::milliseconds perCharacter) {
+    constexpr long long kMinimumDisplayMs = 2000;
     const long long perCharMs = std::max<long long>(1, perCharacter.count());
     const long long textLen = static_cast<long long>(text.size());
-    return std::chrono::milliseconds(std::max<long long>(perCharMs, textLen * perCharMs));
+    const long long dynamicMs = std::max<long long>(perCharMs, textLen * perCharMs);
+    return std::chrono::milliseconds(std::max<long long>(kMinimumDisplayMs, dynamicMs));
 }
 
 Token postAutoTimed(Owner owner, std::string_view text, Kind kind, int priority,
@@ -148,6 +150,10 @@ void clearOwnerToken(Owner owner, Token token) {
 }
 
 bool currentVisibleMessage(VisibleMessage &out) {
+    if (!configuredMenulineMessages()) {
+        out = VisibleMessage();
+        return false;
+    }
     State &shared = state();
     std::lock_guard<std::mutex> lock(shared.mutex);
     const auto now = std::chrono::steady_clock::now();
@@ -166,6 +172,10 @@ bool currentVisibleMessage(VisibleMessage &out) {
 }
 
 bool currentOwnerMessage(Owner owner, VisibleMessage &out) {
+    if (!configuredMenulineMessages()) {
+        out = VisibleMessage();
+        return false;
+    }
     State &shared = state();
     std::lock_guard<std::mutex> lock(shared.mutex);
     const auto now = std::chrono::steady_clock::now();

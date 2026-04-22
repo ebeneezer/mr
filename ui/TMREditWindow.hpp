@@ -35,6 +35,8 @@
 #include "../mrmac/mrvm.hpp"
 
 void mrTraceCoprocessorTaskCancel(int bufferId, std::uint64_t taskId);
+class TMREditWindow;
+void setWindowManuallyHidden(TMREditWindow *win, bool hidden);
 
 class TMREditWindow : public TWindow {
   public:
@@ -165,6 +167,13 @@ class TMREditWindow : public TWindow {
 	}
 
 	virtual void handleEvent(TEvent &event) override {
+			if (event.what == evCommand && event.message.command == cmClose && windowRole_ == wrLog) {
+				setWindowManuallyHidden(this, true);
+				hide();
+				static_cast<void>(mrEnsureUsableWorkWindow());
+				clearEvent(event);
+				return;
+			}
 			const ushort originalEvent = event.what;
 			const ushort keyCodeBefore =
 			    event.what == evKeyDown ? ctrlToArrow(event.keyDown.keyCode) : static_cast<ushort>(0);

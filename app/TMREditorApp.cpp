@@ -888,22 +888,26 @@ const TPalette &extendedAppBasePalette() {
 			data[i] = static_cast<unsigned char>(cp[i]);
 		// Dedicated editor-only accent slots (avoid window frame/scrollbar side effects).
 		data[kMrPaletteCurrentLine - 1] = data[10 - 1];
-			data[kMrPaletteCurrentLineInBlock - 1] = data[12 - 1];
-			data[kMrPaletteChangedText - 1] = data[14 - 1];
-			data[kMrPaletteMessageError - 1] = data[42 - 1];
-			data[kMrPaletteMessage - 1] = data[43 - 1];
-			data[kMrPaletteMessageWarning - 1] = data[44 - 1];
-				data[kMrPaletteMessageHero - 1] = data[43 - 1];
-				data[kMrPaletteCursorPositionMarker - 1] = data[3 - 1];
-				data[kMrPaletteLineNumbers - 1] = data[9 - 1];
-				data[kMrPaletteEofMarker - 1] = data[14 - 1];
-				data[kMrPaletteMiniMapNormal - 1] = data[13 - 1];
-				data[kMrPaletteMiniMapViewport - 1] = data[11 - 1];
-				data[kMrPaletteMiniMapChanged - 1] = data[14 - 1];
-				data[kMrPaletteMiniMapFindMarker - 1] = data[5 - 1];
-				data[kMrPaletteMiniMapErrorMarker - 1] = data[42 - 1];
-				return TPalette(data, static_cast<ushort>(kTotalSlots));
-			}();
+		data[kMrPaletteCurrentLineInBlock - 1] = data[12 - 1];
+		data[kMrPaletteChangedText - 1] = data[14 - 1];
+		data[kMrPaletteMessageError - 1] = data[42 - 1];
+		data[kMrPaletteMessage - 1] = data[43 - 1];
+		data[kMrPaletteMessageWarning - 1] = data[44 - 1];
+		data[kMrPaletteMessageHero - 1] = data[43 - 1];
+		data[kMrPaletteCursorPositionMarker - 1] = data[3 - 1];
+		data[kMrPaletteLineNumbers - 1] = data[9 - 1];
+		data[kMrPaletteEofMarker - 1] = data[14 - 1];
+		data[kMrPaletteDialogInactiveElements - 1] = data[62 - 1];
+		data[kMrPaletteMiniMapNormal - 1] = data[13 - 1];
+		data[kMrPaletteMiniMapViewport - 1] = data[11 - 1];
+		data[kMrPaletteMiniMapChanged - 1] = data[14 - 1];
+		data[kMrPaletteMiniMapFindMarker - 1] = data[5 - 1];
+		data[kMrPaletteMiniMapErrorMarker - 1] = data[42 - 1];
+		data[kMrPaletteCodeFolding - 1] = data[9 - 1];
+		data[kMrPaletteDesktop - 1] = 0x90;
+		data[kMrPaletteVirtualDesktopMarker - 1] = 0x9F;
+		return TPalette(data, static_cast<ushort>(kTotalSlots));
+	}();
 	return palette;
 }
 } // namespace
@@ -1412,7 +1416,7 @@ TPalette &TMREditorApp::getPalette() const {
 	syncWindowScrollbarsToFrame(16);
 	syncWindowScrollbarsToFrame(24);
 
-	palette[1] = currentPalette.desktop;
+	palette[1] = palette[kMrPaletteDesktop];
 	return palette;
 }
 

@@ -1,125 +1,104 @@
 #ifndef TMRDESKTOP_HPP
 #define TMRDESKTOP_HPP
+
 #define Uses_TDeskTop
 #define Uses_TBackground
-#include "MRPalette.hpp"
+#define Uses_TDrawBuffer
 #include <tvision/tv.h>
 
-#include "../config/MRDialogPaths.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
-#include <string>
+#include "../config/MRDialogPaths.hpp"
 
-class TMRDeskTop : public TDeskTop {
+#include <algorithm>
+#include <string>
+#include <vector>
+
+namespace {
+class TMRDesktopBackground : public TBackground {
   public:
-	TMRDeskTop(const TRect &r) : TDeskInit(&TDeskTop::initBackground), TDeskTop(r) {
-		if (background != nullptr)
-			background->pattern = '\xB0';
+	TMRDesktopBackground(const TRect &bounds) : TBackground(bounds, '\xB0') {
 	}
 
-	virtual void draw() override {
-		TDeskTop::draw();
-		int maxVd = configuredVirtualDesktops();
-		if (maxVd > 1) {
-			int currentVd = currentVirtualDesktop();
+	void draw() override {
+		TColorAttr desktopColor = resolveColor(kMrPaletteDesktop, getColor(1));
+		TColorAttr markerColor = resolveColor(kMrPaletteVirtualDesktopMarker, desktopColor);
+		std::vector<std::string> marker = markerLines(currentVirtualDesktop());
+		const int markerRows = static_cast<int>(marker.size());
+		int markerWidth = 0;
+		int startX = 0;
+		int startY = 0;
 
-			const char* figlet1[] = {
-				"  _ ",
-				" / |",
-				" | |",
-				" | |",
-				" |_|"
-			};
-			const char* figlet2[] = {
-				" ____  ",
-				"|___ \\ ",
-				"  __) |",
-				" / __/ ",
-				"|_____|"
-			};
-			const char* figlet3[] = {
-				" _____ ",
-				"|___ / ",
-				"  |_ \\ ",
-				" ___) |",
-				"|____/ "
-			};
-			const char* figlet4[] = {
-				" _  _   ",
-				"| || |  ",
-				"| || |_ ",
-				"|__   _|",
-				"   |_|  "
-			};
-			const char* figlet5[] = {
-				" _____ ",
-				"| ____|",
-				"| |__  ",
-				"|___ \\ ",
-				" ___) |",
-				"|____/ "
-			};
-			const char* figlet6[] = {
-				"  __   ",
-				" / /_  ",
-				"| '_ \\ ",
-				"| (_) |",
-				" \\___/ "
-			};
-			const char* figlet7[] = {
-				" _____ ",
-				"|___  |",
-				"   / / ",
-				"  / /  ",
-				" /_/   "
-			};
-			const char* figlet8[] = {
-				"  ___  ",
-				" ( _ ) ",
-				" / _ \\ ",
-				"| (_) |",
-				" \\___/ "
-			};
-			const char* figlet9[] = {
-				"  ___  ",
-				" / _ \\ ",
-				"| (_) |",
-				" \\__, |",
-				"   /_/ "
-			};
+		for (const std::string &line : marker)
+			markerWidth = std::max(markerWidth, static_cast<int>(line.size()));
+		if (!marker.empty()) {
+			startX = std::max(0, size.x - markerWidth - 1);
+			startY = std::max(0, size.y - markerRows - 1);
+		}
 
-			const char** currentFiglet = nullptr;
-			int rows = 5;
-			if (currentVd == 1) currentFiglet = figlet1;
-			else if (currentVd == 2) currentFiglet = figlet2;
-			else if (currentVd == 3) currentFiglet = figlet3;
-			else if (currentVd == 4) currentFiglet = figlet4;
-			else if (currentVd == 5) currentFiglet = figlet5;
-			else if (currentVd == 6) currentFiglet = figlet6;
-			else if (currentVd == 7) currentFiglet = figlet7;
-			else if (currentVd == 8) currentFiglet = figlet8;
-			else if (currentVd == 9) currentFiglet = figlet9;
+		for (int y = 0; y < size.y; ++y) {
+			TDrawBuffer buffer;
 
-			if (currentFiglet != nullptr) {
-				TColorAttr color = background != nullptr ? background->mapColor(1) : mapColor(1);
-				int maxWidth = 0;
-				for (int i = 0; i < rows; ++i) {
-					int len = std::string(currentFiglet[i]).length();
-					if (len > maxWidth) maxWidth = len;
-				}
-
-				int startX = size.x - maxWidth - 1;
-				int startY = size.y - rows - 1;
-				if (startX < 0) startX = 0;
-				if (startY < 0) startY = 0;
-
-				for (int i = 0; i < rows; ++i) {
-					TDrawBuffer b;
-					std::string lineStr = currentFiglet[i];
-					b.moveStr(0, lineStr, color);
-					writeLine(startX, startY + i, lineStr.length(), 1, b);
-				}
+			buffer.moveChar(0, pattern, desktopColor, size.x);
+			if (!marker.empty() && y >= startY && y < startY + markerRows) {
+				const std::string &markerLine = marker[static_cast<std::size_t>(y - startY)];
+				for (std::size_t x = 0; x < markerLine.size() && startX + static_cast<int>(x) < size.x; ++x)
+					if (markerLine[x] == '#') {
+						buffer.putChar(startX + static_cast<ushort>(x), pattern);
+						buffer.putAttribute(startX + static_cast<ushort>(x), markerColor);
+					}
 			}
+			writeLine(0, y, size.x, 1, buffer);
+		}
+	}
+
+  private:
+	static TColorAttr resolveColor(unsigned char slot, TColorAttr fallback) {
+		unsigned char biosAttr = 0;
+
+		if (configuredColorSlotOverride(slot, biosAttr))
+			return TColorAttr(biosAttr);
+		return fallback;
+	}
+
+	static std::vector<std::string> markerLines(int currentVd) {
+		if (configuredVirtualDesktops() <= 1)
+			return {};
+
+		switch (currentVd) {
+			case 1:
+				return {" # ", "## ", " # ", " # ", "###"};
+			case 2:
+				return {"###", "  #", "###", "#  ", "###"};
+			case 3:
+				return {"###", "  #", "###", "  #", "###"};
+			case 4:
+				return {"# #", "# #", "###", "  #", "  #"};
+			case 5:
+				return {"###", "#  ", "###", "  #", "###"};
+			case 6:
+				return {"###", "#  ", "###", "# #", "###"};
+			case 7:
+				return {"###", "  #", "  #", " # ", " # "};
+			case 8:
+				return {"###", "# #", "###", "# #", "###"};
+			case 9:
+				return {"###", "# #", "###", "  #", "###"};
+			default:
+				return {};
 		}
 	}
 };
+} // namespace
+
+class TMRDeskTop : public TDeskTop {
+  public:
+	TMRDeskTop(const TRect &r) : TDeskInit(&TMRDeskTop::initBackground), TDeskTop(r) {
+	}
+
+  private:
+	static TBackground *initBackground(TRect r) {
+		return new TMRDesktopBackground(r);
+	}
+};
+
 #endif

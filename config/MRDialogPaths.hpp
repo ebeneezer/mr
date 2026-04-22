@@ -178,6 +178,68 @@ enum class MRSettingsKeyClass : unsigned char {
 	ColorInline
 };
 
+enum class MRSearchTextType : unsigned char {
+	Literal = 0,
+	Pcre = 1,
+	Word = 2
+};
+
+enum class MRSearchDirection : unsigned char {
+	Forward = 0,
+	Backward = 1
+};
+
+enum class MRSearchMode : unsigned char {
+	StopFirst = 0,
+	PromptNext = 1,
+	ListAll = 2
+};
+
+enum class MRSarMode : unsigned char {
+	ReplaceFirst = 0,
+	PromptEach = 1,
+	ReplaceAll = 2
+};
+
+enum class MRSarLeaveCursor : unsigned char {
+	EndOfReplaceString = 0,
+	StartOfReplaceString = 1
+};
+
+struct MRSearchDialogOptions {
+	MRSearchTextType textType;
+	MRSearchDirection direction;
+	MRSearchMode mode;
+	bool caseSensitive;
+	bool globalSearch;
+	bool restrictToMarkedBlock;
+	bool searchAllWindows;
+
+	MRSearchDialogOptions() noexcept
+	    : textType(MRSearchTextType::Literal), direction(MRSearchDirection::Forward),
+	      mode(MRSearchMode::StopFirst), caseSensitive(false), globalSearch(true),
+	      restrictToMarkedBlock(false), searchAllWindows(false) {
+	}
+};
+
+struct MRSarDialogOptions {
+	MRSearchTextType textType;
+	MRSearchDirection direction;
+	MRSarMode mode;
+	MRSarLeaveCursor leaveCursorAt;
+	bool caseSensitive;
+	bool globalSearch;
+	bool restrictToMarkedBlock;
+	bool searchAllWindows;
+
+	MRSarDialogOptions() noexcept
+	    : textType(MRSearchTextType::Literal), direction(MRSearchDirection::Forward),
+	      mode(MRSarMode::ReplaceFirst), leaveCursorAt(MRSarLeaveCursor::EndOfReplaceString),
+	      caseSensitive(false), globalSearch(true), restrictToMarkedBlock(false),
+	      searchAllWindows(false) {
+	}
+};
+
 struct MRColorSetupItem {
 	const char *label;
 	unsigned char paletteIndex;
@@ -201,14 +263,16 @@ enum : unsigned char {
 	kMrPaletteMiniMapFindMarker = 150,
 	kMrPaletteMiniMapErrorMarker = 151,
 	kMrPaletteCodeFolding = 152,
-	kMrPaletteMax = kMrPaletteCodeFolding
+	kMrPaletteDesktop = 153,
+	kMrPaletteVirtualDesktopMarker = 154,
+	kMrPaletteMax = kMrPaletteVirtualDesktopMarker
 };
 
 struct MRColorSetupSettings {
 	static const std::size_t kWindowCount = 10;
 	static const std::size_t kMenuDialogCount = 17;
 	static const std::size_t kHelpCount = 9;
-	static const std::size_t kOtherCount = 9;
+	static const std::size_t kOtherCount = 11;
 	static const std::size_t kMiniMapCount = 5;
 
 	std::array<unsigned char, kWindowCount> windowColors;
@@ -302,8 +366,17 @@ bool setConfiguredWindowManager(bool enabled, std::string *errorMessage = nullpt
 [[nodiscard]] bool configuredWindowManager();
 bool setConfiguredMenulineMessages(bool enabled, std::string *errorMessage = nullptr);
 [[nodiscard]] bool configuredMenulineMessages();
+bool setConfiguredSearchDialogOptions(const MRSearchDialogOptions &options,
+                                      std::string *errorMessage = nullptr);
+[[nodiscard]] MRSearchDialogOptions configuredSearchDialogOptions();
+bool setConfiguredSarDialogOptions(const MRSarDialogOptions &options, std::string *errorMessage = nullptr);
+[[nodiscard]] MRSarDialogOptions configuredSarDialogOptions();
 bool setConfiguredVirtualDesktops(int count, std::string *errorMessage = nullptr);
 [[nodiscard]] int configuredVirtualDesktops();
+bool setConfiguredCyclicVirtualDesktops(bool enabled, std::string *errorMessage = nullptr);
+[[nodiscard]] bool configuredCyclicVirtualDesktops();
+bool setConfiguredCursorPositionMarker(const std::string &value, std::string *errorMessage = nullptr);
+[[nodiscard]] std::string configuredCursorPositionMarker();
 bool setConfiguredAutoloadWorkspace(bool enabled, std::string *errorMessage = nullptr);
 [[nodiscard]] bool configuredAutoloadWorkspace();
 bool setConfiguredLastFileDialogPath(const std::string &path, std::string *errorMessage = nullptr);

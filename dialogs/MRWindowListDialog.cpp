@@ -35,9 +35,7 @@ enum : ushort {
 	cmMRWindowListHide,
 	cmMRWindowListHideAll,
 	cmMRWorkspaceSave,
-	cmMRWorkspaceSaveAs,
 	cmMRWorkspaceLoad,
-	cmMRWorkspaceLoadFrom
 };
 
 struct WindowListEntry {
@@ -168,8 +166,10 @@ void closeWindow(TMREditWindow *win) {
 }
 
 void hideWindow(TMREditWindow *win) {
-	if (win != nullptr)
+	if (win != nullptr) {
+		setWindowManuallyHidden(win, true);
 		win->hide();
+	}
 }
 
 class WindowListView : public TListViewer {
@@ -205,7 +205,16 @@ class WindowListView : public TListViewer {
 	}
 
 	void handleEvent(TEvent &event) override {
+		const bool isDoubleClickActivation =
+		    event.what == evMouseDown && (event.mouse.buttons & mbLeftButton) != 0 &&
+		    (event.mouse.eventFlags & meDoubleClick) != 0;
+
 		TListViewer::handleEvent(event);
+		if (isDoubleClickActivation && focused >= 0 && focused < range) {
+			message(owner, evCommand, cmOK, nullptr);
+			clearEvent(event);
+			return;
+		}
 		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter && focused >= 0 &&
 		    focused < range) {
 			message(owner, evCommand, cmOK, nullptr);
@@ -219,25 +228,30 @@ class WindowListView : public TListViewer {
 
 class WindowListDialog : public TDialog {
   public:
-	void handleWorkspaceCustom(ushort cmd) {
+	void saveWorkspaceWithDialog() {
 		char fileName[MAXPATH];
-		fileName[0] = '\0';
-		if (cmd == cmMRWorkspaceSaveAs) {
-			if (TEditor::editorDialog(edSaveAs, fileName) != cmCancel) {
-				std::string name(fileName);
-				if (name.find(".mrmac") == std::string::npos) name += ".mrmac";
-				mrSaveWorkspace(name);
-			}
-		} else {
-			initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.mrmac");
-			TFileDialog *dialog = new TFileDialog(fileName, "Load workspace from...", "~N~ame", fdOpenButton, kFileDialogHistoryId);
-			if (TProgram::deskTop->execView(dialog) != cmCancel) {
-			    dialog->getFileName(fileName);
-				std::string name(fileName);
-				mrLoadWorkspace(name);
-			}
-			TObject::destroy(dialog);
+
+		initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.mrmac");
+		if (TEditor::editorDialog(edSaveAs, fileName) != cmCancel) {
+			std::string name(fileName);
+			if (name.find(".mrmac") == std::string::npos)
+				name += ".mrmac";
+			mrSaveWorkspace(name);
 		}
+	}
+
+	void loadWorkspaceWithDialog() {
+		char fileName[MAXPATH];
+
+		fileName[0] = '\0';
+		initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.mrmac");
+		TFileDialog *dialog =
+		    new TFileDialog(fileName, "Load workspace from...", "~N~ame", fdOpenButton, kFileDialogHistoryId);
+		if (TProgram::deskTop->execView(dialog) != cmCancel) {
+			dialog->getFileName(fileName);
+			mrLoadWorkspace(std::string(fileName));
+		}
+		TObject::destroy(dialog);
 	}
 
 	WindowListDialog(MRWindowListMode aMode, TMREditWindow *aCurrent, TMREditWindow *aPreferred)
@@ -249,13 +263,36 @@ class WindowListDialog : public TDialog {
 		int height = size.y;
 		int listTop = 6;
 		int listBottom = height - 6;
+		const int topButtonY = 2;
+		const int workspaceButtonY = height - 5;
+		const int bottomButtonY = height - 3;
+		const int buttonGap = 2;
+		const int workspaceGap = 4;
+		auto centeredRowStart = [width](int contentWidth) {
+			return std::max(2, (width - contentWidth) / 2);
+		};
 
-		insert(new TButton(TRect(3, 2, 16, 4), "~D~elete<DEL>", cmMRWindowListDelete, bfNormal));
-		insert(new TButton(TRect(18, 2, 29, 4), "~S~ave<F3>", cmMRWindowListSave, bfNormal));
-		hideToggleButton =
-		    new TButton(TRect(31, 2, 49, 4), "Un/~H~ide<F4>", cmMRWindowListHide, bfNormal);
-		insert(hideToggleButton);
-		insert(new TButton(TRect(51, 2, 66, 4), "Hide ~a~ll<F5>", cmMRWindowListHideAll, bfNormal));
+		{
+			const int deleteWidth = 13;
+			const int saveWidth = 11;
+			const int hideWidth = 18;
+			const int hideAllWidth = 15;
+			const int rowWidth = deleteWidth + saveWidth + hideWidth + hideAllWidth + buttonGap * 3;
+			int x = centeredRowStart(rowWidth);
+
+			insert(new TButton(TRect(x, topButtonY, x + deleteWidth, topButtonY + 2), "~D~elete<DEL>",
+			                   cmMRWindowListDelete, bfNormal));
+			x += deleteWidth + buttonGap;
+			insert(new TButton(TRect(x, topButtonY, x + saveWidth, topButtonY + 2), "~S~ave<F3>",
+			                   cmMRWindowListSave, bfNormal));
+			x += saveWidth + buttonGap;
+			hideToggleButton = new TButton(TRect(x, topButtonY, x + hideWidth, topButtonY + 2),
+			                               "Un/~H~ide<F4>", cmMRWindowListHide, bfNormal);
+			insert(hideToggleButton);
+			x += hideWidth + buttonGap;
+			insert(new TButton(TRect(x, topButtonY, x + hideAllWidth, topButtonY + 2), "Hide ~a~ll<F5>",
+			                   cmMRWindowListHideAll, bfNormal));
+		}
 		insert(new TStaticText(TRect(2, 5, 18, 6), "Select window:"));
 
 		scrollBar = new TScrollBar(TRect(width - 3, listTop, width - 2, listBottom));
@@ -264,15 +301,33 @@ class WindowListDialog : public TDialog {
 		                              std::vector<std::string>());
 		insert(listView);
 
-		insert(new TButton(TRect(3, height - 5, 18, height - 3), "Sa~v~e workspace", cmMRWorkspaceSave, bfNormal));
-		insert(new TButton(TRect(19, height - 5, 34, height - 3), "~L~oad workspace", cmMRWorkspaceLoad, bfNormal));
-		insert(new TButton(TRect(35, height - 5, 52, height - 3), "Save workspace ~a~s", cmMRWorkspaceSaveAs, bfNormal));
-		insert(new TButton(TRect(53, height - 5, 70, height - 3), "Load workspace ~f~rom", cmMRWorkspaceLoadFrom, bfNormal));
+		{
+			const int wsButtonWidth = 18;
+			const int wsRowWidth = wsButtonWidth * 2 + workspaceGap;
+			int x = centeredRowStart(wsRowWidth);
 
-		insert(new TButton(TRect(22, height - 3, 35, height - 1), "~O~K<ENTER>", cmOK, bfDefault));
-		insert(new TButton(TRect(37, height - 3, 51, height - 1), "~C~ancel<ESC>", cmCancel,
-		                   bfNormal));
-		insert(new TButton(TRect(53, height - 3, 65, height - 1), "~H~elp<F1>", cmHelp, bfNormal));
+			insert(new TButton(TRect(x, workspaceButtonY, x + wsButtonWidth, workspaceButtonY + 2),
+			                   "Sa~v~e workspace<F6>", cmMRWorkspaceSave, bfNormal));
+			x += wsButtonWidth + workspaceGap;
+			insert(new TButton(TRect(x, workspaceButtonY, x + wsButtonWidth, workspaceButtonY + 2),
+			                   "~L~oad workspace<F7>", cmMRWorkspaceLoad, bfNormal));
+		}
+		{
+			const int okWidth = 13;
+			const int cancelWidth = 14;
+			const int helpWidth = 12;
+			const int rowWidth = okWidth + cancelWidth + helpWidth + buttonGap * 2;
+			int x = centeredRowStart(rowWidth);
+
+			insert(new TButton(TRect(x, bottomButtonY, x + okWidth, bottomButtonY + 2), "~O~K<ENTER>", cmOK,
+			                   bfDefault));
+			x += okWidth + buttonGap;
+			insert(new TButton(TRect(x, bottomButtonY, x + cancelWidth, bottomButtonY + 2),
+			                   "~C~ancel<ESC>", cmCancel, bfNormal));
+			x += cancelWidth + buttonGap;
+			insert(new TButton(TRect(x, bottomButtonY, x + helpWidth, bottomButtonY + 2), "~H~elp<F1>",
+			                   cmHelp, bfNormal));
+		}
 
 		refreshEntries();
 		focusPreferred();
@@ -311,12 +366,20 @@ class WindowListDialog : public TDialog {
 					clearEvent(event);
 					return;
 				case kbF4:
-					if (canHideCurrentSelection())
+					if (canToggleCurrentSelection())
 						handleHide();
 					clearEvent(event);
 					return;
 				case kbF5:
 					handleHideAll();
+					clearEvent(event);
+					return;
+				case kbF6:
+					saveWorkspaceWithDialog();
+					clearEvent(event);
+					return;
+				case kbF7:
+					loadWorkspaceWithDialog();
 					clearEvent(event);
 					return;
 				case kbF1:
@@ -339,7 +402,7 @@ class WindowListDialog : public TDialog {
 				clearEvent(event);
 				break;
 			case cmMRWindowListHide:
-				if (canHideCurrentSelection())
+				if (canToggleCurrentSelection())
 					handleHide();
 				clearEvent(event);
 				break;
@@ -348,16 +411,11 @@ class WindowListDialog : public TDialog {
 				clearEvent(event);
 				break;
 			case cmMRWorkspaceSave:
-				mrSaveWorkspace("");
+				saveWorkspaceWithDialog();
 				clearEvent(event);
 				break;
 			case cmMRWorkspaceLoad:
-				mrLoadWorkspace("");
-				clearEvent(event);
-				break;
-			case cmMRWorkspaceSaveAs:
-			case cmMRWorkspaceLoadFrom:
-				handleWorkspaceCustom(event.message.command);
+				loadWorkspaceWithDialog();
 				clearEvent(event);
 				break;
 			case cmHelp:
@@ -371,7 +429,7 @@ class WindowListDialog : public TDialog {
 	static int computeWidth() {
 		TRect desk = TProgram::deskTop->getExtent();
 		int deskWidth = desk.b.x - desk.a.x;
-		return std::max(68, std::min(78, deskWidth - 2));
+		return std::max(68, std::min(72, deskWidth - 2));
 	}
 
 	static int computeHeight(MRWindowListMode, TMREditWindow *) {
@@ -416,7 +474,7 @@ class WindowListDialog : public TDialog {
 			    fileName.empty() ? (titleText.empty() ? "?No-File" : baseNameOf(titleText)) : baseNameOf(fileName);
 			entry.slotLabel = slotLabelFor(i);
 			entry.directoryLabel = directoryOf(fileName.empty() ? currentWorkingDirectory() : fileName);
-			entry.hidden = (windows[i]->state & sfVisible) == 0;
+			entry.hidden = isWindowManuallyHidden(windows[i]);
 			entries.push_back(entry);
 			rows.push_back(renderRow(entry));
 		}
@@ -481,22 +539,24 @@ class WindowListDialog : public TDialog {
 		TMREditWindow *win = currentSelection();
 		if (win == nullptr)
 			return;
-		if ((win->state & sfVisible) == 0)
-			return;
-		hideWindow(win);
-		static_cast<void>(mrEnsureUsableWorkWindow());
+		if ((win->state & sfVisible) != 0) {
+			hideWindow(win);
+			static_cast<void>(mrEnsureUsableWorkWindow());
+		}
+		else {
+			setWindowManuallyHidden(win, false);
+			static_cast<void>(mrActivateEditWindow(win));
+		}
 		refreshEntries();
 	}
 
-	bool canHideCurrentSelection() const {
+	bool canToggleCurrentSelection() const {
 		TMREditWindow *win = currentSelection();
-		if (win == nullptr)
-			return false;
-		return (win->state & sfVisible) != 0;
+		return win != nullptr;
 	}
 
 	void updateHideToggleState() {
-		const bool enabled = canHideCurrentSelection();
+		const bool enabled = canToggleCurrentSelection();
 		if (hideToggleButton != nullptr)
 			hideToggleButton->setState(sfDisabled, enabled ? False : True);
 		lastFocusedIndex = listView != nullptr ? listView->focused : -1;

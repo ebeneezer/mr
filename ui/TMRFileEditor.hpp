@@ -464,6 +464,39 @@ class TMRFileEditor : public TScroller {
 		syncFromEditorState(false);
 	}
 
+	void setFindMarkerRanges(const std::vector<std::pair<std::size_t, std::size_t>> &ranges) {
+		std::vector<TMRTextBufferModel::Range> normalized;
+		const std::size_t length = bufferModel_.length();
+
+		normalized.reserve(ranges.size());
+		if (length != 0) {
+			for (const auto &rangePair : ranges) {
+				std::size_t start = std::min(rangePair.first, length);
+				std::size_t end = std::min(rangePair.second, length);
+				if (end < start)
+					std::swap(start, end);
+				if (end == start) {
+					if (end < length)
+						++end;
+					else if (start > 0)
+						--start;
+				}
+				if (end > start)
+					normalized.push_back(TMRTextBufferModel::Range(start, end));
+			}
+		}
+		normalizeRangeList(normalized);
+		findMarkerRanges_.swap(normalized);
+		drawView();
+	}
+
+	void clearFindMarkerRanges() {
+		if (findMarkerRanges_.empty())
+			return;
+		findMarkerRanges_.clear();
+		drawView();
+	}
+
 	void revealCursor(Boolean centerCursor = True) {
 		ensureCursorVisible(centerCursor == True);
 		updateIndicator();
@@ -1061,6 +1094,19 @@ class TMRFileEditor : public TScroller {
 		bool zeroFillLineNumbers = showLineNumbers && editSettings.lineNumZeroFill;
 		int textWidth = viewport.width;
 		TMRTextBufferModel::Range selection = bufferModel_.selection().range().normalized();
+		if ((selection.end <= selection.start) && owner != nullptr) {
+			std::size_t lastSearchStart = 0;
+			std::size_t lastSearchEnd = 0;
+			std::size_t lastSearchCursor = 0;
+			std::string currentFileName = hasPersistentFileName() ? std::string(fileName) : std::string();
+
+			if (mrvmUiCopyWindowLastSearch(owner, currentFileName, lastSearchStart, lastSearchEnd,
+			                              lastSearchCursor) &&
+			    lastSearchEnd > lastSearchStart) {
+				selection.start = std::min(lastSearchStart, bufferModel_.length());
+				selection.end = std::min(lastSearchEnd, bufferModel_.length());
+			}
+		}
 		MiniMapPalette miniMapPalette = resolveMiniMapPalette();
 		const bool drawMiniMap = viewport.miniMapBodyWidth > 0 && viewport.miniMapInfoX >= 0;
 		const bool miniMapUseBraille = useBrailleMiniMapRenderer();
@@ -1309,9 +1355,7 @@ class TMRFileEditor : public TScroller {
 	};
 
 	struct MiniMapOverlayState {
-		bool hasFindRange = false;
-		std::size_t findLineStart = 0;
-		std::size_t findLineEnd = 0;
+		std::vector<std::pair<std::size_t, std::size_t>> findLineRanges;
 		std::vector<std::pair<std::size_t, std::size_t>> dirtyLineRanges;
 	};
 
@@ -2062,13 +2106,22 @@ class TMRFileEditor : public TScroller {
 	MiniMapOverlayState computeMiniMapOverlayState(const TMRTextBufferModel::Range &selection,
 	                                               std::size_t totalLines) const {
 		MiniMapOverlayState overlay;
-		if (selection.end > selection.start && bufferModel_.length() != 0) {
-			const std::size_t startOffset = std::min(selection.start, bufferModel_.length() - 1);
-			const std::size_t endOffset = std::min(selection.end - 1, bufferModel_.length() - 1);
-			overlay.findLineStart = std::min<std::size_t>(bufferModel_.lineIndex(startOffset), totalLines);
-			overlay.findLineEnd = std::min<std::size_t>(bufferModel_.lineIndex(endOffset) + 1, totalLines);
-			overlay.hasFindRange = overlay.findLineEnd > overlay.findLineStart;
-		}
+		auto addFindLineRange = [&](const TMRTextBufferModel::Range &range) {
+			if (range.end <= range.start || bufferModel_.length() == 0)
+				return;
+			const std::size_t startOffset = std::min(range.start, bufferModel_.length() - 1);
+			const std::size_t endOffset = std::min(range.end - 1, bufferModel_.length() - 1);
+			const std::size_t lineStart = std::min<std::size_t>(bufferModel_.lineIndex(startOffset), totalLines);
+			const std::size_t lineEnd = std::min<std::size_t>(bufferModel_.lineIndex(endOffset) + 1, totalLines);
+			if (lineEnd > lineStart)
+				overlay.findLineRanges.push_back(std::make_pair(lineStart, lineEnd));
+		};
+
+		if (selection.end > selection.start)
+			addFindLineRange(selection);
+		for (const TMRTextBufferModel::Range &range : findMarkerRanges_)
+			addFindLineRange(range);
+		normalizePairRangeList(overlay.findLineRanges);
 		for (const TMRTextBufferModel::Range &range : dirtyRanges_) {
 			if (range.end <= range.start || range.start >= bufferModel_.length())
 				continue;
@@ -2079,6 +2132,7 @@ class TMRFileEditor : public TScroller {
 			if (lineEnd > lineStart)
 				overlay.dirtyLineRanges.push_back(std::make_pair(lineStart, lineEnd));
 		}
+		normalizePairRangeList(overlay.dirtyLineRanges);
 		return overlay;
 	}
 
@@ -2135,7 +2189,7 @@ class TMRFileEditor : public TScroller {
 		}
 
 		bool rowChanged = lineIntervalOverlaps(rowLineStart, rowLineEnd, overlay.dirtyLineRanges);
-		bool rowFind = overlay.hasFindRange && rowLineStart < overlay.findLineEnd && rowLineEnd > overlay.findLineStart;
+		bool rowFind = lineIntervalOverlaps(rowLineStart, rowLineEnd, overlay.findLineRanges);
 		bool rowError = false;
 
 		for (int x = 0; x < bodyWidth; ++x) {
@@ -2145,14 +2199,16 @@ class TMRFileEditor : public TScroller {
 				if (index < miniMapCache_.rowPatterns.size())
 					pattern = miniMapCache_.rowPatterns[index];
 			}
-			TColorAttr rowPriorityColor = palette.normal;
-			if (rowError)
-				rowPriorityColor = palette.errorMarker;
-			else if (rowFind)
-				rowPriorityColor = palette.findMarker;
-			else if (rowChanged)
-				rowPriorityColor = palette.changed;
-			TColorAttr cellColor = (pattern != 0) ? rowPriorityColor : palette.normal;
+				TColorAttr rowPriorityColor = palette.normal;
+				if (rowError) {
+					rowPriorityColor = palette.errorMarker;
+				} else if (rowFind) {
+					rowPriorityColor = palette.findMarker;
+				} else if (rowChanged) {
+					rowPriorityColor = palette.changed;
+				}
+				const bool rowOverlayActive = rowError || rowFind || rowChanged;
+				TColorAttr cellColor = (pattern != 0 || rowOverlayActive) ? rowPriorityColor : palette.normal;
 			if (useBraille)
 				b.moveStr(static_cast<ushort>(bodyX + x), glyphTable[pattern], cellColor, 1);
 			else if (pattern != 0)
@@ -2822,9 +2878,10 @@ class TMRFileEditor : public TScroller {
 			case cmMrEditUndo: {
 				TMRTextBufferModel::CustomUndoRecord record;
 				if (bufferModel_.undo(&record)) {
+					const bool modifiedState = bufferModel_.isModified();
 					adoptCommittedDocument(bufferModel_.document(), bufferModel_.cursor(),
 					                       bufferModel_.selectionStart(), bufferModel_.selectionEnd(),
-					                       true);
+					                       modifiedState);
 					if (owner != nullptr) {
 						setBlockOverlayState(record.blockMode, record.blockAnchor,
 						                     record.blockEnd, record.blockMarkingOn, false);
@@ -2835,9 +2892,10 @@ class TMRFileEditor : public TScroller {
 			case cmMrEditRedo: {
 				TMRTextBufferModel::CustomUndoRecord record;
 				if (bufferModel_.redo(&record)) {
+					const bool modifiedState = bufferModel_.isModified();
 					adoptCommittedDocument(bufferModel_.document(), bufferModel_.cursor(),
 					                       bufferModel_.selectionStart(), bufferModel_.selectionEnd(),
-					                       true);
+					                       modifiedState);
 					if (owner != nullptr) {
 						setBlockOverlayState(record.blockMode, record.blockAnchor,
 						                     record.blockEnd, record.blockMarkingOn, false);
@@ -3362,6 +3420,8 @@ class TMRFileEditor : public TScroller {
 		selEnd = canonicalCursorOffset(selEnd);
 		bufferModel_.setCursorAndSelection(cursorPos, selStart, selEnd);
 		bufferModel_.setModified(modifiedState);
+		if (changeSet == nullptr || changeSet->changed)
+			findMarkerRanges_.clear();
 		if (!modifiedState)
 			clearDirtyRanges();
 		else if (changeSet != nullptr && changeSet->changed) {
@@ -3426,6 +3486,7 @@ class TMRFileEditor : public TScroller {
 	std::size_t blockOverlayAnchor_;
 	std::size_t blockOverlayEnd_;
 	bool blockOverlayTrackingCursor_;
+	std::vector<TMRTextBufferModel::Range> findMarkerRanges_;
 	std::vector<TMRTextBufferModel::Range> dirtyRanges_;
 	LoadTiming lastLoadTiming_;
 
@@ -3433,19 +3494,43 @@ class TMRFileEditor : public TScroller {
 		dirtyRanges_.clear();
 	}
 
-	void normalizeDirtyRanges() {
-		std::sort(dirtyRanges_.begin(), dirtyRanges_.end(),
+	static void normalizePairRangeList(std::vector<std::pair<std::size_t, std::size_t>> &ranges) {
+		std::sort(ranges.begin(), ranges.end(),
+		          [](const std::pair<std::size_t, std::size_t> &a,
+		             const std::pair<std::size_t, std::size_t> &b) {
+			          return a.first < b.first || (a.first == b.first && a.second < b.second);
+		          });
+		std::vector<std::pair<std::size_t, std::size_t>> merged;
+		for (const auto &item : ranges) {
+			if (item.second <= item.first)
+				continue;
+			if (merged.empty() || item.first > merged.back().second)
+				merged.push_back(item);
+			else if (item.second > merged.back().second)
+				merged.back().second = item.second;
+		}
+		ranges.swap(merged);
+	}
+
+	static void normalizeRangeList(std::vector<TMRTextBufferModel::Range> &ranges) {
+		std::sort(ranges.begin(), ranges.end(),
 		          [](const TMRTextBufferModel::Range &a, const TMRTextBufferModel::Range &b) {
 			          return a.start < b.start || (a.start == b.start && a.end < b.end);
 		          });
 		std::vector<TMRTextBufferModel::Range> merged;
-		for (const TMRTextBufferModel::Range &item : dirtyRanges_) {
+		for (const TMRTextBufferModel::Range &item : ranges) {
+			if (item.end <= item.start)
+				continue;
 			if (merged.empty() || item.start > merged.back().end)
 				merged.push_back(item);
 			else if (item.end > merged.back().end)
 				merged.back().end = item.end;
 		}
-		dirtyRanges_.swap(merged);
+		ranges.swap(merged);
+	}
+
+	void normalizeDirtyRanges() {
+		normalizeRangeList(dirtyRanges_);
 	}
 
 	void pushMappedDirtyRange(std::vector<TMRTextBufferModel::Range> &mapped, std::size_t start,
