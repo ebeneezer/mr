@@ -1,6 +1,6 @@
-#line 2 "mrmac/lex.yy.c"
+#line 1 "mrmac/lex.yy.c"
 
-#line 4 "mrmac/lex.yy.c"
+#line 3 "mrmac/lex.yy.c"
 
 #define  YY_INT_ALIGNED short int
 
@@ -634,9 +634,9 @@ static char *dup_unescaped_string(const char *yytext)
     out[j] = '\0';
     return out;
 }
-#line 638 "mrmac/lex.yy.c"
+#line 637 "mrmac/lex.yy.c"
 
-#line 640 "mrmac/lex.yy.c"
+#line 639 "mrmac/lex.yy.c"
 
 #define INITIAL 0
 #define COMMENT 1
@@ -857,7 +857,7 @@ YY_DECL
 #line 55 "mrmac/lexer.l"
 
 
-#line 861 "mrmac/lex.yy.c"
+#line 860 "mrmac/lex.yy.c"
 
 	while ( /*CONSTCOND*/1 )		/* loops until end-of-file is reached */
 		{
@@ -1240,7 +1240,7 @@ YY_RULE_SETUP
 #line 153 "mrmac/lexer.l"
 ECHO;
 	YY_BREAK
-#line 1244 "mrmac/lex.yy.c"
+#line 1243 "mrmac/lex.yy.c"
 case YY_STATE_EOF(INITIAL):
 case YY_STATE_EOF(COMMENT):
 	yyterminate();
