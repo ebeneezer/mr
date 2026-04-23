@@ -127,6 +127,14 @@ TSubMenu *createSearchMenu() {
 	         *new TMenuItem("repeat ~P~revious search", cmMrSearchRepeatPrevious, kbCtrlF5,
 	                        hcNoContext, "CtrlF5") +
 	         newLine() +
+	         *new TMenuItem("multiple ~F~ile search...", cmMrSearchMultiFileSearch, TKey('F', kbAltShift),
+	                        hcNoContext, "AltShiftF") +
+	         *new TMenuItem("list files from last search...", cmMrSearchListFilesFromLastSearch,
+	                        TKey('G', kbAltShift), hcNoContext, "AltShiftG") +
+	         *new TMenuItem("multiple file search and ~R~eplace...",
+	                        cmMrSearchMultiFileSearchReplace, TKey('R', kbAltShift), hcNoContext,
+	                        "AltShiftR") +
+	         newLine() +
 	         *new TMenuItem("p~U~sh position onto marker stack", cmMrSearchPushMarker, kbF4,
 	                        hcNoContext, "F4") +
 	         *new TMenuItem("~G~et position from marker stack", cmMrSearchGetMarker, kbShiftF4,

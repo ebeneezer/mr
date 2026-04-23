@@ -26,6 +26,7 @@
 #include "../config/MRDialogPaths.hpp"
 #include "../config/MRSettingsLoader.hpp"
 #include "../dialogs/MRUnsavedChangesDialog.hpp"
+#include "../dialogs/MRSetupDialogCommon.hpp"
 #include "../coprocessor/MRPerformance.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../app/commands/MRFileCommands.hpp"
@@ -65,12 +66,12 @@
 namespace {
 static constexpr std::chrono::milliseconds kRecordingBlinkInterval(450);
 
-class TMacroBindCaptureDialog : public TDialog {
+class TMacroBindCaptureDialog : public MRDialogFoundation {
   public:
 	TMacroBindCaptureDialog()
-	    : TWindowInit(&TDialog::initFrame), TDialog(TRect(0, 0, 52, 8), "Bind Recorded Macro Key"),
+	    : TWindowInit(&TDialog::initFrame),
+	      MRDialogFoundation(centeredSetupDialogRect(52, 8), "Bind Recorded Macro Key", 52, 8),
 	      captureAccepted(false), capturedKeyCode(kbNoKey), capturedControlState(0) {
-		options |= ofCentered;
 		insert(new TStaticText(TRect(2, 2, 50, 6),
 		                       "Press key to bind the recorded macro.\nEsc = no binding."));
 	}
@@ -94,7 +95,7 @@ class TMacroBindCaptureDialog : public TDialog {
 			clearEvent(event);
 			return;
 		}
-		TDialog::handleEvent(event);
+		MRDialogFoundation::handleEvent(event);
 	}
 
 	bool hasCaptured() const noexcept {
@@ -483,17 +484,7 @@ bool applySettingsSource(const std::string &source, std::string *errorMessage) {
 }
 
 ushort execDialogWithData(TDialog *dialog, void *data) {
-	ushort result = cmCancel;
-
-	if (dialog == nullptr)
-		return cmCancel;
-	if (data != nullptr)
-		dialog->setData(data);
-	result = TProgram::deskTop->execView(dialog);
-	if (result != cmCancel && data != nullptr)
-		dialog->getData(data);
-	TObject::destroy(dialog);
-	return result;
+	return mr::dialogs::execDialogWithData(dialog, data);
 }
 
 ushort mrEditorDialog(int dialog, ...) {
@@ -1152,6 +1143,7 @@ bool TMREditorApp::captureBindingKeySpec(std::string &keySpec) {
 	dialog = new TMacroBindCaptureDialog();
 	if (dialog == nullptr)
 		return false;
+	dialog->finalizeLayout();
 	modalResult = deskTop != nullptr ? deskTop->execView(dialog) : cmCancel;
 	captured = dialog->hasCaptured();
 	keyCode = dialog->keyCode();
@@ -1335,6 +1327,7 @@ void TMREditorApp::warmIndexedMacroBindings() {
 }
 
 void TMREditorApp::handleEvent(TEvent &event) {
+	clearTransientSearchSelectionOnUserInput(event);
 	if (isRecorderToggleCommand(event)) {
 		if (keystrokeRecording)
 			stopKeystrokeRecording();

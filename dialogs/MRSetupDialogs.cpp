@@ -504,10 +504,20 @@ ushort execDialog(TDialog *dialog) {
 
 ushort execDialogWithDataCapture(TDialog *dialog, void *data) {
 	ushort result = cmCancel;
+	MRDialogFoundation *foundation = nullptr;
+	MRScrollableDialog *scrollable = nullptr;
 	if (dialog == nullptr)
 		return result;
 	if (data != nullptr)
 		dialog->setData(data);
+	foundation = dynamic_cast<MRDialogFoundation *>(dialog);
+	if (foundation != nullptr)
+		foundation->finalizeLayout();
+	else {
+		scrollable = dynamic_cast<MRScrollableDialog *>(dialog);
+		if (scrollable != nullptr)
+			scrollable->initScrollIfNeeded();
+	}
 	result = TProgram::deskTop->execView(dialog);
 	if (data != nullptr)
 		dialog->getData(data);
@@ -2091,6 +2101,32 @@ void MRScrollableDialog::applyScroll() {
 		content_->drawView();
 }
 
+MRDialogFoundation::MRDialogFoundation(const TRect &bounds, const char *title, int virtualWidth,
+                                       int virtualHeight)
+    : TWindowInit(&TDialog::initFrame),
+      MRScrollableDialog(bounds, title, virtualWidth, virtualHeight) {
+}
+
+void MRDialogFoundation::insert(TView *view) {
+	if (view == nullptr)
+		return;
+	if (view == managedContent()) {
+		TDialog::insert(view);
+		return;
+	}
+	addManaged(view, view->getBounds());
+}
+
+void MRDialogFoundation::finalizeLayout() {
+	TGroup *content = managedContent();
+	if (layoutFinalized_)
+		return;
+	initScrollIfNeeded();
+	if (content != nullptr && content->current == nullptr)
+		selectContent();
+	layoutFinalized_ = true;
+}
+
 TRect centeredSetupDialogRect(int width, int height) {
 	TRect r = TProgram::deskTop != nullptr ? TProgram::deskTop->getExtent() : TRect(0, 0, 80, 25);
 	int availableWidth = std::max(1, r.b.x - r.a.x);
@@ -2103,6 +2139,62 @@ TRect centeredSetupDialogRect(int width, int height) {
 	return TRect(left, top, left + safeWidth, top + safeHeight);
 }
 
+namespace mr::dialogs {
+
+TRect centeredDialogRect(int width, int height) {
+	return centeredSetupDialogRect(width, height);
+}
+
+MRDialogFoundation *createScrollableDialog(const char *title, int virtualWidth, int virtualHeight) {
+	return new MRDialogFoundation(centeredDialogRect(virtualWidth, virtualHeight), title, virtualWidth,
+	                              virtualHeight);
+}
+
+ushort execDialog(TDialog *dialog) {
+	ushort result = cmCancel;
+	MRDialogFoundation *foundation = nullptr;
+	MRScrollableDialog *scrollable = nullptr;
+
+	if (dialog == nullptr || TProgram::deskTop == nullptr)
+		return cmCancel;
+	foundation = dynamic_cast<MRDialogFoundation *>(dialog);
+	if (foundation != nullptr)
+		foundation->finalizeLayout();
+	else {
+		scrollable = dynamic_cast<MRScrollableDialog *>(dialog);
+		if (scrollable != nullptr)
+			scrollable->initScrollIfNeeded();
+	}
+	result = TProgram::deskTop->execView(dialog);
+	TObject::destroy(dialog);
+	return result;
+}
+
+ushort execDialogWithData(TDialog *dialog, void *data) {
+	ushort result = cmCancel;
+	MRDialogFoundation *foundation = nullptr;
+	MRScrollableDialog *scrollable = nullptr;
+	if (dialog == nullptr || TProgram::deskTop == nullptr)
+		return cmCancel;
+	if (data != nullptr)
+		dialog->setData(data);
+	foundation = dynamic_cast<MRDialogFoundation *>(dialog);
+	if (foundation != nullptr)
+		foundation->finalizeLayout();
+	else {
+		scrollable = dynamic_cast<MRScrollableDialog *>(dialog);
+		if (scrollable != nullptr)
+			scrollable->initScrollIfNeeded();
+	}
+	result = TProgram::deskTop->execView(dialog);
+	if (result != cmCancel && data != nullptr)
+		dialog->getData(data);
+	TObject::destroy(dialog);
+	return result;
+}
+
+} // namespace mr::dialogs
+
 void insertSetupStaticLine(TDialog *dialog, int x, int y, const char *text) {
 	dialog->insert(new TStaticText(TRect(x, y, x + std::strlen(text) + 1, y + 1), text));
 }
@@ -2110,30 +2202,26 @@ void insertSetupStaticLine(TDialog *dialog, int x, int y, const char *text) {
 TDialog *createSetupSimplePreviewDialog(const char *title, int width, int height,
                                         const std::vector<std::string> &lines,
                                         bool showOkCancelHelp) {
-	MRScrollableDialog *dialog =
-	    new MRScrollableDialog(centeredSetupDialogRect(width, height), title, width, height);
+	MRDialogFoundation *dialog =
+	    new MRDialogFoundation(centeredSetupDialogRect(width, height), title, width, height);
 	int y = 2;
 
 	if (dialog == nullptr)
 		return nullptr;
 	for (std::vector<std::string>::const_iterator it = lines.begin(); it != lines.end(); ++it, ++y) {
-		TRect lineRect(2, y, 2 + std::strlen(it->c_str()) + 1, y + 1);
-		dialog->addManaged(new TStaticText(lineRect, it->c_str()), lineRect);
+		dialog->insert(new TStaticText(TRect(2, y, 2 + std::strlen(it->c_str()) + 1, y + 1), it->c_str()));
 	}
 
 	if (showOkCancelHelp) {
-		TRect okRect(width - 34, height - 3, width - 24, height - 1);
-		TRect cancelRect(width - 23, height - 3, width - 10, height - 1);
-		TRect helpRect(width - 9, height - 3, width - 2, height - 1);
-		dialog->addManaged(new TButton(okRect, "O~K~", cmOK, bfDefault), okRect);
-		dialog->addManaged(new TButton(cancelRect, "~C~ancel", cmCancel, bfNormal), cancelRect);
-		dialog->addManaged(new TButton(helpRect, "~H~elp", cmHelp, bfNormal), helpRect);
+		dialog->insert(new TButton(TRect(width - 34, height - 3, width - 24, height - 1), "O~K~", cmOK, bfDefault));
+		dialog->insert(
+		    new TButton(TRect(width - 23, height - 3, width - 10, height - 1), "~C~ancel", cmCancel, bfNormal));
+		dialog->insert(new TButton(TRect(width - 9, height - 3, width - 2, height - 1), "~H~elp", cmHelp, bfNormal));
 	} else {
-		TRect doneRect(width / 2 - 4, height - 3, width / 2 + 4, height - 1);
-		dialog->addManaged(new TButton(doneRect, "~D~one", cmOK, bfDefault), doneRect);
+		dialog->insert(new TButton(TRect(width / 2 - 4, height - 3, width / 2 + 4, height - 1), "~D~one", cmOK,
+		                           bfDefault));
 	}
 
-	dialog->initScrollIfNeeded();
-	dialog->selectContent();
+	dialog->finalizeLayout();
 	return dialog;
 }

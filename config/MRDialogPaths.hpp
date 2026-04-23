@@ -240,6 +240,39 @@ struct MRSarDialogOptions {
 	}
 };
 
+struct MRMultiSearchDialogOptions {
+	bool searchSubdirectories;
+	bool caseSensitive;
+	bool regularExpressions;
+	bool searchFilesInMemory;
+	std::string filespec;
+	std::string startingPath;
+	std::string searchText;
+
+	MRMultiSearchDialogOptions() noexcept
+	    : searchSubdirectories(true), caseSensitive(false), regularExpressions(true),
+	      searchFilesInMemory(true), filespec("*.*"), startingPath(), searchText() {
+	}
+};
+
+struct MRMultiSarDialogOptions {
+	bool searchSubdirectories;
+	bool caseSensitive;
+	bool regularExpressions;
+	bool searchFilesInMemory;
+	bool keepFilesOpen;
+	std::string filespec;
+	std::string startingPath;
+	std::string searchText;
+	std::string replacementText;
+
+	MRMultiSarDialogOptions() noexcept
+	    : searchSubdirectories(true), caseSensitive(false), regularExpressions(true),
+	      searchFilesInMemory(true), keepFilesOpen(false), filespec("*.*"), startingPath(), searchText(),
+	      replacementText() {
+	}
+};
+
 struct MRColorSetupItem {
 	const char *label;
 	unsigned char paletteIndex;
@@ -371,6 +404,16 @@ bool setConfiguredSearchDialogOptions(const MRSearchDialogOptions &options,
 [[nodiscard]] MRSearchDialogOptions configuredSearchDialogOptions();
 bool setConfiguredSarDialogOptions(const MRSarDialogOptions &options, std::string *errorMessage = nullptr);
 [[nodiscard]] MRSarDialogOptions configuredSarDialogOptions();
+bool setConfiguredMultiSearchDialogOptions(const MRMultiSearchDialogOptions &options,
+                                           std::string *errorMessage = nullptr);
+[[nodiscard]] MRMultiSearchDialogOptions configuredMultiSearchDialogOptions();
+bool setConfiguredMultiSarDialogOptions(const MRMultiSarDialogOptions &options,
+                                        std::string *errorMessage = nullptr);
+[[nodiscard]] MRMultiSarDialogOptions configuredMultiSarDialogOptions();
+void configuredMultiFilespecHistoryEntries(std::vector<std::string> &outValues);
+void configuredMultiPathHistoryEntries(std::vector<std::string> &outValues);
+bool addConfiguredMultiFilespecHistoryEntry(const std::string &value, std::string *errorMessage = nullptr);
+bool addConfiguredMultiPathHistoryEntry(const std::string &value, std::string *errorMessage = nullptr);
 bool setConfiguredVirtualDesktops(int count, std::string *errorMessage = nullptr);
 [[nodiscard]] int configuredVirtualDesktops();
 bool setConfiguredCyclicVirtualDesktops(bool enabled, std::string *errorMessage = nullptr);

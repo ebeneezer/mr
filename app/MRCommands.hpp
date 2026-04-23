@@ -115,7 +115,11 @@ enum : ushort {
 	cmMrDevSetMarqueeText,
 	cmMrDevHeroEventProbe,
 	cmMrPreviewPrev,
-	cmMrPreviewNext
+	cmMrPreviewNext,
+
+	cmMrSearchMultiFileSearch,
+	cmMrSearchListFilesFromLastSearch,
+	cmMrSearchMultiFileSearchReplace
 };
 
 #endif

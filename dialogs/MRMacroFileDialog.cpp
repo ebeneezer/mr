@@ -403,12 +403,12 @@ bool keySpecFromEvent(ushort keyCode, ushort controlKeyState, std::string &outTo
 	return false;
 }
 
-class TBindKeyCaptureDialog : public TDialog {
+class TBindKeyCaptureDialog : public MRDialogFoundation {
   public:
 	TBindKeyCaptureDialog()
-	    : TWindowInit(&TDialog::initFrame), TDialog(TRect(0, 0, 50, 8), "Bind Macro Key"),
+	    : TWindowInit(&TDialog::initFrame),
+	      MRDialogFoundation(centeredSetupDialogRect(50, 8), "Bind Macro Key", 50, 8),
 	      captured_(false), keyCode_(kbNoKey), controlState_(0) {
-		options |= ofCentered;
 		insert(new TStaticText(TRect(2, 2, 48, 6), "Press key to bind macro.\nEsc = cancel."));
 	}
 
@@ -427,7 +427,7 @@ class TBindKeyCaptureDialog : public TDialog {
 			clearEvent(event);
 			return;
 		}
-		TDialog::handleEvent(event);
+		MRDialogFoundation::handleEvent(event);
 	}
 
 	bool captured() const noexcept {
@@ -453,6 +453,7 @@ bool captureBindingKeySpec(std::string &keySpec) {
 	keySpec.clear();
 	if (dialog == nullptr)
 		return false;
+	dialog->finalizeLayout();
 	result = TProgram::deskTop->execView(dialog);
 	bool captured = dialog->captured();
 	ushort keyCode = dialog->keyCode();
@@ -613,10 +614,12 @@ class MacroManagerListView : public TListViewer {
 	std::vector<bool> errorFlags_;
 };
 
-class MacroManagerDialog : public TDialog {
+class MacroManagerDialog : public MRDialogFoundation {
   public:
 	MacroManagerDialog()
-	    : TWindowInit(&TDialog::initFrame), TDialog(centeredBounds(), "MACRO MANAGER"),
+	    : TWindowInit(&TDialog::initFrame),
+	      MRDialogFoundation(centeredBounds(), "MACRO MANAGER", centeredBounds().b.x - centeredBounds().a.x,
+	                         centeredBounds().b.y - centeredBounds().a.y),
 	      directory_(defaultMacroDirectoryPath()),  listView_(nullptr),
 	      scrollBar_(nullptr) {
 		int width = size.x;
@@ -666,7 +669,7 @@ class MacroManagerDialog : public TDialog {
 	}
 
 	void handleEvent(TEvent &event) override {
-		TDialog::handleEvent(event);
+		MRDialogFoundation::handleEvent(event);
 
 		if (event.what == evKeyDown) {
 			switch (ctrlToArrow(event.keyDown.keyCode)) {
@@ -941,6 +944,7 @@ bool runMacroManagerDialog() {
 
 	if (dialog == nullptr)
 		return false;
+	dialog->finalizeLayout();
 	result = TProgram::deskTop->execView(dialog);
 	openPath = dialog->openPath();
 	TObject::destroy(dialog);

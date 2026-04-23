@@ -8,6 +8,7 @@
 #include <tvision/tv.h>
 
 #include "MRUnsavedChangesDialog.hpp"
+#include "MRSetupDialogCommon.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -20,19 +21,7 @@ namespace dialogs {
 namespace {
 
 TRect centeredRect(int width, int height) {
-	TRect r = TProgram::deskTop->getExtent();
-	int left = r.a.x + (r.b.x - r.a.x - width) / 2;
-	int top = r.a.y + (r.b.y - r.a.y - height) / 2;
-	return TRect(left, top, left + width, top + height);
-}
-
-ushort execDialog(TDialog *dialog) {
-	ushort result = cmCancel;
-	if (dialog != nullptr) {
-		result = TProgram::deskTop->execView(dialog);
-		TObject::destroy(dialog);
-	}
-	return result;
+	return mr::dialogs::centeredDialogRect(width, height);
 }
 
 void insertStaticLine(TDialog *dialog, int x, int y, const std::string &text) {
@@ -134,7 +123,8 @@ UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const ch
 	const int textWidth = std::max(widestLineWidth(textLines), buttonRowWidth);
 	const int width = std::min(std::max(46, textWidth + 6), std::max(46, desktopWidth - 4));
 	const int height = std::max(hasDetail ? 10 : 8, static_cast<int>(textLines.size()) + 6);
-	TDialog *dialog = new TDialog(centeredRect(width, height), "Confirm");
+	MRDialogFoundation *dialog =
+	    new MRDialogFoundation(centeredRect(width, height), "Confirm", width, height);
 	int y = 2;
 
 	for (const std::string &line : textLines)
@@ -151,7 +141,7 @@ UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const ch
 	dialog->insert(new TButton(TRect(buttonLeft, buttonY, buttonLeft + cancelButtonWidth, buttonY + 2),
 	                           cancelButtonLabel.c_str(), cmCancel, bfNormal));
 
-	switch (execDialog(dialog)) {
+	switch (mr::dialogs::execDialog(dialog)) {
 		case cmYes:
 			return UnsavedChangesChoice::Save;
 		case cmNo:

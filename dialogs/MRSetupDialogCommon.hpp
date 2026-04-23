@@ -22,9 +22,15 @@
 class TDialog;
 class TGroup;
 class TRect;
+class MRDialogFoundation;
 
 namespace mr::dialogs {
 
+[[nodiscard]] TRect centeredDialogRect(int width, int height);
+[[nodiscard]] ushort execDialog(TDialog *dialog);
+[[nodiscard]] ushort execDialogWithData(TDialog *dialog, void *data);
+[[nodiscard]] MRDialogFoundation *createScrollableDialog(const char *title, int virtualWidth,
+                                                         int virtualHeight);
 
 [[nodiscard]] inline std::string normalizeTvPathSeparators(std::string_view value) {
 	std::string path(value);
@@ -67,25 +73,11 @@ inline void writeRecordField(char *dest, std::size_t destSize, std::string_view 
 }
 
 [[nodiscard]] inline ushort execDialogRaw(TDialog *dialog) {
-	ushort result = cmCancel;
-	if (dialog != nullptr) {
-		result = TProgram::deskTop->execView(dialog);
-		TObject::destroy(dialog);
-	}
-	return result;
+	return execDialog(dialog);
 }
 
 [[nodiscard]] inline ushort execDialogRawWithData(TDialog *dialog, void *data) {
-	ushort result = cmCancel;
-	if (dialog != nullptr) {
-		if (data != nullptr)
-			dialog->setData(data);
-		result = TProgram::deskTop->execView(dialog);
-		if (result != cmCancel && data != nullptr)
-			dialog->getData(data);
-		TObject::destroy(dialog);
-	}
-	return result;
+	return execDialogWithData(dialog, data);
 }
 
 } // namespace mr::dialogs
@@ -126,6 +118,17 @@ class MRScrollableDialog : public TDialog {
 	std::vector<ManagedItem> managedViews_;
 	TScrollBar *hScrollBar_ = nullptr;
 	TScrollBar *vScrollBar_ = nullptr;
+};
+
+class MRDialogFoundation : public MRScrollableDialog {
+  public:
+	MRDialogFoundation(const TRect &bounds, const char *title, int virtualWidth, int virtualHeight);
+
+	void insert(TView *view);
+	void finalizeLayout();
+
+  private:
+	bool layoutFinalized_ = false;
 };
 
 #endif

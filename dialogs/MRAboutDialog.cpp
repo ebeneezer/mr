@@ -33,10 +33,7 @@ constexpr uint kDoneLongPressMs = 700;
 constexpr ushort cmAboutDone = 0x6A10;
 
 TRect centeredRect(int width, int height) {
-	TRect r = TProgram::deskTop->getExtent();
-	int left = r.a.x + (r.b.x - r.a.x - width) / 2;
-	int top = r.a.y + (r.b.y - r.a.y - height) / 2;
-	return TRect(left, top, left + width, top + height);
+	return mr::dialogs::centeredDialogRect(width, height);
 }
 
 void insertCenteredStaticLine(TDialog *dialog, int width, int y, const std::string &text) {
@@ -368,10 +365,11 @@ class MRAboutQuoteBox : public TView {
 	mutable std::uint32_t scrambleSeed_;
 };
 
-class MRAboutDialog : public TDialog {
+class MRAboutDialog : public MRDialogFoundation {
   public:
 	MRAboutDialog() noexcept
-	    : TWindowInit(&TDialog::initFrame), TDialog(centeredRect(76, 16), "ABOUT"), quoteBox_(nullptr),
+	    : TWindowInit(&TDialog::initFrame),
+	      MRDialogFoundation(centeredRect(76, 16), "ABOUT", 76, 16), quoteBox_(nullptr),
 	      doneButton_(nullptr), quoteIndex_(0), quoteRandomState_(0), quoteModeEnabled_(false), rotationTimer_(nullptr),
 	       rearmRotationAfterAnimation_(false), donePressTracking_(false),
 	      doneLongPressTriggered_(false), suppressNextDoneCommand_(false) {
@@ -422,7 +420,7 @@ class MRAboutDialog : public TDialog {
 			clearEvent(event);
 			return;
 		}
-		TDialog::handleEvent(event);
+		MRDialogFoundation::handleEvent(event);
 		if (event.what == evBroadcast && event.message.command == cmTimerExpired &&
 		    event.message.infoPtr == rotationTimer_) {
 			tickQuoteRotation();
@@ -563,6 +561,5 @@ void showAboutDialog() {
 	if (TProgram::deskTop == nullptr)
 		return;
 	TDialog *dialog = new MRAboutDialog();
-	TProgram::deskTop->execView(dialog);
-	TObject::destroy(dialog);
+	(void)mr::dialogs::execDialog(dialog);
 }

@@ -9,6 +9,7 @@
 #include <tvision/tv.h>
 
 #include "MRFileInformationDialog.hpp"
+#include "MRSetupDialogCommon.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -38,13 +39,9 @@ void insertStaticLine(TDialog *dialog, int x, int y, const char *text) {
 }
 
 ushort execDialog(TDialog *dialog) {
-	ushort result = cmCancel;
-	if (dialog != nullptr) {
-		result = TProgram::deskTop->execView(dialog);
-		TObject::destroy(dialog);
-		if (result == cmHelp)
-			static_cast<void>(mrShowProjectHelp());
-	}
+	ushort result = mr::dialogs::execDialog(dialog);
+	if (result == cmHelp)
+		static_cast<void>(mrShowProjectHelp());
 	return result;
 }
 
@@ -152,12 +149,13 @@ const char *blockModeLabel(TMREditWindow *win) {
 	}
 }
 
-class FileInformationDialog : public TDialog {
+class FileInformationDialog : public MRDialogFoundation {
   public:
 	FileInformationDialog(const FileInformationPage &page, std::size_t pageIndex, std::size_t pageCount,
 	                      bool hasPrev, bool hasNext)
 	    : TWindowInit(&TDialog::initFrame),
-	      TDialog(centeredBounds(computeWidth(page), computeHeight(page)), "FILE INFORMATION"),
+	      MRDialogFoundation(centeredBounds(computeWidth(page), computeHeight(page)), "FILE INFORMATION",
+	                         computeWidth(page), computeHeight(page)),
 	      hasPrevInfo(hasPrev), hasNextInfo(hasNext) {
 		int width = size.x;
 		int height = size.y;
@@ -179,7 +177,7 @@ class FileInformationDialog : public TDialog {
 	}
 
 	virtual void handleEvent(TEvent &event) override {
-		TDialog::handleEvent(event);
+		MRDialogFoundation::handleEvent(event);
 		if (event.what != evKeyDown)
 			return;
 		switch (ctrlToArrow(event.keyDown.keyCode)) {

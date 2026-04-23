@@ -15,6 +15,7 @@
 #include <tvision/tv.h>
 
 #include "MRWindowListDialog.hpp"
+#include "MRSetupDialogCommon.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -226,7 +227,7 @@ class WindowListView : public TListViewer {
 	std::vector<std::string> items;
 };
 
-class WindowListDialog : public TDialog {
+class WindowListDialog : public MRDialogFoundation {
   public:
 	void saveWorkspaceWithDialog() {
 		char fileName[MAXPATH];
@@ -256,7 +257,8 @@ class WindowListDialog : public TDialog {
 
 	WindowListDialog(MRWindowListMode aMode, TMREditWindow *aCurrent, TMREditWindow *aPreferred)
 	    : TWindowInit(&TDialog::initFrame),
-	      TDialog(centeredBounds(computeWidth(), computeHeight(aMode, aCurrent)), "WINDOW LIST"),
+	      MRDialogFoundation(centeredBounds(computeWidth(), computeHeight(aMode, aCurrent)), "WINDOW LIST",
+	                         computeWidth(), computeHeight(aMode, aCurrent)),
 	      mode(aMode), current(aCurrent), preferred(aPreferred), listView(nullptr),
 	      scrollBar(nullptr), hideToggleButton(nullptr), selected(nullptr), lastFocusedIndex(-1) {
 		int width = size.x;
@@ -350,7 +352,7 @@ class WindowListDialog : public TDialog {
 			}
 		}
 
-		TDialog::handleEvent(event);
+		MRDialogFoundation::handleEvent(event);
 
 		if (listView != nullptr && listView->focused != lastFocusedIndex)
 			updateHideToggleState();
@@ -593,6 +595,7 @@ TMREditWindow *mrShowWindowListDialog(MRWindowListMode mode, TMREditWindow *curr
 		return nullptr;
 
 	dialog = new WindowListDialog(mode, current, preferred);
+	dialog->finalizeLayout();
 	result = TProgram::deskTop->execView(dialog);
 	selected = dialog->selectedWindow();
 	TObject::destroy(dialog);

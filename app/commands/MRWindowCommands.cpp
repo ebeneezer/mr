@@ -32,6 +32,7 @@
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/TMREditWindow.hpp"
 #include "../../ui/MRWindowSupport.hpp"
+#include "../../dialogs/MRSetupDialogCommon.hpp"
 
 namespace {
 void collectEditWindowsInZOrder(TView *view, void *arg) {
@@ -545,15 +546,7 @@ void mrUpdateAllWindowsColorTheme() {
 
 namespace {
 ushort execDialogWithPayload(TDialog *dialog, void *data) {
-	ushort result = cmCancel;
-	if (dialog == nullptr)
-		return cmCancel;
-	if (data != nullptr)
-		dialog->setData(data);
-	result = TProgram::deskTop->execView(dialog);
-	if (result != cmCancel && data != nullptr)
-		dialog->getData(data);
-	TObject::destroy(dialog);
+	ushort result = mr::dialogs::execDialogWithData(dialog, data);
 	if (result == cmHelp)
 		static_cast<void>(mrShowProjectHelp());
 	return result;

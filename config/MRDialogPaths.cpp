@@ -39,6 +39,8 @@ static bool g_windowManagerEnabled = true;
 static bool g_menulineMessagesEnabled = true;
 static MRSearchDialogOptions g_searchDialogOptions;
 static MRSarDialogOptions g_sarDialogOptions;
+static MRMultiSearchDialogOptions g_multiSearchDialogOptions;
+static MRMultiSarDialogOptions g_multiSarDialogOptions;
 static int g_virtualDesktops = 1;
 static bool g_cyclicVirtualDesktops = false;
 static std::string g_cursorPositionMarker = "R:C";
@@ -50,6 +52,16 @@ std::vector<MRDialogHistoryEntry> &configuredPathHistoryStorage() {
 }
 
 std::vector<MRDialogHistoryEntry> &configuredFileHistoryStorage() {
+	static std::vector<MRDialogHistoryEntry> value;
+	return value;
+}
+
+std::vector<MRDialogHistoryEntry> &configuredMultiFilespecHistoryStorage() {
+	static std::vector<MRDialogHistoryEntry> value;
+	return value;
+}
+
+std::vector<MRDialogHistoryEntry> &configuredMultiPathHistoryStorage() {
 	static std::vector<MRDialogHistoryEntry> value;
 	return value;
 }
@@ -622,6 +634,24 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
 	{"SAR_ALL_WINDOWS", MRSettingsKeyClass::Global, true},
 	{"SAR_REPLACE_MODE", MRSettingsKeyClass::Global, false},
 	{"SAR_PROMPT_EACH_REPLACE", MRSettingsKeyClass::Global, false},
+	{"MULTI_SEARCH_FILESPEC", MRSettingsKeyClass::Global, true},
+	{"MULTI_SEARCH_TEXT", MRSettingsKeyClass::Global, true},
+	{"MULTI_SEARCH_STARTING_PATH", MRSettingsKeyClass::Global, true},
+	{"MULTI_SEARCH_SUBDIRECTORIES", MRSettingsKeyClass::Global, true},
+	{"MULTI_SEARCH_CASE_SENSITIVE", MRSettingsKeyClass::Global, true},
+	{"MULTI_SEARCH_REGULAR_EXPRESSIONS", MRSettingsKeyClass::Global, true},
+	{"MULTI_SEARCH_FILES_IN_MEMORY", MRSettingsKeyClass::Global, true},
+	{"MULTI_SAR_FILESPEC", MRSettingsKeyClass::Global, true},
+	{"MULTI_SAR_TEXT", MRSettingsKeyClass::Global, true},
+	{"MULTI_SAR_REPLACEMENT", MRSettingsKeyClass::Global, true},
+	{"MULTI_SAR_STARTING_PATH", MRSettingsKeyClass::Global, true},
+	{"MULTI_SAR_SUBDIRECTORIES", MRSettingsKeyClass::Global, true},
+	{"MULTI_SAR_CASE_SENSITIVE", MRSettingsKeyClass::Global, true},
+	{"MULTI_SAR_REGULAR_EXPRESSIONS", MRSettingsKeyClass::Global, true},
+	{"MULTI_SAR_FILES_IN_MEMORY", MRSettingsKeyClass::Global, true},
+	{"MULTI_SAR_KEEP_FILES_OPEN", MRSettingsKeyClass::Global, true},
+	{"MULTI_FILESPEC_HISTORY", MRSettingsKeyClass::Global, false},
+	{"MULTI_PATH_HISTORY", MRSettingsKeyClass::Global, false},
 		{"VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
 		{"CYCLIC_VIRTUAL_DESKTOP", MRSettingsKeyClass::Global, false},
 		{"CYCLIC_VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
@@ -2619,6 +2649,10 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 		return false;
 	if (!setConfiguredSarDialogOptions(MRSarDialogOptions(), errorMessage))
 		return false;
+	if (!setConfiguredMultiSearchDialogOptions(MRMultiSearchDialogOptions(), errorMessage))
+		return false;
+	if (!setConfiguredMultiSarDialogOptions(MRMultiSarDialogOptions(), errorMessage))
+		return false;
 	if (!setConfiguredCursorPositionMarker("R:C", errorMessage))
 		return false;
 	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), errorMessage))
@@ -2633,6 +2667,8 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	configuredFileHistoryLimit() = kHistoryLimitDefault;
 	configuredPathHistoryStorage().clear();
 	configuredFileHistoryStorage().clear();
+	configuredMultiFilespecHistoryStorage().clear();
+	configuredMultiPathHistoryStorage().clear();
 	configuredHistoryEpochCounter() = std::max(static_cast<long long>(0), static_cast<long long>(std::time(nullptr)));
 	paths.settingsMacroUri = configuredSettingsMacroFilePath();
 	paths.macroPath = configuredMacroDirectoryPath();
@@ -2816,6 +2852,99 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 					options.mode = MRSarMode::ReplaceFirst;
 				return setConfiguredSarDialogOptions(options, errorMessage);
 			}
+			if (upper == "MULTI_SEARCH_FILESPEC") {
+				MRMultiSearchDialogOptions options = configuredMultiSearchDialogOptions();
+				options.filespec = trimAscii(value);
+				if (options.filespec.empty())
+					options.filespec = "*.*";
+				return setConfiguredMultiSearchDialogOptions(options, errorMessage);
+			}
+			if (upper == "MULTI_SEARCH_TEXT") {
+				MRMultiSearchDialogOptions options = configuredMultiSearchDialogOptions();
+				options.searchText = value;
+				return setConfiguredMultiSearchDialogOptions(options, errorMessage);
+			}
+			if (upper == "MULTI_SEARCH_STARTING_PATH") {
+				MRMultiSearchDialogOptions options = configuredMultiSearchDialogOptions();
+				options.startingPath = normalizeConfiguredPathInput(value);
+				return setConfiguredMultiSearchDialogOptions(options, errorMessage);
+			}
+			if (upper == "MULTI_SEARCH_SUBDIRECTORIES") {
+				MRMultiSearchDialogOptions options = configuredMultiSearchDialogOptions();
+				if (!parseBooleanLiteral(value, options.searchSubdirectories, errorMessage))
+					return false;
+				return setConfiguredMultiSearchDialogOptions(options, errorMessage);
+			}
+			if (upper == "MULTI_SEARCH_CASE_SENSITIVE") {
+				MRMultiSearchDialogOptions options = configuredMultiSearchDialogOptions();
+				if (!parseBooleanLiteral(value, options.caseSensitive, errorMessage))
+					return false;
+				return setConfiguredMultiSearchDialogOptions(options, errorMessage);
+			}
+			if (upper == "MULTI_SEARCH_REGULAR_EXPRESSIONS") {
+				MRMultiSearchDialogOptions options = configuredMultiSearchDialogOptions();
+				if (!parseBooleanLiteral(value, options.regularExpressions, errorMessage))
+					return false;
+				return setConfiguredMultiSearchDialogOptions(options, errorMessage);
+			}
+			if (upper == "MULTI_SEARCH_FILES_IN_MEMORY") {
+				MRMultiSearchDialogOptions options = configuredMultiSearchDialogOptions();
+				if (!parseBooleanLiteral(value, options.searchFilesInMemory, errorMessage))
+					return false;
+				return setConfiguredMultiSearchDialogOptions(options, errorMessage);
+			}
+			if (upper == "MULTI_SAR_FILESPEC") {
+				MRMultiSarDialogOptions options = configuredMultiSarDialogOptions();
+				options.filespec = trimAscii(value);
+				if (options.filespec.empty())
+					options.filespec = "*.*";
+				return setConfiguredMultiSarDialogOptions(options, errorMessage);
+			}
+			if (upper == "MULTI_SAR_TEXT") {
+				MRMultiSarDialogOptions options = configuredMultiSarDialogOptions();
+				options.searchText = value;
+				return setConfiguredMultiSarDialogOptions(options, errorMessage);
+			}
+			if (upper == "MULTI_SAR_REPLACEMENT") {
+				MRMultiSarDialogOptions options = configuredMultiSarDialogOptions();
+				options.replacementText = value;
+				return setConfiguredMultiSarDialogOptions(options, errorMessage);
+			}
+			if (upper == "MULTI_SAR_STARTING_PATH") {
+				MRMultiSarDialogOptions options = configuredMultiSarDialogOptions();
+				options.startingPath = normalizeConfiguredPathInput(value);
+				return setConfiguredMultiSarDialogOptions(options, errorMessage);
+			}
+			if (upper == "MULTI_SAR_SUBDIRECTORIES") {
+				MRMultiSarDialogOptions options = configuredMultiSarDialogOptions();
+				if (!parseBooleanLiteral(value, options.searchSubdirectories, errorMessage))
+					return false;
+				return setConfiguredMultiSarDialogOptions(options, errorMessage);
+			}
+			if (upper == "MULTI_SAR_CASE_SENSITIVE") {
+				MRMultiSarDialogOptions options = configuredMultiSarDialogOptions();
+				if (!parseBooleanLiteral(value, options.caseSensitive, errorMessage))
+					return false;
+				return setConfiguredMultiSarDialogOptions(options, errorMessage);
+			}
+			if (upper == "MULTI_SAR_REGULAR_EXPRESSIONS") {
+				MRMultiSarDialogOptions options = configuredMultiSarDialogOptions();
+				if (!parseBooleanLiteral(value, options.regularExpressions, errorMessage))
+					return false;
+				return setConfiguredMultiSarDialogOptions(options, errorMessage);
+			}
+			if (upper == "MULTI_SAR_FILES_IN_MEMORY") {
+				MRMultiSarDialogOptions options = configuredMultiSarDialogOptions();
+				if (!parseBooleanLiteral(value, options.searchFilesInMemory, errorMessage))
+					return false;
+				return setConfiguredMultiSarDialogOptions(options, errorMessage);
+			}
+			if (upper == "MULTI_SAR_KEEP_FILES_OPEN") {
+				MRMultiSarDialogOptions options = configuredMultiSarDialogOptions();
+				if (!parseBooleanLiteral(value, options.keepFilesOpen, errorMessage))
+					return false;
+				return setConfiguredMultiSarDialogOptions(options, errorMessage);
+			}
 			if (upper == "VIRTUAL_DESKTOPS") {
 				int parsed = 1;
 				try {
@@ -2871,6 +3000,19 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 			}
 			if (upper == "FILE_HISTORY") {
 				addSerializedHistoryEntry(configuredFileHistoryStorage(), value, configuredFileHistoryLimit());
+				if (errorMessage != nullptr)
+					errorMessage->clear();
+				return true;
+			}
+			if (upper == "MULTI_FILESPEC_HISTORY") {
+				addSerializedHistoryEntry(configuredMultiFilespecHistoryStorage(), value,
+				                          configuredFileHistoryLimit());
+				if (errorMessage != nullptr)
+					errorMessage->clear();
+				return true;
+			}
+			if (upper == "MULTI_PATH_HISTORY") {
+				addSerializedHistoryEntry(configuredMultiPathHistoryStorage(), value, configuredPathHistoryLimit());
 				if (errorMessage != nullptr)
 					errorMessage->clear();
 				return true;
@@ -3770,6 +3912,33 @@ void configuredFileHistoryEntries(std::vector<std::string> &outValues) {
 		outValues.push_back(entry.value);
 }
 
+void configuredMultiFilespecHistoryEntries(std::vector<std::string> &outValues) {
+	outValues.clear();
+	for (const MRDialogHistoryEntry &entry : configuredMultiFilespecHistoryStorage())
+		outValues.push_back(entry.value);
+}
+
+void configuredMultiPathHistoryEntries(std::vector<std::string> &outValues) {
+	outValues.clear();
+	for (const MRDialogHistoryEntry &entry : configuredMultiPathHistoryStorage())
+		outValues.push_back(entry.value);
+}
+
+bool addConfiguredMultiFilespecHistoryEntry(const std::string &value, std::string *errorMessage) {
+	addHistoryEntry(configuredMultiFilespecHistoryStorage(), trimAscii(value), configuredFileHistoryLimit());
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+bool addConfiguredMultiPathHistoryEntry(const std::string &value, std::string *errorMessage) {
+	addHistoryEntry(configuredMultiPathHistoryStorage(), normalizeConfiguredPathInput(value),
+	                configuredPathHistoryLimit());
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
 bool setConfiguredWindowManager(bool enabled, std::string *errorMessage) {
 	g_windowManagerEnabled = enabled;
 	if (errorMessage != nullptr)
@@ -3819,6 +3988,30 @@ bool setConfiguredSarDialogOptions(const MRSarDialogOptions &options, std::strin
 
 MRSarDialogOptions configuredSarDialogOptions() {
 	return g_sarDialogOptions;
+}
+
+bool setConfiguredMultiSearchDialogOptions(const MRMultiSearchDialogOptions &options,
+                                           std::string *errorMessage) {
+	g_multiSearchDialogOptions = options;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+MRMultiSearchDialogOptions configuredMultiSearchDialogOptions() {
+	return g_multiSearchDialogOptions;
+}
+
+bool setConfiguredMultiSarDialogOptions(const MRMultiSarDialogOptions &options,
+                                        std::string *errorMessage) {
+	g_multiSarDialogOptions = options;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+MRMultiSarDialogOptions configuredMultiSarDialogOptions() {
+	return g_multiSarDialogOptions;
 }
 
 bool setConfiguredVirtualDesktops(int count, std::string *errorMessage) {
@@ -3908,12 +4101,16 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	std::string source;
 	std::vector<std::string> pathHistory;
 	std::vector<std::string> fileHistory;
+	std::vector<std::string> multiFilespecHistory;
+	std::vector<std::string> multiPathHistory;
 	std::size_t descriptorCount = 0;
 	const MREditSettingDescriptor *descriptors = editSettingDescriptors(descriptorCount);
 
 	themePath = normalizeConfiguredPathInput(themePath);
 	configuredPathHistoryEntries(pathHistory);
 	configuredFileHistoryEntries(fileHistory);
+	configuredMultiFilespecHistoryEntries(multiFilespecHistory);
+	configuredMultiPathHistoryEntries(multiPathHistory);
 
 	source += "$MACRO MR_SETTINGS FROM EDIT;\n";
 	source += "MRSETUP('" + std::string(kSettingsVersionKey) + "', '" +
@@ -3971,6 +4168,60 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	          escapeMrmacSingleQuotedLiteral(
 	              formatEditSetupBoolean(configuredSarDialogOptions().searchAllWindows)) +
 	          "');\n";
+	source += "MRSETUP('MULTI_SEARCH_FILESPEC', '" +
+	          escapeMrmacSingleQuotedLiteral(configuredMultiSearchDialogOptions().filespec) + "');\n";
+	source += "MRSETUP('MULTI_SEARCH_TEXT', '" +
+	          escapeMrmacSingleQuotedLiteral(configuredMultiSearchDialogOptions().searchText) + "');\n";
+	source += "MRSETUP('MULTI_SEARCH_STARTING_PATH', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              normalizeConfiguredPathInput(configuredMultiSearchDialogOptions().startingPath)) +
+	          "');\n";
+	source += "MRSETUP('MULTI_SEARCH_SUBDIRECTORIES', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              formatEditSetupBoolean(configuredMultiSearchDialogOptions().searchSubdirectories)) +
+	          "');\n";
+	source += "MRSETUP('MULTI_SEARCH_CASE_SENSITIVE', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              formatEditSetupBoolean(configuredMultiSearchDialogOptions().caseSensitive)) +
+	          "');\n";
+	source += "MRSETUP('MULTI_SEARCH_REGULAR_EXPRESSIONS', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              formatEditSetupBoolean(configuredMultiSearchDialogOptions().regularExpressions)) +
+	          "');\n";
+	source += "MRSETUP('MULTI_SEARCH_FILES_IN_MEMORY', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              formatEditSetupBoolean(configuredMultiSearchDialogOptions().searchFilesInMemory)) +
+	          "');\n";
+	source += "MRSETUP('MULTI_SAR_FILESPEC', '" +
+	          escapeMrmacSingleQuotedLiteral(configuredMultiSarDialogOptions().filespec) + "');\n";
+	source += "MRSETUP('MULTI_SAR_TEXT', '" +
+	          escapeMrmacSingleQuotedLiteral(configuredMultiSarDialogOptions().searchText) + "');\n";
+	source += "MRSETUP('MULTI_SAR_REPLACEMENT', '" +
+	          escapeMrmacSingleQuotedLiteral(configuredMultiSarDialogOptions().replacementText) + "');\n";
+	source += "MRSETUP('MULTI_SAR_STARTING_PATH', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              normalizeConfiguredPathInput(configuredMultiSarDialogOptions().startingPath)) +
+	          "');\n";
+	source += "MRSETUP('MULTI_SAR_SUBDIRECTORIES', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              formatEditSetupBoolean(configuredMultiSarDialogOptions().searchSubdirectories)) +
+	          "');\n";
+	source += "MRSETUP('MULTI_SAR_CASE_SENSITIVE', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              formatEditSetupBoolean(configuredMultiSarDialogOptions().caseSensitive)) +
+	          "');\n";
+	source += "MRSETUP('MULTI_SAR_REGULAR_EXPRESSIONS', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              formatEditSetupBoolean(configuredMultiSarDialogOptions().regularExpressions)) +
+	          "');\n";
+	source += "MRSETUP('MULTI_SAR_FILES_IN_MEMORY', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              formatEditSetupBoolean(configuredMultiSarDialogOptions().searchFilesInMemory)) +
+	          "');\n";
+	source += "MRSETUP('MULTI_SAR_KEEP_FILES_OPEN', '" +
+	          escapeMrmacSingleQuotedLiteral(
+	              formatEditSetupBoolean(configuredMultiSarDialogOptions().keepFilesOpen)) +
+	          "');\n";
 	source += "MRSETUP('VIRTUAL_DESKTOPS', '" + std::to_string(configuredVirtualDesktops()) + "');\n";
 	source += "MRSETUP('CYCLIC_VIRTUAL_DESKTOPS', '" +
 	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredCyclicVirtualDesktops())) + "');\n";
@@ -3985,6 +4236,12 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 		source += "MRSETUP('PATH_HISTORY', '" + escapeMrmacSingleQuotedLiteral(pathHistory[i]) + "');\n";
 	for (std::size_t i = 0; i < fileHistory.size(); ++i)
 		source += "MRSETUP('FILE_HISTORY', '" + escapeMrmacSingleQuotedLiteral(fileHistory[i]) + "');\n";
+	for (std::size_t i = 0; i < multiFilespecHistory.size(); ++i)
+		source += "MRSETUP('MULTI_FILESPEC_HISTORY', '" +
+		          escapeMrmacSingleQuotedLiteral(multiFilespecHistory[i]) + "');\n";
+	for (std::size_t i = 0; i < multiPathHistory.size(); ++i)
+		source += "MRSETUP('MULTI_PATH_HISTORY', '" +
+		          escapeMrmacSingleQuotedLiteral(multiPathHistory[i]) + "');\n";
 	source += "MRSETUP('DEFAULT_PROFILE_DESCRIPTION', '" +
 	          escapeMrmacSingleQuotedLiteral(configuredDefaultProfileDescription()) + "');\n";
 	source += "MRSETUP('PAGE_BREAK', '" + escapeMrmacSingleQuotedLiteral(edit.pageBreak) + "');\n";

@@ -460,11 +460,11 @@ void postValidationWarning(const std::string &text) {
 }
 
 ushort runDirtyProfilesDialog(const std::vector<std::string> &dirtyIds) {
-	class TDirtyProfilesDialog : public TDialog {
+	class TDirtyProfilesDialog : public MRDialogFoundation {
 	  public:
 		TDirtyProfilesDialog(const std::string &ids)
 		    : TWindowInit(&TDialog::initFrame),
-		      TDialog(centeredSetupDialogRect(74, 11), "UNSAVED PROFILES") {
+		      MRDialogFoundation(centeredSetupDialogRect(74, 11), "UNSAVED PROFILES", 74, 11) {
 			insert(new TStaticText(TRect(2, 2, 70, 3), "Discard changed filename-extension profiles?"));
 			insert(new TStaticText(TRect(2, 4, 70, 5), "Dirty profile IDs:"));
 			insert(new TStaticText(TRect(2, 5, 70, 7), ids.c_str()));
@@ -476,8 +476,7 @@ ushort runDirtyProfilesDialog(const std::vector<std::string> &dirtyIds) {
 	TDirtyProfilesDialog *dialog = new TDirtyProfilesDialog(joinCommaSeparated(dirtyIds));
 	if (dialog == nullptr)
 		return cmCancel;
-	ushort result = TProgram::deskTop->execView(dialog);
-	TObject::destroy(dialog);
+	ushort result = mr::dialogs::execDialog(dialog);
 	return result;
 }
 

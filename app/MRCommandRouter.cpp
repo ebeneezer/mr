@@ -9,6 +9,7 @@
 #define Uses_TInputLine
 #define Uses_TLabel
 #define Uses_TListViewer
+#define Uses_THistory
 #define Uses_TDrawBuffer
 #define Uses_MsgBox
 #define Uses_TCheckBoxes
@@ -26,7 +27,11 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
+#include <fnmatch.h>
+#include <map>
 #include <sstream>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -34,7 +39,9 @@
 #include "../dialogs/MRFileInformationDialog.hpp"
 #include "../dialogs/MRAboutDialog.hpp"
 #include "../dialogs/MRSetupDialogs.hpp"
+#include "../dialogs/MRSetupDialogCommon.hpp"
 #include "../config/MRDialogPaths.hpp"
+#include "../app/utils/MRFileIOUtils.hpp"
 #include "../app/utils/MRStringUtils.hpp"
 #include "../mrmac/mrvm.hpp"
 #include "../app/commands/MRExternalCommand.hpp"
@@ -76,6 +83,63 @@ struct SearchMatchEntry {
 	std::string preview;
 	std::size_t previewMatchOffset = 0;
 	std::size_t previewMatchLength = 0;
+};
+
+struct MultiFileSearchCandidate {
+	std::string normalizedPath;
+	TMREditWindow *window = nullptr;
+	bool inMemory = false;
+};
+
+struct MultiFileSearchFileResult {
+	std::string normalizedPath;
+	std::string fileName;
+	std::vector<SearchMatchEntry> matches;
+	std::size_t selectedMatchIndex = 0;
+	bool startedInMemory = false;
+	bool temporaryWindow = false;
+	TMREditWindow *window = nullptr;
+};
+
+struct MultiFileSearchSession {
+	bool valid = false;
+	bool replaceMode = false;
+	bool caseSensitive = false;
+	bool regularExpressions = true;
+	bool keepFilesOpen = false;
+	std::string pattern;
+	std::string replacement;
+	std::vector<MultiFileSearchFileResult> files;
+	std::size_t selectedFileIndex = 0;
+};
+
+MultiFileSearchSession g_lastMultiFileSearchSession;
+
+enum class MultiFileCollectOutcome : unsigned char {
+	Success = 0,
+	NoHits = 1,
+	Cancelled = 2,
+	Error = 3
+};
+
+struct PendingTransientSelectionClear {
+	bool active = false;
+	std::string normalizedPath;
+	std::size_t start = 0;
+	std::size_t end = 0;
+};
+
+PendingTransientSelectionClear g_pendingTransientSelectionClear;
+
+enum : ushort {
+	cmMrMultiFileSelectionChanged = 4901,
+	cmMrMultiFileMatchPrev = 4902,
+	cmMrMultiFileMatchNext = 4903
+};
+
+enum : uchar {
+	kMultiFilespecHistoryId = 243,
+	kMultiPathHistoryId = 244
 };
 
 enum class PromptReplaceDecision : unsigned char {
@@ -187,6 +251,12 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Search / Search and Replace";
 		case cmMrSearchRepeatPrevious:
 			return "Search / Repeat previous search";
+		case cmMrSearchMultiFileSearch:
+			return "Search / Multiple file search";
+		case cmMrSearchListFilesFromLastSearch:
+			return "Search / List files from last search";
+		case cmMrSearchMultiFileSearchReplace:
+			return "Search / Multiple file search and replace";
 		case cmMrSearchPushMarker:
 			return "Search / Push position onto marker stack";
 		case cmMrSearchGetMarker:
@@ -274,16 +344,163 @@ void showPlaceholderCommandBox(const char *title) {
 	messageBox(mfInformation | mfOKButton, "%s\n\nPlaceholder implementation for now.", title);
 }
 
-TRect centeredDialogRect(short width, short height) {
-	TRect desk(0, 0, width, height);
+std::string normalizedSearchPath(const std::filesystem::path &path) {
+	std::error_code ec;
+	std::filesystem::path normalized = std::filesystem::weakly_canonical(path, ec);
 
-	if (TProgram::deskTop != nullptr)
-		desk = TProgram::deskTop->getExtent();
-	const short deskWidth = desk.b.x - desk.a.x;
-	const short deskHeight = desk.b.y - desk.a.y;
-	const short left = desk.a.x + std::max<short>(0, (deskWidth - width) / 2);
-	const short top = desk.a.y + std::max<short>(0, (deskHeight - height) / 2);
-	return TRect(left, top, left + width, top + height);
+	if (ec || normalized.empty()) {
+		ec.clear();
+		normalized = std::filesystem::absolute(path, ec);
+	}
+	if (ec || normalized.empty())
+		normalized = path.lexically_normal();
+	std::string result = normalized.lexically_normal().string();
+	for (char &ch : result)
+		if (ch == '\\')
+			ch = '/';
+	return result;
+}
+
+std::vector<std::string> splitFilespecTokens(std::string_view literal) {
+	std::vector<std::string> tokens;
+	std::istringstream in{std::string(literal)};
+	std::string token;
+
+	while (in >> token) {
+		token = trimAscii(token);
+		if (token.empty())
+			continue;
+		for (char &ch : token)
+			if (ch == '\\')
+				ch = '/';
+		tokens.push_back(token);
+	}
+	if (tokens.empty())
+		tokens.push_back("*.*");
+	return tokens;
+}
+
+bool filespecMatchesPath(const std::filesystem::path &candidatePath, const std::filesystem::path &startingPath,
+                         const std::vector<std::string> &tokens) {
+	std::string baseName = candidatePath.filename().string();
+	std::error_code relEc;
+	std::filesystem::path relativePath = std::filesystem::relative(candidatePath, startingPath, relEc);
+	std::string relativeText = relEc ? std::string() : relativePath.lexically_normal().string();
+	std::string fullText = normalizedSearchPath(candidatePath);
+
+	for (char &ch : relativeText)
+		if (ch == '\\')
+			ch = '/';
+	for (const std::string &token : tokens) {
+		const bool hasPathSeparator = token.find('/') != std::string::npos;
+		const char *subject = nullptr;
+
+		if (hasPathSeparator) {
+			if (!relativeText.empty() && relativeText != "." &&
+			    relativeText.rfind("../", 0) != 0 && relativeText != "..")
+				subject = relativeText.c_str();
+			else
+				subject = fullText.c_str();
+		} else
+			subject = baseName.c_str();
+		if (subject != nullptr && fnmatch(token.c_str(), subject, 0) == 0)
+			return true;
+	}
+	return false;
+}
+
+void appendCandidateUnique(const std::filesystem::path &path, bool inMemory, TMREditWindow *window,
+                           std::vector<MultiFileSearchCandidate> &outCandidates,
+                           std::map<std::string, std::size_t> &seen) {
+	const std::string normalized = normalizedSearchPath(path);
+	auto it = seen.find(normalized);
+
+	if (normalized.empty())
+		return;
+	if (it != seen.end()) {
+		MultiFileSearchCandidate &entry = outCandidates[it->second];
+		if (inMemory) {
+			entry.inMemory = true;
+			if (entry.window == nullptr)
+				entry.window = window;
+		}
+		return;
+	}
+	seen.emplace(normalized, outCandidates.size());
+	outCandidates.push_back(MultiFileSearchCandidate{normalized, window, inMemory});
+}
+
+std::vector<MultiFileSearchCandidate> collectMultiFileSearchCandidates(const MRMultiSearchDialogOptions &options) {
+	std::vector<MultiFileSearchCandidate> candidates;
+	std::map<std::string, std::size_t> seen;
+	std::filesystem::path startingPath = normalizeConfiguredPathInput(options.startingPath);
+	std::vector<std::string> filespecTokens = splitFilespecTokens(options.filespec);
+	std::error_code ec;
+
+	if (startingPath.empty()) {
+		startingPath = std::filesystem::current_path(ec);
+		if (ec)
+			startingPath = ".";
+	}
+	startingPath = startingPath.lexically_normal();
+	if (std::filesystem::is_regular_file(startingPath, ec) && !ec) {
+		if (filespecMatchesPath(startingPath, startingPath.parent_path(), filespecTokens))
+			appendCandidateUnique(startingPath, false, nullptr, candidates, seen);
+	} else if (std::filesystem::is_directory(startingPath, ec) && !ec) {
+		if (options.searchSubdirectories) {
+			std::filesystem::recursive_directory_iterator it(
+			    startingPath, std::filesystem::directory_options::skip_permission_denied, ec);
+			const std::filesystem::recursive_directory_iterator end;
+			for (; !ec && it != end; it.increment(ec)) {
+				if (!it->is_regular_file(ec) || ec) {
+					ec.clear();
+					continue;
+				}
+				if (!filespecMatchesPath(it->path(), startingPath, filespecTokens))
+					continue;
+				appendCandidateUnique(it->path(), false, nullptr, candidates, seen);
+			}
+		} else {
+			std::filesystem::directory_iterator it(startingPath, std::filesystem::directory_options::skip_permission_denied,
+			                                       ec);
+			const std::filesystem::directory_iterator end;
+			for (; !ec && it != end; it.increment(ec)) {
+				if (!it->is_regular_file(ec) || ec) {
+					ec.clear();
+					continue;
+				}
+				if (!filespecMatchesPath(it->path(), startingPath, filespecTokens))
+					continue;
+				appendCandidateUnique(it->path(), false, nullptr, candidates, seen);
+			}
+		}
+	}
+
+	if (options.searchFilesInMemory) {
+		std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+		for (TMREditWindow *window : windows) {
+			TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+			std::filesystem::path windowPath;
+			if (editor == nullptr || !editor->hasPersistentFileName())
+				continue;
+			windowPath = editor->persistentFileName();
+			if (windowPath.empty())
+				continue;
+			if (!filespecMatchesPath(windowPath, startingPath, filespecTokens))
+				continue;
+			appendCandidateUnique(windowPath, true, window, candidates, seen);
+		}
+	}
+
+	std::sort(candidates.begin(), candidates.end(),
+	          [](const MultiFileSearchCandidate &lhs, const MultiFileSearchCandidate &rhs) {
+		          return lhs.normalizedPath < rhs.normalizedPath;
+	          });
+	return candidates;
+}
+
+[[maybe_unused]] TRect centeredDialogRect(short width, short height) {
+	return mr::dialogs::centeredDialogRect(width, height);
 }
 
 std::string escapeRegexLiteral(std::string_view value) {
@@ -317,6 +534,55 @@ const char *wrappedSearchMessage(MRSearchDirection direction) {
 void postSearchWarning(std::string_view text) {
 	mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEventFollowup, std::string(text),
 	                               mr::messageline::Kind::Warning, mr::messageline::kPriorityMedium);
+}
+
+void postNoHitsWarning() {
+	mr::messageline::postTimed(mr::messageline::Owner::HeroEventFollowup, "no hits found",
+	                           mr::messageline::Kind::Warning, std::chrono::seconds(5),
+	                           mr::messageline::kPriorityMedium);
+}
+
+void postSearchCancelledError() {
+	mr::messageline::postTimed(mr::messageline::Owner::HeroEventFollowup, "search cancelled",
+	                           mr::messageline::Kind::Error, std::chrono::seconds(5),
+	                           mr::messageline::kPriorityHigh);
+}
+
+void postMultiSearchProgress(std::size_t filesSearched, std::size_t totalHits) {
+	const std::string message = "files searched: " + std::to_string(filesSearched) + ", " +
+	                            std::to_string(totalHits) + " hits";
+	mr::messageline::postTimed(mr::messageline::Owner::HeroEventFollowup, message,
+	                           mr::messageline::Kind::Info, std::chrono::seconds(5),
+	                           mr::messageline::kPriorityMedium);
+}
+
+bool shouldCancelLongRunningSearch() {
+	auto pollEscFromTarget = [](TView *target) {
+		TEvent event;
+		if (target == nullptr)
+			return false;
+		while (target->eventAvail()) {
+			target->getEvent(event);
+			if (event.what == evKeyDown && TKey(event.keyDown) == TKey(kbEsc))
+				return true;
+			target->putEvent(event);
+			break;
+		}
+		return false;
+	};
+
+	if (pollEscFromTarget(TProgram::application != nullptr ? static_cast<TView *>(TProgram::application)
+	                                                       : static_cast<TView *>(TProgram::deskTop)))
+		return true;
+	return pollEscFromTarget(static_cast<TView *>(TProgram::deskTop));
+}
+
+[[maybe_unused]] void armTransientSelectionClear(const std::string &normalizedPath, std::size_t start,
+                                                 std::size_t end) {
+	g_pendingTransientSelectionClear.active = true;
+	g_pendingTransientSelectionClear.normalizedPath = normalizedPath;
+	g_pendingTransientSelectionClear.start = std::min(start, end);
+	g_pendingTransientSelectionClear.end = std::max(start, end);
 }
 
 struct SearchPreviewParts {
@@ -574,7 +840,7 @@ class FoundListView : public TListViewer {
 bool showFoundListDialog(TMREditWindow *win, const std::string &pattern,
                          const MRSearchDialogOptions &options,
                          const std::vector<SearchMatchEntry> &matches, std::size_t &selectedIndex) {
-	TDialog *dialog = nullptr;
+	MRDialogFoundation *dialog = nullptr;
 	TScrollBar *scrollBar = nullptr;
 	FoundListView *listView = nullptr;
 	ushort result = cmCancel;
@@ -585,7 +851,7 @@ bool showFoundListDialog(TMREditWindow *win, const std::string &pattern,
 
 	if (TProgram::deskTop == nullptr || matches.empty())
 		return false;
-	dialog = new TDialog(centeredDialogRect(width, height), "FOUND LIST");
+	dialog = mr::dialogs::createScrollableDialog("FOUND LIST", width, height);
 	scrollBar = new TScrollBar(TRect(width - 3, 2, width - 2, height - 4));
 	dialog->insert(scrollBar);
 	listView = new FoundListView(TRect(2, 2, width - 3, height - 4), scrollBar, win, matches, pattern, options);
@@ -596,6 +862,7 @@ bool showFoundListDialog(TMREditWindow *win, const std::string &pattern,
 	dialog->insert(new TButton(TRect(width / 2 - 12, buttonY, width / 2 - 2, buttonY + 2), "~D~one", cmOK, bfDefault));
 	dialog->insert(new TButton(TRect(width / 2 + 1, buttonY, width / 2 + 13, buttonY + 2), "~C~ancel", cmCancel,
 	                           bfNormal));
+	dialog->finalizeLayout();
 	result = TProgram::deskTop->execView(dialog);
 	if (result == cmOK && listView->focused >= 0 &&
 	    static_cast<std::size_t>(listView->focused) < matches.size()) {
@@ -677,17 +944,18 @@ PromptReplaceDecision promptReplaceDecisionDialog(const std::string &title, cons
 		std::size_t afterMatchLength_;
 	};
 
-	TDialog *dialog = nullptr;
+	MRDialogFoundation *dialog = nullptr;
 	ushort result = cmCancel;
 
 	if (TProgram::deskTop == nullptr)
 		return PromptReplaceDecision::Cancel;
-	dialog = new TDialog(centeredDialogRect(88, 10), title.c_str());
+	dialog = mr::dialogs::createScrollableDialog(title.c_str(), 88, 10);
 	dialog->insert(new PromptPreviewView(TRect(2, 2, 86, 5), preview, replacement));
 	dialog->insert(new TButton(TRect(12, 6, 26, 8), "~R~eplace", cmOK, bfDefault));
 	dialog->insert(new TButton(TRect(28, 6, 40, 8), "~S~kip", cmNo, bfNormal));
 	dialog->insert(new TButton(TRect(42, 6, 60, 8), "Replace ~A~ll", cmYes, bfNormal));
 	dialog->insert(new TButton(TRect(62, 6, 76, 8), "~C~ancel", cmCancel, bfNormal));
+	dialog->finalizeLayout();
 	result = TProgram::deskTop->execView(dialog);
 	TObject::destroy(dialog);
 	if (result == cmOK)
@@ -743,16 +1011,17 @@ PromptSearchDecision promptSearchDecisionDialog(const SearchPreviewParts &previe
 		SearchPreviewParts preview_;
 	};
 
-	TDialog *dialog = nullptr;
+	MRDialogFoundation *dialog = nullptr;
 	ushort result = cmCancel;
 
 	if (TProgram::deskTop == nullptr)
 		return PromptSearchDecision::Cancel;
-	dialog = new TDialog(centeredDialogRect(88, 10), "SEARCH");
+	dialog = mr::dialogs::createScrollableDialog("SEARCH", 88, 10);
 	dialog->insert(new SearchPromptPreviewView(TRect(2, 2, 86, 5), preview));
 	dialog->insert(new TButton(TRect(23, 6, 35, 8), "~N~ext", cmOK, bfDefault));
 	dialog->insert(new TButton(TRect(37, 6, 49, 8), "~S~top", cmNo, bfNormal));
 	dialog->insert(new TButton(TRect(51, 6, 65, 8), "~C~ancel", cmCancel, bfNormal));
+	dialog->finalizeLayout();
 	result = TProgram::deskTop->execView(dialog);
 	TObject::destroy(dialog);
 	if (result == cmOK)
@@ -770,7 +1039,7 @@ bool promptSearchPattern(std::string &pattern, MRSearchDialogOptions &options) {
 	ushort modeChoice = 0;
 	ushort optionMask = 0;
 	ushort result = cmCancel;
-	TDialog *dialog = nullptr;
+	MRDialogFoundation *dialog = nullptr;
 	TInputLine *patternField = nullptr;
 	TRadioButtons *typeField = nullptr;
 	TRadioButtons *directionField = nullptr;
@@ -814,7 +1083,7 @@ bool promptSearchPattern(std::string &pattern, MRSearchDialogOptions &options) {
 	if (options.searchAllWindows)
 		optionMask |= 0x0008;
 
-	dialog = new TDialog(centeredDialogRect(96, 22), "SEARCH");
+	dialog = mr::dialogs::createScrollableDialog("SEARCH", 96, 22);
 	patternField = new TInputLine(TRect(15, 2, 93, 3), kInputBufferSize - 1);
 	dialog->insert(new TLabel(TRect(2, 2, 15, 3), "Search ~f~or:", patternField));
 	dialog->insert(patternField);
@@ -850,6 +1119,7 @@ bool promptSearchPattern(std::string &pattern, MRSearchDialogOptions &options) {
 	directionField->setData(&directionChoice);
 	modeField->setData(&modeChoice);
 	optionsField->setData(&optionMask);
+	dialog->finalizeLayout();
 	result = TProgram::deskTop->execView(dialog);
 	if (result != cmCancel) {
 		patternField->getData(patternInput);
@@ -884,7 +1154,7 @@ bool promptReplaceValues(std::string &pattern, std::string &replacement, MRSarDi
 	    options.leaveCursorAt == MRSarLeaveCursor::StartOfReplaceString ? 1 : 0;
 	ushort optionMask = 0;
 	ushort result = cmCancel;
-	TDialog *dialog = nullptr;
+	MRDialogFoundation *dialog = nullptr;
 	TInputLine *patternField = nullptr;
 	TInputLine *replacementField = nullptr;
 	TRadioButtons *typeField = nullptr;
@@ -933,7 +1203,7 @@ bool promptReplaceValues(std::string &pattern, std::string &replacement, MRSarDi
 	if (options.searchAllWindows)
 		optionMask |= 0x0008;
 
-	dialog = new TDialog(centeredDialogRect(92, 24), "SEARCH AND REPLACE");
+	dialog = mr::dialogs::createScrollableDialog("SEARCH AND REPLACE", 92, 24);
 	patternField = new TInputLine(TRect(17, 2, 89, 3), kPatternBufferSize - 1);
 	dialog->insert(new TLabel(TRect(2, 2, 16, 3), "Search ~f~or:", patternField));
 	dialog->insert(patternField);
@@ -981,6 +1251,7 @@ bool promptReplaceValues(std::string &pattern, std::string &replacement, MRSarDi
 	modeField->setData(&modeChoice);
 	leaveCursorField->setData(&leaveCursorChoice);
 	optionsField->setData(&optionMask);
+	dialog->finalizeLayout();
 	result = TProgram::deskTop->execView(dialog);
 	if (result != cmCancel) {
 		patternField->getData(patternInput);
@@ -1033,6 +1304,7 @@ bool promptGotoLineNumber(long &lineNumber) {
 bool compileSearchRegex(const std::string &patternExpression, bool ignoreCase, pcre2_code **outCode,
                         std::string &errorText) {
 	int errorCode = 0;
+	int jitCode = 0;
 	PCRE2_SIZE errorOffset = 0;
 	uint32_t options = PCRE2_UTF | PCRE2_UCP;
 	char errorBuffer[256];
@@ -1045,6 +1317,13 @@ bool compileSearchRegex(const std::string &patternExpression, bool ignoreCase, p
 	                         static_cast<PCRE2_SIZE>(patternExpression.size()), options, &errorCode,
 	                         &errorOffset, nullptr);
 	if (*outCode != nullptr) {
+		jitCode = pcre2_jit_compile(*outCode, PCRE2_JIT_COMPLETE);
+		if (jitCode < 0 && jitCode != PCRE2_ERROR_JIT_BADOPTION && jitCode != PCRE2_ERROR_NOMEMORY) {
+			errorText = "Regex JIT compile error: " + std::to_string(jitCode);
+			pcre2_code_free(*outCode);
+			*outCode = nullptr;
+			return false;
+		}
 		errorText.clear();
 		return true;
 	}
@@ -1354,6 +1633,982 @@ bool performSearch(TMREditWindow *win, const std::string &pattern, std::size_t s
 	pcre2_code_free(code);
 	if (outWrapped != nullptr)
 		*outWrapped = wrapped;
+	return true;
+}
+
+void seedHistoryOnce(uchar historyId, const std::vector<std::string> &entries) {
+	static std::set<uchar> seededIds;
+
+	if (!seededIds.insert(historyId).second)
+		return;
+	for (auto it = entries.rbegin(); it != entries.rend(); ++it)
+		historyAdd(historyId, *it);
+}
+
+bool promptMultiFileSearchValues(std::string &pattern, MRMultiSearchDialogOptions &options) {
+	enum { kFilespecBufferSize = 256, kSearchBufferSize = 256, kPathBufferSize = 256 };
+	char filespecInput[kFilespecBufferSize];
+	char searchInput[kSearchBufferSize];
+	char pathInput[kPathBufferSize];
+	ushort optionMask = 0;
+	ushort result = cmCancel;
+	MRDialogFoundation *dialog = nullptr;
+	TInputLine *filespecField = nullptr;
+	TInputLine *searchField = nullptr;
+	TInputLine *pathField = nullptr;
+	TCheckBoxes *optionsField = nullptr;
+	std::vector<std::string> filespecHistory;
+	std::vector<std::string> pathHistory;
+
+	std::memset(filespecInput, 0, sizeof(filespecInput));
+	std::memset(searchInput, 0, sizeof(searchInput));
+	std::memset(pathInput, 0, sizeof(pathInput));
+	if (TProgram::deskTop == nullptr)
+		return false;
+	configuredMultiFilespecHistoryEntries(filespecHistory);
+	configuredMultiPathHistoryEntries(pathHistory);
+	seedHistoryOnce(kMultiFilespecHistoryId, filespecHistory);
+	seedHistoryOnce(kMultiPathHistoryId, pathHistory);
+
+	strnzcpy(filespecInput, options.filespec.empty() ? "*.*" : options.filespec.c_str(), sizeof(filespecInput));
+	if (!options.searchText.empty())
+		strnzcpy(searchInput, options.searchText.c_str(), sizeof(searchInput));
+	else if (!g_searchUiState.pattern.empty())
+		strnzcpy(searchInput, g_searchUiState.pattern.c_str(), sizeof(searchInput));
+	if (!options.startingPath.empty())
+		strnzcpy(pathInput, options.startingPath.c_str(), sizeof(pathInput));
+	else {
+		std::string fallback = configuredLastFileDialogPath();
+		if (fallback.empty())
+			fallback = ".";
+		strnzcpy(pathInput, fallback.c_str(), sizeof(pathInput));
+	}
+
+	if (options.searchSubdirectories)
+		optionMask |= 0x0001;
+	if (options.caseSensitive)
+		optionMask |= 0x0002;
+	if (options.regularExpressions)
+		optionMask |= 0x0004;
+	if (options.searchFilesInMemory)
+		optionMask |= 0x0008;
+
+	dialog = mr::dialogs::createScrollableDialog("MULTIPLE FILE SEARCH", 100, 18);
+	filespecField = new TInputLine(TRect(14, 2, 96, 3), kFilespecBufferSize - 1);
+	dialog->insert(new TLabel(TRect(2, 2, 14, 3), "~F~ilespec:", filespecField));
+	dialog->insert(filespecField);
+	dialog->insert(new THistory(TRect(96, 2, 99, 3), filespecField, kMultiFilespecHistoryId));
+	searchField = new TInputLine(TRect(14, 4, 96, 5), kSearchBufferSize - 1);
+	dialog->insert(new TLabel(TRect(2, 4, 14, 5), "Search ~f~or:", searchField));
+	dialog->insert(searchField);
+	dialog->insert(new TStaticText(TRect(3, 6, 13, 7), "Options:"));
+	optionsField = new TCheckBoxes(
+	    TRect(3, 7, 45, 12),
+	    new TSItem("~S~earch sub-directories",
+	               new TSItem("~C~ase sensitive",
+	                          new TSItem("~R~egular expressions",
+	                                     new TSItem("search files in ~m~emory", nullptr)))));
+	dialog->insert(optionsField);
+	pathField = new TInputLine(TRect(16, 13, 96, 14), kPathBufferSize - 1);
+	dialog->insert(new TLabel(TRect(2, 13, 16, 14), "Starting ~p~ath:", pathField));
+	dialog->insert(pathField);
+	dialog->insert(new THistory(TRect(96, 13, 99, 14), pathField, kMultiPathHistoryId));
+	dialog->insert(new TButton(TRect(34, 15, 46, 17), "~O~K", cmOK, bfDefault));
+	dialog->insert(new TButton(TRect(49, 15, 64, 17), "~C~ancel", cmCancel, bfNormal));
+	filespecField->setData(filespecInput);
+	searchField->setData(searchInput);
+	pathField->setData(pathInput);
+	optionsField->setData(&optionMask);
+	dialog->finalizeLayout();
+	result = TProgram::deskTop->execView(dialog);
+	if (result != cmCancel) {
+		filespecField->getData(filespecInput);
+		searchField->getData(searchInput);
+		pathField->getData(pathInput);
+		optionsField->getData(&optionMask);
+		options.filespec = trimAscii(filespecInput);
+		if (options.filespec.empty())
+			options.filespec = "*.*";
+		options.searchSubdirectories = (optionMask & 0x0001) != 0;
+		options.caseSensitive = (optionMask & 0x0002) != 0;
+		options.regularExpressions = (optionMask & 0x0004) != 0;
+		options.searchFilesInMemory = (optionMask & 0x0008) != 0;
+		options.startingPath = normalizeConfiguredPathInput(pathInput);
+		if (options.startingPath.empty())
+			options.startingPath = ".";
+		pattern = trimAscii(searchInput);
+		options.searchText = pattern;
+		static_cast<void>(setConfiguredMultiSearchDialogOptions(options));
+		static_cast<void>(addConfiguredMultiFilespecHistoryEntry(options.filespec));
+		static_cast<void>(addConfiguredMultiPathHistoryEntry(options.startingPath));
+		historyAdd(kMultiFilespecHistoryId, options.filespec);
+		historyAdd(kMultiPathHistoryId, options.startingPath);
+	}
+	TObject::destroy(dialog);
+	return result != cmCancel;
+}
+
+bool promptMultiFileSarValues(std::string &pattern, std::string &replacement,
+                              MRMultiSarDialogOptions &options) {
+	enum {
+		kFilespecBufferSize = 256,
+		kSearchBufferSize = 256,
+		kReplacementBufferSize = 256,
+		kPathBufferSize = 256
+	};
+	char filespecInput[kFilespecBufferSize];
+	char searchInput[kSearchBufferSize];
+	char replacementInput[kReplacementBufferSize];
+	char pathInput[kPathBufferSize];
+	ushort optionMask = 0;
+	ushort result = cmCancel;
+	MRDialogFoundation *dialog = nullptr;
+	TInputLine *filespecField = nullptr;
+	TInputLine *searchField = nullptr;
+	TInputLine *replacementField = nullptr;
+	TInputLine *pathField = nullptr;
+	TCheckBoxes *optionsField = nullptr;
+	std::vector<std::string> filespecHistory;
+	std::vector<std::string> pathHistory;
+
+	std::memset(filespecInput, 0, sizeof(filespecInput));
+	std::memset(searchInput, 0, sizeof(searchInput));
+	std::memset(replacementInput, 0, sizeof(replacementInput));
+	std::memset(pathInput, 0, sizeof(pathInput));
+	if (TProgram::deskTop == nullptr)
+		return false;
+	configuredMultiFilespecHistoryEntries(filespecHistory);
+	configuredMultiPathHistoryEntries(pathHistory);
+	seedHistoryOnce(kMultiFilespecHistoryId, filespecHistory);
+	seedHistoryOnce(kMultiPathHistoryId, pathHistory);
+
+	strnzcpy(filespecInput, options.filespec.empty() ? "*.*" : options.filespec.c_str(), sizeof(filespecInput));
+	if (!options.searchText.empty())
+		strnzcpy(searchInput, options.searchText.c_str(), sizeof(searchInput));
+	else if (!g_searchUiState.pattern.empty())
+		strnzcpy(searchInput, g_searchUiState.pattern.c_str(), sizeof(searchInput));
+	if (!options.replacementText.empty())
+		strnzcpy(replacementInput, options.replacementText.c_str(), sizeof(replacementInput));
+	else if (!g_searchUiState.replacement.empty())
+		strnzcpy(replacementInput, g_searchUiState.replacement.c_str(), sizeof(replacementInput));
+	if (!options.startingPath.empty())
+		strnzcpy(pathInput, options.startingPath.c_str(), sizeof(pathInput));
+	else {
+		std::string fallback = configuredLastFileDialogPath();
+		if (fallback.empty())
+			fallback = ".";
+		strnzcpy(pathInput, fallback.c_str(), sizeof(pathInput));
+	}
+
+	if (options.searchSubdirectories)
+		optionMask |= 0x0001;
+	if (options.caseSensitive)
+		optionMask |= 0x0002;
+	if (options.regularExpressions)
+		optionMask |= 0x0004;
+	if (options.searchFilesInMemory)
+		optionMask |= 0x0008;
+	if (options.keepFilesOpen)
+		optionMask |= 0x0010;
+
+	dialog = mr::dialogs::createScrollableDialog("MULTIPLE FILE SEARCH AND REPLACE", 100, 20);
+	filespecField = new TInputLine(TRect(14, 2, 96, 3), kFilespecBufferSize - 1);
+	dialog->insert(new TLabel(TRect(2, 2, 14, 3), "~F~ilespec:", filespecField));
+	dialog->insert(filespecField);
+	dialog->insert(new THistory(TRect(96, 2, 99, 3), filespecField, kMultiFilespecHistoryId));
+	searchField = new TInputLine(TRect(14, 4, 96, 5), kSearchBufferSize - 1);
+	dialog->insert(new TLabel(TRect(2, 4, 14, 5), "Search ~f~or:", searchField));
+	dialog->insert(searchField);
+	replacementField = new TInputLine(TRect(14, 6, 96, 7), kReplacementBufferSize - 1);
+	dialog->insert(new TLabel(TRect(2, 6, 14, 7), "Replace ~w~ith:", replacementField));
+	dialog->insert(replacementField);
+	dialog->insert(new TStaticText(TRect(3, 8, 13, 9), "Options:"));
+	optionsField = new TCheckBoxes(
+	    TRect(3, 9, 47, 15),
+	    new TSItem("~S~earch sub-directories",
+	               new TSItem("~C~ase sensitive",
+	                          new TSItem("~R~egular expressions",
+	                                     new TSItem("search files in ~m~emory",
+	                                                new TSItem("~K~eep all files open", nullptr))))));
+	dialog->insert(optionsField);
+	pathField = new TInputLine(TRect(16, 16, 96, 17), kPathBufferSize - 1);
+	dialog->insert(new TLabel(TRect(2, 16, 16, 17), "Starting ~p~ath:", pathField));
+	dialog->insert(pathField);
+	dialog->insert(new THistory(TRect(96, 16, 99, 17), pathField, kMultiPathHistoryId));
+	dialog->insert(new TButton(TRect(34, 17, 46, 19), "~O~K", cmOK, bfDefault));
+	dialog->insert(new TButton(TRect(49, 17, 64, 19), "~C~ancel", cmCancel, bfNormal));
+	filespecField->setData(filespecInput);
+	searchField->setData(searchInput);
+	replacementField->setData(replacementInput);
+	pathField->setData(pathInput);
+	optionsField->setData(&optionMask);
+	dialog->finalizeLayout();
+	result = TProgram::deskTop->execView(dialog);
+	if (result != cmCancel) {
+		filespecField->getData(filespecInput);
+		searchField->getData(searchInput);
+		replacementField->getData(replacementInput);
+		pathField->getData(pathInput);
+		optionsField->getData(&optionMask);
+		options.filespec = trimAscii(filespecInput);
+		if (options.filespec.empty())
+			options.filespec = "*.*";
+		options.searchSubdirectories = (optionMask & 0x0001) != 0;
+		options.caseSensitive = (optionMask & 0x0002) != 0;
+		options.regularExpressions = (optionMask & 0x0004) != 0;
+		options.searchFilesInMemory = (optionMask & 0x0008) != 0;
+		options.keepFilesOpen = (optionMask & 0x0010) != 0;
+		options.startingPath = normalizeConfiguredPathInput(pathInput);
+		if (options.startingPath.empty())
+			options.startingPath = ".";
+		pattern = trimAscii(searchInput);
+		replacement = replacementInput;
+		options.searchText = pattern;
+		options.replacementText = replacement;
+		static_cast<void>(setConfiguredMultiSarDialogOptions(options));
+		static_cast<void>(addConfiguredMultiFilespecHistoryEntry(options.filespec));
+		static_cast<void>(addConfiguredMultiPathHistoryEntry(options.startingPath));
+		historyAdd(kMultiFilespecHistoryId, options.filespec);
+		historyAdd(kMultiPathHistoryId, options.startingPath);
+	}
+	TObject::destroy(dialog);
+	return result != cmCancel;
+}
+
+std::string baseNameFromPath(const std::string &path) {
+	const std::size_t slash = path.find_last_of('/');
+	return slash == std::string::npos ? path : path.substr(slash + 1);
+}
+
+bool collectMatchesForMultiFileText(const std::string &text, const MultiFileSearchSession &session,
+                                    std::vector<SearchMatchEntry> &outMatches, std::string &errorText) {
+	pcre2_code *code = nullptr;
+	const MRSearchTextType textType = session.regularExpressions ? MRSearchTextType::Pcre
+	                                                              : MRSearchTextType::Literal;
+
+	outMatches.clear();
+	if (!compileSearchRegex(buildSearchPatternExpression(session.pattern, textType),
+	                        !session.caseSensitive, &code, errorText))
+		return false;
+	static_cast<void>(collectRegexMatches(text, code, outMatches));
+	pcre2_code_free(code);
+	errorText.clear();
+	return true;
+}
+
+TMREditWindow *findOpenWindowForNormalizedPath(const std::string &normalizedPath) {
+	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+
+	for (TMREditWindow *window : windows) {
+		TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+		if (editor == nullptr || !editor->hasPersistentFileName())
+			continue;
+		if (normalizedSearchPath(editor->persistentFileName()) == normalizedPath)
+			return window;
+	}
+	return nullptr;
+}
+
+bool ensureWindowLoadedForSessionFile(MultiFileSearchFileResult &file, bool activate, std::string &errorText) {
+	TMREditWindow *window = file.window;
+
+	if (window == nullptr || window->getEditor() == nullptr ||
+	    !window->getEditor()->hasPersistentFileName() ||
+	    normalizedSearchPath(window->getEditor()->persistentFileName()) != file.normalizedPath) {
+		window = findOpenWindowForNormalizedPath(file.normalizedPath);
+		file.temporaryWindow = false;
+	}
+	if (window == nullptr) {
+		window = createEditorWindow(file.normalizedPath.c_str());
+		if (window == nullptr) {
+			errorText = "Unable to create editor window.";
+			return false;
+		}
+		if (!loadResolvedFileIntoWindow(window, file.normalizedPath, "Multi-file search load")) {
+			message(window, evCommand, cmClose, nullptr);
+			errorText = "Unable to load file: " + file.normalizedPath;
+			return false;
+		}
+		file.temporaryWindow = true;
+	}
+	if (activate)
+		static_cast<void>(mrActivateEditWindow(window));
+	file.window = window;
+	errorText.clear();
+	return true;
+}
+
+void closeTemporarySessionWindow(MultiFileSearchFileResult &file, bool keepFilesOpen) {
+	if (keepFilesOpen || !file.temporaryWindow || file.window == nullptr)
+		return;
+	message(file.window, evCommand, cmClose, nullptr);
+	file.window = nullptr;
+	file.temporaryWindow = false;
+}
+
+bool loadSessionFileText(const MultiFileSearchFileResult &file, std::string &outText,
+                         std::string &errorText) {
+	TMREditWindow *window = file.window;
+	TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+
+	if (editor != nullptr && editor->hasPersistentFileName() &&
+	    normalizedSearchPath(editor->persistentFileName()) == file.normalizedPath) {
+		outText = editor->snapshotText();
+		errorText.clear();
+		return true;
+	}
+	if (!readTextFile(file.normalizedPath, outText, errorText)) {
+		if (errorText.empty())
+			errorText = "Unable to read file: " + file.normalizedPath;
+		return false;
+	}
+	errorText.clear();
+	return true;
+}
+
+MultiFileSearchFileResult *currentSessionFile(MultiFileSearchSession &session) {
+	if (session.files.empty())
+		return nullptr;
+	if (session.selectedFileIndex >= session.files.size())
+		session.selectedFileIndex = session.files.size() - 1;
+	return &session.files[session.selectedFileIndex];
+}
+
+SearchMatchEntry *currentSessionMatch(MultiFileSearchSession &session) {
+	MultiFileSearchFileResult *file = currentSessionFile(session);
+	if (file == nullptr || file->matches.empty())
+		return nullptr;
+	if (file->selectedMatchIndex >= file->matches.size())
+		file->selectedMatchIndex = file->matches.size() - 1;
+	return &file->matches[file->selectedMatchIndex];
+}
+
+bool moveSessionMatch(MultiFileSearchSession &session, int direction, bool wrap) {
+	if (session.files.empty())
+		return false;
+	if (direction == 0)
+		return true;
+	MultiFileSearchFileResult *file = currentSessionFile(session);
+	if (file == nullptr || file->matches.empty())
+		return false;
+	if (direction > 0) {
+		if (file->selectedMatchIndex + 1 < file->matches.size()) {
+			++file->selectedMatchIndex;
+			return true;
+		}
+		for (std::size_t i = session.selectedFileIndex + 1; i < session.files.size(); ++i)
+			if (!session.files[i].matches.empty()) {
+				session.selectedFileIndex = i;
+				session.files[i].selectedMatchIndex = 0;
+				return true;
+			}
+		if (wrap)
+			for (std::size_t i = 0; i <= session.selectedFileIndex && i < session.files.size(); ++i)
+				if (!session.files[i].matches.empty()) {
+					session.selectedFileIndex = i;
+					session.files[i].selectedMatchIndex = 0;
+					return true;
+				}
+		return false;
+	}
+
+	if (file->selectedMatchIndex > 0) {
+		--file->selectedMatchIndex;
+		return true;
+	}
+	for (std::size_t i = session.selectedFileIndex; i > 0; --i)
+		if (!session.files[i - 1].matches.empty()) {
+			session.selectedFileIndex = i - 1;
+			session.files[i - 1].selectedMatchIndex = session.files[i - 1].matches.size() - 1;
+			return true;
+		}
+	if (wrap)
+		for (std::size_t i = session.files.size(); i > session.selectedFileIndex + 1; --i)
+			if (!session.files[i - 1].matches.empty()) {
+				session.selectedFileIndex = i - 1;
+				session.files[i - 1].selectedMatchIndex = session.files[i - 1].matches.size() - 1;
+				return true;
+			}
+	return false;
+}
+
+struct MultiPreviewLine {
+	std::string text;
+	std::size_t highlightStart = 0;
+	std::size_t highlightEnd = 0;
+};
+
+struct MultiPreviewBlock {
+	std::vector<MultiPreviewLine> lines;
+	std::size_t matchLineIndex = 0;
+};
+
+std::string sanitizePreviewLine(std::string value) {
+	for (char &ch : value) {
+		unsigned char uch = static_cast<unsigned char>(ch);
+		if (ch == '\t' || ch == '\r' || ch == '\n' || uch < 32 || uch >= 127)
+			ch = ' ';
+	}
+	return value;
+}
+
+bool buildMultiPreviewBlock(const std::string &text, const SearchMatchEntry &match, std::size_t rowCount,
+                            MultiPreviewBlock &out) {
+	const std::size_t safeStart = std::min(match.start, text.size());
+	const std::size_t safeEnd = std::min(std::max(match.end, safeStart), text.size());
+	std::size_t lineStart = safeStart;
+	std::size_t lineEnd = text.find('\n', safeStart);
+	std::vector<std::pair<std::size_t, std::size_t>> ranges;
+
+	out.lines.clear();
+	out.matchLineIndex = 0;
+	if (lineEnd == std::string::npos)
+		lineEnd = text.size();
+	if (lineStart > 0) {
+		std::size_t pos = safeStart;
+		std::size_t breakPos = text.rfind('\n', pos == 0 ? 0 : pos - 1);
+		lineStart = breakPos == std::string::npos ? 0 : breakPos + 1;
+	}
+
+	{
+		std::vector<std::pair<std::size_t, std::size_t>> before;
+		std::size_t cursor = lineStart;
+		while (cursor > 0 && before.size() < rowCount / 2) {
+			std::size_t prevEnd = cursor - 1;
+			std::size_t prevBreak = text.rfind('\n', prevEnd == 0 ? 0 : prevEnd - 1);
+			std::size_t prevStart = prevBreak == std::string::npos ? 0 : prevBreak + 1;
+			before.push_back(std::make_pair(prevStart, prevEnd));
+			cursor = prevStart;
+		}
+		ranges.assign(before.rbegin(), before.rend());
+	}
+	ranges.push_back(std::make_pair(lineStart, lineEnd));
+	while (ranges.size() < rowCount && lineEnd < text.size()) {
+		std::size_t nextStart = lineEnd + 1;
+		std::size_t nextEnd = text.find('\n', nextStart);
+		if (nextEnd == std::string::npos)
+			nextEnd = text.size();
+		ranges.push_back(std::make_pair(nextStart, nextEnd));
+		lineEnd = nextEnd;
+	}
+
+	out.matchLineIndex = ranges.size() > rowCount / 2 ? rowCount / 2 : ranges.size() - 1;
+	for (std::size_t i = 0; i < ranges.size(); ++i) {
+		MultiPreviewLine line;
+		std::size_t start = ranges[i].first;
+		std::size_t end = ranges[i].second;
+		line.text = sanitizePreviewLine(text.substr(start, end - start));
+		if (start <= safeStart && safeStart <= end) {
+			line.highlightStart = safeStart - start;
+			line.highlightEnd = std::min(end, safeEnd) - start;
+			out.matchLineIndex = i;
+		}
+		out.lines.push_back(line);
+	}
+	return !out.lines.empty();
+}
+
+class MultiFileListView : public TListViewer {
+  public:
+	MultiFileListView(const TRect &bounds, TScrollBar *aScrollBar, MultiFileSearchSession &session) noexcept
+	    : TListViewer(bounds, 1, nullptr, aScrollBar), session_(session) {
+		setRange(static_cast<short>(session_.files.size()));
+	}
+
+	void getText(char *dest, short item, short maxLen) override {
+		if (dest == nullptr || maxLen <= 0)
+			return;
+		if (item < 0 || static_cast<std::size_t>(item) >= session_.files.size()) {
+			dest[0] = EOS;
+			return;
+		}
+		const MultiFileSearchFileResult &file = session_.files[static_cast<std::size_t>(item)];
+		const std::string label =
+		    file.fileName + " (" + std::to_string(file.matches.size()) + ")";
+		std::strncpy(dest, label.c_str(), static_cast<std::size_t>(maxLen - 1));
+		dest[maxLen - 1] = EOS;
+	}
+
+	void focusItemNum(short item) override {
+		TListViewer::focusItemNum(item);
+		if (item >= 0 && static_cast<std::size_t>(item) < session_.files.size())
+			session_.selectedFileIndex = static_cast<std::size_t>(item);
+		message(owner, evBroadcast, cmMrMultiFileSelectionChanged, this);
+	}
+
+  private:
+	MultiFileSearchSession &session_;
+};
+
+class MultiPreviewView : public TView {
+  public:
+	MultiPreviewView(const TRect &bounds, MultiFileSearchSession &session) noexcept
+	    : TView(bounds), session_(session) {
+		options |= ofSelectable;
+		eventMask |= evMouseWheel | evMouseDown | evKeyDown;
+	}
+
+	void draw() override {
+		TDrawBuffer b;
+		unsigned char editorTextAttr = 0;
+		unsigned char editorHighlightAttr = 0;
+		const TColorAttr normal =
+		    configuredColorSlotOverride(13, editorTextAttr) ? TAttrPair(editorTextAttr) : getColor(1);
+		const TColorAttr highlight =
+		    configuredColorSlotOverride(14, editorHighlightAttr) ? TAttrPair(editorHighlightAttr) : getColor(3);
+		MultiFileSearchFileResult *file = currentSessionFile(session_);
+		SearchMatchEntry *match = currentSessionMatch(session_);
+		std::string text;
+		std::string error;
+		MultiPreviewBlock block;
+		std::size_t width = static_cast<std::size_t>(std::max<short>(0, size.x));
+		std::size_t textWidth = width;
+		std::size_t left = 0;
+
+		for (short y = 0; y < size.y; ++y) {
+			b.moveChar(0, ' ', normal, size.x);
+			writeLine(0, y, size.x, 1, b);
+		}
+		if (file == nullptr || match == nullptr)
+			return;
+		if (!loadSessionFileText(*file, text, error) || !buildMultiPreviewBlock(text, *match, static_cast<std::size_t>(size.y), block)) {
+			b.moveChar(0, ' ', normal, size.x);
+			b.moveStr(0, error.empty() ? "No preview." : error.c_str(), highlight, size.x);
+			writeLine(0, std::max<short>(0, size.y / 2), size.x, 1, b);
+			return;
+		}
+		{
+			const MultiPreviewLine &matchLine = block.lines[block.matchLineIndex];
+			left = centeredPreviewLeft(matchLine.text, matchLine.highlightStart,
+			                           matchLine.highlightEnd > matchLine.highlightStart
+			                               ? matchLine.highlightEnd - matchLine.highlightStart
+			                               : 1,
+			                           textWidth);
+		}
+		for (short y = 0; y < size.y; ++y) {
+			b.moveChar(0, ' ', normal, size.x);
+			if (static_cast<std::size_t>(y) < block.lines.size()) {
+				const MultiPreviewLine &line = block.lines[static_cast<std::size_t>(y)];
+				for (ushort x = 0; x < static_cast<ushort>(textWidth); ++x) {
+					const std::size_t source = left + static_cast<std::size_t>(x);
+					const bool inHighlight =
+					    source >= line.highlightStart && source < line.highlightEnd &&
+					    line.highlightEnd > line.highlightStart;
+					const char ch = source < line.text.size() ? line.text[source] : ' ';
+					b.putChar(x, static_cast<uchar>(ch));
+					b.putAttribute(x, inHighlight ? highlight : normal);
+				}
+			}
+			writeLine(0, y, size.x, 1, b);
+		}
+	}
+
+	void handleEvent(TEvent &event) override {
+		if (event.what == evMouseWheel && containsMouse(event)) {
+			if (event.mouse.wheel == mwUp || event.mouse.wheel == mwLeft) {
+				message(owner, evCommand, cmMrMultiFileMatchPrev, this);
+				clearEvent(event);
+				return;
+			}
+			if (event.mouse.wheel == mwDown || event.mouse.wheel == mwRight) {
+				message(owner, evCommand, cmMrMultiFileMatchNext, this);
+				clearEvent(event);
+				return;
+			}
+		}
+		if (event.what == evKeyDown) {
+			ushort keyCode = ctrlToArrow(event.keyDown.keyCode);
+			if (keyCode == kbUp || keyCode == kbPgUp) {
+				message(owner, evCommand, cmMrMultiFileMatchPrev, this);
+				clearEvent(event);
+				return;
+			}
+			if (keyCode == kbDown || keyCode == kbPgDn) {
+				message(owner, evCommand, cmMrMultiFileMatchNext, this);
+				clearEvent(event);
+				return;
+			}
+		}
+		TView::handleEvent(event);
+	}
+
+  private:
+	MultiFileSearchSession &session_;
+};
+
+enum class MultiDialogAction : unsigned char {
+	Cancel = 0,
+	Done = 1,
+	Replace = 2,
+	ReplaceAll = 3,
+	Skip = 4
+};
+
+MultiDialogAction runMultiFileResultsDialog(MultiFileSearchSession &session) {
+	enum : ushort {
+		cmMrMultiDone = 4951,
+		cmMrMultiReplace = 4952,
+		cmMrMultiReplaceAll = 4953,
+		cmMrMultiSkip = 4954
+	};
+	class MultiFileResultsDialog : public MRScrollableDialog {
+	  public:
+		MultiFileResultsDialog(MultiFileSearchSession &session)
+		    : TWindowInit(&TDialog::initFrame),
+		      MRScrollableDialog(centeredSetupDialogRect(118, 28),
+		                         session.replaceMode ? "MULTIPLE FILE SEARCH AND REPLACE"
+		                                             : "MULTIPLE FILE SEARCH",
+		                         118, 28),
+		      session_(session) {
+			const short buttonTop = 24;
+			const short rows = static_cast<short>(buttonTop - 4);
+			const short listTop = 2;
+			const short listBottom = static_cast<short>(listTop + rows);
+			const int gap = 2;
+			listScrollBar_ = new TScrollBar(TRect(29, listTop, 30, listBottom));
+			addManaged(listScrollBar_, TRect(29, listTop, 30, listBottom));
+			listView_ = new MultiFileListView(TRect(2, listTop, 29, listBottom), listScrollBar_, session_);
+			addManaged(listView_, TRect(2, listTop, 29, listBottom));
+			previewView_ = new MultiPreviewView(TRect(32, listTop, 116, listBottom), session_);
+			addManaged(previewView_, TRect(32, listTop, 116, listBottom));
+			addManaged(new TLabel(TRect(2, 1, 16, 2), "Fi~l~es:", listView_), TRect(2, 1, 16, 2));
+			addManaged(new TStaticText(TRect(32, 1, 102, 2), "Preview (Up/Down or mouse wheel = next/prev match)"),
+			           TRect(32, 1, 102, 2));
+			if (session_.replaceMode) {
+				const int replaceW = 12;
+				const int replaceAllW = 14;
+				const int skipW = 10;
+				const int cancelW = 12;
+				const int totalW = replaceW + replaceAllW + skipW + cancelW + (gap * 3);
+				int x = (118 - totalW) / 2;
+				addManaged(new TButton(TRect(x, buttonTop, x + replaceW, buttonTop + 2), "~R~eplace",
+				                       cmMrMultiReplace, bfDefault),
+				           TRect(x, buttonTop, x + replaceW, buttonTop + 2));
+				x += replaceW + gap;
+				addManaged(new TButton(TRect(x, buttonTop, x + replaceAllW, buttonTop + 2), "Replace ~A~ll",
+				                       cmMrMultiReplaceAll, bfNormal),
+				           TRect(x, buttonTop, x + replaceAllW, buttonTop + 2));
+				x += replaceAllW + gap;
+				addManaged(new TButton(TRect(x, buttonTop, x + skipW, buttonTop + 2), "~S~kip",
+				                       cmMrMultiSkip, bfNormal),
+				           TRect(x, buttonTop, x + skipW, buttonTop + 2));
+				x += skipW + gap;
+				addManaged(new TButton(TRect(x, buttonTop, x + cancelW, buttonTop + 2), "~C~ancel",
+				                       cmCancel, bfNormal),
+				           TRect(x, buttonTop, x + cancelW, buttonTop + 2));
+			} else {
+				const int doneW = 12;
+				const int cancelW = 12;
+				const int totalW = doneW + cancelW + gap;
+				int x = (118 - totalW) / 2;
+				addManaged(new TButton(TRect(x, buttonTop, x + doneW, buttonTop + 2), "~D~one", cmMrMultiDone,
+				                       bfDefault),
+				           TRect(x, buttonTop, x + doneW, buttonTop + 2));
+				x += doneW + gap;
+				addManaged(new TButton(TRect(x, buttonTop, x + cancelW, buttonTop + 2), "~C~ancel", cmCancel,
+				                       bfNormal),
+				           TRect(x, buttonTop, x + cancelW, buttonTop + 2));
+			}
+			initScrollIfNeeded();
+			selectContent();
+			if (session_.selectedFileIndex < session_.files.size())
+				listView_->focusItemNum(static_cast<short>(session_.selectedFileIndex));
+			else
+				listView_->focusItemNum(0);
+		}
+
+		void handleEvent(TEvent &event) override {
+			if (event.what == evCommand) {
+				switch (event.message.command) {
+					case cmMrMultiDone:
+					case cmMrMultiReplace:
+					case cmMrMultiReplaceAll:
+					case cmMrMultiSkip:
+						endModal(event.message.command);
+						clearEvent(event);
+						return;
+				}
+			}
+			if (event.what == evMouseWheel) {
+				if (event.mouse.wheel == mwUp || event.mouse.wheel == mwLeft)
+					message(this, evCommand, cmMrMultiFileMatchPrev, this);
+				else if (event.mouse.wheel == mwDown || event.mouse.wheel == mwRight)
+					message(this, evCommand, cmMrMultiFileMatchNext, this);
+				clearEvent(event);
+				return;
+			}
+			MRScrollableDialog::handleEvent(event);
+			if (event.what == evBroadcast && event.message.command == cmMrMultiFileSelectionChanged) {
+				previewView_->drawView();
+				clearEvent(event);
+				return;
+			}
+			if (event.what == evCommand && event.message.command == cmMrMultiFileMatchPrev) {
+				if (moveSessionMatch(session_, -1, true)) {
+					if (listView_ != nullptr)
+						listView_->focusItemNum(static_cast<short>(session_.selectedFileIndex));
+					previewView_->drawView();
+				}
+				clearEvent(event);
+				return;
+			}
+			if (event.what == evCommand && event.message.command == cmMrMultiFileMatchNext) {
+				if (moveSessionMatch(session_, 1, true)) {
+					if (listView_ != nullptr)
+						listView_->focusItemNum(static_cast<short>(session_.selectedFileIndex));
+					previewView_->drawView();
+				}
+				clearEvent(event);
+				return;
+			}
+		}
+
+	  private:
+		MultiFileSearchSession &session_;
+		TScrollBar *listScrollBar_ = nullptr;
+		MultiFileListView *listView_ = nullptr;
+		MultiPreviewView *previewView_ = nullptr;
+	};
+
+	ushort result = cmCancel;
+	MultiFileResultsDialog *dialog = nullptr;
+
+	if (session.files.empty() || TProgram::deskTop == nullptr)
+		return MultiDialogAction::Cancel;
+	dialog = new MultiFileResultsDialog(session);
+	result = mr::dialogs::execDialog(dialog);
+	if (result == cmMrMultiDone)
+		return MultiDialogAction::Done;
+	if (result == cmMrMultiReplace)
+		return MultiDialogAction::Replace;
+	if (result == cmMrMultiReplaceAll)
+		return MultiDialogAction::ReplaceAll;
+	if (result == cmMrMultiSkip)
+		return MultiDialogAction::Skip;
+	return MultiDialogAction::Cancel;
+}
+
+bool activateSessionCurrentMatch(MultiFileSearchSession &session) {
+	MultiFileSearchFileResult *file = currentSessionFile(session);
+	SearchMatchEntry *match = currentSessionMatch(session);
+	std::string error;
+	std::size_t end = 0;
+	TMRFileEditor *editor = nullptr;
+	MRSearchDialogOptions searchOptions;
+
+	if (file == nullptr || match == nullptr)
+		return false;
+	if (!ensureWindowLoadedForSessionFile(*file, true, error)) {
+		messageBox(mfError | mfOKButton, "%s", error.c_str());
+		return false;
+	}
+	editor = file->window != nullptr ? file->window->getEditor() : nullptr;
+	if (editor == nullptr)
+		return false;
+	end = std::max(match->end, match->start);
+	if (end == match->start) {
+		if (end < editor->bufferLength())
+			++end;
+		else if (match->start > 0)
+			--end;
+	}
+	editor->setCursorOffset(match->start);
+	file->window->applyCommittedBlockState(TMREditWindow::bmStream, false, static_cast<uint>(match->start),
+	                                       static_cast<uint>(end));
+	editor->revealCursor(True);
+	searchOptions.textType = session.regularExpressions ? MRSearchTextType::Pcre : MRSearchTextType::Literal;
+	searchOptions.caseSensitive = session.caseSensitive;
+	updateMiniMapFindMarkers(file->window, session.pattern, searchOptions);
+	g_searchUiState.hasPrevious = true;
+	g_searchUiState.pattern = session.pattern;
+	g_searchUiState.lastStart = match->start;
+	g_searchUiState.lastEnd = end;
+	g_searchUiState.lastOptions = searchOptions;
+	return true;
+}
+
+bool removeSessionFileAt(MultiFileSearchSession &session, std::size_t index) {
+	if (index >= session.files.size())
+		return false;
+	closeTemporarySessionWindow(session.files[index], session.keepFilesOpen);
+	session.files.erase(session.files.begin() + static_cast<std::ptrdiff_t>(index));
+	if (session.files.empty()) {
+		session.selectedFileIndex = 0;
+		return true;
+	}
+	if (session.selectedFileIndex >= session.files.size())
+		session.selectedFileIndex = session.files.size() - 1;
+	return true;
+}
+
+bool refreshMatchesForSessionFile(MultiFileSearchSession &session, std::size_t fileIndex, std::string &errorText) {
+	std::string text;
+	std::vector<SearchMatchEntry> matches;
+
+	if (fileIndex >= session.files.size())
+		return false;
+	if (!loadSessionFileText(session.files[fileIndex], text, errorText))
+		return false;
+	if (!collectMatchesForMultiFileText(text, session, matches, errorText))
+		return false;
+	session.files[fileIndex].matches.swap(matches);
+	if (session.files[fileIndex].selectedMatchIndex >= session.files[fileIndex].matches.size())
+		session.files[fileIndex].selectedMatchIndex = session.files[fileIndex].matches.empty()
+		                                                  ? 0
+		                                                  : session.files[fileIndex].matches.size() - 1;
+	return true;
+}
+
+bool replaceCurrentSessionMatch(MultiFileSearchSession &session, bool advanceAfterReplace,
+                                std::string &errorText) {
+	MultiFileSearchFileResult *file = currentSessionFile(session);
+	SearchMatchEntry *match = currentSessionMatch(session);
+	TMRFileEditor *editor = nullptr;
+	std::size_t start = 0;
+	std::size_t end = 0;
+	std::size_t nextOffset = 0;
+	std::size_t fileIndex = session.selectedFileIndex;
+
+	if (file == nullptr || match == nullptr)
+		return false;
+	if (!ensureWindowLoadedForSessionFile(*file, false, errorText))
+		return false;
+	editor = file->window != nullptr ? file->window->getEditor() : nullptr;
+	if (editor == nullptr) {
+		errorText = "No editor available for replacement.";
+		return false;
+	}
+	start = match->start;
+	end = match->end;
+	nextOffset = start + std::max<std::size_t>(1, session.replacement.size());
+	if (!editor->replaceRangeAndSelect(static_cast<uint>(start), static_cast<uint>(end),
+	                                   session.replacement.c_str(),
+	                                   static_cast<uint>(session.replacement.size()))) {
+		errorText = "Replace failed.";
+		return false;
+	}
+	if (!file->window->saveCurrentFile()) {
+		errorText = "Save failed for: " + file->normalizedPath;
+		return false;
+	}
+	if (!refreshMatchesForSessionFile(session, fileIndex, errorText))
+		return false;
+	if (fileIndex >= session.files.size())
+		return false;
+	if (session.files[fileIndex].matches.empty()) {
+		removeSessionFileAt(session, fileIndex);
+		errorText.clear();
+		return true;
+	}
+	{
+		std::size_t nextIndex = 0;
+		while (nextIndex < session.files[fileIndex].matches.size() &&
+		       session.files[fileIndex].matches[nextIndex].start < nextOffset)
+			++nextIndex;
+		if (nextIndex >= session.files[fileIndex].matches.size())
+			nextIndex = session.files[fileIndex].matches.size() - 1;
+		session.files[fileIndex].selectedMatchIndex = nextIndex;
+		session.selectedFileIndex = fileIndex;
+	}
+	if (advanceAfterReplace)
+		static_cast<void>(moveSessionMatch(session, 1, false));
+	errorText.clear();
+	return true;
+}
+
+MultiFileCollectOutcome collectMultiFileSession(MultiFileSearchSession &session,
+                                                const MRMultiSearchDialogOptions &options,
+                                                const std::string &pattern,
+                                                const std::string &replacement, bool replaceMode,
+                                                bool keepFilesOpen, std::string &errorText) {
+	std::vector<MultiFileSearchCandidate> candidates = collectMultiFileSearchCandidates(options);
+	pcre2_code *code = nullptr;
+	std::string compileError;
+	MRSearchTextType textType = options.regularExpressions ? MRSearchTextType::Pcre : MRSearchTextType::Literal;
+	std::size_t filesSearched = 0;
+	std::size_t totalHits = 0;
+	auto lastProgressAt = std::chrono::steady_clock::now();
+	bool cancelled = false;
+
+	session = MultiFileSearchSession();
+	session.valid = false;
+	session.replaceMode = replaceMode;
+	session.caseSensitive = options.caseSensitive;
+	session.regularExpressions = options.regularExpressions;
+	session.pattern = pattern;
+	session.replacement = replacement;
+	session.keepFilesOpen = keepFilesOpen;
+	if (pattern.empty()) {
+		errorText = "Search text must not be empty.";
+		return MultiFileCollectOutcome::Error;
+	}
+	if (!compileSearchRegex(buildSearchPatternExpression(pattern, textType), !options.caseSensitive, &code,
+	                        compileError)) {
+		errorText = "Invalid search pattern: " + compileError;
+		return MultiFileCollectOutcome::Error;
+	}
+	postMultiSearchProgress(filesSearched, totalHits);
+	for (const MultiFileSearchCandidate &candidate : candidates) {
+		std::string text;
+		MultiFileSearchFileResult file;
+		std::vector<SearchMatchEntry> matches;
+		TMREditWindow *window = candidate.window;
+		TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+		bool loaded = false;
+
+		if (shouldCancelLongRunningSearch()) {
+			cancelled = true;
+			break;
+		}
+
+		if (editor != nullptr && editor->hasPersistentFileName() &&
+		    normalizedSearchPath(editor->persistentFileName()) == candidate.normalizedPath) {
+			text = editor->snapshotText();
+			loaded = true;
+		} else if (readTextFile(candidate.normalizedPath, text))
+			loaded = true;
+		if (loaded)
+			static_cast<void>(collectRegexMatches(text, code, matches));
+		++filesSearched;
+		totalHits += matches.size();
+		const auto now = std::chrono::steady_clock::now();
+		if (now - lastProgressAt >= std::chrono::seconds(5)) {
+			postMultiSearchProgress(filesSearched, totalHits);
+			lastProgressAt = now;
+		}
+		if (matches.empty())
+			continue;
+		file.normalizedPath = candidate.normalizedPath;
+		file.fileName = baseNameFromPath(candidate.normalizedPath);
+		file.matches.swap(matches);
+		file.selectedMatchIndex = 0;
+		file.startedInMemory = candidate.inMemory;
+		file.window = candidate.window;
+		session.files.push_back(file);
+	}
+	if (code != nullptr)
+		pcre2_code_free(code);
+	postMultiSearchProgress(filesSearched, totalHits);
+	if (cancelled)
+		postSearchCancelledError();
+	if (session.files.empty()) {
+		errorText.clear();
+		return cancelled ? MultiFileCollectOutcome::Cancelled : MultiFileCollectOutcome::NoHits;
+	}
+	session.valid = true;
+	session.selectedFileIndex = 0;
+	errorText.clear();
+	return cancelled ? MultiFileCollectOutcome::Cancelled : MultiFileCollectOutcome::Success;
+}
+
+void closeTemporaryWindowsForSession(MultiFileSearchSession &session) {
+	for (MultiFileSearchFileResult &file : session.files)
+		closeTemporarySessionWindow(file, session.keepFilesOpen);
+}
+
+bool showMultiFileSessionCollectionError(const std::string &errorText) {
+	if (!errorText.empty())
+		messageBox(mfError | mfOKButton, "%s", errorText.c_str());
 	return true;
 }
 
@@ -1704,6 +2959,133 @@ bool handleSearchReplace() {
 	return true;
 }
 
+bool handleSearchMultiFileSearch() {
+	MRMultiSearchDialogOptions options = configuredMultiSearchDialogOptions();
+	std::string pattern;
+	for (;;) {
+		MultiFileSearchSession session;
+		std::string errorText;
+		if (!promptMultiFileSearchValues(pattern, options))
+			return true;
+		switch (collectMultiFileSession(session, options, pattern, "", false, false, errorText)) {
+			case MultiFileCollectOutcome::Error:
+				static_cast<void>(showMultiFileSessionCollectionError(errorText));
+				continue;
+			case MultiFileCollectOutcome::NoHits:
+				postNoHitsWarning();
+				continue;
+			case MultiFileCollectOutcome::Cancelled:
+				if (session.files.empty())
+					continue;
+				break;
+			case MultiFileCollectOutcome::Success:
+				break;
+		}
+		g_lastMultiFileSearchSession = session;
+		switch (runMultiFileResultsDialog(g_lastMultiFileSearchSession)) {
+			case MultiDialogAction::Done:
+				static_cast<void>(activateSessionCurrentMatch(g_lastMultiFileSearchSession));
+				return true;
+			case MultiDialogAction::Cancel:
+				continue;
+			default:
+				return true;
+		}
+	}
+	return true;
+}
+
+bool handleSearchListFilesFromLastSearch() {
+	MultiDialogAction action = MultiDialogAction::Cancel;
+
+	if (!g_lastMultiFileSearchSession.valid || g_lastMultiFileSearchSession.files.empty()) {
+		messageBox(mfInformation | mfOKButton, "No previous multi-file search list.");
+		return true;
+	}
+	action = runMultiFileResultsDialog(g_lastMultiFileSearchSession);
+	if (action == MultiDialogAction::Done)
+		static_cast<void>(activateSessionCurrentMatch(g_lastMultiFileSearchSession));
+	return true;
+}
+
+bool handleSearchMultiFileSearchReplace() {
+	MRMultiSarDialogOptions sarOptions = configuredMultiSarDialogOptions();
+	std::string pattern;
+	std::string replacement;
+	for (;;) {
+		MRMultiSearchDialogOptions searchOptions;
+		MultiFileSearchSession session;
+		std::string errorText;
+		std::size_t replacedCount = 0;
+		bool returnToSearchDialog = false;
+		if (!promptMultiFileSarValues(pattern, replacement, sarOptions))
+			return true;
+		searchOptions.searchSubdirectories = sarOptions.searchSubdirectories;
+		searchOptions.caseSensitive = sarOptions.caseSensitive;
+		searchOptions.regularExpressions = sarOptions.regularExpressions;
+		searchOptions.searchFilesInMemory = sarOptions.searchFilesInMemory;
+		searchOptions.filespec = sarOptions.filespec;
+		searchOptions.startingPath = sarOptions.startingPath;
+		switch (collectMultiFileSession(session, searchOptions, pattern, replacement, true,
+		                                sarOptions.keepFilesOpen, errorText)) {
+			case MultiFileCollectOutcome::Error:
+				static_cast<void>(showMultiFileSessionCollectionError(errorText));
+				continue;
+			case MultiFileCollectOutcome::NoHits:
+				postNoHitsWarning();
+				continue;
+			case MultiFileCollectOutcome::Cancelled:
+				if (session.files.empty())
+					continue;
+				break;
+			case MultiFileCollectOutcome::Success:
+				break;
+		}
+		while (!session.files.empty()) {
+			const MultiDialogAction action = runMultiFileResultsDialog(session);
+			if (action == MultiDialogAction::Cancel) {
+				returnToSearchDialog = true;
+				break;
+			}
+			if (action == MultiDialogAction::Skip) {
+				if (!moveSessionMatch(session, 1, false))
+					break;
+				continue;
+			}
+			if (action == MultiDialogAction::ReplaceAll) {
+				while (!session.files.empty()) {
+					if (!replaceCurrentSessionMatch(session, false, errorText)) {
+						if (!errorText.empty())
+							messageBox(mfError | mfOKButton, "%s", errorText.c_str());
+						closeTemporaryWindowsForSession(session);
+						return true;
+					}
+					++replacedCount;
+				}
+				break;
+			}
+			if (action == MultiDialogAction::Replace) {
+				if (!replaceCurrentSessionMatch(session, true, errorText)) {
+					if (!errorText.empty())
+						messageBox(mfError | mfOKButton, "%s", errorText.c_str());
+					closeTemporaryWindowsForSession(session);
+					return true;
+				}
+				++replacedCount;
+			}
+		}
+		closeTemporaryWindowsForSession(session);
+		if (returnToSearchDialog)
+			continue;
+		if (replacedCount == 0)
+			postSearchWarning("No replacements.");
+		else
+			postSearchWarning(std::to_string(replacedCount) + " replacements");
+		return true;
+	}
+	return true;
+}
+
 bool handleSearchGotoLineNumber() {
 	TMREditWindow *win = currentEditWindow();
 	TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
@@ -1912,17 +3294,7 @@ bool dispatchEditorClipboardCommand(ushort editorCommand, bool requiresWritable)
 }
 
 ushort execDialogWithDataLocal(TDialog *dialog, void *data) {
-	ushort result = cmCancel;
-
-	if (dialog == nullptr || TProgram::deskTop == nullptr)
-		return cmCancel;
-	if (data != nullptr)
-		dialog->setData(data);
-	result = TProgram::deskTop->execView(dialog);
-	if (result != cmCancel && data != nullptr)
-		dialog->getData(data);
-	TObject::destroy(dialog);
-	return result;
+	return mr::dialogs::execDialogWithData(dialog, data);
 }
 
 void syncPersistentBlocksMenuState() {
@@ -2099,6 +3471,33 @@ bool handleClearCurrentOutput() {
 	return true;
 }
 
+void clearTransientSelectionIfPending(const TEvent &event) {
+	if (!g_pendingTransientSelectionClear.active || event.what != evKeyDown)
+		return;
+	g_pendingTransientSelectionClear.active = false;
+	for (TMREditWindow *window : allEditWindowsInZOrder()) {
+		TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+		if (editor == nullptr || !editor->hasPersistentFileName())
+			continue;
+		if (normalizedSearchPath(editor->persistentFileName()) != g_pendingTransientSelectionClear.normalizedPath)
+			continue;
+		{
+			std::size_t selStart = editor->selectionStartOffset();
+			std::size_t selEnd = editor->selectionEndOffset();
+			if (selEnd < selStart)
+				std::swap(selStart, selEnd);
+			if (selStart != g_pendingTransientSelectionClear.start ||
+			    selEnd != g_pendingTransientSelectionClear.end)
+				break;
+		}
+		{
+			const std::size_t cursor = editor->cursorOffset();
+			editor->setSelectionOffsets(cursor, cursor);
+		}
+		break;
+	}
+}
+
 } // namespace
 
 bool handleMRCommand(ushort command) {
@@ -2150,6 +3549,15 @@ bool handleMRCommand(ushort command) {
 
 		case cmMrSearchRepeatPrevious:
 			return handleSearchRepeatPrevious();
+
+		case cmMrSearchMultiFileSearch:
+			return handleSearchMultiFileSearch();
+
+		case cmMrSearchListFilesFromLastSearch:
+			return handleSearchListFilesFromLastSearch();
+
+		case cmMrSearchMultiFileSearchReplace:
+			return handleSearchMultiFileSearchReplace();
 
 		case cmMrSearchGotoLineNumber:
 			return handleSearchGotoLineNumber();
@@ -2324,4 +3732,8 @@ bool handleMRCommand(ushort command) {
 			return false;
 		}
 	}
+}
+
+void clearTransientSearchSelectionOnUserInput(const TEvent &event) {
+	clearTransientSelectionIfPending(event);
 }

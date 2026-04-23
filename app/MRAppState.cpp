@@ -145,6 +145,9 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrSearchFindText, hasEditor);
 	setCommandEnabled(cmMrSearchReplace, canModify);
 	setCommandEnabled(cmMrSearchRepeatPrevious, hasEditor);
+	setCommandEnabled(cmMrSearchMultiFileSearch, true);
+	setCommandEnabled(cmMrSearchListFilesFromLastSearch, true);
+	setCommandEnabled(cmMrSearchMultiFileSearchReplace, true);
 	setCommandEnabled(cmMrSearchPushMarker, hasEditor);
 	setCommandEnabled(cmMrSearchGetMarker, hasEditor);
 	setCommandEnabled(cmMrSearchSetRandomAccessMark, hasEditor);
