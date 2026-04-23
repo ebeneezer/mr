@@ -5,6 +5,8 @@
 
 - Never write Japanese.
 
+- Rede mich mit "Sie" oder "Dr. Raus" an.
+
 Use English only for:
 - code
 - identifiers
@@ -26,11 +28,13 @@ Use English only for:
 
 - Code style: Semantisch korrekte Bezeichner ohne leading und ohne trailing underscore. Für Methoden und Membder und Klassen. Werden neue Sourcefiles benötigt ist dafür eine Freigabe einzuholen.
 
-- Keine multiplen gleiche Stringliterale. Diese sind zu const zusammenzufassen.
+- Code style: Keine multiplen gleiche Stringliterale. Diese sind zu const zusammenzuführen.
 
 - Code style: Maximum Human Readability.
 
 - Strategie und Coding: Dies ist ein agil geführtes Innovationsprojekt. Neue Funktionen werden zuerst in Setup Dialogen implementiert, notwendige Setup Values und Keys werden ausschliesslich im zentralen key/value Hash gehalten und von dort in Richtung settings.mrmac serialisiert. Dezentrale Speicher dieser Art sind verboten. Keine überflüssigen File I/O. Es wird nur serialisiert wenn dies notwendig ist und es wird nicht reloaded aus dem Filesystem. Der k/v Hash ist stets inhaltlich gleich zum Inhalt von settings.mrmac.
+
+- Strategie und Coding: Es wird zuerst die Funktion komplett implementiert und debugged. Erst nach Empfehlung und Freigabe werden Regressionstests implementiert.
 
 - Code style: Performance maximieren.
 
@@ -45,5 +49,3 @@ Use English only for:
 - Code style: Kein AI Boilerplate.
 
 - Code style: Bezeichner dürfen keine Underscores am Begin oder Ende haben.
-
-- Rede mich mit "Sie" oder "Dr. Raus" an.
