@@ -20,6 +20,7 @@ enum class Owner : unsigned char {
     HeroEvent,
     HeroEventFollowup,
     MacroMarquee,
+    MacroBrain,
     DialogValidation,
     DialogInteraction
 };

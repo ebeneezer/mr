@@ -1,5 +1,5 @@
-#ifndef TMRFRAME_HPP
-#define TMRFRAME_HPP
+#ifndef MRFRAME_HPP
+#define MRFRAME_HPP
 
 #define Uses_TFrame
 #define Uses_TRect
@@ -14,9 +14,9 @@
 #include <string>
 #include <vector>
 
-class TMRTaskOverviewView : public TView {
+class MRTaskOverviewView : public TView {
   public:
-	TMRTaskOverviewView(const TRect &bounds) noexcept;
+	MRTaskOverviewView(const TRect &bounds) noexcept;
 	void setLines(const std::vector<std::string> &lines);
 	virtual void draw() override;
 	virtual TPalette &getPalette() const override;
@@ -25,17 +25,17 @@ class TMRTaskOverviewView : public TView {
 	std::vector<std::string> lines_;
 };
 
-class TMRTaskOverviewWindow : public TWindow {
+class MRTaskOverviewWindow : public TWindow {
   public:
-	TMRTaskOverviewWindow(const TRect &bounds) noexcept;
+	MRTaskOverviewWindow(const TRect &bounds) noexcept;
 	void setLines(const std::vector<std::string> &lines);
 	virtual TPalette &getPalette() const override;
 
   private:
-	TMRTaskOverviewView *content_;
+	MRTaskOverviewView *content_;
 };
 
-class TMRFrame : public TFrame {
+class MRFrame : public TFrame {
   public:
 	struct MarkerState {
 		bool modified;
@@ -46,25 +46,30 @@ class TMRFrame : public TFrame {
 		bool readOnlyVisible;
 		bool recording;
 		bool recordingVisible;
+		bool macroBrain;
+		bool macroBrainVisible;
 
 		MarkerState() noexcept
 		    : modified(false), insertMode(false), background(false), backgroundVisible(false), readOnly(false),
-		      readOnlyVisible(false), recording(false), recordingVisible(false) {
+		      readOnlyVisible(false), recording(false), recordingVisible(false), macroBrain(false),
+		      macroBrainVisible(false) {
 		}
 
 		MarkerState(bool aModified, bool anInsertMode, bool aBackground, bool aBackgroundVisible, bool aReadOnly,
-		            bool aReadOnlyVisible, bool aRecording, bool aRecordingVisible) noexcept
+		            bool aReadOnlyVisible, bool aRecording, bool aRecordingVisible, bool aMacroBrain,
+		            bool aMacroBrainVisible) noexcept
 		    : modified(aModified), insertMode(anInsertMode), background(aBackground),
 		      backgroundVisible(aBackgroundVisible), readOnly(aReadOnly), readOnlyVisible(aReadOnlyVisible),
-		      recording(aRecording), recordingVisible(aRecordingVisible) {
+		      recording(aRecording), recordingVisible(aRecordingVisible), macroBrain(aMacroBrain),
+		      macroBrainVisible(aMacroBrainVisible) {
 		}
 	};
 
 	using MarkerStateProvider = std::function<MarkerState()>;
 	using TaskOverviewProvider = std::function<std::vector<std::string>()>;
 
-	TMRFrame(const TRect &bounds) noexcept;
-	virtual ~TMRFrame() override;
+	MRFrame(const TRect &bounds) noexcept;
+	virtual ~MRFrame() override;
 
 	virtual void draw() override;
 	virtual void handleEvent(TEvent &event) override;
@@ -87,7 +92,7 @@ class TMRFrame : public TFrame {
 
 	MarkerStateProvider markerStateProvider_;
 	TaskOverviewProvider taskOverviewProvider_;
-	TMRTaskOverviewWindow *taskOverviewPopup_;
+	MRTaskOverviewWindow *taskOverviewPopup_;
 	TGroup *taskOverviewPopupOwner_;
 };
 

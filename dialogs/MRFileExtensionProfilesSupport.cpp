@@ -4,7 +4,7 @@
 #include "MRSetupDialogCommon.hpp"
 #include "MRSetupDialogs.hpp"
 
-#include "../app/TMREditorApp.hpp"
+#include "../app/MREditorApp.hpp"
 #include "../config/MRDialogPaths.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
@@ -841,10 +841,17 @@ EditProfileDraft makeCopiedDraft(const EditProfileDraft &source,
 }
 
 bool validateDraftsForUi(const std::vector<EditProfileDraft> &drafts, int currentIndex,
-                         std::string &errorText) {
+                         const EditProfileDraft *currentDraftOverride, std::string &errorText) {
 	std::map<std::string, std::vector<std::size_t>> ids;
 	std::map<std::string, std::vector<std::size_t>> exts;
 	std::vector<std::size_t> order;
+	const auto draftAtIndex = [&](std::size_t index) -> const EditProfileDraft & {
+		if (currentDraftOverride != nullptr && currentIndex >= 0 &&
+		    currentIndex < static_cast<int>(drafts.size()) &&
+		    static_cast<std::size_t>(currentIndex) == index)
+			return *currentDraftOverride;
+		return drafts[index];
+	};
 
 	order.reserve(drafts.size());
 	if (currentIndex >= 0 && currentIndex < static_cast<int>(drafts.size()))
@@ -855,21 +862,23 @@ bool validateDraftsForUi(const std::vector<EditProfileDraft> &drafts, int curren
 
 	for (std::size_t i : order) {
 		std::string localError;
-		if (!validateDraftLocally(drafts[i], localError)) {
+		const EditProfileDraft &draft = draftAtIndex(i);
+		if (!validateDraftLocally(draft, localError)) {
 			if (static_cast<int>(i) == currentIndex)
 				errorText = localError;
 			else
-				errorText = profileOwnerLabel(drafts[i]) + ": " + localError;
+				errorText = profileOwnerLabel(draft) + ": " + localError;
 			return false;
 		}
 	}
 
 	for (std::size_t i = 0; i < drafts.size(); ++i) {
-		if (drafts[i].isDefault)
+		const EditProfileDraft &draft = draftAtIndex(i);
+		if (draft.isDefault)
 			continue;
-		ids[upperAscii(trimAscii(drafts[i].id))].push_back(i);
+		ids[upperAscii(trimAscii(draft.id))].push_back(i);
 		{
-			std::vector<std::string> selectors = splitExtensionLiteral(drafts[i].extensionsLiteral);
+			std::vector<std::string> selectors = splitExtensionLiteral(draft.extensionsLiteral);
 			std::string extError;
 			if (!normalizeEditExtensionSelectors(selectors, &extError)) {
 				if (extError.rfind("Extensions", 0) == 0)
@@ -877,7 +886,7 @@ bool validateDraftsForUi(const std::vector<EditProfileDraft> &drafts, int curren
 				if (static_cast<int>(i) == currentIndex)
 					errorText = extError;
 				else
-					errorText = profileOwnerLabel(drafts[i]) + ": " + extError;
+					errorText = profileOwnerLabel(draft) + ": " + extError;
 				return false;
 			}
 			if (!selectors.empty())
@@ -890,15 +899,17 @@ bool validateDraftsForUi(const std::vector<EditProfileDraft> &drafts, int curren
 			std::vector<std::string> owners;
 			for (std::size_t idx : entry.second)
 				if (static_cast<int>(idx) != currentIndex)
-					owners.push_back(profileOwnerLabel(drafts[idx]));
+					owners.push_back(profileOwnerLabel(draftAtIndex(idx)));
 			if (currentIndex >= 0 &&
 			    std::find(entry.second.begin(), entry.second.end(),
 			              static_cast<std::size_t>(currentIndex)) != entry.second.end()) {
-				errorText = "Duplicate profile ID '" + trimAscii(drafts[currentIndex].id) + "': " +
+				errorText = "Duplicate profile ID '" +
+				            trimAscii(draftAtIndex(static_cast<std::size_t>(currentIndex)).id) + "': " +
 				            joinCommaSeparatedList(owners);
 				return false;
 			}
-			errorText = "Duplicate profile ID '" + trimAscii(drafts[entry.second.front()].id) + "': " +
+			errorText = "Duplicate profile ID '" +
+			            trimAscii(draftAtIndex(entry.second.front()).id) + "': " +
 			            joinCommaSeparatedList(owners);
 			return false;
 		}
@@ -908,7 +919,7 @@ bool validateDraftsForUi(const std::vector<EditProfileDraft> &drafts, int curren
 			std::vector<std::string> owners;
 			for (std::size_t idx : entry.second)
 				if (static_cast<int>(idx) != currentIndex)
-					owners.push_back(profileOwnerLabel(drafts[idx]));
+					owners.push_back(profileOwnerLabel(draftAtIndex(idx)));
 			if (currentIndex >= 0 &&
 			    std::find(entry.second.begin(), entry.second.end(),
 			              static_cast<std::size_t>(currentIndex)) != entry.second.end()) {
@@ -924,7 +935,7 @@ bool validateDraftsForUi(const std::vector<EditProfileDraft> &drafts, int curren
 }
 
 bool saveAndReloadEditProfiles(const std::vector<EditProfileDraft> &drafts, std::string &errorText) {
-	TMREditorApp *app = dynamic_cast<TMREditorApp *>(TProgram::application);
+	MREditorApp *app = dynamic_cast<MREditorApp *>(TProgram::application);
 	MRSetupPaths paths;
 	MRSettingsWriteReport writeReport;
 	MRFileExtensionEditorSettings defaultsCandidate;
@@ -932,7 +943,7 @@ bool saveAndReloadEditProfiles(const std::vector<EditProfileDraft> &drafts, std:
 	std::string defaultThemePathCandidate;
 
 	if (app == nullptr) {
-		errorText = "Application error: TMREditorApp is unavailable.";
+		errorText = "Application error: MREditorApp is unavailable.";
 		return false;
 	}
 	if (!draftsToConfiguredState(drafts, defaultsCandidate, profilesCandidate, defaultThemePathCandidate,

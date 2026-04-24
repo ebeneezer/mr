@@ -1,13 +1,13 @@
-#ifndef TMRTEXTBUFFERMODEL_HPP
-#define TMRTEXTBUFFERMODEL_HPP
+#ifndef MRTEXTBUFFERMODEL_HPP
+#define MRTEXTBUFFERMODEL_HPP
 
 #include <cstddef>
 #include <string>
 
-#include "TMRSyntax.hpp"
+#include "MRSyntax.hpp"
 #include "MRTextDocument.hpp"
 
-class TMRTextBufferModel {
+class MRTextBufferModel {
   public:
 	using Document = mr::editor::TextDocument;
 	using ReadSnapshot = mr::editor::ReadSnapshot;
@@ -34,9 +34,9 @@ class TMRTextBufferModel {
 		bool blockMarkingOn = false;
 	};
 
-	TMRTextBufferModel() noexcept
+	MRTextBufferModel() noexcept
 	    : document_(), cursor_(), selection_(), modified_(false),
-	      language_(TMRSyntaxLanguage::PlainText), syntaxPathHint_(), syntaxTitleHint_(),
+	      language_(MRSyntaxLanguage::PlainText), syntaxPathHint_(), syntaxTitleHint_(),
 	      undoStack_(), redoStack_() {
 	}
 
@@ -256,7 +256,7 @@ class TMRTextBufferModel {
 		language_ = tmrDetectSyntaxLanguage(syntaxPathHint_, syntaxTitleHint_);
 	}
 
-	TMRSyntaxLanguage language() const noexcept {
+	MRSyntaxLanguage language() const noexcept {
 		return language_;
 	}
 
@@ -264,7 +264,7 @@ class TMRTextBufferModel {
 		return tmrSyntaxLanguageName(language_);
 	}
 
-	TMRSyntaxTokenMap tokenMapForLine(std::size_t pos) const {
+	MRSyntaxTokenMap tokenMapForLine(std::size_t pos) const {
 		return tmrBuildTokenMapForTextLine(language_, document_.lineText(pos));
 	}
 
@@ -322,7 +322,7 @@ class TMRTextBufferModel {
 	Cursor cursor_;
 	Selection selection_;
 	bool modified_;
-	TMRSyntaxLanguage language_;
+	MRSyntaxLanguage language_;
 	std::string syntaxPathHint_;
 	std::string syntaxTitleHint_;
 	std::vector<CustomUndoRecord> undoStack_;

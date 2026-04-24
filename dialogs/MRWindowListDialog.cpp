@@ -16,6 +16,7 @@
 
 #include "MRWindowListDialog.hpp"
 #include "MRSetupDialogCommon.hpp"
+#include "../app/MRCommands.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -26,7 +27,7 @@
 #include <unistd.h>
 
 #include "../app/commands/MRWindowCommands.hpp"
-#include "../ui/TMREditWindow.hpp"
+#include "../ui/MREditWindow.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
 namespace {
@@ -39,8 +40,12 @@ enum : ushort {
 	cmMRWorkspaceLoad,
 };
 
+class WindowListDialog;
+
+WindowListDialog *g_manageWindowListDialog = nullptr;
+
 struct WindowListEntry {
-	TMREditWindow *window;
+	MREditWindow *window;
 	std::string fileLabel;
 	std::string slotLabel;
 	std::string directoryLabel;
@@ -95,7 +100,7 @@ std::string slotLabelFor(std::size_t index) {
 	return std::string(buffer);
 }
 
-bool isWindowEmptyUntitled(TMREditWindow *win) {
+bool isWindowEmptyUntitled(MREditWindow *win) {
 	if (win == nullptr)
 		return false;
 	if (win->currentFileName()[0] != '\0')
@@ -103,15 +108,19 @@ bool isWindowEmptyUntitled(TMREditWindow *win) {
 	return win->isBufferEmpty();
 }
 
-std::vector<TMREditWindow *> allEditWindows() {
+std::vector<MREditWindow *> allEditWindows() {
 	return allEditWindowsInZOrder();
 }
 
-TMREditWindow *preferredLinkTarget(TMREditWindow *current) {
-	std::vector<TMREditWindow *> windows = allEditWindows();
-	TMREditWindow *firstOther = nullptr;
-	TMREditWindow *emptyUntitled = nullptr;
-	TMREditWindow *sameFile = nullptr;
+bool containsWindow(const std::vector<MREditWindow *> &windows, MREditWindow *candidate) {
+	return std::find(windows.begin(), windows.end(), candidate) != windows.end();
+}
+
+MREditWindow *preferredLinkTarget(MREditWindow *current) {
+	std::vector<MREditWindow *> windows = allEditWindows();
+	MREditWindow *firstOther = nullptr;
+	MREditWindow *emptyUntitled = nullptr;
+	MREditWindow *sameFile = nullptr;
 	std::string currentFile;
 
 	if (current == nullptr)
@@ -135,7 +144,7 @@ TMREditWindow *preferredLinkTarget(TMREditWindow *current) {
 	return firstOther;
 }
 
-bool saveWindow(TMREditWindow *win) {
+bool saveWindow(MREditWindow *win) {
 	if (win == nullptr)
 		return false;
 	if (win->isReadOnly()) {
@@ -161,12 +170,12 @@ bool saveWindow(TMREditWindow *win) {
 	return true;
 }
 
-void closeWindow(TMREditWindow *win) {
+void closeWindow(MREditWindow *win) {
 	if (win != nullptr)
 		message(win, evCommand, cmClose, nullptr);
 }
 
-void hideWindow(TMREditWindow *win) {
+void hideWindow(MREditWindow *win) {
 	if (win != nullptr) {
 		setWindowManuallyHidden(win, true);
 		win->hide();
@@ -229,6 +238,11 @@ class WindowListView : public TListViewer {
 
 class WindowListDialog : public MRDialogFoundation {
   public:
+	~WindowListDialog() override {
+		if (g_manageWindowListDialog == this)
+			g_manageWindowListDialog = nullptr;
+	}
+
 	void saveWorkspaceWithDialog() {
 		char fileName[MAXPATH];
 
@@ -255,7 +269,7 @@ class WindowListDialog : public MRDialogFoundation {
 		TObject::destroy(dialog);
 	}
 
-	WindowListDialog(MRWindowListMode aMode, TMREditWindow *aCurrent, TMREditWindow *aPreferred)
+	WindowListDialog(MRWindowListMode aMode, MREditWindow *aCurrent, MREditWindow *aPreferred)
 	    : TWindowInit(&TDialog::initFrame),
 	      MRDialogFoundation(centeredBounds(computeWidth(), computeHeight(aMode, aCurrent)), "WINDOW LIST",
 	                         computeWidth(), computeHeight(aMode, aCurrent)),
@@ -321,8 +335,8 @@ class WindowListDialog : public MRDialogFoundation {
 			const int rowWidth = okWidth + cancelWidth + helpWidth + buttonGap * 2;
 			int x = centeredRowStart(rowWidth);
 
-			insert(new TButton(TRect(x, bottomButtonY, x + okWidth, bottomButtonY + 2), "~O~K<ENTER>", cmOK,
-			                   bfDefault));
+			insert(new TButton(TRect(x, bottomButtonY, x + okWidth, bottomButtonY + 2), "~D~one<ENTER>",
+			                   mode == mrwlManageWindows ? cmClose : cmOK, bfDefault));
 			x += okWidth + buttonGap;
 			insert(new TButton(TRect(x, bottomButtonY, x + cancelWidth, bottomButtonY + 2),
 			                   "~C~ancel<ESC>", cmCancel, bfNormal));
@@ -335,18 +349,56 @@ class WindowListDialog : public MRDialogFoundation {
 		focusPreferred();
 		listView->select();
 		updateHideToggleState();
+		setDialogValidationHook([this]() {
+			DialogValidationResult result;
+			result.valid = currentSelection() != nullptr;
+			if (!result.valid)
+				result.warningText = "Select window.";
+			return result;
+		});
 	}
 
-	TMREditWindow *selectedWindow() const {
+	MREditWindow *selectedWindow() const {
 		if (selected != nullptr)
 			return selected;
 		return currentSelection();
 	}
 
+	void activateModeless() {
+		refreshEntries();
+		focusPreferred();
+		if (TProgram::deskTop != nullptr)
+			TProgram::deskTop->setCurrent(this, TView::normalSelect);
+		else
+			select();
+	}
+
 	void handleEvent(TEvent &event) override {
+		if (event.what == evBroadcast && event.message.command == cmMrWindowTopologyChanged) {
+			if (mode == mrwlManageWindows) {
+				refreshEntries();
+				if (listView != nullptr)
+					listView->drawView();
+				drawView();
+			}
+			clearEvent(event);
+			return;
+		}
+		if (mode == mrwlManageWindows && event.what == evCommand &&
+		    (event.message.command == cmCancel || event.message.command == cmClose)) {
+			g_manageWindowListDialog = nullptr;
+			message(this, evCommand, cmClose, nullptr);
+			clearEvent(event);
+			return;
+		}
 		if (event.what == evCommand && event.message.command == cmOK) {
 			selected = currentSelection();
 			if (selected == nullptr) {
+				clearEvent(event);
+				return;
+			}
+			if (mode == mrwlManageWindows) {
+				static_cast<void>(mrActivateEditWindow(selected));
 				clearEvent(event);
 				return;
 			}
@@ -434,7 +486,7 @@ class WindowListDialog : public MRDialogFoundation {
 		return std::max(68, std::min(72, deskWidth - 2));
 	}
 
-	static int computeHeight(MRWindowListMode, TMREditWindow *) {
+	static int computeHeight(MRWindowListMode, MREditWindow *) {
 		std::size_t count = allEditWindows().size();
 		int visibleRows = std::max<int>(4, std::min<int>(static_cast<int>(count), 10));
 		TRect desk = TProgram::deskTop->getExtent();
@@ -459,7 +511,7 @@ class WindowListDialog : public MRDialogFoundation {
 	}
 
 	void collectEntries() {
-		std::vector<TMREditWindow *> windows = allEditWindows();
+		const std::vector<MREditWindow *> windows = allEditWindows();
 		entries.clear();
 		rows.clear();
 		for (std::size_t i = 0; i < windows.size(); ++i) {
@@ -482,14 +534,28 @@ class WindowListDialog : public MRDialogFoundation {
 		}
 	}
 
+	void sanitizeTrackedWindows() {
+		const std::vector<MREditWindow *> windows = allEditWindows();
+		if (!containsWindow(windows, current))
+			current = nullptr;
+		if (!containsWindow(windows, preferred))
+			preferred = nullptr;
+		if (!containsWindow(windows, selected))
+			selected = nullptr;
+	}
+
 	void refreshEntries() {
 		int oldFocus = listView != nullptr ? listView->focused : 0;
+		sanitizeTrackedWindows();
 		collectEntries();
 		if (listView != nullptr)
 			listView->setItems(rows);
 		if (entries.empty()) {
 			selected = nullptr;
-			endModal(cmCancel);
+			if (mode == mrwlManageWindows)
+				message(this, evCommand, cmClose, nullptr);
+			else
+				endModal(cmCancel);
 			return;
 		}
 		if (oldFocus < 0)
@@ -502,7 +568,7 @@ class WindowListDialog : public MRDialogFoundation {
 
 	void focusPreferred() {
 		int index = 0;
-		TMREditWindow *target = mode == mrwlActivateWindow ? current : preferred;
+		MREditWindow *target = mode == mrwlActivateWindow ? current : preferred;
 		for (std::size_t i = 0; i < entries.size(); ++i) {
 			if (entries[i].window == target) {
 				index = static_cast<int>(i);
@@ -513,7 +579,7 @@ class WindowListDialog : public MRDialogFoundation {
 			listView->focusItemNum(static_cast<short>(index));
 	}
 
-	TMREditWindow *currentSelection() const {
+	MREditWindow *currentSelection() const {
 		if (listView == nullptr || listView->focused < 0 ||
 		    static_cast<std::size_t>(listView->focused) >= entries.size())
 			return nullptr;
@@ -521,7 +587,7 @@ class WindowListDialog : public MRDialogFoundation {
 	}
 
 	void handleDelete() {
-		TMREditWindow *win = currentSelection();
+		MREditWindow *win = currentSelection();
 		if (win == nullptr)
 			return;
 		closeWindow(win);
@@ -530,7 +596,7 @@ class WindowListDialog : public MRDialogFoundation {
 	}
 
 	void handleSave() {
-		TMREditWindow *win = currentSelection();
+		MREditWindow *win = currentSelection();
 		if (win == nullptr)
 			return;
 		saveWindow(win);
@@ -538,22 +604,35 @@ class WindowListDialog : public MRDialogFoundation {
 	}
 
 	void handleHide() {
-		TMREditWindow *win = currentSelection();
+		MREditWindow *win = currentSelection();
+		std::string line;
 		if (win == nullptr)
 			return;
-		if ((win->state & sfVisible) != 0) {
+		line = "Window List handleHide";
+		line += (win->state & sfVisible) != 0 ? " hide " : " unhide ";
+		line += "'";
+		line += win->getTitle(0) != nullptr ? win->getTitle(0) : "?";
+		line += "' visible=";
+		line += (win->state & sfVisible) != 0 ? "1" : "0";
+		line += " selected=";
+		line += (win->state & sfSelected) != 0 ? "1" : "0";
+		line += " hidden=";
+		line += isWindowManuallyHidden(win) ? "1" : "0";
+		mrLogMessage(line);
+		if (!isWindowManuallyHidden(win)) {
 			hideWindow(win);
 			static_cast<void>(mrEnsureUsableWorkWindow());
 		}
 		else {
 			setWindowManuallyHidden(win, false);
+			selected = win;
 			static_cast<void>(mrActivateEditWindow(win));
 		}
 		refreshEntries();
 	}
 
 	bool canToggleCurrentSelection() const {
-		TMREditWindow *win = currentSelection();
+		MREditWindow *win = currentSelection();
 		return win != nullptr;
 	}
 
@@ -565,7 +644,7 @@ class WindowListDialog : public MRDialogFoundation {
 	}
 
 	void handleHideAll() {
-		std::vector<TMREditWindow *> windows = allEditWindows();
+		std::vector<MREditWindow *> windows = allEditWindows();
 		for (auto & window : windows)
 			hideWindow(window);
 		static_cast<void>(mrEnsureUsableWorkWindow());
@@ -573,38 +652,78 @@ class WindowListDialog : public MRDialogFoundation {
 	}
 
 	MRWindowListMode mode;
-	TMREditWindow *current;
-	TMREditWindow *preferred;
+	MREditWindow *current;
+	MREditWindow *preferred;
 	WindowListView *listView;
 	TScrollBar *scrollBar;
 	TButton *hideToggleButton;
-	TMREditWindow *selected;
+	MREditWindow *selected;
 	int lastFocusedIndex;
 	std::vector<WindowListEntry> entries;
 	std::vector<std::string> rows;
 };
 } // namespace
 
-TMREditWindow *mrShowWindowListDialog(MRWindowListMode mode, TMREditWindow *current) {
-	TMREditWindow *preferred = mode == mrwlSelectLinkTarget ? preferredLinkTarget(current) : current;
+MREditWindow *mrShowWindowListDialog(MRWindowListMode mode, MREditWindow *current) {
+	MREditWindow *preferred = mode == mrwlSelectLinkTarget ? preferredLinkTarget(current) : current;
 	WindowListDialog *dialog;
 	ushort result;
-	TMREditWindow *selected;
+	MREditWindow *selected;
 
 	if (TProgram::deskTop == nullptr)
 		return nullptr;
+
+	if (mode == mrwlManageWindows) {
+		if (g_manageWindowListDialog != nullptr) {
+			g_manageWindowListDialog->activateModeless();
+			return nullptr;
+		}
+		dialog = new WindowListDialog(mode, current, preferred);
+		dialog->finalizeLayout();
+		g_manageWindowListDialog = dialog;
+		TProgram::deskTop->insert(dialog);
+		dialog->activateModeless();
+		return nullptr;
+	}
 
 	dialog = new WindowListDialog(mode, current, preferred);
 	dialog->finalizeLayout();
 	result = TProgram::deskTop->execView(dialog);
 	selected = dialog->selectedWindow();
+	{
+		std::string line = "Window List result=" + std::to_string(result);
+		line += " selected='";
+		line += selected != nullptr && selected->getTitle(0) != nullptr ? selected->getTitle(0) : "";
+		line += "'";
+		if (selected != nullptr) {
+			line += " visible=";
+			line += (selected->state & sfVisible) != 0 ? "1" : "0";
+			line += " selected=";
+			line += (selected->state & sfSelected) != 0 ? "1" : "0";
+			line += " hidden=";
+			line += isWindowManuallyHidden(selected) ? "1" : "0";
+		}
+		mrLogMessage(line);
+	}
 	TObject::destroy(dialog);
 
 	if (result == cmHelp) {
 		static_cast<void>(mrShowProjectHelp());
 		return nullptr;
 	}
+	if (result == cmCancel && mode == mrwlManageWindows && selected != nullptr)
+		return selected;
 	if (result != cmOK)
 		return nullptr;
 	return selected;
+}
+
+void mrRefreshManageWindowListDialog() {
+	if (g_manageWindowListDialog != nullptr)
+		g_manageWindowListDialog->activateModeless();
+}
+
+void mrNotifyWindowTopologyChanged() {
+	if (g_manageWindowListDialog != nullptr)
+		message(g_manageWindowListDialog, evBroadcast, cmMrWindowTopologyChanged, nullptr);
 }

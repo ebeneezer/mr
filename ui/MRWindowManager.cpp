@@ -1,5 +1,5 @@
 #include "MRWindowManager.hpp"
-#include "TMREditWindow.hpp"
+#include "MREditWindow.hpp"
 #include "../config/MRDialogPaths.hpp"
 
 #define Uses_TProgram
@@ -8,7 +8,7 @@
 #include <tvision/tv.h>
 #include <algorithm>
 
-void MRWindowManager::handleDragView(TMREditWindow* window, TEvent& event, uchar mode, TRect& limits, TPoint minSize, TPoint maxSize) {
+void MRWindowManager::handleDragView(MREditWindow* window, TEvent& event, uchar mode, TRect& limits, TPoint minSize, TPoint maxSize) {
     if (!configuredWindowManager() || (mode & dmDragMove) == 0 || event.what != evMouseDown) {
         window->TWindow::dragView(event, mode, limits, minSize, maxSize);
         return;

@@ -4,6 +4,7 @@
 #define Uses_TObject
 #define Uses_TEvent
 #define Uses_TRect
+#define Uses_TView
 #define Uses_TButton
 #define Uses_TFileDialog
 #define Uses_TInputLine
@@ -25,15 +26,19 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <fnmatch.h>
+#include <functional>
+#include <iomanip>
 #include <map>
 #include <sstream>
 #include <set>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "../dialogs/MRFileInformationDialog.hpp"
@@ -49,19 +54,19 @@
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../dialogs/MRMacroFileDialog.hpp"
 #include "../dialogs/MRWindowListDialog.hpp"
-#include "../ui/TMREditWindow.hpp"
-#include "../ui/TMRMenuBar.hpp"
+#include "../ui/MREditWindow.hpp"
+#include "../ui/MRMenuBar.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "../coprocessor/MRCoprocessor.hpp"
 #include "../ui/MRMessageLineController.hpp"
-#include "TMREditorApp.hpp"
+#include "MREditorApp.hpp"
 #include "MRCommands.hpp"
 
 #define PCRE2_CODE_UNIT_WIDTH 8
 #include <pcre2.h>
 
 namespace {
-bool startExternalCommandInWindow(TMREditWindow *win, const std::string &commandLine, bool replaceBuffer,
+bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandLine, bool replaceBuffer,
                                   bool activate, bool closeOnFailure);
 
 struct SearchUiState {
@@ -75,6 +80,25 @@ struct SearchUiState {
 
 SearchUiState g_searchUiState;
 
+struct CharacterTableEntry {
+	std::string text;
+	std::string label;
+	std::string detail;
+};
+
+enum class CharacterTableKind : unsigned char {
+	Ascii = 0,
+	Emoji = 1
+};
+
+struct CharacterTableLayout {
+	const char *title;
+	int width;
+	int height;
+	int columns;
+	int cellWidth;
+};
+
 struct SearchMatchEntry {
 	std::size_t start = 0;
 	std::size_t end = 0;
@@ -87,7 +111,7 @@ struct SearchMatchEntry {
 
 struct MultiFileSearchCandidate {
 	std::string normalizedPath;
-	TMREditWindow *window = nullptr;
+	MREditWindow *window = nullptr;
 	bool inMemory = false;
 };
 
@@ -98,7 +122,7 @@ struct MultiFileSearchFileResult {
 	std::size_t selectedMatchIndex = 0;
 	bool startedInMemory = false;
 	bool temporaryWindow = false;
-	TMREditWindow *window = nullptr;
+	MREditWindow *window = nullptr;
 };
 
 struct MultiFileSearchSession {
@@ -122,6 +146,13 @@ enum class MultiFileCollectOutcome : unsigned char {
 	Error = 3
 };
 
+MultiFileCollectOutcome collectMultiFileSession(MultiFileSearchSession &session,
+                                                const MRMultiSearchDialogOptions &options,
+                                                const std::string &pattern,
+                                                const std::string &replacement, bool replaceMode,
+                                                bool keepFilesOpen, std::string &errorText);
+bool showMultiFileSessionCollectionError(const std::string &errorText);
+
 struct PendingTransientSelectionClear {
 	bool active = false;
 	std::string normalizedPath;
@@ -134,7 +165,11 @@ PendingTransientSelectionClear g_pendingTransientSelectionClear;
 enum : ushort {
 	cmMrMultiFileSelectionChanged = 4901,
 	cmMrMultiFileMatchPrev = 4902,
-	cmMrMultiFileMatchNext = 4903
+	cmMrMultiFileMatchNext = 4903,
+	cmMrMultiDone = 4951,
+	cmMrMultiReplace = 4952,
+	cmMrMultiReplaceAll = 4953,
+	cmMrMultiSkip = 4954
 };
 
 enum : uchar {
@@ -164,7 +199,7 @@ const char *placeholderCommandTitle(ushort command) {
 		case cmMrFileSave:
 			return "File / Save";
 		case cmMrFileSaveAs:
-			return "File / Save File As";
+			return "File / Save As";
 		case cmMrFileInformation:
 			return "File / Information";
 		case cmMrFileMerge:
@@ -172,24 +207,24 @@ const char *placeholderCommandTitle(ushort command) {
 		case cmMrFilePrint:
 			return "File / Print";
 		case cmMrFileShellToDos:
-			return "File / Shell to DOS";
+			return "File / Shell";
 
 		case cmMrEditUndo:
 			return "Edit / Undo";
 		case cmMrEditRedo:
 			return "Edit / Redo";
 		case cmMrEditCutToBuffer:
-			return "Edit / Cut to buffer";
+			return "Edit / Cut";
 		case cmMrEditCopyToBuffer:
-			return "Edit / Copy to buffer";
+			return "Edit / Copy";
 		case cmMrEditAppendToBuffer:
-			return "Edit / Append to buffer";
+			return "Edit / Append";
 		case cmMrEditCutAndAppendToBuffer:
-			return "Edit / Cut and append to buffer";
+			return "Edit / Cut & append";
 		case cmMrEditPasteFromBuffer:
-			return "Edit / Paste from buffer";
+			return "Edit / Paste";
 		case cmMrEditRepeatCommand:
-			return "Edit / Repeat command";
+			return "Edit / Repeat";
 
 		case cmMrWindowClose:
 			return "Window / Close";
@@ -299,8 +334,6 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Other / Find next compiler error";
 		case cmMrOtherMatchBraceOrParen:
 			return "Other / Match brace or paren";
-		case cmMrOtherAsciiTable:
-			return "Other / Ascii table";
 
 		case cmMrHelpContents:
 			return "Help / Table of contents";
@@ -342,6 +375,422 @@ void showPlaceholderCommandBox(const char *title) {
 	if (title == nullptr)
 		title = "Command";
 	messageBox(mfInformation | mfOKButton, "%s\n\nPlaceholder implementation for now.", title);
+}
+
+std::string utf8FromCodepoint(std::uint32_t codepoint);
+
+std::vector<CharacterTableEntry> buildAsciiTableEntries() {
+	std::vector<CharacterTableEntry> entries;
+	entries.reserve(224);
+	for (int code = 0; code <= 255; ++code) {
+		if (code >= 128 && code < 160)
+			continue;
+		CharacterTableEntry entry;
+		entry.text = std::string(1, static_cast<char>(code));
+		std::ostringstream detail;
+		detail << "ASCII " << std::dec << std::setw(3) << std::setfill('0') << code
+		       << " 0x" << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << code
+		       << " ";
+		if (code < 32) {
+			entry.label = std::string("^") + static_cast<char>('@' + code);
+			detail << entry.label;
+		} else if (code == 32) {
+			entry.label = "SP";
+			detail << "SPACE";
+		} else if (code == 127) {
+			entry.label = "^?";
+			detail << "DELETE";
+		} else if (code >= 160) {
+			entry.label = utf8FromCodepoint(static_cast<std::uint32_t>(code));
+			entry.text = entry.label;
+			if (code == 160)
+				detail << "NO-BREAK SPACE";
+			else
+				detail << "LATIN-1 " << entry.label;
+		} else {
+			entry.label = entry.text;
+			detail << entry.text;
+		}
+		entry.detail = detail.str();
+		entries.push_back(std::move(entry));
+	}
+	return entries;
+}
+
+std::string utf8FromCodepoint(std::uint32_t codepoint) {
+	std::string text;
+	if (codepoint <= 0x7F) {
+		text.push_back(static_cast<char>(codepoint));
+	} else if (codepoint <= 0x7FF) {
+		text.push_back(static_cast<char>(0xC0 | (codepoint >> 6)));
+		text.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+	} else if (codepoint <= 0xFFFF) {
+		text.push_back(static_cast<char>(0xE0 | (codepoint >> 12)));
+		text.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+		text.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+	} else {
+		text.push_back(static_cast<char>(0xF0 | (codepoint >> 18)));
+		text.push_back(static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
+		text.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+		text.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+	}
+	return text;
+}
+
+std::vector<CharacterTableEntry> buildEmojiTableEntries() {
+	struct Range {
+		std::uint32_t first;
+		std::uint32_t last;
+	};
+	static constexpr Range kEmojiRanges[] = {
+	    {0x2300, 0x23FF}, {0x2600, 0x27BF}, {0x1F1E6, 0x1F1FF},
+	    {0x1F300, 0x1F5FF}, {0x1F600, 0x1F64F}, {0x1F680, 0x1F6FF},
+	    {0x1F780, 0x1F7FF}, {0x1F900, 0x1F9FF}, {0x1FA70, 0x1FAFF}
+	};
+	std::vector<CharacterTableEntry> entries;
+	for (const Range &range : kEmojiRanges)
+		for (std::uint32_t codepoint = range.first; codepoint <= range.last; ++codepoint) {
+			CharacterTableEntry entry;
+			std::ostringstream detail;
+			entry.text = utf8FromCodepoint(codepoint);
+			entry.label = entry.text;
+			detail << "U+" << std::hex << std::uppercase << std::setw(codepoint > 0xFFFF ? 5 : 4)
+			       << std::setfill('0') << codepoint;
+			entry.detail = detail.str();
+			entries.push_back(std::move(entry));
+		}
+	return entries;
+}
+
+CharacterTableLayout layoutForCharacterTable(CharacterTableKind kind) {
+	switch (kind) {
+		case CharacterTableKind::Ascii:
+			return {"ASCII TABLE", 67, 18, 15, 4};
+		case CharacterTableKind::Emoji:
+			return {"EMOJI TABLE", 67, 18, 15, 4};
+	}
+	return {"CHARACTER TABLE", 67, 18, 15, 4};
+}
+
+class CharacterTableView final : public TView {
+public:
+	CharacterTableView(const TRect &bounds, std::vector<CharacterTableEntry> entries,
+	                   int columns, int cellWidth, TScrollBar *scrollBar)
+	    : TView(bounds), entries(std::move(entries)), columns(columns), cellWidth(cellWidth),
+	      scrollBar(scrollBar) {
+		options |= ofSelectable;
+		eventMask |= evMouseDown | evMouseWheel | evKeyDown | evBroadcast;
+	}
+
+	void draw() override {
+		TDrawBuffer row;
+		const TColorAttr normal = getColor(1);
+		const TColorAttr selected = getColor(3);
+		const short blankRow = size.y > 1 ? size.y - 2 : 0;
+		const short detailRow = size.y > 0 ? size.y - 1 : 0;
+		const int rowOffset = scrollOffset;
+		updateScrollBar();
+		for (short y = 0; y < size.y; ++y) {
+			row.moveChar(0, ' ', normal, size.x);
+			writeLine(0, y, size.x, 1, row);
+		}
+		for (std::size_t index = 0; index < entries.size(); ++index) {
+			const int rowIndex = static_cast<int>(index) / columns - rowOffset;
+			const int colIndex = static_cast<int>(index) % columns;
+			const short x = static_cast<short>(gridLeftOffset() + colIndex * cellWidth);
+			const short y = static_cast<short>(rowIndex);
+			if (y < 0 || y >= blankRow || x >= size.x)
+				continue;
+			drawCell(index, x, y, index == selectedIndex ? selected : normal);
+		}
+		drawDetail(detailRow, normal);
+	}
+
+	void handleEvent(TEvent &event) override {
+		if (event.what == evMouseDown && containsMouse(event)) {
+			TPoint local = makeLocal(event.mouse.where);
+			const int gridLeft = gridLeftOffset();
+			if (local.x < gridLeft || local.x >= gridLeft + gridWidth()) {
+				clearEvent(event);
+				return;
+			}
+			const int col = cellWidth > 0 ? (local.x - gridLeft) / cellWidth : 0;
+			const int row = local.y + scrollOffset;
+			const std::size_t index = static_cast<std::size_t>(row * columns + col);
+			if (index < entries.size()) {
+				selectedIndex = index;
+				ensureSelectedVisible();
+				drawView();
+				if ((event.mouse.eventFlags & meDoubleClick) != 0 && owner != nullptr)
+					message(owner, evCommand, cmOK, this);
+			}
+			clearEvent(event);
+			return;
+		}
+		if (event.what == evMouseWheel && containsMouse(event)) {
+			const int step = event.mouse.wheel == mwUp || event.mouse.wheel == mwLeft ? -1 : 1;
+			setScrollOffset(scrollOffset + step);
+			clearEvent(event);
+			return;
+		}
+		if (event.what == evKeyDown) {
+			if (moveSelection(ctrlToArrow(event.keyDown.keyCode))) {
+				clearEvent(event);
+				return;
+			}
+			if (ctrlToArrow(event.keyDown.keyCode) == kbEnter) {
+				if (owner != nullptr)
+					message(owner, evCommand, cmOK, this);
+				clearEvent(event);
+				return;
+			}
+		}
+		if (event.what == evBroadcast && event.message.command == cmScrollBarChanged &&
+		    event.message.infoPtr == scrollBar) {
+			setScrollOffset(scrollBar != nullptr ? scrollBar->value : 0);
+			clearEvent(event);
+			return;
+		}
+		TView::handleEvent(event);
+	}
+
+	[[nodiscard]] const std::string &selectedText() const noexcept {
+		static const std::string empty;
+		return selectedIndex < entries.size() ? entries[selectedIndex].text : empty;
+	}
+
+private:
+	[[nodiscard]] int gridWidth() const noexcept {
+		return std::max(0, columns * cellWidth);
+	}
+
+	[[nodiscard]] int gridLeftOffset() const noexcept {
+		return std::max(0, (static_cast<int>(size.x) - gridWidth()) / 2);
+	}
+
+	void drawCell(std::size_t index, short x, short y, TColorAttr attr) {
+		TDrawBuffer cell;
+		std::string text = entries[index].label;
+		if (static_cast<int>(text.size()) + 1 < cellWidth)
+			text = " " + text;
+		cell.moveChar(0, ' ', attr, static_cast<ushort>(cellWidth));
+		cell.moveStr(0, text.c_str(), attr, static_cast<ushort>(cellWidth));
+		writeLine(x, y, static_cast<short>(std::min(cellWidth, static_cast<int>(size.x - x))), 1, cell);
+	}
+
+	void drawDetail(short y, TColorAttr attr) {
+		if (entries.empty() || y < 0 || y >= size.y)
+			return;
+		TDrawBuffer row;
+		std::string text = entries[selectedIndex].label;
+		if (!entries[selectedIndex].detail.empty()) {
+			if (!text.empty())
+				text += " ";
+			text += entries[selectedIndex].detail;
+		}
+		const int detailWidth = strwidth(text.c_str());
+		const int start = std::max(0, (static_cast<int>(size.x) - detailWidth) / 2);
+		row.moveChar(0, ' ', attr, size.x);
+		row.moveStr(static_cast<ushort>(start), text.c_str(), attr,
+		            static_cast<ushort>(std::max(0, size.x - start)));
+		writeLine(0, y, size.x, 1, row);
+	}
+
+	bool moveSelection(ushort keyCode) {
+		if (entries.empty())
+			return false;
+		std::size_t next = selectedIndex;
+		switch (keyCode) {
+			case kbLeft:
+				next = selectedIndex == 0 ? entries.size() - 1 : selectedIndex - 1;
+				break;
+			case kbRight:
+				next = (selectedIndex + 1) % entries.size();
+				break;
+			case kbUp:
+				next = selectedIndex < static_cast<std::size_t>(columns)
+				           ? selectedIndex
+				           : selectedIndex - static_cast<std::size_t>(columns);
+				break;
+			case kbDown:
+				next = std::min(entries.size() - 1,
+				                selectedIndex + static_cast<std::size_t>(columns));
+				break;
+			case kbHome:
+				next = 0;
+				break;
+			case kbEnd:
+				next = entries.size() - 1;
+				break;
+			case kbPgUp:
+				next = selectedIndex < static_cast<std::size_t>(columns * 4)
+				           ? 0
+				           : selectedIndex - static_cast<std::size_t>(columns * 4);
+				break;
+			case kbPgDn:
+				next = std::min(entries.size() - 1,
+				                selectedIndex + static_cast<std::size_t>(columns * 4));
+				break;
+			default:
+				return false;
+		}
+		if (next != selectedIndex) {
+			selectedIndex = next;
+			ensureSelectedVisible();
+			drawView();
+		}
+		return true;
+	}
+
+	[[nodiscard]] int totalRows() const noexcept {
+		if (columns <= 0)
+			return 0;
+		return static_cast<int>((entries.size() + static_cast<std::size_t>(columns - 1)) /
+		                        static_cast<std::size_t>(columns));
+	}
+
+	[[nodiscard]] int visibleRows() const noexcept {
+		return std::max(1, static_cast<int>(size.y) - 2);
+	}
+
+	[[nodiscard]] int maxScrollOffset() const noexcept {
+		return std::max(0, totalRows() - visibleRows());
+	}
+
+	void setScrollOffset(int offset) {
+		const int clamped = std::max(0, std::min(offset, maxScrollOffset()));
+		if (clamped == scrollOffset)
+			return;
+		scrollOffset = clamped;
+		updateScrollBar();
+		drawView();
+	}
+
+	void updateScrollBar() {
+		if (scrollBar == nullptr)
+			return;
+		scrollBar->setParams(scrollOffset, 0, maxScrollOffset(), visibleRows(), 1);
+	}
+
+	void ensureSelectedVisible() {
+		if (columns <= 0)
+			return;
+		const int row = static_cast<int>(selectedIndex) / columns;
+		if (row < scrollOffset)
+			scrollOffset = row;
+		else if (row >= scrollOffset + visibleRows())
+			scrollOffset = row - visibleRows() + 1;
+		scrollOffset = std::max(0, std::min(scrollOffset, maxScrollOffset()));
+		updateScrollBar();
+	}
+
+	std::vector<CharacterTableEntry> entries;
+	int columns = 1;
+	int cellWidth = 1;
+	int scrollOffset = 0;
+	TScrollBar *scrollBar = nullptr;
+	std::size_t selectedIndex = 0;
+};
+
+class CharacterTableDialog final : public MRDialogFoundation {
+public:
+	CharacterTableDialog(const CharacterTableLayout &layout, std::vector<CharacterTableEntry> entries)
+	    : TWindowInit(&TDialog::initFrame),
+	      MRDialogFoundation(mr::dialogs::centeredDialogRect(layout.width, layout.height),
+	                         layout.title, layout.width, layout.height) {
+		static constexpr int kButtonTotalWidth = 34;
+		const int buttonLeft = (layout.width - kButtonTotalWidth) / 2;
+		scrollBar = new TScrollBar(TRect(layout.width - 2, 2, layout.width - 1, layout.height - 5));
+		tableView = new CharacterTableView(TRect(2, 2, layout.width - 2, layout.height - 5),
+		                                    std::move(entries), layout.columns, layout.cellWidth,
+		                                    scrollBar);
+		insert(tableView);
+		insert(scrollBar);
+		insert(new TButton(TRect(buttonLeft, layout.height - 3, buttonLeft + 10, layout.height - 1),
+		                   "~D~one", cmOK, bfDefault));
+		insert(new TButton(TRect(buttonLeft + 12, layout.height - 3, buttonLeft + 24, layout.height - 1),
+		                   "C~a~ncel", cmCancel, bfNormal));
+		insert(new TButton(TRect(buttonLeft + 26, layout.height - 3, buttonLeft + 34, layout.height - 1),
+		                   "~H~elp", cmHelp, bfNormal));
+		tableView->select();
+	}
+
+	void handleEvent(TEvent &event) override {
+		if (event.what == evCommand && event.message.command == cmHelp) {
+			messageBox(mfInformation | mfOKButton,
+			           "Use arrow keys to select a character. Enter posts it to the focused editor window.");
+			clearEvent(event);
+			return;
+		}
+		MRDialogFoundation::handleEvent(event);
+	}
+
+	[[nodiscard]] std::string selectedText() const {
+		return tableView != nullptr ? tableView->selectedText() : std::string();
+	}
+
+private:
+	CharacterTableView *tableView = nullptr;
+	TScrollBar *scrollBar = nullptr;
+};
+
+bool insertTextIntoWindow(MREditWindow *win, const std::string &text) {
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	if (win == nullptr || editor == nullptr || text.empty())
+		return true;
+	if (win->isReadOnly()) {
+		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction,
+		                               "Window is read-only.",
+		                               mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+		return true;
+	}
+	if (!editor->insertBufferText(text)) {
+		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction,
+		                               "Unable to insert selected character.",
+		                               mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+		return true;
+	}
+	editor->revealCursor(True);
+	editor->drawView();
+	return true;
+}
+
+bool handleCharacterTable(CharacterTableKind kind) {
+	MREditWindow *targetWindow = currentEditWindow();
+	CharacterTableDialog *dialog = nullptr;
+	const CharacterTableLayout layout = layoutForCharacterTable(kind);
+	std::string selectedText;
+	ushort result = cmCancel;
+
+	if (targetWindow == nullptr || targetWindow->getEditor() == nullptr)
+		return true;
+	if (targetWindow->isReadOnly()) {
+		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction,
+		                               "Window is read-only.",
+		                               mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+		return true;
+	}
+
+	switch (kind) {
+		case CharacterTableKind::Ascii:
+			dialog = new CharacterTableDialog(layout, buildAsciiTableEntries());
+			break;
+		case CharacterTableKind::Emoji:
+			dialog = new CharacterTableDialog(layout, buildEmojiTableEntries());
+			break;
+	}
+	if (dialog == nullptr || TProgram::deskTop == nullptr) {
+		TObject::destroy(dialog);
+		return true;
+	}
+	dialog->finalizeLayout();
+	result = TProgram::deskTop->execView(dialog);
+	if (result == cmOK)
+		selectedText = dialog->selectedText();
+	TObject::destroy(dialog);
+	if (result == cmOK)
+		return insertTextIntoWindow(targetWindow, selectedText);
+	return true;
 }
 
 std::string normalizedSearchPath(const std::filesystem::path &path) {
@@ -409,7 +858,7 @@ bool filespecMatchesPath(const std::filesystem::path &candidatePath, const std::
 	return false;
 }
 
-void appendCandidateUnique(const std::filesystem::path &path, bool inMemory, TMREditWindow *window,
+void appendCandidateUnique(const std::filesystem::path &path, bool inMemory, MREditWindow *window,
                            std::vector<MultiFileSearchCandidate> &outCandidates,
                            std::map<std::string, std::size_t> &seen) {
 	const std::string normalized = normalizedSearchPath(path);
@@ -477,9 +926,9 @@ std::vector<MultiFileSearchCandidate> collectMultiFileSearchCandidates(const MRM
 	}
 
 	if (options.searchFilesInMemory) {
-		std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
-		for (TMREditWindow *window : windows) {
-			TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+		std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+		for (MREditWindow *window : windows) {
+			MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 			std::filesystem::path windowPath;
 			if (editor == nullptr || !editor->hasPersistentFileName())
 				continue;
@@ -531,15 +980,59 @@ const char *wrappedSearchMessage(MRSearchDirection direction) {
 	                                                : "search wrapped to TOF";
 }
 
+constexpr const char *kSearchTextRequiredMessage = "Search text must not be empty.";
+constexpr const char *kNoMarkedBlockSelectedMessage = "No marked block selected.";
+constexpr const char *kNoPreviousSearchMessage = "No previous search.";
+constexpr const char *kNoPreviousMultiFileSearchListMessage = "No previous multi-file search list.";
+constexpr const char *kNoCommandSpecifiedMessage = "No command specified.";
+constexpr const char *kNoBackgroundMacroTasksMessage =
+    "No background macro tasks are running in this window.";
+constexpr const char *kWindowReadOnlyMessage = "Window is read-only.";
+constexpr const char *kChooseAnotherWindowForBlockMessage =
+    "Choose another window for inter-window block operation.";
+constexpr const char *kNoMarkedBlockInSourceWindowMessage =
+    "No block marked in the selected source window.";
+constexpr const char *kNoExternalProgramTaskMessage =
+    "No external program task is running in this window.";
+constexpr const char *kStopProgramBeforeRestartMessage =
+    "Stop the current program before restarting it.";
+constexpr const char *kNoRestartableCommandMessage =
+    "No restartable command is associated with this window.";
+
 void postSearchWarning(std::string_view text) {
 	mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEventFollowup, std::string(text),
 	                               mr::messageline::Kind::Warning, mr::messageline::kPriorityMedium);
+}
+
+void postSearchError(std::string_view text) {
+	mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEventFollowup, std::string(text),
+	                               mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+}
+
+void postDialogWarning(std::string_view text) {
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, std::string(text),
+	                               mr::messageline::Kind::Warning, mr::messageline::kPriorityMedium);
+}
+
+void persistSearchDialogSettingsSnapshot() {
+	std::string errorText;
+
+	if (!persistConfiguredSettingsSnapshot(&errorText) && !errorText.empty())
+		postSearchError("Settings save failed: " + errorText);
 }
 
 void postNoHitsWarning() {
 	mr::messageline::postTimed(mr::messageline::Owner::HeroEventFollowup, "no hits found",
 	                           mr::messageline::Kind::Warning, std::chrono::seconds(5),
 	                           mr::messageline::kPriorityMedium);
+}
+
+void postMultiSearchStartedWarning() {
+	mr::messageline::postTimed(mr::messageline::Owner::HeroEventFollowup, "searching ...",
+	                           mr::messageline::Kind::Warning, std::chrono::seconds(5),
+	                           mr::messageline::kPriorityMedium);
+	if (TProgram::application != nullptr)
+		TProgram::application->drawView();
 }
 
 void postSearchCancelledError() {
@@ -549,6 +1042,8 @@ void postSearchCancelledError() {
 }
 
 void postMultiSearchProgress(std::size_t filesSearched, std::size_t totalHits) {
+	if (filesSearched == 0 && totalHits == 0)
+		return;
 	const std::string message = "files searched: " + std::to_string(filesSearched) + ", " +
 	                            std::to_string(totalHits) + " hits";
 	mr::messageline::postTimed(mr::messageline::Owner::HeroEventFollowup, message,
@@ -728,17 +1223,17 @@ bool collectRegexMatches(const std::string &text, pcre2_code *code, std::vector<
 	return true;
 }
 
-void activateMatch(TMREditWindow *win, const SearchMatchEntry &match, const std::string &pattern,
+void activateMatch(MREditWindow *win, const SearchMatchEntry &match, const std::string &pattern,
                    const MRSearchDialogOptions &options);
 
 class FoundListView : public TListViewer {
   public:
-	FoundListView(const TRect &bounds, TScrollBar *aScrollBar, TMREditWindow *aWindow,
+	FoundListView(const TRect &bounds, TScrollBar *aScrollBar, MREditWindow *aWindow,
 	              const std::vector<SearchMatchEntry> &aEntries, const std::string &aPattern,
 	              const MRSearchDialogOptions &aOptions) noexcept
-	    : TListViewer(bounds, 1, nullptr, aScrollBar), window_(aWindow), entries_(aEntries),
-	      pattern_(aPattern), options_(aOptions) {
-		setRange(static_cast<short>(entries_.size()));
+	    : TListViewer(bounds, 1, nullptr, aScrollBar), window(aWindow), entries(aEntries),
+	      pattern(aPattern), options(aOptions) {
+		setRange(static_cast<short>(entries.size()));
 	}
 
 	void getText(char *dest, short item, short maxLen) override {
@@ -746,12 +1241,12 @@ class FoundListView : public TListViewer {
 
 		if (dest == nullptr || maxLen <= 0)
 			return;
-		if (item < 0 || static_cast<std::size_t>(item) >= entries_.size()) {
+		if (item < 0 || static_cast<std::size_t>(item) >= entries.size()) {
 			dest[0] = EOS;
 			return;
 		}
 		copyLen = static_cast<std::size_t>(maxLen - 1);
-		std::strncpy(dest, entries_[static_cast<std::size_t>(item)].preview.c_str(), copyLen);
+		std::strncpy(dest, entries[static_cast<std::size_t>(item)].preview.c_str(), copyLen);
 		dest[copyLen] = EOS;
 	}
 
@@ -780,7 +1275,7 @@ class FoundListView : public TListViewer {
 
 			buffer.moveChar(0, ' ', rowColor, size.x);
 			if (item < range) {
-				const SearchMatchEntry &entry = entries_[static_cast<std::size_t>(item)];
+				const SearchMatchEntry &entry = entries[static_cast<std::size_t>(item)];
 				ushort x = 1;
 				ushort limit = static_cast<ushort>(std::max(0, size.x - 1));
 				auto drawSegment = [&](const std::string &segment, TColorAttr color) {
@@ -824,20 +1319,20 @@ class FoundListView : public TListViewer {
 	}
 
 	void previewFocusedItem() {
-		if (focused < 0 || focused >= range || static_cast<std::size_t>(focused) >= entries_.size() ||
-		    window_ == nullptr)
+		if (focused < 0 || focused >= range || static_cast<std::size_t>(focused) >= entries.size() ||
+		    window == nullptr)
 			return;
-		activateMatch(window_, entries_[static_cast<std::size_t>(focused)], pattern_, options_);
+		activateMatch(window, entries[static_cast<std::size_t>(focused)], pattern, options);
 	}
 
   private:
-	TMREditWindow *window_;
-	const std::vector<SearchMatchEntry> &entries_;
-	const std::string &pattern_;
-	const MRSearchDialogOptions &options_;
+	MREditWindow *window;
+	const std::vector<SearchMatchEntry> &entries;
+	const std::string &pattern;
+	const MRSearchDialogOptions &options;
 };
 
-bool showFoundListDialog(TMREditWindow *win, const std::string &pattern,
+bool showFoundListDialog(MREditWindow *win, const std::string &pattern,
                          const MRSearchDialogOptions &options,
                          const std::vector<SearchMatchEntry> &matches, std::size_t &selectedIndex) {
 	MRDialogFoundation *dialog = nullptr;
@@ -862,6 +1357,13 @@ bool showFoundListDialog(TMREditWindow *win, const std::string &pattern,
 	dialog->insert(new TButton(TRect(width / 2 - 12, buttonY, width / 2 - 2, buttonY + 2), "~D~one", cmOK, bfDefault));
 	dialog->insert(new TButton(TRect(width / 2 + 1, buttonY, width / 2 + 13, buttonY + 2), "~C~ancel", cmCancel,
 	                           bfNormal));
+	dialog->setDialogValidationHook([listView]() {
+		MRScrollableDialog::DialogValidationResult result;
+		result.valid = listView != nullptr && listView->focused >= 0;
+		if (!result.valid)
+			result.warningText = "Select a match.";
+		return result;
+	});
 	dialog->finalizeLayout();
 	result = TProgram::deskTop->execView(dialog);
 	if (result == cmOK && listView->focused >= 0 &&
@@ -880,23 +1382,23 @@ PromptReplaceDecision promptReplaceDecisionDialog(const std::string &title, cons
 	  public:
 		PromptPreviewView(const TRect &bounds, const SearchPreviewParts &preview,
 		                  const std::string &replacement)
-		    : TView(bounds), before_(preview.matchLine), beforeMatchOffset_(preview.matchLineOffset),
-		      beforeMatchLength_(preview.matchLineLength), after_(), afterMatchOffset_(preview.matchLineOffset),
-		      afterMatchLength_(replacement.size()) {
-			const std::size_t safeOffset = std::min(beforeMatchOffset_, before_.size());
-			const std::size_t safeLength = std::min(beforeMatchLength_, before_.size() - safeOffset);
+		    : TView(bounds), beforeText(preview.matchLine), beforeMatchOffset(preview.matchLineOffset),
+		      beforeMatchLength(preview.matchLineLength), afterText(), afterMatchOffset(preview.matchLineOffset),
+		      afterMatchLength(replacement.size()) {
+			const std::size_t safeOffset = std::min(beforeMatchOffset, beforeText.size());
+			const std::size_t safeLength = std::min(beforeMatchLength, beforeText.size() - safeOffset);
 
-			after_ = before_.substr(0, safeOffset);
-			after_ += replacement;
-			if (safeOffset + safeLength <= before_.size())
-				after_ += before_.substr(safeOffset + safeLength);
-			for (char &ch : after_)
+			afterText = beforeText.substr(0, safeOffset);
+			afterText += replacement;
+			if (safeOffset + safeLength <= beforeText.size())
+				afterText += beforeText.substr(safeOffset + safeLength);
+			for (char &ch : afterText)
 				if (ch == '\t' || ch == '\r' || ch == '\n' ||
 				    static_cast<unsigned char>(ch) < 32 ||
 				    static_cast<unsigned char>(ch) >= 127)
 					ch = ' ';
-			beforeMatchOffset_ = safeOffset;
-			beforeMatchLength_ = safeLength;
+			beforeMatchOffset = safeOffset;
+			beforeMatchLength = safeLength;
 		}
 
 		void draw() override {
@@ -904,8 +1406,8 @@ PromptReplaceDecision promptReplaceDecisionDialog(const std::string &title, cons
 			const TColorAttr normal = getColor(1);
 			const TColorAttr accent = static_cast<TColorAttr>(getColor(3));
 			const std::size_t width = static_cast<std::size_t>(std::max<int>(0, size.x));
-			const std::size_t beforeLeft = centeredPreviewLeft(before_, beforeMatchOffset_, beforeMatchLength_, width);
-			const std::size_t afterLeft = centeredPreviewLeft(after_, afterMatchOffset_, afterMatchLength_, width);
+			const std::size_t beforeLeft = centeredPreviewLeft(beforeText, beforeMatchOffset, beforeMatchLength, width);
+			const std::size_t afterLeft = centeredPreviewLeft(afterText, afterMatchOffset, afterMatchLength, width);
 			auto drawLine = [&](short y, const std::string &line, std::size_t lineLeft, std::size_t markOffset,
 			                    std::size_t markLength) {
 				const std::size_t effectiveLeft =
@@ -926,22 +1428,22 @@ PromptReplaceDecision promptReplaceDecisionDialog(const std::string &title, cons
 				writeLine(0, y, size.x, 1, b);
 			}
 			const short centerY = size.y / 2;
-			drawLine(static_cast<short>(std::max(0, centerY - 1)), before_, beforeLeft, beforeMatchOffset_,
-			         beforeMatchLength_);
+			drawLine(static_cast<short>(std::max(0, centerY - 1)), beforeText, beforeLeft, beforeMatchOffset,
+			         beforeMatchLength);
 			b.moveChar(0, ' ', normal, size.x);
 			b.moveStr(static_cast<ushort>(std::max(0, (size.x - 2) / 2)), "->", getColor(3), size.x);
 			writeLine(0, centerY, size.x, 1, b);
-			drawLine(static_cast<short>(std::min<int>(size.y - 1, centerY + 1)), after_, afterLeft,
-			         afterMatchOffset_, afterMatchLength_);
+			drawLine(static_cast<short>(std::min<int>(size.y - 1, centerY + 1)), afterText, afterLeft,
+			         afterMatchOffset, afterMatchLength);
 		}
 
 	  private:
-		std::string before_;
-		std::size_t beforeMatchOffset_;
-		std::size_t beforeMatchLength_;
-		std::string after_;
-		std::size_t afterMatchOffset_;
-		std::size_t afterMatchLength_;
+		std::string beforeText;
+		std::size_t beforeMatchOffset;
+		std::size_t beforeMatchLength;
+		std::string afterText;
+		std::size_t afterMatchOffset;
+		std::size_t afterMatchLength;
 	};
 
 	MRDialogFoundation *dialog = nullptr;
@@ -971,7 +1473,7 @@ PromptSearchDecision promptSearchDecisionDialog(const SearchPreviewParts &previe
 	class SearchPromptPreviewView : public TView {
 	  public:
 		SearchPromptPreviewView(const TRect &bounds, const SearchPreviewParts &preview)
-		    : TView(bounds), preview_(preview) {
+		    : TView(bounds), preview(preview) {
 		}
 
 		void draw() override {
@@ -980,7 +1482,7 @@ PromptSearchDecision promptSearchDecisionDialog(const SearchPreviewParts &previe
 			const TColorAttr accent = static_cast<TColorAttr>(getColor(3));
 			const std::size_t width = static_cast<std::size_t>(std::max<int>(0, size.x));
 			const std::size_t lineLeft =
-			    centeredPreviewLeft(preview_.matchLine, preview_.matchLineOffset, preview_.matchLineLength, width);
+			    centeredPreviewLeft(preview.matchLine, preview.matchLineOffset, preview.matchLineLength, width);
 			auto drawLine = [&](short y, const std::string &line, bool highlightMatch) {
 				const std::size_t effectiveLeft =
 				    line.size() <= width ? 0 : std::min(lineLeft, line.size() - width);
@@ -989,8 +1491,8 @@ PromptSearchDecision promptSearchDecisionDialog(const SearchPreviewParts &previe
 					const std::size_t source = effectiveLeft + static_cast<std::size_t>(x);
 					char ch = source < line.size() ? line[source] : ' ';
 					const bool inMatch =
-					    highlightMatch && source >= preview_.matchLineOffset &&
-					    source < (preview_.matchLineOffset + preview_.matchLineLength);
+					    highlightMatch && source >= preview.matchLineOffset &&
+					    source < (preview.matchLineOffset + preview.matchLineLength);
 					b.putChar(x, static_cast<uchar>(ch));
 					b.putAttribute(x, inMatch ? accent : normal);
 				}
@@ -1002,13 +1504,13 @@ PromptSearchDecision promptSearchDecisionDialog(const SearchPreviewParts &previe
 				writeLine(0, y, size.x, 1, b);
 			}
 			const short centerY = size.y / 2;
-			drawLine(static_cast<short>(std::max(0, centerY - 1)), preview_.previousLine, false);
-			drawLine(centerY, preview_.matchLine, true);
-			drawLine(static_cast<short>(std::min<int>(size.y - 1, centerY + 1)), preview_.nextLine, false);
+			drawLine(static_cast<short>(std::max(0, centerY - 1)), preview.previousLine, false);
+			drawLine(centerY, preview.matchLine, true);
+			drawLine(static_cast<short>(std::min<int>(size.y - 1, centerY + 1)), preview.nextLine, false);
 		}
 
 	  private:
-		SearchPreviewParts preview_;
+		SearchPreviewParts preview;
 	};
 
 	MRDialogFoundation *dialog = nullptr;
@@ -1112,13 +1614,24 @@ bool promptSearchPattern(std::string &pattern, MRSearchDialogOptions &options) {
 	                          new TSItem("~R~estrict to marked block",
 	                                     new TSItem("Search all ~w~indows", nullptr)))));
 	dialog->insert(optionsField);
-	dialog->insert(new TButton(TRect(34, 18, 46, 20), "~O~K", cmOK, bfDefault));
+	dialog->insert(new TButton(TRect(34, 18, 46, 20), "~G~o", cmOK, bfDefault));
 	dialog->insert(new TButton(TRect(49, 18, 62, 20), "~C~ancel", cmCancel, bfNormal));
 	patternField->setData(patternInput);
 	typeField->setData(&typeChoice);
 	directionField->setData(&directionChoice);
 	modeField->setData(&modeChoice);
 	optionsField->setData(&optionMask);
+	dialog->setDialogValidationHook([patternField]() {
+		MRScrollableDialog::DialogValidationResult result;
+		char text[kInputBufferSize] = {0};
+
+		if (patternField != nullptr)
+			patternField->getData(text);
+		result.valid = !trimAscii(text).empty();
+		if (!result.valid)
+			result.warningText = kSearchTextRequiredMessage;
+		return result;
+	});
 	dialog->finalizeLayout();
 	result = TProgram::deskTop->execView(dialog);
 	if (result != cmCancel) {
@@ -1242,7 +1755,7 @@ bool promptReplaceValues(std::string &pattern, std::string &replacement, MRSarDi
 	                          new TSItem("~R~estrict to marked block",
 	                                     new TSItem("Search all ~w~indows", nullptr)))));
 	dialog->insert(optionsField);
-	dialog->insert(new TButton(TRect(31, 20, 43, 22), "~O~K", cmOK, bfDefault));
+	dialog->insert(new TButton(TRect(31, 20, 43, 22), "~G~o", cmOK, bfDefault));
 	dialog->insert(new TButton(TRect(46, 20, 61, 22), "~C~ancel", cmCancel, bfNormal));
 	patternField->setData(patternInput);
 	replacementField->setData(replacementInput);
@@ -1251,6 +1764,17 @@ bool promptReplaceValues(std::string &pattern, std::string &replacement, MRSarDi
 	modeField->setData(&modeChoice);
 	leaveCursorField->setData(&leaveCursorChoice);
 	optionsField->setData(&optionMask);
+	dialog->setDialogValidationHook([patternField]() {
+		MRScrollableDialog::DialogValidationResult result;
+		char text[kPatternBufferSize] = {0};
+
+		if (patternField != nullptr)
+			patternField->getData(text);
+		result.valid = !trimAscii(text).empty();
+		if (!result.valid)
+			result.warningText = kSearchTextRequiredMessage;
+		return result;
+	});
 	dialog->finalizeLayout();
 	result = TProgram::deskTop->execView(dialog);
 	if (result != cmCancel) {
@@ -1294,7 +1818,7 @@ bool promptGotoLineNumber(long &lineNumber) {
 	parsed = std::strtol(input, &endPtr, 10);
 	tail = trimAscii(endPtr != nullptr ? endPtr : "");
 	if (endPtr == input || !tail.empty() || parsed < 1) {
-		messageBox(mfError | mfOKButton, "Please enter a valid line number.");
+		postSearchError("Please enter a valid line number.");
 		return false;
 	}
 	lineNumber = parsed;
@@ -1462,9 +1986,9 @@ bool findRegexWithWrap(const std::string &text, pcre2_code *code, std::size_t st
 	return false;
 }
 
-void syncVmLastSearch(TMREditWindow *win, bool valid, std::size_t start, std::size_t end,
+void syncVmLastSearch(MREditWindow *win, bool valid, std::size_t start, std::size_t end,
                       std::size_t cursor) {
-	TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	std::string fileName;
 	if (win == nullptr)
 		return;
@@ -1473,8 +1997,8 @@ void syncVmLastSearch(TMREditWindow *win, bool valid, std::size_t start, std::si
 	mrvmUiReplaceWindowLastSearch(win, fileName, valid, start, end, cursor);
 }
 
-void clearSearchSelection(TMREditWindow *win) {
-	TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+void clearSearchSelection(MREditWindow *win) {
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	const std::size_t cursor = editor != nullptr ? editor->cursorOffset() : 0;
 
 	if (editor == nullptr)
@@ -1485,9 +2009,9 @@ void clearSearchSelection(TMREditWindow *win) {
 	editor->refreshViewState();
 }
 
-void updateMiniMapFindMarkers(TMREditWindow *win, const std::string &pattern,
+void updateMiniMapFindMarkers(MREditWindow *win, const std::string &pattern,
                               const MRSearchDialogOptions &options) {
-	TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	std::vector<std::pair<std::size_t, std::size_t>> ranges;
 	pcre2_code *code = nullptr;
 	std::string regexError;
@@ -1538,9 +2062,9 @@ void updateMiniMapFindMarkers(TMREditWindow *win, const std::string &pattern,
 	editor->setFindMarkerRanges(ranges);
 }
 
-void activateMatch(TMREditWindow *win, const SearchMatchEntry &match, const std::string &pattern,
+void activateMatch(MREditWindow *win, const SearchMatchEntry &match, const std::string &pattern,
                    const MRSearchDialogOptions &options) {
-	TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	std::size_t end = std::max(match.end, match.start);
 
 	if (editor == nullptr)
@@ -1562,10 +2086,10 @@ void activateMatch(TMREditWindow *win, const SearchMatchEntry &match, const std:
 	g_searchUiState.lastOptions = options;
 }
 
-bool performSearch(TMREditWindow *win, const std::string &pattern, std::size_t startOffset, bool updateState,
+bool performSearch(MREditWindow *win, const std::string &pattern, std::size_t startOffset, bool updateState,
                    const MRSearchDialogOptions &options, bool showNotFoundMessage,
                    bool *outWrapped = nullptr) {
-	TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	pcre2_code *code = nullptr;
 	std::string regexError;
 	std::string patternExpression;
@@ -1583,12 +2107,12 @@ bool performSearch(TMREditWindow *win, const std::string &pattern, std::size_t s
 	if (editor == nullptr)
 		return false;
 	if (pattern.empty()) {
-		messageBox(mfError | mfOKButton, "Search text must not be empty.");
+		postSearchError(kSearchTextRequiredMessage);
 		return false;
 	}
 	patternExpression = buildSearchPatternExpression(pattern, options.textType);
 	if (!compileSearchRegex(patternExpression, !options.caseSensitive, &code, regexError)) {
-		messageBox(mfError | mfOKButton, "Invalid search pattern:\n%s", regexError.c_str());
+		postSearchError("Invalid search pattern: " + regexError);
 		return false;
 	}
 	text = editor->snapshotText();
@@ -1601,7 +2125,7 @@ bool performSearch(TMREditWindow *win, const std::string &pattern, std::size_t s
 		rangeEnd = std::max(selectionStart, selectionEnd);
 		if (rangeStart >= rangeEnd) {
 			pcre2_code_free(code);
-			messageBox(mfInformation | mfOKButton, "No marked block selected.");
+			postDialogWarning(kNoMarkedBlockSelectedMessage);
 			return false;
 		}
 	}
@@ -1645,14 +2169,43 @@ void seedHistoryOnce(uchar historyId, const std::vector<std::string> &entries) {
 		historyAdd(historyId, *it);
 }
 
-bool promptMultiFileSearchValues(std::string &pattern, MRMultiSearchDialogOptions &options) {
+class SubmitInterceptDialog : public MRDialogFoundation {
+  public:
+	using SubmitHook = std::function<void()>;
+
+	SubmitInterceptDialog(const char *title, int virtualWidth, int virtualHeight)
+	    : TWindowInit(&TDialog::initFrame),
+	      MRDialogFoundation(mr::dialogs::centeredDialogRect(virtualWidth, virtualHeight), title,
+	                         virtualWidth, virtualHeight) {
+	}
+
+	void setSubmitHook(SubmitHook hook) {
+		submitHook = std::move(hook);
+	}
+
+	void handleEvent(TEvent &event) override {
+		if (event.what == evCommand && event.message.command == cmOK) {
+			clearEvent(event);
+			if (submitHook)
+				submitHook();
+			return;
+		}
+		MRDialogFoundation::handleEvent(event);
+	}
+
+  private:
+	SubmitHook submitHook;
+};
+
+bool promptMultiFileSearchValues(std::string &pattern, MRMultiSearchDialogOptions &options,
+                                 MultiFileSearchSession &outSession) {
 	enum { kFilespecBufferSize = 256, kSearchBufferSize = 256, kPathBufferSize = 256 };
 	char filespecInput[kFilespecBufferSize];
 	char searchInput[kSearchBufferSize];
 	char pathInput[kPathBufferSize];
 	ushort optionMask = 0;
 	ushort result = cmCancel;
-	MRDialogFoundation *dialog = nullptr;
+	SubmitInterceptDialog *dialog = nullptr;
 	TInputLine *filespecField = nullptr;
 	TInputLine *searchField = nullptr;
 	TInputLine *pathField = nullptr;
@@ -1660,6 +2213,7 @@ bool promptMultiFileSearchValues(std::string &pattern, MRMultiSearchDialogOption
 	std::vector<std::string> filespecHistory;
 	std::vector<std::string> pathHistory;
 
+	outSession = MultiFileSearchSession();
 	std::memset(filespecInput, 0, sizeof(filespecInput));
 	std::memset(searchInput, 0, sizeof(searchInput));
 	std::memset(pathInput, 0, sizeof(pathInput));
@@ -1675,13 +2229,17 @@ bool promptMultiFileSearchValues(std::string &pattern, MRMultiSearchDialogOption
 		strnzcpy(searchInput, options.searchText.c_str(), sizeof(searchInput));
 	else if (!g_searchUiState.pattern.empty())
 		strnzcpy(searchInput, g_searchUiState.pattern.c_str(), sizeof(searchInput));
-	if (!options.startingPath.empty())
-		strnzcpy(pathInput, options.startingPath.c_str(), sizeof(pathInput));
-	else {
-		std::string fallback = configuredLastFileDialogPath();
-		if (fallback.empty())
-			fallback = ".";
-		strnzcpy(pathInput, fallback.c_str(), sizeof(pathInput));
+	{
+		std::string initialPath = normalizeConfiguredPathInput(options.startingPath);
+		if (initialPath.empty())
+			initialPath = normalizeConfiguredPathInput(configuredMultiSearchDialogOptions().startingPath);
+		if (initialPath.empty() && !pathHistory.empty())
+			initialPath = normalizeConfiguredPathInput(pathHistory.front());
+		if (initialPath.empty())
+			initialPath = normalizeConfiguredPathInput(configuredLastFileDialogPath());
+		if (initialPath.empty())
+			initialPath = ".";
+		strnzcpy(pathInput, initialPath.c_str(), sizeof(pathInput));
 	}
 
 	if (options.searchSubdirectories)
@@ -1693,63 +2251,111 @@ bool promptMultiFileSearchValues(std::string &pattern, MRMultiSearchDialogOption
 	if (options.searchFilesInMemory)
 		optionMask |= 0x0008;
 
-	dialog = mr::dialogs::createScrollableDialog("MULTIPLE FILE SEARCH", 100, 18);
+	dialog = new SubmitInterceptDialog("MULTIPLE FILE SEARCH", 102, 17);
 	filespecField = new TInputLine(TRect(14, 2, 96, 3), kFilespecBufferSize - 1);
-	dialog->insert(new TLabel(TRect(2, 2, 14, 3), "~F~ilespec:", filespecField));
+	dialog->insert(new TLabel(TRect(2, 2, 14, 3), "~F~ilespecs:", filespecField));
 	dialog->insert(filespecField);
 	dialog->insert(new THistory(TRect(96, 2, 99, 3), filespecField, kMultiFilespecHistoryId));
 	searchField = new TInputLine(TRect(14, 4, 96, 5), kSearchBufferSize - 1);
-	dialog->insert(new TLabel(TRect(2, 4, 14, 5), "Search ~f~or:", searchField));
+	dialog->insert(new TLabel(TRect(2, 4, 14, 5), "Se~a~rch:", searchField));
 	dialog->insert(searchField);
 	dialog->insert(new TStaticText(TRect(3, 6, 13, 7), "Options:"));
 	optionsField = new TCheckBoxes(
-	    TRect(3, 7, 45, 12),
-	    new TSItem("~S~earch sub-directories",
+	    TRect(3, 7, 30, 11),
+	    new TSItem("recursive ~S~earch",
 	               new TSItem("~C~ase sensitive",
 	                          new TSItem("~R~egular expressions",
-	                                     new TSItem("search files in ~m~emory", nullptr)))));
+	                                     new TSItem("search editor ~w~indows", nullptr)))));
 	dialog->insert(optionsField);
-	pathField = new TInputLine(TRect(16, 13, 96, 14), kPathBufferSize - 1);
-	dialog->insert(new TLabel(TRect(2, 13, 16, 14), "Starting ~p~ath:", pathField));
+	pathField = new TInputLine(TRect(14, 12, 96, 13), kPathBufferSize - 1);
+	dialog->insert(new TLabel(TRect(2, 12, 14, 13), "Start a~t~:", pathField));
 	dialog->insert(pathField);
-	dialog->insert(new THistory(TRect(96, 13, 99, 14), pathField, kMultiPathHistoryId));
-	dialog->insert(new TButton(TRect(34, 15, 46, 17), "~O~K", cmOK, bfDefault));
-	dialog->insert(new TButton(TRect(49, 15, 64, 17), "~C~ancel", cmCancel, bfNormal));
+	dialog->insert(new THistory(TRect(96, 12, 99, 13), pathField, kMultiPathHistoryId));
+	dialog->insert(new TButton(TRect(34, 14, 46, 16), "~D~one", cmOK, bfDefault));
+	dialog->insert(new TButton(TRect(49, 14, 64, 16), "~C~ancel", cmCancel, bfNormal));
 	filespecField->setData(filespecInput);
 	searchField->setData(searchInput);
 	pathField->setData(pathInput);
 	optionsField->setData(&optionMask);
+	dialog->setDialogValidationHook([searchField]() {
+		MRScrollableDialog::DialogValidationResult result;
+		char text[kSearchBufferSize] = {0};
+
+		if (searchField != nullptr)
+			searchField->getData(text);
+		result.valid = !trimAscii(text).empty();
+		if (!result.valid)
+			result.warningText = kSearchTextRequiredMessage;
+		return result;
+	});
+	dialog->setSubmitHook([&]() {
+		char currentFilespec[kFilespecBufferSize] = {0};
+		char currentSearch[kSearchBufferSize] = {0};
+		char currentPath[kPathBufferSize] = {0};
+		ushort currentMask = 0;
+		MRMultiSearchDialogOptions currentOptions = options;
+		MultiFileSearchSession session;
+		std::string errorText;
+
+		if (filespecField == nullptr || searchField == nullptr || pathField == nullptr || optionsField == nullptr)
+			return;
+
+		filespecField->getData(currentFilespec);
+		searchField->getData(currentSearch);
+		pathField->getData(currentPath);
+		optionsField->getData(&currentMask);
+
+		currentOptions.filespec = trimAscii(currentFilespec);
+		if (currentOptions.filespec.empty())
+			currentOptions.filespec = "*.*";
+		currentOptions.searchSubdirectories = (currentMask & 0x0001) != 0;
+		currentOptions.caseSensitive = (currentMask & 0x0002) != 0;
+		currentOptions.regularExpressions = (currentMask & 0x0004) != 0;
+		currentOptions.searchFilesInMemory = (currentMask & 0x0008) != 0;
+		currentOptions.startingPath = normalizeConfiguredPathInput(currentPath);
+		if (currentOptions.startingPath.empty())
+			currentOptions.startingPath = ".";
+		currentOptions.searchText = trimAscii(currentSearch);
+
+		static_cast<void>(setConfiguredMultiSearchDialogOptions(currentOptions));
+		static_cast<void>(setConfiguredLastFileDialogPath(currentOptions.startingPath));
+		static_cast<void>(addConfiguredMultiFilespecHistoryEntry(currentOptions.filespec));
+		static_cast<void>(addConfiguredMultiPathHistoryEntry(currentOptions.startingPath));
+		historyAdd(kMultiFilespecHistoryId, currentOptions.filespec);
+		historyAdd(kMultiPathHistoryId, currentOptions.startingPath);
+		persistSearchDialogSettingsSnapshot();
+
+		postMultiSearchStartedWarning();
+		switch (collectMultiFileSession(session, currentOptions, currentOptions.searchText, "", false, false,
+		                                errorText)) {
+			case MultiFileCollectOutcome::Error:
+				static_cast<void>(showMultiFileSessionCollectionError(errorText));
+				return;
+			case MultiFileCollectOutcome::NoHits:
+				postNoHitsWarning();
+				return;
+			case MultiFileCollectOutcome::Cancelled:
+				if (session.files.empty())
+					return;
+				break;
+			case MultiFileCollectOutcome::Success:
+				break;
+		}
+
+		options = currentOptions;
+		pattern = currentOptions.searchText;
+		outSession = session;
+		dialog->endModal(cmOK);
+	});
 	dialog->finalizeLayout();
+	dialog->runDialogValidation();
 	result = TProgram::deskTop->execView(dialog);
-	if (result != cmCancel) {
-		filespecField->getData(filespecInput);
-		searchField->getData(searchInput);
-		pathField->getData(pathInput);
-		optionsField->getData(&optionMask);
-		options.filespec = trimAscii(filespecInput);
-		if (options.filespec.empty())
-			options.filespec = "*.*";
-		options.searchSubdirectories = (optionMask & 0x0001) != 0;
-		options.caseSensitive = (optionMask & 0x0002) != 0;
-		options.regularExpressions = (optionMask & 0x0004) != 0;
-		options.searchFilesInMemory = (optionMask & 0x0008) != 0;
-		options.startingPath = normalizeConfiguredPathInput(pathInput);
-		if (options.startingPath.empty())
-			options.startingPath = ".";
-		pattern = trimAscii(searchInput);
-		options.searchText = pattern;
-		static_cast<void>(setConfiguredMultiSearchDialogOptions(options));
-		static_cast<void>(addConfiguredMultiFilespecHistoryEntry(options.filespec));
-		static_cast<void>(addConfiguredMultiPathHistoryEntry(options.startingPath));
-		historyAdd(kMultiFilespecHistoryId, options.filespec);
-		historyAdd(kMultiPathHistoryId, options.startingPath);
-	}
 	TObject::destroy(dialog);
-	return result != cmCancel;
+	return result == cmOK;
 }
 
 bool promptMultiFileSarValues(std::string &pattern, std::string &replacement,
-                              MRMultiSarDialogOptions &options) {
+                              MRMultiSarDialogOptions &options, MultiFileSearchSession &outSession) {
 	enum {
 		kFilespecBufferSize = 256,
 		kSearchBufferSize = 256,
@@ -1762,7 +2368,7 @@ bool promptMultiFileSarValues(std::string &pattern, std::string &replacement,
 	char pathInput[kPathBufferSize];
 	ushort optionMask = 0;
 	ushort result = cmCancel;
-	MRDialogFoundation *dialog = nullptr;
+	SubmitInterceptDialog *dialog = nullptr;
 	TInputLine *filespecField = nullptr;
 	TInputLine *searchField = nullptr;
 	TInputLine *replacementField = nullptr;
@@ -1771,6 +2377,7 @@ bool promptMultiFileSarValues(std::string &pattern, std::string &replacement,
 	std::vector<std::string> filespecHistory;
 	std::vector<std::string> pathHistory;
 
+	outSession = MultiFileSearchSession();
 	std::memset(filespecInput, 0, sizeof(filespecInput));
 	std::memset(searchInput, 0, sizeof(searchInput));
 	std::memset(replacementInput, 0, sizeof(replacementInput));
@@ -1791,13 +2398,17 @@ bool promptMultiFileSarValues(std::string &pattern, std::string &replacement,
 		strnzcpy(replacementInput, options.replacementText.c_str(), sizeof(replacementInput));
 	else if (!g_searchUiState.replacement.empty())
 		strnzcpy(replacementInput, g_searchUiState.replacement.c_str(), sizeof(replacementInput));
-	if (!options.startingPath.empty())
-		strnzcpy(pathInput, options.startingPath.c_str(), sizeof(pathInput));
-	else {
-		std::string fallback = configuredLastFileDialogPath();
-		if (fallback.empty())
-			fallback = ".";
-		strnzcpy(pathInput, fallback.c_str(), sizeof(pathInput));
+	{
+		std::string initialPath = normalizeConfiguredPathInput(options.startingPath);
+		if (initialPath.empty())
+			initialPath = normalizeConfiguredPathInput(configuredMultiSarDialogOptions().startingPath);
+		if (initialPath.empty() && !pathHistory.empty())
+			initialPath = normalizeConfiguredPathInput(pathHistory.front());
+		if (initialPath.empty())
+			initialPath = normalizeConfiguredPathInput(configuredLastFileDialogPath());
+		if (initialPath.empty())
+			initialPath = ".";
+		strnzcpy(pathInput, initialPath.c_str(), sizeof(pathInput));
 	}
 
 	if (options.searchSubdirectories)
@@ -1811,68 +2422,127 @@ bool promptMultiFileSarValues(std::string &pattern, std::string &replacement,
 	if (options.keepFilesOpen)
 		optionMask |= 0x0010;
 
-	dialog = mr::dialogs::createScrollableDialog("MULTIPLE FILE SEARCH AND REPLACE", 100, 20);
+	dialog = new SubmitInterceptDialog("MULTIPLE FILE SEARCH AND REPLACE", 102, 20);
 	filespecField = new TInputLine(TRect(14, 2, 96, 3), kFilespecBufferSize - 1);
-	dialog->insert(new TLabel(TRect(2, 2, 14, 3), "~F~ilespec:", filespecField));
+	dialog->insert(new TLabel(TRect(2, 2, 14, 3), "~F~ilespecs:", filespecField));
 	dialog->insert(filespecField);
 	dialog->insert(new THistory(TRect(96, 2, 99, 3), filespecField, kMultiFilespecHistoryId));
 	searchField = new TInputLine(TRect(14, 4, 96, 5), kSearchBufferSize - 1);
-	dialog->insert(new TLabel(TRect(2, 4, 14, 5), "Search ~f~or:", searchField));
+	dialog->insert(new TLabel(TRect(2, 4, 14, 5), "Se~a~rch:", searchField));
 	dialog->insert(searchField);
 	replacementField = new TInputLine(TRect(14, 6, 96, 7), kReplacementBufferSize - 1);
-	dialog->insert(new TLabel(TRect(2, 6, 14, 7), "Replace ~w~ith:", replacementField));
+	dialog->insert(new TLabel(TRect(2, 6, 14, 7), "Replac~e~:", replacementField));
 	dialog->insert(replacementField);
 	dialog->insert(new TStaticText(TRect(3, 8, 13, 9), "Options:"));
 	optionsField = new TCheckBoxes(
-	    TRect(3, 9, 47, 15),
-	    new TSItem("~S~earch sub-directories",
+	    TRect(3, 9, 32, 14),
+	    new TSItem("recursive ~S~earch",
 	               new TSItem("~C~ase sensitive",
 	                          new TSItem("~R~egular expressions",
 	                                     new TSItem("search files in ~m~emory",
 	                                                new TSItem("~K~eep all files open", nullptr))))));
 	dialog->insert(optionsField);
-	pathField = new TInputLine(TRect(16, 16, 96, 17), kPathBufferSize - 1);
-	dialog->insert(new TLabel(TRect(2, 16, 16, 17), "Starting ~p~ath:", pathField));
+	pathField = new TInputLine(TRect(14, 15, 96, 16), kPathBufferSize - 1);
+	dialog->insert(new TLabel(TRect(2, 15, 16, 16), "Start ~a~t:", pathField));
 	dialog->insert(pathField);
-	dialog->insert(new THistory(TRect(96, 16, 99, 17), pathField, kMultiPathHistoryId));
-	dialog->insert(new TButton(TRect(34, 17, 46, 19), "~O~K", cmOK, bfDefault));
+	dialog->insert(new THistory(TRect(96, 15, 99, 16), pathField, kMultiPathHistoryId));
+	dialog->insert(new TButton(TRect(34, 17, 46, 19), "~D~one", cmOK, bfDefault));
 	dialog->insert(new TButton(TRect(49, 17, 64, 19), "~C~ancel", cmCancel, bfNormal));
 	filespecField->setData(filespecInput);
 	searchField->setData(searchInput);
 	replacementField->setData(replacementInput);
 	pathField->setData(pathInput);
 	optionsField->setData(&optionMask);
+	dialog->setDialogValidationHook([searchField]() {
+		MRScrollableDialog::DialogValidationResult result;
+		char text[kSearchBufferSize] = {0};
+
+		if (searchField != nullptr)
+			searchField->getData(text);
+		result.valid = !trimAscii(text).empty();
+		if (!result.valid)
+			result.warningText = kSearchTextRequiredMessage;
+		return result;
+	});
+	dialog->setSubmitHook([&]() {
+		char currentFilespec[kFilespecBufferSize] = {0};
+		char currentSearch[kSearchBufferSize] = {0};
+		char currentReplacement[kReplacementBufferSize] = {0};
+		char currentPath[kPathBufferSize] = {0};
+		ushort currentMask = 0;
+		MRMultiSarDialogOptions currentOptions = options;
+		MRMultiSearchDialogOptions searchOptions;
+		MultiFileSearchSession session;
+		std::string errorText;
+
+		if (filespecField == nullptr || searchField == nullptr || replacementField == nullptr ||
+		    pathField == nullptr || optionsField == nullptr)
+			return;
+
+		filespecField->getData(currentFilespec);
+		searchField->getData(currentSearch);
+		replacementField->getData(currentReplacement);
+		pathField->getData(currentPath);
+		optionsField->getData(&currentMask);
+
+		currentOptions.filespec = trimAscii(currentFilespec);
+		if (currentOptions.filespec.empty())
+			currentOptions.filespec = "*.*";
+		currentOptions.searchSubdirectories = (currentMask & 0x0001) != 0;
+		currentOptions.caseSensitive = (currentMask & 0x0002) != 0;
+		currentOptions.regularExpressions = (currentMask & 0x0004) != 0;
+		currentOptions.searchFilesInMemory = (currentMask & 0x0008) != 0;
+		currentOptions.keepFilesOpen = (currentMask & 0x0010) != 0;
+		currentOptions.startingPath = normalizeConfiguredPathInput(currentPath);
+		if (currentOptions.startingPath.empty())
+			currentOptions.startingPath = ".";
+		currentOptions.searchText = trimAscii(currentSearch);
+		currentOptions.replacementText = currentReplacement;
+
+		static_cast<void>(setConfiguredMultiSarDialogOptions(currentOptions));
+		static_cast<void>(setConfiguredLastFileDialogPath(currentOptions.startingPath));
+		static_cast<void>(addConfiguredMultiFilespecHistoryEntry(currentOptions.filespec));
+		static_cast<void>(addConfiguredMultiPathHistoryEntry(currentOptions.startingPath));
+		historyAdd(kMultiFilespecHistoryId, currentOptions.filespec);
+		historyAdd(kMultiPathHistoryId, currentOptions.startingPath);
+		persistSearchDialogSettingsSnapshot();
+
+		searchOptions.searchSubdirectories = currentOptions.searchSubdirectories;
+		searchOptions.caseSensitive = currentOptions.caseSensitive;
+		searchOptions.regularExpressions = currentOptions.regularExpressions;
+		searchOptions.searchFilesInMemory = currentOptions.searchFilesInMemory;
+		searchOptions.filespec = currentOptions.filespec;
+		searchOptions.startingPath = currentOptions.startingPath;
+
+		postMultiSearchStartedWarning();
+		switch (collectMultiFileSession(session, searchOptions, currentOptions.searchText,
+		                                currentOptions.replacementText, true,
+		                                currentOptions.keepFilesOpen, errorText)) {
+			case MultiFileCollectOutcome::Error:
+				static_cast<void>(showMultiFileSessionCollectionError(errorText));
+				return;
+			case MultiFileCollectOutcome::NoHits:
+				postNoHitsWarning();
+				return;
+			case MultiFileCollectOutcome::Cancelled:
+				if (session.files.empty())
+					return;
+				break;
+			case MultiFileCollectOutcome::Success:
+				break;
+		}
+
+		options = currentOptions;
+		pattern = currentOptions.searchText;
+		replacement = currentOptions.replacementText;
+		outSession = session;
+		dialog->endModal(cmOK);
+	});
 	dialog->finalizeLayout();
+	dialog->runDialogValidation();
 	result = TProgram::deskTop->execView(dialog);
-	if (result != cmCancel) {
-		filespecField->getData(filespecInput);
-		searchField->getData(searchInput);
-		replacementField->getData(replacementInput);
-		pathField->getData(pathInput);
-		optionsField->getData(&optionMask);
-		options.filespec = trimAscii(filespecInput);
-		if (options.filespec.empty())
-			options.filespec = "*.*";
-		options.searchSubdirectories = (optionMask & 0x0001) != 0;
-		options.caseSensitive = (optionMask & 0x0002) != 0;
-		options.regularExpressions = (optionMask & 0x0004) != 0;
-		options.searchFilesInMemory = (optionMask & 0x0008) != 0;
-		options.keepFilesOpen = (optionMask & 0x0010) != 0;
-		options.startingPath = normalizeConfiguredPathInput(pathInput);
-		if (options.startingPath.empty())
-			options.startingPath = ".";
-		pattern = trimAscii(searchInput);
-		replacement = replacementInput;
-		options.searchText = pattern;
-		options.replacementText = replacement;
-		static_cast<void>(setConfiguredMultiSarDialogOptions(options));
-		static_cast<void>(addConfiguredMultiFilespecHistoryEntry(options.filespec));
-		static_cast<void>(addConfiguredMultiPathHistoryEntry(options.startingPath));
-		historyAdd(kMultiFilespecHistoryId, options.filespec);
-		historyAdd(kMultiPathHistoryId, options.startingPath);
-	}
 	TObject::destroy(dialog);
-	return result != cmCancel;
+	return result == cmOK;
 }
 
 std::string baseNameFromPath(const std::string &path) {
@@ -1896,11 +2566,11 @@ bool collectMatchesForMultiFileText(const std::string &text, const MultiFileSear
 	return true;
 }
 
-TMREditWindow *findOpenWindowForNormalizedPath(const std::string &normalizedPath) {
-	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+MREditWindow *findOpenWindowForNormalizedPath(const std::string &normalizedPath) {
+	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 
-	for (TMREditWindow *window : windows) {
-		TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+	for (MREditWindow *window : windows) {
+		MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 		if (editor == nullptr || !editor->hasPersistentFileName())
 			continue;
 		if (normalizedSearchPath(editor->persistentFileName()) == normalizedPath)
@@ -1910,7 +2580,7 @@ TMREditWindow *findOpenWindowForNormalizedPath(const std::string &normalizedPath
 }
 
 bool ensureWindowLoadedForSessionFile(MultiFileSearchFileResult &file, bool activate, std::string &errorText) {
-	TMREditWindow *window = file.window;
+	MREditWindow *window = file.window;
 
 	if (window == nullptr || window->getEditor() == nullptr ||
 	    !window->getEditor()->hasPersistentFileName() ||
@@ -1948,8 +2618,8 @@ void closeTemporarySessionWindow(MultiFileSearchFileResult &file, bool keepFiles
 
 bool loadSessionFileText(const MultiFileSearchFileResult &file, std::string &outText,
                          std::string &errorText) {
-	TMREditWindow *window = file.window;
-	TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+	MREditWindow *window = file.window;
+	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 
 	if (editor != nullptr && editor->hasPersistentFileName() &&
 	    normalizedSearchPath(editor->persistentFileName()) == file.normalizedPath) {
@@ -1981,6 +2651,31 @@ SearchMatchEntry *currentSessionMatch(MultiFileSearchSession &session) {
 	if (file->selectedMatchIndex >= file->matches.size())
 		file->selectedMatchIndex = file->matches.size() - 1;
 	return &file->matches[file->selectedMatchIndex];
+}
+
+std::size_t sessionTotalMatchCount(const MultiFileSearchSession &session) {
+	std::size_t total = 0;
+	for (const MultiFileSearchFileResult &file : session.files)
+		total += file.matches.size();
+	return total;
+}
+
+std::size_t sessionCurrentMatchOrdinal(const MultiFileSearchSession &session) {
+	if (session.files.empty() || session.selectedFileIndex >= session.files.size())
+		return 0;
+
+	std::size_t ordinal = 0;
+	for (std::size_t i = 0; i < session.files.size(); ++i) {
+		const MultiFileSearchFileResult &file = session.files[i];
+		if (file.matches.empty())
+			continue;
+		if (i == session.selectedFileIndex) {
+			const std::size_t index = std::min(file.selectedMatchIndex + 1, file.matches.size());
+			return ordinal + index;
+		}
+		ordinal += file.matches.size();
+	}
+	return 0;
 }
 
 bool moveSessionMatch(MultiFileSearchSession &session, int direction, bool wrap) {
@@ -2111,39 +2806,106 @@ bool buildMultiPreviewBlock(const std::string &text, const SearchMatchEntry &mat
 class MultiFileListView : public TListViewer {
   public:
 	MultiFileListView(const TRect &bounds, TScrollBar *aScrollBar, MultiFileSearchSession &session) noexcept
-	    : TListViewer(bounds, 1, nullptr, aScrollBar), session_(session) {
-		setRange(static_cast<short>(session_.files.size()));
+	    : TListViewer(bounds, 1, nullptr, aScrollBar), session(session) {
+		setRange(static_cast<short>(session.files.size()));
 	}
 
 	void getText(char *dest, short item, short maxLen) override {
+		auto trimFileNameForWidth = [](const std::string &name, std::size_t width) {
+			if (name.size() <= width)
+				return name;
+			if (width <= 3)
+				return name.substr(0, width);
+			return name.substr(0, width - 3) + "...";
+		};
+		auto hitColumnWidth = [this]() {
+			std::size_t width = 0;
+			for (const MultiFileSearchFileResult &file : session.files) {
+				const std::size_t hitTotal = file.matches.size();
+				const std::size_t hitIndex = hitTotal == 0 ? 0 : std::min(file.selectedMatchIndex + 1, hitTotal);
+				const std::size_t labelLen =
+				    3 + std::to_string(hitIndex).size() + std::to_string(hitTotal).size();
+				width = std::max(width, labelLen);
+			}
+			return std::max<std::size_t>(7, width);
+		};
+
 		if (dest == nullptr || maxLen <= 0)
 			return;
-		if (item < 0 || static_cast<std::size_t>(item) >= session_.files.size()) {
+		if (item < 0 || static_cast<std::size_t>(item) >= session.files.size()) {
 			dest[0] = EOS;
 			return;
 		}
-		const MultiFileSearchFileResult &file = session_.files[static_cast<std::size_t>(item)];
-		const std::string label =
-		    file.fileName + " (" + std::to_string(file.matches.size()) + ")";
+		const MultiFileSearchFileResult &file = session.files[static_cast<std::size_t>(item)];
+		const std::size_t hitTotal = file.matches.size();
+		const std::size_t hitIndex = hitTotal == 0 ? 0 : std::min(file.selectedMatchIndex + 1, hitTotal);
+		const std::string hitLabel = "[" + std::to_string(hitIndex) + "/" + std::to_string(hitTotal) + "]";
+		const std::size_t width = static_cast<std::size_t>(maxLen - 1);
+		const std::size_t firstColWidth = std::min<std::size_t>(hitColumnWidth(), width);
+		const std::string fileName =
+		    file.fileName.empty() ? baseNameFromPath(file.normalizedPath) : file.fileName;
+		std::string label = hitLabel.substr(0, firstColWidth);
+
+		if (label.size() < firstColWidth)
+			label.append(firstColWidth - label.size(), ' ');
+		if (label.size() < width) {
+			const std::size_t secondColWidth = width - label.size();
+			label += trimFileNameForWidth(fileName, secondColWidth);
+		}
 		std::strncpy(dest, label.c_str(), static_cast<std::size_t>(maxLen - 1));
 		dest[maxLen - 1] = EOS;
 	}
 
 	void focusItemNum(short item) override {
 		TListViewer::focusItemNum(item);
-		if (item >= 0 && static_cast<std::size_t>(item) < session_.files.size())
-			session_.selectedFileIndex = static_cast<std::size_t>(item);
+		if (item >= 0 && static_cast<std::size_t>(item) < session.files.size())
+			session.selectedFileIndex = static_cast<std::size_t>(item);
 		message(owner, evBroadcast, cmMrMultiFileSelectionChanged, this);
 	}
 
   private:
-	MultiFileSearchSession &session_;
+	MultiFileSearchSession &session;
+};
+
+class MultiPreviewHeaderView : public TView {
+  public:
+	MultiPreviewHeaderView(const TRect &bounds, MultiFileSearchSession &session) noexcept
+	    : TView(bounds), session(session) {
+	}
+
+	void draw() override {
+		TDrawBuffer b;
+		const TColorAttr color = getColor(1);
+		const std::size_t width = static_cast<std::size_t>(std::max<short>(0, size.x));
+		const std::size_t totalMatches = sessionTotalMatchCount(session);
+		const std::size_t currentMatch = sessionCurrentMatchOrdinal(session);
+		const MultiFileSearchFileResult *file =
+		    (session.selectedFileIndex < session.files.size()) ? &session.files[session.selectedFileIndex] : nullptr;
+		const std::string path =
+		    file == nullptr ? std::string() : (file->normalizedPath.empty() ? file->fileName : file->normalizedPath);
+		std::string header = "[" + std::to_string(currentMatch) + "/" + std::to_string(totalMatches) + "]";
+
+		if (!path.empty())
+			header += " " + path;
+		if (header.size() > width) {
+			if (width <= 3)
+				header = header.substr(0, width);
+			else
+				header = "..." + header.substr(header.size() - (width - 3));
+		}
+		b.moveChar(0, ' ', color, size.x);
+		b.moveStr(0, header.c_str(), color, size.x);
+		writeLine(0, 0, size.x, 1, b);
+	}
+
+  private:
+	MultiFileSearchSession &session;
 };
 
 class MultiPreviewView : public TView {
   public:
 	MultiPreviewView(const TRect &bounds, MultiFileSearchSession &session) noexcept
-	    : TView(bounds), session_(session) {
+	    : TView(bounds), session(session) {
 		options |= ofSelectable;
 		eventMask |= evMouseWheel | evMouseDown | evKeyDown;
 	}
@@ -2156,8 +2918,8 @@ class MultiPreviewView : public TView {
 		    configuredColorSlotOverride(13, editorTextAttr) ? TAttrPair(editorTextAttr) : getColor(1);
 		const TColorAttr highlight =
 		    configuredColorSlotOverride(14, editorHighlightAttr) ? TAttrPair(editorHighlightAttr) : getColor(3);
-		MultiFileSearchFileResult *file = currentSessionFile(session_);
-		SearchMatchEntry *match = currentSessionMatch(session_);
+		MultiFileSearchFileResult *file = currentSessionFile(session);
+		SearchMatchEntry *match = currentSessionMatch(session);
 		std::string text;
 		std::string error;
 		MultiPreviewBlock block;
@@ -2204,6 +2966,13 @@ class MultiPreviewView : public TView {
 	}
 
 	void handleEvent(TEvent &event) override {
+		if (event.what == evMouseDown && containsMouse(event) &&
+		    (event.mouse.buttons & mbLeftButton) != 0 &&
+		    (event.mouse.eventFlags & meDoubleClick) != 0) {
+			message(owner, evCommand, session.replaceMode ? cmMrMultiReplace : cmMrMultiDone, this);
+			clearEvent(event);
+			return;
+		}
 		if (event.what == evMouseWheel && containsMouse(event)) {
 			if (event.mouse.wheel == mwUp || event.mouse.wheel == mwLeft) {
 				message(owner, evCommand, cmMrMultiFileMatchPrev, this);
@@ -2233,7 +3002,7 @@ class MultiPreviewView : public TView {
 	}
 
   private:
-	MultiFileSearchSession &session_;
+	MultiFileSearchSession &session;
 };
 
 enum class MultiDialogAction : unsigned char {
@@ -2245,12 +3014,6 @@ enum class MultiDialogAction : unsigned char {
 };
 
 MultiDialogAction runMultiFileResultsDialog(MultiFileSearchSession &session) {
-	enum : ushort {
-		cmMrMultiDone = 4951,
-		cmMrMultiReplace = 4952,
-		cmMrMultiReplaceAll = 4953,
-		cmMrMultiSkip = 4954
-	};
 	class MultiFileResultsDialog : public MRScrollableDialog {
 	  public:
 		MultiFileResultsDialog(MultiFileSearchSession &session)
@@ -2259,22 +3022,22 @@ MultiDialogAction runMultiFileResultsDialog(MultiFileSearchSession &session) {
 		                         session.replaceMode ? "MULTIPLE FILE SEARCH AND REPLACE"
 		                                             : "MULTIPLE FILE SEARCH",
 		                         118, 28),
-		      session_(session) {
+		      session(session) {
 			const short buttonTop = 24;
 			const short rows = static_cast<short>(buttonTop - 4);
 			const short listTop = 2;
 			const short listBottom = static_cast<short>(listTop + rows);
 			const int gap = 2;
-			listScrollBar_ = new TScrollBar(TRect(29, listTop, 30, listBottom));
-			addManaged(listScrollBar_, TRect(29, listTop, 30, listBottom));
-			listView_ = new MultiFileListView(TRect(2, listTop, 29, listBottom), listScrollBar_, session_);
-			addManaged(listView_, TRect(2, listTop, 29, listBottom));
-			previewView_ = new MultiPreviewView(TRect(32, listTop, 116, listBottom), session_);
-			addManaged(previewView_, TRect(32, listTop, 116, listBottom));
-			addManaged(new TLabel(TRect(2, 1, 16, 2), "Fi~l~es:", listView_), TRect(2, 1, 16, 2));
-			addManaged(new TStaticText(TRect(32, 1, 102, 2), "Preview (Up/Down or mouse wheel = next/prev match)"),
-			           TRect(32, 1, 102, 2));
-			if (session_.replaceMode) {
+				listScrollBar = new TScrollBar(TRect(29, listTop, 30, listBottom));
+				addManaged(listScrollBar, TRect(29, listTop, 30, listBottom));
+				listView = new MultiFileListView(TRect(2, listTop, 29, listBottom), listScrollBar, session);
+				addManaged(listView, TRect(2, listTop, 29, listBottom));
+				previewView = new MultiPreviewView(TRect(32, listTop, 116, listBottom), session);
+				addManaged(previewView, TRect(32, listTop, 116, listBottom));
+				previewHeaderView = new MultiPreviewHeaderView(TRect(32, 1, 116, 2), session);
+				addManaged(previewHeaderView, TRect(32, 1, 116, 2));
+				addManaged(new TLabel(TRect(2, 1, 16, 2), "Fi~l~es:", listView), TRect(2, 1, 16, 2));
+				if (session.replaceMode) {
 				const int replaceW = 12;
 				const int replaceAllW = 14;
 				const int skipW = 10;
@@ -2311,10 +3074,17 @@ MultiDialogAction runMultiFileResultsDialog(MultiFileSearchSession &session) {
 			}
 			initScrollIfNeeded();
 			selectContent();
-			if (session_.selectedFileIndex < session_.files.size())
-				listView_->focusItemNum(static_cast<short>(session_.selectedFileIndex));
+			if (session.selectedFileIndex < session.files.size())
+				listView->focusItemNum(static_cast<short>(session.selectedFileIndex));
 			else
-				listView_->focusItemNum(0);
+				listView->focusItemNum(0);
+			setDialogValidationHook([this]() {
+				MRScrollableDialog::DialogValidationResult result;
+				result.valid = currentSessionMatch(this->session) != nullptr;
+				if (!result.valid)
+					result.warningText = "Select a match.";
+				return result;
+			});
 		}
 
 		void handleEvent(TEvent &event) override {
@@ -2337,38 +3107,45 @@ MultiDialogAction runMultiFileResultsDialog(MultiFileSearchSession &session) {
 				clearEvent(event);
 				return;
 			}
-			MRScrollableDialog::handleEvent(event);
-			if (event.what == evBroadcast && event.message.command == cmMrMultiFileSelectionChanged) {
-				previewView_->drawView();
-				clearEvent(event);
-				return;
-			}
-			if (event.what == evCommand && event.message.command == cmMrMultiFileMatchPrev) {
-				if (moveSessionMatch(session_, -1, true)) {
-					if (listView_ != nullptr)
-						listView_->focusItemNum(static_cast<short>(session_.selectedFileIndex));
-					previewView_->drawView();
+				MRScrollableDialog::handleEvent(event);
+				if (event.what == evBroadcast && event.message.command == cmMrMultiFileSelectionChanged) {
+					if (previewHeaderView != nullptr)
+						previewHeaderView->drawView();
+					previewView->drawView();
+					clearEvent(event);
+					return;
 				}
-				clearEvent(event);
-				return;
-			}
-			if (event.what == evCommand && event.message.command == cmMrMultiFileMatchNext) {
-				if (moveSessionMatch(session_, 1, true)) {
-					if (listView_ != nullptr)
-						listView_->focusItemNum(static_cast<short>(session_.selectedFileIndex));
-					previewView_->drawView();
+				if (event.what == evCommand && event.message.command == cmMrMultiFileMatchPrev) {
+					if (moveSessionMatch(session, -1, true)) {
+						if (listView != nullptr)
+							listView->focusItemNum(static_cast<short>(session.selectedFileIndex));
+						if (previewHeaderView != nullptr)
+							previewHeaderView->drawView();
+						previewView->drawView();
+					}
+					clearEvent(event);
+					return;
 				}
-				clearEvent(event);
-				return;
+				if (event.what == evCommand && event.message.command == cmMrMultiFileMatchNext) {
+					if (moveSessionMatch(session, 1, true)) {
+						if (listView != nullptr)
+							listView->focusItemNum(static_cast<short>(session.selectedFileIndex));
+						if (previewHeaderView != nullptr)
+							previewHeaderView->drawView();
+						previewView->drawView();
+					}
+					clearEvent(event);
+					return;
 			}
 		}
 
 	  private:
-		MultiFileSearchSession &session_;
-		TScrollBar *listScrollBar_ = nullptr;
-		MultiFileListView *listView_ = nullptr;
-		MultiPreviewView *previewView_ = nullptr;
-	};
+		MultiFileSearchSession &session;
+			TScrollBar *listScrollBar = nullptr;
+			MultiFileListView *listView = nullptr;
+			MultiPreviewHeaderView *previewHeaderView = nullptr;
+			MultiPreviewView *previewView = nullptr;
+		};
 
 	ushort result = cmCancel;
 	MultiFileResultsDialog *dialog = nullptr;
@@ -2393,13 +3170,13 @@ bool activateSessionCurrentMatch(MultiFileSearchSession &session) {
 	SearchMatchEntry *match = currentSessionMatch(session);
 	std::string error;
 	std::size_t end = 0;
-	TMRFileEditor *editor = nullptr;
+	MRFileEditor *editor = nullptr;
 	MRSearchDialogOptions searchOptions;
 
 	if (file == nullptr || match == nullptr)
 		return false;
 	if (!ensureWindowLoadedForSessionFile(*file, true, error)) {
-		messageBox(mfError | mfOKButton, "%s", error.c_str());
+		postSearchError(error);
 		return false;
 	}
 	editor = file->window != nullptr ? file->window->getEditor() : nullptr;
@@ -2413,7 +3190,7 @@ bool activateSessionCurrentMatch(MultiFileSearchSession &session) {
 			--end;
 	}
 	editor->setCursorOffset(match->start);
-	file->window->applyCommittedBlockState(TMREditWindow::bmStream, false, static_cast<uint>(match->start),
+	file->window->applyCommittedBlockState(MREditWindow::bmStream, false, static_cast<uint>(match->start),
 	                                       static_cast<uint>(end));
 	editor->revealCursor(True);
 	searchOptions.textType = session.regularExpressions ? MRSearchTextType::Pcre : MRSearchTextType::Literal;
@@ -2463,7 +3240,7 @@ bool replaceCurrentSessionMatch(MultiFileSearchSession &session, bool advanceAft
                                 std::string &errorText) {
 	MultiFileSearchFileResult *file = currentSessionFile(session);
 	SearchMatchEntry *match = currentSessionMatch(session);
-	TMRFileEditor *editor = nullptr;
+	MRFileEditor *editor = nullptr;
 	std::size_t start = 0;
 	std::size_t end = 0;
 	std::size_t nextOffset = 0;
@@ -2539,7 +3316,7 @@ MultiFileCollectOutcome collectMultiFileSession(MultiFileSearchSession &session,
 	session.replacement = replacement;
 	session.keepFilesOpen = keepFilesOpen;
 	if (pattern.empty()) {
-		errorText = "Search text must not be empty.";
+		errorText = kSearchTextRequiredMessage;
 		return MultiFileCollectOutcome::Error;
 	}
 	if (!compileSearchRegex(buildSearchPatternExpression(pattern, textType), !options.caseSensitive, &code,
@@ -2552,8 +3329,8 @@ MultiFileCollectOutcome collectMultiFileSession(MultiFileSearchSession &session,
 		std::string text;
 		MultiFileSearchFileResult file;
 		std::vector<SearchMatchEntry> matches;
-		TMREditWindow *window = candidate.window;
-		TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+		MREditWindow *window = candidate.window;
+		MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 		bool loaded = false;
 
 		if (shouldCancelLongRunningSearch()) {
@@ -2608,13 +3385,13 @@ void closeTemporaryWindowsForSession(MultiFileSearchSession &session) {
 
 bool showMultiFileSessionCollectionError(const std::string &errorText) {
 	if (!errorText.empty())
-		messageBox(mfError | mfOKButton, "%s", errorText.c_str());
+		postSearchError(errorText);
 	return true;
 }
 
 bool handleSearchFindText() {
-	TMREditWindow *win = currentEditWindow();
-	TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	MREditWindow *win = currentEditWindow();
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	MRSearchDialogOptions options = configuredSearchDialogOptions();
 	std::string pattern;
 
@@ -2632,21 +3409,21 @@ bool handleSearchFindText() {
 		std::vector<SearchMatchEntry> matches;
 		std::size_t selectedIndex = 0;
 		std::string text = editor->snapshotText();
-		const std::string patternExpression = buildSearchPatternExpression(pattern, options.textType);
-		std::size_t rangeStart = 0;
-		std::size_t rangeEnd = text.size();
+			const std::string patternExpression = buildSearchPatternExpression(pattern, options.textType);
+			std::size_t rangeStart = 0;
+			std::size_t rangeEnd = text.size();
 
-		if (!compileSearchRegex(patternExpression, !options.caseSensitive, &code, regexError)) {
-			messageBox(mfError | mfOKButton, "Invalid search pattern:\n%s", regexError.c_str());
-			return true;
-		}
+			if (!compileSearchRegex(patternExpression, !options.caseSensitive, &code, regexError)) {
+				postSearchError("Invalid search pattern: " + regexError);
+				return true;
+			}
 		static_cast<void>(collectRegexMatches(text, code, matches));
 		pcre2_code_free(code);
 		if (options.restrictToMarkedBlock) {
 			rangeStart = std::min(editor->selectionStartOffset(), editor->selectionEndOffset());
 			rangeEnd = std::max(editor->selectionStartOffset(), editor->selectionEndOffset());
 			if (rangeStart >= rangeEnd) {
-				messageBox(mfInformation | mfOKButton, "No marked block selected.");
+				postDialogWarning(kNoMarkedBlockSelectedMessage);
 				clearSearchSelection(win);
 				return true;
 			}
@@ -2674,14 +3451,14 @@ bool handleSearchFindText() {
 	}
 
 	if (options.searchAllWindows && options.mode == MRSearchMode::StopFirst) {
-		std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+		std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 		auto it = std::find(windows.begin(), windows.end(), win);
 		bool found = false;
 		if (it != windows.end())
 			std::rotate(windows.begin(), it, windows.end());
 		for (std::size_t i = 0; i < windows.size(); ++i) {
-			TMREditWindow *candidate = windows[i];
-			TMRFileEditor *candidateEditor = candidate != nullptr ? candidate->getEditor() : nullptr;
+			MREditWindow *candidate = windows[i];
+			MRFileEditor *candidateEditor = candidate != nullptr ? candidate->getEditor() : nullptr;
 			std::size_t startOffset = 0;
 			bool wrapped = false;
 
@@ -2753,15 +3530,15 @@ bool handleSearchFindText() {
 }
 
 bool handleSearchRepeatPrevious() {
-	TMREditWindow *win = currentEditWindow();
-	TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	MREditWindow *win = currentEditWindow();
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	std::size_t startOffset = 0;
 	bool wrapped = false;
 
 	if (editor == nullptr)
 		return true;
 	if (!g_searchUiState.hasPrevious || g_searchUiState.pattern.empty()) {
-		messageBox(mfInformation | mfOKButton, "No previous search.");
+		postDialogWarning(kNoPreviousSearchMessage);
 		return true;
 	}
 	if (g_searchUiState.lastOptions.direction == MRSearchDirection::Backward)
@@ -2783,8 +3560,8 @@ bool handleSearchRepeatPrevious() {
 }
 
 bool handleSearchReplace() {
-	TMREditWindow *win = currentEditWindow();
-	TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	MREditWindow *win = currentEditWindow();
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	MRSarDialogOptions options = configuredSarDialogOptions();
 	std::string pattern;
 	std::string replacement;
@@ -2803,7 +3580,7 @@ bool handleSearchReplace() {
 		return true;
 	}
 	if (pattern.empty()) {
-		messageBox(mfError | mfOKButton, "Search text must not be empty.");
+		postSearchError(kSearchTextRequiredMessage);
 		return true;
 	}
 	{
@@ -2822,13 +3599,13 @@ bool handleSearchReplace() {
 				return true;
 			start = editor->selectionStartOffset();
 			end = editor->selectionEndOffset();
-			if (end < start)
-				std::swap(start, end);
-			if (!editor->replaceRangeAndSelect(static_cast<uint>(start), static_cast<uint>(end),
-			                                   replacement.data(), static_cast<uint>(replacement.size()))) {
-				messageBox(mfError | mfOKButton, "Replace failed.");
-				return true;
-			}
+				if (end < start)
+					std::swap(start, end);
+				if (!editor->replaceRangeAndSelect(static_cast<uint>(start), static_cast<uint>(end),
+				                                   replacement.data(), static_cast<uint>(replacement.size()))) {
+					postSearchError("Replace failed.");
+					return true;
+				}
 			cursorTargetStart = start;
 			cursorTargetEnd = start + replacement.size();
 			replacedCount = 1;
@@ -2844,18 +3621,18 @@ bool handleSearchReplace() {
 			bool forceReplaceAll = options.mode == MRSarMode::ReplaceAll;
 			const bool forwardOrder = options.direction != MRSearchDirection::Backward;
 
-			if (!compileSearchRegex(buildSearchPatternExpression(pattern, options.textType), !options.caseSensitive, &code,
-			                        regexError)) {
-				messageBox(mfError | mfOKButton, "Invalid search pattern:\n%s", regexError.c_str());
-				return true;
-			}
+				if (!compileSearchRegex(buildSearchPatternExpression(pattern, options.textType), !options.caseSensitive, &code,
+				                        regexError)) {
+					postSearchError("Invalid search pattern: " + regexError);
+					return true;
+				}
 			static_cast<void>(collectRegexMatches(text, code, matches));
 			pcre2_code_free(code);
 			if (options.restrictToMarkedBlock) {
 				rangeStart = std::min(editor->selectionStartOffset(), editor->selectionEndOffset());
 				rangeEnd = std::max(editor->selectionStartOffset(), editor->selectionEndOffset());
 				if (rangeStart >= rangeEnd) {
-					messageBox(mfInformation | mfOKButton, "No marked block selected.");
+					postDialogWarning(kNoMarkedBlockSelectedMessage);
 					clearSearchSelection(win);
 					return true;
 				}
@@ -2914,11 +3691,11 @@ bool handleSearchReplace() {
 						forceReplaceAll = true;
 				}
 
-				if (!editor->replaceRangeAndSelect(static_cast<uint>(currentStart), static_cast<uint>(currentEnd),
-				                                   replacement.data(), static_cast<uint>(replacement.size()))) {
-					messageBox(mfError | mfOKButton, "Replace failed.");
-					return true;
-				}
+					if (!editor->replaceRangeAndSelect(static_cast<uint>(currentStart), static_cast<uint>(currentEnd),
+					                                   replacement.data(), static_cast<uint>(replacement.size()))) {
+						postSearchError("Replace failed.");
+						return true;
+					}
 				cursorTargetStart = currentStart;
 				cursorTargetEnd = currentStart + replacement.size();
 				++replacedCount;
@@ -2964,23 +3741,8 @@ bool handleSearchMultiFileSearch() {
 	std::string pattern;
 	for (;;) {
 		MultiFileSearchSession session;
-		std::string errorText;
-		if (!promptMultiFileSearchValues(pattern, options))
+		if (!promptMultiFileSearchValues(pattern, options, session))
 			return true;
-		switch (collectMultiFileSession(session, options, pattern, "", false, false, errorText)) {
-			case MultiFileCollectOutcome::Error:
-				static_cast<void>(showMultiFileSessionCollectionError(errorText));
-				continue;
-			case MultiFileCollectOutcome::NoHits:
-				postNoHitsWarning();
-				continue;
-			case MultiFileCollectOutcome::Cancelled:
-				if (session.files.empty())
-					continue;
-				break;
-			case MultiFileCollectOutcome::Success:
-				break;
-		}
 		g_lastMultiFileSearchSession = session;
 		switch (runMultiFileResultsDialog(g_lastMultiFileSearchSession)) {
 			case MultiDialogAction::Done:
@@ -2999,7 +3761,7 @@ bool handleSearchListFilesFromLastSearch() {
 	MultiDialogAction action = MultiDialogAction::Cancel;
 
 	if (!g_lastMultiFileSearchSession.valid || g_lastMultiFileSearchSession.files.empty()) {
-		messageBox(mfInformation | mfOKButton, "No previous multi-file search list.");
+		postDialogWarning(kNoPreviousMultiFileSearchListMessage);
 		return true;
 	}
 	action = runMultiFileResultsDialog(g_lastMultiFileSearchSession);
@@ -3013,34 +3775,14 @@ bool handleSearchMultiFileSearchReplace() {
 	std::string pattern;
 	std::string replacement;
 	for (;;) {
-		MRMultiSearchDialogOptions searchOptions;
 		MultiFileSearchSession session;
 		std::string errorText;
 		std::size_t replacedCount = 0;
 		bool returnToSearchDialog = false;
-		if (!promptMultiFileSarValues(pattern, replacement, sarOptions))
+
+		if (!promptMultiFileSarValues(pattern, replacement, sarOptions, session))
 			return true;
-		searchOptions.searchSubdirectories = sarOptions.searchSubdirectories;
-		searchOptions.caseSensitive = sarOptions.caseSensitive;
-		searchOptions.regularExpressions = sarOptions.regularExpressions;
-		searchOptions.searchFilesInMemory = sarOptions.searchFilesInMemory;
-		searchOptions.filespec = sarOptions.filespec;
-		searchOptions.startingPath = sarOptions.startingPath;
-		switch (collectMultiFileSession(session, searchOptions, pattern, replacement, true,
-		                                sarOptions.keepFilesOpen, errorText)) {
-			case MultiFileCollectOutcome::Error:
-				static_cast<void>(showMultiFileSessionCollectionError(errorText));
-				continue;
-			case MultiFileCollectOutcome::NoHits:
-				postNoHitsWarning();
-				continue;
-			case MultiFileCollectOutcome::Cancelled:
-				if (session.files.empty())
-					continue;
-				break;
-			case MultiFileCollectOutcome::Success:
-				break;
-		}
+
 		while (!session.files.empty()) {
 			const MultiDialogAction action = runMultiFileResultsDialog(session);
 			if (action == MultiDialogAction::Cancel) {
@@ -3052,25 +3794,25 @@ bool handleSearchMultiFileSearchReplace() {
 					break;
 				continue;
 			}
-			if (action == MultiDialogAction::ReplaceAll) {
-				while (!session.files.empty()) {
-					if (!replaceCurrentSessionMatch(session, false, errorText)) {
-						if (!errorText.empty())
-							messageBox(mfError | mfOKButton, "%s", errorText.c_str());
-						closeTemporaryWindowsForSession(session);
-						return true;
-					}
+				if (action == MultiDialogAction::ReplaceAll) {
+					while (!session.files.empty()) {
+						if (!replaceCurrentSessionMatch(session, false, errorText)) {
+							if (!errorText.empty())
+								postSearchError(errorText);
+							closeTemporaryWindowsForSession(session);
+							return true;
+						}
 					++replacedCount;
 				}
 				break;
 			}
-			if (action == MultiDialogAction::Replace) {
-				if (!replaceCurrentSessionMatch(session, true, errorText)) {
-					if (!errorText.empty())
-						messageBox(mfError | mfOKButton, "%s", errorText.c_str());
-					closeTemporaryWindowsForSession(session);
-					return true;
-				}
+				if (action == MultiDialogAction::Replace) {
+					if (!replaceCurrentSessionMatch(session, true, errorText)) {
+						if (!errorText.empty())
+							postSearchError(errorText);
+						closeTemporaryWindowsForSession(session);
+						return true;
+					}
 				++replacedCount;
 			}
 		}
@@ -3087,8 +3829,8 @@ bool handleSearchMultiFileSearchReplace() {
 }
 
 bool handleSearchGotoLineNumber() {
-	TMREditWindow *win = currentEditWindow();
-	TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	MREditWindow *win = currentEditWindow();
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	long lineNumber = 0;
 	std::size_t offset = 0;
 	std::size_t line = 1;
@@ -3118,8 +3860,8 @@ bool handleSearchGotoLineNumber() {
 bool handleFileOpen() {
 	enum { FileNameBufferSize = MAXPATH };
 	char fileName[FileNameBufferSize];
-	TMREditWindow *target;
-	TMREditWindow *current = currentEditWindow();
+	MREditWindow *target;
+	MREditWindow *current = currentEditWindow();
 	std::string resolvedPath;
 	std::string logLine;
 	bool createdTarget = false;
@@ -3153,7 +3895,7 @@ bool handleFileOpen() {
 bool handleFileLoad() {
 	enum { FileNameBufferSize = MAXPATH };
 	char fileName[FileNameBufferSize];
-	TMREditWindow *target = currentEditWindow();
+	MREditWindow *target = currentEditWindow();
 	std::string resolvedPath;
 	std::string logLine;
 	bool createdTarget = false;
@@ -3183,25 +3925,25 @@ bool handleFileLoad() {
 
 bool handleExecuteProgram() {
 	std::string commandLine;
-	TMREditWindow *win;
+	MREditWindow *win;
 
 	if (!promptForCommandLine(commandLine))
 		return true;
 	if (commandLine.empty()) {
-		messageBox(mfInformation | mfOKButton, "No command specified.");
+		postDialogWarning(kNoCommandSpecifiedMessage);
 		return true;
 	}
 
 	win = createEditorWindow(shortenCommandTitle(commandLine).c_str());
 	if (win == nullptr) {
-		messageBox(mfError | mfOKButton, "Unable to create communication window.");
+		postSearchError("Unable to create communication window.");
 		return true;
 	}
 	startExternalCommandInWindow(win, commandLine, true, true, true);
 	return true;
 }
 
-bool startExternalCommandInWindow(TMREditWindow *win, const std::string &commandLine, bool replaceBuffer,
+bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandLine, bool replaceBuffer,
                                   bool activate, bool closeOnFailure) {
 	std::string title;
 	std::string initialText;
@@ -3216,13 +3958,13 @@ bool startExternalCommandInWindow(TMREditWindow *win, const std::string &command
 		if (!win->replaceTextBuffer(initialText.c_str(), title.c_str())) {
 			if (closeOnFailure)
 				message(win, evCommand, cmClose, nullptr);
-			messageBox(mfError | mfOKButton, "Unable to prepare communication window.");
+			postSearchError("Unable to prepare communication window.");
 			return false;
 		}
 	}
 	win->setReadOnly(true);
 	win->setFileChanged(false);
-	win->setWindowRole(TMREditWindow::wrCommunicationCommand, commandLine);
+	win->setWindowRole(MREditWindow::wrCommunicationCommand, commandLine);
 	if (activate)
 		static_cast<void>(mrActivateEditWindow(win));
 
@@ -3236,7 +3978,7 @@ bool startExternalCommandInWindow(TMREditWindow *win, const std::string &command
 	if (taskId == 0) {
 		if (closeOnFailure)
 			message(win, evCommand, cmClose, nullptr);
-		messageBox(mfError | mfOKButton, "Unable to start external command worker.");
+		postSearchError("Unable to start external command worker.");
 		return false;
 	}
 	win->trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::ExternalIo, commandLine);
@@ -3248,7 +3990,7 @@ bool startExternalCommandInWindow(TMREditWindow *win, const std::string &command
 }
 
 bool handleCancelBackgroundMacros() {
-	TMREditWindow *win = currentEditWindow();
+	MREditWindow *win = currentEditWindow();
 	std::ostringstream line;
 	std::size_t taskCount;
 
@@ -3256,7 +3998,7 @@ bool handleCancelBackgroundMacros() {
 		return true;
 	taskCount = win->trackedMacroTaskCount();
 	if (taskCount == 0) {
-		messageBox(mfInformation | mfOKButton, "No background macro tasks are running in this window.");
+		postDialogWarning(kNoBackgroundMacroTasksMessage);
 		return true;
 	}
 	if (!win->cancelTrackedMacroTasks())
@@ -3276,13 +4018,13 @@ bool handleHeroEventProbe() {
 }
 
 bool dispatchEditorCommand(ushort editorCommand, bool requiresWritable) {
-	TMREditWindow *win = currentEditWindow();
-	TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	MREditWindow *win = currentEditWindow();
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 
 	if (win == nullptr || editor == nullptr)
 		return true;
 	if (requiresWritable && win->isReadOnly()) {
-		messageBox(mfInformation | mfOKButton, "Window is read-only.");
+		postDialogWarning(kWindowReadOnlyMessage);
 		return true;
 	}
 	message(editor, evCommand, editorCommand, nullptr);
@@ -3298,7 +4040,7 @@ ushort execDialogWithDataLocal(TDialog *dialog, void *data) {
 }
 
 void syncPersistentBlocksMenuState() {
-	if (auto *mrMenuBar = dynamic_cast<TMRMenuBar *>(TProgram::menuBar))
+	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(TProgram::menuBar))
 		mrMenuBar->setPersistentBlocksMenuState(configuredPersistentBlocksSetting());
 }
 
@@ -3308,10 +4050,10 @@ bool handleBlockAction(bool ok, const char *failureText) {
 	return true;
 }
 
-bool hasMarkedTextForBlockOperation(TMREditWindow *win) {
+bool hasMarkedTextForBlockOperation(MREditWindow *win) {
 	if (win == nullptr || !win->hasBlock())
 		return false;
-	if (win->blockStatus() == TMREditWindow::bmStream &&
+	if (win->blockStatus() == MREditWindow::bmStream &&
 	    win->blockAnchorPtr() == win->blockEffectiveEndPtr())
 		return false;
 	return true;
@@ -3321,7 +4063,7 @@ bool promptBlockSavePath(std::string &outPath) {
 	char buffer[MAXPATH] = {0};
 	ushort result = cmCancel;
 	static constexpr ushort kBlockSaveDialogHistoryId = 45;
-	TMREditWindow *win = currentEditWindow();
+	MREditWindow *win = currentEditWindow();
 
 	outPath.clear();
 	if (win != nullptr && win->currentFileName() != nullptr && *win->currentFileName() != '\0')
@@ -3341,8 +4083,8 @@ bool promptBlockSavePath(std::string &outPath) {
 }
 
 bool chooseInterWindowBlockTarget(int &sourceWindowIndex) {
-	TMREditWindow *targetWin = currentEditWindow();
-	TMREditWindow *sourceWin = nullptr;
+	MREditWindow *targetWin = currentEditWindow();
+	MREditWindow *sourceWin = nullptr;
 
 	sourceWindowIndex = 0;
 	if (targetWin == nullptr)
@@ -3351,11 +4093,11 @@ bool chooseInterWindowBlockTarget(int &sourceWindowIndex) {
 	if (sourceWin == nullptr)
 		return false;
 	if (sourceWin == targetWin) {
-		messageBox(mfInformation | mfOKButton, "Choose another window for inter-window block operation.");
+		postDialogWarning(kChooseAnotherWindowForBlockMessage);
 		return false;
 	}
 	if (!hasMarkedTextForBlockOperation(sourceWin)) {
-		messageBox(mfInformation | mfOKButton, "No block marked in the selected source window.");
+		postDialogWarning(kNoMarkedBlockInSourceWindowMessage);
 		return false;
 	}
 	sourceWindowIndex = mrvmUiCurrentWindowIndex(sourceWin);
@@ -3367,13 +4109,13 @@ bool togglePersistentBlocksSetting() {
 	MREditSetupSettings settings = configuredEditSetupSettings();
 	MRSetupPaths paths;
 	MRSettingsWriteReport writeReport;
-	TMREditorApp *app = dynamic_cast<TMREditorApp *>(TProgram::application);
+	MREditorApp *app = dynamic_cast<MREditorApp *>(TProgram::application);
 	std::string errorText;
 	bool enabled;
 
 	settings.persistentBlocks = !settings.persistentBlocks;
 	if (!setConfiguredEditSetupSettings(settings, &errorText)) {
-		messageBox(mfError | mfOKButton, "Persistent blocks update failed:\n%s", errorText.c_str());
+		postSearchError("Persistent blocks update failed: " + errorText);
 		return true;
 	}
 
@@ -3383,12 +4125,12 @@ bool togglePersistentBlocksSetting() {
 	paths.tempPath = configuredTempDirectoryPath();
 	paths.shellUri = configuredShellExecutablePath();
 	if (!writeSettingsMacroFile(paths, &errorText, &writeReport)) {
-		messageBox(mfError | mfOKButton, "Settings save failed:\n%s", errorText.c_str());
+		postSearchError("Settings save failed: " + errorText);
 		return true;
 	}
 	mrLogSettingsWriteReport("persistent blocks toggle", writeReport);
 	if (app != nullptr && !app->reloadSettingsMacroFromPath(paths.settingsMacroUri, &errorText)) {
-		messageBox(mfError | mfOKButton, "Settings reload failed:\n%s", errorText.c_str());
+		postSearchError("Settings reload failed: " + errorText);
 		return true;
 	}
 
@@ -3402,7 +4144,7 @@ bool togglePersistentBlocksSetting() {
 }
 
 bool handleStopCurrentProgram() {
-	TMREditWindow *win = currentEditWindow();
+	MREditWindow *win = currentEditWindow();
 	std::ostringstream line;
 	std::size_t taskCount;
 
@@ -3410,7 +4152,7 @@ bool handleStopCurrentProgram() {
 		return true;
 	taskCount = win->trackedTaskCount(mr::coprocessor::TaskKind::ExternalIo);
 	if (taskCount == 0) {
-		messageBox(mfInformation | mfOKButton, "No external program task is running in this window.");
+		postDialogWarning(kNoExternalProgramTaskMessage);
 		return true;
 	}
 	if (!win->cancelTrackedExternalIoTasks())
@@ -3424,16 +4166,16 @@ bool handleStopCurrentProgram() {
 }
 
 bool handleRestartCurrentProgram() {
-	TMREditWindow *win = currentEditWindow();
+	MREditWindow *win = currentEditWindow();
 
-	if (win == nullptr || win->windowRole() != TMREditWindow::wrCommunicationCommand)
+	if (win == nullptr || win->windowRole() != MREditWindow::wrCommunicationCommand)
 		return true;
 	if (win->hasTrackedExternalIoTasks()) {
-		messageBox(mfInformation | mfOKButton, "Stop the current program before restarting it.");
+		postDialogWarning(kStopProgramBeforeRestartMessage);
 		return true;
 	}
 	if (win->windowRoleDetail().empty()) {
-		messageBox(mfInformation | mfOKButton, "No restartable command is associated with this window.");
+		postDialogWarning(kNoRestartableCommandMessage);
 		return true;
 	}
 	startExternalCommandInWindow(win, win->windowRoleDetail(), true, true, false);
@@ -3441,14 +4183,14 @@ bool handleRestartCurrentProgram() {
 }
 
 bool handleClearCurrentOutput() {
-	TMREditWindow *win = currentEditWindow();
+	MREditWindow *win = currentEditWindow();
 	std::ostringstream line;
 
 	if (win == nullptr)
 		return true;
-	if (win->windowRole() == TMREditWindow::wrLog) {
+	if (win->windowRole() == MREditWindow::wrLog) {
 		if (!mrClearLogWindow()) {
-			messageBox(mfError | mfOKButton, "Unable to clear log window.");
+			postSearchError("Unable to clear log window.");
 			return true;
 		}
 		mrLogMessage("Log window cleared.");
@@ -3461,7 +4203,7 @@ bool handleClearCurrentOutput() {
 		return true;
 	}
 	if (!win->replaceTextBuffer("", win->getTitle(0))) {
-		messageBox(mfError | mfOKButton, "Unable to clear communication window.");
+		postSearchError("Unable to clear communication window.");
 		return true;
 	}
 	win->setReadOnly(true);
@@ -3475,8 +4217,8 @@ void clearTransientSelectionIfPending(const TEvent &event) {
 	if (!g_pendingTransientSelectionClear.active || event.what != evKeyDown)
 		return;
 	g_pendingTransientSelectionClear.active = false;
-	for (TMREditWindow *window : allEditWindowsInZOrder()) {
-		TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+	for (MREditWindow *window : allEditWindowsInZOrder()) {
+		MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 		if (editor == nullptr || !editor->hasPersistentFileName())
 			continue;
 		if (normalizedSearchPath(editor->persistentFileName()) != g_pendingTransientSelectionClear.normalizedPath)
@@ -3632,9 +4374,9 @@ bool handleMRCommand(ushort command) {
 			return true;
 
 		case cmMrWindowList: {
-			TMREditWindow *selected = mrShowWindowListDialog(mrwlActivateWindow, currentEditWindow());
+			MREditWindow *selected = mrShowWindowListDialog(mrwlManageWindows, currentEditWindow());
 			if (selected != nullptr)
-				static_cast<void>(mrActivateEditWindow(selected));
+				mrScheduleWindowActivation(selected);
 			return true;
 		}
 
@@ -3716,6 +4458,12 @@ bool handleMRCommand(ushort command) {
 
 		case cmMrOtherMacroManager:
 			return runMacroManagerDialog();
+
+		case cmMrOtherAsciiTable:
+			return handleCharacterTable(CharacterTableKind::Ascii);
+
+		case cmMrOtherEmojiTable:
+			return handleCharacterTable(CharacterTableKind::Emoji);
 
 		case cmMrDevCancelMacroTasks:
 			return handleCancelBackgroundMacros();

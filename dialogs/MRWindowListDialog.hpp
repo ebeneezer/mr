@@ -1,13 +1,16 @@
 #ifndef MRWINDOWLISTDIALOG_HPP
 #define MRWINDOWLISTDIALOG_HPP
 
-class TMREditWindow;
+class MREditWindow;
 
 enum MRWindowListMode {
 	mrwlActivateWindow = 0,
-	mrwlSelectLinkTarget = 1
+	mrwlSelectLinkTarget = 1,
+	mrwlManageWindows = 2
 };
 
-TMREditWindow *mrShowWindowListDialog(MRWindowListMode mode, TMREditWindow *current);
+MREditWindow *mrShowWindowListDialog(MRWindowListMode mode, MREditWindow *current);
+void mrRefreshManageWindowListDialog();
+void mrNotifyWindowTopologyChanged();
 
 #endif

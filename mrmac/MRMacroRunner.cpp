@@ -1,5 +1,8 @@
 #include "../app/utils/MRFileIOUtils.hpp"
 #define Uses_MsgBox
+#define Uses_TDisplay
+#define Uses_TApplication
+#define Uses_TProgram
 #include <tvision/tv.h>
 
 #include "MRMacroRunner.hpp"
@@ -8,7 +11,8 @@
 #include "mrvm.hpp"
 #include "../coprocessor/MRCoprocessor.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
-#include "../ui/TMREditWindow.hpp"
+#include "../ui/MREditWindow.hpp"
+#include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
 #include <cstdio>
@@ -84,6 +88,72 @@ std::string trimPathInput(const std::string &path) {
 	return result;
 }
 
+std::string upperAscii(std::string value) {
+	for (char &ch : value)
+		ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+	return value;
+}
+
+std::string baseNameOfPath(const std::string &path) {
+	const std::size_t pos = path.find_last_of('/');
+	return pos == std::string::npos ? path : path.substr(pos + 1);
+}
+
+std::string stemOfPath(const std::string &path) {
+	std::string baseName = baseNameOfPath(path);
+	const std::size_t dotPos = baseName.rfind('.');
+	return dotPos == std::string::npos ? baseName : baseName.substr(0, dotPos);
+}
+
+std::string escapeMrmacSingleQuotedLiteral(std::string_view value) {
+	std::string escaped;
+	escaped.reserve(value.size());
+	for (char ch : value) {
+		escaped.push_back(ch);
+		if (ch == '\'')
+			escaped.push_back('\'');
+	}
+	return escaped;
+}
+
+bool selectPlaybackMacro(const std::string &resolvedPath, const std::string &source, std::string &macroName,
+                         std::string &errorText, MRMacroExecutionProfile *profileOut = nullptr) {
+	size_t bytecodeSize = 0;
+	unsigned char *bytecode = compile_macro_code(source.c_str(), &bytecodeSize);
+	const int macroCount = get_compiled_macro_count();
+	const std::string preferredName = upperAscii(stemOfPath(resolvedPath));
+
+	macroName.clear();
+	errorText.clear();
+	if (bytecode == nullptr) {
+		const char *compileError = get_last_compile_error();
+		errorText = compileError != nullptr && *compileError != '\0' ? compileError : "Compilation failed.";
+		return false;
+	}
+
+	if (profileOut != nullptr)
+		*profileOut = mrvmAnalyzeBytecode(bytecode, bytecodeSize);
+
+	for (int i = 0; i < macroCount; ++i) {
+		const char *compiledName = get_compiled_macro_name(i);
+		if (compiledName == nullptr || *compiledName == '\0')
+			continue;
+		if (macroName.empty())
+			macroName = compiledName;
+		if (upperAscii(compiledName) == preferredName) {
+			macroName = compiledName;
+			break;
+		}
+	}
+	std::free(bytecode);
+
+	if (!macroName.empty())
+		return true;
+
+	errorText = "No macros found in file.";
+	return false;
+}
+
 std::string expandUserPath(const char *path) {
 	std::string result;
 
@@ -102,8 +172,27 @@ std::string expandUserPath(const char *path) {
 
 
 const char *backgroundMacroPolicyText(bool staged) noexcept {
-	return staged ? "policy: snapshot + staged write, UI-thread commit, conflict=abort, cancel=cooperative"
+	return staged ? "policy: snapshot + staged ops, UI-thread commit/playback, conflict=abort, cancel=cooperative"
 	              : "policy: snapshot read-only, cancel=cooperative";
+}
+
+std::string joinNames(const std::vector<std::string> &names);
+
+std::string buildExecutionRouteLogLine(const std::string &label, const char *route,
+                                       const MRMacroExecutionProfile &profile) {
+	std::string line = "Macro '";
+	line += label;
+	line += "' route=";
+	line += route;
+	line += " profile=";
+	line += mrvmDescribeExecutionProfile(profile);
+
+	std::vector<std::string> unsupported = mrvmUnsupportedStagedSymbols(profile);
+	if (!unsupported.empty())
+		line += " [unsupported staged symbols: " + joinNames(unsupported) + "]";
+	else if (profile.has(mrefExternalIo))
+		line += " [contains external I/O]";
+	return line;
 }
 
 std::string joinNames(const std::vector<std::string> &names) {
@@ -118,25 +207,23 @@ std::string joinNames(const std::vector<std::string> &names) {
 }
 
 void showErrorBox(const char *title, const char *text) {
-	char msg[1024];
-
 	if (title == nullptr)
 		title = "Error";
 	if (text == nullptr)
 		text = "Unknown error.";
 
-	std::snprintf(msg, sizeof(msg), "%s:\n\n%s", title, text);
-	messageBox(mfError | mfOKButton, "%s", msg);
+	messageBox(mfError | mfOKButton, "%s:\n\n%s", title, text);
 }
 
-bool runMacroSource(const char *displayName, const char *source) {
+bool runMacroSource(const char *displayName, const char *source,
+                    const MRMacroExecutionProfile *routeProfile = nullptr) {
 	size_t bytecodeSize = 0;
 	unsigned char *bytecode = nullptr;
 	std::shared_ptr<VirtualMachine> vm = std::make_shared<VirtualMachine>();
 	MRMacroExecutionProfile profile;
 	std::vector<unsigned char> bytecodeCopy;
 	std::string label = displayName != nullptr ? displayName : "Macro Loader";
-	TMREditWindow *win = currentEditWindow();
+	MREditWindow *win = currentEditWindow();
 	std::uint64_t taskId = 0;
 
 	if (source == nullptr) {
@@ -157,8 +244,9 @@ bool runMacroSource(const char *displayName, const char *source) {
 		return false;
 	}
 
-	profile = mrvmAnalyzeBytecode(bytecode, bytecodeSize);
+	profile = routeProfile != nullptr ? *routeProfile : mrvmAnalyzeBytecode(bytecode, bytecodeSize);
 	if (mrvmCanRunInBackground(profile)) {
+		mrLogMessage(buildExecutionRouteLogLine(label, "background", profile).c_str());
 		bytecodeCopy.assign(bytecode, bytecode + bytecodeSize);
 		std::free(bytecode);
 		bytecode = nullptr;
@@ -208,117 +296,119 @@ bool runMacroSource(const char *displayName, const char *source) {
 
 	if (mrvmCanRunStagedInBackground(profile)) {
 		MRMacroStagedExecutionInput stagedInput;
-		TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+		MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 
-		if (win == nullptr || editor == nullptr) {
-			showErrorBox(label.c_str(), "No active editor window available for staged macro execution.");
+		if (win != nullptr && editor != nullptr) {
+			mrLogMessage(buildExecutionRouteLogLine(label, "staged", profile).c_str());
+			bytecodeCopy.assign(bytecode, bytecode + bytecodeSize);
 			std::free(bytecode);
-			return false;
-		}
+			bytecode = nullptr;
 
-		bytecodeCopy.assign(bytecode, bytecode + bytecodeSize);
-		std::free(bytecode);
-		bytecode = nullptr;
+			stagedInput.document = editor->documentCopy();
+			stagedInput.baseVersion = editor->documentVersion();
+			stagedInput.cursorOffset = editor->cursorOffset();
+			stagedInput.selectionStart = editor->selectionStartOffset();
+			stagedInput.selectionEnd = editor->selectionEndOffset();
+			stagedInput.blockMode = win->blockStatus();
+			stagedInput.blockMarkingOn = win->isBlockMarking();
+			stagedInput.blockAnchor = win->blockAnchorPtr();
+			stagedInput.blockEnd = win->blockEffectiveEndPtr();
+			stagedInput.firstSave = win->hasBeenSavedInSession();
+			stagedInput.eofInMemory = win->eofInMemory();
+			stagedInput.bufferId = win->bufferId();
+			stagedInput.temporaryFile = win->isTemporaryFile();
+			stagedInput.temporaryFileName = win->temporaryFileName();
+			stagedInput.currentWindow = mrvmUiCurrentWindowIndex(win);
+			stagedInput.linkStatus = mrvmUiLinkStatus(win);
+			stagedInput.windowCount = mrvmUiWindowCount();
+			stagedInput.windowGeometryValid = mrvmUiWindowGeometry(
+			    win, stagedInput.windowX1, stagedInput.windowY1, stagedInput.windowX2,
+			    stagedInput.windowY2);
+			mrvmUiCopyGlobals(stagedInput.globalOrder, stagedInput.globalInts,
+			                  stagedInput.globalStrings);
+			mrvmUiCopyLoadedMacros(stagedInput.macroOrder, stagedInput.macroDisplayNames);
+			stagedInput.fileName = win->currentFileName();
+			stagedInput.fileChanged = win->isFileChanged();
+			stagedInput.lastSearchValid = mrvmUiCopyWindowLastSearch(
+			    win, stagedInput.fileName, stagedInput.lastSearchStart, stagedInput.lastSearchEnd,
+			    stagedInput.lastSearchCursor);
+			mrvmUiCopyRuntimeOptions(stagedInput.ignoreCase, stagedInput.tabExpand);
+			stagedInput.markStack = mrvmUiCopyWindowMarkStack(win);
+			stagedInput.insertMode = editor->insertModeEnabled();
+			stagedInput.indentLevel = win->indentLevel();
+			stagedInput.pageLines = std::max(1, editor->size.y - 1);
+			stagedInput.screenWidth = mrvmUiScreenWidth();
+			stagedInput.screenHeight = mrvmUiScreenHeight();
+			{
+				int cursorX = 1;
+				int cursorY = 1;
+				if (mrvmUiCursorPosition(cursorX, cursorY)) {
+					stagedInput.screenCursorX = cursorX;
+					stagedInput.screenCursorY = cursorY;
+				}
+			}
 
-		stagedInput.document = editor->documentCopy();
-		stagedInput.baseVersion = editor->documentVersion();
-		stagedInput.cursorOffset = editor->cursorOffset();
-		stagedInput.selectionStart = editor->selectionStartOffset();
-		stagedInput.selectionEnd = editor->selectionEndOffset();
-		stagedInput.blockMode = win->blockStatus();
-		stagedInput.blockMarkingOn = win->isBlockMarking();
-		stagedInput.blockAnchor = win->blockAnchorPtr();
-		stagedInput.blockEnd = win->blockEffectiveEndPtr();
-		stagedInput.firstSave = win->hasBeenSavedInSession();
-		stagedInput.eofInMemory = win->eofInMemory();
-		stagedInput.bufferId = win->bufferId();
-		stagedInput.temporaryFile = win->isTemporaryFile();
-		stagedInput.temporaryFileName = win->temporaryFileName();
-		stagedInput.currentWindow = mrvmUiCurrentWindowIndex(win);
-		stagedInput.linkStatus = mrvmUiLinkStatus(win);
-		stagedInput.windowCount = mrvmUiWindowCount();
-		stagedInput.windowGeometryValid = mrvmUiWindowGeometry(
-		    win, stagedInput.windowX1, stagedInput.windowY1, stagedInput.windowX2,
-		    stagedInput.windowY2);
-		mrvmUiCopyGlobals(stagedInput.globalOrder, stagedInput.globalInts,
-		                  stagedInput.globalStrings);
-		mrvmUiCopyLoadedMacros(stagedInput.macroOrder, stagedInput.macroDisplayNames);
-		stagedInput.fileName = win->currentFileName();
-		stagedInput.fileChanged = win->isFileChanged();
-		stagedInput.lastSearchValid = mrvmUiCopyWindowLastSearch(
-		    win, stagedInput.fileName, stagedInput.lastSearchStart, stagedInput.lastSearchEnd,
-		    stagedInput.lastSearchCursor);
-		mrvmUiCopyRuntimeOptions(stagedInput.ignoreCase, stagedInput.tabExpand);
-		stagedInput.markStack = mrvmUiCopyWindowMarkStack(win);
-		stagedInput.insertMode = editor->insertModeEnabled();
-		stagedInput.indentLevel = win->indentLevel();
-		stagedInput.pageLines = std::max(1, editor->size.y - 1);
+			taskId = mr::coprocessor::globalCoprocessor().submit(
+			    mr::coprocessor::Lane::Macro, mr::coprocessor::TaskKind::MacroJob,
+			    static_cast<std::size_t>(win->bufferId()), stagedInput.baseVersion,
+			    std::string("macro: ") + label,
+			    [label, bytecodeCopy = std::move(bytecodeCopy), stagedInput = std::move(stagedInput)](
+			        const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) mutable {
+				    mr::coprocessor::Result result;
+				    MRMacroStagedJobResult runResult;
 
-		taskId = mr::coprocessor::globalCoprocessor().submit(
-		    mr::coprocessor::Lane::Macro, mr::coprocessor::TaskKind::MacroJob,
-		    static_cast<std::size_t>(win->bufferId()), stagedInput.baseVersion,
-		    std::string("macro: ") + label,
-		    [label, bytecodeCopy = std::move(bytecodeCopy), stagedInput = std::move(stagedInput)](
-		        const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) mutable {
-			    mr::coprocessor::Result result;
-			    MRMacroStagedJobResult runResult;
+				    result.task = info;
+				    if (stopToken.stop_requested() || info.cancelRequested()) {
+					    result.status = mr::coprocessor::TaskStatus::Cancelled;
+					    return result;
+				    }
 
-			    result.task = info;
-			    if (stopToken.stop_requested() || info.cancelRequested()) {
-				    result.status = mr::coprocessor::TaskStatus::Cancelled;
+				    runResult = mrvmRunBytecodeStagedBackground(bytecodeCopy.data(), bytecodeCopy.size(),
+				                                                stagedInput, stopToken, info.cancelFlag);
+				    if (runResult.cancelled) {
+					    result.status = mr::coprocessor::TaskStatus::Cancelled;
+					    return result;
+				    }
+				    result.status = mr::coprocessor::TaskStatus::Completed;
+				    result.payload = std::make_shared<mr::coprocessor::MacroJobStagedPayload>(
+				        label, std::move(runResult.logLines), runResult.hadError,
+				        std::move(runResult.transaction), runResult.cursorOffset, runResult.selectionStart,
+				        runResult.selectionEnd, runResult.blockMode, runResult.blockMarkingOn,
+				        runResult.blockAnchor, runResult.blockEnd, std::move(runResult.globalOrder),
+				        std::move(runResult.globalInts), std::move(runResult.globalStrings),
+				        std::move(runResult.deferredUiCommands),
+				        runResult.lastSearchValid,
+				        runResult.lastSearchStart, runResult.lastSearchEnd, runResult.lastSearchCursor,
+				        runResult.ignoreCase, runResult.tabExpand, std::move(runResult.markStack),
+				        runResult.insertMode,
+				        runResult.indentLevel, std::move(runResult.fileName), runResult.fileChanged);
 				    return result;
-			    }
-
-			    runResult = mrvmRunBytecodeStagedBackground(bytecodeCopy.data(), bytecodeCopy.size(),
-			                                                stagedInput, stopToken, info.cancelFlag);
-			    if (runResult.cancelled) {
-				    result.status = mr::coprocessor::TaskStatus::Cancelled;
-				    return result;
-			    }
-			    result.status = mr::coprocessor::TaskStatus::Completed;
-			    result.payload = std::make_shared<mr::coprocessor::MacroJobStagedPayload>(
-			        label, std::move(runResult.logLines), runResult.hadError,
-			        std::move(runResult.transaction), runResult.cursorOffset, runResult.selectionStart,
-			        runResult.selectionEnd, runResult.blockMode, runResult.blockMarkingOn,
-			        runResult.blockAnchor, runResult.blockEnd, std::move(runResult.globalOrder),
-			        std::move(runResult.globalInts), std::move(runResult.globalStrings),
-			        std::move(runResult.deferredUiCommands),
-			        runResult.lastSearchValid,
-			        runResult.lastSearchStart, runResult.lastSearchEnd, runResult.lastSearchCursor,
-			        runResult.ignoreCase, runResult.tabExpand, std::move(runResult.markStack),
-			        runResult.insertMode,
-			        runResult.indentLevel, std::move(runResult.fileName), runResult.fileChanged);
-			    return result;
-		    });
-		if (taskId == 0) {
-			showErrorBox(label.c_str(), "Unable to start staged background macro worker.");
-			return false;
+			    });
+			if (taskId == 0) {
+				showErrorBox(label.c_str(), "Unable to start staged background macro worker.");
+				return false;
+			}
+			win->trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::MacroJob, label);
+			win->noteQueuedBackgroundMacro(label, true);
+			{
+				std::string line = "Queued staged macro '";
+				line += label;
+				line += "' [task #";
+				line += std::to_string(taskId);
+				line += "] ";
+				line += backgroundMacroPolicyText(true);
+				mrLogMessage(line.c_str());
+			}
+			return true;
 		}
-		win->trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::MacroJob, label);
-		win->noteQueuedBackgroundMacro(label, true);
-		{
-			std::string line = "Queued staged-write macro '";
-			line += label;
-			line += "' [task #";
-			line += std::to_string(taskId);
-			line += "] ";
-			line += backgroundMacroPolicyText(true);
-			mrLogMessage(line.c_str());
-		}
-		return true;
+		mrLogMessage(("Staged execution skipped for macro '" + label +
+		              "': no active editor window, running on UI thread.")
+		                 .c_str());
 	}
 
-	{
-		std::string line = "Running macro '" + label + "' on UI thread: " + mrvmDescribeExecutionProfile(profile);
-		std::vector<std::string> unsupported = mrvmUnsupportedStagedSymbols(profile);
+	mrLogMessage(buildExecutionRouteLogLine(label, "ui-thread", profile).c_str());
 
-		if (!unsupported.empty())
-			line += " [unsupported staged symbols: " + joinNames(unsupported) + "]";
-		else if (profile.has(mrefExternalIo))
-			line += " [contains external I/O]";
-		mrLogMessage(line.c_str());
-	}
-
+	vm->setAsyncDelayEnabled(true);
 	vm->execute(bytecode, bytecodeSize);
 	std::free(bytecode);
 	if (vm->hasPendingDelay()) {
@@ -369,6 +459,11 @@ bool runMacroFileByPath(const char *path) {
 	std::string resolvedPath = expandUserPath(path);
 	std::string source;
 	std::string ioError;
+	std::string macroName;
+	std::string loadError;
+	std::string runnerSource;
+	std::string macroSpec;
+	MRMacroExecutionProfile targetProfile;
 
 	if (resolvedPath.empty()) {
 		showErrorBox("Macro Loader", "No file name specified.");
@@ -385,5 +480,18 @@ bool runMacroFileByPath(const char *path) {
 		return false;
 	}
 
-	return runMacroSource(resolvedPath.c_str(), source.c_str());
+	if (!selectPlaybackMacro(resolvedPath, source, macroName, loadError, &targetProfile)) {
+		showErrorBox(resolvedPath.c_str(), loadError.c_str());
+		return false;
+	}
+
+	if (!mrvmLoadMacroFile(resolvedPath, &loadError)) {
+		showErrorBox(resolvedPath.c_str(), loadError.c_str());
+		return false;
+	}
+
+	macroSpec = resolvedPath + "^" + macroName;
+	runnerSource =
+	    "$MACRO MacroPlaybackLauncher;\nRUN_MACRO('" + escapeMrmacSingleQuotedLiteral(macroSpec) + "');\nEND_MACRO;\n";
+	return runMacroSource(macroSpec.c_str(), runnerSource.c_str(), &targetProfile);
 }

@@ -3,10 +3,12 @@
 
 #include <string_view>
 
-class TMREditWindow;
+class MREditWindow;
 struct MRSettingsWriteReport;
 
-[[nodiscard]] bool mrActivateEditWindow(TMREditWindow *win);
+[[nodiscard]] bool mrActivateEditWindow(MREditWindow *win);
+void mrScheduleWindowActivation(MREditWindow *win);
+[[nodiscard]] bool mrDispatchDeferredWindowActivation();
 [[nodiscard]] bool mrShowProjectHelp();
 [[nodiscard]] bool mrEnsureLogWindow(bool activate = true);
 [[nodiscard]] bool mrEnsureUsableWorkWindow();
@@ -17,5 +19,9 @@ void mrSetKeystrokeRecordingActive(bool active);
 [[nodiscard]] bool mrIsKeystrokeRecordingActive();
 void mrSetKeystrokeRecordingMarkerVisible(bool visible);
 [[nodiscard]] bool mrIsKeystrokeRecordingMarkerVisible();
+void mrSetMacroBrainMarkerActive(bool active);
+[[nodiscard]] bool mrIsMacroBrainMarkerActive();
+void mrSetMacroBrainMarkerVisible(bool visible);
+[[nodiscard]] bool mrIsMacroBrainMarkerVisible();
 
 #endif

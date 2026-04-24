@@ -1,4 +1,4 @@
-#include "TMRSyntax.hpp"
+#include "MRSyntax.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -48,7 +48,7 @@ bool matchesWord(const std::string &word, const char *const *table, std::size_t 
 	return false;
 }
 
-void paint(TMRSyntaxTokenMap &tokens, std::size_t start, std::size_t end, TMRSyntaxToken token) {
+void paint(MRSyntaxTokenMap &tokens, std::size_t start, std::size_t end, MRSyntaxToken token) {
 	if (start > tokens.size())
 		start = tokens.size();
 	if (end > tokens.size())
@@ -72,7 +72,7 @@ static std::size_t skipWhitespace(const std::string &text, std::size_t pos = 0) 
 	return pos == text.size() ? std::string::npos : pos;
 }
 
-void tokenizeString(TMRSyntaxTokenMap &tokens, const std::string &line, std::size_t &i, char quote,
+void tokenizeString(MRSyntaxTokenMap &tokens, const std::string &line, std::size_t &i, char quote,
                     bool doubledQuoteEscape = false) {
 	std::size_t start = i++;
 	while (i < line.size()) {
@@ -90,10 +90,10 @@ void tokenizeString(TMRSyntaxTokenMap &tokens, const std::string &line, std::siz
 		}
 		++i;
 	}
-	paint(tokens, start, i, TMRSyntaxToken::String);
+	paint(tokens, start, i, MRSyntaxToken::String);
 }
 
-void tokenizeCFamily(TMRSyntaxTokenMap &tokens, const std::string &line) {
+void tokenizeCFamily(MRSyntaxTokenMap &tokens, const std::string &line) {
 	static const char *const keywords[] = {
 	    "break",    "case",     "catch",   "class",    "const",    "continue", "default", "delete",
 	    "do",       "else",     "enum",    "explicit", "extern",   "for",      "friend",  "goto",
@@ -111,7 +111,7 @@ void tokenizeCFamily(TMRSyntaxTokenMap &tokens, const std::string &line) {
 
 	for (std::size_t i = 0; i < line.size();) {
 		if (line[i] == '/' && i + 1 < line.size() && line[i + 1] == '/') {
-			paint(tokens, i, line.size(), TMRSyntaxToken::Comment);
+			paint(tokens, i, line.size(), MRSyntaxToken::Comment);
 			break;
 		}
 		if (line[i] == '/' && i + 1 < line.size() && line[i + 1] == '*') {
@@ -121,7 +121,7 @@ void tokenizeCFamily(TMRSyntaxTokenMap &tokens, const std::string &line) {
 				++i;
 			if (i + 1 < line.size())
 				i += 2;
-			paint(tokens, start, i, TMRSyntaxToken::Comment);
+			paint(tokens, start, i, MRSyntaxToken::Comment);
 			continue;
 		}
 		if (line[i] == '"' || line[i] == '\'') {
@@ -130,7 +130,7 @@ void tokenizeCFamily(TMRSyntaxTokenMap &tokens, const std::string &line) {
 			continue;
 		}
 		if ((line[i] == '#' && skipWhitespace(line) == i)) {
-			paint(tokens, i, line.size(), TMRSyntaxToken::Directive);
+			paint(tokens, i, line.size(), MRSyntaxToken::Directive);
 			break;
 		}
 		if (std::isdigit(static_cast<unsigned char>(line[i]))) {
@@ -143,7 +143,7 @@ void tokenizeCFamily(TMRSyntaxTokenMap &tokens, const std::string &line) {
 				else
 					break;
 			}
-			paint(tokens, start, i, TMRSyntaxToken::Number);
+			paint(tokens, start, i, MRSyntaxToken::Number);
 			continue;
 		}
 		if (isWordStart(line[i])) {
@@ -152,16 +152,16 @@ void tokenizeCFamily(TMRSyntaxTokenMap &tokens, const std::string &line) {
 				++i;
 			std::string word = line.substr(start, i - start);
 			if (matchesWord(word, keywords, sizeof(keywords) / sizeof(keywords[0])))
-				paint(tokens, start, i, TMRSyntaxToken::Keyword);
+				paint(tokens, start, i, MRSyntaxToken::Keyword);
 			else if (matchesWord(word, types, sizeof(types) / sizeof(types[0])))
-				paint(tokens, start, i, TMRSyntaxToken::Type);
+				paint(tokens, start, i, MRSyntaxToken::Type);
 			continue;
 		}
 		++i;
 	}
 }
 
-void tokenizeMRMAC(TMRSyntaxTokenMap &tokens, const std::string &line) {
+void tokenizeMRMAC(MRSyntaxTokenMap &tokens, const std::string &line) {
 	static const char *const keywords[] = {
 	    "SMACRO_FILE", "END_MACRO", "DEF_INT", "DEF_STR", "DEF_CHAR", "DEF_REAL", "IF",   "THEN",
 	    "ELSE",        "END",       "WHILE",   "DO",      "TVCALL",   "CALL",     "RET",  "GOTO",
@@ -180,7 +180,7 @@ void tokenizeMRMAC(TMRSyntaxTokenMap &tokens, const std::string &line) {
 					--depth;
 				++i;
 			}
-			paint(tokens, start, i, TMRSyntaxToken::Comment);
+			paint(tokens, start, i, MRSyntaxToken::Comment);
 			continue;
 		}
 		if (line[i] == '\'') {
@@ -193,7 +193,7 @@ void tokenizeMRMAC(TMRSyntaxTokenMap &tokens, const std::string &line) {
 				++i;
 			if (i < line.size())
 				++i;
-			paint(tokens, start, i, TMRSyntaxToken::Directive);
+			paint(tokens, start, i, MRSyntaxToken::Directive);
 			continue;
 		}
 		if (line[i] == '$' && i + 1 < line.size() && std::isxdigit(static_cast<unsigned char>(line[i + 1]))) {
@@ -201,11 +201,11 @@ void tokenizeMRMAC(TMRSyntaxTokenMap &tokens, const std::string &line) {
 			i += 2;
 			while (i < line.size() && std::isxdigit(static_cast<unsigned char>(line[i])))
 				++i;
-			paint(tokens, start, i, TMRSyntaxToken::Number);
+			paint(tokens, start, i, MRSyntaxToken::Number);
 			continue;
 		}
 		if (line.compare(i, 6, "$MACRO") == 0 || line.compare(i, 6, "$macro") == 0) {
-			paint(tokens, i, i + 6, TMRSyntaxToken::Directive);
+			paint(tokens, i, i + 6, MRSyntaxToken::Directive);
 			i += 6;
 			continue;
 		}
@@ -213,7 +213,7 @@ void tokenizeMRMAC(TMRSyntaxTokenMap &tokens, const std::string &line) {
 			std::size_t start = i++;
 			while (i < line.size() && std::isdigit(static_cast<unsigned char>(line[i])))
 				++i;
-			paint(tokens, start, i, TMRSyntaxToken::Number);
+			paint(tokens, start, i, MRSyntaxToken::Number);
 			continue;
 		}
 		if (isWordStart(line[i])) {
@@ -222,17 +222,17 @@ void tokenizeMRMAC(TMRSyntaxTokenMap &tokens, const std::string &line) {
 				++i;
 			std::string word = upperCopy(line.substr(start, i - start));
 			if (matchesWord(word, keywords, sizeof(keywords) / sizeof(keywords[0])))
-				paint(tokens, start, i, TMRSyntaxToken::Keyword);
+				paint(tokens, start, i, MRSyntaxToken::Keyword);
 			continue;
 		}
 		++i;
 	}
 }
 
-void tokenizeMake(TMRSyntaxTokenMap &tokens, const std::string &line) {
+void tokenizeMake(MRSyntaxTokenMap &tokens, const std::string &line) {
 	std::size_t trimmed = skipWhitespace(line);
 	if (trimmed != std::string::npos && line[trimmed] == '#') {
-		paint(tokens, trimmed, line.size(), TMRSyntaxToken::Comment);
+		paint(tokens, trimmed, line.size(), MRSyntaxToken::Comment);
 		return;
 	}
 
@@ -240,14 +240,14 @@ void tokenizeMake(TMRSyntaxTokenMap &tokens, const std::string &line) {
 		std::size_t colon = line.find(':', trimmed);
 		std::size_t eq = line.find('=', trimmed);
 		if (colon != std::string::npos && (eq == std::string::npos || colon < eq))
-			paint(tokens, trimmed, colon, TMRSyntaxToken::Key);
+			paint(tokens, trimmed, colon, MRSyntaxToken::Key);
 		else if (eq != std::string::npos)
-			paint(tokens, trimmed, eq, TMRSyntaxToken::Directive);
+			paint(tokens, trimmed, eq, MRSyntaxToken::Directive);
 	}
 
 	for (std::size_t i = 0; i < line.size();) {
 		if (line[i] == '#') {
-			paint(tokens, i, line.size(), TMRSyntaxToken::Comment);
+			paint(tokens, i, line.size(), MRSyntaxToken::Comment);
 			break;
 		}
 		if (line[i] == '$' && i + 1 < line.size() && (line[i + 1] == '(' || line[i + 1] == '{')) {
@@ -258,14 +258,14 @@ void tokenizeMake(TMRSyntaxTokenMap &tokens, const std::string &line) {
 				++i;
 			if (i < line.size())
 				++i;
-			paint(tokens, start, i, TMRSyntaxToken::Directive);
+			paint(tokens, start, i, MRSyntaxToken::Directive);
 			continue;
 		}
 		++i;
 	}
 }
 
-void tokenizeJson(TMRSyntaxTokenMap &tokens, const std::string &line) {
+void tokenizeJson(MRSyntaxTokenMap &tokens, const std::string &line) {
 	for (std::size_t i = 0; i < line.size();) {
 		if (line[i] == '"') {
 			std::size_t start = i;
@@ -274,7 +274,7 @@ void tokenizeJson(TMRSyntaxTokenMap &tokens, const std::string &line) {
 			while (j < line.size() && std::isspace(static_cast<unsigned char>(line[j])))
 				++j;
 			if (j < line.size() && line[j] == ':')
-				paint(tokens, start, i, TMRSyntaxToken::Key);
+				paint(tokens, start, i, MRSyntaxToken::Key);
 			continue;
 		}
 		if (std::isdigit(static_cast<unsigned char>(line[i])) || line[i] == '-') {
@@ -287,16 +287,16 @@ void tokenizeJson(TMRSyntaxTokenMap &tokens, const std::string &line) {
 				else
 					break;
 			}
-			paint(tokens, start, i, TMRSyntaxToken::Number);
+			paint(tokens, start, i, MRSyntaxToken::Number);
 			continue;
 		}
 		if (std::strncmp(line.c_str() + i, "true", 4) == 0 || std::strncmp(line.c_str() + i, "null", 4) == 0) {
-			paint(tokens, i, i + 4, TMRSyntaxToken::Keyword);
+			paint(tokens, i, i + 4, MRSyntaxToken::Keyword);
 			i += 4;
 			continue;
 		}
 		if (std::strncmp(line.c_str() + i, "false", 5) == 0) {
-			paint(tokens, i, i + 5, TMRSyntaxToken::Keyword);
+			paint(tokens, i, i + 5, MRSyntaxToken::Keyword);
 			i += 5;
 			continue;
 		}
@@ -304,12 +304,12 @@ void tokenizeJson(TMRSyntaxTokenMap &tokens, const std::string &line) {
 	}
 }
 
-void tokenizeIni(TMRSyntaxTokenMap &tokens, const std::string &line) {
+void tokenizeIni(MRSyntaxTokenMap &tokens, const std::string &line) {
 	std::size_t trimmed = skipWhitespace(line);
 	if (trimmed == std::string::npos)
 		return;
 	if (line[trimmed] == ';' || line[trimmed] == '#') {
-		paint(tokens, trimmed, line.size(), TMRSyntaxToken::Comment);
+		paint(tokens, trimmed, line.size(), MRSyntaxToken::Comment);
 		return;
 	}
 	if (line[trimmed] == '[') {
@@ -318,7 +318,7 @@ void tokenizeIni(TMRSyntaxTokenMap &tokens, const std::string &line) {
 			end = line.size();
 		else
 			++end;
-		paint(tokens, trimmed, end, TMRSyntaxToken::Section);
+		paint(tokens, trimmed, end, MRSyntaxToken::Section);
 		return;
 	}
 
@@ -329,7 +329,7 @@ void tokenizeIni(TMRSyntaxTokenMap &tokens, const std::string &line) {
 	std::size_t sepColon = line.find(':', trimmed);
 	std::size_t sep = std::min(sepEq, sepColon);
 	if (sep != std::string::npos)
-		paint(tokens, trimmed, sep, TMRSyntaxToken::Key);
+		paint(tokens, trimmed, sep, MRSyntaxToken::Key);
 
 	for (std::size_t i = sep == std::string::npos ? trimmed : sep + 1; i < line.size();) {
 		if (line[i] == '"' || line[i] == '\'') {
@@ -341,19 +341,19 @@ void tokenizeIni(TMRSyntaxTokenMap &tokens, const std::string &line) {
 			std::size_t start = i++;
 			while (i < line.size() && (std::isdigit(static_cast<unsigned char>(line[i])) || line[i] == '.'))
 				++i;
-			paint(tokens, start, i, TMRSyntaxToken::Number);
+			paint(tokens, start, i, MRSyntaxToken::Number);
 			continue;
 		}
 		++i;
 	}
 }
 
-void tokenizeMarkdown(TMRSyntaxTokenMap &tokens, const std::string &line) {
+void tokenizeMarkdown(MRSyntaxTokenMap &tokens, const std::string &line) {
 	std::size_t trimmed = skipWhitespace(line);
 	if (trimmed == std::string::npos)
 		return;
 	if (line.compare(trimmed, 3, "```") == 0) {
-		paint(tokens, trimmed, line.size(), TMRSyntaxToken::Directive);
+		paint(tokens, trimmed, line.size(), MRSyntaxToken::Directive);
 		return;
 	}
 	if (line[trimmed] == '#') {
@@ -361,7 +361,7 @@ void tokenizeMarkdown(TMRSyntaxTokenMap &tokens, const std::string &line) {
 		while (i < line.size() && line[i] == '#')
 			++i;
 		if (i < line.size() && std::isspace(static_cast<unsigned char>(line[i]))) {
-			paint(tokens, trimmed, line.size(), TMRSyntaxToken::Heading);
+			paint(tokens, trimmed, line.size(), MRSyntaxToken::Heading);
 			return;
 		}
 	}
@@ -372,7 +372,7 @@ void tokenizeMarkdown(TMRSyntaxTokenMap &tokens, const std::string &line) {
 				++i;
 			if (i < line.size())
 				++i;
-			paint(tokens, start, i, TMRSyntaxToken::String);
+			paint(tokens, start, i, MRSyntaxToken::String);
 			continue;
 		}
 		++i;
@@ -381,47 +381,47 @@ void tokenizeMarkdown(TMRSyntaxTokenMap &tokens, const std::string &line) {
 
 } // namespace
 
-TMRSyntaxLanguage tmrDetectSyntaxLanguage(const std::string &path, const std::string &title) {
+MRSyntaxLanguage tmrDetectSyntaxLanguage(const std::string &path, const std::string &title) {
 	std::string fileName = fileNamePart(!path.empty() ? path : title);
 	std::string lowerName = lowerCopy(fileName);
 	std::string ext = extensionPart(fileName);
 
 	if (lowerName == "makefile" || lowerName == "gnumakefile" || ext == ".mk" || ext == ".mak")
-		return TMRSyntaxLanguage::Make;
+		return MRSyntaxLanguage::Make;
 	if (ext == ".c" || ext == ".cc" || ext == ".cpp" || ext == ".cxx" || ext == ".h" || ext == ".hh" ||
 	    ext == ".hpp" || ext == ".hxx" || ext == ".l" || ext == ".y")
-		return TMRSyntaxLanguage::CFamily;
+		return MRSyntaxLanguage::CFamily;
 	if (ext == ".mrmac" || ext == ".mr")
-		return TMRSyntaxLanguage::MRMAC;
+		return MRSyntaxLanguage::MRMAC;
 	if (ext == ".json")
-		return TMRSyntaxLanguage::Json;
+		return MRSyntaxLanguage::Json;
 	if (ext == ".ini" || ext == ".cfg" || ext == ".conf")
-		return TMRSyntaxLanguage::Ini;
+		return MRSyntaxLanguage::Ini;
 	if (ext == ".md" || ext == ".markdown" || lowerName == "readme")
-		return TMRSyntaxLanguage::Markdown;
-	return TMRSyntaxLanguage::PlainText;
+		return MRSyntaxLanguage::Markdown;
+	return MRSyntaxLanguage::PlainText;
 }
 
-const char *tmrSyntaxLanguageName(TMRSyntaxLanguage language) noexcept {
+const char *tmrSyntaxLanguageName(MRSyntaxLanguage language) noexcept {
 	switch (language) {
-		case TMRSyntaxLanguage::CFamily:
+		case MRSyntaxLanguage::CFamily:
 			return "C/C++";
-		case TMRSyntaxLanguage::MRMAC:
+		case MRSyntaxLanguage::MRMAC:
 			return "MRMAC";
-		case TMRSyntaxLanguage::Make:
+		case MRSyntaxLanguage::Make:
 			return "Make";
-		case TMRSyntaxLanguage::Json:
+		case MRSyntaxLanguage::Json:
 			return "JSON";
-		case TMRSyntaxLanguage::Ini:
+		case MRSyntaxLanguage::Ini:
 			return "INI";
-		case TMRSyntaxLanguage::Markdown:
+		case MRSyntaxLanguage::Markdown:
 			return "Markdown";
 		default:
 			return "Plain Text";
 	}
 }
 
-TMRSyntaxTokenMap tmrBuildTokenMapForLine(TMRSyntaxLanguage language, const std::string &text,
+MRSyntaxTokenMap tmrBuildTokenMapForLine(MRSyntaxLanguage language, const std::string &text,
                                           std::size_t lineStart) {
 	if (lineStart > text.size())
 		lineStart = text.size();
@@ -429,26 +429,26 @@ TMRSyntaxTokenMap tmrBuildTokenMapForLine(TMRSyntaxLanguage language, const std:
 	return tmrBuildTokenMapForTextLine(language, text.substr(lineStart, lineEnd - lineStart));
 }
 
-TMRSyntaxTokenMap tmrBuildTokenMapForTextLine(TMRSyntaxLanguage language, const std::string &line) {
-	TMRSyntaxTokenMap tokens(line.size(), TMRSyntaxToken::Text);
+MRSyntaxTokenMap tmrBuildTokenMapForTextLine(MRSyntaxLanguage language, const std::string &line) {
+	MRSyntaxTokenMap tokens(line.size(), MRSyntaxToken::Text);
 
 	switch (language) {
-		case TMRSyntaxLanguage::CFamily:
+		case MRSyntaxLanguage::CFamily:
 			tokenizeCFamily(tokens, line);
 			break;
-		case TMRSyntaxLanguage::MRMAC:
+		case MRSyntaxLanguage::MRMAC:
 			tokenizeMRMAC(tokens, line);
 			break;
-		case TMRSyntaxLanguage::Make:
+		case MRSyntaxLanguage::Make:
 			tokenizeMake(tokens, line);
 			break;
-		case TMRSyntaxLanguage::Json:
+		case MRSyntaxLanguage::Json:
 			tokenizeJson(tokens, line);
 			break;
-		case TMRSyntaxLanguage::Ini:
+		case MRSyntaxLanguage::Ini:
 			tokenizeIni(tokens, line);
 			break;
-		case TMRSyntaxLanguage::Markdown:
+		case MRSyntaxLanguage::Markdown:
 			tokenizeMarkdown(tokens, line);
 			break;
 		default:

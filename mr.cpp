@@ -1,5 +1,5 @@
 #include "mrmac/mrvm.hpp"
-#include "app/TMREditorApp.hpp"
+#include "app/MREditorApp.hpp"
 #include "app/MRHelp.generated.hpp"
 #include "ui/MRPalette.hpp"
 
@@ -26,7 +26,7 @@ int main(int argc, char **argv) {
 	}
 	mrvmSetProcessContext(argc, argv);
 	loadDefaultMultiEditPalette();
-	TMREditorApp app;
+	MREditorApp app;
 	app.run();
 	return 0;
 }

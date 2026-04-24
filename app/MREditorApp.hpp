@@ -4,22 +4,22 @@
 #define Uses_TMenuBar
 #define Uses_TStatusLine
 #define Uses_TDeskTop
-#ifndef TMREDITORAPP_HPP
-#define TMREDITORAPP_HPP
+#ifndef MREDITORAPP_HPP
+#define MREDITORAPP_HPP
 
 #include <tvision/tv.h>
 #include <chrono>
 #include <string>
 #include <vector>
 
-class TMREditorApp : public TApplication {
+class MREditorApp : public TApplication {
  public:
 	static TMenuBar *initMRMenuBar(TRect r);
 	static TStatusLine *initMRStatusLine(TRect r);
 	static TDeskTop *initMRDeskTop(TRect r);
 
-	TMREditorApp();
-	~TMREditorApp() override;
+	MREditorApp();
+	~MREditorApp() override;
 
 	void handleEvent(TEvent &event) override;
 	void idle() override;
@@ -38,6 +38,7 @@ class TMREditorApp : public TApplication {
 	void syncRecordingUiState();
 	void redrawRecordingMarkerFrames();
 	void updateRecordingBlink();
+	void updateMacroBrainBlink();
 	void bootstrapIndexedMacroBindings();
 	void warmIndexedMacroBindings();
 	void applyConfiguredDisplayLayout();
@@ -46,10 +47,12 @@ class TMREditorApp : public TApplication {
 	bool exitPrepared;
 	bool keystrokeRecording;
 	bool recordingMarkerVisible;
+	bool macroBrainMarkerVisible;
 	std::string recordedKeySequence;
 	unsigned long recordedMacroCounter;
 	std::vector<std::string> recordedSessionMacroFiles;
 	std::chrono::steady_clock::time_point recordingBlinkToggleAt;
+	std::chrono::steady_clock::time_point macroBrainBlinkToggleAt;
 	bool indexedMacroWarmupActive;
 	std::size_t indexedMacroWarmupLoadedFiles;
 };

@@ -6,6 +6,7 @@
 #include "../coprocessor/MRCoprocessor.hpp"
 
 void handleCoprocessorResult(const mr::coprocessor::Result &result);
+void pumpDeferredMacroUiPlayback();
 void mrTraceCoprocessorTaskCancel(int bufferId, std::uint64_t taskId);
 void mrTraceCoprocessorTaskRelease(int bufferId, std::uint64_t taskId, const char *state);
 

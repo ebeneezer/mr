@@ -1,0 +1,585 @@
+$MACRO CalculatorFormatValue FROM EDIT;
+DEF_INT(Base, Value, Negative, Digit);
+DEF_STR(Digits, Out);
+
+Base := GLOBAL_INT('CALCULATOR_BASE');
+Value := GLOBAL_INT('CALCULATOR_VALUE');
+Digits := '0123456789ABCDEF';
+Out := '';
+Negative := FALSE;
+
+IF Value < 0 THEN
+    Negative := TRUE;
+    Value := 0 - Value;
+END;
+
+IF Value = 0 THEN
+    Out := '0';
+END;
+
+WHILE Value > 0 DO
+    Digit := (Value MOD Base) + 1;
+    Out := COPY(Digits, Digit, 1) + Out;
+    Value := Value / Base;
+END;
+
+IF Base = 16 THEN
+    Out := '$' + Out;
+END;
+
+IF Negative THEN
+    Out := '-' + Out;
+END;
+
+RETURN_STR := Out;
+END_MACRO;
+
+$MACRO CalculatorParseValue FROM EDIT;
+DEF_INT(Base, Value, Digit, Negative, I, Limit, Ok);
+DEF_STR(Input, Digits, Ch);
+
+Base := GLOBAL_INT('CALCULATOR_BASE');
+Input := CAPS(REMOVE_SPACE(GLOBAL_STR('CALCULATOR_INPUT')));
+Digits := '0123456789ABCDEF';
+Value := 0;
+Digit := 0;
+Negative := FALSE;
+Ok := TRUE;
+Limit := LENGTH(Input);
+
+IF Limit = 0 THEN
+    Ok := FALSE;
+END;
+
+IF Ok AND (COPY(Input, 1, 1) = '-') THEN
+    Negative := TRUE;
+    I := 2;
+ELSE
+    I := 1;
+END;
+
+IF Ok AND (Base = 16) AND (I <= Limit) AND (COPY(Input, I, 1) = '$') THEN
+    I := I + 1;
+END;
+
+IF Ok AND (I > Limit) THEN
+    Ok := FALSE;
+END;
+
+WHILE I <= Limit DO
+    Ch := COPY(Input, I, 1);
+    Digit := POS(Ch, Digits);
+    IF (Digit = 0) OR (Digit > Base) THEN
+        Ok := FALSE;
+    END;
+    IF Ok THEN
+        Value := Value * Base + Digit - 1;
+    END;
+    I := I + 1;
+END;
+
+IF Ok AND Negative THEN
+    Value := 0 - Value;
+END;
+
+RETURN_INT := Value;
+RETURN_STR := Input;
+ERROR_LEVEL := 0;
+
+IF NOT Ok THEN
+    RETURN_INT := 0;
+    ERROR_LEVEL := 1;
+END;
+END_MACRO;
+
+$MACRO CalculatorApplyOperator FROM EDIT;
+DEF_INT(Acc, Cur, Op);
+
+Acc := GLOBAL_INT('CALCULATOR_ACC');
+Cur := GLOBAL_INT('CALCULATOR_CUR');
+Op := GLOBAL_INT('CALCULATOR_OP');
+ERROR_LEVEL := 0;
+
+IF Op = 1 THEN
+    Acc := Acc + Cur;
+END;
+
+IF Op = 2 THEN
+    Acc := Acc - Cur;
+END;
+
+IF Op = 3 THEN
+    Acc := Acc * Cur;
+END;
+
+IF Op = 4 THEN
+    IF Cur = 0 THEN
+        ERROR_LEVEL := 1;
+    ELSE
+        Acc := Acc / Cur;
+    END;
+END;
+
+IF Op = 5 THEN
+    IF Cur = 0 THEN
+        ERROR_LEVEL := 1;
+    ELSE
+        Acc := Acc MOD Cur;
+    END;
+END;
+
+IF Op = 6 THEN
+    Acc := Acc BAND Cur;
+END;
+
+IF Op = 7 THEN
+    Acc := Acc BOR Cur;
+END;
+
+IF Op = 8 THEN
+    Acc := Acc BXOR Cur;
+END;
+
+RETURN_INT := Acc;
+END_MACRO;
+
+$MACRO CalculatorRightAlign FROM EDIT;
+DEF_INT(TargetWidth, PadCount);
+DEF_STR(Text, Out);
+
+TargetWidth := GLOBAL_INT('CALCULATOR_ALIGN_WIDTH');
+Text := GLOBAL_STR('CALCULATOR_ALIGN_TEXT');
+IF LENGTH(Text) = 0 THEN
+    Text := '0';
+END;
+Out := Text;
+PadCount := TargetWidth - LENGTH(Text);
+
+WHILE PadCount > 0 DO
+    Out := ' ' + Out;
+    PadCount := PadCount - 1;
+END;
+
+RETURN_STR := Out;
+END_MACRO;
+
+$MACRO CalculatorAppendToken FROM EDIT;
+DEF_INT(Base);
+DEF_STR(Input, Token, Allowed, Sign, Prefix, Work);
+
+Base := GLOBAL_INT('CALCULATOR_BASE');
+Input := GLOBAL_STR('CALCULATOR_INPUT');
+Token := GLOBAL_STR('CALCULATOR_APPEND');
+Allowed := '01';
+Sign := '';
+Prefix := '';
+Work := Input;
+ERROR_LEVEL := 0;
+
+IF Base = 10 THEN
+    Allowed := '0123456789';
+END;
+
+IF Base = 16 THEN
+    Allowed := '0123456789ABCDEF';
+END;
+
+IF POS(Token, Allowed) = 0 THEN
+    ERROR_LEVEL := 1;
+    RETURN_STR := Input;
+END;
+
+IF ERROR_LEVEL = 0 THEN
+    IF COPY(Work, 1, 1) = '-' THEN
+        Sign := '-';
+        Work := COPY(Work, 2, LENGTH(Work) - 1);
+    END;
+
+    IF (Base = 16) AND (COPY(Work, 1, 1) = '$') THEN
+        Prefix := '$';
+        Work := COPY(Work, 2, LENGTH(Work) - 1);
+    END;
+
+    IF Work = '0' THEN
+        Work := Token;
+    ELSE
+        Work := Work + Token;
+    END;
+
+    RETURN_STR := Sign + Prefix + Work;
+END;
+END_MACRO;
+
+$MACRO CalculatorToggleSign FROM EDIT;
+DEF_STR(Input);
+
+Input := GLOBAL_STR('CALCULATOR_INPUT');
+
+IF COPY(Input, 1, 1) = '-' THEN
+    RETURN_STR := COPY(Input, 2, LENGTH(Input) - 1);
+ELSE
+    IF (Input = '0') OR (Input = '$0') THEN
+        RETURN_STR := Input;
+    ELSE
+        RETURN_STR := '-' + Input;
+    END;
+END;
+END_MACRO;
+
+$MACRO Calculator FROM EDIT;
+DEF_INT(Choice, Done, CurrentValue, ParseRc, PendingOp);
+DEF_INT(Base, Acc, Cur, Mem, NextOp);
+DEF_STR(DisplayCur, DisplayMem, BlockSeed, InputText);
+
+Base := 10;
+Acc := 0;
+Cur := 0;
+Mem := 0;
+PendingOp := 0;
+Choice := 0;
+Done := FALSE;
+InputText := '0';
+
+IF (BLOCK_STAT = 1) OR (BLOCK_STAT = 3) THEN
+    BlockSeed := REMOVE_SPACE(BLOCK_TEXT);
+    ParseRc := VAL(CurrentValue, BlockSeed);
+    IF ParseRc = 0 THEN
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        SET_GLOBAL_INT('CALCULATOR_VALUE', CurrentValue);
+        RUN_MACRO('CalculatorFormatValue');
+        InputText := RETURN_STR;
+    END;
+END;
+
+WHILE NOT Done DO
+    SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+    SET_GLOBAL_INT('CALCULATOR_VALUE', Mem);
+    RUN_MACRO('CalculatorFormatValue');
+    DisplayMem := RETURN_STR;
+    SET_GLOBAL_INT('CALCULATOR_ALIGN_WIDTH', 71);
+    SET_GLOBAL_STR('CALCULATOR_ALIGN_TEXT', DisplayMem);
+    RUN_MACRO('CalculatorRightAlign');
+    DisplayMem := RETURN_STR;
+
+    DisplayCur := InputText;
+    IF LENGTH(DisplayCur) = 0 THEN
+        DisplayCur := '0';
+    END;
+    SET_GLOBAL_INT('CALCULATOR_ALIGN_WIDTH', 71);
+    SET_GLOBAL_STR('CALCULATOR_ALIGN_TEXT', DisplayCur);
+    RUN_MACRO('CalculatorRightAlign');
+    DisplayCur := RETURN_STR;
+
+    UI_DIALOG(0, 0, 76, 18, 'Calculator');
+    UI_DISPLAY(2, 3, 72, DisplayCur);
+    UI_DISPLAY(2, 5, 72, DisplayMem);
+    UI_BUTTON(2, 7, 12, 1, 'And<F4>');
+    UI_BUTTON(14, 7, 12, 2, 'Or<F5>');
+    UI_BUTTON(26, 7, 12, 3, 'Xor<F6>');
+    UI_BUTTON(38, 7, 12, 4, 'Mem Sto<F3>');
+    UI_BUTTON(50, 7, 12, 24, 'Mem Rcl');
+    UI_BUTTON(62, 7, 12, 6, 'Clr<F2>');
+    UI_BUTTON(2, 9, 12, 7, '~A~');
+    UI_BUTTON(14, 9, 12, 8, '~B~');
+    UI_BUTTON(26, 9, 12, 9, '~C~');
+    UI_BUTTON(38, 9, 12, 10, '~D~');
+    UI_BUTTON(50, 9, 12, 11, '~E~');
+    UI_BUTTON(62, 9, 12, 12, '~F~');
+    UI_BUTTON(2, 11, 12, 13, '~7~');
+    UI_BUTTON(14, 11, 12, 14, '~8~');
+    UI_BUTTON(26, 11, 12, 15, '~9~');
+    UI_BUTTON(38, 11, 12, 16, '/');
+    UI_BUTTON(50, 11, 12, 17, '*');
+    UI_BUTTON(62, 11, 12, 30, 'Paste<F1>');
+    UI_BUTTON(2, 13, 12, 19, '~4~');
+    UI_BUTTON(14, 13, 12, 20, '~5~');
+    UI_BUTTON(26, 13, 12, 21, '~6~');
+    UI_BUTTON(38, 13, 12, 22, '-');
+    UI_BUTTON(50, 13, 12, 23, '+');
+    UI_BUTTON(62, 13, 12, 5, 'Base<F7>');
+    UI_BUTTON(2, 15, 12, 25, '~1~');
+    UI_BUTTON(14, 15, 12, 26, '~2~');
+    UI_BUTTON(26, 15, 12, 27, '~3~');
+    UI_BUTTON(38, 15, 12, 28, '~0~');
+    UI_BUTTON(50, 15, 12, 29, '+/-<F8>');
+    UI_BUTTON(62, 15, 12, 18, '=');
+    Choice := UI_EXEC;
+
+    IF Choice = 0 THEN
+        Done := TRUE;
+    END;
+
+    IF (Choice >= 7) AND (Choice <= 15) THEN
+        IF Choice = 7 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', 'A');
+        END;
+        IF Choice = 8 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', 'B');
+        END;
+        IF Choice = 9 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', 'C');
+        END;
+        IF Choice = 10 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', 'D');
+        END;
+        IF Choice = 11 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', 'E');
+        END;
+        IF Choice = 12 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', 'F');
+        END;
+        IF Choice = 13 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', '7');
+        END;
+        IF Choice = 14 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', '8');
+        END;
+        IF Choice = 15 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', '9');
+        END;
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        SET_GLOBAL_STR('CALCULATOR_INPUT', InputText);
+        RUN_MACRO('CalculatorAppendToken');
+        IF ERROR_LEVEL = 0 THEN
+            InputText := RETURN_STR;
+        ELSE
+            MARQUEE_WARNING('Digit not valid for current base.');
+        END;
+    END;
+
+    IF (Choice >= 19) AND (Choice <= 21) THEN
+        IF Choice = 19 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', '4');
+        END;
+        IF Choice = 20 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', '5');
+        END;
+        IF Choice = 21 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', '6');
+        END;
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        SET_GLOBAL_STR('CALCULATOR_INPUT', InputText);
+        RUN_MACRO('CalculatorAppendToken');
+        IF ERROR_LEVEL = 0 THEN
+            InputText := RETURN_STR;
+        ELSE
+            MARQUEE_WARNING('Digit not valid for current base.');
+        END;
+    END;
+
+    IF (Choice >= 25) AND (Choice <= 28) THEN
+        IF Choice = 25 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', '1');
+        END;
+        IF Choice = 26 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', '2');
+        END;
+        IF Choice = 27 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', '3');
+        END;
+        IF Choice = 28 THEN
+            SET_GLOBAL_STR('CALCULATOR_APPEND', '0');
+        END;
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        SET_GLOBAL_STR('CALCULATOR_INPUT', InputText);
+        RUN_MACRO('CalculatorAppendToken');
+        IF ERROR_LEVEL = 0 THEN
+            InputText := RETURN_STR;
+        ELSE
+            MARQUEE_WARNING('Digit not valid for current base.');
+        END;
+    END;
+
+    IF (Choice >= 1) AND (Choice <= 3) THEN
+        NextOp := 6;
+        IF Choice = 2 THEN
+            NextOp := 7;
+        END;
+        IF Choice = 3 THEN
+            NextOp := 8;
+        END;
+        SET_GLOBAL_STR('CALCULATOR_INPUT', InputText);
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        RUN_MACRO('CalculatorParseValue');
+        IF ERROR_LEVEL = 0 THEN
+            Cur := RETURN_INT;
+            IF PendingOp = 0 THEN
+                Acc := Cur;
+            ELSE
+                SET_GLOBAL_INT('CALCULATOR_ACC', Acc);
+                SET_GLOBAL_INT('CALCULATOR_CUR', Cur);
+                SET_GLOBAL_INT('CALCULATOR_OP', PendingOp);
+                RUN_MACRO('CalculatorApplyOperator');
+                IF ERROR_LEVEL = 0 THEN
+                    Acc := RETURN_INT;
+                END;
+            END;
+            IF ERROR_LEVEL = 0 THEN
+                PendingOp := NextOp;
+                InputText := '0';
+            ELSE
+                MARQUEE_WARNING('Operation failed.');
+            END;
+        ELSE
+            MARQUEE_WARNING('Invalid calculator input.');
+        END;
+    END;
+
+    IF Choice = 4 THEN
+        SET_GLOBAL_STR('CALCULATOR_INPUT', InputText);
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        RUN_MACRO('CalculatorParseValue');
+        IF ERROR_LEVEL = 0 THEN
+            Mem := RETURN_INT;
+        ELSE
+            MARQUEE_WARNING('Invalid calculator input.');
+        END;
+    END;
+
+    IF Choice = 5 THEN
+        SET_GLOBAL_STR('CALCULATOR_INPUT', InputText);
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        RUN_MACRO('CalculatorParseValue');
+        IF ERROR_LEVEL = 0 THEN
+            CurrentValue := RETURN_INT;
+            IF Base = 10 THEN
+                Base := 16;
+            ELSE
+                IF Base = 16 THEN
+                    Base := 2;
+                ELSE
+                    Base := 10;
+                END;
+            END;
+            SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+            SET_GLOBAL_INT('CALCULATOR_VALUE', CurrentValue);
+            RUN_MACRO('CalculatorFormatValue');
+            InputText := RETURN_STR;
+        ELSE
+            MARQUEE_WARNING('Invalid calculator input.');
+        END;
+    END;
+
+    IF Choice = 6 THEN
+        SET_GLOBAL_STR('CALCULATOR_INPUT', InputText);
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        RUN_MACRO('CalculatorParseValue');
+        IF (ERROR_LEVEL = 0) AND (RETURN_INT = 0) THEN
+            Mem := 0;
+        END;
+        InputText := '0';
+    END;
+
+    IF (Choice >= 16) AND (Choice <= 17) THEN
+        NextOp := 4;
+        IF Choice = 17 THEN
+            NextOp := 3;
+        END;
+        SET_GLOBAL_STR('CALCULATOR_INPUT', InputText);
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        RUN_MACRO('CalculatorParseValue');
+        IF ERROR_LEVEL = 0 THEN
+            Cur := RETURN_INT;
+            IF PendingOp = 0 THEN
+                Acc := Cur;
+            ELSE
+                SET_GLOBAL_INT('CALCULATOR_ACC', Acc);
+                SET_GLOBAL_INT('CALCULATOR_CUR', Cur);
+                SET_GLOBAL_INT('CALCULATOR_OP', PendingOp);
+                RUN_MACRO('CalculatorApplyOperator');
+                IF ERROR_LEVEL = 0 THEN
+                    Acc := RETURN_INT;
+                END;
+            END;
+            IF ERROR_LEVEL = 0 THEN
+                PendingOp := NextOp;
+                InputText := '0';
+            ELSE
+                MARQUEE_WARNING('Division or modulo by zero is not allowed.');
+            END;
+        ELSE
+            MARQUEE_WARNING('Invalid calculator input.');
+        END;
+    END;
+
+    IF Choice = 18 THEN
+        SET_GLOBAL_STR('CALCULATOR_INPUT', InputText);
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        RUN_MACRO('CalculatorParseValue');
+        IF ERROR_LEVEL = 0 THEN
+            Cur := RETURN_INT;
+            IF PendingOp = 0 THEN
+                Acc := Cur;
+            ELSE
+                SET_GLOBAL_INT('CALCULATOR_ACC', Acc);
+                SET_GLOBAL_INT('CALCULATOR_CUR', Cur);
+                SET_GLOBAL_INT('CALCULATOR_OP', PendingOp);
+                RUN_MACRO('CalculatorApplyOperator');
+                IF ERROR_LEVEL = 0 THEN
+                    Acc := RETURN_INT;
+                END;
+            END;
+            IF ERROR_LEVEL = 0 THEN
+                PendingOp := 0;
+                SET_GLOBAL_INT('CALCULATOR_VALUE', Acc);
+                RUN_MACRO('CalculatorFormatValue');
+                InputText := RETURN_STR;
+            ELSE
+                MARQUEE_WARNING('Operation failed.');
+            END;
+        ELSE
+            MARQUEE_WARNING('Invalid calculator input.');
+        END;
+    END;
+
+    IF (Choice >= 22) AND (Choice <= 23) THEN
+        NextOp := 2;
+        IF Choice = 23 THEN
+            NextOp := 1;
+        END;
+        SET_GLOBAL_STR('CALCULATOR_INPUT', InputText);
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        RUN_MACRO('CalculatorParseValue');
+        IF ERROR_LEVEL = 0 THEN
+            Cur := RETURN_INT;
+            IF PendingOp = 0 THEN
+                Acc := Cur;
+            ELSE
+                SET_GLOBAL_INT('CALCULATOR_ACC', Acc);
+                SET_GLOBAL_INT('CALCULATOR_CUR', Cur);
+                SET_GLOBAL_INT('CALCULATOR_OP', PendingOp);
+                RUN_MACRO('CalculatorApplyOperator');
+                IF ERROR_LEVEL = 0 THEN
+                    Acc := RETURN_INT;
+                END;
+            END;
+            IF ERROR_LEVEL = 0 THEN
+                PendingOp := NextOp;
+                InputText := '0';
+            ELSE
+                MARQUEE_WARNING('Division or modulo by zero is not allowed.');
+            END;
+        ELSE
+            MARQUEE_WARNING('Invalid calculator input.');
+        END;
+    END;
+
+    IF Choice = 29 THEN
+        SET_GLOBAL_STR('CALCULATOR_INPUT', InputText);
+        RUN_MACRO('CalculatorToggleSign');
+        InputText := RETURN_STR;
+    END;
+
+    IF Choice = 30 THEN
+        TEXT(InputText);
+        Done := TRUE;
+    END;
+
+    IF Choice = 24 THEN
+        SET_GLOBAL_INT('CALCULATOR_BASE', Base);
+        SET_GLOBAL_INT('CALCULATOR_VALUE', Mem);
+        RUN_MACRO('CalculatorFormatValue');
+        InputText := RETURN_STR;
+    END;
+END;
+END_MACRO;

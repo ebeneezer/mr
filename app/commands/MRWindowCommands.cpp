@@ -30,22 +30,28 @@
 #include "MRDialogPaths.hpp"
 #include "MRPerformance.hpp"
 #include "../../ui/MRMessageLineController.hpp"
-#include "../../ui/TMREditWindow.hpp"
+#include "../../ui/MREditWindow.hpp"
 #include "../../ui/MRWindowSupport.hpp"
+#include "../../dialogs/MRWindowListDialog.hpp"
 #include "../../dialogs/MRSetupDialogCommon.hpp"
 
 namespace {
+void postWindowCommandError(std::string_view text) {
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text,
+	                               mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+}
+
 void collectEditWindowsInZOrder(TView *view, void *arg) {
-	std::vector<TMREditWindow *> *windows = static_cast<std::vector<TMREditWindow *> *>(arg);
-	TMREditWindow *win = dynamic_cast<TMREditWindow *>(view);
+	std::vector<MREditWindow *> *windows = static_cast<std::vector<MREditWindow *> *>(arg);
+	MREditWindow *win = dynamic_cast<MREditWindow *>(view);
 
 	if (windows != nullptr && win != nullptr)
 		windows->push_back(win);
 }
 } // namespace
 
-std::vector<TMREditWindow *> allEditWindowsInZOrder() {
-	std::vector<TMREditWindow *> windows;
+std::vector<MREditWindow *> allEditWindowsInZOrder() {
+	std::vector<MREditWindow *> windows;
 
 	if (TProgram::deskTop == nullptr)
 		return windows;
@@ -56,7 +62,7 @@ std::vector<TMREditWindow *> allEditWindowsInZOrder() {
 
 namespace {
 short nextEditorWindowNumber() {
-	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 	std::set<short> used;
 	short candidate = 1;
 
@@ -80,7 +86,7 @@ short nextEditorWindowNumber() {
 #include "../ui/MRMessageLineController.hpp"
 
 static int g_currentVirtualDesktop = 1;
-static std::set<const TMREditWindow *> g_manuallyHiddenWindows;
+static std::set<const MREditWindow *> g_manuallyHiddenWindows;
 
 namespace {
 struct WorkspaceEntry {
@@ -128,10 +134,10 @@ std::string workspaceDisplayName(const std::string &path) {
 	return pos == std::string::npos ? path : path.substr(pos + 1);
 }
 
-void pruneManuallyHiddenWindows(const std::vector<TMREditWindow *> &windows) {
-	std::set<const TMREditWindow *> active;
+void pruneManuallyHiddenWindows(const std::vector<MREditWindow *> &windows) {
+	std::set<const MREditWindow *> active;
 
-	for (TMREditWindow *win : windows)
+	for (MREditWindow *win : windows)
 		if (win != nullptr)
 			active.insert(win);
 
@@ -171,7 +177,7 @@ bool parseWorkspaceEntry(const std::string &line, WorkspaceEntry &entry) {
 	return !entry.url.empty();
 }
 
-void restoreEditorCursor(TMRFileEditor *editor, int line, int column) {
+void restoreEditorCursor(MRFileEditor *editor, int line, int column) {
 	std::size_t target = 0;
 
 	if (editor == nullptr)
@@ -196,16 +202,19 @@ int currentVirtualDesktop() {
 	return g_currentVirtualDesktop;
 }
 
-void setWindowManuallyHidden(TMREditWindow *win, bool hidden) {
+void setWindowManuallyHidden(MREditWindow *win, bool hidden) {
 	if (win == nullptr)
+		return;
+	if (hidden == isWindowManuallyHidden(win))
 		return;
 	if (hidden)
 		g_manuallyHiddenWindows.insert(win);
 	else
 		g_manuallyHiddenWindows.erase(win);
+	mrNotifyWindowTopologyChanged();
 }
 
-bool isWindowManuallyHidden(const TMREditWindow *win) {
+bool isWindowManuallyHidden(const MREditWindow *win) {
 	if (win == nullptr)
 		return false;
 	return g_manuallyHiddenWindows.find(win) != g_manuallyHiddenWindows.end();
@@ -220,14 +229,14 @@ void postDesktopChangedMessage(int desktop) {
 } // namespace
 
 void syncVirtualDesktopVisibility() {
-	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
-	TMREditWindow *candidate = nullptr;
-	TMREditWindow *current =
-	    TProgram::deskTop != nullptr ? dynamic_cast<TMREditWindow *>(TProgram::deskTop->current) : nullptr;
+	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+	MREditWindow *candidate = nullptr;
+	MREditWindow *current =
+	    TProgram::deskTop != nullptr ? dynamic_cast<MREditWindow *>(TProgram::deskTop->current) : nullptr;
 
 	pruneManuallyHiddenWindows(windows);
 
-	for (TMREditWindow *win : windows) {
+	for (MREditWindow *win : windows) {
 		const bool manuallyHidden = isWindowManuallyHidden(win);
 
 		if (win == nullptr)
@@ -271,14 +280,14 @@ void setCurrentVirtualDesktop(int vd) {
 }
 
 void applyVirtualDesktopConfigurationChange(int count) {
-	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 	std::string ignoredError;
 
 	if (count < 1)
 		count = 1;
 	if (count > 9)
 		count = 9;
-	for (TMREditWindow *win : windows)
+	for (MREditWindow *win : windows)
 		if (win != nullptr && win->virtualDesktop_ > count)
 			win->virtualDesktop_ = count;
 
@@ -287,7 +296,7 @@ void applyVirtualDesktopConfigurationChange(int count) {
 }
 
 bool moveToNextVirtualDesktop() {
-	TMREditWindow *win = currentEditWindow();
+	MREditWindow *win = currentEditWindow();
 	if (win == nullptr) return false;
 	int maxVd = configuredVirtualDesktops();
 	if (win->virtualDesktop_ >= maxVd) return false;
@@ -297,7 +306,7 @@ bool moveToNextVirtualDesktop() {
 }
 
 bool moveToPrevVirtualDesktop() {
-	TMREditWindow *win = currentEditWindow();
+	MREditWindow *win = currentEditWindow();
 	if (win == nullptr) return false;
 	if (win->virtualDesktop_ <= 1) return false;
 	win->virtualDesktop_--;
@@ -354,8 +363,8 @@ void mrSaveWorkspace(const std::string &filename) {
 		}
 	}
 
-	for (TMREditWindow *win : allEditWindowsInZOrder()) {
-		TMRFileEditor *editor = win->getEditor();
+	for (MREditWindow *win : allEditWindowsInZOrder()) {
+		MRFileEditor *editor = win->getEditor();
 		if (editor == nullptr || win == nullptr) continue;
 		std::string url = editor->persistentFileName();
 		if (url.empty()) continue;
@@ -404,8 +413,8 @@ void mrLoadWorkspace(const std::string &filename) {
 	std::vector<std::string> failedFiles;
 	while (std::getline(iss, line)) {
 		WorkspaceEntry entry;
-		TMREditWindow *win = nullptr;
-		TMRFileEditor *editor = nullptr;
+		MREditWindow *win = nullptr;
+		MRFileEditor *editor = nullptr;
 		std::string err;
 
 		if (!parseWorkspaceEntry(line, entry))
@@ -441,15 +450,15 @@ void mrLoadWorkspace(const std::string &filename) {
 	syncVirtualDesktopVisibility();
 }
 
-TMREditWindow *createEditorWindow(const char *title) {
+MREditWindow *createEditorWindow(const char *title) {
 	TRect bounds;
-	TMREditWindow *win;
+	MREditWindow *win;
 
 	if (TProgram::deskTop == nullptr)
 		return nullptr;
 	bounds = TProgram::deskTop->getExtent();
 	bounds.grow(-2, -1);
-	win = new TMREditWindow(bounds, title, nextEditorWindowNumber());
+	win = new MREditWindow(bounds, title, nextEditorWindowNumber());
 	TProgram::deskTop->insert(win);
 	if (win != nullptr) {
 		win->virtualDesktop_ = currentVirtualDesktop();
@@ -457,31 +466,32 @@ TMREditWindow *createEditorWindow(const char *title) {
 	}
 	if (win != nullptr && win->getEditor() != nullptr)
 		win->getEditor()->setInsertModeEnabled(configuredDefaultInsertMode());
+	mrNotifyWindowTopologyChanged();
 	return win;
 }
 
-TMREditWindow *currentEditWindow() {
+MREditWindow *currentEditWindow() {
 	if (TProgram::deskTop == nullptr || TProgram::deskTop->current == nullptr)
 		return nullptr;
-	return dynamic_cast<TMREditWindow *>(TProgram::deskTop->current);
+	return dynamic_cast<MREditWindow *>(TProgram::deskTop->current);
 }
 
-TMREditWindow *findEditWindowByBufferId(int bufferId) {
-	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+MREditWindow *findEditWindowByBufferId(int bufferId) {
+	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 	for (auto & window : windows)
 		if (window != nullptr && window->bufferId() == bufferId)
 			return window;
 	return nullptr;
 }
 
-bool isEmptyUntitledEditableWindow(TMREditWindow *win) {
+bool isEmptyUntitledEditableWindow(MREditWindow *win) {
 	if (win == nullptr || win->isReadOnly() || win->currentFileName()[0] != '\0' || win->isFileChanged())
 		return false;
 	return win->isBufferEmpty();
 }
 
-TMREditWindow *findReusableEmptyWindow(TMREditWindow *preferred) {
-	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+MREditWindow *findReusableEmptyWindow(MREditWindow *preferred) {
+	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 	if (preferred != nullptr && isEmptyUntitledEditableWindow(preferred))
 		return preferred;
 	for (auto & window : windows)
@@ -491,7 +501,7 @@ TMREditWindow *findReusableEmptyWindow(TMREditWindow *preferred) {
 }
 
 bool closeCurrentEditWindow() {
-	TMREditWindow *win = currentEditWindow();
+	MREditWindow *win = currentEditWindow();
 	if (win == nullptr)
 		return false;
 	setWindowManuallyHidden(win, false);
@@ -500,8 +510,8 @@ bool closeCurrentEditWindow() {
 }
 
 bool activateRelativeEditWindow(int delta) {
-	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
-	TMREditWindow *current = currentEditWindow();
+	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+	MREditWindow *current = currentEditWindow();
 	std::size_t index;
 
 	if (windows.empty())
@@ -524,7 +534,7 @@ bool activateRelativeEditWindow(int delta) {
 }
 
 bool hideCurrentEditWindow() {
-	TMREditWindow *win = currentEditWindow();
+	MREditWindow *win = currentEditWindow();
 	if (win == nullptr)
 		return false;
 	setWindowManuallyHidden(win, true);
@@ -533,7 +543,7 @@ bool hideCurrentEditWindow() {
 }
 
 void mrUpdateAllWindowsColorTheme() {
-	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 	for (auto & window : windows) {
 		if (window != nullptr) {
 			window->applyWindowColorThemeForPath(window->currentFileName());
@@ -703,21 +713,21 @@ bool promptForSaveAsPath(const char *title, const char *initialPath, std::string
 		return false;
 	outResolvedPath = expandUserPath(fileName);
 	if (outResolvedPath.empty()) {
-		messageBox(mfError | mfOKButton, "No file name specified.");
+		postWindowCommandError("No file name specified.");
 		return false;
 	}
 	if (hasWildcardPattern(outResolvedPath)) {
-		messageBox(mfError | mfOKButton, "Wildcards are not allowed in save file names.");
+		postWindowCommandError("Wildcards are not allowed in save file names.");
 		return false;
 	}
 	rememberLoadDialogPath(outResolvedPath.c_str());
 	return true;
 }
 
-bool saveWindowSnapshotToPath(TMREditWindow *win, const std::string &resolvedPath) {
+bool saveWindowSnapshotToPath(MREditWindow *win, const std::string &resolvedPath) {
 	std::ofstream outFile;
 	std::string text;
-	TMRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 
 	if (win == nullptr || editor == nullptr || resolvedPath.empty())
 		return false;
@@ -740,33 +750,33 @@ bool resolveReadableExistingPath(const char *path, std::string &resolvedPath) {
 		resolvedPath.pop_back();
 	}
 	if (resolvedPath.empty()) {
-		messageBox(mfError | mfOKButton, "No file name specified.");
+		postWindowCommandError("No file name specified.");
 		return false;
 	}
 	if (::access(resolvedPath.c_str(), F_OK) != 0 && !disableExtensionSearch &&
 	    !hasWildcardPattern(resolvedPath) && !hasExtensionInBaseName(resolvedPath))
 		static_cast<void>(resolveWithConfiguredExtensions(resolvedPath, resolvedPath));
 	if (access(resolvedPath.c_str(), F_OK) != 0) {
-		messageBox(mfError | mfOKButton, "File does not exist:\n%s", resolvedPath.c_str());
+		postWindowCommandError("File does not exist: " + resolvedPath);
 		return false;
 	}
 	if (access(resolvedPath.c_str(), R_OK) != 0) {
-		messageBox(mfError | mfOKButton, "File is not readable:\n%s", resolvedPath.c_str());
+		postWindowCommandError("File is not readable: " + resolvedPath);
 		return false;
 	}
 	rememberLoadDialogPath(resolvedPath.c_str());
 	return true;
 }
 
-bool loadResolvedFileIntoWindow(TMREditWindow *win, const std::string &resolvedPath, const char *operationLabel) {
+bool loadResolvedFileIntoWindow(MREditWindow *win, const std::string &resolvedPath, const char *operationLabel) {
 	const auto fallbackLoadStartedAt = std::chrono::steady_clock::now();
 	if (win == nullptr)
 		return false;
 	if (!win->loadFromFile(resolvedPath.c_str())) {
-		messageBox(mfError | mfOKButton, "Unable to load file:\n%s", resolvedPath.c_str());
+		postWindowCommandError("Unable to load file: " + resolvedPath);
 		return false;
 	}
-	const TMRFileEditor::LoadTiming timing = win->lastLoadTiming();
+	const MRFileEditor::LoadTiming timing = win->lastLoadTiming();
 	std::size_t bytes = win->bufferLength();
 	std::size_t lines = 0;
 	double loadMs = 0.0;
@@ -797,7 +807,7 @@ bool loadResolvedFileIntoWindow(TMREditWindow *win, const std::string &resolvedP
 }
 
 bool saveCurrentEditWindow() {
-	TMREditWindow *win = currentEditWindow();
+	MREditWindow *win = currentEditWindow();
 
 	if (win == nullptr)
 		return false;
@@ -830,13 +840,13 @@ bool saveCurrentEditWindow() {
 }
 
 bool saveCurrentEditWindowAs() {
-	TMREditWindow *win = currentEditWindow();
+	MREditWindow *win = currentEditWindow();
 	std::string resolvedPath;
 	bool isLogWindow = false;
 
 	if (win == nullptr)
 		return false;
-	isLogWindow = win->windowRole() == TMREditWindow::wrLog;
+	isLogWindow = win->windowRole() == MREditWindow::wrLog;
 	if (win->isReadOnly()) {
 		if (!isLogWindow) {
 			messageBox(mfInformation | mfOKButton, "Window is read-only.");
@@ -847,7 +857,7 @@ bool saveCurrentEditWindowAs() {
 			return false;
 		auto startedAt = std::chrono::steady_clock::now();
 		if (!saveWindowSnapshotToPath(win, resolvedPath)) {
-			messageBox(mfError | mfOKButton, "Unable to save log file:\n%s", resolvedPath.c_str());
+			postWindowCommandError("Unable to save log file: " + resolvedPath);
 			mrLogMessage("Save As failed.");
 			return false;
 		}
@@ -872,8 +882,8 @@ bool saveCurrentEditWindowAs() {
 }
 
 bool handleWindowCascade() {
-	std::vector<TMREditWindow *> allWindows = allEditWindowsInZOrder();
-	std::vector<TMREditWindow *> visibleWindows;
+	std::vector<MREditWindow *> allWindows = allEditWindowsInZOrder();
+	std::vector<MREditWindow *> visibleWindows;
 	TRect desktopBounds;
 
 	if (TProgram::deskTop == nullptr)
@@ -882,7 +892,7 @@ bool handleWindowCascade() {
 	desktopBounds = TProgram::deskTop->getExtent();
 
 	for (auto it = allWindows.rbegin(); it != allWindows.rend(); ++it) {
-		TMREditWindow *win = *it;
+		MREditWindow *win = *it;
 		if (win != nullptr && (win->state & sfVisible) != 0) {
 			visibleWindows.push_back(win);
 		}
@@ -893,7 +903,7 @@ bool handleWindowCascade() {
 
 	int cascadeIndex = 0;
 	TProgram::deskTop->lock();
-	for (TMREditWindow *win : visibleWindows) {
+	for (MREditWindow *win : visibleWindows) {
 		TRect bounds;
 		bounds.a.x = desktopBounds.a.x + cascadeIndex;
 		bounds.a.y = desktopBounds.a.y + cascadeIndex;
@@ -908,8 +918,8 @@ bool handleWindowCascade() {
 }
 
 bool handleWindowTile() {
-	std::vector<TMREditWindow *> allWindows = allEditWindowsInZOrder();
-	std::vector<TMREditWindow *> visibleWindows;
+	std::vector<MREditWindow *> allWindows = allEditWindowsInZOrder();
+	std::vector<MREditWindow *> visibleWindows;
 	TRect desktopBounds;
 
 	if (TProgram::deskTop == nullptr)
@@ -918,7 +928,7 @@ bool handleWindowTile() {
 	desktopBounds = TProgram::deskTop->getExtent();
 
 	for (auto it = allWindows.rbegin(); it != allWindows.rend(); ++it) {
-		TMREditWindow *win = *it;
+		MREditWindow *win = *it;
 		if (win != nullptr && (win->state & sfVisible) != 0) {
 			visibleWindows.push_back(win);
 		}

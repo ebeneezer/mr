@@ -17,9 +17,11 @@
 #include <unistd.h>
 #include <vector>
 
+#include "../app/MRCommands.hpp"
 #include "../config/MRDialogPaths.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
-#include "TMREditWindow.hpp"
+#include "MRMessageLineController.hpp"
+#include "MREditWindow.hpp"
 
 namespace {
 constexpr std::string_view kHelpWindowTitle = "MR HELP";
@@ -28,7 +30,15 @@ constexpr std::string_view kLogWindowTitle = "MR LOG";
 std::string g_logBuffer;
 bool g_keystrokeRecordingActive = false;
 bool g_keystrokeRecordingMarkerVisible = false;
+bool g_macroBrainMarkerActive = false;
+bool g_macroBrainMarkerVisible = false;
+MREditWindow *g_deferredActivationWindow = nullptr;
 [[nodiscard]] std::string baseNameOf(std::string_view path);
+
+void postWindowSupportError(std::string_view text) {
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text,
+	                               mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+}
 
 [[nodiscard]] std::string currentWorkingDirectory() {
 	std::array<char, 1024> cwd{};
@@ -99,9 +109,9 @@ bool g_keystrokeRecordingMarkerVisible = false;
 	return std::string(path.substr(pos + 1));
 }
 
-[[nodiscard]] TMREditWindow *findWindowByTitle(std::string_view title) {
-	const std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
-	for (TMREditWindow *window : windows) {
+[[nodiscard]] MREditWindow *findWindowByTitle(std::string_view title) {
+	const std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+	for (MREditWindow *window : windows) {
 		const char *windowTitle = window != nullptr ? window->getTitle(0) : nullptr;
 		if (windowTitle != nullptr && title == windowTitle)
 			return window;
@@ -109,17 +119,17 @@ bool g_keystrokeRecordingMarkerVisible = false;
 	return nullptr;
 }
 
-[[nodiscard]] bool isReservedUtilityWindow(TMREditWindow *win) {
+[[nodiscard]] bool isReservedUtilityWindow(MREditWindow *win) {
 	const char *title = win != nullptr ? win->getTitle(0) : nullptr;
 	return title != nullptr && (kHelpWindowTitle == title || kLogWindowTitle == title);
 }
 
-[[nodiscard]] TMREditWindow *chooseFallbackWorkWindow() {
-	const std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
-	TMREditWindow *hiddenEditable = nullptr;
-	TMREditWindow *hiddenNonUtility = nullptr;
+[[nodiscard]] MREditWindow *chooseFallbackWorkWindow() {
+	const std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+	MREditWindow *hiddenEditable = nullptr;
+	MREditWindow *hiddenNonUtility = nullptr;
 
-	for (TMREditWindow *window : windows) {
+	for (MREditWindow *window : windows) {
 		if ((window->state & sfVisible) != 0)
 			return window;
 		if (hiddenEditable == nullptr && !window->isReadOnly())
@@ -134,14 +144,14 @@ bool g_keystrokeRecordingMarkerVisible = false;
 	return nullptr;
 }
 
-[[nodiscard]] TMREditWindow *createReadOnlyTextWindow(const char *title, const char *text, bool hidden) {
-	TMREditWindow *previous;
-	TMREditWindow *win;
+[[nodiscard]] MREditWindow *createReadOnlyTextWindow(const char *title, const char *text, bool hidden) {
+	MREditWindow *previous;
+	MREditWindow *win;
 
 	if (TProgram::deskTop == nullptr)
 		return nullptr;
 
-	previous = dynamic_cast<TMREditWindow *>(TProgram::deskTop->current);
+	previous = dynamic_cast<MREditWindow *>(TProgram::deskTop->current);
 	win = createEditorWindow(title);
 	if (win == nullptr)
 		return nullptr;
@@ -159,8 +169,8 @@ bool g_keystrokeRecordingMarkerVisible = false;
 	return win;
 }
 
-[[nodiscard]] TMREditWindow *ensureLogWindowInternal(bool activate) {
-	TMREditWindow *win = findWindowByTitle(kLogWindowTitle);
+[[nodiscard]] MREditWindow *ensureLogWindowInternal(bool activate) {
+	MREditWindow *win = findWindowByTitle(kLogWindowTitle);
 
 	if (g_logBuffer.empty())
 		g_logBuffer = "MR/MEMAC log initialized.\n";
@@ -169,7 +179,7 @@ bool g_keystrokeRecordingMarkerVisible = false;
 	if (win == nullptr)
 		return nullptr;
 	win->replaceTextBuffer(g_logBuffer.c_str(), kLogWindowTitle.data());
-	win->setWindowRole(TMREditWindow::wrLog);
+	win->setWindowRole(MREditWindow::wrLog);
 	win->setReadOnly(true);
 	win->setFileChanged(false);
 	if (activate)
@@ -178,25 +188,80 @@ bool g_keystrokeRecordingMarkerVisible = false;
 }
 } // namespace
 
-bool mrActivateEditWindow(TMREditWindow *win) {
+bool mrActivateEditWindow(MREditWindow *win) {
 	if (win == nullptr)
 		return false;
 	setWindowManuallyHidden(win, false);
 	setCurrentVirtualDesktop(win->virtualDesktop_);
 	if ((win->state & sfVisible) == 0)
 		win->show();
-	win->select();
+	if (TProgram::deskTop != nullptr)
+		TProgram::deskTop->setCurrent(win, TView::normalSelect);
+	else
+		win->select();
+	return true;
+}
+
+void mrScheduleWindowActivation(MREditWindow *win) {
+	std::string line;
+	if (win == nullptr)
+		return;
+	line = "mrScheduleWindowActivation target='";
+	line += win->getTitle(0) != nullptr ? win->getTitle(0) : "?";
+	line += "' visible=";
+	line += (win->state & sfVisible) != 0 ? "1" : "0";
+	line += " selected=";
+	line += (win->state & sfSelected) != 0 ? "1" : "0";
+	line += " hidden=";
+	line += isWindowManuallyHidden(win) ? "1" : "0";
+	mrLogMessage(line);
+	g_deferredActivationWindow = win;
+	if (TProgram::application == nullptr) {
+		static_cast<void>(mrActivateEditWindow(win));
+		g_deferredActivationWindow = nullptr;
+		return;
+	}
+	message(TProgram::application, evCommand, cmMrDeferredActivateWindow, nullptr);
+}
+
+bool mrDispatchDeferredWindowActivation() {
+	MREditWindow *win = g_deferredActivationWindow;
+	std::string line;
+
+	if (win == nullptr)
+		return false;
+	line = "mrDispatchDeferredWindowActivation before target='";
+	line += win->getTitle(0) != nullptr ? win->getTitle(0) : "?";
+	line += "' visible=";
+	line += (win->state & sfVisible) != 0 ? "1" : "0";
+	line += " selected=";
+	line += (win->state & sfSelected) != 0 ? "1" : "0";
+	line += " hidden=";
+	line += isWindowManuallyHidden(win) ? "1" : "0";
+	mrLogMessage(line);
+	g_deferredActivationWindow = nullptr;
+	if (!mrActivateEditWindow(win))
+		return false;
+	line = "mrDispatchDeferredWindowActivation after target='";
+	line += win->getTitle(0) != nullptr ? win->getTitle(0) : "?";
+	line += "' visible=";
+	line += (win->state & sfVisible) != 0 ? "1" : "0";
+	line += " selected=";
+	line += (win->state & sfSelected) != 0 ? "1" : "0";
+	line += " hidden=";
+	line += isWindowManuallyHidden(win) ? "1" : "0";
+	mrLogMessage(line);
 	return true;
 }
 
 bool mrShowProjectHelp() {
-	TMREditWindow *win;
+	MREditWindow *win;
 	const std::string helpPath = resolveHelpFilePath();
 
 	if (TProgram::deskTop == nullptr)
 		return false;
 
-	win = dynamic_cast<TMREditWindow *>(TProgram::deskTop->current);
+	win = dynamic_cast<MREditWindow *>(TProgram::deskTop->current);
 	if (win != nullptr) {
 		const std::string currentFile = win->currentFileName();
 		const char *title = win->getTitle(0);
@@ -212,7 +277,7 @@ bool mrShowProjectHelp() {
 			return false;
 
 		if (!win->loadFromFile(helpPath.c_str())) {
-			messageBox(mfError | mfOKButton, "Unable to load help file:\n%s", helpPath.c_str());
+			postWindowSupportError("Unable to load help file: " + helpPath);
 			message(win, evCommand, cmClose, nullptr);
 			return false;
 		}
@@ -220,7 +285,7 @@ bool mrShowProjectHelp() {
 		win->setReadOnly(true);
 		win->setFileChanged(false);
 	}
-	win->setWindowRole(TMREditWindow::wrHelp, helpPath);
+	win->setWindowRole(MREditWindow::wrHelp, helpPath);
 	static_cast<void>(mrActivateEditWindow(win));
 	return true;
 }
@@ -230,7 +295,7 @@ bool mrEnsureLogWindow(bool activate) {
 }
 
 bool mrClearLogWindow() {
-	TMREditWindow *win;
+	MREditWindow *win;
 
 	g_logBuffer = "MR/MEMAC log initialized.\n";
 	win = ensureLogWindowInternal(false);
@@ -238,19 +303,21 @@ bool mrClearLogWindow() {
 		return false;
 	if (!win->replaceTextBuffer(g_logBuffer.c_str(), kLogWindowTitle.data()))
 		return false;
-	win->setWindowRole(TMREditWindow::wrLog);
+	win->setWindowRole(MREditWindow::wrLog);
 	win->setReadOnly(true);
 	win->setFileChanged(false);
 	return true;
 }
 
 bool mrEnsureUsableWorkWindow() {
-	TMREditWindow *current =
-	    dynamic_cast<TMREditWindow *>(TProgram::deskTop != nullptr ? TProgram::deskTop->current : nullptr);
-	TMREditWindow *fallback;
+	TView *currentView = TProgram::deskTop != nullptr ? TProgram::deskTop->current : nullptr;
+	MREditWindow *current = dynamic_cast<MREditWindow *>(currentView);
+	MREditWindow *fallback;
 
 	if (TProgram::deskTop == nullptr)
 		return false;
+	if (currentView != nullptr && (currentView->state & sfVisible) != 0 && current == nullptr)
+		return true;
 	if (current != nullptr && (current->state & sfVisible) != 0)
 		return true;
 	fallback = chooseFallbackWorkWindow();
@@ -265,7 +332,7 @@ bool mrEnsureUsableWorkWindow() {
 
 void mrLogMessage(std::string_view message) {
 	const std::string line = normalizeLogLine(message);
-	TMREditWindow *win;
+	MREditWindow *win;
 
 	if (line.empty())
 		return;
@@ -305,4 +372,22 @@ void mrSetKeystrokeRecordingMarkerVisible(bool visible) {
 
 bool mrIsKeystrokeRecordingMarkerVisible() {
 	return g_keystrokeRecordingMarkerVisible;
+}
+
+void mrSetMacroBrainMarkerActive(bool active) {
+	g_macroBrainMarkerActive = active;
+	if (!active)
+		g_macroBrainMarkerVisible = false;
+}
+
+bool mrIsMacroBrainMarkerActive() {
+	return g_macroBrainMarkerActive;
+}
+
+void mrSetMacroBrainMarkerVisible(bool visible) {
+	g_macroBrainMarkerVisible = visible;
+}
+
+bool mrIsMacroBrainMarkerVisible() {
+	return g_macroBrainMarkerVisible;
 }

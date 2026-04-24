@@ -40,6 +40,28 @@ std::size_t ownerIndex(Owner owner) {
     return static_cast<std::size_t>(owner);
 }
 
+Slot *slotForOwner(State &shared, Owner owner) {
+    const std::size_t index = ownerIndex(owner);
+    if (index >= shared.slots.size())
+        return nullptr;
+    return &shared.slots[index];
+}
+
+std::chrono::milliseconds minimumDurationForKind(Kind kind) {
+    switch (kind) {
+        case Kind::Warning:
+            return std::chrono::seconds(5);
+        case Kind::Error:
+            return std::chrono::seconds(7);
+        default:
+            return std::chrono::milliseconds(0);
+    }
+}
+
+std::chrono::milliseconds clampDurationForKind(Kind kind, std::chrono::milliseconds duration) {
+    return std::max(duration, minimumDurationForKind(kind));
+}
+
 void expireLocked(State &shared, std::chrono::steady_clock::time_point now) {
     for (Slot &slot : shared.slots)
         if (slot.active && slot.timed && now >= slot.expiresAt) {
@@ -69,18 +91,21 @@ Token postTimed(Owner owner, std::string_view text, Kind kind, std::chrono::mill
     State &shared = state();
     std::lock_guard<std::mutex> lock(shared.mutex);
     const auto now = std::chrono::steady_clock::now();
-    Slot &slot = shared.slots[ownerIndex(owner)];
+    Slot *slot = slotForOwner(shared, owner);
+    if (slot == nullptr)
+        return 0;
 
     expireLocked(shared, now);
-    slot.active = !text.empty();
-    slot.kind = kind;
-    slot.text = text;
-    slot.timed = !text.empty();
-    slot.expiresAt = text.empty() ? std::chrono::steady_clock::time_point::max() : now + duration;
-    slot.priority = text.empty() ? 0 : priority;
-    slot.token = shared.nextToken++;
-    slot.sequence = shared.nextSequence++;
-    return slot.token;
+    duration = text.empty() ? std::chrono::milliseconds(0) : clampDurationForKind(kind, duration);
+    slot->active = !text.empty();
+    slot->kind = kind;
+    slot->text = text;
+    slot->timed = !text.empty();
+    slot->expiresAt = text.empty() ? std::chrono::steady_clock::time_point::max() : now + duration;
+    slot->priority = text.empty() ? 0 : priority;
+    slot->token = shared.nextToken++;
+    slot->sequence = shared.nextSequence++;
+    return slot->token;
 }
 
 Token postSticky(Owner owner, std::string_view text, Kind kind, int priority) {
@@ -88,17 +113,19 @@ Token postSticky(Owner owner, std::string_view text, Kind kind, int priority) {
         return 0;
     State &shared = state();
     std::lock_guard<std::mutex> lock(shared.mutex);
-    Slot &slot = shared.slots[ownerIndex(owner)];
+    Slot *slot = slotForOwner(shared, owner);
+    if (slot == nullptr)
+        return 0;
 
-    slot.active = !text.empty();
-    slot.kind = kind;
-    slot.text = text;
-    slot.timed = false;
-    slot.expiresAt = std::chrono::steady_clock::time_point::max();
-    slot.priority = text.empty() ? 0 : priority;
-    slot.token = shared.nextToken++;
-    slot.sequence = shared.nextSequence++;
-    return slot.token;
+    slot->active = !text.empty();
+    slot->kind = kind;
+    slot->text = text;
+    slot->timed = false;
+    slot->expiresAt = std::chrono::steady_clock::time_point::max();
+    slot->priority = text.empty() ? 0 : priority;
+    slot->token = shared.nextToken++;
+    slot->sequence = shared.nextSequence++;
+    return slot->token;
 }
 
 std::chrono::milliseconds autoDurationForText(std::string_view text, std::chrono::milliseconds perCharacter) {
@@ -122,31 +149,35 @@ Token postAutoTimedAfter(Owner owner, std::string_view text, Kind kind, std::chr
 void clearOwner(Owner owner) {
     State &shared = state();
     std::lock_guard<std::mutex> lock(shared.mutex);
-    Slot &slot = shared.slots[ownerIndex(owner)];
+    Slot *slot = slotForOwner(shared, owner);
+    if (slot == nullptr)
+        return;
 
-    slot.active = false;
-    slot.text.clear();
-    slot.timed = false;
-    slot.expiresAt = std::chrono::steady_clock::time_point::max();
-    slot.priority = 0;
-    slot.token = shared.nextToken++;
-    slot.sequence = shared.nextSequence++;
+    slot->active = false;
+    slot->text.clear();
+    slot->timed = false;
+    slot->expiresAt = std::chrono::steady_clock::time_point::max();
+    slot->priority = 0;
+    slot->token = shared.nextToken++;
+    slot->sequence = shared.nextSequence++;
 }
 
 void clearOwnerToken(Owner owner, Token token) {
     State &shared = state();
     std::lock_guard<std::mutex> lock(shared.mutex);
-    Slot &slot = shared.slots[ownerIndex(owner)];
-
-    if (slot.token != token)
+    Slot *slot = slotForOwner(shared, owner);
+    if (slot == nullptr)
         return;
-    slot.active = false;
-    slot.text.clear();
-    slot.timed = false;
-    slot.expiresAt = std::chrono::steady_clock::time_point::max();
-    slot.priority = 0;
-    slot.token = shared.nextToken++;
-    slot.sequence = shared.nextSequence++;
+
+    if (slot->token != token)
+        return;
+    slot->active = false;
+    slot->text.clear();
+    slot->timed = false;
+    slot->expiresAt = std::chrono::steady_clock::time_point::max();
+    slot->priority = 0;
+    slot->token = shared.nextToken++;
+    slot->sequence = shared.nextSequence++;
 }
 
 bool currentVisibleMessage(VisibleMessage &out) {
@@ -182,7 +213,8 @@ bool currentOwnerMessage(Owner owner, VisibleMessage &out) {
 
     expireLocked(shared, now);
     out = VisibleMessage();
-    return exportSlot(shared.slots[ownerIndex(owner)], out);
+    const Slot *slot = slotForOwner(shared, owner);
+    return slot != nullptr ? exportSlot(*slot, out) : false;
 }
 
 } // namespace messageline

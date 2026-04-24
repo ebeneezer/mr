@@ -24,10 +24,10 @@
 #include "MRSetupDialogCommon.hpp"
 #include "../app/utils/MRStringUtils.hpp"
 
-#include "../app/TMREditorApp.hpp"
+#include "../app/MREditorApp.hpp"
 #include "../config/MRDialogPaths.hpp"
 #include "../ui/MRMessageLineController.hpp"
-#include "../ui/TMRMenuBar.hpp"
+#include "../ui/MRMenuBar.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 
 #include <algorithm>
@@ -424,39 +424,15 @@ FileExtensionEditorSettingsPanelConfig makeEditorSettingsPanelConfig(int dialogW
 }
 
 
-mr::messageline::Kind toMessageLineKind(TMRMenuBar::MarqueeKind kind) {
-	switch (kind) {
-		case TMRMenuBar::MarqueeKind::Success:
-			return mr::messageline::Kind::Success;
-		case TMRMenuBar::MarqueeKind::Warning:
-			return mr::messageline::Kind::Warning;
-		case TMRMenuBar::MarqueeKind::Error:
-			return mr::messageline::Kind::Error;
-		case TMRMenuBar::MarqueeKind::Hero:
-		case TMRMenuBar::MarqueeKind::Info:
-		default:
-			return mr::messageline::Kind::Info;
-	}
-}
-
-void setDialogStatus(const std::string &text, TMRMenuBar::MarqueeKind kind) {
-	if (text.empty()) {
-		mr::messageline::clearOwner(mr::messageline::Owner::DialogValidation);
-		return;
-	}
-	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogValidation, text, toMessageLineKind(kind),
-	                              mr::messageline::kPriorityHigh);
-}
-
 void clearDialogStatus() {
 	mr::messageline::clearOwner(mr::messageline::Owner::DialogValidation);
 }
 
-void postValidationWarning(const std::string &text) {
+void postDialogError(const std::string &text) {
 	if (text.empty())
 		return;
-	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogValidation, text,
-	                              mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text,
+	                              mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 }
 
 ushort runDirtyProfilesDialog(const std::vector<std::string> &dirtyIds) {
@@ -487,10 +463,11 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	    : TWindowInit(&TDialog::initFrame),
 	      MRScrollableDialog(centeredSetupDialogRect(kDialogWidth, kVisibleHeight), "FILENAME EXTENSIONS",
 	                         kDialogWidth, kVirtualHeight),
-	      initialDrafts_(initialDrafts), drafts_(workingDrafts),
+	      initialDraftList(initialDrafts), draftList(workingDrafts),
 	      editorSettingsPanel(makeEditorSettingsPanelConfig(kDialogWidth - 1, 30, 49, kDialogWidth - 2, 6)) {
 		buildViews();
-		if (!drafts_.empty())
+		setDialogValidationHook([this]() { return validateDialogValues(); });
+		if (!draftList.empty())
 			currentIndex_ = 0;
 		refreshProfileList();
 		loadCurrentDraftToWidgets();
@@ -509,8 +486,8 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	ushort run(std::vector<EditProfileDraft> &outDrafts, bool &changed) {
 		ushort result = TProgram::deskTop->execView(this);
 		saveWidgetsToCurrentDraft();
-		outDrafts = drafts_;
-		changed = !draftListsEqual(initialDrafts_, drafts_);
+		outDrafts = draftList;
+		changed = !draftListsEqual(initialDraftList, draftList);
 		clearDialogStatus();
 		return result;
 	}
@@ -683,8 +660,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 		editorSettingsPanel.buildViews(*this);
 
-		doneButton_ = addButton(TRect(doneLeft, bottomTop, doneLeft + 10, bottomTop + 2), "~D~one", cmOK,
-		                        bfDefault);
+		addButton(TRect(doneLeft, bottomTop, doneLeft + 10, bottomTop + 2), "~D~one", cmOK, bfDefault);
 		addButton(TRect(cancelLeft, bottomTop, cancelLeft + 12, bottomTop + 2), "C~a~ncel", cmCancel,
 		          bfNormal);
 		addButton(TRect(helpLeft, bottomTop, helpLeft + 8, bottomTop + 2), "~H~elp", cmMrSetupFilenameProfilesHelp,
@@ -730,22 +706,14 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	}
 
 	void setValidationState(bool valid, const std::string &errorText) {
+		(void)errorText;
 		isValid_ = valid;
-		if (doneButton_ != nullptr)
-			doneButton_->setState(sfDisabled, valid ? False : True);
-		if (valid) {
-			lastValidationText_.clear();
-			clearDialogStatus();
-		} else if (errorText != lastValidationText_) {
-			setDialogStatus(errorText, TMRMenuBar::MarqueeKind::Warning);
-			lastValidationText_ = errorText;
-		}
 	}
 
 	void saveWidgetsToCurrentDraft() {
-		if (currentIndex_ < 0 || currentIndex_ >= static_cast<int>(drafts_.size()))
+		if (currentIndex_ < 0 || currentIndex_ >= static_cast<int>(draftList.size()))
 			return;
-		EditProfileDraft &draft = drafts_[currentIndex_];
+		EditProfileDraft &draft = draftList[currentIndex_];
 
 		editorSettingsPanel.saveFieldsToRecord(draft.settingsRecord);
 		if (draft.isDefault) {
@@ -761,10 +729,30 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		draft.colorThemeUri = readInputLineString(profileColorThemeField_, kProfileColorThemeFieldSize);
 	}
 
+	EditProfileDraft collectCurrentDraftFromWidgets() const {
+		EditProfileDraft draft;
+		if (currentIndex_ < 0 || currentIndex_ >= static_cast<int>(draftList.size()))
+			return draft;
+		draft = draftList[currentIndex_];
+		editorSettingsPanel.saveFieldsToRecord(draft.settingsRecord);
+		if (draft.isDefault) {
+			draft.id = kDefaultProfileId;
+			draft.name = readInputLineString(profileNameField_, kProfileNameFieldSize);
+			draft.extensionsLiteral.clear();
+			draft.colorThemeUri = readInputLineString(profileColorThemeField_, kProfileColorThemeFieldSize);
+		} else {
+			draft.id = readInputLineString(profileIdField_, kProfileIdFieldSize);
+			draft.name = readInputLineString(profileNameField_, kProfileNameFieldSize);
+			draft.extensionsLiteral = readInputLineString(profileExtensionsField_, kProfileExtensionsFieldSize);
+			draft.colorThemeUri = readInputLineString(profileColorThemeField_, kProfileColorThemeFieldSize);
+		}
+		return draft;
+	}
+
 	void loadCurrentDraftToWidgets() {
-		if (currentIndex_ < 0 || currentIndex_ >= static_cast<int>(drafts_.size()))
+		if (currentIndex_ < 0 || currentIndex_ >= static_cast<int>(draftList.size()))
 			return;
-		const EditProfileDraft &draft = drafts_[currentIndex_];
+		const EditProfileDraft &draft = draftList[currentIndex_];
 
 		loadCurrentDraftFieldValues(draft);
 		applyCurrentDraftWidgetState(draft.isDefault);
@@ -772,22 +760,22 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	}
 
 	void refreshProfileList() {
-		TPlainStringCollection *items = new TPlainStringCollection(std::max<short>(1, drafts_.size()), 5);
+		TPlainStringCollection *items = new TPlainStringCollection(std::max<short>(1, draftList.size()), 5);
 		TListBoxRec data;
 		int selection = currentIndex_;
 		std::size_t idWidth = std::strlen(kDefaultProfileId);
 
 		if (items == nullptr || profileList_ == nullptr)
 			return;
-		for (const EditProfileDraft &draft : drafts_)
+		for (const EditProfileDraft &draft : draftList)
 			idWidth = std::max(idWidth, trimAscii(draft.isDefault ? std::string(kDefaultProfileId) : draft.id).size());
 		idWidth = std::min<std::size_t>(18, std::max<std::size_t>(7, idWidth));
-		for (const EditProfileDraft &draft : drafts_)
+		for (const EditProfileDraft &draft : draftList)
 			items->insert(dupCString(buildProfileListLabel(draft, idWidth)));
-		if (selection < 0 && !drafts_.empty())
+		if (selection < 0 && !draftList.empty())
 			selection = 0;
-		if (selection >= static_cast<int>(drafts_.size()))
-			selection = drafts_.empty() ? 0 : static_cast<int>(drafts_.size()) - 1;
+		if (selection >= static_cast<int>(draftList.size()))
+			selection = draftList.empty() ? 0 : static_cast<int>(draftList.size()) - 1;
 		data.items = items;
 		data.selection = static_cast<ushort>(std::max(0, selection));
 		profileList_->setData(&data);
@@ -796,11 +784,11 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	int selectedListIndex() const {
 		TListBoxRec data;
 
-		if (profileList_ == nullptr || drafts_.empty())
+		if (profileList_ == nullptr || draftList.empty())
 			return -1;
 		profileList_->getData((void *)&data);
-		if (data.selection >= drafts_.size())
-			return static_cast<int>(drafts_.size()) - 1;
+		if (data.selection >= draftList.size())
+			return static_cast<int>(draftList.size()) - 1;
 		return static_cast<int>(data.selection);
 	}
 
@@ -810,7 +798,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	}
 
 	void changeSelection(int index, bool moveFocusToFields) {
-		if (index == currentIndex_ || index < 0 || index >= static_cast<int>(drafts_.size()))
+		if (index == currentIndex_ || index < 0 || index >= static_cast<int>(draftList.size()))
 			return;
 		saveWidgetsToCurrentDraft();
 		currentIndex_ = index;
@@ -825,7 +813,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 	void selectTopField() {
 		scrollToOrigin();
-		if (currentIndex_ >= 0 && currentIndex_ < static_cast<int>(drafts_.size()) && drafts_[currentIndex_].isDefault) {
+		if (currentIndex_ >= 0 && currentIndex_ < static_cast<int>(draftList.size()) && draftList[currentIndex_].isDefault) {
 			if (profileNameField_ != nullptr)
 				profileNameField_->select();
 		} else if (profileIdField_ != nullptr)
@@ -836,8 +824,8 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 	void addProfile() {
 		saveWidgetsToCurrentDraft();
-		drafts_.push_back(makeNewDraft(drafts_));
-		currentIndex_ = static_cast<int>(drafts_.size()) - 1;
+		draftList.push_back(makeNewDraft(draftList));
+		currentIndex_ = static_cast<int>(draftList.size()) - 1;
 		setCurrentIndex(currentIndex_);
 		loadCurrentDraftToWidgets();
 		selectTopField();
@@ -845,11 +833,11 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	}
 
 	void copyCurrentProfile() {
-		if (currentIndex_ < 0 || currentIndex_ >= static_cast<int>(drafts_.size()))
+		if (currentIndex_ < 0 || currentIndex_ >= static_cast<int>(draftList.size()))
 			return;
 		saveWidgetsToCurrentDraft();
-		drafts_.push_back(makeCopiedDraft(drafts_[currentIndex_], drafts_));
-		currentIndex_ = static_cast<int>(drafts_.size()) - 1;
+		draftList.push_back(makeCopiedDraft(draftList[currentIndex_], draftList));
+		currentIndex_ = static_cast<int>(draftList.size()) - 1;
 		setCurrentIndex(currentIndex_);
 		loadCurrentDraftToWidgets();
 		selectTopField();
@@ -857,19 +845,19 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	}
 
 	void deleteCurrentProfile() {
-		if (currentIndex_ <= 0 || currentIndex_ >= static_cast<int>(drafts_.size()))
+		if (currentIndex_ <= 0 || currentIndex_ >= static_cast<int>(draftList.size()))
 			return;
 		{
-			const EditProfileDraft &draft = drafts_[currentIndex_];
+			const EditProfileDraft &draft = draftList[currentIndex_];
 			std::string caption = trimAscii(draft.name).empty() ? trimAscii(draft.id)
 			                                              : trimAscii(draft.id) + " / " + trimAscii(draft.name);
 			if (messageBox(mfConfirmation | mfYesButton | mfNoButton, "Delete profile:\n%s",
 			               caption.c_str()) != cmYes)
 				return;
 		}
-		drafts_.erase(drafts_.begin() + currentIndex_);
-		if (currentIndex_ >= static_cast<int>(drafts_.size()))
-			currentIndex_ = static_cast<int>(drafts_.size()) - 1;
+		draftList.erase(draftList.begin() + currentIndex_);
+		if (currentIndex_ >= static_cast<int>(draftList.size()))
+			currentIndex_ = static_cast<int>(draftList.size()) - 1;
 		setCurrentIndex(currentIndex_);
 		loadCurrentDraftToWidgets();
 		selectTopField();
@@ -877,7 +865,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	}
 
 	void browseCurrentColorTheme() {
-		if (currentIndex_ < 0 || currentIndex_ >= static_cast<int>(drafts_.size()))
+		if (currentIndex_ < 0 || currentIndex_ >= static_cast<int>(draftList.size()))
 			return;
 		std::string selectedUri;
 		std::string currentValue = readInputLineString(profileColorThemeField_, kProfileColorThemeFieldSize);
@@ -916,16 +904,26 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	}
 
 	void refreshValidationState() {
-		std::string errorText;
-
-		saveWidgetsToCurrentDraft();
-		editorSettingsPanel.syncDynamicStates();
-		refreshProfileList();
-		setValidationState(validateDraftsForUi(drafts_, currentIndex_, errorText), errorText);
+		runDialogValidation();
 	}
 
-	std::vector<EditProfileDraft> initialDrafts_;
-	std::vector<EditProfileDraft> drafts_;
+	DialogValidationResult validateDialogValues() {
+		std::string errorText;
+		DialogValidationResult result;
+
+		editorSettingsPanel.syncDynamicStates();
+		if (currentIndex_ >= 0 && currentIndex_ < static_cast<int>(draftList.size())) {
+			EditProfileDraft currentDraft = collectCurrentDraftFromWidgets();
+			result.valid = validateDraftsForUi(draftList, currentIndex_, &currentDraft, errorText);
+		} else
+			result.valid = validateDraftsForUi(draftList, currentIndex_, errorText);
+		result.warningText = errorText;
+		setValidationState(result.valid, result.warningText);
+		return result;
+	}
+
+	std::vector<EditProfileDraft> initialDraftList;
+	std::vector<EditProfileDraft> draftList;
 	int currentIndex_ = -1;
 	TProfileListBox *profileList_ = nullptr;
 	TScrollBar *profileListScrollBar_ = nullptr;
@@ -939,9 +937,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	TInputLine *profileColorThemeField_ = nullptr;
 	TInlineGlyphButton *profileColorThemeBrowseButton_ = nullptr;
 	TButton *deleteButton_ = nullptr;
-	TButton *doneButton_ = nullptr;
 	bool isValid_ = true;
-	std::string lastValidationText_;
 	FileExtensionEditorSettingsPanel editorSettingsPanel;
 };
 
@@ -990,30 +986,29 @@ void runFileExtensionProfilesDialogFlow() {
 				showEditProfilesHelpDialog();
 				break;
 
-			case cmOK:
-				workingDrafts = editedDrafts;
-				if (!saveAndReloadEditProfiles(workingDrafts, errorText)) {
-					postValidationWarning(errorText);
-					break;
-				}
+				case cmOK:
+					workingDrafts = editedDrafts;
+					if (!saveAndReloadEditProfiles(workingDrafts, errorText)) {
+						postDialogError(errorText);
+						break;
+					}
 				mrUpdateAllWindowsColorTheme();
 				baselineDrafts = workingDrafts;
 				running = false;
 				break;
 
+			case cmClose:
 			case cmCancel:
 				if (changed) {
 					workingDrafts = editedDrafts;
 					std::vector<std::string> dirtyIds = dirtyDraftIds(baselineDrafts, editedDrafts);
 					ushort discardResult = runDirtyProfilesDialog(dirtyIds);
-					if (discardResult == cmYes) {
-						workingDrafts = editedDrafts;
-						if (!saveAndReloadEditProfiles(workingDrafts, errorText)) {
-							mr::messageline::postAutoTimed(mr::messageline::Owner::DialogValidation, errorText,
-							                              mr::messageline::Kind::Warning,
-							                              mr::messageline::kPriorityHigh);
-							break;
-						}
+						if (discardResult == cmYes) {
+							workingDrafts = editedDrafts;
+							if (!saveAndReloadEditProfiles(workingDrafts, errorText)) {
+								postDialogError(errorText);
+								break;
+							}
 						mrUpdateAllWindowsColorTheme();
 						running = false;
 						break;

@@ -23,7 +23,7 @@
 
 #include "../mrmac/mrmac.h"
 #include "../mrmac/mrvm.hpp"
-#include "../app/TMREditorApp.hpp"
+#include "../app/MREditorApp.hpp"
 #include "../config/MRDialogPaths.hpp"
 #include "../dialogs/MRSetupDialogs.hpp"
 #include "../piecetable/MRTextDocument.hpp"
@@ -108,6 +108,18 @@ bool expectCompileError(const std::string &source, const std::string &expectedPa
 
 bool containsText(const std::vector<std::string> &values, const char *needle) {
 	return std::find(values.begin(), values.end(), std::string(needle)) != values.end();
+}
+
+std::size_t countSubstring(const std::string &text, const std::string &needle) {
+	std::size_t count = 0;
+	std::size_t pos = 0;
+	if (needle.empty())
+		return 0;
+	while ((pos = text.find(needle, pos)) != std::string::npos) {
+		++count;
+		pos += needle.size();
+	}
+	return count;
 }
 
 bool checkGlobalInt(const std::map<std::string, int> &ints, const char *name, int expected,
@@ -1109,12 +1121,12 @@ bool testSettingsDiscrepancyMigrationGuard(std::string &failureReason) {
 }
 
 bool testDialogPaletteOverridesAbsent(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("app/TMREditorApp.cpp");
+	const std::string sourcePath = absolutePathFromCwd("app/MREditorApp.cpp");
 	std::string content;
 	std::string ioError;
 
 	if (!readTextFile(sourcePath, content, ioError)) {
-		failureReason = "Unable to read TMREditorApp.cpp for palette guard: " + ioError;
+		failureReason = "Unable to read MREditorApp.cpp for palette guard: " + ioError;
 		return false;
 	}
 	if (content.find("palette[32] =") != std::string::npos ||
@@ -1146,20 +1158,20 @@ bool testDialogPaletteOverridesAbsent(std::string &failureReason) {
 	    content.find("palette[62] =") != std::string::npos ||
 	    content.find("palette[63] =") != std::string::npos) {
 		failureReason =
-		    "TMREditorApp.cpp must not hardcode dialog colors outside global scrollbar synchronization.";
+		    "MREditorApp.cpp must not hardcode dialog colors outside global scrollbar synchronization.";
 		return false;
 	}
 	if (content.find("static const TPalette basePalette(cpAppColor, sizeof(cpAppColor) - 1);") ==
 	        std::string::npos &&
 	    content.find("static const TPalette &basePalette = extendedAppBasePalette();") == std::string::npos) {
 		failureReason =
-		    "TMREditorApp::getPalette must use a stable base palette source before applying overrides.";
+		    "MREditorApp::getPalette must use a stable base palette source before applying overrides.";
 		return false;
 	}
 	if (content.find("palette = basePalette;") == std::string::npos ||
 	    content.find("slot <= kMrPaletteMax") == std::string::npos) {
 		failureReason =
-		    "TMREditorApp::getPalette must rebuild each call and include extension slots up to kMrPaletteMax.";
+		    "MREditorApp::getPalette must rebuild each call and include extension slots up to kMrPaletteMax.";
 		return false;
 	}
 	failureReason.clear();
@@ -2487,31 +2499,31 @@ bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureRea
 }
 
 bool testIndicatorLineNumberColorWiringGuard(std::string &failureReason) {
-	const std::string indicatorPath = absolutePathFromCwd("ui/TMRIndicator.hpp");
-	const std::string windowPath = absolutePathFromCwd("ui/TMREditWindow.hpp");
+	const std::string indicatorPath = absolutePathFromCwd("ui/MRIndicator.hpp");
+	const std::string windowPath = absolutePathFromCwd("ui/MREditWindow.hpp");
 	std::string indicatorContent;
 	std::string windowContent;
 	std::string ioError;
 
 	if (!readTextFile(indicatorPath, indicatorContent, ioError)) {
-		failureReason = "Unable to read TMRIndicator.hpp for line-number wiring guard: " + ioError;
+		failureReason = "Unable to read MRIndicator.hpp for line-number wiring guard: " + ioError;
 		return false;
 	}
 	if (!readTextFile(windowPath, windowContent, ioError)) {
-		failureReason = "Unable to read TMREditWindow.hpp for line-number wiring guard: " + ioError;
+		failureReason = "Unable to read MREditWindow.hpp for line-number wiring guard: " + ioError;
 		return false;
 	}
 	if (indicatorContent.find("cursorColor = getColor(3);") == std::string::npos ||
 	    indicatorContent.find("b.moveStr(cursorX, cursorText, cursorColor);") == std::string::npos) {
-		failureReason = "TMRIndicator must draw line/column text from the dedicated line-number color slot.";
+		failureReason = "MRIndicator must draw line/column text from the dedicated line-number color slot.";
 		return false;
 	}
 	if (indicatorContent.find("TPalette palette(\"\\x02\\x03\\x0C\", 3);") == std::string::npos) {
-		failureReason = "TMRIndicator palette must expose line-number color as local slot 12.";
+		failureReason = "MRIndicator palette must expose line-number color as local slot 12.";
 		return false;
 	}
 	if (windowContent.find("kMrPaletteLineNumbers") == std::string::npos) {
-		failureReason = "TMREditWindow palette must include the line-number extension slot.";
+		failureReason = "MREditWindow palette must include the line-number extension slot.";
 		return false;
 	}
 
@@ -2520,16 +2532,16 @@ bool testIndicatorLineNumberColorWiringGuard(std::string &failureReason) {
 }
 
 bool testCurrentLineColorWiringGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("ui/TMRFileEditor.hpp");
+	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor.hpp");
 	std::string content;
 	std::string ioError;
 
 	if (!readTextFile(sourcePath, content, ioError)) {
-		failureReason = "Unable to read TMRFileEditor.hpp for current-line color wiring guard: " + ioError;
+		failureReason = "Unable to read MRFileEditor.hpp for current-line color wiring guard: " + ioError;
 		return false;
 	}
 	if (content.find("TPalette palette(\"\\x06\\x07\\x09\\x0A\\x0B\\x0C\", 6);") == std::string::npos) {
-		failureReason = "TMRFileEditor palette must expose current-line, changed-text and line-number slots.";
+		failureReason = "MRFileEditor palette must expose current-line, changed-text and line-number slots.";
 		return false;
 	}
 	if (content.find("basePair = getColor(0x0303);") == std::string::npos ||
@@ -2546,12 +2558,12 @@ bool testCurrentLineColorWiringGuard(std::string &failureReason) {
 }
 
 bool testChangedTextColorWiringGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("ui/TMRFileEditor.hpp");
+	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor.hpp");
 	std::string content;
 	std::string ioError;
 
 	if (!readTextFile(sourcePath, content, ioError)) {
-		failureReason = "Unable to read TMRFileEditor.hpp for changed-text color wiring guard: " + ioError;
+		failureReason = "Unable to read MRFileEditor.hpp for changed-text color wiring guard: " + ioError;
 		return false;
 	}
 	if (content.find("TAttrPair changedPair = getColor(0x0505);") == std::string::npos ||
@@ -2565,7 +2577,7 @@ bool testChangedTextColorWiringGuard(std::string &failureReason) {
 	if (content.find("dirtyRanges_") == std::string::npos ||
 	    content.find("addDirtyRange(") == std::string::npos ||
 	    content.find("isDirtyOffset(") == std::string::npos) {
-		failureReason = "Changed-text wiring requires dedicated dirty-range tracking in TMRFileEditor.";
+		failureReason = "Changed-text wiring requires dedicated dirty-range tracking in MRFileEditor.";
 		return false;
 	}
 	if (content.find("remapDirtyRangesForAppliedChange(*changeSet);") == std::string::npos ||
@@ -2586,12 +2598,12 @@ bool testChangedTextColorWiringGuard(std::string &failureReason) {
 }
 
 bool testEditorCursorViewportGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("ui/TMRFileEditor.hpp");
+	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor.hpp");
 	std::string content;
 	std::string ioError;
 
 	if (!readTextFile(sourcePath, content, ioError)) {
-		failureReason = "Unable to read TMRFileEditor.hpp for cursor viewport guard: " + ioError;
+		failureReason = "Unable to read MRFileEditor.hpp for cursor viewport guard: " + ioError;
 		return false;
 	}
 	if (content.find("struct TextViewportGeometry") == std::string::npos ||
@@ -2614,12 +2626,12 @@ bool testEditorCursorViewportGuard(std::string &failureReason) {
 }
 
 bool testEofVirtualLineColorGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("ui/TMRFileEditor.hpp");
+	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor.hpp");
 	std::string content;
 	std::string ioError;
 
 	if (!readTextFile(sourcePath, content, ioError)) {
-		failureReason = "Unable to read TMRFileEditor.hpp for EOF virtual-line color guard: " + ioError;
+		failureReason = "Unable to read MRFileEditor.hpp for EOF virtual-line color guard: " + ioError;
 		return false;
 	}
 		if (content.find("bool isDocumentLine = lineIndex < totalLines;") ==
@@ -2652,12 +2664,12 @@ bool testEofVirtualLineColorGuard(std::string &failureReason) {
 }
 
 bool testSaveAsOverwriteAndBackupWiringGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("ui/TMRFileEditor.hpp");
+	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor.hpp");
 	std::string content;
 	std::string ioError;
 
 	if (!readTextFile(sourcePath, content, ioError)) {
-		failureReason = "Unable to read TMRFileEditor.hpp for Save As overwrite/backup guard: " + ioError;
+		failureReason = "Unable to read MRFileEditor.hpp for Save As overwrite/backup guard: " + ioError;
 		return false;
 	}
 	if (content.find("showUnsavedChangesDialog(\"Overwrite\", \"Target file exists. Overwrite?\",") ==
@@ -2682,7 +2694,7 @@ bool testSaveAsOverwriteAndBackupWiringGuard(std::string &failureReason) {
 
 bool testThemeAndMacroSaveOverwriteWiringGuard(std::string &failureReason) {
 	const std::string setupDialogsPath = absolutePathFromCwd("dialogs/MRSetupDialogs.cpp");
-	const std::string appPath = absolutePathFromCwd("app/TMREditorApp.cpp");
+	const std::string appPath = absolutePathFromCwd("app/MREditorApp.cpp");
 	std::string setupContent;
 	std::string appContent;
 	std::string ioError;
@@ -2692,7 +2704,7 @@ bool testThemeAndMacroSaveOverwriteWiringGuard(std::string &failureReason) {
 		return false;
 	}
 	if (!readTextFile(appPath, appContent, ioError)) {
-		failureReason = "Unable to read TMREditorApp.cpp for macro overwrite guard: " + ioError;
+		failureReason = "Unable to read MREditorApp.cpp for macro overwrite guard: " + ioError;
 		return false;
 	}
 	if (setupContent.find("confirmOverwriteForPath(\"Overwrite\", \"Theme file exists. Overwrite?\", themeUri)") ==
@@ -2822,12 +2834,12 @@ bool testSearchMarkerRoutingAndTextMenuGuard(std::string &failureReason) {
 }
 
 bool testBlockHotkeyModifierRoutingGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("ui/TMREditWindow.hpp");
+	const std::string sourcePath = absolutePathFromCwd("ui/MREditWindow.hpp");
 	std::string content;
 	std::string ioError;
 
 	if (!readTextFile(sourcePath, content, ioError)) {
-		failureReason = "Unable to read TMREditWindow.hpp for block-hotkey guard: " + ioError;
+		failureReason = "Unable to read MREditWindow.hpp for block-hotkey guard: " + ioError;
 		return false;
 	}
 	if (content.find("bool handleBuiltInBlockHotkeys(TEvent &event)") == std::string::npos ||
@@ -2860,7 +2872,7 @@ bool testInterWindowBlockSourceTargetGuard(std::string &failureReason) {
 		return false;
 	}
 	if (content.find("bool chooseInterWindowBlockTarget(int &sourceWindowIndex)") == std::string::npos ||
-	    content.find("TMREditWindow *targetWin = currentEditWindow();") == std::string::npos ||
+	    content.find("MREditWindow *targetWin = currentEditWindow();") == std::string::npos ||
 	    content.find("sourceWin = mrShowWindowListDialog(mrwlActivateWindow, targetWin);") ==
 	        std::string::npos ||
 	    content.find("No block marked in the selected source window.") == std::string::npos ||
@@ -2882,7 +2894,7 @@ bool testColumnUndentPolicyGuard(std::string &failureReason) {
 		failureReason = "Unable to read mrvm.cpp for column-undent policy guard: " + ioError;
 		return false;
 	}
-	if (content.find("if (mode == TMREditWindow::bmColumn)") == std::string::npos ||
+	if (content.find("if (mode == MREditWindow::bmColumn)") == std::string::npos ||
 	    content.find("bool leaveColumnSpace = undent && configuredColumnBlockMoveLeavesSpace();") ==
 	        std::string::npos ||
 	    content.find("if (leaveColumnSpace)") == std::string::npos ||
@@ -3239,16 +3251,168 @@ bool testMarqueeProcWiringGuard(std::string &failureReason) {
 		failureReason = "MARQUEE probe must compile as OP_PROC (not TVCALL).";
 		return false;
 	}
-	if (mrvmCanRunStagedInBackground(profile)) {
-		failureReason = "MARQUEE proc probe must remain UI-affine (not staged-background eligible).";
+	if (!mrvmCanRunStagedInBackground(profile)) {
+		failureReason = "MARQUEE proc probe must be staged-background eligible.";
 		return false;
 	}
 	unsupported = mrvmUnsupportedStagedSymbols(profile);
-	if (!containsText(unsupported, "MARQUEE") || !containsText(unsupported, "MARQUEE_WARNING") ||
-	    !containsText(unsupported, "MARQUEE_ERROR")) {
-		failureReason = "MARQUEE proc names must be reported as unsupported staged symbols.";
+	if (!unsupported.empty()) {
+		failureReason = "MARQUEE proc names must be accepted staged symbols.";
 		return false;
 	}
+	failureReason.clear();
+	return true;
+}
+
+bool testDeferredUiPlaybackMailboxGuard(std::string &failureReason) {
+	const std::string dispatchPath = absolutePathFromCwd("coprocessor/MRCoprocessorDispatch.cpp");
+	const std::string dispatchHeaderPath = absolutePathFromCwd("coprocessor/MRCoprocessorDispatch.hpp");
+	std::string dispatchContent;
+	std::string dispatchHeaderContent;
+	std::string ioError;
+
+	if (!readTextFile(dispatchPath, dispatchContent, ioError)) {
+		failureReason = "Unable to read MRCoprocessorDispatch.cpp for deferred playback guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(dispatchHeaderPath, dispatchHeaderContent, ioError)) {
+		failureReason = "Unable to read MRCoprocessorDispatch.hpp for deferred playback guard: " + ioError;
+		return false;
+	}
+	if (dispatchHeaderContent.find("void pumpDeferredMacroUiPlayback();") == std::string::npos) {
+		failureReason = "Deferred UI playback pump must be declared in MRCoprocessorDispatch.hpp.";
+		return false;
+	}
+	if (dispatchContent.find("struct MacroScreenModel") == std::string::npos ||
+	    dispatchContent.find("struct MacroScreenView") == std::string::npos ||
+	    dispatchContent.find("struct DeferredUiRenderGateway") == std::string::npos) {
+		failureReason = "Deferred playback must define MacroScreenModel, MacroScreenView and DeferredUiRenderGateway.";
+		return false;
+	}
+	if (dispatchContent.find("DeferredUiRenderGateway::renderDeferredCommand(command)") == std::string::npos) {
+		failureReason = "MacroScreenView must route rendering through the deferred UI render gateway.";
+		return false;
+	}
+	if (dispatchContent.find("queueDeferredMacroUiPlayback(") == std::string::npos) {
+		failureReason = "Staged macro completion must queue deferred UI playback.";
+		return false;
+	}
+	if (dispatchContent.find("Queued deferred UI playback for macro") == std::string::npos) {
+		failureReason = "Deferred playback queueing must be logged for staged macros.";
+		return false;
+	}
+	if (dispatchContent.find("if (command.type == mrducDelay)") == std::string::npos) {
+		failureReason = "Deferred playback loop must handle DELAY cooperatively.";
+		return false;
+	}
+	if (dispatchContent.find("Applied deferred UI commands for macro") != std::string::npos) {
+		failureReason = "Legacy immediate deferred-UI apply log must not remain.";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
+bool testDeferredUiMutationEpochGuard(std::string &failureReason) {
+	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
+	const std::string vmHeaderPath = absolutePathFromCwd("mrmac/mrvm.hpp");
+	const std::string dispatchPath = absolutePathFromCwd("coprocessor/MRCoprocessorDispatch.cpp");
+	const std::string appPath = absolutePathFromCwd("app/MREditorApp.cpp");
+	const std::string menuBarPath = absolutePathFromCwd("ui/MRMenuBar.cpp");
+	const std::string framePath = absolutePathFromCwd("ui/MRFrame.cpp");
+	const std::string indicatorPath = absolutePathFromCwd("ui/MRIndicator.hpp");
+	const std::string statusLinePath = absolutePathFromCwd("ui/MRStatusLine.hpp");
+	std::string vmContent;
+	std::string vmHeaderContent;
+	std::string dispatchContent;
+	std::string appContent;
+	std::string menuBarContent;
+	std::string frameContent;
+	std::string indicatorContent;
+	std::string statusLineContent;
+	std::string ioError;
+
+	if (!readTextFile(vmPath, vmContent, ioError)) {
+		failureReason = "Unable to read mrvm.cpp for deferred UI mutation-epoch guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(vmHeaderPath, vmHeaderContent, ioError)) {
+		failureReason = "Unable to read mrvm.hpp for deferred UI mutation-epoch guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(dispatchPath, dispatchContent, ioError)) {
+		failureReason = "Unable to read MRCoprocessorDispatch.cpp for mutation-epoch guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(appPath, appContent, ioError)) {
+		failureReason = "Unable to read MREditorApp.cpp for mutation-epoch guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(menuBarPath, menuBarContent, ioError)) {
+		failureReason = "Unable to read MRMenuBar.cpp for mutation-epoch guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(framePath, frameContent, ioError)) {
+		failureReason = "Unable to read MRFrame.cpp for mutation-epoch guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(indicatorPath, indicatorContent, ioError)) {
+		failureReason = "Unable to read MRIndicator.hpp for mutation-epoch guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(statusLinePath, statusLineContent, ioError)) {
+		failureReason = "Unable to read MRStatusLine.hpp for mutation-epoch guard: " + ioError;
+		return false;
+	}
+
+	if (vmHeaderContent.find("std::uint64_t mrvmUiScreenMutationEpoch() noexcept;") == std::string::npos ||
+	    vmHeaderContent.find("void mrvmUiInvalidateScreenBase() noexcept;") == std::string::npos ||
+	    vmHeaderContent.find("void mrvmUiTouchScreenMutationEpoch() noexcept;") == std::string::npos ||
+	    vmHeaderContent.find("bool mrvmUiRenderFacadeRenderDeferredCommand(const MRMacroDeferredUiCommand &command);") ==
+	        std::string::npos ||
+	    vmHeaderContent.find("bool mrvmUiEraseCurrentWindow();") == std::string::npos) {
+		failureReason = "mrvm.hpp must expose screen mutation epoch and base invalidation APIs.";
+		return false;
+	}
+	if (vmContent.find("static std::atomic<std::uint64_t> g_macroScreenMutationEpoch(1);") == std::string::npos ||
+	    vmContent.find("struct ScreenStateCoordinator") == std::string::npos ||
+	    vmContent.find("static ScreenStateCoordinator g_screenStateCoordinator;") == std::string::npos ||
+	    vmContent.find("struct UiScreenStateFacade") == std::string::npos ||
+	    vmContent.find("struct UiRenderFacade") == std::string::npos ||
+	    vmContent.find("bool mrvmUiRenderFacadeRenderDeferredCommand(const MRMacroDeferredUiCommand &command)") ==
+	        std::string::npos ||
+	    vmContent.find("returnWithMacroScreenMutation(") == std::string::npos ||
+	    vmContent.find("returnWithDirectScreenMutation(") == std::string::npos ||
+	    vmContent.find("std::uint64_t mrvmUiScreenMutationEpoch() noexcept") == std::string::npos ||
+	    vmContent.find("void mrvmUiInvalidateScreenBase() noexcept") == std::string::npos ||
+	    vmContent.find("void mrvmUiTouchScreenMutationEpoch() noexcept") == std::string::npos ||
+	    vmContent.find("bool mrvmUiEraseCurrentWindow()") == std::string::npos ||
+	    vmContent.find("returnWithDirectScreenMutation(eraseCurrentEditWindow())") == std::string::npos ||
+	    vmContent.find("ok = mrvmUiEraseCurrentWindow();") == std::string::npos) {
+		failureReason = "mrvm.cpp must maintain and expose a central screen-mutation epoch coordinator.";
+		return false;
+	}
+	if (dispatchContent.find("observedScreenEpoch") == std::string::npos ||
+	    dispatchContent.find("liveEpoch != playback.observedScreenEpoch") == std::string::npos ||
+	    dispatchContent.find("mrvmUiScreenMutationEpoch()") == std::string::npos ||
+	    dispatchContent.find("mrvmUiRenderFacadeRenderDeferredCommand(command)") == std::string::npos) {
+		failureReason = "Deferred UI playback must invalidate projection when global screen mutation epoch changes.";
+		return false;
+	}
+	if (appContent.find("shouldInvalidateScreenBaseForEvent(") == std::string::npos ||
+	    appContent.find("mrvmUiInvalidateScreenBase();") == std::string::npos ||
+	    appContent.find("shouldInvalidateScreenBaseForEvent(originalWhat)") == std::string::npos) {
+		failureReason = "MREditorApp must invalidate base screen state after UI-driving input handling.";
+		return false;
+	}
+	if (menuBarContent.find("mrvmUiInvalidateScreenBase();") == std::string::npos ||
+	    frameContent.find("mrvmUiInvalidateScreenBase();") == std::string::npos ||
+	    indicatorContent.find("mrvmUiInvalidateScreenBase();") == std::string::npos ||
+	    statusLineContent.find("mrvmUiInvalidateScreenBase();") == std::string::npos) {
+		failureReason = "Core UI render sinks must invalidate base screen state on direct drawing.";
+		return false;
+	}
+
 	failureReason.clear();
 	return true;
 }
@@ -3260,10 +3424,6 @@ bool testTvCallSurfaceGuard(std::string &failureReason) {
 	std::size_t dispatchStart = std::string::npos;
 	std::size_t dispatchEnd = std::string::npos;
 	std::string dispatchBlock;
-	std::regex tvcallNamePattern("funcNameUpper\\s*==\\s*\"([A-Z0-9_]+)\"");
-	std::sregex_iterator it;
-	std::sregex_iterator end;
-	std::vector<std::string> names;
 
 	if (!readTextFile(vmPath, content, ioError)) {
 		failureReason = "Unable to read mrvm.cpp for TVCALL surface guard: " + ioError;
@@ -3280,19 +3440,18 @@ bool testTvCallSurfaceGuard(std::string &failureReason) {
 		return false;
 	}
 	dispatchBlock = content.substr(dispatchStart, dispatchEnd - dispatchStart);
-	for (it = std::sregex_iterator(dispatchBlock.begin(), dispatchBlock.end(), tvcallNamePattern); it != end; ++it)
-		names.push_back((*it)[1].str());
-	std::sort(names.begin(), names.end());
-	names.erase(std::unique(names.begin(), names.end()), names.end());
-
-	if (names.size() != 1 || names[0] != "MESSAGEBOX") {
-		std::string found;
-		for (std::size_t i = 0; i < names.size(); ++i) {
-			if (i != 0)
-				found += ", ";
-			found += names[i];
-		}
-		failureReason = "TVCALL runtime surface must remain MESSAGEBOX-only; found: " + found;
+	if (content.find("static bool queueDeferredUiTvCall(") == std::string::npos ||
+	    content.find("static bool executeUiTvCall(") == std::string::npos ||
+	    content.find("if (queueDeferredUiTvCall(funcNameUpper, args, deferredError))") == std::string::npos ||
+	    content.find("if (executeUiTvCall(funcNameUpper, args))") == std::string::npos) {
+		failureReason = "TVCALL runtime dispatch must route through queueDeferredUiTvCall/executeUiTvCall.";
+		return false;
+	}
+	if (content.find("kTvCallVideoMode = \"VIDEO_MODE\"") == std::string::npos ||
+	    content.find("kTvCallVideoCard = \"VIDEO_CARD\"") == std::string::npos ||
+	    content.find("kTvCallToggle = \"TOGGLE\"") == std::string::npos ||
+	    content.find("is not implemented.") == std::string::npos) {
+		failureReason = "TVCALL runtime must keep VIDEO_MODE/VIDEO_CARD/TOGGLE explicitly unimplemented.";
 		return false;
 	}
 	if (dispatchBlock.find("MARQUEE") != std::string::npos) {
@@ -3303,13 +3462,126 @@ bool testTvCallSurfaceGuard(std::string &failureReason) {
 	return true;
 }
 
+bool testScreenRenderFacadeBoundaryGuard(std::string &failureReason) {
+	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
+	const std::string dispatchPath = absolutePathFromCwd("coprocessor/MRCoprocessorDispatch.cpp");
+	std::string vmContent;
+	std::string dispatchContent;
+	std::string ioError;
+
+	if (!readTextFile(vmPath, vmContent, ioError)) {
+		failureReason = "Unable to read mrvm.cpp for screen facade guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(dispatchPath, dispatchContent, ioError)) {
+		failureReason = "Unable to read MRCoprocessorDispatch.cpp for screen facade guard: " + ioError;
+		return false;
+	}
+
+	if (vmContent.find("TScreen::screenBuffer") != std::string::npos ||
+	    dispatchContent.find("TScreen::screenBuffer") != std::string::npos) {
+		failureReason = "VM and deferred UI playback must not write through TScreen::screenBuffer.";
+		return false;
+	}
+	if (vmContent.find("struct UiRenderFacade") == std::string::npos ||
+	    vmContent.find("UiRenderFacade::renderDeferredCommand(command)") == std::string::npos ||
+	    dispatchContent.find("mrvmUiRenderFacadeRenderDeferredCommand(command)") == std::string::npos) {
+		failureReason = "Deferred UI commands must cross the central VM UI render facade.";
+		return false;
+	}
+	if (dispatchContent.find("struct UiRenderFacade") != std::string::npos) {
+		failureReason = "Coprocessor playback must not define a second UiRenderFacade.";
+		return false;
+	}
+	if (vmContent.find("struct ScreenStateCoordinator") == std::string::npos ||
+	    vmContent.find("struct UiScreenStateFacade") == std::string::npos ||
+	    vmContent.find("UiScreenStateFacade::noteMacroOverlayMutation") == std::string::npos ||
+	    vmContent.find("UiScreenStateFacade::noteBaseInvalidation") == std::string::npos) {
+		failureReason = "Screen render facade must keep base/overlay generation coordination.";
+		return false;
+	}
+	{
+		const std::size_t facadeStart = vmContent.find("struct UiScreenStateFacade");
+		const std::size_t facadeEnd = vmContent.find("static thread_local", facadeStart);
+		if (facadeStart == std::string::npos || facadeEnd == std::string::npos || facadeEnd <= facadeStart) {
+			failureReason = "Unable to locate UiScreenStateFacade boundary.";
+			return false;
+		}
+		std::string outsideFacade = vmContent;
+		outsideFacade.erase(facadeStart, facadeEnd - facadeStart);
+		if (outsideFacade.find("g_screenStateCoordinator.") != std::string::npos) {
+			failureReason = "ScreenStateCoordinator must only be touched through UiScreenStateFacade.";
+			return false;
+		}
+	}
+	if (vmContent.find("bool mrvmUiSetCurrentWindow(const void *windowKey)") == std::string::npos ||
+	    vmContent.find("returnWithDirectScreenMutation(createEditWindow())") == std::string::npos ||
+	    vmContent.find("returnWithDirectScreenMutation(deleteCurrentEditWindow())") == std::string::npos ||
+	    vmContent.find("returnWithDirectScreenMutation(modifyCurrentEditWindow())") == std::string::npos ||
+	    vmContent.find("returnWithDirectScreenMutation(switchEditWindow(index))") == std::string::npos ||
+	    vmContent.find("returnWithDirectScreenMutation(sizeCurrentEditWindow(x1, y1, x2, y2))") ==
+	        std::string::npos ||
+	    vmContent.find("returnWithDirectScreenMutation(zoomCurrentEditWindow())") == std::string::npos ||
+	    vmContent.find("returnWithDirectScreenMutation(redrawCurrentEditWindow())") == std::string::npos ||
+	    vmContent.find("returnWithDirectScreenMutation(redrawEntireScreen())") == std::string::npos) {
+		failureReason = "Window and desktop render operations must invalidate the base screen through the facade.";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
+bool testRenderSinkClassificationGuard(std::string &failureReason) {
+	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
+	const std::string dispatchPath = absolutePathFromCwd("coprocessor/MRCoprocessorDispatch.cpp");
+	std::string vmContent;
+	std::string dispatchContent;
+	std::string ioError;
+
+	if (!readTextFile(vmPath, vmContent, ioError)) {
+		failureReason = "Unable to read mrvm.cpp for render sink classification guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(dispatchPath, dispatchContent, ioError)) {
+		failureReason = "Unable to read MRCoprocessorDispatch.cpp for render sink classification guard: " + ioError;
+		return false;
+	}
+	if (dispatchContent.find("writeLine(") != std::string::npos ||
+	    dispatchContent.find("writeBuf(") != std::string::npos ||
+	    dispatchContent.find("TScreen::flushScreen()") != std::string::npos) {
+		failureReason = "Deferred playback must not own physical render sinks.";
+		return false;
+	}
+	if (vmContent.find("MacroCellGrid::projectRowSpan") == std::string::npos ||
+	    vmContent.find("MacroCellGrid::projectAll") == std::string::npos ||
+	    vmContent.find("MacroCellGrid::redrawBaseAndOverlay") == std::string::npos ||
+	    vmContent.find("forceMacroUiMessageRefresh") == std::string::npos) {
+		failureReason = "VM render sinks must remain classified as overlay projection or explicit base refresh.";
+		return false;
+	}
+	if (vmContent.find("dirtyRows") == std::string::npos ||
+	    vmContent.find("fullProjectionPending") == std::string::npos ||
+	    vmContent.find("projectDirtyRows(") == std::string::npos) {
+		failureReason = "MacroCellGrid must keep dirty-row coalescing state in the VM render path.";
+		return false;
+	}
+	if (countSubstring(vmContent, "TScreen::flushScreen()") != 3) {
+		failureReason = "Unexpected VM flushScreen sink count; classify new sinks before adding them.";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
 bool testMarqueeColorSourceGuard(std::string &failureReason) {
-	const std::string menuBarPath = absolutePathFromCwd("ui/TMRMenuBar.cpp");
+	const std::string menuBarPath = absolutePathFromCwd("ui/MRMenuBar.cpp");
 	std::string content;
 	std::string ioError;
 
 	if (!readTextFile(menuBarPath, content, ioError)) {
-		failureReason = "Unable to read TMRMenuBar.cpp for marquee color source guard: " + ioError;
+		failureReason = "Unable to read MRMenuBar.cpp for marquee color source guard: " + ioError;
 		return false;
 	}
 	if (content.find("configuredColorSlotOverride(slot, biosAttr)") == std::string::npos) {
@@ -3387,7 +3659,7 @@ bool testDelayProcWiringGuard(std::string &failureReason) {
 }
 
 bool testStartupCliLoadRecursiveGuard(std::string &failureReason) {
-	const std::string appSourcePath = absolutePathFromCwd("app/TMREditorApp.cpp");
+	const std::string appSourcePath = absolutePathFromCwd("app/MREditorApp.cpp");
 	const std::string mainSourcePath = absolutePathFromCwd("mr.cpp");
 	const std::string makefilePath = absolutePathFromCwd("Makefile");
 	const std::string vmHeaderPath = absolutePathFromCwd("mrmac/mrvm.hpp");
@@ -3400,7 +3672,7 @@ bool testStartupCliLoadRecursiveGuard(std::string &failureReason) {
 	std::string ioError;
 
 	if (!readTextFile(appSourcePath, appContent, ioError)) {
-		failureReason = "Unable to read TMREditorApp.cpp for startup CLI guard: " + ioError;
+		failureReason = "Unable to read MREditorApp.cpp for startup CLI guard: " + ioError;
 		return false;
 	}
 	if (!readTextFile(mainSourcePath, mainContent, ioError)) {
@@ -3424,7 +3696,7 @@ bool testStartupCliLoadRecursiveGuard(std::string &failureReason) {
 	    appContent.find("recursive_directory_iterator") == std::string::npos ||
 	    appContent.find("fnmatch(") == std::string::npos) {
 		failureReason =
-		    "TMREditorApp startup loading must support --load-recursive/-lr with recursive glob matching.";
+		    "MREditorApp startup loading must support --load-recursive/-lr with recursive glob matching.";
 		return false;
 	}
 	if (appContent.find("patternSuffix.find('/') == std::string::npos") == std::string::npos ||
@@ -3435,15 +3707,15 @@ bool testStartupCliLoadRecursiveGuard(std::string &failureReason) {
 		return false;
 	}
 	if (appContent.find("mrvmProcessArguments()") == std::string::npos) {
-		failureReason = "TMREditorApp startup loading must consume CLI args via mrvmProcessArguments().";
+		failureReason = "MREditorApp startup loading must consume CLI args via mrvmProcessArguments().";
 		return false;
 	}
 	if (appContent.find("static_cast<void>(loadStartupFilesFromCommandLine());") == std::string::npos) {
-		failureReason = "TMREditorApp constructor must load startup files from CLI.";
+		failureReason = "MREditorApp constructor must load startup files from CLI.";
 		return false;
 	}
 	if (appContent.find("createEditorWindow(\"?No-File?\")") != std::string::npos) {
-		failureReason = "TMREditorApp must not create an empty placeholder editor window on startup.";
+		failureReason = "MREditorApp must not create an empty placeholder editor window on startup.";
 		return false;
 	}
 	if (vmHeaderContent.find("mrvmProcessArguments();") == std::string::npos ||
@@ -3512,6 +3784,8 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Startup CLI + recursive load wiring guard", testStartupCliLoadRecursiveGuard);
 	runTest(ctx, "DELAY proc wiring guard", testDelayProcWiringGuard);
 	runTest(ctx, "TVCALL surface guard (MESSAGEBOX only)", testTvCallSurfaceGuard);
+	runTest(ctx, "Screen render facade boundary guard", testScreenRenderFacadeBoundaryGuard);
+	runTest(ctx, "Render sink classification guard", testRenderSinkClassificationGuard);
 }
 
 void runFullSuite(TestContext &ctx) {
@@ -3558,8 +3832,12 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "CREATE_GLOBAL_STR operation + staging guards", testCreateGlobalStrOperation);
 	runTest(ctx, "Startup CLI + recursive load wiring guard", testStartupCliLoadRecursiveGuard);
 	runTest(ctx, "MARQUEE proc wiring guard", testMarqueeProcWiringGuard);
+	runTest(ctx, "Deferred UI mailbox playback guard", testDeferredUiPlaybackMailboxGuard);
+	runTest(ctx, "Deferred UI mutation-epoch guard", testDeferredUiMutationEpochGuard);
 	runTest(ctx, "DELAY proc wiring guard", testDelayProcWiringGuard);
 	runTest(ctx, "TVCALL surface guard (MESSAGEBOX only)", testTvCallSurfaceGuard);
+	runTest(ctx, "Screen render facade boundary guard", testScreenRenderFacadeBoundaryGuard);
+	runTest(ctx, "Render sink classification guard", testRenderSinkClassificationGuard);
 	runTest(ctx, "Marquee color source guard", testMarqueeColorSourceGuard);
 	runTest(ctx, "OTHERCOLORS dedicated message slots guard", testOtherColorsDedicatedMessageSlotsGuard);
 }

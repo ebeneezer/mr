@@ -6,11 +6,11 @@
 #define Uses_TPoint
 #include <tvision/tv.h>
 
-class TMREditWindow;
+class MREditWindow;
 
 class MRWindowManager {
 public:
-    static void handleDragView(TMREditWindow* window, TEvent& event, uchar mode, TRect& limits, TPoint minSize, TPoint maxSize);
+    static void handleDragView(MREditWindow* window, TEvent& event, uchar mode, TRect& limits, TPoint minSize, TPoint maxSize);
 };
 
 #endif

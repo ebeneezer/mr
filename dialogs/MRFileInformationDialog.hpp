@@ -1,8 +1,8 @@
 #ifndef MRFILEINFORMATIONDIALOG_HPP
 #define MRFILEINFORMATIONDIALOG_HPP
 
-class TMREditWindow;
+class MREditWindow;
 
-void showFileInformationDialog(TMREditWindow *win);
+void showFileInformationDialog(MREditWindow *win);
 
 #endif

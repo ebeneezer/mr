@@ -1,10 +1,13 @@
 #define Uses_TGroup
+#define Uses_TProgram
 #define Uses_TScrollBar
 #include <tvision/tv.h>
 
 #include "MRCoprocessorDispatch.hpp"
 
 #include <chrono>
+#include <algorithm>
+#include <deque>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -14,9 +17,9 @@
 
 #include "../mrmac/mrvm.hpp"
 #include "../ui/MRMessageLineController.hpp"
-#include "../ui/TMRFileEditor.hpp"
-#include "../ui/TMRIndicator.hpp"
-#include "../ui/TMREditWindow.hpp"
+#include "../ui/MRFileEditor.hpp"
+#include "../ui/MRIndicator.hpp"
+#include "../ui/MREditWindow.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
 namespace {
@@ -24,6 +27,8 @@ const char *kLineIndexWarmAction = "Line index warming";
 const char *kSyntaxWarmAction = "Syntax warming";
 const char *kMiniMapRenderAction = "Mini map rendering";
 const char *kSaveNormalizationWarmAction = "Save normalization warming";
+constexpr std::size_t kMacroUiPlaybackBudgetCommands = 48;
+const std::chrono::milliseconds kMacroUiPlaybackBudgetSlice(2);
 
 const char *coprocessorLaneName(mr::coprocessor::Lane lane) {
 	switch (lane) {
@@ -69,13 +74,13 @@ std::string externalIoDisplayName(const mr::coprocessor::TaskInfo &task) {
 	return "external command";
 }
 
-void recordTaskPerformance(const mr::coprocessor::Result &result, const std::string &action, TMREditWindow *win,
+void recordTaskPerformance(const mr::coprocessor::Result &result, const std::string &action, MREditWindow *win,
                            std::size_t documentId, std::size_t bytes, const std::string &detail) {
 	mr::performance::recordBackgroundResult(
 	    result, action, win != nullptr ? static_cast<std::size_t>(win->bufferId()) : 0, documentId, bytes, detail);
 }
 
-void recordMacroPerformance(const mr::coprocessor::Result &result, TMREditWindow *win, std::size_t documentId,
+void recordMacroPerformance(const mr::coprocessor::Result &result, MREditWindow *win, std::size_t documentId,
                             std::size_t bytes, const std::string &detail,
                             mr::performance::Outcome outcome = mr::performance::Outcome::Completed) {
 	if (outcome == mr::performance::Outcome::Completed) {
@@ -122,7 +127,7 @@ void appendMacroLogLines(const std::vector<std::string> &logLines) {
 	}
 }
 
-void releaseMacroTask(TMREditWindow *win, const mr::coprocessor::Result &result, const char *state) {
+void releaseMacroTask(MREditWindow *win, const mr::coprocessor::Result &result, const char *state) {
 	int bufferId = win != nullptr ? win->bufferId() : static_cast<int>(result.task.documentId);
 	if (win != nullptr)
 		win->releaseCoprocessorTask(result.task.id);
@@ -151,45 +156,575 @@ const char *deferredUiCommandName(int type) {
 			return "SWITCH_WINDOW";
 		case mrducSizeWindow:
 			return "SIZE_WINDOW";
+		case mrducMarqueeInfo:
+			return "MARQUEE";
+		case mrducMarqueeWarning:
+			return "MARQUEE_WARNING";
+		case mrducMarqueeError:
+			return "MARQUEE_ERROR";
+		case mrducBrain:
+			return "BRAIN";
+		case mrducPutBox:
+			return "PUT_BOX";
+		case mrducWrite:
+			return "WRITE";
+		case mrducClrLine:
+			return "CLR_LINE";
+		case mrducGotoxy:
+			return "GOTOXY";
+		case mrducPutLineNum:
+			return "PUT_LINE_NUM";
+		case mrducPutColNum:
+			return "PUT_COL_NUM";
+		case mrducScrollBoxUp:
+			return "SCROLL_BOX_UP";
+		case mrducScrollBoxDn:
+			return "SCROLL_BOX_DN";
+		case mrducClearScreen:
+			return "CLEAR_SCREEN";
+		case mrducKillBox:
+			return "KILL_BOX";
+		case mrducMessageBox:
+			return "MESSAGEBOX";
+		case mrducDelay:
+			return "DELAY";
 		default:
 			return "UNKNOWN";
 	}
 }
 
-bool applyDeferredUiCommand(const MRMacroDeferredUiCommand &command) {
-	switch (command.type) {
-		case mrducCreateWindow:
-			return mrvmUiCreateWindow();
-		case mrducDeleteWindow:
-			return mrvmUiDeleteCurrentWindow();
-		case mrducModifyWindow:
-			return mrvmUiModifyCurrentWindow();
-		case mrducLinkWindow:
-			return mrvmUiLinkCurrentWindow();
-		case mrducUnlinkWindow:
-			return mrvmUiUnlinkCurrentWindow();
-		case mrducZoom:
-			return mrvmUiZoomCurrentWindow();
-		case mrducRedraw:
-			return mrvmUiRedrawCurrentWindow();
-		case mrducNewScreen:
-			return mrvmUiNewScreen();
-		case mrducSwitchWindow:
-			return mrvmUiSwitchWindow(command.a1);
-		case mrducSizeWindow:
-			return mrvmUiSizeCurrentWindow(command.a1, command.a2, command.a3, command.a4);
-		default:
+struct DeferredUiRenderGateway {
+	static bool renderDeferredCommand(const MRMacroDeferredUiCommand &command) {
+		static constexpr const char *kNoActiveApplicationMessage =
+		    "Deferred UI render failed: no active application.";
+		if (command.type == mrducDelay)
+			return true;
+		if (TProgram::application == nullptr) {
+			mrLogMessage(kNoActiveApplicationMessage);
 			return false;
+		}
+		return mrvmUiRenderFacadeRenderDeferredCommand(command);
+	}
+};
+
+int marqueeKindFromDeferredType(int type) noexcept {
+	switch (type) {
+		case mrducMarqueeWarning:
+			return 1;
+		case mrducMarqueeError:
+			return 2;
+		default:
+			return 0;
+	}
+}
+
+struct MacroScreenModel {
+	struct Cell {
+		char ch;
+		unsigned char attr;
+		bool known;
+
+		Cell() noexcept : ch(' '), attr(0x07), known(false) {
+		}
+
+		Cell(char aCh, unsigned char anAttr, bool isKnown) noexcept
+		    : ch(aCh), attr(anAttr), known(isKnown) {
+		}
+	};
+
+	bool seeded;
+	bool cursorKnown;
+	int cursorX;
+	int cursorY;
+	bool lineNumberKnown;
+	int lineNumber;
+	bool colNumberKnown;
+	int colNumber;
+	bool brainKnown;
+	bool brainEnabled;
+	bool marqueeKnown;
+	int marqueeKind;
+	std::string marqueeText;
+	int screenWidth;
+	int screenHeight;
+	std::vector<Cell> cells;
+
+	MacroScreenModel() noexcept
+	    : seeded(false), cursorKnown(false), cursorX(1), cursorY(1),
+	      lineNumberKnown(false), lineNumber(0), colNumberKnown(false), colNumber(0),
+	      brainKnown(false), brainEnabled(false), marqueeKnown(false), marqueeKind(0),
+	      marqueeText(), screenWidth(0), screenHeight(0), cells() {
+	}
+
+	void seedFromRuntime() {
+		int x = 1;
+		int y = 1;
+		screenWidth = std::max(0, mrvmUiScreenWidth());
+		screenHeight = std::max(0, mrvmUiScreenHeight());
+		if (screenWidth > 0 && screenHeight > 0)
+			cells.assign(static_cast<std::size_t>(screenWidth) * static_cast<std::size_t>(screenHeight), Cell());
+		else
+			cells.clear();
+		if (mrvmUiCursorPosition(x, y)) {
+			cursorKnown = true;
+			cursorX = x;
+			cursorY = y;
+		}
+		seeded = true;
+	}
+
+	void invalidateAfterRenderFailure() {
+		seeded = false;
+		cursorKnown = false;
+		lineNumberKnown = false;
+		colNumberKnown = false;
+		brainKnown = false;
+		marqueeKnown = false;
+		screenWidth = 0;
+		screenHeight = 0;
+		cells.clear();
+	}
+
+	[[nodiscard]] bool hasGrid() const noexcept {
+		return screenWidth > 0 && screenHeight > 0 &&
+		       cells.size() == static_cast<std::size_t>(screenWidth) * static_cast<std::size_t>(screenHeight);
+	}
+
+	[[nodiscard]] static unsigned char composeAttribute(int bgColor, int fgColor) noexcept {
+		if ((bgColor & 0xFF) == 0)
+			return static_cast<unsigned char>(fgColor & 0xFF);
+		return static_cast<unsigned char>(((bgColor & 0x0F) << 4) | (fgColor & 0x0F));
+	}
+
+	[[nodiscard]] static int marqueeKindFor(int type) noexcept {
+		return marqueeKindFromDeferredType(type);
+	}
+
+	[[nodiscard]] std::size_t indexFor(int x, int y) const noexcept {
+		return static_cast<std::size_t>(y) * static_cast<std::size_t>(screenWidth) +
+		       static_cast<std::size_t>(x);
+	}
+
+	bool writeCell(int x, int y, char ch, unsigned char attr) {
+		Cell &cell = cells[indexFor(x, y)];
+		const bool changed = !cell.known || cell.ch != ch || cell.attr != attr;
+		cell.ch = ch;
+		cell.attr = attr;
+		cell.known = true;
+		return changed;
+	}
+
+	bool copyCell(int dstX, int dstY, int srcX, int srcY) {
+		Cell &dst = cells[indexFor(dstX, dstY)];
+		const Cell src = cells[indexFor(srcX, srcY)];
+		const bool changed = dst.known != src.known || dst.ch != src.ch || dst.attr != src.attr;
+		dst = src;
+		return changed;
+	}
+
+	bool fillRect(int x1, int y1, int x2, int y2, char ch, unsigned char attr) {
+		bool changed = false;
+		for (int y = y1; y <= y2; ++y)
+			for (int x = x1; x <= x2; ++x)
+				changed = writeCell(x, y, ch, attr) || changed;
+		return changed;
+	}
+
+	bool applyClearScreen(const MRMacroDeferredUiCommand &command) {
+		const unsigned char attr = static_cast<unsigned char>(command.a1 & 0xFF);
+		if (!hasGrid()) {
+			cursorKnown = true;
+			cursorX = 1;
+			cursorY = 1;
+			lineNumberKnown = false;
+			lineNumber = 0;
+			colNumberKnown = false;
+			colNumber = 0;
+			return true;
+		}
+
+		bool changed = false;
+		for (std::size_t i = 0; i < cells.size(); ++i)
+			changed = writeCell(static_cast<int>(i % static_cast<std::size_t>(screenWidth)),
+			                    static_cast<int>(i / static_cast<std::size_t>(screenWidth)),
+			                    ' ', attr) || changed;
+		cursorKnown = true;
+		cursorX = 1;
+		cursorY = 1;
+		lineNumberKnown = false;
+		lineNumber = 0;
+		colNumberKnown = false;
+		colNumber = 0;
+		return changed;
+	}
+
+	bool applyWrite(const MRMacroDeferredUiCommand &command) {
+		if (!hasGrid())
+			return true;
+
+		const int y = command.a2 - 1;
+		if (y < 0 || y >= screenHeight)
+			return false;
+
+		const unsigned char attr = composeAttribute(command.a3, command.a4);
+		bool changed = false;
+		for (std::size_t i = 0; i < command.text.size(); ++i) {
+			const int x = command.a1 - 1 + static_cast<int>(i);
+			if (x < 0)
+				continue;
+			if (x >= screenWidth)
+				break;
+			changed = writeCell(x, y, command.text[i], attr) || changed;
+		}
+		return changed;
+	}
+
+	bool applyPutBox(const MRMacroDeferredUiCommand &command) {
+		if (!hasGrid())
+			return true;
+
+		int x1 = command.a1 - 1;
+		int y1 = command.a2 - 1;
+		int x2 = command.a3 - 1;
+		int y2 = command.a4 - 1;
+		const unsigned char attr = composeAttribute(command.a5, command.a6);
+		const bool shadow = command.a7 != 0;
+		bool changed = false;
+		std::string title = command.text;
+
+		if (x1 > x2)
+			std::swap(x1, x2);
+		if (y1 > y2)
+			std::swap(y1, y2);
+		x1 = std::max(0, std::min(x1, screenWidth - 1));
+		x2 = std::max(0, std::min(x2, screenWidth - 1));
+		y1 = std::max(0, std::min(y1, screenHeight - 1));
+		y2 = std::max(0, std::min(y2, screenHeight - 1));
+		if (x1 > x2 || y1 > y2)
+			return false;
+
+		changed = fillRect(x1, y1, x2, y2, ' ', attr) || changed;
+		for (int x = x1 + 1; x < x2; ++x) {
+			changed = writeCell(x, y1, '-', attr) || changed;
+			changed = writeCell(x, y2, '-', attr) || changed;
+		}
+		for (int y = y1 + 1; y < y2; ++y) {
+			changed = writeCell(x1, y, '|', attr) || changed;
+			changed = writeCell(x2, y, '|', attr) || changed;
+		}
+		changed = writeCell(x1, y1, '+', attr) || changed;
+		changed = writeCell(x2, y1, '+', attr) || changed;
+		changed = writeCell(x1, y2, '+', attr) || changed;
+		changed = writeCell(x2, y2, '+', attr) || changed;
+
+		if (!title.empty() && x2 - x1 >= 2) {
+			const int maxTitleLen = x2 - x1 - 1;
+			if (maxTitleLen > 0) {
+				if (static_cast<int>(title.size()) > maxTitleLen)
+					title = title.substr(0, static_cast<std::size_t>(maxTitleLen));
+				const int startX = x1 + 1 + std::max(0, (maxTitleLen - static_cast<int>(title.size())) / 2);
+				for (std::size_t i = 0; i < title.size(); ++i) {
+					const int x = startX + static_cast<int>(i);
+					if (x >= x1 + 1 && x <= x2 - 1)
+						changed = writeCell(x, y1, title[i], attr) || changed;
+				}
+			}
+		}
+
+		if (shadow) {
+			if (x2 + 1 < screenWidth)
+				changed = fillRect(x2 + 1, y1 + 1, x2 + 1, y2 + 1, ' ', 0x08) || changed;
+			if (y2 + 1 < screenHeight)
+				changed = fillRect(x1 + 1, y2 + 1, x2 + 1, y2 + 1, ' ', 0x08) || changed;
+		}
+
+		return changed;
+	}
+
+	bool applyClrLine() {
+		if (!cursorKnown || !hasGrid())
+			return true;
+
+		const int y = std::max(0, std::min(cursorY - 1, screenHeight - 1));
+		unsigned char attr = 0x07;
+		const Cell &rowHead = cells[indexFor(0, y)];
+		if (rowHead.known)
+			attr = rowHead.attr;
+		return fillRect(0, y, screenWidth - 1, y, ' ', attr);
+	}
+
+	bool applyClrLine(const MRMacroDeferredUiCommand &command) {
+		if (command.a3 <= 0)
+			return applyClrLine();
+		if (!hasGrid())
+			return true;
+
+		int x = command.a1 - 1;
+		const int y = command.a2 - 1;
+		int count = command.a3;
+		if (y < 0 || y >= screenHeight || count <= 0)
+			return false;
+		if (x < 0) {
+			count += x;
+			x = 0;
+		}
+		if (x >= screenWidth || count <= 0)
+			return false;
+		count = std::min(count, screenWidth - x);
+
+		unsigned char attr = 0x07;
+		const Cell &rowHead = cells[indexFor(0, y)];
+		if (rowHead.known)
+			attr = rowHead.attr;
+		return fillRect(x, y, x + count - 1, y, ' ', attr);
+	}
+
+	bool applyGotoxy(const MRMacroDeferredUiCommand &command) {
+		int x = command.a1;
+		int y = command.a2;
+		if (screenWidth > 0)
+			x = std::max(1, std::min(x, screenWidth));
+		if (screenHeight > 0)
+			y = std::max(1, std::min(y, screenHeight));
+		const bool changed = !cursorKnown || cursorX != x || cursorY != y;
+		cursorKnown = true;
+		cursorX = x;
+		cursorY = y;
+		return changed;
+	}
+
+	bool applyPutLineNum(const MRMacroDeferredUiCommand &command) {
+		const bool changed = !lineNumberKnown || lineNumber != command.a1;
+		lineNumberKnown = true;
+		lineNumber = command.a1;
+		return changed;
+	}
+
+	bool applyPutColNum(const MRMacroDeferredUiCommand &command) {
+		const bool changed = !colNumberKnown || colNumber != command.a1;
+		colNumberKnown = true;
+		colNumber = command.a1;
+		return changed;
+	}
+
+	bool applyScroll(const MRMacroDeferredUiCommand &command, bool down) {
+		if (!hasGrid())
+			return true;
+
+		int x1 = command.a1 - 1;
+		int y1 = command.a2 - 1;
+		int x2 = command.a3 - 1;
+		int y2 = command.a4 - 1;
+		const unsigned char attr = static_cast<unsigned char>(command.a5 & 0xFF);
+		bool changed = false;
+
+		if (x1 > x2)
+			std::swap(x1, x2);
+		if (y1 > y2)
+			std::swap(y1, y2);
+		x1 = std::max(0, std::min(x1, screenWidth - 1));
+		x2 = std::max(0, std::min(x2, screenWidth - 1));
+		y1 = std::max(0, std::min(y1, screenHeight - 1));
+		y2 = std::max(0, std::min(y2, screenHeight - 1));
+		if (x1 > x2 || y1 > y2)
+			return false;
+
+		if (y2 - y1 + 1 <= 1)
+			return fillRect(x1, y1, x2, y2, ' ', attr);
+
+		if (down) {
+			for (int y = y2; y > y1; --y)
+				for (int x = x1; x <= x2; ++x)
+					changed = copyCell(x, y, x, y - 1) || changed;
+			changed = fillRect(x1, y1, x2, y1, ' ', attr) || changed;
+		} else {
+			for (int y = y1; y < y2; ++y)
+				for (int x = x1; x <= x2; ++x)
+					changed = copyCell(x, y, x, y + 1) || changed;
+			changed = fillRect(x1, y2, x2, y2, ' ', attr) || changed;
+		}
+		return changed;
+	}
+
+	bool applyMarquee(const MRMacroDeferredUiCommand &command) {
+		const int nextKind = marqueeKindFor(command.type);
+		const bool changed = !marqueeKnown || marqueeKind != nextKind || marqueeText != command.text;
+		marqueeKnown = true;
+		marqueeKind = nextKind;
+		marqueeText = command.text;
+		return changed;
+	}
+
+	bool applyBrain(const MRMacroDeferredUiCommand &command) {
+		const bool enabled = command.a1 != 0;
+		const bool changed = !brainKnown || brainEnabled != enabled;
+		brainKnown = true;
+		brainEnabled = enabled;
+		return changed;
+	}
+
+	bool shouldRenderAndProject(const MRMacroDeferredUiCommand &command) {
+		switch (command.type) {
+			case mrducMarqueeInfo:
+			case mrducMarqueeWarning:
+			case mrducMarqueeError:
+				return applyMarquee(command);
+			case mrducBrain:
+				return applyBrain(command);
+			case mrducGotoxy:
+				return applyGotoxy(command);
+			case mrducPutLineNum:
+				return applyPutLineNum(command);
+			case mrducPutColNum:
+				return applyPutColNum(command);
+			case mrducWrite:
+				return applyWrite(command);
+			case mrducPutBox:
+				return applyPutBox(command);
+			case mrducClrLine:
+				return applyClrLine(command);
+			case mrducScrollBoxUp:
+				return applyScroll(command, false);
+			case mrducScrollBoxDn:
+				return applyScroll(command, true);
+			case mrducClearScreen:
+				return applyClearScreen(command);
+			case mrducKillBox:
+			case mrducMessageBox:
+				return true;
+			default:
+				return true;
+		}
+	}
+};
+
+struct MacroScreenView {
+	static bool render(const MRMacroDeferredUiCommand &command) {
+		return DeferredUiRenderGateway::renderDeferredCommand(command);
+	}
+};
+
+struct DeferredMacroUiPlayback {
+	std::size_t documentId;
+	std::string displayName;
+	std::vector<MRMacroDeferredUiCommand> commands;
+	std::size_t nextIndex;
+	std::size_t appliedCount;
+	std::size_t skippedCount;
+	std::size_t failedCount;
+	std::uint64_t observedScreenEpoch;
+	bool waitingForDelay;
+	std::chrono::steady_clock::time_point resumeAfter;
+	MacroScreenModel screenModel;
+
+	DeferredMacroUiPlayback(std::size_t aDocumentId, std::string aDisplayName,
+	                        std::vector<MRMacroDeferredUiCommand> aCommands)
+	    : documentId(aDocumentId), displayName(std::move(aDisplayName)),
+	      commands(std::move(aCommands)), nextIndex(0), appliedCount(0), skippedCount(0),
+	      failedCount(0), observedScreenEpoch(0), waitingForDelay(false),
+	      resumeAfter(std::chrono::steady_clock::time_point::min()),
+	      screenModel() {
+	}
+};
+
+std::deque<DeferredMacroUiPlayback> g_deferredMacroUiPlaybackQueue;
+
+void queueDeferredMacroUiPlayback(std::size_t documentId, const std::string &displayName,
+                                  const std::vector<MRMacroDeferredUiCommand> &commands) {
+	if (commands.empty())
+		return;
+	g_deferredMacroUiPlaybackQueue.emplace_back(documentId, displayName, commands);
+}
+
+void logDeferredMacroUiPlaybackSummary(const DeferredMacroUiPlayback &playback) {
+	std::ostringstream summary;
+	summary << "Deferred UI playback '" << playback.displayName << "' finished: applied="
+	        << playback.appliedCount << ", skipped=" << playback.skippedCount
+	        << ", failed=" << playback.failedCount << ".";
+	mrLogMessage(summary.str().c_str());
+}
+
+void pumpDeferredMacroUiPlaybackImpl() {
+	const auto deadline = std::chrono::steady_clock::now() + kMacroUiPlaybackBudgetSlice;
+	std::size_t remainingCommands = kMacroUiPlaybackBudgetCommands;
+
+	while (!g_deferredMacroUiPlaybackQueue.empty() && remainingCommands > 0 &&
+	       std::chrono::steady_clock::now() < deadline) {
+		DeferredMacroUiPlayback &playback = g_deferredMacroUiPlaybackQueue.front();
+		MREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(playback.documentId));
+
+		if (playback.waitingForDelay) {
+			if (std::chrono::steady_clock::now() < playback.resumeAfter)
+				break;
+			playback.waitingForDelay = false;
+			playback.resumeAfter = std::chrono::steady_clock::time_point::min();
+		}
+		{
+			const std::uint64_t liveEpoch = mrvmUiScreenMutationEpoch();
+			if (playback.observedScreenEpoch == 0)
+				playback.observedScreenEpoch = liveEpoch;
+			else if (liveEpoch != playback.observedScreenEpoch) {
+				playback.screenModel.invalidateAfterRenderFailure();
+				playback.observedScreenEpoch = liveEpoch;
+			}
+		}
+		if (!playback.screenModel.seeded)
+			playback.screenModel.seedFromRuntime();
+		if (targetWindow != nullptr)
+			mrvmUiSetCurrentWindow(targetWindow);
+
+		while (playback.nextIndex < playback.commands.size() && remainingCommands > 0 &&
+		       std::chrono::steady_clock::now() < deadline) {
+			const MRMacroDeferredUiCommand &command = playback.commands[playback.nextIndex];
+			++playback.nextIndex;
+			--remainingCommands;
+
+			if (command.type == mrducDelay) {
+				const int millis = std::max(0, command.a1);
+				if (millis > 0) {
+					playback.waitingForDelay = true;
+					playback.resumeAfter = std::chrono::steady_clock::now() +
+					                       std::chrono::milliseconds(millis);
+				}
+				break;
+			}
+			if (!playback.screenModel.shouldRenderAndProject(command)) {
+				++playback.skippedCount;
+				continue;
+			}
+			if (MacroScreenView::render(command)) {
+				++playback.appliedCount;
+				playback.observedScreenEpoch = mrvmUiScreenMutationEpoch();
+				continue;
+			}
+			++playback.failedCount;
+			playback.screenModel.invalidateAfterRenderFailure();
+			playback.observedScreenEpoch = mrvmUiScreenMutationEpoch();
+			mrLogMessage((std::string("Deferred UI command failed: ") +
+			              deferredUiCommandName(command.type))
+			                 .c_str());
+		}
+
+		if (playback.nextIndex >= playback.commands.size() && !playback.waitingForDelay) {
+			logDeferredMacroUiPlaybackSummary(playback);
+			g_deferredMacroUiPlaybackQueue.pop_front();
+			continue;
+		}
+		break;
 	}
 }
 } // namespace
+
+void pumpDeferredMacroUiPlayback() {
+	pumpDeferredMacroUiPlaybackImpl();
+}
 
 void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 	if (result.completed()) {
 		const mr::coprocessor::IndicatorBlinkPayload *blink =
 		    dynamic_cast<const mr::coprocessor::IndicatorBlinkPayload *>(result.payload.get());
 		if (blink != nullptr) {
-			TMRIndicator::applyBlinkUpdate(blink->indicatorId, blink->channel, blink->generation,
+			MRIndicator::applyBlinkUpdate(blink->indicatorId, blink->channel, blink->generation,
 			                               blink->visible);
 			return;
 		}
@@ -197,10 +732,10 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 		const mr::coprocessor::LineIndexWarmupPayload *warmup =
 		    dynamic_cast<const mr::coprocessor::LineIndexWarmupPayload *>(result.payload.get());
 		if (warmup != nullptr) {
-			std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+			std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 			bool recorded = false;
 			for (auto & window : windows) {
-				TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+				MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 				if (editor == nullptr)
 					continue;
 				if (editor->documentId() != result.task.documentId) {
@@ -227,10 +762,10 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			const mr::coprocessor::SyntaxWarmupPayload *syntax =
 			    dynamic_cast<const mr::coprocessor::SyntaxWarmupPayload *>(result.payload.get());
 			if (syntax != nullptr) {
-			std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+			std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 			bool recorded = false;
 			for (auto & window : windows) {
-				TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+				MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 				if (editor == nullptr)
 					continue;
 				if (editor->documentId() != result.task.documentId) {
@@ -257,11 +792,11 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			const mr::coprocessor::MiniMapWarmupPayload *miniMap =
 			    dynamic_cast<const mr::coprocessor::MiniMapWarmupPayload *>(result.payload.get());
 			if (miniMap != nullptr) {
-				std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+				std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 				bool recorded = false;
 				bool postedHero = false;
 				for (auto &window : windows) {
-					TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+					MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 					if (editor == nullptr)
 						continue;
 					if (editor->documentId() != result.task.documentId) {
@@ -296,10 +831,10 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			const mr::coprocessor::SaveNormalizationWarmupPayload *saveNormalization =
 			    dynamic_cast<const mr::coprocessor::SaveNormalizationWarmupPayload *>(result.payload.get());
 			if (saveNormalization != nullptr) {
-				std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+				std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 				bool recorded = false;
 				for (auto & window : windows) {
-					TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+					MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 					if (editor == nullptr)
 						continue;
 					if (editor->documentId() != result.task.documentId) {
@@ -328,7 +863,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 		const mr::coprocessor::ExternalIoChunkPayload *chunk =
 		    dynamic_cast<const mr::coprocessor::ExternalIoChunkPayload *>(result.payload.get());
 		if (chunk != nullptr) {
-			TMREditWindow *win = findEditWindowByBufferId(static_cast<int>(chunk->channelId));
+			MREditWindow *win = findEditWindowByBufferId(static_cast<int>(chunk->channelId));
 			if (win != nullptr) {
 				win->appendTextBuffer(chunk->text.c_str());
 				win->setReadOnly(true);
@@ -341,7 +876,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 		    dynamic_cast<const mr::coprocessor::ExternalIoFinishedPayload *>(result.payload.get());
 		if (finished != nullptr) {
 			std::ostringstream statusLine;
-			TMREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(finished->channelId));
+			MREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(finished->channelId));
 			if (targetWindow != nullptr) {
 				std::string exitLine = communicationExitLine(*finished);
 				targetWindow->appendTextBuffer(exitLine.c_str());
@@ -370,8 +905,8 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 		    dynamic_cast<const mr::coprocessor::MacroJobStagedPayload *>(result.payload.get());
 		if (staged != nullptr) {
 			std::ostringstream statusLine;
-			TMREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
-			TMRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
+			MREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
+			MRFileEditor *targetEditor = targetWindow != nullptr ? targetWindow->getEditor() : nullptr;
 			bool accepted = false;
 			bool textChanged = false;
 			std::size_t currentVersion = 0;
@@ -379,7 +914,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 
 			if (targetWindow != nullptr && targetEditor != nullptr) {
 				currentVersion = targetEditor->documentVersion();
-				TMRTextBufferModel::CommitResult commit = targetEditor->applyStagedTransaction(
+				MRTextBufferModel::CommitResult commit = targetEditor->applyStagedTransaction(
 				    staged->transaction, staged->cursorOffset, staged->selectionStart,
 				    staged->selectionEnd, staged->fileChanged);
 				if (!commit.conflicted()) {
@@ -419,26 +954,12 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 					targetWindow->noteBackgroundMacroCompleted(statusSummary);
 				releaseMacroTask(targetWindow, result, textChanged ? "committed" : "state-only");
 				if (!staged->deferredUiCommands.empty()) {
-					TMREditWindow *applyWin =
-					    findEditWindowByBufferId(static_cast<int>(result.task.documentId));
-					std::size_t applied = 0;
-					std::size_t failed = 0;
-					if (applyWin != nullptr)
-						mrvmUiSetCurrentWindow(applyWin);
-					for (const auto & deferredUiCommand : staged->deferredUiCommands) {
-						if (applyDeferredUiCommand(deferredUiCommand))
-							++applied;
-						else {
-							std::string line = std::string("Deferred UI command failed: ") +
-							                   deferredUiCommandName(deferredUiCommand.type);
-							mrLogMessage(line.c_str());
-							++failed;
-						}
-					}
+					queueDeferredMacroUiPlayback(result.task.documentId, staged->displayName,
+					                             staged->deferredUiCommands);
 					{
 						std::ostringstream uiLine;
-						uiLine << "Applied deferred UI commands for macro '" << staged->displayName
-						       << "': ok=" << applied << ", failed=" << failed << ".";
+						uiLine << "Queued deferred UI playback for macro '" << staged->displayName
+						       << "': " << staged->deferredUiCommands.size() << " command(s).";
 						mrLogMessage(uiLine.str().c_str());
 					}
 				}
@@ -462,7 +983,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 		}
 		if (macro != nullptr) {
 			std::ostringstream statusLine;
-			TMREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
+			MREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
 			std::string statusSummary;
 
 			recordMacroPerformance(result, targetWindow, targetWindow != nullptr ? targetWindow->documentId() : 0,
@@ -483,7 +1004,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 	}
 
 	if (result.task.kind == mr::coprocessor::TaskKind::ExternalIo) {
-		TMREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
+		MREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
 		if (targetWindow != nullptr) {
 			targetWindow->releaseCoprocessorTask(result.task.id);
 			if (result.cancelled()) {
@@ -508,7 +1029,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 	}
 
 	if (result.task.kind == mr::coprocessor::TaskKind::MacroJob) {
-		TMREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
+		MREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(result.task.documentId));
 		std::string displayName = macroDisplayName(result.task);
 		std::string statusSummary;
 
@@ -543,10 +1064,10 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 	}
 
 	if (result.task.kind == mr::coprocessor::TaskKind::LineIndexWarmup) {
-		std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+		std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 		bool recorded = false;
 		for (auto & window : windows) {
-			TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+			MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 			if (editor == nullptr)
 				continue;
 			if (!recorded && editor->documentId() == result.task.documentId) {
@@ -561,10 +1082,10 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 	}
 
 	if (result.task.kind == mr::coprocessor::TaskKind::SyntaxWarmup) {
-		std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+		std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 		bool recorded = false;
 		for (auto & window : windows) {
-			TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+			MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 			if (editor == nullptr)
 				continue;
 			if (!recorded && editor->documentId() == result.task.documentId) {
@@ -579,10 +1100,10 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 	}
 
 	if (result.task.kind == mr::coprocessor::TaskKind::MiniMapWarmup) {
-		std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+		std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 		bool recorded = false;
 		for (auto &window : windows) {
-			TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+			MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 			if (editor == nullptr)
 				continue;
 			if (!recorded && editor->documentId() == result.task.documentId) {
@@ -597,10 +1118,10 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 	}
 
 	if (result.task.kind == mr::coprocessor::TaskKind::SaveNormalizationWarmup) {
-		std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+		std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 		bool recorded = false;
 		for (auto &window : windows) {
-			TMRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+			MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 			if (editor == nullptr)
 				continue;
 			if (!recorded && editor->documentId() == result.task.documentId) {

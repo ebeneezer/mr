@@ -1,5 +1,5 @@
-#ifndef TMRMENUBAR_HPP
-#define TMRMENUBAR_HPP
+#ifndef MRMENUBAR_HPP
+#define MRMENUBAR_HPP
 #define Uses_TMenuBar
 #define Uses_TDrawBuffer
 #include "MRPalette.hpp"
@@ -8,7 +8,7 @@
 #include <chrono>
 #include <string>
 
-class TMRMenuBar : public TMenuBar {
+class MRMenuBar : public TMenuBar {
   public:
 	enum class MarqueeKind : unsigned char {
 		Info,
@@ -18,7 +18,7 @@ class TMRMenuBar : public TMenuBar {
 		Hero
 	};
 
-	TMRMenuBar(const TRect &r, TSubMenu &aMenu)
+	MRMenuBar(const TRect &r, TSubMenu &aMenu)
 	    : TMenuBar(r, aMenu), rightStatus_(), autoMarqueeStatus_(), manualMarqueeStatus_(),
 	      autoMarqueeKind_(MarqueeKind::Info) {
 	}

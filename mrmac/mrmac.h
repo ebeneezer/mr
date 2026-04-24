@@ -47,6 +47,9 @@
 #define OP_NOT 0x62
 #define OP_SHL 0x63
 #define OP_SHR 0x64
+#define OP_BIT_AND 0x65
+#define OP_BIT_OR 0x66
+#define OP_BIT_XOR 0x67
 
 /* Multi-Edit data types */
 #define TYPE_INT 1

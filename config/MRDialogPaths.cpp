@@ -305,15 +305,17 @@ void addHistoryEntry(std::vector<MRDialogHistoryEntry> &entries, const std::stri
 	trimHistoryToLimit(entries, limit);
 }
 
-void addSerializedHistoryEntry(std::vector<MRDialogHistoryEntry> &entries, const std::string &value, int limit) {
-	const std::string normalized = normalizeConfiguredPathInput(value);
+void addSerializedHistoryEntry(std::vector<MRDialogHistoryEntry> &entries, const std::string &value, int limit,
+                               bool normalizeAsPath) {
+	const std::string prepared =
+	    normalizeAsPath ? normalizeConfiguredPathInput(value) : trimAscii(value);
 
-	if (normalized.empty())
+	if (prepared.empty())
 		return;
 	for (const MRDialogHistoryEntry &entry : entries)
-		if (entry.value == normalized)
+		if (entry.value == prepared)
 			return;
-	entries.push_back(MRDialogHistoryEntry{normalized, nextHistoryEpoch()});
+	entries.push_back(MRDialogHistoryEntry{prepared, nextHistoryEpoch()});
 	trimHistoryToLimit(entries, limit);
 }
 
@@ -653,7 +655,6 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
 	{"MULTI_FILESPEC_HISTORY", MRSettingsKeyClass::Global, false},
 	{"MULTI_PATH_HISTORY", MRSettingsKeyClass::Global, false},
 		{"VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
-		{"CYCLIC_VIRTUAL_DESKTOP", MRSettingsKeyClass::Global, false},
 		{"CYCLIC_VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
 		{"CURSOR_POSITION_MARKER", MRSettingsKeyClass::Global, true},
 		{"AUTOLOAD_WORKSPACE", MRSettingsKeyClass::Global, true},
@@ -994,7 +995,8 @@ bool parseColorListLiteral(const std::string &literal, std::array<unsigned char,
 	std::size_t itemIndex = 0;
 	std::array<unsigned char, N> parsed;
 
-	if (text.rfind("v1:", 0) == 0 || text.rfind("V1:", 0) == 0)
+	if (text.size() >= 3 && (text[0] == 'v' || text[0] == 'V') &&
+	    std::isdigit(static_cast<unsigned char>(text[1])) && text[2] == ':')
 		text = text.substr(3);
 	if (text.empty())
 		return setError(errorMessage, "Empty color list.");
@@ -1131,7 +1133,8 @@ bool parseMenuDialogColorListLiteral(
 	std::vector<unsigned char> parsed;
 	unsigned char value = 0;
 
-	if (text.rfind("v1:", 0) == 0 || text.rfind("V1:", 0) == 0)
+	if (text.size() >= 3 && (text[0] == 'v' || text[0] == 'V') &&
+	    std::isdigit(static_cast<unsigned char>(text[1])) && text[2] == ':')
 		text = text.substr(3);
 	if (text.empty())
 		return setError(errorMessage, "Empty color list.");
@@ -1207,7 +1210,8 @@ bool parseOtherColorListLiteral(const std::string &literal,
 	std::vector<unsigned char> parsed;
 	unsigned char value = 0;
 
-	if (text.rfind("v1:", 0) == 0 || text.rfind("V1:", 0) == 0)
+	if (text.size() >= 3 && (text[0] == 'v' || text[0] == 'V') &&
+	    std::isdigit(static_cast<unsigned char>(text[1])) && text[2] == ':')
 		text = text.substr(3);
 	if (text.empty())
 		return setError(errorMessage, "Empty color list.");
@@ -1298,7 +1302,7 @@ bool parseThemeSetupAssignments(const std::string &source, std::map<std::string,
 		std::string value = unescapeMrmacSingleQuotedLiteral((*it)[2].str());
 
 		if (allowed.find(key) == allowed.end())
-			return setError(errorMessage, "Theme file contains unsupported MRSETUP key: " + key);
+			continue;
 		assignments[key] = value;
 	}
 	for (const std::string &key : required)
@@ -2959,7 +2963,7 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 					errorMessage->clear();
 				return true;
 			}
-				if (upper == "CYCLIC_VIRTUAL_DESKTOP" || upper == "CYCLIC_VIRTUAL_DESKTOPS") {
+				if (upper == "CYCLIC_VIRTUAL_DESKTOPS") {
 					bool parsed = false;
 					if (!parseBooleanLiteral(value, parsed, errorMessage))
 						return false;
@@ -2993,26 +2997,26 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				return setConfiguredFileHistoryLimitValue(parsed, errorMessage);
 			}
 			if (upper == "PATH_HISTORY") {
-				addSerializedHistoryEntry(configuredPathHistoryStorage(), value, configuredPathHistoryLimit());
+				addSerializedHistoryEntry(configuredPathHistoryStorage(), value, configuredPathHistoryLimit(), true);
 				if (errorMessage != nullptr)
 					errorMessage->clear();
 				return true;
 			}
 			if (upper == "FILE_HISTORY") {
-				addSerializedHistoryEntry(configuredFileHistoryStorage(), value, configuredFileHistoryLimit());
+				addSerializedHistoryEntry(configuredFileHistoryStorage(), value, configuredFileHistoryLimit(), true);
 				if (errorMessage != nullptr)
 					errorMessage->clear();
 				return true;
 			}
 			if (upper == "MULTI_FILESPEC_HISTORY") {
 				addSerializedHistoryEntry(configuredMultiFilespecHistoryStorage(), value,
-				                          configuredFileHistoryLimit());
+				                          configuredFileHistoryLimit(), false);
 				if (errorMessage != nullptr)
 					errorMessage->clear();
 				return true;
 			}
 			if (upper == "MULTI_PATH_HISTORY") {
-				addSerializedHistoryEntry(configuredMultiPathHistoryStorage(), value, configuredPathHistoryLimit());
+				addSerializedHistoryEntry(configuredMultiPathHistoryStorage(), value, configuredPathHistoryLimit(), true);
 				if (errorMessage != nullptr)
 					errorMessage->clear();
 				return true;

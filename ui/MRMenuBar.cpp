@@ -6,13 +6,15 @@
 #define Uses_TSubMenu
 #include <tvision/tv.h>
 
-#include "TMRMenuBar.hpp"
+#include "MRMenuBar.hpp"
 
 #include <algorithm>
 #include <string>
 
 #include "../app/MRCommands.hpp"
 #include "../config/MRDialogPaths.hpp"
+
+void mrvmUiInvalidateScreenBase() noexcept;
 
 namespace {
 TMenuItem *findMenuItemByCommand(TMenu *menu, ushort command) {
@@ -29,7 +31,7 @@ TMenuItem *findMenuItemByCommand(TMenu *menu, ushort command) {
 }
 } // namespace
 
-void TMRMenuBar::setPersistentBlocksMenuState(bool enabled) {
+void MRMenuBar::setPersistentBlocksMenuState(bool enabled) {
 	const std::string wantedLabel = enabled ? "~P~ersistent blocks [ON]" : "~P~ersistent blocks [OFF]";
 	TMenuItem *item = findMenuItemByCommand(menu, cmMrBlockPersistent);
 
@@ -42,7 +44,7 @@ void TMRMenuBar::setPersistentBlocksMenuState(bool enabled) {
 	drawView();
 }
 
-void TMRMenuBar::tickMarquee() {
+void MRMenuBar::tickMarquee() {
 	const int textLen = static_cast<int>(marqueeActiveText_.size());
 	auto now = std::chrono::steady_clock::now();
 	const int visibleSpan = marqueeVisibleSpanFor(marqueeActiveText_, marqueeLaneWidth_);
@@ -167,7 +169,7 @@ void TMRMenuBar::tickMarquee() {
 	drawView();
 }
 
-void TMRMenuBar::draw() {
+void MRMenuBar::draw() {
 	TAttrPair color;
 	short x, l;
 	TMenuItem *p;
@@ -396,4 +398,5 @@ void TMRMenuBar::draw() {
 	}
 
 	writeBuf(0, 0, size.x, 1, b);
+	mrvmUiInvalidateScreenBase();
 }

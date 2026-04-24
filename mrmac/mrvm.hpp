@@ -12,7 +12,7 @@
 
 #include "MRTextDocument.hpp"
 
-class TMREditWindow;
+class MREditWindow;
 
 class VirtualMachine {
   public:
@@ -33,6 +33,7 @@ class VirtualMachine {
 	bool logTruncated;
 	bool asyncDelayPending_;
 	bool asyncDelayReady_;
+	bool asyncDelayEnabled_;
 	std::vector<unsigned char> asyncBytecode_;
 	std::size_t asyncLength_;
 	std::size_t asyncIp_;
@@ -67,6 +68,9 @@ class VirtualMachine {
 	void executeAt(const unsigned char *bytecode, size_t length, size_t entryOffset,
 	               const std::string &parameterString, const std::string &macroName,
 	               bool resetState, bool firstRun);
+	void setAsyncDelayEnabled(bool enabled) noexcept {
+		asyncDelayEnabled_ = enabled;
+	}
 	bool hasPendingDelay() const noexcept {
 		return asyncDelayPending_;
 	}
@@ -139,7 +143,23 @@ enum MRMacroDeferredUiCommandType {
 	mrducRedraw,
 	mrducNewScreen,
 	mrducSwitchWindow,
-	mrducSizeWindow
+	mrducSizeWindow,
+	mrducMarqueeInfo,
+	mrducMarqueeWarning,
+	mrducMarqueeError,
+	mrducBrain,
+	mrducPutBox,
+	mrducWrite,
+	mrducClrLine,
+	mrducGotoxy,
+	mrducPutLineNum,
+	mrducPutColNum,
+	mrducScrollBoxUp,
+	mrducScrollBoxDn,
+	mrducClearScreen,
+	mrducKillBox,
+	mrducMessageBox,
+	mrducDelay
 };
 
 struct MRMacroDeferredUiCommand {
@@ -148,13 +168,25 @@ struct MRMacroDeferredUiCommand {
 	int a2;
 	int a3;
 	int a4;
+	int a5;
+	int a6;
+	int a7;
+	int a8;
+	std::string text;
 
-	MRMacroDeferredUiCommand() noexcept : type(mrducNone), a1(0), a2(0), a3(0), a4(0) {
+	MRMacroDeferredUiCommand() noexcept
+	    : type(mrducNone), a1(0), a2(0), a3(0), a4(0), a5(0), a6(0), a7(0), a8(0), text() {
 	}
 
 	MRMacroDeferredUiCommand(int aType, int arg1 = 0, int arg2 = 0, int arg3 = 0,
 	                         int arg4 = 0) noexcept
-	    : type(aType), a1(arg1), a2(arg2), a3(arg3), a4(arg4) {
+	    : type(aType), a1(arg1), a2(arg2), a3(arg3), a4(arg4), a5(0), a6(0), a7(0), a8(0), text() {
+	}
+
+	MRMacroDeferredUiCommand(int aType, int arg1, int arg2, int arg3, int arg4, int arg5, int arg6,
+	                         int arg7, int arg8, const std::string &aText = std::string())
+	    : type(aType), a1(arg1), a2(arg2), a3(arg3), a4(arg4), a5(arg5), a6(arg6), a7(arg7), a8(arg8),
+	      text(aText) {
 	}
 };
 
@@ -198,6 +230,10 @@ struct MRMacroStagedExecutionInput {
 	int pageLines;
 	std::string fileName;
 	bool fileChanged;
+	int screenWidth;
+	int screenHeight;
+	int screenCursorX;
+	int screenCursorY;
 
 		MRMacroStagedExecutionInput() noexcept
 	    : document(), baseVersion(0), cursorOffset(0), selectionStart(0), selectionEnd(0),
@@ -208,7 +244,8 @@ struct MRMacroStagedExecutionInput {
 	      globalInts(), globalStrings(), macroOrder(), macroDisplayNames(),
 	      lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0),
 	      ignoreCase(false), tabExpand(true), markStack(), insertMode(true), indentLevel(1),
-	      pageLines(20), fileName(), fileChanged(false) {
+	      pageLines(20), fileName(), fileChanged(false), screenWidth(0), screenHeight(0),
+	      screenCursorX(1), screenCursorY(1) {
 	}
 };
 
@@ -274,14 +311,21 @@ void mrvmUiReplaceGlobals(const std::vector<std::string> &order,
                           const std::map<std::string, std::string> &strings);
 void mrvmUiCopyRuntimeOptions(bool &ignoreCase, bool &tabExpand);
 void mrvmUiReplaceRuntimeOptions(bool ignoreCase, bool tabExpand);
-void mrvmUiSyncLinkedWindowsFrom(TMREditWindow *window);
+void mrvmUiSyncLinkedWindowsFrom(MREditWindow *window);
 int mrvmUiCurrentWindowIndex(const void *windowKey);
 int mrvmUiWindowCount();
 int mrvmUiLinkStatus(const void *windowKey);
 bool mrvmUiWindowGeometry(const void *windowKey, int &x1, int &y1, int &x2, int &y2);
+int mrvmUiScreenWidth();
+int mrvmUiScreenHeight();
+bool mrvmUiCursorPosition(int &x, int &y);
+std::uint64_t mrvmUiScreenMutationEpoch() noexcept;
+void mrvmUiInvalidateScreenBase() noexcept;
+void mrvmUiTouchScreenMutationEpoch() noexcept;
 bool mrvmUiSetCurrentWindow(const void *windowKey);
 bool mrvmUiCreateWindow();
 bool mrvmUiDeleteCurrentWindow();
+bool mrvmUiEraseCurrentWindow();
 bool mrvmUiModifyCurrentWindow();
 bool mrvmUiSwitchWindow(int index);
 bool mrvmUiSizeCurrentWindow(int x1, int y1, int x2, int y2);
@@ -310,6 +354,22 @@ bool mrvmUiUnlinkCurrentWindow();
 bool mrvmUiZoomCurrentWindow();
 bool mrvmUiRedrawCurrentWindow();
 bool mrvmUiNewScreen();
+bool mrvmUiMarquee(int kind, const std::string &text);
+bool mrvmUiBrain(bool enabled);
+bool mrvmUiPutBox(int x1, int y1, int x2, int y2, int bgColor, int fgColor,
+                  const std::string &title, int shadow);
+bool mrvmUiWrite(const std::string &text, int x, int y, int bgColor, int fgColor);
+bool mrvmUiClrLine(int col = 0, int row = 0, int count = 0);
+bool mrvmUiGotoxy(int x, int y);
+bool mrvmUiPutLineNum(int line);
+bool mrvmUiPutColNum(int col);
+bool mrvmUiScrollBoxUp(int x1, int y1, int x2, int y2, int attr);
+bool mrvmUiScrollBoxDn(int x1, int y1, int x2, int y2, int attr);
+bool mrvmUiClearScreen(int attr = 0x07);
+bool mrvmUiKillBox();
+bool mrvmUiMessageBox(const std::string &text);
+bool mrvmUiRenderFacadeRenderDeferredCommand(const MRMacroDeferredUiCommand &command);
+bool mrvmUiRenderDeferredCommand(const MRMacroDeferredUiCommand &command);
 bool mrvmLoadMacroFile(const std::string &spec, std::string *errorMessage = nullptr);
 void mrvmBootstrapBoundMacroIndex(const std::string &directoryPath, std::size_t *fileCount = nullptr,
                                   std::size_t *bindingCount = nullptr);

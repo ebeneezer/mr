@@ -4,14 +4,14 @@
 #include <vector>
 #include <string>
 
-class TMREditWindow;
+class MREditWindow;
 
-[[nodiscard]] TMREditWindow *createEditorWindow(const char *title);
-[[nodiscard]] std::vector<TMREditWindow *> allEditWindowsInZOrder();
-[[nodiscard]] TMREditWindow *currentEditWindow();
-[[nodiscard]] TMREditWindow *findEditWindowByBufferId(int bufferId);
-[[nodiscard]] bool isEmptyUntitledEditableWindow(TMREditWindow *win);
-[[nodiscard]] TMREditWindow *findReusableEmptyWindow(TMREditWindow *preferred);
+[[nodiscard]] MREditWindow *createEditorWindow(const char *title);
+[[nodiscard]] std::vector<MREditWindow *> allEditWindowsInZOrder();
+[[nodiscard]] MREditWindow *currentEditWindow();
+[[nodiscard]] MREditWindow *findEditWindowByBufferId(int bufferId);
+[[nodiscard]] bool isEmptyUntitledEditableWindow(MREditWindow *win);
+[[nodiscard]] MREditWindow *findReusableEmptyWindow(MREditWindow *preferred);
 [[nodiscard]] bool closeCurrentEditWindow();
 [[nodiscard]] bool activateRelativeEditWindow(int delta);
 [[nodiscard]] bool hideCurrentEditWindow();
@@ -19,8 +19,8 @@ void mrUpdateAllWindowsColorTheme();
 [[nodiscard]] bool handleWindowCascade();
 [[nodiscard]] bool handleWindowTile();
 void applyVirtualDesktopConfigurationChange(int count);
-void setWindowManuallyHidden(TMREditWindow *win, bool hidden);
-[[nodiscard]] bool isWindowManuallyHidden(const TMREditWindow *win);
+void setWindowManuallyHidden(MREditWindow *win, bool hidden);
+[[nodiscard]] bool isWindowManuallyHidden(const MREditWindow *win);
 
 [[nodiscard]] int currentVirtualDesktop();
 void setCurrentVirtualDesktop(int vd);

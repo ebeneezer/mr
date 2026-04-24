@@ -104,6 +104,9 @@ typedef enum {
 	TOK_DIV,
 	TOK_AND,
 	TOK_OR,
+	TOK_BAND,
+	TOK_BOR,
+	TOK_BXOR,
 	TOK_NOT,
 	TOK_SHL,
 	TOK_SHR,
@@ -652,12 +655,14 @@ static void lexer_next(Lexer *lex, Token *tok) {
 			tok->kind = TOK_AND;
 		else if (ident_eq(text, "OR"))
 			tok->kind = TOK_OR;
+		else if (ident_eq(text, "BAND"))
+			tok->kind = TOK_BAND;
+		else if (ident_eq(text, "BOR"))
+			tok->kind = TOK_BOR;
+		else if (ident_eq(text, "BXOR"))
+			tok->kind = TOK_BXOR;
 		else if (ident_eq(text, "NOT"))
 			tok->kind = TOK_NOT;
-		else if (ident_eq(text, "SHL"))
-			tok->kind = TOK_SHL;
-		else if (ident_eq(text, "SHR"))
-			tok->kind = TOK_SHR;
 		else if (ident_eq(text, "MOD"))
 			tok->kind = TOK_MOD;
 		else
@@ -674,6 +679,18 @@ static void lexer_next(Lexer *lex, Token *tok) {
 	if (lex->p[0] == '<' && lex->p[1] == '>') {
 		tok->kind = TOK_NE;
 		tok->text = xstrdup("<>");
+		lex->p += 2;
+		return;
+	}
+	if (lex->p[0] == '<' && lex->p[1] == '<') {
+		tok->kind = TOK_SHL;
+		tok->text = xstrdup("<<");
+		lex->p += 2;
+		return;
+	}
+	if (lex->p[0] == '>' && lex->p[1] == '>') {
+		tok->kind = TOK_SHR;
+		tok->text = xstrdup(">>");
 		lex->p += 2;
 		return;
 	}
@@ -724,6 +741,21 @@ static void lexer_next(Lexer *lex, Token *tok) {
 		case '/':
 			tok->kind = TOK_DIV;
 			tok->text = xstrdup("/");
+			++lex->p;
+			return;
+		case '&':
+			tok->kind = TOK_BAND;
+			tok->text = xstrdup("&");
+			++lex->p;
+			return;
+		case '|':
+			tok->kind = TOK_BOR;
+			tok->text = xstrdup("|");
+			++lex->p;
+			return;
+		case '^':
+			tok->kind = TOK_BXOR;
+			tok->text = xstrdup("^");
 			++lex->p;
 			return;
 		case ',':
@@ -1024,6 +1056,18 @@ static int lookup_builtin_constant(const char *name, int *out_value) {
 	    {"BROWN", 6},       {"LIGHTGRAY", 7},  {"DARKGRAY", 8},  {"LIGHTBLUE", 9},
 	    {"LIGHTGREEN", 10}, {"LIGHTCYAN", 11}, {"LIGHTRED", 12}, {"LIGHTMAGENTA", 13},
 	    {"YELLOW", 14},     {"WHITE", 15},     {"EDIT", 0},      {"DOS_SHELL", 1},
+	    {"BACK_SPACE", 0x7001},     {"BLOCK_BEGIN", 0x7002},     {"BLOCK_END", 0x7003},
+	    {"BLOCK_OFF", 0x7004},      {"COL_BLOCK_BEGIN", 0x7005}, {"COPY_BLOCK", 0x7006},
+	    {"CR", 0x7007},             {"DELETE_BLOCK", 0x7008},    {"DEL_CHAR", 0x7009},
+	    {"DEL_LINE", 0x700A},       {"DOWN", 0x700B},            {"EOF", 0x700C},
+	    {"EOL", 0x700D},            {"FIRST_WORD", 0x700E},      {"GOTO_MARK", 0x700F},
+	    {"HOME", 0x7010},           {"INDENT", 0x7011},          {"KEY_RECORD", 0x7012},
+	    {"LAST_PAGE_BREAK", 0x7013},{"LEFT", 0x7014},            {"MARK_POS", 0x7015},
+	    {"MOVE_BLOCK", 0x7016},     {"NEXT_PAGE_BREAK", 0x7017}, {"PAGE_DOWN", 0x7018},
+	    {"PAGE_UP", 0x7019},        {"RIGHT", 0x701A},           {"SAVE_FILE", 0x701B},
+	    {"STR_BLOCK_BEGIN", 0x701C},{"TAB_LEFT", 0x701D},        {"TAB_RIGHT", 0x701E},
+	    {"TOF", 0x701F},            {"UNDENT", 0x7020},          {"UNDO", 0x7021},
+	    {"UP", 0x7022},             {"WORD_LEFT", 0x7023},       {"WORD_RIGHT", 0x7024},
 	    {"ALL", 255},       {NULL, 0}};
 	int i;
 	for (i = 0; constants[i].name != NULL; ++i)
@@ -1042,8 +1086,23 @@ static int lookup_builtin_variable(const char *name, int *out_type) {
 	};
 	static const struct BuiltinVariable variables[] = {
 	    {"RETURN_INT", TYPE_INT},     {"ERROR_LEVEL", TYPE_INT},    {"FIRST_RUN", TYPE_INT},
-	    {"IGNORE_CASE", TYPE_INT},    {"FIRST_SAVE", TYPE_INT},     {"EOF_IN_MEM", TYPE_INT},
+	    {"IGNORE_CASE", TYPE_INT},    {"REG_EXP_STAT", TYPE_INT},   {"FIRST_SAVE", TYPE_INT},
 	    {"BUFFER_ID", TYPE_INT},      {"TMP_FILE", TYPE_INT},       {"FILE_CHANGED", TYPE_INT},
+	    {"LAST_FILE_ATTR", TYPE_INT}, {"LAST_FILE_SIZE", TYPE_INT}, {"LAST_FILE_TIME", TYPE_INT},
+	    {"CUR_FILE_ATTR", TYPE_INT},  {"CUR_FILE_SIZE", TYPE_INT},  {"READ_ONLY", TYPE_INT},
+	    {"DOC_MODE", TYPE_INT},       {"PRINT_MARGIN", TYPE_INT},   {"SHADOW_CHAR", TYPE_INT},
+	    {"REFRESH", TYPE_INT},
+	    {"MESSAGES", TYPE_INT},       {"MOUSE", TYPE_INT},          {"LOGO_SCREEN", TYPE_INT},
+	    {"EXPLOSIONS", TYPE_INT},     {"TRUNCATE_SPACES", TYPE_INT},{"BACKUPS", TYPE_INT},
+	    {"AUTOSAVE", TYPE_INT},       {"UNDO_STAT", TYPE_INT},      {"FORMAT_STAT", TYPE_INT},
+	    {"WRAP_STAT", TYPE_INT},      {"MEM_ALLOC", TYPE_INT},      {"RIGHT_MARGIN", TYPE_INT},
+	    {"INDENT_STYLE", TYPE_INT},   {"INS_CURSOR", TYPE_INT},     {"OVR_CURSOR", TYPE_INT},
+	    {"CTRL_HELP", TYPE_INT},      {"MOUSE_H_SENSE", TYPE_INT},  {"MOUSE_V_SENSE", TYPE_INT},
+	    {"WINDOW_ATTR", TYPE_INT},    {"TEXT_COLOR", TYPE_INT},     {"CHANGE_COLOR", TYPE_INT},
+	    {"BACK_COLOR", TYPE_INT},     {"MENU_COLOR", TYPE_INT},     {"STAT_COLOR", TYPE_INT},
+	    {"ERROR_COLOR", TYPE_INT},    {"SHADOW_COLOR", TYPE_INT},   {"STATUS_ROW", TYPE_INT},
+	    {"MESSAGE_ROW", TYPE_INT},    {"MAX_WINDOW_ROW", TYPE_INT}, {"MIN_WINDOW_ROW", TYPE_INT},
+	    {"NAME_LINE", TYPE_INT},
 	    {"PARAM_COUNT", TYPE_INT},    {"CPU", TYPE_INT},            {"C_COL", TYPE_INT},
 	    {"C_LINE", TYPE_INT},         {"C_ROW", TYPE_INT},          {"C_PAGE", TYPE_INT},
 	    {"PG_LINE", TYPE_INT},        {"AT_EOF", TYPE_INT},
@@ -1053,12 +1112,16 @@ static int lookup_builtin_variable(const char *name, int *out_type) {
 	    {"INDENT_LEVEL", TYPE_INT},   {"CUR_WINDOW", TYPE_INT},     {"LINK_STAT", TYPE_INT},
 	    {"WIN_X1", TYPE_INT},         {"WIN_Y1", TYPE_INT},         {"WIN_X2", TYPE_INT},
 	    {"WIN_Y2", TYPE_INT},         {"WINDOW_COUNT", TYPE_INT},   {"VIRTUAL_DESKTOPS", TYPE_INT},
-	    {"CYCLIC_VIRTUAL_DESKTOP", TYPE_INT}, {"CYCLIC_VIRTUAL_DESKTOPS", TYPE_INT},
+	    {"CYCLIC_VIRTUAL_DESKTOPS", TYPE_INT}, {"KEY1", TYPE_INT},  {"KEY2", TYPE_INT},
 	    {"RETURN_STR", TYPE_STR},
 	    {"MPARM_STR", TYPE_STR},      {"DATE", TYPE_STR},           {"TIME", TYPE_STR},
 	    {"FIRST_MACRO", TYPE_STR},    {"NEXT_MACRO", TYPE_STR},     {"LAST_FILE_NAME", TYPE_STR},
 	    {"TMP_FILE_NAME", TYPE_STR},  {"FILE_NAME", TYPE_STR},      {"COMSPEC", TYPE_STR},
-	    {"MR_PATH", TYPE_STR},        {"OS_VERSION", TYPE_STR},     {"GET_LINE", TYPE_STR},
+	    {"TEMP_PATH", TYPE_STR},      {"FOUND_STR", TYPE_STR},      {"SEARCH_FILE", TYPE_STR},
+	    {"MR_PATH", TYPE_STR},        {"OS_VERSION", TYPE_STR},
+	    {"GET_LINE", TYPE_STR},       {"FORMAT_LINE", TYPE_STR},    {"DEFAULT_FORMAT", TYPE_STR},
+	    {"PAGE_STR", TYPE_STR},       {"WORD_DELIMITS", TYPE_STR},
+	    {"FOUND_X", TYPE_INT},        {"FOUND_Y", TYPE_INT},
 	    {"CUR_CHAR", TYPE_CHAR},      {NULL, 0}};
 	int i;
 
@@ -1110,23 +1173,29 @@ static int binary_precedence(TokenKind kind) {
 			return 1;
 		case TOK_AND:
 			return 2;
+		case TOK_BOR:
+			return 3;
+		case TOK_BXOR:
+			return 4;
+		case TOK_BAND:
+			return 5;
 		case TOK_EQ:
 		case TOK_NE:
 		case TOK_LT:
 		case TOK_GT:
 		case TOK_LE:
 		case TOK_GE:
-			return 3;
+			return 6;
 		case TOK_SHL:
 		case TOK_SHR:
-			return 4;
+			return 7;
 		case TOK_PLUS:
 		case TOK_MINUS:
-			return 5;
+			return 8;
 		case TOK_MULT:
 		case TOK_DIV:
 		case TOK_MOD:
-			return 6;
+			return 9;
 		default:
 			return -1;
 	}
@@ -1193,19 +1262,28 @@ static int parse_argument_expressions(Parser *ps, ExprInfo *arg_types, int *out_
 typedef struct {
 	const char *name;
 	int argc;
-	CallArgKind args[4];
+	CallArgKind args[8];
 	int result_type;
 	int allow_without_parens;
 } IntrinsicSignature;
 
 #define INTR_SIG0(n, r) \
-	{ n, 0, {CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, r, 0 }
+	{ n, 0, {CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, \
+	         CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, r, 0 }
 #define INTR_SIG0_BARE(n, r) \
-	{ n, 0, {CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, r, 1 }
+	{ n, 0, {CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, \
+	         CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, r, 1 }
 #define INTR_SIG1(n, a0, r) \
-	{ n, 1, {a0, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, r, 0 }
-#define INTR_SIG2(n, a0, a1, r) { n, 2, {a0, a1, CALL_ARG_NONE, CALL_ARG_NONE}, r, 0 }
-#define INTR_SIG3(n, a0, a1, a2, r) { n, 3, {a0, a1, a2, CALL_ARG_NONE}, r, 0 }
+	{ n, 1, {a0, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, \
+	         CALL_ARG_NONE, CALL_ARG_NONE}, r, 0 }
+#define INTR_SIG2(n, a0, a1, r) \
+	{ n, 2, {a0, a1, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, \
+	         CALL_ARG_NONE, CALL_ARG_NONE}, r, 0 }
+#define INTR_SIG3(n, a0, a1, a2, r) \
+	{ n, 3, {a0, a1, a2, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, \
+	         CALL_ARG_NONE}, r, 0 }
+#define INTR_SIG5(n, a0, a1, a2, a3, a4, r) \
+	{ n, 5, {a0, a1, a2, a3, a4, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, r, 0 }
 
 static const IntrinsicSignature kIntrinsicSignatures[] = {
     INTR_SIG1("STR", CALL_ARG_INT, TYPE_STR),
@@ -1227,6 +1305,7 @@ static const IntrinsicSignature kIntrinsicSignatures[] = {
     INTR_SIG1("TRUNCATE_EXTENSION", CALL_ARG_STRINGLIKE, TYPE_STR),
     INTR_SIG1("TRUNCATE_PATH", CALL_ARG_STRINGLIKE, TYPE_STR),
     INTR_SIG1("FILE_EXISTS", CALL_ARG_STRINGLIKE, TYPE_INT),
+    INTR_SIG1("FILE_ATTR", CALL_ARG_STRINGLIKE, TYPE_INT),
     INTR_SIG1("FIRST_FILE", CALL_ARG_STRINGLIKE, TYPE_INT),
     INTR_SIG0_BARE("NEXT_FILE", TYPE_INT),
     INTR_SIG1("GET_ENVIRONMENT", CALL_ARG_STRINGLIKE, TYPE_STR),
@@ -1234,11 +1313,32 @@ static const IntrinsicSignature kIntrinsicSignatures[] = {
     INTR_SIG1("PARAM_STR", CALL_ARG_INT, TYPE_STR),
     INTR_SIG1("GLOBAL_STR", CALL_ARG_STRINGLIKE, TYPE_STR),
     INTR_SIG1("GLOBAL_INT", CALL_ARG_STRINGLIKE, TYPE_INT),
+    INTR_SIG0_BARE("CHECK_KEY", TYPE_INT),
+    INTR_SIG0_BARE("VERSION", TYPE_STR),
+    INTR_SIG0_BARE("OS_BACK", TYPE_INT),
+    INTR_SIG0_BARE("OS_COLOR", TYPE_INT),
     INTR_SIG2("PARSE_STR", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, TYPE_STR),
     INTR_SIG2("PARSE_INT", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, TYPE_INT),
     INTR_SIG1("INQ_MACRO", CALL_ARG_STRINGLIKE, TYPE_INT),
+    INTR_SIG3("COPY_FILE", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_INT, TYPE_INT),
+    INTR_SIG2("RENAME_FILE", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, TYPE_INT),
+    INTR_SIG1("SWITCH_FILE", CALL_ARG_STRINGLIKE, TYPE_INT),
     INTR_SIG2("SEARCH_FWD", CALL_ARG_STRINGLIKE, CALL_ARG_INT, TYPE_INT),
     INTR_SIG2("SEARCH_BWD", CALL_ARG_STRINGLIKE, CALL_ARG_INT, TYPE_INT),
+    INTR_SIG0_BARE("SCREEN_LENGTH", TYPE_INT),
+    INTR_SIG0_BARE("SCREEN_WIDTH", TYPE_INT),
+    INTR_SIG0_BARE("WHEREX", TYPE_INT),
+    INTR_SIG0_BARE("WHEREY", TYPE_INT),
+    INTR_SIG0_BARE("BLOCK_TEXT", TYPE_STR),
+    INTR_SIG5("BAR_MENU", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_STRINGLIKE,
+              CALL_ARG_STRINGLIKE, TYPE_INT),
+    INTR_SIG5("V_MENU", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_STRINGLIKE,
+              CALL_ARG_STRINGLIKE, TYPE_INT),
+    INTR_SIG5("STRING_IN", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_STRINGLIKE,
+              CALL_ARG_STRINGLIKE, TYPE_STR),
+    INTR_SIG0_BARE("UI_EXEC", TYPE_INT),
+    INTR_SIG1("UI_TEXT", CALL_ARG_INT, TYPE_STR),
+    INTR_SIG1("UI_INDEX", CALL_ARG_INT, TYPE_INT),
 };
 
 #undef INTR_SIG0
@@ -1246,6 +1346,7 @@ static const IntrinsicSignature kIntrinsicSignatures[] = {
 #undef INTR_SIG1
 #undef INTR_SIG2
 #undef INTR_SIG3
+#undef INTR_SIG5
 
 static const IntrinsicSignature *find_intrinsic_signature(const char *name) {
 	size_t i;
@@ -1388,6 +1489,14 @@ static int parse_primary(Parser *ps, ExprInfo *out) {
 		return 0;
 	}
 
+	if (ps->tok.kind == TOK_KEYSPEC) {
+		emit_byte(OP_PUSH_S);
+		emit_string(ps->tok.text);
+		out->type = TYPE_STR;
+		parser_next(ps);
+		return 0;
+	}
+
 	if (parser_accept(ps, TOK_LPAREN)) {
 		if (parse_expression(ps, 1, out) != 0)
 			return -1;
@@ -1459,7 +1568,61 @@ static int parse_primary(Parser *ps, ExprInfo *out) {
 				free(name);
 				return -1;
 			}
-			if (validate_call_arguments(spec->args, spec->argc, args, argc, line) != 0) {
+			if (strcasecmp(name, "BAR_MENU") == 0 || strcasecmp(name, "V_MENU") == 0) {
+				if (!(argc == 1 || argc == 2 || argc == 3 || argc == 5)) {
+					set_compile_error(line, "Wrong number of arguments.");
+					free(name);
+					return -1;
+				}
+				if (argc == 1) {
+					if (validate_call_arguments(&spec->args[4], 1, args, argc, line) != 0) {
+						free(name);
+						return -1;
+					}
+				} else if (argc == 2) {
+					if (validate_call_arguments(&spec->args[3], 2, args, argc, line) != 0) {
+						free(name);
+						return -1;
+					}
+				} else if (argc == 3) {
+					if (args[0].type != TYPE_INT ||
+					    validate_call_arguments(&spec->args[3], 2, args + 1, 2, line) != 0) {
+						set_compile_error(line, "Type mismatch or syntax error.");
+						free(name);
+						return -1;
+					}
+				} else if (validate_call_arguments(spec->args, spec->argc, args, argc, line) != 0) {
+					free(name);
+					return -1;
+				}
+			} else if (strcasecmp(name, "STRING_IN") == 0) {
+				if (!(argc == 1 || argc == 2 || argc == 3 || argc == 5)) {
+					set_compile_error(line, "Wrong number of arguments.");
+					free(name);
+					return -1;
+				}
+				if (argc == 1) {
+					if (validate_call_arguments(&spec->args[4], 1, args, argc, line) != 0) {
+						free(name);
+						return -1;
+					}
+				} else if (argc == 2) {
+					if (validate_call_arguments(&spec->args[3], 2, args, argc, line) != 0) {
+						free(name);
+						return -1;
+					}
+				} else if (argc == 3) {
+					if (!is_stringlike_type(args[0].type) || !is_stringlike_type(args[1].type) ||
+					    args[2].type != TYPE_INT) {
+						set_compile_error(line, "Type mismatch or syntax error.");
+						free(name);
+						return -1;
+					}
+				} else if (validate_call_arguments(spec->args, spec->argc, args, argc, line) != 0) {
+					free(name);
+					return -1;
+				}
+			} else if (validate_call_arguments(spec->args, spec->argc, args, argc, line) != 0) {
 				free(name);
 				return -1;
 			}
@@ -1536,7 +1699,8 @@ static int combine_binary(TokenKind op, int line, ExprInfo *lhs, const ExprInfo 
 			lhs->type = (lhs->type == TYPE_REAL || rhs->type == TYPE_REAL) ? TYPE_REAL : TYPE_INT;
 			return 0;
 		}
-	} else if (op == TOK_MOD || op == TOK_SHL || op == TOK_SHR || op == TOK_AND || op == TOK_OR) {
+	} else if (op == TOK_MOD || op == TOK_SHL || op == TOK_SHR || op == TOK_BAND || op == TOK_BOR ||
+	           op == TOK_BXOR) {
 		if (lhs->type == TYPE_INT && rhs->type == TYPE_INT) {
 			if (op == TOK_MOD)
 				emit_byte(OP_MOD);
@@ -1544,7 +1708,18 @@ static int combine_binary(TokenKind op, int line, ExprInfo *lhs, const ExprInfo 
 				emit_byte(OP_SHL);
 			else if (op == TOK_SHR)
 				emit_byte(OP_SHR);
-			else if (op == TOK_AND)
+			else if (op == TOK_BAND)
+				emit_byte(OP_BIT_AND);
+			else if (op == TOK_BOR)
+				emit_byte(OP_BIT_OR);
+			else
+				emit_byte(OP_BIT_XOR);
+			lhs->type = TYPE_INT;
+			return 0;
+		}
+	} else if (op == TOK_AND || op == TOK_OR) {
+		if (lhs->type == TYPE_INT && rhs->type == TYPE_INT) {
+			if (op == TOK_AND)
 				emit_byte(OP_AND);
 			else
 				emit_byte(OP_OR);
@@ -1744,7 +1919,7 @@ static int parse_tvcall_statement(Parser *ps) {
 typedef struct {
 	const char *name;
 	int argc;
-	CallArgKind args[4];
+	CallArgKind args[8];
 	const char *emit_name;
 } ProcSignature;
 
@@ -1821,10 +1996,26 @@ static int parse_proc_var_string_statement(Parser *ps, const char *name) {
 	return 0;
 }
 
-#define PROC_SIG0(n, e) { n, 0, {CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, e }
-#define PROC_SIG1(n, a0, e) { n, 1, {a0, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, e }
-#define PROC_SIG2(n, a0, a1, e) { n, 2, {a0, a1, CALL_ARG_NONE, CALL_ARG_NONE}, e }
-#define PROC_SIG4(n, a0, a1, a2, a3, e) { n, 4, {a0, a1, a2, a3}, e }
+#define PROC_SIG0(n, e) \
+	{ n, 0, {CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, \
+	         CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, e }
+#define PROC_SIG1(n, a0, e) \
+	{ n, 1, {a0, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, \
+	         CALL_ARG_NONE, CALL_ARG_NONE}, e }
+#define PROC_SIG2(n, a0, a1, e) \
+	{ n, 2, {a0, a1, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, \
+	         CALL_ARG_NONE, CALL_ARG_NONE}, e }
+#define PROC_SIG3(n, a0, a1, a2, e) \
+	{ n, 3, {a0, a1, a2, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, \
+	         CALL_ARG_NONE}, e }
+#define PROC_SIG4(n, a0, a1, a2, a3, e) \
+	{ n, 4, {a0, a1, a2, a3, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, e }
+#define PROC_SIG5(n, a0, a1, a2, a3, a4, e) \
+	{ n, 5, {a0, a1, a2, a3, a4, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, e }
+#define PROC_SIG6(n, a0, a1, a2, a3, a4, a5, e) \
+	{ n, 6, {a0, a1, a2, a3, a4, a5, CALL_ARG_NONE, CALL_ARG_NONE}, e }
+#define PROC_SIG8(n, a0, a1, a2, a3, a4, a5, a6, a7, e) \
+	{ n, 8, {a0, a1, a2, a3, a4, a5, a6, a7}, e }
 
 static const ProcSignature kProcSignatures[] = {
     PROC_SIG0("MOVE_WIN_TO_NEXT_DESKTOP", NULL),
@@ -1833,6 +2024,7 @@ static const ProcSignature kProcSignatures[] = {
     PROC_SIG0("MOVE_VIEWPORT_LEFT", NULL),
     PROC_SIG0("SAVE_WORKSPACE", NULL),
     PROC_SIG0("LOAD_WORKSPACE", NULL),
+    PROC_SIG0("SAVE_SETTINGS", NULL),
     PROC_SIG0("LINK_WINDOW", NULL),
     PROC_SIG0("UNLINK_WINDOW", NULL),
     PROC_SIG0("ZOOM", NULL),
@@ -1851,7 +2043,22 @@ static const ProcSignature kProcSignatures[] = {
     PROC_SIG1("MARQUEE", CALL_ARG_STRINGLIKE, NULL),
     PROC_SIG1("MARQUEE_WARNING", CALL_ARG_STRINGLIKE, NULL),
     PROC_SIG1("MARQUEE_ERROR", CALL_ARG_STRINGLIKE, NULL),
+    PROC_SIG1("MAKE_MESSAGE", CALL_ARG_STRINGLIKE, "MARQUEE"),
+    PROC_SIG0("WORKING", NULL),
+    PROC_SIG1("BRAIN", CALL_ARG_INT, NULL),
+    PROC_SIG8("PUT_BOX", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT,
+              CALL_ARG_INT, CALL_ARG_STRINGLIKE, CALL_ARG_INT, NULL),
+    PROC_SIG5("WRITE", CALL_ARG_STRINGLIKE, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, NULL),
+    PROC_SIG3("CLR_LINE", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, NULL),
+    PROC_SIG2("GOTOXY", CALL_ARG_INT, CALL_ARG_INT, NULL),
+    PROC_SIG1("PUT_LINE_NUM", CALL_ARG_INT, NULL),
+    PROC_SIG1("PUT_COL_NUM", CALL_ARG_INT, NULL),
+    PROC_SIG5("SCROLL_BOX_UP", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, NULL),
+    PROC_SIG5("SCROLL_BOX_DN", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, NULL),
+    PROC_SIG1("CLEAR_SCREEN", CALL_ARG_INT, NULL),
+    PROC_SIG0("KILL_BOX", NULL),
     PROC_SIG1("DELAY", CALL_ARG_INT, "DELAY"),
+    PROC_SIG0("BEEP", "BEEP"),
     PROC_SIG2("MRSETUP", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, "MRSETUP"),
     PROC_SIG4("MRFEPROFILE", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE,
               CALL_ARG_STRINGLIKE, "MRFEPROFILE"),
@@ -1859,12 +2066,34 @@ static const ProcSignature kProcSignatures[] = {
     PROC_SIG1("UNLOAD_MACRO", CALL_ARG_STRINGLIKE, "UNLOAD_MACRO"),
     PROC_SIG1("CHANGE_DIR", CALL_ARG_STRINGLIKE, "CHANGE_DIR"),
     PROC_SIG1("DEL_FILE", CALL_ARG_STRINGLIKE, "DEL_FILE"),
+    PROC_SIG2("SET_FILE_ATTR", CALL_ARG_STRINGLIKE, CALL_ARG_INT, "SET_FILE_ATTR"),
+    PROC_SIG2("SHELL_TO_OS", CALL_ARG_STRINGLIKE, CALL_ARG_INT, "SHELL_TO_OS"),
+    PROC_SIG1("WRITE_SOD", CALL_ARG_STRINGLIKE, "WRITE_SOD"),
     PROC_SIG1("LOAD_FILE", CALL_ARG_STRINGLIKE, "LOAD_FILE"),
     PROC_SIG0("SAVE_FILE", "SAVE_FILE"),
+    PROC_SIG5("UI_DIALOG", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT,
+              CALL_ARG_STRINGLIKE, NULL),
+    PROC_SIG3("UI_LABEL", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_STRINGLIKE, NULL),
+    PROC_SIG5("UI_BUTTON", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT,
+              CALL_ARG_STRINGLIKE, NULL),
+    PROC_SIG4("UI_DISPLAY", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_STRINGLIKE, NULL),
+    PROC_SIG6("UI_INPUT", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT,
+              CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, NULL),
+    PROC_SIG8("UI_LISTBOX", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT,
+              CALL_ARG_INT, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_INT, NULL),
     PROC_SIG0("SET_INDENT_LEVEL", "SET_INDENT_LEVEL"),
     PROC_SIG1("REPLACE", CALL_ARG_STRINGLIKE, "REPLACE"),
     PROC_SIG1("TEXT", CALL_ARG_STRINGLIKE, "TEXT"),
     PROC_SIG1("KEY_IN", CALL_ARG_STRINGLIKE, "KEY_IN"),
+    PROC_SIG0("READ_KEY", NULL),
+    PROC_SIG2("PUSH_KEY", CALL_ARG_INT, CALL_ARG_INT, NULL),
+    PROC_SIG2("PASS_KEY", CALL_ARG_INT, CALL_ARG_INT, NULL),
+    PROC_SIG0("PUSH_LABELS", NULL),
+    PROC_SIG0("POP_LABELS", NULL),
+    PROC_SIG3("FLABEL", CALL_ARG_STRINGLIKE, CALL_ARG_INT, CALL_ARG_INT, NULL),
+    PROC_SIG3("MACRO_TO_KEY", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_INT, "MACRO_TO_KEY"),
+    PROC_SIG3("CMD_TO_KEY", CALL_ARG_STRINGLIKE, CALL_ARG_INT, CALL_ARG_INT, "CMD_TO_KEY"),
+    PROC_SIG2("UNASSIGN_KEY", CALL_ARG_STRINGLIKE, CALL_ARG_INT, "UNASSIGN_KEY"),
     PROC_SIG1("PUT_LINE", CALL_ARG_STRINGLIKE, "PUT_LINE"),
     PROC_SIG1("DEL_CHARS", CALL_ARG_INT, "DEL_CHARS"),
     PROC_SIG1("GOTO_LINE", CALL_ARG_INT, "GOTO_LINE"),
@@ -1874,12 +2103,21 @@ static const ProcSignature kProcSignatures[] = {
     PROC_SIG1("SWITCH_WINDOW", CALL_ARG_INT, NULL),
     PROC_SIG1("SAVE_BLOCK", CALL_ARG_STRINGLIKE, NULL),
     PROC_SIG4("SIZE_WINDOW", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, NULL),
+    PROC_SIG1("QUIT", CALL_ARG_INT, "QUIT"),
+    PROC_SIG2("PLAY_KEY_MACRO", CALL_ARG_INT, CALL_ARG_INT, "PLAY_KEY_MACRO"),
+    PROC_SIG0("SAVE_OS_SCREEN", NULL),
+    PROC_SIG0("REST_OS_SCREEN", NULL),
+    PROC_SIG0("UNASSIGN_ALL_KEYS", "UNASSIGN_ALL_KEYS"),
 };
 
 #undef PROC_SIG0
 #undef PROC_SIG1
 #undef PROC_SIG2
+#undef PROC_SIG3
 #undef PROC_SIG4
+#undef PROC_SIG5
+#undef PROC_SIG6
+#undef PROC_SIG8
 
 static const ProcSignature *find_proc_signature(const char *name) {
 	size_t i;
@@ -1891,6 +2129,50 @@ static const ProcSignature *find_proc_signature(const char *name) {
 }
 
 static int validate_proc_signature(const ProcSignature *spec, const ExprInfo *args, int argc, int line) {
+	if (strcasecmp(spec->name, "CLR_LINE") == 0) {
+		if (argc == 0)
+			return 0;
+		if (argc == 3)
+			return validate_call_arguments(spec->args, 3, args, argc, line);
+		set_compile_error(line, "Wrong number of arguments.");
+		return -1;
+	}
+	if (strcasecmp(spec->name, "CLEAR_SCREEN") == 0) {
+		if (argc == 0)
+			return 0;
+		if (argc == 1)
+			return validate_call_arguments(spec->args, 1, args, argc, line);
+		set_compile_error(line, "Wrong number of arguments.");
+		return -1;
+	}
+	if (strcasecmp(spec->name, "QUIT") == 0) {
+		if (argc == 0)
+			return 0;
+		if (argc == 1)
+			return validate_call_arguments(spec->args, 1, args, argc, line);
+		set_compile_error(line, "Wrong number of arguments.");
+		return -1;
+	}
+	if (strcasecmp(spec->name, "COPY_FILE") == 0) {
+		if (argc == 2) {
+			CallArgKind expected[2] = {CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE};
+			return validate_call_arguments(expected, 2, args, argc, line);
+		}
+		if (argc == 3)
+			return validate_call_arguments(spec->args, 3, args, argc, line);
+		set_compile_error(line, "Wrong number of arguments.");
+		return -1;
+	}
+	if (strcasecmp(spec->name, "PLAY_KEY_MACRO") == 0) {
+		if (argc == 2)
+			return validate_call_arguments(spec->args, 2, args, argc, line);
+		if (argc == 3) {
+			CallArgKind expected[3] = {CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT};
+			return validate_call_arguments(expected, 3, args, argc, line);
+		}
+		set_compile_error(line, "Wrong number of arguments.");
+		return -1;
+	}
 	return validate_call_arguments(spec->args, spec->argc, args, argc, line);
 }
 
@@ -2055,11 +2337,24 @@ static const BareProcStatement kBareProcStatements[] = {
     BARE_PROC("MOVE_VIEWPORT_LEFT"),
     BARE_PROC("SAVE_WORKSPACE"),
     BARE_PROC("LOAD_WORKSPACE"),
+    BARE_PROC("SAVE_SETTINGS"),
     BARE_PROC("LINK_WINDOW"),
     BARE_PROC("UNLINK_WINDOW"),
     BARE_PROC("ZOOM"),
     BARE_PROC("REDRAW"),
     BARE_PROC("NEW_SCREEN"),
+    BARE_PROC("READ_KEY"),
+    BARE_PROC("PUSH_LABELS"),
+    BARE_PROC("POP_LABELS"),
+    BARE_PROC("KEY_RECORD"),
+    BARE_PROC("WORKING"),
+    BARE_PROC("BEEP"),
+    BARE_PROC("CLR_LINE"),
+    BARE_PROC("CLEAR_SCREEN"),
+    BARE_PROC("KILL_BOX"),
+    BARE_PROC("SAVE_OS_SCREEN"),
+    BARE_PROC("REST_OS_SCREEN"),
+    BARE_PROC("UNASSIGN_ALL_KEYS"),
 };
 
 #undef BARE_PROC

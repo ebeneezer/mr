@@ -5,7 +5,6 @@
 #define Uses_TDialog
 #define Uses_TButton
 #define Uses_TStaticText
-#define Uses_MsgBox
 #include <tvision/tv.h>
 
 #include "MRFileInformationDialog.hpp"
@@ -23,12 +22,15 @@
 #include "../app/MRCommands.hpp"
 #include "../coprocessor/MRCoprocessor.hpp"
 #include "../coprocessor/MRPerformance.hpp"
-#include "../ui/TMREditWindow.hpp"
-#include "../ui/TMRFileEditor.hpp"
-#include "../ui/TMRTextBuffer.hpp"
+#include "../ui/MRMessageLineController.hpp"
+#include "../ui/MREditWindow.hpp"
+#include "../ui/MRFileEditor.hpp"
+#include "../ui/MRTextBuffer.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
 namespace {
+constexpr const char *kNoActiveFileWindowMessage = "No active file window.";
+
 struct FileInformationPage {
 	std::string title;
 	std::vector<std::string> lines;
@@ -105,7 +107,7 @@ std::string formatCursorProgress(std::size_t cursorOffset, std::size_t currentLe
 	return out.str();
 }
 
-std::string formatTaskSummary(TMREditWindow *win) {
+std::string formatTaskSummary(MREditWindow *win) {
 	std::ostringstream out;
 	const std::size_t count = win != nullptr ? win->trackedCoprocessorTaskCount() : 0;
 
@@ -134,15 +136,15 @@ std::string formatWarmupState(const char *label, std::uint64_t taskId, bool exac
 	return out.str();
 }
 
-const char *blockModeLabel(TMREditWindow *win) {
+const char *blockModeLabel(MREditWindow *win) {
 	if (win == nullptr)
 		return "None";
 	switch (win->blockStatus()) {
-		case TMREditWindow::bmLine:
+		case MREditWindow::bmLine:
 			return "Line";
-		case TMREditWindow::bmColumn:
+		case MREditWindow::bmColumn:
 			return "Column";
-		case TMREditWindow::bmStream:
+		case MREditWindow::bmStream:
 			return "Stream";
 		default:
 			return "None";
@@ -225,12 +227,12 @@ class FileInformationDialog : public MRDialogFoundation {
 	bool hasNextInfo;
 };
 
-std::vector<FileInformationPage> buildFileInformationPages(TMREditWindow *win) {
+std::vector<FileInformationPage> buildFileInformationPages(MREditWindow *win) {
 	std::vector<FileInformationPage> pages;
 	FileInformationPage page1;
 	FileInformationPage page2;
 	FileInformationPage page3;
-	TMRTextBuffer textBuffer = win != nullptr ? win->buffer() : TMRTextBuffer();
+	MRTextBuffer textBuffer = win != nullptr ? win->buffer() : MRTextBuffer();
 	std::string path = win != nullptr ? win->currentFileName() : std::string();
 	std::string title = win != nullptr && win->getTitle(0) != nullptr ? win->getTitle(0) : "?No-File?";
 	std::string roleDetail = win != nullptr ? win->windowRoleDetail() : std::string();
@@ -352,13 +354,15 @@ std::vector<FileInformationPage> buildFileInformationPages(TMREditWindow *win) {
 }
 } // namespace
 
-void showFileInformationDialog(TMREditWindow *win) {
+void showFileInformationDialog(MREditWindow *win) {
 	std::vector<FileInformationPage> pages;
 	std::size_t pageIndex = 0;
 	ushort result;
 
 	if (win == nullptr) {
-		messageBox(mfInformation | mfOKButton, "No active file window.");
+		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction,
+		                               kNoActiveFileWindowMessage,
+		                               mr::messageline::Kind::Warning, mr::messageline::kPriorityMedium);
 		return;
 	}
 	pages = buildFileInformationPages(win);

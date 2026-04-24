@@ -2,12 +2,12 @@
 
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../config/MRDialogPaths.hpp"
-#include "../ui/TMREditWindow.hpp"
+#include "../ui/MREditWindow.hpp"
 #include "MRCommands.hpp"
 
 namespace {
 struct AppCommandState {
-	TMREditWindow *window;
+	MREditWindow *window;
 	std::size_t windowCount;
 	bool hasEditableWindow;
 	bool hasReadOnlyWindow;
@@ -42,7 +42,7 @@ void setCommandEnabled(ushort command, bool enabled) {
 
 AppCommandState appCommandState() {
 	AppCommandState state;
-	TMREditWindow *win = currentEditWindow();
+	MREditWindow *win = currentEditWindow();
 
 	state.window = win;
 	state.windowCount = allEditWindowsInZOrder().size();
@@ -62,8 +62,8 @@ AppCommandState appCommandState() {
 	state.hasMacroTasks = win->hasTrackedMacroTasks();
 	state.hasExternalIoTasks = win->hasTrackedExternalIoTasks();
 	state.isCommunicationWindow = win->isCommunicationWindow();
-	state.isCommunicationCommandWindow = win->windowRole() == TMREditWindow::wrCommunicationCommand;
-	state.isLogWindow = win->windowRole() == TMREditWindow::wrLog;
+	state.isCommunicationCommandWindow = win->windowRole() == MREditWindow::wrCommunicationCommand;
+	state.isLogWindow = win->windowRole() == MREditWindow::wrLog;
 	return state;
 }
 } // namespace
@@ -166,6 +166,8 @@ void updateAppCommandState() {
 	                      !state.window->windowRoleDetail().empty());
 	setCommandEnabled(cmMrOtherClearOutput,
 	                  hasWindow && ((state.isCommunicationWindow && !state.hasExternalIoTasks) || state.isLogWindow));
+	setCommandEnabled(cmMrOtherAsciiTable, canModify);
+	setCommandEnabled(cmMrOtherEmojiTable, canModify);
 	setCommandEnabled(cmMrMacroToggleRecording, hasEditor);
 	setCommandEnabled(cmMrDevCancelMacroTasks, hasWindow && state.hasMacroTasks);
 	setCommandEnabled(cmMrDevHeroEventProbe, true);

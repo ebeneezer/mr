@@ -1,5 +1,5 @@
-#ifndef TMRFILEEDITOR_HPP
-#define TMRFILEEDITOR_HPP
+#ifndef MRFILEEDITOR_HPP
+#define MRFILEEDITOR_HPP
 
 #define Uses_TScroller
 #define Uses_TEditor
@@ -30,17 +30,17 @@
 
 #include "MRCoprocessor.hpp"
 #include "MRUnsavedChangesDialog.hpp"
-#include "TMRIndicator.hpp"
-#include "TMRTextBufferModel.hpp"
+#include "MRIndicator.hpp"
+#include "MRTextBufferModel.hpp"
 #include "../config/MRDialogPaths.hpp"
 #include "../app/MRCommands.hpp"
 #include "../app/utils/MRFileIOUtils.hpp"
 #include "../app/utils/MRStringUtils.hpp"
 #include "../ui/MRMessageLineController.hpp"
 
-class TMREditWindow;
+class MREditWindow;
 
-class TMRFileEditor : public TScroller {
+class MRFileEditor : public TScroller {
   public:
 	struct LoadTiming {
 		bool valid;
@@ -53,7 +53,7 @@ class TMRFileEditor : public TScroller {
 		}
 	};
 
-	TMRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar,
+	MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar,
 	              TIndicator *aIndicator, TStringView aFileName) noexcept
 	    : TScroller(bounds, aHScrollBar, aVScrollBar), indicator_(aIndicator), readOnly_(false),
 	      insertMode_(true), autoIndent_(false), syntaxTitleHint_(), bufferModel_(),
@@ -61,7 +61,7 @@ class TMRFileEditor : public TScroller {
 		      lineIndexWarmupTaskId_(0), lineIndexWarmupDocumentId_(0), lineIndexWarmupVersion_(0),
 			      syntaxTokenCache_(), syntaxWarmupTaskId_(0), syntaxWarmupDocumentId_(0),
 				      syntaxWarmupVersion_(0), syntaxWarmupTopLine_(0), syntaxWarmupBottomLine_(0),
-					      syntaxWarmupLanguage_(TMRSyntaxLanguage::PlainText), miniMapWarmupTaskId_(0),
+					      syntaxWarmupLanguage_(MRSyntaxLanguage::PlainText), miniMapWarmupTaskId_(0),
 					      miniMapWarmupDocumentId_(0), miniMapWarmupVersion_(0), miniMapWarmupRows_(0),
 					      miniMapWarmupBodyWidth_(0), miniMapWarmupViewportWidth_(0), miniMapWarmupBraille_(true),
 					      miniMapWarmupWindowStartLine_(0), miniMapWarmupWindowLineCount_(0),
@@ -465,7 +465,7 @@ class TMRFileEditor : public TScroller {
 	}
 
 	void setFindMarkerRanges(const std::vector<std::pair<std::size_t, std::size_t>> &ranges) {
-		std::vector<TMRTextBufferModel::Range> normalized;
+		std::vector<MRTextBufferModel::Range> normalized;
 		const std::size_t length = bufferModel_.length();
 
 		normalized.reserve(ranges.size());
@@ -482,7 +482,7 @@ class TMRFileEditor : public TScroller {
 						--start;
 				}
 				if (end > start)
-					normalized.push_back(TMRTextBufferModel::Range(start, end));
+					normalized.push_back(MRTextBufferModel::Range(start, end));
 			}
 		}
 		normalizeRangeList(normalized);
@@ -520,11 +520,11 @@ class TMRFileEditor : public TScroller {
 		return std::max(1, static_cast<int>(bufferModel_.lineIndex(bufferModel_.cursor())) - delta.y + 1);
 	}
 
-	const TMRTextBufferModel &bufferModel() const noexcept {
+	const MRTextBufferModel &bufferModel() const noexcept {
 		return bufferModel_;
 	}
 
-	TMRTextBufferModel &bufferModel() noexcept {
+	MRTextBufferModel &bufferModel() noexcept {
 		return bufferModel_;
 	}
 
@@ -543,11 +543,11 @@ class TMRFileEditor : public TScroller {
 		return bufferModel_.text();
 	}
 
-	TMRTextBufferModel::ReadSnapshot readSnapshot() const {
+	MRTextBufferModel::ReadSnapshot readSnapshot() const {
 		return bufferModel_.readSnapshot();
 	}
 
-	TMRTextBufferModel::Document documentCopy() const {
+	MRTextBufferModel::Document documentCopy() const {
 		return bufferModel_.document();
 	}
 
@@ -595,7 +595,7 @@ class TMRFileEditor : public TScroller {
 		syntaxWarmupVersion_ = 0;
 		syntaxWarmupTopLine_ = 0;
 		syntaxWarmupBottomLine_ = 0;
-		syntaxWarmupLanguage_ = TMRSyntaxLanguage::PlainText;
+		syntaxWarmupLanguage_ = MRSyntaxLanguage::PlainText;
 		notifyWindowTaskStateChanged();
 		drawView();
 		return true;
@@ -642,7 +642,7 @@ class TMRFileEditor : public TScroller {
 		syntaxWarmupVersion_ = 0;
 		syntaxWarmupTopLine_ = 0;
 		syntaxWarmupBottomLine_ = 0;
-		syntaxWarmupLanguage_ = TMRSyntaxLanguage::PlainText;
+		syntaxWarmupLanguage_ = MRSyntaxLanguage::PlainText;
 		notifyWindowTaskStateChanged();
 	}
 
@@ -675,7 +675,7 @@ class TMRFileEditor : public TScroller {
 		return bufferModel_.languageName();
 	}
 
-	TMRSyntaxLanguage syntaxLanguage() const noexcept {
+	MRSyntaxLanguage syntaxLanguage() const noexcept {
 		return bufferModel_.language();
 	}
 
@@ -697,7 +697,7 @@ class TMRFileEditor : public TScroller {
 	}
 
 	bool loadMappedFile(TStringView path, std::string &error) {
-		TMRTextBufferModel::Document document;
+		MRTextBufferModel::Document document;
 		const auto mapStartedAt = std::chrono::steady_clock::now();
 
 		lastLoadTiming_ = LoadTiming();
@@ -760,7 +760,7 @@ class TMRFileEditor : public TScroller {
 	}
 
 	void pushUndoSnapshot() {
-		TMRTextBufferModel::CustomUndoRecord record;
+		MRTextBufferModel::CustomUndoRecord record;
 		record.preSnapshot = bufferModel_.readSnapshot();
 		record.cursor = bufferModel_.cursor();
 		record.modifiedState = bufferModel_.isModified();
@@ -782,10 +782,10 @@ class TMRFileEditor : public TScroller {
 
 	bool replaceBufferData(const char *data, uint length) {
 		std::string text;
-		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
+		MRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
 		                                                 "replace-buffer-data");
-		TMRTextBufferModel::Document preview;
-		TMRTextBufferModel::CommitResult commit;
+		MRTextBufferModel::Document preview;
+		MRTextBufferModel::CommitResult commit;
 
 		if (data != nullptr && length != 0)
 			text.assign(data, length);
@@ -807,10 +807,10 @@ class TMRFileEditor : public TScroller {
 
 	bool appendBufferData(const char *data, uint length) {
 		std::string text;
-		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
+		MRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
 		                                                 "append-buffer-data");
-		TMRTextBufferModel::Document preview;
-		TMRTextBufferModel::CommitResult commit;
+		MRTextBufferModel::Document preview;
+		MRTextBufferModel::CommitResult commit;
 		std::size_t endPtr = bufferModel_.length();
 
 		if (length == 0)
@@ -836,17 +836,17 @@ class TMRFileEditor : public TScroller {
 
 	bool replaceRangeAndSelect(uint start, uint end, const char *data, uint length) {
 		std::string text;
-		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
+		MRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
 		                                                 "replace-range-select");
-		TMRTextBufferModel::Document preview;
-		TMRTextBufferModel::CommitResult commit;
-		TMRTextBufferModel::Range range;
+		MRTextBufferModel::Document preview;
+		MRTextBufferModel::CommitResult commit;
+		MRTextBufferModel::Range range;
 
 		if (readOnly_)
 			return false;
 		if (end < start)
 			std::swap(start, end);
-		range = TMRTextBufferModel::Range(start, end).clamped(bufferModel_.length());
+		range = MRTextBufferModel::Range(start, end).clamped(bufferModel_.length());
 		if (data != nullptr && length != 0)
 			text.assign(data, length);
 		transaction.replace(range, text);
@@ -864,11 +864,11 @@ class TMRFileEditor : public TScroller {
 	bool insertBufferText(const std::string &text) {
 		std::size_t start = bufferModel_.cursor();
 		std::size_t end = start;
-		TMRTextBufferModel::Range range;
-		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
+		MRTextBufferModel::Range range;
+		MRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
 		                                                 "insert-buffer-text");
-		TMRTextBufferModel::Document preview;
-		TMRTextBufferModel::CommitResult commit;
+		MRTextBufferModel::Document preview;
+		MRTextBufferModel::CommitResult commit;
 
 		if (readOnly_)
 			return false;
@@ -882,7 +882,7 @@ class TMRFileEditor : public TScroller {
 				endSel = nextCharOffset(endSel);
 			end = endSel;
 		}
-		range = TMRTextBufferModel::Range(start, end).clamped(bufferModel_.length());
+		range = MRTextBufferModel::Range(start, end).clamped(bufferModel_.length());
 		transaction.replace(range, text);
 		preview = bufferModel_.document();
 		pushUndoSnapshot();
@@ -898,14 +898,14 @@ class TMRFileEditor : public TScroller {
 	bool replaceCurrentLineText(const std::string &text) {
 		std::size_t start = bufferModel_.lineStart(bufferModel_.cursor());
 		std::size_t end = bufferModel_.lineEnd(bufferModel_.cursor());
-		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
+		MRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
 		                                                 "replace-current-line");
-		TMRTextBufferModel::Document preview;
-		TMRTextBufferModel::CommitResult commit;
+		MRTextBufferModel::Document preview;
+		MRTextBufferModel::CommitResult commit;
 
 		if (readOnly_)
 			return false;
-		transaction.replace(TMRTextBufferModel::Range(start, end), text);
+		transaction.replace(MRTextBufferModel::Range(start, end), text);
 		preview = bufferModel_.document();
 		pushUndoSnapshot();
 		commit = preview.tryApply(transaction);
@@ -979,12 +979,12 @@ class TMRFileEditor : public TScroller {
 		if (paragraphText.back() == '\n')
 			formattedText += "\n";
 
-		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(), "format-paragraph");
-		transaction.replace(TMRTextBufferModel::Range(start, end), formattedText);
+		MRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(), "format-paragraph");
+		transaction.replace(MRTextBufferModel::Range(start, end), formattedText);
 
-		TMRTextBufferModel::Document preview = bufferModel_.document();
+		MRTextBufferModel::Document preview = bufferModel_.document();
 		pushUndoSnapshot();
-		TMRTextBufferModel::CommitResult commit = preview.tryApply(transaction);
+		MRTextBufferModel::CommitResult commit = preview.tryApply(transaction);
 
 		if (!commit.applied()) {
 			bufferModel_.popUndoSnapshot();
@@ -997,10 +997,10 @@ class TMRFileEditor : public TScroller {
 	bool deleteCharsAtCursor(int count) {
 		std::size_t start = bufferModel_.cursor();
 		std::size_t end = start;
-		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
+		MRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
 		                                                 "delete-chars-at-cursor");
-		TMRTextBufferModel::Document preview;
-		TMRTextBufferModel::CommitResult commit;
+		MRTextBufferModel::Document preview;
+		MRTextBufferModel::CommitResult commit;
 
 		if (readOnly_)
 			return false;
@@ -1010,7 +1010,7 @@ class TMRFileEditor : public TScroller {
 			end = nextCharOffset(end);
 		if (end <= start)
 			return true;
-		transaction.erase(TMRTextBufferModel::Range(start, end));
+		transaction.erase(MRTextBufferModel::Range(start, end));
 		preview = bufferModel_.document();
 		pushUndoSnapshot();
 		commit = preview.tryApply(transaction);
@@ -1024,14 +1024,14 @@ class TMRFileEditor : public TScroller {
 	bool deleteCurrentLineText() {
 		std::size_t start = bufferModel_.lineStart(bufferModel_.cursor());
 		std::size_t end = bufferModel_.nextLine(bufferModel_.cursor());
-		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
+		MRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
 		                                                 "delete-current-line");
-		TMRTextBufferModel::Document preview;
-		TMRTextBufferModel::CommitResult commit;
+		MRTextBufferModel::Document preview;
+		MRTextBufferModel::CommitResult commit;
 
 		if (readOnly_)
 			return false;
-		transaction.erase(TMRTextBufferModel::Range(start, end));
+		transaction.erase(MRTextBufferModel::Range(start, end));
 		preview = bufferModel_.document();
 		pushUndoSnapshot();
 		commit = preview.tryApply(transaction);
@@ -1043,10 +1043,10 @@ class TMRFileEditor : public TScroller {
 	}
 
 	bool replaceWholeBuffer(const std::string &text, std::size_t cursorPos) {
-		TMRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
+		MRTextBufferModel::StagedTransaction transaction(bufferModel_.readSnapshot(),
 		                                                 "replace-whole-buffer");
-		TMRTextBufferModel::Document preview;
-		TMRTextBufferModel::CommitResult commit;
+		MRTextBufferModel::Document preview;
+		MRTextBufferModel::CommitResult commit;
 
 		if (readOnly_)
 			return false;
@@ -1062,12 +1062,12 @@ class TMRFileEditor : public TScroller {
 		return adoptCommittedDocument(preview, cursorPos, cursorPos, cursorPos, true, &commit.change);
 	}
 
-	TMRTextBufferModel::CommitResult applyStagedTransaction(
-	    const TMRTextBufferModel::StagedTransaction &transaction, std::size_t cursorPos,
+	MRTextBufferModel::CommitResult applyStagedTransaction(
+	    const MRTextBufferModel::StagedTransaction &transaction, std::size_t cursorPos,
 	    std::size_t selStart, std::size_t selEnd, bool modifiedState = true) {
-		TMRTextBufferModel::Document preview = bufferModel_.document();
+		MRTextBufferModel::Document preview = bufferModel_.document();
 		pushUndoSnapshot();
-		TMRTextBufferModel::CommitResult result = preview.tryApply(transaction);
+		MRTextBufferModel::CommitResult result = preview.tryApply(transaction);
 
 		if (result.applied()) {
 			adoptCommittedDocument(preview, cursorPos, selStart, selEnd, modifiedState,
@@ -1094,7 +1094,7 @@ class TMRFileEditor : public TScroller {
 		bool drawCodeFolding = viewport.codeFoldingWidth > 0;
 		bool zeroFillLineNumbers = showLineNumbers && editSettings.lineNumZeroFill;
 		int textWidth = viewport.width;
-		TMRTextBufferModel::Range selection = bufferModel_.selection().range().normalized();
+		MRTextBufferModel::Range selection = bufferModel_.selection().range().normalized();
 		if ((selection.end <= selection.start) && owner != nullptr) {
 			std::size_t lastSearchStart = 0;
 			std::size_t lastSearchEnd = 0;
@@ -1770,7 +1770,7 @@ class TMRFileEditor : public TScroller {
 	bool lineIntersectsDirtyRanges(std::size_t lineStart, std::size_t lineEnd) const noexcept {
 		if (lineEnd <= lineStart || dirtyRanges_.empty())
 			return false;
-		for (const TMRTextBufferModel::Range &range : dirtyRanges_) {
+		for (const MRTextBufferModel::Range &range : dirtyRanges_) {
 			if (range.end <= lineStart)
 				continue;
 			if (range.start >= lineEnd)
@@ -1973,7 +1973,7 @@ class TMRFileEditor : public TScroller {
 			clearMiniMapWarmupTaskInternal(miniMapWarmupTaskId_);
 		}
 
-		TMRTextBufferModel::ReadSnapshot snapshot = bufferModel_.readSnapshot();
+		MRTextBufferModel::ReadSnapshot snapshot = bufferModel_.readSnapshot();
 		std::uint64_t previousTaskId = miniMapWarmupTaskId_;
 		miniMapWarmupDocumentId_ = docId;
 		miniMapWarmupVersion_ = version;
@@ -2104,10 +2104,10 @@ class TMRFileEditor : public TScroller {
 			notifyWindowTaskStateChanged();
 	}
 
-	MiniMapOverlayState computeMiniMapOverlayState(const TMRTextBufferModel::Range &selection,
+	MiniMapOverlayState computeMiniMapOverlayState(const MRTextBufferModel::Range &selection,
 	                                               std::size_t totalLines) const {
 		MiniMapOverlayState overlay;
-		auto addFindLineRange = [&](const TMRTextBufferModel::Range &range) {
+		auto addFindLineRange = [&](const MRTextBufferModel::Range &range) {
 			if (range.end <= range.start || bufferModel_.length() == 0)
 				return;
 			const std::size_t startOffset = std::min(range.start, bufferModel_.length() - 1);
@@ -2120,10 +2120,10 @@ class TMRFileEditor : public TScroller {
 
 		if (selection.end > selection.start)
 			addFindLineRange(selection);
-		for (const TMRTextBufferModel::Range &range : findMarkerRanges_)
+		for (const MRTextBufferModel::Range &range : findMarkerRanges_)
 			addFindLineRange(range);
 		normalizePairRangeList(overlay.findLineRanges);
-		for (const TMRTextBufferModel::Range &range : dirtyRanges_) {
+		for (const MRTextBufferModel::Range &range : dirtyRanges_) {
 			if (range.end <= range.start || range.start >= bufferModel_.length())
 				continue;
 			std::size_t startOffset = std::min(range.start, bufferModel_.length() - 1);
@@ -2406,7 +2406,7 @@ class TMRFileEditor : public TScroller {
 	}
 
 	bool useApproximateLargeFileMetrics() const noexcept {
-		const TMRTextBufferModel::Document &document = bufferModel_.document();
+		const MRTextBufferModel::Document &document = bufferModel_.document();
 		return document.hasMappedOriginal() && document.length() >= static_cast<std::size_t>(8) * 1024 * 1024;
 	}
 
@@ -2452,7 +2452,7 @@ class TMRFileEditor : public TScroller {
 			    lineIndexWarmupVersion_ == version)
 				return;
 
-			TMRTextBufferModel::ReadSnapshot snapshot = bufferModel_.readSnapshot();
+			MRTextBufferModel::ReadSnapshot snapshot = bufferModel_.readSnapshot();
 			std::uint64_t previousTaskId = lineIndexWarmupTaskId_;
 			if (previousTaskId != 0)
 				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
@@ -2484,14 +2484,14 @@ class TMRFileEditor : public TScroller {
 
 	void scheduleSyntaxWarmupIfNeeded() {
 		const int textRows = visibleTextRows();
-		if (bufferModel_.language() == TMRSyntaxLanguage::PlainText || textRows <= 0) {
+		if (bufferModel_.language() == MRSyntaxLanguage::PlainText || textRows <= 0) {
 			resetSyntaxWarmupState(true);
 			return;
 		}
 
 		const std::size_t docId = bufferModel_.documentId();
 		const std::size_t version = bufferModel_.version();
-		const TMRSyntaxLanguage language = bufferModel_.language();
+		const MRSyntaxLanguage language = bufferModel_.language();
 		const std::size_t topLine = static_cast<std::size_t>(std::max(delta.y - 4, 0));
 		const int rowBudget = std::max(textRows + 8, 8);
 		std::vector<std::size_t> lineStarts = syntaxWarmupLineStarts(topLine, rowBudget);
@@ -2520,7 +2520,7 @@ class TMRFileEditor : public TScroller {
 		    topLine >= syntaxWarmupTopLine_ && bottomLine <= syntaxWarmupBottomLine_)
 			return;
 
-		TMRTextBufferModel::ReadSnapshot snapshot = bufferModel_.readSnapshot();
+		MRTextBufferModel::ReadSnapshot snapshot = bufferModel_.readSnapshot();
 		std::uint64_t previousTaskId = syntaxWarmupTaskId_;
 		if (previousTaskId != 0)
 			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
@@ -2639,7 +2639,7 @@ class TMRFileEditor : public TScroller {
 		long long localY = static_cast<long long>(line) - delta.y;
 
 		if (indicator_ != nullptr) {
-			if (auto *mrIndicator = dynamic_cast<TMRIndicator *>(indicator_))
+			if (auto *mrIndicator = dynamic_cast<MRIndicator *>(indicator_))
 				mrIndicator->setDisplayValue(visualColumn, line, bufferModel_.isModified() ? True : False);
 			else {
 				TPoint location = {
@@ -2877,7 +2877,7 @@ class TMRFileEditor : public TScroller {
 				pasteClipboard();
 				break;
 			case cmMrEditUndo: {
-				TMRTextBufferModel::CustomUndoRecord record;
+				MRTextBufferModel::CustomUndoRecord record;
 				if (bufferModel_.undo(&record)) {
 					const bool modifiedState = bufferModel_.isModified();
 					adoptCommittedDocument(bufferModel_.document(), bufferModel_.cursor(),
@@ -2891,7 +2891,7 @@ class TMRFileEditor : public TScroller {
 				break;
 			}
 			case cmMrEditRedo: {
-				TMRTextBufferModel::CustomUndoRecord record;
+				MRTextBufferModel::CustomUndoRecord record;
 				if (bufferModel_.redo(&record)) {
 					const bool modifiedState = bufferModel_.isModified();
 					adoptCommittedDocument(bufferModel_.document(), bufferModel_.cursor(),
@@ -3072,7 +3072,7 @@ class TMRFileEditor : public TScroller {
 	void copySelection() {
 		if (!bufferModel_.hasSelection())
 			return;
-		TMRTextBufferModel::Range range = bufferModel_.selection().range();
+		MRTextBufferModel::Range range = bufferModel_.selection().range();
 		clipboardText() = bufferModel_.text().substr(range.start, range.length());
 	}
 
@@ -3095,7 +3095,7 @@ class TMRFileEditor : public TScroller {
 				insertBufferText(text);
 			return;
 		}
-		TMRTextBufferModel::Range range = bufferModel_.selection().range();
+		MRTextBufferModel::Range range = bufferModel_.selection().range();
 		replaceRangeAndSelect(static_cast<uint>(range.start), static_cast<uint>(range.end), text.data(),
 		                      static_cast<uint>(text.size()));
 	}
@@ -3103,7 +3103,7 @@ class TMRFileEditor : public TScroller {
 	void convertSelectionToUpperCase() {
 		if (readOnly_ || !bufferModel_.hasSelection())
 			return;
-		TMRTextBufferModel::Range range = bufferModel_.selection().range();
+		MRTextBufferModel::Range range = bufferModel_.selection().range();
 		std::string text = bufferModel_.text().substr(range.start, range.length());
 		for (char &c : text)
 			c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
@@ -3114,7 +3114,7 @@ class TMRFileEditor : public TScroller {
 	void convertSelectionToLowerCase() {
 		if (readOnly_ || !bufferModel_.hasSelection())
 			return;
-		TMRTextBufferModel::Range range = bufferModel_.selection().range();
+		MRTextBufferModel::Range range = bufferModel_.selection().range();
 		std::string text = bufferModel_.text().substr(range.start, range.length());
 		for (char &c : text)
 			c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
@@ -3154,7 +3154,7 @@ class TMRFileEditor : public TScroller {
 		}
 	}
 
-	TColorAttr tokenColor(TMRSyntaxToken token, bool selected, TAttrPair pair) noexcept {
+	TColorAttr tokenColor(MRSyntaxToken token, bool selected, TAttrPair pair) noexcept {
 		TColorAttr normal = static_cast<TColorAttr>(pair);
 		TColorAttr selectedAttr = static_cast<TColorAttr>(pair >> 8);
 		uchar background = static_cast<uchar>((selected ? selectedAttr : normal) & 0xF0);
@@ -3163,20 +3163,20 @@ class TMRFileEditor : public TScroller {
 			return selectedAttr;
 
 		switch (token) {
-			case TMRSyntaxToken::Keyword:
-			case TMRSyntaxToken::Directive:
-			case TMRSyntaxToken::Section:
+			case MRSyntaxToken::Keyword:
+			case MRSyntaxToken::Directive:
+			case MRSyntaxToken::Section:
 				return static_cast<TColorAttr>(background | 0x0E);
-			case TMRSyntaxToken::Type:
-			case TMRSyntaxToken::Key:
+			case MRSyntaxToken::Type:
+			case MRSyntaxToken::Key:
 				return static_cast<TColorAttr>(background | 0x0B);
-			case TMRSyntaxToken::Number:
+			case MRSyntaxToken::Number:
 				return static_cast<TColorAttr>(background | 0x0A);
-			case TMRSyntaxToken::String:
+			case MRSyntaxToken::String:
 				return static_cast<TColorAttr>(background | 0x0D);
-			case TMRSyntaxToken::Comment:
+			case MRSyntaxToken::Comment:
 				return static_cast<TColorAttr>(background | 0x03);
-			case TMRSyntaxToken::Heading:
+			case MRSyntaxToken::Heading:
 				return static_cast<TColorAttr>(background | 0x0F);
 			default:
 				return normal;
@@ -3184,7 +3184,7 @@ class TMRFileEditor : public TScroller {
 	}
 
 	void refreshSyntaxContext() {
-		TMRSyntaxLanguage oldLanguage = bufferModel_.language();
+		MRSyntaxLanguage oldLanguage = bufferModel_.language();
 		bufferModel_.setSyntaxContext(hasPersistentFileName() ? fileName : "", syntaxTitleHint_);
 		if (bufferModel_.language() != oldLanguage)
 			resetSyntaxWarmupState(true);
@@ -3200,7 +3200,7 @@ class TMRFileEditor : public TScroller {
 		syntaxWarmupVersion_ = 0;
 		syntaxWarmupTopLine_ = 0;
 		syntaxWarmupBottomLine_ = 0;
-		syntaxWarmupLanguage_ = TMRSyntaxLanguage::PlainText;
+		syntaxWarmupLanguage_ = MRSyntaxLanguage::PlainText;
 		if (hadTask) {
 			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledTaskId));
 			notifyWindowTaskStateChanged();
@@ -3232,8 +3232,8 @@ class TMRFileEditor : public TScroller {
 		return true;
 	}
 
-	TMRSyntaxTokenMap syntaxTokensForLine(std::size_t lineStart) const {
-		std::map<std::size_t, TMRSyntaxTokenMap>::const_iterator found = syntaxTokenCache_.find(lineStart);
+	MRSyntaxTokenMap syntaxTokensForLine(std::size_t lineStart) const {
+		std::map<std::size_t, MRSyntaxTokenMap>::const_iterator found = syntaxTokenCache_.find(lineStart);
 		if (found != syntaxTokenCache_.end())
 			return found->second;
 		return bufferModel_.tokenMapForLine(lineStart);
@@ -3244,8 +3244,8 @@ class TMRFileEditor : public TScroller {
 		TAttrPair basePair = getColor(0x0201);
 		TAttrPair changedPair = getColor(0x0505);
 		TAttrPair selectionPair = getColor(0x0201);
-		TMRSyntaxTokenMap tokens;
-		TMRTextBufferModel::Range selection;
+		MRSyntaxTokenMap tokens;
+		MRTextBufferModel::Range selection;
 		std::size_t documentLength = bufferModel_.length();
 		std::size_t lineEnd = lineStart;
 		std::size_t cursorPos = 0;
@@ -3270,7 +3270,7 @@ class TMRFileEditor : public TScroller {
 		width = std::max(width, 0);
 		drawX = std::max(drawX, 0);
 		if (!isDocumentLine) {
-			TColorAttr color = tokenColor(TMRSyntaxToken::Text, false, basePair);
+			TColorAttr color = tokenColor(MRSyntaxToken::Text, false, basePair);
 			b.moveChar(static_cast<ushort>(drawX), ' ', color, static_cast<ushort>(width));
 			if (drawEofMarker)
 				drawEofMarkerGlyph(b, hScroll, width, drawX, basePair, drawEofMarkerAsEmoji);
@@ -3335,11 +3335,9 @@ class TMRFileEditor : public TScroller {
 			if (nextVisual > hScroll) {
 				std::size_t tokenIndex = bytePos;
 				std::size_t documentPos = lineStart + bytePos;
-				TMRSyntaxToken token =
-				    tokenIndex < tokens.size() ? tokens[tokenIndex] : TMRSyntaxToken::Text;
+				MRSyntaxToken token =
+				    tokenIndex < tokens.size() ? tokens[tokenIndex] : MRSyntaxToken::Text;
 				bool selected = false;
-				bool changedChar = false;
-				TAttrPair effectivePair;
 				TAttrPair tokenPair;
 				TColorAttr color;
 				int visibleWidth = 0;
@@ -3354,8 +3352,8 @@ class TMRFileEditor : public TScroller {
 						           visual < overlayCol2Exclusive && nextVisual > overlayCol1;
 				} else
 					selected = selection.start <= documentPos && documentPos < selection.end;
-				changedChar = !currentLine && !currentLineInBlock && isDirtyOffset(documentPos);
-				effectivePair = changedChar ? changedPair : basePair;
+				bool changedChar = !currentLine && !currentLineInBlock && isDirtyOffset(documentPos);
+				TAttrPair effectivePair = changedChar ? changedPair : basePair;
 				tokenPair = selected ? selectionPair : effectivePair;
 				color = tokenColor(token, selected, tokenPair);
 				visibleWidth = nextVisual - std::max(visual, hScroll);
@@ -3377,7 +3375,7 @@ class TMRFileEditor : public TScroller {
 		}
 
 		if (x < width) {
-			TColorAttr color = tokenColor(TMRSyntaxToken::Text, false, basePair);
+			TColorAttr color = tokenColor(MRSyntaxToken::Text, false, basePair);
 			b.moveChar(static_cast<ushort>(drawX + x), ' ', color, static_cast<ushort>(width - x));
 		}
 	}
@@ -3388,7 +3386,7 @@ class TMRFileEditor : public TScroller {
 		static const char *const kEofMarkerEmoji = "\xF0\x9F\x94\x9A";
 		const char *marker = drawEmoji ? kEofMarkerEmoji : kEofMarkerText;
 		int markerWidth = 0;
-		TColorAttr markerColor = tokenColor(TMRSyntaxToken::Text, false, basePair);
+		TColorAttr markerColor = tokenColor(MRSyntaxToken::Text, false, basePair);
 		unsigned char configuredMarkerColor = 0;
 
 		if (width <= 0 || hScroll != 0)
@@ -3402,9 +3400,9 @@ class TMRFileEditor : public TScroller {
 		b.moveStr(static_cast<ushort>(drawX), marker, markerColor, static_cast<ushort>(markerWidth));
 	}
 
-	bool adoptCommittedDocument(const TMRTextBufferModel::Document &document, std::size_t cursorPos,
+	bool adoptCommittedDocument(const MRTextBufferModel::Document &document, std::size_t cursorPos,
 	                            std::size_t selStart, std::size_t selEnd, bool modifiedState,
-	                            const TMRTextBufferModel::DocumentChangeSet *changeSet = nullptr) {
+	                            const MRTextBufferModel::DocumentChangeSet *changeSet = nullptr) {
 		cursorPos = std::min(cursorPos, document.length());
 		selStart = std::min(selStart, document.length());
 		selEnd = std::min(selEnd, document.length());
@@ -3448,19 +3446,19 @@ class TMRFileEditor : public TScroller {
 	bool autoIndent_;
 	char fileName[MAXPATH];
 	std::string syntaxTitleHint_;
-	TMRTextBufferModel bufferModel_;
+	MRTextBufferModel bufferModel_;
 	std::size_t selectionAnchor_;
 	bool indicatorUpdateInProgress_;
 	std::uint64_t lineIndexWarmupTaskId_;
 	std::size_t lineIndexWarmupDocumentId_;
 	std::size_t lineIndexWarmupVersion_;
-	std::map<std::size_t, TMRSyntaxTokenMap> syntaxTokenCache_;
+	std::map<std::size_t, MRSyntaxTokenMap> syntaxTokenCache_;
 	std::uint64_t syntaxWarmupTaskId_;
 	std::size_t syntaxWarmupDocumentId_;
 	std::size_t syntaxWarmupVersion_;
 	std::size_t syntaxWarmupTopLine_;
 	std::size_t syntaxWarmupBottomLine_;
-	TMRSyntaxLanguage syntaxWarmupLanguage_;
+	MRSyntaxLanguage syntaxWarmupLanguage_;
 	std::uint64_t miniMapWarmupTaskId_;
 	std::size_t miniMapWarmupDocumentId_;
 	std::size_t miniMapWarmupVersion_;
@@ -3487,8 +3485,8 @@ class TMRFileEditor : public TScroller {
 	std::size_t blockOverlayAnchor_;
 	std::size_t blockOverlayEnd_;
 	bool blockOverlayTrackingCursor_;
-	std::vector<TMRTextBufferModel::Range> findMarkerRanges_;
-	std::vector<TMRTextBufferModel::Range> dirtyRanges_;
+	std::vector<MRTextBufferModel::Range> findMarkerRanges_;
+	std::vector<MRTextBufferModel::Range> dirtyRanges_;
 	LoadTiming lastLoadTiming_;
 
 	void clearDirtyRanges() noexcept {
@@ -3513,13 +3511,13 @@ class TMRFileEditor : public TScroller {
 		ranges.swap(merged);
 	}
 
-	static void normalizeRangeList(std::vector<TMRTextBufferModel::Range> &ranges) {
+	static void normalizeRangeList(std::vector<MRTextBufferModel::Range> &ranges) {
 		std::sort(ranges.begin(), ranges.end(),
-		          [](const TMRTextBufferModel::Range &a, const TMRTextBufferModel::Range &b) {
+		          [](const MRTextBufferModel::Range &a, const MRTextBufferModel::Range &b) {
 			          return a.start < b.start || (a.start == b.start && a.end < b.end);
 		          });
-		std::vector<TMRTextBufferModel::Range> merged;
-		for (const TMRTextBufferModel::Range &item : ranges) {
+		std::vector<MRTextBufferModel::Range> merged;
+		for (const MRTextBufferModel::Range &item : ranges) {
 			if (item.end <= item.start)
 				continue;
 			if (merged.empty() || item.start > merged.back().end)
@@ -3534,19 +3532,19 @@ class TMRFileEditor : public TScroller {
 		normalizeRangeList(dirtyRanges_);
 	}
 
-	void pushMappedDirtyRange(std::vector<TMRTextBufferModel::Range> &mapped, std::size_t start,
+	void pushMappedDirtyRange(std::vector<MRTextBufferModel::Range> &mapped, std::size_t start,
 	                          std::size_t end, std::size_t maxLength) {
 		start = std::min(start, maxLength);
 		end = std::min(end, maxLength);
 		if (end <= start)
 			return;
-		mapped.push_back(TMRTextBufferModel::Range(start, end));
+		mapped.push_back(MRTextBufferModel::Range(start, end));
 	}
 
-	void remapDirtyRangesForAppliedChange(const TMRTextBufferModel::DocumentChangeSet &change) {
+	void remapDirtyRangesForAppliedChange(const MRTextBufferModel::DocumentChangeSet &change) {
 		const std::size_t oldLength = change.oldLength;
 		const std::size_t newLength = change.newLength;
-		const TMRTextBufferModel::Range touched = change.touchedRange.normalized();
+		const MRTextBufferModel::Range touched = change.touchedRange.normalized();
 		const long long delta = static_cast<long long>(newLength) - static_cast<long long>(oldLength);
 		const std::size_t touchedLength = touched.length();
 		const std::size_t editStart = std::min(touched.start, oldLength);
@@ -3562,11 +3560,11 @@ class TMRFileEditor : public TScroller {
 			replacedOldLength = oldLength - editStart;
 		const std::size_t oldEditEnd = editStart + replacedOldLength;
 
-		std::vector<TMRTextBufferModel::Range> mapped;
+		std::vector<MRTextBufferModel::Range> mapped;
 		mapped.reserve(dirtyRanges_.size() + 2);
 
 		for (std::size_t i = 0; i < dirtyRanges_.size(); ++i) {
-			TMRTextBufferModel::Range range = dirtyRanges_[i].clamped(oldLength).normalized();
+			MRTextBufferModel::Range range = dirtyRanges_[i].clamped(oldLength).normalized();
 
 			if (range.end <= range.start)
 				continue;
@@ -3600,14 +3598,14 @@ class TMRFileEditor : public TScroller {
 		normalizeDirtyRanges();
 	}
 
-	void addDirtyRange(TMRTextBufferModel::Range range) {
+	void addDirtyRange(MRTextBufferModel::Range range) {
 		if (bufferModel_.length() == 0)
 			return;
 		range = range.clamped(bufferModel_.length());
 		range.normalize();
 		if (range.empty()) {
 			std::size_t point = std::min(range.start, bufferModel_.length() - 1);
-			range = TMRTextBufferModel::Range(point, point + 1);
+			range = MRTextBufferModel::Range(point, point + 1);
 		}
 		dirtyRanges_.push_back(range);
 		normalizeDirtyRanges();
@@ -3618,7 +3616,7 @@ class TMRFileEditor : public TScroller {
 			return false;
 		if (pos >= bufferModel_.length())
 			return false;
-		for (const TMRTextBufferModel::Range &item : dirtyRanges_) {
+		for (const MRTextBufferModel::Range &item : dirtyRanges_) {
 			if (item.end <= pos)
 				continue;
 			if (item.start > pos)

@@ -16,7 +16,7 @@
 #define Uses_TScreen
 #include <tvision/tv.h>
 
-#include "TMREditorApp.hpp"
+#include "MREditorApp.hpp"
 
 #include "../coprocessor/MRCoprocessor.hpp"
 #include "../mrmac/mrmac.h"
@@ -30,11 +30,11 @@
 #include "../coprocessor/MRPerformance.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../app/commands/MRFileCommands.hpp"
-#include "../ui/TMRDeskTop.hpp"
-#include "../ui/TMREditWindow.hpp"
-#include "../ui/TMRMenuBar.hpp"
+#include "../ui/MRDeskTop.hpp"
+#include "../ui/MREditWindow.hpp"
+#include "../ui/MRMenuBar.hpp"
 #include "../ui/MRMessageLineController.hpp"
-#include "../ui/TMRStatusLine.hpp"
+#include "../ui/MRStatusLine.hpp"
 #include "../ui/MRPalette.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "MRAppState.hpp"
@@ -65,6 +65,23 @@
 
 namespace {
 static constexpr std::chrono::milliseconds kRecordingBlinkInterval(450);
+
+bool shouldInvalidateScreenBaseForEvent(ushort eventWhat) noexcept {
+	switch (eventWhat) {
+		case evKeyDown:
+		case evMouseDown:
+		case evMouseWheel:
+		case evCommand:
+			return true;
+		default:
+			return false;
+	}
+}
+
+void postAppError(std::string_view text) {
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text,
+	                               mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+}
 
 class TMacroBindCaptureDialog : public MRDialogFoundation {
   public:
@@ -493,30 +510,34 @@ ushort mrEditorDialog(int dialog, ...) {
 
 	switch (dialog) {
 		case edOutOfMemory:
-			return messageBox(mfError | mfOKButton, "Out of memory.");
+			postAppError("Out of memory.");
+			return cmOK;
 		case edReadError: {
 			const char *path = nullptr;
 			va_start(arg, dialog);
 			path = va_arg(arg, const char *);
 			va_end(arg);
-			return messageBox(mfError | mfOKButton, "Error reading file:\n%s",
-			                  (path != nullptr && *path != '\0') ? path : "<unknown>");
+			postAppError(std::string("Error reading file: ") +
+			             ((path != nullptr && *path != '\0') ? path : "<unknown>"));
+			return cmOK;
 		}
 		case edWriteError: {
 			const char *path = nullptr;
 			va_start(arg, dialog);
 			path = va_arg(arg, const char *);
 			va_end(arg);
-			return messageBox(mfError | mfOKButton, "Error writing file:\n%s",
-			                  (path != nullptr && *path != '\0') ? path : "<unknown>");
+			postAppError(std::string("Error writing file: ") +
+			             ((path != nullptr && *path != '\0') ? path : "<unknown>"));
+			return cmOK;
 		}
 		case edCreateError: {
 			const char *path = nullptr;
 			va_start(arg, dialog);
 			path = va_arg(arg, const char *);
 			va_end(arg);
-			return messageBox(mfError | mfOKButton, "Error creating file:\n%s",
-			                  (path != nullptr && *path != '\0') ? path : "<unknown>");
+			postAppError(std::string("Error creating file: ") +
+			             ((path != nullptr && *path != '\0') ? path : "<unknown>"));
+			return cmOK;
 		}
 		case edSaveModify: {
 			const char *path = nullptr;
@@ -802,7 +823,7 @@ std::size_t loadStartupFilesFromCommandLine() {
 	StartupLoadRequest request = parseStartupLoadRequest();
 	std::vector<std::string> files;
 	std::size_t loadedCount = 0;
-	TMREditWindow *lastLoadedWindow = nullptr;
+	MREditWindow *lastLoadedWindow = nullptr;
 
 	if (request.specs.empty())
 		return 0;
@@ -813,7 +834,7 @@ std::size_t loadStartupFilesFromCommandLine() {
 		return 0;
 	}
 	for (const std::string &file : files) {
-		TMREditWindow *win = createEditorWindow(file.c_str());
+		MREditWindow *win = createEditorWindow(file.c_str());
 		if (win == nullptr) {
 			mrLogMessage("Startup load aborted: unable to create editor window.");
 			break;
@@ -831,7 +852,7 @@ std::size_t loadStartupFilesFromCommandLine() {
 }
 
 std::string buildTopRightCursorStatus() {
-	TMREditWindow *win = currentEditWindow();
+	MREditWindow *win = currentEditWindow();
 	if (win == nullptr || win->getEditor() == nullptr)
 		return std::string();
 	if (isEmptyUntitledEditableWindow(win))
@@ -856,17 +877,17 @@ std::string buildTopRightCursorStatus() {
 	return out;
 }
 
-TMRMenuBar::MarqueeKind mapMessageNoticeKind(mr::messageline::Kind kind) {
+MRMenuBar::MarqueeKind mapMessageNoticeKind(mr::messageline::Kind kind) {
 	switch (kind) {
 		case mr::messageline::Kind::Success:
-			return TMRMenuBar::MarqueeKind::Success;
+			return MRMenuBar::MarqueeKind::Success;
 		case mr::messageline::Kind::Warning:
-			return TMRMenuBar::MarqueeKind::Warning;
+			return MRMenuBar::MarqueeKind::Warning;
 		case mr::messageline::Kind::Error:
-			return TMRMenuBar::MarqueeKind::Error;
+			return MRMenuBar::MarqueeKind::Error;
 		case mr::messageline::Kind::Info:
 		default:
-			return TMRMenuBar::MarqueeKind::Info;
+			return MRMenuBar::MarqueeKind::Info;
 	}
 }
 
@@ -876,6 +897,9 @@ bool isHeroVisibleMessage(const mr::messageline::VisibleMessage &visible) {
 	    ownerMessage.kind == visible.kind && ownerMessage.text == visible.text)
 		return true;
 	if (mr::messageline::currentOwnerMessage(mr::messageline::Owner::HeroEventFollowup, ownerMessage) &&
+	    ownerMessage.kind == visible.kind && ownerMessage.text == visible.text)
+		return true;
+	if (mr::messageline::currentOwnerMessage(mr::messageline::Owner::MacroBrain, ownerMessage) &&
 	    ownerMessage.kind == visible.kind && ownerMessage.text == visible.text)
 		return true;
 	return false;
@@ -917,13 +941,13 @@ const TPalette &extendedAppBasePalette() {
 }
 } // namespace
 
-TMenuBar *TMREditorApp::initMRMenuBar(TRect r) {
+TMenuBar *MREditorApp::initMRMenuBar(TRect r) {
 	return createMRMenuBar(r);
 }
 
-TStatusLine *TMREditorApp::initMRStatusLine(TRect r) {
+TStatusLine *MREditorApp::initMRStatusLine(TRect r) {
 	r.a.y = r.b.y - 1;
-	return new TMRStatusLine(r, *new TStatusDef(0, 0xFFFF) +
+	return new MRStatusLine(r, *new TStatusDef(0, 0xFFFF) +
 	                                *new TStatusItem("~F1~ Help", kbF1, cmMrHelpContents) +
 	                                *new TStatusItem("~F10~ Menu", kbF10, cmMenu) +
 	                                *new TStatusItem("~Alt-F10~ Rec", kbAltF10,
@@ -931,18 +955,20 @@ TStatusLine *TMREditorApp::initMRStatusLine(TRect r) {
 	                                *new TStatusItem("~Alt-X~ Exit", kbAltX, cmQuit));
 }
 
-TDeskTop *TMREditorApp::initMRDeskTop(TRect r) {
+TDeskTop *MREditorApp::initMRDeskTop(TRect r) {
 	r.a.y++;
 	r.b.y--;
-	return new TMRDeskTop(r);
+	return new MRDeskTop(r);
 }
 
-TMREditorApp::TMREditorApp()
-    : TProgInit(&TMREditorApp::initMRStatusLine, &TMREditorApp::initMRMenuBar,
-                &TMREditorApp::initMRDeskTop),
+MREditorApp::MREditorApp()
+    : TProgInit(&MREditorApp::initMRStatusLine, &MREditorApp::initMRMenuBar,
+                &MREditorApp::initMRDeskTop),
       exitPrepared(false), keystrokeRecording(false), recordingMarkerVisible(false),
+      macroBrainMarkerVisible(false),
        recordedMacroCounter(0), 
       recordingBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval),
+      macroBrainBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval),
       indexedMacroWarmupActive(false), indexedMacroWarmupLoadedFiles(0) {
 	TEditor::editorDialog = mrEditorDialog;
 	mr::coprocessor::globalCoprocessor().setResultHandler(handleCoprocessorResult);
@@ -953,7 +979,7 @@ TMREditorApp::TMREditorApp()
 	applyConfiguredDisplayLayout();
 	static_cast<void>(mrEnsureLogWindow(false));
 	syncRecordingUiState();
-	if (auto *mrMenuBar = dynamic_cast<TMRMenuBar *>(menuBar))
+	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar))
 		mrMenuBar->setPersistentBlocksMenuState(configuredPersistentBlocksSetting());
 
 	if (configuredAutoloadWorkspace()) {
@@ -963,13 +989,13 @@ TMREditorApp::TMREditorApp()
 	updateAppCommandState();
 }
 
-TMREditorApp::~TMREditorApp() {
+MREditorApp::~MREditorApp() {
 	prepareForQuit();
 	mr::coprocessor::globalCoprocessor().shutdown(true);
 }
 
-bool TMREditorApp::reloadSettingsMacroFromPath(const std::string &path, std::string *errorMessage) {
-	std::vector<TMREditWindow *> windows;
+bool MREditorApp::reloadSettingsMacroFromPath(const std::string &path, std::string *errorMessage) {
+	std::vector<MREditWindow *> windows;
 	bool defaultInsertMode = true;
 
 	if (!loadStartupSettingsMacro(path, errorMessage))
@@ -987,8 +1013,8 @@ bool TMREditorApp::reloadSettingsMacroFromPath(const std::string &path, std::str
 	return true;
 }
 
-void TMREditorApp::applyConfiguredWindowFramePolicy() {
-	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+void MREditorApp::applyConfiguredWindowFramePolicy() {
+	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 
 	for (auto win : windows) {
 			if (win == nullptr)
@@ -999,7 +1025,7 @@ void TMREditorApp::applyConfiguredWindowFramePolicy() {
 	}
 }
 
-void TMREditorApp::applyConfiguredDisplayLayout() {
+void MREditorApp::applyConfiguredDisplayLayout() {
 	bool statusVisible = true;
 	TRect appRect = getExtent();
 	TRect desktopRect;
@@ -1007,7 +1033,7 @@ void TMREditorApp::applyConfiguredDisplayLayout() {
 	if (menuBar != nullptr) {
 		menuBar->show();
 	}
-	if (auto *mrStatus = dynamic_cast<TMRStatusLine *>(statusLine)) {
+	if (auto *mrStatus = dynamic_cast<MRStatusLine *>(statusLine)) {
 		mrStatus->setShowFunctionKeyLabels(true);
 		mrStatus->show();
 	}
@@ -1028,11 +1054,11 @@ void TMREditorApp::applyConfiguredDisplayLayout() {
 		statusLine->drawView();
 }
 
-void TMREditorApp::prepareForQuit() {
+void MREditorApp::prepareForQuit() {
 	if (exitPrepared)
 		return;
 
-	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 	std::size_t pendingTaskCount = 0;
 	std::string settingsError;
 	MRSettingsWriteReport settingsWriteReport;
@@ -1060,31 +1086,31 @@ void TMREditorApp::prepareForQuit() {
 	cancelForegroundMacroDelays();
 }
 
-bool TMREditorApp::isRecorderToggleKey(const TEvent &event) const {
+bool MREditorApp::isRecorderToggleKey(const TEvent &event) const {
 	return event.what == evKeyDown && TKey(event.keyDown) == TKey(kbAltF10);
 }
 
-bool TMREditorApp::isRecorderToggleCommand(const TEvent &event) const {
+bool MREditorApp::isRecorderToggleCommand(const TEvent &event) const {
 	return event.what == evCommand && event.message.command == cmMrMacroToggleRecording;
 }
 
-void TMREditorApp::redrawRecordingMarkerFrames() {
-	std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+void MREditorApp::redrawRecordingMarkerFrames() {
+	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 	for (auto & window : windows) {
 		if (window != nullptr && window->frame != nullptr)
 			window->frame->drawView();
 	}
 }
 
-void TMREditorApp::syncRecordingUiState() {
+void MREditorApp::syncRecordingUiState() {
 	mrSetKeystrokeRecordingActive(keystrokeRecording);
 	mrSetKeystrokeRecordingMarkerVisible(keystrokeRecording && recordingMarkerVisible);
-	if (auto *mrStatusLine = dynamic_cast<TMRStatusLine *>(statusLine))
+	if (auto *mrStatusLine = dynamic_cast<MRStatusLine *>(statusLine))
 		mrStatusLine->setRecordingState(keystrokeRecording, recordingMarkerVisible);
 	redrawRecordingMarkerFrames();
 }
 
-void TMREditorApp::updateRecordingBlink() {
+void MREditorApp::updateRecordingBlink() {
 	std::chrono::steady_clock::time_point now;
 	if (!keystrokeRecording)
 		return;
@@ -1096,12 +1122,27 @@ void TMREditorApp::updateRecordingBlink() {
 	recordingMarkerVisible = !recordingMarkerVisible;
 	recordingBlinkToggleAt = now + kRecordingBlinkInterval;
 	mrSetKeystrokeRecordingMarkerVisible(recordingMarkerVisible);
-	if (auto *mrStatusLine = dynamic_cast<TMRStatusLine *>(statusLine))
+	if (auto *mrStatusLine = dynamic_cast<MRStatusLine *>(statusLine))
 		mrStatusLine->setRecordingState(keystrokeRecording, recordingMarkerVisible);
 	redrawRecordingMarkerFrames();
 }
 
-void TMREditorApp::startKeystrokeRecording() {
+void MREditorApp::updateMacroBrainBlink() {
+	std::chrono::steady_clock::time_point now;
+	if (!mrIsMacroBrainMarkerActive())
+		return;
+
+	now = std::chrono::steady_clock::now();
+	if (now < macroBrainBlinkToggleAt)
+		return;
+
+	macroBrainMarkerVisible = !macroBrainMarkerVisible;
+	macroBrainBlinkToggleAt = now + kRecordingBlinkInterval;
+	mrSetMacroBrainMarkerVisible(macroBrainMarkerVisible);
+	redrawRecordingMarkerFrames();
+}
+
+void MREditorApp::startKeystrokeRecording() {
 	keystrokeRecording = true;
 	recordingMarkerVisible = true;
 	recordingBlinkToggleAt = std::chrono::steady_clock::now() + kRecordingBlinkInterval;
@@ -1110,7 +1151,7 @@ void TMREditorApp::startKeystrokeRecording() {
 	mrLogMessage("Keystroke recording started (Alt-F10 to stop).");
 }
 
-void TMREditorApp::appendRecordedKeyEvent(const TEvent &event) {
+void MREditorApp::appendRecordedKeyEvent(const TEvent &event) {
 	std::string keyToken;
 	ushort state;
 
@@ -1132,7 +1173,7 @@ void TMREditorApp::appendRecordedKeyEvent(const TEvent &event) {
 		recordedKeySequence += keyToken;
 }
 
-bool TMREditorApp::captureBindingKeySpec(std::string &keySpec) {
+bool MREditorApp::captureBindingKeySpec(std::string &keySpec) {
 	TMacroBindCaptureDialog *dialog = nullptr;
 	ushort modalResult;
 	bool captured = false;
@@ -1153,14 +1194,13 @@ bool TMREditorApp::captureBindingKeySpec(std::string &keySpec) {
 	if (modalResult == cmCancel || !captured)
 		return true;
 	if (!keyInTokenFromEvent(keyCode, controlState, keySpec)) {
-		messageBox(mfError | mfOKButton,
-		           "Unsupported binding key.\nUse a function key or a Ctrl/Alt/Shift combination.");
+		postAppError("Unsupported binding key. Use a function key or a Ctrl/Alt/Shift combination.");
 		return false;
 	}
 	return true;
 }
 
-void TMREditorApp::finalizeKeystrokeRecording() {
+void MREditorApp::finalizeKeystrokeRecording() {
 	enum { SavePathBufferSize = 512 };
 	char savePathBuffer[SavePathBufferSize];
 	std::string keySpec;
@@ -1201,7 +1241,7 @@ void TMREditorApp::finalizeKeystrokeRecording() {
 	macroSource = source.str();
 
 	if (!validateMacroSource(macroSource, validationError)) {
-		messageBox(mfError | mfOKButton, "Recorded macro is invalid:\n\n%s", validationError.c_str());
+		postAppError("Recorded macro is invalid: " + validationError);
 		return;
 	}
 
@@ -1209,7 +1249,7 @@ void TMREditorApp::finalizeKeystrokeRecording() {
 		if (!confirmOverwriteForPath("Overwrite", "Macro file exists. Overwrite?", savePath))
 			return;
 		if (!writeTextFileWithConfiguredSaveOptions(savePath, macroSource)) {
-			messageBox(mfError | mfOKButton, "Could not save recorded macro:\n%s", savePath.c_str());
+			postAppError("Could not save recorded macro: " + savePath);
 			return;
 		}
 		std::string line = "Saved recorded macro to ";
@@ -1220,21 +1260,21 @@ void TMREditorApp::finalizeKeystrokeRecording() {
 	if (!keySpec.empty()) {
 		if (!savePath.empty())
 			sessionPath = savePath;
-		else {
-			sessionPath = configuredTempDirectoryPath() + "/mr_recorded_" +
-			              std::to_string(static_cast<long>(::getpid())) + "_" +
-			              std::to_string(recordedMacroCounter) + ".mrmac";
-				if (!writeTextFileWithConfiguredSaveOptions(sessionPath, macroSource)) {
-				messageBox(mfError | mfOKButton, "Could not create session macro file.");
+			else {
+				sessionPath = configuredTempDirectoryPath() + "/mr_recorded_" +
+				              std::to_string(static_cast<long>(::getpid())) + "_" +
+				              std::to_string(recordedMacroCounter) + ".mrmac";
+					if (!writeTextFileWithConfiguredSaveOptions(sessionPath, macroSource)) {
+					postAppError("Could not create session macro file.");
+					return;
+				}
+				recordedSessionMacroFiles.push_back(sessionPath);
+			}
+
+			if (!mrvmLoadMacroFile(sessionPath, &loadError)) {
+				postAppError("Could not bind recorded macro: " + loadError);
 				return;
 			}
-			recordedSessionMacroFiles.push_back(sessionPath);
-		}
-
-		if (!mrvmLoadMacroFile(sessionPath, &loadError)) {
-			messageBox(mfError | mfOKButton, "Could not bind recorded macro:\n\n%s", loadError.c_str());
-			return;
-		}
 		{
 			std::string line = "Recorded macro bound to ";
 			line += keySpec;
@@ -1252,7 +1292,7 @@ void TMREditorApp::finalizeKeystrokeRecording() {
 	messageBox(mfInformation | mfOKButton, "%s", summary.c_str());
 }
 
-void TMREditorApp::stopKeystrokeRecording() {
+void MREditorApp::stopKeystrokeRecording() {
 	keystrokeRecording = false;
 	recordingMarkerVisible = false;
 	syncRecordingUiState();
@@ -1261,7 +1301,7 @@ void TMREditorApp::stopKeystrokeRecording() {
 	recordedKeySequence.clear();
 }
 
-void TMREditorApp::bootstrapIndexedMacroBindings() {
+void MREditorApp::bootstrapIndexedMacroBindings() {
 	std::size_t fileCount = 0;
 	std::size_t bindingCount = 0;
 	std::string directory = defaultMacroDirectoryPath();
@@ -1293,7 +1333,7 @@ void TMREditorApp::bootstrapIndexedMacroBindings() {
 	}
 }
 
-void TMREditorApp::warmIndexedMacroBindings() {
+void MREditorApp::warmIndexedMacroBindings() {
 	std::string loadedPath;
 	std::string failedPath;
 	std::string errorText;
@@ -1326,13 +1366,15 @@ void TMREditorApp::warmIndexedMacroBindings() {
 	}
 }
 
-void TMREditorApp::handleEvent(TEvent &event) {
+void MREditorApp::handleEvent(TEvent &event) {
+	const ushort originalWhat = event.what;
 	clearTransientSearchSelectionOnUserInput(event);
 	if (isRecorderToggleCommand(event)) {
 		if (keystrokeRecording)
 			stopKeystrokeRecording();
 		else
 			startKeystrokeRecording();
+		mrvmUiInvalidateScreenBase();
 		clearEvent(event);
 		return;
 	}
@@ -1341,15 +1383,26 @@ void TMREditorApp::handleEvent(TEvent &event) {
 			stopKeystrokeRecording();
 		else
 			startKeystrokeRecording();
+		mrvmUiInvalidateScreenBase();
 		clearEvent(event);
 		return;
 	}
 	if (keystrokeRecording && event.what == evKeyDown)
 		appendRecordedKeyEvent(event);
 
+	if (event.what == evCommand && event.message.command == cmMrDeferredActivateWindow) {
+		mrLogMessage("MREditorApp handling cmMrDeferredActivateWindow");
+		static_cast<void>(mrDispatchDeferredWindowActivation());
+		mrvmUiInvalidateScreenBase();
+		clearEvent(event);
+		return;
+	}
+
 	if (event.what == evCommand && event.message.command == cmQuit)
 		prepareForQuit();
 	TApplication::handleEvent(event);
+	if (shouldInvalidateScreenBaseForEvent(originalWhat))
+		mrvmUiInvalidateScreenBase();
 
 	if (event.what != evCommand)
 		return;
@@ -1357,21 +1410,23 @@ void TMREditorApp::handleEvent(TEvent &event) {
 		clearEvent(event);
 }
 
-void TMREditorApp::idle() {
+void MREditorApp::idle() {
 	TApplication::idle();
 	pumpForegroundMacroDelays();
 	updateRecordingBlink();
+	updateMacroBrainBlink();
 	warmIndexedMacroBindings();
 	mr::coprocessor::globalCoprocessor().pump(8);
-	if (auto *mrMenuBar = dynamic_cast<TMRMenuBar *>(menuBar)) {
+	pumpDeferredMacroUiPlayback();
+	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar)) {
 		mr::messageline::VisibleMessage message;
 		std::string rightStatus = buildTopRightCursorStatus();
 		mrMenuBar->setRightStatus(rightStatus);
 		mrMenuBar->setPersistentBlocksMenuState(configuredPersistentBlocksSetting());
 		if (mr::messageline::currentVisibleMessage(message)) {
-			TMRMenuBar::MarqueeKind marqueeKind = mapMessageNoticeKind(message.kind);
+			MRMenuBar::MarqueeKind marqueeKind = mapMessageNoticeKind(message.kind);
 			if (isHeroVisibleMessage(message))
-				marqueeKind = TMRMenuBar::MarqueeKind::Hero;
+				marqueeKind = MRMenuBar::MarqueeKind::Hero;
 			mrMenuBar->setAutoMarqueeStatus(message.text, marqueeKind);
 		}
 		else
@@ -1379,18 +1434,18 @@ void TMREditorApp::idle() {
 		mrMenuBar->tickMarquee();
 	}
 	{
-		std::vector<TMREditWindow *> windows = allEditWindowsInZOrder();
+		std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 		for (auto *window : windows) {
 			if (window == nullptr || window->frame == nullptr)
 				continue;
-			if (auto *mrFrame = dynamic_cast<TMRFrame *>(window->frame))
+			if (auto *mrFrame = dynamic_cast<MRFrame *>(window->frame))
 				mrFrame->tickTaskOverviewAnimation();
 		}
 	}
 	updateAppCommandState();
 }
 
-TPalette &TMREditorApp::getPalette() const {
+TPalette &MREditorApp::getPalette() const {
 	static const TPalette &basePalette = extendedAppBasePalette();
 	static TPalette palette = basePalette;
 	unsigned char overrideValue = 0;

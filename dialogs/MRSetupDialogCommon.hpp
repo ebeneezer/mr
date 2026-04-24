@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <functional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -22,6 +23,7 @@
 class TDialog;
 class TGroup;
 class TRect;
+class TButton;
 class MRDialogFoundation;
 
 namespace mr::dialogs {
@@ -91,6 +93,12 @@ void insertSetupStaticLine(TDialog *dialog, int x, int y, const char *text);
 
 class MRScrollableDialog : public TDialog {
   public:
+	struct DialogValidationResult {
+		bool valid = true;
+		std::string warningText;
+	};
+	using DialogValidationHook = std::function<DialogValidationResult()>;
+
 	struct ManagedItem {
 		TView *view;
 		TRect base;
@@ -98,15 +106,19 @@ class MRScrollableDialog : public TDialog {
 
 	MRScrollableDialog(const TRect &bounds, const char *title, int virtualWidth,
 	                   int virtualHeight);
+	~MRScrollableDialog() override;
 	void handleEvent(TEvent &event) override;
 
 	void addManaged(TView *view, const TRect &base);
 	void initScrollIfNeeded();
 	void selectContent();
 	void scrollToOrigin();
+	void setDialogValidationHook(DialogValidationHook hook);
+	void runDialogValidation();
 	[[nodiscard]] TGroup *managedContent() const noexcept { return content_; }
 
   private:
+	void detectDoneButton(TView *view);
 	void applyScroll();
 	void ensureViewVisible(TView *view);
 	void ensureCurrentVisible();
@@ -118,6 +130,11 @@ class MRScrollableDialog : public TDialog {
 	std::vector<ManagedItem> managedViews_;
 	TScrollBar *hScrollBar_ = nullptr;
 	TScrollBar *vScrollBar_ = nullptr;
+	TButton *doneButton = nullptr;
+	DialogValidationHook dialogValidationHook;
+	bool isRunningDialogValidation = false;
+	bool hasDialogValidationWarning = false;
+	std::string lastDialogValidationWarning;
 };
 
 class MRDialogFoundation : public MRScrollableDialog {

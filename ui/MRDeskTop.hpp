@@ -1,5 +1,5 @@
-#ifndef TMRDESKTOP_HPP
-#define TMRDESKTOP_HPP
+#ifndef MRDESKTOP_HPP
+#define MRDESKTOP_HPP
 
 #define Uses_TDeskTop
 #define Uses_TBackground
@@ -14,9 +14,9 @@
 #include <vector>
 
 namespace {
-class TMRDesktopBackground : public TBackground {
+class MRDesktopBackground : public TBackground {
   public:
-	TMRDesktopBackground(const TRect &bounds) : TBackground(bounds, '\xB0') {
+	MRDesktopBackground(const TRect &bounds) : TBackground(bounds, '\xB0') {
 	}
 
 	void draw() override {
@@ -90,14 +90,14 @@ class TMRDesktopBackground : public TBackground {
 };
 } // namespace
 
-class TMRDeskTop : public TDeskTop {
+class MRDeskTop : public TDeskTop {
   public:
-	TMRDeskTop(const TRect &r) : TDeskInit(&TMRDeskTop::initBackground), TDeskTop(r) {
+	MRDeskTop(const TRect &r) : TDeskInit(&MRDeskTop::initBackground), TDeskTop(r) {
 	}
 
   private:
 	static TBackground *initBackground(TRect r) {
-		return new TMRDesktopBackground(r);
+		return new MRDesktopBackground(r);
 	}
 };
 

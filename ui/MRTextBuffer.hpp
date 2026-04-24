@@ -1,37 +1,37 @@
-#ifndef TMRTEXTBUFFER_HPP
-#define TMRTEXTBUFFER_HPP
+#ifndef MRTEXTBUFFER_HPP
+#define MRTEXTBUFFER_HPP
 
 #include <cstddef>
 
-#include "TMRFileEditor.hpp"
+#include "MRFileEditor.hpp"
 
-class TMRTextBuffer {
+class MRTextBuffer {
   public:
-	TMRTextBuffer() noexcept : editor_(nullptr) {
+	MRTextBuffer() noexcept : editor_(nullptr) {
 	}
 
-	explicit TMRTextBuffer(TMRFileEditor *editor) noexcept : editor_(editor) {
+	explicit MRTextBuffer(MRFileEditor *editor) noexcept : editor_(editor) {
 	}
 
 	bool exists() const noexcept {
 		return editor_ != nullptr;
 	}
 
-	TMRFileEditor *nativeEditor() const noexcept {
+	MRFileEditor *nativeEditor() const noexcept {
 		return editor_;
 	}
 
-	TMRTextBufferModel::Snapshot snapshot() const {
-		return editor_ != nullptr ? editor_->bufferModel().snapshot() : TMRTextBufferModel::Snapshot();
+	MRTextBufferModel::Snapshot snapshot() const {
+		return editor_ != nullptr ? editor_->bufferModel().snapshot() : MRTextBufferModel::Snapshot();
 	}
 
-	TMRTextBufferModel::ReadSnapshot readSnapshot() const {
+	MRTextBufferModel::ReadSnapshot readSnapshot() const {
 		return editor_ != nullptr ? editor_->bufferModel().readSnapshot()
-		                         : TMRTextBufferModel::ReadSnapshot();
+		                         : MRTextBufferModel::ReadSnapshot();
 	}
 
-	TMRTextBufferModel::Range selectionRange() const noexcept {
-		return editor_ != nullptr ? editor_->bufferModel().selection().range() : TMRTextBufferModel::Range();
+	MRTextBufferModel::Range selectionRange() const noexcept {
+		return editor_ != nullptr ? editor_->bufferModel().selection().range() : MRTextBufferModel::Range();
 	}
 
 	std::size_t length() const noexcept {
@@ -66,8 +66,8 @@ class TMRTextBuffer {
 		return editor_ != nullptr && editor_->bufferModel().isModified();
 	}
 
-	TMRSyntaxLanguage language() const noexcept {
-		return editor_ != nullptr ? editor_->bufferModel().language() : TMRSyntaxLanguage::PlainText;
+	MRSyntaxLanguage language() const noexcept {
+		return editor_ != nullptr ? editor_->bufferModel().language() : MRSyntaxLanguage::PlainText;
 	}
 
 	const char *languageName() const noexcept {
@@ -86,7 +86,7 @@ class TMRTextBuffer {
 
 	unsigned long cursorLineNumber() const noexcept {
 		if (editor_ != nullptr) {
-			const TMRTextBufferModel &model = editor_->bufferModel();
+			const MRTextBufferModel &model = editor_->bufferModel();
 			return static_cast<unsigned long>(model.lineIndex(model.cursor())) + 1UL;
 		}
 		return 1UL;
@@ -94,7 +94,7 @@ class TMRTextBuffer {
 
 	unsigned long cursorColumnNumber() const noexcept {
 		if (editor_ != nullptr) {
-			const TMRTextBufferModel &model = editor_->bufferModel();
+			const MRTextBufferModel &model = editor_->bufferModel();
 			return static_cast<unsigned long>(model.column(model.cursor())) + 1UL;
 		}
 		return 1UL;
@@ -103,7 +103,7 @@ class TMRTextBuffer {
 	TPoint cursorPoint() const noexcept {
 		TPoint point = {0, 0};
 		if (editor_ != nullptr) {
-			const TMRTextBufferModel &model = editor_->bufferModel();
+			const MRTextBufferModel &model = editor_->bufferModel();
 			point.x = static_cast<short>(model.column(model.cursor()));
 			point.y = static_cast<short>(model.lineIndex(model.cursor()));
 		}
@@ -119,7 +119,7 @@ class TMRTextBuffer {
 	}
 
   private:
-	TMRFileEditor *editor_;
+	MRFileEditor *editor_;
 };
 
 #endif

@@ -1,5 +1,5 @@
-#ifndef TMREDITWINDOW_HPP
-#define TMREDITWINDOW_HPP
+#ifndef MREDITWINDOW_HPP
+#define MREDITWINDOW_HPP
 
 #define Uses_TWindow
 #define Uses_TScrollBar
@@ -25,20 +25,21 @@
 #include <unistd.h>
 #include <vector>
 
-#include "TMRFrame.hpp"
-#include "TMRIndicator.hpp"
-#include "TMRTextBuffer.hpp"
+#include "MRFrame.hpp"
+#include "MRIndicator.hpp"
+#include "MRTextBuffer.hpp"
 #include "MRWindowManager.hpp"
 #include "MRWindowManager.hpp"
 #include "MRWindowSupport.hpp"
+#include "../dialogs/MRWindowListDialog.hpp"
 #include "../config/MRDialogPaths.hpp"
 #include "../mrmac/mrvm.hpp"
 
 void mrTraceCoprocessorTaskCancel(int bufferId, std::uint64_t taskId);
-class TMREditWindow;
-void setWindowManuallyHidden(TMREditWindow *win, bool hidden);
+class MREditWindow;
+void setWindowManuallyHidden(MREditWindow *win, bool hidden);
 
-class TMREditWindow : public TWindow {
+class MREditWindow : public TWindow {
   public:
 	struct TrackedTask {
 		std::uint64_t id;
@@ -65,8 +66,8 @@ class TMREditWindow : public TWindow {
 		wrHelp
 	};
 
-	TMREditWindow(const TRect &bounds, const char *title, int aNumber)
-	    : TWindowInit(&TMREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr),
+	MREditWindow(const TRect &bounds, const char *title, int aNumber)
+	    : TWindowInit(&MREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr),
 	      hScrollBar(nullptr), indicator(nullptr), editor(nullptr), bufferId_(allocateBufferId()),
 	      firstSaveDone_(false), temporaryFileUsed_(false), temporaryFileName_(), indentLevel_(1),
 	      blockMode_(bmNone), blockMarkingOn_(false), blockAnchor_(0), blockEnd_(0),
@@ -89,11 +90,11 @@ class TMREditWindow : public TWindow {
 		vScrollBar->hide();
 		insert(vScrollBar);
 
-		indicator = new TMRIndicator(TRect(2, size.y - 1, 38, size.y));
+		indicator = new MRIndicator(TRect(2, size.y - 1, 38, size.y));
 		indicator->hide();
 		insert(indicator);
 		if (frame != nullptr) {
-			TMRFrame *mrFrame = static_cast<TMRFrame *>(frame);
+			MRFrame *mrFrame = static_cast<MRFrame *>(frame);
 			mrFrame->setMarkerStateProvider([this]() {
 				const bool hasTaskSlot = indicator != nullptr && indicator->hasTaskMarkerSlot();
 				const bool showTaskIcon = indicator != nullptr && indicator->shouldDrawTaskMarker();
@@ -102,9 +103,11 @@ class TMREditWindow : public TWindow {
 				const bool isActiveWindow = (this->state & sfActive) != 0;
 				const bool showRecordingSlot = isActiveWindow && mrIsKeystrokeRecordingActive();
 				const bool showRecordingIcon = showRecordingSlot && mrIsKeystrokeRecordingMarkerVisible();
-				return TMRFrame::MarkerState(isFileChanged(), insertModeEnabled(), hasTaskSlot, showTaskIcon,
+				const bool showMacroBrainSlot = isActiveWindow && mrIsMacroBrainMarkerActive();
+				const bool showMacroBrainIcon = showMacroBrainSlot && mrIsMacroBrainMarkerVisible();
+				return MRFrame::MarkerState(isFileChanged(), insertModeEnabled(), hasTaskSlot, showTaskIcon,
 				                             hasReadOnlySlot, showReadOnlyIcon, showRecordingSlot,
-				                             showRecordingIcon);
+				                             showRecordingIcon, showMacroBrainSlot, showMacroBrainIcon);
 			});
 			mrFrame->setTaskOverviewProvider([this]() { return describeRunningTasks(); });
 		}
@@ -118,8 +121,9 @@ class TMREditWindow : public TWindow {
 		refreshSyntaxContext();
 	}
 
-	virtual ~TMREditWindow() override {
+	virtual ~MREditWindow() override {
 		cancelTrackedCoprocessorTasks();
+		mrNotifyWindowTopologyChanged();
 	}
 
 	virtual TPalette &getPalette() const override {
@@ -246,7 +250,7 @@ class TMREditWindow : public TWindow {
 				editor->setSelectionOffsets(cursor, cursor, False);
 			}
 			if (frame != nullptr) {
-				TMRFrame *mrFrame = static_cast<TMRFrame *>(frame);
+				MRFrame *mrFrame = static_cast<MRFrame *>(frame);
 				if ((event.what & (evMouseDown | evMouseMove | evMouseUp)) != 0)
 					mrFrame->updateTaskHover(event.mouse.where, false);
 				else if ((event.what & (evKeyDown | evCommand)) != 0)
@@ -361,12 +365,12 @@ class TMREditWindow : public TWindow {
 		return "";
 	}
 
-	TMRFileEditor *getEditor() const {
+	MRFileEditor *getEditor() const {
 		return editor;
 	}
 
-	TMRTextBuffer buffer() const {
-		return TMRTextBuffer(editor);
+	MRTextBuffer buffer() const {
+		return MRTextBuffer(editor);
 	}
 
 	bool isBufferEmpty() const {
@@ -381,8 +385,8 @@ class TMREditWindow : public TWindow {
 		return buffer().lineCount();
 	}
 
-	TMRFileEditor::LoadTiming lastLoadTiming() const noexcept {
-		return editor != nullptr ? editor->lastLoadTiming() : TMRFileEditor::LoadTiming();
+	MRFileEditor::LoadTiming lastLoadTiming() const noexcept {
+		return editor != nullptr ? editor->lastLoadTiming() : MRFileEditor::LoadTiming();
 	}
 
 	bool hasSelection() const {
@@ -425,8 +429,8 @@ class TMREditWindow : public TWindow {
 		return editor != nullptr ? editor->syntaxLanguageName() : "Plain Text";
 	}
 
-	TMRSyntaxLanguage syntaxLanguage() const {
-		return editor != nullptr ? editor->syntaxLanguage() : TMRSyntaxLanguage::PlainText;
+	MRSyntaxLanguage syntaxLanguage() const {
+		return editor != nullptr ? editor->syntaxLanguage() : MRSyntaxLanguage::PlainText;
 	}
 
 	bool hasPersistentFileName() const {
@@ -810,7 +814,7 @@ class TMREditWindow : public TWindow {
 		return clearedCount;
 	}
 
-	void showMacroNotice(const std::string &text, TMRIndicator::NoticeKind kind) {
+	void showMacroNotice(const std::string &text, MRIndicator::NoticeKind kind) {
 		if (indicator != nullptr)
 			indicator->showStatusNotice(text, kind);
 	}
@@ -1142,8 +1146,8 @@ class TMREditWindow : public TWindow {
 			editor->drawView();
 	}
 
-	TMRFileEditor *createEditor(const TRect &bounds, const char *fileName) {
-		return new TMRFileEditor(bounds, hScrollBar, vScrollBar, indicator, fileName != nullptr ? fileName : "");
+	MRFileEditor *createEditor(const TRect &bounds, const char *fileName) {
+		return new MRFileEditor(bounds, hScrollBar, vScrollBar, indicator, fileName != nullptr ? fileName : "");
 	}
 
 	void layoutEditorChrome() {
@@ -1178,7 +1182,7 @@ class TMREditWindow : public TWindow {
 	}
 
 	static TFrame *initFrame(TRect r) {
-		return new TMRFrame(r);
+		return new MRFrame(r);
 	}
 
 	static bool isExistingPathReadOnly(const char *fileName) {
@@ -1599,8 +1603,8 @@ class TMREditWindow : public TWindow {
 
 	TScrollBar *vScrollBar;
 	TScrollBar *hScrollBar;
-	TMRIndicator *indicator;
-	TMRFileEditor *editor;
+	MRIndicator *indicator;
+	MRFileEditor *editor;
 	int bufferId_;
 	bool firstSaveDone_;
 	bool temporaryFileUsed_;

@@ -26,8 +26,9 @@
 #include "../mrmac/mrvm.hpp"
 #include "../config/MRDialogPaths.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
+#include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRWindowSupport.hpp"
-#include "../ui/TMREditWindow.hpp"
+#include "../ui/MREditWindow.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -45,6 +46,14 @@ using mr::dialogs::ensureMrmacExtension;
 using mr::dialogs::hasMrmacExtension;
 using mr::dialogs::normalizeTvPathSeparators;
 
+class MacroManagerActivationSink {
+  public:
+	virtual void activateFocusedEntry() = 0;
+
+  protected:
+	~MacroManagerActivationSink() = default;
+};
+
 enum : ushort {
 	cmMRMacroManagerCreate = 220,
 	cmMRMacroManagerDelete,
@@ -54,6 +63,11 @@ enum : ushort {
 	cmMRMacroManagerPlayback,
 	cmMRMacroManagerOpenEditor
 };
+
+void postMacroDialogError(std::string_view text) {
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text,
+	                               mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+}
 
 struct MacroFileEntry {
 	std::string fileName;
@@ -408,7 +422,7 @@ class TBindKeyCaptureDialog : public MRDialogFoundation {
 	TBindKeyCaptureDialog()
 	    : TWindowInit(&TDialog::initFrame),
 	      MRDialogFoundation(centeredSetupDialogRect(50, 8), "Bind Macro Key", 50, 8),
-	      captured_(false), keyCode_(kbNoKey), controlState_(0) {
+	      captureAccepted(false), capturedKeyCode(kbNoKey), capturedControlState(0) {
 		insert(new TStaticText(TRect(2, 2, 48, 6), "Press key to bind macro.\nEsc = cancel."));
 	}
 
@@ -420,9 +434,9 @@ class TBindKeyCaptureDialog : public MRDialogFoundation {
 				clearEvent(event);
 				return;
 			}
-			captured_ = true;
-			keyCode_ = event.keyDown.keyCode;
-			controlState_ = event.keyDown.controlKeyState;
+			captureAccepted = true;
+			capturedKeyCode = event.keyDown.keyCode;
+			capturedControlState = event.keyDown.controlKeyState;
 			endModal(cmOK);
 			clearEvent(event);
 			return;
@@ -431,19 +445,19 @@ class TBindKeyCaptureDialog : public MRDialogFoundation {
 	}
 
 	bool captured() const noexcept {
-		return captured_;
+		return captureAccepted;
 	}
 	ushort keyCode() const noexcept {
-		return keyCode_;
+		return capturedKeyCode;
 	}
 	ushort controlState() const noexcept {
-		return controlState_;
+		return capturedControlState;
 	}
 
   private:
-	bool captured_;
-	ushort keyCode_;
-	ushort controlState_;
+	bool captureAccepted;
+	ushort capturedKeyCode;
+	ushort capturedControlState;
 };
 
 bool captureBindingKeySpec(std::string &keySpec) {
@@ -463,7 +477,7 @@ bool captureBindingKeySpec(std::string &keySpec) {
 	if (result == cmCancel || !captured)
 		return true;
 	if (!keySpecFromEvent(keyCode, controlState, keySpec)) {
-		messageBox(mfError | mfOKButton, "Unsupported key combination.");
+		postMacroDialogError("Unsupported key combination.");
 		return false;
 	}
 	return true;
@@ -511,13 +525,13 @@ bool rebindMacroFileKey(const MacroFileEntry &entry, const std::string &keySpec,
 }
 
 bool openMacroSourceInEditor(const std::string &path) {
-	TMREditWindow *target = findReusableEmptyWindow(currentEditWindow());
+	MREditWindow *target = findReusableEmptyWindow(currentEditWindow());
 	if (target == nullptr)
 		target = createEditorWindow(baseNameOf(path).c_str());
 	if (target == nullptr)
 		return false;
 	if (!target->loadFromFile(path.c_str())) {
-		messageBox(mfError | mfOKButton, "Unable to load macro file:\n%s", path.c_str());
+		postMacroDialogError("Unable to load macro file: " + path);
 		return false;
 	}
 	static_cast<void>(mrActivateEditWindow(target));
@@ -528,16 +542,18 @@ class MacroManagerListView : public TListViewer {
   public:
 	MacroManagerListView(const TRect &bounds, TScrollBar *aVScrollBar,
 	                     const std::vector<std::string> &aItems,
-	                     const std::vector<bool> &aErrorFlags) noexcept
-	    : TListViewer(bounds, 1, nullptr, aVScrollBar), items_(aItems), errorFlags_(aErrorFlags) {
-		setRange(static_cast<short>(items_.size()));
+	                     const std::vector<bool> &aErrorFlags,
+	                     MacroManagerActivationSink &activationSink) noexcept
+	    : TListViewer(bounds, 1, nullptr, aVScrollBar), itemRows(aItems),
+	      compileErrorFlags(aErrorFlags), activationSink(activationSink) {
+		setRange(static_cast<short>(itemRows.size()));
 	}
 
 	void setItems(const std::vector<std::string> &items, const std::vector<bool> &errorFlags) {
-		items_ = items;
-		errorFlags_ = errorFlags;
-		setRange(static_cast<short>(items_.size()));
-		if (items_.empty())
+		itemRows = items;
+		compileErrorFlags = errorFlags;
+		setRange(static_cast<short>(itemRows.size()));
+		if (itemRows.empty())
 			focusItemNum(0);
 		else if (focused >= range)
 			focusItemNum(range - 1);
@@ -582,46 +598,57 @@ class MacroManagerListView : public TListViewer {
 		std::size_t copyLen;
 		if (dest == nullptr || maxLen <= 0)
 			return;
-		if (item < 0 || static_cast<std::size_t>(item) >= items_.size()) {
+		if (item < 0 || static_cast<std::size_t>(item) >= itemRows.size()) {
 			dest[0] = EOS;
 			return;
 		}
 		copyLen = static_cast<std::size_t>(maxLen - 1);
-		std::strncpy(dest, items_[static_cast<std::size_t>(item)].c_str(), copyLen);
+		std::strncpy(dest, itemRows[static_cast<std::size_t>(item)].c_str(), copyLen);
 		dest[copyLen] = EOS;
 	}
 
 	void handleEvent(TEvent &event) override {
-		const bool isDoubleClickPlayback = event.what == evMouseDown &&
-		                                   (event.mouse.buttons & mbLeftButton) != 0 &&
-		                                   (event.mouse.eventFlags & meDoubleClick) != 0;
+		const bool isDoubleClickActivation = event.what == evMouseDown &&
+		                                     (event.mouse.buttons & mbLeftButton) != 0 &&
+		                                     (event.mouse.eventFlags & meDoubleClick) != 0;
 
 		TListViewer::handleEvent(event);
 
-		if (!isDoubleClickPlayback || owner == nullptr)
+		if (isDoubleClickActivation && owner != nullptr && focused >= 0 && focused < range) {
+			activationSink.activateFocusedEntry();
+			clearEvent(event);
 			return;
-		message(owner, evCommand, cmMRMacroManagerPlayback, this);
-		clearEvent(event);
+		}
+		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter && owner != nullptr &&
+		    focused >= 0 && focused < range) {
+			message(owner, evCommand, cmOK, nullptr);
+			clearEvent(event);
+		}
+	}
+
+	bool hasSelection() const noexcept {
+		return focused >= 0 && focused < range;
 	}
 
   private:
 	bool hasCompileError(short item) const noexcept {
-		return item >= 0 && static_cast<std::size_t>(item) < errorFlags_.size() &&
-		       errorFlags_[static_cast<std::size_t>(item)];
+		return item >= 0 && static_cast<std::size_t>(item) < compileErrorFlags.size() &&
+		       compileErrorFlags[static_cast<std::size_t>(item)];
 	}
 
-	std::vector<std::string> items_;
-	std::vector<bool> errorFlags_;
+	std::vector<std::string> itemRows;
+	std::vector<bool> compileErrorFlags;
+	MacroManagerActivationSink &activationSink;
 };
 
-class MacroManagerDialog : public MRDialogFoundation {
+class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivationSink {
   public:
 	MacroManagerDialog()
 	    : TWindowInit(&TDialog::initFrame),
 	      MRDialogFoundation(centeredBounds(), "MACRO MANAGER", centeredBounds().b.x - centeredBounds().a.x,
 	                         centeredBounds().b.y - centeredBounds().a.y),
-	      directory_(defaultMacroDirectoryPath()),  listView_(nullptr),
-	      scrollBar_(nullptr) {
+	      directoryPath(defaultMacroDirectoryPath()),  listView(nullptr),
+	      scrollBar(nullptr) {
 		int width = size.x;
 		int height = size.y;
 		int listLeft = 3;
@@ -635,42 +662,48 @@ class MacroManagerDialog : public MRDialogFoundation {
 		int bottomWidth = 16 + gap + 13 + gap + 12;
 		int bottomLeft = listLeft + std::max(0, (listWidth - bottomWidth) / 2);
 
-		insert(new TButton(TRect(row1Left, 2, row1Left + 14, 4), "~C~reate<Ins>", cmMRMacroManagerCreate,
+		insert(new TButton(TRect(row1Left, 2, row1Left + 14, 4), "~C~reate", cmMRMacroManagerCreate,
 		                   bfNormal));
-		insert(new TButton(TRect(row1Left + 14 + gap, 2, row1Left + 14 + gap + 14, 4), "De~l~ete<Del>",
+		insert(new TButton(TRect(row1Left + 14 + gap, 2, row1Left + 14 + gap + 14, 4), "De~l~ete",
 		                   cmMRMacroManagerDelete, bfNormal));
-		insert(new TButton(TRect(row1Left + 14 + gap + 14 + gap, 2, row1Left + row1Width, 4), "C~o~py<F4>",
+		insert(new TButton(TRect(row1Left + 14 + gap + 14 + gap, 2, row1Left + row1Width, 4), "C~o~py",
 		                   cmMRMacroManagerCopy, bfNormal));
-		insert(new TButton(TRect(row2Left, 4, row2Left + 12, 6), "~E~dit<F3>", cmMRMacroManagerEdit, bfNormal));
-		insert(new TButton(TRect(row2Left + 12 + gap, 4, row2Left + row2Width, 6), "~B~ind<F2>",
+		insert(new TButton(TRect(row2Left, 4, row2Left + 12, 6), "~E~dit", cmMRMacroManagerEdit, bfNormal));
+		insert(new TButton(TRect(row2Left + 12 + gap, 4, row2Left + row2Width, 6), "~B~ind",
 		                   cmMRMacroManagerBind, bfNormal));
 
-		scrollBar_ = new TScrollBar(TRect(width - 4, 7, width - 3, height - 4));
-		insert(scrollBar_);
-		listView_ = new MacroManagerListView(TRect(3, 7, width - 4, height - 4), scrollBar_,
-		                                     std::vector<std::string>(), std::vector<bool>());
-		insert(listView_);
+		scrollBar = new TScrollBar(TRect(width - 4, 7, width - 3, height - 4));
+		insert(scrollBar);
+		listView = new MacroManagerListView(TRect(3, 7, width - 4, height - 4), scrollBar,
+		                                     std::vector<std::string>(), std::vector<bool>(), *this);
+		insert(listView);
 
-		insert(new TButton(TRect(bottomLeft, height - 3, bottomLeft + 16, height - 1), "~P~layback<ENTER>",
+		insert(new TButton(TRect(bottomLeft, height - 3, bottomLeft + 16, height - 1), "~P~layback",
 		                   cmMRMacroManagerPlayback, bfDefault));
 		insert(new TButton(TRect(bottomLeft + 16 + gap, height - 3, bottomLeft + 16 + gap + 13, height - 1),
-		                   "~D~one<ESC>", cmCancel, bfNormal));
+		                   "~D~one", cmCancel, bfNormal));
 		insert(new TButton(TRect(bottomLeft + 16 + gap + 13 + gap, height - 3, bottomLeft + bottomWidth,
 		                         height - 1),
-		                   "~H~elp<F1>", cmHelp, bfNormal));
+		                   "~H~elp", cmHelp, bfNormal));
 
 		refreshEntries(-1);
-		if (listView_ != nullptr)
-			listView_->select();
+		if (listView != nullptr)
+			listView->select();
 	}
 
 	const std::string &openPath() const noexcept {
-		return openPath_;
+		return openPathValue;
+	}
+
+	const std::string &playbackPath() const noexcept {
+		return playbackPathValue;
+	}
+
+	void activateFocusedEntry() {
+		handlePlayback();
 	}
 
 	void handleEvent(TEvent &event) override {
-		MRDialogFoundation::handleEvent(event);
-
 		if (event.what == evKeyDown) {
 			switch (ctrlToArrow(event.keyDown.keyCode)) {
 				case kbIns:
@@ -705,7 +738,7 @@ class MacroManagerDialog : public MRDialogFoundation {
 		}
 
 		if (event.what != evCommand)
-			return;
+			goto base;
 
 		switch (event.message.command) {
 			case cmMRMacroManagerCreate:
@@ -732,28 +765,40 @@ class MacroManagerDialog : public MRDialogFoundation {
 				handlePlayback();
 				clearEvent(event);
 				break;
+			case cmOK:
+				if (listView != nullptr && listView->hasSelection()) {
+					handlePlayback();
+					clearEvent(event);
+				}
+				break;
 			case cmHelp:
 				static_cast<void>(mrShowProjectHelp());
 				clearEvent(event);
 				break;
 		}
+
+		if (event.what == evNothing)
+			return;
+
+	base:
+		MRDialogFoundation::handleEvent(event);
 	}
 
   private:
 	static TRect centeredBounds() {
 		TRect desk = TProgram::deskTop->getExtent();
 		int width = std::min(58, std::max(52, desk.b.x - desk.a.x - 4));
-		int height = std::min(16, std::max(14, desk.b.y - desk.a.y - 2));
+		int height = std::min(26, std::max(24, desk.b.y - desk.a.y - 2));
 		int left = desk.a.x + (desk.b.x - desk.a.x - width) / 2;
 		int top = desk.a.y + (desk.b.y - desk.a.y - height) / 2;
 		return TRect(left, top, left + width, top + height);
 	}
 
 	int selectedIndex() const {
-		if (listView_ == nullptr)
+		if (listView == nullptr)
 			return -1;
-		short idx = listView_->focused;
-		if (idx < 0 || static_cast<std::size_t>(idx) >= entries_.size())
+		short idx = listView->focused;
+		if (idx < 0 || static_cast<std::size_t>(idx) >= entries.size())
 			return -1;
 		return idx;
 	}
@@ -762,29 +807,29 @@ class MacroManagerDialog : public MRDialogFoundation {
 		int idx = selectedIndex();
 		if (idx < 0)
 			return nullptr;
-		return &entries_[static_cast<std::size_t>(idx)];
+		return &entries[static_cast<std::size_t>(idx)];
 	}
 
 	void refreshEntries(int keepIndex) {
-		entries_ = scanMacroFilesInDirectory(directory_);
-		rows_.clear();
-		rowHasCompileError_.clear();
-		if (entries_.empty())
-			rows_.push_back("(none available)");
+		entries = scanMacroFilesInDirectory(directoryPath);
+		rows.clear();
+		rowHasCompileError.clear();
+		if (entries.empty())
+			rows.push_back("(none available)");
 		else
-			for (auto & entrie : entries_) {
-				rows_.push_back(rowTextFor(entrie));
-				rowHasCompileError_.push_back(!entrie.compileError.empty());
+			for (auto & entrie : entries) {
+				rows.push_back(rowTextFor(entrie));
+				rowHasCompileError.push_back(!entrie.compileError.empty());
 			}
-		if (entries_.empty())
-			rowHasCompileError_.push_back(false);
-		if (listView_ != nullptr) {
-			listView_->setItems(rows_, rowHasCompileError_);
-			if (!rows_.empty()) {
+		if (entries.empty())
+			rowHasCompileError.push_back(false);
+		if (listView != nullptr) {
+			listView->setItems(rows, rowHasCompileError);
+			if (!rows.empty()) {
 				int target = keepIndex;
-				if (target < 0 || target >= static_cast<int>(rows_.size()))
+				if (target < 0 || target >= static_cast<int>(rows.size()))
 					target = 0;
-				listView_->focusItemNum(target);
+				listView->focusItemNum(target);
 			}
 		}
 	}
@@ -805,7 +850,7 @@ class MacroManagerDialog : public MRDialogFoundation {
 			return;
 		path = ensureMrmacExtension(path);
 		if (path.find('/') == std::string::npos)
-			path = directory_ + "/" + path;
+			path = directoryPath + "/" + path;
 		path = normalizeTvPathSeparators(path);
 
 		if (fileExists(path)) {
@@ -814,11 +859,11 @@ class MacroManagerDialog : public MRDialogFoundation {
 				return;
 		}
 		if (!writeTextFile(path, createMacroTemplateForPath(path))) {
-			messageBox(mfError | mfOKButton, "Unable to create macro file:\n%s", path.c_str());
+			postMacroDialogError("Unable to create macro file: " + path);
 			return;
 		}
 		rememberLoadDialogPath(path.c_str());
-		openPath_ = path;
+		openPathValue = path;
 		endModal(cmMRMacroManagerOpenEditor);
 	}
 
@@ -830,7 +875,7 @@ class MacroManagerDialog : public MRDialogFoundation {
 		               "Delete macro file?\n%s", entry->path.c_str()) != cmYes)
 			return;
 		if (::unlink(entry->path.c_str()) != 0) {
-			messageBox(mfError | mfOKButton, "Unable to delete:\n%s", entry->path.c_str());
+			postMacroDialogError("Unable to delete: " + entry->path);
 			return;
 		}
 		refreshEntries(selectedIndex());
@@ -863,7 +908,7 @@ class MacroManagerDialog : public MRDialogFoundation {
 			return;
 		destPath = ensureMrmacExtension(destPath);
 		if (destPath.find('/') == std::string::npos)
-			destPath = directory_ + "/" + destPath;
+			destPath = directoryPath + "/" + destPath;
 		destPath = normalizeTvPathSeparators(destPath);
 
 		if (fileExists(destPath)) {
@@ -872,7 +917,7 @@ class MacroManagerDialog : public MRDialogFoundation {
 				return;
 		}
 		if (!copyFileBinary(entry->path, destPath)) {
-			messageBox(mfError | mfOKButton, "Unable to copy macro file.");
+			postMacroDialogError("Unable to copy macro file.");
 			return;
 		}
 		refreshEntries(-1);
@@ -882,7 +927,7 @@ class MacroManagerDialog : public MRDialogFoundation {
 		const MacroFileEntry *entry = selectedEntry();
 		if (entry == nullptr)
 			return;
-		openPath_ = entry->path;
+		openPathValue = entry->path;
 		endModal(cmMRMacroManagerOpenEditor);
 	}
 
@@ -898,7 +943,7 @@ class MacroManagerDialog : public MRDialogFoundation {
 		if (keySpec.empty())
 			return;
 		if (!rebindMacroFileKey(*entry, keySpec, err)) {
-			messageBox(mfError | mfOKButton, "Unable to bind macro:\n\n%s", err.c_str());
+			postMacroDialogError("Unable to bind macro: " + err);
 			return;
 		}
 		messageBox(mfInformation | mfOKButton, "Updated %s with TO %s", entry->fileName.c_str(),
@@ -910,16 +955,18 @@ class MacroManagerDialog : public MRDialogFoundation {
 		const MacroFileEntry *entry = selectedEntry();
 		if (entry == nullptr)
 			return;
-		runMacroFileByPath(entry->path.c_str());
+		playbackPathValue = entry->path;
+		endModal(cmMRMacroManagerPlayback);
 	}
 
-	std::string directory_;
-	std::vector<MacroFileEntry> entries_;
-	std::vector<std::string> rows_;
-	std::vector<bool> rowHasCompileError_;
-	MacroManagerListView *listView_;
-	TScrollBar *scrollBar_;
-	std::string openPath_;
+	std::string directoryPath;
+	std::vector<MacroFileEntry> entries;
+	std::vector<std::string> rows;
+	std::vector<bool> rowHasCompileError;
+	MacroManagerListView *listView;
+	TScrollBar *scrollBar;
+	std::string openPathValue;
+	std::string playbackPathValue;
 };
 } // namespace
 
@@ -941,16 +988,20 @@ bool runMacroManagerDialog() {
 	MacroManagerDialog *dialog = new MacroManagerDialog();
 	ushort result = cmCancel;
 	std::string openPath;
+	std::string playbackPath;
 
 	if (dialog == nullptr)
 		return false;
 	dialog->finalizeLayout();
 	result = TProgram::deskTop->execView(dialog);
 	openPath = dialog->openPath();
+	playbackPath = dialog->playbackPath();
 	TObject::destroy(dialog);
 
 	if (result == cmMRMacroManagerOpenEditor && !openPath.empty())
 		return openMacroSourceInEditor(openPath);
+	if (result == cmMRMacroManagerPlayback && !playbackPath.empty())
+		return runMacroFileByPath(playbackPath.c_str());
 	if (result == cmHelp)
 		static_cast<void>(mrShowProjectHelp());
 	return result != cmCancel;

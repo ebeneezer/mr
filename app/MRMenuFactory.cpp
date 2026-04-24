@@ -12,7 +12,7 @@
 #include <string>
 
 #include "../config/MRDialogPaths.hpp"
-#include "../ui/TMRMenuBar.hpp"
+#include "../ui/MRMenuBar.hpp"
 
 namespace {
 TMenuItem *createOrganizeMenuItem() {
@@ -45,11 +45,11 @@ TSubMenu *createFileMenu() {
 	         *new TMenuItem("~O~pen...", cmMrFileOpen, kbF3, hcNoContext, "F3") +
 	         *new TMenuItem("~L~oad...", cmMrFileLoad, kbNoKey, hcNoContext) +
 	         *new TMenuItem("~S~ave", cmMrFileSave, kbF2, hcNoContext, "F2") +
-	         *new TMenuItem("save file ~A~s...", cmMrFileSaveAs, kbCtrlF2, hcNoContext, "CtrlF2") +
-	         *new TMenuItem("~I~nformation...", cmMrFileInformation, kbNoKey, hcNoContext) +
+	         *new TMenuItem("save ~A~s...", cmMrFileSaveAs, kbCtrlF2, hcNoContext, "CtrlF2") +
+	         *new TMenuItem("~I~nfo...", cmMrFileInformation, kbNoKey, hcNoContext) +
 	         newLine() + *new TMenuItem("~M~erge...", cmMrFileMerge, kbNoKey, hcNoContext) +
 	         *new TMenuItem("~P~rint...", cmMrFilePrint, kbNoKey, hcNoContext) + newLine() +
-	         *new TMenuItem("~D~OS shell", cmMrFileShellToDos, kbAltF9, hcNoContext, "AltF9") +
+	         *new TMenuItem("~O~S shell", cmMrFileShellToDos, kbAltF9, hcNoContext, "AltF9") +
 	         newLine() + *new TMenuItem("E~x~it", cmQuit, kbAltX, hcNoContext, "Alt-X"));
 }
 
@@ -58,17 +58,17 @@ TSubMenu *createEditMenu() {
 	    *new TSubMenu("~E~dit", kbAltE) +
 	    *new TMenuItem("~U~ndo", cmMrEditUndo, kbCtrlZ, hcNoContext, "CtrlZ") +
 	    *new TMenuItem("~R~edo", cmMrEditRedo, TKey('Z', kbCtrlShift | kbShift), hcNoContext, "ShiftCtrlZ") + newLine() +
-	    *new TMenuItem("~C~ut to buffer", cmMrEditCutToBuffer, kbCtrlIns, hcNoContext, "CtrlIns") +
-	    *new TMenuItem("co~P~y to buffer", cmMrEditCopyToBuffer, kbNoKey, hcNoContext,
+	    *new TMenuItem("~C~ut", cmMrEditCutToBuffer, kbCtrlIns, hcNoContext, "CtrlIns") +
+	    *new TMenuItem("co~P~y", cmMrEditCopyToBuffer, kbNoKey, hcNoContext,
 	                   "CtrlGrey+") +
-	    *new TMenuItem("~A~ppend to buffer", cmMrEditAppendToBuffer, kbCtrlDel, hcNoContext,
+	    *new TMenuItem("~A~ppend", cmMrEditAppendToBuffer, kbCtrlDel, hcNoContext,
 	                   "CtrlDel") +
-	    *new TMenuItem("cut and ap~P~end to buffer", cmMrEditCutAndAppendToBuffer, kbNoKey,
+	    *new TMenuItem("cut & ap~P~end", cmMrEditCutAndAppendToBuffer, kbNoKey,
 	                   hcNoContext, "CtrlGrey-") +
-	    *new TMenuItem("~P~aste from buffer", cmMrEditPasteFromBuffer, kbShiftIns, hcNoContext,
+	    *new TMenuItem("~P~aste", cmMrEditPasteFromBuffer, kbShiftIns, hcNoContext,
 	                   "ShiftIns") +
 	    newLine() +
-	    *new TMenuItem("re~P~eat command", cmMrEditRepeatCommand, kbCtrlR, hcNoContext, "CtrlR"));
+	    *new TMenuItem("re~P~eat", cmMrEditRepeatCommand, kbCtrlR, hcNoContext, "CtrlR"));
 }
 
 TSubMenu *createWindowMenu() {
@@ -181,7 +181,8 @@ TSubMenu *createOtherMenu() {
 	    *new TMenuItem("~M~atch brace or paren", cmMrOtherMatchBraceOrParen, kbCtrlF5, hcNoContext,
 	                   "CtrlF5") +
 	    newLine() +
-	    *new TMenuItem("~A~scii table", cmMrOtherAsciiTable, kbAltA, hcNoContext, "AltA"));
+	    *new TMenuItem("~A~scii table", cmMrOtherAsciiTable, kbAltA, hcNoContext, "AltA") +
+	    *new TMenuItem("~E~moji table", cmMrOtherEmojiTable, kbNoKey, hcNoContext));
 }
 
 TSubMenu *createMacroMenu() {
@@ -213,7 +214,7 @@ TSubMenu *createDevMenu() {
 
 TMenuBar *createMRMenuBar(TRect r) {
 	r.b.y = r.a.y + 1;
-	return new TMRMenuBar(r, *createFileMenu() + *createEditMenu() + *createWindowMenu() +
+	return new MRMenuBar(r, *createFileMenu() + *createEditMenu() + *createWindowMenu() +
 	                             *createBlockMenu() + *createSearchMenu() + *createTextMenu() +
 	                             *createOtherMenu() + *createMacroMenu() + *createHelpMenu() +
 	                             *createDevMenu());

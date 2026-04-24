@@ -2,13 +2,15 @@
 #define Uses_TStaticText
 #define Uses_TText
 #define Uses_TDialog
-#include "TMRFrame.hpp"
+#include "MRFrame.hpp"
 
 #include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstring>
 #include <vector>
+
+void mrvmUiInvalidateScreenBase() noexcept;
 
 namespace {
 
@@ -27,11 +29,13 @@ static const char *kDragLeftIcon = "~\xC0\xC4~";
 static constexpr char kDirtyMarkerIcon[] = "✍";
 static constexpr char kRecordingMarkerIcon[] = "📼";
 static constexpr char kTaskMarkerIcon[] = "🧠";
+static constexpr char kMacroBrainMarkerIcon[] = "🧠";
 static constexpr char kReadOnlyMarkerIcon[] = "🔒";
 static constexpr char kInsertMarkerIcon[] = "✚";
 static constexpr int kDirtyMarkerSlotWidth = 2;
 static constexpr int kRecordingMarkerSlotWidth = 2;
 static constexpr int kTaskMarkerSlotWidth = 2;
+static constexpr int kMacroBrainMarkerSlotWidth = 2;
 static constexpr int kReadOnlyMarkerSlotWidth = 2;
 static constexpr int kInsertMarkerSlotWidth = 1;
 static constexpr char kMarkerLeftBracket = '[';
@@ -50,14 +54,15 @@ int advanceMarkerX(int x, TStringView icon, int minWidth = 1) noexcept {
 	return x + markerSpan(icon, minWidth) + kMarkerGap;
 }
 
-bool hasMarkerBlock(const TMRFrame::MarkerState &state) noexcept {
-	return state.modified || state.insertMode || state.recording || state.background || state.readOnly;
+bool hasMarkerBlock(const MRFrame::MarkerState &state) noexcept {
+	return state.modified || state.insertMode || state.recording || state.macroBrain ||
+	       state.background || state.readOnly;
 }
 
-bool isFrameFocused(const TMRFrame *frame) noexcept {
+bool isFrameFocused(const MRFrame *frame) noexcept {
 	const TView *owner = frame != nullptr ? frame->owner : nullptr;
 	const TView *top =
-	    frame != nullptr ? static_cast<const TView *>(const_cast<TMRFrame *>(frame)->TopView()) : nullptr;
+	    frame != nullptr ? static_cast<const TView *>(const_cast<MRFrame *>(frame)->TopView()) : nullptr;
 	const TWindow *window = frame != nullptr ? static_cast<const TWindow *>(frame->owner) : nullptr;
 
 	// During modal execView(), TopView points to the modal dialog.
@@ -72,19 +77,19 @@ bool isFrameFocused(const TMRFrame *frame) noexcept {
 
 } // namespace
 
-TMRTaskOverviewView::TMRTaskOverviewView(const TRect &bounds) noexcept : TView(bounds) {
+MRTaskOverviewView::MRTaskOverviewView(const TRect &bounds) noexcept : TView(bounds) {
 	eventMask = 0;
 	options |= ofBuffered;
 }
 
-void TMRTaskOverviewView::setLines(const std::vector<std::string> &lines) {
+void MRTaskOverviewView::setLines(const std::vector<std::string> &lines) {
 	if (lines_ == lines)
 		return;
 	lines_ = lines;
 	drawView();
 }
 
-void TMRTaskOverviewView::draw() {
+void MRTaskOverviewView::draw() {
 	TDrawBuffer b;
 	TColorAttr text = getColor(1);
 
@@ -105,14 +110,15 @@ void TMRTaskOverviewView::draw() {
 		}
 		writeBuf(0, y, size.x, 1, b);
 	}
+	mrvmUiInvalidateScreenBase();
 }
 
-TPalette &TMRTaskOverviewView::getPalette() const {
+TPalette &MRTaskOverviewView::getPalette() const {
 	static TPalette palette("\x06", 1);
 	return palette;
 }
 
-TMRTaskOverviewWindow::TMRTaskOverviewWindow(const TRect &bounds) noexcept
+MRTaskOverviewWindow::MRTaskOverviewWindow(const TRect &bounds) noexcept
     : TWindowInit(&TWindow::initFrame), TWindow(bounds, "Tasks", wnNoNumber), content_(nullptr) {
 	flags = 0;
 	options &= ~(ofSelectable | ofTopSelect);
@@ -120,43 +126,43 @@ TMRTaskOverviewWindow::TMRTaskOverviewWindow(const TRect &bounds) noexcept
 	palette = wpGrayWindow;
 	TRect inner = getExtent();
 	inner.grow(-1, -1);
-	content_ = new TMRTaskOverviewView(inner);
+	content_ = new MRTaskOverviewView(inner);
 	insert(content_);
 }
 
-void TMRTaskOverviewWindow::setLines(const std::vector<std::string> &lines) {
+void MRTaskOverviewWindow::setLines(const std::vector<std::string> &lines) {
 	if (content_ != nullptr)
 		content_->setLines(lines);
 }
 
-TPalette &TMRTaskOverviewWindow::getPalette() const {
+TPalette &MRTaskOverviewWindow::getPalette() const {
 	static TPalette paletteGray("\x18\x18\x18\x18\x18\x18\x18\x18", 8);
 	return paletteGray;
 }
 
-TMRFrame::TMRFrame(const TRect &bounds) noexcept
+MRFrame::MRFrame(const TRect &bounds) noexcept
     : TFrame(bounds), taskOverviewPopup_(nullptr), taskOverviewPopupOwner_(nullptr) {
 }
 
-TMRFrame::~TMRFrame() {
+MRFrame::~MRFrame() {
 	hideTaskOverview();
 }
 
-void TMRFrame::setMarkerStateProvider(MarkerStateProvider provider) {
+void MRFrame::setMarkerStateProvider(MarkerStateProvider provider) {
 	markerStateProvider_ = std::move(provider);
 }
 
-void TMRFrame::setTaskOverviewProvider(TaskOverviewProvider provider) {
+void MRFrame::setTaskOverviewProvider(TaskOverviewProvider provider) {
 	taskOverviewProvider_ = std::move(provider);
 }
 
-TMRFrame::MarkerState TMRFrame::markerState() const {
+MRFrame::MarkerState MRFrame::markerState() const {
 	if (markerStateProvider_)
 		return markerStateProvider_();
 	return MarkerState();
 }
 
-int TMRFrame::markerStartColumn() const noexcept {
+int MRFrame::markerStartColumn() const noexcept {
 	TWindow *window = static_cast<TWindow *>(owner);
 	bool controlsVisible = isFrameFocused(this);
 	if (window != nullptr && (window->flags & wfClose) != 0 && controlsVisible)
@@ -164,7 +170,7 @@ int TMRFrame::markerStartColumn() const noexcept {
 	return 2;
 }
 
-int TMRFrame::taskMarkerColumn(const MarkerState &state) const noexcept {
+int MRFrame::taskMarkerColumn(const MarkerState &state) const noexcept {
 	int x = markerStartColumn();
 	if (state.modified)
 		x = advanceMarkerX(x, kDirtyMarkerIcon, kDirtyMarkerSlotWidth);
@@ -172,12 +178,14 @@ int TMRFrame::taskMarkerColumn(const MarkerState &state) const noexcept {
 		x = advanceMarkerX(x, kInsertMarkerIcon, kInsertMarkerSlotWidth);
 	if (state.recording)
 		x = advanceMarkerX(x, kRecordingMarkerIcon, kRecordingMarkerSlotWidth);
+	if (state.macroBrain)
+		x = advanceMarkerX(x, kMacroBrainMarkerIcon, kMacroBrainMarkerSlotWidth);
 	if (state.background)
 		return x;
 	return -1;
 }
 
-int TMRFrame::markersEndColumn(const MarkerState &state) const noexcept {
+int MRFrame::markersEndColumn(const MarkerState &state) const noexcept {
 	int x = markerStartColumn();
 	if (state.modified)
 		x = advanceMarkerX(x, kDirtyMarkerIcon, kDirtyMarkerSlotWidth);
@@ -185,6 +193,8 @@ int TMRFrame::markersEndColumn(const MarkerState &state) const noexcept {
 		x = advanceMarkerX(x, kInsertMarkerIcon, kInsertMarkerSlotWidth);
 	if (state.recording)
 		x = advanceMarkerX(x, kRecordingMarkerIcon, kRecordingMarkerSlotWidth);
+	if (state.macroBrain)
+		x = advanceMarkerX(x, kMacroBrainMarkerIcon, kMacroBrainMarkerSlotWidth);
 	if (state.background)
 		x = advanceMarkerX(x, kTaskMarkerIcon, kTaskMarkerSlotWidth);
 	if (state.readOnly)
@@ -192,7 +202,7 @@ int TMRFrame::markersEndColumn(const MarkerState &state) const noexcept {
 	return x;
 }
 
-void TMRFrame::drawFrameLine(TDrawBuffer &frameBuf, short y, short n, TColorAttr color) {
+void MRFrame::drawFrameLine(TDrawBuffer &frameBuf, short y, short n, TColorAttr color) {
 	if (size.x <= 0)
 		return;
 
@@ -238,7 +248,7 @@ void TMRFrame::drawFrameLine(TDrawBuffer &frameBuf, short y, short n, TColorAttr
 	}
 }
 
-void TMRFrame::draw() {
+void MRFrame::draw() {
 	TAttrPair cFrame, cTitle;
 	short f;
 	short width = size.x;
@@ -321,6 +331,16 @@ void TMRFrame::draw() {
 			b.moveStr(static_cast<ushort>(markerX), kRecordingMarkerIcon, recordingColor, span);
 		markerX = advanceMarkerX(markerX, kRecordingMarkerIcon, kRecordingMarkerSlotWidth);
 	}
+	if (markers.macroBrain) {
+		TColorAttr brainColor = cTitle;
+		setFore(brainColor, TColorDesired(TColorRGB(0xFF, 0x79, 0xC6)));
+		setStyle(brainColor, getStyle(brainColor) | slBold);
+		int span = markerSpan(kMacroBrainMarkerIcon, kMacroBrainMarkerSlotWidth);
+		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
+		if (markers.macroBrainVisible)
+			b.moveStr(static_cast<ushort>(markerX), kMacroBrainMarkerIcon, brainColor, span);
+		markerX = advanceMarkerX(markerX, kMacroBrainMarkerIcon, kMacroBrainMarkerSlotWidth);
+	}
 	if (markers.background) {
 		TColorAttr taskColor = cTitle;
 		setFore(taskColor, TColorDesired(TColorRGB(0xFF, 0x79, 0xC6)));
@@ -378,9 +398,10 @@ void TMRFrame::draw() {
 		if (!lines.empty())
 			taskOverviewPopup_->setLines(lines);
 	}
+	mrvmUiInvalidateScreenBase();
 }
 
-void TMRFrame::dragWindow(TEvent &event, uchar mode) {
+void MRFrame::dragWindow(TEvent &event, uchar mode) {
 	TRect limits = owner->owner->getExtent();
 	TPoint minSize, maxSize;
 	owner->sizeLimits(minSize, maxSize);
@@ -388,7 +409,7 @@ void TMRFrame::dragWindow(TEvent &event, uchar mode) {
 	clearEvent(event);
 }
 
-void TMRFrame::handleEvent(TEvent &event) {
+void MRFrame::handleEvent(TEvent &event) {
 	TView::handleEvent(event);
 
 	if (event.what == evMouseDown) {
@@ -430,13 +451,13 @@ void TMRFrame::handleEvent(TEvent &event) {
 	}
 }
 
-void TMRFrame::setState(ushort aState, Boolean enable) {
+void MRFrame::setState(ushort aState, Boolean enable) {
 	TView::setState(aState, enable);
 	if ((aState & (sfActive | sfFocused | sfDragging)) != 0)
 		drawView();
 }
 
-void TMRFrame::showTaskOverview() {
+void MRFrame::showTaskOverview() {
 	TGroup *group = owner != nullptr ? owner->owner : nullptr;
 	std::vector<std::string> lines;
 	MarkerState state = markerState();
@@ -475,7 +496,7 @@ void TMRFrame::showTaskOverview() {
 		taskOverviewPopup_ = nullptr;
 		taskOverviewPopupOwner_ = nullptr;
 	}
-	taskOverviewPopup_ = new TMRTaskOverviewWindow(bounds);
+	taskOverviewPopup_ = new MRTaskOverviewWindow(bounds);
 	taskOverviewPopup_->setLines(lines);
 	group->insert(taskOverviewPopup_);
 	taskOverviewPopupOwner_ = group;
@@ -483,7 +504,7 @@ void TMRFrame::showTaskOverview() {
 	taskOverviewPopup_->setState(sfActive, False);
 }
 
-void TMRFrame::hideTaskOverview() {
+void MRFrame::hideTaskOverview() {
 	if (taskOverviewPopup_ == nullptr)
 		return;
 	if (taskOverviewPopupOwner_ != nullptr)
@@ -493,7 +514,7 @@ void TMRFrame::hideTaskOverview() {
 	taskOverviewPopupOwner_ = nullptr;
 }
 
-void TMRFrame::updateTaskHover(TPoint globalMouse, bool forceHide) {
+void MRFrame::updateTaskHover(TPoint globalMouse, bool forceHide) {
 	MarkerState state = markerState();
 	int taskX = taskMarkerColumn(state);
 
@@ -513,7 +534,7 @@ void TMRFrame::updateTaskHover(TPoint globalMouse, bool forceHide) {
 	showTaskOverview();
 }
 
-void TMRFrame::tickTaskOverviewAnimation() {
+void MRFrame::tickTaskOverviewAnimation() {
 	if (taskOverviewPopup_ == nullptr || !taskOverviewProvider_)
 		return;
 	std::vector<std::string> lines = taskOverviewProvider_();

@@ -216,7 +216,7 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 
 		addButton(TRect(6, 16, 19, 18), "~L~oad Theme", cmMrColorLoadTheme, bfNormal);
 		addButton(TRect(21, 16, 34, 18), "~S~ave Theme", cmMrColorSaveTheme, bfNormal);
-		addButton(TRect(41, 16, 51, 18), "~O~K", cmOK, bfDefault);
+		addButton(TRect(41, 16, 51, 18), "~D~one", cmOK, bfDefault);
 		addButton(TRect(53, 16, 67, 18), "~C~ancel", cmCancel, bfNormal);
 
 		themeField_ = new TThemeNameField(TRect(5, 18, 71, 19), configuredColorThemeDisplayName());

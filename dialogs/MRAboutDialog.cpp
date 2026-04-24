@@ -389,7 +389,7 @@ class MRAboutDialog : public MRDialogFoundation {
 		                   0xA39F1D5Bu;
 
 		doneButton_ =
-		    new TButton(TRect(size.x / 2 - 5, 13, size.x / 2 + 5, 15), "~D~one", cmAboutDone, bfDefault);
+		    new TButton(TRect(size.x / 2 - 6, 13, size.x / 2 + 6, 15), "~P~ress", cmAboutDone, bfDefault);
 		insert(doneButton_);
 	}
 

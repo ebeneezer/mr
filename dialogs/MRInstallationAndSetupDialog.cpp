@@ -159,7 +159,6 @@ bool isInstallationSetupModalCommand(ushort command) {
 		case cmMrSetupFilenameExtensions:
 		case cmMrSetupPaths:
 		case cmMrSetupBackupsAutosave:
-		case cmMrSetupSearchAndReplaceDefaults:
 		case cmMrSetupUserInterfaceSettings:
 			return true;
 		default:
@@ -239,8 +238,6 @@ class TInstallationAndSetupDialog : public MRScrollableDialog {
 		          bfNormal);
 		addButton(TRect(g.kLeftX1, 11, g.leftX2, 13), "~K~ey mapping", cmMrSetupKeyMapping,
 		          bfNormal);
-		addButton(TRect(g.kLeftX1, 13, g.leftX2, 15), "~S~earch and Replace",
-		          cmMrSetupSearchAndReplaceDefaults, bfNormal);
 
 		addButton(TRect(g.rightX1, 9, g.rightX2, 11), "~M~ouse / Key repeat",
 		          cmMrSetupMouseKeyRepeat, bfNormal);

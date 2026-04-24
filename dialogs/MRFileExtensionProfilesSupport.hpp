@@ -65,7 +65,12 @@ void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileE
 [[nodiscard]] EditProfileDraft makeCopiedDraft(const EditProfileDraft &source,
                                                const std::vector<EditProfileDraft> &existingDrafts);
 [[nodiscard]] bool validateDraftsForUi(const std::vector<EditProfileDraft> &drafts, int currentIndex,
+                                       const EditProfileDraft *currentDraftOverride,
                                        std::string &errorText);
+[[nodiscard]] inline bool validateDraftsForUi(const std::vector<EditProfileDraft> &drafts, int currentIndex,
+                                              std::string &errorText) {
+	return validateDraftsForUi(drafts, currentIndex, nullptr, errorText);
+}
 [[nodiscard]] bool saveAndReloadEditProfiles(const std::vector<EditProfileDraft> &drafts,
                                              std::string &errorText);
 [[nodiscard]] std::vector<std::string> dirtyDraftIds(const std::vector<EditProfileDraft> &initialDrafts,

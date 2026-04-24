@@ -1,5 +1,5 @@
-#ifndef TMRINDICATOR_HPP
-#define TMRINDICATOR_HPP
+#ifndef MRINDICATOR_HPP
+#define MRINDICATOR_HPP
 
 #define Uses_TIndicator
 #define Uses_TDrawBuffer
@@ -27,9 +27,11 @@
 #include "../config/MRDialogPaths.hpp"
 #include "MRCoprocessor.hpp"
 
-class TMRTaskOverviewPopup : public TView {
+void mrvmUiInvalidateScreenBase() noexcept;
+
+class MRTaskOverviewPopup : public TView {
   public:
-	TMRTaskOverviewPopup(const TRect &bounds) noexcept : TView(bounds), lines_() {
+	MRTaskOverviewPopup(const TRect &bounds) noexcept : TView(bounds), lines_() {
 		eventMask = 0;
 		options |= ofBuffered;
 	}
@@ -70,6 +72,7 @@ class TMRTaskOverviewPopup : public TView {
 
 			writeBuf(0, y, size.x, 1, b);
 		}
+		mrvmUiInvalidateScreenBase();
 	}
 
 	virtual TPalette &getPalette() const override {
@@ -82,7 +85,7 @@ class TMRTaskOverviewPopup : public TView {
 	std::vector<std::string> lines_;
 };
 
-class TMRIndicator : public TIndicator {
+class MRIndicator : public TIndicator {
   public:
 	enum class NoticeKind : unsigned char {
 		Info,
@@ -93,7 +96,7 @@ class TMRIndicator : public TIndicator {
 
 	using TaskOverviewProvider = std::function<std::vector<std::string>()>;
 
-	TMRIndicator(const TRect &bounds) noexcept
+	MRIndicator(const TRect &bounds) noexcept
 	    : TIndicator(bounds), readOnly_(false), displayColumn_(0), displayLine_(0),
 	      taskCount_(0), taskDisplayCount_(0), indicatorId_(allocateIndicatorId()), blinkGeneration_(0),
 	      taskBlinkGeneration_(0), readOnlyBlinkActive_(false), readOnlyBlinkVisible_(false),
@@ -104,7 +107,7 @@ class TMRIndicator : public TIndicator {
 		registerIndicator(this);
 	}
 
-	virtual ~TMRIndicator() override {
+	virtual ~MRIndicator() override {
 		hideTaskOverview();
 		cancelReadOnlyBlinkChain(false);
 		cancelTaskBlinkChain(false);
@@ -116,7 +119,8 @@ class TMRIndicator : public TIndicator {
 		TColorAttr cursorColor;
 		char frame;
 		TDrawBuffer b;
-		std::string cursorText;
+		std::string cursorTextBuffer;
+		const char *cursorText;
 		int cursorX;
 		int cursorMinX;
 		int noticeStartX;
@@ -139,15 +143,17 @@ class TMRIndicator : public TIndicator {
 			noticeEndX = noticeStartX + static_cast<int>(statusNoticeText_.size()) + 1;
 		}
 
-		cursorText = resolvedCursorPositionMarkerText(displayLine_ + 1UL, displayColumn_ + 1UL);
-		cursorX = static_cast<int>(size.x) - static_cast<int>(cursorText.size());
+		cursorTextBuffer = resolvedCursorPositionMarkerText(displayLine_ + 1UL, displayColumn_ + 1UL);
+		cursorText = cursorTextBuffer.c_str();
+		cursorX = static_cast<int>(size.x) - static_cast<int>(std::strlen(cursorText));
 		cursorMinX = 1;
 		if (noticeEndX > cursorMinX)
 			cursorMinX = noticeEndX;
 		if (cursorX < cursorMinX)
 			cursorX = cursorMinX;
-		b.moveStr(cursorX, cursorText.c_str(), cursorColor);
+		b.moveStr(cursorX, cursorText, cursorColor);
 		writeBuf(0, 0, size.x, 1, b);
+		mrvmUiInvalidateScreenBase();
 	}
 
 	virtual TPalette &getPalette() const override {
@@ -258,7 +264,7 @@ class TMRIndicator : public TIndicator {
 
 	static bool applyBlinkUpdate(std::size_t indicatorId, mr::coprocessor::IndicatorBlinkChannel channel,
 	                             std::size_t generation, bool visible) {
-		TMRIndicator *indicator = lookupIndicator(indicatorId);
+		MRIndicator *indicator = lookupIndicator(indicatorId);
 		if (indicator == nullptr)
 			return false;
 		return indicator->applyBlinkUpdateImpl(channel, generation, visible);
@@ -276,8 +282,8 @@ class TMRIndicator : public TIndicator {
 		return nextId.fetch_add(1, std::memory_order_relaxed);
 	}
 
-	static std::unordered_map<std::size_t, TMRIndicator *> &indicatorRegistry() {
-		static std::unordered_map<std::size_t, TMRIndicator *> registry;
+	static std::unordered_map<std::size_t, MRIndicator *> &indicatorRegistry() {
+		static std::unordered_map<std::size_t, MRIndicator *> registry;
 		return registry;
 	}
 
@@ -286,7 +292,7 @@ class TMRIndicator : public TIndicator {
 		return mutex;
 	}
 
-	static void registerIndicator(TMRIndicator *indicator) {
+	static void registerIndicator(MRIndicator *indicator) {
 		if (indicator == nullptr)
 			return;
 		std::lock_guard<std::mutex> lock(indicatorRegistryMutex());
@@ -298,9 +304,9 @@ class TMRIndicator : public TIndicator {
 		indicatorRegistry().erase(indicatorId);
 	}
 
-	static TMRIndicator *lookupIndicator(std::size_t indicatorId) {
+	static MRIndicator *lookupIndicator(std::size_t indicatorId) {
 		std::lock_guard<std::mutex> lock(indicatorRegistryMutex());
-		std::unordered_map<std::size_t, TMRIndicator *>::iterator it = indicatorRegistry().find(indicatorId);
+		std::unordered_map<std::size_t, MRIndicator *>::iterator it = indicatorRegistry().find(indicatorId);
 		return it != indicatorRegistry().end() ? it->second : nullptr;
 	}
 
@@ -364,7 +370,7 @@ class TMRIndicator : public TIndicator {
 			TObject::destroy(taskOverviewPopup_);
 			taskOverviewPopup_ = nullptr;
 		}
-		taskOverviewPopup_ = new TMRTaskOverviewPopup(bounds);
+		taskOverviewPopup_ = new MRTaskOverviewPopup(bounds);
 		taskOverviewPopup_->setLines(lines);
 		group->insert(taskOverviewPopup_);
 		taskOverviewPopup_->makeFirst();
@@ -648,7 +654,7 @@ class TMRIndicator : public TIndicator {
 	std::string statusNoticeText_;
 	NoticeKind statusNoticeKind_;
 	TaskOverviewProvider taskOverviewProvider_;
-	TMRTaskOverviewPopup *taskOverviewPopup_;
+	MRTaskOverviewPopup *taskOverviewPopup_;
 	std::chrono::steady_clock::time_point readOnlyBlinkUntil_;
 	std::chrono::steady_clock::time_point taskBlinkUntil_;
 	std::uint64_t taskBlinkTaskId_;

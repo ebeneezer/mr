@@ -3,6 +3,11 @@
 #include <chrono>
 #include <exception>
 #include <utility>
+#include <vector>
+
+#include <pthread.h>
+#include <sched.h>
+#include <unistd.h>
 
 namespace mr {
 namespace coprocessor {
@@ -13,6 +18,46 @@ std::uint64_t nowMicros() noexcept {
 	    std::chrono::duration_cast<std::chrono::microseconds>(
 	        std::chrono::steady_clock::now().time_since_epoch())
 	        .count());
+}
+
+unsigned int laneAffinitySlot(Lane lane) noexcept {
+	switch (lane) {
+		case Lane::Io:
+			return 0;
+		case Lane::Compute:
+			return 1;
+		case Lane::MiniMap:
+			return 2;
+		case Lane::Macro:
+			return 3;
+	}
+	return 0;
+}
+
+void bindCurrentThreadToLaneCore(Lane lane) noexcept {
+	std::vector<int> availableCores;
+	cpu_set_t availableSet;
+	CPU_ZERO(&availableSet);
+	if (sched_getaffinity(0, sizeof(availableSet), &availableSet) == 0) {
+		for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu)
+			if (CPU_ISSET(cpu, &availableSet))
+				availableCores.push_back(cpu);
+	}
+
+	if (availableCores.empty()) {
+		const long onlineCoreCount = sysconf(_SC_NPROCESSORS_ONLN);
+		if (onlineCoreCount <= 0)
+			return;
+		availableCores.reserve(static_cast<std::size_t>(onlineCoreCount));
+		for (int cpu = 0; cpu < onlineCoreCount; ++cpu)
+			availableCores.push_back(cpu);
+	}
+
+	const int targetCore = availableCores[laneAffinitySlot(lane) % availableCores.size()];
+	cpu_set_t targetSet;
+	CPU_ZERO(&targetSet);
+	CPU_SET(targetCore, &targetSet);
+	(void)pthread_setaffinity_np(pthread_self(), sizeof(targetSet), &targetSet);
 }
 
 } // namespace
@@ -193,6 +238,8 @@ void Coprocessor::startLane(LaneState &lane) {
 }
 
 void Coprocessor::workerLoop(LaneState &lane, std::stop_token stopToken) {
+	bindCurrentThreadToLaneCore(lane.lane);
+
 	for (;;) {
 		Request request;
 		Result result;

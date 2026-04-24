@@ -19,7 +19,7 @@
 #include <vector>
 
 #include "MRTextDocument.hpp"
-#include "TMRSyntax.hpp"
+#include "MRSyntax.hpp"
 #include "mrvm.hpp"
 
 namespace mr {
@@ -107,24 +107,24 @@ struct LineIndexWarmupPayload final : Payload {
 
 struct SyntaxWarmLine {
 	std::size_t lineStart;
-	TMRSyntaxTokenMap tokens;
+	MRSyntaxTokenMap tokens;
 
 	SyntaxWarmLine() noexcept : lineStart(0), tokens() {
 	}
 
-	SyntaxWarmLine(std::size_t aLineStart, TMRSyntaxTokenMap aTokens)
+	SyntaxWarmLine(std::size_t aLineStart, MRSyntaxTokenMap aTokens)
 	    : lineStart(aLineStart), tokens(std::move(aTokens)) {
 	}
 };
 
 struct SyntaxWarmupPayload final : Payload {
-	TMRSyntaxLanguage language;
+	MRSyntaxLanguage language;
 	std::vector<SyntaxWarmLine> lines;
 
-	SyntaxWarmupPayload() noexcept : language(TMRSyntaxLanguage::PlainText), lines() {
+	SyntaxWarmupPayload() noexcept : language(MRSyntaxLanguage::PlainText), lines() {
 	}
 
-	SyntaxWarmupPayload(TMRSyntaxLanguage aLanguage, std::vector<SyntaxWarmLine> aLines)
+	SyntaxWarmupPayload(MRSyntaxLanguage aLanguage, std::vector<SyntaxWarmLine> aLines)
 	    : language(aLanguage), lines(std::move(aLines)) {
 	}
 };
