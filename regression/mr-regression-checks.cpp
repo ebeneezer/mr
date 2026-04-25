@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <initializer_list>
 #include <iostream>
 #include <iterator>
 #include <limits.h>
@@ -120,6 +121,17 @@ std::size_t countSubstring(const std::string &text, const std::string &needle) {
 		pos += needle.size();
 	}
 	return count;
+}
+
+bool containsAllSubstrings(const std::string &text, std::initializer_list<const char *> needles,
+                           std::string &missingNeedle) {
+	for (const char *needle : needles)
+		if (text.find(needle) == std::string::npos) {
+			missingNeedle = needle;
+			return false;
+		}
+	missingNeedle.clear();
+	return true;
 }
 
 bool checkGlobalInt(const std::map<std::string, int> &ints, const char *name, int expected,
@@ -424,6 +436,37 @@ int runStagedMarkPageProbeMode() {
 	}
 
 	return 0;
+}
+
+int runMacroScreenFlushProbeMode() {
+	static constexpr int kWriteCount = 8;
+	static constexpr int kStartX = 3;
+	static constexpr int kStartY = 3;
+	static constexpr int kBgColor = 1;
+	static constexpr int kFgColor = 14;
+	MREditorApp app;
+	std::uint64_t unbatchedFlushes = 0;
+	std::uint64_t batchedFlushes = 0;
+
+	mrvmUiClearScreen();
+	mrvmUiResetMacroScreenFlushCount();
+	for (int i = 0; i < kWriteCount; ++i)
+		mrvmUiWrite("flush-probe", kStartX, kStartY + i, kBgColor, kFgColor);
+	unbatchedFlushes = mrvmUiMacroScreenFlushCount();
+
+	mrvmUiClearScreen();
+	mrvmUiResetMacroScreenFlushCount();
+	mrvmUiBeginMacroScreenBatch();
+	for (int i = 0; i < kWriteCount; ++i)
+		mrvmUiWrite("flush-probe", kStartX, kStartY + i, kBgColor, kFgColor);
+	mrvmUiEndMacroScreenBatch();
+	batchedFlushes = mrvmUiMacroScreenFlushCount();
+
+	std::cout << "macro-screen-flush-probe unbatched=" << unbatchedFlushes
+	          << " batched=" << batchedFlushes
+	          << " reduction=" << (unbatchedFlushes > batchedFlushes ? (unbatchedFlushes - batchedFlushes) : 0)
+	          << "\n";
+	return batchedFlushes < unbatchedFlushes ? 0 : 1;
 }
 
 bool validateMrsetupCorePaths(std::string &failureReason) {
@@ -3368,6 +3411,8 @@ bool testDeferredUiMutationEpochGuard(std::string &failureReason) {
 	if (vmHeaderContent.find("std::uint64_t mrvmUiScreenMutationEpoch() noexcept;") == std::string::npos ||
 	    vmHeaderContent.find("void mrvmUiInvalidateScreenBase() noexcept;") == std::string::npos ||
 	    vmHeaderContent.find("void mrvmUiTouchScreenMutationEpoch() noexcept;") == std::string::npos ||
+	    vmHeaderContent.find("void mrvmUiBeginMacroScreenBatch() noexcept;") == std::string::npos ||
+	    vmHeaderContent.find("void mrvmUiEndMacroScreenBatch() noexcept;") == std::string::npos ||
 	    vmHeaderContent.find("bool mrvmUiRenderFacadeRenderDeferredCommand(const MRMacroDeferredUiCommand &command);") ==
 	        std::string::npos ||
 	    vmHeaderContent.find("bool mrvmUiEraseCurrentWindow();") == std::string::npos) {
@@ -3386,6 +3431,8 @@ bool testDeferredUiMutationEpochGuard(std::string &failureReason) {
 	    vmContent.find("std::uint64_t mrvmUiScreenMutationEpoch() noexcept") == std::string::npos ||
 	    vmContent.find("void mrvmUiInvalidateScreenBase() noexcept") == std::string::npos ||
 	    vmContent.find("void mrvmUiTouchScreenMutationEpoch() noexcept") == std::string::npos ||
+	    vmContent.find("void mrvmUiBeginMacroScreenBatch() noexcept") == std::string::npos ||
+	    vmContent.find("void mrvmUiEndMacroScreenBatch() noexcept") == std::string::npos ||
 	    vmContent.find("bool mrvmUiEraseCurrentWindow()") == std::string::npos ||
 	    vmContent.find("returnWithDirectScreenMutation(eraseCurrentEditWindow())") == std::string::npos ||
 	    vmContent.find("ok = mrvmUiEraseCurrentWindow();") == std::string::npos) {
@@ -3440,11 +3487,12 @@ bool testTvCallSurfaceGuard(std::string &failureReason) {
 		return false;
 	}
 	dispatchBlock = content.substr(dispatchStart, dispatchEnd - dispatchStart);
-	if (content.find("static bool queueDeferredUiTvCall(") == std::string::npos ||
-	    content.find("static bool executeUiTvCall(") == std::string::npos ||
-	    content.find("if (queueDeferredUiTvCall(funcNameUpper, args, deferredError))") == std::string::npos ||
-	    content.find("if (executeUiTvCall(funcNameUpper, args))") == std::string::npos) {
-		failureReason = "TVCALL runtime dispatch must route through queueDeferredUiTvCall/executeUiTvCall.";
+	if (content.find("static bool dispatchDeferredUiTvCall(") == std::string::npos ||
+	    content.find("if (dispatchDeferredUiTvCall(funcNameUpper, args, deferredError))") ==
+	        std::string::npos ||
+	    content.find("mrvmUiRenderFacadeRenderDeferredCommand(command);") == std::string::npos ||
+	    content.find("session->deferredUiCommands.push_back(command);") == std::string::npos) {
+		failureReason = "TVCALL runtime dispatch must route through dispatchDeferredUiTvCall and the central deferred UI command path.";
 		return false;
 	}
 	if (content.find("kTvCallVideoMode = \"VIDEO_MODE\"") == std::string::npos ||
@@ -3496,7 +3544,9 @@ bool testScreenRenderFacadeBoundaryGuard(std::string &failureReason) {
 	if (vmContent.find("struct ScreenStateCoordinator") == std::string::npos ||
 	    vmContent.find("struct UiScreenStateFacade") == std::string::npos ||
 	    vmContent.find("UiScreenStateFacade::noteMacroOverlayMutation") == std::string::npos ||
-	    vmContent.find("UiScreenStateFacade::noteBaseInvalidation") == std::string::npos) {
+	    vmContent.find("UiScreenStateFacade::noteBaseMutation") == std::string::npos ||
+	    vmContent.find("UiScreenStateFacade::renderBaseThenOverlayIfNeeded") == std::string::npos ||
+	    vmContent.find("UiScreenStateFacade::renderOverlay") == std::string::npos) {
 		failureReason = "Screen render facade must keep base/overlay generation coordination.";
 		return false;
 	}
@@ -3535,9 +3585,14 @@ bool testScreenRenderFacadeBoundaryGuard(std::string &failureReason) {
 bool testRenderSinkClassificationGuard(std::string &failureReason) {
 	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
 	const std::string dispatchPath = absolutePathFromCwd("coprocessor/MRCoprocessorDispatch.cpp");
+	const std::string appPath = absolutePathFromCwd("app/MREditorApp.cpp");
+	const std::string windowCommandsPath = absolutePathFromCwd("app/commands/MRWindowCommands.cpp");
 	std::string vmContent;
 	std::string dispatchContent;
+	std::string appContent;
+	std::string windowCommandsContent;
 	std::string ioError;
+	std::string missingNeedle;
 
 	if (!readTextFile(vmPath, vmContent, ioError)) {
 		failureReason = "Unable to read mrvm.cpp for render sink classification guard: " + ioError;
@@ -3547,17 +3602,82 @@ bool testRenderSinkClassificationGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRCoprocessorDispatch.cpp for render sink classification guard: " + ioError;
 		return false;
 	}
+	if (!readTextFile(appPath, appContent, ioError)) {
+		failureReason = "Unable to read MREditorApp.cpp for render sink classification guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(windowCommandsPath, windowCommandsContent, ioError)) {
+		failureReason = "Unable to read MRWindowCommands.cpp for render sink classification guard: " + ioError;
+		return false;
+	}
 	if (dispatchContent.find("writeLine(") != std::string::npos ||
 	    dispatchContent.find("writeBuf(") != std::string::npos ||
 	    dispatchContent.find("TScreen::flushScreen()") != std::string::npos) {
 		failureReason = "Deferred playback must not own physical render sinks.";
 		return false;
 	}
-	if (vmContent.find("MacroCellGrid::projectRowSpan") == std::string::npos ||
-	    vmContent.find("MacroCellGrid::projectAll") == std::string::npos ||
-	    vmContent.find("MacroCellGrid::redrawBaseAndOverlay") == std::string::npos ||
-	    vmContent.find("forceMacroUiMessageRefresh") == std::string::npos) {
-		failureReason = "VM render sinks must remain classified as overlay projection or explicit base refresh.";
+	if (!containsAllSubstrings(vmContent,
+	                           {
+	                               "Render sink classification for the Strangler foundation:",
+	                               "ordinary-view-draw:",
+	                               "base-redraw-trigger:",
+	                               "overlay-render:",
+	                               "unsafe-physical-write:"
+	                           },
+	                           missingNeedle)) {
+		failureReason = "mrvm.cpp must document the render sink classification foundation: missing " +
+		                missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(vmContent,
+	                           {
+	                               "void MacroCellView::draw()",
+	                               "grid.drawKnownCells(*this);",
+	                               "void MacroCellGrid::projectRowSpan",
+	                               "void MacroCellGrid::projectAll",
+	                               "void MacroCellGrid::redrawBaseAndOverlay"
+	                           },
+	                           missingNeedle)) {
+		failureReason =
+		    "VM render sinks must keep MacroCell overlay projection classified explicitly: missing " +
+		    missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(vmContent,
+	                           {
+	                               "static void forceMacroUiMessageRefresh(TApplication *app)",
+	                               "static bool redrawCurrentEditWindow()",
+	                               "static bool redrawEntireScreen()"
+	                           },
+	                           missingNeedle)) {
+		failureReason =
+		    "VM render sinks must keep explicit base redraw trigger entry points classified: missing " +
+		    missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(appContent,
+	                           {
+	                               "void MREditorApp::applyConfiguredDisplayLayout()",
+	                               "deskTop->drawView();",
+	                               "menuBar->drawView();",
+	                               "statusLine->drawView();"
+	                           },
+	                           missingNeedle)) {
+		failureReason =
+		    "Application render sinks must keep layout redraw triggers classified explicitly: missing " +
+		    missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(windowCommandsContent,
+	                           {
+	                               "void syncVirtualDesktopVisibility()",
+	                               "TProgram::deskTop->drawView();",
+	                               "TProgram::application->redraw();"
+	                           },
+	                           missingNeedle)) {
+		failureReason =
+		    "Virtual desktop render sinks must keep redraw triggers classified explicitly: missing " +
+		    missingNeedle + ".";
 		return false;
 	}
 	if (vmContent.find("dirtyRows") == std::string::npos ||
@@ -3566,8 +3686,285 @@ bool testRenderSinkClassificationGuard(std::string &failureReason) {
 		failureReason = "MacroCellGrid must keep dirty-row coalescing state in the VM render path.";
 		return false;
 	}
-	if (countSubstring(vmContent, "TScreen::flushScreen()") != 3) {
+	if (countSubstring(vmContent, "TScreen::flushScreen()") != 4) {
 		failureReason = "Unexpected VM flushScreen sink count; classify new sinks before adding them.";
+		return false;
+	}
+	{
+		const std::size_t messageRefreshStart = vmContent.find("static void forceMacroUiMessageRefresh(TApplication *app)");
+		const std::size_t messageRefreshEnd = vmContent.find("static bool applyMarqueeProc(", messageRefreshStart);
+		const std::size_t batchEndStart = vmContent.find("void MacroCellGrid::endProjectionBatch()");
+		const std::size_t batchEndEnd = vmContent.find("bool MacroCellGrid::hasDirtyRows() const noexcept", batchEndStart);
+		const std::size_t projectAllStart = vmContent.find("void MacroCellGrid::projectAll()");
+		const std::size_t projectAllEnd = vmContent.find("void MacroCellGrid::redrawBaseAndOverlay()", projectAllStart);
+		const std::size_t redrawStart = vmContent.find("void MacroCellGrid::redrawBaseAndOverlay()");
+		const std::size_t redrawEnd = vmContent.find("bool MacroCellGrid::putBox(", redrawStart);
+		if (messageRefreshStart == std::string::npos || messageRefreshEnd == std::string::npos ||
+		    batchEndStart == std::string::npos || batchEndEnd == std::string::npos ||
+		    projectAllStart == std::string::npos || projectAllEnd == std::string::npos ||
+		    redrawStart == std::string::npos || redrawEnd == std::string::npos) {
+			failureReason = "Unable to locate approved flushScreen sink boundaries in mrvm.cpp.";
+			return false;
+		}
+		const std::string messageRefreshBlock = vmContent.substr(messageRefreshStart, messageRefreshEnd - messageRefreshStart);
+		const std::string batchEndBlock = vmContent.substr(batchEndStart, batchEndEnd - batchEndStart);
+		const std::string projectAllBlock = vmContent.substr(projectAllStart, projectAllEnd - projectAllStart);
+		const std::string redrawBlock = vmContent.substr(redrawStart, redrawEnd - redrawStart);
+		if (countSubstring(messageRefreshBlock, "TScreen::flushScreen()") != 1 ||
+		    countSubstring(batchEndBlock, "TScreen::flushScreen()") != 1 ||
+		    countSubstring(projectAllBlock, "TScreen::flushScreen()") != 1 ||
+		    countSubstring(redrawBlock, "TScreen::flushScreen()") != 1) {
+			failureReason =
+			    "Approved VM flushScreen sinks must remain limited to forceMacroUiMessageRefresh(), endProjectionBatch(), projectAll() and redrawBaseAndOverlay().";
+			return false;
+		}
+		std::string outsideApprovedFlushSinks = vmContent;
+		outsideApprovedFlushSinks.erase(redrawStart, redrawEnd - redrawStart);
+		outsideApprovedFlushSinks.erase(projectAllStart, projectAllEnd - projectAllStart);
+		outsideApprovedFlushSinks.erase(batchEndStart, batchEndEnd - batchEndStart);
+		outsideApprovedFlushSinks.erase(messageRefreshStart, messageRefreshEnd - messageRefreshStart);
+		if (outsideApprovedFlushSinks.find("TScreen::flushScreen()") != std::string::npos) {
+			failureReason = "VM flushScreen() must not appear outside the approved facade/consumer sinks.";
+			return false;
+		}
+	}
+
+	failureReason.clear();
+	return true;
+}
+
+bool testResizeKillBoxReprojectionGuard(std::string &failureReason) {
+	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
+	std::string vmContent;
+	std::string ioError;
+	std::string missingNeedle;
+
+	if (!readTextFile(vmPath, vmContent, ioError)) {
+		failureReason = "Unable to read mrvm.cpp for resize/KILL_BOX reprojection guard: " + ioError;
+		return false;
+	}
+	if (!containsAllSubstrings(vmContent,
+	                           {
+	                               "bool geometryResetPending = false;",
+	                               "boxStack.clear();",
+	                               "geometryResetPending = true;",
+	                               "UiScreenStateFacade::renderBaseThenOverlayIfNeeded(*this)",
+	                               "grid.geometryResetPending || UiScreenStateFacade::needsOverlayReprojection()",
+	                               "geometryResetPending = false;"
+	                           },
+	                           missingNeedle)) {
+		failureReason =
+		    "MacroCellGrid must keep explicit geometry-reset reprojection state for resize handling: missing " +
+		    missingNeedle + ".";
+		return false;
+	}
+	{
+		const std::size_t killBoxStart = vmContent.find("bool MacroCellGrid::killBox()");
+		const std::size_t killBoxEnd = vmContent.find("static bool applyPutBoxProc(", killBoxStart);
+		if (killBoxStart == std::string::npos || killBoxEnd == std::string::npos || killBoxEnd <= killBoxStart) {
+			failureReason = "Unable to locate MacroCellGrid::killBox() for resize/KILL_BOX reprojection guard.";
+			return false;
+		}
+		const std::string killBoxBlock = vmContent.substr(killBoxStart, killBoxEnd - killBoxStart);
+		if (!containsAllSubstrings(killBoxBlock,
+		                           {
+		                               "if (boxStack.empty()) {",
+		                               "if (geometryResetPending)",
+		                               "redrawBaseAndOverlay();",
+		                               "return true;"
+		                           },
+		                           missingNeedle)) {
+			failureReason =
+			    "MacroCellGrid::killBox() must redraw base and overlay after resize when snapshots were cleared: missing " +
+			    missingNeedle + ".";
+			return false;
+		}
+	}
+
+	failureReason.clear();
+	return true;
+}
+
+bool testClearScreenSnapshotResetGuard(std::string &failureReason) {
+	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
+	std::string vmContent;
+	std::string ioError;
+
+	if (!readTextFile(vmPath, vmContent, ioError)) {
+		failureReason = "Unable to read mrvm.cpp for CLEAR_SCREEN snapshot guard: " + ioError;
+		return false;
+	}
+	{
+		const std::size_t clearScreenStart = vmContent.find("bool MacroCellGrid::clearScreen(int attr) {");
+		const std::size_t clearScreenEnd = vmContent.find("bool MacroCellGrid::scrollBox(", clearScreenStart);
+		if (clearScreenStart == std::string::npos || clearScreenEnd == std::string::npos ||
+		    clearScreenEnd <= clearScreenStart) {
+			failureReason = "Unable to locate MacroCellGrid::clearScreen() for CLEAR_SCREEN snapshot guard.";
+			return false;
+		}
+		const std::string clearScreenBlock = vmContent.substr(clearScreenStart, clearScreenEnd - clearScreenStart);
+		if (clearScreenBlock.find("boxStack.clear();") == std::string::npos) {
+			failureReason = "CLEAR_SCREEN must clear active PUT_BOX snapshots before reprojection.";
+			return false;
+		}
+	}
+	{
+		const std::size_t clearLineStart = vmContent.find("bool MacroCellGrid::clearLine(int col, int row, int count) {");
+		const std::size_t clearLineEnd = vmContent.find("bool MacroCellGrid::clearScreen(int attr) {", clearLineStart);
+		if (clearLineStart == std::string::npos || clearLineEnd == std::string::npos || clearLineEnd <= clearLineStart) {
+			failureReason = "Unable to locate MacroCellGrid::clearLine() for CLEAR_SCREEN snapshot guard.";
+			return false;
+		}
+		const std::string clearLineBlock = vmContent.substr(clearLineStart, clearLineEnd - clearLineStart);
+		if (clearLineBlock.find("boxStack.clear();") != std::string::npos) {
+			failureReason = "CLR_LINE must not discard PUT_BOX snapshots.";
+			return false;
+		}
+	}
+	{
+		const std::size_t scrollBoxStart = vmContent.find("bool MacroCellGrid::scrollBox(int x1, int y1, int x2, int y2, int attr, bool down) {");
+		const std::size_t scrollBoxEnd = vmContent.find("bool MacroCellGrid::putLineColOverlay(", scrollBoxStart);
+		if (scrollBoxStart == std::string::npos || scrollBoxEnd == std::string::npos || scrollBoxEnd <= scrollBoxStart) {
+			failureReason = "Unable to locate MacroCellGrid::scrollBox() for CLEAR_SCREEN snapshot guard.";
+			return false;
+		}
+		const std::string scrollBoxBlock = vmContent.substr(scrollBoxStart, scrollBoxEnd - scrollBoxStart);
+		if (scrollBoxBlock.find("boxStack.clear();") != std::string::npos) {
+			failureReason = "SCROLL_BOX_* must not discard PUT_BOX snapshots.";
+			return false;
+		}
+	}
+
+	failureReason.clear();
+	return true;
+}
+
+bool testLineColOverlayReplayGuard(std::string &failureReason) {
+	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
+	std::string vmContent;
+	std::string ioError;
+	std::string missingNeedle;
+
+	if (!readTextFile(vmPath, vmContent, ioError)) {
+		failureReason = "Unable to read mrvm.cpp for line/column overlay replay guard: " + ioError;
+		return false;
+	}
+	if (!containsAllSubstrings(vmContent,
+	                           {
+	                               "static bool renderMacroLineColOverlay()",
+	                               "static bool reapplyMacroLineColOverlayIfActive()",
+	                               "if (!g_macroScreenLineColOverlay.haveLine && !g_macroScreenLineColOverlay.haveCol)",
+	                               "return renderMacroLineColOverlay();"
+	                           },
+	                           missingNeedle)) {
+		failureReason =
+		    "Macro line/column overlay replay helper must remain wired through the persistent overlay state: missing " +
+		    missingNeedle + ".";
+		return false;
+	}
+	{
+		const std::size_t killBoxStart = vmContent.find("bool MacroCellGrid::killBox()");
+		const std::size_t killBoxEnd = vmContent.find("static bool applyPutBoxProc(", killBoxStart);
+		if (killBoxStart == std::string::npos || killBoxEnd == std::string::npos || killBoxEnd <= killBoxStart) {
+			failureReason = "Unable to locate MacroCellGrid::killBox() for line/column overlay replay guard.";
+			return false;
+		}
+		const std::string killBoxBlock = vmContent.substr(killBoxStart, killBoxEnd - killBoxStart);
+		if (countSubstring(killBoxBlock, "reapplyMacroLineColOverlayIfActive();") < 3) {
+			failureReason =
+			    "MacroCellGrid::killBox() must reapply the current line/column overlay after every redraw-based restore path.";
+			return false;
+		}
+	}
+
+	failureReason.clear();
+	return true;
+}
+
+bool testCoprocessorScreenRendererBoundaryGuard(std::string &failureReason) {
+	const std::string dispatchPath = absolutePathFromCwd("coprocessor/MRCoprocessorDispatch.cpp");
+	std::string dispatchContent;
+	std::string ioError;
+	std::string forbidden;
+	std::vector<std::string> observedCalls;
+	std::vector<std::string> unexpectedCalls;
+
+	if (!readTextFile(dispatchPath, dispatchContent, ioError)) {
+		failureReason = "Unable to read MRCoprocessorDispatch.cpp for coprocessor screen-renderer guard: " + ioError;
+		return false;
+	}
+	static constexpr const char *kForbiddenDirectScreenRenderers[] = {
+	    "mrvmUiCreateWindow(",
+	    "mrvmUiDeleteCurrentWindow(",
+	    "mrvmUiEraseCurrentWindow(",
+	    "mrvmUiModifyCurrentWindow(",
+	    "mrvmUiLinkCurrentWindow(",
+	    "mrvmUiUnlinkCurrentWindow(",
+	    "mrvmUiZoomCurrentWindow(",
+	    "mrvmUiRedrawCurrentWindow(",
+	    "mrvmUiNewScreen(",
+	    "mrvmUiMarquee(",
+	    "mrvmUiBrain(",
+	    "mrvmUiPutBox(",
+	    "mrvmUiWrite(",
+	    "mrvmUiClrLine(",
+	    "mrvmUiGotoxy(",
+	    "mrvmUiPutLineNum(",
+	    "mrvmUiPutColNum(",
+	    "mrvmUiScrollBoxUp(",
+	    "mrvmUiScrollBoxDn(",
+	    "mrvmUiClearScreen(",
+		    "mrvmUiKillBox(",
+		    "mrvmUiMessageBox("
+		};
+	static constexpr const char *kAllowedUiBridgeCalls[] = {
+	    "mrvmUiBeginMacroScreenBatch(",
+	    "mrvmUiCursorPosition(",
+	    "mrvmUiEndMacroScreenBatch(",
+	    "mrvmUiRenderFacadeRenderDeferredCommand(",
+	    "mrvmUiReplaceGlobals(",
+	    "mrvmUiReplaceRuntimeOptions(",
+	    "mrvmUiReplaceWindowLastSearch(",
+	    "mrvmUiReplaceWindowMarkStack(",
+	    "mrvmUiScreenHeight(",
+	    "mrvmUiScreenMutationEpoch(",
+	    "mrvmUiScreenWidth(",
+	    "mrvmUiSetCurrentWindow(",
+	    "mrvmUiSyncLinkedWindowsFrom("
+	};
+
+	for (const char *needle : kForbiddenDirectScreenRenderers)
+		if (dispatchContent.find(needle) != std::string::npos) {
+			forbidden = needle;
+			failureReason =
+			    "Coprocessor playback must not call direct mrvmUi* screen renderers outside the central gateway: " +
+			    forbidden;
+			return false;
+		}
+	{
+		const std::regex uiBridgeCallPattern("mrvmUi[A-Z][A-Za-z0-9_]*\\(");
+		for (std::sregex_iterator it(dispatchContent.begin(), dispatchContent.end(), uiBridgeCallPattern), end; it != end;
+		     ++it) {
+			const std::string call = it->str();
+			if (std::find(observedCalls.begin(), observedCalls.end(), call) == observedCalls.end())
+				observedCalls.push_back(call);
+		}
+		for (const std::string &call : observedCalls)
+			if (std::find(std::begin(kAllowedUiBridgeCalls), std::end(kAllowedUiBridgeCalls), call) ==
+			    std::end(kAllowedUiBridgeCalls))
+				unexpectedCalls.push_back(call);
+		if (!unexpectedCalls.empty()) {
+			failureReason =
+			    "Coprocessor playback must keep mrvmUi* bridge usage on the approved whitelist: " + unexpectedCalls.front();
+			return false;
+		}
+	}
+	if (dispatchContent.find("mrvmUiRenderFacadeRenderDeferredCommand(command)") == std::string::npos ||
+	    dispatchContent.find("DeferredUiRenderGateway::renderDeferredCommand(command)") == std::string::npos ||
+	    dispatchContent.find("MacroScreenView::render(command)") == std::string::npos ||
+	    dispatchContent.find("mrvmUiBeginMacroScreenBatch();") == std::string::npos ||
+	    dispatchContent.find("mrvmUiEndMacroScreenBatch();") == std::string::npos) {
+		failureReason = "Coprocessor playback must keep all deferred screen rendering routed through the gateway/view chain.";
 		return false;
 	}
 
@@ -3786,6 +4183,10 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "TVCALL surface guard (MESSAGEBOX only)", testTvCallSurfaceGuard);
 	runTest(ctx, "Screen render facade boundary guard", testScreenRenderFacadeBoundaryGuard);
 	runTest(ctx, "Render sink classification guard", testRenderSinkClassificationGuard);
+	runTest(ctx, "Resize/KILL_BOX reprojection guard", testResizeKillBoxReprojectionGuard);
+	runTest(ctx, "CLEAR_SCREEN snapshot reset guard", testClearScreenSnapshotResetGuard);
+	runTest(ctx, "Line/column overlay replay guard", testLineColOverlayReplayGuard);
+	runTest(ctx, "Coprocessor screen-renderer boundary guard", testCoprocessorScreenRendererBoundaryGuard);
 }
 
 void runFullSuite(TestContext &ctx) {
@@ -3838,6 +4239,10 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "TVCALL surface guard (MESSAGEBOX only)", testTvCallSurfaceGuard);
 	runTest(ctx, "Screen render facade boundary guard", testScreenRenderFacadeBoundaryGuard);
 	runTest(ctx, "Render sink classification guard", testRenderSinkClassificationGuard);
+	runTest(ctx, "Resize/KILL_BOX reprojection guard", testResizeKillBoxReprojectionGuard);
+	runTest(ctx, "CLEAR_SCREEN snapshot reset guard", testClearScreenSnapshotResetGuard);
+	runTest(ctx, "Line/column overlay replay guard", testLineColOverlayReplayGuard);
+	runTest(ctx, "Coprocessor screen-renderer boundary guard", testCoprocessorScreenRendererBoundaryGuard);
 	runTest(ctx, "Marquee color source guard", testMarqueeColorSourceGuard);
 	runTest(ctx, "OTHERCOLORS dedicated message slots guard", testOtherColorsDedicatedMessageSlotsGuard);
 }
@@ -3853,13 +4258,15 @@ int main(int argc, char **argv) {
 				return runStagedNavProbeMode();
 			if (std::strcmp(argv[2], "staged-mark-page") == 0)
 				return runStagedMarkPageProbeMode();
+			if (std::strcmp(argv[2], "macro-screen-flush") == 0)
+				return runMacroScreenFlushProbeMode();
 		} else if (argc == 2 && std::strcmp(argv[1], "--full") == 0) {
 			runFull = true;
 		} else if (argc == 2 && std::strcmp(argv[1], "--core") == 0) {
 			runFull = false;
 		} else {
 			std::cerr << "usage: regression/mr-regression-checks "
-			             "[--core|--full|--probe staged-nav|staged-mark-page]\n";
+			             "[--core|--full|--probe staged-nav|staged-mark-page|macro-screen-flush]\n";
 			return 2;
 		}
 	}

@@ -1094,12 +1094,11 @@ bool MREditorApp::isRecorderToggleCommand(const TEvent &event) const {
 	return event.what == evCommand && event.message.command == cmMrMacroToggleRecording;
 }
 
-void MREditorApp::redrawRecordingMarkerFrames() {
-	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
-	for (auto & window : windows) {
-		if (window != nullptr && window->frame != nullptr)
-			window->frame->drawView();
-	}
+void MREditorApp::redrawActiveMarkerFrame() {
+	MREditWindow *window = currentEditWindow();
+	if (window == nullptr || window->frame == nullptr || (window->state & sfVisible) == 0)
+		return;
+	window->frame->drawView();
 }
 
 void MREditorApp::syncRecordingUiState() {
@@ -1107,7 +1106,7 @@ void MREditorApp::syncRecordingUiState() {
 	mrSetKeystrokeRecordingMarkerVisible(keystrokeRecording && recordingMarkerVisible);
 	if (auto *mrStatusLine = dynamic_cast<MRStatusLine *>(statusLine))
 		mrStatusLine->setRecordingState(keystrokeRecording, recordingMarkerVisible);
-	redrawRecordingMarkerFrames();
+	redrawActiveMarkerFrame();
 }
 
 void MREditorApp::updateRecordingBlink() {
@@ -1124,7 +1123,7 @@ void MREditorApp::updateRecordingBlink() {
 	mrSetKeystrokeRecordingMarkerVisible(recordingMarkerVisible);
 	if (auto *mrStatusLine = dynamic_cast<MRStatusLine *>(statusLine))
 		mrStatusLine->setRecordingState(keystrokeRecording, recordingMarkerVisible);
-	redrawRecordingMarkerFrames();
+	redrawActiveMarkerFrame();
 }
 
 void MREditorApp::updateMacroBrainBlink() {
@@ -1139,7 +1138,7 @@ void MREditorApp::updateMacroBrainBlink() {
 	macroBrainMarkerVisible = !macroBrainMarkerVisible;
 	macroBrainBlinkToggleAt = now + kRecordingBlinkInterval;
 	mrSetMacroBrainMarkerVisible(macroBrainMarkerVisible);
-	redrawRecordingMarkerFrames();
+	redrawActiveMarkerFrame();
 }
 
 void MREditorApp::startKeystrokeRecording() {

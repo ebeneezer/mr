@@ -36,7 +36,7 @@ class MREditorApp : public TApplication {
 	void appendRecordedKeyEvent(const TEvent &event);
 	bool captureBindingKeySpec(std::string &keySpec);
 	void syncRecordingUiState();
-	void redrawRecordingMarkerFrames();
+	void redrawActiveMarkerFrame();
 	void updateRecordingBlink();
 	void updateMacroBrainBlink();
 	void bootstrapIndexedMacroBindings();

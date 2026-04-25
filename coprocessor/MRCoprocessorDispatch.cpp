@@ -672,6 +672,7 @@ void pumpDeferredMacroUiPlaybackImpl() {
 			playback.screenModel.seedFromRuntime();
 		if (targetWindow != nullptr)
 			mrvmUiSetCurrentWindow(targetWindow);
+		mrvmUiBeginMacroScreenBatch();
 
 		while (playback.nextIndex < playback.commands.size() && remainingCommands > 0 &&
 		       std::chrono::steady_clock::now() < deadline) {
@@ -700,10 +701,11 @@ void pumpDeferredMacroUiPlaybackImpl() {
 			++playback.failedCount;
 			playback.screenModel.invalidateAfterRenderFailure();
 			playback.observedScreenEpoch = mrvmUiScreenMutationEpoch();
-			mrLogMessage((std::string("Deferred UI command failed: ") +
-			              deferredUiCommandName(command.type))
-			                 .c_str());
-		}
+				mrLogMessage((std::string("Deferred UI command failed: ") +
+				              deferredUiCommandName(command.type))
+				                 .c_str());
+			}
+		mrvmUiEndMacroScreenBatch();
 
 		if (playback.nextIndex >= playback.commands.size() && !playback.waitingForDelay) {
 			logDeferredMacroUiPlaybackSummary(playback);

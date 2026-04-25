@@ -1446,11 +1446,11 @@ class MRFileEditor : public TScroller {
 	};
 
 	static bool isGutterPositionLeading(const std::string &position) noexcept {
-		return std::strcmp(position.c_str(), "LEADING") == 0;
+		return position == "LEADING";
 	}
 
 	static bool isGutterPositionTrailing(const std::string &position) noexcept {
-		return std::strcmp(position.c_str(), "TRAILING") == 0;
+		return position == "TRAILING";
 	}
 
 	static std::string normalizedLineNumbersPosition(const MREditSetupSettings &settings) {

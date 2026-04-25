@@ -376,6 +376,8 @@ struct ExecutionState {
 static RuntimeEnvironment g_runtimeEnv;
 static std::recursive_mutex g_vmExecutionMutex;
 static std::atomic<std::uint64_t> g_macroScreenMutationEpoch(1);
+static std::atomic<std::uint64_t> g_macroScreenFlushCount(0);
+class MacroCellGrid;
 
 struct ScreenStateCoordinator {
 	std::atomic<std::uint64_t> baseGeneration{1};
@@ -412,7 +414,7 @@ struct UiScreenStateFacade {
 		g_screenStateCoordinator.noteMacroOverlayMutation(nextGeneration());
 	}
 
-	static void noteBaseInvalidation() noexcept {
+	static void noteBaseMutation() noexcept {
 		g_screenStateCoordinator.noteDirectScreenMutation(nextGeneration());
 	}
 
@@ -423,6 +425,10 @@ struct UiScreenStateFacade {
 	[[nodiscard]] static bool needsOverlayReprojection() noexcept {
 		return g_screenStateCoordinator.needsOverlayReprojection();
 	}
+
+	[[nodiscard]] static std::pair<bool, bool>
+	renderBaseThenOverlayIfNeeded(MacroCellGrid &grid) noexcept;
+	[[nodiscard]] static bool renderOverlay(MacroCellGrid &grid) noexcept;
 };
 
 static thread_local BackgroundEditSession *g_backgroundEditSession = nullptr;
@@ -455,8 +461,6 @@ struct MacroScreenBoxSnapshot {
 	std::vector<MacroCell> cells;
 };
 
-class MacroCellGrid;
-
 class MacroCellView final : public TView {
 public:
 	MacroCellView(const TRect &bounds, MacroCellGrid &grid) noexcept;
@@ -477,8 +481,12 @@ public:
 	bool putLineColOverlay(int line, int col, bool haveLine, bool haveCol);
 	bool killBox();
 	void drawKnownCells(MacroCellView &view);
+	void beginProjectionBatch() noexcept;
+	void endProjectionBatch() noexcept;
 
 private:
+	friend struct UiScreenStateFacade;
+
 	int width = 0;
 	int height = 0;
 	std::vector<MacroCell> cells;
@@ -506,6 +514,9 @@ private:
 
 	std::vector<unsigned char> dirtyRows;
 	bool fullProjectionPending = true;
+	bool geometryResetPending = false;
+	int projectionBatchDepth = 0;
+	bool flushPending = false;
 };
 
 static MacroCellGrid g_macroCellGrid;
@@ -695,6 +706,7 @@ static bool executeLoadedMacro(std::map<std::string, MacroRef>::iterator macroIt
                                const std::string &macroKey, const std::string &paramPart,
                                std::vector<std::string> *logSink);
 static bool tryLoadIndexedMacroForKey(const TKey &pressed);
+static bool reapplyMacroLineColOverlayIfActive();
 
 static std::string upperKey(const std::string &value) {
 	std::string out = value;
@@ -702,6 +714,12 @@ static std::string upperKey(const std::string &value) {
 		i = static_cast<char>(std::toupper(static_cast<unsigned char>(i)));
 	return out;
 }
+
+static constexpr const char *kMacroWorkingMessageText = "working...";
+static constexpr const char *kTvCallMessageBox = "MESSAGEBOX";
+static constexpr const char *kTvCallVideoMode = "VIDEO_MODE";
+static constexpr const char *kTvCallVideoCard = "VIDEO_CARD";
+static constexpr const char *kTvCallToggle = "TOGGLE";
 
 static bool startsWithTokenInsensitive(const std::string &text, std::size_t pos, const char *token) {
 	std::size_t i = 0;
@@ -942,7 +960,11 @@ static unsigned classifyTvCallName(const std::string &name) {
 }
 
 static void bumpMacroScreenMutationEpoch() noexcept {
-	UiScreenStateFacade::noteBaseInvalidation();
+	UiScreenStateFacade::noteBaseMutation();
+}
+
+static void noteMacroScreenFlush() noexcept {
+	g_macroScreenFlushCount.fetch_add(1, std::memory_order_relaxed);
 }
 
 static bool returnWithMacroScreenMutation(bool ok) noexcept {
@@ -953,10 +975,15 @@ static bool returnWithMacroScreenMutation(bool ok) noexcept {
 
 static bool returnWithDirectScreenMutation(bool ok) noexcept {
 	if (ok)
-		UiScreenStateFacade::noteBaseInvalidation();
+		UiScreenStateFacade::noteBaseMutation();
 	return ok;
 }
 
+// Render sink classification for the Strangler foundation:
+// ordinary-view-draw: regular TView::draw(), writeLine() and writeBuf() implementations in app/ui/dialogs.
+// base-redraw-trigger: forceMacroUiMessageRefresh(), redrawCurrentEditWindow() and redrawEntireScreen().
+// overlay-render: MacroCellView::draw(), MacroCellGrid::projectRowSpan(), projectAll() and redrawBaseAndOverlay().
+// unsafe-physical-write: direct physical screen-buffer access outside TVision internals and guarded facade sinks.
 static void forceMacroUiMessageRefresh(TApplication *app) {
 	if (app == nullptr)
 		return;
@@ -964,12 +991,38 @@ static void forceMacroUiMessageRefresh(TApplication *app) {
 		app->menuBar->drawView();
 	if (app->statusLine != nullptr)
 		app->statusLine->drawView();
+	noteMacroScreenFlush();
 	TScreen::flushScreen();
+}
+
+std::pair<bool, bool> UiScreenStateFacade::renderBaseThenOverlayIfNeeded(
+    MacroCellGrid &grid) noexcept {
+	const bool baseReprojectionNeeded =
+	    grid.geometryResetPending || UiScreenStateFacade::needsOverlayReprojection();
+	if (baseReprojectionNeeded && TProgram::application != nullptr) {
+		TProgram::application->drawView();
+		grid.markFullProjection();
+	}
+	return {baseReprojectionNeeded, renderOverlay(grid)};
+}
+
+bool UiScreenStateFacade::renderOverlay(MacroCellGrid &grid) noexcept {
+	if (grid.view == nullptr || !grid.hasKnownCells())
+		return false;
+	if (grid.fullProjectionPending) {
+		grid.view->drawView();
+		return true;
+	}
+	if (!grid.hasDirtyRows())
+		return false;
+	grid.projectDirtyRows(*grid.view);
+	return true;
 }
 
 static bool applyMarqueeProc(const std::string &name, const std::vector<Value> &args) {
 	TApplication *app = dynamic_cast<TApplication *>(TProgram::application);
 	mr::messageline::Kind kind = mr::messageline::Kind::Info;
+	mr::messageline::VisibleMessage existingMessage;
 	std::string text;
 
 	if (args.size() != 1 || !isStringLike(args[0]))
@@ -983,48 +1036,48 @@ static bool applyMarqueeProc(const std::string &name, const std::vector<Value> &
 		kind = mr::messageline::Kind::Error;
 
 	text = valueAsString(args[0]);
-	if (text.empty())
+	if (text.empty()) {
+		if (!mr::messageline::currentOwnerMessage(mr::messageline::Owner::MacroMarquee,
+		                                         existingMessage))
+			return true;
 		mr::messageline::clearOwner(mr::messageline::Owner::MacroMarquee);
-	else
+	} else {
+		if (mr::messageline::currentOwnerMessage(mr::messageline::Owner::MacroMarquee,
+		                                        existingMessage) &&
+		    existingMessage.kind == kind && existingMessage.text == text)
+			return true;
 		mr::messageline::postSticky(mr::messageline::Owner::MacroMarquee, text, kind,
 		                            mr::messageline::kPriorityMedium);
-	forceMacroUiMessageRefresh(app);
-	return returnWithDirectScreenMutation(true);
-}
-
-static bool applyWorkingProc(const std::string &name, const std::vector<Value> &args) {
-	static constexpr const char *kWorkingMessageText = "working...";
-	TApplication *app = dynamic_cast<TApplication *>(TProgram::application);
-
-	if (args.size() != 0)
-		throw std::runtime_error(name + " expects no arguments.");
-	if (app == nullptr || dynamic_cast<MRMenuBar *>(app->menuBar) == nullptr)
-		throw std::runtime_error(name + " requires an active menu bar.");
-	mr::messageline::postSticky(mr::messageline::Owner::MacroMarquee, kWorkingMessageText,
-	                            mr::messageline::Kind::Warning, mr::messageline::kPriorityMedium);
+	}
 	forceMacroUiMessageRefresh(app);
 	return returnWithDirectScreenMutation(true);
 }
 
 static bool applyBrainProc(const std::string &name, const std::vector<Value> &args) {
 	bool enabled = false;
+	bool activeChanged = false;
+	bool visibleChanged = false;
+	MREditWindow *window = nullptr;
 
 	if (args.size() != 1 || !isNumeric(args[0]))
 		throw std::runtime_error(name + " expects one integer argument.");
 
 	enabled = valueAsInt(args[0]) != 0;
+	activeChanged = mrIsMacroBrainMarkerActive() != enabled;
+	visibleChanged = mrIsMacroBrainMarkerVisible() != enabled;
+	if (!activeChanged && !visibleChanged)
+		return true;
 	mrSetMacroBrainMarkerActive(enabled);
 	if (enabled)
 		mrSetMacroBrainMarkerVisible(true);
 	else
 		mrSetMacroBrainMarkerVisible(false);
-	{
-		std::vector<MREditWindow *> windows = allEditWindows();
-		for (MREditWindow *window : windows)
-			if (window != nullptr && window->frame != nullptr)
-				window->frame->drawView();
+	window = activeMacroEditWindow();
+	if (window != nullptr && window->frame != nullptr && (window->state & sfVisible) != 0) {
+		window->frame->drawView();
+		return returnWithDirectScreenMutation(true);
 	}
-	return returnWithDirectScreenMutation(true);
+	return true;
 }
 
 static uchar composeScreenAttribute(int bgColor, int fgColor) noexcept {
@@ -1058,6 +1111,7 @@ bool MacroCellGrid::ensureGeometry() {
 	dirtyRows.assign(static_cast<std::size_t>(height), 0);
 	boxStack.clear();
 	fullProjectionPending = true;
+	geometryResetPending = true;
 	if (view != nullptr) {
 		TRect bounds(0, 0, static_cast<short>(width), static_cast<short>(height));
 		view->locate(bounds);
@@ -1229,6 +1283,21 @@ void MacroCellGrid::markFullProjection() noexcept {
 	fullProjectionPending = true;
 }
 
+void MacroCellGrid::beginProjectionBatch() noexcept {
+	++projectionBatchDepth;
+}
+
+void MacroCellGrid::endProjectionBatch() noexcept {
+	if (projectionBatchDepth <= 0)
+		return;
+	--projectionBatchDepth;
+	if (projectionBatchDepth == 0 && flushPending) {
+		noteMacroScreenFlush();
+		TScreen::flushScreen();
+		flushPending = false;
+	}
+}
+
 bool MacroCellGrid::hasDirtyRows() const noexcept {
 	if (dirtyRows.size() != static_cast<std::size_t>(height))
 		return false;
@@ -1243,25 +1312,20 @@ bool MacroCellGrid::hasKnownCells() const noexcept {
 void MacroCellGrid::projectAll() {
 	if (!ensureView())
 		return;
-	const bool baseReprojectionNeeded = UiScreenStateFacade::needsOverlayReprojection();
-	if (baseReprojectionNeeded && TProgram::application != nullptr) {
-		TProgram::application->drawView();
-		markFullProjection();
-	}
-	bool projectedOverlay = false;
-	if (view != nullptr && hasKnownCells()) {
-		if (fullProjectionPending) {
-			view->drawView();
-			projectedOverlay = true;
-		} else if (hasDirtyRows()) {
-			projectDirtyRows(*view);
-			projectedOverlay = true;
+	const auto [baseReprojectionNeeded, projectedOverlay] =
+	    UiScreenStateFacade::renderBaseThenOverlayIfNeeded(*this);
+	if (baseReprojectionNeeded || projectedOverlay) {
+		if (projectionBatchDepth > 0)
+			flushPending = true;
+		else {
+			noteMacroScreenFlush();
+			TScreen::flushScreen();
 		}
 	}
-	if (baseReprojectionNeeded || projectedOverlay)
-		TScreen::flushScreen();
-	if (baseReprojectionNeeded)
+	if (baseReprojectionNeeded) {
 		UiScreenStateFacade::noteBaseRedraw();
+		geometryResetPending = false;
+	}
 	clearDirtyRows();
 	fullProjectionPending = false;
 }
@@ -1272,10 +1336,16 @@ void MacroCellGrid::redrawBaseAndOverlay() {
 	if (TProgram::application != nullptr)
 		TProgram::application->drawView();
 	markFullProjection();
-	if (view != nullptr && hasKnownCells())
-		view->drawView();
-	TScreen::flushScreen();
+	const bool projectedOverlay = UiScreenStateFacade::renderOverlay(*this);
+	(void)projectedOverlay;
+	if (projectionBatchDepth > 0)
+		flushPending = true;
+	else {
+		noteMacroScreenFlush();
+		TScreen::flushScreen();
+	}
 	UiScreenStateFacade::noteBaseRedraw();
+	geometryResetPending = false;
 	clearDirtyRows();
 	fullProjectionPending = false;
 }
@@ -1375,6 +1445,7 @@ bool MacroCellGrid::clearLine(int col, int row, int count) {
 bool MacroCellGrid::clearScreen(int attr) {
 	if (!ensureGeometry())
 		return true;
+	boxStack.clear();
 	const bool changed = fillRect(0, 0, width - 1, height - 1, ' ', static_cast<uchar>(attr & 0xFF));
 	bool cursorMoved = false;
 	if (TApplication *app = dynamic_cast<TApplication *>(TProgram::application)) {
@@ -1445,14 +1516,22 @@ bool MacroCellGrid::putLineColOverlay(int line, int col, bool haveLine, bool hav
 }
 
 bool MacroCellGrid::killBox() {
-	if (!ensureGeometry() || boxStack.empty())
+	if (!ensureGeometry())
 		return true;
+	if (boxStack.empty()) {
+		if (geometryResetPending) {
+			redrawBaseAndOverlay();
+			reapplyMacroLineColOverlayIfActive();
+		}
+		return true;
+	}
 	MacroScreenBoxSnapshot snapshot = std::move(boxStack.back());
 	boxStack.pop_back();
 	if (snapshot.width != width || snapshot.height != height) {
 		boxStack.clear();
 		markFullProjection();
 		redrawBaseAndOverlay();
+		reapplyMacroLineColOverlayIfActive();
 		return true;
 	}
 
@@ -1478,6 +1557,7 @@ bool MacroCellGrid::killBox() {
 	if (changed) {
 		markFullProjection();
 		redrawBaseAndOverlay();
+		reapplyMacroLineColOverlayIfActive();
 	}
 	return true;
 }
@@ -1574,6 +1654,12 @@ static bool renderMacroLineColOverlay() {
 	                                         g_macroScreenLineColOverlay.col,
 	                                         g_macroScreenLineColOverlay.haveLine,
 	                                         g_macroScreenLineColOverlay.haveCol);
+}
+
+static bool reapplyMacroLineColOverlayIfActive() {
+	if (!g_macroScreenLineColOverlay.haveLine && !g_macroScreenLineColOverlay.haveCol)
+		return true;
+	return renderMacroLineColOverlay();
 }
 
 static bool applyPutLineColNumberProc(const std::string &name, const std::vector<Value> &args) {
@@ -1697,12 +1783,6 @@ static std::string valueAsString(const Value &value) {
 		default:
 			return std::string();
 	}
-}
-
-static std::string uppercaseAscii(std::string value) {
-	for (char & i : value)
-		i = static_cast<char>(std::toupper(static_cast<unsigned char>(i)));
-	return value;
 }
 
 static std::string removeSpaceAscii(const std::string &value) {
@@ -2513,8 +2593,8 @@ static bool searchEditorForward(MRFileEditor *editor, const std::string &needle,
 	haystack = text.substr(startPos, endPos - startPos);
 	query = needle;
 	if (ignoreCase) {
-		haystack = uppercaseAscii(haystack);
-		query = uppercaseAscii(query);
+		haystack = upperKey(haystack);
+		query = upperKey(query);
 	}
 
 	found = haystack.find(query);
@@ -2584,8 +2664,8 @@ static bool searchEditorBackward(MRFileEditor *editor, const std::string &needle
 	    startPos, endPos - startPos + std::min<std::size_t>(needle.size(), text.size() - endPos));
 	query = needle;
 	if (ignoreCase) {
-		haystack = uppercaseAscii(haystack);
-		query = uppercaseAscii(query);
+		haystack = upperKey(haystack);
+		query = upperKey(query);
 	}
 
 	found = haystack.rfind(query, endPos - startPos);
@@ -4496,7 +4576,7 @@ static bool queueDeferredUiProcedure(const std::string &name, const std::vector<
 		if (!args.empty())
 			throw std::runtime_error("WORKING expects no arguments.");
 		session->deferredUiCommands.emplace_back(mrducMarqueeWarning, 0, 0, 0, 0, 0, 0, 0, 0,
-		                                         "working...");
+		                                         kMacroWorkingMessageText);
 		return true;
 	}
 	if (name == "BRAIN") {
@@ -4676,6 +4756,166 @@ static bool queueDeferredUiProcedure(const std::string &name, const std::vector<
 	return false;
 }
 
+enum class DeferredVisualUiProc {
+	Unknown,
+	MarqueeInfo,
+	MarqueeWarning,
+	MarqueeError,
+	Working,
+	Brain,
+	PutBox,
+	Write,
+	ClrLine,
+	Gotoxy,
+	PutLineNum,
+	PutColNum,
+	ScrollBoxUp,
+	ScrollBoxDn,
+	ClearScreen,
+	KillBox
+};
+
+static DeferredVisualUiProc classifyDeferredVisualUiProc(const std::string &name) noexcept {
+	if (name == "MARQUEE")
+		return DeferredVisualUiProc::MarqueeInfo;
+	if (name == "MARQUEE_WARNING")
+		return DeferredVisualUiProc::MarqueeWarning;
+	if (name == "MARQUEE_ERROR")
+		return DeferredVisualUiProc::MarqueeError;
+	if (name == "WORKING")
+		return DeferredVisualUiProc::Working;
+	if (name == "BRAIN")
+		return DeferredVisualUiProc::Brain;
+	if (name == "PUT_BOX")
+		return DeferredVisualUiProc::PutBox;
+	if (name == "WRITE")
+		return DeferredVisualUiProc::Write;
+	if (name == "CLR_LINE")
+		return DeferredVisualUiProc::ClrLine;
+	if (name == "GOTOXY")
+		return DeferredVisualUiProc::Gotoxy;
+	if (name == "PUT_LINE_NUM")
+		return DeferredVisualUiProc::PutLineNum;
+	if (name == "PUT_COL_NUM")
+		return DeferredVisualUiProc::PutColNum;
+	if (name == "SCROLL_BOX_UP")
+		return DeferredVisualUiProc::ScrollBoxUp;
+	if (name == "SCROLL_BOX_DN")
+		return DeferredVisualUiProc::ScrollBoxDn;
+	if (name == "CLEAR_SCREEN")
+		return DeferredVisualUiProc::ClearScreen;
+	if (name == "KILL_BOX")
+		return DeferredVisualUiProc::KillBox;
+	return DeferredVisualUiProc::Unknown;
+}
+
+static bool buildDeferredVisualUiProcedureCommand(const std::string &name,
+                                                  const std::vector<Value> &args,
+                                                  MRMacroDeferredUiCommand &command) {
+	switch (classifyDeferredVisualUiProc(name)) {
+		case DeferredVisualUiProc::MarqueeInfo:
+		case DeferredVisualUiProc::MarqueeWarning:
+		case DeferredVisualUiProc::MarqueeError:
+			if (args.size() != 1 || !isStringLike(args[0]))
+				throw std::runtime_error(name + " expects one string argument.");
+			command = MRMacroDeferredUiCommand(
+			    name == "MARQUEE" ? mrducMarqueeInfo
+			                      : (name == "MARQUEE_WARNING" ? mrducMarqueeWarning : mrducMarqueeError),
+			    0, 0, 0, 0, 0, 0, 0, 0, valueAsString(args[0]));
+			return true;
+		case DeferredVisualUiProc::Working:
+			if (!args.empty())
+				throw std::runtime_error("WORKING expects no arguments.");
+			command = MRMacroDeferredUiCommand(mrducMarqueeWarning, 0, 0, 0, 0, 0, 0, 0, 0,
+			                                   kMacroWorkingMessageText);
+			return true;
+		case DeferredVisualUiProc::Brain:
+			if (args.size() != 1 || !isNumeric(args[0]))
+				throw std::runtime_error("BRAIN expects one integer argument.");
+			command = MRMacroDeferredUiCommand(mrducBrain, valueAsInt(args[0]) != 0 ? 1 : 0);
+			return true;
+		case DeferredVisualUiProc::PutBox:
+			if (args.size() != 8 || args[0].type != TYPE_INT || args[1].type != TYPE_INT ||
+			    args[2].type != TYPE_INT || args[3].type != TYPE_INT || args[4].type != TYPE_INT ||
+			    args[5].type != TYPE_INT || !isStringLike(args[6]) || args[7].type != TYPE_INT)
+				throw std::runtime_error(name + " expects (int, int, int, int, int, int, string, int).");
+			command = MRMacroDeferredUiCommand(
+			    mrducPutBox, valueAsInt(args[0]), valueAsInt(args[1]), valueAsInt(args[2]),
+			    valueAsInt(args[3]), valueAsInt(args[4]), valueAsInt(args[5]), valueAsInt(args[7]), 0,
+			    valueAsString(args[6]));
+			return true;
+		case DeferredVisualUiProc::Write:
+			if (args.size() != 5 || !isStringLike(args[0]) || args[1].type != TYPE_INT ||
+			    args[2].type != TYPE_INT || args[3].type != TYPE_INT || args[4].type != TYPE_INT)
+				throw std::runtime_error(name + " expects (string, int, int, int, int).");
+			command = MRMacroDeferredUiCommand(
+			    mrducWrite, valueAsInt(args[1]), valueAsInt(args[2]), valueAsInt(args[3]),
+			    valueAsInt(args[4]), 0, 0, 0, 0, valueAsString(args[0]));
+			return true;
+		case DeferredVisualUiProc::ClrLine:
+			if (!(args.empty() || (args.size() == 3 && args[0].type == TYPE_INT &&
+			                       args[1].type == TYPE_INT && args[2].type == TYPE_INT)))
+				throw std::runtime_error(name + " expects no arguments or (int, int, int).");
+			command = args.empty()
+			              ? MRMacroDeferredUiCommand(mrducClrLine)
+			              : MRMacroDeferredUiCommand(mrducClrLine, valueAsInt(args[0]),
+			                                         valueAsInt(args[1]), valueAsInt(args[2]));
+			return true;
+		case DeferredVisualUiProc::Gotoxy:
+			if (args.size() != 2 || args[0].type != TYPE_INT || args[1].type != TYPE_INT)
+				throw std::runtime_error(name + " expects (int, int).");
+			command = MRMacroDeferredUiCommand(mrducGotoxy, valueAsInt(args[0]), valueAsInt(args[1]));
+			return true;
+		case DeferredVisualUiProc::PutLineNum:
+		case DeferredVisualUiProc::PutColNum:
+			if (args.size() != 1 || args[0].type != TYPE_INT)
+				throw std::runtime_error(name + " expects one integer argument.");
+			command = MRMacroDeferredUiCommand(
+			    classifyDeferredVisualUiProc(name) == DeferredVisualUiProc::PutLineNum ? mrducPutLineNum
+			                                                                           : mrducPutColNum,
+			    valueAsInt(args[0]));
+			return true;
+		case DeferredVisualUiProc::ScrollBoxUp:
+		case DeferredVisualUiProc::ScrollBoxDn:
+			if (args.size() != 5 || args[0].type != TYPE_INT || args[1].type != TYPE_INT ||
+			    args[2].type != TYPE_INT || args[3].type != TYPE_INT || args[4].type != TYPE_INT)
+				throw std::runtime_error(name + " expects (int, int, int, int, int).");
+			command = MRMacroDeferredUiCommand(
+			    classifyDeferredVisualUiProc(name) == DeferredVisualUiProc::ScrollBoxUp ? mrducScrollBoxUp
+			                                                                            : mrducScrollBoxDn,
+			    valueAsInt(args[0]), valueAsInt(args[1]), valueAsInt(args[2]), valueAsInt(args[3]),
+			    valueAsInt(args[4]), 0, 0, 0);
+			return true;
+		case DeferredVisualUiProc::ClearScreen:
+			if (!(args.empty() || (args.size() == 1 && args[0].type == TYPE_INT)))
+				throw std::runtime_error(name + " expects no arguments or one integer argument.");
+			command = MRMacroDeferredUiCommand(mrducClearScreen, args.empty() ? 0x07 : valueAsInt(args[0]));
+			return true;
+		case DeferredVisualUiProc::KillBox:
+			if (!args.empty())
+				throw std::runtime_error(name + " expects no arguments.");
+			command = MRMacroDeferredUiCommand(mrducKillBox);
+			return true;
+		case DeferredVisualUiProc::Unknown:
+			return false;
+	}
+	return false;
+}
+
+static bool dispatchDeferredVisualUiProcedure(const std::string &name,
+                                              const std::vector<Value> &args,
+                                              int &errorCode) {
+	MRMacroDeferredUiCommand command;
+
+	errorCode = 0;
+	if (currentBackgroundEditSession() != nullptr)
+		return queueDeferredUiProcedure(name, args, errorCode);
+	if (!buildDeferredVisualUiProcedureCommand(name, args, command))
+		return false;
+	mrvmUiRenderFacadeRenderDeferredCommand(command);
+	return true;
+}
+
 static std::string composeTvCallText(const std::vector<Value> &args) {
 	std::string text;
 	for (std::size_t i = 0; i < args.size(); ++i) {
@@ -4686,31 +4926,18 @@ static std::string composeTvCallText(const std::vector<Value> &args) {
 	return text;
 }
 
-static bool queueDeferredUiTvCall(const std::string &nameUpper, const std::vector<Value> &args,
-                                  int &errorCode) {
-	static constexpr const char *kTvCallMessageBox = "MESSAGEBOX";
+static bool dispatchDeferredUiTvCall(const std::string &nameUpper, const std::vector<Value> &args,
+                                     int &errorCode) {
 	BackgroundEditSession *session = currentBackgroundEditSession();
 
 	errorCode = 0;
-	if (session == nullptr)
-		return false;
-	if (nameUpper == kTvCallMessageBox) {
-		session->deferredUiCommands.emplace_back(mrducMessageBox, 0, 0, 0, 0, 0, 0, 0, 0,
-		                                         composeTvCallText(args));
-		return true;
-	}
-	return false;
-}
-
-static bool executeUiTvCall(const std::string &nameUpper, const std::vector<Value> &args) {
-	static constexpr const char *kTvCallMessageBox = "MESSAGEBOX";
-	static constexpr const char *kTvCallVideoMode = "VIDEO_MODE";
-	static constexpr const char *kTvCallVideoCard = "VIDEO_CARD";
-	static constexpr const char *kTvCallToggle = "TOGGLE";
-
 	if (nameUpper == kTvCallMessageBox) {
 		MRMacroDeferredUiCommand command(mrducMessageBox, 0, 0, 0, 0, 0, 0, 0, 0, composeTvCallText(args));
-		return mrvmUiRenderFacadeRenderDeferredCommand(command);
+		if (session != nullptr)
+			session->deferredUiCommands.push_back(command);
+		else
+			mrvmUiRenderFacadeRenderDeferredCommand(command);
+		return true;
 	}
 	if (nameUpper == kTvCallVideoMode || nameUpper == kTvCallVideoCard || nameUpper == kTvCallToggle)
 		throw std::runtime_error("TVCALL " + nameUpper + " is not implemented.");
@@ -7862,7 +8089,7 @@ static Value applyIntrinsic(const std::string &name, const std::vector<Value> &a
 	if (name == "CAPS") {
 		if (args.size() != 1 || !isStringLike(args[0]))
 			throw std::runtime_error("CAPS expects one string argument.");
-		return makeString(uppercaseAscii(valueAsString(args[0])));
+		return makeString(upperKey(valueAsString(args[0])));
 	}
 	if (name == "COPY") {
 		std::string s;
@@ -9602,88 +9829,76 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					setGlobalValue(valueAsString(args[0]), TYPE_INT, makeInt(args[1].i));
 				} else if (name == "MARQUEE" || name == "MARQUEE_WARNING" || name == "MARQUEE_ERROR") {
 					int deferredError = 0;
-					if (queueDeferredUiProcedure(name, args, deferredError)) {
+					if (dispatchDeferredVisualUiProcedure(name, args, deferredError)) {
 						runtimeErrorLevel() = deferredError;
 						continue;
 					}
-					applyMarqueeProc(name, args);
 				} else if (name == "WORKING") {
 					int deferredError = 0;
-					if (queueDeferredUiProcedure(name, args, deferredError)) {
+					if (dispatchDeferredVisualUiProcedure(name, args, deferredError)) {
 						runtimeErrorLevel() = deferredError;
 						continue;
 					}
-					applyWorkingProc(name, args);
 				} else if (name == "BRAIN") {
 					int deferredError = 0;
-					if (queueDeferredUiProcedure(name, args, deferredError)) {
+					if (dispatchDeferredVisualUiProcedure(name, args, deferredError)) {
 						runtimeErrorLevel() = deferredError;
 						continue;
 					}
-					applyBrainProc(name, args);
 				} else if (name == "PUT_BOX") {
 					int deferredError = 0;
-					if (queueDeferredUiProcedure(name, args, deferredError)) {
+					if (dispatchDeferredVisualUiProcedure(name, args, deferredError)) {
 						runtimeErrorLevel() = deferredError;
 						continue;
 					}
-					applyPutBoxProc(name, args);
 				} else if (name == "WRITE") {
 					int deferredError = 0;
-					if (queueDeferredUiProcedure(name, args, deferredError)) {
+					if (dispatchDeferredVisualUiProcedure(name, args, deferredError)) {
 						runtimeErrorLevel() = deferredError;
 						continue;
 					}
-					applyWriteProc(name, args);
 				} else if (name == "CLR_LINE") {
 					int deferredError = 0;
-					if (queueDeferredUiProcedure(name, args, deferredError)) {
+					if (dispatchDeferredVisualUiProcedure(name, args, deferredError)) {
 						runtimeErrorLevel() = deferredError;
 						continue;
 					}
-					applyClrLineProc(name, args);
 				} else if (name == "GOTOXY") {
 					int deferredError = 0;
-					if (queueDeferredUiProcedure(name, args, deferredError)) {
+					if (dispatchDeferredVisualUiProcedure(name, args, deferredError)) {
 						runtimeErrorLevel() = deferredError;
 						continue;
 					}
-					applyGotoxyProc(name, args);
 				} else if (name == "PUT_LINE_NUM" || name == "PUT_COL_NUM") {
 					int deferredError = 0;
-					if (queueDeferredUiProcedure(name, args, deferredError)) {
+					if (dispatchDeferredVisualUiProcedure(name, args, deferredError)) {
 						runtimeErrorLevel() = deferredError;
 						continue;
 					}
-					applyPutLineColNumberProc(name, args);
 				} else if (name == "SCROLL_BOX_UP") {
 					int deferredError = 0;
-					if (queueDeferredUiProcedure(name, args, deferredError)) {
+					if (dispatchDeferredVisualUiProcedure(name, args, deferredError)) {
 						runtimeErrorLevel() = deferredError;
 						continue;
 					}
-					applyScrollBoxProc(name, args, false);
 				} else if (name == "SCROLL_BOX_DN") {
 					int deferredError = 0;
-					if (queueDeferredUiProcedure(name, args, deferredError)) {
+					if (dispatchDeferredVisualUiProcedure(name, args, deferredError)) {
 						runtimeErrorLevel() = deferredError;
 						continue;
 					}
-					applyScrollBoxProc(name, args, true);
 				} else if (name == "CLEAR_SCREEN") {
 					int deferredError = 0;
-					if (queueDeferredUiProcedure(name, args, deferredError)) {
+					if (dispatchDeferredVisualUiProcedure(name, args, deferredError)) {
 						runtimeErrorLevel() = deferredError;
 						continue;
 					}
-					applyClearScreenProc(name, args);
 				} else if (name == "KILL_BOX") {
 					int deferredError = 0;
-					if (queueDeferredUiProcedure(name, args, deferredError)) {
+					if (dispatchDeferredVisualUiProcedure(name, args, deferredError)) {
 						runtimeErrorLevel() = deferredError;
 						continue;
 					}
-					applyKillBoxProc(name, args);
 				} else if (name == "DELAY") {
 					int millis = 0;
 					BackgroundEditSession *session = nullptr;
@@ -10383,11 +10598,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 
 				appendLogLine("TVCALL: " + funcName + " (" + std::to_string(argc) + " params)");
 
-				if (queueDeferredUiTvCall(funcNameUpper, args, deferredError)) {
-					runtimeErrorLevel() = deferredError;
-					continue;
-				}
-				if (executeUiTvCall(funcNameUpper, args)) {
+				if (dispatchDeferredUiTvCall(funcNameUpper, args, deferredError)) {
 					runtimeErrorLevel() = 0;
 					continue;
 				}
@@ -10627,11 +10838,27 @@ std::uint64_t mrvmUiScreenMutationEpoch() noexcept {
 }
 
 void mrvmUiInvalidateScreenBase() noexcept {
-	UiScreenStateFacade::noteBaseInvalidation();
+	UiScreenStateFacade::noteBaseMutation();
 }
 
 void mrvmUiTouchScreenMutationEpoch() noexcept {
 	bumpMacroScreenMutationEpoch();
+}
+
+void mrvmUiBeginMacroScreenBatch() noexcept {
+	g_macroCellGrid.beginProjectionBatch();
+}
+
+void mrvmUiEndMacroScreenBatch() noexcept {
+	g_macroCellGrid.endProjectionBatch();
+}
+
+std::uint64_t mrvmUiMacroScreenFlushCount() noexcept {
+	return g_macroScreenFlushCount.load(std::memory_order_relaxed);
+}
+
+void mrvmUiResetMacroScreenFlushCount() noexcept {
+	g_macroScreenFlushCount.store(0, std::memory_order_relaxed);
 }
 
 bool mrvmUiSetCurrentWindow(const void *windowKey) {

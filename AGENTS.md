@@ -34,11 +34,13 @@ Use English only for:
 
 - Intrinsics / SIMD ist im Einzelfall zu prüfen und ggf. zu empfehlen.
 
-- Code style: Semantisch korrekte Bezeichner ohne leading und ohne trailing underscore. Für Methoden und Membder und Klassen. Werden neue Sourcefiles benötigt ist dafür eine Freigabe einzuholen.
+- Code style: Semantisch korrekte Bezeichner ohne leading und ohne trailing Underscores für Methoden, Member und Klassen. Werden neue Sourcefiles benötigt ist dem User eine Empfehlung zu geben und eine Freigabe einzuholen.
 
 - Code style: Keine multiplen gleiche Stringliterale. Diese sind zu const zusammenzuführen.
 
 - Code style: Maximum Human Readability.
+
+- Coding: Es drüfen keine Routinen implementiert werden, die auch durch Library Funktionen ersetzt werden können: Wrapper für Library Funktionen sind nicht erlaubt.
 
 - Strategie und Coding: Es wird zuerst die Funktion komplett implementiert und debugged. Erst nach Empfehlung und Freigabe werden Regressionstests implementiert.
 
@@ -46,7 +48,7 @@ Use English only for:
 
 - Code style: Keine if Ketten statt dessen tabellengesteuerter Programmfluss oder mindestens switch Statements oder assoziative Arrays oder Hashes.
 
-- Code style: Tvision Upstream Treue: Keine Implementierungen um Tvision herum. Konzepte von Tvision nutzen. Sources im Ordner tvision werden nicht verändert. 
+- Code style: Tvision Upstream Treue: Keine Implementierungen um Tvision herum. Konzepte von Tvision nutzen. Sources im Ordner tvision werden nicht verändert.
 
 - Code style: C++20 Konstrukte konsequent nutzen - kein AI Boilerplate.
 
@@ -62,7 +64,7 @@ Use English only for:
 
 - Coding: VM/UI Producer/Consumer Strategie: mrmac VM, TVCALL und Macro Screen Commands sind Producer von gestagten `MRMacroDeferredUiCommand`- bzw. `MacroCellGrid`-Mutationen. Direkte Screen-Ausgabe über `TScreen::screenBuffer` oder an Tvision vorbei ist für neue Screen Ops verboten. Consumer ist ausschließlich die UI-Schicht (`MacroCellGrid`/`MacroCellView` bzw. die Screen Facade), die auf dem UI Thread über TVision `TView`/`TDrawBuffer` projiziert. Neue TVCALL Screen Ops werden als Commands dieser Schicht modelliert, damit Kollisionen, Ghosting und konkurrierende Schreibpfade vermieden werden.
 
-## Serialisierung:
+## Serialisierung
 
 - Neue Funktionen werden zuerst in Setup Dialogen implementiert, notwendige Setup Values und Keys werden ausschliesslich im zentralen key/value Hash gehalten und von dort in Richtung settings.mrmac serialisiert. Dezentrale Speicher dieser Art sind verboten. Keine überflüssigen File I/O. Es wird nur serialisiert wenn dies notwendig ist und es wird nicht reloaded aus dem Filesystem. Der K/V Hash ist stets inhaltlich gleich zum Inhalt von settings.mrmac.
 
@@ -77,3 +79,4 @@ Use English only for:
 - Beim Eintritt in Dialoge ist bereits ein Data Validator Lauf über den gesamten Dialog zu führen. Schlägt dieser fehl wird der "Done" Button ghosted.
 - Dialoge dürfen KEINE statischen Hilfetexte enthalten: Ein Dialog der das benötigt ist schlecht designed. Für die Hilfe ist die Hilfe da.
 - Jeder Dialog benötigt einen Hilfe Button
+- Jeder Dialog muss die Colorierung der Gruppe Menu/Dialog aus dem Setup Dialog COLOR SETUP implementieren.
