@@ -15,43 +15,43 @@ void mrvmUiInvalidateScreenBase() noexcept;
 class MRStatusLine : public TStatusLine {
   public:
 	MRStatusLine(const TRect &r, TStatusDef &aDef)
-	    : TStatusLine(r, aDef), recordingActive_(false), recordingVisible_(false),
-	      showFunctionKeyLabels_(true), macroFunctionLabels_() {
+	    : TStatusLine(r, aDef), mRecordingActive(false), mRecordingVisible(false),
+	      mShowFunctionKeyLabels(true), mMacroFunctionLabels() {
 	}
 
 	void setRecordingState(bool active, bool visible) {
-		if (recordingActive_ == active && recordingVisible_ == visible)
+		if (mRecordingActive == active && mRecordingVisible == visible)
 			return;
-		recordingActive_ = active;
-		recordingVisible_ = visible;
+		mRecordingActive = active;
+		mRecordingVisible = visible;
 		drawView();
 	}
 
 	void setShowFunctionKeyLabels(bool enabled) {
-		if (showFunctionKeyLabels_ == enabled)
+		if (mShowFunctionKeyLabels == enabled)
 			return;
-		showFunctionKeyLabels_ = enabled;
+		mShowFunctionKeyLabels = enabled;
 		drawView();
 	}
 
 	void setMacroFunctionLabels(const std::vector<std::string> &labels) {
-		if (macroFunctionLabels_ == labels)
+		if (mMacroFunctionLabels == labels)
 			return;
-		macroFunctionLabels_ = labels;
+		mMacroFunctionLabels = labels;
 		drawView();
 	}
 
 	virtual void draw() override {
-		if (!showFunctionKeyLabels_) {
+		if (!mShowFunctionKeyLabels) {
 			TDrawBuffer b;
 			TColorAttr color = getColor(1);
 			b.moveChar(0, ' ', color, size.x);
 			writeLine(0, 0, size.x, 1, b);
-		} else if (!macroFunctionLabels_.empty()) {
+		} else if (!mMacroFunctionLabels.empty()) {
 			drawMacroFunctionLabels();
 		} else
 		TStatusLine::draw();
-		if (!recordingActive_ || !recordingVisible_) {
+		if (!mRecordingActive || !mRecordingVisible) {
 			mrvmUiInvalidateScreenBase();
 			return;
 		}
@@ -85,12 +85,12 @@ class MRStatusLine : public TStatusLine {
 			int x = segment * segmentWidth;
 			int width = segment == segmentCount - 1 ? size.x - x : segmentWidth;
 
-			if (keyNumber > 0 && keyNumber < static_cast<int>(macroFunctionLabels_.size()) &&
-			    !macroFunctionLabels_[static_cast<std::size_t>(keyNumber)].empty()) {
+			if (keyNumber > 0 && keyNumber < static_cast<int>(mMacroFunctionLabels.size()) &&
+			    !mMacroFunctionLabels[static_cast<std::size_t>(keyNumber)].empty()) {
 				text = "F";
 				text += std::to_string(keyNumber <= 10 ? keyNumber : keyNumber - 30);
 				text.push_back(' ');
-				text += macroFunctionLabels_[static_cast<std::size_t>(keyNumber)];
+				text += mMacroFunctionLabels[static_cast<std::size_t>(keyNumber)];
 			}
 			if (width <= 0)
 				continue;
@@ -101,9 +101,9 @@ class MRStatusLine : public TStatusLine {
 		writeLine(0, 0, size.x, 1, buffer);
 	}
 
-	bool recordingActive_;
-	bool recordingVisible_;
-	bool showFunctionKeyLabels_;
-	std::vector<std::string> macroFunctionLabels_;
+	bool mRecordingActive;
+	bool mRecordingVisible;
+	bool mShowFunctionKeyLabels;
+	std::vector<std::string> mMacroFunctionLabels;
 };
 #endif

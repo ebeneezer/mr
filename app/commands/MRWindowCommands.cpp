@@ -241,7 +241,7 @@ void syncVirtualDesktopVisibility() {
 
 		if (win == nullptr)
 			continue;
-		if (win->virtualDesktop_ == g_currentVirtualDesktop) {
+		if (win->mVirtualDesktop == g_currentVirtualDesktop) {
 			if (candidate == nullptr && !manuallyHidden)
 				candidate = win;
 			if (!manuallyHidden && (win->state & sfVisible) == 0)
@@ -254,7 +254,7 @@ void syncVirtualDesktopVisibility() {
 	}
 
 	if (candidate != nullptr &&
-	    (current == nullptr || current->virtualDesktop_ != g_currentVirtualDesktop ||
+	    (current == nullptr || current->mVirtualDesktop != g_currentVirtualDesktop ||
 	     (current->state & sfVisible) == 0))
 		candidate->select();
 
@@ -288,8 +288,8 @@ void applyVirtualDesktopConfigurationChange(int count) {
 	if (count > 9)
 		count = 9;
 	for (MREditWindow *win : windows)
-		if (win != nullptr && win->virtualDesktop_ > count)
-			win->virtualDesktop_ = count;
+		if (win != nullptr && win->mVirtualDesktop > count)
+			win->mVirtualDesktop = count;
 
 	setConfiguredVirtualDesktops(count, &ignoredError);
 	setCurrentVirtualDesktop(std::min(currentVirtualDesktop(), count));
@@ -299,8 +299,8 @@ bool moveToNextVirtualDesktop() {
 	MREditWindow *win = currentEditWindow();
 	if (win == nullptr) return false;
 	int maxVd = configuredVirtualDesktops();
-	if (win->virtualDesktop_ >= maxVd) return false;
-	win->virtualDesktop_++;
+	if (win->mVirtualDesktop >= maxVd) return false;
+	win->mVirtualDesktop++;
 	syncVirtualDesktopVisibility();
 	return true;
 }
@@ -308,8 +308,8 @@ bool moveToNextVirtualDesktop() {
 bool moveToPrevVirtualDesktop() {
 	MREditWindow *win = currentEditWindow();
 	if (win == nullptr) return false;
-	if (win->virtualDesktop_ <= 1) return false;
-	win->virtualDesktop_--;
+	if (win->mVirtualDesktop <= 1) return false;
+	win->mVirtualDesktop--;
 	syncVirtualDesktopVisibility();
 	return true;
 }
@@ -371,7 +371,7 @@ void mrSaveWorkspace(const std::string &filename) {
 		TRect r = win->getBounds();
 		int cursorColumn = static_cast<int>(win->cursorColumnNumber());
 		int cursorLine = static_cast<int>(win->cursorLineNumber());
-		int vd = win->virtualDesktop_;
+		int vd = win->mVirtualDesktop;
 
 		std::string wsLine = "MRSETUP('WORKSPACE', 'URL=" + escapeMrmacSingleQuotedLiteral(url) +
 		                     " size=" + std::to_string(r.b.x - r.a.x) + "," +
@@ -431,7 +431,7 @@ void mrLoadWorkspace(const std::string &filename) {
 
 		if (entry.width > 0 && entry.height > 0 && entry.x >= 0 && entry.y >= 0)
 			win->changeBounds(TRect(entry.x, entry.y, entry.x + entry.width, entry.y + entry.height));
-		win->virtualDesktop_ = std::min(std::max(entry.vd, 1), configuredVirtualDesktops());
+		win->mVirtualDesktop = std::min(std::max(entry.vd, 1), configuredVirtualDesktops());
 		restoreEditorCursor(editor, entry.line, entry.column);
 	}
 	if (!failedFiles.empty()) {
@@ -461,7 +461,7 @@ MREditWindow *createEditorWindow(const char *title) {
 	win = new MREditWindow(bounds, title, nextEditorWindowNumber());
 	TProgram::deskTop->insert(win);
 	if (win != nullptr) {
-		win->virtualDesktop_ = currentVirtualDesktop();
+		win->mVirtualDesktop = currentVirtualDesktop();
 		win->flags |= (wfMove | wfGrow | wfZoom | wfClose);
 	}
 	if (win != nullptr && win->getEditor() != nullptr)

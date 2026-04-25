@@ -22,7 +22,7 @@ class MRTaskOverviewView : public TView {
 	virtual TPalette &getPalette() const override;
 
   private:
-	std::vector<std::string> lines_;
+	std::vector<std::string> mLines;
 };
 
 class MRTaskOverviewWindow : public TWindow {
@@ -32,7 +32,7 @@ class MRTaskOverviewWindow : public TWindow {
 	virtual TPalette &getPalette() const override;
 
   private:
-	MRTaskOverviewView *content_;
+	MRTaskOverviewView *mContent;
 };
 
 class MRFrame : public TFrame {
@@ -90,10 +90,10 @@ class MRFrame : public TFrame {
 	void showTaskOverview();
 	void hideTaskOverview();
 
-	MarkerStateProvider markerStateProvider_;
-	TaskOverviewProvider taskOverviewProvider_;
-	MRTaskOverviewWindow *taskOverviewPopup_;
-	TGroup *taskOverviewPopupOwner_;
+	MarkerStateProvider mMarkerStateProvider;
+	TaskOverviewProvider mTaskOverviewProvider;
+	MRTaskOverviewWindow *mTaskOverviewPopup;
+	TGroup *mTaskOverviewPopupOwner;
 };
 
 #endif

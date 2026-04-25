@@ -7,35 +7,35 @@
 
 class MRTextBuffer {
   public:
-	MRTextBuffer() noexcept : editor_(nullptr) {
+	MRTextBuffer() noexcept : mEditor(nullptr) {
 	}
 
-	explicit MRTextBuffer(MRFileEditor *editor) noexcept : editor_(editor) {
+	explicit MRTextBuffer(MRFileEditor *editor) noexcept : mEditor(editor) {
 	}
 
 	bool exists() const noexcept {
-		return editor_ != nullptr;
+		return mEditor != nullptr;
 	}
 
 	MRFileEditor *nativeEditor() const noexcept {
-		return editor_;
+		return mEditor;
 	}
 
 	MRTextBufferModel::Snapshot snapshot() const {
-		return editor_ != nullptr ? editor_->bufferModel().snapshot() : MRTextBufferModel::Snapshot();
+		return mEditor != nullptr ? mEditor->bufferModel().snapshot() : MRTextBufferModel::Snapshot();
 	}
 
 	MRTextBufferModel::ReadSnapshot readSnapshot() const {
-		return editor_ != nullptr ? editor_->bufferModel().readSnapshot()
+		return mEditor != nullptr ? mEditor->bufferModel().readSnapshot()
 		                         : MRTextBufferModel::ReadSnapshot();
 	}
 
 	MRTextBufferModel::Range selectionRange() const noexcept {
-		return editor_ != nullptr ? editor_->bufferModel().selection().range() : MRTextBufferModel::Range();
+		return mEditor != nullptr ? mEditor->bufferModel().selection().range() : MRTextBufferModel::Range();
 	}
 
 	std::size_t length() const noexcept {
-		return editor_ != nullptr ? editor_->bufferModel().length() : 0;
+		return mEditor != nullptr ? mEditor->bufferModel().length() : 0;
 	}
 
 	bool isEmpty() const noexcept {
@@ -43,58 +43,58 @@ class MRTextBuffer {
 	}
 
 	bool hasSelection() const noexcept {
-		return editor_ != nullptr && editor_->bufferModel().hasSelection();
+		return mEditor != nullptr && mEditor->bufferModel().hasSelection();
 	}
 
 	bool hasUndoHistory() const noexcept {
-		return editor_ != nullptr && editor_->hasUndoHistory();
+		return mEditor != nullptr && mEditor->hasUndoHistory();
 	}
 
 	bool hasRedoHistory() const noexcept {
-		return editor_ != nullptr && editor_->hasRedoHistory();
+		return mEditor != nullptr && mEditor->hasRedoHistory();
 	}
 
 	std::size_t undoStackDepth() const noexcept {
-		return editor_ != nullptr ? editor_->bufferModel().undoStackDepth() : 0;
+		return mEditor != nullptr ? mEditor->bufferModel().undoStackDepth() : 0;
 	}
 
 	std::size_t redoStackDepth() const noexcept {
-		return editor_ != nullptr ? editor_->bufferModel().redoStackDepth() : 0;
+		return mEditor != nullptr ? mEditor->bufferModel().redoStackDepth() : 0;
 	}
 
 	bool isModified() const noexcept {
-		return editor_ != nullptr && editor_->bufferModel().isModified();
+		return mEditor != nullptr && mEditor->bufferModel().isModified();
 	}
 
 	MRSyntaxLanguage language() const noexcept {
-		return editor_ != nullptr ? editor_->bufferModel().language() : MRSyntaxLanguage::PlainText;
+		return mEditor != nullptr ? mEditor->bufferModel().language() : MRSyntaxLanguage::PlainText;
 	}
 
 	const char *languageName() const noexcept {
-		return editor_ != nullptr ? editor_->bufferModel().languageName() : "Plain Text";
+		return mEditor != nullptr ? mEditor->bufferModel().languageName() : "Plain Text";
 	}
 
 	void setModified(bool changed) noexcept {
-		if (editor_ == nullptr)
+		if (mEditor == nullptr)
 			return;
-		editor_->setDocumentModified(changed);
+		mEditor->setDocumentModified(changed);
 	}
 
 	uint cursor() const noexcept {
-		return editor_ != nullptr ? static_cast<uint>(editor_->bufferModel().cursor()) : 0;
+		return mEditor != nullptr ? static_cast<uint>(mEditor->bufferModel().cursor()) : 0;
 	}
 
 	unsigned long cursorLineNumber() const noexcept {
-		if (editor_ != nullptr) {
-			const MRTextBufferModel &model = editor_->bufferModel();
+		if (mEditor != nullptr) {
+			const MRTextBufferModel &model = mEditor->bufferModel();
 			return static_cast<unsigned long>(model.lineIndex(model.cursor())) + 1UL;
 		}
 		return 1UL;
 	}
 
 	unsigned long cursorColumnNumber() const noexcept {
-		if (editor_ != nullptr) {
-			const MRTextBufferModel &model = editor_->bufferModel();
+		if (mEditor != nullptr) {
+			const MRTextBufferModel &model = mEditor->bufferModel();
 			return static_cast<unsigned long>(model.column(model.cursor())) + 1UL;
 		}
 		return 1UL;
@@ -102,8 +102,8 @@ class MRTextBuffer {
 
 	TPoint cursorPoint() const noexcept {
 		TPoint point = {0, 0};
-		if (editor_ != nullptr) {
-			const MRTextBufferModel &model = editor_->bufferModel();
+		if (mEditor != nullptr) {
+			const MRTextBufferModel &model = mEditor->bufferModel();
 			point.x = static_cast<short>(model.column(model.cursor()));
 			point.y = static_cast<short>(model.lineIndex(model.cursor()));
 		}
@@ -111,15 +111,15 @@ class MRTextBuffer {
 	}
 
 	std::size_t lineCount() const noexcept {
-		return editor_ != nullptr ? editor_->bufferModel().lineCount() : 1;
+		return mEditor != nullptr ? mEditor->bufferModel().lineCount() : 1;
 	}
 
 	char charAt(uint pos) const noexcept {
-		return editor_ != nullptr ? editor_->bufferModel().charAt(pos) : '\0';
+		return mEditor != nullptr ? mEditor->bufferModel().charAt(pos) : '\0';
 	}
 
   private:
-	MRFileEditor *editor_;
+	MRFileEditor *mEditor;
 };
 
 #endif

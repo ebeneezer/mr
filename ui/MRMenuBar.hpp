@@ -19,8 +19,8 @@ class MRMenuBar : public TMenuBar {
 	};
 
 	MRMenuBar(const TRect &r, TSubMenu &aMenu)
-	    : TMenuBar(r, aMenu), rightStatus_(), autoMarqueeStatus_(), manualMarqueeStatus_(),
-	      autoMarqueeKind_(MarqueeKind::Info) {
+	    : TMenuBar(r, aMenu), mRightStatus(), mAutoMarqueeStatus(), mManualMarqueeStatus(),
+	      mAutoMarqueeKind(MarqueeKind::Info) {
 	}
 
 	virtual void draw() override;
@@ -28,20 +28,20 @@ class MRMenuBar : public TMenuBar {
 	void setPersistentBlocksMenuState(bool enabled);
 
 	void setRightStatus(const std::string &status) {
-		if (rightStatus_ != status) {
-			rightStatus_ = status;
+		if (mRightStatus != status) {
+			mRightStatus = status;
 			drawView();
 		}
 	}
 
 	const std::string &rightStatus() const noexcept {
-		return rightStatus_;
+		return mRightStatus;
 	}
 
 	void setAutoMarqueeStatus(const std::string &status, MarqueeKind kind = MarqueeKind::Info) {
-		if (autoMarqueeStatus_ != status || autoMarqueeKind_ != kind) {
-			autoMarqueeStatus_ = status;
-			autoMarqueeKind_ = kind;
+		if (mAutoMarqueeStatus != status || mAutoMarqueeKind != kind) {
+			mAutoMarqueeStatus = status;
+			mAutoMarqueeKind = kind;
 			drawView();
 		}
 	}
@@ -51,18 +51,18 @@ class MRMenuBar : public TMenuBar {
 	}
 
 	void setManualMarqueeStatus(const std::string &status, MarqueeKind kind) {
-		if (manualMarqueeStatus_ != status || manualMarqueeKind_ != kind) {
-			manualMarqueeStatus_ = status;
-			manualMarqueeKind_ = kind;
+		if (mManualMarqueeStatus != status || mManualMarqueeKind != kind) {
+			mManualMarqueeStatus = status;
+			mManualMarqueeKind = kind;
 			drawView();
 		}
 	}
 
 	const std::string &autoMarqueeStatus() const noexcept {
-		return autoMarqueeStatus_;
+		return mAutoMarqueeStatus;
 	}
 	const std::string &manualMarqueeStatus() const noexcept {
-		return manualMarqueeStatus_;
+		return mManualMarqueeStatus;
 	}
 
  private:
@@ -82,47 +82,47 @@ class MRMenuBar : public TMenuBar {
 		return std::chrono::milliseconds(3000);
 	}
 	void resetMarqueeState() {
-		marqueeOffset_ = 0;
-		marqueeDirection_ = -1;
-		marqueeLaneWidth_ = 0;
-		marqueeActiveText_.clear();
-		marqueeActiveKind_ = MarqueeKind::Info;
-		marqueeHasPending_ = false;
-		marqueePendingText_.clear();
-		marqueePendingKind_ = MarqueeKind::Info;
-		marqueeScrollNextAt_ = std::chrono::steady_clock::time_point::min();
-		marqueeIntroActive_ = false;
-		marqueeIntroShift_ = 0;
-		marqueeIntroStartShift_ = 0;
-		marqueeIntroStartedAt_ = std::chrono::steady_clock::time_point::min();
-		marqueeOutroActive_ = false;
-		marqueeOutroShift_ = 0;
-		marqueeOutroStartShift_ = 0;
-		marqueeOutroStartedAt_ = std::chrono::steady_clock::time_point::min();
+		mMarqueeOffset = 0;
+		mMarqueeDirection = -1;
+		mMarqueeLaneWidth = 0;
+		mMarqueeActiveText.clear();
+		mMarqueeActiveKind = MarqueeKind::Info;
+		mMarqueeHasPending = false;
+		mMarqueePendingText.clear();
+		mMarqueePendingKind = MarqueeKind::Info;
+		mMarqueeScrollNextAt = std::chrono::steady_clock::time_point::min();
+		mMarqueeIntroActive = false;
+		mMarqueeIntroShift = 0;
+		mMarqueeIntroStartShift = 0;
+		mMarqueeIntroStartedAt = std::chrono::steady_clock::time_point::min();
+		mMarqueeOutroActive = false;
+		mMarqueeOutroShift = 0;
+		mMarqueeOutroStartShift = 0;
+		mMarqueeOutroStartedAt = std::chrono::steady_clock::time_point::min();
 	}
 
-	std::string rightStatus_;
-	std::string autoMarqueeStatus_;
-	std::string manualMarqueeStatus_;
-	MarqueeKind manualMarqueeKind_ = MarqueeKind::Info;
-	MarqueeKind autoMarqueeKind_;
-	int marqueeOffset_ = 0;
-	int marqueeDirection_ = -1;
-	int marqueeLaneWidth_ = 0;
-	std::string marqueeActiveText_;
-	MarqueeKind marqueeActiveKind_ = MarqueeKind::Info;
-	bool marqueeHasPending_ = false;
-	std::string marqueePendingText_;
-	MarqueeKind marqueePendingKind_ = MarqueeKind::Info;
-	std::chrono::steady_clock::time_point marqueeScrollNextAt_ = std::chrono::steady_clock::time_point::min();
-	bool marqueeIntroActive_ = false;
-	int marqueeIntroShift_ = 0;
-	int marqueeIntroStartShift_ = 0;
-	std::chrono::steady_clock::time_point marqueeIntroStartedAt_ = std::chrono::steady_clock::time_point::min();
-	bool marqueeOutroActive_ = false;
-	int marqueeOutroShift_ = 0;
-	int marqueeOutroStartShift_ = 0;
-	std::chrono::steady_clock::time_point marqueeOutroStartedAt_ = std::chrono::steady_clock::time_point::min();
+	std::string mRightStatus;
+	std::string mAutoMarqueeStatus;
+	std::string mManualMarqueeStatus;
+	MarqueeKind mManualMarqueeKind = MarqueeKind::Info;
+	MarqueeKind mAutoMarqueeKind;
+	int mMarqueeOffset = 0;
+	int mMarqueeDirection = -1;
+	int mMarqueeLaneWidth = 0;
+	std::string mMarqueeActiveText;
+	MarqueeKind mMarqueeActiveKind = MarqueeKind::Info;
+	bool mMarqueeHasPending = false;
+	std::string mMarqueePendingText;
+	MarqueeKind mMarqueePendingKind = MarqueeKind::Info;
+	std::chrono::steady_clock::time_point mMarqueeScrollNextAt = std::chrono::steady_clock::time_point::min();
+	bool mMarqueeIntroActive = false;
+	int mMarqueeIntroShift = 0;
+	int mMarqueeIntroStartShift = 0;
+	std::chrono::steady_clock::time_point mMarqueeIntroStartedAt = std::chrono::steady_clock::time_point::min();
+	bool mMarqueeOutroActive = false;
+	int mMarqueeOutroShift = 0;
+	int mMarqueeOutroStartShift = 0;
+	std::chrono::steady_clock::time_point mMarqueeOutroStartedAt = std::chrono::steady_clock::time_point::min();
 };
 
 #endif

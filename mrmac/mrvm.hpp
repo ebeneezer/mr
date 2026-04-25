@@ -31,23 +31,23 @@ class VirtualMachine {
 	std::map<std::string, Value> variables;
 	bool verboseLogging;
 	bool logTruncated;
-	bool asyncDelayPending_;
-	bool asyncDelayReady_;
-	bool asyncDelayEnabled_;
-	std::vector<unsigned char> asyncBytecode_;
-	std::size_t asyncLength_;
-	std::size_t asyncIp_;
-	std::vector<std::size_t> asyncCallStack_;
-	int asyncReturnInt_;
-	std::string asyncReturnStr_;
-	int asyncErrorLevel_;
-	std::string asyncSavedParameterString_;
-	bool asyncMacroFramePushed_;
-	std::shared_ptr<std::atomic_bool> asyncDelayReadyFlag_;
-	std::shared_ptr<std::atomic_bool> asyncDelayCancelledFlag_;
-	std::uint64_t asyncDelayTaskId_;
-	std::uint64_t asyncDelayGeneration_;
-	int asyncDelayMillis_;
+	bool mAsyncDelayPending;
+	bool mAsyncDelayReady;
+	bool mAsyncDelayEnabled;
+	std::vector<unsigned char> mAsyncBytecode;
+	std::size_t mAsyncLength;
+	std::size_t mAsyncIp;
+	std::vector<std::size_t> mAsyncCallStack;
+	int mAsyncReturnInt;
+	std::string mAsyncReturnStr;
+	int mAsyncErrorLevel;
+	std::string mAsyncSavedParameterString;
+	bool mAsyncMacroFramePushed;
+	std::shared_ptr<std::atomic_bool> mAsyncDelayReadyFlag;
+	std::shared_ptr<std::atomic_bool> mAsyncDelayCancelledFlag;
+	std::uint64_t mAsyncDelayTaskId;
+	std::uint64_t mAsyncDelayGeneration;
+	int mAsyncDelayMillis;
 
 	void appendLogLine(const std::string &line, bool important = false);
 	void clearAsyncDelayState() noexcept;
@@ -69,10 +69,10 @@ class VirtualMachine {
 	               const std::string &parameterString, const std::string &macroName,
 	               bool resetState, bool firstRun);
 	void setAsyncDelayEnabled(bool enabled) noexcept {
-		asyncDelayEnabled_ = enabled;
+		mAsyncDelayEnabled = enabled;
 	}
 	bool hasPendingDelay() const noexcept {
-		return asyncDelayPending_;
+		return mAsyncDelayPending;
 	}
 	bool resumePendingDelay();
 	bool cancelPendingDelay();

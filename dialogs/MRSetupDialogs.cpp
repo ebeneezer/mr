@@ -634,7 +634,7 @@ class TPathsSetupDialog : public MRScrollableDialog {
 	class TInlineGlyphButton : public TView {
 	  public:
 		TInlineGlyphButton(const TRect &bounds, const char *glyph, ushort command)
-		    : TView(bounds), glyph_(glyph != nullptr ? glyph : ""), command_(command) {
+		    : TView(bounds), mGlyph(glyph != nullptr ? glyph : ""), mCommand(command) {
 			options |= ofSelectable;
 			options |= ofFirstClick;
 			eventMask |= evMouseDown | evKeyDown;
@@ -643,11 +643,11 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		void draw() override {
 			TDrawBuffer b;
 			ushort color = getColor((state & sfFocused) != 0 ? 2 : 1);
-			int glyphWidth = strwidth(glyph_.c_str());
+			int glyphWidth = strwidth(mGlyph.c_str());
 			int x = std::max(0, (size.x - glyphWidth) / 2);
 
 			b.moveChar(0, ' ', color, size.x);
-			b.moveStr(static_cast<ushort>(x), glyph_.c_str(), color, size.x - x);
+			b.moveStr(static_cast<ushort>(x), mGlyph.c_str(), color, size.x - x);
 			writeLine(0, 0, size.x, size.y, b);
 		}
 
@@ -675,20 +675,20 @@ class TPathsSetupDialog : public MRScrollableDialog {
 
 			while (target != nullptr && dynamic_cast<TDialog *>(target) == nullptr)
 				target = target->owner;
-			message(target != nullptr ? target : owner, evCommand, command_, this);
+			message(target != nullptr ? target : owner, evCommand, mCommand, this);
 		}
 
-		std::string glyph_;
-		ushort command_;
+		std::string mGlyph;
+		ushort mCommand;
 	};
 
 	TPathsSetupDialog(const PathsDialogRecord &baselineRecord, const PathsDialogRecord &initialRecord)
 	    : TWindowInit(&TDialog::initFrame),
 	      MRScrollableDialog(centeredSetupDialogRect(kVirtualDialogWidth, kVirtualDialogHeight),
 	                         "PATHS", kVirtualDialogWidth, kVirtualDialogHeight),
-	      baselineRecord_(baselineRecord), currentRecord_(initialRecord) {
+	      mBaselineRecord(baselineRecord), mCurrentRecord(initialRecord) {
 		buildViews();
-		loadFieldsFromRecord(currentRecord_);
+		loadFieldsFromRecord(mCurrentRecord);
 		setDialogValidationHook([this]() { return validateDialogValues(); });
 		initScrollIfNeeded();
 		selectContent();
@@ -698,7 +698,7 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		ushort result = TProgram::deskTop->execView(this);
 		PathsDialogRecord editedRecord = collectRecordFromFields();
 		outRecord = editedRecord;
-		changed = !recordsEqual(baselineRecord_, editedRecord);
+		changed = !recordsEqual(mBaselineRecord, editedRecord);
 		return result;
 	}
 
@@ -791,30 +791,30 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		int buttonTop = kVirtualDialogHeight - 3;
 
 		addLabel(TRect(2, 2, dialogWidth - 2, 3), "Settings macro URI:");
-		settingsMacroPathField_ = addInput(TRect(inputLeft, 3, inputRight, 4));
+		mSettingsMacroPathField = addInput(TRect(inputLeft, 3, inputRight, 4));
 		addBrowseButton(TRect(glyphLeft, 3, glyphRight, 4), cmMrSetupPathsBrowseSettingsUri);
 
 		addLabel(TRect(2, 5, dialogWidth - 2, 6), "Macro path (*.mrmac):");
-		macroDirectoryPathField_ = addInput(TRect(inputLeft, 6, inputRight, 7));
+		mMacroDirectoryPathField = addInput(TRect(inputLeft, 6, inputRight, 7));
 		addBrowseButton(TRect(glyphLeft, 6, glyphRight, 7), cmMrSetupPathsBrowseMacroPath);
 
 		addLabel(TRect(2, 8, dialogWidth - 2, 9), "Help file URI:");
-		helpFilePathField_ = addInput(TRect(inputLeft, 9, inputRight, 10));
+		mHelpFilePathField = addInput(TRect(inputLeft, 9, inputRight, 10));
 		addBrowseButton(TRect(glyphLeft, 9, glyphRight, 10), cmMrSetupPathsBrowseHelpUri);
 
 		addLabel(TRect(2, 11, dialogWidth - 2, 12), "Temporary path:");
-		tempDirectoryPathField_ = addInput(TRect(inputLeft, 12, inputRight, 13));
+		mTempDirectoryPathField = addInput(TRect(inputLeft, 12, inputRight, 13));
 		addBrowseButton(TRect(glyphLeft, 12, glyphRight, 13), cmMrSetupPathsBrowseTempPath);
 
 			addLabel(TRect(2, 14, dialogWidth - 2, 15), "Shell executable URI:");
-			shellExecutablePathField_ = addInput(TRect(inputLeft, 15, inputRight, 16));
+			mShellExecutablePathField = addInput(TRect(inputLeft, 15, inputRight, 16));
 			addBrowseButton(TRect(glyphLeft, 15, glyphRight, 16), cmMrSetupPathsBrowseShellUri);
 
 			addLabel(TRect(2, 18, inputLeft + 19, 19), "Max path history:");
-			maxPathHistorySlider_ = addNumericSlider(TRect(inputLeft + 20, 18, inputRight, 19), 5, 50, 15, 1, 5);
+			mMaxPathHistorySlider = addNumericSlider(TRect(inputLeft + 20, 18, inputRight, 19), 5, 50, 15, 1, 5);
 
 			addLabel(TRect(2, 20, inputLeft + 19, 21), "Max file history:");
-			maxFileHistorySlider_ = addNumericSlider(TRect(inputLeft + 20, 20, inputRight, 21), 5, 50, 15, 1, 5);
+			mMaxFileHistorySlider = addNumericSlider(TRect(inputLeft + 20, 20, inputRight, 21), 5, 50, 15, 1, 5);
 
 			addButton(TRect(doneLeft, buttonTop, doneLeft + 10, buttonTop + 2), "~D~one", cmOK, bfDefault);
 		addButton(TRect(cancelLeft, buttonTop, cancelLeft + 12, buttonTop + 2), "~C~ancel", cmCancel,
@@ -847,37 +847,37 @@ class TPathsSetupDialog : public MRScrollableDialog {
 	}
 
 		void loadFieldsFromRecord(const PathsDialogRecord &record) {
-			setInputLineValue(settingsMacroPathField_, record.settingsMacroPath);
-			setInputLineValue(macroDirectoryPathField_, record.macroDirectoryPath);
-			setInputLineValue(helpFilePathField_, record.helpFilePath);
-			setInputLineValue(tempDirectoryPathField_, record.tempDirectoryPath);
-			setInputLineValue(shellExecutablePathField_, record.shellExecutablePath);
-			if (maxPathHistorySlider_ != nullptr) {
+			setInputLineValue(mSettingsMacroPathField, record.settingsMacroPath);
+			setInputLineValue(mMacroDirectoryPathField, record.macroDirectoryPath);
+			setInputLineValue(mHelpFilePathField, record.helpFilePath);
+			setInputLineValue(mTempDirectoryPathField, record.tempDirectoryPath);
+			setInputLineValue(mShellExecutablePathField, record.shellExecutablePath);
+			if (mMaxPathHistorySlider != nullptr) {
 				int32_t value = parseHistorySliderValueOrDefault(record.maxPathHistory, 15);
-				maxPathHistorySlider_->setData(&value);
+				mMaxPathHistorySlider->setData(&value);
 			}
-			if (maxFileHistorySlider_ != nullptr) {
+			if (mMaxFileHistorySlider != nullptr) {
 				int32_t value = parseHistorySliderValueOrDefault(record.maxFileHistory, 15);
-				maxFileHistorySlider_->setData(&value);
+				mMaxFileHistorySlider->setData(&value);
 			}
 		}
 
 		void saveFieldsToRecord(PathsDialogRecord &record) const {
 			int32_t maxPathHistory = 15;
 			int32_t maxFileHistory = 15;
-			readInputLineValue(settingsMacroPathField_, record.settingsMacroPath,
+			readInputLineValue(mSettingsMacroPathField, record.settingsMacroPath,
 			                   sizeof(record.settingsMacroPath));
-			readInputLineValue(macroDirectoryPathField_, record.macroDirectoryPath,
+			readInputLineValue(mMacroDirectoryPathField, record.macroDirectoryPath,
 			                   sizeof(record.macroDirectoryPath));
-			readInputLineValue(helpFilePathField_, record.helpFilePath, sizeof(record.helpFilePath));
-			readInputLineValue(tempDirectoryPathField_, record.tempDirectoryPath,
+			readInputLineValue(mHelpFilePathField, record.helpFilePath, sizeof(record.helpFilePath));
+			readInputLineValue(mTempDirectoryPathField, record.tempDirectoryPath,
 			                   sizeof(record.tempDirectoryPath));
-			readInputLineValue(shellExecutablePathField_, record.shellExecutablePath,
+			readInputLineValue(mShellExecutablePathField, record.shellExecutablePath,
 			                   sizeof(record.shellExecutablePath));
-			if (maxPathHistorySlider_ != nullptr)
-				maxPathHistorySlider_->getData(&maxPathHistory);
-			if (maxFileHistorySlider_ != nullptr)
-				maxFileHistorySlider_->getData(&maxFileHistory);
+			if (mMaxPathHistorySlider != nullptr)
+				mMaxPathHistorySlider->getData(&maxPathHistory);
+			if (mMaxFileHistorySlider != nullptr)
+				mMaxFileHistorySlider->getData(&maxFileHistory);
 			writeRecordField(record.maxPathHistory, sizeof(record.maxPathHistory),
 			                 std::to_string(std::clamp(static_cast<int>(maxPathHistory), 5, 50)));
 				writeRecordField(record.maxFileHistory, sizeof(record.maxFileHistory),
@@ -885,7 +885,7 @@ class TPathsSetupDialog : public MRScrollableDialog {
 			}
 
 		PathsDialogRecord collectRecordFromFields() const {
-			PathsDialogRecord record = currentRecord_;
+			PathsDialogRecord record = mCurrentRecord;
 			saveFieldsToRecord(record);
 			return record;
 		}
@@ -908,34 +908,34 @@ class TPathsSetupDialog : public MRScrollableDialog {
 
 	void browseSettingsMacroUri() {
 		std::string selected;
-		if (browseUriWithFileDialog("Select settings macro URI", currentInputValue(settingsMacroPathField_),
+		if (browseUriWithFileDialog("Select settings macro URI", currentInputValue(mSettingsMacroPathField),
 		                            selected))
-			setInputValue(settingsMacroPathField_, selected);
+			setInputValue(mSettingsMacroPathField, selected);
 	}
 
 	void browseMacroPath() {
 		std::string selected;
-		if (browsePathWithDirectoryDialog(currentInputValue(macroDirectoryPathField_), selected))
-			setInputValue(macroDirectoryPathField_, selected);
+		if (browsePathWithDirectoryDialog(currentInputValue(mMacroDirectoryPathField), selected))
+			setInputValue(mMacroDirectoryPathField, selected);
 	}
 
 	void browseHelpUri() {
 		std::string selected;
-		if (browseUriWithFileDialog("Select help file URI", currentInputValue(helpFilePathField_), selected))
-			setInputValue(helpFilePathField_, selected);
+		if (browseUriWithFileDialog("Select help file URI", currentInputValue(mHelpFilePathField), selected))
+			setInputValue(mHelpFilePathField, selected);
 	}
 
 	void browseTempPath() {
 		std::string selected;
-		if (browsePathWithDirectoryDialog(currentInputValue(tempDirectoryPathField_), selected))
-			setInputValue(tempDirectoryPathField_, selected);
+		if (browsePathWithDirectoryDialog(currentInputValue(mTempDirectoryPathField), selected))
+			setInputValue(mTempDirectoryPathField, selected);
 	}
 
 	void browseShellUri() {
 		std::string selected;
-		if (browseUriWithFileDialog("Select shell executable URI", currentInputValue(shellExecutablePathField_),
+		if (browseUriWithFileDialog("Select shell executable URI", currentInputValue(mShellExecutablePathField),
 		                            selected))
-			setInputValue(shellExecutablePathField_, selected);
+			setInputValue(mShellExecutablePathField, selected);
 	}
 
 	DialogValidationResult validateDialogValues() {
@@ -948,17 +948,17 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		return result;
 	}
 
-		PathsDialogRecord baselineRecord_;
-		PathsDialogRecord currentRecord_;
+		PathsDialogRecord mBaselineRecord;
+		PathsDialogRecord mCurrentRecord;
 		static const int kVirtualDialogWidth = 84;
 		static const int kVirtualDialogHeight = 27;
-		TInputLine *settingsMacroPathField_ = nullptr;
-		TInputLine *macroDirectoryPathField_ = nullptr;
-		TInputLine *helpFilePathField_ = nullptr;
-		TInputLine *tempDirectoryPathField_ = nullptr;
-		TInputLine *shellExecutablePathField_ = nullptr;
-		MRNumericSlider *maxPathHistorySlider_ = nullptr;
-		MRNumericSlider *maxFileHistorySlider_ = nullptr;
+		TInputLine *mSettingsMacroPathField = nullptr;
+		TInputLine *mMacroDirectoryPathField = nullptr;
+		TInputLine *mHelpFilePathField = nullptr;
+		TInputLine *mTempDirectoryPathField = nullptr;
+		TInputLine *mShellExecutablePathField = nullptr;
+		MRNumericSlider *mMaxPathHistorySlider = nullptr;
+		MRNumericSlider *mMaxFileHistorySlider = nullptr;
 };
 
 void showPathsHelpDialog() {
@@ -1044,7 +1044,7 @@ void runPathsSetupDialogFlow() {
 class TNotifyingInputLine : public TInputLine {
   public:
 	TNotifyingInputLine(const TRect &bounds, int maxLen, ushort changeCommand) noexcept
-	    : TInputLine(bounds, maxLen), capacity_(maxLen + 1), changeCommand_(changeCommand) {
+	    : TInputLine(bounds, maxLen), mCapacity(maxLen + 1), mChangeCommand(changeCommand) {
 	}
 
 	void handleEvent(TEvent &event) override {
@@ -1056,18 +1056,18 @@ class TNotifyingInputLine : public TInputLine {
 			target = target->owner;
 
 		if (currentText() != beforeText)
-			message(target != nullptr ? target : owner, evBroadcast, changeCommand_, this);
+			message(target != nullptr ? target : owner, evBroadcast, mChangeCommand, this);
 	}
 
   private:
 	std::string currentText() const {
-		std::vector<char> buffer(capacity_, '\0');
+		std::vector<char> buffer(mCapacity, '\0');
 		const_cast<TNotifyingInputLine *>(this)->getData(buffer.data());
 		return std::string(buffer.data());
 	}
 
-	std::size_t capacity_ = 0;
-	ushort changeCommand_ = 0;
+	std::size_t mCapacity = 0;
+	ushort mChangeCommand = 0;
 };
 
 void showBackupsAutosaveHelpDialog() {
@@ -1087,7 +1087,7 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 	class TInlineGlyphButton : public TView {
 	  public:
 		TInlineGlyphButton(const TRect &bounds, const char *glyph, ushort command)
-		    : TView(bounds), glyph_(glyph != nullptr ? glyph : ""), command_(command) {
+		    : TView(bounds), mGlyph(glyph != nullptr ? glyph : ""), mCommand(command) {
 			options |= ofSelectable;
 			options |= ofFirstClick;
 			eventMask |= evMouseDown | evKeyDown;
@@ -1096,11 +1096,11 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 		void draw() override {
 			TDrawBuffer b;
 			ushort color = getColor((state & sfFocused) != 0 ? 2 : 1);
-			int glyphWidth = strwidth(glyph_.c_str());
+			int glyphWidth = strwidth(mGlyph.c_str());
 			int x = std::max(0, (size.x - glyphWidth) / 2);
 
 			b.moveChar(0, ' ', color, size.x);
-			b.moveStr(static_cast<ushort>(x), glyph_.c_str(), color, size.x - x);
+			b.moveStr(static_cast<ushort>(x), mGlyph.c_str(), color, size.x - x);
 			writeLine(0, 0, size.x, size.y, b);
 		}
 
@@ -1128,11 +1128,11 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 
 			while (target != nullptr && dynamic_cast<TDialog *>(target) == nullptr)
 				target = target->owner;
-			message(target != nullptr ? target : owner, evCommand, command_, this);
+			message(target != nullptr ? target : owner, evCommand, mCommand, this);
 		}
 
-		std::string glyph_;
-		ushort command_;
+		std::string mGlyph;
+		ushort mCommand;
 	};
 
 	TBackupsAutosaveSetupDialog(const BackupsAutosaveDialogRecord &baselineRecord,
@@ -1140,10 +1140,10 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 	    : TWindowInit(&TDialog::initFrame),
 	      MRScrollableDialog(centeredSetupDialogRect(kVirtualDialogWidth, kVirtualDialogHeight),
 	                         "BACKUPS & AUTOSAVE", kVirtualDialogWidth, kVirtualDialogHeight),
-	      baselineRecord_(baselineRecord), currentRecord_(initialRecord) {
+	      mBaselineRecord(baselineRecord), mCurrentRecord(initialRecord) {
 		buildViews();
 		setDialogValidationHook([this]() { return validateDialogValues(); });
-		loadFieldsFromRecord(currentRecord_);
+		loadFieldsFromRecord(mCurrentRecord);
 		updateBackupFieldState();
 		initScrollIfNeeded();
 		selectContent();
@@ -1158,7 +1158,7 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 		ushort result = TProgram::deskTop->execView(this);
 		BackupsAutosaveDialogRecord editedRecord = collectRecordFromFields();
 		outRecord = editedRecord;
-		changed = !recordsEqual(baselineRecord_, editedRecord);
+		changed = !recordsEqual(mBaselineRecord, editedRecord);
 		return result;
 	}
 
@@ -1173,19 +1173,19 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 		bool backwardTab = event.what == evKeyDown && event.keyDown.keyCode == kbShiftTab;
 
 		if (forwardTab) {
-			if (current == backupFrequencyField_) {
-				if (backupMethod == kBackupMethodBakFile && backupExtensionField_ != nullptr)
-					backupExtensionField_->select();
-				else if (inactivitySecondsSlider_ != nullptr)
-					inactivitySecondsSlider_->select();
+			if (current == mBackupFrequencyField) {
+				if (backupMethod == kBackupMethodBakFile && mBackupExtensionField != nullptr)
+					mBackupExtensionField->select();
+				else if (mInactivitySecondsSlider != nullptr)
+					mInactivitySecondsSlider->select();
 				clearEvent(event);
 				refreshValidationState();
 				return;
 			}
-			if (current == backupExtensionField_ || current == backupDirectoryField_ ||
-			    current == backupDirectoryBrowseButton_) {
-				if (inactivitySecondsSlider_ != nullptr)
-					inactivitySecondsSlider_->select();
+			if (current == mBackupExtensionField || current == mBackupDirectoryField ||
+			    current == mBackupDirectoryBrowseButton) {
+				if (mInactivitySecondsSlider != nullptr)
+					mInactivitySecondsSlider->select();
 				clearEvent(event);
 				refreshValidationState();
 				return;
@@ -1193,20 +1193,20 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 		}
 
 		if (backwardTab) {
-			if (current == inactivitySecondsSlider_) {
-				if (backupMethod == kBackupMethodBakFile && backupExtensionField_ != nullptr &&
-				    (backupExtensionField_->state & sfDisabled) == 0)
-					backupExtensionField_->select();
-				else if (backupFrequencyField_ != nullptr)
-					backupFrequencyField_->select();
+			if (current == mInactivitySecondsSlider) {
+				if (backupMethod == kBackupMethodBakFile && mBackupExtensionField != nullptr &&
+				    (mBackupExtensionField->state & sfDisabled) == 0)
+					mBackupExtensionField->select();
+				else if (mBackupFrequencyField != nullptr)
+					mBackupFrequencyField->select();
 				clearEvent(event);
 				refreshValidationState();
 				return;
 			}
-			if (current == backupExtensionField_ || current == backupDirectoryField_ ||
-			    current == backupDirectoryBrowseButton_) {
-				if (backupFrequencyField_ != nullptr)
-					backupFrequencyField_->select();
+			if (current == mBackupExtensionField || current == mBackupDirectoryField ||
+			    current == mBackupDirectoryBrowseButton) {
+				if (mBackupFrequencyField != nullptr)
+					mBackupFrequencyField->select();
 				clearEvent(event);
 				refreshValidationState();
 				return;
@@ -1225,7 +1225,7 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 
 		if (originalWhat == evCommand && originalCommand == cmOK) {
 			refreshValidationState();
-			if (!isValid_) {
+			if (!mIsValid) {
 				clearEvent(event);
 				return;
 			}
@@ -1259,7 +1259,7 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 		if (originalWhat == evBroadcast &&
 		    (originalCommand == cmReleasedFocus || originalCommand == cmReceivedFocus ||
 		     originalCommand == cmMRNumericSliderChanged) &&
-		    originalInfoPtr != backupDirectoryBrowseButton_)
+		    originalInfoPtr != mBackupDirectoryBrowseButton)
 			refreshValidationState();
 		if (originalWhat == evKeyDown &&
 		    (originalKey == kbTab || originalKey == kbCtrlI || originalKey == kbShiftTab))
@@ -1325,32 +1325,32 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 		const int buttonTop = kVirtualDialogHeight - 3;
 
 		addLabel(TRect(leftGroupLeft, 2, leftGroupRight, 3), "Backup method:");
-		backupMethodField_ = addRadioGroup(TRect(leftGroupLeft, 3, leftGroupRight, 6),
+		mBackupMethodField = addRadioGroup(TRect(leftGroupLeft, 3, leftGroupRight, 6),
 		                                  new TSItem("~O~ff",
 		                                             new TSItem("create ~B~ackup file",
 		                                                        new TSItem("move to backup ~P~ath", nullptr))));
 
 		addLabel(TRect(rightGroupLeft, 2, rightGroupRight, 3), "Backup frequency:");
-		backupFrequencyField_ = addRadioGroup(TRect(rightGroupLeft, 3, rightGroupRight, 5),
+		mBackupFrequencyField = addRadioGroup(TRect(rightGroupLeft, 3, rightGroupRight, 5),
 		                                     new TSItem("~F~irst save only",
 		                                                new TSItem("E~v~ery save", nullptr)));
 
 		addLabel(TRect(2, 7, textFieldLeft - 1, 8), "Backup file ext.:");
-		backupExtensionField_ = addInput(TRect(textFieldLeft, 7, backupExtFieldRight, 8),
+		mBackupExtensionField = addInput(TRect(textFieldLeft, 7, backupExtFieldRight, 8),
 		                                kBackupExtensionFieldSize - 1);
 
 		addLabel(TRect(2, 8, textFieldLeft - 1, 9), "Backup path:");
-		backupDirectoryField_ = addInput(TRect(textFieldLeft, 8, backupPathFieldRight, 9),
+		mBackupDirectoryField = addInput(TRect(textFieldLeft, 8, backupPathFieldRight, 9),
 		                                kBackupDirectoryFieldSize - 1);
-		backupDirectoryBrowseButton_ =
+		mBackupDirectoryBrowseButton =
 		    addBrowseButton(TRect(glyphLeft, 8, glyphRight, 9), cmMrSetupBackupsAutosaveBrowseDirectory);
 
 		addLabel(TRect(2, 10, dialogWidth - 2, 11), "Autosave in seconds, 0 = OFF:");
 		addLabel(TRect(2, 11, textFieldLeft - 1, 12), "Keyboard inactivity:");
-		inactivitySecondsSlider_ = addNumericSlider(TRect(textFieldLeft, 11, autosaveFieldRight, 12), 0, 100,
+		mInactivitySecondsSlider = addNumericSlider(TRect(textFieldLeft, 11, autosaveFieldRight, 12), 0, 100,
 		                                           15, 5, 10);
 		addLabel(TRect(2, 12, textFieldLeft - 1, 13), "Intervall auto save:");
-		absoluteIntervalSlider_ = addNumericSlider(TRect(textFieldLeft, 12, autosaveFieldRight, 13), 0, 300,
+		mAbsoluteIntervalSlider = addNumericSlider(TRect(textFieldLeft, 12, autosaveFieldRight, 13), 0, 300,
 		                                         180, 10, 50);
 
 		addButton(TRect(doneLeft, buttonTop, doneLeft + 10, buttonTop + 2), "~D~one", cmOK, bfDefault);
@@ -1383,7 +1383,7 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 
 		result.valid = validateBackupsAutosaveRecord(record, errorText);
 		result.warningText = errorText;
-		isValid_ = result.valid;
+		mIsValid = result.valid;
 		return result;
 	}
 
@@ -1426,45 +1426,45 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 	}
 
 	void loadFieldsFromRecord(const BackupsAutosaveDialogRecord &record) {
-		if (backupMethodField_ != nullptr)
-			backupMethodField_->setData((void *)&record.backupMethodChoice);
-		if (backupFrequencyField_ != nullptr)
-			backupFrequencyField_->setData((void *)&record.backupFrequencyChoice);
-		setInputLineValue(backupExtensionField_, record.backupFileExtension, sizeof(record.backupFileExtension));
-		setInputLineValue(backupDirectoryField_, record.backupDirectoryPath, sizeof(record.backupDirectoryPath));
-		if (inactivitySecondsSlider_ != nullptr) {
+		if (mBackupMethodField != nullptr)
+			mBackupMethodField->setData((void *)&record.backupMethodChoice);
+		if (mBackupFrequencyField != nullptr)
+			mBackupFrequencyField->setData((void *)&record.backupFrequencyChoice);
+		setInputLineValue(mBackupExtensionField, record.backupFileExtension, sizeof(record.backupFileExtension));
+		setInputLineValue(mBackupDirectoryField, record.backupDirectoryPath, sizeof(record.backupDirectoryPath));
+		if (mInactivitySecondsSlider != nullptr) {
 			int32_t value = parseSliderValueOrDefault(record.inactivitySeconds, 15, 5, 100);
-			inactivitySecondsSlider_->setData(&value);
+			mInactivitySecondsSlider->setData(&value);
 		}
-		if (absoluteIntervalSlider_ != nullptr) {
+		if (mAbsoluteIntervalSlider != nullptr) {
 			int32_t value = parseSliderValueOrDefault(record.absoluteIntervalSeconds, 180, 100, 300);
-			absoluteIntervalSlider_->setData(&value);
+			mAbsoluteIntervalSlider->setData(&value);
 		}
 	}
 
 	void saveFieldsToRecord(BackupsAutosaveDialogRecord &record) const {
-		if (backupMethodField_ != nullptr)
-			backupMethodField_->getData((void *)&record.backupMethodChoice);
-		if (backupFrequencyField_ != nullptr)
-			backupFrequencyField_->getData((void *)&record.backupFrequencyChoice);
-		readInputLineValue(backupExtensionField_, record.backupFileExtension, sizeof(record.backupFileExtension));
-		readInputLineValue(backupDirectoryField_, record.backupDirectoryPath, sizeof(record.backupDirectoryPath));
-		writeSliderValue(inactivitySecondsSlider_, record.inactivitySeconds, sizeof(record.inactivitySeconds), 15,
+		if (mBackupMethodField != nullptr)
+			mBackupMethodField->getData((void *)&record.backupMethodChoice);
+		if (mBackupFrequencyField != nullptr)
+			mBackupFrequencyField->getData((void *)&record.backupFrequencyChoice);
+		readInputLineValue(mBackupExtensionField, record.backupFileExtension, sizeof(record.backupFileExtension));
+		readInputLineValue(mBackupDirectoryField, record.backupDirectoryPath, sizeof(record.backupDirectoryPath));
+		writeSliderValue(mInactivitySecondsSlider, record.inactivitySeconds, sizeof(record.inactivitySeconds), 15,
 		                5, 100);
-		writeSliderValue(absoluteIntervalSlider_, record.absoluteIntervalSeconds,
+		writeSliderValue(mAbsoluteIntervalSlider, record.absoluteIntervalSeconds,
 		                sizeof(record.absoluteIntervalSeconds), 180, 100, 300);
 	}
 
 	BackupsAutosaveDialogRecord collectRecordFromFields() const {
-		BackupsAutosaveDialogRecord record = currentRecord_;
+		BackupsAutosaveDialogRecord record = mCurrentRecord;
 		saveFieldsToRecord(record);
 		return record;
 	}
 
 	ushort currentBackupMethod() const {
 		ushort method = kBackupMethodOff;
-		if (backupMethodField_ != nullptr)
-			backupMethodField_->getData((void *)&method);
+		if (mBackupMethodField != nullptr)
+			mBackupMethodField->getData((void *)&method);
 		return method;
 	}
 
@@ -1473,46 +1473,46 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 		const bool backupOff = method == kBackupMethodOff;
 		const bool extensionEnabled = method == kBackupMethodBakFile;
 		const bool pathEnabled = method == kBackupMethodDirectory;
-		if (backupFrequencyField_ != nullptr)
-			backupFrequencyField_->setState(sfDisabled, backupOff ? True : False);
-		if (backupExtensionField_ != nullptr)
-			backupExtensionField_->setState(sfDisabled, extensionEnabled ? False : True);
-		if (backupDirectoryField_ != nullptr)
-			backupDirectoryField_->setState(sfDisabled, pathEnabled ? False : True);
-		if (backupDirectoryBrowseButton_ != nullptr)
-			backupDirectoryBrowseButton_->setState(sfDisabled, pathEnabled ? False : True);
-		if (inactivitySecondsSlider_ != nullptr)
-			inactivitySecondsSlider_->setState(sfDisabled, backupOff ? True : False);
-		if (absoluteIntervalSlider_ != nullptr)
-			absoluteIntervalSlider_->setState(sfDisabled, backupOff ? True : False);
+		if (mBackupFrequencyField != nullptr)
+			mBackupFrequencyField->setState(sfDisabled, backupOff ? True : False);
+		if (mBackupExtensionField != nullptr)
+			mBackupExtensionField->setState(sfDisabled, extensionEnabled ? False : True);
+		if (mBackupDirectoryField != nullptr)
+			mBackupDirectoryField->setState(sfDisabled, pathEnabled ? False : True);
+		if (mBackupDirectoryBrowseButton != nullptr)
+			mBackupDirectoryBrowseButton->setState(sfDisabled, pathEnabled ? False : True);
+		if (mInactivitySecondsSlider != nullptr)
+			mInactivitySecondsSlider->setState(sfDisabled, backupOff ? True : False);
+		if (mAbsoluteIntervalSlider != nullptr)
+			mAbsoluteIntervalSlider->setState(sfDisabled, backupOff ? True : False);
 	}
 
 	bool mouseHitsBackupBrowseButton(TEvent &event) {
-		return event.what == evMouseDown && backupDirectoryBrowseButton_ != nullptr &&
-		       (backupDirectoryBrowseButton_->state & sfDisabled) == 0 &&
-		       backupDirectoryBrowseButton_->containsMouse(event);
+		return event.what == evMouseDown && mBackupDirectoryBrowseButton != nullptr &&
+		       (mBackupDirectoryBrowseButton->state & sfDisabled) == 0 &&
+		       mBackupDirectoryBrowseButton->containsMouse(event);
 	}
 
 	void browseBackupDirectory() {
 		std::string selected;
-		if (browsePathWithDirectoryDialog(currentInputValue(backupDirectoryField_, kBackupDirectoryFieldSize), selected))
-			setInputValue(backupDirectoryField_, kBackupDirectoryFieldSize, selected);
-		if (backupDirectoryField_ != nullptr)
-			backupDirectoryField_->select();
+		if (browsePathWithDirectoryDialog(currentInputValue(mBackupDirectoryField, kBackupDirectoryFieldSize), selected))
+			setInputValue(mBackupDirectoryField, kBackupDirectoryFieldSize, selected);
+		if (mBackupDirectoryField != nullptr)
+			mBackupDirectoryField->select();
 	}
 
-	BackupsAutosaveDialogRecord baselineRecord_;
-	BackupsAutosaveDialogRecord currentRecord_;
+	BackupsAutosaveDialogRecord mBaselineRecord;
+	BackupsAutosaveDialogRecord mCurrentRecord;
 	static const int kVirtualDialogWidth = 96;
 	static const int kVirtualDialogHeight = 17;
-	bool isValid_ = true;
-	TRadioButtons *backupMethodField_ = nullptr;
-	TRadioButtons *backupFrequencyField_ = nullptr;
-	TInputLine *backupExtensionField_ = nullptr;
-	TInputLine *backupDirectoryField_ = nullptr;
-	TView *backupDirectoryBrowseButton_ = nullptr;
-	MRNumericSlider *inactivitySecondsSlider_ = nullptr;
-	MRNumericSlider *absoluteIntervalSlider_ = nullptr;
+	bool mIsValid = true;
+	TRadioButtons *mBackupMethodField = nullptr;
+	TRadioButtons *mBackupFrequencyField = nullptr;
+	TInputLine *mBackupExtensionField = nullptr;
+	TInputLine *mBackupDirectoryField = nullptr;
+	TView *mBackupDirectoryBrowseButton = nullptr;
+	MRNumericSlider *mInactivitySecondsSlider = nullptr;
+	MRNumericSlider *mAbsoluteIntervalSlider = nullptr;
 };
 
 void runBackupsAutosaveDialogFlow() {
@@ -1829,19 +1829,19 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		                          new TSItem("~A~uto load workspace",
 		                                     new TSItem("~C~ycle virtual desktops", nullptr)))));
 
-		optionsField_ = cb;
-		addManaged(optionsField_, optionsField_->getBounds());
+		mOptionsField = cb;
+		addManaged(mOptionsField, mOptionsField->getBounds());
 
-		virtualDesktopsSlider_ =
+		mVirtualDesktopsSlider =
 		    new MRNumericSlider(TRect(26, 6, 63, 7), 1, 9, initialVirtualDesktops, 1, 1,
 		                       MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
-		addManaged(virtualDesktopsSlider_, TRect(26, 6, 63, 7));
-		addManaged(new TLabel(TRect(3, 6, 25, 7), "~V~irtual desktops:", virtualDesktopsSlider_),
+		addManaged(mVirtualDesktopsSlider, TRect(26, 6, 63, 7));
+		addManaged(new TLabel(TRect(3, 6, 25, 7), "~V~irtual desktops:", mVirtualDesktopsSlider),
 		           TRect(3, 6, 25, 7));
 
-		cursorPositionMarkerField_ = new TInputLine(TRect(28, 8, 42, 9), 11);
-		addManaged(cursorPositionMarkerField_, TRect(28, 8, 42, 9));
-		addManaged(new TLabel(TRect(3, 8, 27, 9), "Cursor position ~m~arker: ", cursorPositionMarkerField_),
+		mCursorPositionMarkerField = new TInputLine(TRect(28, 8, 42, 9), 11);
+		addManaged(mCursorPositionMarkerField, TRect(28, 8, 42, 9));
+		addManaged(new TLabel(TRect(3, 8, 27, 9), "Cursor position ~m~arker: ", mCursorPositionMarkerField),
 		           TRect(3, 8, 27, 9));
 
 		int buttonRow = 10;
@@ -1850,7 +1850,7 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		addManaged(new TButton(TRect(33, buttonRow, 45, buttonRow + 2), "~C~ancel", cmCancel, bfNormal),
 		           TRect(33, buttonRow, 45, buttonRow + 2));
 
-		writeRecordField(dataCursorMarker_, sizeof(dataCursorMarker_), initialCursorPositionMarker);
+		writeRecordField(mDataCursorMarker, sizeof(mDataCursorMarker), initialCursorPositionMarker);
 		setDialogValidationHook([this]() { return validateDialogValues(); });
 
 		selectContent();
@@ -1858,43 +1858,43 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 
 	void getData(void *rec) override {
 		UserInterfaceSettingsDialogData *data = static_cast<UserInterfaceSettingsDialogData *>(rec);
-		if (optionsField_ != nullptr)
-			optionsField_->getData(&data->flags);
-		if (virtualDesktopsSlider_ != nullptr) {
+		if (mOptionsField != nullptr)
+			mOptionsField->getData(&data->flags);
+		if (mVirtualDesktopsSlider != nullptr) {
 			int32_t val = 1;
-			virtualDesktopsSlider_->getData(&val);
+			mVirtualDesktopsSlider->getData(&val);
 			data->virtualDesktops = static_cast<ushort>(val);
 		}
-		if (cursorPositionMarkerField_ != nullptr)
-			cursorPositionMarkerField_->getData(data->cursorPositionMarker);
+		if (mCursorPositionMarkerField != nullptr)
+			mCursorPositionMarkerField->getData(data->cursorPositionMarker);
 	}
 
 	void setData(void *rec) override {
 		UserInterfaceSettingsDialogData *data = static_cast<UserInterfaceSettingsDialogData *>(rec);
-		if (optionsField_ != nullptr)
-			optionsField_->setData(&data->flags);
-		if (virtualDesktopsSlider_ != nullptr) {
+		if (mOptionsField != nullptr)
+			mOptionsField->setData(&data->flags);
+		if (mVirtualDesktopsSlider != nullptr) {
 			int32_t val = data->virtualDesktops;
-			virtualDesktopsSlider_->setData(&val);
+			mVirtualDesktopsSlider->setData(&val);
 		}
-		if (cursorPositionMarkerField_ != nullptr) {
+		if (mCursorPositionMarkerField != nullptr) {
 			if (data->cursorPositionMarker[0] == '\0')
 				writeRecordField(data->cursorPositionMarker, sizeof(data->cursorPositionMarker),
-				                dataCursorMarker_);
-			cursorPositionMarkerField_->setData(data->cursorPositionMarker);
+				                mDataCursorMarker);
+			mCursorPositionMarkerField->setData(data->cursorPositionMarker);
 		}
 	}
 
-	TCheckBoxes *optionsField_ = nullptr;
-	MRNumericSlider *virtualDesktopsSlider_ = nullptr;
-	TInputLine *cursorPositionMarkerField_ = nullptr;
-	char dataCursorMarker_[12] = {0};
+	TCheckBoxes *mOptionsField = nullptr;
+	MRNumericSlider *mVirtualDesktopsSlider = nullptr;
+	TInputLine *mCursorPositionMarkerField = nullptr;
+	char mDataCursorMarker[12] = {0};
 
   private:
 	std::string currentCursorMarkerInput() const {
 		char value[12] = {0};
-		if (cursorPositionMarkerField_ != nullptr)
-			cursorPositionMarkerField_->getData(value);
+		if (mCursorPositionMarkerField != nullptr)
+			mCursorPositionMarkerField->getData(value);
 		return readRecordField(value);
 	}
 
@@ -2064,12 +2064,12 @@ TGroup *createSetupDialogContentGroup(const TRect &bounds) {
 
 MRScrollableDialog::MRScrollableDialog(const TRect &bounds, const char *title, int virtualWidth,
                                        int virtualHeight)
-    : TWindowInit(&TDialog::initFrame), TDialog(bounds, title), virtualWidth_(virtualWidth),
-      virtualHeight_(virtualHeight), contentRect_(1, 1, size.x - 1, size.y - 1) {
-	content_ = createSetupDialogContentGroup(contentRect_);
-	if (content_ != nullptr) {
-		content_->options |= ofSelectable;
-		insert(content_);
+    : TWindowInit(&TDialog::initFrame), TDialog(bounds, title), mVirtualWidth(virtualWidth),
+      mVirtualHeight(virtualHeight), mContentRect(1, 1, size.x - 1, size.y - 1) {
+	mContent = createSetupDialogContentGroup(mContentRect);
+	if (mContent != nullptr) {
+		mContent->options |= ofSelectable;
+		insert(mContent);
 	}
 }
 
@@ -2090,29 +2090,29 @@ void MRScrollableDialog::addManaged(TView *view, const TRect &base) {
 	ManagedItem item;
 	item.view = view;
 	item.base = base;
-	managedViews_.push_back(item);
+	mManagedViews.push_back(item);
 	detectDoneButton(view);
-	if (content_ != nullptr) {
+	if (mContent != nullptr) {
 		TRect local = base;
-		local.move(-contentRect_.a.x, -contentRect_.a.y);
+		local.move(-mContentRect.a.x, -mContentRect.a.y);
 		view->locate(local);
-		content_->insert(view);
+		mContent->insert(view);
 	} else
 		insert(view);
 }
 
 void MRScrollableDialog::selectContent() {
-	if (content_ != nullptr) {
-		content_->resetCurrent();
-		content_->select();
+	if (mContent != nullptr) {
+		mContent->resetCurrent();
+		mContent->select();
 	}
 }
 
 void MRScrollableDialog::scrollToOrigin() {
-	if (hScrollBar_ != nullptr)
-		hScrollBar_->setValue(0);
-	if (vScrollBar_ != nullptr)
-		vScrollBar_->setValue(0);
+	if (mHScrollBar != nullptr)
+		mHScrollBar->setValue(0);
+	if (mVScrollBar != nullptr)
+		mVScrollBar->setValue(0);
 	applyScroll();
 }
 
@@ -2155,8 +2155,8 @@ void MRScrollableDialog::runDialogValidation() {
 }
 
 void MRScrollableDialog::initScrollIfNeeded() {
-	int virtualContentWidth = std::max(1, virtualWidth_ - 2);
-	int virtualContentHeight = std::max(1, virtualHeight_ - 2);
+	int virtualContentWidth = std::max(1, mVirtualWidth - 2);
+	int virtualContentHeight = std::max(1, mVirtualHeight - 2);
 	bool needH = false;
 	bool needV = false;
 
@@ -2171,39 +2171,39 @@ void MRScrollableDialog::initScrollIfNeeded() {
 			break;
 	}
 
-	contentRect_ = TRect(1, 1, size.x - 1, size.y - 1);
-	if (contentRect_.b.x <= contentRect_.a.x)
-		contentRect_.b.x = contentRect_.a.x + 1;
-	if (contentRect_.b.y <= contentRect_.a.y)
-		contentRect_.b.y = contentRect_.a.y + 1;
-	if (content_ != nullptr)
-		content_->locate(contentRect_);
+	mContentRect = TRect(1, 1, size.x - 1, size.y - 1);
+	if (mContentRect.b.x <= mContentRect.a.x)
+		mContentRect.b.x = mContentRect.a.x + 1;
+	if (mContentRect.b.y <= mContentRect.a.y)
+		mContentRect.b.y = mContentRect.a.y + 1;
+	if (mContent != nullptr)
+		mContent->locate(mContentRect);
 
 	if (needH) {
 		TRect hRect(1, size.y - 1, size.x - 1, size.y);
-		if (hScrollBar_ == nullptr) {
-			hScrollBar_ = new TScrollBar(hRect);
-			insert(hScrollBar_);
+		if (mHScrollBar == nullptr) {
+			mHScrollBar = new TScrollBar(hRect);
+			insert(mHScrollBar);
 		} else
-			hScrollBar_->locate(hRect);
+			mHScrollBar->locate(hRect);
 	}
 	if (needV) {
 		TRect vRect(size.x - 1, 1, size.x, size.y - 1);
-		if (vScrollBar_ == nullptr) {
-			vScrollBar_ = new TScrollBar(vRect);
-			insert(vScrollBar_);
+		if (mVScrollBar == nullptr) {
+			mVScrollBar = new TScrollBar(vRect);
+			insert(mVScrollBar);
 		} else
-			vScrollBar_->locate(vRect);
+			mVScrollBar->locate(vRect);
 	}
-	if (hScrollBar_ != nullptr) {
-		int maxDx = std::max(0, virtualContentWidth - std::max(1, contentRect_.b.x - contentRect_.a.x));
-		hScrollBar_->setParams(0, 0, maxDx,
-		                       std::max(1, (contentRect_.b.x - contentRect_.a.x) / 2), 1);
+	if (mHScrollBar != nullptr) {
+		int maxDx = std::max(0, virtualContentWidth - std::max(1, mContentRect.b.x - mContentRect.a.x));
+		mHScrollBar->setParams(0, 0, maxDx,
+		                       std::max(1, (mContentRect.b.x - mContentRect.a.x) / 2), 1);
 	}
-	if (vScrollBar_ != nullptr) {
-		int maxDy = std::max(0, virtualContentHeight - std::max(1, contentRect_.b.y - contentRect_.a.y));
-		vScrollBar_->setParams(0, 0, maxDy,
-		                       std::max(1, (contentRect_.b.y - contentRect_.a.y) / 2), 1);
+	if (mVScrollBar != nullptr) {
+		int maxDy = std::max(0, virtualContentHeight - std::max(1, mContentRect.b.y - mContentRect.a.y));
+		mVScrollBar->setParams(0, 0, maxDy,
+		                       std::max(1, (mContentRect.b.y - mContentRect.a.y) / 2), 1);
 	}
 	applyScroll();
 	runDialogValidation();
@@ -2220,15 +2220,15 @@ void MRScrollableDialog::handleEvent(TEvent &event) {
 			clearEvent(event);
 			return;
 		}
-		if (content_ != nullptr) {
+		if (mContent != nullptr) {
 			if (keyCode == kbTab || keyCode == kbCtrlI) {
-				content_->selectNext(False);
+				mContent->selectNext(False);
 				ensureCurrentVisible();
 				clearEvent(event);
 				return;
 			}
 			if (keyCode == kbShiftTab) {
-				content_->selectNext(True);
+				mContent->selectNext(True);
 				ensureCurrentVisible();
 				clearEvent(event);
 				return;
@@ -2238,7 +2238,7 @@ void MRScrollableDialog::handleEvent(TEvent &event) {
 
 	TDialog::handleEvent(event);
 	if (event.what == evBroadcast && event.message.command == cmScrollBarChanged &&
-	    (event.message.infoPtr == hScrollBar_ || event.message.infoPtr == vScrollBar_)) {
+	    (event.message.infoPtr == mHScrollBar || event.message.infoPtr == mVScrollBar)) {
 		applyScroll();
 		clearEvent(event);
 		return;
@@ -2251,30 +2251,30 @@ void MRScrollableDialog::handleEvent(TEvent &event) {
 }
 
 void MRScrollableDialog::ensureViewVisible(TView *view) {
-	if (view == nullptr || content_ == nullptr)
+	if (view == nullptr || mContent == nullptr)
 		return;
-	for (const auto &managedView : managedViews_)
+	for (const auto &managedView : mManagedViews)
 		if (managedView.view == view) {
-			int dx = hScrollBar_ != nullptr ? hScrollBar_->value : 0;
-			int dy = vScrollBar_ != nullptr ? vScrollBar_->value : 0;
-			int viewportWidth = std::max(1, contentRect_.b.x - contentRect_.a.x);
-			int viewportHeight = std::max(1, contentRect_.b.y - contentRect_.a.y);
-			int left = managedView.base.a.x - contentRect_.a.x;
-			int right = managedView.base.b.x - contentRect_.a.x;
-			int top = managedView.base.a.y - contentRect_.a.y;
-			int bottom = managedView.base.b.y - contentRect_.a.y;
+			int dx = mHScrollBar != nullptr ? mHScrollBar->value : 0;
+			int dy = mVScrollBar != nullptr ? mVScrollBar->value : 0;
+			int viewportWidth = std::max(1, mContentRect.b.x - mContentRect.a.x);
+			int viewportHeight = std::max(1, mContentRect.b.y - mContentRect.a.y);
+			int left = managedView.base.a.x - mContentRect.a.x;
+			int right = managedView.base.b.x - mContentRect.a.x;
+			int top = managedView.base.a.y - mContentRect.a.y;
+			int bottom = managedView.base.b.y - mContentRect.a.y;
 
-			if (hScrollBar_ != nullptr) {
+			if (mHScrollBar != nullptr) {
 				if (left < dx)
-					hScrollBar_->setValue(std::max(0, left));
+					mHScrollBar->setValue(std::max(0, left));
 				else if (right > dx + viewportWidth)
-					hScrollBar_->setValue(std::max(0, right - viewportWidth));
+					mHScrollBar->setValue(std::max(0, right - viewportWidth));
 			}
-			if (vScrollBar_ != nullptr) {
+			if (mVScrollBar != nullptr) {
 				if (top < dy)
-					vScrollBar_->setValue(std::max(0, top));
+					mVScrollBar->setValue(std::max(0, top));
 				else if (bottom > dy + viewportHeight)
-					vScrollBar_->setValue(std::max(0, bottom - viewportHeight));
+					mVScrollBar->setValue(std::max(0, bottom - viewportHeight));
 			}
 			applyScroll();
 			return;
@@ -2282,7 +2282,7 @@ void MRScrollableDialog::ensureViewVisible(TView *view) {
 }
 
 void MRScrollableDialog::ensureCurrentVisible() {
-	TView *view = content_ != nullptr ? content_->current : nullptr;
+	TView *view = mContent != nullptr ? mContent->current : nullptr;
 
 	while (view != nullptr) {
 		TGroup *group = dynamic_cast<TGroup *>(view);
@@ -2294,17 +2294,17 @@ void MRScrollableDialog::ensureCurrentVisible() {
 }
 
 void MRScrollableDialog::applyScroll() {
-	int dx = hScrollBar_ != nullptr ? hScrollBar_->value : 0;
-	int dy = vScrollBar_ != nullptr ? vScrollBar_->value : 0;
+	int dx = mHScrollBar != nullptr ? mHScrollBar->value : 0;
+	int dy = mVScrollBar != nullptr ? mVScrollBar->value : 0;
 
-	for (auto &managedView : managedViews_) {
+	for (auto &managedView : mManagedViews) {
 		TRect moved = managedView.base;
 		moved.move(-dx, -dy);
-		moved.move(-contentRect_.a.x, -contentRect_.a.y);
+		moved.move(-mContentRect.a.x, -mContentRect.a.y);
 		managedView.view->locate(moved);
 	}
-	if (content_ != nullptr)
-		content_->drawView();
+	if (mContent != nullptr)
+		mContent->drawView();
 }
 
 MRDialogFoundation::MRDialogFoundation(const TRect &bounds, const char *title, int virtualWidth,
@@ -2325,12 +2325,12 @@ void MRDialogFoundation::insert(TView *view) {
 
 void MRDialogFoundation::finalizeLayout() {
 	TGroup *content = managedContent();
-	if (layoutFinalized_)
+	if (mLayoutFinalized)
 		return;
 	initScrollIfNeeded();
 	if (content != nullptr && content->current == nullptr)
 		selectContent();
-	layoutFinalized_ = true;
+	mLayoutFinalized = true;
 }
 
 TRect centeredSetupDialogRect(int width, int height) {

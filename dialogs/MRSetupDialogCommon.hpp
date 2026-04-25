@@ -115,7 +115,7 @@ class MRScrollableDialog : public TDialog {
 	void scrollToOrigin();
 	void setDialogValidationHook(DialogValidationHook hook);
 	void runDialogValidation();
-	[[nodiscard]] TGroup *managedContent() const noexcept { return content_; }
+	[[nodiscard]] TGroup *managedContent() const noexcept { return mContent; }
 
   private:
 	void detectDoneButton(TView *view);
@@ -123,13 +123,13 @@ class MRScrollableDialog : public TDialog {
 	void ensureViewVisible(TView *view);
 	void ensureCurrentVisible();
 
-	int virtualWidth_ = 0;
-	int virtualHeight_ = 0;
-	TRect contentRect_;
-	TGroup *content_ = nullptr;
-	std::vector<ManagedItem> managedViews_;
-	TScrollBar *hScrollBar_ = nullptr;
-	TScrollBar *vScrollBar_ = nullptr;
+	int mVirtualWidth = 0;
+	int mVirtualHeight = 0;
+	TRect mContentRect;
+	TGroup *mContent = nullptr;
+	std::vector<ManagedItem> mManagedViews;
+	TScrollBar *mHScrollBar = nullptr;
+	TScrollBar *mVScrollBar = nullptr;
 	TButton *doneButton = nullptr;
 	DialogValidationHook dialogValidationHook;
 	bool isRunningDialogValidation = false;
@@ -145,7 +145,7 @@ class MRDialogFoundation : public MRScrollableDialog {
 	void finalizeLayout();
 
   private:
-	bool layoutFinalized_ = false;
+	bool mLayoutFinalized = false;
 };
 
 #endif

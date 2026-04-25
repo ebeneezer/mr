@@ -567,25 +567,25 @@ bool MappedFileSource::openReadOnly(const std::string &path, std::string &error)
 		state->data = static_cast<const char *>(mapping);
 	}
 
-	state_ = state;
+	mState = state;
 	return true;
 }
 
 void MappedFileSource::reset() noexcept {
-	state_.reset();
+	mState.reset();
 }
 
 std::size_t MappedFileSource::size() const noexcept {
-	return state_ != nullptr ? state_->size : 0;
+	return mState != nullptr ? mState->size : 0;
 }
 
 const char *MappedFileSource::data() const noexcept {
-	return state_ != nullptr ? state_->data : nullptr;
+	return mState != nullptr ? mState->data : nullptr;
 }
 
 const std::string &MappedFileSource::path() const noexcept {
 	static const std::string emptyPath;
-	return state_ != nullptr ? state_->path : emptyPath;
+	return mState != nullptr ? mState->path : emptyPath;
 }
 
 std::string MappedFileSource::sliceText(TextSpan span) const {
@@ -596,134 +596,134 @@ std::string MappedFileSource::sliceText(TextSpan span) const {
 }
 
 TextSpan AppendBuffer::append(std::string_view text) {
-	TextSpan span(text_.size(), text.size());
-	text_.append(text.data(), text.size());
+	TextSpan span(mText.size(), text.size());
+	mText.append(text.data(), text.size());
 	return span;
 }
 
 void AppendBuffer::clear() noexcept {
-	text_.clear();
+	mText.clear();
 }
 
 std::string AppendBuffer::sliceText(TextSpan span) const {
-	TextSpan bounded = span.clamped(text_.size());
-	return text_.substr(bounded.start, bounded.length);
+	TextSpan bounded = span.clamped(mText.size());
+	return mText.substr(bounded.start, bounded.length);
 }
 
 TextSpan StagedAddBuffer::append(std::string_view text) {
-	TextSpan span(text_.size(), text.size());
-	text_.append(text.data(), text.size());
+	TextSpan span(mText.size(), text.size());
+	mText.append(text.data(), text.size());
 	return span;
 }
 
 void StagedAddBuffer::clear() noexcept {
-	text_.clear();
+	mText.clear();
 }
 
 std::string StagedAddBuffer::sliceText(TextSpan span) const {
-	TextSpan bounded = span.clamped(text_.size());
-	return text_.substr(bounded.start, bounded.length);
+	TextSpan bounded = span.clamped(mText.size());
+	return mText.substr(bounded.start, bounded.length);
 }
 
 void EditTransaction::setText(std::string_view text) {
-	operations_.push_back(EditOperation(EditKind::SetText, Range(), text));
+	mOperations.push_back(EditOperation(EditKind::SetText, Range(), text));
 }
 
 void EditTransaction::insert(Offset offset, std::string_view text) {
-	operations_.push_back(EditOperation(EditKind::Insert, Range(offset, offset), text));
+	mOperations.push_back(EditOperation(EditKind::Insert, Range(offset, offset), text));
 }
 
 void EditTransaction::erase(Range range) {
 	range.normalize();
-	operations_.push_back(EditOperation(EditKind::Erase, range, std::string()));
+	mOperations.push_back(EditOperation(EditKind::Erase, range, std::string()));
 }
 
 void EditTransaction::replace(Range range, std::string_view text) {
 	range.normalize();
-	operations_.push_back(EditOperation(EditKind::Replace, range, text));
+	mOperations.push_back(EditOperation(EditKind::Replace, range, text));
 }
 
 void StagedEditTransaction::setText(std::string_view text) {
-	operations_.push_back(
-	    StagedEditOperation(EditKind::SetText, Range(), addBuffer_.append(text)));
+	mOperations.push_back(
+	    StagedEditOperation(EditKind::SetText, Range(), mAddBuffer.append(text)));
 }
 
 void StagedEditTransaction::insert(Offset offset, std::string_view text) {
-	operations_.push_back(
-	    StagedEditOperation(EditKind::Insert, Range(offset, offset), addBuffer_.append(text)));
+	mOperations.push_back(
+	    StagedEditOperation(EditKind::Insert, Range(offset, offset), mAddBuffer.append(text)));
 }
 
 void StagedEditTransaction::erase(Range range) {
 	range.normalize();
-	operations_.push_back(StagedEditOperation(EditKind::Erase, range, TextSpan()));
+	mOperations.push_back(StagedEditOperation(EditKind::Erase, range, TextSpan()));
 }
 
 void StagedEditTransaction::replace(Range range, std::string_view text) {
 	range.normalize();
-	operations_.push_back(
-	    StagedEditOperation(EditKind::Replace, range, addBuffer_.append(text)));
+	mOperations.push_back(
+	    StagedEditOperation(EditKind::Replace, range, mAddBuffer.append(text)));
 }
 
 StagedEditTransaction::StagedEditTransaction(const ReadSnapshot &snapshot,
                                              std::string_view label)
-    : baseVersion_(snapshot.version()), label_(label) {
+    : mBaseVersion(snapshot.version()), mLabel(label) {
 }
 
 TextDocument::TextDocument() noexcept
-    :  length_(0),
-      documentId_(allocateDocumentId()), version_(0), cacheDirty_(false),  lazyIndexedOffset_(0), lazyIndexedLine_(0),
-      lazyLineIndexComplete_(false), lazyTotalLineCount_(1) {
+    :  mLength(0),
+      mDocumentId(allocateDocumentId()), mVersion(0), mCacheDirty(false),  mLazyIndexedOffset(0), mLazyIndexedLine(0),
+      mLazyLineIndexComplete(false), mLazyTotalLineCount(1) {
 	resetLazyLineIndex();
 }
 
 TextDocument::TextDocument(std::string_view text)
-    :  length_(0),
-      documentId_(allocateDocumentId()), version_(0), cacheDirty_(false),  lazyIndexedOffset_(0), lazyIndexedLine_(0),
-      lazyLineIndexComplete_(false), lazyTotalLineCount_(1) {
+    :  mLength(0),
+      mDocumentId(allocateDocumentId()), mVersion(0), mCacheDirty(false),  mLazyIndexedOffset(0), mLazyIndexedLine(0),
+      mLazyLineIndexComplete(false), mLazyTotalLineCount(1) {
 	resetLazyLineIndex();
 	initializeFromOriginal(text, true);
 }
 
 const std::string &TextDocument::text() const noexcept {
 	ensureMaterialized();
-	return materializedText_;
+	return mMaterializedText;
 }
 
 Offset TextDocument::length() const noexcept {
-	return length_;
+	return mLength;
 }
 
 bool TextDocument::empty() const noexcept {
-	return length_ == 0;
+	return mLength == 0;
 }
 
 char TextDocument::charAt(Offset pos) const noexcept {
 	if (const char *data = directTextData())
-		return pos < length_ ? data[pos] : '\0';
+		return pos < mLength ? data[pos] : '\0';
 	return piecewiseCharAt(*this, pos);
 }
 
 Snapshot TextDocument::snapshot() const {
-	return Snapshot(text(), version_);
+	return Snapshot(text(), mVersion);
 }
 
 ReadSnapshot TextDocument::readSnapshot() const {
 	ReadSnapshot snapshot;
-	snapshot.documentId_ = documentId_;
-	snapshot.version_ = version_;
-	snapshot.mappedOriginal_ = mappedOriginal_;
-	snapshot.originalBuffer_ = std::make_shared<const std::string>(originalBuffer_);
-	snapshot.addBuffer_ = std::make_shared<const std::string>(addBuffer_.text());
-	snapshot.pieces_ = std::make_shared<const std::vector<Piece>>(pieces_);
-	snapshot.length_ = length_;
-	snapshot.cacheDirty_ = cacheDirty_;
-	snapshot.materializedText_ = cacheDirty_ ? std::string() : materializedText_;
-	snapshot.lineIndexCheckpoints_ = lineIndexCheckpoints_;
-	snapshot.lazyIndexedOffset_ = lazyIndexedOffset_;
-	snapshot.lazyIndexedLine_ = lazyIndexedLine_;
-	snapshot.lazyLineIndexComplete_ = lazyLineIndexComplete_;
-	snapshot.lazyTotalLineCount_ = lazyTotalLineCount_;
-	if (snapshot.lineIndexCheckpoints_.empty())
+	snapshot.mDocumentId = mDocumentId;
+	snapshot.mVersion = mVersion;
+	snapshot.mMappedOriginal = mMappedOriginal;
+	snapshot.mOriginalBuffer = std::make_shared<const std::string>(mOriginalBuffer);
+	snapshot.mAddBuffer = std::make_shared<const std::string>(mAddBuffer.text());
+	snapshot.mPieces = std::make_shared<const std::vector<Piece>>(mPieces);
+	snapshot.mLength = mLength;
+	snapshot.mCacheDirty = mCacheDirty;
+	snapshot.mMaterializedText = mCacheDirty ? std::string() : mMaterializedText;
+	snapshot.mLineIndexCheckpoints = mLineIndexCheckpoints;
+	snapshot.mLazyIndexedOffset = mLazyIndexedOffset;
+	snapshot.mLazyIndexedLine = mLazyIndexedLine;
+	snapshot.mLazyLineIndexComplete = mLazyLineIndexComplete;
+	snapshot.mLazyTotalLineCount = mLazyTotalLineCount;
+	if (snapshot.mLineIndexCheckpoints.empty())
 		snapshot.resetLazyLineIndex();
 	return snapshot;
 }
@@ -732,31 +732,31 @@ void TextDocument::restoreFromSnapshot(const ReadSnapshot &snapshot) {
 	if (snapshot.empty() && snapshot.length() == 0) {
 		setTextNoVersionBump("");
 	} else {
-		documentId_ = snapshot.documentId_;
-		version_ = snapshot.version_;
-		mappedOriginal_ = snapshot.mappedOriginal_;
-		if (snapshot.originalBuffer_)
-			originalBuffer_ = *snapshot.originalBuffer_;
+		mDocumentId = snapshot.mDocumentId;
+		mVersion = snapshot.mVersion;
+		mMappedOriginal = snapshot.mMappedOriginal;
+		if (snapshot.mOriginalBuffer)
+			mOriginalBuffer = *snapshot.mOriginalBuffer;
 		else
-			originalBuffer_.clear();
+			mOriginalBuffer.clear();
 
-		addBuffer_.clear();
-		if (snapshot.addBuffer_)
-			addBuffer_.append(*snapshot.addBuffer_);
+		mAddBuffer.clear();
+		if (snapshot.mAddBuffer)
+			mAddBuffer.append(*snapshot.mAddBuffer);
 
-		if (snapshot.pieces_)
-			pieces_ = *snapshot.pieces_;
+		if (snapshot.mPieces)
+			mPieces = *snapshot.mPieces;
 		else
-			pieces_.clear();
+			mPieces.clear();
 
-		length_ = snapshot.length_;
-		cacheDirty_ = snapshot.cacheDirty_;
-		materializedText_ = snapshot.materializedText_;
-		lineIndexCheckpoints_ = snapshot.lineIndexCheckpoints_;
-		lazyIndexedOffset_ = snapshot.lazyIndexedOffset_;
-		lazyIndexedLine_ = snapshot.lazyIndexedLine_;
-		lazyLineIndexComplete_ = snapshot.lazyLineIndexComplete_;
-		lazyTotalLineCount_ = snapshot.lazyTotalLineCount_;
+		mLength = snapshot.mLength;
+		mCacheDirty = snapshot.mCacheDirty;
+		mMaterializedText = snapshot.mMaterializedText;
+		mLineIndexCheckpoints = snapshot.mLineIndexCheckpoints;
+		mLazyIndexedOffset = snapshot.mLazyIndexedOffset;
+		mLazyIndexedLine = snapshot.mLazyIndexedLine;
+		mLazyLineIndexComplete = snapshot.mLazyLineIndexComplete;
+		mLazyTotalLineCount = snapshot.mLazyTotalLineCount;
 	}
 }
 
@@ -767,9 +767,9 @@ bool TextDocument::adoptLineIndexWarmup(const LineIndexWarmupData &warmup,
 	if (warmup.checkpoints.empty())
 		return false;
 
-	const bool currentComplete = lazyLineIndexComplete_;
-	const Offset currentOffset = lazyIndexedOffset_;
-	const std::size_t currentCheckpointCount = lineIndexCheckpoints_.size();
+	const bool currentComplete = mLazyLineIndexComplete;
+	const Offset currentOffset = mLazyIndexedOffset;
+	const std::size_t currentCheckpointCount = mLineIndexCheckpoints.size();
 
 	const bool incomingBetter = !currentComplete && warmup.lazyLineIndexComplete;
 	const bool incomingFurther = warmup.lazyIndexedOffset > currentOffset;
@@ -778,56 +778,56 @@ bool TextDocument::adoptLineIndexWarmup(const LineIndexWarmupData &warmup,
 	if (!incomingBetter && !incomingFurther && !incomingDenser)
 		return false;
 
-	lineIndexCheckpoints_ = warmup.checkpoints;
-	lazyIndexedOffset_ = warmup.lazyIndexedOffset;
-	lazyIndexedLine_ = warmup.lazyIndexedLine;
-	lazyLineIndexComplete_ = warmup.lazyLineIndexComplete;
-	lazyTotalLineCount_ = warmup.lazyTotalLineCount;
-	if (lineIndexCheckpoints_.empty())
+	mLineIndexCheckpoints = warmup.checkpoints;
+	mLazyIndexedOffset = warmup.lazyIndexedOffset;
+	mLazyIndexedLine = warmup.lazyIndexedLine;
+	mLazyLineIndexComplete = warmup.lazyLineIndexComplete;
+	mLazyTotalLineCount = warmup.lazyTotalLineCount;
+	if (mLineIndexCheckpoints.empty())
 		resetLazyLineIndex();
 	return true;
 }
 
 ReadSnapshot::ReadSnapshot() noexcept
-    : documentId_(0), version_(0), 
-      length_(0), cacheDirty_(false), 
-      lazyIndexedOffset_(0), lazyIndexedLine_(0), lazyLineIndexComplete_(true),
-      lazyTotalLineCount_(1) {
+    : mDocumentId(0), mVersion(0),
+      mLength(0), mCacheDirty(false),
+      mLazyIndexedOffset(0), mLazyIndexedLine(0), mLazyLineIndexComplete(true),
+      mLazyTotalLineCount(1) {
 	resetLazyLineIndex();
 }
 
 Offset ReadSnapshot::length() const noexcept {
-	return length_;
+	return mLength;
 }
 
 bool ReadSnapshot::empty() const noexcept {
-	return length_ == 0;
+	return mLength == 0;
 }
 
 char ReadSnapshot::charAt(Offset pos) const noexcept {
 	if (const char *data = directTextData())
-		return pos < length_ ? data[pos] : '\0';
+		return pos < mLength ? data[pos] : '\0';
 	return piecewiseCharAt(*this, pos);
 }
 
 std::string ReadSnapshot::text() const {
 	ensureMaterialized();
-	return materializedText_;
+	return mMaterializedText;
 }
 
 std::size_t ReadSnapshot::addBufferLength() const noexcept {
-	return addBuffer_ != nullptr ? addBuffer_->size() : 0;
+	return mAddBuffer != nullptr ? mAddBuffer->size() : 0;
 }
 
 std::size_t ReadSnapshot::pieceCount() const noexcept {
-	return pieces_ != nullptr ? pieces_->size() : 0;
+	return mPieces != nullptr ? mPieces->size() : 0;
 }
 
 PieceChunkView ReadSnapshot::pieceChunk(std::size_t index) const noexcept {
-	if (pieces_ == nullptr || index >= pieces_->size())
+	if (mPieces == nullptr || index >= mPieces->size())
 		return PieceChunkView();
 
-	const Piece &piece = (*pieces_)[index];
+	const Piece &piece = (*mPieces)[index];
 	if (piece.empty())
 		return PieceChunkView();
 	if (piece.source == BufferKind::Original) {
@@ -836,18 +836,18 @@ PieceChunkView ReadSnapshot::pieceChunk(std::size_t index) const noexcept {
 			return PieceChunkView();
 		return PieceChunkView(base + piece.span.start, piece.span.length);
 	}
-	if (addBuffer_ == nullptr || piece.span.start >= addBuffer_->size())
+	if (mAddBuffer == nullptr || piece.span.start >= mAddBuffer->size())
 		return PieceChunkView();
-	return PieceChunkView(addBuffer_->data() + piece.span.start, piece.span.length);
+	return PieceChunkView(mAddBuffer->data() + piece.span.start, piece.span.length);
 }
 
 Offset ReadSnapshot::clampOffset(Offset pos) const noexcept {
-	return std::min(pos, length_);
+	return std::min(pos, mLength);
 }
 
 std::size_t ReadSnapshot::lineCount() const noexcept {
 	ensureLazyIndexComplete();
-	return lazyTotalLineCount_;
+	return mLazyTotalLineCount;
 }
 
 Offset ReadSnapshot::lineStart(Offset pos) const noexcept {
@@ -863,7 +863,7 @@ Offset ReadSnapshot::lineStart(Offset pos) const noexcept {
 Offset ReadSnapshot::lineEnd(Offset pos) const noexcept {
 	if (const char *data = directTextData()) {
 		pos = clampOffset(pos);
-		return directFindNextLineBreak(data, length_, pos);
+		return directFindNextLineBreak(data, mLength, pos);
 	}
 
 	return piecewiseLineEnd(*this, pos);
@@ -872,8 +872,8 @@ Offset ReadSnapshot::lineEnd(Offset pos) const noexcept {
 Offset ReadSnapshot::nextLine(Offset pos) const noexcept {
 	if (const char *data = directTextData()) {
 		pos = lineEnd(pos);
-		if (pos < length_) {
-			if (data[pos] == '\r' && pos + 1 < length_ && data[pos + 1] == '\n')
+		if (pos < mLength) {
+			if (data[pos] == '\r' && pos + 1 < mLength && data[pos + 1] == '\n')
 				pos += 2;
 			else
 				++pos;
@@ -902,25 +902,25 @@ Offset ReadSnapshot::prevLine(Offset pos) const noexcept {
 std::size_t ReadSnapshot::lineIndex(Offset pos) const noexcept {
 	pos = clampOffset(pos);
 	ensureLazyIndexSeeded();
-	if (lineIndexCheckpoints_.empty())
+	if (mLineIndexCheckpoints.empty())
 		return 0;
 
 	std::size_t left = 0;
-	std::size_t right = lineIndexCheckpoints_.size();
+	std::size_t right = mLineIndexCheckpoints.size();
 	while (left < right) {
 		std::size_t mid = left + (right - left) / 2;
-		if (lineIndexCheckpoints_[mid].offset <= pos)
+		if (mLineIndexCheckpoints[mid].offset <= pos)
 			left = mid + 1;
 		else
 			right = mid;
 	}
 	LineIndexCheckpoint checkpoint =
-	    lineIndexCheckpoints_[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
+	    mLineIndexCheckpoints[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
 	if (checkpoint.offset >= pos)
 		return checkpoint.lineIndex;
 	if (const char *data = directTextData()) {
 		const std::size_t delta =
-		    directCountLineBreaksInRange(data, length_, checkpoint.offset, pos);
+		    directCountLineBreaksInRange(data, mLength, checkpoint.offset, pos);
 		return checkpoint.lineIndex + delta;
 	}
 	return checkpoint.lineIndex + piecewiseCountLineBreaksInRange(*this, checkpoint.offset, pos);
@@ -928,22 +928,22 @@ std::size_t ReadSnapshot::lineIndex(Offset pos) const noexcept {
 
 Offset ReadSnapshot::lineStartByIndex(std::size_t index) const noexcept {
 	ensureLazyIndexForLine(index);
-	if (lineIndexCheckpoints_.empty())
+	if (mLineIndexCheckpoints.empty())
 		return 0;
-	if (lazyLineIndexComplete_ && index >= lazyTotalLineCount_)
-		index = lazyTotalLineCount_ > 0 ? lazyTotalLineCount_ - 1 : 0;
+	if (mLazyLineIndexComplete && index >= mLazyTotalLineCount)
+		index = mLazyTotalLineCount > 0 ? mLazyTotalLineCount - 1 : 0;
 
 	std::size_t left = 0;
-	std::size_t right = lineIndexCheckpoints_.size();
+	std::size_t right = mLineIndexCheckpoints.size();
 	while (left < right) {
 		std::size_t mid = left + (right - left) / 2;
-		if (lineIndexCheckpoints_[mid].lineIndex <= index)
+		if (mLineIndexCheckpoints[mid].lineIndex <= index)
 			left = mid + 1;
 		else
 			right = mid;
 	}
 	LineIndexCheckpoint checkpoint =
-	    lineIndexCheckpoints_[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
+	    mLineIndexCheckpoints[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
 	Offset cursor = checkpoint.offset;
 	std::size_t line = checkpoint.lineIndex;
 	while (line < index) {
@@ -958,22 +958,22 @@ Offset ReadSnapshot::lineStartByIndex(std::size_t index) const noexcept {
 
 std::size_t ReadSnapshot::estimatedLineCount() const noexcept {
 	ensureLazyIndexSeeded();
-	if (lazyLineIndexComplete_)
-		return lazyTotalLineCount_;
-	if (!mappedOriginal_.mapped())
+	if (mLazyLineIndexComplete)
+		return mLazyTotalLineCount;
+	if (!mMappedOriginal.mapped())
 		return piecewiseLineCount(*this);
-	if (lazyIndexedOffset_ == 0 || lazyIndexedLine_ == 0)
-		return std::max<std::size_t>(1, length_ / 80 + 1);
+	if (mLazyIndexedOffset == 0 || mLazyIndexedLine == 0)
+		return std::max<std::size_t>(1, mLength / 80 + 1);
 
-	const std::size_t observedLines = lazyIndexedLine_ + 1;
+	const std::size_t observedLines = mLazyIndexedLine + 1;
 	const std::size_t estimated =
-	    static_cast<std::size_t>((static_cast<long double>(length_) * observedLines) /
-	                             std::max<Offset>(lazyIndexedOffset_, 1));
+	    static_cast<std::size_t>((static_cast<long double>(mLength) * observedLines) /
+	                             std::max<Offset>(mLazyIndexedOffset, 1));
 	return std::max<std::size_t>(observedLines, estimated);
 }
 
 bool ReadSnapshot::exactLineCountKnown() const noexcept {
-	return !mappedOriginal_.mapped() || lazyLineIndexComplete_;
+	return !mMappedOriginal.mapped() || mLazyLineIndexComplete;
 }
 
 std::size_t ReadSnapshot::column(Offset pos) const noexcept {
@@ -998,18 +998,18 @@ LineIndexWarmupData ReadSnapshot::completeLineIndexWarmup() const {
 bool ReadSnapshot::completeLineIndexWarmup(LineIndexWarmupData &warmup, std::stop_token stopToken,
                                            const std::atomic_bool *cancelFlag) const {
 	ensureLazyIndexSeeded();
-	while (!lazyLineIndexComplete_) {
+	while (!mLazyLineIndexComplete) {
 		if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire)))
 			return false;
 		advanceLazyIndexByStride();
 	}
 	if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire)))
 		return false;
-	warmup.checkpoints = lineIndexCheckpoints_;
-	warmup.lazyIndexedOffset = lazyIndexedOffset_;
-	warmup.lazyIndexedLine = lazyIndexedLine_;
-	warmup.lazyLineIndexComplete = lazyLineIndexComplete_;
-	warmup.lazyTotalLineCount = lazyTotalLineCount_;
+	warmup.checkpoints = mLineIndexCheckpoints;
+	warmup.lazyIndexedOffset = mLazyIndexedOffset;
+	warmup.lazyIndexedLine = mLazyIndexedLine;
+	warmup.lazyLineIndexComplete = mLazyLineIndexComplete;
+	warmup.lazyTotalLineCount = mLazyTotalLineCount;
 	return true;
 }
 
@@ -1018,22 +1018,22 @@ bool ReadSnapshot::isLineBreakChar(char ch) const noexcept {
 }
 
 bool ReadSnapshot::hasDirectOriginalView() const noexcept {
-	return mappedOriginal_.mapped() && addBufferLength() == 0 && pieces_ != nullptr &&
-	       pieces_->size() == 1 && (*pieces_)[0].source == BufferKind::Original &&
-	       (*pieces_)[0].span.start == 0 && (*pieces_)[0].span.length == length_;
+	return mMappedOriginal.mapped() && addBufferLength() == 0 && mPieces != nullptr &&
+	       mPieces->size() == 1 && (*mPieces)[0].source == BufferKind::Original &&
+	       (*mPieces)[0].span.start == 0 && (*mPieces)[0].span.length == mLength;
 }
 
 const char *ReadSnapshot::directTextData() const noexcept {
-	return hasDirectOriginalView() ? mappedOriginal_.data() : nullptr;
+	return hasDirectOriginalView() ? mMappedOriginal.data() : nullptr;
 }
 
 void ReadSnapshot::resetLazyLineIndex() noexcept {
-	lineIndexCheckpoints_.clear();
-	lineIndexCheckpoints_.push_back(LineIndexCheckpoint(0, 0));
-	lazyIndexedOffset_ = 0;
-	lazyIndexedLine_ = 0;
-	lazyLineIndexComplete_ = (length_ == 0);
-	lazyTotalLineCount_ = 1;
+	mLineIndexCheckpoints.clear();
+	mLineIndexCheckpoints.push_back(LineIndexCheckpoint(0, 0));
+	mLazyIndexedOffset = 0;
+	mLazyIndexedLine = 0;
+	mLazyLineIndexComplete = (mLength == 0);
+	mLazyTotalLineCount = 1;
 }
 
 bool ReadSnapshot::advanceLine(Offset &offset) const noexcept {
@@ -1046,13 +1046,13 @@ bool ReadSnapshot::directAdvanceLine(Offset &offset) const noexcept {
 	const char *data = directTextData();
 	if (data == nullptr)
 		return false;
-	if (offset >= length_)
+	if (offset >= mLength)
 		return false;
 
-	Offset breakPos = directFindNextLineBreak(data, length_, offset);
-	if (breakPos >= length_)
+	Offset breakPos = directFindNextLineBreak(data, mLength, offset);
+	if (breakPos >= mLength)
 		return false;
-	if (data[breakPos] == '\r' && breakPos + 1 < length_ && data[breakPos + 1] == '\n')
+	if (data[breakPos] == '\r' && breakPos + 1 < mLength && data[breakPos + 1] == '\n')
 		offset = breakPos + 2;
 	else
 		offset = breakPos + 1;
@@ -1060,84 +1060,84 @@ bool ReadSnapshot::directAdvanceLine(Offset &offset) const noexcept {
 }
 
 void ReadSnapshot::ensureLazyIndexSeeded() const noexcept {
-	if (lineIndexCheckpoints_.empty())
+	if (mLineIndexCheckpoints.empty())
 		const_cast<ReadSnapshot *>(this)->resetLazyLineIndex();
 }
 
 void ReadSnapshot::advanceLazyIndexByStride() const noexcept {
 	ensureLazyIndexSeeded();
-	if (lazyLineIndexComplete_)
+	if (mLazyLineIndexComplete)
 		return;
 
 	for (std::size_t steps = 0; steps < kLazyLineIndexStride; ++steps) {
-		Offset next = lazyIndexedOffset_;
+		Offset next = mLazyIndexedOffset;
 		if (!advanceLine(next)) {
-			lazyLineIndexComplete_ = true;
-			lazyTotalLineCount_ = lazyIndexedLine_ + 1;
+			mLazyLineIndexComplete = true;
+			mLazyTotalLineCount = mLazyIndexedLine + 1;
 			return;
 		}
-		lazyIndexedOffset_ = next;
-		++lazyIndexedLine_;
-		if ((lazyIndexedLine_ % kLazyLineIndexStride) == 0)
-			lineIndexCheckpoints_.push_back(LineIndexCheckpoint(lazyIndexedOffset_, lazyIndexedLine_));
+		mLazyIndexedOffset = next;
+		++mLazyIndexedLine;
+		if ((mLazyIndexedLine % kLazyLineIndexStride) == 0)
+			mLineIndexCheckpoints.push_back(LineIndexCheckpoint(mLazyIndexedOffset, mLazyIndexedLine));
 	}
 }
 
 void ReadSnapshot::ensureLazyIndexForLine(std::size_t targetLine) const noexcept {
 	ensureLazyIndexSeeded();
-	while (!lazyLineIndexComplete_ && lineIndexCheckpoints_.back().lineIndex < targetLine)
+	while (!mLazyLineIndexComplete && mLineIndexCheckpoints.back().lineIndex < targetLine)
 		advanceLazyIndexByStride();
 }
 
 void ReadSnapshot::ensureLazyIndexForOffset(Offset targetOffset) const noexcept {
 	ensureLazyIndexSeeded();
 	targetOffset = clampOffset(targetOffset);
-	while (!lazyLineIndexComplete_ && lineIndexCheckpoints_.back().offset <= targetOffset)
+	while (!mLazyLineIndexComplete && mLineIndexCheckpoints.back().offset <= targetOffset)
 		advanceLazyIndexByStride();
 }
 
 void ReadSnapshot::ensureLazyIndexComplete() const noexcept {
 	ensureLazyIndexSeeded();
-	if (!lazyLineIndexComplete_ && lineIndexCheckpoints_.size() == 1 && lineIndexCheckpoints_[0].offset == 0 &&
-	    lineIndexCheckpoints_[0].lineIndex == 0 && lazyIndexedOffset_ == 0 && lazyIndexedLine_ == 0) {
+	if (!mLazyLineIndexComplete && mLineIndexCheckpoints.size() == 1 && mLineIndexCheckpoints[0].offset == 0 &&
+	    mLineIndexCheckpoints[0].lineIndex == 0 && mLazyIndexedOffset == 0 && mLazyIndexedLine == 0) {
 		if (const char *data = directTextData()) {
-			buildDirectInitialLineIndex(data, length_, lineIndexCheckpoints_, lazyIndexedOffset_,
-			                           lazyIndexedLine_, lazyTotalLineCount_);
-			lazyLineIndexComplete_ = true;
+			buildDirectInitialLineIndex(data, mLength, mLineIndexCheckpoints, mLazyIndexedOffset,
+			                           mLazyIndexedLine, mLazyTotalLineCount);
+			mLazyLineIndexComplete = true;
 			return;
 		}
 	}
-	while (!lazyLineIndexComplete_)
+	while (!mLazyLineIndexComplete)
 		advanceLazyIndexByStride();
 }
 
 const char *ReadSnapshot::originalData() const noexcept {
-	if (mappedOriginal_.mapped())
-		return mappedOriginal_.data();
-	return originalBuffer_ != nullptr ? originalBuffer_->data() : nullptr;
+	if (mMappedOriginal.mapped())
+		return mMappedOriginal.data();
+	return mOriginalBuffer != nullptr ? mOriginalBuffer->data() : nullptr;
 }
 
 std::string ReadSnapshot::pieceText(const Piece &piece) const {
 	if (piece.source == BufferKind::Original) {
-		if (mappedOriginal_.mapped())
-			return mappedOriginal_.sliceText(piece.span);
-		if (originalBuffer_ != nullptr)
-			return originalBuffer_->substr(piece.span.start, piece.span.length);
+		if (mMappedOriginal.mapped())
+			return mMappedOriginal.sliceText(piece.span);
+		if (mOriginalBuffer != nullptr)
+			return mOriginalBuffer->substr(piece.span.start, piece.span.length);
 		return std::string();
 	}
-	return addBuffer_ != nullptr ? addBuffer_->substr(piece.span.start, piece.span.length) : std::string();
+	return mAddBuffer != nullptr ? mAddBuffer->substr(piece.span.start, piece.span.length) : std::string();
 }
 
 void ReadSnapshot::ensureMaterialized() const noexcept {
-	if (!cacheDirty_)
+	if (!mCacheDirty)
 		return;
 
-	materializedText_.clear();
-	materializedText_.reserve(length_);
-	if (pieces_ != nullptr)
-		for (std::size_t i = 0; i < pieces_->size(); ++i)
-			materializedText_ += pieceText((*pieces_)[i]);
-	cacheDirty_ = false;
+	mMaterializedText.clear();
+	mMaterializedText.reserve(mLength);
+	if (mPieces != nullptr)
+		for (std::size_t i = 0; i < mPieces->size(); ++i)
+			mMaterializedText += pieceText((*mPieces)[i]);
+	mCacheDirty = false;
 }
 
 bool TextDocument::loadMappedFile(const std::string &path, std::string &error) {
@@ -1149,10 +1149,10 @@ bool TextDocument::loadMappedFile(const std::string &path, std::string &error) {
 }
 
 PieceChunkView TextDocument::pieceChunk(std::size_t index) const noexcept {
-	if (index >= pieces_.size())
+	if (index >= mPieces.size())
 		return PieceChunkView();
 
-	const Piece &piece = pieces_[index];
+	const Piece &piece = mPieces[index];
 	if (piece.empty())
 		return PieceChunkView();
 	if (piece.source == BufferKind::Original) {
@@ -1161,9 +1161,9 @@ PieceChunkView TextDocument::pieceChunk(std::size_t index) const noexcept {
 			return PieceChunkView();
 		return PieceChunkView(base + piece.span.start, piece.span.length);
 	}
-	if (piece.span.start >= addBuffer_.size())
+	if (piece.span.start >= mAddBuffer.size())
 		return PieceChunkView();
-	return PieceChunkView(addBuffer_.text().data() + piece.span.start, piece.span.length);
+	return PieceChunkView(mAddBuffer.text().data() + piece.span.start, piece.span.length);
 }
 
 void TextDocument::setText(std::string_view text) {
@@ -1184,14 +1184,14 @@ void TextDocument::apply(const EditTransaction &transaction) {
 CommitResult TextDocument::tryApply(const EditTransaction &transaction, std::size_t expectedVersion) {
 	CommitResult result;
 	result.expectedVersion = expectedVersion;
-	result.actualVersion = version_;
+	result.actualVersion = mVersion;
 	if (!matchesVersion(expectedVersion)) {
 		result.status = CommitStatus::VersionConflict;
 		return result;
 	}
 
-	const std::size_t oldVersion = version_;
-	const Offset oldLength = length_;
+	const std::size_t oldVersion = mVersion;
+	const Offset oldLength = mLength;
 	bool mutated = false;
 	Offset touchStart = oldLength;
 	Offset touchEnd = 0;
@@ -1225,12 +1225,12 @@ CommitResult TextDocument::tryApply(const EditTransaction &transaction, std::siz
 
 	bumpVersion();
 	result.status = CommitStatus::Applied;
-	result.actualVersion = version_;
+	result.actualVersion = mVersion;
 	result.change.changed = true;
 	result.change.oldVersion = oldVersion;
-	result.change.newVersion = version_;
+	result.change.newVersion = mVersion;
 	result.change.oldLength = oldLength;
-	result.change.newLength = length_;
+	result.change.newLength = mLength;
 	if (touched)
 		result.change.touchedRange = Range(touchStart, touchEnd).normalized();
 	return result;
@@ -1239,14 +1239,14 @@ CommitResult TextDocument::tryApply(const EditTransaction &transaction, std::siz
 CommitResult TextDocument::tryApply(const StagedEditTransaction &transaction) {
 	CommitResult result;
 	result.expectedVersion = transaction.baseVersion();
-	result.actualVersion = version_;
+	result.actualVersion = mVersion;
 	if (!matchesVersion(transaction.baseVersion())) {
 		result.status = CommitStatus::VersionConflict;
 		return result;
 	}
 
-	const std::size_t oldVersion = version_;
-	const Offset oldLength = length_;
+	const std::size_t oldVersion = mVersion;
+	const Offset oldLength = mLength;
 	bool mutated = false;
 	Offset touchStart = oldLength;
 	Offset touchEnd = 0;
@@ -1280,12 +1280,12 @@ CommitResult TextDocument::tryApply(const StagedEditTransaction &transaction) {
 
 	bumpVersion();
 	result.status = CommitStatus::Applied;
-	result.actualVersion = version_;
+	result.actualVersion = mVersion;
 	result.change.changed = true;
 	result.change.oldVersion = oldVersion;
-	result.change.newVersion = version_;
+	result.change.newVersion = mVersion;
 	result.change.oldLength = oldLength;
-	result.change.newLength = length_;
+	result.change.newLength = mLength;
 	if (touched)
 		result.change.touchedRange = Range(touchStart, touchEnd).normalized();
 	return result;
@@ -1294,7 +1294,7 @@ CommitResult TextDocument::tryApply(const StagedEditTransaction &transaction) {
 void TextDocument::insert(Offset offset, std::string_view text) {
 	if (text.empty())
 		return;
-	if (insertAddSpanNoVersionBump(offset, addBuffer_.append(text)))
+	if (insertAddSpanNoVersionBump(offset, mAddBuffer.append(text)))
 		bumpVersion();
 }
 
@@ -1317,29 +1317,29 @@ void TextDocument::replaceFromStaged(Range range, const StagedAddBuffer &buffer,
 }
 
 void TextDocument::flatten() {
-	if (pieces_.size() <= 1 && addBuffer_.size() == 0 && !mappedOriginal_.mapped())
+	if (mPieces.size() <= 1 && mAddBuffer.size() == 0 && !mMappedOriginal.mapped())
 		return;
 
 	std::string currentText = text();
-	originalBuffer_ = std::move(currentText);
-	mappedOriginal_.reset();
-	addBuffer_.clear();
+	mOriginalBuffer = std::move(currentText);
+	mMappedOriginal.reset();
+	mAddBuffer.clear();
 
-	pieces_.clear();
-	pieces_.emplace_back(BufferKind::Original, TextSpan(0, originalBuffer_.length()));
-	length_ = originalBuffer_.length();
+	mPieces.clear();
+	mPieces.emplace_back(BufferKind::Original, TextSpan(0, mOriginalBuffer.length()));
+	mLength = mOriginalBuffer.length();
 
 	markDirty();
 	bumpVersion();
 }
 
 Offset TextDocument::clampOffset(Offset pos) const noexcept {
-	return std::min(pos, length_);
+	return std::min(pos, mLength);
 }
 
 std::size_t TextDocument::lineCount() const noexcept {
 	ensureLazyIndexComplete();
-	return lazyTotalLineCount_;
+	return mLazyTotalLineCount;
 }
 
 Offset TextDocument::lineStart(Offset pos) const noexcept {
@@ -1355,7 +1355,7 @@ Offset TextDocument::lineStart(Offset pos) const noexcept {
 Offset TextDocument::lineEnd(Offset pos) const noexcept {
 	if (const char *data = directTextData()) {
 		pos = clampOffset(pos);
-		return directFindNextLineBreak(data, length_, pos);
+		return directFindNextLineBreak(data, mLength, pos);
 	}
 
 	return piecewiseLineEnd(*this, pos);
@@ -1364,8 +1364,8 @@ Offset TextDocument::lineEnd(Offset pos) const noexcept {
 Offset TextDocument::nextLine(Offset pos) const noexcept {
 	if (const char *data = directTextData()) {
 		pos = lineEnd(pos);
-		if (pos < length_) {
-			if (data[pos] == '\r' && pos + 1 < length_ && data[pos + 1] == '\n')
+		if (pos < mLength) {
+			if (data[pos] == '\r' && pos + 1 < mLength && data[pos + 1] == '\n')
 				pos += 2;
 			else
 				++pos;
@@ -1394,25 +1394,25 @@ Offset TextDocument::prevLine(Offset pos) const noexcept {
 std::size_t TextDocument::lineIndex(Offset pos) const noexcept {
 	pos = clampOffset(pos);
 	ensureLazyIndexSeeded();
-	if (lineIndexCheckpoints_.empty())
+	if (mLineIndexCheckpoints.empty())
 		return 0;
 
 	std::size_t left = 0;
-	std::size_t right = lineIndexCheckpoints_.size();
+	std::size_t right = mLineIndexCheckpoints.size();
 	while (left < right) {
 		std::size_t mid = left + (right - left) / 2;
-		if (lineIndexCheckpoints_[mid].offset <= pos)
+		if (mLineIndexCheckpoints[mid].offset <= pos)
 			left = mid + 1;
 		else
 			right = mid;
 	}
 	LineIndexCheckpoint checkpoint =
-	    lineIndexCheckpoints_[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
+	    mLineIndexCheckpoints[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
 	if (checkpoint.offset >= pos)
 		return checkpoint.lineIndex;
 	if (const char *data = directTextData()) {
 		const std::size_t delta =
-		    directCountLineBreaksInRange(data, length_, checkpoint.offset, pos);
+		    directCountLineBreaksInRange(data, mLength, checkpoint.offset, pos);
 		return checkpoint.lineIndex + delta;
 	}
 	return checkpoint.lineIndex + piecewiseCountLineBreaksInRange(*this, checkpoint.offset, pos);
@@ -1420,22 +1420,22 @@ std::size_t TextDocument::lineIndex(Offset pos) const noexcept {
 
 Offset TextDocument::lineStartByIndex(std::size_t index) const noexcept {
 	ensureLazyIndexForLine(index);
-	if (lineIndexCheckpoints_.empty())
+	if (mLineIndexCheckpoints.empty())
 		return 0;
-	if (lazyLineIndexComplete_ && index >= lazyTotalLineCount_)
-		index = lazyTotalLineCount_ > 0 ? lazyTotalLineCount_ - 1 : 0;
+	if (mLazyLineIndexComplete && index >= mLazyTotalLineCount)
+		index = mLazyTotalLineCount > 0 ? mLazyTotalLineCount - 1 : 0;
 
 	std::size_t left = 0;
-	std::size_t right = lineIndexCheckpoints_.size();
+	std::size_t right = mLineIndexCheckpoints.size();
 	while (left < right) {
 		std::size_t mid = left + (right - left) / 2;
-		if (lineIndexCheckpoints_[mid].lineIndex <= index)
+		if (mLineIndexCheckpoints[mid].lineIndex <= index)
 			left = mid + 1;
 		else
 			right = mid;
 	}
 	LineIndexCheckpoint checkpoint =
-	    lineIndexCheckpoints_[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
+	    mLineIndexCheckpoints[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
 	Offset cursor = checkpoint.offset;
 	std::size_t line = checkpoint.lineIndex;
 	while (line < index) {
@@ -1450,22 +1450,22 @@ Offset TextDocument::lineStartByIndex(std::size_t index) const noexcept {
 
 std::size_t TextDocument::estimatedLineCount() const noexcept {
 	ensureLazyIndexSeeded();
-	if (lazyLineIndexComplete_)
-		return lazyTotalLineCount_;
-	if (!mappedOriginal_.mapped())
+	if (mLazyLineIndexComplete)
+		return mLazyTotalLineCount;
+	if (!mMappedOriginal.mapped())
 		return piecewiseLineCount(*this);
-	if (lazyIndexedOffset_ == 0 || lazyIndexedLine_ == 0)
-		return std::max<std::size_t>(1, length_ / 80 + 1);
+	if (mLazyIndexedOffset == 0 || mLazyIndexedLine == 0)
+		return std::max<std::size_t>(1, mLength / 80 + 1);
 
-	const std::size_t observedLines = lazyIndexedLine_ + 1;
+	const std::size_t observedLines = mLazyIndexedLine + 1;
 	const std::size_t estimated =
-	    static_cast<std::size_t>((static_cast<long double>(length_) * observedLines) /
-	                             std::max<Offset>(lazyIndexedOffset_, 1));
+	    static_cast<std::size_t>((static_cast<long double>(mLength) * observedLines) /
+	                             std::max<Offset>(mLazyIndexedOffset, 1));
 	return std::max<std::size_t>(observedLines, estimated);
 }
 
 bool TextDocument::exactLineCountKnown() const noexcept {
-	return !mappedOriginal_.mapped() || lazyLineIndexComplete_;
+	return !mMappedOriginal.mapped() || mLazyLineIndexComplete;
 }
 
 std::size_t TextDocument::column(Offset pos) const noexcept {
@@ -1493,63 +1493,63 @@ bool TextDocument::setTextNoVersionBump(std::string_view text) {
 }
 
 void TextDocument::initializeFromOriginal(std::string_view text, bool bumpVersionFlag) {
-	originalBuffer_.assign(text.data(), text.size());
-	mappedOriginal_.reset();
-	addBuffer_.clear();
-	pieces_.clear();
-	length_ = originalBuffer_.size();
+	mOriginalBuffer.assign(text.data(), text.size());
+	mMappedOriginal.reset();
+	mAddBuffer.clear();
+	mPieces.clear();
+	mLength = mOriginalBuffer.size();
 	resetLazyLineIndex();
-	if (!originalBuffer_.empty())
-		pieces_.push_back(Piece(BufferKind::Original, TextSpan(0, originalBuffer_.size())));
-	materializedText_ = originalBuffer_;
-	cacheDirty_ = false;
+	if (!mOriginalBuffer.empty())
+		mPieces.push_back(Piece(BufferKind::Original, TextSpan(0, mOriginalBuffer.size())));
+	mMaterializedText = mOriginalBuffer;
+	mCacheDirty = false;
 	if (bumpVersionFlag)
 		bumpVersion();
 }
 
 void TextDocument::initializeFromMappedSource(const MappedFileSource &source, bool bumpVersionFlag) {
-	originalBuffer_.clear();
-	mappedOriginal_ = source;
-	addBuffer_.clear();
-	pieces_.clear();
-	length_ = mappedOriginal_.size();
+	mOriginalBuffer.clear();
+	mMappedOriginal = source;
+	mAddBuffer.clear();
+	mPieces.clear();
+	mLength = mMappedOriginal.size();
 	resetLazyLineIndex();
-	materializedText_.clear();
-	cacheDirty_ = length_ != 0;
-	if (length_ != 0)
-		pieces_.push_back(Piece(BufferKind::Original, TextSpan(0, length_)));
+	mMaterializedText.clear();
+	mCacheDirty = mLength != 0;
+	if (mLength != 0)
+		mPieces.push_back(Piece(BufferKind::Original, TextSpan(0, mLength)));
 	if (bumpVersionFlag)
 		bumpVersion();
 }
 
 void TextDocument::bumpVersion() noexcept {
-	++version_;
+	++mVersion;
 }
 
 void TextDocument::markDirty() noexcept {
-	cacheDirty_ = true;
+	mCacheDirty = true;
 }
 
 void TextDocument::ensureMaterialized() const noexcept {
-	if (!cacheDirty_)
+	if (!mCacheDirty)
 		return;
 
-	materializedText_.clear();
-	materializedText_.reserve(length_);
-	for (const auto & piece : pieces_)
-		materializedText_ += pieceText(piece);
-	cacheDirty_ = false;
+	mMaterializedText.clear();
+	mMaterializedText.reserve(mLength);
+	for (const auto & piece : mPieces)
+		mMaterializedText += pieceText(piece);
+	mCacheDirty = false;
 }
 
 std::string TextDocument::pieceText(const Piece &piece) const {
 	if (piece.source == BufferKind::Original)
-		return mappedOriginal_.mapped() ? mappedOriginal_.sliceText(piece.span)
-		                                : originalBuffer_.substr(piece.span.start, piece.span.length);
-	return addBuffer_.sliceText(piece.span);
+		return mMappedOriginal.mapped() ? mMappedOriginal.sliceText(piece.span)
+		                                : mOriginalBuffer.substr(piece.span.start, piece.span.length);
+	return mAddBuffer.sliceText(piece.span);
 }
 
 const char *TextDocument::originalData() const noexcept {
-	return mappedOriginal_.mapped() ? mappedOriginal_.data() : originalBuffer_.data();
+	return mMappedOriginal.mapped() ? mMappedOriginal.data() : mOriginalBuffer.data();
 }
 
 bool TextDocument::applyOperationNoVersionBump(const EditOperation &operation) {
@@ -1559,7 +1559,7 @@ bool TextDocument::applyOperationNoVersionBump(const EditOperation &operation) {
 		case EditKind::Insert:
 			if (operation.text.empty())
 				return false;
-			return insertAddSpanNoVersionBump(operation.range.start, addBuffer_.append(operation.text));
+			return insertAddSpanNoVersionBump(operation.range.start, mAddBuffer.append(operation.text));
 		case EditKind::Erase:
 			return eraseNoVersionBump(operation.range);
 		case EditKind::Replace:
@@ -1577,7 +1577,7 @@ bool TextDocument::applyStagedOperationNoVersionBump(const StagedEditOperation &
 			if (operation.span.empty())
 				return false;
 			return insertAddSpanNoVersionBump(operation.range.start,
-			                                 addBuffer_.append(buffer.sliceText(operation.span)));
+			                                 mAddBuffer.append(buffer.sliceText(operation.span)));
 		case EditKind::Erase:
 			return eraseNoVersionBump(operation.range);
 		case EditKind::Replace:
@@ -1592,11 +1592,11 @@ std::size_t TextDocument::splitAt(Offset offset) {
 
 	if (logical == 0)
 		return 0;
-	if (logical >= length_)
-		return pieces_.size();
+	if (logical >= mLength)
+		return mPieces.size();
 
-	for (std::size_t i = 0; i < pieces_.size(); ++i) {
-		Offset pieceLen = pieces_[i].span.length;
+	for (std::size_t i = 0; i < mPieces.size(); ++i) {
+		Offset pieceLen = mPieces[i].span.length;
 		Offset pieceEnd = consumed + pieceLen;
 
 		if (logical == consumed)
@@ -1605,23 +1605,23 @@ std::size_t TextDocument::splitAt(Offset offset) {
 			return i + 1;
 		if (consumed < logical && logical < pieceEnd) {
 			Offset leftLen = logical - consumed;
-			Piece left = pieces_[i];
-			Piece right = pieces_[i];
+			Piece left = mPieces[i];
+			Piece right = mPieces[i];
 			left.span.length = leftLen;
 			right.span.start += leftLen;
 			right.span.length -= leftLen;
-			pieces_[i] = left;
-			pieces_.insert(pieces_.begin() + static_cast<std::ptrdiff_t>(i + 1), right);
+			mPieces[i] = left;
+			mPieces.insert(mPieces.begin() + static_cast<std::ptrdiff_t>(i + 1), right);
 			return i + 1;
 		}
 		consumed = pieceEnd;
 	}
 
-	return pieces_.size();
+	return mPieces.size();
 }
 
 bool TextDocument::eraseNoVersionBump(Range range) {
-	Range bounded = range.clamped(length_);
+	Range bounded = range.clamped(mLength);
 	if (bounded.empty())
 		return false;
 
@@ -1629,9 +1629,9 @@ bool TextDocument::eraseNoVersionBump(Range range) {
 	std::size_t endIndex = splitAt(bounded.end);
 
 	if (startIndex < endIndex)
-		pieces_.erase(pieces_.begin() + static_cast<std::ptrdiff_t>(startIndex),
-		              pieces_.begin() + static_cast<std::ptrdiff_t>(endIndex));
-	length_ -= bounded.end - bounded.start;
+		mPieces.erase(mPieces.begin() + static_cast<std::ptrdiff_t>(startIndex),
+		              mPieces.begin() + static_cast<std::ptrdiff_t>(endIndex));
+	mLength -= bounded.end - bounded.start;
 	compactPieces();
 	invalidateLazyLineIndexFrom(bounded.start);
 	markDirty();
@@ -1639,44 +1639,44 @@ bool TextDocument::eraseNoVersionBump(Range range) {
 }
 
 bool TextDocument::replaceNoVersionBump(Range range, std::string_view text) {
-	Range bounded = range.clamped(length_);
+	Range bounded = range.clamped(mLength);
 	bool removed = eraseNoVersionBump(bounded);
 	if (text.empty())
 		return removed;
 
-	return insertAddSpanNoVersionBump(bounded.start, addBuffer_.append(text)) || removed;
+	return insertAddSpanNoVersionBump(bounded.start, mAddBuffer.append(text)) || removed;
 }
 
 bool TextDocument::hasDirectOriginalView() const noexcept {
-	return mappedOriginal_.mapped() && addBuffer_.size() == 0 && pieces_.size() == 1 &&
-	       pieces_[0].source == BufferKind::Original && pieces_[0].span.start == 0 &&
-	       pieces_[0].span.length == length_;
+	return mMappedOriginal.mapped() && mAddBuffer.size() == 0 && mPieces.size() == 1 &&
+	       mPieces[0].source == BufferKind::Original && mPieces[0].span.start == 0 &&
+	       mPieces[0].span.length == mLength;
 }
 
 const char *TextDocument::directTextData() const noexcept {
-	return hasDirectOriginalView() ? mappedOriginal_.data() : nullptr;
+	return hasDirectOriginalView() ? mMappedOriginal.data() : nullptr;
 }
 
 void TextDocument::resetLazyLineIndex() noexcept {
-	lineIndexCheckpoints_.clear();
-	lineIndexCheckpoints_.push_back(LineIndexCheckpoint(0, 0));
-	lazyIndexedOffset_ = 0;
-	lazyIndexedLine_ = 0;
-	lazyLineIndexComplete_ = (length_ == 0);
-	lazyTotalLineCount_ = 1;
+	mLineIndexCheckpoints.clear();
+	mLineIndexCheckpoints.push_back(LineIndexCheckpoint(0, 0));
+	mLazyIndexedOffset = 0;
+	mLazyIndexedLine = 0;
+	mLazyLineIndexComplete = (mLength == 0);
+	mLazyTotalLineCount = 1;
 }
 
 bool TextDocument::directAdvanceLine(Offset &offset) const noexcept {
 	const char *data = directTextData();
 	if (data == nullptr)
 		return false;
-	if (offset >= length_)
+	if (offset >= mLength)
 		return false;
 
-	Offset breakPos = directFindNextLineBreak(data, length_, offset);
-	if (breakPos >= length_)
+	Offset breakPos = directFindNextLineBreak(data, mLength, offset);
+	if (breakPos >= mLength)
 		return false;
-	if (data[breakPos] == '\r' && breakPos + 1 < length_ && data[breakPos + 1] == '\n')
+	if (data[breakPos] == '\r' && breakPos + 1 < mLength && data[breakPos + 1] == '\n')
 		offset = breakPos + 2;
 	else
 		offset = breakPos + 1;
@@ -1690,79 +1690,79 @@ bool TextDocument::advanceLine(Offset &offset) const noexcept {
 }
 
 void TextDocument::ensureLazyIndexSeeded() const noexcept {
-	if (lineIndexCheckpoints_.empty())
+	if (mLineIndexCheckpoints.empty())
 		const_cast<TextDocument *>(this)->resetLazyLineIndex();
 }
 
 void TextDocument::advanceLazyIndexByStride() const noexcept {
 	ensureLazyIndexSeeded();
-	if (lazyLineIndexComplete_)
+	if (mLazyLineIndexComplete)
 		return;
 
 	for (std::size_t steps = 0; steps < kLazyLineIndexStride; ++steps) {
-		Offset next = lazyIndexedOffset_;
+		Offset next = mLazyIndexedOffset;
 		if (!advanceLine(next)) {
-			lazyLineIndexComplete_ = true;
-			lazyTotalLineCount_ = lazyIndexedLine_ + 1;
+			mLazyLineIndexComplete = true;
+			mLazyTotalLineCount = mLazyIndexedLine + 1;
 			return;
 		}
-		lazyIndexedOffset_ = next;
-		++lazyIndexedLine_;
-		if ((lazyIndexedLine_ % kLazyLineIndexStride) == 0)
-			lineIndexCheckpoints_.push_back(LineIndexCheckpoint(lazyIndexedOffset_, lazyIndexedLine_));
+		mLazyIndexedOffset = next;
+		++mLazyIndexedLine;
+		if ((mLazyIndexedLine % kLazyLineIndexStride) == 0)
+			mLineIndexCheckpoints.push_back(LineIndexCheckpoint(mLazyIndexedOffset, mLazyIndexedLine));
 	}
 }
 
 void TextDocument::ensureLazyIndexForLine(std::size_t targetLine) const noexcept {
 	ensureLazyIndexSeeded();
-	while (!lazyLineIndexComplete_ && lineIndexCheckpoints_.back().lineIndex < targetLine)
+	while (!mLazyLineIndexComplete && mLineIndexCheckpoints.back().lineIndex < targetLine)
 		advanceLazyIndexByStride();
 }
 
 void TextDocument::ensureLazyIndexForOffset(Offset targetOffset) const noexcept {
 	ensureLazyIndexSeeded();
 	targetOffset = clampOffset(targetOffset);
-	while (!lazyLineIndexComplete_ && lineIndexCheckpoints_.back().offset <= targetOffset)
+	while (!mLazyLineIndexComplete && mLineIndexCheckpoints.back().offset <= targetOffset)
 		advanceLazyIndexByStride();
 }
 
 void TextDocument::ensureLazyIndexComplete() const noexcept {
 	ensureLazyIndexSeeded();
-	if (!lazyLineIndexComplete_ && lineIndexCheckpoints_.size() == 1 && lineIndexCheckpoints_[0].offset == 0 &&
-	    lineIndexCheckpoints_[0].lineIndex == 0 && lazyIndexedOffset_ == 0 && lazyIndexedLine_ == 0) {
+	if (!mLazyLineIndexComplete && mLineIndexCheckpoints.size() == 1 && mLineIndexCheckpoints[0].offset == 0 &&
+	    mLineIndexCheckpoints[0].lineIndex == 0 && mLazyIndexedOffset == 0 && mLazyIndexedLine == 0) {
 		if (const char *data = directTextData()) {
-			buildDirectInitialLineIndex(data, length_, lineIndexCheckpoints_, lazyIndexedOffset_,
-			                           lazyIndexedLine_, lazyTotalLineCount_);
-			lazyLineIndexComplete_ = true;
+			buildDirectInitialLineIndex(data, mLength, mLineIndexCheckpoints, mLazyIndexedOffset,
+			                           mLazyIndexedLine, mLazyTotalLineCount);
+			mLazyLineIndexComplete = true;
 			return;
 		}
 	}
-	while (!lazyLineIndexComplete_)
+	while (!mLazyLineIndexComplete)
 		advanceLazyIndexByStride();
 }
 
 void TextDocument::invalidateLazyLineIndexFrom(Offset offset) noexcept {
 	offset = clampOffset(offset);
-	if (lineIndexCheckpoints_.empty()) {
+	if (mLineIndexCheckpoints.empty()) {
 		resetLazyLineIndex();
 		return;
 	}
 
 	std::vector<LineIndexCheckpoint>::iterator keepEnd =
-	    std::upper_bound(lineIndexCheckpoints_.begin(), lineIndexCheckpoints_.end(), offset,
+	    std::upper_bound(mLineIndexCheckpoints.begin(), mLineIndexCheckpoints.end(), offset,
 	                     [](Offset value, const LineIndexCheckpoint &checkpoint) {
 		                     return value < checkpoint.offset;
 	                     });
-	if (keepEnd == lineIndexCheckpoints_.begin())
+	if (keepEnd == mLineIndexCheckpoints.begin())
 		++keepEnd;
-	lineIndexCheckpoints_.erase(keepEnd, lineIndexCheckpoints_.end());
-	if (lineIndexCheckpoints_.empty())
+	mLineIndexCheckpoints.erase(keepEnd, mLineIndexCheckpoints.end());
+	if (mLineIndexCheckpoints.empty())
 		resetLazyLineIndex();
 	else {
-		lazyIndexedOffset_ = lineIndexCheckpoints_.back().offset;
-		lazyIndexedLine_ = lineIndexCheckpoints_.back().lineIndex;
-		lazyLineIndexComplete_ = false;
-		lazyTotalLineCount_ = std::max<std::size_t>(1, lazyIndexedLine_ + 1);
+		mLazyIndexedOffset = mLineIndexCheckpoints.back().offset;
+		mLazyIndexedLine = mLineIndexCheckpoints.back().lineIndex;
+		mLazyLineIndexComplete = false;
+		mLazyTotalLineCount = std::max<std::size_t>(1, mLazyIndexedLine + 1);
 	}
 }
 
@@ -1771,12 +1771,12 @@ bool TextDocument::insertAddSpanNoVersionBump(Offset offset, TextSpan span) {
 	std::size_t index = splitAt(logical);
 
 	if (!span.empty())
-		pieces_.insert(pieces_.begin() + static_cast<std::ptrdiff_t>(index),
+		mPieces.insert(mPieces.begin() + static_cast<std::ptrdiff_t>(index),
 		              Piece(BufferKind::Add, span));
 	else
 		return false;
 
-	length_ += span.length;
+	mLength += span.length;
 	compactPieces();
 	invalidateLazyLineIndexFrom(logical);
 	markDirty();
@@ -1785,9 +1785,9 @@ bool TextDocument::insertAddSpanNoVersionBump(Offset offset, TextSpan span) {
 
 void TextDocument::compactPieces() {
 	std::vector<Piece> compacted;
-	compacted.reserve(pieces_.size());
+	compacted.reserve(mPieces.size());
 
-	for (const auto & piece : pieces_) {
+	for (const auto & piece : mPieces) {
 			if (piece.empty())
 			continue;
 		if (!compacted.empty() && compacted.back().source == piece.source &&
@@ -1797,7 +1797,7 @@ void TextDocument::compactPieces() {
 			compacted.push_back(piece);
 	}
 
-	pieces_.swap(compacted);
+	mPieces.swap(compacted);
 }
 
 } // namespace editor

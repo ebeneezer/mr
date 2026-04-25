@@ -2851,7 +2851,7 @@ bool testBlockHotkeyModifierRoutingGuard(std::string &failureReason) {
 		    "Block hotkey routing must distinguish F7/Shift+F7/Ctrl+F7 and Ctrl+F9 by modifier state.";
 		return false;
 	}
-	if (content.find("if (originalEvent == evMouseDown && blockMode_ == bmNone)") == std::string::npos ||
+	if (content.find("if (originalEvent == evMouseDown && mBlockMode == bmNone)") == std::string::npos ||
 	    content.find("// Mouse drag selection without an explicit mode defaults to stream block.") ==
 	        std::string::npos) {
 		failureReason =

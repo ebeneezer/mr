@@ -104,14 +104,14 @@ struct Piece {
 
 class MappedFileSource {
   public:
-	MappedFileSource() noexcept : state_() {
+	MappedFileSource() noexcept : mState() {
 	}
 
 	bool openReadOnly(const std::string &path, std::string &error);
 	void reset() noexcept;
 
 	[[nodiscard]] bool mapped() const noexcept {
-		return static_cast<bool>(state_);
+		return static_cast<bool>(mState);
 	}
 
 	[[nodiscard]] bool empty() const noexcept {
@@ -125,29 +125,29 @@ class MappedFileSource {
 
   private:
 	struct State;
-	std::shared_ptr<State> state_;
+	std::shared_ptr<State> mState;
 };
 
 class AppendBuffer {
   public:
-	AppendBuffer() noexcept : text_() {
+	AppendBuffer() noexcept : mText() {
 	}
 
 	TextSpan append(std::string_view text);
 	void clear() noexcept;
 
 	[[nodiscard]] const std::string &text() const noexcept {
-		return text_;
+		return mText;
 	}
 
 	[[nodiscard]] std::size_t size() const noexcept {
-		return text_.size();
+		return mText.size();
 	}
 
 	[[nodiscard]] std::string sliceText(TextSpan span) const;
 
  private:
-	std::string text_;
+	std::string mText;
 };
 
 class ReadSnapshot;
@@ -155,28 +155,28 @@ class ReadSnapshot;
 // Separate producer-side buffer for future async macro work; commits remain serialized.
 class StagedAddBuffer {
   public:
-	StagedAddBuffer() noexcept : text_() {
+	StagedAddBuffer() noexcept : mText() {
 	}
 
 	TextSpan append(std::string_view text);
 	void clear() noexcept;
 
 	[[nodiscard]] bool empty() const noexcept {
-		return text_.empty();
+		return mText.empty();
 	}
 
 	[[nodiscard]] std::size_t size() const noexcept {
-		return text_.size();
+		return mText.size();
 	}
 
 	[[nodiscard]] const std::string &text() const noexcept {
-		return text_;
+		return mText;
 	}
 
 	[[nodiscard]] std::string sliceText(TextSpan span) const;
 
   private:
-	std::string text_;
+	std::string mText;
 };
 
 enum class EditKind : unsigned char {
@@ -201,26 +201,26 @@ struct EditOperation {
 
 class EditTransaction {
   public:
-	EditTransaction() noexcept : label_(), operations_() {
+	EditTransaction() noexcept : mLabel(), mOperations() {
 	}
 
-	explicit EditTransaction(std::string_view label) : label_(label), operations_() {
+	explicit EditTransaction(std::string_view label) : mLabel(label), mOperations() {
 	}
 
 	[[nodiscard]] const std::string &label() const noexcept {
-		return label_;
+		return mLabel;
 	}
 
 	void setLabel(std::string_view label) {
-		label_ = label;
+		mLabel = label;
 	}
 
 	[[nodiscard]] bool empty() const noexcept {
-		return operations_.empty();
+		return mOperations.empty();
 	}
 
 	[[nodiscard]] const std::vector<EditOperation> &operations() const noexcept {
-		return operations_;
+		return mOperations;
 	}
 
 	void setText(std::string_view text);
@@ -229,8 +229,8 @@ class EditTransaction {
 	void replace(Range range, std::string_view text);
 
   private:
-	std::string label_;
-	std::vector<EditOperation> operations_;
+	std::string mLabel;
+	std::vector<EditOperation> mOperations;
 };
 
 struct StagedEditOperation {
@@ -248,50 +248,50 @@ struct StagedEditOperation {
 
 class StagedEditTransaction {
   public:
-	StagedEditTransaction() noexcept : baseVersion_(0), label_(), addBuffer_(), operations_() {
+	StagedEditTransaction() noexcept : mBaseVersion(0), mLabel(), mAddBuffer(), mOperations() {
 	}
 
 	explicit StagedEditTransaction(std::size_t aBaseVersion, std::string_view label = {})
-	    : baseVersion_(aBaseVersion), label_(label), addBuffer_(), operations_() {
+	    : mBaseVersion(aBaseVersion), mLabel(label), mAddBuffer(), mOperations() {
 	}
 
 	explicit StagedEditTransaction(const Snapshot &snapshot, std::string_view label = {})
-	    : baseVersion_(snapshot.version), label_(label), addBuffer_(), operations_() {
+	    : mBaseVersion(snapshot.version), mLabel(label), mAddBuffer(), mOperations() {
 	}
 
 	explicit StagedEditTransaction(const ReadSnapshot &snapshot,
 	                               std::string_view label = {});
 
 	std::size_t baseVersion() const noexcept {
-		return baseVersion_;
+		return mBaseVersion;
 	}
 
 	void setBaseVersion(std::size_t value) noexcept {
-		baseVersion_ = value;
+		mBaseVersion = value;
 	}
 
 	[[nodiscard]] const std::string &label() const noexcept {
-		return label_;
+		return mLabel;
 	}
 
 	void setLabel(std::string_view label) {
-		label_ = label;
+		mLabel = label;
 	}
 
 	[[nodiscard]] bool empty() const noexcept {
-		return operations_.empty();
+		return mOperations.empty();
 	}
 
 	[[nodiscard]] const StagedAddBuffer &buffer() const noexcept {
-		return addBuffer_;
+		return mAddBuffer;
 	}
 
 	[[nodiscard]] StagedAddBuffer &buffer() noexcept {
-		return addBuffer_;
+		return mAddBuffer;
 	}
 
 	[[nodiscard]] const std::vector<StagedEditOperation> &operations() const noexcept {
-		return operations_;
+		return mOperations;
 	}
 
 	void setText(std::string_view text);
@@ -300,10 +300,10 @@ class StagedEditTransaction {
 	void replace(Range range, std::string_view text);
 
   private:
-	std::size_t baseVersion_;
-	std::string label_;
-	StagedAddBuffer addBuffer_;
-	std::vector<StagedEditOperation> operations_;
+	std::size_t mBaseVersion;
+	std::string mLabel;
+	StagedAddBuffer mAddBuffer;
+	std::vector<StagedEditOperation> mOperations;
 };
 
 struct DocumentChangeSet {
@@ -389,11 +389,11 @@ class ReadSnapshot {
 	ReadSnapshot() noexcept;
 
 	[[nodiscard]] std::size_t documentId() const noexcept {
-		return documentId_;
+		return mDocumentId;
 	}
 
 	[[nodiscard]] std::size_t version() const noexcept {
-		return version_;
+		return mVersion;
 	}
 
 	[[nodiscard]] Offset length() const noexcept;
@@ -402,11 +402,11 @@ class ReadSnapshot {
 	[[nodiscard]] std::string text() const;
 
 	[[nodiscard]] bool hasMappedOriginal() const noexcept {
-		return mappedOriginal_.mapped();
+		return mMappedOriginal.mapped();
 	}
 
 	[[nodiscard]] const std::string &mappedPath() const noexcept {
-		return mappedOriginal_.path();
+		return mMappedOriginal.path();
 	}
 
 	[[nodiscard]] std::size_t addBufferLength() const noexcept;
@@ -447,20 +447,20 @@ class ReadSnapshot {
 	std::string pieceText(const Piece &piece) const;
 	void ensureMaterialized() const noexcept;
 
-	std::size_t documentId_;
-	std::size_t version_;
-	MappedFileSource mappedOriginal_;
-	std::shared_ptr<const std::string> originalBuffer_;
-	std::shared_ptr<const std::string> addBuffer_;
-	std::shared_ptr<const std::vector<Piece>> pieces_;
-	Offset length_;
-	mutable bool cacheDirty_;
-	mutable std::string materializedText_;
-	mutable std::vector<LineIndexCheckpoint> lineIndexCheckpoints_;
-	mutable Offset lazyIndexedOffset_;
-	mutable std::size_t lazyIndexedLine_;
-	mutable bool lazyLineIndexComplete_;
-	mutable std::size_t lazyTotalLineCount_;
+	std::size_t mDocumentId;
+	std::size_t mVersion;
+	MappedFileSource mMappedOriginal;
+	std::shared_ptr<const std::string> mOriginalBuffer;
+	std::shared_ptr<const std::string> mAddBuffer;
+	std::shared_ptr<const std::vector<Piece>> mPieces;
+	Offset mLength;
+	mutable bool mCacheDirty;
+	mutable std::string mMaterializedText;
+	mutable std::vector<LineIndexCheckpoint> mLineIndexCheckpoints;
+	mutable Offset mLazyIndexedOffset;
+	mutable std::size_t mLazyIndexedLine;
+	mutable bool mLazyLineIndexComplete;
+	mutable std::size_t mLazyTotalLineCount;
 };
 
 class TextDocument {
@@ -478,15 +478,15 @@ class TextDocument {
 	[[nodiscard]] bool adoptLineIndexWarmup(const LineIndexWarmupData &warmup, std::size_t expectedVersion) noexcept;
 
 	[[nodiscard]] std::size_t version() const noexcept {
-		return version_;
+		return mVersion;
 	}
 
 	[[nodiscard]] std::size_t documentId() const noexcept {
-		return documentId_;
+		return mDocumentId;
 	}
 
 	[[nodiscard]] bool matchesVersion(std::size_t expectedVersion) const noexcept {
-		return expectedVersion == version_;
+		return expectedVersion == mVersion;
 	}
 
 	[[nodiscard]] bool matchesSnapshot(const Snapshot &snapshot) const noexcept {
@@ -494,24 +494,24 @@ class TextDocument {
 	}
 
 	[[nodiscard]] std::size_t originalLength() const noexcept {
-		return mappedOriginal_.mapped() ? mappedOriginal_.size() : originalBuffer_.size();
+		return mMappedOriginal.mapped() ? mMappedOriginal.size() : mOriginalBuffer.size();
 	}
 
 	[[nodiscard]] std::size_t addBufferLength() const noexcept {
-		return addBuffer_.size();
+		return mAddBuffer.size();
 	}
 
 	[[nodiscard]] std::size_t pieceCount() const noexcept {
-		return pieces_.size();
+		return mPieces.size();
 	}
 
 	bool loadMappedFile(const std::string &path, std::string &error);
 	[[nodiscard]] bool hasMappedOriginal() const noexcept {
-		return mappedOriginal_.mapped();
+		return mMappedOriginal.mapped();
 	}
 
 	[[nodiscard]] const std::string &mappedPath() const noexcept {
-		return mappedOriginal_.path();
+		return mMappedOriginal.path();
 	}
 
 	[[nodiscard]] PieceChunkView pieceChunk(std::size_t index) const noexcept;
@@ -571,20 +571,20 @@ class TextDocument {
 	bool insertAddSpanNoVersionBump(Offset offset, TextSpan span);
 	void compactPieces();
 
-	std::string originalBuffer_;
-	MappedFileSource mappedOriginal_;
-	AppendBuffer addBuffer_;
-	std::vector<Piece> pieces_;
-	Offset length_;
-	std::size_t documentId_;
-	std::size_t version_;
-	mutable bool cacheDirty_;
-	mutable std::string materializedText_;
-	mutable std::vector<LineIndexCheckpoint> lineIndexCheckpoints_;
-	mutable Offset lazyIndexedOffset_;
-	mutable std::size_t lazyIndexedLine_;
-	mutable bool lazyLineIndexComplete_;
-	mutable std::size_t lazyTotalLineCount_;
+	std::string mOriginalBuffer;
+	MappedFileSource mMappedOriginal;
+	AppendBuffer mAddBuffer;
+	std::vector<Piece> mPieces;
+	Offset mLength;
+	std::size_t mDocumentId;
+	std::size_t mVersion;
+	mutable bool mCacheDirty;
+	mutable std::string mMaterializedText;
+	mutable std::vector<LineIndexCheckpoint> mLineIndexCheckpoints;
+	mutable Offset mLazyIndexedOffset;
+	mutable std::size_t mLazyIndexedLine;
+	mutable bool mLazyLineIndexComplete;
+	mutable std::size_t mLazyTotalLineCount;
 };
 
 } // namespace editor

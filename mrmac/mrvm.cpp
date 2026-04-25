@@ -8852,11 +8852,11 @@ VirtualMachine::Value::Value() : type(TYPE_INT), i(0), r(0.0),  c(0) {
 }
 
 VirtualMachine::VirtualMachine()
-    : verboseLogging(true), logTruncated(false), asyncDelayPending_(false), asyncDelayReady_(false),
-      asyncDelayEnabled_(true), asyncLength_(0), asyncIp_(0),  asyncReturnInt_(0),
-       asyncErrorLevel_(0),  asyncMacroFramePushed_(false),
-       asyncDelayTaskId_(0), asyncDelayGeneration_(0),
-      asyncDelayMillis_(0), cancelledExecution(false) {
+    : verboseLogging(true), logTruncated(false), mAsyncDelayPending(false), mAsyncDelayReady(false),
+      mAsyncDelayEnabled(true), mAsyncLength(0), mAsyncIp(0),  mAsyncReturnInt(0),
+       mAsyncErrorLevel(0),  mAsyncMacroFramePushed(false),
+       mAsyncDelayTaskId(0), mAsyncDelayGeneration(0),
+      mAsyncDelayMillis(0), cancelledExecution(false) {
 }
 
 void VirtualMachine::appendLogLine(const std::string &line, bool important) {
@@ -8899,21 +8899,21 @@ int VirtualMachine::normalizeDelayMillis(int millis) noexcept {
 }
 
 void VirtualMachine::clearAsyncDelayState() noexcept {
-	asyncDelayPending_ = false;
-	asyncDelayReady_ = false;
-	asyncBytecode_.clear();
-	asyncCallStack_.clear();
-	asyncLength_ = 0;
-	asyncIp_ = 0;
-	asyncReturnInt_ = 0;
-	asyncReturnStr_.clear();
-	asyncErrorLevel_ = 0;
-	asyncSavedParameterString_.clear();
-	asyncMacroFramePushed_ = false;
-	asyncDelayReadyFlag_.reset();
-	asyncDelayCancelledFlag_.reset();
-	asyncDelayTaskId_ = 0;
-	asyncDelayMillis_ = 0;
+	mAsyncDelayPending = false;
+	mAsyncDelayReady = false;
+	mAsyncBytecode.clear();
+	mAsyncCallStack.clear();
+	mAsyncLength = 0;
+	mAsyncIp = 0;
+	mAsyncReturnInt = 0;
+	mAsyncReturnStr.clear();
+	mAsyncErrorLevel = 0;
+	mAsyncSavedParameterString.clear();
+	mAsyncMacroFramePushed = false;
+	mAsyncDelayReadyFlag.reset();
+	mAsyncDelayCancelledFlag.reset();
+	mAsyncDelayTaskId = 0;
+	mAsyncDelayMillis = 0;
 }
 
 namespace {
@@ -8949,34 +8949,34 @@ void VirtualMachine::execute(const unsigned char *bytecode, size_t length) {
 }
 
 bool VirtualMachine::resumePendingDelay() {
-	if (!asyncDelayPending_)
+	if (!mAsyncDelayPending)
 		return false;
-	if (!asyncDelayReady_ || asyncDelayReadyFlag_ == nullptr ||
-	    !asyncDelayReadyFlag_->load(std::memory_order_acquire))
+	if (!mAsyncDelayReady || mAsyncDelayReadyFlag == nullptr ||
+	    !mAsyncDelayReadyFlag->load(std::memory_order_acquire))
 		return true;
-	if (asyncDelayCancelledFlag_ != nullptr && asyncDelayCancelledFlag_->load(std::memory_order_acquire)) {
+	if (mAsyncDelayCancelledFlag != nullptr && mAsyncDelayCancelledFlag->load(std::memory_order_acquire)) {
 		cancelledExecution = true;
 		appendLogLine("VM Notice: DELAY cancelled before resume.", true);
 		runtimeErrorLevel() = 5007;
-		if (asyncMacroFramePushed_ && !g_runtimeEnv.macroStack.empty())
+		if (mAsyncMacroFramePushed && !g_runtimeEnv.macroStack.empty())
 			g_runtimeEnv.macroStack.pop_back();
 		clearAsyncDelayState();
 		return false;
 	}
 	executeAt(nullptr, 0, 0, std::string(), std::string(), false, false);
-	return asyncDelayPending_;
+	return mAsyncDelayPending;
 }
 
 bool VirtualMachine::cancelPendingDelay() {
-	bool hadPending = asyncDelayPending_;
+	bool hadPending = mAsyncDelayPending;
 
 	if (!hadPending)
 		return false;
-	if (asyncDelayCancelledFlag_ != nullptr)
-		asyncDelayCancelledFlag_->store(true, std::memory_order_release);
-	if (asyncDelayTaskId_ != 0)
-		(void) mr::coprocessor::globalCoprocessor().cancelTask(asyncDelayTaskId_);
-	if (asyncMacroFramePushed_ && !g_runtimeEnv.macroStack.empty())
+	if (mAsyncDelayCancelledFlag != nullptr)
+		mAsyncDelayCancelledFlag->store(true, std::memory_order_release);
+	if (mAsyncDelayTaskId != 0)
+		(void) mr::coprocessor::globalCoprocessor().cancelTask(mAsyncDelayTaskId);
+	if (mAsyncMacroFramePushed && !g_runtimeEnv.macroStack.empty())
 		g_runtimeEnv.macroStack.pop_back();
 	cancelledExecution = true;
 	runtimeErrorLevel() = 5007;
@@ -8989,10 +8989,10 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
                                const std::string &parameterString, const std::string &macroName,
                                bool resetState, bool firstRun) {
 	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
-	bool resumeFromDelay = (bytecode == nullptr && length == 0 && asyncDelayPending_ && asyncDelayReady_ &&
-	                        !asyncBytecode_.empty() && asyncIp_ <= asyncLength_);
-	std::uint64_t resumeGeneration = asyncDelayGeneration_;
-	size_t ip = resumeFromDelay ? asyncIp_ : entryOffset;
+	bool resumeFromDelay = (bytecode == nullptr && length == 0 && mAsyncDelayPending && mAsyncDelayReady &&
+	                        !mAsyncBytecode.empty() && mAsyncIp <= mAsyncLength);
+	std::uint64_t resumeGeneration = mAsyncDelayGeneration;
+	size_t ip = resumeFromDelay ? mAsyncIp : entryOffset;
 	std::vector<size_t> call_stack;
 	ExecutionState state;
 	ExecutionState *parentState = currentExecutionState();
@@ -9012,17 +9012,17 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 	} executionStateGuard(&state);
 
 	if (resumeFromDelay) {
-		bytecode = asyncBytecode_.data();
-		length = asyncLength_;
-		call_stack = asyncCallStack_;
-		savedParameterString = asyncSavedParameterString_;
-		state.parameterString = asyncSavedParameterString_;
-		state.returnInt = asyncReturnInt_;
-		state.returnStr = asyncReturnStr_;
-		state.errorLevel = asyncErrorLevel_;
-		pushedMacroFrame = asyncMacroFramePushed_;
-		asyncDelayReady_ = false;
-		asyncDelayTaskId_ = 0;
+		bytecode = mAsyncBytecode.data();
+		length = mAsyncLength;
+		call_stack = mAsyncCallStack;
+		savedParameterString = mAsyncSavedParameterString;
+		state.parameterString = mAsyncSavedParameterString;
+		state.returnInt = mAsyncReturnInt;
+		state.returnStr = mAsyncReturnStr;
+		state.errorLevel = mAsyncErrorLevel;
+		pushedMacroFrame = mAsyncMacroFramePushed;
+		mAsyncDelayReady = false;
+		mAsyncDelayTaskId = 0;
 	} else {
 		if (bytecode == nullptr || length == 0 || entryOffset >= length)
 			return;
@@ -9059,12 +9059,12 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 		}
 		state.parameterString = parameterString;
 	}
-	allowAsyncDelay = (asyncDelayEnabled_ && parentState == nullptr &&
+	allowAsyncDelay = (mAsyncDelayEnabled && parentState == nullptr &&
 	                   currentBackgroundEditSession() == nullptr &&
 	                   g_backgroundMacroStopToken == nullptr);
 	if (allowAsyncDelay && !resumeFromDelay) {
-		asyncBytecode_.assign(bytecode, bytecode + length);
-		asyncLength_ = length;
+		mAsyncBytecode.assign(bytecode, bytecode + length);
+		mAsyncLength = length;
 	}
 
 	auto readInt = [&](int &value) {
@@ -10409,7 +10409,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 		std::uint64_t taskId = 0;
 		std::shared_ptr<std::atomic_bool> ready = std::make_shared<std::atomic_bool>(false);
 		std::shared_ptr<std::atomic_bool> cancelled = std::make_shared<std::atomic_bool>(false);
-		std::uint64_t generation = asyncDelayGeneration_ + 1;
+		std::uint64_t generation = mAsyncDelayGeneration + 1;
 
 		taskId = mr::coprocessor::globalCoprocessor().submit(
 		    mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::Custom, 0, generation, "macro-delay",
@@ -10443,20 +10443,20 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 			throw std::runtime_error("DELAY scheduling failed.");
 		appendLogLine("VM Notice: DELAY(" + std::to_string(millis) + ") yielded [gen " +
 		              std::to_string(generation) + "].", true);
-		asyncDelayPending_ = true;
-		asyncDelayReady_ = true;
-		asyncIp_ = ip;
-		asyncCallStack_ = call_stack;
-		asyncReturnInt_ = state.returnInt;
-		asyncReturnStr_ = state.returnStr;
-		asyncErrorLevel_ = state.errorLevel;
-		asyncSavedParameterString_ = savedParameterString;
-		asyncMacroFramePushed_ = pushedMacroFrame;
-		asyncDelayReadyFlag_ = ready;
-		asyncDelayCancelledFlag_ = cancelled;
-		asyncDelayTaskId_ = taskId;
-		asyncDelayGeneration_ = generation;
-		asyncDelayMillis_ = millis;
+		mAsyncDelayPending = true;
+		mAsyncDelayReady = true;
+		mAsyncIp = ip;
+		mAsyncCallStack = call_stack;
+		mAsyncReturnInt = state.returnInt;
+		mAsyncReturnStr = state.returnStr;
+		mAsyncErrorLevel = state.errorLevel;
+		mAsyncSavedParameterString = savedParameterString;
+		mAsyncMacroFramePushed = pushedMacroFrame;
+		mAsyncDelayReadyFlag = ready;
+		mAsyncDelayCancelledFlag = cancelled;
+		mAsyncDelayTaskId = taskId;
+		mAsyncDelayGeneration = generation;
+		mAsyncDelayMillis = millis;
 		if (parentState != nullptr) {
 			parentState->returnInt = state.returnInt;
 			parentState->returnStr = state.returnStr;
@@ -10473,7 +10473,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 		appendLogLine(std::string("VM Error: ") + ex.what(), true);
 	}
 
-	if (resumeFromDelay && resumeGeneration != asyncDelayGeneration_) {
+	if (resumeFromDelay && resumeGeneration != mAsyncDelayGeneration) {
 		appendLogLine("VM Notice: stale DELAY resume generation ignored.", true);
 	}
 

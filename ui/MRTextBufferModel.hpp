@@ -35,92 +35,92 @@ class MRTextBufferModel {
 	};
 
 	MRTextBufferModel() noexcept
-	    : document_(), cursor_(), selection_(), modified_(false),
-	      language_(MRSyntaxLanguage::PlainText), syntaxPathHint_(), syntaxTitleHint_(),
-	      undoStack_(), redoStack_() {
+	    : mDocument(), mCursor(), mSelection(), mModified(false),
+	      mLanguage(MRSyntaxLanguage::PlainText), mSyntaxPathHint(), mSyntaxTitleHint(),
+	      mUndoStack(), mRedoStack() {
 	}
 
 	void setText(const char *data, std::size_t length) {
 		if (data == nullptr || length == 0)
-			document_.setText(std::string());
+			mDocument.setText(std::string());
 		else
-			document_.setText(std::string(data, length));
+			mDocument.setText(std::string(data, length));
 		clampState();
 	}
 
 	void setText(const std::string &text) {
-		document_.setText(text);
+		mDocument.setText(text);
 		clampState();
 	}
 
 	const std::string &text() const noexcept {
-		return document_.text();
+		return mDocument.text();
 	}
 
 	std::size_t length() const noexcept {
-		return document_.length();
+		return mDocument.length();
 	}
 
 	bool isEmpty() const noexcept {
-		return document_.empty();
+		return mDocument.empty();
 	}
 
 	char charAt(std::size_t pos) const noexcept {
-		return document_.charAt(pos);
+		return mDocument.charAt(pos);
 	}
 
 	std::size_t lineCount() const noexcept {
-		return document_.lineCount();
+		return mDocument.lineCount();
 	}
 
 	const Document &document() const noexcept {
-		return document_;
+		return mDocument;
 	}
 
 	Document &document() noexcept {
-		return document_;
+		return mDocument;
 	}
 
 	Snapshot snapshot() const {
-		return document_.snapshot();
+		return mDocument.snapshot();
 	}
 
 	ReadSnapshot readSnapshot() const {
-		return document_.readSnapshot();
+		return mDocument.readSnapshot();
 	}
 
 	std::size_t version() const noexcept {
-		return document_.version();
+		return mDocument.version();
 	}
 
 	std::size_t documentId() const noexcept {
-		return document_.documentId();
+		return mDocument.documentId();
 	}
 
 	bool matchesSnapshot(const Snapshot &snapshot) const noexcept {
-		return document_.matchesSnapshot(snapshot);
+		return mDocument.matchesSnapshot(snapshot);
 	}
 
 	void applyEditTransaction(const EditTransaction &transaction) {
-		document_.apply(transaction);
-		modified_ = true;
+		mDocument.apply(transaction);
+		mModified = true;
 		clampState();
 	}
 
 	CommitResult tryApplyEditTransaction(const EditTransaction &transaction,
 	                                     std::size_t expectedVersion) {
-		CommitResult result = document_.tryApply(transaction, expectedVersion);
+		CommitResult result = mDocument.tryApply(transaction, expectedVersion);
 		if (result.applied()) {
-			modified_ = true;
+			mModified = true;
 			clampState();
 		}
 		return result;
 	}
 
 	CommitResult tryApplyStagedTransaction(const StagedTransaction &transaction) {
-		CommitResult result = document_.tryApply(transaction);
+		CommitResult result = mDocument.tryApply(transaction);
 		if (result.applied()) {
-			modified_ = true;
+			mModified = true;
 			clampState();
 		}
 		return result;
@@ -128,205 +128,205 @@ class MRTextBufferModel {
 
 	bool adoptLineIndexWarmup(const mr::editor::LineIndexWarmupData &warmup,
 	                          std::size_t expectedVersion) noexcept {
-		return document_.adoptLineIndexWarmup(warmup, expectedVersion);
+		return mDocument.adoptLineIndexWarmup(warmup, expectedVersion);
 	}
 
 	std::size_t cursor() const noexcept {
-		return cursor_.offset;
+		return mCursor.offset;
 	}
 
 	void setCursor(std::size_t pos) noexcept {
-		cursor_.offset = clampOffset(pos);
+		mCursor.offset = clampOffset(pos);
 	}
 
 	void setSelection(std::size_t start, std::size_t end) noexcept {
-		selection_.anchor = clampOffset(start);
-		selection_.cursor = clampOffset(end);
+		mSelection.anchor = clampOffset(start);
+		mSelection.cursor = clampOffset(end);
 	}
 
 	void setCursorAndSelection(std::size_t cursor, std::size_t start, std::size_t end) noexcept {
-		cursor_.offset = clampOffset(cursor);
+		mCursor.offset = clampOffset(cursor);
 		setSelection(start, end);
 	}
 
 	bool hasSelection() const noexcept {
-		return !selection_.empty();
+		return !mSelection.empty();
 	}
 
 	std::size_t selectionStart() const noexcept {
-		return selection_.range().start;
+		return mSelection.range().start;
 	}
 
 	std::size_t selectionEnd() const noexcept {
-		return selection_.range().end;
+		return mSelection.range().end;
 	}
 
 	const Selection &selection() const noexcept {
-		return selection_;
+		return mSelection;
 	}
 
 	bool isModified() const noexcept {
-		return modified_;
+		return mModified;
 	}
 
 	void setModified(bool changed) noexcept {
-		modified_ = changed;
+		mModified = changed;
 	}
 
 	std::size_t undoStackDepth() const noexcept {
-		return undoStack_.size();
+		return mUndoStack.size();
 	}
 
 	std::size_t redoStackDepth() const noexcept {
-		return redoStack_.size();
+		return mRedoStack.size();
 	}
 
 	void clearUndoRedo() noexcept {
-		undoStack_.clear();
-		redoStack_.clear();
+		mUndoStack.clear();
+		mRedoStack.clear();
 	}
 
 	void pushUndoSnapshot(const CustomUndoRecord &record) {
-		undoStack_.push_back(record);
-		redoStack_.clear();
+		mUndoStack.push_back(record);
+		mRedoStack.clear();
 	}
 
 	void popUndoSnapshot() {
-		if (!undoStack_.empty())
-			undoStack_.pop_back();
+		if (!mUndoStack.empty())
+			mUndoStack.pop_back();
 	}
 
 	bool undo(CustomUndoRecord *outRecord = nullptr) {
-		if (undoStack_.empty())
+		if (mUndoStack.empty())
 			return false;
 
 		CustomUndoRecord redoRecord;
-		redoRecord.preSnapshot = document_.readSnapshot();
-		redoRecord.cursor = cursor_.offset;
-		redoRecord.selAnchor = selection_.anchor;
-		redoRecord.selCursor = selection_.cursor;
-		redoRecord.modifiedState = modified_;
-		redoStack_.push_back(redoRecord);
+		redoRecord.preSnapshot = mDocument.readSnapshot();
+		redoRecord.cursor = mCursor.offset;
+		redoRecord.selAnchor = mSelection.anchor;
+		redoRecord.selCursor = mSelection.cursor;
+		redoRecord.modifiedState = mModified;
+		mRedoStack.push_back(redoRecord);
 
-		const CustomUndoRecord &undoRecord = undoStack_.back();
-		document_.restoreFromSnapshot(undoRecord.preSnapshot);
-		static_cast<void>(document_.adoptLineIndexWarmup(undoRecord.preSnapshot.completeLineIndexWarmup(), 0));
-		cursor_.offset = undoRecord.cursor;
-		selection_.anchor = undoRecord.selAnchor;
-		selection_.cursor = undoRecord.selCursor;
-		modified_ = undoRecord.modifiedState;
+		const CustomUndoRecord &undoRecord = mUndoStack.back();
+		mDocument.restoreFromSnapshot(undoRecord.preSnapshot);
+		static_cast<void>(mDocument.adoptLineIndexWarmup(undoRecord.preSnapshot.completeLineIndexWarmup(), 0));
+		mCursor.offset = undoRecord.cursor;
+		mSelection.anchor = undoRecord.selAnchor;
+		mSelection.cursor = undoRecord.selCursor;
+		mModified = undoRecord.modifiedState;
 		if (outRecord)
 			*outRecord = undoRecord;
 
-		undoStack_.pop_back();
+		mUndoStack.pop_back();
 		clampState();
 		return true;
 	}
 
 	bool redo(CustomUndoRecord *outRecord = nullptr) {
-		if (redoStack_.empty())
+		if (mRedoStack.empty())
 			return false;
 
 		CustomUndoRecord undoRecord;
-		undoRecord.preSnapshot = document_.readSnapshot();
-		undoRecord.cursor = cursor_.offset;
-		undoRecord.selAnchor = selection_.anchor;
-		undoRecord.selCursor = selection_.cursor;
-		undoRecord.modifiedState = modified_;
-		undoStack_.push_back(undoRecord);
+		undoRecord.preSnapshot = mDocument.readSnapshot();
+		undoRecord.cursor = mCursor.offset;
+		undoRecord.selAnchor = mSelection.anchor;
+		undoRecord.selCursor = mSelection.cursor;
+		undoRecord.modifiedState = mModified;
+		mUndoStack.push_back(undoRecord);
 
-		const CustomUndoRecord &redoRecord = redoStack_.back();
-		document_.restoreFromSnapshot(redoRecord.preSnapshot);
-		static_cast<void>(document_.adoptLineIndexWarmup(redoRecord.preSnapshot.completeLineIndexWarmup(), 0));
-		cursor_.offset = redoRecord.cursor;
-		selection_.anchor = redoRecord.selAnchor;
-		selection_.cursor = redoRecord.selCursor;
-		modified_ = redoRecord.modifiedState;
+		const CustomUndoRecord &redoRecord = mRedoStack.back();
+		mDocument.restoreFromSnapshot(redoRecord.preSnapshot);
+		static_cast<void>(mDocument.adoptLineIndexWarmup(redoRecord.preSnapshot.completeLineIndexWarmup(), 0));
+		mCursor.offset = redoRecord.cursor;
+		mSelection.anchor = redoRecord.selAnchor;
+		mSelection.cursor = redoRecord.selCursor;
+		mModified = redoRecord.modifiedState;
 		if (outRecord)
 			*outRecord = redoRecord;
 
-		redoStack_.pop_back();
+		mRedoStack.pop_back();
 		clampState();
 		return true;
 	}
 
 	void setSyntaxContext(const std::string &path, const std::string &title = std::string()) {
-		syntaxPathHint_ = path;
-		syntaxTitleHint_ = title;
-		language_ = tmrDetectSyntaxLanguage(syntaxPathHint_, syntaxTitleHint_);
+		mSyntaxPathHint = path;
+		mSyntaxTitleHint = title;
+		mLanguage = tmrDetectSyntaxLanguage(mSyntaxPathHint, mSyntaxTitleHint);
 	}
 
 	MRSyntaxLanguage language() const noexcept {
-		return language_;
+		return mLanguage;
 	}
 
 	const char *languageName() const noexcept {
-		return tmrSyntaxLanguageName(language_);
+		return tmrSyntaxLanguageName(mLanguage);
 	}
 
 	MRSyntaxTokenMap tokenMapForLine(std::size_t pos) const {
-		return tmrBuildTokenMapForTextLine(language_, document_.lineText(pos));
+		return tmrBuildTokenMapForTextLine(mLanguage, mDocument.lineText(pos));
 	}
 
 	std::size_t lineStart(std::size_t pos) const noexcept {
-		return document_.lineStart(pos);
+		return mDocument.lineStart(pos);
 	}
 
 	std::size_t lineEnd(std::size_t pos) const noexcept {
-		return document_.lineEnd(pos);
+		return mDocument.lineEnd(pos);
 	}
 
 	std::size_t nextLine(std::size_t pos) const noexcept {
-		return document_.nextLine(pos);
+		return mDocument.nextLine(pos);
 	}
 
 	std::size_t prevLine(std::size_t pos) const noexcept {
-		return document_.prevLine(pos);
+		return mDocument.prevLine(pos);
 	}
 
 	std::size_t lineIndex(std::size_t pos) const noexcept {
-		return document_.lineIndex(pos);
+		return mDocument.lineIndex(pos);
 	}
 
 	std::size_t lineStartByIndex(std::size_t index) const noexcept {
-		return document_.lineStartByIndex(index);
+		return mDocument.lineStartByIndex(index);
 	}
 
 	std::size_t estimatedLineCount() const noexcept {
-		return document_.estimatedLineCount();
+		return mDocument.estimatedLineCount();
 	}
 
 	bool exactLineCountKnown() const noexcept {
-		return document_.exactLineCountKnown();
+		return mDocument.exactLineCountKnown();
 	}
 
 	std::size_t column(std::size_t pos) const noexcept {
-		return document_.column(pos);
+		return mDocument.column(pos);
 	}
 
 	std::string lineText(std::size_t pos) const {
-		return document_.lineText(pos);
+		return mDocument.lineText(pos);
 	}
 
   private:
 	std::size_t clampOffset(std::size_t pos) const noexcept {
-		return document_.clampOffset(pos);
+		return mDocument.clampOffset(pos);
 	}
 
 	void clampState() noexcept {
-		cursor_.clamp(document_.length());
-		selection_.clamp(document_.length());
+		mCursor.clamp(mDocument.length());
+		mSelection.clamp(mDocument.length());
 	}
 
-	Document document_;
-	Cursor cursor_;
-	Selection selection_;
-	bool modified_;
-	MRSyntaxLanguage language_;
-	std::string syntaxPathHint_;
-	std::string syntaxTitleHint_;
-	std::vector<CustomUndoRecord> undoStack_;
-	std::vector<CustomUndoRecord> redoStack_;
+	Document mDocument;
+	Cursor mCursor;
+	Selection mSelection;
+	bool mModified;
+	MRSyntaxLanguage mLanguage;
+	std::string mSyntaxPathHint;
+	std::string mSyntaxTitleHint;
+	std::vector<CustomUndoRecord> mUndoStack;
+	std::vector<CustomUndoRecord> mRedoStack;
 };
 
 #endif

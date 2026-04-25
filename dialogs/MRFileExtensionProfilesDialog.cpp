@@ -131,8 +131,8 @@ class TInactiveStaticText : public TStaticText {
 	}
 
 	void setInactive(bool inactive) {
-		if (inactive_ != inactive) {
-			inactive_ = inactive;
+		if (mInactive != inactive) {
+			mInactive = inactive;
 			drawView();
 		}
 	}
@@ -140,7 +140,7 @@ class TInactiveStaticText : public TStaticText {
 	void draw() override {
 		TDrawBuffer buffer;
 		char text[256];
-		TAttrPair color = inactive_ ? configuredColorOr(this, kMrPaletteDialogInactiveElements, 1) : getColor(1);
+		TAttrPair color = mInactive ? configuredColorOr(this, kMrPaletteDialogInactiveElements, 1) : getColor(1);
 
 		buffer.moveChar(0, ' ', color, size.x);
 		getText(text);
@@ -149,13 +149,13 @@ class TInactiveStaticText : public TStaticText {
 	}
 
   private:
-	bool inactive_ = false;
+	bool mInactive = false;
 };
 
 class TInlineGlyphButton : public TView {
   public:
 	TInlineGlyphButton(const TRect &bounds, const char *glyph, ushort command)
-	    : TView(bounds), glyph_(glyph != nullptr ? glyph : ""), command_(command) {
+	    : TView(bounds), mGlyph(glyph != nullptr ? glyph : ""), mCommand(command) {
 		options |= ofSelectable;
 		options |= ofFirstClick;
 		eventMask |= evMouseDown | evKeyDown;
@@ -169,7 +169,7 @@ class TInlineGlyphButton : public TView {
 		buffer.moveChar(0, ' ', color, size.x);
 		if (size.x > 1)
 			x = (size.x - 1) / 2;
-		buffer.moveStr(static_cast<ushort>(x), glyph_.c_str(), color, size.x - x);
+		buffer.moveStr(static_cast<ushort>(x), mGlyph.c_str(), color, size.x - x);
 		writeLine(0, 0, size.x, size.y, buffer);
 	}
 
@@ -197,16 +197,16 @@ class TInlineGlyphButton : public TView {
 
 		while (target != nullptr && dynamic_cast<TDialog *>(target) == nullptr)
 			target = target->owner;
-		message(target != nullptr ? target : owner, evCommand, command_, this);
+		message(target != nullptr ? target : owner, evCommand, mCommand, this);
 	}
 
-	std::string glyph_;
-	ushort command_;
+	std::string mGlyph;
+	ushort mCommand;
 };
 
 class TNotifyingInputLine : public TInputLine {
   public:
-	TNotifyingInputLine(const TRect &bounds, int maxLen) noexcept : TInputLine(bounds, maxLen), capacity_(maxLen + 1) {
+	TNotifyingInputLine(const TRect &bounds, int maxLen) noexcept : TInputLine(bounds, maxLen), mCapacity(maxLen + 1) {
 	}
 
 	void handleEvent(TEvent &event) override {
@@ -233,12 +233,12 @@ class TNotifyingInputLine : public TInputLine {
 
   private:
 	std::string currentText() const {
-		std::vector<char> buffer(capacity_, '\0');
+		std::vector<char> buffer(mCapacity, '\0');
 		const_cast<TNotifyingInputLine *>(this)->getData(buffer.data());
 		return std::string(buffer.data());
 	}
 
-	std::size_t capacity_ = 0;
+	std::size_t mCapacity = 0;
 };
 
 class TReadOnlyAwareInputLine : public TNotifyingInputLine {
@@ -247,15 +247,15 @@ class TReadOnlyAwareInputLine : public TNotifyingInputLine {
 	}
 
 	void setReadOnly(bool readOnly) noexcept {
-		readOnly_ = readOnly;
+		mReadOnly = readOnly;
 	}
 
 	void setWarningText(const std::string &warningText) {
-		warningText_ = warningText;
+		mWarningText = warningText;
 	}
 
 	void handleEvent(TEvent &event) override {
-		if (!readOnly_) {
+		if (!mReadOnly) {
 			TNotifyingInputLine::handleEvent(event);
 			return;
 		}
@@ -292,14 +292,14 @@ class TReadOnlyAwareInputLine : public TNotifyingInputLine {
 	}
 
 	void postWarning() const {
-		if (warningText_.empty())
+		if (mWarningText.empty())
 			return;
-		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, warningText_,
+		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, mWarningText,
 		                              mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
 	}
 
-	bool readOnly_ = false;
-	std::string warningText_;
+	bool mReadOnly = false;
+	std::string mWarningText;
 };
 
 std::string readInputLineString(TInputLine *inputLine, std::size_t capacity) {
@@ -468,13 +468,13 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		buildViews();
 		setDialogValidationHook([this]() { return validateDialogValues(); });
 		if (!draftList.empty())
-			currentIndex_ = 0;
+			mCurrentIndex = 0;
 		refreshProfileList();
 		loadCurrentDraftToWidgets();
 		refreshValidationState();
 		initScrollIfNeeded();
-		if (profileList_ != nullptr)
-			profileList_->select();
+		if (mProfileList != nullptr)
+			mProfileList->select();
 		scrollToOrigin();
 	}
 
@@ -501,7 +501,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		MRScrollableDialog::handleEvent(event);
 		if (originalWhat == evBroadcast && event.what == evBroadcast &&
 		    event.message.command == cmMrSetupFilenameProfilesSelectionChanged &&
-		    event.message.infoPtr == profileList_) {
+		    event.message.infoPtr == mProfileList) {
 			changeSelection(selectedListIndex(), false);
 			clearEvent(event);
 			return;
@@ -509,7 +509,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		if (originalWhat == evCommand && originalCommand == cmOK) {
 			saveWidgetsToCurrentDraft();
 			refreshValidationState();
-			if (!isValid_) {
+			if (!mIsValid) {
 				clearEvent(event);
 				return;
 			}
@@ -561,7 +561,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		     originalCommand == cmMrSetupFilenameProfilesFieldFocusChanged ||
 		     originalCommand == cmMrFileExtensionEditorSettingsPanelChanged ||
 		     originalCommand == cmMrFileExtensionEditorSettingsPanelFocusChanged) &&
-		    originalInfoPtr != profileList_)
+		    originalInfoPtr != mProfileList)
 			refreshValidationState();
 		if (originalWhat == evKeyDown &&
 		    (originalKey == kbTab || originalKey == kbCtrlI || originalKey == kbShiftTab))
@@ -634,28 +634,28 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		const int helpLeft = cancelLeft + 14;
 
 		addLabel(TRect(listLeft, 2, listLeft + 12, 3), "Profiles:");
-		profileListScrollBar_ = addScrollBar(TRect(listLeft + listWidth, 3, listLeft + listWidth + 1, listBottom));
-		profileList_ = addProfileListBox(TRect(listLeft, 3, listLeft + listWidth, listBottom), profileListScrollBar_);
+		mProfileListScrollBar = addScrollBar(TRect(listLeft + listWidth, 3, listLeft + listWidth + 1, listBottom));
+		mProfileList = addProfileListBox(TRect(listLeft, 3, listLeft + listWidth, listBottom), mProfileListScrollBar);
 
 		addButton(TRect(listLeft, buttonRow, listLeft + 8, buttonRow + 2), "Ne~w~", cmMrSetupFilenameProfilesAdd,
 		          bfNormal);
 		addButton(TRect(listLeft + 8, buttonRow, listLeft + 16, buttonRow + 2), "Cop~y~",
 		          cmMrSetupFilenameProfilesCopy, bfNormal);
-		deleteButton_ = addButton(TRect(listLeft + 16, buttonRow, listLeft + 26, buttonRow + 2), "De~l~ete ",
+		mDeleteButton = addButton(TRect(listLeft + 16, buttonRow, listLeft + 26, buttonRow + 2), "De~l~ete ",
 		                         cmMrSetupFilenameProfilesDelete, bfNormal);
 
-		profileIdLabel_ = addLabel(TRect(rightLeft, 2, fieldLeft - 1, 3), "Profile ID:");
-		profileIdField_ = addInput(TRect(fieldLeft, 2, fieldRight, 3), kProfileIdFieldSize - 1);
+		mProfileIdLabel = addLabel(TRect(rightLeft, 2, fieldLeft - 1, 3), "Profile ID:");
+		mProfileIdField = addInput(TRect(fieldLeft, 2, fieldRight, 3), kProfileIdFieldSize - 1);
 
-		profileNameLabel_ = addLabel(TRect(rightLeft, 3, fieldLeft - 1, 4), "Description:");
-		profileNameField_ = addInput(TRect(fieldLeft, 3, fieldRight, 4), kProfileNameFieldSize - 1);
+		mProfileNameLabel = addLabel(TRect(rightLeft, 3, fieldLeft - 1, 4), "Description:");
+		mProfileNameField = addInput(TRect(fieldLeft, 3, fieldRight, 4), kProfileNameFieldSize - 1);
 
-		profileExtensionsLabel_ = addLabel(TRect(rightLeft, 4, fieldLeft - 1, 5), "Extension:");
-		profileExtensionsField_ = addInput(TRect(fieldLeft, 4, fieldRight, 5), kProfileExtensionsFieldSize - 1);
+		mProfileExtensionsLabel = addLabel(TRect(rightLeft, 4, fieldLeft - 1, 5), "Extension:");
+		mProfileExtensionsField = addInput(TRect(fieldLeft, 4, fieldRight, 5), kProfileExtensionsFieldSize - 1);
 
-		profileColorThemeLabel_ = addLabel(TRect(rightLeft, 5, fieldLeft - 1, 6), "Colortheme:");
-		profileColorThemeField_ = addInput(TRect(fieldLeft, 5, fieldRight, 6), kProfileColorThemeFieldSize - 1);
-		profileColorThemeBrowseButton_ = addGlyphButton(TRect(colorGlyphLeft, 5, colorGlyphRight, 6),
+		mProfileColorThemeLabel = addLabel(TRect(rightLeft, 5, fieldLeft - 1, 6), "Colortheme:");
+		mProfileColorThemeField = addInput(TRect(fieldLeft, 5, fieldRight, 6), kProfileColorThemeFieldSize - 1);
+		mProfileColorThemeBrowseButton = addGlyphButton(TRect(colorGlyphLeft, 5, colorGlyphRight, 6),
 		                                             cmMrSetupFilenameProfilesBrowseColorTheme);
 
 		editorSettingsPanel.buildViews(*this);
@@ -681,78 +681,78 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	}
 
 	void loadCurrentDraftFieldValues(const EditProfileDraft &draft) {
-		writeInputLineString(profileIdField_, draft.id, kProfileIdFieldSize);
-		writeInputLineString(profileNameField_, draft.name, kProfileNameFieldSize);
-		writeInputLineString(profileExtensionsField_, draft.extensionsLiteral, kProfileExtensionsFieldSize);
-		writeInputLineString(profileColorThemeField_, draft.colorThemeUri, kProfileColorThemeFieldSize);
+		writeInputLineString(mProfileIdField, draft.id, kProfileIdFieldSize);
+		writeInputLineString(mProfileNameField, draft.name, kProfileNameFieldSize);
+		writeInputLineString(mProfileExtensionsField, draft.extensionsLiteral, kProfileExtensionsFieldSize);
+		writeInputLineString(mProfileColorThemeField, draft.colorThemeUri, kProfileColorThemeFieldSize);
 		editorSettingsPanel.loadFieldsFromRecord(draft.settingsRecord);
 	}
 
 	void applyCurrentDraftWidgetState(bool isDefault) {
-		applyFieldState(profileIdField_, isDefault, "read-only with DEFAULT profile");
-		applyFieldState(profileNameField_, false, "");
-		applyFieldState(profileExtensionsField_, isDefault, "read-only with DEFAULT profile");
-		applyFieldState(profileColorThemeField_, false, "");
-		if (profileColorThemeBrowseButton_ != nullptr) {
-			profileColorThemeBrowseButton_->setState(sfVisible, True);
-			profileColorThemeBrowseButton_->setState(sfDisabled, False);
+		applyFieldState(mProfileIdField, isDefault, "read-only with DEFAULT profile");
+		applyFieldState(mProfileNameField, false, "");
+		applyFieldState(mProfileExtensionsField, isDefault, "read-only with DEFAULT profile");
+		applyFieldState(mProfileColorThemeField, false, "");
+		if (mProfileColorThemeBrowseButton != nullptr) {
+			mProfileColorThemeBrowseButton->setState(sfVisible, True);
+			mProfileColorThemeBrowseButton->setState(sfDisabled, False);
 		}
-		setLabelInactive(profileIdLabel_, isDefault);
-		setLabelInactive(profileNameLabel_, false);
-		setLabelInactive(profileExtensionsLabel_, isDefault);
-		setLabelInactive(profileColorThemeLabel_, false);
-		if (deleteButton_ != nullptr)
-			deleteButton_->setState(sfDisabled, isDefault ? True : False);
+		setLabelInactive(mProfileIdLabel, isDefault);
+		setLabelInactive(mProfileNameLabel, false);
+		setLabelInactive(mProfileExtensionsLabel, isDefault);
+		setLabelInactive(mProfileColorThemeLabel, false);
+		if (mDeleteButton != nullptr)
+			mDeleteButton->setState(sfDisabled, isDefault ? True : False);
 	}
 
 	void setValidationState(bool valid, const std::string &errorText) {
 		(void)errorText;
-		isValid_ = valid;
+		mIsValid = valid;
 	}
 
 	void saveWidgetsToCurrentDraft() {
-		if (currentIndex_ < 0 || currentIndex_ >= static_cast<int>(draftList.size()))
+		if (mCurrentIndex < 0 || mCurrentIndex >= static_cast<int>(draftList.size()))
 			return;
-		EditProfileDraft &draft = draftList[currentIndex_];
+		EditProfileDraft &draft = draftList[mCurrentIndex];
 
 		editorSettingsPanel.saveFieldsToRecord(draft.settingsRecord);
 		if (draft.isDefault) {
 			draft.id = kDefaultProfileId;
-			draft.name = readInputLineString(profileNameField_, kProfileNameFieldSize);
+			draft.name = readInputLineString(mProfileNameField, kProfileNameFieldSize);
 			draft.extensionsLiteral.clear();
-			draft.colorThemeUri = readInputLineString(profileColorThemeField_, kProfileColorThemeFieldSize);
+			draft.colorThemeUri = readInputLineString(mProfileColorThemeField, kProfileColorThemeFieldSize);
 			return;
 		}
-		draft.id = readInputLineString(profileIdField_, kProfileIdFieldSize);
-		draft.name = readInputLineString(profileNameField_, kProfileNameFieldSize);
-		draft.extensionsLiteral = readInputLineString(profileExtensionsField_, kProfileExtensionsFieldSize);
-		draft.colorThemeUri = readInputLineString(profileColorThemeField_, kProfileColorThemeFieldSize);
+		draft.id = readInputLineString(mProfileIdField, kProfileIdFieldSize);
+		draft.name = readInputLineString(mProfileNameField, kProfileNameFieldSize);
+		draft.extensionsLiteral = readInputLineString(mProfileExtensionsField, kProfileExtensionsFieldSize);
+		draft.colorThemeUri = readInputLineString(mProfileColorThemeField, kProfileColorThemeFieldSize);
 	}
 
 	EditProfileDraft collectCurrentDraftFromWidgets() const {
 		EditProfileDraft draft;
-		if (currentIndex_ < 0 || currentIndex_ >= static_cast<int>(draftList.size()))
+		if (mCurrentIndex < 0 || mCurrentIndex >= static_cast<int>(draftList.size()))
 			return draft;
-		draft = draftList[currentIndex_];
+		draft = draftList[mCurrentIndex];
 		editorSettingsPanel.saveFieldsToRecord(draft.settingsRecord);
 		if (draft.isDefault) {
 			draft.id = kDefaultProfileId;
-			draft.name = readInputLineString(profileNameField_, kProfileNameFieldSize);
+			draft.name = readInputLineString(mProfileNameField, kProfileNameFieldSize);
 			draft.extensionsLiteral.clear();
-			draft.colorThemeUri = readInputLineString(profileColorThemeField_, kProfileColorThemeFieldSize);
+			draft.colorThemeUri = readInputLineString(mProfileColorThemeField, kProfileColorThemeFieldSize);
 		} else {
-			draft.id = readInputLineString(profileIdField_, kProfileIdFieldSize);
-			draft.name = readInputLineString(profileNameField_, kProfileNameFieldSize);
-			draft.extensionsLiteral = readInputLineString(profileExtensionsField_, kProfileExtensionsFieldSize);
-			draft.colorThemeUri = readInputLineString(profileColorThemeField_, kProfileColorThemeFieldSize);
+			draft.id = readInputLineString(mProfileIdField, kProfileIdFieldSize);
+			draft.name = readInputLineString(mProfileNameField, kProfileNameFieldSize);
+			draft.extensionsLiteral = readInputLineString(mProfileExtensionsField, kProfileExtensionsFieldSize);
+			draft.colorThemeUri = readInputLineString(mProfileColorThemeField, kProfileColorThemeFieldSize);
 		}
 		return draft;
 	}
 
 	void loadCurrentDraftToWidgets() {
-		if (currentIndex_ < 0 || currentIndex_ >= static_cast<int>(draftList.size()))
+		if (mCurrentIndex < 0 || mCurrentIndex >= static_cast<int>(draftList.size()))
 			return;
-		const EditProfileDraft &draft = draftList[currentIndex_];
+		const EditProfileDraft &draft = draftList[mCurrentIndex];
 
 		loadCurrentDraftFieldValues(draft);
 		applyCurrentDraftWidgetState(draft.isDefault);
@@ -762,10 +762,10 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	void refreshProfileList() {
 		TPlainStringCollection *items = new TPlainStringCollection(std::max<short>(1, draftList.size()), 5);
 		TListBoxRec data;
-		int selection = currentIndex_;
+		int selection = mCurrentIndex;
 		std::size_t idWidth = std::strlen(kDefaultProfileId);
 
-		if (items == nullptr || profileList_ == nullptr)
+		if (items == nullptr || mProfileList == nullptr)
 			return;
 		for (const EditProfileDraft &draft : draftList)
 			idWidth = std::max(idWidth, trimAscii(draft.isDefault ? std::string(kDefaultProfileId) : draft.id).size());
@@ -778,46 +778,46 @@ class TEditProfilesDialog : public MRScrollableDialog {
 			selection = draftList.empty() ? 0 : static_cast<int>(draftList.size()) - 1;
 		data.items = items;
 		data.selection = static_cast<ushort>(std::max(0, selection));
-		profileList_->setData(&data);
+		mProfileList->setData(&data);
 	}
 
 	int selectedListIndex() const {
 		TListBoxRec data;
 
-		if (profileList_ == nullptr || draftList.empty())
+		if (mProfileList == nullptr || draftList.empty())
 			return -1;
-		profileList_->getData((void *)&data);
+		mProfileList->getData((void *)&data);
 		if (data.selection >= draftList.size())
 			return static_cast<int>(draftList.size()) - 1;
 		return static_cast<int>(data.selection);
 	}
 
 	void setCurrentIndex(int index) {
-		currentIndex_ = index;
+		mCurrentIndex = index;
 		refreshProfileList();
 	}
 
 	void changeSelection(int index, bool moveFocusToFields) {
-		if (index == currentIndex_ || index < 0 || index >= static_cast<int>(draftList.size()))
+		if (index == mCurrentIndex || index < 0 || index >= static_cast<int>(draftList.size()))
 			return;
 		saveWidgetsToCurrentDraft();
-		currentIndex_ = index;
+		mCurrentIndex = index;
 		loadCurrentDraftToWidgets();
 		scrollToOrigin();
 		if (moveFocusToFields)
 			selectTopField();
-		else if (profileList_ != nullptr)
-			profileList_->select();
+		else if (mProfileList != nullptr)
+			mProfileList->select();
 		refreshValidationState();
 	}
 
 	void selectTopField() {
 		scrollToOrigin();
-		if (currentIndex_ >= 0 && currentIndex_ < static_cast<int>(draftList.size()) && draftList[currentIndex_].isDefault) {
-			if (profileNameField_ != nullptr)
-				profileNameField_->select();
-		} else if (profileIdField_ != nullptr)
-			profileIdField_->select();
+		if (mCurrentIndex >= 0 && mCurrentIndex < static_cast<int>(draftList.size()) && draftList[mCurrentIndex].isDefault) {
+			if (mProfileNameField != nullptr)
+				mProfileNameField->select();
+		} else if (mProfileIdField != nullptr)
+			mProfileIdField->select();
 		else
 			selectContent();
 	}
@@ -825,53 +825,53 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	void addProfile() {
 		saveWidgetsToCurrentDraft();
 		draftList.push_back(makeNewDraft(draftList));
-		currentIndex_ = static_cast<int>(draftList.size()) - 1;
-		setCurrentIndex(currentIndex_);
+		mCurrentIndex = static_cast<int>(draftList.size()) - 1;
+		setCurrentIndex(mCurrentIndex);
 		loadCurrentDraftToWidgets();
 		selectTopField();
 		refreshValidationState();
 	}
 
 	void copyCurrentProfile() {
-		if (currentIndex_ < 0 || currentIndex_ >= static_cast<int>(draftList.size()))
+		if (mCurrentIndex < 0 || mCurrentIndex >= static_cast<int>(draftList.size()))
 			return;
 		saveWidgetsToCurrentDraft();
-		draftList.push_back(makeCopiedDraft(draftList[currentIndex_], draftList));
-		currentIndex_ = static_cast<int>(draftList.size()) - 1;
-		setCurrentIndex(currentIndex_);
+		draftList.push_back(makeCopiedDraft(draftList[mCurrentIndex], draftList));
+		mCurrentIndex = static_cast<int>(draftList.size()) - 1;
+		setCurrentIndex(mCurrentIndex);
 		loadCurrentDraftToWidgets();
 		selectTopField();
 		refreshValidationState();
 	}
 
 	void deleteCurrentProfile() {
-		if (currentIndex_ <= 0 || currentIndex_ >= static_cast<int>(draftList.size()))
+		if (mCurrentIndex <= 0 || mCurrentIndex >= static_cast<int>(draftList.size()))
 			return;
 		{
-			const EditProfileDraft &draft = draftList[currentIndex_];
+			const EditProfileDraft &draft = draftList[mCurrentIndex];
 			std::string caption = trimAscii(draft.name).empty() ? trimAscii(draft.id)
 			                                              : trimAscii(draft.id) + " / " + trimAscii(draft.name);
 			if (messageBox(mfConfirmation | mfYesButton | mfNoButton, "Delete profile:\n%s",
 			               caption.c_str()) != cmYes)
 				return;
 		}
-		draftList.erase(draftList.begin() + currentIndex_);
-		if (currentIndex_ >= static_cast<int>(draftList.size()))
-			currentIndex_ = static_cast<int>(draftList.size()) - 1;
-		setCurrentIndex(currentIndex_);
+		draftList.erase(draftList.begin() + mCurrentIndex);
+		if (mCurrentIndex >= static_cast<int>(draftList.size()))
+			mCurrentIndex = static_cast<int>(draftList.size()) - 1;
+		setCurrentIndex(mCurrentIndex);
 		loadCurrentDraftToWidgets();
 		selectTopField();
 		refreshValidationState();
 	}
 
 	void browseCurrentColorTheme() {
-		if (currentIndex_ < 0 || currentIndex_ >= static_cast<int>(draftList.size()))
+		if (mCurrentIndex < 0 || mCurrentIndex >= static_cast<int>(draftList.size()))
 			return;
 		std::string selectedUri;
-		std::string currentValue = readInputLineString(profileColorThemeField_, kProfileColorThemeFieldSize);
+		std::string currentValue = readInputLineString(mProfileColorThemeField, kProfileColorThemeFieldSize);
 		if (!browseColorThemeUri(currentValue, selectedUri))
 			return;
-		writeInputLineString(profileColorThemeField_, selectedUri, kProfileColorThemeFieldSize);
+		writeInputLineString(mProfileColorThemeField, selectedUri, kProfileColorThemeFieldSize);
 		saveWidgetsToCurrentDraft();
 		refreshValidationState();
 	}
@@ -912,11 +912,11 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		DialogValidationResult result;
 
 		editorSettingsPanel.syncDynamicStates();
-		if (currentIndex_ >= 0 && currentIndex_ < static_cast<int>(draftList.size())) {
+		if (mCurrentIndex >= 0 && mCurrentIndex < static_cast<int>(draftList.size())) {
 			EditProfileDraft currentDraft = collectCurrentDraftFromWidgets();
-			result.valid = validateDraftsForUi(draftList, currentIndex_, &currentDraft, errorText);
+			result.valid = validateDraftsForUi(draftList, mCurrentIndex, &currentDraft, errorText);
 		} else
-			result.valid = validateDraftsForUi(draftList, currentIndex_, errorText);
+			result.valid = validateDraftsForUi(draftList, mCurrentIndex, errorText);
 		result.warningText = errorText;
 		setValidationState(result.valid, result.warningText);
 		return result;
@@ -924,20 +924,20 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 	std::vector<EditProfileDraft> initialDraftList;
 	std::vector<EditProfileDraft> draftList;
-	int currentIndex_ = -1;
-	TProfileListBox *profileList_ = nullptr;
-	TScrollBar *profileListScrollBar_ = nullptr;
-	TInactiveStaticText *profileIdLabel_ = nullptr;
-	TInactiveStaticText *profileNameLabel_ = nullptr;
-	TInactiveStaticText *profileExtensionsLabel_ = nullptr;
-	TInactiveStaticText *profileColorThemeLabel_ = nullptr;
-	TInputLine *profileIdField_ = nullptr;
-	TInputLine *profileNameField_ = nullptr;
-	TInputLine *profileExtensionsField_ = nullptr;
-	TInputLine *profileColorThemeField_ = nullptr;
-	TInlineGlyphButton *profileColorThemeBrowseButton_ = nullptr;
-	TButton *deleteButton_ = nullptr;
-	bool isValid_ = true;
+	int mCurrentIndex = -1;
+	TProfileListBox *mProfileList = nullptr;
+	TScrollBar *mProfileListScrollBar = nullptr;
+	TInactiveStaticText *mProfileIdLabel = nullptr;
+	TInactiveStaticText *mProfileNameLabel = nullptr;
+	TInactiveStaticText *mProfileExtensionsLabel = nullptr;
+	TInactiveStaticText *mProfileColorThemeLabel = nullptr;
+	TInputLine *mProfileIdField = nullptr;
+	TInputLine *mProfileNameField = nullptr;
+	TInputLine *mProfileExtensionsField = nullptr;
+	TInputLine *mProfileColorThemeField = nullptr;
+	TInlineGlyphButton *mProfileColorThemeBrowseButton = nullptr;
+	TButton *mDeleteButton = nullptr;
+	bool mIsValid = true;
 	FileExtensionEditorSettingsPanel editorSettingsPanel;
 };
 

@@ -112,7 +112,7 @@ void updateAppCommandState() {
 		const bool hasMultipleDesktops = desktopCount > 1;
 		const bool cyclicViewport =
 		    hasMultipleDesktops && configuredCyclicVirtualDesktops();
-		const int windowDesktop = hasWindow ? state.window->virtualDesktop_ : 1;
+		const int windowDesktop = hasWindow ? state.window->mVirtualDesktop : 1;
 
 		setCommandEnabled(cmMrWindowNextDesktop,
 		                  hasMultipleDesktops &&

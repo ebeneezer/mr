@@ -83,9 +83,9 @@ MRTaskOverviewView::MRTaskOverviewView(const TRect &bounds) noexcept : TView(bou
 }
 
 void MRTaskOverviewView::setLines(const std::vector<std::string> &lines) {
-	if (lines_ == lines)
+	if (mLines == lines)
 		return;
-	lines_ = lines;
+	mLines = lines;
 	drawView();
 }
 
@@ -95,8 +95,8 @@ void MRTaskOverviewView::draw() {
 
 	for (int y = 0; y < size.y; ++y) {
 		b.moveChar(0, ' ', text, size.x);
-		if (y < static_cast<int>(lines_.size())) {
-			std::string textLine = lines_[static_cast<std::size_t>(y)];
+		if (y < static_cast<int>(mLines.size())) {
+			std::string textLine = mLines[static_cast<std::size_t>(y)];
 			while (strwidth(textLine.c_str()) > std::max(0, size.x - 2) && !textLine.empty()) {
 				std::size_t nextLen = TText::prev(textLine, textLine.size());
 				if (nextLen == 0 || nextLen > textLine.size())
@@ -119,20 +119,20 @@ TPalette &MRTaskOverviewView::getPalette() const {
 }
 
 MRTaskOverviewWindow::MRTaskOverviewWindow(const TRect &bounds) noexcept
-    : TWindowInit(&TWindow::initFrame), TWindow(bounds, "Tasks", wnNoNumber), content_(nullptr) {
+    : TWindowInit(&TWindow::initFrame), TWindow(bounds, "Tasks", wnNoNumber), mContent(nullptr) {
 	flags = 0;
 	options &= ~(ofSelectable | ofTopSelect);
 	eventMask = 0;
 	palette = wpGrayWindow;
 	TRect inner = getExtent();
 	inner.grow(-1, -1);
-	content_ = new MRTaskOverviewView(inner);
-	insert(content_);
+	mContent = new MRTaskOverviewView(inner);
+	insert(mContent);
 }
 
 void MRTaskOverviewWindow::setLines(const std::vector<std::string> &lines) {
-	if (content_ != nullptr)
-		content_->setLines(lines);
+	if (mContent != nullptr)
+		mContent->setLines(lines);
 }
 
 TPalette &MRTaskOverviewWindow::getPalette() const {
@@ -141,7 +141,7 @@ TPalette &MRTaskOverviewWindow::getPalette() const {
 }
 
 MRFrame::MRFrame(const TRect &bounds) noexcept
-    : TFrame(bounds), taskOverviewPopup_(nullptr), taskOverviewPopupOwner_(nullptr) {
+    : TFrame(bounds), mTaskOverviewPopup(nullptr), mTaskOverviewPopupOwner(nullptr) {
 }
 
 MRFrame::~MRFrame() {
@@ -149,16 +149,16 @@ MRFrame::~MRFrame() {
 }
 
 void MRFrame::setMarkerStateProvider(MarkerStateProvider provider) {
-	markerStateProvider_ = std::move(provider);
+	mMarkerStateProvider = std::move(provider);
 }
 
 void MRFrame::setTaskOverviewProvider(TaskOverviewProvider provider) {
-	taskOverviewProvider_ = std::move(provider);
+	mTaskOverviewProvider = std::move(provider);
 }
 
 MRFrame::MarkerState MRFrame::markerState() const {
-	if (markerStateProvider_)
-		return markerStateProvider_();
+	if (mMarkerStateProvider)
+		return mMarkerStateProvider();
 	return MarkerState();
 }
 
@@ -393,10 +393,10 @@ void MRFrame::draw() {
 		b.moveCStr(width - 2, kDragIcon, cFrame);
 	}
 	writeLine(0, size.y - 1, size.x, 1, b);
-	if (taskOverviewPopup_ != nullptr && taskOverviewProvider_) {
-		std::vector<std::string> lines = taskOverviewProvider_();
+	if (mTaskOverviewPopup != nullptr && mTaskOverviewProvider) {
+		std::vector<std::string> lines = mTaskOverviewProvider();
 		if (!lines.empty())
-			taskOverviewPopup_->setLines(lines);
+			mTaskOverviewPopup->setLines(lines);
 	}
 	mrvmUiInvalidateScreenBase();
 }
@@ -464,9 +464,9 @@ void MRFrame::showTaskOverview() {
 	int taskX = taskMarkerColumn(state);
 	int width = 14;
 
-	if (group == nullptr || !taskOverviewProvider_ || taskX < 0)
+	if (group == nullptr || !mTaskOverviewProvider || taskX < 0)
 		return;
-	lines = taskOverviewProvider_();
+	lines = mTaskOverviewProvider();
 	if (lines.empty()) {
 		hideTaskOverview();
 		return;
@@ -489,36 +489,36 @@ void MRFrame::showTaskOverview() {
 		top = std::max(1, group->size.y - 1 - height);
 	TRect bounds(left, top, left + width, top + height);
 
-	if (taskOverviewPopup_ != nullptr) {
-		if (taskOverviewPopupOwner_ != nullptr)
-			taskOverviewPopupOwner_->remove(taskOverviewPopup_);
-		TObject::destroy(taskOverviewPopup_);
-		taskOverviewPopup_ = nullptr;
-		taskOverviewPopupOwner_ = nullptr;
+	if (mTaskOverviewPopup != nullptr) {
+		if (mTaskOverviewPopupOwner != nullptr)
+			mTaskOverviewPopupOwner->remove(mTaskOverviewPopup);
+		TObject::destroy(mTaskOverviewPopup);
+		mTaskOverviewPopup = nullptr;
+		mTaskOverviewPopupOwner = nullptr;
 	}
-	taskOverviewPopup_ = new MRTaskOverviewWindow(bounds);
-	taskOverviewPopup_->setLines(lines);
-	group->insert(taskOverviewPopup_);
-	taskOverviewPopupOwner_ = group;
-	taskOverviewPopup_->makeFirst();
-	taskOverviewPopup_->setState(sfActive, False);
+	mTaskOverviewPopup = new MRTaskOverviewWindow(bounds);
+	mTaskOverviewPopup->setLines(lines);
+	group->insert(mTaskOverviewPopup);
+	mTaskOverviewPopupOwner = group;
+	mTaskOverviewPopup->makeFirst();
+	mTaskOverviewPopup->setState(sfActive, False);
 }
 
 void MRFrame::hideTaskOverview() {
-	if (taskOverviewPopup_ == nullptr)
+	if (mTaskOverviewPopup == nullptr)
 		return;
-	if (taskOverviewPopupOwner_ != nullptr)
-		taskOverviewPopupOwner_->remove(taskOverviewPopup_);
-	TObject::destroy(taskOverviewPopup_);
-	taskOverviewPopup_ = nullptr;
-	taskOverviewPopupOwner_ = nullptr;
+	if (mTaskOverviewPopupOwner != nullptr)
+		mTaskOverviewPopupOwner->remove(mTaskOverviewPopup);
+	TObject::destroy(mTaskOverviewPopup);
+	mTaskOverviewPopup = nullptr;
+	mTaskOverviewPopupOwner = nullptr;
 }
 
 void MRFrame::updateTaskHover(TPoint globalMouse, bool forceHide) {
 	MarkerState state = markerState();
 	int taskX = taskMarkerColumn(state);
 
-	if (forceHide || taskX < 0 || !taskOverviewProvider_) {
+	if (forceHide || taskX < 0 || !mTaskOverviewProvider) {
 		hideTaskOverview();
 		return;
 	}
@@ -535,12 +535,12 @@ void MRFrame::updateTaskHover(TPoint globalMouse, bool forceHide) {
 }
 
 void MRFrame::tickTaskOverviewAnimation() {
-	if (taskOverviewPopup_ == nullptr || !taskOverviewProvider_)
+	if (mTaskOverviewPopup == nullptr || !mTaskOverviewProvider)
 		return;
-	std::vector<std::string> lines = taskOverviewProvider_();
+	std::vector<std::string> lines = mTaskOverviewProvider();
 	if (lines.empty()) {
 		hideTaskOverview();
 		return;
 	}
-	taskOverviewPopup_->setLines(lines);
+	mTaskOverviewPopup->setLines(lines);
 }

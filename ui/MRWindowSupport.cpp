@@ -192,7 +192,7 @@ bool mrActivateEditWindow(MREditWindow *win) {
 	if (win == nullptr)
 		return false;
 	setWindowManuallyHidden(win, false);
-	setCurrentVirtualDesktop(win->virtualDesktop_);
+	setCurrentVirtualDesktop(win->mVirtualDesktop);
 	if ((win->state & sfVisible) == 0)
 		win->show();
 	if (TProgram::deskTop != nullptr)
