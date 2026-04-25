@@ -6318,7 +6318,7 @@ static bool parseIndexedBindingHeaders(const std::string &source, std::vector<TK
 			if (!parseAssignedKeySpec(tokens[t + 1], parsed))
 				continue;
 			bool duplicate = false;
-			for (auto key : keys)
+			for (const auto& key : keys)
 				if (key == parsed) {
 					duplicate = true;
 					break;
