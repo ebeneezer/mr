@@ -6,7 +6,9 @@
 #include <tvision/tv.h>
 
 #include <chrono>
+#include <cstdint>
 #include <string>
+#include <vector>
 
 class MRMenuBar : public TMenuBar {
   public:
@@ -18,14 +20,23 @@ class MRMenuBar : public TMenuBar {
 		Hero
 	};
 
-	MRMenuBar(const TRect &r, TSubMenu &aMenu)
-	    : TMenuBar(r, aMenu), mRightStatus(), mAutoMarqueeStatus(), mManualMarqueeStatus(),
-	      mAutoMarqueeKind(MarqueeKind::Info) {
-	}
+	MRMenuBar(const TRect &r, TSubMenu &aMenu);
+	~MRMenuBar() override;
 
 	virtual void draw() override;
 	void tickMarquee();
 	void setPersistentBlocksMenuState(bool enabled);
+	bool registerRuntimeMenuItem(const std::string &menuTitle, const std::string &itemTitle,
+	                             const std::string &macroSpec, const std::string &ownerSpec,
+	                             std::string *errorMessage = nullptr);
+	bool refreshRuntimeMenus(std::string *errorMessage = nullptr);
+	bool removeRuntimeMenuItem(const std::string &menuTitle, const std::string &itemTitle,
+	                           const std::string &ownerSpec,
+	                           std::string *errorMessage = nullptr);
+	bool removeRuntimeNodesOwnedByMacroSpec(const std::string &ownerSpec,
+	                                        std::string *errorMessage = nullptr);
+	bool removeRuntimeNodesOwnedByFile(const std::string &fileSpec, std::string *errorMessage = nullptr);
+	bool handleRuntimeCommand(ushort command);
 
 	void setRightStatus(const std::string &status) {
 		if (mRightStatus != status) {
@@ -53,7 +64,7 @@ class MRMenuBar : public TMenuBar {
 	void setManualMarqueeStatus(const std::string &status, MarqueeKind kind) {
 		if (mManualMarqueeStatus != status || mManualMarqueeKind != kind) {
 			mManualMarqueeStatus = status;
-			mManualMarqueeKind = kind;
+		mManualMarqueeKind = kind;
 			drawView();
 		}
 	}
@@ -66,6 +77,23 @@ class MRMenuBar : public TMenuBar {
 	}
 
  private:
+	enum class RuntimeMenuNodeKind : unsigned char {
+		Item,
+		Separator
+	};
+
+	struct RuntimeMenuNode {
+		RuntimeMenuNodeKind kind = RuntimeMenuNodeKind::Item;
+		std::string menuKey;
+		std::string menuTitle;
+		std::string itemKey;
+		std::string itemTitle;
+		std::string ownerSpec;
+		std::string macroSpec;
+		ushort command = 0;
+		std::uint32_t order = 0;
+	};
+
 	static int marqueeVisibleSpanFor(const std::string &text, int laneWidth) noexcept {
 		const int textLen = static_cast<int>(text.size());
 		if (textLen <= 0 || laneWidth <= 0)
@@ -100,7 +128,18 @@ class MRMenuBar : public TMenuBar {
 		mMarqueeOutroStartShift = 0;
 		mMarqueeOutroStartedAt = std::chrono::steady_clock::time_point::min();
 	}
+	static std::string canonicalMenuToken(const std::string &value);
+	static std::string trimAscii(std::string value);
+	static bool ownerSpecMatchesFile(const std::string &ownerSpec, const std::string &fileSpec) noexcept;
+	bool allocateRuntimeCommand(ushort &command, std::string *errorMessage);
+	bool rebuildRuntimeMenu();
+	int findRuntimeNodeIndex(const std::string &menuKey, const std::string &itemKey,
+	                         const std::string &ownerSpec) const noexcept;
 
+	TMenu *mBaseMenu = nullptr;
+	std::vector<RuntimeMenuNode> mRuntimeNodes;
+	std::uint32_t mNextRuntimeOrder = 0;
+	ushort mNextRuntimeCommand = 0x7400;
 	std::string mRightStatus;
 	std::string mAutoMarqueeStatus;
 	std::string mManualMarqueeStatus;

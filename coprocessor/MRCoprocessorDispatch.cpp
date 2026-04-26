@@ -162,6 +162,8 @@ const char *deferredUiCommandName(int type) {
 			return "MARQUEE_WARNING";
 		case mrducMarqueeError:
 			return "MARQUEE_ERROR";
+		case mrducMakeMessage:
+			return "MAKE_MESSAGE";
 		case mrducBrain:
 			return "BRAIN";
 		case mrducPutBox:
@@ -184,6 +186,10 @@ const char *deferredUiCommandName(int type) {
 			return "CLEAR_SCREEN";
 		case mrducKillBox:
 			return "KILL_BOX";
+		case mrducRegisterMenuItem:
+			return "REGISTER_MENU_ITEM";
+		case mrducRemoveMenuItem:
+			return "REMOVE_MENU_ITEM";
 		case mrducMessageBox:
 			return "MESSAGEBOX";
 		case mrducDelay:
@@ -568,6 +574,7 @@ struct MacroScreenModel {
 			case mrducMarqueeInfo:
 			case mrducMarqueeWarning:
 			case mrducMarqueeError:
+			case mrducMakeMessage:
 				return applyMarquee(command);
 			case mrducBrain:
 				return applyBrain(command);

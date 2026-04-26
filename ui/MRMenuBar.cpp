@@ -1,5 +1,6 @@
 #define Uses_TMenuBar
 #define Uses_TDrawBuffer
+#define Uses_TKeys
 #define Uses_TMenu
 #define Uses_TMenuItem
 #define Uses_TRect
@@ -9,10 +10,16 @@
 #include "MRMenuBar.hpp"
 
 #include <algorithm>
+#include <array>
+#include <cctype>
+#include <limits>
 #include <string>
+#include <utility>
 
 #include "../app/MRCommands.hpp"
 #include "../config/MRDialogPaths.hpp"
+#include "../mrmac/MRMacroRunner.hpp"
+#include "../mrmac/mrvm.hpp"
 
 void mrvmUiInvalidateScreenBase() noexcept;
 
@@ -29,7 +36,456 @@ TMenuItem *findMenuItemByCommand(TMenu *menu, ushort command) {
 	}
 	return nullptr;
 }
+
+std::size_t indexOfMenuItem(const TMenuItem *items, const TMenuItem *target) noexcept {
+	std::size_t index = 0;
+
+	for (const TMenuItem *item = items; item != nullptr; item = item->next, ++index)
+		if (item == target)
+			return index;
+	return std::numeric_limits<std::size_t>::max();
+}
+
+TMenuItem *menuItemAt(TMenuItem *items, std::size_t index) noexcept {
+	std::size_t currentIndex = 0;
+
+	for (TMenuItem *item = items; item != nullptr; item = item->next, ++currentIndex)
+		if (currentIndex == index)
+			return item;
+	return nullptr;
+}
+
+TMenu *cloneMenu(const TMenu *source);
+
+TMenuItem *cloneMenuItem(const TMenuItem *source) {
+	TMenuItem *cloned = nullptr;
+
+	if (source == nullptr)
+		return nullptr;
+	if (source->name == nullptr && source->command == 0)
+		cloned = &newLine();
+	else if (source->command == 0 && source->subMenu != nullptr)
+		cloned = new TMenuItem(source->name, source->keyCode, cloneMenu(source->subMenu), source->helpCtx);
+	else
+		cloned = new TMenuItem(source->name != nullptr ? source->name : "", source->command,
+		                       source->keyCode, source->helpCtx,
+		                       source->param != nullptr ? source->param : "");
+
+	cloned->disabled = source->disabled;
+	return cloned;
+}
+
+TMenuItem *cloneMenuItems(const TMenuItem *source) {
+	TMenuItem *head = nullptr;
+	TMenuItem *tail = nullptr;
+
+	for (const TMenuItem *item = source; item != nullptr; item = item->next) {
+		TMenuItem *cloned = cloneMenuItem(item);
+
+		if (head == nullptr)
+			head = cloned;
+		else
+			tail->next = cloned;
+		tail = cloned;
+	}
+	return head;
+}
+
+TMenu *cloneMenu(const TMenu *source) {
+	TMenu *cloned = nullptr;
+	std::size_t defaultIndex = 0;
+
+	if (source == nullptr)
+		return nullptr;
+
+	defaultIndex = indexOfMenuItem(source->items, source->deflt);
+	cloned = new TMenu();
+	cloned->items = cloneMenuItems(source->items);
+	cloned->deflt = menuItemAt(cloned->items, defaultIndex);
+	if (cloned->deflt == nullptr)
+		cloned->deflt = cloned->items;
+	return cloned;
+}
+
+void appendMenuItem(TMenu *menu, TMenuItem *item) {
+	TMenuItem *tail = nullptr;
+
+	if (menu == nullptr || item == nullptr)
+		return;
+	item->next = nullptr;
+	if (menu->items == nullptr) {
+		menu->items = item;
+		menu->deflt = item;
+		return;
+	}
+	for (tail = menu->items; tail->next != nullptr; tail = tail->next)
+		;
+	tail->next = item;
+}
+
+int hotkeyIndex(char ch) noexcept {
+	if (ch >= 'A' && ch <= 'Z')
+		return ch - 'A';
+	if (ch >= '0' && ch <= '9')
+		return 26 + (ch - '0');
+	return -1;
+}
+
+char canonicalHotkeyChar(char ch) noexcept {
+	unsigned char uch = static_cast<unsigned char>(ch);
+	if (std::isalpha(uch) != 0)
+		return static_cast<char>(std::toupper(uch));
+	if (std::isdigit(uch) != 0)
+		return static_cast<char>(uch);
+	return '\0';
+}
+
+char markedHotkeyChar(const char *name) noexcept {
+	if (name == nullptr)
+		return '\0';
+	for (const char *pos = name; pos[0] != '\0' && pos[1] != '\0' && pos[2] != '\0'; ++pos)
+		if (pos[0] == '~' && pos[2] == '~')
+			return canonicalHotkeyChar(pos[1]);
+	return '\0';
+}
+
+void markUsedHotkey(std::array<bool, 36> &usedHotkeys, char hotkey) noexcept {
+	const int index = hotkeyIndex(canonicalHotkeyChar(hotkey));
+
+	if (index >= 0)
+		usedHotkeys[static_cast<std::size_t>(index)] = true;
+}
+
+char chooseMenuHotkey(const std::string &title, const std::array<bool, 36> &usedHotkeys) {
+	for (char ch : title) {
+		const char hotkey = canonicalHotkeyChar(ch);
+		const int index = hotkeyIndex(hotkey);
+
+		if (hotkey != '\0' && index >= 0 && !usedHotkeys[static_cast<std::size_t>(index)])
+			return hotkey;
+	}
+	return '\0';
+}
+
+std::string menuTitleWithHotkeyMarker(const std::string &title, char hotkey) {
+	std::string marked = title;
+	const char canonical = canonicalHotkeyChar(hotkey);
+
+	if (canonical == '\0')
+		return marked;
+	for (std::size_t i = 0; i < marked.size(); ++i)
+		if (canonicalHotkeyChar(marked[i]) == canonical) {
+			marked.insert(i, 1, '~');
+			marked.insert(i + 2, 1, '~');
+			return marked;
+		}
+	return marked;
+}
 } // namespace
+
+MRMenuBar::MRMenuBar(const TRect &r, TSubMenu &aMenu)
+    : TMenuBar(r, aMenu), mBaseMenu(nullptr), mRuntimeNodes(), mRightStatus(),
+      mAutoMarqueeStatus(), mManualMarqueeStatus(), mAutoMarqueeKind(MarqueeKind::Info) {
+	mBaseMenu = cloneMenu(menu);
+}
+
+MRMenuBar::~MRMenuBar() {
+	delete mBaseMenu;
+	mBaseMenu = nullptr;
+}
+
+std::string MRMenuBar::trimAscii(std::string value) {
+	auto isTrimChar = [](unsigned char ch) noexcept {
+		return std::isspace(ch) != 0 || ch < 32;
+	};
+
+	while (!value.empty() && isTrimChar(static_cast<unsigned char>(value.front())))
+		value.erase(value.begin());
+	while (!value.empty() && isTrimChar(static_cast<unsigned char>(value.back())))
+		value.pop_back();
+	return value;
+}
+
+std::string MRMenuBar::canonicalMenuToken(const std::string &value) {
+	std::string canonical = trimAscii(value);
+
+	for (char &ch : canonical)
+		ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+	return canonical;
+}
+
+bool MRMenuBar::ownerSpecMatchesFile(const std::string &ownerSpec, const std::string &fileSpec) noexcept {
+	const std::string canonicalOwner = canonicalMenuToken(ownerSpec);
+	const std::string canonicalFile = canonicalMenuToken(fileSpec);
+	const std::size_t caretPos = canonicalOwner.find('^');
+	std::string ownerFile;
+
+	if (canonicalOwner.empty() || canonicalFile.empty() || caretPos == std::string::npos)
+		return false;
+	{
+		const std::size_t searchEnd = caretPos == 0 ? 0 : caretPos - 1;
+		const std::size_t slashPos = canonicalOwner.find_last_of("/\\", searchEnd);
+		const std::size_t nameStart = slashPos == std::string::npos ? 0 : slashPos + 1;
+
+		ownerFile = canonicalOwner.substr(nameStart, caretPos - nameStart);
+	}
+	if (canonicalOwner.substr(0, caretPos) == canonicalFile)
+		return true;
+	return ownerFile == canonicalFile;
+}
+
+bool MRMenuBar::allocateRuntimeCommand(ushort &command, std::string *errorMessage) {
+	if (mNextRuntimeCommand == std::numeric_limits<ushort>::max()) {
+		if (errorMessage != nullptr)
+			*errorMessage = "No runtime menu command ids left.";
+		return false;
+	}
+	command = mNextRuntimeCommand++;
+	return true;
+}
+
+int MRMenuBar::findRuntimeNodeIndex(const std::string &menuKey, const std::string &itemKey,
+                                    const std::string &ownerSpec) const noexcept {
+	const auto it = std::find_if(mRuntimeNodes.begin(), mRuntimeNodes.end(),
+	                             [&](const RuntimeMenuNode &node) {
+		                             return node.menuKey == menuKey && node.itemKey == itemKey &&
+		                                    node.ownerSpec == ownerSpec;
+	                             });
+
+	if (it == mRuntimeNodes.end())
+		return -1;
+	return static_cast<int>(std::distance(mRuntimeNodes.begin(), it));
+}
+
+bool MRMenuBar::rebuildRuntimeMenu() {
+	struct RuntimeMenuGroup {
+		std::string menuKey;
+		std::string menuTitle;
+		std::uint32_t order = 0;
+		std::vector<const RuntimeMenuNode *> items;
+	};
+
+	TMenu *rebuilt = cloneMenu(mBaseMenu);
+	std::array<bool, 36> usedHotkeys{};
+	std::vector<RuntimeMenuGroup> groups;
+
+	if (rebuilt == nullptr)
+		return false;
+	for (const TMenuItem *item = rebuilt->items; item != nullptr; item = item->next)
+		markUsedHotkey(usedHotkeys, markedHotkeyChar(item->name));
+	for (const RuntimeMenuNode &node : mRuntimeNodes) {
+		auto it = std::find_if(groups.begin(), groups.end(),
+		                       [&](const RuntimeMenuGroup &group) { return group.menuKey == node.menuKey; });
+		if (it == groups.end()) {
+			RuntimeMenuGroup group;
+
+			group.menuKey = node.menuKey;
+			group.menuTitle = node.menuTitle;
+			group.order = node.order;
+			group.items.push_back(&node);
+			groups.push_back(std::move(group));
+		} else {
+			it->items.push_back(&node);
+			if (node.order < it->order) {
+				it->order = node.order;
+				it->menuTitle = node.menuTitle;
+			}
+		}
+	}
+	std::sort(groups.begin(), groups.end(), [](const RuntimeMenuGroup &left, const RuntimeMenuGroup &right) {
+		return left.order < right.order;
+	});
+	for (const RuntimeMenuGroup &group : groups) {
+		auto *submenu = new TMenu();
+		std::string groupTitle = group.menuTitle;
+		const char groupHotkey = chooseMenuHotkey(groupTitle, usedHotkeys);
+
+		for (const RuntimeMenuNode *node : group.items) {
+			if (node->kind == RuntimeMenuNodeKind::Separator) {
+				appendMenuItem(submenu, &newLine());
+				continue;
+			}
+			std::string keyLabel = mrvmUiMenuKeyLabelForMacroSpec(node->macroSpec);
+			if (keyLabel.empty())
+				keyLabel = mrvmUiMenuKeyLabelForMacroSpec(node->ownerSpec);
+			appendMenuItem(submenu, new TMenuItem(node->itemTitle.c_str(), node->command, kbNoKey,
+			                                     hcNoContext,
+			                                     keyLabel.empty() ? nullptr : keyLabel.c_str()));
+		}
+		markUsedHotkey(usedHotkeys, groupHotkey);
+		groupTitle = menuTitleWithHotkeyMarker(groupTitle, groupHotkey);
+		appendMenuItem(rebuilt, new TMenuItem(groupTitle.c_str(),
+		                                      groupHotkey == '\0'
+		                                          ? TKey(kbNoKey)
+		                                          : TKey(static_cast<ushort>(groupHotkey), kbAltShift),
+		                                      submenu, hcNoContext));
+	}
+
+	current = nullptr;
+	delete menu;
+	menu = rebuilt;
+	return true;
+}
+
+bool MRMenuBar::registerRuntimeMenuItem(const std::string &menuTitle, const std::string &itemTitle,
+                                        const std::string &macroSpec, const std::string &ownerSpec,
+                                        std::string *errorMessage) {
+	RuntimeMenuNode node;
+
+	node.menuTitle = trimAscii(menuTitle);
+	node.menuKey = canonicalMenuToken(menuTitle);
+	node.itemTitle = trimAscii(itemTitle);
+	node.itemKey = canonicalMenuToken(itemTitle);
+	node.ownerSpec = trimAscii(ownerSpec);
+	node.macroSpec = trimAscii(macroSpec);
+	if (node.menuKey.empty()) {
+		if (errorMessage != nullptr)
+			*errorMessage = "REGISTER_MENU_ITEM requires a non-empty menu title.";
+		return false;
+	}
+	if (node.macroSpec.empty() || node.ownerSpec.empty()) {
+		if (errorMessage != nullptr)
+			*errorMessage = "REGISTER_MENU_ITEM requires macro and owner context.";
+		return false;
+	}
+	if (node.itemKey.empty())
+		node.itemKey = "SEP_" + std::to_string(mNextRuntimeOrder + 1);
+	if (findRuntimeNodeIndex(node.menuKey, node.itemKey, node.ownerSpec) >= 0) {
+		if (errorMessage != nullptr)
+			*errorMessage = "REGISTER_MENU_ITEM is already registered by this macro.";
+		return false;
+	}
+	node.kind = node.itemTitle.empty() ? RuntimeMenuNodeKind::Separator : RuntimeMenuNodeKind::Item;
+	if (node.kind == RuntimeMenuNodeKind::Item && !allocateRuntimeCommand(node.command, errorMessage))
+		return false;
+	node.order = ++mNextRuntimeOrder;
+	mRuntimeNodes.push_back(std::move(node));
+	if (!rebuildRuntimeMenu()) {
+		mRuntimeNodes.pop_back();
+		if (errorMessage != nullptr)
+			*errorMessage = "REGISTER_MENU_ITEM could not rebuild the menu bar.";
+		return false;
+	}
+	drawView();
+	return true;
+}
+
+bool MRMenuBar::refreshRuntimeMenus(std::string *errorMessage) {
+	if (!rebuildRuntimeMenu()) {
+		if (errorMessage != nullptr)
+			*errorMessage = "Could not rebuild runtime menus.";
+		return false;
+	}
+	drawView();
+	return true;
+}
+
+bool MRMenuBar::removeRuntimeMenuItem(const std::string &menuTitle, const std::string &itemTitle,
+                                      const std::string &ownerSpec,
+                                      std::string *errorMessage) {
+	const std::string menuKey = canonicalMenuToken(menuTitle);
+	const std::string itemKey = canonicalMenuToken(itemTitle);
+	const std::string owner = trimAscii(ownerSpec);
+	int index = -1;
+	std::vector<RuntimeMenuNode> previousNodes = mRuntimeNodes;
+
+	if (menuKey.empty()) {
+		if (errorMessage != nullptr)
+			*errorMessage = "REMOVE_MENU_ITEM requires a non-empty menu title.";
+		return false;
+	}
+	for (std::size_t i = 0; i < mRuntimeNodes.size(); ++i) {
+		const RuntimeMenuNode &node = mRuntimeNodes[i];
+
+		if (node.ownerSpec != owner || node.menuKey != menuKey)
+			continue;
+		if (itemKey.empty()) {
+			if (node.kind == RuntimeMenuNodeKind::Separator) {
+				index = static_cast<int>(i);
+				break;
+			}
+			continue;
+		}
+		if (node.itemKey == itemKey) {
+			index = static_cast<int>(i);
+			break;
+		}
+	}
+	if (index < 0) {
+		if (errorMessage != nullptr)
+			*errorMessage = "REMOVE_MENU_ITEM references no item owned by the current macro.";
+		return false;
+	}
+	mRuntimeNodes.erase(mRuntimeNodes.begin() + index);
+	if (!rebuildRuntimeMenu()) {
+		mRuntimeNodes = std::move(previousNodes);
+		static_cast<void>(rebuildRuntimeMenu());
+		if (errorMessage != nullptr)
+			*errorMessage = "REMOVE_MENU_ITEM could not rebuild the menu bar.";
+		return false;
+	}
+	drawView();
+	return true;
+}
+
+bool MRMenuBar::removeRuntimeNodesOwnedByMacroSpec(const std::string &ownerSpec,
+                                                   std::string *errorMessage) {
+	const std::string owner = trimAscii(ownerSpec);
+	std::vector<RuntimeMenuNode> previousNodes = mRuntimeNodes;
+
+	if (owner.empty())
+		return true;
+	mRuntimeNodes.erase(std::remove_if(mRuntimeNodes.begin(), mRuntimeNodes.end(),
+	                                   [&](const RuntimeMenuNode &node) {
+		                                   return node.ownerSpec == owner;
+	                                   }),
+	                    mRuntimeNodes.end());
+	if (!rebuildRuntimeMenu()) {
+		mRuntimeNodes = std::move(previousNodes);
+		static_cast<void>(rebuildRuntimeMenu());
+		if (errorMessage != nullptr)
+			*errorMessage = "Unable to rebuild the menu bar after macro cleanup.";
+		return false;
+	}
+	drawView();
+	return true;
+}
+
+bool MRMenuBar::removeRuntimeNodesOwnedByFile(const std::string &fileSpec, std::string *errorMessage) {
+	const std::string fileId = trimAscii(fileSpec);
+	std::vector<RuntimeMenuNode> previousNodes = mRuntimeNodes;
+
+	if (fileId.empty())
+		return true;
+	mRuntimeNodes.erase(std::remove_if(mRuntimeNodes.begin(), mRuntimeNodes.end(),
+	                                   [&](const RuntimeMenuNode &node) {
+		                                   return ownerSpecMatchesFile(node.ownerSpec, fileId);
+	                                   }),
+	                    mRuntimeNodes.end());
+	if (!rebuildRuntimeMenu()) {
+		mRuntimeNodes = std::move(previousNodes);
+		static_cast<void>(rebuildRuntimeMenu());
+		if (errorMessage != nullptr)
+			*errorMessage = "Unable to rebuild the menu bar after file cleanup.";
+		return false;
+	}
+	drawView();
+	return true;
+}
+
+bool MRMenuBar::handleRuntimeCommand(ushort command) {
+	const auto it = std::find_if(mRuntimeNodes.begin(), mRuntimeNodes.end(),
+	                             [&](const RuntimeMenuNode &node) {
+		                             return node.kind == RuntimeMenuNodeKind::Item &&
+		                                    node.command == command;
+	                             });
+
+	if (it == mRuntimeNodes.end())
+		return false;
+	static_cast<void>(runMacroSpecByName(it->macroSpec.c_str(), nullptr, true));
+	mrvmUiInvalidateScreenBase();
+	return true;
+}
 
 void MRMenuBar::setPersistentBlocksMenuState(bool enabled) {
 	const std::string wantedLabel = enabled ? "~P~ersistent blocks [ON]" : "~P~ersistent blocks [OFF]";

@@ -31,6 +31,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstdio>
+#include <cstdint>
 #include <cstring>
 #include <ctime>
 #include <fstream>
@@ -49,7 +50,6 @@
 #include <vector>
 
 #include "../ui/MREditWindow.hpp"
-#include "../app/MRCommands.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../ui/MRMenuBar.hpp"
 #include "../ui/MRStatusLine.hpp"
@@ -707,6 +707,12 @@ static bool executeLoadedMacro(std::map<std::string, MacroRef>::iterator macroIt
                                std::vector<std::string> *logSink);
 static bool tryLoadIndexedMacroForKey(const TKey &pressed);
 static bool reapplyMacroLineColOverlayIfActive();
+static bool currentExecutingMacroSpec(std::string &macroSpec);
+static bool composeLoadedMacroSpec(const MacroRef &macroRef, std::string &macroSpec);
+static std::string menuLabelFromBindingKey(const TKey &key);
+static std::string normalizeMenuKeySpec(std::string keySpec);
+static bool macroSpecTargetsLoadedMacro(const std::string &spec, const std::string &targetFileKey,
+                                        const std::string &targetMacroKey);
 
 static std::string upperKey(const std::string &value) {
 	std::string out = value;
@@ -842,6 +848,8 @@ static unsigned classifyIntrinsicName(const std::string &name) {
 	if (name == "CHECK_KEY" || name == "BAR_MENU" || name == "V_MENU" || name == "STRING_IN" ||
 	    name == "UI_EXEC" || name == "UI_TEXT" || name == "UI_INDEX")
 		return mrefUiAffinity;
+	if (name == "UTF8")
+		return mrefBackgroundSafe;
 	if (name == "OS_BACK" || name == "OS_COLOR")
 		return mrefUiAffinity;
 	if (name == "SCREEN_LENGTH" || name == "SCREEN_WIDTH" || name == "WHEREX" ||
@@ -900,6 +908,10 @@ static unsigned classifyStoreVarName(const std::string &name) {
 static unsigned classifyProcName(const std::string &name) {
 	if (name == "MRSETUP")
 		return mrefUiAffinity;
+	if (name == "MAKE_MESSAGE")
+		return mrefUiAffinity;
+	if (name == "REGISTER_MENU_ITEM" || name == "REMOVE_MENU_ITEM")
+		return mrefUiAffinity;
 	if (name == "CREATE_GLOBAL_STR" || name == "SET_GLOBAL_STR" || name == "SET_GLOBAL_INT" || name == "UNLOAD_MACRO")
 		return name == "UNLOAD_MACRO" ? mrefUiAffinity : (mrefUiAffinity | mrefStagedWrite);
 	if (name == "LOAD_MACRO_FILE" || name == "CHANGE_DIR" || name == "DEL_FILE" || name == "SET_FILE_ATTR")
@@ -909,8 +921,7 @@ static unsigned classifyProcName(const std::string &name) {
 	if (name == "LOAD_FILE" || name == "SAVE_FILE" || name == "SAVE_BLOCK")
 		return mrefUiAffinity | mrefExternalIo;
 	if (name == "UI_DIALOG" || name == "UI_LABEL" || name == "UI_BUTTON" ||
-	    name == "UI_DISPLAY" ||
-	    name == "UI_INPUT" || name == "UI_LISTBOX")
+	    name == "UI_DISPLAY" || name == "UI_INPUT" || name == "UI_LISTBOX")
 		return mrefUiAffinity;
 	if (name == "SAVE_SETTINGS")
 		return mrefUiAffinity | mrefExternalIo;
@@ -1048,6 +1059,35 @@ static bool applyMarqueeProc(const std::string &name, const std::vector<Value> &
 			return true;
 		mr::messageline::postSticky(mr::messageline::Owner::MacroMarquee, text, kind,
 		                            mr::messageline::kPriorityMedium);
+	}
+	forceMacroUiMessageRefresh(app);
+	return returnWithDirectScreenMutation(true);
+}
+
+static bool applyMakeMessageProc(const std::vector<Value> &args) {
+	TApplication *app = dynamic_cast<TApplication *>(TProgram::application);
+	mr::messageline::VisibleMessage existingMessage;
+	std::string text;
+
+	if (args.size() != 1 || !isStringLike(args[0]))
+		throw std::runtime_error("MAKE_MESSAGE expects one string argument.");
+	if (app == nullptr || dynamic_cast<MRMenuBar *>(app->menuBar) == nullptr)
+		throw std::runtime_error("MAKE_MESSAGE requires an active menu bar.");
+
+	text = valueAsString(args[0]);
+	if (text.empty()) {
+		if (!mr::messageline::currentOwnerMessage(mr::messageline::Owner::MacroMessage,
+		                                         existingMessage))
+			return true;
+		mr::messageline::clearOwner(mr::messageline::Owner::MacroMessage);
+	} else {
+		if (mr::messageline::currentOwnerMessage(mr::messageline::Owner::MacroMessage,
+		                                        existingMessage) &&
+		    existingMessage.kind == mr::messageline::Kind::Info && existingMessage.text == text)
+			return true;
+		mr::messageline::postAutoTimed(mr::messageline::Owner::MacroMessage, text,
+		                               mr::messageline::Kind::Info,
+		                               mr::messageline::kPriorityMedium);
 	}
 	forceMacroUiMessageRefresh(app);
 	return returnWithDirectScreenMutation(true);
@@ -1946,6 +1986,36 @@ static Value coerceForStore(const Value &value, int targetType) {
 static void enforceStringLength(const std::string &s) {
 	if (s.size() > 254)
 		throw std::runtime_error("String length error.");
+}
+
+static std::string utf8FromCodepoint(std::uint32_t codepoint) {
+	std::string text;
+	int byteCount = 0;
+
+	if (codepoint > 0x10FFFF || (codepoint >= 0xD800 && codepoint <= 0xDFFF))
+		throw std::runtime_error("UTF8 expects a valid Unicode codepoint.");
+	byteCount = codepoint <= 0x7F ? 1 : (codepoint <= 0x7FF ? 2 : (codepoint <= 0xFFFF ? 3 : 4));
+	switch (byteCount) {
+		case 1:
+			text.push_back(static_cast<char>(codepoint));
+			break;
+		case 2:
+			text.push_back(static_cast<char>(0xC0 | (codepoint >> 6)));
+			text.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+			break;
+		case 3:
+			text.push_back(static_cast<char>(0xE0 | (codepoint >> 12)));
+			text.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+			text.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+			break;
+		case 4:
+			text.push_back(static_cast<char>(0xF0 | (codepoint >> 18)));
+			text.push_back(static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
+			text.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+			text.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+			break;
+	}
+	return text;
 }
 
 static int checkedStringIndex(int pos) {
@@ -4572,6 +4642,13 @@ static bool queueDeferredUiProcedure(const std::string &name, const std::vector<
 			                                         valueAsString(args[0]));
 		return true;
 	}
+	if (name == "MAKE_MESSAGE") {
+		if (args.size() != 1 || !isStringLike(args[0]))
+			throw std::runtime_error("MAKE_MESSAGE expects one string argument.");
+		session->deferredUiCommands.emplace_back(mrducMakeMessage, 0, 0, 0, 0, 0, 0, 0, 0,
+		                                         valueAsString(args[0]));
+		return true;
+	}
 	if (name == "WORKING") {
 		if (!args.empty())
 			throw std::runtime_error("WORKING expects no arguments.");
@@ -4585,6 +4662,8 @@ static bool queueDeferredUiProcedure(const std::string &name, const std::vector<
 		session->deferredUiCommands.emplace_back(mrducBrain, valueAsInt(args[0]) != 0 ? 1 : 0);
 		return true;
 	}
+	if (name == "REGISTER_MENU_ITEM" || name == "REMOVE_MENU_ITEM")
+		throw std::runtime_error(name + " is not allowed during staged background execution.");
 
 	if (name == "PUT_BOX") {
 		if (args.size() != 8 || args[0].type != TYPE_INT || args[1].type != TYPE_INT ||
@@ -4758,6 +4837,7 @@ static bool queueDeferredUiProcedure(const std::string &name, const std::vector<
 
 enum class DeferredVisualUiProc {
 	Unknown,
+	MakeMessage,
 	MarqueeInfo,
 	MarqueeWarning,
 	MarqueeError,
@@ -4776,6 +4856,8 @@ enum class DeferredVisualUiProc {
 };
 
 static DeferredVisualUiProc classifyDeferredVisualUiProc(const std::string &name) noexcept {
+	if (name == "MAKE_MESSAGE")
+		return DeferredVisualUiProc::MakeMessage;
 	if (name == "MARQUEE")
 		return DeferredVisualUiProc::MarqueeInfo;
 	if (name == "MARQUEE_WARNING")
@@ -4813,6 +4895,12 @@ static bool buildDeferredVisualUiProcedureCommand(const std::string &name,
                                                   const std::vector<Value> &args,
                                                   MRMacroDeferredUiCommand &command) {
 	switch (classifyDeferredVisualUiProc(name)) {
+		case DeferredVisualUiProc::MakeMessage:
+			if (args.size() != 1 || !isStringLike(args[0]))
+				throw std::runtime_error("MAKE_MESSAGE expects one string argument.");
+			command = MRMacroDeferredUiCommand(mrducMakeMessage, 0, 0, 0, 0, 0, 0, 0, 0,
+			                                   valueAsString(args[0]));
+			return true;
 		case DeferredVisualUiProc::MarqueeInfo:
 		case DeferredVisualUiProc::MarqueeWarning:
 		case DeferredVisualUiProc::MarqueeError:
@@ -4914,6 +5002,85 @@ static bool dispatchDeferredVisualUiProcedure(const std::string &name,
 		return false;
 	mrvmUiRenderFacadeRenderDeferredCommand(command);
 	return true;
+}
+
+enum class DeferredMenuUiProc {
+	Unknown,
+	RegisterMenuItem,
+	RemoveMenuItem
+};
+
+static DeferredMenuUiProc classifyDeferredMenuUiProc(const std::string &name) noexcept {
+	if (name == "REGISTER_MENU_ITEM")
+		return DeferredMenuUiProc::RegisterMenuItem;
+	if (name == "REMOVE_MENU_ITEM")
+		return DeferredMenuUiProc::RemoveMenuItem;
+	return DeferredMenuUiProc::Unknown;
+}
+
+static bool buildDeferredMenuUiProcedureCommand(const std::string &name, const std::vector<Value> &args,
+                                                MRMacroDeferredUiCommand &command) {
+	std::string macroSpec;
+
+	if (!currentExecutingMacroSpec(macroSpec))
+		throw std::runtime_error(name + " requires an active macro context.");
+
+	switch (classifyDeferredMenuUiProc(name)) {
+		case DeferredMenuUiProc::RegisterMenuItem:
+			if ((args.size() != 2 && args.size() != 3) || !isStringLike(args[0]) || !isStringLike(args[1]) ||
+			    (args.size() == 3 && !isStringLike(args[2])))
+				throw std::runtime_error("REGISTER_MENU_ITEM expects (string, string[, string]).");
+			command.type = mrducRegisterMenuItem;
+			command.text = valueAsString(args[0]);
+			command.text2 = valueAsString(args[1]);
+			command.text3 = args.size() == 3 ? valueAsString(args[2]) : macroSpec;
+			command.text4 = macroSpec;
+			return true;
+		case DeferredMenuUiProc::RemoveMenuItem:
+			if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1]))
+				throw std::runtime_error("REMOVE_MENU_ITEM expects (string, string).");
+			command.type = mrducRemoveMenuItem;
+			command.text = valueAsString(args[0]);
+			command.text2 = valueAsString(args[1]);
+			command.text3 = macroSpec;
+			return true;
+		case DeferredMenuUiProc::Unknown:
+			return false;
+	}
+	return false;
+}
+
+static bool applyDeferredMenuUiProcedureCommand(const MRMacroDeferredUiCommand &command) {
+	std::string errorText;
+
+	switch (command.type) {
+		case mrducRegisterMenuItem:
+			if (!mrvmUiRegisterMenuItem(command.text, command.text2, command.text3, command.text4, &errorText))
+				throw std::runtime_error("REGISTER_MENU_ITEM failed: " +
+				                         (errorText.empty() ? std::string("unable to register menu item.")
+				                                            : errorText));
+			return true;
+		case mrducRemoveMenuItem:
+			if (!mrvmUiRemoveMenuItem(command.text, command.text2, command.text3, &errorText))
+				throw std::runtime_error("REMOVE_MENU_ITEM failed: " +
+				                         (errorText.empty() ? std::string("unable to remove menu item.")
+				                                            : errorText));
+			return true;
+		default:
+			return false;
+	}
+}
+
+static bool dispatchDeferredMenuUiProcedure(const std::string &name, const std::vector<Value> &args,
+                                            int &errorCode) {
+	MRMacroDeferredUiCommand command;
+
+	errorCode = 0;
+	if (currentBackgroundEditSession() != nullptr)
+		return queueDeferredUiProcedure(name, args, errorCode);
+	if (!buildDeferredMenuUiProcedureCommand(name, args, command))
+		return false;
+	return applyDeferredMenuUiProcedureCommand(command);
 }
 
 static std::string composeTvCallText(const std::vector<Value> &args) {
@@ -6267,6 +6434,42 @@ static std::string makeFileKey(const std::string &value) {
 	return upperKey(stripMrmacExtension(trimAscii(value)));
 }
 
+static std::string loadedFileBasenameKey(const LoadedMacroFile &file) {
+	std::string source = !file.resolvedPath.empty() ? file.resolvedPath : file.displayName;
+
+	if (source.empty())
+		source = file.fileKey;
+	return makeFileKey(truncatePathPart(source));
+}
+
+static std::string resolveLoadedFileKeyForSpec(const std::string &fileSpec) {
+	const std::string exactKey = makeFileKey(fileSpec);
+	std::string matchedKey;
+
+	if (fileSpec.empty())
+		return std::string();
+	if (g_runtimeEnv.loadedFiles.find(exactKey) != g_runtimeEnv.loadedFiles.end())
+		return exactKey;
+	for (const auto &entry : g_runtimeEnv.loadedFiles) {
+		if (loadedFileBasenameKey(entry.second) != exactKey)
+			continue;
+		if (!matchedKey.empty() && matchedKey != entry.first)
+			return std::string();
+		matchedKey = entry.first;
+	}
+	return matchedKey;
+}
+
+static bool fileSpecMatchesLoadedFileKey(const std::string &fileSpec, const std::string &targetFileKey) {
+	const std::string resolvedKey = resolveLoadedFileKeyForSpec(fileSpec);
+
+	if (targetFileKey.empty())
+		return fileSpec.empty();
+	if (!resolvedKey.empty())
+		return resolvedKey == targetFileKey;
+	return makeFileKey(fileSpec) == targetFileKey;
+}
+
 
 static bool hasMrmacExtension(const std::string &path) {
 	std::size_t dotPos = path.rfind('.');
@@ -6344,8 +6547,13 @@ static bool macroIsRunning(const std::string &macroKey) {
 
 static bool removeMacroFromRegistryByKey(const std::string &macroKey) {
 	std::map<std::string, MacroRef>::iterator it = g_runtimeEnv.loadedMacros.find(macroKey);
+	std::string ownerSpec;
+
 	if (it == g_runtimeEnv.loadedMacros.end())
 		return false;
+	static_cast<void>(composeLoadedMacroSpec(it->second, ownerSpec));
+	if (!ownerSpec.empty())
+		static_cast<void>(mrvmUiRemoveRuntimeMenusOwnedByMacroSpec(ownerSpec));
 
 	const std::string fileKey = it->second.fileKey;
 	g_runtimeEnv.loadedMacros.erase(it);
@@ -7000,6 +7208,21 @@ static std::vector<std::string> parseMacroListItems(const std::string &itemSpec)
 	return parseMacroMenuItems(itemSpec);
 }
 
+static std::string macroUiListKey(const std::string &name) {
+	return upperKey(trimAscii(name));
+}
+
+static std::unordered_map<std::string, std::vector<std::string>> g_macroUiItemLists;
+
+static std::vector<std::string> resolveMacroUiListItems(const std::string &itemSpec) {
+	const std::string key = macroUiListKey(itemSpec);
+	const auto it = g_macroUiItemLists.find(key);
+
+	if (it != g_macroUiItemLists.end())
+		return it->second;
+	return parseMacroListItems(itemSpec);
+}
+
 static int macroMenuDialogWidth(const MacroMenuRequest &request) noexcept {
 	return std::max(36, std::min(72, static_cast<int>(request.menuSpec.size()) + 8));
 }
@@ -7294,7 +7517,7 @@ static void addMacroUiInput(const std::vector<Value> &args) {
 
 static void addMacroUiListBox(const std::vector<Value> &args) {
 	MacroUiListBoxSpec spec;
-	const std::vector<std::string> items = parseMacroListItems(valueAsString(args[6]));
+	const std::vector<std::string> items = resolveMacroUiListItems(valueAsString(args[6]));
 
 	spec.x = valueAsInt(args[0]);
 	spec.y = valueAsInt(args[1]);
@@ -7309,6 +7532,22 @@ static void addMacroUiListBox(const std::vector<Value> &args) {
 	g_macroUiDialog.textValues[spec.id] =
 	    items.empty() ? std::string() : items[static_cast<std::size_t>(g_macroUiDialog.indexValues[spec.id] - 1)];
 	g_macroUiDialog.listBoxes.push_back(std::move(spec));
+}
+
+static void clearMacroUiItemList(const std::vector<Value> &args) {
+	const std::string key = macroUiListKey(valueAsString(args[0]));
+
+	if (key.empty())
+		throw std::runtime_error("UI_LIST_CLEAR expects a non-empty list name.");
+	g_macroUiItemLists[key].clear();
+}
+
+static void addMacroUiItemListValue(const std::vector<Value> &args) {
+	const std::string key = macroUiListKey(valueAsString(args[0]));
+
+	if (key.empty())
+		throw std::runtime_error("UI_LIST_ADD expects a non-empty list name.");
+	g_macroUiItemLists[key].push_back(valueAsString(args[1]));
 }
 
 static int runMacroUiDialogDefinition() {
@@ -7349,7 +7588,7 @@ static int runMacroUiDialogDefinition() {
 			}
 
 			for (const auto &listBox : definition.listBoxes) {
-				const std::vector<std::string> items = parseMacroListItems(listBox.itemSpec);
+				const std::vector<std::string> items = resolveMacroUiListItems(listBox.itemSpec);
 				const int listTop = listBox.label.empty() ? listBox.y : listBox.y + 1;
 				TScrollBar *scrollBar = nullptr;
 				MacroUiListView *listView = nullptr;
@@ -7623,6 +7862,41 @@ static bool bindingModeMatches(int bindingMode, int currentMode) noexcept {
 	return bindingMode == MACRO_MODE_ALL || bindingMode == currentMode;
 }
 
+static bool isAsciiLetterKeyCode(ushort code) noexcept {
+	return code >= 'A' && code <= 'Z';
+}
+
+static bool isCalculatorHotkey(const TKey &key) noexcept {
+	return (key.mods & kbAltShift) != 0 && key.code == 'C';
+}
+
+static void logCalculatorHotkeyState(const char *stage, const TKey &key, std::string_view detail = {}) {
+	if (!isCalculatorHotkey(key))
+		return;
+	char line[320];
+	if (detail.empty())
+		std::snprintf(line, sizeof(line), "KEYDBG calc stage=%s code=0x%04X mods=0x%04X", stage,
+		              static_cast<unsigned>(key.code), static_cast<unsigned>(key.mods));
+	else
+		std::snprintf(line, sizeof(line), "KEYDBG calc stage=%s code=0x%04X mods=0x%04X %.*s", stage,
+		              static_cast<unsigned>(key.code), static_cast<unsigned>(key.mods),
+		              static_cast<int>(detail.size()), detail.data());
+	mrLogMessage(line);
+}
+
+static bool bindingKeysEqual(const TKey &lhs, const TKey &rhs) noexcept {
+	const ushort lhsModsSansShift = lhs.mods & static_cast<ushort>(~kbShift);
+	const ushort rhsModsSansShift = rhs.mods & static_cast<ushort>(~kbShift);
+
+	if (lhs == rhs)
+		return true;
+	if (lhs.code != rhs.code || !isAsciiLetterKeyCode(lhs.code))
+		return false;
+	if ((lhs.mods & kbAltShift) == 0 || (rhs.mods & kbAltShift) == 0)
+		return false;
+	return lhsModsSansShift == rhsModsSansShift;
+}
+
 static bool parseBindingKeyValue(const Value &value, TKey &key) {
 	if (value.type == TYPE_INT) {
 		const int encoded = valueAsInt(value);
@@ -7640,27 +7914,27 @@ static void removeExplicitBindingsForKey(const TKey &key, int mode) {
 	auto &bindings = g_runtimeEnv.explicitKeyBindings;
 	bindings.erase(std::remove_if(bindings.begin(), bindings.end(),
 	                              [&](const ExplicitKeyBinding &binding) {
-		                              return binding.mode == mode && binding.key == key;
+		                              return binding.mode == mode && bindingKeysEqual(binding.key, key);
 	                              }),
 	               bindings.end());
 }
 
 static void clearRegisteredBindingsForKey(const TKey *key, int mode, bool clearAllModes) {
 	for (auto &entry : g_runtimeEnv.loadedMacros) {
-		MacroRef &macroRef = entry.second;
-		if (!macroRef.hasAssignedKey)
-			continue;
-		if (!clearAllModes && macroRef.fromMode != mode)
-			continue;
-		if (key != nullptr && macroRef.assignedKey != *key)
-			continue;
-		macroRef.hasAssignedKey = false;
-		macroRef.assignedKeySpec.clear();
-	}
+			MacroRef &macroRef = entry.second;
+			if (!macroRef.hasAssignedKey)
+				continue;
+			if (!clearAllModes && macroRef.fromMode != mode)
+				continue;
+			if (key != nullptr && !bindingKeysEqual(macroRef.assignedKey, *key))
+				continue;
+			macroRef.hasAssignedKey = false;
+			macroRef.assignedKeySpec.clear();
+		}
 	g_runtimeEnv.indexedBoundMacros.erase(
 	    std::remove_if(g_runtimeEnv.indexedBoundMacros.begin(), g_runtimeEnv.indexedBoundMacros.end(),
 	                   [&](const IndexedBoundMacroEntry &entry) {
-		                   if (key != nullptr && entry.key != *key)
+		                   if (key != nullptr && !bindingKeysEqual(entry.key, *key))
 			                   return false;
 		                   return clearAllModes || mode == MACRO_MODE_ALL || mode == MACRO_MODE_EDIT ||
 		                          mode == MACRO_MODE_DOS_SHELL;
@@ -7668,7 +7942,7 @@ static void clearRegisteredBindingsForKey(const TKey *key, int mode, bool clearA
 	    g_runtimeEnv.indexedBoundMacros.end());
 }
 
-static bool runMacroSpec(const std::string &spec, std::vector<std::string> *logLines) {
+static bool executeRuntimeMacroSpec(const std::string &spec, std::vector<std::string> *logLines) {
 	std::string filePart;
 	std::string macroPart;
 	std::string paramPart;
@@ -7683,6 +7957,8 @@ static bool runMacroSpec(const std::string &spec, std::vector<std::string> *logL
 
 	macroKey = upperKey(macroPart);
 	if (!filePart.empty())
+		targetFileKey = resolveLoadedFileKeyForSpec(filePart);
+	if (!filePart.empty() && targetFileKey.empty())
 		targetFileKey = makeFileKey(filePart);
 
 	macroIt = g_runtimeEnv.loadedMacros.find(macroKey);
@@ -7704,6 +7980,138 @@ static bool runMacroSpec(const std::string &spec, std::vector<std::string> *logL
 		return false;
 	}
 	return executeLoadedMacro(macroIt, macroKey, paramPart, logLines);
+}
+
+static bool currentExecutingMacroSpec(std::string &macroSpec) {
+	const std::string macroDisplayName =
+	    !g_runtimeEnv.macroStack.empty() ? trimAscii(g_runtimeEnv.macroStack.back().macroName) : std::string();
+	const auto macroIt = g_runtimeEnv.loadedMacros.find(upperKey(macroDisplayName));
+	std::string fileDisplayName;
+
+	macroSpec.clear();
+	if (macroDisplayName.empty() || macroIt == g_runtimeEnv.loadedMacros.end())
+		return false;
+
+	{
+		const auto fileIt = g_runtimeEnv.loadedFiles.find(macroIt->second.fileKey);
+
+		if (fileIt == g_runtimeEnv.loadedFiles.end())
+			return false;
+		fileDisplayName =
+		    !fileIt->second.displayName.empty() ? fileIt->second.displayName : fileIt->second.resolvedPath;
+	}
+	if (fileDisplayName.empty())
+		return false;
+	macroSpec = fileDisplayName + "^" + macroIt->second.displayName;
+	return true;
+}
+
+static bool composeLoadedMacroSpec(const MacroRef &macroRef, std::string &macroSpec) {
+	std::string fileDisplayName;
+
+	macroSpec.clear();
+	{
+		const auto fileIt = g_runtimeEnv.loadedFiles.find(macroRef.fileKey);
+
+		if (fileIt == g_runtimeEnv.loadedFiles.end())
+			return false;
+		fileDisplayName =
+		    !fileIt->second.displayName.empty() ? fileIt->second.displayName : fileIt->second.resolvedPath;
+	}
+	if (fileDisplayName.empty() || macroRef.displayName.empty())
+		return false;
+	macroSpec = fileDisplayName + "^" + macroRef.displayName;
+	return true;
+}
+
+static std::string normalizeMenuKeySpec(std::string keySpec) {
+	keySpec = trimAscii(keySpec);
+	if (keySpec.size() >= 2 && keySpec.front() == '<' && keySpec.back() == '>')
+		keySpec = keySpec.substr(1, keySpec.size() - 2);
+	return keySpec;
+}
+
+static std::string menuLabelFromBindingKey(const TKey &key) {
+	struct ComboSpec {
+		const char *prefix;
+		ushort mods;
+	};
+	struct NamedKeySpec {
+		const char *token;
+		ushort code;
+	};
+	static const ComboSpec combos[] = {{"", 0},
+	                                   {"Shft", kbShift},
+	                                   {"Ctrl", kbCtrlShift},
+	                                   {"Alt", kbAltShift},
+	                                   {"CtrlShft", static_cast<ushort>(kbCtrlShift | kbShift)},
+	                                   {"AltShft", static_cast<ushort>(kbAltShift | kbShift)},
+	                                   {"CtrlAlt", static_cast<ushort>(kbCtrlShift | kbAltShift)},
+	                                   {"CtrlAltShft",
+	                                    static_cast<ushort>(kbCtrlShift | kbAltShift | kbShift)}};
+	static const NamedKeySpec named[] = {{"Enter", kbEnter},
+	                                     {"Tab", kbTab},
+	                                     {"Esc", kbEsc},
+	                                     {"Backspace", kbBack},
+	                                     {"Up", kbUp},
+	                                     {"Down", kbDown},
+	                                     {"Left", kbLeft},
+	                                     {"Right", kbRight},
+	                                     {"PgUp", kbPgUp},
+	                                     {"PgDn", kbPgDn},
+	                                     {"Home", kbHome},
+	                                     {"End", kbEnd},
+	                                     {"Ins", kbIns},
+	                                     {"Del", kbDel},
+	                                     {"Grey-", kbGrayMinus},
+	                                     {"Grey+", kbGrayPlus},
+	                                     {"Grey*", static_cast<ushort>('*')},
+	                                     {"Space", static_cast<ushort>(' ')},
+	                                     {"Minus", static_cast<ushort>('-')},
+	                                     {"Equal", static_cast<ushort>('=')},
+	                                     {"F1", kbF1},
+	                                     {"F2", kbF2},
+	                                     {"F3", kbF3},
+	                                     {"F4", kbF4},
+	                                     {"F5", kbF5},
+	                                     {"F6", kbF6},
+	                                     {"F7", kbF7},
+	                                     {"F8", kbF8},
+	                                     {"F9", kbF9},
+	                                     {"F10", kbF10},
+	                                     {"F11", kbF11},
+	                                     {"F12", kbF12}};
+	for (const ComboSpec &combo : combos)
+		for (const NamedKeySpec &entry : named)
+			if (key == TKey(entry.code, combo.mods))
+				return std::string(combo.prefix) + entry.token;
+	for (const ComboSpec &combo : combos) {
+		for (char c = 'A'; c <= 'Z'; ++c)
+			if (key == TKey(static_cast<ushort>(c), combo.mods))
+				return std::string(combo.prefix) + c;
+		for (char c = '0'; c <= '9'; ++c)
+			if (key == TKey(static_cast<ushort>(c), combo.mods))
+				return std::string(combo.prefix) + c;
+	}
+	if (key.code != kbNoKey && key.code < 256 && std::isprint(static_cast<unsigned char>(key.code)) != 0)
+		return std::string(1, static_cast<char>(key.code));
+	return std::string();
+}
+
+static bool macroSpecTargetsLoadedMacro(const std::string &spec, const std::string &targetFileKey,
+                                        const std::string &targetMacroKey) {
+	std::string filePart;
+	std::string macroPart;
+	std::string paramPart;
+	const bool parsed = parseRunMacroSpec(spec, filePart, macroPart, paramPart);
+
+	if (!parsed || upperKey(macroPart) != targetMacroKey)
+		return false;
+	if (targetFileKey.empty())
+		return true;
+	if (filePart.empty())
+		return false;
+	return fileSpecMatchesLoadedFileKey(filePart, targetFileKey);
 }
 
 static bool dispatchEditorCommandEvent(ushort command) {
@@ -7819,12 +8227,17 @@ static bool executeBoundCommand(int commandId) {
 }
 
 static bool executeExplicitKeyBinding(const TKey &pressed, int mode, std::vector<std::string> *logLines) {
+	logCalculatorHotkeyState("vm-explicit-enter", pressed);
 	for (std::size_t i = g_runtimeEnv.explicitKeyBindings.size(); i > 0; --i) {
 		const ExplicitKeyBinding &binding = g_runtimeEnv.explicitKeyBindings[i - 1];
-		if (binding.key != pressed || !bindingModeMatches(binding.mode, mode))
+		if (!bindingKeysEqual(binding.key, pressed) || !bindingModeMatches(binding.mode, mode))
 			continue;
 		if (binding.kind == ExplicitBindingKind::MacroSpec)
-			return runMacroSpec(binding.macroSpec, logLines);
+			logCalculatorHotkeyState("vm-explicit-match", pressed, binding.macroSpec);
+		else
+			logCalculatorHotkeyState("vm-explicit-match-cmd", pressed);
+		if (binding.kind == ExplicitBindingKind::MacroSpec)
+			return executeRuntimeMacroSpec(binding.macroSpec, logLines);
 		runtimeErrorLevel() = executeBoundCommand(binding.commandId) ? 0 : 1001;
 		return runtimeErrorLevel() == 0;
 	}
@@ -8033,18 +8446,21 @@ static bool loadMacroFileIntoRegistry(const std::string &spec, std::string *load
 	g_runtimeEnv.loadedFiles[fileKey] = newFile;
 	runtimeErrorLevel() = 0;
 	logMacroProfileLine("Loaded macro file", newFile);
+	static_cast<void>(mrvmUiRefreshRuntimeMenus(nullptr));
 	if (loadedFileKey != nullptr)
 		*loadedFileKey = fileKey;
 	return true;
 }
 
 static bool tryLoadIndexedMacroForKey(const TKey &pressed) {
+	logCalculatorHotkeyState("vm-indexed-enter", pressed);
 	for (std::size_t i = 0; i < g_runtimeEnv.indexedBoundMacros.size(); ++i) {
 		const IndexedBoundMacroEntry &entry = g_runtimeEnv.indexedBoundMacros[i];
 		std::string fileKey;
 
-		if (entry.key != pressed)
+		if (!bindingKeysEqual(entry.key, pressed))
 			continue;
+		logCalculatorHotkeyState("vm-indexed-match", pressed, entry.filePath);
 		fileKey = makeFileKey(entry.filePath);
 		if (g_runtimeEnv.loadedFiles.find(fileKey) != g_runtimeEnv.loadedFiles.end())
 			return true;
@@ -8079,6 +8495,11 @@ static Value applyIntrinsic(const std::string &name, const std::vector<Value> &a
 		if (args.size() != 1 || args[0].type != TYPE_INT)
 			throw std::runtime_error("CHAR expects one integer argument.");
 		return makeChar(static_cast<unsigned char>(args[0].i & 0xFF));
+	}
+	if (name == "UTF8") {
+		if (args.size() != 1 || args[0].type != TYPE_INT)
+			throw std::runtime_error("UTF8 expects one integer argument.");
+		return makeString(utf8FromCodepoint(static_cast<std::uint32_t>(args[0].i)));
 	}
 	if (name == "ASCII") {
 		if (args.size() != 1 || !isStringLike(args[0]))
@@ -9714,6 +10135,9 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						           setupKey == "CYCLIC_VIRTUAL_DESKTOPS" ||
 						           setupKey == "CURSOR_POSITION_MARKER" ||
 						           setupKey == "AUTOLOAD_WORKSPACE" ||
+						           setupKey == "LOG_HANDLING" ||
+						           setupKey == "LOGFILE" ||
+						           setupKey == "AUTOEXEC_MACRO" ||
 						           setupKey == "WORKSPACE" ||
 						           setupKey == "MAX_PATH_HISTORY" || setupKey == "MAX_FILE_HISTORY" ||
 						           setupKey == "PATH_HISTORY" || setupKey == "FILE_HISTORY" ||
@@ -9770,7 +10194,8 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							    "MULTI_SAR_CASE_SENSITIVE, MULTI_SAR_REGULAR_EXPRESSIONS, "
 							    "MULTI_SAR_FILES_IN_MEMORY, MULTI_SAR_KEEP_FILES_OPEN, "
 							    "VIRTUAL_DESKTOPS, CYCLIC_VIRTUAL_DESKTOPS, "
-							    "CURSOR_POSITION_MARKER, LASTFILEDIALOGPATH, "
+							    "CURSOR_POSITION_MARKER, AUTOLOAD_WORKSPACE, LOG_HANDLING, LOGFILE, AUTOEXEC_MACRO, "
+							    "LASTFILEDIALOGPATH, "
 							    "MAX_PATH_HISTORY, MAX_FILE_HISTORY, PATH_HISTORY, FILE_HISTORY, "
 							    "MULTI_FILESPEC_HISTORY, MULTI_PATH_HISTORY, "
 							    "DEFAULT_PROFILE_DESCRIPTION, COLORTHEMEURI, PAGE_BREAK, WORD_DELIMITERS, DEFAULT_EXTENSIONS, "
@@ -9818,6 +10243,12 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				} else if (name == "UI_LISTBOX") {
 					addMacroUiListBox(args);
 					runtimeErrorLevel() = 0;
+				} else if (name == "UI_LIST_CLEAR") {
+					clearMacroUiItemList(args);
+					runtimeErrorLevel() = 0;
+				} else if (name == "UI_LIST_ADD") {
+					addMacroUiItemListValue(args);
+					runtimeErrorLevel() = 0;
 				} else if (name == "CREATE_GLOBAL_STR" || name == "SET_GLOBAL_STR") {
 					if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1]))
 						throw std::runtime_error(name + " expects (string, string).");
@@ -9827,10 +10258,11 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					if (args.size() != 2 || !isStringLike(args[0]) || args[1].type != TYPE_INT)
 						throw std::runtime_error("SET_GLOBAL_INT expects (string, int).");
 					setGlobalValue(valueAsString(args[0]), TYPE_INT, makeInt(args[1].i));
-				} else if (name == "MARQUEE" || name == "MARQUEE_WARNING" || name == "MARQUEE_ERROR") {
-					int deferredError = 0;
-					if (dispatchDeferredVisualUiProcedure(name, args, deferredError)) {
-						runtimeErrorLevel() = deferredError;
+					} else if (name == "MARQUEE" || name == "MARQUEE_WARNING" || name == "MARQUEE_ERROR" ||
+					           name == "MAKE_MESSAGE") {
+						int deferredError = 0;
+						if (dispatchDeferredVisualUiProcedure(name, args, deferredError)) {
+							runtimeErrorLevel() = deferredError;
 						continue;
 					}
 				} else if (name == "WORKING") {
@@ -9896,6 +10328,12 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				} else if (name == "KILL_BOX") {
 					int deferredError = 0;
 					if (dispatchDeferredVisualUiProcedure(name, args, deferredError)) {
+						runtimeErrorLevel() = deferredError;
+						continue;
+					}
+				} else if (name == "REGISTER_MENU_ITEM" || name == "REMOVE_MENU_ITEM") {
+					int deferredError = 0;
+					if (dispatchDeferredMenuUiProcedure(name, args, deferredError)) {
 						runtimeErrorLevel() = deferredError;
 						continue;
 					}
@@ -9995,21 +10433,21 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						throw std::runtime_error("REST_OS_SCREEN expects no arguments.");
 					(void)mrvmUiNewScreen();
 					runtimeErrorLevel() = 0;
-				} else if (name == "QUIT") {
-					int returnCode = 0;
-					if (args.size() > 1 || (args.size() == 1 && args[0].type != TYPE_INT))
-						throw std::runtime_error("QUIT expects zero or one integer argument.");
+					} else if (name == "QUIT") {
+						int returnCode = 0;
+						if (args.size() > 1 || (args.size() == 1 && args[0].type != TYPE_INT))
+							throw std::runtime_error("QUIT expects zero or one integer argument.");
 					if (currentBackgroundEditSession() != nullptr) {
 						runtimeErrorLevel() = 1001;
 						continue;
 					}
-					if (!args.empty())
-						returnCode = valueAsInt(args[0]);
-					runtimeErrorLevel() = returnCode;
-					(void)dispatchApplicationCommandEvent(cmQuit);
-				} else if (name == "LOAD_FILE") {
-					MREditWindow *win;
-					std::string path;
+						if (!args.empty())
+							returnCode = valueAsInt(args[0]);
+						runtimeErrorLevel() = returnCode;
+						(void)dispatchApplicationCommandEvent(cmQuit);
+					} else if (name == "LOAD_FILE") {
+						MREditWindow *win;
+						std::string path;
 					if (args.size() != 1 || !isStringLike(args[0]))
 						throw std::runtime_error("LOAD_FILE expects one string argument.");
 					path = expandUserPath(valueAsString(args[0]));
@@ -10160,6 +10598,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					TKey key;
 					int mode = MACRO_MODE_EDIT;
 					ExplicitKeyBinding binding;
+					std::string refreshError;
 					if (args.size() != 3 || !isStringLike(args[1]) || args[2].type != TYPE_INT)
 						throw std::runtime_error("MACRO_TO_KEY expects (key, string, int).");
 					if (currentBackgroundEditSession() != nullptr) {
@@ -10176,6 +10615,10 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					binding.kind = ExplicitBindingKind::MacroSpec;
 					binding.macroSpec = valueAsString(args[1]);
 					g_runtimeEnv.explicitKeyBindings.push_back(binding);
+					if (!mrvmUiRefreshRuntimeMenus(&refreshError))
+						throw std::runtime_error("MACRO_TO_KEY could not refresh runtime menus: " +
+						                         (refreshError.empty() ? std::string("unknown error.")
+						                                              : refreshError));
 					runtimeErrorLevel() = 0;
 				} else if (name == "CMD_TO_KEY") {
 					TKey key;
@@ -10201,6 +10644,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				} else if (name == "UNASSIGN_KEY") {
 					TKey key;
 					int mode = MACRO_MODE_EDIT;
+					std::string refreshError;
 					if (args.size() != 2 || args[1].type != TYPE_INT)
 						throw std::runtime_error("UNASSIGN_KEY expects (key, int).");
 					if (currentBackgroundEditSession() != nullptr) {
@@ -10213,8 +10657,13 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					}
 					removeExplicitBindingsForKey(key, mode);
 					clearRegisteredBindingsForKey(&key, mode, mode == MACRO_MODE_ALL);
+					if (!mrvmUiRefreshRuntimeMenus(&refreshError))
+						throw std::runtime_error("UNASSIGN_KEY could not refresh runtime menus: " +
+						                         (refreshError.empty() ? std::string("unknown error.")
+						                                              : refreshError));
 					runtimeErrorLevel() = 0;
 				} else if (name == "UNASSIGN_ALL_KEYS") {
+					std::string refreshError;
 					if (!args.empty())
 						throw std::runtime_error("UNASSIGN_ALL_KEYS expects no arguments.");
 					if (currentBackgroundEditSession() != nullptr) {
@@ -10223,6 +10672,10 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					}
 					g_runtimeEnv.explicitKeyBindings.clear();
 					clearRegisteredBindingsForKey(nullptr, MACRO_MODE_ALL, true);
+					if (!mrvmUiRefreshRuntimeMenus(&refreshError))
+						throw std::runtime_error("UNASSIGN_ALL_KEYS could not refresh runtime menus: " +
+						                         (refreshError.empty() ? std::string("unknown error.")
+						                                              : refreshError));
 					runtimeErrorLevel() = 0;
 				} else if (name == "KEY_RECORD") {
 					if (!args.empty())
@@ -10558,6 +11011,8 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 
 					macroKey = upperKey(macroPart);
 					if (!filePart.empty())
+						targetFileKey = resolveLoadedFileKeyForSpec(filePart);
+					if (!filePart.empty() && targetFileKey.empty())
 						targetFileKey = makeFileKey(filePart);
 
 					mit = g_runtimeEnv.loadedMacros.find(macroKey);
@@ -11316,6 +11771,112 @@ bool mrvmUiKillBox() {
 	}
 }
 
+bool mrvmUiRegisterMenuItem(const std::string &menuTitle, const std::string &itemTitle,
+                            const std::string &macroSpec, const std::string &ownerSpec,
+                            std::string *errorMessage) {
+	auto *app = dynamic_cast<TApplication *>(TProgram::application);
+	auto *menuBar = app != nullptr ? dynamic_cast<MRMenuBar *>(app->menuBar) : nullptr;
+
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	if (menuBar == nullptr) {
+		if (errorMessage != nullptr)
+			*errorMessage = "REGISTER_MENU_ITEM requires an active MRMenuBar.";
+		return false;
+	}
+	return returnWithDirectScreenMutation(
+	    menuBar->registerRuntimeMenuItem(menuTitle, itemTitle, macroSpec, ownerSpec, errorMessage));
+}
+
+bool mrvmUiRemoveMenuItem(const std::string &menuTitle, const std::string &itemTitle,
+                          const std::string &ownerSpec,
+                          std::string *errorMessage) {
+	auto *app = dynamic_cast<TApplication *>(TProgram::application);
+	auto *menuBar = app != nullptr ? dynamic_cast<MRMenuBar *>(app->menuBar) : nullptr;
+
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	if (menuBar == nullptr) {
+		if (errorMessage != nullptr)
+			*errorMessage = "REMOVE_MENU_ITEM requires an active MRMenuBar.";
+		return false;
+	}
+	return returnWithDirectScreenMutation(
+	    menuBar->removeRuntimeMenuItem(menuTitle, itemTitle, ownerSpec, errorMessage));
+}
+
+bool mrvmUiRemoveRuntimeMenusOwnedByMacroSpec(const std::string &ownerSpec, std::string *errorMessage) {
+	auto *app = dynamic_cast<TApplication *>(TProgram::application);
+	auto *menuBar = app != nullptr ? dynamic_cast<MRMenuBar *>(app->menuBar) : nullptr;
+
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	if (menuBar == nullptr)
+		return true;
+	return returnWithDirectScreenMutation(menuBar->removeRuntimeNodesOwnedByMacroSpec(ownerSpec, errorMessage));
+}
+
+bool mrvmUiRemoveRuntimeMenusOwnedByFile(const std::string &fileSpec, std::string *errorMessage) {
+	auto *app = dynamic_cast<TApplication *>(TProgram::application);
+	auto *menuBar = app != nullptr ? dynamic_cast<MRMenuBar *>(app->menuBar) : nullptr;
+
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	if (menuBar == nullptr)
+		return true;
+	return returnWithDirectScreenMutation(menuBar->removeRuntimeNodesOwnedByFile(fileSpec, errorMessage));
+}
+
+std::string mrvmUiMenuKeyLabelForMacroSpec(const std::string &macroSpec) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	std::string filePart;
+	std::string macroPart;
+	std::string paramPart;
+	std::string targetFileKey;
+	const std::string targetMacroKey = [&]() {
+		parseRunMacroSpec(macroSpec, filePart, macroPart, paramPart);
+		return upperKey(macroPart);
+	}();
+	const int mode = currentUiMacroMode();
+
+	if (targetMacroKey.empty())
+		return std::string();
+	if (!filePart.empty())
+		targetFileKey = resolveLoadedFileKeyForSpec(filePart);
+	if (!filePart.empty() && targetFileKey.empty())
+		targetFileKey = makeFileKey(filePart);
+	for (auto it = g_runtimeEnv.explicitKeyBindings.rbegin(); it != g_runtimeEnv.explicitKeyBindings.rend(); ++it) {
+		if (it->kind != ExplicitBindingKind::MacroSpec || !bindingModeMatches(it->mode, mode))
+			continue;
+		if (!macroSpecTargetsLoadedMacro(it->macroSpec, targetFileKey, targetMacroKey))
+			continue;
+		return menuLabelFromBindingKey(it->key);
+	}
+	{
+		const auto macroIt = g_runtimeEnv.loadedMacros.find(targetMacroKey);
+		if (macroIt == g_runtimeEnv.loadedMacros.end())
+			return std::string();
+		if (!targetFileKey.empty() && macroIt->second.fileKey != targetFileKey)
+			return std::string();
+		if (!macroAllowsUiMode(macroIt->second, mode) || !macroIt->second.hasAssignedKey)
+			return std::string();
+		if (!macroIt->second.assignedKeySpec.empty())
+			return normalizeMenuKeySpec(macroIt->second.assignedKeySpec);
+		return menuLabelFromBindingKey(macroIt->second.assignedKey);
+	}
+}
+
+bool mrvmUiRefreshRuntimeMenus(std::string *errorMessage) {
+	auto *app = dynamic_cast<TApplication *>(TProgram::application);
+	auto *menuBar = app != nullptr ? dynamic_cast<MRMenuBar *>(app->menuBar) : nullptr;
+
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	if (menuBar == nullptr)
+		return true;
+	return returnWithDirectScreenMutation(menuBar->refreshRuntimeMenus(errorMessage));
+}
+
 bool mrvmUiMessageBox(const std::string &text) {
 	try {
 		messageBox(mfInformation | mfOKButton, "%s", text.c_str());
@@ -11354,6 +11915,8 @@ struct UiRenderFacade {
 				return mrvmUiMarquee(1, command.text);
 			case mrducMarqueeError:
 				return mrvmUiMarquee(2, command.text);
+			case mrducMakeMessage:
+				return applyMakeMessageProc(std::vector<Value>{makeString(command.text)});
 			case mrducBrain:
 				return mrvmUiBrain(command.a1 != 0);
 			case mrducPutBox:
@@ -11377,6 +11940,10 @@ struct UiRenderFacade {
 				return mrvmUiClearScreen(command.a1);
 			case mrducKillBox:
 				return mrvmUiKillBox();
+			case mrducRegisterMenuItem:
+				return mrvmUiRegisterMenuItem(command.text, command.text2, command.text3, command.text4);
+			case mrducRemoveMenuItem:
+				return mrvmUiRemoveMenuItem(command.text, command.text2, command.text3);
 			case mrducMessageBox:
 				return mrvmUiMessageBox(command.text);
 			case mrducDelay:
@@ -11492,6 +12059,39 @@ bool mrvmLoadMacroFile(const std::string &spec, std::string *errorMessage) {
 	return true;
 }
 
+bool mrvmRunMacroSpec(const std::string &spec, std::string *errorMessage, std::vector<std::string> *logLines) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+
+	if (logLines != nullptr)
+		logLines->clear();
+	if (executeRuntimeMacroSpec(spec, logLines)) {
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
+	}
+	if (errorMessage == nullptr)
+		return false;
+
+	switch (g_runtimeEnv.errorLevel) {
+		case 5001:
+			*errorMessage = "Macro specification could not be resolved.";
+			break;
+		case 5005:
+			*errorMessage = "Macro file could not be compiled.";
+			break;
+		case 5006:
+			*errorMessage = "Macro conflicts with a loaded or running macro.";
+			break;
+		case 5007:
+			*errorMessage = "Macro execution stack could not be completed.";
+			break;
+		default:
+			*errorMessage = "Macro execution failed.";
+			break;
+	}
+	return false;
+}
+
 bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKeyState,
                                 std::string &executedMacroName,
                                 std::vector<std::string> *logLines) {
@@ -11509,9 +12109,10 @@ bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKe
 				continue;
 			if (!macroAllowsUiMode(it->second, mode))
 				continue;
-			if (pressed != it->second.assignedKey)
+			if (!bindingKeysEqual(pressed, it->second.assignedKey))
 				continue;
 
+			logCalculatorHotkeyState("vm-loaded-match", pressed, it->second.displayName);
 			executedMacroName = it->second.displayName;
 			executeLoadedMacro(it, macroKey, std::string(), logLines);
 			return true;
@@ -11524,13 +12125,16 @@ bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKe
 		logLines->clear();
 	if (g_keyReplayDepth > 0)
 		return false;
+	logCalculatorHotkeyState("vm-enter", pressed);
 	if (executeExplicitKeyBinding(pressed, mode, logLines)) {
 		executedMacroName = "<bound>";
+		logCalculatorHotkeyState("vm-explicit-consumed", pressed);
 		return true;
 	}
 	if (dispatchLoadedBinding())
 		return true;
 	if (!tryLoadIndexedMacroForKey(pressed))
 		return false;
+	logCalculatorHotkeyState("vm-indexed-loaded", pressed);
 	return dispatchLoadedBinding();
 }

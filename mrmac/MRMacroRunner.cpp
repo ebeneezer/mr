@@ -455,7 +455,7 @@ void cancelForegroundMacroDelays() {
 	g_pendingForegroundMacros.clear();
 }
 
-bool runMacroFileByPath(const char *path) {
+bool runMacroFileByPath(const char *path, std::string *errorMessage, bool showErrorDialogs) {
 	std::string resolvedPath = expandUserPath(path);
 	std::string source;
 	std::string ioError;
@@ -465,33 +465,84 @@ bool runMacroFileByPath(const char *path) {
 	std::string macroSpec;
 	MRMacroExecutionProfile targetProfile;
 
+	if (errorMessage != nullptr)
+		errorMessage->clear();
 	if (resolvedPath.empty()) {
-		showErrorBox("Macro Loader", "No file name specified.");
+		if (errorMessage != nullptr)
+			*errorMessage = "No file name specified.";
+		if (showErrorDialogs)
+			showErrorBox("Macro Loader", "No file name specified.");
 		return false;
 	}
 
 	if (!hasMrmacExtension(resolvedPath)) {
-		showErrorBox("Macro Loader", "Only .mrmac files are allowed.");
+		if (errorMessage != nullptr)
+			*errorMessage = "Only .mrmac files are allowed.";
+		if (showErrorDialogs)
+			showErrorBox("Macro Loader", "Only .mrmac files are allowed.");
 		return false;
 	}
 
 	if (!readTextFile(resolvedPath, source, ioError)) {
-		showErrorBox(resolvedPath.c_str(), ioError.c_str());
+		if (errorMessage != nullptr)
+			*errorMessage = ioError;
+		if (showErrorDialogs)
+			showErrorBox(resolvedPath.c_str(), ioError.c_str());
 		return false;
 	}
 
 	if (!selectPlaybackMacro(resolvedPath, source, macroName, loadError, &targetProfile)) {
-		showErrorBox(resolvedPath.c_str(), loadError.c_str());
+		if (errorMessage != nullptr)
+			*errorMessage = loadError;
+		if (showErrorDialogs)
+			showErrorBox(resolvedPath.c_str(), loadError.c_str());
 		return false;
 	}
 
 	if (!mrvmLoadMacroFile(resolvedPath, &loadError)) {
-		showErrorBox(resolvedPath.c_str(), loadError.c_str());
+		if (errorMessage != nullptr)
+			*errorMessage = loadError;
+		if (showErrorDialogs)
+			showErrorBox(resolvedPath.c_str(), loadError.c_str());
 		return false;
 	}
 
 	macroSpec = resolvedPath + "^" + macroName;
 	runnerSource =
 	    "$MACRO MacroPlaybackLauncher;\nRUN_MACRO('" + escapeMrmacSingleQuotedLiteral(macroSpec) + "');\nEND_MACRO;\n";
-	return runMacroSource(macroSpec.c_str(), runnerSource.c_str(), &targetProfile);
+	if (!runMacroSource(macroSpec.c_str(), runnerSource.c_str(), &targetProfile)) {
+		if (errorMessage != nullptr && errorMessage->empty())
+			*errorMessage = "Macro execution failed.";
+		return false;
+	}
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+bool runMacroSpecByName(const char *macroSpec, std::string *errorMessage, bool showErrorDialogs) {
+	std::string spec = macroSpec != nullptr ? trimPathInput(macroSpec) : std::string();
+	std::string runError;
+
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	if (spec.empty()) {
+		if (errorMessage != nullptr)
+			*errorMessage = "No macro specification specified.";
+		if (showErrorDialogs)
+			showErrorBox("Macro Runner", "No macro specification specified.");
+		return false;
+	}
+	if (!mrvmRunMacroSpec(spec, &runError)) {
+		if (errorMessage != nullptr)
+			*errorMessage = runError;
+		if (showErrorDialogs)
+			showErrorBox(spec.c_str(), runError.empty() ? "Macro execution failed." : runError.c_str());
+		return false;
+	}
+	return true;
+}
+
+bool runMacroFileByPath(const char *path) {
+	return runMacroFileByPath(path, nullptr, true);
 }

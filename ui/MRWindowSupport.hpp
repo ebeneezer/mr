@@ -14,6 +14,7 @@ void mrScheduleWindowActivation(MREditWindow *win);
 [[nodiscard]] bool mrEnsureUsableWorkWindow();
 [[nodiscard]] bool mrClearLogWindow();
 void mrLogMessage(std::string_view message);
+bool mrAppendLogBufferToFile(const std::string &path, std::string *errorMessage = nullptr);
 void mrLogSettingsWriteReport(std::string_view reason, const MRSettingsWriteReport &report);
 void mrSetKeystrokeRecordingActive(bool active);
 [[nodiscard]] bool mrIsKeystrokeRecordingActive();

@@ -111,9 +111,6 @@ enum : ushort {
 	cmMrColorLoadTheme,
 	cmMrColorSaveTheme,
 
-	cmMrDevCancelMacroTasks,
-	cmMrDevSetMarqueeText,
-	cmMrDevHeroEventProbe,
 	cmMrPreviewPrev,
 	cmMrPreviewNext,
 

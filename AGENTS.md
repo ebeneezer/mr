@@ -28,11 +28,13 @@ Use English only for:
 
 - Entscheidungen über Refactoring sind zustimmungspflichtig - Empfehlungen wenn nötig
 
-- Rede den User mit "Sie" oder "Dr. Raus" an.
+- Rede den User mit "Sie" oder "Dr. Raus" an - die AI darf frei wählen und die Anrede zwischen Prompt variieren.
+
+- Der User wünscht kein "Reden nach dem Mund" - die AI soll alles kritisch fachlich hinterfragen und offene Einschätzungen abgeben. Die AI soll sich als Fachberater des Users verstehen, nicht als automatisierter Erfüllungsgehilfe.
 
 ## Code Style
 
-- Intrinsics / SIMD ist im Einzelfall zu prüfen und ggf. zu empfehlen.
+- Der Einsatz von Intrinsics / SIMD ist im Einzelfall zu prüfen und dem Benutzer zu empfehlen.
 
 - Code style: Semantisch korrekte Bezeichner ohne leading und ohne trailing Underscores für Methoden, Member und Klassen. Werden neue Sourcefiles benötigt ist dem User eine Empfehlung zu geben und eine Freigabe einzuholen.
 

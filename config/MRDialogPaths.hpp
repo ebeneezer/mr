@@ -169,6 +169,12 @@ enum class MRColorSetupGroup : unsigned char {
 	MiniMap
 };
 
+enum class MRLogHandling : unsigned char {
+	Volatile = 0,
+	Persist = 1,
+	Journalctl = 2
+};
+
 enum class MRSettingsKeyClass : unsigned char {
 	Unknown,
 	Version,
@@ -422,6 +428,16 @@ bool setConfiguredCursorPositionMarker(const std::string &value, std::string *er
 [[nodiscard]] std::string configuredCursorPositionMarker();
 bool setConfiguredAutoloadWorkspace(bool enabled, std::string *errorMessage = nullptr);
 [[nodiscard]] bool configuredAutoloadWorkspace();
+bool setConfiguredLogHandling(MRLogHandling handling, std::string *errorMessage = nullptr);
+[[nodiscard]] MRLogHandling configuredLogHandling();
+void configuredAutoexecMacroEntries(std::vector<std::string> &outValues);
+bool setConfiguredAutoexecMacroEntries(const std::vector<std::string> &values,
+                                       std::string *errorMessage = nullptr);
+bool addConfiguredAutoexecMacroEntry(const std::string &value, std::string *errorMessage = nullptr);
+void clearConfiguredAutoexecMacroDiagnostics();
+void rememberConfiguredAutoexecMacroDiagnostic(const std::string &fileName, const std::string &errorText);
+[[nodiscard]] bool configuredAutoexecMacroDiagnosticForFile(const std::string &fileName,
+                                                            std::string &errorText);
 bool setConfiguredLastFileDialogPath(const std::string &path, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string configuredLastFileDialogPath();
 struct MRSettingsWriteReport {
@@ -455,6 +471,9 @@ bool setConfiguredTempDirectoryPath(const std::string &path, std::string *errorM
 bool validateShellExecutablePath(const std::string &path, std::string *errorMessage = nullptr);
 bool setConfiguredShellExecutablePath(const std::string &path, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string configuredShellExecutablePath();
+bool validateLogFilePath(const std::string &path, std::string *errorMessage = nullptr);
+bool setConfiguredLogFilePath(const std::string &path, std::string *errorMessage = nullptr);
+[[nodiscard]] std::string configuredLogFilePath();
 [[nodiscard]] std::string defaultSettingsMacroFilePath();
 [[nodiscard]] std::string defaultMacroDirectoryPath();
 

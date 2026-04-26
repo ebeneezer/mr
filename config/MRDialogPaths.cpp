@@ -45,6 +45,8 @@ static int g_virtualDesktops = 1;
 static bool g_cyclicVirtualDesktops = false;
 static std::string g_cursorPositionMarker = "R:C";
 static bool g_autoloadWorkspace = false;
+static MRLogHandling g_logHandling = MRLogHandling::Volatile;
+static std::map<std::string, std::string> g_autoexecMacroDiagnostics;
 
 std::vector<MRDialogHistoryEntry> &configuredPathHistoryStorage() {
 	static std::vector<MRDialogHistoryEntry> value;
@@ -64,6 +66,19 @@ std::vector<MRDialogHistoryEntry> &configuredMultiFilespecHistoryStorage() {
 std::vector<MRDialogHistoryEntry> &configuredMultiPathHistoryStorage() {
 	static std::vector<MRDialogHistoryEntry> value;
 	return value;
+}
+
+std::vector<std::string> &configuredAutoexecMacroStorage() {
+	static std::vector<std::string> value;
+	return value;
+}
+
+std::string autoexecDiagnosticKey(const std::string &fileName) {
+	std::string key = trimAscii(fileName);
+
+	for (char &ch : key)
+		ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+	return key;
 }
 
 int &configuredPathHistoryLimit() {
@@ -102,6 +117,11 @@ std::string &configuredTempDirectory() {
 }
 
 std::string &configuredShellExecutable() {
+	static std::string value;
+	return value;
+}
+
+std::string &configuredLogFile() {
 	static std::string value;
 	return value;
 }
@@ -205,6 +225,18 @@ std::string expandUserPath(std::string_view input) {
 	return ::access(pathString.c_str(), X_OK) == 0;
 }
 
+[[nodiscard]] bool isWritableRegularFile(std::string_view path) {
+	const std::string pathString(path);
+	struct stat st;
+	if (path.empty())
+		return false;
+	if (::stat(pathString.c_str(), &st) != 0)
+		return false;
+	if (!S_ISREG(st.st_mode))
+		return false;
+	return ::access(pathString.c_str(), W_OK) == 0;
+}
+
 std::string directoryPartOf(std::string_view path) {
 	if (path.empty())
 		return std::string();
@@ -218,6 +250,28 @@ std::string directoryPartOf(std::string_view path) {
 
 [[nodiscard]] bool hasDirectorySeparator(std::string_view path) {
 	return path.find('/') != std::string::npos;
+}
+
+std::string normalizeAutoexecMacroEntry(std::string_view value) {
+	return trimAscii(value);
+}
+
+bool validateAutoexecMacroEntry(const std::string &value, std::string *errorMessage) {
+	const std::string normalized = normalizeDialogPath(normalizeAutoexecMacroEntry(value).c_str());
+
+	if (normalized.empty()) {
+		if (errorMessage != nullptr)
+			*errorMessage = "Autoexec macro name must not be empty.";
+		return false;
+	}
+	if (hasDirectorySeparator(normalized) || normalized.find(':') != std::string::npos) {
+		if (errorMessage != nullptr)
+			*errorMessage = "Autoexec macro must be a file name under MACROPATH.";
+		return false;
+	}
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
 }
 
 void copyToBuffer(char *buffer, std::size_t bufferSize, const std::string &value) {
@@ -436,6 +490,13 @@ std::string defaultColorThemePathForSettings(std::string_view settingsPath) {
 	return appendFileName(dir, "default-theme.mrmac");
 }
 
+std::string defaultLogFilePathForSettings(std::string_view settingsPath) {
+	std::string dir = directoryPartOf(makeAbsolutePath(std::string(settingsPath)));
+	if (dir.empty() || !isWritableDirectory(dir))
+		dir = builtInTempDirectoryPath();
+	return appendFileName(dir, "mr.log");
+}
+
 std::string builtInTempDirectoryPath() {
 	std::string envValue = firstWritableDirectoryFromEnvironment();
 	std::string cwd;
@@ -602,6 +663,9 @@ static const char *const kSarModePromptEach = "PROMPT_FOR_EACH_REPLACE";
 static const char *const kSarModeReplaceAll = "REPLACE_ALL_OCCURRENCES";
 static const char *const kSarLeaveCursorEnd = "END_OF_REPLACE_STRING";
 static const char *const kSarLeaveCursorStart = "START_OF_REPLACE_STRING";
+static const char *const kLogHandlingVolatile = "VOLATILE";
+static const char *const kLogHandlingPersist = "PERSIST";
+static const char *const kLogHandlingJournalctl = "JOURNALCTL";
 
 struct MRSettingsKeyDescriptor {
 	const char *key;
@@ -610,11 +674,11 @@ struct MRSettingsKeyDescriptor {
 };
 
 static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
-    {kSettingsVersionKey, MRSettingsKeyClass::Version, true},
-    {"SETTINGSPATH", MRSettingsKeyClass::Path, true},
-    {"MACROPATH", MRSettingsKeyClass::Path, true},
-    {"HELPPATH", MRSettingsKeyClass::Path, true},
-    {"TEMPDIR", MRSettingsKeyClass::Path, true},
+	{kSettingsVersionKey, MRSettingsKeyClass::Version, true},
+	{"SETTINGSPATH", MRSettingsKeyClass::Path, true},
+	{"MACROPATH", MRSettingsKeyClass::Path, true},
+	{"HELPPATH", MRSettingsKeyClass::Path, true},
+	{"TEMPDIR", MRSettingsKeyClass::Path, true},
 	{"SHELLPATH", MRSettingsKeyClass::Path, true},
 	{"WINDOW_MANAGER", MRSettingsKeyClass::Global, true},
 	{"MESSAGES", MRSettingsKeyClass::Global, true},
@@ -654,10 +718,13 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
 	{"MULTI_SAR_KEEP_FILES_OPEN", MRSettingsKeyClass::Global, true},
 	{"MULTI_FILESPEC_HISTORY", MRSettingsKeyClass::Global, false},
 	{"MULTI_PATH_HISTORY", MRSettingsKeyClass::Global, false},
-		{"VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
-		{"CYCLIC_VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
-		{"CURSOR_POSITION_MARKER", MRSettingsKeyClass::Global, true},
-		{"AUTOLOAD_WORKSPACE", MRSettingsKeyClass::Global, true},
+	{"VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
+	{"CYCLIC_VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
+	{"CURSOR_POSITION_MARKER", MRSettingsKeyClass::Global, true},
+	{"AUTOLOAD_WORKSPACE", MRSettingsKeyClass::Global, true},
+	{"LOG_HANDLING", MRSettingsKeyClass::Global, true},
+	{"LOGFILE", MRSettingsKeyClass::Global, true},
+	{"AUTOEXEC_MACRO", MRSettingsKeyClass::Global, false},
 	{"LASTFILEDIALOGPATH", MRSettingsKeyClass::Global, true},
 	{"WORKSPACE", MRSettingsKeyClass::Global, false},
 	{"MAX_PATH_HISTORY", MRSettingsKeyClass::Global, true},
@@ -666,11 +733,11 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
 	{"FILE_HISTORY", MRSettingsKeyClass::Global, false},
 	{"DEFAULT_PROFILE_DESCRIPTION", MRSettingsKeyClass::Global, true},
 	{kThemeSettingsKey, MRSettingsKeyClass::Global, true},
-    {"WINDOWCOLORS", MRSettingsKeyClass::ColorInline, false},
-    {"MENUDIALOGCOLORS", MRSettingsKeyClass::ColorInline, false},
-    {"HELPCOLORS", MRSettingsKeyClass::ColorInline, false},
-    {"OTHERCOLORS", MRSettingsKeyClass::ColorInline, false},
-    {"MINIMAPCOLORS", MRSettingsKeyClass::ColorInline, false},
+	{"WINDOWCOLORS", MRSettingsKeyClass::ColorInline, false},
+	{"MENUDIALOGCOLORS", MRSettingsKeyClass::ColorInline, false},
+	{"HELPCOLORS", MRSettingsKeyClass::ColorInline, false},
+	{"OTHERCOLORS", MRSettingsKeyClass::ColorInline, false},
+	{"MINIMAPCOLORS", MRSettingsKeyClass::ColorInline, false},
 };
 
 const MREditSettingDescriptor *editSettingDescriptorByKeyInternal(const std::string &key);
@@ -1340,6 +1407,43 @@ bool parseBooleanLiteral(const std::string &value, bool &outValue, std::string *
 		return true;
 	}
 	return setError(errorMessage, "Expected boolean literal true/false.");
+}
+
+bool parseLogHandlingLiteral(const std::string &value, MRLogHandling &outValue,
+                             std::string *errorMessage) {
+	const std::string upper = upperAscii(trimAscii(value));
+
+	if (upper == kLogHandlingVolatile) {
+		outValue = MRLogHandling::Volatile;
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
+	}
+	if (upper == kLogHandlingPersist) {
+		outValue = MRLogHandling::Persist;
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
+	}
+	if (upper == kLogHandlingJournalctl) {
+		outValue = MRLogHandling::Journalctl;
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
+	}
+	return setError(errorMessage, "Expected log handling VOLATILE, PERSIST or JOURNALCTL.");
+}
+
+std::string formatLogHandlingLiteral(MRLogHandling handling) {
+	switch (handling) {
+		case MRLogHandling::Volatile:
+			return kLogHandlingVolatile;
+		case MRLogHandling::Persist:
+			return kLogHandlingPersist;
+		case MRLogHandling::Journalctl:
+			return kLogHandlingJournalctl;
+	}
+	return kLogHandlingVolatile;
 }
 
 std::string canonicalBooleanLiteral(bool value) {
@@ -2645,6 +2749,8 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 		return false;
 	if (!setConfiguredShellExecutablePath(paths.shellUri, errorMessage))
 		return false;
+	if (!setConfiguredLogFilePath(defaultLogFilePathForSettings(paths.settingsMacroUri), errorMessage))
+		return false;
 	if (!setConfiguredLastFileDialogPath(paths.macroPath, errorMessage))
 		return false;
 	if (!setConfiguredDefaultProfileDescription("Global defaults", errorMessage))
@@ -2659,6 +2765,8 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 		return false;
 	if (!setConfiguredCursorPositionMarker("R:C", errorMessage))
 		return false;
+	g_logHandling = MRLogHandling::Volatile;
+	configuredAutoexecMacroStorage().clear();
 	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), errorMessage))
 		return false;
 	configuredColorSettings() = defaultsFromColorGroups();
@@ -2963,20 +3071,30 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 					errorMessage->clear();
 				return true;
 			}
-				if (upper == "CYCLIC_VIRTUAL_DESKTOPS") {
-					bool parsed = false;
-					if (!parseBooleanLiteral(value, parsed, errorMessage))
-						return false;
-					return setConfiguredCyclicVirtualDesktops(parsed, errorMessage);
-				}
-				if (upper == "CURSOR_POSITION_MARKER")
-					return setConfiguredCursorPositionMarker(value, errorMessage);
-				if (upper == "AUTOLOAD_WORKSPACE") {
-					bool parsed = false;
-					if (!parseBooleanLiteral(value, parsed, errorMessage))
+			if (upper == "CYCLIC_VIRTUAL_DESKTOPS") {
+				bool parsed = false;
+				if (!parseBooleanLiteral(value, parsed, errorMessage))
+					return false;
+				return setConfiguredCyclicVirtualDesktops(parsed, errorMessage);
+			}
+			if (upper == "CURSOR_POSITION_MARKER")
+				return setConfiguredCursorPositionMarker(value, errorMessage);
+			if (upper == "AUTOLOAD_WORKSPACE") {
+				bool parsed = false;
+				if (!parseBooleanLiteral(value, parsed, errorMessage))
 					return false;
 				return setConfiguredAutoloadWorkspace(parsed, errorMessage);
 			}
+			if (upper == "LOG_HANDLING") {
+				MRLogHandling handling = MRLogHandling::Volatile;
+				if (!parseLogHandlingLiteral(value, handling, errorMessage))
+					return false;
+				return setConfiguredLogHandling(handling, errorMessage);
+			}
+			if (upper == "LOGFILE")
+				return setConfiguredLogFilePath(value, errorMessage);
+			if (upper == "AUTOEXEC_MACRO")
+				return addConfiguredAutoexecMacroEntry(value, errorMessage);
 			if (upper == "LASTFILEDIALOGPATH")
 				return setConfiguredLastFileDialogPath(value, errorMessage);
 			if (upper == "WORKSPACE") {
@@ -3958,6 +4076,7 @@ bool setConfiguredMenulineMessages(bool enabled, std::string *errorMessage) {
 	if (!enabled) {
 		mr::messageline::clearOwner(mr::messageline::Owner::HeroEvent);
 		mr::messageline::clearOwner(mr::messageline::Owner::HeroEventFollowup);
+		mr::messageline::clearOwner(mr::messageline::Owner::MacroMessage);
 		mr::messageline::clearOwner(mr::messageline::Owner::MacroMarquee);
 		mr::messageline::clearOwner(mr::messageline::Owner::DialogValidation);
 		mr::messageline::clearOwner(mr::messageline::Owner::DialogInteraction);
@@ -4068,6 +4187,72 @@ bool configuredAutoloadWorkspace() {
 	return g_autoloadWorkspace;
 }
 
+bool setConfiguredLogHandling(MRLogHandling handling, std::string *errorMessage) {
+	g_logHandling = handling;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+MRLogHandling configuredLogHandling() {
+	return g_logHandling;
+}
+
+void configuredAutoexecMacroEntries(std::vector<std::string> &outValues) {
+	outValues = configuredAutoexecMacroStorage();
+}
+
+bool setConfiguredAutoexecMacroEntries(const std::vector<std::string> &values,
+                                       std::string *errorMessage) {
+	std::vector<std::string> normalizedValues;
+
+	for (const std::string &value : values) {
+		const std::string normalized = normalizeAutoexecMacroEntry(value);
+		if (!validateAutoexecMacroEntry(normalized, errorMessage))
+			return false;
+		if (std::find(normalizedValues.begin(), normalizedValues.end(), normalized) == normalizedValues.end())
+			normalizedValues.push_back(normalized);
+	}
+	configuredAutoexecMacroStorage() = std::move(normalizedValues);
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+bool addConfiguredAutoexecMacroEntry(const std::string &value, std::string *errorMessage) {
+	const std::string normalized = normalizeAutoexecMacroEntry(value);
+	std::vector<std::string> values = configuredAutoexecMacroStorage();
+
+	if (!validateAutoexecMacroEntry(normalized, errorMessage))
+		return false;
+	if (std::find(values.begin(), values.end(), normalized) == values.end())
+		values.push_back(normalized);
+	return setConfiguredAutoexecMacroEntries(values, errorMessage);
+}
+
+void clearConfiguredAutoexecMacroDiagnostics() {
+	g_autoexecMacroDiagnostics.clear();
+}
+
+void rememberConfiguredAutoexecMacroDiagnostic(const std::string &fileName, const std::string &errorText) {
+	const std::string key = autoexecDiagnosticKey(fileName);
+
+	if (key.empty())
+		return;
+	g_autoexecMacroDiagnostics[key] = errorText;
+}
+
+bool configuredAutoexecMacroDiagnosticForFile(const std::string &fileName, std::string &errorText) {
+	const std::string key = autoexecDiagnosticKey(fileName);
+	auto it = g_autoexecMacroDiagnostics.find(key);
+
+	errorText.clear();
+	if (it == g_autoexecMacroDiagnostics.end())
+		return false;
+	errorText = it->second;
+	return true;
+}
+
 bool setConfiguredLastFileDialogPath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 	std::string directory;
@@ -4107,6 +4292,7 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	std::vector<std::string> fileHistory;
 	std::vector<std::string> multiFilespecHistory;
 	std::vector<std::string> multiPathHistory;
+	std::vector<std::string> autoexecMacros;
 	std::size_t descriptorCount = 0;
 	const MREditSettingDescriptor *descriptors = editSettingDescriptors(descriptorCount);
 
@@ -4115,6 +4301,7 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	configuredFileHistoryEntries(fileHistory);
 	configuredMultiFilespecHistoryEntries(multiFilespecHistory);
 	configuredMultiPathHistoryEntries(multiPathHistory);
+	configuredAutoexecMacroEntries(autoexecMacros);
 
 	source += "$MACRO MR_SETTINGS FROM EDIT;\n";
 	source += "MRSETUP('" + std::string(kSettingsVersionKey) + "', '" +
@@ -4232,6 +4419,12 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source += "MRSETUP('CURSOR_POSITION_MARKER', '" +
 	          escapeMrmacSingleQuotedLiteral(configuredCursorPositionMarker()) + "');\n";
 	source += "MRSETUP('AUTOLOAD_WORKSPACE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredAutoloadWorkspace())) + "');\n";
+	source += "MRSETUP('LOG_HANDLING', '" +
+	          escapeMrmacSingleQuotedLiteral(formatLogHandlingLiteral(configuredLogHandling())) + "');\n";
+	source += "MRSETUP('LOGFILE', '" +
+	          escapeMrmacSingleQuotedLiteral(configuredLogFilePath()) + "');\n";
+	for (const std::string &autoexecMacro : autoexecMacros)
+		source += "MRSETUP('AUTOEXEC_MACRO', '" + escapeMrmacSingleQuotedLiteral(autoexecMacro) + "');\n";
 	source += "MRSETUP('LASTFILEDIALOGPATH', '" +
 	          escapeMrmacSingleQuotedLiteral(configuredLastFileDialogPath()) + "');\n";
 	source += "MRSETUP('MAX_PATH_HISTORY', '" + std::to_string(configuredMaxPathHistory()) + "');\n";
@@ -4660,6 +4853,48 @@ std::string configuredShellExecutablePath() {
 	if (isExecutableFile(builtIn))
 		return builtIn;
 	return "/bin/sh";
+}
+
+bool validateLogFilePath(const std::string &path, std::string *errorMessage) {
+	const std::string normalized = normalizeConfiguredPathInput(path);
+	std::string directory;
+	struct stat st;
+
+	if (normalized.empty())
+		return setError(errorMessage, "Empty log file URI.");
+	if (isReadableDirectory(normalized))
+		return setError(errorMessage, "Log file URI points to a directory: " + normalized);
+	if (::stat(normalized.c_str(), &st) == 0 && !S_ISREG(st.st_mode))
+		return setError(errorMessage, "Log file URI must point to a regular file: " + normalized);
+	if (isWritableRegularFile(normalized) == false && ::stat(normalized.c_str(), &st) == 0)
+		return setError(errorMessage, "Log file is not writable: " + normalized);
+	directory = directoryPartOf(normalized);
+	if (directory.empty())
+		directory = currentWorkingDirectory();
+	if (directory.empty() || !isWritableDirectory(makeAbsolutePath(directory)))
+		return setError(errorMessage, "Log file path is missing or parent directory is not writable: " +
+		                             normalized);
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+bool setConfiguredLogFilePath(const std::string &path, std::string *errorMessage) {
+	const std::string normalized = normalizeConfiguredPathInput(path);
+
+	if (!validateLogFilePath(path, errorMessage))
+		return false;
+	configuredLogFile() = makeAbsolutePath(normalized);
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+std::string configuredLogFilePath() {
+	const std::string &configured = configuredLogFile();
+	if (!configured.empty())
+		return makeAbsolutePath(configured);
+	return defaultLogFilePathForSettings(configuredSettingsMacroFilePath());
 }
 
 std::string defaultSettingsMacroFilePath() {

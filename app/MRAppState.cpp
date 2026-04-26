@@ -169,6 +169,4 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrOtherAsciiTable, canModify);
 	setCommandEnabled(cmMrOtherEmojiTable, canModify);
 	setCommandEnabled(cmMrMacroToggleRecording, hasEditor);
-	setCommandEnabled(cmMrDevCancelMacroTasks, hasWindow && state.hasMacroTasks);
-	setCommandEnabled(cmMrDevHeroEventProbe, true);
 }

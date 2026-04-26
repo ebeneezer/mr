@@ -44,6 +44,16 @@ class WindowListDialog;
 
 WindowListDialog *g_manageWindowListDialog = nullptr;
 
+void postWindowListClose(TView *dialog) {
+	if (dialog == nullptr)
+		return;
+	TEvent closeEvent {};
+	closeEvent.what = evCommand;
+	closeEvent.message.command = cmClose;
+	closeEvent.message.infoPtr = dialog;
+	dialog->putEvent(closeEvent);
+}
+
 struct WindowListEntry {
 	MREditWindow *window;
 	std::string fileLabel;
@@ -385,9 +395,8 @@ class WindowListDialog : public MRDialogFoundation {
 			return;
 		}
 		if (mode == mrwlManageWindows && event.what == evCommand &&
-		    (event.message.command == cmCancel || event.message.command == cmClose)) {
-			g_manageWindowListDialog = nullptr;
-			message(this, evCommand, cmClose, nullptr);
+		    event.message.command == cmCancel) {
+			postWindowListClose(this);
 			clearEvent(event);
 			return;
 		}
@@ -548,15 +557,15 @@ class WindowListDialog : public MRDialogFoundation {
 		int oldFocus = listView != nullptr ? listView->focused : 0;
 		sanitizeTrackedWindows();
 		collectEntries();
-		if (listView != nullptr)
-			listView->setItems(rows);
-		if (entries.empty()) {
-			selected = nullptr;
-			if (mode == mrwlManageWindows)
-				message(this, evCommand, cmClose, nullptr);
-			else
-				endModal(cmCancel);
-			return;
+			if (listView != nullptr)
+				listView->setItems(rows);
+			if (entries.empty()) {
+				selected = nullptr;
+				if (mode == mrwlManageWindows)
+					postWindowListClose(this);
+				else
+					endModal(cmCancel);
+				return;
 		}
 		if (oldFocus < 0)
 			oldFocus = 0;

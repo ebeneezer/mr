@@ -19,6 +19,7 @@ enum class Kind : unsigned char {
 enum class Owner : unsigned char {
     HeroEvent,
     HeroEventFollowup,
+    MacroMessage,
     MacroMarquee,
     MacroBrain,
     DialogValidation,

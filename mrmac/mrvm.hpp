@@ -147,6 +147,7 @@ enum MRMacroDeferredUiCommandType {
 	mrducMarqueeInfo,
 	mrducMarqueeWarning,
 	mrducMarqueeError,
+	mrducMakeMessage,
 	mrducBrain,
 	mrducPutBox,
 	mrducWrite,
@@ -158,6 +159,8 @@ enum MRMacroDeferredUiCommandType {
 	mrducScrollBoxDn,
 	mrducClearScreen,
 	mrducKillBox,
+	mrducRegisterMenuItem,
+	mrducRemoveMenuItem,
 	mrducMessageBox,
 	mrducDelay
 };
@@ -173,20 +176,25 @@ struct MRMacroDeferredUiCommand {
 	int a7;
 	int a8;
 	std::string text;
+	std::string text2;
+	std::string text3;
+	std::string text4;
 
 	MRMacroDeferredUiCommand() noexcept
-	    : type(mrducNone), a1(0), a2(0), a3(0), a4(0), a5(0), a6(0), a7(0), a8(0), text() {
+	    : type(mrducNone), a1(0), a2(0), a3(0), a4(0), a5(0), a6(0), a7(0), a8(0), text(),
+	      text2(), text3(), text4() {
 	}
 
 	MRMacroDeferredUiCommand(int aType, int arg1 = 0, int arg2 = 0, int arg3 = 0,
 	                         int arg4 = 0) noexcept
-	    : type(aType), a1(arg1), a2(arg2), a3(arg3), a4(arg4), a5(0), a6(0), a7(0), a8(0), text() {
+	    : type(aType), a1(arg1), a2(arg2), a3(arg3), a4(arg4), a5(0), a6(0), a7(0), a8(0), text(),
+	      text2(), text3(), text4() {
 	}
 
 	MRMacroDeferredUiCommand(int aType, int arg1, int arg2, int arg3, int arg4, int arg5, int arg6,
 	                         int arg7, int arg8, const std::string &aText = std::string())
 	    : type(aType), a1(arg1), a2(arg2), a3(arg3), a4(arg4), a5(arg5), a6(arg6), a7(arg7), a8(arg8),
-	      text(aText) {
+	      text(aText), text2(), text3(), text4() {
 	}
 };
 
@@ -371,10 +379,24 @@ bool mrvmUiScrollBoxUp(int x1, int y1, int x2, int y2, int attr);
 bool mrvmUiScrollBoxDn(int x1, int y1, int x2, int y2, int attr);
 bool mrvmUiClearScreen(int attr = 0x07);
 bool mrvmUiKillBox();
+bool mrvmUiRegisterMenuItem(const std::string &menuTitle, const std::string &itemTitle,
+                            const std::string &macroSpec, const std::string &ownerSpec,
+                            std::string *errorMessage = nullptr);
+bool mrvmUiRemoveMenuItem(const std::string &menuTitle, const std::string &itemTitle,
+                          const std::string &ownerSpec,
+                          std::string *errorMessage = nullptr);
+bool mrvmUiRemoveRuntimeMenusOwnedByMacroSpec(const std::string &ownerSpec,
+                                              std::string *errorMessage = nullptr);
+bool mrvmUiRemoveRuntimeMenusOwnedByFile(const std::string &fileSpec,
+                                         std::string *errorMessage = nullptr);
+std::string mrvmUiMenuKeyLabelForMacroSpec(const std::string &macroSpec);
+bool mrvmUiRefreshRuntimeMenus(std::string *errorMessage = nullptr);
 bool mrvmUiMessageBox(const std::string &text);
 bool mrvmUiRenderFacadeRenderDeferredCommand(const MRMacroDeferredUiCommand &command);
 bool mrvmUiRenderDeferredCommand(const MRMacroDeferredUiCommand &command);
 bool mrvmLoadMacroFile(const std::string &spec, std::string *errorMessage = nullptr);
+bool mrvmRunMacroSpec(const std::string &spec, std::string *errorMessage = nullptr,
+                      std::vector<std::string> *logLines = nullptr);
 void mrvmBootstrapBoundMacroIndex(const std::string &directoryPath, std::size_t *fileCount = nullptr,
                                   std::size_t *bindingCount = nullptr);
 bool mrvmWarmLoadNextIndexedMacroFile(std::string *loadedFilePath = nullptr,

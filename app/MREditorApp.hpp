@@ -24,7 +24,7 @@ class MREditorApp : public TApplication {
 	void handleEvent(TEvent &event) override;
 	void idle() override;
 	TPalette &getPalette() const override;
-	bool reloadSettingsMacroFromPath(const std::string &path, std::string *errorMessage = nullptr);
+	bool applyConfiguredSettingsFromModel(std::string *errorMessage = nullptr);
 
  private:
 	void prepareForQuit();

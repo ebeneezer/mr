@@ -1,5 +1,5 @@
 # MR / MEMAC – Planungsnotizen zum Key-Mapping-System
-
+Unser letzter Stand war die experimentelle Modellierung der ASCII / Emoji Tabelle in mrmac. Auch wenn das Vorhaben nicht so gut gelungen ist wie die Implementierung des Calculators halte ich den Ausbau in Richtung Menü Manipulationen für wertvoll für mrmac. Ich möchte das Thema mrmac zunächst verlassen und mich mit Dir einem zentralen neuen Thema zuwenden : Key Mapping Themes.
 Stand: 2026-04-16
 
 ## Zielsetzung

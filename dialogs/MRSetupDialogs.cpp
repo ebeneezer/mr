@@ -85,9 +85,34 @@ struct PathsDialogRecord {
 	char helpFilePath[kPathFieldSize];
 	char tempDirectoryPath[kPathFieldSize];
 	char shellExecutablePath[kPathFieldSize];
+	char logFilePath[kPathFieldSize];
+	ushort logHandlingChoice;
 	char maxPathHistory[kHistoryNumberFieldSize];
 	char maxFileHistory[kHistoryNumberFieldSize];
 };
+
+ushort logHandlingChoiceFrom(MRLogHandling handling) {
+	switch (handling) {
+		case MRLogHandling::Volatile:
+			return 0;
+		case MRLogHandling::Persist:
+			return 1;
+		case MRLogHandling::Journalctl:
+			return 2;
+	}
+	return 0;
+}
+
+MRLogHandling logHandlingFromChoice(ushort choice) {
+	switch (choice) {
+		case 1:
+			return MRLogHandling::Persist;
+		case 2:
+			return MRLogHandling::Journalctl;
+		default:
+			return MRLogHandling::Volatile;
+	}
+}
 
 enum : ushort {
 	kBackupMethodOff = 0,
@@ -183,6 +208,8 @@ bool recordsEqual(const PathsDialogRecord &lhs, const PathsDialogRecord &rhs) {
 	       readRecordField(lhs.helpFilePath) == readRecordField(rhs.helpFilePath) &&
 	       readRecordField(lhs.tempDirectoryPath) == readRecordField(rhs.tempDirectoryPath) &&
 	       readRecordField(lhs.shellExecutablePath) == readRecordField(rhs.shellExecutablePath) &&
+	       readRecordField(lhs.logFilePath) == readRecordField(rhs.logFilePath) &&
+	       lhs.logHandlingChoice == rhs.logHandlingChoice &&
 	       readRecordField(lhs.maxPathHistory) == readRecordField(rhs.maxPathHistory) &&
 	       readRecordField(lhs.maxFileHistory) == readRecordField(rhs.maxFileHistory);
 }
@@ -204,6 +231,8 @@ void initPathsDialogRecord(PathsDialogRecord &record) {
 	writeRecordField(record.helpFilePath, sizeof(record.helpFilePath), configuredHelpFilePath());
 	writeRecordField(record.tempDirectoryPath, sizeof(record.tempDirectoryPath), configuredTempDirectoryPath());
 	writeRecordField(record.shellExecutablePath, sizeof(record.shellExecutablePath), configuredShellExecutablePath());
+	writeRecordField(record.logFilePath, sizeof(record.logFilePath), configuredLogFilePath());
+	record.logHandlingChoice = logHandlingChoiceFrom(configuredLogHandling());
 	writeRecordField(record.maxPathHistory, sizeof(record.maxPathHistory),
 	                 std::to_string(configuredMaxPathHistory()));
 	writeRecordField(record.maxFileHistory, sizeof(record.maxFileHistory),
@@ -345,6 +374,7 @@ bool validatePathsRecord(const PathsDialogRecord &record, std::string &errorText
 	std::string helpPath = normalizeConfiguredPathInput(readRecordField(record.helpFilePath));
 	std::string tempDir = normalizeConfiguredPathInput(readRecordField(record.tempDirectoryPath));
 	std::string shellPath = normalizeConfiguredPathInput(readRecordField(record.shellExecutablePath));
+	std::string logFile = normalizeConfiguredPathInput(readRecordField(record.logFilePath));
 	int maxPathHistory = 0;
 	int maxFileHistory = 0;
 
@@ -357,6 +387,9 @@ bool validatePathsRecord(const PathsDialogRecord &record, std::string &errorText
 	if (!validateTempDirectoryPath(tempDir, &errorText))
 		return false;
 	if (!validateShellExecutablePath(shellPath, &errorText))
+		return false;
+	if (logHandlingFromChoice(record.logHandlingChoice) == MRLogHandling::Persist &&
+	    !validateLogFilePath(logFile, &errorText))
 		return false;
 	if (!parseNonNegativeIntegerField(trimAscii(readRecordField(record.maxPathHistory)), maxPathHistory) ||
 	    maxPathHistory < 5 || maxPathHistory > 50) {
@@ -377,22 +410,88 @@ bool saveAndReloadPathsRecord(const PathsDialogRecord &record, std::string &erro
 	MRSettingsWriteReport writeReport;
 	MREditorApp *app;
 	MRSetupPaths dummyPaths = resolveSetupPathDefaults();
+	const std::string originalSettingsPath = configuredSettingsMacroFilePath();
+	const std::string originalMacroPath = defaultMacroDirectoryPath();
+	const std::string originalHelpPath = configuredHelpFilePath();
+	const std::string originalTempPath = configuredTempDirectoryPath();
+	const std::string originalShellPath = configuredShellExecutablePath();
 	const int originalMaxPathHistory = configuredMaxPathHistory();
 	const int originalMaxFileHistory = configuredMaxFileHistory();
+	const MRLogHandling originalLogHandling = configuredLogHandling();
+	const std::string originalLogFile = configuredLogFilePath();
 	const std::string maxPathHistoryText = trimAscii(readRecordField(record.maxPathHistory));
 	const std::string maxFileHistoryText = trimAscii(readRecordField(record.maxFileHistory));
+	const std::string logFileText = normalizeConfiguredPathInput(readRecordField(record.logFilePath));
+	const MRLogHandling newLogHandling = logHandlingFromChoice(record.logHandlingChoice);
 
 	if (!validatePathsRecord(record, errorText))
 		return false;
-	if (!applyConfiguredSettingsAssignment("MAX_PATH_HISTORY", maxPathHistoryText, dummyPaths, &errorText))
+	if (!setConfiguredSettingsMacroFilePath(paths.settingsMacroUri, &errorText))
 		return false;
+	if (!setConfiguredMacroDirectoryPath(paths.macroPath, &errorText)) {
+		(void)setConfiguredSettingsMacroFilePath(originalSettingsPath, nullptr);
+		return false;
+	}
+	if (!setConfiguredHelpFilePath(paths.helpUri, &errorText)) {
+		(void)setConfiguredSettingsMacroFilePath(originalSettingsPath, nullptr);
+		(void)setConfiguredMacroDirectoryPath(originalMacroPath, nullptr);
+		return false;
+	}
+	if (!setConfiguredTempDirectoryPath(paths.tempPath, &errorText)) {
+		(void)setConfiguredSettingsMacroFilePath(originalSettingsPath, nullptr);
+		(void)setConfiguredMacroDirectoryPath(originalMacroPath, nullptr);
+		(void)setConfiguredHelpFilePath(originalHelpPath, nullptr);
+		return false;
+	}
+	if (!setConfiguredShellExecutablePath(paths.shellUri, &errorText)) {
+		(void)setConfiguredSettingsMacroFilePath(originalSettingsPath, nullptr);
+		(void)setConfiguredMacroDirectoryPath(originalMacroPath, nullptr);
+		(void)setConfiguredHelpFilePath(originalHelpPath, nullptr);
+		(void)setConfiguredTempDirectoryPath(originalTempPath, nullptr);
+		return false;
+	}
+	if (!setConfiguredLogHandling(newLogHandling, &errorText))
+		return false;
+	if (!setConfiguredLogFilePath(logFileText, &errorText)) {
+		(void)setConfiguredSettingsMacroFilePath(originalSettingsPath, nullptr);
+		(void)setConfiguredMacroDirectoryPath(originalMacroPath, nullptr);
+		(void)setConfiguredHelpFilePath(originalHelpPath, nullptr);
+		(void)setConfiguredTempDirectoryPath(originalTempPath, nullptr);
+		(void)setConfiguredShellExecutablePath(originalShellPath, nullptr);
+		(void)setConfiguredLogHandling(originalLogHandling, nullptr);
+		return false;
+	}
+	if (!applyConfiguredSettingsAssignment("MAX_PATH_HISTORY", maxPathHistoryText, dummyPaths, &errorText)) {
+		(void)setConfiguredSettingsMacroFilePath(originalSettingsPath, nullptr);
+		(void)setConfiguredMacroDirectoryPath(originalMacroPath, nullptr);
+		(void)setConfiguredHelpFilePath(originalHelpPath, nullptr);
+		(void)setConfiguredTempDirectoryPath(originalTempPath, nullptr);
+		(void)setConfiguredShellExecutablePath(originalShellPath, nullptr);
+		(void)setConfiguredLogHandling(originalLogHandling, nullptr);
+		(void)setConfiguredLogFilePath(originalLogFile, nullptr);
+		return false;
+	}
 	if (!applyConfiguredSettingsAssignment("MAX_FILE_HISTORY", maxFileHistoryText, dummyPaths, &errorText)) {
+		(void)setConfiguredSettingsMacroFilePath(originalSettingsPath, nullptr);
+		(void)setConfiguredMacroDirectoryPath(originalMacroPath, nullptr);
+		(void)setConfiguredHelpFilePath(originalHelpPath, nullptr);
+		(void)setConfiguredTempDirectoryPath(originalTempPath, nullptr);
+		(void)setConfiguredShellExecutablePath(originalShellPath, nullptr);
+		(void)setConfiguredLogHandling(originalLogHandling, nullptr);
+		(void)setConfiguredLogFilePath(originalLogFile, nullptr);
 		(void)applyConfiguredSettingsAssignment("MAX_PATH_HISTORY", std::to_string(originalMaxPathHistory), dummyPaths,
 		                                       nullptr);
 		return false;
 	}
 	if (!writeSettingsMacroFile(paths, &errorText, &writeReport))
 	{
+		(void)setConfiguredSettingsMacroFilePath(originalSettingsPath, nullptr);
+		(void)setConfiguredMacroDirectoryPath(originalMacroPath, nullptr);
+		(void)setConfiguredHelpFilePath(originalHelpPath, nullptr);
+		(void)setConfiguredTempDirectoryPath(originalTempPath, nullptr);
+		(void)setConfiguredShellExecutablePath(originalShellPath, nullptr);
+		(void)setConfiguredLogHandling(originalLogHandling, nullptr);
+		(void)setConfiguredLogFilePath(originalLogFile, nullptr);
 		(void)applyConfiguredSettingsAssignment("MAX_PATH_HISTORY", std::to_string(originalMaxPathHistory), dummyPaths,
 		                                       nullptr);
 		(void)applyConfiguredSettingsAssignment("MAX_FILE_HISTORY", std::to_string(originalMaxFileHistory), dummyPaths,
@@ -403,11 +502,26 @@ bool saveAndReloadPathsRecord(const PathsDialogRecord &record, std::string &erro
 
 	app = dynamic_cast<MREditorApp *>(TProgram::application);
 	if (app == nullptr) {
+		(void)setConfiguredSettingsMacroFilePath(originalSettingsPath, nullptr);
+		(void)setConfiguredMacroDirectoryPath(originalMacroPath, nullptr);
+		(void)setConfiguredHelpFilePath(originalHelpPath, nullptr);
+		(void)setConfiguredTempDirectoryPath(originalTempPath, nullptr);
+		(void)setConfiguredShellExecutablePath(originalShellPath, nullptr);
+		(void)setConfiguredLogHandling(originalLogHandling, nullptr);
+		(void)setConfiguredLogFilePath(originalLogFile, nullptr);
 		errorText = "Application error: MREditorApp is unavailable.";
 		return false;
 	}
-	if (!app->reloadSettingsMacroFromPath(paths.settingsMacroUri, &errorText))
+	if (!app->applyConfiguredSettingsFromModel(&errorText)) {
+		(void)setConfiguredSettingsMacroFilePath(originalSettingsPath, nullptr);
+		(void)setConfiguredMacroDirectoryPath(originalMacroPath, nullptr);
+		(void)setConfiguredHelpFilePath(originalHelpPath, nullptr);
+		(void)setConfiguredTempDirectoryPath(originalTempPath, nullptr);
+		(void)setConfiguredShellExecutablePath(originalShellPath, nullptr);
+		(void)setConfiguredLogHandling(originalLogHandling, nullptr);
+		(void)setConfiguredLogFilePath(originalLogFile, nullptr);
 		return false;
+	}
 
 	errorText.clear();
 	return true;
@@ -704,6 +818,7 @@ class TPathsSetupDialog : public MRScrollableDialog {
 
 	void handleEvent(TEvent &event) override {
 		MRScrollableDialog::handleEvent(event);
+		updateLogFileFieldState();
 
 		if (event.what != evCommand)
 			return;
@@ -757,6 +872,12 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		return view;
 	}
 
+	TRadioButtons *addRadioGroup(const TRect &rect, TSItem *items) {
+		TRadioButtons *view = new TRadioButtons(rect, items);
+		addManaged(view, rect);
+		return view;
+	}
+
 	MRNumericSlider *addNumericSlider(const TRect &rect, int32_t minValue, int32_t maxValue, int32_t initialValue,
 	                                 int32_t step, int32_t pageStep) {
 		MRNumericSlider *view = new MRNumericSlider(rect, minValue, maxValue, initialValue, step, pageStep,
@@ -780,43 +901,54 @@ class TPathsSetupDialog : public MRScrollableDialog {
 
 	void buildViews() {
 		int dialogWidth = kVirtualDialogWidth;
-		int inputLeft = 2;
+		int labelLeft = 2;
+		int labelRight = 23;
+		int inputLeft = 25;
 		int glyphWidth = 2;
 		int glyphRight = dialogWidth - 2;
 		int glyphLeft = glyphRight - glyphWidth;
-		int inputRight = glyphLeft;
+		int inputRight = glyphLeft - 1;
 		int doneLeft = dialogWidth / 2 - 17;
 		int cancelLeft = doneLeft + 12;
 		int helpLeft = cancelLeft + 14;
 		int buttonTop = kVirtualDialogHeight - 3;
 
-		addLabel(TRect(2, 2, dialogWidth - 2, 3), "Settings macro URI:");
-		mSettingsMacroPathField = addInput(TRect(inputLeft, 3, inputRight, 4));
-		addBrowseButton(TRect(glyphLeft, 3, glyphRight, 4), cmMrSetupPathsBrowseSettingsUri);
+		addLabel(TRect(labelLeft, 2, labelRight, 3), "Settings macro URI: ");
+		mSettingsMacroPathField = addInput(TRect(inputLeft, 2, inputRight, 3));
+		addBrowseButton(TRect(glyphLeft, 2, glyphRight, 3), cmMrSetupPathsBrowseSettingsUri);
 
-		addLabel(TRect(2, 5, dialogWidth - 2, 6), "Macro path (*.mrmac):");
-		mMacroDirectoryPathField = addInput(TRect(inputLeft, 6, inputRight, 7));
-		addBrowseButton(TRect(glyphLeft, 6, glyphRight, 7), cmMrSetupPathsBrowseMacroPath);
+		addLabel(TRect(labelLeft, 4, labelRight, 5), "Macro path (*.mrmac): ");
+		mMacroDirectoryPathField = addInput(TRect(inputLeft, 4, inputRight, 5));
+		addBrowseButton(TRect(glyphLeft, 4, glyphRight, 5), cmMrSetupPathsBrowseMacroPath);
 
-		addLabel(TRect(2, 8, dialogWidth - 2, 9), "Help file URI:");
-		mHelpFilePathField = addInput(TRect(inputLeft, 9, inputRight, 10));
-		addBrowseButton(TRect(glyphLeft, 9, glyphRight, 10), cmMrSetupPathsBrowseHelpUri);
+		addLabel(TRect(labelLeft, 6, labelRight, 7), "Help file URI: ");
+		mHelpFilePathField = addInput(TRect(inputLeft, 6, inputRight, 7));
+		addBrowseButton(TRect(glyphLeft, 6, glyphRight, 7), cmMrSetupPathsBrowseHelpUri);
 
-		addLabel(TRect(2, 11, dialogWidth - 2, 12), "Temporary path:");
-		mTempDirectoryPathField = addInput(TRect(inputLeft, 12, inputRight, 13));
-		addBrowseButton(TRect(glyphLeft, 12, glyphRight, 13), cmMrSetupPathsBrowseTempPath);
+		addLabel(TRect(labelLeft, 8, labelRight, 9), "Temporary path: ");
+		mTempDirectoryPathField = addInput(TRect(inputLeft, 8, inputRight, 9));
+		addBrowseButton(TRect(glyphLeft, 8, glyphRight, 9), cmMrSetupPathsBrowseTempPath);
 
-			addLabel(TRect(2, 14, dialogWidth - 2, 15), "Shell executable URI:");
-			mShellExecutablePathField = addInput(TRect(inputLeft, 15, inputRight, 16));
-			addBrowseButton(TRect(glyphLeft, 15, glyphRight, 16), cmMrSetupPathsBrowseShellUri);
+		addLabel(TRect(labelLeft, 10, labelRight, 11), "Shell executable URI: ");
+		mShellExecutablePathField = addInput(TRect(inputLeft, 10, inputRight, 11));
+		addBrowseButton(TRect(glyphLeft, 10, glyphRight, 11), cmMrSetupPathsBrowseShellUri);
 
-			addLabel(TRect(2, 18, inputLeft + 19, 19), "Max path history:");
-			mMaxPathHistorySlider = addNumericSlider(TRect(inputLeft + 20, 18, inputRight, 19), 5, 50, 15, 1, 5);
+		addLabel(TRect(labelLeft, 12, labelRight, 13), "Mr log URI: ");
+		mLogFilePathField = addInput(TRect(inputLeft, 12, inputRight, 13));
 
-			addLabel(TRect(2, 20, inputLeft + 19, 21), "Max file history:");
-			mMaxFileHistorySlider = addNumericSlider(TRect(inputLeft + 20, 20, inputRight, 21), 5, 50, 15, 1, 5);
+		addLabel(TRect(labelLeft, 14, labelRight, 15), "Max path history: ");
+		mMaxPathHistorySlider = addNumericSlider(TRect(inputLeft, 14, inputRight, 15), 5, 50, 15, 1, 5);
 
-			addButton(TRect(doneLeft, buttonTop, doneLeft + 10, buttonTop + 2), "~D~one", cmOK, bfDefault);
+		addLabel(TRect(labelLeft, 16, labelRight, 17), "Max file history: ");
+		mMaxFileHistorySlider = addNumericSlider(TRect(inputLeft, 16, inputRight, 17), 5, 50, 15, 1, 5);
+
+		addLabel(TRect(labelLeft, 18, dialogWidth - 2, 19), "Log handling:");
+		mLogHandlingField = addRadioGroup(
+		    TRect(labelLeft, 19, labelLeft + 20, 22),
+		    new TSItem("~V~olatile log",
+		               new TSItem("~P~ersist mr log", new TSItem("Use ~J~ournalctl", nullptr))));
+
+		addButton(TRect(doneLeft, buttonTop, doneLeft + 10, buttonTop + 2), "~D~one", cmOK, bfDefault);
 		addButton(TRect(cancelLeft, buttonTop, cancelLeft + 12, buttonTop + 2), "~C~ancel", cmCancel,
 		          bfNormal);
 		addButton(TRect(helpLeft, buttonTop, helpLeft + 8, buttonTop + 2), "~H~elp",
@@ -846,43 +978,50 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		return std::clamp(parsed, 5, 50);
 	}
 
-		void loadFieldsFromRecord(const PathsDialogRecord &record) {
-			setInputLineValue(mSettingsMacroPathField, record.settingsMacroPath);
-			setInputLineValue(mMacroDirectoryPathField, record.macroDirectoryPath);
-			setInputLineValue(mHelpFilePathField, record.helpFilePath);
-			setInputLineValue(mTempDirectoryPathField, record.tempDirectoryPath);
-			setInputLineValue(mShellExecutablePathField, record.shellExecutablePath);
-			if (mMaxPathHistorySlider != nullptr) {
-				int32_t value = parseHistorySliderValueOrDefault(record.maxPathHistory, 15);
-				mMaxPathHistorySlider->setData(&value);
-			}
-			if (mMaxFileHistorySlider != nullptr) {
-				int32_t value = parseHistorySliderValueOrDefault(record.maxFileHistory, 15);
-				mMaxFileHistorySlider->setData(&value);
-			}
+	void loadFieldsFromRecord(const PathsDialogRecord &record) {
+		setInputLineValue(mSettingsMacroPathField, record.settingsMacroPath);
+		setInputLineValue(mMacroDirectoryPathField, record.macroDirectoryPath);
+		setInputLineValue(mHelpFilePathField, record.helpFilePath);
+		setInputLineValue(mTempDirectoryPathField, record.tempDirectoryPath);
+		setInputLineValue(mShellExecutablePathField, record.shellExecutablePath);
+		setInputLineValue(mLogFilePathField, record.logFilePath);
+		if (mLogHandlingField != nullptr)
+			mLogHandlingField->setData((void *)&record.logHandlingChoice);
+		if (mMaxPathHistorySlider != nullptr) {
+			int32_t value = parseHistorySliderValueOrDefault(record.maxPathHistory, 15);
+			mMaxPathHistorySlider->setData(&value);
 		}
+		if (mMaxFileHistorySlider != nullptr) {
+			int32_t value = parseHistorySliderValueOrDefault(record.maxFileHistory, 15);
+			mMaxFileHistorySlider->setData(&value);
+		}
+		updateLogFileFieldState();
+	}
 
-		void saveFieldsToRecord(PathsDialogRecord &record) const {
-			int32_t maxPathHistory = 15;
-			int32_t maxFileHistory = 15;
-			readInputLineValue(mSettingsMacroPathField, record.settingsMacroPath,
-			                   sizeof(record.settingsMacroPath));
-			readInputLineValue(mMacroDirectoryPathField, record.macroDirectoryPath,
-			                   sizeof(record.macroDirectoryPath));
-			readInputLineValue(mHelpFilePathField, record.helpFilePath, sizeof(record.helpFilePath));
-			readInputLineValue(mTempDirectoryPathField, record.tempDirectoryPath,
-			                   sizeof(record.tempDirectoryPath));
-			readInputLineValue(mShellExecutablePathField, record.shellExecutablePath,
-			                   sizeof(record.shellExecutablePath));
-			if (mMaxPathHistorySlider != nullptr)
-				mMaxPathHistorySlider->getData(&maxPathHistory);
-			if (mMaxFileHistorySlider != nullptr)
-				mMaxFileHistorySlider->getData(&maxFileHistory);
-			writeRecordField(record.maxPathHistory, sizeof(record.maxPathHistory),
-			                 std::to_string(std::clamp(static_cast<int>(maxPathHistory), 5, 50)));
-				writeRecordField(record.maxFileHistory, sizeof(record.maxFileHistory),
-				                 std::to_string(std::clamp(static_cast<int>(maxFileHistory), 5, 50)));
-			}
+	void saveFieldsToRecord(PathsDialogRecord &record) const {
+		int32_t maxPathHistory = 15;
+		int32_t maxFileHistory = 15;
+		readInputLineValue(mSettingsMacroPathField, record.settingsMacroPath,
+		                   sizeof(record.settingsMacroPath));
+		readInputLineValue(mMacroDirectoryPathField, record.macroDirectoryPath,
+		                   sizeof(record.macroDirectoryPath));
+		readInputLineValue(mHelpFilePathField, record.helpFilePath, sizeof(record.helpFilePath));
+		readInputLineValue(mTempDirectoryPathField, record.tempDirectoryPath,
+		                   sizeof(record.tempDirectoryPath));
+		readInputLineValue(mShellExecutablePathField, record.shellExecutablePath,
+		                   sizeof(record.shellExecutablePath));
+		readInputLineValue(mLogFilePathField, record.logFilePath, sizeof(record.logFilePath));
+		if (mLogHandlingField != nullptr)
+			mLogHandlingField->getData((void *)&record.logHandlingChoice);
+		if (mMaxPathHistorySlider != nullptr)
+			mMaxPathHistorySlider->getData(&maxPathHistory);
+		if (mMaxFileHistorySlider != nullptr)
+			mMaxFileHistorySlider->getData(&maxFileHistory);
+		writeRecordField(record.maxPathHistory, sizeof(record.maxPathHistory),
+		                 std::to_string(std::clamp(static_cast<int>(maxPathHistory), 5, 50)));
+		writeRecordField(record.maxFileHistory, sizeof(record.maxFileHistory),
+		                 std::to_string(std::clamp(static_cast<int>(maxFileHistory), 5, 50)));
+	}
 
 		PathsDialogRecord collectRecordFromFields() const {
 			PathsDialogRecord record = mCurrentRecord;
@@ -896,6 +1035,19 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		std::memset(buffer, 0, sizeof(buffer));
 		inputLine->getData(buffer);
 		return readRecordField(buffer);
+	}
+
+	ushort currentLogHandlingChoice() const {
+		ushort choice = 0;
+		if (mLogHandlingField != nullptr)
+			mLogHandlingField->getData((void *)&choice);
+		return choice;
+	}
+
+	void updateLogFileFieldState() {
+		const bool persistSelected = currentLogHandlingChoice() == 1;
+		if (mLogFilePathField != nullptr)
+			mLogFilePathField->setState(sfDisabled, persistSelected ? False : True);
 	}
 
 	void setInputValue(TInputLine *inputLine, const std::string &value) {
@@ -948,17 +1100,19 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		return result;
 	}
 
-		PathsDialogRecord mBaselineRecord;
-		PathsDialogRecord mCurrentRecord;
-		static const int kVirtualDialogWidth = 84;
-		static const int kVirtualDialogHeight = 27;
-		TInputLine *mSettingsMacroPathField = nullptr;
-		TInputLine *mMacroDirectoryPathField = nullptr;
-		TInputLine *mHelpFilePathField = nullptr;
-		TInputLine *mTempDirectoryPathField = nullptr;
-		TInputLine *mShellExecutablePathField = nullptr;
-		MRNumericSlider *mMaxPathHistorySlider = nullptr;
-		MRNumericSlider *mMaxFileHistorySlider = nullptr;
+	PathsDialogRecord mBaselineRecord;
+	PathsDialogRecord mCurrentRecord;
+	static const int kVirtualDialogWidth = 92;
+	static const int kVirtualDialogHeight = 27;
+	TInputLine *mSettingsMacroPathField = nullptr;
+	TInputLine *mMacroDirectoryPathField = nullptr;
+	TInputLine *mHelpFilePathField = nullptr;
+	TInputLine *mTempDirectoryPathField = nullptr;
+	TInputLine *mShellExecutablePathField = nullptr;
+	TInputLine *mLogFilePathField = nullptr;
+	TRadioButtons *mLogHandlingField = nullptr;
+	MRNumericSlider *mMaxPathHistorySlider = nullptr;
+	MRNumericSlider *mMaxFileHistorySlider = nullptr;
 };
 
 void showPathsHelpDialog() {

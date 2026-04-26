@@ -48,7 +48,8 @@ using mr::dialogs::normalizeTvPathSeparators;
 
 class MacroManagerActivationSink {
   public:
-	virtual void activateFocusedEntry() = 0;
+	virtual void activateFocusedEntry(bool fromAutoexecList) = 0;
+	virtual void noteListFocus(bool autoexecListFocused) = 0;
 
   protected:
 	~MacroManagerActivationSink() = default;
@@ -60,6 +61,8 @@ enum : ushort {
 	cmMRMacroManagerCopy,
 	cmMRMacroManagerEdit,
 	cmMRMacroManagerBind,
+	cmMRMacroManagerAddAutoexec,
+	cmMRMacroManagerRemoveAutoexec,
 	cmMRMacroManagerPlayback,
 	cmMRMacroManagerOpenEditor
 };
@@ -178,6 +181,10 @@ std::string rowTextFor(const MacroFileEntry &entry) {
 	std::string left = (entry.compileError.empty() ? "  " : "! ");
 	left += entry.fileName;
 	return padRight(left, 30) + " " + padRight(entry.keySpec.empty() ? "<no key>" : entry.keySpec, 14);
+}
+
+std::string autoexecRowTextFor(const std::string &fileName) {
+	return fileName;
 }
 
 std::string sanitizeMacroIdentifier(const std::string &name) {
@@ -543,17 +550,19 @@ class MacroManagerListView : public TListViewer {
 	MacroManagerListView(const TRect &bounds, TScrollBar *aVScrollBar,
 	                     const std::vector<std::string> &aItems,
 	                     const std::vector<bool> &aErrorFlags,
-	                     MacroManagerActivationSink &activationSink) noexcept
+	                     MacroManagerActivationSink &activationSink, bool autoexecList) noexcept
 	    : TListViewer(bounds, 1, nullptr, aVScrollBar), itemRows(aItems),
-	      compileErrorFlags(aErrorFlags), activationSink(activationSink) {
+	      compileErrorFlags(aErrorFlags), activationSink(activationSink), autoexecList(autoexecList) {
 		setRange(static_cast<short>(itemRows.size()));
 	}
 
-	void setItems(const std::vector<std::string> &items, const std::vector<bool> &errorFlags) {
+	void setItems(const std::vector<std::string> &items, const std::vector<bool> &errorFlags,
+	              short selectableItems) {
 		itemRows = items;
 		compileErrorFlags = errorFlags;
+		selectableItemCount = std::max<short>(0, selectableItems);
 		setRange(static_cast<short>(itemRows.size()));
-		if (itemRows.empty())
+		if (itemRows.empty() || selectableItemCount <= 0)
 			focusItemNum(0);
 		else if (focused >= range)
 			focusItemNum(range - 1);
@@ -614,20 +623,28 @@ class MacroManagerListView : public TListViewer {
 
 		TListViewer::handleEvent(event);
 
-		if (isDoubleClickActivation && owner != nullptr && focused >= 0 && focused < range) {
-			activationSink.activateFocusedEntry();
+		if (isDoubleClickActivation && owner != nullptr && focused >= 0 && focused < selectableItemCount) {
+			activationSink.activateFocusedEntry(autoexecList);
 			clearEvent(event);
 			return;
 		}
 		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter && owner != nullptr &&
-		    focused >= 0 && focused < range) {
+		    focused >= 0 && focused < selectableItemCount) {
 			message(owner, evCommand, cmOK, nullptr);
 			clearEvent(event);
 		}
 	}
 
 	bool hasSelection() const noexcept {
-		return focused >= 0 && focused < range;
+		return focused >= 0 && focused < selectableItemCount;
+	}
+
+	void setState(ushort aState, Boolean enable) override {
+		const bool hadFocus = (state & sfFocused) != 0;
+
+		TListViewer::setState(aState, enable);
+		if (aState == sfFocused && !hadFocus && (state & sfFocused) != 0)
+			activationSink.noteListFocus(autoexecList);
 	}
 
   private:
@@ -639,6 +656,8 @@ class MacroManagerListView : public TListViewer {
 	std::vector<std::string> itemRows;
 	std::vector<bool> compileErrorFlags;
 	MacroManagerActivationSink &activationSink;
+	short selectableItemCount = 0;
+	bool autoexecList = false;
 };
 
 class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivationSink {
@@ -647,36 +666,57 @@ class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivat
 	    : TWindowInit(&TDialog::initFrame),
 	      MRDialogFoundation(centeredBounds(), "MACRO MANAGER", centeredBounds().b.x - centeredBounds().a.x,
 	                         centeredBounds().b.y - centeredBounds().a.y),
-	      directoryPath(defaultMacroDirectoryPath()),  listView(nullptr),
-	      scrollBar(nullptr) {
+	      directoryPath(defaultMacroDirectoryPath()), macroListView(nullptr),
+	      macroScrollBar(nullptr), autoexecListView(nullptr), autoexecScrollBar(nullptr) {
 		int width = size.x;
 		int height = size.y;
-		int listLeft = 3;
-		int listRight = width - 4;
-		int listWidth = std::max(1, listRight - listLeft);
-		int gap = 2;
-		int row1Width = 14 + gap + 14 + gap + 12;
-		int row1Left = listLeft + std::max(0, (listWidth - row1Width) / 2);
-		int row2Width = 12 + gap + 12;
-		int row2Left = listLeft + std::max(0, (listWidth - row2Width) / 2);
-		int bottomWidth = 16 + gap + 13 + gap + 12;
-		int bottomLeft = listLeft + std::max(0, (listWidth - bottomWidth) / 2);
+		const int gap = 2;
+		const int leftListLeft = 3;
+		const int leftListRight = 52;
+		const int centerLeft = leftListRight + 1;
+		const int centerRight = centerLeft + 12;
+		const int rightListLeft = centerRight + 1;
+		const int rightListRight = width - 4;
+		const int listTop = 7;
+		const int listBottom = height - 4;
+		const int row1Width = 12 + gap + 12 + gap + 10 + gap + 10 + gap + 10;
+		const int row1Left = 3 + std::max(0, (width - 6 - row1Width) / 2);
+		const int bottomWidth = 16 + gap + 13 + gap + 12;
+		const int bottomLeft = 3 + std::max(0, (width - 6 - bottomWidth) / 2);
 
-		insert(new TButton(TRect(row1Left, 2, row1Left + 14, 4), "~C~reate", cmMRMacroManagerCreate,
+		insert(new TButton(TRect(row1Left, 2, row1Left + 12, 4), "~C~reate", cmMRMacroManagerCreate,
 		                   bfNormal));
-		insert(new TButton(TRect(row1Left + 14 + gap, 2, row1Left + 14 + gap + 14, 4), "De~l~ete",
+		insert(new TButton(TRect(row1Left + 12 + gap, 2, row1Left + 12 + gap + 12, 4), "De~l~ete",
 		                   cmMRMacroManagerDelete, bfNormal));
-		insert(new TButton(TRect(row1Left + 14 + gap + 14 + gap, 2, row1Left + row1Width, 4), "C~o~py",
+		insert(new TButton(TRect(row1Left + 12 + gap + 12 + gap, 2, row1Left + 12 + gap + 12 + gap + 10, 4),
+		                   "C~o~py",
 		                   cmMRMacroManagerCopy, bfNormal));
-		insert(new TButton(TRect(row2Left, 4, row2Left + 12, 6), "~E~dit", cmMRMacroManagerEdit, bfNormal));
-		insert(new TButton(TRect(row2Left + 12 + gap, 4, row2Left + row2Width, 6), "~B~ind",
+		insert(new TButton(TRect(row1Left + 12 + gap + 12 + gap + 10 + gap, 2,
+		                         row1Left + 12 + gap + 12 + gap + 10 + gap + 10, 4),
+		                   "~E~dit", cmMRMacroManagerEdit, bfNormal));
+		insert(new TButton(TRect(row1Left + row1Width - 10, 2, row1Left + row1Width, 4), "~B~ind",
 		                   cmMRMacroManagerBind, bfNormal));
 
-		scrollBar = new TScrollBar(TRect(width - 4, 7, width - 3, height - 4));
-		insert(scrollBar);
-		listView = new MacroManagerListView(TRect(3, 7, width - 4, height - 4), scrollBar,
-		                                     std::vector<std::string>(), std::vector<bool>(), *this);
-		insert(listView);
+		insert(new TStaticText(TRect(leftListLeft, 5, leftListLeft + 8, 6), "Macros:"));
+		insert(new TStaticText(TRect(rightListLeft, 5, rightListLeft + 10, 6), "Autoexec:"));
+
+		macroScrollBar = new TScrollBar(TRect(leftListRight, listTop, leftListRight + 1, listBottom));
+		insert(macroScrollBar);
+		macroListView =
+		    new MacroManagerListView(TRect(leftListLeft, listTop, leftListRight, listBottom), macroScrollBar,
+		                             std::vector<std::string>(), std::vector<bool>(), *this, false);
+		insert(macroListView);
+
+		autoexecScrollBar = new TScrollBar(TRect(rightListRight, listTop, rightListRight + 1, listBottom));
+		insert(autoexecScrollBar);
+		autoexecListView =
+		    new MacroManagerListView(TRect(rightListLeft, listTop, rightListRight, listBottom), autoexecScrollBar,
+		                             std::vector<std::string>(), std::vector<bool>(), *this, true);
+		insert(autoexecListView);
+
+		insert(new TButton(TRect(centerLeft, 11, centerRight, 13), "~A~dd", cmMRMacroManagerAddAutoexec, bfNormal));
+		insert(new TButton(TRect(centerLeft, 14, centerRight, 16), "~R~emove", cmMRMacroManagerRemoveAutoexec,
+		                   bfNormal));
 
 		insert(new TButton(TRect(bottomLeft, height - 3, bottomLeft + 16, height - 1), "~P~layback",
 		                   cmMRMacroManagerPlayback, bfDefault));
@@ -686,9 +726,11 @@ class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivat
 		                         height - 1),
 		                   "~H~elp", cmHelp, bfNormal));
 
+		loadAutoexecEntries();
 		refreshEntries(-1);
-		if (listView != nullptr)
-			listView->select();
+		refreshAutoexecRows(-1);
+		if (macroListView != nullptr)
+			macroListView->select();
 	}
 
 	const std::string &openPath() const noexcept {
@@ -699,8 +741,22 @@ class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivat
 		return playbackPathValue;
 	}
 
-	void activateFocusedEntry() {
-		handlePlayback();
+	void activateFocusedEntry(bool fromAutoexecList) override {
+		switch (fromAutoexecList) {
+			case true:
+				return;
+			case false:
+				if (selectedEntryHasCompileError()) {
+					showSelectedEntryError();
+					return;
+				}
+				handlePlayback();
+				return;
+		}
+	}
+
+	void noteListFocus(bool autoexecListFocused) override {
+		activeAutoexecList = autoexecListFocused;
 	}
 
 	void handleEvent(TEvent &event) override {
@@ -711,7 +767,10 @@ class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivat
 					clearEvent(event);
 					return;
 				case kbDel:
-					handleDelete();
+					if (activeAutoexecList)
+						handleRemoveAutoexec();
+					else
+						handleDelete();
 					clearEvent(event);
 					return;
 				case kbF4:
@@ -727,9 +786,23 @@ class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivat
 					clearEvent(event);
 					return;
 				case kbEnter:
-					handlePlayback();
+					activateFocusedEntry(activeAutoexecList);
 					clearEvent(event);
 					return;
+				case kbUp:
+					if ((event.keyDown.controlKeyState & kbCtrlShift) != 0) {
+						handleMoveAutoexecBy(-1);
+						clearEvent(event);
+						return;
+					}
+					break;
+				case kbDown:
+					if ((event.keyDown.controlKeyState & kbCtrlShift) != 0) {
+						handleMoveAutoexecBy(1);
+						clearEvent(event);
+						return;
+					}
+					break;
 				case kbF1:
 					static_cast<void>(mrShowProjectHelp());
 					clearEvent(event);
@@ -761,13 +834,25 @@ class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivat
 				handleBind();
 				clearEvent(event);
 				break;
+			case cmMRMacroManagerAddAutoexec:
+				handleAddAutoexec();
+				clearEvent(event);
+				break;
+			case cmMRMacroManagerRemoveAutoexec:
+				handleRemoveAutoexec();
+				clearEvent(event);
+				break;
 			case cmMRMacroManagerPlayback:
 				handlePlayback();
 				clearEvent(event);
 				break;
 			case cmOK:
-				if (listView != nullptr && listView->hasSelection()) {
-					handlePlayback();
+				if (activeAutoexecList) {
+					clearEvent(event);
+					break;
+				}
+				if (macroListView != nullptr && macroListView->hasSelection()) {
+					activateFocusedEntry(false);
 					clearEvent(event);
 				}
 				break;
@@ -787,18 +872,27 @@ class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivat
   private:
 	static TRect centeredBounds() {
 		TRect desk = TProgram::deskTop->getExtent();
-		int width = std::min(58, std::max(52, desk.b.x - desk.a.x - 4));
-		int height = std::min(26, std::max(24, desk.b.y - desk.a.y - 2));
+		int width = std::min(92, std::max(84, desk.b.x - desk.a.x - 4));
+		int height = std::min(27, std::max(24, desk.b.y - desk.a.y - 2));
 		int left = desk.a.x + (desk.b.x - desk.a.x - width) / 2;
 		int top = desk.a.y + (desk.b.y - desk.a.y - height) / 2;
 		return TRect(left, top, left + width, top + height);
 	}
 
 	int selectedIndex() const {
-		if (listView == nullptr)
+		if (macroListView == nullptr)
 			return -1;
-		short idx = listView->focused;
+		short idx = macroListView->focused;
 		if (idx < 0 || static_cast<std::size_t>(idx) >= entries.size())
+			return -1;
+		return idx;
+	}
+
+	int selectedAutoexecIndex() const {
+		if (autoexecListView == nullptr)
+			return -1;
+		short idx = autoexecListView->focused;
+		if (idx < 0 || static_cast<std::size_t>(idx) >= autoexecEntries.size())
 			return -1;
 		return idx;
 	}
@@ -810,6 +904,21 @@ class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivat
 		return &entries[static_cast<std::size_t>(idx)];
 	}
 
+	bool selectedEntryHasCompileError() const {
+		const MacroFileEntry *entry = selectedEntry();
+
+		return entry != nullptr && !entry->compileError.empty();
+	}
+
+	void showSelectedEntryError() {
+		const MacroFileEntry *entry = selectedEntry();
+
+		if (entry == nullptr || entry->compileError.empty())
+			return;
+		messageBox(mfError | mfOKButton, "Invalid macro file.\n%s\n\n%s", entry->fileName.c_str(),
+		           entry->compileError.c_str());
+	}
+
 	void refreshEntries(int keepIndex) {
 		entries = scanMacroFilesInDirectory(directoryPath);
 		rows.clear();
@@ -818,20 +927,137 @@ class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivat
 			rows.push_back("(none available)");
 		else
 			for (auto & entrie : entries) {
+				std::string autoexecDiagnostic;
+
+				if (configuredAutoexecMacroDiagnosticForFile(entrie.fileName, autoexecDiagnostic) &&
+				    !autoexecDiagnostic.empty()) {
+					if (entrie.compileError.empty())
+						entrie.compileError = autoexecDiagnostic;
+					else
+						entrie.compileError += "\n\nAutoexec bootstrap:\n" + autoexecDiagnostic;
+				}
 				rows.push_back(rowTextFor(entrie));
 				rowHasCompileError.push_back(!entrie.compileError.empty());
 			}
 		if (entries.empty())
 			rowHasCompileError.push_back(false);
-		if (listView != nullptr) {
-			listView->setItems(rows, rowHasCompileError);
+		if (macroListView != nullptr) {
+			macroListView->setItems(rows, rowHasCompileError, static_cast<short>(entries.size()));
 			if (!rows.empty()) {
 				int target = keepIndex;
 				if (target < 0 || target >= static_cast<int>(rows.size()))
 					target = 0;
-				listView->focusItemNum(target);
+				macroListView->focusItemNum(target);
 			}
 		}
+	}
+
+	void refreshAutoexecRows(int keepIndex) {
+		autoexecRows.clear();
+		for (const std::string &fileName : autoexecEntries)
+			autoexecRows.push_back(autoexecRowTextFor(fileName));
+		if (autoexecListView != nullptr) {
+			autoexecListView->setItems(autoexecRows, std::vector<bool>(autoexecRows.size(), false),
+			                           static_cast<short>(autoexecEntries.size()));
+			if (!autoexecRows.empty()) {
+				int target = keepIndex;
+				if (target < 0 || target >= static_cast<int>(autoexecRows.size()))
+					target = 0;
+				autoexecListView->focusItemNum(target);
+			}
+			autoexecListView->drawView();
+		}
+		if (autoexecScrollBar != nullptr) {
+			autoexecScrollBar->drawView();
+		}
+	}
+
+	void loadAutoexecEntries() {
+		configuredAutoexecMacroEntries(autoexecEntries);
+	}
+
+	bool persistAutoexecEntries(const std::vector<std::string> &newEntries) {
+		std::string errorText;
+		std::vector<std::string> originalEntries = autoexecEntries;
+
+		if (!setConfiguredAutoexecMacroEntries(newEntries, &errorText) ||
+		    !persistConfiguredSettingsSnapshot(&errorText)) {
+			setConfiguredAutoexecMacroEntries(originalEntries, nullptr);
+			postMacroDialogError(errorText.empty() ? "Unable to update AUTOEXEC_MACRO." : errorText);
+			return false;
+		}
+		autoexecEntries = newEntries;
+		return true;
+	}
+
+	void insertMacroIntoAutoexec(int macroIndex, int targetIndex) {
+		if (macroIndex < 0 || static_cast<std::size_t>(macroIndex) >= entries.size())
+			return;
+		std::vector<std::string> updatedEntries = autoexecEntries;
+		const std::string &fileName = entries[static_cast<std::size_t>(macroIndex)].fileName;
+		auto existing = std::find(updatedEntries.begin(), updatedEntries.end(), fileName);
+		int existingIndex = existing == updatedEntries.end()
+		                        ? -1
+		                        : static_cast<int>(std::distance(updatedEntries.begin(), existing));
+
+		targetIndex = std::clamp(targetIndex, 0, static_cast<int>(updatedEntries.size()));
+		if (existingIndex >= 0) {
+			if (existingIndex < targetIndex)
+				--targetIndex;
+			if (existingIndex == targetIndex) {
+				refreshAutoexecRows(existingIndex);
+				return;
+			}
+			updatedEntries.erase(updatedEntries.begin() + existingIndex);
+			updatedEntries.insert(updatedEntries.begin() + targetIndex, fileName);
+			if (!persistAutoexecEntries(updatedEntries))
+				return;
+			refreshAutoexecRows(targetIndex);
+			return;
+		}
+
+		updatedEntries.insert(updatedEntries.begin() + targetIndex, fileName);
+		if (!persistAutoexecEntries(updatedEntries))
+			return;
+		refreshAutoexecRows(targetIndex);
+	}
+
+	void moveAutoexecEntry(int sourceIndex, int targetIndex) {
+		std::vector<std::string> updatedEntries = autoexecEntries;
+		std::string movedEntry;
+
+		if (sourceIndex < 0 || static_cast<std::size_t>(sourceIndex) >= updatedEntries.size())
+			return;
+		targetIndex = std::clamp(targetIndex, 0, static_cast<int>(updatedEntries.size()));
+		if (sourceIndex < targetIndex)
+			--targetIndex;
+		if (sourceIndex == targetIndex)
+			return;
+		movedEntry = updatedEntries[static_cast<std::size_t>(sourceIndex)];
+		updatedEntries.erase(updatedEntries.begin() + sourceIndex);
+		updatedEntries.insert(updatedEntries.begin() + targetIndex, movedEntry);
+		if (!persistAutoexecEntries(updatedEntries))
+			return;
+		refreshAutoexecRows(targetIndex);
+	}
+
+	void removeAutoexecEntry(int index) {
+		std::vector<std::string> updatedEntries = autoexecEntries;
+
+		if (index < 0 || static_cast<std::size_t>(index) >= updatedEntries.size())
+			return;
+		updatedEntries.erase(updatedEntries.begin() + index);
+		if (!persistAutoexecEntries(updatedEntries))
+			return;
+		refreshAutoexecRows(index);
+	}
+
+	void removeAutoexecFileName(const std::string &fileName) {
+		auto it = std::find(autoexecEntries.begin(), autoexecEntries.end(), fileName);
+
+		if (it == autoexecEntries.end())
+			return;
+		removeAutoexecEntry(static_cast<int>(std::distance(autoexecEntries.begin(), it)));
 	}
 
 	void handleCreate() {
@@ -878,6 +1104,8 @@ class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivat
 			postMacroDialogError("Unable to delete: " + entry->path);
 			return;
 		}
+		static_cast<void>(mrvmUiRemoveRuntimeMenusOwnedByFile(entry->fileName));
+		removeAutoexecFileName(entry->fileName);
 		refreshEntries(selectedIndex());
 	}
 
@@ -959,14 +1187,35 @@ class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivat
 		endModal(cmMRMacroManagerPlayback);
 	}
 
+	void handleAddAutoexec() {
+		insertMacroIntoAutoexec(selectedIndex(), static_cast<int>(autoexecEntries.size()));
+	}
+
+	void handleRemoveAutoexec() {
+		removeAutoexecEntry(selectedAutoexecIndex());
+	}
+
+	void handleMoveAutoexecBy(int delta) {
+		int index = selectedAutoexecIndex();
+
+		if (!activeAutoexecList || index < 0)
+			return;
+		moveAutoexecEntry(index, index + delta);
+	}
+
 	std::string directoryPath;
 	std::vector<MacroFileEntry> entries;
 	std::vector<std::string> rows;
 	std::vector<bool> rowHasCompileError;
-	MacroManagerListView *listView;
-	TScrollBar *scrollBar;
+	std::vector<std::string> autoexecEntries;
+	std::vector<std::string> autoexecRows;
+	MacroManagerListView *macroListView;
+	TScrollBar *macroScrollBar;
+	MacroManagerListView *autoexecListView;
+	TScrollBar *autoexecScrollBar;
 	std::string openPathValue;
 	std::string playbackPathValue;
+	bool activeAutoexecList = false;
 };
 } // namespace
 

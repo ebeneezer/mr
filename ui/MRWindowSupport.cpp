@@ -12,6 +12,7 @@
 #include <cctype>
 #include <cstring>
 #include <ctime>
+#include <fstream>
 #include <string>
 #include <string_view>
 #include <unistd.h>
@@ -345,6 +346,25 @@ void mrLogMessage(std::string_view message) {
 		win->setReadOnly(true);
 		win->setFileChanged(false);
 	}
+}
+
+bool mrAppendLogBufferToFile(const std::string &path, std::string *errorMessage) {
+	std::ofstream out(path, std::ios::out | std::ios::app | std::ios::binary);
+
+	if (!out) {
+		if (errorMessage != nullptr)
+			*errorMessage = "Unable to open log file for append: " + path;
+		return false;
+	}
+	out << g_logBuffer;
+	if (!out.good()) {
+		if (errorMessage != nullptr)
+			*errorMessage = "Unable to append log file: " + path;
+		return false;
+	}
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
 }
 
 void mrLogSettingsWriteReport(std::string_view reason, const MRSettingsWriteReport &report) {

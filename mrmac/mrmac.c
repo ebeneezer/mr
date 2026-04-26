@@ -1288,6 +1288,7 @@ typedef struct {
 static const IntrinsicSignature kIntrinsicSignatures[] = {
     INTR_SIG1("STR", CALL_ARG_INT, TYPE_STR),
     INTR_SIG1("CHAR", CALL_ARG_INT, TYPE_CHAR),
+    INTR_SIG1("UTF8", CALL_ARG_INT, TYPE_STR),
     INTR_SIG1("ASCII", CALL_ARG_STRINGLIKE, TYPE_INT),
     INTR_SIG1("CAPS", CALL_ARG_STRINGLIKE, TYPE_STR),
     INTR_SIG3("COPY", CALL_ARG_STRINGLIKE, CALL_ARG_INT, CALL_ARG_INT, TYPE_STR),
@@ -2043,7 +2044,9 @@ static const ProcSignature kProcSignatures[] = {
     PROC_SIG1("MARQUEE", CALL_ARG_STRINGLIKE, NULL),
     PROC_SIG1("MARQUEE_WARNING", CALL_ARG_STRINGLIKE, NULL),
     PROC_SIG1("MARQUEE_ERROR", CALL_ARG_STRINGLIKE, NULL),
-    PROC_SIG1("MAKE_MESSAGE", CALL_ARG_STRINGLIKE, "MARQUEE"),
+    PROC_SIG3("REGISTER_MENU_ITEM", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, NULL),
+    PROC_SIG2("REMOVE_MENU_ITEM", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, NULL),
+    PROC_SIG1("MAKE_MESSAGE", CALL_ARG_STRINGLIKE, "MAKE_MESSAGE"),
     PROC_SIG0("WORKING", NULL),
     PROC_SIG1("BRAIN", CALL_ARG_INT, NULL),
     PROC_SIG8("PUT_BOX", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT,
@@ -2081,6 +2084,8 @@ static const ProcSignature kProcSignatures[] = {
               CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, NULL),
     PROC_SIG8("UI_LISTBOX", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT,
               CALL_ARG_INT, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_INT, NULL),
+    PROC_SIG1("UI_LIST_CLEAR", CALL_ARG_STRINGLIKE, NULL),
+    PROC_SIG2("UI_LIST_ADD", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, NULL),
     PROC_SIG0("SET_INDENT_LEVEL", "SET_INDENT_LEVEL"),
     PROC_SIG1("REPLACE", CALL_ARG_STRINGLIKE, "REPLACE"),
     PROC_SIG1("TEXT", CALL_ARG_STRINGLIKE, "TEXT"),
@@ -2150,6 +2155,14 @@ static int validate_proc_signature(const ProcSignature *spec, const ExprInfo *ar
 			return 0;
 		if (argc == 1)
 			return validate_call_arguments(spec->args, 1, args, argc, line);
+		set_compile_error(line, "Wrong number of arguments.");
+		return -1;
+	}
+	if (strcasecmp(spec->name, "REGISTER_MENU_ITEM") == 0) {
+		if (argc == 2)
+			return validate_call_arguments(spec->args, 2, args, argc, line);
+		if (argc == 3)
+			return validate_call_arguments(spec->args, 3, args, argc, line);
 		set_compile_error(line, "Wrong number of arguments.");
 		return -1;
 	}

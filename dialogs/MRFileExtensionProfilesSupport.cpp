@@ -959,7 +959,7 @@ bool saveAndReloadEditProfiles(const std::vector<EditProfileDraft> &drafts, std:
 	if (!writeSettingsMacroFile(paths, &errorText, &writeReport))
 		return false;
 	mrLogSettingsWriteReport("fe profiles", writeReport);
-	if (!app->reloadSettingsMacroFromPath(paths.settingsMacroUri, &errorText))
+	if (!app->applyConfiguredSettingsFromModel(&errorText))
 		return false;
 
 	errorText.clear();

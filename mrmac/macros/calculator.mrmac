@@ -1,3 +1,11 @@
+$MACRO REGISTER_CALC FROM EDIT;
+IF GLOBAL_INT('CALCULATOR_MENU_REGISTERED') = 0 THEN
+    REGISTER_MENU_ITEM('Tools', 'Calculator', 'calculator^SHOW_CALC');
+    SET_GLOBAL_INT('CALCULATOR_MENU_REGISTERED', TRUE);
+END;
+MACRO_TO_KEY('<AltShftC>', 'calculator^SHOW_CALC', 0);
+END_MACRO;
+
 $MACRO CalculatorFormatValue FROM EDIT;
 DEF_INT(Base, Value, Negative, Digit);
 DEF_STR(Digits, Out);
@@ -226,10 +234,12 @@ ELSE
 END;
 END_MACRO;
 
-$MACRO Calculator FROM EDIT;
+$MACRO SHOW_CALC FROM EDIT;
 DEF_INT(Choice, Done, CurrentValue, ParseRc, PendingOp);
 DEF_INT(Base, Acc, Cur, Mem, NextOp);
 DEF_STR(DisplayCur, DisplayMem, BlockSeed, InputText);
+
+MAKE_MESSAGE('Welcome to calculator V 1.0');
 
 Base := 10;
 Acc := 0;

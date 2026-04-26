@@ -188,13 +188,14 @@ class MREditWindow : public TWindow {
 			const std::size_t cursorBefore = editor != nullptr ? editor->cursorOffset() : 0;
 			const std::size_t selectionStartBefore =
 			    editor != nullptr ? editor->selectionStartOffset() : 0;
-			const std::size_t selectionEndBefore =
-			    editor != nullptr ? editor->selectionEndOffset() : 0;
+				const std::size_t selectionEndBefore =
+				    editor != nullptr ? editor->selectionEndOffset() : 0;
 
-			maybeTraceTabKeyEvent(event);
+				maybeTraceTabKeyEvent(event);
+				traceCalculatorHotkeyEvent("window-pre", event);
 
-			if (event.what == evMouseDown && editor != nullptr &&
-			    (event.mouse.buttons & mbLeftButton) != 0 && mBlockMode != bmNone && !mBlockMarkingOn) {
+				if (event.what == evMouseDown && editor != nullptr &&
+				    (event.mouse.buttons & mbLeftButton) != 0 && mBlockMode != bmNone && !mBlockMarkingOn) {
 				// Keep state, but hide committed block overlay while the mouse selection loop runs,
 				// so the live growing selection is visible.
 				editor->setBlockOverlayState(0, 0, 0, false, false);
@@ -215,36 +216,40 @@ class MREditWindow : public TWindow {
 					              editor != nullptr ? editor->cursorOffset() : 0);
 					mrLogMessage(line);
 				}
-				if (handleBuiltInBlockHotkeys(event))
-					return;
-				std::string executedMacroName;
-				if (mrvmRunAssignedMacroForKey(event.keyDown.keyCode, event.keyDown.controlKeyState,
-				                               executedMacroName, nullptr)) {
-					if (keyDebugEnabled()) {
-						char line[224];
-						std::snprintf(line, sizeof(line),
-						              "KEYDBG shifttab stage=macro-consumed macro='%s'",
-						              executedMacroName.c_str());
-						mrLogMessage(line);
+					if (handleBuiltInBlockHotkeys(event))
+						return;
+					std::string executedMacroName;
+					if (mrvmRunAssignedMacroForKey(event.keyDown.keyCode, event.keyDown.controlKeyState,
+					                               executedMacroName, nullptr)) {
+						if (isCalculatorHotkeyEvent(event)) {
+							std::string detail = "macro=" + executedMacroName;
+							traceCalculatorHotkeyEvent("window-macro-consumed", event, detail.c_str());
+						}
+						if (keyDebugEnabled()) {
+							char line[224];
+							std::snprintf(line, sizeof(line),
+							              "KEYDBG shifttab stage=macro-consumed macro='%s'",
+							              executedMacroName.c_str());
+							mrLogMessage(line);
+						}
+						clearEvent(event);
+						return;
 					}
-					clearEvent(event);
-					return;
-				}
-				if (event.keyDown.keyCode == kbShiftTab && editor != nullptr) {
-					const std::size_t cursorStart = editor->cursorOffset();
-					const ushort eventTypeBeforeEditor = event.what;
-					editor->handleEvent(event);
-					if (keyDebugEnabled()) {
-						char line[224];
-						std::snprintf(
-						    line, sizeof(line),
-						    "KEYDBG shifttab stage=editor-dispatch eventBefore=0x%04X eventAfter=0x%04X cursorBefore=%zu cursorAfter=%zu",
-						    static_cast<unsigned>(eventTypeBeforeEditor),
-						    static_cast<unsigned>(event.what), cursorStart, editor->cursorOffset());
-						mrLogMessage(line);
+					if (event.keyDown.keyCode == kbShiftTab && editor != nullptr) {
+						const std::size_t cursorStart = editor->cursorOffset();
+						const ushort eventTypeBeforeEditor = event.what;
+						editor->handleEvent(event);
+						if (keyDebugEnabled()) {
+							char line[224];
+							std::snprintf(
+							    line, sizeof(line),
+							    "KEYDBG shifttab stage=editor-dispatch eventBefore=0x%04X eventAfter=0x%04X cursorBefore=%zu cursorAfter=%zu",
+							    static_cast<unsigned>(eventTypeBeforeEditor),
+							    static_cast<unsigned>(event.what), cursorStart, editor->cursorOffset());
+							mrLogMessage(line);
+						}
 					}
 				}
-			}
 			if (shouldCollapseSelectionBeforeEditorInput(event)) {
 				const std::size_t cursor = editor->cursorOffset();
 				editor->setSelectionOffsets(cursor, cursor, False);
@@ -257,10 +262,11 @@ class MREditWindow : public TWindow {
 					mrFrame->updateTaskHover(TPoint(), true);
 			}
 
-			TWindow::handleEvent(event);
-			if (keyDebugEnabled() && originalEvent == evKeyDown &&
-			    TKey(keyCodeBefore, keyModifiersBefore) == TKey(kbShiftTab)) {
-				char line[192];
+				TWindow::handleEvent(event);
+				traceCalculatorHotkeyEvent("window-post", event);
+				if (keyDebugEnabled() && originalEvent == evKeyDown &&
+				    TKey(keyCodeBefore, keyModifiersBefore) == TKey(kbShiftTab)) {
+					char line[192];
 				std::snprintf(line, sizeof(line),
 				              "KEYDBG shifttab stage=window-post event=0x%04X cursor=%zu",
 				              static_cast<unsigned>(event.what),
@@ -1038,11 +1044,11 @@ class MREditWindow : public TWindow {
 		refreshWindowPaletteViews();
 	}
 
-  private:
-	static bool keyDebugEnabled() noexcept {
-		static int cached = -1;
-		if (cached < 0) {
-			const char *value = std::getenv("MR_KEY_DEBUG");
+	private:
+		static bool keyDebugEnabled() noexcept {
+			static int cached = -1;
+			if (cached < 0) {
+				const char *value = std::getenv("MR_KEY_DEBUG");
 			cached = (value != nullptr && *value != '\0' && std::strcmp(value, "0") != 0) ? 1 : 0;
 		}
 		return cached == 1;
@@ -1058,10 +1064,10 @@ class MREditWindow : public TWindow {
 		       TKey(event.keyDown.keyCode, event.keyDown.controlKeyState) == TKey(kbShiftTab);
 	}
 
-	static void maybeTraceTabKeyEvent(const TEvent &event) {
-		if (!keyDebugEnabled() || !isTabRelatedKeyEvent(event))
-			return;
-		const TKey normalized(event.keyDown.keyCode, event.keyDown.controlKeyState);
+		static void maybeTraceTabKeyEvent(const TEvent &event) {
+			if (!keyDebugEnabled() || !isTabRelatedKeyEvent(event))
+				return;
+			const TKey normalized(event.keyDown.keyCode, event.keyDown.controlKeyState);
 		char line[256];
 		std::snprintf(
 		    line, sizeof(line),
@@ -1071,10 +1077,34 @@ class MREditWindow : public TWindow {
 		    static_cast<unsigned>(normalized.code), static_cast<unsigned>(normalized.mods),
 		    static_cast<unsigned>(event.keyDown.textLength),
 		    static_cast<unsigned>(static_cast<unsigned char>(event.keyDown.charScan.charCode)));
-		mrLogMessage(line);
-	}
+			mrLogMessage(line);
+		}
 
-	static TColorAttr configuredWindowPaletteSlot(unsigned char slot) noexcept {
+		static bool isCalculatorHotkeyEvent(const TEvent &event) noexcept {
+			if (event.what != evKeyDown)
+				return false;
+			const TKey normalized(event.keyDown.keyCode, event.keyDown.controlKeyState);
+			return (normalized.mods & kbAltShift) != 0 && normalized.code == 'C';
+		}
+
+		static void traceCalculatorHotkeyEvent(const char *stage, const TEvent &event,
+		                                       const char *detail = nullptr) {
+			if (!isCalculatorHotkeyEvent(event))
+				return;
+			const TKey normalized(event.keyDown.keyCode, event.keyDown.controlKeyState);
+			char line[320];
+			std::snprintf(line, sizeof(line),
+			              "KEYDBG calc stage=%s rawCode=0x%04X rawMods=0x%04X normCode=0x%04X normMods=0x%04X textLen=%u char=0x%02X%s%s",
+			              stage, static_cast<unsigned>(event.keyDown.keyCode),
+			              static_cast<unsigned>(event.keyDown.controlKeyState),
+			              static_cast<unsigned>(normalized.code), static_cast<unsigned>(normalized.mods),
+			              static_cast<unsigned>(event.keyDown.textLength),
+			              static_cast<unsigned>(static_cast<unsigned char>(event.keyDown.charScan.charCode)),
+			              detail != nullptr ? " " : "", detail != nullptr ? detail : "");
+			mrLogMessage(line);
+		}
+
+		static TColorAttr configuredWindowPaletteSlot(unsigned char slot) noexcept {
 		unsigned char value = 0x07;
 		unsigned char overrideValue = 0;
 

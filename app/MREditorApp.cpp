@@ -78,6 +78,28 @@ bool shouldInvalidateScreenBaseForEvent(ushort eventWhat) noexcept {
 	}
 }
 
+bool isCalculatorHotkeyEvent(const TEvent &event) noexcept {
+	if (event.what != evKeyDown)
+		return false;
+	const TKey normalized(event.keyDown.keyCode, event.keyDown.controlKeyState);
+	return (normalized.mods & kbAltShift) != 0 && normalized.code == 'C';
+}
+
+void traceCalculatorHotkeyEvent(const char *stage, const TEvent &event) {
+	if (!isCalculatorHotkeyEvent(event))
+		return;
+	const TKey normalized(event.keyDown.keyCode, event.keyDown.controlKeyState);
+	char line[288];
+	std::snprintf(line, sizeof(line),
+	              "KEYDBG calc stage=%s rawCode=0x%04X rawMods=0x%04X normCode=0x%04X normMods=0x%04X textLen=%u char=0x%02X",
+	              stage, static_cast<unsigned>(event.keyDown.keyCode),
+	              static_cast<unsigned>(event.keyDown.controlKeyState),
+	              static_cast<unsigned>(normalized.code), static_cast<unsigned>(normalized.mods),
+	              static_cast<unsigned>(event.keyDown.textLength),
+	              static_cast<unsigned>(static_cast<unsigned char>(event.keyDown.charScan.charCode)));
+	mrLogMessage(line);
+}
+
 void postAppError(std::string_view text) {
 	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text,
 	                               mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
@@ -994,11 +1016,16 @@ MREditorApp::~MREditorApp() {
 	mr::coprocessor::globalCoprocessor().shutdown(true);
 }
 
-bool MREditorApp::reloadSettingsMacroFromPath(const std::string &path, std::string *errorMessage) {
+bool MREditorApp::applyConfiguredSettingsFromModel(std::string *errorMessage) {
 	std::vector<MREditWindow *> windows;
 	bool defaultInsertMode = true;
+	MRSetupPaths paths;
+	std::string source;
 
-	if (!loadStartupSettingsMacro(path, errorMessage))
+	if (!buildConfiguredSetupPathsSnapshot(paths, errorMessage))
+		return false;
+	source = buildSettingsMacroSource(paths);
+	if (!applySettingsSourceViaVm(paths.settingsMacroUri, source, errorMessage))
 		return false;
 	defaultInsertMode = configuredDefaultInsertMode();
 	windows = allEditWindowsInZOrder();
@@ -1008,7 +1035,6 @@ bool MREditorApp::reloadSettingsMacroFromPath(const std::string &path, std::stri
 				window->getEditor()->setInsertModeEnabled(defaultInsertMode);
 			window->getEditor()->refreshConfiguredVisualSettings();
 		}
-	bootstrapIndexedMacroBindings();
 	applyConfiguredDisplayLayout();
 	return true;
 }
@@ -1084,6 +1110,11 @@ void MREditorApp::prepareForQuit() {
 		mr::coprocessor::globalCoprocessor().pump(64);
 	}
 	cancelForegroundMacroDelays();
+	if (configuredLogHandling() == MRLogHandling::Persist) {
+		const std::string logPath = configuredLogFilePath();
+		if (!mrAppendLogBufferToFile(logPath, &settingsError))
+			mrLogMessage(("MR log append on exit failed: " + settingsError).c_str());
+	}
 }
 
 bool MREditorApp::isRecorderToggleKey(const TEvent &event) const {
@@ -1301,72 +1332,95 @@ void MREditorApp::stopKeystrokeRecording() {
 }
 
 void MREditorApp::bootstrapIndexedMacroBindings() {
-	std::size_t fileCount = 0;
-	std::size_t bindingCount = 0;
+	std::vector<std::string> configuredEntries;
+	std::vector<std::string> retainedEntries;
+	std::vector<std::string> failedEntries;
 	std::string directory = defaultMacroDirectoryPath();
+	bool filteredEntries = false;
+	std::size_t executedCount = 0;
 
-	mrvmBootstrapBoundMacroIndex(directory, &fileCount, &bindingCount);
+	clearConfiguredAutoexecMacroDiagnostics();
+	configuredAutoexecMacroEntries(configuredEntries);
 	indexedMacroWarmupLoadedFiles = 0;
-	indexedMacroWarmupActive = (fileCount != 0);
+	indexedMacroWarmupActive = false;
 
-	if (fileCount == 0) {
-		mrLogMessage("Macro bootstrap: no bound .mrmac files found.");
+	if (configuredEntries.empty()) {
+		mrLogMessage("Autoexec bootstrap: no AUTOEXEC_MACRO entries configured.");
 		return;
 	}
 
+	for (const std::string &fileName : configuredEntries) {
+		const std::filesystem::path resolvedPath = std::filesystem::path(directory) / fileName;
+		const std::string resolved = resolvedPath.lexically_normal().generic_string();
+		std::string errorText;
+
+		if (!std::filesystem::exists(resolvedPath)) {
+			filteredEntries = true;
+			mrLogMessage(("Autoexec bootstrap removed missing macro: " + fileName).c_str());
+			continue;
+		}
+		if (runMacroFileByPath(resolved.c_str(), &errorText, true)) {
+			retainedEntries.push_back(fileName);
+			++executedCount;
+			continue;
+		}
+
+		filteredEntries = true;
+		failedEntries.push_back(fileName);
+		rememberConfiguredAutoexecMacroDiagnostic(fileName,
+		                                          errorText.empty() ? "Autoexec execution failed." : errorText);
+		mrLogMessage(("Autoexec bootstrap failed for " + fileName + ": " +
+		              (errorText.empty() ? std::string("unknown error") : errorText))
+		                 .c_str());
+	}
+
+	if (filteredEntries) {
+		std::string persistError;
+
+		if (setConfiguredAutoexecMacroEntries(retainedEntries, &persistError) &&
+		    persistConfiguredSettingsSnapshot(&persistError)) {
+			mrLogMessage("Autoexec bootstrap updated AUTOEXEC_MACRO in settings.mrmac.");
+		} else {
+			setConfiguredAutoexecMacroEntries(configuredEntries, nullptr);
+			mrLogMessage(("Autoexec bootstrap could not persist filtered AUTOEXEC_MACRO: " + persistError).c_str());
+		}
+	}
+
 	{
-		std::string line = "Macro bootstrap indexed ";
-		line += std::to_string(bindingCount);
-		line += " binding";
-		if (bindingCount != 1)
+		std::string line = "Autoexec bootstrap executed ";
+		line += std::to_string(executedCount);
+		line += " macro";
+		if (executedCount != 1)
 			line += "s";
-		line += " across ";
-		line += std::to_string(fileCount);
-		line += " file";
-		if (fileCount != 1)
+		line += " from ";
+		line += std::to_string(configuredEntries.size());
+		line += " configured entry";
+		if (configuredEntries.size() != 1)
 			line += "s";
-		line += " in ";
-		line += directory;
 		line += ".";
 		mrLogMessage(line.c_str());
+	}
+
+	if (!failedEntries.empty()) {
+		std::ostringstream summary;
+
+		summary << "Failed autoexec macros: ";
+		for (std::size_t i = 0; i < failedEntries.size(); ++i) {
+			if (i != 0)
+				summary << ", ";
+			summary << failedEntries[i];
+		}
+		mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEventFollowup, summary.str(),
+		                               mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 	}
 }
 
 void MREditorApp::warmIndexedMacroBindings() {
-	std::string loadedPath;
-	std::string failedPath;
-	std::string errorText;
-
-	if (!indexedMacroWarmupActive)
-		return;
-
-	if (mrvmWarmLoadNextIndexedMacroFile(&loadedPath, &failedPath, &errorText)) {
-		++indexedMacroWarmupLoadedFiles;
-		return;
-	}
-
-	if (!failedPath.empty()) {
-		std::string line = "Macro warmup failed for ";
-		line += failedPath;
-		line += ": ";
-		line += errorText.empty() ? std::string("unknown error") : errorText;
-		mrLogMessage(line.c_str());
-	}
-
-	if (!mrvmHasPendingIndexedMacroWarmup()) {
-		std::string line = "Macro warmup completed: ";
-		line += std::to_string(indexedMacroWarmupLoadedFiles);
-		line += " file";
-		if (indexedMacroWarmupLoadedFiles != 1)
-			line += "s";
-		line += " loaded.";
-		mrLogMessage(line.c_str());
-		indexedMacroWarmupActive = false;
-	}
 }
 
 void MREditorApp::handleEvent(TEvent &event) {
 	const ushort originalWhat = event.what;
+	traceCalculatorHotkeyEvent("app-pre", event);
 	clearTransientSearchSelectionOnUserInput(event);
 	if (isRecorderToggleCommand(event)) {
 		if (keystrokeRecording)
@@ -1396,15 +1450,30 @@ void MREditorApp::handleEvent(TEvent &event) {
 		clearEvent(event);
 		return;
 	}
+	if (event.what == evKeyDown && currentEditWindow() == nullptr) {
+		std::string executedMacroName;
+		if (mrvmRunAssignedMacroForKey(event.keyDown.keyCode, event.keyDown.controlKeyState,
+		                               executedMacroName, nullptr)) {
+			traceCalculatorHotkeyEvent("app-macro-consumed", event);
+			clearEvent(event);
+			return;
+		}
+	}
 
 	if (event.what == evCommand && event.message.command == cmQuit)
 		prepareForQuit();
 	TApplication::handleEvent(event);
+	traceCalculatorHotkeyEvent("app-post", event);
 	if (shouldInvalidateScreenBaseForEvent(originalWhat))
 		mrvmUiInvalidateScreenBase();
 
 	if (event.what != evCommand)
 		return;
+	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar); mrMenuBar != nullptr &&
+	    mrMenuBar->handleRuntimeCommand(event.message.command)) {
+		clearEvent(event);
+		return;
+	}
 	if (handleMRCommand(event.message.command))
 		clearEvent(event);
 }

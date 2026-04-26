@@ -346,11 +346,6 @@ const char *placeholderCommandTitle(ushort command) {
 		case cmMrHelpAbout:
 			return "Help / About";
 
-		case cmMrDevCancelMacroTasks:
-			return "Dev / Cancel background macros";
-		case cmMrDevHeroEventProbe:
-			return "Dev / Test hero event";
-
 		case cmMrSetupKeyMapping:
 			return "Installation / Key mapping";
 		case cmMrSetupMouseKeyRepeat:
@@ -3989,34 +3984,6 @@ bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandL
 	return true;
 }
 
-bool handleCancelBackgroundMacros() {
-	MREditWindow *win = currentEditWindow();
-	std::ostringstream line;
-	std::size_t taskCount;
-
-	if (win == nullptr)
-		return true;
-	taskCount = win->trackedMacroTaskCount();
-	if (taskCount == 0) {
-		postDialogWarning(kNoBackgroundMacroTasksMessage);
-		return true;
-	}
-	if (!win->cancelTrackedMacroTasks())
-		return true;
-	line << "Requested cancel of " << taskCount << " background macro task";
-	if (taskCount != 1)
-		line << "s";
-	line << " in window #" << win->bufferId() << ".";
-	mrLogMessage(line.str().c_str());
-	return true;
-}
-
-bool handleHeroEventProbe() {
-	mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEvent, "Hero event probe",
-	                              mr::messageline::Kind::Info, mr::messageline::kPriorityLow);
-	return true;
-}
-
 bool dispatchEditorCommand(ushort editorCommand, bool requiresWritable) {
 	MREditWindow *win = currentEditWindow();
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
@@ -4129,7 +4096,7 @@ bool togglePersistentBlocksSetting() {
 		return true;
 	}
 	mrLogSettingsWriteReport("persistent blocks toggle", writeReport);
-	if (app != nullptr && !app->reloadSettingsMacroFromPath(paths.settingsMacroUri, &errorText)) {
+	if (app != nullptr && !app->applyConfiguredSettingsFromModel(&errorText)) {
 		postSearchError("Settings reload failed: " + errorText);
 		return true;
 	}
@@ -4464,12 +4431,6 @@ bool handleMRCommand(ushort command) {
 
 		case cmMrOtherEmojiTable:
 			return handleCharacterTable(CharacterTableKind::Emoji);
-
-		case cmMrDevCancelMacroTasks:
-			return handleCancelBackgroundMacros();
-
-		case cmMrDevHeroEventProbe:
-			return handleHeroEventProbe();
 
 				default: {
 					const char *title = placeholderCommandTitle(command);

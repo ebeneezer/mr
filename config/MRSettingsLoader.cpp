@@ -129,12 +129,16 @@ MRFlattenedSettingsDocument flattenSettingsDocument(const MRParsedSettingsDocume
 	MRFlattenedSettingsDocument flattened;
 	std::size_t pathHistoryIndex = 1;
 	std::size_t fileHistoryIndex = 1;
+	std::size_t autoexecMacroIndex = 1;
 
 	for (const MRParsedSettingsAssignment &assignment : document.assignments)
 		if (assignment.key == "PATH_HISTORY")
 			flattened.globals[assignment.key + "[" + std::to_string(pathHistoryIndex++) + "]"] = assignment.value;
 		else if (assignment.key == "FILE_HISTORY")
 			flattened.globals[assignment.key + "[" + std::to_string(fileHistoryIndex++) + "]"] = assignment.value;
+		else if (assignment.key == "AUTOEXEC_MACRO")
+			flattened.globals[assignment.key + "[" + std::to_string(autoexecMacroIndex++) + "]"] =
+			    assignment.value;
 		else
 			flattened.globals[assignment.key] = assignment.value;
 

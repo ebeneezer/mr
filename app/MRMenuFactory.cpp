@@ -205,17 +205,11 @@ TSubMenu *createHelpMenu() {
 	    *new TMenuItem("~A~bout...", cmMrHelpAbout, kbNoKey, hcNoContext));
 }
 
-TSubMenu *createDevMenu() {
-	return &(*new TSubMenu("De~V~", kbAltV) +
-	         *new TMenuItem("~C~ancel background macros", cmMrDevCancelMacroTasks, kbNoKey, hcNoContext) +
-	         *new TMenuItem("Test ~H~ero event", cmMrDevHeroEventProbe, kbNoKey, hcNoContext));
-}
 } // namespace
 
 TMenuBar *createMRMenuBar(TRect r) {
 	r.b.y = r.a.y + 1;
 	return new MRMenuBar(r, *createFileMenu() + *createEditMenu() + *createWindowMenu() +
 	                             *createBlockMenu() + *createSearchMenu() + *createTextMenu() +
-	                             *createOtherMenu() + *createMacroMenu() + *createHelpMenu() +
-	                             *createDevMenu());
+	                             *createOtherMenu() + *createMacroMenu() + *createHelpMenu());
 }

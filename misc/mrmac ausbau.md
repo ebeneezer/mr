@@ -52,6 +52,8 @@ Set/Get-Zustand
 Enabled/Visible/Focus
 danach Checkbox/Radio
 danach modeless
+
+
 2. Moderne Sprachvision von mrmac als Zentrum: Was fehlt noch?
 
 Hier geht es nicht nur um UI, sondern darum, dass mr wirklich vom Makroprozessor getragen wird.
@@ -95,17 +97,3 @@ UI-Primitives vervollständigen
 Menümanipulation über K/V-Hash
 Set/Get-/State-Modell für UI und Editorzustände
 Damit würde mrmac wirklich vom „mächtigen Makrosystem“ zum führenden Systemkern werden.
-
-Wenn Sie möchten, kann ich Ihnen als nächsten Schritt diese beiden Themen in eine kompakte Ausbaureihenfolge bringen:
-UI-Schicht und mrmac-als-Zentrum, jeweils in sinnvoller technischer Reihenfolge.
-
-23:49
-
-Vollzugriff
-
-5.4
-Hoch
-
-IDE-Kontext
-
-Lokal arbeiten
