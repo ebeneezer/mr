@@ -12,7 +12,7 @@ class TInputLine;
 class TRadioButtons;
 class TView;
 
-namespace MRFileExtensionProfilesDialogInternal {
+namespace MRFileExtensionProfilesInternal {
 
 enum : ushort {
 	cmMrFileExtensionEditorSettingsPanelChanged = 3860,
@@ -206,6 +206,6 @@ class FileExtensionEditorSettingsPanel {
 		int lastKnownRightMarginForFormatLine = 78;
 };
 
-} // namespace MRFileExtensionProfilesDialogInternal
+} // namespace MRFileExtensionProfilesInternal
 
 #endif

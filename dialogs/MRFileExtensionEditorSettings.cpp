@@ -10,9 +10,9 @@
 #define Uses_TView
 #include <tvision/tv.h>
 
-#include "MRFileExtensionEditorSettingsPanelInternal.hpp"
+#include "MRFileExtensionEditorSettingsInternal.hpp"
 #include "MRNumericSlider.hpp"
-#include "MRSetupDialogCommon.hpp"
+#include "MRSetupCommon.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -20,7 +20,7 @@
 #include <vector>
 
 namespace {
-using namespace MRFileExtensionProfilesDialogInternal;
+using namespace MRFileExtensionProfilesInternal;
 using mr::dialogs::readRecordField;
 using mr::dialogs::writeRecordField;
 
@@ -300,7 +300,7 @@ void writeInputFieldValue(TInputLine *inputLine, const std::string &value) {
 
 } // namespace
 
-namespace MRFileExtensionProfilesDialogInternal {
+namespace MRFileExtensionProfilesInternal {
 
 FileExtensionEditorSettingsPanel::FileExtensionEditorSettingsPanel(const FileExtensionEditorSettingsPanelConfig &config) : config(config) {
 }
@@ -742,4 +742,4 @@ void FileExtensionEditorSettingsPanel::setDefaultPathValue(const std::string &va
 		writeInputFieldValue(defaultPathField, value);
 }
 
-} // namespace MRFileExtensionProfilesDialogInternal
+} // namespace MRFileExtensionProfilesInternal

@@ -1,4 +1,4 @@
-#include "mrmac/mrvm.hpp"
+#include "mrmac/MRVM.hpp"
 #include "app/MREditorApp.hpp"
 #include "app/MRHelp.generated.hpp"
 #include "ui/MRPalette.hpp"

@@ -23,10 +23,10 @@
 #include <vector>
 
 #include "../mrmac/mrmac.h"
-#include "../mrmac/mrvm.hpp"
+#include "../mrmac/MRVM.hpp"
 #include "../app/MREditorApp.hpp"
 #include "../config/MRDialogPaths.hpp"
-#include "../dialogs/MRSetupDialogs.hpp"
+#include "../dialogs/MRSetup.hpp"
 #include "../piecetable/MRTextDocument.hpp"
 
 namespace {
@@ -2736,14 +2736,14 @@ bool testSaveAsOverwriteAndBackupWiringGuard(std::string &failureReason) {
 }
 
 bool testThemeAndMacroSaveOverwriteWiringGuard(std::string &failureReason) {
-	const std::string setupDialogsPath = absolutePathFromCwd("dialogs/MRSetupDialogs.cpp");
+	const std::string setupDialogsPath = absolutePathFromCwd("dialogs/MRSetup.cpp");
 	const std::string appPath = absolutePathFromCwd("app/MREditorApp.cpp");
 	std::string setupContent;
 	std::string appContent;
 	std::string ioError;
 
 	if (!readTextFile(setupDialogsPath, setupContent, ioError)) {
-		failureReason = "Unable to read MRSetupDialogs.cpp for theme overwrite guard: " + ioError;
+		failureReason = "Unable to read MRSetup.cpp for theme overwrite guard: " + ioError;
 		return false;
 	}
 	if (!readTextFile(appPath, appContent, ioError)) {
@@ -2776,8 +2776,8 @@ bool testThemeAndMacroSaveOverwriteWiringGuard(std::string &failureReason) {
 
 bool testPersistentBlocksWiringGuard(std::string &failureReason) {
 	const std::string settingsPath = absolutePathFromCwd("config/MRDialogPaths.cpp");
-	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
-	const std::string panelPath = absolutePathFromCwd("dialogs/MRFileExtensionEditorSettingsPanel.cpp");
+	const std::string vmPath = absolutePathFromCwd("mrmac/MRVM.cpp");
+	const std::string panelPath = absolutePathFromCwd("dialogs/MRFileExtensionEditorSettings.cpp");
 	std::string settingsContent;
 	std::string vmContent;
 	std::string panelContent;
@@ -2788,12 +2788,12 @@ bool testPersistentBlocksWiringGuard(std::string &failureReason) {
 		return false;
 	}
 	if (!readTextFile(vmPath, vmContent, ioError)) {
-		failureReason = "Unable to read mrvm.cpp for persistent-blocks guard: " + ioError;
+		failureReason = "Unable to read MRVM.cpp for persistent-blocks guard: " + ioError;
 		return false;
 	}
 	if (!readTextFile(panelPath, panelContent, ioError)) {
 		failureReason =
-		    "Unable to read MRFileExtensionEditorSettingsPanel.cpp for persistent-blocks guard: " +
+		    "Unable to read MRFileExtensionEditorSettings.cpp for persistent-blocks guard: " +
 		    ioError;
 		return false;
 	}
@@ -2929,12 +2929,12 @@ bool testInterWindowBlockSourceTargetGuard(std::string &failureReason) {
 }
 
 bool testColumnUndentPolicyGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("mrmac/mrvm.cpp");
+	const std::string sourcePath = absolutePathFromCwd("mrmac/MRVM.cpp");
 	std::string content;
 	std::string ioError;
 
 	if (!readTextFile(sourcePath, content, ioError)) {
-		failureReason = "Unable to read mrvm.cpp for column-undent policy guard: " + ioError;
+		failureReason = "Unable to read MRVM.cpp for column-undent policy guard: " + ioError;
 		return false;
 	}
 	if (content.find("if (mode == MREditWindow::bmColumn)") == std::string::npos ||
@@ -3263,7 +3263,7 @@ bool testCreateGlobalStrOperation(std::string &failureReason) {
 }
 
 bool testMarqueeProcWiringGuard(std::string &failureReason) {
-	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
+	const std::string vmPath = absolutePathFromCwd("mrmac/MRVM.cpp");
 	std::string content;
 	std::string ioError;
 	std::vector<unsigned char> bytecode;
@@ -3277,7 +3277,7 @@ bool testMarqueeProcWiringGuard(std::string &failureReason) {
 	                              "END_MACRO;\n";
 
 	if (!readTextFile(vmPath, content, ioError)) {
-		failureReason = "Unable to read mrvm.cpp for MARQUEE proc guard: " + ioError;
+		failureReason = "Unable to read MRVM.cpp for MARQUEE proc guard: " + ioError;
 		return false;
 	}
 	if (content.find("name == \"MARQUEE\" || name == \"MARQUEE_WARNING\" || name == \"MARQUEE_ERROR\"") ==
@@ -3357,8 +3357,8 @@ bool testDeferredUiPlaybackMailboxGuard(std::string &failureReason) {
 }
 
 bool testDeferredUiMutationEpochGuard(std::string &failureReason) {
-	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
-	const std::string vmHeaderPath = absolutePathFromCwd("mrmac/mrvm.hpp");
+	const std::string vmPath = absolutePathFromCwd("mrmac/MRVM.cpp");
+	const std::string vmHeaderPath = absolutePathFromCwd("mrmac/MRVM.hpp");
 	const std::string dispatchPath = absolutePathFromCwd("coprocessor/MRCoprocessorDispatch.cpp");
 	const std::string appPath = absolutePathFromCwd("app/MREditorApp.cpp");
 	const std::string menuBarPath = absolutePathFromCwd("ui/MRMenuBar.cpp");
@@ -3376,11 +3376,11 @@ bool testDeferredUiMutationEpochGuard(std::string &failureReason) {
 	std::string ioError;
 
 	if (!readTextFile(vmPath, vmContent, ioError)) {
-		failureReason = "Unable to read mrvm.cpp for deferred UI mutation-epoch guard: " + ioError;
+		failureReason = "Unable to read MRVM.cpp for deferred UI mutation-epoch guard: " + ioError;
 		return false;
 	}
 	if (!readTextFile(vmHeaderPath, vmHeaderContent, ioError)) {
-		failureReason = "Unable to read mrvm.hpp for deferred UI mutation-epoch guard: " + ioError;
+		failureReason = "Unable to read MRVM.hpp for deferred UI mutation-epoch guard: " + ioError;
 		return false;
 	}
 	if (!readTextFile(dispatchPath, dispatchContent, ioError)) {
@@ -3416,7 +3416,7 @@ bool testDeferredUiMutationEpochGuard(std::string &failureReason) {
 	    vmHeaderContent.find("bool mrvmUiRenderFacadeRenderDeferredCommand(const MRMacroDeferredUiCommand &command);") ==
 	        std::string::npos ||
 	    vmHeaderContent.find("bool mrvmUiEraseCurrentWindow();") == std::string::npos) {
-		failureReason = "mrvm.hpp must expose screen mutation epoch and base invalidation APIs.";
+		failureReason = "MRVM.hpp must expose screen mutation epoch and base invalidation APIs.";
 		return false;
 	}
 	if (vmContent.find("static std::atomic<std::uint64_t> g_macroScreenMutationEpoch(1);") == std::string::npos ||
@@ -3436,7 +3436,7 @@ bool testDeferredUiMutationEpochGuard(std::string &failureReason) {
 	    vmContent.find("bool mrvmUiEraseCurrentWindow()") == std::string::npos ||
 	    vmContent.find("returnWithDirectScreenMutation(eraseCurrentEditWindow())") == std::string::npos ||
 	    vmContent.find("ok = mrvmUiEraseCurrentWindow();") == std::string::npos) {
-		failureReason = "mrvm.cpp must maintain and expose a central screen-mutation epoch coordinator.";
+		failureReason = "MRVM.cpp must maintain and expose a central screen-mutation epoch coordinator.";
 		return false;
 	}
 	if (dispatchContent.find("observedScreenEpoch") == std::string::npos ||
@@ -3465,7 +3465,7 @@ bool testDeferredUiMutationEpochGuard(std::string &failureReason) {
 }
 
 bool testTvCallSurfaceGuard(std::string &failureReason) {
-	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
+	const std::string vmPath = absolutePathFromCwd("mrmac/MRVM.cpp");
 	std::string content;
 	std::string ioError;
 	std::size_t dispatchStart = std::string::npos;
@@ -3473,7 +3473,7 @@ bool testTvCallSurfaceGuard(std::string &failureReason) {
 	std::string dispatchBlock;
 
 	if (!readTextFile(vmPath, content, ioError)) {
-		failureReason = "Unable to read mrvm.cpp for TVCALL surface guard: " + ioError;
+		failureReason = "Unable to read MRVM.cpp for TVCALL surface guard: " + ioError;
 		return false;
 	}
 	dispatchStart = content.find("} else if (opcode == OP_TVCALL) {");
@@ -3511,14 +3511,14 @@ bool testTvCallSurfaceGuard(std::string &failureReason) {
 }
 
 bool testScreenRenderFacadeBoundaryGuard(std::string &failureReason) {
-	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
+	const std::string vmPath = absolutePathFromCwd("mrmac/MRVM.cpp");
 	const std::string dispatchPath = absolutePathFromCwd("coprocessor/MRCoprocessorDispatch.cpp");
 	std::string vmContent;
 	std::string dispatchContent;
 	std::string ioError;
 
 	if (!readTextFile(vmPath, vmContent, ioError)) {
-		failureReason = "Unable to read mrvm.cpp for screen facade guard: " + ioError;
+		failureReason = "Unable to read MRVM.cpp for screen facade guard: " + ioError;
 		return false;
 	}
 	if (!readTextFile(dispatchPath, dispatchContent, ioError)) {
@@ -3583,7 +3583,7 @@ bool testScreenRenderFacadeBoundaryGuard(std::string &failureReason) {
 }
 
 bool testRenderSinkClassificationGuard(std::string &failureReason) {
-	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
+	const std::string vmPath = absolutePathFromCwd("mrmac/MRVM.cpp");
 	const std::string dispatchPath = absolutePathFromCwd("coprocessor/MRCoprocessorDispatch.cpp");
 	const std::string appPath = absolutePathFromCwd("app/MREditorApp.cpp");
 	const std::string windowCommandsPath = absolutePathFromCwd("app/commands/MRWindowCommands.cpp");
@@ -3595,7 +3595,7 @@ bool testRenderSinkClassificationGuard(std::string &failureReason) {
 	std::string missingNeedle;
 
 	if (!readTextFile(vmPath, vmContent, ioError)) {
-		failureReason = "Unable to read mrvm.cpp for render sink classification guard: " + ioError;
+		failureReason = "Unable to read MRVM.cpp for render sink classification guard: " + ioError;
 		return false;
 	}
 	if (!readTextFile(dispatchPath, dispatchContent, ioError)) {
@@ -3625,7 +3625,7 @@ bool testRenderSinkClassificationGuard(std::string &failureReason) {
 	                               "unsafe-physical-write:"
 	                           },
 	                           missingNeedle)) {
-		failureReason = "mrvm.cpp must document the render sink classification foundation: missing " +
+		failureReason = "MRVM.cpp must document the render sink classification foundation: missing " +
 		                missingNeedle + ".";
 		return false;
 	}
@@ -3703,7 +3703,7 @@ bool testRenderSinkClassificationGuard(std::string &failureReason) {
 		    batchEndStart == std::string::npos || batchEndEnd == std::string::npos ||
 		    projectAllStart == std::string::npos || projectAllEnd == std::string::npos ||
 		    redrawStart == std::string::npos || redrawEnd == std::string::npos) {
-			failureReason = "Unable to locate approved flushScreen sink boundaries in mrvm.cpp.";
+			failureReason = "Unable to locate approved flushScreen sink boundaries in MRVM.cpp.";
 			return false;
 		}
 		const std::string messageRefreshBlock = vmContent.substr(messageRefreshStart, messageRefreshEnd - messageRefreshStart);
@@ -3734,13 +3734,13 @@ bool testRenderSinkClassificationGuard(std::string &failureReason) {
 }
 
 bool testResizeKillBoxReprojectionGuard(std::string &failureReason) {
-	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
+	const std::string vmPath = absolutePathFromCwd("mrmac/MRVM.cpp");
 	std::string vmContent;
 	std::string ioError;
 	std::string missingNeedle;
 
 	if (!readTextFile(vmPath, vmContent, ioError)) {
-		failureReason = "Unable to read mrvm.cpp for resize/KILL_BOX reprojection guard: " + ioError;
+		failureReason = "Unable to read MRVM.cpp for resize/KILL_BOX reprojection guard: " + ioError;
 		return false;
 	}
 	if (!containsAllSubstrings(vmContent,
@@ -3786,12 +3786,12 @@ bool testResizeKillBoxReprojectionGuard(std::string &failureReason) {
 }
 
 bool testClearScreenSnapshotResetGuard(std::string &failureReason) {
-	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
+	const std::string vmPath = absolutePathFromCwd("mrmac/MRVM.cpp");
 	std::string vmContent;
 	std::string ioError;
 
 	if (!readTextFile(vmPath, vmContent, ioError)) {
-		failureReason = "Unable to read mrvm.cpp for CLEAR_SCREEN snapshot guard: " + ioError;
+		failureReason = "Unable to read MRVM.cpp for CLEAR_SCREEN snapshot guard: " + ioError;
 		return false;
 	}
 	{
@@ -3840,13 +3840,13 @@ bool testClearScreenSnapshotResetGuard(std::string &failureReason) {
 }
 
 bool testLineColOverlayReplayGuard(std::string &failureReason) {
-	const std::string vmPath = absolutePathFromCwd("mrmac/mrvm.cpp");
+	const std::string vmPath = absolutePathFromCwd("mrmac/MRVM.cpp");
 	std::string vmContent;
 	std::string ioError;
 	std::string missingNeedle;
 
 	if (!readTextFile(vmPath, vmContent, ioError)) {
-		failureReason = "Unable to read mrvm.cpp for line/column overlay replay guard: " + ioError;
+		failureReason = "Unable to read MRVM.cpp for line/column overlay replay guard: " + ioError;
 		return false;
 	}
 	if (!containsAllSubstrings(vmContent,
@@ -4059,8 +4059,8 @@ bool testStartupCliLoadRecursiveGuard(std::string &failureReason) {
 	const std::string appSourcePath = absolutePathFromCwd("app/MREditorApp.cpp");
 	const std::string mainSourcePath = absolutePathFromCwd("mr.cpp");
 	const std::string makefilePath = absolutePathFromCwd("Makefile");
-	const std::string vmHeaderPath = absolutePathFromCwd("mrmac/mrvm.hpp");
-	const std::string vmSourcePath = absolutePathFromCwd("mrmac/mrvm.cpp");
+	const std::string vmHeaderPath = absolutePathFromCwd("mrmac/MRVM.hpp");
+	const std::string vmSourcePath = absolutePathFromCwd("mrmac/MRVM.cpp");
 	std::string appContent;
 	std::string mainContent;
 	std::string makefileContent;
@@ -4081,11 +4081,11 @@ bool testStartupCliLoadRecursiveGuard(std::string &failureReason) {
 		return false;
 	}
 	if (!readTextFile(vmHeaderPath, vmHeaderContent, ioError)) {
-		failureReason = "Unable to read mrvm.hpp for startup CLI guard: " + ioError;
+		failureReason = "Unable to read MRVM.hpp for startup CLI guard: " + ioError;
 		return false;
 	}
 	if (!readTextFile(vmSourcePath, vmSourceContent, ioError)) {
-		failureReason = "Unable to read mrvm.cpp for startup CLI guard: " + ioError;
+		failureReason = "Unable to read MRVM.cpp for startup CLI guard: " + ioError;
 		return false;
 	}
 	if (appContent.find("--load-recursive") == std::string::npos ||

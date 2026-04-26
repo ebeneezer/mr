@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "../mrmac/mrmac.h"
-#include "../mrmac/mrvm.hpp"
+#include "../mrmac/MRVM.hpp"
 
 static bool readText(const char *path, std::string &out) {
 	std::ifstream in(path, std::ios::in | std::ios::binary);

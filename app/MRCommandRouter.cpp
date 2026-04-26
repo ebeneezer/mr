@@ -41,19 +41,19 @@
 #include <utility>
 #include <vector>
 
-#include "../dialogs/MRFileInformationDialog.hpp"
-#include "../dialogs/MRAboutDialog.hpp"
-#include "../dialogs/MRSetupDialogs.hpp"
-#include "../dialogs/MRSetupDialogCommon.hpp"
+#include "../dialogs/MRFileInformation.hpp"
+#include "../dialogs/MRAbout.hpp"
+#include "../dialogs/MRSetup.hpp"
+#include "../dialogs/MRSetupCommon.hpp"
 #include "../config/MRDialogPaths.hpp"
 #include "../app/utils/MRFileIOUtils.hpp"
 #include "../app/utils/MRStringUtils.hpp"
-#include "../mrmac/mrvm.hpp"
+#include "../mrmac/MRVM.hpp"
 #include "../app/commands/MRExternalCommand.hpp"
 #include "../app/commands/MRFileCommands.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
-#include "../dialogs/MRMacroFileDialog.hpp"
-#include "../dialogs/MRWindowListDialog.hpp"
+#include "../dialogs/MRMacroFile.hpp"
+#include "../dialogs/MRWindowList.hpp"
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRMenuBar.hpp"
 #include "../ui/MRWindowSupport.hpp"
@@ -4381,6 +4381,25 @@ bool handleMRCommand(ushort command) {
 		case cmMrWindowMoveToPrevDesktop:
 			return moveToPrevVirtualDesktop();
 
+		case cmMrSetupEditSettings:
+		case cmMrSetupColorSetup:
+		case cmMrSetupKeyMapping:
+		case cmMrSetupMouseKeyRepeat:
+		case cmMrSetupFilenameExtensions:
+		case cmMrSetupPaths:
+		case cmMrSetupBackupsAutosave:
+		case cmMrSetupUserInterfaceSettings:
+		case cmMrSetupSearchAndReplaceDefaults: {
+			if (runSetupDialogCommand(command))
+				return true;
+			const char *title = placeholderCommandTitle(command);
+			if (title != nullptr) {
+				showPlaceholderCommandBox(title);
+				return true;
+			}
+			return false;
+		}
+
 		case cmMrTextUpperCaseMenu:
 			return dispatchEditorCommand(cmMrTextUpperCaseMenu, true);
 
@@ -4401,10 +4420,6 @@ bool handleMRCommand(ushort command) {
 		case cmMrHelpPreviousTopic:
 		case cmHelp:
 			static_cast<void>(mrShowProjectHelp());
-			return true;
-
-		case cmMrOtherInstallationAndSetup:
-			runInstallationAndSetupDialogFlow();
 			return true;
 
 		case cmMrHelpAbout:

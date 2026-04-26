@@ -1,8 +1,8 @@
 #include "../app/utils/MRStringUtils.hpp"
 #include "MRFileExtensionProfilesSupport.hpp"
 
-#include "MRSetupDialogCommon.hpp"
-#include "MRSetupDialogs.hpp"
+#include "MRSetupCommon.hpp"
+#include "MRSetup.hpp"
 
 #include "../app/MREditorApp.hpp"
 #include "../config/MRDialogPaths.hpp"
@@ -15,7 +15,7 @@
 #include <cstring>
 #include <map>
 
-namespace MRFileExtensionProfilesDialogInternal {
+namespace MRFileExtensionProfilesInternal {
 
 
 
@@ -158,8 +158,10 @@ void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDial
 		record.optionsMask |= kOptionWordWrap;
 	if (settings.showEofMarker)
 		record.optionsMask |= kOptionShowEofMarker;
-	if (settings.showEofMarkerEmoji)
+	if (settings.showEofMarkerEmoji) {
+		record.optionsMask |= kOptionShowEofMarker;
 		record.optionsMask |= kOptionShowEofMarkerEmoji;
+	}
 	if (settings.persistentBlocks)
 		record.optionsMask |= kOptionPersistentBlocks;
 	if (settings.codeFoldingPosition != "OFF")
@@ -323,6 +325,8 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.wordWrap = (record.optionsMask & kOptionWordWrap) != 0;
 	settings.showEofMarker = (record.optionsMask & kOptionShowEofMarker) != 0;
 	settings.showEofMarkerEmoji = (record.optionsMask & kOptionShowEofMarkerEmoji) != 0;
+	if (settings.showEofMarkerEmoji)
+		settings.showEofMarker = true;
 	settings.lineNumZeroFill = (record.optionsMask & kOptionLineNumZeroFill) != 0;
 	settings.displayTabs = (record.optionsMask & kOptionDisplayTabs) != 0;
 	settings.lineNumbersPosition = (record.lineNumbersPositionChoice == kLineNumbersLeading) ? "LEADING"
@@ -354,9 +358,9 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	return true;
 }
 
-} // namespace MRFileExtensionProfilesDialogInternal
+} // namespace MRFileExtensionProfilesInternal
 
-namespace MRFileExtensionProfilesDialogInternal {
+namespace MRFileExtensionProfilesInternal {
 namespace {
 
 const char *kDefaultProfileId = "DEFAULT";
@@ -573,6 +577,42 @@ enum : unsigned long long {
 	}
 }
 
+bool normalizeDraftSyntaxImpl(EditProfileDraft &draft, std::string &errorText) {
+	MRFileExtensionEditorSettings normalizedSettings;
+	std::vector<std::string> selectors;
+
+	draft.id = draft.isDefault ? std::string(kDefaultProfileId) : trimAscii(draft.id);
+	draft.name = trimAscii(draft.name);
+	draft.colorThemeUri = trimAscii(draft.colorThemeUri).empty() ? std::string()
+	                                                             : normalizeConfiguredPathInput(draft.colorThemeUri);
+
+	if (draft.isDefault)
+		draft.extensionsLiteral.clear();
+	else {
+		selectors = splitExtensionLiteral(draft.extensionsLiteral);
+		if (!normalizeEditExtensionSelectors(selectors, &errorText)) {
+			if (errorText.rfind("Extensions", 0) == 0)
+				errorText.replace(0, std::strlen("Extensions"), "Extension");
+			return false;
+		}
+		draft.extensionsLiteral = joinExtensionsLiteral(selectors);
+	}
+
+	if (!fileExtensionEditorSettingsDialogRecordToSettings(draft.settingsRecord, normalizedSettings, errorText))
+		return false;
+	settingsToDialogRecord(normalizedSettings, draft.settingsRecord);
+	errorText.clear();
+	return true;
+}
+
+bool normalizeDraftListSyntaxImpl(std::vector<EditProfileDraft> &drafts, std::string &errorText) {
+	for (EditProfileDraft &draft : drafts)
+		if (!normalizeDraftSyntaxImpl(draft, errorText))
+			return false;
+	errorText.clear();
+	return true;
+}
+
 [[nodiscard]] bool draftsToConfiguredState(const std::vector<EditProfileDraft> &drafts,
                                            MRFileExtensionEditorSettings &defaultsOut,
                                            std::vector<MRFileExtensionProfile> &profilesOut,
@@ -670,6 +710,14 @@ std::string joinCommaSeparated(const std::vector<std::string> &values) {
 	return joinCommaSeparatedList(values);
 }
 
+bool normalizeDraftSyntax(EditProfileDraft &draft, std::string &errorText) {
+	return normalizeDraftSyntaxImpl(draft, errorText);
+}
+
+bool normalizeDraftListSyntax(std::vector<EditProfileDraft> &drafts, std::string &errorText) {
+	return normalizeDraftListSyntaxImpl(drafts, errorText);
+}
+
 std::vector<std::string> splitExtensionLiteral(const std::string &literal) {
 	std::vector<std::string> values;
 	std::string current;
@@ -761,11 +809,24 @@ void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileE
 }
 
 bool draftsEqual(const EditProfileDraft &lhs, const EditProfileDraft &rhs) {
-	return lhs.isDefault == rhs.isDefault && trimAscii(lhs.id) == trimAscii(rhs.id) &&
-	       trimAscii(lhs.name) == trimAscii(rhs.name) &&
-	       trimAscii(lhs.extensionsLiteral) == trimAscii(rhs.extensionsLiteral) &&
-	       trimAscii(lhs.colorThemeUri) == trimAscii(rhs.colorThemeUri) &&
-	       fileExtensionEditorSettingsDialogRecordsEqual(lhs.settingsRecord, rhs.settingsRecord);
+	EditProfileDraft normalizedLhs = lhs;
+	EditProfileDraft normalizedRhs = rhs;
+	std::string errorText;
+
+	if (!normalizeDraftSyntax(normalizedLhs, errorText) || !normalizeDraftSyntax(normalizedRhs, errorText))
+		return lhs.isDefault == rhs.isDefault && trimAscii(lhs.id) == trimAscii(rhs.id) &&
+		       trimAscii(lhs.name) == trimAscii(rhs.name) &&
+		       trimAscii(lhs.extensionsLiteral) == trimAscii(rhs.extensionsLiteral) &&
+		       trimAscii(lhs.colorThemeUri) == trimAscii(rhs.colorThemeUri) &&
+		       fileExtensionEditorSettingsDialogRecordsEqual(lhs.settingsRecord, rhs.settingsRecord);
+
+	return normalizedLhs.isDefault == normalizedRhs.isDefault &&
+	       normalizedLhs.id == normalizedRhs.id &&
+	       normalizedLhs.name == normalizedRhs.name &&
+	       normalizedLhs.extensionsLiteral == normalizedRhs.extensionsLiteral &&
+	       normalizedLhs.colorThemeUri == normalizedRhs.colorThemeUri &&
+	       fileExtensionEditorSettingsDialogRecordsEqual(normalizedLhs.settingsRecord,
+	                                                    normalizedRhs.settingsRecord);
 }
 
 bool draftListsEqual(const std::vector<EditProfileDraft> &lhs, const std::vector<EditProfileDraft> &rhs) {
@@ -987,4 +1048,4 @@ std::vector<std::string> dirtyDraftIds(const std::vector<EditProfileDraft> &init
 	return out;
 }
 
-} // namespace MRFileExtensionProfilesDialogInternal
+} // namespace MRFileExtensionProfilesInternal

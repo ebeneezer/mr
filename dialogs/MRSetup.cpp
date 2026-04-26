@@ -27,7 +27,7 @@
 #define Uses_TSItem
 #include <tvision/tv.h>
 
-#include "MRSetupDialogs.hpp"
+#include "MRSetup.hpp"
 
 #include "../app/MRCommands.hpp"
 #include "../app/MREditorApp.hpp"
@@ -36,8 +36,8 @@
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRMenuBar.hpp"
 #include "../ui/MRWindowSupport.hpp"
-#include "MRUnsavedChangesDialog.hpp"
-#include "MRSetupDialogCommon.hpp"
+#include "MRDirtyGating.hpp"
+#include "MRSetupCommon.hpp"
 #include "MRNumericSlider.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 
@@ -59,6 +59,7 @@ using mr::dialogs::ensureMrmacExtension;
 using mr::dialogs::readRecordField;
 
 using mr::dialogs::writeRecordField;
+
 enum : ushort {
 	cmMrSetupPathsHelp = 3800,
 	cmMrSetupPathsBrowseSettingsUri,
@@ -66,6 +67,7 @@ enum : ushort {
 	cmMrSetupPathsBrowseHelpUri,
 	cmMrSetupPathsBrowseTempPath,
 	cmMrSetupPathsBrowseShellUri,
+	cmMrSetupPathsBrowseLogUri,
 	cmMrSetupBackupsAutosaveHelp = 3810,
 	cmMrSetupBackupsAutosaveBrowseDirectory,
 	cmMrSetupFieldChanged
@@ -149,6 +151,13 @@ bool confirmOverwriteForPath(const char *primaryLabel, const char *headline, con
 	       mr::dialogs::UnsavedChangesChoice::Save;
 }
 
+TAttrPair configuredColorOr(TView *view, unsigned char paletteSlot, ushort fallbackColorIndex) {
+	unsigned char biosAttr = 0;
+
+	if (configuredColorSlotOverride(paletteSlot, biosAttr))
+		return TAttrPair(biosAttr);
+	return view != nullptr ? view->getColor(fallbackColorIndex) : TAttrPair(0x70);
+}
 
 mr::messageline::Kind toSetupMessageLineKind(MRMenuBar::MarqueeKind kind) {
 	switch (kind) {
@@ -745,6 +754,64 @@ bool applyWorkingColorPaletteToConfigured(const TPalette &palette, std::string &
 
 class TPathsSetupDialog : public MRScrollableDialog {
   public:
+	class TInactiveStaticText : public TStaticText {
+	  public:
+		TInactiveStaticText(const TRect &bounds, const char *text) noexcept : TStaticText(bounds, text) {
+		}
+
+		void setInactive(bool inactive) {
+			if (mInactive != inactive) {
+				mInactive = inactive;
+				drawView();
+			}
+		}
+
+		void draw() override {
+			TDrawBuffer buffer;
+			char text[256];
+			TAttrPair color = mInactive ? configuredColorOr(this, kMrPaletteDialogInactiveElements, 1)
+			                            : getColor(1);
+
+			buffer.moveChar(0, ' ', color, size.x);
+			getText(text);
+			buffer.moveStr(0, text, color, size.x);
+			writeLine(0, 0, size.x, size.y, buffer);
+		}
+
+	  private:
+		bool mInactive = false;
+	};
+
+	class TInactiveInputLine : public TInputLine {
+	  public:
+		TInactiveInputLine(const TRect &bounds, int maxLen) noexcept : TInputLine(bounds, maxLen) {
+		}
+
+		void draw() override {
+			if ((state & sfDisabled) == 0) {
+				TInputLine::draw();
+				return;
+			}
+
+			TDrawBuffer buffer;
+			TAttrPair color = configuredColorOr(this, kMrPaletteDialogInactiveElements, 1);
+
+			buffer.moveChar(0, ' ', color, size.x);
+			if (size.x > 1)
+				buffer.moveStr(1, data, color, size.x - 1, firstPos);
+			writeLine(0, 0, size.x, size.y, buffer);
+			setCursor(0, 0);
+		}
+
+		void setState(ushort aState, Boolean enable) override {
+			const ushort oldState = state;
+
+			TInputLine::setState(aState, enable);
+			if (oldState != state && (aState & (sfFocused | sfDisabled | sfSelected | sfActive)))
+				drawView();
+		}
+	};
+
 	class TInlineGlyphButton : public TView {
 	  public:
 		TInlineGlyphButton(const TRect &bounds, const char *glyph, ushort command)
@@ -766,6 +833,10 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		}
 
 		void handleEvent(TEvent &event) override {
+			if ((state & sfDisabled) != 0) {
+				TView::handleEvent(event);
+				return;
+			}
 			if (event.what == evMouseDown) {
 				dispatchCommand();
 				clearEvent(event);
@@ -796,11 +867,11 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		ushort mCommand;
 	};
 
-	TPathsSetupDialog(const PathsDialogRecord &baselineRecord, const PathsDialogRecord &initialRecord)
+	TPathsSetupDialog(const PathsDialogRecord &initialRecord)
 	    : TWindowInit(&TDialog::initFrame),
 	      MRScrollableDialog(centeredSetupDialogRect(kVirtualDialogWidth, kVirtualDialogHeight),
 	                         "PATHS", kVirtualDialogWidth, kVirtualDialogHeight),
-	      mBaselineRecord(baselineRecord), mCurrentRecord(initialRecord) {
+	      mCurrentRecord(initialRecord) {
 		buildViews();
 		loadFieldsFromRecord(mCurrentRecord);
 		setDialogValidationHook([this]() { return validateDialogValues(); });
@@ -808,11 +879,9 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		selectContent();
 	}
 
-	ushort run(PathsDialogRecord &outRecord, bool &changed) {
+	ushort run(PathsDialogRecord &outRecord) {
 		ushort result = TProgram::deskTop->execView(this);
-		PathsDialogRecord editedRecord = collectRecordFromFields();
-		outRecord = editedRecord;
-		changed = !recordsEqual(mBaselineRecord, editedRecord);
+		outRecord = collectRecordFromFields();
 		return result;
 	}
 
@@ -854,20 +923,25 @@ class TPathsSetupDialog : public MRScrollableDialog {
 				clearEvent(event);
 				return;
 
+			case cmMrSetupPathsBrowseLogUri:
+				browseLogUri();
+				clearEvent(event);
+				return;
+
 			default:
 				return;
 		}
 	}
 
   private:
-	TStaticText *addLabel(const TRect &rect, const char *text) {
-		TStaticText *view = new TStaticText(rect, text);
+	TInactiveStaticText *addLabel(const TRect &rect, const char *text) {
+		TInactiveStaticText *view = new TInactiveStaticText(rect, text);
 		addManaged(view, rect);
 		return view;
 	}
 
-	TInputLine *addInput(const TRect &rect) {
-		TInputLine *view = new TInputLine(rect, kPathFieldSize - 1);
+	TInactiveInputLine *addInput(const TRect &rect) {
+		TInactiveInputLine *view = new TInactiveInputLine(rect, kPathFieldSize - 1);
 		addManaged(view, rect);
 		return view;
 	}
@@ -907,7 +981,7 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		int glyphWidth = 2;
 		int glyphRight = dialogWidth - 2;
 		int glyphLeft = glyphRight - glyphWidth;
-		int inputRight = glyphLeft - 1;
+		int inputRight = glyphLeft;
 		int doneLeft = dialogWidth / 2 - 17;
 		int cancelLeft = doneLeft + 12;
 		int helpLeft = cancelLeft + 14;
@@ -933,20 +1007,22 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		mShellExecutablePathField = addInput(TRect(inputLeft, 10, inputRight, 11));
 		addBrowseButton(TRect(glyphLeft, 10, glyphRight, 11), cmMrSetupPathsBrowseShellUri);
 
-		addLabel(TRect(labelLeft, 12, labelRight, 13), "Mr log URI: ");
+		mLogFilePathLabel = addLabel(TRect(labelLeft, 12, labelRight, 13), "Logfile URI: ");
 		mLogFilePathField = addInput(TRect(inputLeft, 12, inputRight, 13));
+		mLogFilePathBrowseButton =
+		    addBrowseButton(TRect(glyphLeft, 12, glyphRight, 13), cmMrSetupPathsBrowseLogUri);
 
-		addLabel(TRect(labelLeft, 14, labelRight, 15), "Max path history: ");
+		addLabel(TRect(labelLeft, 14, labelRight, 15), "Path history: ");
 		mMaxPathHistorySlider = addNumericSlider(TRect(inputLeft, 14, inputRight, 15), 5, 50, 15, 1, 5);
 
-		addLabel(TRect(labelLeft, 16, labelRight, 17), "Max file history: ");
+		addLabel(TRect(labelLeft, 16, labelRight, 17), "File history: ");
 		mMaxFileHistorySlider = addNumericSlider(TRect(inputLeft, 16, inputRight, 17), 5, 50, 15, 1, 5);
 
 		addLabel(TRect(labelLeft, 18, dialogWidth - 2, 19), "Log handling:");
 		mLogHandlingField = addRadioGroup(
 		    TRect(labelLeft, 19, labelLeft + 20, 22),
 		    new TSItem("~V~olatile log",
-		               new TSItem("~P~ersist mr log", new TSItem("Use ~J~ournalctl", nullptr))));
+		               new TSItem("~L~og to file", new TSItem("Use ~J~ournalctl", nullptr))));
 
 		addButton(TRect(doneLeft, buttonTop, doneLeft + 10, buttonTop + 2), "~D~one", cmOK, bfDefault);
 		addButton(TRect(cancelLeft, buttonTop, cancelLeft + 12, buttonTop + 2), "~C~ancel", cmCancel,
@@ -1046,8 +1122,18 @@ class TPathsSetupDialog : public MRScrollableDialog {
 
 	void updateLogFileFieldState() {
 		const bool persistSelected = currentLogHandlingChoice() == 1;
+		if (!persistSelected) {
+			if (current == mLogFilePathField && mMaxPathHistorySlider != nullptr)
+				mMaxPathHistorySlider->select();
+			else if (current == mLogFilePathBrowseButton && mMaxPathHistorySlider != nullptr)
+				mMaxPathHistorySlider->select();
+		}
 		if (mLogFilePathField != nullptr)
 			mLogFilePathField->setState(sfDisabled, persistSelected ? False : True);
+		if (mLogFilePathBrowseButton != nullptr)
+			mLogFilePathBrowseButton->setState(sfDisabled, persistSelected ? False : True);
+		if (mLogFilePathLabel != nullptr)
+			mLogFilePathLabel->setInactive(!persistSelected);
 	}
 
 	void setInputValue(TInputLine *inputLine, const std::string &value) {
@@ -1090,6 +1176,12 @@ class TPathsSetupDialog : public MRScrollableDialog {
 			setInputValue(mShellExecutablePathField, selected);
 	}
 
+	void browseLogUri() {
+		std::string selected;
+		if (browseUriWithFileDialog("Select logfile URI", currentInputValue(mLogFilePathField), selected))
+			setInputValue(mLogFilePathField, selected);
+	}
+
 	DialogValidationResult validateDialogValues() {
 		std::string errorText;
 		DialogValidationResult result;
@@ -1100,7 +1192,6 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		return result;
 	}
 
-	PathsDialogRecord mBaselineRecord;
 	PathsDialogRecord mCurrentRecord;
 	static const int kVirtualDialogWidth = 92;
 	static const int kVirtualDialogHeight = 27;
@@ -1110,6 +1201,8 @@ class TPathsSetupDialog : public MRScrollableDialog {
 	TInputLine *mTempDirectoryPathField = nullptr;
 	TInputLine *mShellExecutablePathField = nullptr;
 	TInputLine *mLogFilePathField = nullptr;
+	TInactiveStaticText *mLogFilePathLabel = nullptr;
+	TInlineGlyphButton *mLogFilePathBrowseButton = nullptr;
 	TRadioButtons *mLogHandlingField = nullptr;
 	MRNumericSlider *mMaxPathHistorySlider = nullptr;
 	MRNumericSlider *mMaxFileHistorySlider = nullptr;
@@ -1137,14 +1230,18 @@ void runPathsSetupDialogFlow() {
 	workingRecord = baselineRecord;
 	while (running) {
 		ushort result;
-		bool changed = false;
 		PathsDialogRecord editedRecord = workingRecord;
-		TPathsSetupDialog *dialog = new TPathsSetupDialog(baselineRecord, workingRecord);
+		TPathsSetupDialog *dialog = new TPathsSetupDialog(workingRecord);
 
 		if (dialog == nullptr)
 			return;
-		result = dialog->run(editedRecord, changed);
+		result = dialog->run(editedRecord);
 		TObject::destroy(dialog);
+		const bool changed = mr::dialogs::isDialogDraftDirty(
+		    baselineRecord, editedRecord,
+		    [](const PathsDialogRecord &lhs, const PathsDialogRecord &rhs) {
+			    return recordsEqual(lhs, rhs);
+		    });
 
 		switch (result) {
 				case cmMrSetupPathsHelp:
@@ -1167,8 +1264,7 @@ void runPathsSetupDialogFlow() {
 					running = false;
 					break;
 				}
-				switch (mr::dialogs::showUnsavedChangesDialog(
-				    "Save", "Path settings have unsaved changes.")) {
+				switch (mr::dialogs::runDialogDirtyGating("Path settings have unsaved changes.")) {
 						case mr::dialogs::UnsavedChangesChoice::Save:
 							workingRecord = editedRecord;
 							if (!saveAndReloadPathsRecord(workingRecord, errorText)) {
@@ -1259,6 +1355,10 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 		}
 
 		void handleEvent(TEvent &event) override {
+			if ((state & sfDisabled) != 0) {
+				TView::handleEvent(event);
+				return;
+			}
 			if (event.what == evMouseDown) {
 				dispatchCommand();
 				clearEvent(event);
@@ -1289,12 +1389,11 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 		ushort mCommand;
 	};
 
-	TBackupsAutosaveSetupDialog(const BackupsAutosaveDialogRecord &baselineRecord,
-	                           const BackupsAutosaveDialogRecord &initialRecord)
+	TBackupsAutosaveSetupDialog(const BackupsAutosaveDialogRecord &initialRecord)
 	    : TWindowInit(&TDialog::initFrame),
 	      MRScrollableDialog(centeredSetupDialogRect(kVirtualDialogWidth, kVirtualDialogHeight),
 	                         "BACKUPS & AUTOSAVE", kVirtualDialogWidth, kVirtualDialogHeight),
-	      mBaselineRecord(baselineRecord), mCurrentRecord(initialRecord) {
+	      mCurrentRecord(initialRecord) {
 		buildViews();
 		setDialogValidationHook([this]() { return validateDialogValues(); });
 		loadFieldsFromRecord(mCurrentRecord);
@@ -1308,11 +1407,9 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 		clearSetupDialogStatus();
 	}
 
-	ushort run(BackupsAutosaveDialogRecord &outRecord, bool &changed) {
+	ushort run(BackupsAutosaveDialogRecord &outRecord) {
 		ushort result = TProgram::deskTop->execView(this);
-		BackupsAutosaveDialogRecord editedRecord = collectRecordFromFields();
-		outRecord = editedRecord;
-		changed = !recordsEqual(mBaselineRecord, editedRecord);
+		outRecord = collectRecordFromFields();
 		return result;
 	}
 
@@ -1655,7 +1752,6 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 			mBackupDirectoryField->select();
 	}
 
-	BackupsAutosaveDialogRecord mBaselineRecord;
 	BackupsAutosaveDialogRecord mCurrentRecord;
 	static const int kVirtualDialogWidth = 96;
 	static const int kVirtualDialogHeight = 17;
@@ -1679,14 +1775,18 @@ void runBackupsAutosaveDialogFlow() {
 
 	while (running) {
 		ushort result;
-		bool changed = false;
 		BackupsAutosaveDialogRecord editedRecord = workingRecord;
-		TBackupsAutosaveSetupDialog *dialog = new TBackupsAutosaveSetupDialog(baselineRecord, workingRecord);
+		TBackupsAutosaveSetupDialog *dialog = new TBackupsAutosaveSetupDialog(workingRecord);
 
 		if (dialog == nullptr)
 			return;
-		result = dialog->run(editedRecord, changed);
+		result = dialog->run(editedRecord);
 		TObject::destroy(dialog);
+		const bool changed = mr::dialogs::isDialogDraftDirty(
+		    baselineRecord, editedRecord,
+		    [](const BackupsAutosaveDialogRecord &lhs, const BackupsAutosaveDialogRecord &rhs) {
+			    return recordsEqual(lhs, rhs);
+		    });
 
 		switch (result) {
 			case cmMrSetupBackupsAutosaveHelp:
@@ -1710,8 +1810,8 @@ void runBackupsAutosaveDialogFlow() {
 					running = false;
 					break;
 				}
-				switch (mr::dialogs::showUnsavedChangesDialog(
-				    "Save", "Backup and autosave settings have unsaved changes.")) {
+				switch (
+				    mr::dialogs::runDialogDirtyGating("Backup and autosave settings have unsaved changes.")) {
 						case mr::dialogs::UnsavedChangesChoice::Save:
 							workingRecord = editedRecord;
 							if (!persistBackupsAutosaveRecord(workingRecord, errorText)) {
@@ -1780,7 +1880,8 @@ void runColorSetupDialogFlow() {
 		TPalette baselinePalette = buildColorSetupWorkingPalette();
 		TPalette workingPalette = havePendingPalette ? pendingPalette : baselinePalette;
 		ushort result = execDialogWithDataCapture(createColorSetupDialog(), &workingPalette);
-		const bool changed = !palettesEqual(workingPalette, baselinePalette);
+		const bool changed =
+		    mr::dialogs::isDialogDraftDirty(baselinePalette, workingPalette, palettesEqual);
 
 		switch (result) {
 				case cmOK:
@@ -1851,8 +1952,7 @@ void runColorSetupDialogFlow() {
 					running = false;
 					break;
 				}
-				switch (mr::dialogs::showUnsavedChangesDialog(
-				    "Save", "Color settings have unsaved changes.")) {
+				switch (mr::dialogs::runDialogDirtyGating("Color settings have unsaved changes.")) {
 					case mr::dialogs::UnsavedChangesChoice::Save:
 						if (!applyAndPersistColors(workingPalette, errorText)) {
 							postSetupFlowError("Color Setup / Save settings", errorText);
@@ -1880,6 +1980,36 @@ void runColorSetupDialogFlow() {
 				running = false;
 				break;
 		}
+	}
+}
+
+static void runUserInterfaceSettingsDialogFlow();
+
+bool runSetupDialogCommand(unsigned short command) {
+	switch (command) {
+		case cmMrSetupEditSettings:
+		case cmMrSetupFilenameExtensions:
+			runFileExtensionProfilesDialogFlow();
+			return true;
+
+		case cmMrSetupColorSetup:
+			runColorSetupDialogFlow();
+			return true;
+
+		case cmMrSetupPaths:
+			runPathsSetupDialogFlow();
+			return true;
+
+		case cmMrSetupBackupsAutosave:
+			runBackupsAutosaveDialogFlow();
+			return true;
+
+		case cmMrSetupUserInterfaceSettings:
+			runUserInterfaceSettingsDialogFlow();
+			return true;
+
+		default:
+			return false;
 	}
 }
 
@@ -1963,6 +2093,12 @@ bool validateCursorPositionMarkerInput(std::string_view value, std::string &erro
 	}
 	errorText.clear();
 	return true;
+}
+
+bool userInterfaceSettingsDialogDataEqual(const UserInterfaceSettingsDialogData &lhs,
+                                          const UserInterfaceSettingsDialogData &rhs) {
+	return lhs.flags == rhs.flags && lhs.virtualDesktops == rhs.virtualDesktops &&
+	       readRecordField(lhs.cursorPositionMarker) == readRecordField(rhs.cursorPositionMarker);
 }
 
 class TUserInterfaceSettingsDialog : public MRScrollableDialog {
@@ -2089,6 +2225,7 @@ static void runUserInterfaceSettingsDialogFlow() {
 		dialogData.virtualDesktops = static_cast<ushort>(currentVd);
 		writeRecordField(dialogData.cursorPositionMarker, sizeof(dialogData.cursorPositionMarker), currentCp);
 
+		UserInterfaceSettingsDialogData baselineData = dialogData;
 		ushort result = execDialogWithDataCapture(dialog, &dialogData);
 		bool newWm = (dialogData.flags & 1) != 0;
 		bool newMm = (dialogData.flags & 2) != 0;
@@ -2096,8 +2233,8 @@ static void runUserInterfaceSettingsDialogFlow() {
 		bool newCv = (dialogData.flags & 8) != 0;
 		int newVd = static_cast<int>(dialogData.virtualDesktops);
 		std::string newCp = readRecordField(dialogData.cursorPositionMarker);
-		const bool changed = (newWm != currentWm) || (newMm != currentMm) || (newAw != currentAw) ||
-		                     (newCv != currentCv) || (newVd != currentVd) || (newCp != currentCp);
+		const bool changed = mr::dialogs::isDialogDraftDirty(
+		    baselineData, dialogData, userInterfaceSettingsDialogDataEqual);
 		auto applyAndPersistUiSettings = [&]() -> bool {
 			std::string errorText;
 			if (!setConfiguredCursorPositionMarker(newCp, &errorText)) {
@@ -2127,8 +2264,8 @@ static void runUserInterfaceSettingsDialogFlow() {
 					running = false;
 					break;
 				}
-				switch (mr::dialogs::showUnsavedChangesDialog(
-				    "Save", "User interface settings have unsaved changes.")) {
+				switch (
+				    mr::dialogs::runDialogDirtyGating("User interface settings have unsaved changes.")) {
 					case mr::dialogs::UnsavedChangesChoice::Save:
 						if (!applyAndPersistUiSettings())
 							break;
@@ -2153,43 +2290,8 @@ static void runUserInterfaceSettingsDialogFlow() {
 	clearSetupDialogStatus();
 }
 
-void runInstallationAndSetupDialogFlow() {
-	bool running = true;
 
-	while (running) {
-		ushort result = execDialog(createInstallationAndSetupDialog());
-		switch (result) {
-			case cmMrSetupEditSettings:
-			case cmMrSetupFilenameExtensions:
-				runFileExtensionProfilesDialogFlow();
-				break;
-
-			case cmMrSetupColorSetup:
-				runColorSetupDialogFlow();
-				break;
-
-			case cmMrSetupPaths:
-				runPathsSetupDialogFlow();
-				break;
-
-			case cmMrSetupBackupsAutosave:
-				runBackupsAutosaveDialogFlow();
-				break;
-
-				case cmMrSetupUserInterfaceSettings:
-					runUserInterfaceSettingsDialogFlow();
-					break;
-
-			case cmCancel:
-			default:
-				running = false;
-				break;
-		}
-	}
-}
-
-
-// ---- Consolidated from MRSetupDialogCommon.cpp ----
+// ---- Consolidated from MRSetupCommon.cpp ----
 
 namespace {
 

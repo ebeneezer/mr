@@ -164,11 +164,24 @@ TSubMenu *createTextMenu() {
 	                        "AltR"));
 }
 
+TMenuItem *createInstallationAndSetupMenuItem() {
+	return new TMenuItem(
+	    "~I~nstallation and setup", kbNoKey,
+	    new TMenu(*new TMenuItem("~C~olor setup", cmMrSetupColorSetup, kbNoKey, hcNoContext) +
+	              *new TMenuItem("~K~ey mapping", cmMrSetupKeyMapping, kbNoKey, hcNoContext) +
+	              *new TMenuItem("~M~ouse / Key repeat", cmMrSetupMouseKeyRepeat, kbNoKey, hcNoContext) +
+	              *new TMenuItem("~F~ilename extensions", cmMrSetupFilenameExtensions, kbNoKey, hcNoContext) +
+	              *new TMenuItem("~P~aths", cmMrSetupPaths, kbNoKey, hcNoContext) +
+	              *new TMenuItem("~B~ackups / Autosave", cmMrSetupBackupsAutosave, kbNoKey, hcNoContext) +
+	              *new TMenuItem("~U~ser interface settings", cmMrSetupUserInterfaceSettings, kbNoKey,
+	                             hcNoContext)),
+	    hcNoContext);
+}
+
 TSubMenu *createOtherMenu() {
 	return &(
 	    *new TSubMenu("~O~ther", kbAltO) +
-	    *new TMenuItem("~I~nstallation and setup", cmMrOtherInstallationAndSetup, kbNoKey,
-	                   hcNoContext) +
+	    *createInstallationAndSetupMenuItem() +
 	    newLine() +
 	    *new TMenuItem("~M~acro manager...", cmMrOtherMacroManager, kbNoKey, hcNoContext) +
 	    newLine() +

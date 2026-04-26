@@ -8,7 +8,7 @@
 #include "MRMacroRunner.hpp"
 
 #include "mrmac.h"
-#include "mrvm.hpp"
+#include "MRVM.hpp"
 #include "../coprocessor/MRCoprocessor.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../ui/MREditWindow.hpp"

@@ -1,19 +1,21 @@
 #define Uses_TApplication
 #define Uses_TDeskTop
-#define Uses_TRect
-#define Uses_TDialog
 #define Uses_TButton
-#define Uses_TStaticText
+#define Uses_TDialog
 #define Uses_TObject
+#define Uses_TRect
+#define Uses_TStaticText
+#define Uses_TWindowInit
 #include <tvision/tv.h>
 
-#include "MRUnsavedChangesDialog.hpp"
-#include "MRSetupDialogCommon.hpp"
+#include "MRDirtyGating.hpp"
 
+#include "MRSetupCommon.hpp"
+
+#include <string>
 #include <algorithm>
 #include <cctype>
 #include <cstring>
-#include <string>
 #include <vector>
 
 namespace mr {
@@ -96,6 +98,35 @@ std::string addMnemonic(const std::string &text, char preferred) {
 	return out;
 }
 
+std::string joinCommaSeparatedItems(const std::vector<std::string> &values) {
+	std::string joined;
+
+	for (std::size_t i = 0; i < values.size(); ++i) {
+		if (i != 0)
+			joined += ", ";
+		joined += values[i];
+	}
+	return joined;
+}
+
+class TDirtyItemDialog : public MRDialogFoundation {
+  public:
+	TDirtyItemDialog(const char *dialogTitle, const char *headline, const char *itemsLabel,
+	                 const char *joinedItems, const char *primaryLabel)
+	    : TWindowInit(&TDialog::initFrame),
+	      MRDialogFoundation(centeredSetupDialogRect(74, 11),
+	                         dialogTitle != nullptr ? dialogTitle : "UNSAVED CHANGES", 74, 11) {
+		insert(new TStaticText(TRect(2, 2, 70, 3),
+		                       headline != nullptr ? headline : "Discard changed items?"));
+		insert(new TStaticText(TRect(2, 4, 70, 5), itemsLabel != nullptr ? itemsLabel : "Dirty items:"));
+		insert(new TStaticText(TRect(2, 5, 70, 7), joinedItems != nullptr ? joinedItems : ""));
+		insert(new TButton(TRect(14, 8, 26, 10), primaryLabel != nullptr ? primaryLabel : "~S~ave",
+		                   cmYes, bfDefault));
+		insert(new TButton(TRect(29, 8, 41, 10), "~D~iscard", cmNo, bfNormal));
+		insert(new TButton(TRect(44, 8, 56, 10), "~C~ancel", cmCancel, bfNormal));
+	}
+};
+
 } // namespace
 
 UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const char *headline,
@@ -142,6 +173,34 @@ UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const ch
 	                           cancelButtonLabel.c_str(), cmCancel, bfNormal));
 
 	switch (mr::dialogs::execDialog(dialog)) {
+		case cmYes:
+			return UnsavedChangesChoice::Save;
+		case cmNo:
+			return UnsavedChangesChoice::Discard;
+		default:
+			return UnsavedChangesChoice::Cancel;
+	}
+}
+
+UnsavedChangesChoice runDialogDirtyGating(const char *headline, const char *primaryLabel,
+                                          const char *detail) {
+	return showUnsavedChangesDialog(primaryLabel, headline, detail);
+}
+
+UnsavedChangesChoice runDialogDirtyListGating(const char *dialogTitle, const char *headline,
+                                              const char *itemsLabel,
+                                              const std::vector<std::string> &dirtyItems,
+                                              const char *primaryLabel) {
+	if (dirtyItems.empty())
+		return runDialogDirtyGating(headline, primaryLabel);
+	std::string joinedItems = joinCommaSeparatedItems(dirtyItems);
+
+	TDirtyItemDialog *dialog =
+	    new TDirtyItemDialog(dialogTitle, headline, itemsLabel, joinedItems.c_str(), primaryLabel);
+	if (dialog == nullptr)
+		return UnsavedChangesChoice::Cancel;
+
+	switch (execDialog(dialog)) {
 		case cmYes:
 			return UnsavedChangesChoice::Save;
 		case cmNo:

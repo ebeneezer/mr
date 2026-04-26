@@ -32,8 +32,8 @@
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MREditWindow.hpp"
 #include "../../ui/MRWindowSupport.hpp"
-#include "../../dialogs/MRWindowListDialog.hpp"
-#include "../../dialogs/MRSetupDialogCommon.hpp"
+#include "../../dialogs/MRWindowList.hpp"
+#include "../../dialogs/MRSetupCommon.hpp"
 
 namespace {
 void postWindowCommandError(std::string_view text) {

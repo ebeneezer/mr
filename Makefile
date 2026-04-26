@@ -16,7 +16,8 @@ NPROC ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
 MAKEFLAGS += -j$(NPROC)
 CLANG_TIDY ?= clang-tidy
 BEAR ?= bear
-LINT_FILE ?= mrmac/mrvm.cpp
+LINT_FILE ?= mrmac/MRVM.cpp
+MR_BUILD_EPOCH := $(shell date +%s)
 
 TVISION_SOURCE_DIR = ./tvision
 TVISION_PATCH_DIR ?= ./patches
@@ -88,18 +89,16 @@ CXX_SOURCES = \
 	app/MRMenuFactory.cpp \
 	app/MRVersion.cpp \
 	app/MREditorApp.cpp \
-	dialogs/MRAboutDialog.cpp \
-	dialogs/MRColorSetupDialog.cpp \
-	dialogs/MRNumericSlider.cpp \
-	dialogs/MRFileInformationDialog.cpp \
-	dialogs/MRInstallationAndSetupDialog.cpp \
-	dialogs/MRMacroFileDialog.cpp \
-	dialogs/MRFileExtensionProfilesDialog.cpp \
-	dialogs/MRFileExtensionEditorSettingsPanel.cpp \
+	dialogs/MRAbout.cpp \
+	dialogs/MRColorSetup.cpp \
+	dialogs/MRDirtyGating.cpp \
+	dialogs/MRFileInformation.cpp \
+	dialogs/MRMacroFile.cpp \
+	dialogs/MRFileExtensionProfiles.cpp \
+	dialogs/MRFileExtensionEditorSettings.cpp \
 	dialogs/MRFileExtensionProfilesSupport.cpp \
-	dialogs/MRSetupDialogs.cpp \
-	dialogs/MRUnsavedChangesDialog.cpp \
-	dialogs/MRWindowListDialog.cpp \
+	dialogs/MRSetup.cpp \
+	dialogs/MRWindowList.cpp \
 	mrmac/MRMacroRunner.cpp \
 	app/commands/MRWindowCommands.cpp \
 	config/MRDialogPaths.cpp \
@@ -107,11 +106,12 @@ CXX_SOURCES = \
 	app/commands/MRExternalCommand.cpp \
 	coprocessor/MRPerformance.cpp \
 	coprocessor/MRCoprocessorDispatch.cpp \
-	mrmac/mrvm.cpp \
+	mrmac/MRVM.cpp \
 	ui/MRFrame.cpp \
 	ui/MRMenuBar.cpp \
 	ui/MRMessageLineController.cpp \
 	ui/MRWindowManager.cpp \
+	ui/MRNumericSlider.cpp \
 	ui/MRPalette.cpp \
 	ui/MRWindowSupport.cpp \
 	ui/MRSyntax.cpp \
@@ -134,6 +134,7 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 	tvision-sync-safe tvision-status \
 	pcre2-check \
 	stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check \
+	FORCE \
 	compile-commands lint-file context-tar tar-archives
 
 all: $(TARGET)
@@ -333,30 +334,32 @@ mrmac/mrmac.o: mrmac/mrmac.c mrmac/parser.tab.h mrmac/mrmac.h
 # 3. Dependencies for C++ compilation
 $(CXX_OBJECTS): | $(ABOUT_QUOTES_GENERATED) $(HELP_MARKDOWN_GENERATED)
 
-mr.o: mr.cpp mrmac/mrvm.hpp app/MREditorApp.hpp ui/MRPalette.hpp $(HELP_MARKDOWN_GENERATED)
+mr.o: mr.cpp mrmac/MRVM.hpp app/MREditorApp.hpp ui/MRPalette.hpp $(HELP_MARKDOWN_GENERATED)
 app/MRAppState.o: app/MRAppState.cpp app/MRAppState.hpp app/MRCommands.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp
-app/MRCommandRouter.o: app/MRCommandRouter.cpp app/MRCommandRouter.hpp app/MRCommands.hpp dialogs/MRAboutDialog.hpp dialogs/MRFileInformationDialog.hpp dialogs/MRMacroFileDialog.hpp dialogs/MRSetupDialogs.hpp dialogs/MRWindowListDialog.hpp mrmac/mrvm.hpp app/commands/MRExternalCommand.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
+app/MRCommandRouter.o: app/MRCommandRouter.cpp app/MRCommandRouter.hpp app/MRCommands.hpp dialogs/MRAbout.hpp dialogs/MRFileInformation.hpp dialogs/MRMacroFile.hpp dialogs/MRSetup.hpp dialogs/MRWindowList.hpp mrmac/MRVM.hpp app/commands/MRExternalCommand.hpp app/commands/MRFileCommands.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 app/MRMenuFactory.o: app/MRMenuFactory.cpp app/MRMenuFactory.hpp app/MRCommands.hpp ui/MRMenuBar.hpp
 app/MRVersion.o: app/MRVersion.cpp app/MRVersion.hpp
+app/MRVersion.o: CXXFLAGS += -DMR_BUILD_EPOCH=$(MR_BUILD_EPOCH)
+app/MRVersion.o: FORCE
 app/MREditorApp.o: app/MREditorApp.cpp app/MREditorApp.hpp app/MRAppState.hpp app/MRCommandRouter.hpp app/MRCommands.hpp app/MRMenuFactory.hpp coprocessor/MRCoprocessorDispatch.hpp coprocessor/MRPerformance.hpp app/commands/MRWindowCommands.hpp config/MRDialogPaths.hpp config/MRSettingsLoader.hpp ui/MRDeskTop.hpp ui/MRStatusLine.hpp ui/MRPalette.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
-dialogs/MRAboutDialog.o: dialogs/MRAboutDialog.cpp dialogs/MRAboutDialog.hpp app/MRVersion.hpp $(ABOUT_QUOTES_GENERATED)
-dialogs/MRNumericSlider.o: dialogs/MRNumericSlider.cpp dialogs/MRNumericSlider.hpp
-dialogs/MRColorSetupDialog.o: dialogs/MRColorSetupDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp app/MRCommands.hpp
-dialogs/MRFileInformationDialog.o: dialogs/MRFileInformationDialog.cpp dialogs/MRFileInformationDialog.hpp app/MRCommands.hpp coprocessor/MRPerformance.hpp ui/MREditWindow.hpp ui/MRFileEditor.hpp ui/MRTextBuffer.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
-dialogs/MRInstallationAndSetupDialog.o: dialogs/MRInstallationAndSetupDialog.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp app/MRCommands.hpp
-dialogs/MRMacroFileDialog.o: dialogs/MRMacroFileDialog.cpp dialogs/MRMacroFileDialog.hpp mrmac/MRMacroRunner.hpp
-dialogs/MRFileExtensionEditorSettingsPanel.o: dialogs/MRFileExtensionEditorSettingsPanel.cpp dialogs/MRFileExtensionEditorSettingsPanelInternal.hpp dialogs/MRNumericSlider.hpp dialogs/MRSetupDialogCommon.hpp
-dialogs/MRFileExtensionProfilesSupport.o: dialogs/MRFileExtensionProfilesSupport.cpp dialogs/MRFileExtensionProfilesSupport.hpp dialogs/MRFileExtensionEditorSettingsPanelInternal.hpp dialogs/MRSetupDialogs.hpp config/MRDialogPaths.hpp app/MREditorApp.hpp
-dialogs/MRSetupDialogs.o: dialogs/MRSetupDialogs.cpp dialogs/MRSetupDialogs.hpp dialogs/MRSetupDialogCommon.hpp app/MRCommands.hpp app/MREditorApp.hpp config/MRDialogPaths.hpp ui/MRWindowSupport.hpp
-dialogs/MRWindowListDialog.o: dialogs/MRWindowListDialog.cpp dialogs/MRWindowListDialog.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp
-mrmac/MRMacroRunner.o: mrmac/MRMacroRunner.cpp mrmac/MRMacroRunner.hpp mrmac/mrmac.h mrmac/mrvm.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
+dialogs/MRAbout.o: dialogs/MRAbout.cpp dialogs/MRAbout.hpp app/MRVersion.hpp $(ABOUT_QUOTES_GENERATED)
+dialogs/MRDirtyGating.o: dialogs/MRDirtyGating.cpp dialogs/MRDirtyGating.hpp dialogs/MRSetupCommon.hpp
+dialogs/MRColorSetup.o: dialogs/MRColorSetup.cpp dialogs/MRSetup.hpp dialogs/MRSetupCommon.hpp app/MRCommands.hpp
+dialogs/MRFileInformation.o: dialogs/MRFileInformation.cpp dialogs/MRFileInformation.hpp app/MRCommands.hpp coprocessor/MRPerformance.hpp ui/MREditWindow.hpp ui/MRFileEditor.hpp ui/MRTextBuffer.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
+dialogs/MRMacroFile.o: dialogs/MRMacroFile.cpp dialogs/MRMacroFile.hpp mrmac/MRMacroRunner.hpp
+dialogs/MRFileExtensionEditorSettings.o: dialogs/MRFileExtensionEditorSettings.cpp dialogs/MRFileExtensionEditorSettingsInternal.hpp ui/MRNumericSlider.hpp dialogs/MRSetupCommon.hpp
+dialogs/MRFileExtensionProfilesSupport.o: dialogs/MRFileExtensionProfilesSupport.cpp dialogs/MRFileExtensionProfilesSupport.hpp dialogs/MRFileExtensionEditorSettingsInternal.hpp dialogs/MRSetup.hpp config/MRDialogPaths.hpp app/MREditorApp.hpp
+dialogs/MRSetup.o: dialogs/MRSetup.cpp dialogs/MRSetup.hpp dialogs/MRSetupCommon.hpp app/MRCommands.hpp app/MREditorApp.hpp config/MRDialogPaths.hpp ui/MRWindowSupport.hpp
+dialogs/MRWindowList.o: dialogs/MRWindowList.cpp dialogs/MRWindowList.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp
+ui/MRNumericSlider.o: ui/MRNumericSlider.cpp ui/MRNumericSlider.hpp
+mrmac/MRMacroRunner.o: mrmac/MRMacroRunner.cpp mrmac/MRMacroRunner.hpp mrmac/mrmac.h mrmac/MRVM.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 app/commands/MRWindowCommands.o: app/commands/MRWindowCommands.cpp app/commands/MRWindowCommands.hpp app/commands/MRFileCommands.hpp config/MRDialogPaths.hpp coprocessor/MRPerformance.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp ui/MRMessageLineController.hpp
 config/MRDialogPaths.o: config/MRDialogPaths.cpp config/MRDialogPaths.hpp
 config/MRSettingsLoader.o: config/MRSettingsLoader.cpp config/MRSettingsLoader.hpp config/MRDialogPaths.hpp
 app/commands/MRExternalCommand.o: app/commands/MRExternalCommand.cpp app/commands/MRExternalCommand.hpp config/MRDialogPaths.hpp coprocessor/MRCoprocessor.hpp
 coprocessor/MRPerformance.o: coprocessor/MRPerformance.cpp coprocessor/MRPerformance.hpp coprocessor/MRCoprocessor.hpp
 coprocessor/MRCoprocessorDispatch.o: coprocessor/MRCoprocessorDispatch.cpp coprocessor/MRCoprocessorDispatch.hpp coprocessor/MRPerformance.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRIndicator.hpp ui/MRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
-mrmac/mrvm.o: mrmac/mrvm.cpp mrmac/mrvm.hpp mrmac/mrmac.h dialogs/MRWindowListDialog.hpp ui/MRWindowSupport.hpp ui/MREditWindow.hpp ui/MRTextBuffer.hpp ui/MRFileEditor.hpp ui/MRTextBufferModel.hpp ui/MRSyntax.hpp piecetable/MRTextDocument.hpp
+mrmac/MRVM.o: mrmac/MRVM.cpp mrmac/MRVM.hpp mrmac/mrmac.h dialogs/MRWindowList.hpp ui/MRWindowSupport.hpp ui/MREditWindow.hpp ui/MRTextBuffer.hpp ui/MRFileEditor.hpp ui/MRTextBufferModel.hpp ui/MRSyntax.hpp piecetable/MRTextDocument.hpp
 ui/MRPalette.o: ui/MRPalette.cpp ui/MRPalette.hpp
 ui/MRWindowSupport.o: ui/MRWindowSupport.cpp ui/MRWindowSupport.hpp config/MRDialogPaths.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp
 ui/MRSyntax.o: ui/MRSyntax.cpp ui/MRSyntax.hpp

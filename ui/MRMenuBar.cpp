@@ -19,7 +19,7 @@
 #include "../app/MRCommands.hpp"
 #include "../config/MRDialogPaths.hpp"
 #include "../mrmac/MRMacroRunner.hpp"
-#include "../mrmac/mrvm.hpp"
+#include "../mrmac/MRVM.hpp"
 
 void mrvmUiInvalidateScreenBase() noexcept;
 

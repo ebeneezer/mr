@@ -29,7 +29,7 @@
 #include <vector>
 
 #include "MRCoprocessor.hpp"
-#include "MRUnsavedChangesDialog.hpp"
+#include "../dialogs/MRDirtyGating.hpp"
 #include "MRIndicator.hpp"
 #include "MRTextBufferModel.hpp"
 #include "../config/MRDialogPaths.hpp"

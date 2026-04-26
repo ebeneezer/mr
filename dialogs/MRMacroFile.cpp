@@ -18,12 +18,12 @@
 #define Uses_TStaticText
 #include <tvision/tv.h>
 
-#include "MRMacroFileDialog.hpp"
-#include "MRSetupDialogCommon.hpp"
+#include "MRMacroFile.hpp"
+#include "MRSetupCommon.hpp"
 
 #include "../mrmac/MRMacroRunner.hpp"
 #include "../mrmac/mrmac.h"
-#include "../mrmac/mrvm.hpp"
+#include "../mrmac/MRVM.hpp"
 #include "../config/MRDialogPaths.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../ui/MRMessageLineController.hpp"

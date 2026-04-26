@@ -19,9 +19,10 @@
 #define Uses_TView
 #include <tvision/tv.h>
 
-#include "MRFileExtensionEditorSettingsPanelInternal.hpp"
+#include "MRFileExtensionEditorSettingsInternal.hpp"
+#include "MRDirtyGating.hpp"
 #include "MRFileExtensionProfilesSupport.hpp"
-#include "MRSetupDialogCommon.hpp"
+#include "MRSetupCommon.hpp"
 #include "../app/utils/MRStringUtils.hpp"
 
 #include "../app/MREditorApp.hpp"
@@ -43,7 +44,7 @@
 #include <vector>
 
 namespace {
-using namespace MRFileExtensionProfilesDialogInternal;
+using namespace MRFileExtensionProfilesInternal;
 
 enum : ushort {
 	cmMrSetupFilenameProfilesHelp = 3820,
@@ -435,36 +436,14 @@ void postDialogError(const std::string &text) {
 	                              mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 }
 
-ushort runDirtyProfilesDialog(const std::vector<std::string> &dirtyIds) {
-	class TDirtyProfilesDialog : public MRDialogFoundation {
-	  public:
-		TDirtyProfilesDialog(const std::string &ids)
-		    : TWindowInit(&TDialog::initFrame),
-		      MRDialogFoundation(centeredSetupDialogRect(74, 11), "UNSAVED PROFILES", 74, 11) {
-			insert(new TStaticText(TRect(2, 2, 70, 3), "Discard changed filename-extension profiles?"));
-			insert(new TStaticText(TRect(2, 4, 70, 5), "Dirty profile IDs:"));
-			insert(new TStaticText(TRect(2, 5, 70, 7), ids.c_str()));
-			insert(new TButton(TRect(14, 8, 26, 10), "~S~ave All", cmYes, bfDefault));
-			insert(new TButton(TRect(29, 8, 41, 10), "~D~iscard", cmNo, bfNormal));
-			insert(new TButton(TRect(44, 8, 56, 10), "~C~ancel", cmCancel, bfNormal));
-		}
-	};
-	TDirtyProfilesDialog *dialog = new TDirtyProfilesDialog(joinCommaSeparated(dirtyIds));
-	if (dialog == nullptr)
-		return cmCancel;
-	ushort result = mr::dialogs::execDialog(dialog);
-	return result;
-}
-
 class TEditProfilesDialog : public MRScrollableDialog {
   public:
-	TEditProfilesDialog(const std::vector<EditProfileDraft> &initialDrafts,
-	                    const std::vector<EditProfileDraft> &workingDrafts)
+	TEditProfilesDialog(const std::vector<EditProfileDraft> &workingDrafts)
 	    : TWindowInit(&TDialog::initFrame),
 	      MRScrollableDialog(centeredSetupDialogRect(kDialogWidth, kVisibleHeight), "FILENAME EXTENSIONS",
 	                         kDialogWidth, kVirtualHeight),
-	      initialDraftList(initialDrafts), draftList(workingDrafts),
-	      editorSettingsPanel(makeEditorSettingsPanelConfig(kDialogWidth - 1, 30, 49, kDialogWidth - 2, 6)) {
+	      draftList(workingDrafts), editorSettingsPanel(makeEditorSettingsPanelConfig(kDialogWidth - 1, 30,
+	                                                                                 49, kDialogWidth - 2, 6)) {
 		buildViews();
 		setDialogValidationHook([this]() { return validateDialogValues(); });
 		if (!draftList.empty())
@@ -483,11 +462,10 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		mr::messageline::clearOwner(mr::messageline::Owner::DialogInteraction);
 	}
 
-	ushort run(std::vector<EditProfileDraft> &outDrafts, bool &changed) {
+	ushort run(std::vector<EditProfileDraft> &outDrafts) {
 		ushort result = TProgram::deskTop->execView(this);
 		saveWidgetsToCurrentDraft();
 		outDrafts = draftList;
-		changed = !draftListsEqual(initialDraftList, draftList);
 		clearDialogStatus();
 		return result;
 	}
@@ -922,7 +900,6 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		return result;
 	}
 
-	std::vector<EditProfileDraft> initialDraftList;
 	std::vector<EditProfileDraft> draftList;
 	int mCurrentIndex = -1;
 	TProfileListBox *mProfileList = nullptr;
@@ -957,29 +934,35 @@ void showEditProfilesHelpDialog() {
 	}
 }
 
-} // namespace MRFileExtensionProfilesDialogInternal
+} // namespace MRFileExtensionProfilesInternal
 
 void runFileExtensionProfilesDialogFlow() {
 	std::vector<EditProfileDraft> baselineDrafts;
 	std::vector<EditProfileDraft> workingDrafts;
 	bool running = true;
+	std::string normalizeError;
 
 	workingDrafts.push_back(makeDefaultDraft());
 	for (const MRFileExtensionProfile &profile : configuredFileExtensionProfiles())
 		workingDrafts.push_back(draftFromProfile(profile));
+	if (!normalizeDraftListSyntax(workingDrafts, normalizeError)) {
+		postDialogError("FE entry normalization failed: " + normalizeError);
+		return;
+	}
 	baselineDrafts = workingDrafts;
 
 	while (running) {
 		ushort result = cmCancel;
-		bool changed = false;
 		std::vector<EditProfileDraft> editedDrafts = workingDrafts;
 		std::string errorText;
-		TEditProfilesDialog *dialog = new TEditProfilesDialog(baselineDrafts, workingDrafts);
+		TEditProfilesDialog *dialog = new TEditProfilesDialog(workingDrafts);
 
 		if (dialog == nullptr)
 			return;
-		result = dialog->run(editedDrafts, changed);
+		result = dialog->run(editedDrafts);
 		TObject::destroy(dialog);
+		const bool changed =
+		    mr::dialogs::isDialogDraftDirty(baselineDrafts, editedDrafts, draftListsEqual);
 
 		switch (result) {
 			case cmMrSetupFilenameProfilesHelp:
@@ -1002,8 +985,11 @@ void runFileExtensionProfilesDialogFlow() {
 				if (changed) {
 					workingDrafts = editedDrafts;
 					std::vector<std::string> dirtyIds = dirtyDraftIds(baselineDrafts, editedDrafts);
-					ushort discardResult = runDirtyProfilesDialog(dirtyIds);
-						if (discardResult == cmYes) {
+					mr::dialogs::UnsavedChangesChoice discardResult =
+					    mr::dialogs::runDialogDirtyListGating(
+					        "UNSAVED PROFILES", "Discard changed filename-extension profiles?",
+					        "Dirty profile IDs:", dirtyIds, "~S~ave All");
+						if (discardResult == mr::dialogs::UnsavedChangesChoice::Save) {
 							workingDrafts = editedDrafts;
 							if (!saveAndReloadEditProfiles(workingDrafts, errorText)) {
 								postDialogError(errorText);
@@ -1013,7 +999,7 @@ void runFileExtensionProfilesDialogFlow() {
 						running = false;
 						break;
 					}
-					if (discardResult == cmCancel) {
+					if (discardResult == mr::dialogs::UnsavedChangesChoice::Cancel) {
 						workingDrafts = editedDrafts;
 						break;
 					}

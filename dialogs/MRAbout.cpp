@@ -9,8 +9,8 @@
 #define Uses_TObject
 #include <tvision/tv.h>
 
-#include "MRAboutDialog.hpp"
-#include "MRSetupDialogCommon.hpp"
+#include "MRAbout.hpp"
+#include "MRSetupCommon.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -365,17 +365,16 @@ class MRAboutQuoteBox : public TView {
 	mutable std::uint32_t mScrambleSeed;
 };
 
-class MRAboutDialog : public MRDialogFoundation {
+class MRAbout : public MRDialogFoundation {
   public:
-	MRAboutDialog() noexcept
+	MRAbout() noexcept
 	    : TWindowInit(&TDialog::initFrame),
 	      MRDialogFoundation(centeredRect(76, 16), "ABOUT", 76, 16), mQuoteBox(nullptr),
 	      mDoneButton(nullptr), mQuoteIndex(0), mQuoteRandomState(0), mQuoteModeEnabled(false), mRotationTimer(nullptr),
 	       mRearmRotationAfterAnimation(false), mDonePressTracking(false),
 	      mDoneLongPressTriggered(false), mSuppressNextDoneCommand(false) {
 		eventMask |= evBroadcast;
-		insertCenteredStaticLine(this, size.x, 2,
-		                         std::string("Multi-Edit Revisited ") + mrDisplayVersion());
+		insertCenteredStaticLine(this, size.x, 2, std::string("Multi-Edit Revisited ") + mrAboutDisplayVersion());
 		insertCenteredStaticLine(this, size.x, 3, "Dr. Michael \"iDoc\" Raus & Codex AI");
 
 		mQuoteBox = new MRAboutQuoteBox(TRect(4, 5, size.x - 4, 13));
@@ -393,7 +392,7 @@ class MRAboutDialog : public MRDialogFoundation {
 		insert(mDoneButton);
 	}
 
-	~MRAboutDialog() override {
+	~MRAbout() override {
 		killTimer(mRotationTimer);
 	}
 
@@ -560,6 +559,6 @@ class MRAboutDialog : public MRDialogFoundation {
 void showAboutDialog() {
 	if (TProgram::deskTop == nullptr)
 		return;
-	TDialog *dialog = new MRAboutDialog();
+	TDialog *dialog = new MRAbout();
 	(void)mr::dialogs::execDialog(dialog);
 }

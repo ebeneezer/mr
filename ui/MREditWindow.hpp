@@ -31,9 +31,9 @@
 #include "MRWindowManager.hpp"
 #include "MRWindowManager.hpp"
 #include "MRWindowSupport.hpp"
-#include "../dialogs/MRWindowListDialog.hpp"
+#include "../dialogs/MRWindowList.hpp"
 #include "../config/MRDialogPaths.hpp"
-#include "../mrmac/mrvm.hpp"
+#include "../mrmac/MRVM.hpp"
 
 void mrTraceCoprocessorTaskCancel(int bufferId, std::uint64_t taskId);
 class MREditWindow;

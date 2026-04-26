@@ -2,7 +2,7 @@
 #ifndef MRFILEEXTENSIONPROFILESSUPPORT_HPP
 #define MRFILEEXTENSIONPROFILESSUPPORT_HPP
 
-#include "MRFileExtensionEditorSettingsPanelInternal.hpp"
+#include "MRFileExtensionEditorSettingsInternal.hpp"
 
 #include "../config/MRDialogPaths.hpp"
 
@@ -36,7 +36,7 @@ inline bool setConfiguredFileExtensionProfiles(const std::vector<MRFileExtension
 	return setConfiguredEditExtensionProfiles(profiles, errorMessage);
 }
 
-namespace MRFileExtensionProfilesDialogInternal {
+namespace MRFileExtensionProfilesInternal {
 
 struct EditProfileDraft {
 	bool isDefault = false;
@@ -55,6 +55,8 @@ void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDial
                                                       std::string &errorText);
 [[nodiscard]] std::vector<std::string> splitExtensionLiteral(const std::string &literal);
 void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileExtensionEditorSettingsDialogRecord &record);
+[[nodiscard]] bool normalizeDraftSyntax(EditProfileDraft &draft, std::string &errorText);
+[[nodiscard]] bool normalizeDraftListSyntax(std::vector<EditProfileDraft> &drafts, std::string &errorText);
 [[nodiscard]] bool draftsEqual(const EditProfileDraft &lhs, const EditProfileDraft &rhs);
 [[nodiscard]] bool draftListsEqual(const std::vector<EditProfileDraft> &lhs,
                                    const std::vector<EditProfileDraft> &rhs);
@@ -77,6 +79,6 @@ void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileE
                                                      const std::vector<EditProfileDraft> &drafts);
 [[nodiscard]] std::string joinCommaSeparated(const std::vector<std::string> &values);
 
-} // namespace MRFileExtensionProfilesDialogInternal
+} // namespace MRFileExtensionProfilesInternal
 
 #endif

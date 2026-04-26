@@ -15,7 +15,7 @@
 #include "MRPerformance.hpp"
 #include "MRWindowCommands.hpp"
 
-#include "../mrmac/mrvm.hpp"
+#include "../mrmac/MRVM.hpp"
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRFileEditor.hpp"
 #include "../ui/MRIndicator.hpp"

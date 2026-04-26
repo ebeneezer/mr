@@ -17,8 +17,8 @@
 #define Uses_TView
 #include <tvision/tv.h>
 
-#include "MRSetupDialogCommon.hpp"
-#include "MRSetupDialogs.hpp"
+#include "MRSetupCommon.hpp"
+#include "MRSetup.hpp"
 
 #include "../app/MRCommands.hpp"
 #include "../config/MRDialogPaths.hpp"

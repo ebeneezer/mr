@@ -14,8 +14,8 @@
 #define Uses_TFileDialog
 #include <tvision/tv.h>
 
-#include "MRWindowListDialog.hpp"
-#include "MRSetupDialogCommon.hpp"
+#include "MRWindowList.hpp"
+#include "MRSetupCommon.hpp"
 #include "../app/MRCommands.hpp"
 
 #include <algorithm>

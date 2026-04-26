@@ -6,10 +6,9 @@
 class TDialog;
 class TPalette;
 
-TDialog *createInstallationAndSetupDialog();
 TDialog *createColorSetupDialog();
 void runFileExtensionProfilesDialogFlow();
-void runInstallationAndSetupDialogFlow();
+bool runSetupDialogCommand(unsigned short command);
 
 // Regression-only hook used by regression/mr-regression-checks.cpp.
 bool mrSaveColorThemeFromWorkingPaletteForTesting(const TPalette &workingPalette,

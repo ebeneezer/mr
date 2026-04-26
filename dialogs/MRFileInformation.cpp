@@ -7,8 +7,8 @@
 #define Uses_TStaticText
 #include <tvision/tv.h>
 
-#include "MRFileInformationDialog.hpp"
-#include "MRSetupDialogCommon.hpp"
+#include "MRFileInformation.hpp"
+#include "MRSetupCommon.hpp"
 
 #include <algorithm>
 #include <cstdint>

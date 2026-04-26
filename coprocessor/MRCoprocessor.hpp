@@ -20,7 +20,7 @@
 
 #include "MRTextDocument.hpp"
 #include "MRSyntax.hpp"
-#include "mrvm.hpp"
+#include "MRVM.hpp"
 
 namespace mr {
 namespace coprocessor {

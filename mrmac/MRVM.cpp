@@ -22,7 +22,7 @@
 #include <tvision/tv.h>
 
 #include "mrmac.h"
-#include "mrvm.hpp"
+#include "MRVM.hpp"
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -54,8 +54,8 @@
 #include "../ui/MRMenuBar.hpp"
 #include "../ui/MRStatusLine.hpp"
 #include "../ui/MRMessageLineController.hpp"
-#include "../dialogs/MRSetupDialogCommon.hpp"
-#include "../dialogs/MRWindowListDialog.hpp"
+#include "../dialogs/MRSetupCommon.hpp"
+#include "../dialogs/MRWindowList.hpp"
 #include "../config/MRDialogPaths.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "../coprocessor/MRCoprocessor.hpp"
