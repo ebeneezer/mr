@@ -19,6 +19,7 @@
 #include "../app/MRCommands.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstdio>
 #include <cstring>
@@ -27,6 +28,8 @@
 #include <unistd.h>
 
 #include "../app/commands/MRWindowCommands.hpp"
+#include "../config/MRDialogPaths.hpp"
+#include "../ui/MRMessageLineController.hpp"
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
@@ -43,6 +46,16 @@ enum : ushort {
 class WindowListDialog;
 
 WindowListDialog *g_manageWindowListDialog = nullptr;
+
+bool windowListDebugEnabled() noexcept {
+	static int cached = -1;
+
+	if (cached < 0) {
+		const char *value = std::getenv("MR_KEY_DEBUG");
+		cached = (value != nullptr && *value != '\0' && std::strcmp(value, "0") != 0) ? 1 : 0;
+	}
+	return cached == 1;
+}
 
 void postWindowListClose(TView *dialog) {
 	if (dialog == nullptr)
@@ -155,10 +168,39 @@ MREditWindow *preferredLinkTarget(MREditWindow *current) {
 }
 
 bool saveWindow(MREditWindow *win) {
+	std::string logPath;
+	std::string saveError;
+
 	if (win == nullptr)
 		return false;
 	if (win->isReadOnly()) {
-		messageBox(mfInformation | mfOKButton, "Window is read-only.");
+		if (win->windowRole() == MREditWindow::wrLog) {
+			logPath = win->windowRoleDetail().empty() ? configuredLogFilePath() : win->windowRoleDetail();
+			if (logPath.empty()) {
+				mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction,
+				                               "No log file URI configured.",
+				                               mr::messageline::Kind::Warning,
+				                               mr::messageline::kPriorityHigh);
+				mrLogMessage("Save rejected for log window without target path.");
+				return false;
+			}
+			if (!mrAppendLogBufferToFile(logPath, &saveError)) {
+				mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, saveError,
+				                               mr::messageline::Kind::Error,
+				                               mr::messageline::kPriorityHigh);
+				mrLogMessage("Save failed.");
+				return false;
+			}
+			win->setWindowRole(MREditWindow::wrLog, logPath);
+			mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction,
+			                               "Log window saved.", mr::messageline::Kind::Info,
+			                               mr::messageline::kPriorityMedium);
+			mrLogMessage("Log window saved.");
+			return true;
+		}
+		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction,
+		                               "Window is read-only.", mr::messageline::Kind::Warning,
+		                               mr::messageline::kPriorityHigh);
 		mrLogMessage("Save rejected for read-only window.");
 		return false;
 	}
@@ -256,8 +298,11 @@ class WindowListDialog : public MRDialogFoundation {
 	void saveWorkspaceWithDialog() {
 		char fileName[MAXPATH];
 
-		initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.mrmac");
-		if (TEditor::editorDialog(edSaveAs, fileName) != cmCancel) {
+		mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::WorkspaceSave, fileName,
+		                                sizeof(fileName), "*.mrmac");
+		if (mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::WorkspaceSave,
+		                                                   "*.mrmac", "Save workspace as...",
+		                                                   "~N~ame", fdOKButton, fileName) != cmCancel) {
 			std::string name(fileName);
 			if (name.find(".mrmac") == std::string::npos)
 				name += ".mrmac";
@@ -268,15 +313,13 @@ class WindowListDialog : public MRDialogFoundation {
 	void loadWorkspaceWithDialog() {
 		char fileName[MAXPATH];
 
-		fileName[0] = '\0';
-		initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.mrmac");
-		TFileDialog *dialog =
-		    new TFileDialog(fileName, "Load workspace from...", "~N~ame", fdOpenButton, kFileDialogHistoryId);
-		if (TProgram::deskTop->execView(dialog) != cmCancel) {
-			dialog->getFileName(fileName);
+		mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::WorkspaceLoad, fileName,
+		                                sizeof(fileName), "*.mrmac");
+		if (mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::WorkspaceLoad,
+		                                                   "*.mrmac", "Load workspace from...",
+		                                                   "~N~ame", fdOpenButton, fileName) != cmCancel) {
 			mrLoadWorkspace(std::string(fileName));
 		}
-		TObject::destroy(dialog);
 	}
 
 	WindowListDialog(MRWindowListMode aMode, MREditWindow *aCurrent, MREditWindow *aPreferred)
@@ -294,31 +337,26 @@ class WindowListDialog : public MRDialogFoundation {
 		const int bottomButtonY = height - 3;
 		const int buttonGap = 2;
 		const int workspaceGap = 4;
-		auto centeredRowStart = [width](int contentWidth) {
-			return std::max(2, (width - contentWidth) / 2);
-		};
+			auto centeredRowStart = [width](int contentWidth) {
+				return std::max(2, (width - contentWidth) / 2);
+			};
 
-		{
-			const int deleteWidth = 13;
-			const int saveWidth = 11;
-			const int hideWidth = 18;
-			const int hideAllWidth = 15;
-			const int rowWidth = deleteWidth + saveWidth + hideWidth + hideAllWidth + buttonGap * 3;
-			int x = centeredRowStart(rowWidth);
+			{
+				const std::array topButtons{
+				    mr::dialogs::DialogButtonSpec{"~D~elete", cmMRWindowListDelete, bfNormal},
+				    mr::dialogs::DialogButtonSpec{"~S~ave", cmMRWindowListSave, bfNormal},
+				    mr::dialogs::DialogButtonSpec{"Un/~H~ide", cmMRWindowListHide, bfNormal},
+				    mr::dialogs::DialogButtonSpec{"Hide ~a~ll", cmMRWindowListHideAll, bfNormal}};
+				std::vector<TButton *> topButtonViews;
+				const mr::dialogs::DialogButtonRowMetrics metrics =
+				    mr::dialogs::measureUniformButtonRow(topButtons, buttonGap);
+				const int left = centeredRowStart(metrics.rowWidth);
 
-			insert(new TButton(TRect(x, topButtonY, x + deleteWidth, topButtonY + 2), "~D~elete<DEL>",
-			                   cmMRWindowListDelete, bfNormal));
-			x += deleteWidth + buttonGap;
-			insert(new TButton(TRect(x, topButtonY, x + saveWidth, topButtonY + 2), "~S~ave<F3>",
-			                   cmMRWindowListSave, bfNormal));
-			x += saveWidth + buttonGap;
-			hideToggleButton = new TButton(TRect(x, topButtonY, x + hideWidth, topButtonY + 2),
-			                               "Un/~H~ide<F4>", cmMRWindowListHide, bfNormal);
-			insert(hideToggleButton);
-			x += hideWidth + buttonGap;
-			insert(new TButton(TRect(x, topButtonY, x + hideAllWidth, topButtonY + 2), "Hide ~a~ll<F5>",
-			                   cmMRWindowListHideAll, bfNormal));
-		}
+				mr::dialogs::insertUniformButtonRow(*this, left, topButtonY, buttonGap, topButtons, 0,
+				                                    &topButtonViews);
+				if (topButtonViews.size() >= 3)
+					hideToggleButton = topButtonViews[2];
+			}
 		insert(new TStaticText(TRect(2, 5, 18, 6), "Select window:"));
 
 		scrollBar = new TScrollBar(TRect(width - 3, listTop, width - 2, listBottom));
@@ -327,33 +365,29 @@ class WindowListDialog : public MRDialogFoundation {
 		                              std::vector<std::string>());
 		insert(listView);
 
-		{
-			const int wsButtonWidth = 18;
-			const int wsRowWidth = wsButtonWidth * 2 + workspaceGap;
-			int x = centeredRowStart(wsRowWidth);
+			{
+				const std::array workspaceButtons{
+				    mr::dialogs::DialogButtonSpec{"Sa~v~e workspace", cmMRWorkspaceSave, bfNormal},
+				    mr::dialogs::DialogButtonSpec{"~L~oad workspace", cmMRWorkspaceLoad, bfNormal}};
+				const mr::dialogs::DialogButtonRowMetrics metrics =
+				    mr::dialogs::measureUniformButtonRow(workspaceButtons, workspaceGap);
+				const int left = centeredRowStart(metrics.rowWidth);
 
-			insert(new TButton(TRect(x, workspaceButtonY, x + wsButtonWidth, workspaceButtonY + 2),
-			                   "Sa~v~e workspace<F6>", cmMRWorkspaceSave, bfNormal));
-			x += wsButtonWidth + workspaceGap;
-			insert(new TButton(TRect(x, workspaceButtonY, x + wsButtonWidth, workspaceButtonY + 2),
-			                   "~L~oad workspace<F7>", cmMRWorkspaceLoad, bfNormal));
-		}
-		{
-			const int okWidth = 13;
-			const int cancelWidth = 14;
-			const int helpWidth = 12;
-			const int rowWidth = okWidth + cancelWidth + helpWidth + buttonGap * 2;
-			int x = centeredRowStart(rowWidth);
+				mr::dialogs::insertUniformButtonRow(*this, left, workspaceButtonY, workspaceGap,
+				                                    workspaceButtons);
+			}
+			{
+				const std::array bottomButtons{
+				    mr::dialogs::DialogButtonSpec{"~D~one", mode == mrwlManageWindows ? cmClose : cmOK,
+				                                  bfDefault},
+				    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal},
+				    mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+				const mr::dialogs::DialogButtonRowMetrics metrics =
+				    mr::dialogs::measureUniformButtonRow(bottomButtons, buttonGap);
+				const int left = centeredRowStart(metrics.rowWidth);
 
-			insert(new TButton(TRect(x, bottomButtonY, x + okWidth, bottomButtonY + 2), "~D~one<ENTER>",
-			                   mode == mrwlManageWindows ? cmClose : cmOK, bfDefault));
-			x += okWidth + buttonGap;
-			insert(new TButton(TRect(x, bottomButtonY, x + cancelWidth, bottomButtonY + 2),
-			                   "~C~ancel<ESC>", cmCancel, bfNormal));
-			x += cancelWidth + buttonGap;
-			insert(new TButton(TRect(x, bottomButtonY, x + helpWidth, bottomButtonY + 2), "~H~elp<F1>",
-			                   cmHelp, bfNormal));
-		}
+				mr::dialogs::insertUniformButtonRow(*this, left, bottomButtonY, buttonGap, bottomButtons);
+			}
 
 		refreshEntries();
 		focusPreferred();
@@ -375,12 +409,31 @@ class WindowListDialog : public MRDialogFoundation {
 	}
 
 	void activateModeless() {
+		std::string line;
 		refreshEntries();
 		focusPreferred();
+		if (windowListDebugEnabled()) {
+			line = "Window List activateModeless before visible=";
+			line += (state & sfVisible) != 0 ? "1" : "0";
+			line += " selected=";
+			line += (state & sfSelected) != 0 ? "1" : "0";
+			line += " focus=";
+			line += listView != nullptr ? std::to_string(listView->focused) : "-1";
+			mrLogMessage(line);
+		}
 		if (TProgram::deskTop != nullptr)
 			TProgram::deskTop->setCurrent(this, TView::normalSelect);
 		else
 			select();
+		if (windowListDebugEnabled()) {
+			line = "Window List activateModeless after visible=";
+			line += (state & sfVisible) != 0 ? "1" : "0";
+			line += " selected=";
+			line += (state & sfSelected) != 0 ? "1" : "0";
+			line += " focus=";
+			line += listView != nullptr ? std::to_string(listView->focused) : "-1";
+			mrLogMessage(line);
+		}
 	}
 
 	void handleEvent(TEvent &event) override {
@@ -407,7 +460,7 @@ class WindowListDialog : public MRDialogFoundation {
 				return;
 			}
 			if (mode == mrwlManageWindows) {
-				static_cast<void>(mrActivateEditWindow(selected));
+				mrScheduleWindowActivation(selected);
 				clearEvent(event);
 				return;
 			}
@@ -635,9 +688,18 @@ class WindowListDialog : public MRDialogFoundation {
 		else {
 			setWindowManuallyHidden(win, false);
 			selected = win;
-			static_cast<void>(mrActivateEditWindow(win));
+			mrScheduleWindowActivation(win);
 		}
 		refreshEntries();
+		if (windowListDebugEnabled()) {
+			line = "Window List after toggle visible=";
+			line += (state & sfVisible) != 0 ? "1" : "0";
+			line += " selected=";
+			line += (state & sfSelected) != 0 ? "1" : "0";
+			line += " focus=";
+			line += listView != nullptr ? std::to_string(listView->focused) : "-1";
+			mrLogMessage(line);
+		}
 	}
 
 	bool canToggleCurrentSelection() const {

@@ -32,7 +32,7 @@ PCRE2_LIB ?= /usr/lib/libpcre2-8.so
 PCRE2_HEADER ?= /usr/include/pcre2.h
 
 # Include paths
-INCLUDES = -I$(TVISION_ACTIVE_SOURCE_DIR)/include -I./mrmac -I./piecetable -I./ui -I./coprocessor -I./app -I./app/commands -I./dialogs -I./config
+INCLUDES = -I$(TVISION_ACTIVE_SOURCE_DIR)/include -I./mrmac -I./piecetable -I./ui -I./coprocessor -I./app -I./app/commands -I./dialogs -I./config -I./keymap
 
 # Language/runtime configuration.
 CXXSTD ?= gnu++20
@@ -89,10 +89,18 @@ CXX_SOURCES = \
 	app/MRMenuFactory.cpp \
 	app/MRVersion.cpp \
 	app/MREditorApp.cpp \
+	keymap/MRKeymapActionCatalog.cpp \
+	keymap/MRKeymapContext.cpp \
+	keymap/MRKeymapProfile.cpp \
+	keymap/MRKeymapResolver.cpp \
+	keymap/MRKeymapToken.cpp \
+	keymap/MRKeymapTrie.cpp \
+	keymap/MRKeymapSequence.cpp \
 	dialogs/MRAbout.cpp \
 	dialogs/MRColorSetup.cpp \
 	dialogs/MRDirtyGating.cpp \
 	dialogs/MRFileInformation.cpp \
+	dialogs/MRKeymapManager.cpp \
 	dialogs/MRMacroFile.cpp \
 	dialogs/MRFileExtensionProfiles.cpp \
 	dialogs/MRFileExtensionEditorSettings.cpp \
@@ -108,6 +116,7 @@ CXX_SOURCES = \
 	coprocessor/MRCoprocessorDispatch.cpp \
 	mrmac/MRVM.cpp \
 	ui/MRFrame.cpp \
+	ui/MRColumnListView.cpp \
 	ui/MRMenuBar.cpp \
 	ui/MRMessageLineController.cpp \
 	ui/MRWindowManager.cpp \
@@ -170,6 +179,7 @@ CONTEXT_ARCHIVE_ITEMS = \
 	mrmac \
 	patches \
 	piecetable \
+	keymap \
 	regression \
 	ui \
 	tvision

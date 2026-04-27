@@ -5,9 +5,11 @@
 
 #include "MRCoprocessorDispatch.hpp"
 
+#include <array>
 #include <chrono>
 #include <algorithm>
 #include <deque>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -29,6 +31,48 @@ const char *kMiniMapRenderAction = "Mini map rendering";
 const char *kSaveNormalizationWarmAction = "Save normalization warming";
 constexpr std::size_t kMacroUiPlaybackBudgetCommands = 48;
 const std::chrono::milliseconds kMacroUiPlaybackBudgetSlice(2);
+
+constexpr std::array<const char *, mrducDelay + 1> kDeferredUiCommandNames{
+    "UNKNOWN",
+    "CREATE_WINDOW",
+    "DELETE_WINDOW",
+    "MODIFY_WINDOW",
+    "LINK_WINDOW",
+    "UNLINK_WINDOW",
+    "ZOOM",
+    "REDRAW",
+    "NEW_SCREEN",
+    "SWITCH_WINDOW",
+    "SIZE_WINDOW",
+    "MARQUEE",
+    "MARQUEE_WARNING",
+    "MARQUEE_ERROR",
+    "MAKE_MESSAGE",
+    "BRAIN",
+    "PUT_BOX",
+    "WRITE",
+    "CLR_LINE",
+    "GOTOXY",
+    "PUT_LINE_NUM",
+    "PUT_COL_NUM",
+    "SCROLL_BOX_UP",
+    "SCROLL_BOX_DN",
+    "CLEAR_SCREEN",
+    "KILL_BOX",
+    "REGISTER_MENU_ITEM",
+    "REMOVE_MENU_ITEM",
+    "MESSAGEBOX",
+    "DELAY",
+};
+
+std::optional<const char *> deferredUiCommandNameAt(int type) {
+	if (type < 0)
+		return std::nullopt;
+	const std::size_t index = static_cast<std::size_t>(type);
+	if (index >= kDeferredUiCommandNames.size())
+		return std::nullopt;
+	return kDeferredUiCommandNames[index];
+}
 
 const char *coprocessorLaneName(mr::coprocessor::Lane lane) {
 	switch (lane) {
@@ -135,68 +179,7 @@ void releaseMacroTask(MREditWindow *win, const mr::coprocessor::Result &result, 
 }
 
 const char *deferredUiCommandName(int type) {
-	switch (type) {
-		case mrducCreateWindow:
-			return "CREATE_WINDOW";
-		case mrducDeleteWindow:
-			return "DELETE_WINDOW";
-		case mrducModifyWindow:
-			return "MODIFY_WINDOW";
-		case mrducLinkWindow:
-			return "LINK_WINDOW";
-		case mrducUnlinkWindow:
-			return "UNLINK_WINDOW";
-		case mrducZoom:
-			return "ZOOM";
-		case mrducRedraw:
-			return "REDRAW";
-		case mrducNewScreen:
-			return "NEW_SCREEN";
-		case mrducSwitchWindow:
-			return "SWITCH_WINDOW";
-		case mrducSizeWindow:
-			return "SIZE_WINDOW";
-		case mrducMarqueeInfo:
-			return "MARQUEE";
-		case mrducMarqueeWarning:
-			return "MARQUEE_WARNING";
-		case mrducMarqueeError:
-			return "MARQUEE_ERROR";
-		case mrducMakeMessage:
-			return "MAKE_MESSAGE";
-		case mrducBrain:
-			return "BRAIN";
-		case mrducPutBox:
-			return "PUT_BOX";
-		case mrducWrite:
-			return "WRITE";
-		case mrducClrLine:
-			return "CLR_LINE";
-		case mrducGotoxy:
-			return "GOTOXY";
-		case mrducPutLineNum:
-			return "PUT_LINE_NUM";
-		case mrducPutColNum:
-			return "PUT_COL_NUM";
-		case mrducScrollBoxUp:
-			return "SCROLL_BOX_UP";
-		case mrducScrollBoxDn:
-			return "SCROLL_BOX_DN";
-		case mrducClearScreen:
-			return "CLEAR_SCREEN";
-		case mrducKillBox:
-			return "KILL_BOX";
-		case mrducRegisterMenuItem:
-			return "REGISTER_MENU_ITEM";
-		case mrducRemoveMenuItem:
-			return "REMOVE_MENU_ITEM";
-		case mrducMessageBox:
-			return "MESSAGEBOX";
-		case mrducDelay:
-			return "DELAY";
-		default:
-			return "UNKNOWN";
-	}
+	return deferredUiCommandNameAt(type).value_or("UNKNOWN");
 }
 
 struct DeferredUiRenderGateway {

@@ -1,0 +1,4 @@
+MRSETUP('KEYMAP_PROFILE', 'name="DEFAULT" description="build-in defaults"');
+MRSETUP('KEYMAP_BIND', 'name="DEFAULT" context=EDIT type=ACTION target="MRMAC_FILE_SAVE" sequence="<F3>" description="Save file"');
+MRSETUP('KEYMAP_BIND', 'name="DEFAULT" context=EDIT type=ACTION target="MRMAC_BLOCK_EXTEND_BY_MOTION" sequence="<F3>" description="Save file"');
+MRSETUP('ACTIVE_KEYMAP_PROFILE', 'name="DEFAULT"');

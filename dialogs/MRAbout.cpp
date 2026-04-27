@@ -13,6 +13,7 @@
 #include "MRSetupCommon.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <chrono>
 #include <cstddef>
@@ -387,10 +388,16 @@ class MRAbout : public MRDialogFoundation {
 		    std::chrono::steady_clock::now().time_since_epoch().count()) ^
 		                   0xA39F1D5Bu;
 
-		mDoneButton =
-		    new TButton(TRect(size.x / 2 - 6, 13, size.x / 2 + 6, 15), "~P~ress", cmAboutDone, bfDefault);
-		insert(mDoneButton);
-	}
+			const std::array buttons{
+			    mr::dialogs::DialogButtonSpec{"~P~ress", cmAboutDone, bfDefault}};
+			std::vector<TButton *> buttonViews;
+			const mr::dialogs::DialogButtonRowMetrics metrics =
+			    mr::dialogs::measureUniformButtonRow(buttons, 0);
+			mr::dialogs::insertUniformButtonRow(*this, (size.x - metrics.rowWidth) / 2, 13, 0, buttons, 0,
+			                                    &buttonViews);
+			if (!buttonViews.empty())
+				mDoneButton = buttonViews.front();
+		}
 
 	~MRAbout() override {
 		killTimer(mRotationTimer);

@@ -38,6 +38,7 @@
 #include <glob.h>
 #include <limits>
 #include <map>
+#include <optional>
 #include <mutex>
 #include <set>
 #include <sstream>
@@ -57,6 +58,7 @@
 #include "../dialogs/MRSetupCommon.hpp"
 #include "../dialogs/MRWindowList.hpp"
 #include "../config/MRDialogPaths.hpp"
+#include "../keymap/MRKeymapProfile.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "../coprocessor/MRCoprocessor.hpp"
 #include "../app/MRVersion.hpp"
@@ -117,6 +119,69 @@ struct IndexedBoundMacroEntry {
 	IndexedBoundMacroEntry(const TKey &aKey, std::string aFilePath) : key(aKey), filePath(std::move(aFilePath)) {
 	}
 };
+
+bool keymapDiagnosticsContainErrors(const std::vector<MRKeymapDiagnostic> &diagnostics) {
+	for (const MRKeymapDiagnostic &diagnostic : diagnostics)
+		if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error)
+			return true;
+	return false;
+}
+
+std::string firstKeymapDiagnosticMessage(const std::vector<MRKeymapDiagnostic> &diagnostics) {
+	for (const MRKeymapDiagnostic &diagnostic : diagnostics)
+		if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error)
+			return diagnostic.message;
+	if (!diagnostics.empty())
+		return diagnostics.front().message;
+	return "invalid keymap payload.";
+}
+
+bool assignKeymapPayloadError(std::string *errorMessage, std::string message) {
+	if (errorMessage != nullptr)
+		*errorMessage = std::move(message);
+	return false;
+}
+
+bool applyConfiguredActiveKeymapProfilePayload(const std::string &payload, std::string *errorMessage) {
+	MRKeymapProfile activeProfileRecord;
+	const auto diagnostics = parseKeymapProfilePayload(payload, activeProfileRecord);
+
+	if (keymapDiagnosticsContainErrors(diagnostics))
+		return assignKeymapPayloadError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
+	return setConfiguredActiveKeymapProfile(activeProfileRecord.name, errorMessage);
+}
+
+bool applyConfiguredKeymapProfilePayload(const std::string &payload, std::string *errorMessage) {
+	MRKeymapProfile profile;
+	const auto diagnostics = parseKeymapProfilePayload(payload, profile);
+	std::vector<MRKeymapProfile> profiles = configuredKeymapProfiles();
+
+	if (keymapDiagnosticsContainErrors(diagnostics))
+		return assignKeymapPayloadError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
+	for (MRKeymapProfile &existing : profiles)
+		if (existing.name == profile.name) {
+			existing = std::move(profile);
+			return setConfiguredKeymapProfiles(profiles, errorMessage);
+		}
+	profiles.push_back(std::move(profile));
+	return setConfiguredKeymapProfiles(profiles, errorMessage);
+}
+
+bool applyConfiguredKeymapBindingPayload(const std::string &payload, std::string *errorMessage) {
+	MRKeymapBindingRecord binding;
+	const auto diagnostics = parseKeymapBindingPayload(payload, binding);
+	std::vector<MRKeymapProfile> profiles = configuredKeymapProfiles();
+
+	if (keymapDiagnosticsContainErrors(diagnostics))
+		return assignKeymapPayloadError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
+	for (MRKeymapProfile &profile : profiles)
+		if (profile.name == binding.profileName) {
+			profile.bindings.push_back(std::move(binding));
+			return setConfiguredKeymapProfiles(profiles, errorMessage);
+		}
+	return assignKeymapPayloadError(errorMessage,
+	                                "Binding references unknown keymap profile: " + binding.profileName);
+}
 
 struct MacroStackFrame {
 	std::string macroName;
@@ -212,6 +277,7 @@ struct RuntimeEnvironment {
 	std::size_t fileMatchIndex;
 	std::string lastFileName;
 	std::map<const void *, std::vector<uint>> markStacks;
+	std::map<const void *, std::array<std::optional<uint>, 10>> randomAccessMarks;
 	std::string startupCommand;
 	std::vector<std::string> processArgs;
 	std::string executablePath;
@@ -324,6 +390,7 @@ struct BackgroundEditSession {
 	int screenCursorX;
 	int screenCursorY;
 	std::vector<uint> markStack;
+	std::array<std::optional<uint>, 10> randomAccessMarks;
 
 	BackgroundEditSession()
 	    : document(),  cursorOffset(0), selectionStart(0), selectionEnd(0),
@@ -656,6 +723,8 @@ static int currentEditorPageLine(MRFileEditor *editor);
 static bool markEditorPosition(MREditWindow *win, MRFileEditor *editor);
 static bool gotoEditorMark(MREditWindow *win, MRFileEditor *editor);
 static bool popEditorMark(MREditWindow *win);
+static bool setEditorRandomAccessMark(MREditWindow *win, MRFileEditor *editor, int index);
+static bool gotoEditorRandomAccessMark(MREditWindow *win, MRFileEditor *editor, int index);
 static bool moveEditorPageUp(MRFileEditor *editor);
 static bool moveEditorPageDown(MRFileEditor *editor);
 static bool moveEditorNextPageBreak(MRFileEditor *editor);
@@ -3602,6 +3671,10 @@ static bool markEditorPosition(MREditWindow *win, MRFileEditor *editor) {
 	return true;
 }
 
+static bool validRandomAccessMarkIndex(int index) noexcept {
+	return index >= 1 && index <= 9;
+}
+
 static bool gotoEditorMark(MREditWindow *win, MRFileEditor *editor) {
 	std::map<const void *, std::vector<uint>>::iterator it;
 	uint pos;
@@ -3637,6 +3710,45 @@ static bool popEditorMark(MREditWindow *win) {
 		return false;
 	it->second.pop_back();
 	return true;
+}
+
+static bool setEditorRandomAccessMark(MREditWindow *win, MRFileEditor *editor, int index) {
+	BackgroundEditSession *session = currentBackgroundEditSession();
+
+	if (!validRandomAccessMarkIndex(index))
+		return false;
+	if (editor == nullptr) {
+		if (session == nullptr)
+			return false;
+		session->randomAccessMarks[static_cast<std::size_t>(index)] =
+		    static_cast<uint>(session->cursorOffset);
+		return true;
+	}
+	if (win == nullptr)
+		return false;
+	g_runtimeEnv.randomAccessMarks[win][static_cast<std::size_t>(index)] = editor->cursorOffset();
+	return true;
+}
+
+static bool gotoEditorRandomAccessMark(MREditWindow *win, MRFileEditor *editor, int index) {
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	std::map<const void *, std::array<std::optional<uint>, 10>>::iterator it;
+
+	if (!validRandomAccessMarkIndex(index))
+		return false;
+	if (editor == nullptr) {
+		if (session == nullptr)
+			return false;
+		const std::optional<uint> &pos = session->randomAccessMarks[static_cast<std::size_t>(index)];
+		return pos.has_value() ? setEditorCursor(nullptr, *pos) : false;
+	}
+	if (win == nullptr)
+		return false;
+	it = g_runtimeEnv.randomAccessMarks.find(win);
+	if (it == g_runtimeEnv.randomAccessMarks.end())
+		return false;
+	const std::optional<uint> &pos = it->second[static_cast<std::size_t>(index)];
+	return pos.has_value() ? setEditorCursor(editor, *pos) : false;
 }
 
 static bool moveEditorPageUp(MRFileEditor *editor) {
@@ -6525,15 +6637,32 @@ static std::vector<std::string> listMrmacFilesInDirectory(const std::string &dir
 
 static std::string resolveMacroFilePath(const std::string &spec) {
 	std::string trimmed = trimAscii(spec);
+	std::string macroDirectory = normalizeConfiguredPathInput(configuredMacroDirectoryPath());
+	auto tryMacroDirectory = [&](const std::string &candidate) -> std::string {
+		std::string joined;
+
+		if (macroDirectory.empty() || candidate.empty())
+			return std::string();
+		joined = macroDirectory;
+		if (joined.back() != '/')
+			joined += '/';
+		joined += candidate;
+		return fileExists(joined) ? joined : std::string();
+	};
 	if (trimmed.empty())
 		return std::string();
 	if (fileExists(trimmed))
 		return trimmed;
+	if (std::string fromMacroDirectory = tryMacroDirectory(trimmed); !fromMacroDirectory.empty())
+		return fromMacroDirectory;
 	if (upperKey(trimmed).size() < 6 ||
 	    upperKey(trimmed).substr(upperKey(trimmed).size() - 6) != ".MRMAC") {
 		std::string withExt = trimmed + ".mrmac";
 		if (fileExists(withExt))
 			return withExt;
+		if (std::string withExtFromMacroDirectory = tryMacroDirectory(withExt);
+		    !withExtFromMacroDirectory.empty())
+			return withExtFromMacroDirectory;
 	}
 	return trimmed;
 }
@@ -10102,6 +10231,21 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 								throw std::runtime_error(
 								    "MRSETUP(LASTFILEDIALOGPATH) failed: " +
 								    (errorText.empty() ? std::string("invalid path.") : errorText));
+						} else if (setupKey == "KEYMAP_PROFILE") {
+							if (!applyConfiguredKeymapProfilePayload(valueAsString(args[1]), &errorText))
+								throw std::runtime_error(
+								    "MRSETUP(KEYMAP_PROFILE) failed: " +
+								    (errorText.empty() ? std::string("invalid value.") : errorText));
+						} else if (setupKey == "KEYMAP_BIND") {
+							if (!applyConfiguredKeymapBindingPayload(valueAsString(args[1]), &errorText))
+								throw std::runtime_error(
+								    "MRSETUP(KEYMAP_BIND) failed: " +
+								    (errorText.empty() ? std::string("invalid value.") : errorText));
+						} else if (setupKey == "ACTIVE_KEYMAP_PROFILE") {
+							if (!applyConfiguredActiveKeymapProfilePayload(valueAsString(args[1]), &errorText))
+								throw std::runtime_error(
+								    "MRSETUP(ACTIVE_KEYMAP_PROFILE) failed: " +
+								    (errorText.empty() ? std::string("invalid value.") : errorText));
 						} else if (setupKey == "WINDOW_MANAGER" || setupKey == "MESSAGES" ||
 						           setupKey == "SEARCH_TEXT_TYPE" || setupKey == "SEARCH_DIRECTION" ||
 						           setupKey == "SEARCH_MODE" || setupKey == "SEARCH_CASE_SENSITIVE" ||
@@ -10141,6 +10285,9 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						           setupKey == "WORKSPACE" ||
 						           setupKey == "MAX_PATH_HISTORY" || setupKey == "MAX_FILE_HISTORY" ||
 						           setupKey == "PATH_HISTORY" || setupKey == "FILE_HISTORY" ||
+						           setupKey == "DIALOG_LAST_PATH" ||
+						           setupKey == "DIALOG_PATH_HISTORY" ||
+						           setupKey == "DIALOG_FILE_HISTORY" ||
 						           setupKey == "MULTI_FILESPEC_HISTORY" ||
 						           setupKey == "MULTI_PATH_HISTORY") {
 							if (!applyConfiguredSettingsAssignment(setupKey, valueAsString(args[1]), dummyPaths,
@@ -10157,6 +10304,11 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							if (!setConfiguredColorThemeFilePath(valueAsString(args[1]), &errorText))
 								throw std::runtime_error(
 								    "MRSETUP(COLORTHEMEURI) failed: " +
+								    (errorText.empty() ? std::string("invalid path.") : errorText));
+						} else if (setupKey == "KEYMAPURI") {
+							if (!setConfiguredKeymapFilePath(valueAsString(args[1]), &errorText))
+								throw std::runtime_error(
+								    "MRSETUP(KEYMAPURI) failed: " +
 								    (errorText.empty() ? std::string("invalid path.") : errorText));
 						} else if (findEditSettingDescriptorByKey(setupKey) != nullptr) {
 							if (!applyConfiguredEditSetupValue(setupKey, valueAsString(args[1]), &errorText))
@@ -10195,10 +10347,11 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							    "MULTI_SAR_FILES_IN_MEMORY, MULTI_SAR_KEEP_FILES_OPEN, "
 							    "VIRTUAL_DESKTOPS, CYCLIC_VIRTUAL_DESKTOPS, "
 							    "CURSOR_POSITION_MARKER, AUTOLOAD_WORKSPACE, LOG_HANDLING, LOGFILE, AUTOEXEC_MACRO, "
-							    "LASTFILEDIALOGPATH, "
+							    "LASTFILEDIALOGPATH, KEYMAP_PROFILE, KEYMAP_BIND, ACTIVE_KEYMAP_PROFILE, "
 							    "MAX_PATH_HISTORY, MAX_FILE_HISTORY, PATH_HISTORY, FILE_HISTORY, "
+							    "DIALOG_LAST_PATH, DIALOG_PATH_HISTORY, DIALOG_FILE_HISTORY, "
 							    "MULTI_FILESPEC_HISTORY, MULTI_PATH_HISTORY, "
-							    "DEFAULT_PROFILE_DESCRIPTION, COLORTHEMEURI, PAGE_BREAK, WORD_DELIMITERS, DEFAULT_EXTENSIONS, "
+							    "DEFAULT_PROFILE_DESCRIPTION, COLORTHEMEURI, KEYMAPURI, PAGE_BREAK, WORD_DELIMITERS, DEFAULT_EXTENSIONS, "
 							    "TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, DISPLAY_TABS, TAB_SIZE, RIGHT_MARGIN, WORD_WRAP, "
 							    "INDENT_STYLE, FILE_TYPE, BINARY_RECORD_LENGTH, POST_LOAD_MACRO, PRE_SAVE_MACRO, DEFAULT_PATH, "
 							    "FORMAT_LINE, BACKUP_METHOD, BACKUP_FREQUENCY, BACKUP_EXTENSION, BACKUP_DIRECTORY, "
@@ -11359,6 +11512,14 @@ bool mrvmUiPushMarker() {
 
 bool mrvmUiGetMarker() {
 	return gotoEditorMark(activeMacroEditWindow(), currentEditor());
+}
+
+bool mrvmUiSetRandomAccessMark(int index) {
+	return setEditorRandomAccessMark(activeMacroEditWindow(), currentEditor(), index);
+}
+
+bool mrvmUiGetRandomAccessMark(int index) {
+	return gotoEditorRandomAccessMark(activeMacroEditWindow(), currentEditor(), index);
 }
 
 bool mrvmUiBlockBeginLine() {

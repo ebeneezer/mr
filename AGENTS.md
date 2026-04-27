@@ -28,7 +28,7 @@ Use English only for:
 
 - Entscheidungen über Refactoring sind zustimmungspflichtig - Empfehlungen wenn nötig
 
-- Rede den User mit "Sie" oder "Dr. Raus" an - die AI darf frei wählen und die Anrede zwischen Prompt variieren.
+- Rede den User mit "Sie" oder "Dr. Raus" an - die AI darf frei wählen und die Anrede zwischen Prompts variieren.
 
 - Der User wünscht kein "Reden nach dem Mund" - die AI soll alles kritisch fachlich hinterfragen und offene Einschätzungen abgeben. Die AI soll sich als Fachberater des Users verstehen, nicht als automatisierter Erfüllungsgehilfe.
 
@@ -36,17 +36,21 @@ Use English only for:
 
 - Der Einsatz von Intrinsics / SIMD ist im Einzelfall zu prüfen und dem Benutzer zu empfehlen.
 
-- Code style: Semantisch korrekte Bezeichner ohne leading und ohne trailing Underscores für Methoden, Member und Klassen. Werden neue Sourcefiles benötigt ist dem User eine Empfehlung zu geben und eine Freigabe einzuholen.
+- Code style: Semantisch korrekte Bezeichner.
+
+- Werden neue Sourcefiles benötigt ist dem User eine Empfehlung zu geben und eine Freigabe einzuholen.
 
 - Code style: Keine multiplen gleiche Stringliterale. Diese sind zu const zusammenzuführen.
 
 - Code style: Maximum Human Readability.
 
-- Coding: Es drüfen keine Routinen implementiert werden, die auch durch Library Funktionen ersetzt werden können: Wrapper für Library Funktionen sind nicht erlaubt.
+- Coding: Es dürfen keine Routinen implementiert werden, die auch durch Library Funktionen ersetzt werden können: Wrapper für Library Funktionen sind nicht erlaubt.
 
 - Strategie und Coding: Es wird zuerst die Funktion komplett implementiert und debugged. Erst nach Empfehlung und Freigabe werden Regressionstests implementiert.
 
 - Code style: Performance maximieren.
+
+- Code Style: Word Wrap in Code ist verboten. Function Header gehören vollständig in eine Zeile. Einrückung nur bei semantischer Unterordnung des nachfolgenden Codes: Wir haben keine 80x25 Schirme mehr. Word Wrap ist auch verboten für if Statements mit nur einem Befehl: Dieser gehört auf dieselbe Zeile wie das if. 
 
 - Code style: Keine if Ketten statt dessen tabellengesteuerter Programmfluss oder mindestens switch Statements oder assoziative Arrays oder Hashes.
 
@@ -54,21 +58,23 @@ Use English only for:
 
 - Code style: C++20 Konstrukte konsequent nutzen - kein AI Boilerplate.
 
-- Code style: Maximale Kaspselung bei C++ Konstrukten. Maximale Nutzung von Vererbung und Kapselung. Geheimnisprinzip.
+- Code style: Maximale Kaspselung bei C++ Konstrukten. Maximale Nutzung von Vererbung & Geheimnisprinzip.
 
 - Coding: Keys des zentralen KEY/VALUE Hases sind eindeutig. Keine zwei Schreibweisen für denselben Value!
 
 - Code style: Bezeichner dürfen keine Underscores am Begin oder Ende haben.
 
-- Coding: Ursachen für Bugs werden fachlich korrekt lokalisisert und per Coding beseitigt. Wächter bzw. Rucksackprogrammierung ist untersagt!
-
-- Coding: Makrobefehle, die Screen Output betreiben wollen müssen den Weg über den UI Thread der VM gehen und alle Ausgabe stagen.
+- Coding: Ursachen für Bugs werden fachlich eindeutig lokalisisert und per Coding beseitigt. Wächter- bzw. Rucksackprogrammierung ist untersagt!
 
 - Coding: VM/UI Producer/Consumer Strategie: mrmac VM, TVCALL und Macro Screen Commands sind Producer von gestagten `MRMacroDeferredUiCommand`- bzw. `MacroCellGrid`-Mutationen. Direkte Screen-Ausgabe über `TScreen::screenBuffer` oder an Tvision vorbei ist für neue Screen Ops verboten. Consumer ist ausschließlich die UI-Schicht (`MacroCellGrid`/`MacroCellView` bzw. die Screen Facade), die auf dem UI Thread über TVision `TView`/`TDrawBuffer` projiziert. Neue TVCALL Screen Ops werden als Commands dieser Schicht modelliert, damit Kollisionen, Ghosting und konkurrierende Schreibpfade vermieden werden.
 
 ## Serialisierung
 
-- Neue Funktionen werden zuerst in Setup Dialogen implementiert, notwendige Setup Values und Keys werden ausschliesslich im zentralen key/value Hash gehalten und von dort in Richtung settings.mrmac serialisiert. Dezentrale Speicher dieser Art sind verboten. Keine überflüssigen File I/O. Es wird nur serialisiert wenn dies notwendig ist und es wird nicht reloaded aus dem Filesystem. Der K/V Hash ist stets inhaltlich gleich zum Inhalt von settings.mrmac.
+- Neue Funktionen werden zuerst in Setup Dialogen implementiert, notwendige Setup Values und Keys werden ausschliesslich im zentralen K/V Hash gehalten und von dort in Richtung settings.mrmac serialisiert. Dezentrale Registries sind verboten. 
+
+- Keine überflüssigen File I/O.
+
+- Es wird nur serialisiert wenn dies notwendig ist und es wird nicht reloaded aus dem Filesystem. Der K/V Hash ist stets inhaltlich kongruent zum Inhalt von settings.mrmac.
 
 - Der Bootstrap liest settings.mrmac, verwirft alle unbekannten Keys, schreibt Defaults für Keys die noch nicht im settings.mrmac waren. Die Anwendung von Values erfolg ausschliesslich über die mrmac Stackmachine (alias VM). Wiederholte MRSETUP Statements sind ausdrücklich erlaibt. Anwendung bei Historylisten definiert Reihenfolge im Dialog oder der Speicherung des Workspaces als unsortierte Liste von Window Definitionen.
 

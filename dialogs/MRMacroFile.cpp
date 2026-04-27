@@ -26,11 +26,13 @@
 #include "../mrmac/MRVM.hpp"
 #include "../config/MRDialogPaths.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
+#include "../ui/MRFrame.hpp"
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "../ui/MREditWindow.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
@@ -45,6 +47,10 @@ namespace {
 using mr::dialogs::ensureMrmacExtension;
 using mr::dialogs::hasMrmacExtension;
 using mr::dialogs::normalizeTvPathSeparators;
+
+TFrame *initMrDialogFrame(TRect bounds) {
+	return new MRFrame(bounds);
+}
 
 class MacroManagerActivationSink {
   public:
@@ -66,6 +72,9 @@ enum : ushort {
 	cmMRMacroManagerPlayback,
 	cmMRMacroManagerOpenEditor
 };
+
+constexpr int kMacroManagerVirtualWidth = 92;
+constexpr int kMacroManagerVirtualHeight = 27;
 
 void postMacroDialogError(std::string_view text) {
 	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text,
@@ -340,154 +349,8 @@ std::string rebuildMacroHeader(const std::string &macroName, const std::string &
 	return out.str();
 }
 
-bool keySpecFromEvent(ushort keyCode, ushort controlKeyState, std::string &outToken) {
-	struct ComboSpec {
-		const char *prefix;
-		ushort mods;
-	};
-	struct NamedKeySpec {
-		const char *token;
-		ushort code;
-	};
-	static const ComboSpec combos[] = {{"", 0},
-	                                   {"Shft", kbShift},
-	                                   {"Ctrl", kbCtrlShift},
-	                                   {"Alt", kbAltShift},
-	                                   {"CtrlShft", static_cast<ushort>(kbCtrlShift | kbShift)},
-	                                   {"AltShft", static_cast<ushort>(kbAltShift | kbShift)},
-	                                   {"CtrlAlt", static_cast<ushort>(kbCtrlShift | kbAltShift)},
-	                                   {"CtrlAltShft",
-	                                    static_cast<ushort>(kbCtrlShift | kbAltShift | kbShift)}};
-	static const NamedKeySpec named[] = {{"Enter", kbEnter},
-	                                     {"Tab", kbTab},
-	                                     {"Esc", kbEsc},
-	                                     {"Backspace", kbBack},
-	                                     {"Up", kbUp},
-	                                     {"Down", kbDown},
-	                                     {"Left", kbLeft},
-	                                     {"Right", kbRight},
-	                                     {"PgUp", kbPgUp},
-	                                     {"PgDn", kbPgDn},
-	                                     {"Home", kbHome},
-	                                     {"End", kbEnd},
-	                                     {"Ins", kbIns},
-	                                     {"Del", kbDel},
-	                                     {"F1", kbF1},
-	                                     {"F2", kbF2},
-	                                     {"F3", kbF3},
-	                                     {"F4", kbF4},
-	                                     {"F5", kbF5},
-	                                     {"F6", kbF6},
-	                                     {"F7", kbF7},
-	                                     {"F8", kbF8},
-	                                     {"F9", kbF9},
-	                                     {"F10", kbF10},
-	                                     {"F11", kbF11},
-	                                     {"F12", kbF12}};
-	TKey pressed(keyCode, controlKeyState);
-
-	for (const ComboSpec &combo : combos)
-		for (const NamedKeySpec &entry : named)
-			if (pressed == TKey(entry.code, combo.mods)) {
-				outToken = "<";
-				outToken += combo.prefix;
-				outToken += entry.token;
-				outToken += ">";
-				return true;
-			}
-
-	for (const ComboSpec &combo : combos) {
-		for (char c = 'A'; c <= 'Z'; ++c)
-			if (pressed == TKey(static_cast<ushort>(c), combo.mods)) {
-				outToken = "<";
-				outToken += combo.prefix;
-				outToken.push_back(c);
-				outToken += ">";
-				return true;
-			}
-		for (char c = '0'; c <= '9'; ++c)
-			if (pressed == TKey(static_cast<ushort>(c), combo.mods)) {
-				outToken = "<";
-				outToken += combo.prefix;
-				outToken.push_back(c);
-				outToken += ">";
-				return true;
-			}
-	}
-
-	if (keyCode != kbNoKey && keyCode < 256 && std::isprint(static_cast<unsigned char>(keyCode)) != 0) {
-		outToken = "<";
-		outToken.push_back(static_cast<char>(keyCode));
-		outToken += ">";
-		return true;
-	}
-	return false;
-}
-
-class TBindKeyCaptureDialog : public MRDialogFoundation {
-  public:
-	TBindKeyCaptureDialog()
-	    : TWindowInit(&TDialog::initFrame),
-	      MRDialogFoundation(centeredSetupDialogRect(50, 8), "Bind Macro Key", 50, 8),
-	      captureAccepted(false), capturedKeyCode(kbNoKey), capturedControlState(0) {
-		insert(new TStaticText(TRect(2, 2, 48, 6), "Press key to bind macro.\nEsc = cancel."));
-	}
-
-	void handleEvent(TEvent &event) override {
-		if (event.what == evKeyDown) {
-			TKey key(event.keyDown);
-			if (key == TKey(kbEsc)) {
-				endModal(cmCancel);
-				clearEvent(event);
-				return;
-			}
-			captureAccepted = true;
-			capturedKeyCode = event.keyDown.keyCode;
-			capturedControlState = event.keyDown.controlKeyState;
-			endModal(cmOK);
-			clearEvent(event);
-			return;
-		}
-		MRDialogFoundation::handleEvent(event);
-	}
-
-	bool captured() const noexcept {
-		return captureAccepted;
-	}
-	ushort keyCode() const noexcept {
-		return capturedKeyCode;
-	}
-	ushort controlState() const noexcept {
-		return capturedControlState;
-	}
-
-  private:
-	bool captureAccepted;
-	ushort capturedKeyCode;
-	ushort capturedControlState;
-};
-
 bool captureBindingKeySpec(std::string &keySpec) {
-	TBindKeyCaptureDialog *dialog = new TBindKeyCaptureDialog();
-	ushort result;
-
-	keySpec.clear();
-	if (dialog == nullptr)
-		return false;
-	dialog->finalizeLayout();
-	result = TProgram::deskTop->execView(dialog);
-	bool captured = dialog->captured();
-	ushort keyCode = dialog->keyCode();
-	ushort controlState = dialog->controlState();
-	TObject::destroy(dialog);
-
-	if (result == cmCancel || !captured)
-		return true;
-	if (!keySpecFromEvent(keyCode, controlState, keySpec)) {
-		postMacroDialogError("Unsupported key combination.");
-		return false;
-	}
-	return true;
+	return mrCaptureBindingKeySpec("Bind Macro Key", "Press key to bind macro.\nEsc = cancel.", keySpec);
 }
 
 bool rebindMacroFileKey(const MacroFileEntry &entry, const std::string &keySpec, std::string &errorText) {
@@ -527,9 +390,9 @@ bool rebindMacroFileKey(const MacroFileEntry &entry, const std::string &keySpec,
 	}
 	if (!mrvmLoadMacroFile(entry.path, &errorText))
 		return false;
-	rememberLoadDialogPath(entry.path.c_str());
+	rememberLoadDialogPath(MRDialogHistoryScope::MacroFile, entry.path.c_str());
 	return true;
-}
+	}
 
 bool openMacroSourceInEditor(const std::string &path) {
 	MREditWindow *target = findReusableEmptyWindow(currentEditWindow());
@@ -663,39 +526,58 @@ class MacroManagerListView : public TListViewer {
 class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivationSink {
   public:
 	MacroManagerDialog()
-	    : TWindowInit(&TDialog::initFrame),
-	      MRDialogFoundation(centeredBounds(), "MACRO MANAGER", centeredBounds().b.x - centeredBounds().a.x,
-	                         centeredBounds().b.y - centeredBounds().a.y),
+	    : TWindowInit(initMrDialogFrame),
+	      MRDialogFoundation(centeredSetupDialogRect(kMacroManagerVirtualWidth, kMacroManagerVirtualHeight),
+	                         "MACRO MANAGER", kMacroManagerVirtualWidth, kMacroManagerVirtualHeight,
+	                         initMrDialogFrame),
 	      directoryPath(defaultMacroDirectoryPath()), macroListView(nullptr),
 	      macroScrollBar(nullptr), autoexecListView(nullptr), autoexecScrollBar(nullptr) {
-		int width = size.x;
-		int height = size.y;
+		const int width = kMacroManagerVirtualWidth;
+		const int height = kMacroManagerVirtualHeight;
 		const int gap = 2;
+		const std::array topButtons{
+		    mr::dialogs::DialogButtonSpec{"~C~reate", cmMRMacroManagerCreate, bfNormal},
+		    mr::dialogs::DialogButtonSpec{"De~l~ete", cmMRMacroManagerDelete, bfNormal},
+		    mr::dialogs::DialogButtonSpec{"C~o~py", cmMRMacroManagerCopy, bfNormal},
+		    mr::dialogs::DialogButtonSpec{"~E~dit", cmMRMacroManagerEdit, bfNormal},
+		    mr::dialogs::DialogButtonSpec{"~B~ind", cmMRMacroManagerBind, bfNormal}};
+		const std::array addAutoexecButton{
+		    mr::dialogs::DialogButtonSpec{"~A~dd", cmMRMacroManagerAddAutoexec, bfNormal}};
+		const std::array removeAutoexecButton{
+		    mr::dialogs::DialogButtonSpec{"~R~emove", cmMRMacroManagerRemoveAutoexec, bfNormal}};
+		const std::array bottomButtons{
+		    mr::dialogs::DialogButtonSpec{"~P~layback", cmMRMacroManagerPlayback, bfDefault},
+		    mr::dialogs::DialogButtonSpec{"~D~one", cmCancel, bfNormal},
+		    mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+		const int uniformButtonWidth =
+		    std::max({mr::dialogs::measureUniformButtonRow(topButtons, gap).buttonWidth,
+		              mr::dialogs::measureUniformButtonRow(addAutoexecButton, 0).buttonWidth,
+		              mr::dialogs::measureUniformButtonRow(removeAutoexecButton, 0).buttonWidth,
+		              mr::dialogs::measureUniformButtonRow(bottomButtons, gap).buttonWidth});
+		const mr::dialogs::DialogButtonRowMetrics topMetrics =
+		    mr::dialogs::measureUniformButtonRow(topButtons, gap, uniformButtonWidth);
+		const mr::dialogs::DialogButtonRowMetrics addAutoexecMetrics =
+		    mr::dialogs::measureUniformButtonRow(addAutoexecButton, 0, uniformButtonWidth);
+		const mr::dialogs::DialogButtonRowMetrics removeAutoexecMetrics =
+		    mr::dialogs::measureUniformButtonRow(removeAutoexecButton, 0, uniformButtonWidth);
+		const mr::dialogs::DialogButtonRowMetrics bottomMetrics =
+		    mr::dialogs::measureUniformButtonRow(bottomButtons, gap, uniformButtonWidth);
 		const int leftListLeft = 3;
 		const int leftListRight = 52;
 		const int centerLeft = leftListRight + 1;
 		const int centerRight = centerLeft + 12;
 		const int rightListLeft = centerRight + 1;
 		const int rightListRight = width - 4;
-		const int listTop = 7;
+		const int listTop = 6;
 		const int listBottom = height - 4;
-		const int row1Width = 12 + gap + 12 + gap + 10 + gap + 10 + gap + 10;
-		const int row1Left = 3 + std::max(0, (width - 6 - row1Width) / 2);
-		const int bottomWidth = 16 + gap + 13 + gap + 12;
-		const int bottomLeft = 3 + std::max(0, (width - 6 - bottomWidth) / 2);
+		const int topLeft = 3 + std::max(0, (width - 6 - topMetrics.rowWidth) / 2);
+		const int addAutoexecLeft = centerLeft +
+		                            std::max(0, (12 - addAutoexecMetrics.rowWidth) / 2);
+		const int removeAutoexecLeft = centerLeft +
+		                               std::max(0, (12 - removeAutoexecMetrics.rowWidth) / 2);
+		const int bottomLeft = 3 + std::max(0, (width - 6 - bottomMetrics.rowWidth) / 2);
 
-		insert(new TButton(TRect(row1Left, 2, row1Left + 12, 4), "~C~reate", cmMRMacroManagerCreate,
-		                   bfNormal));
-		insert(new TButton(TRect(row1Left + 12 + gap, 2, row1Left + 12 + gap + 12, 4), "De~l~ete",
-		                   cmMRMacroManagerDelete, bfNormal));
-		insert(new TButton(TRect(row1Left + 12 + gap + 12 + gap, 2, row1Left + 12 + gap + 12 + gap + 10, 4),
-		                   "C~o~py",
-		                   cmMRMacroManagerCopy, bfNormal));
-		insert(new TButton(TRect(row1Left + 12 + gap + 12 + gap + 10 + gap, 2,
-		                         row1Left + 12 + gap + 12 + gap + 10 + gap + 10, 4),
-		                   "~E~dit", cmMRMacroManagerEdit, bfNormal));
-		insert(new TButton(TRect(row1Left + row1Width - 10, 2, row1Left + row1Width, 4), "~B~ind",
-		                   cmMRMacroManagerBind, bfNormal));
+		mr::dialogs::insertUniformButtonRow(*this, topLeft, 2, gap, topButtons, uniformButtonWidth);
 
 		insert(new TStaticText(TRect(leftListLeft, 5, leftListLeft + 8, 6), "Macros:"));
 		insert(new TStaticText(TRect(rightListLeft, 5, rightListLeft + 10, 6), "Autoexec:"));
@@ -714,17 +596,11 @@ class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivat
 		                             std::vector<std::string>(), std::vector<bool>(), *this, true);
 		insert(autoexecListView);
 
-		insert(new TButton(TRect(centerLeft, 11, centerRight, 13), "~A~dd", cmMRMacroManagerAddAutoexec, bfNormal));
-		insert(new TButton(TRect(centerLeft, 14, centerRight, 16), "~R~emove", cmMRMacroManagerRemoveAutoexec,
-		                   bfNormal));
-
-		insert(new TButton(TRect(bottomLeft, height - 3, bottomLeft + 16, height - 1), "~P~layback",
-		                   cmMRMacroManagerPlayback, bfDefault));
-		insert(new TButton(TRect(bottomLeft + 16 + gap, height - 3, bottomLeft + 16 + gap + 13, height - 1),
-		                   "~D~one", cmCancel, bfNormal));
-		insert(new TButton(TRect(bottomLeft + 16 + gap + 13 + gap, height - 3, bottomLeft + bottomWidth,
-		                         height - 1),
-		                   "~H~elp", cmHelp, bfNormal));
+		mr::dialogs::insertUniformButtonRow(*this, addAutoexecLeft, 11, 0, addAutoexecButton, uniformButtonWidth);
+		mr::dialogs::insertUniformButtonRow(*this, removeAutoexecLeft, 14, 0, removeAutoexecButton,
+		                                    uniformButtonWidth);
+		mr::dialogs::insertUniformButtonRow(*this, bottomLeft, height - 3, gap, bottomButtons,
+		                                    uniformButtonWidth);
 
 		loadAutoexecEntries();
 		refreshEntries(-1);
@@ -870,15 +746,6 @@ class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivat
 	}
 
   private:
-	static TRect centeredBounds() {
-		TRect desk = TProgram::deskTop->getExtent();
-		int width = std::min(92, std::max(84, desk.b.x - desk.a.x - 4));
-		int height = std::min(27, std::max(24, desk.b.y - desk.a.y - 2));
-		int left = desk.a.x + (desk.b.x - desk.a.x - width) / 2;
-		int top = desk.a.y + (desk.b.y - desk.a.y - height) / 2;
-		return TRect(left, top, left + width, top + height);
-	}
-
 	int selectedIndex() const {
 		if (macroListView == nullptr)
 			return -1;
@@ -1088,7 +955,7 @@ class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivat
 			postMacroDialogError("Unable to create macro file: " + path);
 			return;
 		}
-		rememberLoadDialogPath(path.c_str());
+		rememberLoadDialogPath(MRDialogHistoryScope::MacroFile, path.c_str());
 		openPathValue = path;
 		endModal(cmMRMacroManagerOpenEditor);
 	}
@@ -1224,12 +1091,13 @@ bool runMacroFileDialog() {
 	char fileName[FileNameBufferSize];
 	ushort dialogResult;
 
-	initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.mrmac");
-	dialogResult = mr::dialogs::execDialogRawWithData(
-	    new TFileDialog("*.mrmac", "Load Macro File", "~N~ame", fdOpenButton, kFileDialogHistoryId), fileName);
+	mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::MacroFile, fileName, sizeof(fileName),
+	                                "*.mrmac");
+	dialogResult = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::MacroFile,
+	                                                              "*.mrmac", "Load Macro File",
+	                                                              "~N~ame", fdOpenButton, fileName);
 	if (dialogResult == cmCancel)
 		return false;
-	rememberLoadDialogPath(fileName);
 	return runMacroFileByPath(fileName);
 }
 
@@ -1242,6 +1110,7 @@ bool runMacroManagerDialog() {
 	if (dialog == nullptr)
 		return false;
 	dialog->finalizeLayout();
+	dialog->scrollToOrigin();
 	result = TProgram::deskTop->execView(dialog);
 	openPath = dialog->openPath();
 	playbackPath = dialog->playbackPath();

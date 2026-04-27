@@ -23,6 +23,7 @@ class MRMenuBar : public TMenuBar {
 	MRMenuBar(const TRect &r, TSubMenu &aMenu);
 	~MRMenuBar() override;
 
+	void handleEvent(TEvent &event) override;
 	virtual void draw() override;
 	void tickMarquee();
 	void setPersistentBlocksMenuState(bool enabled);

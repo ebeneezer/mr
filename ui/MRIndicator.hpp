@@ -97,19 +97,27 @@ class MRIndicator : public TIndicator {
 	using TaskOverviewProvider = std::function<std::vector<std::string>()>;
 
 	MRIndicator(const TRect &bounds) noexcept
-	    : TIndicator(bounds), mReadOnly(false), mDisplayColumn(0), mDisplayLine(0),
-	      mTaskCount(0), mTaskDisplayCount(0), mIndicatorId(allocateIndicatorId()), mBlinkGeneration(0),
+	    : TIndicator(bounds), mReadOnly(false), mInsertMode(false), mInsertModeDisplayState(false),
+	      mWordWrap(false), mWordWrapDisplayState(false), mDisplayColumn(0), mDisplayLine(0),
+	      mTaskCount(0), mTaskDisplayCount(0), mIndicatorId(allocateIndicatorId()),
+	      mBlinkGeneration(0), mInsertBlinkGeneration(0), mWordWrapBlinkGeneration(0),
 	      mTaskBlinkGeneration(0), mReadOnlyBlinkActive(false), mReadOnlyBlinkVisible(false),
+	      mInsertModeInitialized(false), mInsertBlinkActive(false), mInsertBlinkVisible(false),
+	      mWordWrapInitialized(false), mWordWrapBlinkActive(false), mWordWrapBlinkVisible(false),
 	      mTaskBlinkActive(false), mTaskBlinkVisible(false), mStatusNoticeGeneration(0),
 	      mStatusNoticeActive(false), mStatusNoticeText(), mStatusNoticeKind(NoticeKind::Info),
-	      mTaskOverviewProvider(), mTaskOverviewPopup(nullptr), mReadOnlyBlinkUntil(), mTaskBlinkUntil(),
-	      mTaskBlinkTaskId(0), mReadOnlyBlinkTaskId(0), mStatusNoticeTaskId(0) {
+	      mTaskOverviewProvider(), mTaskOverviewPopup(nullptr), mReadOnlyBlinkUntil(),
+	      mInsertBlinkUntil(), mWordWrapBlinkUntil(), mTaskBlinkUntil(), mTaskBlinkTaskId(0),
+	      mReadOnlyBlinkTaskId(0), mInsertBlinkTaskId(0), mWordWrapBlinkTaskId(0),
+	      mStatusNoticeTaskId(0) {
 		registerIndicator(this);
 	}
 
 	virtual ~MRIndicator() override {
 		hideTaskOverview();
 		cancelReadOnlyBlinkChain(false);
+		cancelInsertBlinkChain(false);
+		cancelWordWrapBlinkChain(false);
 		cancelTaskBlinkChain(false);
 		unregisterIndicator(mIndicatorId);
 	}
@@ -188,6 +196,36 @@ class MRIndicator : public TIndicator {
 		}
 	}
 
+	void setWordWrap(bool wordWrap) {
+		if (!mWordWrapInitialized) {
+			mWordWrapInitialized = true;
+			mWordWrap = wordWrap;
+			mWordWrapDisplayState = wordWrap;
+			return;
+		}
+		if (mWordWrap == wordWrap)
+			return;
+		bool wasWordWrap = mWordWrap;
+		mWordWrap = wordWrap;
+		mWordWrapDisplayState = mWordWrap || wasWordWrap;
+		startWordWrapBlink();
+	}
+
+	void setInsertMode(bool insertMode) {
+		if (!mInsertModeInitialized) {
+			mInsertModeInitialized = true;
+			mInsertMode = insertMode;
+			mInsertModeDisplayState = insertMode;
+			return;
+		}
+		if (mInsertMode == insertMode)
+			return;
+		bool wasInsertMode = mInsertMode;
+		mInsertMode = insertMode;
+		mInsertModeDisplayState = mInsertMode || wasInsertMode;
+		startInsertBlink();
+	}
+
 	void setTaskCount(std::size_t taskCount) {
 		if (mTaskCount != taskCount) {
 			std::size_t previousDisplayedCount = mTaskDisplayCount;
@@ -250,12 +288,28 @@ class MRIndicator : public TIndicator {
 		return mReadOnly && (!mReadOnlyBlinkActive || mReadOnlyBlinkVisible);
 	}
 
+	bool shouldDrawInsertMarker() const noexcept {
+		return mInsertModeDisplayState && (!mInsertBlinkActive || mInsertBlinkVisible);
+	}
+
+	bool shouldDrawWordWrapMarker() const noexcept {
+		return mWordWrapDisplayState && (!mWordWrapBlinkActive || mWordWrapBlinkVisible);
+	}
+
 	bool shouldDrawTaskMarker() const noexcept {
 		return mTaskDisplayCount != 0 && (!mTaskBlinkActive || mTaskBlinkVisible);
 	}
 
 	bool hasReadOnlyMarkerSlot() const noexcept {
 		return mReadOnly;
+	}
+
+	bool hasInsertMarkerSlot() const noexcept {
+		return mInsertModeDisplayState;
+	}
+
+	bool hasWordWrapMarkerSlot() const noexcept {
+		return mWordWrapDisplayState;
 	}
 
 	bool hasTaskMarkerSlot() const noexcept {
@@ -450,6 +504,20 @@ class MRIndicator : public TIndicator {
 		scheduleReadOnlyBlinkTick(false);
 	}
 
+	void startInsertBlink() {
+		if (mInsertBlinkTaskId != 0) {
+			mr::coprocessor::globalCoprocessor().cancelTask(mInsertBlinkTaskId);
+			mInsertBlinkTaskId = 0;
+		}
+		++mInsertBlinkGeneration;
+		mInsertBlinkActive = true;
+		mInsertBlinkVisible = true;
+		mInsertBlinkUntil = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+		drawView();
+		redrawFrame();
+		scheduleInsertBlinkTick(false);
+	}
+
 	void cancelReadOnlyBlinkChain(bool redraw) {
 		++mBlinkGeneration;
 		mReadOnlyBlinkActive = false;
@@ -466,6 +534,58 @@ class MRIndicator : public TIndicator {
 
 	void stopReadOnlyBlink() {
 		cancelReadOnlyBlinkChain(true);
+	}
+
+	void cancelInsertBlinkChain(bool redraw) {
+		++mInsertBlinkGeneration;
+		mInsertBlinkActive = false;
+		mInsertBlinkVisible = true;
+		if (mInsertBlinkTaskId != 0) {
+			mr::coprocessor::globalCoprocessor().cancelTask(mInsertBlinkTaskId);
+			mInsertBlinkTaskId = 0;
+		}
+		mInsertModeDisplayState = mInsertMode;
+		if (redraw) {
+			drawView();
+			redrawFrame();
+		}
+	}
+
+	void stopInsertBlink() {
+		cancelInsertBlinkChain(true);
+	}
+
+	void startWordWrapBlink() {
+		if (mWordWrapBlinkTaskId != 0) {
+			mr::coprocessor::globalCoprocessor().cancelTask(mWordWrapBlinkTaskId);
+			mWordWrapBlinkTaskId = 0;
+		}
+		++mWordWrapBlinkGeneration;
+		mWordWrapBlinkActive = true;
+		mWordWrapBlinkVisible = true;
+		mWordWrapBlinkUntil = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+		drawView();
+		redrawFrame();
+		scheduleWordWrapBlinkTick(false);
+	}
+
+	void cancelWordWrapBlinkChain(bool redraw) {
+		++mWordWrapBlinkGeneration;
+		mWordWrapBlinkActive = false;
+		mWordWrapBlinkVisible = true;
+		if (mWordWrapBlinkTaskId != 0) {
+			mr::coprocessor::globalCoprocessor().cancelTask(mWordWrapBlinkTaskId);
+			mWordWrapBlinkTaskId = 0;
+		}
+		mWordWrapDisplayState = mWordWrap;
+		if (redraw) {
+			drawView();
+			redrawFrame();
+		}
+	}
+
+	void stopWordWrapBlink() {
+		cancelWordWrapBlinkChain(true);
 	}
 
 	void startTaskBlink() {
@@ -598,9 +718,83 @@ class MRIndicator : public TIndicator {
 		    });
 	}
 
+	void scheduleInsertBlinkTick(bool nextVisible) {
+		const std::size_t generation = mInsertBlinkGeneration;
+		const std::size_t indicatorId = mIndicatorId;
+		mInsertBlinkTaskId = mr::coprocessor::globalCoprocessor().submit(
+		    mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::IndicatorBlink, 0, generation,
+		    "indicator-blink-insert",
+		    [indicatorId, generation, nextVisible](const mr::coprocessor::TaskInfo &info,
+		                                           std::stop_token stopToken) {
+			    mr::coprocessor::Result result;
+			    result.task = info;
+			    for (int step = 0; step < kBlinkSlicesPerTick; ++step) {
+				    if (stopToken.stop_requested() || info.cancelRequested()) {
+					    result.status = mr::coprocessor::TaskStatus::Cancelled;
+					    return result;
+				    }
+				    std::this_thread::sleep_for(kBlinkSlice);
+			    }
+			    result.status = mr::coprocessor::TaskStatus::Completed;
+			    result.payload = std::make_shared<mr::coprocessor::IndicatorBlinkPayload>(
+			        indicatorId, generation, nextVisible, mr::coprocessor::IndicatorBlinkChannel::Insert);
+			    return result;
+		    });
+	}
+
+	void scheduleWordWrapBlinkTick(bool nextVisible) {
+		const std::size_t generation = mWordWrapBlinkGeneration;
+		const std::size_t indicatorId = mIndicatorId;
+		mWordWrapBlinkTaskId = mr::coprocessor::globalCoprocessor().submit(
+		    mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::IndicatorBlink, 0, generation,
+		    "indicator-blink-wordwrap",
+		    [indicatorId, generation, nextVisible](const mr::coprocessor::TaskInfo &info,
+		                                           std::stop_token stopToken) {
+			    mr::coprocessor::Result result;
+			    result.task = info;
+			    for (int step = 0; step < kBlinkSlicesPerTick; ++step) {
+				    if (stopToken.stop_requested() || info.cancelRequested()) {
+					    result.status = mr::coprocessor::TaskStatus::Cancelled;
+					    return result;
+				    }
+				    std::this_thread::sleep_for(kBlinkSlice);
+			    }
+			    result.status = mr::coprocessor::TaskStatus::Completed;
+			    result.payload = std::make_shared<mr::coprocessor::IndicatorBlinkPayload>(
+			        indicatorId, generation, nextVisible, mr::coprocessor::IndicatorBlinkChannel::WordWrap);
+			    return result;
+		    });
+	}
+
 	bool applyBlinkUpdateImpl(mr::coprocessor::IndicatorBlinkChannel channel, std::size_t generation,
 	                          bool visible) {
 		switch (channel) {
+			case mr::coprocessor::IndicatorBlinkChannel::Insert:
+				if (generation != mInsertBlinkGeneration || !mInsertBlinkActive)
+					return false;
+				mInsertBlinkTaskId = 0;
+				if (std::chrono::steady_clock::now() >= mInsertBlinkUntil) {
+					stopInsertBlink();
+					return true;
+				}
+				mInsertBlinkVisible = visible;
+				drawView();
+				redrawFrame();
+				scheduleInsertBlinkTick(!visible);
+				return true;
+			case mr::coprocessor::IndicatorBlinkChannel::WordWrap:
+				if (generation != mWordWrapBlinkGeneration || !mWordWrapBlinkActive)
+					return false;
+				mWordWrapBlinkTaskId = 0;
+				if (std::chrono::steady_clock::now() >= mWordWrapBlinkUntil) {
+					stopWordWrapBlink();
+					return true;
+				}
+				mWordWrapBlinkVisible = visible;
+				drawView();
+				redrawFrame();
+				scheduleWordWrapBlinkTick(!visible);
+				return true;
 			case mr::coprocessor::IndicatorBlinkChannel::TaskMarker:
 				if (generation != mTaskBlinkGeneration || !mTaskBlinkActive)
 					return false;
@@ -638,15 +832,27 @@ class MRIndicator : public TIndicator {
 	}
 
 	bool mReadOnly;
+	bool mInsertMode;
+	bool mInsertModeDisplayState;
+	bool mWordWrap;
+	bool mWordWrapDisplayState;
 	unsigned long mDisplayColumn;
 	unsigned long mDisplayLine;
 	std::size_t mTaskCount;
 	std::size_t mTaskDisplayCount;
 	std::size_t mIndicatorId;
 	std::size_t mBlinkGeneration;
+	std::size_t mInsertBlinkGeneration;
+	std::size_t mWordWrapBlinkGeneration;
 	std::size_t mTaskBlinkGeneration;
 	bool mReadOnlyBlinkActive;
 	bool mReadOnlyBlinkVisible;
+	bool mInsertModeInitialized;
+	bool mInsertBlinkActive;
+	bool mInsertBlinkVisible;
+	bool mWordWrapInitialized;
+	bool mWordWrapBlinkActive;
+	bool mWordWrapBlinkVisible;
 	bool mTaskBlinkActive;
 	bool mTaskBlinkVisible;
 	std::size_t mStatusNoticeGeneration;
@@ -656,9 +862,13 @@ class MRIndicator : public TIndicator {
 	TaskOverviewProvider mTaskOverviewProvider;
 	MRTaskOverviewPopup *mTaskOverviewPopup;
 	std::chrono::steady_clock::time_point mReadOnlyBlinkUntil;
+	std::chrono::steady_clock::time_point mInsertBlinkUntil;
+	std::chrono::steady_clock::time_point mWordWrapBlinkUntil;
 	std::chrono::steady_clock::time_point mTaskBlinkUntil;
 	std::uint64_t mTaskBlinkTaskId;
 	std::uint64_t mReadOnlyBlinkTaskId;
+	std::uint64_t mInsertBlinkTaskId;
+	std::uint64_t mWordWrapBlinkTaskId;
 	std::uint64_t mStatusNoticeTaskId;
 };
 

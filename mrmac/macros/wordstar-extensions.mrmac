@@ -1,0 +1,7 @@
+$MACRO clone_line_above;
+DEF_CHAR(CurrentCh);
+UP;
+CurrentCh := CUR_CHAR;
+DOWN;
+TEXT(CurrentCh);
+END_MACRO;

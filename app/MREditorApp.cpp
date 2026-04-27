@@ -308,6 +308,13 @@ bool keyInTokenFromEvent(ushort keyCode, ushort controlKeyState, std::string &ou
 			}
 	}
 
+	if (keyCode >= 1 && keyCode <= 26 && (controlKeyState & (kbAltShift | kbPaste)) == 0) {
+		outToken = "<Ctrl";
+		outToken.push_back(static_cast<char>('A' + keyCode - 1));
+		outToken += ">";
+		return true;
+	}
+
 	if (keyCode != kbNoKey && keyCode < 256 && std::isprint(static_cast<unsigned char>(keyCode)) != 0) {
 		outToken = "<";
 		outToken.push_back(static_cast<char>(keyCode));
@@ -578,10 +585,8 @@ ushort mrEditorDialog(int dialog, ...) {
 			va_end(arg);
 			if (target == nullptr)
 				return cmCancel;
-			result = execDialogWithData(
-			    new TFileDialog("*.*", "Save file as", "~N~ame", fdOKButton, kFileDialogHistoryId), target);
-			if (result != cmCancel)
-				rememberLoadDialogPath(target);
+			mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::EditorSaveAs, target, MAXPATH, "*.*", target);
+			result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::EditorSaveAs, "*.*", "Save file as", "~N~ame", fdOKButton, target);
 			return result;
 		}
 		default:
@@ -644,8 +649,11 @@ bool loadStartupSettingsMacro(const std::string &overridePath, std::string *erro
 		if (!summary.empty())
 			mrLogMessage(("Settings normalization details: " + summary).c_str());
 	}
-	if (!applySettingsSourceViaVm(settingsPath, canonicalSource, errorMessage)) {
-		mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings VM apply failed.");
+	loadError.clear();
+	if (!applySettingsSourceViaVm(settingsPath, canonicalSource, &loadError)) {
+		if (errorMessage != nullptr)
+			*errorMessage = loadError;
+		mrLogMessage(loadError.empty() ? "Settings VM apply failed." : loadError.c_str());
 		return false;
 	}
 
@@ -1178,6 +1186,8 @@ void MREditorApp::startKeystrokeRecording() {
 	recordingBlinkToggleAt = std::chrono::steady_clock::now() + kRecordingBlinkInterval;
 	recordedKeySequence.clear();
 	syncRecordingUiState();
+	mr::messageline::postSticky(mr::messageline::Owner::MacroMessage, "recordings started, ALT-F10 ends",
+	                            mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
 	mrLogMessage("Keystroke recording started (Alt-F10 to stop).");
 }
 
@@ -1326,6 +1336,7 @@ void MREditorApp::stopKeystrokeRecording() {
 	keystrokeRecording = false;
 	recordingMarkerVisible = false;
 	syncRecordingUiState();
+	mr::messageline::clearOwner(mr::messageline::Owner::MacroMessage);
 	mrLogMessage("Keystroke recording stopped.");
 	finalizeKeystrokeRecording();
 	recordedKeySequence.clear();

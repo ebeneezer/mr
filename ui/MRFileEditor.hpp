@@ -20,12 +20,14 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <future>
 #include <iomanip>
 #include <map>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <sys/stat.h>
+#include <thread>
 #include <vector>
 
 #include "MRCoprocessor.hpp"
@@ -237,6 +239,7 @@ class MRFileEditor : public TScroller {
 	}
 
 	void refreshConfiguredVisualSettings() {
+		syncIndicatorVisualSettings();
 		updateMetrics();
 		scheduleSyntaxWarmupIfNeeded();
 		updateIndicator();
@@ -520,6 +523,10 @@ class MRFileEditor : public TScroller {
 		return std::max(1, static_cast<int>(mBufferModel.lineIndex(mBufferModel.cursor())) - delta.y + 1);
 	}
 
+	int visibleViewportRows() const noexcept {
+		return std::max(1, visibleTextRows());
+	}
+
 	const MRTextBufferModel &bufferModel() const noexcept {
 		return mBufferModel;
 	}
@@ -531,7 +538,15 @@ class MRFileEditor : public TScroller {
 	void syncFromEditorState(bool = true) {
 		refreshSyntaxContext();
 		updateMetrics();
+		syncIndicatorVisualSettings();
 		updateIndicator();
+	}
+
+	void syncIndicatorVisualSettings() {
+		if (auto *mrIndicator = dynamic_cast<MRIndicator *>(mIndicator)) {
+			mrIndicator->setInsertMode(mInsertMode);
+			mrIndicator->setWordWrap(configuredEditSetupSettings().wordWrap);
+		}
 	}
 
 	void notifyWindowTaskStateChanged() {
@@ -743,7 +758,8 @@ class MRFileEditor : public TScroller {
 		if (hasPersistentFileName())
 			strnzcpy(saveName, fileName, sizeof(saveName));
 		else
-			initRememberedLoadDialogPath(saveName, sizeof(saveName), "*.*");
+			initRememberedLoadDialogPath(MRDialogHistoryScope::EditorSaveAs, saveName,
+			                             sizeof(saveName), "*.*");
 		if (TEditor::editorDialog(edSaveAs, saveName) == cmCancel)
 			return False;
 		fexpand(saveName);
@@ -751,7 +767,30 @@ class MRFileEditor : public TScroller {
 			return False;
 		if (!writeDocumentToPath(saveName))
 			return False;
-		rememberLoadDialogPath(saveName);
+		rememberLoadDialogPath(MRDialogHistoryScope::EditorSaveAs, saveName);
+		setPersistentFileName(saveName);
+		if (owner != nullptr)
+			message((TView *)owner, evBroadcast, cmUpdateTitle, 0);
+		setDocumentModified(false);
+		return True;
+	}
+
+	Boolean saveAsWithoutOverwritePrompt() noexcept {
+		char saveName[MAXPATH];
+
+		if (!canSaveAs())
+			return False;
+		if (hasPersistentFileName())
+			strnzcpy(saveName, fileName, sizeof(saveName));
+		else
+			initRememberedLoadDialogPath(MRDialogHistoryScope::EditorSaveAs, saveName,
+			                             sizeof(saveName), "*.*");
+		if (TEditor::editorDialog(edSaveAs, saveName) == cmCancel)
+			return False;
+		fexpand(saveName);
+		if (!writeDocumentToPath(saveName))
+			return False;
+		rememberLoadDialogPath(MRDialogHistoryScope::EditorSaveAs, saveName);
 		setPersistentFileName(saveName);
 		if (owner != nullptr)
 			message((TView *)owner, evBroadcast, cmUpdateTitle, 0);
@@ -916,12 +955,61 @@ class MRFileEditor : public TScroller {
 		return adoptCommittedDocument(preview, start, start, start, true, &commit.change);
 	}
 
+	bool centerCurrentLine(int leftMargin, int rightMargin) {
+		std::string text;
+		std::string trimmed;
+		const int safeLeftMargin = std::max(1, leftMargin);
+		const int safeRightMargin = std::max(safeLeftMargin, rightMargin);
+		int contentWidth = 0;
+		int padWidth = 0;
+
+		if (mReadOnly)
+			return false;
+		text = lineTextAtOffset(cursorOffset());
+		trimmed = trimAscii(text);
+		if (trimmed.empty())
+			return replaceCurrentLineText(std::string());
+		contentWidth = displayWidthForText(trimmed, configuredTabSize());
+		padWidth = std::max(safeLeftMargin - 1, ((safeRightMargin - contentWidth) / 2));
+		return replaceCurrentLineText(std::string(static_cast<std::size_t>(padWidth), ' ') + trimmed);
+	}
+
+	bool copyCharFromLineAbove() {
+		const std::size_t cursor = cursorOffset();
+		const std::size_t currentLineStart = lineStartOffset(cursor);
+		const std::size_t previousLineStart = prevLineOffset(currentLineStart);
+		const std::size_t previousLineEnd = lineEndOffset(previousLineStart);
+		const int targetColumn = charColumn(currentLineStart, cursor);
+		const std::size_t sourceOffset = charPtrOffset(previousLineStart, targetColumn);
+		char ch = '\0';
+
+		if (mReadOnly || currentLineStart == previousLineStart || sourceOffset >= previousLineEnd)
+			return false;
+		ch = charAtOffset(sourceOffset);
+		if (ch == '\0' || ch == '\r' || ch == '\n')
+			return false;
+		return insertBufferText(std::string(1, ch));
+	}
+
 	bool formatParagraph(int rightMargin) {
+		return formatParagraph(1, rightMargin);
+	}
+
+	bool formatParagraph(int leftMargin, int rightMargin) {
 		if (mReadOnly)
 			return false;
 
 		std::size_t start = mBufferModel.cursor();
 		std::size_t end = start;
+		const int safeLeftMargin = std::max(1, leftMargin);
+		const int safeRightMargin = std::max(safeLeftMargin, rightMargin);
+		const std::size_t indentWidth = static_cast<std::size_t>(safeLeftMargin - 1);
+		const std::size_t contentWidth = static_cast<std::size_t>(std::max(1, safeRightMargin - safeLeftMargin + 1));
+		std::vector<std::string> words;
+		std::string formattedText;
+		std::string currentWord;
+		std::string currentLine;
+		std::size_t currentLineLength = 0;
 
 		while (start > 0) {
 			std::size_t prevLineStart = mBufferModel.lineStart(mBufferModel.prevLine(start));
@@ -948,36 +1036,42 @@ class MRFileEditor : public TScroller {
 			paragraphText += chunk;
 			current = mBufferModel.document().nextLine(current);
 		}
-
-		std::string formattedText;
-		std::string word;
-		std::size_t currentLineLength = 0;
-
 		for (std::size_t i = 0; i <= paragraphText.length(); ++i) {
 			if (i == paragraphText.length() || std::isspace(static_cast<unsigned char>(paragraphText[i]))) {
-				if (!word.empty()) {
-					if (currentLineLength > 0 && currentLineLength + 1 + word.length() > static_cast<std::size_t>(rightMargin)) {
-						formattedText += "\n";
-						currentLineLength = 0;
-					} else if (currentLineLength > 0) {
-						formattedText += " ";
-						currentLineLength++;
-					}
-					formattedText += word;
-					currentLineLength += word.length();
-					word.clear();
+				if (!currentWord.empty()) {
+					words.push_back(currentWord);
+					currentWord.clear();
 				}
-				if (i < paragraphText.length() && paragraphText[i] == '\n' && i > 0 && paragraphText[i-1] == '\n') {
-					formattedText += "\n\n";
-					currentLineLength = 0;
-				}
-			} else {
-				word += paragraphText[i];
+				continue;
 			}
+			currentWord.push_back(paragraphText[i]);
 		}
-
-		if (paragraphText.back() == '\n')
-			formattedText += "\n";
+		if (words.empty())
+			return true;
+		for (const std::string &word : words) {
+			const std::size_t projectedLength = currentLine.empty() ? word.size() : currentLineLength + 1 + word.size();
+			if (!currentLine.empty() && projectedLength > contentWidth) {
+				if (!formattedText.empty())
+					formattedText.push_back('\n');
+				formattedText.append(indentWidth, ' ');
+				formattedText += currentLine;
+				currentLine = word;
+				currentLineLength = word.size();
+				continue;
+			}
+			if (!currentLine.empty()) {
+				currentLine.push_back(' ');
+				++currentLineLength;
+			}
+			currentLine += word;
+			currentLineLength += word.size();
+		}
+		if (!currentLine.empty()) {
+			if (!formattedText.empty())
+				formattedText.push_back('\n');
+			formattedText.append(indentWidth, ' ');
+			formattedText += currentLine;
+		}
 
 		MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "format-paragraph");
 		transaction.replace(MRTextBufferModel::Range(start, end), formattedText);
@@ -992,6 +1086,99 @@ class MRFileEditor : public TScroller {
 		}
 
 		return adoptCommittedDocument(preview, start, start, start, true, &commit.change);
+	}
+
+	bool justifyParagraph(int leftMargin, int rightMargin) {
+		if (mReadOnly)
+			return false;
+
+		std::size_t start = mBufferModel.cursor();
+		std::size_t end = start;
+		const int safeLeftMargin = std::max(1, leftMargin);
+		const int safeRightMargin = std::max(safeLeftMargin, rightMargin);
+		const std::size_t indentWidth = static_cast<std::size_t>(safeLeftMargin - 1);
+		const std::size_t contentWidth = static_cast<std::size_t>(std::max(1, safeRightMargin - safeLeftMargin + 1));
+		std::vector<std::string> words;
+		std::vector<std::vector<std::string>> lines;
+		std::vector<std::string> currentLineWords;
+		std::size_t currentLineLength = 0;
+		std::string paragraphText;
+		std::string currentWord;
+		std::string justifiedText;
+
+		while (start > 0) {
+			std::size_t prevLineStart = mBufferModel.lineStart(mBufferModel.prevLine(start));
+			if (isBlankString(mBufferModel.lineText(prevLineStart)))
+				break;
+			start = prevLineStart;
+		}
+		while (end < mBufferModel.length()) {
+			std::size_t nextLineStart = mBufferModel.nextLine(end);
+			if (isBlankString(mBufferModel.lineText(end)))
+				break;
+			end = nextLineStart;
+		}
+		if (start == end)
+			return true;
+		paragraphText.reserve(end - start);
+		for (std::size_t current = start; current < end; current = mBufferModel.document().nextLine(current))
+			paragraphText += mBufferModel.document().lineText(current);
+		for (std::size_t i = 0; i <= paragraphText.length(); ++i) {
+			if (i == paragraphText.length() || std::isspace(static_cast<unsigned char>(paragraphText[i]))) {
+				if (!currentWord.empty()) {
+					words.push_back(currentWord);
+					currentWord.clear();
+				}
+				continue;
+			}
+			currentWord.push_back(paragraphText[i]);
+		}
+		if (words.empty())
+			return true;
+		for (const std::string &word : words) {
+			const std::size_t projectedLength = currentLineWords.empty() ? word.size() : currentLineLength + 1 + word.size();
+			if (!currentLineWords.empty() && projectedLength > contentWidth) {
+				lines.push_back(currentLineWords);
+				currentLineWords.clear();
+				currentLineLength = 0;
+			}
+			if (!currentLineWords.empty())
+				++currentLineLength;
+			currentLineWords.push_back(word);
+			currentLineLength += word.size();
+		}
+		if (!currentLineWords.empty())
+			lines.push_back(currentLineWords);
+		for (std::size_t lineIndex = 0; lineIndex < lines.size(); ++lineIndex) {
+			const bool lastLine = lineIndex + 1 == lines.size();
+			std::size_t wordsLength = 0;
+			std::string line(indentWidth, ' ');
+
+			for (const std::string &word : lines[lineIndex])
+				wordsLength += word.size();
+			if (lastLine || lines[lineIndex].size() == 1) {
+				for (std::size_t i = 0; i < lines[lineIndex].size(); ++i) {
+					if (i != 0)
+						line.push_back(' ');
+					line += lines[lineIndex][i];
+				}
+			} else {
+				const std::size_t gapCount = lines[lineIndex].size() - 1;
+				const std::size_t totalSpaces = contentWidth > wordsLength ? contentWidth - wordsLength : gapCount;
+				const std::size_t baseGap = totalSpaces / gapCount;
+				const std::size_t extraGap = totalSpaces % gapCount;
+
+				for (std::size_t i = 0; i < lines[lineIndex].size(); ++i) {
+					if (i != 0)
+						line.append(baseGap + (i <= extraGap ? 1 : 0), ' ');
+					line += lines[lineIndex][i];
+				}
+			}
+			if (!justifiedText.empty())
+				justifiedText.push_back('\n');
+			justifiedText += line;
+		}
+		return replaceRangeAndSelect(static_cast<uint>(start), static_cast<uint>(end), justifiedText.data(), static_cast<uint>(justifiedText.size()));
 	}
 
 	bool deleteCharsAtCursor(int count) {
@@ -1993,7 +2180,6 @@ class MRFileEditor : public TScroller {
 			    struct MiniMapLineSample {
 				    std::uint64_t dotColumnBits = 0;
 			    };
-			    std::map<std::size_t, MiniMapLineSample> sampledLineSamples;
 			    std::vector<unsigned char> rowPatterns;
 			    std::vector<std::size_t> rowLineStarts;
 			    std::vector<std::size_t> rowLineEnds;
@@ -2001,6 +2187,9 @@ class MRFileEditor : public TScroller {
 			    const int dotCols = useBraille ? std::max(1, bodyWidth * 2) : std::max(1, bodyWidth);
 			    const std::size_t windowStartLine = samplingWindow.startLine;
 			    const std::size_t windowLineCount = std::max<std::size_t>(1, samplingWindow.lineCount);
+			    const std::size_t totalMiniMapCells =
+			        static_cast<std::size_t>(std::max(1, rowCount)) *
+			        static_cast<std::size_t>(std::max(1, bodyWidth));
 			    std::size_t normalizedTotalLines = std::max<std::size_t>(1, totalLines);
 			    auto shouldStop = [&]() noexcept { return stopToken.stop_requested() || info.cancelRequested(); };
 			    result.task = info;
@@ -2014,74 +2203,73 @@ class MRFileEditor : public TScroller {
 			    rowPatterns.assign(static_cast<std::size_t>(std::max(0, rowCount) * std::max(0, bodyWidth)), 0);
 			    rowLineStarts.assign(static_cast<std::size_t>(std::max(0, rowCount)), 0);
 			    rowLineEnds.assign(static_cast<std::size_t>(std::max(0, rowCount)), 0);
-
-			    auto lineSampleAt = [&](std::size_t lineIndex) -> const MiniMapLineSample & {
-				    auto cached = sampledLineSamples.find(lineIndex);
-				    if (cached != sampledLineSamples.end())
-					    return cached->second;
-				    MiniMapLineSample sample;
-				    if (lineIndex < normalizedTotalLines) {
-					    std::size_t lineStart = snapshot.lineStartByIndex(lineIndex);
-					    std::string lineText = snapshot.lineText(lineStart);
-					    std::size_t index = 0;
-					    int visualColumn = 0;
-					    while (index < lineText.size()) {
-						    std::size_t current = index;
-						    std::size_t next = index;
-						    std::size_t width = 0;
-						    if (!nextDisplayChar(lineText, next, width, visualColumn, tabSize))
-							    break;
-						    unsigned char ch = static_cast<unsigned char>(lineText[current]);
-						    if (std::isspace(ch) == 0) {
-							    const long long c = static_cast<long long>(visualColumn);
-							    const long long w = static_cast<long long>(width);
-							    const long long n = static_cast<long long>(dotCols);
-							    const long long v = static_cast<long long>(viewportWidth);
-							    const int dotColStart = static_cast<int>(c * n / v);
-							    const int dotColEnd = static_cast<int>(((c + w) * n - 1) / v);
-							    for (int dc = std::max(0, dotColStart); dc <= std::min(63, dotColEnd); ++dc)
-								    sample.dotColumnBits |= (1ULL << dc);
-						    }
-						    visualColumn += static_cast<int>(width);
-						    index = next;
-					    }
-				    }
-				    auto inserted = sampledLineSamples.insert(std::make_pair(lineIndex, sample));
-				    return inserted.first->second;
-			    };
-
-			    for (int y = 0; y < rowCount; ++y) {
-				    if (shouldStop()) {
-					    result.status = mr::coprocessor::TaskStatus::Cancelled;
-					    return result;
-				    }
-				    std::pair<std::size_t, std::size_t> lineSpan =
-				        scaledInterval(static_cast<std::size_t>(y), static_cast<std::size_t>(rowCount), windowLineCount);
-				    rowLineStarts[static_cast<std::size_t>(y)] =
-				        std::min(normalizedTotalLines, windowStartLine + lineSpan.first);
-				    rowLineEnds[static_cast<std::size_t>(y)] =
-				        std::min(normalizedTotalLines, windowStartLine + lineSpan.second);
-				    for (int x = 0; x < bodyWidth; ++x) {
-					    unsigned char pattern = 0;
-					    if (useBraille) {
-						    static const unsigned char dotBits[4][2] = {
-						        {0x01, 0x08}, {0x02, 0x10}, {0x04, 0x20}, {0x40, 0x80}};
-						    for (int py = 0; py < 4; ++py) {
-							    std::size_t sampleRow = static_cast<std::size_t>(y * 4 + py);
-							    if (sampleRow >= windowLineCount)
-								    continue;
-							    std::size_t lineIndex =
-							        windowStartLine +
-							        scaledMidpoint(sampleRow, static_cast<std::size_t>(dotRows), windowLineCount);
-							    const MiniMapLineSample &sample = lineSampleAt(lineIndex);
-							    for (int px = 0; px < 2; ++px) {
-								    const int dotColumn = x * 2 + px;
-								    if (dotColumn < 64 && (sample.dotColumnBits & (1ULL << dotColumn)) != 0)
-									    pattern |= dotBits[py][px];
+			    auto renderRows = [&](int yStart, int yEnd) -> bool {
+				    MRTextBufferModel::ReadSnapshot workerSnapshot = snapshot;
+				    std::map<std::size_t, MiniMapLineSample> sampledLineSamples;
+				    auto lineSampleAt = [&](std::size_t lineIndex) -> const MiniMapLineSample & {
+					    auto cached = sampledLineSamples.find(lineIndex);
+					    if (cached != sampledLineSamples.end())
+						    return cached->second;
+					    MiniMapLineSample sample;
+					    if (lineIndex < normalizedTotalLines) {
+						    std::size_t lineStart = workerSnapshot.lineStartByIndex(lineIndex);
+						    std::string lineText = workerSnapshot.lineText(lineStart);
+						    std::size_t index = 0;
+						    int visualColumn = 0;
+						    while (index < lineText.size()) {
+							    std::size_t current = index;
+							    std::size_t next = index;
+							    std::size_t width = 0;
+							    if (!nextDisplayChar(lineText, next, width, visualColumn, tabSize))
+								    break;
+							    unsigned char ch = static_cast<unsigned char>(lineText[current]);
+							    if (std::isspace(ch) == 0) {
+								    const long long c = static_cast<long long>(visualColumn);
+								    const long long w = static_cast<long long>(width);
+								    const long long n = static_cast<long long>(dotCols);
+								    const long long v = static_cast<long long>(viewportWidth);
+								    const int dotColStart = static_cast<int>(c * n / v);
+								    const int dotColEnd = static_cast<int>(((c + w) * n - 1) / v);
+								    for (int dc = std::max(0, dotColStart); dc <= std::min(63, dotColEnd); ++dc)
+									    sample.dotColumnBits |= (1ULL << dc);
 							    }
+							    visualColumn += static_cast<int>(width);
+							    index = next;
 						    }
-					    } else {
-						    if (static_cast<std::size_t>(y) < windowLineCount) {
+					    }
+					    auto inserted = sampledLineSamples.insert(std::make_pair(lineIndex, sample));
+					    return inserted.first->second;
+				    };
+
+				    for (int y = yStart; y < yEnd; ++y) {
+					    if (shouldStop())
+						    return false;
+					    std::pair<std::size_t, std::size_t> lineSpan =
+					        scaledInterval(static_cast<std::size_t>(y), static_cast<std::size_t>(rowCount), windowLineCount);
+					    rowLineStarts[static_cast<std::size_t>(y)] =
+					        std::min(normalizedTotalLines, windowStartLine + lineSpan.first);
+					    rowLineEnds[static_cast<std::size_t>(y)] =
+					        std::min(normalizedTotalLines, windowStartLine + lineSpan.second);
+					    for (int x = 0; x < bodyWidth; ++x) {
+						    unsigned char pattern = 0;
+						    if (useBraille) {
+							    static const unsigned char dotBits[4][2] = {
+							        {0x01, 0x08}, {0x02, 0x10}, {0x04, 0x20}, {0x40, 0x80}};
+							    for (int py = 0; py < 4; ++py) {
+								    std::size_t sampleRow = static_cast<std::size_t>(y * 4 + py);
+								    if (sampleRow >= windowLineCount)
+									    continue;
+								    std::size_t lineIndex =
+								        windowStartLine +
+								        scaledMidpoint(sampleRow, static_cast<std::size_t>(dotRows), windowLineCount);
+								    const MiniMapLineSample &sample = lineSampleAt(lineIndex);
+								    for (int px = 0; px < 2; ++px) {
+									    const int dotColumn = x * 2 + px;
+									    if (dotColumn < 64 && (sample.dotColumnBits & (1ULL << dotColumn)) != 0)
+										    pattern |= dotBits[py][px];
+								    }
+							    }
+						    } else if (static_cast<std::size_t>(y) < windowLineCount) {
 							    std::size_t lineIndex = windowStartLine +
 							                            scaledMidpoint(static_cast<std::size_t>(y),
 							                                           static_cast<std::size_t>(rowCount), windowLineCount);
@@ -2089,10 +2277,39 @@ class MRFileEditor : public TScroller {
 							    if (x < 64 && (sample.dotColumnBits & (1ULL << x)) != 0)
 								    pattern = 1;
 						    }
-					    }
-					    rowPatterns[static_cast<std::size_t>(y * bodyWidth + x)] = pattern;
+						    rowPatterns[static_cast<std::size_t>(y * bodyWidth + x)] = pattern;
 					    }
 				    }
+				    return true;
+			    };
+			    const unsigned hardwareWorkers = std::max(1u, std::thread::hardware_concurrency());
+			    const unsigned workerCount =
+			        totalMiniMapCells >= 512 ? std::min<unsigned>(hardwareWorkers, static_cast<unsigned>(std::max(1, rowCount))) : 1u;
+			    if (workerCount == 1) {
+				    if (!renderRows(0, rowCount)) {
+					    result.status = mr::coprocessor::TaskStatus::Cancelled;
+					    return result;
+				    }
+			    } else {
+				    std::vector<std::future<bool>> workers;
+
+				    workers.reserve(workerCount);
+				    for (unsigned workerIndex = 0; workerIndex < workerCount; ++workerIndex) {
+					    const int yStart = static_cast<int>((static_cast<std::size_t>(workerIndex) * static_cast<std::size_t>(rowCount)) /
+					                                        static_cast<std::size_t>(workerCount));
+					    const int yEnd =
+					        static_cast<int>((static_cast<std::size_t>(workerIndex + 1) * static_cast<std::size_t>(rowCount)) /
+					                         static_cast<std::size_t>(workerCount));
+					    if (yStart >= yEnd)
+						    continue;
+					    workers.push_back(std::async(std::launch::async, [&, yStart, yEnd]() { return renderRows(yStart, yEnd); }));
+				    }
+				    for (std::future<bool> &worker : workers)
+					    if (!worker.get()) {
+						    result.status = mr::coprocessor::TaskStatus::Cancelled;
+						    return result;
+					    }
+			    }
 			    result.status = mr::coprocessor::TaskStatus::Completed;
 			    result.payload = std::make_shared<mr::coprocessor::MiniMapWarmupPayload>(
 			        useBraille, rowCount, bodyWidth, normalizedTotalLines, windowStartLine, windowLineCount,
@@ -2909,6 +3126,12 @@ class MRFileEditor : public TScroller {
 				break;
 			case cmMrTextLowerCaseMenu:
 				convertSelectionToLowerCase();
+				break;
+			case cmMrTextCenterLine:
+				if (!mReadOnly) {
+					int margin = configuredEditSetupSettings().rightMargin;
+					centerCurrentLine(1, margin > 0 ? margin : 78);
+				}
 				break;
 			case cmMrTextReformatParagraph:
 				if (!mReadOnly) {

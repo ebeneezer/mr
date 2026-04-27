@@ -11,6 +11,7 @@
 #include "MRSetupCommon.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -166,17 +167,42 @@ class FileInformationDialog : public MRDialogFoundation {
 
 		header << page.title << "  (" << (pageIndex + 1) << "/" << pageCount << ")";
 		insertStaticLine(this, 2, y++, header.str().c_str());
-		for (std::vector<std::string>::const_iterator it = page.lines.begin(); it != page.lines.end(); ++it, ++y)
-			insertStaticLine(this, 2, y, it->c_str());
-		if (hasPrevInfo)
-			insert(new TButton(TRect(width - 38, height - 3, width - 28, height - 1), "~P~rev",
-			                   cmMrPreviewPrev, bfNormal));
-		if (hasNextInfo)
-			insert(new TButton(TRect(width - 27, height - 3, width - 17, height - 1), "~N~ext",
-			                   cmMrPreviewNext, bfNormal));
-		insert(new TButton(TRect(width - 16, height - 3, width - 2, height - 1), "~D~one", cmOK,
-		                   bfDefault));
-	}
+			for (std::vector<std::string>::const_iterator it = page.lines.begin(); it != page.lines.end(); ++it, ++y) {
+				insertStaticLine(this, 2, y, it->c_str());
+			}
+			if (hasPrevInfo && hasNextInfo) {
+				const std::array buttons{
+				    mr::dialogs::DialogButtonSpec{"~P~rev", cmMrPreviewPrev, bfNormal},
+				    mr::dialogs::DialogButtonSpec{"~N~ext", cmMrPreviewNext, bfNormal},
+				    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}};
+				const mr::dialogs::DialogButtonRowMetrics metrics =
+				    mr::dialogs::measureUniformButtonRow(buttons, 1);
+				const int left = width - 2 - metrics.rowWidth;
+				mr::dialogs::insertUniformButtonRow(*this, left, height - 3, 1, buttons);
+			} else if (hasPrevInfo) {
+				const std::array buttons{
+				    mr::dialogs::DialogButtonSpec{"~P~rev", cmMrPreviewPrev, bfNormal},
+				    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}};
+				const mr::dialogs::DialogButtonRowMetrics metrics =
+				    mr::dialogs::measureUniformButtonRow(buttons, 1);
+				const int left = width - 2 - metrics.rowWidth;
+				mr::dialogs::insertUniformButtonRow(*this, left, height - 3, 1, buttons);
+			} else if (hasNextInfo) {
+				const std::array buttons{
+				    mr::dialogs::DialogButtonSpec{"~N~ext", cmMrPreviewNext, bfNormal},
+				    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}};
+				const mr::dialogs::DialogButtonRowMetrics metrics =
+				    mr::dialogs::measureUniformButtonRow(buttons, 1);
+				const int left = width - 2 - metrics.rowWidth;
+				mr::dialogs::insertUniformButtonRow(*this, left, height - 3, 1, buttons);
+			} else {
+				const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}};
+				const mr::dialogs::DialogButtonRowMetrics metrics =
+				    mr::dialogs::measureUniformButtonRow(buttons, 0);
+				const int left = width - 2 - metrics.rowWidth;
+				mr::dialogs::insertUniformButtonRow(*this, left, height - 3, 0, buttons);
+			}
+		}
 
 	virtual void handleEvent(TEvent &event) override {
 		MRDialogFoundation::handleEvent(event);

@@ -343,6 +343,8 @@ bool mrvmUiSwitchWindow(int index);
 bool mrvmUiSizeCurrentWindow(int x1, int y1, int x2, int y2);
 bool mrvmUiPushMarker();
 bool mrvmUiGetMarker();
+bool mrvmUiSetRandomAccessMark(int index);
+bool mrvmUiGetRandomAccessMark(int index);
 bool mrvmUiBlockBeginLine();
 bool mrvmUiBlockBeginColumn();
 bool mrvmUiBlockBeginStream();

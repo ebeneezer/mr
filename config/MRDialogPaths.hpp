@@ -1,6 +1,8 @@
 #ifndef MRDIALOGPATHS_HPP
 #define MRDIALOGPATHS_HPP
 
+#include "../keymap/MRKeymapProfile.hpp"
+
 #include <array>
 #include <cstddef>
 #include <string>
@@ -329,6 +331,42 @@ enum : unsigned char {
 	kPathDialogHistoryId = 231
 };
 
+enum class MRDialogHistoryScope : unsigned char {
+	General = 0,
+	EditorSaveAs,
+	OpenFile,
+	LoadFile,
+	SaveLogAs,
+	BlockSave,
+	BlockLoad,
+	MacroFile,
+	KeymapProfileLoad,
+	KeymapProfileSave,
+	WorkspaceLoad,
+	WorkspaceSave,
+	SetupSettingsMacro,
+	SetupMacroDirectory,
+	SetupHelpFile,
+	SetupTempDirectory,
+	SetupShellExecutable,
+	SetupLogFile,
+	SetupBackupDirectory,
+	SetupThemeLoad,
+	SetupThemeSave,
+	ExtensionThemeFile,
+	ExtensionPostLoadMacro,
+	ExtensionPreSaveMacro,
+	ExtensionDefaultPath,
+	Count
+};
+
+[[nodiscard]] ushort configuredFileDialogHistoryId(MRDialogHistoryScope scope);
+[[nodiscard]] ushort configuredPathDialogHistoryId(MRDialogHistoryScope scope);
+void initRememberedLoadDialogPath(MRDialogHistoryScope scope, char *buffer, std::size_t bufferSize,
+                                  const char *pattern);
+void rememberLoadDialogPath(MRDialogHistoryScope scope, const char *path);
+[[nodiscard]] std::string configuredLastFileDialogFilePath(MRDialogHistoryScope scope);
+[[nodiscard]] std::string configuredLastFileDialogPath(MRDialogHistoryScope scope);
 void initRememberedLoadDialogPath(char *buffer, std::size_t bufferSize, const char *pattern);
 void rememberLoadDialogPath(const char *path);
 [[nodiscard]] std::string normalizeConfiguredPathInput(std::string_view input);
@@ -381,6 +419,15 @@ bool setConfiguredEditExtensionProfiles(const std::vector<MREditExtensionProfile
 [[nodiscard]] std::string configuredDefaultProfileDescription();
 bool setConfiguredDefaultProfileDescription(const std::string &value,
                                             std::string *errorMessage = nullptr);
+const std::vector<MRKeymapProfile> &configuredKeymapProfiles();
+bool setConfiguredKeymapProfiles(const std::vector<MRKeymapProfile> &profiles,
+                                 std::string *errorMessage = nullptr);
+[[nodiscard]] std::string configuredKeymapFilePath();
+bool setConfiguredKeymapFilePath(const std::string &path,
+                                 std::string *errorMessage = nullptr);
+[[nodiscard]] std::string configuredActiveKeymapProfile();
+bool setConfiguredActiveKeymapProfile(const std::string &value,
+                                      std::string *errorMessage = nullptr);
 bool applyConfiguredEditExtensionProfileDirective(const std::string &operation, const std::string &profileId,
                                                   const std::string &arg3, const std::string &arg4,
                                                   std::string *errorMessage = nullptr);

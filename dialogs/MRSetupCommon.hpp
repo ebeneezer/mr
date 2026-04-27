@@ -1,4 +1,5 @@
 #include "../app/utils/MRStringUtils.hpp"
+#include "../config/MRDialogPaths.hpp"
 #ifndef MRSETUPDIALOGCOMMON_HPP
 #define MRSETUPDIALOGCOMMON_HPP
 
@@ -16,6 +17,7 @@
 #include <cctype>
 #include <cstring>
 #include <functional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -24,15 +26,39 @@ class TDialog;
 class TGroup;
 class TRect;
 class TButton;
+class TFileDialog;
 class MRDialogFoundation;
+class MRScrollableDialog;
 
 namespace mr::dialogs {
 
 [[nodiscard]] TRect centeredDialogRect(int width, int height);
 [[nodiscard]] ushort execDialog(TDialog *dialog);
 [[nodiscard]] ushort execDialogWithData(TDialog *dialog, void *data);
-[[nodiscard]] MRDialogFoundation *createScrollableDialog(const char *title, int virtualWidth,
-                                                         int virtualHeight);
+[[nodiscard]] MRDialogFoundation *createScrollableDialog(const char *title, int virtualWidth, int virtualHeight);
+[[nodiscard]] TFileDialog *createFileDialog(const char *wildCard, const char *title, const char *inputName, ushort options, uchar histId);
+void seedFileDialogPath(MRDialogHistoryScope scope, char *buffer, std::size_t bufferSize, const char *pattern, std::string_view currentValue = {});
+[[nodiscard]] ushort execRememberingFileDialogWithData(MRDialogHistoryScope scope, const char *wildCard, const char *title, const char *inputName, ushort options, char *buffer);
+
+struct DialogButtonSpec {
+	const char *title = "";
+	ushort command = 0;
+	ushort flags = bfNormal;
+};
+
+struct DialogButtonRowMetrics {
+	int buttonWidth = 0;
+	int rowWidth = 0;
+};
+
+[[nodiscard]] DialogButtonRowMetrics measureUniformButtonRow(std::span<const DialogButtonSpec> specs,
+                                                             int gap, int minButtonWidth = 0);
+void insertUniformButtonRow(MRDialogFoundation &dialog, int left, int top, int gap,
+                            std::span<const DialogButtonSpec> specs, int minButtonWidth = 0,
+                            std::vector<TButton *> *outButtons = nullptr);
+void addManagedUniformButtonRow(MRScrollableDialog &dialog, int left, int top, int gap,
+                                std::span<const DialogButtonSpec> specs, int minButtonWidth = 0,
+                                std::vector<TButton *> *outButtons = nullptr);
 
 [[nodiscard]] inline std::string normalizeTvPathSeparators(std::string_view value) {
 	std::string path(value);
@@ -96,6 +122,7 @@ class MRScrollableDialog : public TDialog {
 	struct DialogValidationResult {
 		bool valid = true;
 		std::string warningText;
+		bool error = false;
 	};
 	using DialogValidationHook = std::function<DialogValidationResult()>;
 
@@ -106,6 +133,8 @@ class MRScrollableDialog : public TDialog {
 
 	MRScrollableDialog(const TRect &bounds, const char *title, int virtualWidth,
 	                   int virtualHeight);
+	MRScrollableDialog(const TRect &bounds, const char *title, int virtualWidth,
+	                   int virtualHeight, TFrame *(*frameFactory)(TRect));
 	~MRScrollableDialog() override;
 	void handleEvent(TEvent &event) override;
 
@@ -115,6 +144,7 @@ class MRScrollableDialog : public TDialog {
 	void scrollToOrigin();
 	void setDialogValidationHook(DialogValidationHook hook);
 	void runDialogValidation();
+	void setDoneButtonDisabled(bool disable);
 	[[nodiscard]] TGroup *managedContent() const noexcept { return mContent; }
 
   private:
@@ -140,6 +170,8 @@ class MRScrollableDialog : public TDialog {
 class MRDialogFoundation : public MRScrollableDialog {
   public:
 	MRDialogFoundation(const TRect &bounds, const char *title, int virtualWidth, int virtualHeight);
+	MRDialogFoundation(const TRect &bounds, const char *title, int virtualWidth, int virtualHeight,
+	                   TFrame *(*frameFactory)(TRect));
 
 	void insert(TView *view);
 	void finalizeLayout();

@@ -28,6 +28,10 @@ template <typename Draft, typename EqualFn>
                                                         const char *primaryLabel = "Save",
                                                         const char *detail = nullptr);
 
+[[nodiscard]] bool runDialogConfirm(const char *headline, const char *confirmLabel = "OK",
+                                    const char *detail = nullptr,
+                                    const char *dialogTitle = "Confirm");
+
 [[nodiscard]] UnsavedChangesChoice runDialogDirtyListGating(const char *dialogTitle,
                                                             const char *headline,
                                                             const char *itemsLabel,

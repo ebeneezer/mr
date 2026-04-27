@@ -3,6 +3,7 @@
 #define Uses_TDeskTop
 #define Uses_TDialog
 #define Uses_TFileDialog
+#define Uses_TFileList
 #define Uses_MsgBox
 #define Uses_TObject
 #define Uses_TButton
@@ -18,6 +19,7 @@
 #define Uses_TGroup
 #define Uses_TInputLine
 #define Uses_TKeys
+#define Uses_TListViewer
 #define Uses_TRect
 #define Uses_TScrollBar
 #define Uses_TStaticText
@@ -32,16 +34,20 @@
 #include "../app/MRCommands.hpp"
 #include "../app/MREditorApp.hpp"
 #include "../config/MRDialogPaths.hpp"
+#include "../keymap/MRKeymapContext.hpp"
+#include "../ui/MRFrame.hpp"
 #include "../ui/MRPalette.hpp"
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRMenuBar.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "MRDirtyGating.hpp"
+#include "MRKeymapManager.hpp"
 #include "MRSetupCommon.hpp"
 #include "MRNumericSlider.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cctype>
 #include <cstring>
@@ -53,6 +59,44 @@
 #include <vector>
 
 namespace {
+TFrame *initSetupDialogFrame(TRect bounds) {
+	return new MRFrame(bounds);
+}
+
+class TWheelFileDialog final : public TFileDialog {
+  public:
+	TWheelFileDialog(TStringView wildCard, TStringView title, TStringView inputName, ushort options,
+	                 uchar histId) noexcept
+	    : TWindowInit(TFileDialog::initFrame),
+	      TFileDialog(wildCard, title, inputName, options, histId), dialogOptions(options) {
+	}
+
+	void handleEvent(TEvent &event) override {
+		if (event.what == evBroadcast && event.message.command == cmFileDoubleClicked &&
+		    (dialogOptions & fdOpenButton) != 0) {
+			event.what = evCommand;
+			event.message.command = cmFileOpen;
+			TFileDialog::handleEvent(event);
+			return;
+		}
+		if (event.what == evMouseWheel && fileList != nullptr && fileList->containsMouse(event) &&
+		    fileList->range > 0) {
+			const int delta =
+			    event.mouse.wheel == mwUp || event.mouse.wheel == mwLeft ? -1 : 1;
+			const short next =
+			    static_cast<short>(std::clamp<int>(fileList->focused + delta, 0, fileList->range - 1));
+
+			fileList->focusItemNum(next);
+			clearEvent(event);
+			return;
+		}
+		TFileDialog::handleEvent(event);
+	}
+
+  private:
+	ushort dialogOptions = 0;
+};
+
 using mr::dialogs::execDialogRaw;
 using mr::dialogs::execDialogRawWithData;
 using mr::dialogs::ensureMrmacExtension;
@@ -144,6 +188,38 @@ bool pathIsRegularFile(const std::string &path) {
 	return ::stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode);
 }
 
+bool pathIsDirectory(const std::string &path) {
+	struct stat st;
+
+	if (path.empty())
+		return false;
+	return ::stat(path.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
+}
+
+std::string parentDirectoryOfPath(std::string_view path) {
+	std::string normalized = normalizeConfiguredPathInput(trimAscii(path));
+	const std::size_t slashPos = normalized.find_last_of('/');
+
+	if (normalized.empty() || slashPos == std::string::npos)
+		return std::string();
+	if (slashPos == 0)
+		return "/";
+	return normalized.substr(0, slashPos);
+}
+
+std::string resolveFileDialogSeedDirectory(MRDialogHistoryScope scope, const char *buffer) {
+	std::string seedPath =
+	    normalizeConfiguredPathInput(trimAscii(buffer != nullptr ? buffer : ""));
+
+	if (seedPath.empty())
+		seedPath = configuredLastFileDialogFilePath(scope);
+	if (seedPath.empty())
+		seedPath = configuredLastFileDialogPath(scope);
+	if (pathIsDirectory(seedPath))
+		return seedPath;
+	return parentDirectoryOfPath(seedPath);
+}
+
 bool confirmOverwriteForPath(const char *primaryLabel, const char *headline, const std::string &targetPath) {
 	if (!pathIsRegularFile(targetPath))
 		return true;
@@ -201,6 +277,42 @@ bool startsWithDoneButtonCaption(const char *title) {
 		normalized.push_back(static_cast<char>(std::toupper(ch)));
 	}
 	return normalized.rfind("DONE", 0) == 0;
+}
+
+std::string visibleButtonCaption(const char *title) {
+	std::string text;
+
+	if (title == nullptr)
+		return text;
+	for (const char *p = title; *p != '\0'; ++p)
+		if (*p != '~')
+			text.push_back(*p);
+	return trimAscii(text);
+}
+
+int buttonCaptionWidth(const char *title) {
+	return static_cast<int>(visibleButtonCaption(title).size());
+}
+
+std::string baseNameOfPath(std::string_view path) {
+	const std::size_t pos = path.find_last_of("/\\");
+
+	return pos == std::string_view::npos ? std::string(path) : std::string(path.substr(pos + 1));
+}
+
+template <class InsertButtonFn>
+void appendUniformButtonRow(InsertButtonFn insertButton, int left, int top,
+                            std::span<const mr::dialogs::DialogButtonSpec> specs,
+                            int buttonWidth, int gap,
+                            std::vector<TButton *> *outButtons) {
+	int x = left;
+
+	for (const mr::dialogs::DialogButtonSpec &spec : specs) {
+		TButton *button = insertButton(TRect(x, top, x + buttonWidth, top + 2), spec);
+		if (outButtons != nullptr)
+			outButtons->push_back(button);
+		x += buttonWidth + gap;
+	}
 }
 
 void postSetupFlowError(const char *scope, const std::string &errorText) {
@@ -569,35 +681,34 @@ void discardQueuedCancelEvent() {
 	discardQueuedCancelEventsForTarget(static_cast<TView *>(TProgram::deskTop));
 }
 
-bool browseUriWithFileDialog(const char *title, const std::string &currentValue, std::string &selectedUri) {
+bool browseUriWithFileDialog(MRDialogHistoryScope scope, const char *title, const std::string &currentValue,
+                             std::string &selectedUri) {
 	char fileName[MAXPATH];
-	std::string seed = trimAscii(currentValue);
 	ushort result;
 
-	initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.*");
-	if (!seed.empty())
-		writeRecordField(fileName, sizeof(fileName), seed);
-	result = execDialogRawWithData(new TFileDialog("*.*", title, "~N~ame", fdOKButton, kFileDialogHistoryId), fileName);
+	mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.*", currentValue);
+	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.*", title, "~N~ame",
+	                                                        fdOKButton, fileName);
 	if (result == cmCancel) {
 		discardQueuedCancelEvent();
 		return false;
 	}
-	rememberLoadDialogPath(fileName);
 	selectedUri = normalizeConfiguredPathInput(fileName);
 	return true;
 }
 
-bool browsePathWithDirectoryDialog(const std::string &currentValue, std::string &selectedPath) {
+bool browsePathWithDirectoryDialog(MRDialogHistoryScope scope, const std::string &currentValue,
+                                   std::string &selectedPath) {
 	std::string originalCwd = readCurrentWorkingDirectory();
 	std::string seed = normalizeConfiguredPathInput(trimAscii(currentValue));
 	std::string picked;
 	ushort result;
 
 	if (seed.empty())
-		seed = configuredLastFileDialogPath();
+		seed = configuredLastFileDialogPath(scope);
 	if (!seed.empty())
 		(void)::chdir(seed.c_str());
-	result = execDialogRaw(new TChDirDialog(cdNormal, kPathDialogHistoryId));
+	result = execDialogRaw(new TChDirDialog(cdNormal, configuredPathDialogHistoryId(scope)));
 	picked = readCurrentWorkingDirectory();
 	if (!originalCwd.empty())
 		(void)::chdir(originalCwd.c_str());
@@ -607,39 +718,47 @@ bool browsePathWithDirectoryDialog(const std::string &currentValue, std::string 
 	}
 	selectedPath = normalizeConfiguredPathInput(picked);
 	if (!selectedPath.empty())
-		rememberLoadDialogPath(selectedPath.c_str());
+		rememberLoadDialogPath(scope, selectedPath.c_str());
 	return !selectedPath.empty();
 }
 
-bool chooseThemeFileForLoad(std::string &selectedUri) {
+bool chooseThemeFileForLoad(MRDialogHistoryScope scope, std::string &selectedUri) {
 	char fileName[MAXPATH];
 	ushort result;
+	std::string initialThemePath = configuredLastFileDialogFilePath(scope);
 
-	initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.mrmac");
-	result = execDialogRawWithData(new TFileDialog("*.mrmac", "Load color theme", "~N~ame", fdOKButton, kFileDialogHistoryId),
-	                               fileName);
+	if (initialThemePath.empty())
+		initialThemePath = configuredColorThemeFilePath();
+	mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.mrmac", initialThemePath);
+	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.mrmac", "Load color theme",
+	                                                        "~N~ame", fdOKButton, fileName);
 	if (result == cmCancel) {
 		discardQueuedCancelEvent();
 		return false;
 	}
-	rememberLoadDialogPath(fileName);
 	selectedUri = normalizeConfiguredPathInput(fileName);
+	if (!selectedUri.empty())
+		rememberLoadDialogPath(scope, selectedUri.c_str());
 	return true;
 }
 
-bool chooseThemeFileForSave(std::string &selectedUri) {
+bool chooseThemeFileForSave(MRDialogHistoryScope scope, std::string &selectedUri) {
 	char fileName[MAXPATH];
 	ushort result;
+	std::string initialThemePath = configuredLastFileDialogFilePath(scope);
 
-	initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.mrmac");
-	result = execDialogRawWithData(new TFileDialog("*.mrmac", "Save color theme as", "~N~ame", fdOKButton, kFileDialogHistoryId),
-	                               fileName);
+	if (initialThemePath.empty())
+		initialThemePath = configuredColorThemeFilePath();
+	mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.mrmac", initialThemePath);
+	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.mrmac", "Save color theme as",
+	                                                        "~N~ame", fdOKButton, fileName);
 	if (result == cmCancel) {
 		discardQueuedCancelEvent();
 		return false;
 	}
-	rememberLoadDialogPath(fileName);
 	selectedUri = normalizeConfiguredPathInput(ensureMrmacExtension(fileName));
+	if (!selectedUri.empty())
+		rememberLoadDialogPath(scope, selectedUri.c_str());
 	return true;
 }
 
@@ -868,9 +987,10 @@ class TPathsSetupDialog : public MRScrollableDialog {
 	};
 
 	TPathsSetupDialog(const PathsDialogRecord &initialRecord)
-	    : TWindowInit(&TDialog::initFrame),
+	    : TWindowInit(initSetupDialogFrame),
 	      MRScrollableDialog(centeredSetupDialogRect(kVirtualDialogWidth, kVirtualDialogHeight),
-	                         "PATHS", kVirtualDialogWidth, kVirtualDialogHeight),
+	                         "PATHS", kVirtualDialogWidth, kVirtualDialogHeight,
+	                         initSetupDialogFrame),
 	      mCurrentRecord(initialRecord) {
 		buildViews();
 		loadFieldsFromRecord(mCurrentRecord);
@@ -967,13 +1087,13 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		return view;
 	}
 
-	TButton *addButton(const TRect &rect, const char *title, ushort command, ushort flags) {
-		TButton *view = new TButton(rect, title, command, flags);
-		addManaged(view, rect);
-		return view;
-	}
-
 	void buildViews() {
+		const std::array buttons{
+		    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault},
+		    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal},
+		    mr::dialogs::DialogButtonSpec{"~H~elp", cmMrSetupPathsHelp, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics =
+		    mr::dialogs::measureUniformButtonRow(buttons, 2);
 		int dialogWidth = kVirtualDialogWidth;
 		int labelLeft = 2;
 		int labelRight = 23;
@@ -982,9 +1102,7 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		int glyphRight = dialogWidth - 2;
 		int glyphLeft = glyphRight - glyphWidth;
 		int inputRight = glyphLeft;
-		int doneLeft = dialogWidth / 2 - 17;
-		int cancelLeft = doneLeft + 12;
-		int helpLeft = cancelLeft + 14;
+		int buttonLeft = (dialogWidth - metrics.rowWidth) / 2;
 		int buttonTop = kVirtualDialogHeight - 3;
 
 		addLabel(TRect(labelLeft, 2, labelRight, 3), "Settings macro URI: ");
@@ -1024,11 +1142,7 @@ class TPathsSetupDialog : public MRScrollableDialog {
 		    new TSItem("~V~olatile log",
 		               new TSItem("~L~og to file", new TSItem("Use ~J~ournalctl", nullptr))));
 
-		addButton(TRect(doneLeft, buttonTop, doneLeft + 10, buttonTop + 2), "~D~one", cmOK, bfDefault);
-		addButton(TRect(cancelLeft, buttonTop, cancelLeft + 12, buttonTop + 2), "~C~ancel", cmCancel,
-		          bfNormal);
-		addButton(TRect(helpLeft, buttonTop, helpLeft + 8, buttonTop + 2), "~H~elp",
-		          cmMrSetupPathsHelp, bfNormal);
+		mr::dialogs::addManagedUniformButtonRow(*this, buttonLeft, buttonTop, 2, buttons);
 	}
 
 	static void setInputLineValue(TInputLine *inputLine, const char *value) {
@@ -1146,39 +1260,45 @@ class TPathsSetupDialog : public MRScrollableDialog {
 
 	void browseSettingsMacroUri() {
 		std::string selected;
-		if (browseUriWithFileDialog("Select settings macro URI", currentInputValue(mSettingsMacroPathField),
+		if (browseUriWithFileDialog(MRDialogHistoryScope::SetupSettingsMacro, "Select settings macro URI",
+		                            currentInputValue(mSettingsMacroPathField),
 		                            selected))
 			setInputValue(mSettingsMacroPathField, selected);
 	}
 
 	void browseMacroPath() {
 		std::string selected;
-		if (browsePathWithDirectoryDialog(currentInputValue(mMacroDirectoryPathField), selected))
+		if (browsePathWithDirectoryDialog(MRDialogHistoryScope::SetupMacroDirectory,
+		                                 currentInputValue(mMacroDirectoryPathField), selected))
 			setInputValue(mMacroDirectoryPathField, selected);
 	}
 
 	void browseHelpUri() {
 		std::string selected;
-		if (browseUriWithFileDialog("Select help file URI", currentInputValue(mHelpFilePathField), selected))
+		if (browseUriWithFileDialog(MRDialogHistoryScope::SetupHelpFile, "Select help file URI",
+		                            currentInputValue(mHelpFilePathField), selected))
 			setInputValue(mHelpFilePathField, selected);
 	}
 
 	void browseTempPath() {
 		std::string selected;
-		if (browsePathWithDirectoryDialog(currentInputValue(mTempDirectoryPathField), selected))
+		if (browsePathWithDirectoryDialog(MRDialogHistoryScope::SetupTempDirectory,
+		                                 currentInputValue(mTempDirectoryPathField), selected))
 			setInputValue(mTempDirectoryPathField, selected);
 	}
 
 	void browseShellUri() {
 		std::string selected;
-		if (browseUriWithFileDialog("Select shell executable URI", currentInputValue(mShellExecutablePathField),
+		if (browseUriWithFileDialog(MRDialogHistoryScope::SetupShellExecutable,
+		                            "Select shell executable URI", currentInputValue(mShellExecutablePathField),
 		                            selected))
 			setInputValue(mShellExecutablePathField, selected);
 	}
 
 	void browseLogUri() {
 		std::string selected;
-		if (browseUriWithFileDialog("Select logfile URI", currentInputValue(mLogFilePathField), selected))
+		if (browseUriWithFileDialog(MRDialogHistoryScope::SetupLogFile, "Select logfile URI",
+		                            currentInputValue(mLogFilePathField), selected))
 			setInputValue(mLogFilePathField, selected);
 	}
 
@@ -1390,9 +1510,10 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 	};
 
 	TBackupsAutosaveSetupDialog(const BackupsAutosaveDialogRecord &initialRecord)
-	    : TWindowInit(&TDialog::initFrame),
+	    : TWindowInit(initSetupDialogFrame),
 	      MRScrollableDialog(centeredSetupDialogRect(kVirtualDialogWidth, kVirtualDialogHeight),
-	                         "BACKUPS & AUTOSAVE", kVirtualDialogWidth, kVirtualDialogHeight),
+	                         "BACKUPS & AUTOSAVE", kVirtualDialogWidth, kVirtualDialogHeight,
+	                         initSetupDialogFrame),
 	      mCurrentRecord(initialRecord) {
 		buildViews();
 		setDialogValidationHook([this]() { return validateDialogValues(); });
@@ -1551,13 +1672,13 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 		return view;
 	}
 
-	TButton *addButton(const TRect &rect, const char *title, ushort command, ushort flags) {
-		TButton *view = new TButton(rect, title, command, flags);
-		addManaged(view, rect);
-		return view;
-	}
-
 	void buildViews() {
+		const std::array buttons{
+		    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault},
+		    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal},
+		    mr::dialogs::DialogButtonSpec{"~H~elp", cmMrSetupBackupsAutosaveHelp, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics =
+		    mr::dialogs::measureUniformButtonRow(buttons, 2);
 		const int dialogWidth = kVirtualDialogWidth;
 		const int leftGroupLeft = 2;
 		const int leftGroupRight = 28;
@@ -1570,9 +1691,7 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 		const int glyphLeft = glyphRight - glyphWidth;
 		const int backupPathFieldRight = glyphLeft;
 		const int autosaveFieldRight = dialogWidth - 2;
-		const int doneLeft = dialogWidth / 2 - 17;
-		const int cancelLeft = doneLeft + 12;
-		const int helpLeft = cancelLeft + 14;
+		const int buttonLeft = (dialogWidth - metrics.rowWidth) / 2;
 		const int buttonTop = kVirtualDialogHeight - 3;
 
 		addLabel(TRect(leftGroupLeft, 2, leftGroupRight, 3), "Backup method:");
@@ -1604,11 +1723,7 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 		mAbsoluteIntervalSlider = addNumericSlider(TRect(textFieldLeft, 12, autosaveFieldRight, 13), 0, 300,
 		                                         180, 10, 50);
 
-		addButton(TRect(doneLeft, buttonTop, doneLeft + 10, buttonTop + 2), "~D~one", cmOK, bfDefault);
-		addButton(TRect(cancelLeft, buttonTop, cancelLeft + 12, buttonTop + 2), "~C~ancel", cmCancel,
-		          bfNormal);
-		addButton(TRect(helpLeft, buttonTop, helpLeft + 8, buttonTop + 2), "~H~elp",
-		          cmMrSetupBackupsAutosaveHelp, bfNormal);
+		mr::dialogs::addManagedUniformButtonRow(*this, buttonLeft, buttonTop, 2, buttons);
 	}
 
 	static void setInputLineValue(TInputLine *inputLine, const char *value, std::size_t capacity) {
@@ -1746,7 +1861,9 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 
 	void browseBackupDirectory() {
 		std::string selected;
-		if (browsePathWithDirectoryDialog(currentInputValue(mBackupDirectoryField, kBackupDirectoryFieldSize), selected))
+		if (browsePathWithDirectoryDialog(MRDialogHistoryScope::SetupBackupDirectory,
+		                                 currentInputValue(mBackupDirectoryField, kBackupDirectoryFieldSize),
+		                                 selected))
 			setInputValue(mBackupDirectoryField, kBackupDirectoryFieldSize, selected);
 		if (mBackupDirectoryField != nullptr)
 			mBackupDirectoryField->select();
@@ -1898,7 +2015,7 @@ void runColorSetupDialogFlow() {
 			case cmMrColorLoadTheme: {
 				std::string themeUri;
 
-					if (!chooseThemeFileForLoad(themeUri))
+					if (!chooseThemeFileForLoad(MRDialogHistoryScope::SetupThemeLoad, themeUri))
 						break;
 					if (!loadColorThemeFile(themeUri, &errorText)) {
 						postSetupFlowError("Color Setup / Load Theme", errorText);
@@ -1918,7 +2035,7 @@ void runColorSetupDialogFlow() {
 					std::string activeThemeUri = normalizeConfiguredPathInput(configuredColorThemeFilePath());
 					bool overwriteActiveTheme = false;
 
-					if (!chooseThemeFileForSave(themeUri))
+					if (!chooseThemeFileForSave(MRDialogHistoryScope::SetupThemeSave, themeUri))
 						break;
 					if (!confirmOverwriteForPath("Overwrite", "Theme file exists. Overwrite?", themeUri))
 						break;
@@ -1994,6 +2111,10 @@ bool runSetupDialogCommand(unsigned short command) {
 
 		case cmMrSetupColorSetup:
 			runColorSetupDialogFlow();
+			return true;
+
+		case cmMrSetupKeyMapping:
+			runKeymapManagerDialogFlow();
 			return true;
 
 		case cmMrSetupPaths:
@@ -2107,10 +2228,11 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 	                             int initialVirtualDesktops, bool initialAutoloadWorkspace,
 	                             bool initialCyclicVirtualDesktops,
 	                             const std::string &initialCursorPositionMarker)
-	    : TWindowInit(&TUserInterfaceSettingsDialog::initFrame),
-	      MRScrollableDialog(centeredSetupDialogRect(68, 14), "User interface settings", 66, 12) {
+	    : TWindowInit(initSetupDialogFrame),
+	      MRScrollableDialog(centeredSetupDialogRect(68, 15), "User interface settings", 66, 13,
+	                         initSetupDialogFrame) {
 
-		int const yStart = 1;
+		int const yStart = 2;
 
 		TCheckBoxes *cb = new TCheckBoxes(
 		    TRect(3, yStart, 34, yStart + 4),
@@ -2123,22 +2245,25 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		addManaged(mOptionsField, mOptionsField->getBounds());
 
 		mVirtualDesktopsSlider =
-		    new MRNumericSlider(TRect(26, 6, 63, 7), 1, 9, initialVirtualDesktops, 1, 1,
+		    new MRNumericSlider(TRect(26, 7, 63, 8), 1, 9, initialVirtualDesktops, 1, 1,
 		                       MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
-		addManaged(mVirtualDesktopsSlider, TRect(26, 6, 63, 7));
-		addManaged(new TLabel(TRect(3, 6, 25, 7), "~V~irtual desktops:", mVirtualDesktopsSlider),
-		           TRect(3, 6, 25, 7));
+		addManaged(mVirtualDesktopsSlider, TRect(26, 7, 63, 8));
+		addManaged(new TLabel(TRect(3, 7, 25, 8), "~V~irtual desktops:", mVirtualDesktopsSlider),
+		           TRect(3, 7, 25, 8));
 
-		mCursorPositionMarkerField = new TInputLine(TRect(28, 8, 42, 9), 11);
-		addManaged(mCursorPositionMarkerField, TRect(28, 8, 42, 9));
-		addManaged(new TLabel(TRect(3, 8, 27, 9), "Cursor position ~m~arker: ", mCursorPositionMarkerField),
-		           TRect(3, 8, 27, 9));
+		mCursorPositionMarkerField = new TInputLine(TRect(28, 9, 42, 10), 11);
+		addManaged(mCursorPositionMarkerField, TRect(28, 9, 42, 10));
+		addManaged(new TLabel(TRect(3, 9, 27, 10), "Cursor position ~m~arker: ", mCursorPositionMarkerField),
+		           TRect(3, 9, 27, 10));
 
-		int buttonRow = 10;
-		addManaged(new TButton(TRect(21, buttonRow, 31, buttonRow + 2), "~D~one", cmOK, bfDefault),
-		           TRect(21, buttonRow, 31, buttonRow + 2));
-		addManaged(new TButton(TRect(33, buttonRow, 45, buttonRow + 2), "~C~ancel", cmCancel, bfNormal),
-		           TRect(33, buttonRow, 45, buttonRow + 2));
+		const std::array buttons{
+		    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault},
+		    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics =
+		    mr::dialogs::measureUniformButtonRow(buttons, 2);
+		int buttonRow = 11;
+		int buttonLeft = (66 - metrics.rowWidth) / 2;
+		mr::dialogs::addManagedUniformButtonRow(*this, buttonLeft, buttonRow, 2, buttons);
 
 		writeRecordField(mDataCursorMarker, sizeof(mDataCursorMarker), initialCursorPositionMarker);
 		setDialogValidationHook([this]() { return validateDialogValues(); });
@@ -2318,9 +2443,33 @@ TGroup *createSetupDialogContentGroup(const TRect &bounds) {
 	return new TSetupDialogContentGroup(bounds);
 }
 
+TView *deepestCurrentDialogView(TGroup *group) {
+	TView *view = group != nullptr ? group->current : nullptr;
+
+	while (view != nullptr) {
+		TGroup *childGroup = dynamic_cast<TGroup *>(view);
+		if (childGroup == nullptr || childGroup->current == nullptr)
+			break;
+		view = childGroup->current;
+	}
+	return view;
+}
+
+MRKeymapContext keymapContextForDialog(const MRScrollableDialog &dialog) {
+	TView *view = deepestCurrentDialogView(dialog.managedContent());
+
+	return dynamic_cast<TListViewer *>(view) != nullptr ? MRKeymapContext::DialogList
+	                                                    : MRKeymapContext::Dialog;
+}
+
 MRScrollableDialog::MRScrollableDialog(const TRect &bounds, const char *title, int virtualWidth,
                                        int virtualHeight)
-    : TWindowInit(&TDialog::initFrame), TDialog(bounds, title), mVirtualWidth(virtualWidth),
+    : MRScrollableDialog(bounds, title, virtualWidth, virtualHeight, initSetupDialogFrame) {
+}
+
+MRScrollableDialog::MRScrollableDialog(const TRect &bounds, const char *title, int virtualWidth,
+                                       int virtualHeight, TFrame *(*frameFactory)(TRect))
+    : TWindowInit(frameFactory), TDialog(bounds, title), mVirtualWidth(virtualWidth),
       mVirtualHeight(virtualHeight), mContentRect(1, 1, size.x - 1, size.y - 1) {
 	mContent = createSetupDialogContentGroup(mContentRect);
 	if (mContent != nullptr) {
@@ -2402,12 +2551,23 @@ void MRScrollableDialog::runDialogValidation() {
 		std::string warningText =
 		    result.warningText.empty() ? "Dialog contains invalid values." : result.warningText;
 		if (!hasDialogValidationWarning || warningText != lastDialogValidationWarning) {
-			setSetupDialogStatus(warningText, MRMenuBar::MarqueeKind::Warning);
+			setSetupDialogStatus(warningText, result.error ? MRMenuBar::MarqueeKind::Error
+			                                              : MRMenuBar::MarqueeKind::Warning);
 			hasDialogValidationWarning = true;
 			lastDialogValidationWarning = warningText;
 		}
 	}
 	isRunningDialogValidation = false;
+}
+
+void MRScrollableDialog::setDoneButtonDisabled(bool disable) {
+	if (doneButton == nullptr)
+		return;
+	const bool wasDisabled = (doneButton->state & sfDisabled) != 0;
+	if (wasDisabled == disable)
+		return;
+	doneButton->setState(sfDisabled, disable ? True : False);
+	doneButton->drawView();
 }
 
 void MRScrollableDialog::initScrollIfNeeded() {
@@ -2467,6 +2627,9 @@ void MRScrollableDialog::initScrollIfNeeded() {
 
 void MRScrollableDialog::handleEvent(TEvent &event) {
 	const ushort originalWhat = event.what;
+
+	if (mrHandleRuntimeKeymapEvent(event, keymapContextForDialog(*this), nullptr))
+		return;
 
 	if (event.what == evKeyDown) {
 		ushort keyCode = event.keyDown.keyCode;
@@ -2565,8 +2728,12 @@ void MRScrollableDialog::applyScroll() {
 
 MRDialogFoundation::MRDialogFoundation(const TRect &bounds, const char *title, int virtualWidth,
                                        int virtualHeight)
-    : TWindowInit(&TDialog::initFrame),
-      MRScrollableDialog(bounds, title, virtualWidth, virtualHeight) {
+    : MRDialogFoundation(bounds, title, virtualWidth, virtualHeight, initSetupDialogFrame) {
+}
+
+MRDialogFoundation::MRDialogFoundation(const TRect &bounds, const char *title, int virtualWidth,
+                                       int virtualHeight, TFrame *(*frameFactory)(TRect))
+    : TWindowInit(frameFactory), MRScrollableDialog(bounds, title, virtualWidth, virtualHeight, frameFactory) {
 }
 
 void MRDialogFoundation::insert(TView *view) {
@@ -2607,9 +2774,93 @@ TRect centeredDialogRect(int width, int height) {
 	return centeredSetupDialogRect(width, height);
 }
 
+DialogButtonRowMetrics measureUniformButtonRow(std::span<const DialogButtonSpec> specs, int gap,
+                                               int minButtonWidth) {
+	DialogButtonRowMetrics metrics;
+
+	if (specs.empty())
+		return metrics;
+	for (const DialogButtonSpec &spec : specs)
+		metrics.buttonWidth = std::max(metrics.buttonWidth, buttonCaptionWidth(spec.title) + 4);
+	metrics.buttonWidth = std::max(metrics.buttonWidth, minButtonWidth);
+	metrics.rowWidth = static_cast<int>(specs.size()) * metrics.buttonWidth +
+	                   static_cast<int>(specs.size() - 1) * gap;
+	return metrics;
+}
+
+void insertUniformButtonRow(MRDialogFoundation &dialog, int left, int top, int gap,
+                            std::span<const DialogButtonSpec> specs, int minButtonWidth,
+                            std::vector<TButton *> *outButtons) {
+	const DialogButtonRowMetrics metrics = measureUniformButtonRow(specs, gap, minButtonWidth);
+
+	appendUniformButtonRow(
+	    [&dialog](const TRect &rect, const DialogButtonSpec &spec) {
+		    TButton *button = new TButton(rect, spec.title, spec.command, spec.flags);
+		    dialog.insert(button);
+		    return button;
+	    },
+	    left, top, specs, metrics.buttonWidth, gap, outButtons);
+}
+
+void addManagedUniformButtonRow(MRScrollableDialog &dialog, int left, int top, int gap,
+                                std::span<const DialogButtonSpec> specs, int minButtonWidth,
+                                std::vector<TButton *> *outButtons) {
+	const DialogButtonRowMetrics metrics = measureUniformButtonRow(specs, gap, minButtonWidth);
+
+	appendUniformButtonRow(
+	    [&dialog](const TRect &rect, const DialogButtonSpec &spec) {
+		    TButton *button = new TButton(rect, spec.title, spec.command, spec.flags);
+		    dialog.addManaged(button, rect);
+		    return button;
+	    },
+	    left, top, specs, metrics.buttonWidth, gap, outButtons);
+}
+
 MRDialogFoundation *createScrollableDialog(const char *title, int virtualWidth, int virtualHeight) {
 	return new MRDialogFoundation(centeredDialogRect(virtualWidth, virtualHeight), title, virtualWidth,
 	                              virtualHeight);
+}
+
+TFileDialog *createFileDialog(const char *wildCard, const char *title, const char *inputName, ushort options, uchar histId) {
+	return new TWheelFileDialog(wildCard, title, inputName, options, histId);
+}
+
+void seedFileDialogPath(MRDialogHistoryScope scope, char *buffer, std::size_t bufferSize, const char *pattern, std::string_view currentValue) {
+	const char *safePattern = pattern != nullptr && *pattern != '\0' ? pattern : "*.*";
+	std::string rememberedFile = configuredLastFileDialogFilePath(scope);
+	std::string rememberedPath = configuredLastFileDialogPath(scope);
+	std::string normalizedCurrent = normalizeConfiguredPathInput(trimAscii(currentValue));
+
+	initRememberedLoadDialogPath(scope, buffer, bufferSize, safePattern);
+	if (!normalizedCurrent.empty()) {
+		if (rememberedPath.empty()) {
+			writeRecordField(buffer, bufferSize, normalizedCurrent);
+			return;
+		}
+		if (rememberedPath.back() != '/')
+			rememberedPath += '/';
+		rememberedPath += baseNameOfPath(normalizedCurrent);
+		writeRecordField(buffer, bufferSize, rememberedPath);
+		return;
+	}
+	if (!rememberedFile.empty())
+		writeRecordField(buffer, bufferSize, rememberedFile);
+}
+
+ushort execRememberingFileDialogWithData(MRDialogHistoryScope scope, const char *wildCard, const char *title, const char *inputName, ushort options, char *buffer) {
+	std::string originalCwd = readCurrentWorkingDirectory();
+	std::string seedDirectory = resolveFileDialogSeedDirectory(scope, buffer);
+
+	if (!seedDirectory.empty())
+		(void)::chdir(seedDirectory.c_str());
+	const ushort result =
+	    execDialogRawWithData(createFileDialog(wildCard, title, inputName, options, configuredFileDialogHistoryId(scope)), buffer);
+	if (!originalCwd.empty())
+		(void)::chdir(originalCwd.c_str());
+
+	if (result != cmCancel)
+		rememberLoadDialogPath(scope, buffer);
+	return result;
 }
 
 ushort execDialog(TDialog *dialog) {
@@ -2675,13 +2926,20 @@ TDialog *createSetupSimplePreviewDialog(const char *title, int width, int height
 	}
 
 	if (showOkCancelHelp) {
-		dialog->insert(new TButton(TRect(width - 34, height - 3, width - 24, height - 1), "~D~one", cmOK, bfDefault));
-		dialog->insert(
-		    new TButton(TRect(width - 23, height - 3, width - 10, height - 1), "~C~ancel", cmCancel, bfNormal));
-		dialog->insert(new TButton(TRect(width - 9, height - 3, width - 2, height - 1), "~H~elp", cmHelp, bfNormal));
+		const std::array buttons{
+		    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault},
+		    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal},
+		    mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics =
+		    mr::dialogs::measureUniformButtonRow(buttons, 1);
+		const int buttonLeft = (width - metrics.rowWidth) / 2;
+		mr::dialogs::insertUniformButtonRow(*dialog, buttonLeft, height - 3, 1, buttons);
 	} else {
-		dialog->insert(new TButton(TRect(width / 2 - 4, height - 3, width / 2 + 4, height - 1), "~D~one", cmOK,
-		                           bfDefault));
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}};
+		const mr::dialogs::DialogButtonRowMetrics metrics =
+		    mr::dialogs::measureUniformButtonRow(buttons, 0);
+		const int buttonLeft = (width - metrics.rowWidth) / 2;
+		mr::dialogs::insertUniformButtonRow(*dialog, buttonLeft, height - 3, 0, buttons);
 	}
 
 	dialog->finalizeLayout();

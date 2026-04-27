@@ -2,6 +2,7 @@
 #include "MRSettingsLoader.hpp"
 
 #include "MRDialogPaths.hpp"
+#include "../ui/MRWindowSupport.hpp"
 
 #include <algorithm>
 #include <array>
@@ -14,6 +15,26 @@
 #include <vector>
 
 namespace {
+
+const char *keymapDiagnosticSeverityName(MRKeymapDiagnosticSeverity severity) noexcept {
+	switch (severity) {
+		case MRKeymapDiagnosticSeverity::Warning:
+			return "warning";
+		case MRKeymapDiagnosticSeverity::Error:
+		default:
+			return "error";
+	}
+}
+
+std::string summarizeKeymapLoadForLog(const MRKeymapLoadResult &load) {
+	std::string text =
+	    "Keymap bootstrap parse: active='" + load.activeProfileName + "' profiles=" +
+	    std::to_string(load.profiles.size()) + " diagnostics=" + std::to_string(load.diagnostics.size());
+
+	for (const MRKeymapProfile &profile : load.profiles)
+		text += " [" + profile.name + ":" + std::to_string(profile.bindings.size()) + "]";
+	return text;
+}
 
 struct MRParsedSettingsAssignment {
 	std::string key;
@@ -129,6 +150,9 @@ MRFlattenedSettingsDocument flattenSettingsDocument(const MRParsedSettingsDocume
 	MRFlattenedSettingsDocument flattened;
 	std::size_t pathHistoryIndex = 1;
 	std::size_t fileHistoryIndex = 1;
+	std::size_t dialogLastPathIndex = 1;
+	std::size_t dialogPathHistoryIndex = 1;
+	std::size_t dialogFileHistoryIndex = 1;
 	std::size_t autoexecMacroIndex = 1;
 
 	for (const MRParsedSettingsAssignment &assignment : document.assignments)
@@ -136,6 +160,15 @@ MRFlattenedSettingsDocument flattenSettingsDocument(const MRParsedSettingsDocume
 			flattened.globals[assignment.key + "[" + std::to_string(pathHistoryIndex++) + "]"] = assignment.value;
 		else if (assignment.key == "FILE_HISTORY")
 			flattened.globals[assignment.key + "[" + std::to_string(fileHistoryIndex++) + "]"] = assignment.value;
+		else if (assignment.key == "DIALOG_LAST_PATH")
+			flattened.globals[assignment.key + "[" + std::to_string(dialogLastPathIndex++) + "]"] =
+			    assignment.value;
+		else if (assignment.key == "DIALOG_PATH_HISTORY")
+			flattened.globals[assignment.key + "[" + std::to_string(dialogPathHistoryIndex++) + "]"] =
+			    assignment.value;
+		else if (assignment.key == "DIALOG_FILE_HISTORY")
+			flattened.globals[assignment.key + "[" + std::to_string(dialogFileHistoryIndex++) + "]"] =
+			    assignment.value;
 		else if (assignment.key == "AUTOEXEC_MACRO")
 			flattened.globals[assignment.key + "[" + std::to_string(autoexecMacroIndex++) + "]"] =
 			    assignment.value;
@@ -306,6 +339,36 @@ bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::
 		                                                 directive.arg4, errorMessage))
 			return false;
 
+	{
+		MRKeymapLoadResult keymapLoad = loadKeymapProfilesFromSettingsSource(source);
+		bool keymapHasError = false;
+
+		mrLogMessage(summarizeKeymapLoadForLog(keymapLoad));
+		for (const MRKeymapDiagnostic &diagnostic : keymapLoad.diagnostics)
+			mrLogMessage("Keymap bootstrap diagnostic [" +
+			             std::string(keymapDiagnosticSeverityName(diagnostic.severity)) + "]: " +
+			             diagnostic.message);
+		for (const MRKeymapDiagnostic &diagnostic : keymapLoad.diagnostics)
+			if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error) {
+				keymapHasError = true;
+				break;
+			}
+		if (keymapHasError) {
+			mrLogMessage("Keymap bootstrap reset: falling back to DEFAULT because diagnostics contain errors.");
+			markFlag(activeReport, MRSettingsLoadReport::InvalidValueReset);
+			if (!setConfiguredKeymapProfiles(std::vector<MRKeymapProfile>(), errorMessage))
+				return false;
+			if (!setConfiguredActiveKeymapProfile("DEFAULT", errorMessage))
+				return false;
+		} else {
+			if (!setConfiguredKeymapProfiles(keymapLoad.profiles, errorMessage))
+				return false;
+			if (!setConfiguredActiveKeymapProfile(keymapLoad.activeProfileName, errorMessage))
+				return false;
+			mrLogMessage("Keymap bootstrap applied without reset.");
+		}
+	}
+
 	if (canonicalKeysSeen.size() < canonicalSerializedSettingsKeyCount()) {
 		activeReport.defaultedCanonicalKeyCount = canonicalSerializedSettingsKeyCount() - canonicalKeysSeen.size();
 		markFlag(activeReport, MRSettingsLoadReport::MissingCanonicalKeyDefaulted);
@@ -322,8 +385,6 @@ bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::
 		                                        defaults.helpColors.size(), errorMessage) ||
 		    !setConfiguredColorSetupGroupValues(MRColorSetupGroup::Other, defaults.otherColors.data(),
 		                                        defaults.otherColors.size(), errorMessage))
-			return false;
-		if (!setConfiguredColorThemeFilePath(defaultColorThemeFilePath(), errorMessage))
 			return false;
 	}
 

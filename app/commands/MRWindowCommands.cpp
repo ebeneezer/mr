@@ -693,22 +693,29 @@ void postLoadHeroEvents(const std::string &resolvedPath, std::size_t bytes, doub
 bool promptForPath(const char *title, char *fileName, std::size_t fileNameSize) {
 	if (fileName == nullptr || fileNameSize == 0)
 		return false;
-	initRememberedLoadDialogPath(fileName, fileNameSize, "*.*");
-	return execDialogWithPayload(new TFileDialog("*.*", title, "~N~ame", fdOpenButton, kFileDialogHistoryId), fileName) !=
-	       cmCancel;
+	const MRDialogHistoryScope scope =
+	    std::string_view(title != nullptr ? title : "") == "Load File" ? MRDialogHistoryScope::LoadFile
+	                                                                    : MRDialogHistoryScope::OpenFile;
+	mr::dialogs::seedFileDialogPath(scope, fileName, fileNameSize, "*.*");
+	if (mr::dialogs::execRememberingFileDialogWithData(scope, "*.*", title, "~N~ame", fdOpenButton,
+	                                                   fileName) == cmCancel)
+		return false;
+	return true;
 }
 
 bool promptForSaveAsPath(const char *title, const char *initialPath, std::string &outResolvedPath) {
 	char fileName[MAXPATH] = {0};
 	ushort result = cmCancel;
+	MRDialogHistoryScope scope = MRDialogHistoryScope::EditorSaveAs;
 
 	outResolvedPath.clear();
-	if (initialPath != nullptr && *initialPath != '\0')
-		strnzcpy(fileName, initialPath, sizeof(fileName));
-	else
-		initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.*");
-	result = execDialogWithPayload(new TFileDialog("*.*", title, "~N~ame", fdOKButton, kFileDialogHistoryId),
-	                               fileName);
+	if (std::string_view(title != nullptr ? title : "") == "Save log as")
+		scope = MRDialogHistoryScope::SaveLogAs;
+	mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.*",
+	                                initialPath != nullptr ? std::string_view(initialPath)
+	                                                       : std::string_view());
+	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.*", title, "~N~ame",
+	                                                        fdOKButton, fileName);
 	if (result == cmCancel)
 		return false;
 	outResolvedPath = expandUserPath(fileName);
@@ -720,7 +727,7 @@ bool promptForSaveAsPath(const char *title, const char *initialPath, std::string
 		postWindowCommandError("Wildcards are not allowed in save file names.");
 		return false;
 	}
-	rememberLoadDialogPath(outResolvedPath.c_str());
+	rememberLoadDialogPath(scope, outResolvedPath.c_str());
 	return true;
 }
 
@@ -740,7 +747,7 @@ bool saveWindowSnapshotToPath(MREditWindow *win, const std::string &resolvedPath
 	return outFile.good();
 }
 
-bool resolveReadableExistingPath(const char *path, std::string &resolvedPath) {
+bool resolveReadableExistingPath(MRDialogHistoryScope scope, const char *path, std::string &resolvedPath) {
 	bool disableExtensionSearch = false;
 	std::string rawInput = expandUserPath(path != nullptr ? std::string_view(path) : std::string_view());
 
@@ -764,7 +771,7 @@ bool resolveReadableExistingPath(const char *path, std::string &resolvedPath) {
 		postWindowCommandError("File is not readable: " + resolvedPath);
 		return false;
 	}
-	rememberLoadDialogPath(resolvedPath.c_str());
+	rememberLoadDialogPath(scope, resolvedPath.c_str());
 	return true;
 }
 
@@ -843,6 +850,7 @@ bool saveCurrentEditWindowAs() {
 	MREditWindow *win = currentEditWindow();
 	std::string resolvedPath;
 	bool isLogWindow = false;
+	const char *initialPath = nullptr;
 
 	if (win == nullptr)
 		return false;
@@ -853,7 +861,10 @@ bool saveCurrentEditWindowAs() {
 			mrLogMessage("Save As rejected for read-only window.");
 			return false;
 		}
-		if (!promptForSaveAsPath("Save log as", win->currentFileName(), resolvedPath))
+		initialPath = nullptr;
+		if (!win->windowRoleDetail().empty())
+			initialPath = win->windowRoleDetail().c_str();
+		if (!promptForSaveAsPath("Save log as", initialPath, resolvedPath))
 			return false;
 		auto startedAt = std::chrono::steady_clock::now();
 		if (!saveWindowSnapshotToPath(win, resolvedPath)) {
@@ -865,6 +876,7 @@ bool saveCurrentEditWindowAs() {
 		    "Save log as", static_cast<std::size_t>(win->bufferId()), win->documentId(), win->bufferLength(),
 		    std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count(),
 		    resolvedPath);
+		win->setWindowRole(MREditWindow::wrLog, resolvedPath);
 		mrLogMessage("Log window saved as a new file.");
 		return true;
 	}

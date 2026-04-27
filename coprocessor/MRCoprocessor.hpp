@@ -75,6 +75,8 @@ class Payload {
 
 enum class IndicatorBlinkChannel : unsigned char {
 	ReadOnly,
+	Insert,
+	WordWrap,
 	TaskMarker,
 	StatusNotice
 };

@@ -330,36 +330,31 @@ std::string readCurrentWorkingDirectory() {
 	return std::string(cwd);
 }
 
-bool browseMrmacFileUri(const char *title, const std::string &currentValue, std::string &selectedUri) {
+bool browseMrmacFileUri(MRDialogHistoryScope scope, const char *title, const std::string &currentValue,
+                        std::string &selectedUri) {
 	char fileName[MAXPATH];
-	std::string seed = trimAscii(currentValue);
 	ushort result;
 
-	if (!seed.empty())
-		seed = normalizeConfiguredPathInput(seed);
-	if (!seed.empty())
-		writeRecordField(fileName, sizeof(fileName), seed);
-	else
-		initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.mrmac");
-	result = mr::dialogs::execDialogRawWithData(new TFileDialog("*.mrmac", title, "~N~ame", fdOKButton, kFileDialogHistoryId), fileName);
+	mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.mrmac", currentValue);
+	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.mrmac", title, "~N~ame",
+	                                                        fdOKButton, fileName);
 	if (result == cmCancel)
 		return false;
-	rememberLoadDialogPath(fileName);
 	selectedUri = normalizeConfiguredPathInput(fileName);
 	return !selectedUri.empty();
 }
 
-bool browseDirectoryPath(const std::string &currentValue, std::string &selectedPath) {
+bool browseDirectoryPath(MRDialogHistoryScope scope, const std::string &currentValue, std::string &selectedPath) {
 	std::string originalCwd = readCurrentWorkingDirectory();
 	std::string seed = normalizeConfiguredPathInput(trimAscii(currentValue));
 	std::string picked;
 	ushort result;
 
 	if (seed.empty())
-		seed = configuredLastFileDialogPath();
+		seed = configuredLastFileDialogPath(scope);
 	if (!seed.empty())
 		(void)::chdir(seed.c_str());
-	result = mr::dialogs::execDialogRaw(new TChDirDialog(cdNormal, kPathDialogHistoryId));
+	result = mr::dialogs::execDialogRaw(new TChDirDialog(cdNormal, configuredPathDialogHistoryId(scope)));
 	picked = readCurrentWorkingDirectory();
 	if (!originalCwd.empty())
 		(void)::chdir(originalCwd.c_str());
@@ -367,42 +362,29 @@ bool browseDirectoryPath(const std::string &currentValue, std::string &selectedP
 		return false;
 	selectedPath = normalizeConfiguredPathInput(picked);
 	if (!selectedPath.empty())
-		rememberLoadDialogPath(selectedPath.c_str());
+		rememberLoadDialogPath(scope, selectedPath.c_str());
 	return !selectedPath.empty();
 }
 
-bool browseColorThemeUri(const std::string &currentValue, std::string &selectedUri) {
+bool browseColorThemeUri(MRDialogHistoryScope scope, const std::string &currentValue,
+                         std::string &selectedUri) {
 	char fileName[MAXPATH];
-	std::string seed = trimAscii(currentValue);
-	TFileDialog *dialog = nullptr;
 	ushort result = cmCancel;
 
-	if (!seed.empty()) {
-		seed = normalizeConfiguredPathInput(seed);
-		writeRecordField(fileName, sizeof(fileName), seed);
-	} else {
-		std::string macroPath = configuredMacroDirectoryPath();
-		if (macroPath.empty())
-			initRememberedLoadDialogPath(fileName, sizeof(fileName), "*.mrmac");
-		else {
-			macroPath = normalizeConfiguredPathInput(macroPath);
-			if (!macroPath.empty() && macroPath.back() != '/')
+	mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.mrmac", currentValue);
+	if (trimAscii(currentValue).empty() && configuredLastFileDialogPath(scope).empty()) {
+		std::string macroPath = normalizeConfiguredPathInput(configuredMacroDirectoryPath());
+		if (!macroPath.empty()) {
+			if (macroPath.back() != '/')
 				macroPath += '/';
 			macroPath += "*.mrmac";
 			writeRecordField(fileName, sizeof(fileName), macroPath);
 		}
 	}
-	dialog = new TFileDialog("*.mrmac", "Color theme file", "~N~ame", fdOKButton, kFileDialogHistoryId);
-	if (dialog == nullptr)
-		return false;
-	dialog->setData(fileName);
-	result = TProgram::deskTop->execView(dialog);
-	if (result != cmCancel)
-		dialog->getData(fileName);
-	TObject::destroy(dialog);
+	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.mrmac", "Color theme file",
+	                                                        "~N~ame", fdOKButton, fileName);
 	if (result == cmCancel)
 		return false;
-	rememberLoadDialogPath(fileName);
 	selectedUri = normalizeConfiguredPathInput(fileName);
 	return true;
 }
@@ -571,12 +553,6 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		view->setWarningText(warningText);
 	}
 
-	TButton *addButton(const TRect &rect, const char *title, ushort command, ushort flags) {
-		TButton *view = new TButton(rect, title, command, flags);
-		addManaged(view, rect);
-		return view;
-	}
-
 	TInlineGlyphButton *addGlyphButton(const TRect &rect, ushort command) {
 		TInlineGlyphButton *view = new TInlineGlyphButton(rect, "🔎", command);
 		addManaged(view, rect);
@@ -596,6 +572,17 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	}
 
 	void buildViews() {
+		const std::array listButtons{
+		    mr::dialogs::DialogButtonSpec{"Ne~w~", cmMrSetupFilenameProfilesAdd, bfNormal},
+		    mr::dialogs::DialogButtonSpec{"Cop~y~", cmMrSetupFilenameProfilesCopy, bfNormal},
+		    mr::dialogs::DialogButtonSpec{"De~l~ete", cmMrSetupFilenameProfilesDelete, bfNormal}};
+		const std::array bottomButtons{
+		    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault},
+		    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal},
+		    mr::dialogs::DialogButtonSpec{"~H~elp", cmMrSetupFilenameProfilesHelp, bfNormal}};
+		std::vector<TButton *> listButtonViews;
+		const mr::dialogs::DialogButtonRowMetrics bottomMetrics =
+		    mr::dialogs::measureUniformButtonRow(bottomButtons, 2);
 		const int listLeft = 2;
 		const int listWidth = 25;
 		const int listBottom = 13;
@@ -607,20 +594,16 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		const int fieldRight = colorGlyphLeft;
 		const int buttonRow = 14;
 		const int bottomTop = kVirtualHeight - 3;
-		const int doneLeft = kDialogWidth / 2 - 17;
-		const int cancelLeft = doneLeft + 12;
-		const int helpLeft = cancelLeft + 14;
+		const int bottomButtonLeft = (kDialogWidth - bottomMetrics.rowWidth) / 2;
 
 		addLabel(TRect(listLeft, 2, listLeft + 12, 3), "Profiles:");
 		mProfileListScrollBar = addScrollBar(TRect(listLeft + listWidth, 3, listLeft + listWidth + 1, listBottom));
 		mProfileList = addProfileListBox(TRect(listLeft, 3, listLeft + listWidth, listBottom), mProfileListScrollBar);
 
-		addButton(TRect(listLeft, buttonRow, listLeft + 8, buttonRow + 2), "Ne~w~", cmMrSetupFilenameProfilesAdd,
-		          bfNormal);
-		addButton(TRect(listLeft + 8, buttonRow, listLeft + 16, buttonRow + 2), "Cop~y~",
-		          cmMrSetupFilenameProfilesCopy, bfNormal);
-		mDeleteButton = addButton(TRect(listLeft + 16, buttonRow, listLeft + 26, buttonRow + 2), "De~l~ete ",
-		                         cmMrSetupFilenameProfilesDelete, bfNormal);
+		mr::dialogs::addManagedUniformButtonRow(*this, listLeft, buttonRow, 0, listButtons, 0,
+		                                        &listButtonViews);
+		if (listButtonViews.size() >= 3)
+			mDeleteButton = listButtonViews[2];
 
 		mProfileIdLabel = addLabel(TRect(rightLeft, 2, fieldLeft - 1, 3), "Profile ID:");
 		mProfileIdField = addInput(TRect(fieldLeft, 2, fieldRight, 3), kProfileIdFieldSize - 1);
@@ -638,11 +621,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 		editorSettingsPanel.buildViews(*this);
 
-		addButton(TRect(doneLeft, bottomTop, doneLeft + 10, bottomTop + 2), "~D~one", cmOK, bfDefault);
-		addButton(TRect(cancelLeft, bottomTop, cancelLeft + 12, bottomTop + 2), "C~a~ncel", cmCancel,
-		          bfNormal);
-		addButton(TRect(helpLeft, bottomTop, helpLeft + 8, bottomTop + 2), "~H~elp", cmMrSetupFilenameProfilesHelp,
-		          bfNormal);
+		mr::dialogs::addManagedUniformButtonRow(*this, bottomButtonLeft, bottomTop, 2, bottomButtons);
 	}
 
 	void setLabelInactive(TInactiveStaticText *label, bool inactive) {
@@ -847,7 +826,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 			return;
 		std::string selectedUri;
 		std::string currentValue = readInputLineString(mProfileColorThemeField, kProfileColorThemeFieldSize);
-		if (!browseColorThemeUri(currentValue, selectedUri))
+		if (!browseColorThemeUri(MRDialogHistoryScope::ExtensionThemeFile, currentValue, selectedUri))
 			return;
 		writeInputLineString(mProfileColorThemeField, selectedUri, kProfileColorThemeFieldSize);
 		saveWidgetsToCurrentDraft();
@@ -856,7 +835,8 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 	void browseCurrentPostLoadMacro() {
 		std::string selectedUri;
-		if (!browseMrmacFileUri("Select post-load macro", editorSettingsPanel.postLoadMacroValue(), selectedUri))
+		if (!browseMrmacFileUri(MRDialogHistoryScope::ExtensionPostLoadMacro, "Select post-load macro",
+		                        editorSettingsPanel.postLoadMacroValue(), selectedUri))
 			return;
 		editorSettingsPanel.setPostLoadMacroValue(selectedUri);
 		saveWidgetsToCurrentDraft();
@@ -865,7 +845,8 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 	void browseCurrentPreSaveMacro() {
 		std::string selectedUri;
-		if (!browseMrmacFileUri("Select pre-save macro", editorSettingsPanel.preSaveMacroValue(), selectedUri))
+		if (!browseMrmacFileUri(MRDialogHistoryScope::ExtensionPreSaveMacro, "Select pre-save macro",
+		                        editorSettingsPanel.preSaveMacroValue(), selectedUri))
 			return;
 		editorSettingsPanel.setPreSaveMacroValue(selectedUri);
 		saveWidgetsToCurrentDraft();
@@ -874,7 +855,8 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 	void browseCurrentDefaultPath() {
 		std::string selectedPath;
-		if (!browseDirectoryPath(editorSettingsPanel.defaultPathValue(), selectedPath))
+		if (!browseDirectoryPath(MRDialogHistoryScope::ExtensionDefaultPath,
+		                        editorSettingsPanel.defaultPathValue(), selectedPath))
 			return;
 		editorSettingsPanel.setDefaultPathValue(selectedPath);
 		saveWidgetsToCurrentDraft();

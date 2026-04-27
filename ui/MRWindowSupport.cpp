@@ -1,8 +1,12 @@
 #define Uses_TApplication
+#define Uses_TButton
 #define Uses_TDeskTop
+#define Uses_TDialog
 #define Uses_TEvent
 #define Uses_MsgBox
 #define Uses_TProgram
+#define Uses_TStaticText
+#define Uses_TWindowInit
 #include <tvision/tv.h>
 
 #include "MRWindowSupport.hpp"
@@ -19,8 +23,12 @@
 #include <vector>
 
 #include "../app/MRCommands.hpp"
+#include "../app/MRCommandRouter.hpp"
 #include "../config/MRDialogPaths.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
+#include "../dialogs/MRSetupCommon.hpp"
+#include "../keymap/MRKeymapResolver.hpp"
+#include "../keymap/MRKeymapToken.hpp"
 #include "MRMessageLineController.hpp"
 #include "MREditWindow.hpp"
 
@@ -36,9 +44,141 @@ bool g_macroBrainMarkerVisible = false;
 MREditWindow *g_deferredActivationWindow = nullptr;
 [[nodiscard]] std::string baseNameOf(std::string_view path);
 
+bool runtimeKeymapDebugEnabled() noexcept {
+	static int cached = -1;
+
+	if (cached < 0) {
+		const char *value = std::getenv("MR_KEY_DEBUG");
+		cached = (value != nullptr && *value != '\0' && std::strcmp(value, "0") != 0) ? 1 : 0;
+	}
+	return cached == 1;
+}
+
+const char *runtimeKeymapContextName(MRKeymapContext context) noexcept {
+	switch (context) {
+		case MRKeymapContext::Menu:
+			return "menu";
+		case MRKeymapContext::Dialog:
+			return "dialog";
+		case MRKeymapContext::DialogList:
+			return "dialog-list";
+		case MRKeymapContext::List:
+			return "list";
+		case MRKeymapContext::ReadOnly:
+			return "readonly";
+		case MRKeymapContext::Edit:
+			return "edit";
+		case MRKeymapContext::None:
+			break;
+	}
+	return "none";
+}
+
+const char *keymapResultName(MRKeymapResolver::ResultKind kind) noexcept {
+	switch (kind) {
+		case MRKeymapResolver::ResultKind::NoMatch:
+			return "no-match";
+		case MRKeymapResolver::ResultKind::Pending:
+			return "pending";
+		case MRKeymapResolver::ResultKind::Matched:
+			return "matched";
+		case MRKeymapResolver::ResultKind::Invalid:
+			return "invalid";
+		case MRKeymapResolver::ResultKind::Aborted:
+			return "aborted";
+	}
+	return "unknown";
+}
+
+bool focusDebugEnabled() noexcept {
+	return runtimeKeymapDebugEnabled();
+}
+
+std::string describeDesktopCurrentView() {
+	TView *current = TProgram::deskTop != nullptr ? TProgram::deskTop->current : nullptr;
+	MREditWindow *editWindow = dynamic_cast<MREditWindow *>(current);
+	TDialog *dialog = dynamic_cast<TDialog *>(current);
+	std::string line = "current=";
+
+	if (editWindow != nullptr) {
+		line += "edit('";
+		line += editWindow->getTitle(0) != nullptr ? editWindow->getTitle(0) : "?";
+		line += "')";
+	}
+	else if (dialog != nullptr) {
+		line += "dialog('";
+		line += dialog->getTitle(0) != nullptr ? dialog->getTitle(0) : "?";
+		line += "')";
+	}
+	else if (current != nullptr)
+		line += "other";
+	else
+		line += "null";
+	if (current != nullptr) {
+		line += " visible=";
+		line += (current->state & sfVisible) != 0 ? "1" : "0";
+		line += " selected=";
+		line += (current->state & sfSelected) != 0 ? "1" : "0";
+	}
+	return line;
+}
+
+class TBindingKeyCaptureDialog : public MRDialogFoundation {
+  public:
+	TBindingKeyCaptureDialog(const char *title, const char *prompt)
+	    : TWindowInit(&TDialog::initFrame),
+	      MRDialogFoundation(centeredSetupDialogRect(52, 8),
+	                         title != nullptr ? title : "Bind Key", 52, 8),
+	      captureAccepted(false), capturedKeyCode(kbNoKey), capturedControlState(0) {
+		insert(new TStaticText(TRect(2, 2, 50, 6),
+		                       prompt != nullptr ? prompt : "Press key to bind.\nEsc = cancel."));
+	}
+
+	void handleEvent(TEvent &event) override {
+		if (event.what == evKeyDown) {
+			const TKey pressed(event.keyDown);
+
+			if (pressed == TKey(kbEsc)) {
+				endModal(cmCancel);
+				clearEvent(event);
+				return;
+			}
+			captureAccepted = true;
+			capturedKeyCode = event.keyDown.keyCode;
+			capturedControlState = event.keyDown.controlKeyState;
+			endModal(cmOK);
+			clearEvent(event);
+			return;
+		}
+		MRDialogFoundation::handleEvent(event);
+	}
+
+	[[nodiscard]] bool hasCaptured() const noexcept {
+		return captureAccepted;
+	}
+
+	[[nodiscard]] ushort keyCode() const noexcept {
+		return capturedKeyCode;
+	}
+
+	[[nodiscard]] ushort controlState() const noexcept {
+		return capturedControlState;
+	}
+
+  private:
+	bool captureAccepted;
+	ushort capturedKeyCode;
+	ushort capturedControlState;
+};
+
 void postWindowSupportError(std::string_view text) {
 	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text,
 	                               mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+}
+
+void postWindowSupportWarning(std::string_view text) {
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text,
+	                               mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
 }
 
 [[nodiscard]] std::string currentWorkingDirectory() {
@@ -190,16 +330,37 @@ void postWindowSupportError(std::string_view text) {
 } // namespace
 
 bool mrActivateEditWindow(MREditWindow *win) {
+	std::string line;
+
 	if (win == nullptr)
 		return false;
+	if (focusDebugEnabled()) {
+		line = "mrActivateEditWindow before target='";
+		line += win->getTitle(0) != nullptr ? win->getTitle(0) : "?";
+		line += "' visible=";
+		line += (win->state & sfVisible) != 0 ? "1" : "0";
+		line += " selected=";
+		line += (win->state & sfSelected) != 0 ? "1" : "0";
+		line += " ";
+		line += describeDesktopCurrentView();
+		mrLogMessage(line);
+	}
 	setWindowManuallyHidden(win, false);
 	setCurrentVirtualDesktop(win->mVirtualDesktop);
 	if ((win->state & sfVisible) == 0)
 		win->show();
-	if (TProgram::deskTop != nullptr)
-		TProgram::deskTop->setCurrent(win, TView::normalSelect);
-	else
-		win->select();
+	win->select();
+	if (focusDebugEnabled()) {
+		line = "mrActivateEditWindow after target='";
+		line += win->getTitle(0) != nullptr ? win->getTitle(0) : "?";
+		line += "' visible=";
+		line += (win->state & sfVisible) != 0 ? "1" : "0";
+		line += " selected=";
+		line += (win->state & sfSelected) != 0 ? "1" : "0";
+		line += " ";
+		line += describeDesktopCurrentView();
+		mrLogMessage(line);
+	}
 	return true;
 }
 
@@ -374,6 +535,175 @@ void mrLogSettingsWriteReport(std::string_view reason, const MRSettingsWriteRepo
 		mrLogMessage(std::string("settings.mrmac write (") + std::string(reason) + "): " + report.settingsPath);
 	for (const std::string &line : report.logLines)
 		mrLogMessage(line);
+}
+
+bool mrKeyTokenFromEvent(ushort keyCode, ushort controlKeyState, std::string &outToken) {
+	struct ComboSpec {
+		const char *prefix;
+		ushort mods;
+	};
+	struct NamedKeySpec {
+		const char *token;
+		ushort code;
+	};
+	static const ComboSpec combos[] = {{"", 0},
+	                                   {"Shft", kbShift},
+	                                   {"Ctrl", kbCtrlShift},
+	                                   {"Alt", kbAltShift},
+	                                   {"CtrlShft", static_cast<ushort>(kbCtrlShift | kbShift)},
+	                                   {"AltShft", static_cast<ushort>(kbAltShift | kbShift)},
+	                                   {"CtrlAlt", static_cast<ushort>(kbCtrlShift | kbAltShift)},
+	                                   {"CtrlAltShft",
+	                                    static_cast<ushort>(kbCtrlShift | kbAltShift | kbShift)}};
+	static const NamedKeySpec named[] = {{"Enter", kbEnter},
+	                                     {"Tab", kbTab},
+	                                     {"Esc", kbEsc},
+	                                     {"Backspace", kbBack},
+	                                     {"Up", kbUp},
+	                                     {"Down", kbDown},
+	                                     {"Left", kbLeft},
+	                                     {"Right", kbRight},
+	                                     {"PgUp", kbPgUp},
+	                                     {"PgDn", kbPgDn},
+	                                     {"Home", kbHome},
+	                                     {"End", kbEnd},
+	                                     {"Ins", kbIns},
+	                                     {"Del", kbDel},
+	                                     {"Grey-", kbGrayMinus},
+	                                     {"Grey+", kbGrayPlus},
+	                                     {"Grey*", static_cast<ushort>('*')},
+	                                     {"Space", static_cast<ushort>(' ')},
+	                                     {"Minus", static_cast<ushort>('-')},
+	                                     {"Equal", static_cast<ushort>('=')},
+	                                     {"F1", kbF1},
+	                                     {"F2", kbF2},
+	                                     {"F3", kbF3},
+	                                     {"F4", kbF4},
+	                                     {"F5", kbF5},
+	                                     {"F6", kbF6},
+	                                     {"F7", kbF7},
+	                                     {"F8", kbF8},
+	                                     {"F9", kbF9},
+	                                     {"F10", kbF10},
+	                                     {"F11", kbF11},
+	                                     {"F12", kbF12}};
+	const TKey pressed(keyCode, controlKeyState);
+
+	for (const ComboSpec &combo : combos)
+		for (const NamedKeySpec &entry : named)
+			if (pressed == TKey(entry.code, combo.mods)) {
+				outToken = "<";
+				outToken += combo.prefix;
+				outToken += entry.token;
+				outToken += ">";
+				return true;
+			}
+
+	for (const ComboSpec &combo : combos) {
+		for (char c = 'A'; c <= 'Z'; ++c)
+			if (pressed == TKey(static_cast<ushort>(c), combo.mods)) {
+				outToken = "<";
+				outToken += combo.prefix;
+				outToken.push_back(c);
+				outToken += ">";
+				return true;
+			}
+		for (char c = '0'; c <= '9'; ++c)
+			if (pressed == TKey(static_cast<ushort>(c), combo.mods)) {
+				outToken = "<";
+				outToken += combo.prefix;
+				outToken.push_back(c);
+				outToken += ">";
+				return true;
+			}
+	}
+
+	if (keyCode >= 1 && keyCode <= 26 && (controlKeyState & (kbAltShift | kbPaste)) == 0) {
+		outToken = "<Ctrl";
+		outToken.push_back(static_cast<char>('A' + keyCode - 1));
+		outToken += ">";
+		return true;
+	}
+
+	if (keyCode != kbNoKey && keyCode < 256 && std::isprint(static_cast<unsigned char>(keyCode)) != 0) {
+		outToken = "<";
+		outToken.push_back(static_cast<char>(keyCode));
+		outToken += ">";
+		return true;
+	}
+	return false;
+}
+
+bool mrKeymapTokenFromEvent(ushort keyCode, ushort controlKeyState, MRKeymapToken &outToken) {
+	std::string tokenText;
+	const auto parsed = mrKeyTokenFromEvent(keyCode, controlKeyState, tokenText)
+	                      ? MRKeymapToken::parse(tokenText)
+	                      : std::nullopt;
+
+	if (!parsed)
+		return false;
+	outToken = *parsed;
+	return true;
+}
+
+bool mrHandleRuntimeKeymapEvent(TEvent &event, MRKeymapContext context, MREditWindow *targetWindow) {
+	MRKeymapToken token(MRKeymapBaseKey::Esc, 0);
+	std::string tokenText;
+	char line[512];
+
+	if (event.what != evKeyDown || !mrKeymapTokenFromEvent(event.keyDown.keyCode, event.keyDown.controlKeyState, token))
+		return false;
+	tokenText = token.toString();
+
+	const MRKeymapResolver::Result result = runtimeKeymapResolver().resolve(context, token);
+	if (runtimeKeymapDebugEnabled()) {
+		std::snprintf(line, sizeof(line),
+		              "KEYDBG keymap context=%s rawCode=0x%04X rawMods=0x%04X token=%s result=%s sequence=%s target=%s",
+		              runtimeKeymapContextName(context), static_cast<unsigned>(event.keyDown.keyCode),
+		              static_cast<unsigned>(event.keyDown.controlKeyState), tokenText.c_str(),
+		              keymapResultName(result.kind), result.sequenceText.c_str(), result.target.target.c_str());
+		mrLogMessage(line);
+	}
+	switch (result.kind) {
+		case MRKeymapResolver::ResultKind::NoMatch:
+			return false;
+		case MRKeymapResolver::ResultKind::Pending:
+		case MRKeymapResolver::ResultKind::Invalid:
+		case MRKeymapResolver::ResultKind::Aborted:
+			event.what = evNothing;
+			return true;
+		case MRKeymapResolver::ResultKind::Matched:
+			event.what = evNothing;
+			if (result.target.type == MRKeymapBindingType::Macro) {
+				if (!dispatchMRKeymapMacro(result.target.target))
+					postWindowSupportError("Macro binding failed: " + result.target.target);
+				return true;
+			}
+			if (!dispatchMRKeymapAction(result.target.target, result.sequenceText, targetWindow))
+				postWindowSupportError("Keymap action is not implemented: " + result.target.target);
+			return true;
+	}
+	return false;
+}
+
+bool mrCaptureBindingKeySpec(const char *title, const char *prompt, std::string &keySpec) {
+	TBindingKeyCaptureDialog *dialog = new TBindingKeyCaptureDialog(title, prompt);
+	const ushort result = dialog != nullptr && TProgram::deskTop != nullptr ? TProgram::deskTop->execView(dialog)
+	                                                                        : cmCancel;
+	const bool captured = dialog != nullptr ? dialog->hasCaptured() : false;
+	const ushort keyCode = dialog != nullptr ? dialog->keyCode() : kbNoKey;
+	const ushort controlState = dialog != nullptr ? dialog->controlState() : 0;
+
+	keySpec.clear();
+	if (dialog != nullptr)
+		TObject::destroy(dialog);
+	if (result == cmCancel || !captured)
+		return true;
+	if (!mrKeyTokenFromEvent(keyCode, controlState, keySpec)) {
+		postWindowSupportWarning("Unsupported binding key. Use a function key or a Ctrl/Alt/Shift combination.");
+		return false;
+	}
+	return true;
 }
 
 void mrSetKeystrokeRecordingActive(bool active) {

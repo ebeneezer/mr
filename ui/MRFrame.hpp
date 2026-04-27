@@ -40,6 +40,9 @@ class MRFrame : public TFrame {
 	struct MarkerState {
 		bool modified;
 		bool insertMode;
+		bool insertModeVisible;
+		bool wordWrap;
+		bool wordWrapVisible;
 		bool background;
 		bool backgroundVisible;
 		bool readOnly;
@@ -50,17 +53,22 @@ class MRFrame : public TFrame {
 		bool macroBrainVisible;
 
 		MarkerState() noexcept
-		    : modified(false), insertMode(false), background(false), backgroundVisible(false), readOnly(false),
+		    : modified(false), insertMode(false), insertModeVisible(false), wordWrap(false),
+		      wordWrapVisible(false), background(false), backgroundVisible(false), readOnly(false),
 		      readOnlyVisible(false), recording(false), recordingVisible(false), macroBrain(false),
 		      macroBrainVisible(false) {
 		}
 
-		MarkerState(bool aModified, bool anInsertMode, bool aBackground, bool aBackgroundVisible, bool aReadOnly,
-		            bool aReadOnlyVisible, bool aRecording, bool aRecordingVisible, bool aMacroBrain,
+		MarkerState(bool aModified, bool anInsertMode, bool anInsertModeVisible, bool aWordWrap,
+		            bool aWordWrapVisible,
+		            bool aBackground, bool aBackgroundVisible, bool aReadOnly, bool aReadOnlyVisible,
+		            bool aRecording, bool aRecordingVisible, bool aMacroBrain,
 		            bool aMacroBrainVisible) noexcept
-		    : modified(aModified), insertMode(anInsertMode), background(aBackground),
-		      backgroundVisible(aBackgroundVisible), readOnly(aReadOnly), readOnlyVisible(aReadOnlyVisible),
-		      recording(aRecording), recordingVisible(aRecordingVisible), macroBrain(aMacroBrain),
+		    : modified(aModified), insertMode(anInsertMode), insertModeVisible(anInsertModeVisible),
+		      wordWrap(aWordWrap), wordWrapVisible(aWordWrapVisible), background(aBackground),
+		      backgroundVisible(aBackgroundVisible), readOnly(aReadOnly),
+		      readOnlyVisible(aReadOnlyVisible), recording(aRecording),
+		      recordingVisible(aRecordingVisible), macroBrain(aMacroBrain),
 		      macroBrainVisible(aMacroBrainVisible) {
 		}
 	};

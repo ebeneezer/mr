@@ -1,7 +1,11 @@
 #include "../app/utils/MRFileIOUtils.hpp"
 #include "../app/utils/MRStringUtils.hpp"
+#include "../keymap/MRKeymapResolver.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../ui/MRMessageLineController.hpp"
+#include "../ui/MRWindowSupport.hpp"
+#define Uses_THistory
+#include <tvision/tv.h>
 #include "MRDialogPaths.hpp"
 #include "MRSettingsLoader.hpp"
 
@@ -26,9 +30,33 @@
 
 namespace {
 
+std::string summarizeConfiguredKeymapsForLog(const std::vector<MRKeymapProfile> &profiles,
+                                             std::string_view activeProfileName) {
+	std::string text =
+	    "Keymap configured state: active='" + std::string(activeProfileName) + "' profiles=" +
+	    std::to_string(profiles.size());
+
+	for (const MRKeymapProfile &profile : profiles)
+		text += " [" + profile.name + ":" + std::to_string(profile.bindings.size()) + "]";
+	return text;
+}
+
 struct MRDialogHistoryEntry {
 	std::string value;
 	long long epoch = 0;
+};
+
+struct MRScopedDialogHistoryState {
+	std::string lastPath;
+	std::vector<MRDialogHistoryEntry> pathHistory;
+	std::vector<MRDialogHistoryEntry> fileHistory;
+	bool fileHistorySeeded = false;
+	bool pathHistorySeeded = false;
+};
+
+struct MRDialogHistoryScopeSpec {
+	MRDialogHistoryScope scope;
+	const char *name;
 };
 
 constexpr int kHistoryLimitMin = 5;
@@ -48,15 +76,67 @@ static bool g_autoloadWorkspace = false;
 static MRLogHandling g_logHandling = MRLogHandling::Volatile;
 static std::map<std::string, std::string> g_autoexecMacroDiagnostics;
 
-std::vector<MRDialogHistoryEntry> &configuredPathHistoryStorage() {
-	static std::vector<MRDialogHistoryEntry> value;
+constexpr std::array kDialogHistoryScopeSpecs{
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::General, "GENERAL"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::EditorSaveAs, "EDITOR_SAVE_AS"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::OpenFile, "OPEN_FILE"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::LoadFile, "LOAD_FILE"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::SaveLogAs, "SAVE_LOG_AS"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::BlockSave, "BLOCK_SAVE"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::BlockLoad, "BLOCK_LOAD"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::MacroFile, "MACRO_FILE"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::KeymapProfileLoad, "KEYMAP_PROFILE_LOAD"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::KeymapProfileSave, "KEYMAP_PROFILE_SAVE"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::WorkspaceLoad, "WORKSPACE_LOAD"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::WorkspaceSave, "WORKSPACE_SAVE"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::SetupSettingsMacro, "SETUP_SETTINGS_MACRO"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::SetupMacroDirectory, "SETUP_MACRO_DIRECTORY"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::SetupHelpFile, "SETUP_HELP_FILE"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::SetupTempDirectory, "SETUP_TEMP_DIRECTORY"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::SetupShellExecutable, "SETUP_SHELL_EXECUTABLE"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::SetupLogFile, "SETUP_LOG_FILE"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::SetupBackupDirectory, "SETUP_BACKUP_DIRECTORY"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::SetupThemeLoad, "SETUP_THEME_LOAD"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::SetupThemeSave, "SETUP_THEME_SAVE"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::ExtensionThemeFile, "EXTENSION_THEME_FILE"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::ExtensionPostLoadMacro, "EXTENSION_POST_LOAD_MACRO"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::ExtensionPreSaveMacro, "EXTENSION_PRE_SAVE_MACRO"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::ExtensionDefaultPath, "EXTENSION_DEFAULT_PATH"},
+};
+
+static_assert(kDialogHistoryScopeSpecs.size() == static_cast<std::size_t>(MRDialogHistoryScope::Count));
+
+std::array<MRScopedDialogHistoryState, static_cast<std::size_t>(MRDialogHistoryScope::Count)> &
+configuredDialogHistoryStorage() {
+	static std::array<MRScopedDialogHistoryState, static_cast<std::size_t>(MRDialogHistoryScope::Count)> value;
 	return value;
 }
 
-std::vector<MRDialogHistoryEntry> &configuredFileHistoryStorage() {
-	static std::vector<MRDialogHistoryEntry> value;
-	return value;
+std::size_t dialogHistoryScopeIndex(MRDialogHistoryScope scope) noexcept {
+	return static_cast<std::size_t>(scope);
 }
+
+MRScopedDialogHistoryState &dialogHistoryState(MRDialogHistoryScope scope) {
+	return configuredDialogHistoryStorage()[dialogHistoryScopeIndex(scope)];
+}
+
+const MRDialogHistoryScopeSpec *findDialogHistoryScopeSpec(MRDialogHistoryScope scope) noexcept {
+	const std::size_t index = dialogHistoryScopeIndex(scope);
+	return index < kDialogHistoryScopeSpecs.size() ? &kDialogHistoryScopeSpecs[index] : nullptr;
+}
+
+const MRDialogHistoryScopeSpec *findDialogHistoryScopeSpecByName(std::string_view name) noexcept {
+	for (const MRDialogHistoryScopeSpec &spec : kDialogHistoryScopeSpecs)
+		if (spec.name == upperAscii(std::string(name)))
+			return &spec;
+	return nullptr;
+}
+
+const char *dialogHistoryScopeName(MRDialogHistoryScope scope) noexcept {
+	const MRDialogHistoryScopeSpec *spec = findDialogHistoryScopeSpec(scope);
+	return spec != nullptr ? spec->name : "GENERAL";
+}
+
 
 std::vector<MRDialogHistoryEntry> &configuredMultiFilespecHistoryStorage() {
 	static std::vector<MRDialogHistoryEntry> value;
@@ -141,8 +221,23 @@ std::vector<MREditExtensionProfile> &configuredEditProfiles() {
 	return value;
 }
 
+std::vector<MRKeymapProfile> &configuredKeymapProfilesValue() {
+	static std::vector<MRKeymapProfile> value;
+	return value;
+}
+
 std::string &configuredDefaultProfileDescriptionValue() {
 	static std::string value = "Global defaults";
+	return value;
+}
+
+std::string &configuredKeymapFileValue() {
+	static std::string value;
+	return value;
+}
+
+std::string &configuredActiveKeymapProfileValue() {
+	static std::string value = "DEFAULT";
 	return value;
 }
 
@@ -391,11 +486,24 @@ std::string latestReadableHistoryFileDirectory(const std::vector<MRDialogHistory
 	return std::string();
 }
 
-std::string effectiveRememberedLoadDirectory() {
-	std::string remembered = latestReadableHistoryPath(configuredPathHistoryStorage());
+std::string latestHistoryValue(const std::vector<MRDialogHistoryEntry> &entries) {
+	for (const MRDialogHistoryEntry &entry : entries) {
+		const std::string normalized = normalizeConfiguredPathInput(entry.value);
+		if (!normalized.empty())
+			return normalized;
+	}
+	return std::string();
+}
+
+std::string effectiveRememberedLoadDirectory(MRDialogHistoryScope scope) {
+	const MRScopedDialogHistoryState &state = dialogHistoryState(scope);
+	std::string remembered = normalizeConfiguredPathInput(state.lastPath);
+	if (!remembered.empty() && isReadableDirectory(remembered))
+		return remembered;
+	remembered = latestReadableHistoryPath(state.pathHistory);
 	if (!remembered.empty())
 		return remembered;
-	remembered = latestReadableHistoryFileDirectory(configuredFileHistoryStorage());
+	remembered = latestReadableHistoryFileDirectory(state.fileHistory);
 	if (!remembered.empty())
 		return remembered;
 	return fallbackRememberedLoadDirectory();
@@ -611,6 +719,163 @@ std::string escapeMrmacSingleQuotedLiteral(const std::string &value) {
 	return out;
 }
 
+bool setError(std::string *errorMessage, const std::string &message);
+
+std::string escapePayloadQuotedString(std::string_view value) {
+	std::string escaped;
+
+	escaped.reserve(value.size() + 8);
+	for (const char ch : value)
+		switch (ch) {
+			case '"':
+				escaped += "\\\"";
+				break;
+			case '\\':
+				escaped += "\\\\";
+				break;
+			case '\n':
+				escaped += "\\n";
+				break;
+			case '\r':
+				escaped += "\\r";
+				break;
+			case '\t':
+				escaped += "\\t";
+				break;
+			default:
+				escaped.push_back(ch);
+				break;
+		}
+	return escaped;
+}
+
+bool isPayloadKeyStart(char ch) noexcept {
+	const unsigned char uch = static_cast<unsigned char>(ch);
+	return std::isalpha(uch) != 0;
+}
+
+bool isPayloadKeyChar(char ch) noexcept {
+	const unsigned char uch = static_cast<unsigned char>(ch);
+	return std::isalnum(uch) != 0 || ch == '_';
+}
+
+bool isPayloadSpace(char ch) noexcept {
+	return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n';
+}
+
+struct ScopedHistoryPayloadMember {
+	std::string key;
+	std::string value;
+};
+
+bool parseScopedHistoryPayloadMembers(std::string_view payload, std::vector<ScopedHistoryPayloadMember> &members,
+                                      std::string *errorMessage) {
+	std::size_t pos = 0;
+
+	while (pos < payload.size()) {
+		while (pos < payload.size() && isPayloadSpace(payload[pos]))
+			++pos;
+		if (pos >= payload.size())
+			break;
+		if (!isPayloadKeyStart(payload[pos]))
+			return setError(errorMessage, "Dialog history payload syntax error.");
+
+		const std::size_t keyStart = pos;
+		++pos;
+		while (pos < payload.size() && isPayloadKeyChar(payload[pos]))
+			++pos;
+		std::string key = upperAscii(std::string(payload.substr(keyStart, pos - keyStart)));
+
+		if (pos >= payload.size() || payload[pos] != '=')
+			return setError(errorMessage, "Dialog history payload is missing '='.");
+		++pos;
+		if (pos >= payload.size() || payload[pos] != '"')
+			return setError(errorMessage, "Dialog history payload expects quoted values.");
+		++pos;
+
+		std::string value;
+		while (pos < payload.size()) {
+			const char ch = payload[pos++];
+			if (ch == '"')
+				break;
+			if (ch == '\\') {
+				if (pos >= payload.size())
+					return setError(errorMessage, "Dialog history payload has a dangling escape.");
+				switch (const char escaped = payload[pos++]) {
+					case '"':
+					case '\\':
+						value.push_back(escaped);
+						break;
+					case 'n':
+						value.push_back('\n');
+						break;
+					case 'r':
+						value.push_back('\r');
+						break;
+					case 't':
+						value.push_back('\t');
+						break;
+					default:
+						return setError(errorMessage, "Dialog history payload has an unsupported escape.");
+				}
+				continue;
+			}
+			value.push_back(ch);
+		}
+		if (pos > payload.size() || payload[pos - 1] != '"')
+			return setError(errorMessage, "Dialog history payload has an unterminated value.");
+
+		members.push_back({std::move(key), std::move(value)});
+	}
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+const ScopedHistoryPayloadMember *findScopedHistoryPayloadMember(
+    const std::vector<ScopedHistoryPayloadMember> &members, std::string_view key) noexcept {
+	for (const ScopedHistoryPayloadMember &member : members)
+		if (member.key == key)
+			return &member;
+	return nullptr;
+}
+
+bool parseScopedHistoryPayload(std::string_view payload, const char *valueMemberName,
+                               MRDialogHistoryScope &scopeOut, std::string &valueOut,
+                               std::string *errorMessage) {
+	std::vector<ScopedHistoryPayloadMember> members;
+	const ScopedHistoryPayloadMember *scopeMember = nullptr;
+	const ScopedHistoryPayloadMember *valueMember = nullptr;
+	const MRDialogHistoryScopeSpec *scopeSpec = nullptr;
+
+	if (!parseScopedHistoryPayloadMembers(payload, members, errorMessage))
+		return false;
+	scopeMember = findScopedHistoryPayloadMember(members, "SCOPE");
+	valueMember = findScopedHistoryPayloadMember(members, upperAscii(std::string(valueMemberName)));
+	if (scopeMember == nullptr || valueMember == nullptr)
+		return setError(errorMessage, "Dialog history payload requires scope and value members.");
+	scopeSpec = findDialogHistoryScopeSpecByName(scopeMember->value);
+	if (scopeSpec == nullptr)
+		return setError(errorMessage, "Dialog history payload references an unknown scope.");
+	scopeOut = scopeSpec->scope;
+	valueOut = valueMember->value;
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+std::string serializeScopedHistoryRecord(std::string_view key, MRDialogHistoryScope scope,
+                                         std::string_view valueMemberName, std::string_view value) {
+	std::string payload = "scope=\"";
+	payload += escapePayloadQuotedString(dialogHistoryScopeName(scope));
+	payload += "\" ";
+	payload += valueMemberName;
+	payload += "=\"";
+	payload += escapePayloadQuotedString(value);
+	payload += '"';
+	return "MRSETUP('" + std::string(key) + "', '" + escapeMrmacSingleQuotedLiteral(payload) + "');\n";
+}
+
 bool setError(std::string *errorMessage, const std::string &message) {
 	if (errorMessage != nullptr)
 		*errorMessage = message;
@@ -647,6 +912,7 @@ static const int kMinMiniMapWidth = 2;
 static const int kMaxMiniMapWidth = 20;
 static const char *const kDefaultCursorStatusColor = "";
 static const char *const kThemeSettingsKey = "COLORTHEMEURI";
+static const char *const kKeymapSettingsKey = "KEYMAPURI";
 static const char *const kWindowColorThemeProfileKey = "WINDOW_COLORTHEME_URI";
 static const char *const kSettingsVersionKey = "SETTINGS_VERSION";
 static const char *const kCurrentSettingsVersion = "2";
@@ -666,6 +932,9 @@ static const char *const kSarLeaveCursorStart = "START_OF_REPLACE_STRING";
 static const char *const kLogHandlingVolatile = "VOLATILE";
 static const char *const kLogHandlingPersist = "PERSIST";
 static const char *const kLogHandlingJournalctl = "JOURNALCTL";
+static const char *const kDialogLastPathKey = "DIALOG_LAST_PATH";
+static const char *const kDialogPathHistoryKey = "DIALOG_PATH_HISTORY";
+static const char *const kDialogFileHistoryKey = "DIALOG_FILE_HISTORY";
 
 struct MRSettingsKeyDescriptor {
 	const char *key;
@@ -725,13 +994,20 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
 	{"LOG_HANDLING", MRSettingsKeyClass::Global, true},
 	{"LOGFILE", MRSettingsKeyClass::Global, true},
 	{"AUTOEXEC_MACRO", MRSettingsKeyClass::Global, false},
-	{"LASTFILEDIALOGPATH", MRSettingsKeyClass::Global, true},
+	{"LASTFILEDIALOGPATH", MRSettingsKeyClass::Global, false},
 	{"WORKSPACE", MRSettingsKeyClass::Global, false},
 	{"MAX_PATH_HISTORY", MRSettingsKeyClass::Global, true},
 	{"MAX_FILE_HISTORY", MRSettingsKeyClass::Global, true},
 	{"PATH_HISTORY", MRSettingsKeyClass::Global, false},
 	{"FILE_HISTORY", MRSettingsKeyClass::Global, false},
+	{kDialogLastPathKey, MRSettingsKeyClass::Global, false},
+	{kDialogPathHistoryKey, MRSettingsKeyClass::Global, false},
+	{kDialogFileHistoryKey, MRSettingsKeyClass::Global, false},
 	{"DEFAULT_PROFILE_DESCRIPTION", MRSettingsKeyClass::Global, true},
+	{kKeymapSettingsKey, MRSettingsKeyClass::Global, true},
+	{"ACTIVE_KEYMAP_PROFILE", MRSettingsKeyClass::Global, true},
+	{"KEYMAP_PROFILE", MRSettingsKeyClass::Global, false},
+	{"KEYMAP_BIND", MRSettingsKeyClass::Global, false},
 	{kThemeSettingsKey, MRSettingsKeyClass::Global, true},
 	{"WINDOWCOLORS", MRSettingsKeyClass::ColorInline, false},
 	{"MENUDIALOGCOLORS", MRSettingsKeyClass::ColorInline, false},
@@ -2568,6 +2844,8 @@ bool parseHistoryLimitLiteral(const std::string &value, int &outValue, std::stri
                               const char *keyName);
 bool setConfiguredPathHistoryLimitValue(int value, std::string *errorMessage);
 bool setConfiguredFileHistoryLimitValue(int value, std::string *errorMessage);
+bool setScopedDialogLastPath(MRDialogHistoryScope scope, const std::string &path,
+                             std::string *errorMessage);
 
 std::string normalizeConfiguredPathInput(std::string_view input) {
 	return makeAbsolutePath(normalizeDialogPath(expandUserPath(input).c_str()));
@@ -2773,12 +3051,23 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	configuredColorSettingsInitialized() = true;
 	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(), errorMessage))
 		return false;
+	if (!setConfiguredKeymapProfiles(std::vector<MRKeymapProfile>(), errorMessage))
+		return false;
+	if (!setConfiguredKeymapFilePath("", errorMessage))
+		return false;
+	if (!setConfiguredActiveKeymapProfile("DEFAULT", errorMessage))
+		return false;
 	if (!setConfiguredColorThemeFilePath(defaultColorThemeFilePath(), errorMessage))
 		return false;
 	configuredPathHistoryLimit() = kHistoryLimitDefault;
 	configuredFileHistoryLimit() = kHistoryLimitDefault;
-	configuredPathHistoryStorage().clear();
-	configuredFileHistoryStorage().clear();
+	for (MRScopedDialogHistoryState &state : configuredDialogHistoryStorage()) {
+		state.lastPath.clear();
+		state.pathHistory.clear();
+		state.fileHistory.clear();
+		state.fileHistorySeeded = false;
+		state.pathHistorySeeded = false;
+	}
 	configuredMultiFilespecHistoryStorage().clear();
 	configuredMultiPathHistoryStorage().clear();
 	configuredHistoryEpochCounter() = std::max(static_cast<long long>(0), static_cast<long long>(std::time(nullptr)));
@@ -3115,13 +3404,47 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				return setConfiguredFileHistoryLimitValue(parsed, errorMessage);
 			}
 			if (upper == "PATH_HISTORY") {
-				addSerializedHistoryEntry(configuredPathHistoryStorage(), value, configuredPathHistoryLimit(), true);
+				addSerializedHistoryEntry(dialogHistoryState(MRDialogHistoryScope::General).pathHistory, value,
+				                         configuredPathHistoryLimit(), true);
 				if (errorMessage != nullptr)
 					errorMessage->clear();
 				return true;
 			}
 			if (upper == "FILE_HISTORY") {
-				addSerializedHistoryEntry(configuredFileHistoryStorage(), value, configuredFileHistoryLimit(), true);
+				addSerializedHistoryEntry(dialogHistoryState(MRDialogHistoryScope::General).fileHistory, value,
+				                         configuredFileHistoryLimit(), true);
+				if (errorMessage != nullptr)
+					errorMessage->clear();
+				return true;
+			}
+			if (upper == kDialogLastPathKey) {
+				MRDialogHistoryScope scope = MRDialogHistoryScope::General;
+				std::string parsedPath;
+
+				if (!parseScopedHistoryPayload(value, "path", scope, parsedPath, errorMessage))
+					return false;
+				return setScopedDialogLastPath(scope, parsedPath, errorMessage);
+			}
+			if (upper == kDialogPathHistoryKey) {
+				MRDialogHistoryScope scope = MRDialogHistoryScope::General;
+				std::string parsedValue;
+
+				if (!parseScopedHistoryPayload(value, "value", scope, parsedValue, errorMessage))
+					return false;
+				addSerializedHistoryEntry(dialogHistoryState(scope).pathHistory, parsedValue,
+				                         configuredPathHistoryLimit(), true);
+				if (errorMessage != nullptr)
+					errorMessage->clear();
+				return true;
+			}
+			if (upper == kDialogFileHistoryKey) {
+				MRDialogHistoryScope scope = MRDialogHistoryScope::General;
+				std::string parsedValue;
+
+				if (!parseScopedHistoryPayload(value, "value", scope, parsedValue, errorMessage))
+					return false;
+				addSerializedHistoryEntry(dialogHistoryState(scope).fileHistory, parsedValue,
+				                         configuredFileHistoryLimit(), true);
 				if (errorMessage != nullptr)
 					errorMessage->clear();
 				return true;
@@ -3141,6 +3464,13 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 			}
 			if (upper == "DEFAULT_PROFILE_DESCRIPTION")
 				return setConfiguredDefaultProfileDescription(value, errorMessage);
+			if (upper == kKeymapSettingsKey)
+				return setConfiguredKeymapFilePath(value, errorMessage);
+			if (upper == "ACTIVE_KEYMAP_PROFILE" || upper == "KEYMAP_PROFILE" || upper == "KEYMAP_BIND") {
+				if (errorMessage != nullptr)
+					errorMessage->clear();
+				return true;
+			}
 			if (upper == kThemeSettingsKey)
 				return setConfiguredColorThemeFilePath(value, errorMessage);
 			break;
@@ -3301,6 +3631,97 @@ bool setConfiguredDefaultProfileDescription(const std::string &value, std::strin
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;
+}
+
+const std::vector<MRKeymapProfile> &configuredKeymapProfiles() {
+	return configuredKeymapProfilesValue();
+}
+
+bool setConfiguredKeymapProfiles(const std::vector<MRKeymapProfile> &profiles, std::string *errorMessage) {
+	std::vector<MRKeymapProfile> normalized = profiles;
+	bool hasDefault = false;
+	std::string runtimeError;
+
+	for (MRKeymapProfile &profile : normalized) {
+		profile.name = trimAscii(profile.name);
+		profile.description = trimAscii(profile.description);
+		for (MRKeymapBindingRecord &binding : profile.bindings) {
+			binding.profileName = trimAscii(binding.profileName);
+			binding.target.target = trimAscii(binding.target.target);
+			binding.description = trimAscii(binding.description);
+		}
+		if (upperAscii(profile.name) == "DEFAULT") {
+			profile.name = "DEFAULT";
+			hasDefault = true;
+		}
+	}
+	if (!hasDefault)
+		normalized.insert(normalized.begin(), builtInDefaultKeymapProfile());
+
+	const auto diagnostics = validateKeymapProfiles(normalized);
+	for (const MRKeymapDiagnostic &diagnostic : diagnostics)
+		if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error)
+			return setError(errorMessage, diagnostic.message);
+	if (!runtimeKeymapResolver().rebuild(normalized, configuredActiveKeymapProfileValue(), &runtimeError))
+		return setError(errorMessage, runtimeError);
+
+	configuredKeymapProfilesValue() = normalized;
+	if (configuredActiveKeymapProfileValue().empty())
+		configuredActiveKeymapProfileValue() = "DEFAULT";
+	else if (std::ranges::find(normalized, configuredActiveKeymapProfileValue(), &MRKeymapProfile::name) ==
+	         normalized.end())
+		configuredActiveKeymapProfileValue() = "DEFAULT";
+	mrLogMessage(summarizeConfiguredKeymapsForLog(configuredKeymapProfilesValue(),
+	                                              configuredActiveKeymapProfileValue()));
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+std::string configuredKeymapFilePath() {
+	const std::string &configured = configuredKeymapFileValue();
+	return configured.empty() ? std::string() : makeAbsolutePath(configured);
+}
+
+bool setConfiguredKeymapFilePath(const std::string &path, std::string *errorMessage) {
+	std::string normalized = normalizeConfiguredPathInput(path);
+	struct stat st;
+
+	if (normalized.empty()) {
+		configuredKeymapFileValue().clear();
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		return true;
+	}
+	if (::stat(normalized.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
+		return setError(errorMessage, "Keymap URI must include a filename.");
+	configuredKeymapFileValue() = makeAbsolutePath(normalized);
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
+
+std::string configuredActiveKeymapProfile() {
+	return configuredActiveKeymapProfileValue();
+}
+
+bool setConfiguredActiveKeymapProfile(const std::string &value, std::string *errorMessage) {
+	std::string normalized = trimAscii(value);
+	std::string runtimeError;
+
+	if (normalized.empty())
+		normalized = "DEFAULT";
+	for (const MRKeymapProfile &profile : configuredKeymapProfilesValue())
+		if (profile.name == normalized) {
+			if (!runtimeKeymapResolver().rebuild(configuredKeymapProfilesValue(), normalized, &runtimeError))
+				return setError(errorMessage, runtimeError);
+			configuredActiveKeymapProfileValue() = normalized;
+			mrLogMessage("Keymap active profile set to '" + normalized + "'.");
+			if (errorMessage != nullptr)
+				errorMessage->clear();
+			return true;
+		}
+	return setError(errorMessage, "Unknown keymap profile: " + normalized);
 }
 
 bool applyConfiguredEditExtensionProfileDirective(const std::string &operation, const std::string &profileId,
@@ -3998,7 +4419,8 @@ bool setConfiguredPathHistoryLimitValue(int value, std::string *errorMessage) {
 	if (value < kHistoryLimitMin || value > kHistoryLimitMax)
 		return setError(errorMessage, "MAX_PATH_HISTORY must be within 5..50.");
 	configuredPathHistoryLimit() = value;
-	trimHistoryToLimit(configuredPathHistoryStorage(), value);
+	for (MRScopedDialogHistoryState &state : configuredDialogHistoryStorage())
+		trimHistoryToLimit(state.pathHistory, value);
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;
@@ -4008,7 +4430,8 @@ bool setConfiguredFileHistoryLimitValue(int value, std::string *errorMessage) {
 	if (value < kHistoryLimitMin || value > kHistoryLimitMax)
 		return setError(errorMessage, "MAX_FILE_HISTORY must be within 5..50.");
 	configuredFileHistoryLimit() = value;
-	trimHistoryToLimit(configuredFileHistoryStorage(), value);
+	for (MRScopedDialogHistoryState &state : configuredDialogHistoryStorage())
+		trimHistoryToLimit(state.fileHistory, value);
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;
@@ -4024,13 +4447,13 @@ int configuredMaxFileHistory() {
 
 void configuredPathHistoryEntries(std::vector<std::string> &outValues) {
 	outValues.clear();
-	for (const MRDialogHistoryEntry &entry : configuredPathHistoryStorage())
+	for (const MRDialogHistoryEntry &entry : dialogHistoryState(MRDialogHistoryScope::General).pathHistory)
 		outValues.push_back(entry.value);
 }
 
 void configuredFileHistoryEntries(std::vector<std::string> &outValues) {
 	outValues.clear();
-	for (const MRDialogHistoryEntry &entry : configuredFileHistoryStorage())
+	for (const MRDialogHistoryEntry &entry : dialogHistoryState(MRDialogHistoryScope::General).fileHistory)
 		outValues.push_back(entry.value);
 }
 
@@ -4253,29 +4676,111 @@ bool configuredAutoexecMacroDiagnosticForFile(const std::string &fileName, std::
 	return true;
 }
 
-bool setConfiguredLastFileDialogPath(const std::string &path, std::string *errorMessage) {
+ushort rawFileDialogHistoryId(MRDialogHistoryScope scope) {
+	return static_cast<ushort>(1000 + dialogHistoryScopeIndex(scope));
+}
+
+ushort rawPathDialogHistoryId(MRDialogHistoryScope scope) {
+	return static_cast<ushort>(2000 + dialogHistoryScopeIndex(scope));
+}
+
+bool setScopedDialogLastPath(MRDialogHistoryScope scope, const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 	std::string directory;
+	MRScopedDialogHistoryState &state = dialogHistoryState(scope);
 
-	if (!normalized.empty() && isReadableDirectory(normalized))
-		addHistoryEntry(configuredPathHistoryStorage(), normalized, configuredPathHistoryLimit());
+	if (!normalized.empty() && isReadableDirectory(normalized)) {
+		state.lastPath = normalized;
+		addHistoryEntry(state.pathHistory, normalized, configuredPathHistoryLimit());
+		historyAdd(rawPathDialogHistoryId(scope), normalized.c_str());
+	}
 	else if (!normalized.empty()) {
-		addHistoryEntry(configuredFileHistoryStorage(), normalized, configuredFileHistoryLimit());
+		addHistoryEntry(state.fileHistory, normalized, configuredFileHistoryLimit());
+		historyAdd(rawFileDialogHistoryId(scope), normalized.c_str());
 		directory = normalizedDialogDirectoryFromPath(normalized);
-		if (!directory.empty())
-			addHistoryEntry(configuredPathHistoryStorage(), directory, configuredPathHistoryLimit());
-	} else {
+		if (!directory.empty()) {
+			state.lastPath = directory;
+			addHistoryEntry(state.pathHistory, directory, configuredPathHistoryLimit());
+			historyAdd(rawPathDialogHistoryId(scope), directory.c_str());
+		}
+	} else if (state.lastPath.empty()) {
 		directory = fallbackRememberedLoadDirectory();
-		if (!directory.empty())
-			addHistoryEntry(configuredPathHistoryStorage(), directory, configuredPathHistoryLimit());
+		if (!directory.empty()) {
+			state.lastPath = directory;
+			addHistoryEntry(state.pathHistory, directory, configuredPathHistoryLimit());
+			historyAdd(rawPathDialogHistoryId(scope), directory.c_str());
+		}
 	}
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;
 }
 
+void seedFileDialogHistoryForScope(MRDialogHistoryScope scope) {
+	MRScopedDialogHistoryState &state = dialogHistoryState(scope);
+
+	if (state.fileHistorySeeded)
+		return;
+	state.fileHistorySeeded = true;
+	for (auto it = state.fileHistory.rbegin(); it != state.fileHistory.rend(); ++it)
+		historyAdd(rawFileDialogHistoryId(scope), it->value.c_str());
+}
+
+void seedPathDialogHistoryForScope(MRDialogHistoryScope scope) {
+	MRScopedDialogHistoryState &state = dialogHistoryState(scope);
+
+	if (state.pathHistorySeeded)
+		return;
+	state.pathHistorySeeded = true;
+	for (auto it = state.pathHistory.rbegin(); it != state.pathHistory.rend(); ++it)
+		historyAdd(rawPathDialogHistoryId(scope), it->value.c_str());
+}
+
+ushort configuredFileDialogHistoryId(MRDialogHistoryScope scope) {
+	seedFileDialogHistoryForScope(scope);
+	return rawFileDialogHistoryId(scope);
+}
+
+ushort configuredPathDialogHistoryId(MRDialogHistoryScope scope) {
+	seedPathDialogHistoryForScope(scope);
+	return rawPathDialogHistoryId(scope);
+}
+
+void initRememberedLoadDialogPath(MRDialogHistoryScope scope, char *buffer, std::size_t bufferSize,
+                                  const char *pattern) {
+	std::string initial;
+	std::string dir = effectiveRememberedLoadDirectory(scope);
+	const char *safePattern = (pattern != nullptr && *pattern != '\0') ? pattern : "*.*";
+
+	seedFileDialogHistoryForScope(scope);
+	if (!dir.empty()) {
+		initial = dir;
+		if (initial.back() != '/')
+			initial += '/';
+		initial += safePattern;
+	} else
+		initial = safePattern;
+	copyToBuffer(buffer, bufferSize, initial);
+}
+
+void rememberLoadDialogPath(MRDialogHistoryScope scope, const char *path) {
+	static_cast<void>(setScopedDialogLastPath(scope, path != nullptr ? path : "", nullptr));
+}
+
+std::string configuredLastFileDialogFilePath(MRDialogHistoryScope scope) {
+	return latestHistoryValue(dialogHistoryState(scope).fileHistory);
+}
+
+std::string configuredLastFileDialogPath(MRDialogHistoryScope scope) {
+	return effectiveRememberedLoadDirectory(scope);
+}
+
+bool setConfiguredLastFileDialogPath(const std::string &path, std::string *errorMessage) {
+	return setScopedDialogLastPath(MRDialogHistoryScope::General, path, errorMessage);
+}
+
 std::string configuredLastFileDialogPath() {
-	return effectiveRememberedLoadDirectory();
+	return effectiveRememberedLoadDirectory(MRDialogHistoryScope::General);
 }
 
 std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
@@ -4288,8 +4793,6 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	                                                          : configuredColorThemeFilePath();
 	MREditSetupSettings edit = configuredEditSetupSettings();
 	std::string source;
-	std::vector<std::string> pathHistory;
-	std::vector<std::string> fileHistory;
 	std::vector<std::string> multiFilespecHistory;
 	std::vector<std::string> multiPathHistory;
 	std::vector<std::string> autoexecMacros;
@@ -4297,8 +4800,6 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	const MREditSettingDescriptor *descriptors = editSettingDescriptors(descriptorCount);
 
 	themePath = normalizeConfiguredPathInput(themePath);
-	configuredPathHistoryEntries(pathHistory);
-	configuredFileHistoryEntries(fileHistory);
 	configuredMultiFilespecHistoryEntries(multiFilespecHistory);
 	configuredMultiPathHistoryEntries(multiPathHistory);
 	configuredAutoexecMacroEntries(autoexecMacros);
@@ -4425,14 +4926,18 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	          escapeMrmacSingleQuotedLiteral(configuredLogFilePath()) + "');\n";
 	for (const std::string &autoexecMacro : autoexecMacros)
 		source += "MRSETUP('AUTOEXEC_MACRO', '" + escapeMrmacSingleQuotedLiteral(autoexecMacro) + "');\n";
-	source += "MRSETUP('LASTFILEDIALOGPATH', '" +
-	          escapeMrmacSingleQuotedLiteral(configuredLastFileDialogPath()) + "');\n";
 	source += "MRSETUP('MAX_PATH_HISTORY', '" + std::to_string(configuredMaxPathHistory()) + "');\n";
 	source += "MRSETUP('MAX_FILE_HISTORY', '" + std::to_string(configuredMaxFileHistory()) + "');\n";
-	for (std::size_t i = 0; i < pathHistory.size(); ++i)
-		source += "MRSETUP('PATH_HISTORY', '" + escapeMrmacSingleQuotedLiteral(pathHistory[i]) + "');\n";
-	for (std::size_t i = 0; i < fileHistory.size(); ++i)
-		source += "MRSETUP('FILE_HISTORY', '" + escapeMrmacSingleQuotedLiteral(fileHistory[i]) + "');\n";
+	for (const MRDialogHistoryScopeSpec &scopeSpec : kDialogHistoryScopeSpecs) {
+		const MRScopedDialogHistoryState &state = dialogHistoryState(scopeSpec.scope);
+
+		if (!state.lastPath.empty())
+			source += serializeScopedHistoryRecord(kDialogLastPathKey, scopeSpec.scope, "path", state.lastPath);
+		for (const MRDialogHistoryEntry &entry : state.pathHistory)
+			source += serializeScopedHistoryRecord(kDialogPathHistoryKey, scopeSpec.scope, "value", entry.value);
+		for (const MRDialogHistoryEntry &entry : state.fileHistory)
+			source += serializeScopedHistoryRecord(kDialogFileHistoryKey, scopeSpec.scope, "value", entry.value);
+	}
 	for (std::size_t i = 0; i < multiFilespecHistory.size(); ++i)
 		source += "MRSETUP('MULTI_FILESPEC_HISTORY', '" +
 		          escapeMrmacSingleQuotedLiteral(multiFilespecHistory[i]) + "');\n";
@@ -4499,6 +5004,9 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source += "MRSETUP('CURSOR_STATUS_COLOR', '" + escapeMrmacSingleQuotedLiteral(edit.cursorStatusColor) + "');\n";
 	source += "MRSETUP('" + std::string(kThemeSettingsKey) + "', '" +
 	          escapeMrmacSingleQuotedLiteral(themePath) + "');\n";
+	source += "MRSETUP('" + std::string(kKeymapSettingsKey) + "', '" +
+	          escapeMrmacSingleQuotedLiteral(configuredKeymapFilePath()) + "');\n";
+	source += serializeKeymapProfilesToSettingsSource(configuredKeymapProfiles(), configuredActiveKeymapProfile());
 
 	for (const auto & profile : configuredEditExtensionProfiles()) {
 		source += "MRFEPROFILE('DEFINE', '" + escapeMrmacSingleQuotedLiteral(profile.id) +
@@ -4670,27 +5178,11 @@ bool ensureSettingsMacroFileExists(const std::string &settingsMacroUri, std::str
 }
 
 void initRememberedLoadDialogPath(char *buffer, std::size_t bufferSize, const char *pattern) {
-	std::string initial;
-	std::string latestFile;
-	std::string dir = effectiveRememberedLoadDirectory();
-	const char *safePattern = (pattern != nullptr && *pattern != '\0') ? pattern : "*.*";
-
-	if (!configuredFileHistoryStorage().empty())
-		latestFile = makeAbsolutePath(configuredFileHistoryStorage().front().value);
-	if (!latestFile.empty())
-		initial = latestFile;
-	else if (!dir.empty()) {
-		initial = dir;
-		if (initial.back() != '/')
-			initial += '/';
-		initial += safePattern;
-	} else
-		initial = safePattern;
-	copyToBuffer(buffer, bufferSize, initial);
+	initRememberedLoadDialogPath(MRDialogHistoryScope::General, buffer, bufferSize, pattern);
 }
 
 void rememberLoadDialogPath(const char *path) {
-	static_cast<void>(setConfiguredLastFileDialogPath(path != nullptr ? path : "", nullptr));
+	rememberLoadDialogPath(MRDialogHistoryScope::General, path);
 }
 
 bool validateSettingsMacroFilePath(const std::string &path, std::string *errorMessage) {
@@ -4742,8 +5234,9 @@ bool setConfiguredMacroDirectoryPath(const std::string &path, std::string *error
 	if (!validateMacroDirectoryPath(path, errorMessage))
 		return false;
 	configuredMacroDirectory() = makeAbsolutePath(normalized);
-	if (configuredPathHistoryStorage().empty() && isReadableDirectory(configuredMacroDirectory()))
-		addHistoryEntry(configuredPathHistoryStorage(), configuredMacroDirectory(), configuredPathHistoryLimit());
+	MRScopedDialogHistoryState &generalDialogHistory = dialogHistoryState(MRDialogHistoryScope::General);
+	if (generalDialogHistory.pathHistory.empty() && isReadableDirectory(configuredMacroDirectory()))
+		addHistoryEntry(generalDialogHistory.pathHistory, configuredMacroDirectory(), configuredPathHistoryLimit());
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;

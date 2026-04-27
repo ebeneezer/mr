@@ -32,15 +32,17 @@ static constexpr char kTaskMarkerIcon[] = "🧠";
 static constexpr char kMacroBrainMarkerIcon[] = "🧠";
 static constexpr char kReadOnlyMarkerIcon[] = "🔒";
 static constexpr char kInsertMarkerIcon[] = "✚";
+static constexpr char kWordWrapMarkerIcon[] = "\xE2\x94\x86\xE2\x86\xB5\xE2\x94\x86"; // ┆↵┆
 static constexpr int kDirtyMarkerSlotWidth = 2;
 static constexpr int kRecordingMarkerSlotWidth = 2;
 static constexpr int kTaskMarkerSlotWidth = 2;
 static constexpr int kMacroBrainMarkerSlotWidth = 2;
 static constexpr int kReadOnlyMarkerSlotWidth = 2;
 static constexpr int kInsertMarkerSlotWidth = 1;
+static constexpr int kWordWrapMarkerSlotWidth = 3;
 static constexpr char kMarkerLeftBracket = '[';
 static constexpr char kMarkerRightBracket = ']';
-static constexpr int kMarkerGap = 0;
+static constexpr int kMarkerGap = 1;
 
 int markerWidth(TStringView icon) noexcept {
 	return std::max(1, strwidth(icon));
@@ -55,7 +57,7 @@ int advanceMarkerX(int x, TStringView icon, int minWidth = 1) noexcept {
 }
 
 bool hasMarkerBlock(const MRFrame::MarkerState &state) noexcept {
-	return state.modified || state.insertMode || state.recording || state.macroBrain ||
+	return state.modified || state.insertMode || state.wordWrap || state.recording || state.macroBrain ||
 	       state.background || state.readOnly;
 }
 
@@ -176,6 +178,8 @@ int MRFrame::taskMarkerColumn(const MarkerState &state) const noexcept {
 		x = advanceMarkerX(x, kDirtyMarkerIcon, kDirtyMarkerSlotWidth);
 	if (state.insertMode)
 		x = advanceMarkerX(x, kInsertMarkerIcon, kInsertMarkerSlotWidth);
+	if (state.wordWrap)
+		x = advanceMarkerX(x, kWordWrapMarkerIcon, kWordWrapMarkerSlotWidth);
 	if (state.recording)
 		x = advanceMarkerX(x, kRecordingMarkerIcon, kRecordingMarkerSlotWidth);
 	if (state.macroBrain)
@@ -187,19 +191,22 @@ int MRFrame::taskMarkerColumn(const MarkerState &state) const noexcept {
 
 int MRFrame::markersEndColumn(const MarkerState &state) const noexcept {
 	int x = markerStartColumn();
+	bool hasMarkers = false;
 	if (state.modified)
-		x = advanceMarkerX(x, kDirtyMarkerIcon, kDirtyMarkerSlotWidth);
+		x = advanceMarkerX(x, kDirtyMarkerIcon, kDirtyMarkerSlotWidth), hasMarkers = true;
 	if (state.insertMode)
-		x = advanceMarkerX(x, kInsertMarkerIcon, kInsertMarkerSlotWidth);
+		x = advanceMarkerX(x, kInsertMarkerIcon, kInsertMarkerSlotWidth), hasMarkers = true;
+	if (state.wordWrap)
+		x = advanceMarkerX(x, kWordWrapMarkerIcon, kWordWrapMarkerSlotWidth), hasMarkers = true;
 	if (state.recording)
-		x = advanceMarkerX(x, kRecordingMarkerIcon, kRecordingMarkerSlotWidth);
+		x = advanceMarkerX(x, kRecordingMarkerIcon, kRecordingMarkerSlotWidth), hasMarkers = true;
 	if (state.macroBrain)
-		x = advanceMarkerX(x, kMacroBrainMarkerIcon, kMacroBrainMarkerSlotWidth);
+		x = advanceMarkerX(x, kMacroBrainMarkerIcon, kMacroBrainMarkerSlotWidth), hasMarkers = true;
 	if (state.background)
-		x = advanceMarkerX(x, kTaskMarkerIcon, kTaskMarkerSlotWidth);
+		x = advanceMarkerX(x, kTaskMarkerIcon, kTaskMarkerSlotWidth), hasMarkers = true;
 	if (state.readOnly)
-		x = advanceMarkerX(x, kReadOnlyMarkerIcon, kReadOnlyMarkerSlotWidth);
-	return x;
+		x = advanceMarkerX(x, kReadOnlyMarkerIcon, kReadOnlyMarkerSlotWidth), hasMarkers = true;
+	return hasMarkers ? x - kMarkerGap : x;
 }
 
 void MRFrame::drawFrameLine(TDrawBuffer &frameBuf, short y, short n, TColorAttr color) {
@@ -318,8 +325,16 @@ void MRFrame::draw() {
 	if (markers.insertMode) {
 		int span = markerSpan(kInsertMarkerIcon, kInsertMarkerSlotWidth);
 		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
-		b.moveStr(static_cast<ushort>(markerX), kInsertMarkerIcon, cTitle, span);
+		if (markers.insertModeVisible)
+			b.moveStr(static_cast<ushort>(markerX), kInsertMarkerIcon, cTitle, span);
 		markerX = advanceMarkerX(markerX, kInsertMarkerIcon, kInsertMarkerSlotWidth);
+	}
+	if (markers.wordWrap) {
+		int span = markerSpan(kWordWrapMarkerIcon, kWordWrapMarkerSlotWidth);
+		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
+		if (markers.wordWrapVisible)
+			b.moveStr(static_cast<ushort>(markerX), kWordWrapMarkerIcon, cTitle, span);
+		markerX = advanceMarkerX(markerX, kWordWrapMarkerIcon, kWordWrapMarkerSlotWidth);
 	}
 	if (markers.recording) {
 		TColorAttr recordingColor = cTitle;
@@ -359,7 +374,7 @@ void MRFrame::draw() {
 		markerX = advanceMarkerX(markerX, kReadOnlyMarkerIcon, kReadOnlyMarkerSlotWidth);
 	}
 	if (showMarkerBlock) {
-		int rightSepX = markerX;
+		int rightSepX = markerX > markerStartColumn() ? markerX - kMarkerGap : markerX;
 		if (rightSepX >= 1 && rightSepX < width - 1)
 			b.putChar(static_cast<ushort>(rightSepX), kMarkerRightBracket);
 		markerX = rightSepX + 1;

@@ -17,9 +17,13 @@
 #include <utility>
 
 #include "../app/MRCommands.hpp"
+#include "../app/commands/MRWindowCommands.hpp"
 #include "../config/MRDialogPaths.hpp"
+#include "../keymap/MRKeymapContext.hpp"
+#include "../keymap/MRKeymapResolver.hpp"
 #include "../mrmac/MRMacroRunner.hpp"
 #include "../mrmac/MRVM.hpp"
+#include "MRWindowSupport.hpp"
 
 void mrvmUiInvalidateScreenBase() noexcept;
 
@@ -192,6 +196,15 @@ MRMenuBar::MRMenuBar(const TRect &r, TSubMenu &aMenu)
 MRMenuBar::~MRMenuBar() {
 	delete mBaseMenu;
 	mBaseMenu = nullptr;
+}
+
+void MRMenuBar::handleEvent(TEvent &event) {
+	if (mrHandleRuntimeKeymapEvent(event, MRKeymapContext::Menu, nullptr))
+		return;
+	if (event.what == evKeyDown && currentEditWindow() != nullptr &&
+	    runtimeKeymapResolver().hasPending(MRKeymapContext::Edit))
+		return;
+	TMenuBar::handleEvent(event);
 }
 
 std::string MRMenuBar::trimAscii(std::string value) {

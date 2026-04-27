@@ -23,6 +23,7 @@
 #include "MRCommandRouter.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdlib>
 #include <cstddef>
@@ -34,6 +35,7 @@
 #include <functional>
 #include <iomanip>
 #include <map>
+#include <optional>
 #include <sstream>
 #include <set>
 #include <string>
@@ -48,6 +50,9 @@
 #include "../config/MRDialogPaths.hpp"
 #include "../app/utils/MRFileIOUtils.hpp"
 #include "../app/utils/MRStringUtils.hpp"
+#include "../keymap/MRKeymapActionCatalog.hpp"
+#include "../keymap/MRKeymapSequence.hpp"
+#include "../mrmac/MRMacroRunner.hpp"
 #include "../mrmac/MRVM.hpp"
 #include "../app/commands/MRExternalCommand.hpp"
 #include "../app/commands/MRFileCommands.hpp"
@@ -188,6 +193,118 @@ enum class PromptSearchDecision : unsigned char {
 	Next = 0,
 	Stop = 1,
 	Cancel = 2
+};
+
+enum class KeymapDispatchKind : unsigned char {
+	AppCommand = 0,
+	EditorCommand = 1,
+	WindowMethod = 2,
+	Custom = 3
+};
+
+enum class KeymapWindowMethod : unsigned char {
+	None = 0,
+	BlockSetBegin = 1,
+	BlockSetEnd = 2,
+	BlockSetColumnBegin = 3,
+	BlockClear = 4,
+	BlockMarkWordRight = 5,
+	CursorTopOfWindow = 6,
+	CursorBottomOfWindow = 7,
+	CursorStartOfBlock = 8,
+	CursorEndOfBlock = 9,
+	ViewCenterLine = 10
+};
+
+enum class KeymapCustomAction : unsigned char {
+	None = 0,
+	DeleteForwardCharOrBlock = 1,
+	LoadBlockFromFile = 2,
+	SetRandomAccessMark = 3,
+	GetRandomAccessMark = 4,
+	CenterLine = 5,
+	ReformatParagraph = 6,
+	ToggleWordWrap = 7,
+	SetLeftMargin = 8,
+	SetRightMargin = 9,
+	JustifyParagraph = 10,
+	SortColumnBlockToggle = 11,
+	ForceSave = 12,
+	ExitDirtySaveAll = 13
+};
+
+struct KeymapActionDispatchEntry {
+	std::string_view actionId;
+	KeymapDispatchKind kind;
+	ushort command;
+	KeymapWindowMethod windowMethod;
+	KeymapCustomAction customAction;
+};
+
+constexpr std::array kKeymapActionDispatchTable{
+	KeymapActionDispatchEntry{"MRMAC_CURSOR_LEFT", KeymapDispatchKind::EditorCommand, cmCharLeft, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_CURSOR_RIGHT", KeymapDispatchKind::EditorCommand, cmCharRight, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_CURSOR_UP", KeymapDispatchKind::EditorCommand, cmLineUp, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_CURSOR_DOWN", KeymapDispatchKind::EditorCommand, cmLineDown, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_CURSOR_HOME", KeymapDispatchKind::EditorCommand, cmLineStart, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_CURSOR_END_OF_LINE", KeymapDispatchKind::EditorCommand, cmLineEnd, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_VIEW_PAGE_UP", KeymapDispatchKind::EditorCommand, cmPageUp, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_VIEW_PAGE_DOWN", KeymapDispatchKind::EditorCommand, cmPageDown, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_CURSOR_TOP_OF_FILE", KeymapDispatchKind::EditorCommand, cmTextStart, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_CURSOR_BOTTOM_OF_FILE", KeymapDispatchKind::EditorCommand, cmTextEnd, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_CURSOR_WORD_LEFT", KeymapDispatchKind::EditorCommand, cmWordLeft, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_CURSOR_WORD_RIGHT", KeymapDispatchKind::EditorCommand, cmWordRight, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_CURSOR_TOP_OF_WINDOW", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::CursorTopOfWindow, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_CURSOR_BOTTOM_OF_WINDOW", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::CursorBottomOfWindow, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_CURSOR_START_OF_BLOCK", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::CursorStartOfBlock, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_CURSOR_END_OF_BLOCK", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::CursorEndOfBlock, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_CURSOR_GOTO_LINE", KeymapDispatchKind::AppCommand, cmMrSearchGotoLineNumber, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_MARK_PUSH_POSITION", KeymapDispatchKind::AppCommand, cmMrSearchPushMarker, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_MARK_POP_POSITION", KeymapDispatchKind::AppCommand, cmMrSearchGetMarker, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_MARK_SET_RANDOM_ACCESS", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::SetRandomAccessMark},
+	KeymapActionDispatchEntry{"MRMAC_MARK_GET_RANDOM_ACCESS", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::GetRandomAccessMark},
+	KeymapActionDispatchEntry{"MRMAC_VIEW_CENTER_LINE", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::ViewCenterLine, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_DELETE_TO_EOL", KeymapDispatchKind::EditorCommand, cmDelEnd, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_DELETE_FORWARD_CHAR_OR_BLOCK", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::DeleteForwardCharOrBlock},
+	KeymapActionDispatchEntry{"MRMAC_DELETE_FORWARD_WORD", KeymapDispatchKind::EditorCommand, cmDelWord, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_DELETE_BACKWARD_CHAR", KeymapDispatchKind::EditorCommand, cmBackSpace, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_DELETE_BACKWARD_WORD", KeymapDispatchKind::EditorCommand, cmDelWordLeft, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_DELETE_LINE", KeymapDispatchKind::EditorCommand, cmDelLine, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_DELETE_BACKWARD_TO_HOME", KeymapDispatchKind::EditorCommand, cmDelStart, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_UNDO", KeymapDispatchKind::AppCommand, cmMrEditUndo, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_REDO_LAST_UNDO", KeymapDispatchKind::AppCommand, cmMrEditRedo, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_SEARCH_FORWARD", KeymapDispatchKind::AppCommand, cmMrSearchFindText, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_SEARCH_REPLACE", KeymapDispatchKind::AppCommand, cmMrSearchReplace, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_SEARCH_REPEAT_LAST", KeymapDispatchKind::AppCommand, cmMrSearchRepeatPrevious, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_SEARCH_MULTI_FILE", KeymapDispatchKind::AppCommand, cmMrSearchMultiFileSearch, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_SEARCH_LIST_MATCHED_FILES", KeymapDispatchKind::AppCommand, cmMrSearchListFilesFromLastSearch, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_BLOCK_PASTE_FROM_CLIPBOARD", KeymapDispatchKind::AppCommand, cmMrEditPasteFromBuffer, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_BLOCK_MARK_COLUMN", KeymapDispatchKind::AppCommand, cmMrBlockMarkColumns, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_BLOCK_MARK_STREAM", KeymapDispatchKind::AppCommand, cmMrBlockMarkStream, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_BLOCK_SET_BEGIN", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::BlockSetBegin, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_BLOCK_SET_END", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::BlockSetEnd, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_BLOCK_SET_COLUMN_BEGIN", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::BlockSetColumnBegin, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_BLOCK_MARK_WORD_RIGHT", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::BlockMarkWordRight, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_BLOCK_CLEAR", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::BlockClear, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_BLOCK_UNDENT", KeymapDispatchKind::AppCommand, cmMrBlockUndent, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_BLOCK_INDENT", KeymapDispatchKind::AppCommand, cmMrBlockIndent, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_BLOCK_COPY", KeymapDispatchKind::AppCommand, cmMrBlockCopy, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_BLOCK_MOVE", KeymapDispatchKind::AppCommand, cmMrBlockMove, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_BLOCK_DELETE", KeymapDispatchKind::AppCommand, cmMrBlockDelete, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_BLOCK_COPY_INTERWINDOW", KeymapDispatchKind::AppCommand, cmMrBlockWindowCopy, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_BLOCK_MOVE_INTERWINDOW", KeymapDispatchKind::AppCommand, cmMrBlockWindowMove, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_FILE_SAVE", KeymapDispatchKind::AppCommand, cmMrFileSave, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MR_SAVE_BLOCK_TO_FILE", KeymapDispatchKind::AppCommand, cmMrBlockSaveToDisk, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MR_LOAD_BLOCK_FROM_FILE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::LoadBlockFromFile},
+	KeymapActionDispatchEntry{"MR_TEXT_CENTER_LINE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CenterLine},
+	KeymapActionDispatchEntry{"MR_TEXT_REFORMAT_PARAGRAPH", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ReformatParagraph},
+	KeymapActionDispatchEntry{"MR_TOGGLE_WORD_WRAP", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ToggleWordWrap},
+	KeymapActionDispatchEntry{"MR_SET_LEFT_MARGIN", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::SetLeftMargin},
+	KeymapActionDispatchEntry{"MR_SET_RIGHT_MARGIN", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::SetRightMargin},
+	KeymapActionDispatchEntry{"MR_JUSTIFY_PARAGRAPH", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::JustifyParagraph},
+	KeymapActionDispatchEntry{"MR_SORT_COLUMN_BLOCK_TOGGLE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::SortColumnBlockToggle},
+	KeymapActionDispatchEntry{"MR_FILE_FORCE_SAVE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ForceSave},
+	KeymapActionDispatchEntry{"MR_EXIT_DIRTY_SAVE_ALL", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ExitDirtySaveAll},
 };
 
 const char *placeholderCommandTitle(ushort command) {
@@ -364,6 +481,85 @@ const char *placeholderCommandTitle(ushort command) {
 		default:
 			return nullptr;
 	}
+}
+
+std::optional<int> randomAccessMarkIndexFromSequence(std::string_view sequenceText) {
+	const auto sequence = MRKeymapSequence::parse(sequenceText);
+
+	if (!sequence || sequence->empty())
+		return std::nullopt;
+	const MRKeymapToken &token = sequence->tokens().back();
+	if (token.baseKey() != MRKeymapBaseKey::Printable || token.modifiers() != 0)
+		return std::nullopt;
+	if (token.printableKey() < '1' || token.printableKey() > '9')
+		return std::nullopt;
+	return token.printableKey() - '0';
+}
+
+MREditWindow *effectiveKeymapWindow(MREditWindow *targetWindow) {
+	return targetWindow != nullptr ? targetWindow : currentEditWindow();
+}
+
+bool dispatchEditorCommandEvent(MREditWindow *targetWindow, ushort command) {
+	MREditWindow *window = effectiveKeymapWindow(targetWindow);
+	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+	TEvent event;
+
+	if (editor == nullptr)
+		return false;
+	std::memset(&event, 0, sizeof(event));
+	event.what = evCommand;
+	event.message.command = command;
+	editor->handleEvent(event);
+	return true;
+}
+
+bool dispatchApplicationCommandEvent(ushort command) {
+	TApplication *application = dynamic_cast<TApplication *>(TProgram::application);
+	TEvent event;
+
+	if (application == nullptr)
+		return false;
+	std::memset(&event, 0, sizeof(event));
+	event.what = evCommand;
+	event.message.command = command;
+	application->handleEvent(event);
+	return true;
+}
+
+bool dispatchKeymapWindowMethod(MREditWindow *targetWindow, KeymapWindowMethod method) {
+	MREditWindow *window = effectiveKeymapWindow(targetWindow);
+
+	if (window == nullptr)
+		return false;
+	switch (method) {
+		case KeymapWindowMethod::BlockSetBegin:
+			window->beginStreamBlock();
+			return true;
+		case KeymapWindowMethod::BlockSetEnd:
+			window->endBlock();
+			return true;
+		case KeymapWindowMethod::BlockSetColumnBegin:
+			window->beginColumnBlock();
+			return true;
+		case KeymapWindowMethod::BlockClear:
+			return window->toggleBlockVisibility();
+		case KeymapWindowMethod::BlockMarkWordRight:
+			return window->markWordRight();
+		case KeymapWindowMethod::CursorTopOfWindow:
+			return window->moveCursorToTopOfView();
+		case KeymapWindowMethod::CursorBottomOfWindow:
+			return window->moveCursorToBottomOfView();
+		case KeymapWindowMethod::CursorStartOfBlock:
+			return window->moveCursorToBlockStart();
+		case KeymapWindowMethod::CursorEndOfBlock:
+			return window->moveCursorToBlockEnd();
+		case KeymapWindowMethod::ViewCenterLine:
+			return window->centerCursorInView();
+		case KeymapWindowMethod::None:
+			break;
+	}
+	return false;
 }
 
 void showPlaceholderCommandBox(const char *title) {
@@ -693,20 +889,20 @@ public:
 	    : TWindowInit(&TDialog::initFrame),
 	      MRDialogFoundation(mr::dialogs::centeredDialogRect(layout.width, layout.height),
 	                         layout.title, layout.width, layout.height) {
-		static constexpr int kButtonTotalWidth = 34;
-		const int buttonLeft = (layout.width - kButtonTotalWidth) / 2;
+		const std::array buttons{
+		    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault},
+		    mr::dialogs::DialogButtonSpec{"C~a~ncel", cmCancel, bfNormal},
+		    mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics =
+		    mr::dialogs::measureUniformButtonRow(buttons, 2);
+		const int buttonLeft = (layout.width - metrics.rowWidth) / 2;
 		scrollBar = new TScrollBar(TRect(layout.width - 2, 2, layout.width - 1, layout.height - 5));
 		tableView = new CharacterTableView(TRect(2, 2, layout.width - 2, layout.height - 5),
 		                                    std::move(entries), layout.columns, layout.cellWidth,
 		                                    scrollBar);
 		insert(tableView);
 		insert(scrollBar);
-		insert(new TButton(TRect(buttonLeft, layout.height - 3, buttonLeft + 10, layout.height - 1),
-		                   "~D~one", cmOK, bfDefault));
-		insert(new TButton(TRect(buttonLeft + 12, layout.height - 3, buttonLeft + 24, layout.height - 1),
-		                   "C~a~ncel", cmCancel, bfNormal));
-		insert(new TButton(TRect(buttonLeft + 26, layout.height - 3, buttonLeft + 34, layout.height - 1),
-		                   "~H~elp", cmHelp, bfNormal));
+		mr::dialogs::insertUniformButtonRow(*this, buttonLeft, layout.height - 3, 2, buttons);
 		tableView->select();
 	}
 
@@ -728,6 +924,96 @@ private:
 	CharacterTableView *tableView = nullptr;
 	TScrollBar *scrollBar = nullptr;
 };
+
+class NumericInputDialog final : public MRDialogFoundation {
+public:
+	struct Layout {
+		short width = 52;
+		short height = 10;
+		short inputLeft = 18;
+		short inputRight = 48;
+		short buttonY = 6;
+		short buttonLeft = 8;
+		short buttonGap = 2;
+		bool showHelp = true;
+	};
+
+	NumericInputDialog(const char *title, const char *label, const char *helpText, int initialValue, int minValue, int maxValue, const Layout &layout)
+	    : TWindowInit(&TDialog::initFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(layout.width, layout.height), title, layout.width, layout.height),
+	      mHelpText(helpText != nullptr ? helpText : ""), mMinValue(minValue), mMaxValue(maxValue) {
+		char buffer[32] = {0};
+
+			std::snprintf(buffer, sizeof(buffer), "%d", initialValue);
+			mInputField = new TInputLine(TRect(layout.inputLeft, 2, layout.inputRight, 3), layout.inputRight - layout.inputLeft);
+			if (label != nullptr && label[0] != '\0')
+				insert(new TLabel(TRect(2, 2, layout.inputLeft, 3), label, mInputField));
+			insert(mInputField);
+			if (layout.showHelp) {
+				const std::array buttons{
+				    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault},
+				    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal},
+				    mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+				mr::dialogs::insertUniformButtonRow(*this, layout.buttonLeft, layout.buttonY,
+				                                    layout.buttonGap, buttons);
+			} else {
+				const std::array buttons{
+				    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault},
+				    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+				mr::dialogs::insertUniformButtonRow(*this, layout.buttonLeft, layout.buttonY,
+				                                    layout.buttonGap, buttons);
+			}
+			mInputField->setData(buffer);
+		setDialogValidationHook([this]() {
+			MRScrollableDialog::DialogValidationResult result;
+			int ignored = 0;
+
+			result.valid = tryReadValue(ignored);
+			if (!result.valid)
+				result.warningText = "Please enter an integer in range.";
+			return result;
+		});
+		finalizeLayout();
+	}
+
+	void handleEvent(TEvent &event) override {
+		if (event.what == evCommand && event.message.command == cmHelp) {
+			messageBox(mfInformation | mfOKButton, "%s", mHelpText.c_str());
+			clearEvent(event);
+			return;
+		}
+		MRDialogFoundation::handleEvent(event);
+	}
+
+	[[nodiscard]] bool tryReadValue(int &outValue) const {
+		char buffer[32] = {0};
+		char *endPtr = nullptr;
+		long parsed = 0;
+
+		if (mInputField == nullptr)
+			return false;
+		const_cast<TInputLine *>(mInputField)->getData(buffer);
+		parsed = std::strtol(buffer, &endPtr, 10);
+		if (endPtr == buffer || !trimAscii(endPtr != nullptr ? endPtr : "").empty())
+			return false;
+		if (parsed < mMinValue || parsed > mMaxValue)
+			return false;
+		outValue = static_cast<int>(parsed);
+		return true;
+	}
+
+private:
+	std::string mHelpText;
+	TInputLine *mInputField = nullptr;
+	int mMinValue = 0;
+	int mMaxValue = 0;
+};
+
+NumericInputDialog::Layout defaultNumericInputDialogLayout() {
+	return NumericInputDialog::Layout{};
+}
+
+bool promptIntegerValue(const char *title, const char *label, const char *helpText, int initialValue, int minValue, int maxValue, int &outValue);
+bool promptIntegerValue(const char *title, const char *label, const char *helpText, int initialValue, int minValue, int maxValue, int &outValue, const NumericInputDialog::Layout &layout);
 
 bool insertTextIntoWindow(MREditWindow *win, const std::string &text) {
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
@@ -1007,6 +1293,11 @@ void postSearchError(std::string_view text) {
 void postDialogWarning(std::string_view text) {
 	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, std::string(text),
 	                               mr::messageline::Kind::Warning, mr::messageline::kPriorityMedium);
+}
+
+void postDialogError(std::string_view text) {
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, std::string(text),
+	                               mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 }
 
 void persistSearchDialogSettingsSnapshot() {
@@ -1349,9 +1640,15 @@ bool showFoundListDialog(MREditWindow *win, const std::string &pattern,
 		listView->focusItemNum(static_cast<short>(selectedIndex));
 	listView->previewFocusedItem();
 	dialog->insert(listView);
-	dialog->insert(new TButton(TRect(width / 2 - 12, buttonY, width / 2 - 2, buttonY + 2), "~D~one", cmOK, bfDefault));
-	dialog->insert(new TButton(TRect(width / 2 + 1, buttonY, width / 2 + 13, buttonY + 2), "~C~ancel", cmCancel,
-	                           bfNormal));
+	{
+		const std::array buttons{
+		    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault},
+		    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics =
+		    mr::dialogs::measureUniformButtonRow(buttons, 1);
+		mr::dialogs::insertUniformButtonRow(*dialog, (width - metrics.rowWidth) / 2, buttonY, 1,
+		                                    buttons);
+	}
 	dialog->setDialogValidationHook([listView]() {
 		MRScrollableDialog::DialogValidationResult result;
 		result.valid = listView != nullptr && listView->focused >= 0;
@@ -1448,10 +1745,16 @@ PromptReplaceDecision promptReplaceDecisionDialog(const std::string &title, cons
 		return PromptReplaceDecision::Cancel;
 	dialog = mr::dialogs::createScrollableDialog(title.c_str(), 88, 10);
 	dialog->insert(new PromptPreviewView(TRect(2, 2, 86, 5), preview, replacement));
-	dialog->insert(new TButton(TRect(12, 6, 26, 8), "~R~eplace", cmOK, bfDefault));
-	dialog->insert(new TButton(TRect(28, 6, 40, 8), "~S~kip", cmNo, bfNormal));
-	dialog->insert(new TButton(TRect(42, 6, 60, 8), "Replace ~A~ll", cmYes, bfNormal));
-	dialog->insert(new TButton(TRect(62, 6, 76, 8), "~C~ancel", cmCancel, bfNormal));
+	{
+		const std::array buttons{
+		    mr::dialogs::DialogButtonSpec{"~R~eplace", cmOK, bfDefault},
+		    mr::dialogs::DialogButtonSpec{"~S~kip", cmNo, bfNormal},
+		    mr::dialogs::DialogButtonSpec{"Replace ~A~ll", cmYes, bfNormal},
+		    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics =
+		    mr::dialogs::measureUniformButtonRow(buttons, 2);
+		mr::dialogs::insertUniformButtonRow(*dialog, (88 - metrics.rowWidth) / 2, 6, 2, buttons);
+	}
 	dialog->finalizeLayout();
 	result = TProgram::deskTop->execView(dialog);
 	TObject::destroy(dialog);
@@ -1515,9 +1818,15 @@ PromptSearchDecision promptSearchDecisionDialog(const SearchPreviewParts &previe
 		return PromptSearchDecision::Cancel;
 	dialog = mr::dialogs::createScrollableDialog("SEARCH", 88, 10);
 	dialog->insert(new SearchPromptPreviewView(TRect(2, 2, 86, 5), preview));
-	dialog->insert(new TButton(TRect(23, 6, 35, 8), "~N~ext", cmOK, bfDefault));
-	dialog->insert(new TButton(TRect(37, 6, 49, 8), "~S~top", cmNo, bfNormal));
-	dialog->insert(new TButton(TRect(51, 6, 65, 8), "~C~ancel", cmCancel, bfNormal));
+	{
+		const std::array buttons{
+		    mr::dialogs::DialogButtonSpec{"~N~ext", cmOK, bfDefault},
+		    mr::dialogs::DialogButtonSpec{"~S~top", cmNo, bfNormal},
+		    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics =
+		    mr::dialogs::measureUniformButtonRow(buttons, 2);
+		mr::dialogs::insertUniformButtonRow(*dialog, (88 - metrics.rowWidth) / 2, 6, 2, buttons);
+	}
 	dialog->finalizeLayout();
 	result = TProgram::deskTop->execView(dialog);
 	TObject::destroy(dialog);
@@ -1609,8 +1918,14 @@ bool promptSearchPattern(std::string &pattern, MRSearchDialogOptions &options) {
 	                          new TSItem("~R~estrict to marked block",
 	                                     new TSItem("Search all ~w~indows", nullptr)))));
 	dialog->insert(optionsField);
-	dialog->insert(new TButton(TRect(34, 18, 46, 20), "~G~o", cmOK, bfDefault));
-	dialog->insert(new TButton(TRect(49, 18, 62, 20), "~C~ancel", cmCancel, bfNormal));
+	{
+		const std::array buttons{
+		    mr::dialogs::DialogButtonSpec{"~G~o", cmOK, bfDefault},
+		    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics =
+		    mr::dialogs::measureUniformButtonRow(buttons, 3);
+		mr::dialogs::insertUniformButtonRow(*dialog, (76 - metrics.rowWidth) / 2, 18, 3, buttons);
+	}
 	patternField->setData(patternInput);
 	typeField->setData(&typeChoice);
 	directionField->setData(&directionChoice);
@@ -1750,8 +2065,14 @@ bool promptReplaceValues(std::string &pattern, std::string &replacement, MRSarDi
 	                          new TSItem("~R~estrict to marked block",
 	                                     new TSItem("Search all ~w~indows", nullptr)))));
 	dialog->insert(optionsField);
-	dialog->insert(new TButton(TRect(31, 20, 43, 22), "~G~o", cmOK, bfDefault));
-	dialog->insert(new TButton(TRect(46, 20, 61, 22), "~C~ancel", cmCancel, bfNormal));
+	{
+		const std::array buttons{
+		    mr::dialogs::DialogButtonSpec{"~G~o", cmOK, bfDefault},
+		    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics =
+		    mr::dialogs::measureUniformButtonRow(buttons, 3);
+		mr::dialogs::insertUniformButtonRow(*dialog, (92 - metrics.rowWidth) / 2, 20, 3, buttons);
+	}
 	patternField->setData(patternInput);
 	replacementField->setData(replacementInput);
 	typeField->setData(&typeChoice);
@@ -1800,24 +2121,46 @@ bool promptReplaceValues(std::string &pattern, std::string &replacement, MRSarDi
 }
 
 bool promptGotoLineNumber(long &lineNumber) {
-	enum { kInputBufferSize = 32 };
-	char input[kInputBufferSize];
-	char *endPtr = nullptr;
-	long parsed = 0;
-	std::string tail;
-	uchar limit = static_cast<uchar>(kInputBufferSize - 1);
+	NumericInputDialog::Layout layout;
+	const int kMinLineNumber = 1;
+	const int kMaxLineNumber = 999999999;
+	int value = 0;
 
-	std::memset(input, 0, sizeof(input));
-	if (inputBox("GOTO LINE NUMBER", "~L~ine", input, limit) == cmCancel)
+	layout.width = 30;
+	layout.height = 8;
+	layout.inputLeft = 4;
+	layout.inputRight = 26;
+	layout.buttonY = 4;
+	layout.buttonLeft = 4;
+	layout.buttonGap = 2;
+	layout.showHelp = false;
+	if (!promptIntegerValue("GOTO LINE NUMBER", "", "Enter the target line number.", static_cast<int>(std::max<long>(kMinLineNumber, std::min<long>(lineNumber > 0 ? lineNumber : 1, kMaxLineNumber))), kMinLineNumber, kMaxLineNumber, value, layout))
 		return false;
-	parsed = std::strtol(input, &endPtr, 10);
-	tail = trimAscii(endPtr != nullptr ? endPtr : "");
-	if (endPtr == input || !tail.empty() || parsed < 1) {
-		postSearchError("Please enter a valid line number.");
+	lineNumber = value;
+	return true;
+}
+
+bool promptIntegerValue(const char *title, const char *label, const char *helpText, int initialValue, int minValue, int maxValue, int &outValue) {
+	return promptIntegerValue(title, label, helpText, initialValue, minValue, maxValue, outValue, defaultNumericInputDialogLayout());
+}
+
+bool promptIntegerValue(const char *title, const char *label, const char *helpText, int initialValue, int minValue, int maxValue, int &outValue, const NumericInputDialog::Layout &layout) {
+	NumericInputDialog *dialog = new NumericInputDialog(title, label, helpText, initialValue, minValue, maxValue, layout);
+	bool accepted = false;
+	ushort result = cmCancel;
+
+	if (dialog == nullptr)
+		return false;
+	if (TProgram::deskTop == nullptr) {
+		TObject::destroy(dialog);
 		return false;
 	}
-	lineNumber = parsed;
-	return true;
+	dialog->finalizeLayout();
+	result = TProgram::deskTop->execView(dialog);
+	if (result != cmCancel)
+		accepted = dialog->tryReadValue(outValue);
+	TObject::destroy(dialog);
+	return accepted;
 }
 
 bool compileSearchRegex(const std::string &patternExpression, bool ignoreCase, pcre2_code **outCode,
@@ -2266,8 +2609,15 @@ bool promptMultiFileSearchValues(std::string &pattern, MRMultiSearchDialogOption
 	dialog->insert(new TLabel(TRect(2, 12, 14, 13), "Start a~t~:", pathField));
 	dialog->insert(pathField);
 	dialog->insert(new THistory(TRect(96, 12, 99, 13), pathField, kMultiPathHistoryId));
-	dialog->insert(new TButton(TRect(34, 14, 46, 16), "~D~one", cmOK, bfDefault));
-	dialog->insert(new TButton(TRect(49, 14, 64, 16), "~C~ancel", cmCancel, bfNormal));
+	{
+		const std::array buttons{
+		    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault},
+		    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics =
+		    mr::dialogs::measureUniformButtonRow(buttons, 3);
+		mr::dialogs::insertUniformButtonRow(*dialog, (102 - metrics.rowWidth) / 2, 14, 3,
+		                                    buttons);
+	}
 	filespecField->setData(filespecInput);
 	searchField->setData(searchInput);
 	pathField->setData(pathInput);
@@ -2441,8 +2791,15 @@ bool promptMultiFileSarValues(std::string &pattern, std::string &replacement,
 	dialog->insert(new TLabel(TRect(2, 15, 16, 16), "Start ~a~t:", pathField));
 	dialog->insert(pathField);
 	dialog->insert(new THistory(TRect(96, 15, 99, 16), pathField, kMultiPathHistoryId));
-	dialog->insert(new TButton(TRect(34, 17, 46, 19), "~D~one", cmOK, bfDefault));
-	dialog->insert(new TButton(TRect(49, 17, 64, 19), "~C~ancel", cmCancel, bfNormal));
+	{
+		const std::array buttons{
+		    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault},
+		    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics =
+		    mr::dialogs::measureUniformButtonRow(buttons, 3);
+		mr::dialogs::insertUniformButtonRow(*dialog, (102 - metrics.rowWidth) / 2, 17, 3,
+		                                    buttons);
+	}
 	filespecField->setData(filespecInput);
 	searchField->setData(searchInput);
 	replacementField->setData(replacementInput);
@@ -3033,40 +3390,24 @@ MultiDialogAction runMultiFileResultsDialog(MultiFileSearchSession &session) {
 				addManaged(previewHeaderView, TRect(32, 1, 116, 2));
 				addManaged(new TLabel(TRect(2, 1, 16, 2), "Fi~l~es:", listView), TRect(2, 1, 16, 2));
 				if (session.replaceMode) {
-				const int replaceW = 12;
-				const int replaceAllW = 14;
-				const int skipW = 10;
-				const int cancelW = 12;
-				const int totalW = replaceW + replaceAllW + skipW + cancelW + (gap * 3);
-				int x = (118 - totalW) / 2;
-				addManaged(new TButton(TRect(x, buttonTop, x + replaceW, buttonTop + 2), "~R~eplace",
-				                       cmMrMultiReplace, bfDefault),
-				           TRect(x, buttonTop, x + replaceW, buttonTop + 2));
-				x += replaceW + gap;
-				addManaged(new TButton(TRect(x, buttonTop, x + replaceAllW, buttonTop + 2), "Replace ~A~ll",
-				                       cmMrMultiReplaceAll, bfNormal),
-				           TRect(x, buttonTop, x + replaceAllW, buttonTop + 2));
-				x += replaceAllW + gap;
-				addManaged(new TButton(TRect(x, buttonTop, x + skipW, buttonTop + 2), "~S~kip",
-				                       cmMrMultiSkip, bfNormal),
-				           TRect(x, buttonTop, x + skipW, buttonTop + 2));
-				x += skipW + gap;
-				addManaged(new TButton(TRect(x, buttonTop, x + cancelW, buttonTop + 2), "~C~ancel",
-				                       cmCancel, bfNormal),
-				           TRect(x, buttonTop, x + cancelW, buttonTop + 2));
-			} else {
-				const int doneW = 12;
-				const int cancelW = 12;
-				const int totalW = doneW + cancelW + gap;
-				int x = (118 - totalW) / 2;
-				addManaged(new TButton(TRect(x, buttonTop, x + doneW, buttonTop + 2), "~D~one", cmMrMultiDone,
-				                       bfDefault),
-				           TRect(x, buttonTop, x + doneW, buttonTop + 2));
-				x += doneW + gap;
-				addManaged(new TButton(TRect(x, buttonTop, x + cancelW, buttonTop + 2), "~C~ancel", cmCancel,
-				                       bfNormal),
-				           TRect(x, buttonTop, x + cancelW, buttonTop + 2));
-			}
+					const std::array buttons{
+					    mr::dialogs::DialogButtonSpec{"~R~eplace", cmMrMultiReplace, bfDefault},
+					    mr::dialogs::DialogButtonSpec{"Replace ~A~ll", cmMrMultiReplaceAll, bfNormal},
+					    mr::dialogs::DialogButtonSpec{"~S~kip", cmMrMultiSkip, bfNormal},
+					    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+					const mr::dialogs::DialogButtonRowMetrics metrics =
+					    mr::dialogs::measureUniformButtonRow(buttons, gap);
+					mr::dialogs::addManagedUniformButtonRow(*this, (118 - metrics.rowWidth) / 2,
+					                                        buttonTop, gap, buttons);
+				} else {
+					const std::array buttons{
+					    mr::dialogs::DialogButtonSpec{"~D~one", cmMrMultiDone, bfDefault},
+					    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+					const mr::dialogs::DialogButtonRowMetrics metrics =
+					    mr::dialogs::measureUniformButtonRow(buttons, gap);
+					mr::dialogs::addManagedUniformButtonRow(*this, (118 - metrics.rowWidth) / 2,
+					                                        buttonTop, gap, buttons);
+				}
 			initScrollIfNeeded();
 			selectContent();
 			if (session.selectedFileIndex < session.files.size())
@@ -3863,7 +4204,7 @@ bool handleFileOpen() {
 
 	if (!promptForPath("Open File", fileName, sizeof(fileName)))
 		return true;
-	if (!resolveReadableExistingPath(fileName, resolvedPath))
+	if (!resolveReadableExistingPath(MRDialogHistoryScope::OpenFile, fileName, resolvedPath))
 		return true;
 
 	target = findReusableEmptyWindow(current);
@@ -3897,7 +4238,7 @@ bool handleFileLoad() {
 
 	if (!promptForPath("Load File", fileName, sizeof(fileName)))
 		return true;
-	if (!resolveReadableExistingPath(fileName, resolvedPath))
+	if (!resolveReadableExistingPath(MRDialogHistoryScope::LoadFile, fileName, resolvedPath))
 		return true;
 	if (target == nullptr) {
 		target = createEditorWindow("?No-File?");
@@ -4029,20 +4370,41 @@ bool hasMarkedTextForBlockOperation(MREditWindow *win) {
 bool promptBlockSavePath(std::string &outPath) {
 	char buffer[MAXPATH] = {0};
 	ushort result = cmCancel;
-	static constexpr ushort kBlockSaveDialogHistoryId = 45;
 	MREditWindow *win = currentEditWindow();
 
 	outPath.clear();
-	if (win != nullptr && win->currentFileName() != nullptr && *win->currentFileName() != '\0')
-		strnzcpy(buffer, win->currentFileName(), sizeof(buffer));
-	else
-		initRememberedLoadDialogPath(buffer, sizeof(buffer), "*.*");
-	result = execDialogWithDataLocal(
-	    new TFileDialog("*.*", "Save block as", "~N~ame", fdOKButton, kBlockSaveDialogHistoryId), buffer);
+	mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::BlockSave, buffer, sizeof(buffer), "*.*",
+	                                win != nullptr && win->currentFileName() != nullptr
+	                                    ? std::string_view(win->currentFileName())
+	                                    : std::string_view());
+	result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::BlockSave, "*.*",
+	                                                        "Save block as", "~N~ame", fdOKButton,
+	                                                        buffer);
 	if (result == cmCancel)
 		return false;
 	fexpand(buffer);
-	rememberLoadDialogPath(buffer);
+	outPath = buffer;
+	if (outPath.find('*') != std::string::npos || outPath.find('?') != std::string::npos)
+		return false;
+	return !outPath.empty();
+}
+
+bool promptBlockLoadPath(std::string &outPath) {
+	char buffer[MAXPATH] = {0};
+	ushort result = cmCancel;
+	MREditWindow *win = currentEditWindow();
+
+	outPath.clear();
+	mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::BlockLoad, buffer, sizeof(buffer), "*.*",
+	                                win != nullptr && win->currentFileName() != nullptr
+	                                    ? std::string_view(win->currentFileName())
+	                                    : std::string_view());
+	result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::BlockLoad, "*.*",
+	                                                        "Load block from", "~N~ame", fdOpenButton,
+	                                                        buffer);
+	if (result == cmCancel)
+		return false;
+	fexpand(buffer);
 	outPath = buffer;
 	if (outPath.find('*') != std::string::npos || outPath.find('?') != std::string::npos)
 		return false;
@@ -4108,6 +4470,178 @@ bool togglePersistentBlocksSetting() {
 	                               enabled ? "Persistent blocks: ON" : "Persistent blocks: OFF",
 	                               mr::messageline::Kind::Info, mr::messageline::kPriorityLow);
 	return true;
+}
+
+bool persistEditSetupSettingsWithFeedback(const MREditSetupSettings &settings, const std::string &errorPrefix) {
+	MRSetupPaths paths;
+	MRSettingsWriteReport writeReport;
+	MREditorApp *app = dynamic_cast<MREditorApp *>(TProgram::application);
+	std::string errorText;
+
+	if (!setConfiguredEditSetupSettings(settings, &errorText)) {
+		postDialogError(errorPrefix + errorText);
+		return false;
+	}
+	paths.settingsMacroUri = configuredSettingsMacroFilePath();
+	paths.macroPath = defaultMacroDirectoryPath();
+	paths.helpUri = configuredHelpFilePath();
+	paths.tempPath = configuredTempDirectoryPath();
+	paths.shellUri = configuredShellExecutablePath();
+	if (!writeSettingsMacroFile(paths, &errorText, &writeReport)) {
+		postDialogError("Settings save failed: " + errorText);
+		return false;
+	}
+	mrLogSettingsWriteReport("wordstar edit setup update", writeReport);
+	if (app != nullptr && !app->applyConfiguredSettingsFromModel(&errorText)) {
+		postDialogError("Settings reload failed: " + errorText);
+		return false;
+	}
+	return true;
+}
+
+bool handleWordstarSetRightMargin() {
+	MREditSetupSettings settings = configuredEditSetupSettings();
+	NumericInputDialog::Layout layout = defaultNumericInputDialogLayout();
+	int margin = settings.rightMargin > 0 ? settings.rightMargin : 78;
+
+	layout.width = 30;
+	layout.height = 8;
+	layout.inputLeft = 4;
+	layout.inputRight = 26;
+	layout.buttonY = 4;
+	layout.buttonLeft = 4;
+	layout.buttonGap = 2;
+	layout.showHelp = false;
+	if (!promptIntegerValue("SET RIGHT MARGIN", "", "Set the global RIGHT_MARGIN used for paragraph formatting and wrap handling.", margin, 1, 999, margin, layout))
+		return true;
+	settings.rightMargin = margin;
+	if (!persistEditSetupSettingsWithFeedback(settings, "Right margin update failed: "))
+		return true;
+	mrLogMessage(("Right margin set to " + std::to_string(margin) + ".").c_str());
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Right margin updated.", mr::messageline::Kind::Info, mr::messageline::kPriorityLow);
+	return true;
+}
+
+bool handleWordstarSetLeftMargin(MREditWindow *window) {
+	int margin = window != nullptr ? window->indentLevel() : 1;
+
+	if (window == nullptr)
+		return false;
+	if (!promptIntegerValue("SET LEFT MARGIN", "~M~argin:", "Set the current window left margin used by WordStar paragraph commands.", margin, 1, 254, margin))
+		return true;
+	window->setIndentLevel(margin);
+	mrLogMessage(("Left margin set to " + std::to_string(margin) + ".").c_str());
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Left margin updated.", mr::messageline::Kind::Info, mr::messageline::kPriorityLow);
+	return true;
+}
+
+bool handleWordstarToggleWordWrap() {
+	MREditSetupSettings settings = configuredEditSetupSettings();
+
+	settings.wordWrap = !settings.wordWrap;
+	if (!persistEditSetupSettingsWithFeedback(settings, "Word wrap update failed: "))
+		return true;
+	mrLogMessage(settings.wordWrap ? "Word wrap enabled." : "Word wrap disabled.");
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, settings.wordWrap ? "Word wrap: ON" : "Word wrap: OFF", mr::messageline::Kind::Info, mr::messageline::kPriorityLow);
+	return true;
+}
+
+bool handleWordstarReformatParagraph(MREditWindow *window) {
+	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+	const int rightMargin = std::max(1, configuredEditSetupSettings().rightMargin);
+
+	if (editor == nullptr || window == nullptr || window->isReadOnly())
+		return false;
+	return editor->formatParagraph(window->indentLevel(), rightMargin);
+}
+
+bool handleWordstarJustifyParagraph(MREditWindow *window) {
+	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+	const int rightMargin = std::max(1, configuredEditSetupSettings().rightMargin);
+
+	if (editor == nullptr || window == nullptr || window->isReadOnly())
+		return false;
+	return editor->justifyParagraph(window->indentLevel(), rightMargin);
+}
+
+bool handleWordstarCenterLine(MREditWindow *window) {
+	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+	const int rightMargin = std::max(1, configuredEditSetupSettings().rightMargin);
+
+	if (editor == nullptr || window == nullptr || window->isReadOnly())
+		return false;
+	return editor->centerCurrentLine(window->indentLevel(), rightMargin);
+}
+
+bool handleWordstarLoadBlockFromFile(MREditWindow *window) {
+	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+	std::string path;
+	std::string text;
+	std::string errorText;
+	std::size_t start = 0;
+	std::size_t end = 0;
+
+	if (window == nullptr || editor == nullptr || window->isReadOnly())
+		return false;
+	if (!promptBlockLoadPath(path))
+		return true;
+	if (!readTextFile(path, text, errorText)) {
+		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, errorText, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+		return true;
+	}
+	start = editor->selectionStartOffset();
+	end = editor->selectionEndOffset();
+	if (end < start)
+		std::swap(start, end);
+	if (!editor->replaceRangeAndSelect(static_cast<uint>(start), static_cast<uint>(end), text.data(), static_cast<uint>(text.size())))
+		return true;
+	window->applyCommittedBlockState(static_cast<int>(MREditWindow::bmStream), false, static_cast<uint>(start), static_cast<uint>(start + text.size()));
+	return true;
+}
+
+bool handleWordstarForceSave(MREditWindow *window) {
+	if (window == nullptr)
+		return false;
+	if (window->isReadOnly()) {
+		postDialogWarning(kWindowReadOnlyMessage);
+		return true;
+	}
+	if (!window->isFileChanged())
+		return true;
+	if (!window->saveCurrentFileWithoutOverwritePrompt()) {
+		mrLogMessage("Force save failed.");
+		return true;
+	}
+	mrLogMessage("Window force-saved.");
+	return true;
+}
+
+bool handleWordstarExitDirtySaveAll() {
+	std::vector<MREditWindow *> dirtyWindows;
+	std::vector<std::string> dirtyItems;
+
+	for (MREditWindow *window : allEditWindowsInZOrder()) {
+		if (window == nullptr || !window->isFileChanged())
+			continue;
+		dirtyWindows.push_back(window);
+		dirtyItems.push_back(window->currentFileName()[0] != '\0' ? window->currentFileName() : window->getTitle(0));
+	}
+	if (dirtyWindows.empty())
+		return dispatchApplicationCommandEvent(cmQuit);
+	switch (mr::dialogs::runDialogDirtyListGating("EXIT MR", "Unsaved windows exist.", "Dirty windows:", dirtyItems, "Save all")) {
+		case mr::dialogs::UnsavedChangesChoice::Save:
+			for (MREditWindow *window : dirtyWindows) {
+				static_cast<void>(mrActivateEditWindow(window));
+				if (!saveCurrentEditWindow())
+					return true;
+			}
+			return dispatchApplicationCommandEvent(cmQuit);
+		case mr::dialogs::UnsavedChangesChoice::Discard:
+			return dispatchApplicationCommandEvent(cmQuit);
+		case mr::dialogs::UnsavedChangesChoice::Cancel:
+		default:
+			return true;
+	}
 }
 
 bool handleStopCurrentProgram() {
@@ -4208,6 +4742,65 @@ void clearTransientSelectionIfPending(const TEvent &event) {
 }
 
 } // namespace
+
+bool dispatchMRKeymapAction(std::string_view actionId, std::string_view sequenceText, MREditWindow *targetWindow) {
+	const auto it = std::ranges::find(kKeymapActionDispatchTable, actionId, &KeymapActionDispatchEntry::actionId);
+	MREditWindow *window = effectiveKeymapWindow(targetWindow);
+	const std::optional<int> markIndex = randomAccessMarkIndexFromSequence(sequenceText);
+
+	if (it == kKeymapActionDispatchTable.end())
+		return false;
+	switch (it->kind) {
+		case KeymapDispatchKind::AppCommand:
+			return dispatchApplicationCommandEvent(it->command);
+		case KeymapDispatchKind::EditorCommand:
+			return dispatchEditorCommandEvent(window, it->command);
+		case KeymapDispatchKind::WindowMethod:
+			return dispatchKeymapWindowMethod(window, it->windowMethod);
+		case KeymapDispatchKind::Custom:
+			switch (it->customAction) {
+				case KeymapCustomAction::DeleteForwardCharOrBlock:
+					if (window != nullptr && window->hasBlock())
+						return dispatchApplicationCommandEvent(cmMrBlockDelete);
+					return dispatchEditorCommandEvent(window, cmDelChar);
+				case KeymapCustomAction::LoadBlockFromFile:
+					return handleWordstarLoadBlockFromFile(window);
+				case KeymapCustomAction::SetRandomAccessMark:
+					return markIndex && mrvmUiSetRandomAccessMark(*markIndex);
+				case KeymapCustomAction::GetRandomAccessMark:
+					return markIndex && mrvmUiGetRandomAccessMark(*markIndex);
+				case KeymapCustomAction::CenterLine:
+					return handleWordstarCenterLine(window);
+				case KeymapCustomAction::ReformatParagraph:
+					return handleWordstarReformatParagraph(window);
+				case KeymapCustomAction::ToggleWordWrap:
+					return handleWordstarToggleWordWrap();
+				case KeymapCustomAction::SetLeftMargin:
+					return handleWordstarSetLeftMargin(window);
+				case KeymapCustomAction::SetRightMargin:
+					return handleWordstarSetRightMargin();
+				case KeymapCustomAction::JustifyParagraph:
+					return handleWordstarJustifyParagraph(window);
+				case KeymapCustomAction::SortColumnBlockToggle:
+					return window != nullptr && window->sortColumnBlockToggleOrder();
+				case KeymapCustomAction::ForceSave:
+					return handleWordstarForceSave(window);
+				case KeymapCustomAction::ExitDirtySaveAll:
+					return handleWordstarExitDirtySaveAll();
+				case KeymapCustomAction::None:
+					return false;
+			}
+	}
+	return false;
+}
+
+bool dispatchMRKeymapMacro(std::string_view macroSpec) {
+	std::string errorText;
+
+	if (macroSpec.empty())
+		return false;
+	return runMacroSpecByName(std::string(macroSpec).c_str(), &errorText, true);
+}
 
 bool handleMRCommand(ushort command) {
 	switch (command) {
@@ -4405,6 +4998,12 @@ bool handleMRCommand(ushort command) {
 
 		case cmMrTextLowerCaseMenu:
 			return dispatchEditorCommand(cmMrTextLowerCaseMenu, true);
+
+		case cmMrTextCenterLine:
+			return dispatchEditorCommand(cmMrTextCenterLine, true);
+
+		case cmMrTextReformatParagraph:
+			return dispatchEditorCommand(cmMrTextReformatParagraph, true);
 
 		case cmMrWindowLink:
 			mrvmUiLinkCurrentWindow();

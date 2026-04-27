@@ -22,10 +22,16 @@
 
 #include "../app/MRCommands.hpp"
 #include "../config/MRDialogPaths.hpp"
+#include "../ui/MRFrame.hpp"
 
+#include <array>
 #include <string>
 
 namespace {
+
+TFrame *initSetupDialogFrame(TRect bounds) {
+	return new MRFrame(bounds);
+}
 
 class TRelayColorGroupList : public TColorGroupList {
   public:
@@ -111,9 +117,9 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 	static const int kDialogHeight = 21;
 
 	TUnifiedColorSetupDialog(const char *title, TColorGroup *groupsHead) noexcept
-	    : TWindowInit(&TDialog::initFrame),
+	    : TWindowInit(initSetupDialogFrame),
 	      MRScrollableDialog(centeredSetupDialogRect(kDialogWidth, kDialogHeight), title,
-	                         kDialogWidth, kDialogHeight) {
+	                         kDialogWidth, kDialogHeight, initSetupDialogFrame) {
 		for (TColorGroup *group = groupsHead; group != nullptr; group = group->next)
 			group->index = 0;
 		buildViews(groupsHead);
@@ -175,13 +181,16 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 		return view;
 	}
 
-	TButton *addButton(const TRect &rect, const char *title, ushort command, ushort flags) {
-		TButton *view = new TButton(rect, title, command, flags);
-		addManaged(view, rect);
-		return view;
-	}
-
 	void buildViews(TColorGroup *groupsHead) {
+		const std::array buttons{
+		    mr::dialogs::DialogButtonSpec{"~L~oad Theme", cmMrColorLoadTheme, bfNormal},
+		    mr::dialogs::DialogButtonSpec{"~S~ave Theme", cmMrColorSaveTheme, bfNormal},
+		    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault},
+		    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics =
+		    mr::dialogs::measureUniformButtonRow(buttons, 2);
+		const int buttonLeft = (kDialogWidth - metrics.rowWidth) / 2;
+
 		mGroupScroll = new TScrollBar(TRect(18, 3, 19, 14));
 		addManaged(mGroupScroll, TRect(18, 3, 19, 14));
 
@@ -214,10 +223,7 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 		mMonoLabel = addLabel(TRect(58, 2, 64, 3), "Color", mMonoSel);
 		mMonoLabel->hide();
 
-		addButton(TRect(6, 16, 19, 18), "~L~oad Theme", cmMrColorLoadTheme, bfNormal);
-		addButton(TRect(21, 16, 34, 18), "~S~ave Theme", cmMrColorSaveTheme, bfNormal);
-		addButton(TRect(41, 16, 51, 18), "~D~one", cmOK, bfDefault);
-		addButton(TRect(53, 16, 67, 18), "~C~ancel", cmCancel, bfNormal);
+		mr::dialogs::addManagedUniformButtonRow(*this, buttonLeft, 16, 2, buttons);
 
 		mThemeField = new TThemeNameField(TRect(5, 18, 71, 19), configuredColorThemeDisplayName());
 		addManaged(mThemeField, TRect(5, 18, 71, 19));

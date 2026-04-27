@@ -183,8 +183,6 @@ TSubMenu *createOtherMenu() {
 	    *new TSubMenu("~O~ther", kbAltO) +
 	    *createInstallationAndSetupMenuItem() +
 	    newLine() +
-	    *new TMenuItem("~M~acro manager...", cmMrOtherMacroManager, kbNoKey, hcNoContext) +
-	    newLine() +
 	    *new TMenuItem("~E~xecute program...", cmMrOtherExecuteProgram, kbF9, hcNoContext, "F9") +
 	    *new TMenuItem("~S~top current program", cmMrOtherStopProgram, kbNoKey, hcNoContext) +
 	    *new TMenuItem("~R~estart current program", cmMrOtherRestartProgram, kbNoKey, hcNoContext) +
