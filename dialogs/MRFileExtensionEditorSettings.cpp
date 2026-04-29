@@ -181,7 +181,7 @@ class TFormatRulerView : public TView {
 		if (event.what == evMouseDown) {
 			select();
 			cursorColumn = std::max(0, std::min(makeLocal(event.mouse.where).x, std::max(0, size.x - 1)));
-			commitMouseEdit(event.mouse.controlKeyState);
+			commitDragEdit(event, cursorColumn);
 			clearEvent(event);
 			return;
 		}
@@ -292,6 +292,30 @@ class TFormatRulerView : public TView {
 		}
 		if (current == 'L' || current == 'R') return;
 		commitSymbolEdit(current == '|' ? '.' : '|');
+	}
+
+	void commitDragEdit(TEvent &event, int startColumn) {
+		const std::string initialValue = panel.currentFormatLineValue();
+		const int initialTabSize = panel.currentFormatLineTabSize();
+		const int initialLeftMargin = panel.currentFormatLineLeftMargin();
+		const int initialRightMargin = panel.currentFormatLineRightMargin();
+		bool dragged = false;
+
+		while (mouseEvent(event, evMouseMove | evMouseAuto | evMouseUp)) {
+			std::string translated;
+			int leftMargin = initialLeftMargin;
+			int rightMargin = initialRightMargin;
+			const int currentColumn = std::max(0, std::min(makeLocal(event.mouse.where).x, std::max(0, size.x - 1)));
+			const int delta = currentColumn - startColumn;
+
+			if (event.what == evMouseUp) break;
+			if (delta == 0) continue;
+			dragged = true;
+			cursorColumn = currentColumn;
+			if (!translateEditFormatLine(initialValue, initialTabSize, initialLeftMargin, initialRightMargin, delta, translated, &leftMargin, &rightMargin, nullptr)) continue;
+			applyUpdatedFormatLine(translated, leftMargin, rightMargin);
+		}
+		if (!dragged) commitMouseEdit(event.mouse.controlKeyState);
 	}
 
 	FileExtensionEditorSettingsPanel &panel;

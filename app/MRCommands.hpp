@@ -118,6 +118,7 @@ enum : ushort {
 	cmMrSearchListFilesFromLastSearch,
 	cmMrSearchMultiFileSearchReplace,
 	cmMrOtherEmojiTable,
+	cmMrEnsureUsableWorkWindow,
 	cmMrDeferredActivateWindow,
 	cmMrWindowTopologyChanged
 };

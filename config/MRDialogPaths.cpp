@@ -1839,6 +1839,21 @@ int clampEditFormatLeftMargin(int leftMargin, int rightMargin) noexcept {
 	return std::max(1, std::min(leftMargin, normalizedRightMargin - 1));
 }
 
+std::string resolvedEditFormatLineValue(const std::string &value, int tabSize, int leftMargin, int rightMargin, int &resolvedLeftMargin, int &resolvedRightMargin) {
+	std::string normalized;
+
+	if (normalizeEditFormatLine(value, tabSize, leftMargin, rightMargin, normalized, &resolvedLeftMargin, &resolvedRightMargin, nullptr)) return normalized;
+	resolvedLeftMargin = clampEditFormatLeftMargin(leftMargin, rightMargin);
+	resolvedRightMargin = clampEditFormatRightMargin(rightMargin);
+	return defaultEditFormatLineForTabSize(tabSize, resolvedLeftMargin, resolvedRightMargin);
+}
+
+int nextNumericTabFillColumn(int column, int tabSize) noexcept {
+	const int normalizedTabSize = clampEditFormatTabSize(tabSize);
+	const int safeColumn = std::max(1, column);
+	return ((safeColumn - 1) / normalizedTabSize + 1) * normalizedTabSize + 1;
+}
+
 std::string defaultEditFormatLineForTabSize(int tabSize, int leftMargin, int rightMargin) {
 	const int normalizedTabSize = clampEditFormatTabSize(tabSize);
 	const int normalizedRightMargin = clampEditFormatRightMargin(rightMargin);
@@ -1981,6 +1996,100 @@ bool editFormatLineAtColumn(const std::string &value, int tabSize, int leftMargi
 		if (safeColumn != currentLeftMargin && safeColumn != currentRightMargin && safeColumn <= static_cast<int>(edited.size())) edited[static_cast<std::size_t>(safeColumn - 1)] = '.';
 	}
 	return normalizeEditFormatLine(edited, tabSize, currentLeftMargin, currentRightMargin, outValue, outLeftMargin, outRightMargin, errorMessage);
+}
+
+bool translateEditFormatLine(const std::string &value, int tabSize, int leftMargin, int rightMargin, int deltaColumns, std::string &outValue, int *outLeftMargin, int *outRightMargin, std::string *errorMessage) {
+	std::string normalized;
+	int currentLeftMargin = leftMargin;
+	int currentRightMargin = rightMargin;
+	int clampedDelta = deltaColumns;
+	std::string translated;
+
+	if (!normalizeEditFormatLine(value, tabSize, leftMargin, rightMargin, normalized, &currentLeftMargin, &currentRightMargin, errorMessage)) return false;
+	clampedDelta = std::max(1 - currentLeftMargin, std::min(deltaColumns, 999 - currentRightMargin));
+	if (currentRightMargin <= 1) {
+		outValue = "R";
+		if (outLeftMargin != nullptr) *outLeftMargin = 1;
+		if (outRightMargin != nullptr) *outRightMargin = 1;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	translated.assign(static_cast<std::size_t>(currentRightMargin + clampedDelta), '.');
+	translated[static_cast<std::size_t>(currentLeftMargin + clampedDelta - 1)] = 'L';
+	translated[static_cast<std::size_t>(currentRightMargin + clampedDelta - 1)] = 'R';
+	for (int i = 0; i < static_cast<int>(normalized.size()); ++i) {
+		const int shiftedColumn = i + clampedDelta + 1;
+		if (normalized[static_cast<std::size_t>(i)] != '|') continue;
+		if (shiftedColumn <= currentLeftMargin + clampedDelta || shiftedColumn >= currentRightMargin + clampedDelta) continue;
+		translated[static_cast<std::size_t>(shiftedColumn - 1)] = '|';
+	}
+	return normalizeEditFormatLine(translated, tabSize, currentLeftMargin + clampedDelta, currentRightMargin + clampedDelta, outValue, outLeftMargin, outRightMargin, errorMessage);
+}
+
+int nextResolvedEditFormatTabStopColumn(const std::string &value, int tabSize, int leftMargin, int rightMargin, int column) {
+	int resolvedLeftMargin = 1;
+	int resolvedRightMargin = 1;
+	const std::string normalized = resolvedEditFormatLineValue(value, tabSize, leftMargin, rightMargin, resolvedLeftMargin, resolvedRightMargin);
+	const int safeColumn = std::max(1, column);
+
+	for (int i = safeColumn; i < static_cast<int>(normalized.size()); ++i)
+		if (normalized[static_cast<std::size_t>(i)] == '|') return i + 1;
+	return safeColumn;
+}
+
+int prevResolvedEditFormatTabStopColumn(const std::string &value, int tabSize, int leftMargin, int rightMargin, int column) {
+	int resolvedLeftMargin = 1;
+	int resolvedRightMargin = 1;
+	const std::string normalized = resolvedEditFormatLineValue(value, tabSize, leftMargin, rightMargin, resolvedLeftMargin, resolvedRightMargin);
+	const int safeColumn = std::max(1, column);
+	int i = std::min(std::max(0, safeColumn - 2), static_cast<int>(normalized.size()) - 1);
+
+	for (; i >= 0; --i)
+		if (normalized[static_cast<std::size_t>(i)] == '|') return i + 1;
+	if (safeColumn > resolvedLeftMargin) return resolvedLeftMargin;
+	return safeColumn;
+}
+
+int resolvedEditFormatTabDisplayColumn(const std::string &value, int tabSize, int leftMargin, int rightMargin, int column) {
+	const int safeColumn = std::max(1, column);
+	const int resolvedTabStop = nextResolvedEditFormatTabStopColumn(value, tabSize, leftMargin, rightMargin, safeColumn);
+
+	if (resolvedTabStop > safeColumn) return resolvedTabStop;
+	return nextNumericTabFillColumn(safeColumn, tabSize);
+}
+
+int resolvedEditFormatIndentColumn(const std::string &value, int tabSize, int leftMargin, int rightMargin, int preferredColumn) {
+	int resolvedLeftMargin = 1;
+	int resolvedRightMargin = 1;
+	const std::string normalized = resolvedEditFormatLineValue(value, tabSize, leftMargin, rightMargin, resolvedLeftMargin, resolvedRightMargin);
+	const int safePreferredColumn = std::max(1, preferredColumn);
+	int resolvedColumn = resolvedLeftMargin;
+
+	if (safePreferredColumn <= resolvedLeftMargin) return resolvedLeftMargin;
+	for (int i = 0; i < static_cast<int>(normalized.size()); ++i) {
+		if (normalized[static_cast<std::size_t>(i)] != '|') continue;
+		if (i + 1 > safePreferredColumn) break;
+		resolvedColumn = i + 1;
+	}
+	return resolvedColumn;
+}
+
+std::string buildEditIndentFill(const MREditSetupSettings &settings, int startColumn, int targetColumn, bool preferTabs) {
+	std::string out;
+	int currentColumn = std::max(1, startColumn);
+	const int safeTargetColumn = std::max(currentColumn, targetColumn);
+
+	while (currentColumn < safeTargetColumn) {
+		const int nextTabColumn = resolvedEditFormatTabDisplayColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, currentColumn);
+		if (preferTabs && nextTabColumn <= safeTargetColumn) {
+			out.push_back('\t');
+			currentColumn = nextTabColumn;
+		} else {
+			out.push_back(' ');
+			++currentColumn;
+		}
+	}
+	return out;
 }
 
 namespace {

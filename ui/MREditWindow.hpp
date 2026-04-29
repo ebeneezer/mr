@@ -9,6 +9,7 @@
 #define Uses_TEvent
 #define Uses_TEditor
 #define Uses_TObject
+#define Uses_TProgram
 #include <tvision/tv.h>
 
 #include <algorithm>
@@ -21,6 +22,7 @@
 #include <cstring>
 #include <fstream>
 #include <iterator>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <unistd.h>
@@ -32,6 +34,7 @@
 #include "MRWindowManager.hpp"
 #include "MRWindowManager.hpp"
 #include "MRWindowSupport.hpp"
+#include "../app/MRCommands.hpp"
 #include "../keymap/MRKeymapContext.hpp"
 #include "../keymap/MRKeymapToken.hpp"
 #include "../dialogs/MRWindowList.hpp"
@@ -67,7 +70,7 @@ class MREditWindow : public TWindow {
 		wrHelp
 	};
 
-	MREditWindow(const TRect &bounds, const char *title, int aNumber) : TWindowInit(&MREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr), hScrollBar(nullptr), indicator(nullptr), editor(nullptr), mBufferId(allocateBufferId()), mFirstSaveDone(false), mTemporaryFileUsed(false), mTemporaryFileName(), mIndentLevel(1), mBlockMode(bmNone), mBlockMarkingOn(false), mBlockAnchor(0), mBlockEnd(0), mColumnSortAscending(true), mTrackedCoprocessorTasks(), mWindowRole(wrText), mWindowRoleDetail(), mMacroQueuedCount(0), mMacroCompletedCount(0), mMacroConflictCount(0), mMacroCancelledCount(0), mMacroFailedCount(0), mLastMacroSummaryText(), mWindowPaletteData(defaultWindowPaletteData()), mWindowPalette(mWindowPaletteData.data(), static_cast<ushort>(mWindowPaletteData.size())), mCustomEofMarkerColorValid(false), mCustomEofMarkerColor(0) {
+	MREditWindow(const TRect &bounds, const char *title, int aNumber) : TWindowInit(&MREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr), hScrollBar(nullptr), indicator(nullptr), editor(nullptr), mBufferId(allocateBufferId()), mFirstSaveDone(false), mTemporaryFileUsed(false), mTemporaryFileName(), mIndentLevel(1), mBlockMode(bmNone), mBlockMarkingOn(false), mBlockAnchor(0), mBlockEnd(0), mColumnSortAscending(true), mTrackedCoprocessorTasks(), mWindowRole(wrText), mWindowRoleDetail(), mMacroQueuedCount(0), mMacroCompletedCount(0), mMacroConflictCount(0), mMacroCancelledCount(0), mMacroFailedCount(0), mLastMacroSummaryText(), mWindowPaletteData(defaultWindowPaletteData()), mWindowPalette(mWindowPaletteData.data(), static_cast<ushort>(mWindowPaletteData.size())), mCustomEofMarkerColorValid(false), mCustomEofMarkerColor(0), mClosePrepared(false) {
 		options |= ofTileable;
 
 		std::strncpy(displayTitle, (title != nullptr && *title != '\0') ? title : "Untitled", sizeof(displayTitle) - 1);
@@ -115,8 +118,14 @@ class MREditWindow : public TWindow {
 	}
 
 	virtual ~MREditWindow() override {
-		cancelTrackedCoprocessorTasks();
+		prepareForClose();
 		mrNotifyWindowTopologyChanged();
+	}
+
+	virtual void close() override {
+		prepareForClose();
+		scheduleEnsureUsableWorkWindow();
+		TWindow::close();
 	}
 
 	virtual TPalette &getPalette() const override {
@@ -825,6 +834,7 @@ class MREditWindow : public TWindow {
 		if (level < 1) level = 1;
 		if (level > 254) level = 254;
 		mIndentLevel = level;
+		if (editor != nullptr) editor->setPreferredIndentColumn(level);
 	}
 
 	enum BlockMode {
@@ -1293,7 +1303,9 @@ class MREditWindow : public TWindow {
 	}
 
 	MRFileEditor *createEditor(const TRect &bounds, const char *fileName) {
-		return new MRFileEditor(bounds, hScrollBar, vScrollBar, indicator, fileName != nullptr ? fileName : "");
+		MRFileEditor *created = new MRFileEditor(bounds, hScrollBar, vScrollBar, indicator, fileName != nullptr ? fileName : "");
+		created->setPreferredIndentColumn(mIndentLevel);
+		return created;
 	}
 
 	void layoutEditorChrome() {
@@ -1340,6 +1352,28 @@ class MREditWindow : public TWindow {
 	void resetTransientEditorState() {
 		if (editor == nullptr) return;
 		clearBlock();
+	}
+
+	void prepareForClose() {
+		std::ostringstream line;
+		const char *title = getTitle(0);
+		std::size_t cancelledCount = 0;
+
+		if (mClosePrepared) return;
+		mClosePrepared = true;
+		cancelledCount = prepareCoprocessorTasksForShutdown();
+		line << "Preparing close for window #" << mBufferId << " title='" << (title != nullptr ? title : "?") << "' cancelled_tasks=" << cancelledCount << ".";
+		mrLogMessage(line.str().c_str());
+	}
+
+	static void scheduleEnsureUsableWorkWindow() {
+		TEvent event;
+
+		if (TProgram::application == nullptr) return;
+		std::memset(&event, 0, sizeof(event));
+		event.what = evCommand;
+		event.message.command = cmMrEnsureUsableWorkWindow;
+		TProgram::application->putEvent(event);
 	}
 
 	void updateTitleFromEditor() {
@@ -1725,6 +1759,7 @@ class MREditWindow : public TWindow {
 	mutable TPalette mWindowPalette;
 	bool mCustomEofMarkerColorValid;
 	TColorAttr mCustomEofMarkerColor;
+	bool mClosePrepared;
 	char displayTitle[MAXPATH];
 };
 

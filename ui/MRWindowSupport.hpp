@@ -17,7 +17,7 @@ void mrScheduleWindowActivation(MREditWindow *win);
 [[nodiscard]] bool mrDispatchDeferredWindowActivation();
 [[nodiscard]] bool mrShowProjectHelp();
 [[nodiscard]] bool mrEnsureLogWindow(bool activate = true);
-[[nodiscard]] bool mrEnsureUsableWorkWindow();
+[[nodiscard]] bool mrEnsureUsableWorkWindow(bool allowCreateFallback = true);
 [[nodiscard]] bool mrClearLogWindow();
 void mrLogMessage(std::string_view message);
 bool mrAppendLogBufferToFile(const std::string &path, std::string *errorMessage = nullptr);

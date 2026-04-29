@@ -641,11 +641,8 @@ static bool replaceLastSearchBackground(const std::string &replacement);
 static Value currentEditorCharValue();
 static std::string currentEditorLineText(MRFileEditor *editor);
 static std::string currentEditorWord(MRFileEditor *editor, const std::string &delimiters);
-static int defaultTabWidth();
 static bool isVirtualChar(char c);
-static int nextTabStopColumn(int col);
-static int prevTabStopColumn(int col);
-static std::string makeIndentFill(int targetCol, bool preferTabs);
+static int nextResolvedTabDisplayColumn(const MREditSetupSettings &settings, int col);
 static std::string expandTabsString(const std::string &value, bool toVirtuals);
 static std::string tabsToSpacesString(const std::string &value);
 static int expandedTabsAdjustedIndex(const std::string &value, int index);
@@ -2554,54 +2551,23 @@ static Value currentEditorCharValue() {
 	return makeChar(editor->charAtOffset(editor->cursorOffset()));
 }
 
-static int defaultTabWidth() {
-	int width = configuredTabSizeSetting();
-	if (width < 1) width = 1;
-	if (width > 32) width = 32;
-	return width;
-}
-
 static bool isVirtualChar(char c) {
 	return static_cast<unsigned char>(c) == 255;
 }
 
-static int nextTabStopColumn(int col) {
-	int width = defaultTabWidth();
-	if (col < 1) col = 1;
-	return ((col - 1) / width + 1) * width + 1;
-}
-
-static int prevTabStopColumn(int col) {
-	int width = defaultTabWidth();
-	if (col <= 1) return 1;
-	return ((col - 2) / width) * width + 1;
-}
-
-static std::string makeIndentFill(int targetCol, bool preferTabs) {
-	std::string out;
-	int col = 1;
-	if (targetCol < 1) targetCol = 1;
-	while (col < targetCol) {
-		int next = nextTabStopColumn(col);
-		if (preferTabs && next <= targetCol) {
-			out.push_back('	');
-			col = next;
-		} else {
-			out.push_back(' ');
-			++col;
-		}
-	}
-	return out;
+static int nextResolvedTabDisplayColumn(const MREditSetupSettings &settings, int col) {
+	return resolvedEditFormatTabDisplayColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, col);
 }
 
 static std::string expandTabsString(const std::string &value, bool toVirtuals) {
+	const MREditSetupSettings settings = configuredEditSetupSettings();
 	std::string out;
 	int col = 1;
 	out.reserve(value.size());
 	for (char i : value) {
 		unsigned char ch = static_cast<unsigned char>(i);
 		if (ch == '	') {
-			int next = nextTabStopColumn(col);
+			int next = nextResolvedTabDisplayColumn(settings, col);
 			int width = next - col;
 			if (toVirtuals) {
 				out.push_back('	');
@@ -2624,13 +2590,14 @@ static std::string expandTabsString(const std::string &value, bool toVirtuals) {
 }
 
 static std::string tabsToSpacesString(const std::string &value) {
+	const MREditSetupSettings settings = configuredEditSetupSettings();
 	std::string out;
 	int col = 1;
 	out.reserve(value.size());
 	for (std::string::size_type i = 0; i < value.size(); ++i) {
 		unsigned char ch = static_cast<unsigned char>(value[i]);
 		if (ch == '	') {
-			int next = nextTabStopColumn(col);
+			int next = nextResolvedTabDisplayColumn(settings, col);
 			int width = next - col;
 			for (int n = 0; n < width; ++n)
 				out.push_back(' ');
@@ -2652,6 +2619,7 @@ static std::string tabsToSpacesString(const std::string &value) {
 }
 
 static int expandedTabsAdjustedIndex(const std::string &value, int index) {
+	const MREditSetupSettings settings = configuredEditSetupSettings();
 	int sourcePos = 1;
 	int mappedPos = 1;
 	int col = 1;
@@ -2661,7 +2629,7 @@ static int expandedTabsAdjustedIndex(const std::string &value, int index) {
 		unsigned char ch = static_cast<unsigned char>(i);
 		if (sourcePos >= clampedIndex) break;
 		if (ch == '\t') {
-			int next = nextTabStopColumn(col);
+			int next = nextResolvedTabDisplayColumn(settings, col);
 			mappedPos += next - col;
 			col = next;
 		} else {
@@ -4968,6 +4936,7 @@ static bool undentCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
 }
 
 static bool moveEditorTabRight(MRFileEditor *editor) {
+	const MREditSetupSettings settings = configuredEditSetupSettings();
 	int col;
 	int targetCol;
 	uint lineStart;
@@ -4975,12 +4944,11 @@ static bool moveEditorTabRight(MRFileEditor *editor) {
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (editor == nullptr && session == nullptr) return false;
 	col = currentEditorColumn(editor);
-	targetCol = nextTabStopColumn(col);
+	targetCol = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, col);
+	if (targetCol <= col) return false;
 	if (currentEditorInsertMode()) {
-		if (tabExpand) return insertEditorText(editor, std::string(1, '	'));
-		return insertEditorText(editor, std::string(static_cast<std::size_t>(targetCol - col), ' '));
+		return insertEditorText(editor, buildEditIndentFill(settings, col, targetCol, tabExpand));
 	}
-	if (tabExpand) return insertEditorText(editor, std::string(1, '	'));
 	if (editor == nullptr) {
 		lineStart = static_cast<uint>(session->document.lineStart(session->cursorOffset));
 		return setEditorCursor(nullptr, static_cast<uint>(backgroundCharPtrOffset(lineStart, targetCol - 1)));
@@ -4990,17 +4958,18 @@ static bool moveEditorTabRight(MRFileEditor *editor) {
 }
 
 static bool moveEditorTabLeft(MRFileEditor *editor) {
+	const MREditSetupSettings settings = configuredEditSetupSettings();
+	const int currentColumn = currentEditorColumn(editor);
 	uint lineStart;
-	int targetCol;
+	const int targetCol = prevResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, currentColumn);
 	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (targetCol >= currentColumn) return false;
 	if (editor == nullptr) {
 		if (session == nullptr) return false;
 		lineStart = static_cast<uint>(session->document.lineStart(session->cursorOffset));
-		targetCol = prevTabStopColumn(currentEditorColumn(nullptr));
 		return setEditorCursor(nullptr, static_cast<uint>(backgroundCharPtrOffset(lineStart, targetCol - 1)));
 	}
 	lineStart = editor->lineStartOffset(editor->cursorOffset());
-	targetCol = prevTabStopColumn(currentEditorColumn(editor));
 	return setEditorCursor(editor, editor->charPtrOffset(lineStart, targetCol - 1));
 }
 
@@ -5015,10 +4984,9 @@ static bool undentEditor(MRFileEditor *editor) {
 }
 
 static bool carriageReturnEditor(MRFileEditor *editor) {
-	int indentLevel;
-	std::string fill;
-	indentLevel = currentEditorIndentLevel();
-	fill = makeIndentFill(indentLevel, currentRuntimeTabExpand());
+	const MREditSetupSettings settings = configuredEditSetupSettings();
+	const int indentLevel = resolvedEditFormatIndentColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, currentEditorIndentLevel());
+	const std::string fill = buildEditIndentFill(settings, 1, indentLevel, currentRuntimeTabExpand());
 	if (editor != nullptr) return editor->newLineWithIndent(fill);
 	return insertEditorText(nullptr, std::string("\n") + fill);
 }

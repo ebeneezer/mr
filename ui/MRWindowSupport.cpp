@@ -37,6 +37,8 @@ constexpr std::string_view kHelpWindowTitle = "MR HELP";
 constexpr std::string_view kLogWindowTitle = "MR LOG";
 
 std::string g_logBuffer;
+std::size_t g_logPersistedBytes = 0;
+std::string g_logPersistedPath;
 bool g_keystrokeRecordingActive = false;
 bool g_keystrokeRecordingMarkerVisible = false;
 bool g_macroBrainMarkerActive = false;
@@ -217,6 +219,22 @@ void postWindowSupportWarning(std::string_view text) {
 	if (tmNow == nullptr) return std::string("--:--:--");
 	if (std::strftime(buffer.data(), buffer.size(), "%H:%M:%S", tmNow) == 0) return std::string("--:--:--");
 	return std::string(buffer.data());
+}
+
+bool appendLogChunkToFile(const std::string &path, std::string_view chunk, std::string *errorMessage) {
+	std::ofstream out(path, std::ios::out | std::ios::app | std::ios::binary);
+
+	if (!out) {
+		if (errorMessage != nullptr) *errorMessage = "Unable to open log file for append: " + path;
+		return false;
+	}
+	out.write(chunk.data(), static_cast<std::streamsize>(chunk.size()));
+	if (!out.good()) {
+		if (errorMessage != nullptr) *errorMessage = "Unable to append log file: " + path;
+		return false;
+	}
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
 }
 
 [[nodiscard]] std::string normalizeLogLine(std::string_view message) {
@@ -428,7 +446,7 @@ bool mrClearLogWindow() {
 	return true;
 }
 
-bool mrEnsureUsableWorkWindow() {
+bool mrEnsureUsableWorkWindow(bool allowCreateFallback) {
 	TView *currentView = TProgram::deskTop != nullptr ? TProgram::deskTop->current : nullptr;
 	MREditWindow *current = dynamic_cast<MREditWindow *>(currentView);
 	MREditWindow *fallback;
@@ -438,6 +456,7 @@ bool mrEnsureUsableWorkWindow() {
 	if (current != nullptr && (current->state & sfVisible) != 0) return true;
 	fallback = chooseFallbackWorkWindow();
 	if (fallback != nullptr) return mrActivateEditWindow(fallback);
+	if (!allowCreateFallback) return false;
 	fallback = createEditorWindow("?No-File?");
 	if (fallback == nullptr) return false;
 	mrLogMessage("Created fallback empty window to keep the editor usable.");
@@ -447,10 +466,22 @@ bool mrEnsureUsableWorkWindow() {
 void mrLogMessage(std::string_view message) {
 	const std::string line = normalizeLogLine(message);
 	MREditWindow *win;
+	std::size_t persistedStart = 0;
 
 	if (line.empty()) return;
+	persistedStart = g_logBuffer.size();
 	if (!g_logBuffer.empty() && g_logBuffer[g_logBuffer.size() - 1] != '\n') g_logBuffer += '\n';
 	g_logBuffer += "[" + currentTimestamp() + "] " + line + "\n";
+	if (configuredLogHandling() == MRLogHandling::Persist) {
+		const std::string path = configuredLogFilePath();
+		const bool pathChanged = g_logPersistedPath != path;
+		const std::string_view chunk = pathChanged ? std::string_view(g_logBuffer.data(), g_logBuffer.size()) : std::string_view(g_logBuffer.data() + persistedStart, g_logBuffer.size() - persistedStart);
+
+		if (!path.empty() && !chunk.empty() && appendLogChunkToFile(path, chunk, nullptr)) {
+			g_logPersistedBytes = g_logBuffer.size();
+			g_logPersistedPath = path;
+		}
+	}
 	win = ensureLogWindowInternal(false);
 	if (win != nullptr) {
 		win->replaceTextBuffer(g_logBuffer.c_str(), kLogWindowTitle.data());
@@ -460,18 +491,15 @@ void mrLogMessage(std::string_view message) {
 }
 
 bool mrAppendLogBufferToFile(const std::string &path, std::string *errorMessage) {
-	std::ofstream out(path, std::ios::out | std::ios::app | std::ios::binary);
+	const std::string_view chunk = path == g_logPersistedPath && g_logPersistedBytes <= g_logBuffer.size() ? std::string_view(g_logBuffer.data() + g_logPersistedBytes, g_logBuffer.size() - g_logPersistedBytes) : std::string_view(g_logBuffer.data(), g_logBuffer.size());
 
-	if (!out) {
-		if (errorMessage != nullptr) *errorMessage = "Unable to open log file for append: " + path;
-		return false;
+	if (chunk.empty()) {
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
 	}
-	out << g_logBuffer;
-	if (!out.good()) {
-		if (errorMessage != nullptr) *errorMessage = "Unable to append log file: " + path;
-		return false;
-	}
-	if (errorMessage != nullptr) errorMessage->clear();
+	if (!appendLogChunkToFile(path, chunk, errorMessage)) return false;
+	g_logPersistedBytes = g_logBuffer.size();
+	g_logPersistedPath = path;
 	return true;
 }
 

@@ -1238,6 +1238,13 @@ void MREditorApp::handleEvent(TEvent &event) {
 		clearEvent(event);
 		return;
 	}
+	if (event.what == evCommand && event.message.command == cmMrEnsureUsableWorkWindow) {
+		mrLogMessage("MREditorApp handling cmMrEnsureUsableWorkWindow");
+		static_cast<void>(mrEnsureUsableWorkWindow(false));
+		mrvmUiInvalidateScreenBase();
+		clearEvent(event);
+		return;
+	}
 	if (event.what == evKeyDown && currentEditWindow() == nullptr) {
 		std::string executedMacroName;
 		if (mrvmRunAssignedMacroForKey(event.keyDown.keyCode, event.keyDown.controlKeyState, executedMacroName, nullptr)) {

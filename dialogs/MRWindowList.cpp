@@ -570,7 +570,7 @@ class WindowListDialog : public MRDialogFoundation {
 		MREditWindow *win = currentSelection();
 		if (win == nullptr) return;
 		closeWindow(win);
-		static_cast<void>(mrEnsureUsableWorkWindow());
+		static_cast<void>(mrEnsureUsableWorkWindow(false));
 		refreshEntries();
 	}
 

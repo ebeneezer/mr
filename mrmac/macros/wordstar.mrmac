@@ -45,7 +45,7 @@ MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MR_FILE
 MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MR_EXIT_DIRTY_SAVE_ALL" sequence="<Ctrl+K> <Ctrl+X>" description="Exit with save-all dialog"');
 MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MR_EXIT_DIRTY_SAVE_ALL" sequence="<Ctrl+K> <X>" description="Exit with save-all dialog"');
 MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MR_TEXT_REFORMAT_PARAGRAPH" sequence="<Ctrl+B>" description="Reformat paragraph"');
-MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MR_TEXT_CENTER_LINE" sequence="<Ctrl+C>" description="Center line"');
+MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MR_TEXT_CENTER_LINE" sequence="<Ctrl+O> <Ctrl+C>" description="Center line"');
 MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MR_TOGGLE_WORD_WRAP" sequence="<Ctrl+W>" description="Toggle word wrap"');
 MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MR_SORT_COLUMN_BLOCK_TOGGLE" sequence="<Ctrl+O> <Ctrl+S>" description="Sort marked column block"');
 MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MR_SORT_COLUMN_BLOCK_TOGGLE" sequence="<Ctrl+O> <S>" description="Sort marked column block"');
@@ -79,4 +79,5 @@ MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_B
 MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_BLOCK_SET_COLUMN_BEGIN" sequence="<Ctrl+K> <N>" description="mark column block"');
 MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_SEARCH_REPLACE" sequence="<Ctrl+K> <Ctrl+A>" description="find & replace"');
 MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_SEARCH_REPLACE" sequence="<Ctrl+K> <A>" description="find & replace"');
+MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MR_TEXT_CENTER_LINE" sequence="<Ctrl+O> <C>" description="Center line"');
 MRSETUP('ACTIVE_KEYMAP_PROFILE', 'name="WORDSTAR"');

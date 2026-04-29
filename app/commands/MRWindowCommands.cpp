@@ -450,7 +450,7 @@ bool closeCurrentEditWindow() {
 	if (win == nullptr) return false;
 	setWindowManuallyHidden(win, false);
 	message(win, evCommand, cmClose, nullptr);
-	return mrEnsureUsableWorkWindow();
+	return mrEnsureUsableWorkWindow(false) || currentEditWindow() == nullptr;
 }
 
 bool activateRelativeEditWindow(int delta) {

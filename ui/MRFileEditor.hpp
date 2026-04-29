@@ -40,6 +40,7 @@
 #include "../app/utils/MRFileIOUtils.hpp"
 #include "../app/utils/MRStringUtils.hpp"
 #include "../ui/MRMessageLineController.hpp"
+#include "../ui/MRWindowSupport.hpp"
 
 class MREditWindow;
 
@@ -58,7 +59,7 @@ class MRFileEditor : public TScroller {
 
 	MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar, TIndicator *aIndicator, TStringView aFileName) noexcept
 	    : TScroller(bounds, aHScrollBar, aVScrollBar), mIndicator(aIndicator), mReadOnly(false), mInsertMode(true), mAutoIndent(false), mSyntaxTitleHint(), mBufferModel(), mSelectionAnchor(0), mIndicatorUpdateInProgress(false), mLineIndexWarmupTaskId(0), mLineIndexWarmupDocumentId(0), mLineIndexWarmupVersion(0), mSyntaxTokenCache(), mSyntaxWarmupTaskId(0), mSyntaxWarmupDocumentId(0), mSyntaxWarmupVersion(0), mSyntaxWarmupTopLine(0), mSyntaxWarmupBottomLine(0), mSyntaxWarmupLanguage(MRSyntaxLanguage::PlainText), mMiniMapWarmupTaskId(0), mMiniMapWarmupDocumentId(0), mMiniMapWarmupVersion(0), mMiniMapWarmupRows(0), mMiniMapWarmupBodyWidth(0), mMiniMapWarmupViewportWidth(0), mMiniMapWarmupBraille(true), mMiniMapWarmupWindowStartLine(0), mMiniMapWarmupWindowLineCount(0), mMiniMapWarmupReschedulePending(false), mMiniMapCache(), mSaveNormalizationCache(), mSaveNormalizationWarmupTaskId(0), mSaveNormalizationWarmupDocumentId(0), mSaveNormalizationWarmupVersion(0),
-	      mSaveNormalizationWarmupOptionsHash(0), mSaveNormalizationWarmupSourceBytes(0), mSaveNormalizationWarmupStartedAt(std::chrono::steady_clock::time_point()), mSaveNormalizationThroughputBytesPerMicro(0.0), mSaveNormalizationThroughputSamples(0), mMiniMapInitialRenderReportedDocumentId(0), mBlockOverlayActive(false), mBlockOverlayMode(0), mBlockOverlayAnchor(0), mBlockOverlayEnd(0), mBlockOverlayTrackingCursor(false), mLastLoadTiming() {
+	      mSaveNormalizationWarmupOptionsHash(0), mSaveNormalizationWarmupSourceBytes(0), mSaveNormalizationWarmupStartedAt(std::chrono::steady_clock::time_point()), mSaveNormalizationThroughputBytesPerMicro(0.0), mSaveNormalizationThroughputSamples(0), mMiniMapInitialRenderReportedDocumentId(0), mBlockOverlayActive(false), mBlockOverlayMode(0), mBlockOverlayAnchor(0), mBlockOverlayEnd(0), mBlockOverlayTrackingCursor(false), mPreferredIndentColumn(1), mLastLoadTiming(), mLargeFileMetricsTraceValid(false), mLastLargeFileMetricsExactKnown(false), mLastLargeFileMetricsLimitY(0), mLastLargeFileMetricsMaxY(0), mLastLargeFileMetricsDeltaY(0), mLastLargeFileMetricsNewDeltaY(0) {
 		fileName[0] = EOS;
 		options |= ofFirstClick;
 		eventMask |= evMouse | evKeyboard | evCommand;
@@ -217,6 +218,16 @@ class MRFileEditor : public TScroller {
 		if (owner != nullptr) message(owner, evBroadcast, cmUpdateTitle, 0);
 	}
 
+	int preferredIndentColumn() const noexcept {
+		return mPreferredIndentColumn;
+	}
+
+	void setPreferredIndentColumn(int column) noexcept {
+		if (column < 1) column = 1;
+		if (column > 999) column = 999;
+		mPreferredIndentColumn = column;
+	}
+
 	void refreshConfiguredVisualSettings() {
 		syncIndicatorVisualSettings();
 		updateMetrics();
@@ -329,8 +340,9 @@ class MRFileEditor : public TScroller {
 	std::size_t tabStopMoveOffset(std::size_t pos, bool forward) noexcept {
 		const std::size_t cursor = std::min(pos, mBufferModel.length());
 		const std::size_t lineStart = lineStartOffset(cursor);
+		const MREditSetupSettings settings = configuredEditSetupSettings();
 		const int currentColumn = charColumn(lineStart, cursor) + 1;
-		const int targetColumn = forward ? nextTabStopColumn(currentColumn) : prevTabStopColumn(currentColumn);
+		const int targetColumn = forward ? nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, currentColumn) : prevResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, currentColumn);
 
 		return charPtrOffset(lineStart, targetColumn - 1);
 	}
@@ -360,15 +372,15 @@ class MRFileEditor : public TScroller {
 		std::size_t lineStart = mBufferModel.lineStart(start);
 		std::string lineText = mBufferModel.lineText(lineStart);
 		TStringView line(lineText.data(), lineText.size());
+		const MREditSetupSettings settings = configuredEditSetupSettings();
 		std::size_t p = 0;
 		int visual = 0;
 		int target = std::max(pos, 0);
-		int tabSize = configuredTabSize();
 
 		while (p < line.size()) {
 			std::size_t next = p;
 			std::size_t width = 0;
-			if (!nextDisplayChar(line, next, width, visual, tabSize)) break;
+			if (!nextDisplayChar(line, next, width, visual, settings)) break;
 			if (visual + static_cast<int>(width) > target) break;
 			visual += static_cast<int>(width);
 			p = next;
@@ -380,16 +392,16 @@ class MRFileEditor : public TScroller {
 		std::size_t lineStart = mBufferModel.lineStart(start);
 		std::string lineText = mBufferModel.lineText(lineStart);
 		TStringView line(lineText.data(), lineText.size());
+		const MREditSetupSettings settings = configuredEditSetupSettings();
 		std::size_t p = 0;
 		std::size_t end = std::min(pos, mBufferModel.length()) - lineStart;
 		int visual = 0;
-		int tabSize = configuredTabSize();
 
 		end = std::min(end, line.size());
 		while (p < end) {
 			std::size_t next = p;
 			std::size_t width = 0;
-			if (!nextDisplayChar(line, next, width, visual, tabSize)) break;
+			if (!nextDisplayChar(line, next, width, visual, settings)) break;
 			if (next > end) break;
 			visual += static_cast<int>(width);
 			p = next;
@@ -552,6 +564,11 @@ class MRFileEditor : public TScroller {
 	}
 
 	bool applyLineIndexWarmup(const mr::editor::LineIndexWarmupData &warmup, std::size_t expectedVersion) {
+		if (shouldTraceLargeFileDiagnostics()) {
+			std::ostringstream detail;
+			detail << "expected_version=" << expectedVersion << " checkpoints=" << warmup.checkpoints.size() << " indexed_offset=" << warmup.lazyIndexedOffset << " indexed_line=" << warmup.lazyIndexedLine << " complete=" << (warmup.lazyLineIndexComplete ? 1 : 0) << " total_lines=" << warmup.lazyTotalLineCount;
+			traceLargeFileMessage("line-index-apply", detail.str());
+		}
 		if (!mBufferModel.adoptLineIndexWarmup(warmup, expectedVersion)) return false;
 		mLineIndexWarmupTaskId = 0;
 		mLineIndexWarmupDocumentId = 0;
@@ -885,7 +902,7 @@ class MRFileEditor : public TScroller {
 		text = lineTextAtOffset(cursorOffset());
 		trimmed = trimAscii(text);
 		if (trimmed.empty()) return replaceCurrentLineText(std::string());
-		contentWidth = displayWidthForText(trimmed, configuredTabSize());
+		contentWidth = displayWidthForText(trimmed, configuredEditSetupSettings());
 		padWidth = std::max(safeLeftMargin - 1, ((safeRightMargin - contentWidth) / 2));
 		return replaceCurrentLineText(std::string(static_cast<std::size_t>(padWidth), ' ') + trimmed);
 	}
@@ -1197,6 +1214,10 @@ class MRFileEditor : public TScroller {
 		return insertBufferText(std::string("\n") + fill);
 	}
 
+	bool newLineWithPreferredIndent() {
+		return newLineWithIndent(preferredIndentFill());
+	}
+
 	void effectiveFormatMargins(const MREditSetupSettings &settings, int &leftMargin, int &rightMargin) const noexcept {
 		std::string normalized;
 
@@ -1426,21 +1447,17 @@ class MRFileEditor : public TScroller {
 		return configuredEditSetupSettings().formatRuler;
 	}
 
-	static int tabDisplayWidth(int visualColumn, int tabSize) noexcept {
-		int nextStop = ((visualColumn / tabSize) + 1) * tabSize;
-		return std::max(1, nextStop - visualColumn);
+	static int tabDisplayWidth(const MREditSetupSettings &settings, int visualColumn) noexcept {
+		const int currentColumn = std::max(1, visualColumn + 1);
+		const int targetColumn = resolvedEditFormatTabDisplayColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, currentColumn);
+		return std::max(1, targetColumn - currentColumn);
 	}
 
-	static int nextTabStopColumn(int col) noexcept {
-		int width = configuredTabSize();
-		if (col < 1) col = 1;
-		return ((col - 1) / width + 1) * width + 1;
-	}
+	std::string preferredIndentFill() const {
+		const MREditSetupSettings settings = configuredEditSetupSettings();
+		const int targetColumn = resolvedEditFormatIndentColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, mPreferredIndentColumn);
 
-	static int prevTabStopColumn(int col) noexcept {
-		int width = configuredTabSize();
-		if (col <= 1) return 1;
-		return ((col - 2) / width) * width + 1;
+		return buildEditIndentFill(settings, 1, targetColumn, configuredTabExpandSetting());
 	}
 
 	int visibleTextRows() const noexcept {
@@ -1468,6 +1485,41 @@ class MRFileEditor : public TScroller {
 			++digits;
 		}
 		return digits;
+	}
+
+	bool shouldTraceLargeFileDiagnostics() const noexcept {
+		return mBufferModel.document().hasMappedOriginal() && mBufferModel.document().length() >= static_cast<std::size_t>(8) * 1024 * 1024;
+	}
+
+	void traceLargeFileMessage(const char *stage, const std::string &detail) const {
+		if (!shouldTraceLargeFileDiagnostics()) return;
+		std::ostringstream line;
+
+		line << "Large-file " << stage << ": doc=" << mBufferModel.documentId() << " ver=" << mBufferModel.version();
+		if (hasPersistentFileName()) line << " file='" << fileName << "'";
+		if (!detail.empty()) line << " " << detail;
+		mrLogMessage(line.str());
+	}
+
+	void traceLargeFileMetrics(const char *stage, int limitY, int maxY, int textRows, int newDeltaY) {
+		if (!shouldTraceLargeFileDiagnostics()) return;
+		const bool exactKnown = mBufferModel.exactLineCountKnown();
+		const bool nearBottom = std::max(delta.y, newDeltaY) >= std::max(0, maxY - 2);
+		const bool clamped = newDeltaY != delta.y;
+
+		if (!nearBottom && !clamped && exactKnown == mLastLargeFileMetricsExactKnown && mLargeFileMetricsTraceValid) return;
+		if (mLargeFileMetricsTraceValid && exactKnown == mLastLargeFileMetricsExactKnown && limitY == mLastLargeFileMetricsLimitY && maxY == mLastLargeFileMetricsMaxY && delta.y == mLastLargeFileMetricsDeltaY && newDeltaY == mLastLargeFileMetricsNewDeltaY) return;
+		std::ostringstream detail;
+		detail << "stage=" << stage << " exact=" << (exactKnown ? 1 : 0) << " estimated_lines=" << mBufferModel.estimatedLineCount();
+		if (exactKnown) detail << " line_count=" << mBufferModel.lineCount();
+		detail << " cursor_line=" << mBufferModel.lineIndex(mBufferModel.cursor()) << " delta_y=" << delta.y << " new_delta_y=" << newDeltaY << " limit_y=" << limitY << " max_y=" << maxY << " text_rows=" << textRows;
+		traceLargeFileMessage("metrics", detail.str());
+		mLargeFileMetricsTraceValid = true;
+		mLastLargeFileMetricsExactKnown = exactKnown;
+		mLastLargeFileMetricsLimitY = limitY;
+		mLastLargeFileMetricsMaxY = maxY;
+		mLastLargeFileMetricsDeltaY = delta.y;
+		mLastLargeFileMetricsNewDeltaY = newDeltaY;
 	}
 
 	bool configuredShowLineNumbers() const {
@@ -1821,6 +1873,28 @@ class MRFileEditor : public TScroller {
 		return true;
 	}
 
+	bool previewVisibleEditSetupSettings(const MREditSetupSettings &settings, const std::string &errorPrefix) {
+		std::string errorText;
+
+		if (!setConfiguredEditSetupSettings(settings, &errorText)) {
+			mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, errorPrefix + errorText, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+			return false;
+		}
+		refreshConfiguredVisualSettings();
+		return true;
+	}
+
+	bool finalizeVisibleEditSetupPreview(const MREditSetupSettings &previousSettings, const std::string &errorPrefix) {
+		MRSettingsWriteReport writeReport;
+		std::string errorText;
+
+		if (persistConfiguredSettingsSnapshot(&errorText, &writeReport)) return true;
+		static_cast<void>(setConfiguredEditSetupSettings(previousSettings, nullptr));
+		refreshConfiguredVisualSettings();
+		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, errorPrefix + errorText, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+		return false;
+	}
+
 	void drawFormatRulerOverlay(const TextViewportGeometry &viewport, const MREditSetupSettings &settings) {
 		TDrawBuffer buffer;
 		unsigned char configured = 0;
@@ -1865,6 +1939,37 @@ class MRFileEditor : public TScroller {
 		settings.rightMargin = rightMargin;
 		if (!persistVisibleEditSetupSettings(settings, "Format ruler update failed: ")) return true;
 		refreshConfiguredVisualSettings();
+		return true;
+	}
+
+	bool dragFormatRulerAtLocalPoint(TEvent &event, TPoint local) {
+		const MREditSetupSettings initialSettings = configuredEditSetupSettings();
+		const TextViewportGeometry viewport = textViewportGeometryFor(initialSettings);
+		const ushort modifiers = event.mouse.controlKeyState;
+		const int startColumn = viewport.textColumnFromLocalX(local.x) + 1;
+		bool dragged = false;
+
+		if (!initialSettings.formatRuler || local.y != 0 || !viewport.containsTextX(local.x)) return false;
+		while (mouseEvent(event, evMouseMove | evMouseAuto | evMouseUp)) {
+			TPoint currentLocal = makeLocal(event.mouse.where);
+			MREditSetupSettings preview = initialSettings;
+			std::string translated;
+			int leftMargin = initialSettings.leftMargin;
+			int rightMargin = initialSettings.rightMargin;
+			const int currentColumn = viewport.textColumnFromLocalX(currentLocal.x) + 1;
+			const int delta = currentColumn - startColumn;
+
+			if (event.what == evMouseUp) break;
+			if (delta == 0) continue;
+			dragged = true;
+			if (!translateEditFormatLine(initialSettings.formatLine, initialSettings.tabSize, initialSettings.leftMargin, initialSettings.rightMargin, delta, translated, &leftMargin, &rightMargin, nullptr)) continue;
+			preview.formatLine = translated;
+			preview.leftMargin = leftMargin;
+			preview.rightMargin = rightMargin;
+			if (!previewVisibleEditSetupSettings(preview, "Format ruler drag failed: ")) return true;
+		}
+		if (!dragged) return editFormatRulerAtLocalPoint(local, modifiers);
+		static_cast<void>(finalizeVisibleEditSetupPreview(initialSettings, "Format ruler drag failed: "));
 		return true;
 	}
 
@@ -2116,7 +2221,7 @@ class MRFileEditor : public TScroller {
 
 		const int bodyWidth = viewport.miniMapBodyWidth;
 		const int viewportWidth = std::max(1, viewport.width);
-		const int tabSize = configuredTabSize();
+		const MREditSetupSettings settings = configuredEditSetupSettings();
 		if (mMiniMapWarmupTaskId != 0) {
 			if (mMiniMapWarmupDocumentId == docId && mMiniMapWarmupVersion == version && mMiniMapWarmupRows == rowCount && mMiniMapWarmupBodyWidth == bodyWidth && mMiniMapWarmupViewportWidth == viewportWidth && mMiniMapWarmupBraille == useBraille && mMiniMapWarmupWindowStartLine == samplingWindow.startLine && mMiniMapWarmupWindowLineCount == samplingWindow.lineCount) return;
 			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mMiniMapWarmupTaskId));
@@ -2134,7 +2239,7 @@ class MRFileEditor : public TScroller {
 		mMiniMapWarmupWindowStartLine = samplingWindow.startLine;
 		mMiniMapWarmupWindowLineCount = samplingWindow.lineCount;
 		mMiniMapWarmupReschedulePending = false;
-		mMiniMapWarmupTaskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::MiniMap, mr::coprocessor::TaskKind::MiniMapWarmup, docId, version, miniMapWarmupTaskLabel(), [snapshot, rowCount, bodyWidth, viewportWidth, useBraille, tabSize, totalLines, samplingWindow](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
+		mMiniMapWarmupTaskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::MiniMap, mr::coprocessor::TaskKind::MiniMapWarmup, docId, version, miniMapWarmupTaskLabel(), [snapshot, rowCount, bodyWidth, viewportWidth, useBraille, settings, totalLines, samplingWindow](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
 			mr::coprocessor::Result result;
 			struct MiniMapLineSample {
 				std::uint64_t dotColumnBits = 0;
@@ -2175,7 +2280,7 @@ class MRFileEditor : public TScroller {
 							std::size_t current = index;
 							std::size_t next = index;
 							std::size_t width = 0;
-							if (!nextDisplayChar(lineText, next, width, visualColumn, tabSize)) break;
+							if (!nextDisplayChar(lineText, next, width, visualColumn, settings)) break;
 							unsigned char ch = static_cast<unsigned char>(lineText[current]);
 							if (std::isspace(ch) == 0) {
 								const long long c = static_cast<long long>(visualColumn);
@@ -2358,24 +2463,24 @@ class MRFileEditor : public TScroller {
 			b.moveChar(static_cast<ushort>(viewport.miniMapInfoX), ' ', palette.normal, 1);
 	}
 
-	static bool nextDisplayChar(TStringView text, std::size_t &index, std::size_t &width, int visualColumn, int tabSize) noexcept {
+	static bool nextDisplayChar(TStringView text, std::size_t &index, std::size_t &width, int visualColumn, const MREditSetupSettings &settings) noexcept {
 		if (index >= text.size()) return false;
 		if (text[index] == '\t') {
 			++index;
-			width = static_cast<std::size_t>(tabDisplayWidth(visualColumn, tabSize));
+			width = static_cast<std::size_t>(tabDisplayWidth(settings, visualColumn));
 			return true;
 		}
 		return TText::next(text, index, width);
 	}
 
-	static int displayWidthForText(TStringView text, int tabSize) noexcept {
+	static int displayWidthForText(TStringView text, const MREditSetupSettings &settings) noexcept {
 		std::size_t index = 0;
 		int visual = 0;
 
 		while (index < text.size()) {
 			std::size_t next = index;
 			std::size_t width = 0;
-			if (!nextDisplayChar(text, next, width, visual, tabSize)) break;
+			if (!nextDisplayChar(text, next, width, visual, settings)) break;
 			visual += static_cast<int>(width);
 			index = next;
 		}
@@ -2493,11 +2598,11 @@ class MRFileEditor : public TScroller {
 	int longestLineWidth() const noexcept {
 		std::size_t pos = 0;
 		std::size_t len = mBufferModel.length();
+		const MREditSetupSettings settings = configuredEditSetupSettings();
 		int maxWidth = 1;
-		int tabSize = configuredTabSize();
 
 		while (true) {
-			int width = displayWidthForText(mBufferModel.lineText(pos), tabSize);
+			int width = displayWidthForText(mBufferModel.lineText(pos), settings);
 			maxWidth = std::max(maxWidth, width + 1);
 			if (pos >= len) break;
 			std::size_t next = mBufferModel.nextLine(pos);
@@ -2518,7 +2623,7 @@ class MRFileEditor : public TScroller {
 		const int textRows = std::max(1, visibleTextRows());
 		const std::size_t minimum = static_cast<std::size_t>(textRows);
 		const std::size_t margin = static_cast<std::size_t>(std::max(textRows * 4, 256));
-		std::size_t limitValue = std::max<std::size_t>(estimated, std::max<std::size_t>(currentLine + margin, static_cast<std::size_t>(std::max(delta.y, 0)) + margin));
+		std::size_t limitValue = std::max<std::size_t>(estimated, currentLine + margin);
 		limitValue = std::max<std::size_t>(limitValue, minimum);
 		return static_cast<int>(std::min<std::size_t>(limitValue, static_cast<std::size_t>(INT_MAX)));
 	}
@@ -2538,6 +2643,7 @@ class MRFileEditor : public TScroller {
 			mLineIndexWarmupDocumentId = 0;
 			mLineIndexWarmupVersion = 0;
 			if (hadTask) {
+				if (shouldTraceLargeFileDiagnostics()) traceLargeFileMessage("line-index-cancel", "reason=exact-line-count-known");
 				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledTaskId));
 				notifyWindowTaskStateChanged();
 			}
@@ -2569,6 +2675,11 @@ class MRFileEditor : public TScroller {
 			result.payload = std::make_shared<mr::coprocessor::LineIndexWarmupPayload>(warmup);
 			return result;
 		});
+		if (shouldTraceLargeFileDiagnostics()) {
+			std::ostringstream detail;
+			detail << "task=" << mLineIndexWarmupTaskId << " estimated_lines=" << mBufferModel.estimatedLineCount() << " cursor_line=" << mBufferModel.lineIndex(mBufferModel.cursor()) << " delta_y=" << delta.y;
+			traceLargeFileMessage("line-index-schedule", detail.str());
+		}
 		if (mLineIndexWarmupTaskId != previousTaskId) notifyWindowTaskStateChanged();
 	}
 
@@ -2676,6 +2787,7 @@ class MRFileEditor : public TScroller {
 		int rightInset = viewport.rightInset;
 		int viewportWidth = viewport.width;
 		const int textRows = std::max(1, visibleTextRows());
+		const bool showEofMarker = configuredEditSetupSettings().showEofMarker;
 
 		if (useApproximateLargeFileMetrics()) {
 			limitX = dynamicLargeFileWidthLimit();
@@ -2684,14 +2796,15 @@ class MRFileEditor : public TScroller {
 			limitX = longestLineWidth();
 			limitY = std::max<int>(1, static_cast<int>(mBufferModel.lineCount()));
 		}
+		if (showEofMarker && limitY < INT_MAX) ++limitY;
 
 		int maxX = std::max(0, limitX - viewportWidth);
 		int maxY = std::max(0, limitY - textRows);
 		int newDeltaX = std::min(std::max(delta.x, 0), maxX);
 		int newDeltaY = std::min(std::max(delta.y, 0), maxY);
+		traceLargeFileMetrics("updateMetrics", limitY, maxY, textRows, newDeltaY);
 
-		setLimit(limitX + gutterWidth + rightInset, limitY);
-		if (vScrollBar != nullptr) vScrollBar->setParams(vScrollBar->value, 0, std::max(0, limitY - textRows), std::max(0, textRows - 1), vScrollBar->arStep);
+		setLimit(limitX + gutterWidth + rightInset, limitY + viewport.topInset);
 		if (newDeltaX != delta.x || newDeltaY != delta.y) scrollTo(newDeltaX, newDeltaY);
 	}
 
@@ -2800,9 +2913,10 @@ class MRFileEditor : public TScroller {
 	std::string tabKeyText() const {
 		if (configuredTabExpandSetting()) return "\t";
 		std::size_t insertPos = mBufferModel.cursor();
+		const MREditSetupSettings settings = configuredEditSetupSettings();
 		if (mBufferModel.hasSelection()) insertPos = mBufferModel.selection().range().start;
 		int visualColumn = charColumn(mBufferModel.lineStart(insertPos), insertPos);
-		return std::string(static_cast<std::size_t>(tabDisplayWidth(visualColumn, configuredTabSize())), ' ');
+		return std::string(static_cast<std::size_t>(tabDisplayWidth(settings, visualColumn)), ' ');
 	}
 
 	void handleKeyDown(TEvent &event) {
@@ -2812,7 +2926,9 @@ class MRFileEditor : public TScroller {
 		const bool shiftTabPressed = event.keyDown.keyCode == kbShiftTab || ((event.keyDown.keyCode == kbTab || event.keyDown.keyCode == kbCtrlI) && hasShiftModifier(mods));
 
 		if (shiftTabPressed) {
-			moveCursor(tabStopMoveOffset(cursorOffset(), false), false, false);
+			const std::size_t target = tabStopMoveOffset(cursorOffset(), false);
+			if (target != cursorOffset()) setPreferredIndentColumn(charColumn(lineStartOffset(target), target) + 1);
+			moveCursor(target, false, false);
 			clearEvent(event);
 			return;
 		}
@@ -2860,7 +2976,7 @@ class MRFileEditor : public TScroller {
 				moveCursor(nextWordOffset(cursorOffset()), extend, false);
 				break;
 			case kbEnter:
-				if (!mReadOnly) newLineWithIndent("");
+				if (!mReadOnly) newLineWithPreferredIndent();
 				clearEvent(event);
 				return;
 			case kbBack:
@@ -2998,7 +3114,7 @@ class MRFileEditor : public TScroller {
 				moveCursor(bufferLength(), false, true);
 				break;
 			case cmNewLine:
-				if (!mReadOnly) newLineWithIndent("");
+				if (!mReadOnly) newLineWithPreferredIndent();
 				break;
 			case cmBackSpace:
 				if (!mReadOnly) {
@@ -3047,7 +3163,7 @@ class MRFileEditor : public TScroller {
 		const TextViewportGeometry viewport = textViewportGeometry();
 
 		if ((event.mouse.buttons & mbLeftButton) == 0) return;
-		if (editFormatRulerAtLocalPoint(makeLocal(event.mouse.where), event.mouse.controlKeyState)) {
+		if (dragFormatRulerAtLocalPoint(event, makeLocal(event.mouse.where))) {
 			clearEvent(event);
 			return;
 		}
@@ -3272,7 +3388,7 @@ class MRFileEditor : public TScroller {
 		std::size_t bytePos = 0;
 		int visual = 0;
 		int x = 0;
-		int tabSize = configuredTabSize();
+		const MREditSetupSettings settings = configuredEditSetupSettings();
 		const bool displayTabs = configuredDisplayTabs();
 
 		hScroll = std::max(hScroll, 0);
@@ -3326,7 +3442,7 @@ class MRFileEditor : public TScroller {
 		while (bytePos < line.size() && x < width) {
 			std::size_t next = bytePos;
 			std::size_t charWidth = 0;
-			if (!nextDisplayChar(line, next, charWidth, visual, tabSize)) break;
+			if (!nextDisplayChar(line, next, charWidth, visual, settings)) break;
 
 			int nextVisual = visual + static_cast<int>(charWidth);
 			if (nextVisual > hScroll) {
@@ -3468,9 +3584,16 @@ class MRFileEditor : public TScroller {
 	std::size_t mBlockOverlayAnchor;
 	std::size_t mBlockOverlayEnd;
 	bool mBlockOverlayTrackingCursor;
+	int mPreferredIndentColumn;
 	std::vector<MRTextBufferModel::Range> mFindMarkerRanges;
 	std::vector<MRTextBufferModel::Range> mDirtyRanges;
 	LoadTiming mLastLoadTiming;
+	bool mLargeFileMetricsTraceValid;
+	bool mLastLargeFileMetricsExactKnown;
+	int mLastLargeFileMetricsLimitY;
+	int mLastLargeFileMetricsMaxY;
+	int mLastLargeFileMetricsDeltaY;
+	int mLastLargeFileMetricsNewDeltaY;
 
 	void clearDirtyRanges() noexcept {
 		mDirtyRanges.clear();
