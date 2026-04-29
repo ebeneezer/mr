@@ -7,6 +7,7 @@
 #define Uses_TDrawBuffer
 #define Uses_TEvent
 #define Uses_TKeys
+#define Uses_TClipboard
 #define Uses_TText
 #define Uses_MsgBox
 #include <tvision/tv.h>
@@ -432,6 +433,21 @@ class MRFileEditor : public TScroller {
 
 	void setCursorOffset(std::size_t pos, int = 0) {
 		moveCursor(std::min(pos, mBufferModel.length()), false, false);
+	}
+
+	bool scrollWindowByLines(int deltaRows) {
+		const std::size_t cursorBefore = cursorOffset();
+		const int rowBefore = currentViewRow();
+		const std::size_t target = lineMoveOffset(cursorBefore, deltaRows);
+
+		if (deltaRows == 0)
+			return true;
+		if (target == cursorBefore)
+			return false;
+		moveCursor(target, false, false);
+		if (const int rowDelta = currentViewRow() - rowBefore; rowDelta != 0)
+			scrollTo(std::max(delta.x, 0), std::max(delta.y + rowDelta, 0));
+		return true;
 	}
 
 	std::size_t offsetForGlobalPoint(TPoint where) noexcept {
@@ -992,15 +1008,11 @@ class MRFileEditor : public TScroller {
 	}
 
 	bool formatParagraph(int rightMargin) {
-		return formatParagraph(1, rightMargin);
+		return formatParagraph(configuredEditSetupSettings().leftMargin, rightMargin);
 	}
 
-	bool formatParagraph(int leftMargin, int rightMargin) {
-		if (mReadOnly)
-			return false;
-
-		std::size_t start = mBufferModel.cursor();
-		std::size_t end = start;
+	std::string buildFormattedParagraphText(std::string_view paragraphText, int leftMargin,
+	                                        int rightMargin) const {
 		const int safeLeftMargin = std::max(1, leftMargin);
 		const int safeRightMargin = std::max(safeLeftMargin, rightMargin);
 		const std::size_t indentWidth = static_cast<std::size_t>(safeLeftMargin - 1);
@@ -1011,33 +1023,8 @@ class MRFileEditor : public TScroller {
 		std::string currentLine;
 		std::size_t currentLineLength = 0;
 
-		while (start > 0) {
-			std::size_t prevLineStart = mBufferModel.lineStart(mBufferModel.prevLine(start));
-			if (isBlankString(mBufferModel.lineText(prevLineStart)))
-				break;
-			start = prevLineStart;
-		}
-
-		while (end < mBufferModel.length()) {
-			std::size_t nextLineStart = mBufferModel.nextLine(end);
-			if (isBlankString(mBufferModel.lineText(end)))
-				break;
-			end = nextLineStart;
-		}
-
-		if (start == end)
-			return true;
-
-		std::string paragraphText;
-		paragraphText.reserve(end - start);
-		std::size_t current = start;
-		while (current < end) {
-			std::string chunk = mBufferModel.document().lineText(current);
-			paragraphText += chunk;
-			current = mBufferModel.document().nextLine(current);
-		}
 		for (std::size_t i = 0; i <= paragraphText.length(); ++i) {
-			if (i == paragraphText.length() || std::isspace(static_cast<unsigned char>(paragraphText[i]))) {
+			if (i == paragraphText.length() || std::isspace(static_cast<unsigned char>(paragraphText[i])) != 0) {
 				if (!currentWord.empty()) {
 					words.push_back(currentWord);
 					currentWord.clear();
@@ -1047,7 +1034,7 @@ class MRFileEditor : public TScroller {
 			currentWord.push_back(paragraphText[i]);
 		}
 		if (words.empty())
-			return true;
+			return std::string();
 		for (const std::string &word : words) {
 			const std::size_t projectedLength = currentLine.empty() ? word.size() : currentLineLength + 1 + word.size();
 			if (!currentLine.empty() && projectedLength > contentWidth) {
@@ -1072,6 +1059,47 @@ class MRFileEditor : public TScroller {
 			formattedText.append(indentWidth, ' ');
 			formattedText += currentLine;
 		}
+		return formattedText;
+	}
+
+	bool formatParagraph(int leftMargin, int rightMargin) {
+		if (mReadOnly)
+			return false;
+
+		std::size_t start = mBufferModel.cursor();
+		std::size_t end = start;
+
+		while (start > 0) {
+			std::size_t prevLineStart = mBufferModel.lineStart(mBufferModel.prevLine(start));
+			if (isBlankString(mBufferModel.lineText(prevLineStart)))
+				break;
+			start = prevLineStart;
+		}
+
+		while (end < mBufferModel.length()) {
+			std::size_t nextLineStart = mBufferModel.nextLine(end);
+			if (isBlankString(mBufferModel.lineText(end)))
+				break;
+			end = nextLineStart;
+		}
+
+		if (start == end)
+			return true;
+
+		std::string paragraphText;
+		paragraphText.reserve(end - start);
+		std::size_t current = start;
+		while (current < end) {
+			std::string chunk = mBufferModel.document().lineText(current);
+			if (!paragraphText.empty())
+				paragraphText.push_back('\n');
+			paragraphText += chunk;
+			current = mBufferModel.document().nextLine(current);
+		}
+		std::string formattedText = buildFormattedParagraphText(paragraphText, leftMargin, rightMargin);
+
+		if (formattedText.empty())
+			return true;
 
 		MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "format-paragraph");
 		transaction.replace(MRTextBufferModel::Range(start, end), formattedText);
@@ -1086,6 +1114,40 @@ class MRFileEditor : public TScroller {
 		}
 
 		return adoptCommittedDocument(preview, start, start, start, true, &commit.change);
+	}
+
+	bool formatDocument(int leftMargin, int rightMargin) {
+		std::string formattedText;
+		const std::size_t length = mBufferModel.length();
+		const std::size_t cursor = mBufferModel.cursor();
+		std::size_t current = 0;
+
+		if (mReadOnly)
+			return false;
+		while (current < length) {
+			if (isBlankString(mBufferModel.lineText(current))) {
+				formattedText.push_back('\n');
+				current = mBufferModel.nextLine(current);
+				continue;
+			}
+			std::string paragraphText;
+			const std::size_t paragraphStart = current;
+			std::size_t paragraphEnd = current;
+
+			while (paragraphEnd < length && !isBlankString(mBufferModel.lineText(paragraphEnd))) {
+				if (!paragraphText.empty())
+					paragraphText.push_back('\n');
+				paragraphText += mBufferModel.document().lineText(paragraphEnd);
+				paragraphEnd = mBufferModel.document().nextLine(paragraphEnd);
+			}
+			if (!formattedText.empty() && formattedText.back() != '\n')
+				formattedText.push_back('\n');
+			formattedText += buildFormattedParagraphText(paragraphText, leftMargin, rightMargin);
+			current = paragraphEnd;
+			if (current == paragraphStart)
+				break;
+		}
+		return replaceWholeBuffer(formattedText, std::min(cursor, formattedText.size()));
 	}
 
 	bool justifyParagraph(int leftMargin, int rightMargin) {
@@ -1122,7 +1184,11 @@ class MRFileEditor : public TScroller {
 			return true;
 		paragraphText.reserve(end - start);
 		for (std::size_t current = start; current < end; current = mBufferModel.document().nextLine(current))
-			paragraphText += mBufferModel.document().lineText(current);
+			if (std::string chunk = mBufferModel.document().lineText(current); true) {
+				if (!paragraphText.empty())
+					paragraphText.push_back('\n');
+				paragraphText += chunk;
+			}
 		for (std::size_t i = 0; i <= paragraphText.length(); ++i) {
 			if (i == paragraphText.length() || std::isspace(static_cast<unsigned char>(paragraphText[i]))) {
 				if (!currentWord.empty()) {
@@ -1269,6 +1335,83 @@ class MRFileEditor : public TScroller {
 		return insertBufferText(std::string("\n") + fill);
 	}
 
+	void effectiveFormatMargins(const MREditSetupSettings &settings, int &leftMargin,
+	                            int &rightMargin) const noexcept {
+		std::string normalized;
+
+		leftMargin = settings.leftMargin;
+		rightMargin = settings.rightMargin;
+		if (normalizeEditFormatLine(settings.formatLine, settings.tabSize, settings.leftMargin,
+		                            settings.rightMargin, normalized, &leftMargin, &rightMargin, nullptr))
+			return;
+		leftMargin = std::max(1, settings.leftMargin);
+		rightMargin = std::max(leftMargin, settings.rightMargin > 0 ? settings.rightMargin : 78);
+	}
+
+	bool wrapCurrentLineOnce(int leftMargin, int rightMargin) {
+		const std::size_t cursor = cursorOffset();
+		const std::size_t lineStart = lineStartOffset(cursor);
+		const std::size_t lineEnd = lineEndOffset(cursor);
+		const int safeLeftMargin = std::max(1, leftMargin);
+		const int safeRightMargin = std::max(safeLeftMargin, rightMargin);
+		const int lineWidth = charColumn(lineStart, lineEnd);
+		const std::string indent(static_cast<std::size_t>(safeLeftMargin - 1), ' ');
+		const std::string replacement = "\n" + indent;
+		std::size_t limitOffset = std::min(charPtrOffset(lineStart, safeRightMargin), lineEnd);
+		std::size_t replaceStart = limitOffset;
+		std::size_t replaceEnd = limitOffset;
+		MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(),
+		                                                 "live-word-wrap-line");
+		std::size_t newCursor = cursor;
+
+		if (lineWidth <= safeRightMargin)
+			return false;
+		for (std::size_t probe = limitOffset; probe > lineStart; probe = prevCharOffset(probe)) {
+			const std::size_t candidate = prevCharOffset(probe);
+			const char ch = charAtOffset(candidate);
+
+			if (ch != ' ' && ch != '\t')
+				continue;
+			replaceStart = candidate;
+			replaceEnd = probe;
+			while (replaceStart > lineStart) {
+				const std::size_t previous = prevCharOffset(replaceStart);
+				const char previousChar = charAtOffset(previous);
+				if (previousChar != ' ' && previousChar != '\t')
+					break;
+				replaceStart = previous;
+			}
+			while (replaceEnd < lineEnd) {
+				const char nextChar = charAtOffset(replaceEnd);
+				if (nextChar != ' ' && nextChar != '\t')
+					break;
+				replaceEnd = nextCharOffset(replaceEnd);
+			}
+			break;
+		}
+		transaction.replace(MRTextBufferModel::Range(replaceStart, replaceEnd), replacement);
+		if (cursor <= replaceStart)
+			newCursor = cursor;
+		else if (cursor >= replaceEnd)
+			newCursor = cursor - (replaceEnd - replaceStart) + replacement.size();
+		else
+			newCursor = replaceStart + replacement.size();
+		return applyStagedTransaction(transaction, newCursor, newCursor, newCursor, true).applied();
+	}
+
+	void applyLiveWordWrapAfterTextInput() {
+		MREditSetupSettings settings = configuredEditSetupSettings();
+		int leftMargin = 1;
+		int rightMargin = 78;
+
+		if (mReadOnly || !settings.wordWrap)
+			return;
+		effectiveFormatMargins(settings, leftMargin, rightMargin);
+		for (int wraps = 0; wraps < 64; ++wraps)
+			if (!wrapCurrentLineOnce(leftMargin, rightMargin))
+				break;
+	}
+
 	virtual void draw() override {
 		syncScrollBarsToState();
 		MREditSetupSettings editSettings = configuredEditSetupSettings();
@@ -1310,6 +1453,8 @@ class MRFileEditor : public TScroller {
 			scheduleMiniMapWarmupIfNeeded(viewport, miniMapUseBraille, totalLines, topLine);
 		MiniMapOverlayState miniMapOverlay = computeMiniMapOverlayState(selection, totalLines);
 
+		if (editSettings.formatRuler && viewport.topInset > 0)
+			drawFormatRulerOverlay(viewport, editSettings);
 		const int textRows = std::max(0, visibleTextRows());
 		for (int y = 0; y < textRows; ++y) {
 			TDrawBuffer buffer;
@@ -1326,7 +1471,7 @@ class MRFileEditor : public TScroller {
 				                  viewportMarkerGlyph, miniMapPalette, miniMapOverlay);
 			formatSyntaxLine(buffer, linePtr, delta.x, textWidth, viewport.textLeft, isDocumentLine, drawEofMarker,
 			                 drawEofMarkerAsEmoji);
-			writeBuf(0, y, size.x, 1, buffer);
+			writeBuf(0, y + viewport.topInset, size.x, 1, buffer);
 			if (linePtr < mBufferModel.length())
 				linePtr = mBufferModel.nextLine(linePtr);
 			++lineIndex;
@@ -1434,11 +1579,6 @@ class MRFileEditor : public TScroller {
 	}
 
   private:
-	static std::string &clipboardText() {
-		static std::string clipboard;
-		return clipboard;
-	}
-
 	static bool isWordByte(char ch) noexcept {
 		unsigned char uch = static_cast<unsigned char>(ch);
 		return std::isalnum(uch) != 0 || ch == '_';
@@ -1461,6 +1601,10 @@ class MRFileEditor : public TScroller {
 		return configuredDisplayTabsSetting();
 	}
 
+	static bool configuredFormatRuler() noexcept {
+		return configuredEditSetupSettings().formatRuler;
+	}
+
 	static int tabDisplayWidth(int visualColumn, int tabSize) noexcept {
 		int nextStop = ((visualColumn / tabSize) + 1) * tabSize;
 		return std::max(1, nextStop - visualColumn);
@@ -1481,7 +1625,7 @@ class MRFileEditor : public TScroller {
 	}
 
 	int visibleTextRows() const noexcept {
-		return std::max(0, size.y);
+		return std::max(0, size.y - (configuredFormatRuler() ? 1 : 0));
 	}
 
 	void syncScrollBarsToState() noexcept {
@@ -1574,6 +1718,7 @@ class MRFileEditor : public TScroller {
 	struct TextViewportGeometry {
 		int gutterWidth = 0;
 		int rightInset = 0;
+		int topInset = 0;
 		int lineNumberX = 0;
 		int lineNumberWidth = 0;
 		int codeFoldingX = 0;
@@ -1594,7 +1739,7 @@ class MRFileEditor : public TScroller {
 		}
 
 		bool containsTextPoint(long long x, long long y, int viewHeight) const noexcept {
-			return containsTextX(x) && y >= 0 && y < viewHeight;
+			return containsTextX(x) && y >= topInset && y < topInset + viewHeight;
 		}
 
 		int textColumnFromLocalX(int localX) const noexcept {
@@ -1704,6 +1849,7 @@ class MRFileEditor : public TScroller {
 	TextViewportGeometry textViewportGeometryFor(const MREditSetupSettings &settings) const noexcept {
 		TextViewportGeometry viewport;
 		GutterLayoutLane lane(std::max(0, size.x));
+		viewport.topInset = settings.formatRuler ? 1 : 0;
 		const std::string lineNumbersPosition = normalizedLineNumbersPosition(settings);
 		const std::string codeFoldingPosition = normalizedCodeFoldingPosition(settings);
 		const bool lineNumbersLeading = lineNumbersPosition == "LEADING";
@@ -1846,6 +1992,102 @@ class MRFileEditor : public TScroller {
 
 	int textViewportWidth() const {
 		return textViewportGeometry().width;
+	}
+
+	std::string normalizedFormatRulerLine(const MREditSetupSettings &settings, int *leftMarginOut = nullptr,
+	                                      int *rightMarginOut = nullptr) const {
+		std::string normalized;
+		int leftMargin = settings.leftMargin;
+		int rightMargin = settings.rightMargin;
+
+		if (!normalizeEditFormatLine(settings.formatLine, settings.tabSize, settings.leftMargin,
+		                             settings.rightMargin, normalized, &leftMargin, &rightMargin, nullptr))
+			normalized = defaultEditFormatLineForTabSize(settings.tabSize, settings.leftMargin,
+			                                            settings.rightMargin);
+		if (leftMarginOut != nullptr)
+			*leftMarginOut = leftMargin;
+		if (rightMarginOut != nullptr)
+			*rightMarginOut = rightMargin;
+		return normalized;
+	}
+
+	bool persistVisibleEditSetupSettings(const MREditSetupSettings &settings, const std::string &errorPrefix) {
+		MREditSetupSettings previousSettings = configuredEditSetupSettings();
+		MRSettingsWriteReport writeReport;
+		std::string errorText;
+
+		if (!setConfiguredEditSetupSettings(settings, &errorText)) {
+			mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, errorPrefix + errorText,
+			                               mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+			return false;
+		}
+		if (!persistConfiguredSettingsSnapshot(&errorText, &writeReport)) {
+			static_cast<void>(setConfiguredEditSetupSettings(previousSettings, nullptr));
+			mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, errorPrefix + errorText,
+			                               mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+			return false;
+		}
+		return true;
+	}
+
+	void drawFormatRulerOverlay(const TextViewportGeometry &viewport, const MREditSetupSettings &settings) {
+		TDrawBuffer buffer;
+		unsigned char configured = 0;
+		TColorAttr normal = static_cast<TColorAttr>(getColor(0x0606));
+		const TColorAttr accent = static_cast<TColorAttr>(getColor(0x0404));
+		const std::string normalized = normalizedFormatRulerLine(settings);
+
+		if (configuredColorSlotOverride(kMrPaletteFormatRuler, configured))
+			normal = static_cast<TColorAttr>(configured);
+		buffer.moveChar(0, ' ', normal, size.x);
+		for (int x = 0; x < viewport.width; ++x) {
+			const int column = viewport.deltaX + x + 1;
+			const char ch = column >= 1 && column <= static_cast<int>(normalized.size())
+			                    ? normalized[static_cast<std::size_t>(column - 1)]
+			                    : ' ';
+			const bool atCursor = static_cast<int>(mBufferModel.lineIndex(mBufferModel.cursor())) == delta.y &&
+			                      charColumn(mBufferModel.lineStart(mBufferModel.cursor()), mBufferModel.cursor()) ==
+			                          viewport.deltaX + x;
+			buffer.moveChar(static_cast<ushort>(viewport.textLeft + x), ch, atCursor ? accent : normal, 1);
+		}
+		writeBuf(0, 0, size.x, 1, buffer);
+	}
+
+	bool editFormatRulerAtLocalPoint(TPoint local, ushort modifiers) {
+		MREditSetupSettings settings = configuredEditSetupSettings();
+		const TextViewportGeometry viewport = textViewportGeometryFor(settings);
+		if (!settings.formatRuler || local.y != 0 || !viewport.containsTextX(local.x))
+			return false;
+		const int column = viewport.textColumnFromLocalX(local.x) + 1;
+		const std::string normalized = normalizedFormatRulerLine(settings);
+		const char current = column >= 1 && column <= static_cast<int>(normalized.size())
+		                         ? normalized[static_cast<std::size_t>(column - 1)]
+		                         : '.';
+		char symbol = current == '|' ? '.' : '|';
+		std::string updated;
+		int leftMargin = settings.leftMargin;
+		int rightMargin = settings.rightMargin;
+		if ((modifiers & kbShift) != 0)
+			symbol = 'L';
+		else if ((modifiers & kbCtrlShift) != 0)
+			symbol = 'R';
+		else if ((modifiers & kbAltShift) != 0)
+			symbol = '.';
+		else if (column <= leftMargin)
+			symbol = 'L';
+		else if (column >= rightMargin)
+			symbol = 'R';
+		if (!editFormatLineAtColumn(settings.formatLine, settings.tabSize, settings.leftMargin,
+		                            settings.rightMargin, column, symbol, updated, &leftMargin,
+		                            &rightMargin, nullptr))
+			return true;
+		settings.formatLine = updated;
+		settings.leftMargin = leftMargin;
+		settings.rightMargin = rightMargin;
+		if (!persistVisibleEditSetupSettings(settings, "Format ruler update failed: "))
+			return true;
+		refreshConfiguredVisualSettings();
+		return true;
 	}
 
 	void drawLineNumberGutter(TDrawBuffer &b, std::size_t lineIndex, bool showNumber, int drawX, int width,
@@ -2853,7 +3095,7 @@ class MRFileEditor : public TScroller {
 		    static_cast<unsigned long>(charColumn(mBufferModel.lineStart(cursor), cursor));
 		unsigned long line = static_cast<unsigned long>(mBufferModel.lineIndex(cursor));
 		long long localX = viewport.localXFromVisualColumn(static_cast<long long>(visualColumn));
-		long long localY = static_cast<long long>(line) - delta.y;
+		long long localY = static_cast<long long>(line) - delta.y + viewport.topInset;
 
 		if (mIndicator != nullptr) {
 			if (auto *mrIndicator = dynamic_cast<MRIndicator *>(mIndicator))
@@ -2938,28 +3180,30 @@ class MRFileEditor : public TScroller {
 			return;
 		}
 
-		if ((event.keyDown.controlKeyState & kbPaste) != 0) {
-			char buf[512];
-			size_t length = 0;
-			while (textEvent(event, TSpan<char>(buf, sizeof(buf)), length))
-				insertBufferText(std::string(buf, length));
-			clearEvent(event);
-			return;
-		}
+			if ((event.keyDown.controlKeyState & kbPaste) != 0) {
+				char buf[512];
+				size_t length = 0;
+				while (textEvent(event, TSpan<char>(buf, sizeof(buf)), length))
+					insertBufferText(std::string(buf, length));
+				applyLiveWordWrapAfterTextInput();
+				clearEvent(event);
+				return;
+			}
 
 			const ushort mods = event.keyDown.controlKeyState;
 			const bool plainTab =
 			    (event.keyDown.keyCode == kbTab || event.keyDown.keyCode == kbCtrlI) &&
 			    (mods & (kbShift | kbCtrlShift | kbAltShift | kbPaste)) == 0;
 
-		if (event.keyDown.textLength > 0)
-			insertBufferText(std::string(event.keyDown.text, event.keyDown.textLength));
-		else if (plainTab)
-			insertBufferText(tabKeyText());
-		else
-			insertBufferText(std::string(1, static_cast<char>(event.keyDown.charScan.charCode)));
-		clearEvent(event);
-	}
+			if (event.keyDown.textLength > 0)
+				insertBufferText(std::string(event.keyDown.text, event.keyDown.textLength));
+			else if (plainTab)
+				insertBufferText(tabKeyText());
+			else
+				insertBufferText(std::string(1, static_cast<char>(event.keyDown.charScan.charCode)));
+			applyLiveWordWrapAfterTextInput();
+			clearEvent(event);
+		}
 
 	std::string tabKeyText() const {
 		if (configuredTabExpandSetting())
@@ -3059,7 +3303,7 @@ class MRFileEditor : public TScroller {
 				clearEvent(event);
 				return;
 			case kbShiftIns:
-				pasteClipboard();
+				requestSystemClipboardPaste();
 				clearEvent(event);
 				return;
 			case kbCtrlIns:
@@ -3091,7 +3335,7 @@ class MRFileEditor : public TScroller {
 				copySelection();
 				break;
 			case cmPaste:
-				pasteClipboard();
+				requestSystemClipboardPaste();
 				break;
 			case cmMrEditUndo: {
 				MRTextBufferModel::CustomUndoRecord record;
@@ -3129,14 +3373,14 @@ class MRFileEditor : public TScroller {
 				break;
 			case cmMrTextCenterLine:
 				if (!mReadOnly) {
-					int margin = configuredEditSetupSettings().rightMargin;
-					centerCurrentLine(1, margin > 0 ? margin : 78);
+					MREditSetupSettings settings = configuredEditSetupSettings();
+					centerCurrentLine(settings.leftMargin, settings.rightMargin > 0 ? settings.rightMargin : 78);
 				}
 				break;
 			case cmMrTextReformatParagraph:
 				if (!mReadOnly) {
-					int margin = configuredEditSetupSettings().rightMargin;
-					formatParagraph(margin > 0 ? margin : 78);
+					MREditSetupSettings settings = configuredEditSetupSettings();
+					formatParagraph(settings.leftMargin, settings.rightMargin > 0 ? settings.rightMargin : 78);
 				}
 				break;
 			case cmClear:
@@ -3239,8 +3483,14 @@ class MRFileEditor : public TScroller {
 	}
 
 	void handleMouse(TEvent &event) {
+		const TextViewportGeometry viewport = textViewportGeometry();
+
 		if ((event.mouse.buttons & mbLeftButton) == 0)
 			return;
+		if (editFormatRulerAtLocalPoint(makeLocal(event.mouse.where), event.mouse.controlKeyState)) {
+			clearEvent(event);
+			return;
+		}
 
 		select();
 		std::size_t anchor =
@@ -3260,9 +3510,9 @@ class MRFileEditor : public TScroller {
 					--dx;
 				else if (mouse.x >= size.x)
 					++dx;
-				if (mouse.y < 0)
+				if (mouse.y < viewport.topInset)
 					--dy;
-				else if (mouse.y >= std::max(0, visibleTextRows()))
+				else if (mouse.y >= viewport.topInset + std::max(0, visibleTextRows()))
 					++dy;
 				scrollTo(std::max(dx, 0), std::max(dy, 0));
 			}
@@ -3277,7 +3527,7 @@ class MRFileEditor : public TScroller {
 	std::size_t mouseOffset(TPoint local) noexcept {
 		TextViewportGeometry viewport = textViewportGeometry();
 		const int textRows = std::max(1, visibleTextRows());
-		int clampedY = std::max(0, std::min(local.y, textRows - 1));
+		int clampedY = std::max(0, std::min(local.y - viewport.topInset, textRows - 1));
 		int row = clampedY + delta.y;
 		int column = viewport.textColumnFromLocalX(local.x);
 		std::size_t start = lineStartForIndex(static_cast<std::size_t>(std::max(row, 0)));
@@ -3296,7 +3546,8 @@ class MRFileEditor : public TScroller {
 		if (!mBufferModel.hasSelection())
 			return;
 		MRTextBufferModel::Range range = mBufferModel.selection().range();
-		clipboardText() = mBufferModel.text().substr(range.start, range.length());
+		const std::string text = mBufferModel.text().substr(range.start, range.length());
+		TClipboard::setText(TStringView(text.data(), text.size()));
 	}
 
 	void cutSelection() {
@@ -3306,10 +3557,10 @@ class MRFileEditor : public TScroller {
 		replaceSelectionText(std::string());
 	}
 
-	void pasteClipboard() {
-		if (mReadOnly || clipboardText().empty())
+	void requestSystemClipboardPaste() {
+		if (mReadOnly)
 			return;
-		insertBufferText(clipboardText());
+		TClipboard::requestText();
 	}
 
 	void replaceSelectionText(const std::string &text) {

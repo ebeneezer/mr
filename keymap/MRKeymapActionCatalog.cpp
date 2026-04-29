@@ -59,8 +59,6 @@ constexpr std::array catalogDefinitions{
 	mrmac("MRMAC_SEARCH_LIST_MATCHED_FILES", "List matched files"),
 	mrmac("MRMAC_BLOCK_COPY_TO_CLIPBOARD", "Copy to MS Windows"),
 	mrmac("MRMAC_BLOCK_PASTE_FROM_CLIPBOARD", "Paste from MS Windows"),
-	mrmac("MRMAC_BLOCK_MARK_CHAR", "Mark a block"),
-	mrmac("MRMAC_BLOCK_MARK_COLUMN", "Mark a column block"),
 	mrmac("MRMAC_BLOCK_MARK_STREAM", "Mark a stream block"),
 	mrmac("MRMAC_BLOCK_SET_BEGIN", "Set block begin"),
 	mrmac("MRMAC_BLOCK_SET_END", "Set block end"),
@@ -85,6 +83,8 @@ constexpr std::array catalogDefinitions{
 	mr("MR_LOAD_BLOCK_FROM_FILE", "Load block from file"),
 	mr("MR_TEXT_CENTER_LINE", "Center current line"),
 	mr("MR_TEXT_REFORMAT_PARAGRAPH", "Reformat paragraph"),
+	mr("MR_TEXT_REFORMAT_DOCUMENT", "Reformat document"),
+	mr("MR_TOGGLE_FORMAT_RULER", "Toggle format ruler"),
 	mr("MR_TOGGLE_WORD_WRAP", "Toggle word wrap"),
 	mr("MR_SET_LEFT_MARGIN", "Set left margin"),
 	mr("MR_SET_RIGHT_MARGIN", "Set right margin"),
@@ -93,7 +93,6 @@ constexpr std::array catalogDefinitions{
 	mr("MR_FILE_FORCE_SAVE", "Force save"),
 	mr("MR_EXIT_DIRTY_SAVE_ALL", "Exit with save-all dialog"),
 	mr("MR_SEARCH_RESULTS_NEXT", "Next search result"),
-	mr("MR_WORKSPACE_RELOAD", "Reload workspace"),
 };
 } // namespace
 

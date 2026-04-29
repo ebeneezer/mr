@@ -27,6 +27,7 @@
 
 #include "../app/MREditorApp.hpp"
 #include "../config/MRDialogPaths.hpp"
+#include "../ui/MRWindowSupport.hpp"
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRMenuBar.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
@@ -39,6 +40,7 @@
 #include <cstring>
 #include <limits.h>
 #include <map>
+#include <sstream>
 #include <string>
 #include <unistd.h>
 #include <vector>
@@ -354,7 +356,7 @@ bool browseDirectoryPath(MRDialogHistoryScope scope, const std::string &currentV
 		seed = configuredLastFileDialogPath(scope);
 	if (!seed.empty())
 		(void)::chdir(seed.c_str());
-	result = mr::dialogs::execDialogRaw(new TChDirDialog(cdNormal, configuredPathDialogHistoryId(scope)));
+	result = mr::dialogs::execDialogRaw(mr::dialogs::createDirectoryDialog(cdNormal));
 	picked = readCurrentWorkingDirectory();
 	if (!originalCwd.empty())
 		(void)::chdir(originalCwd.c_str());
@@ -424,8 +426,8 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	    : TWindowInit(&TDialog::initFrame),
 	      MRScrollableDialog(centeredSetupDialogRect(kDialogWidth, kVisibleHeight), "FILENAME EXTENSIONS",
 	                         kDialogWidth, kVirtualHeight),
-	      draftList(workingDrafts), editorSettingsPanel(makeEditorSettingsPanelConfig(kDialogWidth - 1, 30,
-	                                                                                 49, kDialogWidth - 2, 6)) {
+	      draftList(workingDrafts), editorSettingsPanel(makeEditorSettingsPanelConfig(kDialogWidth - 1, 37,
+	                                                                                 56, kDialogWidth - 2, 6)) {
 		buildViews();
 		setDialogValidationHook([this]() { return validateDialogValues(); });
 		if (!draftList.empty())
@@ -529,7 +531,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	}
 
   private:
-	static const int kDialogWidth = 107;
+	static const int kDialogWidth = 114;
 	static const int kVisibleHeight = 24;
 	static const int kVirtualHeight = 40;
 
@@ -584,10 +586,10 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		const mr::dialogs::DialogButtonRowMetrics bottomMetrics =
 		    mr::dialogs::measureUniformButtonRow(bottomButtons, 2);
 		const int listLeft = 2;
-		const int listWidth = 25;
+		const int listWidth = 29;
 		const int listBottom = 13;
-		const int rightLeft = 31;
-		const int fieldLeft = 49;
+		const int rightLeft = 38;
+		const int fieldLeft = 56;
 		const int glyphWidth = 2;
 		const int colorGlyphRight = kDialogWidth - 2;
 		const int colorGlyphLeft = colorGlyphRight - glyphWidth;
@@ -907,8 +909,8 @@ void showEditProfilesHelpDialog() {
 	lines.push_back("DEFAULT contains the global edit settings and cannot be deleted.");
 	lines.push_back("Each additional profile has its own ID, description and exact extension list.");
 	lines.push_back("Extension matching is exact and case-sensitive.");
-	lines.push_back("Right margin, word wrap, macros and default path are profile-specific.");
-	lines.push_back("Done writes settings.mrmac and reloads the configuration.");
+	lines.push_back("Margins, format ruler, word wrap, macros and default path are profile-specific.");
+	lines.push_back("Done writes settings.mrmac and applies the configured values via the VM.");
 	TDialog *dialog = createSetupSimplePreviewDialog("FILENAME EXTENSIONS HELP", 78, 14, lines, false);
 	if (dialog != nullptr) {
 		TProgram::deskTop->execView(dialog);
@@ -945,13 +947,12 @@ void runFileExtensionProfilesDialogFlow() {
 		TObject::destroy(dialog);
 		const bool changed =
 		    mr::dialogs::isDialogDraftDirty(baselineDrafts, editedDrafts, draftListsEqual);
-
 		switch (result) {
 			case cmMrSetupFilenameProfilesHelp:
 				showEditProfilesHelpDialog();
 				break;
 
-				case cmOK:
+			case cmOK:
 					workingDrafts = editedDrafts;
 					if (!saveAndReloadEditProfiles(workingDrafts, errorText)) {
 						postDialogError(errorText);

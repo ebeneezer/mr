@@ -78,6 +78,18 @@ Use English only for:
 
 - Der Bootstrap liest settings.mrmac, verwirft alle unbekannten Keys, schreibt Defaults für Keys die noch nicht im settings.mrmac waren. Die Anwendung von Values erfolg ausschliesslich über die mrmac Stackmachine (alias VM). Wiederholte MRSETUP Statements sind ausdrücklich erlaibt. Anwendung bei Historylisten definiert Reihenfolge im Dialog oder der Speicherung des Workspaces als unsortierte Liste von Window Definitionen.
 
+- Runtime-Regel für Settings: Nach dem Bootstrap wird kein Settings-Zustand mehr aus dem Filesystem nachgeladen, reread oder durch Dateimerge rekonstruiert. Laufzeitänderungen erfolgen ausschließlich am zentralen K/V Hash; Persistenz ist nur die Serialisierung dieses Zustands.
+
+- Runtime-Regel für Settings-Anwendung: Die Anwendung laufender Settings erfolgt ausschließlich aus dem aktuellen In-Memory-Modell über die mrmac VM. Formulierungen oder Codepfade im Sinn von "reload settings" sind fachlich falsch und zu vermeiden.
+
+- Ausbauqualitäts-Regel: Züge an gemeinsamer Infrastruktur dürfen erst als abgeschlossen übergeben werden, wenn alle bekannten Consumer sowie Success-/Fail-Pfade des betroffenen Systems lokal durchgeprüft wurden. Repräsentative Spot-Fixes, Parallelbetrieb alter und neuer Mechanismen sowie stillschweigende Restmigrationen sind verboten. Bestehen nach der lokalen Prüfung noch Unsicherheiten, sind diese vor Übergabe explizit zu benennen statt den Zug als fertig auszugeben.
+
+- QS-Regel für gemeinsame Systeme: Änderungen an Querschnittsfunktionen, zentralen Dialogpfaden, Serialisierung, K/V-Keys, History-/Pfadlogik, Settings-Anwendung, Resolvern oder anderen Shared Services gelten nicht als erfolgreich, nur weil ein Einzelbeispiel funktioniert. Vor Übergabe ist die betroffene Consumer-Menge fachlich zu identifizieren und entlang typischer Nutzungsarten systematisch abzunehmen: Neuanlage, Wiederöffnen, Success, Fail, Persistenz, Wiederanlauf, bestehende Datenbestände und Konfliktpfade.
+
+- QS-Regel für Migrationen: Wenn ein altes Verfahren durch ein neues ersetzt werden soll, ist der Zug erst dann abgeschlossen, wenn die Altmechanik aus der Projektcodebasis entfernt oder bewusst und explizit als verbleibender Restbestand benannt wurde. Verdeckter Parallelbetrieb, schleichende Teilmigrationen und „funktioniert an einer Stelle“ gelten nicht als ausreichende Qualität.
+
+- History-Regel: TVision-History (`THistory`, `historyAdd`, History-IDs der Upstream-Dialogs) wird in der Projektcodebasis nicht genutzt. Pfad- und Datei-Historien werden ausschließlich über die eigene K/V-Serialisierung und deren Runtime-Modelle geführt.
+
 ## Design
 
 - Dialoge müssen 2 Spaces Abstand vom Rahmen zu den Dialogelementen lassen. Alle Radio Button CLuster sind korrekt auszurichten. Label linksbündig über den Clustern.

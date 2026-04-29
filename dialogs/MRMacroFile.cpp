@@ -1098,7 +1098,12 @@ bool runMacroFileDialog() {
 	                                                              "~N~ame", fdOpenButton, fileName);
 	if (dialogResult == cmCancel)
 		return false;
-	return runMacroFileByPath(fileName);
+	if (!runMacroFileByPath(fileName)) {
+		forgetLoadDialogPath(MRDialogHistoryScope::MacroFile, fileName);
+		return false;
+	}
+	rememberLoadDialogPath(MRDialogHistoryScope::MacroFile, fileName);
+	return true;
 }
 
 bool runMacroManagerDialog() {

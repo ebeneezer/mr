@@ -275,7 +275,7 @@ tvision-build: $(TVISION_SOURCE_DIR)/CMakeLists.txt $(TVISION_SOURCE_DIR)/source
 		$(CMAKE) -S $(TVISION_SOURCE_DIR) -B $(TVISION_SOURCE_DIR)/build $(TVISION_CMAKE_FLAGS); \
 		printf '%s\n' "$(TVISION_C_COMPILER)|$(TVISION_CXX_COMPILER)" > $(TVISION_TOOLCHAIN_STAMP); \
 	fi
-	$(CMAKE) --build $(TVISION_SOURCE_DIR)/build --target tvision -j$(NPROC)
+	$(CMAKE) --build $(TVISION_SOURCE_DIR)/build --target tvision
 
 $(TVISION_LIB): tvision-build
 	@test -f $(TVISION_LIB)

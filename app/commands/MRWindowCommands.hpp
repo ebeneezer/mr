@@ -5,6 +5,7 @@
 #include <string>
 
 class MREditWindow;
+struct MRSetupPaths;
 
 [[nodiscard]] MREditWindow *createEditorWindow(const char *title);
 [[nodiscard]] std::vector<MREditWindow *> allEditWindowsInZOrder();
@@ -29,6 +30,7 @@ void setCurrentVirtualDesktop(int vd);
 [[nodiscard]] bool viewportRight();
 [[nodiscard]] bool viewportLeft();
 void syncVirtualDesktopVisibility();
+[[nodiscard]] std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths);
 void mrSaveWorkspace(const std::string &filename);
 void mrLoadWorkspace(const std::string &filename);
 

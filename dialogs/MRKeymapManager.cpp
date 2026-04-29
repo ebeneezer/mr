@@ -40,6 +40,7 @@
 #include <dirent.h>
 #include <map>
 #include <set>
+#include <span>
 #include <string>
 #include <sys/stat.h>
 #include <vector>
@@ -61,6 +62,7 @@ enum : ushort {
 	cmMrSetupKeymapBindingDelete,
 	cmMrSetupKeymapBindingCapture,
 	cmMrSetupKeymapBindingHelp,
+	cmMrSetupKeymapBindingTargetFilterChanged,
 	cmMrSetupKeymapBindingFilterChanged
 };
 
@@ -73,6 +75,7 @@ constexpr int kProfileNameFieldSize = 64;
 constexpr int kProfileDescriptionFieldSize = 128;
 constexpr int kBindingDescriptionFieldSize = 128;
 constexpr int kBindingFilterFieldSize = 64;
+constexpr int kTargetFilterFieldSize = 64;
 constexpr char kBindingRecordingGlyph[] = "📼";
 
 TFrame *initMrDialogFrame(TRect bounds) {
@@ -91,6 +94,66 @@ void postDialogWarning(const std::string &text) {
 		return;
 	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text,
 	                              mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
+}
+
+std::string keymapDiagnosticIdentity(const MRKeymapDiagnostic &diagnostic) {
+	return std::to_string(static_cast<unsigned>(diagnostic.kind)) + "|" +
+	       std::to_string(static_cast<unsigned>(diagnostic.severity)) + "|" +
+	       std::to_string(diagnostic.profileIndex) + "|" + std::to_string(diagnostic.bindingIndex) + "|" +
+	       diagnostic.message;
+}
+
+std::string describeKeymapDiagnostic(std::span<const MRKeymapProfile> profiles,
+                                     const MRKeymapDiagnostic &diagnostic) {
+	std::string text = diagnostic.message;
+
+	if (diagnostic.profileIndex != kNoIndex && diagnostic.profileIndex < profiles.size()) {
+		const MRKeymapProfile &profile = profiles[diagnostic.profileIndex];
+		text += " profile='" + profile.name + "'";
+		if (diagnostic.bindingIndex != kNoIndex && diagnostic.bindingIndex < profile.bindings.size()) {
+			const MRKeymapBindingRecord &binding = profile.bindings[diagnostic.bindingIndex];
+			text += " binding=" + std::to_string(diagnostic.bindingIndex + 1);
+			text += " target='" + binding.target.target + "'";
+			text += " sequence='" + binding.sequence.toString() + "'";
+		}
+	}
+	return text;
+}
+
+std::string summarizeKeymapDiagnosticsForMessageLine(std::span<const MRKeymapDiagnostic> diagnostics,
+                                                     std::string_view operation) {
+	std::set<std::string> seen;
+	std::size_t errorCount = 0;
+	std::size_t warningCount = 0;
+
+	for (const MRKeymapDiagnostic &diagnostic : diagnostics) {
+		if (!seen.insert(keymapDiagnosticIdentity(diagnostic)).second)
+			continue;
+		if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error)
+			++errorCount;
+		else
+			++warningCount;
+	}
+	if (errorCount == 0 && warningCount == 0)
+		return std::string();
+	if (errorCount == 0)
+		return std::string(operation) + ": " + std::to_string(warningCount) + " warning(s); see log.";
+	return std::string(operation) + ": removed " + std::to_string(errorCount) +
+	       " invalid key binding(s); see log.";
+}
+
+void logKeymapDiagnostics(std::string_view origin, std::span<const MRKeymapProfile> profiles,
+                          std::span<const MRKeymapDiagnostic> diagnostics) {
+	std::set<std::string> seen;
+
+	for (const MRKeymapDiagnostic &diagnostic : diagnostics) {
+		if (!seen.insert(keymapDiagnosticIdentity(diagnostic)).second)
+			continue;
+		const char *severity =
+		    diagnostic.severity == MRKeymapDiagnosticSeverity::Error ? "error" : "warning";
+		mrLogMessage(std::string(origin) + " diagnostic [" + severity + "]: " +
+		             describeKeymapDiagnostic(profiles, diagnostic));
+	}
 }
 
 bool pathIsRegularFile(const std::string &path) {
@@ -343,6 +406,17 @@ std::size_t activeProfileIndex(const KeymapManagerDraft &draft) {
 	return draft.profiles.empty() ? kNoIndex : 0;
 }
 
+KeymapManagerDraft draftFromCanonicalizedResult(const MRKeymapCanonicalizationResult &result) {
+	KeymapManagerDraft draft;
+
+	draft.profiles = result.profiles;
+	draft.activeProfileName = result.activeProfileName;
+	ensureDefaultProfile(draft);
+	if (draft.activeProfileName.empty() || activeProfileIndex(draft) == kNoIndex)
+		draft.activeProfileName = "DEFAULT";
+	return draft;
+}
+
 struct BindingTargetChoice {
 	std::string target;
 	std::string label;
@@ -505,117 +579,6 @@ std::vector<BindingTargetChoice> buildMacroTargetChoices() {
 	return choices;
 }
 
-std::string summarizeMacroBindingError(std::string_view message) {
-	const std::size_t pos = message.find_first_of("\r\n");
-
-	if (pos == std::string_view::npos)
-		return trimAscii(std::string(message));
-	return trimAscii(std::string(message.substr(0, pos)));
-}
-
-std::string resolveMacroBindingFilePath(const std::string &spec) {
-	std::string trimmed = trimAscii(spec);
-	std::string macroDirectory = normalizeConfiguredPathInput(configuredMacroDirectoryPath());
-	auto tryMacroDirectory = [&](const std::string &candidate) -> std::string {
-		std::string joined;
-
-		if (macroDirectory.empty() || candidate.empty())
-			return std::string();
-		joined = macroDirectory;
-		if (joined.back() != '/')
-			joined += '/';
-		joined += candidate;
-		return ::access(joined.c_str(), F_OK) == 0 ? joined : std::string();
-	};
-
-	if (trimmed.empty())
-		return std::string();
-	if (::access(trimmed.c_str(), F_OK) == 0)
-		return trimmed;
-	if (std::string fromMacroDirectory = tryMacroDirectory(trimmed); !fromMacroDirectory.empty())
-		return fromMacroDirectory;
-	if (upperAscii(trimmed).size() < 6 || upperAscii(trimmed).substr(upperAscii(trimmed).size() - 6) != ".MRMAC") {
-		std::string withExt = trimmed + ".mrmac";
-		if (::access(withExt.c_str(), F_OK) == 0)
-			return withExt;
-		if (std::string withExtFromMacroDirectory = tryMacroDirectory(withExt); !withExtFromMacroDirectory.empty())
-			return withExtFromMacroDirectory;
-	}
-	return std::string();
-}
-
-struct MacroBindingFileValidation {
-	std::set<std::string> macroNames;
-	std::string compileError;
-};
-
-const MacroBindingFileValidation &validateMacroBindingFile(
-    const std::string &filePart, std::map<std::string, MacroBindingFileValidation> &cache) {
-	const std::string cacheKey = upperAscii(trimAscii(filePart));
-	auto cached = cache.find(cacheKey);
-
-	if (cached != cache.end())
-		return cached->second;
-
-	MacroBindingFileValidation validation;
-	std::string source;
-	std::size_t bytecodeSize = 0;
-	const std::string resolvedPath = resolveMacroBindingFilePath(filePart);
-	unsigned char *bytecode = nullptr;
-
-	if (resolvedPath.empty()) {
-		validation.compileError = "Macro file could not be resolved.";
-		return cache.emplace(cacheKey, std::move(validation)).first->second;
-	}
-	if (!readTextFile(resolvedPath, source)) {
-		validation.compileError = "Macro file could not be read.";
-		return cache.emplace(cacheKey, std::move(validation)).first->second;
-	}
-	bytecode = compile_macro_code(source.c_str(), &bytecodeSize);
-	if (bytecode == nullptr) {
-		const char *err = get_last_compile_error();
-		validation.compileError = err != nullptr && *err != '\0' ? err : "Compilation failed.";
-		return cache.emplace(cacheKey, std::move(validation)).first->second;
-	}
-	for (int i = 0; i < get_compiled_macro_count(); ++i) {
-		const char *compiledName = get_compiled_macro_name(i);
-		const std::string macroName = trimAscii(compiledName != nullptr ? compiledName : "");
-
-		if (!macroName.empty())
-			validation.macroNames.insert(upperAscii(macroName));
-	}
-	std::free(bytecode);
-	return cache.emplace(cacheKey, std::move(validation)).first->second;
-}
-
-bool bindingHasMacroError(const MRKeymapBindingRecord &binding, std::string &errorText,
-                          std::map<std::string, MacroBindingFileValidation> &cache) {
-	const std::string filePart = macroSpecFilePart(binding.target.target);
-	const std::string macroPart = macroSpecMacroPart(binding.target.target);
-
-	errorText.clear();
-	if (binding.target.type != MRKeymapBindingType::Macro)
-		return false;
-	if (filePart.empty()) {
-		errorText = "Macro target has no file qualifier.";
-		return true;
-	}
-	if (macroPart.empty()) {
-		errorText = "Macro target has no macro name.";
-		return true;
-	}
-	const MacroBindingFileValidation &validation = validateMacroBindingFile(filePart, cache);
-	if (!validation.compileError.empty()) {
-		errorText = summarizeMacroBindingError(validation.compileError);
-		return true;
-	}
-	if (validation.macroNames.find(upperAscii(macroPart)) == validation.macroNames.end()) {
-		errorText = "Macro not found in file.";
-		return true;
-	}
-	return false;
-}
-
 std::string makeUniqueProfileName(const KeymapManagerDraft &draft) {
 	for (int index = 1;; ++index) {
 		const std::string candidate = "PROFILE" + std::to_string(index);
@@ -661,7 +624,8 @@ bool chooseKeymapFileForSave(std::string &selectedUri) {
 	return !selectedUri.empty();
 }
 
-bool loadKeymapDraftFromFile(const std::string &path, KeymapManagerDraft &draft, std::string &errorText) {
+bool loadKeymapDraftFromFile(const std::string &path, KeymapManagerDraft &draft, std::string &errorText,
+                             std::vector<MRKeymapDiagnostic> *diagnosticsOut = nullptr) {
 	std::string source;
 	std::string readError;
 
@@ -670,19 +634,32 @@ bool loadKeymapDraftFromFile(const std::string &path, KeymapManagerDraft &draft,
 		return false;
 	}
 	MRKeymapLoadResult result = loadKeymapProfilesFromSettingsSource(source);
-	for (const MRKeymapDiagnostic &diagnostic : result.diagnostics)
-		if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error) {
-			errorText = diagnostic.message;
-			return false;
-		}
 
 	draft.profiles = result.profiles;
 	draft.activeProfileName = result.activeProfileName;
 	ensureDefaultProfile(draft);
+	if (diagnosticsOut != nullptr)
+		*diagnosticsOut = result.diagnostics;
 	mrLogMessage("Keymap file loaded from '" + path + "'.");
 	mrLogMessage(summarizeDraftForLog(draft));
 	errorText.clear();
 	return true;
+}
+
+MRKeymapCanonicalizationResult canonicalizeDraftForCommit(const KeymapManagerDraft &draft) {
+	return canonicalizeKeymapProfiles(draft.profiles, draft.activeProfileName,
+	                                  MRKeymapCanonicalizationMode::TrustedCommit);
+}
+
+void applyCommitCanonicalization(KeymapManagerDraft &draft, std::string_view operation) {
+	const MRKeymapCanonicalizationResult canonicalized = canonicalizeDraftForCommit(draft);
+	const std::string summary =
+	    summarizeKeymapDiagnosticsForMessageLine(canonicalized.diagnostics, operation);
+
+	logKeymapDiagnostics(operation, canonicalized.profiles, canonicalized.diagnostics);
+	draft = draftFromCanonicalizedResult(canonicalized);
+	if (!summary.empty())
+		postDialogError(summary);
 }
 
 bool saveKeymapDraftToFile(const KeymapManagerDraft &draft, const std::string &path, std::string &errorText) {
@@ -719,6 +696,16 @@ bool saveKeymapDraftToConfiguredState(const KeymapManagerDraft &draft, const std
 	return true;
 }
 
+bool persistDialogHistorySnapshot(std::string &errorText, const char *logLabel) {
+	MRSettingsWriteReport writeReport;
+
+	if (!persistConfiguredSettingsSnapshot(&errorText, &writeReport))
+		return false;
+	mrLogSettingsWriteReport(logLabel != nullptr ? logLabel : "persist dialog history", writeReport);
+	errorText.clear();
+	return true;
+}
+
 std::vector<MRColumnListView::Row> buildProfileRows(const KeymapManagerDraft &draft) {
 	std::vector<MRColumnListView::Row> rows;
 
@@ -739,11 +726,28 @@ bool bindingMatchesFilter(const MRColumnListView::Row &row, std::string_view fil
 	return false;
 }
 
+bool targetChoiceMatchesFilter(const BindingTargetChoice &choice, MRKeymapBindingType type,
+                               std::string_view filterText) {
+	const std::string filter = upperAscii(trimAscii(filterText));
+	std::array<std::string, 3> haystacks;
+
+	if (filter.empty())
+		return true;
+	haystacks[0] = upperAscii(choice.target);
+	haystacks[1] = upperAscii(choice.label);
+	haystacks[2] = type == MRKeymapBindingType::Macro ? upperAscii(macroSpecMacroPart(choice.target))
+	                                                  : upperAscii(stripTargetPrefix(choice.target));
+	for (const std::string &haystack : haystacks)
+		if (haystack.find(filter) != std::string::npos)
+			return true;
+	return false;
+}
+
 std::vector<MRColumnListView::Row> buildBindingRows(const MRKeymapProfile *profile, std::string_view filterText,
                                                     std::vector<std::size_t> *visibleIndexes = nullptr,
                                                     std::vector<bool> *errorFlags = nullptr) {
 	std::vector<MRColumnListView::Row> rows;
-	std::map<std::string, MacroBindingFileValidation> macroValidationCache;
+	std::map<std::size_t, std::string> bindingErrors;
 
 	if (profile == nullptr)
 		return rows;
@@ -751,20 +755,28 @@ std::vector<MRColumnListView::Row> buildBindingRows(const MRKeymapProfile *profi
 		visibleIndexes->clear();
 	if (errorFlags != nullptr)
 		errorFlags->clear();
+	{
+		const MRKeymapCanonicalizationResult canonicalized =
+		    canonicalizeKeymapProfiles(std::span<const MRKeymapProfile>(profile, 1), profile->name,
+		                               MRKeymapCanonicalizationMode::TrustedCommit);
+		for (const MRKeymapDiagnostic &diagnostic : canonicalized.diagnostics)
+			if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error && diagnostic.profileIndex == 0 &&
+			    diagnostic.bindingIndex != kNoIndex && bindingErrors.find(diagnostic.bindingIndex) == bindingErrors.end())
+				bindingErrors.emplace(diagnostic.bindingIndex, diagnostic.message);
+	}
 	rows.reserve(profile->bindings.size());
 	for (std::size_t i = 0; i < profile->bindings.size(); ++i) {
 		const MRKeymapBindingRecord &binding = profile->bindings[i];
 		std::string description = binding.description;
-		std::string macroError;
 		MRColumnListView::Row row;
-		bool hasError = false;
+		const auto errorIt = bindingErrors.find(i);
+		const bool hasError = errorIt != bindingErrors.end();
 
 		if (description.empty() && binding.target.type == MRKeymapBindingType::Action)
 			if (const MRKeymapActionDefinition *action = MRKeymapActionCatalog::findById(binding.target.target))
 				description = std::string(action->description);
-		hasError = bindingHasMacroError(binding, macroError, macroValidationCache);
 		if (hasError)
-			description = macroError;
+			description = errorIt->second;
 		row = {std::string(hasError ? "! " : "  ") + bindingTargetDisplayName(binding),
 		       bindingDisplayDescription(binding, description), binding.sequence.toString()};
 		if (!bindingMatchesFilter(row, filterText))
@@ -820,9 +832,19 @@ class TBindingEditorDialog : public MRDialogFoundation {
 		if (handleSequenceRecordingEvent(event))
 			return;
 		const ushort originalWhat = event.what;
-		const ushort originalCommand = event.what == evCommand ? event.message.command : 0;
+		const ushort originalCommand =
+		    (event.what == evCommand || event.what == evBroadcast) ? event.message.command : 0;
+		void *originalInfo = event.what == evBroadcast ? event.message.infoPtr : nullptr;
 
 		MRDialogFoundation::handleEvent(event);
+		if (originalWhat == evBroadcast &&
+		    originalCommand == cmMrSetupKeymapBindingTargetFilterChanged &&
+		    originalInfo == mTargetFilterField) {
+			rebuildTargetChoices(true);
+			runDialogValidation();
+			clearEvent(event);
+			return;
+		}
 		syncTargetChoicesToType(true);
 		if (originalWhat != evCommand)
 			return;
@@ -876,6 +898,10 @@ class TBindingEditorDialog : public MRDialogFoundation {
 		const int targetLeft = 32;
 		const int targetRight = 92;
 		const int targetScrollLeft = 93;
+		const int targetFilterLabelWidth = 8;
+		const int targetFilterFieldWidth = 28;
+		const int targetFilterFieldLeft = targetScrollLeft - targetFilterFieldWidth;
+		const int targetFilterLabelLeft = targetFilterFieldLeft - targetFilterLabelWidth;
 		const int sequenceFieldLeft = 18;
 		const int sequenceGlyphLeft = 92;
 		const int buttonTop = 15;
@@ -901,6 +927,11 @@ class TBindingEditorDialog : public MRDialogFoundation {
 		                                                new TSItem("~R~eadonly",
 		                                                           new TSItem("~E~dit", nullptr)))))));
 		addLabel(TRect(targetLeft, 2, targetLeft + 10, 3), "Target:");
+		addLabel(TRect(targetFilterLabelLeft, 2, targetFilterFieldLeft, 3), "Filter:");
+		mTargetFilterField =
+		    new TNotifyingInputLine(TRect(targetFilterFieldLeft, 2, targetScrollLeft, 3),
+		                            kTargetFilterFieldSize - 1, cmMrSetupKeymapBindingTargetFilterChanged);
+		insert(mTargetFilterField);
 		mTargetScrollBar = new TScrollBar(TRect(targetScrollLeft, 3, targetScrollLeft + 1, 10));
 		insert(mTargetScrollBar);
 		mTargetList = new MRColumnListView(TRect(targetLeft, 3, targetScrollLeft, 10), mTargetScrollBar,
@@ -996,10 +1027,17 @@ class TBindingEditorDialog : public MRDialogFoundation {
 		const auto type = selectedType().value_or(MRKeymapBindingType::Action);
 		std::vector<MRColumnListView::Row> rows;
 		short selected = 0;
+		const std::string filter = targetFilterText();
 
-		currentTargetChoices =
+		allTargetChoices =
 		    type == MRKeymapBindingType::Macro ? buildMacroTargetChoices() : buildActionTargetChoices();
-		rows.reserve(currentTargetChoices.size());
+		currentTargetChoices.clear();
+		rows.reserve(allTargetChoices.size());
+		for (const BindingTargetChoice &choice : allTargetChoices) {
+			if (!targetChoiceMatchesFilter(choice, type, filter))
+				continue;
+			currentTargetChoices.push_back(choice);
+		}
 		for (std::size_t i = 0; i < currentTargetChoices.size(); ++i) {
 			const BindingTargetChoice &choice = currentTargetChoices[i];
 			rows.push_back({type == MRKeymapBindingType::Macro ? macroSpecMacroPart(choice.target)
@@ -1030,6 +1068,7 @@ class TBindingEditorDialog : public MRDialogFoundation {
 	void loadDraftToFields() {
 		setRadioValue(mTypeGroup, typeIndexFor(draft.target.type));
 		setRadioValue(mContextGroup, contextIndexFor(draft.context));
+		setFieldText(mTargetFilterField, "", kTargetFilterFieldSize);
 		rebuildTargetChoices(false);
 		lastSyncedType = draft.target.type;
 		mSequenceField->setText(draft.sequence.toString());
@@ -1066,9 +1105,14 @@ class TBindingEditorDialog : public MRDialogFoundation {
 			result.warningText = "Select a binding context.";
 			return result;
 		}
-		if (currentTargetChoices.empty()) {
+		if (allTargetChoices.empty()) {
 			result.valid = false;
 			result.warningText = "No target is available for the selected type.";
+			return result;
+		}
+		if (currentTargetChoices.empty()) {
+			result.valid = false;
+			result.warningText = "No target matches the current filter.";
 			return result;
 		}
 		if (selectedTarget().empty()) {
@@ -1162,13 +1206,24 @@ class TBindingEditorDialog : public MRDialogFoundation {
 			frame->drawView();
 	}
 
+	std::string targetFilterText() const {
+		std::vector<char> buffer(kTargetFilterFieldSize + 1, '\0');
+
+		if (mTargetFilterField == nullptr)
+			return std::string();
+		const_cast<TInputLine *>(mTargetFilterField)->getData(buffer.data());
+		return trimAscii(buffer.data());
+	}
+
 	MRKeymapBindingRecord draft;
 	TRadioButtons *mTypeGroup = nullptr;
 	TRadioButtons *mContextGroup = nullptr;
 	MRColumnListView *mTargetList = nullptr;
 	TScrollBar *mTargetScrollBar = nullptr;
+	TInputLine *mTargetFilterField = nullptr;
 	TSequenceDisplay *mSequenceField = nullptr;
 	TInputLine *mDescriptionField = nullptr;
+	std::vector<BindingTargetChoice> allTargetChoices;
 	std::vector<BindingTargetChoice> currentTargetChoices;
 	std::optional<MRKeymapBindingType> lastSyncedType;
 	bool recordingSequence = false;
@@ -1466,7 +1521,7 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 		const int profileScrollLeft = left + profilesWidth;
 		const int bindingLeft = profileScrollLeft + 3;
 		const int bindingScrollLeft = right - 1;
-		const int buttonTop = 18;
+		const int buttonTop = 19;
 		const int activeTop = 21;
 		const int gap = 2;
 		const int profileButtonGap = 1;
@@ -1592,15 +1647,6 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 
 	DialogValidationResult validateDialogValues() const {
 		DialogValidationResult result;
-		const auto diagnostics = validateKeymapProfiles(workingDraft.profiles);
-
-		for (const MRKeymapDiagnostic &diagnostic : diagnostics)
-			if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error) {
-				result.valid = false;
-				result.warningText = diagnostic.message;
-				result.error = true;
-				return result;
-			}
 		if (workingDraft.profiles.empty()) {
 			result.valid = false;
 			result.warningText = "At least one keymap profile is required.";
@@ -1648,7 +1694,11 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 			if (visualFrameWasActive)
 				dialogFrame->setState(sfActive, False);
 		}
+		if (dialogFrame != nullptr)
+			dialogFrame->drawView();
 		drawView();
+		if (TProgram::deskTop != nullptr)
+			TProgram::deskTop->drawView();
 	}
 
 	void resumeVisualFocus() {
@@ -1674,7 +1724,11 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 		}
 		visualFocusSuspended = false;
 		visualFocusedView = nullptr;
+		if (dialogFrame != nullptr)
+			dialogFrame->drawView();
 		drawView();
+		if (TProgram::deskTop != nullptr)
+			TProgram::deskTop->drawView();
 	}
 
 	bool editProfileWithDialog(MRKeymapProfile &profile, std::size_t editedIndex) {
@@ -1851,15 +1905,31 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 
 	void loadFromSelectedFile() {
 		KeymapManagerDraft loadedDraft;
+		std::vector<MRKeymapDiagnostic> diagnostics;
 		std::string errorText;
 		std::string selectedUri;
 
 		if (!chooseKeymapFileForLoad(selectedUri))
 			return;
-		if (!loadKeymapDraftFromFile(selectedUri, loadedDraft, errorText)) {
-			postDialogError(errorText);
+		if (!loadKeymapDraftFromFile(selectedUri, loadedDraft, errorText, &diagnostics)) {
+			const std::string loadError = errorText;
+			std::string historyError;
+
+			forgetLoadDialogPath(MRDialogHistoryScope::KeymapProfileLoad, selectedUri.c_str());
+			if (!persistDialogHistorySnapshot(historyError, "forget keymap load history"))
+				postDialogWarning(historyError);
+			postDialogError(loadError);
 			return;
 		}
+		rememberLoadDialogPath(MRDialogHistoryScope::KeymapProfileLoad, selectedUri.c_str());
+		if (!persistDialogHistorySnapshot(errorText, "remember keymap load history")) {
+			postDialogWarning(errorText);
+			errorText.clear();
+		}
+		logKeymapDiagnostics("keymap load", loadedDraft.profiles, diagnostics);
+		if (const std::string summary = summarizeKeymapDiagnosticsForMessageLine(diagnostics, "Keymap load");
+		    !summary.empty())
+			postDialogError(summary);
 		fileUri = selectedUri;
 		workingDraft = loadedDraft;
 		refreshAllViews();
@@ -1872,6 +1942,8 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 			saveAs();
 			return;
 		}
+		applyCommitCanonicalization(workingDraft, "Keymap save");
+		refreshAllViews();
 		fileUri = mr::dialogs::ensureMrmacExtension(fileUri);
 		if (!confirmOverwriteForPath("Overwrite", "Keymap file exists. Overwrite?", fileUri))
 			return;
@@ -1893,6 +1965,8 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 
 		if (!chooseKeymapFileForSave(selectedUri))
 			return;
+		applyCommitCanonicalization(workingDraft, "Keymap save");
+		refreshAllViews();
 		fileUri = selectedUri;
 		if (!confirmOverwriteForPath("Overwrite", "Keymap file exists. Overwrite?", fileUri))
 			return;
@@ -1988,6 +2062,7 @@ void runKeymapManagerDialogFlow() {
 				showKeymapManagerHelpDialog();
 				break;
 			case cmOK:
+				applyCommitCanonicalization(workingDraft, "Keymap done");
 				if (!saveKeymapDraftToConfiguredState(workingDraft, currentFileUri, errorText)) {
 					postDialogError(errorText);
 					break;
@@ -2002,6 +2077,7 @@ void runKeymapManagerDialogFlow() {
 					const mr::dialogs::UnsavedChangesChoice choice =
 					    mr::dialogs::runDialogDirtyGating("Discard changed keymap profiles?");
 					if (choice == mr::dialogs::UnsavedChangesChoice::Save) {
+						applyCommitCanonicalization(workingDraft, "Keymap done");
 						if (!saveKeymapDraftToConfiguredState(workingDraft, currentFileUri, errorText)) {
 							postDialogError(errorText);
 							break;

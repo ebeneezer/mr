@@ -27,7 +27,9 @@ struct MREditSetupSettings {
 	bool tabExpand;
 	bool displayTabs;
 	int tabSize;
+	int leftMargin;
 	int rightMargin;
+	bool formatRuler;
 	bool wordWrap;
 	std::string indentStyle;
 	std::string fileType;
@@ -61,7 +63,7 @@ struct MREditSetupSettings {
 
 	MREditSetupSettings() noexcept
 	    : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false),
-	      eofCrLf(false), tabExpand(true), displayTabs(false), tabSize(8), rightMargin(78), wordWrap(true), indentStyle(),
+	      eofCrLf(false), tabExpand(true), displayTabs(false), tabSize(8), leftMargin(1), rightMargin(78), formatRuler(false), wordWrap(true), indentStyle(),
 	      fileType(), binaryRecordLength(100), postLoadMacro(), preSaveMacro(), defaultPath(), formatLine(),
 	      backupMethod("BAK_FILE"), backupFrequency("FIRST_SAVE_ONLY"), backupExtension("bak"), backupDirectory(),
 	      autosaveInactivitySeconds(15), autosaveIntervalSeconds(180), backupFiles(true), showEofMarker(false),
@@ -136,6 +138,8 @@ enum MREditSetupOverrideMask : unsigned long long {
 	kOvCodeFoldingPosition = 1ull << 37,
 	kOvGutters = 1ull << 38,
 	kOvDisplayTabs = 1ull << 39,
+	kOvLeftMargin = 1ull << 40,
+	kOvFormatRuler = 1ull << 41,
 };
 
 struct MREditSettingDescriptor {
@@ -306,11 +310,12 @@ enum : unsigned char {
 	kMrPaletteCodeFolding = 152,
 	kMrPaletteDesktop = 153,
 	kMrPaletteVirtualDesktopMarker = 154,
-	kMrPaletteMax = kMrPaletteVirtualDesktopMarker
+	kMrPaletteFormatRuler = 155,
+	kMrPaletteMax = kMrPaletteFormatRuler
 };
 
 struct MRColorSetupSettings {
-	static const std::size_t kWindowCount = 10;
+	static const std::size_t kWindowCount = 11;
 	static const std::size_t kMenuDialogCount = 17;
 	static const std::size_t kHelpCount = 9;
 	static const std::size_t kOtherCount = 11;
@@ -360,11 +365,10 @@ enum class MRDialogHistoryScope : unsigned char {
 	Count
 };
 
-[[nodiscard]] ushort configuredFileDialogHistoryId(MRDialogHistoryScope scope);
-[[nodiscard]] ushort configuredPathDialogHistoryId(MRDialogHistoryScope scope);
 void initRememberedLoadDialogPath(MRDialogHistoryScope scope, char *buffer, std::size_t bufferSize,
                                   const char *pattern);
 void rememberLoadDialogPath(MRDialogHistoryScope scope, const char *path);
+void forgetLoadDialogPath(MRDialogHistoryScope scope, const char *path);
 [[nodiscard]] std::string configuredLastFileDialogFilePath(MRDialogHistoryScope scope);
 [[nodiscard]] std::string configuredLastFileDialogPath(MRDialogHistoryScope scope);
 void initRememberedLoadDialogPath(char *buffer, std::size_t bufferSize, const char *pattern);
@@ -411,6 +415,20 @@ const MREditSettingDescriptor *editSettingDescriptors(std::size_t &count);
 [[nodiscard]] const MREditSettingDescriptor *findEditSettingDescriptorByKey(std::string_view key);
 [[nodiscard]] std::string normalizeEditExtensionSelector(std::string_view value);
 bool normalizeEditExtensionSelectors(std::vector<std::string> &selectors, std::string *errorMessage = nullptr);
+int clampEditFormatTabSize(int tabSize) noexcept;
+int clampEditFormatRightMargin(int rightMargin) noexcept;
+int clampEditFormatLeftMargin(int leftMargin, int rightMargin) noexcept;
+[[nodiscard]] std::string defaultEditFormatLineForTabSize(int tabSize, int leftMargin, int rightMargin);
+bool normalizeEditFormatLine(const std::string &value, int tabSize, int fallbackLeftMargin,
+                             int fallbackRightMargin, std::string &outValue,
+                             int *outLeftMargin = nullptr, int *outRightMargin = nullptr,
+                             std::string *errorMessage = nullptr);
+[[nodiscard]] std::string synchronizeEditFormatLineMargins(const std::string &value, int leftMargin,
+                                                           int rightMargin, int tabSize);
+bool editFormatLineAtColumn(const std::string &value, int tabSize, int leftMargin, int rightMargin,
+                            int column, char symbol, std::string &outValue,
+                            int *outLeftMargin = nullptr, int *outRightMargin = nullptr,
+                            std::string *errorMessage = nullptr);
 MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults,
                                            const MREditSetupOverrides &overrides);
 const std::vector<MREditExtensionProfile> &configuredEditExtensionProfiles();

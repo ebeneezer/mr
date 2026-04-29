@@ -2,6 +2,7 @@
 #include "MRSettingsLoader.hpp"
 
 #include "MRDialogPaths.hpp"
+#include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
 #include <algorithm>
@@ -10,11 +11,13 @@
 #include <map>
 #include <regex>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace {
+constexpr std::size_t kNoIndex = static_cast<std::size_t>(-1);
 
 const char *keymapDiagnosticSeverityName(MRKeymapDiagnosticSeverity severity) noexcept {
 	switch (severity) {
@@ -26,6 +29,30 @@ const char *keymapDiagnosticSeverityName(MRKeymapDiagnosticSeverity severity) no
 	}
 }
 
+std::string keymapDiagnosticIdentity(const MRKeymapDiagnostic &diagnostic) {
+	return std::to_string(static_cast<unsigned>(diagnostic.kind)) + "|" +
+	       std::to_string(static_cast<unsigned>(diagnostic.severity)) + "|" +
+	       std::to_string(diagnostic.profileIndex) + "|" + std::to_string(diagnostic.bindingIndex) + "|" +
+	       diagnostic.message;
+}
+
+std::string describeKeymapDiagnostic(std::span<const MRKeymapProfile> profiles,
+                                     const MRKeymapDiagnostic &diagnostic) {
+	std::string text = diagnostic.message;
+
+	if (diagnostic.profileIndex != kNoIndex && diagnostic.profileIndex < profiles.size()) {
+		const MRKeymapProfile &profile = profiles[diagnostic.profileIndex];
+		text += " profile='" + profile.name + "'";
+		if (diagnostic.bindingIndex != kNoIndex && diagnostic.bindingIndex < profile.bindings.size()) {
+			const MRKeymapBindingRecord &binding = profile.bindings[diagnostic.bindingIndex];
+			text += " binding=" + std::to_string(diagnostic.bindingIndex + 1);
+			text += " target='" + binding.target.target + "'";
+			text += " sequence='" + binding.sequence.toString() + "'";
+		}
+	}
+	return text;
+}
+
 std::string summarizeKeymapLoadForLog(const MRKeymapLoadResult &load) {
 	std::string text =
 	    "Keymap bootstrap parse: active='" + load.activeProfileName + "' profiles=" +
@@ -34,6 +61,28 @@ std::string summarizeKeymapLoadForLog(const MRKeymapLoadResult &load) {
 	for (const MRKeymapProfile &profile : load.profiles)
 		text += " [" + profile.name + ":" + std::to_string(profile.bindings.size()) + "]";
 	return text;
+}
+
+std::string summarizeKeymapDiagnosticsForMessageLine(std::span<const MRKeymapDiagnostic> diagnostics,
+                                                     std::string_view operation) {
+	std::set<std::string> seen;
+	std::size_t errorCount = 0;
+	std::size_t warningCount = 0;
+
+	for (const MRKeymapDiagnostic &diagnostic : diagnostics) {
+		if (!seen.insert(keymapDiagnosticIdentity(diagnostic)).second)
+			continue;
+		if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error)
+			++errorCount;
+		else
+			++warningCount;
+	}
+	if (errorCount == 0 && warningCount == 0)
+		return std::string();
+	if (errorCount == 0)
+		return std::string(operation) + ": " + std::to_string(warningCount) + " warning(s); see log.";
+	return std::string(operation) + ": removed " + std::to_string(errorCount) +
+	       " invalid key binding(s); see log.";
 }
 
 struct MRParsedSettingsAssignment {
@@ -341,32 +390,32 @@ bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::
 
 	{
 		MRKeymapLoadResult keymapLoad = loadKeymapProfilesFromSettingsSource(source);
-		bool keymapHasError = false;
+		const std::string diagnosticSummary =
+		    summarizeKeymapDiagnosticsForMessageLine(keymapLoad.diagnostics, "Keymap bootstrap");
+		std::set<std::string> loggedDiagnostics;
 
 		mrLogMessage(summarizeKeymapLoadForLog(keymapLoad));
-		for (const MRKeymapDiagnostic &diagnostic : keymapLoad.diagnostics)
+		for (const MRKeymapDiagnostic &diagnostic : keymapLoad.diagnostics) {
+			if (!loggedDiagnostics.insert(keymapDiagnosticIdentity(diagnostic)).second)
+				continue;
 			mrLogMessage("Keymap bootstrap diagnostic [" +
 			             std::string(keymapDiagnosticSeverityName(diagnostic.severity)) + "]: " +
-			             diagnostic.message);
-		for (const MRKeymapDiagnostic &diagnostic : keymapLoad.diagnostics)
-			if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error) {
-				keymapHasError = true;
-				break;
-			}
-		if (keymapHasError) {
-			mrLogMessage("Keymap bootstrap reset: falling back to DEFAULT because diagnostics contain errors.");
+			             describeKeymapDiagnostic(keymapLoad.profiles, diagnostic));
+		}
+		if (!diagnosticSummary.empty())
+			mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEventFollowup, diagnosticSummary,
+			                              mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+		if (!setConfiguredKeymapProfiles(keymapLoad.profiles, errorMessage)) {
+			mrLogMessage("Keymap bootstrap canonicalized result could not be applied; falling back to DEFAULT.");
 			markFlag(activeReport, MRSettingsLoadReport::InvalidValueReset);
 			if (!setConfiguredKeymapProfiles(std::vector<MRKeymapProfile>(), errorMessage))
 				return false;
 			if (!setConfiguredActiveKeymapProfile("DEFAULT", errorMessage))
 				return false;
-		} else {
-			if (!setConfiguredKeymapProfiles(keymapLoad.profiles, errorMessage))
-				return false;
-			if (!setConfiguredActiveKeymapProfile(keymapLoad.activeProfileName, errorMessage))
-				return false;
-			mrLogMessage("Keymap bootstrap applied without reset.");
-		}
+		} else if (!setConfiguredActiveKeymapProfile(keymapLoad.activeProfileName, errorMessage))
+			return false;
+		else
+			mrLogMessage("Keymap bootstrap applied canonicalized result.");
 	}
 
 	if (canonicalKeysSeen.size() < canonicalSerializedSettingsKeyCount()) {

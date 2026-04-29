@@ -198,6 +198,39 @@ void restoreEditorCursor(MRFileEditor *editor, int line, int column) {
 
 } // namespace
 
+std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths) {
+	std::string source = buildSettingsMacroSource(paths);
+	const std::size_t endMacro = source.rfind("END_MACRO;");
+
+	if (endMacro == std::string::npos)
+		return source;
+	for (MREditWindow *win : allEditWindowsInZOrder()) {
+		MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+		std::string url;
+		TRect r;
+		int cursorColumn = 1;
+		int cursorLine = 1;
+		int vd = 1;
+
+		if (win == nullptr || editor == nullptr)
+			continue;
+		url = editor->persistentFileName();
+		if (url.empty())
+			continue;
+		r = win->getBounds();
+		cursorColumn = static_cast<int>(win->cursorColumnNumber());
+		cursorLine = static_cast<int>(win->cursorLineNumber());
+		vd = win->mVirtualDesktop;
+		source.insert(endMacro,
+		              "MRSETUP('WORKSPACE', 'URL=" + escapeMrmacSingleQuotedLiteral(url) + " size=" +
+		                  std::to_string(r.b.x - r.a.x) + "," + std::to_string(r.b.y - r.a.y) + " pos=" +
+		                  std::to_string(r.a.x) + "," + std::to_string(r.a.y) + " cursor=" +
+		                  std::to_string(cursorColumn) + "," + std::to_string(cursorLine) + " vd=" +
+		                  std::to_string(vd) + "');\n");
+	}
+	return source;
+}
+
 int currentVirtualDesktop() {
 	return g_currentVirtualDesktop;
 }
@@ -342,50 +375,23 @@ bool viewportLeft() {
 
 void mrSaveWorkspace(const std::string &filename) {
 	std::string settingsPath = filename;
+	MRSetupPaths paths;
+	std::string dest;
+	std::string source;
 	if (settingsPath.empty()) {
 		settingsPath = configuredSettingsMacroFilePath();
 	}
-	std::string dest = settingsPath;
+	dest = settingsPath;
 	if (dest.find(".mrmac") == std::string::npos) {
 		dest += ".mrmac";
 	}
-
-	std::string currentContent;
-	std::string errorText;
-	readTextFile(dest, currentContent, errorText);
-
-	std::vector<std::string> lines;
-	std::istringstream iss(currentContent);
-	std::string line;
-	while (std::getline(iss, line)) {
-		if (line.find("MRSETUP('WORKSPACE'") == std::string::npos) {
-			lines.push_back(line);
-		}
-	}
-
-	for (MREditWindow *win : allEditWindowsInZOrder()) {
-		MRFileEditor *editor = win->getEditor();
-		if (editor == nullptr || win == nullptr) continue;
-		std::string url = editor->persistentFileName();
-		if (url.empty()) continue;
-		TRect r = win->getBounds();
-		int cursorColumn = static_cast<int>(win->cursorColumnNumber());
-		int cursorLine = static_cast<int>(win->cursorLineNumber());
-		int vd = win->mVirtualDesktop;
-
-		std::string wsLine = "MRSETUP('WORKSPACE', 'URL=" + escapeMrmacSingleQuotedLiteral(url) +
-		                     " size=" + std::to_string(r.b.x - r.a.x) + "," +
-		                     std::to_string(r.b.y - r.a.y) + " pos=" + std::to_string(r.a.x) + "," +
-		                     std::to_string(r.a.y) + " cursor=" + std::to_string(cursorColumn) + "," +
-		                     std::to_string(cursorLine) + " vd=" + std::to_string(vd) + "');";
-		lines.push_back(wsLine);
-	}
-
-	std::string newContent;
-	for (const std::string &l : lines) {
-		newContent += l + "\n";
-	}
-	writeTextFile(dest, newContent);
+	paths.settingsMacroUri = dest;
+	paths.macroPath = defaultMacroDirectoryPath();
+	paths.helpUri = configuredHelpFilePath();
+	paths.tempPath = configuredTempDirectoryPath();
+	paths.shellUri = configuredShellExecutablePath();
+	source = buildSettingsMacroSourceWithWorkspace(paths);
+	writeTextFile(dest, source);
 }
 
 void mrLoadWorkspace(const std::string &filename) {
@@ -555,13 +561,6 @@ void mrUpdateAllWindowsColorTheme() {
 // ---- Consolidated from MRFileCommands.cpp ----
 
 namespace {
-ushort execDialogWithPayload(TDialog *dialog, void *data) {
-	ushort result = mr::dialogs::execDialogWithData(dialog, data);
-	if (result == cmHelp)
-		static_cast<void>(mrShowProjectHelp());
-	return result;
-}
-
 [[nodiscard]] std::string normalizeTvPath(std::string_view path) {
 	std::string result(path);
 
@@ -693,6 +692,7 @@ void postLoadHeroEvents(const std::string &resolvedPath, std::size_t bytes, doub
 bool promptForPath(const char *title, char *fileName, std::size_t fileNameSize) {
 	if (fileName == nullptr || fileNameSize == 0)
 		return false;
+	fileName[0] = '\0';
 	const MRDialogHistoryScope scope =
 	    std::string_view(title != nullptr ? title : "") == "Load File" ? MRDialogHistoryScope::LoadFile
 	                                                                    : MRDialogHistoryScope::OpenFile;
@@ -771,7 +771,6 @@ bool resolveReadableExistingPath(MRDialogHistoryScope scope, const char *path, s
 		postWindowCommandError("File is not readable: " + resolvedPath);
 		return false;
 	}
-	rememberLoadDialogPath(scope, resolvedPath.c_str());
 	return true;
 }
 

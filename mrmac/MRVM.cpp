@@ -955,7 +955,7 @@ static unsigned classifyLoadVarName(const std::string &name) {
 	if (name == "CUR_WINDOW" || name == "LINK_STAT" || name == "WIN_X1" || name == "WIN_Y1" ||
 	    name == "WIN_X2" || name == "WIN_Y2" || name == "WINDOW_COUNT" || name == "KEY1" ||
 	    name == "KEY2" ||
-	    name == "FIRST_SAVE" || name == "EOF_IN_MEM" || name == "BUFFER_ID" ||
+	    name == "FIRST_SAVE" || name == "BUFFER_ID" ||
 	    name == "TMP_FILE" || name == "TMP_FILE_NAME" || name == "LAST_FILE_ATTR" ||
 	    name == "LAST_FILE_SIZE" || name == "LAST_FILE_TIME" || name == "CUR_FILE_ATTR" ||
 	    name == "CUR_FILE_SIZE" || name == "READ_ONLY" || name == "FOUND_X" ||
@@ -2579,11 +2579,6 @@ static Value loadCurrentFileState(const std::string &key) {
 			return makeInt(win->hasBeenSavedInSession() ? 1 : 0);
 		return makeInt(session != nullptr && session->firstSave ? 1 : 0);
 	}
-	if (key == "EOF_IN_MEM") {
-		if (win != nullptr)
-			return makeInt(win->eofInMemory() ? 1 : 0);
-		return makeInt(session != nullptr && session->eofInMemory ? 1 : 0);
-	}
 	if (key == "BUFFER_ID") {
 		if (win != nullptr)
 			return makeInt(win->bufferId());
@@ -3246,11 +3241,19 @@ static bool replaceEditorLine(MRFileEditor *editor, const std::string &text) {
 
 static bool wordWrapEditorLine(MRFileEditor *editor) {
 	MREditSetupSettings settings = configuredEditSetupSettings();
-	int margin = settings.rightMargin > 0 ? settings.rightMargin : 78;
+	std::string normalized;
+	int leftMargin = settings.leftMargin;
+	int rightMargin = settings.rightMargin;
+
+	if (!normalizeEditFormatLine(settings.formatLine, settings.tabSize, settings.leftMargin,
+	                             settings.rightMargin, normalized, &leftMargin, &rightMargin, nullptr)) {
+		leftMargin = settings.leftMargin > 0 ? settings.leftMargin : 1;
+		rightMargin = settings.rightMargin > 0 ? settings.rightMargin : 78;
+	}
 
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (editor != nullptr) {
-		return editor->formatParagraph(margin);
+		return editor->formatParagraph(leftMargin, rightMargin);
 	}
 
 	if (session == nullptr)
@@ -3263,15 +3266,15 @@ static bool wordWrapEditorLine(MRFileEditor *editor) {
 	std::size_t start = session->document.lineStart(cursor);
 	std::string line = session->document.lineText(cursor);
 
-	if (line.length() <= static_cast<std::size_t>(margin))
+	if (line.length() <= static_cast<std::size_t>(rightMargin))
 		return true;
 
-	std::size_t breakPos = margin;
+	std::size_t breakPos = static_cast<std::size_t>(rightMargin);
 	while (breakPos > 0 && line[breakPos] != ' ' && line[breakPos] != '\t')
 		breakPos--;
 
 	if (breakPos == 0)
-		breakPos = margin;
+		breakPos = static_cast<std::size_t>(rightMargin);
 
 	if (breakPos < line.length() && (line[breakPos] == ' ' || line[breakPos] == '\t')) {
 		backgroundReplaceRange(mr::editor::Range(start + breakPos, start + breakPos + 1), "\n", start + breakPos + 1);
@@ -6005,8 +6008,12 @@ static Value loadSpecialVariable(const std::string &name, bool &handled) {
 		return makeInt(configuredEditSetupSettings().wordWrap ? 1 : 0);
 	if (key == "MEM_ALLOC")
 		return makeInt(g_runtimeEnv.memAlloc);
+	if (key == "LEFT_MARGIN")
+		return makeInt(configuredEditSetupSettings().leftMargin);
 	if (key == "RIGHT_MARGIN")
 		return makeInt(configuredEditSetupSettings().rightMargin);
+	if (key == "FORMAT_RULER")
+		return makeInt(configuredEditSetupSettings().formatRuler ? 1 : 0);
 	if (key == "INDENT_STYLE")
 		return makeInt(encodeIndentStyle(configuredEditSetupSettings().indentStyle));
 	if (key == "INS_CURSOR")
@@ -6192,7 +6199,7 @@ static Value loadSpecialVariable(const std::string &name, bool &handled) {
 		return makeString(configuredEditSetupSettings().wordDelimiters);
 	if (key == "CUR_CHAR")
 		return currentEditorCharValue();
-	if (key == "FIRST_SAVE" || key == "EOF_IN_MEM" || key == "BUFFER_ID" || key == "TMP_FILE" ||
+	if (key == "FIRST_SAVE" || key == "BUFFER_ID" || key == "TMP_FILE" ||
 	    key == "TMP_FILE_NAME" || key == "FILE_CHANGED" || key == "FILE_NAME" ||
 	    key == "CUR_FILE_ATTR" || key == "CUR_FILE_SIZE" || key == "READ_ONLY")
 		return loadCurrentFileState(key);
@@ -6352,8 +6359,12 @@ static bool storeSpecialVariable(const std::string &name, const Value &value) {
 		g_runtimeEnv.memAlloc = std::max(0, valueAsInt(value));
 		return true;
 	}
+	if (key == "LEFT_MARGIN")
+		return applyConfiguredEditSetupValue("LEFT_MARGIN", std::to_string(valueAsInt(value)), nullptr);
 	if (key == "RIGHT_MARGIN")
 		return applyConfiguredEditSetupValue("RIGHT_MARGIN", std::to_string(valueAsInt(value)), nullptr);
+	if (key == "FORMAT_RULER")
+		return applyConfiguredEditSetupValue("FORMAT_RULER", valueAsInt(value) != 0 ? "TRUE" : "FALSE", nullptr);
 	if (key == "INDENT_STYLE")
 		return applyConfiguredEditSetupValue("INDENT_STYLE", decodeIndentStyle(valueAsInt(value)), nullptr);
 	if (key == "INS_CURSOR") {
@@ -6482,7 +6493,7 @@ static bool storeSpecialVariable(const std::string &name, const Value &value) {
 	    key == "WIN_Y2" || key == "WINDOW_COUNT" || key == "KEY1" || key == "KEY2" || key == "BLOCK_STAT" ||
 	    key == "BLOCK_LINE1" || key == "BLOCK_LINE2" || key == "BLOCK_COL1" ||
 	    key == "BLOCK_COL2" || key == "MARKING" || key == "FIRST_SAVE" ||
-	    key == "EOF_IN_MEM" || key == "BUFFER_ID" || key == "TMP_FILE" || key == "TMP_FILE_NAME" ||
+	    key == "BUFFER_ID" || key == "TMP_FILE" || key == "TMP_FILE_NAME" ||
 	    key == "LAST_FILE_ATTR" || key == "LAST_FILE_SIZE" || key == "LAST_FILE_TIME" ||
 	    key == "CUR_FILE_ATTR" || key == "CUR_FILE_SIZE" || key == "READ_ONLY" ||
 	    key == "FOUND_STR" || key == "SEARCH_FILE" || key == "FOUND_X" || key == "FOUND_Y" ||
@@ -9348,7 +9359,7 @@ bool isSupportedStagedSymbol(const std::string &value) noexcept {
 	    "BLOCK_END",   "BLOCK_OFF",
 	    "COPY_BLOCK",  "MOVE_BLOCK",     "DELETE_BLOCK",   "ERASE_WINDOW",    "BLOCK_STAT",
 	    "BLOCK_LINE1", "BLOCK_LINE2",    "BLOCK_COL1",     "BLOCK_COL2",      "MARKING",
-	    "FIRST_SAVE",  "EOF_IN_MEM",     "BUFFER_ID",      "TMP_FILE",        "TMP_FILE_NAME",
+	    "FIRST_SAVE",  "BUFFER_ID",      "TMP_FILE",       "TMP_FILE_NAME",
 	    "CUR_WINDOW",  "LINK_STAT",      "WINDOW_COUNT",   "VIRTUAL_DESKTOPS",
 	    "CYCLIC_VIRTUAL_DESKTOPS", "KEY1", "KEY2",
 	    "WIN_X1",          "WIN_Y1",
@@ -10352,7 +10363,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							    "DIALOG_LAST_PATH, DIALOG_PATH_HISTORY, DIALOG_FILE_HISTORY, "
 							    "MULTI_FILESPEC_HISTORY, MULTI_PATH_HISTORY, "
 							    "DEFAULT_PROFILE_DESCRIPTION, COLORTHEMEURI, KEYMAPURI, PAGE_BREAK, WORD_DELIMITERS, DEFAULT_EXTENSIONS, "
-							    "TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, DISPLAY_TABS, TAB_SIZE, RIGHT_MARGIN, WORD_WRAP, "
+							    "TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, DISPLAY_TABS, TAB_SIZE, LEFT_MARGIN, RIGHT_MARGIN, FORMAT_RULER, WORD_WRAP, "
 							    "INDENT_STYLE, FILE_TYPE, BINARY_RECORD_LENGTH, POST_LOAD_MACRO, PRE_SAVE_MACRO, DEFAULT_PATH, "
 							    "FORMAT_LINE, BACKUP_METHOD, BACKUP_FREQUENCY, BACKUP_EXTENSION, BACKUP_DIRECTORY, "
 							    "AUTOSAVE_INACTIVITY_SECONDS, AUTOSAVE_INTERVAL_SECONDS, BACKUP_FILES, SHOW_EOF_MARKER, "
@@ -11566,6 +11577,14 @@ bool mrvmUiDeleteBlock() {
 	return deleteCurrentBlock(win, editor, shouldLeaveColumnSpaceForDelete(win));
 }
 
+bool mrvmUiExtractCurrentBlockText(std::string &out) {
+	MREditWindow *win = activeMacroEditWindow();
+	MRFileEditor *editor = currentEditor();
+	if (win == nullptr || editor == nullptr)
+		return false;
+	return extractCurrentBlockText(win, editor, out);
+}
+
 bool mrvmUiIndentBlock() {
 	MREditWindow *win = activeMacroEditWindow();
 	MRFileEditor *editor = currentEditor();
@@ -11580,6 +11599,30 @@ bool mrvmUiUndentBlock() {
 	if (win == nullptr || editor == nullptr)
 		return false;
 	return undentCurrentBlock(win, editor);
+}
+
+bool mrvmUiMoveCursorToNextPageBreak() {
+	return moveEditorNextPageBreak(currentEditor());
+}
+
+bool mrvmUiMoveCursorToPrevPageBreak() {
+	return moveEditorLastPageBreak(currentEditor());
+}
+
+bool mrvmUiCursorTabRight() {
+	return moveEditorTabRight(currentEditor());
+}
+
+bool mrvmUiCursorTabLeft() {
+	return moveEditorTabLeft(currentEditor());
+}
+
+bool mrvmUiCursorIndent() {
+	return indentEditor(currentEditor());
+}
+
+bool mrvmUiCursorUndent() {
+	return undentEditor(currentEditor());
 }
 
 bool mrvmUiWindowCopyBlock(int sourceWindowIndex) {

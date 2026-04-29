@@ -1,14 +1,21 @@
 #include "MRKeymapProfile.hpp"
 
 #include "MRKeymapActionCatalog.hpp"
+#include "../app/utils/MRFileIOUtils.hpp"
 #include "../app/utils/MRStringUtils.hpp"
+#include "../config/MRDialogPaths.hpp"
+#include "../mrmac/mrmac.h"
 
+#include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstdlib>
+#include <map>
 #include <regex>
 #include <set>
 #include <string>
 #include <string_view>
+#include <unistd.h>
 #include <utility>
 #include <vector>
 
@@ -64,6 +71,191 @@ std::string displayBindingTarget(std::string_view target) {
 	if (name.rfind("MR_", 0) == 0)
 		return name.substr(3);
 	return name;
+}
+
+bool isPhase1CtrlAsciiCollision(const MRKeymapToken &token) noexcept {
+	if (!token.hasModifier(MRKeymapModifier::Ctrl) || token.hasModifier(MRKeymapModifier::Alt) ||
+	    token.hasModifier(MRKeymapModifier::Shift))
+		return false;
+	if (token.baseKey() == MRKeymapBaseKey::Backspace || token.baseKey() == MRKeymapBaseKey::Tab ||
+	    token.baseKey() == MRKeymapBaseKey::Enter)
+		return true;
+	if (token.baseKey() != MRKeymapBaseKey::Printable)
+		return false;
+	switch (std::toupper(static_cast<unsigned char>(token.printableKey()))) {
+		case 'H':
+		case 'I':
+		case 'J':
+		case 'M':
+			return true;
+		default:
+			return false;
+	}
+}
+
+bool sequenceHasPhase1CtrlAsciiCollision(const MRKeymapSequence &sequence) noexcept {
+	for (const MRKeymapToken &token : sequence.tokens())
+		if (isPhase1CtrlAsciiCollision(token))
+			return true;
+	return false;
+}
+
+std::string macroSpecFilePart(std::string_view target) {
+	const std::size_t caretPos = target.find('^');
+
+	return caretPos == std::string_view::npos ? std::string() : std::string(trimAscii(target.substr(0, caretPos)));
+}
+
+std::string macroSpecMacroPart(std::string_view target) {
+	const std::size_t caretPos = target.find('^');
+
+	if (caretPos == std::string_view::npos)
+		return trimAscii(std::string(target));
+	return trimAscii(std::string(target.substr(caretPos + 1)));
+}
+
+std::string resolveMacroBindingFilePath(const std::string &spec) {
+	std::string trimmed = trimAscii(spec);
+	std::string macroDirectory = normalizeConfiguredPathInput(configuredMacroDirectoryPath());
+	auto tryMacroDirectory = [&](const std::string &candidate) -> std::string {
+		std::string joined;
+
+		if (macroDirectory.empty() || candidate.empty())
+			return std::string();
+		joined = macroDirectory;
+		if (joined.back() != '/')
+			joined += '/';
+		joined += candidate;
+		return ::access(joined.c_str(), F_OK) == 0 ? joined : std::string();
+	};
+
+	if (trimmed.empty())
+		return std::string();
+	if (::access(trimmed.c_str(), F_OK) == 0)
+		return trimmed;
+	if (std::string fromMacroDirectory = tryMacroDirectory(trimmed); !fromMacroDirectory.empty())
+		return fromMacroDirectory;
+	if (upperAscii(trimmed).size() < 6 || upperAscii(trimmed).substr(upperAscii(trimmed).size() - 6) != ".MRMAC") {
+		std::string withExt = trimmed + ".mrmac";
+		if (::access(withExt.c_str(), F_OK) == 0)
+			return withExt;
+		if (std::string withExtFromMacroDirectory = tryMacroDirectory(withExt); !withExtFromMacroDirectory.empty())
+			return withExtFromMacroDirectory;
+	}
+	return std::string();
+}
+
+struct MacroBindingFileValidation {
+	std::set<std::string> macroNames;
+	std::string compileError;
+};
+
+const MacroBindingFileValidation &validateMacroBindingFile(
+    const std::string &filePart, std::map<std::string, MacroBindingFileValidation> &cache) {
+	const std::string cacheKey = upperAscii(trimAscii(filePart));
+	auto cached = cache.find(cacheKey);
+
+	if (cached != cache.end())
+		return cached->second;
+
+	MacroBindingFileValidation validation;
+	std::string source;
+	std::size_t bytecodeSize = 0;
+	const std::string resolvedPath = resolveMacroBindingFilePath(filePart);
+	unsigned char *bytecode = nullptr;
+
+	if (resolvedPath.empty()) {
+		validation.compileError = "Macro file could not be resolved.";
+		return cache.emplace(cacheKey, std::move(validation)).first->second;
+	}
+	if (!readTextFile(resolvedPath, source)) {
+		validation.compileError = "Macro file could not be read.";
+		return cache.emplace(cacheKey, std::move(validation)).first->second;
+	}
+	bytecode = compile_macro_code(source.c_str(), &bytecodeSize);
+	if (bytecode == nullptr) {
+		const char *err = get_last_compile_error();
+		validation.compileError = err != nullptr && *err != '\0' ? err : "Compilation failed.";
+		return cache.emplace(cacheKey, std::move(validation)).first->second;
+	}
+	for (int i = 0; i < get_compiled_macro_count(); ++i) {
+		const char *compiledName = get_compiled_macro_name(i);
+		const std::string macroName = trimAscii(compiledName != nullptr ? compiledName : "");
+
+		if (!macroName.empty())
+			validation.macroNames.insert(upperAscii(macroName));
+	}
+	std::free(bytecode);
+	return cache.emplace(cacheKey, std::move(validation)).first->second;
+}
+
+std::string summarizeMacroBindingError(std::string_view message) {
+	const std::size_t pos = message.find_first_of("\r\n");
+
+	if (pos == std::string_view::npos)
+		return trimAscii(std::string(message));
+	return trimAscii(std::string(message.substr(0, pos)));
+}
+
+bool bindingHasMacroError(const MRKeymapBindingRecord &binding, std::string &errorText,
+                          std::map<std::string, MacroBindingFileValidation> &cache) {
+	const std::string filePart = macroSpecFilePart(binding.target.target);
+	const std::string macroPart = macroSpecMacroPart(binding.target.target);
+
+	errorText.clear();
+	if (binding.target.type != MRKeymapBindingType::Macro)
+		return false;
+	if (filePart.empty()) {
+		errorText = "Macro target has no file qualifier.";
+		return true;
+	}
+	if (macroPart.empty()) {
+		errorText = "Macro target has no macro name.";
+		return true;
+	}
+	const MacroBindingFileValidation &validation = validateMacroBindingFile(filePart, cache);
+	if (!validation.compileError.empty()) {
+		errorText = summarizeMacroBindingError(validation.compileError);
+		return true;
+	}
+	if (validation.macroNames.find(upperAscii(macroPart)) == validation.macroNames.end()) {
+		errorText = "Macro not found in file.";
+		return true;
+	}
+	return false;
+}
+
+bool isSequencePrefix(const MRKeymapSequence &prefix, const MRKeymapSequence &sequence) {
+	if (prefix.size() >= sequence.size())
+		return false;
+	for (std::size_t i = 0; i < prefix.size(); ++i)
+		if (prefix.tokens()[i] != sequence.tokens()[i])
+			return false;
+	return true;
+}
+
+bool hasSequencePrefixCollision(const MRKeymapBindingRecord &lhs, const MRKeymapBindingRecord &rhs) {
+	return lhs.context == rhs.context &&
+	       (isSequencePrefix(lhs.sequence, rhs.sequence) || isSequencePrefix(rhs.sequence, lhs.sequence));
+}
+
+std::size_t findProfileIndex(std::span<const MRKeymapProfile> profiles, std::string_view name) {
+	for (std::size_t i = 0; i < profiles.size(); ++i)
+		if (profiles[i].name == name)
+			return i;
+	return kNoIndex;
+}
+
+void normalizeKeymapProfile(MRKeymapProfile &profile) {
+	profile.name = trimAscii(profile.name);
+	profile.description = trimAscii(profile.description);
+	if (upperAscii(profile.name) == "DEFAULT")
+		profile.name = "DEFAULT";
+	for (MRKeymapBindingRecord &binding : profile.bindings) {
+		binding.profileName = trimAscii(binding.profileName);
+		binding.target.target = trimAscii(binding.target.target);
+		binding.description = trimAscii(binding.description);
+	}
 }
 
 bool isPayloadKeyStart(char ch) noexcept {
@@ -362,6 +554,11 @@ std::vector<MRKeymapDiagnostic> validateKeymapProfile(const MRKeymapProfile &pro
 			diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::InvalidSequence,
 			                                     MRKeymapDiagnosticSeverity::Error, profileIndex, i,
 			                                     "Binding sequence must not be empty."));
+		else if (sequenceHasPhase1CtrlAsciiCollision(binding.sequence))
+			diagnostics.push_back(makeDiagnostic(
+			    MRKeymapDiagnosticKind::Phase1CtrlAsciiCollision,
+			    MRKeymapDiagnosticSeverity::Error, profileIndex, i,
+			    "Binding sequence uses a Ctrl ASCII collision that is reserved in phase 1."));
 		switch (binding.target.type) {
 			case MRKeymapBindingType::Action:
 				if (binding.target.target.empty() ||
@@ -414,6 +611,136 @@ std::vector<MRKeymapDiagnostic> validateKeymapProfiles(std::span<const MRKeymapP
 	}
 
 	return diagnostics;
+}
+
+MRKeymapCanonicalizationResult canonicalizeKeymapProfiles(std::span<const MRKeymapProfile> profiles,
+                                                          std::string_view activeProfileName,
+                                                          MRKeymapCanonicalizationMode mode) {
+	MRKeymapCanonicalizationResult result;
+	std::map<std::string, MacroBindingFileValidation> macroValidationCache;
+
+	result.activeProfileName = trimAscii(std::string(activeProfileName));
+	for (const MRKeymapProfile &sourceProfile : profiles) {
+		MRKeymapProfile normalizedProfile = sourceProfile;
+
+		normalizeKeymapProfile(normalizedProfile);
+		if (mode == MRKeymapCanonicalizationMode::UntrustedIngress) {
+			if (normalizedProfile.name.empty()) {
+				result.diagnostics.push_back(makeDiagnostic(
+				    MRKeymapDiagnosticKind::UnknownProfile, MRKeymapDiagnosticSeverity::Error,
+				    result.profiles.size(), kNoIndex, "Profile name must not be empty."));
+				continue;
+			}
+			const std::size_t duplicateIndex = findProfileIndex(result.profiles, normalizedProfile.name);
+			if (duplicateIndex != kNoIndex) {
+				result.diagnostics.push_back(makeDiagnostic(
+				    MRKeymapDiagnosticKind::DuplicateProfile, MRKeymapDiagnosticSeverity::Error,
+				    result.profiles.size(), kNoIndex, "Profile name is defined more than once."));
+				continue;
+			}
+		}
+		result.profiles.push_back(std::move(normalizedProfile));
+	}
+
+	if (findProfileIndex(result.profiles, "DEFAULT") == kNoIndex)
+		result.profiles.insert(result.profiles.begin(), builtInDefaultKeymapProfile());
+
+	for (std::size_t profileIndex = 0; profileIndex < result.profiles.size(); ++profileIndex) {
+		MRKeymapProfile &profile = result.profiles[profileIndex];
+		std::vector<MRKeymapBindingRecord> cleanedBindings;
+
+		for (std::size_t bindingIndex = 0; bindingIndex < profile.bindings.size(); ++bindingIndex) {
+			const MRKeymapBindingRecord &binding = profile.bindings[bindingIndex];
+			std::string macroError;
+			bool dropBinding = false;
+
+			if (mode == MRKeymapCanonicalizationMode::UntrustedIngress) {
+				if (binding.profileName != profile.name) {
+					result.diagnostics.push_back(makeDiagnostic(
+					    MRKeymapDiagnosticKind::ProfileNameMismatch, MRKeymapDiagnosticSeverity::Error,
+					    profileIndex, bindingIndex,
+					    "Binding profile name does not match owning profile."));
+					continue;
+				}
+				if (binding.context == MRKeymapContext::None) {
+					result.diagnostics.push_back(makeDiagnostic(
+					    MRKeymapDiagnosticKind::UnknownContext, MRKeymapDiagnosticSeverity::Error,
+					    profileIndex, bindingIndex, "Binding context is unknown."));
+					continue;
+				}
+				if (binding.sequence.empty()) {
+					result.diagnostics.push_back(makeDiagnostic(
+					    MRKeymapDiagnosticKind::InvalidSequence, MRKeymapDiagnosticSeverity::Error,
+					    profileIndex, bindingIndex, "Binding sequence must not be empty."));
+					continue;
+				}
+				if (sequenceHasPhase1CtrlAsciiCollision(binding.sequence)) {
+					result.diagnostics.push_back(makeDiagnostic(
+					    MRKeymapDiagnosticKind::Phase1CtrlAsciiCollision,
+					    MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex,
+					    "Binding sequence uses a Ctrl ASCII collision that is reserved in phase 1."));
+					continue;
+				}
+				if (binding.target.type == MRKeymapBindingType::Action &&
+				    !MRKeymapActionCatalog::contains(binding.target.target)) {
+					result.diagnostics.push_back(makeDiagnostic(
+					    MRKeymapDiagnosticKind::UnknownAction, MRKeymapDiagnosticSeverity::Error,
+					    profileIndex, bindingIndex, "Binding action target is unknown."));
+					continue;
+				}
+			}
+			if (bindingHasMacroError(binding, macroError, macroValidationCache)) {
+				result.diagnostics.push_back(makeDiagnostic(
+				    MRKeymapDiagnosticKind::InvalidMacroTarget, MRKeymapDiagnosticSeverity::Error,
+				    profileIndex, bindingIndex, macroError));
+				continue;
+			}
+
+			for (MRKeymapBindingRecord &existing : cleanedBindings)
+				if (sameBindingIdentity(existing, binding)) {
+					existing = binding;
+					dropBinding = true;
+					break;
+				}
+			if (dropBinding)
+				continue;
+
+			for (const MRKeymapBindingRecord &existing : cleanedBindings) {
+				if (sameDispatchSlot(existing, binding)) {
+					result.diagnostics.push_back(makeDiagnostic(
+					    MRKeymapDiagnosticKind::ConflictingBinding, MRKeymapDiagnosticSeverity::Error,
+					    profileIndex, bindingIndex,
+					    "colliding binding " + binding.sequence.toString() + " for " +
+					        displayBindingTarget(existing.target.target) + " & " +
+					        displayBindingTarget(binding.target.target)));
+					dropBinding = true;
+					break;
+				}
+				if (hasSequencePrefixCollision(existing, binding)) {
+					result.diagnostics.push_back(makeDiagnostic(
+					    MRKeymapDiagnosticKind::TerminalPrefixConflict,
+					    MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex,
+					    "terminal/prefix collision between '" + existing.sequence.toString() + "' and '" +
+					        binding.sequence.toString() + "'."));
+					dropBinding = true;
+					break;
+				}
+			}
+			if (!dropBinding)
+				cleanedBindings.push_back(binding);
+		}
+		profile.bindings = std::move(cleanedBindings);
+	}
+
+	if (result.activeProfileName.empty() || findProfileIndex(result.profiles, result.activeProfileName) == kNoIndex) {
+		if (findProfileIndex(result.profiles, "DEFAULT") != kNoIndex)
+			result.activeProfileName = "DEFAULT";
+		else if (!result.profiles.empty())
+			result.activeProfileName = result.profiles.front().name;
+		else
+			result.activeProfileName = "DEFAULT";
+	}
+	return result;
 }
 
 std::vector<MRKeymapDiagnostic> parseKeymapProfilePayload(std::string_view payload, MRKeymapProfile &profile,
@@ -490,6 +817,11 @@ std::vector<MRKeymapDiagnostic> parseKeymapBindingPayload(std::string_view paylo
 			    profileIndex, bindingIndex,
 			    "Binding sequence '" + sequence->value + "' is invalid."));
 	}
+	if (!binding.sequence.empty() && sequenceHasPhase1CtrlAsciiCollision(binding.sequence))
+		diagnostics.push_back(makeDiagnostic(
+		    MRKeymapDiagnosticKind::Phase1CtrlAsciiCollision,
+		    MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex,
+		    "Binding sequence uses a Ctrl ASCII collision that is reserved in phase 1."));
 
 	return diagnostics;
 }
@@ -570,10 +902,15 @@ MRKeymapLoadResult loadKeymapProfilesFromSettingsSource(std::string_view source)
 		if (result.activeProfileName.empty() && !result.profiles.empty())
 			result.activeProfileName = result.profiles.front().name;
 	}
-
-	auto validationDiagnostics = validateKeymapProfiles(result.profiles);
-	result.diagnostics.insert(result.diagnostics.end(), validationDiagnostics.begin(),
-	                          validationDiagnostics.end());
+	{
+		MRKeymapCanonicalizationResult canonicalized =
+		    canonicalizeKeymapProfiles(result.profiles, result.activeProfileName,
+		                               MRKeymapCanonicalizationMode::UntrustedIngress);
+		result.activeProfileName = std::move(canonicalized.activeProfileName);
+		result.profiles = std::move(canonicalized.profiles);
+		result.diagnostics.insert(result.diagnostics.end(), canonicalized.diagnostics.begin(),
+		                          canonicalized.diagnostics.end());
+	}
 	return result;
 }
 

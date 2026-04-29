@@ -4,7 +4,6 @@
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRWindowSupport.hpp"
-#define Uses_THistory
 #include <tvision/tv.h>
 #include "MRDialogPaths.hpp"
 #include "MRSettingsLoader.hpp"
@@ -15,6 +14,7 @@
 #include <ctime>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <map>
@@ -50,8 +50,6 @@ struct MRScopedDialogHistoryState {
 	std::string lastPath;
 	std::vector<MRDialogHistoryEntry> pathHistory;
 	std::vector<MRDialogHistoryEntry> fileHistory;
-	bool fileHistorySeeded = false;
-	bool pathHistorySeeded = false;
 };
 
 struct MRDialogHistoryScopeSpec {
@@ -258,6 +256,8 @@ std::string normalizeDialogPath(const char *path) {
 	for (char & i : result)
 		if (i == '\\')
 			i = '/';
+	if (!result.empty())
+		result = std::filesystem::path(result).lexically_normal().generic_string();
 	return result;
 }
 
@@ -401,7 +401,7 @@ std::string makeAbsolutePath(const std::string &path) {
 	if (cwd.back() != '/')
 		cwd.push_back('/');
 	cwd += normalized;
-	return cwd;
+	return normalizeDialogPath(cwd.c_str());
 }
 
 std::string normalizedDialogDirectoryFromPath(const std::string &path) {
@@ -1034,8 +1034,12 @@ static const MREditSettingDescriptor kEditSettingDescriptors[] = {
     {"DISPLAY_TABS", "Display tabs", MREditSettingSection::Tabs, MREditSettingKind::Boolean, true,
      kOvDisplayTabs},
     {"TAB_SIZE", "Tab size", MREditSettingSection::Tabs, MREditSettingKind::Integer, true, kOvTabSize},
+    {"LEFT_MARGIN", "Left margin", MREditSettingSection::Formatting, MREditSettingKind::Integer, true,
+     kOvLeftMargin},
     {"RIGHT_MARGIN", "Right margin", MREditSettingSection::Formatting, MREditSettingKind::Integer, true,
      kOvRightMargin},
+    {"FORMAT_RULER", "Format ruler", MREditSettingSection::Formatting, MREditSettingKind::Boolean, true,
+     kOvFormatRuler},
     {"WORD_WRAP", "Word wrap", MREditSettingSection::Formatting, MREditSettingKind::Boolean, true,
      kOvWordWrap},
     {"INDENT_STYLE", "Indent style", MREditSettingSection::Formatting, MREditSettingKind::Choice, true,
@@ -1135,6 +1139,7 @@ static const MRColorSetupItem kWindowColorItems[] = {
 	{"current line in block", kMrPaletteCurrentLineInBlock},
 	{"line numbers", kMrPaletteLineNumbers},
 	{"code folding", kMrPaletteCodeFolding},
+	{"format ruler", kMrPaletteFormatRuler},
 };
 
 static const MRColorSetupItem kMenuDialogColorItems[] = {
@@ -1250,6 +1255,8 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 		return defaults[9];
 	if (paletteIndex == kMrPaletteCodeFolding)
 		return defaults[9];
+	if (paletteIndex == kMrPaletteFormatRuler)
+		return defaults[13];
 	if (paletteIndex == kMrPaletteEofMarker)
 		return defaults[14];
 	if (paletteIndex == kMrPaletteMiniMapNormal)
@@ -1324,9 +1331,9 @@ std::string formatWindowColorListLiteral(
     const std::array<unsigned char, MRColorSetupSettings::kWindowCount> &values) {
 	std::string out = formatColorListLiteral(values);
 
-	// WINDOWCOLORS uses v3 (adds EOF marker color to v2's 8-value layout).
+	// WINDOWCOLORS uses v4 (adds format-ruler color to v3's 10-value layout).
 	if (out.size() >= 2 && out[0] == 'v')
-		out[1] = '3';
+		out[1] = '4';
 	return out;
 }
 
@@ -1377,11 +1384,16 @@ bool parseWindowColorListLiteral(const std::string &literal,
 	const unsigned char defaultEofMarker = defaultColorForSlot(kMrPaletteEofMarker);
 	const unsigned char defaultLineNumbers = defaultColorForSlot(kMrPaletteLineNumbers);
 	const unsigned char defaultCodeFolding = defaultColorForSlot(kMrPaletteCodeFolding);
+	const unsigned char defaultFormatRuler = defaultColorForSlot(kMrPaletteFormatRuler);
 	unsigned char value = 0;
+	bool v4Format = false;
 	bool v3Format = false;
 	bool v2Format = false;
 
-	if (text.rfind("v3:", 0) == 0 || text.rfind("V3:", 0) == 0) {
+	if (text.rfind("v4:", 0) == 0 || text.rfind("V4:", 0) == 0) {
+		text = text.substr(3);
+		v4Format = true;
+	} else if (text.rfind("v3:", 0) == 0 || text.rfind("V3:", 0) == 0) {
 		text = text.substr(3);
 		v3Format = true;
 	} else if (text.rfind("v2:", 0) == 0 || text.rfind("V2:", 0) == 0) {
@@ -1404,16 +1416,23 @@ bool parseWindowColorListLiteral(const std::string &literal,
 	}
 
 	// Formats:
-	// - v3 + 10 values: current format (..., EOF marker, ..., line numbers, code folding)
+	// - v4 + 11 values: current format (..., EOF marker, ..., line numbers, code folding, format ruler)
+	// - v3 + 10 values: previous format without dedicated format-ruler color
 	// - v2 + 8 values: previous format (without EOF marker, line numbers, code folding)
 	// - v1 + 7 values: legacy format (without EOF marker and without line-number/folding colors)
 	// - v1 + 8 values: legacy format with EOF marker as 4th entry, no line-number/folding colors
 	// - unversioned 9 values: layout with line numbers but without code folding
-	if (v3Format) {
+	if (v4Format) {
 		if (parsed.size() != MRColorSetupSettings::kWindowCount)
-			return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v3.");
+			return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v4.");
 		for (std::size_t i = 0; i < outValues.size(); ++i)
 			outValues[i] = parsed[i];
+	} else if (v3Format) {
+		if (parsed.size() != MRColorSetupSettings::kWindowCount - 1)
+			return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v3.");
+		for (std::size_t i = 0; i < parsed.size(); ++i)
+			outValues[i] = parsed[i];
+		outValues[10] = defaultFormatRuler;
 	} else if (v2Format) {
 		if (parsed.size() != 8)
 			return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v2.");
@@ -1427,17 +1446,24 @@ bool parseWindowColorListLiteral(const std::string &literal,
 		outValues[7] = parsed[6];
 		outValues[8] = defaultLineNumbers;
 		outValues[9] = defaultCodeFolding;
+		outValues[10] = defaultFormatRuler;
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount) {
 		// Accept unversioned current layout as a tolerant input.
 		for (std::size_t i = 0; i < outValues.size(); ++i)
 			outValues[i] = parsed[i];
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 1) {
-		// Layout with EOF+line numbers and missing code-folding color.
+		// Previous current layout without dedicated format-ruler color.
+		for (std::size_t i = 0; i < parsed.size(); ++i)
+			outValues[i] = parsed[i];
+		outValues[10] = defaultFormatRuler;
+	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 2) {
+		// Layout with EOF+line numbers and missing code-folding/format-ruler colors.
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
 		outValues[9] = defaultCodeFolding;
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 2) {
-		// Legacy v1 with EOF marker and without line-number color.
+		outValues[10] = defaultFormatRuler;
+	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 3) {
+		// Legacy v1 with EOF marker and without line-number/folding/ruler colors.
 		outValues[0] = parsed[0];
 		outValues[1] = parsed[1];
 		outValues[2] = parsed[2];
@@ -1448,8 +1474,9 @@ bool parseWindowColorListLiteral(const std::string &literal,
 		outValues[7] = parsed[7];
 		outValues[8] = defaultLineNumbers;
 		outValues[9] = defaultCodeFolding;
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 3) {
-		// Legacy v1 without EOF marker and without line-number color.
+		outValues[10] = defaultFormatRuler;
+	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 4) {
+		// Legacy v1 without EOF marker and without line-number/folding/ruler colors.
 		outValues[0] = parsed[0];
 		outValues[1] = parsed[1];
 		outValues[2] = parsed[2];
@@ -1460,6 +1487,7 @@ bool parseWindowColorListLiteral(const std::string &literal,
 		outValues[7] = parsed[6];
 		outValues[8] = defaultLineNumbers;
 		outValues[9] = defaultCodeFolding;
+		outValues[10] = defaultFormatRuler;
 	} else
 		return setError(errorMessage, "Unexpected WINDOWCOLORS list size.");
 
@@ -2173,34 +2201,60 @@ bool parseBinaryRecordLengthLiteral(const std::string &value, int &outValue, std
 	return true;
 }
 
-int clampFormatTabSize(int tabSize) noexcept {
+} // namespace
+
+int clampEditFormatTabSize(int tabSize) noexcept {
 	return std::max(2, std::min(tabSize, 32));
 }
 
-int clampFormatRightMargin(int rightMargin) noexcept {
+int clampEditFormatRightMargin(int rightMargin) noexcept {
 	return std::max(1, std::min(rightMargin, 999));
 }
 
-std::string defaultFormatLineForTabSize(int tabSize, int rightMargin) {
-	const int normalizedTabSize = clampFormatTabSize(tabSize);
-	const int normalizedRightMargin = clampFormatRightMargin(rightMargin);
+int clampEditFormatLeftMargin(int leftMargin, int rightMargin) noexcept {
+	const int normalizedRightMargin = clampEditFormatRightMargin(rightMargin);
+	if (normalizedRightMargin <= 1)
+		return 1;
+	return std::max(1, std::min(leftMargin, normalizedRightMargin - 1));
+}
+
+std::string defaultEditFormatLineForTabSize(int tabSize, int leftMargin, int rightMargin) {
+	const int normalizedTabSize = clampEditFormatTabSize(tabSize);
+	const int normalizedRightMargin = clampEditFormatRightMargin(rightMargin);
+	const int normalizedLeftMargin = clampEditFormatLeftMargin(leftMargin, normalizedRightMargin);
 	std::string out(static_cast<std::size_t>(normalizedRightMargin), '.');
 
+	if (normalizedRightMargin <= 1) {
+		out[0] = 'R';
+		return out;
+	}
 	for (int col = normalizedTabSize; col <= normalizedRightMargin; col += normalizedTabSize)
-		out[static_cast<std::size_t>(col - 1)] = '|';
+		if (col > normalizedLeftMargin && col < normalizedRightMargin)
+			out[static_cast<std::size_t>(col - 1)] = '|';
+	out[static_cast<std::size_t>(normalizedLeftMargin - 1)] = 'L';
 	out[static_cast<std::size_t>(normalizedRightMargin - 1)] = 'R';
 	return out;
 }
 
-bool normalizeFormatLine(const std::string &value, int tabSize, int rightMargin, std::string &outValue,
-                         std::string *errorMessage) {
-	std::string out = trimAscii(value);
-	int normalizedRightMargin = clampFormatRightMargin(rightMargin);
+bool normalizeEditFormatLine(const std::string &value, int tabSize, int fallbackLeftMargin,
+                             int fallbackRightMargin, std::string &outValue,
+                             int *outLeftMargin, int *outRightMargin, std::string *errorMessage) {
+	std::string out = value;
+	const int normalizedFallbackRightMargin = clampEditFormatRightMargin(fallbackRightMargin);
+	const int normalizedFallbackLeftMargin =
+	    clampEditFormatLeftMargin(fallbackLeftMargin, normalizedFallbackRightMargin);
+	int lCount = 0;
 	int rCount = 0;
+	int lIndex = -1;
 	int rIndex = -1;
 
 	if (out.empty()) {
-		outValue = defaultFormatLineForTabSize(tabSize, normalizedRightMargin);
+		outValue = defaultEditFormatLineForTabSize(tabSize, normalizedFallbackLeftMargin,
+		                                           normalizedFallbackRightMargin);
+		if (outLeftMargin != nullptr)
+			*outLeftMargin = normalizedFallbackLeftMargin;
+		if (outRightMargin != nullptr)
+			*outRightMargin = normalizedFallbackRightMargin;
 		if (errorMessage != nullptr)
 			errorMessage->clear();
 		return true;
@@ -2213,44 +2267,147 @@ bool normalizeFormatLine(const std::string &value, int tabSize, int rightMargin,
 				break;
 			}
 		if (legacy) {
-			outValue = defaultFormatLineForTabSize(tabSize, normalizedRightMargin);
+			outValue = defaultEditFormatLineForTabSize(tabSize, normalizedFallbackLeftMargin,
+			                                           normalizedFallbackRightMargin);
+			if (outLeftMargin != nullptr)
+				*outLeftMargin = normalizedFallbackLeftMargin;
+			if (outRightMargin != nullptr)
+				*outRightMargin = normalizedFallbackRightMargin;
 			if (errorMessage != nullptr)
 				errorMessage->clear();
 			return true;
 		}
 	}
+	for (char &ch : out)
+		if (ch == ' ')
+			ch = '.';
 	for (std::size_t i = 0; i < out.size(); ++i) {
 		char ch = out[i];
-		if (ch != '.' && ch != '|' && ch != 'R')
-			return setError(errorMessage, "FORMAT_LINE may only contain '.', '|' and 'R'.");
+		if (ch != '.' && ch != '|' && ch != 'L' && ch != 'R')
+			return setError(errorMessage, "FORMAT_LINE may only contain '.', ' ', '|', 'L' and 'R'.");
+		if (ch == 'L') {
+			++lCount;
+			lIndex = static_cast<int>(i);
+		}
 		if (ch == 'R') {
 			++rCount;
 			rIndex = static_cast<int>(i);
 		}
 	}
+	if (lCount > 1)
+		return setError(errorMessage, "FORMAT_LINE must contain at most one 'L'.");
 	if (rCount != 1)
 		return setError(errorMessage, "FORMAT_LINE must contain exactly one 'R'.");
-	if (rIndex + 1 != normalizedRightMargin)
-		return setError(errorMessage, "FORMAT_LINE must place 'R' at RIGHT_MARGIN.");
+	if (lCount == 0)
+		lIndex = 0;
+	if (lIndex >= rIndex && rIndex > 0)
+		return setError(errorMessage, "FORMAT_LINE must place 'L' before 'R'.");
+	out.resize(static_cast<std::size_t>(rIndex + 1), '.');
+	if (rIndex > 0)
+		out[static_cast<std::size_t>(lIndex)] = 'L';
+	out[static_cast<std::size_t>(rIndex)] = 'R';
 	outValue = out;
+	if (outLeftMargin != nullptr)
+		*outLeftMargin = rIndex > 0 ? lIndex + 1 : 1;
+	if (outRightMargin != nullptr)
+		*outRightMargin = rIndex + 1;
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;
 }
 
-std::string synchronizeFormatLineRightMargin(const std::string &value, int rightMargin, int tabSize) {
-	const int normalizedRightMargin = clampFormatRightMargin(rightMargin);
-	std::string out = trimAscii(value);
-	if (out.empty())
-		return defaultFormatLineForTabSize(tabSize, normalizedRightMargin);
-	for (char &ch : out)
-		if (ch == 'R')
-			ch = '.';
-	if (static_cast<int>(out.size()) < normalizedRightMargin)
-		out.append(static_cast<std::size_t>(normalizedRightMargin - static_cast<int>(out.size())), '.');
+std::string synchronizeEditFormatLineMargins(const std::string &value, int leftMargin, int rightMargin,
+                                             int tabSize) {
+	std::string normalized;
+	int oldLeftMargin = 1;
+	int oldRightMargin = 1;
+	const int normalizedRightMargin = clampEditFormatRightMargin(rightMargin);
+	const int normalizedLeftMargin = clampEditFormatLeftMargin(leftMargin, normalizedRightMargin);
+	std::string out;
+	const int delta = normalizedLeftMargin - oldLeftMargin;
+
+	if (!normalizeEditFormatLine(value, tabSize, normalizedLeftMargin, normalizedRightMargin, normalized,
+	                             &oldLeftMargin, &oldRightMargin, nullptr))
+		return defaultEditFormatLineForTabSize(tabSize, normalizedLeftMargin, normalizedRightMargin);
+	out = std::string(static_cast<std::size_t>(normalizedRightMargin), '.');
+	if (normalizedRightMargin <= 1) {
+		out[0] = 'R';
+		return out;
+	}
+	out[static_cast<std::size_t>(normalizedLeftMargin - 1)] = 'L';
 	out[static_cast<std::size_t>(normalizedRightMargin - 1)] = 'R';
+	for (int i = 0; i < static_cast<int>(normalized.size()); ++i) {
+		const char ch = normalized[static_cast<std::size_t>(i)];
+		const int shifted = i + delta;
+		const int column = shifted + 1;
+
+		if (ch != '|')
+			continue;
+		if (column <= normalizedLeftMargin || column >= normalizedRightMargin)
+			continue;
+		if (shifted < 0 || shifted >= normalizedRightMargin)
+			continue;
+		out[static_cast<std::size_t>(shifted)] = '|';
+	}
 	return out;
 }
+
+bool editFormatLineAtColumn(const std::string &value, int tabSize, int leftMargin, int rightMargin,
+                            int column, char symbol, std::string &outValue,
+                            int *outLeftMargin, int *outRightMargin, std::string *errorMessage) {
+	std::string normalized;
+	std::string edited;
+	int currentLeftMargin = leftMargin;
+	int currentRightMargin = rightMargin;
+	const char normalizedSymbol = symbol == ' ' ? '.' : symbol;
+	const int safeColumn = std::max(1, std::min(column, 999));
+
+	if (normalizedSymbol != '.' && normalizedSymbol != '|' && normalizedSymbol != 'L' &&
+	    normalizedSymbol != 'R')
+		return setError(errorMessage, "FORMAT_LINE editor accepts only '.', ' ', '|', 'L' and 'R'.");
+	if (!normalizeEditFormatLine(value, tabSize, leftMargin, rightMargin, normalized, &currentLeftMargin,
+	                             &currentRightMargin, errorMessage))
+		return false;
+	edited = normalized;
+	if (static_cast<int>(edited.size()) < safeColumn)
+		edited.append(static_cast<std::size_t>(safeColumn - static_cast<int>(edited.size())), '.');
+	if (normalizedSymbol == 'L') {
+		if (safeColumn >= currentRightMargin)
+			return setError(errorMessage, "FORMAT_LINE must place 'L' before 'R'.");
+		for (char &ch : edited)
+			if (ch == 'L')
+				ch = '.';
+		edited[static_cast<std::size_t>(safeColumn - 1)] = 'L';
+	} else if (normalizedSymbol == 'R') {
+		if (safeColumn <= currentLeftMargin)
+			return setError(errorMessage, "FORMAT_LINE must place 'R' after 'L'.");
+		for (char &ch : edited)
+			if (ch == 'R')
+				ch = '.';
+		edited.resize(static_cast<std::size_t>(safeColumn), '.');
+		edited[static_cast<std::size_t>(safeColumn - 1)] = 'R';
+	} else if (normalizedSymbol == '|') {
+		if (safeColumn <= currentLeftMargin || safeColumn >= currentRightMargin) {
+			outValue = normalized;
+			if (outLeftMargin != nullptr)
+				*outLeftMargin = currentLeftMargin;
+			if (outRightMargin != nullptr)
+				*outRightMargin = currentRightMargin;
+			if (errorMessage != nullptr)
+				errorMessage->clear();
+			return true;
+		}
+		edited[static_cast<std::size_t>(safeColumn - 1)] = '|';
+	} else {
+		if (safeColumn != currentLeftMargin && safeColumn != currentRightMargin &&
+		    safeColumn <= static_cast<int>(edited.size()))
+			edited[static_cast<std::size_t>(safeColumn - 1)] = '.';
+	}
+	return normalizeEditFormatLine(edited, tabSize, currentLeftMargin, currentRightMargin, outValue,
+	                               outLeftMargin, outRightMargin, errorMessage);
+}
+
+namespace {
 
 bool normalizeCursorStatusColor(const std::string &value, std::string &outValue, std::string *errorMessage) {
 	std::string normalized = upperAscii(trimAscii(value));
@@ -2309,9 +2466,30 @@ bool parseMiniMapWidthLiteral(const std::string &value, int &outValue, std::stri
 	return true;
 }
 
+constexpr int kDefaultLeftMargin = 1;
+constexpr int kMinLeftMargin = 1;
+constexpr int kMaxLeftMargin = 999;
 constexpr int kDefaultRightMargin = 78;
 constexpr int kMinRightMargin = 1;
 constexpr int kMaxRightMargin = 999;
+
+bool parseLeftMarginLiteral(const std::string &value, int &outValue, std::string *errorMessage) {
+	std::string text = trimAscii(value);
+	char *end = nullptr;
+	long parsed = 0;
+
+	if (text.empty())
+		return setError(errorMessage, "LEFT_MARGIN must be an integer between 1 and 999.");
+	parsed = std::strtol(text.c_str(), &end, 10);
+	if (end == text.c_str() || end == nullptr || *end != '\0')
+		return setError(errorMessage, "LEFT_MARGIN must be an integer between 1 and 999.");
+	if (parsed < kMinLeftMargin || parsed > kMaxLeftMargin)
+		return setError(errorMessage, "LEFT_MARGIN must be between 1 and 999.");
+	outValue = static_cast<int>(parsed);
+	if (errorMessage != nullptr)
+		errorMessage->clear();
+	return true;
+}
 
 bool parseRightMarginLiteral(const std::string &value, int &outValue, std::string *errorMessage) {
 	std::string text = trimAscii(value);
@@ -2548,14 +2726,25 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 			return false;
 		current.tabSize = tabSize;
 		// Changing tab size resets the format line to the canonical tab/margin layout.
-		current.formatLine = defaultFormatLineForTabSize(current.tabSize, current.rightMargin);
+		current.formatLine = defaultEditFormatLineForTabSize(current.tabSize, current.leftMargin,
+		                                                    current.rightMargin);
+	} else if (upperKeyName == "LEFT_MARGIN") {
+		int leftMargin = 0;
+		if (!parseLeftMarginLiteral(value, leftMargin, errorMessage))
+			return false;
+		current.leftMargin = leftMargin;
+		current.formatLine = synchronizeEditFormatLineMargins(current.formatLine, current.leftMargin,
+		                                                      current.rightMargin, current.tabSize);
 	} else if (upperKeyName == "RIGHT_MARGIN") {
 		int rightMargin = 0;
 		if (!parseRightMarginLiteral(value, rightMargin, errorMessage))
 			return false;
 		current.rightMargin = rightMargin;
-		current.formatLine =
-		    synchronizeFormatLineRightMargin(current.formatLine, current.rightMargin, current.tabSize);
+		current.formatLine = synchronizeEditFormatLineMargins(current.formatLine, current.leftMargin,
+		                                                      current.rightMargin, current.tabSize);
+	} else if (upperKeyName == "FORMAT_RULER") {
+		if (!parseAndAssignBooleanLiteral(value, current.formatRuler, errorMessage))
+			return false;
 	} else if (upperKeyName == "WORD_WRAP") {
 		if (!parseAndAssignBooleanLiteral(value, current.wordWrap, errorMessage))
 			return false;
@@ -2581,9 +2770,14 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 	else if (upperKeyName == "DEFAULT_PATH")
 		current.defaultPath = trimAscii(value).empty() ? std::string() : normalizeConfiguredPathInput(value);
 	else if (upperKeyName == "FORMAT_LINE") {
-		if (!normalizeFormatLine(value, current.tabSize, current.rightMargin, normalized, errorMessage))
+		int leftMargin = current.leftMargin;
+		int rightMargin = current.rightMargin;
+		if (!normalizeEditFormatLine(value, current.tabSize, current.leftMargin, current.rightMargin,
+		                             normalized, &leftMargin, &rightMargin, errorMessage))
 			return false;
 		current.formatLine = normalized;
+		current.leftMargin = leftMargin;
+		current.rightMargin = rightMargin;
 	}
 	else if (upperKeyName == "BACKUP_FILES") {
 		if (!parseAndAssignBooleanLiteral(value, current.backupFiles, errorMessage))
@@ -2702,8 +2896,12 @@ std::string editSetupValueLiteral(const MREditSetupSettings &settings, const cha
 		return formatEditSetupBoolean(settings.displayTabs);
 	if (upperKey == "TAB_SIZE")
 		return std::to_string(settings.tabSize);
+	if (upperKey == "LEFT_MARGIN")
+		return std::to_string(settings.leftMargin);
 	if (upperKey == "RIGHT_MARGIN")
 		return std::to_string(settings.rightMargin);
+	if (upperKey == "FORMAT_RULER")
+		return formatEditSetupBoolean(settings.formatRuler);
 	if (upperKey == "WORD_WRAP")
 		return formatEditSetupBoolean(settings.wordWrap);
 	if (upperKey == "INDENT_STYLE")
@@ -2765,7 +2963,7 @@ std::string editSetupValueLiteral(const MREditSetupSettings &settings, const cha
 
 unsigned long long supportedEditProfileOverrideMask() noexcept {
 static constexpr unsigned long long mask = kOvPageBreak | kOvWordDelimiters | kOvDefaultExtensions | kOvTruncateSpaces |
-	                                     kOvEofCtrlZ | kOvEofCrLf | kOvTabExpand | kOvDisplayTabs | kOvTabSize | kOvRightMargin |
+	                                     kOvEofCtrlZ | kOvEofCrLf | kOvTabExpand | kOvDisplayTabs | kOvTabSize | kOvLeftMargin | kOvRightMargin | kOvFormatRuler |
 	                                     kOvWordWrap | kOvIndentStyle | kOvFileType | kOvBinaryRecordLength |
 	                                     kOvPostLoadMacro | kOvPreSaveMacro | kOvDefaultPath | kOvFormatLine |
 	                                     kOvBackupFiles | kOvShowEofMarker | kOvShowEofMarkerEmoji | kOvLineNumZeroFill |
@@ -2937,7 +3135,9 @@ MREditSetupSettings resolveEditSetupDefaults() {
 	defaults.tabExpand = true;
 	defaults.displayTabs = false;
 	defaults.tabSize = kDefaultTabSize;
+	defaults.leftMargin = kDefaultLeftMargin;
 	defaults.rightMargin = kDefaultRightMargin;
+	defaults.formatRuler = false;
 	defaults.wordWrap = true;
 	defaults.indentStyle = kIndentStyleOff;
 	defaults.fileType = kFileTypeUnix;
@@ -2945,7 +3145,8 @@ MREditSetupSettings resolveEditSetupDefaults() {
 	defaults.postLoadMacro.clear();
 	defaults.preSaveMacro.clear();
 	defaults.defaultPath.clear();
-	defaults.formatLine = defaultFormatLineForTabSize(defaults.tabSize, defaults.rightMargin);
+	defaults.formatLine = defaultEditFormatLineForTabSize(defaults.tabSize, defaults.leftMargin,
+	                                                     defaults.rightMargin);
 	defaults.backupMethod = kBackupMethodBakFile;
 	defaults.backupFrequency = kBackupFrequencyFirstSaveOnly;
 	defaults.backupExtension = "bak";
@@ -3065,8 +3266,6 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 		state.lastPath.clear();
 		state.pathHistory.clear();
 		state.fileHistory.clear();
-		state.fileHistorySeeded = false;
-		state.pathHistorySeeded = false;
 	}
 	configuredMultiFilespecHistoryStorage().clear();
 	configuredMultiPathHistoryStorage().clear();
@@ -3522,8 +3721,12 @@ MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults,
 		merged.displayTabs = overrides.values.displayTabs;
 	if ((overrides.mask & kOvTabSize) != 0)
 		merged.tabSize = overrides.values.tabSize;
+	if ((overrides.mask & kOvLeftMargin) != 0)
+		merged.leftMargin = overrides.values.leftMargin;
 	if ((overrides.mask & kOvRightMargin) != 0)
 		merged.rightMargin = overrides.values.rightMargin;
+	if ((overrides.mask & kOvFormatRuler) != 0)
+		merged.formatRuler = overrides.values.formatRuler;
 	if ((overrides.mask & kOvWordWrap) != 0)
 		merged.wordWrap = overrides.values.wordWrap;
 	if ((overrides.mask & kOvIndentStyle) != 0)
@@ -3696,6 +3899,10 @@ bool setConfiguredKeymapFilePath(const std::string &path, std::string *errorMess
 	if (::stat(normalized.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
 		return setError(errorMessage, "Keymap URI must include a filename.");
 	configuredKeymapFileValue() = makeAbsolutePath(normalized);
+	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::KeymapProfileLoad,
+	                                         configuredKeymapFileValue(), nullptr));
+	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::KeymapProfileSave,
+	                                         configuredKeymapFileValue(), nullptr));
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;
@@ -3870,6 +4077,8 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	std::string formatLine;
 	std::string cursorStatusColor;
 	std::string miniMapMarkerGlyph;
+	int normalizedFormatLeftMargin = settings.leftMargin;
+	int normalizedFormatRightMargin = settings.rightMargin;
 	std::string postLoadMacro = trimAscii(settings.postLoadMacro).empty() ? std::string()
 	                                                                  : normalizeConfiguredPathInput(settings.postLoadMacro);
 	std::string preSaveMacro = trimAscii(settings.preSaveMacro).empty() ? std::string()
@@ -3901,11 +4110,16 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 		return setError(errorMessage, "BINARY_RECORD_LENGTH must be between 1 and 99999.");
 	if (settings.tabSize < kMinTabSize || settings.tabSize > kMaxTabSize)
 		return setError(errorMessage, "TAB_SIZE must be between 2 and 32.");
+	if (settings.leftMargin < kMinLeftMargin || settings.leftMargin > kMaxLeftMargin)
+		return setError(errorMessage, "LEFT_MARGIN must be between 1 and 999.");
 	if (settings.rightMargin < kMinRightMargin || settings.rightMargin > kMaxRightMargin)
 		return setError(errorMessage, "RIGHT_MARGIN must be between 1 and 999.");
-	if (!normalizeFormatLine(settings.formatLine, settings.tabSize, settings.rightMargin, formatLine,
-	                         errorMessage))
+	if (!normalizeEditFormatLine(settings.formatLine, settings.tabSize, settings.leftMargin,
+	                             settings.rightMargin, formatLine, &normalizedFormatLeftMargin,
+	                             &normalizedFormatRightMargin, errorMessage))
 		return false;
+	if (settings.rightMargin > 1 && settings.leftMargin >= settings.rightMargin)
+		return setError(errorMessage, "LEFT_MARGIN must be less than RIGHT_MARGIN.");
 	if (settings.miniMapWidth < kMinMiniMapWidth || settings.miniMapWidth > kMaxMiniMapWidth)
 		return setError(errorMessage, "MINIMAP_WIDTH must be between 2 and 20.");
 
@@ -3915,7 +4129,9 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	normalized.tabExpand = settings.tabExpand;
 	normalized.displayTabs = settings.displayTabs;
 	normalized.tabSize = settings.tabSize;
+	normalized.leftMargin = settings.leftMargin;
 	normalized.rightMargin = settings.rightMargin;
+	normalized.formatRuler = settings.formatRuler;
 	normalized.wordWrap = settings.wordWrap;
 	normalized.indentStyle = indentStyle;
 	normalized.fileType = fileType;
@@ -3923,7 +4139,8 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	normalized.postLoadMacro = postLoadMacro;
 	normalized.preSaveMacro = preSaveMacro;
 	normalized.defaultPath = defaultPath;
-	normalized.formatLine = formatLine;
+	normalized.formatLine = synchronizeEditFormatLineMargins(formatLine, normalized.leftMargin,
+	                                                         normalized.rightMargin, normalized.tabSize);
 	normalized.backupMethod = normalizeBackupMethod(settings.backupMethod);
 	if (normalized.backupMethod.empty())
 		return setError(errorMessage, "BACKUP_METHOD must be OFF, BAK_FILE or DIRECTORY.");
@@ -4068,6 +4285,10 @@ bool setConfiguredColorThemeFilePath(const std::string &path, std::string *error
 	if (!validateColorThemeFilePath(path, errorMessage))
 		return false;
 	configuredColorThemeFile() = makeAbsolutePath(normalized);
+	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupThemeLoad,
+	                                         configuredColorThemeFile(), nullptr));
+	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupThemeSave,
+	                                         configuredColorThemeFile(), nullptr));
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;
@@ -4676,14 +4897,6 @@ bool configuredAutoexecMacroDiagnosticForFile(const std::string &fileName, std::
 	return true;
 }
 
-ushort rawFileDialogHistoryId(MRDialogHistoryScope scope) {
-	return static_cast<ushort>(1000 + dialogHistoryScopeIndex(scope));
-}
-
-ushort rawPathDialogHistoryId(MRDialogHistoryScope scope) {
-	return static_cast<ushort>(2000 + dialogHistoryScopeIndex(scope));
-}
-
 bool setScopedDialogLastPath(MRDialogHistoryScope scope, const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 	std::string directory;
@@ -4692,58 +4905,24 @@ bool setScopedDialogLastPath(MRDialogHistoryScope scope, const std::string &path
 	if (!normalized.empty() && isReadableDirectory(normalized)) {
 		state.lastPath = normalized;
 		addHistoryEntry(state.pathHistory, normalized, configuredPathHistoryLimit());
-		historyAdd(rawPathDialogHistoryId(scope), normalized.c_str());
 	}
 	else if (!normalized.empty()) {
 		addHistoryEntry(state.fileHistory, normalized, configuredFileHistoryLimit());
-		historyAdd(rawFileDialogHistoryId(scope), normalized.c_str());
 		directory = normalizedDialogDirectoryFromPath(normalized);
 		if (!directory.empty()) {
 			state.lastPath = directory;
 			addHistoryEntry(state.pathHistory, directory, configuredPathHistoryLimit());
-			historyAdd(rawPathDialogHistoryId(scope), directory.c_str());
 		}
 	} else if (state.lastPath.empty()) {
 		directory = fallbackRememberedLoadDirectory();
 		if (!directory.empty()) {
 			state.lastPath = directory;
 			addHistoryEntry(state.pathHistory, directory, configuredPathHistoryLimit());
-			historyAdd(rawPathDialogHistoryId(scope), directory.c_str());
 		}
 	}
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;
-}
-
-void seedFileDialogHistoryForScope(MRDialogHistoryScope scope) {
-	MRScopedDialogHistoryState &state = dialogHistoryState(scope);
-
-	if (state.fileHistorySeeded)
-		return;
-	state.fileHistorySeeded = true;
-	for (auto it = state.fileHistory.rbegin(); it != state.fileHistory.rend(); ++it)
-		historyAdd(rawFileDialogHistoryId(scope), it->value.c_str());
-}
-
-void seedPathDialogHistoryForScope(MRDialogHistoryScope scope) {
-	MRScopedDialogHistoryState &state = dialogHistoryState(scope);
-
-	if (state.pathHistorySeeded)
-		return;
-	state.pathHistorySeeded = true;
-	for (auto it = state.pathHistory.rbegin(); it != state.pathHistory.rend(); ++it)
-		historyAdd(rawPathDialogHistoryId(scope), it->value.c_str());
-}
-
-ushort configuredFileDialogHistoryId(MRDialogHistoryScope scope) {
-	seedFileDialogHistoryForScope(scope);
-	return rawFileDialogHistoryId(scope);
-}
-
-ushort configuredPathDialogHistoryId(MRDialogHistoryScope scope) {
-	seedPathDialogHistoryForScope(scope);
-	return rawPathDialogHistoryId(scope);
 }
 
 void initRememberedLoadDialogPath(MRDialogHistoryScope scope, char *buffer, std::size_t bufferSize,
@@ -4752,7 +4931,6 @@ void initRememberedLoadDialogPath(MRDialogHistoryScope scope, char *buffer, std:
 	std::string dir = effectiveRememberedLoadDirectory(scope);
 	const char *safePattern = (pattern != nullptr && *pattern != '\0') ? pattern : "*.*";
 
-	seedFileDialogHistoryForScope(scope);
 	if (!dir.empty()) {
 		initial = dir;
 		if (initial.back() != '/')
@@ -4765,6 +4943,19 @@ void initRememberedLoadDialogPath(MRDialogHistoryScope scope, char *buffer, std:
 
 void rememberLoadDialogPath(MRDialogHistoryScope scope, const char *path) {
 	static_cast<void>(setScopedDialogLastPath(scope, path != nullptr ? path : "", nullptr));
+}
+
+void forgetLoadDialogPath(MRDialogHistoryScope scope, const char *path) {
+	const std::string normalized = normalizeConfiguredPathInput(path != nullptr ? path : "");
+	MRScopedDialogHistoryState &state = dialogHistoryState(scope);
+
+	if (normalized.empty())
+		return;
+	state.fileHistory.erase(std::remove_if(state.fileHistory.begin(), state.fileHistory.end(),
+	                                       [&](const MRDialogHistoryEntry &entry) {
+		                                       return normalizeConfiguredPathInput(entry.value) == normalized;
+	                                       }),
+	                        state.fileHistory.end());
 }
 
 std::string configuredLastFileDialogFilePath(MRDialogHistoryScope scope) {
@@ -4803,7 +4994,6 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	configuredMultiFilespecHistoryEntries(multiFilespecHistory);
 	configuredMultiPathHistoryEntries(multiPathHistory);
 	configuredAutoexecMacroEntries(autoexecMacros);
-
 	source += "$MACRO MR_SETTINGS FROM EDIT;\n";
 	source += "MRSETUP('" + std::string(kSettingsVersionKey) + "', '" +
 	          escapeMrmacSingleQuotedLiteral(kCurrentSettingsVersion) + "');\n";
@@ -4964,7 +5154,10 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	    "MRSETUP('DISPLAY_TABS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.displayTabs)) +
 	    "');\n";
 	source += "MRSETUP('TAB_SIZE', '" + std::to_string(edit.tabSize) + "');\n";
+	source += "MRSETUP('LEFT_MARGIN', '" + std::to_string(edit.leftMargin) + "');\n";
 	source += "MRSETUP('RIGHT_MARGIN', '" + std::to_string(edit.rightMargin) + "');\n";
+	source += "MRSETUP('FORMAT_RULER', '" +
+	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.formatRuler)) + "');\n";
 	source += "MRSETUP('WORD_WRAP', '" +
 	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.wordWrap)) + "');\n";
 	source += "MRSETUP('INDENT_STYLE', '" + escapeMrmacSingleQuotedLiteral(edit.indentStyle) + "');\n";
@@ -5040,8 +5233,12 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 					value = formatEditSetupBoolean(profile.overrides.values.displayTabs);
 				else if (std::string(descriptors[i].key) == "TAB_SIZE")
 					value = std::to_string(profile.overrides.values.tabSize);
+				else if (std::string(descriptors[i].key) == "LEFT_MARGIN")
+					value = std::to_string(profile.overrides.values.leftMargin);
 				else if (std::string(descriptors[i].key) == "RIGHT_MARGIN")
 					value = std::to_string(profile.overrides.values.rightMargin);
+				else if (std::string(descriptors[i].key) == "FORMAT_RULER")
+					value = formatEditSetupBoolean(profile.overrides.values.formatRuler);
 				else if (std::string(descriptors[i].key) == "WORD_WRAP")
 					value = formatEditSetupBoolean(profile.overrides.values.wordWrap);
 				else if (std::string(descriptors[i].key) == "INDENT_STYLE")
@@ -5113,13 +5310,10 @@ bool persistConfiguredSettingsSnapshot(std::string *errorMessage, MRSettingsWrit
 	if (!ensureDirectoryTree(settingsDir, errorMessage))
 		return false;
 	static_cast<void>(readTextFile(settingsPath, previousSource));
-	source = buildSettingsMacroSource(paths);
+	source = configuredAutoloadWorkspace() ? buildSettingsMacroSourceWithWorkspace(paths)
+	                                       : buildSettingsMacroSource(paths);
 	if (!writeTextFile(settingsPath, source))
 		return setError(errorMessage, "Unable to write settings macro file: " + settingsPath);
-	if (configuredAutoloadWorkspace()) {
-		mrSaveWorkspace(settingsPath);
-		static_cast<void>(readTextFile(settingsPath, source));
-	}
 	populateSettingsWriteReport(settingsPath, previousSource, source, report);
 	if (errorMessage != nullptr)
 		errorMessage->clear();
@@ -5142,15 +5336,11 @@ bool writeSettingsMacroFile(const MRSetupPaths &paths, std::string *errorMessage
 		return false;
 	if (!setConfiguredColorThemeFilePath(themePath, errorMessage))
 		return false;
-
 	static_cast<void>(readTextFile(settingsPath, previousSource));
-	source = buildSettingsMacroSource(paths);
+	source = configuredAutoloadWorkspace() ? buildSettingsMacroSourceWithWorkspace(paths)
+	                                       : buildSettingsMacroSource(paths);
 	if (!writeTextFile(settingsPath, source))
 		return setError(errorMessage, "Unable to write settings macro file: " + settingsPath);
-	if (configuredAutoloadWorkspace()) {
-		mrSaveWorkspace(settingsPath);
-		static_cast<void>(readTextFile(settingsPath, source));
-	}
 	populateSettingsWriteReport(settingsPath, previousSource, source, report);
 	if (errorMessage != nullptr)
 		errorMessage->clear();
@@ -5204,6 +5394,8 @@ bool setConfiguredSettingsMacroFilePath(const std::string &path, std::string *er
 	if (!validateSettingsMacroFilePath(path, errorMessage))
 		return false;
 	configuredSettingsMacroFile() = makeAbsolutePath(normalized);
+	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupSettingsMacro,
+	                                         configuredSettingsMacroFile(), nullptr));
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;
@@ -5268,6 +5460,8 @@ bool setConfiguredHelpFilePath(const std::string &path, std::string *errorMessag
 	if (!validateHelpFilePath(path, errorMessage))
 		return false;
 	configuredHelpFile() = makeAbsolutePath(normalized);
+	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupHelpFile,
+	                                         configuredHelpFile(), nullptr));
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;
@@ -5332,6 +5526,8 @@ bool setConfiguredShellExecutablePath(const std::string &path, std::string *erro
 	if (!validateShellExecutablePath(path, errorMessage))
 		return false;
 	configuredShellExecutable() = makeAbsolutePath(normalized);
+	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupShellExecutable,
+	                                         configuredShellExecutable(), nullptr));
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;
@@ -5378,6 +5574,8 @@ bool setConfiguredLogFilePath(const std::string &path, std::string *errorMessage
 	if (!validateLogFilePath(path, errorMessage))
 		return false;
 	configuredLogFile() = makeAbsolutePath(normalized);
+	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupLogFile,
+	                                         configuredLogFile(), nullptr));
 	if (errorMessage != nullptr)
 		errorMessage->clear();
 	return true;

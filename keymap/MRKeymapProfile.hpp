@@ -55,6 +55,7 @@ enum class MRKeymapDiagnosticKind : unsigned char {
 	InvalidBindingType,
 	UnknownAction,
 	InvalidMacroTarget,
+	Phase1CtrlAsciiCollision,
 	PrefixConflict,
 	TerminalPrefixConflict,
 	ProfileNameMismatch
@@ -76,10 +77,19 @@ struct MRKeymapLoadResult {
 	std::vector<MRKeymapDiagnostic> diagnostics;
 };
 
+enum class MRKeymapCanonicalizationMode : unsigned char { UntrustedIngress, TrustedCommit };
+
+struct MRKeymapCanonicalizationResult {
+	std::string activeProfileName;
+	std::vector<MRKeymapProfile> profiles;
+	std::vector<MRKeymapDiagnostic> diagnostics;
+};
+
 [[nodiscard]] std::vector<MRKeymapDiagnostic> validateKeymapProfile(const MRKeymapProfile &profile, std::size_t profileIndex = static_cast<std::size_t>(-1));
 [[nodiscard]] std::vector<MRKeymapDiagnostic> validateKeymapProfiles(std::span<const MRKeymapProfile> profiles);
 [[nodiscard]] std::vector<MRKeymapDiagnostic> parseKeymapProfilePayload(std::string_view payload, MRKeymapProfile &profile, std::size_t profileIndex = static_cast<std::size_t>(-1));
 [[nodiscard]] std::vector<MRKeymapDiagnostic> parseKeymapBindingPayload(std::string_view payload, MRKeymapBindingRecord &binding, std::size_t profileIndex = static_cast<std::size_t>(-1), std::size_t bindingIndex = static_cast<std::size_t>(-1));
+[[nodiscard]] MRKeymapCanonicalizationResult canonicalizeKeymapProfiles(std::span<const MRKeymapProfile> profiles, std::string_view activeProfileName, MRKeymapCanonicalizationMode mode);
 [[nodiscard]] MRKeymapLoadResult loadKeymapProfilesFromSettingsSource(std::string_view source);
 [[nodiscard]] std::string serializeKeymapProfilesToSettingsSource(std::span<const MRKeymapProfile> profiles, std::string_view activeProfileName);
 [[nodiscard]] MRKeymapProfile builtInDefaultKeymapProfile();

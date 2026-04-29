@@ -27,6 +27,7 @@ enum {
 	kWordDelimsFieldSize = 256,
 	kDefaultExtsFieldSize = 256,
 	kTabSizeFieldSize = 8,
+	kLeftMarginFieldSize = 8,
 	kRightMarginFieldSize = 8,
 	kBinaryRecordLengthFieldSize = 8,
 	kMacroFieldSize = 256,
@@ -49,7 +50,8 @@ enum : ushort {
 	kOptionShowEofMarker = 0x0080,
 	kOptionShowEofMarkerEmoji = 0x0100,
 	kOptionWordWrap = 0x0200,
-	kOptionDisplayTabs = 0x0400
+	kOptionDisplayTabs = 0x0400,
+	kOptionFormatRuler = 0x0800
 };
 
 enum : ushort {
@@ -59,7 +61,8 @@ enum : ushort {
 	kLeftOptionPersistentBlocks = 0x0008,
 	kLeftOptionLineNumZeroFill = 0x0010,
 	kLeftOptionWordWrap = 0x0020,
-	kLeftOptionDisplayTabs = 0x0040
+	kLeftOptionDisplayTabs = 0x0040,
+	kLeftOptionFormatRuler = 0x0080
 };
 
 enum : ushort {
@@ -118,6 +121,7 @@ struct FileExtensionEditorSettingsDialogRecord {
 	char wordDelimiters[kWordDelimsFieldSize];
 	char defaultExtensions[kDefaultExtsFieldSize];
 	char tabSize[kTabSizeFieldSize];
+	char leftMargin[kLeftMarginFieldSize];
 	char rightMargin[kRightMarginFieldSize];
 	char binaryRecordLength[kBinaryRecordLengthFieldSize];
 	char postLoadMacro[kMacroFieldSize];
@@ -162,6 +166,12 @@ class FileExtensionEditorSettingsPanel {
 	[[nodiscard]] std::string postLoadMacroValue() const;
 	[[nodiscard]] std::string preSaveMacroValue() const;
 	[[nodiscard]] std::string defaultPathValue() const;
+	[[nodiscard]] bool formatRulerEnabled() const noexcept;
+	[[nodiscard]] int currentFormatLineTabSize() const noexcept;
+	[[nodiscard]] int currentFormatLineLeftMargin() const noexcept;
+	[[nodiscard]] int currentFormatLineRightMargin() const noexcept;
+	[[nodiscard]] std::string currentFormatLineValue() const;
+	void applyFormatLineState(const std::string &value, int leftMargin, int rightMargin);
 	void setPostLoadMacroValue(const std::string &value);
 	void setPreSaveMacroValue(const std::string &value);
 	void setDefaultPathValue(const std::string &value);
@@ -179,6 +189,7 @@ class FileExtensionEditorSettingsPanel {
 	TInputLine *wordDelimitersField = nullptr;
 	TInputLine *defaultExtensionsField = nullptr;
 	MRNumericSlider *tabSizeSlider = nullptr;
+	TInputLine *leftMarginField = nullptr;
 	TInputLine *rightMarginField = nullptr;
 	TInputLine *binaryRecordLengthField = nullptr;
 	ushort preservedOptionsMask = 0;
@@ -186,6 +197,7 @@ class FileExtensionEditorSettingsPanel {
 		TInputLine *preSaveMacroField = nullptr;
 		TInputLine *defaultPathField = nullptr;
 		TInputLine *formatLineField = nullptr;
+		TView *formatRulerView = nullptr;
 		TView *postLoadMacroBrowseButton = nullptr;
 		TView *preSaveMacroBrowseButton = nullptr;
 		TView *defaultPathBrowseButton = nullptr;
@@ -202,6 +214,7 @@ class FileExtensionEditorSettingsPanel {
 		MRNumericSlider *miniMapWidthSlider = nullptr;
 		TInputLine *miniMapMarkerGlyphField = nullptr;
 		TInputLine *guttersField = nullptr;
+		int lastKnownLeftMarginForFormatLine = 1;
 		int lastKnownTabSizeForFormatLine = 8;
 		int lastKnownRightMarginForFormatLine = 78;
 };

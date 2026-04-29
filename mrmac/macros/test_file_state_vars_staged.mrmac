@@ -1,9 +1,8 @@
 $MACRO FileStateVarsStaged;
-DEF_INT(FirstSave, EofInMem, BufferId, TmpFile, FileChanged);
+DEF_INT(FirstSave, BufferId, TmpFile, FileChanged);
 DEF_STR(TmpFileName, FileName);
 
 FirstSave := FIRST_SAVE;
-EofInMem := EOF_IN_MEM;
 BufferId := BUFFER_ID;
 TmpFile := TMP_FILE;
 TmpFileName := TMP_FILE_NAME;

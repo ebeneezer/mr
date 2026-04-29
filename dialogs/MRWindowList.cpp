@@ -312,13 +312,24 @@ class WindowListDialog : public MRDialogFoundation {
 
 	void loadWorkspaceWithDialog() {
 		char fileName[MAXPATH];
+		std::string selectedPath;
+		bool readable = false;
 
 		mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::WorkspaceLoad, fileName,
 		                                sizeof(fileName), "*.mrmac");
 		if (mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::WorkspaceLoad,
 		                                                   "*.mrmac", "Load workspace from...",
 		                                                   "~N~ame", fdOpenButton, fileName) != cmCancel) {
-			mrLoadWorkspace(std::string(fileName));
+			selectedPath = normalizeConfiguredPathInput(fileName);
+			if (selectedPath.empty())
+				return;
+			readable = !selectedPath.empty() && ::access(selectedPath.c_str(), F_OK) == 0 &&
+			           ::access(selectedPath.c_str(), R_OK) == 0;
+			mrLoadWorkspace(selectedPath);
+			if (readable)
+				rememberLoadDialogPath(MRDialogHistoryScope::WorkspaceLoad, selectedPath.c_str());
+			else
+				forgetLoadDialogPath(MRDialogHistoryScope::WorkspaceLoad, selectedPath.c_str());
 		}
 	}
 

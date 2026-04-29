@@ -529,10 +529,6 @@ bool applySettingsSource(const std::string &source, std::string *errorMessage) {
 	return applySettingsSourceViaVm(settingsPath, canonicalSource, errorMessage);
 }
 
-ushort execDialogWithData(TDialog *dialog, void *data) {
-	return mr::dialogs::execDialogWithData(dialog, data);
-}
-
 ushort mrEditorDialog(int dialog, ...) {
 	va_list arg;
 	ushort result = cmCancel;
@@ -623,14 +619,15 @@ bool loadStartupSettingsMacro(const std::string &overridePath, std::string *erro
 			mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings normalization failed.");
 			return false;
 		}
-		if (!readTextFile(settingsPath, source)) {
-			if (errorMessage != nullptr)
-				*errorMessage = "Settings load failed after normalization (read): " + settingsPath;
+		if (!buildConfiguredSetupPathsSnapshot(paths, errorMessage)) {
 			mrLogMessage(errorMessage != nullptr ? errorMessage->c_str()
-			                                   : "Settings load failed after normalization (read).");
+			                                   : "Settings canonical source build failed after normalization.");
 			return false;
 		}
-		if (!buildCanonicalSettingsSource(settingsPath, source, &report, canonicalSource, errorMessage)) {
+		canonicalSource = buildSettingsMacroSource(paths);
+		if (errorMessage != nullptr)
+			errorMessage->clear();
+		if (!loadAndNormalizeSettingsSource(settingsPath, canonicalSource, &report, errorMessage)) {
 			mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings canonicalization failed.");
 			return false;
 		}
@@ -1022,29 +1019,6 @@ MREditorApp::MREditorApp()
 MREditorApp::~MREditorApp() {
 	prepareForQuit();
 	mr::coprocessor::globalCoprocessor().shutdown(true);
-}
-
-bool MREditorApp::applyConfiguredSettingsFromModel(std::string *errorMessage) {
-	std::vector<MREditWindow *> windows;
-	bool defaultInsertMode = true;
-	MRSetupPaths paths;
-	std::string source;
-
-	if (!buildConfiguredSetupPathsSnapshot(paths, errorMessage))
-		return false;
-	source = buildSettingsMacroSource(paths);
-	if (!applySettingsSourceViaVm(paths.settingsMacroUri, source, errorMessage))
-		return false;
-	defaultInsertMode = configuredDefaultInsertMode();
-	windows = allEditWindowsInZOrder();
-	for (auto & window : windows)
-		if (window != nullptr && window->getEditor() != nullptr) {
-			if (!window->isReadOnly())
-				window->getEditor()->setInsertModeEnabled(defaultInsertMode);
-			window->getEditor()->refreshConfiguredVisualSettings();
-		}
-	applyConfiguredDisplayLayout();
-	return true;
 }
 
 void MREditorApp::applyConfiguredWindowFramePolicy() {

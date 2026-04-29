@@ -33,6 +33,7 @@
 #include "MRWindowManager.hpp"
 #include "MRWindowSupport.hpp"
 #include "../keymap/MRKeymapContext.hpp"
+#include "../keymap/MRKeymapToken.hpp"
 #include "../dialogs/MRWindowList.hpp"
 #include "../config/MRDialogPaths.hpp"
 #include "../mrmac/MRVM.hpp"
@@ -1047,6 +1048,57 @@ class MREditWindow : public TWindow {
 		if (editor == nullptr)
 			return false;
 		editor->revealCursor(True);
+		return true;
+	}
+
+	bool shiftCursorBlockMark(const MRKeymapToken &token) {
+		std::size_t target = 0;
+
+		if (editor == nullptr)
+			return false;
+		target = editor->cursorOffset();
+		switch (token.baseKey()) {
+			case MRKeymapBaseKey::Left:
+				target = token.hasModifier(MRKeymapModifier::Ctrl) ? editor->prevWordOffset(target)
+				                                                   : editor->prevCharOffset(target);
+				break;
+			case MRKeymapBaseKey::Right:
+				target = token.hasModifier(MRKeymapModifier::Ctrl) ? editor->nextWordOffset(target)
+				                                                   : editor->nextCharOffset(target);
+				break;
+			case MRKeymapBaseKey::Up:
+				target = editor->lineMoveOffset(target, -1);
+				break;
+			case MRKeymapBaseKey::Down:
+				target = editor->lineMoveOffset(target, 1);
+				break;
+			case MRKeymapBaseKey::Home:
+				target = token.hasModifier(MRKeymapModifier::Ctrl) ? 0 : editor->lineStartOffset(target);
+				break;
+			case MRKeymapBaseKey::End:
+				target = token.hasModifier(MRKeymapModifier::Ctrl) ? editor->bufferLength()
+				                                                   : editor->lineEndOffset(target);
+				break;
+			case MRKeymapBaseKey::PageUp:
+				target = editor->lineMoveOffset(target, -(std::max(2, editor->visibleViewportRows()) - 1));
+				break;
+			case MRKeymapBaseKey::PageDown:
+				target = editor->lineMoveOffset(target, std::max(2, editor->visibleViewportRows()) - 1);
+				break;
+			default:
+				return false;
+		}
+		if (mBlockMode == bmNone)
+			mBlockMode = bmStream;
+		if (!mBlockMarkingOn) {
+			discardHiddenBlockState();
+			mBlockMarkingOn = true;
+			mBlockAnchor = static_cast<uint>(editor->cursorOffset());
+			mBlockEnd = static_cast<uint>(editor->cursorOffset());
+		}
+		editor->setCursorOffset(target);
+		mBlockEnd = static_cast<uint>(editor->cursorOffset());
+		syncBlockVisual();
 		return true;
 	}
 

@@ -4,8 +4,9 @@
 #include "MRSetupCommon.hpp"
 #include "MRSetup.hpp"
 
-#include "../app/MREditorApp.hpp"
+#include "../app/commands/MRWindowCommands.hpp"
 #include "../config/MRDialogPaths.hpp"
+#include "../ui/MREditWindow.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
 #include <algorithm>
@@ -14,10 +15,12 @@
 #include <cstdlib>
 #include <cstring>
 #include <map>
+#include <sstream>
 
 namespace MRFileExtensionProfilesInternal {
 
-
+std::string readRecordField(const char *value);
+void writeRecordField(char *dest, std::size_t destSize, const std::string &value);
 
 std::string readRecordField(const char *value) {
 	return mr::dialogs::readRecordField(value);
@@ -27,79 +30,12 @@ void writeRecordField(char *dest, std::size_t destSize, const std::string &value
 	mr::dialogs::writeRecordField(dest, destSize, value);
 }
 
-int clampFormatTabSize(int tabSize) {
-	return std::max(2, std::min(tabSize, 32));
-}
-
-int clampFormatRightMargin(int rightMargin) {
-	return std::max(1, std::min(rightMargin, 999));
-}
-
-std::string defaultFormatLineForSettings(int tabSize, int rightMargin) {
-	const int normalizedTabSize = clampFormatTabSize(tabSize);
-	const int normalizedRightMargin = clampFormatRightMargin(rightMargin);
-	std::string out(static_cast<std::size_t>(normalizedRightMargin), '.');
-
-	for (int col = normalizedTabSize; col <= normalizedRightMargin; col += normalizedTabSize)
-		out[static_cast<std::size_t>(col - 1)] = '|';
-	out[static_cast<std::size_t>(normalizedRightMargin - 1)] = 'R';
-	return out;
-}
-
-bool validateAndNormalizeFormatLine(const std::string &value, int rightMargin, int tabSize,
-                                    std::string &outFormatLine, std::string &errorText) {
-	std::string line = trimAscii(value);
-	const int normalizedRightMargin = clampFormatRightMargin(rightMargin);
-	int rCount = 0;
-	int rIndex = -1;
-
-	if (line.empty()) {
-		outFormatLine = defaultFormatLineForSettings(tabSize, normalizedRightMargin);
-		errorText.clear();
-		return true;
-	}
-	{
-		bool legacy = true;
-		for (char ch : line)
-			if (ch != '!' && ch != '-') {
-				legacy = false;
-				break;
-			}
-		if (legacy) {
-			outFormatLine = defaultFormatLineForSettings(tabSize, normalizedRightMargin);
-			errorText.clear();
-			return true;
-		}
-	}
-	for (std::size_t i = 0; i < line.size(); ++i) {
-		char ch = line[i];
-		if (ch != '.' && ch != '|' && ch != 'R') {
-			errorText = "FORMAT_LINE may only contain '.', '|' and 'R'.";
-			return false;
-		}
-		if (ch == 'R') {
-			++rCount;
-			rIndex = static_cast<int>(i);
-		}
-	}
-	if (rCount != 1) {
-		errorText = "FORMAT_LINE must contain exactly one 'R'.";
-		return false;
-	}
-	if (rIndex + 1 != normalizedRightMargin) {
-		errorText = "FORMAT_LINE must place 'R' at RIGHT_MARGIN.";
-		return false;
-	}
-	outFormatLine = line;
-	errorText.clear();
-	return true;
-}
-
 bool fileExtensionEditorSettingsDialogRecordsEqual(const FileExtensionEditorSettingsDialogRecord &lhs, const FileExtensionEditorSettingsDialogRecord &rhs) {
 	return readRecordField(lhs.pageBreak) == readRecordField(rhs.pageBreak) &&
 	       readRecordField(lhs.wordDelimiters) == readRecordField(rhs.wordDelimiters) &&
 	       readRecordField(lhs.defaultExtensions) == readRecordField(rhs.defaultExtensions) &&
 	       readRecordField(lhs.tabSize) == readRecordField(rhs.tabSize) &&
+	       readRecordField(lhs.leftMargin) == readRecordField(rhs.leftMargin) &&
 	       readRecordField(lhs.rightMargin) == readRecordField(rhs.rightMargin) &&
 	       readRecordField(lhs.binaryRecordLength) == readRecordField(rhs.binaryRecordLength) &&
 	       readRecordField(lhs.postLoadMacro) == readRecordField(rhs.postLoadMacro) &&
@@ -135,6 +71,7 @@ void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDial
 	writeRecordField(record.defaultExtensions, sizeof(record.defaultExtensions),
 	                 settings.defaultExtensions);
 	writeRecordField(record.tabSize, sizeof(record.tabSize), std::to_string(settings.tabSize));
+	writeRecordField(record.leftMargin, sizeof(record.leftMargin), std::to_string(settings.leftMargin));
 	writeRecordField(record.rightMargin, sizeof(record.rightMargin), std::to_string(settings.rightMargin));
 	writeRecordField(record.binaryRecordLength, sizeof(record.binaryRecordLength),
 	                 std::to_string(settings.binaryRecordLength));
@@ -172,6 +109,8 @@ void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDial
 		record.optionsMask |= kOptionLineNumZeroFill;
 	if (settings.displayTabs)
 		record.optionsMask |= kOptionDisplayTabs;
+	if (settings.formatRuler)
+		record.optionsMask |= kOptionFormatRuler;
 
 	record.tabExpandChoice = settings.tabExpand ? kTabExpandTabs : kTabExpandSpaces;
 	record.indentStyleChoice = (indentStyle == "AUTOMATIC") ? kIndentStyleAutomatic
@@ -222,6 +161,23 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	}
 
 	{
+		std::string leftMarginText = readRecordField(record.leftMargin);
+		char *end = nullptr;
+		long leftMargin = 0;
+		if (leftMarginText.empty()) {
+			errorText = "LEFT_MARGIN must be between 1 and 999.";
+			return false;
+		}
+		leftMargin = std::strtol(leftMarginText.c_str(), &end, 10);
+		if (end == leftMarginText.c_str() || end == nullptr || *end != '\0' || leftMargin < 1 ||
+		    leftMargin > 999) {
+			errorText = "LEFT_MARGIN must be an integer between 1 and 999.";
+			return false;
+		}
+		settings.leftMargin = static_cast<int>(leftMargin);
+	}
+
+	{
 		std::string rightMarginText = readRecordField(record.rightMargin);
 		char *end = nullptr;
 		long rightMargin = 0;
@@ -259,8 +215,9 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.preSaveMacro = readRecordField(record.preSaveMacro);
 	settings.defaultPath = readRecordField(record.defaultPath);
 	settings.formatLine = readRecordField(record.formatLine);
-	if (!validateAndNormalizeFormatLine(settings.formatLine, settings.rightMargin, settings.tabSize,
-	                                    settings.formatLine, errorText))
+	if (!normalizeEditFormatLine(settings.formatLine, settings.tabSize, settings.leftMargin,
+	                             settings.rightMargin, settings.formatLine, &settings.leftMargin,
+	                             &settings.rightMargin, &errorText))
 		return false;
 	settings.cursorStatusColor = upperAscii(trimAscii(readRecordField(record.cursorStatusColor)));
 	settings.miniMapMarkerGlyph = readRecordField(record.miniMapMarkerGlyph);
@@ -323,6 +280,7 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.eofCtrlZ = (record.optionsMask & kOptionEofCtrlZ) != 0;
 	settings.eofCrLf = (record.optionsMask & kOptionEofCrLf) != 0;
 	settings.wordWrap = (record.optionsMask & kOptionWordWrap) != 0;
+	settings.formatRuler = (record.optionsMask & kOptionFormatRuler) != 0;
 	settings.showEofMarker = (record.optionsMask & kOptionShowEofMarker) != 0;
 	settings.showEofMarkerEmoji = (record.optionsMask & kOptionShowEofMarkerEmoji) != 0;
 	if (settings.showEofMarkerEmoji)
@@ -376,7 +334,9 @@ enum : unsigned long long {
 	kOvTabExpand = ::kOvTabExpand,
 	kOvDisplayTabs = ::kOvDisplayTabs,
 	kOvTabSize = ::kOvTabSize,
+	kOvLeftMargin = ::kOvLeftMargin,
 	kOvRightMargin = ::kOvRightMargin,
+	kOvFormatRuler = ::kOvFormatRuler,
 	kOvWordWrap = ::kOvWordWrap,
 	kOvIndentStyle = ::kOvIndentStyle,
 	kOvFileType = ::kOvFileType,
@@ -504,8 +464,12 @@ enum : unsigned long long {
 		mask |= kOvDisplayTabs;
 	if (effective.tabSize != defaults.tabSize)
 		mask |= kOvTabSize;
+	if (effective.leftMargin != defaults.leftMargin)
+		mask |= kOvLeftMargin;
 	if (effective.rightMargin != defaults.rightMargin)
 		mask |= kOvRightMargin;
+	if (effective.formatRuler != defaults.formatRuler)
+		mask |= kOvFormatRuler;
 	if (effective.wordWrap != defaults.wordWrap)
 		mask |= kOvWordWrap;
 	if (upperAscii(effective.indentStyle) != upperAscii(defaults.indentStyle))
@@ -751,6 +715,7 @@ void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileE
 	writeRecordField(record.wordDelimiters, sizeof(record.wordDelimiters), settings.wordDelimiters);
 	writeRecordField(record.defaultExtensions, sizeof(record.defaultExtensions), settings.defaultExtensions);
 	writeRecordField(record.tabSize, sizeof(record.tabSize), std::to_string(settings.tabSize));
+	writeRecordField(record.leftMargin, sizeof(record.leftMargin), std::to_string(settings.leftMargin));
 	writeRecordField(record.rightMargin, sizeof(record.rightMargin), std::to_string(settings.rightMargin));
 	writeRecordField(record.binaryRecordLength, sizeof(record.binaryRecordLength), std::to_string(settings.binaryRecordLength));
 	writeRecordField(record.postLoadMacro, sizeof(record.postLoadMacro), settings.postLoadMacro);
@@ -785,6 +750,8 @@ void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileE
 		record.optionsMask |= kOptionLineNumZeroFill;
 	if (settings.displayTabs)
 		record.optionsMask |= kOptionDisplayTabs;
+	if (settings.formatRuler)
+		record.optionsMask |= kOptionFormatRuler;
 
 	record.tabExpandChoice = settings.tabExpand ? kTabExpandTabs : kTabExpandSpaces;
 	record.indentStyleChoice = (indentStyle == "AUTOMATIC") ? kIndentStyleAutomatic
@@ -996,32 +963,24 @@ bool validateDraftsForUi(const std::vector<EditProfileDraft> &drafts, int curren
 }
 
 bool saveAndReloadEditProfiles(const std::vector<EditProfileDraft> &drafts, std::string &errorText) {
-	MREditorApp *app = dynamic_cast<MREditorApp *>(TProgram::application);
-	MRSetupPaths paths;
 	MRSettingsWriteReport writeReport;
 	MRFileExtensionEditorSettings defaultsCandidate;
 	std::vector<MRFileExtensionProfile> profilesCandidate;
 	std::string defaultThemePathCandidate;
 
-	if (app == nullptr) {
-		errorText = "Application error: MREditorApp is unavailable.";
-		return false;
-	}
 	if (!draftsToConfiguredState(drafts, defaultsCandidate, profilesCandidate, defaultThemePathCandidate,
 	                             errorText))
 		return false;
-
-	paths.settingsMacroUri = configuredSettingsMacroFilePath();
-	paths.macroPath = defaultMacroDirectoryPath();
-	paths.helpUri = configuredHelpFilePath();
-	paths.tempPath = configuredTempDirectoryPath();
-	paths.shellUri = configuredShellExecutablePath();
-
-	if (!writeSettingsMacroFile(paths, &errorText, &writeReport))
+	if (!persistConfiguredSettingsSnapshot(&errorText, &writeReport))
 		return false;
 	mrLogSettingsWriteReport("fe profiles", writeReport);
-	if (!app->applyConfiguredSettingsFromModel(&errorText))
-		return false;
+	for (MREditWindow *window : allEditWindowsInZOrder())
+		if (window != nullptr && window->getEditor() != nullptr) {
+			if (!window->isReadOnly())
+				window->getEditor()->setInsertModeEnabled(configuredDefaultInsertMode());
+			window->getEditor()->refreshConfiguredVisualSettings();
+		}
+	mrUpdateAllWindowsColorTheme();
 
 	errorText.clear();
 	return true;

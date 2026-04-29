@@ -1222,8 +1222,8 @@ bool testDialogPaletteOverridesAbsent(std::string &failureReason) {
 }
 
 bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
-	static const unsigned char probeValues[] = {0x51, 0x52, 0x53, 0x54, 0x55,
-	                                            0x56, 0x57, 0x58, 0x59, 0x5A};
+	static const unsigned char probeValues[] = {0x51, 0x52, 0x53, 0x54, 0x55, 0x56,
+	                                            0x57, 0x58, 0x59, 0x5A, 0x5B};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::size_t itemCount = 0;
 	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::Window, itemCount);
@@ -1254,7 +1254,8 @@ bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
 			bool isExpectedSlot = (slot == 8 || slot == 9 || slot == 13 || slot == 14 ||
 			                       slot == kMrPaletteCurrentLine || slot == kMrPaletteCurrentLineInBlock ||
 			                       slot == kMrPaletteChangedText || slot == kMrPaletteLineNumbers ||
-			                       slot == kMrPaletteEofMarker || slot == kMrPaletteCodeFolding);
+			                       slot == kMrPaletteEofMarker || slot == kMrPaletteCodeFolding ||
+			                       slot == kMrPaletteFormatRuler);
 		if (!configuredColorSlotOverride(items[i].paletteIndex, value)) {
 			restore();
 			failureReason = "WINDOWCOLORS item must override its mapped palette slot.";
@@ -1739,6 +1740,7 @@ bool testExtendedSettingsRoundtripGuard(std::string &failureReason) {
 	std::string restoreError;
 	bool restored = false;
 	MREditSetupSettings loaded;
+	MREditSetupSettings normalized;
 
 	auto restore = [&]() {
 		if (!restored)
@@ -1747,6 +1749,8 @@ bool testExtendedSettingsRoundtripGuard(std::string &failureReason) {
 	};
 
 	probe.rightMargin = 91;
+	probe.leftMargin = 3;
+	probe.formatRuler = true;
 	probe.wordWrap = false;
 	probe.indentStyle = "smart";
 	probe.fileType = "binary";
@@ -1762,6 +1766,7 @@ bool testExtendedSettingsRoundtripGuard(std::string &failureReason) {
 		failureReason = "Unable to seed extended settings probe: " + errorText;
 		return false;
 	}
+	normalized = configuredEditSetupSettings();
 
 	paths.settingsMacroUri = settingsPath;
 	paths.macroPath = "/tmp";
@@ -1770,8 +1775,10 @@ bool testExtendedSettingsRoundtripGuard(std::string &failureReason) {
 	paths.shellUri = "/bin/sh";
 	source = buildSettingsMacroSource(paths);
 	const std::string expectedFormatLineSetting =
-	    "MRSETUP('FORMAT_LINE', '" + probe.formatLine + "');";
-	if (source.find("MRSETUP('RIGHT_MARGIN', '91');") == std::string::npos ||
+	    "MRSETUP('FORMAT_LINE', '" + normalized.formatLine + "');";
+	if (source.find("MRSETUP('LEFT_MARGIN', '3');") == std::string::npos ||
+	    source.find("MRSETUP('RIGHT_MARGIN', '91');") == std::string::npos ||
+	    source.find("MRSETUP('FORMAT_RULER', 'true');") == std::string::npos ||
 	    source.find("MRSETUP('WORD_WRAP', 'false');") == std::string::npos ||
 	    source.find("MRSETUP('INDENT_STYLE', 'SMART');") == std::string::npos ||
 	    source.find("MRSETUP('FILE_TYPE', 'BINARY');") == std::string::npos ||
@@ -1798,12 +1805,13 @@ bool testExtendedSettingsRoundtripGuard(std::string &failureReason) {
 	}
 
 	loaded = configuredEditSetupSettings();
-	if (loaded.rightMargin != 91 || loaded.wordWrap || loaded.indentStyle != "SMART" ||
+	if (loaded.leftMargin != 3 || loaded.rightMargin != 91 || !loaded.formatRuler || loaded.wordWrap ||
+	    loaded.indentStyle != "SMART" ||
 	    loaded.fileType != "BINARY" || loaded.binaryRecordLength != 123 ||
 	    loaded.postLoadMacro != normalizeConfiguredPathInput(probe.postLoadMacro) ||
 	    loaded.preSaveMacro != normalizeConfiguredPathInput(probe.preSaveMacro) ||
 	    loaded.defaultPath != normalizeConfiguredPathInput(probe.defaultPath) ||
-	    loaded.formatLine != probe.formatLine || loaded.cursorStatusColor != "7F") {
+	    loaded.formatLine != normalized.formatLine || loaded.cursorStatusColor != "7F") {
 		restore();
 		failureReason = "Extended settings roundtrip lost one or more serialized edit settings.";
 		return false;
@@ -2456,11 +2464,11 @@ bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) 
 
 bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureReason) {
 	const std::string themePath = "/tmp/mr-windowcolors-line-numbers-theme.mrmac";
-	const std::string windowColorsPrefix = "MRSETUP('WINDOWCOLORS', 'v3:";
+	const std::string windowColorsPrefix = "MRSETUP('WINDOWCOLORS', 'v4:";
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::string previousThemePath = configuredColorThemeFilePath();
 	const std::array<unsigned char, MRColorSetupSettings::kWindowCount> probeValues = {
-	    0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A};
+	    0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B};
 	std::string errorText;
 	std::string content;
 	unsigned char slotValue = 0;
@@ -2492,7 +2500,7 @@ bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureRea
 		return false;
 	}
 	if (content.find(windowColorsPrefix) == std::string::npos) {
-		failureReason = "Saved theme must serialize WINDOWCOLORS using v3 list format.";
+		failureReason = "Saved theme must serialize WINDOWCOLORS using v4 list format.";
 		restore();
 		return false;
 	}
@@ -2528,6 +2536,11 @@ bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureRea
 	}
 	if (!configuredColorSlotOverride(kMrPaletteCodeFolding, slotValue) || slotValue != probeValues[9]) {
 		failureReason = "Code-folding palette slot must be restored from WINDOWCOLORS theme value.";
+		restore();
+		return false;
+	}
+	if (!configuredColorSlotOverride(kMrPaletteFormatRuler, slotValue) || slotValue != probeValues[10]) {
+		failureReason = "Format-ruler palette slot must be restored from WINDOWCOLORS theme value.";
 		restore();
 		return false;
 	}
@@ -2617,8 +2630,8 @@ bool testChangedTextColorWiringGuard(std::string &failureReason) {
 		failureReason = "Changed-text must be applied per character via dedicated dirty-range lookup.";
 		return false;
 	}
-	if (content.find("dirtyRanges_") == std::string::npos ||
-	    content.find("addDirtyRange(") == std::string::npos ||
+	if (content.find("mDirtyRanges") == std::string::npos ||
+	    content.find("void addDirtyRange(") == std::string::npos ||
 	    content.find("isDirtyOffset(") == std::string::npos) {
 		failureReason = "Changed-text wiring requires dedicated dirty-range tracking in MRFileEditor.";
 		return false;
@@ -2628,7 +2641,7 @@ bool testChangedTextColorWiringGuard(std::string &failureReason) {
 		failureReason = "Changed-text ranges must be remapped across edits to stay position-correct.";
 		return false;
 	}
-	if (content.find("if (pos >= bufferModel_.length())") == std::string::npos) {
+	if (content.find("if (pos >= mBufferModel.length())") == std::string::npos) {
 		failureReason = "Changed-text lookup must not clamp offsets beyond EOF into the last dirty character.";
 		return false;
 	}
@@ -2828,9 +2841,11 @@ bool testEditClipboardCommandRoutingGuard(std::string &failureReason) {
 		return false;
 	}
 	if (content.find("case cmMrEditCutToBuffer:") == std::string::npos ||
-	    content.find("dispatchEditorClipboardCommand(cmCut, true)") == std::string::npos ||
+	    content.find("copyCurrentBlockToSystemClipboard(false, true, \"Unable to move block to buffer.\")") ==
+	        std::string::npos ||
 	    content.find("case cmMrEditCopyToBuffer:") == std::string::npos ||
-	    content.find("dispatchEditorClipboardCommand(cmCopy, false)") == std::string::npos ||
+	    content.find("copyCurrentBlockToSystemClipboard(false, false, \"No block marked.\")") ==
+	        std::string::npos ||
 	    content.find("case cmMrEditPasteFromBuffer:") == std::string::npos ||
 	    content.find("dispatchEditorClipboardCommand(cmPaste, true)") == std::string::npos) {
 		failureReason = "Edit Cut/Copy/Paste commands must route to editor clipboard commands.";

@@ -24,7 +24,6 @@ class MREditorApp : public TApplication {
 	void handleEvent(TEvent &event) override;
 	void idle() override;
 	TPalette &getPalette() const override;
-	bool applyConfiguredSettingsFromModel(std::string *errorMessage = nullptr);
 
  private:
 	void prepareForQuit();

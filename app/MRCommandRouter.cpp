@@ -10,13 +10,14 @@
 #define Uses_TInputLine
 #define Uses_TLabel
 #define Uses_TListViewer
-#define Uses_THistory
 #define Uses_TDrawBuffer
 #define Uses_MsgBox
 #define Uses_TCheckBoxes
 #define Uses_TRadioButtons
 #define Uses_TScrollBar
 #define Uses_TStaticText
+#define Uses_TClipboard
+#define Uses_THardwareInfo
 #define Uses_TSItem
 #include <tvision/tv.h>
 
@@ -84,6 +85,19 @@ struct SearchUiState {
 };
 
 SearchUiState g_searchUiState;
+
+enum class SearchResultsContextKind : unsigned char {
+	None = 0,
+	SingleFile = 1,
+	MultiFile = 2
+};
+
+struct SearchResultsContext {
+	SearchResultsContextKind kind = SearchResultsContextKind::None;
+	MREditWindow *window = nullptr;
+};
+
+SearchResultsContext g_searchResultsContext;
 
 struct CharacterTableEntry {
 	std::string text;
@@ -167,6 +181,13 @@ struct PendingTransientSelectionClear {
 
 PendingTransientSelectionClear g_pendingTransientSelectionClear;
 
+struct ClipboardFetchState {
+	bool received = false;
+	std::string text;
+};
+
+ClipboardFetchState g_clipboardFetchState;
+
 enum : ushort {
 	cmMrMultiFileSelectionChanged = 4901,
 	cmMrMultiFileMatchPrev = 4902,
@@ -178,8 +199,6 @@ enum : ushort {
 };
 
 enum : uchar {
-	kMultiFilespecHistoryId = 243,
-	kMultiPathHistoryId = 244
 };
 
 enum class PromptReplaceDecision : unsigned char {
@@ -224,13 +243,27 @@ enum class KeymapCustomAction : unsigned char {
 	GetRandomAccessMark = 4,
 	CenterLine = 5,
 	ReformatParagraph = 6,
-	ToggleWordWrap = 7,
-	SetLeftMargin = 8,
-	SetRightMargin = 9,
-	JustifyParagraph = 10,
-	SortColumnBlockToggle = 11,
-	ForceSave = 12,
-	ExitDirtySaveAll = 13
+	ReformatDocument = 7,
+	ToggleFormatRuler = 8,
+	ToggleWordWrap = 9,
+	SetLeftMargin = 10,
+	SetRightMargin = 11,
+	JustifyParagraph = 12,
+	SortColumnBlockToggle = 13,
+	ForceSave = 14,
+	ExitDirtySaveAll = 15,
+	MoveCursorToNextPageBreak = 16,
+	MoveCursorToPrevPageBreak = 17,
+	ScrollWindowUp = 18,
+	ScrollWindowDown = 19,
+	CursorIndent = 20,
+	CursorTabRight = 21,
+	CursorTabLeft = 22,
+	CursorUndent = 23,
+	CopyMarkedBlockToSystemClipboard = 24,
+	BlockMath = 25,
+	ExtendBlockByMotion = 26,
+	SearchResultsNext = 27
 };
 
 struct KeymapActionDispatchEntry {
@@ -252,13 +285,21 @@ constexpr std::array kKeymapActionDispatchTable{
 	KeymapActionDispatchEntry{"MRMAC_VIEW_PAGE_DOWN", KeymapDispatchKind::EditorCommand, cmPageDown, KeymapWindowMethod::None, KeymapCustomAction::None},
 	KeymapActionDispatchEntry{"MRMAC_CURSOR_TOP_OF_FILE", KeymapDispatchKind::EditorCommand, cmTextStart, KeymapWindowMethod::None, KeymapCustomAction::None},
 	KeymapActionDispatchEntry{"MRMAC_CURSOR_BOTTOM_OF_FILE", KeymapDispatchKind::EditorCommand, cmTextEnd, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_CURSOR_NEXT_PAGE_BREAK", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::MoveCursorToNextPageBreak},
+	KeymapActionDispatchEntry{"MRMAC_CURSOR_PREV_PAGE_BREAK", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::MoveCursorToPrevPageBreak},
 	KeymapActionDispatchEntry{"MRMAC_CURSOR_WORD_LEFT", KeymapDispatchKind::EditorCommand, cmWordLeft, KeymapWindowMethod::None, KeymapCustomAction::None},
 	KeymapActionDispatchEntry{"MRMAC_CURSOR_WORD_RIGHT", KeymapDispatchKind::EditorCommand, cmWordRight, KeymapWindowMethod::None, KeymapCustomAction::None},
 	KeymapActionDispatchEntry{"MRMAC_CURSOR_TOP_OF_WINDOW", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::CursorTopOfWindow, KeymapCustomAction::None},
 	KeymapActionDispatchEntry{"MRMAC_CURSOR_BOTTOM_OF_WINDOW", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::CursorBottomOfWindow, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_VIEW_SCROLL_UP", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ScrollWindowUp},
+	KeymapActionDispatchEntry{"MRMAC_VIEW_SCROLL_DOWN", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ScrollWindowDown},
 	KeymapActionDispatchEntry{"MRMAC_CURSOR_START_OF_BLOCK", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::CursorStartOfBlock, KeymapCustomAction::None},
 	KeymapActionDispatchEntry{"MRMAC_CURSOR_END_OF_BLOCK", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::CursorEndOfBlock, KeymapCustomAction::None},
 	KeymapActionDispatchEntry{"MRMAC_CURSOR_GOTO_LINE", KeymapDispatchKind::AppCommand, cmMrSearchGotoLineNumber, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_CURSOR_INDENT", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CursorIndent},
+	KeymapActionDispatchEntry{"MRMAC_CURSOR_TAB_RIGHT", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CursorTabRight},
+	KeymapActionDispatchEntry{"MRMAC_CURSOR_TAB_LEFT", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CursorTabLeft},
+	KeymapActionDispatchEntry{"MRMAC_CURSOR_UNDENT", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CursorUndent},
 	KeymapActionDispatchEntry{"MRMAC_MARK_PUSH_POSITION", KeymapDispatchKind::AppCommand, cmMrSearchPushMarker, KeymapWindowMethod::None, KeymapCustomAction::None},
 	KeymapActionDispatchEntry{"MRMAC_MARK_POP_POSITION", KeymapDispatchKind::AppCommand, cmMrSearchGetMarker, KeymapWindowMethod::None, KeymapCustomAction::None},
 	KeymapActionDispatchEntry{"MRMAC_MARK_SET_RANDOM_ACCESS", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::SetRandomAccessMark},
@@ -278,8 +319,8 @@ constexpr std::array kKeymapActionDispatchTable{
 	KeymapActionDispatchEntry{"MRMAC_SEARCH_REPEAT_LAST", KeymapDispatchKind::AppCommand, cmMrSearchRepeatPrevious, KeymapWindowMethod::None, KeymapCustomAction::None},
 	KeymapActionDispatchEntry{"MRMAC_SEARCH_MULTI_FILE", KeymapDispatchKind::AppCommand, cmMrSearchMultiFileSearch, KeymapWindowMethod::None, KeymapCustomAction::None},
 	KeymapActionDispatchEntry{"MRMAC_SEARCH_LIST_MATCHED_FILES", KeymapDispatchKind::AppCommand, cmMrSearchListFilesFromLastSearch, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_BLOCK_COPY_TO_CLIPBOARD", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CopyMarkedBlockToSystemClipboard},
 	KeymapActionDispatchEntry{"MRMAC_BLOCK_PASTE_FROM_CLIPBOARD", KeymapDispatchKind::AppCommand, cmMrEditPasteFromBuffer, KeymapWindowMethod::None, KeymapCustomAction::None},
-	KeymapActionDispatchEntry{"MRMAC_BLOCK_MARK_COLUMN", KeymapDispatchKind::AppCommand, cmMrBlockMarkColumns, KeymapWindowMethod::None, KeymapCustomAction::None},
 	KeymapActionDispatchEntry{"MRMAC_BLOCK_MARK_STREAM", KeymapDispatchKind::AppCommand, cmMrBlockMarkStream, KeymapWindowMethod::None, KeymapCustomAction::None},
 	KeymapActionDispatchEntry{"MRMAC_BLOCK_SET_BEGIN", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::BlockSetBegin, KeymapCustomAction::None},
 	KeymapActionDispatchEntry{"MRMAC_BLOCK_SET_END", KeymapDispatchKind::WindowMethod, 0, KeymapWindowMethod::BlockSetEnd, KeymapCustomAction::None},
@@ -293,11 +334,19 @@ constexpr std::array kKeymapActionDispatchTable{
 	KeymapActionDispatchEntry{"MRMAC_BLOCK_DELETE", KeymapDispatchKind::AppCommand, cmMrBlockDelete, KeymapWindowMethod::None, KeymapCustomAction::None},
 	KeymapActionDispatchEntry{"MRMAC_BLOCK_COPY_INTERWINDOW", KeymapDispatchKind::AppCommand, cmMrBlockWindowCopy, KeymapWindowMethod::None, KeymapCustomAction::None},
 	KeymapActionDispatchEntry{"MRMAC_BLOCK_MOVE_INTERWINDOW", KeymapDispatchKind::AppCommand, cmMrBlockWindowMove, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_BLOCK_MOVE_TO_BUFFER", KeymapDispatchKind::AppCommand, cmMrEditCutToBuffer, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_BLOCK_APPEND_TO_BUFFER", KeymapDispatchKind::AppCommand, cmMrEditAppendToBuffer, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_BLOCK_CUT_APPEND_TO_BUFFER", KeymapDispatchKind::AppCommand, cmMrEditCutAndAppendToBuffer, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_BLOCK_COPY_FROM_BUFFER", KeymapDispatchKind::AppCommand, cmMrEditPasteFromBuffer, KeymapWindowMethod::None, KeymapCustomAction::None},
+	KeymapActionDispatchEntry{"MRMAC_BLOCK_MATH", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::BlockMath},
+	KeymapActionDispatchEntry{"MRMAC_BLOCK_EXTEND_BY_MOTION", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ExtendBlockByMotion},
 	KeymapActionDispatchEntry{"MRMAC_FILE_SAVE", KeymapDispatchKind::AppCommand, cmMrFileSave, KeymapWindowMethod::None, KeymapCustomAction::None},
 	KeymapActionDispatchEntry{"MR_SAVE_BLOCK_TO_FILE", KeymapDispatchKind::AppCommand, cmMrBlockSaveToDisk, KeymapWindowMethod::None, KeymapCustomAction::None},
 	KeymapActionDispatchEntry{"MR_LOAD_BLOCK_FROM_FILE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::LoadBlockFromFile},
 	KeymapActionDispatchEntry{"MR_TEXT_CENTER_LINE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CenterLine},
 	KeymapActionDispatchEntry{"MR_TEXT_REFORMAT_PARAGRAPH", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ReformatParagraph},
+	KeymapActionDispatchEntry{"MR_TEXT_REFORMAT_DOCUMENT", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ReformatDocument},
+	KeymapActionDispatchEntry{"MR_TOGGLE_FORMAT_RULER", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ToggleFormatRuler},
 	KeymapActionDispatchEntry{"MR_TOGGLE_WORD_WRAP", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ToggleWordWrap},
 	KeymapActionDispatchEntry{"MR_SET_LEFT_MARGIN", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::SetLeftMargin},
 	KeymapActionDispatchEntry{"MR_SET_RIGHT_MARGIN", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::SetRightMargin},
@@ -305,6 +354,7 @@ constexpr std::array kKeymapActionDispatchTable{
 	KeymapActionDispatchEntry{"MR_SORT_COLUMN_BLOCK_TOGGLE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::SortColumnBlockToggle},
 	KeymapActionDispatchEntry{"MR_FILE_FORCE_SAVE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ForceSave},
 	KeymapActionDispatchEntry{"MR_EXIT_DIRTY_SAVE_ALL", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ExitDirtySaveAll},
+	KeymapActionDispatchEntry{"MR_SEARCH_RESULTS_NEXT", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::SearchResultsNext},
 };
 
 const char *placeholderCommandTitle(ushort command) {
@@ -2347,6 +2397,37 @@ void clearSearchSelection(MREditWindow *win) {
 	editor->refreshViewState();
 }
 
+MREditWindow *resolveSearchResultsWindow(MREditWindow *window) {
+	if (window == nullptr)
+		return nullptr;
+	for (MREditWindow *candidate : allEditWindowsInZOrder())
+		if (candidate == window)
+			return candidate;
+	return nullptr;
+}
+
+void rememberSingleSearchResultContext(MREditWindow *window, const std::string &pattern,
+                                       const MRSearchDialogOptions &options,
+                                       std::size_t start, std::size_t end) {
+	g_searchUiState.hasPrevious = true;
+	g_searchUiState.pattern = pattern;
+	g_searchUiState.lastStart = start;
+	g_searchUiState.lastEnd = end;
+	g_searchUiState.lastOptions = options;
+	g_searchResultsContext.kind = SearchResultsContextKind::SingleFile;
+	g_searchResultsContext.window = window;
+}
+
+void rememberMultiFileSearchResultContext() {
+	if (!g_lastMultiFileSearchSession.valid || g_lastMultiFileSearchSession.files.empty()) {
+		g_searchResultsContext.kind = SearchResultsContextKind::None;
+		g_searchResultsContext.window = nullptr;
+		return;
+	}
+	g_searchResultsContext.kind = SearchResultsContextKind::MultiFile;
+	g_searchResultsContext.window = nullptr;
+}
+
 void updateMiniMapFindMarkers(MREditWindow *win, const std::string &pattern,
                               const MRSearchDialogOptions &options) {
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
@@ -2417,11 +2498,7 @@ void activateMatch(MREditWindow *win, const SearchMatchEntry &match, const std::
 	editor->setSelectionOffsets(match.start, end);
 	editor->revealCursor(True);
 	syncVmLastSearch(win, true, match.start, end, match.start);
-	g_searchUiState.hasPrevious = true;
-	g_searchUiState.pattern = pattern;
-	g_searchUiState.lastStart = match.start;
-	g_searchUiState.lastEnd = end;
-	g_searchUiState.lastOptions = options;
+	rememberSingleSearchResultContext(win, pattern, options, match.start, end);
 }
 
 bool performSearch(MREditWindow *win, const std::string &pattern, std::size_t startOffset, bool updateState,
@@ -2485,26 +2562,12 @@ bool performSearch(MREditWindow *win, const std::string &pattern, std::size_t st
 	editor->setSelectionOffsets(matchStart, matchEnd);
 	editor->revealCursor(True);
 	syncVmLastSearch(win, true, matchStart, matchEnd, matchStart);
-	if (updateState) {
-		g_searchUiState.hasPrevious = true;
-		g_searchUiState.pattern = pattern;
-		g_searchUiState.lastStart = matchStart;
-		g_searchUiState.lastEnd = matchEnd;
-		g_searchUiState.lastOptions = options;
-	}
+	if (updateState)
+		rememberSingleSearchResultContext(win, pattern, options, matchStart, matchEnd);
 	pcre2_code_free(code);
 	if (outWrapped != nullptr)
 		*outWrapped = wrapped;
 	return true;
-}
-
-void seedHistoryOnce(uchar historyId, const std::vector<std::string> &entries) {
-	static std::set<uchar> seededIds;
-
-	if (!seededIds.insert(historyId).second)
-		return;
-	for (auto it = entries.rbegin(); it != entries.rend(); ++it)
-		historyAdd(historyId, *it);
 }
 
 class SubmitInterceptDialog : public MRDialogFoundation {
@@ -2559,9 +2622,6 @@ bool promptMultiFileSearchValues(std::string &pattern, MRMultiSearchDialogOption
 		return false;
 	configuredMultiFilespecHistoryEntries(filespecHistory);
 	configuredMultiPathHistoryEntries(pathHistory);
-	seedHistoryOnce(kMultiFilespecHistoryId, filespecHistory);
-	seedHistoryOnce(kMultiPathHistoryId, pathHistory);
-
 	strnzcpy(filespecInput, options.filespec.empty() ? "*.*" : options.filespec.c_str(), sizeof(filespecInput));
 	if (!options.searchText.empty())
 		strnzcpy(searchInput, options.searchText.c_str(), sizeof(searchInput));
@@ -2593,7 +2653,6 @@ bool promptMultiFileSearchValues(std::string &pattern, MRMultiSearchDialogOption
 	filespecField = new TInputLine(TRect(14, 2, 96, 3), kFilespecBufferSize - 1);
 	dialog->insert(new TLabel(TRect(2, 2, 14, 3), "~F~ilespecs:", filespecField));
 	dialog->insert(filespecField);
-	dialog->insert(new THistory(TRect(96, 2, 99, 3), filespecField, kMultiFilespecHistoryId));
 	searchField = new TInputLine(TRect(14, 4, 96, 5), kSearchBufferSize - 1);
 	dialog->insert(new TLabel(TRect(2, 4, 14, 5), "Se~a~rch:", searchField));
 	dialog->insert(searchField);
@@ -2608,7 +2667,6 @@ bool promptMultiFileSearchValues(std::string &pattern, MRMultiSearchDialogOption
 	pathField = new TInputLine(TRect(14, 12, 96, 13), kPathBufferSize - 1);
 	dialog->insert(new TLabel(TRect(2, 12, 14, 13), "Start a~t~:", pathField));
 	dialog->insert(pathField);
-	dialog->insert(new THistory(TRect(96, 12, 99, 13), pathField, kMultiPathHistoryId));
 	{
 		const std::array buttons{
 		    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault},
@@ -2666,8 +2724,6 @@ bool promptMultiFileSearchValues(std::string &pattern, MRMultiSearchDialogOption
 		static_cast<void>(setConfiguredLastFileDialogPath(currentOptions.startingPath));
 		static_cast<void>(addConfiguredMultiFilespecHistoryEntry(currentOptions.filespec));
 		static_cast<void>(addConfiguredMultiPathHistoryEntry(currentOptions.startingPath));
-		historyAdd(kMultiFilespecHistoryId, currentOptions.filespec);
-		historyAdd(kMultiPathHistoryId, currentOptions.startingPath);
 		persistSearchDialogSettingsSnapshot();
 
 		postMultiSearchStartedWarning();
@@ -2731,9 +2787,6 @@ bool promptMultiFileSarValues(std::string &pattern, std::string &replacement,
 		return false;
 	configuredMultiFilespecHistoryEntries(filespecHistory);
 	configuredMultiPathHistoryEntries(pathHistory);
-	seedHistoryOnce(kMultiFilespecHistoryId, filespecHistory);
-	seedHistoryOnce(kMultiPathHistoryId, pathHistory);
-
 	strnzcpy(filespecInput, options.filespec.empty() ? "*.*" : options.filespec.c_str(), sizeof(filespecInput));
 	if (!options.searchText.empty())
 		strnzcpy(searchInput, options.searchText.c_str(), sizeof(searchInput));
@@ -2771,7 +2824,6 @@ bool promptMultiFileSarValues(std::string &pattern, std::string &replacement,
 	filespecField = new TInputLine(TRect(14, 2, 96, 3), kFilespecBufferSize - 1);
 	dialog->insert(new TLabel(TRect(2, 2, 14, 3), "~F~ilespecs:", filespecField));
 	dialog->insert(filespecField);
-	dialog->insert(new THistory(TRect(96, 2, 99, 3), filespecField, kMultiFilespecHistoryId));
 	searchField = new TInputLine(TRect(14, 4, 96, 5), kSearchBufferSize - 1);
 	dialog->insert(new TLabel(TRect(2, 4, 14, 5), "Se~a~rch:", searchField));
 	dialog->insert(searchField);
@@ -2790,7 +2842,6 @@ bool promptMultiFileSarValues(std::string &pattern, std::string &replacement,
 	pathField = new TInputLine(TRect(14, 15, 96, 16), kPathBufferSize - 1);
 	dialog->insert(new TLabel(TRect(2, 15, 16, 16), "Start ~a~t:", pathField));
 	dialog->insert(pathField);
-	dialog->insert(new THistory(TRect(96, 15, 99, 16), pathField, kMultiPathHistoryId));
 	{
 		const std::array buttons{
 		    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault},
@@ -2855,8 +2906,6 @@ bool promptMultiFileSarValues(std::string &pattern, std::string &replacement,
 		static_cast<void>(setConfiguredLastFileDialogPath(currentOptions.startingPath));
 		static_cast<void>(addConfiguredMultiFilespecHistoryEntry(currentOptions.filespec));
 		static_cast<void>(addConfiguredMultiPathHistoryEntry(currentOptions.startingPath));
-		historyAdd(kMultiFilespecHistoryId, currentOptions.filespec);
-		historyAdd(kMultiPathHistoryId, currentOptions.startingPath);
 		persistSearchDialogSettingsSnapshot();
 
 		searchOptions.searchSubdirectories = currentOptions.searchSubdirectories;
@@ -3866,14 +3915,16 @@ bool handleSearchFindText() {
 }
 
 bool handleSearchRepeatPrevious() {
-	MREditWindow *win = currentEditWindow();
+	MREditWindow *win = resolveSearchResultsWindow(g_searchResultsContext.window);
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 	std::size_t startOffset = 0;
 	bool wrapped = false;
 
-	if (editor == nullptr)
-		return true;
 	if (!g_searchUiState.hasPrevious || g_searchUiState.pattern.empty()) {
+		postDialogWarning(kNoPreviousSearchMessage);
+		return true;
+	}
+	if (editor == nullptr) {
 		postDialogWarning(kNoPreviousSearchMessage);
 		return true;
 	}
@@ -3887,6 +3938,8 @@ bool handleSearchRepeatPrevious() {
 	if (!performSearch(win, g_searchUiState.pattern, startOffset, true, g_searchUiState.lastOptions,
 	                   true, &wrapped))
 		return true;
+	if (win != currentEditWindow())
+		static_cast<void>(mrActivateEditWindow(win));
 	updateMiniMapFindMarkers(win, g_searchUiState.pattern, g_searchUiState.lastOptions);
 	if (wrapped)
 		mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEventFollowup,
@@ -4056,12 +4109,8 @@ bool handleSearchReplace() {
 		}
 		editor->revealCursor(True);
 
-		g_searchUiState.hasPrevious = true;
-		g_searchUiState.pattern = pattern;
 		g_searchUiState.replacement = replacement;
-		g_searchUiState.lastStart = cursorTargetStart;
-		g_searchUiState.lastEnd = cursorTargetEnd;
-		g_searchUiState.lastOptions = searchOptions;
+		rememberSingleSearchResultContext(win, pattern, searchOptions, cursorTargetStart, cursorTargetEnd);
 		syncVmLastSearch(win, true, cursorTargetStart, cursorTargetEnd, editor->cursorOffset());
 		if (cancelledByUser) {
 			clearSearchSelection(win);
@@ -4080,9 +4129,11 @@ bool handleSearchMultiFileSearch() {
 		if (!promptMultiFileSearchValues(pattern, options, session))
 			return true;
 		g_lastMultiFileSearchSession = session;
+		rememberMultiFileSearchResultContext();
 		switch (runMultiFileResultsDialog(g_lastMultiFileSearchSession)) {
 			case MultiDialogAction::Done:
 				static_cast<void>(activateSessionCurrentMatch(g_lastMultiFileSearchSession));
+				rememberMultiFileSearchResultContext();
 				return true;
 			case MultiDialogAction::Cancel:
 				continue;
@@ -4100,6 +4151,7 @@ bool handleSearchListFilesFromLastSearch() {
 		postDialogWarning(kNoPreviousMultiFileSearchListMessage);
 		return true;
 	}
+	rememberMultiFileSearchResultContext();
 	action = runMultiFileResultsDialog(g_lastMultiFileSearchSession);
 	if (action == MultiDialogAction::Done)
 		static_cast<void>(activateSessionCurrentMatch(g_lastMultiFileSearchSession));
@@ -4155,6 +4207,8 @@ bool handleSearchMultiFileSearchReplace() {
 		closeTemporaryWindowsForSession(session);
 		if (returnToSearchDialog)
 			continue;
+		g_lastMultiFileSearchSession = session;
+		rememberMultiFileSearchResultContext();
 		if (replacedCount == 0)
 			postSearchWarning("No replacements.");
 		else
@@ -4204,8 +4258,10 @@ bool handleFileOpen() {
 
 	if (!promptForPath("Open File", fileName, sizeof(fileName)))
 		return true;
-	if (!resolveReadableExistingPath(MRDialogHistoryScope::OpenFile, fileName, resolvedPath))
+	if (!resolveReadableExistingPath(MRDialogHistoryScope::OpenFile, fileName, resolvedPath)) {
+		forgetLoadDialogPath(MRDialogHistoryScope::OpenFile, fileName);
 		return true;
+	}
 
 	target = findReusableEmptyWindow(current);
 	if (target == nullptr) {
@@ -4213,12 +4269,14 @@ bool handleFileOpen() {
 		createdTarget = true;
 	}
 	if (!loadResolvedFileIntoWindow(target, resolvedPath, "Open file")) {
+		forgetLoadDialogPath(MRDialogHistoryScope::OpenFile, resolvedPath.c_str());
 		if (createdTarget && target != nullptr)
 			message(target, evCommand, cmClose, nullptr);
 		if (target != nullptr && isEmptyUntitledEditableWindow(target) && current != target && current != nullptr)
 			static_cast<void>(mrActivateEditWindow(current));
 		return true;
 	}
+	rememberLoadDialogPath(MRDialogHistoryScope::OpenFile, resolvedPath.c_str());
 	static_cast<void>(mrActivateEditWindow(target));
 	logLine = "Opened file: ";
 	logLine += target->currentFileName();
@@ -4238,18 +4296,22 @@ bool handleFileLoad() {
 
 	if (!promptForPath("Load File", fileName, sizeof(fileName)))
 		return true;
-	if (!resolveReadableExistingPath(MRDialogHistoryScope::LoadFile, fileName, resolvedPath))
+	if (!resolveReadableExistingPath(MRDialogHistoryScope::LoadFile, fileName, resolvedPath)) {
+		forgetLoadDialogPath(MRDialogHistoryScope::LoadFile, fileName);
 		return true;
+	}
 	if (target == nullptr) {
 		target = createEditorWindow("?No-File?");
 		createdTarget = true;
 	} else if (!target->confirmAbandonForReload())
 		return true;
 	if (!loadResolvedFileIntoWindow(target, resolvedPath, "Load file")) {
+		forgetLoadDialogPath(MRDialogHistoryScope::LoadFile, resolvedPath.c_str());
 		if (createdTarget && target != nullptr)
 			message(target, evCommand, cmClose, nullptr);
 		return true;
 	}
+	rememberLoadDialogPath(MRDialogHistoryScope::LoadFile, resolvedPath.c_str());
 	static_cast<void>(mrActivateEditWindow(target));
 	logLine = "Loaded file into active window: ";
 	logLine += target->currentFileName();
@@ -4343,10 +4405,6 @@ bool dispatchEditorClipboardCommand(ushort editorCommand, bool requiresWritable)
 	return dispatchEditorCommand(editorCommand, requiresWritable);
 }
 
-ushort execDialogWithDataLocal(TDialog *dialog, void *data) {
-	return mr::dialogs::execDialogWithData(dialog, data);
-}
-
 void syncPersistentBlocksMenuState() {
 	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(TProgram::menuBar))
 		mrMenuBar->setPersistentBlocksMenuState(configuredPersistentBlocksSetting());
@@ -4411,6 +4469,187 @@ bool promptBlockLoadPath(std::string &outPath) {
 	return !outPath.empty();
 }
 
+void acceptFetchedClipboardText(TStringView text) {
+	g_clipboardFetchState.received = true;
+	g_clipboardFetchState.text.assign(text.data(), text.size());
+}
+
+bool readSystemClipboardText(std::string &outText) {
+	g_clipboardFetchState = ClipboardFetchState();
+	if (!THardwareInfo::requestClipboardText(acceptFetchedClipboardText) || !g_clipboardFetchState.received)
+		return false;
+	outText = g_clipboardFetchState.text;
+	return true;
+}
+
+void writeSystemClipboardText(std::string_view text) {
+	TClipboard::setText(TStringView(text.data(), text.size()));
+}
+
+bool copyCurrentBlockToSystemClipboard(bool append, bool cut, const char *failureText) {
+	std::string blockText;
+	std::string clipboardText;
+
+	if (!mrvmUiExtractCurrentBlockText(blockText))
+		return handleBlockAction(false, failureText);
+	if (append) {
+		if (!readSystemClipboardText(clipboardText)) {
+			postDialogWarning("Unable to read system clipboard.");
+			return true;
+		}
+		clipboardText += blockText;
+	} else
+		clipboardText = blockText;
+	writeSystemClipboardText(clipboardText);
+	if (cut)
+		return handleBlockAction(mrvmUiDeleteBlock(), failureText);
+	return true;
+}
+
+bool copyCurrentBlockToSystemClipboard() {
+	return copyCurrentBlockToSystemClipboard(false, false, "No block marked.");
+}
+
+bool promptBlockMathOperation(char &operation) {
+	char operationBuffer[8] = {0};
+
+	operation = '\0';
+	if (inputBox("BLOCK MATH", "~O~peration (+,-,*,/)", operationBuffer,
+	             static_cast<ushort>(sizeof(operationBuffer) - 1)) == cmCancel)
+		return false;
+	switch (operationBuffer[0]) {
+		case '+':
+		case '-':
+		case '*':
+		case '/':
+			operation = operationBuffer[0];
+			return true;
+		default:
+			postDialogWarning("Operation must be one of: + - * /");
+			return false;
+	}
+}
+
+bool parseBlockMathValues(std::string_view text, std::vector<double> &values) {
+	std::string token;
+	auto flushToken = [&]() {
+		bool sawDigit = false;
+		std::string normalized;
+		char *endPtr = nullptr;
+		double value = 0.0;
+
+		if (token.empty())
+			return;
+		for (const char ch : token) {
+			if (std::isdigit(static_cast<unsigned char>(ch)) != 0)
+				sawDigit = true;
+			if (ch != ',')
+				normalized.push_back(ch);
+		}
+		token.clear();
+		if (!sawDigit || normalized.empty())
+			return;
+		value = std::strtod(normalized.c_str(), &endPtr);
+		if (endPtr != nullptr && *endPtr == '\0')
+			values.push_back(value);
+	};
+
+	values.clear();
+	for (const char ch : text) {
+		if (std::isdigit(static_cast<unsigned char>(ch)) != 0 || ch == '.' || ch == ',' || ch == '-')
+			token.push_back(ch);
+		else
+			flushToken();
+	}
+	flushToken();
+	return !values.empty();
+}
+
+std::string formatBlockMathResult(double value) {
+	std::ostringstream out;
+	std::string text;
+
+	out << std::setprecision(15) << value;
+	text = out.str();
+	if (text.find('.') != std::string::npos) {
+		while (!text.empty() && text.back() == '0')
+			text.pop_back();
+		if (!text.empty() && text.back() == '.')
+			text.pop_back();
+	}
+	return text.empty() ? "0" : text;
+}
+
+bool runBlockMathOperation() {
+	MREditWindow *win = currentEditWindow();
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	std::string blockText;
+	std::vector<double> values;
+	char operation = '\0';
+	double result = 0.0;
+
+	if (editor == nullptr)
+		return true;
+	if (!promptBlockMathOperation(operation))
+		return true;
+	if (!mrvmUiExtractCurrentBlockText(blockText)) {
+		postDialogWarning("No block marked.");
+		return true;
+	}
+	if (!parseBlockMathValues(blockText, values)) {
+		postDialogWarning("Marked block contains no numbers.");
+		return true;
+	}
+	result = values.front();
+	for (std::size_t i = 1; i < values.size(); ++i)
+		switch (operation) {
+			case '+':
+				result += values[i];
+				break;
+			case '-':
+				result -= values[i];
+				break;
+			case '*':
+				result *= values[i];
+				break;
+			case '/':
+				if (values[i] == 0.0) {
+					postDialogWarning("Division by zero in marked block.");
+					return true;
+				}
+				result /= values[i];
+				break;
+			default:
+				postDialogWarning("Unsupported math operation.");
+				return true;
+		}
+	if (win->isReadOnly()) {
+		postDialogWarning(kWindowReadOnlyMessage);
+		return true;
+	}
+	return handleBlockAction(editor->insertBufferText(formatBlockMathResult(result)),
+	                         "Unable to insert block math result.");
+}
+
+bool handleSearchResultsNext() {
+	switch (g_searchResultsContext.kind) {
+		case SearchResultsContextKind::SingleFile:
+			return handleSearchRepeatPrevious();
+		case SearchResultsContextKind::MultiFile:
+			if (!g_lastMultiFileSearchSession.valid || g_lastMultiFileSearchSession.files.empty()) {
+				postDialogWarning(kNoPreviousMultiFileSearchListMessage);
+				return true;
+			}
+			if (!moveSessionMatch(g_lastMultiFileSearchSession, 1, true))
+				return true;
+			return activateSessionCurrentMatch(g_lastMultiFileSearchSession);
+		case SearchResultsContextKind::None:
+			postDialogWarning(kNoPreviousSearchMessage);
+			return true;
+	}
+	return true;
+}
+
 bool chooseInterWindowBlockTarget(int &sourceWindowIndex) {
 	MREditWindow *targetWin = currentEditWindow();
 	MREditWindow *sourceWin = nullptr;
@@ -4434,34 +4673,15 @@ bool chooseInterWindowBlockTarget(int &sourceWindowIndex) {
 	return true;
 }
 
+bool persistVisibleEditSetupSettingsWithFeedback(const MREditSetupSettings &settings, const std::string &errorPrefix);
+
 bool togglePersistentBlocksSetting() {
 	MREditSetupSettings settings = configuredEditSetupSettings();
-	MRSetupPaths paths;
-	MRSettingsWriteReport writeReport;
-	MREditorApp *app = dynamic_cast<MREditorApp *>(TProgram::application);
-	std::string errorText;
 	bool enabled;
 
 	settings.persistentBlocks = !settings.persistentBlocks;
-	if (!setConfiguredEditSetupSettings(settings, &errorText)) {
-		postSearchError("Persistent blocks update failed: " + errorText);
+	if (!persistVisibleEditSetupSettingsWithFeedback(settings, "Persistent blocks update failed: "))
 		return true;
-	}
-
-	paths.settingsMacroUri = configuredSettingsMacroFilePath();
-	paths.macroPath = defaultMacroDirectoryPath();
-	paths.helpUri = configuredHelpFilePath();
-	paths.tempPath = configuredTempDirectoryPath();
-	paths.shellUri = configuredShellExecutablePath();
-	if (!writeSettingsMacroFile(paths, &errorText, &writeReport)) {
-		postSearchError("Settings save failed: " + errorText);
-		return true;
-	}
-	mrLogSettingsWriteReport("persistent blocks toggle", writeReport);
-	if (app != nullptr && !app->applyConfiguredSettingsFromModel(&errorText)) {
-		postSearchError("Settings reload failed: " + errorText);
-		return true;
-	}
 
 	enabled = configuredPersistentBlocksSetting();
 	mrLogMessage(enabled ? "Persistent blocks enabled." : "Persistent blocks disabled.");
@@ -4472,36 +4692,29 @@ bool togglePersistentBlocksSetting() {
 	return true;
 }
 
-bool persistEditSetupSettingsWithFeedback(const MREditSetupSettings &settings, const std::string &errorPrefix) {
-	MRSetupPaths paths;
+bool persistVisibleEditSetupSettingsWithFeedback(const MREditSetupSettings &settings, const std::string &errorPrefix) {
 	MRSettingsWriteReport writeReport;
-	MREditorApp *app = dynamic_cast<MREditorApp *>(TProgram::application);
 	std::string errorText;
 
 	if (!setConfiguredEditSetupSettings(settings, &errorText)) {
 		postDialogError(errorPrefix + errorText);
 		return false;
 	}
-	paths.settingsMacroUri = configuredSettingsMacroFilePath();
-	paths.macroPath = defaultMacroDirectoryPath();
-	paths.helpUri = configuredHelpFilePath();
-	paths.tempPath = configuredTempDirectoryPath();
-	paths.shellUri = configuredShellExecutablePath();
-	if (!writeSettingsMacroFile(paths, &errorText, &writeReport)) {
+	if (!persistConfiguredSettingsSnapshot(&errorText, &writeReport)) {
 		postDialogError("Settings save failed: " + errorText);
 		return false;
 	}
-	mrLogSettingsWriteReport("wordstar edit setup update", writeReport);
-	if (app != nullptr && !app->applyConfiguredSettingsFromModel(&errorText)) {
-		postDialogError("Settings reload failed: " + errorText);
-		return false;
-	}
+	mrLogSettingsWriteReport("visible edit setup update", writeReport);
+	for (MREditWindow *window : allEditWindowsInZOrder())
+		if (window != nullptr && window->getEditor() != nullptr)
+			window->getEditor()->refreshConfiguredVisualSettings();
 	return true;
 }
 
 bool handleWordstarSetRightMargin() {
 	MREditSetupSettings settings = configuredEditSetupSettings();
 	NumericInputDialog::Layout layout = defaultNumericInputDialogLayout();
+	int minimumMargin = std::min(999, std::max(1, settings.leftMargin + 1));
 	int margin = settings.rightMargin > 0 ? settings.rightMargin : 78;
 
 	layout.width = 30;
@@ -4512,10 +4725,15 @@ bool handleWordstarSetRightMargin() {
 	layout.buttonLeft = 4;
 	layout.buttonGap = 2;
 	layout.showHelp = false;
-	if (!promptIntegerValue("SET RIGHT MARGIN", "", "Set the global RIGHT_MARGIN used for paragraph formatting and wrap handling.", margin, 1, 999, margin, layout))
+	if (margin < minimumMargin)
+		margin = minimumMargin;
+	if (!promptIntegerValue("SET RIGHT MARGIN", "", "Set the global RIGHT_MARGIN used for editor formatting.", margin,
+	                        minimumMargin, 999, margin, layout))
 		return true;
 	settings.rightMargin = margin;
-	if (!persistEditSetupSettingsWithFeedback(settings, "Right margin update failed: "))
+	settings.formatLine = synchronizeEditFormatLineMargins(settings.formatLine, settings.leftMargin,
+	                                                      settings.rightMargin, settings.tabSize);
+	if (!persistVisibleEditSetupSettingsWithFeedback(settings, "Right margin update failed: "))
 		return true;
 	mrLogMessage(("Right margin set to " + std::to_string(margin) + ".").c_str());
 	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Right margin updated.", mr::messageline::Kind::Info, mr::messageline::kPriorityLow);
@@ -4523,13 +4741,19 @@ bool handleWordstarSetRightMargin() {
 }
 
 bool handleWordstarSetLeftMargin(MREditWindow *window) {
-	int margin = window != nullptr ? window->indentLevel() : 1;
+	MREditSetupSettings settings = configuredEditSetupSettings();
+	int maximumMargin = std::max(1, settings.rightMargin - 1);
+	int margin = settings.leftMargin > 0 ? settings.leftMargin : 1;
 
-	if (window == nullptr)
-		return false;
-	if (!promptIntegerValue("SET LEFT MARGIN", "~M~argin:", "Set the current window left margin used by WordStar paragraph commands.", margin, 1, 254, margin))
+	static_cast<void>(window);
+	if (!promptIntegerValue("SET LEFT MARGIN", "~M~argin:", "Set the global LEFT_MARGIN used for editor formatting.",
+	                        margin, 1, maximumMargin, margin))
 		return true;
-	window->setIndentLevel(margin);
+	settings.leftMargin = margin;
+	settings.formatLine = synchronizeEditFormatLineMargins(settings.formatLine, settings.leftMargin,
+	                                                      settings.rightMargin, settings.tabSize);
+	if (!persistVisibleEditSetupSettingsWithFeedback(settings, "Left margin update failed: "))
+		return true;
 	mrLogMessage(("Left margin set to " + std::to_string(margin) + ".").c_str());
 	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Left margin updated.", mr::messageline::Kind::Info, mr::messageline::kPriorityLow);
 	return true;
@@ -4539,38 +4763,58 @@ bool handleWordstarToggleWordWrap() {
 	MREditSetupSettings settings = configuredEditSetupSettings();
 
 	settings.wordWrap = !settings.wordWrap;
-	if (!persistEditSetupSettingsWithFeedback(settings, "Word wrap update failed: "))
+	if (!persistVisibleEditSetupSettingsWithFeedback(settings, "Word wrap update failed: "))
 		return true;
-	mrLogMessage(settings.wordWrap ? "Word wrap enabled." : "Word wrap disabled.");
-	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, settings.wordWrap ? "Word wrap: ON" : "Word wrap: OFF", mr::messageline::Kind::Info, mr::messageline::kPriorityLow);
+	return true;
+}
+
+bool handleToggleFormatRuler() {
+	MREditSetupSettings settings = configuredEditSetupSettings();
+
+	settings.formatRuler = !settings.formatRuler;
+	if (!persistVisibleEditSetupSettingsWithFeedback(settings, "Format ruler update failed: "))
+		return true;
+	mrLogMessage(settings.formatRuler ? "Format ruler enabled." : "Format ruler disabled.");
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction,
+	                               settings.formatRuler ? "Format ruler: ON" : "Format ruler: OFF",
+	                               mr::messageline::Kind::Info, mr::messageline::kPriorityLow);
 	return true;
 }
 
 bool handleWordstarReformatParagraph(MREditWindow *window) {
 	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
-	const int rightMargin = std::max(1, configuredEditSetupSettings().rightMargin);
+	const MREditSetupSettings settings = configuredEditSetupSettings();
 
 	if (editor == nullptr || window == nullptr || window->isReadOnly())
 		return false;
-	return editor->formatParagraph(window->indentLevel(), rightMargin);
+	return editor->formatParagraph(settings.leftMargin, settings.rightMargin);
+}
+
+bool handleReformatDocument(MREditWindow *window) {
+	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+	const MREditSetupSettings settings = configuredEditSetupSettings();
+
+	if (editor == nullptr || window == nullptr || window->isReadOnly())
+		return false;
+	return editor->formatDocument(settings.leftMargin, settings.rightMargin);
 }
 
 bool handleWordstarJustifyParagraph(MREditWindow *window) {
 	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
-	const int rightMargin = std::max(1, configuredEditSetupSettings().rightMargin);
+	const MREditSetupSettings settings = configuredEditSetupSettings();
 
 	if (editor == nullptr || window == nullptr || window->isReadOnly())
 		return false;
-	return editor->justifyParagraph(window->indentLevel(), rightMargin);
+	return editor->justifyParagraph(settings.leftMargin, settings.rightMargin);
 }
 
 bool handleWordstarCenterLine(MREditWindow *window) {
 	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
-	const int rightMargin = std::max(1, configuredEditSetupSettings().rightMargin);
+	const MREditSetupSettings settings = configuredEditSetupSettings();
 
 	if (editor == nullptr || window == nullptr || window->isReadOnly())
 		return false;
-	return editor->centerCurrentLine(window->indentLevel(), rightMargin);
+	return editor->centerCurrentLine(settings.leftMargin, settings.rightMargin);
 }
 
 bool handleWordstarLoadBlockFromFile(MREditWindow *window) {
@@ -4586,6 +4830,7 @@ bool handleWordstarLoadBlockFromFile(MREditWindow *window) {
 	if (!promptBlockLoadPath(path))
 		return true;
 	if (!readTextFile(path, text, errorText)) {
+		forgetLoadDialogPath(MRDialogHistoryScope::BlockLoad, path.c_str());
 		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, errorText, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 		return true;
 	}
@@ -4596,6 +4841,7 @@ bool handleWordstarLoadBlockFromFile(MREditWindow *window) {
 	if (!editor->replaceRangeAndSelect(static_cast<uint>(start), static_cast<uint>(end), text.data(), static_cast<uint>(text.size())))
 		return true;
 	window->applyCommittedBlockState(static_cast<int>(MREditWindow::bmStream), false, static_cast<uint>(start), static_cast<uint>(start + text.size()));
+	rememberLoadDialogPath(MRDialogHistoryScope::BlockLoad, path.c_str());
 	return true;
 }
 
@@ -4746,6 +4992,7 @@ void clearTransientSelectionIfPending(const TEvent &event) {
 bool dispatchMRKeymapAction(std::string_view actionId, std::string_view sequenceText, MREditWindow *targetWindow) {
 	const auto it = std::ranges::find(kKeymapActionDispatchTable, actionId, &KeymapActionDispatchEntry::actionId);
 	MREditWindow *window = effectiveKeymapWindow(targetWindow);
+	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 	const std::optional<int> markIndex = randomAccessMarkIndexFromSequence(sequenceText);
 
 	if (it == kKeymapActionDispatchTable.end())
@@ -4769,27 +5016,58 @@ bool dispatchMRKeymapAction(std::string_view actionId, std::string_view sequence
 					return markIndex && mrvmUiSetRandomAccessMark(*markIndex);
 				case KeymapCustomAction::GetRandomAccessMark:
 					return markIndex && mrvmUiGetRandomAccessMark(*markIndex);
-				case KeymapCustomAction::CenterLine:
-					return handleWordstarCenterLine(window);
-				case KeymapCustomAction::ReformatParagraph:
-					return handleWordstarReformatParagraph(window);
-				case KeymapCustomAction::ToggleWordWrap:
-					return handleWordstarToggleWordWrap();
+					case KeymapCustomAction::CenterLine:
+						return handleWordstarCenterLine(window);
+						case KeymapCustomAction::ReformatParagraph:
+							return handleWordstarReformatParagraph(window);
+						case KeymapCustomAction::ReformatDocument:
+							return handleReformatDocument(window);
+						case KeymapCustomAction::ToggleFormatRuler:
+							return handleToggleFormatRuler();
+						case KeymapCustomAction::ToggleWordWrap:
+							return handleWordstarToggleWordWrap();
 				case KeymapCustomAction::SetLeftMargin:
 					return handleWordstarSetLeftMargin(window);
 				case KeymapCustomAction::SetRightMargin:
 					return handleWordstarSetRightMargin();
 				case KeymapCustomAction::JustifyParagraph:
 					return handleWordstarJustifyParagraph(window);
-				case KeymapCustomAction::SortColumnBlockToggle:
-					return window != nullptr && window->sortColumnBlockToggleOrder();
-				case KeymapCustomAction::ForceSave:
-					return handleWordstarForceSave(window);
-				case KeymapCustomAction::ExitDirtySaveAll:
-					return handleWordstarExitDirtySaveAll();
-				case KeymapCustomAction::None:
-					return false;
-			}
+					case KeymapCustomAction::SortColumnBlockToggle:
+						return window != nullptr && window->sortColumnBlockToggleOrder();
+					case KeymapCustomAction::ForceSave:
+						return handleWordstarForceSave(window);
+					case KeymapCustomAction::ExitDirtySaveAll:
+						return handleWordstarExitDirtySaveAll();
+					case KeymapCustomAction::MoveCursorToNextPageBreak:
+						return handleBlockAction(mrvmUiMoveCursorToNextPageBreak(), "No next page break found.");
+					case KeymapCustomAction::MoveCursorToPrevPageBreak:
+						return handleBlockAction(mrvmUiMoveCursorToPrevPageBreak(), "No previous page break found.");
+					case KeymapCustomAction::ScrollWindowUp:
+						return window != nullptr && editor != nullptr && editor->scrollWindowByLines(1);
+					case KeymapCustomAction::ScrollWindowDown:
+						return window != nullptr && editor != nullptr && editor->scrollWindowByLines(-1);
+					case KeymapCustomAction::CursorIndent:
+						return handleBlockAction(mrvmUiCursorIndent(), "Unable to indent cursor position.");
+					case KeymapCustomAction::CursorTabRight:
+						return handleBlockAction(mrvmUiCursorTabRight(), "Unable to move to next tab stop.");
+					case KeymapCustomAction::CursorTabLeft:
+						return handleBlockAction(mrvmUiCursorTabLeft(), "Unable to move to previous tab stop.");
+					case KeymapCustomAction::CursorUndent:
+						return handleBlockAction(mrvmUiCursorUndent(), "Unable to undent cursor position.");
+					case KeymapCustomAction::CopyMarkedBlockToSystemClipboard:
+						return copyCurrentBlockToSystemClipboard();
+					case KeymapCustomAction::BlockMath:
+						return runBlockMathOperation();
+					case KeymapCustomAction::ExtendBlockByMotion: {
+						const auto sequence = MRKeymapSequence::parse(sequenceText);
+						return window != nullptr && sequence && sequence->size() == 1 &&
+						       window->shiftCursorBlockMark(sequence->tokens().front());
+					}
+						case KeymapCustomAction::SearchResultsNext:
+							return handleSearchResultsNext();
+						case KeymapCustomAction::None:
+							return false;
+				}
 	}
 	return false;
 }
@@ -4829,10 +5107,16 @@ bool handleMRCommand(ushort command) {
 			return dispatchEditorCommand(cmMrEditRedo, true);
 
 		case cmMrEditCutToBuffer:
-			return dispatchEditorClipboardCommand(cmCut, true);
+			return copyCurrentBlockToSystemClipboard(false, true, "Unable to move block to buffer.");
 
 		case cmMrEditCopyToBuffer:
-			return dispatchEditorClipboardCommand(cmCopy, false);
+			return copyCurrentBlockToSystemClipboard(false, false, "No block marked.");
+
+		case cmMrEditAppendToBuffer:
+			return copyCurrentBlockToSystemClipboard(true, false, "No block marked.");
+
+		case cmMrEditCutAndAppendToBuffer:
+			return copyCurrentBlockToSystemClipboard(true, true, "Unable to cut and append block.");
 
 		case cmMrEditPasteFromBuffer:
 			return dispatchEditorClipboardCommand(cmPaste, true);

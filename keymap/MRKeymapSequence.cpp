@@ -54,6 +54,8 @@ std::optional<MRKeymapSequence> MRKeymapSequence::parse(std::string_view text) {
 std::string MRKeymapSequence::toString() const {
 	std::string text;
 	for (std::size_t i = 0; i < tokenValues.size(); ++i) {
+		if (i != 0)
+			text += ' ';
 		text += tokenValues[i].toString();
 	}
 	return text;
