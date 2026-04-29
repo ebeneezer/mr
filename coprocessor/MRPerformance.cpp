@@ -33,8 +33,7 @@ EventStore &eventStore() {
 
 std::string_view leafNameOf(std::string_view path) {
 	std::size_t pos = path.find_last_of("\\/");
-	if (pos == std::string_view::npos)
-		return path;
+	if (pos == std::string_view::npos) return path;
 	return path.substr(pos + 1);
 }
 
@@ -74,10 +73,8 @@ std::string formatWallClock(std::time_t when) {
 	std::array<char, 32> buffer{};
 	std::tm *tmNow = std::localtime(&when);
 
-	if (tmNow == nullptr)
-		return "--:--:--";
-	if (std::strftime(buffer.data(), buffer.size(), "%H:%M:%S", tmNow) == 0)
-		return "--:--:--";
+	if (tmNow == nullptr) return "--:--:--";
+	if (std::strftime(buffer.data(), buffer.size(), "%H:%M:%S", tmNow) == 0) return "--:--:--";
 	return buffer.data();
 }
 
@@ -91,8 +88,7 @@ void appendEvent(EventStore &store, Event event) {
 
 } // namespace
 
-void recordUiEvent(std::string_view action, std::size_t bufferId, std::size_t documentId, std::size_t bytes,
-                   double totalMs, std::string_view detail, Outcome outcome) {
+void recordUiEvent(std::string_view action, std::size_t bufferId, std::size_t documentId, std::size_t bytes, double totalMs, std::string_view detail, Outcome outcome) {
 	EventStore &store = eventStore();
 	std::lock_guard<std::mutex> lock(store.mutex);
 	Event event;
@@ -110,17 +106,12 @@ void recordUiEvent(std::string_view action, std::size_t bufferId, std::size_t do
 	appendEvent(store, event);
 }
 
-void recordBackgroundResult(const mr::coprocessor::Result &result, std::string_view action,
-                            std::size_t bufferId, std::size_t documentId, std::size_t bytes,
-                            std::string_view detail) {
-	Outcome outcome =
-	    result.failed() ? Outcome::Failed : (result.cancelled() ? Outcome::Cancelled : Outcome::Completed);
+void recordBackgroundResult(const mr::coprocessor::Result &result, std::string_view action, std::size_t bufferId, std::size_t documentId, std::size_t bytes, std::string_view detail) {
+	Outcome outcome = result.failed() ? Outcome::Failed : (result.cancelled() ? Outcome::Cancelled : Outcome::Completed);
 	recordBackgroundEvent(result.task.lane, outcome, result.timing, action, bufferId, documentId, bytes, detail);
 }
 
-void recordBackgroundEvent(mr::coprocessor::Lane lane, Outcome outcome, const mr::coprocessor::TaskTiming &timing,
-                           std::string_view action, std::size_t bufferId, std::size_t documentId,
-                           std::size_t bytes, std::string_view detail) {
+void recordBackgroundEvent(mr::coprocessor::Lane lane, Outcome outcome, const mr::coprocessor::TaskTiming &timing, std::string_view action, std::size_t bufferId, std::size_t documentId, std::size_t bytes, std::string_view detail) {
 	EventStore &store = eventStore();
 	std::lock_guard<std::mutex> lock(store.mutex);
 	Event event;
@@ -144,15 +135,13 @@ std::vector<Event> recentForWindow(std::size_t bufferId, std::size_t documentId,
 	std::vector<Event> result;
 	std::lock_guard<std::mutex> lock(store.mutex);
 
-	for (const auto & event : store.events) {
+	for (const auto &event : store.events) {
 		bool matchesBuffer = bufferId != 0 && event.bufferId != 0 && event.bufferId == bufferId;
 		bool matchesDocument = documentId != 0 && event.documentId != 0 && event.documentId == documentId;
 
-		if (!matchesBuffer && !matchesDocument)
-			continue;
+		if (!matchesBuffer && !matchesDocument) continue;
 		result.push_back(event);
-		if (result.size() >= maxCount)
-			break;
+		if (result.size() >= maxCount) break;
 	}
 	return result;
 }
@@ -162,8 +151,7 @@ std::vector<Event> recentGlobal(std::size_t maxCount) {
 	std::vector<Event> result;
 	std::lock_guard<std::mutex> lock(store.mutex);
 
-	for (std::deque<Event>::const_iterator it = store.events.begin();
-	     it != store.events.end() && result.size() < maxCount; ++it)
+	for (std::deque<Event>::const_iterator it = store.events.begin(); it != store.events.end() && result.size() < maxCount; ++it)
 		result.push_back(*it);
 	return result;
 }
@@ -171,8 +159,7 @@ std::vector<Event> recentGlobal(std::size_t maxCount) {
 bool currentMessageLineNotice(MessageLineNotice &out) {
 	mr::messageline::VisibleMessage message;
 
-	if (!mr::messageline::currentOwnerMessage(mr::messageline::Owner::HeroEvent, message))
-		return false;
+	if (!mr::messageline::currentOwnerMessage(mr::messageline::Owner::HeroEvent, message)) return false;
 	out.active = true;
 	out.kind = static_cast<MessageNoticeKind>(message.kind);
 	out.text = message.text;
@@ -199,11 +186,9 @@ std::string formatThroughput(std::size_t bytes, double totalMs) {
 	double seconds = totalMs / 1000.0;
 	double mibPerSecond;
 
-	if (bytes == 0 || totalMs <= 0.0)
-		return std::string();
+	if (bytes == 0 || totalMs <= 0.0) return std::string();
 	mibPerSecond = (static_cast<double>(bytes) / (1024.0 * 1024.0)) / seconds;
-	if (!std::isfinite(mibPerSecond) || mibPerSecond <= 0.0)
-		return std::string();
+	if (!std::isfinite(mibPerSecond) || mibPerSecond <= 0.0) return std::string();
 	std::snprintf(buffer.data(), buffer.size(), "%.1f MiB/s", mibPerSecond);
 	return buffer.data();
 }
@@ -221,9 +206,7 @@ std::string formatEventLine(const Event &event) {
 	line += " ";
 	line += outcomeLabel(event.outcome);
 	line += " ";
-	if (event.scope == Scope::Background)
-		line += "q " + formatDuration(event.queueMs) + ", run " + formatDuration(event.runMs) + ", total " +
-		        formatDuration(event.totalMs);
+	if (event.scope == Scope::Background) line += "q " + formatDuration(event.queueMs) + ", run " + formatDuration(event.runMs) + ", total " + formatDuration(event.totalMs);
 	else
 		line += formatDuration(event.totalMs);
 	if (event.bytes != 0) {

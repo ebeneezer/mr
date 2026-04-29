@@ -43,13 +43,9 @@ struct MRSettingsChangeEntry {
 	std::string newValue;
 };
 
-bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::string &source,
-                                    MRSettingsLoadReport *report = nullptr,
-                                    std::string *errorMessage = nullptr);
+bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::string &source, MRSettingsLoadReport *report = nullptr, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string describeSettingsLoadReport(const MRSettingsLoadReport &report);
-bool diffSettingsSources(const std::string &beforeSource, const std::string &afterSource,
-                         std::vector<MRSettingsChangeEntry> &changes,
-                         std::string *errorMessage = nullptr);
+bool diffSettingsSources(const std::string &beforeSource, const std::string &afterSource, std::vector<MRSettingsChangeEntry> &changes, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string formatSettingsChangeForLog(const MRSettingsChangeEntry &change);
 
 #endif

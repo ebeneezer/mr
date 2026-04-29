@@ -8,14 +8,14 @@ namespace {
 
 std::string lowerCopy(const std::string &value) {
 	std::string result = value;
-	for (char & i : result)
+	for (char &i : result)
 		i = static_cast<char>(std::tolower(static_cast<unsigned char>(i)));
 	return result;
 }
 
 std::string upperCopy(const std::string &value) {
 	std::string result = value;
-	for (char & i : result)
+	for (char &i : result)
 		i = static_cast<char>(std::toupper(static_cast<unsigned char>(i)));
 	return result;
 }
@@ -43,16 +43,13 @@ bool isWordChar(char ch) {
 
 bool matchesWord(const std::string &word, const char *const *table, std::size_t count) {
 	for (std::size_t i = 0; i < count; ++i)
-		if (word == table[i])
-			return true;
+		if (word == table[i]) return true;
 	return false;
 }
 
 void paint(MRSyntaxTokenMap &tokens, std::size_t start, std::size_t end, MRSyntaxToken token) {
-	if (start > tokens.size())
-		start = tokens.size();
-	if (end > tokens.size())
-		end = tokens.size();
+	if (start > tokens.size()) start = tokens.size();
+	if (end > tokens.size()) end = tokens.size();
 	for (std::size_t i = start; i < end; ++i)
 		tokens[i] = token;
 }
@@ -72,8 +69,7 @@ static std::size_t skipWhitespace(const std::string &text, std::size_t pos = 0) 
 	return pos == text.size() ? std::string::npos : pos;
 }
 
-void tokenizeString(MRSyntaxTokenMap &tokens, const std::string &line, std::size_t &i, char quote,
-                    bool doubledQuoteEscape = false) {
+void tokenizeString(MRSyntaxTokenMap &tokens, const std::string &line, std::size_t &i, char quote, bool doubledQuoteEscape = false) {
 	std::size_t start = i++;
 	while (i < line.size()) {
 		if (!doubledQuoteEscape && line[i] == '\\' && i + 1 < line.size()) {
@@ -94,20 +90,8 @@ void tokenizeString(MRSyntaxTokenMap &tokens, const std::string &line, std::size
 }
 
 void tokenizeCFamily(MRSyntaxTokenMap &tokens, const std::string &line) {
-	static const char *const keywords[] = {
-	    "break",    "case",     "catch",   "class",    "const",    "continue", "default", "delete",
-	    "do",       "else",     "enum",    "explicit", "extern",   "for",      "friend",  "goto",
-	    "if",       "inline",   "namespace", "new",    "operator", "private",  "protected",
-	    "public",   "return",   "sizeof",  "static",   "struct",   "switch",   "template", "throw",
-	    "try",      "typedef",  "typename", "union",   "using",    "virtual",  "while",   "constexpr",
-	    "noexcept", "override", "final",   "auto",     "decltype"
-	};
-	static const char *const types[] = {
-	    "bool",       "char",      "double", "float",   "int",        "long",   "short",
-	    "signed",     "size_t",    "ssize_t","std",     "string",     "unsigned","void",
-	    "wchar_t",    "uint8_t",   "uint16_t","uint32_t","uint64_t",  "int8_t", "int16_t",
-	    "int32_t",    "int64_t",   "FILE",   "Boolean", "TStringView","TColorAttr", "TAttrPair"
-	};
+	static const char *const keywords[] = {"break", "case", "catch", "class", "const", "continue", "default", "delete", "do", "else", "enum", "explicit", "extern", "for", "friend", "goto", "if", "inline", "namespace", "new", "operator", "private", "protected", "public", "return", "sizeof", "static", "struct", "switch", "template", "throw", "try", "typedef", "typename", "union", "using", "virtual", "while", "constexpr", "noexcept", "override", "final", "auto", "decltype"};
+	static const char *const types[] = {"bool", "char", "double", "float", "int", "long", "short", "signed", "size_t", "ssize_t", "std", "string", "unsigned", "void", "wchar_t", "uint8_t", "uint16_t", "uint32_t", "uint64_t", "int8_t", "int16_t", "int32_t", "int64_t", "FILE", "Boolean", "TStringView", "TColorAttr", "TAttrPair"};
 
 	for (std::size_t i = 0; i < line.size();) {
 		if (line[i] == '/' && i + 1 < line.size() && line[i + 1] == '/') {
@@ -119,8 +103,7 @@ void tokenizeCFamily(MRSyntaxTokenMap &tokens, const std::string &line) {
 			i += 2;
 			while (i + 1 < line.size() && (line[i] != '*' || line[i + 1] != '/'))
 				++i;
-			if (i + 1 < line.size())
-				i += 2;
+			if (i + 1 < line.size()) i += 2;
 			paint(tokens, start, i, MRSyntaxToken::Comment);
 			continue;
 		}
@@ -137,9 +120,7 @@ void tokenizeCFamily(MRSyntaxTokenMap &tokens, const std::string &line) {
 			std::size_t start = i++;
 			while (i < line.size()) {
 				char ch = line[i];
-				if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '.' || ch == '_' || ch == 'x' ||
-				    ch == 'X')
-					++i;
+				if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '.' || ch == '_' || ch == 'x' || ch == 'X') ++i;
 				else
 					break;
 			}
@@ -151,8 +132,7 @@ void tokenizeCFamily(MRSyntaxTokenMap &tokens, const std::string &line) {
 			while (i < line.size() && isWordChar(line[i]))
 				++i;
 			std::string word = line.substr(start, i - start);
-			if (matchesWord(word, keywords, sizeof(keywords) / sizeof(keywords[0])))
-				paint(tokens, start, i, MRSyntaxToken::Keyword);
+			if (matchesWord(word, keywords, sizeof(keywords) / sizeof(keywords[0]))) paint(tokens, start, i, MRSyntaxToken::Keyword);
 			else if (matchesWord(word, types, sizeof(types) / sizeof(types[0])))
 				paint(tokens, start, i, MRSyntaxToken::Type);
 			continue;
@@ -162,20 +142,14 @@ void tokenizeCFamily(MRSyntaxTokenMap &tokens, const std::string &line) {
 }
 
 void tokenizeMRMAC(MRSyntaxTokenMap &tokens, const std::string &line) {
-	static const char *const keywords[] = {
-	    "SMACRO_FILE", "END_MACRO", "DEF_INT", "DEF_STR", "DEF_CHAR", "DEF_REAL", "IF",   "THEN",
-	    "ELSE",        "END",       "WHILE",   "DO",      "TVCALL",   "CALL",     "RET",  "GOTO",
-	    "TO",          "FROM",      "TRANS",   "DUMP",    "PERM",     "AND",      "OR",   "NOT",
-	    "SHL",         "SHR",       "MOD"
-	};
+	static const char *const keywords[] = {"SMACRO_FILE", "END_MACRO", "DEF_INT", "DEF_STR", "DEF_CHAR", "DEF_REAL", "IF", "THEN", "ELSE", "END", "WHILE", "DO", "TVCALL", "CALL", "RET", "GOTO", "TO", "FROM", "TRANS", "DUMP", "PERM", "AND", "OR", "NOT", "SHL", "SHR", "MOD"};
 
 	for (std::size_t i = 0; i < line.size();) {
 		if (line[i] == '{') {
 			std::size_t start = i++;
 			int depth = 1;
 			while (i < line.size() && depth > 0) {
-				if (line[i] == '{')
-					++depth;
+				if (line[i] == '{') ++depth;
 				else if (line[i] == '}')
 					--depth;
 				++i;
@@ -191,8 +165,7 @@ void tokenizeMRMAC(MRSyntaxTokenMap &tokens, const std::string &line) {
 			std::size_t start = i++;
 			while (i < line.size() && line[i] != '>')
 				++i;
-			if (i < line.size())
-				++i;
+			if (i < line.size()) ++i;
 			paint(tokens, start, i, MRSyntaxToken::Directive);
 			continue;
 		}
@@ -221,8 +194,7 @@ void tokenizeMRMAC(MRSyntaxTokenMap &tokens, const std::string &line) {
 			while (i < line.size() && isWordChar(line[i]))
 				++i;
 			std::string word = upperCopy(line.substr(start, i - start));
-			if (matchesWord(word, keywords, sizeof(keywords) / sizeof(keywords[0])))
-				paint(tokens, start, i, MRSyntaxToken::Keyword);
+			if (matchesWord(word, keywords, sizeof(keywords) / sizeof(keywords[0]))) paint(tokens, start, i, MRSyntaxToken::Keyword);
 			continue;
 		}
 		++i;
@@ -239,8 +211,7 @@ void tokenizeMake(MRSyntaxTokenMap &tokens, const std::string &line) {
 	if (trimmed != std::string::npos && line[trimmed] != '\t') {
 		std::size_t colon = line.find(':', trimmed);
 		std::size_t eq = line.find('=', trimmed);
-		if (colon != std::string::npos && (eq == std::string::npos || colon < eq))
-			paint(tokens, trimmed, colon, MRSyntaxToken::Key);
+		if (colon != std::string::npos && (eq == std::string::npos || colon < eq)) paint(tokens, trimmed, colon, MRSyntaxToken::Key);
 		else if (eq != std::string::npos)
 			paint(tokens, trimmed, eq, MRSyntaxToken::Directive);
 	}
@@ -256,8 +227,7 @@ void tokenizeMake(MRSyntaxTokenMap &tokens, const std::string &line) {
 			i += 2;
 			while (i < line.size() && line[i] != closer)
 				++i;
-			if (i < line.size())
-				++i;
+			if (i < line.size()) ++i;
 			paint(tokens, start, i, MRSyntaxToken::Directive);
 			continue;
 		}
@@ -273,17 +243,14 @@ void tokenizeJson(MRSyntaxTokenMap &tokens, const std::string &line) {
 			std::size_t j = i;
 			while (j < line.size() && std::isspace(static_cast<unsigned char>(line[j])))
 				++j;
-			if (j < line.size() && line[j] == ':')
-				paint(tokens, start, i, MRSyntaxToken::Key);
+			if (j < line.size() && line[j] == ':') paint(tokens, start, i, MRSyntaxToken::Key);
 			continue;
 		}
 		if (std::isdigit(static_cast<unsigned char>(line[i])) || line[i] == '-') {
 			std::size_t start = i++;
 			while (i < line.size()) {
 				char ch = line[i];
-				if (std::isdigit(static_cast<unsigned char>(ch)) || ch == '.' || ch == 'e' || ch == 'E' ||
-				    ch == '+' || ch == '-')
-					++i;
+				if (std::isdigit(static_cast<unsigned char>(ch)) || ch == '.' || ch == 'e' || ch == 'E' || ch == '+' || ch == '-') ++i;
 				else
 					break;
 			}
@@ -306,16 +273,14 @@ void tokenizeJson(MRSyntaxTokenMap &tokens, const std::string &line) {
 
 void tokenizeIni(MRSyntaxTokenMap &tokens, const std::string &line) {
 	std::size_t trimmed = skipWhitespace(line);
-	if (trimmed == std::string::npos)
-		return;
+	if (trimmed == std::string::npos) return;
 	if (line[trimmed] == ';' || line[trimmed] == '#') {
 		paint(tokens, trimmed, line.size(), MRSyntaxToken::Comment);
 		return;
 	}
 	if (line[trimmed] == '[') {
 		std::size_t end = line.find(']', trimmed + 1);
-		if (end == std::string::npos)
-			end = line.size();
+		if (end == std::string::npos) end = line.size();
 		else
 			++end;
 		paint(tokens, trimmed, end, MRSyntaxToken::Section);
@@ -328,8 +293,7 @@ void tokenizeIni(MRSyntaxTokenMap &tokens, const std::string &line) {
 	std::size_t sepEq = line.find('=', trimmed);
 	std::size_t sepColon = line.find(':', trimmed);
 	std::size_t sep = std::min(sepEq, sepColon);
-	if (sep != std::string::npos)
-		paint(tokens, trimmed, sep, MRSyntaxToken::Key);
+	if (sep != std::string::npos) paint(tokens, trimmed, sep, MRSyntaxToken::Key);
 
 	for (std::size_t i = sep == std::string::npos ? trimmed : sep + 1; i < line.size();) {
 		if (line[i] == '"' || line[i] == '\'') {
@@ -350,8 +314,7 @@ void tokenizeIni(MRSyntaxTokenMap &tokens, const std::string &line) {
 
 void tokenizeMarkdown(MRSyntaxTokenMap &tokens, const std::string &line) {
 	std::size_t trimmed = skipWhitespace(line);
-	if (trimmed == std::string::npos)
-		return;
+	if (trimmed == std::string::npos) return;
 	if (line.compare(trimmed, 3, "```") == 0) {
 		paint(tokens, trimmed, line.size(), MRSyntaxToken::Directive);
 		return;
@@ -370,8 +333,7 @@ void tokenizeMarkdown(MRSyntaxTokenMap &tokens, const std::string &line) {
 			std::size_t start = i++;
 			while (i < line.size() && line[i] != '`')
 				++i;
-			if (i < line.size())
-				++i;
+			if (i < line.size()) ++i;
 			paint(tokens, start, i, MRSyntaxToken::String);
 			continue;
 		}
@@ -386,19 +348,12 @@ MRSyntaxLanguage tmrDetectSyntaxLanguage(const std::string &path, const std::str
 	std::string lowerName = lowerCopy(fileName);
 	std::string ext = extensionPart(fileName);
 
-	if (lowerName == "makefile" || lowerName == "gnumakefile" || ext == ".mk" || ext == ".mak")
-		return MRSyntaxLanguage::Make;
-	if (ext == ".c" || ext == ".cc" || ext == ".cpp" || ext == ".cxx" || ext == ".h" || ext == ".hh" ||
-	    ext == ".hpp" || ext == ".hxx" || ext == ".l" || ext == ".y")
-		return MRSyntaxLanguage::CFamily;
-	if (ext == ".mrmac" || ext == ".mr")
-		return MRSyntaxLanguage::MRMAC;
-	if (ext == ".json")
-		return MRSyntaxLanguage::Json;
-	if (ext == ".ini" || ext == ".cfg" || ext == ".conf")
-		return MRSyntaxLanguage::Ini;
-	if (ext == ".md" || ext == ".markdown" || lowerName == "readme")
-		return MRSyntaxLanguage::Markdown;
+	if (lowerName == "makefile" || lowerName == "gnumakefile" || ext == ".mk" || ext == ".mak") return MRSyntaxLanguage::Make;
+	if (ext == ".c" || ext == ".cc" || ext == ".cpp" || ext == ".cxx" || ext == ".h" || ext == ".hh" || ext == ".hpp" || ext == ".hxx" || ext == ".l" || ext == ".y") return MRSyntaxLanguage::CFamily;
+	if (ext == ".mrmac" || ext == ".mr") return MRSyntaxLanguage::MRMAC;
+	if (ext == ".json") return MRSyntaxLanguage::Json;
+	if (ext == ".ini" || ext == ".cfg" || ext == ".conf") return MRSyntaxLanguage::Ini;
+	if (ext == ".md" || ext == ".markdown" || lowerName == "readme") return MRSyntaxLanguage::Markdown;
 	return MRSyntaxLanguage::PlainText;
 }
 
@@ -421,10 +376,8 @@ const char *tmrSyntaxLanguageName(MRSyntaxLanguage language) noexcept {
 	}
 }
 
-MRSyntaxTokenMap tmrBuildTokenMapForLine(MRSyntaxLanguage language, const std::string &text,
-                                          std::size_t lineStart) {
-	if (lineStart > text.size())
-		lineStart = text.size();
+MRSyntaxTokenMap tmrBuildTokenMapForLine(MRSyntaxLanguage language, const std::string &text, std::size_t lineStart) {
+	if (lineStart > text.size()) lineStart = text.size();
 	std::size_t lineEnd = lineEndOf(text, lineStart);
 	return tmrBuildTokenMapForTextLine(language, text.substr(lineStart, lineEnd - lineStart));
 }

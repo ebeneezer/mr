@@ -2,6 +2,6 @@
 #include <string_view>
 
 namespace MRConstants {
-    constexpr const char* const kErrorTypeMismatch = "Type mismatch or syntax error.";
-    constexpr const char* const kErrorOutOfMemory = "Out of memory.";
-}
+constexpr const char *const kErrorTypeMismatch = "Type mismatch or syntax error.";
+constexpr const char *const kErrorOutOfMemory = "Out of memory.";
+} // namespace MRConstants

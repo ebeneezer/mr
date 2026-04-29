@@ -37,24 +37,21 @@
 
 namespace {
 void postWindowCommandError(std::string_view text) {
-	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text,
-	                               mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 }
 
 void collectEditWindowsInZOrder(TView *view, void *arg) {
 	std::vector<MREditWindow *> *windows = static_cast<std::vector<MREditWindow *> *>(arg);
 	MREditWindow *win = dynamic_cast<MREditWindow *>(view);
 
-	if (windows != nullptr && win != nullptr)
-		windows->push_back(win);
+	if (windows != nullptr && win != nullptr) windows->push_back(win);
 }
 } // namespace
 
 std::vector<MREditWindow *> allEditWindowsInZOrder() {
 	std::vector<MREditWindow *> windows;
 
-	if (TProgram::deskTop == nullptr)
-		return windows;
+	if (TProgram::deskTop == nullptr) return windows;
 
 	TProgram::deskTop->forEach(collectEditWindowsInZOrder, &windows);
 	return windows;
@@ -66,14 +63,12 @@ short nextEditorWindowNumber() {
 	std::set<short> used;
 	short candidate = 1;
 
-	for (auto & window : windows) {
-		if (window != nullptr && window->number > 0)
-			used.insert(window->number);
+	for (auto &window : windows) {
+		if (window != nullptr && window->number > 0) used.insert(window->number);
 	}
 
 	while (used.find(candidate) != used.end()) {
-		if (candidate == std::numeric_limits<short>::max())
-			return candidate;
+		if (candidate == std::numeric_limits<short>::max()) return candidate;
 		++candidate;
 	}
 	return candidate;
@@ -105,8 +100,7 @@ std::string escapeMrmacSingleQuotedLiteral(std::string_view value) {
 
 	escaped.reserve(value.size());
 	for (char ch : value) {
-		if (ch == '\'')
-			escaped += "''";
+		if (ch == '\'') escaped += "''";
 		else
 			escaped.push_back(ch);
 	}
@@ -122,8 +116,7 @@ std::string unescapeMrmacSingleQuotedLiteral(std::string_view value) {
 		if (ch == '\'' && i + 1 < value.size() && value[i + 1] == '\'') {
 			unescaped.push_back('\'');
 			++i;
-		}
-		else
+		} else
 			unescaped.push_back(ch);
 	}
 	return unescaped;
@@ -138,33 +131,25 @@ void pruneManuallyHiddenWindows(const std::vector<MREditWindow *> &windows) {
 	std::set<const MREditWindow *> active;
 
 	for (MREditWindow *win : windows)
-		if (win != nullptr)
-			active.insert(win);
+		if (win != nullptr) active.insert(win);
 
 	for (auto it = g_manuallyHiddenWindows.begin(); it != g_manuallyHiddenWindows.end();) {
-		if (active.find(*it) == active.end())
-			it = g_manuallyHiddenWindows.erase(it);
+		if (active.find(*it) == active.end()) it = g_manuallyHiddenWindows.erase(it);
 		else
 			++it;
 	}
 }
 
 bool parseWorkspaceEntry(const std::string &line, WorkspaceEntry &entry) {
-	static const std::regex linePattern(
-	    R"(MRSETUP\s*\(\s*'WORKSPACE'\s*,\s*'((?:''|[^'])*)'\s*\)\s*;?)",
-	    std::regex_constants::ECMAScript | std::regex_constants::icase);
-	static const std::regex payloadPattern(
-	    R"(^URL=(.*) size=(-?\d+),(-?\d+) pos=(-?\d+),(-?\d+) cursor=(-?\d+),(-?\d+) vd=(-?\d+)$)",
-	    std::regex_constants::ECMAScript);
+	static const std::regex linePattern(R"(MRSETUP\s*\(\s*'WORKSPACE'\s*,\s*'((?:''|[^'])*)'\s*\)\s*;?)", std::regex_constants::ECMAScript | std::regex_constants::icase);
+	static const std::regex payloadPattern(R"(^URL=(.*) size=(-?\d+),(-?\d+) pos=(-?\d+),(-?\d+) cursor=(-?\d+),(-?\d+) vd=(-?\d+)$)", std::regex_constants::ECMAScript);
 	std::smatch match;
 	std::smatch payloadMatch;
 	std::string payload;
 
-	if (!std::regex_search(line, match, linePattern))
-		return false;
+	if (!std::regex_search(line, match, linePattern)) return false;
 	payload = unescapeMrmacSingleQuotedLiteral(match[1].str());
-	if (!std::regex_match(payload, payloadMatch, payloadPattern))
-		return false;
+	if (!std::regex_match(payload, payloadMatch, payloadPattern)) return false;
 
 	entry.url = payloadMatch[1].str();
 	entry.width = std::stoi(payloadMatch[2].str());
@@ -180,15 +165,13 @@ bool parseWorkspaceEntry(const std::string &line, WorkspaceEntry &entry) {
 void restoreEditorCursor(MRFileEditor *editor, int line, int column) {
 	std::size_t target = 0;
 
-	if (editor == nullptr)
-		return;
+	if (editor == nullptr) return;
 	line = std::max(1, line);
 	column = std::max(1, column);
 
 	for (int currentLine = 1; currentLine < line && target < editor->bufferLength(); ++currentLine) {
 		std::size_t next = editor->nextLineOffset(target);
-		if (next <= target)
-			break;
+		if (next <= target) break;
 		target = next;
 	}
 	target = editor->charPtrOffset(target, column - 1);
@@ -202,8 +185,7 @@ std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths) {
 	std::string source = buildSettingsMacroSource(paths);
 	const std::size_t endMacro = source.rfind("END_MACRO;");
 
-	if (endMacro == std::string::npos)
-		return source;
+	if (endMacro == std::string::npos) return source;
 	for (MREditWindow *win : allEditWindowsInZOrder()) {
 		MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 		std::string url;
@@ -212,21 +194,14 @@ std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths) {
 		int cursorLine = 1;
 		int vd = 1;
 
-		if (win == nullptr || editor == nullptr)
-			continue;
+		if (win == nullptr || editor == nullptr) continue;
 		url = editor->persistentFileName();
-		if (url.empty())
-			continue;
+		if (url.empty()) continue;
 		r = win->getBounds();
 		cursorColumn = static_cast<int>(win->cursorColumnNumber());
 		cursorLine = static_cast<int>(win->cursorLineNumber());
 		vd = win->mVirtualDesktop;
-		source.insert(endMacro,
-		              "MRSETUP('WORKSPACE', 'URL=" + escapeMrmacSingleQuotedLiteral(url) + " size=" +
-		                  std::to_string(r.b.x - r.a.x) + "," + std::to_string(r.b.y - r.a.y) + " pos=" +
-		                  std::to_string(r.a.x) + "," + std::to_string(r.a.y) + " cursor=" +
-		                  std::to_string(cursorColumn) + "," + std::to_string(cursorLine) + " vd=" +
-		                  std::to_string(vd) + "');\n");
+		source.insert(endMacro, "MRSETUP('WORKSPACE', 'URL=" + escapeMrmacSingleQuotedLiteral(url) + " size=" + std::to_string(r.b.x - r.a.x) + "," + std::to_string(r.b.y - r.a.y) + " pos=" + std::to_string(r.a.x) + "," + std::to_string(r.a.y) + " cursor=" + std::to_string(cursorColumn) + "," + std::to_string(cursorLine) + " vd=" + std::to_string(vd) + "');\n");
 	}
 	return source;
 }
@@ -236,67 +211,52 @@ int currentVirtualDesktop() {
 }
 
 void setWindowManuallyHidden(MREditWindow *win, bool hidden) {
-	if (win == nullptr)
-		return;
-	if (hidden == isWindowManuallyHidden(win))
-		return;
-	if (hidden)
-		g_manuallyHiddenWindows.insert(win);
+	if (win == nullptr) return;
+	if (hidden == isWindowManuallyHidden(win)) return;
+	if (hidden) g_manuallyHiddenWindows.insert(win);
 	else
 		g_manuallyHiddenWindows.erase(win);
 	mrNotifyWindowTopologyChanged();
 }
 
 bool isWindowManuallyHidden(const MREditWindow *win) {
-	if (win == nullptr)
-		return false;
+	if (win == nullptr) return false;
 	return g_manuallyHiddenWindows.find(win) != g_manuallyHiddenWindows.end();
 }
 
 namespace {
 void postDesktopChangedMessage(int desktop) {
-	mr::messageline::postAutoTimed(
-	    mr::messageline::Owner::DialogInteraction, "Desktop #" + std::to_string(desktop),
-	    mr::messageline::Kind::Info, mr::messageline::kPriorityMedium);
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Desktop #" + std::to_string(desktop), mr::messageline::Kind::Info, mr::messageline::kPriorityMedium);
 }
 } // namespace
 
 void syncVirtualDesktopVisibility() {
 	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 	MREditWindow *candidate = nullptr;
-	MREditWindow *current =
-	    TProgram::deskTop != nullptr ? dynamic_cast<MREditWindow *>(TProgram::deskTop->current) : nullptr;
+	MREditWindow *current = TProgram::deskTop != nullptr ? dynamic_cast<MREditWindow *>(TProgram::deskTop->current) : nullptr;
 
 	pruneManuallyHiddenWindows(windows);
 
 	for (MREditWindow *win : windows) {
 		const bool manuallyHidden = isWindowManuallyHidden(win);
 
-		if (win == nullptr)
-			continue;
+		if (win == nullptr) continue;
 		if (win->mVirtualDesktop == g_currentVirtualDesktop) {
-			if (candidate == nullptr && !manuallyHidden)
-				candidate = win;
-			if (!manuallyHidden && (win->state & sfVisible) == 0)
-				win->show();
+			if (candidate == nullptr && !manuallyHidden) candidate = win;
+			if (!manuallyHidden && (win->state & sfVisible) == 0) win->show();
 			else if (manuallyHidden && (win->state & sfVisible) != 0)
 				win->hide();
-		}
-		else if ((win->state & sfVisible) != 0)
-				win->hide();
+		} else if ((win->state & sfVisible) != 0)
+			win->hide();
 	}
 
-	if (candidate != nullptr &&
-	    (current == nullptr || current->mVirtualDesktop != g_currentVirtualDesktop ||
-	     (current->state & sfVisible) == 0))
-		candidate->select();
+	if (candidate != nullptr && (current == nullptr || current->mVirtualDesktop != g_currentVirtualDesktop || (current->state & sfVisible) == 0)) candidate->select();
 
 	if (TProgram::deskTop != nullptr) {
 		TProgram::deskTop->redraw();
 		TProgram::deskTop->drawView();
 	}
-	if (TProgram::application != nullptr)
-		TProgram::application->redraw();
+	if (TProgram::application != nullptr) TProgram::application->redraw();
 }
 
 void setCurrentVirtualDesktop(int vd) {
@@ -308,21 +268,17 @@ void setCurrentVirtualDesktop(int vd) {
 	if (vd > maxVd) vd = maxVd;
 	g_currentVirtualDesktop = vd;
 	syncVirtualDesktopVisibility();
-	if (g_currentVirtualDesktop != oldDesktop)
-		postDesktopChangedMessage(vd);
+	if (g_currentVirtualDesktop != oldDesktop) postDesktopChangedMessage(vd);
 }
 
 void applyVirtualDesktopConfigurationChange(int count) {
 	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 	std::string ignoredError;
 
-	if (count < 1)
-		count = 1;
-	if (count > 9)
-		count = 9;
+	if (count < 1) count = 1;
+	if (count > 9) count = 9;
 	for (MREditWindow *win : windows)
-		if (win != nullptr && win->mVirtualDesktop > count)
-			win->mVirtualDesktop = count;
+		if (win != nullptr && win->mVirtualDesktop > count) win->mVirtualDesktop = count;
 
 	setConfiguredVirtualDesktops(count, &ignoredError);
 	setCurrentVirtualDesktop(std::min(currentVirtualDesktop(), count));
@@ -407,10 +363,7 @@ void mrLoadWorkspace(const std::string &filename) {
 	std::string currentContent;
 	std::string errorText;
 	if (!readTextFile(dest, currentContent, errorText)) {
-		mr::messageline::postAutoTimed(
-		    mr::messageline::Owner::HeroEvent,
-		    "Unable to read workspace: " + workspaceDisplayName(dest), mr::messageline::Kind::Error,
-		    mr::messageline::kPriorityHigh);
+		mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEvent, "Unable to read workspace: " + workspaceDisplayName(dest), mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 		return;
 	}
 
@@ -423,20 +376,17 @@ void mrLoadWorkspace(const std::string &filename) {
 		MRFileEditor *editor = nullptr;
 		std::string err;
 
-		if (!parseWorkspaceEntry(line, entry))
-			continue;
+		if (!parseWorkspaceEntry(line, entry)) continue;
 
 		win = createEditorWindow(entry.url.c_str());
 		editor = win != nullptr ? win->getEditor() : nullptr;
 		if (win == nullptr || editor == nullptr || !editor->loadMappedFile(entry.url.c_str(), err)) {
-			if (win != nullptr)
-				message(win, evCommand, cmClose, nullptr);
+			if (win != nullptr) message(win, evCommand, cmClose, nullptr);
 			failedFiles.push_back(workspaceDisplayName(entry.url));
 			continue;
 		}
 
-		if (entry.width > 0 && entry.height > 0 && entry.x >= 0 && entry.y >= 0)
-			win->changeBounds(TRect(entry.x, entry.y, entry.x + entry.width, entry.y + entry.height));
+		if (entry.width > 0 && entry.height > 0 && entry.x >= 0 && entry.y >= 0) win->changeBounds(TRect(entry.x, entry.y, entry.x + entry.width, entry.y + entry.height));
 		win->mVirtualDesktop = std::min(std::max(entry.vd, 1), configuredVirtualDesktops());
 		restoreEditorCursor(editor, entry.line, entry.column);
 	}
@@ -444,14 +394,10 @@ void mrLoadWorkspace(const std::string &filename) {
 		std::string failedText;
 
 		for (std::size_t i = 0; i < failedFiles.size(); ++i) {
-			if (i != 0)
-				failedText += ", ";
+			if (i != 0) failedText += ", ";
 			failedText += failedFiles[i];
 		}
-		mr::messageline::postAutoTimed(
-		    mr::messageline::Owner::HeroEvent,
-		    "Failed to load workspace files; discarded: " + failedText, mr::messageline::Kind::Error,
-		    mr::messageline::kPriorityHigh);
+		mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEvent, "Failed to load workspace files; discarded: " + failedText, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 	}
 	syncVirtualDesktopVisibility();
 }
@@ -460,8 +406,7 @@ MREditWindow *createEditorWindow(const char *title) {
 	TRect bounds;
 	MREditWindow *win;
 
-	if (TProgram::deskTop == nullptr)
-		return nullptr;
+	if (TProgram::deskTop == nullptr) return nullptr;
 	bounds = TProgram::deskTop->getExtent();
 	bounds.grow(-2, -1);
 	win = new MREditWindow(bounds, title, nextEditorWindowNumber());
@@ -470,46 +415,39 @@ MREditWindow *createEditorWindow(const char *title) {
 		win->mVirtualDesktop = currentVirtualDesktop();
 		win->flags |= (wfMove | wfGrow | wfZoom | wfClose);
 	}
-	if (win != nullptr && win->getEditor() != nullptr)
-		win->getEditor()->setInsertModeEnabled(configuredDefaultInsertMode());
+	if (win != nullptr && win->getEditor() != nullptr) win->getEditor()->setInsertModeEnabled(configuredDefaultInsertMode());
 	mrNotifyWindowTopologyChanged();
 	return win;
 }
 
 MREditWindow *currentEditWindow() {
-	if (TProgram::deskTop == nullptr || TProgram::deskTop->current == nullptr)
-		return nullptr;
+	if (TProgram::deskTop == nullptr || TProgram::deskTop->current == nullptr) return nullptr;
 	return dynamic_cast<MREditWindow *>(TProgram::deskTop->current);
 }
 
 MREditWindow *findEditWindowByBufferId(int bufferId) {
 	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
-	for (auto & window : windows)
-		if (window != nullptr && window->bufferId() == bufferId)
-			return window;
+	for (auto &window : windows)
+		if (window != nullptr && window->bufferId() == bufferId) return window;
 	return nullptr;
 }
 
 bool isEmptyUntitledEditableWindow(MREditWindow *win) {
-	if (win == nullptr || win->isReadOnly() || win->currentFileName()[0] != '\0' || win->isFileChanged())
-		return false;
+	if (win == nullptr || win->isReadOnly() || win->currentFileName()[0] != '\0' || win->isFileChanged()) return false;
 	return win->isBufferEmpty();
 }
 
 MREditWindow *findReusableEmptyWindow(MREditWindow *preferred) {
 	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
-	if (preferred != nullptr && isEmptyUntitledEditableWindow(preferred))
-		return preferred;
-	for (auto & window : windows)
-		if (isEmptyUntitledEditableWindow(window))
-			return window;
+	if (preferred != nullptr && isEmptyUntitledEditableWindow(preferred)) return preferred;
+	for (auto &window : windows)
+		if (isEmptyUntitledEditableWindow(window)) return window;
 	return nullptr;
 }
 
 bool closeCurrentEditWindow() {
 	MREditWindow *win = currentEditWindow();
-	if (win == nullptr)
-		return false;
+	if (win == nullptr) return false;
 	setWindowManuallyHidden(win, false);
 	message(win, evCommand, cmClose, nullptr);
 	return mrEnsureUsableWorkWindow();
@@ -520,10 +458,8 @@ bool activateRelativeEditWindow(int delta) {
 	MREditWindow *current = currentEditWindow();
 	std::size_t index;
 
-	if (windows.empty())
-		return false;
-	if (current == nullptr)
-		return mrActivateEditWindow(windows.front());
+	if (windows.empty()) return false;
+	if (current == nullptr) return mrActivateEditWindow(windows.front());
 
 	for (index = 0; index < windows.size(); ++index) {
 		if (windows[index] == current) {
@@ -541,8 +477,7 @@ bool activateRelativeEditWindow(int delta) {
 
 bool hideCurrentEditWindow() {
 	MREditWindow *win = currentEditWindow();
-	if (win == nullptr)
-		return false;
+	if (win == nullptr) return false;
 	setWindowManuallyHidden(win, true);
 	win->hide();
 	return mrEnsureUsableWorkWindow();
@@ -550,13 +485,12 @@ bool hideCurrentEditWindow() {
 
 void mrUpdateAllWindowsColorTheme() {
 	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
-	for (auto & window : windows) {
+	for (auto &window : windows) {
 		if (window != nullptr) {
 			window->applyWindowColorThemeForPath(window->currentFileName());
 		}
 	}
 }
-
 
 // ---- Consolidated from MRFileCommands.cpp ----
 
@@ -565,13 +499,9 @@ namespace {
 	std::string result(path);
 
 	for (char &ch : result)
-		if (ch == '\\')
-			ch = '/';
+		if (ch == '\\') ch = '/';
 #ifdef __unix__
-	if (result.size() >= 2 && ((result[0] >= 'A' && result[0] <= 'Z') ||
-	                           (result[0] >= 'a' && result[0] <= 'z')) &&
-	    result[1] == ':')
-		result.erase(0, 2);
+	if (result.size() >= 2 && ((result[0] >= 'A' && result[0] <= 'Z') || (result[0] >= 'a' && result[0] <= 'z')) && result[1] == ':') result.erase(0, 2);
 #endif
 	return result;
 }
@@ -582,28 +512,22 @@ namespace {
 
 	while (start < end && std::isspace(static_cast<unsigned char>(path[start])) != 0)
 		++start;
-	while (end > start &&
-	       (std::isspace(static_cast<unsigned char>(path[end - 1])) != 0 ||
-	        static_cast<unsigned char>(path[end - 1]) < 32))
+	while (end > start && (std::isspace(static_cast<unsigned char>(path[end - 1])) != 0 || static_cast<unsigned char>(path[end - 1]) < 32))
 		--end;
 
 	std::string result(path.substr(start, end - start));
-	if (result.size() >= 2 &&
-	    ((result.front() == '"' && result.back() == '"') || (result.front() == '\'' && result.back() == '\'')))
-		result = result.substr(1, result.size() - 2);
+	if (result.size() >= 2 && ((result.front() == '"' && result.back() == '"') || (result.front() == '\'' && result.back() == '\''))) result = result.substr(1, result.size() - 2);
 	return result;
 }
 
 [[nodiscard]] std::string expandUserPath(std::string_view path) {
 	std::string result;
 
-	if (path.empty())
-		return std::string();
+	if (path.empty()) return std::string();
 	result = normalizeTvPath(trimPathInput(path));
 	if (result.size() >= 2 && result[0] == '~' && result[1] == '/') {
 		const char *home = std::getenv("HOME");
-		if (home != nullptr && *home != '\0')
-			return std::string(home) + result.substr(1);
+		if (home != nullptr && *home != '\0') return std::string(home) + result.substr(1);
 	}
 	return result;
 }
@@ -616,42 +540,31 @@ namespace {
 	const std::size_t slash = path.find_last_of('/');
 	const std::size_t backslash = path.find_last_of('\\');
 
-	if (slash == std::string_view::npos)
-		return backslash;
-	if (backslash == std::string_view::npos)
-		return slash;
+	if (slash == std::string_view::npos) return backslash;
+	if (backslash == std::string_view::npos) return slash;
 	return std::max(slash, backslash);
 }
 
 [[nodiscard]] std::string baseNameForDisplay(const std::string &path) {
 	const std::size_t sep = lastPathSeparator(path);
 
-	if (sep == std::string::npos || sep + 1 >= path.size())
-		return path;
+	if (sep == std::string::npos || sep + 1 >= path.size()) return path;
 	return path.substr(sep + 1);
 }
 
 [[nodiscard]] long long roundedMilliseconds(double valueMs) {
-	if (valueMs <= 0.0)
-		return 0;
+	if (valueMs <= 0.0) return 0;
 	return static_cast<long long>(valueMs + 0.5);
 }
 
-void postLoadHeroEvents(const std::string &resolvedPath, std::size_t bytes, double loadMs, std::size_t lineCount,
-                        double lineCountMs) {
+void postLoadHeroEvents(const std::string &resolvedPath, std::size_t bytes, double loadMs, std::size_t lineCount, double lineCountMs) {
 	const std::string fileName = baseNameForDisplay(resolvedPath);
-	const std::string loadText =
-	    "loaded " + fileName + " in " + (roundedMilliseconds(loadMs) >= 1 ? std::to_string(roundedMilliseconds(loadMs)) : "<1") + " ms";
-	const std::string lineText = "indexed " + std::to_string(bytes) + " bytes, " +
-	                             std::to_string(lineCount) + " lines, " +
-	                             std::to_string(roundedMilliseconds(lineCountMs)) + " ms";
+	const std::string loadText = "loaded " + fileName + " in " + (roundedMilliseconds(loadMs) >= 1 ? std::to_string(roundedMilliseconds(loadMs)) : "<1") + " ms";
+	const std::string lineText = "indexed " + std::to_string(bytes) + " bytes, " + std::to_string(lineCount) + " lines, " + std::to_string(roundedMilliseconds(lineCountMs)) + " ms";
 	const std::chrono::milliseconds loadDuration = mr::messageline::autoDurationForText(loadText);
 
-	mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEvent, loadText, mr::messageline::Kind::Success,
-	                              mr::messageline::kPriorityHigh);
-	mr::messageline::postAutoTimedAfter(mr::messageline::Owner::HeroEventFollowup, lineText,
-	                                   mr::messageline::Kind::Info, loadDuration,
-	                                   mr::messageline::kPriorityLow);
+	mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEvent, loadText, mr::messageline::Kind::Success, mr::messageline::kPriorityHigh);
+	mr::messageline::postAutoTimedAfter(mr::messageline::Owner::HeroEventFollowup, lineText, mr::messageline::Kind::Info, loadDuration, mr::messageline::kPriorityLow);
 }
 
 [[nodiscard]] bool hasExtensionInBaseName(std::string_view path) {
@@ -668,8 +581,7 @@ void postLoadHeroEvents(const std::string &resolvedPath, std::size_t bytes, doub
 	for (const std::string &ext : extensions) {
 		std::array<std::string, 3> candidates = {ext, ext, ext};
 
-		if (ext.empty())
-			continue;
+		if (ext.empty()) continue;
 		for (std::size_t p = 0; p < ext.size(); ++p) {
 			candidates[1][p] = static_cast<char>(std::tolower(static_cast<unsigned char>(ext[p])));
 			candidates[2][p] = static_cast<char>(std::toupper(static_cast<unsigned char>(ext[p])));
@@ -677,8 +589,7 @@ void postLoadHeroEvents(const std::string &resolvedPath, std::size_t bytes, doub
 
 		for (const std::string &candidateExt : candidates) {
 			std::string candidate = basePath + "." + candidateExt;
-			if (!tried.insert(candidate).second)
-				continue;
+			if (!tried.insert(candidate).second) continue;
 			if (::access(candidate.c_str(), F_OK) == 0 && ::access(candidate.c_str(), R_OK) == 0) {
 				resolvedPath = candidate;
 				return true;
@@ -690,16 +601,11 @@ void postLoadHeroEvents(const std::string &resolvedPath, std::size_t bytes, doub
 } // namespace
 
 bool promptForPath(const char *title, char *fileName, std::size_t fileNameSize) {
-	if (fileName == nullptr || fileNameSize == 0)
-		return false;
+	if (fileName == nullptr || fileNameSize == 0) return false;
 	fileName[0] = '\0';
-	const MRDialogHistoryScope scope =
-	    std::string_view(title != nullptr ? title : "") == "Load File" ? MRDialogHistoryScope::LoadFile
-	                                                                    : MRDialogHistoryScope::OpenFile;
+	const MRDialogHistoryScope scope = std::string_view(title != nullptr ? title : "") == "Load File" ? MRDialogHistoryScope::LoadFile : MRDialogHistoryScope::OpenFile;
 	mr::dialogs::seedFileDialogPath(scope, fileName, fileNameSize, "*.*");
-	if (mr::dialogs::execRememberingFileDialogWithData(scope, "*.*", title, "~N~ame", fdOpenButton,
-	                                                   fileName) == cmCancel)
-		return false;
+	if (mr::dialogs::execRememberingFileDialogWithData(scope, "*.*", title, "~N~ame", fdOpenButton, fileName) == cmCancel) return false;
 	return true;
 }
 
@@ -709,15 +615,10 @@ bool promptForSaveAsPath(const char *title, const char *initialPath, std::string
 	MRDialogHistoryScope scope = MRDialogHistoryScope::EditorSaveAs;
 
 	outResolvedPath.clear();
-	if (std::string_view(title != nullptr ? title : "") == "Save log as")
-		scope = MRDialogHistoryScope::SaveLogAs;
-	mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.*",
-	                                initialPath != nullptr ? std::string_view(initialPath)
-	                                                       : std::string_view());
-	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.*", title, "~N~ame",
-	                                                        fdOKButton, fileName);
-	if (result == cmCancel)
-		return false;
+	if (std::string_view(title != nullptr ? title : "") == "Save log as") scope = MRDialogHistoryScope::SaveLogAs;
+	mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.*", initialPath != nullptr ? std::string_view(initialPath) : std::string_view());
+	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.*", title, "~N~ame", fdOKButton, fileName);
+	if (result == cmCancel) return false;
 	outResolvedPath = expandUserPath(fileName);
 	if (outResolvedPath.empty()) {
 		postWindowCommandError("No file name specified.");
@@ -736,12 +637,10 @@ bool saveWindowSnapshotToPath(MREditWindow *win, const std::string &resolvedPath
 	std::string text;
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 
-	if (win == nullptr || editor == nullptr || resolvedPath.empty())
-		return false;
+	if (win == nullptr || editor == nullptr || resolvedPath.empty()) return false;
 	text = editor->snapshotText();
 	outFile.open(resolvedPath.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
-	if (!outFile.is_open())
-		return false;
+	if (!outFile.is_open()) return false;
 	outFile.write(text.data(), static_cast<std::streamsize>(text.size()));
 	outFile.close();
 	return outFile.good();
@@ -760,9 +659,7 @@ bool resolveReadableExistingPath(MRDialogHistoryScope scope, const char *path, s
 		postWindowCommandError("No file name specified.");
 		return false;
 	}
-	if (::access(resolvedPath.c_str(), F_OK) != 0 && !disableExtensionSearch &&
-	    !hasWildcardPattern(resolvedPath) && !hasExtensionInBaseName(resolvedPath))
-		static_cast<void>(resolveWithConfiguredExtensions(resolvedPath, resolvedPath));
+	if (::access(resolvedPath.c_str(), F_OK) != 0 && !disableExtensionSearch && !hasWildcardPattern(resolvedPath) && !hasExtensionInBaseName(resolvedPath)) static_cast<void>(resolveWithConfiguredExtensions(resolvedPath, resolvedPath));
 	if (access(resolvedPath.c_str(), F_OK) != 0) {
 		postWindowCommandError("File does not exist: " + resolvedPath);
 		return false;
@@ -776,8 +673,7 @@ bool resolveReadableExistingPath(MRDialogHistoryScope scope, const char *path, s
 
 bool loadResolvedFileIntoWindow(MREditWindow *win, const std::string &resolvedPath, const char *operationLabel) {
 	const auto fallbackLoadStartedAt = std::chrono::steady_clock::now();
-	if (win == nullptr)
-		return false;
+	if (win == nullptr) return false;
 	if (!win->loadFromFile(resolvedPath.c_str())) {
 		postWindowCommandError("Unable to load file: " + resolvedPath);
 		return false;
@@ -794,20 +690,14 @@ bool loadResolvedFileIntoWindow(MREditWindow *win, const std::string &resolvedPa
 		loadMs = timing.mappedLoadMs;
 		lineCountMs = timing.lineCountMs;
 	} else {
-		loadMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() -
-		                                                   fallbackLoadStartedAt)
-		             .count();
+		loadMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - fallbackLoadStartedAt).count();
 		const auto lineCountStartedAt = std::chrono::steady_clock::now();
 		lines = win->bufferLineCount();
-		lineCountMs =
-		    std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - lineCountStartedAt).count();
+		lineCountMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - lineCountStartedAt).count();
 	}
 
-	mr::performance::recordUiEvent(operationLabel != nullptr ? operationLabel : "Load file",
-	                               static_cast<std::size_t>(win->bufferId()), win->documentId(), bytes, loadMs,
-	                               resolvedPath);
-	mr::performance::recordUiEvent("Line count", static_cast<std::size_t>(win->bufferId()), win->documentId(), bytes,
-	                               lineCountMs, resolvedPath);
+	mr::performance::recordUiEvent(operationLabel != nullptr ? operationLabel : "Load file", static_cast<std::size_t>(win->bufferId()), win->documentId(), bytes, loadMs, resolvedPath);
+	mr::performance::recordUiEvent("Line count", static_cast<std::size_t>(win->bufferId()), win->documentId(), bytes, lineCountMs, resolvedPath);
 	postLoadHeroEvents(resolvedPath, bytes, loadMs, lines, lineCountMs);
 	return true;
 }
@@ -815,25 +705,20 @@ bool loadResolvedFileIntoWindow(MREditWindow *win, const std::string &resolvedPa
 bool saveCurrentEditWindow() {
 	MREditWindow *win = currentEditWindow();
 
-	if (win == nullptr)
-		return false;
+	if (win == nullptr) return false;
 	if (win->isReadOnly()) {
 		messageBox(mfInformation | mfOKButton, "Window is read-only.");
 		mrLogMessage("Save rejected for read-only window.");
 		return false;
 	}
-	if (!win->isFileChanged())
-		return true;
+	if (!win->isFileChanged()) return true;
 	if (win->canSaveInPlace()) {
 		auto startedAt = std::chrono::steady_clock::now();
 		if (!win->saveCurrentFile()) {
 			mrLogMessage("Save failed.");
 			return false;
 		}
-		mr::performance::recordUiEvent(
-		    "Save file", static_cast<std::size_t>(win->bufferId()), win->documentId(), win->bufferLength(),
-		    std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count(),
-		    win->currentFileName());
+		mr::performance::recordUiEvent("Save file", static_cast<std::size_t>(win->bufferId()), win->documentId(), win->bufferLength(), std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count(), win->currentFileName());
 		mrLogMessage("Window saved.");
 		return true;
 	}
@@ -851,8 +736,7 @@ bool saveCurrentEditWindowAs() {
 	bool isLogWindow = false;
 	const char *initialPath = nullptr;
 
-	if (win == nullptr)
-		return false;
+	if (win == nullptr) return false;
 	isLogWindow = win->windowRole() == MREditWindow::wrLog;
 	if (win->isReadOnly()) {
 		if (!isLogWindow) {
@@ -861,20 +745,15 @@ bool saveCurrentEditWindowAs() {
 			return false;
 		}
 		initialPath = nullptr;
-		if (!win->windowRoleDetail().empty())
-			initialPath = win->windowRoleDetail().c_str();
-		if (!promptForSaveAsPath("Save log as", initialPath, resolvedPath))
-			return false;
+		if (!win->windowRoleDetail().empty()) initialPath = win->windowRoleDetail().c_str();
+		if (!promptForSaveAsPath("Save log as", initialPath, resolvedPath)) return false;
 		auto startedAt = std::chrono::steady_clock::now();
 		if (!saveWindowSnapshotToPath(win, resolvedPath)) {
 			postWindowCommandError("Unable to save log file: " + resolvedPath);
 			mrLogMessage("Save As failed.");
 			return false;
 		}
-		mr::performance::recordUiEvent(
-		    "Save log as", static_cast<std::size_t>(win->bufferId()), win->documentId(), win->bufferLength(),
-		    std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count(),
-		    resolvedPath);
+		mr::performance::recordUiEvent("Save log as", static_cast<std::size_t>(win->bufferId()), win->documentId(), win->bufferLength(), std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count(), resolvedPath);
 		win->setWindowRole(MREditWindow::wrLog, resolvedPath);
 		mrLogMessage("Log window saved as a new file.");
 		return true;
@@ -884,10 +763,7 @@ bool saveCurrentEditWindowAs() {
 		mrLogMessage("Save As failed.");
 		return false;
 	}
-	mr::performance::recordUiEvent(
-	    "Save file as", static_cast<std::size_t>(win->bufferId()), win->documentId(), win->bufferLength(),
-	    std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count(),
-	    win->currentFileName());
+	mr::performance::recordUiEvent("Save file as", static_cast<std::size_t>(win->bufferId()), win->documentId(), win->bufferLength(), std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count(), win->currentFileName());
 	mrLogMessage("Window saved as a new file.");
 	return true;
 }
@@ -897,8 +773,7 @@ bool handleWindowCascade() {
 	std::vector<MREditWindow *> visibleWindows;
 	TRect desktopBounds;
 
-	if (TProgram::deskTop == nullptr)
-		return false;
+	if (TProgram::deskTop == nullptr) return false;
 
 	desktopBounds = TProgram::deskTop->getExtent();
 
@@ -909,8 +784,7 @@ bool handleWindowCascade() {
 		}
 	}
 
-	if (visibleWindows.empty())
-		return true;
+	if (visibleWindows.empty()) return true;
 
 	int cascadeIndex = 0;
 	TProgram::deskTop->lock();
@@ -933,8 +807,7 @@ bool handleWindowTile() {
 	std::vector<MREditWindow *> visibleWindows;
 	TRect desktopBounds;
 
-	if (TProgram::deskTop == nullptr)
-		return false;
+	if (TProgram::deskTop == nullptr) return false;
 
 	desktopBounds = TProgram::deskTop->getExtent();
 
@@ -948,13 +821,11 @@ bool handleWindowTile() {
 	int count = visibleWindows.size();
 
 	if (count > 9) {
-		mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEvent, "max 9 windows can be tiled",
-		                               mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+		mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEvent, "max 9 windows can be tiled", mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 		return true;
 	}
 
-	if (count == 0)
-		return true;
+	if (count == 0) return true;
 
 	std::vector<TRect> rects(count);
 	int width = desktopBounds.b.x - desktopBounds.a.x;

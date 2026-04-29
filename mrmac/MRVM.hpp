@@ -56,7 +56,7 @@ class VirtualMachine {
 	void push(const Value &value);
 	Value pop();
 
- public:
+  public:
 	std::vector<std::string> log;
 	bool cancelledExecution;
 
@@ -65,9 +65,7 @@ class VirtualMachine {
 		verboseLogging = enable;
 	}
 	void execute(const unsigned char *bytecode, size_t length);
-	void executeAt(const unsigned char *bytecode, size_t length, size_t entryOffset,
-	               const std::string &parameterString, const std::string &macroName,
-	               bool resetState, bool firstRun);
+	void executeAt(const unsigned char *bytecode, size_t length, size_t entryOffset, const std::string &parameterString, const std::string &macroName, bool resetState, bool firstRun);
 	void setAsyncDelayEnabled(bool enabled) noexcept {
 		mAsyncDelayEnabled = enabled;
 	}
@@ -81,33 +79,31 @@ class VirtualMachine {
 	}
 };
 
-	enum MRMacroExecutionFlags {
-		mrefBackgroundSafe = 1u << 0,
-		mrefStagedWrite = 1u << 1,
-		mrefUiAffinity = 1u << 2,
-		mrefExternalIo = 1u << 3
-	};
+enum MRMacroExecutionFlags {
+	mrefBackgroundSafe = 1u << 0,
+	mrefStagedWrite = 1u << 1,
+	mrefUiAffinity = 1u << 2,
+	mrefExternalIo = 1u << 3
+};
 
-	struct MRMacroExecutionProfile {
-		unsigned flags;
-		std::size_t opcodeCount;
-		std::size_t intrinsicCount;
-		std::size_t procCount;
-		std::size_t procVarCount;
-		std::size_t tvCallCount;
-		std::vector<std::string> stagedWriteSymbols;
-		std::vector<std::string> uiAffinitySymbols;
-		std::vector<std::string> externalIoSymbols;
+struct MRMacroExecutionProfile {
+	unsigned flags;
+	std::size_t opcodeCount;
+	std::size_t intrinsicCount;
+	std::size_t procCount;
+	std::size_t procVarCount;
+	std::size_t tvCallCount;
+	std::vector<std::string> stagedWriteSymbols;
+	std::vector<std::string> uiAffinitySymbols;
+	std::vector<std::string> externalIoSymbols;
 
-		MRMacroExecutionProfile() noexcept
-		    : flags(0), opcodeCount(0), intrinsicCount(0), procCount(0), procVarCount(0),
-		      tvCallCount(0), stagedWriteSymbols(), uiAffinitySymbols(), externalIoSymbols() {
-		}
+	MRMacroExecutionProfile() noexcept : flags(0), opcodeCount(0), intrinsicCount(0), procCount(0), procVarCount(0), tvCallCount(0), stagedWriteSymbols(), uiAffinitySymbols(), externalIoSymbols() {
+	}
 
-		bool has(unsigned mask) const noexcept {
-			return (flags & mask) != 0;
-		}
-	};
+	bool has(unsigned mask) const noexcept {
+		return (flags & mask) != 0;
+	}
+};
 
 void mrvmSetProcessContext(int argc, char **argv);
 std::vector<std::string> mrvmProcessArguments();
@@ -128,9 +124,7 @@ struct MRMacroJobResult {
 	}
 };
 
-MRMacroJobResult mrvmRunBytecodeBackground(const unsigned char *bytecode, std::size_t length,
-                                           std::stop_token stopToken = std::stop_token(),
-                                           std::shared_ptr<std::atomic_bool> cancelFlag = nullptr);
+MRMacroJobResult mrvmRunBytecodeBackground(const unsigned char *bytecode, std::size_t length, std::stop_token stopToken = std::stop_token(), std::shared_ptr<std::atomic_bool> cancelFlag = nullptr);
 
 enum MRMacroDeferredUiCommandType {
 	mrducNone = 0,
@@ -180,21 +174,13 @@ struct MRMacroDeferredUiCommand {
 	std::string text3;
 	std::string text4;
 
-	MRMacroDeferredUiCommand() noexcept
-	    : type(mrducNone), a1(0), a2(0), a3(0), a4(0), a5(0), a6(0), a7(0), a8(0), text(),
-	      text2(), text3(), text4() {
+	MRMacroDeferredUiCommand() noexcept : type(mrducNone), a1(0), a2(0), a3(0), a4(0), a5(0), a6(0), a7(0), a8(0), text(), text2(), text3(), text4() {
 	}
 
-	MRMacroDeferredUiCommand(int aType, int arg1 = 0, int arg2 = 0, int arg3 = 0,
-	                         int arg4 = 0) noexcept
-	    : type(aType), a1(arg1), a2(arg2), a3(arg3), a4(arg4), a5(0), a6(0), a7(0), a8(0), text(),
-	      text2(), text3(), text4() {
+	MRMacroDeferredUiCommand(int aType, int arg1 = 0, int arg2 = 0, int arg3 = 0, int arg4 = 0) noexcept : type(aType), a1(arg1), a2(arg2), a3(arg3), a4(arg4), a5(0), a6(0), a7(0), a8(0), text(), text2(), text3(), text4() {
 	}
 
-	MRMacroDeferredUiCommand(int aType, int arg1, int arg2, int arg3, int arg4, int arg5, int arg6,
-	                         int arg7, int arg8, const std::string &aText = std::string())
-	    : type(aType), a1(arg1), a2(arg2), a3(arg3), a4(arg4), a5(arg5), a6(arg6), a7(arg7), a8(arg8),
-	      text(aText), text2(), text3(), text4() {
+	MRMacroDeferredUiCommand(int aType, int arg1, int arg2, int arg3, int arg4, int arg5, int arg6, int arg7, int arg8, const std::string &aText = std::string()) : type(aType), a1(arg1), a2(arg2), a3(arg3), a4(arg4), a5(arg5), a6(arg6), a7(arg7), a8(arg8), text(aText), text2(), text3(), text4() {
 	}
 };
 
@@ -243,17 +229,7 @@ struct MRMacroStagedExecutionInput {
 	int screenCursorX;
 	int screenCursorY;
 
-		MRMacroStagedExecutionInput() noexcept
-	    : document(), baseVersion(0), cursorOffset(0), selectionStart(0), selectionEnd(0),
-	      blockMode(0), blockMarkingOn(false), blockAnchor(0), blockEnd(0), firstSave(false),
-	      eofInMemory(false), bufferId(0), temporaryFile(false), temporaryFileName(),
-	      currentWindow(0), linkStatus(0), windowCount(0), windowGeometryValid(false),
-	      windowX1(0), windowY1(0), windowX2(0), windowY2(0), globalOrder(),
-	      globalInts(), globalStrings(), macroOrder(), macroDisplayNames(),
-	      lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0),
-	      ignoreCase(false), tabExpand(true), markStack(), insertMode(true), indentLevel(1),
-	      pageLines(20), fileName(), fileChanged(false), screenWidth(0), screenHeight(0),
-	      screenCursorX(1), screenCursorY(1) {
+	MRMacroStagedExecutionInput() noexcept : document(), baseVersion(0), cursorOffset(0), selectionStart(0), selectionEnd(0), blockMode(0), blockMarkingOn(false), blockAnchor(0), blockEnd(0), firstSave(false), eofInMemory(false), bufferId(0), temporaryFile(false), temporaryFileName(), currentWindow(0), linkStatus(0), windowCount(0), windowGeometryValid(false), windowX1(0), windowY1(0), windowX2(0), windowY2(0), globalOrder(), globalInts(), globalStrings(), macroOrder(), macroDisplayNames(), lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0), ignoreCase(false), tabExpand(true), markStack(), insertMode(true), indentLevel(1), pageLines(20), fileName(), fileChanged(false), screenWidth(0), screenHeight(0), screenCursorX(1), screenCursorY(1) {
 	}
 };
 
@@ -287,36 +263,19 @@ struct MRMacroStagedJobResult {
 	std::string fileName;
 	bool fileChanged;
 
-	MRMacroStagedJobResult() noexcept
-	    : logLines(), hadError(false), cancelled(false), transaction(), cursorOffset(0), selectionStart(0),
-	      selectionEnd(0), blockMode(0), blockMarkingOn(false), blockAnchor(0), blockEnd(0),
-	      globalOrder(), globalInts(), globalStrings(), macroOrder(), macroDisplayNames(),
-	      deferredUiCommands(),
-	      lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0),
-	      ignoreCase(false), tabExpand(true), markStack(), insertMode(true), indentLevel(1),
-	      fileName(), fileChanged(false) {
+	MRMacroStagedJobResult() noexcept : logLines(), hadError(false), cancelled(false), transaction(), cursorOffset(0), selectionStart(0), selectionEnd(0), blockMode(0), blockMarkingOn(false), blockAnchor(0), blockEnd(0), globalOrder(), globalInts(), globalStrings(), macroOrder(), macroDisplayNames(), deferredUiCommands(), lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0), ignoreCase(false), tabExpand(true), markStack(), insertMode(true), indentLevel(1), fileName(), fileChanged(false) {
 	}
 };
 
-MRMacroStagedJobResult mrvmRunBytecodeStagedBackground(const unsigned char *bytecode,
-                                                       std::size_t length,
-                                                       const MRMacroStagedExecutionInput &input,
-                                                       std::stop_token stopToken = std::stop_token(),
-                                                       std::shared_ptr<std::atomic_bool> cancelFlag = nullptr);
+MRMacroStagedJobResult mrvmRunBytecodeStagedBackground(const unsigned char *bytecode, std::size_t length, const MRMacroStagedExecutionInput &input, std::stop_token stopToken = std::stop_token(), std::shared_ptr<std::atomic_bool> cancelFlag = nullptr);
 
 std::vector<std::size_t> mrvmUiCopyWindowMarkStack(const void *windowKey);
 void mrvmUiReplaceWindowMarkStack(const void *windowKey, const std::vector<std::size_t> &offsets);
-bool mrvmUiCopyWindowLastSearch(const void *windowKey, const std::string &fileName, std::size_t &start,
-                                std::size_t &end, std::size_t &cursor);
-void mrvmUiReplaceWindowLastSearch(const void *windowKey, const std::string &fileName, bool valid,
-                                   std::size_t start, std::size_t end, std::size_t cursor);
-void mrvmUiCopyGlobals(std::vector<std::string> &order, std::map<std::string, int> &ints,
-                       std::map<std::string, std::string> &strings);
-void mrvmUiCopyLoadedMacros(std::vector<std::string> &order,
-                            std::map<std::string, std::string> &displayNames);
-void mrvmUiReplaceGlobals(const std::vector<std::string> &order,
-                          const std::map<std::string, int> &ints,
-                          const std::map<std::string, std::string> &strings);
+bool mrvmUiCopyWindowLastSearch(const void *windowKey, const std::string &fileName, std::size_t &start, std::size_t &end, std::size_t &cursor);
+void mrvmUiReplaceWindowLastSearch(const void *windowKey, const std::string &fileName, bool valid, std::size_t start, std::size_t end, std::size_t cursor);
+void mrvmUiCopyGlobals(std::vector<std::string> &order, std::map<std::string, int> &ints, std::map<std::string, std::string> &strings);
+void mrvmUiCopyLoadedMacros(std::vector<std::string> &order, std::map<std::string, std::string> &displayNames);
+void mrvmUiReplaceGlobals(const std::vector<std::string> &order, const std::map<std::string, int> &ints, const std::map<std::string, std::string> &strings);
 void mrvmUiCopyRuntimeOptions(bool &ignoreCase, bool &tabExpand);
 void mrvmUiReplaceRuntimeOptions(bool ignoreCase, bool tabExpand);
 void mrvmUiSyncLinkedWindowsFrom(MREditWindow *window);
@@ -377,8 +336,7 @@ bool mrvmUiRedrawCurrentWindow();
 bool mrvmUiNewScreen();
 bool mrvmUiMarquee(int kind, const std::string &text);
 bool mrvmUiBrain(bool enabled);
-bool mrvmUiPutBox(int x1, int y1, int x2, int y2, int bgColor, int fgColor,
-                  const std::string &title, int shadow);
+bool mrvmUiPutBox(int x1, int y1, int x2, int y2, int bgColor, int fgColor, const std::string &title, int shadow);
 bool mrvmUiWrite(const std::string &text, int x, int y, int bgColor, int fgColor);
 bool mrvmUiClrLine(int col = 0, int row = 0, int count = 0);
 bool mrvmUiGotoxy(int x, int y);
@@ -388,33 +346,21 @@ bool mrvmUiScrollBoxUp(int x1, int y1, int x2, int y2, int attr);
 bool mrvmUiScrollBoxDn(int x1, int y1, int x2, int y2, int attr);
 bool mrvmUiClearScreen(int attr = 0x07);
 bool mrvmUiKillBox();
-bool mrvmUiRegisterMenuItem(const std::string &menuTitle, const std::string &itemTitle,
-                            const std::string &macroSpec, const std::string &ownerSpec,
-                            std::string *errorMessage = nullptr);
-bool mrvmUiRemoveMenuItem(const std::string &menuTitle, const std::string &itemTitle,
-                          const std::string &ownerSpec,
-                          std::string *errorMessage = nullptr);
-bool mrvmUiRemoveRuntimeMenusOwnedByMacroSpec(const std::string &ownerSpec,
-                                              std::string *errorMessage = nullptr);
-bool mrvmUiRemoveRuntimeMenusOwnedByFile(const std::string &fileSpec,
-                                         std::string *errorMessage = nullptr);
+bool mrvmUiRegisterMenuItem(const std::string &menuTitle, const std::string &itemTitle, const std::string &macroSpec, const std::string &ownerSpec, std::string *errorMessage = nullptr);
+bool mrvmUiRemoveMenuItem(const std::string &menuTitle, const std::string &itemTitle, const std::string &ownerSpec, std::string *errorMessage = nullptr);
+bool mrvmUiRemoveRuntimeMenusOwnedByMacroSpec(const std::string &ownerSpec, std::string *errorMessage = nullptr);
+bool mrvmUiRemoveRuntimeMenusOwnedByFile(const std::string &fileSpec, std::string *errorMessage = nullptr);
 std::string mrvmUiMenuKeyLabelForMacroSpec(const std::string &macroSpec);
 bool mrvmUiRefreshRuntimeMenus(std::string *errorMessage = nullptr);
 bool mrvmUiMessageBox(const std::string &text);
 bool mrvmUiRenderFacadeRenderDeferredCommand(const MRMacroDeferredUiCommand &command);
 bool mrvmUiRenderDeferredCommand(const MRMacroDeferredUiCommand &command);
 bool mrvmLoadMacroFile(const std::string &spec, std::string *errorMessage = nullptr);
-bool mrvmRunMacroSpec(const std::string &spec, std::string *errorMessage = nullptr,
-                      std::vector<std::string> *logLines = nullptr);
-void mrvmBootstrapBoundMacroIndex(const std::string &directoryPath, std::size_t *fileCount = nullptr,
-                                  std::size_t *bindingCount = nullptr);
-bool mrvmWarmLoadNextIndexedMacroFile(std::string *loadedFilePath = nullptr,
-                                      std::string *failedFilePath = nullptr,
-                                      std::string *errorMessage = nullptr);
+bool mrvmRunMacroSpec(const std::string &spec, std::string *errorMessage = nullptr, std::vector<std::string> *logLines = nullptr);
+void mrvmBootstrapBoundMacroIndex(const std::string &directoryPath, std::size_t *fileCount = nullptr, std::size_t *bindingCount = nullptr);
+bool mrvmWarmLoadNextIndexedMacroFile(std::string *loadedFilePath = nullptr, std::string *failedFilePath = nullptr, std::string *errorMessage = nullptr);
 bool mrvmHasPendingIndexedMacroWarmup();
 
-bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKeyState,
-                                std::string &executedMacroName,
-                                std::vector<std::string> *logLines = nullptr);
+bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKeyState, std::string &executedMacroName, std::vector<std::string> *logLines = nullptr);
 
 #endif

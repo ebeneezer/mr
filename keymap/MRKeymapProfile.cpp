@@ -30,8 +30,7 @@ constexpr std::string_view kBindingContextMember = "CONTEXT";
 constexpr std::string_view kBindingTypeMember = "TYPE";
 constexpr std::string_view kBindingTargetMember = "TARGET";
 constexpr std::string_view kBindingSequenceMember = "SEQUENCE";
-const char *const kAssignmentPattern =
-    "MRSETUP\\s*\\(\\s*'([^']+)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)";
+const char *const kAssignmentPattern = "MRSETUP\\s*\\(\\s*'([^']+)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)";
 
 struct PayloadMember {
 	std::string key;
@@ -48,15 +47,12 @@ constexpr std::array targetTypes{
     TargetTypeSpec{"MACRO", MRKeymapBindingType::Macro},
 };
 
-MRKeymapDiagnostic makeDiagnostic(MRKeymapDiagnosticKind kind, MRKeymapDiagnosticSeverity severity,
-                                  std::size_t profileIndex, std::size_t bindingIndex,
-                                  std::string message) {
+MRKeymapDiagnostic makeDiagnostic(MRKeymapDiagnosticKind kind, MRKeymapDiagnosticSeverity severity, std::size_t profileIndex, std::size_t bindingIndex, std::string message) {
 	return {kind, severity, profileIndex, bindingIndex, std::move(message)};
 }
 
 bool sameBindingIdentity(const MRKeymapBindingRecord &lhs, const MRKeymapBindingRecord &rhs) noexcept {
-	return lhs.profileName == rhs.profileName && lhs.context == rhs.context && lhs.target == rhs.target &&
-	       lhs.sequence == rhs.sequence;
+	return lhs.profileName == rhs.profileName && lhs.context == rhs.context && lhs.target == rhs.target && lhs.sequence == rhs.sequence;
 }
 
 bool sameDispatchSlot(const MRKeymapBindingRecord &lhs, const MRKeymapBindingRecord &rhs) noexcept {
@@ -66,22 +62,15 @@ bool sameDispatchSlot(const MRKeymapBindingRecord &lhs, const MRKeymapBindingRec
 std::string displayBindingTarget(std::string_view target) {
 	std::string name(target);
 
-	if (name.rfind("MRMAC_", 0) == 0)
-		return name.substr(6);
-	if (name.rfind("MR_", 0) == 0)
-		return name.substr(3);
+	if (name.rfind("MRMAC_", 0) == 0) return name.substr(6);
+	if (name.rfind("MR_", 0) == 0) return name.substr(3);
 	return name;
 }
 
 bool isPhase1CtrlAsciiCollision(const MRKeymapToken &token) noexcept {
-	if (!token.hasModifier(MRKeymapModifier::Ctrl) || token.hasModifier(MRKeymapModifier::Alt) ||
-	    token.hasModifier(MRKeymapModifier::Shift))
-		return false;
-	if (token.baseKey() == MRKeymapBaseKey::Backspace || token.baseKey() == MRKeymapBaseKey::Tab ||
-	    token.baseKey() == MRKeymapBaseKey::Enter)
-		return true;
-	if (token.baseKey() != MRKeymapBaseKey::Printable)
-		return false;
+	if (!token.hasModifier(MRKeymapModifier::Ctrl) || token.hasModifier(MRKeymapModifier::Alt) || token.hasModifier(MRKeymapModifier::Shift)) return false;
+	if (token.baseKey() == MRKeymapBaseKey::Backspace || token.baseKey() == MRKeymapBaseKey::Tab || token.baseKey() == MRKeymapBaseKey::Enter) return true;
+	if (token.baseKey() != MRKeymapBaseKey::Printable) return false;
 	switch (std::toupper(static_cast<unsigned char>(token.printableKey()))) {
 		case 'H':
 		case 'I':
@@ -95,8 +84,7 @@ bool isPhase1CtrlAsciiCollision(const MRKeymapToken &token) noexcept {
 
 bool sequenceHasPhase1CtrlAsciiCollision(const MRKeymapSequence &sequence) noexcept {
 	for (const MRKeymapToken &token : sequence.tokens())
-		if (isPhase1CtrlAsciiCollision(token))
-			return true;
+		if (isPhase1CtrlAsciiCollision(token)) return true;
 	return false;
 }
 
@@ -109,8 +97,7 @@ std::string macroSpecFilePart(std::string_view target) {
 std::string macroSpecMacroPart(std::string_view target) {
 	const std::size_t caretPos = target.find('^');
 
-	if (caretPos == std::string_view::npos)
-		return trimAscii(std::string(target));
+	if (caretPos == std::string_view::npos) return trimAscii(std::string(target));
 	return trimAscii(std::string(target.substr(caretPos + 1)));
 }
 
@@ -120,27 +107,20 @@ std::string resolveMacroBindingFilePath(const std::string &spec) {
 	auto tryMacroDirectory = [&](const std::string &candidate) -> std::string {
 		std::string joined;
 
-		if (macroDirectory.empty() || candidate.empty())
-			return std::string();
+		if (macroDirectory.empty() || candidate.empty()) return std::string();
 		joined = macroDirectory;
-		if (joined.back() != '/')
-			joined += '/';
+		if (joined.back() != '/') joined += '/';
 		joined += candidate;
 		return ::access(joined.c_str(), F_OK) == 0 ? joined : std::string();
 	};
 
-	if (trimmed.empty())
-		return std::string();
-	if (::access(trimmed.c_str(), F_OK) == 0)
-		return trimmed;
-	if (std::string fromMacroDirectory = tryMacroDirectory(trimmed); !fromMacroDirectory.empty())
-		return fromMacroDirectory;
+	if (trimmed.empty()) return std::string();
+	if (::access(trimmed.c_str(), F_OK) == 0) return trimmed;
+	if (std::string fromMacroDirectory = tryMacroDirectory(trimmed); !fromMacroDirectory.empty()) return fromMacroDirectory;
 	if (upperAscii(trimmed).size() < 6 || upperAscii(trimmed).substr(upperAscii(trimmed).size() - 6) != ".MRMAC") {
 		std::string withExt = trimmed + ".mrmac";
-		if (::access(withExt.c_str(), F_OK) == 0)
-			return withExt;
-		if (std::string withExtFromMacroDirectory = tryMacroDirectory(withExt); !withExtFromMacroDirectory.empty())
-			return withExtFromMacroDirectory;
+		if (::access(withExt.c_str(), F_OK) == 0) return withExt;
+		if (std::string withExtFromMacroDirectory = tryMacroDirectory(withExt); !withExtFromMacroDirectory.empty()) return withExtFromMacroDirectory;
 	}
 	return std::string();
 }
@@ -150,13 +130,11 @@ struct MacroBindingFileValidation {
 	std::string compileError;
 };
 
-const MacroBindingFileValidation &validateMacroBindingFile(
-    const std::string &filePart, std::map<std::string, MacroBindingFileValidation> &cache) {
+const MacroBindingFileValidation &validateMacroBindingFile(const std::string &filePart, std::map<std::string, MacroBindingFileValidation> &cache) {
 	const std::string cacheKey = upperAscii(trimAscii(filePart));
 	auto cached = cache.find(cacheKey);
 
-	if (cached != cache.end())
-		return cached->second;
+	if (cached != cache.end()) return cached->second;
 
 	MacroBindingFileValidation validation;
 	std::string source;
@@ -182,8 +160,7 @@ const MacroBindingFileValidation &validateMacroBindingFile(
 		const char *compiledName = get_compiled_macro_name(i);
 		const std::string macroName = trimAscii(compiledName != nullptr ? compiledName : "");
 
-		if (!macroName.empty())
-			validation.macroNames.insert(upperAscii(macroName));
+		if (!macroName.empty()) validation.macroNames.insert(upperAscii(macroName));
 	}
 	std::free(bytecode);
 	return cache.emplace(cacheKey, std::move(validation)).first->second;
@@ -192,19 +169,16 @@ const MacroBindingFileValidation &validateMacroBindingFile(
 std::string summarizeMacroBindingError(std::string_view message) {
 	const std::size_t pos = message.find_first_of("\r\n");
 
-	if (pos == std::string_view::npos)
-		return trimAscii(std::string(message));
+	if (pos == std::string_view::npos) return trimAscii(std::string(message));
 	return trimAscii(std::string(message.substr(0, pos)));
 }
 
-bool bindingHasMacroError(const MRKeymapBindingRecord &binding, std::string &errorText,
-                          std::map<std::string, MacroBindingFileValidation> &cache) {
+bool bindingHasMacroError(const MRKeymapBindingRecord &binding, std::string &errorText, std::map<std::string, MacroBindingFileValidation> &cache) {
 	const std::string filePart = macroSpecFilePart(binding.target.target);
 	const std::string macroPart = macroSpecMacroPart(binding.target.target);
 
 	errorText.clear();
-	if (binding.target.type != MRKeymapBindingType::Macro)
-		return false;
+	if (binding.target.type != MRKeymapBindingType::Macro) return false;
 	if (filePart.empty()) {
 		errorText = "Macro target has no file qualifier.";
 		return true;
@@ -226,31 +200,26 @@ bool bindingHasMacroError(const MRKeymapBindingRecord &binding, std::string &err
 }
 
 bool isSequencePrefix(const MRKeymapSequence &prefix, const MRKeymapSequence &sequence) {
-	if (prefix.size() >= sequence.size())
-		return false;
+	if (prefix.size() >= sequence.size()) return false;
 	for (std::size_t i = 0; i < prefix.size(); ++i)
-		if (prefix.tokens()[i] != sequence.tokens()[i])
-			return false;
+		if (prefix.tokens()[i] != sequence.tokens()[i]) return false;
 	return true;
 }
 
 bool hasSequencePrefixCollision(const MRKeymapBindingRecord &lhs, const MRKeymapBindingRecord &rhs) {
-	return lhs.context == rhs.context &&
-	       (isSequencePrefix(lhs.sequence, rhs.sequence) || isSequencePrefix(rhs.sequence, lhs.sequence));
+	return lhs.context == rhs.context && (isSequencePrefix(lhs.sequence, rhs.sequence) || isSequencePrefix(rhs.sequence, lhs.sequence));
 }
 
 std::size_t findProfileIndex(std::span<const MRKeymapProfile> profiles, std::string_view name) {
 	for (std::size_t i = 0; i < profiles.size(); ++i)
-		if (profiles[i].name == name)
-			return i;
+		if (profiles[i].name == name) return i;
 	return kNoIndex;
 }
 
 void normalizeKeymapProfile(MRKeymapProfile &profile) {
 	profile.name = trimAscii(profile.name);
 	profile.description = trimAscii(profile.description);
-	if (upperAscii(profile.name) == "DEFAULT")
-		profile.name = "DEFAULT";
+	if (upperAscii(profile.name) == "DEFAULT") profile.name = "DEFAULT";
 	for (MRKeymapBindingRecord &binding : profile.bindings) {
 		binding.profileName = trimAscii(binding.profileName);
 		binding.target.target = trimAscii(binding.target.target);
@@ -287,8 +256,7 @@ std::string unescapeMrmacSingleQuotedLiteral(std::string_view value) {
 }
 
 std::string describeBindingLocation(std::size_t bindingIndex) {
-	if (bindingIndex == kNoIndex)
-		return "payload";
+	if (bindingIndex == kNoIndex) return "payload";
 	return "binding payload";
 }
 
@@ -326,15 +294,13 @@ std::string escapeMrmacSingleQuotedLiteral(std::string_view value) {
 	escaped.reserve(value.size() + 4);
 	for (const char ch : value) {
 		escaped.push_back(ch);
-		if (ch == '\'')
-			escaped.push_back('\'');
+		if (ch == '\'') escaped.push_back('\'');
 	}
 	return escaped;
 }
 
 void appendQuotedPayloadMember(std::string &payload, std::string_view key, std::string_view value) {
-	if (!payload.empty())
-		payload.push_back(' ');
+	if (!payload.empty()) payload.push_back(' ');
 	payload += key;
 	payload += "=\"";
 	payload += escapePayloadQuotedString(value);
@@ -342,8 +308,7 @@ void appendQuotedPayloadMember(std::string &payload, std::string_view key, std::
 }
 
 void appendAtomPayloadMember(std::string &payload, std::string_view key, std::string_view value) {
-	if (!payload.empty())
-		payload.push_back(' ');
+	if (!payload.empty()) payload.push_back(' ');
 	payload += key;
 	payload.push_back('=');
 	payload += value;
@@ -373,8 +338,7 @@ std::string serializeMrsetupRecord(std::string_view key, std::string_view payloa
 	return "MRSETUP('" + std::string(key) + "', '" + escapeMrmacSingleQuotedLiteral(payload) + "');\n";
 }
 
-std::vector<MRKeymapDiagnostic> parsePayloadMembers(std::string_view payload, std::vector<PayloadMember> &members,
-                                                    std::size_t profileIndex, std::size_t bindingIndex) {
+std::vector<MRKeymapDiagnostic> parsePayloadMembers(std::string_view payload, std::vector<PayloadMember> &members, std::size_t profileIndex, std::size_t bindingIndex) {
 	std::vector<MRKeymapDiagnostic> diagnostics;
 	std::set<std::string> seenKeys;
 	std::size_t pos = 0;
@@ -382,13 +346,9 @@ std::vector<MRKeymapDiagnostic> parsePayloadMembers(std::string_view payload, st
 	while (pos < payload.size()) {
 		while (pos < payload.size() && isPayloadSpace(payload[pos]))
 			++pos;
-		if (pos >= payload.size())
-			break;
+		if (pos >= payload.size()) break;
 		if (!isPayloadKeyStart(payload[pos])) {
-			diagnostics.push_back(makeDiagnostic(
-			    MRKeymapDiagnosticKind::PayloadSyntaxError, MRKeymapDiagnosticSeverity::Error,
-			    profileIndex, bindingIndex,
-			    "Invalid payload syntax: expected member key at position " + std::to_string(pos) + "."));
+			diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::PayloadSyntaxError, MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex, "Invalid payload syntax: expected member key at position " + std::to_string(pos) + "."));
 			return diagnostics;
 		}
 
@@ -399,10 +359,7 @@ std::vector<MRKeymapDiagnostic> parsePayloadMembers(std::string_view payload, st
 		std::string key = upperAscii(std::string(payload.substr(keyStart, pos - keyStart)));
 
 		if (pos >= payload.size() || payload[pos] != '=') {
-			diagnostics.push_back(makeDiagnostic(
-			    MRKeymapDiagnosticKind::PayloadSyntaxError, MRKeymapDiagnosticSeverity::Error,
-			    profileIndex, bindingIndex,
-			    "Invalid payload syntax: missing '=' after member '" + key + "'."));
+			diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::PayloadSyntaxError, MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex, "Invalid payload syntax: missing '=' after member '" + key + "'."));
 			return diagnostics;
 		}
 		++pos;
@@ -412,14 +369,10 @@ std::vector<MRKeymapDiagnostic> parsePayloadMembers(std::string_view payload, st
 			++pos;
 			while (pos < payload.size()) {
 				const char ch = payload[pos++];
-				if (ch == '"')
-					break;
+				if (ch == '"') break;
 				if (ch == '\\') {
 					if (pos >= payload.size()) {
-						diagnostics.push_back(makeDiagnostic(
-						    MRKeymapDiagnosticKind::PayloadSyntaxError,
-						    MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex,
-						    "Invalid payload syntax: dangling escape in member '" + key + "'."));
+						diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::PayloadSyntaxError, MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex, "Invalid payload syntax: dangling escape in member '" + key + "'."));
 						return diagnostics;
 					}
 					switch (const char escaped = payload[pos++]) {
@@ -437,11 +390,7 @@ std::vector<MRKeymapDiagnostic> parsePayloadMembers(std::string_view payload, st
 							value.push_back('\t');
 							break;
 						default:
-							diagnostics.push_back(makeDiagnostic(
-							    MRKeymapDiagnosticKind::PayloadSyntaxError,
-							    MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex,
-							    "Invalid payload syntax: unsupported escape sequence in member '" +
-							        key + "'."));
+							diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::PayloadSyntaxError, MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex, "Invalid payload syntax: unsupported escape sequence in member '" + key + "'."));
 							return diagnostics;
 					}
 					continue;
@@ -449,10 +398,7 @@ std::vector<MRKeymapDiagnostic> parsePayloadMembers(std::string_view payload, st
 				value.push_back(ch);
 			}
 			if (pos > payload.size() || payload[pos - 1] != '"') {
-				diagnostics.push_back(makeDiagnostic(
-				    MRKeymapDiagnosticKind::PayloadSyntaxError, MRKeymapDiagnosticSeverity::Error,
-				    profileIndex, bindingIndex,
-				    "Invalid payload syntax: unterminated quoted value in member '" + key + "'."));
+				diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::PayloadSyntaxError, MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex, "Invalid payload syntax: unterminated quoted value in member '" + key + "'."));
 				return diagnostics;
 			}
 		} else {
@@ -461,19 +407,12 @@ std::vector<MRKeymapDiagnostic> parsePayloadMembers(std::string_view payload, st
 				++pos;
 			value.assign(payload.substr(valueStart, pos - valueStart));
 			if (value.empty()) {
-				diagnostics.push_back(makeDiagnostic(
-				    MRKeymapDiagnosticKind::PayloadSyntaxError, MRKeymapDiagnosticSeverity::Error,
-				    profileIndex, bindingIndex,
-				    "Invalid payload syntax: missing value for member '" + key + "'."));
+				diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::PayloadSyntaxError, MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex, "Invalid payload syntax: missing value for member '" + key + "'."));
 				return diagnostics;
 			}
 		}
 
-		if (!seenKeys.insert(key).second)
-			diagnostics.push_back(makeDiagnostic(
-			    MRKeymapDiagnosticKind::DuplicatePayloadMember, MRKeymapDiagnosticSeverity::Error,
-			    profileIndex, bindingIndex,
-			    "Duplicate payload member '" + key + "' in " + describeBindingLocation(bindingIndex) + "."));
+		if (!seenKeys.insert(key).second) diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::DuplicatePayloadMember, MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex, "Duplicate payload member '" + key + "' in " + describeBindingLocation(bindingIndex) + "."));
 
 		members.push_back({std::move(key), std::move(value)});
 	}
@@ -483,24 +422,15 @@ std::vector<MRKeymapDiagnostic> parsePayloadMembers(std::string_view payload, st
 
 const PayloadMember *findPayloadMember(const std::vector<PayloadMember> &members, std::string_view key) noexcept {
 	for (const PayloadMember &member : members)
-		if (member.key == key)
-			return &member;
+		if (member.key == key) return &member;
 	return nullptr;
 }
 
-void requirePayloadMember(const std::vector<PayloadMember> &members, std::string_view key,
-                          std::vector<MRKeymapDiagnostic> &diagnostics, std::size_t profileIndex,
-                          std::size_t bindingIndex) {
-	if (findPayloadMember(members, key) == nullptr)
-		diagnostics.push_back(makeDiagnostic(
-		    MRKeymapDiagnosticKind::MissingPayloadMember, MRKeymapDiagnosticSeverity::Error,
-		    profileIndex, bindingIndex, "Missing payload member '" + std::string(key) + "'."));
+void requirePayloadMember(const std::vector<PayloadMember> &members, std::string_view key, std::vector<MRKeymapDiagnostic> &diagnostics, std::size_t profileIndex, std::size_t bindingIndex) {
+	if (findPayloadMember(members, key) == nullptr) diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::MissingPayloadMember, MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex, "Missing payload member '" + std::string(key) + "'."));
 }
 
-void diagnoseUnknownPayloadMembers(const std::vector<PayloadMember> &members,
-                                   std::span<const std::string_view> allowedKeys,
-                                   std::vector<MRKeymapDiagnostic> &diagnostics,
-                                   std::size_t profileIndex, std::size_t bindingIndex) {
+void diagnoseUnknownPayloadMembers(const std::vector<PayloadMember> &members, std::span<const std::string_view> allowedKeys, std::vector<MRKeymapDiagnostic> &diagnostics, std::size_t profileIndex, std::size_t bindingIndex) {
 	for (const PayloadMember &member : members) {
 		bool known = false;
 		for (const std::string_view allowed : allowedKeys)
@@ -508,10 +438,7 @@ void diagnoseUnknownPayloadMembers(const std::vector<PayloadMember> &members,
 				known = true;
 				break;
 			}
-		if (!known)
-			diagnostics.push_back(makeDiagnostic(
-			    MRKeymapDiagnosticKind::UnknownPayloadMember, MRKeymapDiagnosticSeverity::Error,
-			    profileIndex, bindingIndex, "Unknown payload member '" + member.key + "'."));
+		if (!known) diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::UnknownPayloadMember, MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex, "Unknown payload member '" + member.key + "'."));
 	}
 }
 } // namespace
@@ -519,77 +446,42 @@ void diagnoseUnknownPayloadMembers(const std::vector<PayloadMember> &members,
 std::optional<MRKeymapBindingType> parseKeymapBindingType(std::string_view text) noexcept {
 	const std::string upper = upperAscii(std::string(text));
 	for (const TargetTypeSpec &entry : targetTypes)
-		if (entry.name == upper)
-			return entry.type;
+		if (entry.name == upper) return entry.type;
 	return std::nullopt;
 }
 
 std::string_view keymapBindingTypeName(MRKeymapBindingType type) noexcept {
 	for (const TargetTypeSpec &entry : targetTypes)
-		if (entry.type == type)
-			return entry.name;
+		if (entry.type == type) return entry.name;
 	return "ACTION";
 }
 
-std::vector<MRKeymapDiagnostic> validateKeymapProfile(const MRKeymapProfile &profile,
-                                                      std::size_t profileIndex) {
+std::vector<MRKeymapDiagnostic> validateKeymapProfile(const MRKeymapProfile &profile, std::size_t profileIndex) {
 	std::vector<MRKeymapDiagnostic> diagnostics;
 
-	if (profile.name.empty())
-		diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::UnknownProfile,
-		                                     MRKeymapDiagnosticSeverity::Error, profileIndex, kNoIndex,
-		                                     "Profile name must not be empty."));
+	if (profile.name.empty()) diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::UnknownProfile, MRKeymapDiagnosticSeverity::Error, profileIndex, kNoIndex, "Profile name must not be empty."));
 
 	for (std::size_t i = 0; i < profile.bindings.size(); ++i) {
 		const MRKeymapBindingRecord &binding = profile.bindings[i];
-		if (binding.profileName != profile.name)
-			diagnostics.push_back(makeDiagnostic(
-			    MRKeymapDiagnosticKind::ProfileNameMismatch, MRKeymapDiagnosticSeverity::Error,
-			    profileIndex, i, "Binding profile name does not match owning profile."));
-		if (binding.context == MRKeymapContext::None)
-			diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::UnknownContext,
-			                                     MRKeymapDiagnosticSeverity::Error, profileIndex, i,
-			                                     "Binding context is unknown."));
-		if (binding.sequence.empty())
-			diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::InvalidSequence,
-			                                     MRKeymapDiagnosticSeverity::Error, profileIndex, i,
-			                                     "Binding sequence must not be empty."));
+		if (binding.profileName != profile.name) diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::ProfileNameMismatch, MRKeymapDiagnosticSeverity::Error, profileIndex, i, "Binding profile name does not match owning profile."));
+		if (binding.context == MRKeymapContext::None) diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::UnknownContext, MRKeymapDiagnosticSeverity::Error, profileIndex, i, "Binding context is unknown."));
+		if (binding.sequence.empty()) diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::InvalidSequence, MRKeymapDiagnosticSeverity::Error, profileIndex, i, "Binding sequence must not be empty."));
 		else if (sequenceHasPhase1CtrlAsciiCollision(binding.sequence))
-			diagnostics.push_back(makeDiagnostic(
-			    MRKeymapDiagnosticKind::Phase1CtrlAsciiCollision,
-			    MRKeymapDiagnosticSeverity::Error, profileIndex, i,
-			    "Binding sequence uses a Ctrl ASCII collision that is reserved in phase 1."));
+			diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::Phase1CtrlAsciiCollision, MRKeymapDiagnosticSeverity::Error, profileIndex, i, "Binding sequence uses a Ctrl ASCII collision that is reserved in phase 1."));
 		switch (binding.target.type) {
 			case MRKeymapBindingType::Action:
-				if (binding.target.target.empty() ||
-				    !MRKeymapActionCatalog::contains(binding.target.target))
-					diagnostics.push_back(makeDiagnostic(
-					    MRKeymapDiagnosticKind::UnknownAction, MRKeymapDiagnosticSeverity::Error,
-					    profileIndex, i, "Binding action target is unknown."));
+				if (binding.target.target.empty() || !MRKeymapActionCatalog::contains(binding.target.target)) diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::UnknownAction, MRKeymapDiagnosticSeverity::Error, profileIndex, i, "Binding action target is unknown."));
 				break;
 			case MRKeymapBindingType::Macro:
-				if (binding.target.target.empty())
-					diagnostics.push_back(makeDiagnostic(
-					    MRKeymapDiagnosticKind::InvalidMacroTarget,
-					    MRKeymapDiagnosticSeverity::Warning, profileIndex, i,
-					    "Binding macro target must not be empty."));
+				if (binding.target.target.empty()) diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::InvalidMacroTarget, MRKeymapDiagnosticSeverity::Warning, profileIndex, i, "Binding macro target must not be empty."));
 				break;
 		}
 
 		for (std::size_t j = i + 1; j < profile.bindings.size(); ++j) {
 			const MRKeymapBindingRecord &other = profile.bindings[j];
-			if (sameBindingIdentity(binding, other))
-				diagnostics.push_back(makeDiagnostic(
-				    MRKeymapDiagnosticKind::DuplicateBinding,
-				    MRKeymapDiagnosticSeverity::Warning, profileIndex, j,
-				    "Binding is duplicated in the same profile."));
+			if (sameBindingIdentity(binding, other)) diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::DuplicateBinding, MRKeymapDiagnosticSeverity::Warning, profileIndex, j, "Binding is duplicated in the same profile."));
 			else if (sameDispatchSlot(binding, other))
-				diagnostics.push_back(makeDiagnostic(
-				    MRKeymapDiagnosticKind::ConflictingBinding,
-				    MRKeymapDiagnosticSeverity::Error, profileIndex, j,
-				    "colliding binding " + binding.sequence.toString() + " for " +
-				        displayBindingTarget(binding.target.target) + " & " +
-				        displayBindingTarget(other.target.target)));
+				diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::ConflictingBinding, MRKeymapDiagnosticSeverity::Error, profileIndex, j, "colliding binding " + binding.sequence.toString() + " for " + displayBindingTarget(binding.target.target) + " & " + displayBindingTarget(other.target.target)));
 		}
 	}
 
@@ -603,19 +495,13 @@ std::vector<MRKeymapDiagnostic> validateKeymapProfiles(std::span<const MRKeymapP
 		auto profileDiagnostics = validateKeymapProfile(profiles[i], i);
 		diagnostics.insert(diagnostics.end(), profileDiagnostics.begin(), profileDiagnostics.end());
 		for (std::size_t j = i + 1; j < profiles.size(); ++j)
-			if (profiles[i].name == profiles[j].name)
-				diagnostics.push_back(makeDiagnostic(
-				    MRKeymapDiagnosticKind::DuplicateProfile,
-				    MRKeymapDiagnosticSeverity::Error, j, kNoIndex,
-				    "Profile name is defined more than once."));
+			if (profiles[i].name == profiles[j].name) diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::DuplicateProfile, MRKeymapDiagnosticSeverity::Error, j, kNoIndex, "Profile name is defined more than once."));
 	}
 
 	return diagnostics;
 }
 
-MRKeymapCanonicalizationResult canonicalizeKeymapProfiles(std::span<const MRKeymapProfile> profiles,
-                                                          std::string_view activeProfileName,
-                                                          MRKeymapCanonicalizationMode mode) {
+MRKeymapCanonicalizationResult canonicalizeKeymapProfiles(std::span<const MRKeymapProfile> profiles, std::string_view activeProfileName, MRKeymapCanonicalizationMode mode) {
 	MRKeymapCanonicalizationResult result;
 	std::map<std::string, MacroBindingFileValidation> macroValidationCache;
 
@@ -626,24 +512,19 @@ MRKeymapCanonicalizationResult canonicalizeKeymapProfiles(std::span<const MRKeym
 		normalizeKeymapProfile(normalizedProfile);
 		if (mode == MRKeymapCanonicalizationMode::UntrustedIngress) {
 			if (normalizedProfile.name.empty()) {
-				result.diagnostics.push_back(makeDiagnostic(
-				    MRKeymapDiagnosticKind::UnknownProfile, MRKeymapDiagnosticSeverity::Error,
-				    result.profiles.size(), kNoIndex, "Profile name must not be empty."));
+				result.diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::UnknownProfile, MRKeymapDiagnosticSeverity::Error, result.profiles.size(), kNoIndex, "Profile name must not be empty."));
 				continue;
 			}
 			const std::size_t duplicateIndex = findProfileIndex(result.profiles, normalizedProfile.name);
 			if (duplicateIndex != kNoIndex) {
-				result.diagnostics.push_back(makeDiagnostic(
-				    MRKeymapDiagnosticKind::DuplicateProfile, MRKeymapDiagnosticSeverity::Error,
-				    result.profiles.size(), kNoIndex, "Profile name is defined more than once."));
+				result.diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::DuplicateProfile, MRKeymapDiagnosticSeverity::Error, result.profiles.size(), kNoIndex, "Profile name is defined more than once."));
 				continue;
 			}
 		}
 		result.profiles.push_back(std::move(normalizedProfile));
 	}
 
-	if (findProfileIndex(result.profiles, "DEFAULT") == kNoIndex)
-		result.profiles.insert(result.profiles.begin(), builtInDefaultKeymapProfile());
+	if (findProfileIndex(result.profiles, "DEFAULT") == kNoIndex) result.profiles.insert(result.profiles.begin(), builtInDefaultKeymapProfile());
 
 	for (std::size_t profileIndex = 0; profileIndex < result.profiles.size(); ++profileIndex) {
 		MRKeymapProfile &profile = result.profiles[profileIndex];
@@ -656,43 +537,28 @@ MRKeymapCanonicalizationResult canonicalizeKeymapProfiles(std::span<const MRKeym
 
 			if (mode == MRKeymapCanonicalizationMode::UntrustedIngress) {
 				if (binding.profileName != profile.name) {
-					result.diagnostics.push_back(makeDiagnostic(
-					    MRKeymapDiagnosticKind::ProfileNameMismatch, MRKeymapDiagnosticSeverity::Error,
-					    profileIndex, bindingIndex,
-					    "Binding profile name does not match owning profile."));
+					result.diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::ProfileNameMismatch, MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex, "Binding profile name does not match owning profile."));
 					continue;
 				}
 				if (binding.context == MRKeymapContext::None) {
-					result.diagnostics.push_back(makeDiagnostic(
-					    MRKeymapDiagnosticKind::UnknownContext, MRKeymapDiagnosticSeverity::Error,
-					    profileIndex, bindingIndex, "Binding context is unknown."));
+					result.diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::UnknownContext, MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex, "Binding context is unknown."));
 					continue;
 				}
 				if (binding.sequence.empty()) {
-					result.diagnostics.push_back(makeDiagnostic(
-					    MRKeymapDiagnosticKind::InvalidSequence, MRKeymapDiagnosticSeverity::Error,
-					    profileIndex, bindingIndex, "Binding sequence must not be empty."));
+					result.diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::InvalidSequence, MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex, "Binding sequence must not be empty."));
 					continue;
 				}
 				if (sequenceHasPhase1CtrlAsciiCollision(binding.sequence)) {
-					result.diagnostics.push_back(makeDiagnostic(
-					    MRKeymapDiagnosticKind::Phase1CtrlAsciiCollision,
-					    MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex,
-					    "Binding sequence uses a Ctrl ASCII collision that is reserved in phase 1."));
+					result.diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::Phase1CtrlAsciiCollision, MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex, "Binding sequence uses a Ctrl ASCII collision that is reserved in phase 1."));
 					continue;
 				}
-				if (binding.target.type == MRKeymapBindingType::Action &&
-				    !MRKeymapActionCatalog::contains(binding.target.target)) {
-					result.diagnostics.push_back(makeDiagnostic(
-					    MRKeymapDiagnosticKind::UnknownAction, MRKeymapDiagnosticSeverity::Error,
-					    profileIndex, bindingIndex, "Binding action target is unknown."));
+				if (binding.target.type == MRKeymapBindingType::Action && !MRKeymapActionCatalog::contains(binding.target.target)) {
+					result.diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::UnknownAction, MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex, "Binding action target is unknown."));
 					continue;
 				}
 			}
 			if (bindingHasMacroError(binding, macroError, macroValidationCache)) {
-				result.diagnostics.push_back(makeDiagnostic(
-				    MRKeymapDiagnosticKind::InvalidMacroTarget, MRKeymapDiagnosticSeverity::Error,
-				    profileIndex, bindingIndex, macroError));
+				result.diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::InvalidMacroTarget, MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex, macroError));
 				continue;
 			}
 
@@ -702,39 +568,27 @@ MRKeymapCanonicalizationResult canonicalizeKeymapProfiles(std::span<const MRKeym
 					dropBinding = true;
 					break;
 				}
-			if (dropBinding)
-				continue;
+			if (dropBinding) continue;
 
 			for (const MRKeymapBindingRecord &existing : cleanedBindings) {
 				if (sameDispatchSlot(existing, binding)) {
-					result.diagnostics.push_back(makeDiagnostic(
-					    MRKeymapDiagnosticKind::ConflictingBinding, MRKeymapDiagnosticSeverity::Error,
-					    profileIndex, bindingIndex,
-					    "colliding binding " + binding.sequence.toString() + " for " +
-					        displayBindingTarget(existing.target.target) + " & " +
-					        displayBindingTarget(binding.target.target)));
+					result.diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::ConflictingBinding, MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex, "colliding binding " + binding.sequence.toString() + " for " + displayBindingTarget(existing.target.target) + " & " + displayBindingTarget(binding.target.target)));
 					dropBinding = true;
 					break;
 				}
 				if (hasSequencePrefixCollision(existing, binding)) {
-					result.diagnostics.push_back(makeDiagnostic(
-					    MRKeymapDiagnosticKind::TerminalPrefixConflict,
-					    MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex,
-					    "terminal/prefix collision between '" + existing.sequence.toString() + "' and '" +
-					        binding.sequence.toString() + "'."));
+					result.diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::TerminalPrefixConflict, MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex, "terminal/prefix collision between '" + existing.sequence.toString() + "' and '" + binding.sequence.toString() + "'."));
 					dropBinding = true;
 					break;
 				}
 			}
-			if (!dropBinding)
-				cleanedBindings.push_back(binding);
+			if (!dropBinding) cleanedBindings.push_back(binding);
 		}
 		profile.bindings = std::move(cleanedBindings);
 	}
 
 	if (result.activeProfileName.empty() || findProfileIndex(result.profiles, result.activeProfileName) == kNoIndex) {
-		if (findProfileIndex(result.profiles, "DEFAULT") != kNoIndex)
-			result.activeProfileName = "DEFAULT";
+		if (findProfileIndex(result.profiles, "DEFAULT") != kNoIndex) result.activeProfileName = "DEFAULT";
 		else if (!result.profiles.empty())
 			result.activeProfileName = result.profiles.front().name;
 		else
@@ -743,8 +597,7 @@ MRKeymapCanonicalizationResult canonicalizeKeymapProfiles(std::span<const MRKeym
 	return result;
 }
 
-std::vector<MRKeymapDiagnostic> parseKeymapProfilePayload(std::string_view payload, MRKeymapProfile &profile,
-                                                          std::size_t profileIndex) {
+std::vector<MRKeymapDiagnostic> parseKeymapProfilePayload(std::string_view payload, MRKeymapProfile &profile, std::size_t profileIndex) {
 	static constexpr std::array allowedKeys{kProfileNameMember, kProfileDescriptionMember};
 	std::vector<MRKeymapDiagnostic> diagnostics;
 	std::vector<PayloadMember> members;
@@ -755,21 +608,15 @@ std::vector<MRKeymapDiagnostic> parseKeymapProfilePayload(std::string_view paylo
 	requirePayloadMember(members, kProfileNameMember, diagnostics, profileIndex, kNoIndex);
 
 	profile = {};
-	if (const PayloadMember *name = findPayloadMember(members, kProfileNameMember))
-		profile.name = trimAscii(name->value);
-	if (const PayloadMember *description = findPayloadMember(members, kProfileDescriptionMember))
-		profile.description = description->value;
+	if (const PayloadMember *name = findPayloadMember(members, kProfileNameMember)) profile.name = trimAscii(name->value);
+	if (const PayloadMember *description = findPayloadMember(members, kProfileDescriptionMember)) profile.description = description->value;
 
 	return diagnostics;
 }
 
-std::vector<MRKeymapDiagnostic> parseKeymapBindingPayload(std::string_view payload,
-                                                          MRKeymapBindingRecord &binding,
-                                                          std::size_t profileIndex,
-                                                          std::size_t bindingIndex) {
+std::vector<MRKeymapDiagnostic> parseKeymapBindingPayload(std::string_view payload, MRKeymapBindingRecord &binding, std::size_t profileIndex, std::size_t bindingIndex) {
 	static constexpr std::array allowedKeys{
-	    kProfileNameMember,      kBindingContextMember, kBindingTypeMember,
-	    kBindingTargetMember,    kBindingSequenceMember, kProfileDescriptionMember,
+	    kProfileNameMember, kBindingContextMember, kBindingTypeMember, kBindingTargetMember, kBindingSequenceMember, kProfileDescriptionMember,
 	};
 	std::vector<MRKeymapDiagnostic> diagnostics;
 	std::vector<PayloadMember> members;
@@ -784,44 +631,25 @@ std::vector<MRKeymapDiagnostic> parseKeymapBindingPayload(std::string_view paylo
 	requirePayloadMember(members, kBindingSequenceMember, diagnostics, profileIndex, bindingIndex);
 
 	binding = {};
-	if (const PayloadMember *name = findPayloadMember(members, kProfileNameMember))
-		binding.profileName = trimAscii(name->value);
-	if (const PayloadMember *description = findPayloadMember(members, kProfileDescriptionMember))
-		binding.description = description->value;
+	if (const PayloadMember *name = findPayloadMember(members, kProfileNameMember)) binding.profileName = trimAscii(name->value);
+	if (const PayloadMember *description = findPayloadMember(members, kProfileDescriptionMember)) binding.description = description->value;
 	if (const PayloadMember *context = findPayloadMember(members, kBindingContextMember)) {
-		if (const auto parsedContext = parseKeymapContext(context->value))
-			binding.context = *parsedContext;
+		if (const auto parsedContext = parseKeymapContext(context->value)) binding.context = *parsedContext;
 		else
-			diagnostics.push_back(makeDiagnostic(
-			    MRKeymapDiagnosticKind::UnknownContext, MRKeymapDiagnosticSeverity::Error,
-			    profileIndex, bindingIndex,
-			    "Binding context '" + context->value + "' is unknown."));
+			diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::UnknownContext, MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex, "Binding context '" + context->value + "' is unknown."));
 	}
 	if (const PayloadMember *type = findPayloadMember(members, kBindingTypeMember)) {
-		if (const auto parsedType = parseKeymapBindingType(type->value))
-			binding.target.type = *parsedType;
+		if (const auto parsedType = parseKeymapBindingType(type->value)) binding.target.type = *parsedType;
 		else
-			diagnostics.push_back(makeDiagnostic(
-			    MRKeymapDiagnosticKind::InvalidBindingType, MRKeymapDiagnosticSeverity::Error,
-			    profileIndex, bindingIndex,
-			    "Binding type '" + type->value + "' is unknown."));
+			diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::InvalidBindingType, MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex, "Binding type '" + type->value + "' is unknown."));
 	}
-	if (const PayloadMember *target = findPayloadMember(members, kBindingTargetMember))
-		binding.target.target = target->value;
+	if (const PayloadMember *target = findPayloadMember(members, kBindingTargetMember)) binding.target.target = target->value;
 	if (const PayloadMember *sequence = findPayloadMember(members, kBindingSequenceMember)) {
-		if (const auto parsedSequence = MRKeymapSequence::parse(sequence->value))
-			binding.sequence = *parsedSequence;
+		if (const auto parsedSequence = MRKeymapSequence::parse(sequence->value)) binding.sequence = *parsedSequence;
 		else
-			diagnostics.push_back(makeDiagnostic(
-			    MRKeymapDiagnosticKind::InvalidSequence, MRKeymapDiagnosticSeverity::Error,
-			    profileIndex, bindingIndex,
-			    "Binding sequence '" + sequence->value + "' is invalid."));
+			diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::InvalidSequence, MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex, "Binding sequence '" + sequence->value + "' is invalid."));
 	}
-	if (!binding.sequence.empty() && sequenceHasPhase1CtrlAsciiCollision(binding.sequence))
-		diagnostics.push_back(makeDiagnostic(
-		    MRKeymapDiagnosticKind::Phase1CtrlAsciiCollision,
-		    MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex,
-		    "Binding sequence uses a Ctrl ASCII collision that is reserved in phase 1."));
+	if (!binding.sequence.empty() && sequenceHasPhase1CtrlAsciiCollision(binding.sequence)) diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::Phase1CtrlAsciiCollision, MRKeymapDiagnosticSeverity::Error, profileIndex, bindingIndex, "Binding sequence uses a Ctrl ASCII collision that is reserved in phase 1."));
 
 	return diagnostics;
 }
@@ -852,14 +680,12 @@ MRKeymapLoadResult loadKeymapProfilesFromSettingsSource(std::string_view source)
 			result.activeProfileName = activeRecord.name;
 		} else if (key == kKeymapProfileSetupKey) {
 			MRKeymapProfile profile;
-			auto diagnostics =
-			    parseKeymapProfilePayload(payload, profile, result.profiles.size());
+			auto diagnostics = parseKeymapProfilePayload(payload, profile, result.profiles.size());
 			result.diagnostics.insert(result.diagnostics.end(), diagnostics.begin(), diagnostics.end());
 			result.profiles.push_back(std::move(profile));
 		} else if (key == kKeymapBindingSetupKey) {
 			ParsedBindingPayload parsedBinding;
-			parsedBinding.diagnostics =
-			    parseKeymapBindingPayload(payload, parsedBinding.binding, kNoIndex, kNoIndex);
+			parsedBinding.diagnostics = parseKeymapBindingPayload(payload, parsedBinding.binding, kNoIndex, kNoIndex);
 			pendingBindings.push_back(std::move(parsedBinding));
 		}
 
@@ -875,12 +701,8 @@ MRKeymapLoadResult loadKeymapProfilesFromSettingsSource(std::string_view source)
 			}
 
 		if (ownerIndex == kNoIndex) {
-			result.diagnostics.insert(result.diagnostics.end(), parsedBinding.diagnostics.begin(),
-			                          parsedBinding.diagnostics.end());
-			result.diagnostics.push_back(makeDiagnostic(
-			    MRKeymapDiagnosticKind::UnknownProfile, MRKeymapDiagnosticSeverity::Error,
-			    kNoIndex, kNoIndex,
-			    "Binding references unknown profile '" + parsedBinding.binding.profileName + "'."));
+			result.diagnostics.insert(result.diagnostics.end(), parsedBinding.diagnostics.begin(), parsedBinding.diagnostics.end());
+			result.diagnostics.push_back(makeDiagnostic(MRKeymapDiagnosticKind::UnknownProfile, MRKeymapDiagnosticSeverity::Error, kNoIndex, kNoIndex, "Binding references unknown profile '" + parsedBinding.binding.profileName + "'."));
 			continue;
 		}
 
@@ -899,17 +721,13 @@ MRKeymapLoadResult loadKeymapProfilesFromSettingsSource(std::string_view source)
 				result.activeProfileName = profile.name;
 				break;
 			}
-		if (result.activeProfileName.empty() && !result.profiles.empty())
-			result.activeProfileName = result.profiles.front().name;
+		if (result.activeProfileName.empty() && !result.profiles.empty()) result.activeProfileName = result.profiles.front().name;
 	}
 	{
-		MRKeymapCanonicalizationResult canonicalized =
-		    canonicalizeKeymapProfiles(result.profiles, result.activeProfileName,
-		                               MRKeymapCanonicalizationMode::UntrustedIngress);
+		MRKeymapCanonicalizationResult canonicalized = canonicalizeKeymapProfiles(result.profiles, result.activeProfileName, MRKeymapCanonicalizationMode::UntrustedIngress);
 		result.activeProfileName = std::move(canonicalized.activeProfileName);
 		result.profiles = std::move(canonicalized.profiles);
-		result.diagnostics.insert(result.diagnostics.end(), canonicalized.diagnostics.begin(),
-		                          canonicalized.diagnostics.end());
+		result.diagnostics.insert(result.diagnostics.end(), canonicalized.diagnostics.begin(), canonicalized.diagnostics.end());
 	}
 	return result;
 }
@@ -922,8 +740,7 @@ std::string serializeKeymapProfilesToSettingsSource(std::span<const MRKeymapProf
 	for (const MRKeymapProfile &profile : profiles)
 		for (const MRKeymapBindingRecord &binding : profile.bindings)
 			source += serializeMrsetupRecord(kKeymapBindingSetupKey, serializeBindingPayload(binding));
-	source += serializeMrsetupRecord(kActiveKeymapProfileSetupKey,
-	                                 "name=\"" + escapePayloadQuotedString(activeProfileName) + "\"");
+	source += serializeMrsetupRecord(kActiveKeymapProfileSetupKey, "name=\"" + escapePayloadQuotedString(activeProfileName) + "\"");
 	return source;
 }
 

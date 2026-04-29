@@ -26,8 +26,7 @@ class MRKeymapResolver final {
 		std::string sequenceText;
 	};
 
-	bool rebuild(std::span<const MRKeymapProfile> profiles, std::string_view activeProfileName,
-	             std::string *errorMessage = nullptr);
+	bool rebuild(std::span<const MRKeymapProfile> profiles, std::string_view activeProfileName, std::string *errorMessage = nullptr);
 	[[nodiscard]] Result resolve(MRKeymapContext context, const MRKeymapToken &token);
 	[[nodiscard]] bool hasPending(MRKeymapContext context) const noexcept;
 	void resetPending() noexcept;

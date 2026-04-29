@@ -23,7 +23,10 @@ typedef struct {
 	int target_pos;
 } LabelDef;
 
-typedef enum { REF_GOTO = 1, REF_CALL = 2 } PendingRefKind;
+typedef enum {
+	REF_GOTO = 1,
+	REF_CALL = 2
+} PendingRefKind;
 
 typedef struct {
 	char name[MAX_SYMBOL_NAME + 1];
@@ -179,8 +182,7 @@ static void reset_compiled_macro_info(void) {
 	g_compiled_macro_file_name = NULL;
 }
 
-static int add_compiled_macro_info(const char *name, int entry_pos, unsigned flags,
-                                   const char *keyspec, int mode) {
+static int add_compiled_macro_info(const char *name, int entry_pos, unsigned flags, const char *keyspec, int mode) {
 	CompiledMacroInfo *slot;
 
 	if (g_compiled_macro_count >= MAX_COMPILED_MACROS) {
@@ -201,8 +203,7 @@ static int add_compiled_macro_info(const char *name, int entry_pos, unsigned fla
 		set_compile_error(0, "Out of memory.");
 		return -1;
 	}
-	if (mode != MACRO_MODE_EDIT && mode != MACRO_MODE_DOS_SHELL && mode != MACRO_MODE_ALL)
-		mode = MACRO_MODE_EDIT;
+	if (mode != MACRO_MODE_EDIT && mode != MACRO_MODE_DOS_SHELL && mode != MACRO_MODE_ALL) mode = MACRO_MODE_EDIT;
 	slot->entry_pos = entry_pos;
 	slot->flags = flags;
 	slot->mode = mode;
@@ -226,12 +227,10 @@ static int ensure_code_capacity(size_t extra) {
 	size_t required;
 	size_t new_capacity;
 
-	if (extra == 0)
-		return 0;
+	if (extra == 0) return 0;
 
 	required = g_code_size + extra;
-	if (required <= g_code_capacity)
-		return 0;
+	if (required <= g_code_capacity) return 0;
 
 	new_capacity = (g_code_capacity == 0) ? INITIAL_CODE_CAPACITY : g_code_capacity;
 	while (new_capacity < required)
@@ -249,21 +248,18 @@ static int ensure_code_capacity(size_t extra) {
 }
 
 void emit_byte(unsigned char byte) {
-	if (ensure_code_capacity(1) != 0)
-		return;
+	if (ensure_code_capacity(1) != 0) return;
 	g_code[g_code_size++] = byte;
 }
 
 void emit_int(int value) {
-	if (ensure_code_capacity(sizeof(int)) != 0)
-		return;
+	if (ensure_code_capacity(sizeof(int)) != 0) return;
 	memcpy(&g_code[g_code_size], &value, sizeof(int));
 	g_code_size += sizeof(int);
 }
 
 void emit_double(double value) {
-	if (ensure_code_capacity(sizeof(double)) != 0)
-		return;
+	if (ensure_code_capacity(sizeof(double)) != 0) return;
 	memcpy(&g_code[g_code_size], &value, sizeof(double));
 	g_code_size += sizeof(double);
 }
@@ -271,12 +267,10 @@ void emit_double(double value) {
 void emit_string(const char *s) {
 	size_t len;
 
-	if (s == NULL)
-		s = "";
+	if (s == NULL) s = "";
 
 	len = strlen(s) + 1;
-	if (ensure_code_capacity(len) != 0)
-		return;
+	if (ensure_code_capacity(len) != 0) return;
 
 	memcpy(&g_code[g_code_size], s, len);
 	g_code_size += len;
@@ -295,16 +289,13 @@ void emit_patch_int(size_t pos, int value) {
 }
 
 void set_compile_error(int line, const char *msg) {
-	if (g_last_error[0] != '\0')
-		return;
+	if (g_last_error[0] != '\0') return;
 
-	if (msg == NULL)
-		msg = "Unknown compile error.";
+	if (msg == NULL) msg = "Unknown compile error.";
 
 	g_last_error_line = line;
 
-	if (line > 0)
-		snprintf(g_last_error, sizeof(g_last_error), "Line %d: %s", line, msg);
+	if (line > 0) snprintf(g_last_error, sizeof(g_last_error), "Line %d: %s", line, msg);
 	else
 		snprintf(g_last_error, sizeof(g_last_error), "%s", msg);
 }
@@ -354,13 +345,11 @@ int add_symbol(const char *name, int type) {
 int lookup_symbol(const char *name, int *out_type) {
 	int i;
 
-	if (name == NULL || *name == '\0')
-		return -1;
+	if (name == NULL || *name == '\0') return -1;
 
 	for (i = 0; i < g_symbol_count; i++) {
 		if (strcasecmp(g_symbols[i].name, name) == 0) {
-			if (out_type != NULL)
-				*out_type = g_symbols[i].type;
+			if (out_type != NULL) *out_type = g_symbols[i].type;
 			return i;
 		}
 	}
@@ -372,13 +361,11 @@ static char *xstrdup(const char *s) {
 	size_t len;
 	char *copy;
 
-	if (s == NULL)
-		s = "";
+	if (s == NULL) s = "";
 
 	len = strlen(s) + 1;
 	copy = (char *)malloc(len);
-	if (copy != NULL)
-		memcpy(copy, s, len);
+	if (copy != NULL) memcpy(copy, s, len);
 	return copy;
 }
 
@@ -403,8 +390,7 @@ static void lexer_init(Lexer *lex, const char *source) {
 
 static void skip_ws_and_comments(Lexer *lex) {
 	for (;;) {
-		if (*lex->p == '\0')
-			return;
+		if (*lex->p == '\0') return;
 
 		if (*lex->p == ' ' || *lex->p == '\t' || *lex->p == '\r') {
 			++lex->p;
@@ -417,8 +403,7 @@ static void skip_ws_and_comments(Lexer *lex) {
 			continue;
 		}
 
-		if ((unsigned char)lex->p[0] == 0xEF && (unsigned char)lex->p[1] == 0xBB &&
-		    (unsigned char)lex->p[2] == 0xBF) {
+		if ((unsigned char)lex->p[0] == 0xEF && (unsigned char)lex->p[1] == 0xBB && (unsigned char)lex->p[2] == 0xBF) {
 			lex->p += 3;
 			continue;
 		}
@@ -427,8 +412,7 @@ static void skip_ws_and_comments(Lexer *lex) {
 			int depth = 1;
 			++lex->p;
 			while (*lex->p != '\0' && depth > 0) {
-				if (*lex->p == '{')
-					depth++;
+				if (*lex->p == '{') depth++;
 				else if (*lex->p == '}')
 					depth--;
 				else if (*lex->p == '\n')
@@ -475,8 +459,7 @@ static void lexer_next(Lexer *lex, Token *tok) {
 			return;
 		}
 
-		if (strncasecmp(lex->p, "$MACRO_FILE", 11) == 0 &&
-		    !is_ident_part((unsigned char)lex->p[11])) {
+		if (strncasecmp(lex->p, "$MACRO_FILE", 11) == 0 && !is_ident_part((unsigned char)lex->p[11])) {
 			tok->kind = TOK_MACRO_FILE;
 			tok->text = xstrdup("$MACRO_FILE");
 			lex->p += 11;
@@ -533,8 +516,7 @@ static void lexer_next(Lexer *lex, Token *tok) {
 				tok->text = xstrdup(buffer);
 				return;
 			}
-			if (*lex->p == '\n')
-				lex->line++;
+			if (*lex->p == '\n') lex->line++;
 			if (out >= MAX_STRING_LITERAL) {
 				tok->kind = TOK_ERROR;
 				tok->text = xstrdup("String constant too long.");
@@ -562,8 +544,7 @@ static void lexer_next(Lexer *lex, Token *tok) {
 		}
 		if (*q == 'e' || *q == 'E') {
 			const char *r = q + 1;
-			if (*r == '+' || *r == '-')
-				++r;
+			if (*r == '+' || *r == '-') ++r;
 			if (isdigit((unsigned char)*r)) {
 				is_real = 1;
 				q = r + 1;
@@ -611,8 +592,7 @@ static void lexer_next(Lexer *lex, Token *tok) {
 		text[len] = '\0';
 		tok->text = text;
 
-		if (ident_eq(text, "END_MACRO"))
-			tok->kind = TOK_END_MACRO;
+		if (ident_eq(text, "END_MACRO")) tok->kind = TOK_END_MACRO;
 		else if (ident_eq(text, "DEF_INT"))
 			tok->kind = TOK_DEF_INT;
 		else if (ident_eq(text, "DEF_STR"))
@@ -853,8 +833,7 @@ static int validate_keyspec(const char *text, int line) {
 	for (i = 1; i + 1 < len; ++i) {
 		unsigned char ch = (unsigned char)text[i];
 
-		if (isspace(ch) || ch == '_')
-			continue;
+		if (isspace(ch) || ch == '_') continue;
 		if (out + 1 >= sizeof(token)) {
 			set_compile_error(line, "Keycode not supported.");
 			return -1;
@@ -900,26 +879,12 @@ static int validate_keyspec(const char *text, int line) {
 	if (token[0] == 'F' && token[1] != '\0') {
 		char *endp = NULL;
 		fnNumber = (int)strtol(token + 1, &endp, 10);
-		if (endp != NULL && *endp == '\0' && fnNumber >= 1 && fnNumber <= 12)
-			return 0;
+		if (endp != NULL && *endp == '\0' && fnNumber >= 1 && fnNumber <= 12) return 0;
 	}
 
-	if (strcmp(token, "ENTER") == 0 || strcmp(token, "RETURN") == 0 || strcmp(token, "TAB") == 0 ||
-	    strcmp(token, "ESC") == 0 || strcmp(token, "BS") == 0 || strcmp(token, "BACK") == 0 ||
-	    strcmp(token, "BACKSPACE") == 0 || strcmp(token, "UP") == 0 ||
-	    strcmp(token, "DN") == 0 || strcmp(token, "DOWN") == 0 || strcmp(token, "LF") == 0 ||
-	    strcmp(token, "LEFT") == 0 || strcmp(token, "RT") == 0 ||
-	    strcmp(token, "RIGHT") == 0 || strcmp(token, "PGUP") == 0 ||
-	    strcmp(token, "PGDN") == 0 || strcmp(token, "HOME") == 0 ||
-	    strcmp(token, "END") == 0 || strcmp(token, "INS") == 0 ||
-	    strcmp(token, "DEL") == 0 || strcmp(token, "SPACE") == 0 ||
-	    strcmp(token, "MINUS") == 0 || strcmp(token, "EQUAL") == 0 ||
-	    strcmp(token, "GREY-") == 0 || strcmp(token, "GREY+") == 0 ||
-	    strcmp(token, "GREY*") == 0)
-		return 0;
+	if (strcmp(token, "ENTER") == 0 || strcmp(token, "RETURN") == 0 || strcmp(token, "TAB") == 0 || strcmp(token, "ESC") == 0 || strcmp(token, "BS") == 0 || strcmp(token, "BACK") == 0 || strcmp(token, "BACKSPACE") == 0 || strcmp(token, "UP") == 0 || strcmp(token, "DN") == 0 || strcmp(token, "DOWN") == 0 || strcmp(token, "LF") == 0 || strcmp(token, "LEFT") == 0 || strcmp(token, "RT") == 0 || strcmp(token, "RIGHT") == 0 || strcmp(token, "PGUP") == 0 || strcmp(token, "PGDN") == 0 || strcmp(token, "HOME") == 0 || strcmp(token, "END") == 0 || strcmp(token, "INS") == 0 || strcmp(token, "DEL") == 0 || strcmp(token, "SPACE") == 0 || strcmp(token, "MINUS") == 0 || strcmp(token, "EQUAL") == 0 || strcmp(token, "GREY-") == 0 || strcmp(token, "GREY+") == 0 || strcmp(token, "GREY*") == 0) return 0;
 
-	if (token[1] == '\0' && isprint((unsigned char)token[0]) != 0)
-		return 0;
+	if (token[1] == '\0' && isprint((unsigned char)token[0]) != 0) return 0;
 
 	set_compile_error(line, "Keycode not supported.");
 	return -1;
@@ -930,9 +895,7 @@ static int validate_mode(const char *text, int line) {
 		set_compile_error(line, "Mode expected.");
 		return -1;
 	}
-	if (strcasecmp(text, "EDIT") == 0 || strcasecmp(text, "DOS_SHELL") == 0 ||
-	    strcasecmp(text, "ALL") == 0)
-		return 0;
+	if (strcasecmp(text, "EDIT") == 0 || strcasecmp(text, "DOS_SHELL") == 0 || strcasecmp(text, "ALL") == 0) return 0;
 	set_compile_error(line, "Mode expected.");
 	return -1;
 }
@@ -940,23 +903,19 @@ static int validate_mode(const char *text, int line) {
 static int macro_mode_from_identifier(const char *text, int line, int *out_mode) {
 	int mode;
 
-	if (validate_mode(text, line) != 0)
-		return -1;
+	if (validate_mode(text, line) != 0) return -1;
 	mode = MACRO_MODE_EDIT;
-	if (strcasecmp(text, "DOS_SHELL") == 0)
-		mode = MACRO_MODE_DOS_SHELL;
+	if (strcasecmp(text, "DOS_SHELL") == 0) mode = MACRO_MODE_DOS_SHELL;
 	else if (strcasecmp(text, "ALL") == 0)
 		mode = MACRO_MODE_ALL;
-	if (out_mode != NULL)
-		*out_mode = mode;
+	if (out_mode != NULL) *out_mode = mode;
 	return 0;
 }
 
 static int find_label_index(const char *name) {
 	int i;
 	for (i = 0; i < g_label_count; ++i)
-		if (strcasecmp(g_labels[i].name, name) == 0)
-			return i;
+		if (strcasecmp(g_labels[i].name, name) == 0) return i;
 	return -1;
 }
 
@@ -1034,14 +993,10 @@ static int emit_define_variable(const char *name, int type) {
 }
 
 static int can_assign_type(int target, int source) {
-	if (target == TYPE_INT)
-		return source == TYPE_INT;
-	if (target == TYPE_REAL)
-		return source == TYPE_REAL || source == TYPE_INT;
-	if (target == TYPE_STR)
-		return source == TYPE_STR || source == TYPE_CHAR;
-	if (target == TYPE_CHAR)
-		return source == TYPE_CHAR || source == TYPE_STR;
+	if (target == TYPE_INT) return source == TYPE_INT;
+	if (target == TYPE_REAL) return source == TYPE_REAL || source == TYPE_INT;
+	if (target == TYPE_STR) return source == TYPE_STR || source == TYPE_CHAR;
+	if (target == TYPE_CHAR) return source == TYPE_CHAR || source == TYPE_STR;
 	return 0;
 }
 
@@ -1050,30 +1005,68 @@ static int lookup_builtin_constant(const char *name, int *out_value) {
 		const char *name;
 		int value;
 	};
-	static const struct BuiltinConstant constants[] = {
-	    {"TRUE", 1},        {"FALSE", 0},      {"BLACK", 0},     {"BLUE", 1},
-	    {"GREEN", 2},       {"CYAN", 3},       {"RED", 4},       {"MAGENTA", 5},
-	    {"BROWN", 6},       {"LIGHTGRAY", 7},  {"DARKGRAY", 8},  {"LIGHTBLUE", 9},
-	    {"LIGHTGREEN", 10}, {"LIGHTCYAN", 11}, {"LIGHTRED", 12}, {"LIGHTMAGENTA", 13},
-	    {"YELLOW", 14},     {"WHITE", 15},     {"EDIT", 0},      {"DOS_SHELL", 1},
-	    {"BACK_SPACE", 0x7001},     {"BLOCK_BEGIN", 0x7002},     {"BLOCK_END", 0x7003},
-	    {"BLOCK_OFF", 0x7004},      {"COL_BLOCK_BEGIN", 0x7005}, {"COPY_BLOCK", 0x7006},
-	    {"CR", 0x7007},             {"DELETE_BLOCK", 0x7008},    {"DEL_CHAR", 0x7009},
-	    {"DEL_LINE", 0x700A},       {"DOWN", 0x700B},            {"EOF", 0x700C},
-	    {"EOL", 0x700D},            {"FIRST_WORD", 0x700E},      {"GOTO_MARK", 0x700F},
-	    {"HOME", 0x7010},           {"INDENT", 0x7011},          {"KEY_RECORD", 0x7012},
-	    {"LAST_PAGE_BREAK", 0x7013},{"LEFT", 0x7014},            {"MARK_POS", 0x7015},
-	    {"MOVE_BLOCK", 0x7016},     {"NEXT_PAGE_BREAK", 0x7017}, {"PAGE_DOWN", 0x7018},
-	    {"PAGE_UP", 0x7019},        {"RIGHT", 0x701A},           {"SAVE_FILE", 0x701B},
-	    {"STR_BLOCK_BEGIN", 0x701C},{"TAB_LEFT", 0x701D},        {"TAB_RIGHT", 0x701E},
-	    {"TOF", 0x701F},            {"UNDENT", 0x7020},          {"UNDO", 0x7021},
-	    {"UP", 0x7022},             {"WORD_LEFT", 0x7023},       {"WORD_RIGHT", 0x7024},
-	    {"ALL", 255},       {NULL, 0}};
+	static const struct BuiltinConstant constants[] = {{"TRUE", 1},
+	                                                   {"FALSE", 0},
+	                                                   {"BLACK", 0},
+	                                                   {"BLUE", 1},
+	                                                   {"GREEN", 2},
+	                                                   {"CYAN", 3},
+	                                                   {"RED", 4},
+	                                                   {"MAGENTA", 5},
+	                                                   {"BROWN", 6},
+	                                                   {"LIGHTGRAY", 7},
+	                                                   {"DARKGRAY", 8},
+	                                                   {"LIGHTBLUE", 9},
+	                                                   {"LIGHTGREEN", 10},
+	                                                   {"LIGHTCYAN", 11},
+	                                                   {"LIGHTRED", 12},
+	                                                   {"LIGHTMAGENTA", 13},
+	                                                   {"YELLOW", 14},
+	                                                   {"WHITE", 15},
+	                                                   {"EDIT", 0},
+	                                                   {"DOS_SHELL", 1},
+	                                                   {"BACK_SPACE", 0x7001},
+	                                                   {"BLOCK_BEGIN", 0x7002},
+	                                                   {"BLOCK_END", 0x7003},
+	                                                   {"BLOCK_OFF", 0x7004},
+	                                                   {"COL_BLOCK_BEGIN", 0x7005},
+	                                                   {"COPY_BLOCK", 0x7006},
+	                                                   {"CR", 0x7007},
+	                                                   {"DELETE_BLOCK", 0x7008},
+	                                                   {"DEL_CHAR", 0x7009},
+	                                                   {"DEL_LINE", 0x700A},
+	                                                   {"DOWN", 0x700B},
+	                                                   {"EOF", 0x700C},
+	                                                   {"EOL", 0x700D},
+	                                                   {"FIRST_WORD", 0x700E},
+	                                                   {"GOTO_MARK", 0x700F},
+	                                                   {"HOME", 0x7010},
+	                                                   {"INDENT", 0x7011},
+	                                                   {"KEY_RECORD", 0x7012},
+	                                                   {"LAST_PAGE_BREAK", 0x7013},
+	                                                   {"LEFT", 0x7014},
+	                                                   {"MARK_POS", 0x7015},
+	                                                   {"MOVE_BLOCK", 0x7016},
+	                                                   {"NEXT_PAGE_BREAK", 0x7017},
+	                                                   {"PAGE_DOWN", 0x7018},
+	                                                   {"PAGE_UP", 0x7019},
+	                                                   {"RIGHT", 0x701A},
+	                                                   {"SAVE_FILE", 0x701B},
+	                                                   {"STR_BLOCK_BEGIN", 0x701C},
+	                                                   {"TAB_LEFT", 0x701D},
+	                                                   {"TAB_RIGHT", 0x701E},
+	                                                   {"TOF", 0x701F},
+	                                                   {"UNDENT", 0x7020},
+	                                                   {"UNDO", 0x7021},
+	                                                   {"UP", 0x7022},
+	                                                   {"WORD_LEFT", 0x7023},
+	                                                   {"WORD_RIGHT", 0x7024},
+	                                                   {"ALL", 255},
+	                                                   {NULL, 0}};
 	int i;
 	for (i = 0; constants[i].name != NULL; ++i)
 		if (strcasecmp(name, constants[i].name) == 0) {
-			if (out_value != NULL)
-				*out_value = constants[i].value;
+			if (out_value != NULL) *out_value = constants[i].value;
 			return 1;
 		}
 	return 0;
@@ -1084,52 +1077,116 @@ static int lookup_builtin_variable(const char *name, int *out_type) {
 		const char *name;
 		int type;
 	};
-	static const struct BuiltinVariable variables[] = {
-	    {"RETURN_INT", TYPE_INT},     {"ERROR_LEVEL", TYPE_INT},    {"FIRST_RUN", TYPE_INT},
-	    {"IGNORE_CASE", TYPE_INT},    {"REG_EXP_STAT", TYPE_INT},   {"FIRST_SAVE", TYPE_INT},
-	    {"BUFFER_ID", TYPE_INT},      {"TMP_FILE", TYPE_INT},       {"FILE_CHANGED", TYPE_INT},
-	    {"LAST_FILE_ATTR", TYPE_INT}, {"LAST_FILE_SIZE", TYPE_INT}, {"LAST_FILE_TIME", TYPE_INT},
-	    {"CUR_FILE_ATTR", TYPE_INT},  {"CUR_FILE_SIZE", TYPE_INT},  {"READ_ONLY", TYPE_INT},
-	    {"DOC_MODE", TYPE_INT},       {"PRINT_MARGIN", TYPE_INT},   {"SHADOW_CHAR", TYPE_INT},
-	    {"REFRESH", TYPE_INT},
-	    {"MESSAGES", TYPE_INT},       {"MOUSE", TYPE_INT},          {"LOGO_SCREEN", TYPE_INT},
-	    {"EXPLOSIONS", TYPE_INT},     {"TRUNCATE_SPACES", TYPE_INT},{"BACKUPS", TYPE_INT},
-	    {"AUTOSAVE", TYPE_INT},       {"UNDO_STAT", TYPE_INT},      {"FORMAT_STAT", TYPE_INT},
-	    {"WRAP_STAT", TYPE_INT},      {"MEM_ALLOC", TYPE_INT},      {"LEFT_MARGIN", TYPE_INT},
-	    {"RIGHT_MARGIN", TYPE_INT},   {"FORMAT_RULER", TYPE_INT},
-	    {"INDENT_STYLE", TYPE_INT},   {"INS_CURSOR", TYPE_INT},     {"OVR_CURSOR", TYPE_INT},
-	    {"CTRL_HELP", TYPE_INT},      {"MOUSE_H_SENSE", TYPE_INT},  {"MOUSE_V_SENSE", TYPE_INT},
-	    {"WINDOW_ATTR", TYPE_INT},    {"TEXT_COLOR", TYPE_INT},     {"CHANGE_COLOR", TYPE_INT},
-	    {"BACK_COLOR", TYPE_INT},     {"MENU_COLOR", TYPE_INT},     {"STAT_COLOR", TYPE_INT},
-	    {"ERROR_COLOR", TYPE_INT},    {"SHADOW_COLOR", TYPE_INT},   {"STATUS_ROW", TYPE_INT},
-	    {"MESSAGE_ROW", TYPE_INT},    {"MAX_WINDOW_ROW", TYPE_INT}, {"MIN_WINDOW_ROW", TYPE_INT},
-	    {"NAME_LINE", TYPE_INT},
-	    {"PARAM_COUNT", TYPE_INT},    {"CPU", TYPE_INT},            {"C_COL", TYPE_INT},
-	    {"C_LINE", TYPE_INT},         {"C_ROW", TYPE_INT},          {"C_PAGE", TYPE_INT},
-	    {"PG_LINE", TYPE_INT},        {"AT_EOF", TYPE_INT},
-	    {"AT_EOL", TYPE_INT},         {"BLOCK_STAT", TYPE_INT},     {"BLOCK_LINE1", TYPE_INT},
-	    {"BLOCK_LINE2", TYPE_INT},    {"BLOCK_COL1", TYPE_INT},     {"BLOCK_COL2", TYPE_INT},
-	    {"MARKING", TYPE_INT},        {"TAB_EXPAND", TYPE_INT},     {"INSERT_MODE", TYPE_INT},
-	    {"INDENT_LEVEL", TYPE_INT},   {"CUR_WINDOW", TYPE_INT},     {"LINK_STAT", TYPE_INT},
-	    {"WIN_X1", TYPE_INT},         {"WIN_Y1", TYPE_INT},         {"WIN_X2", TYPE_INT},
-	    {"WIN_Y2", TYPE_INT},         {"WINDOW_COUNT", TYPE_INT},   {"VIRTUAL_DESKTOPS", TYPE_INT},
-	    {"CYCLIC_VIRTUAL_DESKTOPS", TYPE_INT}, {"KEY1", TYPE_INT},  {"KEY2", TYPE_INT},
-	    {"RETURN_STR", TYPE_STR},
-	    {"MPARM_STR", TYPE_STR},      {"DATE", TYPE_STR},           {"TIME", TYPE_STR},
-	    {"FIRST_MACRO", TYPE_STR},    {"NEXT_MACRO", TYPE_STR},     {"LAST_FILE_NAME", TYPE_STR},
-	    {"TMP_FILE_NAME", TYPE_STR},  {"FILE_NAME", TYPE_STR},      {"COMSPEC", TYPE_STR},
-	    {"TEMP_PATH", TYPE_STR},      {"FOUND_STR", TYPE_STR},      {"SEARCH_FILE", TYPE_STR},
-	    {"MR_PATH", TYPE_STR},        {"OS_VERSION", TYPE_STR},
-	    {"GET_LINE", TYPE_STR},       {"FORMAT_LINE", TYPE_STR},    {"DEFAULT_FORMAT", TYPE_STR},
-	    {"PAGE_STR", TYPE_STR},       {"WORD_DELIMITS", TYPE_STR},
-	    {"FOUND_X", TYPE_INT},        {"FOUND_Y", TYPE_INT},
-	    {"CUR_CHAR", TYPE_CHAR},      {NULL, 0}};
+	static const struct BuiltinVariable variables[] = {{"RETURN_INT", TYPE_INT},
+	                                                   {"ERROR_LEVEL", TYPE_INT},
+	                                                   {"FIRST_RUN", TYPE_INT},
+	                                                   {"IGNORE_CASE", TYPE_INT},
+	                                                   {"REG_EXP_STAT", TYPE_INT},
+	                                                   {"FIRST_SAVE", TYPE_INT},
+	                                                   {"BUFFER_ID", TYPE_INT},
+	                                                   {"TMP_FILE", TYPE_INT},
+	                                                   {"FILE_CHANGED", TYPE_INT},
+	                                                   {"LAST_FILE_ATTR", TYPE_INT},
+	                                                   {"LAST_FILE_SIZE", TYPE_INT},
+	                                                   {"LAST_FILE_TIME", TYPE_INT},
+	                                                   {"CUR_FILE_ATTR", TYPE_INT},
+	                                                   {"CUR_FILE_SIZE", TYPE_INT},
+	                                                   {"READ_ONLY", TYPE_INT},
+	                                                   {"DOC_MODE", TYPE_INT},
+	                                                   {"PRINT_MARGIN", TYPE_INT},
+	                                                   {"SHADOW_CHAR", TYPE_INT},
+	                                                   {"REFRESH", TYPE_INT},
+	                                                   {"MESSAGES", TYPE_INT},
+	                                                   {"MOUSE", TYPE_INT},
+	                                                   {"LOGO_SCREEN", TYPE_INT},
+	                                                   {"EXPLOSIONS", TYPE_INT},
+	                                                   {"TRUNCATE_SPACES", TYPE_INT},
+	                                                   {"BACKUPS", TYPE_INT},
+	                                                   {"AUTOSAVE", TYPE_INT},
+	                                                   {"UNDO_STAT", TYPE_INT},
+	                                                   {"FORMAT_STAT", TYPE_INT},
+	                                                   {"WRAP_STAT", TYPE_INT},
+	                                                   {"MEM_ALLOC", TYPE_INT},
+	                                                   {"LEFT_MARGIN", TYPE_INT},
+	                                                   {"RIGHT_MARGIN", TYPE_INT},
+	                                                   {"FORMAT_RULER", TYPE_INT},
+	                                                   {"INDENT_STYLE", TYPE_INT},
+	                                                   {"INS_CURSOR", TYPE_INT},
+	                                                   {"OVR_CURSOR", TYPE_INT},
+	                                                   {"CTRL_HELP", TYPE_INT},
+	                                                   {"MOUSE_H_SENSE", TYPE_INT},
+	                                                   {"MOUSE_V_SENSE", TYPE_INT},
+	                                                   {"WINDOW_ATTR", TYPE_INT},
+	                                                   {"TEXT_COLOR", TYPE_INT},
+	                                                   {"CHANGE_COLOR", TYPE_INT},
+	                                                   {"BACK_COLOR", TYPE_INT},
+	                                                   {"MENU_COLOR", TYPE_INT},
+	                                                   {"STAT_COLOR", TYPE_INT},
+	                                                   {"ERROR_COLOR", TYPE_INT},
+	                                                   {"SHADOW_COLOR", TYPE_INT},
+	                                                   {"STATUS_ROW", TYPE_INT},
+	                                                   {"MESSAGE_ROW", TYPE_INT},
+	                                                   {"MAX_WINDOW_ROW", TYPE_INT},
+	                                                   {"MIN_WINDOW_ROW", TYPE_INT},
+	                                                   {"NAME_LINE", TYPE_INT},
+	                                                   {"PARAM_COUNT", TYPE_INT},
+	                                                   {"CPU", TYPE_INT},
+	                                                   {"C_COL", TYPE_INT},
+	                                                   {"C_LINE", TYPE_INT},
+	                                                   {"C_ROW", TYPE_INT},
+	                                                   {"C_PAGE", TYPE_INT},
+	                                                   {"PG_LINE", TYPE_INT},
+	                                                   {"AT_EOF", TYPE_INT},
+	                                                   {"AT_EOL", TYPE_INT},
+	                                                   {"BLOCK_STAT", TYPE_INT},
+	                                                   {"BLOCK_LINE1", TYPE_INT},
+	                                                   {"BLOCK_LINE2", TYPE_INT},
+	                                                   {"BLOCK_COL1", TYPE_INT},
+	                                                   {"BLOCK_COL2", TYPE_INT},
+	                                                   {"MARKING", TYPE_INT},
+	                                                   {"TAB_EXPAND", TYPE_INT},
+	                                                   {"INSERT_MODE", TYPE_INT},
+	                                                   {"INDENT_LEVEL", TYPE_INT},
+	                                                   {"CUR_WINDOW", TYPE_INT},
+	                                                   {"LINK_STAT", TYPE_INT},
+	                                                   {"WIN_X1", TYPE_INT},
+	                                                   {"WIN_Y1", TYPE_INT},
+	                                                   {"WIN_X2", TYPE_INT},
+	                                                   {"WIN_Y2", TYPE_INT},
+	                                                   {"WINDOW_COUNT", TYPE_INT},
+	                                                   {"VIRTUAL_DESKTOPS", TYPE_INT},
+	                                                   {"CYCLIC_VIRTUAL_DESKTOPS", TYPE_INT},
+	                                                   {"KEY1", TYPE_INT},
+	                                                   {"KEY2", TYPE_INT},
+	                                                   {"RETURN_STR", TYPE_STR},
+	                                                   {"MPARM_STR", TYPE_STR},
+	                                                   {"DATE", TYPE_STR},
+	                                                   {"TIME", TYPE_STR},
+	                                                   {"FIRST_MACRO", TYPE_STR},
+	                                                   {"NEXT_MACRO", TYPE_STR},
+	                                                   {"LAST_FILE_NAME", TYPE_STR},
+	                                                   {"TMP_FILE_NAME", TYPE_STR},
+	                                                   {"FILE_NAME", TYPE_STR},
+	                                                   {"COMSPEC", TYPE_STR},
+	                                                   {"TEMP_PATH", TYPE_STR},
+	                                                   {"FOUND_STR", TYPE_STR},
+	                                                   {"SEARCH_FILE", TYPE_STR},
+	                                                   {"MR_PATH", TYPE_STR},
+	                                                   {"OS_VERSION", TYPE_STR},
+	                                                   {"GET_LINE", TYPE_STR},
+	                                                   {"FORMAT_LINE", TYPE_STR},
+	                                                   {"DEFAULT_FORMAT", TYPE_STR},
+	                                                   {"PAGE_STR", TYPE_STR},
+	                                                   {"WORD_DELIMITS", TYPE_STR},
+	                                                   {"FOUND_X", TYPE_INT},
+	                                                   {"FOUND_Y", TYPE_INT},
+	                                                   {"CUR_CHAR", TYPE_CHAR},
+	                                                   {NULL, 0}};
 	int i;
 
 	for (i = 0; variables[i].name != NULL; ++i)
 		if (strcasecmp(name, variables[i].name) == 0) {
-			if (out_type != NULL)
-				*out_type = variables[i].type;
+			if (out_type != NULL) *out_type = variables[i].type;
 			return 1;
 		}
 	return 0;
@@ -1143,17 +1200,13 @@ typedef enum {
 } CallArgKind;
 
 static int call_arg_matches_type(CallArgKind expected, int actual_type) {
-	if (expected == CALL_ARG_INT)
-		return actual_type == TYPE_INT;
-	if (expected == CALL_ARG_REAL)
-		return actual_type == TYPE_REAL;
-	if (expected == CALL_ARG_STRINGLIKE)
-		return is_stringlike_type(actual_type);
+	if (expected == CALL_ARG_INT) return actual_type == TYPE_INT;
+	if (expected == CALL_ARG_REAL) return actual_type == TYPE_REAL;
+	if (expected == CALL_ARG_STRINGLIKE) return is_stringlike_type(actual_type);
 	return 1;
 }
 
-static int validate_call_arguments(const CallArgKind *expected_args, int expected_argc,
-                                   const ExprInfo *args, int argc, int line) {
+static int validate_call_arguments(const CallArgKind *expected_args, int expected_argc, const ExprInfo *args, int argc, int line) {
 	int i;
 
 	if (argc != expected_argc) {
@@ -1235,8 +1288,7 @@ static int emit_proc_var_call2(const char *name, const char *var_name1, const ch
 
 static int parse_expression(Parser *ps, int min_prec, ExprInfo *out);
 
-static int parse_argument_expressions(Parser *ps, ExprInfo *arg_types, int *out_count,
-                                      int max_args) {
+static int parse_argument_expressions(Parser *ps, ExprInfo *arg_types, int *out_count, int max_args) {
 	int count = 0;
 
 	if (ps->tok.kind == TOK_RPAREN) {
@@ -1249,11 +1301,9 @@ static int parse_argument_expressions(Parser *ps, ExprInfo *arg_types, int *out_
 			set_compile_error(ps->tok.line, "Too many arguments.");
 			return -1;
 		}
-		if (parse_expression(ps, 1, &arg_types[count]) != 0)
-			return -1;
+		if (parse_expression(ps, 1, &arg_types[count]) != 0) return -1;
 		count++;
-		if (!parser_accept(ps, TOK_COMMA))
-			break;
+		if (!parser_accept(ps, TOK_COMMA)) break;
 	}
 
 	*out_count = count;
@@ -1268,23 +1318,12 @@ typedef struct {
 	int allow_without_parens;
 } IntrinsicSignature;
 
-#define INTR_SIG0(n, r) \
-	{ n, 0, {CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, \
-	         CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, r, 0 }
-#define INTR_SIG0_BARE(n, r) \
-	{ n, 0, {CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, \
-	         CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, r, 1 }
-#define INTR_SIG1(n, a0, r) \
-	{ n, 1, {a0, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, \
-	         CALL_ARG_NONE, CALL_ARG_NONE}, r, 0 }
-#define INTR_SIG2(n, a0, a1, r) \
-	{ n, 2, {a0, a1, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, \
-	         CALL_ARG_NONE, CALL_ARG_NONE}, r, 0 }
-#define INTR_SIG3(n, a0, a1, a2, r) \
-	{ n, 3, {a0, a1, a2, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, \
-	         CALL_ARG_NONE}, r, 0 }
-#define INTR_SIG5(n, a0, a1, a2, a3, a4, r) \
-	{ n, 5, {a0, a1, a2, a3, a4, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, r, 0 }
+#define INTR_SIG0(n, r) {n, 0, {CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, r, 0}
+#define INTR_SIG0_BARE(n, r) {n, 0, {CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, r, 1}
+#define INTR_SIG1(n, a0, r) {n, 1, {a0, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, r, 0}
+#define INTR_SIG2(n, a0, a1, r) {n, 2, {a0, a1, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, r, 0}
+#define INTR_SIG3(n, a0, a1, a2, r) {n, 3, {a0, a1, a2, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, r, 0}
+#define INTR_SIG5(n, a0, a1, a2, a3, a4, r) {n, 5, {a0, a1, a2, a3, a4, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, r, 0}
 
 static const IntrinsicSignature kIntrinsicSignatures[] = {
     INTR_SIG1("STR", CALL_ARG_INT, TYPE_STR),
@@ -1332,12 +1371,9 @@ static const IntrinsicSignature kIntrinsicSignatures[] = {
     INTR_SIG0_BARE("WHEREX", TYPE_INT),
     INTR_SIG0_BARE("WHEREY", TYPE_INT),
     INTR_SIG0_BARE("BLOCK_TEXT", TYPE_STR),
-    INTR_SIG5("BAR_MENU", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_STRINGLIKE,
-              CALL_ARG_STRINGLIKE, TYPE_INT),
-    INTR_SIG5("V_MENU", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_STRINGLIKE,
-              CALL_ARG_STRINGLIKE, TYPE_INT),
-    INTR_SIG5("STRING_IN", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_STRINGLIKE,
-              CALL_ARG_STRINGLIKE, TYPE_STR),
+    INTR_SIG5("BAR_MENU", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, TYPE_INT),
+    INTR_SIG5("V_MENU", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, TYPE_INT),
+    INTR_SIG5("STRING_IN", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, TYPE_STR),
     INTR_SIG0_BARE("UI_EXEC", TYPE_INT),
     INTR_SIG1("UI_TEXT", CALL_ARG_INT, TYPE_STR),
     INTR_SIG1("UI_INDEX", CALL_ARG_INT, TYPE_INT),
@@ -1354,15 +1390,13 @@ static const IntrinsicSignature *find_intrinsic_signature(const char *name) {
 	size_t i;
 
 	for (i = 0; i < sizeof(kIntrinsicSignatures) / sizeof(kIntrinsicSignatures[0]); ++i)
-		if (strcasecmp(name, kIntrinsicSignatures[i].name) == 0)
-			return &kIntrinsicSignatures[i];
+		if (strcasecmp(name, kIntrinsicSignatures[i].name) == 0) return &kIntrinsicSignatures[i];
 	return NULL;
 }
 
 static int try_emit_bare_intrinsic_call(const char *name, ExprInfo *out) {
 	const IntrinsicSignature *spec = find_intrinsic_signature(name);
-	if (spec == NULL || !spec->allow_without_parens || spec->argc != 0)
-		return 0;
+	if (spec == NULL || !spec->allow_without_parens || spec->argc != 0) return 0;
 	emit_intrinsic_call(spec->name, 0);
 	out->type = spec->result_type;
 	return 1;
@@ -1500,8 +1534,7 @@ static int parse_primary(Parser *ps, ExprInfo *out) {
 	}
 
 	if (parser_accept(ps, TOK_LPAREN)) {
-		if (parse_expression(ps, 1, out) != 0)
-			return -1;
+		if (parse_expression(ps, 1, out) != 0) return -1;
 		return parser_expect(ps, TOK_RPAREN, "')' expected.");
 	}
 
@@ -1587,8 +1620,7 @@ static int parse_primary(Parser *ps, ExprInfo *out) {
 						return -1;
 					}
 				} else if (argc == 3) {
-					if (args[0].type != TYPE_INT ||
-					    validate_call_arguments(&spec->args[3], 2, args + 1, 2, line) != 0) {
+					if (args[0].type != TYPE_INT || validate_call_arguments(&spec->args[3], 2, args + 1, 2, line) != 0) {
 						set_compile_error(line, "Type mismatch or syntax error.");
 						free(name);
 						return -1;
@@ -1614,8 +1646,7 @@ static int parse_primary(Parser *ps, ExprInfo *out) {
 						return -1;
 					}
 				} else if (argc == 3) {
-					if (!is_stringlike_type(args[0].type) || !is_stringlike_type(args[1].type) ||
-					    args[2].type != TYPE_INT) {
+					if (!is_stringlike_type(args[0].type) || !is_stringlike_type(args[1].type) || args[2].type != TYPE_INT) {
 						set_compile_error(line, "Type mismatch or syntax error.");
 						free(name);
 						return -1;
@@ -1653,8 +1684,7 @@ static int parse_primary(Parser *ps, ExprInfo *out) {
 
 static int parse_unary(Parser *ps, ExprInfo *out) {
 	if (parser_accept(ps, TOK_MINUS)) {
-		if (parse_unary(ps, out) != 0)
-			return -1;
+		if (parse_unary(ps, out) != 0) return -1;
 		if (!is_numeric_type(out->type)) {
 			set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
 			return -1;
@@ -1664,8 +1694,7 @@ static int parse_unary(Parser *ps, ExprInfo *out) {
 	}
 
 	if (parser_accept(ps, TOK_NOT)) {
-		if (parse_unary(ps, out) != 0)
-			return -1;
+		if (parse_unary(ps, out) != 0) return -1;
 		if (out->type != TYPE_INT) {
 			set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
 			return -1;
@@ -1692,8 +1721,7 @@ static int combine_binary(TokenKind op, int line, ExprInfo *lhs, const ExprInfo 
 		}
 	} else if (op == TOK_MINUS || op == TOK_MULT || op == TOK_DIV) {
 		if (is_numeric_type(lhs->type) && is_numeric_type(rhs->type)) {
-			if (op == TOK_MINUS)
-				emit_byte(OP_SUB);
+			if (op == TOK_MINUS) emit_byte(OP_SUB);
 			else if (op == TOK_MULT)
 				emit_byte(OP_MUL);
 			else
@@ -1701,11 +1729,9 @@ static int combine_binary(TokenKind op, int line, ExprInfo *lhs, const ExprInfo 
 			lhs->type = (lhs->type == TYPE_REAL || rhs->type == TYPE_REAL) ? TYPE_REAL : TYPE_INT;
 			return 0;
 		}
-	} else if (op == TOK_MOD || op == TOK_SHL || op == TOK_SHR || op == TOK_BAND || op == TOK_BOR ||
-	           op == TOK_BXOR) {
+	} else if (op == TOK_MOD || op == TOK_SHL || op == TOK_SHR || op == TOK_BAND || op == TOK_BOR || op == TOK_BXOR) {
 		if (lhs->type == TYPE_INT && rhs->type == TYPE_INT) {
-			if (op == TOK_MOD)
-				emit_byte(OP_MOD);
+			if (op == TOK_MOD) emit_byte(OP_MOD);
 			else if (op == TOK_SHL)
 				emit_byte(OP_SHL);
 			else if (op == TOK_SHR)
@@ -1721,24 +1747,21 @@ static int combine_binary(TokenKind op, int line, ExprInfo *lhs, const ExprInfo 
 		}
 	} else if (op == TOK_AND || op == TOK_OR) {
 		if (lhs->type == TYPE_INT && rhs->type == TYPE_INT) {
-			if (op == TOK_AND)
-				emit_byte(OP_AND);
+			if (op == TOK_AND) emit_byte(OP_AND);
 			else
 				emit_byte(OP_OR);
 			lhs->type = TYPE_INT;
 			return 0;
 		}
 	} else if (op == TOK_EQ || op == TOK_NE) {
-		if ((is_numeric_type(lhs->type) && is_numeric_type(rhs->type)) ||
-		    (is_stringlike_type(lhs->type) && is_stringlike_type(rhs->type))) {
+		if ((is_numeric_type(lhs->type) && is_numeric_type(rhs->type)) || (is_stringlike_type(lhs->type) && is_stringlike_type(rhs->type))) {
 			emit_byte(op == TOK_EQ ? OP_CMP_EQ : OP_CMP_NE);
 			lhs->type = TYPE_INT;
 			return 0;
 		}
 	} else if (op == TOK_LT || op == TOK_GT || op == TOK_LE || op == TOK_GE) {
 		if (is_numeric_type(lhs->type) && is_numeric_type(rhs->type)) {
-			if (op == TOK_LT)
-				emit_byte(OP_CMP_LT);
+			if (op == TOK_LT) emit_byte(OP_CMP_LT);
 			else if (op == TOK_GT)
 				emit_byte(OP_CMP_GT);
 			else if (op == TOK_LE)
@@ -1757,8 +1780,7 @@ static int combine_binary(TokenKind op, int line, ExprInfo *lhs, const ExprInfo 
 static int parse_expression(Parser *ps, int min_prec, ExprInfo *out) {
 	ExprInfo lhs;
 
-	if (parse_unary(ps, &lhs) != 0)
-		return -1;
+	if (parse_unary(ps, &lhs) != 0) return -1;
 
 	while (1) {
 		int prec = binary_precedence(ps->tok.kind);
@@ -1766,14 +1788,11 @@ static int parse_expression(Parser *ps, int min_prec, ExprInfo *out) {
 		int line = ps->tok.line;
 		ExprInfo rhs;
 
-		if (prec < min_prec)
-			break;
+		if (prec < min_prec) break;
 
 		parser_next(ps);
-		if (parse_expression(ps, prec + 1, &rhs) != 0)
-			return -1;
-		if (combine_binary(op, line, &lhs, &rhs) != 0)
-			return -1;
+		if (parse_expression(ps, prec + 1, &rhs) != 0) return -1;
+		if (combine_binary(op, line, &lhs, &rhs) != 0) return -1;
 	}
 
 	*out = lhs;
@@ -1783,8 +1802,7 @@ static int parse_expression(Parser *ps, int min_prec, ExprInfo *out) {
 static int parse_statement_list(Parser *ps, TokenKind end1, TokenKind end2, TokenKind end3);
 
 static int parse_variable_declaration(Parser *ps, int decl_type) {
-	if (parser_expect(ps, TOK_LPAREN, "'(' expected.") != 0)
-		return -1;
+	if (parser_expect(ps, TOK_LPAREN, "'(' expected.") != 0) return -1;
 
 	for (;;) {
 		char *name;
@@ -1804,8 +1822,7 @@ static int parse_variable_declaration(Parser *ps, int decl_type) {
 		emit_define_variable(name, decl_type);
 		free(name);
 		parser_next(ps);
-		if (!parser_accept(ps, TOK_COMMA))
-			break;
+		if (!parser_accept(ps, TOK_COMMA)) break;
 	}
 
 	return parser_expect(ps, TOK_RPAREN, "')' expected.");
@@ -1820,10 +1837,8 @@ static int parse_assignment_after_name(Parser *ps, const char *name, int line) {
 		return -1;
 	}
 
-	if (parser_expect(ps, TOK_ASSIGN, "':=' expected.") != 0)
-		return -1;
-	if (parse_expression(ps, 1, &expr) != 0)
-		return -1;
+	if (parser_expect(ps, TOK_ASSIGN, "':=' expected.") != 0) return -1;
+	if (parse_expression(ps, 1, &expr) != 0) return -1;
 	if (!can_assign_type(var_type, expr.type)) {
 		set_compile_error(line, "Type mismatch or syntax error.");
 		return -1;
@@ -1840,8 +1855,7 @@ static int parse_goto_statement(Parser *ps) {
 	size_t patch_pos;
 	int line = ps->tok.line;
 
-	if (parser_expect(ps, TOK_GOTO, "Syntax Error.") != 0)
-		return -1;
+	if (parser_expect(ps, TOK_GOTO, "Syntax Error.") != 0) return -1;
 	if (ps->tok.kind != TOK_IDENTIFIER) {
 		set_compile_error(ps->tok.line, "Label expected.");
 		return -1;
@@ -1865,8 +1879,7 @@ static int parse_call_statement(Parser *ps) {
 	size_t patch_pos;
 	int line = ps->tok.line;
 
-	if (parser_expect(ps, TOK_CALL, "Syntax Error.") != 0)
-		return -1;
+	if (parser_expect(ps, TOK_CALL, "Syntax Error.") != 0) return -1;
 	if (ps->tok.kind != TOK_IDENTIFIER) {
 		set_compile_error(ps->tok.line, "Label expected.");
 		return -1;
@@ -1890,8 +1903,7 @@ static int parse_tvcall_statement(Parser *ps) {
 	ExprInfo args[32];
 	int argc = 0;
 
-	if (parser_expect(ps, TOK_TVCALL, "Syntax Error.") != 0)
-		return -1;
+	if (parser_expect(ps, TOK_TVCALL, "Syntax Error.") != 0) return -1;
 	if (ps->tok.kind != TOK_IDENTIFIER) {
 		set_compile_error(ps->tok.line, "Identifier expected.");
 		return -1;
@@ -1930,8 +1942,7 @@ static int is_proc_var_string_call(const char *name) {
 	size_t i;
 
 	for (i = 0; i < sizeof(names) / sizeof(names[0]); ++i)
-		if (strcasecmp(name, names[i]) == 0)
-			return 1;
+		if (strcasecmp(name, names[i]) == 0) return 1;
 	return 0;
 }
 
@@ -1989,8 +2000,7 @@ static int parse_proc_var_string_statement(Parser *ps, const char *name) {
 		free(var_name);
 		return -1;
 	}
-	if (has_index_arg)
-		emit_proc_var_call2(name, var_name, index_var_name);
+	if (has_index_arg) emit_proc_var_call2(name, var_name, index_var_name);
 	else
 		emit_proc_var_call(name, var_name);
 	free(index_var_name);
@@ -1998,26 +2008,14 @@ static int parse_proc_var_string_statement(Parser *ps, const char *name) {
 	return 0;
 }
 
-#define PROC_SIG0(n, e) \
-	{ n, 0, {CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, \
-	         CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, e }
-#define PROC_SIG1(n, a0, e) \
-	{ n, 1, {a0, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, \
-	         CALL_ARG_NONE, CALL_ARG_NONE}, e }
-#define PROC_SIG2(n, a0, a1, e) \
-	{ n, 2, {a0, a1, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, \
-	         CALL_ARG_NONE, CALL_ARG_NONE}, e }
-#define PROC_SIG3(n, a0, a1, a2, e) \
-	{ n, 3, {a0, a1, a2, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, \
-	         CALL_ARG_NONE}, e }
-#define PROC_SIG4(n, a0, a1, a2, a3, e) \
-	{ n, 4, {a0, a1, a2, a3, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, e }
-#define PROC_SIG5(n, a0, a1, a2, a3, a4, e) \
-	{ n, 5, {a0, a1, a2, a3, a4, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, e }
-#define PROC_SIG6(n, a0, a1, a2, a3, a4, a5, e) \
-	{ n, 6, {a0, a1, a2, a3, a4, a5, CALL_ARG_NONE, CALL_ARG_NONE}, e }
-#define PROC_SIG8(n, a0, a1, a2, a3, a4, a5, a6, a7, e) \
-	{ n, 8, {a0, a1, a2, a3, a4, a5, a6, a7}, e }
+#define PROC_SIG0(n, e) {n, 0, {CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, e}
+#define PROC_SIG1(n, a0, e) {n, 1, {a0, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, e}
+#define PROC_SIG2(n, a0, a1, e) {n, 2, {a0, a1, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, e}
+#define PROC_SIG3(n, a0, a1, a2, e) {n, 3, {a0, a1, a2, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, e}
+#define PROC_SIG4(n, a0, a1, a2, a3, e) {n, 4, {a0, a1, a2, a3, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, e}
+#define PROC_SIG5(n, a0, a1, a2, a3, a4, e) {n, 5, {a0, a1, a2, a3, a4, CALL_ARG_NONE, CALL_ARG_NONE, CALL_ARG_NONE}, e}
+#define PROC_SIG6(n, a0, a1, a2, a3, a4, a5, e) {n, 6, {a0, a1, a2, a3, a4, a5, CALL_ARG_NONE, CALL_ARG_NONE}, e}
+#define PROC_SIG8(n, a0, a1, a2, a3, a4, a5, a6, a7, e) {n, 8, {a0, a1, a2, a3, a4, a5, a6, a7}, e}
 
 static const ProcSignature kProcSignatures[] = {
     PROC_SIG0("MOVE_WIN_TO_NEXT_DESKTOP", NULL),
@@ -2050,8 +2048,7 @@ static const ProcSignature kProcSignatures[] = {
     PROC_SIG1("MAKE_MESSAGE", CALL_ARG_STRINGLIKE, "MAKE_MESSAGE"),
     PROC_SIG0("WORKING", NULL),
     PROC_SIG1("BRAIN", CALL_ARG_INT, NULL),
-    PROC_SIG8("PUT_BOX", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT,
-              CALL_ARG_INT, CALL_ARG_STRINGLIKE, CALL_ARG_INT, NULL),
+    PROC_SIG8("PUT_BOX", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_STRINGLIKE, CALL_ARG_INT, NULL),
     PROC_SIG5("WRITE", CALL_ARG_STRINGLIKE, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, NULL),
     PROC_SIG3("CLR_LINE", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, NULL),
     PROC_SIG2("GOTOXY", CALL_ARG_INT, CALL_ARG_INT, NULL),
@@ -2064,8 +2061,7 @@ static const ProcSignature kProcSignatures[] = {
     PROC_SIG1("DELAY", CALL_ARG_INT, "DELAY"),
     PROC_SIG0("BEEP", "BEEP"),
     PROC_SIG2("MRSETUP", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, "MRSETUP"),
-    PROC_SIG4("MRFEPROFILE", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE,
-              CALL_ARG_STRINGLIKE, "MRFEPROFILE"),
+    PROC_SIG4("MRFEPROFILE", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, "MRFEPROFILE"),
     PROC_SIG1("LOAD_MACRO_FILE", CALL_ARG_STRINGLIKE, "LOAD_MACRO_FILE"),
     PROC_SIG1("UNLOAD_MACRO", CALL_ARG_STRINGLIKE, "UNLOAD_MACRO"),
     PROC_SIG1("CHANGE_DIR", CALL_ARG_STRINGLIKE, "CHANGE_DIR"),
@@ -2075,16 +2071,12 @@ static const ProcSignature kProcSignatures[] = {
     PROC_SIG1("WRITE_SOD", CALL_ARG_STRINGLIKE, "WRITE_SOD"),
     PROC_SIG1("LOAD_FILE", CALL_ARG_STRINGLIKE, "LOAD_FILE"),
     PROC_SIG0("SAVE_FILE", "SAVE_FILE"),
-    PROC_SIG5("UI_DIALOG", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT,
-              CALL_ARG_STRINGLIKE, NULL),
+    PROC_SIG5("UI_DIALOG", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_STRINGLIKE, NULL),
     PROC_SIG3("UI_LABEL", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_STRINGLIKE, NULL),
-    PROC_SIG5("UI_BUTTON", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT,
-              CALL_ARG_STRINGLIKE, NULL),
+    PROC_SIG5("UI_BUTTON", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_STRINGLIKE, NULL),
     PROC_SIG4("UI_DISPLAY", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_STRINGLIKE, NULL),
-    PROC_SIG6("UI_INPUT", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT,
-              CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, NULL),
-    PROC_SIG8("UI_LISTBOX", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT,
-              CALL_ARG_INT, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_INT, NULL),
+    PROC_SIG6("UI_INPUT", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, NULL),
+    PROC_SIG8("UI_LISTBOX", CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_INT, NULL),
     PROC_SIG1("UI_LIST_CLEAR", CALL_ARG_STRINGLIKE, NULL),
     PROC_SIG2("UI_LIST_ADD", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, NULL),
     PROC_SIG0("SET_INDENT_LEVEL", "SET_INDENT_LEVEL"),
@@ -2129,41 +2121,32 @@ static const ProcSignature *find_proc_signature(const char *name) {
 	size_t i;
 
 	for (i = 0; i < sizeof(kProcSignatures) / sizeof(kProcSignatures[0]); ++i)
-		if (strcasecmp(name, kProcSignatures[i].name) == 0)
-			return &kProcSignatures[i];
+		if (strcasecmp(name, kProcSignatures[i].name) == 0) return &kProcSignatures[i];
 	return NULL;
 }
 
 static int validate_proc_signature(const ProcSignature *spec, const ExprInfo *args, int argc, int line) {
 	if (strcasecmp(spec->name, "CLR_LINE") == 0) {
-		if (argc == 0)
-			return 0;
-		if (argc == 3)
-			return validate_call_arguments(spec->args, 3, args, argc, line);
+		if (argc == 0) return 0;
+		if (argc == 3) return validate_call_arguments(spec->args, 3, args, argc, line);
 		set_compile_error(line, "Wrong number of arguments.");
 		return -1;
 	}
 	if (strcasecmp(spec->name, "CLEAR_SCREEN") == 0) {
-		if (argc == 0)
-			return 0;
-		if (argc == 1)
-			return validate_call_arguments(spec->args, 1, args, argc, line);
+		if (argc == 0) return 0;
+		if (argc == 1) return validate_call_arguments(spec->args, 1, args, argc, line);
 		set_compile_error(line, "Wrong number of arguments.");
 		return -1;
 	}
 	if (strcasecmp(spec->name, "QUIT") == 0) {
-		if (argc == 0)
-			return 0;
-		if (argc == 1)
-			return validate_call_arguments(spec->args, 1, args, argc, line);
+		if (argc == 0) return 0;
+		if (argc == 1) return validate_call_arguments(spec->args, 1, args, argc, line);
 		set_compile_error(line, "Wrong number of arguments.");
 		return -1;
 	}
 	if (strcasecmp(spec->name, "REGISTER_MENU_ITEM") == 0) {
-		if (argc == 2)
-			return validate_call_arguments(spec->args, 2, args, argc, line);
-		if (argc == 3)
-			return validate_call_arguments(spec->args, 3, args, argc, line);
+		if (argc == 2) return validate_call_arguments(spec->args, 2, args, argc, line);
+		if (argc == 3) return validate_call_arguments(spec->args, 3, args, argc, line);
 		set_compile_error(line, "Wrong number of arguments.");
 		return -1;
 	}
@@ -2172,14 +2155,12 @@ static int validate_proc_signature(const ProcSignature *spec, const ExprInfo *ar
 			CallArgKind expected[2] = {CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE};
 			return validate_call_arguments(expected, 2, args, argc, line);
 		}
-		if (argc == 3)
-			return validate_call_arguments(spec->args, 3, args, argc, line);
+		if (argc == 3) return validate_call_arguments(spec->args, 3, args, argc, line);
 		set_compile_error(line, "Wrong number of arguments.");
 		return -1;
 	}
 	if (strcasecmp(spec->name, "PLAY_KEY_MACRO") == 0) {
-		if (argc == 2)
-			return validate_call_arguments(spec->args, 2, args, argc, line);
+		if (argc == 2) return validate_call_arguments(spec->args, 2, args, argc, line);
 		if (argc == 3) {
 			CallArgKind expected[3] = {CALL_ARG_INT, CALL_ARG_INT, CALL_ARG_INT};
 			return validate_call_arguments(expected, 3, args, argc, line);
@@ -2196,28 +2177,22 @@ static int parse_proc_statement_after_name(Parser *ps, const char *name, int lin
 	const ProcSignature *spec;
 	const char *emit_name;
 
-	if (parser_expect(ps, TOK_LPAREN, "'(' expected.") != 0)
-		return -1;
+	if (parser_expect(ps, TOK_LPAREN, "'(' expected.") != 0) return -1;
 
-	if (is_proc_var_string_call(name))
-		return parse_proc_var_string_statement(ps, name);
+	if (is_proc_var_string_call(name)) return parse_proc_var_string_statement(ps, name);
 
-	if (parse_argument_expressions(ps, args, &argc, 8) != 0)
-		return -1;
-	if (parser_expect(ps, TOK_RPAREN, "')' expected.") != 0)
-		return -1;
+	if (parse_argument_expressions(ps, args, &argc, 8) != 0) return -1;
+	if (parser_expect(ps, TOK_RPAREN, "')' expected.") != 0) return -1;
 
 	spec = find_proc_signature(name);
 	if (spec == NULL) {
 		set_compile_error(line, "Syntax Error.");
 		return -1;
 	}
-	if (validate_proc_signature(spec, args, argc, line) != 0)
-		return -1;
+	if (validate_proc_signature(spec, args, argc, line) != 0) return -1;
 	emit_name = spec->emit_name != NULL ? spec->emit_name : name;
 	emit_proc_call(emit_name, argc);
 	return 0;
-
 }
 
 static int parse_if_statement(Parser *ps) {
@@ -2225,37 +2200,30 @@ static int parse_if_statement(Parser *ps) {
 	int jz_patch;
 	int else_patch;
 
-	if (parser_expect(ps, TOK_IF, "Syntax Error.") != 0)
-		return -1;
-	if (parse_expression(ps, 1, &cond) != 0)
-		return -1;
+	if (parser_expect(ps, TOK_IF, "Syntax Error.") != 0) return -1;
+	if (parse_expression(ps, 1, &cond) != 0) return -1;
 	if (cond.type != TYPE_INT) {
 		set_compile_error(ps->tok.line, "IF expression must be integer.");
 		return -1;
 	}
-	if (parser_expect(ps, TOK_THEN, "THEN expected.") != 0)
-		return -1;
+	if (parser_expect(ps, TOK_THEN, "THEN expected.") != 0) return -1;
 
 	emit_byte(OP_JZ);
 	jz_patch = (int)emit_get_pos();
 	emit_int(-1);
 
-	if (parse_statement_list(ps, TOK_ELSE, TOK_END, TOK_EOF) != 0)
-		return -1;
+	if (parse_statement_list(ps, TOK_ELSE, TOK_END, TOK_EOF) != 0) return -1;
 
 	if (parser_accept(ps, TOK_ELSE)) {
 		emit_byte(OP_GOTO);
 		else_patch = (int)emit_get_pos();
 		emit_int(-1);
 		emit_patch_int(jz_patch, (int)emit_get_pos());
-		if (parse_statement_list(ps, TOK_END, TOK_EOF, TOK_EOF) != 0)
-			return -1;
-		if (parser_expect(ps, TOK_END, "END statement not found.") != 0)
-			return -1;
+		if (parse_statement_list(ps, TOK_END, TOK_EOF, TOK_EOF) != 0) return -1;
+		if (parser_expect(ps, TOK_END, "END statement not found.") != 0) return -1;
 		emit_patch_int(else_patch, (int)emit_get_pos());
 	} else {
-		if (parser_expect(ps, TOK_END, "END statement not found.") != 0)
-			return -1;
+		if (parser_expect(ps, TOK_END, "END statement not found.") != 0) return -1;
 		emit_patch_int(jz_patch, (int)emit_get_pos());
 	}
 
@@ -2267,26 +2235,21 @@ static int parse_while_statement(Parser *ps) {
 	int loop_start;
 	int jz_patch;
 
-	if (parser_expect(ps, TOK_WHILE, "Syntax Error.") != 0)
-		return -1;
+	if (parser_expect(ps, TOK_WHILE, "Syntax Error.") != 0) return -1;
 	loop_start = (int)emit_get_pos();
-	if (parse_expression(ps, 1, &cond) != 0)
-		return -1;
+	if (parse_expression(ps, 1, &cond) != 0) return -1;
 	if (cond.type != TYPE_INT) {
 		set_compile_error(ps->tok.line, "WHILE expression must be integer.");
 		return -1;
 	}
-	if (parser_expect(ps, TOK_DO, "DO expected.") != 0)
-		return -1;
+	if (parser_expect(ps, TOK_DO, "DO expected.") != 0) return -1;
 
 	emit_byte(OP_JZ);
 	jz_patch = (int)emit_get_pos();
 	emit_int(-1);
 
-	if (parse_statement_list(ps, TOK_END, TOK_EOF, TOK_EOF) != 0)
-		return -1;
-	if (parser_expect(ps, TOK_END, "END statement not found.") != 0)
-		return -1;
+	if (parse_statement_list(ps, TOK_END, TOK_EOF, TOK_EOF) != 0) return -1;
+	if (parser_expect(ps, TOK_END, "END statement not found.") != 0) return -1;
 
 	emit_byte(OP_GOTO);
 	emit_int(loop_start);
@@ -2299,7 +2262,7 @@ typedef struct {
 	const char *emit_name;
 } BareProcStatement;
 
-#define BARE_PROC(n) { n, n }
+#define BARE_PROC(n) {n, n}
 
 static const BareProcStatement kBareProcStatements[] = {
     BARE_PROC("SAVE_FILE"),
@@ -2329,7 +2292,7 @@ static const BareProcStatement kBareProcStatements[] = {
     BARE_PROC("LAST_PAGE_BREAK"),
     BARE_PROC("TAB_RIGHT"),
     BARE_PROC("TAB_LEFT"),
-    { "REVERSE_TAB", "TAB_LEFT" },
+    {"REVERSE_TAB", "TAB_LEFT"},
     BARE_PROC("INDENT"),
     BARE_PROC("UNDENT"),
     BARE_PROC("BLOCK_BEGIN"),
@@ -2377,8 +2340,7 @@ static const char *find_bare_proc_statement_emit_name(const char *name) {
 	size_t i;
 
 	for (i = 0; i < sizeof(kBareProcStatements) / sizeof(kBareProcStatements[0]); ++i)
-		if (strcasecmp(name, kBareProcStatements[i].name) == 0)
-			return kBareProcStatements[i].emit_name;
+		if (strcasecmp(name, kBareProcStatements[i].name) == 0) return kBareProcStatements[i].emit_name;
 	return NULL;
 }
 
@@ -2397,8 +2359,7 @@ static int parse_identifier_statement(Parser *ps, int *out_needs_semicolon) {
 	if (parser_accept(ps, TOK_COLON)) {
 		int rc = define_label(name, line);
 		free(name);
-		if (out_needs_semicolon != NULL)
-			*out_needs_semicolon = 0;
+		if (out_needs_semicolon != NULL) *out_needs_semicolon = 0;
 		return rc;
 	}
 	if (ps->tok.kind == TOK_ASSIGN) {
@@ -2468,9 +2429,7 @@ typedef struct {
 } KeywordStatementDispatch;
 
 static const KeywordStatementDispatch kKeywordStatementDispatch[] = {
-    {TOK_GOTO, parse_goto_statement},   {TOK_CALL, parse_call_statement},
-    {TOK_TVCALL, parse_tvcall_statement}, {TOK_RET, parse_ret_statement},
-    {TOK_IF, parse_if_statement},       {TOK_WHILE, parse_while_statement},
+    {TOK_GOTO, parse_goto_statement}, {TOK_CALL, parse_call_statement}, {TOK_TVCALL, parse_tvcall_statement}, {TOK_RET, parse_ret_statement}, {TOK_IF, parse_if_statement}, {TOK_WHILE, parse_while_statement},
 };
 
 static int parse_keyword_statement(Parser *ps, int *out_handled) {
@@ -2478,13 +2437,11 @@ static int parse_keyword_statement(Parser *ps, int *out_handled) {
 
 	for (i = 0; i < sizeof(kKeywordStatementDispatch) / sizeof(kKeywordStatementDispatch[0]); ++i)
 		if (ps->tok.kind == kKeywordStatementDispatch[i].token) {
-			if (out_handled != NULL)
-				*out_handled = 1;
+			if (out_handled != NULL) *out_handled = 1;
 			return kKeywordStatementDispatch[i].parser(ps);
 		}
 
-	if (out_handled != NULL)
-		*out_handled = 0;
+	if (out_handled != NULL) *out_handled = 0;
 	return 0;
 }
 
@@ -2505,8 +2462,7 @@ static int parse_statement(Parser *ps) {
 			break;
 		default:
 			rc = parse_keyword_statement(ps, &keyword_handled);
-			if (rc != 0)
-				return -1;
+			if (rc != 0) return -1;
 			if (!keyword_handled) {
 				set_compile_error(ps->tok.line, "Syntax Error.");
 				return -1;
@@ -2514,19 +2470,15 @@ static int parse_statement(Parser *ps) {
 			break;
 	}
 
-	if (rc != 0)
-		return -1;
-	if (!needs_semicolon)
-		return 0;
+	if (rc != 0) return -1;
+	if (!needs_semicolon) return 0;
 
 	return parser_expect(ps, TOK_SEMICOLON, "; expected.");
 }
 
 static int parse_statement_list(Parser *ps, TokenKind end1, TokenKind end2, TokenKind end3) {
-	while (ps->tok.kind != TOK_EOF && ps->tok.kind != end1 && ps->tok.kind != end2 &&
-	       ps->tok.kind != end3) {
-		if (parse_statement(ps) != 0)
-			return -1;
+	while (ps->tok.kind != TOK_EOF && ps->tok.kind != end1 && ps->tok.kind != end2 && ps->tok.kind != end3) {
+		if (parse_statement(ps) != 0) return -1;
 	}
 	return 0;
 }
@@ -2582,10 +2534,8 @@ static int parse_macro_header(Parser *ps, unsigned *out_flags, char **out_keyspe
 			}
 			from_seen = 1;
 			parser_next(ps);
-		} else if (ps->tok.kind == TOK_TRANS || ps->tok.kind == TOK_DUMP ||
-		           ps->tok.kind == TOK_PERM) {
-			if (ps->tok.kind == TOK_TRANS)
-				flags |= MACRO_ATTR_TRANS;
+		} else if (ps->tok.kind == TOK_TRANS || ps->tok.kind == TOK_DUMP || ps->tok.kind == TOK_PERM) {
+			if (ps->tok.kind == TOK_TRANS) flags |= MACRO_ATTR_TRANS;
 			else if (ps->tok.kind == TOK_DUMP)
 				flags |= MACRO_ATTR_DUMP;
 			else if (ps->tok.kind == TOK_PERM)
@@ -2597,20 +2547,16 @@ static int parse_macro_header(Parser *ps, unsigned *out_flags, char **out_keyspe
 			return -1;
 		}
 	}
-	if (out_flags != NULL)
-		*out_flags = flags;
-	if (out_mode != NULL)
-		*out_mode = mode;
-	if (out_keyspec != NULL)
-		*out_keyspec = keyspec;
+	if (out_flags != NULL) *out_flags = flags;
+	if (out_mode != NULL) *out_mode = mode;
+	if (out_keyspec != NULL) *out_keyspec = keyspec;
 	else
 		free(keyspec);
 	return 0;
 }
 
 static int parse_macro_file_definition(Parser *ps) {
-	if (parser_expect(ps, TOK_MACRO_FILE, "Scommand expected.") != 0)
-		return -1;
+	if (parser_expect(ps, TOK_MACRO_FILE, "Scommand expected.") != 0) return -1;
 	if (ps->macro_file_seen) {
 		set_compile_error(ps->tok.line, "$MACRO_FILE already defined.");
 		return -1;
@@ -2619,8 +2565,7 @@ static int parse_macro_file_definition(Parser *ps) {
 		set_compile_error(ps->tok.line, "Identifier expected.");
 		return -1;
 	}
-	if (set_compiled_macro_file_name(ps->tok.text) != 0)
-		return -1;
+	if (set_compiled_macro_file_name(ps->tok.text) != 0) return -1;
 	ps->macro_file_seen = 1;
 	parser_next(ps);
 	return parser_expect(ps, TOK_SEMICOLON, "; expected.");
@@ -2632,8 +2577,7 @@ static int parse_macro_definition(Parser *ps) {
 	unsigned flags = 0;
 	int mode = MACRO_MODE_EDIT;
 
-	if (parser_expect(ps, TOK_MACRO, "Scommand expected.") != 0)
-		return -1;
+	if (parser_expect(ps, TOK_MACRO, "Scommand expected.") != 0) return -1;
 	if (ps->tok.kind != TOK_IDENTIFIER) {
 		set_compile_error(ps->tok.line, "Macro name expected.");
 		return -1;
@@ -2692,11 +2636,9 @@ static int parse_macro_definition(Parser *ps) {
 static int parse_program(Parser *ps) {
 	while (ps->tok.kind != TOK_EOF) {
 		if (ps->tok.kind == TOK_MACRO_FILE) {
-			if (parse_macro_file_definition(ps) != 0)
-				return -1;
+			if (parse_macro_file_definition(ps) != 0) return -1;
 		} else if (ps->tok.kind == TOK_MACRO) {
-			if (parse_macro_definition(ps) != 0)
-				return -1;
+			if (parse_macro_definition(ps) != 0) return -1;
 		} else if (ps->tok.kind == TOK_ERROR) {
 			set_compile_error(ps->tok.line, ps->tok.text ? ps->tok.text : "Syntax Error.");
 			return -1;
@@ -2712,8 +2654,7 @@ unsigned char *compile_macro_code(const char *source, size_t *out_size) {
 	Parser ps;
 	unsigned char *result = NULL;
 
-	if (out_size != NULL)
-		*out_size = 0;
+	if (out_size != NULL) *out_size = 0;
 
 	reset_code_buffer();
 	clear_symbols();
@@ -2727,15 +2668,13 @@ unsigned char *compile_macro_code(const char *source, size_t *out_size) {
 	}
 
 	parser_init(&ps, source);
-	if (parse_program(&ps) != 0 && g_last_error[0] == '\0')
-		set_compile_error(ps.tok.line, "Compilation failed.");
+	if (parse_program(&ps) != 0 && g_last_error[0] == '\0') set_compile_error(ps.tok.line, "Compilation failed.");
 	token_free(&ps.tok);
 
 	if (g_last_error[0] != '\0') {
 		reset_code_buffer();
 		clear_symbols();
-		if (out_size != NULL)
-			*out_size = 0;
+		if (out_size != NULL) *out_size = 0;
 		return NULL;
 	}
 
@@ -2745,8 +2684,7 @@ unsigned char *compile_macro_code(const char *source, size_t *out_size) {
 			set_compile_error(0, "Out of memory.");
 			return NULL;
 		}
-		if (out_size != NULL)
-			*out_size = 0;
+		if (out_size != NULL) *out_size = 0;
 		reset_code_buffer();
 		clear_symbols();
 		return result;
@@ -2757,14 +2695,12 @@ unsigned char *compile_macro_code(const char *source, size_t *out_size) {
 		set_compile_error(0, "Out of memory.");
 		reset_code_buffer();
 		clear_symbols();
-		if (out_size != NULL)
-			*out_size = 0;
+		if (out_size != NULL) *out_size = 0;
 		return NULL;
 	}
 
 	memcpy(result, g_code, g_code_size);
-	if (out_size != NULL)
-		*out_size = g_code_size;
+	if (out_size != NULL) *out_size = g_code_size;
 
 	reset_code_buffer();
 	clear_symbols();
@@ -2776,20 +2712,17 @@ int get_compiled_macro_count(void) {
 }
 
 const char *get_compiled_macro_name(int index) {
-	if (index < 0 || index >= g_compiled_macro_count)
-		return NULL;
+	if (index < 0 || index >= g_compiled_macro_count) return NULL;
 	return g_compiled_macros[index].name;
 }
 
 int get_compiled_macro_entry(int index) {
-	if (index < 0 || index >= g_compiled_macro_count)
-		return -1;
+	if (index < 0 || index >= g_compiled_macro_count) return -1;
 	return g_compiled_macros[index].entry_pos;
 }
 
 int get_compiled_macro_flags(int index) {
-	if (index < 0 || index >= g_compiled_macro_count)
-		return 0;
+	if (index < 0 || index >= g_compiled_macro_count) return 0;
 	return (int)g_compiled_macros[index].flags;
 }
 
@@ -2798,13 +2731,11 @@ const char *get_compiled_macro_file_name(void) {
 }
 
 const char *get_compiled_macro_keyspec(int index) {
-	if (index < 0 || index >= g_compiled_macro_count)
-		return NULL;
+	if (index < 0 || index >= g_compiled_macro_count) return NULL;
 	return g_compiled_macros[index].keyspec;
 }
 
 int get_compiled_macro_mode(int index) {
-	if (index < 0 || index >= g_compiled_macro_count)
-		return MACRO_MODE_EDIT;
+	if (index < 0 || index >= g_compiled_macro_count) return MACRO_MODE_EDIT;
 	return g_compiled_macros[index].mode;
 }

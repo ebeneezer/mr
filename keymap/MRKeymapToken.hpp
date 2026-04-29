@@ -55,8 +55,8 @@ enum class MRKeymapBaseKey : std::uint8_t {
 
 class MRKeymapToken final {
   public:
-	MRKeymapToken(MRKeymapBaseKey key, std::uint8_t modifiers, char printable = 0) noexcept
-	    : baseKeyValue(key), printableKeyValue(printable), modifierBits(modifiers) {}
+	MRKeymapToken(MRKeymapBaseKey key, std::uint8_t modifiers, char printable = 0) noexcept : baseKeyValue(key), printableKeyValue(printable), modifierBits(modifiers) {
+	}
 
 	[[nodiscard]] static std::optional<MRKeymapToken> parse(std::string_view text);
 	[[nodiscard]] std::string toString() const;

@@ -30,8 +30,8 @@ class MRKeymapSequence final {
   private:
 	std::vector<MRKeymapToken> tokenValues;
 
-	explicit MRKeymapSequence(std::vector<MRKeymapToken> tokens) noexcept
-	    : tokenValues(std::move(tokens)) {}
+	explicit MRKeymapSequence(std::vector<MRKeymapToken> tokens) noexcept : tokenValues(std::move(tokens)) {
+	}
 };
 
 #endif

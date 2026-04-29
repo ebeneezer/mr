@@ -34,15 +34,11 @@ class MRTextBufferModel {
 		bool blockMarkingOn = false;
 	};
 
-	MRTextBufferModel() noexcept
-	    : mDocument(), mCursor(), mSelection(), mModified(false),
-	      mLanguage(MRSyntaxLanguage::PlainText), mSyntaxPathHint(), mSyntaxTitleHint(),
-	      mUndoStack(), mRedoStack() {
+	MRTextBufferModel() noexcept : mDocument(), mCursor(), mSelection(), mModified(false), mLanguage(MRSyntaxLanguage::PlainText), mSyntaxPathHint(), mSyntaxTitleHint(), mUndoStack(), mRedoStack() {
 	}
 
 	void setText(const char *data, std::size_t length) {
-		if (data == nullptr || length == 0)
-			mDocument.setText(std::string());
+		if (data == nullptr || length == 0) mDocument.setText(std::string());
 		else
 			mDocument.setText(std::string(data, length));
 		clampState();
@@ -107,8 +103,7 @@ class MRTextBufferModel {
 		clampState();
 	}
 
-	CommitResult tryApplyEditTransaction(const EditTransaction &transaction,
-	                                     std::size_t expectedVersion) {
+	CommitResult tryApplyEditTransaction(const EditTransaction &transaction, std::size_t expectedVersion) {
 		CommitResult result = mDocument.tryApply(transaction, expectedVersion);
 		if (result.applied()) {
 			mModified = true;
@@ -126,8 +121,7 @@ class MRTextBufferModel {
 		return result;
 	}
 
-	bool adoptLineIndexWarmup(const mr::editor::LineIndexWarmupData &warmup,
-	                          std::size_t expectedVersion) noexcept {
+	bool adoptLineIndexWarmup(const mr::editor::LineIndexWarmupData &warmup, std::size_t expectedVersion) noexcept {
 		return mDocument.adoptLineIndexWarmup(warmup, expectedVersion);
 	}
 
@@ -192,13 +186,11 @@ class MRTextBufferModel {
 	}
 
 	void popUndoSnapshot() {
-		if (!mUndoStack.empty())
-			mUndoStack.pop_back();
+		if (!mUndoStack.empty()) mUndoStack.pop_back();
 	}
 
 	bool undo(CustomUndoRecord *outRecord = nullptr) {
-		if (mUndoStack.empty())
-			return false;
+		if (mUndoStack.empty()) return false;
 
 		CustomUndoRecord redoRecord;
 		redoRecord.preSnapshot = mDocument.readSnapshot();
@@ -215,8 +207,7 @@ class MRTextBufferModel {
 		mSelection.anchor = undoRecord.selAnchor;
 		mSelection.cursor = undoRecord.selCursor;
 		mModified = undoRecord.modifiedState;
-		if (outRecord)
-			*outRecord = undoRecord;
+		if (outRecord) *outRecord = undoRecord;
 
 		mUndoStack.pop_back();
 		clampState();
@@ -224,8 +215,7 @@ class MRTextBufferModel {
 	}
 
 	bool redo(CustomUndoRecord *outRecord = nullptr) {
-		if (mRedoStack.empty())
-			return false;
+		if (mRedoStack.empty()) return false;
 
 		CustomUndoRecord undoRecord;
 		undoRecord.preSnapshot = mDocument.readSnapshot();
@@ -242,8 +232,7 @@ class MRTextBufferModel {
 		mSelection.anchor = redoRecord.selAnchor;
 		mSelection.cursor = redoRecord.selCursor;
 		mModified = redoRecord.modifiedState;
-		if (outRecord)
-			*outRecord = redoRecord;
+		if (outRecord) *outRecord = redoRecord;
 
 		mRedoStack.pop_back();
 		clampState();

@@ -31,28 +31,8 @@ void writeRecordField(char *dest, std::size_t destSize, const std::string &value
 }
 
 bool fileExtensionEditorSettingsDialogRecordsEqual(const FileExtensionEditorSettingsDialogRecord &lhs, const FileExtensionEditorSettingsDialogRecord &rhs) {
-	return readRecordField(lhs.pageBreak) == readRecordField(rhs.pageBreak) &&
-	       readRecordField(lhs.wordDelimiters) == readRecordField(rhs.wordDelimiters) &&
-	       readRecordField(lhs.defaultExtensions) == readRecordField(rhs.defaultExtensions) &&
-	       readRecordField(lhs.tabSize) == readRecordField(rhs.tabSize) &&
-	       readRecordField(lhs.leftMargin) == readRecordField(rhs.leftMargin) &&
-	       readRecordField(lhs.rightMargin) == readRecordField(rhs.rightMargin) &&
-	       readRecordField(lhs.binaryRecordLength) == readRecordField(rhs.binaryRecordLength) &&
-	       readRecordField(lhs.postLoadMacro) == readRecordField(rhs.postLoadMacro) &&
-	       readRecordField(lhs.preSaveMacro) == readRecordField(rhs.preSaveMacro) &&
-	       readRecordField(lhs.defaultPath) == readRecordField(rhs.defaultPath) &&
-	       readRecordField(lhs.formatLine) == readRecordField(rhs.formatLine) &&
-	       readRecordField(lhs.cursorStatusColor) == readRecordField(rhs.cursorStatusColor) &&
-	       readRecordField(lhs.miniMapWidth) == readRecordField(rhs.miniMapWidth) &&
-	       readRecordField(lhs.miniMapMarkerGlyph) == readRecordField(rhs.miniMapMarkerGlyph) &&
-	       readRecordField(lhs.gutters) == readRecordField(rhs.gutters) &&
-	       lhs.optionsMask == rhs.optionsMask && lhs.tabExpandChoice == rhs.tabExpandChoice &&
-	       lhs.indentStyleChoice == rhs.indentStyleChoice && lhs.fileTypeChoice == rhs.fileTypeChoice &&
-	       lhs.columnBlockMoveChoice == rhs.columnBlockMoveChoice &&
-	       lhs.defaultModeChoice == rhs.defaultModeChoice &&
-	       lhs.lineNumbersPositionChoice == rhs.lineNumbersPositionChoice &&
-	       lhs.codeFoldingPositionChoice == rhs.codeFoldingPositionChoice &&
-	       lhs.miniMapPositionChoice == rhs.miniMapPositionChoice;
+	return readRecordField(lhs.pageBreak) == readRecordField(rhs.pageBreak) && readRecordField(lhs.wordDelimiters) == readRecordField(rhs.wordDelimiters) && readRecordField(lhs.defaultExtensions) == readRecordField(rhs.defaultExtensions) && readRecordField(lhs.tabSize) == readRecordField(rhs.tabSize) && readRecordField(lhs.leftMargin) == readRecordField(rhs.leftMargin) && readRecordField(lhs.rightMargin) == readRecordField(rhs.rightMargin) && readRecordField(lhs.binaryRecordLength) == readRecordField(rhs.binaryRecordLength) && readRecordField(lhs.postLoadMacro) == readRecordField(rhs.postLoadMacro) && readRecordField(lhs.preSaveMacro) == readRecordField(rhs.preSaveMacro) && readRecordField(lhs.defaultPath) == readRecordField(rhs.defaultPath) && readRecordField(lhs.formatLine) == readRecordField(rhs.formatLine) && readRecordField(lhs.cursorStatusColor) == readRecordField(rhs.cursorStatusColor) && readRecordField(lhs.miniMapWidth) == readRecordField(rhs.miniMapWidth) &&
+	       readRecordField(lhs.miniMapMarkerGlyph) == readRecordField(rhs.miniMapMarkerGlyph) && readRecordField(lhs.gutters) == readRecordField(rhs.gutters) && lhs.optionsMask == rhs.optionsMask && lhs.tabExpandChoice == rhs.tabExpandChoice && lhs.indentStyleChoice == rhs.indentStyleChoice && lhs.fileTypeChoice == rhs.fileTypeChoice && lhs.columnBlockMoveChoice == rhs.columnBlockMoveChoice && lhs.defaultModeChoice == rhs.defaultModeChoice && lhs.lineNumbersPositionChoice == rhs.lineNumbersPositionChoice && lhs.codeFoldingPositionChoice == rhs.codeFoldingPositionChoice && lhs.miniMapPositionChoice == rhs.miniMapPositionChoice;
 }
 
 void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDialogRecord &record) {
@@ -68,13 +48,11 @@ void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDial
 	std::memset(&record, 0, sizeof(record));
 	writeRecordField(record.pageBreak, sizeof(record.pageBreak), settings.pageBreak);
 	writeRecordField(record.wordDelimiters, sizeof(record.wordDelimiters), settings.wordDelimiters);
-	writeRecordField(record.defaultExtensions, sizeof(record.defaultExtensions),
-	                 settings.defaultExtensions);
+	writeRecordField(record.defaultExtensions, sizeof(record.defaultExtensions), settings.defaultExtensions);
 	writeRecordField(record.tabSize, sizeof(record.tabSize), std::to_string(settings.tabSize));
 	writeRecordField(record.leftMargin, sizeof(record.leftMargin), std::to_string(settings.leftMargin));
 	writeRecordField(record.rightMargin, sizeof(record.rightMargin), std::to_string(settings.rightMargin));
-	writeRecordField(record.binaryRecordLength, sizeof(record.binaryRecordLength),
-	                 std::to_string(settings.binaryRecordLength));
+	writeRecordField(record.binaryRecordLength, sizeof(record.binaryRecordLength), std::to_string(settings.binaryRecordLength));
 	writeRecordField(record.postLoadMacro, sizeof(record.postLoadMacro), settings.postLoadMacro);
 	writeRecordField(record.preSaveMacro, sizeof(record.preSaveMacro), settings.preSaveMacro);
 	writeRecordField(record.defaultPath, sizeof(record.defaultPath), settings.defaultPath);
@@ -85,59 +63,33 @@ void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDial
 	writeRecordField(record.gutters, sizeof(record.gutters), settings.gutters);
 
 	record.optionsMask = 0;
-	if (settings.truncateSpaces)
-		record.optionsMask |= kOptionTruncateSpaces;
-	if (settings.eofCtrlZ)
-		record.optionsMask |= kOptionEofCtrlZ;
-	if (settings.eofCrLf)
-		record.optionsMask |= kOptionEofCrLf;
-	if (settings.wordWrap)
-		record.optionsMask |= kOptionWordWrap;
-	if (settings.showEofMarker)
-		record.optionsMask |= kOptionShowEofMarker;
+	if (settings.truncateSpaces) record.optionsMask |= kOptionTruncateSpaces;
+	if (settings.eofCtrlZ) record.optionsMask |= kOptionEofCtrlZ;
+	if (settings.eofCrLf) record.optionsMask |= kOptionEofCrLf;
+	if (settings.wordWrap) record.optionsMask |= kOptionWordWrap;
+	if (settings.showEofMarker) record.optionsMask |= kOptionShowEofMarker;
 	if (settings.showEofMarkerEmoji) {
 		record.optionsMask |= kOptionShowEofMarker;
 		record.optionsMask |= kOptionShowEofMarkerEmoji;
 	}
-	if (settings.persistentBlocks)
-		record.optionsMask |= kOptionPersistentBlocks;
-	if (settings.codeFoldingPosition != "OFF")
-		record.optionsMask |= kOptionCodeFolding;
-	if (settings.lineNumbersPosition != "OFF")
-		record.optionsMask |= kOptionShowLineNumbers;
-	if (settings.lineNumZeroFill)
-		record.optionsMask |= kOptionLineNumZeroFill;
-	if (settings.displayTabs)
-		record.optionsMask |= kOptionDisplayTabs;
-	if (settings.formatRuler)
-		record.optionsMask |= kOptionFormatRuler;
+	if (settings.persistentBlocks) record.optionsMask |= kOptionPersistentBlocks;
+	if (settings.codeFoldingPosition != "OFF") record.optionsMask |= kOptionCodeFolding;
+	if (settings.lineNumbersPosition != "OFF") record.optionsMask |= kOptionShowLineNumbers;
+	if (settings.lineNumZeroFill) record.optionsMask |= kOptionLineNumZeroFill;
+	if (settings.displayTabs) record.optionsMask |= kOptionDisplayTabs;
+	if (settings.formatRuler) record.optionsMask |= kOptionFormatRuler;
 
 	record.tabExpandChoice = settings.tabExpand ? kTabExpandTabs : kTabExpandSpaces;
-	record.indentStyleChoice = (indentStyle == "AUTOMATIC") ? kIndentStyleAutomatic
-	                       : (indentStyle == "SMART") ? kIndentStyleSmart
-	                                                  : kIndentStyleOff;
-	record.fileTypeChoice = (fileType == "LEGACY_TEXT") ? kFileTypeLegacyText
-	                    : (fileType == "BINARY") ? kFileTypeBinary
-	                                             : kFileTypeUnix;
-	record.columnBlockMoveChoice =
-	    (columnMove == "LEAVE_SPACE") ? kColumnMoveLeaveSpace : kColumnMoveDeleteSpace;
-	record.defaultModeChoice =
-	    (defaultMode == "OVERWRITE") ? kDefaultModeOverwrite : kDefaultModeInsert;
-	record.lineNumbersPositionChoice =
-	    (lineNumbersPosition == "LEADING") ? kLineNumbersLeading
-	                                       : (lineNumbersPosition == "TRAILING") ? kLineNumbersTrailing
-	                                                                             : kLineNumbersOff;
-	record.codeFoldingPositionChoice =
-	    (codeFoldingPosition == "LEADING") ? kCodeFoldingLeading
-	                                       : (codeFoldingPosition == "TRAILING") ? kCodeFoldingTrailing
-	                                                                             : kCodeFoldingOff;
-	record.miniMapPositionChoice = (miniMapPosition == "LEADING") ? kMiniMapLeading
-	                            : (miniMapPosition == "TRAILING") ? kMiniMapTrailing
-	                                                               : kMiniMapOff;
+	record.indentStyleChoice = (indentStyle == "AUTOMATIC") ? kIndentStyleAutomatic : (indentStyle == "SMART") ? kIndentStyleSmart : kIndentStyleOff;
+	record.fileTypeChoice = (fileType == "LEGACY_TEXT") ? kFileTypeLegacyText : (fileType == "BINARY") ? kFileTypeBinary : kFileTypeUnix;
+	record.columnBlockMoveChoice = (columnMove == "LEAVE_SPACE") ? kColumnMoveLeaveSpace : kColumnMoveDeleteSpace;
+	record.defaultModeChoice = (defaultMode == "OVERWRITE") ? kDefaultModeOverwrite : kDefaultModeInsert;
+	record.lineNumbersPositionChoice = (lineNumbersPosition == "LEADING") ? kLineNumbersLeading : (lineNumbersPosition == "TRAILING") ? kLineNumbersTrailing : kLineNumbersOff;
+	record.codeFoldingPositionChoice = (codeFoldingPosition == "LEADING") ? kCodeFoldingLeading : (codeFoldingPosition == "TRAILING") ? kCodeFoldingTrailing : kCodeFoldingOff;
+	record.miniMapPositionChoice = (miniMapPosition == "LEADING") ? kMiniMapLeading : (miniMapPosition == "TRAILING") ? kMiniMapTrailing : kMiniMapOff;
 }
 
-bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditorSettingsDialogRecord &record, MRFileExtensionEditorSettings &settings,
-                                                     std::string &errorText) {
+bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditorSettingsDialogRecord &record, MRFileExtensionEditorSettings &settings, std::string &errorText) {
 	settings = configuredFileExtensionEditorSettings();
 	settings.pageBreak = readRecordField(record.pageBreak);
 	settings.wordDelimiters = readRecordField(record.wordDelimiters);
@@ -152,8 +104,7 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 			return false;
 		}
 		tabSize = std::strtol(tabSizeText.c_str(), &end, 10);
-		if (end == tabSizeText.c_str() || end == nullptr || *end != '\0' || tabSize < 2 ||
-		    tabSize > 32) {
+		if (end == tabSizeText.c_str() || end == nullptr || *end != '\0' || tabSize < 2 || tabSize > 32) {
 			errorText = "TABSIZE must be an integer between 2 and 32.";
 			return false;
 		}
@@ -169,8 +120,7 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 			return false;
 		}
 		leftMargin = std::strtol(leftMarginText.c_str(), &end, 10);
-		if (end == leftMarginText.c_str() || end == nullptr || *end != '\0' || leftMargin < 1 ||
-		    leftMargin > 999) {
+		if (end == leftMarginText.c_str() || end == nullptr || *end != '\0' || leftMargin < 1 || leftMargin > 999) {
 			errorText = "LEFT_MARGIN must be an integer between 1 and 999.";
 			return false;
 		}
@@ -186,8 +136,7 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 			return false;
 		}
 		rightMargin = std::strtol(rightMarginText.c_str(), &end, 10);
-		if (end == rightMarginText.c_str() || end == nullptr || *end != '\0' || rightMargin < 1 ||
-		    rightMargin > 999) {
+		if (end == rightMarginText.c_str() || end == nullptr || *end != '\0' || rightMargin < 1 || rightMargin > 999) {
 			errorText = "RIGHT_MARGIN must be an integer between 1 and 999.";
 			return false;
 		}
@@ -203,8 +152,7 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 			return false;
 		}
 		binaryRecordLength = std::strtol(binaryRecordLengthText.c_str(), &end, 10);
-		if (end == binaryRecordLengthText.c_str() || end == nullptr || *end != '\0' || binaryRecordLength < 1 ||
-		    binaryRecordLength > 99999) {
+		if (end == binaryRecordLengthText.c_str() || end == nullptr || *end != '\0' || binaryRecordLength < 1 || binaryRecordLength > 99999) {
 			errorText = "BINARY_RECORD_LENGTH must be an integer between 1 and 99999.";
 			return false;
 		}
@@ -215,10 +163,7 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.preSaveMacro = readRecordField(record.preSaveMacro);
 	settings.defaultPath = readRecordField(record.defaultPath);
 	settings.formatLine = readRecordField(record.formatLine);
-	if (!normalizeEditFormatLine(settings.formatLine, settings.tabSize, settings.leftMargin,
-	                             settings.rightMargin, settings.formatLine, &settings.leftMargin,
-	                             &settings.rightMargin, &errorText))
-		return false;
+	if (!normalizeEditFormatLine(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, settings.formatLine, &settings.leftMargin, &settings.rightMargin, &errorText)) return false;
 	settings.cursorStatusColor = upperAscii(trimAscii(readRecordField(record.cursorStatusColor)));
 	settings.miniMapMarkerGlyph = readRecordField(record.miniMapMarkerGlyph);
 	settings.gutters = readRecordField(record.gutters);
@@ -260,21 +205,16 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 			return false;
 		}
 		miniMapWidth = std::strtol(miniMapWidthText.c_str(), &end, 10);
-		if (end == miniMapWidthText.c_str() || end == nullptr || *end != '\0' || miniMapWidth < 2 ||
-		    miniMapWidth > 20) {
+		if (end == miniMapWidthText.c_str() || end == nullptr || *end != '\0' || miniMapWidth < 2 || miniMapWidth > 20) {
 			errorText = "MINIMAP_WIDTH must be an integer between 2 and 20.";
 			return false;
 		}
 		settings.miniMapWidth = static_cast<int>(miniMapWidth);
 	}
-	settings.miniMapPosition = (record.miniMapPositionChoice == kMiniMapLeading) ? "LEADING"
-	                       : (record.miniMapPositionChoice == kMiniMapTrailing) ? "TRAILING"
-	                                                                      : "OFF";
-	if (trimAscii(settings.miniMapMarkerGlyph).empty())
-		settings.miniMapMarkerGlyph = "│";
+	settings.miniMapPosition = (record.miniMapPositionChoice == kMiniMapLeading) ? "LEADING" : (record.miniMapPositionChoice == kMiniMapTrailing) ? "TRAILING" : "OFF";
+	if (trimAscii(settings.miniMapMarkerGlyph).empty()) settings.miniMapMarkerGlyph = "│";
 	settings.gutters = upperAscii(settings.gutters);
-	if (trimAscii(settings.gutters).empty())
-		settings.gutters = "LCM";
+	if (trimAscii(settings.gutters).empty()) settings.gutters = "LCM";
 
 	settings.truncateSpaces = (record.optionsMask & kOptionTruncateSpaces) != 0;
 	settings.eofCtrlZ = (record.optionsMask & kOptionEofCtrlZ) != 0;
@@ -283,34 +223,21 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.formatRuler = (record.optionsMask & kOptionFormatRuler) != 0;
 	settings.showEofMarker = (record.optionsMask & kOptionShowEofMarker) != 0;
 	settings.showEofMarkerEmoji = (record.optionsMask & kOptionShowEofMarkerEmoji) != 0;
-	if (settings.showEofMarkerEmoji)
-		settings.showEofMarker = true;
+	if (settings.showEofMarkerEmoji) settings.showEofMarker = true;
 	settings.lineNumZeroFill = (record.optionsMask & kOptionLineNumZeroFill) != 0;
 	settings.displayTabs = (record.optionsMask & kOptionDisplayTabs) != 0;
-	settings.lineNumbersPosition = (record.lineNumbersPositionChoice == kLineNumbersLeading) ? "LEADING"
-	                         : (record.lineNumbersPositionChoice == kLineNumbersTrailing) ? "TRAILING"
-	                                                                                      : "OFF";
-	if (settings.lineNumbersPosition == "OFF" && (record.optionsMask & kOptionShowLineNumbers) != 0)
-		settings.lineNumbersPosition = "LEADING";
+	settings.lineNumbersPosition = (record.lineNumbersPositionChoice == kLineNumbersLeading) ? "LEADING" : (record.lineNumbersPositionChoice == kLineNumbersTrailing) ? "TRAILING" : "OFF";
+	if (settings.lineNumbersPosition == "OFF" && (record.optionsMask & kOptionShowLineNumbers) != 0) settings.lineNumbersPosition = "LEADING";
 	settings.showLineNumbers = settings.lineNumbersPosition != "OFF";
-	settings.codeFoldingPosition = (record.codeFoldingPositionChoice == kCodeFoldingLeading) ? "LEADING"
-	                         : (record.codeFoldingPositionChoice == kCodeFoldingTrailing) ? "TRAILING"
-	                                                                                      : "OFF";
-	if (settings.codeFoldingPosition == "OFF" && (record.optionsMask & kOptionCodeFolding) != 0)
-		settings.codeFoldingPosition = "LEADING";
+	settings.codeFoldingPosition = (record.codeFoldingPositionChoice == kCodeFoldingLeading) ? "LEADING" : (record.codeFoldingPositionChoice == kCodeFoldingTrailing) ? "TRAILING" : "OFF";
+	if (settings.codeFoldingPosition == "OFF" && (record.optionsMask & kOptionCodeFolding) != 0) settings.codeFoldingPosition = "LEADING";
 	settings.codeFolding = settings.codeFoldingPosition != "OFF";
 	settings.persistentBlocks = (record.optionsMask & kOptionPersistentBlocks) != 0;
 	settings.tabExpand = record.tabExpandChoice == kTabExpandTabs;
-	settings.indentStyle = (record.indentStyleChoice == kIndentStyleAutomatic) ? "AUTOMATIC"
-	                    : (record.indentStyleChoice == kIndentStyleSmart) ? "SMART"
-	                                                                   : "OFF";
-	settings.fileType = (record.fileTypeChoice == kFileTypeLegacyText) ? "LEGACY_TEXT"
-	                  : (record.fileTypeChoice == kFileTypeBinary) ? "BINARY"
-	                                                             : "UNIX";
-	settings.columnBlockMove =
-	    (record.columnBlockMoveChoice == kColumnMoveLeaveSpace) ? "LEAVE_SPACE" : "DELETE_SPACE";
-	settings.defaultMode =
-	    (record.defaultModeChoice == kDefaultModeOverwrite) ? "OVERWRITE" : "INSERT";
+	settings.indentStyle = (record.indentStyleChoice == kIndentStyleAutomatic) ? "AUTOMATIC" : (record.indentStyleChoice == kIndentStyleSmart) ? "SMART" : "OFF";
+	settings.fileType = (record.fileTypeChoice == kFileTypeLegacyText) ? "LEGACY_TEXT" : (record.fileTypeChoice == kFileTypeBinary) ? "BINARY" : "UNIX";
+	settings.columnBlockMove = (record.columnBlockMoveChoice == kColumnMoveLeaveSpace) ? "LEAVE_SPACE" : "DELETE_SPACE";
+	settings.defaultMode = (record.defaultModeChoice == kDefaultModeOverwrite) ? "OVERWRITE" : "INSERT";
 
 	errorText.clear();
 	return true;
@@ -404,8 +331,7 @@ enum : unsigned long long {
 		return false;
 	}
 	if (!normalizeEditExtensionSelectors(selectors, &errorText)) {
-		if (errorText.rfind("Extensions", 0) == 0)
-			errorText.replace(0, std::strlen("Extensions"), "Extension");
+		if (errorText.rfind("Extensions", 0) == 0) errorText.replace(0, std::strlen("Extensions"), "Extension");
 		return false;
 	}
 	errorText.clear();
@@ -428,104 +354,63 @@ enum : unsigned long long {
 }
 
 [[nodiscard]] bool validateDraftLocally(const EditProfileDraft &draft, std::string &errorText) {
-	if (!validateProfileIdLiteral(draft, errorText))
-		return false;
-	if (!validateProfileNameLiteral(draft, errorText))
-		return false;
-	if (!validateProfileExtensionsLiteral(draft, errorText))
-		return false;
-	if (!validateProfileColorThemeLiteral(draft, errorText))
-		return false;
-	if (!validateDraftRecordFields(draft, errorText))
-		return false;
+	if (!validateProfileIdLiteral(draft, errorText)) return false;
+	if (!validateProfileNameLiteral(draft, errorText)) return false;
+	if (!validateProfileExtensionsLiteral(draft, errorText)) return false;
+	if (!validateProfileColorThemeLiteral(draft, errorText)) return false;
+	if (!validateDraftRecordFields(draft, errorText)) return false;
 	errorText.clear();
 	return true;
 }
 
-[[nodiscard]] unsigned long long computeOverrideMask(const MRFileExtensionEditorSettings &defaults,
-                                               const MRFileExtensionEditorSettings &effective) {
+[[nodiscard]] unsigned long long computeOverrideMask(const MRFileExtensionEditorSettings &defaults, const MRFileExtensionEditorSettings &effective) {
 	unsigned long long mask = kOvNone;
 
-	if (effective.pageBreak != defaults.pageBreak)
-		mask |= kOvPageBreak;
-	if (effective.wordDelimiters != defaults.wordDelimiters)
-		mask |= kOvWordDelimiters;
-	if (effective.defaultExtensions != defaults.defaultExtensions)
-		mask |= kOvDefaultExtensions;
-	if (effective.truncateSpaces != defaults.truncateSpaces)
-		mask |= kOvTruncateSpaces;
-	if (effective.eofCtrlZ != defaults.eofCtrlZ)
-		mask |= kOvEofCtrlZ;
-	if (effective.eofCrLf != defaults.eofCrLf)
-		mask |= kOvEofCrLf;
-	if (effective.tabExpand != defaults.tabExpand)
-		mask |= kOvTabExpand;
-	if (effective.displayTabs != defaults.displayTabs)
-		mask |= kOvDisplayTabs;
-	if (effective.tabSize != defaults.tabSize)
-		mask |= kOvTabSize;
-	if (effective.leftMargin != defaults.leftMargin)
-		mask |= kOvLeftMargin;
-	if (effective.rightMargin != defaults.rightMargin)
-		mask |= kOvRightMargin;
-	if (effective.formatRuler != defaults.formatRuler)
-		mask |= kOvFormatRuler;
-	if (effective.wordWrap != defaults.wordWrap)
-		mask |= kOvWordWrap;
-	if (upperAscii(effective.indentStyle) != upperAscii(defaults.indentStyle))
-		mask |= kOvIndentStyle;
-	if (upperAscii(effective.fileType) != upperAscii(defaults.fileType))
-		mask |= kOvFileType;
-	if (effective.binaryRecordLength != defaults.binaryRecordLength)
-		mask |= kOvBinaryRecordLength;
-	if (trimAscii(effective.postLoadMacro) != trimAscii(defaults.postLoadMacro))
-		mask |= kOvPostLoadMacro;
-	if (trimAscii(effective.preSaveMacro) != trimAscii(defaults.preSaveMacro))
-		mask |= kOvPreSaveMacro;
-	if (trimAscii(effective.defaultPath) != trimAscii(defaults.defaultPath))
-		mask |= kOvDefaultPath;
-	if (effective.formatLine != defaults.formatLine)
-		mask |= kOvFormatLine;
-	if (effective.showEofMarker != defaults.showEofMarker)
-		mask |= kOvShowEofMarker;
-	if (effective.showEofMarkerEmoji != defaults.showEofMarkerEmoji)
-		mask |= kOvShowEofMarkerEmoji;
-	if (upperAscii(effective.lineNumbersPosition) != upperAscii(defaults.lineNumbersPosition))
-		mask |= kOvLineNumbersPosition;
-	if (effective.lineNumZeroFill != defaults.lineNumZeroFill)
-		mask |= kOvLineNumZeroFill;
-	if (effective.persistentBlocks != defaults.persistentBlocks)
-		mask |= kOvPersistentBlocks;
-	if (upperAscii(effective.codeFoldingPosition) != upperAscii(defaults.codeFoldingPosition))
-		mask |= kOvCodeFoldingPosition;
-	if (upperAscii(effective.columnBlockMove) != upperAscii(defaults.columnBlockMove))
-		mask |= kOvColumnBlockMove;
-	if (upperAscii(effective.defaultMode) != upperAscii(defaults.defaultMode))
-		mask |= kOvDefaultMode;
-	if (upperAscii(effective.miniMapPosition) != upperAscii(defaults.miniMapPosition))
-		mask |= kOvMiniMapPosition;
-	if (effective.miniMapWidth != defaults.miniMapWidth)
-		mask |= kOvMiniMapWidth;
-	if (trimAscii(effective.miniMapMarkerGlyph) != trimAscii(defaults.miniMapMarkerGlyph))
-		mask |= kOvMiniMapMarkerGlyph;
-	if (upperAscii(trimAscii(effective.gutters)) != upperAscii(trimAscii(defaults.gutters)))
-		mask |= kOvGutters;
+	if (effective.pageBreak != defaults.pageBreak) mask |= kOvPageBreak;
+	if (effective.wordDelimiters != defaults.wordDelimiters) mask |= kOvWordDelimiters;
+	if (effective.defaultExtensions != defaults.defaultExtensions) mask |= kOvDefaultExtensions;
+	if (effective.truncateSpaces != defaults.truncateSpaces) mask |= kOvTruncateSpaces;
+	if (effective.eofCtrlZ != defaults.eofCtrlZ) mask |= kOvEofCtrlZ;
+	if (effective.eofCrLf != defaults.eofCrLf) mask |= kOvEofCrLf;
+	if (effective.tabExpand != defaults.tabExpand) mask |= kOvTabExpand;
+	if (effective.displayTabs != defaults.displayTabs) mask |= kOvDisplayTabs;
+	if (effective.tabSize != defaults.tabSize) mask |= kOvTabSize;
+	if (effective.leftMargin != defaults.leftMargin) mask |= kOvLeftMargin;
+	if (effective.rightMargin != defaults.rightMargin) mask |= kOvRightMargin;
+	if (effective.formatRuler != defaults.formatRuler) mask |= kOvFormatRuler;
+	if (effective.wordWrap != defaults.wordWrap) mask |= kOvWordWrap;
+	if (upperAscii(effective.indentStyle) != upperAscii(defaults.indentStyle)) mask |= kOvIndentStyle;
+	if (upperAscii(effective.fileType) != upperAscii(defaults.fileType)) mask |= kOvFileType;
+	if (effective.binaryRecordLength != defaults.binaryRecordLength) mask |= kOvBinaryRecordLength;
+	if (trimAscii(effective.postLoadMacro) != trimAscii(defaults.postLoadMacro)) mask |= kOvPostLoadMacro;
+	if (trimAscii(effective.preSaveMacro) != trimAscii(defaults.preSaveMacro)) mask |= kOvPreSaveMacro;
+	if (trimAscii(effective.defaultPath) != trimAscii(defaults.defaultPath)) mask |= kOvDefaultPath;
+	if (effective.formatLine != defaults.formatLine) mask |= kOvFormatLine;
+	if (effective.showEofMarker != defaults.showEofMarker) mask |= kOvShowEofMarker;
+	if (effective.showEofMarkerEmoji != defaults.showEofMarkerEmoji) mask |= kOvShowEofMarkerEmoji;
+	if (upperAscii(effective.lineNumbersPosition) != upperAscii(defaults.lineNumbersPosition)) mask |= kOvLineNumbersPosition;
+	if (effective.lineNumZeroFill != defaults.lineNumZeroFill) mask |= kOvLineNumZeroFill;
+	if (effective.persistentBlocks != defaults.persistentBlocks) mask |= kOvPersistentBlocks;
+	if (upperAscii(effective.codeFoldingPosition) != upperAscii(defaults.codeFoldingPosition)) mask |= kOvCodeFoldingPosition;
+	if (upperAscii(effective.columnBlockMove) != upperAscii(defaults.columnBlockMove)) mask |= kOvColumnBlockMove;
+	if (upperAscii(effective.defaultMode) != upperAscii(defaults.defaultMode)) mask |= kOvDefaultMode;
+	if (upperAscii(effective.miniMapPosition) != upperAscii(defaults.miniMapPosition)) mask |= kOvMiniMapPosition;
+	if (effective.miniMapWidth != defaults.miniMapWidth) mask |= kOvMiniMapWidth;
+	if (trimAscii(effective.miniMapMarkerGlyph) != trimAscii(defaults.miniMapMarkerGlyph)) mask |= kOvMiniMapMarkerGlyph;
+	if (upperAscii(trimAscii(effective.gutters)) != upperAscii(trimAscii(defaults.gutters))) mask |= kOvGutters;
 	return mask;
 }
-
 
 [[nodiscard]] std::string joinExtensionsLiteral(const std::vector<std::string> &extensions) {
 	std::string out;
 	for (std::size_t i = 0; i < extensions.size(); ++i) {
-		if (i != 0)
-			out += "; ";
+		if (i != 0) out += "; ";
 		out += extensions[i];
 	}
 	return out;
 }
 
-[[nodiscard]] std::string nextUniqueProfileId(const std::vector<EditProfileDraft> &existingDrafts,
-                                              const std::string &seed) {
+[[nodiscard]] std::string nextUniqueProfileId(const std::vector<EditProfileDraft> &existingDrafts, const std::string &seed) {
 	std::string base = trimAscii(seed).empty() ? std::string("profile") : trimAscii(seed);
 	for (int suffix = 0;; ++suffix) {
 		std::string candidate = suffix == 0 ? base : base + std::to_string(suffix + 1);
@@ -536,8 +421,7 @@ enum : unsigned long long {
 				used = true;
 				break;
 			}
-		if (!used)
-			return candidate;
+		if (!used) return candidate;
 	}
 }
 
@@ -547,23 +431,19 @@ bool normalizeDraftSyntaxImpl(EditProfileDraft &draft, std::string &errorText) {
 
 	draft.id = draft.isDefault ? std::string(kDefaultProfileId) : trimAscii(draft.id);
 	draft.name = trimAscii(draft.name);
-	draft.colorThemeUri = trimAscii(draft.colorThemeUri).empty() ? std::string()
-	                                                             : normalizeConfiguredPathInput(draft.colorThemeUri);
+	draft.colorThemeUri = trimAscii(draft.colorThemeUri).empty() ? std::string() : normalizeConfiguredPathInput(draft.colorThemeUri);
 
-	if (draft.isDefault)
-		draft.extensionsLiteral.clear();
+	if (draft.isDefault) draft.extensionsLiteral.clear();
 	else {
 		selectors = splitExtensionLiteral(draft.extensionsLiteral);
 		if (!normalizeEditExtensionSelectors(selectors, &errorText)) {
-			if (errorText.rfind("Extensions", 0) == 0)
-				errorText.replace(0, std::strlen("Extensions"), "Extension");
+			if (errorText.rfind("Extensions", 0) == 0) errorText.replace(0, std::strlen("Extensions"), "Extension");
 			return false;
 		}
 		draft.extensionsLiteral = joinExtensionsLiteral(selectors);
 	}
 
-	if (!fileExtensionEditorSettingsDialogRecordToSettings(draft.settingsRecord, normalizedSettings, errorText))
-		return false;
+	if (!fileExtensionEditorSettingsDialogRecordToSettings(draft.settingsRecord, normalizedSettings, errorText)) return false;
 	settingsToDialogRecord(normalizedSettings, draft.settingsRecord);
 	errorText.clear();
 	return true;
@@ -571,16 +451,12 @@ bool normalizeDraftSyntaxImpl(EditProfileDraft &draft, std::string &errorText) {
 
 bool normalizeDraftListSyntaxImpl(std::vector<EditProfileDraft> &drafts, std::string &errorText) {
 	for (EditProfileDraft &draft : drafts)
-		if (!normalizeDraftSyntaxImpl(draft, errorText))
-			return false;
+		if (!normalizeDraftSyntaxImpl(draft, errorText)) return false;
 	errorText.clear();
 	return true;
 }
 
-[[nodiscard]] bool draftsToConfiguredState(const std::vector<EditProfileDraft> &drafts,
-                                           MRFileExtensionEditorSettings &defaultsOut,
-                                           std::vector<MRFileExtensionProfile> &profilesOut,
-                                           std::string &defaultThemePathOut, std::string &errorText) {
+[[nodiscard]] bool draftsToConfiguredState(const std::vector<EditProfileDraft> &drafts, MRFileExtensionEditorSettings &defaultsOut, std::vector<MRFileExtensionProfile> &profilesOut, std::string &defaultThemePathOut, std::string &errorText) {
 	bool haveDefault = false;
 	std::string defaultDescription;
 
@@ -599,8 +475,7 @@ bool normalizeDraftListSyntaxImpl(std::vector<EditProfileDraft> &drafts, std::st
 			}
 			defaultDescription = trimAscii(draft.name);
 			defaultThemePathOut = trimAscii(draft.colorThemeUri);
-			if (defaultThemePathOut.empty())
-				defaultThemePathOut = defaultColorThemeFilePath();
+			if (defaultThemePathOut.empty()) defaultThemePathOut = defaultColorThemeFilePath();
 			if (!validateColorThemeFilePath(defaultThemePathOut, &errorText)) {
 				errorText = "DEFAULT: " + errorText;
 				return false;
@@ -619,8 +494,7 @@ bool normalizeDraftListSyntaxImpl(std::vector<EditProfileDraft> &drafts, std::st
 		MRFileExtensionEditorSettings effective;
 		MRFileExtensionProfile profile;
 
-		if (draft.isDefault)
-			continue;
+		if (draft.isDefault) continue;
 		if (!fileExtensionEditorSettingsDialogRecordToSettings(draft.settingsRecord, effective, errorText)) {
 			errorText = trimAscii(draft.id) + ": " + errorText;
 			return false;
@@ -634,22 +508,17 @@ bool normalizeDraftListSyntaxImpl(std::vector<EditProfileDraft> &drafts, std::st
 		profilesOut.push_back(profile);
 	}
 
-	if (!setConfiguredDefaultProfileDescription(defaultDescription, &errorText))
-		return false;
-	if (!setConfiguredColorThemeFilePath(defaultThemePathOut, &errorText))
-		return false;
-	if (!setConfiguredFileExtensionEditorSettings(defaultsOut, &errorText))
-		return false;
-	if (!setConfiguredFileExtensionProfiles(profilesOut, &errorText))
-		return false;
+	if (!setConfiguredDefaultProfileDescription(defaultDescription, &errorText)) return false;
+	if (!setConfiguredColorThemeFilePath(defaultThemePathOut, &errorText)) return false;
+	if (!setConfiguredFileExtensionEditorSettings(defaultsOut, &errorText)) return false;
+	if (!setConfiguredFileExtensionProfiles(profilesOut, &errorText)) return false;
 	return true;
 }
 
 std::string joinCommaSeparatedList(const std::vector<std::string> &values) {
 	std::string out;
 	for (std::size_t i = 0; i < values.size(); ++i) {
-		if (i != 0)
-			out += ", ";
+		if (i != 0) out += ", ";
 		out += values[i];
 	}
 	return out;
@@ -659,12 +528,9 @@ std::string joinCommaSeparatedList(const std::vector<std::string> &values) {
 	std::string id = trimAscii(draft.id);
 	std::string name = trimAscii(draft.name);
 
-	if (draft.isDefault)
-		return "DEFAULT";
-	if (id.empty())
-		id = "<empty>";
-	if (name.empty())
-		return id;
+	if (draft.isDefault) return "DEFAULT";
+	if (id.empty()) id = "<empty>";
+	if (name.empty()) return id;
 	return id + " (" + name + ")";
 }
 
@@ -689,15 +555,13 @@ std::vector<std::string> splitExtensionLiteral(const std::string &literal) {
 	for (char ch : literal) {
 		if (ch == ';' || ch == ',') {
 			std::string token = trimAscii(current);
-			if (!token.empty())
-				values.push_back(token);
+			if (!token.empty()) values.push_back(token);
 			current.clear();
 		} else
 			current.push_back(ch);
 	}
 	current = trimAscii(current);
-	if (!current.empty())
-		values.push_back(current);
+	if (!current.empty()) values.push_back(current);
 	return values;
 }
 
@@ -728,51 +592,27 @@ void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileE
 	writeRecordField(record.gutters, sizeof(record.gutters), settings.gutters);
 
 	record.optionsMask = 0;
-	if (settings.truncateSpaces)
-		record.optionsMask |= kOptionTruncateSpaces;
-	if (settings.eofCtrlZ)
-		record.optionsMask |= kOptionEofCtrlZ;
-	if (settings.eofCrLf)
-		record.optionsMask |= kOptionEofCrLf;
-	if (settings.wordWrap)
-		record.optionsMask |= kOptionWordWrap;
-	if (settings.showEofMarker)
-		record.optionsMask |= kOptionShowEofMarker;
-	if (settings.showEofMarkerEmoji)
-		record.optionsMask |= kOptionShowEofMarkerEmoji;
-	if (settings.persistentBlocks)
-		record.optionsMask |= kOptionPersistentBlocks;
-	if (settings.codeFoldingPosition != "OFF")
-		record.optionsMask |= kOptionCodeFolding;
-	if (settings.lineNumbersPosition != "OFF")
-		record.optionsMask |= kOptionShowLineNumbers;
-	if (settings.lineNumZeroFill)
-		record.optionsMask |= kOptionLineNumZeroFill;
-	if (settings.displayTabs)
-		record.optionsMask |= kOptionDisplayTabs;
-	if (settings.formatRuler)
-		record.optionsMask |= kOptionFormatRuler;
+	if (settings.truncateSpaces) record.optionsMask |= kOptionTruncateSpaces;
+	if (settings.eofCtrlZ) record.optionsMask |= kOptionEofCtrlZ;
+	if (settings.eofCrLf) record.optionsMask |= kOptionEofCrLf;
+	if (settings.wordWrap) record.optionsMask |= kOptionWordWrap;
+	if (settings.showEofMarker) record.optionsMask |= kOptionShowEofMarker;
+	if (settings.showEofMarkerEmoji) record.optionsMask |= kOptionShowEofMarkerEmoji;
+	if (settings.persistentBlocks) record.optionsMask |= kOptionPersistentBlocks;
+	if (settings.codeFoldingPosition != "OFF") record.optionsMask |= kOptionCodeFolding;
+	if (settings.lineNumbersPosition != "OFF") record.optionsMask |= kOptionShowLineNumbers;
+	if (settings.lineNumZeroFill) record.optionsMask |= kOptionLineNumZeroFill;
+	if (settings.displayTabs) record.optionsMask |= kOptionDisplayTabs;
+	if (settings.formatRuler) record.optionsMask |= kOptionFormatRuler;
 
 	record.tabExpandChoice = settings.tabExpand ? kTabExpandTabs : kTabExpandSpaces;
-	record.indentStyleChoice = (indentStyle == "AUTOMATIC") ? kIndentStyleAutomatic
-	                       : (indentStyle == "SMART") ? kIndentStyleSmart
-	                                                  : kIndentStyleOff;
-	record.fileTypeChoice = (fileType == "LEGACY_TEXT") ? kFileTypeLegacyText
-	                    : (fileType == "BINARY") ? kFileTypeBinary
-	                                             : kFileTypeUnix;
+	record.indentStyleChoice = (indentStyle == "AUTOMATIC") ? kIndentStyleAutomatic : (indentStyle == "SMART") ? kIndentStyleSmart : kIndentStyleOff;
+	record.fileTypeChoice = (fileType == "LEGACY_TEXT") ? kFileTypeLegacyText : (fileType == "BINARY") ? kFileTypeBinary : kFileTypeUnix;
 	record.columnBlockMoveChoice = (columnMove == "LEAVE_SPACE") ? kColumnMoveLeaveSpace : kColumnMoveDeleteSpace;
 	record.defaultModeChoice = (defaultMode == "OVERWRITE") ? kDefaultModeOverwrite : kDefaultModeInsert;
-	record.lineNumbersPositionChoice =
-	    (lineNumbersPosition == "LEADING") ? kLineNumbersLeading
-	                                       : (lineNumbersPosition == "TRAILING") ? kLineNumbersTrailing
-	                                                                             : kLineNumbersOff;
-	record.codeFoldingPositionChoice =
-	    (codeFoldingPosition == "LEADING") ? kCodeFoldingLeading
-	                                       : (codeFoldingPosition == "TRAILING") ? kCodeFoldingTrailing
-	                                                                             : kCodeFoldingOff;
-	record.miniMapPositionChoice = (miniMapPosition == "LEADING") ? kMiniMapLeading
-	                            : (miniMapPosition == "TRAILING") ? kMiniMapTrailing
-	                                                               : kMiniMapOff;
+	record.lineNumbersPositionChoice = (lineNumbersPosition == "LEADING") ? kLineNumbersLeading : (lineNumbersPosition == "TRAILING") ? kLineNumbersTrailing : kLineNumbersOff;
+	record.codeFoldingPositionChoice = (codeFoldingPosition == "LEADING") ? kCodeFoldingLeading : (codeFoldingPosition == "TRAILING") ? kCodeFoldingTrailing : kCodeFoldingOff;
+	record.miniMapPositionChoice = (miniMapPosition == "LEADING") ? kMiniMapLeading : (miniMapPosition == "TRAILING") ? kMiniMapTrailing : kMiniMapOff;
 }
 
 bool draftsEqual(const EditProfileDraft &lhs, const EditProfileDraft &rhs) {
@@ -780,28 +620,15 @@ bool draftsEqual(const EditProfileDraft &lhs, const EditProfileDraft &rhs) {
 	EditProfileDraft normalizedRhs = rhs;
 	std::string errorText;
 
-	if (!normalizeDraftSyntax(normalizedLhs, errorText) || !normalizeDraftSyntax(normalizedRhs, errorText))
-		return lhs.isDefault == rhs.isDefault && trimAscii(lhs.id) == trimAscii(rhs.id) &&
-		       trimAscii(lhs.name) == trimAscii(rhs.name) &&
-		       trimAscii(lhs.extensionsLiteral) == trimAscii(rhs.extensionsLiteral) &&
-		       trimAscii(lhs.colorThemeUri) == trimAscii(rhs.colorThemeUri) &&
-		       fileExtensionEditorSettingsDialogRecordsEqual(lhs.settingsRecord, rhs.settingsRecord);
+	if (!normalizeDraftSyntax(normalizedLhs, errorText) || !normalizeDraftSyntax(normalizedRhs, errorText)) return lhs.isDefault == rhs.isDefault && trimAscii(lhs.id) == trimAscii(rhs.id) && trimAscii(lhs.name) == trimAscii(rhs.name) && trimAscii(lhs.extensionsLiteral) == trimAscii(rhs.extensionsLiteral) && trimAscii(lhs.colorThemeUri) == trimAscii(rhs.colorThemeUri) && fileExtensionEditorSettingsDialogRecordsEqual(lhs.settingsRecord, rhs.settingsRecord);
 
-	return normalizedLhs.isDefault == normalizedRhs.isDefault &&
-	       normalizedLhs.id == normalizedRhs.id &&
-	       normalizedLhs.name == normalizedRhs.name &&
-	       normalizedLhs.extensionsLiteral == normalizedRhs.extensionsLiteral &&
-	       normalizedLhs.colorThemeUri == normalizedRhs.colorThemeUri &&
-	       fileExtensionEditorSettingsDialogRecordsEqual(normalizedLhs.settingsRecord,
-	                                                    normalizedRhs.settingsRecord);
+	return normalizedLhs.isDefault == normalizedRhs.isDefault && normalizedLhs.id == normalizedRhs.id && normalizedLhs.name == normalizedRhs.name && normalizedLhs.extensionsLiteral == normalizedRhs.extensionsLiteral && normalizedLhs.colorThemeUri == normalizedRhs.colorThemeUri && fileExtensionEditorSettingsDialogRecordsEqual(normalizedLhs.settingsRecord, normalizedRhs.settingsRecord);
 }
 
 bool draftListsEqual(const std::vector<EditProfileDraft> &lhs, const std::vector<EditProfileDraft> &rhs) {
-	if (lhs.size() != rhs.size())
-		return false;
+	if (lhs.size() != rhs.size()) return false;
 	for (std::size_t i = 0; i < lhs.size(); ++i)
-		if (!draftsEqual(lhs[i], rhs[i]))
-			return false;
+		if (!draftsEqual(lhs[i], rhs[i])) return false;
 	return true;
 }
 
@@ -836,12 +663,9 @@ std::string buildProfileListLabel(const EditProfileDraft &draft, std::size_t idW
 	std::string id = draft.isDefault ? std::string(kDefaultProfileId) : trimAscii(draft.id);
 	std::string name = trimAscii(draft.name);
 
-	if (id.empty())
-		id = "<empty>";
-	if (name.empty())
-		return id;
-	if (id.size() < idWidth)
-		id.append(idWidth - id.size(), ' ');
+	if (id.empty()) id = "<empty>";
+	if (name.empty()) return id;
+	if (id.size() < idWidth) id.append(idWidth - id.size(), ' ');
 	return id + "  " + name;
 }
 
@@ -857,8 +681,7 @@ EditProfileDraft makeNewDraft(const std::vector<EditProfileDraft> &existingDraft
 	return draft;
 }
 
-EditProfileDraft makeCopiedDraft(const EditProfileDraft &source,
-                                 const std::vector<EditProfileDraft> &existingDrafts) {
+EditProfileDraft makeCopiedDraft(const EditProfileDraft &source, const std::vector<EditProfileDraft> &existingDrafts) {
 	EditProfileDraft draft = source;
 	std::string sourceId = trimAscii(source.id);
 	std::string baseId = sourceId.empty() ? std::string("profile") : sourceId + "_copy";
@@ -868,32 +691,25 @@ EditProfileDraft makeCopiedDraft(const EditProfileDraft &source,
 	return draft;
 }
 
-bool validateDraftsForUi(const std::vector<EditProfileDraft> &drafts, int currentIndex,
-                         const EditProfileDraft *currentDraftOverride, std::string &errorText) {
+bool validateDraftsForUi(const std::vector<EditProfileDraft> &drafts, int currentIndex, const EditProfileDraft *currentDraftOverride, std::string &errorText) {
 	std::map<std::string, std::vector<std::size_t>> ids;
 	std::map<std::string, std::vector<std::size_t>> exts;
 	std::vector<std::size_t> order;
 	const auto draftAtIndex = [&](std::size_t index) -> const EditProfileDraft & {
-		if (currentDraftOverride != nullptr && currentIndex >= 0 &&
-		    currentIndex < static_cast<int>(drafts.size()) &&
-		    static_cast<std::size_t>(currentIndex) == index)
-			return *currentDraftOverride;
+		if (currentDraftOverride != nullptr && currentIndex >= 0 && currentIndex < static_cast<int>(drafts.size()) && static_cast<std::size_t>(currentIndex) == index) return *currentDraftOverride;
 		return drafts[index];
 	};
 
 	order.reserve(drafts.size());
-	if (currentIndex >= 0 && currentIndex < static_cast<int>(drafts.size()))
-		order.push_back(static_cast<std::size_t>(currentIndex));
+	if (currentIndex >= 0 && currentIndex < static_cast<int>(drafts.size())) order.push_back(static_cast<std::size_t>(currentIndex));
 	for (std::size_t i = 0; i < drafts.size(); ++i)
-		if (static_cast<int>(i) != currentIndex)
-			order.push_back(i);
+		if (static_cast<int>(i) != currentIndex) order.push_back(i);
 
 	for (std::size_t i : order) {
 		std::string localError;
 		const EditProfileDraft &draft = draftAtIndex(i);
 		if (!validateDraftLocally(draft, localError)) {
-			if (static_cast<int>(i) == currentIndex)
-				errorText = localError;
+			if (static_cast<int>(i) == currentIndex) errorText = localError;
 			else
 				errorText = profileOwnerLabel(draft) + ": " + localError;
 			return false;
@@ -902,23 +718,19 @@ bool validateDraftsForUi(const std::vector<EditProfileDraft> &drafts, int curren
 
 	for (std::size_t i = 0; i < drafts.size(); ++i) {
 		const EditProfileDraft &draft = draftAtIndex(i);
-		if (draft.isDefault)
-			continue;
+		if (draft.isDefault) continue;
 		ids[upperAscii(trimAscii(draft.id))].push_back(i);
 		{
 			std::vector<std::string> selectors = splitExtensionLiteral(draft.extensionsLiteral);
 			std::string extError;
 			if (!normalizeEditExtensionSelectors(selectors, &extError)) {
-				if (extError.rfind("Extensions", 0) == 0)
-					extError.replace(0, std::strlen("Extensions"), "Extension");
-				if (static_cast<int>(i) == currentIndex)
-					errorText = extError;
+				if (extError.rfind("Extensions", 0) == 0) extError.replace(0, std::strlen("Extensions"), "Extension");
+				if (static_cast<int>(i) == currentIndex) errorText = extError;
 				else
 					errorText = profileOwnerLabel(draft) + ": " + extError;
 				return false;
 			}
-			if (!selectors.empty())
-				exts[selectors.front()].push_back(i);
+			if (!selectors.empty()) exts[selectors.front()].push_back(i);
 		}
 	}
 
@@ -926,19 +738,12 @@ bool validateDraftsForUi(const std::vector<EditProfileDraft> &drafts, int curren
 		if (entry.second.size() > 1) {
 			std::vector<std::string> owners;
 			for (std::size_t idx : entry.second)
-				if (static_cast<int>(idx) != currentIndex)
-					owners.push_back(profileOwnerLabel(draftAtIndex(idx)));
-			if (currentIndex >= 0 &&
-			    std::find(entry.second.begin(), entry.second.end(),
-			              static_cast<std::size_t>(currentIndex)) != entry.second.end()) {
-				errorText = "Duplicate profile ID '" +
-				            trimAscii(draftAtIndex(static_cast<std::size_t>(currentIndex)).id) + "': " +
-				            joinCommaSeparatedList(owners);
+				if (static_cast<int>(idx) != currentIndex) owners.push_back(profileOwnerLabel(draftAtIndex(idx)));
+			if (currentIndex >= 0 && std::find(entry.second.begin(), entry.second.end(), static_cast<std::size_t>(currentIndex)) != entry.second.end()) {
+				errorText = "Duplicate profile ID '" + trimAscii(draftAtIndex(static_cast<std::size_t>(currentIndex)).id) + "': " + joinCommaSeparatedList(owners);
 				return false;
 			}
-			errorText = "Duplicate profile ID '" +
-			            trimAscii(draftAtIndex(entry.second.front()).id) + "': " +
-			            joinCommaSeparatedList(owners);
+			errorText = "Duplicate profile ID '" + trimAscii(draftAtIndex(entry.second.front()).id) + "': " + joinCommaSeparatedList(owners);
 			return false;
 		}
 
@@ -946,11 +751,8 @@ bool validateDraftsForUi(const std::vector<EditProfileDraft> &drafts, int curren
 		if (entry.second.size() > 1) {
 			std::vector<std::string> owners;
 			for (std::size_t idx : entry.second)
-				if (static_cast<int>(idx) != currentIndex)
-					owners.push_back(profileOwnerLabel(draftAtIndex(idx)));
-			if (currentIndex >= 0 &&
-			    std::find(entry.second.begin(), entry.second.end(),
-			              static_cast<std::size_t>(currentIndex)) != entry.second.end()) {
+				if (static_cast<int>(idx) != currentIndex) owners.push_back(profileOwnerLabel(draftAtIndex(idx)));
+			if (currentIndex >= 0 && std::find(entry.second.begin(), entry.second.end(), static_cast<std::size_t>(currentIndex)) != entry.second.end()) {
 				errorText = "Duplicate profile extension '" + entry.first + "': " + joinCommaSeparatedList(owners);
 				return false;
 			}
@@ -968,16 +770,12 @@ bool saveAndReloadEditProfiles(const std::vector<EditProfileDraft> &drafts, std:
 	std::vector<MRFileExtensionProfile> profilesCandidate;
 	std::string defaultThemePathCandidate;
 
-	if (!draftsToConfiguredState(drafts, defaultsCandidate, profilesCandidate, defaultThemePathCandidate,
-	                             errorText))
-		return false;
-	if (!persistConfiguredSettingsSnapshot(&errorText, &writeReport))
-		return false;
+	if (!draftsToConfiguredState(drafts, defaultsCandidate, profilesCandidate, defaultThemePathCandidate, errorText)) return false;
+	if (!persistConfiguredSettingsSnapshot(&errorText, &writeReport)) return false;
 	mrLogSettingsWriteReport("fe profiles", writeReport);
 	for (MREditWindow *window : allEditWindowsInZOrder())
 		if (window != nullptr && window->getEditor() != nullptr) {
-			if (!window->isReadOnly())
-				window->getEditor()->setInsertModeEnabled(configuredDefaultInsertMode());
+			if (!window->isReadOnly()) window->getEditor()->setInsertModeEnabled(configuredDefaultInsertMode());
 			window->getEditor()->refreshConfiguredVisualSettings();
 		}
 	mrUpdateAllWindowsColorTheme();
@@ -986,22 +784,17 @@ bool saveAndReloadEditProfiles(const std::vector<EditProfileDraft> &drafts, std:
 	return true;
 }
 
-std::vector<std::string> dirtyDraftIds(const std::vector<EditProfileDraft> &initialDrafts,
-                                       const std::vector<EditProfileDraft> &drafts) {
+std::vector<std::string> dirtyDraftIds(const std::vector<EditProfileDraft> &initialDrafts, const std::vector<EditProfileDraft> &drafts) {
 	std::vector<std::string> out;
 	std::size_t count = std::max(initialDrafts.size(), drafts.size());
 	for (std::size_t i = 0; i < count; ++i) {
 		const EditProfileDraft *initial = i < initialDrafts.size() ? &initialDrafts[i] : nullptr;
 		const EditProfileDraft *current = i < drafts.size() ? &drafts[i] : nullptr;
-		if (initial != nullptr && current != nullptr && draftsEqual(*initial, *current))
-			continue;
+		if (initial != nullptr && current != nullptr && draftsEqual(*initial, *current)) continue;
 		std::string id;
-		if (current != nullptr)
-			id = trimAscii(current->id);
-		if (id.empty() && initial != nullptr)
-			id = trimAscii(initial->id);
-		if (id.empty())
-			id = "<empty>";
+		if (current != nullptr) id = trimAscii(current->id);
+		if (id.empty() && initial != nullptr) id = trimAscii(initial->id);
+		if (id.empty()) id = "<empty>";
 		out.push_back(id);
 	}
 	return out;

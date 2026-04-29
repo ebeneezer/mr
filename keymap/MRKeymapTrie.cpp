@@ -7,8 +7,7 @@ namespace {
 constexpr std::size_t kContextCount = static_cast<std::size_t>(MRKeymapContext::Edit) + 1;
 
 bool setTrieError(std::string *errorMessage, const std::string &message) {
-	if (errorMessage != nullptr)
-		*errorMessage = message;
+	if (errorMessage != nullptr) *errorMessage = message;
 	return false;
 }
 } // namespace
@@ -23,12 +22,9 @@ bool MRKeymapTrie::rebuild(std::span<const MRKeymapBindingRecord> bindings, std:
 	roots.assign(kContextCount, 0);
 
 	for (const MRKeymapBindingRecord &binding : bindings) {
-		if (binding.context == MRKeymapContext::None)
-			return setTrieError(errorMessage, "Keymap trie build failed: binding without context.");
-		if (binding.sequence.empty())
-			return setTrieError(errorMessage, "Keymap trie build failed: binding without sequence.");
-		if (binding.target.target.empty())
-			return setTrieError(errorMessage, "Keymap trie build failed: binding without target.");
+		if (binding.context == MRKeymapContext::None) return setTrieError(errorMessage, "Keymap trie build failed: binding without context.");
+		if (binding.sequence.empty()) return setTrieError(errorMessage, "Keymap trie build failed: binding without sequence.");
+		if (binding.target.target.empty()) return setTrieError(errorMessage, "Keymap trie build failed: binding without target.");
 
 		std::size_t nodeIndex = roots[contextIndex(binding.context)];
 		if (nodeIndex == 0) {
@@ -51,22 +47,13 @@ bool MRKeymapTrie::rebuild(std::span<const MRKeymapBindingRecord> bindings, std:
 		}
 
 		Node &node = nodes[nodeIndex];
-		if (node.terminal)
-			return setTrieError(errorMessage, "Keymap trie build failed: duplicate sequence '" +
-			                                     binding.sequence.toString() + "'.");
-		if (!node.edges.empty())
-			return setTrieError(errorMessage, "Keymap trie build failed: terminal/prefix collision at '" +
-			                                     binding.sequence.toString() + "'.");
+		if (node.terminal) return setTrieError(errorMessage, "Keymap trie build failed: duplicate sequence '" + binding.sequence.toString() + "'.");
+		if (!node.edges.empty()) return setTrieError(errorMessage, "Keymap trie build failed: terminal/prefix collision at '" + binding.sequence.toString() + "'.");
 
 		for (std::size_t i = 1; i < binding.sequence.size(); ++i) {
-			std::vector<MRKeymapToken> prefixTokens(binding.sequence.tokens().begin(),
-			                                        binding.sequence.tokens().begin() +
-			                                            static_cast<std::ptrdiff_t>(i));
+			std::vector<MRKeymapToken> prefixTokens(binding.sequence.tokens().begin(), binding.sequence.tokens().begin() + static_cast<std::ptrdiff_t>(i));
 			Decision prefixDecision = decide(binding.context, prefixTokens);
-			if (prefixDecision.kind == DecisionKind::Matched)
-				return setTrieError(errorMessage,
-				                    "Keymap trie build failed: prefix/terminal collision at '" +
-				                        binding.sequence.toString() + "'.");
+			if (prefixDecision.kind == DecisionKind::Matched) return setTrieError(errorMessage, "Keymap trie build failed: prefix/terminal collision at '" + binding.sequence.toString() + "'.");
 		}
 
 		node.terminal = true;
@@ -74,26 +61,22 @@ bool MRKeymapTrie::rebuild(std::span<const MRKeymapBindingRecord> bindings, std:
 		node.description = binding.description;
 	}
 
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 MRKeymapTrie::Decision MRKeymapTrie::decide(MRKeymapContext context, std::span<const MRKeymapToken> sequence) const {
 	Decision decision;
 
-	if (context == MRKeymapContext::None || sequence.empty())
-		return decision;
+	if (context == MRKeymapContext::None || sequence.empty()) return decision;
 	const std::size_t rootIndex = roots[contextIndex(context)];
-	if (rootIndex == 0)
-		return decision;
+	if (rootIndex == 0) return decision;
 
 	std::size_t nodeIndex = rootIndex;
 	for (const MRKeymapToken &token : sequence) {
 		const auto &edges = nodes[nodeIndex].edges;
 		const auto it = std::ranges::find(edges, token, &Edge::token);
-		if (it == edges.end())
-			return decision;
+		if (it == edges.end()) return decision;
 		nodeIndex = it->nextIndex;
 	}
 
@@ -104,7 +87,6 @@ MRKeymapTrie::Decision MRKeymapTrie::decide(MRKeymapContext context, std::span<c
 		decision.description = node.description;
 		return decision;
 	}
-	if (!node.edges.empty())
-		decision.kind = DecisionKind::Pending;
+	if (!node.edges.empty()) decision.kind = DecisionKind::Pending;
 	return decision;
 }

@@ -8,14 +8,11 @@
 namespace {
 MRKeymapResolver g_runtimeKeymapResolver;
 
-const MRKeymapProfile *findActiveProfile(std::span<const MRKeymapProfile> profiles,
-                                         std::string_view activeProfileName) noexcept {
+const MRKeymapProfile *findActiveProfile(std::span<const MRKeymapProfile> profiles, std::string_view activeProfileName) noexcept {
 	const auto activeIt = std::ranges::find(profiles, activeProfileName, &MRKeymapProfile::name);
-	if (activeIt != profiles.end())
-		return &*activeIt;
+	if (activeIt != profiles.end()) return &*activeIt;
 	const auto defaultIt = std::ranges::find(profiles, std::string_view("DEFAULT"), &MRKeymapProfile::name);
-	if (defaultIt != profiles.end())
-		return &*defaultIt;
+	if (defaultIt != profiles.end()) return &*defaultIt;
 	return profiles.empty() ? nullptr : &profiles.front();
 }
 } // namespace
@@ -36,12 +33,9 @@ std::string MRKeymapResolver::sequenceText(std::span<const MRKeymapToken> tokens
 	return text;
 }
 
-bool MRKeymapResolver::rebuild(std::span<const MRKeymapProfile> profiles, std::string_view activeProfileName,
-                               std::string *errorMessage) {
+bool MRKeymapResolver::rebuild(std::span<const MRKeymapProfile> profiles, std::string_view activeProfileName, std::string *errorMessage) {
 	const MRKeymapProfile *activeProfile = findActiveProfile(profiles, activeProfileName);
-	const std::span<const MRKeymapBindingRecord> bindings =
-	    activeProfile != nullptr ? std::span<const MRKeymapBindingRecord>(activeProfile->bindings)
-	                             : std::span<const MRKeymapBindingRecord>();
+	const std::span<const MRKeymapBindingRecord> bindings = activeProfile != nullptr ? std::span<const MRKeymapBindingRecord>(activeProfile->bindings) : std::span<const MRKeymapBindingRecord>();
 
 	resetPending();
 	return trie.rebuild(bindings, errorMessage);
@@ -52,8 +46,7 @@ MRKeymapResolver::Result MRKeymapResolver::resolve(MRKeymapContext context, cons
 	PendingState *state = nullptr;
 
 	result.context = context;
-	if (context == MRKeymapContext::None)
-		return result;
+	if (context == MRKeymapContext::None) return result;
 	state = &pendingStates[contextIndex(context)];
 	if (!state->tokens.empty() && isAbortToken(token)) {
 		result.kind = ResultKind::Aborted;
@@ -91,8 +84,7 @@ MRKeymapResolver::Result MRKeymapResolver::resolve(MRKeymapContext context, cons
 }
 
 bool MRKeymapResolver::hasPending(MRKeymapContext context) const noexcept {
-	if (context == MRKeymapContext::None)
-		return false;
+	if (context == MRKeymapContext::None) return false;
 	return !pendingStates[contextIndex(context)].tokens.empty();
 }
 
@@ -106,6 +98,5 @@ MRKeymapResolver &runtimeKeymapResolver() noexcept {
 }
 
 bool rebuildRuntimeKeymapResolver(std::string *errorMessage) {
-	return g_runtimeKeymapResolver.rebuild(configuredKeymapProfiles(), configuredActiveKeymapProfile(),
-	                                       errorMessage);
+	return g_runtimeKeymapResolver.rebuild(configuredKeymapProfiles(), configuredActiveKeymapProfile(), errorMessage);
 }

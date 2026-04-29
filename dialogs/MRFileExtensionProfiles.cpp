@@ -105,8 +105,7 @@ class TProfileListBox : public TListBox {
 		short oldFocused = focused;
 
 		TListBox::focusItemNum(item);
-		if (focused != oldFocused)
-			dispatchSelectionChanged();
+		if (focused != oldFocused) dispatchSelectionChanged();
 	}
 
   private:
@@ -115,16 +114,14 @@ class TProfileListBox : public TListBox {
 
 		while (target != nullptr && dynamic_cast<TDialog *>(target) == nullptr)
 			target = target->owner;
-		message(target != nullptr ? target : owner, evBroadcast, cmMrSetupFilenameProfilesSelectionChanged,
-		        this);
+		message(target != nullptr ? target : owner, evBroadcast, cmMrSetupFilenameProfilesSelectionChanged, this);
 	}
 };
 
 TAttrPair configuredColorOr(TView *view, unsigned char paletteSlot, ushort fallbackColorIndex) {
 	unsigned char biosAttr = 0;
 
-	if (configuredColorSlotOverride(paletteSlot, biosAttr))
-		return TAttrPair(biosAttr);
+	if (configuredColorSlotOverride(paletteSlot, biosAttr)) return TAttrPair(biosAttr);
 	return view != nullptr ? view->getColor(fallbackColorIndex) : TAttrPair(0x70);
 }
 
@@ -157,8 +154,7 @@ class TInactiveStaticText : public TStaticText {
 
 class TInlineGlyphButton : public TView {
   public:
-	TInlineGlyphButton(const TRect &bounds, const char *glyph, ushort command)
-	    : TView(bounds), mGlyph(glyph != nullptr ? glyph : ""), mCommand(command) {
+	TInlineGlyphButton(const TRect &bounds, const char *glyph, ushort command) : TView(bounds), mGlyph(glyph != nullptr ? glyph : ""), mCommand(command) {
 		options |= ofSelectable;
 		options |= ofFirstClick;
 		eventMask |= evMouseDown | evKeyDown;
@@ -170,8 +166,7 @@ class TInlineGlyphButton : public TView {
 		int x = 0;
 
 		buffer.moveChar(0, ' ', color, size.x);
-		if (size.x > 1)
-			x = (size.x - 1) / 2;
+		if (size.x > 1) x = (size.x - 1) / 2;
 		buffer.moveStr(static_cast<ushort>(x), mGlyph.c_str(), color, size.x - x);
 		writeLine(0, 0, size.x, size.y, buffer);
 	}
@@ -223,15 +218,9 @@ class TNotifyingInputLine : public TInputLine {
 		while (target != nullptr && dynamic_cast<TDialog *>(target) == nullptr)
 			target = target->owner;
 
-		if (currentText() != beforeText)
-			message(target != nullptr ? target : owner, evBroadcast,
-			        cmMrSetupFilenameProfilesFieldChanged, this);
+		if (currentText() != beforeText) message(target != nullptr ? target : owner, evBroadcast, cmMrSetupFilenameProfilesFieldChanged, this);
 
-		if (((state & sfFocused) != 0) != beforeFocused ||
-		    (originalWhat == evBroadcast &&
-		     (originalCommand == cmReleasedFocus || originalCommand == cmReceivedFocus)))
-			message(target != nullptr ? target : owner, evBroadcast,
-			        cmMrSetupFilenameProfilesFieldFocusChanged, this);
+		if (((state & sfFocused) != 0) != beforeFocused || (originalWhat == evBroadcast && (originalCommand == cmReleasedFocus || originalCommand == cmReceivedFocus))) message(target != nullptr ? target : owner, evBroadcast, cmMrSetupFilenameProfilesFieldFocusChanged, this);
 	}
 
   private:
@@ -279,26 +268,20 @@ class TReadOnlyAwareInputLine : public TNotifyingInputLine {
 
   private:
 	static bool isNavigationKey(ushort keyCode) noexcept {
-		return keyCode == kbTab || keyCode == kbShiftTab || keyCode == kbCtrlI || keyCode == kbLeft ||
-		       keyCode == kbRight || keyCode == kbUp || keyCode == kbDown || keyCode == kbHome ||
-		       keyCode == kbEnd || keyCode == kbEsc || keyCode == kbEnter;
+		return keyCode == kbTab || keyCode == kbShiftTab || keyCode == kbCtrlI || keyCode == kbLeft || keyCode == kbRight || keyCode == kbUp || keyCode == kbDown || keyCode == kbHome || keyCode == kbEnd || keyCode == kbEsc || keyCode == kbEnter;
 	}
 
 	bool isMutatingKey(const TEvent &event) const noexcept {
 		ushort keyCode = event.keyDown.keyCode;
 		unsigned char ch = static_cast<unsigned char>(event.keyDown.charScan.charCode);
-		if (isNavigationKey(keyCode))
-			return false;
-		if (keyCode == kbBack || keyCode == kbDel)
-			return true;
+		if (isNavigationKey(keyCode)) return false;
+		if (keyCode == kbBack || keyCode == kbDel) return true;
 		return std::isprint(ch) != 0;
 	}
 
 	void postWarning() const {
-		if (mWarningText.empty())
-			return;
-		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, mWarningText,
-		                              mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
+		if (mWarningText.empty()) return;
+		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, mWarningText, mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
 	}
 
 	bool mReadOnly = false;
@@ -308,8 +291,7 @@ class TReadOnlyAwareInputLine : public TNotifyingInputLine {
 std::string readInputLineString(TInputLine *inputLine, std::size_t capacity) {
 	std::vector<char> buffer(capacity, '\0');
 
-	if (inputLine == nullptr)
-		return std::string();
+	if (inputLine == nullptr) return std::string();
 	inputLine->getData(buffer.data());
 	return readRecordField(buffer.data());
 }
@@ -317,31 +299,25 @@ std::string readInputLineString(TInputLine *inputLine, std::size_t capacity) {
 void writeInputLineString(TInputLine *inputLine, const std::string &value, std::size_t capacity) {
 	std::vector<char> buffer(capacity, '\0');
 
-	if (inputLine == nullptr)
-		return;
+	if (inputLine == nullptr) return;
 	writeRecordField(buffer.data(), buffer.size(), value);
 	inputLine->setData(buffer.data());
 }
 
-
 std::string readCurrentWorkingDirectory() {
 	char cwd[PATH_MAX];
 
-	if (::getcwd(cwd, sizeof(cwd)) == nullptr)
-		return std::string();
+	if (::getcwd(cwd, sizeof(cwd)) == nullptr) return std::string();
 	return std::string(cwd);
 }
 
-bool browseMrmacFileUri(MRDialogHistoryScope scope, const char *title, const std::string &currentValue,
-                        std::string &selectedUri) {
+bool browseMrmacFileUri(MRDialogHistoryScope scope, const char *title, const std::string &currentValue, std::string &selectedUri) {
 	char fileName[MAXPATH];
 	ushort result;
 
 	mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.mrmac", currentValue);
-	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.mrmac", title, "~N~ame",
-	                                                        fdOKButton, fileName);
-	if (result == cmCancel)
-		return false;
+	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.mrmac", title, "~N~ame", fdOKButton, fileName);
+	if (result == cmCancel) return false;
 	selectedUri = normalizeConfiguredPathInput(fileName);
 	return !selectedUri.empty();
 }
@@ -352,24 +328,18 @@ bool browseDirectoryPath(MRDialogHistoryScope scope, const std::string &currentV
 	std::string picked;
 	ushort result;
 
-	if (seed.empty())
-		seed = configuredLastFileDialogPath(scope);
-	if (!seed.empty())
-		(void)::chdir(seed.c_str());
+	if (seed.empty()) seed = configuredLastFileDialogPath(scope);
+	if (!seed.empty()) (void)::chdir(seed.c_str());
 	result = mr::dialogs::execDialogRaw(mr::dialogs::createDirectoryDialog(cdNormal));
 	picked = readCurrentWorkingDirectory();
-	if (!originalCwd.empty())
-		(void)::chdir(originalCwd.c_str());
-	if (result == cmCancel)
-		return false;
+	if (!originalCwd.empty()) (void)::chdir(originalCwd.c_str());
+	if (result == cmCancel) return false;
 	selectedPath = normalizeConfiguredPathInput(picked);
-	if (!selectedPath.empty())
-		rememberLoadDialogPath(scope, selectedPath.c_str());
+	if (!selectedPath.empty()) rememberLoadDialogPath(scope, selectedPath.c_str());
 	return !selectedPath.empty();
 }
 
-bool browseColorThemeUri(MRDialogHistoryScope scope, const std::string &currentValue,
-                         std::string &selectedUri) {
+bool browseColorThemeUri(MRDialogHistoryScope scope, const std::string &currentValue, std::string &selectedUri) {
 	char fileName[MAXPATH];
 	ushort result = cmCancel;
 
@@ -377,22 +347,18 @@ bool browseColorThemeUri(MRDialogHistoryScope scope, const std::string &currentV
 	if (trimAscii(currentValue).empty() && configuredLastFileDialogPath(scope).empty()) {
 		std::string macroPath = normalizeConfiguredPathInput(configuredMacroDirectoryPath());
 		if (!macroPath.empty()) {
-			if (macroPath.back() != '/')
-				macroPath += '/';
+			if (macroPath.back() != '/') macroPath += '/';
 			macroPath += "*.mrmac";
 			writeRecordField(fileName, sizeof(fileName), macroPath);
 		}
 	}
-	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.mrmac", "Color theme file",
-	                                                        "~N~ame", fdOKButton, fileName);
-	if (result == cmCancel)
-		return false;
+	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.mrmac", "Color theme file", "~N~ame", fdOKButton, fileName);
+	if (result == cmCancel) return false;
 	selectedUri = normalizeConfiguredPathInput(fileName);
 	return true;
 }
 
-FileExtensionEditorSettingsPanelConfig makeEditorSettingsPanelConfig(int dialogWidth, int labelLeft, int inputLeft, int inputRight,
-                                                             int topY) {
+FileExtensionEditorSettingsPanelConfig makeEditorSettingsPanelConfig(int dialogWidth, int labelLeft, int inputLeft, int inputRight, int topY) {
 	FileExtensionEditorSettingsPanelConfig panelConfig;
 	panelConfig.topY = topY;
 	panelConfig.dialogWidth = dialogWidth;
@@ -408,36 +374,26 @@ FileExtensionEditorSettingsPanelConfig makeEditorSettingsPanelConfig(int dialogW
 	return panelConfig;
 }
 
-
 void clearDialogStatus() {
 	mr::messageline::clearOwner(mr::messageline::Owner::DialogValidation);
 }
 
 void postDialogError(const std::string &text) {
-	if (text.empty())
-		return;
-	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text,
-	                              mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+	if (text.empty()) return;
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 }
 
 class TEditProfilesDialog : public MRScrollableDialog {
   public:
-	TEditProfilesDialog(const std::vector<EditProfileDraft> &workingDrafts)
-	    : TWindowInit(&TDialog::initFrame),
-	      MRScrollableDialog(centeredSetupDialogRect(kDialogWidth, kVisibleHeight), "FILENAME EXTENSIONS",
-	                         kDialogWidth, kVirtualHeight),
-	      draftList(workingDrafts), editorSettingsPanel(makeEditorSettingsPanelConfig(kDialogWidth - 1, 37,
-	                                                                                 56, kDialogWidth - 2, 6)) {
+	TEditProfilesDialog(const std::vector<EditProfileDraft> &workingDrafts) : TWindowInit(&TDialog::initFrame), MRScrollableDialog(centeredSetupDialogRect(kDialogWidth, kVisibleHeight), "FILENAME EXTENSIONS", kDialogWidth, kVirtualHeight), draftList(workingDrafts), editorSettingsPanel(makeEditorSettingsPanelConfig(kDialogWidth - 1, 37, 56, kDialogWidth - 2, 6)) {
 		buildViews();
 		setDialogValidationHook([this]() { return validateDialogValues(); });
-		if (!draftList.empty())
-			mCurrentIndex = 0;
+		if (!draftList.empty()) mCurrentIndex = 0;
 		refreshProfileList();
 		loadCurrentDraftToWidgets();
 		refreshValidationState();
 		initScrollIfNeeded();
-		if (mProfileList != nullptr)
-			mProfileList->select();
+		if (mProfileList != nullptr) mProfileList->select();
 		scrollToOrigin();
 	}
 
@@ -461,9 +417,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		ushort originalKey = event.what == evKeyDown ? event.keyDown.keyCode : 0;
 
 		MRScrollableDialog::handleEvent(event);
-		if (originalWhat == evBroadcast && event.what == evBroadcast &&
-		    event.message.command == cmMrSetupFilenameProfilesSelectionChanged &&
-		    event.message.infoPtr == mProfileList) {
+		if (originalWhat == evBroadcast && event.what == evBroadcast && event.message.command == cmMrSetupFilenameProfilesSelectionChanged && event.message.infoPtr == mProfileList) {
 			changeSelection(selectedListIndex(), false);
 			clearEvent(event);
 			return;
@@ -514,20 +468,9 @@ class TEditProfilesDialog : public MRScrollableDialog {
 					break;
 			}
 		}
-		if (originalWhat == evCommand || originalWhat == evKeyDown || originalWhat == evMouseDown ||
-		    originalWhat == evMouseUp || originalWhat == evMouseMove)
-			refreshValidationState();
-		if (originalWhat == evBroadcast &&
-		    (originalCommand == cmReleasedFocus || originalCommand == cmReceivedFocus ||
-		     originalCommand == cmMrSetupFilenameProfilesFieldChanged ||
-		     originalCommand == cmMrSetupFilenameProfilesFieldFocusChanged ||
-		     originalCommand == cmMrFileExtensionEditorSettingsPanelChanged ||
-		     originalCommand == cmMrFileExtensionEditorSettingsPanelFocusChanged) &&
-		    originalInfoPtr != mProfileList)
-			refreshValidationState();
-		if (originalWhat == evKeyDown &&
-		    (originalKey == kbTab || originalKey == kbCtrlI || originalKey == kbShiftTab))
-			refreshValidationState();
+		if (originalWhat == evCommand || originalWhat == evKeyDown || originalWhat == evMouseDown || originalWhat == evMouseUp || originalWhat == evMouseMove) refreshValidationState();
+		if (originalWhat == evBroadcast && (originalCommand == cmReleasedFocus || originalCommand == cmReceivedFocus || originalCommand == cmMrSetupFilenameProfilesFieldChanged || originalCommand == cmMrSetupFilenameProfilesFieldFocusChanged || originalCommand == cmMrFileExtensionEditorSettingsPanelChanged || originalCommand == cmMrFileExtensionEditorSettingsPanelFocusChanged) && originalInfoPtr != mProfileList) refreshValidationState();
+		if (originalWhat == evKeyDown && (originalKey == kbTab || originalKey == kbCtrlI || originalKey == kbShiftTab)) refreshValidationState();
 	}
 
   private:
@@ -549,8 +492,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 	void setInputReadOnly(TInputLine *input, bool readOnly, const std::string &warningText) {
 		TReadOnlyAwareInputLine *view = dynamic_cast<TReadOnlyAwareInputLine *>(input);
-		if (view == nullptr)
-			return;
+		if (view == nullptr) return;
 		view->setReadOnly(readOnly);
 		view->setWarningText(warningText);
 	}
@@ -574,17 +516,10 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	}
 
 	void buildViews() {
-		const std::array listButtons{
-		    mr::dialogs::DialogButtonSpec{"Ne~w~", cmMrSetupFilenameProfilesAdd, bfNormal},
-		    mr::dialogs::DialogButtonSpec{"Cop~y~", cmMrSetupFilenameProfilesCopy, bfNormal},
-		    mr::dialogs::DialogButtonSpec{"De~l~ete", cmMrSetupFilenameProfilesDelete, bfNormal}};
-		const std::array bottomButtons{
-		    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault},
-		    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal},
-		    mr::dialogs::DialogButtonSpec{"~H~elp", cmMrSetupFilenameProfilesHelp, bfNormal}};
+		const std::array listButtons{mr::dialogs::DialogButtonSpec{"Ne~w~", cmMrSetupFilenameProfilesAdd, bfNormal}, mr::dialogs::DialogButtonSpec{"Cop~y~", cmMrSetupFilenameProfilesCopy, bfNormal}, mr::dialogs::DialogButtonSpec{"De~l~ete", cmMrSetupFilenameProfilesDelete, bfNormal}};
+		const std::array bottomButtons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmMrSetupFilenameProfilesHelp, bfNormal}};
 		std::vector<TButton *> listButtonViews;
-		const mr::dialogs::DialogButtonRowMetrics bottomMetrics =
-		    mr::dialogs::measureUniformButtonRow(bottomButtons, 2);
+		const mr::dialogs::DialogButtonRowMetrics bottomMetrics = mr::dialogs::measureUniformButtonRow(bottomButtons, 2);
 		const int listLeft = 2;
 		const int listWidth = 29;
 		const int listBottom = 13;
@@ -602,10 +537,8 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		mProfileListScrollBar = addScrollBar(TRect(listLeft + listWidth, 3, listLeft + listWidth + 1, listBottom));
 		mProfileList = addProfileListBox(TRect(listLeft, 3, listLeft + listWidth, listBottom), mProfileListScrollBar);
 
-		mr::dialogs::addManagedUniformButtonRow(*this, listLeft, buttonRow, 0, listButtons, 0,
-		                                        &listButtonViews);
-		if (listButtonViews.size() >= 3)
-			mDeleteButton = listButtonViews[2];
+		mr::dialogs::addManagedUniformButtonRow(*this, listLeft, buttonRow, 0, listButtons, 0, &listButtonViews);
+		if (listButtonViews.size() >= 3) mDeleteButton = listButtonViews[2];
 
 		mProfileIdLabel = addLabel(TRect(rightLeft, 2, fieldLeft - 1, 3), "Profile ID:");
 		mProfileIdField = addInput(TRect(fieldLeft, 2, fieldRight, 3), kProfileIdFieldSize - 1);
@@ -618,8 +551,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 		mProfileColorThemeLabel = addLabel(TRect(rightLeft, 5, fieldLeft - 1, 6), "Colortheme:");
 		mProfileColorThemeField = addInput(TRect(fieldLeft, 5, fieldRight, 6), kProfileColorThemeFieldSize - 1);
-		mProfileColorThemeBrowseButton = addGlyphButton(TRect(colorGlyphLeft, 5, colorGlyphRight, 6),
-		                                             cmMrSetupFilenameProfilesBrowseColorTheme);
+		mProfileColorThemeBrowseButton = addGlyphButton(TRect(colorGlyphLeft, 5, colorGlyphRight, 6), cmMrSetupFilenameProfilesBrowseColorTheme);
 
 		editorSettingsPanel.buildViews(*this);
 
@@ -627,13 +559,11 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	}
 
 	void setLabelInactive(TInactiveStaticText *label, bool inactive) {
-		if (label != nullptr)
-			label->setInactive(inactive ? True : False);
+		if (label != nullptr) label->setInactive(inactive ? True : False);
 	}
 
 	void applyFieldState(TInputLine *input, bool readOnly, const std::string &warningText) {
-		if (input == nullptr)
-			return;
+		if (input == nullptr) return;
 		input->setState(sfVisible, True);
 		input->setState(sfDisabled, False);
 		setInputReadOnly(input, readOnly, warningText);
@@ -660,8 +590,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		setLabelInactive(mProfileNameLabel, false);
 		setLabelInactive(mProfileExtensionsLabel, isDefault);
 		setLabelInactive(mProfileColorThemeLabel, false);
-		if (mDeleteButton != nullptr)
-			mDeleteButton->setState(sfDisabled, isDefault ? True : False);
+		if (mDeleteButton != nullptr) mDeleteButton->setState(sfDisabled, isDefault ? True : False);
 	}
 
 	void setValidationState(bool valid, const std::string &errorText) {
@@ -670,8 +599,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	}
 
 	void saveWidgetsToCurrentDraft() {
-		if (mCurrentIndex < 0 || mCurrentIndex >= static_cast<int>(draftList.size()))
-			return;
+		if (mCurrentIndex < 0 || mCurrentIndex >= static_cast<int>(draftList.size())) return;
 		EditProfileDraft &draft = draftList[mCurrentIndex];
 
 		editorSettingsPanel.saveFieldsToRecord(draft.settingsRecord);
@@ -690,8 +618,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 	EditProfileDraft collectCurrentDraftFromWidgets() const {
 		EditProfileDraft draft;
-		if (mCurrentIndex < 0 || mCurrentIndex >= static_cast<int>(draftList.size()))
-			return draft;
+		if (mCurrentIndex < 0 || mCurrentIndex >= static_cast<int>(draftList.size())) return draft;
 		draft = draftList[mCurrentIndex];
 		editorSettingsPanel.saveFieldsToRecord(draft.settingsRecord);
 		if (draft.isDefault) {
@@ -709,8 +636,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	}
 
 	void loadCurrentDraftToWidgets() {
-		if (mCurrentIndex < 0 || mCurrentIndex >= static_cast<int>(draftList.size()))
-			return;
+		if (mCurrentIndex < 0 || mCurrentIndex >= static_cast<int>(draftList.size())) return;
 		const EditProfileDraft &draft = draftList[mCurrentIndex];
 
 		loadCurrentDraftFieldValues(draft);
@@ -724,17 +650,14 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		int selection = mCurrentIndex;
 		std::size_t idWidth = std::strlen(kDefaultProfileId);
 
-		if (items == nullptr || mProfileList == nullptr)
-			return;
+		if (items == nullptr || mProfileList == nullptr) return;
 		for (const EditProfileDraft &draft : draftList)
 			idWidth = std::max(idWidth, trimAscii(draft.isDefault ? std::string(kDefaultProfileId) : draft.id).size());
 		idWidth = std::min<std::size_t>(18, std::max<std::size_t>(7, idWidth));
 		for (const EditProfileDraft &draft : draftList)
 			items->insert(dupCString(buildProfileListLabel(draft, idWidth)));
-		if (selection < 0 && !draftList.empty())
-			selection = 0;
-		if (selection >= static_cast<int>(draftList.size()))
-			selection = draftList.empty() ? 0 : static_cast<int>(draftList.size()) - 1;
+		if (selection < 0 && !draftList.empty()) selection = 0;
+		if (selection >= static_cast<int>(draftList.size())) selection = draftList.empty() ? 0 : static_cast<int>(draftList.size()) - 1;
 		data.items = items;
 		data.selection = static_cast<ushort>(std::max(0, selection));
 		mProfileList->setData(&data);
@@ -743,11 +666,9 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	int selectedListIndex() const {
 		TListBoxRec data;
 
-		if (mProfileList == nullptr || draftList.empty())
-			return -1;
+		if (mProfileList == nullptr || draftList.empty()) return -1;
 		mProfileList->getData((void *)&data);
-		if (data.selection >= draftList.size())
-			return static_cast<int>(draftList.size()) - 1;
+		if (data.selection >= draftList.size()) return static_cast<int>(draftList.size()) - 1;
 		return static_cast<int>(data.selection);
 	}
 
@@ -757,14 +678,12 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	}
 
 	void changeSelection(int index, bool moveFocusToFields) {
-		if (index == mCurrentIndex || index < 0 || index >= static_cast<int>(draftList.size()))
-			return;
+		if (index == mCurrentIndex || index < 0 || index >= static_cast<int>(draftList.size())) return;
 		saveWidgetsToCurrentDraft();
 		mCurrentIndex = index;
 		loadCurrentDraftToWidgets();
 		scrollToOrigin();
-		if (moveFocusToFields)
-			selectTopField();
+		if (moveFocusToFields) selectTopField();
 		else if (mProfileList != nullptr)
 			mProfileList->select();
 		refreshValidationState();
@@ -773,8 +692,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	void selectTopField() {
 		scrollToOrigin();
 		if (mCurrentIndex >= 0 && mCurrentIndex < static_cast<int>(draftList.size()) && draftList[mCurrentIndex].isDefault) {
-			if (mProfileNameField != nullptr)
-				mProfileNameField->select();
+			if (mProfileNameField != nullptr) mProfileNameField->select();
 		} else if (mProfileIdField != nullptr)
 			mProfileIdField->select();
 		else
@@ -792,8 +710,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	}
 
 	void copyCurrentProfile() {
-		if (mCurrentIndex < 0 || mCurrentIndex >= static_cast<int>(draftList.size()))
-			return;
+		if (mCurrentIndex < 0 || mCurrentIndex >= static_cast<int>(draftList.size())) return;
 		saveWidgetsToCurrentDraft();
 		draftList.push_back(makeCopiedDraft(draftList[mCurrentIndex], draftList));
 		mCurrentIndex = static_cast<int>(draftList.size()) - 1;
@@ -804,19 +721,14 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	}
 
 	void deleteCurrentProfile() {
-		if (mCurrentIndex <= 0 || mCurrentIndex >= static_cast<int>(draftList.size()))
-			return;
+		if (mCurrentIndex <= 0 || mCurrentIndex >= static_cast<int>(draftList.size())) return;
 		{
 			const EditProfileDraft &draft = draftList[mCurrentIndex];
-			std::string caption = trimAscii(draft.name).empty() ? trimAscii(draft.id)
-			                                              : trimAscii(draft.id) + " / " + trimAscii(draft.name);
-			if (messageBox(mfConfirmation | mfYesButton | mfNoButton, "Delete profile:\n%s",
-			               caption.c_str()) != cmYes)
-				return;
+			std::string caption = trimAscii(draft.name).empty() ? trimAscii(draft.id) : trimAscii(draft.id) + " / " + trimAscii(draft.name);
+			if (messageBox(mfConfirmation | mfYesButton | mfNoButton, "Delete profile:\n%s", caption.c_str()) != cmYes) return;
 		}
 		draftList.erase(draftList.begin() + mCurrentIndex);
-		if (mCurrentIndex >= static_cast<int>(draftList.size()))
-			mCurrentIndex = static_cast<int>(draftList.size()) - 1;
+		if (mCurrentIndex >= static_cast<int>(draftList.size())) mCurrentIndex = static_cast<int>(draftList.size()) - 1;
 		setCurrentIndex(mCurrentIndex);
 		loadCurrentDraftToWidgets();
 		selectTopField();
@@ -824,12 +736,10 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	}
 
 	void browseCurrentColorTheme() {
-		if (mCurrentIndex < 0 || mCurrentIndex >= static_cast<int>(draftList.size()))
-			return;
+		if (mCurrentIndex < 0 || mCurrentIndex >= static_cast<int>(draftList.size())) return;
 		std::string selectedUri;
 		std::string currentValue = readInputLineString(mProfileColorThemeField, kProfileColorThemeFieldSize);
-		if (!browseColorThemeUri(MRDialogHistoryScope::ExtensionThemeFile, currentValue, selectedUri))
-			return;
+		if (!browseColorThemeUri(MRDialogHistoryScope::ExtensionThemeFile, currentValue, selectedUri)) return;
 		writeInputLineString(mProfileColorThemeField, selectedUri, kProfileColorThemeFieldSize);
 		saveWidgetsToCurrentDraft();
 		refreshValidationState();
@@ -837,9 +747,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 	void browseCurrentPostLoadMacro() {
 		std::string selectedUri;
-		if (!browseMrmacFileUri(MRDialogHistoryScope::ExtensionPostLoadMacro, "Select post-load macro",
-		                        editorSettingsPanel.postLoadMacroValue(), selectedUri))
-			return;
+		if (!browseMrmacFileUri(MRDialogHistoryScope::ExtensionPostLoadMacro, "Select post-load macro", editorSettingsPanel.postLoadMacroValue(), selectedUri)) return;
 		editorSettingsPanel.setPostLoadMacroValue(selectedUri);
 		saveWidgetsToCurrentDraft();
 		refreshValidationState();
@@ -847,9 +755,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 	void browseCurrentPreSaveMacro() {
 		std::string selectedUri;
-		if (!browseMrmacFileUri(MRDialogHistoryScope::ExtensionPreSaveMacro, "Select pre-save macro",
-		                        editorSettingsPanel.preSaveMacroValue(), selectedUri))
-			return;
+		if (!browseMrmacFileUri(MRDialogHistoryScope::ExtensionPreSaveMacro, "Select pre-save macro", editorSettingsPanel.preSaveMacroValue(), selectedUri)) return;
 		editorSettingsPanel.setPreSaveMacroValue(selectedUri);
 		saveWidgetsToCurrentDraft();
 		refreshValidationState();
@@ -857,9 +763,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 	void browseCurrentDefaultPath() {
 		std::string selectedPath;
-		if (!browseDirectoryPath(MRDialogHistoryScope::ExtensionDefaultPath,
-		                        editorSettingsPanel.defaultPathValue(), selectedPath))
-			return;
+		if (!browseDirectoryPath(MRDialogHistoryScope::ExtensionDefaultPath, editorSettingsPanel.defaultPathValue(), selectedPath)) return;
 		editorSettingsPanel.setDefaultPathValue(selectedPath);
 		saveWidgetsToCurrentDraft();
 		refreshValidationState();
@@ -918,7 +822,7 @@ void showEditProfilesHelpDialog() {
 	}
 }
 
-} // namespace MRFileExtensionProfilesInternal
+} // namespace
 
 void runFileExtensionProfilesDialogFlow() {
 	std::vector<EditProfileDraft> baselineDrafts;
@@ -941,23 +845,21 @@ void runFileExtensionProfilesDialogFlow() {
 		std::string errorText;
 		TEditProfilesDialog *dialog = new TEditProfilesDialog(workingDrafts);
 
-		if (dialog == nullptr)
-			return;
+		if (dialog == nullptr) return;
 		result = dialog->run(editedDrafts);
 		TObject::destroy(dialog);
-		const bool changed =
-		    mr::dialogs::isDialogDraftDirty(baselineDrafts, editedDrafts, draftListsEqual);
+		const bool changed = mr::dialogs::isDialogDraftDirty(baselineDrafts, editedDrafts, draftListsEqual);
 		switch (result) {
 			case cmMrSetupFilenameProfilesHelp:
 				showEditProfilesHelpDialog();
 				break;
 
 			case cmOK:
-					workingDrafts = editedDrafts;
-					if (!saveAndReloadEditProfiles(workingDrafts, errorText)) {
-						postDialogError(errorText);
-						break;
-					}
+				workingDrafts = editedDrafts;
+				if (!saveAndReloadEditProfiles(workingDrafts, errorText)) {
+					postDialogError(errorText);
+					break;
+				}
 				mrUpdateAllWindowsColorTheme();
 				baselineDrafts = workingDrafts;
 				running = false;
@@ -968,16 +870,13 @@ void runFileExtensionProfilesDialogFlow() {
 				if (changed) {
 					workingDrafts = editedDrafts;
 					std::vector<std::string> dirtyIds = dirtyDraftIds(baselineDrafts, editedDrafts);
-					mr::dialogs::UnsavedChangesChoice discardResult =
-					    mr::dialogs::runDialogDirtyListGating(
-					        "UNSAVED PROFILES", "Discard changed filename-extension profiles?",
-					        "Dirty profile IDs:", dirtyIds, "~S~ave All");
-						if (discardResult == mr::dialogs::UnsavedChangesChoice::Save) {
-							workingDrafts = editedDrafts;
-							if (!saveAndReloadEditProfiles(workingDrafts, errorText)) {
-								postDialogError(errorText);
-								break;
-							}
+					mr::dialogs::UnsavedChangesChoice discardResult = mr::dialogs::runDialogDirtyListGating("UNSAVED PROFILES", "Discard changed filename-extension profiles?", "Dirty profile IDs:", dirtyIds, "~S~ave All");
+					if (discardResult == mr::dialogs::UnsavedChangesChoice::Save) {
+						workingDrafts = editedDrafts;
+						if (!saveAndReloadEditProfiles(workingDrafts, errorText)) {
+							postDialogError(errorText);
+							break;
+						}
 						mrUpdateAllWindowsColorTheme();
 						running = false;
 						break;

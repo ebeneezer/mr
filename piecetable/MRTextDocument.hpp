@@ -146,7 +146,7 @@ class AppendBuffer {
 
 	[[nodiscard]] std::string sliceText(TextSpan span) const;
 
- private:
+  private:
 	std::string mText;
 };
 
@@ -194,8 +194,7 @@ struct EditOperation {
 	EditOperation() noexcept : kind(EditKind::Replace), range(), text() {
 	}
 
-	EditOperation(EditKind aKind, Range aRange, std::string_view aText)
-	    : kind(aKind), range(aRange), text(aText) {
+	EditOperation(EditKind aKind, Range aRange, std::string_view aText) : kind(aKind), range(aRange), text(aText) {
 	}
 };
 
@@ -241,8 +240,7 @@ struct StagedEditOperation {
 	StagedEditOperation() noexcept : kind(EditKind::Replace), range(), span() {
 	}
 
-	StagedEditOperation(EditKind aKind, Range aRange, TextSpan aSpan) noexcept
-	    : kind(aKind), range(aRange), span(aSpan) {
+	StagedEditOperation(EditKind aKind, Range aRange, TextSpan aSpan) noexcept : kind(aKind), range(aRange), span(aSpan) {
 	}
 };
 
@@ -251,16 +249,13 @@ class StagedEditTransaction {
 	StagedEditTransaction() noexcept : mBaseVersion(0), mLabel(), mAddBuffer(), mOperations() {
 	}
 
-	explicit StagedEditTransaction(std::size_t aBaseVersion, std::string_view label = {})
-	    : mBaseVersion(aBaseVersion), mLabel(label), mAddBuffer(), mOperations() {
+	explicit StagedEditTransaction(std::size_t aBaseVersion, std::string_view label = {}) : mBaseVersion(aBaseVersion), mLabel(label), mAddBuffer(), mOperations() {
 	}
 
-	explicit StagedEditTransaction(const Snapshot &snapshot, std::string_view label = {})
-	    : mBaseVersion(snapshot.version), mLabel(label), mAddBuffer(), mOperations() {
+	explicit StagedEditTransaction(const Snapshot &snapshot, std::string_view label = {}) : mBaseVersion(snapshot.version), mLabel(label), mAddBuffer(), mOperations() {
 	}
 
-	explicit StagedEditTransaction(const ReadSnapshot &snapshot,
-	                               std::string_view label = {});
+	explicit StagedEditTransaction(const ReadSnapshot &snapshot, std::string_view label = {});
 
 	std::size_t baseVersion() const noexcept {
 		return mBaseVersion;
@@ -314,8 +309,7 @@ struct DocumentChangeSet {
 	std::size_t oldVersion;
 	std::size_t newVersion;
 
-	DocumentChangeSet() noexcept
-	    : changed(false), touchedRange(), oldLength(0), newLength(0), oldVersion(0), newVersion(0) {
+	DocumentChangeSet() noexcept : changed(false), touchedRange(), oldLength(0), newLength(0), oldVersion(0), newVersion(0) {
 	}
 };
 
@@ -331,8 +325,7 @@ struct CommitResult {
 	std::size_t actualVersion;
 	DocumentChangeSet change;
 
-	CommitResult() noexcept
-	    : status(CommitStatus::NoOp), expectedVersion(0), actualVersion(0), change() {
+	CommitResult() noexcept : status(CommitStatus::NoOp), expectedVersion(0), actualVersion(0), change() {
 	}
 
 	[[nodiscard]] bool applied() const noexcept {
@@ -366,8 +359,7 @@ struct LineIndexCheckpoint {
 	LineIndexCheckpoint() noexcept : offset(0), lineIndex(0) {
 	}
 
-	LineIndexCheckpoint(Offset anOffset, std::size_t aLineIndex) noexcept
-	    : offset(anOffset), lineIndex(aLineIndex) {
+	LineIndexCheckpoint(Offset anOffset, std::size_t aLineIndex) noexcept : offset(anOffset), lineIndex(aLineIndex) {
 	}
 };
 
@@ -378,9 +370,7 @@ struct LineIndexWarmupData {
 	bool lazyLineIndexComplete;
 	std::size_t lazyTotalLineCount;
 
-	LineIndexWarmupData() noexcept
-	    : checkpoints(), lazyIndexedOffset(0), lazyIndexedLine(0), lazyLineIndexComplete(false),
-	      lazyTotalLineCount(1) {
+	LineIndexWarmupData() noexcept : checkpoints(), lazyIndexedOffset(0), lazyIndexedLine(0), lazyLineIndexComplete(false), lazyTotalLineCount(1) {
 	}
 };
 
@@ -426,21 +416,20 @@ class ReadSnapshot {
 	[[nodiscard]] std::size_t column(Offset pos) const noexcept;
 	[[nodiscard]] std::string lineText(Offset pos) const;
 	[[nodiscard]] LineIndexWarmupData completeLineIndexWarmup() const;
-	bool completeLineIndexWarmup(LineIndexWarmupData &warmup, std::stop_token stopToken,
-	                             const std::atomic_bool *cancelFlag = nullptr) const;
+	bool completeLineIndexWarmup(LineIndexWarmupData &warmup, std::stop_token stopToken, const std::atomic_bool *cancelFlag = nullptr) const;
 
   private:
 	friend class TextDocument;
 
-		bool isLineBreakChar(char ch) const noexcept;
-		bool hasDirectOriginalView() const noexcept;
-		const char *directTextData() const noexcept;
-		void resetLazyLineIndex() noexcept;
-		bool advanceLine(Offset &offset) const noexcept;
-		bool directAdvanceLine(Offset &offset) const noexcept;
-		void ensureLazyIndexSeeded() const noexcept;
-		void advanceLazyIndexByStride() const noexcept;
-		void ensureLazyIndexForLine(std::size_t targetLine) const noexcept;
+	bool isLineBreakChar(char ch) const noexcept;
+	bool hasDirectOriginalView() const noexcept;
+	const char *directTextData() const noexcept;
+	void resetLazyLineIndex() noexcept;
+	bool advanceLine(Offset &offset) const noexcept;
+	bool directAdvanceLine(Offset &offset) const noexcept;
+	void ensureLazyIndexSeeded() const noexcept;
+	void advanceLazyIndexByStride() const noexcept;
+	void ensureLazyIndexForLine(std::size_t targetLine) const noexcept;
 	void ensureLazyIndexForOffset(Offset targetOffset) const noexcept;
 	void ensureLazyIndexComplete() const noexcept;
 	const char *originalData() const noexcept;
@@ -551,20 +540,19 @@ class TextDocument {
 	const char *originalData() const noexcept;
 	bool setTextNoVersionBump(std::string_view text);
 	bool applyOperationNoVersionBump(const EditOperation &operation);
-	bool applyStagedOperationNoVersionBump(const StagedEditOperation &operation,
-	                                       const StagedAddBuffer &buffer);
+	bool applyStagedOperationNoVersionBump(const StagedEditOperation &operation, const StagedAddBuffer &buffer);
 	bool replaceNoVersionBump(Range range, std::string_view text);
-		bool hasDirectOriginalView() const noexcept;
-		const char *directTextData() const noexcept;
-		void resetLazyLineIndex() noexcept;
-		bool advanceLine(Offset &offset) const noexcept;
-		bool directAdvanceLine(Offset &offset) const noexcept;
-		void ensureLazyIndexSeeded() const noexcept;
-		void advanceLazyIndexByStride() const noexcept;
-		void ensureLazyIndexForLine(std::size_t targetLine) const noexcept;
-		void ensureLazyIndexForOffset(Offset targetOffset) const noexcept;
-		void ensureLazyIndexComplete() const noexcept;
-		void invalidateLazyLineIndexFrom(Offset offset) noexcept;
+	bool hasDirectOriginalView() const noexcept;
+	const char *directTextData() const noexcept;
+	void resetLazyLineIndex() noexcept;
+	bool advanceLine(Offset &offset) const noexcept;
+	bool directAdvanceLine(Offset &offset) const noexcept;
+	void ensureLazyIndexSeeded() const noexcept;
+	void advanceLazyIndexByStride() const noexcept;
+	void ensureLazyIndexForLine(std::size_t targetLine) const noexcept;
+	void ensureLazyIndexForOffset(Offset targetOffset) const noexcept;
+	void ensureLazyIndexComplete() const noexcept;
+	void invalidateLazyLineIndexFrom(Offset offset) noexcept;
 
 	std::size_t splitAt(Offset offset);
 	bool eraseNoVersionBump(Range range);

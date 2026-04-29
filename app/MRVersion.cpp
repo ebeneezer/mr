@@ -11,7 +11,7 @@ namespace {
 constexpr char kMrDisplayVersion[] = "0.2.0-dev";
 constexpr char kBuildLabel[] = " (build ";
 constexpr char kBuildSuffix[] = ")";
-}
+} // namespace
 
 const char *mrDisplayVersion() noexcept {
 	return kMrDisplayVersion;

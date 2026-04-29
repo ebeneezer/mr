@@ -27,7 +27,6 @@
 
 namespace {
 
-
 constexpr uint kAnimationTickMs = 100;
 constexpr uint kQuoteRotateMs = 10000;
 constexpr uint kDoneLongPressMs = 700;
@@ -50,18 +49,14 @@ std::vector<std::string> wrapQuoteText(const std::string &text, int maxWidth) {
 
 	while (in >> word) {
 		std::string candidate = current.empty() ? word : current + " " + word;
-		if (strwidth(candidate.c_str()) <= maxWidth)
-			current = candidate;
+		if (strwidth(candidate.c_str()) <= maxWidth) current = candidate;
 		else {
-			if (!current.empty())
-				lines.push_back(current);
+			if (!current.empty()) lines.push_back(current);
 			current = word;
 		}
 	}
-	if (!current.empty())
-		lines.push_back(current);
-	if (lines.empty())
-		lines.push_back(std::string());
+	if (!current.empty()) lines.push_back(current);
+	if (lines.empty()) lines.push_back(std::string());
 	return lines;
 }
 
@@ -88,8 +83,7 @@ std::string normalizeSpaces(const std::string &value) {
 			pendingSpace = true;
 			continue;
 		}
-		if (pendingSpace && hasOutput)
-			out << ' ';
+		if (pendingSpace && hasOutput) out << ' ';
 		out << i;
 		hasOutput = true;
 		pendingSpace = false;
@@ -114,15 +108,13 @@ ParsedQuoteParts splitQuoteAndAuthor(const std::string &raw) {
 		std::size_t quotePos = i;
 		if (consumeQuoteToken(raw, i)) {
 			lastQuoteToken = raw.substr(quotePos, i - quotePos);
-			if (!insideQuote && out.openingQuote.empty())
-				out.openingQuote = lastQuoteToken;
+			if (!insideQuote && out.openingQuote.empty()) out.openingQuote = lastQuoteToken;
 			else if (insideQuote)
 				out.closingQuote = lastQuoteToken;
 			insideQuote = !insideQuote;
 			continue;
 		}
-		if (insideQuote)
-			out.quoteText.push_back(raw[i]);
+		if (insideQuote) out.quoteText.push_back(raw[i]);
 		else
 			out.authorText.push_back(raw[i]);
 		++i;
@@ -135,10 +127,8 @@ ParsedQuoteParts splitQuoteAndAuthor(const std::string &raw) {
 		out.quoteText = normalizeSpaces(raw);
 		out.authorText.clear();
 	}
-	if (out.openingQuote.empty())
-		out.openingQuote = "\"";
-	if (out.closingQuote.empty())
-		out.closingQuote = out.openingQuote;
+	if (out.openingQuote.empty()) out.openingQuote = "\"";
+	if (out.closingQuote.empty()) out.closingQuote = out.openingQuote;
 
 	return out;
 }
@@ -146,8 +136,7 @@ ParsedQuoteParts splitQuoteAndAuthor(const std::string &raw) {
 std::vector<std::string> buildQuoteDisplayLines(const std::string &raw, int maxWidth) {
 	ParsedQuoteParts parts = splitQuoteAndAuthor(raw);
 	std::string displayQuote = parts.quoteText;
-	if (!displayQuote.empty())
-		displayQuote = parts.openingQuote + displayQuote + parts.closingQuote;
+	if (!displayQuote.empty()) displayQuote = parts.openingQuote + displayQuote + parts.closingQuote;
 	std::vector<std::string> lines = wrapQuoteText(displayQuote, maxWidth);
 
 	if (!parts.authorText.empty()) {
@@ -158,9 +147,7 @@ std::vector<std::string> buildQuoteDisplayLines(const std::string &raw, int maxW
 
 class MRAboutQuoteBox : public TView {
   public:
-	MRAboutQuoteBox(const TRect &bounds) noexcept
-	    : TView(bounds),  mAnimationFrame(0), mAnimationFramesTotal(22),
-	      mAnimating(false), mScrambleSeed(0x00C0DA42u) {
+	MRAboutQuoteBox(const TRect &bounds) noexcept : TView(bounds), mAnimationFrame(0), mAnimationFramesTotal(22), mAnimating(false), mScrambleSeed(0x00C0DA42u) {
 		options |= ofBuffered;
 	}
 
@@ -180,8 +167,7 @@ class MRAboutQuoteBox : public TView {
 	}
 
 	bool tickTransition() {
-		if (!mAnimating)
-			return false;
+		if (!mAnimating) return false;
 		++mAnimationFrame;
 		if (mAnimationFrame >= mAnimationFramesTotal) {
 			mCurrentLines = mTargetLines;
@@ -213,8 +199,7 @@ class MRAboutQuoteBox : public TView {
 			writeBuf(0, y, size.x, 1, b);
 		}
 
-		if (size.x < 2 || size.y < 2)
-			return;
+		if (size.x < 2 || size.y < 2) return;
 
 		b.moveChar(0, horiz, border, size.x);
 		b.putChar(0, topLeft);
@@ -287,32 +272,24 @@ class MRAboutQuoteBox : public TView {
 	int centeredBaseRow(const std::vector<std::string> &lines) const noexcept {
 		int innerHeight = std::max(1, size.y - 2);
 		int freeRows = std::max(0, innerHeight - static_cast<int>(lines.size()));
-		if (lines.size() == 1)
-			return 1 + innerHeight / 2;
+		if (lines.size() == 1) return 1 + innerHeight / 2;
 		return 1 + freeRows / 2;
 	}
 
 	std::string scrambledLine(const std::string &target, std::size_t lineIndex) const {
-		if (!mAnimating)
-			return target;
+		if (!mAnimating) return target;
 
 		std::string out = target;
 		SweepState sweep = sweepStateForLength(target.size());
-		std::uint32_t localSeed =
-		    mScrambleSeed ^ static_cast<std::uint32_t>(lineIndex * 131u) ^
-		    static_cast<std::uint32_t>(mAnimationFrame * 977u);
+		std::uint32_t localSeed = mScrambleSeed ^ static_cast<std::uint32_t>(lineIndex * 131u) ^ static_cast<std::uint32_t>(mAnimationFrame * 977u);
 		for (std::size_t i = 0; i < out.size(); ++i) {
 			unsigned char c = static_cast<unsigned char>(out[i]);
-			if (c == ' ')
-				continue;
-			if (static_cast<int>(i) <= sweep.revealUntil)
-				continue;
+			if (c == ' ') continue;
+			if (static_cast<int>(i) <= sweep.revealUntil) continue;
 			localSeed = localSeed * 1664525u + 1013904223u;
 			out[i] = scrambleGlyph(localSeed);
 		}
-		if (sweep.front >= 0 && sweep.front < static_cast<int>(out.size()) &&
-		    out[static_cast<std::size_t>(sweep.front)] != ' ')
-			out[static_cast<std::size_t>(sweep.front)] = '_';
+		if (sweep.front >= 0 && sweep.front < static_cast<int>(out.size()) && out[static_cast<std::size_t>(sweep.front)] != ' ') out[static_cast<std::size_t>(sweep.front)] = '_';
 		return out;
 	}
 
@@ -322,12 +299,9 @@ class MRAboutQuoteBox : public TView {
 			int lineIndex = row - baseRow;
 			if (0 <= lineIndex && lineIndex < static_cast<int>(mTargetLines.size())) {
 				const std::string &target = mTargetLines[static_cast<std::size_t>(lineIndex)];
-				std::string line = scrambledLine(target,
-				                                 static_cast<std::size_t>(lineIndex));
+				std::string line = scrambledLine(target, static_cast<std::size_t>(lineIndex));
 				SweepState sweep = sweepStateForLength(target.size());
-				std::uint32_t colorSeed = mScrambleSeed ^
-				                          static_cast<std::uint32_t>(mAnimationFrame * 4099u) ^
-				                          static_cast<std::uint32_t>(lineIndex * 97u);
+				std::uint32_t colorSeed = mScrambleSeed ^ static_cast<std::uint32_t>(mAnimationFrame * 4099u) ^ static_cast<std::uint32_t>(lineIndex * 97u);
 				int innerWidth = std::max(0, size.x - 4);
 				int textWidth = std::max(0, strwidth(line.c_str()));
 				int startX = 2 + std::max(0, (innerWidth - textWidth) / 2);
@@ -336,8 +310,7 @@ class MRAboutQuoteBox : public TView {
 					unsigned char ch = static_cast<unsigned char>(line[static_cast<std::size_t>(i)]);
 					TColorAttr attr = color;
 					if (ch != ' ') {
-						if (i <= sweep.revealUntil)
-							attr = color;
+						if (i <= sweep.revealUntil) attr = color;
 						else
 							attr = scrambleColor(colorSeed, color);
 					}
@@ -368,12 +341,7 @@ class MRAboutQuoteBox : public TView {
 
 class MRAbout : public MRDialogFoundation {
   public:
-	MRAbout() noexcept
-	    : TWindowInit(&TDialog::initFrame),
-	      MRDialogFoundation(centeredRect(76, 16), "ABOUT", 76, 16), mQuoteBox(nullptr),
-	      mDoneButton(nullptr), mQuoteIndex(0), mQuoteRandomState(0), mQuoteModeEnabled(false), mRotationTimer(nullptr),
-	       mRearmRotationAfterAnimation(false), mDonePressTracking(false),
-	      mDoneLongPressTriggered(false), mSuppressNextDoneCommand(false) {
+	MRAbout() noexcept : TWindowInit(&TDialog::initFrame), MRDialogFoundation(centeredRect(76, 16), "ABOUT", 76, 16), mQuoteBox(nullptr), mDoneButton(nullptr), mQuoteIndex(0), mQuoteRandomState(0), mQuoteModeEnabled(false), mRotationTimer(nullptr), mRearmRotationAfterAnimation(false), mDonePressTracking(false), mDoneLongPressTriggered(false), mSuppressNextDoneCommand(false) {
 		eventMask |= evBroadcast;
 		insertCenteredStaticLine(this, size.x, 2, std::string("Multi-Edit Revisited ") + mrAboutDisplayVersion());
 		insertCenteredStaticLine(this, size.x, 3, "Dr. Michael \"iDoc\" Raus & Codex AI");
@@ -382,22 +350,15 @@ class MRAbout : public MRDialogFoundation {
 		insert(mQuoteBox);
 		mQuoteBox->setQuoteImmediate(kAboutQuotes[0]);
 		mQuoteSeen.assign(kAboutQuoteCount, 0);
-		if (!mQuoteSeen.empty())
-			mQuoteSeen[0] = 1;
-		mQuoteRandomState = static_cast<std::uint32_t>(
-		    std::chrono::steady_clock::now().time_since_epoch().count()) ^
-		                   0xA39F1D5Bu;
+		if (!mQuoteSeen.empty()) mQuoteSeen[0] = 1;
+		mQuoteRandomState = static_cast<std::uint32_t>(std::chrono::steady_clock::now().time_since_epoch().count()) ^ 0xA39F1D5Bu;
 
-			const std::array buttons{
-			    mr::dialogs::DialogButtonSpec{"~P~ress", cmAboutDone, bfDefault}};
-			std::vector<TButton *> buttonViews;
-			const mr::dialogs::DialogButtonRowMetrics metrics =
-			    mr::dialogs::measureUniformButtonRow(buttons, 0);
-			mr::dialogs::insertUniformButtonRow(*this, (size.x - metrics.rowWidth) / 2, 13, 0, buttons, 0,
-			                                    &buttonViews);
-			if (!buttonViews.empty())
-				mDoneButton = buttonViews.front();
-		}
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~P~ress", cmAboutDone, bfDefault}};
+		std::vector<TButton *> buttonViews;
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 0);
+		mr::dialogs::insertUniformButtonRow(*this, (size.x - metrics.rowWidth) / 2, 13, 0, buttons, 0, &buttonViews);
+		if (!buttonViews.empty()) mDoneButton = buttonViews.front();
+	}
 
 	~MRAbout() override {
 		killTimer(mRotationTimer);
@@ -414,8 +375,7 @@ class MRAbout : public MRDialogFoundation {
 	}
 
 	void handleEvent(TEvent &event) override {
-		if (event.what == evMouseDown || event.what == evMouseUp)
-			trackDonePress(event);
+		if (event.what == evMouseDown || event.what == evMouseUp) trackDonePress(event);
 		if (event.what == evCommand && event.message.command == cmAboutDone) {
 			if (mSuppressNextDoneCommand) {
 				mSuppressNextDoneCommand = false;
@@ -427,8 +387,7 @@ class MRAbout : public MRDialogFoundation {
 			return;
 		}
 		MRDialogFoundation::handleEvent(event);
-		if (event.what == evBroadcast && event.message.command == cmTimerExpired &&
-		    event.message.infoPtr == mRotationTimer) {
+		if (event.what == evBroadcast && event.message.command == cmTimerExpired && event.message.infoPtr == mRotationTimer) {
 			tickQuoteRotation();
 			clearEvent(event);
 		}
@@ -436,13 +395,11 @@ class MRAbout : public MRDialogFoundation {
 
   private:
 	void armRotationTimer() {
-		if (mRotationTimer == nullptr && owner != nullptr)
-			mRotationTimer = setTimer(kAnimationTickMs, kAnimationTickMs);
+		if (mRotationTimer == nullptr && owner != nullptr) mRotationTimer = setTimer(kAnimationTickMs, kAnimationTickMs);
 	}
 
 	void trackDonePress(const TEvent &event) {
-		if (mDoneButton == nullptr)
-			return;
+		if (mDoneButton == nullptr) return;
 		TPoint local = makeLocal(event.mouse.where);
 		bool insideDone = mDoneButton->getBounds().contains(local);
 		if (event.what == evMouseDown) {
@@ -454,15 +411,13 @@ class MRAbout : public MRDialogFoundation {
 			return;
 		}
 		if (mDonePressTracking) {
-			if (mDoneLongPressTriggered)
-				mSuppressNextDoneCommand = true;
+			if (mDoneLongPressTriggered) mSuppressNextDoneCommand = true;
 			mDonePressTracking = false;
 		}
 	}
 
 	void enableQuoteModeFromLongPress() {
-		if (mQuoteModeEnabled || mQuoteBox == nullptr || kAboutQuoteCount <= 1)
-			return;
+		if (mQuoteModeEnabled || mQuoteBox == nullptr || kAboutQuoteCount <= 1) return;
 		mQuoteModeEnabled = true;
 		mQuoteIndex = pickNextQuoteIndex();
 		mQuoteBox->beginQuoteTransition(kAboutQuotes[mQuoteIndex]);
@@ -470,15 +425,11 @@ class MRAbout : public MRDialogFoundation {
 	}
 
 	std::size_t pickNextQuoteIndex() {
-		if (kAboutQuoteCount <= 1)
-			return 0;
-		if (mQuoteBagCursor >= mQuoteBag.size())
-			rebuildQuoteBag();
-		if (mQuoteBagCursor >= mQuoteBag.size())
-			return (mQuoteIndex + 1) % kAboutQuoteCount;
+		if (kAboutQuoteCount <= 1) return 0;
+		if (mQuoteBagCursor >= mQuoteBag.size()) rebuildQuoteBag();
+		if (mQuoteBagCursor >= mQuoteBag.size()) return (mQuoteIndex + 1) % kAboutQuoteCount;
 		std::size_t picked = mQuoteBag[mQuoteBagCursor++];
-		if (picked < mQuoteSeen.size())
-			mQuoteSeen[picked] = 1;
+		if (picked < mQuoteSeen.size()) mQuoteSeen[picked] = 1;
 		return picked;
 	}
 
@@ -497,19 +448,16 @@ class MRAbout : public MRDialogFoundation {
 
 		if (!hasUnseen) {
 			std::fill(mQuoteSeen.begin(), mQuoteSeen.end(), static_cast<unsigned char>(0));
-			if (mQuoteIndex < mQuoteSeen.size())
-				mQuoteSeen[mQuoteIndex] = 1;
+			if (mQuoteIndex < mQuoteSeen.size()) mQuoteSeen[mQuoteIndex] = 1;
 		}
 
 		for (std::size_t i = 0; i < kAboutQuoteCount; ++i)
-			if (i < mQuoteSeen.size() && mQuoteSeen[i] == 0)
-				mQuoteBag.push_back(i);
+			if (i < mQuoteSeen.size() && mQuoteSeen[i] == 0) mQuoteBag.push_back(i);
 
 		if (mQuoteBag.size() > 1) {
 			for (std::size_t i = mQuoteBag.size() - 1; i > 0; --i) {
 				mQuoteRandomState = mQuoteRandomState * 1664525u + 1013904223u;
-				std::size_t j =
-				    static_cast<std::size_t>(mQuoteRandomState % static_cast<std::uint32_t>(i + 1));
+				std::size_t j = static_cast<std::size_t>(mQuoteRandomState % static_cast<std::uint32_t>(i + 1));
 				std::size_t tmp = mQuoteBag[i];
 				mQuoteBag[i] = mQuoteBag[j];
 				mQuoteBag[j] = tmp;
@@ -520,15 +468,13 @@ class MRAbout : public MRDialogFoundation {
 
 	void tickQuoteRotation() {
 		if (mDonePressTracking && !mDoneLongPressTriggered) {
-			if (std::chrono::steady_clock::now() - mDonePressStartedAt >=
-			    std::chrono::milliseconds(kDoneLongPressMs)) {
+			if (std::chrono::steady_clock::now() - mDonePressStartedAt >= std::chrono::milliseconds(kDoneLongPressMs)) {
 				mDoneLongPressTriggered = true;
 				mSuppressNextDoneCommand = true;
 				enableQuoteModeFromLongPress();
 			}
 		}
-		if (mQuoteBox == nullptr || !mQuoteModeEnabled)
-			return;
+		if (mQuoteBox == nullptr || !mQuoteModeEnabled) return;
 		if (mQuoteBox->animating()) {
 			mQuoteBox->tickTransition();
 			if (!mQuoteBox->animating() && mRearmRotationAfterAnimation) {
@@ -537,8 +483,7 @@ class MRAbout : public MRDialogFoundation {
 			}
 			return;
 		}
-		if (std::chrono::steady_clock::now() < mNextRotationAt)
-			return;
+		if (std::chrono::steady_clock::now() < mNextRotationAt) return;
 		mQuoteIndex = pickNextQuoteIndex();
 		mQuoteBox->beginQuoteTransition(kAboutQuotes[mQuoteIndex]);
 		mRearmRotationAfterAnimation = true;
@@ -564,8 +509,7 @@ class MRAbout : public MRDialogFoundation {
 } // namespace
 
 void showAboutDialog() {
-	if (TProgram::deskTop == nullptr)
-		return;
+	if (TProgram::deskTop == nullptr) return;
 	TDialog *dialog = new MRAbout();
 	(void)mr::dialogs::execDialog(dialog);
 }

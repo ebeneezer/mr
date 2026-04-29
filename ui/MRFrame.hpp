@@ -52,24 +52,10 @@ class MRFrame : public TFrame {
 		bool macroBrain;
 		bool macroBrainVisible;
 
-		MarkerState() noexcept
-		    : modified(false), insertMode(false), insertModeVisible(false), wordWrap(false),
-		      wordWrapVisible(false), background(false), backgroundVisible(false), readOnly(false),
-		      readOnlyVisible(false), recording(false), recordingVisible(false), macroBrain(false),
-		      macroBrainVisible(false) {
+		MarkerState() noexcept : modified(false), insertMode(false), insertModeVisible(false), wordWrap(false), wordWrapVisible(false), background(false), backgroundVisible(false), readOnly(false), readOnlyVisible(false), recording(false), recordingVisible(false), macroBrain(false), macroBrainVisible(false) {
 		}
 
-		MarkerState(bool aModified, bool anInsertMode, bool anInsertModeVisible, bool aWordWrap,
-		            bool aWordWrapVisible,
-		            bool aBackground, bool aBackgroundVisible, bool aReadOnly, bool aReadOnlyVisible,
-		            bool aRecording, bool aRecordingVisible, bool aMacroBrain,
-		            bool aMacroBrainVisible) noexcept
-		    : modified(aModified), insertMode(anInsertMode), insertModeVisible(anInsertModeVisible),
-		      wordWrap(aWordWrap), wordWrapVisible(aWordWrapVisible), background(aBackground),
-		      backgroundVisible(aBackgroundVisible), readOnly(aReadOnly),
-		      readOnlyVisible(aReadOnlyVisible), recording(aRecording),
-		      recordingVisible(aRecordingVisible), macroBrain(aMacroBrain),
-		      macroBrainVisible(aMacroBrainVisible) {
+		MarkerState(bool aModified, bool anInsertMode, bool anInsertModeVisible, bool aWordWrap, bool aWordWrapVisible, bool aBackground, bool aBackgroundVisible, bool aReadOnly, bool aReadOnlyVisible, bool aRecording, bool aRecordingVisible, bool aMacroBrain, bool aMacroBrainVisible) noexcept : modified(aModified), insertMode(anInsertMode), insertModeVisible(anInsertModeVisible), wordWrap(aWordWrap), wordWrapVisible(aWordWrapVisible), background(aBackground), backgroundVisible(aBackgroundVisible), readOnly(aReadOnly), readOnlyVisible(aReadOnlyVisible), recording(aRecording), recordingVisible(aRecordingVisible), macroBrain(aMacroBrain), macroBrainVisible(aMacroBrainVisible) {
 		}
 	};
 

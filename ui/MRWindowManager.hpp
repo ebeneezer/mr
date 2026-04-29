@@ -9,8 +9,8 @@
 class MREditWindow;
 
 class MRWindowManager {
-public:
-    static void handleDragView(MREditWindow* window, TEvent& event, uchar mode, TRect& limits, TPoint minSize, TPoint maxSize);
+  public:
+	static void handleDragView(MREditWindow *window, TEvent &event, uchar mode, TRect &limits, TPoint minSize, TPoint maxSize);
 };
 
 #endif

@@ -35,20 +35,17 @@ TFrame *initSetupDialogFrame(TRect bounds) {
 
 class TRelayColorGroupList : public TColorGroupList {
   public:
-	TRelayColorGroupList(const TRect &bounds, TScrollBar *scrollBar, TColorGroup *groups, TView *relay) noexcept
-	    : TColorGroupList(bounds, scrollBar, groups), mRelay(relay) {
+	TRelayColorGroupList(const TRect &bounds, TScrollBar *scrollBar, TColorGroup *groups, TView *relay) noexcept : TColorGroupList(bounds, scrollBar, groups), mRelay(relay) {
 	}
 
 	void focusItem(short item) override {
 		TColorGroupList::focusItem(item);
-		if (mRelay == nullptr)
-			return;
+		if (mRelay == nullptr) return;
 		TColorGroup *curGroup = groups;
 		short index = item;
 		while (curGroup != nullptr && index-- > 0)
 			curGroup = curGroup->next;
-		if (curGroup != nullptr)
-			message(mRelay, evBroadcast, cmNewColorItem, curGroup);
+		if (curGroup != nullptr) message(mRelay, evBroadcast, cmNewColorItem, curGroup);
 	}
 
   private:
@@ -57,21 +54,18 @@ class TRelayColorGroupList : public TColorGroupList {
 
 class TRelayColorItemList : public TColorItemList {
   public:
-	TRelayColorItemList(const TRect &bounds, TScrollBar *scrollBar, TColorItem *items, TView *relay) noexcept
-	    : TColorItemList(bounds, scrollBar, items), mRelay(relay) {
+	TRelayColorItemList(const TRect &bounds, TScrollBar *scrollBar, TColorItem *items, TView *relay) noexcept : TColorItemList(bounds, scrollBar, items), mRelay(relay) {
 	}
 
 	void focusItem(short item) override {
 		TColorItemList::focusItem(item);
-		if (mRelay == nullptr)
-			return;
-		message(mRelay, evBroadcast, cmSaveColorIndex, (void *)(size_t) item);
+		if (mRelay == nullptr) return;
+		message(mRelay, evBroadcast, cmSaveColorIndex, (void *)(size_t)item);
 		TColorItem *curItem = items;
 		short index = item;
 		while (curItem != nullptr && index-- > 0)
 			curItem = curItem->next;
-		if (curItem != nullptr)
-			message(mRelay, evBroadcast, cmNewColorIndex, (void *)(size_t) (curItem->index));
+		if (curItem != nullptr) message(mRelay, evBroadcast, cmNewColorIndex, (void *)(size_t)(curItem->index));
 	}
 
   private:
@@ -90,18 +84,15 @@ class TThemeNameField : public TView {
 
 	void draw() override {
 		TDrawBuffer buffer;
-		TColorAttr color = (TProgram::application != nullptr) ? TProgram::application->mapColor(2)
-		                                                      : TColorAttr(getColor(1));
+		TColorAttr color = (TProgram::application != nullptr) ? TProgram::application->mapColor(2) : TColorAttr(getColor(1));
 		std::string shown = "active: " + mText;
 		int start = 0;
 
 		buffer.moveChar(0, ' ', color, size.x);
 		if (size.x > 0) {
-			if (shown.size() > static_cast<std::size_t>(size.x))
-				shown = shown.substr(0, static_cast<std::size_t>(size.x));
+			if (shown.size() > static_cast<std::size_t>(size.x)) shown = shown.substr(0, static_cast<std::size_t>(size.x));
 			start = (size.x - static_cast<int>(shown.size())) / 2;
-			if (start < 0)
-				start = 0;
+			if (start < 0) start = 0;
 			buffer.moveStr(static_cast<ushort>(start), shown.c_str(), color, size.x - start);
 		}
 		writeLine(0, 0, size.x, 1, buffer);
@@ -116,10 +107,7 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 	static const int kDialogWidth = 76;
 	static const int kDialogHeight = 21;
 
-	TUnifiedColorSetupDialog(const char *title, TColorGroup *groupsHead) noexcept
-	    : TWindowInit(initSetupDialogFrame),
-	      MRScrollableDialog(centeredSetupDialogRect(kDialogWidth, kDialogHeight), title,
-	                         kDialogWidth, kDialogHeight, initSetupDialogFrame) {
+	TUnifiedColorSetupDialog(const char *title, TColorGroup *groupsHead) noexcept : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(kDialogWidth, kDialogHeight), title, kDialogWidth, kDialogHeight, initSetupDialogFrame) {
 		for (TColorGroup *group = groupsHead; group != nullptr; group = group->next)
 			group->index = 0;
 		buildViews(groupsHead);
@@ -136,15 +124,12 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 	}
 
 	void getData(void *rec) override {
-		if (rec != nullptr && mPal != nullptr)
-			*static_cast<TPalette *>(rec) = *mPal;
+		if (rec != nullptr && mPal != nullptr) *static_cast<TPalette *>(rec) = *mPal;
 	}
 
 	void setData(void *rec) override {
-		if (rec == nullptr)
-			return;
-		if (mPal == nullptr)
-			mPal = new TPalette("", 0);
+		if (rec == nullptr) return;
+		if (mPal == nullptr) mPal = new TPalette("", 0);
 		*mPal = *static_cast<TPalette *>(rec);
 		mDisplay->setColor(&mPal->data[mGroups->getGroupIndex(mGroupIndex)]);
 		mGroups->focusItem(mGroupIndex);
@@ -161,17 +146,14 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 	}
 
 	void handleEvent(TEvent &event) override {
-		if (event.what == evBroadcast && event.message.command == cmNewColorItem)
-			mGroupIndex = mGroups->focused;
+		if (event.what == evBroadcast && event.message.command == cmNewColorItem) mGroupIndex = mGroups->focused;
 		MRScrollableDialog::handleEvent(event);
-		if (event.what == evCommand &&
-		    (event.message.command == cmMrColorLoadTheme || event.message.command == cmMrColorSaveTheme)) {
+		if (event.what == evCommand && (event.message.command == cmMrColorLoadTheme || event.message.command == cmMrColorSaveTheme)) {
 			endModal(event.message.command);
 			clearEvent(event);
 			return;
 		}
-		if (event.what == evBroadcast && event.message.command == cmNewColorIndex && mPal != nullptr)
-			mDisplay->setColor(&mPal->data[event.message.infoByte]);
+		if (event.what == evBroadcast && event.message.command == cmNewColorIndex && mPal != nullptr) mDisplay->setColor(&mPal->data[event.message.infoByte]);
 	}
 
   private:
@@ -182,13 +164,8 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 	}
 
 	void buildViews(TColorGroup *groupsHead) {
-		const std::array buttons{
-		    mr::dialogs::DialogButtonSpec{"~L~oad Theme", cmMrColorLoadTheme, bfNormal},
-		    mr::dialogs::DialogButtonSpec{"~S~ave Theme", cmMrColorSaveTheme, bfNormal},
-		    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault},
-		    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
-		const mr::dialogs::DialogButtonRowMetrics metrics =
-		    mr::dialogs::measureUniformButtonRow(buttons, 2);
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~L~oad Theme", cmMrColorLoadTheme, bfNormal}, mr::dialogs::DialogButtonSpec{"~S~ave Theme", cmMrColorSaveTheme, bfNormal}, mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 2);
 		const int buttonLeft = (kDialogWidth - metrics.rowWidth) / 2;
 
 		mGroupScroll = new TScrollBar(TRect(18, 3, 19, 14));
@@ -246,9 +223,7 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 };
 
 TColorGroup *buildAllColorGroups() {
-	static const MRColorSetupGroup groups[] = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog,
-	                                           MRColorSetupGroup::Help, MRColorSetupGroup::Other,
-	                                           MRColorSetupGroup::MiniMap};
+	static const MRColorSetupGroup groups[] = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog, MRColorSetupGroup::Help, MRColorSetupGroup::Other, MRColorSetupGroup::MiniMap};
 	TColorGroup *head = nullptr;
 
 	for (std::size_t g = sizeof(groups) / sizeof(groups[0]); g-- > 0;) {
@@ -256,11 +231,9 @@ TColorGroup *buildAllColorGroups() {
 		const MRColorSetupItem *items = colorSetupGroupItems(groups[g], count);
 		TColorItem *itemHead = nullptr;
 
-		if (items == nullptr || count == 0)
-			continue;
+		if (items == nullptr || count == 0) continue;
 		for (std::size_t i = count; i-- > 0;) {
-			if (groups[g] == MRColorSetupGroup::MenuDialog && items[i].paletteIndex == 62)
-				continue;
+			if (groups[g] == MRColorSetupGroup::MenuDialog && items[i].paletteIndex == 62) continue;
 			itemHead = new TColorItem(items[i].label, items[i].paletteIndex, itemHead);
 		}
 		head = new TColorGroup(colorSetupGroupTitle(groups[g]), itemHead, head);
@@ -273,7 +246,6 @@ TColorGroup *buildAllColorGroups() {
 TDialog *createColorSetupDialog() {
 	TColorGroup *groupsHead = buildAllColorGroups();
 
-	if (groupsHead == nullptr)
-		return nullptr;
+	if (groupsHead == nullptr) return nullptr;
 	return new TUnifiedColorSetupDialog("Colors", groupsHead);
 }

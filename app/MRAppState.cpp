@@ -25,17 +25,12 @@ struct AppCommandState {
 	bool isCommunicationCommandWindow;
 	bool isLogWindow;
 
-	AppCommandState()
-	    : window(nullptr), windowCount(0), hasEditableWindow(false), hasReadOnlyWindow(false),
-	      hasDirtyWindow(false), hasPersistentFileName(false), canSaveInPlace(false), hasSelection(false),
-	      hasUndo(false), hasRedo(false), hasBlock(false), blockMarking(false), hasMacroTasks(false), hasExternalIoTasks(false),
-	      isCommunicationWindow(false), isCommunicationCommandWindow(false), isLogWindow(false) {
+	AppCommandState() : window(nullptr), windowCount(0), hasEditableWindow(false), hasReadOnlyWindow(false), hasDirtyWindow(false), hasPersistentFileName(false), canSaveInPlace(false), hasSelection(false), hasUndo(false), hasRedo(false), hasBlock(false), blockMarking(false), hasMacroTasks(false), hasExternalIoTasks(false), isCommunicationWindow(false), isCommunicationCommandWindow(false), isLogWindow(false) {
 	}
 };
 
 void setCommandEnabled(ushort command, bool enabled) {
-	if (enabled)
-		TView::enableCommand(command);
+	if (enabled) TView::enableCommand(command);
 	else
 		TView::disableCommand(command);
 }
@@ -46,8 +41,7 @@ AppCommandState appCommandState() {
 
 	state.window = win;
 	state.windowCount = allEditWindowsInZOrder().size();
-	if (win == nullptr)
-		return state;
+	if (win == nullptr) return state;
 
 	state.hasReadOnlyWindow = win->isReadOnly();
 	state.hasEditableWindow = !state.hasReadOnlyWindow;
@@ -110,19 +104,13 @@ void updateAppCommandState() {
 		const int desktopCount = configuredVirtualDesktops();
 		const int currentDesktop = currentVirtualDesktop();
 		const bool hasMultipleDesktops = desktopCount > 1;
-		const bool cyclicViewport =
-		    hasMultipleDesktops && configuredCyclicVirtualDesktops();
+		const bool cyclicViewport = hasMultipleDesktops && configuredCyclicVirtualDesktops();
 		const int windowDesktop = hasWindow ? state.window->mVirtualDesktop : 1;
 
-		setCommandEnabled(cmMrWindowNextDesktop,
-		                  hasMultipleDesktops &&
-		                      (currentDesktop < desktopCount || cyclicViewport));
-		setCommandEnabled(cmMrWindowPrevDesktop,
-		                  hasMultipleDesktops && (currentDesktop > 1 || cyclicViewport));
-		setCommandEnabled(cmMrWindowMoveToNextDesktop,
-		                  hasWindow && hasMultipleDesktops && windowDesktop < desktopCount);
-		setCommandEnabled(cmMrWindowMoveToPrevDesktop,
-		                  hasWindow && hasMultipleDesktops && windowDesktop > 1);
+		setCommandEnabled(cmMrWindowNextDesktop, hasMultipleDesktops && (currentDesktop < desktopCount || cyclicViewport));
+		setCommandEnabled(cmMrWindowPrevDesktop, hasMultipleDesktops && (currentDesktop > 1 || cyclicViewport));
+		setCommandEnabled(cmMrWindowMoveToNextDesktop, hasWindow && hasMultipleDesktops && windowDesktop < desktopCount);
+		setCommandEnabled(cmMrWindowMoveToPrevDesktop, hasWindow && hasMultipleDesktops && windowDesktop > 1);
 	}
 	setCommandEnabled(cmMrWindowLink, hasMultipleWindows && hasEditor);
 	setCommandEnabled(cmMrWindowUnlink, hasWindow);
@@ -161,11 +149,8 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrTextTimeDateStamp, canModify);
 	setCommandEnabled(cmMrTextReformatParagraph, canModify);
 	setCommandEnabled(cmMrOtherStopProgram, hasWindow && state.hasExternalIoTasks);
-	setCommandEnabled(cmMrOtherRestartProgram,
-	                  hasWindow && state.isCommunicationCommandWindow && !state.hasExternalIoTasks &&
-	                      !state.window->windowRoleDetail().empty());
-	setCommandEnabled(cmMrOtherClearOutput,
-	                  hasWindow && ((state.isCommunicationWindow && !state.hasExternalIoTasks) || state.isLogWindow));
+	setCommandEnabled(cmMrOtherRestartProgram, hasWindow && state.isCommunicationCommandWindow && !state.hasExternalIoTasks && !state.window->windowRoleDetail().empty());
+	setCommandEnabled(cmMrOtherClearOutput, hasWindow && ((state.isCommunicationWindow && !state.hasExternalIoTasks) || state.isLogWindow));
 	setCommandEnabled(cmMrOtherAsciiTable, canModify);
 	setCommandEnabled(cmMrOtherEmojiTable, canModify);
 	setCommandEnabled(cmMrMacroToggleRecording, hasEditor);

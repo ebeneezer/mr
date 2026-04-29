@@ -11,7 +11,10 @@
 #include <string_view>
 #include <vector>
 
-enum class MRKeymapBindingType : unsigned char { Action, Macro };
+enum class MRKeymapBindingType : unsigned char {
+	Action,
+	Macro
+};
 
 [[nodiscard]] std::optional<MRKeymapBindingType> parseKeymapBindingType(std::string_view text) noexcept;
 [[nodiscard]] std::string_view keymapBindingTypeName(MRKeymapBindingType type) noexcept;
@@ -61,7 +64,10 @@ enum class MRKeymapDiagnosticKind : unsigned char {
 	ProfileNameMismatch
 };
 
-enum class MRKeymapDiagnosticSeverity : unsigned char { Warning, Error };
+enum class MRKeymapDiagnosticSeverity : unsigned char {
+	Warning,
+	Error
+};
 
 struct MRKeymapDiagnostic {
 	MRKeymapDiagnosticKind kind{MRKeymapDiagnosticKind::InvalidSequence};
@@ -77,7 +83,10 @@ struct MRKeymapLoadResult {
 	std::vector<MRKeymapDiagnostic> diagnostics;
 };
 
-enum class MRKeymapCanonicalizationMode : unsigned char { UntrustedIngress, TrustedCommit };
+enum class MRKeymapCanonicalizationMode : unsigned char {
+	UntrustedIngress,
+	TrustedCommit
+};
 
 struct MRKeymapCanonicalizationResult {
 	std::string activeProfileName;

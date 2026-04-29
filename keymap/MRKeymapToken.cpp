@@ -66,47 +66,19 @@ constexpr std::array namedKeys{
 };
 
 constexpr std::array aliasKeys{
-    AliasKeySpec{"PGUP", MRKeymapBaseKey::PageUp, 0},
-    AliasKeySpec{"PGDN", MRKeymapBaseKey::PageDown, 0},
-    AliasKeySpec{"INS", MRKeymapBaseKey::Insert, 0},
-    AliasKeySpec{"DEL", MRKeymapBaseKey::Delete, 0},
-    AliasKeySpec{"GREY+", MRKeymapBaseKey::KeypadPlus, 0},
-    AliasKeySpec{"GREY-", MRKeymapBaseKey::KeypadMinus, 0},
-    AliasKeySpec{"GREY*", MRKeymapBaseKey::KeypadMultiply, 0},
-    AliasKeySpec{"GREYENTER", MRKeymapBaseKey::KeypadEnter, 0},
-    AliasKeySpec{"SPACE", MRKeymapBaseKey::Printable, ' '},
-    AliasKeySpec{"MINUS", MRKeymapBaseKey::Printable, '-'},
-    AliasKeySpec{"EQUAL", MRKeymapBaseKey::Printable, '='},
-    AliasKeySpec{"MSUP", MRKeymapBaseKey::MouseUp, 0},
-    AliasKeySpec{"MSDN", MRKeymapBaseKey::MouseDown, 0},
-    AliasKeySpec{"MSLF", MRKeymapBaseKey::MouseLeft, 0},
-    AliasKeySpec{"MSRT", MRKeymapBaseKey::MouseRight, 0},
-    AliasKeySpec{"BTN0", MRKeymapBaseKey::MouseButtonLeft, 0},
-    AliasKeySpec{"BTN1", MRKeymapBaseKey::MouseButtonRight, 0},
-    AliasKeySpec{"BTN2", MRKeymapBaseKey::MouseButtonMiddle, 0},
+    AliasKeySpec{"PGUP", MRKeymapBaseKey::PageUp, 0}, AliasKeySpec{"PGDN", MRKeymapBaseKey::PageDown, 0}, AliasKeySpec{"INS", MRKeymapBaseKey::Insert, 0}, AliasKeySpec{"DEL", MRKeymapBaseKey::Delete, 0}, AliasKeySpec{"GREY+", MRKeymapBaseKey::KeypadPlus, 0}, AliasKeySpec{"GREY-", MRKeymapBaseKey::KeypadMinus, 0}, AliasKeySpec{"GREY*", MRKeymapBaseKey::KeypadMultiply, 0}, AliasKeySpec{"GREYENTER", MRKeymapBaseKey::KeypadEnter, 0}, AliasKeySpec{"SPACE", MRKeymapBaseKey::Printable, ' '}, AliasKeySpec{"MINUS", MRKeymapBaseKey::Printable, '-'}, AliasKeySpec{"EQUAL", MRKeymapBaseKey::Printable, '='}, AliasKeySpec{"MSUP", MRKeymapBaseKey::MouseUp, 0}, AliasKeySpec{"MSDN", MRKeymapBaseKey::MouseDown, 0}, AliasKeySpec{"MSLF", MRKeymapBaseKey::MouseLeft, 0}, AliasKeySpec{"MSRT", MRKeymapBaseKey::MouseRight, 0}, AliasKeySpec{"BTN0", MRKeymapBaseKey::MouseButtonLeft, 0}, AliasKeySpec{"BTN1", MRKeymapBaseKey::MouseButtonRight, 0}, AliasKeySpec{"BTN2", MRKeymapBaseKey::MouseButtonMiddle, 0},
 };
 
 constexpr std::array combinedModifiers{
-    CombinedModifierSpec{"CTRLALTSHFT", kCtrlBit | kAltBit | kShiftBit},
-    CombinedModifierSpec{"CTRLSHIFT", kCtrlBit | kShiftBit},
-    CombinedModifierSpec{"CTRLSHFT", kCtrlBit | kShiftBit},
-    CombinedModifierSpec{"ALTSHIFT", kAltBit | kShiftBit},
-    CombinedModifierSpec{"ALTSHFT", kAltBit | kShiftBit},
-    CombinedModifierSpec{"CTRLALT", kCtrlBit | kAltBit},
-    CombinedModifierSpec{"CTRL", kCtrlBit},
-    CombinedModifierSpec{"ALT", kAltBit},
-    CombinedModifierSpec{"SHIFT", kShiftBit},
-    CombinedModifierSpec{"SHFT", kShiftBit},
+    CombinedModifierSpec{"CTRLALTSHFT", kCtrlBit | kAltBit | kShiftBit}, CombinedModifierSpec{"CTRLSHIFT", kCtrlBit | kShiftBit}, CombinedModifierSpec{"CTRLSHFT", kCtrlBit | kShiftBit}, CombinedModifierSpec{"ALTSHIFT", kAltBit | kShiftBit}, CombinedModifierSpec{"ALTSHFT", kAltBit | kShiftBit}, CombinedModifierSpec{"CTRLALT", kCtrlBit | kAltBit}, CombinedModifierSpec{"CTRL", kCtrlBit}, CombinedModifierSpec{"ALT", kAltBit}, CombinedModifierSpec{"SHIFT", kShiftBit}, CombinedModifierSpec{"SHFT", kShiftBit},
 };
 
 std::string trimAscii(std::string_view text) {
 	std::size_t first = 0;
-	while (first < text.size() &&
-	       std::isspace(static_cast<unsigned char>(text[first])) != 0)
+	while (first < text.size() && std::isspace(static_cast<unsigned char>(text[first])) != 0)
 		++first;
 	std::size_t last = text.size();
-	while (last > first &&
-	       std::isspace(static_cast<unsigned char>(text[last - 1])) != 0)
+	while (last > first && std::isspace(static_cast<unsigned char>(text[last - 1])) != 0)
 		--last;
 	return std::string(text.substr(first, last - first));
 }
@@ -120,23 +92,19 @@ std::string upperAscii(std::string_view text) {
 }
 
 std::optional<MRKeymapToken> parseKeyName(std::string_view keyText, std::uint8_t modifiers) {
-	if (keyText.empty())
-		return std::nullopt;
+	if (keyText.empty()) return std::nullopt;
 
 	const std::string upper = upperAscii(keyText);
 	if (upper.size() == 1 && std::isprint(static_cast<unsigned char>(upper[0])) != 0) {
-		const char printable =
-		    static_cast<char>(std::isalpha(static_cast<unsigned char>(upper[0])) != 0 ? upper[0] : keyText[0]);
+		const char printable = static_cast<char>(std::isalpha(static_cast<unsigned char>(upper[0])) != 0 ? upper[0] : keyText[0]);
 		return MRKeymapToken(MRKeymapBaseKey::Printable, modifiers, printable);
 	}
 
 	for (const NamedKeySpec &entry : namedKeys)
-		if (upper == upperAscii(entry.canonicalName))
-			return MRKeymapToken(entry.key, modifiers);
+		if (upper == upperAscii(entry.canonicalName)) return MRKeymapToken(entry.key, modifiers);
 
 	for (const AliasKeySpec &entry : aliasKeys)
-		if (upper == entry.alias)
-			return MRKeymapToken(entry.key, modifiers, entry.printable);
+		if (upper == entry.alias) return MRKeymapToken(entry.key, modifiers, entry.printable);
 
 	return std::nullopt;
 }
@@ -147,16 +115,13 @@ std::optional<MRKeymapToken> parsePlusSeparated(std::string_view inner) {
 	bool sawSeparator = false;
 
 	for (std::size_t i = 0; i <= inner.size(); ++i) {
-		if (i < inner.size() && inner[i] != '+')
-			continue;
+		if (i < inner.size() && inner[i] != '+') continue;
 		const std::string_view part = inner.substr(partStart, i - partStart);
-		if (part.empty())
-			return std::nullopt;
+		if (part.empty()) return std::nullopt;
 		if (i < inner.size()) {
 			sawSeparator = true;
 			const std::string upper = upperAscii(part);
-			if (upper == "CTRL")
-				modifiers |= kCtrlBit;
+			if (upper == "CTRL") modifiers |= kCtrlBit;
 			else if (upper == "ALT")
 				modifiers |= kAltBit;
 			else if (upper == "SHIFT" || upper == "SHFT")
@@ -174,8 +139,7 @@ std::optional<MRKeymapToken> parsePlusSeparated(std::string_view inner) {
 std::optional<MRKeymapToken> parseLegacyCombined(std::string_view inner) {
 	const std::string upper = upperAscii(inner);
 	for (const CombinedModifierSpec &entry : combinedModifiers) {
-		if (!upper.starts_with(entry.prefix) || upper.size() == entry.prefix.size())
-			continue;
+		if (!upper.starts_with(entry.prefix) || upper.size() == entry.prefix.size()) continue;
 		return parseKeyName(inner.substr(entry.prefix.size()), entry.modifiers);
 	}
 	return std::nullopt;
@@ -183,26 +147,20 @@ std::optional<MRKeymapToken> parseLegacyCombined(std::string_view inner) {
 
 std::string_view canonicalName(MRKeymapBaseKey key) noexcept {
 	for (const NamedKeySpec &entry : namedKeys)
-		if (entry.key == key)
-			return entry.canonicalName;
+		if (entry.key == key) return entry.canonicalName;
 	return {};
 }
 } // namespace
 
 std::optional<MRKeymapToken> MRKeymapToken::parse(std::string_view text) {
 	const std::string trimmed = trimAscii(text);
-	if (trimmed.size() < 3 || trimmed.front() != '<' || trimmed.back() != '>')
-		return std::nullopt;
+	if (trimmed.size() < 3 || trimmed.front() != '<' || trimmed.back() != '>') return std::nullopt;
 
 	const std::string_view inner(trimmed.data() + 1, trimmed.size() - 2);
-	if (inner.empty())
-		return std::nullopt;
-	if (inner.size() == 1 && std::isprint(static_cast<unsigned char>(inner.front())) != 0)
-		return MRKeymapToken(MRKeymapBaseKey::Printable, 0, inner.front());
-	if (const auto token = parsePlusSeparated(inner))
-		return token;
-	if (const auto token = parseKeyName(inner, 0))
-		return token;
+	if (inner.empty()) return std::nullopt;
+	if (inner.size() == 1 && std::isprint(static_cast<unsigned char>(inner.front())) != 0) return MRKeymapToken(MRKeymapBaseKey::Printable, 0, inner.front());
+	if (const auto token = parsePlusSeparated(inner)) return token;
+	if (const auto token = parseKeyName(inner, 0)) return token;
 	return parseLegacyCombined(inner);
 }
 
@@ -214,19 +172,16 @@ std::string MRKeymapToken::toString() const {
 		needPlus = true;
 	}
 	if (hasModifier(MRKeymapModifier::Alt)) {
-		if (needPlus)
-			text += '+';
+		if (needPlus) text += '+';
 		text += "Alt";
 		needPlus = true;
 	}
 	if (hasModifier(MRKeymapModifier::Shift)) {
-		if (needPlus)
-			text += '+';
+		if (needPlus) text += '+';
 		text += "Shift";
 		needPlus = true;
 	}
-	if (needPlus)
-		text += '+';
+	if (needPlus) text += '+';
 
 	if (baseKeyValue == MRKeymapBaseKey::Printable) {
 		switch (printableKeyValue) {
@@ -237,8 +192,7 @@ std::string MRKeymapToken::toString() const {
 				text.push_back(printableKeyValue);
 				break;
 		}
-	}
-	else
+	} else
 		text += canonicalName(baseKeyValue);
 
 	text += '>';

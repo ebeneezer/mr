@@ -55,14 +55,12 @@ class MRDesktopBackground : public TBackground {
 	static TColorAttr resolveColor(unsigned char slot, TColorAttr fallback) {
 		unsigned char biosAttr = 0;
 
-		if (configuredColorSlotOverride(slot, biosAttr))
-			return TColorAttr(biosAttr);
+		if (configuredColorSlotOverride(slot, biosAttr)) return TColorAttr(biosAttr);
 		return fallback;
 	}
 
 	static std::vector<std::string> markerLines(int currentVd) {
-		if (configuredVirtualDesktops() <= 1)
-			return {};
+		if (configuredVirtualDesktops() <= 1) return {};
 
 		switch (currentVd) {
 			case 1:

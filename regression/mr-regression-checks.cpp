@@ -39,8 +39,7 @@ struct TestContext {
 	}
 };
 
-bool compileSource(const std::string &source, std::vector<unsigned char> &bytecode, int &entryOffset,
-                   std::string &entryName, std::string &errorText) {
+bool compileSource(const std::string &source, std::vector<unsigned char> &bytecode, int &entryOffset, std::string &entryName, std::string &errorText) {
 	unsigned char *compiled = nullptr;
 	size_t bytecodeSize = 0;
 	int macroCount = 0;
@@ -106,7 +105,6 @@ bool expectCompileError(const std::string &source, const std::string &expectedPa
 	return true;
 }
 
-
 bool containsText(const std::vector<std::string> &values, const char *needle) {
 	return std::find(values.begin(), values.end(), std::string(needle)) != values.end();
 }
@@ -114,8 +112,7 @@ bool containsText(const std::vector<std::string> &values, const char *needle) {
 std::size_t countSubstring(const std::string &text, const std::string &needle) {
 	std::size_t count = 0;
 	std::size_t pos = 0;
-	if (needle.empty())
-		return 0;
+	if (needle.empty()) return 0;
 	while ((pos = text.find(needle, pos)) != std::string::npos) {
 		++count;
 		pos += needle.size();
@@ -123,8 +120,7 @@ std::size_t countSubstring(const std::string &text, const std::string &needle) {
 	return count;
 }
 
-bool containsAllSubstrings(const std::string &text, std::initializer_list<const char *> needles,
-                           std::string &missingNeedle) {
+bool containsAllSubstrings(const std::string &text, std::initializer_list<const char *> needles, std::string &missingNeedle) {
 	for (const char *needle : needles)
 		if (text.find(needle) == std::string::npos) {
 			missingNeedle = needle;
@@ -134,21 +130,18 @@ bool containsAllSubstrings(const std::string &text, std::initializer_list<const 
 	return true;
 }
 
-bool checkGlobalInt(const std::map<std::string, int> &ints, const char *name, int expected,
-                    std::string &failureReason) {
+bool checkGlobalInt(const std::map<std::string, int> &ints, const char *name, int expected, std::string &failureReason) {
 	std::map<std::string, int>::const_iterator it = ints.find(name);
 	if (it == ints.end()) {
 		failureReason = std::string("Missing global ") + name + ".";
 		return false;
 	}
 	if (it->second != expected) {
-		failureReason = std::string("Global ") + name + " mismatch: expected " +
-		                std::to_string(expected) + ", got " + std::to_string(it->second) + ".";
+		failureReason = std::string("Global ") + name + " mismatch: expected " + std::to_string(expected) + ", got " + std::to_string(it->second) + ".";
 		return false;
 	}
 	return true;
 }
-
 
 bool compileBytecode(const std::string &source, std::vector<unsigned char> &bytecode, std::string &errorReason) {
 	size_t bytecodeSize = 0;
@@ -169,13 +162,10 @@ std::string absolutePathFromCwd(const char *relativePath) {
 	char cwd[PATH_MAX];
 	std::string out;
 
-	if (relativePath == NULL || *relativePath == '\0')
-		return std::string();
-	if (getcwd(cwd, sizeof(cwd)) == NULL)
-		return std::string(relativePath);
+	if (relativePath == NULL || *relativePath == '\0') return std::string();
+	if (getcwd(cwd, sizeof(cwd)) == NULL) return std::string(relativePath);
 	out = cwd;
-	if (!out.empty() && out.back() != '/')
-		out.push_back('/');
+	if (!out.empty() && out.back() != '/') out.push_back('/');
 	out += relativePath;
 	return out;
 }
@@ -223,38 +213,19 @@ RuntimeSettingsSnapshot captureRuntimeSettingsSnapshot() {
 }
 
 bool restoreRuntimeSettingsSnapshot(const RuntimeSettingsSnapshot &snapshot, std::string &errorText) {
-	if (!setConfiguredSettingsMacroFilePath(snapshot.settingsMacroFilePath, &errorText))
-		return false;
-	if (!setConfiguredMacroDirectoryPath(snapshot.macroDirectoryPath, &errorText))
-		return false;
-	if (!setConfiguredHelpFilePath(snapshot.helpFilePath, &errorText))
-		return false;
-	if (!setConfiguredTempDirectoryPath(snapshot.tempDirectoryPath, &errorText))
-		return false;
-	if (!setConfiguredShellExecutablePath(snapshot.shellExecutablePath, &errorText))
-		return false;
-	if (!setConfiguredEditSetupSettings(snapshot.editSettings, &errorText))
-		return false;
-	if (!setConfiguredEditExtensionProfiles(snapshot.editExtensionProfiles, &errorText))
-		return false;
-	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, snapshot.colorSettings.windowColors.data(),
-	                                        snapshot.colorSettings.windowColors.size(), &errorText))
-		return false;
-	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog,
-	                                        snapshot.colorSettings.menuDialogColors.data(),
-	                                        snapshot.colorSettings.menuDialogColors.size(), &errorText))
-		return false;
-	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Help, snapshot.colorSettings.helpColors.data(),
-	                                        snapshot.colorSettings.helpColors.size(), &errorText))
-		return false;
-	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Other, snapshot.colorSettings.otherColors.data(),
-	                                        snapshot.colorSettings.otherColors.size(), &errorText))
-		return false;
-	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MiniMap, snapshot.colorSettings.miniMapColors.data(),
-	                                        snapshot.colorSettings.miniMapColors.size(), &errorText))
-		return false;
-	if (!setConfiguredColorThemeFilePath(snapshot.colorThemeFilePath, &errorText))
-		return false;
+	if (!setConfiguredSettingsMacroFilePath(snapshot.settingsMacroFilePath, &errorText)) return false;
+	if (!setConfiguredMacroDirectoryPath(snapshot.macroDirectoryPath, &errorText)) return false;
+	if (!setConfiguredHelpFilePath(snapshot.helpFilePath, &errorText)) return false;
+	if (!setConfiguredTempDirectoryPath(snapshot.tempDirectoryPath, &errorText)) return false;
+	if (!setConfiguredShellExecutablePath(snapshot.shellExecutablePath, &errorText)) return false;
+	if (!setConfiguredEditSetupSettings(snapshot.editSettings, &errorText)) return false;
+	if (!setConfiguredEditExtensionProfiles(snapshot.editExtensionProfiles, &errorText)) return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, snapshot.colorSettings.windowColors.data(), snapshot.colorSettings.windowColors.size(), &errorText)) return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, snapshot.colorSettings.menuDialogColors.data(), snapshot.colorSettings.menuDialogColors.size(), &errorText)) return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Help, snapshot.colorSettings.helpColors.data(), snapshot.colorSettings.helpColors.size(), &errorText)) return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Other, snapshot.colorSettings.otherColors.data(), snapshot.colorSettings.otherColors.size(), &errorText)) return false;
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MiniMap, snapshot.colorSettings.miniMapColors.data(), snapshot.colorSettings.miniMapColors.size(), &errorText)) return false;
+	if (!setConfiguredColorThemeFilePath(snapshot.colorThemeFilePath, &errorText)) return false;
 	errorText.clear();
 	return true;
 }
@@ -279,8 +250,7 @@ bool printProfileLineForMacro(const std::string &path, bool requireStageable, st
 
 	profile = mrvmAnalyzeBytecode(bytecode.data(), bytecode.size());
 	canStage = mrvmCanRunStagedInBackground(profile);
-	std::cout << path << " profile=" << mrvmDescribeExecutionProfile(profile)
-	          << " canStage=" << (canStage ? 1 : 0) << "\n";
+	std::cout << path << " profile=" << mrvmDescribeExecutionProfile(profile) << " canStage=" << (canStage ? 1 : 0) << "\n";
 	if (requireStageable && !canStage) {
 		failureReason = path + ": staged background expected but rejected.";
 		return false;
@@ -288,10 +258,7 @@ bool printProfileLineForMacro(const std::string &path, bool requireStageable, st
 	return true;
 }
 
-bool runCustomStagedProbe(const std::string &source, const std::string &documentText,
-                          const std::string &fileName, std::size_t startCursorOffset,
-                          std::size_t expectedCursorOffset, int expectedLine, int expectedColumn,
-                          bool printText, std::string &failureReason) {
+bool runCustomStagedProbe(const std::string &source, const std::string &documentText, const std::string &fileName, std::size_t startCursorOffset, std::size_t expectedCursorOffset, int expectedLine, int expectedColumn, bool printText, std::string &failureReason) {
 	std::vector<unsigned char> bytecode;
 	std::string compileError;
 	MRMacroExecutionProfile profile;
@@ -309,8 +276,7 @@ bool runCustomStagedProbe(const std::string &source, const std::string &document
 	}
 
 	profile = mrvmAnalyzeBytecode(bytecode.data(), bytecode.size());
-	std::cout << "custom profile=" << mrvmDescribeExecutionProfile(profile)
-	          << " canStage=" << (mrvmCanRunStagedInBackground(profile) ? 1 : 0) << "\n";
+	std::cout << "custom profile=" << mrvmDescribeExecutionProfile(profile) << " canStage=" << (mrvmCanRunStagedInBackground(profile) ? 1 : 0) << "\n";
 	if (!mrvmCanRunStagedInBackground(profile)) {
 		failureReason = "custom macro is not staged-background eligible.";
 		return false;
@@ -330,16 +296,8 @@ bool runCustomStagedProbe(const std::string &source, const std::string &document
 	lineNumber = static_cast<int>(input.document.lineIndex(cursorOffset) + 1);
 	columnNumber = static_cast<int>(input.document.column(cursorOffset) + 1);
 
-	std::cout << "custom ops=" << result.transaction.operations().size()
-	          << " hadError=" << (result.hadError ? 1 : 0)
-	          << " applied=" << (commit.applied() ? 1 : 0)
-	          << " conflicted=" << (commit.conflicted() ? 1 : 0)
-	          << " cursor=" << cursorOffset
-	          << " line=" << lineNumber
-	          << " col=" << columnNumber
-	          << " modified=" << (result.fileChanged ? 1 : 0);
-	if (printText)
-		std::cout << " text='" << input.document.text() << "'";
+	std::cout << "custom ops=" << result.transaction.operations().size() << " hadError=" << (result.hadError ? 1 : 0) << " applied=" << (commit.applied() ? 1 : 0) << " conflicted=" << (commit.conflicted() ? 1 : 0) << " cursor=" << cursorOffset << " line=" << lineNumber << " col=" << columnNumber << " modified=" << (result.fileChanged ? 1 : 0);
+	if (printText) std::cout << " text='" << input.document.text() << "'";
 	std::cout << "\n";
 
 	if (result.hadError) {
@@ -383,8 +341,7 @@ bool runCustomStagedProbe(const std::string &source, const std::string &document
 }
 
 int runStagedNavProbeMode() {
-	static const char *const kMacros[] = {"mrmac/macros/test_cursor_ops.mrmac", "mrmac/macros/test_nav_ops.mrmac",
-	                                      "mrmac/macros/test_tab_indent_ops.mrmac"};
+	static const char *const kMacros[] = {"mrmac/macros/test_cursor_ops.mrmac", "mrmac/macros/test_nav_ops.mrmac", "mrmac/macros/test_tab_indent_ops.mrmac"};
 	static const char kCustomSource[] = "$MACRO NavStage;\n"
 	                                    "GOTO_LINE(2);\n"
 	                                    "GOTO_COL(3);\n"
@@ -462,10 +419,7 @@ int runMacroScreenFlushProbeMode() {
 	mrvmUiEndMacroScreenBatch();
 	batchedFlushes = mrvmUiMacroScreenFlushCount();
 
-	std::cout << "macro-screen-flush-probe unbatched=" << unbatchedFlushes
-	          << " batched=" << batchedFlushes
-	          << " reduction=" << (unbatchedFlushes > batchedFlushes ? (unbatchedFlushes - batchedFlushes) : 0)
-	          << "\n";
+	std::cout << "macro-screen-flush-probe unbatched=" << unbatchedFlushes << " batched=" << batchedFlushes << " reduction=" << (unbatchedFlushes > batchedFlushes ? (unbatchedFlushes - batchedFlushes) : 0) << "\n";
 	return batchedFlushes < unbatchedFlushes ? 0 : 1;
 }
 
@@ -546,11 +500,7 @@ bool validateMrsetupEditorSettings(std::string &failureReason) {
 bool validateMrsetupColorSettings(std::string &failureReason) {
 	MRColorSetupSettings colors = configuredColorSetupSettings();
 
-	if (colors.windowColors[0] != 0x10 || colors.windowColors[1] != 0x11 ||
-	    colors.windowColors[2] != 0x12 || colors.windowColors[3] != 0x13 ||
-	    colors.windowColors[4] != 0x14 || colors.windowColors[5] != 0x15 ||
-	    colors.windowColors[6] != 0x16 || colors.windowColors[7] != 0x17 ||
-	    colors.windowColors[8] != 0x1F || colors.windowColors[9] != 0x1F) {
+	if (colors.windowColors[0] != 0x10 || colors.windowColors[1] != 0x11 || colors.windowColors[2] != 0x12 || colors.windowColors[3] != 0x13 || colors.windowColors[4] != 0x14 || colors.windowColors[5] != 0x15 || colors.windowColors[6] != 0x16 || colors.windowColors[7] != 0x17 || colors.windowColors[8] != 0x1F || colors.windowColors[9] != 0x1F) {
 		failureReason = "Startup context should apply WINDOWCOLORS list (including legacy migration).";
 		return false;
 	}
@@ -574,8 +524,7 @@ bool validateMrsetupRuntimeRejection(const std::vector<unsigned char> &bytecode,
 	std::string vmError;
 
 	mrvmSetStartupSettingsMode(false);
-	vm.executeAt(bytecode.data(), bytecode.size(), static_cast<size_t>(entryOffset), std::string(), macroName,
-	             true, true);
+	vm.executeAt(bytecode.data(), bytecode.size(), static_cast<size_t>(entryOffset), std::string(), macroName, true, true);
 	if (!firstVmError(vm.log, vmError)) {
 		failureReason = "Runtime context should reject MRSETUP, but no VM Error occurred.";
 		return false;
@@ -629,8 +578,7 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 		std::string vmError;
 
 		mrvmSetStartupSettingsMode(true);
-		vm.executeAt(bytecode.data(), bytecode.size(), static_cast<size_t>(entryOffset), std::string(), macroName,
-		             true, true);
+		vm.executeAt(bytecode.data(), bytecode.size(), static_cast<size_t>(entryOffset), std::string(), macroName, true, true);
 		mrvmSetStartupSettingsMode(false);
 
 		if (firstVmError(vm.log, vmError)) {
@@ -665,20 +613,16 @@ bool testPathDefaultsFromEnvironment(std::string &failureReason) {
 	bool hadShell = oldShell != nullptr;
 
 	auto restoreEnvironment = [&]() {
-		if (hadTmpdir)
-			setenv("TMPDIR", oldTmpdirValue.c_str(), 1);
+		if (hadTmpdir) setenv("TMPDIR", oldTmpdirValue.c_str(), 1);
 		else
 			unsetenv("TMPDIR");
-		if (hadTemp)
-			setenv("TEMP", oldTempValue.c_str(), 1);
+		if (hadTemp) setenv("TEMP", oldTempValue.c_str(), 1);
 		else
 			unsetenv("TEMP");
-		if (hadTmp)
-			setenv("TMP", oldTmpValue.c_str(), 1);
+		if (hadTmp) setenv("TMP", oldTmpValue.c_str(), 1);
 		else
 			unsetenv("TMP");
-		if (hadShell)
-			setenv("SHELL", oldShellValue.c_str(), 1);
+		if (hadShell) setenv("SHELL", oldShellValue.c_str(), 1);
 		else
 			unsetenv("SHELL");
 	};
@@ -720,11 +664,9 @@ bool testPathDefaultsFromEnvironment(std::string &failureReason) {
 }
 
 bool testSettingsMacroAutoCreate(std::string &failureReason) {
-	const std::string root = "/tmp/mr_regression_settings_bootstrap_" +
-	                         std::to_string(static_cast<long>(::getpid()));
+	const std::string root = "/tmp/mr_regression_settings_bootstrap_" + std::to_string(static_cast<long>(::getpid()));
 	const std::string settingsPath = root + "/cfg/mr/settings.mrmac";
-	const std::string expectedSettingLine =
-	    "MRSETUP('SETTINGSPATH', '" + settingsPath + "');";
+	const std::string expectedSettingLine = "MRSETUP('SETTINGSPATH', '" + settingsPath + "');";
 	std::string content;
 	std::string ioError;
 	struct stat st;
@@ -738,8 +680,7 @@ bool testSettingsMacroAutoCreate(std::string &failureReason) {
 		failureReason = "Unable to create bootstrap probe root directory.";
 		return false;
 	}
-	if (!ensureSettingsMacroFileExists(settingsPath, &failureReason))
-		return false;
+	if (!ensureSettingsMacroFileExists(settingsPath, &failureReason)) return false;
 	if (::stat(settingsPath.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) {
 		failureReason = "Auto-created settings.mrmac is missing.";
 		return false;
@@ -800,13 +741,11 @@ bool testSettingsMacroAutoCreate(std::string &failureReason) {
 		failureReason = "Auto-created settings.mrmac is missing DEFAULT_EXTENSIONS.";
 		return false;
 	}
-	if (content.find("MRSETUP('TRUNCATE_SPACES', 'true');") == std::string::npos &&
-	    content.find("MRSETUP('TRUNCATE_SPACES', 'false');") == std::string::npos) {
+	if (content.find("MRSETUP('TRUNCATE_SPACES', 'true');") == std::string::npos && content.find("MRSETUP('TRUNCATE_SPACES', 'false');") == std::string::npos) {
 		failureReason = "Auto-created settings.mrmac should persist TRUNCATE_SPACES as true/false.";
 		return false;
 	}
-	if (content.find("MRSETUP('TAB_EXPAND', 'true');") == std::string::npos &&
-	    content.find("MRSETUP('TAB_EXPAND', 'false');") == std::string::npos) {
+	if (content.find("MRSETUP('TAB_EXPAND', 'true');") == std::string::npos && content.find("MRSETUP('TAB_EXPAND', 'false');") == std::string::npos) {
 		failureReason = "Auto-created settings.mrmac should persist TAB_EXPAND as true/false.";
 		return false;
 	}
@@ -814,29 +753,23 @@ bool testSettingsMacroAutoCreate(std::string &failureReason) {
 		failureReason = "Auto-created settings.mrmac is missing TAB_SIZE.";
 		return false;
 	}
-	if (content.find("MRSETUP('BACKUP_FILES', 'true');") == std::string::npos &&
-	    content.find("MRSETUP('BACKUP_FILES', 'false');") == std::string::npos) {
+	if (content.find("MRSETUP('BACKUP_FILES', 'true');") == std::string::npos && content.find("MRSETUP('BACKUP_FILES', 'false');") == std::string::npos) {
 		failureReason = "Auto-created settings.mrmac should persist BACKUP_FILES as true/false.";
 		return false;
 	}
-	if (content.find("MRSETUP('SHOW_EOF_MARKER', 'true');") == std::string::npos &&
-	    content.find("MRSETUP('SHOW_EOF_MARKER', 'false');") == std::string::npos) {
+	if (content.find("MRSETUP('SHOW_EOF_MARKER', 'true');") == std::string::npos && content.find("MRSETUP('SHOW_EOF_MARKER', 'false');") == std::string::npos) {
 		failureReason = "Auto-created settings.mrmac should persist SHOW_EOF_MARKER as true/false.";
 		return false;
 	}
-	if (content.find("MRSETUP('SHOW_EOF_MARKER_EMOJI', 'true');") == std::string::npos &&
-	    content.find("MRSETUP('SHOW_EOF_MARKER_EMOJI', 'false');") == std::string::npos) {
+	if (content.find("MRSETUP('SHOW_EOF_MARKER_EMOJI', 'true');") == std::string::npos && content.find("MRSETUP('SHOW_EOF_MARKER_EMOJI', 'false');") == std::string::npos) {
 		failureReason = "Auto-created settings.mrmac should persist SHOW_EOF_MARKER_EMOJI as true/false.";
 		return false;
 	}
-	if (content.find("MRSETUP('LINE_NUMBERS_POSITION', 'OFF');") == std::string::npos &&
-	    content.find("MRSETUP('LINE_NUMBERS_POSITION', 'LEADING');") == std::string::npos &&
-	    content.find("MRSETUP('LINE_NUMBERS_POSITION', 'TRAILING');") == std::string::npos) {
+	if (content.find("MRSETUP('LINE_NUMBERS_POSITION', 'OFF');") == std::string::npos && content.find("MRSETUP('LINE_NUMBERS_POSITION', 'LEADING');") == std::string::npos && content.find("MRSETUP('LINE_NUMBERS_POSITION', 'TRAILING');") == std::string::npos) {
 		failureReason = "Auto-created settings.mrmac should persist LINE_NUMBERS_POSITION as OFF/LEADING/TRAILING.";
 		return false;
 	}
-	if (content.find("MRSETUP('LINE_NUM_ZERO_FILL', 'true');") == std::string::npos &&
-	    content.find("MRSETUP('LINE_NUM_ZERO_FILL', 'false');") == std::string::npos) {
+	if (content.find("MRSETUP('LINE_NUM_ZERO_FILL', 'true');") == std::string::npos && content.find("MRSETUP('LINE_NUM_ZERO_FILL', 'false');") == std::string::npos) {
 		failureReason = "Auto-created settings.mrmac should persist LINE_NUM_ZERO_FILL as true/false.";
 		return false;
 	}
@@ -852,17 +785,12 @@ bool testSettingsMacroAutoCreate(std::string &failureReason) {
 		failureReason = "Auto-created settings.mrmac is missing COLORTHEMEURI.";
 		return false;
 	}
-	if (content.find("MRSETUP('WINDOWCOLORS', '") != std::string::npos ||
-	    content.find("MRSETUP('MENUDIALOGCOLORS', '") != std::string::npos ||
-	    content.find("MRSETUP('HELPCOLORS', '") != std::string::npos ||
-	    content.find("MRSETUP('OTHERCOLORS', '") != std::string::npos) {
+	if (content.find("MRSETUP('WINDOWCOLORS', '") != std::string::npos || content.find("MRSETUP('MENUDIALOGCOLORS', '") != std::string::npos || content.find("MRSETUP('HELPCOLORS', '") != std::string::npos || content.find("MRSETUP('OTHERCOLORS', '") != std::string::npos) {
 		failureReason = "settings.mrmac must not contain direct color lists after theme migration.";
 		return false;
 	}
 	{
-		static const std::regex themePattern(
-		    "MRSETUP\\('COLORTHEMEURI',\\s*'((?:''|[^'])*)'\\);",
-		    std::regex_constants::ECMAScript | std::regex_constants::icase);
+		static const std::regex themePattern("MRSETUP\\('COLORTHEMEURI',\\s*'((?:''|[^'])*)'\\);", std::regex_constants::ECMAScript | std::regex_constants::icase);
 		std::smatch match;
 		std::string themePath;
 		struct stat themeStat;
@@ -880,21 +808,7 @@ bool testSettingsMacroAutoCreate(std::string &failureReason) {
 		failureReason = "Auto-created settings.mrmac must not include deprecated CURSORVISIBILITY.";
 		return false;
 	}
-	if (content.find("MRSETUP('PAGEBREAK', '") != std::string::npos ||
-	    content.find("MRSETUP('WORDDELIMS', '") != std::string::npos ||
-	    content.find("MRSETUP('DEFAULTEXTS', '") != std::string::npos ||
-	    content.find("MRSETUP('TRUNCSPACES', '") != std::string::npos ||
-	    content.find("MRSETUP('EOFCTRLZ', '") != std::string::npos ||
-	    content.find("MRSETUP('EOFCRLF', '") != std::string::npos ||
-	    content.find("MRSETUP('TABEXPAND', '") != std::string::npos ||
-	    content.find("MRSETUP('TABSIZE', '") != std::string::npos ||
-	    content.find("MRSETUP('BACKUPFILES', '") != std::string::npos ||
-	    content.find("MRSETUP('SHOWEOFMARKER', '") != std::string::npos ||
-	    content.find("MRSETUP('SHOWEOFMARKEREMOJI', '") != std::string::npos ||
-	    content.find("MRSETUP('SHOWLINENUMBERS', '") != std::string::npos ||
-	    content.find("MRSETUP('LINENUMZEROFILL', '") != std::string::npos ||
-	    content.find("MRSETUP('PERSISTENTBLOCKS', '") != std::string::npos ||
-	    content.find("MRSETUP('COLBLOCKMOVE', '") != std::string::npos ||
+	if (content.find("MRSETUP('PAGEBREAK', '") != std::string::npos || content.find("MRSETUP('WORDDELIMS', '") != std::string::npos || content.find("MRSETUP('DEFAULTEXTS', '") != std::string::npos || content.find("MRSETUP('TRUNCSPACES', '") != std::string::npos || content.find("MRSETUP('EOFCTRLZ', '") != std::string::npos || content.find("MRSETUP('EOFCRLF', '") != std::string::npos || content.find("MRSETUP('TABEXPAND', '") != std::string::npos || content.find("MRSETUP('TABSIZE', '") != std::string::npos || content.find("MRSETUP('BACKUPFILES', '") != std::string::npos || content.find("MRSETUP('SHOWEOFMARKER', '") != std::string::npos || content.find("MRSETUP('SHOWEOFMARKEREMOJI', '") != std::string::npos || content.find("MRSETUP('SHOWLINENUMBERS', '") != std::string::npos || content.find("MRSETUP('LINENUMZEROFILL', '") != std::string::npos || content.find("MRSETUP('PERSISTENTBLOCKS', '") != std::string::npos || content.find("MRSETUP('COLBLOCKMOVE', '") != std::string::npos ||
 	    content.find("MRSETUP('DEFAULTMODE', '") != std::string::npos) {
 		failureReason = "Auto-created settings.mrmac must not rewrite deprecated edit-setting keys.";
 		return false;
@@ -924,11 +838,7 @@ bool testToFromHeaders(std::string &failureReason) {
 		int mode;
 		int flags;
 	};
-	static const ExpectedMacro expected[] = {{"Alpha", "<AltB>", MACRO_MODE_EDIT, MACRO_ATTR_TRANS},
-	                                         {"Beta", "<CtrlF7>", MACRO_MODE_DOS_SHELL, MACRO_ATTR_DUMP},
-	                                         {"Gamma", "<F5>", MACRO_MODE_ALL, MACRO_ATTR_PERM},
-	                                         {"ShiftTab", "<ShftTAB>", MACRO_MODE_EDIT, 0},
-	                                         {"Delta", "", MACRO_MODE_EDIT, 0}};
+	static const ExpectedMacro expected[] = {{"Alpha", "<AltB>", MACRO_MODE_EDIT, MACRO_ATTR_TRANS}, {"Beta", "<CtrlF7>", MACRO_MODE_DOS_SHELL, MACRO_ATTR_DUMP}, {"Gamma", "<F5>", MACRO_MODE_ALL, MACRO_ATTR_PERM}, {"ShiftTab", "<ShftTAB>", MACRO_MODE_EDIT, 0}, {"Delta", "", MACRO_MODE_EDIT, 0}};
 
 	if (bytecode == NULL) {
 		failureReason = std::string("Compilation failed: ") + get_last_compile_error();
@@ -965,15 +875,10 @@ bool testToFromHeaders(std::string &failureReason) {
 		}
 	}
 
-	if (!expectCompileError("$MACRO Bad TO <NoSuchKey>;\nEND_MACRO;\n", "Keycode not supported.", failureReason))
-		return false;
-	if (!expectCompileError("$MACRO Bad TO <F1> TO <F2>;\nEND_MACRO;\n", "Duplicate TO clause.", failureReason))
-		return false;
-	if (!expectCompileError("$MACRO Bad FROM EDIT FROM ALL;\nEND_MACRO;\n", "Duplicate FROM clause.",
-	                        failureReason))
-		return false;
-	if (!expectCompileError("$MACRO Bad FROM INVALID;\nEND_MACRO;\n", "Mode expected.", failureReason))
-		return false;
+	if (!expectCompileError("$MACRO Bad TO <NoSuchKey>;\nEND_MACRO;\n", "Keycode not supported.", failureReason)) return false;
+	if (!expectCompileError("$MACRO Bad TO <F1> TO <F2>;\nEND_MACRO;\n", "Duplicate TO clause.", failureReason)) return false;
+	if (!expectCompileError("$MACRO Bad FROM EDIT FROM ALL;\nEND_MACRO;\n", "Duplicate FROM clause.", failureReason)) return false;
+	if (!expectCompileError("$MACRO Bad FROM INVALID;\nEND_MACRO;\n", "Mode expected.", failureReason)) return false;
 
 	failureReason.clear();
 	return true;
@@ -1024,29 +929,25 @@ bool testToFromDispatch(std::string &failureReason) {
 	vm.execute(bytecode, bytecodeSize);
 	std::free(bytecode);
 
-	ok = mrvmRunAssignedMacroForKey(kbAltB, 0, executedMacroName, nullptr) &&
-	     executedMacroName == "HitEditOverride";
+	ok = mrvmRunAssignedMacroForKey(kbAltB, 0, executedMacroName, nullptr) && executedMacroName == "HitEditOverride";
 	if (!ok) {
 		failureReason = "Edit-mode key dispatch failed.";
 		std::remove(macroPath);
 		return false;
 	}
-	ok = mrvmRunAssignedMacroForKey(kbShiftTab, 0, executedMacroName, nullptr) &&
-	     executedMacroName == "HitShiftTab";
+	ok = mrvmRunAssignedMacroForKey(kbShiftTab, 0, executedMacroName, nullptr) && executedMacroName == "HitShiftTab";
 	if (!ok) {
 		failureReason = "Shift+Tab dispatch failed.";
 		std::remove(macroPath);
 		return false;
 	}
-	ok = mrvmRunAssignedMacroForKey(kbCtrlA, 0, executedMacroName, nullptr) &&
-	     executedMacroName == "HitCtrlA";
+	ok = mrvmRunAssignedMacroForKey(kbCtrlA, 0, executedMacroName, nullptr) && executedMacroName == "HitCtrlA";
 	if (!ok) {
 		failureReason = "Ctrl+A dispatch failed.";
 		std::remove(macroPath);
 		return false;
 	}
-	ok = mrvmRunAssignedMacroForKey(kbAlt1, 0, executedMacroName, nullptr) &&
-	     executedMacroName == "HitAlt1";
+	ok = mrvmRunAssignedMacroForKey(kbAlt1, 0, executedMacroName, nullptr) && executedMacroName == "HitAlt1";
 	if (!ok) {
 		failureReason = "Alt+1 dispatch failed.";
 		std::remove(macroPath);
@@ -1070,8 +971,7 @@ bool testToFromDispatch(std::string &failureReason) {
 
 bool testSettingsDiscrepancyMigrationGuard(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	const std::string root =
-	    "/tmp/mr_regression_settings_migration_" + std::to_string(static_cast<long>(::getpid()));
+	const std::string root = "/tmp/mr_regression_settings_migration_" + std::to_string(static_cast<long>(::getpid()));
 	const std::string settingsPath = root + "/cfg/settings.mrmac";
 	const std::string legacyThemePath = root + "/cfg/legacy-theme.mrmac";
 	const std::string legacySource = "$MACRO LegacySettings FROM EDIT;\n"
@@ -1086,7 +986,8 @@ bool testSettingsDiscrepancyMigrationGuard(std::string &failureReason) {
 	                                 "MRSETUP('LINE_NUMBERS_POSITION', 'LEADING');\n"
 	                                 "MRSETUP('LINE_NUM_ZERO_FILL', 'true');\n"
 	                                 "MRSETUP('COLORTHEMEURI', '" +
-	                                 legacyThemePath + "');\n"
+	                                 legacyThemePath +
+	                                 "');\n"
 	                                 "MRSETUP('WINDOWCOLORS', 'v1:31,32,33,34,35,36,37,38');\n"
 	                                 "MRSETUP('UNKNOWNKEY', 'ignored');\n"
 	                                 "END_MACRO;\n";
@@ -1096,16 +997,14 @@ bool testSettingsDiscrepancyMigrationGuard(std::string &failureReason) {
 	bool restored = false;
 
 	auto restore = [&]() {
-		if (!restored)
-			restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
 		return restored;
 	};
 
 	(void)::remove(settingsPath.c_str());
 	(void)::remove(legacyThemePath.c_str());
 
-	if (!mrMigrateSettingsMacroToCurrentVersionForTesting(settingsPath, legacySource, "regression-probe",
-	                                                      &errorText)) {
+	if (!mrMigrateSettingsMacroToCurrentVersionForTesting(settingsPath, legacySource, "regression-probe", &errorText)) {
 		restore();
 		failureReason = "Settings migration probe failed: " + errorText;
 		return false;
@@ -1120,11 +1019,7 @@ bool testSettingsDiscrepancyMigrationGuard(std::string &failureReason) {
 		failureReason = "Migrated settings.mrmac must anchor SETTINGSPATH to the active file.";
 		return false;
 	}
-	if (content.find("MRSETUP('LINE_NUMBERS_POSITION', 'LEADING');") == std::string::npos ||
-	    content.find("MRSETUP('LINE_NUM_ZERO_FILL', 'true');") == std::string::npos ||
-	    content.find("MRSETUP('TRUNCATE_SPACES', 'false');") == std::string::npos ||
-	    content.find("MRSETUP('TAB_SIZE', '4');") == std::string::npos ||
-	    content.find("MRSETUP('BACKUP_FILES', 'false');") == std::string::npos) {
+	if (content.find("MRSETUP('LINE_NUMBERS_POSITION', 'LEADING');") == std::string::npos || content.find("MRSETUP('LINE_NUM_ZERO_FILL', 'true');") == std::string::npos || content.find("MRSETUP('TRUNCATE_SPACES', 'false');") == std::string::npos || content.find("MRSETUP('TAB_SIZE', '4');") == std::string::npos || content.find("MRSETUP('BACKUP_FILES', 'false');") == std::string::npos) {
 		restore();
 		failureReason = "Migrated settings.mrmac did not carry over recognized edit settings.";
 		return false;
@@ -1134,8 +1029,7 @@ bool testSettingsDiscrepancyMigrationGuard(std::string &failureReason) {
 		failureReason = "Migrated settings.mrmac must not keep unknown legacy keys.";
 		return false;
 	}
-	if (content.find("MRSETUP('PERSISTENT_BLOCKS', '") == std::string::npos ||
-	    content.find("MRSETUP('DEFAULT_MODE', '") == std::string::npos) {
+	if (content.find("MRSETUP('PERSISTENT_BLOCKS', '") == std::string::npos || content.find("MRSETUP('DEFAULT_MODE', '") == std::string::npos) {
 		restore();
 		failureReason = "Migrated settings.mrmac must include normalized defaults for required keys.";
 		return false;
@@ -1147,8 +1041,7 @@ bool testSettingsDiscrepancyMigrationGuard(std::string &failureReason) {
 	}
 	{
 		MREditSetupSettings edit = configuredEditSetupSettings();
-		if (!edit.showLineNumbers || !edit.lineNumZeroFill || edit.truncateSpaces ||
-		    edit.tabSize != 4 || edit.backupFiles) {
+		if (!edit.showLineNumbers || !edit.lineNumZeroFill || edit.truncateSpaces || edit.tabSize != 4 || edit.backupFiles) {
 			restore();
 			failureReason = "Applying migrated settings should restore carried edit-setting values.";
 			return false;
@@ -1172,49 +1065,17 @@ bool testDialogPaletteOverridesAbsent(std::string &failureReason) {
 		failureReason = "Unable to read MREditorApp.cpp for palette guard: " + ioError;
 		return false;
 	}
-	if (content.find("palette[32] =") != std::string::npos ||
-	    content.find("palette[33] =") != std::string::npos ||
-	    content.find("palette[34] =") != std::string::npos ||
-	    content.find("palette[37] =") != std::string::npos ||
-	    content.find("palette[38] =") != std::string::npos ||
-	    content.find("palette[39] =") != std::string::npos ||
-	    content.find("palette[40] =") != std::string::npos ||
-	    content.find("palette[41] =") != std::string::npos ||
-	    content.find("palette[42] =") != std::string::npos ||
-	    content.find("palette[43] =") != std::string::npos ||
-	    content.find("palette[44] =") != std::string::npos ||
-	    content.find("palette[45] =") != std::string::npos ||
-	    content.find("palette[46] =") != std::string::npos ||
-	    content.find("palette[47] =") != std::string::npos ||
-	    content.find("palette[48] =") != std::string::npos ||
-	    content.find("palette[49] =") != std::string::npos ||
-	    content.find("palette[50] =") != std::string::npos ||
-	    content.find("palette[51] =") != std::string::npos ||
-	    content.find("palette[52] =") != std::string::npos ||
-	    content.find("palette[53] =") != std::string::npos ||
-	    content.find("palette[54] =") != std::string::npos ||
-	    content.find("palette[57] =") != std::string::npos ||
-	    content.find("palette[58] =") != std::string::npos ||
-	    content.find("palette[59] =") != std::string::npos ||
-	    content.find("palette[60] =") != std::string::npos ||
-	    content.find("palette[61] =") != std::string::npos ||
-	    content.find("palette[62] =") != std::string::npos ||
-	    content.find("palette[63] =") != std::string::npos) {
-		failureReason =
-		    "MREditorApp.cpp must not hardcode dialog colors outside global scrollbar synchronization.";
+	if (content.find("palette[32] =") != std::string::npos || content.find("palette[33] =") != std::string::npos || content.find("palette[34] =") != std::string::npos || content.find("palette[37] =") != std::string::npos || content.find("palette[38] =") != std::string::npos || content.find("palette[39] =") != std::string::npos || content.find("palette[40] =") != std::string::npos || content.find("palette[41] =") != std::string::npos || content.find("palette[42] =") != std::string::npos || content.find("palette[43] =") != std::string::npos || content.find("palette[44] =") != std::string::npos || content.find("palette[45] =") != std::string::npos || content.find("palette[46] =") != std::string::npos || content.find("palette[47] =") != std::string::npos || content.find("palette[48] =") != std::string::npos || content.find("palette[49] =") != std::string::npos || content.find("palette[50] =") != std::string::npos || content.find("palette[51] =") != std::string::npos ||
+	    content.find("palette[52] =") != std::string::npos || content.find("palette[53] =") != std::string::npos || content.find("palette[54] =") != std::string::npos || content.find("palette[57] =") != std::string::npos || content.find("palette[58] =") != std::string::npos || content.find("palette[59] =") != std::string::npos || content.find("palette[60] =") != std::string::npos || content.find("palette[61] =") != std::string::npos || content.find("palette[62] =") != std::string::npos || content.find("palette[63] =") != std::string::npos) {
+		failureReason = "MREditorApp.cpp must not hardcode dialog colors outside global scrollbar synchronization.";
 		return false;
 	}
-	if (content.find("static const TPalette basePalette(cpAppColor, sizeof(cpAppColor) - 1);") ==
-	        std::string::npos &&
-	    content.find("static const TPalette &basePalette = extendedAppBasePalette();") == std::string::npos) {
-		failureReason =
-		    "MREditorApp::getPalette must use a stable base palette source before applying overrides.";
+	if (content.find("static const TPalette basePalette(cpAppColor, sizeof(cpAppColor) - 1);") == std::string::npos && content.find("static const TPalette &basePalette = extendedAppBasePalette();") == std::string::npos) {
+		failureReason = "MREditorApp::getPalette must use a stable base palette source before applying overrides.";
 		return false;
 	}
-	if (content.find("palette = basePalette;") == std::string::npos ||
-	    content.find("slot <= kMrPaletteMax") == std::string::npos) {
-		failureReason =
-		    "MREditorApp::getPalette must rebuild each call and include extension slots up to kMrPaletteMax.";
+	if (content.find("palette = basePalette;") == std::string::npos || content.find("slot <= kMrPaletteMax") == std::string::npos) {
+		failureReason = "MREditorApp::getPalette must rebuild each call and include extension slots up to kMrPaletteMax.";
 		return false;
 	}
 	failureReason.clear();
@@ -1222,8 +1083,7 @@ bool testDialogPaletteOverridesAbsent(std::string &failureReason) {
 }
 
 bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
-	static const unsigned char probeValues[] = {0x51, 0x52, 0x53, 0x54, 0x55, 0x56,
-	                                            0x57, 0x58, 0x59, 0x5A, 0x5B};
+	static const unsigned char probeValues[] = {0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5B};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::size_t itemCount = 0;
 	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::Window, itemCount);
@@ -1232,10 +1092,8 @@ bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
 	bool restoreOk = true;
 
 	auto restore = [&]() {
-		if (!restoreOk)
-			return;
-		restoreOk = setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, previous.windowColors.data(),
-		                                               previous.windowColors.size(), &errorText);
+		if (!restoreOk) return;
+		restoreOk = setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, previous.windowColors.data(), previous.windowColors.size(), &errorText);
 	};
 
 	if (items == nullptr || itemCount != sizeof(probeValues) / sizeof(probeValues[0])) {
@@ -1243,19 +1101,14 @@ bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
 		return false;
 	}
 
-	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, probeValues,
-	                                        sizeof(probeValues) / sizeof(probeValues[0]), &errorText)) {
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, probeValues, sizeof(probeValues) / sizeof(probeValues[0]), &errorText)) {
 		failureReason = "Unable to set WINDOWCOLORS probe values: " + errorText;
 		return false;
 	}
 
 	for (std::size_t i = 0; i < itemCount; ++i) {
 		unsigned char slot = items[i].paletteIndex;
-			bool isExpectedSlot = (slot == 8 || slot == 9 || slot == 13 || slot == 14 ||
-			                       slot == kMrPaletteCurrentLine || slot == kMrPaletteCurrentLineInBlock ||
-			                       slot == kMrPaletteChangedText || slot == kMrPaletteLineNumbers ||
-			                       slot == kMrPaletteEofMarker || slot == kMrPaletteCodeFolding ||
-			                       slot == kMrPaletteFormatRuler);
+		bool isExpectedSlot = (slot == 8 || slot == 9 || slot == 13 || slot == 14 || slot == kMrPaletteCurrentLine || slot == kMrPaletteCurrentLineInBlock || slot == kMrPaletteChangedText || slot == kMrPaletteLineNumbers || slot == kMrPaletteEofMarker || slot == kMrPaletteCodeFolding || slot == kMrPaletteFormatRuler);
 		if (!configuredColorSlotOverride(items[i].paletteIndex, value)) {
 			restore();
 			failureReason = "WINDOWCOLORS item must override its mapped palette slot.";
@@ -1278,9 +1131,7 @@ bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
 }
 
 bool testMenuDialogColorGroupTargetsExpectedSlots(std::string &failureReason) {
-	static const unsigned char probeValues[] = {0x61, 0x62, 0x63, 0x64, 0x65, 0x66,
-	                                            0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C,
-	                                            0x6D, 0x6E, 0x6F, 0x70, 0x71};
+	static const unsigned char probeValues[] = {0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0x70, 0x71};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::size_t itemCount = 0;
 	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::MenuDialog, itemCount);
@@ -1289,11 +1140,8 @@ bool testMenuDialogColorGroupTargetsExpectedSlots(std::string &failureReason) {
 	bool restoreOk = true;
 
 	auto restore = [&]() {
-		if (!restoreOk)
-			return;
-		restoreOk = setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog,
-		                                               previous.menuDialogColors.data(),
-		                                               previous.menuDialogColors.size(), &errorText);
+		if (!restoreOk) return;
+		restoreOk = setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, previous.menuDialogColors.data(), previous.menuDialogColors.size(), &errorText);
 	};
 
 	if (items == nullptr || itemCount != sizeof(probeValues) / sizeof(probeValues[0])) {
@@ -1301,8 +1149,7 @@ bool testMenuDialogColorGroupTargetsExpectedSlots(std::string &failureReason) {
 		return false;
 	}
 
-	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, probeValues,
-	                                        sizeof(probeValues) / sizeof(probeValues[0]), &errorText)) {
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, probeValues, sizeof(probeValues) / sizeof(probeValues[0]), &errorText)) {
 		failureReason = "Unable to set MENUDIALOGCOLORS probe values: " + errorText;
 		return false;
 	}
@@ -1342,54 +1189,31 @@ bool testMenuDialogSemanticLabelsGuard(std::string &failureReason) {
 	bool restored = false;
 
 	auto restore = [&]() {
-		if (!restored)
-			restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
 		return restored;
 	};
 
-	if (!applyConfiguredColorSetupValue("MENUDIALOGCOLORS",
-	                                    "v1:10,11,12,13,14,15,16,17,18,19,1A,1B,1C,1D",
-	                                    &errorText)) {
+	if (!applyConfiguredColorSetupValue("MENUDIALOGCOLORS", "v1:10,11,12,13,14,15,16,17,18,19,1A,1B,1C,1D", &errorText)) {
 		restore();
 		failureReason = "Unable to apply 14-entry legacy MENUDIALOGCOLORS list: " + errorText;
 		return false;
 	}
 	configured = configuredColorSetupSettings();
-	if (configured.menuDialogColors[kMenuDialogIndexInactiveControls] !=
-	        defaults.menuDialogColors[kMenuDialogIndexInactiveControls] ||
-	    configured.menuDialogColors[kMenuDialogIndexInactiveElements] !=
-	        defaults.menuDialogColors[kMenuDialogIndexInactiveElements] ||
-	    configured.menuDialogColors[kMenuDialogIndexDialogFrame] != 0x1C ||
-	    configured.menuDialogColors[kMenuDialogIndexDialogText] != 0x1D ||
-	    configured.menuDialogColors[kMenuDialogIndexDialogBackground] != 0x1C) {
+	if (configured.menuDialogColors[kMenuDialogIndexInactiveControls] != defaults.menuDialogColors[kMenuDialogIndexInactiveControls] || configured.menuDialogColors[kMenuDialogIndexInactiveElements] != defaults.menuDialogColors[kMenuDialogIndexInactiveElements] || configured.menuDialogColors[kMenuDialogIndexDialogFrame] != 0x1C || configured.menuDialogColors[kMenuDialogIndexDialogText] != 0x1D || configured.menuDialogColors[kMenuDialogIndexDialogBackground] != 0x1C) {
 		restore();
-		failureReason =
-		    "14-entry MENUDIALOGCOLORS upgrade must inject inactive-controls default and map dialog background to legacy frame color.";
+		failureReason = "14-entry MENUDIALOGCOLORS upgrade must inject inactive-controls default and map dialog background to legacy frame color.";
 		return false;
 	}
 
-	if (!applyConfiguredColorSetupValue("MENUDIALOGCOLORS",
-	                                    "v1:20,21,22,23,24,25,26,27,28,29,2A",
-	                                    &errorText)) {
+	if (!applyConfiguredColorSetupValue("MENUDIALOGCOLORS", "v1:20,21,22,23,24,25,26,27,28,29,2A", &errorText)) {
 		restore();
 		failureReason = "Unable to apply 11-entry legacy MENUDIALOGCOLORS list: " + errorText;
 		return false;
 	}
 	configured = configuredColorSetupSettings();
-	if (configured.menuDialogColors[kMenuDialogIndexListboxSelector] !=
-	        defaults.menuDialogColors[kMenuDialogIndexListboxSelector] ||
-	    configured.menuDialogColors[kMenuDialogIndexInactiveControls] !=
-	        defaults.menuDialogColors[kMenuDialogIndexInactiveControls] ||
-	    configured.menuDialogColors[kMenuDialogIndexInactiveElements] !=
-	        defaults.menuDialogColors[kMenuDialogIndexInactiveElements] ||
-	    configured.menuDialogColors[kMenuDialogIndexDialogFrame] !=
-	        defaults.menuDialogColors[kMenuDialogIndexDialogFrame] ||
-	    configured.menuDialogColors[kMenuDialogIndexDialogText] != defaults.menuDialogColors[kMenuDialogIndexDialogText] ||
-	    configured.menuDialogColors[kMenuDialogIndexDialogBackground] !=
-	        defaults.menuDialogColors[kMenuDialogIndexDialogBackground]) {
+	if (configured.menuDialogColors[kMenuDialogIndexListboxSelector] != defaults.menuDialogColors[kMenuDialogIndexListboxSelector] || configured.menuDialogColors[kMenuDialogIndexInactiveControls] != defaults.menuDialogColors[kMenuDialogIndexInactiveControls] || configured.menuDialogColors[kMenuDialogIndexInactiveElements] != defaults.menuDialogColors[kMenuDialogIndexInactiveElements] || configured.menuDialogColors[kMenuDialogIndexDialogFrame] != defaults.menuDialogColors[kMenuDialogIndexDialogFrame] || configured.menuDialogColors[kMenuDialogIndexDialogText] != defaults.menuDialogColors[kMenuDialogIndexDialogText] || configured.menuDialogColors[kMenuDialogIndexDialogBackground] != defaults.menuDialogColors[kMenuDialogIndexDialogBackground]) {
 		restore();
-		failureReason =
-		    "11-entry MENUDIALOGCOLORS upgrade must fill missing selector/inactive/frame/text/background defaults.";
+		failureReason = "11-entry MENUDIALOGCOLORS upgrade must fill missing selector/inactive/frame/text/background defaults.";
 		return false;
 	}
 
@@ -1402,9 +1226,7 @@ bool testMenuDialogSemanticLabelsGuard(std::string &failureReason) {
 }
 
 bool testMenuEntryHotkeySelectionAliasGuard(std::string &failureReason) {
-	static const unsigned char probeValues[] = {0x71, 0x72, 0x7B, 0x74, 0x75, 0x76,
-	                                            0x77, 0x78, 0x79, 0x7A, 0x7C, 0x7D,
-	                                            0x7E, 0x7F, 0x70, 0x71, 0x72};
+	static const unsigned char probeValues[] = {0x71, 0x72, 0x7B, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7C, 0x7D, 0x7E, 0x7F, 0x70, 0x71, 0x72};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::string errorText;
 	unsigned char normalHotkey = 0;
@@ -1412,15 +1234,11 @@ bool testMenuEntryHotkeySelectionAliasGuard(std::string &failureReason) {
 	bool restoreOk = true;
 
 	auto restore = [&]() {
-		if (!restoreOk)
-			return;
-		restoreOk = setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog,
-		                                               previous.menuDialogColors.data(),
-		                                               previous.menuDialogColors.size(), &errorText);
+		if (!restoreOk) return;
+		restoreOk = setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, previous.menuDialogColors.data(), previous.menuDialogColors.size(), &errorText);
 	};
 
-	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, probeValues,
-	                                        sizeof(probeValues) / sizeof(probeValues[0]), &errorText)) {
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, probeValues, sizeof(probeValues) / sizeof(probeValues[0]), &errorText)) {
 		failureReason = "Unable to set MENUDIALOGCOLORS probe values: " + errorText;
 		return false;
 	}
@@ -1456,11 +1274,8 @@ bool testDialogFrameAndBackgroundPropagationGuard(std::string &failureReason) {
 	bool restoreOk = true;
 
 	auto restore = [&]() {
-		if (!restoreOk)
-			return;
-		restoreOk = setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog,
-		                                               previous.menuDialogColors.data(),
-		                                               previous.menuDialogColors.size(), &errorText);
+		if (!restoreOk) return;
+		restoreOk = setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, previous.menuDialogColors.data(), previous.menuDialogColors.size(), &errorText);
 	};
 
 	// Set explicit probe colors for:
@@ -1478,8 +1293,7 @@ bool testDialogFrameAndBackgroundPropagationGuard(std::string &failureReason) {
 	probe[kMenuDialogIndexDialogText] = 0x3C;
 	probe[kMenuDialogIndexDialogBackground] = 0x2D;
 
-	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, probe.data(), probe.size(),
-	                                        &errorText)) {
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, probe.data(), probe.size(), &errorText)) {
 		failureReason = "Unable to set MENUDIALOGCOLORS frame/background probe values: " + errorText;
 		return false;
 	}
@@ -1526,9 +1340,7 @@ bool testDialogFrameAndBackgroundPropagationGuard(std::string &failureReason) {
 		}
 	}
 
-	static const unsigned char inactiveControlSlots[] = {kPaletteDialogInactiveControlsGray,
-	                                                      kPaletteDialogInactiveControlsBlue,
-	                                                      kPaletteDialogInactiveControlsCyan};
+	static const unsigned char inactiveControlSlots[] = {kPaletteDialogInactiveControlsGray, kPaletteDialogInactiveControlsBlue, kPaletteDialogInactiveControlsCyan};
 	for (unsigned char slot : inactiveControlSlots) {
 		if (!configuredColorSlotOverride(slot, value)) {
 			restore();
@@ -1574,8 +1386,7 @@ bool testTouchedRangeMidInsertGuard(std::string &failureReason) {
 
 bool testSetupScrollRefreshGuard(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	const std::string root =
-	    "/tmp/mr_regression_edit_roundtrip_" + std::to_string(static_cast<long>(::getpid()));
+	const std::string root = "/tmp/mr_regression_edit_roundtrip_" + std::to_string(static_cast<long>(::getpid()));
 	const std::string settingsPath = root + "/cfg/settings.mrmac";
 	MREditSetupSettings probe = resolveEditSetupDefaults();
 	MREditSetupSettings loaded;
@@ -1586,8 +1397,7 @@ bool testSetupScrollRefreshGuard(std::string &failureReason) {
 	bool restored = false;
 
 	auto restore = [&]() {
-		if (!restored)
-			restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
 		return restored;
 	};
 
@@ -1621,17 +1431,12 @@ bool testSetupScrollRefreshGuard(std::string &failureReason) {
 	paths.tempPath = "/tmp";
 	paths.shellUri = "/bin/sh";
 	source = buildSettingsMacroSource(paths);
-	if (source.find("MRSETUP('DISPLAY_TABS', 'true');") == std::string::npos ||
-	    source.find("MRSETUP('TAB_SIZE', '") == std::string::npos ||
-	    source.find("MRSETUP('LINE_NUMBERS_POSITION', '") == std::string::npos) {
+	if (source.find("MRSETUP('DISPLAY_TABS', 'true');") == std::string::npos || source.find("MRSETUP('TAB_SIZE', '") == std::string::npos || source.find("MRSETUP('LINE_NUMBERS_POSITION', '") == std::string::npos) {
 		restore();
 		failureReason = "Edit-settings roundtrip source did not use canonical edit-setting keys.";
 		return false;
 	}
-	if (source.find("MRSETUP('TABSIZE', '") != std::string::npos ||
-	    source.find("MRSETUP('SHOW_LINE_NUMBERS', '") != std::string::npos ||
-	    source.find("MRSETUP('SHOWLINENUMBERS', '") != std::string::npos ||
-	    source.find("MRFEPROFILE('SET', 'perl_profile', 'TABSIZE', '3');") != std::string::npos) {
+	if (source.find("MRSETUP('TABSIZE', '") != std::string::npos || source.find("MRSETUP('SHOW_LINE_NUMBERS', '") != std::string::npos || source.find("MRSETUP('SHOWLINENUMBERS', '") != std::string::npos || source.find("MRFEPROFILE('SET', 'perl_profile', 'TABSIZE', '3');") != std::string::npos) {
 		restore();
 		failureReason = "Profile roundtrip source still emitted deprecated edit-setting keys.";
 		return false;
@@ -1730,8 +1535,7 @@ bool testSetupScrollRefreshGuard(std::string &failureReason) {
 
 bool testExtendedSettingsRoundtripGuard(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	const std::string root =
-	    "/tmp/mr_regression_extended_settings_" + std::to_string(static_cast<long>(::getpid()));
+	const std::string root = "/tmp/mr_regression_extended_settings_" + std::to_string(static_cast<long>(::getpid()));
 	const std::string settingsPath = root + "/cfg/settings.mrmac";
 	MREditSetupSettings probe = resolveEditSetupDefaults();
 	MRSetupPaths paths = resolveSetupPathDefaults();
@@ -1743,8 +1547,7 @@ bool testExtendedSettingsRoundtripGuard(std::string &failureReason) {
 	MREditSetupSettings normalized;
 
 	auto restore = [&]() {
-		if (!restored)
-			restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
 		return restored;
 	};
 
@@ -1774,20 +1577,8 @@ bool testExtendedSettingsRoundtripGuard(std::string &failureReason) {
 	paths.tempPath = "/tmp";
 	paths.shellUri = "/bin/sh";
 	source = buildSettingsMacroSource(paths);
-	const std::string expectedFormatLineSetting =
-	    "MRSETUP('FORMAT_LINE', '" + normalized.formatLine + "');";
-	if (source.find("MRSETUP('LEFT_MARGIN', '3');") == std::string::npos ||
-	    source.find("MRSETUP('RIGHT_MARGIN', '91');") == std::string::npos ||
-	    source.find("MRSETUP('FORMAT_RULER', 'true');") == std::string::npos ||
-	    source.find("MRSETUP('WORD_WRAP', 'false');") == std::string::npos ||
-	    source.find("MRSETUP('INDENT_STYLE', 'SMART');") == std::string::npos ||
-	    source.find("MRSETUP('FILE_TYPE', 'BINARY');") == std::string::npos ||
-	    source.find("MRSETUP('BINARY_RECORD_LENGTH', '123');") == std::string::npos ||
-	    source.find("MRSETUP('POST_LOAD_MACRO', '") == std::string::npos ||
-	    source.find("MRSETUP('PRE_SAVE_MACRO', '") == std::string::npos ||
-	    source.find("MRSETUP('DEFAULT_PATH', '") == std::string::npos ||
-	    source.find(expectedFormatLineSetting) == std::string::npos ||
-	    source.find("MRSETUP('CURSOR_STATUS_COLOR', '7F');") == std::string::npos) {
+	const std::string expectedFormatLineSetting = "MRSETUP('FORMAT_LINE', '" + normalized.formatLine + "');";
+	if (source.find("MRSETUP('LEFT_MARGIN', '3');") == std::string::npos || source.find("MRSETUP('RIGHT_MARGIN', '91');") == std::string::npos || source.find("MRSETUP('FORMAT_RULER', 'true');") == std::string::npos || source.find("MRSETUP('WORD_WRAP', 'false');") == std::string::npos || source.find("MRSETUP('INDENT_STYLE', 'SMART');") == std::string::npos || source.find("MRSETUP('FILE_TYPE', 'BINARY');") == std::string::npos || source.find("MRSETUP('BINARY_RECORD_LENGTH', '123');") == std::string::npos || source.find("MRSETUP('POST_LOAD_MACRO', '") == std::string::npos || source.find("MRSETUP('PRE_SAVE_MACRO', '") == std::string::npos || source.find("MRSETUP('DEFAULT_PATH', '") == std::string::npos || source.find(expectedFormatLineSetting) == std::string::npos || source.find("MRSETUP('CURSOR_STATUS_COLOR', '7F');") == std::string::npos) {
 		restore();
 		failureReason = "Extended settings serializer did not emit the expected canonical keys.";
 		return false;
@@ -1805,13 +1596,7 @@ bool testExtendedSettingsRoundtripGuard(std::string &failureReason) {
 	}
 
 	loaded = configuredEditSetupSettings();
-	if (loaded.leftMargin != 3 || loaded.rightMargin != 91 || !loaded.formatRuler || loaded.wordWrap ||
-	    loaded.indentStyle != "SMART" ||
-	    loaded.fileType != "BINARY" || loaded.binaryRecordLength != 123 ||
-	    loaded.postLoadMacro != normalizeConfiguredPathInput(probe.postLoadMacro) ||
-	    loaded.preSaveMacro != normalizeConfiguredPathInput(probe.preSaveMacro) ||
-	    loaded.defaultPath != normalizeConfiguredPathInput(probe.defaultPath) ||
-	    loaded.formatLine != normalized.formatLine || loaded.cursorStatusColor != "7F") {
+	if (loaded.leftMargin != 3 || loaded.rightMargin != 91 || !loaded.formatRuler || loaded.wordWrap || loaded.indentStyle != "SMART" || loaded.fileType != "BINARY" || loaded.binaryRecordLength != 123 || loaded.postLoadMacro != normalizeConfiguredPathInput(probe.postLoadMacro) || loaded.preSaveMacro != normalizeConfiguredPathInput(probe.preSaveMacro) || loaded.defaultPath != normalizeConfiguredPathInput(probe.defaultPath) || loaded.formatLine != normalized.formatLine || loaded.cursorStatusColor != "7F") {
 		restore();
 		failureReason = "Extended settings roundtrip lost one or more serialized edit settings.";
 		return false;
@@ -1833,8 +1618,7 @@ bool testEditProfileDirectApiValidationGuard(std::string &failureReason) {
 	bool restored = false;
 
 	auto restore = [&]() {
-		if (!restored)
-			restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
 		return restored;
 	};
 
@@ -1876,8 +1660,7 @@ bool testEditProfileRoundtripGuard(std::string &failureReason) {
 	MREditSetupSettings fallback;
 
 	auto restore = [&]() {
-		if (!restored)
-			restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
 		return restored;
 	};
 
@@ -1945,9 +1728,7 @@ bool testEditProfileRoundtripGuard(std::string &failureReason) {
 		failureReason = "Profile roundtrip did not preserve the profile name.";
 		return false;
 	}
-	if (configuredEditExtensionProfiles()[0].extensions.size() != 2 ||
-		configuredEditExtensionProfiles()[0].extensions[0] != "pl" ||
-		configuredEditExtensionProfiles()[0].extensions[1] != "pm") {
+	if (configuredEditExtensionProfiles()[0].extensions.size() != 2 || configuredEditExtensionProfiles()[0].extensions[0] != "pl" || configuredEditExtensionProfiles()[0].extensions[1] != "pm") {
 		restore();
 		failureReason = "Profile roundtrip did not preserve the extension selector list.";
 		return false;
@@ -1979,8 +1760,7 @@ bool testEditProfileRoundtripGuard(std::string &failureReason) {
 		failureReason = "Non-matching file unexpectedly reported an edit profile match.";
 		return false;
 	}
-	if (fallback.tabSize != globalSettings.tabSize || fallback.showLineNumbers != globalSettings.showLineNumbers ||
-		fallback.defaultMode != globalSettings.defaultMode) {
+	if (fallback.tabSize != globalSettings.tabSize || fallback.showLineNumbers != globalSettings.showLineNumbers || fallback.defaultMode != globalSettings.defaultMode) {
 		restore();
 		failureReason = "Non-matching file did not fall back to the global edit settings.";
 		return false;
@@ -2006,8 +1786,7 @@ bool testEditProfileCaseSensitiveExtensionMatchGuard(std::string &failureReason)
 	std::string matchedProfile;
 
 	auto restore = [&]() {
-		if (!restored)
-			restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
 		return restored;
 	};
 
@@ -2032,8 +1811,7 @@ bool testEditProfileCaseSensitiveExtensionMatchGuard(std::string &failureReason)
 	upperProfile.overrides.values.tabSize = 6;
 	upperProfile.overrides.mask = kOvTabSize;
 
-	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>{lowerProfile, upperProfile},
-	                                       &errorText)) {
+	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>{lowerProfile, upperProfile}, &errorText)) {
 		restore();
 		failureReason = "Unable to seed case-sensitive extension profiles: " + errorText;
 		return false;
@@ -2069,7 +1847,6 @@ bool testEditProfileCaseSensitiveExtensionMatchGuard(std::string &failureReason)
 	return true;
 }
 
-
 bool testLegacyEditProfileMacroDropToDefaultsGuard(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
 	std::string source = R"($MACRO MR_SETTINGS FROM EDIT;
@@ -2087,8 +1864,7 @@ END_MACRO;
 	std::string matchedProfile;
 
 	auto restore = [&]() {
-		if (!restored)
-			restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
 		return restored;
 	};
 
@@ -2142,8 +1918,7 @@ bool testEditProfileCaseSensitiveMacroRoundtripGuard(std::string &failureReason)
 	std::string rewritten;
 
 	auto restore = [&]() {
-		if (!restored)
-			restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
 		return restored;
 	};
 
@@ -2173,10 +1948,7 @@ bool testEditProfileCaseSensitiveMacroRoundtripGuard(std::string &failureReason)
 		failureReason = "Case-sensitive macro source did not preserve profile ids.";
 		return false;
 	}
-	if (configuredEditExtensionProfiles()[0].extensions.size() != 1 ||
-		configuredEditExtensionProfiles()[0].extensions[0] != "c" ||
-		configuredEditExtensionProfiles()[1].extensions.size() != 1 ||
-		configuredEditExtensionProfiles()[1].extensions[0] != "C") {
+	if (configuredEditExtensionProfiles()[0].extensions.size() != 1 || configuredEditExtensionProfiles()[0].extensions[0] != "c" || configuredEditExtensionProfiles()[1].extensions.size() != 1 || configuredEditExtensionProfiles()[1].extensions[0] != "C") {
 		restore();
 		failureReason = "Case-sensitive macro source did not preserve exact extension selectors.";
 		return false;
@@ -2210,14 +1982,12 @@ bool testEditProfileCaseSensitiveMacroRoundtripGuard(std::string &failureReason)
 	paths.tempPath = configuredTempDirectoryPath();
 	paths.shellUri = configuredShellExecutablePath();
 	rewritten = buildSettingsMacroSource(paths);
-	if (rewritten.find("MRFEPROFILE('EXT', 'c_lower', 'c', '');") == std::string::npos ||
-	    rewritten.find("MRFEPROFILE('EXT', 'c_upper', 'C', '');") == std::string::npos) {
+	if (rewritten.find("MRFEPROFILE('EXT', 'c_lower', 'c', '');") == std::string::npos || rewritten.find("MRFEPROFILE('EXT', 'c_upper', 'C', '');") == std::string::npos) {
 		restore();
 		failureReason = "Case-sensitive macro rewrite did not preserve exact extension selectors.";
 		return false;
 	}
-	if (rewritten.find("MRFEPROFILE('SET', 'c_lower', 'TAB_SIZE', '2');") == std::string::npos ||
-	    rewritten.find("MRFEPROFILE('SET', 'c_upper', 'TAB_SIZE', '6');") == std::string::npos) {
+	if (rewritten.find("MRFEPROFILE('SET', 'c_lower', 'TAB_SIZE', '2');") == std::string::npos || rewritten.find("MRFEPROFILE('SET', 'c_upper', 'TAB_SIZE', '6');") == std::string::npos) {
 		restore();
 		failureReason = "Case-sensitive macro rewrite did not preserve profile override values.";
 		return false;
@@ -2245,8 +2015,7 @@ bool testEditProfileDuplicateExactExtensionMacroGuard(std::string &failureReason
 	bool restored = false;
 
 	auto restore = [&]() {
-		if (!restored)
-			restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
 		return restored;
 	};
 
@@ -2271,8 +2040,7 @@ bool testEditProfileDuplicateExactExtensionMacroGuard(std::string &failureReason
 
 bool testPathsBrowseEventGuard(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	const std::string root =
-	    "/tmp/mr_regression_paths_roundtrip_" + std::to_string(static_cast<long>(::getpid()));
+	const std::string root = "/tmp/mr_regression_paths_roundtrip_" + std::to_string(static_cast<long>(::getpid()));
 	const std::string settingsPath = root + "/cfg/settings.mrmac";
 	const std::string macroPath = root + "/macros";
 	const std::string tempPath = root + "/tmp";
@@ -2283,8 +2051,7 @@ bool testPathsBrowseEventGuard(std::string &failureReason) {
 	bool restored = false;
 
 	auto restore = [&]() {
-		if (!restored)
-			restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
 		return restored;
 	};
 
@@ -2343,13 +2110,10 @@ bool testPathsBrowseEventGuard(std::string &failureReason) {
 
 bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	const std::string root =
-	    "/tmp/mr_regression_color_save_theme_" + std::to_string(static_cast<long>(::getpid()));
+	const std::string root = "/tmp/mr_regression_color_save_theme_" + std::to_string(static_cast<long>(::getpid()));
 	const std::string settingsPath = root + "/cfg/settings.mrmac";
 	const std::string themePath = root + "/cfg/probe-theme.mrmac";
-	static const MRColorSetupGroup groups[] = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog,
-	                                           MRColorSetupGroup::Help, MRColorSetupGroup::Other,
-	                                           MRColorSetupGroup::MiniMap};
+	static const MRColorSetupGroup groups[] = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog, MRColorSetupGroup::Help, MRColorSetupGroup::Other, MRColorSetupGroup::MiniMap};
 	TColorAttr paletteData[kMrPaletteMax];
 	TPalette workingPalette(paletteData, static_cast<ushort>(kMrPaletteMax));
 	MRSetupPaths paths = resolveSetupPathDefaults();
@@ -2360,8 +2124,7 @@ bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) 
 	unsigned char nextColor = 0x21;
 
 	auto restore = [&]() {
-		if (!restored)
-			restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
+		if (!restored) restored = restoreRuntimeSettingsSnapshot(snapshot, restoreError);
 		return restored;
 	};
 
@@ -2371,8 +2134,7 @@ bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) 
 	for (MRColorSetupGroup group : groups) {
 		std::size_t count = 0;
 		const MRColorSetupItem *items = colorSetupGroupItems(group, count);
-		if (items == nullptr || count == 0)
-			continue;
+		if (items == nullptr || count == 0) continue;
 		for (std::size_t i = 0; i < count; ++i) {
 			workingPalette[items[i].paletteIndex] = nextColor;
 			++nextColor;
@@ -2408,11 +2170,7 @@ bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) 
 		failureReason = "Unable to read saved theme file after Color Setup save-theme probe: " + errorText;
 		return false;
 	}
-	if (content.find("MRSETUP('WINDOWCOLORS', '") == std::string::npos ||
-	    content.find("MRSETUP('MENUDIALOGCOLORS', '") == std::string::npos ||
-	    content.find("MRSETUP('HELPCOLORS', '") == std::string::npos ||
-	    content.find("MRSETUP('OTHERCOLORS', '") == std::string::npos ||
-	    content.find("MRSETUP('MINIMAPCOLORS', '") == std::string::npos) {
+	if (content.find("MRSETUP('WINDOWCOLORS', '") == std::string::npos || content.find("MRSETUP('MENUDIALOGCOLORS', '") == std::string::npos || content.find("MRSETUP('HELPCOLORS', '") == std::string::npos || content.find("MRSETUP('OTHERCOLORS', '") == std::string::npos || content.find("MRSETUP('MINIMAPCOLORS', '") == std::string::npos) {
 		restore();
 		failureReason = "Saved color theme must contain all color group assignments.";
 		return false;
@@ -2423,8 +2181,7 @@ bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) 
 		for (MRColorSetupGroup group : groups) {
 			std::size_t count = 0;
 			const MRColorSetupItem *items = colorSetupGroupItems(group, count);
-			if (items == nullptr || count == 0)
-				continue;
+			if (items == nullptr || count == 0) continue;
 			for (std::size_t i = 0; i < count; ++i) {
 				const unsigned char expected = static_cast<unsigned char>(workingPalette[items[i].paletteIndex]);
 				unsigned char actual = 0;
@@ -2467,8 +2224,7 @@ bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureRea
 	const std::string windowColorsPrefix = "MRSETUP('WINDOWCOLORS', 'v4:";
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::string previousThemePath = configuredColorThemeFilePath();
-	const std::array<unsigned char, MRColorSetupSettings::kWindowCount> probeValues = {
-	    0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B};
+	const std::array<unsigned char, MRColorSetupSettings::kWindowCount> probeValues = {0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B};
 	std::string errorText;
 	std::string content;
 	unsigned char slotValue = 0;
@@ -2476,15 +2232,11 @@ bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureRea
 
 	auto restore = [&]() {
 		std::string restoreError;
-		if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, previous.windowColors.data(),
-		                                        previous.windowColors.size(), &restoreError))
-			restored = false;
-		if (!setConfiguredColorThemeFilePath(previousThemePath, &restoreError))
-			restored = false;
+		if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, previous.windowColors.data(), previous.windowColors.size(), &restoreError)) restored = false;
+		if (!setConfiguredColorThemeFilePath(previousThemePath, &restoreError)) restored = false;
 	};
 
-	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, probeValues.data(), probeValues.size(),
-	                                        &errorText)) {
+	if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, probeValues.data(), probeValues.size(), &errorText)) {
 		failureReason = "Unable to seed WINDOWCOLORS probe values: " + errorText;
 		restore();
 		return false;
@@ -2507,8 +2259,7 @@ bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureRea
 
 	{
 		MRColorSetupSettings defaults = resolveColorSetupDefaults();
-		if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, defaults.windowColors.data(),
-		                                        defaults.windowColors.size(), &errorText)) {
+		if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, defaults.windowColors.data(), defaults.windowColors.size(), &errorText)) {
 			failureReason = "Unable to reset WINDOWCOLORS before reload probe: " + errorText;
 			restore();
 			return false;
@@ -2522,13 +2273,13 @@ bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureRea
 
 	{
 		MRColorSetupSettings loaded = configuredColorSetupSettings();
-			for (std::size_t i = 0; i < probeValues.size(); ++i)
-				if (loaded.windowColors[i] != probeValues[i]) {
-					failureReason = "WINDOWCOLORS v3 roundtrip mismatch after theme reload.";
-					restore();
-					return false;
-				}
-		}
+		for (std::size_t i = 0; i < probeValues.size(); ++i)
+			if (loaded.windowColors[i] != probeValues[i]) {
+				failureReason = "WINDOWCOLORS v3 roundtrip mismatch after theme reload.";
+				restore();
+				return false;
+			}
+	}
 	if (!configuredColorSlotOverride(kMrPaletteLineNumbers, slotValue) || slotValue != probeValues[8]) {
 		failureReason = "Line-number palette slot must be restored from WINDOWCOLORS theme value.";
 		restore();
@@ -2569,8 +2320,7 @@ bool testIndicatorLineNumberColorWiringGuard(std::string &failureReason) {
 		failureReason = "Unable to read MREditWindow.hpp for line-number wiring guard: " + ioError;
 		return false;
 	}
-	if (indicatorContent.find("cursorColor = getColor(3);") == std::string::npos ||
-	    indicatorContent.find("b.moveStr(cursorX, cursorText, cursorColor);") == std::string::npos) {
+	if (indicatorContent.find("cursorColor = getColor(3);") == std::string::npos || indicatorContent.find("b.moveStr(cursorX, cursorText, cursorColor);") == std::string::npos) {
 		failureReason = "MRIndicator must draw line/column text from the dedicated line-number color slot.";
 		return false;
 	}
@@ -2600,8 +2350,7 @@ bool testCurrentLineColorWiringGuard(std::string &failureReason) {
 		failureReason = "MRFileEditor palette must expose current-line, changed-text and line-number slots.";
 		return false;
 	}
-	if (content.find("basePair = getColor(0x0303);") == std::string::npos ||
-	    content.find("basePair = getColor(0x0204);") == std::string::npos) {
+	if (content.find("basePair = getColor(0x0303);") == std::string::npos || content.find("basePair = getColor(0x0204);") == std::string::npos) {
 		failureReason = "Current-line and current-line-in-block must be wired to dedicated palette pairs.";
 		return false;
 	}
@@ -2622,22 +2371,15 @@ bool testChangedTextColorWiringGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRFileEditor.hpp for changed-text color wiring guard: " + ioError;
 		return false;
 	}
-	if (content.find("TAttrPair changedPair = getColor(0x0505);") == std::string::npos ||
-	    content.find("bool changedChar = !currentLine && !currentLineInBlock && isDirtyOffset(documentPos);") ==
-	        std::string::npos ||
-	    content.find("TAttrPair effectivePair = changedChar ? changedPair : basePair;") ==
-	        std::string::npos) {
+	if (content.find("TAttrPair changedPair = getColor(0x0505);") == std::string::npos || content.find("bool changedChar = !currentLine && !currentLineInBlock && isDirtyOffset(documentPos);") == std::string::npos || content.find("TAttrPair effectivePair = changedChar ? changedPair : basePair;") == std::string::npos) {
 		failureReason = "Changed-text must be applied per character via dedicated dirty-range lookup.";
 		return false;
 	}
-	if (content.find("mDirtyRanges") == std::string::npos ||
-	    content.find("void addDirtyRange(") == std::string::npos ||
-	    content.find("isDirtyOffset(") == std::string::npos) {
+	if (content.find("mDirtyRanges") == std::string::npos || content.find("void addDirtyRange(") == std::string::npos || content.find("isDirtyOffset(") == std::string::npos) {
 		failureReason = "Changed-text wiring requires dedicated dirty-range tracking in MRFileEditor.";
 		return false;
 	}
-	if (content.find("remapDirtyRangesForAppliedChange(*changeSet);") == std::string::npos ||
-	    content.find("void remapDirtyRangesForAppliedChange(") == std::string::npos) {
+	if (content.find("remapDirtyRangesForAppliedChange(*changeSet);") == std::string::npos || content.find("void remapDirtyRangesForAppliedChange(") == std::string::npos) {
 		failureReason = "Changed-text ranges must be remapped across edits to stay position-correct.";
 		return false;
 	}
@@ -2662,18 +2404,11 @@ bool testEditorCursorViewportGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRFileEditor.hpp for cursor viewport guard: " + ioError;
 		return false;
 	}
-	if (content.find("struct TextViewportGeometry") == std::string::npos ||
-	    content.find("TextViewportGeometry textViewportGeometry() const noexcept") == std::string::npos ||
-	    content.find("bool shouldShowEditorCursor(long long x, long long y, const TextViewportGeometry &viewport) const noexcept") ==
-	        std::string::npos ||
-	    content.find("const bool viewActive = (state & sfActive) != 0;") == std::string::npos ||
-	    content.find("const bool viewSelected = (state & sfSelected) != 0;") == std::string::npos ||
-	    content.find("if (shouldShowEditorCursor(localX, localY, viewport))") == std::string::npos) {
+	if (content.find("struct TextViewportGeometry") == std::string::npos || content.find("TextViewportGeometry textViewportGeometry() const noexcept") == std::string::npos || content.find("bool shouldShowEditorCursor(long long x, long long y, const TextViewportGeometry &viewport) const noexcept") == std::string::npos || content.find("const bool viewActive = (state & sfActive) != 0;") == std::string::npos || content.find("const bool viewSelected = (state & sfSelected) != 0;") == std::string::npos || content.find("if (shouldShowEditorCursor(localX, localY, viewport))") == std::string::npos) {
 		failureReason = "Editor cursor visibility must be gated by active/selected state and text viewport bounds.";
 		return false;
 	}
-	if (content.find("int column = viewport.textColumnFromLocalX(local.x);") == std::string::npos ||
-	    content.find("TextViewportGeometry viewport = textViewportGeometry();") == std::string::npos) {
+	if (content.find("int column = viewport.textColumnFromLocalX(local.x);") == std::string::npos || content.find("TextViewportGeometry viewport = textViewportGeometry();") == std::string::npos) {
 		failureReason = "Mouse-to-text mapping must be routed through text viewport conversion.";
 		return false;
 	}
@@ -2690,11 +2425,7 @@ bool testEofVirtualLineColorGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRFileEditor.hpp for EOF virtual-line color guard: " + ioError;
 		return false;
 	}
-		if (content.find("bool isDocumentLine = lineIndex < totalLines;") ==
-		        std::string::npos ||
-		    content.find(
-		        "formatSyntaxLine(buffer, linePtr, delta.x, textWidth, viewport.textLeft, isDocumentLine, drawEofMarker,") ==
-		        std::string::npos) {
+	if (content.find("bool isDocumentLine = lineIndex < totalLines;") == std::string::npos || content.find("formatSyntaxLine(buffer, linePtr, delta.x, textWidth, viewport.textLeft, isDocumentLine, drawEofMarker,") == std::string::npos) {
 		failureReason = "Draw path must pass document-line state into syntax line formatter.";
 		return false;
 	}
@@ -2702,15 +2433,11 @@ bool testEofVirtualLineColorGuard(std::string &failureReason) {
 		failureReason = "Virtual lines behind EOF must bypass current/changed-line color logic.";
 		return false;
 	}
-	if (content.find("cursorPos == documentLength && lineStart == cursorPos && lineEnd == cursorPos") ==
-	    std::string::npos) {
+	if (content.find("cursorPos == documentLength && lineStart == cursorPos && lineEnd == cursorPos") == std::string::npos) {
 		failureReason = "EOF current-line condition must be constrained to the actual EOF line.";
 		return false;
 	}
-	if (content.find("bool drawEofMarkerAsEmoji = drawEofMarker && editSettings.showEofMarkerEmoji;") ==
-	        std::string::npos ||
-	    content.find("if (!drawEmoji && configuredColorSlotOverride(kMrPaletteEofMarker, configuredMarkerColor))") ==
-	        std::string::npos) {
+	if (content.find("bool drawEofMarkerAsEmoji = drawEofMarker && editSettings.showEofMarkerEmoji;") == std::string::npos || content.find("if (!drawEmoji && configuredColorSlotOverride(kMrPaletteEofMarker, configuredMarkerColor))") == std::string::npos) {
 		failureReason = "EOF marker must support emoji toggle with text-mode color override wiring.";
 		return false;
 	}
@@ -2728,18 +2455,15 @@ bool testSaveAsOverwriteAndBackupWiringGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRFileEditor.hpp for Save As overwrite/backup guard: " + ioError;
 		return false;
 	}
-	if (content.find("showUnsavedChangesDialog(\"Overwrite\", \"Target file exists. Overwrite?\",") ==
-	    std::string::npos) {
+	if (content.find("showUnsavedChangesDialog(\"Overwrite\", \"Target file exists. Overwrite?\",") == std::string::npos) {
 		failureReason = "Save As must ask for overwrite confirmation via centralized UnsavedChanges dialog.";
 		return false;
 	}
-	if (content.find("if (!samePath(saveName, fileName) && !confirmOverwriteForSaveAs(saveName))") ==
-	    std::string::npos) {
+	if (content.find("if (!samePath(saveName, fileName) && !confirmOverwriteForSaveAs(saveName))") == std::string::npos) {
 		failureReason = "Save As must guard existing target overwrite before writing.";
 		return false;
 	}
-	if (content.find("if (configuredBackupFilesSetting())") == std::string::npos ||
-	    content.find("fnmerge(backupName, drive, dir, file, \".bak\");") == std::string::npos) {
+	if (content.find("if (configuredBackupFilesSetting())") == std::string::npos || content.find("fnmerge(backupName, drive, dir, file, \".bak\");") == std::string::npos) {
 		failureReason = "Backup file creation must be gated by configurable BACKUP_FILES setting.";
 		return false;
 	}
@@ -2763,23 +2487,19 @@ bool testThemeAndMacroSaveOverwriteWiringGuard(std::string &failureReason) {
 		failureReason = "Unable to read MREditorApp.cpp for macro overwrite guard: " + ioError;
 		return false;
 	}
-	if (setupContent.find("confirmOverwriteForPath(\"Overwrite\", \"Theme file exists. Overwrite?\", themeUri)") ==
-	    std::string::npos) {
+	if (setupContent.find("confirmOverwriteForPath(\"Overwrite\", \"Theme file exists. Overwrite?\", themeUri)") == std::string::npos) {
 		failureReason = "Color Setup / Save Theme must ask for overwrite confirmation before writing.";
 		return false;
 	}
-	if (setupContent.find("showUnsavedChangesDialog(primaryLabel, headline, targetPath.c_str())") ==
-	    std::string::npos) {
+	if (setupContent.find("showUnsavedChangesDialog(primaryLabel, headline, targetPath.c_str())") == std::string::npos) {
 		failureReason = "Theme overwrite confirmation must use centralized UnsavedChanges dialog.";
 		return false;
 	}
-	if (appContent.find("confirmOverwriteForPath(\"Overwrite\", \"Macro file exists. Overwrite?\", savePath)") ==
-	    std::string::npos) {
+	if (appContent.find("confirmOverwriteForPath(\"Overwrite\", \"Macro file exists. Overwrite?\", savePath)") == std::string::npos) {
 		failureReason = "Recorded macro save must ask for overwrite confirmation before writing.";
 		return false;
 	}
-	if (appContent.find("showUnsavedChangesDialog(primaryLabel, headline, targetPath.c_str())") ==
-	    std::string::npos) {
+	if (appContent.find("showUnsavedChangesDialog(primaryLabel, headline, targetPath.c_str())") == std::string::npos) {
 		failureReason = "Macro overwrite confirmation must use centralized UnsavedChanges dialog.";
 		return false;
 	}
@@ -2805,26 +2525,19 @@ bool testPersistentBlocksWiringGuard(std::string &failureReason) {
 		return false;
 	}
 	if (!readTextFile(panelPath, panelContent, ioError)) {
-		failureReason =
-		    "Unable to read MRFileExtensionEditorSettings.cpp for persistent-blocks guard: " +
-		    ioError;
+		failureReason = "Unable to read MRFileExtensionEditorSettings.cpp for persistent-blocks guard: " + ioError;
 		return false;
 	}
-	if (settingsContent.find("upperKeyName == \"PERSISTENT_BLOCKS\"") ==
-	        std::string::npos ||
-	    settingsContent.find("MRSETUP('PERSISTENT_BLOCKS'") == std::string::npos) {
+	if (settingsContent.find("upperKeyName == \"PERSISTENT_BLOCKS\"") == std::string::npos || settingsContent.find("MRSETUP('PERSISTENT_BLOCKS'") == std::string::npos) {
 		failureReason = "Persistent blocks must be parsed and serialized via MRSETUP in MRDialogPaths.";
 		return false;
 	}
-	if (vmContent.find("findEditSettingDescriptorByKey(setupKey)") == std::string::npos ||
-	    vmContent.find("PERSISTENT_BLOCKS") == std::string::npos) {
+	if (vmContent.find("findEditSettingDescriptorByKey(setupKey)") == std::string::npos || vmContent.find("PERSISTENT_BLOCKS") == std::string::npos) {
 		failureReason = "MRVM startup whitelist must accept PERSISTENT_BLOCKS.";
 		return false;
 	}
-	if (panelContent.find("Persistent ~B~locks") == std::string::npos ||
-	    panelContent.find("kOptionPersistentBlocks") == std::string::npos) {
-		failureReason =
-		    "File extension editor settings panel must expose and wire a Persistent blocks option.";
+	if (panelContent.find("Persistent ~B~locks") == std::string::npos || panelContent.find("kOptionPersistentBlocks") == std::string::npos) {
+		failureReason = "File extension editor settings panel must expose and wire a Persistent blocks option.";
 		return false;
 	}
 	failureReason.clear();
@@ -2840,14 +2553,7 @@ bool testEditClipboardCommandRoutingGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRCommandRouter.cpp for clipboard routing guard: " + ioError;
 		return false;
 	}
-	if (content.find("case cmMrEditCutToBuffer:") == std::string::npos ||
-	    content.find("copyCurrentBlockToSystemClipboard(false, true, \"Unable to move block to buffer.\")") ==
-	        std::string::npos ||
-	    content.find("case cmMrEditCopyToBuffer:") == std::string::npos ||
-	    content.find("copyCurrentBlockToSystemClipboard(false, false, \"No block marked.\")") ==
-	        std::string::npos ||
-	    content.find("case cmMrEditPasteFromBuffer:") == std::string::npos ||
-	    content.find("dispatchEditorClipboardCommand(cmPaste, true)") == std::string::npos) {
+	if (content.find("case cmMrEditCutToBuffer:") == std::string::npos || content.find("copyCurrentBlockToSystemClipboard(false, true, \"Unable to move block to buffer.\")") == std::string::npos || content.find("case cmMrEditCopyToBuffer:") == std::string::npos || content.find("copyCurrentBlockToSystemClipboard(false, false, \"No block marked.\")") == std::string::npos || content.find("case cmMrEditPasteFromBuffer:") == std::string::npos || content.find("dispatchEditorClipboardCommand(cmPaste, true)") == std::string::npos) {
 		failureReason = "Edit Cut/Copy/Paste commands must route to editor clipboard commands.";
 		return false;
 	}
@@ -2870,20 +2576,11 @@ bool testSearchMarkerRoutingAndTextMenuGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRMenuFactory.cpp for text-menu F4/ShiftF4 guard: " + ioError;
 		return false;
 	}
-	if (routerContent.find("case cmMrSearchPushMarker:") == std::string::npos ||
-	    routerContent.find(
-	        "handleBlockAction(mrvmUiPushMarker(), \"Unable to push position onto marker stack.\")") ==
-	        std::string::npos ||
-	    routerContent.find("case cmMrSearchGetMarker:") == std::string::npos ||
-	    routerContent.find("handleBlockAction(mrvmUiGetMarker(), \"No marker position on stack.\")") ==
-	        std::string::npos) {
-		failureReason =
-		    "Search marker commands must route through MRCommandRouter to mrvmUiPushMarker/mrvmUiGetMarker.";
+	if (routerContent.find("case cmMrSearchPushMarker:") == std::string::npos || routerContent.find("handleBlockAction(mrvmUiPushMarker(), \"Unable to push position onto marker stack.\")") == std::string::npos || routerContent.find("case cmMrSearchGetMarker:") == std::string::npos || routerContent.find("handleBlockAction(mrvmUiGetMarker(), \"No marker position on stack.\")") == std::string::npos) {
+		failureReason = "Search marker commands must route through MRCommandRouter to mrvmUiPushMarker/mrvmUiGetMarker.";
 		return false;
 	}
-	if (menuContent.find("TSubMenu *createTextMenu()") == std::string::npos ||
-	    menuContent.find("cmMrSearchPushMarker, kbF4") == std::string::npos ||
-	    menuContent.find("cmMrSearchGetMarker, kbShiftF4") == std::string::npos) {
+	if (menuContent.find("TSubMenu *createTextMenu()") == std::string::npos || menuContent.find("cmMrSearchPushMarker, kbF4") == std::string::npos || menuContent.find("cmMrSearchGetMarker, kbShiftF4") == std::string::npos) {
 		failureReason = "Text menu must expose F4/ShiftF4 marker stack actions.";
 		return false;
 	}
@@ -2900,20 +2597,12 @@ bool testBlockHotkeyModifierRoutingGuard(std::string &failureReason) {
 		failureReason = "Unable to read MREditWindow.hpp for block-hotkey guard: " + ioError;
 		return false;
 	}
-	if (content.find("bool handleBuiltInBlockHotkeys(TEvent &event)") == std::string::npos ||
-	    content.find("keyCode == kbCtrlF7 || (keyCode == kbF7 && ctrl && !shift)") == std::string::npos ||
-	    content.find("keyCode == kbShiftF7 || (keyCode == kbF7 && shift && !ctrl)") == std::string::npos ||
-	    content.find("keyCode == kbF7 && !shift && !ctrl") == std::string::npos ||
-	    content.find("keyCode == kbCtrlF9 || (keyCode == kbF9 && ctrl && !shift)") == std::string::npos) {
-		failureReason =
-		    "Block hotkey routing must distinguish F7/Shift+F7/Ctrl+F7 and Ctrl+F9 by modifier state.";
+	if (content.find("bool handleBuiltInBlockHotkeys(TEvent &event)") == std::string::npos || content.find("keyCode == kbCtrlF7 || (keyCode == kbF7 && ctrl && !shift)") == std::string::npos || content.find("keyCode == kbShiftF7 || (keyCode == kbF7 && shift && !ctrl)") == std::string::npos || content.find("keyCode == kbF7 && !shift && !ctrl") == std::string::npos || content.find("keyCode == kbCtrlF9 || (keyCode == kbF9 && ctrl && !shift)") == std::string::npos) {
+		failureReason = "Block hotkey routing must distinguish F7/Shift+F7/Ctrl+F7 and Ctrl+F9 by modifier state.";
 		return false;
 	}
-	if (content.find("if (originalEvent == evMouseDown && mBlockMode == bmNone)") == std::string::npos ||
-	    content.find("// Mouse drag selection without an explicit mode defaults to stream block.") ==
-	        std::string::npos) {
-		failureReason =
-		    "Mouse-drag default to stream block must only apply when no explicit block mode is active.";
+	if (content.find("if (originalEvent == evMouseDown && mBlockMode == bmNone)") == std::string::npos || content.find("// Mouse drag selection without an explicit mode defaults to stream block.") == std::string::npos) {
+		failureReason = "Mouse-drag default to stream block must only apply when no explicit block mode is active.";
 		return false;
 	}
 	failureReason.clear();
@@ -2929,14 +2618,8 @@ bool testInterWindowBlockSourceTargetGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRCommandRouter.cpp for inter-window block guard: " + ioError;
 		return false;
 	}
-	if (content.find("bool chooseInterWindowBlockTarget(int &sourceWindowIndex)") == std::string::npos ||
-	    content.find("MREditWindow *targetWin = currentEditWindow();") == std::string::npos ||
-	    content.find("sourceWin = mrShowWindowListDialog(mrwlActivateWindow, targetWin);") ==
-	        std::string::npos ||
-	    content.find("No block marked in the selected source window.") == std::string::npos ||
-	    content.find("mrActivateEditWindow(targetWin)") == std::string::npos) {
-		failureReason =
-		    "Inter-window block copy/move must keep the current window as target and select source from window list.";
+	if (content.find("bool chooseInterWindowBlockTarget(int &sourceWindowIndex)") == std::string::npos || content.find("MREditWindow *targetWin = currentEditWindow();") == std::string::npos || content.find("sourceWin = mrShowWindowListDialog(mrwlActivateWindow, targetWin);") == std::string::npos || content.find("No block marked in the selected source window.") == std::string::npos || content.find("mrActivateEditWindow(targetWin)") == std::string::npos) {
+		failureReason = "Inter-window block copy/move must keep the current window as target and select source from window list.";
 		return false;
 	}
 	failureReason.clear();
@@ -2952,14 +2635,8 @@ bool testColumnUndentPolicyGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRVM.cpp for column-undent policy guard: " + ioError;
 		return false;
 	}
-	if (content.find("if (mode == MREditWindow::bmColumn)") == std::string::npos ||
-	    content.find("bool leaveColumnSpace = undent && configuredColumnBlockMoveLeavesSpace();") ==
-	        std::string::npos ||
-	    content.find("if (leaveColumnSpace)") == std::string::npos ||
-	    content.find("line.replace(start, static_cast<std::size_t>(removeCount),") == std::string::npos ||
-	    content.find("line.erase(start, static_cast<std::size_t>(removeCount));") == std::string::npos) {
-		failureReason =
-		    "Column UNDENT must honor COLUMN_BLOCK_MOVE policy (leave-space vs remove) in block indent logic.";
+	if (content.find("if (mode == MREditWindow::bmColumn)") == std::string::npos || content.find("bool leaveColumnSpace = undent && configuredColumnBlockMoveLeavesSpace();") == std::string::npos || content.find("if (leaveColumnSpace)") == std::string::npos || content.find("line.replace(start, static_cast<std::size_t>(removeCount),") == std::string::npos || content.find("line.erase(start, static_cast<std::size_t>(removeCount));") == std::string::npos) {
+		failureReason = "Column UNDENT must honor COLUMN_BLOCK_MOVE policy (leave-space vs remove) in block indent logic.";
 		return false;
 	}
 	failureReason.clear();
@@ -3017,8 +2694,7 @@ bool testTabstopIndentingOps(std::string &failureReason) {
 	if (!mrvmCanRunStagedInBackground(profile)) {
 		unsupported = mrvmUnsupportedStagedSymbols(profile);
 		failureReason = "Tabstop/indenting probe should be staged-background eligible.";
-		if (!unsupported.empty())
-			failureReason += " Unsupported symbol example: " + unsupported.front() + ".";
+		if (!unsupported.empty()) failureReason += " Unsupported symbol example: " + unsupported.front() + ".";
 		return false;
 	}
 
@@ -3028,10 +2704,7 @@ bool testTabstopIndentingOps(std::string &failureReason) {
 		std::map<std::string, int> ints;
 		std::map<std::string, std::string> strings;
 
-		GlobalsRestore(std::vector<std::string> savedOrderRef, std::map<std::string, int> savedIntsRef,
-		               std::map<std::string, std::string> savedStringsRef)
-		    : order(std::move(savedOrderRef)), ints(std::move(savedIntsRef)),
-		      strings(std::move(savedStringsRef)) {
+		GlobalsRestore(std::vector<std::string> savedOrderRef, std::map<std::string, int> savedIntsRef, std::map<std::string, std::string> savedStringsRef) : order(std::move(savedOrderRef)), ints(std::move(savedIntsRef)), strings(std::move(savedStringsRef)) {
 		}
 
 		~GlobalsRestore() {
@@ -3050,12 +2723,9 @@ bool testTabstopIndentingOps(std::string &failureReason) {
 	input.pageLines = 20;
 	input.fileName = "/tmp/tabstop_ops_probe.txt";
 
-	result = mrvmRunBytecodeStagedBackground(
-	    bytecode.data() + static_cast<std::size_t>(entryOffset),
-	    bytecode.size() - static_cast<std::size_t>(entryOffset), input);
+	result = mrvmRunBytecodeStagedBackground(bytecode.data() + static_cast<std::size_t>(entryOffset), bytecode.size() - static_cast<std::size_t>(entryOffset), input);
 	if (result.hadError) {
-		if (firstVmError(result.logLines, vmError))
-			failureReason = "Tabstop/indenting probe produced VM error: " + vmError;
+		if (firstVmError(result.logLines, vmError)) failureReason = "Tabstop/indenting probe produced VM error: " + vmError;
 		else
 			failureReason = "Tabstop/indenting probe produced VM error.";
 		return false;
@@ -3066,36 +2736,22 @@ bool testTabstopIndentingOps(std::string &failureReason) {
 		return false;
 	}
 
-	if (tabWidth < 1)
-		tabWidth = 1;
-	if (tabWidth > 32)
-		tabWidth = 32;
+	if (tabWidth < 1) tabWidth = 1;
+	if (tabWidth > 32) tabWidth = 32;
 	expectedPosA = tabWidth + 1;
 
-	if (!checkGlobalInt(result.globalInts, "TABOPS_EXP_I", expectedPosA, failureReason))
-		return false;
-	if (!checkGlobalInt(result.globalInts, "TABOPS_EXP_LEN", expectedPosA, failureReason))
-		return false;
-	if (!checkGlobalInt(result.globalInts, "TABOPS_EXP_POSA", expectedPosA, failureReason))
-		return false;
-	if (!checkGlobalInt(result.globalInts, "TABOPS_EXP_FIRST", 9, failureReason))
-		return false;
-	if (!checkGlobalInt(result.globalInts, "TABOPS_SPC_FIRST", 32, failureReason))
-		return false;
-	if (!checkGlobalInt(result.globalInts, "TABOPS_SPC_POSA", expectedPosA, failureReason))
-		return false;
-	if (!checkGlobalInt(result.globalInts, "TABOPS_SPC_LEN", expectedPosA, failureReason))
-		return false;
-	if (!checkGlobalInt(result.globalInts, "TABOPS_COL_AFTER_TAB", 2, failureReason))
-		return false;
-	if (!checkGlobalInt(result.globalInts, "TABOPS_TABCHAR", 9, failureReason))
-		return false;
-	if (!checkGlobalInt(result.globalInts, "TABOPS_INDENT", 1, failureReason))
-		return false;
+	if (!checkGlobalInt(result.globalInts, "TABOPS_EXP_I", expectedPosA, failureReason)) return false;
+	if (!checkGlobalInt(result.globalInts, "TABOPS_EXP_LEN", expectedPosA, failureReason)) return false;
+	if (!checkGlobalInt(result.globalInts, "TABOPS_EXP_POSA", expectedPosA, failureReason)) return false;
+	if (!checkGlobalInt(result.globalInts, "TABOPS_EXP_FIRST", 9, failureReason)) return false;
+	if (!checkGlobalInt(result.globalInts, "TABOPS_SPC_FIRST", 32, failureReason)) return false;
+	if (!checkGlobalInt(result.globalInts, "TABOPS_SPC_POSA", expectedPosA, failureReason)) return false;
+	if (!checkGlobalInt(result.globalInts, "TABOPS_SPC_LEN", expectedPosA, failureReason)) return false;
+	if (!checkGlobalInt(result.globalInts, "TABOPS_COL_AFTER_TAB", 2, failureReason)) return false;
+	if (!checkGlobalInt(result.globalInts, "TABOPS_TABCHAR", 9, failureReason)) return false;
+	if (!checkGlobalInt(result.globalInts, "TABOPS_INDENT", 1, failureReason)) return false;
 
-	if (!expectCompileError("$MACRO Bad;\nDEF_STR(S);\nEXPAND_TABS(S, S);\nEND_MACRO;\n",
-	                        "Type mismatch or syntax error.", failureReason))
-		return false;
+	if (!expectCompileError("$MACRO Bad;\nDEF_STR(S);\nEXPAND_TABS(S, S);\nEND_MACRO;\n", "Type mismatch or syntax error.", failureReason)) return false;
 
 	failureReason.clear();
 	return true;
@@ -3153,8 +2809,7 @@ bool testKeyIn(std::string &failureReason) {
 	vm.execute(bytecode, bytecodeSize);
 	std::free(bytecode);
 
-	ok = mrvmRunAssignedMacroForKey(kbCtrlP, 0, executedMacroName, nullptr) &&
-	     executedMacroName == "KeyOnCtrlP";
+	ok = mrvmRunAssignedMacroForKey(kbCtrlP, 0, executedMacroName, nullptr) && executedMacroName == "KeyOnCtrlP";
 	if (!ok) {
 		failureReason = "Ctrl+P macro dispatch failed.";
 		std::remove(macroPath);
@@ -3171,8 +2826,7 @@ bool testKeyIn(std::string &failureReason) {
 		return false;
 	}
 
-	if (!expectCompileError("$MACRO Bad;\nKEY_IN(1);\nEND_MACRO;\n", "Type mismatch or syntax error.",
-	                        failureReason)) {
+	if (!expectCompileError("$MACRO Bad;\nKEY_IN(1);\nEND_MACRO;\n", "Type mismatch or syntax error.", failureReason)) {
 		std::remove(macroPath);
 		return false;
 	}
@@ -3224,8 +2878,7 @@ bool testCreateGlobalStrOperation(std::string &failureReason) {
 	if (!mrvmCanRunStagedInBackground(profile)) {
 		unsupported = mrvmUnsupportedStagedSymbols(profile);
 		failureReason = "CREATE_GLOBAL_STR probe should be staged-background eligible.";
-		if (!unsupported.empty())
-			failureReason += " Unsupported symbol example: " + unsupported.front() + ".";
+		if (!unsupported.empty()) failureReason += " Unsupported symbol example: " + unsupported.front() + ".";
 		return false;
 	}
 	unsupported = mrvmUnsupportedStagedSymbols(profile);
@@ -3240,10 +2893,7 @@ bool testCreateGlobalStrOperation(std::string &failureReason) {
 		std::map<std::string, int> ints;
 		std::map<std::string, std::string> strings;
 
-		GlobalsRestore(std::vector<std::string> savedOrderRef, std::map<std::string, int> savedIntsRef,
-		               std::map<std::string, std::string> savedStringsRef)
-		    : order(std::move(savedOrderRef)), ints(std::move(savedIntsRef)),
-		      strings(std::move(savedStringsRef)) {
+		GlobalsRestore(std::vector<std::string> savedOrderRef, std::map<std::string, int> savedIntsRef, std::map<std::string, std::string> savedStringsRef) : order(std::move(savedOrderRef)), ints(std::move(savedIntsRef)), strings(std::move(savedStringsRef)) {
 		}
 
 		~GlobalsRestore() {
@@ -3251,27 +2901,22 @@ bool testCreateGlobalStrOperation(std::string &failureReason) {
 		}
 	} restoreGuard(savedOrder, savedInts, savedStrings);
 
-	vm.executeAt(bytecode.data(), bytecode.size(), static_cast<size_t>(entryOffset), std::string(),
-	             macroName, true, true);
+	vm.executeAt(bytecode.data(), bytecode.size(), static_cast<size_t>(entryOffset), std::string(), macroName, true, true);
 	if (firstVmError(vm.log, vmError)) {
 		failureReason = "CREATE_GLOBAL_STR probe produced VM error: " + vmError;
 		return false;
 	}
 
 	mrvmUiCopyGlobals(globalOrder, globalInts, globalStrings);
-	if (!checkGlobalInt(globalInts, "CSTR_PROBE_SEEN", 1, failureReason))
-		return false;
-	if (!checkGlobalInt(globalInts, "CSTR_PROBE_LEN", 5, failureReason))
-		return false;
+	if (!checkGlobalInt(globalInts, "CSTR_PROBE_SEEN", 1, failureReason)) return false;
+	if (!checkGlobalInt(globalInts, "CSTR_PROBE_LEN", 5, failureReason)) return false;
 	strIt = globalStrings.find("CSTR_PROBE");
 	if (strIt == globalStrings.end() || strIt->second != "Alpha") {
 		failureReason = "CREATE_GLOBAL_STR did not persist expected string value.";
 		return false;
 	}
 
-	if (!expectCompileError("$MACRO Bad;\nCREATE_GLOBAL_STR('X', 1);\nEND_MACRO;\n",
-	                        "Type mismatch or syntax error.", failureReason))
-		return false;
+	if (!expectCompileError("$MACRO Bad;\nCREATE_GLOBAL_STR('X', 1);\nEND_MACRO;\n", "Type mismatch or syntax error.", failureReason)) return false;
 
 	failureReason.clear();
 	return true;
@@ -3295,8 +2940,7 @@ bool testMarqueeProcWiringGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRVM.cpp for MARQUEE proc guard: " + ioError;
 		return false;
 	}
-	if (content.find("name == \"MARQUEE\" || name == \"MARQUEE_WARNING\" || name == \"MARQUEE_ERROR\"") ==
-	    std::string::npos) {
+	if (content.find("name == \"MARQUEE\" || name == \"MARQUEE_WARNING\" || name == \"MARQUEE_ERROR\"") == std::string::npos) {
 		failureReason = "MRVM OP_PROC dispatcher must handle MARQUEE, MARQUEE_WARNING and MARQUEE_ERROR.";
 		return false;
 	}
@@ -3341,9 +2985,7 @@ bool testDeferredUiPlaybackMailboxGuard(std::string &failureReason) {
 		failureReason = "Deferred UI playback pump must be declared in MRCoprocessorDispatch.hpp.";
 		return false;
 	}
-	if (dispatchContent.find("struct MacroScreenModel") == std::string::npos ||
-	    dispatchContent.find("struct MacroScreenView") == std::string::npos ||
-	    dispatchContent.find("struct DeferredUiRenderGateway") == std::string::npos) {
+	if (dispatchContent.find("struct MacroScreenModel") == std::string::npos || dispatchContent.find("struct MacroScreenView") == std::string::npos || dispatchContent.find("struct DeferredUiRenderGateway") == std::string::npos) {
 		failureReason = "Deferred playback must define MacroScreenModel, MacroScreenView and DeferredUiRenderGateway.";
 		return false;
 	}
@@ -3423,54 +3065,24 @@ bool testDeferredUiMutationEpochGuard(std::string &failureReason) {
 		return false;
 	}
 
-	if (vmHeaderContent.find("std::uint64_t mrvmUiScreenMutationEpoch() noexcept;") == std::string::npos ||
-	    vmHeaderContent.find("void mrvmUiInvalidateScreenBase() noexcept;") == std::string::npos ||
-	    vmHeaderContent.find("void mrvmUiTouchScreenMutationEpoch() noexcept;") == std::string::npos ||
-	    vmHeaderContent.find("void mrvmUiBeginMacroScreenBatch() noexcept;") == std::string::npos ||
-	    vmHeaderContent.find("void mrvmUiEndMacroScreenBatch() noexcept;") == std::string::npos ||
-	    vmHeaderContent.find("bool mrvmUiRenderFacadeRenderDeferredCommand(const MRMacroDeferredUiCommand &command);") ==
-	        std::string::npos ||
-	    vmHeaderContent.find("bool mrvmUiEraseCurrentWindow();") == std::string::npos) {
+	if (vmHeaderContent.find("std::uint64_t mrvmUiScreenMutationEpoch() noexcept;") == std::string::npos || vmHeaderContent.find("void mrvmUiInvalidateScreenBase() noexcept;") == std::string::npos || vmHeaderContent.find("void mrvmUiTouchScreenMutationEpoch() noexcept;") == std::string::npos || vmHeaderContent.find("void mrvmUiBeginMacroScreenBatch() noexcept;") == std::string::npos || vmHeaderContent.find("void mrvmUiEndMacroScreenBatch() noexcept;") == std::string::npos || vmHeaderContent.find("bool mrvmUiRenderFacadeRenderDeferredCommand(const MRMacroDeferredUiCommand &command);") == std::string::npos || vmHeaderContent.find("bool mrvmUiEraseCurrentWindow();") == std::string::npos) {
 		failureReason = "MRVM.hpp must expose screen mutation epoch and base invalidation APIs.";
 		return false;
 	}
-	if (vmContent.find("static std::atomic<std::uint64_t> g_macroScreenMutationEpoch(1);") == std::string::npos ||
-	    vmContent.find("struct ScreenStateCoordinator") == std::string::npos ||
-	    vmContent.find("static ScreenStateCoordinator g_screenStateCoordinator;") == std::string::npos ||
-	    vmContent.find("struct UiScreenStateFacade") == std::string::npos ||
-	    vmContent.find("struct UiRenderFacade") == std::string::npos ||
-	    vmContent.find("bool mrvmUiRenderFacadeRenderDeferredCommand(const MRMacroDeferredUiCommand &command)") ==
-	        std::string::npos ||
-	    vmContent.find("returnWithMacroScreenMutation(") == std::string::npos ||
-	    vmContent.find("returnWithDirectScreenMutation(") == std::string::npos ||
-	    vmContent.find("std::uint64_t mrvmUiScreenMutationEpoch() noexcept") == std::string::npos ||
-	    vmContent.find("void mrvmUiInvalidateScreenBase() noexcept") == std::string::npos ||
-	    vmContent.find("void mrvmUiTouchScreenMutationEpoch() noexcept") == std::string::npos ||
-	    vmContent.find("void mrvmUiBeginMacroScreenBatch() noexcept") == std::string::npos ||
-	    vmContent.find("void mrvmUiEndMacroScreenBatch() noexcept") == std::string::npos ||
-	    vmContent.find("bool mrvmUiEraseCurrentWindow()") == std::string::npos ||
-	    vmContent.find("returnWithDirectScreenMutation(eraseCurrentEditWindow())") == std::string::npos ||
-	    vmContent.find("ok = mrvmUiEraseCurrentWindow();") == std::string::npos) {
+	if (vmContent.find("static std::atomic<std::uint64_t> g_macroScreenMutationEpoch(1);") == std::string::npos || vmContent.find("struct ScreenStateCoordinator") == std::string::npos || vmContent.find("static ScreenStateCoordinator g_screenStateCoordinator;") == std::string::npos || vmContent.find("struct UiScreenStateFacade") == std::string::npos || vmContent.find("struct UiRenderFacade") == std::string::npos || vmContent.find("bool mrvmUiRenderFacadeRenderDeferredCommand(const MRMacroDeferredUiCommand &command)") == std::string::npos || vmContent.find("returnWithMacroScreenMutation(") == std::string::npos || vmContent.find("returnWithDirectScreenMutation(") == std::string::npos || vmContent.find("std::uint64_t mrvmUiScreenMutationEpoch() noexcept") == std::string::npos || vmContent.find("void mrvmUiInvalidateScreenBase() noexcept") == std::string::npos || vmContent.find("void mrvmUiTouchScreenMutationEpoch() noexcept") == std::string::npos ||
+	    vmContent.find("void mrvmUiBeginMacroScreenBatch() noexcept") == std::string::npos || vmContent.find("void mrvmUiEndMacroScreenBatch() noexcept") == std::string::npos || vmContent.find("bool mrvmUiEraseCurrentWindow()") == std::string::npos || vmContent.find("returnWithDirectScreenMutation(eraseCurrentEditWindow())") == std::string::npos || vmContent.find("ok = mrvmUiEraseCurrentWindow();") == std::string::npos) {
 		failureReason = "MRVM.cpp must maintain and expose a central screen-mutation epoch coordinator.";
 		return false;
 	}
-	if (dispatchContent.find("observedScreenEpoch") == std::string::npos ||
-	    dispatchContent.find("liveEpoch != playback.observedScreenEpoch") == std::string::npos ||
-	    dispatchContent.find("mrvmUiScreenMutationEpoch()") == std::string::npos ||
-	    dispatchContent.find("mrvmUiRenderFacadeRenderDeferredCommand(command)") == std::string::npos) {
+	if (dispatchContent.find("observedScreenEpoch") == std::string::npos || dispatchContent.find("liveEpoch != playback.observedScreenEpoch") == std::string::npos || dispatchContent.find("mrvmUiScreenMutationEpoch()") == std::string::npos || dispatchContent.find("mrvmUiRenderFacadeRenderDeferredCommand(command)") == std::string::npos) {
 		failureReason = "Deferred UI playback must invalidate projection when global screen mutation epoch changes.";
 		return false;
 	}
-	if (appContent.find("shouldInvalidateScreenBaseForEvent(") == std::string::npos ||
-	    appContent.find("mrvmUiInvalidateScreenBase();") == std::string::npos ||
-	    appContent.find("shouldInvalidateScreenBaseForEvent(originalWhat)") == std::string::npos) {
+	if (appContent.find("shouldInvalidateScreenBaseForEvent(") == std::string::npos || appContent.find("mrvmUiInvalidateScreenBase();") == std::string::npos || appContent.find("shouldInvalidateScreenBaseForEvent(originalWhat)") == std::string::npos) {
 		failureReason = "MREditorApp must invalidate base screen state after UI-driving input handling.";
 		return false;
 	}
-	if (menuBarContent.find("mrvmUiInvalidateScreenBase();") == std::string::npos ||
-	    frameContent.find("mrvmUiInvalidateScreenBase();") == std::string::npos ||
-	    indicatorContent.find("mrvmUiInvalidateScreenBase();") == std::string::npos ||
-	    statusLineContent.find("mrvmUiInvalidateScreenBase();") == std::string::npos) {
+	if (menuBarContent.find("mrvmUiInvalidateScreenBase();") == std::string::npos || frameContent.find("mrvmUiInvalidateScreenBase();") == std::string::npos || indicatorContent.find("mrvmUiInvalidateScreenBase();") == std::string::npos || statusLineContent.find("mrvmUiInvalidateScreenBase();") == std::string::npos) {
 		failureReason = "Core UI render sinks must invalidate base screen state on direct drawing.";
 		return false;
 	}
@@ -3502,18 +3114,11 @@ bool testTvCallSurfaceGuard(std::string &failureReason) {
 		return false;
 	}
 	dispatchBlock = content.substr(dispatchStart, dispatchEnd - dispatchStart);
-	if (content.find("static bool dispatchDeferredUiTvCall(") == std::string::npos ||
-	    content.find("if (dispatchDeferredUiTvCall(funcNameUpper, args, deferredError))") ==
-	        std::string::npos ||
-	    content.find("mrvmUiRenderFacadeRenderDeferredCommand(command);") == std::string::npos ||
-	    content.find("session->deferredUiCommands.push_back(command);") == std::string::npos) {
+	if (content.find("static bool dispatchDeferredUiTvCall(") == std::string::npos || content.find("if (dispatchDeferredUiTvCall(funcNameUpper, args, deferredError))") == std::string::npos || content.find("mrvmUiRenderFacadeRenderDeferredCommand(command);") == std::string::npos || content.find("session->deferredUiCommands.push_back(command);") == std::string::npos) {
 		failureReason = "TVCALL runtime dispatch must route through dispatchDeferredUiTvCall and the central deferred UI command path.";
 		return false;
 	}
-	if (content.find("kTvCallVideoMode = \"VIDEO_MODE\"") == std::string::npos ||
-	    content.find("kTvCallVideoCard = \"VIDEO_CARD\"") == std::string::npos ||
-	    content.find("kTvCallToggle = \"TOGGLE\"") == std::string::npos ||
-	    content.find("is not implemented.") == std::string::npos) {
+	if (content.find("kTvCallVideoMode = \"VIDEO_MODE\"") == std::string::npos || content.find("kTvCallVideoCard = \"VIDEO_CARD\"") == std::string::npos || content.find("kTvCallToggle = \"TOGGLE\"") == std::string::npos || content.find("is not implemented.") == std::string::npos) {
 		failureReason = "TVCALL runtime must keep VIDEO_MODE/VIDEO_CARD/TOGGLE explicitly unimplemented.";
 		return false;
 	}
@@ -3541,14 +3146,11 @@ bool testScreenRenderFacadeBoundaryGuard(std::string &failureReason) {
 		return false;
 	}
 
-	if (vmContent.find("TScreen::screenBuffer") != std::string::npos ||
-	    dispatchContent.find("TScreen::screenBuffer") != std::string::npos) {
+	if (vmContent.find("TScreen::screenBuffer") != std::string::npos || dispatchContent.find("TScreen::screenBuffer") != std::string::npos) {
 		failureReason = "VM and deferred UI playback must not write through TScreen::screenBuffer.";
 		return false;
 	}
-	if (vmContent.find("struct UiRenderFacade") == std::string::npos ||
-	    vmContent.find("UiRenderFacade::renderDeferredCommand(command)") == std::string::npos ||
-	    dispatchContent.find("mrvmUiRenderFacadeRenderDeferredCommand(command)") == std::string::npos) {
+	if (vmContent.find("struct UiRenderFacade") == std::string::npos || vmContent.find("UiRenderFacade::renderDeferredCommand(command)") == std::string::npos || dispatchContent.find("mrvmUiRenderFacadeRenderDeferredCommand(command)") == std::string::npos) {
 		failureReason = "Deferred UI commands must cross the central VM UI render facade.";
 		return false;
 	}
@@ -3556,12 +3158,7 @@ bool testScreenRenderFacadeBoundaryGuard(std::string &failureReason) {
 		failureReason = "Coprocessor playback must not define a second UiRenderFacade.";
 		return false;
 	}
-	if (vmContent.find("struct ScreenStateCoordinator") == std::string::npos ||
-	    vmContent.find("struct UiScreenStateFacade") == std::string::npos ||
-	    vmContent.find("UiScreenStateFacade::noteMacroOverlayMutation") == std::string::npos ||
-	    vmContent.find("UiScreenStateFacade::noteBaseMutation") == std::string::npos ||
-	    vmContent.find("UiScreenStateFacade::renderBaseThenOverlayIfNeeded") == std::string::npos ||
-	    vmContent.find("UiScreenStateFacade::renderOverlay") == std::string::npos) {
+	if (vmContent.find("struct ScreenStateCoordinator") == std::string::npos || vmContent.find("struct UiScreenStateFacade") == std::string::npos || vmContent.find("UiScreenStateFacade::noteMacroOverlayMutation") == std::string::npos || vmContent.find("UiScreenStateFacade::noteBaseMutation") == std::string::npos || vmContent.find("UiScreenStateFacade::renderBaseThenOverlayIfNeeded") == std::string::npos || vmContent.find("UiScreenStateFacade::renderOverlay") == std::string::npos) {
 		failureReason = "Screen render facade must keep base/overlay generation coordination.";
 		return false;
 	}
@@ -3579,16 +3176,7 @@ bool testScreenRenderFacadeBoundaryGuard(std::string &failureReason) {
 			return false;
 		}
 	}
-	if (vmContent.find("bool mrvmUiSetCurrentWindow(const void *windowKey)") == std::string::npos ||
-	    vmContent.find("returnWithDirectScreenMutation(createEditWindow())") == std::string::npos ||
-	    vmContent.find("returnWithDirectScreenMutation(deleteCurrentEditWindow())") == std::string::npos ||
-	    vmContent.find("returnWithDirectScreenMutation(modifyCurrentEditWindow())") == std::string::npos ||
-	    vmContent.find("returnWithDirectScreenMutation(switchEditWindow(index))") == std::string::npos ||
-	    vmContent.find("returnWithDirectScreenMutation(sizeCurrentEditWindow(x1, y1, x2, y2))") ==
-	        std::string::npos ||
-	    vmContent.find("returnWithDirectScreenMutation(zoomCurrentEditWindow())") == std::string::npos ||
-	    vmContent.find("returnWithDirectScreenMutation(redrawCurrentEditWindow())") == std::string::npos ||
-	    vmContent.find("returnWithDirectScreenMutation(redrawEntireScreen())") == std::string::npos) {
+	if (vmContent.find("bool mrvmUiSetCurrentWindow(const void *windowKey)") == std::string::npos || vmContent.find("returnWithDirectScreenMutation(createEditWindow())") == std::string::npos || vmContent.find("returnWithDirectScreenMutation(deleteCurrentEditWindow())") == std::string::npos || vmContent.find("returnWithDirectScreenMutation(modifyCurrentEditWindow())") == std::string::npos || vmContent.find("returnWithDirectScreenMutation(switchEditWindow(index))") == std::string::npos || vmContent.find("returnWithDirectScreenMutation(sizeCurrentEditWindow(x1, y1, x2, y2))") == std::string::npos || vmContent.find("returnWithDirectScreenMutation(zoomCurrentEditWindow())") == std::string::npos || vmContent.find("returnWithDirectScreenMutation(redrawCurrentEditWindow())") == std::string::npos || vmContent.find("returnWithDirectScreenMutation(redrawEntireScreen())") == std::string::npos) {
 		failureReason = "Window and desktop render operations must invalidate the base screen through the facade.";
 		return false;
 	}
@@ -3625,79 +3213,31 @@ bool testRenderSinkClassificationGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRWindowCommands.cpp for render sink classification guard: " + ioError;
 		return false;
 	}
-	if (dispatchContent.find("writeLine(") != std::string::npos ||
-	    dispatchContent.find("writeBuf(") != std::string::npos ||
-	    dispatchContent.find("TScreen::flushScreen()") != std::string::npos) {
+	if (dispatchContent.find("writeLine(") != std::string::npos || dispatchContent.find("writeBuf(") != std::string::npos || dispatchContent.find("TScreen::flushScreen()") != std::string::npos) {
 		failureReason = "Deferred playback must not own physical render sinks.";
 		return false;
 	}
-	if (!containsAllSubstrings(vmContent,
-	                           {
-	                               "Render sink classification for the Strangler foundation:",
-	                               "ordinary-view-draw:",
-	                               "base-redraw-trigger:",
-	                               "overlay-render:",
-	                               "unsafe-physical-write:"
-	                           },
-	                           missingNeedle)) {
-		failureReason = "MRVM.cpp must document the render sink classification foundation: missing " +
-		                missingNeedle + ".";
+	if (!containsAllSubstrings(vmContent, {"Render sink classification for the Strangler foundation:", "ordinary-view-draw:", "base-redraw-trigger:", "overlay-render:", "unsafe-physical-write:"}, missingNeedle)) {
+		failureReason = "MRVM.cpp must document the render sink classification foundation: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (!containsAllSubstrings(vmContent,
-	                           {
-	                               "void MacroCellView::draw()",
-	                               "grid.drawKnownCells(*this);",
-	                               "void MacroCellGrid::projectRowSpan",
-	                               "void MacroCellGrid::projectAll",
-	                               "void MacroCellGrid::redrawBaseAndOverlay"
-	                           },
-	                           missingNeedle)) {
-		failureReason =
-		    "VM render sinks must keep MacroCell overlay projection classified explicitly: missing " +
-		    missingNeedle + ".";
+	if (!containsAllSubstrings(vmContent, {"void MacroCellView::draw()", "grid.drawKnownCells(*this);", "void MacroCellGrid::projectRowSpan", "void MacroCellGrid::projectAll", "void MacroCellGrid::redrawBaseAndOverlay"}, missingNeedle)) {
+		failureReason = "VM render sinks must keep MacroCell overlay projection classified explicitly: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (!containsAllSubstrings(vmContent,
-	                           {
-	                               "static void forceMacroUiMessageRefresh(TApplication *app)",
-	                               "static bool redrawCurrentEditWindow()",
-	                               "static bool redrawEntireScreen()"
-	                           },
-	                           missingNeedle)) {
-		failureReason =
-		    "VM render sinks must keep explicit base redraw trigger entry points classified: missing " +
-		    missingNeedle + ".";
+	if (!containsAllSubstrings(vmContent, {"static void forceMacroUiMessageRefresh(TApplication *app)", "static bool redrawCurrentEditWindow()", "static bool redrawEntireScreen()"}, missingNeedle)) {
+		failureReason = "VM render sinks must keep explicit base redraw trigger entry points classified: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (!containsAllSubstrings(appContent,
-	                           {
-	                               "void MREditorApp::applyConfiguredDisplayLayout()",
-	                               "deskTop->drawView();",
-	                               "menuBar->drawView();",
-	                               "statusLine->drawView();"
-	                           },
-	                           missingNeedle)) {
-		failureReason =
-		    "Application render sinks must keep layout redraw triggers classified explicitly: missing " +
-		    missingNeedle + ".";
+	if (!containsAllSubstrings(appContent, {"void MREditorApp::applyConfiguredDisplayLayout()", "deskTop->drawView();", "menuBar->drawView();", "statusLine->drawView();"}, missingNeedle)) {
+		failureReason = "Application render sinks must keep layout redraw triggers classified explicitly: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (!containsAllSubstrings(windowCommandsContent,
-	                           {
-	                               "void syncVirtualDesktopVisibility()",
-	                               "TProgram::deskTop->drawView();",
-	                               "TProgram::application->redraw();"
-	                           },
-	                           missingNeedle)) {
-		failureReason =
-		    "Virtual desktop render sinks must keep redraw triggers classified explicitly: missing " +
-		    missingNeedle + ".";
+	if (!containsAllSubstrings(windowCommandsContent, {"void syncVirtualDesktopVisibility()", "TProgram::deskTop->drawView();", "TProgram::application->redraw();"}, missingNeedle)) {
+		failureReason = "Virtual desktop render sinks must keep redraw triggers classified explicitly: missing " + missingNeedle + ".";
 		return false;
 	}
-	if (vmContent.find("dirtyRows") == std::string::npos ||
-	    vmContent.find("fullProjectionPending") == std::string::npos ||
-	    vmContent.find("projectDirtyRows(") == std::string::npos) {
+	if (vmContent.find("dirtyRows") == std::string::npos || vmContent.find("fullProjectionPending") == std::string::npos || vmContent.find("projectDirtyRows(") == std::string::npos) {
 		failureReason = "MacroCellGrid must keep dirty-row coalescing state in the VM render path.";
 		return false;
 	}
@@ -3714,10 +3254,7 @@ bool testRenderSinkClassificationGuard(std::string &failureReason) {
 		const std::size_t projectAllEnd = vmContent.find("void MacroCellGrid::redrawBaseAndOverlay()", projectAllStart);
 		const std::size_t redrawStart = vmContent.find("void MacroCellGrid::redrawBaseAndOverlay()");
 		const std::size_t redrawEnd = vmContent.find("bool MacroCellGrid::putBox(", redrawStart);
-		if (messageRefreshStart == std::string::npos || messageRefreshEnd == std::string::npos ||
-		    batchEndStart == std::string::npos || batchEndEnd == std::string::npos ||
-		    projectAllStart == std::string::npos || projectAllEnd == std::string::npos ||
-		    redrawStart == std::string::npos || redrawEnd == std::string::npos) {
+		if (messageRefreshStart == std::string::npos || messageRefreshEnd == std::string::npos || batchEndStart == std::string::npos || batchEndEnd == std::string::npos || projectAllStart == std::string::npos || projectAllEnd == std::string::npos || redrawStart == std::string::npos || redrawEnd == std::string::npos) {
 			failureReason = "Unable to locate approved flushScreen sink boundaries in MRVM.cpp.";
 			return false;
 		}
@@ -3725,12 +3262,8 @@ bool testRenderSinkClassificationGuard(std::string &failureReason) {
 		const std::string batchEndBlock = vmContent.substr(batchEndStart, batchEndEnd - batchEndStart);
 		const std::string projectAllBlock = vmContent.substr(projectAllStart, projectAllEnd - projectAllStart);
 		const std::string redrawBlock = vmContent.substr(redrawStart, redrawEnd - redrawStart);
-		if (countSubstring(messageRefreshBlock, "TScreen::flushScreen()") != 1 ||
-		    countSubstring(batchEndBlock, "TScreen::flushScreen()") != 1 ||
-		    countSubstring(projectAllBlock, "TScreen::flushScreen()") != 1 ||
-		    countSubstring(redrawBlock, "TScreen::flushScreen()") != 1) {
-			failureReason =
-			    "Approved VM flushScreen sinks must remain limited to forceMacroUiMessageRefresh(), endProjectionBatch(), projectAll() and redrawBaseAndOverlay().";
+		if (countSubstring(messageRefreshBlock, "TScreen::flushScreen()") != 1 || countSubstring(batchEndBlock, "TScreen::flushScreen()") != 1 || countSubstring(projectAllBlock, "TScreen::flushScreen()") != 1 || countSubstring(redrawBlock, "TScreen::flushScreen()") != 1) {
+			failureReason = "Approved VM flushScreen sinks must remain limited to forceMacroUiMessageRefresh(), endProjectionBatch(), projectAll() and redrawBaseAndOverlay().";
 			return false;
 		}
 		std::string outsideApprovedFlushSinks = vmContent;
@@ -3758,19 +3291,8 @@ bool testResizeKillBoxReprojectionGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRVM.cpp for resize/KILL_BOX reprojection guard: " + ioError;
 		return false;
 	}
-	if (!containsAllSubstrings(vmContent,
-	                           {
-	                               "bool geometryResetPending = false;",
-	                               "boxStack.clear();",
-	                               "geometryResetPending = true;",
-	                               "UiScreenStateFacade::renderBaseThenOverlayIfNeeded(*this)",
-	                               "grid.geometryResetPending || UiScreenStateFacade::needsOverlayReprojection()",
-	                               "geometryResetPending = false;"
-	                           },
-	                           missingNeedle)) {
-		failureReason =
-		    "MacroCellGrid must keep explicit geometry-reset reprojection state for resize handling: missing " +
-		    missingNeedle + ".";
+	if (!containsAllSubstrings(vmContent, {"bool geometryResetPending = false;", "boxStack.clear();", "geometryResetPending = true;", "UiScreenStateFacade::renderBaseThenOverlayIfNeeded(*this)", "grid.geometryResetPending || UiScreenStateFacade::needsOverlayReprojection()", "geometryResetPending = false;"}, missingNeedle)) {
+		failureReason = "MacroCellGrid must keep explicit geometry-reset reprojection state for resize handling: missing " + missingNeedle + ".";
 		return false;
 	}
 	{
@@ -3781,17 +3303,8 @@ bool testResizeKillBoxReprojectionGuard(std::string &failureReason) {
 			return false;
 		}
 		const std::string killBoxBlock = vmContent.substr(killBoxStart, killBoxEnd - killBoxStart);
-		if (!containsAllSubstrings(killBoxBlock,
-		                           {
-		                               "if (boxStack.empty()) {",
-		                               "if (geometryResetPending)",
-		                               "redrawBaseAndOverlay();",
-		                               "return true;"
-		                           },
-		                           missingNeedle)) {
-			failureReason =
-			    "MacroCellGrid::killBox() must redraw base and overlay after resize when snapshots were cleared: missing " +
-			    missingNeedle + ".";
+		if (!containsAllSubstrings(killBoxBlock, {"if (boxStack.empty()) {", "if (geometryResetPending)", "redrawBaseAndOverlay();", "return true;"}, missingNeedle)) {
+			failureReason = "MacroCellGrid::killBox() must redraw base and overlay after resize when snapshots were cleared: missing " + missingNeedle + ".";
 			return false;
 		}
 	}
@@ -3812,8 +3325,7 @@ bool testClearScreenSnapshotResetGuard(std::string &failureReason) {
 	{
 		const std::size_t clearScreenStart = vmContent.find("bool MacroCellGrid::clearScreen(int attr) {");
 		const std::size_t clearScreenEnd = vmContent.find("bool MacroCellGrid::scrollBox(", clearScreenStart);
-		if (clearScreenStart == std::string::npos || clearScreenEnd == std::string::npos ||
-		    clearScreenEnd <= clearScreenStart) {
+		if (clearScreenStart == std::string::npos || clearScreenEnd == std::string::npos || clearScreenEnd <= clearScreenStart) {
 			failureReason = "Unable to locate MacroCellGrid::clearScreen() for CLEAR_SCREEN snapshot guard.";
 			return false;
 		}
@@ -3864,17 +3376,8 @@ bool testLineColOverlayReplayGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRVM.cpp for line/column overlay replay guard: " + ioError;
 		return false;
 	}
-	if (!containsAllSubstrings(vmContent,
-	                           {
-	                               "static bool renderMacroLineColOverlay()",
-	                               "static bool reapplyMacroLineColOverlayIfActive()",
-	                               "if (!g_macroScreenLineColOverlay.haveLine && !g_macroScreenLineColOverlay.haveCol)",
-	                               "return renderMacroLineColOverlay();"
-	                           },
-	                           missingNeedle)) {
-		failureReason =
-		    "Macro line/column overlay replay helper must remain wired through the persistent overlay state: missing " +
-		    missingNeedle + ".";
+	if (!containsAllSubstrings(vmContent, {"static bool renderMacroLineColOverlay()", "static bool reapplyMacroLineColOverlayIfActive()", "if (!g_macroScreenLineColOverlay.haveLine && !g_macroScreenLineColOverlay.haveCol)", "return renderMacroLineColOverlay();"}, missingNeedle)) {
+		failureReason = "Macro line/column overlay replay helper must remain wired through the persistent overlay state: missing " + missingNeedle + ".";
 		return false;
 	}
 	{
@@ -3886,8 +3389,7 @@ bool testLineColOverlayReplayGuard(std::string &failureReason) {
 		}
 		const std::string killBoxBlock = vmContent.substr(killBoxStart, killBoxEnd - killBoxStart);
 		if (countSubstring(killBoxBlock, "reapplyMacroLineColOverlayIfActive();") < 3) {
-			failureReason =
-			    "MacroCellGrid::killBox() must reapply the current line/column overlay after every redraw-based restore path.";
+			failureReason = "MacroCellGrid::killBox() must reapply the current line/column overlay after every redraw-based restore path.";
 			return false;
 		}
 	}
@@ -3908,77 +3410,29 @@ bool testCoprocessorScreenRendererBoundaryGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRCoprocessorDispatch.cpp for coprocessor screen-renderer guard: " + ioError;
 		return false;
 	}
-	static constexpr const char *kForbiddenDirectScreenRenderers[] = {
-	    "mrvmUiCreateWindow(",
-	    "mrvmUiDeleteCurrentWindow(",
-	    "mrvmUiEraseCurrentWindow(",
-	    "mrvmUiModifyCurrentWindow(",
-	    "mrvmUiLinkCurrentWindow(",
-	    "mrvmUiUnlinkCurrentWindow(",
-	    "mrvmUiZoomCurrentWindow(",
-	    "mrvmUiRedrawCurrentWindow(",
-	    "mrvmUiNewScreen(",
-	    "mrvmUiMarquee(",
-	    "mrvmUiBrain(",
-	    "mrvmUiPutBox(",
-	    "mrvmUiWrite(",
-	    "mrvmUiClrLine(",
-	    "mrvmUiGotoxy(",
-	    "mrvmUiPutLineNum(",
-	    "mrvmUiPutColNum(",
-	    "mrvmUiScrollBoxUp(",
-	    "mrvmUiScrollBoxDn(",
-	    "mrvmUiClearScreen(",
-		    "mrvmUiKillBox(",
-		    "mrvmUiMessageBox("
-		};
-	static constexpr const char *kAllowedUiBridgeCalls[] = {
-	    "mrvmUiBeginMacroScreenBatch(",
-	    "mrvmUiCursorPosition(",
-	    "mrvmUiEndMacroScreenBatch(",
-	    "mrvmUiRenderFacadeRenderDeferredCommand(",
-	    "mrvmUiReplaceGlobals(",
-	    "mrvmUiReplaceRuntimeOptions(",
-	    "mrvmUiReplaceWindowLastSearch(",
-	    "mrvmUiReplaceWindowMarkStack(",
-	    "mrvmUiScreenHeight(",
-	    "mrvmUiScreenMutationEpoch(",
-	    "mrvmUiScreenWidth(",
-	    "mrvmUiSetCurrentWindow(",
-	    "mrvmUiSyncLinkedWindowsFrom("
-	};
+	static constexpr const char *kForbiddenDirectScreenRenderers[] = {"mrvmUiCreateWindow(", "mrvmUiDeleteCurrentWindow(", "mrvmUiEraseCurrentWindow(", "mrvmUiModifyCurrentWindow(", "mrvmUiLinkCurrentWindow(", "mrvmUiUnlinkCurrentWindow(", "mrvmUiZoomCurrentWindow(", "mrvmUiRedrawCurrentWindow(", "mrvmUiNewScreen(", "mrvmUiMarquee(", "mrvmUiBrain(", "mrvmUiPutBox(", "mrvmUiWrite(", "mrvmUiClrLine(", "mrvmUiGotoxy(", "mrvmUiPutLineNum(", "mrvmUiPutColNum(", "mrvmUiScrollBoxUp(", "mrvmUiScrollBoxDn(", "mrvmUiClearScreen(", "mrvmUiKillBox(", "mrvmUiMessageBox("};
+	static constexpr const char *kAllowedUiBridgeCalls[] = {"mrvmUiBeginMacroScreenBatch(", "mrvmUiCursorPosition(", "mrvmUiEndMacroScreenBatch(", "mrvmUiRenderFacadeRenderDeferredCommand(", "mrvmUiReplaceGlobals(", "mrvmUiReplaceRuntimeOptions(", "mrvmUiReplaceWindowLastSearch(", "mrvmUiReplaceWindowMarkStack(", "mrvmUiScreenHeight(", "mrvmUiScreenMutationEpoch(", "mrvmUiScreenWidth(", "mrvmUiSetCurrentWindow(", "mrvmUiSyncLinkedWindowsFrom("};
 
 	for (const char *needle : kForbiddenDirectScreenRenderers)
 		if (dispatchContent.find(needle) != std::string::npos) {
 			forbidden = needle;
-			failureReason =
-			    "Coprocessor playback must not call direct mrvmUi* screen renderers outside the central gateway: " +
-			    forbidden;
+			failureReason = "Coprocessor playback must not call direct mrvmUi* screen renderers outside the central gateway: " + forbidden;
 			return false;
 		}
 	{
 		const std::regex uiBridgeCallPattern("mrvmUi[A-Z][A-Za-z0-9_]*\\(");
-		for (std::sregex_iterator it(dispatchContent.begin(), dispatchContent.end(), uiBridgeCallPattern), end; it != end;
-		     ++it) {
+		for (std::sregex_iterator it(dispatchContent.begin(), dispatchContent.end(), uiBridgeCallPattern), end; it != end; ++it) {
 			const std::string call = it->str();
-			if (std::find(observedCalls.begin(), observedCalls.end(), call) == observedCalls.end())
-				observedCalls.push_back(call);
+			if (std::find(observedCalls.begin(), observedCalls.end(), call) == observedCalls.end()) observedCalls.push_back(call);
 		}
 		for (const std::string &call : observedCalls)
-			if (std::find(std::begin(kAllowedUiBridgeCalls), std::end(kAllowedUiBridgeCalls), call) ==
-			    std::end(kAllowedUiBridgeCalls))
-				unexpectedCalls.push_back(call);
+			if (std::find(std::begin(kAllowedUiBridgeCalls), std::end(kAllowedUiBridgeCalls), call) == std::end(kAllowedUiBridgeCalls)) unexpectedCalls.push_back(call);
 		if (!unexpectedCalls.empty()) {
-			failureReason =
-			    "Coprocessor playback must keep mrvmUi* bridge usage on the approved whitelist: " + unexpectedCalls.front();
+			failureReason = "Coprocessor playback must keep mrvmUi* bridge usage on the approved whitelist: " + unexpectedCalls.front();
 			return false;
 		}
 	}
-	if (dispatchContent.find("mrvmUiRenderFacadeRenderDeferredCommand(command)") == std::string::npos ||
-	    dispatchContent.find("DeferredUiRenderGateway::renderDeferredCommand(command)") == std::string::npos ||
-	    dispatchContent.find("MacroScreenView::render(command)") == std::string::npos ||
-	    dispatchContent.find("mrvmUiBeginMacroScreenBatch();") == std::string::npos ||
-	    dispatchContent.find("mrvmUiEndMacroScreenBatch();") == std::string::npos) {
+	if (dispatchContent.find("mrvmUiRenderFacadeRenderDeferredCommand(command)") == std::string::npos || dispatchContent.find("DeferredUiRenderGateway::renderDeferredCommand(command)") == std::string::npos || dispatchContent.find("MacroScreenView::render(command)") == std::string::npos || dispatchContent.find("mrvmUiBeginMacroScreenBatch();") == std::string::npos || dispatchContent.find("mrvmUiEndMacroScreenBatch();") == std::string::npos) {
 		failureReason = "Coprocessor playback must keep all deferred screen rendering routed through the gateway/view chain.";
 		return false;
 	}
@@ -4000,10 +3454,8 @@ bool testMarqueeColorSourceGuard(std::string &failureReason) {
 		failureReason = "Marquee colors must be sourced from configuredColorSlotOverride(...).";
 		return false;
 	}
-	if (content.find("getColor(0x2B2B)") != std::string::npos || content.find("getColor(0x2C2C)") != std::string::npos ||
-	    content.find("getColor(0x2A2A)") != std::string::npos) {
-		failureReason =
-		    "Marquee colors must not use raw getColor(0x2A2A/0x2B2B/0x2C2C) view-local lookup.";
+	if (content.find("getColor(0x2B2B)") != std::string::npos || content.find("getColor(0x2C2C)") != std::string::npos || content.find("getColor(0x2A2A)") != std::string::npos) {
+		failureReason = "Marquee colors must not use raw getColor(0x2A2A/0x2B2B/0x2C2C) view-local lookup.";
 		return false;
 	}
 	failureReason.clear();
@@ -4019,15 +3471,11 @@ bool testOtherColorsDedicatedMessageSlotsGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRDialogPaths.cpp for OTHERCOLORS slot guard: " + ioError;
 		return false;
 	}
-	if (content.find("{\"error message\", kMrPaletteMessageError}") == std::string::npos ||
-	    content.find("{\"message\", kMrPaletteMessage}") == std::string::npos ||
-	    content.find("{\"warning message\", kMrPaletteMessageWarning}") == std::string::npos) {
+	if (content.find("{\"error message\", kMrPaletteMessageError}") == std::string::npos || content.find("{\"message\", kMrPaletteMessage}") == std::string::npos || content.find("{\"warning message\", kMrPaletteMessageWarning}") == std::string::npos) {
 		failureReason = "OTHERCOLORS message entries must target dedicated extension palette slots.";
 		return false;
 	}
-	if (content.find("{\"error message\", 42}") != std::string::npos ||
-	    content.find("{\"message\", 43}") != std::string::npos ||
-	    content.find("{\"warning message\", 44}") != std::string::npos) {
+	if (content.find("{\"error message\", 42}") != std::string::npos || content.find("{\"message\", 43}") != std::string::npos || content.find("{\"warning message\", 44}") != std::string::npos) {
 		failureReason = "OTHERCOLORS message entries must not map directly to dialog palette slots 42/43/44.";
 		return false;
 	}
@@ -4052,8 +3500,7 @@ bool testDelayProcWiringGuard(std::string &failureReason) {
 		failureReason = "Compile failed for DELAY probe: " + compileError;
 		return false;
 	}
-	vm.executeAt(bytecode.data(), bytecode.size(), static_cast<size_t>(entryOffset), std::string(), macroName,
-	             true, true);
+	vm.executeAt(bytecode.data(), bytecode.size(), static_cast<size_t>(entryOffset), std::string(), macroName, true, true);
 	while (vm.hasPendingDelay() && std::chrono::steady_clock::now() < deadline) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(2));
 		vm.resumePendingDelay();
@@ -4103,19 +3550,12 @@ bool testStartupCliLoadRecursiveGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRVM.cpp for startup CLI guard: " + ioError;
 		return false;
 	}
-	if (appContent.find("--load-recursive") == std::string::npos ||
-	    appContent.find("-lr") == std::string::npos ||
-	    appContent.find("recursive_directory_iterator") == std::string::npos ||
-	    appContent.find("fnmatch(") == std::string::npos) {
-		failureReason =
-		    "MREditorApp startup loading must support --load-recursive/-lr with recursive glob matching.";
+	if (appContent.find("--load-recursive") == std::string::npos || appContent.find("-lr") == std::string::npos || appContent.find("recursive_directory_iterator") == std::string::npos || appContent.find("fnmatch(") == std::string::npos) {
+		failureReason = "MREditorApp startup loading must support --load-recursive/-lr with recursive glob matching.";
 		return false;
 	}
-	if (appContent.find("patternSuffix.find('/') == std::string::npos") == std::string::npos ||
-	    appContent.find("candidatePath.filename().string()") == std::string::npos ||
-	    appContent.find("std::filesystem::relative(candidatePath, basePath") == std::string::npos) {
-		failureReason =
-		    "Recursive glob must match by basename without path prefix and by relative path for path patterns.";
+	if (appContent.find("patternSuffix.find('/') == std::string::npos") == std::string::npos || appContent.find("candidatePath.filename().string()") == std::string::npos || appContent.find("std::filesystem::relative(candidatePath, basePath") == std::string::npos) {
+		failureReason = "Recursive glob must match by basename without path prefix and by relative path for path patterns.";
 		return false;
 	}
 	if (appContent.find("mrvmProcessArguments()") == std::string::npos) {
@@ -4130,19 +3570,15 @@ bool testStartupCliLoadRecursiveGuard(std::string &failureReason) {
 		failureReason = "MREditorApp must not create an empty placeholder editor window on startup.";
 		return false;
 	}
-	if (vmHeaderContent.find("mrvmProcessArguments();") == std::string::npos ||
-	    vmSourceContent.find("std::vector<std::string> mrvmProcessArguments()") == std::string::npos) {
+	if (vmHeaderContent.find("mrvmProcessArguments();") == std::string::npos || vmSourceContent.find("std::vector<std::string> mrvmProcessArguments()") == std::string::npos) {
 		failureReason = "mrvm process-argument getter must be declared and implemented.";
 		return false;
 	}
-	if (mainContent.find("--help") == std::string::npos || mainContent.find("-h") == std::string::npos ||
-	    mainContent.find("kMrEmbeddedHelpMarkdown") == std::string::npos) {
+	if (mainContent.find("--help") == std::string::npos || mainContent.find("-h") == std::string::npos || mainContent.find("kMrEmbeddedHelpMarkdown") == std::string::npos) {
 		failureReason = "mr.cpp must provide --help/-h and print embedded markdown help.";
 		return false;
 	}
-	if (makefileContent.find("app/mrhelp.md") == std::string::npos ||
-	    makefileContent.find("app/MRHelp.generated.hpp") == std::string::npos ||
-	    makefileContent.find("generate_help_markdown.sh") == std::string::npos) {
+	if (makefileContent.find("app/mrhelp.md") == std::string::npos || makefileContent.find("app/MRHelp.generated.hpp") == std::string::npos || makefileContent.find("generate_help_markdown.sh") == std::string::npos) {
 		failureReason = "Makefile must regenerate embedded help header from app/mrhelp.md.";
 		return false;
 	}
@@ -4160,8 +3596,7 @@ void runTest(TestContext &ctx, const char *name, bool (*fn)(std::string &)) {
 	}
 	++ctx.failed;
 	std::cout << "[FAIL] " << name << "\n";
-	if (!failure.empty())
-		std::cout << "       " << failure << "\n";
+	if (!failure.empty()) std::cout << "       " << failure << "\n";
 }
 
 void runCoreSuite(TestContext &ctx) {
@@ -4214,8 +3649,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "MENUDIALOGCOLORS targets menu + gray dialog palette", testMenuDialogColorGroupTargetsExpectedSlots);
 	runTest(ctx, "MENUDIALOGCOLORS legacy list upgrade behavior", testMenuDialogSemanticLabelsGuard);
 	runTest(ctx, "MENUDIALOGCOLORS hotkey selection alias guard", testMenuEntryHotkeySelectionAliasGuard);
-	runTest(ctx, "MENUDIALOGCOLORS dialog frame/background propagation guard",
-	        testDialogFrameAndBackgroundPropagationGuard);
+	runTest(ctx, "MENUDIALOGCOLORS dialog frame/background propagation guard", testDialogFrameAndBackgroundPropagationGuard);
 	runTest(ctx, "Touched-range mid-insert guard", testTouchedRangeMidInsertGuard);
 	runTest(ctx, "Edit settings roundtrip behavior", testSetupScrollRefreshGuard);
 	runTest(ctx, "Extended settings roundtrip behavior", testExtendedSettingsRoundtripGuard);
@@ -4269,12 +3703,9 @@ int main(int argc, char **argv) {
 
 	if (argc >= 2) {
 		if (argc == 3 && std::strcmp(argv[1], "--probe") == 0) {
-			if (std::strcmp(argv[2], "staged-nav") == 0)
-				return runStagedNavProbeMode();
-			if (std::strcmp(argv[2], "staged-mark-page") == 0)
-				return runStagedMarkPageProbeMode();
-			if (std::strcmp(argv[2], "macro-screen-flush") == 0)
-				return runMacroScreenFlushProbeMode();
+			if (std::strcmp(argv[2], "staged-nav") == 0) return runStagedNavProbeMode();
+			if (std::strcmp(argv[2], "staged-mark-page") == 0) return runStagedMarkPageProbeMode();
+			if (std::strcmp(argv[2], "macro-screen-flush") == 0) return runMacroScreenFlushProbeMode();
 		} else if (argc == 2 && std::strcmp(argv[1], "--full") == 0) {
 			runFull = true;
 		} else if (argc == 2 && std::strcmp(argv[1], "--core") == 0) {
@@ -4288,8 +3719,7 @@ int main(int argc, char **argv) {
 
 	TestContext ctx;
 
-	if (runFull)
-		runFullSuite(ctx);
+	if (runFull) runFullSuite(ctx);
 	else
 		runCoreSuite(ctx);
 

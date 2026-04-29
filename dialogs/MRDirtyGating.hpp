@@ -14,29 +14,17 @@ enum class UnsavedChangesChoice : unsigned char {
 	Cancel
 };
 
-template <typename Draft, typename EqualFn>
-[[nodiscard]] bool isDialogDraftDirty(const Draft &baselineDraft, const Draft &currentDraft,
-                                      EqualFn &&equalFn) {
+template <typename Draft, typename EqualFn> [[nodiscard]] bool isDialogDraftDirty(const Draft &baselineDraft, const Draft &currentDraft, EqualFn &&equalFn) {
 	return !std::invoke(std::forward<EqualFn>(equalFn), baselineDraft, currentDraft);
 }
 
-[[nodiscard]] UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel,
-                                                            const char *headline,
-                                                            const char *detail = nullptr);
+[[nodiscard]] UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const char *headline, const char *detail = nullptr);
 
-[[nodiscard]] UnsavedChangesChoice runDialogDirtyGating(const char *headline,
-                                                        const char *primaryLabel = "Save",
-                                                        const char *detail = nullptr);
+[[nodiscard]] UnsavedChangesChoice runDialogDirtyGating(const char *headline, const char *primaryLabel = "Save", const char *detail = nullptr);
 
-[[nodiscard]] bool runDialogConfirm(const char *headline, const char *confirmLabel = "OK",
-                                    const char *detail = nullptr,
-                                    const char *dialogTitle = "Confirm");
+[[nodiscard]] bool runDialogConfirm(const char *headline, const char *confirmLabel = "OK", const char *detail = nullptr, const char *dialogTitle = "Confirm");
 
-[[nodiscard]] UnsavedChangesChoice runDialogDirtyListGating(const char *dialogTitle,
-                                                            const char *headline,
-                                                            const char *itemsLabel,
-                                                            const std::vector<std::string> &dirtyItems,
-                                                            const char *primaryLabel = "Save");
+[[nodiscard]] UnsavedChangesChoice runDialogDirtyListGating(const char *dialogTitle, const char *headline, const char *itemsLabel, const std::vector<std::string> &dirtyItems, const char *primaryLabel = "Save");
 
 } // namespace dialogs
 } // namespace mr

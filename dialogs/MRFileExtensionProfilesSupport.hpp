@@ -17,8 +17,7 @@ inline MRFileExtensionEditorSettings configuredFileExtensionEditorSettings() {
 	return configuredEditSetupSettings();
 }
 
-inline MRFileExtensionEditorSettings mergeFileExtensionEditorSettings(const MRFileExtensionEditorSettings &defaults,
-	                                                             const MREditSetupOverrides &overrides) {
+inline MRFileExtensionEditorSettings mergeFileExtensionEditorSettings(const MRFileExtensionEditorSettings &defaults, const MREditSetupOverrides &overrides) {
 	return mergeEditSetupSettings(defaults, overrides);
 }
 
@@ -26,13 +25,11 @@ inline const std::vector<MRFileExtensionProfile> &configuredFileExtensionProfile
 	return configuredEditExtensionProfiles();
 }
 
-inline bool setConfiguredFileExtensionEditorSettings(const MRFileExtensionEditorSettings &settings,
-	                                             std::string *errorMessage = nullptr) {
+inline bool setConfiguredFileExtensionEditorSettings(const MRFileExtensionEditorSettings &settings, std::string *errorMessage = nullptr) {
 	return setConfiguredEditSetupSettings(settings, errorMessage);
 }
 
-inline bool setConfiguredFileExtensionProfiles(const std::vector<MRFileExtensionProfile> &profiles,
-	                                       std::string *errorMessage = nullptr) {
+inline bool setConfiguredFileExtensionProfiles(const std::vector<MRFileExtensionProfile> &profiles, std::string *errorMessage = nullptr) {
 	return setConfiguredEditExtensionProfiles(profiles, errorMessage);
 }
 
@@ -51,32 +48,24 @@ struct EditProfileDraft {
 void writeRecordField(char *dest, std::size_t destSize, const std::string &value);
 [[nodiscard]] bool fileExtensionEditorSettingsDialogRecordsEqual(const FileExtensionEditorSettingsDialogRecord &lhs, const FileExtensionEditorSettingsDialogRecord &rhs);
 void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDialogRecord &record);
-[[nodiscard]] bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditorSettingsDialogRecord &record, MRFileExtensionEditorSettings &settings,
-                                                      std::string &errorText);
+[[nodiscard]] bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditorSettingsDialogRecord &record, MRFileExtensionEditorSettings &settings, std::string &errorText);
 [[nodiscard]] std::vector<std::string> splitExtensionLiteral(const std::string &literal);
 void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileExtensionEditorSettingsDialogRecord &record);
 [[nodiscard]] bool normalizeDraftSyntax(EditProfileDraft &draft, std::string &errorText);
 [[nodiscard]] bool normalizeDraftListSyntax(std::vector<EditProfileDraft> &drafts, std::string &errorText);
 [[nodiscard]] bool draftsEqual(const EditProfileDraft &lhs, const EditProfileDraft &rhs);
-[[nodiscard]] bool draftListsEqual(const std::vector<EditProfileDraft> &lhs,
-                                   const std::vector<EditProfileDraft> &rhs);
+[[nodiscard]] bool draftListsEqual(const std::vector<EditProfileDraft> &lhs, const std::vector<EditProfileDraft> &rhs);
 [[nodiscard]] EditProfileDraft draftFromProfile(const MRFileExtensionProfile &profile);
 [[nodiscard]] EditProfileDraft makeDefaultDraft();
 [[nodiscard]] std::string buildProfileListLabel(const EditProfileDraft &draft, std::size_t idWidth);
 [[nodiscard]] EditProfileDraft makeNewDraft(const std::vector<EditProfileDraft> &existingDrafts);
-[[nodiscard]] EditProfileDraft makeCopiedDraft(const EditProfileDraft &source,
-                                               const std::vector<EditProfileDraft> &existingDrafts);
-[[nodiscard]] bool validateDraftsForUi(const std::vector<EditProfileDraft> &drafts, int currentIndex,
-                                       const EditProfileDraft *currentDraftOverride,
-                                       std::string &errorText);
-[[nodiscard]] inline bool validateDraftsForUi(const std::vector<EditProfileDraft> &drafts, int currentIndex,
-                                              std::string &errorText) {
+[[nodiscard]] EditProfileDraft makeCopiedDraft(const EditProfileDraft &source, const std::vector<EditProfileDraft> &existingDrafts);
+[[nodiscard]] bool validateDraftsForUi(const std::vector<EditProfileDraft> &drafts, int currentIndex, const EditProfileDraft *currentDraftOverride, std::string &errorText);
+[[nodiscard]] inline bool validateDraftsForUi(const std::vector<EditProfileDraft> &drafts, int currentIndex, std::string &errorText) {
 	return validateDraftsForUi(drafts, currentIndex, nullptr, errorText);
 }
-[[nodiscard]] bool saveAndReloadEditProfiles(const std::vector<EditProfileDraft> &drafts,
-                                             std::string &errorText);
-[[nodiscard]] std::vector<std::string> dirtyDraftIds(const std::vector<EditProfileDraft> &initialDrafts,
-                                                     const std::vector<EditProfileDraft> &drafts);
+[[nodiscard]] bool saveAndReloadEditProfiles(const std::vector<EditProfileDraft> &drafts, std::string &errorText);
+[[nodiscard]] std::vector<std::string> dirtyDraftIds(const std::vector<EditProfileDraft> &initialDrafts, const std::vector<EditProfileDraft> &drafts);
 [[nodiscard]] std::string joinCommaSeparated(const std::vector<std::string> &values);
 
 } // namespace MRFileExtensionProfilesInternal

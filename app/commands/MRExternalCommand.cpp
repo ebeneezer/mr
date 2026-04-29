@@ -24,15 +24,11 @@ namespace {
 
 	while (start < end && std::isspace(static_cast<unsigned char>(path[start])) != 0)
 		++start;
-	while (end > start &&
-	       (std::isspace(static_cast<unsigned char>(path[end - 1])) != 0 ||
-	        static_cast<unsigned char>(path[end - 1]) < 32))
+	while (end > start && (std::isspace(static_cast<unsigned char>(path[end - 1])) != 0 || static_cast<unsigned char>(path[end - 1]) < 32))
 		--end;
 
 	std::string result(path.substr(start, end - start));
-	if (result.size() >= 2 &&
-	    ((result.front() == '"' && result.back() == '"') || (result.front() == '\'' && result.back() == '\'')))
-		result = result.substr(1, result.size() - 2);
+	if (result.size() >= 2 && ((result.front() == '"' && result.back() == '"') || (result.front() == '\'' && result.back() == '\''))) result = result.substr(1, result.size() - 2);
 	return result;
 }
 } // namespace
@@ -44,8 +40,7 @@ bool promptForCommandLine(std::string &commandLine) {
 
 	commandLine.clear();
 	limit = static_cast<uchar>(command.size() - 1);
-	if (inputBox("EXECUTE PROGRAM", "~C~ommand", command.data(), limit) == cmCancel)
-		return false;
+	if (inputBox("EXECUTE PROGRAM", "~C~ommand", command.data(), limit) == cmCancel) return false;
 	commandLine = trimPathInput(command.data());
 	return true;
 }
@@ -53,16 +48,12 @@ bool promptForCommandLine(std::string &commandLine) {
 std::string shortenCommandTitle(std::string_view command) {
 	std::string trimmed = trimPathInput(command);
 
-	if (trimmed.empty())
-		trimmed = "(empty)";
-	if (trimmed.size() > 54)
-		trimmed = trimmed.substr(0, 51) + "...";
+	if (trimmed.empty()) trimmed = "(empty)";
+	if (trimmed.size() > 54) trimmed = trimmed.substr(0, 51) + "...";
 	return "CMD: " + trimmed;
 }
 
-mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &info,
-                                               std::stop_token stopToken, std::size_t channelId,
-                                               const std::string &command) {
+mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &info, std::stop_token stopToken, std::size_t channelId, const std::string &command) {
 	mr::coprocessor::Result result;
 	int pipeFds[2] = {-1, -1};
 	pid_t childPid = -1;
@@ -104,8 +95,7 @@ mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &
 	::close(pipeFds[1]);
 	::setpgid(childPid, childPid);
 	readFlags = ::fcntl(pipeFds[0], F_GETFL, 0);
-	if (readFlags >= 0)
-		::fcntl(pipeFds[0], F_SETFL, readFlags | O_NONBLOCK);
+	if (readFlags >= 0) ::fcntl(pipeFds[0], F_SETFL, readFlags | O_NONBLOCK);
 
 	while (pipeOpen || !childExited) {
 		struct pollfd pfd;
@@ -113,8 +103,7 @@ mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &
 
 		if ((stopToken.stop_requested() || info.cancelRequested()) && !childExited) {
 			cancellationRequested = true;
-			if (stopPolls == 0)
-				::kill(-childPid, SIGTERM);
+			if (stopPolls == 0) ::kill(-childPid, SIGTERM);
 			else if (stopPolls > 10)
 				::kill(-childPid, SIGKILL);
 			++stopPolls;
@@ -137,8 +126,7 @@ mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &
 					mr::coprocessor::Result chunkResult;
 					chunkResult.task = info;
 					chunkResult.status = mr::coprocessor::TaskStatus::Completed;
-					chunkResult.payload = std::make_shared<mr::coprocessor::ExternalIoChunkPayload>(
-					    channelId, std::string(buffer.data(), static_cast<std::size_t>(count)));
+					chunkResult.payload = std::make_shared<mr::coprocessor::ExternalIoChunkPayload>(channelId, std::string(buffer.data(), static_cast<std::size_t>(count)));
 					mr::coprocessor::globalCoprocessor().post(std::move(chunkResult));
 					continue;
 				}
@@ -146,21 +134,18 @@ mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &
 					pipeOpen = false;
 					break;
 				}
-				if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
-					break;
+				if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) break;
 				result.status = mr::coprocessor::TaskStatus::Failed;
 				result.error = std::string("read failed: ") + std::strerror(errno);
 				pipeOpen = false;
 				break;
 			}
-			if (result.failed())
-				break;
+			if (result.failed()) break;
 		}
 
 		if (!childExited) {
 			pid_t waited = ::waitpid(childPid, &waitStatus, WNOHANG);
-			if (waited == childPid)
-				childExited = true;
+			if (waited == childPid) childExited = true;
 			else if (waited < 0 && errno != EINTR) {
 				result.status = mr::coprocessor::TaskStatus::Failed;
 				result.error = std::string("waitpid failed: ") + std::strerror(errno);
@@ -169,24 +154,20 @@ mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &
 		}
 	}
 
-	if (pipeFds[0] >= 0)
-		::close(pipeFds[0]);
+	if (pipeFds[0] >= 0) ::close(pipeFds[0]);
 	if (!childExited && childPid > 0) {
 		while (::waitpid(childPid, &waitStatus, 0) < 0 && errno == EINTR)
 			;
 		childExited = true;
 	}
 
-	if (result.failed())
-		return result;
+	if (result.failed()) return result;
 	if (cancellationRequested || stopToken.stop_requested() || info.cancelRequested()) {
 		result.status = mr::coprocessor::TaskStatus::Cancelled;
 		return result;
 	}
 
 	result.status = mr::coprocessor::TaskStatus::Completed;
-	result.payload = std::make_shared<mr::coprocessor::ExternalIoFinishedPayload>(
-	    channelId, WIFEXITED(waitStatus) ? WEXITSTATUS(waitStatus) : -1,
-	    WIFSIGNALED(waitStatus) != 0, WIFSIGNALED(waitStatus) ? WTERMSIG(waitStatus) : 0);
+	result.payload = std::make_shared<mr::coprocessor::ExternalIoFinishedPayload>(channelId, WIFEXITED(waitStatus) ? WEXITSTATUS(waitStatus) : -1, WIFSIGNALED(waitStatus) != 0, WIFSIGNALED(waitStatus) ? WTERMSIG(waitStatus) : 0);
 	return result;
 }

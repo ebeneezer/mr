@@ -30,11 +30,8 @@
 
 namespace {
 
-std::string summarizeConfiguredKeymapsForLog(const std::vector<MRKeymapProfile> &profiles,
-                                             std::string_view activeProfileName) {
-	std::string text =
-	    "Keymap configured state: active='" + std::string(activeProfileName) + "' profiles=" +
-	    std::to_string(profiles.size());
+std::string summarizeConfiguredKeymapsForLog(const std::vector<MRKeymapProfile> &profiles, std::string_view activeProfileName) {
+	std::string text = "Keymap configured state: active='" + std::string(activeProfileName) + "' profiles=" + std::to_string(profiles.size());
 
 	for (const MRKeymapProfile &profile : profiles)
 		text += " [" + profile.name + ":" + std::to_string(profile.bindings.size()) + "]";
@@ -104,8 +101,7 @@ constexpr std::array kDialogHistoryScopeSpecs{
 
 static_assert(kDialogHistoryScopeSpecs.size() == static_cast<std::size_t>(MRDialogHistoryScope::Count));
 
-std::array<MRScopedDialogHistoryState, static_cast<std::size_t>(MRDialogHistoryScope::Count)> &
-configuredDialogHistoryStorage() {
+std::array<MRScopedDialogHistoryState, static_cast<std::size_t>(MRDialogHistoryScope::Count)> &configuredDialogHistoryStorage() {
 	static std::array<MRScopedDialogHistoryState, static_cast<std::size_t>(MRDialogHistoryScope::Count)> value;
 	return value;
 }
@@ -125,8 +121,7 @@ const MRDialogHistoryScopeSpec *findDialogHistoryScopeSpec(MRDialogHistoryScope 
 
 const MRDialogHistoryScopeSpec *findDialogHistoryScopeSpecByName(std::string_view name) noexcept {
 	for (const MRDialogHistoryScopeSpec &spec : kDialogHistoryScopeSpecs)
-		if (spec.name == upperAscii(std::string(name)))
-			return &spec;
+		if (spec.name == upperAscii(std::string(name))) return &spec;
 	return nullptr;
 }
 
@@ -134,7 +129,6 @@ const char *dialogHistoryScopeName(MRDialogHistoryScope scope) noexcept {
 	const MRDialogHistoryScopeSpec *spec = findDialogHistoryScopeSpec(scope);
 	return spec != nullptr ? spec->name : "GENERAL";
 }
-
 
 std::vector<MRDialogHistoryEntry> &configuredMultiFilespecHistoryStorage() {
 	static std::vector<MRDialogHistoryEntry> value;
@@ -249,15 +243,11 @@ bool &configuredColorSettingsInitialized() {
 	return initialized;
 }
 
-
-
 std::string normalizeDialogPath(const char *path) {
 	std::string result = path != nullptr ? path : "";
-	for (char & i : result)
-		if (i == '\\')
-			i = '/';
-	if (!result.empty())
-		result = std::filesystem::path(result).lexically_normal().generic_string();
+	for (char &i : result)
+		if (i == '\\') i = '/';
+	if (!result.empty()) result = std::filesystem::path(result).lexically_normal().generic_string();
 	return result;
 }
 
@@ -266,8 +256,7 @@ std::string expandUserPath(std::string_view input) {
 
 	if (path.size() >= 2 && path[0] == '~' && path[1] == '/') {
 		const char *home = std::getenv("HOME");
-		if (home != nullptr && *home != '\0')
-			return std::string(home) + path.substr(1);
+		if (home != nullptr && *home != '\0') return std::string(home) + path.substr(1);
 	}
 	return path;
 }
@@ -275,71 +264,53 @@ std::string expandUserPath(std::string_view input) {
 [[nodiscard]] bool isReadableDirectory(std::string_view path) {
 	const std::string pathString(path);
 	struct stat st;
-	if (path.empty())
-		return false;
-	if (::stat(pathString.c_str(), &st) != 0)
-		return false;
-	if (!S_ISDIR(st.st_mode))
-		return false;
+	if (path.empty()) return false;
+	if (::stat(pathString.c_str(), &st) != 0) return false;
+	if (!S_ISDIR(st.st_mode)) return false;
 	return ::access(pathString.c_str(), R_OK | X_OK) == 0;
 }
 
 [[nodiscard]] bool isWritableDirectory(std::string_view path) {
 	const std::string pathString(path);
 	struct stat st;
-	if (path.empty())
-		return false;
-	if (::stat(pathString.c_str(), &st) != 0)
-		return false;
-	if (!S_ISDIR(st.st_mode))
-		return false;
+	if (path.empty()) return false;
+	if (::stat(pathString.c_str(), &st) != 0) return false;
+	if (!S_ISDIR(st.st_mode)) return false;
 	return ::access(pathString.c_str(), R_OK | W_OK | X_OK) == 0;
 }
 
 [[nodiscard]] bool isReadableFile(std::string_view path) {
 	const std::string pathString(path);
 	struct stat st;
-	if (path.empty())
-		return false;
-	if (::stat(pathString.c_str(), &st) != 0)
-		return false;
-	if (!S_ISREG(st.st_mode))
-		return false;
+	if (path.empty()) return false;
+	if (::stat(pathString.c_str(), &st) != 0) return false;
+	if (!S_ISREG(st.st_mode)) return false;
 	return ::access(pathString.c_str(), R_OK) == 0;
 }
 
 [[nodiscard]] bool isExecutableFile(std::string_view path) {
 	const std::string pathString(path);
 	struct stat st;
-	if (path.empty())
-		return false;
-	if (::stat(pathString.c_str(), &st) != 0)
-		return false;
-	if (!S_ISREG(st.st_mode))
-		return false;
+	if (path.empty()) return false;
+	if (::stat(pathString.c_str(), &st) != 0) return false;
+	if (!S_ISREG(st.st_mode)) return false;
 	return ::access(pathString.c_str(), X_OK) == 0;
 }
 
 [[nodiscard]] bool isWritableRegularFile(std::string_view path) {
 	const std::string pathString(path);
 	struct stat st;
-	if (path.empty())
-		return false;
-	if (::stat(pathString.c_str(), &st) != 0)
-		return false;
-	if (!S_ISREG(st.st_mode))
-		return false;
+	if (path.empty()) return false;
+	if (::stat(pathString.c_str(), &st) != 0) return false;
+	if (!S_ISREG(st.st_mode)) return false;
 	return ::access(pathString.c_str(), W_OK) == 0;
 }
 
 std::string directoryPartOf(std::string_view path) {
-	if (path.empty())
-		return std::string();
+	if (path.empty()) return std::string();
 	std::size_t pos = path.find_last_of('/');
-	if (pos == std::string::npos)
-		return std::string();
-	if (pos == 0)
-		return "/";
+	if (pos == std::string::npos) return std::string();
+	if (pos == 0) return "/";
 	return std::string(path.substr(0, pos));
 }
 
@@ -355,23 +326,19 @@ bool validateAutoexecMacroEntry(const std::string &value, std::string *errorMess
 	const std::string normalized = normalizeDialogPath(normalizeAutoexecMacroEntry(value).c_str());
 
 	if (normalized.empty()) {
-		if (errorMessage != nullptr)
-			*errorMessage = "Autoexec macro name must not be empty.";
+		if (errorMessage != nullptr) *errorMessage = "Autoexec macro name must not be empty.";
 		return false;
 	}
 	if (hasDirectorySeparator(normalized) || normalized.find(':') != std::string::npos) {
-		if (errorMessage != nullptr)
-			*errorMessage = "Autoexec macro must be a file name under MACROPATH.";
+		if (errorMessage != nullptr) *errorMessage = "Autoexec macro must be a file name under MACROPATH.";
 		return false;
 	}
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 void copyToBuffer(char *buffer, std::size_t bufferSize, const std::string &value) {
-	if (buffer == nullptr || bufferSize == 0)
-		return;
+	if (buffer == nullptr || bufferSize == 0) return;
 	std::memset(buffer, 0, bufferSize);
 	std::strncpy(buffer, value.c_str(), bufferSize - 1);
 	buffer[bufferSize - 1] = '\0';
@@ -380,8 +347,7 @@ void copyToBuffer(char *buffer, std::size_t bufferSize, const std::string &value
 std::string currentWorkingDirectory() {
 	char cwd[4096];
 
-	if (::getcwd(cwd, sizeof(cwd)) == nullptr)
-		return std::string();
+	if (::getcwd(cwd, sizeof(cwd)) == nullptr) return std::string();
 	return normalizeDialogPath(cwd);
 }
 
@@ -393,13 +359,10 @@ std::string makeAbsolutePath(const std::string &path) {
 	std::string normalized = normalizeDialogPath(path.c_str());
 	std::string cwd;
 
-	if (normalized.empty() || isAbsolutePath(normalized))
-		return normalized;
+	if (normalized.empty() || isAbsolutePath(normalized)) return normalized;
 	cwd = currentWorkingDirectory();
-	if (cwd.empty())
-		return normalized;
-	if (cwd.back() != '/')
-		cwd.push_back('/');
+	if (cwd.empty()) return normalized;
+	if (cwd.back() != '/') cwd.push_back('/');
 	cwd += normalized;
 	return normalizeDialogPath(cwd.c_str());
 }
@@ -408,13 +371,10 @@ std::string normalizedDialogDirectoryFromPath(const std::string &path) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 	std::string dir;
 
-	if (normalized.empty())
-		return std::string();
-	if (isReadableDirectory(normalized))
-		return normalized;
+	if (normalized.empty()) return std::string();
+	if (isReadableDirectory(normalized)) return normalized;
 	dir = directoryPartOf(normalized);
-	if (dir.empty())
-		return std::string();
+	if (dir.empty()) return std::string();
 	dir = makeAbsolutePath(dir);
 	return isReadableDirectory(dir) ? dir : std::string();
 }
@@ -423,10 +383,8 @@ std::string fallbackRememberedLoadDirectory() {
 	std::string macroDir = makeAbsolutePath(configuredMacroDirectory());
 	std::string cwd = currentWorkingDirectory();
 
-	if (isReadableDirectory(macroDir))
-		return macroDir;
-	if (isReadableDirectory(cwd))
-		return cwd;
+	if (isReadableDirectory(macroDir)) return macroDir;
+	if (isReadableDirectory(cwd)) return cwd;
 	return std::string();
 }
 
@@ -438,32 +396,23 @@ long long nextHistoryEpoch() {
 }
 
 void trimHistoryToLimit(std::vector<MRDialogHistoryEntry> &entries, int limit) {
-	if (limit < 0)
-		limit = 0;
-	if (entries.size() > static_cast<std::size_t>(limit))
-		entries.resize(static_cast<std::size_t>(limit));
+	if (limit < 0) limit = 0;
+	if (entries.size() > static_cast<std::size_t>(limit)) entries.resize(static_cast<std::size_t>(limit));
 }
 
 void addHistoryEntry(std::vector<MRDialogHistoryEntry> &entries, const std::string &value, int limit) {
-	if (value.empty())
-		return;
-	entries.erase(std::remove_if(entries.begin(), entries.end(),
-	                             [&](const MRDialogHistoryEntry &entry) { return entry.value == value; }),
-	              entries.end());
+	if (value.empty()) return;
+	entries.erase(std::remove_if(entries.begin(), entries.end(), [&](const MRDialogHistoryEntry &entry) { return entry.value == value; }), entries.end());
 	entries.insert(entries.begin(), MRDialogHistoryEntry{value, nextHistoryEpoch()});
 	trimHistoryToLimit(entries, limit);
 }
 
-void addSerializedHistoryEntry(std::vector<MRDialogHistoryEntry> &entries, const std::string &value, int limit,
-                               bool normalizeAsPath) {
-	const std::string prepared =
-	    normalizeAsPath ? normalizeConfiguredPathInput(value) : trimAscii(value);
+void addSerializedHistoryEntry(std::vector<MRDialogHistoryEntry> &entries, const std::string &value, int limit, bool normalizeAsPath) {
+	const std::string prepared = normalizeAsPath ? normalizeConfiguredPathInput(value) : trimAscii(value);
 
-	if (prepared.empty())
-		return;
+	if (prepared.empty()) return;
 	for (const MRDialogHistoryEntry &entry : entries)
-		if (entry.value == prepared)
-			return;
+		if (entry.value == prepared) return;
 	entries.push_back(MRDialogHistoryEntry{prepared, nextHistoryEpoch()});
 	trimHistoryToLimit(entries, limit);
 }
@@ -471,8 +420,7 @@ void addSerializedHistoryEntry(std::vector<MRDialogHistoryEntry> &entries, const
 std::string latestReadableHistoryPath(const std::vector<MRDialogHistoryEntry> &entries) {
 	for (const MRDialogHistoryEntry &entry : entries) {
 		const std::string normalized = makeAbsolutePath(entry.value);
-		if (isReadableDirectory(normalized))
-			return normalized;
+		if (isReadableDirectory(normalized)) return normalized;
 	}
 	return std::string();
 }
@@ -480,8 +428,7 @@ std::string latestReadableHistoryPath(const std::vector<MRDialogHistoryEntry> &e
 std::string latestReadableHistoryFileDirectory(const std::vector<MRDialogHistoryEntry> &entries) {
 	for (const MRDialogHistoryEntry &entry : entries) {
 		std::string dir = normalizedDialogDirectoryFromPath(entry.value);
-		if (!dir.empty())
-			return dir;
+		if (!dir.empty()) return dir;
 	}
 	return std::string();
 }
@@ -489,8 +436,7 @@ std::string latestReadableHistoryFileDirectory(const std::vector<MRDialogHistory
 std::string latestHistoryValue(const std::vector<MRDialogHistoryEntry> &entries) {
 	for (const MRDialogHistoryEntry &entry : entries) {
 		const std::string normalized = normalizeConfiguredPathInput(entry.value);
-		if (!normalized.empty())
-			return normalized;
+		if (!normalized.empty()) return normalized;
 	}
 	return std::string();
 }
@@ -498,14 +444,11 @@ std::string latestHistoryValue(const std::vector<MRDialogHistoryEntry> &entries)
 std::string effectiveRememberedLoadDirectory(MRDialogHistoryScope scope) {
 	const MRScopedDialogHistoryState &state = dialogHistoryState(scope);
 	std::string remembered = normalizeConfiguredPathInput(state.lastPath);
-	if (!remembered.empty() && isReadableDirectory(remembered))
-		return remembered;
+	if (!remembered.empty() && isReadableDirectory(remembered)) return remembered;
 	remembered = latestReadableHistoryPath(state.pathHistory);
-	if (!remembered.empty())
-		return remembered;
+	if (!remembered.empty()) return remembered;
 	remembered = latestReadableHistoryFileDirectory(state.fileHistory);
-	if (!remembered.empty())
-		return remembered;
+	if (!remembered.empty()) return remembered;
 	return fallbackRememberedLoadDirectory();
 }
 
@@ -514,22 +457,18 @@ std::string executableDirectory() {
 	ssize_t len = ::readlink("/proc/self/exe", path, sizeof(path) - 1);
 	std::size_t sep = 0;
 
-	if (len <= 0)
-		return std::string();
+	if (len <= 0) return std::string();
 	path[len] = '\0';
 	sep = std::string(path).find_last_of('/');
-	if (sep == std::string::npos)
-		return std::string();
-	if (sep == 0)
-		return "/";
+	if (sep == std::string::npos) return std::string();
+	if (sep == 0) return "/";
 	return std::string(path).substr(0, sep);
 }
 
 std::string pathFromEnvironment(const char *name) {
 	const char *value = std::getenv(name);
 
-	if (value == nullptr || *value == '\0')
-		return std::string();
+	if (value == nullptr || *value == '\0') return std::string();
 	return makeAbsolutePath(normalizeDialogPath(expandUserPath(value).c_str()));
 }
 
@@ -537,8 +476,7 @@ std::string firstWritableDirectoryFromEnvironment() {
 	static constexpr std::array<const char *, 3> names = {"TMPDIR", "TEMP", "TMP"};
 	for (const char *name : names) {
 		std::string value = pathFromEnvironment(name);
-		if (isWritableDirectory(value))
-			return value;
+		if (isWritableDirectory(value)) return value;
 	}
 	return std::string();
 }
@@ -546,8 +484,7 @@ std::string firstWritableDirectoryFromEnvironment() {
 std::string shellFromUserDatabase() {
 	struct passwd *entry = ::getpwuid(::getuid());
 
-	if (entry == nullptr || entry->pw_shell == nullptr || *entry->pw_shell == '\0')
-		return std::string();
+	if (entry == nullptr || entry->pw_shell == nullptr || *entry->pw_shell == '\0') return std::string();
 	return normalizeDialogPath(entry->pw_shell);
 }
 
@@ -556,12 +493,9 @@ std::string builtInTempDirectoryPath();
 std::string appendFileName(std::string_view directory, const char *fileName) {
 	std::string base(directory);
 
-	if (fileName == nullptr || *fileName == '\0')
-		return base;
-	if (base.empty())
-		return std::string(fileName);
-	if (base.back() != '/')
-		base.push_back('/');
+	if (fileName == nullptr || *fileName == '\0') return base;
+	if (base.empty()) return std::string(fileName);
+	if (base.back() != '/') base.push_back('/');
 	base += fileName;
 	return base;
 }
@@ -569,39 +503,31 @@ std::string appendFileName(std::string_view directory, const char *fileName) {
 std::string appendPathSegment(std::string_view base, const char *segment) {
 	std::string out(base);
 
-	if (segment == nullptr || *segment == '\0')
-		return out;
-	if (out.empty())
-		return std::string(segment);
-	if (out.back() != '/')
-		out.push_back('/');
+	if (segment == nullptr || *segment == '\0') return out;
+	if (out.empty()) return std::string(segment);
+	if (out.back() != '/') out.push_back('/');
 	out += segment;
 	return out;
 }
 
 std::string fileNamePartOf(std::string_view path) {
 	std::size_t pos;
-	if (path.empty())
-		return std::string();
+	if (path.empty()) return std::string();
 	pos = path.find_last_of('/');
-	if (pos == std::string::npos)
-		return std::string(path);
+	if (pos == std::string::npos) return std::string(path);
 	return std::string(path.substr(pos + 1));
 }
 
 std::string defaultColorThemePathForSettings(std::string_view settingsPath) {
 	std::string dir = directoryPartOf(makeAbsolutePath(std::string(settingsPath)));
-	if (dir.empty())
-		dir = currentWorkingDirectory();
-	if (dir.empty())
-		dir = "/tmp";
+	if (dir.empty()) dir = currentWorkingDirectory();
+	if (dir.empty()) dir = "/tmp";
 	return appendFileName(dir, "default-theme.mrmac");
 }
 
 std::string defaultLogFilePathForSettings(std::string_view settingsPath) {
 	std::string dir = directoryPartOf(makeAbsolutePath(std::string(settingsPath)));
-	if (dir.empty() || !isWritableDirectory(dir))
-		dir = builtInTempDirectoryPath();
+	if (dir.empty() || !isWritableDirectory(dir)) dir = builtInTempDirectoryPath();
 	return appendFileName(dir, "mr.log");
 }
 
@@ -609,29 +535,22 @@ std::string builtInTempDirectoryPath() {
 	std::string envValue = firstWritableDirectoryFromEnvironment();
 	std::string cwd;
 
-	if (!envValue.empty())
-		return envValue;
-	if (isWritableDirectory("/tmp"))
-		return "/tmp";
+	if (!envValue.empty()) return envValue;
+	if (isWritableDirectory("/tmp")) return "/tmp";
 	cwd = currentWorkingDirectory();
-	if (!cwd.empty() && isWritableDirectory(cwd))
-		return cwd;
+	if (!cwd.empty() && isWritableDirectory(cwd)) return cwd;
 	return "/tmp";
 }
 
 std::string builtInShellExecutablePath() {
 	std::string shell = pathFromEnvironment("SHELL");
 
-	if (isExecutableFile(shell))
-		return shell;
+	if (isExecutableFile(shell)) return shell;
 	shell = shellFromUserDatabase();
-	if (isExecutableFile(shell))
-		return shell;
+	if (isExecutableFile(shell)) return shell;
 	shell = pathFromEnvironment("COMSPEC");
-	if (isExecutableFile(shell))
-		return shell;
-	if (isExecutableFile("/bin/sh"))
-		return "/bin/sh";
+	if (isExecutableFile(shell)) return shell;
+	if (isExecutableFile("/bin/sh")) return "/bin/sh";
 	return "/bin/sh";
 }
 
@@ -640,67 +559,52 @@ bool ensureDirectoryTree(const std::string &directoryPath, std::string *errorMes
 	std::string parentPath;
 
 	if (directoryPath.empty() || directoryPath == "." || directoryPath == "/") {
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	if (::stat(directoryPath.c_str(), &st) == 0) {
 		if (S_ISDIR(st.st_mode)) {
-			if (errorMessage != nullptr)
-				errorMessage->clear();
+			if (errorMessage != nullptr) errorMessage->clear();
 			return true;
 		}
-		if (errorMessage != nullptr)
-			*errorMessage = "Path exists and is not a path container: " + directoryPath;
+		if (errorMessage != nullptr) *errorMessage = "Path exists and is not a path container: " + directoryPath;
 		return false;
 	}
 	parentPath = directoryPartOf(directoryPath);
 	if (!parentPath.empty() && parentPath != directoryPath)
-		if (!ensureDirectoryTree(parentPath, errorMessage))
-			return false;
+		if (!ensureDirectoryTree(parentPath, errorMessage)) return false;
 	if (::mkdir(directoryPath.c_str(), 0755) != 0 && errno != EEXIST) {
-		if (errorMessage != nullptr)
-			*errorMessage = "Unable to create path container: " + directoryPath;
+		if (errorMessage != nullptr) *errorMessage = "Unable to create path container: " + directoryPath;
 		return false;
 	}
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
-
-
-void accumulateSettingsChangeCounts(const std::vector<MRSettingsChangeEntry> &changes, std::size_t &addedCount,
-                                    std::size_t &removedCount, std::size_t &changedCount) {
+void accumulateSettingsChangeCounts(const std::vector<MRSettingsChangeEntry> &changes, std::size_t &addedCount, std::size_t &removedCount, std::size_t &changedCount) {
 	addedCount = 0;
 	removedCount = 0;
 	changedCount = 0;
 	for (const MRSettingsChangeEntry &change : changes)
-		if (change.kind == MRSettingsChangeEntry::Kind::Added)
-			++addedCount;
+		if (change.kind == MRSettingsChangeEntry::Kind::Added) ++addedCount;
 		else if (change.kind == MRSettingsChangeEntry::Kind::Removed)
 			++removedCount;
 		else
 			++changedCount;
 }
 
-void populateSettingsWriteReport(const std::string &settingsPath, const std::string &beforeSource,
-                                 const std::string &afterSource, MRSettingsWriteReport *report) {
+void populateSettingsWriteReport(const std::string &settingsPath, const std::string &beforeSource, const std::string &afterSource, MRSettingsWriteReport *report) {
 	std::vector<MRSettingsChangeEntry> changes;
 
-	if (report == nullptr)
-		return;
+	if (report == nullptr) return;
 	*report = MRSettingsWriteReport();
 	report->settingsPath = settingsPath;
 	report->fileWritten = true;
 	report->contentChanged = beforeSource != afterSource;
-	if (!diffSettingsSources(beforeSource, afterSource, changes, nullptr))
-		return;
+	if (!diffSettingsSources(beforeSource, afterSource, changes, nullptr)) return;
 	accumulateSettingsChangeCounts(changes, report->addedCount, report->removedCount, report->changedCount);
 	if (report->contentChanged && !changes.empty()) {
-		report->logLines.push_back("settings.mrmac updated: " + std::to_string(report->changedCount) +
-		                      " changed, " + std::to_string(report->addedCount) +
-		                      " added, " + std::to_string(report->removedCount) + " removed.");
+		report->logLines.push_back("settings.mrmac updated: " + std::to_string(report->changedCount) + " changed, " + std::to_string(report->addedCount) + " added, " + std::to_string(report->removedCount) + " removed.");
 		for (const MRSettingsChangeEntry &change : changes)
 			report->logLines.push_back(formatSettingsChangeForLog(change));
 	} else if (report->contentChanged)
@@ -711,8 +615,7 @@ std::string escapeMrmacSingleQuotedLiteral(const std::string &value) {
 	std::string out;
 	out.reserve(value.size() + 8);
 	for (char ch : value) {
-			if (ch == '\'')
-			out += "''";
+		if (ch == '\'') out += "''";
 		else
 			out.push_back(ch);
 	}
@@ -768,17 +671,14 @@ struct ScopedHistoryPayloadMember {
 	std::string value;
 };
 
-bool parseScopedHistoryPayloadMembers(std::string_view payload, std::vector<ScopedHistoryPayloadMember> &members,
-                                      std::string *errorMessage) {
+bool parseScopedHistoryPayloadMembers(std::string_view payload, std::vector<ScopedHistoryPayloadMember> &members, std::string *errorMessage) {
 	std::size_t pos = 0;
 
 	while (pos < payload.size()) {
 		while (pos < payload.size() && isPayloadSpace(payload[pos]))
 			++pos;
-		if (pos >= payload.size())
-			break;
-		if (!isPayloadKeyStart(payload[pos]))
-			return setError(errorMessage, "Dialog history payload syntax error.");
+		if (pos >= payload.size()) break;
+		if (!isPayloadKeyStart(payload[pos])) return setError(errorMessage, "Dialog history payload syntax error.");
 
 		const std::size_t keyStart = pos;
 		++pos;
@@ -786,21 +686,17 @@ bool parseScopedHistoryPayloadMembers(std::string_view payload, std::vector<Scop
 			++pos;
 		std::string key = upperAscii(std::string(payload.substr(keyStart, pos - keyStart)));
 
-		if (pos >= payload.size() || payload[pos] != '=')
-			return setError(errorMessage, "Dialog history payload is missing '='.");
+		if (pos >= payload.size() || payload[pos] != '=') return setError(errorMessage, "Dialog history payload is missing '='.");
 		++pos;
-		if (pos >= payload.size() || payload[pos] != '"')
-			return setError(errorMessage, "Dialog history payload expects quoted values.");
+		if (pos >= payload.size() || payload[pos] != '"') return setError(errorMessage, "Dialog history payload expects quoted values.");
 		++pos;
 
 		std::string value;
 		while (pos < payload.size()) {
 			const char ch = payload[pos++];
-			if (ch == '"')
-				break;
+			if (ch == '"') break;
 			if (ch == '\\') {
-				if (pos >= payload.size())
-					return setError(errorMessage, "Dialog history payload has a dangling escape.");
+				if (pos >= payload.size()) return setError(errorMessage, "Dialog history payload has a dangling escape.");
 				switch (const char escaped = payload[pos++]) {
 					case '"':
 					case '\\':
@@ -822,50 +718,39 @@ bool parseScopedHistoryPayloadMembers(std::string_view payload, std::vector<Scop
 			}
 			value.push_back(ch);
 		}
-		if (pos > payload.size() || payload[pos - 1] != '"')
-			return setError(errorMessage, "Dialog history payload has an unterminated value.");
+		if (pos > payload.size() || payload[pos - 1] != '"') return setError(errorMessage, "Dialog history payload has an unterminated value.");
 
 		members.push_back({std::move(key), std::move(value)});
 	}
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
-const ScopedHistoryPayloadMember *findScopedHistoryPayloadMember(
-    const std::vector<ScopedHistoryPayloadMember> &members, std::string_view key) noexcept {
+const ScopedHistoryPayloadMember *findScopedHistoryPayloadMember(const std::vector<ScopedHistoryPayloadMember> &members, std::string_view key) noexcept {
 	for (const ScopedHistoryPayloadMember &member : members)
-		if (member.key == key)
-			return &member;
+		if (member.key == key) return &member;
 	return nullptr;
 }
 
-bool parseScopedHistoryPayload(std::string_view payload, const char *valueMemberName,
-                               MRDialogHistoryScope &scopeOut, std::string &valueOut,
-                               std::string *errorMessage) {
+bool parseScopedHistoryPayload(std::string_view payload, const char *valueMemberName, MRDialogHistoryScope &scopeOut, std::string &valueOut, std::string *errorMessage) {
 	std::vector<ScopedHistoryPayloadMember> members;
 	const ScopedHistoryPayloadMember *scopeMember = nullptr;
 	const ScopedHistoryPayloadMember *valueMember = nullptr;
 	const MRDialogHistoryScopeSpec *scopeSpec = nullptr;
 
-	if (!parseScopedHistoryPayloadMembers(payload, members, errorMessage))
-		return false;
+	if (!parseScopedHistoryPayloadMembers(payload, members, errorMessage)) return false;
 	scopeMember = findScopedHistoryPayloadMember(members, "SCOPE");
 	valueMember = findScopedHistoryPayloadMember(members, upperAscii(std::string(valueMemberName)));
-	if (scopeMember == nullptr || valueMember == nullptr)
-		return setError(errorMessage, "Dialog history payload requires scope and value members.");
+	if (scopeMember == nullptr || valueMember == nullptr) return setError(errorMessage, "Dialog history payload requires scope and value members.");
 	scopeSpec = findDialogHistoryScopeSpecByName(scopeMember->value);
-	if (scopeSpec == nullptr)
-		return setError(errorMessage, "Dialog history payload references an unknown scope.");
+	if (scopeSpec == nullptr) return setError(errorMessage, "Dialog history payload references an unknown scope.");
 	scopeOut = scopeSpec->scope;
 	valueOut = valueMember->value;
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
-std::string serializeScopedHistoryRecord(std::string_view key, MRDialogHistoryScope scope,
-                                         std::string_view valueMemberName, std::string_view value) {
+std::string serializeScopedHistoryRecord(std::string_view key, MRDialogHistoryScope scope, std::string_view valueMemberName, std::string_view value) {
 	std::string payload = "scope=\"";
 	payload += escapePayloadQuotedString(dialogHistoryScopeName(scope));
 	payload += "\" ";
@@ -877,8 +762,7 @@ std::string serializeScopedHistoryRecord(std::string_view key, MRDialogHistorySc
 }
 
 bool setError(std::string *errorMessage, const std::string &message) {
-	if (errorMessage != nullptr)
-		*errorMessage = message;
+	if (errorMessage != nullptr) *errorMessage = message;
 	return false;
 }
 
@@ -943,159 +827,122 @@ struct MRSettingsKeyDescriptor {
 };
 
 static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
-	{kSettingsVersionKey, MRSettingsKeyClass::Version, true},
-	{"SETTINGSPATH", MRSettingsKeyClass::Path, true},
-	{"MACROPATH", MRSettingsKeyClass::Path, true},
-	{"HELPPATH", MRSettingsKeyClass::Path, true},
-	{"TEMPDIR", MRSettingsKeyClass::Path, true},
-	{"SHELLPATH", MRSettingsKeyClass::Path, true},
-	{"WINDOW_MANAGER", MRSettingsKeyClass::Global, true},
-	{"MESSAGES", MRSettingsKeyClass::Global, true},
-	{"SEARCH_TEXT_TYPE", MRSettingsKeyClass::Global, true},
-	{"SEARCH_DIRECTION", MRSettingsKeyClass::Global, true},
-	{"SEARCH_MODE", MRSettingsKeyClass::Global, true},
-	{"SEARCH_CASE_SENSITIVE", MRSettingsKeyClass::Global, true},
-	{"SEARCH_GLOBAL_SEARCH", MRSettingsKeyClass::Global, true},
-	{"SEARCH_RESTRICT_MARKED_BLOCK", MRSettingsKeyClass::Global, true},
-	{"SEARCH_ALL_WINDOWS", MRSettingsKeyClass::Global, true},
-	{"SEARCH_LIST_ALL_OCCURRENCES", MRSettingsKeyClass::Global, false},
-	{"SAR_TEXT_TYPE", MRSettingsKeyClass::Global, true},
-	{"SAR_DIRECTION", MRSettingsKeyClass::Global, true},
-	{"SAR_MODE", MRSettingsKeyClass::Global, true},
-	{"SAR_LEAVE_CURSOR_AT", MRSettingsKeyClass::Global, true},
-	{"SAR_CASE_SENSITIVE", MRSettingsKeyClass::Global, true},
-	{"SAR_GLOBAL_SEARCH", MRSettingsKeyClass::Global, true},
-	{"SAR_RESTRICT_MARKED_BLOCK", MRSettingsKeyClass::Global, true},
-	{"SAR_ALL_WINDOWS", MRSettingsKeyClass::Global, true},
-	{"SAR_REPLACE_MODE", MRSettingsKeyClass::Global, false},
-	{"SAR_PROMPT_EACH_REPLACE", MRSettingsKeyClass::Global, false},
-	{"MULTI_SEARCH_FILESPEC", MRSettingsKeyClass::Global, true},
-	{"MULTI_SEARCH_TEXT", MRSettingsKeyClass::Global, true},
-	{"MULTI_SEARCH_STARTING_PATH", MRSettingsKeyClass::Global, true},
-	{"MULTI_SEARCH_SUBDIRECTORIES", MRSettingsKeyClass::Global, true},
-	{"MULTI_SEARCH_CASE_SENSITIVE", MRSettingsKeyClass::Global, true},
-	{"MULTI_SEARCH_REGULAR_EXPRESSIONS", MRSettingsKeyClass::Global, true},
-	{"MULTI_SEARCH_FILES_IN_MEMORY", MRSettingsKeyClass::Global, true},
-	{"MULTI_SAR_FILESPEC", MRSettingsKeyClass::Global, true},
-	{"MULTI_SAR_TEXT", MRSettingsKeyClass::Global, true},
-	{"MULTI_SAR_REPLACEMENT", MRSettingsKeyClass::Global, true},
-	{"MULTI_SAR_STARTING_PATH", MRSettingsKeyClass::Global, true},
-	{"MULTI_SAR_SUBDIRECTORIES", MRSettingsKeyClass::Global, true},
-	{"MULTI_SAR_CASE_SENSITIVE", MRSettingsKeyClass::Global, true},
-	{"MULTI_SAR_REGULAR_EXPRESSIONS", MRSettingsKeyClass::Global, true},
-	{"MULTI_SAR_FILES_IN_MEMORY", MRSettingsKeyClass::Global, true},
-	{"MULTI_SAR_KEEP_FILES_OPEN", MRSettingsKeyClass::Global, true},
-	{"MULTI_FILESPEC_HISTORY", MRSettingsKeyClass::Global, false},
-	{"MULTI_PATH_HISTORY", MRSettingsKeyClass::Global, false},
-	{"VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
-	{"CYCLIC_VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
-	{"CURSOR_POSITION_MARKER", MRSettingsKeyClass::Global, true},
-	{"AUTOLOAD_WORKSPACE", MRSettingsKeyClass::Global, true},
-	{"LOG_HANDLING", MRSettingsKeyClass::Global, true},
-	{"LOGFILE", MRSettingsKeyClass::Global, true},
-	{"AUTOEXEC_MACRO", MRSettingsKeyClass::Global, false},
-	{"LASTFILEDIALOGPATH", MRSettingsKeyClass::Global, false},
-	{"WORKSPACE", MRSettingsKeyClass::Global, false},
-	{"MAX_PATH_HISTORY", MRSettingsKeyClass::Global, true},
-	{"MAX_FILE_HISTORY", MRSettingsKeyClass::Global, true},
-	{"PATH_HISTORY", MRSettingsKeyClass::Global, false},
-	{"FILE_HISTORY", MRSettingsKeyClass::Global, false},
-	{kDialogLastPathKey, MRSettingsKeyClass::Global, false},
-	{kDialogPathHistoryKey, MRSettingsKeyClass::Global, false},
-	{kDialogFileHistoryKey, MRSettingsKeyClass::Global, false},
-	{"DEFAULT_PROFILE_DESCRIPTION", MRSettingsKeyClass::Global, true},
-	{kKeymapSettingsKey, MRSettingsKeyClass::Global, true},
-	{"ACTIVE_KEYMAP_PROFILE", MRSettingsKeyClass::Global, true},
-	{"KEYMAP_PROFILE", MRSettingsKeyClass::Global, false},
-	{"KEYMAP_BIND", MRSettingsKeyClass::Global, false},
-	{kThemeSettingsKey, MRSettingsKeyClass::Global, true},
-	{"WINDOWCOLORS", MRSettingsKeyClass::ColorInline, false},
-	{"MENUDIALOGCOLORS", MRSettingsKeyClass::ColorInline, false},
-	{"HELPCOLORS", MRSettingsKeyClass::ColorInline, false},
-	{"OTHERCOLORS", MRSettingsKeyClass::ColorInline, false},
-	{"MINIMAPCOLORS", MRSettingsKeyClass::ColorInline, false},
+    {kSettingsVersionKey, MRSettingsKeyClass::Version, true},
+    {"SETTINGSPATH", MRSettingsKeyClass::Path, true},
+    {"MACROPATH", MRSettingsKeyClass::Path, true},
+    {"HELPPATH", MRSettingsKeyClass::Path, true},
+    {"TEMPDIR", MRSettingsKeyClass::Path, true},
+    {"SHELLPATH", MRSettingsKeyClass::Path, true},
+    {"WINDOW_MANAGER", MRSettingsKeyClass::Global, true},
+    {"MESSAGES", MRSettingsKeyClass::Global, true},
+    {"SEARCH_TEXT_TYPE", MRSettingsKeyClass::Global, true},
+    {"SEARCH_DIRECTION", MRSettingsKeyClass::Global, true},
+    {"SEARCH_MODE", MRSettingsKeyClass::Global, true},
+    {"SEARCH_CASE_SENSITIVE", MRSettingsKeyClass::Global, true},
+    {"SEARCH_GLOBAL_SEARCH", MRSettingsKeyClass::Global, true},
+    {"SEARCH_RESTRICT_MARKED_BLOCK", MRSettingsKeyClass::Global, true},
+    {"SEARCH_ALL_WINDOWS", MRSettingsKeyClass::Global, true},
+    {"SEARCH_LIST_ALL_OCCURRENCES", MRSettingsKeyClass::Global, false},
+    {"SAR_TEXT_TYPE", MRSettingsKeyClass::Global, true},
+    {"SAR_DIRECTION", MRSettingsKeyClass::Global, true},
+    {"SAR_MODE", MRSettingsKeyClass::Global, true},
+    {"SAR_LEAVE_CURSOR_AT", MRSettingsKeyClass::Global, true},
+    {"SAR_CASE_SENSITIVE", MRSettingsKeyClass::Global, true},
+    {"SAR_GLOBAL_SEARCH", MRSettingsKeyClass::Global, true},
+    {"SAR_RESTRICT_MARKED_BLOCK", MRSettingsKeyClass::Global, true},
+    {"SAR_ALL_WINDOWS", MRSettingsKeyClass::Global, true},
+    {"SAR_REPLACE_MODE", MRSettingsKeyClass::Global, false},
+    {"SAR_PROMPT_EACH_REPLACE", MRSettingsKeyClass::Global, false},
+    {"MULTI_SEARCH_FILESPEC", MRSettingsKeyClass::Global, true},
+    {"MULTI_SEARCH_TEXT", MRSettingsKeyClass::Global, true},
+    {"MULTI_SEARCH_STARTING_PATH", MRSettingsKeyClass::Global, true},
+    {"MULTI_SEARCH_SUBDIRECTORIES", MRSettingsKeyClass::Global, true},
+    {"MULTI_SEARCH_CASE_SENSITIVE", MRSettingsKeyClass::Global, true},
+    {"MULTI_SEARCH_REGULAR_EXPRESSIONS", MRSettingsKeyClass::Global, true},
+    {"MULTI_SEARCH_FILES_IN_MEMORY", MRSettingsKeyClass::Global, true},
+    {"MULTI_SAR_FILESPEC", MRSettingsKeyClass::Global, true},
+    {"MULTI_SAR_TEXT", MRSettingsKeyClass::Global, true},
+    {"MULTI_SAR_REPLACEMENT", MRSettingsKeyClass::Global, true},
+    {"MULTI_SAR_STARTING_PATH", MRSettingsKeyClass::Global, true},
+    {"MULTI_SAR_SUBDIRECTORIES", MRSettingsKeyClass::Global, true},
+    {"MULTI_SAR_CASE_SENSITIVE", MRSettingsKeyClass::Global, true},
+    {"MULTI_SAR_REGULAR_EXPRESSIONS", MRSettingsKeyClass::Global, true},
+    {"MULTI_SAR_FILES_IN_MEMORY", MRSettingsKeyClass::Global, true},
+    {"MULTI_SAR_KEEP_FILES_OPEN", MRSettingsKeyClass::Global, true},
+    {"MULTI_FILESPEC_HISTORY", MRSettingsKeyClass::Global, false},
+    {"MULTI_PATH_HISTORY", MRSettingsKeyClass::Global, false},
+    {"VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
+    {"CYCLIC_VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
+    {"CURSOR_POSITION_MARKER", MRSettingsKeyClass::Global, true},
+    {"AUTOLOAD_WORKSPACE", MRSettingsKeyClass::Global, true},
+    {"LOG_HANDLING", MRSettingsKeyClass::Global, true},
+    {"LOGFILE", MRSettingsKeyClass::Global, true},
+    {"AUTOEXEC_MACRO", MRSettingsKeyClass::Global, false},
+    {"LASTFILEDIALOGPATH", MRSettingsKeyClass::Global, false},
+    {"WORKSPACE", MRSettingsKeyClass::Global, false},
+    {"MAX_PATH_HISTORY", MRSettingsKeyClass::Global, true},
+    {"MAX_FILE_HISTORY", MRSettingsKeyClass::Global, true},
+    {"PATH_HISTORY", MRSettingsKeyClass::Global, false},
+    {"FILE_HISTORY", MRSettingsKeyClass::Global, false},
+    {kDialogLastPathKey, MRSettingsKeyClass::Global, false},
+    {kDialogPathHistoryKey, MRSettingsKeyClass::Global, false},
+    {kDialogFileHistoryKey, MRSettingsKeyClass::Global, false},
+    {"DEFAULT_PROFILE_DESCRIPTION", MRSettingsKeyClass::Global, true},
+    {kKeymapSettingsKey, MRSettingsKeyClass::Global, true},
+    {"ACTIVE_KEYMAP_PROFILE", MRSettingsKeyClass::Global, true},
+    {"KEYMAP_PROFILE", MRSettingsKeyClass::Global, false},
+    {"KEYMAP_BIND", MRSettingsKeyClass::Global, false},
+    {kThemeSettingsKey, MRSettingsKeyClass::Global, true},
+    {"WINDOWCOLORS", MRSettingsKeyClass::ColorInline, false},
+    {"MENUDIALOGCOLORS", MRSettingsKeyClass::ColorInline, false},
+    {"HELPCOLORS", MRSettingsKeyClass::ColorInline, false},
+    {"OTHERCOLORS", MRSettingsKeyClass::ColorInline, false},
+    {"MINIMAPCOLORS", MRSettingsKeyClass::ColorInline, false},
 };
 
 const MREditSettingDescriptor *editSettingDescriptorByKeyInternal(const std::string &key);
 
 static const MREditSettingDescriptor kEditSettingDescriptors[] = {
     {"PAGE_BREAK", "Page break", MREditSettingSection::Text, MREditSettingKind::String, true, kOvPageBreak},
-    {"WORD_DELIMITERS", "Word delimiters", MREditSettingSection::Text, MREditSettingKind::String, true,
-     kOvWordDelimiters},
-    {"DEFAULT_EXTENSIONS", "Filename extension fallback", MREditSettingSection::OpenFile, MREditSettingKind::String,
-     true, kOvDefaultExtensions},
-    {"TRUNCATE_SPACES", "Truncate whitespace", MREditSettingSection::Save, MREditSettingKind::Boolean, true,
-     kOvTruncateSpaces},
-    {"EOF_CTRL_Z", "Write Ctrl+Z EOF", MREditSettingSection::Save, MREditSettingKind::Boolean, true,
-     kOvEofCtrlZ},
+    {"WORD_DELIMITERS", "Word delimiters", MREditSettingSection::Text, MREditSettingKind::String, true, kOvWordDelimiters},
+    {"DEFAULT_EXTENSIONS", "Filename extension fallback", MREditSettingSection::OpenFile, MREditSettingKind::String, true, kOvDefaultExtensions},
+    {"TRUNCATE_SPACES", "Truncate whitespace", MREditSettingSection::Save, MREditSettingKind::Boolean, true, kOvTruncateSpaces},
+    {"EOF_CTRL_Z", "Write Ctrl+Z EOF", MREditSettingSection::Save, MREditSettingKind::Boolean, true, kOvEofCtrlZ},
     {"EOF_CR_LF", "Write CR/LF", MREditSettingSection::Save, MREditSettingKind::Boolean, true, kOvEofCrLf},
-    {"TAB_EXPAND", "Expand tabs", MREditSettingSection::Tabs, MREditSettingKind::Boolean, true,
-     kOvTabExpand},
-    {"DISPLAY_TABS", "Display tabs", MREditSettingSection::Tabs, MREditSettingKind::Boolean, true,
-     kOvDisplayTabs},
+    {"TAB_EXPAND", "Expand tabs", MREditSettingSection::Tabs, MREditSettingKind::Boolean, true, kOvTabExpand},
+    {"DISPLAY_TABS", "Display tabs", MREditSettingSection::Tabs, MREditSettingKind::Boolean, true, kOvDisplayTabs},
     {"TAB_SIZE", "Tab size", MREditSettingSection::Tabs, MREditSettingKind::Integer, true, kOvTabSize},
-    {"LEFT_MARGIN", "Left margin", MREditSettingSection::Formatting, MREditSettingKind::Integer, true,
-     kOvLeftMargin},
-    {"RIGHT_MARGIN", "Right margin", MREditSettingSection::Formatting, MREditSettingKind::Integer, true,
-     kOvRightMargin},
-    {"FORMAT_RULER", "Format ruler", MREditSettingSection::Formatting, MREditSettingKind::Boolean, true,
-     kOvFormatRuler},
-    {"WORD_WRAP", "Word wrap", MREditSettingSection::Formatting, MREditSettingKind::Boolean, true,
-     kOvWordWrap},
-    {"INDENT_STYLE", "Indent style", MREditSettingSection::Formatting, MREditSettingKind::Choice, true,
-     kOvIndentStyle},
-    {"FILE_TYPE", "File type", MREditSettingSection::Formatting, MREditSettingKind::Choice, true,
-     kOvFileType},
-    {"BINARY_RECORD_LENGTH", "Binary record length", MREditSettingSection::Formatting, MREditSettingKind::Integer, true,
-     kOvBinaryRecordLength},
-    {"POST_LOAD_MACRO", "Post-load macro", MREditSettingSection::Macros, MREditSettingKind::String, true,
-     kOvPostLoadMacro},
-    {"PRE_SAVE_MACRO", "Pre-save macro", MREditSettingSection::Macros, MREditSettingKind::String, true,
-     kOvPreSaveMacro},
-    {"DEFAULT_PATH", "Default path", MREditSettingSection::Paths, MREditSettingKind::String, true,
-     kOvDefaultPath},
-    {"FORMAT_LINE", "Format line", MREditSettingSection::Formatting, MREditSettingKind::String, true,
-     kOvFormatLine},
-    {"BACKUP_FILES", "Backup files", MREditSettingSection::Save, MREditSettingKind::Boolean, true,
-     kOvBackupFiles},
-    {"BACKUP_METHOD", "Backup method", MREditSettingSection::Save, MREditSettingKind::Choice, false,
-     kOvBackupMethod},
-    {"BACKUP_FREQUENCY", "Backup frequency", MREditSettingSection::Save, MREditSettingKind::Choice, false,
-     kOvBackupFrequency},
-    {"BACKUP_EXTENSION", "Backup extension", MREditSettingSection::Save, MREditSettingKind::String, false,
-     kOvBackupExtension},
-    {"BACKUP_DIRECTORY", "Backup directory", MREditSettingSection::Save, MREditSettingKind::String, false,
-     kOvBackupDirectory},
-    {"AUTOSAVE_INACTIVITY_SECONDS", "Autosave inactivity", MREditSettingSection::Save, MREditSettingKind::Integer, false,
-     kOvAutosaveInactivitySeconds},
-    {"AUTOSAVE_INTERVAL_SECONDS", "Autosave interval", MREditSettingSection::Save, MREditSettingKind::Integer, false,
-     kOvAutosaveIntervalSeconds},
-    {"SHOW_EOF_MARKER", "Show EOF marker", MREditSettingSection::Display, MREditSettingKind::Boolean, true,
-     kOvShowEofMarker},
-    {"SHOW_EOF_MARKER_EMOJI", "EOF marker emoji", MREditSettingSection::Display, MREditSettingKind::Boolean, true,
-     kOvShowEofMarkerEmoji},
-    {"LINE_NUMBERS_POSITION", "Line number position", MREditSettingSection::Display, MREditSettingKind::Choice, true,
-     kOvLineNumbersPosition},
-    {"LINE_NUM_ZERO_FILL", "Zero-fill line numbers", MREditSettingSection::Display, MREditSettingKind::Boolean,
-     true, kOvLineNumZeroFill},
-    {"MINIMAP_POSITION", "Minimap position", MREditSettingSection::Display, MREditSettingKind::Choice, true,
-     kOvMiniMapPosition},
-    {"MINIMAP_WIDTH", "Minimap width", MREditSettingSection::Display, MREditSettingKind::Integer, true,
-     kOvMiniMapWidth},
-    {"MINIMAP_MARKER_GLYPH", "Minimap marker glyph", MREditSettingSection::Display, MREditSettingKind::String, true,
-     kOvMiniMapMarkerGlyph},
-    {"GUTTERS", "Gutter render order", MREditSettingSection::Display, MREditSettingKind::String, true,
-     kOvGutters},
-    {"PERSISTENT_BLOCKS", "Persistent blocks", MREditSettingSection::Blocks, MREditSettingKind::Boolean, true,
-     kOvPersistentBlocks},
-    {"CODE_FOLDING_POSITION", "Code folding position", MREditSettingSection::Display, MREditSettingKind::Choice, true,
-     kOvCodeFoldingPosition},
-    {"COLUMN_BLOCK_MOVE", "Column block move", MREditSettingSection::Blocks, MREditSettingKind::Choice, true,
-     kOvColumnBlockMove},
-    {"DEFAULT_MODE", "Default mode", MREditSettingSection::Mode, MREditSettingKind::Choice, true,
-     kOvDefaultMode},
-    {"CURSOR_STATUS_COLOR", "Cursor status color", MREditSettingSection::Display, MREditSettingKind::String, true,
-     kOvCursorStatusColor},
+    {"LEFT_MARGIN", "Left margin", MREditSettingSection::Formatting, MREditSettingKind::Integer, true, kOvLeftMargin},
+    {"RIGHT_MARGIN", "Right margin", MREditSettingSection::Formatting, MREditSettingKind::Integer, true, kOvRightMargin},
+    {"FORMAT_RULER", "Format ruler", MREditSettingSection::Formatting, MREditSettingKind::Boolean, true, kOvFormatRuler},
+    {"WORD_WRAP", "Word wrap", MREditSettingSection::Formatting, MREditSettingKind::Boolean, true, kOvWordWrap},
+    {"INDENT_STYLE", "Indent style", MREditSettingSection::Formatting, MREditSettingKind::Choice, true, kOvIndentStyle},
+    {"FILE_TYPE", "File type", MREditSettingSection::Formatting, MREditSettingKind::Choice, true, kOvFileType},
+    {"BINARY_RECORD_LENGTH", "Binary record length", MREditSettingSection::Formatting, MREditSettingKind::Integer, true, kOvBinaryRecordLength},
+    {"POST_LOAD_MACRO", "Post-load macro", MREditSettingSection::Macros, MREditSettingKind::String, true, kOvPostLoadMacro},
+    {"PRE_SAVE_MACRO", "Pre-save macro", MREditSettingSection::Macros, MREditSettingKind::String, true, kOvPreSaveMacro},
+    {"DEFAULT_PATH", "Default path", MREditSettingSection::Paths, MREditSettingKind::String, true, kOvDefaultPath},
+    {"FORMAT_LINE", "Format line", MREditSettingSection::Formatting, MREditSettingKind::String, true, kOvFormatLine},
+    {"BACKUP_FILES", "Backup files", MREditSettingSection::Save, MREditSettingKind::Boolean, true, kOvBackupFiles},
+    {"BACKUP_METHOD", "Backup method", MREditSettingSection::Save, MREditSettingKind::Choice, false, kOvBackupMethod},
+    {"BACKUP_FREQUENCY", "Backup frequency", MREditSettingSection::Save, MREditSettingKind::Choice, false, kOvBackupFrequency},
+    {"BACKUP_EXTENSION", "Backup extension", MREditSettingSection::Save, MREditSettingKind::String, false, kOvBackupExtension},
+    {"BACKUP_DIRECTORY", "Backup directory", MREditSettingSection::Save, MREditSettingKind::String, false, kOvBackupDirectory},
+    {"AUTOSAVE_INACTIVITY_SECONDS", "Autosave inactivity", MREditSettingSection::Save, MREditSettingKind::Integer, false, kOvAutosaveInactivitySeconds},
+    {"AUTOSAVE_INTERVAL_SECONDS", "Autosave interval", MREditSettingSection::Save, MREditSettingKind::Integer, false, kOvAutosaveIntervalSeconds},
+    {"SHOW_EOF_MARKER", "Show EOF marker", MREditSettingSection::Display, MREditSettingKind::Boolean, true, kOvShowEofMarker},
+    {"SHOW_EOF_MARKER_EMOJI", "EOF marker emoji", MREditSettingSection::Display, MREditSettingKind::Boolean, true, kOvShowEofMarkerEmoji},
+    {"LINE_NUMBERS_POSITION", "Line number position", MREditSettingSection::Display, MREditSettingKind::Choice, true, kOvLineNumbersPosition},
+    {"LINE_NUM_ZERO_FILL", "Zero-fill line numbers", MREditSettingSection::Display, MREditSettingKind::Boolean, true, kOvLineNumZeroFill},
+    {"MINIMAP_POSITION", "Minimap position", MREditSettingSection::Display, MREditSettingKind::Choice, true, kOvMiniMapPosition},
+    {"MINIMAP_WIDTH", "Minimap width", MREditSettingSection::Display, MREditSettingKind::Integer, true, kOvMiniMapWidth},
+    {"MINIMAP_MARKER_GLYPH", "Minimap marker glyph", MREditSettingSection::Display, MREditSettingKind::String, true, kOvMiniMapMarkerGlyph},
+    {"GUTTERS", "Gutter render order", MREditSettingSection::Display, MREditSettingKind::String, true, kOvGutters},
+    {"PERSISTENT_BLOCKS", "Persistent blocks", MREditSettingSection::Blocks, MREditSettingKind::Boolean, true, kOvPersistentBlocks},
+    {"CODE_FOLDING_POSITION", "Code folding position", MREditSettingSection::Display, MREditSettingKind::Choice, true, kOvCodeFoldingPosition},
+    {"COLUMN_BLOCK_MOVE", "Column block move", MREditSettingSection::Blocks, MREditSettingKind::Choice, true, kOvColumnBlockMove},
+    {"DEFAULT_MODE", "Default mode", MREditSettingSection::Mode, MREditSettingKind::Choice, true, kOvDefaultMode},
+    {"CURSOR_STATUS_COLOR", "Cursor status color", MREditSettingSection::Display, MREditSettingKind::String, true, kOvCursorStatusColor},
 };
 
 static const unsigned char kPaletteDialogFrame = 33;
@@ -1129,154 +976,72 @@ static const MRColorSetupItem kWindowColorItems[] = {
     // Current-line, current-line-in-block and changed-text intentionally use
     // dedicated app palette extension slots (136..138) to avoid recoloring
     // frame icons/scrollbar controls.
-	{"text", 13},
-	{"changed text", kMrPaletteChangedText},
-	{"highlighted text", 14},
-	{"EOF marker", kMrPaletteEofMarker},
-	{"window border", 8},
-	{"window bold", 9},
-	{"current line", kMrPaletteCurrentLine},
-	{"current line in block", kMrPaletteCurrentLineInBlock},
-	{"line numbers", kMrPaletteLineNumbers},
-	{"code folding", kMrPaletteCodeFolding},
-	{"format ruler", kMrPaletteFormatRuler},
+    {"text", 13}, {"changed text", kMrPaletteChangedText}, {"highlighted text", 14}, {"EOF marker", kMrPaletteEofMarker}, {"window border", 8}, {"window bold", 9}, {"current line", kMrPaletteCurrentLine}, {"current line in block", kMrPaletteCurrentLineInBlock}, {"line numbers", kMrPaletteLineNumbers}, {"code folding", kMrPaletteCodeFolding}, {"format ruler", kMrPaletteFormatRuler},
 };
 
 static const MRColorSetupItem kMenuDialogColorItems[] = {
     // Mixed group by design:
     // - Menu/status palette slots 2..6.
     // - Gray dialog block (32..63), as TDialog defaults to dpGrayDialog.
-    {"description of selectable menu element", 2},
-    {"description of ghosted menu element", 3},
-    {"hotkey of menu element", 4},
-    {"menu selector on selectable menu element", 5},
-    {"menu selector on ghosted menu element", 6},
-    {"description of buttons", 41},
-    {"hotkey on buttons", 45},
-    {"button shadow", 46},
-    {"selected element in unfocussed listbox", 59},
-    {"element description in listbox", 57},
-    {"hotkeys on radio buttons & check boxes", 49},
-    {"dialog selector", 58},
-    {"inactive radio buttons and checkboxes", kPaletteDialogInactiveClusterGray},
-    {"inactive dialog elements", kMrPaletteDialogInactiveElements},
-    {"dialog frame", kPaletteDialogFrame},
-    {"dialog text", kPaletteDialogText},
-    {"dialog background", kPaletteDialogBackground},
+    {"description of selectable menu element", 2}, {"description of ghosted menu element", 3}, {"hotkey of menu element", 4}, {"menu selector on selectable menu element", 5}, {"menu selector on ghosted menu element", 6}, {"description of buttons", 41}, {"hotkey on buttons", 45}, {"button shadow", 46}, {"selected element in unfocussed listbox", 59}, {"element description in listbox", 57}, {"hotkeys on radio buttons & check boxes", 49}, {"dialog selector", 58}, {"inactive radio buttons and checkboxes", kPaletteDialogInactiveClusterGray}, {"inactive dialog elements", kMrPaletteDialogInactiveElements}, {"dialog frame", kPaletteDialogFrame}, {"dialog text", kPaletteDialogText}, {"dialog background", kPaletteDialogBackground},
 };
 
 static const MRColorSetupItem kHelpColorItems[] = {
-    {"Help-Text", 133},     {"help-Highlight", 134}, {"help-Chapter", 135},
-    {"help-Border", 128},   {"help-Link", 134},      {"help-F-keys", 135},
-    {"help-attr-1", 133},   {"help-attr-2", 134},    {"help-attr-3", 135},
+    {"Help-Text", 133}, {"help-Highlight", 134}, {"help-Chapter", 135}, {"help-Border", 128}, {"help-Link", 134}, {"help-F-keys", 135}, {"help-attr-1", 133}, {"help-attr-2", 134}, {"help-attr-3", 135},
 };
 
 static const MRColorSetupItem kOtherColorItems[] = {
-    {"statusline", 2},
-    {"statusline bold", 3},
-    {"function descriptions on statusline", 4},
-    {"function keys on statusline", 5},
-    {"error message", kMrPaletteMessageError},
-    {"message", kMrPaletteMessage},
-    {"warning message", kMrPaletteMessageWarning},
-    {"hero events", kMrPaletteMessageHero},
-    {"cursor position marker", kMrPaletteCursorPositionMarker},
-    {"desktop background", kMrPaletteDesktop},
-    {"virtual desktop marker", kMrPaletteVirtualDesktopMarker},
+    {"statusline", 2}, {"statusline bold", 3}, {"function descriptions on statusline", 4}, {"function keys on statusline", 5}, {"error message", kMrPaletteMessageError}, {"message", kMrPaletteMessage}, {"warning message", kMrPaletteMessageWarning}, {"hero events", kMrPaletteMessageHero}, {"cursor position marker", kMrPaletteCursorPositionMarker}, {"desktop background", kMrPaletteDesktop}, {"virtual desktop marker", kMrPaletteVirtualDesktopMarker},
 };
 
 static const MRColorSetupItem kMiniMapColorItems[] = {
-    {"normal", kMrPaletteMiniMapNormal},
-    {"viewport cursor", kMrPaletteMiniMapViewport},
-    {"changed", kMrPaletteMiniMapChanged},
-    {"find marker", kMrPaletteMiniMapFindMarker},
-    {"error marker", kMrPaletteMiniMapErrorMarker},
+    {"normal", kMrPaletteMiniMapNormal}, {"viewport cursor", kMrPaletteMiniMapViewport}, {"changed", kMrPaletteMiniMapChanged}, {"find marker", kMrPaletteMiniMapFindMarker}, {"error marker", kMrPaletteMiniMapErrorMarker},
 };
 
 static const ColorGroupDefinition kColorGroups[] = {
-    {MRColorSetupGroup::Window, "WINDOW COLORS", "WINDOWCOLORS", kWindowColorItems,
-     std::size(kWindowColorItems)},
-    {MRColorSetupGroup::MenuDialog, "MENU / DIALOG COLORS", "MENUDIALOGCOLORS", kMenuDialogColorItems,
-     std::size(kMenuDialogColorItems)},
-    {MRColorSetupGroup::Help, "HELP COLORS", "HELPCOLORS", kHelpColorItems,
-     std::size(kHelpColorItems)},
-    {MRColorSetupGroup::Other, "OTHER COLORS", "OTHERCOLORS", kOtherColorItems,
-     std::size(kOtherColorItems)},
-    {MRColorSetupGroup::MiniMap, "MINIMAP COLORS", "MINIMAPCOLORS", kMiniMapColorItems,
-     std::size(kMiniMapColorItems)},
+    {MRColorSetupGroup::Window, "WINDOW COLORS", "WINDOWCOLORS", kWindowColorItems, std::size(kWindowColorItems)}, {MRColorSetupGroup::MenuDialog, "MENU / DIALOG COLORS", "MENUDIALOGCOLORS", kMenuDialogColorItems, std::size(kMenuDialogColorItems)}, {MRColorSetupGroup::Help, "HELP COLORS", "HELPCOLORS", kHelpColorItems, std::size(kHelpColorItems)}, {MRColorSetupGroup::Other, "OTHER COLORS", "OTHERCOLORS", kOtherColorItems, std::size(kOtherColorItems)}, {MRColorSetupGroup::MiniMap, "MINIMAP COLORS", "MINIMAPCOLORS", kMiniMapColorItems, std::size(kMiniMapColorItems)},
 };
 
 const ColorGroupDefinition *findColorGroupDefinition(MRColorSetupGroup group) {
-	for (const auto & kColorGroup : kColorGroups)
-		if (kColorGroup.group == group)
-			return &kColorGroup;
+	for (const auto &kColorGroup : kColorGroups)
+		if (kColorGroup.group == group) return &kColorGroup;
 	return nullptr;
 }
 
 const ColorGroupDefinition *findColorGroupDefinitionByKey(const std::string &key) {
 	std::string upper = upperAscii(trimAscii(key));
-	for (const auto & kColorGroup : kColorGroups)
-		if (upper == kColorGroup.key)
-			return &kColorGroup;
+	for (const auto &kColorGroup : kColorGroups)
+		if (upper == kColorGroup.key) return &kColorGroup;
 	return nullptr;
 }
 
 unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 	// Defaults from cpAppColor (TVision app.h), expanded explicitly for stability.
 	static constexpr std::array<unsigned char, 146> defaults = {
-	    0x00, 0x71, 0x70, 0x78, 0x74, 0x20, 0x28, 0x24, 0x17, 0x1F, 0x1A, 0x31, 0x31, 0x1E, 0x71, 0x1F,
-	    0x37, 0x3F, 0x3A, 0x13, 0x13, 0x3E, 0x21, 0x3F, 0x70, 0x7F, 0x7A, 0x13, 0x13, 0x70, 0x7F, 0x7E,
-	    0x70, 0x7F, 0x7A, 0x13, 0x13, 0x70, 0x70, 0x7F, 0x7E, 0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x70, 0x30,
-	    0x3F, 0x3E, 0x1F, 0x2F, 0x1A, 0x20, 0x72, 0x31, 0x31, 0x30, 0x2F, 0x3E, 0x31, 0x13, 0x38, 0x00,
-	    0x17, 0x1F, 0x1A, 0x71, 0x71, 0x1E, 0x17, 0x1F, 0x1E, 0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x10, 0x30,
-	    0x3F, 0x3E, 0x70, 0x2F, 0x7A, 0x20, 0x12, 0x31, 0x31, 0x30, 0x2F, 0x3E, 0x31, 0x13, 0x38, 0x00,
-	    0x37, 0x3F, 0x3A, 0x13, 0x13, 0x3E, 0x30, 0x3F, 0x3E, 0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x30, 0x70,
-	    0x7F, 0x7E, 0x1F, 0x2F, 0x1A, 0x20, 0x32, 0x31, 0x71, 0x70, 0x2F, 0x7E, 0x71, 0x13, 0x78, 0x00,
-	    0x37, 0x3F, 0x3A, 0x13, 0x13, 0x30, 0x3E, 0x1E,
+	    0x00, 0x71, 0x70, 0x78, 0x74, 0x20, 0x28, 0x24, 0x17, 0x1F, 0x1A, 0x31, 0x31, 0x1E, 0x71, 0x1F, 0x37, 0x3F, 0x3A, 0x13, 0x13, 0x3E, 0x21, 0x3F, 0x70, 0x7F, 0x7A, 0x13, 0x13, 0x70, 0x7F, 0x7E, 0x70, 0x7F, 0x7A, 0x13, 0x13, 0x70, 0x70, 0x7F, 0x7E, 0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x70, 0x30, 0x3F, 0x3E, 0x1F, 0x2F, 0x1A, 0x20, 0x72, 0x31, 0x31, 0x30, 0x2F, 0x3E, 0x31, 0x13, 0x38, 0x00, 0x17, 0x1F, 0x1A, 0x71, 0x71, 0x1E, 0x17, 0x1F, 0x1E, 0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x10, 0x30, 0x3F, 0x3E, 0x70, 0x2F, 0x7A, 0x20, 0x12, 0x31, 0x31, 0x30, 0x2F, 0x3E, 0x31, 0x13, 0x38, 0x00, 0x37, 0x3F, 0x3A, 0x13, 0x13, 0x3E, 0x30, 0x3F, 0x3E, 0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x30, 0x70, 0x7F, 0x7E, 0x1F, 0x2F, 0x1A, 0x20, 0x32, 0x31, 0x71, 0x70, 0x2F, 0x7E, 0x71, 0x13, 0x78, 0x00, 0x37, 0x3F, 0x3A, 0x13, 0x13, 0x30, 0x3E, 0x1E,
 	};
 
-	if (paletteIndex == kMrPaletteCurrentLine)
-		return defaults[10];
-	if (paletteIndex == kMrPaletteCurrentLineInBlock)
-		return defaults[12];
-	if (paletteIndex == kMrPaletteChangedText)
-		return defaults[14];
-	if (paletteIndex == kMrPaletteMessageError)
-		return defaults[42];
-	if (paletteIndex == kMrPaletteMessage)
-		return defaults[43];
-	if (paletteIndex == kMrPaletteMessageWarning)
-		return defaults[44];
-	if (paletteIndex == kMrPaletteMessageHero)
-		return defaults[43];
-	if (paletteIndex == kMrPaletteCursorPositionMarker)
-		return defaults[3];
-	if (paletteIndex == kMrPaletteLineNumbers)
-		return defaults[9];
-	if (paletteIndex == kMrPaletteCodeFolding)
-		return defaults[9];
-	if (paletteIndex == kMrPaletteFormatRuler)
-		return defaults[13];
-	if (paletteIndex == kMrPaletteEofMarker)
-		return defaults[14];
-	if (paletteIndex == kMrPaletteMiniMapNormal)
-		return defaults[13];
-	if (paletteIndex == kMrPaletteMiniMapViewport)
-		return defaults[11];
-	if (paletteIndex == kMrPaletteMiniMapChanged)
-		return defaults[14];
-	if (paletteIndex == kMrPaletteMiniMapFindMarker)
-		return defaults[5];
-	if (paletteIndex == kMrPaletteMiniMapErrorMarker)
-		return defaults[42];
-	if (paletteIndex == kMrPaletteDialogInactiveElements)
-		return defaults[kPaletteDialogInactiveClusterGray];
-	if (paletteIndex == kMrPaletteDesktop)
-		return 0x90;
-	if (paletteIndex == kMrPaletteVirtualDesktopMarker)
-		return 0x9F;
-	if (paletteIndex == 0 || paletteIndex >= std::size(defaults))
-		return 0x70;
+	if (paletteIndex == kMrPaletteCurrentLine) return defaults[10];
+	if (paletteIndex == kMrPaletteCurrentLineInBlock) return defaults[12];
+	if (paletteIndex == kMrPaletteChangedText) return defaults[14];
+	if (paletteIndex == kMrPaletteMessageError) return defaults[42];
+	if (paletteIndex == kMrPaletteMessage) return defaults[43];
+	if (paletteIndex == kMrPaletteMessageWarning) return defaults[44];
+	if (paletteIndex == kMrPaletteMessageHero) return defaults[43];
+	if (paletteIndex == kMrPaletteCursorPositionMarker) return defaults[3];
+	if (paletteIndex == kMrPaletteLineNumbers) return defaults[9];
+	if (paletteIndex == kMrPaletteCodeFolding) return defaults[9];
+	if (paletteIndex == kMrPaletteFormatRuler) return defaults[13];
+	if (paletteIndex == kMrPaletteEofMarker) return defaults[14];
+	if (paletteIndex == kMrPaletteMiniMapNormal) return defaults[13];
+	if (paletteIndex == kMrPaletteMiniMapViewport) return defaults[11];
+	if (paletteIndex == kMrPaletteMiniMapChanged) return defaults[14];
+	if (paletteIndex == kMrPaletteMiniMapFindMarker) return defaults[5];
+	if (paletteIndex == kMrPaletteMiniMapErrorMarker) return defaults[42];
+	if (paletteIndex == kMrPaletteDialogInactiveElements) return defaults[kPaletteDialogInactiveClusterGray];
+	if (paletteIndex == kMrPaletteDesktop) return 0x90;
+	if (paletteIndex == kMrPaletteVirtualDesktopMarker) return 0x9F;
+	if (paletteIndex == 0 || paletteIndex >= std::size(defaults)) return 0x70;
 	return defaults[paletteIndex];
 }
 
@@ -1300,84 +1065,65 @@ bool parseHexColorToken(const std::string &token, unsigned char &outValue) {
 	std::string value = trimAscii(token);
 	unsigned int parsed = 0;
 
-	if (value.empty() || value.size() > 2)
-		return false;
+	if (value.empty() || value.size() > 2) return false;
 	for (char i : value)
-		if (!std::isxdigit(static_cast<unsigned char>(i)))
-			return false;
+		if (!std::isxdigit(static_cast<unsigned char>(i))) return false;
 	parsed = static_cast<unsigned int>(std::strtoul(value.c_str(), nullptr, 16));
-	if (parsed > 0xFF)
-		return false;
+	if (parsed > 0xFF) return false;
 	outValue = static_cast<unsigned char>(parsed);
 	return true;
 }
 
-template <std::size_t N>
-std::string formatColorListLiteral(const std::array<unsigned char, N> &values) {
+template <std::size_t N> std::string formatColorListLiteral(const std::array<unsigned char, N> &values) {
 	static const char *const hex = "0123456789ABCDEF";
 	std::string out = "v1:";
 
 	for (std::size_t i = 0; i < N; ++i) {
 		unsigned char value = values[i];
-		if (i != 0)
-			out.push_back(',');
+		if (i != 0) out.push_back(',');
 		out.push_back(hex[(value >> 4) & 0x0F]);
 		out.push_back(hex[value & 0x0F]);
 	}
 	return out;
 }
 
-std::string formatWindowColorListLiteral(
-    const std::array<unsigned char, MRColorSetupSettings::kWindowCount> &values) {
+std::string formatWindowColorListLiteral(const std::array<unsigned char, MRColorSetupSettings::kWindowCount> &values) {
 	std::string out = formatColorListLiteral(values);
 
 	// WINDOWCOLORS uses v4 (adds format-ruler color to v3's 10-value layout).
-	if (out.size() >= 2 && out[0] == 'v')
-		out[1] = '4';
+	if (out.size() >= 2 && out[0] == 'v') out[1] = '4';
 	return out;
 }
 
-template <std::size_t N>
-bool parseColorListLiteral(const std::string &literal, std::array<unsigned char, N> &outValues,
-                           std::string *errorMessage) {
+template <std::size_t N> bool parseColorListLiteral(const std::string &literal, std::array<unsigned char, N> &outValues, std::string *errorMessage) {
 	std::string text = trimAscii(literal);
 	std::size_t cursor = 0;
 	std::size_t itemIndex = 0;
 	std::array<unsigned char, N> parsed;
 
-	if (text.size() >= 3 && (text[0] == 'v' || text[0] == 'V') &&
-	    std::isdigit(static_cast<unsigned char>(text[1])) && text[2] == ':')
-		text = text.substr(3);
-	if (text.empty())
-		return setError(errorMessage, "Empty color list.");
+	if (text.size() >= 3 && (text[0] == 'v' || text[0] == 'V') && std::isdigit(static_cast<unsigned char>(text[1])) && text[2] == ':') text = text.substr(3);
+	if (text.empty()) return setError(errorMessage, "Empty color list.");
 
 	while (cursor <= text.size() && itemIndex < N) {
 		std::size_t comma = text.find(',', cursor);
 		std::string token = text.substr(cursor, comma == std::string::npos ? std::string::npos : comma - cursor);
 		unsigned char value = 0;
 
-		if (!parseHexColorToken(token, value))
-			return setError(errorMessage, "Expected hex color list (e.g. v1:70,7F,...).");
+		if (!parseHexColorToken(token, value)) return setError(errorMessage, "Expected hex color list (e.g. v1:70,7F,...).");
 		parsed[itemIndex++] = value;
-		if (comma == std::string::npos)
-			break;
+		if (comma == std::string::npos) break;
 		cursor = comma + 1;
 	}
 
-	if (itemIndex != N)
-		return setError(errorMessage, "Unexpected color list size.");
-	if (text.find(',', cursor) != std::string::npos)
-		return setError(errorMessage, "Too many color values in list.");
+	if (itemIndex != N) return setError(errorMessage, "Unexpected color list size.");
+	if (text.find(',', cursor) != std::string::npos) return setError(errorMessage, "Too many color values in list.");
 
 	outValues = parsed;
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
-bool parseWindowColorListLiteral(const std::string &literal,
-                                 std::array<unsigned char, MRColorSetupSettings::kWindowCount> &outValues,
-                                 std::string *errorMessage) {
+bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned char, MRColorSetupSettings::kWindowCount> &outValues, std::string *errorMessage) {
 	std::string text = trimAscii(literal);
 	std::size_t cursor = 0;
 	std::vector<unsigned char> parsed;
@@ -1401,17 +1147,14 @@ bool parseWindowColorListLiteral(const std::string &literal,
 		v2Format = true;
 	} else if (text.rfind("v1:", 0) == 0 || text.rfind("V1:", 0) == 0)
 		text = text.substr(3);
-	if (text.empty())
-		return setError(errorMessage, "Empty color list.");
+	if (text.empty()) return setError(errorMessage, "Empty color list.");
 
 	while (cursor <= text.size()) {
 		std::size_t comma = text.find(',', cursor);
 		std::string token = text.substr(cursor, comma == std::string::npos ? std::string::npos : comma - cursor);
-		if (!parseHexColorToken(token, value))
-			return setError(errorMessage, "Expected hex color list (e.g. v1:70,7F,...).");
+		if (!parseHexColorToken(token, value)) return setError(errorMessage, "Expected hex color list (e.g. v1:70,7F,...).");
 		parsed.push_back(value);
-		if (comma == std::string::npos)
-			break;
+		if (comma == std::string::npos) break;
 		cursor = comma + 1;
 	}
 
@@ -1423,19 +1166,16 @@ bool parseWindowColorListLiteral(const std::string &literal,
 	// - v1 + 8 values: legacy format with EOF marker as 4th entry, no line-number/folding colors
 	// - unversioned 9 values: layout with line numbers but without code folding
 	if (v4Format) {
-		if (parsed.size() != MRColorSetupSettings::kWindowCount)
-			return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v4.");
+		if (parsed.size() != MRColorSetupSettings::kWindowCount) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v4.");
 		for (std::size_t i = 0; i < outValues.size(); ++i)
 			outValues[i] = parsed[i];
 	} else if (v3Format) {
-		if (parsed.size() != MRColorSetupSettings::kWindowCount - 1)
-			return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v3.");
+		if (parsed.size() != MRColorSetupSettings::kWindowCount - 1) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v3.");
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
 		outValues[10] = defaultFormatRuler;
 	} else if (v2Format) {
-		if (parsed.size() != 8)
-			return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v2.");
+		if (parsed.size() != 8) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v2.");
 		outValues[0] = parsed[0];
 		outValues[1] = parsed[1];
 		outValues[2] = parsed[2];
@@ -1491,33 +1231,25 @@ bool parseWindowColorListLiteral(const std::string &literal,
 	} else
 		return setError(errorMessage, "Unexpected WINDOWCOLORS list size.");
 
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
-bool parseMenuDialogColorListLiteral(
-    const std::string &literal, std::array<unsigned char, MRColorSetupSettings::kMenuDialogCount> &outValues,
-    std::string *errorMessage) {
+bool parseMenuDialogColorListLiteral(const std::string &literal, std::array<unsigned char, MRColorSetupSettings::kMenuDialogCount> &outValues, std::string *errorMessage) {
 	std::string text = trimAscii(literal);
 	std::size_t cursor = 0;
 	std::vector<unsigned char> parsed;
 	unsigned char value = 0;
 
-	if (text.size() >= 3 && (text[0] == 'v' || text[0] == 'V') &&
-	    std::isdigit(static_cast<unsigned char>(text[1])) && text[2] == ':')
-		text = text.substr(3);
-	if (text.empty())
-		return setError(errorMessage, "Empty color list.");
+	if (text.size() >= 3 && (text[0] == 'v' || text[0] == 'V') && std::isdigit(static_cast<unsigned char>(text[1])) && text[2] == ':') text = text.substr(3);
+	if (text.empty()) return setError(errorMessage, "Empty color list.");
 
 	while (cursor <= text.size()) {
 		std::size_t comma = text.find(',', cursor);
 		std::string token = text.substr(cursor, comma == std::string::npos ? std::string::npos : comma - cursor);
-		if (!parseHexColorToken(token, value))
-			return setError(errorMessage, "Expected hex color list (e.g. v1:70,7F,...).");
+		if (!parseHexColorToken(token, value)) return setError(errorMessage, "Expected hex color list (e.g. v1:70,7F,...).");
 		parsed.push_back(value);
-		if (comma == std::string::npos)
-			break;
+		if (comma == std::string::npos) break;
 		cursor = comma + 1;
 	}
 
@@ -1568,33 +1300,25 @@ bool parseMenuDialogColorListLiteral(
 		return setError(errorMessage, "Unexpected MENUDIALOGCOLORS list size.");
 	}
 
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
-bool parseOtherColorListLiteral(const std::string &literal,
-                                std::array<unsigned char, MRColorSetupSettings::kOtherCount> &outValues,
-                                std::string *errorMessage) {
+bool parseOtherColorListLiteral(const std::string &literal, std::array<unsigned char, MRColorSetupSettings::kOtherCount> &outValues, std::string *errorMessage) {
 	std::string text = trimAscii(literal);
 	std::size_t cursor = 0;
 	std::vector<unsigned char> parsed;
 	unsigned char value = 0;
 
-	if (text.size() >= 3 && (text[0] == 'v' || text[0] == 'V') &&
-	    std::isdigit(static_cast<unsigned char>(text[1])) && text[2] == ':')
-		text = text.substr(3);
-	if (text.empty())
-		return setError(errorMessage, "Empty color list.");
+	if (text.size() >= 3 && (text[0] == 'v' || text[0] == 'V') && std::isdigit(static_cast<unsigned char>(text[1])) && text[2] == ':') text = text.substr(3);
+	if (text.empty()) return setError(errorMessage, "Empty color list.");
 
 	while (cursor <= text.size()) {
 		std::size_t comma = text.find(',', cursor);
 		std::string token = text.substr(cursor, comma == std::string::npos ? std::string::npos : comma - cursor);
-		if (!parseHexColorToken(token, value))
-			return setError(errorMessage, "Expected hex color list (e.g. v1:70,7F,...).");
+		if (!parseHexColorToken(token, value)) return setError(errorMessage, "Expected hex color list (e.g. v1:70,7F,...).");
 		parsed.push_back(value);
-		if (comma == std::string::npos)
-			break;
+		if (comma == std::string::npos) break;
 		cursor = comma + 1;
 	}
 
@@ -1609,35 +1333,30 @@ bool parseOtherColorListLiteral(const std::string &literal,
 			outValues[i] = parsed[i];
 		outValues[9] = defaultColorForSlot(kMrPaletteDesktop);
 		outValues[10] = defaultColorForSlot(kMrPaletteVirtualDesktopMarker);
-	}
-	else if (parsed.size() == 8) {
+	} else if (parsed.size() == 8) {
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
 		outValues[8] = defaultColorForSlot(kMrPaletteCursorPositionMarker);
 		outValues[9] = defaultColorForSlot(kMrPaletteDesktop);
 		outValues[10] = defaultColorForSlot(kMrPaletteVirtualDesktopMarker);
-	}
-	else if (parsed.size() == 7) {
+	} else if (parsed.size() == 7) {
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
 		outValues[7] = defaultColorForSlot(kMrPaletteMessageHero);
 		outValues[8] = defaultColorForSlot(kMrPaletteCursorPositionMarker);
 		outValues[9] = defaultColorForSlot(kMrPaletteDesktop);
 		outValues[10] = defaultColorForSlot(kMrPaletteVirtualDesktopMarker);
-	}
-	else if (parsed.size() == 10) {
+	} else if (parsed.size() == 10) {
 		for (std::size_t i = 0; i < 7; ++i)
 			outValues[i] = parsed[i];
 		outValues[7] = defaultColorForSlot(kMrPaletteMessageHero);
 		outValues[8] = defaultColorForSlot(kMrPaletteCursorPositionMarker);
 		outValues[9] = defaultColorForSlot(kMrPaletteDesktop);
 		outValues[10] = defaultColorForSlot(kMrPaletteVirtualDesktopMarker);
-	}
-	else
+	} else
 		return setError(errorMessage, "Unexpected OTHERCOLORS list size.");
 
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -1656,13 +1375,9 @@ std::string unescapeMrmacSingleQuotedLiteral(const std::string &value) {
 	return out;
 }
 
-bool parseThemeSetupAssignments(const std::string &source, std::map<std::string, std::string> &assignments,
-                                std::string *errorMessage) {
-	static const std::regex pattern(
-	    "MRSETUP\\s*\\(\\s*'([^']+)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)",
-	    std::regex_constants::ECMAScript | std::regex_constants::icase);
-	std::set<std::string> allowed = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS",
-	                                 "MINIMAPCOLORS"};
+bool parseThemeSetupAssignments(const std::string &source, std::map<std::string, std::string> &assignments, std::string *errorMessage) {
+	static const std::regex pattern("MRSETUP\\s*\\(\\s*'([^']+)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex_constants::ECMAScript | std::regex_constants::icase);
+	std::set<std::string> allowed = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS", "MINIMAPCOLORS"};
 	std::set<std::string> required = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS"};
 	std::sregex_iterator it(source.begin(), source.end(), pattern);
 	std::sregex_iterator end;
@@ -1672,25 +1387,21 @@ bool parseThemeSetupAssignments(const std::string &source, std::map<std::string,
 		std::string key = upperAscii(trimAscii((*it)[1].str()));
 		std::string value = unescapeMrmacSingleQuotedLiteral((*it)[2].str());
 
-		if (allowed.find(key) == allowed.end())
-			continue;
+		if (allowed.find(key) == allowed.end()) continue;
 		assignments[key] = value;
 	}
 	for (const std::string &key : required)
-		if (assignments.find(key) == assignments.end())
-			return setError(errorMessage, "Theme file must define MRSETUP('" + key + "', ...).");
+		if (assignments.find(key) == assignments.end()) return setError(errorMessage, "Theme file must define MRSETUP('" + key + "', ...).");
 	if (assignments.find("MINIMAPCOLORS") == assignments.end()) {
 		MRColorSetupSettings defaults = resolveColorSetupDefaults();
 		assignments["MINIMAPCOLORS"] = formatColorListLiteral(defaults.miniMapColors);
 	}
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 void ensureConfiguredColorSettingsInitialized() {
-	if (configuredColorSettingsInitialized())
-		return;
+	if (configuredColorSettingsInitialized()) return;
 	configuredColorSettings() = defaultsFromColorGroups();
 	configuredColorSettingsInitialized() = true;
 }
@@ -1700,39 +1411,33 @@ bool parseBooleanLiteral(const std::string &value, bool &outValue, std::string *
 
 	if (upper == "TRUE" || upper == "1" || upper == "YES" || upper == "ON") {
 		outValue = true;
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	if (upper == "FALSE" || upper == "0" || upper == "NO" || upper == "OFF") {
 		outValue = false;
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	return setError(errorMessage, "Expected boolean literal true/false.");
 }
 
-bool parseLogHandlingLiteral(const std::string &value, MRLogHandling &outValue,
-                             std::string *errorMessage) {
+bool parseLogHandlingLiteral(const std::string &value, MRLogHandling &outValue, std::string *errorMessage) {
 	const std::string upper = upperAscii(trimAscii(value));
 
 	if (upper == kLogHandlingVolatile) {
 		outValue = MRLogHandling::Volatile;
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	if (upper == kLogHandlingPersist) {
 		outValue = MRLogHandling::Persist;
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	if (upper == kLogHandlingJournalctl) {
 		outValue = MRLogHandling::Journalctl;
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	return setError(errorMessage, "Expected log handling VOLATILE, PERSIST or JOURNALCTL.");
@@ -1755,33 +1460,27 @@ std::string canonicalBooleanLiteral(bool value) {
 }
 
 std::string formatSearchTextType(MRSearchTextType value) {
-	if (value == MRSearchTextType::Word)
-		return kSearchTextTypeWord;
-	if (value == MRSearchTextType::Pcre)
-		return kSearchTextTypePcre;
+	if (value == MRSearchTextType::Word) return kSearchTextTypeWord;
+	if (value == MRSearchTextType::Pcre) return kSearchTextTypePcre;
 	return kSearchTextTypeLiteral;
 }
 
-bool parseSearchTextTypeLiteral(const std::string &value, MRSearchTextType &outValue,
-                                std::string *errorMessage) {
+bool parseSearchTextTypeLiteral(const std::string &value, MRSearchTextType &outValue, std::string *errorMessage) {
 	std::string upper = upperAscii(trimAscii(value));
 
 	if (upper == kSearchTextTypeLiteral) {
 		outValue = MRSearchTextType::Literal;
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	if (upper == kSearchTextTypeWord) {
 		outValue = MRSearchTextType::Word;
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	if (upper == kSearchTextTypePcre || upper == "REGEX" || upper == "REGULAR_EXPRESSION") {
 		outValue = MRSearchTextType::Pcre;
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	return setError(errorMessage, "SEARCH_TEXT_TYPE/SAR_TEXT_TYPE must be LITERAL, PCRE or WORD.");
@@ -1791,148 +1490,122 @@ std::string formatSearchDirection(MRSearchDirection value) {
 	return value == MRSearchDirection::Backward ? kSearchDirectionBackward : kSearchDirectionForward;
 }
 
-bool parseSearchDirectionLiteral(const std::string &value, MRSearchDirection &outValue,
-                                 std::string *errorMessage) {
+bool parseSearchDirectionLiteral(const std::string &value, MRSearchDirection &outValue, std::string *errorMessage) {
 	std::string upper = upperAscii(trimAscii(value));
 
 	if (upper == kSearchDirectionForward) {
 		outValue = MRSearchDirection::Forward;
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	if (upper == kSearchDirectionBackward) {
 		outValue = MRSearchDirection::Backward;
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	return setError(errorMessage, "SEARCH_DIRECTION/SAR_DIRECTION must be FORWARD or BACKWARD.");
 }
 
 std::string formatSearchMode(MRSearchMode value) {
-	if (value == MRSearchMode::PromptNext)
-		return kSearchModePromptNext;
-	if (value == MRSearchMode::ListAll)
-		return kSearchModeListAll;
+	if (value == MRSearchMode::PromptNext) return kSearchModePromptNext;
+	if (value == MRSearchMode::ListAll) return kSearchModeListAll;
 	return kSearchModeStopFirst;
 }
 
-bool parseSearchModeLiteral(const std::string &value, MRSearchMode &outValue,
-                            std::string *errorMessage) {
+bool parseSearchModeLiteral(const std::string &value, MRSearchMode &outValue, std::string *errorMessage) {
 	std::string upper = upperAscii(trimAscii(value));
 
 	if (upper == kSearchModeStopFirst || upper == "STOP_FIRST") {
 		outValue = MRSearchMode::StopFirst;
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	if (upper == kSearchModePromptNext || upper == "PROMPT_NEXT") {
 		outValue = MRSearchMode::PromptNext;
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	if (upper == kSearchModeListAll || upper == "LIST_ALL") {
 		outValue = MRSearchMode::ListAll;
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	return setError(errorMessage, "SEARCH_MODE must be STOP_FIRST_OCCURRENCE, PROMPT_FOR_NEXT_MATCH or LIST_ALL_OCCURRENCES.");
 }
 
 std::string formatSarMode(MRSarMode value) {
-	if (value == MRSarMode::PromptEach)
-		return kSarModePromptEach;
-	if (value == MRSarMode::ReplaceAll)
-		return kSarModeReplaceAll;
+	if (value == MRSarMode::PromptEach) return kSarModePromptEach;
+	if (value == MRSarMode::ReplaceAll) return kSarModeReplaceAll;
 	return kSarModeReplaceFirst;
 }
 
-bool parseSarModeLiteral(const std::string &value, MRSarMode &outValue,
-                         std::string *errorMessage) {
+bool parseSarModeLiteral(const std::string &value, MRSarMode &outValue, std::string *errorMessage) {
 	std::string upper = upperAscii(trimAscii(value));
 
 	if (upper == kSarModeReplaceFirst || upper == "FIRST") {
 		outValue = MRSarMode::ReplaceFirst;
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	if (upper == kSarModePromptEach || upper == "PROMPT_EACH") {
 		outValue = MRSarMode::PromptEach;
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	if (upper == kSarModeReplaceAll || upper == "ALL") {
 		outValue = MRSarMode::ReplaceAll;
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	return setError(errorMessage, "SAR_MODE must be REPLACE_FIRST_OCCURRENCE, PROMPT_FOR_EACH_REPLACE or REPLACE_ALL_OCCURRENCES.");
 }
 
 std::string formatSarLeaveCursor(MRSarLeaveCursor value) {
-	return value == MRSarLeaveCursor::StartOfReplaceString ? kSarLeaveCursorStart
-	                                                       : kSarLeaveCursorEnd;
+	return value == MRSarLeaveCursor::StartOfReplaceString ? kSarLeaveCursorStart : kSarLeaveCursorEnd;
 }
 
-bool parseSarLeaveCursorLiteral(const std::string &value, MRSarLeaveCursor &outValue,
-                                std::string *errorMessage) {
+bool parseSarLeaveCursorLiteral(const std::string &value, MRSarLeaveCursor &outValue, std::string *errorMessage) {
 	std::string upper = upperAscii(trimAscii(value));
 
 	if (upper == kSarLeaveCursorEnd || upper == "END") {
 		outValue = MRSarLeaveCursor::EndOfReplaceString;
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	if (upper == kSarLeaveCursorStart || upper == "START") {
 		outValue = MRSarLeaveCursor::StartOfReplaceString;
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	return setError(errorMessage, "SAR_LEAVE_CURSOR_AT must be END_OF_REPLACE_STRING or START_OF_REPLACE_STRING.");
 }
 
-bool normalizeCursorPositionMarker(const std::string &value, std::string &out,
-                                   std::string *errorMessage) {
+bool normalizeCursorPositionMarker(const std::string &value, std::string &out, std::string *errorMessage) {
 	std::string trimmed = trimAscii(value);
 	int rCount = 0;
 	int cCount = 0;
 
-	if (trimmed.empty())
-		return setError(errorMessage, "must not be empty.");
-	if (trimmed.size() > 10)
-		return setError(errorMessage, "must be at most 10 characters.");
+	if (trimmed.empty()) return setError(errorMessage, "must not be empty.");
+	if (trimmed.size() > 10) return setError(errorMessage, "must be at most 10 characters.");
 	out.clear();
 	out.reserve(trimmed.size());
 	for (char ch : trimmed) {
 		if (ch == 'R') {
 			++rCount;
-			if (rCount > 1)
-				return setError(errorMessage, "R placeholder may appear only once.");
+			if (rCount > 1) return setError(errorMessage, "R placeholder may appear only once.");
 			out.push_back(ch);
 			continue;
 		}
 		if (ch == 'C') {
 			++cCount;
-			if (cCount > 1)
-				return setError(errorMessage, "C placeholder may appear only once.");
+			if (cCount > 1) return setError(errorMessage, "C placeholder may appear only once.");
 			out.push_back(ch);
 			continue;
 		}
 		out.push_back(ch);
 	}
-	if (rCount == 0 || cCount == 0)
-		return setError(errorMessage, "must contain R and C placeholder.");
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (rCount == 0 || cCount == 0) return setError(errorMessage, "must contain R and C placeholder.");
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -1941,49 +1614,38 @@ std::string normalizeColumnBlockMove(const std::string &value) {
 	std::string compact;
 
 	for (char ch : key) {
-			if (ch == '-' || ch == ' ')
-			ch = '_';
+		if (ch == '-' || ch == ' ') ch = '_';
 		compact.push_back(ch);
 	}
 
-	if (compact == "DELETE_SPACE" || compact == "DELETE")
-		return kColumnBlockMoveDelete;
-	if (compact == "LEAVE_SPACE" || compact == "LEAVE")
-		return kColumnBlockMoveLeave;
+	if (compact == "DELETE_SPACE" || compact == "DELETE") return kColumnBlockMoveDelete;
+	if (compact == "LEAVE_SPACE" || compact == "LEAVE") return kColumnBlockMoveLeave;
 	return std::string();
 }
 
 std::string normalizeDefaultMode(const std::string &value) {
 	std::string key = upperAscii(trimAscii(value));
 
-	if (key == "INSERT")
-		return kDefaultModeInsert;
-	if (key == "OVERWRITE" || key == "OVR")
-		return kDefaultModeOverwrite;
+	if (key == "INSERT") return kDefaultModeInsert;
+	if (key == "OVERWRITE" || key == "OVR") return kDefaultModeOverwrite;
 	return std::string();
 }
 
 std::string normalizeMiniMapPosition(const std::string &value) {
 	std::string key = upperAscii(trimAscii(value));
 
-	if (key == "OFF")
-		return kMiniMapPositionOff;
-	if (key == "LEADING" || key == "LEFT")
-		return kMiniMapPositionLeading;
-	if (key == "TRAILING" || key == "RIGHT")
-		return kMiniMapPositionTrailing;
+	if (key == "OFF") return kMiniMapPositionOff;
+	if (key == "LEADING" || key == "LEFT") return kMiniMapPositionLeading;
+	if (key == "TRAILING" || key == "RIGHT") return kMiniMapPositionTrailing;
 	return std::string();
 }
 
 std::string normalizeGutterPosition(const std::string &value) {
 	std::string key = upperAscii(trimAscii(value));
 
-	if (key == "OFF")
-		return kLineNumbersPositionOff;
-	if (key == "LEADING" || key == "LEFT")
-		return kLineNumbersPositionLeading;
-	if (key == "TRAILING" || key == "RIGHT")
-		return kLineNumbersPositionTrailing;
+	if (key == "OFF") return kLineNumbersPositionOff;
+	if (key == "LEADING" || key == "LEFT") return kLineNumbersPositionLeading;
+	if (key == "TRAILING" || key == "RIGHT") return kLineNumbersPositionTrailing;
 	return std::string();
 }
 
@@ -2021,20 +1683,15 @@ std::string normalizeGuttersOrder(const std::string &value) {
 				break;
 		}
 	}
-	if (normalized.empty())
-		normalized = kDefaultGuttersOrder;
+	if (normalized.empty()) normalized = kDefaultGuttersOrder;
 	return normalized;
 }
 
 int utf8CodepointLength(unsigned char lead) {
-	if ((lead & 0x80u) == 0u)
-		return 1;
-	if ((lead & 0xE0u) == 0xC0u)
-		return 2;
-	if ((lead & 0xF0u) == 0xE0u)
-		return 3;
-	if ((lead & 0xF8u) == 0xF0u)
-		return 4;
+	if ((lead & 0x80u) == 0u) return 1;
+	if ((lead & 0xE0u) == 0xC0u) return 2;
+	if ((lead & 0xF0u) == 0xE0u) return 3;
+	if ((lead & 0xF8u) == 0xF0u) return 4;
 	return 0;
 }
 
@@ -2043,48 +1700,37 @@ bool normalizeMiniMapMarkerGlyph(const std::string &value, std::string &outGlyph
 
 	if (trimmed.empty()) {
 		outGlyph = "│";
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	const unsigned char lead = static_cast<unsigned char>(trimmed[0]);
 	const int cpLen = utf8CodepointLength(lead);
-	if (cpLen == 0 || trimmed.size() != static_cast<std::size_t>(cpLen))
-		return setError(errorMessage, "MINIMAP_MARKER_GLYPH must be exactly one UTF-8 character.");
+	if (cpLen == 0 || trimmed.size() != static_cast<std::size_t>(cpLen)) return setError(errorMessage, "MINIMAP_MARKER_GLYPH must be exactly one UTF-8 character.");
 	for (int i = 1; i < cpLen; ++i) {
 		const unsigned char ch = static_cast<unsigned char>(trimmed[static_cast<std::size_t>(i)]);
-		if ((ch & 0xC0u) != 0x80u)
-			return setError(errorMessage, "MINIMAP_MARKER_GLYPH must be valid UTF-8.");
+		if ((ch & 0xC0u) != 0x80u) return setError(errorMessage, "MINIMAP_MARKER_GLYPH must be valid UTF-8.");
 	}
-	if (cpLen == 1 && std::iscntrl(lead) != 0)
-		return setError(errorMessage, "MINIMAP_MARKER_GLYPH may not be a control character.");
+	if (cpLen == 1 && std::iscntrl(lead) != 0) return setError(errorMessage, "MINIMAP_MARKER_GLYPH may not be a control character.");
 	outGlyph = trimmed;
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 std::string normalizeIndentStyle(const std::string &value) {
 	std::string key = upperAscii(trimAscii(value));
 
-	if (key == "OFF")
-		return kIndentStyleOff;
-	if (key == "AUTOMATIC" || key == "AUTO")
-		return kIndentStyleAutomatic;
-	if (key == "SMART")
-		return kIndentStyleSmart;
+	if (key == "OFF") return kIndentStyleOff;
+	if (key == "AUTOMATIC" || key == "AUTO") return kIndentStyleAutomatic;
+	if (key == "SMART") return kIndentStyleSmart;
 	return std::string();
 }
 
 std::string normalizeFileType(const std::string &value) {
 	std::string key = upperAscii(trimAscii(value));
 
-	if (key == "LEGACY_TEXT" || key == "LEGACY" || key == "CRLF" || key == "TEXT")
-		return kFileTypeLegacyText;
-	if (key == "UNIX" || key == "LF")
-		return kFileTypeUnix;
-	if (key == "BINARY" || key == "BIN")
-		return kFileTypeBinary;
+	if (key == "LEGACY_TEXT" || key == "LEGACY" || key == "CRLF" || key == "TEXT") return kFileTypeLegacyText;
+	if (key == "UNIX" || key == "LF") return kFileTypeUnix;
+	if (key == "BINARY" || key == "BIN") return kFileTypeBinary;
 	return std::string();
 }
 
@@ -2103,44 +1749,31 @@ constexpr int kMaxAutosaveIntervalSeconds = 300;
 std::string normalizeBackupMethod(const std::string &value) {
 	std::string key = upperAscii(trimAscii(value));
 
-	if (key == "OFF")
-		return kBackupMethodOff;
-	if (key == "BAK_FILE" || key == "BAKFILE" || key == "FILE")
-		return kBackupMethodBakFile;
-	if (key == "DIRECTORY" || key == "DIR" || key == "PATH")
-		return kBackupMethodDirectory;
+	if (key == "OFF") return kBackupMethodOff;
+	if (key == "BAK_FILE" || key == "BAKFILE" || key == "FILE") return kBackupMethodBakFile;
+	if (key == "DIRECTORY" || key == "DIR" || key == "PATH") return kBackupMethodDirectory;
 	return std::string();
 }
 
 std::string normalizeBackupFrequency(const std::string &value) {
 	std::string key = upperAscii(trimAscii(value));
 
-	if (key == "FIRST_SAVE_ONLY" || key == "FIRST_SAVE" || key == "FIRST")
-		return kBackupFrequencyFirstSaveOnly;
-	if (key == "EVERY_SAVE" || key == "EVERY")
-		return kBackupFrequencyEverySave;
+	if (key == "FIRST_SAVE_ONLY" || key == "FIRST_SAVE" || key == "FIRST") return kBackupFrequencyFirstSaveOnly;
+	if (key == "EVERY_SAVE" || key == "EVERY") return kBackupFrequencyEverySave;
 	return std::string();
 }
 
-bool normalizeAutosaveSeconds(const std::string &value, int minValue, int maxValue, int &outValue,
-                              const char *fieldName, std::string *errorMessage) {
+bool normalizeAutosaveSeconds(const std::string &value, int minValue, int maxValue, int &outValue, const char *fieldName, std::string *errorMessage) {
 	std::string text = trimAscii(value);
 	char *end = nullptr;
 	long parsed = 0;
 
-	if (text.empty())
-		return setError(errorMessage, std::string(fieldName) + " must be 0 or within " + std::to_string(minValue) +
-		                               ".." + std::to_string(maxValue) + " seconds.");
+	if (text.empty()) return setError(errorMessage, std::string(fieldName) + " must be 0 or within " + std::to_string(minValue) + ".." + std::to_string(maxValue) + " seconds.");
 	parsed = std::strtol(text.c_str(), &end, 10);
-	if (end == text.c_str() || end == nullptr || *end != '\0')
-		return setError(errorMessage, std::string(fieldName) + " must be 0 or within " + std::to_string(minValue) +
-		                               ".." + std::to_string(maxValue) + " seconds.");
-	if (parsed != 0 && (parsed < minValue || parsed > maxValue))
-		return setError(errorMessage, std::string(fieldName) + " must be 0 or within " + std::to_string(minValue) +
-		                               ".." + std::to_string(maxValue) + " seconds.");
+	if (end == text.c_str() || end == nullptr || *end != '\0') return setError(errorMessage, std::string(fieldName) + " must be 0 or within " + std::to_string(minValue) + ".." + std::to_string(maxValue) + " seconds.");
+	if (parsed != 0 && (parsed < minValue || parsed > maxValue)) return setError(errorMessage, std::string(fieldName) + " must be 0 or within " + std::to_string(minValue) + ".." + std::to_string(maxValue) + " seconds.");
 	outValue = static_cast<int>(parsed);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -2156,26 +1789,19 @@ bool validateBackupExtension(const std::string &value, std::string *errorMessage
 	static const std::string invalidChars = std::string("\\") + "/*?:\"<>|";
 	std::string normalized = normalizeBackupExtension(value);
 
-	if (normalized.empty())
-		return setError(errorMessage, "BACKUP_EXTENSION may not be empty when BACKUP_METHOD=BAK_FILE.");
-	if (normalized.size() > 255)
-		return setError(errorMessage, "BACKUP_EXTENSION may not exceed 255 characters.");
-	if (normalized.find_first_of(invalidChars) != std::string::npos)
-		return setError(errorMessage, "BACKUP_EXTENSION contains invalid filename characters.");
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (normalized.empty()) return setError(errorMessage, "BACKUP_EXTENSION may not be empty when BACKUP_METHOD=BAK_FILE.");
+	if (normalized.size() > 255) return setError(errorMessage, "BACKUP_EXTENSION may not exceed 255 characters.");
+	if (normalized.find_first_of(invalidChars) != std::string::npos) return setError(errorMessage, "BACKUP_EXTENSION contains invalid filename characters.");
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool validateWritableDirectoryPath(const std::string &path, const char *label, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 
-	if (normalized.empty())
-		return setError(errorMessage, std::string(label) + " may not be empty.");
-	if (!isWritableDirectory(normalized))
-		return setError(errorMessage, std::string(label) + " is missing or not writable: " + normalized);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (normalized.empty()) return setError(errorMessage, std::string(label) + " may not be empty.");
+	if (!isWritableDirectory(normalized)) return setError(errorMessage, std::string(label) + " is missing or not writable: " + normalized);
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -2188,16 +1814,12 @@ bool parseBinaryRecordLengthLiteral(const std::string &value, int &outValue, std
 	char *end = nullptr;
 	long parsed = 0;
 
-	if (text.empty())
-		return setError(errorMessage, "BINARY_RECORD_LENGTH must be an integer between 1 and 99999.");
+	if (text.empty()) return setError(errorMessage, "BINARY_RECORD_LENGTH must be an integer between 1 and 99999.");
 	parsed = std::strtol(text.c_str(), &end, 10);
-	if (end == text.c_str() || end == nullptr || *end != '\0')
-		return setError(errorMessage, "BINARY_RECORD_LENGTH must be an integer between 1 and 99999.");
-	if (parsed < kMinBinaryRecordLength || parsed > kMaxBinaryRecordLength)
-		return setError(errorMessage, "BINARY_RECORD_LENGTH must be between 1 and 99999.");
+	if (end == text.c_str() || end == nullptr || *end != '\0') return setError(errorMessage, "BINARY_RECORD_LENGTH must be an integer between 1 and 99999.");
+	if (parsed < kMinBinaryRecordLength || parsed > kMaxBinaryRecordLength) return setError(errorMessage, "BINARY_RECORD_LENGTH must be between 1 and 99999.");
 	outValue = static_cast<int>(parsed);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -2213,8 +1835,7 @@ int clampEditFormatRightMargin(int rightMargin) noexcept {
 
 int clampEditFormatLeftMargin(int leftMargin, int rightMargin) noexcept {
 	const int normalizedRightMargin = clampEditFormatRightMargin(rightMargin);
-	if (normalizedRightMargin <= 1)
-		return 1;
+	if (normalizedRightMargin <= 1) return 1;
 	return std::max(1, std::min(leftMargin, normalizedRightMargin - 1));
 }
 
@@ -2229,34 +1850,26 @@ std::string defaultEditFormatLineForTabSize(int tabSize, int leftMargin, int rig
 		return out;
 	}
 	for (int col = normalizedTabSize; col <= normalizedRightMargin; col += normalizedTabSize)
-		if (col > normalizedLeftMargin && col < normalizedRightMargin)
-			out[static_cast<std::size_t>(col - 1)] = '|';
+		if (col > normalizedLeftMargin && col < normalizedRightMargin) out[static_cast<std::size_t>(col - 1)] = '|';
 	out[static_cast<std::size_t>(normalizedLeftMargin - 1)] = 'L';
 	out[static_cast<std::size_t>(normalizedRightMargin - 1)] = 'R';
 	return out;
 }
 
-bool normalizeEditFormatLine(const std::string &value, int tabSize, int fallbackLeftMargin,
-                             int fallbackRightMargin, std::string &outValue,
-                             int *outLeftMargin, int *outRightMargin, std::string *errorMessage) {
+bool normalizeEditFormatLine(const std::string &value, int tabSize, int fallbackLeftMargin, int fallbackRightMargin, std::string &outValue, int *outLeftMargin, int *outRightMargin, std::string *errorMessage) {
 	std::string out = value;
 	const int normalizedFallbackRightMargin = clampEditFormatRightMargin(fallbackRightMargin);
-	const int normalizedFallbackLeftMargin =
-	    clampEditFormatLeftMargin(fallbackLeftMargin, normalizedFallbackRightMargin);
+	const int normalizedFallbackLeftMargin = clampEditFormatLeftMargin(fallbackLeftMargin, normalizedFallbackRightMargin);
 	int lCount = 0;
 	int rCount = 0;
 	int lIndex = -1;
 	int rIndex = -1;
 
 	if (out.empty()) {
-		outValue = defaultEditFormatLineForTabSize(tabSize, normalizedFallbackLeftMargin,
-		                                           normalizedFallbackRightMargin);
-		if (outLeftMargin != nullptr)
-			*outLeftMargin = normalizedFallbackLeftMargin;
-		if (outRightMargin != nullptr)
-			*outRightMargin = normalizedFallbackRightMargin;
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		outValue = defaultEditFormatLineForTabSize(tabSize, normalizedFallbackLeftMargin, normalizedFallbackRightMargin);
+		if (outLeftMargin != nullptr) *outLeftMargin = normalizedFallbackLeftMargin;
+		if (outRightMargin != nullptr) *outRightMargin = normalizedFallbackRightMargin;
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	{
@@ -2267,24 +1880,18 @@ bool normalizeEditFormatLine(const std::string &value, int tabSize, int fallback
 				break;
 			}
 		if (legacy) {
-			outValue = defaultEditFormatLineForTabSize(tabSize, normalizedFallbackLeftMargin,
-			                                           normalizedFallbackRightMargin);
-			if (outLeftMargin != nullptr)
-				*outLeftMargin = normalizedFallbackLeftMargin;
-			if (outRightMargin != nullptr)
-				*outRightMargin = normalizedFallbackRightMargin;
-			if (errorMessage != nullptr)
-				errorMessage->clear();
+			outValue = defaultEditFormatLineForTabSize(tabSize, normalizedFallbackLeftMargin, normalizedFallbackRightMargin);
+			if (outLeftMargin != nullptr) *outLeftMargin = normalizedFallbackLeftMargin;
+			if (outRightMargin != nullptr) *outRightMargin = normalizedFallbackRightMargin;
+			if (errorMessage != nullptr) errorMessage->clear();
 			return true;
 		}
 	}
 	for (char &ch : out)
-		if (ch == ' ')
-			ch = '.';
+		if (ch == ' ') ch = '.';
 	for (std::size_t i = 0; i < out.size(); ++i) {
 		char ch = out[i];
-		if (ch != '.' && ch != '|' && ch != 'L' && ch != 'R')
-			return setError(errorMessage, "FORMAT_LINE may only contain '.', ' ', '|', 'L' and 'R'.");
+		if (ch != '.' && ch != '|' && ch != 'L' && ch != 'R') return setError(errorMessage, "FORMAT_LINE may only contain '.', ' ', '|', 'L' and 'R'.");
 		if (ch == 'L') {
 			++lCount;
 			lIndex = static_cast<int>(i);
@@ -2294,30 +1901,21 @@ bool normalizeEditFormatLine(const std::string &value, int tabSize, int fallback
 			rIndex = static_cast<int>(i);
 		}
 	}
-	if (lCount > 1)
-		return setError(errorMessage, "FORMAT_LINE must contain at most one 'L'.");
-	if (rCount != 1)
-		return setError(errorMessage, "FORMAT_LINE must contain exactly one 'R'.");
-	if (lCount == 0)
-		lIndex = 0;
-	if (lIndex >= rIndex && rIndex > 0)
-		return setError(errorMessage, "FORMAT_LINE must place 'L' before 'R'.");
+	if (lCount > 1) return setError(errorMessage, "FORMAT_LINE must contain at most one 'L'.");
+	if (rCount != 1) return setError(errorMessage, "FORMAT_LINE must contain exactly one 'R'.");
+	if (lCount == 0) lIndex = 0;
+	if (lIndex >= rIndex && rIndex > 0) return setError(errorMessage, "FORMAT_LINE must place 'L' before 'R'.");
 	out.resize(static_cast<std::size_t>(rIndex + 1), '.');
-	if (rIndex > 0)
-		out[static_cast<std::size_t>(lIndex)] = 'L';
+	if (rIndex > 0) out[static_cast<std::size_t>(lIndex)] = 'L';
 	out[static_cast<std::size_t>(rIndex)] = 'R';
 	outValue = out;
-	if (outLeftMargin != nullptr)
-		*outLeftMargin = rIndex > 0 ? lIndex + 1 : 1;
-	if (outRightMargin != nullptr)
-		*outRightMargin = rIndex + 1;
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (outLeftMargin != nullptr) *outLeftMargin = rIndex > 0 ? lIndex + 1 : 1;
+	if (outRightMargin != nullptr) *outRightMargin = rIndex + 1;
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
-std::string synchronizeEditFormatLineMargins(const std::string &value, int leftMargin, int rightMargin,
-                                             int tabSize) {
+std::string synchronizeEditFormatLineMargins(const std::string &value, int leftMargin, int rightMargin, int tabSize) {
 	std::string normalized;
 	int oldLeftMargin = 1;
 	int oldRightMargin = 1;
@@ -2326,9 +1924,7 @@ std::string synchronizeEditFormatLineMargins(const std::string &value, int leftM
 	std::string out;
 	const int delta = normalizedLeftMargin - oldLeftMargin;
 
-	if (!normalizeEditFormatLine(value, tabSize, normalizedLeftMargin, normalizedRightMargin, normalized,
-	                             &oldLeftMargin, &oldRightMargin, nullptr))
-		return defaultEditFormatLineForTabSize(tabSize, normalizedLeftMargin, normalizedRightMargin);
+	if (!normalizeEditFormatLine(value, tabSize, normalizedLeftMargin, normalizedRightMargin, normalized, &oldLeftMargin, &oldRightMargin, nullptr)) return defaultEditFormatLineForTabSize(tabSize, normalizedLeftMargin, normalizedRightMargin);
 	out = std::string(static_cast<std::size_t>(normalizedRightMargin), '.');
 	if (normalizedRightMargin <= 1) {
 		out[0] = 'R';
@@ -2341,20 +1937,15 @@ std::string synchronizeEditFormatLineMargins(const std::string &value, int leftM
 		const int shifted = i + delta;
 		const int column = shifted + 1;
 
-		if (ch != '|')
-			continue;
-		if (column <= normalizedLeftMargin || column >= normalizedRightMargin)
-			continue;
-		if (shifted < 0 || shifted >= normalizedRightMargin)
-			continue;
+		if (ch != '|') continue;
+		if (column <= normalizedLeftMargin || column >= normalizedRightMargin) continue;
+		if (shifted < 0 || shifted >= normalizedRightMargin) continue;
 		out[static_cast<std::size_t>(shifted)] = '|';
 	}
 	return out;
 }
 
-bool editFormatLineAtColumn(const std::string &value, int tabSize, int leftMargin, int rightMargin,
-                            int column, char symbol, std::string &outValue,
-                            int *outLeftMargin, int *outRightMargin, std::string *errorMessage) {
+bool editFormatLineAtColumn(const std::string &value, int tabSize, int leftMargin, int rightMargin, int column, char symbol, std::string &outValue, int *outLeftMargin, int *outRightMargin, std::string *errorMessage) {
 	std::string normalized;
 	std::string edited;
 	int currentLeftMargin = leftMargin;
@@ -2362,49 +1953,34 @@ bool editFormatLineAtColumn(const std::string &value, int tabSize, int leftMargi
 	const char normalizedSymbol = symbol == ' ' ? '.' : symbol;
 	const int safeColumn = std::max(1, std::min(column, 999));
 
-	if (normalizedSymbol != '.' && normalizedSymbol != '|' && normalizedSymbol != 'L' &&
-	    normalizedSymbol != 'R')
-		return setError(errorMessage, "FORMAT_LINE editor accepts only '.', ' ', '|', 'L' and 'R'.");
-	if (!normalizeEditFormatLine(value, tabSize, leftMargin, rightMargin, normalized, &currentLeftMargin,
-	                             &currentRightMargin, errorMessage))
-		return false;
+	if (normalizedSymbol != '.' && normalizedSymbol != '|' && normalizedSymbol != 'L' && normalizedSymbol != 'R') return setError(errorMessage, "FORMAT_LINE editor accepts only '.', ' ', '|', 'L' and 'R'.");
+	if (!normalizeEditFormatLine(value, tabSize, leftMargin, rightMargin, normalized, &currentLeftMargin, &currentRightMargin, errorMessage)) return false;
 	edited = normalized;
-	if (static_cast<int>(edited.size()) < safeColumn)
-		edited.append(static_cast<std::size_t>(safeColumn - static_cast<int>(edited.size())), '.');
+	if (static_cast<int>(edited.size()) < safeColumn) edited.append(static_cast<std::size_t>(safeColumn - static_cast<int>(edited.size())), '.');
 	if (normalizedSymbol == 'L') {
-		if (safeColumn >= currentRightMargin)
-			return setError(errorMessage, "FORMAT_LINE must place 'L' before 'R'.");
+		if (safeColumn >= currentRightMargin) return setError(errorMessage, "FORMAT_LINE must place 'L' before 'R'.");
 		for (char &ch : edited)
-			if (ch == 'L')
-				ch = '.';
+			if (ch == 'L') ch = '.';
 		edited[static_cast<std::size_t>(safeColumn - 1)] = 'L';
 	} else if (normalizedSymbol == 'R') {
-		if (safeColumn <= currentLeftMargin)
-			return setError(errorMessage, "FORMAT_LINE must place 'R' after 'L'.");
+		if (safeColumn <= currentLeftMargin) return setError(errorMessage, "FORMAT_LINE must place 'R' after 'L'.");
 		for (char &ch : edited)
-			if (ch == 'R')
-				ch = '.';
+			if (ch == 'R') ch = '.';
 		edited.resize(static_cast<std::size_t>(safeColumn), '.');
 		edited[static_cast<std::size_t>(safeColumn - 1)] = 'R';
 	} else if (normalizedSymbol == '|') {
 		if (safeColumn <= currentLeftMargin || safeColumn >= currentRightMargin) {
 			outValue = normalized;
-			if (outLeftMargin != nullptr)
-				*outLeftMargin = currentLeftMargin;
-			if (outRightMargin != nullptr)
-				*outRightMargin = currentRightMargin;
-			if (errorMessage != nullptr)
-				errorMessage->clear();
+			if (outLeftMargin != nullptr) *outLeftMargin = currentLeftMargin;
+			if (outRightMargin != nullptr) *outRightMargin = currentRightMargin;
+			if (errorMessage != nullptr) errorMessage->clear();
 			return true;
 		}
 		edited[static_cast<std::size_t>(safeColumn - 1)] = '|';
 	} else {
-		if (safeColumn != currentLeftMargin && safeColumn != currentRightMargin &&
-		    safeColumn <= static_cast<int>(edited.size()))
-			edited[static_cast<std::size_t>(safeColumn - 1)] = '.';
+		if (safeColumn != currentLeftMargin && safeColumn != currentRightMargin && safeColumn <= static_cast<int>(edited.size())) edited[static_cast<std::size_t>(safeColumn - 1)] = '.';
 	}
-	return normalizeEditFormatLine(edited, tabSize, currentLeftMargin, currentRightMargin, outValue,
-	                               outLeftMargin, outRightMargin, errorMessage);
+	return normalizeEditFormatLine(edited, tabSize, currentLeftMargin, currentRightMargin, outValue, outLeftMargin, outRightMargin, errorMessage);
 }
 
 namespace {
@@ -2416,17 +1992,14 @@ bool normalizeCursorStatusColor(const std::string &value, std::string &outValue,
 
 	if (normalized.empty()) {
 		outValue.clear();
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
-	if (!parseHexColorToken(normalized, parsed))
-		return setError(errorMessage, "CURSOR_STATUS_COLOR must be a hex byte (00..FF) or empty.");
+	if (!parseHexColorToken(normalized, parsed)) return setError(errorMessage, "CURSOR_STATUS_COLOR must be a hex byte (00..FF) or empty.");
 	outValue.clear();
 	outValue.push_back(hex[(parsed >> 4) & 0x0F]);
 	outValue.push_back(hex[parsed & 0x0F]);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -2435,16 +2008,12 @@ bool parseTabSizeLiteral(const std::string &value, int &outValue, std::string *e
 	char *end = nullptr;
 	long parsed = 0;
 
-	if (text.empty())
-		return setError(errorMessage, "TAB_SIZE must be an integer between 2 and 32.");
+	if (text.empty()) return setError(errorMessage, "TAB_SIZE must be an integer between 2 and 32.");
 	parsed = std::strtol(text.c_str(), &end, 10);
-	if (end == text.c_str() || end == nullptr || *end != '\0')
-		return setError(errorMessage, "TAB_SIZE must be an integer between 2 and 32.");
-	if (parsed < kMinTabSize || parsed > kMaxTabSize)
-		return setError(errorMessage, "TAB_SIZE must be between 2 and 32.");
+	if (end == text.c_str() || end == nullptr || *end != '\0') return setError(errorMessage, "TAB_SIZE must be an integer between 2 and 32.");
+	if (parsed < kMinTabSize || parsed > kMaxTabSize) return setError(errorMessage, "TAB_SIZE must be between 2 and 32.");
 	outValue = static_cast<int>(parsed);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -2453,16 +2022,12 @@ bool parseMiniMapWidthLiteral(const std::string &value, int &outValue, std::stri
 	char *end = nullptr;
 	long parsed = 0;
 
-	if (text.empty())
-		return setError(errorMessage, "MINIMAP_WIDTH must be between 2 and 20.");
+	if (text.empty()) return setError(errorMessage, "MINIMAP_WIDTH must be between 2 and 20.");
 	parsed = std::strtol(text.c_str(), &end, 10);
-	if (end == text.c_str() || end == nullptr || *end != '\0')
-		return setError(errorMessage, "MINIMAP_WIDTH must be an integer between 2 and 20.");
-	if (parsed < kMinMiniMapWidth || parsed > kMaxMiniMapWidth)
-		return setError(errorMessage, "MINIMAP_WIDTH must be between 2 and 20.");
+	if (end == text.c_str() || end == nullptr || *end != '\0') return setError(errorMessage, "MINIMAP_WIDTH must be an integer between 2 and 20.");
+	if (parsed < kMinMiniMapWidth || parsed > kMaxMiniMapWidth) return setError(errorMessage, "MINIMAP_WIDTH must be between 2 and 20.");
 	outValue = static_cast<int>(parsed);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -2478,16 +2043,12 @@ bool parseLeftMarginLiteral(const std::string &value, int &outValue, std::string
 	char *end = nullptr;
 	long parsed = 0;
 
-	if (text.empty())
-		return setError(errorMessage, "LEFT_MARGIN must be an integer between 1 and 999.");
+	if (text.empty()) return setError(errorMessage, "LEFT_MARGIN must be an integer between 1 and 999.");
 	parsed = std::strtol(text.c_str(), &end, 10);
-	if (end == text.c_str() || end == nullptr || *end != '\0')
-		return setError(errorMessage, "LEFT_MARGIN must be an integer between 1 and 999.");
-	if (parsed < kMinLeftMargin || parsed > kMaxLeftMargin)
-		return setError(errorMessage, "LEFT_MARGIN must be between 1 and 999.");
+	if (end == text.c_str() || end == nullptr || *end != '\0') return setError(errorMessage, "LEFT_MARGIN must be an integer between 1 and 999.");
+	if (parsed < kMinLeftMargin || parsed > kMaxLeftMargin) return setError(errorMessage, "LEFT_MARGIN must be between 1 and 999.");
 	outValue = static_cast<int>(parsed);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -2496,46 +2057,32 @@ bool parseRightMarginLiteral(const std::string &value, int &outValue, std::strin
 	char *end = nullptr;
 	long parsed = 0;
 
-	if (text.empty())
-		return setError(errorMessage, "RIGHT_MARGIN must be an integer between 1 and 999.");
+	if (text.empty()) return setError(errorMessage, "RIGHT_MARGIN must be an integer between 1 and 999.");
 	parsed = std::strtol(text.c_str(), &end, 10);
-	if (end == text.c_str() || end == nullptr || *end != '\0')
-		return setError(errorMessage, "RIGHT_MARGIN must be an integer between 1 and 999.");
-	if (parsed < kMinRightMargin || parsed > kMaxRightMargin)
-		return setError(errorMessage, "RIGHT_MARGIN must be between 1 and 999.");
+	if (end == text.c_str() || end == nullptr || *end != '\0') return setError(errorMessage, "RIGHT_MARGIN must be an integer between 1 and 999.");
+	if (parsed < kMinRightMargin || parsed > kMaxRightMargin) return setError(errorMessage, "RIGHT_MARGIN must be between 1 and 999.");
 	outValue = static_cast<int>(parsed);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 std::string normalizePageBreakLiteral(const std::string &value) {
 	std::string trimmed = trimAscii(value);
 
-	if (trimmed.empty())
-		return kDefaultPageBreakLiteral;
+	if (trimmed.empty()) return kDefaultPageBreakLiteral;
 	while (trimmed.size() > 2 && trimmed[0] == '\\' && trimmed[1] == '\\')
 		trimmed.erase(trimmed.begin());
-	if (trimmed == "\\F")
-		return "\\f";
-	if (trimmed == "\\N")
-		return "\\n";
-	if (trimmed == "\\R")
-		return "\\r";
-	if (trimmed == "\\T")
-		return "\\t";
-	if (trimmed == "\\f" || trimmed == "\\n" || trimmed == "\\r" || trimmed == "\\t")
-		return trimmed;
+	if (trimmed == "\\F") return "\\f";
+	if (trimmed == "\\N") return "\\n";
+	if (trimmed == "\\R") return "\\r";
+	if (trimmed == "\\T") return "\\t";
+	if (trimmed == "\\f" || trimmed == "\\n" || trimmed == "\\r" || trimmed == "\\t") return trimmed;
 	if (trimmed.size() == 1) {
 		unsigned char ch = static_cast<unsigned char>(trimmed[0]);
-		if (ch == '\f')
-			return "\\f";
-		if (ch == '\n')
-			return "\\n";
-		if (ch == '\r')
-			return "\\r";
-		if (ch == '\t')
-			return "\\t";
+		if (ch == '\f') return "\\f";
+		if (ch == '\n') return "\\n";
+		if (ch == '\r') return "\\r";
+		if (ch == '\t') return "\\t";
 	}
 	return trimmed;
 }
@@ -2543,14 +2090,10 @@ std::string normalizePageBreakLiteral(const std::string &value) {
 char decodePageBreakLiteral(const std::string &literal) {
 	std::string value = normalizePageBreakLiteral(literal);
 
-	if (value == "\\f")
-		return '\f';
-	if (value == "\\n")
-		return '\n';
-	if (value == "\\r")
-		return '\r';
-	if (value == "\\t")
-		return '\t';
+	if (value == "\\f") return '\f';
+	if (value == "\\n") return '\n';
+	if (value == "\\r") return '\r';
+	if (value == "\\t") return '\t';
 	return value.empty() ? '\f' : value[0];
 }
 
@@ -2560,8 +2103,7 @@ std::vector<std::string> parseDefaultExtensions(const std::string &value) {
 	std::string token;
 	std::size_t i = 0;
 
-	if (text.size() >= 2 && std::isalpha(static_cast<unsigned char>(text[0])) != 0 && text[1] == ':')
-		text = text.substr(2);
+	if (text.size() >= 2 && std::isalpha(static_cast<unsigned char>(text[0])) != 0 && text[1] == ':') text = text.substr(2);
 
 	for (i = 0; i <= text.size(); ++i) {
 		char ch = (i < text.size()) ? text[i] : ';';
@@ -2570,20 +2112,17 @@ std::vector<std::string> parseDefaultExtensions(const std::string &value) {
 			bool duplicate = false;
 
 			token.clear();
-			if (ext.empty())
-				continue;
+			if (ext.empty()) continue;
 			while (!ext.empty() && ext[0] == '.')
 				ext.erase(ext.begin());
 			ext = trimAscii(ext);
-			if (ext.empty())
-				continue;
-			for (const auto & j : out)
+			if (ext.empty()) continue;
+			for (const auto &j : out)
 				if (j == ext) {
 					duplicate = true;
 					break;
 				}
-			if (!duplicate)
-				out.push_back(ext);
+			if (!duplicate) out.push_back(ext);
 			continue;
 		}
 		token.push_back(ch);
@@ -2596,8 +2135,7 @@ std::string canonicalDefaultExtensionsLiteral(const std::string &value) {
 	std::string out;
 
 	for (std::size_t i = 0; i < list.size(); ++i) {
-		if (i != 0)
-			out.push_back(';');
+		if (i != 0) out.push_back(';');
 		out += list[i];
 	}
 	return out;
@@ -2606,9 +2144,8 @@ std::string canonicalDefaultExtensionsLiteral(const std::string &value) {
 const MREditSettingDescriptor *editSettingDescriptorByKeyInternal(const std::string &key) {
 	std::string upper = upperAscii(trimAscii(key));
 
-		for (const auto & descriptor : kEditSettingDescriptors)
-		if (upper == descriptor.key)
-			return &descriptor;
+	for (const auto &descriptor : kEditSettingDescriptors)
+		if (upper == descriptor.key) return &descriptor;
 	return nullptr;
 }
 
@@ -2626,8 +2163,7 @@ std::string canonicalEditProfileName(const std::string &value) {
 
 std::string canonicalWindowColorThemeUri(const std::string &value) {
 	std::string trimmed = trimAscii(value);
-	if (trimmed.empty())
-		return std::string();
+	if (trimmed.empty()) return std::string();
 	return normalizeConfiguredPathInput(trimmed);
 }
 
@@ -2641,8 +2177,7 @@ std::string normalizeEditExtensionSelectorValue(const std::string &value) {
 
 bool containsAsciiSpace(const std::string &value) {
 	for (char ch : value)
-		if (std::isspace(static_cast<unsigned char>(ch)) != 0)
-			return true;
+		if (std::isspace(static_cast<unsigned char>(ch)) != 0) return true;
 	return false;
 }
 
@@ -2651,29 +2186,23 @@ bool normalizeEditExtensionSelectorsInPlace(std::vector<std::string> &selectors,
 	std::set<std::string> seen;
 
 	normalized.reserve(selectors.size());
-	for (const std::string & selector : selectors) {
+	for (const std::string &selector : selectors) {
 		std::string ext = normalizeEditExtensionSelectorValue(selector);
 
-		if (ext.empty())
-			continue;
-		if (containsAsciiSpace(ext))
-			return setError(errorMessage, "Extensions may not contain whitespace.");
-		if (ext.find('/') != std::string::npos || ext.find('\\') != std::string::npos)
-			return setError(errorMessage, "Extensions may not contain path separators.");
-		if (seen.insert(ext).second)
-			normalized.push_back(ext);
+		if (ext.empty()) continue;
+		if (containsAsciiSpace(ext)) return setError(errorMessage, "Extensions may not contain whitespace.");
+		if (ext.find('/') != std::string::npos || ext.find('\\') != std::string::npos) return setError(errorMessage, "Extensions may not contain path separators.");
+		if (seen.insert(ext).second) normalized.push_back(ext);
 	}
 	selectors.swap(normalized);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool parseAndAssignBooleanLiteral(const std::string &value, bool &target, std::string *errorMessage) {
 	bool parsed = false;
 
-	if (!parseBooleanLiteral(value, parsed, errorMessage))
-		return false;
+	if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
 	target = parsed;
 	return true;
 }
@@ -2683,85 +2212,64 @@ std::string extensionSelectorForPath(std::string_view path) {
 	std::string_view base = normalized;
 	std::size_t sep = base.find_last_of("/\\");
 
-	if (sep != std::string::npos)
-		base.remove_prefix(sep + 1);
+	if (sep != std::string::npos) base.remove_prefix(sep + 1);
 	std::size_t dot = base.find_last_of('.');
-	if (base.empty() || dot == std::string::npos || dot + 1 >= base.size())
-		return std::string();
+	if (base.empty() || dot == std::string::npos || dot + 1 >= base.size()) return std::string();
 	return std::string(base.substr(dot + 1));
 }
 
-bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string &keyName, const std::string &value,
-                                 std::string *errorMessage) {
+bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string &keyName, const std::string &value, std::string *errorMessage) {
 	std::string upperKeyName = upperAscii(trimAscii(keyName));
 	std::string normalized;
 
-	if (upperKeyName == "PAGE_BREAK")
-		current.pageBreak = normalizePageBreakLiteral(value);
+	if (upperKeyName == "PAGE_BREAK") current.pageBreak = normalizePageBreakLiteral(value);
 	else if (upperKeyName == "WORD_DELIMITERS") {
-		if (trimAscii(value).empty())
-			current.wordDelimiters = resolveEditSetupDefaults().wordDelimiters;
+		if (trimAscii(value).empty()) current.wordDelimiters = resolveEditSetupDefaults().wordDelimiters;
 		else
 			current.wordDelimiters = value;
 	} else if (upperKeyName == "DEFAULT_EXTENSIONS")
 		current.defaultExtensions = canonicalDefaultExtensionsLiteral(value);
 	else if (upperKeyName == "TRUNCATE_SPACES") {
-		if (!parseAndAssignBooleanLiteral(value, current.truncateSpaces, errorMessage))
-			return false;
+		if (!parseAndAssignBooleanLiteral(value, current.truncateSpaces, errorMessage)) return false;
 	} else if (upperKeyName == "EOF_CTRL_Z") {
-		if (!parseAndAssignBooleanLiteral(value, current.eofCtrlZ, errorMessage))
-			return false;
+		if (!parseAndAssignBooleanLiteral(value, current.eofCtrlZ, errorMessage)) return false;
 	} else if (upperKeyName == "EOF_CR_LF") {
-		if (!parseAndAssignBooleanLiteral(value, current.eofCrLf, errorMessage))
-			return false;
+		if (!parseAndAssignBooleanLiteral(value, current.eofCrLf, errorMessage)) return false;
 	} else if (upperKeyName == "TAB_EXPAND") {
-		if (!parseAndAssignBooleanLiteral(value, current.tabExpand, errorMessage))
-			return false;
+		if (!parseAndAssignBooleanLiteral(value, current.tabExpand, errorMessage)) return false;
 	} else if (upperKeyName == "DISPLAY_TABS") {
-		if (!parseAndAssignBooleanLiteral(value, current.displayTabs, errorMessage))
-			return false;
+		if (!parseAndAssignBooleanLiteral(value, current.displayTabs, errorMessage)) return false;
 	} else if (upperKeyName == "TAB_SIZE") {
 		int tabSize = 0;
-		if (!parseTabSizeLiteral(value, tabSize, errorMessage))
-			return false;
+		if (!parseTabSizeLiteral(value, tabSize, errorMessage)) return false;
 		current.tabSize = tabSize;
 		// Changing tab size resets the format line to the canonical tab/margin layout.
-		current.formatLine = defaultEditFormatLineForTabSize(current.tabSize, current.leftMargin,
-		                                                    current.rightMargin);
+		current.formatLine = defaultEditFormatLineForTabSize(current.tabSize, current.leftMargin, current.rightMargin);
 	} else if (upperKeyName == "LEFT_MARGIN") {
 		int leftMargin = 0;
-		if (!parseLeftMarginLiteral(value, leftMargin, errorMessage))
-			return false;
+		if (!parseLeftMarginLiteral(value, leftMargin, errorMessage)) return false;
 		current.leftMargin = leftMargin;
-		current.formatLine = synchronizeEditFormatLineMargins(current.formatLine, current.leftMargin,
-		                                                      current.rightMargin, current.tabSize);
+		current.formatLine = synchronizeEditFormatLineMargins(current.formatLine, current.leftMargin, current.rightMargin, current.tabSize);
 	} else if (upperKeyName == "RIGHT_MARGIN") {
 		int rightMargin = 0;
-		if (!parseRightMarginLiteral(value, rightMargin, errorMessage))
-			return false;
+		if (!parseRightMarginLiteral(value, rightMargin, errorMessage)) return false;
 		current.rightMargin = rightMargin;
-		current.formatLine = synchronizeEditFormatLineMargins(current.formatLine, current.leftMargin,
-		                                                      current.rightMargin, current.tabSize);
+		current.formatLine = synchronizeEditFormatLineMargins(current.formatLine, current.leftMargin, current.rightMargin, current.tabSize);
 	} else if (upperKeyName == "FORMAT_RULER") {
-		if (!parseAndAssignBooleanLiteral(value, current.formatRuler, errorMessage))
-			return false;
+		if (!parseAndAssignBooleanLiteral(value, current.formatRuler, errorMessage)) return false;
 	} else if (upperKeyName == "WORD_WRAP") {
-		if (!parseAndAssignBooleanLiteral(value, current.wordWrap, errorMessage))
-			return false;
+		if (!parseAndAssignBooleanLiteral(value, current.wordWrap, errorMessage)) return false;
 	} else if (upperKeyName == "INDENT_STYLE") {
 		normalized = normalizeIndentStyle(value);
-		if (normalized.empty())
-			return setError(errorMessage, "INDENT_STYLE must be OFF, AUTOMATIC or SMART.");
+		if (normalized.empty()) return setError(errorMessage, "INDENT_STYLE must be OFF, AUTOMATIC or SMART.");
 		current.indentStyle = normalized;
 	} else if (upperKeyName == "FILE_TYPE") {
 		normalized = normalizeFileType(value);
-		if (normalized.empty())
-			return setError(errorMessage, "FILE_TYPE must be LEGACY_TEXT, UNIX or BINARY.");
+		if (normalized.empty()) return setError(errorMessage, "FILE_TYPE must be LEGACY_TEXT, UNIX or BINARY.");
 		current.fileType = normalized;
 	} else if (upperKeyName == "BINARY_RECORD_LENGTH") {
 		int binaryRecordLength = 0;
-		if (!parseBinaryRecordLengthLiteral(value, binaryRecordLength, errorMessage))
-			return false;
+		if (!parseBinaryRecordLengthLiteral(value, binaryRecordLength, errorMessage)) return false;
 		current.binaryRecordLength = binaryRecordLength;
 	} else if (upperKeyName == "POST_LOAD_MACRO")
 		current.postLoadMacro = trimAscii(value).empty() ? std::string() : normalizeConfiguredPathInput(value);
@@ -2772,30 +2280,23 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 	else if (upperKeyName == "FORMAT_LINE") {
 		int leftMargin = current.leftMargin;
 		int rightMargin = current.rightMargin;
-		if (!normalizeEditFormatLine(value, current.tabSize, current.leftMargin, current.rightMargin,
-		                             normalized, &leftMargin, &rightMargin, errorMessage))
-			return false;
+		if (!normalizeEditFormatLine(value, current.tabSize, current.leftMargin, current.rightMargin, normalized, &leftMargin, &rightMargin, errorMessage)) return false;
 		current.formatLine = normalized;
 		current.leftMargin = leftMargin;
 		current.rightMargin = rightMargin;
-	}
-	else if (upperKeyName == "BACKUP_FILES") {
-		if (!parseAndAssignBooleanLiteral(value, current.backupFiles, errorMessage))
-			return false;
-		if (!current.backupFiles)
-			current.backupMethod = kBackupMethodOff;
+	} else if (upperKeyName == "BACKUP_FILES") {
+		if (!parseAndAssignBooleanLiteral(value, current.backupFiles, errorMessage)) return false;
+		if (!current.backupFiles) current.backupMethod = kBackupMethodOff;
 		else if (normalizeBackupMethod(current.backupMethod).empty() || current.backupMethod == kBackupMethodOff)
 			current.backupMethod = kBackupMethodBakFile;
 	} else if (upperKeyName == "BACKUP_METHOD") {
 		normalized = normalizeBackupMethod(value);
-		if (normalized.empty())
-			return setError(errorMessage, "BACKUP_METHOD must be OFF, BAK_FILE or DIRECTORY.");
+		if (normalized.empty()) return setError(errorMessage, "BACKUP_METHOD must be OFF, BAK_FILE or DIRECTORY.");
 		current.backupMethod = normalized;
 		current.backupFiles = normalized != kBackupMethodOff;
 	} else if (upperKeyName == "BACKUP_FREQUENCY") {
 		normalized = normalizeBackupFrequency(value);
-		if (normalized.empty())
-			return setError(errorMessage, "BACKUP_FREQUENCY must be FIRST_SAVE_ONLY or EVERY_SAVE.");
+		if (normalized.empty()) return setError(errorMessage, "BACKUP_FREQUENCY must be FIRST_SAVE_ONLY or EVERY_SAVE.");
 		current.backupFrequency = normalized;
 	} else if (upperKeyName == "BACKUP_EXTENSION")
 		current.backupExtension = normalizeBackupExtension(value);
@@ -2803,174 +2304,109 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 		current.backupDirectory = trimAscii(value).empty() ? std::string() : normalizeConfiguredPathInput(value);
 	else if (upperKeyName == "AUTOSAVE_INACTIVITY_SECONDS") {
 		int parsedSeconds = 0;
-		if (!normalizeAutosaveSeconds(value, kMinAutosaveInactivitySeconds, kMaxAutosaveInactivitySeconds, parsedSeconds,
-		                             "AUTOSAVE_INACTIVITY_SECONDS", errorMessage))
-			return false;
+		if (!normalizeAutosaveSeconds(value, kMinAutosaveInactivitySeconds, kMaxAutosaveInactivitySeconds, parsedSeconds, "AUTOSAVE_INACTIVITY_SECONDS", errorMessage)) return false;
 		current.autosaveInactivitySeconds = parsedSeconds;
 	} else if (upperKeyName == "AUTOSAVE_INTERVAL_SECONDS") {
 		int parsedSeconds = 0;
-		if (!normalizeAutosaveSeconds(value, kMinAutosaveIntervalSeconds, kMaxAutosaveIntervalSeconds, parsedSeconds,
-		                             "AUTOSAVE_INTERVAL_SECONDS", errorMessage))
-			return false;
+		if (!normalizeAutosaveSeconds(value, kMinAutosaveIntervalSeconds, kMaxAutosaveIntervalSeconds, parsedSeconds, "AUTOSAVE_INTERVAL_SECONDS", errorMessage)) return false;
 		current.autosaveIntervalSeconds = parsedSeconds;
 	} else if (upperKeyName == "SHOW_EOF_MARKER") {
-		if (!parseAndAssignBooleanLiteral(value, current.showEofMarker, errorMessage))
-			return false;
+		if (!parseAndAssignBooleanLiteral(value, current.showEofMarker, errorMessage)) return false;
 	} else if (upperKeyName == "SHOW_EOF_MARKER_EMOJI") {
-		if (!parseAndAssignBooleanLiteral(value, current.showEofMarkerEmoji, errorMessage))
-			return false;
+		if (!parseAndAssignBooleanLiteral(value, current.showEofMarkerEmoji, errorMessage)) return false;
 	} else if (upperKeyName == "LINE_NUMBERS_POSITION") {
 		normalized = normalizeLineNumbersPosition(value);
-		if (normalized.empty())
-			return setError(errorMessage, "LINE_NUMBERS_POSITION must be OFF, LEADING or TRAILING.");
+		if (normalized.empty()) return setError(errorMessage, "LINE_NUMBERS_POSITION must be OFF, LEADING or TRAILING.");
 		current.lineNumbersPosition = normalized;
 		current.showLineNumbers = normalized != kLineNumbersPositionOff;
 	} else if (upperKeyName == "LINE_NUM_ZERO_FILL") {
-		if (!parseAndAssignBooleanLiteral(value, current.lineNumZeroFill, errorMessage))
-			return false;
+		if (!parseAndAssignBooleanLiteral(value, current.lineNumZeroFill, errorMessage)) return false;
 	} else if (upperKeyName == "MINIMAP_POSITION") {
 		normalized = normalizeMiniMapPosition(value);
-		if (normalized.empty())
-			return setError(errorMessage, "MINIMAP_POSITION must be OFF, LEADING or TRAILING.");
+		if (normalized.empty()) return setError(errorMessage, "MINIMAP_POSITION must be OFF, LEADING or TRAILING.");
 		current.miniMapPosition = normalized;
 	} else if (upperKeyName == "MINIMAP_WIDTH") {
 		int miniMapWidth = 0;
-		if (!parseMiniMapWidthLiteral(value, miniMapWidth, errorMessage))
-			return false;
+		if (!parseMiniMapWidthLiteral(value, miniMapWidth, errorMessage)) return false;
 		current.miniMapWidth = miniMapWidth;
 	} else if (upperKeyName == "MINIMAP_MARKER_GLYPH") {
-		if (!normalizeMiniMapMarkerGlyph(value, normalized, errorMessage))
-			return false;
+		if (!normalizeMiniMapMarkerGlyph(value, normalized, errorMessage)) return false;
 		current.miniMapMarkerGlyph = normalized;
 	} else if (upperKeyName == "GUTTERS")
 		current.gutters = normalizeGuttersOrder(value);
 	else if (upperKeyName == "PERSISTENT_BLOCKS") {
-		if (!parseAndAssignBooleanLiteral(value, current.persistentBlocks, errorMessage))
-			return false;
+		if (!parseAndAssignBooleanLiteral(value, current.persistentBlocks, errorMessage)) return false;
 	} else if (upperKeyName == "CODE_FOLDING_POSITION") {
 		normalized = normalizeCodeFoldingPosition(value);
-		if (normalized.empty())
-			return setError(errorMessage, "CODE_FOLDING_POSITION must be OFF, LEADING or TRAILING.");
+		if (normalized.empty()) return setError(errorMessage, "CODE_FOLDING_POSITION must be OFF, LEADING or TRAILING.");
 		current.codeFoldingPosition = normalized;
 		current.codeFolding = normalized != kCodeFoldingPositionOff;
 	} else if (upperKeyName == "COLUMN_BLOCK_MOVE") {
 		normalized = normalizeColumnBlockMove(value);
-		if (normalized.empty())
-			return setError(errorMessage, "COLUMN_BLOCK_MOVE must be DELETE_SPACE or LEAVE_SPACE.");
+		if (normalized.empty()) return setError(errorMessage, "COLUMN_BLOCK_MOVE must be DELETE_SPACE or LEAVE_SPACE.");
 		current.columnBlockMove = normalized;
 	} else if (upperKeyName == "DEFAULT_MODE") {
 		normalized = normalizeDefaultMode(value);
-		if (normalized.empty())
-			return setError(errorMessage, "DEFAULT_MODE must be INSERT or OVERWRITE.");
+		if (normalized.empty()) return setError(errorMessage, "DEFAULT_MODE must be INSERT or OVERWRITE.");
 		current.defaultMode = normalized;
 	} else if (upperKeyName == "CURSOR_STATUS_COLOR") {
-		if (!normalizeCursorStatusColor(value, normalized, errorMessage))
-			return false;
+		if (!normalizeCursorStatusColor(value, normalized, errorMessage)) return false;
 		current.cursorStatusColor = normalized;
 	} else
 		return setError(errorMessage, "Unknown edit setting key.");
 
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 std::string editSetupValueLiteral(const MREditSetupSettings &settings, const char *key) {
 	std::string upperKey = upperAscii(trimAscii(key != nullptr ? key : ""));
 
-	if (upperKey == "PAGE_BREAK")
-		return settings.pageBreak;
-	if (upperKey == "WORD_DELIMITERS")
-		return settings.wordDelimiters;
-	if (upperKey == "DEFAULT_EXTENSIONS")
-		return settings.defaultExtensions;
-	if (upperKey == "TRUNCATE_SPACES")
-		return formatEditSetupBoolean(settings.truncateSpaces);
-	if (upperKey == "EOF_CTRL_Z")
-		return formatEditSetupBoolean(settings.eofCtrlZ);
-	if (upperKey == "EOF_CR_LF")
-		return formatEditSetupBoolean(settings.eofCrLf);
-	if (upperKey == "TAB_EXPAND")
-		return formatEditSetupBoolean(settings.tabExpand);
-	if (upperKey == "DISPLAY_TABS")
-		return formatEditSetupBoolean(settings.displayTabs);
-	if (upperKey == "TAB_SIZE")
-		return std::to_string(settings.tabSize);
-	if (upperKey == "LEFT_MARGIN")
-		return std::to_string(settings.leftMargin);
-	if (upperKey == "RIGHT_MARGIN")
-		return std::to_string(settings.rightMargin);
-	if (upperKey == "FORMAT_RULER")
-		return formatEditSetupBoolean(settings.formatRuler);
-	if (upperKey == "WORD_WRAP")
-		return formatEditSetupBoolean(settings.wordWrap);
-	if (upperKey == "INDENT_STYLE")
-		return settings.indentStyle;
-	if (upperKey == "FILE_TYPE")
-		return settings.fileType;
-	if (upperKey == "BINARY_RECORD_LENGTH")
-		return std::to_string(settings.binaryRecordLength);
-	if (upperKey == "POST_LOAD_MACRO")
-		return settings.postLoadMacro;
-	if (upperKey == "PRE_SAVE_MACRO")
-		return settings.preSaveMacro;
-	if (upperKey == "DEFAULT_PATH")
-		return settings.defaultPath;
-	if (upperKey == "FORMAT_LINE")
-		return settings.formatLine;
-	if (upperKey == "BACKUP_FILES")
-		return formatEditSetupBoolean(settings.backupFiles);
-	if (upperKey == "BACKUP_METHOD")
-		return settings.backupMethod;
-	if (upperKey == "BACKUP_FREQUENCY")
-		return settings.backupFrequency;
-	if (upperKey == "BACKUP_EXTENSION")
-		return settings.backupExtension;
-	if (upperKey == "BACKUP_DIRECTORY")
-		return settings.backupDirectory;
-	if (upperKey == "AUTOSAVE_INACTIVITY_SECONDS")
-		return std::to_string(settings.autosaveInactivitySeconds);
-	if (upperKey == "AUTOSAVE_INTERVAL_SECONDS")
-		return std::to_string(settings.autosaveIntervalSeconds);
-	if (upperKey == "SHOW_EOF_MARKER")
-		return formatEditSetupBoolean(settings.showEofMarker);
-	if (upperKey == "SHOW_EOF_MARKER_EMOJI")
-		return formatEditSetupBoolean(settings.showEofMarkerEmoji);
-	if (upperKey == "LINE_NUMBERS_POSITION")
-		return settings.lineNumbersPosition;
-	if (upperKey == "LINE_NUM_ZERO_FILL")
-		return formatEditSetupBoolean(settings.lineNumZeroFill);
-	if (upperKey == "MINIMAP_POSITION")
-		return settings.miniMapPosition;
-	if (upperKey == "MINIMAP_WIDTH")
-		return std::to_string(settings.miniMapWidth);
-	if (upperKey == "MINIMAP_MARKER_GLYPH")
-		return settings.miniMapMarkerGlyph;
-	if (upperKey == "GUTTERS")
-		return settings.gutters;
-	if (upperKey == "PERSISTENT_BLOCKS")
-		return formatEditSetupBoolean(settings.persistentBlocks);
-	if (upperKey == "CODE_FOLDING_POSITION")
-		return settings.codeFoldingPosition;
-	if (upperKey == "COLUMN_BLOCK_MOVE")
-		return settings.columnBlockMove;
-	if (upperKey == "DEFAULT_MODE")
-		return settings.defaultMode;
-	if (upperKey == "CURSOR_STATUS_COLOR")
-		return settings.cursorStatusColor;
+	if (upperKey == "PAGE_BREAK") return settings.pageBreak;
+	if (upperKey == "WORD_DELIMITERS") return settings.wordDelimiters;
+	if (upperKey == "DEFAULT_EXTENSIONS") return settings.defaultExtensions;
+	if (upperKey == "TRUNCATE_SPACES") return formatEditSetupBoolean(settings.truncateSpaces);
+	if (upperKey == "EOF_CTRL_Z") return formatEditSetupBoolean(settings.eofCtrlZ);
+	if (upperKey == "EOF_CR_LF") return formatEditSetupBoolean(settings.eofCrLf);
+	if (upperKey == "TAB_EXPAND") return formatEditSetupBoolean(settings.tabExpand);
+	if (upperKey == "DISPLAY_TABS") return formatEditSetupBoolean(settings.displayTabs);
+	if (upperKey == "TAB_SIZE") return std::to_string(settings.tabSize);
+	if (upperKey == "LEFT_MARGIN") return std::to_string(settings.leftMargin);
+	if (upperKey == "RIGHT_MARGIN") return std::to_string(settings.rightMargin);
+	if (upperKey == "FORMAT_RULER") return formatEditSetupBoolean(settings.formatRuler);
+	if (upperKey == "WORD_WRAP") return formatEditSetupBoolean(settings.wordWrap);
+	if (upperKey == "INDENT_STYLE") return settings.indentStyle;
+	if (upperKey == "FILE_TYPE") return settings.fileType;
+	if (upperKey == "BINARY_RECORD_LENGTH") return std::to_string(settings.binaryRecordLength);
+	if (upperKey == "POST_LOAD_MACRO") return settings.postLoadMacro;
+	if (upperKey == "PRE_SAVE_MACRO") return settings.preSaveMacro;
+	if (upperKey == "DEFAULT_PATH") return settings.defaultPath;
+	if (upperKey == "FORMAT_LINE") return settings.formatLine;
+	if (upperKey == "BACKUP_FILES") return formatEditSetupBoolean(settings.backupFiles);
+	if (upperKey == "BACKUP_METHOD") return settings.backupMethod;
+	if (upperKey == "BACKUP_FREQUENCY") return settings.backupFrequency;
+	if (upperKey == "BACKUP_EXTENSION") return settings.backupExtension;
+	if (upperKey == "BACKUP_DIRECTORY") return settings.backupDirectory;
+	if (upperKey == "AUTOSAVE_INACTIVITY_SECONDS") return std::to_string(settings.autosaveInactivitySeconds);
+	if (upperKey == "AUTOSAVE_INTERVAL_SECONDS") return std::to_string(settings.autosaveIntervalSeconds);
+	if (upperKey == "SHOW_EOF_MARKER") return formatEditSetupBoolean(settings.showEofMarker);
+	if (upperKey == "SHOW_EOF_MARKER_EMOJI") return formatEditSetupBoolean(settings.showEofMarkerEmoji);
+	if (upperKey == "LINE_NUMBERS_POSITION") return settings.lineNumbersPosition;
+	if (upperKey == "LINE_NUM_ZERO_FILL") return formatEditSetupBoolean(settings.lineNumZeroFill);
+	if (upperKey == "MINIMAP_POSITION") return settings.miniMapPosition;
+	if (upperKey == "MINIMAP_WIDTH") return std::to_string(settings.miniMapWidth);
+	if (upperKey == "MINIMAP_MARKER_GLYPH") return settings.miniMapMarkerGlyph;
+	if (upperKey == "GUTTERS") return settings.gutters;
+	if (upperKey == "PERSISTENT_BLOCKS") return formatEditSetupBoolean(settings.persistentBlocks);
+	if (upperKey == "CODE_FOLDING_POSITION") return settings.codeFoldingPosition;
+	if (upperKey == "COLUMN_BLOCK_MOVE") return settings.columnBlockMove;
+	if (upperKey == "DEFAULT_MODE") return settings.defaultMode;
+	if (upperKey == "CURSOR_STATUS_COLOR") return settings.cursorStatusColor;
 	return std::string();
 }
 
 unsigned long long supportedEditProfileOverrideMask() noexcept {
-static constexpr unsigned long long mask = kOvPageBreak | kOvWordDelimiters | kOvDefaultExtensions | kOvTruncateSpaces |
-	                                     kOvEofCtrlZ | kOvEofCrLf | kOvTabExpand | kOvDisplayTabs | kOvTabSize | kOvLeftMargin | kOvRightMargin | kOvFormatRuler |
-	                                     kOvWordWrap | kOvIndentStyle | kOvFileType | kOvBinaryRecordLength |
-	                                     kOvPostLoadMacro | kOvPreSaveMacro | kOvDefaultPath | kOvFormatLine |
-	                                     kOvBackupFiles | kOvShowEofMarker | kOvShowEofMarkerEmoji | kOvLineNumZeroFill |
-	                                     kOvLineNumbersPosition | kOvMiniMapPosition | kOvMiniMapWidth |
-	                                     kOvMiniMapMarkerGlyph | kOvGutters | kOvPersistentBlocks |
-	                                     kOvCodeFoldingPosition | kOvColumnBlockMove | kOvDefaultMode |
-	                                     kOvCursorStatusColor;
+	static constexpr unsigned long long mask = kOvPageBreak | kOvWordDelimiters | kOvDefaultExtensions | kOvTruncateSpaces | kOvEofCtrlZ | kOvEofCrLf | kOvTabExpand | kOvDisplayTabs | kOvTabSize | kOvLeftMargin | kOvRightMargin | kOvFormatRuler | kOvWordWrap | kOvIndentStyle | kOvFileType | kOvBinaryRecordLength | kOvPostLoadMacro | kOvPreSaveMacro | kOvDefaultPath | kOvFormatLine | kOvBackupFiles | kOvShowEofMarker | kOvShowEofMarkerEmoji | kOvLineNumZeroFill | kOvLineNumbersPosition | kOvMiniMapPosition | kOvMiniMapWidth | kOvMiniMapMarkerGlyph | kOvGutters | kOvPersistentBlocks | kOvCodeFoldingPosition | kOvColumnBlockMove | kOvDefaultMode | kOvCursorStatusColor;
 	return mask;
 }
 
@@ -2980,26 +2416,19 @@ bool normalizeEditProfileOverridesInPlace(MREditExtensionProfile &profile, std::
 	MREditSetupSettings normalizedValues = resolveEditSetupDefaults();
 	unsigned long long mask = profile.overrides.mask;
 
-	if ((mask & ~supportedEditProfileOverrideMask()) != 0)
-		return setError(errorMessage, "Extension profile override mask contains unsupported bits.");
+	if ((mask & ~supportedEditProfileOverrideMask()) != 0) return setError(errorMessage, "Extension profile override mask contains unsupported bits.");
 
 	for (std::size_t i = 0; i < descriptorCount; ++i) {
 		const MREditSettingDescriptor &descriptor = descriptors[i];
 
-		if (!descriptor.profileSupported)
-			continue;
-		if ((mask & descriptor.overrideBit) == 0)
-			continue;
-		if (!applyEditSetupValueInternal(normalizedValues, descriptor.key,
-		                               editSetupValueLiteral(profile.overrides.values, descriptor.key),
-		                               errorMessage))
-			return false;
+		if (!descriptor.profileSupported) continue;
+		if ((mask & descriptor.overrideBit) == 0) continue;
+		if (!applyEditSetupValueInternal(normalizedValues, descriptor.key, editSetupValueLiteral(profile.overrides.values, descriptor.key), errorMessage)) return false;
 	}
 
 	profile.overrides.mask = mask;
 	profile.overrides.values = normalizedValues;
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -3009,41 +2438,32 @@ bool validateNormalizedEditProfiles(const std::vector<MREditExtensionProfile> &p
 
 	std::map<std::string, std::string> selectorOwners;
 
-	for (const auto & profile : profiles) {
+	for (const auto &profile : profiles) {
 		std::string id = canonicalEditProfileId(profile.id);
 		std::string name = canonicalEditProfileName(profile.name);
 		std::string lookup = profileIdLookupKey(id);
 
-		if (id.empty())
-			return setError(errorMessage, "Extension profile id may not be empty.");
-		if (name.empty())
-			return setError(errorMessage, "Extension profile name may not be empty.");
-		if (!profileIds.insert(lookup).second)
-			return setError(errorMessage, "Duplicate extension profile id: " + id + " (" + name + ")");
-		if (!profile.windowColorThemeUri.empty() &&
-		    !validateColorThemeFilePath(profile.windowColorThemeUri, errorMessage))
-			return false;
-		for (const std::string & ext : profile.extensions) {
+		if (id.empty()) return setError(errorMessage, "Extension profile id may not be empty.");
+		if (name.empty()) return setError(errorMessage, "Extension profile name may not be empty.");
+		if (!profileIds.insert(lookup).second) return setError(errorMessage, "Duplicate extension profile id: " + id + " (" + name + ")");
+		if (!profile.windowColorThemeUri.empty() && !validateColorThemeFilePath(profile.windowColorThemeUri, errorMessage)) return false;
+		for (const std::string &ext : profile.extensions) {
 			std::string ownerLabel = id + " (" + name + ")";
 			auto it = selectorOwners.find(ext);
-			if (it != selectorOwners.end())
-				return setError(errorMessage, "Duplicate profile extension '" + ext + "': " + it->second + " and " + ownerLabel);
+			if (it != selectorOwners.end()) return setError(errorMessage, "Duplicate profile extension '" + ext + "': " + it->second + " and " + ownerLabel);
 			selectorOwners.insert(std::make_pair(ext, ownerLabel));
 		}
 	}
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 } // namespace
 
-bool parseHistoryLimitLiteral(const std::string &value, int &outValue, std::string *errorMessage,
-                              const char *keyName);
+bool parseHistoryLimitLiteral(const std::string &value, int &outValue, std::string *errorMessage, const char *keyName);
 bool setConfiguredPathHistoryLimitValue(int value, std::string *errorMessage);
 bool setConfiguredFileHistoryLimitValue(int value, std::string *errorMessage);
-bool setScopedDialogLastPath(MRDialogHistoryScope scope, const std::string &path,
-                             std::string *errorMessage);
+bool setScopedDialogLastPath(MRDialogHistoryScope scope, const std::string &path, std::string *errorMessage);
 
 std::string normalizeConfiguredPathInput(std::string_view input) {
 	return makeAbsolutePath(normalizeDialogPath(expandUserPath(input).c_str()));
@@ -3053,20 +2473,16 @@ MRSetupPaths resolveSetupPathDefaults() {
 	MRSetupPaths defaults;
 	std::string xdgConfig = pathFromEnvironment("XDG_CONFIG_HOME");
 	const char *homeEnv = std::getenv("HOME");
-	std::string home = (homeEnv != nullptr && *homeEnv != '\0')
-	                       ? makeAbsolutePath(normalizeDialogPath(homeEnv))
-	                       : std::string();
+	std::string home = (homeEnv != nullptr && *homeEnv != '\0') ? makeAbsolutePath(normalizeDialogPath(homeEnv)) : std::string();
 	std::string cwd = currentWorkingDirectory();
 	std::string exeDir = makeAbsolutePath(executableDirectory());
 	std::string candidate;
 	std::string configBase;
 
 	defaults.tempPath = builtInTempDirectoryPath();
-	if (defaults.tempPath.empty())
-		defaults.tempPath = "/tmp";
+	if (defaults.tempPath.empty()) defaults.tempPath = "/tmp";
 
-	if (!xdgConfig.empty())
-		defaults.settingsMacroUri = appendFileName(appendPathSegment(xdgConfig, "mr"), "settings.mrmac");
+	if (!xdgConfig.empty()) defaults.settingsMacroUri = appendFileName(appendPathSegment(xdgConfig, "mr"), "settings.mrmac");
 	else if (!home.empty()) {
 		configBase = appendPathSegment(home, ".config");
 		defaults.settingsMacroUri = appendFileName(appendPathSegment(configBase, "mr"), "settings.mrmac");
@@ -3081,39 +2497,29 @@ MRSetupPaths resolveSetupPathDefaults() {
 
 	if (!cwd.empty()) {
 		candidate = appendPathSegment(appendPathSegment(cwd, "mrmac"), "macros");
-		if (isReadableDirectory(candidate))
-			defaults.macroPath = candidate;
+		if (isReadableDirectory(candidate)) defaults.macroPath = candidate;
 	}
 	if (defaults.macroPath.empty() && !exeDir.empty()) {
 		candidate = appendPathSegment(appendPathSegment(exeDir, "mrmac"), "macros");
-		if (isReadableDirectory(candidate))
-			defaults.macroPath = candidate;
+		if (isReadableDirectory(candidate)) defaults.macroPath = candidate;
 	}
-	if (defaults.macroPath.empty() && !cwd.empty() && isReadableDirectory(cwd))
-		defaults.macroPath = cwd;
-	if (defaults.macroPath.empty())
-		defaults.macroPath = defaults.tempPath;
+	if (defaults.macroPath.empty() && !cwd.empty() && isReadableDirectory(cwd)) defaults.macroPath = cwd;
+	if (defaults.macroPath.empty()) defaults.macroPath = defaults.tempPath;
 
 	if (!cwd.empty()) {
 		candidate = appendFileName(cwd, "mr.hlp");
-		if (isReadableFile(candidate))
-			defaults.helpUri = candidate;
+		if (isReadableFile(candidate)) defaults.helpUri = candidate;
 	}
 	if (defaults.helpUri.empty() && !exeDir.empty()) {
 		candidate = appendFileName(exeDir, "mr.hlp");
-		if (isReadableFile(candidate))
-			defaults.helpUri = candidate;
+		if (isReadableFile(candidate)) defaults.helpUri = candidate;
 	}
-	if (defaults.helpUri.empty() && !cwd.empty())
-		defaults.helpUri = appendFileName(cwd, "mr.hlp");
-	if (defaults.helpUri.empty() && !exeDir.empty())
-		defaults.helpUri = appendFileName(exeDir, "mr.hlp");
-	if (defaults.helpUri.empty())
-		defaults.helpUri = appendFileName(defaults.tempPath, "mr.hlp");
+	if (defaults.helpUri.empty() && !cwd.empty()) defaults.helpUri = appendFileName(cwd, "mr.hlp");
+	if (defaults.helpUri.empty() && !exeDir.empty()) defaults.helpUri = appendFileName(exeDir, "mr.hlp");
+	if (defaults.helpUri.empty()) defaults.helpUri = appendFileName(defaults.tempPath, "mr.hlp");
 
 	defaults.shellUri = builtInShellExecutablePath();
-	if (defaults.shellUri.empty())
-		defaults.shellUri = "/bin/sh";
+	if (defaults.shellUri.empty()) defaults.shellUri = "/bin/sh";
 
 	defaults.settingsMacroUri = makeAbsolutePath(defaults.settingsMacroUri);
 	defaults.macroPath = makeAbsolutePath(defaults.macroPath);
@@ -3145,8 +2551,7 @@ MREditSetupSettings resolveEditSetupDefaults() {
 	defaults.postLoadMacro.clear();
 	defaults.preSaveMacro.clear();
 	defaults.defaultPath.clear();
-	defaults.formatLine = defaultEditFormatLineForTabSize(defaults.tabSize, defaults.leftMargin,
-	                                                     defaults.rightMargin);
+	defaults.formatLine = defaultEditFormatLineForTabSize(defaults.tabSize, defaults.leftMargin, defaults.rightMargin);
 	defaults.backupMethod = kBackupMethodBakFile;
 	defaults.backupFrequency = kBackupFrequencyFirstSaveOnly;
 	defaults.backupExtension = "bak";
@@ -3179,23 +2584,18 @@ MRColorSetupSettings resolveColorSetupDefaults() {
 MRSettingsKeyClass classifySettingsKey(std::string_view key) {
 	std::string upper = upperAscii(trimAscii(key));
 
-	if (upper.empty())
-		return MRSettingsKeyClass::Unknown;
-	for (const auto & descriptor : kFixedSettingsKeyDescriptors)
-		if (upper == descriptor.key)
-			return descriptor.keyClass;
-	return editSettingDescriptorByKeyInternal(upper) != nullptr ? MRSettingsKeyClass::Edit
-	                                                           : MRSettingsKeyClass::Unknown;
+	if (upper.empty()) return MRSettingsKeyClass::Unknown;
+	for (const auto &descriptor : kFixedSettingsKeyDescriptors)
+		if (upper == descriptor.key) return descriptor.keyClass;
+	return editSettingDescriptorByKeyInternal(upper) != nullptr ? MRSettingsKeyClass::Edit : MRSettingsKeyClass::Unknown;
 }
 
 bool isCanonicalSerializedSettingsKey(std::string_view key) {
 	std::string upper = upperAscii(trimAscii(key));
 
-	if (upper.empty())
-		return false;
-	for (const auto & descriptor : kFixedSettingsKeyDescriptors)
-		if (upper == descriptor.key)
-			return descriptor.serialized;
+	if (upper.empty()) return false;
+	for (const auto &descriptor : kFixedSettingsKeyDescriptors)
+		if (upper == descriptor.key) return descriptor.serialized;
 	return editSettingDescriptorByKeyInternal(upper) != nullptr;
 }
 
@@ -3205,9 +2605,8 @@ std::size_t canonicalSerializedSettingsKeyCount() {
 	std::size_t serializedEditCount = 0;
 	editSettingDescriptors(editDescriptorCount);
 
-	for (const auto & descriptor : kFixedSettingsKeyDescriptors)
-		if (descriptor.serialized)
-			++fixedSerializedCount;
+	for (const auto &descriptor : kFixedSettingsKeyDescriptors)
+		if (descriptor.serialized) ++fixedSerializedCount;
 	for (std::size_t i = 0; i < editDescriptorCount; ++i)
 		++serializedEditCount;
 	return fixedSerializedCount + serializedEditCount;
@@ -3216,50 +2615,30 @@ std::size_t canonicalSerializedSettingsKeyCount() {
 bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths &paths, std::string *errorMessage) {
 	paths = resolveSetupPathDefaults();
 	paths.settingsMacroUri = normalizeConfiguredPathInput(settingsPath);
-	if (paths.settingsMacroUri.empty())
-		return setError(errorMessage, "Settings path is empty.");
-	if (!setConfiguredSettingsMacroFilePath(paths.settingsMacroUri, errorMessage))
-		return false;
-	if (!setConfiguredMacroDirectoryPath(paths.macroPath, errorMessage))
-		return false;
-	if (!setConfiguredHelpFilePath(paths.helpUri, errorMessage))
-		return false;
-	if (!setConfiguredTempDirectoryPath(paths.tempPath, errorMessage))
-		return false;
-	if (!setConfiguredShellExecutablePath(paths.shellUri, errorMessage))
-		return false;
-	if (!setConfiguredLogFilePath(defaultLogFilePathForSettings(paths.settingsMacroUri), errorMessage))
-		return false;
-	if (!setConfiguredLastFileDialogPath(paths.macroPath, errorMessage))
-		return false;
-	if (!setConfiguredDefaultProfileDescription("Global defaults", errorMessage))
-		return false;
-	if (!setConfiguredSearchDialogOptions(MRSearchDialogOptions(), errorMessage))
-		return false;
-	if (!setConfiguredSarDialogOptions(MRSarDialogOptions(), errorMessage))
-		return false;
-	if (!setConfiguredMultiSearchDialogOptions(MRMultiSearchDialogOptions(), errorMessage))
-		return false;
-	if (!setConfiguredMultiSarDialogOptions(MRMultiSarDialogOptions(), errorMessage))
-		return false;
-	if (!setConfiguredCursorPositionMarker("R:C", errorMessage))
-		return false;
+	if (paths.settingsMacroUri.empty()) return setError(errorMessage, "Settings path is empty.");
+	if (!setConfiguredSettingsMacroFilePath(paths.settingsMacroUri, errorMessage)) return false;
+	if (!setConfiguredMacroDirectoryPath(paths.macroPath, errorMessage)) return false;
+	if (!setConfiguredHelpFilePath(paths.helpUri, errorMessage)) return false;
+	if (!setConfiguredTempDirectoryPath(paths.tempPath, errorMessage)) return false;
+	if (!setConfiguredShellExecutablePath(paths.shellUri, errorMessage)) return false;
+	if (!setConfiguredLogFilePath(defaultLogFilePathForSettings(paths.settingsMacroUri), errorMessage)) return false;
+	if (!setConfiguredLastFileDialogPath(paths.macroPath, errorMessage)) return false;
+	if (!setConfiguredDefaultProfileDescription("Global defaults", errorMessage)) return false;
+	if (!setConfiguredSearchDialogOptions(MRSearchDialogOptions(), errorMessage)) return false;
+	if (!setConfiguredSarDialogOptions(MRSarDialogOptions(), errorMessage)) return false;
+	if (!setConfiguredMultiSearchDialogOptions(MRMultiSearchDialogOptions(), errorMessage)) return false;
+	if (!setConfiguredMultiSarDialogOptions(MRMultiSarDialogOptions(), errorMessage)) return false;
+	if (!setConfiguredCursorPositionMarker("R:C", errorMessage)) return false;
 	g_logHandling = MRLogHandling::Volatile;
 	configuredAutoexecMacroStorage().clear();
-	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), errorMessage))
-		return false;
+	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), errorMessage)) return false;
 	configuredColorSettings() = defaultsFromColorGroups();
 	configuredColorSettingsInitialized() = true;
-	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(), errorMessage))
-		return false;
-	if (!setConfiguredKeymapProfiles(std::vector<MRKeymapProfile>(), errorMessage))
-		return false;
-	if (!setConfiguredKeymapFilePath("", errorMessage))
-		return false;
-	if (!setConfiguredActiveKeymapProfile("DEFAULT", errorMessage))
-		return false;
-	if (!setConfiguredColorThemeFilePath(defaultColorThemeFilePath(), errorMessage))
-		return false;
+	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(), errorMessage)) return false;
+	if (!setConfiguredKeymapProfiles(std::vector<MRKeymapProfile>(), errorMessage)) return false;
+	if (!setConfiguredKeymapFilePath("", errorMessage)) return false;
+	if (!setConfiguredActiveKeymapProfile("DEFAULT", errorMessage)) return false;
+	if (!setConfiguredColorThemeFilePath(defaultColorThemeFilePath(), errorMessage)) return false;
 	configuredPathHistoryLimit() = kHistoryLimitDefault;
 	configuredFileHistoryLimit() = kHistoryLimitDefault;
 	for (MRScopedDialogHistoryState &state : configuredDialogHistoryStorage()) {
@@ -3275,18 +2654,14 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	paths.helpUri = configuredHelpFilePath();
 	paths.tempPath = configuredTempDirectoryPath();
 	paths.shellUri = configuredShellExecutablePath();
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
-bool applyConfiguredSettingsAssignment(const std::string &key, const std::string &value, MRSetupPaths &paths,
-                                       std::string *errorMessage) {
+bool applyConfiguredSettingsAssignment(const std::string &key, const std::string &value, MRSetupPaths &paths, std::string *errorMessage) {
 	auto applyValidatedNormalizedPath = [&](auto validator, auto setter, std::string &target) {
-		if (!validator(value, errorMessage))
-			return false;
-		if (!setter(value, errorMessage))
-			return false;
+		if (!validator(value, errorMessage)) return false;
+		if (!setter(value, errorMessage)) return false;
 		target = normalizeConfiguredPathInput(value);
 		return true;
 	};
@@ -3295,159 +2670,128 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 		case MRSettingsKeyClass::Unknown:
 			return setError(errorMessage, "Unsupported MRSETUP key.");
 		case MRSettingsKeyClass::Version:
-			if (trimAscii(value) != kCurrentSettingsVersion)
-				return setError(errorMessage, "Unsupported settings version.");
-			if (errorMessage != nullptr)
-				errorMessage->clear();
+			if (trimAscii(value) != kCurrentSettingsVersion) return setError(errorMessage, "Unsupported settings version.");
+			if (errorMessage != nullptr) errorMessage->clear();
 			return true;
 		case MRSettingsKeyClass::Path: {
 			std::string upper = upperAscii(trimAscii(key));
 			if (upper == "SETTINGSPATH") {
 				paths.settingsMacroUri = configuredSettingsMacroFilePath();
-				if (errorMessage != nullptr)
-					errorMessage->clear();
+				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
 			}
-			if (upper == "MACROPATH")
-				return applyValidatedNormalizedPath(validateMacroDirectoryPath, setConfiguredMacroDirectoryPath,
-				                                   paths.macroPath);
-			if (upper == "HELPPATH")
-				return applyValidatedNormalizedPath(validateHelpFilePath, setConfiguredHelpFilePath, paths.helpUri);
-			if (upper == "TEMPDIR")
-				return applyValidatedNormalizedPath(validateTempDirectoryPath, setConfiguredTempDirectoryPath,
-				                                   paths.tempPath);
-			if (upper == "SHELLPATH")
-				return applyValidatedNormalizedPath(validateShellExecutablePath, setConfiguredShellExecutablePath,
-				                                   paths.shellUri);
+			if (upper == "MACROPATH") return applyValidatedNormalizedPath(validateMacroDirectoryPath, setConfiguredMacroDirectoryPath, paths.macroPath);
+			if (upper == "HELPPATH") return applyValidatedNormalizedPath(validateHelpFilePath, setConfiguredHelpFilePath, paths.helpUri);
+			if (upper == "TEMPDIR") return applyValidatedNormalizedPath(validateTempDirectoryPath, setConfiguredTempDirectoryPath, paths.tempPath);
+			if (upper == "SHELLPATH") return applyValidatedNormalizedPath(validateShellExecutablePath, setConfiguredShellExecutablePath, paths.shellUri);
 			break;
 		}
 		case MRSettingsKeyClass::Global: {
 			std::string upper = upperAscii(trimAscii(key));
 			if (upper == "WINDOW_MANAGER") {
 				bool parsed = true;
-				if (!parseBooleanLiteral(value, parsed, errorMessage))
-					return false;
+				if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
 				return setConfiguredWindowManager(parsed, errorMessage);
 			}
 			if (upper == "MESSAGES") {
 				bool parsed = true;
-				if (!parseBooleanLiteral(value, parsed, errorMessage))
-					return false;
+				if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
 				return setConfiguredMenulineMessages(parsed, errorMessage);
 			}
 			if (upper == "SEARCH_TEXT_TYPE") {
 				MRSearchDialogOptions options = configuredSearchDialogOptions();
-				if (!parseSearchTextTypeLiteral(value, options.textType, errorMessage))
-					return false;
+				if (!parseSearchTextTypeLiteral(value, options.textType, errorMessage)) return false;
 				return setConfiguredSearchDialogOptions(options, errorMessage);
 			}
 			if (upper == "SEARCH_DIRECTION") {
 				MRSearchDialogOptions options = configuredSearchDialogOptions();
-				if (!parseSearchDirectionLiteral(value, options.direction, errorMessage))
-					return false;
+				if (!parseSearchDirectionLiteral(value, options.direction, errorMessage)) return false;
 				return setConfiguredSearchDialogOptions(options, errorMessage);
 			}
 			if (upper == "SEARCH_MODE") {
 				MRSearchDialogOptions options = configuredSearchDialogOptions();
-				if (!parseSearchModeLiteral(value, options.mode, errorMessage))
-					return false;
+				if (!parseSearchModeLiteral(value, options.mode, errorMessage)) return false;
 				return setConfiguredSearchDialogOptions(options, errorMessage);
 			}
 			if (upper == "SEARCH_CASE_SENSITIVE") {
 				MRSearchDialogOptions options = configuredSearchDialogOptions();
-				if (!parseBooleanLiteral(value, options.caseSensitive, errorMessage))
-					return false;
+				if (!parseBooleanLiteral(value, options.caseSensitive, errorMessage)) return false;
 				return setConfiguredSearchDialogOptions(options, errorMessage);
 			}
 			if (upper == "SEARCH_GLOBAL_SEARCH") {
 				MRSearchDialogOptions options = configuredSearchDialogOptions();
-				if (!parseBooleanLiteral(value, options.globalSearch, errorMessage))
-					return false;
+				if (!parseBooleanLiteral(value, options.globalSearch, errorMessage)) return false;
 				return setConfiguredSearchDialogOptions(options, errorMessage);
 			}
 			if (upper == "SEARCH_RESTRICT_MARKED_BLOCK") {
 				MRSearchDialogOptions options = configuredSearchDialogOptions();
-				if (!parseBooleanLiteral(value, options.restrictToMarkedBlock, errorMessage))
-					return false;
+				if (!parseBooleanLiteral(value, options.restrictToMarkedBlock, errorMessage)) return false;
 				return setConfiguredSearchDialogOptions(options, errorMessage);
 			}
 			if (upper == "SEARCH_ALL_WINDOWS") {
 				MRSearchDialogOptions options = configuredSearchDialogOptions();
-				if (!parseBooleanLiteral(value, options.searchAllWindows, errorMessage))
-					return false;
+				if (!parseBooleanLiteral(value, options.searchAllWindows, errorMessage)) return false;
 				return setConfiguredSearchDialogOptions(options, errorMessage);
 			}
 			if (upper == "SEARCH_LIST_ALL_OCCURRENCES") {
 				MRSearchDialogOptions options = configuredSearchDialogOptions();
 				bool listAll = false;
-				if (!parseBooleanLiteral(value, listAll, errorMessage))
-					return false;
+				if (!parseBooleanLiteral(value, listAll, errorMessage)) return false;
 				options.mode = listAll ? MRSearchMode::ListAll : MRSearchMode::StopFirst;
 				return setConfiguredSearchDialogOptions(options, errorMessage);
 			}
 			if (upper == "SAR_TEXT_TYPE") {
 				MRSarDialogOptions options = configuredSarDialogOptions();
-				if (!parseSearchTextTypeLiteral(value, options.textType, errorMessage))
-					return false;
+				if (!parseSearchTextTypeLiteral(value, options.textType, errorMessage)) return false;
 				return setConfiguredSarDialogOptions(options, errorMessage);
 			}
 			if (upper == "SAR_DIRECTION") {
 				MRSarDialogOptions options = configuredSarDialogOptions();
-				if (!parseSearchDirectionLiteral(value, options.direction, errorMessage))
-					return false;
+				if (!parseSearchDirectionLiteral(value, options.direction, errorMessage)) return false;
 				return setConfiguredSarDialogOptions(options, errorMessage);
 			}
 			if (upper == "SAR_MODE") {
 				MRSarDialogOptions options = configuredSarDialogOptions();
-				if (!parseSarModeLiteral(value, options.mode, errorMessage))
-					return false;
+				if (!parseSarModeLiteral(value, options.mode, errorMessage)) return false;
 				return setConfiguredSarDialogOptions(options, errorMessage);
 			}
 			if (upper == "SAR_LEAVE_CURSOR_AT") {
 				MRSarDialogOptions options = configuredSarDialogOptions();
-				if (!parseSarLeaveCursorLiteral(value, options.leaveCursorAt, errorMessage))
-					return false;
+				if (!parseSarLeaveCursorLiteral(value, options.leaveCursorAt, errorMessage)) return false;
 				return setConfiguredSarDialogOptions(options, errorMessage);
 			}
 			if (upper == "SAR_CASE_SENSITIVE") {
 				MRSarDialogOptions options = configuredSarDialogOptions();
-				if (!parseBooleanLiteral(value, options.caseSensitive, errorMessage))
-					return false;
+				if (!parseBooleanLiteral(value, options.caseSensitive, errorMessage)) return false;
 				return setConfiguredSarDialogOptions(options, errorMessage);
 			}
 			if (upper == "SAR_GLOBAL_SEARCH") {
 				MRSarDialogOptions options = configuredSarDialogOptions();
-				if (!parseBooleanLiteral(value, options.globalSearch, errorMessage))
-					return false;
+				if (!parseBooleanLiteral(value, options.globalSearch, errorMessage)) return false;
 				return setConfiguredSarDialogOptions(options, errorMessage);
 			}
 			if (upper == "SAR_RESTRICT_MARKED_BLOCK") {
 				MRSarDialogOptions options = configuredSarDialogOptions();
-				if (!parseBooleanLiteral(value, options.restrictToMarkedBlock, errorMessage))
-					return false;
+				if (!parseBooleanLiteral(value, options.restrictToMarkedBlock, errorMessage)) return false;
 				return setConfiguredSarDialogOptions(options, errorMessage);
 			}
 			if (upper == "SAR_ALL_WINDOWS") {
 				MRSarDialogOptions options = configuredSarDialogOptions();
-				if (!parseBooleanLiteral(value, options.searchAllWindows, errorMessage))
-					return false;
+				if (!parseBooleanLiteral(value, options.searchAllWindows, errorMessage)) return false;
 				return setConfiguredSarDialogOptions(options, errorMessage);
 			}
 			if (upper == "SAR_REPLACE_MODE") {
 				MRSarDialogOptions options = configuredSarDialogOptions();
 				MRSarMode mode = MRSarMode::ReplaceFirst;
-				if (!parseSarModeLiteral(value, mode, errorMessage))
-					return false;
+				if (!parseSarModeLiteral(value, mode, errorMessage)) return false;
 				options.mode = mode == MRSarMode::ReplaceAll ? MRSarMode::ReplaceAll : MRSarMode::ReplaceFirst;
 				return setConfiguredSarDialogOptions(options, errorMessage);
 			}
 			if (upper == "SAR_PROMPT_EACH_REPLACE") {
 				MRSarDialogOptions options = configuredSarDialogOptions();
 				bool promptEach = false;
-				if (!parseBooleanLiteral(value, promptEach, errorMessage))
-					return false;
-				if (promptEach)
-					options.mode = MRSarMode::PromptEach;
+				if (!parseBooleanLiteral(value, promptEach, errorMessage)) return false;
+				if (promptEach) options.mode = MRSarMode::PromptEach;
 				else if (options.mode == MRSarMode::PromptEach)
 					options.mode = MRSarMode::ReplaceFirst;
 				return setConfiguredSarDialogOptions(options, errorMessage);
@@ -3455,8 +2799,7 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 			if (upper == "MULTI_SEARCH_FILESPEC") {
 				MRMultiSearchDialogOptions options = configuredMultiSearchDialogOptions();
 				options.filespec = trimAscii(value);
-				if (options.filespec.empty())
-					options.filespec = "*.*";
+				if (options.filespec.empty()) options.filespec = "*.*";
 				return setConfiguredMultiSearchDialogOptions(options, errorMessage);
 			}
 			if (upper == "MULTI_SEARCH_TEXT") {
@@ -3471,33 +2814,28 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 			}
 			if (upper == "MULTI_SEARCH_SUBDIRECTORIES") {
 				MRMultiSearchDialogOptions options = configuredMultiSearchDialogOptions();
-				if (!parseBooleanLiteral(value, options.searchSubdirectories, errorMessage))
-					return false;
+				if (!parseBooleanLiteral(value, options.searchSubdirectories, errorMessage)) return false;
 				return setConfiguredMultiSearchDialogOptions(options, errorMessage);
 			}
 			if (upper == "MULTI_SEARCH_CASE_SENSITIVE") {
 				MRMultiSearchDialogOptions options = configuredMultiSearchDialogOptions();
-				if (!parseBooleanLiteral(value, options.caseSensitive, errorMessage))
-					return false;
+				if (!parseBooleanLiteral(value, options.caseSensitive, errorMessage)) return false;
 				return setConfiguredMultiSearchDialogOptions(options, errorMessage);
 			}
 			if (upper == "MULTI_SEARCH_REGULAR_EXPRESSIONS") {
 				MRMultiSearchDialogOptions options = configuredMultiSearchDialogOptions();
-				if (!parseBooleanLiteral(value, options.regularExpressions, errorMessage))
-					return false;
+				if (!parseBooleanLiteral(value, options.regularExpressions, errorMessage)) return false;
 				return setConfiguredMultiSearchDialogOptions(options, errorMessage);
 			}
 			if (upper == "MULTI_SEARCH_FILES_IN_MEMORY") {
 				MRMultiSearchDialogOptions options = configuredMultiSearchDialogOptions();
-				if (!parseBooleanLiteral(value, options.searchFilesInMemory, errorMessage))
-					return false;
+				if (!parseBooleanLiteral(value, options.searchFilesInMemory, errorMessage)) return false;
 				return setConfiguredMultiSearchDialogOptions(options, errorMessage);
 			}
 			if (upper == "MULTI_SAR_FILESPEC") {
 				MRMultiSarDialogOptions options = configuredMultiSarDialogOptions();
 				options.filespec = trimAscii(value);
-				if (options.filespec.empty())
-					options.filespec = "*.*";
+				if (options.filespec.empty()) options.filespec = "*.*";
 				return setConfiguredMultiSarDialogOptions(options, errorMessage);
 			}
 			if (upper == "MULTI_SAR_TEXT") {
@@ -3517,32 +2855,27 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 			}
 			if (upper == "MULTI_SAR_SUBDIRECTORIES") {
 				MRMultiSarDialogOptions options = configuredMultiSarDialogOptions();
-				if (!parseBooleanLiteral(value, options.searchSubdirectories, errorMessage))
-					return false;
+				if (!parseBooleanLiteral(value, options.searchSubdirectories, errorMessage)) return false;
 				return setConfiguredMultiSarDialogOptions(options, errorMessage);
 			}
 			if (upper == "MULTI_SAR_CASE_SENSITIVE") {
 				MRMultiSarDialogOptions options = configuredMultiSarDialogOptions();
-				if (!parseBooleanLiteral(value, options.caseSensitive, errorMessage))
-					return false;
+				if (!parseBooleanLiteral(value, options.caseSensitive, errorMessage)) return false;
 				return setConfiguredMultiSarDialogOptions(options, errorMessage);
 			}
 			if (upper == "MULTI_SAR_REGULAR_EXPRESSIONS") {
 				MRMultiSarDialogOptions options = configuredMultiSarDialogOptions();
-				if (!parseBooleanLiteral(value, options.regularExpressions, errorMessage))
-					return false;
+				if (!parseBooleanLiteral(value, options.regularExpressions, errorMessage)) return false;
 				return setConfiguredMultiSarDialogOptions(options, errorMessage);
 			}
 			if (upper == "MULTI_SAR_FILES_IN_MEMORY") {
 				MRMultiSarDialogOptions options = configuredMultiSarDialogOptions();
-				if (!parseBooleanLiteral(value, options.searchFilesInMemory, errorMessage))
-					return false;
+				if (!parseBooleanLiteral(value, options.searchFilesInMemory, errorMessage)) return false;
 				return setConfiguredMultiSarDialogOptions(options, errorMessage);
 			}
 			if (upper == "MULTI_SAR_KEEP_FILES_OPEN") {
 				MRMultiSarDialogOptions options = configuredMultiSarDialogOptions();
-				if (!parseBooleanLiteral(value, options.keepFilesOpen, errorMessage))
-					return false;
+				if (!parseBooleanLiteral(value, options.keepFilesOpen, errorMessage)) return false;
 				return setConfiguredMultiSarDialogOptions(options, errorMessage);
 			}
 			if (upper == "VIRTUAL_DESKTOPS") {
@@ -3555,123 +2888,94 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				if (parsed < 1) parsed = 1;
 				if (parsed > 9) parsed = 9;
 				applyVirtualDesktopConfigurationChange(parsed);
-				if (errorMessage != nullptr)
-					errorMessage->clear();
+				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
 			}
 			if (upper == "CYCLIC_VIRTUAL_DESKTOPS") {
 				bool parsed = false;
-				if (!parseBooleanLiteral(value, parsed, errorMessage))
-					return false;
+				if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
 				return setConfiguredCyclicVirtualDesktops(parsed, errorMessage);
 			}
-			if (upper == "CURSOR_POSITION_MARKER")
-				return setConfiguredCursorPositionMarker(value, errorMessage);
+			if (upper == "CURSOR_POSITION_MARKER") return setConfiguredCursorPositionMarker(value, errorMessage);
 			if (upper == "AUTOLOAD_WORKSPACE") {
 				bool parsed = false;
-				if (!parseBooleanLiteral(value, parsed, errorMessage))
-					return false;
+				if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
 				return setConfiguredAutoloadWorkspace(parsed, errorMessage);
 			}
 			if (upper == "LOG_HANDLING") {
 				MRLogHandling handling = MRLogHandling::Volatile;
-				if (!parseLogHandlingLiteral(value, handling, errorMessage))
-					return false;
+				if (!parseLogHandlingLiteral(value, handling, errorMessage)) return false;
 				return setConfiguredLogHandling(handling, errorMessage);
 			}
-			if (upper == "LOGFILE")
-				return setConfiguredLogFilePath(value, errorMessage);
-			if (upper == "AUTOEXEC_MACRO")
-				return addConfiguredAutoexecMacroEntry(value, errorMessage);
-			if (upper == "LASTFILEDIALOGPATH")
-				return setConfiguredLastFileDialogPath(value, errorMessage);
+			if (upper == "LOGFILE") return setConfiguredLogFilePath(value, errorMessage);
+			if (upper == "AUTOEXEC_MACRO") return addConfiguredAutoexecMacroEntry(value, errorMessage);
+			if (upper == "LASTFILEDIALOGPATH") return setConfiguredLastFileDialogPath(value, errorMessage);
 			if (upper == "WORKSPACE") {
-				if (errorMessage != nullptr)
-					errorMessage->clear();
+				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
 			}
 			if (upper == "MAX_PATH_HISTORY") {
 				int parsed = 0;
-				if (!parseHistoryLimitLiteral(value, parsed, errorMessage, "MAX_PATH_HISTORY"))
-					return false;
+				if (!parseHistoryLimitLiteral(value, parsed, errorMessage, "MAX_PATH_HISTORY")) return false;
 				return setConfiguredPathHistoryLimitValue(parsed, errorMessage);
 			}
 			if (upper == "MAX_FILE_HISTORY") {
 				int parsed = 0;
-				if (!parseHistoryLimitLiteral(value, parsed, errorMessage, "MAX_FILE_HISTORY"))
-					return false;
+				if (!parseHistoryLimitLiteral(value, parsed, errorMessage, "MAX_FILE_HISTORY")) return false;
 				return setConfiguredFileHistoryLimitValue(parsed, errorMessage);
 			}
 			if (upper == "PATH_HISTORY") {
-				addSerializedHistoryEntry(dialogHistoryState(MRDialogHistoryScope::General).pathHistory, value,
-				                         configuredPathHistoryLimit(), true);
-				if (errorMessage != nullptr)
-					errorMessage->clear();
+				addSerializedHistoryEntry(dialogHistoryState(MRDialogHistoryScope::General).pathHistory, value, configuredPathHistoryLimit(), true);
+				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
 			}
 			if (upper == "FILE_HISTORY") {
-				addSerializedHistoryEntry(dialogHistoryState(MRDialogHistoryScope::General).fileHistory, value,
-				                         configuredFileHistoryLimit(), true);
-				if (errorMessage != nullptr)
-					errorMessage->clear();
+				addSerializedHistoryEntry(dialogHistoryState(MRDialogHistoryScope::General).fileHistory, value, configuredFileHistoryLimit(), true);
+				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
 			}
 			if (upper == kDialogLastPathKey) {
 				MRDialogHistoryScope scope = MRDialogHistoryScope::General;
 				std::string parsedPath;
 
-				if (!parseScopedHistoryPayload(value, "path", scope, parsedPath, errorMessage))
-					return false;
+				if (!parseScopedHistoryPayload(value, "path", scope, parsedPath, errorMessage)) return false;
 				return setScopedDialogLastPath(scope, parsedPath, errorMessage);
 			}
 			if (upper == kDialogPathHistoryKey) {
 				MRDialogHistoryScope scope = MRDialogHistoryScope::General;
 				std::string parsedValue;
 
-				if (!parseScopedHistoryPayload(value, "value", scope, parsedValue, errorMessage))
-					return false;
-				addSerializedHistoryEntry(dialogHistoryState(scope).pathHistory, parsedValue,
-				                         configuredPathHistoryLimit(), true);
-				if (errorMessage != nullptr)
-					errorMessage->clear();
+				if (!parseScopedHistoryPayload(value, "value", scope, parsedValue, errorMessage)) return false;
+				addSerializedHistoryEntry(dialogHistoryState(scope).pathHistory, parsedValue, configuredPathHistoryLimit(), true);
+				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
 			}
 			if (upper == kDialogFileHistoryKey) {
 				MRDialogHistoryScope scope = MRDialogHistoryScope::General;
 				std::string parsedValue;
 
-				if (!parseScopedHistoryPayload(value, "value", scope, parsedValue, errorMessage))
-					return false;
-				addSerializedHistoryEntry(dialogHistoryState(scope).fileHistory, parsedValue,
-				                         configuredFileHistoryLimit(), true);
-				if (errorMessage != nullptr)
-					errorMessage->clear();
+				if (!parseScopedHistoryPayload(value, "value", scope, parsedValue, errorMessage)) return false;
+				addSerializedHistoryEntry(dialogHistoryState(scope).fileHistory, parsedValue, configuredFileHistoryLimit(), true);
+				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
 			}
 			if (upper == "MULTI_FILESPEC_HISTORY") {
-				addSerializedHistoryEntry(configuredMultiFilespecHistoryStorage(), value,
-				                          configuredFileHistoryLimit(), false);
-				if (errorMessage != nullptr)
-					errorMessage->clear();
+				addSerializedHistoryEntry(configuredMultiFilespecHistoryStorage(), value, configuredFileHistoryLimit(), false);
+				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
 			}
 			if (upper == "MULTI_PATH_HISTORY") {
 				addSerializedHistoryEntry(configuredMultiPathHistoryStorage(), value, configuredPathHistoryLimit(), true);
-				if (errorMessage != nullptr)
-					errorMessage->clear();
+				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
 			}
-			if (upper == "DEFAULT_PROFILE_DESCRIPTION")
-				return setConfiguredDefaultProfileDescription(value, errorMessage);
-			if (upper == kKeymapSettingsKey)
-				return setConfiguredKeymapFilePath(value, errorMessage);
+			if (upper == "DEFAULT_PROFILE_DESCRIPTION") return setConfiguredDefaultProfileDescription(value, errorMessage);
+			if (upper == kKeymapSettingsKey) return setConfiguredKeymapFilePath(value, errorMessage);
 			if (upper == "ACTIVE_KEYMAP_PROFILE" || upper == "KEYMAP_PROFILE" || upper == "KEYMAP_BIND") {
-				if (errorMessage != nullptr)
-					errorMessage->clear();
+				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
 			}
-			if (upper == kThemeSettingsKey)
-				return setConfiguredColorThemeFilePath(value, errorMessage);
+			if (upper == kThemeSettingsKey) return setConfiguredColorThemeFilePath(value, errorMessage);
 			break;
 		}
 		case MRSettingsKeyClass::Edit:
@@ -3688,112 +2992,69 @@ const MREditSettingDescriptor *editSettingDescriptors(std::size_t &count) {
 }
 
 const MREditSettingDescriptor *findEditSettingDescriptorByKey(std::string_view key) {
-		return editSettingDescriptorByKeyInternal(std::string(key));
+	return editSettingDescriptorByKeyInternal(std::string(key));
 }
 
 std::string normalizeEditExtensionSelector(std::string_view value) {
-		return normalizeEditExtensionSelectorValue(std::string(value));
+	return normalizeEditExtensionSelectorValue(std::string(value));
 }
 
 bool normalizeEditExtensionSelectors(std::vector<std::string> &selectors, std::string *errorMessage) {
 	return normalizeEditExtensionSelectorsInPlace(selectors, errorMessage);
 }
 
-MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults,
-                                           const MREditSetupOverrides &overrides) {
+MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults, const MREditSetupOverrides &overrides) {
 	MREditSetupSettings merged = defaults;
 
-	if ((overrides.mask & kOvPageBreak) != 0)
-		merged.pageBreak = overrides.values.pageBreak;
-	if ((overrides.mask & kOvWordDelimiters) != 0)
-		merged.wordDelimiters = overrides.values.wordDelimiters;
-	if ((overrides.mask & kOvDefaultExtensions) != 0)
-		merged.defaultExtensions = overrides.values.defaultExtensions;
-	if ((overrides.mask & kOvTruncateSpaces) != 0)
-		merged.truncateSpaces = overrides.values.truncateSpaces;
-	if ((overrides.mask & kOvEofCtrlZ) != 0)
-		merged.eofCtrlZ = overrides.values.eofCtrlZ;
-	if ((overrides.mask & kOvEofCrLf) != 0)
-		merged.eofCrLf = overrides.values.eofCrLf;
-	if ((overrides.mask & kOvTabExpand) != 0)
-		merged.tabExpand = overrides.values.tabExpand;
-	if ((overrides.mask & kOvDisplayTabs) != 0)
-		merged.displayTabs = overrides.values.displayTabs;
-	if ((overrides.mask & kOvTabSize) != 0)
-		merged.tabSize = overrides.values.tabSize;
-	if ((overrides.mask & kOvLeftMargin) != 0)
-		merged.leftMargin = overrides.values.leftMargin;
-	if ((overrides.mask & kOvRightMargin) != 0)
-		merged.rightMargin = overrides.values.rightMargin;
-	if ((overrides.mask & kOvFormatRuler) != 0)
-		merged.formatRuler = overrides.values.formatRuler;
-	if ((overrides.mask & kOvWordWrap) != 0)
-		merged.wordWrap = overrides.values.wordWrap;
-	if ((overrides.mask & kOvIndentStyle) != 0)
-		merged.indentStyle = overrides.values.indentStyle;
-	if ((overrides.mask & kOvFileType) != 0)
-		merged.fileType = overrides.values.fileType;
-	if ((overrides.mask & kOvBinaryRecordLength) != 0)
-		merged.binaryRecordLength = overrides.values.binaryRecordLength;
-	if ((overrides.mask & kOvPostLoadMacro) != 0)
-		merged.postLoadMacro = overrides.values.postLoadMacro;
-	if ((overrides.mask & kOvPreSaveMacro) != 0)
-		merged.preSaveMacro = overrides.values.preSaveMacro;
-	if ((overrides.mask & kOvDefaultPath) != 0)
-		merged.defaultPath = overrides.values.defaultPath;
-	if ((overrides.mask & kOvFormatLine) != 0)
-		merged.formatLine = overrides.values.formatLine;
-	if ((overrides.mask & kOvBackupFiles) != 0)
-		merged.backupFiles = overrides.values.backupFiles;
-	if ((overrides.mask & kOvBackupMethod) != 0)
-		merged.backupMethod = overrides.values.backupMethod;
-	if ((overrides.mask & kOvBackupFrequency) != 0)
-		merged.backupFrequency = overrides.values.backupFrequency;
-	if ((overrides.mask & kOvBackupExtension) != 0)
-		merged.backupExtension = overrides.values.backupExtension;
-	if ((overrides.mask & kOvBackupDirectory) != 0)
-		merged.backupDirectory = overrides.values.backupDirectory;
-	if ((overrides.mask & kOvAutosaveInactivitySeconds) != 0)
-		merged.autosaveInactivitySeconds = overrides.values.autosaveInactivitySeconds;
-	if ((overrides.mask & kOvAutosaveIntervalSeconds) != 0)
-		merged.autosaveIntervalSeconds = overrides.values.autosaveIntervalSeconds;
-	if ((overrides.mask & kOvShowEofMarker) != 0)
-		merged.showEofMarker = overrides.values.showEofMarker;
-	if ((overrides.mask & kOvShowEofMarkerEmoji) != 0)
-		merged.showEofMarkerEmoji = overrides.values.showEofMarkerEmoji;
-	if ((overrides.mask & kOvLineNumbersPosition) != 0)
-		merged.lineNumbersPosition = overrides.values.lineNumbersPosition;
-	if ((overrides.mask & kOvLineNumZeroFill) != 0)
-		merged.lineNumZeroFill = overrides.values.lineNumZeroFill;
-	if ((overrides.mask & kOvMiniMapPosition) != 0)
-		merged.miniMapPosition = overrides.values.miniMapPosition;
-	if ((overrides.mask & kOvMiniMapWidth) != 0)
-		merged.miniMapWidth = overrides.values.miniMapWidth;
-	if ((overrides.mask & kOvMiniMapMarkerGlyph) != 0)
-		merged.miniMapMarkerGlyph = overrides.values.miniMapMarkerGlyph;
-	if ((overrides.mask & kOvGutters) != 0)
-		merged.gutters = overrides.values.gutters;
-	if ((overrides.mask & kOvPersistentBlocks) != 0)
-		merged.persistentBlocks = overrides.values.persistentBlocks;
-	if ((overrides.mask & kOvCodeFoldingPosition) != 0)
-		merged.codeFoldingPosition = overrides.values.codeFoldingPosition;
-	if ((overrides.mask & kOvColumnBlockMove) != 0)
-		merged.columnBlockMove = overrides.values.columnBlockMove;
-	if ((overrides.mask & kOvDefaultMode) != 0)
-		merged.defaultMode = overrides.values.defaultMode;
-	if ((overrides.mask & kOvCursorStatusColor) != 0)
-		merged.cursorStatusColor = overrides.values.cursorStatusColor;
+	if ((overrides.mask & kOvPageBreak) != 0) merged.pageBreak = overrides.values.pageBreak;
+	if ((overrides.mask & kOvWordDelimiters) != 0) merged.wordDelimiters = overrides.values.wordDelimiters;
+	if ((overrides.mask & kOvDefaultExtensions) != 0) merged.defaultExtensions = overrides.values.defaultExtensions;
+	if ((overrides.mask & kOvTruncateSpaces) != 0) merged.truncateSpaces = overrides.values.truncateSpaces;
+	if ((overrides.mask & kOvEofCtrlZ) != 0) merged.eofCtrlZ = overrides.values.eofCtrlZ;
+	if ((overrides.mask & kOvEofCrLf) != 0) merged.eofCrLf = overrides.values.eofCrLf;
+	if ((overrides.mask & kOvTabExpand) != 0) merged.tabExpand = overrides.values.tabExpand;
+	if ((overrides.mask & kOvDisplayTabs) != 0) merged.displayTabs = overrides.values.displayTabs;
+	if ((overrides.mask & kOvTabSize) != 0) merged.tabSize = overrides.values.tabSize;
+	if ((overrides.mask & kOvLeftMargin) != 0) merged.leftMargin = overrides.values.leftMargin;
+	if ((overrides.mask & kOvRightMargin) != 0) merged.rightMargin = overrides.values.rightMargin;
+	if ((overrides.mask & kOvFormatRuler) != 0) merged.formatRuler = overrides.values.formatRuler;
+	if ((overrides.mask & kOvWordWrap) != 0) merged.wordWrap = overrides.values.wordWrap;
+	if ((overrides.mask & kOvIndentStyle) != 0) merged.indentStyle = overrides.values.indentStyle;
+	if ((overrides.mask & kOvFileType) != 0) merged.fileType = overrides.values.fileType;
+	if ((overrides.mask & kOvBinaryRecordLength) != 0) merged.binaryRecordLength = overrides.values.binaryRecordLength;
+	if ((overrides.mask & kOvPostLoadMacro) != 0) merged.postLoadMacro = overrides.values.postLoadMacro;
+	if ((overrides.mask & kOvPreSaveMacro) != 0) merged.preSaveMacro = overrides.values.preSaveMacro;
+	if ((overrides.mask & kOvDefaultPath) != 0) merged.defaultPath = overrides.values.defaultPath;
+	if ((overrides.mask & kOvFormatLine) != 0) merged.formatLine = overrides.values.formatLine;
+	if ((overrides.mask & kOvBackupFiles) != 0) merged.backupFiles = overrides.values.backupFiles;
+	if ((overrides.mask & kOvBackupMethod) != 0) merged.backupMethod = overrides.values.backupMethod;
+	if ((overrides.mask & kOvBackupFrequency) != 0) merged.backupFrequency = overrides.values.backupFrequency;
+	if ((overrides.mask & kOvBackupExtension) != 0) merged.backupExtension = overrides.values.backupExtension;
+	if ((overrides.mask & kOvBackupDirectory) != 0) merged.backupDirectory = overrides.values.backupDirectory;
+	if ((overrides.mask & kOvAutosaveInactivitySeconds) != 0) merged.autosaveInactivitySeconds = overrides.values.autosaveInactivitySeconds;
+	if ((overrides.mask & kOvAutosaveIntervalSeconds) != 0) merged.autosaveIntervalSeconds = overrides.values.autosaveIntervalSeconds;
+	if ((overrides.mask & kOvShowEofMarker) != 0) merged.showEofMarker = overrides.values.showEofMarker;
+	if ((overrides.mask & kOvShowEofMarkerEmoji) != 0) merged.showEofMarkerEmoji = overrides.values.showEofMarkerEmoji;
+	if ((overrides.mask & kOvLineNumbersPosition) != 0) merged.lineNumbersPosition = overrides.values.lineNumbersPosition;
+	if ((overrides.mask & kOvLineNumZeroFill) != 0) merged.lineNumZeroFill = overrides.values.lineNumZeroFill;
+	if ((overrides.mask & kOvMiniMapPosition) != 0) merged.miniMapPosition = overrides.values.miniMapPosition;
+	if ((overrides.mask & kOvMiniMapWidth) != 0) merged.miniMapWidth = overrides.values.miniMapWidth;
+	if ((overrides.mask & kOvMiniMapMarkerGlyph) != 0) merged.miniMapMarkerGlyph = overrides.values.miniMapMarkerGlyph;
+	if ((overrides.mask & kOvGutters) != 0) merged.gutters = overrides.values.gutters;
+	if ((overrides.mask & kOvPersistentBlocks) != 0) merged.persistentBlocks = overrides.values.persistentBlocks;
+	if ((overrides.mask & kOvCodeFoldingPosition) != 0) merged.codeFoldingPosition = overrides.values.codeFoldingPosition;
+	if ((overrides.mask & kOvColumnBlockMove) != 0) merged.columnBlockMove = overrides.values.columnBlockMove;
+	if ((overrides.mask & kOvDefaultMode) != 0) merged.defaultMode = overrides.values.defaultMode;
+	if ((overrides.mask & kOvCursorStatusColor) != 0) merged.cursorStatusColor = overrides.values.cursorStatusColor;
 	{
 		std::string lineNumbersPosition = normalizeLineNumbersPosition(merged.lineNumbersPosition);
-		if (lineNumbersPosition.empty())
-			lineNumbersPosition = merged.showLineNumbers ? kLineNumbersPositionLeading : kLineNumbersPositionOff;
+		if (lineNumbersPosition.empty()) lineNumbersPosition = merged.showLineNumbers ? kLineNumbersPositionLeading : kLineNumbersPositionOff;
 		merged.lineNumbersPosition = lineNumbersPosition;
 		merged.showLineNumbers = lineNumbersPosition != kLineNumbersPositionOff;
 	}
 	{
 		std::string codeFoldingPosition = normalizeCodeFoldingPosition(merged.codeFoldingPosition);
-		if (codeFoldingPosition.empty())
-			codeFoldingPosition = merged.codeFolding ? kCodeFoldingPositionLeading : kCodeFoldingPositionOff;
+		if (codeFoldingPosition.empty()) codeFoldingPosition = merged.codeFolding ? kCodeFoldingPositionLeading : kCodeFoldingPositionOff;
 		merged.codeFoldingPosition = codeFoldingPosition;
 		merged.codeFolding = codeFoldingPosition != kCodeFoldingPositionOff;
 	}
@@ -3804,24 +3065,19 @@ const std::vector<MREditExtensionProfile> &configuredEditExtensionProfiles() {
 	return configuredEditProfiles();
 }
 
-bool setConfiguredEditExtensionProfiles(const std::vector<MREditExtensionProfile> &profiles,
-                                        std::string *errorMessage) {
+bool setConfiguredEditExtensionProfiles(const std::vector<MREditExtensionProfile> &profiles, std::string *errorMessage) {
 	std::vector<MREditExtensionProfile> normalized = profiles;
 
-	for (auto & profile : normalized) {
+	for (auto &profile : normalized) {
 		profile.id = canonicalEditProfileId(profile.id);
 		profile.name = canonicalEditProfileName(profile.name);
 		profile.windowColorThemeUri = canonicalWindowColorThemeUri(profile.windowColorThemeUri);
-		if (!normalizeEditExtensionSelectorsInPlace(profile.extensions, errorMessage))
-			return false;
-		if (!normalizeEditProfileOverridesInPlace(profile, errorMessage))
-			return false;
+		if (!normalizeEditExtensionSelectorsInPlace(profile.extensions, errorMessage)) return false;
+		if (!normalizeEditProfileOverridesInPlace(profile, errorMessage)) return false;
 	}
-	if (!validateNormalizedEditProfiles(normalized, errorMessage))
-		return false;
+	if (!validateNormalizedEditProfiles(normalized, errorMessage)) return false;
 	configuredEditProfiles() = normalized;
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -3831,8 +3087,7 @@ std::string configuredDefaultProfileDescription() {
 
 bool setConfiguredDefaultProfileDescription(const std::string &value, std::string *errorMessage) {
 	configuredDefaultProfileDescriptionValue() = trimAscii(value);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -3858,26 +3113,19 @@ bool setConfiguredKeymapProfiles(const std::vector<MRKeymapProfile> &profiles, s
 			hasDefault = true;
 		}
 	}
-	if (!hasDefault)
-		normalized.insert(normalized.begin(), builtInDefaultKeymapProfile());
+	if (!hasDefault) normalized.insert(normalized.begin(), builtInDefaultKeymapProfile());
 
 	const auto diagnostics = validateKeymapProfiles(normalized);
 	for (const MRKeymapDiagnostic &diagnostic : diagnostics)
-		if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error)
-			return setError(errorMessage, diagnostic.message);
-	if (!runtimeKeymapResolver().rebuild(normalized, configuredActiveKeymapProfileValue(), &runtimeError))
-		return setError(errorMessage, runtimeError);
+		if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error) return setError(errorMessage, diagnostic.message);
+	if (!runtimeKeymapResolver().rebuild(normalized, configuredActiveKeymapProfileValue(), &runtimeError)) return setError(errorMessage, runtimeError);
 
 	configuredKeymapProfilesValue() = normalized;
-	if (configuredActiveKeymapProfileValue().empty())
+	if (configuredActiveKeymapProfileValue().empty()) configuredActiveKeymapProfileValue() = "DEFAULT";
+	else if (std::ranges::find(normalized, configuredActiveKeymapProfileValue(), &MRKeymapProfile::name) == normalized.end())
 		configuredActiveKeymapProfileValue() = "DEFAULT";
-	else if (std::ranges::find(normalized, configuredActiveKeymapProfileValue(), &MRKeymapProfile::name) ==
-	         normalized.end())
-		configuredActiveKeymapProfileValue() = "DEFAULT";
-	mrLogMessage(summarizeConfiguredKeymapsForLog(configuredKeymapProfilesValue(),
-	                                              configuredActiveKeymapProfileValue()));
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	mrLogMessage(summarizeConfiguredKeymapsForLog(configuredKeymapProfilesValue(), configuredActiveKeymapProfileValue()));
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -3892,19 +3140,14 @@ bool setConfiguredKeymapFilePath(const std::string &path, std::string *errorMess
 
 	if (normalized.empty()) {
 		configuredKeymapFileValue().clear();
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
-	if (::stat(normalized.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
-		return setError(errorMessage, "Keymap URI must include a filename.");
+	if (::stat(normalized.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) return setError(errorMessage, "Keymap URI must include a filename.");
 	configuredKeymapFileValue() = makeAbsolutePath(normalized);
-	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::KeymapProfileLoad,
-	                                         configuredKeymapFileValue(), nullptr));
-	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::KeymapProfileSave,
-	                                         configuredKeymapFileValue(), nullptr));
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::KeymapProfileLoad, configuredKeymapFileValue(), nullptr));
+	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::KeymapProfileSave, configuredKeymapFileValue(), nullptr));
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -3916,34 +3159,27 @@ bool setConfiguredActiveKeymapProfile(const std::string &value, std::string *err
 	std::string normalized = trimAscii(value);
 	std::string runtimeError;
 
-	if (normalized.empty())
-		normalized = "DEFAULT";
+	if (normalized.empty()) normalized = "DEFAULT";
 	for (const MRKeymapProfile &profile : configuredKeymapProfilesValue())
 		if (profile.name == normalized) {
-			if (!runtimeKeymapResolver().rebuild(configuredKeymapProfilesValue(), normalized, &runtimeError))
-				return setError(errorMessage, runtimeError);
+			if (!runtimeKeymapResolver().rebuild(configuredKeymapProfilesValue(), normalized, &runtimeError)) return setError(errorMessage, runtimeError);
 			configuredActiveKeymapProfileValue() = normalized;
 			mrLogMessage("Keymap active profile set to '" + normalized + "'.");
-			if (errorMessage != nullptr)
-				errorMessage->clear();
+			if (errorMessage != nullptr) errorMessage->clear();
 			return true;
 		}
 	return setError(errorMessage, "Unknown keymap profile: " + normalized);
 }
 
-bool applyConfiguredEditExtensionProfileDirective(const std::string &operation, const std::string &profileId,
-                                                  const std::string &arg3, const std::string &arg4,
-                                                  std::string *errorMessage) {
+bool applyConfiguredEditExtensionProfileDirective(const std::string &operation, const std::string &profileId, const std::string &arg3, const std::string &arg4, std::string *errorMessage) {
 	std::string op = upperAscii(trimAscii(operation));
 	std::string id = canonicalEditProfileId(profileId);
 	std::vector<MREditExtensionProfile> profiles = configuredEditProfiles();
 	MREditExtensionProfile *profile = nullptr;
 	std::size_t i = 0;
 
-	if (op.empty())
-		return setError(errorMessage, "MRFEPROFILE operation may not be empty.");
-	if (id.empty())
-		return setError(errorMessage, "MRFEPROFILE profile id may not be empty.");
+	if (op.empty()) return setError(errorMessage, "MRFEPROFILE operation may not be empty.");
+	if (id.empty()) return setError(errorMessage, "MRFEPROFILE profile id may not be empty.");
 
 	for (i = 0; i < profiles.size(); ++i)
 		if (profileIdLookupKey(profiles[i].id) == profileIdLookupKey(id)) {
@@ -3954,12 +3190,9 @@ bool applyConfiguredEditExtensionProfileDirective(const std::string &operation, 
 	if (op == "DEFINE") {
 		std::string name = canonicalEditProfileName(arg3);
 
-		if (name.empty() && trimAscii(arg4).empty())
-			name = id;
-		if (name.empty())
-			return setError(errorMessage, "MRFEPROFILE DEFINE requires a non-empty display name.");
-		if (profile != nullptr)
-			return setError(errorMessage, "Duplicate extension profile id: " + id);
+		if (name.empty() && trimAscii(arg4).empty()) name = id;
+		if (name.empty()) return setError(errorMessage, "MRFEPROFILE DEFINE requires a non-empty display name.");
+		if (profile != nullptr) return setError(errorMessage, "Duplicate extension profile id: " + id);
 		MREditExtensionProfile created;
 		created.id = id;
 		created.name = name;
@@ -3968,8 +3201,7 @@ bool applyConfiguredEditExtensionProfileDirective(const std::string &operation, 
 		return setConfiguredEditExtensionProfiles(profiles, errorMessage);
 	}
 
-	if (profile == nullptr)
-		return setError(errorMessage, "Unknown extension profile id: " + id);
+	if (profile == nullptr) return setError(errorMessage, "Unknown extension profile id: " + id);
 
 	if (op == "EXT") {
 		profile->extensions.push_back(arg3);
@@ -3979,21 +3211,16 @@ bool applyConfiguredEditExtensionProfileDirective(const std::string &operation, 
 	if (op == "SET") {
 		if (upperAscii(trimAscii(arg3)) == kWindowColorThemeProfileKey) {
 			std::string normalizedTheme = canonicalWindowColorThemeUri(arg4);
-			if (!normalizedTheme.empty() && !validateColorThemeFilePath(normalizedTheme, errorMessage))
-				return false;
+			if (!normalizedTheme.empty() && !validateColorThemeFilePath(normalizedTheme, errorMessage)) return false;
 			profile->windowColorThemeUri = normalizedTheme;
 			return setConfiguredEditExtensionProfiles(profiles, errorMessage);
 		}
 
 		const MREditSettingDescriptor *descriptor = editSettingDescriptorByKeyInternal(arg3);
 
-		if (descriptor == nullptr)
-			return setError(errorMessage, "Unknown edit setting key for extension profile.");
-		if (!descriptor->profileSupported)
-			return setError(errorMessage, std::string("Setting is global-only and cannot be overridden: ") +
-			                             descriptor->key);
-		if (!applyEditSetupValueInternal(profile->overrides.values, descriptor->key, arg4, errorMessage))
-			return false;
+		if (descriptor == nullptr) return setError(errorMessage, "Unknown edit setting key for extension profile.");
+		if (!descriptor->profileSupported) return setError(errorMessage, std::string("Setting is global-only and cannot be overridden: ") + descriptor->key);
+		if (!applyEditSetupValueInternal(profile->overrides.values, descriptor->key, arg4, errorMessage)) return false;
 		profile->overrides.mask |= descriptor->overrideBit;
 		return setConfiguredEditExtensionProfiles(profiles, errorMessage);
 	}
@@ -4001,43 +3228,34 @@ bool applyConfiguredEditExtensionProfileDirective(const std::string &operation, 
 	return setError(errorMessage, "MRFEPROFILE supports operations DEFINE, EXT and SET.");
 }
 
-bool effectiveEditSetupSettingsForPath(const std::string &path, MREditSetupSettings &out,
-                                       std::string *matchedProfileName) {
+bool effectiveEditSetupSettingsForPath(const std::string &path, MREditSetupSettings &out, std::string *matchedProfileName) {
 	MREditSetupSettings defaults = configuredEditSetupSettings();
 	std::string ext = extensionSelectorForPath(path);
 
 	out = defaults;
-	if (matchedProfileName != nullptr)
-		matchedProfileName->clear();
-	if (ext.empty())
-		return true;
-	for (const auto & profile : configuredEditProfiles())
-		for (const std::string & selector : profile.extensions)
+	if (matchedProfileName != nullptr) matchedProfileName->clear();
+	if (ext.empty()) return true;
+	for (const auto &profile : configuredEditProfiles())
+		for (const std::string &selector : profile.extensions)
 			if (selector == ext) {
 				out = mergeEditSetupSettings(defaults, profile.overrides);
-				if (matchedProfileName != nullptr)
-					*matchedProfileName = profile.name;
+				if (matchedProfileName != nullptr) *matchedProfileName = profile.name;
 				return true;
 			}
 	return true;
 }
 
-bool effectiveEditWindowColorThemePathForPath(const std::string &path, std::string &themeUri,
-                                              std::string *matchedProfileName) {
+bool effectiveEditWindowColorThemePathForPath(const std::string &path, std::string &themeUri, std::string *matchedProfileName) {
 	std::string ext = extensionSelectorForPath(path);
 
 	themeUri = configuredColorThemeFilePath();
-	if (matchedProfileName != nullptr)
-		matchedProfileName->clear();
-	if (ext.empty())
-		return true;
-	for (const auto & profile : configuredEditProfiles())
-		for (const std::string & selector : profile.extensions)
+	if (matchedProfileName != nullptr) matchedProfileName->clear();
+	if (ext.empty()) return true;
+	for (const auto &profile : configuredEditProfiles())
+		for (const std::string &selector : profile.extensions)
 			if (selector == ext) {
-				if (!profile.windowColorThemeUri.empty())
-					themeUri = profile.windowColorThemeUri;
-				if (matchedProfileName != nullptr)
-					*matchedProfileName = profile.name;
+				if (!profile.windowColorThemeUri.empty()) themeUri = profile.windowColorThemeUri;
+				if (matchedProfileName != nullptr) *matchedProfileName = profile.name;
 				return true;
 			}
 	return true;
@@ -4063,8 +3281,7 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	MREditSetupSettings defaults = resolveEditSetupDefaults();
 	MREditSetupSettings normalized = settings;
 	std::string pageBreak = normalizePageBreakLiteral(settings.pageBreak);
-	std::string wordDelimiters = settings.wordDelimiters.empty() ? defaults.wordDelimiters
-	                                                             : settings.wordDelimiters;
+	std::string wordDelimiters = settings.wordDelimiters.empty() ? defaults.wordDelimiters : settings.wordDelimiters;
 	std::string defaultExts = canonicalDefaultExtensionsLiteral(settings.defaultExtensions);
 	std::string columnStyle = normalizeColumnBlockMove(settings.columnBlockMove);
 	std::string defaultMode = normalizeDefaultMode(settings.defaultMode);
@@ -4079,49 +3296,27 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	std::string miniMapMarkerGlyph;
 	int normalizedFormatLeftMargin = settings.leftMargin;
 	int normalizedFormatRightMargin = settings.rightMargin;
-	std::string postLoadMacro = trimAscii(settings.postLoadMacro).empty() ? std::string()
-	                                                                  : normalizeConfiguredPathInput(settings.postLoadMacro);
-	std::string preSaveMacro = trimAscii(settings.preSaveMacro).empty() ? std::string()
-	                                                                : normalizeConfiguredPathInput(settings.preSaveMacro);
-	std::string defaultPath = trimAscii(settings.defaultPath).empty() ? std::string()
-	                                                              : normalizeConfiguredPathInput(settings.defaultPath);
+	std::string postLoadMacro = trimAscii(settings.postLoadMacro).empty() ? std::string() : normalizeConfiguredPathInput(settings.postLoadMacro);
+	std::string preSaveMacro = trimAscii(settings.preSaveMacro).empty() ? std::string() : normalizeConfiguredPathInput(settings.preSaveMacro);
+	std::string defaultPath = trimAscii(settings.defaultPath).empty() ? std::string() : normalizeConfiguredPathInput(settings.defaultPath);
 
-	if (wordDelimiters.empty())
-		return setError(errorMessage, "WORD_DELIMITERS may not be empty.");
-	if (columnStyle.empty())
-		return setError(errorMessage, "COLUMN_BLOCK_MOVE must be DELETE_SPACE or LEAVE_SPACE.");
-	if (defaultMode.empty())
-		return setError(errorMessage, "DEFAULT_MODE must be INSERT or OVERWRITE.");
-	if (indentStyle.empty())
-		return setError(errorMessage, "INDENT_STYLE must be OFF, AUTOMATIC or SMART.");
-	if (fileType.empty())
-		return setError(errorMessage, "FILE_TYPE must be LEGACY_TEXT, UNIX or BINARY.");
-	if (lineNumbersPosition.empty())
-		lineNumbersPosition = settings.showLineNumbers ? kLineNumbersPositionLeading : kLineNumbersPositionOff;
-	if (miniMapPosition.empty())
-		return setError(errorMessage, "MINIMAP_POSITION must be OFF, LEADING or TRAILING.");
-	if (codeFoldingPosition.empty())
-		codeFoldingPosition = settings.codeFolding ? kCodeFoldingPositionLeading : kCodeFoldingPositionOff;
-	if (!normalizeCursorStatusColor(settings.cursorStatusColor, cursorStatusColor, errorMessage))
-		return false;
-	if (!normalizeMiniMapMarkerGlyph(settings.miniMapMarkerGlyph, miniMapMarkerGlyph, errorMessage))
-		return false;
-	if (settings.binaryRecordLength < kMinBinaryRecordLength || settings.binaryRecordLength > kMaxBinaryRecordLength)
-		return setError(errorMessage, "BINARY_RECORD_LENGTH must be between 1 and 99999.");
-	if (settings.tabSize < kMinTabSize || settings.tabSize > kMaxTabSize)
-		return setError(errorMessage, "TAB_SIZE must be between 2 and 32.");
-	if (settings.leftMargin < kMinLeftMargin || settings.leftMargin > kMaxLeftMargin)
-		return setError(errorMessage, "LEFT_MARGIN must be between 1 and 999.");
-	if (settings.rightMargin < kMinRightMargin || settings.rightMargin > kMaxRightMargin)
-		return setError(errorMessage, "RIGHT_MARGIN must be between 1 and 999.");
-	if (!normalizeEditFormatLine(settings.formatLine, settings.tabSize, settings.leftMargin,
-	                             settings.rightMargin, formatLine, &normalizedFormatLeftMargin,
-	                             &normalizedFormatRightMargin, errorMessage))
-		return false;
-	if (settings.rightMargin > 1 && settings.leftMargin >= settings.rightMargin)
-		return setError(errorMessage, "LEFT_MARGIN must be less than RIGHT_MARGIN.");
-	if (settings.miniMapWidth < kMinMiniMapWidth || settings.miniMapWidth > kMaxMiniMapWidth)
-		return setError(errorMessage, "MINIMAP_WIDTH must be between 2 and 20.");
+	if (wordDelimiters.empty()) return setError(errorMessage, "WORD_DELIMITERS may not be empty.");
+	if (columnStyle.empty()) return setError(errorMessage, "COLUMN_BLOCK_MOVE must be DELETE_SPACE or LEAVE_SPACE.");
+	if (defaultMode.empty()) return setError(errorMessage, "DEFAULT_MODE must be INSERT or OVERWRITE.");
+	if (indentStyle.empty()) return setError(errorMessage, "INDENT_STYLE must be OFF, AUTOMATIC or SMART.");
+	if (fileType.empty()) return setError(errorMessage, "FILE_TYPE must be LEGACY_TEXT, UNIX or BINARY.");
+	if (lineNumbersPosition.empty()) lineNumbersPosition = settings.showLineNumbers ? kLineNumbersPositionLeading : kLineNumbersPositionOff;
+	if (miniMapPosition.empty()) return setError(errorMessage, "MINIMAP_POSITION must be OFF, LEADING or TRAILING.");
+	if (codeFoldingPosition.empty()) codeFoldingPosition = settings.codeFolding ? kCodeFoldingPositionLeading : kCodeFoldingPositionOff;
+	if (!normalizeCursorStatusColor(settings.cursorStatusColor, cursorStatusColor, errorMessage)) return false;
+	if (!normalizeMiniMapMarkerGlyph(settings.miniMapMarkerGlyph, miniMapMarkerGlyph, errorMessage)) return false;
+	if (settings.binaryRecordLength < kMinBinaryRecordLength || settings.binaryRecordLength > kMaxBinaryRecordLength) return setError(errorMessage, "BINARY_RECORD_LENGTH must be between 1 and 99999.");
+	if (settings.tabSize < kMinTabSize || settings.tabSize > kMaxTabSize) return setError(errorMessage, "TAB_SIZE must be between 2 and 32.");
+	if (settings.leftMargin < kMinLeftMargin || settings.leftMargin > kMaxLeftMargin) return setError(errorMessage, "LEFT_MARGIN must be between 1 and 999.");
+	if (settings.rightMargin < kMinRightMargin || settings.rightMargin > kMaxRightMargin) return setError(errorMessage, "RIGHT_MARGIN must be between 1 and 999.");
+	if (!normalizeEditFormatLine(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, formatLine, &normalizedFormatLeftMargin, &normalizedFormatRightMargin, errorMessage)) return false;
+	if (settings.rightMargin > 1 && settings.leftMargin >= settings.rightMargin) return setError(errorMessage, "LEFT_MARGIN must be less than RIGHT_MARGIN.");
+	if (settings.miniMapWidth < kMinMiniMapWidth || settings.miniMapWidth > kMaxMiniMapWidth) return setError(errorMessage, "MINIMAP_WIDTH must be between 2 and 20.");
 
 	normalized.truncateSpaces = settings.truncateSpaces;
 	normalized.eofCtrlZ = settings.eofCtrlZ;
@@ -4139,31 +3334,19 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	normalized.postLoadMacro = postLoadMacro;
 	normalized.preSaveMacro = preSaveMacro;
 	normalized.defaultPath = defaultPath;
-	normalized.formatLine = synchronizeEditFormatLineMargins(formatLine, normalized.leftMargin,
-	                                                         normalized.rightMargin, normalized.tabSize);
+	normalized.formatLine = synchronizeEditFormatLineMargins(formatLine, normalized.leftMargin, normalized.rightMargin, normalized.tabSize);
 	normalized.backupMethod = normalizeBackupMethod(settings.backupMethod);
-	if (normalized.backupMethod.empty())
-		return setError(errorMessage, "BACKUP_METHOD must be OFF, BAK_FILE or DIRECTORY.");
+	if (normalized.backupMethod.empty()) return setError(errorMessage, "BACKUP_METHOD must be OFF, BAK_FILE or DIRECTORY.");
 	normalized.backupFrequency = normalizeBackupFrequency(settings.backupFrequency);
-	if (normalized.backupFrequency.empty())
-		return setError(errorMessage, "BACKUP_FREQUENCY must be FIRST_SAVE_ONLY or EVERY_SAVE.");
+	if (normalized.backupFrequency.empty()) return setError(errorMessage, "BACKUP_FREQUENCY must be FIRST_SAVE_ONLY or EVERY_SAVE.");
 	normalized.backupExtension = normalizeBackupExtension(settings.backupExtension);
 	normalized.backupDirectory = trimAscii(settings.backupDirectory).empty() ? std::string() : normalizeConfiguredPathInput(settings.backupDirectory);
-	if (normalized.backupMethod == kBackupMethodBakFile && !validateBackupExtension(normalized.backupExtension, errorMessage))
-		return false;
-	if (normalized.backupMethod == kBackupMethodDirectory &&
-	    !validateWritableDirectoryPath(normalized.backupDirectory, "BACKUP_DIRECTORY", errorMessage))
-		return false;
-	if (normalized.backupMethod != kBackupMethodBakFile)
-		normalized.backupExtension = normalizeBackupExtension(settings.backupExtension).empty() ? defaults.backupExtension : normalizeBackupExtension(settings.backupExtension);
-	if (normalized.backupMethod != kBackupMethodDirectory && trimAscii(normalized.backupDirectory).empty())
-		normalized.backupDirectory.clear();
-	if (settings.autosaveInactivitySeconds != 0 &&
-	    (settings.autosaveInactivitySeconds < kMinAutosaveInactivitySeconds || settings.autosaveInactivitySeconds > kMaxAutosaveInactivitySeconds))
-		return setError(errorMessage, "AUTOSAVE_INACTIVITY_SECONDS must be 0 or within 5..100 seconds.");
-	if (settings.autosaveIntervalSeconds != 0 &&
-	    (settings.autosaveIntervalSeconds < kMinAutosaveIntervalSeconds || settings.autosaveIntervalSeconds > kMaxAutosaveIntervalSeconds))
-		return setError(errorMessage, "AUTOSAVE_INTERVAL_SECONDS must be 0 or within 100..300 seconds.");
+	if (normalized.backupMethod == kBackupMethodBakFile && !validateBackupExtension(normalized.backupExtension, errorMessage)) return false;
+	if (normalized.backupMethod == kBackupMethodDirectory && !validateWritableDirectoryPath(normalized.backupDirectory, "BACKUP_DIRECTORY", errorMessage)) return false;
+	if (normalized.backupMethod != kBackupMethodBakFile) normalized.backupExtension = normalizeBackupExtension(settings.backupExtension).empty() ? defaults.backupExtension : normalizeBackupExtension(settings.backupExtension);
+	if (normalized.backupMethod != kBackupMethodDirectory && trimAscii(normalized.backupDirectory).empty()) normalized.backupDirectory.clear();
+	if (settings.autosaveInactivitySeconds != 0 && (settings.autosaveInactivitySeconds < kMinAutosaveInactivitySeconds || settings.autosaveInactivitySeconds > kMaxAutosaveInactivitySeconds)) return setError(errorMessage, "AUTOSAVE_INACTIVITY_SECONDS must be 0 or within 5..100 seconds.");
+	if (settings.autosaveIntervalSeconds != 0 && (settings.autosaveIntervalSeconds < kMinAutosaveIntervalSeconds || settings.autosaveIntervalSeconds > kMaxAutosaveIntervalSeconds)) return setError(errorMessage, "AUTOSAVE_INTERVAL_SECONDS must be 0 or within 100..300 seconds.");
 	normalized.autosaveInactivitySeconds = settings.autosaveInactivitySeconds;
 	normalized.autosaveIntervalSeconds = settings.autosaveIntervalSeconds;
 	normalized.backupFiles = normalized.backupMethod != kBackupMethodOff;
@@ -4187,21 +3370,17 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	normalized.defaultMode = defaultMode;
 	normalized.cursorStatusColor = cursorStatusColor;
 	configuredEditSettings() = normalized;
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
-bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned char *values, std::size_t count,
-                                        std::string *errorMessage) {
+bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned char *values, std::size_t count, std::string *errorMessage) {
 	const ColorGroupDefinition *definition = findColorGroupDefinition(group);
 	MRColorSetupSettings &configured = configuredColorSettings();
 
 	ensureConfiguredColorSettingsInitialized();
-	if (definition == nullptr)
-		return setError(errorMessage, "Unknown color setup group.");
-	if (values == nullptr || count != definition->count)
-		return setError(errorMessage, "Unexpected color setup group value count.");
+	if (definition == nullptr) return setError(errorMessage, "Unknown color setup group.");
+	if (values == nullptr || count != definition->count) return setError(errorMessage, "Unexpected color setup group value count.");
 
 	switch (group) {
 		case MRColorSetupGroup::Window:
@@ -4226,8 +3405,7 @@ bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned 
 			break;
 	}
 
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -4235,8 +3413,7 @@ void configuredColorSetupGroupValues(MRColorSetupGroup group, unsigned char *val
 	const ColorGroupDefinition *definition = findColorGroupDefinition(group);
 	MRColorSetupSettings configured = configuredColorSetupSettings();
 
-	if (values == nullptr || definition == nullptr || count != definition->count)
-		return;
+	if (values == nullptr || definition == nullptr || count != definition->count) return;
 
 	switch (group) {
 		case MRColorSetupGroup::Window:
@@ -4270,34 +3447,26 @@ bool validateColorThemeFilePath(const std::string &path, std::string *errorMessa
 	std::string normalized = normalizeConfiguredPathInput(path);
 	struct stat st;
 
-	if (normalized.empty())
-		return setError(errorMessage, "Empty color theme URI.");
-	if (::stat(normalized.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
-		return setError(errorMessage, "Color theme URI must include a filename.");
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (normalized.empty()) return setError(errorMessage, "Empty color theme URI.");
+	if (::stat(normalized.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) return setError(errorMessage, "Color theme URI must include a filename.");
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool setConfiguredColorThemeFilePath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 
-	if (!validateColorThemeFilePath(path, errorMessage))
-		return false;
+	if (!validateColorThemeFilePath(path, errorMessage)) return false;
 	configuredColorThemeFile() = makeAbsolutePath(normalized);
-	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupThemeLoad,
-	                                         configuredColorThemeFile(), nullptr));
-	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupThemeSave,
-	                                         configuredColorThemeFile(), nullptr));
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupThemeLoad, configuredColorThemeFile(), nullptr));
+	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupThemeSave, configuredColorThemeFile(), nullptr));
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 std::string configuredColorThemeFilePath() {
 	const std::string &configured = configuredColorThemeFile();
-	if (!configured.empty())
-		return makeAbsolutePath(configured);
+	if (!configured.empty()) return makeAbsolutePath(configured);
 	return defaultColorThemeFilePath();
 }
 
@@ -4305,8 +3474,7 @@ std::string configuredColorThemeDisplayName() {
 	std::string path = configuredColorThemeFilePath();
 	std::string name = fileNamePartOf(path);
 
-	if (name.empty())
-		return std::string("<none>");
+	if (name.empty()) return std::string("<none>");
 	return name;
 }
 
@@ -4315,20 +3483,11 @@ std::string buildColorThemeMacroSource() {
 	std::string source;
 
 	source += "$MACRO MR_COLOR_THEME FROM EDIT;\n";
-	source +=
-	    "MRSETUP('WINDOWCOLORS', '" +
-	    escapeMrmacSingleQuotedLiteral(formatWindowColorListLiteral(colors.windowColors)) +
-	    "');\n";
-	source += "MRSETUP('MENUDIALOGCOLORS', '" +
-	          escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.menuDialogColors)) + "');\n";
-	source += "MRSETUP('HELPCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.helpColors)) +
-	          "');\n";
-	source +=
-	    "MRSETUP('OTHERCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.otherColors)) +
-	    "');\n";
-	source +=
-	    "MRSETUP('MINIMAPCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.miniMapColors)) +
-	    "');\n";
+	source += "MRSETUP('WINDOWCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatWindowColorListLiteral(colors.windowColors)) + "');\n";
+	source += "MRSETUP('MENUDIALOGCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.menuDialogColors)) + "');\n";
+	source += "MRSETUP('HELPCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.helpColors)) + "');\n";
+	source += "MRSETUP('OTHERCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.otherColors)) + "');\n";
+	source += "MRSETUP('MINIMAPCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.miniMapColors)) + "');\n";
 	source += "END_MACRO;\n";
 	return source;
 }
@@ -4338,17 +3497,12 @@ bool writeColorThemeFile(const std::string &themeUri, std::string *errorMessage)
 	std::string themeDir = directoryPartOf(themePath);
 	std::string source;
 
-	if (!validateColorThemeFilePath(themePath, errorMessage))
-		return false;
-	if (!ensureDirectoryTree(themeDir, errorMessage))
-		return false;
+	if (!validateColorThemeFilePath(themePath, errorMessage)) return false;
+	if (!ensureDirectoryTree(themeDir, errorMessage)) return false;
 	source = buildColorThemeMacroSource();
-	if (!writeTextFile(themePath, source))
-		return setError(errorMessage, "Unable to write color theme file: " + themePath);
-	if (!setConfiguredColorThemeFilePath(themePath, errorMessage))
-		return false;
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (!writeTextFile(themePath, source)) return setError(errorMessage, "Unable to write color theme file: " + themePath);
+	if (!setConfiguredColorThemeFilePath(themePath, errorMessage)) return false;
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -4356,13 +3510,10 @@ bool ensureColorThemeFileExists(const std::string &themeUri, std::string *errorM
 	std::string normalized = normalizeConfiguredPathInput(themeUri);
 	struct stat st;
 
-	if (!validateColorThemeFilePath(normalized, errorMessage))
-		return false;
+	if (!validateColorThemeFilePath(normalized, errorMessage)) return false;
 	if (::stat(normalized.c_str(), &st) == 0) {
-		if (S_ISDIR(st.st_mode))
-			return setError(errorMessage, "Color theme URI must include a filename.");
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (S_ISDIR(st.st_mode)) return setError(errorMessage, "Color theme URI must include a filename.");
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 	return writeColorThemeFile(normalized, errorMessage);
@@ -4373,46 +3524,30 @@ bool loadColorThemeFile(const std::string &themeUri, std::string *errorMessage) 
 	std::string source;
 	std::string applyError;
 	std::map<std::string, std::string> assignments;
-	static const char *const order[] = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS",
-	                                    "MINIMAPCOLORS"};
+	static const char *const order[] = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS", "MINIMAPCOLORS"};
 
-	if (!validateColorThemeFilePath(normalized, errorMessage))
-		return false;
-	if (!ensureColorThemeFileExists(normalized, errorMessage))
-		return false;
-	if (!readTextFile(normalized, source))
-		return setError(errorMessage, "Unable to read color theme file: " + normalized);
-	if (!parseThemeSetupAssignments(source, assignments, errorMessage))
-		return false;
+	if (!validateColorThemeFilePath(normalized, errorMessage)) return false;
+	if (!ensureColorThemeFileExists(normalized, errorMessage)) return false;
+	if (!readTextFile(normalized, source)) return setError(errorMessage, "Unable to read color theme file: " + normalized);
+	if (!parseThemeSetupAssignments(source, assignments, errorMessage)) return false;
 	for (const char *key : order)
-		if (!applyConfiguredColorSetupValue(key, assignments[key], &applyError))
-			return setError(errorMessage, "Theme apply failed for " + std::string(key) + ": " + applyError);
-	if (!setConfiguredColorThemeFilePath(normalized, errorMessage))
-		return false;
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+		if (!applyConfiguredColorSetupValue(key, assignments[key], &applyError)) return setError(errorMessage, "Theme apply failed for " + std::string(key) + ": " + applyError);
+	if (!setConfiguredColorThemeFilePath(normalized, errorMessage)) return false;
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
-bool loadWindowColorThemeGroupValues(const std::string &themeUri,
-                                     std::array<unsigned char, MRColorSetupSettings::kWindowCount> &outValues,
-                                     std::string *errorMessage) {
+bool loadWindowColorThemeGroupValues(const std::string &themeUri, std::array<unsigned char, MRColorSetupSettings::kWindowCount> &outValues, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(themeUri);
 	std::string source;
 	std::map<std::string, std::string> assignments;
 
-	if (!validateColorThemeFilePath(normalized, errorMessage))
-		return false;
-	if (!ensureColorThemeFileExists(normalized, errorMessage))
-		return false;
-	if (!readTextFile(normalized, source))
-		return setError(errorMessage, "Unable to read color theme file: " + normalized);
-	if (!parseThemeSetupAssignments(source, assignments, errorMessage))
-		return false;
-	if (!parseWindowColorListLiteral(assignments["WINDOWCOLORS"], outValues, errorMessage))
-		return false;
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (!validateColorThemeFilePath(normalized, errorMessage)) return false;
+	if (!ensureColorThemeFileExists(normalized, errorMessage)) return false;
+	if (!readTextFile(normalized, source)) return setError(errorMessage, "Unable to read color theme file: " + normalized);
+	if (!parseThemeSetupAssignments(source, assignments, errorMessage)) return false;
+	if (!parseWindowColorListLiteral(assignments["WINDOWCOLORS"], outValues, errorMessage)) return false;
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -4436,41 +3571,33 @@ const MRColorSetupItem *colorSetupGroupItems(MRColorSetupGroup group, std::size_
 	return definition->items;
 }
 
-bool applyConfiguredColorSetupValue(const std::string &key, const std::string &value,
-                                    std::string *errorMessage) {
+bool applyConfiguredColorSetupValue(const std::string &key, const std::string &value, std::string *errorMessage) {
 	const ColorGroupDefinition *definition = findColorGroupDefinitionByKey(key);
 	MRColorSetupSettings configured = configuredColorSetupSettings();
 
-	if (definition == nullptr)
-		return setError(errorMessage, "Unknown color setup key.");
+	if (definition == nullptr) return setError(errorMessage, "Unknown color setup key.");
 
 	switch (definition->group) {
 		case MRColorSetupGroup::Window:
-			if (!parseWindowColorListLiteral(value, configured.windowColors, errorMessage))
-				return false;
+			if (!parseWindowColorListLiteral(value, configured.windowColors, errorMessage)) return false;
 			break;
 		case MRColorSetupGroup::MenuDialog:
-			if (!parseMenuDialogColorListLiteral(value, configured.menuDialogColors, errorMessage))
-				return false;
+			if (!parseMenuDialogColorListLiteral(value, configured.menuDialogColors, errorMessage)) return false;
 			break;
 		case MRColorSetupGroup::Help:
-			if (!parseColorListLiteral(value, configured.helpColors, errorMessage))
-				return false;
+			if (!parseColorListLiteral(value, configured.helpColors, errorMessage)) return false;
 			break;
 		case MRColorSetupGroup::Other:
-			if (!parseOtherColorListLiteral(value, configured.otherColors, errorMessage))
-				return false;
+			if (!parseOtherColorListLiteral(value, configured.otherColors, errorMessage)) return false;
 			break;
 		case MRColorSetupGroup::MiniMap:
-			if (!parseColorListLiteral(value, configured.miniMapColors, errorMessage))
-				return false;
+			if (!parseColorListLiteral(value, configured.miniMapColors, errorMessage)) return false;
 			break;
 	}
 
 	configuredColorSettings() = configured;
 	configuredColorSettingsInitialized() = true;
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -4495,16 +3622,11 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 	}
 
 	for (std::size_t i = 0; i < std::size(kMenuDialogColorItems); ++i) {
-		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogFrame)
-			dialogFrame = configured.menuDialogColors[i];
-		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogText)
-			dialogText = configured.menuDialogColors[i];
-		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogBackground)
-			dialogBackground = configured.menuDialogColors[i];
-		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogInactiveClusterGray)
-			dialogInactiveCluster = configured.menuDialogColors[i];
-		if (kMenuDialogColorItems[i].paletteIndex == kMrPaletteDialogInactiveElements)
-			dialogInactiveElements = configured.menuDialogColors[i];
+		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogFrame) dialogFrame = configured.menuDialogColors[i];
+		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogText) dialogText = configured.menuDialogColors[i];
+		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogBackground) dialogBackground = configured.menuDialogColors[i];
+		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogInactiveClusterGray) dialogInactiveCluster = configured.menuDialogColors[i];
+		if (kMenuDialogColorItems[i].paletteIndex == kMrPaletteDialogInactiveElements) dialogInactiveElements = configured.menuDialogColors[i];
 	}
 
 	switch (paletteIndex) {
@@ -4572,12 +3694,10 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 	return false;
 }
 
-bool applyConfiguredEditSetupValue(const std::string &key, const std::string &value,
-                                   std::string *errorMessage) {
+bool applyConfiguredEditSetupValue(const std::string &key, const std::string &value, std::string *errorMessage) {
 	MREditSetupSettings current = configuredEditSetupSettings();
 
-	if (!applyEditSetupValueInternal(current, key, value, errorMessage))
-		return false;
+	if (!applyEditSetupValueInternal(current, key, value, errorMessage)) return false;
 	return setConfiguredEditSetupSettings(current, errorMessage);
 }
 
@@ -4617,44 +3737,35 @@ char configuredPageBreakCharacter() {
 	return decodePageBreakLiteral(configuredEditSetupSettings().pageBreak);
 }
 
-bool parseHistoryLimitLiteral(const std::string &value, int &outValue, std::string *errorMessage,
-                              const char *keyName) {
+bool parseHistoryLimitLiteral(const std::string &value, int &outValue, std::string *errorMessage, const char *keyName) {
 	std::string text = trimAscii(value);
 	char *end = nullptr;
 	long parsed = 0;
 
-	if (text.empty())
-		return setError(errorMessage, std::string(keyName) + " must be an integer within 5..50.");
+	if (text.empty()) return setError(errorMessage, std::string(keyName) + " must be an integer within 5..50.");
 	parsed = std::strtol(text.c_str(), &end, 10);
-	if (end == text.c_str() || end == nullptr || *end != '\0')
-		return setError(errorMessage, std::string(keyName) + " must be an integer within 5..50.");
-	if (parsed < kHistoryLimitMin || parsed > kHistoryLimitMax)
-		return setError(errorMessage, std::string(keyName) + " must be within 5..50.");
+	if (end == text.c_str() || end == nullptr || *end != '\0') return setError(errorMessage, std::string(keyName) + " must be an integer within 5..50.");
+	if (parsed < kHistoryLimitMin || parsed > kHistoryLimitMax) return setError(errorMessage, std::string(keyName) + " must be within 5..50.");
 	outValue = static_cast<int>(parsed);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool setConfiguredPathHistoryLimitValue(int value, std::string *errorMessage) {
-	if (value < kHistoryLimitMin || value > kHistoryLimitMax)
-		return setError(errorMessage, "MAX_PATH_HISTORY must be within 5..50.");
+	if (value < kHistoryLimitMin || value > kHistoryLimitMax) return setError(errorMessage, "MAX_PATH_HISTORY must be within 5..50.");
 	configuredPathHistoryLimit() = value;
 	for (MRScopedDialogHistoryState &state : configuredDialogHistoryStorage())
 		trimHistoryToLimit(state.pathHistory, value);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool setConfiguredFileHistoryLimitValue(int value, std::string *errorMessage) {
-	if (value < kHistoryLimitMin || value > kHistoryLimitMax)
-		return setError(errorMessage, "MAX_FILE_HISTORY must be within 5..50.");
+	if (value < kHistoryLimitMin || value > kHistoryLimitMax) return setError(errorMessage, "MAX_FILE_HISTORY must be within 5..50.");
 	configuredFileHistoryLimit() = value;
 	for (MRScopedDialogHistoryState &state : configuredDialogHistoryStorage())
 		trimHistoryToLimit(state.fileHistory, value);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -4692,23 +3803,19 @@ void configuredMultiPathHistoryEntries(std::vector<std::string> &outValues) {
 
 bool addConfiguredMultiFilespecHistoryEntry(const std::string &value, std::string *errorMessage) {
 	addHistoryEntry(configuredMultiFilespecHistoryStorage(), trimAscii(value), configuredFileHistoryLimit());
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool addConfiguredMultiPathHistoryEntry(const std::string &value, std::string *errorMessage) {
-	addHistoryEntry(configuredMultiPathHistoryStorage(), normalizeConfiguredPathInput(value),
-	                configuredPathHistoryLimit());
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	addHistoryEntry(configuredMultiPathHistoryStorage(), normalizeConfiguredPathInput(value), configuredPathHistoryLimit());
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool setConfiguredWindowManager(bool enabled, std::string *errorMessage) {
 	g_windowManagerEnabled = enabled;
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -4726,8 +3833,7 @@ bool setConfiguredMenulineMessages(bool enabled, std::string *errorMessage) {
 		mr::messageline::clearOwner(mr::messageline::Owner::DialogInteraction);
 	}
 	g_menulineMessagesEnabled = enabled;
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -4737,8 +3843,7 @@ bool configuredMenulineMessages() {
 
 bool setConfiguredSearchDialogOptions(const MRSearchDialogOptions &options, std::string *errorMessage) {
 	g_searchDialogOptions = options;
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -4748,8 +3853,7 @@ MRSearchDialogOptions configuredSearchDialogOptions() {
 
 bool setConfiguredSarDialogOptions(const MRSarDialogOptions &options, std::string *errorMessage) {
 	g_sarDialogOptions = options;
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -4757,11 +3861,9 @@ MRSarDialogOptions configuredSarDialogOptions() {
 	return g_sarDialogOptions;
 }
 
-bool setConfiguredMultiSearchDialogOptions(const MRMultiSearchDialogOptions &options,
-                                           std::string *errorMessage) {
+bool setConfiguredMultiSearchDialogOptions(const MRMultiSearchDialogOptions &options, std::string *errorMessage) {
 	g_multiSearchDialogOptions = options;
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -4769,11 +3871,9 @@ MRMultiSearchDialogOptions configuredMultiSearchDialogOptions() {
 	return g_multiSearchDialogOptions;
 }
 
-bool setConfiguredMultiSarDialogOptions(const MRMultiSarDialogOptions &options,
-                                        std::string *errorMessage) {
+bool setConfiguredMultiSarDialogOptions(const MRMultiSarDialogOptions &options, std::string *errorMessage) {
 	g_multiSarDialogOptions = options;
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -4785,8 +3885,7 @@ bool setConfiguredVirtualDesktops(int count, std::string *errorMessage) {
 	if (count < 1) count = 1;
 	if (count > 9) count = 9;
 	g_virtualDesktops = count;
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -4796,8 +3895,7 @@ int configuredVirtualDesktops() {
 
 bool setConfiguredCyclicVirtualDesktops(bool enabled, std::string *errorMessage) {
 	g_cyclicVirtualDesktops = enabled;
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -4808,11 +3906,9 @@ bool configuredCyclicVirtualDesktops() {
 bool setConfiguredCursorPositionMarker(const std::string &value, std::string *errorMessage) {
 	std::string normalized;
 
-	if (!normalizeCursorPositionMarker(value, normalized, errorMessage))
-		return false;
+	if (!normalizeCursorPositionMarker(value, normalized, errorMessage)) return false;
 	g_cursorPositionMarker = normalized;
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -4822,8 +3918,7 @@ std::string configuredCursorPositionMarker() {
 
 bool setConfiguredAutoloadWorkspace(bool enabled, std::string *errorMessage) {
 	g_autoloadWorkspace = enabled;
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -4833,8 +3928,7 @@ bool configuredAutoloadWorkspace() {
 
 bool setConfiguredLogHandling(MRLogHandling handling, std::string *errorMessage) {
 	g_logHandling = handling;
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -4846,20 +3940,16 @@ void configuredAutoexecMacroEntries(std::vector<std::string> &outValues) {
 	outValues = configuredAutoexecMacroStorage();
 }
 
-bool setConfiguredAutoexecMacroEntries(const std::vector<std::string> &values,
-                                       std::string *errorMessage) {
+bool setConfiguredAutoexecMacroEntries(const std::vector<std::string> &values, std::string *errorMessage) {
 	std::vector<std::string> normalizedValues;
 
 	for (const std::string &value : values) {
 		const std::string normalized = normalizeAutoexecMacroEntry(value);
-		if (!validateAutoexecMacroEntry(normalized, errorMessage))
-			return false;
-		if (std::find(normalizedValues.begin(), normalizedValues.end(), normalized) == normalizedValues.end())
-			normalizedValues.push_back(normalized);
+		if (!validateAutoexecMacroEntry(normalized, errorMessage)) return false;
+		if (std::find(normalizedValues.begin(), normalizedValues.end(), normalized) == normalizedValues.end()) normalizedValues.push_back(normalized);
 	}
 	configuredAutoexecMacroStorage() = std::move(normalizedValues);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -4867,10 +3957,8 @@ bool addConfiguredAutoexecMacroEntry(const std::string &value, std::string *erro
 	const std::string normalized = normalizeAutoexecMacroEntry(value);
 	std::vector<std::string> values = configuredAutoexecMacroStorage();
 
-	if (!validateAutoexecMacroEntry(normalized, errorMessage))
-		return false;
-	if (std::find(values.begin(), values.end(), normalized) == values.end())
-		values.push_back(normalized);
+	if (!validateAutoexecMacroEntry(normalized, errorMessage)) return false;
+	if (std::find(values.begin(), values.end(), normalized) == values.end()) values.push_back(normalized);
 	return setConfiguredAutoexecMacroEntries(values, errorMessage);
 }
 
@@ -4881,8 +3969,7 @@ void clearConfiguredAutoexecMacroDiagnostics() {
 void rememberConfiguredAutoexecMacroDiagnostic(const std::string &fileName, const std::string &errorText) {
 	const std::string key = autoexecDiagnosticKey(fileName);
 
-	if (key.empty())
-		return;
+	if (key.empty()) return;
 	g_autoexecMacroDiagnostics[key] = errorText;
 }
 
@@ -4891,8 +3978,7 @@ bool configuredAutoexecMacroDiagnosticForFile(const std::string &fileName, std::
 	auto it = g_autoexecMacroDiagnostics.find(key);
 
 	errorText.clear();
-	if (it == g_autoexecMacroDiagnostics.end())
-		return false;
+	if (it == g_autoexecMacroDiagnostics.end()) return false;
 	errorText = it->second;
 	return true;
 }
@@ -4905,8 +3991,7 @@ bool setScopedDialogLastPath(MRDialogHistoryScope scope, const std::string &path
 	if (!normalized.empty() && isReadableDirectory(normalized)) {
 		state.lastPath = normalized;
 		addHistoryEntry(state.pathHistory, normalized, configuredPathHistoryLimit());
-	}
-	else if (!normalized.empty()) {
+	} else if (!normalized.empty()) {
 		addHistoryEntry(state.fileHistory, normalized, configuredFileHistoryLimit());
 		directory = normalizedDialogDirectoryFromPath(normalized);
 		if (!directory.empty()) {
@@ -4920,21 +4005,18 @@ bool setScopedDialogLastPath(MRDialogHistoryScope scope, const std::string &path
 			addHistoryEntry(state.pathHistory, directory, configuredPathHistoryLimit());
 		}
 	}
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
-void initRememberedLoadDialogPath(MRDialogHistoryScope scope, char *buffer, std::size_t bufferSize,
-                                  const char *pattern) {
+void initRememberedLoadDialogPath(MRDialogHistoryScope scope, char *buffer, std::size_t bufferSize, const char *pattern) {
 	std::string initial;
 	std::string dir = effectiveRememberedLoadDirectory(scope);
 	const char *safePattern = (pattern != nullptr && *pattern != '\0') ? pattern : "*.*";
 
 	if (!dir.empty()) {
 		initial = dir;
-		if (initial.back() != '/')
-			initial += '/';
+		if (initial.back() != '/') initial += '/';
 		initial += safePattern;
 	} else
 		initial = safePattern;
@@ -4949,13 +4031,8 @@ void forgetLoadDialogPath(MRDialogHistoryScope scope, const char *path) {
 	const std::string normalized = normalizeConfiguredPathInput(path != nullptr ? path : "");
 	MRScopedDialogHistoryState &state = dialogHistoryState(scope);
 
-	if (normalized.empty())
-		return;
-	state.fileHistory.erase(std::remove_if(state.fileHistory.begin(), state.fileHistory.end(),
-	                                       [&](const MRDialogHistoryEntry &entry) {
-		                                       return normalizeConfiguredPathInput(entry.value) == normalized;
-	                                       }),
-	                        state.fileHistory.end());
+	if (normalized.empty()) return;
+	state.fileHistory.erase(std::remove_if(state.fileHistory.begin(), state.fileHistory.end(), [&](const MRDialogHistoryEntry &entry) { return normalizeConfiguredPathInput(entry.value) == normalized; }), state.fileHistory.end());
 }
 
 std::string configuredLastFileDialogFilePath(MRDialogHistoryScope scope) {
@@ -4980,8 +4057,7 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	std::string helpPath = normalizeConfiguredPathInput(paths.helpUri);
 	std::string tempDir = normalizeConfiguredPathInput(paths.tempPath);
 	std::string shellPath = normalizeConfiguredPathInput(paths.shellUri);
-	std::string themePath = configuredColorThemeFile().empty() ? defaultColorThemePathForSettings(settingsPath)
-	                                                          : configuredColorThemeFilePath();
+	std::string themePath = configuredColorThemeFile().empty() ? defaultColorThemePathForSettings(settingsPath) : configuredColorThemeFilePath();
 	MREditSetupSettings edit = configuredEditSetupSettings();
 	std::string source;
 	std::vector<std::string> multiFilespecHistory;
@@ -4995,8 +4071,7 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	configuredMultiPathHistoryEntries(multiPathHistory);
 	configuredAutoexecMacroEntries(autoexecMacros);
 	source += "$MACRO MR_SETTINGS FROM EDIT;\n";
-	source += "MRSETUP('" + std::string(kSettingsVersionKey) + "', '" +
-	          escapeMrmacSingleQuotedLiteral(kCurrentSettingsVersion) + "');\n";
+	source += "MRSETUP('" + std::string(kSettingsVersionKey) + "', '" + escapeMrmacSingleQuotedLiteral(kCurrentSettingsVersion) + "');\n";
 	source += "MRSETUP('SETTINGSPATH', '" + escapeMrmacSingleQuotedLiteral(settingsPath) + "');\n";
 	source += "MRSETUP('MACROPATH', '" + escapeMrmacSingleQuotedLiteral(macroDir) + "');\n";
 	source += "MRSETUP('HELPPATH', '" + escapeMrmacSingleQuotedLiteral(helpPath) + "');\n";
@@ -5004,116 +4079,43 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source += "MRSETUP('SHELLPATH', '" + escapeMrmacSingleQuotedLiteral(shellPath) + "');\n";
 	source += "MRSETUP('WINDOW_MANAGER', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredWindowManager())) + "');\n";
 	source += "MRSETUP('MESSAGES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMenulineMessages())) + "');\n";
-	source += "MRSETUP('SEARCH_TEXT_TYPE', '" +
-	          escapeMrmacSingleQuotedLiteral(formatSearchTextType(configuredSearchDialogOptions().textType)) + "');\n";
-	source += "MRSETUP('SEARCH_DIRECTION', '" +
-	          escapeMrmacSingleQuotedLiteral(formatSearchDirection(configuredSearchDialogOptions().direction)) + "');\n";
-	source += "MRSETUP('SEARCH_MODE', '" +
-	          escapeMrmacSingleQuotedLiteral(formatSearchMode(configuredSearchDialogOptions().mode)) + "');\n";
-	source += "MRSETUP('SEARCH_CASE_SENSITIVE', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              formatEditSetupBoolean(configuredSearchDialogOptions().caseSensitive)) +
-	          "');\n";
-	source += "MRSETUP('SEARCH_GLOBAL_SEARCH', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              formatEditSetupBoolean(configuredSearchDialogOptions().globalSearch)) +
-	          "');\n";
-	source += "MRSETUP('SEARCH_RESTRICT_MARKED_BLOCK', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              formatEditSetupBoolean(configuredSearchDialogOptions().restrictToMarkedBlock)) +
-	          "');\n";
-	source += "MRSETUP('SEARCH_ALL_WINDOWS', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              formatEditSetupBoolean(configuredSearchDialogOptions().searchAllWindows)) +
-	          "');\n";
-	source += "MRSETUP('SAR_TEXT_TYPE', '" +
-	          escapeMrmacSingleQuotedLiteral(formatSearchTextType(configuredSarDialogOptions().textType)) + "');\n";
-	source += "MRSETUP('SAR_DIRECTION', '" +
-	          escapeMrmacSingleQuotedLiteral(formatSearchDirection(configuredSarDialogOptions().direction)) + "');\n";
-	source += "MRSETUP('SAR_MODE', '" +
-	          escapeMrmacSingleQuotedLiteral(formatSarMode(configuredSarDialogOptions().mode)) + "');\n";
-	source += "MRSETUP('SAR_LEAVE_CURSOR_AT', '" +
-	          escapeMrmacSingleQuotedLiteral(formatSarLeaveCursor(configuredSarDialogOptions().leaveCursorAt)) + "');\n";
-	source += "MRSETUP('SAR_CASE_SENSITIVE', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              formatEditSetupBoolean(configuredSarDialogOptions().caseSensitive)) +
-	          "');\n";
-	source += "MRSETUP('SAR_GLOBAL_SEARCH', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              formatEditSetupBoolean(configuredSarDialogOptions().globalSearch)) +
-	          "');\n";
-	source += "MRSETUP('SAR_RESTRICT_MARKED_BLOCK', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              formatEditSetupBoolean(configuredSarDialogOptions().restrictToMarkedBlock)) +
-	          "');\n";
-	source += "MRSETUP('SAR_ALL_WINDOWS', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              formatEditSetupBoolean(configuredSarDialogOptions().searchAllWindows)) +
-	          "');\n";
-	source += "MRSETUP('MULTI_SEARCH_FILESPEC', '" +
-	          escapeMrmacSingleQuotedLiteral(configuredMultiSearchDialogOptions().filespec) + "');\n";
-	source += "MRSETUP('MULTI_SEARCH_TEXT', '" +
-	          escapeMrmacSingleQuotedLiteral(configuredMultiSearchDialogOptions().searchText) + "');\n";
-	source += "MRSETUP('MULTI_SEARCH_STARTING_PATH', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              normalizeConfiguredPathInput(configuredMultiSearchDialogOptions().startingPath)) +
-	          "');\n";
-	source += "MRSETUP('MULTI_SEARCH_SUBDIRECTORIES', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              formatEditSetupBoolean(configuredMultiSearchDialogOptions().searchSubdirectories)) +
-	          "');\n";
-	source += "MRSETUP('MULTI_SEARCH_CASE_SENSITIVE', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              formatEditSetupBoolean(configuredMultiSearchDialogOptions().caseSensitive)) +
-	          "');\n";
-	source += "MRSETUP('MULTI_SEARCH_REGULAR_EXPRESSIONS', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              formatEditSetupBoolean(configuredMultiSearchDialogOptions().regularExpressions)) +
-	          "');\n";
-	source += "MRSETUP('MULTI_SEARCH_FILES_IN_MEMORY', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              formatEditSetupBoolean(configuredMultiSearchDialogOptions().searchFilesInMemory)) +
-	          "');\n";
-	source += "MRSETUP('MULTI_SAR_FILESPEC', '" +
-	          escapeMrmacSingleQuotedLiteral(configuredMultiSarDialogOptions().filespec) + "');\n";
-	source += "MRSETUP('MULTI_SAR_TEXT', '" +
-	          escapeMrmacSingleQuotedLiteral(configuredMultiSarDialogOptions().searchText) + "');\n";
-	source += "MRSETUP('MULTI_SAR_REPLACEMENT', '" +
-	          escapeMrmacSingleQuotedLiteral(configuredMultiSarDialogOptions().replacementText) + "');\n";
-	source += "MRSETUP('MULTI_SAR_STARTING_PATH', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              normalizeConfiguredPathInput(configuredMultiSarDialogOptions().startingPath)) +
-	          "');\n";
-	source += "MRSETUP('MULTI_SAR_SUBDIRECTORIES', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              formatEditSetupBoolean(configuredMultiSarDialogOptions().searchSubdirectories)) +
-	          "');\n";
-	source += "MRSETUP('MULTI_SAR_CASE_SENSITIVE', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              formatEditSetupBoolean(configuredMultiSarDialogOptions().caseSensitive)) +
-	          "');\n";
-	source += "MRSETUP('MULTI_SAR_REGULAR_EXPRESSIONS', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              formatEditSetupBoolean(configuredMultiSarDialogOptions().regularExpressions)) +
-	          "');\n";
-	source += "MRSETUP('MULTI_SAR_FILES_IN_MEMORY', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              formatEditSetupBoolean(configuredMultiSarDialogOptions().searchFilesInMemory)) +
-	          "');\n";
-	source += "MRSETUP('MULTI_SAR_KEEP_FILES_OPEN', '" +
-	          escapeMrmacSingleQuotedLiteral(
-	              formatEditSetupBoolean(configuredMultiSarDialogOptions().keepFilesOpen)) +
-	          "');\n";
+	source += "MRSETUP('SEARCH_TEXT_TYPE', '" + escapeMrmacSingleQuotedLiteral(formatSearchTextType(configuredSearchDialogOptions().textType)) + "');\n";
+	source += "MRSETUP('SEARCH_DIRECTION', '" + escapeMrmacSingleQuotedLiteral(formatSearchDirection(configuredSearchDialogOptions().direction)) + "');\n";
+	source += "MRSETUP('SEARCH_MODE', '" + escapeMrmacSingleQuotedLiteral(formatSearchMode(configuredSearchDialogOptions().mode)) + "');\n";
+	source += "MRSETUP('SEARCH_CASE_SENSITIVE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredSearchDialogOptions().caseSensitive)) + "');\n";
+	source += "MRSETUP('SEARCH_GLOBAL_SEARCH', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredSearchDialogOptions().globalSearch)) + "');\n";
+	source += "MRSETUP('SEARCH_RESTRICT_MARKED_BLOCK', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredSearchDialogOptions().restrictToMarkedBlock)) + "');\n";
+	source += "MRSETUP('SEARCH_ALL_WINDOWS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredSearchDialogOptions().searchAllWindows)) + "');\n";
+	source += "MRSETUP('SAR_TEXT_TYPE', '" + escapeMrmacSingleQuotedLiteral(formatSearchTextType(configuredSarDialogOptions().textType)) + "');\n";
+	source += "MRSETUP('SAR_DIRECTION', '" + escapeMrmacSingleQuotedLiteral(formatSearchDirection(configuredSarDialogOptions().direction)) + "');\n";
+	source += "MRSETUP('SAR_MODE', '" + escapeMrmacSingleQuotedLiteral(formatSarMode(configuredSarDialogOptions().mode)) + "');\n";
+	source += "MRSETUP('SAR_LEAVE_CURSOR_AT', '" + escapeMrmacSingleQuotedLiteral(formatSarLeaveCursor(configuredSarDialogOptions().leaveCursorAt)) + "');\n";
+	source += "MRSETUP('SAR_CASE_SENSITIVE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredSarDialogOptions().caseSensitive)) + "');\n";
+	source += "MRSETUP('SAR_GLOBAL_SEARCH', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredSarDialogOptions().globalSearch)) + "');\n";
+	source += "MRSETUP('SAR_RESTRICT_MARKED_BLOCK', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredSarDialogOptions().restrictToMarkedBlock)) + "');\n";
+	source += "MRSETUP('SAR_ALL_WINDOWS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredSarDialogOptions().searchAllWindows)) + "');\n";
+	source += "MRSETUP('MULTI_SEARCH_FILESPEC', '" + escapeMrmacSingleQuotedLiteral(configuredMultiSearchDialogOptions().filespec) + "');\n";
+	source += "MRSETUP('MULTI_SEARCH_TEXT', '" + escapeMrmacSingleQuotedLiteral(configuredMultiSearchDialogOptions().searchText) + "');\n";
+	source += "MRSETUP('MULTI_SEARCH_STARTING_PATH', '" + escapeMrmacSingleQuotedLiteral(normalizeConfiguredPathInput(configuredMultiSearchDialogOptions().startingPath)) + "');\n";
+	source += "MRSETUP('MULTI_SEARCH_SUBDIRECTORIES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMultiSearchDialogOptions().searchSubdirectories)) + "');\n";
+	source += "MRSETUP('MULTI_SEARCH_CASE_SENSITIVE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMultiSearchDialogOptions().caseSensitive)) + "');\n";
+	source += "MRSETUP('MULTI_SEARCH_REGULAR_EXPRESSIONS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMultiSearchDialogOptions().regularExpressions)) + "');\n";
+	source += "MRSETUP('MULTI_SEARCH_FILES_IN_MEMORY', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMultiSearchDialogOptions().searchFilesInMemory)) + "');\n";
+	source += "MRSETUP('MULTI_SAR_FILESPEC', '" + escapeMrmacSingleQuotedLiteral(configuredMultiSarDialogOptions().filespec) + "');\n";
+	source += "MRSETUP('MULTI_SAR_TEXT', '" + escapeMrmacSingleQuotedLiteral(configuredMultiSarDialogOptions().searchText) + "');\n";
+	source += "MRSETUP('MULTI_SAR_REPLACEMENT', '" + escapeMrmacSingleQuotedLiteral(configuredMultiSarDialogOptions().replacementText) + "');\n";
+	source += "MRSETUP('MULTI_SAR_STARTING_PATH', '" + escapeMrmacSingleQuotedLiteral(normalizeConfiguredPathInput(configuredMultiSarDialogOptions().startingPath)) + "');\n";
+	source += "MRSETUP('MULTI_SAR_SUBDIRECTORIES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMultiSarDialogOptions().searchSubdirectories)) + "');\n";
+	source += "MRSETUP('MULTI_SAR_CASE_SENSITIVE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMultiSarDialogOptions().caseSensitive)) + "');\n";
+	source += "MRSETUP('MULTI_SAR_REGULAR_EXPRESSIONS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMultiSarDialogOptions().regularExpressions)) + "');\n";
+	source += "MRSETUP('MULTI_SAR_FILES_IN_MEMORY', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMultiSarDialogOptions().searchFilesInMemory)) + "');\n";
+	source += "MRSETUP('MULTI_SAR_KEEP_FILES_OPEN', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMultiSarDialogOptions().keepFilesOpen)) + "');\n";
 	source += "MRSETUP('VIRTUAL_DESKTOPS', '" + std::to_string(configuredVirtualDesktops()) + "');\n";
-	source += "MRSETUP('CYCLIC_VIRTUAL_DESKTOPS', '" +
-	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredCyclicVirtualDesktops())) + "');\n";
-	source += "MRSETUP('CURSOR_POSITION_MARKER', '" +
-	          escapeMrmacSingleQuotedLiteral(configuredCursorPositionMarker()) + "');\n";
+	source += "MRSETUP('CYCLIC_VIRTUAL_DESKTOPS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredCyclicVirtualDesktops())) + "');\n";
+	source += "MRSETUP('CURSOR_POSITION_MARKER', '" + escapeMrmacSingleQuotedLiteral(configuredCursorPositionMarker()) + "');\n";
 	source += "MRSETUP('AUTOLOAD_WORKSPACE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredAutoloadWorkspace())) + "');\n";
-	source += "MRSETUP('LOG_HANDLING', '" +
-	          escapeMrmacSingleQuotedLiteral(formatLogHandlingLiteral(configuredLogHandling())) + "');\n";
-	source += "MRSETUP('LOGFILE', '" +
-	          escapeMrmacSingleQuotedLiteral(configuredLogFilePath()) + "');\n";
+	source += "MRSETUP('LOG_HANDLING', '" + escapeMrmacSingleQuotedLiteral(formatLogHandlingLiteral(configuredLogHandling())) + "');\n";
+	source += "MRSETUP('LOGFILE', '" + escapeMrmacSingleQuotedLiteral(configuredLogFilePath()) + "');\n";
 	for (const std::string &autoexecMacro : autoexecMacros)
 		source += "MRSETUP('AUTOEXEC_MACRO', '" + escapeMrmacSingleQuotedLiteral(autoexecMacro) + "');\n";
 	source += "MRSETUP('MAX_PATH_HISTORY', '" + std::to_string(configuredMaxPathHistory()) + "');\n";
@@ -5121,45 +4123,30 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	for (const MRDialogHistoryScopeSpec &scopeSpec : kDialogHistoryScopeSpecs) {
 		const MRScopedDialogHistoryState &state = dialogHistoryState(scopeSpec.scope);
 
-		if (!state.lastPath.empty())
-			source += serializeScopedHistoryRecord(kDialogLastPathKey, scopeSpec.scope, "path", state.lastPath);
+		if (!state.lastPath.empty()) source += serializeScopedHistoryRecord(kDialogLastPathKey, scopeSpec.scope, "path", state.lastPath);
 		for (const MRDialogHistoryEntry &entry : state.pathHistory)
 			source += serializeScopedHistoryRecord(kDialogPathHistoryKey, scopeSpec.scope, "value", entry.value);
 		for (const MRDialogHistoryEntry &entry : state.fileHistory)
 			source += serializeScopedHistoryRecord(kDialogFileHistoryKey, scopeSpec.scope, "value", entry.value);
 	}
 	for (std::size_t i = 0; i < multiFilespecHistory.size(); ++i)
-		source += "MRSETUP('MULTI_FILESPEC_HISTORY', '" +
-		          escapeMrmacSingleQuotedLiteral(multiFilespecHistory[i]) + "');\n";
+		source += "MRSETUP('MULTI_FILESPEC_HISTORY', '" + escapeMrmacSingleQuotedLiteral(multiFilespecHistory[i]) + "');\n";
 	for (std::size_t i = 0; i < multiPathHistory.size(); ++i)
-		source += "MRSETUP('MULTI_PATH_HISTORY', '" +
-		          escapeMrmacSingleQuotedLiteral(multiPathHistory[i]) + "');\n";
-	source += "MRSETUP('DEFAULT_PROFILE_DESCRIPTION', '" +
-	          escapeMrmacSingleQuotedLiteral(configuredDefaultProfileDescription()) + "');\n";
+		source += "MRSETUP('MULTI_PATH_HISTORY', '" + escapeMrmacSingleQuotedLiteral(multiPathHistory[i]) + "');\n";
+	source += "MRSETUP('DEFAULT_PROFILE_DESCRIPTION', '" + escapeMrmacSingleQuotedLiteral(configuredDefaultProfileDescription()) + "');\n";
 	source += "MRSETUP('PAGE_BREAK', '" + escapeMrmacSingleQuotedLiteral(edit.pageBreak) + "');\n";
 	source += "MRSETUP('WORD_DELIMITERS', '" + escapeMrmacSingleQuotedLiteral(edit.wordDelimiters) + "');\n";
-	source +=
-	    "MRSETUP('DEFAULT_EXTENSIONS', '" + escapeMrmacSingleQuotedLiteral(edit.defaultExtensions) + "');\n";
-	source += "MRSETUP('TRUNCATE_SPACES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.truncateSpaces)) +
-	          "');\n";
-	source +=
-	    "MRSETUP('EOF_CTRL_Z', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.eofCtrlZ)) +
-	    "');\n";
-	source += "MRSETUP('EOF_CR_LF', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.eofCrLf)) +
-	          "');\n";
-	source +=
-	    "MRSETUP('TAB_EXPAND', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.tabExpand)) +
-	    "');\n";
-	source +=
-	    "MRSETUP('DISPLAY_TABS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.displayTabs)) +
-	    "');\n";
+	source += "MRSETUP('DEFAULT_EXTENSIONS', '" + escapeMrmacSingleQuotedLiteral(edit.defaultExtensions) + "');\n";
+	source += "MRSETUP('TRUNCATE_SPACES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.truncateSpaces)) + "');\n";
+	source += "MRSETUP('EOF_CTRL_Z', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.eofCtrlZ)) + "');\n";
+	source += "MRSETUP('EOF_CR_LF', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.eofCrLf)) + "');\n";
+	source += "MRSETUP('TAB_EXPAND', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.tabExpand)) + "');\n";
+	source += "MRSETUP('DISPLAY_TABS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.displayTabs)) + "');\n";
 	source += "MRSETUP('TAB_SIZE', '" + std::to_string(edit.tabSize) + "');\n";
 	source += "MRSETUP('LEFT_MARGIN', '" + std::to_string(edit.leftMargin) + "');\n";
 	source += "MRSETUP('RIGHT_MARGIN', '" + std::to_string(edit.rightMargin) + "');\n";
-	source += "MRSETUP('FORMAT_RULER', '" +
-	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.formatRuler)) + "');\n";
-	source += "MRSETUP('WORD_WRAP', '" +
-	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.wordWrap)) + "');\n";
+	source += "MRSETUP('FORMAT_RULER', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.formatRuler)) + "');\n";
+	source += "MRSETUP('WORD_WRAP', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.wordWrap)) + "');\n";
 	source += "MRSETUP('INDENT_STYLE', '" + escapeMrmacSingleQuotedLiteral(edit.indentStyle) + "');\n";
 	source += "MRSETUP('FILE_TYPE', '" + escapeMrmacSingleQuotedLiteral(edit.fileType) + "');\n";
 	source += "MRSETUP('BINARY_RECORD_LENGTH', '" + std::to_string(edit.binaryRecordLength) + "');\n";
@@ -5173,50 +4160,34 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source += "MRSETUP('BACKUP_DIRECTORY', '" + escapeMrmacSingleQuotedLiteral(edit.backupDirectory) + "');\n";
 	source += "MRSETUP('AUTOSAVE_INACTIVITY_SECONDS', '" + std::to_string(edit.autosaveInactivitySeconds) + "');\n";
 	source += "MRSETUP('AUTOSAVE_INTERVAL_SECONDS', '" + std::to_string(edit.autosaveIntervalSeconds) + "');\n";
-	source += "MRSETUP('BACKUP_FILES', '" +
-	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.backupFiles)) + "');\n";
-	source += "MRSETUP('SHOW_EOF_MARKER', '" +
-	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.showEofMarker)) + "');\n";
-	source += "MRSETUP('SHOW_EOF_MARKER_EMOJI', '" +
-	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.showEofMarkerEmoji)) + "');\n";
-	source += "MRSETUP('LINE_NUMBERS_POSITION', '" +
-	          escapeMrmacSingleQuotedLiteral(edit.lineNumbersPosition) + "');\n";
-	source += "MRSETUP('LINE_NUM_ZERO_FILL', '" +
-	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.lineNumZeroFill)) + "');\n";
+	source += "MRSETUP('BACKUP_FILES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.backupFiles)) + "');\n";
+	source += "MRSETUP('SHOW_EOF_MARKER', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.showEofMarker)) + "');\n";
+	source += "MRSETUP('SHOW_EOF_MARKER_EMOJI', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.showEofMarkerEmoji)) + "');\n";
+	source += "MRSETUP('LINE_NUMBERS_POSITION', '" + escapeMrmacSingleQuotedLiteral(edit.lineNumbersPosition) + "');\n";
+	source += "MRSETUP('LINE_NUM_ZERO_FILL', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.lineNumZeroFill)) + "');\n";
 	source += "MRSETUP('MINIMAP_POSITION', '" + escapeMrmacSingleQuotedLiteral(edit.miniMapPosition) + "');\n";
 	source += "MRSETUP('MINIMAP_WIDTH', '" + std::to_string(edit.miniMapWidth) + "');\n";
-	source += "MRSETUP('MINIMAP_MARKER_GLYPH', '" + escapeMrmacSingleQuotedLiteral(edit.miniMapMarkerGlyph) +
-	          "');\n";
+	source += "MRSETUP('MINIMAP_MARKER_GLYPH', '" + escapeMrmacSingleQuotedLiteral(edit.miniMapMarkerGlyph) + "');\n";
 	source += "MRSETUP('GUTTERS', '" + escapeMrmacSingleQuotedLiteral(edit.gutters) + "');\n";
-	source += "MRSETUP('PERSISTENT_BLOCKS', '" +
-	          escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.persistentBlocks)) + "');\n";
-	source += "MRSETUP('CODE_FOLDING_POSITION', '" +
-	          escapeMrmacSingleQuotedLiteral(edit.codeFoldingPosition) + "');\n";
+	source += "MRSETUP('PERSISTENT_BLOCKS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.persistentBlocks)) + "');\n";
+	source += "MRSETUP('CODE_FOLDING_POSITION', '" + escapeMrmacSingleQuotedLiteral(edit.codeFoldingPosition) + "');\n";
 	source += "MRSETUP('COLUMN_BLOCK_MOVE', '" + escapeMrmacSingleQuotedLiteral(edit.columnBlockMove) + "');\n";
 	source += "MRSETUP('DEFAULT_MODE', '" + escapeMrmacSingleQuotedLiteral(edit.defaultMode) + "');\n";
 	source += "MRSETUP('CURSOR_STATUS_COLOR', '" + escapeMrmacSingleQuotedLiteral(edit.cursorStatusColor) + "');\n";
-	source += "MRSETUP('" + std::string(kThemeSettingsKey) + "', '" +
-	          escapeMrmacSingleQuotedLiteral(themePath) + "');\n";
-	source += "MRSETUP('" + std::string(kKeymapSettingsKey) + "', '" +
-	          escapeMrmacSingleQuotedLiteral(configuredKeymapFilePath()) + "');\n";
+	source += "MRSETUP('" + std::string(kThemeSettingsKey) + "', '" + escapeMrmacSingleQuotedLiteral(themePath) + "');\n";
+	source += "MRSETUP('" + std::string(kKeymapSettingsKey) + "', '" + escapeMrmacSingleQuotedLiteral(configuredKeymapFilePath()) + "');\n";
 	source += serializeKeymapProfilesToSettingsSource(configuredKeymapProfiles(), configuredActiveKeymapProfile());
 
-	for (const auto & profile : configuredEditExtensionProfiles()) {
-		source += "MRFEPROFILE('DEFINE', '" + escapeMrmacSingleQuotedLiteral(profile.id) +
-		          "', '" + escapeMrmacSingleQuotedLiteral(profile.name) + "', '');\n";
-		for (const std::string & ext : profile.extensions)
-			source += "MRFEPROFILE('EXT', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', '" +
-			          escapeMrmacSingleQuotedLiteral(ext) + "', '');\n";
-		if (!profile.windowColorThemeUri.empty())
-			source += "MRFEPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', '" +
-			          std::string(kWindowColorThemeProfileKey) + "', '" +
-			          escapeMrmacSingleQuotedLiteral(profile.windowColorThemeUri) + "');\n";
+	for (const auto &profile : configuredEditExtensionProfiles()) {
+		source += "MRFEPROFILE('DEFINE', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', '" + escapeMrmacSingleQuotedLiteral(profile.name) + "', '');\n";
+		for (const std::string &ext : profile.extensions)
+			source += "MRFEPROFILE('EXT', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', '" + escapeMrmacSingleQuotedLiteral(ext) + "', '');\n";
+		if (!profile.windowColorThemeUri.empty()) source += "MRFEPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', '" + std::string(kWindowColorThemeProfileKey) + "', '" + escapeMrmacSingleQuotedLiteral(profile.windowColorThemeUri) + "');\n";
 		for (std::size_t i = 0; i < descriptorCount; ++i)
 			if (descriptors[i].profileSupported && (profile.overrides.mask & descriptors[i].overrideBit) != 0) {
 				std::string value;
 
-				if (std::string(descriptors[i].key) == "PAGE_BREAK")
-					value = profile.overrides.values.pageBreak;
+				if (std::string(descriptors[i].key) == "PAGE_BREAK") value = profile.overrides.values.pageBreak;
 				else if (std::string(descriptors[i].key) == "WORD_DELIMITERS")
 					value = profile.overrides.values.wordDelimiters;
 				else if (std::string(descriptors[i].key) == "DEFAULT_EXTENSIONS")
@@ -5284,8 +4255,7 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 				else if (std::string(descriptors[i].key) == "CURSOR_STATUS_COLOR")
 					value = profile.overrides.values.cursorStatusColor;
 
-				source += "MRFEPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', '" +
-				          descriptors[i].key + "', '" + escapeMrmacSingleQuotedLiteral(value) + "');\n";
+				source += "MRFEPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', '" + descriptors[i].key + "', '" + escapeMrmacSingleQuotedLiteral(value) + "');\n";
 			}
 	}
 	source += "END_MACRO;\n";
@@ -5305,45 +4275,32 @@ bool persistConfiguredSettingsSnapshot(std::string *errorMessage, MRSettingsWrit
 	paths.tempPath = configuredTempDirectoryPath();
 	paths.shellUri = configuredShellExecutablePath();
 
-	if (!validateSettingsMacroFilePath(settingsPath, errorMessage))
-		return false;
-	if (!ensureDirectoryTree(settingsDir, errorMessage))
-		return false;
+	if (!validateSettingsMacroFilePath(settingsPath, errorMessage)) return false;
+	if (!ensureDirectoryTree(settingsDir, errorMessage)) return false;
 	static_cast<void>(readTextFile(settingsPath, previousSource));
-	source = configuredAutoloadWorkspace() ? buildSettingsMacroSourceWithWorkspace(paths)
-	                                       : buildSettingsMacroSource(paths);
-	if (!writeTextFile(settingsPath, source))
-		return setError(errorMessage, "Unable to write settings macro file: " + settingsPath);
+	source = configuredAutoloadWorkspace() ? buildSettingsMacroSourceWithWorkspace(paths) : buildSettingsMacroSource(paths);
+	if (!writeTextFile(settingsPath, source)) return setError(errorMessage, "Unable to write settings macro file: " + settingsPath);
 	populateSettingsWriteReport(settingsPath, previousSource, source, report);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool writeSettingsMacroFile(const MRSetupPaths &paths, std::string *errorMessage, MRSettingsWriteReport *report) {
 	std::string settingsPath = normalizeConfiguredPathInput(paths.settingsMacroUri);
 	std::string settingsDir = directoryPartOf(settingsPath);
-	std::string themePath = configuredColorThemeFile().empty() ? defaultColorThemePathForSettings(settingsPath)
-	                                                          : configuredColorThemeFilePath();
+	std::string themePath = configuredColorThemeFile().empty() ? defaultColorThemePathForSettings(settingsPath) : configuredColorThemeFilePath();
 	std::string source;
 	std::string previousSource;
 
-	if (!validateSettingsMacroFilePath(settingsPath, errorMessage))
-		return false;
-	if (!ensureDirectoryTree(settingsDir, errorMessage))
-		return false;
-	if (!writeColorThemeFile(themePath, errorMessage))
-		return false;
-	if (!setConfiguredColorThemeFilePath(themePath, errorMessage))
-		return false;
+	if (!validateSettingsMacroFilePath(settingsPath, errorMessage)) return false;
+	if (!ensureDirectoryTree(settingsDir, errorMessage)) return false;
+	if (!writeColorThemeFile(themePath, errorMessage)) return false;
+	if (!setConfiguredColorThemeFilePath(themePath, errorMessage)) return false;
 	static_cast<void>(readTextFile(settingsPath, previousSource));
-	source = configuredAutoloadWorkspace() ? buildSettingsMacroSourceWithWorkspace(paths)
-	                                       : buildSettingsMacroSource(paths);
-	if (!writeTextFile(settingsPath, source))
-		return setError(errorMessage, "Unable to write settings macro file: " + settingsPath);
+	source = configuredAutoloadWorkspace() ? buildSettingsMacroSourceWithWorkspace(paths) : buildSettingsMacroSource(paths);
+	if (!writeTextFile(settingsPath, source)) return setError(errorMessage, "Unable to write settings macro file: " + settingsPath);
 	populateSettingsWriteReport(settingsPath, previousSource, source, report);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -5352,13 +4309,10 @@ bool ensureSettingsMacroFileExists(const std::string &settingsMacroUri, std::str
 	struct stat st;
 	MRSetupPaths defaults;
 
-	if (!validateSettingsMacroFilePath(normalized, errorMessage))
-		return false;
+	if (!validateSettingsMacroFilePath(normalized, errorMessage)) return false;
 	if (::stat(normalized.c_str(), &st) == 0) {
-		if (S_ISDIR(st.st_mode))
-			return setError(errorMessage, "Settings macro URI must include a filename.");
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (S_ISDIR(st.st_mode)) return setError(errorMessage, "Settings macro URI must include a filename.");
+		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
 
@@ -5379,121 +4333,95 @@ bool validateSettingsMacroFilePath(const std::string &path, std::string *errorMe
 	std::string normalized = normalizeConfiguredPathInput(path);
 	struct stat st;
 
-	if (normalized.empty())
-		return setError(errorMessage, "Empty settings macro URI.");
-	if (::stat(normalized.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
-		return setError(errorMessage, "Settings macro URI must include a filename.");
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (normalized.empty()) return setError(errorMessage, "Empty settings macro URI.");
+	if (::stat(normalized.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) return setError(errorMessage, "Settings macro URI must include a filename.");
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool setConfiguredSettingsMacroFilePath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 
-	if (!validateSettingsMacroFilePath(path, errorMessage))
-		return false;
+	if (!validateSettingsMacroFilePath(path, errorMessage)) return false;
 	configuredSettingsMacroFile() = makeAbsolutePath(normalized);
-	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupSettingsMacro,
-	                                         configuredSettingsMacroFile(), nullptr));
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupSettingsMacro, configuredSettingsMacroFile(), nullptr));
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 std::string configuredSettingsMacroFilePath() {
 	const std::string &configured = configuredSettingsMacroFile();
-	if (!configured.empty())
-		return makeAbsolutePath(configured);
+	if (!configured.empty()) return makeAbsolutePath(configured);
 	return resolveSetupPathDefaults().settingsMacroUri;
 }
 
 bool validateMacroDirectoryPath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 
-	if (normalized.empty())
-		return setError(errorMessage, "Empty macro path.");
-	if (!isReadableDirectory(normalized))
-		return setError(errorMessage, "Macro path is missing or not readable: " + normalized);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (normalized.empty()) return setError(errorMessage, "Empty macro path.");
+	if (!isReadableDirectory(normalized)) return setError(errorMessage, "Macro path is missing or not readable: " + normalized);
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool setConfiguredMacroDirectoryPath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 
-	if (!validateMacroDirectoryPath(path, errorMessage))
-		return false;
+	if (!validateMacroDirectoryPath(path, errorMessage)) return false;
 	configuredMacroDirectory() = makeAbsolutePath(normalized);
 	MRScopedDialogHistoryState &generalDialogHistory = dialogHistoryState(MRDialogHistoryScope::General);
-	if (generalDialogHistory.pathHistory.empty() && isReadableDirectory(configuredMacroDirectory()))
-		addHistoryEntry(generalDialogHistory.pathHistory, configuredMacroDirectory(), configuredPathHistoryLimit());
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (generalDialogHistory.pathHistory.empty() && isReadableDirectory(configuredMacroDirectory())) addHistoryEntry(generalDialogHistory.pathHistory, configuredMacroDirectory(), configuredPathHistoryLimit());
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 std::string configuredMacroDirectoryPath() {
 	const std::string &configured = configuredMacroDirectory();
 	std::string absoluteConfigured = makeAbsolutePath(configured);
-	if (!isReadableDirectory(absoluteConfigured))
-		return std::string();
+	if (!isReadableDirectory(absoluteConfigured)) return std::string();
 	return absoluteConfigured;
 }
 
 bool validateHelpFilePath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 
-	if (normalized.empty())
-		return setError(errorMessage, "Empty help URI.");
-	if (hasDirectorySeparator(normalized) && !isReadableFile(normalized))
-		return setError(errorMessage, "Help URI is missing or not readable: " + normalized);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (normalized.empty()) return setError(errorMessage, "Empty help URI.");
+	if (hasDirectorySeparator(normalized) && !isReadableFile(normalized)) return setError(errorMessage, "Help URI is missing or not readable: " + normalized);
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool setConfiguredHelpFilePath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 
-	if (!validateHelpFilePath(path, errorMessage))
-		return false;
+	if (!validateHelpFilePath(path, errorMessage)) return false;
 	configuredHelpFile() = makeAbsolutePath(normalized);
-	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupHelpFile,
-	                                         configuredHelpFile(), nullptr));
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupHelpFile, configuredHelpFile(), nullptr));
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 std::string configuredHelpFilePath() {
 	const std::string &configured = configuredHelpFile();
-	if (!configured.empty())
-		return makeAbsolutePath(configured);
+	if (!configured.empty()) return makeAbsolutePath(configured);
 	return resolveSetupPathDefaults().helpUri;
 }
 
 bool validateTempDirectoryPath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 
-	if (normalized.empty())
-		return setError(errorMessage, "Empty temp path.");
-	if (!isWritableDirectory(normalized))
-		return setError(errorMessage, "Temp path is missing or not writable: " + normalized);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (normalized.empty()) return setError(errorMessage, "Empty temp path.");
+	if (!isWritableDirectory(normalized)) return setError(errorMessage, "Temp path is missing or not writable: " + normalized);
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool setConfiguredTempDirectoryPath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 
-	if (!validateTempDirectoryPath(path, errorMessage))
-		return false;
+	if (!validateTempDirectoryPath(path, errorMessage)) return false;
 	configuredTempDirectory() = makeAbsolutePath(normalized);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -5501,35 +4429,27 @@ std::string configuredTempDirectoryPath() {
 	const std::string &configured = configuredTempDirectory();
 	std::string absoluteConfigured = makeAbsolutePath(configured);
 	std::string builtIn = resolveSetupPathDefaults().tempPath;
-	if (isWritableDirectory(absoluteConfigured))
-		return absoluteConfigured;
-	if (isWritableDirectory(builtIn))
-		return builtIn;
+	if (isWritableDirectory(absoluteConfigured)) return absoluteConfigured;
+	if (isWritableDirectory(builtIn)) return builtIn;
 	return "/tmp";
 }
 
 bool validateShellExecutablePath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 
-	if (normalized.empty())
-		return setError(errorMessage, "Empty shell executable URI.");
-	if (!isExecutableFile(normalized))
-		return setError(errorMessage, "Shell executable URI is missing or not executable: " + normalized);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (normalized.empty()) return setError(errorMessage, "Empty shell executable URI.");
+	if (!isExecutableFile(normalized)) return setError(errorMessage, "Shell executable URI is missing or not executable: " + normalized);
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool setConfiguredShellExecutablePath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 
-	if (!validateShellExecutablePath(path, errorMessage))
-		return false;
+	if (!validateShellExecutablePath(path, errorMessage)) return false;
 	configuredShellExecutable() = makeAbsolutePath(normalized);
-	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupShellExecutable,
-	                                         configuredShellExecutable(), nullptr));
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupShellExecutable, configuredShellExecutable(), nullptr));
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -5537,10 +4457,8 @@ std::string configuredShellExecutablePath() {
 	const std::string &configured = configuredShellExecutable();
 	std::string absoluteConfigured = makeAbsolutePath(configured);
 	std::string builtIn = resolveSetupPathDefaults().shellUri;
-	if (isExecutableFile(absoluteConfigured))
-		return absoluteConfigured;
-	if (isExecutableFile(builtIn))
-		return builtIn;
+	if (isExecutableFile(absoluteConfigured)) return absoluteConfigured;
+	if (isExecutableFile(builtIn)) return builtIn;
 	return "/bin/sh";
 }
 
@@ -5549,42 +4467,30 @@ bool validateLogFilePath(const std::string &path, std::string *errorMessage) {
 	std::string directory;
 	struct stat st;
 
-	if (normalized.empty())
-		return setError(errorMessage, "Empty log file URI.");
-	if (isReadableDirectory(normalized))
-		return setError(errorMessage, "Log file URI points to a directory: " + normalized);
-	if (::stat(normalized.c_str(), &st) == 0 && !S_ISREG(st.st_mode))
-		return setError(errorMessage, "Log file URI must point to a regular file: " + normalized);
-	if (isWritableRegularFile(normalized) == false && ::stat(normalized.c_str(), &st) == 0)
-		return setError(errorMessage, "Log file is not writable: " + normalized);
+	if (normalized.empty()) return setError(errorMessage, "Empty log file URI.");
+	if (isReadableDirectory(normalized)) return setError(errorMessage, "Log file URI points to a directory: " + normalized);
+	if (::stat(normalized.c_str(), &st) == 0 && !S_ISREG(st.st_mode)) return setError(errorMessage, "Log file URI must point to a regular file: " + normalized);
+	if (isWritableRegularFile(normalized) == false && ::stat(normalized.c_str(), &st) == 0) return setError(errorMessage, "Log file is not writable: " + normalized);
 	directory = directoryPartOf(normalized);
-	if (directory.empty())
-		directory = currentWorkingDirectory();
-	if (directory.empty() || !isWritableDirectory(makeAbsolutePath(directory)))
-		return setError(errorMessage, "Log file path is missing or parent directory is not writable: " +
-		                             normalized);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (directory.empty()) directory = currentWorkingDirectory();
+	if (directory.empty() || !isWritableDirectory(makeAbsolutePath(directory))) return setError(errorMessage, "Log file path is missing or parent directory is not writable: " + normalized);
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool setConfiguredLogFilePath(const std::string &path, std::string *errorMessage) {
 	const std::string normalized = normalizeConfiguredPathInput(path);
 
-	if (!validateLogFilePath(path, errorMessage))
-		return false;
+	if (!validateLogFilePath(path, errorMessage)) return false;
 	configuredLogFile() = makeAbsolutePath(normalized);
-	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupLogFile,
-	                                         configuredLogFile(), nullptr));
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupLogFile, configuredLogFile(), nullptr));
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 std::string configuredLogFilePath() {
 	const std::string &configured = configuredLogFile();
-	if (!configured.empty())
-		return makeAbsolutePath(configured);
+	if (!configured.empty()) return makeAbsolutePath(configured);
 	return defaultLogFilePathForSettings(configuredSettingsMacroFilePath());
 }
 
@@ -5595,7 +4501,6 @@ std::string defaultSettingsMacroFilePath() {
 std::string defaultMacroDirectoryPath() {
 	std::string configured = configuredMacroDirectoryPath();
 
-	if (!configured.empty())
-		return configured;
+	if (!configured.empty()) return configured;
 	return resolveSetupPathDefaults().macroPath;
 }

@@ -15,11 +15,12 @@ constexpr ushort cmMRNumericSliderChanged = 0x7A10;
 
 class MRNumericSlider final : public TView {
   public:
-	enum Format : uchar { fmtRaw, fmtPercent };
+	enum Format : uchar {
+		fmtRaw,
+		fmtPercent
+	};
 
-	MRNumericSlider(const TRect &bounds, int32_t aMin, int32_t aMax, int32_t aValue = 0,
-	                 int32_t aStep = 1, int32_t aPageStep = 10, Format aFormat = fmtRaw,
-	                 ushort aChangedCmd = cmMRNumericSliderChanged) noexcept;
+	MRNumericSlider(const TRect &bounds, int32_t aMin, int32_t aMax, int32_t aValue = 0, int32_t aStep = 1, int32_t aPageStep = 10, Format aFormat = fmtRaw, ushort aChangedCmd = cmMRNumericSliderChanged) noexcept;
 
 	void draw() override;
 	void handleEvent(TEvent &event) override;

@@ -26,8 +26,7 @@ class MRTextBuffer {
 	}
 
 	MRTextBufferModel::ReadSnapshot readSnapshot() const {
-		return mEditor != nullptr ? mEditor->bufferModel().readSnapshot()
-		                         : MRTextBufferModel::ReadSnapshot();
+		return mEditor != nullptr ? mEditor->bufferModel().readSnapshot() : MRTextBufferModel::ReadSnapshot();
 	}
 
 	MRTextBufferModel::Range selectionRange() const noexcept {
@@ -75,8 +74,7 @@ class MRTextBuffer {
 	}
 
 	void setModified(bool changed) noexcept {
-		if (mEditor == nullptr)
-			return;
+		if (mEditor == nullptr) return;
 		mEditor->setDocumentModified(changed);
 	}
 

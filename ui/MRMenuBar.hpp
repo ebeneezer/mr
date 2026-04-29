@@ -27,15 +27,10 @@ class MRMenuBar : public TMenuBar {
 	virtual void draw() override;
 	void tickMarquee();
 	void setPersistentBlocksMenuState(bool enabled);
-	bool registerRuntimeMenuItem(const std::string &menuTitle, const std::string &itemTitle,
-	                             const std::string &macroSpec, const std::string &ownerSpec,
-	                             std::string *errorMessage = nullptr);
+	bool registerRuntimeMenuItem(const std::string &menuTitle, const std::string &itemTitle, const std::string &macroSpec, const std::string &ownerSpec, std::string *errorMessage = nullptr);
 	bool refreshRuntimeMenus(std::string *errorMessage = nullptr);
-	bool removeRuntimeMenuItem(const std::string &menuTitle, const std::string &itemTitle,
-	                           const std::string &ownerSpec,
-	                           std::string *errorMessage = nullptr);
-	bool removeRuntimeNodesOwnedByMacroSpec(const std::string &ownerSpec,
-	                                        std::string *errorMessage = nullptr);
+	bool removeRuntimeMenuItem(const std::string &menuTitle, const std::string &itemTitle, const std::string &ownerSpec, std::string *errorMessage = nullptr);
+	bool removeRuntimeNodesOwnedByMacroSpec(const std::string &ownerSpec, std::string *errorMessage = nullptr);
 	bool removeRuntimeNodesOwnedByFile(const std::string &fileSpec, std::string *errorMessage = nullptr);
 	bool handleRuntimeCommand(ushort command);
 
@@ -65,7 +60,7 @@ class MRMenuBar : public TMenuBar {
 	void setManualMarqueeStatus(const std::string &status, MarqueeKind kind) {
 		if (mManualMarqueeStatus != status || mManualMarqueeKind != kind) {
 			mManualMarqueeStatus = status;
-		mManualMarqueeKind = kind;
+			mManualMarqueeKind = kind;
 			drawView();
 		}
 	}
@@ -77,7 +72,7 @@ class MRMenuBar : public TMenuBar {
 		return mManualMarqueeStatus;
 	}
 
- private:
+  private:
 	enum class RuntimeMenuNodeKind : unsigned char {
 		Item,
 		Separator
@@ -97,8 +92,7 @@ class MRMenuBar : public TMenuBar {
 
 	static int marqueeVisibleSpanFor(const std::string &text, int laneWidth) noexcept {
 		const int textLen = static_cast<int>(text.size());
-		if (textLen <= 0 || laneWidth <= 0)
-			return 0;
+		if (textLen <= 0 || laneWidth <= 0) return 0;
 		return std::min(textLen, laneWidth);
 	}
 	static constexpr std::chrono::milliseconds marqueeScrollStepInterval() {
@@ -134,8 +128,7 @@ class MRMenuBar : public TMenuBar {
 	static bool ownerSpecMatchesFile(const std::string &ownerSpec, const std::string &fileSpec) noexcept;
 	bool allocateRuntimeCommand(ushort &command, std::string *errorMessage);
 	bool rebuildRuntimeMenu();
-	int findRuntimeNodeIndex(const std::string &menuKey, const std::string &itemKey,
-	                         const std::string &ownerSpec) const noexcept;
+	int findRuntimeNodeIndex(const std::string &menuKey, const std::string &itemKey, const std::string &ownerSpec) const noexcept;
 
 	TMenu *mBaseMenu = nullptr;
 	std::vector<RuntimeMenuNode> mRuntimeNodes;

@@ -104,13 +104,11 @@ std::string describeDesktopCurrentView() {
 		line += "edit('";
 		line += editWindow->getTitle(0) != nullptr ? editWindow->getTitle(0) : "?";
 		line += "')";
-	}
-	else if (dialog != nullptr) {
+	} else if (dialog != nullptr) {
 		line += "dialog('";
 		line += dialog->getTitle(0) != nullptr ? dialog->getTitle(0) : "?";
 		line += "')";
-	}
-	else if (current != nullptr)
+	} else if (current != nullptr)
 		line += "other";
 	else
 		line += "null";
@@ -125,13 +123,8 @@ std::string describeDesktopCurrentView() {
 
 class TBindingKeyCaptureDialog : public MRDialogFoundation {
   public:
-	TBindingKeyCaptureDialog(const char *title, const char *prompt)
-	    : TWindowInit(&TDialog::initFrame),
-	      MRDialogFoundation(centeredSetupDialogRect(52, 8),
-	                         title != nullptr ? title : "Bind Key", 52, 8),
-	      captureAccepted(false), capturedKeyCode(kbNoKey), capturedControlState(0) {
-		insert(new TStaticText(TRect(2, 2, 50, 6),
-		                       prompt != nullptr ? prompt : "Press key to bind.\nEsc = cancel."));
+	TBindingKeyCaptureDialog(const char *title, const char *prompt) : TWindowInit(&TDialog::initFrame), MRDialogFoundation(centeredSetupDialogRect(52, 8), title != nullptr ? title : "Bind Key", 52, 8), captureAccepted(false), capturedKeyCode(kbNoKey), capturedControlState(0) {
+		insert(new TStaticText(TRect(2, 2, 50, 6), prompt != nullptr ? prompt : "Press key to bind.\nEsc = cancel."));
 	}
 
 	void handleEvent(TEvent &event) override {
@@ -172,19 +165,16 @@ class TBindingKeyCaptureDialog : public MRDialogFoundation {
 };
 
 void postWindowSupportError(std::string_view text) {
-	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text,
-	                               mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 }
 
 void postWindowSupportWarning(std::string_view text) {
-	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text,
-	                               mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text, mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
 }
 
 [[nodiscard]] std::string currentWorkingDirectory() {
 	std::array<char, 1024> cwd{};
-	if (::getcwd(cwd.data(), cwd.size()) == nullptr)
-		return std::string();
+	if (::getcwd(cwd.data(), cwd.size()) == nullptr) return std::string();
 	return std::string(cwd.data());
 }
 
@@ -193,12 +183,10 @@ void postWindowSupportWarning(std::string_view text) {
 	const ssize_t len = ::readlink("/proc/self/exe", path.data(), path.size() - 1);
 	std::size_t pos;
 
-	if (len <= 0)
-		return std::string();
+	if (len <= 0) return std::string();
 	path[static_cast<std::size_t>(len)] = '\0';
 	pos = std::string_view(path.data()).find_last_of('/');
-	if (pos == std::string_view::npos)
-		return std::string();
+	if (pos == std::string_view::npos) return std::string();
 	return std::string(path.data(), pos);
 }
 
@@ -209,17 +197,14 @@ void postWindowSupportWarning(std::string_view text) {
 	std::string candidate;
 	const std::string configuredName = baseNameOf(configured);
 
-	if (!configured.empty() && ::access(configured.c_str(), R_OK) == 0)
-		return configured;
+	if (!configured.empty() && ::access(configured.c_str(), R_OK) == 0) return configured;
 	if (!fromCwd.empty()) {
 		candidate = fromCwd + "/" + configuredName;
-		if (::access(candidate.c_str(), R_OK) == 0)
-			return candidate;
+		if (::access(candidate.c_str(), R_OK) == 0) return candidate;
 	}
 	if (!fromExe.empty()) {
 		candidate = fromExe + "/" + configuredName;
-		if (::access(candidate.c_str(), R_OK) == 0)
-			return candidate;
+		if (::access(candidate.c_str(), R_OK) == 0) return candidate;
 	}
 	return configured;
 }
@@ -229,10 +214,8 @@ void postWindowSupportWarning(std::string_view text) {
 	const std::time_t now = std::time(nullptr);
 	const std::tm *tmNow = std::localtime(&now);
 
-	if (tmNow == nullptr)
-		return std::string("--:--:--");
-	if (std::strftime(buffer.data(), buffer.size(), "%H:%M:%S", tmNow) == 0)
-		return std::string("--:--:--");
+	if (tmNow == nullptr) return std::string("--:--:--");
+	if (std::strftime(buffer.data(), buffer.size(), "%H:%M:%S", tmNow) == 0) return std::string("--:--:--");
 	return std::string(buffer.data());
 }
 
@@ -245,8 +228,7 @@ void postWindowSupportWarning(std::string_view text) {
 
 [[nodiscard]] std::string baseNameOf(std::string_view path) {
 	const std::size_t pos = path.find_last_of("\\/");
-	if (pos == std::string_view::npos)
-		return std::string(path);
+	if (pos == std::string_view::npos) return std::string(path);
 	return std::string(path.substr(pos + 1));
 }
 
@@ -254,8 +236,7 @@ void postWindowSupportWarning(std::string_view text) {
 	const std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 	for (MREditWindow *window : windows) {
 		const char *windowTitle = window != nullptr ? window->getTitle(0) : nullptr;
-		if (windowTitle != nullptr && title == windowTitle)
-			return window;
+		if (windowTitle != nullptr && title == windowTitle) return window;
 	}
 	return nullptr;
 }
@@ -271,17 +252,12 @@ void postWindowSupportWarning(std::string_view text) {
 	MREditWindow *hiddenNonUtility = nullptr;
 
 	for (MREditWindow *window : windows) {
-		if ((window->state & sfVisible) != 0)
-			return window;
-		if (hiddenEditable == nullptr && !window->isReadOnly())
-			hiddenEditable = window;
-		if (hiddenNonUtility == nullptr && !isReservedUtilityWindow(window))
-			hiddenNonUtility = window;
+		if ((window->state & sfVisible) != 0) return window;
+		if (hiddenEditable == nullptr && !window->isReadOnly()) hiddenEditable = window;
+		if (hiddenNonUtility == nullptr && !isReservedUtilityWindow(window)) hiddenNonUtility = window;
 	}
-	if (hiddenEditable != nullptr)
-		return hiddenEditable;
-	if (hiddenNonUtility != nullptr)
-		return hiddenNonUtility;
+	if (hiddenEditable != nullptr) return hiddenEditable;
+	if (hiddenNonUtility != nullptr) return hiddenNonUtility;
 	return nullptr;
 }
 
@@ -289,13 +265,11 @@ void postWindowSupportWarning(std::string_view text) {
 	MREditWindow *previous;
 	MREditWindow *win;
 
-	if (TProgram::deskTop == nullptr)
-		return nullptr;
+	if (TProgram::deskTop == nullptr) return nullptr;
 
 	previous = dynamic_cast<MREditWindow *>(TProgram::deskTop->current);
 	win = createEditorWindow(title);
-	if (win == nullptr)
-		return nullptr;
+	if (win == nullptr) return nullptr;
 	if (!win->loadTextBuffer(text, title)) {
 		message(win, evCommand, cmClose, nullptr);
 		return nullptr;
@@ -303,28 +277,22 @@ void postWindowSupportWarning(std::string_view text) {
 	win->setReadOnly(true);
 	win->setFileChanged(false);
 	setWindowManuallyHidden(win, hidden);
-	if (hidden)
-		win->hide();
-	if (hidden && previous != nullptr && previous != win)
-		static_cast<void>(mrActivateEditWindow(previous));
+	if (hidden) win->hide();
+	if (hidden && previous != nullptr && previous != win) static_cast<void>(mrActivateEditWindow(previous));
 	return win;
 }
 
 [[nodiscard]] MREditWindow *ensureLogWindowInternal(bool activate) {
 	MREditWindow *win = findWindowByTitle(kLogWindowTitle);
 
-	if (g_logBuffer.empty())
-		g_logBuffer = "MR/MEMAC log initialized.\n";
-	if (win == nullptr)
-		win = createReadOnlyTextWindow(kLogWindowTitle.data(), g_logBuffer.c_str(), !activate);
-	if (win == nullptr)
-		return nullptr;
+	if (g_logBuffer.empty()) g_logBuffer = "MR/MEMAC log initialized.\n";
+	if (win == nullptr) win = createReadOnlyTextWindow(kLogWindowTitle.data(), g_logBuffer.c_str(), !activate);
+	if (win == nullptr) return nullptr;
 	win->replaceTextBuffer(g_logBuffer.c_str(), kLogWindowTitle.data());
 	win->setWindowRole(MREditWindow::wrLog);
 	win->setReadOnly(true);
 	win->setFileChanged(false);
-	if (activate)
-		static_cast<void>(mrActivateEditWindow(win));
+	if (activate) static_cast<void>(mrActivateEditWindow(win));
 	return win;
 }
 } // namespace
@@ -332,8 +300,7 @@ void postWindowSupportWarning(std::string_view text) {
 bool mrActivateEditWindow(MREditWindow *win) {
 	std::string line;
 
-	if (win == nullptr)
-		return false;
+	if (win == nullptr) return false;
 	if (focusDebugEnabled()) {
 		line = "mrActivateEditWindow before target='";
 		line += win->getTitle(0) != nullptr ? win->getTitle(0) : "?";
@@ -347,8 +314,7 @@ bool mrActivateEditWindow(MREditWindow *win) {
 	}
 	setWindowManuallyHidden(win, false);
 	setCurrentVirtualDesktop(win->mVirtualDesktop);
-	if ((win->state & sfVisible) == 0)
-		win->show();
+	if ((win->state & sfVisible) == 0) win->show();
 	win->select();
 	if (focusDebugEnabled()) {
 		line = "mrActivateEditWindow after target='";
@@ -366,8 +332,7 @@ bool mrActivateEditWindow(MREditWindow *win) {
 
 void mrScheduleWindowActivation(MREditWindow *win) {
 	std::string line;
-	if (win == nullptr)
-		return;
+	if (win == nullptr) return;
 	line = "mrScheduleWindowActivation target='";
 	line += win->getTitle(0) != nullptr ? win->getTitle(0) : "?";
 	line += "' visible=";
@@ -390,8 +355,7 @@ bool mrDispatchDeferredWindowActivation() {
 	MREditWindow *win = g_deferredActivationWindow;
 	std::string line;
 
-	if (win == nullptr)
-		return false;
+	if (win == nullptr) return false;
 	line = "mrDispatchDeferredWindowActivation before target='";
 	line += win->getTitle(0) != nullptr ? win->getTitle(0) : "?";
 	line += "' visible=";
@@ -402,8 +366,7 @@ bool mrDispatchDeferredWindowActivation() {
 	line += isWindowManuallyHidden(win) ? "1" : "0";
 	mrLogMessage(line);
 	g_deferredActivationWindow = nullptr;
-	if (!mrActivateEditWindow(win))
-		return false;
+	if (!mrActivateEditWindow(win)) return false;
 	line = "mrDispatchDeferredWindowActivation after target='";
 	line += win->getTitle(0) != nullptr ? win->getTitle(0) : "?";
 	line += "' visible=";
@@ -420,23 +383,19 @@ bool mrShowProjectHelp() {
 	MREditWindow *win;
 	const std::string helpPath = resolveHelpFilePath();
 
-	if (TProgram::deskTop == nullptr)
-		return false;
+	if (TProgram::deskTop == nullptr) return false;
 
 	win = dynamic_cast<MREditWindow *>(TProgram::deskTop->current);
 	if (win != nullptr) {
 		const std::string currentFile = win->currentFileName();
 		const char *title = win->getTitle(0);
-		if ((!currentFile.empty() && baseNameOf(currentFile) == baseNameOf(helpPath)) ||
-		    (title != nullptr && kHelpWindowTitle == title))
-			return true;
+		if ((!currentFile.empty() && baseNameOf(currentFile) == baseNameOf(helpPath)) || (title != nullptr && kHelpWindowTitle == title)) return true;
 	}
 
 	win = findWindowByTitle(kHelpWindowTitle);
 	if (win == nullptr) {
 		win = createEditorWindow(kHelpWindowTitle.data());
-		if (win == nullptr)
-			return false;
+		if (win == nullptr) return false;
 
 		if (!win->loadFromFile(helpPath.c_str())) {
 			postWindowSupportError("Unable to load help file: " + helpPath);
@@ -461,10 +420,8 @@ bool mrClearLogWindow() {
 
 	g_logBuffer = "MR/MEMAC log initialized.\n";
 	win = ensureLogWindowInternal(false);
-	if (win == nullptr)
-		return false;
-	if (!win->replaceTextBuffer(g_logBuffer.c_str(), kLogWindowTitle.data()))
-		return false;
+	if (win == nullptr) return false;
+	if (!win->replaceTextBuffer(g_logBuffer.c_str(), kLogWindowTitle.data())) return false;
 	win->setWindowRole(MREditWindow::wrLog);
 	win->setReadOnly(true);
 	win->setFileChanged(false);
@@ -476,18 +433,13 @@ bool mrEnsureUsableWorkWindow() {
 	MREditWindow *current = dynamic_cast<MREditWindow *>(currentView);
 	MREditWindow *fallback;
 
-	if (TProgram::deskTop == nullptr)
-		return false;
-	if (currentView != nullptr && (currentView->state & sfVisible) != 0 && current == nullptr)
-		return true;
-	if (current != nullptr && (current->state & sfVisible) != 0)
-		return true;
+	if (TProgram::deskTop == nullptr) return false;
+	if (currentView != nullptr && (currentView->state & sfVisible) != 0 && current == nullptr) return true;
+	if (current != nullptr && (current->state & sfVisible) != 0) return true;
 	fallback = chooseFallbackWorkWindow();
-	if (fallback != nullptr)
-		return mrActivateEditWindow(fallback);
+	if (fallback != nullptr) return mrActivateEditWindow(fallback);
 	fallback = createEditorWindow("?No-File?");
-	if (fallback == nullptr)
-		return false;
+	if (fallback == nullptr) return false;
 	mrLogMessage("Created fallback empty window to keep the editor usable.");
 	return mrActivateEditWindow(fallback);
 }
@@ -496,10 +448,8 @@ void mrLogMessage(std::string_view message) {
 	const std::string line = normalizeLogLine(message);
 	MREditWindow *win;
 
-	if (line.empty())
-		return;
-	if (!g_logBuffer.empty() && g_logBuffer[g_logBuffer.size() - 1] != '\n')
-		g_logBuffer += '\n';
+	if (line.empty()) return;
+	if (!g_logBuffer.empty() && g_logBuffer[g_logBuffer.size() - 1] != '\n') g_logBuffer += '\n';
 	g_logBuffer += "[" + currentTimestamp() + "] " + line + "\n";
 	win = ensureLogWindowInternal(false);
 	if (win != nullptr) {
@@ -513,26 +463,21 @@ bool mrAppendLogBufferToFile(const std::string &path, std::string *errorMessage)
 	std::ofstream out(path, std::ios::out | std::ios::app | std::ios::binary);
 
 	if (!out) {
-		if (errorMessage != nullptr)
-			*errorMessage = "Unable to open log file for append: " + path;
+		if (errorMessage != nullptr) *errorMessage = "Unable to open log file for append: " + path;
 		return false;
 	}
 	out << g_logBuffer;
 	if (!out.good()) {
-		if (errorMessage != nullptr)
-			*errorMessage = "Unable to append log file: " + path;
+		if (errorMessage != nullptr) *errorMessage = "Unable to append log file: " + path;
 		return false;
 	}
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 void mrLogSettingsWriteReport(std::string_view reason, const MRSettingsWriteReport &report) {
-	if (!report.contentChanged && report.logLines.empty())
-		return;
-	if (!reason.empty())
-		mrLogMessage(std::string("settings.mrmac write (") + std::string(reason) + "): " + report.settingsPath);
+	if (!report.contentChanged && report.logLines.empty()) return;
+	if (!reason.empty()) mrLogMessage(std::string("settings.mrmac write (") + std::string(reason) + "): " + report.settingsPath);
 	for (const std::string &line : report.logLines)
 		mrLogMessage(line);
 }
@@ -546,47 +491,8 @@ bool mrKeyTokenFromEvent(ushort keyCode, ushort controlKeyState, std::string &ou
 		const char *token;
 		ushort code;
 	};
-	static const ComboSpec combos[] = {{"", 0},
-	                                   {"Shft", kbShift},
-	                                   {"Ctrl", kbCtrlShift},
-	                                   {"Alt", kbAltShift},
-	                                   {"CtrlShft", static_cast<ushort>(kbCtrlShift | kbShift)},
-	                                   {"AltShft", static_cast<ushort>(kbAltShift | kbShift)},
-	                                   {"CtrlAlt", static_cast<ushort>(kbCtrlShift | kbAltShift)},
-	                                   {"CtrlAltShft",
-	                                    static_cast<ushort>(kbCtrlShift | kbAltShift | kbShift)}};
-	static const NamedKeySpec named[] = {{"Enter", kbEnter},
-	                                     {"Tab", kbTab},
-	                                     {"Esc", kbEsc},
-	                                     {"Backspace", kbBack},
-	                                     {"Up", kbUp},
-	                                     {"Down", kbDown},
-	                                     {"Left", kbLeft},
-	                                     {"Right", kbRight},
-	                                     {"PgUp", kbPgUp},
-	                                     {"PgDn", kbPgDn},
-	                                     {"Home", kbHome},
-	                                     {"End", kbEnd},
-	                                     {"Ins", kbIns},
-	                                     {"Del", kbDel},
-	                                     {"Grey-", kbGrayMinus},
-	                                     {"Grey+", kbGrayPlus},
-	                                     {"Grey*", static_cast<ushort>('*')},
-	                                     {"Space", static_cast<ushort>(' ')},
-	                                     {"Minus", static_cast<ushort>('-')},
-	                                     {"Equal", static_cast<ushort>('=')},
-	                                     {"F1", kbF1},
-	                                     {"F2", kbF2},
-	                                     {"F3", kbF3},
-	                                     {"F4", kbF4},
-	                                     {"F5", kbF5},
-	                                     {"F6", kbF6},
-	                                     {"F7", kbF7},
-	                                     {"F8", kbF8},
-	                                     {"F9", kbF9},
-	                                     {"F10", kbF10},
-	                                     {"F11", kbF11},
-	                                     {"F12", kbF12}};
+	static const ComboSpec combos[] = {{"", 0}, {"Shft", kbShift}, {"Ctrl", kbCtrlShift}, {"Alt", kbAltShift}, {"CtrlShft", static_cast<ushort>(kbCtrlShift | kbShift)}, {"AltShft", static_cast<ushort>(kbAltShift | kbShift)}, {"CtrlAlt", static_cast<ushort>(kbCtrlShift | kbAltShift)}, {"CtrlAltShft", static_cast<ushort>(kbCtrlShift | kbAltShift | kbShift)}};
+	static const NamedKeySpec named[] = {{"Enter", kbEnter}, {"Tab", kbTab}, {"Esc", kbEsc}, {"Backspace", kbBack}, {"Up", kbUp}, {"Down", kbDown}, {"Left", kbLeft}, {"Right", kbRight}, {"PgUp", kbPgUp}, {"PgDn", kbPgDn}, {"Home", kbHome}, {"End", kbEnd}, {"Ins", kbIns}, {"Del", kbDel}, {"Grey-", kbGrayMinus}, {"Grey+", kbGrayPlus}, {"Grey*", static_cast<ushort>('*')}, {"Space", static_cast<ushort>(' ')}, {"Minus", static_cast<ushort>('-')}, {"Equal", static_cast<ushort>('=')}, {"F1", kbF1}, {"F2", kbF2}, {"F3", kbF3}, {"F4", kbF4}, {"F5", kbF5}, {"F6", kbF6}, {"F7", kbF7}, {"F8", kbF8}, {"F9", kbF9}, {"F10", kbF10}, {"F11", kbF11}, {"F12", kbF12}};
 	const TKey pressed(keyCode, controlKeyState);
 
 	for (const ComboSpec &combo : combos)
@@ -636,12 +542,9 @@ bool mrKeyTokenFromEvent(ushort keyCode, ushort controlKeyState, std::string &ou
 
 bool mrKeymapTokenFromEvent(ushort keyCode, ushort controlKeyState, MRKeymapToken &outToken) {
 	std::string tokenText;
-	const auto parsed = mrKeyTokenFromEvent(keyCode, controlKeyState, tokenText)
-	                      ? MRKeymapToken::parse(tokenText)
-	                      : std::nullopt;
+	const auto parsed = mrKeyTokenFromEvent(keyCode, controlKeyState, tokenText) ? MRKeymapToken::parse(tokenText) : std::nullopt;
 
-	if (!parsed)
-		return false;
+	if (!parsed) return false;
 	outToken = *parsed;
 	return true;
 }
@@ -651,17 +554,12 @@ bool mrHandleRuntimeKeymapEvent(TEvent &event, MRKeymapContext context, MREditWi
 	std::string tokenText;
 	char line[512];
 
-	if (event.what != evKeyDown || !mrKeymapTokenFromEvent(event.keyDown.keyCode, event.keyDown.controlKeyState, token))
-		return false;
+	if (event.what != evKeyDown || !mrKeymapTokenFromEvent(event.keyDown.keyCode, event.keyDown.controlKeyState, token)) return false;
 	tokenText = token.toString();
 
 	const MRKeymapResolver::Result result = runtimeKeymapResolver().resolve(context, token);
 	if (runtimeKeymapDebugEnabled()) {
-		std::snprintf(line, sizeof(line),
-		              "KEYDBG keymap context=%s rawCode=0x%04X rawMods=0x%04X token=%s result=%s sequence=%s target=%s",
-		              runtimeKeymapContextName(context), static_cast<unsigned>(event.keyDown.keyCode),
-		              static_cast<unsigned>(event.keyDown.controlKeyState), tokenText.c_str(),
-		              keymapResultName(result.kind), result.sequenceText.c_str(), result.target.target.c_str());
+		std::snprintf(line, sizeof(line), "KEYDBG keymap context=%s rawCode=0x%04X rawMods=0x%04X token=%s result=%s sequence=%s target=%s", runtimeKeymapContextName(context), static_cast<unsigned>(event.keyDown.keyCode), static_cast<unsigned>(event.keyDown.controlKeyState), tokenText.c_str(), keymapResultName(result.kind), result.sequenceText.c_str(), result.target.target.c_str());
 		mrLogMessage(line);
 	}
 	switch (result.kind) {
@@ -675,12 +573,10 @@ bool mrHandleRuntimeKeymapEvent(TEvent &event, MRKeymapContext context, MREditWi
 		case MRKeymapResolver::ResultKind::Matched:
 			event.what = evNothing;
 			if (result.target.type == MRKeymapBindingType::Macro) {
-				if (!dispatchMRKeymapMacro(result.target.target))
-					postWindowSupportError("Macro binding failed: " + result.target.target);
+				if (!dispatchMRKeymapMacro(result.target.target)) postWindowSupportError("Macro binding failed: " + result.target.target);
 				return true;
 			}
-			if (!dispatchMRKeymapAction(result.target.target, result.sequenceText, targetWindow))
-				postWindowSupportError("Keymap action is not implemented: " + result.target.target);
+			if (!dispatchMRKeymapAction(result.target.target, result.sequenceText, targetWindow)) postWindowSupportError("Keymap action is not implemented: " + result.target.target);
 			return true;
 	}
 	return false;
@@ -688,17 +584,14 @@ bool mrHandleRuntimeKeymapEvent(TEvent &event, MRKeymapContext context, MREditWi
 
 bool mrCaptureBindingKeySpec(const char *title, const char *prompt, std::string &keySpec) {
 	TBindingKeyCaptureDialog *dialog = new TBindingKeyCaptureDialog(title, prompt);
-	const ushort result = dialog != nullptr && TProgram::deskTop != nullptr ? TProgram::deskTop->execView(dialog)
-	                                                                        : cmCancel;
+	const ushort result = dialog != nullptr && TProgram::deskTop != nullptr ? TProgram::deskTop->execView(dialog) : cmCancel;
 	const bool captured = dialog != nullptr ? dialog->hasCaptured() : false;
 	const ushort keyCode = dialog != nullptr ? dialog->keyCode() : kbNoKey;
 	const ushort controlState = dialog != nullptr ? dialog->controlState() : 0;
 
 	keySpec.clear();
-	if (dialog != nullptr)
-		TObject::destroy(dialog);
-	if (result == cmCancel || !captured)
-		return true;
+	if (dialog != nullptr) TObject::destroy(dialog);
+	if (result == cmCancel || !captured) return true;
 	if (!mrKeyTokenFromEvent(keyCode, controlState, keySpec)) {
 		postWindowSupportWarning("Unsupported binding key. Use a function key or a Ctrl/Alt/Shift combination.");
 		return false;
@@ -708,8 +601,7 @@ bool mrCaptureBindingKeySpec(const char *title, const char *prompt, std::string 
 
 void mrSetKeystrokeRecordingActive(bool active) {
 	g_keystrokeRecordingActive = active;
-	if (!active)
-		g_keystrokeRecordingMarkerVisible = false;
+	if (!active) g_keystrokeRecordingMarkerVisible = false;
 }
 
 bool mrIsKeystrokeRecordingActive() {
@@ -726,8 +618,7 @@ bool mrIsKeystrokeRecordingMarkerVisible() {
 
 void mrSetMacroBrainMarkerActive(bool active) {
 	g_macroBrainMarkerActive = active;
-	if (!active)
-		g_macroBrainMarkerVisible = false;
+	if (!active) g_macroBrainMarkerVisible = false;
 }
 
 bool mrIsMacroBrainMarkerActive() {

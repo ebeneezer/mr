@@ -12,11 +12,9 @@ static bool readText(const char *path, std::string &out) {
 	std::ifstream in(path, std::ios::in | std::ios::binary);
 	std::ostringstream buf;
 
-	if (!in)
-		return false;
+	if (!in) return false;
 	buf << in.rdbuf();
-	if (!in.good() && !in.eof())
-		return false;
+	if (!in.good() && !in.eof()) return false;
 	out = buf.str();
 	return true;
 }
@@ -52,15 +50,11 @@ int main(int argc, char **argv) {
 
 		profile = mrvmAnalyzeBytecode(bytecode, bytecodeSize);
 		unsupported = mrvmUnsupportedStagedSymbols(profile);
-		std::cout << argv[i] << ": canBackground=" << (mrvmCanRunInBackground(profile) ? 1 : 0)
-		          << " canStage=" << (mrvmCanRunStagedInBackground(profile) ? 1 : 0)
-		          << " unsupported=";
-		if (unsupported.empty())
-			std::cout << "<none>";
+		std::cout << argv[i] << ": canBackground=" << (mrvmCanRunInBackground(profile) ? 1 : 0) << " canStage=" << (mrvmCanRunStagedInBackground(profile) ? 1 : 0) << " unsupported=";
+		if (unsupported.empty()) std::cout << "<none>";
 		else {
 			for (std::size_t j = 0; j < unsupported.size(); ++j) {
-				if (j != 0)
-					std::cout << ",";
+				if (j != 0) std::cout << ",";
 				std::cout << unsupported[j];
 			}
 		}

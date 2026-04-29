@@ -6,9 +6,19 @@ UseTab: ForIndentation
 
 BreakBeforeBraces: Attach
 
-AllowShortIfStatementsOnASingleLine: Never
+AllowShortIfStatementsOnASingleLine: Always
 AllowShortBlocksOnASingleLine: Never
+AllowShortEnumsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: None
 
+AlwaysBreakAfterDefinitionReturnType: None
+BreakAfterReturnType: None
+BreakFunctionDefinitionParameters: false
+BinPackArguments: true
+BinPackParameters: BinPack
+AllowAllParametersOfDeclarationOnNextLine: true
+PenaltyBreakBeforeFirstCallParameter: 1000000
 IndentCaseLabels: true
-ColumnLimit: 100
+ReflowComments: false
+SortIncludes: false
+ColumnLimit: 1000

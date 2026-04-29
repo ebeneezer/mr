@@ -79,40 +79,27 @@ bool shouldInvalidateScreenBaseForEvent(ushort eventWhat) noexcept {
 }
 
 bool isCalculatorHotkeyEvent(const TEvent &event) noexcept {
-	if (event.what != evKeyDown)
-		return false;
+	if (event.what != evKeyDown) return false;
 	const TKey normalized(event.keyDown.keyCode, event.keyDown.controlKeyState);
 	return (normalized.mods & kbAltShift) != 0 && normalized.code == 'C';
 }
 
 void traceCalculatorHotkeyEvent(const char *stage, const TEvent &event) {
-	if (!isCalculatorHotkeyEvent(event))
-		return;
+	if (!isCalculatorHotkeyEvent(event)) return;
 	const TKey normalized(event.keyDown.keyCode, event.keyDown.controlKeyState);
 	char line[288];
-	std::snprintf(line, sizeof(line),
-	              "KEYDBG calc stage=%s rawCode=0x%04X rawMods=0x%04X normCode=0x%04X normMods=0x%04X textLen=%u char=0x%02X",
-	              stage, static_cast<unsigned>(event.keyDown.keyCode),
-	              static_cast<unsigned>(event.keyDown.controlKeyState),
-	              static_cast<unsigned>(normalized.code), static_cast<unsigned>(normalized.mods),
-	              static_cast<unsigned>(event.keyDown.textLength),
-	              static_cast<unsigned>(static_cast<unsigned char>(event.keyDown.charScan.charCode)));
+	std::snprintf(line, sizeof(line), "KEYDBG calc stage=%s rawCode=0x%04X rawMods=0x%04X normCode=0x%04X normMods=0x%04X textLen=%u char=0x%02X", stage, static_cast<unsigned>(event.keyDown.keyCode), static_cast<unsigned>(event.keyDown.controlKeyState), static_cast<unsigned>(normalized.code), static_cast<unsigned>(normalized.mods), static_cast<unsigned>(event.keyDown.textLength), static_cast<unsigned>(static_cast<unsigned char>(event.keyDown.charScan.charCode)));
 	mrLogMessage(line);
 }
 
 void postAppError(std::string_view text) {
-	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text,
-	                               mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+	mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, text, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 }
 
 class TMacroBindCaptureDialog : public MRDialogFoundation {
   public:
-	TMacroBindCaptureDialog()
-	    : TWindowInit(&TDialog::initFrame),
-	      MRDialogFoundation(centeredSetupDialogRect(52, 8), "Bind Recorded Macro Key", 52, 8),
-	      captureAccepted(false), capturedKeyCode(kbNoKey), capturedControlState(0) {
-		insert(new TStaticText(TRect(2, 2, 50, 6),
-		                       "Press key to bind the recorded macro.\nEsc = no binding."));
+	TMacroBindCaptureDialog() : TWindowInit(&TDialog::initFrame), MRDialogFoundation(centeredSetupDialogRect(52, 8), "Bind Recorded Macro Key", 52, 8), captureAccepted(false), capturedKeyCode(kbNoKey), capturedControlState(0) {
+		insert(new TStaticText(TRect(2, 2, 50, 6), "Press key to bind the recorded macro.\nEsc = no binding."));
 	}
 
 	virtual void handleEvent(TEvent &event) override {
@@ -155,13 +142,11 @@ class TMacroBindCaptureDialog : public MRDialogFoundation {
 	ushort capturedControlState;
 };
 
-
 std::string expandUserPath(std::string_view input) {
 	std::string path = trimAscii(input);
 	if (path.size() >= 2 && path[0] == '~' && path[1] == '/') {
 		const char *home = std::getenv("HOME");
-		if (home != nullptr && *home != '\0')
-			return std::string(home) + path.substr(1);
+		if (home != nullptr && *home != '\0') return std::string(home) + path.substr(1);
 	}
 	return path;
 }
@@ -171,10 +156,9 @@ std::string ensureMrmacExtension(std::string_view pathView) {
 	std::size_t dotPos = path.rfind('.');
 	if (dotPos != std::string::npos) {
 		std::string ext = path.substr(dotPos);
-		for (char & i : ext)
+		for (char &i : ext)
 			i = static_cast<char>(std::tolower(static_cast<unsigned char>(i)));
-		if (ext == ".mrmac")
-			return path;
+		if (ext == ".mrmac") return path;
 	}
 	return path + ".mrmac";
 }
@@ -222,8 +206,7 @@ void appendEscapedKeyInChar(std::string &out, unsigned char ch) {
 		out += "<Del>";
 		return;
 	}
-	if (std::isprint(ch) == 0)
-		return;
+	if (std::isprint(ch) == 0) return;
 	out.push_back(static_cast<char>(ch));
 }
 
@@ -236,47 +219,8 @@ bool keyInTokenFromEvent(ushort keyCode, ushort controlKeyState, std::string &ou
 		const char *token;
 		ushort code;
 	};
-	static const ComboSpec combos[] = {{"", 0},
-	                                   {"Shft", kbShift},
-	                                   {"Ctrl", kbCtrlShift},
-	                                   {"Alt", kbAltShift},
-	                                   {"CtrlShft", static_cast<ushort>(kbCtrlShift | kbShift)},
-	                                   {"AltShft", static_cast<ushort>(kbAltShift | kbShift)},
-	                                   {"CtrlAlt", static_cast<ushort>(kbCtrlShift | kbAltShift)},
-	                                   {"CtrlAltShft",
-	                                    static_cast<ushort>(kbCtrlShift | kbAltShift | kbShift)}};
-	static const NamedKeySpec named[] = {{"Enter", kbEnter},
-	                                     {"Tab", kbTab},
-	                                     {"Esc", kbEsc},
-	                                     {"Backspace", kbBack},
-	                                     {"Up", kbUp},
-	                                     {"Down", kbDown},
-	                                     {"Left", kbLeft},
-	                                     {"Right", kbRight},
-	                                     {"PgUp", kbPgUp},
-	                                     {"PgDn", kbPgDn},
-	                                     {"Home", kbHome},
-	                                     {"End", kbEnd},
-	                                     {"Ins", kbIns},
-	                                     {"Del", kbDel},
-	                                     {"Grey-", kbGrayMinus},
-	                                     {"Grey+", kbGrayPlus},
-	                                     {"Grey*", static_cast<ushort>('*')},
-	                                     {"Space", static_cast<ushort>(' ')},
-	                                     {"Minus", static_cast<ushort>('-')},
-	                                     {"Equal", static_cast<ushort>('=')},
-	                                     {"F1", kbF1},
-	                                     {"F2", kbF2},
-	                                     {"F3", kbF3},
-	                                     {"F4", kbF4},
-	                                     {"F5", kbF5},
-	                                     {"F6", kbF6},
-	                                     {"F7", kbF7},
-	                                     {"F8", kbF8},
-	                                     {"F9", kbF9},
-	                                     {"F10", kbF10},
-	                                     {"F11", kbF11},
-	                                     {"F12", kbF12}};
+	static const ComboSpec combos[] = {{"", 0}, {"Shft", kbShift}, {"Ctrl", kbCtrlShift}, {"Alt", kbAltShift}, {"CtrlShft", static_cast<ushort>(kbCtrlShift | kbShift)}, {"AltShft", static_cast<ushort>(kbAltShift | kbShift)}, {"CtrlAlt", static_cast<ushort>(kbCtrlShift | kbAltShift)}, {"CtrlAltShft", static_cast<ushort>(kbCtrlShift | kbAltShift | kbShift)}};
+	static const NamedKeySpec named[] = {{"Enter", kbEnter}, {"Tab", kbTab}, {"Esc", kbEsc}, {"Backspace", kbBack}, {"Up", kbUp}, {"Down", kbDown}, {"Left", kbLeft}, {"Right", kbRight}, {"PgUp", kbPgUp}, {"PgDn", kbPgDn}, {"Home", kbHome}, {"End", kbEnd}, {"Ins", kbIns}, {"Del", kbDel}, {"Grey-", kbGrayMinus}, {"Grey+", kbGrayPlus}, {"Grey*", static_cast<ushort>('*')}, {"Space", static_cast<ushort>(' ')}, {"Minus", static_cast<ushort>('-')}, {"Equal", static_cast<ushort>('=')}, {"F1", kbF1}, {"F2", kbF2}, {"F3", kbF3}, {"F4", kbF4}, {"F5", kbF5}, {"F6", kbF6}, {"F7", kbF7}, {"F8", kbF8}, {"F9", kbF9}, {"F10", kbF10}, {"F11", kbF11}, {"F12", kbF12}};
 	TKey pressed(keyCode, controlKeyState);
 
 	for (const ComboSpec &combo : combos)
@@ -324,22 +268,17 @@ bool keyInTokenFromEvent(ushort keyCode, ushort controlKeyState, std::string &ou
 	return false;
 }
 
-
 bool pathIsRegularFile(std::string_view path) {
 	struct stat st;
 
-	if (path.empty())
-		return false;
+	if (path.empty()) return false;
 	return ::stat(std::string(path).c_str(), &st) == 0 && S_ISREG(st.st_mode);
 }
 
 bool confirmOverwriteForPath(const char *primaryLabel, const char *headline, const std::string &targetPath) {
-	if (!pathIsRegularFile(targetPath))
-		return true;
-	return mr::dialogs::showUnsavedChangesDialog(primaryLabel, headline, targetPath.c_str()) ==
-	       mr::dialogs::UnsavedChangesChoice::Save;
+	if (!pathIsRegularFile(targetPath)) return true;
+	return mr::dialogs::showUnsavedChangesDialog(primaryLabel, headline, targetPath.c_str()) == mr::dialogs::UnsavedChangesChoice::Save;
 }
-
 
 bool validateMacroSource(std::string_view source, std::string &errorText) {
 	size_t bytecodeSize = 0;
@@ -356,8 +295,7 @@ bool validateMacroSource(std::string_view source, std::string &errorText) {
 	return true;
 }
 
-[[nodiscard]] bool hasVmErrorLineSince(const std::vector<std::string> &lines, std::size_t start,
-                                          std::string &outError) {
+[[nodiscard]] bool hasVmErrorLineSince(const std::vector<std::string> &lines, std::size_t start, std::string &outError) {
 	static constexpr std::string_view prefix = "VM Error:";
 	for (std::size_t i = start; i < lines.size(); ++i)
 		if (lines[i].compare(0, prefix.size(), prefix.data(), prefix.size()) == 0) {
@@ -387,20 +325,16 @@ bool buildConfiguredSetupPathsSnapshot(MRSetupPaths &paths, std::string *errorMe
 	paths.helpUri = configuredHelpFilePath();
 	paths.tempPath = configuredTempDirectoryPath();
 	paths.shellUri = configuredShellExecutablePath();
-	if (paths.settingsMacroUri.empty())
-		paths.settingsMacroUri = defaultSettingsMacroFilePath();
+	if (paths.settingsMacroUri.empty()) paths.settingsMacroUri = defaultSettingsMacroFilePath();
 	if (paths.settingsMacroUri.empty()) {
-		if (errorMessage != nullptr)
-			*errorMessage = "Settings path is empty.";
+		if (errorMessage != nullptr) *errorMessage = "Settings path is empty.";
 		return false;
 	}
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
-bool normalizeSettingsMacroToCurrentModel(const std::string &settingsPath, const std::string &source,
-                                          const std::string &reason, std::string *errorMessage) {
+bool normalizeSettingsMacroToCurrentModel(const std::string &settingsPath, const std::string &source, const std::string &reason, std::string *errorMessage) {
 	MRSettingsLoadReport report;
 	MRSetupPaths paths;
 	std::string normalizedPath = normalizeConfiguredPathInput(settingsPath);
@@ -410,29 +344,23 @@ bool normalizeSettingsMacroToCurrentModel(const std::string &settingsPath, const
 	MRSettingsWriteReport writeReport;
 
 	if (!loadAndNormalizeSettingsSource(normalizedPath, source, &report, &applyError)) {
-		if (errorMessage != nullptr)
-			*errorMessage = "Settings normalization failed: " + applyError;
+		if (errorMessage != nullptr) *errorMessage = "Settings normalization failed: " + applyError;
 		return false;
 	}
 	if (!buildConfiguredSetupPathsSnapshot(paths, &rewriteError)) {
-		if (errorMessage != nullptr)
-			*errorMessage = "Settings normalization failed: " + rewriteError;
+		if (errorMessage != nullptr) *errorMessage = "Settings normalization failed: " + rewriteError;
 		return false;
 	}
 	if (!writeSettingsMacroFile(paths, &rewriteError, &writeReport)) {
-		if (errorMessage != nullptr)
-			*errorMessage = "Settings normalization failed: " + rewriteError;
+		if (errorMessage != nullptr) *errorMessage = "Settings normalization failed: " + rewriteError;
 		return false;
 	}
 	mrLogSettingsWriteReport("startup normalization", writeReport);
 
 	summary = describeSettingsLoadReport(report);
-	if (!reason.empty())
-		mrLogMessage(("Settings normalized: " + reason).c_str());
-	if (!summary.empty())
-		mrLogMessage(("Settings normalization details: " + summary).c_str());
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (!reason.empty()) mrLogMessage(("Settings normalized: " + reason).c_str());
+	if (!summary.empty()) mrLogMessage(("Settings normalization details: " + summary).c_str());
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -448,23 +376,20 @@ bool applySettingsSourceViaVm(const std::string &settingsPath, const std::string
 	std::string themeError;
 
 	if (!resetConfiguredSettingsModel(normalizedSettingsPath, resetPaths, &vmError)) {
-		if (errorMessage != nullptr)
-			*errorMessage = "Settings VM preload reset failed: " + vmError;
+		if (errorMessage != nullptr) *errorMessage = "Settings VM preload reset failed: " + vmError;
 		return false;
 	}
 	bytecode = compile_macro_code(source.c_str(), &bytecodeSize);
 	if (bytecode == nullptr) {
 		const char *err = get_last_compile_error();
 		compileError = (err != nullptr && *err != '\0') ? err : "Compilation failed.";
-		if (errorMessage != nullptr)
-			*errorMessage = "Settings load failed (compile): " + compileError;
+		if (errorMessage != nullptr) *errorMessage = "Settings load failed (compile): " + compileError;
 		return false;
 	}
 	macroCount = get_compiled_macro_count();
 	if (macroCount <= 0) {
 		std::free(bytecode);
-		if (errorMessage != nullptr)
-			*errorMessage = "Settings load failed: no macros found.";
+		if (errorMessage != nullptr) *errorMessage = "Settings load failed: no macros found.";
 		return false;
 	}
 	{
@@ -476,44 +401,34 @@ bool applySettingsSourceViaVm(const std::string &settingsPath, const std::string
 
 			if (entry < 0 || static_cast<size_t>(entry) >= bytecodeSize) {
 				std::free(bytecode);
-				if (errorMessage != nullptr)
-					*errorMessage = "Settings load failed: invalid macro entry.";
+				if (errorMessage != nullptr) *errorMessage = "Settings load failed: invalid macro entry.";
 				return false;
 			}
-			vm.executeAt(bytecode, bytecodeSize, static_cast<size_t>(entry), std::string(),
-			             macroName != nullptr ? macroName : std::string(), i == 0, true);
+			vm.executeAt(bytecode, bytecodeSize, static_cast<size_t>(entry), std::string(), macroName != nullptr ? macroName : std::string(), i == 0, true);
 			if (hasVmErrorLineSince(vm.log, logStart, vmError)) {
 				std::free(bytecode);
-				if (errorMessage != nullptr)
-					*errorMessage = "Settings load failed (runtime): " + vmError;
+				if (errorMessage != nullptr) *errorMessage = "Settings load failed (runtime): " + vmError;
 				return false;
 			}
 		}
 	}
 	std::free(bytecode);
 	if (!loadColorThemeFile(configuredColorThemeFilePath(), &themeError)) {
-		if (errorMessage != nullptr)
-			*errorMessage = "Color theme load failed: " + themeError;
+		if (errorMessage != nullptr) *errorMessage = "Color theme load failed: " + themeError;
 		return false;
 	}
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
-bool buildCanonicalSettingsSource(const std::string &settingsPath, const std::string &source,
-                                  MRSettingsLoadReport *report, std::string &canonicalSource,
-                                  std::string *errorMessage) {
+bool buildCanonicalSettingsSource(const std::string &settingsPath, const std::string &source, MRSettingsLoadReport *report, std::string &canonicalSource, std::string *errorMessage) {
 	MRSetupPaths paths;
 	std::string normalizedPath = normalizeConfiguredPathInput(settingsPath);
 
-	if (!loadAndNormalizeSettingsSource(normalizedPath, source, report, errorMessage))
-		return false;
-	if (!buildConfiguredSetupPathsSnapshot(paths, errorMessage))
-		return false;
+	if (!loadAndNormalizeSettingsSource(normalizedPath, source, report, errorMessage)) return false;
+	if (!buildConfiguredSetupPathsSnapshot(paths, errorMessage)) return false;
 	canonicalSource = buildSettingsMacroSource(paths);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -522,10 +437,8 @@ bool applySettingsSource(const std::string &source, std::string *errorMessage) {
 	std::string settingsPath = configuredSettingsMacroFilePath();
 	std::string canonicalSource;
 
-	if (settingsPath.empty())
-		settingsPath = defaultSettingsMacroFilePath();
-	if (!buildCanonicalSettingsSource(settingsPath, source, &report, canonicalSource, errorMessage))
-		return false;
+	if (settingsPath.empty()) settingsPath = defaultSettingsMacroFilePath();
+	if (!buildCanonicalSettingsSource(settingsPath, source, &report, canonicalSource, errorMessage)) return false;
 	return applySettingsSourceViaVm(settingsPath, canonicalSource, errorMessage);
 }
 
@@ -542,8 +455,7 @@ ushort mrEditorDialog(int dialog, ...) {
 			va_start(arg, dialog);
 			path = va_arg(arg, const char *);
 			va_end(arg);
-			postAppError(std::string("Error reading file: ") +
-			             ((path != nullptr && *path != '\0') ? path : "<unknown>"));
+			postAppError(std::string("Error reading file: ") + ((path != nullptr && *path != '\0') ? path : "<unknown>"));
 			return cmOK;
 		}
 		case edWriteError: {
@@ -551,8 +463,7 @@ ushort mrEditorDialog(int dialog, ...) {
 			va_start(arg, dialog);
 			path = va_arg(arg, const char *);
 			va_end(arg);
-			postAppError(std::string("Error writing file: ") +
-			             ((path != nullptr && *path != '\0') ? path : "<unknown>"));
+			postAppError(std::string("Error writing file: ") + ((path != nullptr && *path != '\0') ? path : "<unknown>"));
 			return cmOK;
 		}
 		case edCreateError: {
@@ -560,8 +471,7 @@ ushort mrEditorDialog(int dialog, ...) {
 			va_start(arg, dialog);
 			path = va_arg(arg, const char *);
 			va_end(arg);
-			postAppError(std::string("Error creating file: ") +
-			             ((path != nullptr && *path != '\0') ? path : "<unknown>"));
+			postAppError(std::string("Error creating file: ") + ((path != nullptr && *path != '\0') ? path : "<unknown>"));
 			return cmOK;
 		}
 		case edSaveModify: {
@@ -569,8 +479,7 @@ ushort mrEditorDialog(int dialog, ...) {
 			va_start(arg, dialog);
 			path = va_arg(arg, const char *);
 			va_end(arg);
-			return messageBox(mfInformation | mfYesNoCancel, "File modified. Save changes to:\n%s",
-			                  (path != nullptr && *path != '\0') ? path : "<unnamed>");
+			return messageBox(mfInformation | mfYesNoCancel, "File modified. Save changes to:\n%s", (path != nullptr && *path != '\0') ? path : "<unnamed>");
 		}
 		case edSaveUntitled:
 			return messageBox(mfInformation | mfYesNoCancel, "Save untitled file?");
@@ -579,8 +488,7 @@ ushort mrEditorDialog(int dialog, ...) {
 			va_start(arg, dialog);
 			target = va_arg(arg, char *);
 			va_end(arg);
-			if (target == nullptr)
-				return cmCancel;
+			if (target == nullptr) return cmCancel;
 			mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::EditorSaveAs, target, MAXPATH, "*.*", target);
 			result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::EditorSaveAs, "*.*", "Save file as", "~N~ame", fdOKButton, target);
 			return result;
@@ -601,13 +509,11 @@ bool loadStartupSettingsMacro(const std::string &overridePath, std::string *erro
 	MRSettingsWriteReport writeReport;
 
 	if (settingsPath.empty()) {
-		if (errorMessage != nullptr)
-			*errorMessage = "Settings path is empty.";
+		if (errorMessage != nullptr) *errorMessage = "Settings path is empty.";
 		return false;
 	}
 	if (!ensureSettingsMacroFileExists(settingsPath, errorMessage)) {
-		mrLogMessage(errorMessage != nullptr ? errorMessage->c_str()
-		                                   : "Settings bootstrap failed (create defaults).");
+		mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings bootstrap failed (create defaults).");
 		return false;
 	}
 	if (!readTextFile(settingsPath, source)) {
@@ -620,36 +526,30 @@ bool loadStartupSettingsMacro(const std::string &overridePath, std::string *erro
 			return false;
 		}
 		if (!buildConfiguredSetupPathsSnapshot(paths, errorMessage)) {
-			mrLogMessage(errorMessage != nullptr ? errorMessage->c_str()
-			                                   : "Settings canonical source build failed after normalization.");
+			mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings canonical source build failed after normalization.");
 			return false;
 		}
 		canonicalSource = buildSettingsMacroSource(paths);
-		if (errorMessage != nullptr)
-			errorMessage->clear();
+		if (errorMessage != nullptr) errorMessage->clear();
 		if (!loadAndNormalizeSettingsSource(settingsPath, canonicalSource, &report, errorMessage)) {
 			mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings canonicalization failed.");
 			return false;
 		}
 	} else if (report.normalized()) {
 		std::string rewriteError;
-		if (!buildConfiguredSetupPathsSnapshot(paths, &rewriteError) ||
-		    !writeSettingsMacroFile(paths, &rewriteError, &writeReport)) {
-			if (errorMessage != nullptr)
-				*errorMessage = "Settings rewrite failed: " + rewriteError;
+		if (!buildConfiguredSetupPathsSnapshot(paths, &rewriteError) || !writeSettingsMacroFile(paths, &rewriteError, &writeReport)) {
+			if (errorMessage != nullptr) *errorMessage = "Settings rewrite failed: " + rewriteError;
 			mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings rewrite failed.");
 			return false;
 		}
 		mrLogSettingsWriteReport("startup canonical rewrite", writeReport);
 		summary = describeSettingsLoadReport(report);
 		mrLogMessage(("Settings normalized: " + settingsPath).c_str());
-		if (!summary.empty())
-			mrLogMessage(("Settings normalization details: " + summary).c_str());
+		if (!summary.empty()) mrLogMessage(("Settings normalization details: " + summary).c_str());
 	}
 	loadError.clear();
 	if (!applySettingsSourceViaVm(settingsPath, canonicalSource, &loadError)) {
-		if (errorMessage != nullptr)
-			*errorMessage = loadError;
+		if (errorMessage != nullptr) *errorMessage = loadError;
 		mrLogMessage(loadError.empty() ? "Settings VM apply failed." : loadError.c_str());
 		return false;
 	}
@@ -657,8 +557,7 @@ bool loadStartupSettingsMacro(const std::string &overridePath, std::string *erro
 	mrLogMessage(("Settings loaded via VM: " + settingsPath).c_str());
 	mrLogMessage(("Color theme loaded: " + configuredColorThemeFilePath()).c_str());
 	mrLogMessage(("Settings MACROPATH: " + defaultMacroDirectoryPath()).c_str());
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -678,10 +577,8 @@ bool isReadableRegularFile(const std::filesystem::path &path) {
 	std::error_code ec;
 	std::string pathString = path.string();
 
-	if (pathString.empty())
-		return false;
-	if (!std::filesystem::is_regular_file(path, ec) || ec)
-		return false;
+	if (pathString.empty()) return false;
+	if (!std::filesystem::is_regular_file(path, ec) || ec) return false;
 	return ::access(pathString.c_str(), R_OK) == 0;
 }
 
@@ -689,26 +586,20 @@ std::string normalizePathForLoad(const std::filesystem::path &path) {
 	std::error_code ec;
 	std::filesystem::path normalized = std::filesystem::weakly_canonical(path, ec);
 
-	if (ec || normalized.empty())
-		normalized = path.lexically_normal();
+	if (ec || normalized.empty()) normalized = path.lexically_normal();
 	return normalized.string();
 }
 
-void appendUniqueFilePath(const std::filesystem::path &path, std::vector<std::string> &paths,
-                          std::set<std::string> &seen) {
+void appendUniqueFilePath(const std::filesystem::path &path, std::vector<std::string> &paths, std::set<std::string> &seen) {
 	std::string normalized;
 
-	if (!isReadableRegularFile(path))
-		return;
+	if (!isReadableRegularFile(path)) return;
 	normalized = normalizePathForLoad(path);
-	if (normalized.empty())
-		return;
-	if (seen.insert(normalized).second)
-		paths.push_back(normalized);
+	if (normalized.empty()) return;
+	if (seen.insert(normalized).second) paths.push_back(normalized);
 }
 
-void appendGlobMatchesFlat(const std::string &pattern, std::vector<std::string> &paths,
-                           std::set<std::string> &seen) {
+void appendGlobMatchesFlat(const std::string &pattern, std::vector<std::string> &paths, std::set<std::string> &seen) {
 	glob_t globResult{};
 	int result = ::glob(pattern.c_str(), 0, nullptr, &globResult);
 
@@ -727,18 +618,14 @@ std::filesystem::path recursiveRootForPattern(const std::string &pattern) {
 	std::size_t wildcardPos = pattern.find_first_of("*?[");
 	std::size_t slashPos;
 
-	if (wildcardPos == std::string::npos)
-		return std::filesystem::path(pattern);
+	if (wildcardPos == std::string::npos) return std::filesystem::path(pattern);
 	slashPos = pattern.rfind('/', wildcardPos);
-	if (slashPos == std::string::npos)
-		return std::filesystem::path(".");
-	if (slashPos == 0)
-		return std::filesystem::path("/");
+	if (slashPos == std::string::npos) return std::filesystem::path(".");
+	if (slashPos == 0) return std::filesystem::path("/");
 	return std::filesystem::path(pattern.substr(0, slashPos));
 }
 
-void appendRecursiveGlobMatches(const std::string &pattern, std::vector<std::string> &paths,
-                                std::set<std::string> &seen) {
+void appendRecursiveGlobMatches(const std::string &pattern, std::vector<std::string> &paths, std::set<std::string> &seen) {
 	std::filesystem::path rootPath = recursiveRootForPattern(pattern);
 	std::size_t wildcardPos = pattern.find_first_of("*?[");
 	std::size_t rootSlashPos = pattern.rfind('/', wildcardPos);
@@ -747,30 +634,24 @@ void appendRecursiveGlobMatches(const std::string &pattern, std::vector<std::str
 	std::error_code ec;
 	auto matchesPattern = [&](const std::filesystem::path &candidatePath, const std::filesystem::path &basePath) -> bool {
 		std::string candidate;
-		if (matchBaseName)
-			candidate = candidatePath.filename().string();
+		if (matchBaseName) candidate = candidatePath.filename().string();
 		else {
 			std::error_code relEc;
 			std::filesystem::path relativePath = std::filesystem::relative(candidatePath, basePath, relEc);
 			candidate = relEc ? candidatePath.lexically_normal().string() : relativePath.lexically_normal().string();
 		}
-		if (candidate.empty())
-			return false;
+		if (candidate.empty()) return false;
 		return fnmatch(patternSuffix.c_str(), candidate.c_str(), 0) == 0;
 	};
 
-	if (rootPath.empty())
-		rootPath = ".";
-	if (!std::filesystem::exists(rootPath, ec) || ec)
-		return;
+	if (rootPath.empty()) rootPath = ".";
+	if (!std::filesystem::exists(rootPath, ec) || ec) return;
 	if (!std::filesystem::is_directory(rootPath, ec) || ec) {
-		if (matchesPattern(rootPath, rootPath.parent_path()))
-			appendUniqueFilePath(rootPath, paths, seen);
+		if (matchesPattern(rootPath, rootPath.parent_path())) appendUniqueFilePath(rootPath, paths, seen);
 		return;
 	}
 
-	std::filesystem::recursive_directory_iterator it(rootPath, std::filesystem::directory_options::skip_permission_denied,
-	                                                 ec);
+	std::filesystem::recursive_directory_iterator it(rootPath, std::filesystem::directory_options::skip_permission_denied, ec);
 	std::filesystem::recursive_directory_iterator end;
 	for (; !ec && it != end; it.increment(ec)) {
 		if (!it->is_regular_file(ec) || ec) {
@@ -778,23 +659,19 @@ void appendRecursiveGlobMatches(const std::string &pattern, std::vector<std::str
 			continue;
 		}
 		std::filesystem::path candidatePath = it->path().lexically_normal();
-		if (matchesPattern(candidatePath, rootPath))
-			appendUniqueFilePath(candidatePath, paths, seen);
+		if (matchesPattern(candidatePath, rootPath)) appendUniqueFilePath(candidatePath, paths, seen);
 	}
 }
 
-void appendRecursivePathFiles(const std::filesystem::path &path, std::vector<std::string> &paths,
-                              std::set<std::string> &seen) {
+void appendRecursivePathFiles(const std::filesystem::path &path, std::vector<std::string> &paths, std::set<std::string> &seen) {
 	std::error_code ec;
 
 	if (isReadableRegularFile(path)) {
 		appendUniqueFilePath(path, paths, seen);
 		return;
 	}
-	if (!std::filesystem::is_directory(path, ec) || ec)
-		return;
-	std::filesystem::recursive_directory_iterator it(path, std::filesystem::directory_options::skip_permission_denied,
-	                                                 ec);
+	if (!std::filesystem::is_directory(path, ec) || ec) return;
+	std::filesystem::recursive_directory_iterator it(path, std::filesystem::directory_options::skip_permission_denied, ec);
 	std::filesystem::recursive_directory_iterator end;
 	for (; !ec && it != end; it.increment(ec)) {
 		if (!it->is_regular_file(ec) || ec) {
@@ -814,8 +691,7 @@ StartupLoadRequest parseStartupLoadRequest() {
 			request.recursive = true;
 			continue;
 		}
-		if (!arg.empty())
-			request.specs.push_back(arg);
+		if (!arg.empty()) request.specs.push_back(arg);
 	}
 	return request;
 }
@@ -828,11 +704,9 @@ std::vector<std::string> collectStartupFilesFromRequest(const StartupLoadRequest
 		std::string spec = expandUserPath(specRaw);
 		std::filesystem::path specPath(spec);
 
-		if (spec.empty())
-			continue;
+		if (spec.empty()) continue;
 		if (request.recursive) {
-			if (hasGlobWildcard(spec))
-				appendRecursiveGlobMatches(spec, paths, seen);
+			if (hasGlobWildcard(spec)) appendRecursiveGlobMatches(spec, paths, seen);
 			else
 				appendRecursivePathFiles(specPath, paths, seen);
 			continue;
@@ -852,8 +726,7 @@ std::size_t loadStartupFilesFromCommandLine() {
 	std::size_t loadedCount = 0;
 	MREditWindow *lastLoadedWindow = nullptr;
 
-	if (request.specs.empty())
-		return 0;
+	if (request.specs.empty()) return 0;
 
 	files = collectStartupFilesFromRequest(request);
 	if (files.empty()) {
@@ -873,29 +746,24 @@ std::size_t loadStartupFilesFromCommandLine() {
 		lastLoadedWindow = win;
 		++loadedCount;
 	}
-	if (lastLoadedWindow != nullptr)
-		static_cast<void>(mrActivateEditWindow(lastLoadedWindow));
+	if (lastLoadedWindow != nullptr) static_cast<void>(mrActivateEditWindow(lastLoadedWindow));
 	return loadedCount;
 }
 
 std::string buildTopRightCursorStatus() {
 	MREditWindow *win = currentEditWindow();
-	if (win == nullptr || win->getEditor() == nullptr)
-		return std::string();
-	if (isEmptyUntitledEditableWindow(win))
-		return std::string();
+	if (win == nullptr || win->getEditor() == nullptr) return std::string();
+	if (isEmptyUntitledEditableWindow(win)) return std::string();
 
 	std::string format = configuredCursorPositionMarker();
 	std::string out;
 	const std::string rowText = std::to_string(win->cursorLineNumber());
 	const std::string colText = std::to_string(win->cursorColumnNumber());
 
-	if (format.empty())
-		format = "R:C";
+	if (format.empty()) format = "R:C";
 	out.reserve(format.size() + rowText.size() + colText.size());
 	for (char ch : format) {
-		if (ch == 'R')
-			out += rowText;
+		if (ch == 'R') out += rowText;
 		else if (ch == 'C')
 			out += colText;
 		else
@@ -920,15 +788,9 @@ MRMenuBar::MarqueeKind mapMessageNoticeKind(mr::messageline::Kind kind) {
 
 bool isHeroVisibleMessage(const mr::messageline::VisibleMessage &visible) {
 	mr::messageline::VisibleMessage ownerMessage;
-	if (mr::messageline::currentOwnerMessage(mr::messageline::Owner::HeroEvent, ownerMessage) &&
-	    ownerMessage.kind == visible.kind && ownerMessage.text == visible.text)
-		return true;
-	if (mr::messageline::currentOwnerMessage(mr::messageline::Owner::HeroEventFollowup, ownerMessage) &&
-	    ownerMessage.kind == visible.kind && ownerMessage.text == visible.text)
-		return true;
-	if (mr::messageline::currentOwnerMessage(mr::messageline::Owner::MacroBrain, ownerMessage) &&
-	    ownerMessage.kind == visible.kind && ownerMessage.text == visible.text)
-		return true;
+	if (mr::messageline::currentOwnerMessage(mr::messageline::Owner::HeroEvent, ownerMessage) && ownerMessage.kind == visible.kind && ownerMessage.text == visible.text) return true;
+	if (mr::messageline::currentOwnerMessage(mr::messageline::Owner::HeroEventFollowup, ownerMessage) && ownerMessage.kind == visible.kind && ownerMessage.text == visible.text) return true;
+	if (mr::messageline::currentOwnerMessage(mr::messageline::Owner::MacroBrain, ownerMessage) && ownerMessage.kind == visible.kind && ownerMessage.text == visible.text) return true;
 	return false;
 }
 
@@ -974,12 +836,7 @@ TMenuBar *MREditorApp::initMRMenuBar(TRect r) {
 
 TStatusLine *MREditorApp::initMRStatusLine(TRect r) {
 	r.a.y = r.b.y - 1;
-	return new MRStatusLine(r, *new TStatusDef(0, 0xFFFF) +
-	                                *new TStatusItem("~F1~ Help", kbF1, cmMrHelpContents) +
-	                                *new TStatusItem("~F10~ Menu", kbF10, cmMenu) +
-	                                *new TStatusItem("~Alt-F10~ Rec", kbAltF10,
-	                                                 cmMrMacroToggleRecording) +
-	                                *new TStatusItem("~Alt-X~ Exit", kbAltX, cmQuit));
+	return new MRStatusLine(r, *new TStatusDef(0, 0xFFFF) + *new TStatusItem("~F1~ Help", kbF1, cmMrHelpContents) + *new TStatusItem("~F10~ Menu", kbF10, cmMenu) + *new TStatusItem("~Alt-F10~ Rec", kbAltF10, cmMrMacroToggleRecording) + *new TStatusItem("~Alt-X~ Exit", kbAltX, cmQuit));
 }
 
 TDeskTop *MREditorApp::initMRDeskTop(TRect r) {
@@ -988,15 +845,7 @@ TDeskTop *MREditorApp::initMRDeskTop(TRect r) {
 	return new MRDeskTop(r);
 }
 
-MREditorApp::MREditorApp()
-    : TProgInit(&MREditorApp::initMRStatusLine, &MREditorApp::initMRMenuBar,
-                &MREditorApp::initMRDeskTop),
-      exitPrepared(false), keystrokeRecording(false), recordingMarkerVisible(false),
-      macroBrainMarkerVisible(false),
-       recordedMacroCounter(0), 
-      recordingBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval),
-      macroBrainBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval),
-      indexedMacroWarmupActive(false), indexedMacroWarmupLoadedFiles(0) {
+MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditorApp::initMRMenuBar, &MREditorApp::initMRDeskTop), exitPrepared(false), keystrokeRecording(false), recordingMarkerVisible(false), macroBrainMarkerVisible(false), recordedMacroCounter(0), recordingBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), macroBrainBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), indexedMacroWarmupActive(false), indexedMacroWarmupLoadedFiles(0) {
 	TEditor::editorDialog = mrEditorDialog;
 	mr::coprocessor::globalCoprocessor().setResultHandler(handleCoprocessorResult);
 	loadStartupSettingsMacro(std::string(), nullptr);
@@ -1006,8 +855,7 @@ MREditorApp::MREditorApp()
 	applyConfiguredDisplayLayout();
 	static_cast<void>(mrEnsureLogWindow(false));
 	syncRecordingUiState();
-	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar))
-		mrMenuBar->setPersistentBlocksMenuState(configuredPersistentBlocksSetting());
+	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar)) mrMenuBar->setPersistentBlocksMenuState(configuredPersistentBlocksSetting());
 
 	if (configuredAutoloadWorkspace()) {
 		mrLoadWorkspace("");
@@ -1025,11 +873,9 @@ void MREditorApp::applyConfiguredWindowFramePolicy() {
 	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 
 	for (auto win : windows) {
-			if (win == nullptr)
-			continue;
+		if (win == nullptr) continue;
 		win->flags |= (wfMove | wfGrow | wfZoom | wfClose);
-		if (win->frame != nullptr)
-			win->frame->drawView();
+		if (win->frame != nullptr) win->frame->drawView();
 	}
 }
 
@@ -1049,44 +895,35 @@ void MREditorApp::applyConfiguredDisplayLayout() {
 	desktopRect.b.x = appRect.b.x - appRect.a.x;
 	desktopRect.a.y = 1;
 	desktopRect.b.y = appRect.b.y - appRect.a.y - (statusVisible ? 1 : 0);
-	if (desktopRect.b.y <= desktopRect.a.y)
-		desktopRect.b.y = desktopRect.a.y + 1;
-	if (deskTop != nullptr)
-		deskTop->locate(desktopRect);
+	if (desktopRect.b.y <= desktopRect.a.y) desktopRect.b.y = desktopRect.a.y + 1;
+	if (deskTop != nullptr) deskTop->locate(desktopRect);
 	applyConfiguredWindowFramePolicy();
-	if (deskTop != nullptr)
-		deskTop->drawView();
-	if (menuBar != nullptr)
-		menuBar->drawView();
-	if (statusLine != nullptr)
-		statusLine->drawView();
+	if (deskTop != nullptr) deskTop->drawView();
+	if (menuBar != nullptr) menuBar->drawView();
+	if (statusLine != nullptr) statusLine->drawView();
 }
 
 void MREditorApp::prepareForQuit() {
-	if (exitPrepared)
-		return;
+	if (exitPrepared) return;
 
 	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 	std::size_t pendingTaskCount = 0;
 	std::string settingsError;
 	MRSettingsWriteReport settingsWriteReport;
 
-	if (!persistConfiguredSettingsSnapshot(&settingsError, &settingsWriteReport) && !settingsError.empty())
-		mrLogMessage(("Settings snapshot on exit failed: " + settingsError).c_str());
+	if (!persistConfiguredSettingsSnapshot(&settingsError, &settingsWriteReport) && !settingsError.empty()) mrLogMessage(("Settings snapshot on exit failed: " + settingsError).c_str());
 	else
 		mrLogSettingsWriteReport("exit snapshot", settingsWriteReport);
 
 	exitPrepared = true;
-	for (auto & window : windows)
-		if (window != nullptr)
-			pendingTaskCount += window->prepareCoprocessorTasksForShutdown();
+	for (auto &window : windows)
+		if (window != nullptr) pendingTaskCount += window->prepareCoprocessorTasksForShutdown();
 
 	if (pendingTaskCount != 0) {
 		std::string line = "Exit requested; cancelling ";
 		line += std::to_string(pendingTaskCount);
 		line += " running or pending coprocessor task";
-		if (pendingTaskCount != 1)
-			line += "s";
+		if (pendingTaskCount != 1) line += "s";
 		line += ".";
 		mrLogMessage(line.c_str());
 		mr::coprocessor::globalCoprocessor().pump(64);
@@ -1094,8 +931,7 @@ void MREditorApp::prepareForQuit() {
 	cancelForegroundMacroDelays();
 	if (configuredLogHandling() == MRLogHandling::Persist) {
 		const std::string logPath = configuredLogFilePath();
-		if (!mrAppendLogBufferToFile(logPath, &settingsError))
-			mrLogMessage(("MR log append on exit failed: " + settingsError).c_str());
+		if (!mrAppendLogBufferToFile(logPath, &settingsError)) mrLogMessage(("MR log append on exit failed: " + settingsError).c_str());
 	}
 }
 
@@ -1109,44 +945,37 @@ bool MREditorApp::isRecorderToggleCommand(const TEvent &event) const {
 
 void MREditorApp::redrawActiveMarkerFrame() {
 	MREditWindow *window = currentEditWindow();
-	if (window == nullptr || window->frame == nullptr || (window->state & sfVisible) == 0)
-		return;
+	if (window == nullptr || window->frame == nullptr || (window->state & sfVisible) == 0) return;
 	window->frame->drawView();
 }
 
 void MREditorApp::syncRecordingUiState() {
 	mrSetKeystrokeRecordingActive(keystrokeRecording);
 	mrSetKeystrokeRecordingMarkerVisible(keystrokeRecording && recordingMarkerVisible);
-	if (auto *mrStatusLine = dynamic_cast<MRStatusLine *>(statusLine))
-		mrStatusLine->setRecordingState(keystrokeRecording, recordingMarkerVisible);
+	if (auto *mrStatusLine = dynamic_cast<MRStatusLine *>(statusLine)) mrStatusLine->setRecordingState(keystrokeRecording, recordingMarkerVisible);
 	redrawActiveMarkerFrame();
 }
 
 void MREditorApp::updateRecordingBlink() {
 	std::chrono::steady_clock::time_point now;
-	if (!keystrokeRecording)
-		return;
+	if (!keystrokeRecording) return;
 
 	now = std::chrono::steady_clock::now();
-	if (now < recordingBlinkToggleAt)
-		return;
+	if (now < recordingBlinkToggleAt) return;
 
 	recordingMarkerVisible = !recordingMarkerVisible;
 	recordingBlinkToggleAt = now + kRecordingBlinkInterval;
 	mrSetKeystrokeRecordingMarkerVisible(recordingMarkerVisible);
-	if (auto *mrStatusLine = dynamic_cast<MRStatusLine *>(statusLine))
-		mrStatusLine->setRecordingState(keystrokeRecording, recordingMarkerVisible);
+	if (auto *mrStatusLine = dynamic_cast<MRStatusLine *>(statusLine)) mrStatusLine->setRecordingState(keystrokeRecording, recordingMarkerVisible);
 	redrawActiveMarkerFrame();
 }
 
 void MREditorApp::updateMacroBrainBlink() {
 	std::chrono::steady_clock::time_point now;
-	if (!mrIsMacroBrainMarkerActive())
-		return;
+	if (!mrIsMacroBrainMarkerActive()) return;
 
 	now = std::chrono::steady_clock::now();
-	if (now < macroBrainBlinkToggleAt)
-		return;
+	if (now < macroBrainBlinkToggleAt) return;
 
 	macroBrainMarkerVisible = !macroBrainMarkerVisible;
 	macroBrainBlinkToggleAt = now + kRecordingBlinkInterval;
@@ -1160,8 +989,7 @@ void MREditorApp::startKeystrokeRecording() {
 	recordingBlinkToggleAt = std::chrono::steady_clock::now() + kRecordingBlinkInterval;
 	recordedKeySequence.clear();
 	syncRecordingUiState();
-	mr::messageline::postSticky(mr::messageline::Owner::MacroMessage, "recordings started, ALT-F10 ends",
-	                            mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
+	mr::messageline::postSticky(mr::messageline::Owner::MacroMessage, "recordings started, ALT-F10 ends", mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
 	mrLogMessage("Keystroke recording started (Alt-F10 to stop).");
 }
 
@@ -1169,8 +997,7 @@ void MREditorApp::appendRecordedKeyEvent(const TEvent &event) {
 	std::string keyToken;
 	ushort state;
 
-	if (event.what != evKeyDown)
-		return;
+	if (event.what != evKeyDown) return;
 	state = event.keyDown.controlKeyState;
 
 	if ((state & kbPaste) != 0 && event.keyDown.textLength > 0) {
@@ -1183,8 +1010,7 @@ void MREditorApp::appendRecordedKeyEvent(const TEvent &event) {
 			appendEscapedKeyInChar(recordedKeySequence, static_cast<unsigned char>(event.keyDown.text[i]));
 		return;
 	}
-	if (keyInTokenFromEvent(event.keyDown.keyCode, state, keyToken))
-		recordedKeySequence += keyToken;
+	if (keyInTokenFromEvent(event.keyDown.keyCode, state, keyToken)) recordedKeySequence += keyToken;
 }
 
 bool MREditorApp::captureBindingKeySpec(std::string &keySpec) {
@@ -1196,8 +1022,7 @@ bool MREditorApp::captureBindingKeySpec(std::string &keySpec) {
 
 	keySpec.clear();
 	dialog = new TMacroBindCaptureDialog();
-	if (dialog == nullptr)
-		return false;
+	if (dialog == nullptr) return false;
 	dialog->finalizeLayout();
 	modalResult = deskTop != nullptr ? deskTop->execView(dialog) : cmCancel;
 	captured = dialog->hasCaptured();
@@ -1205,8 +1030,7 @@ bool MREditorApp::captureBindingKeySpec(std::string &keySpec) {
 	controlState = dialog->controlState();
 	TObject::destroy(dialog);
 
-	if (modalResult == cmCancel || !captured)
-		return true;
+	if (modalResult == cmCancel || !captured) return true;
 	if (!keyInTokenFromEvent(keyCode, controlState, keySpec)) {
 		postAppError("Unsupported binding key. Use a function key or a Ctrl/Alt/Shift combination.");
 		return false;
@@ -1215,7 +1039,9 @@ bool MREditorApp::captureBindingKeySpec(std::string &keySpec) {
 }
 
 void MREditorApp::finalizeKeystrokeRecording() {
-	enum { SavePathBufferSize = 512 };
+	enum {
+		SavePathBufferSize = 512
+	};
 	char savePathBuffer[SavePathBufferSize];
 	std::string keySpec;
 	std::string savePath;
@@ -1228,25 +1054,19 @@ void MREditorApp::finalizeKeystrokeRecording() {
 	std::string summary;
 
 	if (recordedKeySequence.empty()) {
-		messageBox(mfInformation | mfOKButton,
-		           "Keystroke recording is empty.\n\nNothing to bind or save.");
+		messageBox(mfInformation | mfOKButton, "Keystroke recording is empty.\n\nNothing to bind or save.");
 		return;
 	}
 
-	if (!captureBindingKeySpec(keySpec))
-		return;
+	if (!captureBindingKeySpec(keySpec)) return;
 
 	std::memset(savePathBuffer, 0, sizeof(savePathBuffer));
-	if (inputBox("KEYSTROKE RECORDER", "~S~ave .mrmac (leer=nur Session-Bindung)",
-	             savePathBuffer, static_cast<uchar>(sizeof(savePathBuffer) - 1)) != cmCancel)
-		savePath = trimAscii(savePathBuffer);
-	if (!savePath.empty())
-		savePath = ensureMrmacExtension(expandUserPath(savePath));
+	if (inputBox("KEYSTROKE RECORDER", "~S~ave .mrmac (leer=nur Session-Bindung)", savePathBuffer, static_cast<uchar>(sizeof(savePathBuffer) - 1)) != cmCancel) savePath = trimAscii(savePathBuffer);
+	if (!savePath.empty()) savePath = ensureMrmacExtension(expandUserPath(savePath));
 
 	macroName = makeRecordedMacroName(++recordedMacroCounter);
 	source << "$MACRO " << macroName;
-	if (!keySpec.empty())
-		source << " TO " << keySpec << " FROM EDIT";
+	if (!keySpec.empty()) source << " TO " << keySpec << " FROM EDIT";
 	else
 		source << " FROM EDIT";
 	source << ";\n";
@@ -1260,8 +1080,7 @@ void MREditorApp::finalizeKeystrokeRecording() {
 	}
 
 	if (!savePath.empty()) {
-		if (!confirmOverwriteForPath("Overwrite", "Macro file exists. Overwrite?", savePath))
-			return;
+		if (!confirmOverwriteForPath("Overwrite", "Macro file exists. Overwrite?", savePath)) return;
 		if (!writeTextFileWithConfiguredSaveOptions(savePath, macroSource)) {
 			postAppError("Could not save recorded macro: " + savePath);
 			return;
@@ -1272,23 +1091,20 @@ void MREditorApp::finalizeKeystrokeRecording() {
 	}
 
 	if (!keySpec.empty()) {
-		if (!savePath.empty())
-			sessionPath = savePath;
-			else {
-				sessionPath = configuredTempDirectoryPath() + "/mr_recorded_" +
-				              std::to_string(static_cast<long>(::getpid())) + "_" +
-				              std::to_string(recordedMacroCounter) + ".mrmac";
-					if (!writeTextFileWithConfiguredSaveOptions(sessionPath, macroSource)) {
-					postAppError("Could not create session macro file.");
-					return;
-				}
-				recordedSessionMacroFiles.push_back(sessionPath);
-			}
-
-			if (!mrvmLoadMacroFile(sessionPath, &loadError)) {
-				postAppError("Could not bind recorded macro: " + loadError);
+		if (!savePath.empty()) sessionPath = savePath;
+		else {
+			sessionPath = configuredTempDirectoryPath() + "/mr_recorded_" + std::to_string(static_cast<long>(::getpid())) + "_" + std::to_string(recordedMacroCounter) + ".mrmac";
+			if (!writeTextFileWithConfiguredSaveOptions(sessionPath, macroSource)) {
+				postAppError("Could not create session macro file.");
 				return;
 			}
+			recordedSessionMacroFiles.push_back(sessionPath);
+		}
+
+		if (!mrvmLoadMacroFile(sessionPath, &loadError)) {
+			postAppError("Could not bind recorded macro: " + loadError);
+			return;
+		}
 		{
 			std::string line = "Recorded macro bound to ";
 			line += keySpec;
@@ -1299,10 +1115,8 @@ void MREditorApp::finalizeKeystrokeRecording() {
 	}
 
 	summary = "Recording finalized.";
-	if (!keySpec.empty())
-		summary += "\nBound key: " + keySpec;
-	if (!savePath.empty())
-		summary += "\nSaved: " + savePath;
+	if (!keySpec.empty()) summary += "\nBound key: " + keySpec;
+	if (!savePath.empty()) summary += "\nSaved: " + savePath;
 	messageBox(mfInformation | mfOKButton, "%s", summary.c_str());
 }
 
@@ -1352,18 +1166,14 @@ void MREditorApp::bootstrapIndexedMacroBindings() {
 
 		filteredEntries = true;
 		failedEntries.push_back(fileName);
-		rememberConfiguredAutoexecMacroDiagnostic(fileName,
-		                                          errorText.empty() ? "Autoexec execution failed." : errorText);
-		mrLogMessage(("Autoexec bootstrap failed for " + fileName + ": " +
-		              (errorText.empty() ? std::string("unknown error") : errorText))
-		                 .c_str());
+		rememberConfiguredAutoexecMacroDiagnostic(fileName, errorText.empty() ? "Autoexec execution failed." : errorText);
+		mrLogMessage(("Autoexec bootstrap failed for " + fileName + ": " + (errorText.empty() ? std::string("unknown error") : errorText)).c_str());
 	}
 
 	if (filteredEntries) {
 		std::string persistError;
 
-		if (setConfiguredAutoexecMacroEntries(retainedEntries, &persistError) &&
-		    persistConfiguredSettingsSnapshot(&persistError)) {
+		if (setConfiguredAutoexecMacroEntries(retainedEntries, &persistError) && persistConfiguredSettingsSnapshot(&persistError)) {
 			mrLogMessage("Autoexec bootstrap updated AUTOEXEC_MACRO in settings.mrmac.");
 		} else {
 			setConfiguredAutoexecMacroEntries(configuredEntries, nullptr);
@@ -1375,13 +1185,11 @@ void MREditorApp::bootstrapIndexedMacroBindings() {
 		std::string line = "Autoexec bootstrap executed ";
 		line += std::to_string(executedCount);
 		line += " macro";
-		if (executedCount != 1)
-			line += "s";
+		if (executedCount != 1) line += "s";
 		line += " from ";
 		line += std::to_string(configuredEntries.size());
 		line += " configured entry";
-		if (configuredEntries.size() != 1)
-			line += "s";
+		if (configuredEntries.size() != 1) line += "s";
 		line += ".";
 		mrLogMessage(line.c_str());
 	}
@@ -1391,12 +1199,10 @@ void MREditorApp::bootstrapIndexedMacroBindings() {
 
 		summary << "Failed autoexec macros: ";
 		for (std::size_t i = 0; i < failedEntries.size(); ++i) {
-			if (i != 0)
-				summary << ", ";
+			if (i != 0) summary << ", ";
 			summary << failedEntries[i];
 		}
-		mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEventFollowup, summary.str(),
-		                               mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+		mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEventFollowup, summary.str(), mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 	}
 }
 
@@ -1408,8 +1214,7 @@ void MREditorApp::handleEvent(TEvent &event) {
 	traceCalculatorHotkeyEvent("app-pre", event);
 	clearTransientSearchSelectionOnUserInput(event);
 	if (isRecorderToggleCommand(event)) {
-		if (keystrokeRecording)
-			stopKeystrokeRecording();
+		if (keystrokeRecording) stopKeystrokeRecording();
 		else
 			startKeystrokeRecording();
 		mrvmUiInvalidateScreenBase();
@@ -1417,16 +1222,14 @@ void MREditorApp::handleEvent(TEvent &event) {
 		return;
 	}
 	if (isRecorderToggleKey(event)) {
-		if (keystrokeRecording)
-			stopKeystrokeRecording();
+		if (keystrokeRecording) stopKeystrokeRecording();
 		else
 			startKeystrokeRecording();
 		mrvmUiInvalidateScreenBase();
 		clearEvent(event);
 		return;
 	}
-	if (keystrokeRecording && event.what == evKeyDown)
-		appendRecordedKeyEvent(event);
+	if (keystrokeRecording && event.what == evKeyDown) appendRecordedKeyEvent(event);
 
 	if (event.what == evCommand && event.message.command == cmMrDeferredActivateWindow) {
 		mrLogMessage("MREditorApp handling cmMrDeferredActivateWindow");
@@ -1437,30 +1240,24 @@ void MREditorApp::handleEvent(TEvent &event) {
 	}
 	if (event.what == evKeyDown && currentEditWindow() == nullptr) {
 		std::string executedMacroName;
-		if (mrvmRunAssignedMacroForKey(event.keyDown.keyCode, event.keyDown.controlKeyState,
-		                               executedMacroName, nullptr)) {
+		if (mrvmRunAssignedMacroForKey(event.keyDown.keyCode, event.keyDown.controlKeyState, executedMacroName, nullptr)) {
 			traceCalculatorHotkeyEvent("app-macro-consumed", event);
 			clearEvent(event);
 			return;
 		}
 	}
 
-	if (event.what == evCommand && event.message.command == cmQuit)
-		prepareForQuit();
+	if (event.what == evCommand && event.message.command == cmQuit) prepareForQuit();
 	TApplication::handleEvent(event);
 	traceCalculatorHotkeyEvent("app-post", event);
-	if (shouldInvalidateScreenBaseForEvent(originalWhat))
-		mrvmUiInvalidateScreenBase();
+	if (shouldInvalidateScreenBaseForEvent(originalWhat)) mrvmUiInvalidateScreenBase();
 
-	if (event.what != evCommand)
-		return;
-	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar); mrMenuBar != nullptr &&
-	    mrMenuBar->handleRuntimeCommand(event.message.command)) {
+	if (event.what != evCommand) return;
+	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar); mrMenuBar != nullptr && mrMenuBar->handleRuntimeCommand(event.message.command)) {
 		clearEvent(event);
 		return;
 	}
-	if (handleMRCommand(event.message.command))
-		clearEvent(event);
+	if (handleMRCommand(event.message.command)) clearEvent(event);
 }
 
 void MREditorApp::idle() {
@@ -1478,21 +1275,17 @@ void MREditorApp::idle() {
 		mrMenuBar->setPersistentBlocksMenuState(configuredPersistentBlocksSetting());
 		if (mr::messageline::currentVisibleMessage(message)) {
 			MRMenuBar::MarqueeKind marqueeKind = mapMessageNoticeKind(message.kind);
-			if (isHeroVisibleMessage(message))
-				marqueeKind = MRMenuBar::MarqueeKind::Hero;
+			if (isHeroVisibleMessage(message)) marqueeKind = MRMenuBar::MarqueeKind::Hero;
 			mrMenuBar->setAutoMarqueeStatus(message.text, marqueeKind);
-		}
-		else
+		} else
 			mrMenuBar->setAutoMarqueeStatus(std::string());
 		mrMenuBar->tickMarquee();
 	}
 	{
 		std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 		for (auto *window : windows) {
-			if (window == nullptr || window->frame == nullptr)
-				continue;
-			if (auto *mrFrame = dynamic_cast<MRFrame *>(window->frame))
-				mrFrame->tickTaskOverviewAnimation();
+			if (window == nullptr || window->frame == nullptr) continue;
+			if (auto *mrFrame = dynamic_cast<MRFrame *>(window->frame)) mrFrame->tickTaskOverviewAnimation();
 		}
 	}
 	updateAppCommandState();
@@ -1508,8 +1301,7 @@ TPalette &MREditorApp::getPalette() const {
 	palette = basePalette;
 
 	for (slot = 1; slot <= kMrPaletteMax; ++slot)
-		if (configuredColorSlotOverride(static_cast<unsigned char>(slot), overrideValue))
-			palette[slot] = overrideValue;
+		if (configuredColorSlotOverride(static_cast<unsigned char>(slot), overrideValue)) palette[slot] = overrideValue;
 
 	// TVision-wide policy: Dialog scrollbars follow dialog frame color globally.
 	// Applies to gray/blue/cyan dialog palette blocks, no per-view exceptions.
@@ -1539,9 +1331,6 @@ bool mrApplySettingsSourceForTesting(const std::string &source, std::string *err
 	return applySettingsSource(source, errorMessage);
 }
 
-bool mrMigrateSettingsMacroToCurrentVersionForTesting(const std::string &settingsPath,
-                                                      const std::string &source,
-                                                      const std::string &reason,
-                                                      std::string *errorMessage) {
+bool mrMigrateSettingsMacroToCurrentVersionForTesting(const std::string &settingsPath, const std::string &source, const std::string &reason, std::string *errorMessage) {
 	return normalizeSettingsMacroToCurrentModel(settingsPath, source, reason, errorMessage);
 }

@@ -30,14 +30,10 @@ const char *keymapDiagnosticSeverityName(MRKeymapDiagnosticSeverity severity) no
 }
 
 std::string keymapDiagnosticIdentity(const MRKeymapDiagnostic &diagnostic) {
-	return std::to_string(static_cast<unsigned>(diagnostic.kind)) + "|" +
-	       std::to_string(static_cast<unsigned>(diagnostic.severity)) + "|" +
-	       std::to_string(diagnostic.profileIndex) + "|" + std::to_string(diagnostic.bindingIndex) + "|" +
-	       diagnostic.message;
+	return std::to_string(static_cast<unsigned>(diagnostic.kind)) + "|" + std::to_string(static_cast<unsigned>(diagnostic.severity)) + "|" + std::to_string(diagnostic.profileIndex) + "|" + std::to_string(diagnostic.bindingIndex) + "|" + diagnostic.message;
 }
 
-std::string describeKeymapDiagnostic(std::span<const MRKeymapProfile> profiles,
-                                     const MRKeymapDiagnostic &diagnostic) {
+std::string describeKeymapDiagnostic(std::span<const MRKeymapProfile> profiles, const MRKeymapDiagnostic &diagnostic) {
 	std::string text = diagnostic.message;
 
 	if (diagnostic.profileIndex != kNoIndex && diagnostic.profileIndex < profiles.size()) {
@@ -54,35 +50,27 @@ std::string describeKeymapDiagnostic(std::span<const MRKeymapProfile> profiles,
 }
 
 std::string summarizeKeymapLoadForLog(const MRKeymapLoadResult &load) {
-	std::string text =
-	    "Keymap bootstrap parse: active='" + load.activeProfileName + "' profiles=" +
-	    std::to_string(load.profiles.size()) + " diagnostics=" + std::to_string(load.diagnostics.size());
+	std::string text = "Keymap bootstrap parse: active='" + load.activeProfileName + "' profiles=" + std::to_string(load.profiles.size()) + " diagnostics=" + std::to_string(load.diagnostics.size());
 
 	for (const MRKeymapProfile &profile : load.profiles)
 		text += " [" + profile.name + ":" + std::to_string(profile.bindings.size()) + "]";
 	return text;
 }
 
-std::string summarizeKeymapDiagnosticsForMessageLine(std::span<const MRKeymapDiagnostic> diagnostics,
-                                                     std::string_view operation) {
+std::string summarizeKeymapDiagnosticsForMessageLine(std::span<const MRKeymapDiagnostic> diagnostics, std::string_view operation) {
 	std::set<std::string> seen;
 	std::size_t errorCount = 0;
 	std::size_t warningCount = 0;
 
 	for (const MRKeymapDiagnostic &diagnostic : diagnostics) {
-		if (!seen.insert(keymapDiagnosticIdentity(diagnostic)).second)
-			continue;
-		if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error)
-			++errorCount;
+		if (!seen.insert(keymapDiagnosticIdentity(diagnostic)).second) continue;
+		if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error) ++errorCount;
 		else
 			++warningCount;
 	}
-	if (errorCount == 0 && warningCount == 0)
-		return std::string();
-	if (errorCount == 0)
-		return std::string(operation) + ": " + std::to_string(warningCount) + " warning(s); see log.";
-	return std::string(operation) + ": removed " + std::to_string(errorCount) +
-	       " invalid key binding(s); see log.";
+	if (errorCount == 0 && warningCount == 0) return std::string();
+	if (errorCount == 0) return std::string(operation) + ": " + std::to_string(warningCount) + " warning(s); see log.";
+	return std::string(operation) + ": removed " + std::to_string(errorCount) + " invalid key binding(s); see log.";
 }
 
 struct MRParsedSettingsAssignment {
@@ -114,8 +102,6 @@ struct MRFlattenedSettingsDocument {
 	std::map<std::string, MRFlattenedEditProfile> profiles;
 };
 
-
-
 std::string unescapeMrmacSingleQuotedLiteral(const std::string &value) {
 	std::string out;
 	out.reserve(value.size());
@@ -134,22 +120,16 @@ std::string joinStrings(const std::vector<std::string> &values, std::string_view
 	std::string out;
 
 	for (std::size_t i = 0; i < values.size(); ++i) {
-		if (i != 0)
-			out += separator;
+		if (i != 0) out += separator;
 		out += values[i];
 	}
 	return out;
 }
 
 MRParsedSettingsDocument parseSettingsDocument(std::string_view source, bool acceptLegacyFeProfileToken) {
-	static const std::regex assignmentPattern(
-	    "MRSETUP\\s*\\(\\s*'([^']+)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
-	static const std::regex profilePattern(
-	    "MRFEPROFILE\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)",
-	    std::regex::icase);
-	static const std::regex profilePatternWithLegacy(
-	    "(?:MRFEPROFILE|MREDITPROFILE)\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)",
-	    std::regex::icase);
+	static const std::regex assignmentPattern("MRSETUP\\s*\\(\\s*'([^']+)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
+	static const std::regex profilePattern("MRFEPROFILE\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
+	static const std::regex profilePatternWithLegacy("(?:MRFEPROFILE|MREDITPROFILE)\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
 	const std::regex &activeProfilePattern = acceptLegacyFeProfileToken ? profilePatternWithLegacy : profilePattern;
 	MRParsedSettingsDocument document;
 	std::smatch match;
@@ -181,9 +161,7 @@ MRParsedSettingsDocument parseSettingsDocument(std::string_view source, bool acc
 }
 
 std::size_t countLegacyFeProfileDirectives(std::string_view source) {
-	static const std::regex legacyProfilePattern(
-	    "MREDITPROFILE\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)",
-	    std::regex::icase);
+	static const std::regex legacyProfilePattern("MREDITPROFILE\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
 	std::smatch match;
 	std::string remaining(source);
 	std::size_t count = 0;
@@ -205,22 +183,17 @@ MRFlattenedSettingsDocument flattenSettingsDocument(const MRParsedSettingsDocume
 	std::size_t autoexecMacroIndex = 1;
 
 	for (const MRParsedSettingsAssignment &assignment : document.assignments)
-		if (assignment.key == "PATH_HISTORY")
-			flattened.globals[assignment.key + "[" + std::to_string(pathHistoryIndex++) + "]"] = assignment.value;
+		if (assignment.key == "PATH_HISTORY") flattened.globals[assignment.key + "[" + std::to_string(pathHistoryIndex++) + "]"] = assignment.value;
 		else if (assignment.key == "FILE_HISTORY")
 			flattened.globals[assignment.key + "[" + std::to_string(fileHistoryIndex++) + "]"] = assignment.value;
 		else if (assignment.key == "DIALOG_LAST_PATH")
-			flattened.globals[assignment.key + "[" + std::to_string(dialogLastPathIndex++) + "]"] =
-			    assignment.value;
+			flattened.globals[assignment.key + "[" + std::to_string(dialogLastPathIndex++) + "]"] = assignment.value;
 		else if (assignment.key == "DIALOG_PATH_HISTORY")
-			flattened.globals[assignment.key + "[" + std::to_string(dialogPathHistoryIndex++) + "]"] =
-			    assignment.value;
+			flattened.globals[assignment.key + "[" + std::to_string(dialogPathHistoryIndex++) + "]"] = assignment.value;
 		else if (assignment.key == "DIALOG_FILE_HISTORY")
-			flattened.globals[assignment.key + "[" + std::to_string(dialogFileHistoryIndex++) + "]"] =
-			    assignment.value;
+			flattened.globals[assignment.key + "[" + std::to_string(dialogFileHistoryIndex++) + "]"] = assignment.value;
 		else if (assignment.key == "AUTOEXEC_MACRO")
-			flattened.globals[assignment.key + "[" + std::to_string(autoexecMacroIndex++) + "]"] =
-			    assignment.value;
+			flattened.globals[assignment.key + "[" + std::to_string(autoexecMacroIndex++) + "]"] = assignment.value;
 		else
 			flattened.globals[assignment.key] = assignment.value;
 
@@ -233,10 +206,8 @@ MRFlattenedSettingsDocument flattenSettingsDocument(const MRParsedSettingsDocume
 		profile.id = profileId;
 		if (op == "DEFINE") {
 			profile.name = trimAscii(directive.arg3);
-			if (profile.name.empty())
-				profile.name = trimAscii(directive.arg4);
-			if (profile.name.empty())
-				profile.name = profileId;
+			if (profile.name.empty()) profile.name = trimAscii(directive.arg4);
+			if (profile.name.empty()) profile.name = profileId;
 		} else if (op == "EXT") {
 			profile.extensions.push_back(normalizeEditExtensionSelector(directive.arg3));
 		} else if (op == "SET")
@@ -252,9 +223,7 @@ MRFlattenedSettingsDocument flattenSettingsDocument(const MRParsedSettingsDocume
 	return flattened;
 }
 
-void appendChange(std::vector<MRSettingsChangeEntry> &changes, MRSettingsChangeEntry::Kind kind,
-                  const std::string &scope, const std::string &key, const std::string &oldValue,
-                  const std::string &newValue) {
+void appendChange(std::vector<MRSettingsChangeEntry> &changes, MRSettingsChangeEntry::Kind kind, const std::string &scope, const std::string &key, const std::string &oldValue, const std::string &newValue) {
 	MRSettingsChangeEntry change;
 
 	change.kind = kind;
@@ -265,9 +234,7 @@ void appendChange(std::vector<MRSettingsChangeEntry> &changes, MRSettingsChangeE
 	changes.push_back(std::move(change));
 }
 
-void diffFlatMap(const std::string &scope, const std::map<std::string, std::string> &beforeMap,
-                 const std::map<std::string, std::string> &afterMap,
-                 std::vector<MRSettingsChangeEntry> &changes) {
+void diffFlatMap(const std::string &scope, const std::map<std::string, std::string> &beforeMap, const std::map<std::string, std::string> &afterMap, std::vector<MRSettingsChangeEntry> &changes) {
 	std::set<std::string> keys;
 
 	for (const auto &entry : beforeMap)
@@ -287,14 +254,11 @@ void diffFlatMap(const std::string &scope, const std::map<std::string, std::stri
 			appendChange(changes, MRSettingsChangeEntry::Kind::Removed, scope, key, beforeIt->second, std::string());
 			continue;
 		}
-		if (beforeIt->second != afterIt->second)
-			appendChange(changes, MRSettingsChangeEntry::Kind::Changed, scope, key, beforeIt->second,
-			             afterIt->second);
+		if (beforeIt->second != afterIt->second) appendChange(changes, MRSettingsChangeEntry::Kind::Changed, scope, key, beforeIt->second, afterIt->second);
 	}
 }
 
-void diffFlattenedDocuments(const MRFlattenedSettingsDocument &before, const MRFlattenedSettingsDocument &after,
-                            std::vector<MRSettingsChangeEntry> &changes) {
+void diffFlattenedDocuments(const MRFlattenedSettingsDocument &before, const MRFlattenedSettingsDocument &after, std::vector<MRSettingsChangeEntry> &changes) {
 	diffFlatMap("settings", before.globals, after.globals, changes);
 
 	std::set<std::string> profileIds;
@@ -312,15 +276,13 @@ void diffFlattenedDocuments(const MRFlattenedSettingsDocument &before, const MRF
 
 		if (beforeIt != before.profiles.end()) {
 			beforeMap["PROFILE_NAME"] = beforeIt->second.name;
-			if (!beforeIt->second.extensions.empty())
-				beforeMap["EXTENSIONS"] = joinStrings(beforeIt->second.extensions, ", ");
+			if (!beforeIt->second.extensions.empty()) beforeMap["EXTENSIONS"] = joinStrings(beforeIt->second.extensions, ", ");
 			for (const auto &entry : beforeIt->second.settings)
 				beforeMap[entry.first] = entry.second;
 		}
 		if (afterIt != after.profiles.end()) {
 			afterMap["PROFILE_NAME"] = afterIt->second.name;
-			if (!afterIt->second.extensions.empty())
-				afterMap["EXTENSIONS"] = joinStrings(afterIt->second.extensions, ", ");
+			if (!afterIt->second.extensions.empty()) afterMap["EXTENSIONS"] = joinStrings(afterIt->second.extensions, ", ");
 			for (const auto &entry : afterIt->second.settings)
 				afterMap[entry.first] = entry.second;
 		}
@@ -342,8 +304,7 @@ std::string quoteValue(const std::string &value) {
 
 } // namespace
 
-bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::string &source,
-                                    MRSettingsLoadReport *report, std::string *errorMessage) {
+bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::string &source, MRSettingsLoadReport *report, std::string *errorMessage) {
 	MRSettingsLoadReport localReport;
 	MRSettingsLoadReport &activeReport = report != nullptr ? *report : localReport;
 	MRParsedSettingsDocument document = parseSettingsDocument(source, false);
@@ -354,10 +315,8 @@ bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::
 	std::string themeError;
 
 	activeReport = MRSettingsLoadReport();
-	if (countLegacyFeProfileDirectives(source) != 0)
-		markFlag(activeReport, MRSettingsLoadReport::ObsoleteFeProfileDropped);
-	if (!resetConfiguredSettingsModel(activeSettingsPath, activePaths, errorMessage))
-		return false;
+	if (countLegacyFeProfileDirectives(source) != 0) markFlag(activeReport, MRSettingsLoadReport::ObsoleteFeProfileDropped);
+	if (!resetConfiguredSettingsModel(activeSettingsPath, activePaths, errorMessage)) return false;
 
 	for (const MRParsedSettingsAssignment &assignment : document.assignments) {
 		MRSettingsKeyClass keyClass = classifySettingsKey(assignment.key);
@@ -371,10 +330,8 @@ bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::
 			markFlag(activeReport, MRSettingsLoadReport::DuplicateKeySeen);
 			++activeReport.duplicateAssignmentCount;
 		}
-		if (keyClass == MRSettingsKeyClass::ColorInline)
-			markFlag(activeReport, MRSettingsLoadReport::LegacyInlineColorsSeen);
-		if (assignment.key == "SETTINGSPATH" && normalizeConfiguredPathInput(assignment.value) != activeSettingsPath)
-			markFlag(activeReport, MRSettingsLoadReport::AnchoredSettingsPath);
+		if (keyClass == MRSettingsKeyClass::ColorInline) markFlag(activeReport, MRSettingsLoadReport::LegacyInlineColorsSeen);
+		if (assignment.key == "SETTINGSPATH" && normalizeConfiguredPathInput(assignment.value) != activeSettingsPath) markFlag(activeReport, MRSettingsLoadReport::AnchoredSettingsPath);
 		if (!applyConfiguredSettingsAssignment(assignment.key, assignment.value, activePaths, &applyError)) {
 			markFlag(activeReport, MRSettingsLoadReport::InvalidValueReset);
 			++activeReport.ignoredAssignmentCount;
@@ -384,34 +341,24 @@ bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::
 	}
 
 	for (const MRParsedEditProfileDirective &directive : document.profileDirectives)
-		if (!applyConfiguredEditExtensionProfileDirective(directive.operation, directive.profileId, directive.arg3,
-		                                                 directive.arg4, errorMessage))
-			return false;
+		if (!applyConfiguredEditExtensionProfileDirective(directive.operation, directive.profileId, directive.arg3, directive.arg4, errorMessage)) return false;
 
 	{
 		MRKeymapLoadResult keymapLoad = loadKeymapProfilesFromSettingsSource(source);
-		const std::string diagnosticSummary =
-		    summarizeKeymapDiagnosticsForMessageLine(keymapLoad.diagnostics, "Keymap bootstrap");
+		const std::string diagnosticSummary = summarizeKeymapDiagnosticsForMessageLine(keymapLoad.diagnostics, "Keymap bootstrap");
 		std::set<std::string> loggedDiagnostics;
 
 		mrLogMessage(summarizeKeymapLoadForLog(keymapLoad));
 		for (const MRKeymapDiagnostic &diagnostic : keymapLoad.diagnostics) {
-			if (!loggedDiagnostics.insert(keymapDiagnosticIdentity(diagnostic)).second)
-				continue;
-			mrLogMessage("Keymap bootstrap diagnostic [" +
-			             std::string(keymapDiagnosticSeverityName(diagnostic.severity)) + "]: " +
-			             describeKeymapDiagnostic(keymapLoad.profiles, diagnostic));
+			if (!loggedDiagnostics.insert(keymapDiagnosticIdentity(diagnostic)).second) continue;
+			mrLogMessage("Keymap bootstrap diagnostic [" + std::string(keymapDiagnosticSeverityName(diagnostic.severity)) + "]: " + describeKeymapDiagnostic(keymapLoad.profiles, diagnostic));
 		}
-		if (!diagnosticSummary.empty())
-			mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEventFollowup, diagnosticSummary,
-			                              mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+		if (!diagnosticSummary.empty()) mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEventFollowup, diagnosticSummary, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 		if (!setConfiguredKeymapProfiles(keymapLoad.profiles, errorMessage)) {
 			mrLogMessage("Keymap bootstrap canonicalized result could not be applied; falling back to DEFAULT.");
 			markFlag(activeReport, MRSettingsLoadReport::InvalidValueReset);
-			if (!setConfiguredKeymapProfiles(std::vector<MRKeymapProfile>(), errorMessage))
-				return false;
-			if (!setConfiguredActiveKeymapProfile("DEFAULT", errorMessage))
-				return false;
+			if (!setConfiguredKeymapProfiles(std::vector<MRKeymapProfile>(), errorMessage)) return false;
+			if (!setConfiguredActiveKeymapProfile("DEFAULT", errorMessage)) return false;
 		} else if (!setConfiguredActiveKeymapProfile(keymapLoad.activeProfileName, errorMessage))
 			return false;
 		else
@@ -426,19 +373,10 @@ bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::
 	if (!loadColorThemeFile(configuredColorThemeFilePath(), &themeError)) {
 		MRColorSetupSettings defaults = resolveColorSetupDefaults();
 		markFlag(activeReport, MRSettingsLoadReport::ThemeFallbackUsed);
-		if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, defaults.windowColors.data(),
-		                                        defaults.windowColors.size(), errorMessage) ||
-		    !setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, defaults.menuDialogColors.data(),
-		                                        defaults.menuDialogColors.size(), errorMessage) ||
-		    !setConfiguredColorSetupGroupValues(MRColorSetupGroup::Help, defaults.helpColors.data(),
-		                                        defaults.helpColors.size(), errorMessage) ||
-		    !setConfiguredColorSetupGroupValues(MRColorSetupGroup::Other, defaults.otherColors.data(),
-		                                        defaults.otherColors.size(), errorMessage))
-			return false;
+		if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, defaults.windowColors.data(), defaults.windowColors.size(), errorMessage) || !setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, defaults.menuDialogColors.data(), defaults.menuDialogColors.size(), errorMessage) || !setConfiguredColorSetupGroupValues(MRColorSetupGroup::Help, defaults.helpColors.data(), defaults.helpColors.size(), errorMessage) || !setConfiguredColorSetupGroupValues(MRColorSetupGroup::Other, defaults.otherColors.data(), defaults.otherColors.size(), errorMessage)) return false;
 	}
 
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -446,49 +384,36 @@ std::string describeSettingsLoadReport(const MRSettingsLoadReport &report) {
 	std::vector<std::string> parts;
 	std::string text;
 
-	if (hasFlag(report, MRSettingsLoadReport::UnknownKeyDropped))
-		parts.emplace_back("unknown keys dropped");
-	if (hasFlag(report, MRSettingsLoadReport::DuplicateKeySeen))
-		parts.emplace_back("duplicates resolved");
-	if (hasFlag(report, MRSettingsLoadReport::InvalidValueReset))
-		parts.emplace_back("invalid values reset to defaults");
-	if (hasFlag(report, MRSettingsLoadReport::MissingCanonicalKeyDefaulted))
-		parts.emplace_back("missing canonical keys defaulted");
-	if (hasFlag(report, MRSettingsLoadReport::LegacyInlineColorsSeen))
-		parts.emplace_back("legacy inline colors normalized");
-	if (hasFlag(report, MRSettingsLoadReport::ThemeFallbackUsed))
-		parts.emplace_back("theme fallback applied");
-	if (hasFlag(report, MRSettingsLoadReport::AnchoredSettingsPath))
-		parts.emplace_back("settings path anchored to active file");
-	if (hasFlag(report, MRSettingsLoadReport::ObsoleteFeProfileDropped))
-		parts.emplace_back("obsolete MREDITPROFILE directives dropped; FE profile defaults restored");
-	if (parts.empty())
-		return std::string();
+	if (hasFlag(report, MRSettingsLoadReport::UnknownKeyDropped)) parts.emplace_back("unknown keys dropped");
+	if (hasFlag(report, MRSettingsLoadReport::DuplicateKeySeen)) parts.emplace_back("duplicates resolved");
+	if (hasFlag(report, MRSettingsLoadReport::InvalidValueReset)) parts.emplace_back("invalid values reset to defaults");
+	if (hasFlag(report, MRSettingsLoadReport::MissingCanonicalKeyDefaulted)) parts.emplace_back("missing canonical keys defaulted");
+	if (hasFlag(report, MRSettingsLoadReport::LegacyInlineColorsSeen)) parts.emplace_back("legacy inline colors normalized");
+	if (hasFlag(report, MRSettingsLoadReport::ThemeFallbackUsed)) parts.emplace_back("theme fallback applied");
+	if (hasFlag(report, MRSettingsLoadReport::AnchoredSettingsPath)) parts.emplace_back("settings path anchored to active file");
+	if (hasFlag(report, MRSettingsLoadReport::ObsoleteFeProfileDropped)) parts.emplace_back("obsolete MREDITPROFILE directives dropped; FE profile defaults restored");
+	if (parts.empty()) return std::string();
 	for (std::size_t i = 0; i < parts.size(); ++i) {
-		if (i != 0)
-			text += "; ";
+		if (i != 0) text += "; ";
 		text += parts[i];
 	}
 	return text;
 }
 
-bool diffSettingsSources(const std::string &beforeSource, const std::string &afterSource,
-                         std::vector<MRSettingsChangeEntry> &changes, std::string *errorMessage) {
+bool diffSettingsSources(const std::string &beforeSource, const std::string &afterSource, std::vector<MRSettingsChangeEntry> &changes, std::string *errorMessage) {
 	const MRFlattenedSettingsDocument before = flattenSettingsDocument(parseSettingsDocument(beforeSource, true));
 	const MRFlattenedSettingsDocument after = flattenSettingsDocument(parseSettingsDocument(afterSource, true));
 
 	changes.clear();
 	diffFlattenedDocuments(before, after, changes);
-	if (errorMessage != nullptr)
-		errorMessage->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 std::string formatSettingsChangeForLog(const MRSettingsChangeEntry &change) {
 	std::string text = change.scope + " ";
 
-	if (change.kind == MRSettingsChangeEntry::Kind::Added)
-		text += "+ " + change.key + " = " + quoteValue(change.newValue);
+	if (change.kind == MRSettingsChangeEntry::Kind::Added) text += "+ " + change.key + " = " + quoteValue(change.newValue);
 	else if (change.kind == MRSettingsChangeEntry::Kind::Removed)
 		text += "- " + change.key + " (was " + quoteValue(change.oldValue) + ")";
 	else

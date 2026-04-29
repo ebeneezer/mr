@@ -11,8 +11,6 @@ void runFileExtensionProfilesDialogFlow();
 bool runSetupDialogCommand(unsigned short command);
 
 // Regression-only hook used by regression/mr-regression-checks.cpp.
-bool mrSaveColorThemeFromWorkingPaletteForTesting(const TPalette &workingPalette,
-                                                  const std::string &themeUri,
-                                                  std::string *errorMessage = nullptr);
+bool mrSaveColorThemeFromWorkingPaletteForTesting(const TPalette &workingPalette, const std::string &themeUri, std::string *errorMessage = nullptr);
 
 #endif

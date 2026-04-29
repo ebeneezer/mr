@@ -13,7 +13,7 @@
 #include <vector>
 
 class MREditorApp : public TApplication {
- public:
+  public:
 	static TMenuBar *initMRMenuBar(TRect r);
 	static TStatusLine *initMRStatusLine(TRect r);
 	static TDeskTop *initMRDeskTop(TRect r);
@@ -25,7 +25,7 @@ class MREditorApp : public TApplication {
 	void idle() override;
 	TPalette &getPalette() const override;
 
- private:
+  private:
 	void prepareForQuit();
 	bool isRecorderToggleKey(const TEvent &event) const;
 	bool isRecorderToggleCommand(const TEvent &event) const;
@@ -58,9 +58,6 @@ class MREditorApp : public TApplication {
 
 // Regression-only hooks used by regression/mr-regression-checks.cpp.
 bool mrApplySettingsSourceForTesting(const std::string &source, std::string *errorMessage = nullptr);
-bool mrMigrateSettingsMacroToCurrentVersionForTesting(const std::string &settingsPath,
-                                                      const std::string &source,
-                                                      const std::string &reason,
-                                                      std::string *errorMessage = nullptr);
+bool mrMigrateSettingsMacroToCurrentVersionForTesting(const std::string &settingsPath, const std::string &source, const std::string &reason, std::string *errorMessage = nullptr);
 
 #endif

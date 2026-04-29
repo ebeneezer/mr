@@ -50,12 +50,10 @@ class MREditWindow : public TWindow {
 		std::string label;
 		std::chrono::steady_clock::time_point startedAt;
 
-		TrackedTask() noexcept
-		    : id(0), kind(mr::coprocessor::TaskKind::Custom), label(), startedAt(std::chrono::steady_clock::now()) {
+		TrackedTask() noexcept : id(0), kind(mr::coprocessor::TaskKind::Custom), label(), startedAt(std::chrono::steady_clock::now()) {
 		}
 
-		TrackedTask(std::uint64_t aId, mr::coprocessor::TaskKind aKind, std::string aLabel = std::string())
-		    : id(aId), kind(aKind), label(std::move(aLabel)), startedAt(std::chrono::steady_clock::now()) {
+		TrackedTask(std::uint64_t aId, mr::coprocessor::TaskKind aKind, std::string aLabel = std::string()) : id(aId), kind(aKind), label(std::move(aLabel)), startedAt(std::chrono::steady_clock::now()) {
 		}
 	};
 
@@ -69,20 +67,10 @@ class MREditWindow : public TWindow {
 		wrHelp
 	};
 
-	MREditWindow(const TRect &bounds, const char *title, int aNumber)
-	    : TWindowInit(&MREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr),
-	      hScrollBar(nullptr), indicator(nullptr), editor(nullptr), mBufferId(allocateBufferId()),
-	      mFirstSaveDone(false), mTemporaryFileUsed(false), mTemporaryFileName(), mIndentLevel(1),
-	      mBlockMode(bmNone), mBlockMarkingOn(false), mBlockAnchor(0), mBlockEnd(0), mColumnSortAscending(true),
-	      mTrackedCoprocessorTasks(), mWindowRole(wrText), mWindowRoleDetail(), mMacroQueuedCount(0),
-	      mMacroCompletedCount(0), mMacroConflictCount(0), mMacroCancelledCount(0), mMacroFailedCount(0),
-	      mLastMacroSummaryText(), mWindowPaletteData(defaultWindowPaletteData()),
-	      mWindowPalette(mWindowPaletteData.data(), static_cast<ushort>(mWindowPaletteData.size())),
-	      mCustomEofMarkerColorValid(false), mCustomEofMarkerColor(0) {
+	MREditWindow(const TRect &bounds, const char *title, int aNumber) : TWindowInit(&MREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr), hScrollBar(nullptr), indicator(nullptr), editor(nullptr), mBufferId(allocateBufferId()), mFirstSaveDone(false), mTemporaryFileUsed(false), mTemporaryFileName(), mIndentLevel(1), mBlockMode(bmNone), mBlockMarkingOn(false), mBlockAnchor(0), mBlockEnd(0), mColumnSortAscending(true), mTrackedCoprocessorTasks(), mWindowRole(wrText), mWindowRoleDetail(), mMacroQueuedCount(0), mMacroCompletedCount(0), mMacroConflictCount(0), mMacroCancelledCount(0), mMacroFailedCount(0), mLastMacroSummaryText(), mWindowPaletteData(defaultWindowPaletteData()), mWindowPalette(mWindowPaletteData.data(), static_cast<ushort>(mWindowPaletteData.size())), mCustomEofMarkerColorValid(false), mCustomEofMarkerColor(0) {
 		options |= ofTileable;
 
-		std::strncpy(displayTitle, (title != nullptr && *title != '\0') ? title : "Untitled",
-		             sizeof(displayTitle) - 1);
+		std::strncpy(displayTitle, (title != nullptr && *title != '\0') ? title : "Untitled", sizeof(displayTitle) - 1);
 		displayTitle[sizeof(displayTitle) - 1] = '\0';
 
 		hScrollBar = new TScrollBar(TRect(1, size.y - 1, size.x - 1, size.y));
@@ -112,11 +100,7 @@ class MREditWindow : public TWindow {
 				const bool showRecordingIcon = showRecordingSlot && mrIsKeystrokeRecordingMarkerVisible();
 				const bool showMacroBrainSlot = isActiveWindow && mrIsMacroBrainMarkerActive();
 				const bool showMacroBrainIcon = showMacroBrainSlot && mrIsMacroBrainMarkerVisible();
-				return MRFrame::MarkerState(isFileChanged(), hasInsertSlot, showInsertIcon,
-				                            hasWordWrapSlot, showWordWrapIcon, hasTaskSlot,
-				                            showTaskIcon, hasReadOnlySlot, showReadOnlyIcon,
-				                            showRecordingSlot, showRecordingIcon, showMacroBrainSlot,
-				                            showMacroBrainIcon);
+				return MRFrame::MarkerState(isFileChanged(), hasInsertSlot, showInsertIcon, hasWordWrapSlot, showWordWrapIcon, hasTaskSlot, showTaskIcon, hasReadOnlySlot, showReadOnlyIcon, showRecordingSlot, showRecordingIcon, showMacroBrainSlot, showMacroBrainIcon);
 			});
 			mrFrame->setTaskOverviewProvider([this]() { return describeRunningTasks(); });
 		}
@@ -140,14 +124,12 @@ class MREditWindow : public TWindow {
 	}
 
 	virtual TColorAttr mapColor(uchar index) override {
-		if (index >= 1 && index <= mWindowPaletteData.size())
-			return mWindowPaletteData[index - 1];
+		if (index >= 1 && index <= mWindowPaletteData.size()) return mWindowPaletteData[index - 1];
 		return TWindow::mapColor(index);
 	}
 
 	virtual const char *getTitle(short) override {
-		if (editor != nullptr && editor->hasPersistentFileName())
-			return editor->persistentFileName();
+		if (editor != nullptr && editor->hasPersistentFileName()) return editor->persistentFileName();
 		return displayTitle;
 	}
 
@@ -155,12 +137,9 @@ class MREditWindow : public TWindow {
 		TWindow::setState(aState, enable);
 		if ((aState & (sfFocused | sfSelected | sfActive)) != 0 && frame != nullptr) {
 			frame->drawView();
-			if (hScrollBar != nullptr)
-				hScrollBar->drawView();
-			if (vScrollBar != nullptr)
-				vScrollBar->drawView();
-			if (indicator != nullptr)
-				indicator->drawView();
+			if (hScrollBar != nullptr) hScrollBar->drawView();
+			if (vScrollBar != nullptr) vScrollBar->drawView();
+			if (indicator != nullptr) indicator->drawView();
 		}
 	}
 
@@ -171,149 +150,113 @@ class MREditWindow : public TWindow {
 	void changeBounds(const TRect &bounds) override {
 		TWindow::changeBounds(bounds);
 		layoutEditorChrome();
-		if (hScrollBar != nullptr)
-			hScrollBar->drawView();
-		if (vScrollBar != nullptr)
-			vScrollBar->drawView();
-		if (indicator != nullptr)
-			indicator->drawView();
+		if (hScrollBar != nullptr) hScrollBar->drawView();
+		if (vScrollBar != nullptr) vScrollBar->drawView();
+		if (indicator != nullptr) indicator->drawView();
 	}
 
 	virtual void handleEvent(TEvent &event) override {
-			if (event.what == evCommand && event.message.command == cmClose && mWindowRole == wrLog) {
-				setWindowManuallyHidden(this, true);
-				hide();
-				static_cast<void>(mrEnsureUsableWorkWindow());
+		if (event.what == evCommand && event.message.command == cmClose && mWindowRole == wrLog) {
+			setWindowManuallyHidden(this, true);
+			hide();
+			static_cast<void>(mrEnsureUsableWorkWindow());
+			clearEvent(event);
+			return;
+		}
+		const ushort originalEvent = event.what;
+		const ushort keyCodeBefore = event.what == evKeyDown ? ctrlToArrow(event.keyDown.keyCode) : static_cast<ushort>(0);
+		const ushort keyModifiersBefore = event.what == evKeyDown ? event.keyDown.controlKeyState : static_cast<ushort>(0);
+		const bool markingBefore = mBlockMarkingOn;
+		const std::size_t bufferLengthBefore = editor != nullptr ? editor->bufferLength() : 0;
+		const std::size_t cursorBefore = editor != nullptr ? editor->cursorOffset() : 0;
+		const std::size_t selectionStartBefore = editor != nullptr ? editor->selectionStartOffset() : 0;
+		const std::size_t selectionEndBefore = editor != nullptr ? editor->selectionEndOffset() : 0;
+
+		maybeTraceTtyCollisionKeyEvent("window-pre", event);
+		traceCalculatorHotkeyEvent("window-pre", event);
+
+		if (event.what == evMouseDown && editor != nullptr && (event.mouse.buttons & mbLeftButton) != 0 && mBlockMode != bmNone && !mBlockMarkingOn) {
+			// Keep state, but hide committed block overlay while the mouse selection loop runs,
+			// so the live growing selection is visible.
+			editor->setBlockOverlayState(0, 0, 0, false, false);
+		}
+		if (event.what == evKeyDown && TKey(event.keyDown.keyCode, event.keyDown.controlKeyState) == TKey(kbShiftTab)) {
+			event.keyDown.keyCode = kbShiftTab;
+			event.keyDown.controlKeyState |= kbShift;
+		}
+		if (event.what == evKeyDown) {
+			if (keyDebugEnabled() && TKey(event.keyDown.keyCode, event.keyDown.controlKeyState) == TKey(kbShiftTab)) {
+				char line[192];
+				std::snprintf(line, sizeof(line), "KEYDBG shifttab stage=window-pre keyCode=0x%04X mods=0x%04X cursor=%zu", static_cast<unsigned>(event.keyDown.keyCode), static_cast<unsigned>(event.keyDown.controlKeyState), editor != nullptr ? editor->cursorOffset() : 0);
+				mrLogMessage(line);
+			}
+			if (mrHandleRuntimeKeymapEvent(event, isReadOnly() ? MRKeymapContext::ReadOnly : MRKeymapContext::Edit, this)) return;
+			if (handleBuiltInBlockHotkeys(event)) return;
+			std::string executedMacroName;
+			if (mrvmRunAssignedMacroForKey(event.keyDown.keyCode, event.keyDown.controlKeyState, executedMacroName, nullptr)) {
+				if (isCalculatorHotkeyEvent(event)) {
+					std::string detail = "macro=" + executedMacroName;
+					traceCalculatorHotkeyEvent("window-macro-consumed", event, detail.c_str());
+				}
+				if (keyDebugEnabled()) {
+					char line[224];
+					std::snprintf(line, sizeof(line), "KEYDBG shifttab stage=macro-consumed macro='%s'", executedMacroName.c_str());
+					mrLogMessage(line);
+				}
 				clearEvent(event);
 				return;
 			}
-			const ushort originalEvent = event.what;
-			const ushort keyCodeBefore =
-			    event.what == evKeyDown ? ctrlToArrow(event.keyDown.keyCode) : static_cast<ushort>(0);
-			const ushort keyModifiersBefore =
-			    event.what == evKeyDown ? event.keyDown.controlKeyState : static_cast<ushort>(0);
-			const bool markingBefore = mBlockMarkingOn;
-			const std::size_t bufferLengthBefore = editor != nullptr ? editor->bufferLength() : 0;
-			const std::size_t cursorBefore = editor != nullptr ? editor->cursorOffset() : 0;
-			const std::size_t selectionStartBefore =
-			    editor != nullptr ? editor->selectionStartOffset() : 0;
-				const std::size_t selectionEndBefore =
-				    editor != nullptr ? editor->selectionEndOffset() : 0;
-
-				maybeTraceTtyCollisionKeyEvent("window-pre", event);
-				traceCalculatorHotkeyEvent("window-pre", event);
-
-				if (event.what == evMouseDown && editor != nullptr &&
-				    (event.mouse.buttons & mbLeftButton) != 0 && mBlockMode != bmNone && !mBlockMarkingOn) {
-				// Keep state, but hide committed block overlay while the mouse selection loop runs,
-				// so the live growing selection is visible.
-				editor->setBlockOverlayState(0, 0, 0, false, false);
-			}
-			if (event.what == evKeyDown &&
-			    TKey(event.keyDown.keyCode, event.keyDown.controlKeyState) == TKey(kbShiftTab)) {
-				event.keyDown.keyCode = kbShiftTab;
-				event.keyDown.controlKeyState |= kbShift;
-			}
-			if (event.what == evKeyDown) {
-				if (keyDebugEnabled() &&
-				    TKey(event.keyDown.keyCode, event.keyDown.controlKeyState) == TKey(kbShiftTab)) {
-					char line[192];
-					std::snprintf(line, sizeof(line),
-					              "KEYDBG shifttab stage=window-pre keyCode=0x%04X mods=0x%04X cursor=%zu",
-					              static_cast<unsigned>(event.keyDown.keyCode),
-					              static_cast<unsigned>(event.keyDown.controlKeyState),
-						              editor != nullptr ? editor->cursorOffset() : 0);
+			if (event.keyDown.keyCode == kbShiftTab && editor != nullptr) {
+				const std::size_t cursorStart = editor->cursorOffset();
+				const ushort eventTypeBeforeEditor = event.what;
+				editor->handleEvent(event);
+				if (keyDebugEnabled()) {
+					char line[224];
+					std::snprintf(line, sizeof(line), "KEYDBG shifttab stage=editor-dispatch eventBefore=0x%04X eventAfter=0x%04X cursorBefore=%zu cursorAfter=%zu", static_cast<unsigned>(eventTypeBeforeEditor), static_cast<unsigned>(event.what), cursorStart, editor->cursorOffset());
 					mrLogMessage(line);
 				}
-					if (mrHandleRuntimeKeymapEvent(
-					        event, isReadOnly() ? MRKeymapContext::ReadOnly : MRKeymapContext::Edit, this))
-						return;
-					if (handleBuiltInBlockHotkeys(event))
-						return;
-					std::string executedMacroName;
-					if (mrvmRunAssignedMacroForKey(event.keyDown.keyCode, event.keyDown.controlKeyState,
-					                               executedMacroName, nullptr)) {
-						if (isCalculatorHotkeyEvent(event)) {
-							std::string detail = "macro=" + executedMacroName;
-							traceCalculatorHotkeyEvent("window-macro-consumed", event, detail.c_str());
-						}
-						if (keyDebugEnabled()) {
-							char line[224];
-							std::snprintf(line, sizeof(line),
-							              "KEYDBG shifttab stage=macro-consumed macro='%s'",
-							              executedMacroName.c_str());
-							mrLogMessage(line);
-						}
-						clearEvent(event);
-						return;
-					}
-					if (event.keyDown.keyCode == kbShiftTab && editor != nullptr) {
-						const std::size_t cursorStart = editor->cursorOffset();
-						const ushort eventTypeBeforeEditor = event.what;
-						editor->handleEvent(event);
-						if (keyDebugEnabled()) {
-							char line[224];
-							std::snprintf(
-							    line, sizeof(line),
-							    "KEYDBG shifttab stage=editor-dispatch eventBefore=0x%04X eventAfter=0x%04X cursorBefore=%zu cursorAfter=%zu",
-							    static_cast<unsigned>(eventTypeBeforeEditor),
-							    static_cast<unsigned>(event.what), cursorStart, editor->cursorOffset());
-							mrLogMessage(line);
-						}
-					}
-				}
-			if (shouldCollapseSelectionBeforeEditorInput(event)) {
-				const std::size_t cursor = editor->cursorOffset();
-				editor->setSelectionOffsets(cursor, cursor, False);
-			}
-			if (frame != nullptr) {
-				MRFrame *mrFrame = static_cast<MRFrame *>(frame);
-				if ((event.what & (evMouseDown | evMouseMove | evMouseUp)) != 0)
-					mrFrame->updateTaskHover(event.mouse.where, false);
-				else if ((event.what & (evKeyDown | evCommand)) != 0)
-					mrFrame->updateTaskHover(TPoint(), true);
-			}
-
-				TWindow::handleEvent(event);
-				traceCalculatorHotkeyEvent("window-post", event);
-				if (keyDebugEnabled() && originalEvent == evKeyDown &&
-				    TKey(keyCodeBefore, keyModifiersBefore) == TKey(kbShiftTab)) {
-					char line[192];
-				std::snprintf(line, sizeof(line),
-				              "KEYDBG shifttab stage=window-post event=0x%04X cursor=%zu",
-				              static_cast<unsigned>(event.what),
-				              editor != nullptr ? editor->cursorOffset() : 0);
-				mrLogMessage(line);
-			}
-			if ((originalEvent & (evKeyDown | evMouseDown | evMouseMove | evMouseUp)) != 0)
-				applyPostInputBlockPolicy(markingBefore, originalEvent, selectionStartBefore,
-				                          selectionEndBefore, bufferLengthBefore, cursorBefore,
-				                          keyCodeBefore, keyModifiersBefore);
-			if (event.what == evBroadcast && event.message.command == cmUpdateTitle) {
-				updateTaskMarkers();
-				if (frame != nullptr)
-					frame->drawView();
-				clearEvent(event);
 			}
 		}
+		if (shouldCollapseSelectionBeforeEditorInput(event)) {
+			const std::size_t cursor = editor->cursorOffset();
+			editor->setSelectionOffsets(cursor, cursor, False);
+		}
+		if (frame != nullptr) {
+			MRFrame *mrFrame = static_cast<MRFrame *>(frame);
+			if ((event.what & (evMouseDown | evMouseMove | evMouseUp)) != 0) mrFrame->updateTaskHover(event.mouse.where, false);
+			else if ((event.what & (evKeyDown | evCommand)) != 0)
+				mrFrame->updateTaskHover(TPoint(), true);
+		}
+
+		TWindow::handleEvent(event);
+		traceCalculatorHotkeyEvent("window-post", event);
+		if (keyDebugEnabled() && originalEvent == evKeyDown && TKey(keyCodeBefore, keyModifiersBefore) == TKey(kbShiftTab)) {
+			char line[192];
+			std::snprintf(line, sizeof(line), "KEYDBG shifttab stage=window-post event=0x%04X cursor=%zu", static_cast<unsigned>(event.what), editor != nullptr ? editor->cursorOffset() : 0);
+			mrLogMessage(line);
+		}
+		if ((originalEvent & (evKeyDown | evMouseDown | evMouseMove | evMouseUp)) != 0) applyPostInputBlockPolicy(markingBefore, originalEvent, selectionStartBefore, selectionEndBefore, bufferLengthBefore, cursorBefore, keyCodeBefore, keyModifiersBefore);
+		if (event.what == evBroadcast && event.message.command == cmUpdateTitle) {
+			updateTaskMarkers();
+			if (frame != nullptr) frame->drawView();
+			clearEvent(event);
+		}
+	}
 
 	bool loadFromFile(const char *fileName) {
 		std::string expandedName;
 		std::string loadError;
 
-		if (editor == nullptr || fileName == nullptr || *fileName == '\0')
-			return false;
+		if (editor == nullptr || fileName == nullptr || *fileName == '\0') return false;
 
 		expandedName = fileName;
-		if (expandedName.size() >= editor->persistentFileNameCapacity())
-			return false;
+		if (expandedName.size() >= editor->persistentFileNameCapacity()) return false;
 		char expandedPath[MAXPATH];
 		strnzcpy(expandedPath, expandedName.c_str(), sizeof(expandedPath));
 		fexpand(expandedPath);
 		expandedName = expandedPath;
 
-		if (!editor->loadMappedFile(expandedName.c_str(), loadError))
-			return false;
+		if (!editor->loadMappedFile(expandedName.c_str(), loadError)) return false;
 
 		applyWindowColorThemeForPath(expandedName);
 		resetTransientEditorState();
@@ -326,10 +269,8 @@ class MREditWindow : public TWindow {
 	}
 
 	bool loadTextBuffer(const char *text, const char *title = nullptr) {
-		if (editor == nullptr)
-			return false;
-		if (!editor->replaceBufferText(text))
-			return false;
+		if (editor == nullptr) return false;
+		if (!editor->replaceBufferText(text)) return false;
 
 		resetWindowColorsToConfiguredDefaults();
 		resetTransientEditorState();
@@ -338,8 +279,7 @@ class MREditWindow : public TWindow {
 		mTemporaryFileName.clear();
 		editor->clearPersistentFileName();
 		setWindowRole(wrText);
-		if (title != nullptr && *title != '\0')
-			setDisplayTitle(title);
+		if (title != nullptr && *title != '\0') setDisplayTitle(title);
 		else
 			updateTitleFromEditor();
 		refreshSyntaxContext();
@@ -347,8 +287,7 @@ class MREditWindow : public TWindow {
 	}
 
 	bool saveCurrentFile() {
-		if (editor == nullptr || isReadOnly() || !editor->canSaveInPlace())
-			return false;
+		if (editor == nullptr || isReadOnly() || !editor->canSaveInPlace()) return false;
 
 		bool ok = editor->saveInPlace() == True;
 		if (ok) {
@@ -362,8 +301,7 @@ class MREditWindow : public TWindow {
 	}
 
 	bool saveCurrentFileAs() {
-		if (editor == nullptr || isReadOnly() || !editor->canSaveAs())
-			return false;
+		if (editor == nullptr || isReadOnly() || !editor->canSaveAs()) return false;
 
 		bool ok = editor->saveAsWithPrompt() == True;
 		if (ok) {
@@ -378,8 +316,7 @@ class MREditWindow : public TWindow {
 	}
 
 	bool saveCurrentFileWithoutOverwritePrompt() {
-		if (editor == nullptr || isReadOnly() || !editor->canSaveAs())
-			return false;
+		if (editor == nullptr || isReadOnly() || !editor->canSaveAs()) return false;
 
 		bool ok = editor->canSaveInPlace() ? editor->saveInPlace() == True : editor->saveAsWithoutOverwritePrompt() == True;
 		if (ok) {
@@ -394,8 +331,7 @@ class MREditWindow : public TWindow {
 	}
 
 	const char *currentFileName() const {
-		if (editor != nullptr && editor->hasPersistentFileName())
-			return editor->persistentFileName();
+		if (editor != nullptr && editor->hasPersistentFileName()) return editor->persistentFileName();
 		return "";
 	}
 
@@ -484,12 +420,9 @@ class MREditWindow : public TWindow {
 	}
 
 	void setReadOnly(bool readOnly) {
-		if (editor != nullptr)
-			editor->setReadOnly(readOnly);
-		if (indicator != nullptr)
-			indicator->setReadOnly(readOnly);
-		if (readOnly && editor != nullptr)
-			editor->setDocumentModified(false);
+		if (editor != nullptr) editor->setReadOnly(readOnly);
+		if (indicator != nullptr) indicator->setReadOnly(readOnly);
+		if (readOnly && editor != nullptr) editor->setDocumentModified(false);
 	}
 
 	bool hasBeenSavedInSession() const {
@@ -542,8 +475,7 @@ class MREditWindow : public TWindow {
 	}
 
 	bool isCommunicationWindow() const noexcept {
-		return mWindowRole == wrCommunicationCommand || mWindowRole == wrCommunicationPipe ||
-		       mWindowRole == wrCommunicationDevice;
+		return mWindowRole == wrCommunicationCommand || mWindowRole == wrCommunicationPipe || mWindowRole == wrCommunicationDevice;
 	}
 
 	bool isTemporaryFile() const {
@@ -559,62 +491,49 @@ class MREditWindow : public TWindow {
 	}
 
 	void setFileChanged(bool changed) {
-		if (editor != nullptr)
-			editor->setDocumentModified(changed && !isReadOnly());
+		if (editor != nullptr) editor->setDocumentModified(changed && !isReadOnly());
 	}
 
 	void setCurrentFileName(const char *fileName) {
-		if (editor == nullptr)
-			return;
+		if (editor == nullptr) return;
 
-		if (fileName == nullptr || *fileName == '\0')
-			editor->clearPersistentFileName();
+		if (fileName == nullptr || *fileName == '\0') editor->clearPersistentFileName();
 		else {
 			editor->setPersistentFileName(fileName);
 			setWindowRole(wrFile);
 		}
-		if ((fileName == nullptr || *fileName == '\0') && mWindowRole == wrFile)
-			setWindowRole(wrText);
+		if ((fileName == nullptr || *fileName == '\0') && mWindowRole == wrFile) setWindowRole(wrText);
 		updateTitleFromEditor();
 		refreshSyntaxContext();
 	}
 
 	bool confirmAbandonForReload() {
-		if (editor == nullptr)
-			return false;
+		if (editor == nullptr) return false;
 		return editor->valid(cmClose) == True;
 	}
 
 	bool replaceTextBuffer(const char *text, const char *title = nullptr) {
-		if (editor == nullptr || !editor->replaceBufferText(text))
-			return false;
-		if (title != nullptr && *title != '\0')
-			setDisplayTitle(title);
+		if (editor == nullptr || !editor->replaceBufferText(text)) return false;
+		if (title != nullptr && *title != '\0') setDisplayTitle(title);
 		return true;
 	}
 
 	bool appendTextBuffer(const char *text) {
-		if (editor == nullptr)
-			return false;
+		if (editor == nullptr) return false;
 		return editor->appendBufferText(text);
 	}
 
 	void setDisplayTitle(const char *title) {
-		std::strncpy(displayTitle, (title != nullptr && *title != '\0') ? title : "Untitled",
-		             sizeof(displayTitle) - 1);
+		std::strncpy(displayTitle, (title != nullptr && *title != '\0') ? title : "Untitled", sizeof(displayTitle) - 1);
 		displayTitle[sizeof(displayTitle) - 1] = '\0';
 		refreshSyntaxContext();
 		message(owner, evBroadcast, cmUpdateTitle, 0);
 	}
 
-	void trackCoprocessorTask(std::uint64_t taskId,
-	                          mr::coprocessor::TaskKind kind = mr::coprocessor::TaskKind::Custom,
-	                          const std::string &label = std::string()) {
-		if (taskId == 0)
-			return;
+	void trackCoprocessorTask(std::uint64_t taskId, mr::coprocessor::TaskKind kind = mr::coprocessor::TaskKind::Custom, const std::string &label = std::string()) {
+		if (taskId == 0) return;
 		for (std::size_t i = 0; i < mTrackedCoprocessorTasks.size(); ++i)
-			if (mTrackedCoprocessorTasks[i].id == taskId)
-				return;
+			if (mTrackedCoprocessorTasks[i].id == taskId) return;
 		mTrackedCoprocessorTasks.push_back(TrackedTask(taskId, kind, label));
 		updateTaskMarkers();
 	}
@@ -650,8 +569,7 @@ class MREditWindow : public TWindow {
 		mLastMacroSummaryText = "Cancel requested for ";
 		mLastMacroSummaryText += std::to_string(count);
 		mLastMacroSummaryText += " background macro task";
-		if (count != 1)
-			mLastMacroSummaryText += "s";
+		if (count != 1) mLastMacroSummaryText += "s";
 		mLastMacroSummaryText += ".";
 	}
 
@@ -666,16 +584,14 @@ class MREditWindow : public TWindow {
 	std::size_t trackedMacroTaskCount() const noexcept {
 		std::size_t count = 0;
 		for (std::size_t i = 0; i < mTrackedCoprocessorTasks.size(); ++i)
-			if (mTrackedCoprocessorTasks[i].kind == mr::coprocessor::TaskKind::MacroJob)
-				++count;
+			if (mTrackedCoprocessorTasks[i].kind == mr::coprocessor::TaskKind::MacroJob) ++count;
 		return count;
 	}
 
 	std::size_t trackedTaskCount(mr::coprocessor::TaskKind kind) const noexcept {
 		std::size_t count = 0;
 		for (std::size_t i = 0; i < mTrackedCoprocessorTasks.size(); ++i)
-			if (mTrackedCoprocessorTasks[i].kind == kind)
-				++count;
+			if (mTrackedCoprocessorTasks[i].kind == kind) ++count;
 		return count;
 	}
 
@@ -760,20 +676,12 @@ class MREditWindow : public TWindow {
 			line = bullet + " " + line + "  " + formatTaskElapsed(task);
 			lines.push_back(line);
 		}
-			if (editor != nullptr) {
-				if (editor->pendingLineIndexWarmupTaskId() != 0 &&
-				    trackedTaskCount(mr::coprocessor::TaskKind::LineIndexWarmup) == 0)
-					lines.push_back(bullet + " " + lineIndexWarmingLabel());
-				if (editor->pendingSyntaxWarmupTaskId() != 0 &&
-				    trackedTaskCount(mr::coprocessor::TaskKind::SyntaxWarmup) == 0)
-					lines.push_back(bullet + " " + syntaxWarmingLabel());
-				if (editor->pendingMiniMapWarmupTaskId() != 0 &&
-				    trackedTaskCount(mr::coprocessor::TaskKind::MiniMapWarmup) == 0)
-					lines.push_back(bullet + " " + miniMapRenderingLabel());
-				if (editor->pendingSaveNormalizationWarmupTaskId() != 0 &&
-				    trackedTaskCount(mr::coprocessor::TaskKind::SaveNormalizationWarmup) == 0)
-					lines.push_back(bullet + " " + saveNormalizationWarmingLabel());
-			}
+		if (editor != nullptr) {
+			if (editor->pendingLineIndexWarmupTaskId() != 0 && trackedTaskCount(mr::coprocessor::TaskKind::LineIndexWarmup) == 0) lines.push_back(bullet + " " + lineIndexWarmingLabel());
+			if (editor->pendingSyntaxWarmupTaskId() != 0 && trackedTaskCount(mr::coprocessor::TaskKind::SyntaxWarmup) == 0) lines.push_back(bullet + " " + syntaxWarmingLabel());
+			if (editor->pendingMiniMapWarmupTaskId() != 0 && trackedTaskCount(mr::coprocessor::TaskKind::MiniMapWarmup) == 0) lines.push_back(bullet + " " + miniMapRenderingLabel());
+			if (editor->pendingSaveNormalizationWarmupTaskId() != 0 && trackedTaskCount(mr::coprocessor::TaskKind::SaveNormalizationWarmup) == 0) lines.push_back(bullet + " " + saveNormalizationWarmingLabel());
+		}
 		return lines;
 	}
 
@@ -782,14 +690,11 @@ class MREditWindow : public TWindow {
 		std::size_t macroCount = trackedMacroTaskCount();
 
 		for (std::size_t i = 0; i < mTrackedCoprocessorTasks.size(); ++i) {
-			if (mTrackedCoprocessorTasks[i].kind != mr::coprocessor::TaskKind::MacroJob)
-				continue;
+			if (mTrackedCoprocessorTasks[i].kind != mr::coprocessor::TaskKind::MacroJob) continue;
 			mrTraceCoprocessorTaskCancel(mBufferId, mTrackedCoprocessorTasks[i].id);
-			if (mr::coprocessor::globalCoprocessor().cancelTask(mTrackedCoprocessorTasks[i].id))
-				cancelledAny = true;
+			if (mr::coprocessor::globalCoprocessor().cancelTask(mTrackedCoprocessorTasks[i].id)) cancelledAny = true;
 		}
-		if (cancelledAny)
-			noteBackgroundMacroCancelRequested(macroCount);
+		if (cancelledAny) noteBackgroundMacroCancelRequested(macroCount);
 		return cancelledAny;
 	}
 
@@ -797,11 +702,9 @@ class MREditWindow : public TWindow {
 		bool cancelledAny = false;
 
 		for (std::size_t i = 0; i < mTrackedCoprocessorTasks.size(); ++i) {
-			if (mTrackedCoprocessorTasks[i].kind != mr::coprocessor::TaskKind::ExternalIo)
-				continue;
+			if (mTrackedCoprocessorTasks[i].kind != mr::coprocessor::TaskKind::ExternalIo) continue;
 			mrTraceCoprocessorTaskCancel(mBufferId, mTrackedCoprocessorTasks[i].id);
-			if (mr::coprocessor::globalCoprocessor().cancelTask(mTrackedCoprocessorTasks[i].id))
-				cancelledAny = true;
+			if (mr::coprocessor::globalCoprocessor().cancelTask(mTrackedCoprocessorTasks[i].id)) cancelledAny = true;
 		}
 		return cancelledAny;
 	}
@@ -829,28 +732,27 @@ class MREditWindow : public TWindow {
 				editor->clearSyntaxWarmupTask(syntaxTaskId);
 				++clearedCount;
 			}
-				std::uint64_t miniMapTaskId = editor->pendingMiniMapWarmupTaskId();
-				if (miniMapTaskId != 0) {
-					mrTraceCoprocessorTaskCancel(mBufferId, miniMapTaskId);
-					static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(miniMapTaskId));
-					editor->clearMiniMapWarmupTask(miniMapTaskId);
-					++clearedCount;
-				}
-				std::uint64_t saveNormalizationTaskId = editor->pendingSaveNormalizationWarmupTaskId();
-				if (saveNormalizationTaskId != 0) {
-					mrTraceCoprocessorTaskCancel(mBufferId, saveNormalizationTaskId);
-					static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(saveNormalizationTaskId));
-					editor->clearSaveNormalizationWarmupTask(saveNormalizationTaskId);
-					++clearedCount;
-				}
+			std::uint64_t miniMapTaskId = editor->pendingMiniMapWarmupTaskId();
+			if (miniMapTaskId != 0) {
+				mrTraceCoprocessorTaskCancel(mBufferId, miniMapTaskId);
+				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(miniMapTaskId));
+				editor->clearMiniMapWarmupTask(miniMapTaskId);
+				++clearedCount;
 			}
+			std::uint64_t saveNormalizationTaskId = editor->pendingSaveNormalizationWarmupTaskId();
+			if (saveNormalizationTaskId != 0) {
+				mrTraceCoprocessorTaskCancel(mBufferId, saveNormalizationTaskId);
+				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(saveNormalizationTaskId));
+				editor->clearSaveNormalizationWarmupTask(saveNormalizationTaskId);
+				++clearedCount;
+			}
+		}
 		updateTaskMarkers();
 		return clearedCount;
 	}
 
 	void showMacroNotice(const std::string &text, MRIndicator::NoticeKind kind) {
-		if (indicator != nullptr)
-			indicator->showStatusNotice(text, kind);
+		if (indicator != nullptr) indicator->showStatusNotice(text, kind);
 	}
 
 	std::size_t originalBufferLength() const noexcept {
@@ -874,8 +776,7 @@ class MREditWindow : public TWindow {
 	}
 
 	const std::string &mappedOriginalPath() const noexcept {
-		if (editor != nullptr)
-			return editor->mappedOriginalPath();
+		if (editor != nullptr) return editor->mappedOriginalPath();
 		return emptyString();
 	}
 
@@ -908,8 +809,7 @@ class MREditWindow : public TWindow {
 	}
 
 	void releaseCoprocessorTask(std::uint64_t taskId) {
-		for (std::vector<TrackedTask>::iterator it = mTrackedCoprocessorTasks.begin();
-		     it != mTrackedCoprocessorTasks.end(); ++it)
+		for (std::vector<TrackedTask>::iterator it = mTrackedCoprocessorTasks.begin(); it != mTrackedCoprocessorTasks.end(); ++it)
 			if (it->id == taskId) {
 				mTrackedCoprocessorTasks.erase(it);
 				updateTaskMarkers();
@@ -922,14 +822,17 @@ class MREditWindow : public TWindow {
 	}
 
 	void setIndentLevel(int level) {
-		if (level < 1)
-			level = 1;
-		if (level > 254)
-			level = 254;
+		if (level < 1) level = 1;
+		if (level > 254) level = 254;
 		mIndentLevel = level;
 	}
 
-	enum BlockMode { bmNone = 0, bmLine = 1, bmColumn = 2, bmStream = 3 };
+	enum BlockMode {
+		bmNone = 0,
+		bmLine = 1,
+		bmColumn = 2,
+		bmStream = 3
+	};
 
 	void beginLineBlock() {
 		beginBlock(bmLine);
@@ -944,8 +847,7 @@ class MREditWindow : public TWindow {
 	}
 
 	void endBlock() {
-		if (editor == nullptr || mBlockMode == bmNone)
-			return;
+		if (editor == nullptr || mBlockMode == bmNone) return;
 		mBlockEnd = static_cast<uint>(editor->cursorOffset());
 		mBlockMarkingOn = false;
 		syncBlockVisual();
@@ -961,8 +863,7 @@ class MREditWindow : public TWindow {
 			clearBlockState(true);
 			return true;
 		}
-		if (!mHiddenBlockValid || editor == nullptr)
-			return false;
+		if (!mHiddenBlockValid || editor == nullptr) return false;
 		applyCommittedBlockState(static_cast<int>(mHiddenBlockMode), mHiddenBlockMarkingOn, mHiddenBlockAnchor, mHiddenBlockEnd);
 		mHiddenBlockValid = false;
 		return true;
@@ -1009,26 +910,21 @@ class MREditWindow : public TWindow {
 	}
 
 	bool moveCursorToTopOfView() {
-		if (editor == nullptr)
-			return false;
-		editor->setCursorOffset(editor->lineMoveOffset(editor->cursorOffset(),
-		                                              -(std::max(0, editor->currentViewRow() - 1))));
+		if (editor == nullptr) return false;
+		editor->setCursorOffset(editor->lineMoveOffset(editor->cursorOffset(), -(std::max(0, editor->currentViewRow() - 1))));
 		return true;
 	}
 
 	bool moveCursorToBottomOfView() {
-		if (editor == nullptr)
-			return false;
-		editor->setCursorOffset(editor->lineMoveOffset(
-		    editor->cursorOffset(), std::max(0, editor->visibleViewportRows() - editor->currentViewRow())));
+		if (editor == nullptr) return false;
+		editor->setCursorOffset(editor->lineMoveOffset(editor->cursorOffset(), std::max(0, editor->visibleViewportRows() - editor->currentViewRow())));
 		return true;
 	}
 
 	bool moveCursorToBlockStart() {
 		uint a = 0;
 		uint b = 0;
-		if (editor == nullptr || mBlockMode == bmNone)
-			return false;
+		if (editor == nullptr || mBlockMode == bmNone) return false;
 		blockPtrRange(a, b);
 		editor->setCursorOffset(a);
 		return true;
@@ -1037,16 +933,14 @@ class MREditWindow : public TWindow {
 	bool moveCursorToBlockEnd() {
 		uint a = 0;
 		uint b = 0;
-		if (editor == nullptr || mBlockMode == bmNone)
-			return false;
+		if (editor == nullptr || mBlockMode == bmNone) return false;
 		blockPtrRange(a, b);
 		editor->setCursorOffset(b);
 		return true;
 	}
 
 	bool centerCursorInView() {
-		if (editor == nullptr)
-			return false;
+		if (editor == nullptr) return false;
 		editor->revealCursor(True);
 		return true;
 	}
@@ -1054,17 +948,14 @@ class MREditWindow : public TWindow {
 	bool shiftCursorBlockMark(const MRKeymapToken &token) {
 		std::size_t target = 0;
 
-		if (editor == nullptr)
-			return false;
+		if (editor == nullptr) return false;
 		target = editor->cursorOffset();
 		switch (token.baseKey()) {
 			case MRKeymapBaseKey::Left:
-				target = token.hasModifier(MRKeymapModifier::Ctrl) ? editor->prevWordOffset(target)
-				                                                   : editor->prevCharOffset(target);
+				target = token.hasModifier(MRKeymapModifier::Ctrl) ? editor->prevWordOffset(target) : editor->prevCharOffset(target);
 				break;
 			case MRKeymapBaseKey::Right:
-				target = token.hasModifier(MRKeymapModifier::Ctrl) ? editor->nextWordOffset(target)
-				                                                   : editor->nextCharOffset(target);
+				target = token.hasModifier(MRKeymapModifier::Ctrl) ? editor->nextWordOffset(target) : editor->nextCharOffset(target);
 				break;
 			case MRKeymapBaseKey::Up:
 				target = editor->lineMoveOffset(target, -1);
@@ -1076,8 +967,7 @@ class MREditWindow : public TWindow {
 				target = token.hasModifier(MRKeymapModifier::Ctrl) ? 0 : editor->lineStartOffset(target);
 				break;
 			case MRKeymapBaseKey::End:
-				target = token.hasModifier(MRKeymapModifier::Ctrl) ? editor->bufferLength()
-				                                                   : editor->lineEndOffset(target);
+				target = token.hasModifier(MRKeymapModifier::Ctrl) ? editor->bufferLength() : editor->lineEndOffset(target);
 				break;
 			case MRKeymapBaseKey::PageUp:
 				target = editor->lineMoveOffset(target, -(std::max(2, editor->visibleViewportRows()) - 1));
@@ -1088,8 +978,7 @@ class MREditWindow : public TWindow {
 			default:
 				return false;
 		}
-		if (mBlockMode == bmNone)
-			mBlockMode = bmStream;
+		if (mBlockMode == bmNone) mBlockMode = bmStream;
 		if (!mBlockMarkingOn) {
 			discardHiddenBlockState();
 			mBlockMarkingOn = true;
@@ -1110,25 +999,20 @@ class MREditWindow : public TWindow {
 		std::size_t start = 0;
 		std::size_t end = 0;
 
-		if (editor == nullptr)
-			return false;
+		if (editor == nullptr) return false;
 		start = editor->cursorOffset();
-		if (start >= editor->bufferLength())
-			return false;
+		if (start >= editor->bufferLength()) return false;
 		if (!isWordByte(editor->charAtOffset(start))) {
 			start = editor->nextWordOffset(start);
-			if (start >= editor->bufferLength())
-				return false;
+			if (start >= editor->bufferLength()) return false;
 		}
 		while (start > 0 && isWordByte(editor->charAtOffset(start - 1)))
 			--start;
 		end = start;
 		while (end < editor->bufferLength() && isWordByte(editor->charAtOffset(end)))
 			end = editor->nextCharOffset(end);
-		if (end <= start)
-			return false;
-		applyCommittedBlockState(static_cast<int>(bmStream), false, static_cast<uint>(start),
-		                         static_cast<uint>(end));
+		if (end <= start) return false;
+		applyCommittedBlockState(static_cast<int>(bmStream), false, static_cast<uint>(start), static_cast<uint>(end));
 		return true;
 	}
 
@@ -1139,8 +1023,7 @@ class MREditWindow : public TWindow {
 			std::string key;
 		};
 
-		if (editor == nullptr || mBlockMode != bmColumn)
-			return false;
+		if (editor == nullptr || mBlockMode != bmColumn) return false;
 
 		uint blockStart = 0;
 		uint blockEnd = 0;
@@ -1157,8 +1040,7 @@ class MREditWindow : public TWindow {
 			std::size_t lineStart = 0;
 			for (int currentLine = 1; currentLine < lineNumber; ++currentLine) {
 				std::size_t next = editor->nextLineOffset(lineStart);
-				if (next <= lineStart)
-					break;
+				if (next <= lineStart) break;
 				lineStart = next;
 			}
 			return lineStart;
@@ -1176,18 +1058,13 @@ class MREditWindow : public TWindow {
 			row.lineEnding = snapshot.substr(lineEnd, nextLine - lineEnd);
 			row.key = snapshot.substr(keyStart, keyEnd - keyStart);
 			rows.push_back(std::move(row));
-			if (nextLine <= lineStart)
-				break;
+			if (nextLine <= lineStart) break;
 		}
-		if (rows.size() < 2)
-			return true;
-		std::stable_sort(rows.begin(), rows.end(), [ascending](const ColumnRow &left, const ColumnRow &right) {
-			return ascending ? left.key < right.key : right.key < left.key;
-		});
+		if (rows.size() < 2) return true;
+		std::stable_sort(rows.begin(), rows.end(), [ascending](const ColumnRow &left, const ColumnRow &right) { return ascending ? left.key < right.key : right.key < left.key; });
 		for (const ColumnRow &row : rows)
 			sortedText += row.text + row.lineEnding;
-		if (!editor->replaceRangeAndSelect(static_cast<uint>(regionStart), static_cast<uint>(regionEnd), sortedText.data(), static_cast<uint>(sortedText.size())))
-			return false;
+		if (!editor->replaceRangeAndSelect(static_cast<uint>(regionStart), static_cast<uint>(regionEnd), sortedText.data(), static_cast<uint>(sortedText.size()))) return false;
 		{
 			const std::size_t sortedStart = editor->charPtrOffset(lineStartByNumber(line1), std::max(0, col1 - 1));
 			const std::size_t sortedEnd = editor->charPtrOffset(lineStartByNumber(line2), std::max(0, col2 - 1));
@@ -1203,10 +1080,8 @@ class MREditWindow : public TWindow {
 
 	void applyCommittedBlockState(int mode, bool markingOn, uint anchor, uint end) {
 		discardHiddenBlockState();
-		if (editor == nullptr)
-			return;
-		if (mode < bmNone || mode > bmStream)
-			mode = bmNone;
+		if (editor == nullptr) return;
+		if (mode < bmNone || mode > bmStream) mode = bmNone;
 		mBlockMode = static_cast<BlockMode>(mode);
 		mBlockMarkingOn = mBlockMode != bmNone && markingOn;
 		mBlockAnchor = std::min<uint>(anchor, static_cast<uint>(editor->bufferLength()));
@@ -1225,8 +1100,7 @@ class MREditWindow : public TWindow {
 
   private:
 	void clearBlockState(bool preserveHiddenState) {
-		if (!preserveHiddenState)
-			discardHiddenBlockState();
+		if (!preserveHiddenState) discardHiddenBlockState();
 		mBlockMode = bmNone;
 		mBlockMarkingOn = false;
 		mBlockAnchor = 0;
@@ -1240,8 +1114,7 @@ class MREditWindow : public TWindow {
 	}
 
 	void storeHiddenBlockState() {
-		if (mBlockMode == bmNone)
-			return;
+		if (mBlockMode == bmNone) return;
 		mHiddenBlockMode = mBlockMode;
 		mHiddenBlockMarkingOn = mBlockMarkingOn;
 		mHiddenBlockAnchor = mBlockAnchor;
@@ -1260,8 +1133,7 @@ class MREditWindow : public TWindow {
 		mWindowPaletteData = defaultWindowPaletteData();
 		rebuildWindowPalette();
 		mCustomEofMarkerColorValid = false;
-		if (editor != nullptr)
-			editor->setWindowEofMarkerColorOverride(false);
+		if (editor != nullptr) editor->setWindowEofMarkerColorOverride(false);
 		refreshWindowPaletteViews();
 	}
 
@@ -1271,8 +1143,7 @@ class MREditWindow : public TWindow {
 		std::string themePath;
 		std::string errorText;
 		resetWindowColorsToConfiguredDefaults();
-		if (!effectiveEditWindowColorThemePathForPath(path, themePath, nullptr) || themePath.empty())
-			return;
+		if (!effectiveEditWindowColorThemePathForPath(path, themePath, nullptr) || themePath.empty()) return;
 		if (!loadWindowColorThemeGroupValues(themePath, colors, &errorText)) {
 			mrLogMessage(("Window color theme load failed: " + themePath + " (" + errorText + ")").c_str());
 			return;
@@ -1298,8 +1169,7 @@ class MREditWindow : public TWindow {
 		mCustomEofMarkerColorValid = true;
 		mCustomEofMarkerColor = static_cast<TColorAttr>(colors[3]);
 		rebuildWindowPalette();
-		if (editor != nullptr)
-			editor->setWindowEofMarkerColorOverride(true, mCustomEofMarkerColor);
+		if (editor != nullptr) editor->setWindowEofMarkerColorOverride(true, mCustomEofMarkerColor);
 		refreshWindowPaletteViews();
 	}
 
@@ -1314,8 +1184,7 @@ class MREditWindow : public TWindow {
 	}
 
 	static bool isTtyCollisionKeyEvent(const TEvent &event) noexcept {
-		if (event.what != evKeyDown)
-			return false;
+		if (event.what != evKeyDown) return false;
 		switch (event.keyDown.keyCode) {
 			case kbBack:
 			case kbCtrlH:
@@ -1330,64 +1199,40 @@ class MREditWindow : public TWindow {
 				break;
 		}
 		const TKey normalized(event.keyDown.keyCode, event.keyDown.controlKeyState);
-		return normalized == TKey(kbBack) || normalized == TKey(kbTab) ||
-		       normalized == TKey(kbShiftTab) || normalized == TKey(kbEnter);
+		return normalized == TKey(kbBack) || normalized == TKey(kbTab) || normalized == TKey(kbShiftTab) || normalized == TKey(kbEnter);
 	}
 
-		static const char *ttyCollisionClass(const TKey &normalized) noexcept {
-			if (normalized == TKey(kbBack))
-				return "backspace";
-			if (normalized == TKey(kbTab))
-				return "tab";
-			if (normalized == TKey(kbShiftTab))
-				return "shifttab";
-			if (normalized == TKey(kbEnter))
-				return "enter";
-			return "other";
-		}
+	static const char *ttyCollisionClass(const TKey &normalized) noexcept {
+		if (normalized == TKey(kbBack)) return "backspace";
+		if (normalized == TKey(kbTab)) return "tab";
+		if (normalized == TKey(kbShiftTab)) return "shifttab";
+		if (normalized == TKey(kbEnter)) return "enter";
+		return "other";
+	}
 
-		static void maybeTraceTtyCollisionKeyEvent(const char *stage, const TEvent &event) {
-			if (!keyDebugEnabled() || !isTtyCollisionKeyEvent(event))
-				return;
-			const TKey normalized(event.keyDown.keyCode, event.keyDown.controlKeyState);
+	static void maybeTraceTtyCollisionKeyEvent(const char *stage, const TEvent &event) {
+		if (!keyDebugEnabled() || !isTtyCollisionKeyEvent(event)) return;
+		const TKey normalized(event.keyDown.keyCode, event.keyDown.controlKeyState);
 		char line[320];
-		std::snprintf(
-		    line, sizeof(line),
-		    "KEYDBG tty stage=%s class=%s rawCode=0x%04X rawMods=0x%04X normCode=0x%04X normMods=0x%04X textLen=%u char=0x%02X",
-		    stage, ttyCollisionClass(normalized),
-		    static_cast<unsigned>(event.keyDown.keyCode),
-		    static_cast<unsigned>(event.keyDown.controlKeyState),
-		    static_cast<unsigned>(normalized.code), static_cast<unsigned>(normalized.mods),
-		    static_cast<unsigned>(event.keyDown.textLength),
-		    static_cast<unsigned>(static_cast<unsigned char>(event.keyDown.charScan.charCode)));
-			mrLogMessage(line);
-		}
+		std::snprintf(line, sizeof(line), "KEYDBG tty stage=%s class=%s rawCode=0x%04X rawMods=0x%04X normCode=0x%04X normMods=0x%04X textLen=%u char=0x%02X", stage, ttyCollisionClass(normalized), static_cast<unsigned>(event.keyDown.keyCode), static_cast<unsigned>(event.keyDown.controlKeyState), static_cast<unsigned>(normalized.code), static_cast<unsigned>(normalized.mods), static_cast<unsigned>(event.keyDown.textLength), static_cast<unsigned>(static_cast<unsigned char>(event.keyDown.charScan.charCode)));
+		mrLogMessage(line);
+	}
 
-		static bool isCalculatorHotkeyEvent(const TEvent &event) noexcept {
-			if (event.what != evKeyDown)
-				return false;
-			const TKey normalized(event.keyDown.keyCode, event.keyDown.controlKeyState);
-			return (normalized.mods & kbAltShift) != 0 && normalized.code == 'C';
-		}
+	static bool isCalculatorHotkeyEvent(const TEvent &event) noexcept {
+		if (event.what != evKeyDown) return false;
+		const TKey normalized(event.keyDown.keyCode, event.keyDown.controlKeyState);
+		return (normalized.mods & kbAltShift) != 0 && normalized.code == 'C';
+	}
 
-		static void traceCalculatorHotkeyEvent(const char *stage, const TEvent &event,
-		                                       const char *detail = nullptr) {
-			if (!isCalculatorHotkeyEvent(event))
-				return;
-			const TKey normalized(event.keyDown.keyCode, event.keyDown.controlKeyState);
-			char line[320];
-			std::snprintf(line, sizeof(line),
-			              "KEYDBG calc stage=%s rawCode=0x%04X rawMods=0x%04X normCode=0x%04X normMods=0x%04X textLen=%u char=0x%02X%s%s",
-			              stage, static_cast<unsigned>(event.keyDown.keyCode),
-			              static_cast<unsigned>(event.keyDown.controlKeyState),
-			              static_cast<unsigned>(normalized.code), static_cast<unsigned>(normalized.mods),
-			              static_cast<unsigned>(event.keyDown.textLength),
-			              static_cast<unsigned>(static_cast<unsigned char>(event.keyDown.charScan.charCode)),
-			              detail != nullptr ? " " : "", detail != nullptr ? detail : "");
-			mrLogMessage(line);
-		}
+	static void traceCalculatorHotkeyEvent(const char *stage, const TEvent &event, const char *detail = nullptr) {
+		if (!isCalculatorHotkeyEvent(event)) return;
+		const TKey normalized(event.keyDown.keyCode, event.keyDown.controlKeyState);
+		char line[320];
+		std::snprintf(line, sizeof(line), "KEYDBG calc stage=%s rawCode=0x%04X rawMods=0x%04X normCode=0x%04X normMods=0x%04X textLen=%u char=0x%02X%s%s", stage, static_cast<unsigned>(event.keyDown.keyCode), static_cast<unsigned>(event.keyDown.controlKeyState), static_cast<unsigned>(normalized.code), static_cast<unsigned>(normalized.mods), static_cast<unsigned>(event.keyDown.textLength), static_cast<unsigned>(static_cast<unsigned char>(event.keyDown.charScan.charCode)), detail != nullptr ? " " : "", detail != nullptr ? detail : "");
+		mrLogMessage(line);
+	}
 
-		static TColorAttr configuredWindowPaletteSlot(unsigned char slot) noexcept {
+	static TColorAttr configuredWindowPaletteSlot(unsigned char slot) noexcept {
 		unsigned char value = 0x07;
 		unsigned char overrideValue = 0;
 
@@ -1426,19 +1271,12 @@ class MREditWindow : public TWindow {
 			default:
 				break;
 		}
-		if (configuredColorSlotOverride(slot, overrideValue))
-			value = overrideValue;
+		if (configuredColorSlotOverride(slot, overrideValue)) value = overrideValue;
 		return static_cast<TColorAttr>(value);
 	}
 
 	static std::array<TColorAttr, 12> defaultWindowPaletteData() noexcept {
-		return {configuredWindowPaletteSlot(8), configuredWindowPaletteSlot(9), configuredWindowPaletteSlot(10),
-		        configuredWindowPaletteSlot(11), configuredWindowPaletteSlot(12), configuredWindowPaletteSlot(13),
-		        configuredWindowPaletteSlot(14), configuredWindowPaletteSlot(15),
-		        configuredWindowPaletteSlot(kMrPaletteCurrentLine),
-		        configuredWindowPaletteSlot(kMrPaletteCurrentLineInBlock),
-		        configuredWindowPaletteSlot(kMrPaletteChangedText),
-		        configuredWindowPaletteSlot(kMrPaletteLineNumbers)};
+		return {configuredWindowPaletteSlot(8), configuredWindowPaletteSlot(9), configuredWindowPaletteSlot(10), configuredWindowPaletteSlot(11), configuredWindowPaletteSlot(12), configuredWindowPaletteSlot(13), configuredWindowPaletteSlot(14), configuredWindowPaletteSlot(15), configuredWindowPaletteSlot(kMrPaletteCurrentLine), configuredWindowPaletteSlot(kMrPaletteCurrentLineInBlock), configuredWindowPaletteSlot(kMrPaletteChangedText), configuredWindowPaletteSlot(kMrPaletteLineNumbers)};
 	}
 
 	void rebuildWindowPalette() {
@@ -1447,16 +1285,11 @@ class MREditWindow : public TWindow {
 
 	void refreshWindowPaletteViews() {
 		drawView();
-		if (frame != nullptr)
-			frame->drawView();
-		if (hScrollBar != nullptr)
-			hScrollBar->drawView();
-		if (vScrollBar != nullptr)
-			vScrollBar->drawView();
-		if (indicator != nullptr)
-			indicator->drawView();
-		if (editor != nullptr)
-			editor->drawView();
+		if (frame != nullptr) frame->drawView();
+		if (hScrollBar != nullptr) hScrollBar->drawView();
+		if (vScrollBar != nullptr) vScrollBar->drawView();
+		if (indicator != nullptr) indicator->drawView();
+		if (editor != nullptr) editor->drawView();
 	}
 
 	MRFileEditor *createEditor(const TRect &bounds, const char *fileName) {
@@ -1499,16 +1332,13 @@ class MREditWindow : public TWindow {
 	}
 
 	static bool isExistingPathReadOnly(const char *fileName) {
-		if (fileName == nullptr || *fileName == '\0')
-			return false;
-		if (access(fileName, F_OK) != 0)
-			return false;
+		if (fileName == nullptr || *fileName == '\0') return false;
+		if (access(fileName, F_OK) != 0) return false;
 		return access(fileName, W_OK) != 0;
 	}
 
 	void resetTransientEditorState() {
-		if (editor == nullptr)
-			return;
+		if (editor == nullptr) return;
 		clearBlock();
 	}
 
@@ -1523,22 +1353,18 @@ class MREditWindow : public TWindow {
 	}
 
 	void refreshSyntaxContext() {
-		if (editor != nullptr)
-			editor->setSyntaxTitleHint(displayTitle);
+		if (editor != nullptr) editor->setSyntaxTitleHint(displayTitle);
 	}
 
 	bool shouldCollapseSelectionBeforeEditorInput(const TEvent &event) const {
 		ushort key = 0;
 		unsigned char ch = 0;
 
-		if (editor == nullptr || mBlockMode == bmNone || mBlockMarkingOn || event.what != evKeyDown)
-			return false;
+		if (editor == nullptr || mBlockMode == bmNone || mBlockMarkingOn || event.what != evKeyDown) return false;
 		key = ctrlToArrow(event.keyDown.keyCode);
 		ch = static_cast<unsigned char>(event.keyDown.charScan.charCode);
-		if ((event.keyDown.controlKeyState & kbPaste) != 0 || event.keyDown.textLength > 0)
-			return true;
-		if (key == kbBack || key == kbDel || key == kbEnter || key == kbTab)
-			return true;
+		if ((event.keyDown.controlKeyState & kbPaste) != 0 || event.keyDown.textLength > 0) return true;
+		if (key == kbBack || key == kbDel || key == kbEnter || key == kbTab) return true;
 		return ch >= 32 && ch < 255;
 	}
 
@@ -1548,8 +1374,7 @@ class MREditWindow : public TWindow {
 		bool shift = (mods & kbShift) != 0;
 		bool ctrl = (mods & kbCtrlShift) != 0;
 
-		if (editor == nullptr || event.what != evKeyDown)
-			return false;
+		if (editor == nullptr || event.what != evKeyDown) return false;
 		if (keyCode == kbCtrlF7 || (keyCode == kbF7 && ctrl && !shift)) {
 			beginStreamBlock();
 			clearEvent(event);
@@ -1561,8 +1386,7 @@ class MREditWindow : public TWindow {
 			return true;
 		}
 		if (keyCode == kbF7 && !shift && !ctrl) {
-			if (mBlockMode != bmNone && mBlockMarkingOn)
-				endBlock();
+			if (mBlockMode != bmNone && mBlockMarkingOn) endBlock();
 			else
 				beginLineBlock();
 			clearEvent(event);
@@ -1576,131 +1400,108 @@ class MREditWindow : public TWindow {
 		return false;
 	}
 
-		static bool isBlockShiftNavigationKey(ushort keyCode, ushort keyModifiers) {
-			if ((keyModifiers & kbShift) == 0 || (keyModifiers & kbPaste) != 0)
+	static bool isBlockShiftNavigationKey(ushort keyCode, ushort keyModifiers) {
+		if ((keyModifiers & kbShift) == 0 || (keyModifiers & kbPaste) != 0) return false;
+		switch (keyCode) {
+			case kbLeft:
+			case kbRight:
+			case kbUp:
+			case kbDown:
+			case kbHome:
+			case kbEnd:
+			case kbPgUp:
+			case kbPgDn:
+			case kbCtrlLeft:
+			case kbCtrlRight:
+			case kbCtrlHome:
+			case kbCtrlEnd:
+				return true;
+			default:
 				return false;
-			switch (keyCode) {
-				case kbLeft:
-				case kbRight:
-				case kbUp:
-				case kbDown:
-				case kbHome:
-				case kbEnd:
-				case kbPgUp:
-				case kbPgDn:
-				case kbCtrlLeft:
-				case kbCtrlRight:
-				case kbCtrlHome:
-				case kbCtrlEnd:
-					return true;
-				default:
-					return false;
-			}
 		}
+	}
 
-		void applyPostInputBlockPolicy(bool markingBefore, ushort originalEvent,
-		                               std::size_t selectionStartBefore,
-		                               std::size_t selectionEndBefore,
-		                               std::size_t bufferLengthBefore,
-		                               std::size_t cursorBefore, ushort keyCodeBefore,
-		                               ushort keyModifiersBefore) {
-			if (editor == nullptr)
-				return;
-			if (originalEvent == evKeyDown &&
-			    isBlockShiftNavigationKey(keyCodeBefore, keyModifiersBefore)) {
-				const std::size_t currentCursor =
-				    std::min(editor->cursorOffset(), editor->bufferLength());
-				const std::size_t anchorCursor = std::min(cursorBefore, bufferLengthBefore);
+	void applyPostInputBlockPolicy(bool markingBefore, ushort originalEvent, std::size_t selectionStartBefore, std::size_t selectionEndBefore, std::size_t bufferLengthBefore, std::size_t cursorBefore, ushort keyCodeBefore, ushort keyModifiersBefore) {
+		if (editor == nullptr) return;
+		if (originalEvent == evKeyDown && isBlockShiftNavigationKey(keyCodeBefore, keyModifiersBefore)) {
+			const std::size_t currentCursor = std::min(editor->cursorOffset(), editor->bufferLength());
+			const std::size_t anchorCursor = std::min(cursorBefore, bufferLengthBefore);
 
-				if (mBlockMode == bmNone)
-					mBlockMode = bmStream;
-				if (!markingBefore) {
-					mBlockMarkingOn = true;
-					mBlockAnchor = static_cast<uint>(anchorCursor);
-				}
-				mBlockEnd = static_cast<uint>(currentCursor);
+			if (mBlockMode == bmNone) mBlockMode = bmStream;
+			if (!markingBefore) {
+				mBlockMarkingOn = true;
+				mBlockAnchor = static_cast<uint>(anchorCursor);
+			}
+			mBlockEnd = static_cast<uint>(currentCursor);
+			syncBlockVisual();
+			return;
+		}
+		if (originalEvent == evMouseDown && mBlockMode == bmNone) {
+			const std::size_t selectionStartNow = editor->selectionStartOffset();
+			const std::size_t selectionEndNow = editor->selectionEndOffset();
+
+			// Mouse drag selection without an explicit mode defaults to stream block.
+			if (selectionStartNow != selectionEndNow && (selectionStartNow != selectionStartBefore || selectionEndNow != selectionEndBefore)) {
+				mBlockMode = bmStream;
+				mBlockMarkingOn = false;
+				mBlockAnchor = static_cast<uint>(selectionStartNow);
+				mBlockEnd = static_cast<uint>(selectionEndNow);
 				syncBlockVisual();
 				return;
 			}
-			if (originalEvent == evMouseDown && mBlockMode == bmNone) {
-				const std::size_t selectionStartNow = editor->selectionStartOffset();
-				const std::size_t selectionEndNow = editor->selectionEndOffset();
+		}
+		if (originalEvent == evKeyDown && mBlockMode != bmNone && !mBlockMarkingOn && bufferLengthBefore != editor->bufferLength()) {
+			const std::size_t currentLength = editor->bufferLength();
+			const std::size_t normalizedCursorBefore = std::min(cursorBefore, bufferLengthBefore);
+			std::size_t changePos = selectionStartBefore;
+			long delta = static_cast<long>(currentLength) - static_cast<long>(bufferLengthBefore);
+			uint startPtr = 0;
+			uint endPtr = 0;
+			uint normalizedStart = 0;
+			uint normalizedEnd = 0;
+			auto shiftPtr = [&](uint &ptr) {
+				long shifted = static_cast<long>(ptr) + delta;
+				if (shifted < 0) shifted = 0;
+				if (shifted > static_cast<long>(currentLength)) shifted = static_cast<long>(currentLength);
+				ptr = static_cast<uint>(shifted);
+			};
 
-				// Mouse drag selection without an explicit mode defaults to stream block.
-				if (selectionStartNow != selectionEndNow &&
-				    (selectionStartNow != selectionStartBefore ||
-				     selectionEndNow != selectionEndBefore)) {
-					mBlockMode = bmStream;
-					mBlockMarkingOn = false;
-					mBlockAnchor = static_cast<uint>(selectionStartNow);
-					mBlockEnd = static_cast<uint>(selectionEndNow);
-					syncBlockVisual();
-					return;
-				}
+			if (selectionStartBefore == selectionEndBefore) {
+				changePos = normalizedCursorBefore;
+				if (keyCodeBefore == kbBack && normalizedCursorBefore > 0) changePos = normalizedCursorBefore - 1;
 			}
-			if (originalEvent == evKeyDown && mBlockMode != bmNone && !mBlockMarkingOn &&
-			    bufferLengthBefore != editor->bufferLength()) {
-				const std::size_t currentLength = editor->bufferLength();
-				const std::size_t normalizedCursorBefore = std::min(cursorBefore, bufferLengthBefore);
-				std::size_t changePos = selectionStartBefore;
-				long delta = static_cast<long>(currentLength) - static_cast<long>(bufferLengthBefore);
-				uint startPtr = 0;
-				uint endPtr = 0;
-				uint normalizedStart = 0;
-				uint normalizedEnd = 0;
-				auto shiftPtr = [&](uint &ptr) {
-					long shifted = static_cast<long>(ptr) + delta;
-					if (shifted < 0)
-						shifted = 0;
-					if (shifted > static_cast<long>(currentLength))
-						shifted = static_cast<long>(currentLength);
-					ptr = static_cast<uint>(shifted);
-				};
 
-				if (selectionStartBefore == selectionEndBefore) {
-					changePos = normalizedCursorBefore;
-					if (keyCodeBefore == kbBack && normalizedCursorBefore > 0)
-						changePos = normalizedCursorBefore - 1;
-				}
+			startPtr = std::min(mBlockAnchor, mBlockEnd);
+			endPtr = std::max(mBlockAnchor, mBlockEnd);
+			normalizedStart = startPtr;
+			normalizedEnd = endPtr;
 
-				startPtr = std::min(mBlockAnchor, mBlockEnd);
-				endPtr = std::max(mBlockAnchor, mBlockEnd);
-				normalizedStart = startPtr;
-				normalizedEnd = endPtr;
-
-				if (changePos <= normalizedStart) {
+			if (changePos <= normalizedStart) {
+				shiftPtr(mBlockAnchor);
+				shiftPtr(mBlockEnd);
+			} else if (changePos < normalizedEnd && mBlockMode == bmStream) {
+				if (mBlockAnchor <= mBlockEnd) shiftPtr(mBlockEnd);
+				else
 					shiftPtr(mBlockAnchor);
-					shiftPtr(mBlockEnd);
-				} else if (changePos < normalizedEnd && mBlockMode == bmStream) {
-					if (mBlockAnchor <= mBlockEnd)
-						shiftPtr(mBlockEnd);
-					else
-						shiftPtr(mBlockAnchor);
-				}
 			}
-			// Drag-release with the mouse finalizes marking in the active block mode.
-			if (markingBefore && originalEvent == evMouseDown && mBlockMarkingOn) {
-				endBlock();
-				return;
-			}
-			if (mBlockMode != bmNone)
-				syncBlockVisual();
 		}
+		// Drag-release with the mouse finalizes marking in the active block mode.
+		if (markingBefore && originalEvent == evMouseDown && mBlockMarkingOn) {
+			endBlock();
+			return;
+		}
+		if (mBlockMode != bmNone) syncBlockVisual();
+	}
 
 	void updateTaskMarkers() {
 		std::size_t taskCount = mTrackedCoprocessorTasks.size();
 		if (editor != nullptr) {
-			if (editor->pendingLineIndexWarmupTaskId() != 0)
-				++taskCount;
-			if (editor->pendingSyntaxWarmupTaskId() != 0)
-				++taskCount;
-			if (editor->pendingMiniMapWarmupTaskId() != 0)
-				++taskCount;
-			if (editor->pendingSaveNormalizationWarmupTaskId() != 0)
-				++taskCount;
+			if (editor->pendingLineIndexWarmupTaskId() != 0) ++taskCount;
+			if (editor->pendingSyntaxWarmupTaskId() != 0) ++taskCount;
+			if (editor->pendingMiniMapWarmupTaskId() != 0) ++taskCount;
+			if (editor->pendingSaveNormalizationWarmupTaskId() != 0) ++taskCount;
 		}
-		if (indicator != nullptr)
-			indicator->setTaskCount(taskCount);
+		if (indicator != nullptr) indicator->setTaskCount(taskCount);
 	}
 
 	void cancelTrackedCoprocessorTasks() {
@@ -1713,8 +1514,7 @@ class MREditWindow : public TWindow {
 	}
 
 	void beginBlock(BlockMode mode) {
-		if (editor == nullptr)
-			return;
+		if (editor == nullptr) return;
 		discardHiddenBlockState();
 		mBlockMode = mode;
 		mBlockMarkingOn = true;
@@ -1724,29 +1524,24 @@ class MREditWindow : public TWindow {
 	}
 
 	uint effectiveBlockEnd() const {
-		if (editor != nullptr && mBlockMarkingOn)
-			return static_cast<uint>(editor->cursorOffset());
+		if (editor != nullptr && mBlockMarkingOn) return static_cast<uint>(editor->cursorOffset());
 		return mBlockEnd;
 	}
 
 	void blockPtrRange(uint &a, uint &b) const {
 		a = mBlockAnchor;
 		b = effectiveBlockEnd();
-		if (a > b)
-			std::swap(a, b);
+		if (a > b) std::swap(a, b);
 	}
 
 	int lineNumberForPtr(uint ptr) const {
 		uint pos = 0;
 		int line = 1;
-		if (editor == nullptr)
-			return 0;
-		if (ptr > editor->bufferLength())
-			ptr = static_cast<uint>(editor->bufferLength());
+		if (editor == nullptr) return 0;
+		if (ptr > editor->bufferLength()) ptr = static_cast<uint>(editor->bufferLength());
 		while (pos < ptr && pos < editor->bufferLength()) {
 			uint next = static_cast<uint>(editor->nextLineOffset(pos));
-			if (next <= pos || next > ptr)
-				break;
+			if (next <= pos || next > ptr) break;
 			pos = next;
 			++line;
 		}
@@ -1755,10 +1550,8 @@ class MREditWindow : public TWindow {
 
 	int columnForPtr(uint ptr) const {
 		uint start;
-		if (editor == nullptr)
-			return 0;
-		if (ptr > editor->bufferLength())
-			ptr = static_cast<uint>(editor->bufferLength());
+		if (editor == nullptr) return 0;
+		if (ptr > editor->bufferLength()) ptr = static_cast<uint>(editor->bufferLength());
 		start = static_cast<uint>(editor->lineStartOffset(ptr));
 		return editor->charColumn(start, ptr) + 1;
 	}
@@ -1771,26 +1564,22 @@ class MREditWindow : public TWindow {
 
 	static std::string stripExtension(const std::string &name) {
 		std::size_t dot = name.find_last_of('.');
-		if (dot == std::string::npos || dot == 0)
-			return name;
+		if (dot == std::string::npos || dot == 0) return name;
 		return name.substr(0, dot);
 	}
 
 	static std::string trimTaskLabel(const std::string &label) {
 		std::size_t start = label.find_first_not_of(' ');
 		std::size_t end = label.find_last_not_of(' ');
-		if (start == std::string::npos)
-			return std::string();
+		if (start == std::string::npos) return std::string();
 		return label.substr(start, end - start + 1);
 	}
 
 	static std::string compactTaskLabel(const TrackedTask &task) {
 		std::string label = trimTaskLabel(task.label);
 
-		if (label.empty())
-			return label;
-		if (task.kind == mr::coprocessor::TaskKind::MacroJob)
-			return stripExtension(baseNameOf(label));
+		if (label.empty()) return label;
+		if (task.kind == mr::coprocessor::TaskKind::MacroJob) return stripExtension(baseNameOf(label));
 		if (task.kind == mr::coprocessor::TaskKind::ExternalIo) {
 			std::size_t split = label.find_first_of(" \t");
 			std::string head = split == std::string::npos ? label : label.substr(0, split);
@@ -1802,8 +1591,7 @@ class MREditWindow : public TWindow {
 	static std::string formatTaskElapsed(const TrackedTask &task) {
 		using namespace std::chrono;
 		char buffer[32];
-		double elapsedMs =
-		    duration_cast<milliseconds>(steady_clock::now() - task.startedAt).count();
+		double elapsedMs = duration_cast<milliseconds>(steady_clock::now() - task.startedAt).count();
 
 		if (elapsedMs < 1000.0) {
 			std::snprintf(buffer, sizeof(buffer), "%.0f ms", elapsedMs);
@@ -1815,15 +1603,12 @@ class MREditWindow : public TWindow {
 
 	static std::string taskActivityBullet() {
 		using namespace std::chrono;
-		static const std::array<const char *, 12> kClockFrames = {
-		    "🕛", "🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗", "🕘", "🕙", "🕚"};
+		static const std::array<const char *, 12> kClockFrames = {"🕛", "🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗", "🕘", "🕙", "🕚"};
 		static const std::array<const char *, 4> kAsciiFrames = {"|", "/", "-", "\\"};
-		const long long elapsedMs =
-		    duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
+		const long long elapsedMs = duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
 		const std::size_t frame = static_cast<std::size_t>((elapsedMs / 200) % kClockFrames.size());
 
-		if (strwidth(kClockFrames[0]) >= 1)
-			return kClockFrames[frame];
+		if (strwidth(kClockFrames[0]) >= 1) return kClockFrames[frame];
 		return kAsciiFrames[frame % kAsciiFrames.size()];
 	}
 
@@ -1845,16 +1630,14 @@ class MREditWindow : public TWindow {
 
 	int normalizedBlockLine1() const {
 		uint a, b;
-		if (mBlockMode == bmNone)
-			return 0;
+		if (mBlockMode == bmNone) return 0;
 		blockPtrRange(a, b);
 		return lineNumberForPtr(a);
 	}
 
 	int normalizedBlockLine2() const {
 		uint a, b;
-		if (mBlockMode == bmNone)
-			return 0;
+		if (mBlockMode == bmNone) return 0;
 		blockPtrRange(a, b);
 		return lineNumberForPtr(b);
 	}
@@ -1862,10 +1645,8 @@ class MREditWindow : public TWindow {
 	int normalizedBlockCol1() const {
 		int aCol;
 		int bCol;
-		if (mBlockMode == bmNone)
-			return 0;
-		if (mBlockMode == bmLine)
-			return 1;
+		if (mBlockMode == bmNone) return 0;
+		if (mBlockMode == bmLine) return 1;
 		aCol = columnForPtr(mBlockAnchor);
 		bCol = columnForPtr(effectiveBlockEnd());
 		return std::min(aCol, bCol);
@@ -1874,10 +1655,8 @@ class MREditWindow : public TWindow {
 	int normalizedBlockCol2() const {
 		int aCol;
 		int bCol;
-		if (mBlockMode == bmNone)
-			return 0;
-		if (mBlockMode == bmLine)
-			return 1000;
+		if (mBlockMode == bmNone) return 0;
+		if (mBlockMode == bmLine) return 1000;
 		aCol = columnForPtr(mBlockAnchor);
 		bCol = columnForPtr(effectiveBlockEnd());
 		return std::max(aCol, bCol);
@@ -1885,12 +1664,12 @@ class MREditWindow : public TWindow {
 
   public:
 	int mVirtualDesktop = 1;
+
   private:
 	void syncBlockVisual() {
 		uint a;
 		uint b;
-		if (editor == nullptr)
-			return;
+		if (editor == nullptr) return;
 		if (mBlockMode == bmStream) {
 			blockPtrRange(a, b);
 			editor->setBlockOverlayState(static_cast<int>(mBlockMode), a, b, true, mBlockMarkingOn);
@@ -1900,8 +1679,7 @@ class MREditWindow : public TWindow {
 			editor->setBlockOverlayState(static_cast<int>(mBlockMode), a, b, true, mBlockMarkingOn);
 			a = static_cast<uint>(editor->lineStartOffset(a));
 			b = static_cast<uint>(editor->nextLineOffset(b));
-			if (b > editor->bufferLength())
-				b = static_cast<uint>(editor->bufferLength());
+			if (b > editor->bufferLength()) b = static_cast<uint>(editor->bufferLength());
 			editor->setSelectionOffsets(a, b, False);
 		} else if (mBlockMode == bmColumn) {
 			blockPtrRange(a, b);

@@ -14,8 +14,7 @@ void mrvmUiInvalidateScreenBase() noexcept;
 
 namespace {
 
-static const unsigned char kInitFrame[19] = {0x06, 0x0A, 0x0C, 0x05, 0x00, 0x05, 0x03, 0x0A, 0x09, 0x16,
-                                             0x1A, 0x1C, 0x15, 0x00, 0x15, 0x13, 0x1A, 0x19, 0x00};
+static const unsigned char kInitFrame[19] = {0x06, 0x0A, 0x0C, 0x05, 0x00, 0x05, 0x03, 0x0A, 0x09, 0x16, 0x1A, 0x1C, 0x15, 0x00, 0x15, 0x13, 0x1A, 0x19, 0x00};
 
 static const char kFrameChars[33] = "   \xC0 \xB3\xDA\xC3 \xD9\xC4\xC1\xBF\xB4\xC2\xC5   \xC8 \xBA\xC9\xC7 "
                                     "\xBC\xCD\xCF\xBB\xB6\xD1 ";
@@ -57,23 +56,19 @@ int advanceMarkerX(int x, TStringView icon, int minWidth = 1) noexcept {
 }
 
 bool hasMarkerBlock(const MRFrame::MarkerState &state) noexcept {
-	return state.modified || state.insertMode || state.wordWrap || state.recording || state.macroBrain ||
-	       state.background || state.readOnly;
+	return state.modified || state.insertMode || state.wordWrap || state.recording || state.macroBrain || state.background || state.readOnly;
 }
 
 bool isFrameFocused(const MRFrame *frame) noexcept {
 	const TView *owner = frame != nullptr ? frame->owner : nullptr;
-	const TView *top =
-	    frame != nullptr ? static_cast<const TView *>(const_cast<MRFrame *>(frame)->TopView()) : nullptr;
+	const TView *top = frame != nullptr ? static_cast<const TView *>(const_cast<MRFrame *>(frame)->TopView()) : nullptr;
 	const TWindow *window = frame != nullptr ? static_cast<const TWindow *>(frame->owner) : nullptr;
 
 	// During modal execView(), TopView points to the modal dialog.
 	// Enforce a single visual focus owner: only the modal top view draws as active.
-	if (top != nullptr && owner != nullptr && top->owner != nullptr && (top->state & sfModal) != 0)
-		return top == owner;
+	if (top != nullptr && owner != nullptr && top->owner != nullptr && (top->state & sfModal) != 0) return top == owner;
 
-	if (window != nullptr && (window->state & sfFocused) != 0)
-		return true;
+	if (window != nullptr && (window->state & sfFocused) != 0) return true;
 	return frame != nullptr && (frame->state & sfFocused) != 0;
 }
 
@@ -85,8 +80,7 @@ MRTaskOverviewView::MRTaskOverviewView(const TRect &bounds) noexcept : TView(bou
 }
 
 void MRTaskOverviewView::setLines(const std::vector<std::string> &lines) {
-	if (mLines == lines)
-		return;
+	if (mLines == lines) return;
 	mLines = lines;
 	drawView();
 }
@@ -101,13 +95,11 @@ void MRTaskOverviewView::draw() {
 			std::string textLine = mLines[static_cast<std::size_t>(y)];
 			while (strwidth(textLine.c_str()) > std::max(0, size.x - 2) && !textLine.empty()) {
 				std::size_t nextLen = TText::prev(textLine, textLine.size());
-				if (nextLen == 0 || nextLen > textLine.size())
-					break;
+				if (nextLen == 0 || nextLen > textLine.size()) break;
 				textLine.resize(textLine.size() - nextLen);
 			}
 			for (char &ch : textLine)
-				if (static_cast<unsigned char>(ch) < 32)
-					ch = ' ';
+				if (static_cast<unsigned char>(ch) < 32) ch = ' ';
 			b.moveStr(1, textLine.c_str(), text);
 		}
 		writeBuf(0, y, size.x, 1, b);
@@ -120,8 +112,7 @@ TPalette &MRTaskOverviewView::getPalette() const {
 	return palette;
 }
 
-MRTaskOverviewWindow::MRTaskOverviewWindow(const TRect &bounds) noexcept
-    : TWindowInit(&TWindow::initFrame), TWindow(bounds, "Tasks", wnNoNumber), mContent(nullptr) {
+MRTaskOverviewWindow::MRTaskOverviewWindow(const TRect &bounds) noexcept : TWindowInit(&TWindow::initFrame), TWindow(bounds, "Tasks", wnNoNumber), mContent(nullptr) {
 	flags = 0;
 	options &= ~(ofSelectable | ofTopSelect);
 	eventMask = 0;
@@ -133,8 +124,7 @@ MRTaskOverviewWindow::MRTaskOverviewWindow(const TRect &bounds) noexcept
 }
 
 void MRTaskOverviewWindow::setLines(const std::vector<std::string> &lines) {
-	if (mContent != nullptr)
-		mContent->setLines(lines);
+	if (mContent != nullptr) mContent->setLines(lines);
 }
 
 TPalette &MRTaskOverviewWindow::getPalette() const {
@@ -142,8 +132,7 @@ TPalette &MRTaskOverviewWindow::getPalette() const {
 	return paletteGray;
 }
 
-MRFrame::MRFrame(const TRect &bounds) noexcept
-    : TFrame(bounds), mTaskOverviewPopup(nullptr), mTaskOverviewPopupOwner(nullptr) {
+MRFrame::MRFrame(const TRect &bounds) noexcept : TFrame(bounds), mTaskOverviewPopup(nullptr), mTaskOverviewPopupOwner(nullptr) {
 }
 
 MRFrame::~MRFrame() {
@@ -159,59 +148,43 @@ void MRFrame::setTaskOverviewProvider(TaskOverviewProvider provider) {
 }
 
 MRFrame::MarkerState MRFrame::markerState() const {
-	if (mMarkerStateProvider)
-		return mMarkerStateProvider();
+	if (mMarkerStateProvider) return mMarkerStateProvider();
 	return MarkerState();
 }
 
 int MRFrame::markerStartColumn() const noexcept {
 	TWindow *window = static_cast<TWindow *>(owner);
 	bool controlsVisible = isFrameFocused(this);
-	if (window != nullptr && (window->flags & wfClose) != 0 && controlsVisible)
-		return 7;
+	if (window != nullptr && (window->flags & wfClose) != 0 && controlsVisible) return 7;
 	return 2;
 }
 
 int MRFrame::taskMarkerColumn(const MarkerState &state) const noexcept {
 	int x = markerStartColumn();
-	if (state.modified)
-		x = advanceMarkerX(x, kDirtyMarkerIcon, kDirtyMarkerSlotWidth);
-	if (state.insertMode)
-		x = advanceMarkerX(x, kInsertMarkerIcon, kInsertMarkerSlotWidth);
-	if (state.wordWrap)
-		x = advanceMarkerX(x, kWordWrapMarkerIcon, kWordWrapMarkerSlotWidth);
-	if (state.recording)
-		x = advanceMarkerX(x, kRecordingMarkerIcon, kRecordingMarkerSlotWidth);
-	if (state.macroBrain)
-		x = advanceMarkerX(x, kMacroBrainMarkerIcon, kMacroBrainMarkerSlotWidth);
-	if (state.background)
-		return x;
+	if (state.modified) x = advanceMarkerX(x, kDirtyMarkerIcon, kDirtyMarkerSlotWidth);
+	if (state.insertMode) x = advanceMarkerX(x, kInsertMarkerIcon, kInsertMarkerSlotWidth);
+	if (state.wordWrap) x = advanceMarkerX(x, kWordWrapMarkerIcon, kWordWrapMarkerSlotWidth);
+	if (state.recording) x = advanceMarkerX(x, kRecordingMarkerIcon, kRecordingMarkerSlotWidth);
+	if (state.macroBrain) x = advanceMarkerX(x, kMacroBrainMarkerIcon, kMacroBrainMarkerSlotWidth);
+	if (state.background) return x;
 	return -1;
 }
 
 int MRFrame::markersEndColumn(const MarkerState &state) const noexcept {
 	int x = markerStartColumn();
 	bool hasMarkers = false;
-	if (state.modified)
-		x = advanceMarkerX(x, kDirtyMarkerIcon, kDirtyMarkerSlotWidth), hasMarkers = true;
-	if (state.insertMode)
-		x = advanceMarkerX(x, kInsertMarkerIcon, kInsertMarkerSlotWidth), hasMarkers = true;
-	if (state.wordWrap)
-		x = advanceMarkerX(x, kWordWrapMarkerIcon, kWordWrapMarkerSlotWidth), hasMarkers = true;
-	if (state.recording)
-		x = advanceMarkerX(x, kRecordingMarkerIcon, kRecordingMarkerSlotWidth), hasMarkers = true;
-	if (state.macroBrain)
-		x = advanceMarkerX(x, kMacroBrainMarkerIcon, kMacroBrainMarkerSlotWidth), hasMarkers = true;
-	if (state.background)
-		x = advanceMarkerX(x, kTaskMarkerIcon, kTaskMarkerSlotWidth), hasMarkers = true;
-	if (state.readOnly)
-		x = advanceMarkerX(x, kReadOnlyMarkerIcon, kReadOnlyMarkerSlotWidth), hasMarkers = true;
+	if (state.modified) x = advanceMarkerX(x, kDirtyMarkerIcon, kDirtyMarkerSlotWidth), hasMarkers = true;
+	if (state.insertMode) x = advanceMarkerX(x, kInsertMarkerIcon, kInsertMarkerSlotWidth), hasMarkers = true;
+	if (state.wordWrap) x = advanceMarkerX(x, kWordWrapMarkerIcon, kWordWrapMarkerSlotWidth), hasMarkers = true;
+	if (state.recording) x = advanceMarkerX(x, kRecordingMarkerIcon, kRecordingMarkerSlotWidth), hasMarkers = true;
+	if (state.macroBrain) x = advanceMarkerX(x, kMacroBrainMarkerIcon, kMacroBrainMarkerSlotWidth), hasMarkers = true;
+	if (state.background) x = advanceMarkerX(x, kTaskMarkerIcon, kTaskMarkerSlotWidth), hasMarkers = true;
+	if (state.readOnly) x = advanceMarkerX(x, kReadOnlyMarkerIcon, kReadOnlyMarkerSlotWidth), hasMarkers = true;
 	return hasMarkers ? x - kMarkerGap : x;
 }
 
 void MRFrame::drawFrameLine(TDrawBuffer &frameBuf, short y, short n, TColorAttr color) {
-	if (size.x <= 0)
-		return;
+	if (size.x <= 0) return;
 
 	std::vector<unsigned char> frameMask(static_cast<std::size_t>(size.x));
 	frameMask[0] = kInitFrame[n];
@@ -225,8 +198,7 @@ void MRFrame::drawFrameLine(TDrawBuffer &frameBuf, short y, short n, TColorAttr 
 			if ((v->options & ofFramed) && (v->state & sfVisible)) {
 				ushort mask = 0;
 				if (y < v->origin.y) {
-					if (y == v->origin.y - 1)
-						mask = 0x0A06;
+					if (y == v->origin.y - 1) mask = 0x0A06;
 				} else if (y < v->origin.y + v->size.y)
 					mask = 0x0005;
 				else if (y == v->origin.y + v->size.y)
@@ -287,19 +259,16 @@ void MRFrame::draw() {
 	short titleReserveRight = width - 2;
 	if (window != nullptr && window->number != wnNoNumber && window->number < 10) {
 		short numberPos = (window->flags & wfZoom) != 0 ? width - 7 : width - 3;
-		if (numberPos >= 1 && numberPos < width - 1)
-			b.putChar(numberPos, window->number + '0');
+		if (numberPos >= 1 && numberPos < width - 1) b.putChar(numberPos, window->number + '0');
 		titleReserveRight = numberPos - 3;
 	}
 
 	if (controlsVisible && window != nullptr) {
-		if ((window->flags & wfClose) != 0)
-			b.moveCStr(2, kCloseIcon, cFrame);
+		if ((window->flags & wfClose) != 0) b.moveCStr(2, kCloseIcon, cFrame);
 		if ((window->flags & wfZoom) != 0) {
 			TPoint minSize, maxSize;
 			owner->sizeLimits(minSize, maxSize);
-			if (owner->size == maxSize)
-				b.moveCStr(width - 5, kUnZoomIcon, cFrame);
+			if (owner->size == maxSize) b.moveCStr(width - 5, kUnZoomIcon, cFrame);
 			else
 				b.moveCStr(width - 5, kZoomIcon, cFrame);
 			titleReserveRight = std::min<short>(titleReserveRight, width - 7);
@@ -311,10 +280,8 @@ void MRFrame::draw() {
 	if (showMarkerBlock) {
 		int leftSepX = markerX - 1;
 		int rightSepX = markersEndColumn(markers);
-		if (leftSepX + 1 <= rightSepX - 1)
-			b.moveChar(static_cast<ushort>(leftSepX + 1), ' ', cTitle, rightSepX - leftSepX - 1);
-		if (leftSepX >= 1 && leftSepX < width - 1)
-			b.putChar(static_cast<ushort>(leftSepX), kMarkerLeftBracket);
+		if (leftSepX + 1 <= rightSepX - 1) b.moveChar(static_cast<ushort>(leftSepX + 1), ' ', cTitle, rightSepX - leftSepX - 1);
+		if (leftSepX >= 1 && leftSepX < width - 1) b.putChar(static_cast<ushort>(leftSepX), kMarkerLeftBracket);
 	}
 	if (markers.modified) {
 		int span = markerSpan(kDirtyMarkerIcon, kDirtyMarkerSlotWidth);
@@ -325,15 +292,13 @@ void MRFrame::draw() {
 	if (markers.insertMode) {
 		int span = markerSpan(kInsertMarkerIcon, kInsertMarkerSlotWidth);
 		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
-		if (markers.insertModeVisible)
-			b.moveStr(static_cast<ushort>(markerX), kInsertMarkerIcon, cTitle, span);
+		if (markers.insertModeVisible) b.moveStr(static_cast<ushort>(markerX), kInsertMarkerIcon, cTitle, span);
 		markerX = advanceMarkerX(markerX, kInsertMarkerIcon, kInsertMarkerSlotWidth);
 	}
 	if (markers.wordWrap) {
 		int span = markerSpan(kWordWrapMarkerIcon, kWordWrapMarkerSlotWidth);
 		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
-		if (markers.wordWrapVisible)
-			b.moveStr(static_cast<ushort>(markerX), kWordWrapMarkerIcon, cTitle, span);
+		if (markers.wordWrapVisible) b.moveStr(static_cast<ushort>(markerX), kWordWrapMarkerIcon, cTitle, span);
 		markerX = advanceMarkerX(markerX, kWordWrapMarkerIcon, kWordWrapMarkerSlotWidth);
 	}
 	if (markers.recording) {
@@ -342,8 +307,7 @@ void MRFrame::draw() {
 		setStyle(recordingColor, getStyle(recordingColor) | slBold);
 		int span = markerSpan(kRecordingMarkerIcon, kRecordingMarkerSlotWidth);
 		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
-		if (markers.recordingVisible)
-			b.moveStr(static_cast<ushort>(markerX), kRecordingMarkerIcon, recordingColor, span);
+		if (markers.recordingVisible) b.moveStr(static_cast<ushort>(markerX), kRecordingMarkerIcon, recordingColor, span);
 		markerX = advanceMarkerX(markerX, kRecordingMarkerIcon, kRecordingMarkerSlotWidth);
 	}
 	if (markers.macroBrain) {
@@ -352,8 +316,7 @@ void MRFrame::draw() {
 		setStyle(brainColor, getStyle(brainColor) | slBold);
 		int span = markerSpan(kMacroBrainMarkerIcon, kMacroBrainMarkerSlotWidth);
 		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
-		if (markers.macroBrainVisible)
-			b.moveStr(static_cast<ushort>(markerX), kMacroBrainMarkerIcon, brainColor, span);
+		if (markers.macroBrainVisible) b.moveStr(static_cast<ushort>(markerX), kMacroBrainMarkerIcon, brainColor, span);
 		markerX = advanceMarkerX(markerX, kMacroBrainMarkerIcon, kMacroBrainMarkerSlotWidth);
 	}
 	if (markers.background) {
@@ -362,21 +325,18 @@ void MRFrame::draw() {
 		setStyle(taskColor, getStyle(taskColor) | slBold);
 		int span = markerSpan(kTaskMarkerIcon, kTaskMarkerSlotWidth);
 		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
-		if (markers.backgroundVisible)
-			b.moveStr(static_cast<ushort>(markerX), kTaskMarkerIcon, taskColor, span);
+		if (markers.backgroundVisible) b.moveStr(static_cast<ushort>(markerX), kTaskMarkerIcon, taskColor, span);
 		markerX = advanceMarkerX(markerX, kTaskMarkerIcon, kTaskMarkerSlotWidth);
 	}
 	if (markers.readOnly) {
 		int span = markerSpan(kReadOnlyMarkerIcon, kReadOnlyMarkerSlotWidth);
 		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
-		if (markers.readOnlyVisible)
-			b.moveStr(static_cast<ushort>(markerX), kReadOnlyMarkerIcon, cTitle, span);
+		if (markers.readOnlyVisible) b.moveStr(static_cast<ushort>(markerX), kReadOnlyMarkerIcon, cTitle, span);
 		markerX = advanceMarkerX(markerX, kReadOnlyMarkerIcon, kReadOnlyMarkerSlotWidth);
 	}
 	if (showMarkerBlock) {
 		int rightSepX = markerX > markerStartColumn() ? markerX - kMarkerGap : markerX;
-		if (rightSepX >= 1 && rightSepX < width - 1)
-			b.putChar(static_cast<ushort>(rightSepX), kMarkerRightBracket);
+		if (rightSepX >= 1 && rightSepX < width - 1) b.putChar(static_cast<ushort>(rightSepX), kMarkerRightBracket);
 		markerX = rightSepX + 1;
 	}
 
@@ -385,16 +345,16 @@ void MRFrame::draw() {
 		int available = titleReserveRight - titleLeftLimit + 1;
 		int titleBudget = std::max(0, available - 4);
 		const char *title = window->getTitle(titleBudget);
-			if (title != nullptr && *title != '\0') {
-				if (available > 0) {
-					std::string decoratedTitle = "[";
-					decoratedTitle += title;
-					decoratedTitle += "]";
-					int len = std::min<int>(strwidth(decoratedTitle.c_str()), available);
-					int titleX = titleReserveRight - len + 1;
-					b.moveStr(static_cast<ushort>(titleX), decoratedTitle.c_str(), cTitle, len);
-				}
+		if (title != nullptr && *title != '\0') {
+			if (available > 0) {
+				std::string decoratedTitle = "[";
+				decoratedTitle += title;
+				decoratedTitle += "]";
+				int len = std::min<int>(strwidth(decoratedTitle.c_str()), available);
+				int titleX = titleReserveRight - len + 1;
+				b.moveStr(static_cast<ushort>(titleX), decoratedTitle.c_str(), cTitle, len);
 			}
+		}
 	}
 
 	writeLine(0, 0, size.x, 1, b);
@@ -410,8 +370,7 @@ void MRFrame::draw() {
 	writeLine(0, size.y - 1, size.x, 1, b);
 	if (mTaskOverviewPopup != nullptr && mTaskOverviewProvider) {
 		std::vector<std::string> lines = mTaskOverviewProvider();
-		if (!lines.empty())
-			mTaskOverviewPopup->setLines(lines);
+		if (!lines.empty()) mTaskOverviewPopup->setLines(lines);
 	}
 	mrvmUiInvalidateScreenBase();
 }
@@ -443,9 +402,7 @@ void MRFrame::handleEvent(TEvent &event) {
 					putEvent(event);
 					clearEvent(event);
 				}
-			} else if ((window->flags & wfZoom) != 0 && controlsVisible &&
-			           ((mouse.x >= size.x - 5 && mouse.x <= size.x - 3) ||
-			            (event.mouse.eventFlags & meDoubleClick))) {
+			} else if ((window->flags & wfZoom) != 0 && controlsVisible && ((mouse.x >= size.x - 5 && mouse.x <= size.x - 3) || (event.mouse.eventFlags & meDoubleClick))) {
 				event.what = evCommand;
 				event.message.command = cmZoom;
 				event.message.infoPtr = owner;
@@ -453,23 +410,18 @@ void MRFrame::handleEvent(TEvent &event) {
 				clearEvent(event);
 			} else if ((window->flags & wfMove) != 0)
 				dragWindow(event, dmDragMove);
-		} else if (isFrameFocused(this) && (mouse.y >= size.y - 1) && window != nullptr &&
-		           (window->flags & wfGrow)) {
-			if (mouse.x >= size.x - 2)
-				dragWindow(event, dmDragGrow);
+		} else if (isFrameFocused(this) && (mouse.y >= size.y - 1) && window != nullptr && (window->flags & wfGrow)) {
+			if (mouse.x >= size.x - 2) dragWindow(event, dmDragGrow);
 			else if (mouse.x <= 1)
 				dragWindow(event, dmDragGrowLeft);
-		} else if (event.what == evMouseDown && event.mouse.buttons == mbMiddleButton && 0 < mouse.x &&
-		           mouse.x < size.x - 1 && 0 < mouse.y && mouse.y < size.y - 1 && window != nullptr &&
-		           (window->flags & wfMove))
+		} else if (event.what == evMouseDown && event.mouse.buttons == mbMiddleButton && 0 < mouse.x && mouse.x < size.x - 1 && 0 < mouse.y && mouse.y < size.y - 1 && window != nullptr && (window->flags & wfMove))
 			dragWindow(event, dmDragMove);
 	}
 }
 
 void MRFrame::setState(ushort aState, Boolean enable) {
 	TView::setState(aState, enable);
-	if ((aState & (sfActive | sfFocused | sfDragging)) != 0)
-		drawView();
+	if ((aState & (sfActive | sfFocused | sfDragging)) != 0) drawView();
 }
 
 void MRFrame::showTaskOverview() {
@@ -479,34 +431,27 @@ void MRFrame::showTaskOverview() {
 	int taskX = taskMarkerColumn(state);
 	int width = 14;
 
-	if (group == nullptr || !mTaskOverviewProvider || taskX < 0)
-		return;
+	if (group == nullptr || !mTaskOverviewProvider || taskX < 0) return;
 	lines = mTaskOverviewProvider();
 	if (lines.empty()) {
 		hideTaskOverview();
 		return;
 	}
 	for (const std::string &line : lines)
-		if (strwidth(line.c_str()) + 4 > width)
-			width = strwidth(line.c_str()) + 4;
-	if (width > group->size.x - 2)
-		width = std::max(12, group->size.x - 2);
+		if (strwidth(line.c_str()) + 4 > width) width = strwidth(line.c_str()) + 4;
+	if (width > group->size.x - 2) width = std::max(12, group->size.x - 2);
 	int height = static_cast<int>(lines.size()) + 2;
-	if (height > group->size.y - 2)
-		height = std::max(3, group->size.y - 2);
+	if (height > group->size.y - 2) height = std::max(3, group->size.y - 2);
 	TPoint topLeft = makeGlobal(TPoint(std::max(1, taskX - 1), 1));
 	topLeft = group->makeLocal(topLeft);
 	int left = std::max(1, topLeft.x);
-	if (left + width > group->size.x - 1)
-		left = std::max(1, group->size.x - 1 - width);
+	if (left + width > group->size.x - 1) left = std::max(1, group->size.x - 1 - width);
 	int top = std::max(1, topLeft.y);
-	if (top + height > group->size.y - 1)
-		top = std::max(1, group->size.y - 1 - height);
+	if (top + height > group->size.y - 1) top = std::max(1, group->size.y - 1 - height);
 	TRect bounds(left, top, left + width, top + height);
 
 	if (mTaskOverviewPopup != nullptr) {
-		if (mTaskOverviewPopupOwner != nullptr)
-			mTaskOverviewPopupOwner->remove(mTaskOverviewPopup);
+		if (mTaskOverviewPopupOwner != nullptr) mTaskOverviewPopupOwner->remove(mTaskOverviewPopup);
 		TObject::destroy(mTaskOverviewPopup);
 		mTaskOverviewPopup = nullptr;
 		mTaskOverviewPopupOwner = nullptr;
@@ -520,10 +465,8 @@ void MRFrame::showTaskOverview() {
 }
 
 void MRFrame::hideTaskOverview() {
-	if (mTaskOverviewPopup == nullptr)
-		return;
-	if (mTaskOverviewPopupOwner != nullptr)
-		mTaskOverviewPopupOwner->remove(mTaskOverviewPopup);
+	if (mTaskOverviewPopup == nullptr) return;
+	if (mTaskOverviewPopupOwner != nullptr) mTaskOverviewPopupOwner->remove(mTaskOverviewPopup);
 	TObject::destroy(mTaskOverviewPopup);
 	mTaskOverviewPopup = nullptr;
 	mTaskOverviewPopupOwner = nullptr;
@@ -550,8 +493,7 @@ void MRFrame::updateTaskHover(TPoint globalMouse, bool forceHide) {
 }
 
 void MRFrame::tickTaskOverviewAnimation() {
-	if (mTaskOverviewPopup == nullptr || !mTaskOverviewProvider)
-		return;
+	if (mTaskOverviewPopup == nullptr || !mTaskOverviewProvider) return;
 	std::vector<std::string> lines = mTaskOverviewProvider();
 	if (lines.empty()) {
 		hideTaskOverview();

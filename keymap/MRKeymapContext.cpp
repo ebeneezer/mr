@@ -11,12 +11,7 @@ struct ContextSpec {
 };
 
 constexpr std::array contexts{
-    ContextSpec{"MENU", MRKeymapContext::Menu},
-    ContextSpec{"DIALOG", MRKeymapContext::Dialog},
-    ContextSpec{"DIALOG_LIST", MRKeymapContext::DialogList},
-    ContextSpec{"LIST", MRKeymapContext::List},
-    ContextSpec{"READONLY", MRKeymapContext::ReadOnly},
-    ContextSpec{"EDIT", MRKeymapContext::Edit},
+    ContextSpec{"MENU", MRKeymapContext::Menu}, ContextSpec{"DIALOG", MRKeymapContext::Dialog}, ContextSpec{"DIALOG_LIST", MRKeymapContext::DialogList}, ContextSpec{"LIST", MRKeymapContext::List}, ContextSpec{"READONLY", MRKeymapContext::ReadOnly}, ContextSpec{"EDIT", MRKeymapContext::Edit},
 };
 
 std::string upperAscii(std::string_view text) {
@@ -31,14 +26,12 @@ std::string upperAscii(std::string_view text) {
 std::optional<MRKeymapContext> parseKeymapContext(std::string_view text) noexcept {
 	const std::string upper = upperAscii(text);
 	for (const ContextSpec &entry : contexts)
-		if (entry.name == upper)
-			return entry.context;
+		if (entry.name == upper) return entry.context;
 	return std::nullopt;
 }
 
 std::string_view keymapContextName(MRKeymapContext context) noexcept {
 	for (const ContextSpec &entry : contexts)
-		if (entry.context == context)
-			return entry.name;
+		if (entry.context == context) return entry.name;
 	return "NONE";
 }

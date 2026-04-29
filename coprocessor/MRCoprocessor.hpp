@@ -58,9 +58,7 @@ struct TaskInfo {
 	std::string label;
 	std::shared_ptr<std::atomic_bool> cancelFlag;
 
-	TaskInfo() noexcept
-	    : id(0), lane(Lane::Compute), kind(TaskKind::Custom), documentId(0), baseVersion(0), label(),
-	      cancelFlag() {
+	TaskInfo() noexcept : id(0), lane(Lane::Compute), kind(TaskKind::Custom), documentId(0), baseVersion(0), label(), cancelFlag() {
 	}
 
 	[[nodiscard]] bool cancelRequested() const noexcept {
@@ -87,13 +85,10 @@ struct IndicatorBlinkPayload final : Payload {
 	bool visible;
 	IndicatorBlinkChannel channel;
 
-	IndicatorBlinkPayload() noexcept
-	    : indicatorId(0), generation(0), visible(true), channel(IndicatorBlinkChannel::ReadOnly) {
+	IndicatorBlinkPayload() noexcept : indicatorId(0), generation(0), visible(true), channel(IndicatorBlinkChannel::ReadOnly) {
 	}
 
-	IndicatorBlinkPayload(std::size_t aIndicatorId, std::size_t aGeneration, bool aVisible,
-	                      IndicatorBlinkChannel aChannel = IndicatorBlinkChannel::ReadOnly) noexcept
-	    : indicatorId(aIndicatorId), generation(aGeneration), visible(aVisible), channel(aChannel) {
+	IndicatorBlinkPayload(std::size_t aIndicatorId, std::size_t aGeneration, bool aVisible, IndicatorBlinkChannel aChannel = IndicatorBlinkChannel::ReadOnly) noexcept : indicatorId(aIndicatorId), generation(aGeneration), visible(aVisible), channel(aChannel) {
 	}
 };
 
@@ -114,8 +109,7 @@ struct SyntaxWarmLine {
 	SyntaxWarmLine() noexcept : lineStart(0), tokens() {
 	}
 
-	SyntaxWarmLine(std::size_t aLineStart, MRSyntaxTokenMap aTokens)
-	    : lineStart(aLineStart), tokens(std::move(aTokens)) {
+	SyntaxWarmLine(std::size_t aLineStart, MRSyntaxTokenMap aTokens) : lineStart(aLineStart), tokens(std::move(aTokens)) {
 	}
 };
 
@@ -126,8 +120,7 @@ struct SyntaxWarmupPayload final : Payload {
 	SyntaxWarmupPayload() noexcept : language(MRSyntaxLanguage::PlainText), lines() {
 	}
 
-	SyntaxWarmupPayload(MRSyntaxLanguage aLanguage, std::vector<SyntaxWarmLine> aLines)
-	    : language(aLanguage), lines(std::move(aLines)) {
+	SyntaxWarmupPayload(MRSyntaxLanguage aLanguage, std::vector<SyntaxWarmLine> aLines) : language(aLanguage), lines(std::move(aLines)) {
 	}
 };
 
@@ -143,20 +136,10 @@ struct MiniMapWarmupPayload final : Payload {
 	std::vector<std::size_t> rowLineStarts;
 	std::vector<std::size_t> rowLineEnds;
 
-	MiniMapWarmupPayload() noexcept
-	    : braille(true), rowCount(0), bodyWidth(0), totalLines(1), windowStartLine(0), windowLineCount(1),
-	      viewportWidth(1), rowPatterns(),
-	      rowLineStarts(), rowLineEnds() {
+	MiniMapWarmupPayload() noexcept : braille(true), rowCount(0), bodyWidth(0), totalLines(1), windowStartLine(0), windowLineCount(1), viewportWidth(1), rowPatterns(), rowLineStarts(), rowLineEnds() {
 	}
 
-	MiniMapWarmupPayload(bool aBraille, int aRowCount, int aBodyWidth, std::size_t aTotalLines,
-	                     std::size_t aWindowStartLine, std::size_t aWindowLineCount, int aViewportWidth,
-	                     std::vector<unsigned char> aRowPatterns,
-	                     std::vector<std::size_t> aRowLineStarts, std::vector<std::size_t> aRowLineEnds)
-	    : braille(aBraille), rowCount(aRowCount), bodyWidth(aBodyWidth), totalLines(aTotalLines),
-	      windowStartLine(aWindowStartLine), windowLineCount(aWindowLineCount), viewportWidth(aViewportWidth),
-	      rowPatterns(std::move(aRowPatterns)),
-	      rowLineStarts(std::move(aRowLineStarts)), rowLineEnds(std::move(aRowLineEnds)) {
+	MiniMapWarmupPayload(bool aBraille, int aRowCount, int aBodyWidth, std::size_t aTotalLines, std::size_t aWindowStartLine, std::size_t aWindowLineCount, int aViewportWidth, std::vector<unsigned char> aRowPatterns, std::vector<std::size_t> aRowLineStarts, std::vector<std::size_t> aRowLineEnds) : braille(aBraille), rowCount(aRowCount), bodyWidth(aBodyWidth), totalLines(aTotalLines), windowStartLine(aWindowStartLine), windowLineCount(aWindowLineCount), viewportWidth(aViewportWidth), rowPatterns(std::move(aRowPatterns)), rowLineStarts(std::move(aRowLineStarts)), rowLineEnds(std::move(aRowLineEnds)) {
 	}
 };
 
@@ -167,8 +150,7 @@ struct SaveNormalizationWarmupPayload final : Payload {
 	SaveNormalizationWarmupPayload() noexcept : optionsHash(0), sourceBytes(0) {
 	}
 
-	SaveNormalizationWarmupPayload(std::size_t aOptionsHash, std::size_t aSourceBytes) noexcept
-	    : optionsHash(aOptionsHash), sourceBytes(aSourceBytes) {
+	SaveNormalizationWarmupPayload(std::size_t aOptionsHash, std::size_t aSourceBytes) noexcept : optionsHash(aOptionsHash), sourceBytes(aSourceBytes) {
 	}
 };
 
@@ -179,8 +161,7 @@ struct ExternalIoChunkPayload final : Payload {
 	ExternalIoChunkPayload() noexcept : channelId(0), text() {
 	}
 
-	ExternalIoChunkPayload(std::size_t aChannelId, std::string aText)
-	    : channelId(aChannelId), text(std::move(aText)) {
+	ExternalIoChunkPayload(std::size_t aChannelId, std::string aText) : channelId(aChannelId), text(std::move(aText)) {
 	}
 };
 
@@ -193,9 +174,7 @@ struct ExternalIoFinishedPayload final : Payload {
 	ExternalIoFinishedPayload() noexcept : channelId(0), exitCode(0), signaled(false), signalNumber(0) {
 	}
 
-	ExternalIoFinishedPayload(std::size_t aChannelId, int aExitCode, bool aSignaled,
-	                          int aSignalNumber) noexcept
-	    : channelId(aChannelId), exitCode(aExitCode), signaled(aSignaled), signalNumber(aSignalNumber) {
+	ExternalIoFinishedPayload(std::size_t aChannelId, int aExitCode, bool aSignaled, int aSignalNumber) noexcept : channelId(aChannelId), exitCode(aExitCode), signaled(aSignaled), signalNumber(aSignalNumber) {
 	}
 };
 
@@ -207,8 +186,7 @@ struct MacroJobFinishedPayload final : Payload {
 	MacroJobFinishedPayload() noexcept : displayName(), logLines(), hadError(false) {
 	}
 
-	MacroJobFinishedPayload(std::string aDisplayName, std::vector<std::string> aLogLines, bool aHadError)
-	    : displayName(std::move(aDisplayName)), logLines(std::move(aLogLines)), hadError(aHadError) {
+	MacroJobFinishedPayload(std::string aDisplayName, std::vector<std::string> aLogLines, bool aHadError) : displayName(std::move(aDisplayName)), logLines(std::move(aLogLines)), hadError(aHadError) {
 	}
 };
 
@@ -240,40 +218,11 @@ struct MacroJobStagedPayload final : Payload {
 	std::string fileName;
 	bool fileChanged;
 
-	MacroJobStagedPayload() noexcept
-	    : displayName(), logLines(), hadError(false), transaction(), cursorOffset(0), selectionStart(0),
-	      selectionEnd(0), blockMode(0), blockMarkingOn(false), blockAnchor(0), blockEnd(0),
-	      globalOrder(), globalInts(), globalStrings(),
-	      deferredUiCommands(),
-	      lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0),
-	      ignoreCase(false), tabExpand(true), markStack(), insertMode(true), indentLevel(1),
-	      fileName(), fileChanged(false) {
+	MacroJobStagedPayload() noexcept : displayName(), logLines(), hadError(false), transaction(), cursorOffset(0), selectionStart(0), selectionEnd(0), blockMode(0), blockMarkingOn(false), blockAnchor(0), blockEnd(0), globalOrder(), globalInts(), globalStrings(), deferredUiCommands(), lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0), ignoreCase(false), tabExpand(true), markStack(), insertMode(true), indentLevel(1), fileName(), fileChanged(false) {
 	}
 
-	MacroJobStagedPayload(std::string aDisplayName, std::vector<std::string> aLogLines, bool aHadError,
-	                      mr::editor::StagedEditTransaction aTransaction, std::size_t aCursorOffset,
-	                      std::size_t aSelectionStart, std::size_t aSelectionEnd, int aBlockMode,
-	                      bool aBlockMarkingOn, std::size_t aBlockAnchor, std::size_t aBlockEnd,
-	                      std::vector<std::string> aGlobalOrder, std::map<std::string, int> aGlobalInts,
-	                      std::map<std::string, std::string> aGlobalStrings,
-	                      std::vector<MRMacroDeferredUiCommand> aDeferredUiCommands,
-	                      bool aLastSearchValid, std::size_t aLastSearchStart,
-	                      std::size_t aLastSearchEnd, std::size_t aLastSearchCursor,
-	                      bool anIgnoreCase, bool aTabExpand, std::vector<std::size_t> aMarkStack,
-	                      bool aInsertMode, int anIndentLevel, std::string aFileName,
-	                      bool aFileChanged)
-	    : displayName(std::move(aDisplayName)), logLines(std::move(aLogLines)), hadError(aHadError),
-	      transaction(std::move(aTransaction)), cursorOffset(aCursorOffset),
-	      selectionStart(aSelectionStart), selectionEnd(aSelectionEnd), blockMode(aBlockMode),
-	      blockMarkingOn(aBlockMarkingOn), blockAnchor(aBlockAnchor), blockEnd(aBlockEnd),
-	      globalOrder(std::move(aGlobalOrder)), globalInts(std::move(aGlobalInts)),
-	      globalStrings(std::move(aGlobalStrings)),
-	      deferredUiCommands(std::move(aDeferredUiCommands)),
-	      lastSearchValid(aLastSearchValid), lastSearchStart(aLastSearchStart),
-	      lastSearchEnd(aLastSearchEnd), lastSearchCursor(aLastSearchCursor),
-	      ignoreCase(anIgnoreCase), tabExpand(aTabExpand), markStack(std::move(aMarkStack)),
-	      insertMode(aInsertMode), indentLevel(anIndentLevel), fileName(std::move(aFileName)),
-	      fileChanged(aFileChanged) {
+	MacroJobStagedPayload(std::string aDisplayName, std::vector<std::string> aLogLines, bool aHadError, mr::editor::StagedEditTransaction aTransaction, std::size_t aCursorOffset, std::size_t aSelectionStart, std::size_t aSelectionEnd, int aBlockMode, bool aBlockMarkingOn, std::size_t aBlockAnchor, std::size_t aBlockEnd, std::vector<std::string> aGlobalOrder, std::map<std::string, int> aGlobalInts, std::map<std::string, std::string> aGlobalStrings, std::vector<MRMacroDeferredUiCommand> aDeferredUiCommands, bool aLastSearchValid, std::size_t aLastSearchStart, std::size_t aLastSearchEnd, std::size_t aLastSearchCursor, bool anIgnoreCase, bool aTabExpand, std::vector<std::size_t> aMarkStack, bool aInsertMode, int anIndentLevel, std::string aFileName, bool aFileChanged)
+	    : displayName(std::move(aDisplayName)), logLines(std::move(aLogLines)), hadError(aHadError), transaction(std::move(aTransaction)), cursorOffset(aCursorOffset), selectionStart(aSelectionStart), selectionEnd(aSelectionEnd), blockMode(aBlockMode), blockMarkingOn(aBlockMarkingOn), blockAnchor(aBlockAnchor), blockEnd(aBlockEnd), globalOrder(std::move(aGlobalOrder)), globalInts(std::move(aGlobalInts)), globalStrings(std::move(aGlobalStrings)), deferredUiCommands(std::move(aDeferredUiCommands)), lastSearchValid(aLastSearchValid), lastSearchStart(aLastSearchStart), lastSearchEnd(aLastSearchEnd), lastSearchCursor(aLastSearchCursor), ignoreCase(anIgnoreCase), tabExpand(aTabExpand), markStack(std::move(aMarkStack)), insertMode(aInsertMode), indentLevel(anIndentLevel), fileName(std::move(aFileName)), fileChanged(aFileChanged) {
 	}
 };
 
@@ -333,8 +282,7 @@ class Coprocessor {
 	Coprocessor &operator=(const Coprocessor &) = delete;
 
 	void setResultHandler(ResultHandler handler);
-	std::uint64_t submit(Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion,
-	                     std::string_view label, TaskFn fn);
+	std::uint64_t submit(Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, std::string_view label, TaskFn fn);
 	std::size_t pump(std::size_t maxResults = 8);
 	[[nodiscard]] std::size_t pendingResults() const noexcept;
 	void post(Result result);

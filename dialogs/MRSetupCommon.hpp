@@ -52,36 +52,26 @@ struct DialogButtonRowMetrics {
 	int rowWidth = 0;
 };
 
-[[nodiscard]] DialogButtonRowMetrics measureUniformButtonRow(std::span<const DialogButtonSpec> specs,
-                                                             int gap, int minButtonWidth = 0);
-void insertUniformButtonRow(MRDialogFoundation &dialog, int left, int top, int gap,
-                            std::span<const DialogButtonSpec> specs, int minButtonWidth = 0,
-                            std::vector<TButton *> *outButtons = nullptr);
-void addManagedUniformButtonRow(MRScrollableDialog &dialog, int left, int top, int gap,
-                                std::span<const DialogButtonSpec> specs, int minButtonWidth = 0,
-                                std::vector<TButton *> *outButtons = nullptr);
+[[nodiscard]] DialogButtonRowMetrics measureUniformButtonRow(std::span<const DialogButtonSpec> specs, int gap, int minButtonWidth = 0);
+void insertUniformButtonRow(MRDialogFoundation &dialog, int left, int top, int gap, std::span<const DialogButtonSpec> specs, int minButtonWidth = 0, std::vector<TButton *> *outButtons = nullptr);
+void addManagedUniformButtonRow(MRScrollableDialog &dialog, int left, int top, int gap, std::span<const DialogButtonSpec> specs, int minButtonWidth = 0, std::vector<TButton *> *outButtons = nullptr);
 
 [[nodiscard]] inline std::string normalizeTvPathSeparators(std::string_view value) {
 	std::string path(value);
 	for (char &ch : path)
-		if (ch == '\\')
-			ch = '/';
+		if (ch == '\\') ch = '/';
 	return path;
 }
 
 [[nodiscard]] inline bool hasMrmacExtension(std::string_view path) {
 	const std::size_t dotPos = path.rfind('.');
-	if (dotPos == std::string_view::npos)
-		return false;
+	if (dotPos == std::string_view::npos) return false;
 
 	const std::string_view ext = path.substr(dotPos);
 	constexpr std::string_view kMrmacExtension = ".mrmac";
-	if (ext.size() != kMrmacExtension.size())
-		return false;
+	if (ext.size() != kMrmacExtension.size()) return false;
 	for (std::size_t i = 0; i < ext.size(); ++i)
-		if (std::tolower(static_cast<unsigned char>(ext[i])) !=
-		    std::tolower(static_cast<unsigned char>(kMrmacExtension[i])))
-			return false;
+		if (std::tolower(static_cast<unsigned char>(ext[i])) != std::tolower(static_cast<unsigned char>(kMrmacExtension[i]))) return false;
 	return true;
 }
 
@@ -94,8 +84,7 @@ void addManagedUniformButtonRow(MRScrollableDialog &dialog, int left, int top, i
 }
 
 inline void writeRecordField(char *dest, std::size_t destSize, std::string_view value) {
-	if (dest == nullptr || destSize == 0)
-		return;
+	if (dest == nullptr || destSize == 0) return;
 	std::memset(dest, 0, destSize);
 	std::strncpy(dest, std::string(value).c_str(), destSize - 1);
 	dest[destSize - 1] = '\0';
@@ -114,9 +103,7 @@ inline void writeRecordField(char *dest, std::size_t destSize, std::string_view 
 [[nodiscard]] TRect centeredSetupDialogRect(int width, int height);
 [[nodiscard]] TGroup *createSetupDialogContentGroup(const TRect &bounds);
 void insertSetupStaticLine(TDialog *dialog, int x, int y, const char *text);
-[[nodiscard]] TDialog *createSetupSimplePreviewDialog(const char *title, int width, int height,
-                                                      const std::vector<std::string> &lines,
-                                                      bool showOkCancelHelp);
+[[nodiscard]] TDialog *createSetupSimplePreviewDialog(const char *title, int width, int height, const std::vector<std::string> &lines, bool showOkCancelHelp);
 
 class MRScrollableDialog : public TDialog {
   public:
@@ -132,10 +119,8 @@ class MRScrollableDialog : public TDialog {
 		TRect base;
 	};
 
-	MRScrollableDialog(const TRect &bounds, const char *title, int virtualWidth,
-	                   int virtualHeight);
-	MRScrollableDialog(const TRect &bounds, const char *title, int virtualWidth,
-	                   int virtualHeight, TFrame *(*frameFactory)(TRect));
+	MRScrollableDialog(const TRect &bounds, const char *title, int virtualWidth, int virtualHeight);
+	MRScrollableDialog(const TRect &bounds, const char *title, int virtualWidth, int virtualHeight, TFrame *(*frameFactory)(TRect));
 	~MRScrollableDialog() override;
 	void handleEvent(TEvent &event) override;
 
@@ -146,7 +131,9 @@ class MRScrollableDialog : public TDialog {
 	void setDialogValidationHook(DialogValidationHook hook);
 	void runDialogValidation();
 	void setDoneButtonDisabled(bool disable);
-	[[nodiscard]] TGroup *managedContent() const noexcept { return mContent; }
+	[[nodiscard]] TGroup *managedContent() const noexcept {
+		return mContent;
+	}
 
   private:
 	void detectDoneButton(TView *view);
@@ -171,8 +158,7 @@ class MRScrollableDialog : public TDialog {
 class MRDialogFoundation : public MRScrollableDialog {
   public:
 	MRDialogFoundation(const TRect &bounds, const char *title, int virtualWidth, int virtualHeight);
-	MRDialogFoundation(const TRect &bounds, const char *title, int virtualWidth, int virtualHeight,
-	                   TFrame *(*frameFactory)(TRect));
+	MRDialogFoundation(const TRect &bounds, const char *title, int virtualWidth, int virtualHeight, TFrame *(*frameFactory)(TRect));
 
 	void insert(TView *view);
 	void finalizeLayout();

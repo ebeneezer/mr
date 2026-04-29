@@ -58,9 +58,8 @@ bool windowListDebugEnabled() noexcept {
 }
 
 void postWindowListClose(TView *dialog) {
-	if (dialog == nullptr)
-		return;
-	TEvent closeEvent {};
+	if (dialog == nullptr) return;
+	TEvent closeEvent{};
 	closeEvent.what = evCommand;
 	closeEvent.message.command = cmClose;
 	closeEvent.message.infoPtr = dialog;
@@ -74,15 +73,13 @@ struct WindowListEntry {
 	std::string directoryLabel;
 	bool hidden;
 
-	WindowListEntry()
-	    : window(nullptr),  hidden(false) {
+	WindowListEntry() : window(nullptr), hidden(false) {
 	}
 };
 
 std::string currentWorkingDirectory() {
 	char cwd[1024];
-	if (::getcwd(cwd, sizeof(cwd)) == nullptr)
-		return std::string();
+	if (::getcwd(cwd, sizeof(cwd)) == nullptr) return std::string();
 	return std::string(cwd);
 }
 
@@ -95,25 +92,20 @@ std::string trimCopy(const std::string &value) {
 
 std::string baseNameOf(const std::string &path) {
 	std::size_t pos = path.find_last_of("\\/");
-	if (pos == std::string::npos)
-		return path;
+	if (pos == std::string::npos) return path;
 	return path.substr(pos + 1);
 }
 
 std::string directoryOf(const std::string &path) {
 	std::size_t pos = path.find_last_of("\\/");
-	if (pos == std::string::npos)
-		return currentWorkingDirectory();
-	if (pos == 2 && path[1] == ':')
-		return path.substr(0, pos + 1);
-	if (pos == 0)
-		return path.substr(0, 1);
+	if (pos == std::string::npos) return currentWorkingDirectory();
+	if (pos == 2 && path[1] == ':') return path.substr(0, pos + 1);
+	if (pos == 0) return path.substr(0, 1);
 	return path.substr(0, pos);
 }
 
 std::string padRight(const std::string &value, std::size_t width) {
-	if (value.size() >= width)
-		return value.substr(0, width);
+	if (value.size() >= width) return value.substr(0, width);
 	return value + std::string(width - value.size(), ' ');
 }
 
@@ -124,10 +116,8 @@ std::string slotLabelFor(std::size_t index) {
 }
 
 bool isWindowEmptyUntitled(MREditWindow *win) {
-	if (win == nullptr)
-		return false;
-	if (win->currentFileName()[0] != '\0')
-		return false;
+	if (win == nullptr) return false;
+	if (win->currentFileName()[0] != '\0') return false;
 	return win->isBufferEmpty();
 }
 
@@ -146,24 +136,17 @@ MREditWindow *preferredLinkTarget(MREditWindow *current) {
 	MREditWindow *sameFile = nullptr;
 	std::string currentFile;
 
-	if (current == nullptr)
-		return nullptr;
+	if (current == nullptr) return nullptr;
 	currentFile = current->currentFileName();
 
-	for (auto & window : windows) {
-		if (window == current)
-			continue;
-		if (firstOther == nullptr)
-			firstOther = window;
-		if (emptyUntitled == nullptr && isWindowEmptyUntitled(window))
-			emptyUntitled = window;
-		if (!currentFile.empty() && sameFile == nullptr && currentFile == window->currentFileName())
-			sameFile = window;
+	for (auto &window : windows) {
+		if (window == current) continue;
+		if (firstOther == nullptr) firstOther = window;
+		if (emptyUntitled == nullptr && isWindowEmptyUntitled(window)) emptyUntitled = window;
+		if (!currentFile.empty() && sameFile == nullptr && currentFile == window->currentFileName()) sameFile = window;
 	}
-	if (emptyUntitled != nullptr)
-		return emptyUntitled;
-	if (sameFile != nullptr)
-		return sameFile;
+	if (emptyUntitled != nullptr) return emptyUntitled;
+	if (sameFile != nullptr) return sameFile;
 	return firstOther;
 }
 
@@ -171,41 +154,30 @@ bool saveWindow(MREditWindow *win) {
 	std::string logPath;
 	std::string saveError;
 
-	if (win == nullptr)
-		return false;
+	if (win == nullptr) return false;
 	if (win->isReadOnly()) {
 		if (win->windowRole() == MREditWindow::wrLog) {
 			logPath = win->windowRoleDetail().empty() ? configuredLogFilePath() : win->windowRoleDetail();
 			if (logPath.empty()) {
-				mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction,
-				                               "No log file URI configured.",
-				                               mr::messageline::Kind::Warning,
-				                               mr::messageline::kPriorityHigh);
+				mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "No log file URI configured.", mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
 				mrLogMessage("Save rejected for log window without target path.");
 				return false;
 			}
 			if (!mrAppendLogBufferToFile(logPath, &saveError)) {
-				mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, saveError,
-				                               mr::messageline::Kind::Error,
-				                               mr::messageline::kPriorityHigh);
+				mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, saveError, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 				mrLogMessage("Save failed.");
 				return false;
 			}
 			win->setWindowRole(MREditWindow::wrLog, logPath);
-			mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction,
-			                               "Log window saved.", mr::messageline::Kind::Info,
-			                               mr::messageline::kPriorityMedium);
+			mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Log window saved.", mr::messageline::Kind::Info, mr::messageline::kPriorityMedium);
 			mrLogMessage("Log window saved.");
 			return true;
 		}
-		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction,
-		                               "Window is read-only.", mr::messageline::Kind::Warning,
-		                               mr::messageline::kPriorityHigh);
+		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Window is read-only.", mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
 		mrLogMessage("Save rejected for read-only window.");
 		return false;
 	}
-	if (!win->isFileChanged())
-		return true;
+	if (!win->isFileChanged()) return true;
 	if (win->canSaveInPlace()) {
 		if (!win->saveCurrentFile()) {
 			mrLogMessage("Save failed.");
@@ -223,8 +195,7 @@ bool saveWindow(MREditWindow *win) {
 }
 
 void closeWindow(MREditWindow *win) {
-	if (win != nullptr)
-		message(win, evCommand, cmClose, nullptr);
+	if (win != nullptr) message(win, evCommand, cmClose, nullptr);
 }
 
 void hideWindow(MREditWindow *win) {
@@ -236,17 +207,14 @@ void hideWindow(MREditWindow *win) {
 
 class WindowListView : public TListViewer {
   public:
-	WindowListView(const TRect &bounds, TScrollBar *aVScrollBar,
-	               const std::vector<std::string> &aItems) noexcept
-	    : TListViewer(bounds, 1, nullptr, aVScrollBar), items(aItems) {
+	WindowListView(const TRect &bounds, TScrollBar *aVScrollBar, const std::vector<std::string> &aItems) noexcept : TListViewer(bounds, 1, nullptr, aVScrollBar), items(aItems) {
 		setRange(static_cast<short>(items.size()));
 	}
 
 	void setItems(const std::vector<std::string> &aItems) {
 		items = aItems;
 		setRange(static_cast<short>(items.size()));
-		if (items.empty())
-			focusItemNum(0);
+		if (items.empty()) focusItemNum(0);
 		else if (focused >= range)
 			focusItemNum(range - 1);
 	}
@@ -254,8 +222,7 @@ class WindowListView : public TListViewer {
 	void getText(char *dest, short item, short maxLen) override {
 		std::size_t copyLen;
 
-		if (dest == nullptr || maxLen <= 0)
-			return;
+		if (dest == nullptr || maxLen <= 0) return;
 		if (item < 0 || static_cast<std::size_t>(item) >= items.size()) {
 			dest[0] = EOS;
 			return;
@@ -267,9 +234,7 @@ class WindowListView : public TListViewer {
 	}
 
 	void handleEvent(TEvent &event) override {
-		const bool isDoubleClickActivation =
-		    event.what == evMouseDown && (event.mouse.buttons & mbLeftButton) != 0 &&
-		    (event.mouse.eventFlags & meDoubleClick) != 0;
+		const bool isDoubleClickActivation = event.what == evMouseDown && (event.mouse.buttons & mbLeftButton) != 0 && (event.mouse.eventFlags & meDoubleClick) != 0;
 
 		TListViewer::handleEvent(event);
 		if (isDoubleClickActivation && focused >= 0 && focused < range) {
@@ -277,8 +242,7 @@ class WindowListView : public TListViewer {
 			clearEvent(event);
 			return;
 		}
-		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter && focused >= 0 &&
-		    focused < range) {
+		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter && focused >= 0 && focused < range) {
 			message(owner, evCommand, cmOK, nullptr);
 			clearEvent(event);
 		}
@@ -291,21 +255,16 @@ class WindowListView : public TListViewer {
 class WindowListDialog : public MRDialogFoundation {
   public:
 	~WindowListDialog() override {
-		if (g_manageWindowListDialog == this)
-			g_manageWindowListDialog = nullptr;
+		if (g_manageWindowListDialog == this) g_manageWindowListDialog = nullptr;
 	}
 
 	void saveWorkspaceWithDialog() {
 		char fileName[MAXPATH];
 
-		mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::WorkspaceSave, fileName,
-		                                sizeof(fileName), "*.mrmac");
-		if (mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::WorkspaceSave,
-		                                                   "*.mrmac", "Save workspace as...",
-		                                                   "~N~ame", fdOKButton, fileName) != cmCancel) {
+		mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::WorkspaceSave, fileName, sizeof(fileName), "*.mrmac");
+		if (mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::WorkspaceSave, "*.mrmac", "Save workspace as...", "~N~ame", fdOKButton, fileName) != cmCancel) {
 			std::string name(fileName);
-			if (name.find(".mrmac") == std::string::npos)
-				name += ".mrmac";
+			if (name.find(".mrmac") == std::string::npos) name += ".mrmac";
 			mrSaveWorkspace(name);
 		}
 	}
@@ -315,30 +274,19 @@ class WindowListDialog : public MRDialogFoundation {
 		std::string selectedPath;
 		bool readable = false;
 
-		mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::WorkspaceLoad, fileName,
-		                                sizeof(fileName), "*.mrmac");
-		if (mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::WorkspaceLoad,
-		                                                   "*.mrmac", "Load workspace from...",
-		                                                   "~N~ame", fdOpenButton, fileName) != cmCancel) {
+		mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::WorkspaceLoad, fileName, sizeof(fileName), "*.mrmac");
+		if (mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::WorkspaceLoad, "*.mrmac", "Load workspace from...", "~N~ame", fdOpenButton, fileName) != cmCancel) {
 			selectedPath = normalizeConfiguredPathInput(fileName);
-			if (selectedPath.empty())
-				return;
-			readable = !selectedPath.empty() && ::access(selectedPath.c_str(), F_OK) == 0 &&
-			           ::access(selectedPath.c_str(), R_OK) == 0;
+			if (selectedPath.empty()) return;
+			readable = !selectedPath.empty() && ::access(selectedPath.c_str(), F_OK) == 0 && ::access(selectedPath.c_str(), R_OK) == 0;
 			mrLoadWorkspace(selectedPath);
-			if (readable)
-				rememberLoadDialogPath(MRDialogHistoryScope::WorkspaceLoad, selectedPath.c_str());
+			if (readable) rememberLoadDialogPath(MRDialogHistoryScope::WorkspaceLoad, selectedPath.c_str());
 			else
 				forgetLoadDialogPath(MRDialogHistoryScope::WorkspaceLoad, selectedPath.c_str());
 		}
 	}
 
-	WindowListDialog(MRWindowListMode aMode, MREditWindow *aCurrent, MREditWindow *aPreferred)
-	    : TWindowInit(&TDialog::initFrame),
-	      MRDialogFoundation(centeredBounds(computeWidth(), computeHeight(aMode, aCurrent)), "WINDOW LIST",
-	                         computeWidth(), computeHeight(aMode, aCurrent)),
-	      mode(aMode), current(aCurrent), preferred(aPreferred), listView(nullptr),
-	      scrollBar(nullptr), hideToggleButton(nullptr), selected(nullptr), lastFocusedIndex(-1) {
+	WindowListDialog(MRWindowListMode aMode, MREditWindow *aCurrent, MREditWindow *aPreferred) : TWindowInit(&TDialog::initFrame), MRDialogFoundation(centeredBounds(computeWidth(), computeHeight(aMode, aCurrent)), "WINDOW LIST", computeWidth(), computeHeight(aMode, aCurrent)), mode(aMode), current(aCurrent), preferred(aPreferred), listView(nullptr), scrollBar(nullptr), hideToggleButton(nullptr), selected(nullptr), lastFocusedIndex(-1) {
 		int width = size.x;
 		int height = size.y;
 		int listTop = 6;
@@ -348,57 +296,38 @@ class WindowListDialog : public MRDialogFoundation {
 		const int bottomButtonY = height - 3;
 		const int buttonGap = 2;
 		const int workspaceGap = 4;
-			auto centeredRowStart = [width](int contentWidth) {
-				return std::max(2, (width - contentWidth) / 2);
-			};
+		auto centeredRowStart = [width](int contentWidth) { return std::max(2, (width - contentWidth) / 2); };
 
-			{
-				const std::array topButtons{
-				    mr::dialogs::DialogButtonSpec{"~D~elete", cmMRWindowListDelete, bfNormal},
-				    mr::dialogs::DialogButtonSpec{"~S~ave", cmMRWindowListSave, bfNormal},
-				    mr::dialogs::DialogButtonSpec{"Un/~H~ide", cmMRWindowListHide, bfNormal},
-				    mr::dialogs::DialogButtonSpec{"Hide ~a~ll", cmMRWindowListHideAll, bfNormal}};
-				std::vector<TButton *> topButtonViews;
-				const mr::dialogs::DialogButtonRowMetrics metrics =
-				    mr::dialogs::measureUniformButtonRow(topButtons, buttonGap);
-				const int left = centeredRowStart(metrics.rowWidth);
+		{
+			const std::array topButtons{mr::dialogs::DialogButtonSpec{"~D~elete", cmMRWindowListDelete, bfNormal}, mr::dialogs::DialogButtonSpec{"~S~ave", cmMRWindowListSave, bfNormal}, mr::dialogs::DialogButtonSpec{"Un/~H~ide", cmMRWindowListHide, bfNormal}, mr::dialogs::DialogButtonSpec{"Hide ~a~ll", cmMRWindowListHideAll, bfNormal}};
+			std::vector<TButton *> topButtonViews;
+			const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(topButtons, buttonGap);
+			const int left = centeredRowStart(metrics.rowWidth);
 
-				mr::dialogs::insertUniformButtonRow(*this, left, topButtonY, buttonGap, topButtons, 0,
-				                                    &topButtonViews);
-				if (topButtonViews.size() >= 3)
-					hideToggleButton = topButtonViews[2];
-			}
+			mr::dialogs::insertUniformButtonRow(*this, left, topButtonY, buttonGap, topButtons, 0, &topButtonViews);
+			if (topButtonViews.size() >= 3) hideToggleButton = topButtonViews[2];
+		}
 		insert(new TStaticText(TRect(2, 5, 18, 6), "Select window:"));
 
 		scrollBar = new TScrollBar(TRect(width - 3, listTop, width - 2, listBottom));
 		insert(scrollBar);
-		listView = new WindowListView(TRect(2, listTop, width - 3, listBottom), scrollBar,
-		                              std::vector<std::string>());
+		listView = new WindowListView(TRect(2, listTop, width - 3, listBottom), scrollBar, std::vector<std::string>());
 		insert(listView);
 
-			{
-				const std::array workspaceButtons{
-				    mr::dialogs::DialogButtonSpec{"Sa~v~e workspace", cmMRWorkspaceSave, bfNormal},
-				    mr::dialogs::DialogButtonSpec{"~L~oad workspace", cmMRWorkspaceLoad, bfNormal}};
-				const mr::dialogs::DialogButtonRowMetrics metrics =
-				    mr::dialogs::measureUniformButtonRow(workspaceButtons, workspaceGap);
-				const int left = centeredRowStart(metrics.rowWidth);
+		{
+			const std::array workspaceButtons{mr::dialogs::DialogButtonSpec{"Sa~v~e workspace", cmMRWorkspaceSave, bfNormal}, mr::dialogs::DialogButtonSpec{"~L~oad workspace", cmMRWorkspaceLoad, bfNormal}};
+			const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(workspaceButtons, workspaceGap);
+			const int left = centeredRowStart(metrics.rowWidth);
 
-				mr::dialogs::insertUniformButtonRow(*this, left, workspaceButtonY, workspaceGap,
-				                                    workspaceButtons);
-			}
-			{
-				const std::array bottomButtons{
-				    mr::dialogs::DialogButtonSpec{"~D~one", mode == mrwlManageWindows ? cmClose : cmOK,
-				                                  bfDefault},
-				    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal},
-				    mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
-				const mr::dialogs::DialogButtonRowMetrics metrics =
-				    mr::dialogs::measureUniformButtonRow(bottomButtons, buttonGap);
-				const int left = centeredRowStart(metrics.rowWidth);
+			mr::dialogs::insertUniformButtonRow(*this, left, workspaceButtonY, workspaceGap, workspaceButtons);
+		}
+		{
+			const std::array bottomButtons{mr::dialogs::DialogButtonSpec{"~D~one", mode == mrwlManageWindows ? cmClose : cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+			const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(bottomButtons, buttonGap);
+			const int left = centeredRowStart(metrics.rowWidth);
 
-				mr::dialogs::insertUniformButtonRow(*this, left, bottomButtonY, buttonGap, bottomButtons);
-			}
+			mr::dialogs::insertUniformButtonRow(*this, left, bottomButtonY, buttonGap, bottomButtons);
+		}
 
 		refreshEntries();
 		focusPreferred();
@@ -407,15 +336,13 @@ class WindowListDialog : public MRDialogFoundation {
 		setDialogValidationHook([this]() {
 			DialogValidationResult result;
 			result.valid = currentSelection() != nullptr;
-			if (!result.valid)
-				result.warningText = "Select window.";
+			if (!result.valid) result.warningText = "Select window.";
 			return result;
 		});
 	}
 
 	MREditWindow *selectedWindow() const {
-		if (selected != nullptr)
-			return selected;
+		if (selected != nullptr) return selected;
 		return currentSelection();
 	}
 
@@ -432,8 +359,7 @@ class WindowListDialog : public MRDialogFoundation {
 			line += listView != nullptr ? std::to_string(listView->focused) : "-1";
 			mrLogMessage(line);
 		}
-		if (TProgram::deskTop != nullptr)
-			TProgram::deskTop->setCurrent(this, TView::normalSelect);
+		if (TProgram::deskTop != nullptr) TProgram::deskTop->setCurrent(this, TView::normalSelect);
 		else
 			select();
 		if (windowListDebugEnabled()) {
@@ -451,15 +377,13 @@ class WindowListDialog : public MRDialogFoundation {
 		if (event.what == evBroadcast && event.message.command == cmMrWindowTopologyChanged) {
 			if (mode == mrwlManageWindows) {
 				refreshEntries();
-				if (listView != nullptr)
-					listView->drawView();
+				if (listView != nullptr) listView->drawView();
 				drawView();
 			}
 			clearEvent(event);
 			return;
 		}
-		if (mode == mrwlManageWindows && event.what == evCommand &&
-		    event.message.command == cmCancel) {
+		if (mode == mrwlManageWindows && event.what == evCommand && event.message.command == cmCancel) {
 			postWindowListClose(this);
 			clearEvent(event);
 			return;
@@ -479,8 +403,7 @@ class WindowListDialog : public MRDialogFoundation {
 
 		MRDialogFoundation::handleEvent(event);
 
-		if (listView != nullptr && listView->focused != lastFocusedIndex)
-			updateHideToggleState();
+		if (listView != nullptr && listView->focused != lastFocusedIndex) updateHideToggleState();
 
 		if (event.what == evKeyDown) {
 			switch (ctrlToArrow(event.keyDown.keyCode)) {
@@ -493,8 +416,7 @@ class WindowListDialog : public MRDialogFoundation {
 					clearEvent(event);
 					return;
 				case kbF4:
-					if (canToggleCurrentSelection())
-						handleHide();
+					if (canToggleCurrentSelection()) handleHide();
 					clearEvent(event);
 					return;
 				case kbF5:
@@ -516,8 +438,7 @@ class WindowListDialog : public MRDialogFoundation {
 			}
 		}
 
-		if (event.what != evCommand)
-			return;
+		if (event.what != evCommand) return;
 
 		switch (event.message.command) {
 			case cmMRWindowListDelete:
@@ -529,8 +450,7 @@ class WindowListDialog : public MRDialogFoundation {
 				clearEvent(event);
 				break;
 			case cmMRWindowListHide:
-				if (canToggleCurrentSelection())
-					handleHide();
+				if (canToggleCurrentSelection()) handleHide();
 				clearEvent(event);
 				break;
 			case cmMRWindowListHideAll:
@@ -578,8 +498,7 @@ class WindowListDialog : public MRDialogFoundation {
 	std::string renderRow(const WindowListEntry &entry) const {
 		std::string filePart = entry.fileLabel;
 		std::string dirPart = trimCopy(entry.directoryLabel);
-		if (entry.hidden)
-			dirPart += " [hidden]";
+		if (entry.hidden) dirPart += " [hidden]";
 		return padRight(filePart, 24) + " " + padRight(entry.slotLabel, 2) + "  " + dirPart;
 	}
 
@@ -593,12 +512,10 @@ class WindowListDialog : public MRDialogFoundation {
 			const char *title = windows[i]->getTitle(0);
 			std::string titleText = title != nullptr ? title : "";
 
-			if (mode == mrwlSelectLinkTarget && windows[i] == current)
-				continue;
+			if (mode == mrwlSelectLinkTarget && windows[i] == current) continue;
 
 			entry.window = windows[i];
-			entry.fileLabel =
-			    fileName.empty() ? (titleText.empty() ? "?No-File" : baseNameOf(titleText)) : baseNameOf(fileName);
+			entry.fileLabel = fileName.empty() ? (titleText.empty() ? "?No-File" : baseNameOf(titleText)) : baseNameOf(fileName);
 			entry.slotLabel = slotLabelFor(i);
 			entry.directoryLabel = directoryOf(fileName.empty() ? currentWorkingDirectory() : fileName);
 			entry.hidden = isWindowManuallyHidden(windows[i]);
@@ -609,32 +526,25 @@ class WindowListDialog : public MRDialogFoundation {
 
 	void sanitizeTrackedWindows() {
 		const std::vector<MREditWindow *> windows = allEditWindows();
-		if (!containsWindow(windows, current))
-			current = nullptr;
-		if (!containsWindow(windows, preferred))
-			preferred = nullptr;
-		if (!containsWindow(windows, selected))
-			selected = nullptr;
+		if (!containsWindow(windows, current)) current = nullptr;
+		if (!containsWindow(windows, preferred)) preferred = nullptr;
+		if (!containsWindow(windows, selected)) selected = nullptr;
 	}
 
 	void refreshEntries() {
 		int oldFocus = listView != nullptr ? listView->focused : 0;
 		sanitizeTrackedWindows();
 		collectEntries();
-			if (listView != nullptr)
-				listView->setItems(rows);
-			if (entries.empty()) {
-				selected = nullptr;
-				if (mode == mrwlManageWindows)
-					postWindowListClose(this);
-				else
-					endModal(cmCancel);
-				return;
+		if (listView != nullptr) listView->setItems(rows);
+		if (entries.empty()) {
+			selected = nullptr;
+			if (mode == mrwlManageWindows) postWindowListClose(this);
+			else
+				endModal(cmCancel);
+			return;
 		}
-		if (oldFocus < 0)
-			oldFocus = 0;
-		if (oldFocus >= static_cast<int>(entries.size()))
-			oldFocus = static_cast<int>(entries.size()) - 1;
+		if (oldFocus < 0) oldFocus = 0;
+		if (oldFocus >= static_cast<int>(entries.size())) oldFocus = static_cast<int>(entries.size()) - 1;
 		listView->focusItemNum(static_cast<short>(oldFocus));
 		updateHideToggleState();
 	}
@@ -648,21 +558,17 @@ class WindowListDialog : public MRDialogFoundation {
 				break;
 			}
 		}
-		if (!entries.empty())
-			listView->focusItemNum(static_cast<short>(index));
+		if (!entries.empty()) listView->focusItemNum(static_cast<short>(index));
 	}
 
 	MREditWindow *currentSelection() const {
-		if (listView == nullptr || listView->focused < 0 ||
-		    static_cast<std::size_t>(listView->focused) >= entries.size())
-			return nullptr;
+		if (listView == nullptr || listView->focused < 0 || static_cast<std::size_t>(listView->focused) >= entries.size()) return nullptr;
 		return entries[static_cast<std::size_t>(listView->focused)].window;
 	}
 
 	void handleDelete() {
 		MREditWindow *win = currentSelection();
-		if (win == nullptr)
-			return;
+		if (win == nullptr) return;
 		closeWindow(win);
 		static_cast<void>(mrEnsureUsableWorkWindow());
 		refreshEntries();
@@ -670,8 +576,7 @@ class WindowListDialog : public MRDialogFoundation {
 
 	void handleSave() {
 		MREditWindow *win = currentSelection();
-		if (win == nullptr)
-			return;
+		if (win == nullptr) return;
 		saveWindow(win);
 		refreshEntries();
 	}
@@ -679,8 +584,7 @@ class WindowListDialog : public MRDialogFoundation {
 	void handleHide() {
 		MREditWindow *win = currentSelection();
 		std::string line;
-		if (win == nullptr)
-			return;
+		if (win == nullptr) return;
 		line = "Window List handleHide";
 		line += (win->state & sfVisible) != 0 ? " hide " : " unhide ";
 		line += "'";
@@ -695,8 +599,7 @@ class WindowListDialog : public MRDialogFoundation {
 		if (!isWindowManuallyHidden(win)) {
 			hideWindow(win);
 			static_cast<void>(mrEnsureUsableWorkWindow());
-		}
-		else {
+		} else {
 			setWindowManuallyHidden(win, false);
 			selected = win;
 			mrScheduleWindowActivation(win);
@@ -720,14 +623,13 @@ class WindowListDialog : public MRDialogFoundation {
 
 	void updateHideToggleState() {
 		const bool enabled = canToggleCurrentSelection();
-		if (hideToggleButton != nullptr)
-			hideToggleButton->setState(sfDisabled, enabled ? False : True);
+		if (hideToggleButton != nullptr) hideToggleButton->setState(sfDisabled, enabled ? False : True);
 		lastFocusedIndex = listView != nullptr ? listView->focused : -1;
 	}
 
 	void handleHideAll() {
 		std::vector<MREditWindow *> windows = allEditWindows();
-		for (auto & window : windows)
+		for (auto &window : windows)
 			hideWindow(window);
 		static_cast<void>(mrEnsureUsableWorkWindow());
 		refreshEntries();
@@ -752,8 +654,7 @@ MREditWindow *mrShowWindowListDialog(MRWindowListMode mode, MREditWindow *curren
 	ushort result;
 	MREditWindow *selected;
 
-	if (TProgram::deskTop == nullptr)
-		return nullptr;
+	if (TProgram::deskTop == nullptr) return nullptr;
 
 	if (mode == mrwlManageWindows) {
 		if (g_manageWindowListDialog != nullptr) {
@@ -793,19 +694,15 @@ MREditWindow *mrShowWindowListDialog(MRWindowListMode mode, MREditWindow *curren
 		static_cast<void>(mrShowProjectHelp());
 		return nullptr;
 	}
-	if (result == cmCancel && mode == mrwlManageWindows && selected != nullptr)
-		return selected;
-	if (result != cmOK)
-		return nullptr;
+	if (result == cmCancel && mode == mrwlManageWindows && selected != nullptr) return selected;
+	if (result != cmOK) return nullptr;
 	return selected;
 }
 
 void mrRefreshManageWindowListDialog() {
-	if (g_manageWindowListDialog != nullptr)
-		g_manageWindowListDialog->activateModeless();
+	if (g_manageWindowListDialog != nullptr) g_manageWindowListDialog->activateModeless();
 }
 
 void mrNotifyWindowTopologyChanged() {
-	if (g_manageWindowListDialog != nullptr)
-		message(g_manageWindowListDialog, evBroadcast, cmMrWindowTopologyChanged, nullptr);
+	if (g_manageWindowListDialog != nullptr) message(g_manageWindowListDialog, evBroadcast, cmMrWindowTopologyChanged, nullptr);
 }

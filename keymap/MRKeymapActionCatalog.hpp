@@ -4,7 +4,10 @@
 #include <span>
 #include <string_view>
 
-enum class MRKeymapActionOrigin : unsigned char { MRMAC, MR };
+enum class MRKeymapActionOrigin : unsigned char {
+	MRMAC,
+	MR
+};
 
 struct MRKeymapActionDefinition {
 	std::string_view id;

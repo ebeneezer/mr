@@ -14,10 +14,7 @@ namespace coprocessor {
 namespace {
 
 std::uint64_t nowMicros() noexcept {
-	return static_cast<std::uint64_t>(
-	    std::chrono::duration_cast<std::chrono::microseconds>(
-	        std::chrono::steady_clock::now().time_since_epoch())
-	        .count());
+	return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
 }
 
 unsigned int laneAffinitySlot(Lane lane) noexcept {
@@ -40,14 +37,12 @@ void bindCurrentThreadToLaneCore(Lane lane) noexcept {
 	CPU_ZERO(&availableSet);
 	if (sched_getaffinity(0, sizeof(availableSet), &availableSet) == 0) {
 		for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu)
-			if (CPU_ISSET(cpu, &availableSet))
-				availableCores.push_back(cpu);
+			if (CPU_ISSET(cpu, &availableSet)) availableCores.push_back(cpu);
 	}
 
 	if (availableCores.empty()) {
 		const long onlineCoreCount = sysconf(_SC_NPROCESSORS_ONLN);
-		if (onlineCoreCount <= 0)
-			return;
+		if (onlineCoreCount <= 0) return;
 		availableCores.reserve(static_cast<std::size_t>(onlineCoreCount));
 		for (int cpu = 0; cpu < onlineCoreCount; ++cpu)
 			availableCores.push_back(cpu);
@@ -62,9 +57,7 @@ void bindCurrentThreadToLaneCore(Lane lane) noexcept {
 
 } // namespace
 
-Coprocessor::Coprocessor()
-    :  nextTaskId(1),  shuttingDown(false), ioLane(Lane::Io),
-      computeLane(Lane::Compute), miniMapLane(Lane::MiniMap), macroLane(Lane::Macro) {
+Coprocessor::Coprocessor() : nextTaskId(1), shuttingDown(false), ioLane(Lane::Io), computeLane(Lane::Compute), miniMapLane(Lane::MiniMap), macroLane(Lane::Macro) {
 	startLane(ioLane);
 	startLane(computeLane);
 	startLane(miniMapLane);
@@ -80,10 +73,8 @@ void Coprocessor::setResultHandler(ResultHandler handler) {
 	resultHandler = std::move(handler);
 }
 
-std::uint64_t Coprocessor::submit(Lane lane, TaskKind kind, std::size_t documentId,
-                                  std::size_t baseVersion, std::string_view label, TaskFn fn) {
-	if (shuttingDown.load(std::memory_order_acquire))
-		return 0;
+std::uint64_t Coprocessor::submit(Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, std::string_view label, TaskFn fn) {
+	if (shuttingDown.load(std::memory_order_acquire)) return 0;
 
 	Request request;
 	LaneState &targetLaneState = laneState(lane);
@@ -125,8 +116,7 @@ std::size_t Coprocessor::pump(std::size_t maxResults) {
 
 		{
 			std::lock_guard<std::mutex> lock(resultMutex);
-			if (results.empty())
-				break;
+			if (results.empty()) break;
 			result = std::move(results.front());
 			results.pop_front();
 		}
@@ -136,8 +126,7 @@ std::size_t Coprocessor::pump(std::size_t maxResults) {
 			handler = resultHandler;
 		}
 
-		if (handler)
-			handler(result);
+		if (handler) handler(result);
 		++drained;
 	}
 
@@ -158,14 +147,11 @@ bool Coprocessor::cancelTask(std::uint64_t taskId) {
 
 	{
 		std::lock_guard<std::mutex> lock(taskCancelMutex);
-		std::unordered_map<std::uint64_t, std::shared_ptr<std::atomic_bool>>::iterator cancelFlagIt =
-		    taskCancelFlags.find(taskId);
-		if (cancelFlagIt == taskCancelFlags.end())
-			return false;
+		std::unordered_map<std::uint64_t, std::shared_ptr<std::atomic_bool>>::iterator cancelFlagIt = taskCancelFlags.find(taskId);
+		if (cancelFlagIt == taskCancelFlags.end()) return false;
 		cancelFlag = cancelFlagIt->second;
 	}
-	if (cancelFlag != nullptr)
-		cancelFlag->store(true, std::memory_order_release);
+	if (cancelFlag != nullptr) cancelFlag->store(true, std::memory_order_release);
 	ioLane.cv.notify_all();
 	computeLane.cv.notify_all();
 	miniMapLane.cv.notify_all();
@@ -178,14 +164,12 @@ void Coprocessor::cancelPending() {
 
 	{
 		std::lock_guard<std::mutex> lock(taskCancelMutex);
-		for (auto & cancelEntry : taskCancelFlags)
-			if (cancelEntry.second != nullptr)
-				cancelEntry.second->store(true, std::memory_order_release);
+		for (auto &cancelEntry : taskCancelFlags)
+			if (cancelEntry.second != nullptr) cancelEntry.second->store(true, std::memory_order_release);
 	}
 
 	for (LaneState *lane : laneStates) {
-		if (lane->worker.joinable())
-			lane->worker.request_stop();
+		if (lane->worker.joinable()) lane->worker.request_stop();
 		{
 			std::lock_guard<std::mutex> lock(lane->mutex);
 			lane->queue.clear();
@@ -205,8 +189,7 @@ void Coprocessor::shutdown(bool drainResults) {
 	cancelPending();
 
 	auto joinLaneWorker = [](LaneState &lane) {
-		if (!lane.worker.joinable())
-			return;
+		if (!lane.worker.joinable()) return;
 		std::jthread joinedWorker = std::move(lane.worker);
 	};
 
@@ -249,10 +232,8 @@ void Coprocessor::workerLoop(LaneState &lane, std::stop_token stopToken) {
 		{
 			std::unique_lock<std::mutex> lock(lane.mutex);
 			lane.cv.wait(lock, stopToken, [&lane]() { return !lane.queue.empty(); });
-			if (stopToken.stop_requested() && lane.queue.empty())
-				break;
-			if (lane.queue.empty())
-				continue;
+			if (stopToken.stop_requested() && lane.queue.empty()) break;
+			if (lane.queue.empty()) continue;
 			request = std::move(lane.queue.front());
 			lane.queue.pop_front();
 		}
@@ -264,8 +245,7 @@ void Coprocessor::workerLoop(LaneState &lane, std::stop_token stopToken) {
 				result.status = TaskStatus::Cancelled;
 			} else if (request.fn) {
 				result = request.fn(request.task, stopToken);
-				if (result.task.id == 0)
-					result.task = request.task;
+				if (result.task.id == 0) result.task = request.task;
 			} else {
 				result.status = TaskStatus::Failed;
 				result.error = "No task function provided.";
@@ -280,12 +260,9 @@ void Coprocessor::workerLoop(LaneState &lane, std::stop_token stopToken) {
 			result.error = "Unknown coprocessor failure.";
 		}
 		finishedMicros = nowMicros();
-		if (startedMicros >= request.submittedMicros)
-			result.timing.queueMicros = startedMicros - request.submittedMicros;
-		if (finishedMicros >= startedMicros)
-			result.timing.runMicros = finishedMicros - startedMicros;
-		if (finishedMicros >= request.submittedMicros)
-			result.timing.totalMicros = finishedMicros - request.submittedMicros;
+		if (startedMicros >= request.submittedMicros) result.timing.queueMicros = startedMicros - request.submittedMicros;
+		if (finishedMicros >= startedMicros) result.timing.runMicros = finishedMicros - startedMicros;
+		if (finishedMicros >= request.submittedMicros) result.timing.totalMicros = finishedMicros - request.submittedMicros;
 
 		forgetTask(request.task.id);
 		enqueueResult(std::move(result));

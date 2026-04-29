@@ -61,20 +61,9 @@ struct MREditSetupSettings {
 	std::string miniMapMarkerGlyph;
 	std::string gutters;
 
-	MREditSetupSettings() noexcept
-	    : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false),
-	      eofCrLf(false), tabExpand(true), displayTabs(false), tabSize(8), leftMargin(1), rightMargin(78), formatRuler(false), wordWrap(true), indentStyle(),
-	      fileType(), binaryRecordLength(100), postLoadMacro(), preSaveMacro(), defaultPath(), formatLine(),
-	      backupMethod("BAK_FILE"), backupFrequency("FIRST_SAVE_ONLY"), backupExtension("bak"), backupDirectory(),
-	      autosaveInactivitySeconds(15), autosaveIntervalSeconds(180), backupFiles(true), showEofMarker(false),
-	      showEofMarkerEmoji(true), showLineNumbers(false), lineNumbersPosition("OFF"), lineNumZeroFill(false),
-	      persistentBlocks(true), codeFolding(false), codeFoldingPosition("OFF"), columnBlockMove(),
-	      defaultMode(), cursorStatusColor(), miniMapPosition("OFF"), miniMapWidth(4), miniMapMarkerGlyph("│"),
-	      gutters("LCM") {
+	MREditSetupSettings() noexcept : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false), eofCrLf(false), tabExpand(true), displayTabs(false), tabSize(8), leftMargin(1), rightMargin(78), formatRuler(false), wordWrap(true), indentStyle(), fileType(), binaryRecordLength(100), postLoadMacro(), preSaveMacro(), defaultPath(), formatLine(), backupMethod("BAK_FILE"), backupFrequency("FIRST_SAVE_ONLY"), backupExtension("bak"), backupDirectory(), autosaveInactivitySeconds(15), autosaveIntervalSeconds(180), backupFiles(true), showEofMarker(false), showEofMarkerEmoji(true), showLineNumbers(false), lineNumbersPosition("OFF"), lineNumZeroFill(false), persistentBlocks(true), codeFolding(false), codeFoldingPosition("OFF"), columnBlockMove(), defaultMode(), cursorStatusColor(), miniMapPosition("OFF"), miniMapWidth(4), miniMapMarkerGlyph("│"), gutters("LCM") {
 	}
 };
-
-
 
 enum class MREditSettingSection : unsigned char {
 	Text,
@@ -227,10 +216,7 @@ struct MRSearchDialogOptions {
 	bool restrictToMarkedBlock;
 	bool searchAllWindows;
 
-	MRSearchDialogOptions() noexcept
-	    : textType(MRSearchTextType::Literal), direction(MRSearchDirection::Forward),
-	      mode(MRSearchMode::StopFirst), caseSensitive(false), globalSearch(true),
-	      restrictToMarkedBlock(false), searchAllWindows(false) {
+	MRSearchDialogOptions() noexcept : textType(MRSearchTextType::Literal), direction(MRSearchDirection::Forward), mode(MRSearchMode::StopFirst), caseSensitive(false), globalSearch(true), restrictToMarkedBlock(false), searchAllWindows(false) {
 	}
 };
 
@@ -244,11 +230,7 @@ struct MRSarDialogOptions {
 	bool restrictToMarkedBlock;
 	bool searchAllWindows;
 
-	MRSarDialogOptions() noexcept
-	    : textType(MRSearchTextType::Literal), direction(MRSearchDirection::Forward),
-	      mode(MRSarMode::ReplaceFirst), leaveCursorAt(MRSarLeaveCursor::EndOfReplaceString),
-	      caseSensitive(false), globalSearch(true), restrictToMarkedBlock(false),
-	      searchAllWindows(false) {
+	MRSarDialogOptions() noexcept : textType(MRSearchTextType::Literal), direction(MRSearchDirection::Forward), mode(MRSarMode::ReplaceFirst), leaveCursorAt(MRSarLeaveCursor::EndOfReplaceString), caseSensitive(false), globalSearch(true), restrictToMarkedBlock(false), searchAllWindows(false) {
 	}
 };
 
@@ -261,9 +243,7 @@ struct MRMultiSearchDialogOptions {
 	std::string startingPath;
 	std::string searchText;
 
-	MRMultiSearchDialogOptions() noexcept
-	    : searchSubdirectories(true), caseSensitive(false), regularExpressions(true),
-	      searchFilesInMemory(true), filespec("*.*"), startingPath(), searchText() {
+	MRMultiSearchDialogOptions() noexcept : searchSubdirectories(true), caseSensitive(false), regularExpressions(true), searchFilesInMemory(true), filespec("*.*"), startingPath(), searchText() {
 	}
 };
 
@@ -278,10 +258,7 @@ struct MRMultiSarDialogOptions {
 	std::string searchText;
 	std::string replacementText;
 
-	MRMultiSarDialogOptions() noexcept
-	    : searchSubdirectories(true), caseSensitive(false), regularExpressions(true),
-	      searchFilesInMemory(true), keepFilesOpen(false), filespec("*.*"), startingPath(), searchText(),
-	      replacementText() {
+	MRMultiSarDialogOptions() noexcept : searchSubdirectories(true), caseSensitive(false), regularExpressions(true), searchFilesInMemory(true), keepFilesOpen(false), filespec("*.*"), startingPath(), searchText(), replacementText() {
 	}
 };
 
@@ -365,8 +342,7 @@ enum class MRDialogHistoryScope : unsigned char {
 	Count
 };
 
-void initRememberedLoadDialogPath(MRDialogHistoryScope scope, char *buffer, std::size_t bufferSize,
-                                  const char *pattern);
+void initRememberedLoadDialogPath(MRDialogHistoryScope scope, char *buffer, std::size_t bufferSize, const char *pattern);
 void rememberLoadDialogPath(MRDialogHistoryScope scope, const char *path);
 void forgetLoadDialogPath(MRDialogHistoryScope scope, const char *path);
 [[nodiscard]] std::string configuredLastFileDialogFilePath(MRDialogHistoryScope scope);
@@ -380,16 +356,13 @@ void rememberLoadDialogPath(const char *path);
 [[nodiscard]] MREditSetupSettings configuredEditSetupSettings();
 [[nodiscard]] MRColorSetupSettings configuredColorSetupSettings();
 bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::string *errorMessage = nullptr);
-bool applyConfiguredEditSetupValue(const std::string &key, const std::string &value,
-                                   std::string *errorMessage = nullptr);
-bool applyConfiguredColorSetupValue(const std::string &key, const std::string &value,
-                                    std::string *errorMessage = nullptr);
+bool applyConfiguredEditSetupValue(const std::string &key, const std::string &value, std::string *errorMessage = nullptr);
+bool applyConfiguredColorSetupValue(const std::string &key, const std::string &value, std::string *errorMessage = nullptr);
 bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &value);
 const char *colorSetupGroupTitle(MRColorSetupGroup group);
 const char *colorSetupGroupKey(MRColorSetupGroup group);
 const MRColorSetupItem *colorSetupGroupItems(MRColorSetupGroup group, std::size_t &count);
-bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned char *values,
-                                        std::size_t count, std::string *errorMessage = nullptr);
+bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned char *values, std::size_t count, std::string *errorMessage = nullptr);
 void configuredColorSetupGroupValues(MRColorSetupGroup group, unsigned char *values, std::size_t count);
 [[nodiscard]] std::string configuredColorThemeFilePath();
 [[nodiscard]] std::string configuredColorThemeDisplayName();
@@ -399,17 +372,13 @@ bool setConfiguredColorThemeFilePath(const std::string &path, std::string *error
 bool writeColorThemeFile(const std::string &themeUri, std::string *errorMessage = nullptr);
 bool ensureColorThemeFileExists(const std::string &themeUri, std::string *errorMessage = nullptr);
 bool loadColorThemeFile(const std::string &themeUri, std::string *errorMessage = nullptr);
-bool loadWindowColorThemeGroupValues(const std::string &themeUri,
-                                     std::array<unsigned char, MRColorSetupSettings::kWindowCount> &outValues,
-                                     std::string *errorMessage = nullptr);
+bool loadWindowColorThemeGroupValues(const std::string &themeUri, std::array<unsigned char, MRColorSetupSettings::kWindowCount> &outValues, std::string *errorMessage = nullptr);
 
 [[nodiscard]] MRSettingsKeyClass classifySettingsKey(std::string_view key);
 [[nodiscard]] bool isCanonicalSerializedSettingsKey(std::string_view key);
 [[nodiscard]] std::size_t canonicalSerializedSettingsKeyCount();
-bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths &paths,
-                                  std::string *errorMessage = nullptr);
-bool applyConfiguredSettingsAssignment(const std::string &key, const std::string &value, MRSetupPaths &paths,
-                                       std::string *errorMessage = nullptr);
+bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths &paths, std::string *errorMessage = nullptr);
+bool applyConfiguredSettingsAssignment(const std::string &key, const std::string &value, MRSetupPaths &paths, std::string *errorMessage = nullptr);
 
 const MREditSettingDescriptor *editSettingDescriptors(std::size_t &count);
 [[nodiscard]] const MREditSettingDescriptor *findEditSettingDescriptorByKey(std::string_view key);
@@ -419,40 +388,23 @@ int clampEditFormatTabSize(int tabSize) noexcept;
 int clampEditFormatRightMargin(int rightMargin) noexcept;
 int clampEditFormatLeftMargin(int leftMargin, int rightMargin) noexcept;
 [[nodiscard]] std::string defaultEditFormatLineForTabSize(int tabSize, int leftMargin, int rightMargin);
-bool normalizeEditFormatLine(const std::string &value, int tabSize, int fallbackLeftMargin,
-                             int fallbackRightMargin, std::string &outValue,
-                             int *outLeftMargin = nullptr, int *outRightMargin = nullptr,
-                             std::string *errorMessage = nullptr);
-[[nodiscard]] std::string synchronizeEditFormatLineMargins(const std::string &value, int leftMargin,
-                                                           int rightMargin, int tabSize);
-bool editFormatLineAtColumn(const std::string &value, int tabSize, int leftMargin, int rightMargin,
-                            int column, char symbol, std::string &outValue,
-                            int *outLeftMargin = nullptr, int *outRightMargin = nullptr,
-                            std::string *errorMessage = nullptr);
-MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults,
-                                           const MREditSetupOverrides &overrides);
+bool normalizeEditFormatLine(const std::string &value, int tabSize, int fallbackLeftMargin, int fallbackRightMargin, std::string &outValue, int *outLeftMargin = nullptr, int *outRightMargin = nullptr, std::string *errorMessage = nullptr);
+[[nodiscard]] std::string synchronizeEditFormatLineMargins(const std::string &value, int leftMargin, int rightMargin, int tabSize);
+bool editFormatLineAtColumn(const std::string &value, int tabSize, int leftMargin, int rightMargin, int column, char symbol, std::string &outValue, int *outLeftMargin = nullptr, int *outRightMargin = nullptr, std::string *errorMessage = nullptr);
+MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults, const MREditSetupOverrides &overrides);
 const std::vector<MREditExtensionProfile> &configuredEditExtensionProfiles();
-bool setConfiguredEditExtensionProfiles(const std::vector<MREditExtensionProfile> &profiles,
-                                        std::string *errorMessage = nullptr);
+bool setConfiguredEditExtensionProfiles(const std::vector<MREditExtensionProfile> &profiles, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string configuredDefaultProfileDescription();
-bool setConfiguredDefaultProfileDescription(const std::string &value,
-                                            std::string *errorMessage = nullptr);
+bool setConfiguredDefaultProfileDescription(const std::string &value, std::string *errorMessage = nullptr);
 const std::vector<MRKeymapProfile> &configuredKeymapProfiles();
-bool setConfiguredKeymapProfiles(const std::vector<MRKeymapProfile> &profiles,
-                                 std::string *errorMessage = nullptr);
+bool setConfiguredKeymapProfiles(const std::vector<MRKeymapProfile> &profiles, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string configuredKeymapFilePath();
-bool setConfiguredKeymapFilePath(const std::string &path,
-                                 std::string *errorMessage = nullptr);
+bool setConfiguredKeymapFilePath(const std::string &path, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string configuredActiveKeymapProfile();
-bool setConfiguredActiveKeymapProfile(const std::string &value,
-                                      std::string *errorMessage = nullptr);
-bool applyConfiguredEditExtensionProfileDirective(const std::string &operation, const std::string &profileId,
-                                                  const std::string &arg3, const std::string &arg4,
-                                                  std::string *errorMessage = nullptr);
-bool effectiveEditSetupSettingsForPath(const std::string &path, MREditSetupSettings &out,
-                                       std::string *matchedProfileName = nullptr);
-bool effectiveEditWindowColorThemePathForPath(const std::string &path, std::string &themeUri,
-                                              std::string *matchedProfileName = nullptr);
+bool setConfiguredActiveKeymapProfile(const std::string &value, std::string *errorMessage = nullptr);
+bool applyConfiguredEditExtensionProfileDirective(const std::string &operation, const std::string &profileId, const std::string &arg3, const std::string &arg4, std::string *errorMessage = nullptr);
+bool effectiveEditSetupSettingsForPath(const std::string &path, MREditSetupSettings &out, std::string *matchedProfileName = nullptr);
+bool effectiveEditWindowColorThemePathForPath(const std::string &path, std::string &themeUri, std::string *matchedProfileName = nullptr);
 [[nodiscard]] std::string formatEditSetupBoolean(bool value);
 std::vector<std::string> configuredDefaultExtensionList();
 [[nodiscard]] bool configuredDefaultInsertMode();
@@ -470,16 +422,13 @@ bool setConfiguredWindowManager(bool enabled, std::string *errorMessage = nullpt
 [[nodiscard]] bool configuredWindowManager();
 bool setConfiguredMenulineMessages(bool enabled, std::string *errorMessage = nullptr);
 [[nodiscard]] bool configuredMenulineMessages();
-bool setConfiguredSearchDialogOptions(const MRSearchDialogOptions &options,
-                                      std::string *errorMessage = nullptr);
+bool setConfiguredSearchDialogOptions(const MRSearchDialogOptions &options, std::string *errorMessage = nullptr);
 [[nodiscard]] MRSearchDialogOptions configuredSearchDialogOptions();
 bool setConfiguredSarDialogOptions(const MRSarDialogOptions &options, std::string *errorMessage = nullptr);
 [[nodiscard]] MRSarDialogOptions configuredSarDialogOptions();
-bool setConfiguredMultiSearchDialogOptions(const MRMultiSearchDialogOptions &options,
-                                           std::string *errorMessage = nullptr);
+bool setConfiguredMultiSearchDialogOptions(const MRMultiSearchDialogOptions &options, std::string *errorMessage = nullptr);
 [[nodiscard]] MRMultiSearchDialogOptions configuredMultiSearchDialogOptions();
-bool setConfiguredMultiSarDialogOptions(const MRMultiSarDialogOptions &options,
-                                        std::string *errorMessage = nullptr);
+bool setConfiguredMultiSarDialogOptions(const MRMultiSarDialogOptions &options, std::string *errorMessage = nullptr);
 [[nodiscard]] MRMultiSarDialogOptions configuredMultiSarDialogOptions();
 void configuredMultiFilespecHistoryEntries(std::vector<std::string> &outValues);
 void configuredMultiPathHistoryEntries(std::vector<std::string> &outValues);
@@ -496,13 +445,11 @@ bool setConfiguredAutoloadWorkspace(bool enabled, std::string *errorMessage = nu
 bool setConfiguredLogHandling(MRLogHandling handling, std::string *errorMessage = nullptr);
 [[nodiscard]] MRLogHandling configuredLogHandling();
 void configuredAutoexecMacroEntries(std::vector<std::string> &outValues);
-bool setConfiguredAutoexecMacroEntries(const std::vector<std::string> &values,
-                                       std::string *errorMessage = nullptr);
+bool setConfiguredAutoexecMacroEntries(const std::vector<std::string> &values, std::string *errorMessage = nullptr);
 bool addConfiguredAutoexecMacroEntry(const std::string &value, std::string *errorMessage = nullptr);
 void clearConfiguredAutoexecMacroDiagnostics();
 void rememberConfiguredAutoexecMacroDiagnostic(const std::string &fileName, const std::string &errorText);
-[[nodiscard]] bool configuredAutoexecMacroDiagnosticForFile(const std::string &fileName,
-                                                            std::string &errorText);
+[[nodiscard]] bool configuredAutoexecMacroDiagnosticForFile(const std::string &fileName, std::string &errorText);
 bool setConfiguredLastFileDialogPath(const std::string &path, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string configuredLastFileDialogPath();
 struct MRSettingsWriteReport {
@@ -516,10 +463,8 @@ struct MRSettingsWriteReport {
 };
 
 [[nodiscard]] std::string buildSettingsMacroSource(const MRSetupPaths &paths);
-bool persistConfiguredSettingsSnapshot(std::string *errorMessage = nullptr,
-                                       MRSettingsWriteReport *report = nullptr);
-bool writeSettingsMacroFile(const MRSetupPaths &paths, std::string *errorMessage = nullptr,
-                            MRSettingsWriteReport *report = nullptr);
+bool persistConfiguredSettingsSnapshot(std::string *errorMessage = nullptr, MRSettingsWriteReport *report = nullptr);
+bool writeSettingsMacroFile(const MRSetupPaths &paths, std::string *errorMessage = nullptr, MRSettingsWriteReport *report = nullptr);
 bool ensureSettingsMacroFileExists(const std::string &settingsMacroUri, std::string *errorMessage = nullptr);
 bool validateSettingsMacroFilePath(const std::string &path, std::string *errorMessage = nullptr);
 bool setConfiguredSettingsMacroFilePath(const std::string &path, std::string *errorMessage = nullptr);

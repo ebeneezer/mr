@@ -7,27 +7,23 @@
 
 #include "../config/MRDialogPaths.hpp"
 
-
 namespace {
 constexpr unsigned char kPaletteDialogSelector = 58;
 
 TAttrPair configuredPaletteSlotOr(TView *view, unsigned char paletteSlot, ushort fallbackColorIndex) {
 	unsigned char biosAttr = 0;
 
-	if (configuredColorSlotOverride(paletteSlot, biosAttr))
-		return TAttrPair(biosAttr);
+	if (configuredColorSlotOverride(paletteSlot, biosAttr)) return TAttrPair(biosAttr);
 	return view != nullptr ? view->getColor(fallbackColorIndex) : TAttrPair(0x70);
 }
 } // namespace
 
-MRNumericSlider::MRNumericSlider(const TRect &bounds, int32_t aMin, int32_t aMax, int32_t aValue, int32_t aStep, int32_t aPageStep, Format aFormat, ushort aChangedCmd) noexcept
-   : TView(bounds), minValue(std::min(aMin, aMax)), maxValue(std::max(aMin, aMax)), value(0), step(absOrOne(aStep)), pageStep(aPageStep ? absOrOne(aPageStep) : absOrOne(aStep) * 10), textWidth(1), format(aFormat), changedCmd(aChangedCmd) {
-	
+MRNumericSlider::MRNumericSlider(const TRect &bounds, int32_t aMin, int32_t aMax, int32_t aValue, int32_t aStep, int32_t aPageStep, Format aFormat, ushort aChangedCmd) noexcept : TView(bounds), minValue(std::min(aMin, aMax)), maxValue(std::max(aMin, aMax)), value(0), step(absOrOne(aStep)), pageStep(aPageStep ? absOrOne(aPageStep) : absOrOne(aStep) * 10), textWidth(1), format(aFormat), changedCmd(aChangedCmd) {
+
 	options |= ofSelectable;
 	eventMask |= evMouseDown | evMouseWheel;
 	recalcMetrics();
 	setValueInternal(aValue, False, False);
-
 }
 
 void MRNumericSlider::draw() {
@@ -128,20 +124,17 @@ ushort MRNumericSlider::dataSize() {
 }
 
 void MRNumericSlider::getData(void *rec) {
-	if (rec)
-		*static_cast<int32_t *>(rec) = value;
+	if (rec) *static_cast<int32_t *>(rec) = value;
 }
 
 void MRNumericSlider::setData(void *rec) {
-	if (rec)
-		setValueInternal(*static_cast<const int32_t *>(rec), True, False);
+	if (rec) setValueInternal(*static_cast<const int32_t *>(rec), True, False);
 }
 
 void MRNumericSlider::setState(ushort aState, Boolean enable) {
 	const ushort old = state;
 	TView::setState(aState, enable);
-	if (old != state && (aState & (sfFocused | sfDisabled | sfSelected | sfActive)))
-		drawView();
+	if (old != state && (aState & (sfFocused | sfDisabled | sfSelected | sfActive))) drawView();
 }
 
 TColorAttr MRNumericSlider::mapColor(uchar index) {
@@ -178,8 +171,7 @@ void MRNumericSlider::setValue(int32_t aValue) noexcept {
 }
 
 void MRNumericSlider::setRange(int32_t aMin, int32_t aMax) noexcept {
-	if (aMin > aMax)
-		std::swap(aMin, aMax);
+	if (aMin > aMax) std::swap(aMin, aMax);
 	minValue = aMin;
 	maxValue = aMax;
 	recalcMetrics();
@@ -216,8 +208,7 @@ int MRNumericSlider::trackSpan() const noexcept {
 
 int MRNumericSlider::handlePosFromValue(int32_t v) const noexcept {
 	const int span = trackSpan();
-	if (span <= 0 || maxValue <= minValue)
-		return 0;
+	if (span <= 0 || maxValue <= minValue) return 0;
 
 	const int64_t num = int64_t(v - minValue) * span;
 	const int64_t den = int64_t(maxValue - minValue);
@@ -226,8 +217,7 @@ int MRNumericSlider::handlePosFromValue(int32_t v) const noexcept {
 
 int32_t MRNumericSlider::valueFromHandlePos(int pos) const noexcept {
 	const int span = trackSpan();
-	if (span <= 0 || maxValue <= minValue)
-		return minValue;
+	if (span <= 0 || maxValue <= minValue) return minValue;
 
 	pos = std::clamp(pos, 0, span);
 	const int64_t num = int64_t(pos) * (maxValue - minValue);
@@ -251,11 +241,9 @@ int MRNumericSlider::calcTextWidth() const noexcept {
 }
 
 void MRNumericSlider::formatValue(char *dst, size_t dstSize, int32_t v) const noexcept {
-	if (!dst || dstSize == 0)
-		return;
+	if (!dst || dstSize == 0) return;
 
-	if (format == fmtPercent)
-		std::snprintf(dst, dstSize, "%d%%", (int)v);
+	if (format == fmtPercent) std::snprintf(dst, dstSize, "%d%%", (int)v);
 	else if (minValue >= 0)
 		std::snprintf(dst, dstSize, "%0*d", textWidth ? textWidth : 1, (int)v);
 	else
@@ -266,10 +254,8 @@ void MRNumericSlider::setValueInternal(int32_t aValue, Boolean redraw, Boolean n
 	const int32_t nv = clamp64(aValue, minValue, maxValue);
 	const Boolean changed = nv != value;
 	value = nv;
-	if (redraw)
-		drawView();
-	if (changed && notify)
-		notifyChanged();
+	if (redraw) drawView();
+	if (changed && notify) notifyChanged();
 }
 
 void MRNumericSlider::changeBy(int32_t delta) noexcept {
@@ -282,20 +268,17 @@ void MRNumericSlider::drag(TEvent &event) noexcept {
 	TPoint p = makeLocal(event.mouse.where);
 	int dragOffset = hw / 2;
 
-	if (p.x >= hp && p.x < hp + hw)
-		dragOffset = p.x - hp;
+	if (p.x >= hp && p.x < hp + hw) dragOffset = p.x - hp;
 	else
 		setValueInternal(valueFromMouseX(p.x, dragOffset), True, True);
 
 	while (mouseEvent(event, evMouseMove | evMouseAuto | evMouseUp)) {
-		if (event.what == evMouseUp)
-			break;
+		if (event.what == evMouseUp) break;
 		p = makeLocal(event.mouse.where);
 		setValueInternal(valueFromMouseX(p.x, dragOffset), True, True);
 	}
 }
 
 void MRNumericSlider::notifyChanged() noexcept {
-	if (owner)
-		message(owner, evBroadcast, changedCmd, this);
+	if (owner) message(owner, evBroadcast, changedCmd, this);
 }
