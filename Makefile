@@ -117,8 +117,10 @@ CXX_SOURCES = \
 	mrmac/MRVM.cpp \
 	ui/MRFrame.cpp \
 	ui/MRColumnListView.cpp \
+	ui/MRFileEditor.cpp \
 	ui/MRMenuBar.cpp \
 	ui/MRMessageLineController.cpp \
+	ui/MRScopedHistoryDialogs.cpp \
 	ui/MRWindowManager.cpp \
 	ui/MRNumericSlider.cpp \
 	ui/MRPalette.cpp \
@@ -359,8 +361,10 @@ dialogs/MRFileInformation.o: dialogs/MRFileInformation.cpp dialogs/MRFileInforma
 dialogs/MRMacroFile.o: dialogs/MRMacroFile.cpp dialogs/MRMacroFile.hpp mrmac/MRMacroRunner.hpp
 dialogs/MRFileExtensionEditorSettings.o: dialogs/MRFileExtensionEditorSettings.cpp dialogs/MRFileExtensionEditorSettingsInternal.hpp ui/MRNumericSlider.hpp dialogs/MRSetupCommon.hpp
 dialogs/MRFileExtensionProfilesSupport.o: dialogs/MRFileExtensionProfilesSupport.cpp dialogs/MRFileExtensionProfilesSupport.hpp dialogs/MRFileExtensionEditorSettingsInternal.hpp dialogs/MRSetup.hpp config/MRDialogPaths.hpp app/MREditorApp.hpp
-dialogs/MRSetup.o: dialogs/MRSetup.cpp dialogs/MRSetup.hpp dialogs/MRSetupCommon.hpp app/MRCommands.hpp app/MREditorApp.hpp config/MRDialogPaths.hpp ui/MRWindowSupport.hpp
+dialogs/MRSetup.o: dialogs/MRSetup.cpp dialogs/MRSetup.hpp dialogs/MRSetupCommon.hpp app/MRCommands.hpp app/MREditorApp.hpp config/MRDialogPaths.hpp ui/MRScopedHistoryDialogs.hpp ui/MRWindowSupport.hpp
 dialogs/MRWindowList.o: dialogs/MRWindowList.cpp dialogs/MRWindowList.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp
+ui/MRFileEditor.o: ui/MRFileEditor.cpp ui/MRFileEditor.hpp
+ui/MRScopedHistoryDialogs.o: ui/MRScopedHistoryDialogs.cpp ui/MRScopedHistoryDialogs.hpp config/MRDialogPaths.hpp ui/MRFrame.hpp
 ui/MRNumericSlider.o: ui/MRNumericSlider.cpp ui/MRNumericSlider.hpp
 mrmac/MRMacroRunner.o: mrmac/MRMacroRunner.cpp mrmac/MRMacroRunner.hpp mrmac/mrmac.h mrmac/MRVM.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 app/commands/MRWindowCommands.o: app/commands/MRWindowCommands.cpp app/commands/MRWindowCommands.hpp app/commands/MRFileCommands.hpp config/MRDialogPaths.hpp coprocessor/MRPerformance.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp ui/MRMessageLineController.hpp

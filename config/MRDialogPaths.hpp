@@ -15,6 +15,8 @@ struct MRSetupPaths {
 	std::string helpUri;
 	std::string tempPath;
 	std::string shellUri;
+
+	auto operator==(const MRSetupPaths &) const noexcept -> bool = default;
 };
 
 struct MREditSetupSettings {
@@ -63,6 +65,8 @@ struct MREditSetupSettings {
 
 	MREditSetupSettings() noexcept : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false), eofCrLf(false), tabExpand(true), displayTabs(false), tabSize(8), leftMargin(1), rightMargin(78), formatRuler(false), wordWrap(true), indentStyle(), fileType(), binaryRecordLength(100), postLoadMacro(), preSaveMacro(), defaultPath(), formatLine(), backupMethod("BAK_FILE"), backupFrequency("FIRST_SAVE_ONLY"), backupExtension("bak"), backupDirectory(), autosaveInactivitySeconds(15), autosaveIntervalSeconds(180), backupFiles(true), showEofMarker(false), showEofMarkerEmoji(true), showLineNumbers(false), lineNumbersPosition("OFF"), lineNumZeroFill(false), persistentBlocks(true), codeFolding(false), codeFoldingPosition("OFF"), columnBlockMove(), defaultMode(), cursorStatusColor(), miniMapPosition("OFF"), miniMapWidth(4), miniMapMarkerGlyph("│"), gutters("LCM") {
 	}
+
+	auto operator==(const MREditSetupSettings &) const noexcept -> bool = default;
 };
 
 enum class MREditSettingSection : unsigned char {
@@ -146,6 +150,8 @@ struct MREditSetupOverrides {
 
 	MREditSetupOverrides() noexcept : values(), mask(kOvNone) {
 	}
+
+	auto operator==(const MREditSetupOverrides &) const noexcept -> bool = default;
 };
 
 struct MREditExtensionProfile {
@@ -154,6 +160,8 @@ struct MREditExtensionProfile {
 	std::vector<std::string> extensions;
 	std::string windowColorThemeUri;
 	MREditSetupOverrides overrides;
+
+	auto operator==(const MREditExtensionProfile &) const noexcept -> bool = default;
 };
 
 enum class MRColorSetupGroup : unsigned char {
@@ -168,6 +176,11 @@ enum class MRLogHandling : unsigned char {
 	Volatile = 0,
 	Persist = 1,
 	Journalctl = 2
+};
+
+enum class MRCursorBehaviour : unsigned char {
+	BoundToText = 0,
+	FreeMovement = 1
 };
 
 enum class MRSettingsKeyClass : unsigned char {
@@ -218,6 +231,8 @@ struct MRSearchDialogOptions {
 
 	MRSearchDialogOptions() noexcept : textType(MRSearchTextType::Literal), direction(MRSearchDirection::Forward), mode(MRSearchMode::StopFirst), caseSensitive(false), globalSearch(true), restrictToMarkedBlock(false), searchAllWindows(false) {
 	}
+
+	auto operator==(const MRSearchDialogOptions &) const noexcept -> bool = default;
 };
 
 struct MRSarDialogOptions {
@@ -232,6 +247,8 @@ struct MRSarDialogOptions {
 
 	MRSarDialogOptions() noexcept : textType(MRSearchTextType::Literal), direction(MRSearchDirection::Forward), mode(MRSarMode::ReplaceFirst), leaveCursorAt(MRSarLeaveCursor::EndOfReplaceString), caseSensitive(false), globalSearch(true), restrictToMarkedBlock(false), searchAllWindows(false) {
 	}
+
+	auto operator==(const MRSarDialogOptions &) const noexcept -> bool = default;
 };
 
 struct MRMultiSearchDialogOptions {
@@ -245,6 +262,8 @@ struct MRMultiSearchDialogOptions {
 
 	MRMultiSearchDialogOptions() noexcept : searchSubdirectories(true), caseSensitive(false), regularExpressions(true), searchFilesInMemory(true), filespec("*.*"), startingPath(), searchText() {
 	}
+
+	auto operator==(const MRMultiSearchDialogOptions &) const noexcept -> bool = default;
 };
 
 struct MRMultiSarDialogOptions {
@@ -260,6 +279,8 @@ struct MRMultiSarDialogOptions {
 
 	MRMultiSarDialogOptions() noexcept : searchSubdirectories(true), caseSensitive(false), regularExpressions(true), searchFilesInMemory(true), keepFilesOpen(false), filespec("*.*"), startingPath(), searchText(), replacementText() {
 	}
+
+	auto operator==(const MRMultiSarDialogOptions &) const noexcept -> bool = default;
 };
 
 struct MRColorSetupItem {
@@ -306,6 +327,8 @@ struct MRColorSetupSettings {
 
 	MRColorSetupSettings() noexcept : windowColors(), menuDialogColors(), helpColors(), otherColors(), miniMapColors() {
 	}
+
+	auto operator==(const MRColorSetupSettings &) const noexcept -> bool = default;
 };
 
 enum : unsigned char {
@@ -347,6 +370,8 @@ void rememberLoadDialogPath(MRDialogHistoryScope scope, const char *path);
 void forgetLoadDialogPath(MRDialogHistoryScope scope, const char *path);
 [[nodiscard]] std::string configuredLastFileDialogFilePath(MRDialogHistoryScope scope);
 [[nodiscard]] std::string configuredLastFileDialogPath(MRDialogHistoryScope scope);
+void configuredScopedDialogFileHistoryEntries(MRDialogHistoryScope scope, std::vector<std::string> &outValues);
+void configuredScopedDialogPathHistoryEntries(MRDialogHistoryScope scope, std::vector<std::string> &outValues);
 void initRememberedLoadDialogPath(char *buffer, std::size_t bufferSize, const char *pattern);
 void rememberLoadDialogPath(const char *path);
 [[nodiscard]] std::string normalizeConfiguredPathInput(std::string_view input);
@@ -444,6 +469,8 @@ bool setConfiguredVirtualDesktops(int count, std::string *errorMessage = nullptr
 [[nodiscard]] int configuredVirtualDesktops();
 bool setConfiguredCyclicVirtualDesktops(bool enabled, std::string *errorMessage = nullptr);
 [[nodiscard]] bool configuredCyclicVirtualDesktops();
+bool setConfiguredCursorBehaviour(MRCursorBehaviour behaviour, std::string *errorMessage = nullptr);
+[[nodiscard]] MRCursorBehaviour configuredCursorBehaviour();
 bool setConfiguredCursorPositionMarker(const std::string &value, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string configuredCursorPositionMarker();
 bool setConfiguredAutoloadWorkspace(bool enabled, std::string *errorMessage = nullptr);
@@ -469,6 +496,8 @@ struct MRSettingsWriteReport {
 };
 
 [[nodiscard]] std::string buildSettingsMacroSource(const MRSetupPaths &paths);
+[[nodiscard]] bool configuredSettingsDirty();
+void clearConfiguredSettingsDirty();
 bool persistConfiguredSettingsSnapshot(std::string *errorMessage = nullptr, MRSettingsWriteReport *report = nullptr);
 bool writeSettingsMacroFile(const MRSetupPaths &paths, std::string *errorMessage = nullptr, MRSettingsWriteReport *report = nullptr);
 bool ensureSettingsMacroFileExists(const std::string &settingsMacroUri, std::string *errorMessage = nullptr);

@@ -41,12 +41,16 @@ std::string summarizeConfiguredKeymapsForLog(const std::vector<MRKeymapProfile> 
 struct MRDialogHistoryEntry {
 	std::string value;
 	long long epoch = 0;
+
+	auto operator==(const MRDialogHistoryEntry &) const noexcept -> bool = default;
 };
 
 struct MRScopedDialogHistoryState {
 	std::string lastPath;
 	std::vector<MRDialogHistoryEntry> pathHistory;
 	std::vector<MRDialogHistoryEntry> fileHistory;
+
+	auto operator==(const MRScopedDialogHistoryState &) const noexcept -> bool = default;
 };
 
 struct MRDialogHistoryScopeSpec {
@@ -66,6 +70,7 @@ static MRMultiSearchDialogOptions g_multiSearchDialogOptions;
 static MRMultiSarDialogOptions g_multiSarDialogOptions;
 static int g_virtualDesktops = 1;
 static bool g_cyclicVirtualDesktops = false;
+static MRCursorBehaviour g_cursorBehaviour = MRCursorBehaviour::BoundToText;
 static std::string g_cursorPositionMarker = "R:C";
 static bool g_autoloadWorkspace = false;
 static MRLogHandling g_logHandling = MRLogHandling::Volatile;
@@ -166,6 +171,15 @@ int &configuredFileHistoryLimit() {
 long long &configuredHistoryEpochCounter() {
 	static long long value = 0;
 	return value;
+}
+
+bool &configuredSettingsDirtyFlag() {
+	static bool value = false;
+	return value;
+}
+
+void markConfiguredSettingsDirty() {
+	configuredSettingsDirtyFlag() = true;
 }
 
 std::string &configuredSettingsMacroFile() {
@@ -816,6 +830,8 @@ static const char *const kSarLeaveCursorStart = "START_OF_REPLACE_STRING";
 static const char *const kLogHandlingVolatile = "VOLATILE";
 static const char *const kLogHandlingPersist = "PERSIST";
 static const char *const kLogHandlingJournalctl = "JOURNALCTL";
+static const char *const kCursorBehaviourBoundToText = "BOUND_TO_TEXT";
+static const char *const kCursorBehaviourFreeMovement = "FREE_MOVEMENT";
 static const char *const kDialogLastPathKey = "DIALOG_LAST_PATH";
 static const char *const kDialogPathHistoryKey = "DIALOG_PATH_HISTORY";
 static const char *const kDialogFileHistoryKey = "DIALOG_FILE_HISTORY";
@@ -873,6 +889,7 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"MULTI_PATH_HISTORY", MRSettingsKeyClass::Global, false},
     {"VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
     {"CYCLIC_VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
+    {"CURSOR_BEHAVIOUR", MRSettingsKeyClass::Global, true},
     {"CURSOR_POSITION_MARKER", MRSettingsKeyClass::Global, true},
     {"AUTOLOAD_WORKSPACE", MRSettingsKeyClass::Global, true},
     {"LOG_HANDLING", MRSettingsKeyClass::Global, true},
@@ -1453,6 +1470,26 @@ std::string formatLogHandlingLiteral(MRLogHandling handling) {
 			return kLogHandlingJournalctl;
 	}
 	return kLogHandlingVolatile;
+}
+
+bool parseCursorBehaviourLiteral(const std::string &value, MRCursorBehaviour &outValue, std::string *errorMessage) {
+	const std::string upper = upperAscii(trimAscii(value));
+
+	if (upper == kCursorBehaviourBoundToText || upper == "BOUND") {
+		outValue = MRCursorBehaviour::BoundToText;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	if (upper == kCursorBehaviourFreeMovement || upper == "FREE") {
+		outValue = MRCursorBehaviour::FreeMovement;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	return setError(errorMessage, "CURSOR_BEHAVIOUR must be BOUND_TO_TEXT or FREE_MOVEMENT.");
+}
+
+std::string formatCursorBehaviourLiteral(MRCursorBehaviour behaviour) {
+	return behaviour == MRCursorBehaviour::FreeMovement ? kCursorBehaviourFreeMovement : kCursorBehaviourBoundToText;
 }
 
 std::string canonicalBooleanLiteral(bool value) {
@@ -2737,6 +2774,7 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredSarDialogOptions(MRSarDialogOptions(), errorMessage)) return false;
 	if (!setConfiguredMultiSearchDialogOptions(MRMultiSearchDialogOptions(), errorMessage)) return false;
 	if (!setConfiguredMultiSarDialogOptions(MRMultiSarDialogOptions(), errorMessage)) return false;
+	if (!setConfiguredCursorBehaviour(MRCursorBehaviour::BoundToText, errorMessage)) return false;
 	if (!setConfiguredCursorPositionMarker("R:C", errorMessage)) return false;
 	g_logHandling = MRLogHandling::Volatile;
 	configuredAutoexecMacroStorage().clear();
@@ -2758,6 +2796,7 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	configuredMultiFilespecHistoryStorage().clear();
 	configuredMultiPathHistoryStorage().clear();
 	configuredHistoryEpochCounter() = std::max(static_cast<long long>(0), static_cast<long long>(std::time(nullptr)));
+	clearConfiguredSettingsDirty();
 	paths.settingsMacroUri = configuredSettingsMacroFilePath();
 	paths.macroPath = configuredMacroDirectoryPath();
 	paths.helpUri = configuredHelpFilePath();
@@ -3005,6 +3044,11 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
 				return setConfiguredCyclicVirtualDesktops(parsed, errorMessage);
 			}
+			if (upper == "CURSOR_BEHAVIOUR") {
+				MRCursorBehaviour behaviour = MRCursorBehaviour::BoundToText;
+				if (!parseCursorBehaviourLiteral(value, behaviour, errorMessage)) return false;
+				return setConfiguredCursorBehaviour(behaviour, errorMessage);
+			}
 			if (upper == "CURSOR_POSITION_MARKER") return setConfiguredCursorPositionMarker(value, errorMessage);
 			if (upper == "AUTOLOAD_WORKSPACE") {
 				bool parsed = false;
@@ -3176,6 +3220,7 @@ const std::vector<MREditExtensionProfile> &configuredEditExtensionProfiles() {
 
 bool setConfiguredEditExtensionProfiles(const std::vector<MREditExtensionProfile> &profiles, std::string *errorMessage) {
 	std::vector<MREditExtensionProfile> normalized = profiles;
+	const std::vector<MREditExtensionProfile> previous = configuredEditProfiles();
 
 	for (auto &profile : normalized) {
 		profile.id = canonicalEditProfileId(profile.id);
@@ -3186,6 +3231,7 @@ bool setConfiguredEditExtensionProfiles(const std::vector<MREditExtensionProfile
 	}
 	if (!validateNormalizedEditProfiles(normalized, errorMessage)) return false;
 	configuredEditProfiles() = normalized;
+	if (previous != normalized) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -3195,7 +3241,12 @@ std::string configuredDefaultProfileDescription() {
 }
 
 bool setConfiguredDefaultProfileDescription(const std::string &value, std::string *errorMessage) {
-	configuredDefaultProfileDescriptionValue() = trimAscii(value);
+	const std::string normalized = trimAscii(value);
+
+	if (configuredDefaultProfileDescriptionValue() != normalized) {
+		configuredDefaultProfileDescriptionValue() = normalized;
+		markConfiguredSettingsDirty();
+	}
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -3206,6 +3257,8 @@ const std::vector<MRKeymapProfile> &configuredKeymapProfiles() {
 
 bool setConfiguredKeymapProfiles(const std::vector<MRKeymapProfile> &profiles, std::string *errorMessage) {
 	std::vector<MRKeymapProfile> normalized = profiles;
+	const std::vector<MRKeymapProfile> previousProfiles = configuredKeymapProfilesValue();
+	const std::string previousActive = configuredActiveKeymapProfileValue();
 	bool hasDefault = false;
 	std::string runtimeError;
 
@@ -3233,6 +3286,7 @@ bool setConfiguredKeymapProfiles(const std::vector<MRKeymapProfile> &profiles, s
 	if (configuredActiveKeymapProfileValue().empty()) configuredActiveKeymapProfileValue() = "DEFAULT";
 	else if (std::ranges::find(normalized, configuredActiveKeymapProfileValue(), &MRKeymapProfile::name) == normalized.end())
 		configuredActiveKeymapProfileValue() = "DEFAULT";
+	if (previousProfiles != configuredKeymapProfilesValue() || previousActive != configuredActiveKeymapProfileValue()) markConfiguredSettingsDirty();
 	mrLogMessage(summarizeConfiguredKeymapsForLog(configuredKeymapProfilesValue(), configuredActiveKeymapProfileValue()));
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -3245,10 +3299,16 @@ std::string configuredKeymapFilePath() {
 
 bool setConfiguredKeymapFilePath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
+	const std::string previousFile = configuredKeymapFileValue();
+	const MRScopedDialogHistoryState previousLoadHistory = dialogHistoryState(MRDialogHistoryScope::KeymapProfileLoad);
+	const MRScopedDialogHistoryState previousSaveHistory = dialogHistoryState(MRDialogHistoryScope::KeymapProfileSave);
 	struct stat st;
 
 	if (normalized.empty()) {
-		configuredKeymapFileValue().clear();
+		if (!configuredKeymapFileValue().empty()) {
+			configuredKeymapFileValue().clear();
+			markConfiguredSettingsDirty();
+		}
 		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
@@ -3256,6 +3316,7 @@ bool setConfiguredKeymapFilePath(const std::string &path, std::string *errorMess
 	configuredKeymapFileValue() = makeAbsolutePath(normalized);
 	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::KeymapProfileLoad, configuredKeymapFileValue(), nullptr));
 	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::KeymapProfileSave, configuredKeymapFileValue(), nullptr));
+	if (previousFile != configuredKeymapFileValue() || previousLoadHistory != dialogHistoryState(MRDialogHistoryScope::KeymapProfileLoad) || previousSaveHistory != dialogHistoryState(MRDialogHistoryScope::KeymapProfileSave)) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -3266,6 +3327,7 @@ std::string configuredActiveKeymapProfile() {
 
 bool setConfiguredActiveKeymapProfile(const std::string &value, std::string *errorMessage) {
 	std::string normalized = trimAscii(value);
+	const std::string previous = configuredActiveKeymapProfileValue();
 	std::string runtimeError;
 
 	if (normalized.empty()) normalized = "DEFAULT";
@@ -3273,6 +3335,7 @@ bool setConfiguredActiveKeymapProfile(const std::string &value, std::string *err
 		if (profile.name == normalized) {
 			if (!runtimeKeymapResolver().rebuild(configuredKeymapProfilesValue(), normalized, &runtimeError)) return setError(errorMessage, runtimeError);
 			configuredActiveKeymapProfileValue() = normalized;
+			if (previous != configuredActiveKeymapProfileValue()) markConfiguredSettingsDirty();
 			mrLogMessage("Keymap active profile set to '" + normalized + "'.");
 			if (errorMessage != nullptr) errorMessage->clear();
 			return true;
@@ -3388,6 +3451,7 @@ MRColorSetupSettings configuredColorSetupSettings() {
 
 bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::string *errorMessage) {
 	MREditSetupSettings defaults = resolveEditSetupDefaults();
+	const MREditSetupSettings previous = configuredEditSettings();
 	MREditSetupSettings normalized = settings;
 	std::string pageBreak = normalizePageBreakLiteral(settings.pageBreak);
 	std::string wordDelimiters = settings.wordDelimiters.empty() ? defaults.wordDelimiters : settings.wordDelimiters;
@@ -3479,6 +3543,7 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	normalized.defaultMode = defaultMode;
 	normalized.cursorStatusColor = cursorStatusColor;
 	configuredEditSettings() = normalized;
+	if (previous != normalized) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -3486,6 +3551,7 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned char *values, std::size_t count, std::string *errorMessage) {
 	const ColorGroupDefinition *definition = findColorGroupDefinition(group);
 	MRColorSetupSettings &configured = configuredColorSettings();
+	const MRColorSetupSettings previous = configuredColorSetupSettings();
 
 	ensureConfiguredColorSettingsInitialized();
 	if (definition == nullptr) return setError(errorMessage, "Unknown color setup group.");
@@ -3513,6 +3579,7 @@ bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned 
 				configured.miniMapColors[i] = values[i];
 			break;
 	}
+	if (previous != configured) markConfiguredSettingsDirty();
 
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -3564,11 +3631,15 @@ bool validateColorThemeFilePath(const std::string &path, std::string *errorMessa
 
 bool setConfiguredColorThemeFilePath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
+	const std::string previousTheme = configuredColorThemeFile();
+	const MRScopedDialogHistoryState previousLoadHistory = dialogHistoryState(MRDialogHistoryScope::SetupThemeLoad);
+	const MRScopedDialogHistoryState previousSaveHistory = dialogHistoryState(MRDialogHistoryScope::SetupThemeSave);
 
 	if (!validateColorThemeFilePath(path, errorMessage)) return false;
 	configuredColorThemeFile() = makeAbsolutePath(normalized);
 	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupThemeLoad, configuredColorThemeFile(), nullptr));
 	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupThemeSave, configuredColorThemeFile(), nullptr));
+	if (previousTheme != configuredColorThemeFile() || previousLoadHistory != dialogHistoryState(MRDialogHistoryScope::SetupThemeLoad) || previousSaveHistory != dialogHistoryState(MRDialogHistoryScope::SetupThemeSave)) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -3683,6 +3754,7 @@ const MRColorSetupItem *colorSetupGroupItems(MRColorSetupGroup group, std::size_
 bool applyConfiguredColorSetupValue(const std::string &key, const std::string &value, std::string *errorMessage) {
 	const ColorGroupDefinition *definition = findColorGroupDefinitionByKey(key);
 	MRColorSetupSettings configured = configuredColorSetupSettings();
+	const MRColorSetupSettings previous = configured;
 
 	if (definition == nullptr) return setError(errorMessage, "Unknown color setup key.");
 
@@ -3706,6 +3778,7 @@ bool applyConfiguredColorSetupValue(const std::string &key, const std::string &v
 
 	configuredColorSettings() = configured;
 	configuredColorSettingsInitialized() = true;
+	if (previous != configured) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -3717,6 +3790,9 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 	unsigned char dialogBackground = 0;
 	unsigned char dialogInactiveCluster = 0;
 	unsigned char dialogInactiveElements = 0;
+	unsigned char dialogListNormal = 0;
+	unsigned char dialogListFocused = 0;
+	unsigned char dialogListSelected = 0;
 
 	// Turbo Vision menu hotkeys use two app slots:
 	// - slot 4: shortcut text (normal item)
@@ -3734,6 +3810,9 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogFrame) dialogFrame = configured.menuDialogColors[i];
 		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogText) dialogText = configured.menuDialogColors[i];
 		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogBackground) dialogBackground = configured.menuDialogColors[i];
+		if (kMenuDialogColorItems[i].paletteIndex == 57) dialogListNormal = configured.menuDialogColors[i];
+		if (kMenuDialogColorItems[i].paletteIndex == 58) dialogListFocused = configured.menuDialogColors[i];
+		if (kMenuDialogColorItems[i].paletteIndex == 59) dialogListSelected = configured.menuDialogColors[i];
 		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogInactiveClusterGray) dialogInactiveCluster = configured.menuDialogColors[i];
 		if (kMenuDialogColorItems[i].paletteIndex == kMrPaletteDialogInactiveElements) dialogInactiveElements = configured.menuDialogColors[i];
 	}
@@ -3756,6 +3835,28 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 		case 64:
 		case 96:
 			value = dialogBackground;
+			return true;
+		case 24:
+		case 25:
+		case 55:
+		case 56:
+			value = dialogFrame;
+			return true;
+		case 26:
+		case 57:
+			value = dialogListNormal;
+			return true;
+		case 27:
+		case 58:
+			value = dialogListFocused;
+			return true;
+		case 28:
+		case 59:
+			value = dialogListSelected;
+			return true;
+		case 29:
+		case 60:
+			value = dialogText;
 			return true;
 		case kPaletteDialogInactiveClusterGray:
 		case kPaletteDialogInactiveClusterBlue:
@@ -3861,19 +3962,27 @@ bool parseHistoryLimitLiteral(const std::string &value, int &outValue, std::stri
 }
 
 bool setConfiguredPathHistoryLimitValue(int value, std::string *errorMessage) {
+	const int previousLimit = configuredPathHistoryLimit();
+	const auto previousStates = configuredDialogHistoryStorage();
+
 	if (value < kHistoryLimitMin || value > kHistoryLimitMax) return setError(errorMessage, "MAX_PATH_HISTORY must be within 5..50.");
 	configuredPathHistoryLimit() = value;
 	for (MRScopedDialogHistoryState &state : configuredDialogHistoryStorage())
 		trimHistoryToLimit(state.pathHistory, value);
+	if (previousLimit != configuredPathHistoryLimit() || previousStates != configuredDialogHistoryStorage()) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool setConfiguredFileHistoryLimitValue(int value, std::string *errorMessage) {
+	const int previousLimit = configuredFileHistoryLimit();
+	const auto previousStates = configuredDialogHistoryStorage();
+
 	if (value < kHistoryLimitMin || value > kHistoryLimitMax) return setError(errorMessage, "MAX_FILE_HISTORY must be within 5..50.");
 	configuredFileHistoryLimit() = value;
 	for (MRScopedDialogHistoryState &state : configuredDialogHistoryStorage())
 		trimHistoryToLimit(state.fileHistory, value);
+	if (previousLimit != configuredFileHistoryLimit() || previousStates != configuredDialogHistoryStorage()) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -3911,18 +4020,25 @@ void configuredMultiPathHistoryEntries(std::vector<std::string> &outValues) {
 }
 
 bool addConfiguredMultiFilespecHistoryEntry(const std::string &value, std::string *errorMessage) {
+	const auto previous = configuredMultiFilespecHistoryStorage();
+
 	addHistoryEntry(configuredMultiFilespecHistoryStorage(), trimAscii(value), configuredFileHistoryLimit());
+	if (previous != configuredMultiFilespecHistoryStorage()) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool addConfiguredMultiPathHistoryEntry(const std::string &value, std::string *errorMessage) {
+	const auto previous = configuredMultiPathHistoryStorage();
+
 	addHistoryEntry(configuredMultiPathHistoryStorage(), normalizeConfiguredPathInput(value), configuredPathHistoryLimit());
+	if (previous != configuredMultiPathHistoryStorage()) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
 bool setConfiguredWindowManager(bool enabled, std::string *errorMessage) {
+	if (g_windowManagerEnabled != enabled) markConfiguredSettingsDirty();
 	g_windowManagerEnabled = enabled;
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -3933,6 +4049,8 @@ bool configuredWindowManager() {
 }
 
 bool setConfiguredMenulineMessages(bool enabled, std::string *errorMessage) {
+	const bool previous = g_menulineMessagesEnabled;
+
 	if (!enabled) {
 		mr::messageline::clearOwner(mr::messageline::Owner::HeroEvent);
 		mr::messageline::clearOwner(mr::messageline::Owner::HeroEventFollowup);
@@ -3942,6 +4060,7 @@ bool setConfiguredMenulineMessages(bool enabled, std::string *errorMessage) {
 		mr::messageline::clearOwner(mr::messageline::Owner::DialogInteraction);
 	}
 	g_menulineMessagesEnabled = enabled;
+	if (previous != g_menulineMessagesEnabled) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -3951,6 +4070,7 @@ bool configuredMenulineMessages() {
 }
 
 bool setConfiguredSearchDialogOptions(const MRSearchDialogOptions &options, std::string *errorMessage) {
+	if (g_searchDialogOptions != options) markConfiguredSettingsDirty();
 	g_searchDialogOptions = options;
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -3961,6 +4081,7 @@ MRSearchDialogOptions configuredSearchDialogOptions() {
 }
 
 bool setConfiguredSarDialogOptions(const MRSarDialogOptions &options, std::string *errorMessage) {
+	if (g_sarDialogOptions != options) markConfiguredSettingsDirty();
 	g_sarDialogOptions = options;
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -3971,6 +4092,7 @@ MRSarDialogOptions configuredSarDialogOptions() {
 }
 
 bool setConfiguredMultiSearchDialogOptions(const MRMultiSearchDialogOptions &options, std::string *errorMessage) {
+	if (g_multiSearchDialogOptions != options) markConfiguredSettingsDirty();
 	g_multiSearchDialogOptions = options;
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -3981,6 +4103,7 @@ MRMultiSearchDialogOptions configuredMultiSearchDialogOptions() {
 }
 
 bool setConfiguredMultiSarDialogOptions(const MRMultiSarDialogOptions &options, std::string *errorMessage) {
+	if (g_multiSarDialogOptions != options) markConfiguredSettingsDirty();
 	g_multiSarDialogOptions = options;
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -3993,6 +4116,7 @@ MRMultiSarDialogOptions configuredMultiSarDialogOptions() {
 bool setConfiguredVirtualDesktops(int count, std::string *errorMessage) {
 	if (count < 1) count = 1;
 	if (count > 9) count = 9;
+	if (g_virtualDesktops != count) markConfiguredSettingsDirty();
 	g_virtualDesktops = count;
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -4003,6 +4127,7 @@ int configuredVirtualDesktops() {
 }
 
 bool setConfiguredCyclicVirtualDesktops(bool enabled, std::string *errorMessage) {
+	if (g_cyclicVirtualDesktops != enabled) markConfiguredSettingsDirty();
 	g_cyclicVirtualDesktops = enabled;
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -4012,10 +4137,22 @@ bool configuredCyclicVirtualDesktops() {
 	return g_cyclicVirtualDesktops;
 }
 
+bool setConfiguredCursorBehaviour(MRCursorBehaviour behaviour, std::string *errorMessage) {
+	if (g_cursorBehaviour != behaviour) markConfiguredSettingsDirty();
+	g_cursorBehaviour = behaviour;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+MRCursorBehaviour configuredCursorBehaviour() {
+	return g_cursorBehaviour;
+}
+
 bool setConfiguredCursorPositionMarker(const std::string &value, std::string *errorMessage) {
 	std::string normalized;
 
 	if (!normalizeCursorPositionMarker(value, normalized, errorMessage)) return false;
+	if (g_cursorPositionMarker != normalized) markConfiguredSettingsDirty();
 	g_cursorPositionMarker = normalized;
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -4026,6 +4163,7 @@ std::string configuredCursorPositionMarker() {
 }
 
 bool setConfiguredAutoloadWorkspace(bool enabled, std::string *errorMessage) {
+	if (g_autoloadWorkspace != enabled) markConfiguredSettingsDirty();
 	g_autoloadWorkspace = enabled;
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -4036,6 +4174,7 @@ bool configuredAutoloadWorkspace() {
 }
 
 bool setConfiguredLogHandling(MRLogHandling handling, std::string *errorMessage) {
+	if (g_logHandling != handling) markConfiguredSettingsDirty();
 	g_logHandling = handling;
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -4051,6 +4190,7 @@ void configuredAutoexecMacroEntries(std::vector<std::string> &outValues) {
 
 bool setConfiguredAutoexecMacroEntries(const std::vector<std::string> &values, std::string *errorMessage) {
 	std::vector<std::string> normalizedValues;
+	const std::vector<std::string> previousValues = configuredAutoexecMacroStorage();
 
 	for (const std::string &value : values) {
 		const std::string normalized = normalizeAutoexecMacroEntry(value);
@@ -4058,6 +4198,7 @@ bool setConfiguredAutoexecMacroEntries(const std::vector<std::string> &values, s
 		if (std::find(normalizedValues.begin(), normalizedValues.end(), normalized) == normalizedValues.end()) normalizedValues.push_back(normalized);
 	}
 	configuredAutoexecMacroStorage() = std::move(normalizedValues);
+	if (previousValues != configuredAutoexecMacroStorage()) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -4096,6 +4237,7 @@ bool setScopedDialogLastPath(MRDialogHistoryScope scope, const std::string &path
 	std::string normalized = normalizeConfiguredPathInput(path);
 	std::string directory;
 	MRScopedDialogHistoryState &state = dialogHistoryState(scope);
+	const MRScopedDialogHistoryState previous = state;
 
 	if (!normalized.empty() && isReadableDirectory(normalized)) {
 		state.lastPath = normalized;
@@ -4114,6 +4256,7 @@ bool setScopedDialogLastPath(MRDialogHistoryScope scope, const std::string &path
 			addHistoryEntry(state.pathHistory, directory, configuredPathHistoryLimit());
 		}
 	}
+	if (previous != state) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -4139,9 +4282,11 @@ void rememberLoadDialogPath(MRDialogHistoryScope scope, const char *path) {
 void forgetLoadDialogPath(MRDialogHistoryScope scope, const char *path) {
 	const std::string normalized = normalizeConfiguredPathInput(path != nullptr ? path : "");
 	MRScopedDialogHistoryState &state = dialogHistoryState(scope);
+	const MRScopedDialogHistoryState previous = state;
 
 	if (normalized.empty()) return;
 	state.fileHistory.erase(std::remove_if(state.fileHistory.begin(), state.fileHistory.end(), [&](const MRDialogHistoryEntry &entry) { return normalizeConfiguredPathInput(entry.value) == normalized; }), state.fileHistory.end());
+	if (previous != state) markConfiguredSettingsDirty();
 }
 
 std::string configuredLastFileDialogFilePath(MRDialogHistoryScope scope) {
@@ -4150,6 +4295,18 @@ std::string configuredLastFileDialogFilePath(MRDialogHistoryScope scope) {
 
 std::string configuredLastFileDialogPath(MRDialogHistoryScope scope) {
 	return effectiveRememberedLoadDirectory(scope);
+}
+
+void configuredScopedDialogFileHistoryEntries(MRDialogHistoryScope scope, std::vector<std::string> &outValues) {
+	outValues.clear();
+	for (const MRDialogHistoryEntry &entry : dialogHistoryState(scope).fileHistory)
+		outValues.push_back(entry.value);
+}
+
+void configuredScopedDialogPathHistoryEntries(MRDialogHistoryScope scope, std::vector<std::string> &outValues) {
+	outValues.clear();
+	for (const MRDialogHistoryEntry &entry : dialogHistoryState(scope).pathHistory)
+		outValues.push_back(entry.value);
 }
 
 bool setConfiguredLastFileDialogPath(const std::string &path, std::string *errorMessage) {
@@ -4221,6 +4378,7 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source += "MRSETUP('MULTI_SAR_KEEP_FILES_OPEN', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMultiSarDialogOptions().keepFilesOpen)) + "');\n";
 	source += "MRSETUP('VIRTUAL_DESKTOPS', '" + std::to_string(configuredVirtualDesktops()) + "');\n";
 	source += "MRSETUP('CYCLIC_VIRTUAL_DESKTOPS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredCyclicVirtualDesktops())) + "');\n";
+	source += "MRSETUP('CURSOR_BEHAVIOUR', '" + escapeMrmacSingleQuotedLiteral(formatCursorBehaviourLiteral(configuredCursorBehaviour())) + "');\n";
 	source += "MRSETUP('CURSOR_POSITION_MARKER', '" + escapeMrmacSingleQuotedLiteral(configuredCursorPositionMarker()) + "');\n";
 	source += "MRSETUP('AUTOLOAD_WORKSPACE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredAutoloadWorkspace())) + "');\n";
 	source += "MRSETUP('LOG_HANDLING', '" + escapeMrmacSingleQuotedLiteral(formatLogHandlingLiteral(configuredLogHandling())) + "');\n";
@@ -4371,12 +4529,27 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	return source;
 }
 
+bool configuredSettingsDirty() {
+	return configuredSettingsDirtyFlag();
+}
+
+void clearConfiguredSettingsDirty() {
+	configuredSettingsDirtyFlag() = false;
+}
+
 bool persistConfiguredSettingsSnapshot(std::string *errorMessage, MRSettingsWriteReport *report) {
 	MRSetupPaths paths;
 	std::string settingsPath = configuredSettingsMacroFilePath();
 	std::string settingsDir = directoryPartOf(settingsPath);
 	std::string source;
 	std::string previousSource;
+
+	if (report != nullptr) *report = MRSettingsWriteReport();
+	if (report != nullptr) report->settingsPath = settingsPath;
+	if (!configuredSettingsDirty()) {
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
 
 	paths.settingsMacroUri = settingsPath;
 	paths.macroPath = defaultMacroDirectoryPath();
@@ -4390,6 +4563,7 @@ bool persistConfiguredSettingsSnapshot(std::string *errorMessage, MRSettingsWrit
 	source = configuredAutoloadWorkspace() ? buildSettingsMacroSourceWithWorkspace(paths) : buildSettingsMacroSource(paths);
 	if (!writeTextFile(settingsPath, source)) return setError(errorMessage, "Unable to write settings macro file: " + settingsPath);
 	populateSettingsWriteReport(settingsPath, previousSource, source, report);
+	clearConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -4409,6 +4583,7 @@ bool writeSettingsMacroFile(const MRSetupPaths &paths, std::string *errorMessage
 	source = configuredAutoloadWorkspace() ? buildSettingsMacroSourceWithWorkspace(paths) : buildSettingsMacroSource(paths);
 	if (!writeTextFile(settingsPath, source)) return setError(errorMessage, "Unable to write settings macro file: " + settingsPath);
 	populateSettingsWriteReport(settingsPath, previousSource, source, report);
+	clearConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -4450,10 +4625,13 @@ bool validateSettingsMacroFilePath(const std::string &path, std::string *errorMe
 
 bool setConfiguredSettingsMacroFilePath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
+	const std::string previousPath = configuredSettingsMacroFile();
+	const MRScopedDialogHistoryState previousHistory = dialogHistoryState(MRDialogHistoryScope::SetupSettingsMacro);
 
 	if (!validateSettingsMacroFilePath(path, errorMessage)) return false;
 	configuredSettingsMacroFile() = makeAbsolutePath(normalized);
 	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupSettingsMacro, configuredSettingsMacroFile(), nullptr));
+	if (previousPath != configuredSettingsMacroFile() || previousHistory != dialogHistoryState(MRDialogHistoryScope::SetupSettingsMacro)) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -4475,11 +4653,14 @@ bool validateMacroDirectoryPath(const std::string &path, std::string *errorMessa
 
 bool setConfiguredMacroDirectoryPath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
+	const std::string previousPath = configuredMacroDirectory();
+	const MRScopedDialogHistoryState previousHistory = dialogHistoryState(MRDialogHistoryScope::General);
 
 	if (!validateMacroDirectoryPath(path, errorMessage)) return false;
 	configuredMacroDirectory() = makeAbsolutePath(normalized);
 	MRScopedDialogHistoryState &generalDialogHistory = dialogHistoryState(MRDialogHistoryScope::General);
 	if (generalDialogHistory.pathHistory.empty() && isReadableDirectory(configuredMacroDirectory())) addHistoryEntry(generalDialogHistory.pathHistory, configuredMacroDirectory(), configuredPathHistoryLimit());
+	if (previousPath != configuredMacroDirectory() || previousHistory != dialogHistoryState(MRDialogHistoryScope::General)) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -4502,10 +4683,13 @@ bool validateHelpFilePath(const std::string &path, std::string *errorMessage) {
 
 bool setConfiguredHelpFilePath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
+	const std::string previousPath = configuredHelpFile();
+	const MRScopedDialogHistoryState previousHistory = dialogHistoryState(MRDialogHistoryScope::SetupHelpFile);
 
 	if (!validateHelpFilePath(path, errorMessage)) return false;
 	configuredHelpFile() = makeAbsolutePath(normalized);
 	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupHelpFile, configuredHelpFile(), nullptr));
+	if (previousPath != configuredHelpFile() || previousHistory != dialogHistoryState(MRDialogHistoryScope::SetupHelpFile)) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -4527,9 +4711,11 @@ bool validateTempDirectoryPath(const std::string &path, std::string *errorMessag
 
 bool setConfiguredTempDirectoryPath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
+	const std::string previousPath = configuredTempDirectory();
 
 	if (!validateTempDirectoryPath(path, errorMessage)) return false;
 	configuredTempDirectory() = makeAbsolutePath(normalized);
+	if (previousPath != configuredTempDirectory()) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -4554,10 +4740,13 @@ bool validateShellExecutablePath(const std::string &path, std::string *errorMess
 
 bool setConfiguredShellExecutablePath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
+	const std::string previousPath = configuredShellExecutable();
+	const MRScopedDialogHistoryState previousHistory = dialogHistoryState(MRDialogHistoryScope::SetupShellExecutable);
 
 	if (!validateShellExecutablePath(path, errorMessage)) return false;
 	configuredShellExecutable() = makeAbsolutePath(normalized);
 	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupShellExecutable, configuredShellExecutable(), nullptr));
+	if (previousPath != configuredShellExecutable() || previousHistory != dialogHistoryState(MRDialogHistoryScope::SetupShellExecutable)) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -4589,10 +4778,13 @@ bool validateLogFilePath(const std::string &path, std::string *errorMessage) {
 
 bool setConfiguredLogFilePath(const std::string &path, std::string *errorMessage) {
 	const std::string normalized = normalizeConfiguredPathInput(path);
+	const std::string previousPath = configuredLogFile();
+	const MRScopedDialogHistoryState previousHistory = dialogHistoryState(MRDialogHistoryScope::SetupLogFile);
 
 	if (!validateLogFilePath(path, errorMessage)) return false;
 	configuredLogFile() = makeAbsolutePath(normalized);
 	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupLogFile, configuredLogFile(), nullptr));
+	if (previousPath != configuredLogFile() || previousHistory != dialogHistoryState(MRDialogHistoryScope::SetupLogFile)) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }

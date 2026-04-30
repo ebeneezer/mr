@@ -5,15 +5,6 @@
       "title": "Backlog",
       "cards": [
         {
-          "id": "602988a6-2cff-4eed-865a-5ebe4888117d",
-          "listId": "442a00f0-c411-4725-9424-3182418b486d",
-          "title": "Treesitter Integration",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
           "id": "e582ea46-09dc-4e28-bce7-3227dac67813",
           "listId": "442a00f0-c411-4725-9424-3182418b486d",
           "title": "Save All mit Dialog/List Window",
@@ -30,24 +21,6 @@
           "labels": [],
           "checkboxes": [],
           "comments": []
-        },
-        {
-          "id": "fa88fc7a-9995-45e3-83ff-85df18a8a05b",
-          "listId": "442a00f0-c411-4725-9424-3182418b486d",
-          "title": "Batch Loading / Acquire",
-          "description": "\"Hol alle mrmac Dateien\"\n",
-          "labels": [],
-          "checkboxes": [],
-          "comments": [
-            {
-              "id": "2a3bd92d-ad44-4ab1-88c1-e24a47fbaa5a",
-              "comment": "Laden multipler Dateien aus einer Liste die die Ausgabe eines Befehls oder Pipe ist"
-            },
-            {
-              "id": "f3626396-4ef7-4b14-b5a7-b5b2afeed8b2",
-              "comment": "IN Load Dialogen - auf Kommandozeile geht das ja schon"
-            }
-          ]
         },
         {
           "id": "d85ea707-6dff-4837-98e6-b3121eaeedea",
@@ -122,15 +95,6 @@
               "comment": "Explode, Magic Lamp?, Slide in/out?"
             }
           ]
-        },
-        {
-          "id": "e990e570-9055-4ee1-a7e4-9e99786c00e2",
-          "listId": "442a00f0-c411-4725-9424-3182418b486d",
-          "title": "Piecetable: Line Indexing auf allen CPU Cores?",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
         }
       ]
     },
@@ -157,20 +121,6 @@
           "comments": []
         },
         {
-          "id": "3f136c23-dea4-4cc1-b981-f32ee1c981f5",
-          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
-          "title": "Minimap Color Coding",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": [
-            {
-              "id": "b5fbef5e-3d83-4df0-af34-c8b1686a5006",
-              "comment": "Suchtreffer, Errors, Warnings, Changed"
-            }
-          ]
-        },
-        {
           "id": "d9673699-ede3-4290-b4aa-1d84ab83ec8a",
           "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
           "title": "Code Folding",
@@ -187,6 +137,33 @@
           "labels": [],
           "checkboxes": [],
           "comments": []
+        },
+        {
+          "id": "602988a6-2cff-4eed-865a-5ebe4888117d",
+          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+          "title": "Treesitter Integration",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "fa88fc7a-9995-45e3-83ff-85df18a8a05b",
+          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+          "title": "Batch Loading / Acquire",
+          "description": "\"Hol alle mrmac Dateien\"\n",
+          "labels": [],
+          "checkboxes": [],
+          "comments": [
+            {
+              "id": "2a3bd92d-ad44-4ab1-88c1-e24a47fbaa5a",
+              "comment": "Laden multipler Dateien aus einer Liste die die Ausgabe eines Befehls oder Pipe ist"
+            },
+            {
+              "id": "f3626396-4ef7-4b14-b5a7-b5b2afeed8b2",
+              "comment": "IN Load Dialogen - auf Kommandozeile geht das ja schon"
+            }
+          ]
         }
       ]
     },
@@ -233,15 +210,6 @@
           ]
         },
         {
-          "id": "49430a5d-ab87-421a-9eb6-728ed5339eb9",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Key Mapping",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
           "id": "adecbc95-314f-47b7-9f0b-ff99ffb8475d",
           "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
           "title": "Window Manager",
@@ -260,16 +228,16 @@
           ]
         },
         {
-          "id": "d5b26a72-7af3-480b-8151-e15af7a96e01",
+          "id": "3f136c23-dea4-4cc1-b981-f32ee1c981f5",
           "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Format Line zuschaltbar als waagerechter Gutter. Tabstops per KLick setzen. Rotation bei Klick:  ./L/R/! ?",
+          "title": "Minimap Color Coding",
           "description": "",
           "labels": [],
           "checkboxes": [],
           "comments": [
             {
-              "id": "e4c5b760-7933-4910-b2c3-cc75c47fed33",
-              "comment": "Dann raus aus FE: RIGHT und LEFT MARGIN  --- wird via Formatline bestimmt. "
+              "id": "b5fbef5e-3d83-4df0-af34-c8b1686a5006",
+              "comment": "Suchtreffer, Errors, Warnings, Changed"
             }
           ]
         }
@@ -296,6 +264,29 @@
           "labels": [],
           "checkboxes": [],
           "comments": []
+        },
+        {
+          "id": "49430a5d-ab87-421a-9eb6-728ed5339eb9",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Key Mapping",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "d5b26a72-7af3-480b-8151-e15af7a96e01",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Format Line zuschaltbar als waagerechter Gutter. Tabstops per KLick setzen. Rotation bei Klick:  ./L/R/! ?",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": [
+            {
+              "id": "e4c5b760-7933-4910-b2c3-cc75c47fed33",
+              "comment": "Dann raus aus FE: RIGHT und LEFT MARGIN  --- wird via Formatline bestimmt. "
+            }
+          ]
         },
         {
           "id": "08c3a6f6-9f77-4c0a-a219-b2a46356ce21",
@@ -378,6 +369,15 @@
           "id": "14dbb8a3-d0d9-44c1-969d-a787e7d64e4b",
           "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
           "title": "ASCII Table & Emoji Table",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "e990e570-9055-4ee1-a7e4-9e99786c00e2",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Piecetable: Line Indexing auf allen CPU Cores?",
           "description": "",
           "labels": [],
           "checkboxes": [],

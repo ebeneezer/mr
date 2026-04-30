@@ -311,26 +311,25 @@ std::string readCurrentWorkingDirectory() {
 	return std::string(cwd);
 }
 
-bool browseMrmacFileUri(MRDialogHistoryScope scope, const char *title, const std::string &currentValue, std::string &selectedUri) {
+bool browseMrmacFileUri(MRDialogHistoryScope scope, const char *title, std::string &selectedUri) {
 	char fileName[MAXPATH];
 	ushort result;
 
-	mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.mrmac", currentValue);
+	mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.mrmac");
 	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.mrmac", title, "~N~ame", fdOKButton, fileName);
 	if (result == cmCancel) return false;
 	selectedUri = normalizeConfiguredPathInput(fileName);
 	return !selectedUri.empty();
 }
 
-bool browseDirectoryPath(MRDialogHistoryScope scope, const std::string &currentValue, std::string &selectedPath) {
+bool browseDirectoryPath(MRDialogHistoryScope scope, std::string &selectedPath) {
 	std::string originalCwd = readCurrentWorkingDirectory();
-	std::string seed = normalizeConfiguredPathInput(trimAscii(currentValue));
+	std::string seed = configuredLastFileDialogPath(scope);
 	std::string picked;
 	ushort result;
 
-	if (seed.empty()) seed = configuredLastFileDialogPath(scope);
 	if (!seed.empty()) (void)::chdir(seed.c_str());
-	result = mr::dialogs::execDialogRaw(mr::dialogs::createDirectoryDialog(cdNormal));
+	result = mr::dialogs::execDialogRaw(mr::dialogs::createDirectoryDialog(scope, cdNormal));
 	picked = readCurrentWorkingDirectory();
 	if (!originalCwd.empty()) (void)::chdir(originalCwd.c_str());
 	if (result == cmCancel) return false;
@@ -339,12 +338,12 @@ bool browseDirectoryPath(MRDialogHistoryScope scope, const std::string &currentV
 	return !selectedPath.empty();
 }
 
-bool browseColorThemeUri(MRDialogHistoryScope scope, const std::string &currentValue, std::string &selectedUri) {
+bool browseColorThemeUri(MRDialogHistoryScope scope, std::string &selectedUri) {
 	char fileName[MAXPATH];
 	ushort result = cmCancel;
 
-	mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.mrmac", currentValue);
-	if (trimAscii(currentValue).empty() && configuredLastFileDialogPath(scope).empty()) {
+	mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.mrmac");
+	if (configuredLastFileDialogPath(scope).empty() && configuredLastFileDialogFilePath(scope).empty()) {
 		std::string macroPath = normalizeConfiguredPathInput(configuredMacroDirectoryPath());
 		if (!macroPath.empty()) {
 			if (macroPath.back() != '/') macroPath += '/';
@@ -738,8 +737,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	void browseCurrentColorTheme() {
 		if (mCurrentIndex < 0 || mCurrentIndex >= static_cast<int>(draftList.size())) return;
 		std::string selectedUri;
-		std::string currentValue = readInputLineString(mProfileColorThemeField, kProfileColorThemeFieldSize);
-		if (!browseColorThemeUri(MRDialogHistoryScope::ExtensionThemeFile, currentValue, selectedUri)) return;
+		if (!browseColorThemeUri(MRDialogHistoryScope::ExtensionThemeFile, selectedUri)) return;
 		writeInputLineString(mProfileColorThemeField, selectedUri, kProfileColorThemeFieldSize);
 		saveWidgetsToCurrentDraft();
 		refreshValidationState();
@@ -747,7 +745,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 	void browseCurrentPostLoadMacro() {
 		std::string selectedUri;
-		if (!browseMrmacFileUri(MRDialogHistoryScope::ExtensionPostLoadMacro, "Select post-load macro", editorSettingsPanel.postLoadMacroValue(), selectedUri)) return;
+		if (!browseMrmacFileUri(MRDialogHistoryScope::ExtensionPostLoadMacro, "Select post-load macro", selectedUri)) return;
 		editorSettingsPanel.setPostLoadMacroValue(selectedUri);
 		saveWidgetsToCurrentDraft();
 		refreshValidationState();
@@ -755,7 +753,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 	void browseCurrentPreSaveMacro() {
 		std::string selectedUri;
-		if (!browseMrmacFileUri(MRDialogHistoryScope::ExtensionPreSaveMacro, "Select pre-save macro", editorSettingsPanel.preSaveMacroValue(), selectedUri)) return;
+		if (!browseMrmacFileUri(MRDialogHistoryScope::ExtensionPreSaveMacro, "Select pre-save macro", selectedUri)) return;
 		editorSettingsPanel.setPreSaveMacroValue(selectedUri);
 		saveWidgetsToCurrentDraft();
 		refreshValidationState();
@@ -763,7 +761,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 
 	void browseCurrentDefaultPath() {
 		std::string selectedPath;
-		if (!browseDirectoryPath(MRDialogHistoryScope::ExtensionDefaultPath, editorSettingsPanel.defaultPathValue(), selectedPath)) return;
+		if (!browseDirectoryPath(MRDialogHistoryScope::ExtensionDefaultPath, selectedPath)) return;
 		editorSettingsPanel.setDefaultPathValue(selectedPath);
 		saveWidgetsToCurrentDraft();
 		refreshValidationState();

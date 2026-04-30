@@ -36,9 +36,10 @@ namespace mr::dialogs {
 [[nodiscard]] ushort execDialog(TDialog *dialog);
 [[nodiscard]] ushort execDialogWithData(TDialog *dialog, void *data);
 [[nodiscard]] MRDialogFoundation *createScrollableDialog(const char *title, int virtualWidth, int virtualHeight);
-[[nodiscard]] TFileDialog *createFileDialog(const char *wildCard, const char *title, const char *inputName, ushort options);
-[[nodiscard]] TDialog *createDirectoryDialog(ushort options);
-void seedFileDialogPath(MRDialogHistoryScope scope, char *buffer, std::size_t bufferSize, const char *pattern, std::string_view currentValue = {});
+[[nodiscard]] TFileDialog *createFileDialog(MRDialogHistoryScope scope, const char *wildCard, const char *title, const char *inputName, ushort options);
+[[nodiscard]] TDialog *createDirectoryDialog(MRDialogHistoryScope scope, ushort options);
+void seedFileDialogPath(MRDialogHistoryScope scope, char *buffer, std::size_t bufferSize, const char *pattern);
+void suggestFileDialogName(char *buffer, std::size_t bufferSize, std::string_view suggestedValue);
 [[nodiscard]] ushort execRememberingFileDialogWithData(MRDialogHistoryScope scope, const char *wildCard, const char *title, const char *inputName, ushort options, char *buffer);
 
 struct DialogButtonSpec {

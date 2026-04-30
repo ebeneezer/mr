@@ -44,6 +44,8 @@ Use English only for:
 
 - Code style: Maximum Human Readability.
 
+- Code style: Header Files enthalten nur Klassen-, Struct-, Enum-, Typ- und Methodendeklarationen. Implementierungscode gehört in `.cpp`-Dateien. Inline-Implementierungen im Header sind auf zwingend notwendige Ausnahmen zu beschränken und dem User bei Strukturentscheidungen ausdrücklich zu empfehlen.
+
 - Coding: Es dürfen keine Routinen implementiert werden, die auch durch Library Funktionen ersetzt werden können: Wrapper für Library Funktionen sind nicht erlaubt.
 
 - Strategie und Coding: Es wird zuerst die Funktion komplett implementiert und debugged. Erst nach Empfehlung und Freigabe werden Regressionstests implementiert.

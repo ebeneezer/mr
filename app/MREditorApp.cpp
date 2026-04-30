@@ -417,6 +417,7 @@ bool applySettingsSourceViaVm(const std::string &settingsPath, const std::string
 		if (errorMessage != nullptr) *errorMessage = "Color theme load failed: " + themeError;
 		return false;
 	}
+	clearConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -489,7 +490,9 @@ ushort mrEditorDialog(int dialog, ...) {
 			target = va_arg(arg, char *);
 			va_end(arg);
 			if (target == nullptr) return cmCancel;
-			mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::EditorSaveAs, target, MAXPATH, "*.*", target);
+			std::string suggestedTarget(target);
+			mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::EditorSaveAs, target, MAXPATH, "*.*");
+			mr::dialogs::suggestFileDialogName(target, MAXPATH, suggestedTarget);
 			result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::EditorSaveAs, "*.*", "Save file as", "~N~ame", fdOKButton, target);
 			return result;
 		}

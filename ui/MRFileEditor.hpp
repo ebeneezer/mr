@@ -2,6 +2,7 @@
 #define MRFILEEDITOR_HPP
 
 #define Uses_TScroller
+#define Uses_TScrollBar
 #define Uses_TEditor
 #define Uses_TIndicator
 #define Uses_TDrawBuffer
@@ -58,7 +59,7 @@ class MRFileEditor : public TScroller {
 	};
 
 	MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar, TIndicator *aIndicator, TStringView aFileName) noexcept
-	    : TScroller(bounds, aHScrollBar, aVScrollBar), mIndicator(aIndicator), mReadOnly(false), mInsertMode(true), mAutoIndent(false), mSyntaxTitleHint(), mBufferModel(), mSelectionAnchor(0), mIndicatorUpdateInProgress(false), mLineIndexWarmupTaskId(0), mLineIndexWarmupDocumentId(0), mLineIndexWarmupVersion(0), mSyntaxTokenCache(), mSyntaxWarmupTaskId(0), mSyntaxWarmupDocumentId(0), mSyntaxWarmupVersion(0), mSyntaxWarmupTopLine(0), mSyntaxWarmupBottomLine(0), mSyntaxWarmupLanguage(MRSyntaxLanguage::PlainText), mMiniMapWarmupTaskId(0), mMiniMapWarmupDocumentId(0), mMiniMapWarmupVersion(0), mMiniMapWarmupRows(0), mMiniMapWarmupBodyWidth(0), mMiniMapWarmupViewportWidth(0), mMiniMapWarmupBraille(true), mMiniMapWarmupWindowStartLine(0), mMiniMapWarmupWindowLineCount(0), mMiniMapWarmupReschedulePending(false), mMiniMapCache(), mSaveNormalizationCache(), mSaveNormalizationWarmupTaskId(0), mSaveNormalizationWarmupDocumentId(0), mSaveNormalizationWarmupVersion(0),
+	    : TScroller(bounds, aHScrollBar, aVScrollBar), mIndicator(aIndicator), mReadOnly(false), mInsertMode(true), mAutoIndent(false), mSyntaxTitleHint(), mBufferModel(), mSelectionAnchor(0), mCursorVisualColumn(0), mIndicatorUpdateInProgress(false), mLineIndexWarmupTaskId(0), mLineIndexWarmupDocumentId(0), mLineIndexWarmupVersion(0), mSyntaxTokenCache(), mSyntaxWarmupTaskId(0), mSyntaxWarmupDocumentId(0), mSyntaxWarmupVersion(0), mSyntaxWarmupTopLine(0), mSyntaxWarmupBottomLine(0), mSyntaxWarmupLanguage(MRSyntaxLanguage::PlainText), mMiniMapWarmupTaskId(0), mMiniMapWarmupDocumentId(0), mMiniMapWarmupVersion(0), mMiniMapWarmupRows(0), mMiniMapWarmupBodyWidth(0), mMiniMapWarmupViewportWidth(0), mMiniMapWarmupBraille(true), mMiniMapWarmupWindowStartLine(0), mMiniMapWarmupWindowLineCount(0), mMiniMapWarmupReschedulePending(false), mMiniMapCache(), mSaveNormalizationCache(), mSaveNormalizationWarmupTaskId(0), mSaveNormalizationWarmupDocumentId(0), mSaveNormalizationWarmupVersion(0),
 	      mSaveNormalizationWarmupOptionsHash(0), mSaveNormalizationWarmupSourceBytes(0), mSaveNormalizationWarmupStartedAt(std::chrono::steady_clock::time_point()), mSaveNormalizationThroughputBytesPerMicro(0.0), mSaveNormalizationThroughputSamples(0), mMiniMapInitialRenderReportedDocumentId(0), mBlockOverlayActive(false), mBlockOverlayMode(0), mBlockOverlayAnchor(0), mBlockOverlayEnd(0), mBlockOverlayTrackingCursor(false), mPreferredIndentColumn(1), mLastLoadTiming(), mLargeFileMetricsTraceValid(false), mLastLargeFileMetricsExactKnown(false), mLastLargeFileMetricsLimitY(0), mLastLargeFileMetricsMaxY(0), mLastLargeFileMetricsDeltaY(0), mLastLargeFileMetricsNewDeltaY(0) {
 		fileName[0] = EOS;
 		options |= ofFirstClick;
@@ -228,7 +229,32 @@ class MRFileEditor : public TScroller {
 		mPreferredIndentColumn = column;
 	}
 
+	bool freeCursorMovementEnabled() const noexcept {
+		return configuredCursorBehaviour() == MRCursorBehaviour::FreeMovement;
+	}
+
+	int actualCursorVisualColumn(std::size_t offset) const noexcept {
+		return charColumn(mBufferModel.lineStart(offset), offset);
+	}
+
+	int displayedCursorColumn() const noexcept {
+		const int actualColumn = actualCursorVisualColumn(mBufferModel.cursor());
+		if (!freeCursorMovementEnabled()) return actualColumn;
+		return std::max(actualColumn, mCursorVisualColumn);
+	}
+
+	void syncDisplayedCursorColumnFromCursor(bool preserveFreeColumn) noexcept {
+		const int actualColumn = actualCursorVisualColumn(mBufferModel.cursor());
+
+		if (!freeCursorMovementEnabled() || !preserveFreeColumn) {
+			mCursorVisualColumn = actualColumn;
+			return;
+		}
+		if (mCursorVisualColumn < actualColumn) mCursorVisualColumn = actualColumn;
+	}
+
 	void refreshConfiguredVisualSettings() {
+		syncDisplayedCursorColumnFromCursor(true);
 		syncIndicatorVisualSettings();
 		updateMetrics();
 		scheduleSyntaxWarmupIfNeeded();
@@ -316,9 +342,10 @@ class MRFileEditor : public TScroller {
 		return pos - std::max<std::size_t>(step, 1);
 	}
 
-	std::size_t lineMoveOffset(std::size_t pos, int deltaLines) noexcept {
+	std::size_t lineMoveOffset(std::size_t pos, int deltaLines, int targetVisualColumn = -1) noexcept {
 		std::size_t target = std::min(pos, mBufferModel.length());
-		int targetVisualColumn = charColumn(mBufferModel.lineStart(pos), std::min(pos, mBufferModel.length()));
+
+		if (targetVisualColumn < 0) targetVisualColumn = charColumn(mBufferModel.lineStart(pos), std::min(pos, mBufferModel.length()));
 
 		if (deltaLines < 0) {
 			for (std::size_t i = 0, distance = static_cast<std::size_t>(-deltaLines); i < distance; ++i) {
@@ -341,7 +368,7 @@ class MRFileEditor : public TScroller {
 		const std::size_t cursor = std::min(pos, mBufferModel.length());
 		const std::size_t lineStart = lineStartOffset(cursor);
 		const MREditSetupSettings settings = configuredEditSetupSettings();
-		const int currentColumn = charColumn(lineStart, cursor) + 1;
+		const int currentColumn = (freeCursorMovementEnabled() && cursor == mBufferModel.cursor() && !mBufferModel.hasSelection() ? displayedCursorColumn() : charColumn(lineStart, cursor)) + 1;
 		const int targetColumn = forward ? nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, currentColumn) : prevResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, currentColumn);
 
 		return charPtrOffset(lineStart, targetColumn - 1);
@@ -416,11 +443,12 @@ class MRFileEditor : public TScroller {
 	bool scrollWindowByLines(int deltaRows) {
 		const std::size_t cursorBefore = cursorOffset();
 		const int rowBefore = currentViewRow();
-		const std::size_t target = lineMoveOffset(cursorBefore, deltaRows);
+		const int targetVisualColumn = displayedCursorColumn();
+		const std::size_t target = lineMoveOffset(cursorBefore, deltaRows, targetVisualColumn);
 
 		if (deltaRows == 0) return true;
 		if (target == cursorBefore) return false;
-		moveCursor(target, false, false);
+		moveCursor(target, false, false, targetVisualColumn);
 		if (const int rowDelta = currentViewRow() - rowBefore; rowDelta != 0) scrollTo(std::max(delta.x, 0), std::max(delta.y + rowDelta, 0));
 		return true;
 	}
@@ -522,6 +550,7 @@ class MRFileEditor : public TScroller {
 	}
 
 	void syncFromEditorState(bool = true) {
+		syncDisplayedCursorColumnFromCursor(true);
 		refreshSyntaxContext();
 		updateMetrics();
 		syncIndicatorVisualSettings();
@@ -839,7 +868,16 @@ class MRFileEditor : public TScroller {
 		return adoptCommittedDocument(preview, range.start, range.start, range.start + text.size(), true, &commit.change);
 	}
 
+	int paddingColumnsBeforeInsertAtCursor() const noexcept {
+		const std::size_t cursor = mBufferModel.cursor();
+		const std::size_t lineEnd = lineEndOffset(cursor);
+
+		if (!freeCursorMovementEnabled() || mBufferModel.hasSelection() || cursor != lineEnd) return 0;
+		return std::max(0, displayedCursorColumn() - actualCursorVisualColumn(cursor));
+	}
+
 	bool insertBufferText(const std::string &text) {
+		std::string insertedText = text;
 		std::size_t start = mBufferModel.cursor();
 		std::size_t end = start;
 		MRTextBufferModel::Range range;
@@ -848,18 +886,22 @@ class MRFileEditor : public TScroller {
 		MRTextBufferModel::CommitResult commit;
 
 		if (mReadOnly) return false;
+		if (!insertedText.empty()) {
+			const int paddingColumns = paddingColumnsBeforeInsertAtCursor();
+			if (paddingColumns > 0) insertedText.insert(0, static_cast<std::size_t>(paddingColumns), ' ');
+		}
 		if (mBufferModel.hasSelection()) {
 			range = mBufferModel.selection().range();
 			start = range.start;
 			end = range.end;
 		} else if (!mInsertMode) {
 			std::size_t endSel = mBufferModel.cursor();
-			for (std::string::size_type i = 0; i < text.size() && endSel < lineEndOffset(start); ++i)
+			for (std::string::size_type i = 0; i < insertedText.size() && endSel < lineEndOffset(start); ++i)
 				endSel = nextCharOffset(endSel);
 			end = endSel;
 		}
 		range = MRTextBufferModel::Range(start, end).clamped(mBufferModel.length());
-		transaction.replace(range, text);
+		transaction.replace(range, insertedText);
 		preview = mBufferModel.document();
 		pushUndoSnapshot();
 		commit = preview.tryApply(transaction);
@@ -867,7 +909,7 @@ class MRFileEditor : public TScroller {
 			mBufferModel.popUndoSnapshot();
 			return false;
 		}
-		start = range.start + text.size();
+		start = range.start + insertedText.size();
 		return adoptCommittedDocument(preview, start, start, start, true, &commit.change);
 	}
 
@@ -1317,7 +1359,7 @@ class MRFileEditor : public TScroller {
 		else
 			totalLines = std::max<std::size_t>(1, std::max<std::size_t>(mBufferModel.estimatedLineCount(), topLine + static_cast<std::size_t>(std::max(miniMapRows, 1))));
 		if (drawMiniMap) scheduleMiniMapWarmupIfNeeded(viewport, miniMapUseBraille, totalLines, topLine);
-		MiniMapOverlayState miniMapOverlay = computeMiniMapOverlayState(selection, totalLines);
+		MiniMapOverlayState miniMapOverlay = computeMiniMapOverlayState(selection, totalLines, viewport.width, viewport.miniMapBodyWidth, miniMapUseBraille, editSettings);
 
 		if (editSettings.formatRuler && viewport.topInset > 0) drawFormatRulerOverlay(viewport, editSettings);
 		const int textRows = std::max(0, visibleTextRows());
@@ -1553,8 +1595,12 @@ class MRFileEditor : public TScroller {
 	};
 
 	struct MiniMapOverlayState {
-		std::vector<std::pair<std::size_t, std::size_t>> findLineRanges;
-		std::vector<std::pair<std::size_t, std::size_t>> dirtyLineRanges;
+		struct LineMask {
+			std::size_t lineIndex = 0;
+			std::uint64_t dotColumnBits = 0;
+		};
+		std::vector<LineMask> findLineMasks;
+		std::vector<LineMask> dirtyLineMasks;
 	};
 
 	struct MiniMapRenderCache {
@@ -1907,7 +1953,7 @@ class MRFileEditor : public TScroller {
 		for (int x = 0; x < viewport.width; ++x) {
 			const int column = viewport.deltaX + x + 1;
 			const char ch = column >= 1 && column <= static_cast<int>(normalized.size()) ? normalized[static_cast<std::size_t>(column - 1)] : ' ';
-			const bool atCursor = static_cast<int>(mBufferModel.lineIndex(mBufferModel.cursor())) == delta.y && charColumn(mBufferModel.lineStart(mBufferModel.cursor()), mBufferModel.cursor()) == viewport.deltaX + x;
+			const bool atCursor = static_cast<int>(mBufferModel.lineIndex(mBufferModel.cursor())) == delta.y && displayedCursorColumn() == viewport.deltaX + x;
 			buffer.moveChar(static_cast<ushort>(viewport.textLeft + x), ch, atCursor ? accent : normal, 1);
 		}
 		writeBuf(0, 0, size.x, 1, buffer);
@@ -1996,19 +2042,11 @@ class MRFileEditor : public TScroller {
 		b.moveChar(static_cast<ushort>(drawX), ' ', color, static_cast<ushort>(width));
 	}
 
-	static bool useBrailleMiniMapRenderer() noexcept {
-		static const int kBrailleWidth = strwidth("\xE2\xA3\xBF"); // U+28FF
-		return kBrailleWidth == 1;
-	}
+	static bool useBrailleMiniMapRenderer() noexcept;
 
-	static std::string normalizedMiniMapViewportMarkerGlyph(const std::string &configuredGlyph) {
-		if (configuredGlyph.empty() || strwidth(configuredGlyph.c_str()) != 1) return "│";
-		return configuredGlyph;
-	}
+	static std::string normalizedMiniMapViewportMarkerGlyph(const std::string &configuredGlyph);
 
-	static const char *miniMapWarmupTaskLabel() noexcept {
-		return "rendering mini map";
-	}
+	static const char *miniMapWarmupTaskLabel() noexcept;
 
 	static const char *lineIndexWarmupTaskLabel() noexcept {
 		return "line-index-warmup";
@@ -2022,49 +2060,11 @@ class MRFileEditor : public TScroller {
 		return "save-normalization";
 	}
 
-	static std::string utf8FromCodepoint(std::uint32_t codepoint) {
-		char bytes[5] = {0, 0, 0, 0, 0};
-		if (codepoint <= 0x7F) {
-			bytes[0] = static_cast<char>(codepoint);
-			return std::string(bytes, 1);
-		}
-		if (codepoint <= 0x7FF) {
-			bytes[0] = static_cast<char>(0xC0 | ((codepoint >> 6) & 0x1F));
-			bytes[1] = static_cast<char>(0x80 | (codepoint & 0x3F));
-			return std::string(bytes, 2);
-		}
-		if (codepoint <= 0xFFFF) {
-			bytes[0] = static_cast<char>(0xE0 | ((codepoint >> 12) & 0x0F));
-			bytes[1] = static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
-			bytes[2] = static_cast<char>(0x80 | (codepoint & 0x3F));
-			return std::string(bytes, 3);
-		}
-		bytes[0] = static_cast<char>(0xF0 | ((codepoint >> 18) & 0x07));
-		bytes[1] = static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F));
-		bytes[2] = static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
-		bytes[3] = static_cast<char>(0x80 | (codepoint & 0x3F));
-		return std::string(bytes, 4);
-	}
+	static std::string utf8FromCodepoint(std::uint32_t codepoint);
 
-	static const std::array<std::string, 256> &brailleGlyphTable() {
-		static const std::array<std::string, 256> table = []() {
-			std::array<std::string, 256> generated;
-			generated[0] = " ";
-			for (std::size_t i = 1; i < generated.size(); ++i)
-				generated[i] = utf8FromCodepoint(static_cast<std::uint32_t>(0x2800 + i));
-			return generated;
-		}();
-		return table;
-	}
+	static const std::array<std::string, 256> &brailleGlyphTable();
 
-	static std::size_t scaledMidpoint(std::size_t sampleIndex, std::size_t sampleCount, std::size_t targetCount) noexcept {
-		if (sampleCount == 0 || targetCount == 0) return 0;
-		unsigned long long numerator = static_cast<unsigned long long>(sampleIndex) * 2ull + 1ull;
-		unsigned long long scaled = numerator * static_cast<unsigned long long>(targetCount);
-		unsigned long long denominator = static_cast<unsigned long long>(sampleCount) * 2ull;
-		std::size_t mapped = static_cast<std::size_t>(scaled / denominator);
-		return std::min(mapped, targetCount - 1);
-	}
+	static std::size_t scaledMidpoint(std::size_t sampleIndex, std::size_t sampleCount, std::size_t targetCount) noexcept;
 
 	bool lineIntersectsDirtyRanges(std::size_t lineStart, std::size_t lineEnd) const noexcept {
 		if (lineEnd <= lineStart || mDirtyRanges.empty()) return false;
@@ -2076,51 +2076,22 @@ class MRFileEditor : public TScroller {
 		return false;
 	}
 
-	MiniMapPalette resolveMiniMapPalette() {
-		MiniMapPalette palette;
-		unsigned char configured = 0;
-		const TColorAttr fallback = static_cast<TColorAttr>(getColor(0x0201));
+	MiniMapPalette resolveMiniMapPalette();
 
-		palette.normal = configuredColorSlotOverride(kMrPaletteMiniMapNormal, configured) ? static_cast<TColorAttr>(configured) : fallback;
-		palette.viewport = configuredColorSlotOverride(kMrPaletteMiniMapViewport, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
-		palette.changed = configuredColorSlotOverride(kMrPaletteMiniMapChanged, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
-		palette.findMarker = configuredColorSlotOverride(kMrPaletteMiniMapFindMarker, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
-		palette.errorMarker = configuredColorSlotOverride(kMrPaletteMiniMapErrorMarker, configured) ? static_cast<TColorAttr>(configured) : palette.normal;
-		return palette;
-	}
+	static std::pair<std::size_t, std::size_t> scaledInterval(std::size_t index, std::size_t count, std::size_t targetCount) noexcept;
 
-	static std::pair<std::size_t, std::size_t> scaledInterval(std::size_t index, std::size_t count, std::size_t targetCount) noexcept {
-		if (count == 0 || targetCount == 0) return std::make_pair(0u, 0u);
-		std::size_t start = (index * targetCount) / count;
-		std::size_t end = ((index + 1) * targetCount + count - 1) / count;
-		if (end <= start) end = std::min(targetCount, start + 1);
-		return std::make_pair(std::min(start, targetCount), std::min(end, targetCount));
-	}
+	static void normalizeMiniMapLineMasks(std::vector<MiniMapOverlayState::LineMask> &masks);
+
+	static std::uint64_t miniMapLineMaskBits(const std::vector<MiniMapOverlayState::LineMask> &masks, std::size_t lineIndex) noexcept;
+
+	static bool miniMapCellHasOverlayBits(std::uint64_t lineBits, int x, bool useBraille) noexcept;
 
 	struct MiniMapSamplingWindow {
 		std::size_t startLine = 0;
 		std::size_t lineCount = 1;
 	};
 
-	static MiniMapSamplingWindow miniMapSamplingWindowFor(std::size_t totalLines, std::size_t topLine, int rowCount, bool useBraille) noexcept {
-		const std::size_t normalizedTotalLines = std::max<std::size_t>(1, totalLines);
-		const std::size_t normalizedRowCount = std::max<std::size_t>(1, static_cast<std::size_t>(std::max(rowCount, 1)));
-		const std::size_t samplingRowCount = useBraille ? normalizedRowCount * 4u : normalizedRowCount;
-		const std::size_t maxWindowLineCount = normalizedRowCount * 9u;
-		MiniMapSamplingWindow window;
-		if (normalizedTotalLines <= maxWindowLineCount) {
-			window.startLine = 0;
-			window.lineCount = std::max(normalizedTotalLines, samplingRowCount);
-			return window;
-		}
-		window.lineCount = std::max<std::size_t>(1, maxWindowLineCount);
-		const std::size_t clampedTop = std::min(topLine, normalizedTotalLines - 1);
-		std::size_t preferredStart = 0;
-		if (clampedTop > window.lineCount / 2) preferredStart = clampedTop - window.lineCount / 2;
-		const std::size_t maxStart = normalizedTotalLines - window.lineCount;
-		window.startLine = std::min(preferredStart, maxStart);
-		return window;
-	}
+	static MiniMapSamplingWindow miniMapSamplingWindowFor(std::size_t totalLines, std::size_t topLine, int rowCount, bool useBraille) noexcept;
 
 	static bool ratioCellActive(int numerator, int denominator, int cellIndex, int cellCount) noexcept {
 		if (numerator <= 0 || denominator <= 0 || cellCount <= 0) return false;
@@ -2132,336 +2103,23 @@ class MRFileEditor : public TScroller {
 
 	// Returns true if minimap cell [cellIndex] overlaps the content column range [from, to)
 	// when the viewport has viewportWidth columns and the minimap has cellCount cells.
-	static bool ratioCellInRange(int from, int to, int viewportWidth, int cellIndex, int cellCount) noexcept {
-		if (from < 0 || to <= 0 || from >= to || viewportWidth <= 0 || cellCount <= 0) return false;
-		long long cellLeft = static_cast<long long>(cellIndex) * viewportWidth;
-		long long cellRight = static_cast<long long>(cellIndex + 1) * viewportWidth;
-		long long cLeft = static_cast<long long>(from) * cellCount;
-		long long cRight = static_cast<long long>(to) * cellCount;
-		return cellRight > cLeft && cellLeft < cRight;
-	}
+	static bool ratioCellInRange(int from, int to, int viewportWidth, int cellIndex, int cellCount) noexcept;
 
-	bool miniMapCacheReadyForViewport(const TextViewportGeometry &viewport, bool braille, const MiniMapSamplingWindow &window) const noexcept {
-		const int rowCount = std::max(0, miniMapViewportRows());
-		return mMiniMapCache.valid && mMiniMapCache.documentId == mBufferModel.documentId() && mMiniMapCache.documentVersion == mBufferModel.version() && mMiniMapCache.rowCount == rowCount && mMiniMapCache.bodyWidth == viewport.miniMapBodyWidth && mMiniMapCache.viewportWidth == std::max(1, viewport.width) && mMiniMapCache.braille == braille && mMiniMapCache.windowStartLine == window.startLine && mMiniMapCache.windowLineCount == std::max<std::size_t>(1, window.lineCount);
-	}
+	bool miniMapCacheReadyForViewport(const TextViewportGeometry &viewport, bool braille, const MiniMapSamplingWindow &window) const noexcept;
 
-	int miniMapViewportRows() const noexcept {
-		return std::max(0, visibleTextRows());
-	}
+	int miniMapViewportRows() const noexcept;
 
-	void clearMiniMapWarmupTaskInternal(std::uint64_t expectedTaskId) noexcept {
-		if (expectedTaskId != 0 && mMiniMapWarmupTaskId != expectedTaskId) return;
-		if (mMiniMapWarmupTaskId == 0) return;
-		const bool shouldReschedule = mMiniMapWarmupReschedulePending;
-		mMiniMapWarmupTaskId = 0;
-		mMiniMapWarmupDocumentId = 0;
-		mMiniMapWarmupVersion = 0;
-		mMiniMapWarmupRows = 0;
-		mMiniMapWarmupBodyWidth = 0;
-		mMiniMapWarmupViewportWidth = 0;
-		mMiniMapWarmupBraille = true;
-		mMiniMapWarmupWindowStartLine = 0;
-		mMiniMapWarmupWindowLineCount = 0;
-		mMiniMapWarmupReschedulePending = false;
-		notifyWindowTaskStateChanged();
-		if (shouldReschedule) drawView();
-	}
+	void clearMiniMapWarmupTaskInternal(std::uint64_t expectedTaskId) noexcept;
 
-	void invalidateMiniMapCache(bool cancelTask) {
-		const bool keepStaleCache = !cancelTask && mMiniMapCache.documentId == mBufferModel.documentId() && mMiniMapCache.bodyWidth > 0 && mMiniMapCache.rowCount > 0;
-		mMiniMapCache.valid = false;
-		if (!keepStaleCache) {
-			mMiniMapCache.rowPatterns.clear();
-			mMiniMapCache.rowLineStarts.clear();
-			mMiniMapCache.rowLineEnds.clear();
-		}
-		mMiniMapWarmupReschedulePending = false;
-		if (cancelTask && mMiniMapWarmupTaskId != 0) {
-			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mMiniMapWarmupTaskId));
-			clearMiniMapWarmupTaskInternal(mMiniMapWarmupTaskId);
-		}
-	}
+	void invalidateMiniMapCache(bool cancelTask);
 
-	bool applyMiniMapWarmupInternal(const mr::coprocessor::MiniMapWarmupPayload &payload, std::size_t expectedVersion, std::uint64_t expectedTaskId) {
-		if (expectedTaskId == 0 || mMiniMapWarmupTaskId != expectedTaskId) return false;
-		if (mBufferModel.documentId() != mMiniMapWarmupDocumentId || mBufferModel.version() != expectedVersion) return false;
+	bool applyMiniMapWarmupInternal(const mr::coprocessor::MiniMapWarmupPayload &payload, std::size_t expectedVersion, std::uint64_t expectedTaskId);
 
-		mMiniMapCache.valid = true;
-		mMiniMapCache.braille = payload.braille;
-		mMiniMapCache.rowCount = payload.rowCount;
-		mMiniMapCache.bodyWidth = payload.bodyWidth;
-		mMiniMapCache.documentId = mBufferModel.documentId();
-		mMiniMapCache.documentVersion = mBufferModel.version();
-		mMiniMapCache.totalLines = std::max<std::size_t>(1, payload.totalLines);
-		mMiniMapCache.windowStartLine = payload.windowStartLine;
-		mMiniMapCache.windowLineCount = std::max<std::size_t>(1, payload.windowLineCount);
-		mMiniMapCache.viewportWidth = std::max(1, payload.viewportWidth);
-		mMiniMapCache.rowPatterns = payload.rowPatterns;
-		mMiniMapCache.rowLineStarts = payload.rowLineStarts;
-		mMiniMapCache.rowLineEnds = payload.rowLineEnds;
+	void scheduleMiniMapWarmupIfNeeded(const TextViewportGeometry &viewport, bool useBraille, std::size_t totalLinesHint, std::size_t topLine);
 
-		clearMiniMapWarmupTaskInternal(expectedTaskId);
-		drawView();
-		return true;
-	}
+	MiniMapOverlayState computeMiniMapOverlayState(const MRTextBufferModel::Range &selection, std::size_t totalLines, int viewportWidth, int miniMapBodyWidth, bool useBraille, const MREditSetupSettings &settings) const;
 
-	void scheduleMiniMapWarmupIfNeeded(const TextViewportGeometry &viewport, bool useBraille, std::size_t totalLinesHint, std::size_t topLine) {
-		const int rowCount = miniMapViewportRows();
-		if (viewport.miniMapBodyWidth <= 0 || rowCount <= 0) {
-			invalidateMiniMapCache(true);
-			return;
-		}
-		const std::size_t docId = mBufferModel.documentId();
-		const std::size_t version = mBufferModel.version();
-		std::size_t totalLines = std::max<std::size_t>(1, totalLinesHint);
-		if (mBufferModel.exactLineCountKnown()) totalLines = std::max<std::size_t>(1, mBufferModel.lineCount());
-		const MiniMapSamplingWindow samplingWindow = miniMapSamplingWindowFor(totalLines, topLine, rowCount, useBraille);
-		if (miniMapCacheReadyForViewport(viewport, useBraille, samplingWindow)) return;
-
-		const int bodyWidth = viewport.miniMapBodyWidth;
-		const int viewportWidth = std::max(1, viewport.width);
-		const MREditSetupSettings settings = configuredEditSetupSettings();
-		if (mMiniMapWarmupTaskId != 0) {
-			if (mMiniMapWarmupDocumentId == docId && mMiniMapWarmupVersion == version && mMiniMapWarmupRows == rowCount && mMiniMapWarmupBodyWidth == bodyWidth && mMiniMapWarmupViewportWidth == viewportWidth && mMiniMapWarmupBraille == useBraille && mMiniMapWarmupWindowStartLine == samplingWindow.startLine && mMiniMapWarmupWindowLineCount == samplingWindow.lineCount) return;
-			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mMiniMapWarmupTaskId));
-			clearMiniMapWarmupTaskInternal(mMiniMapWarmupTaskId);
-		}
-
-		MRTextBufferModel::ReadSnapshot snapshot = mBufferModel.readSnapshot();
-		std::uint64_t previousTaskId = mMiniMapWarmupTaskId;
-		mMiniMapWarmupDocumentId = docId;
-		mMiniMapWarmupVersion = version;
-		mMiniMapWarmupRows = rowCount;
-		mMiniMapWarmupBodyWidth = bodyWidth;
-		mMiniMapWarmupViewportWidth = viewportWidth;
-		mMiniMapWarmupBraille = useBraille;
-		mMiniMapWarmupWindowStartLine = samplingWindow.startLine;
-		mMiniMapWarmupWindowLineCount = samplingWindow.lineCount;
-		mMiniMapWarmupReschedulePending = false;
-		mMiniMapWarmupTaskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::MiniMap, mr::coprocessor::TaskKind::MiniMapWarmup, docId, version, miniMapWarmupTaskLabel(), [snapshot, rowCount, bodyWidth, viewportWidth, useBraille, settings, totalLines, samplingWindow](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
-			mr::coprocessor::Result result;
-			struct MiniMapLineSample {
-				std::uint64_t dotColumnBits = 0;
-			};
-			std::vector<unsigned char> rowPatterns;
-			std::vector<std::size_t> rowLineStarts;
-			std::vector<std::size_t> rowLineEnds;
-			const int dotRows = useBraille ? std::max(1, rowCount * 4) : std::max(1, rowCount);
-			const int dotCols = useBraille ? std::max(1, bodyWidth * 2) : std::max(1, bodyWidth);
-			const std::size_t windowStartLine = samplingWindow.startLine;
-			const std::size_t windowLineCount = std::max<std::size_t>(1, samplingWindow.lineCount);
-			const std::size_t totalMiniMapCells = static_cast<std::size_t>(std::max(1, rowCount)) * static_cast<std::size_t>(std::max(1, bodyWidth));
-			std::size_t normalizedTotalLines = std::max<std::size_t>(1, totalLines);
-			auto shouldStop = [&]() noexcept { return stopToken.stop_requested() || info.cancelRequested(); };
-			result.task = info;
-
-			if (shouldStop()) {
-				result.status = mr::coprocessor::TaskStatus::Cancelled;
-				return result;
-			}
-			if (snapshot.exactLineCountKnown()) normalizedTotalLines = std::max<std::size_t>(1, snapshot.lineCount());
-			rowPatterns.assign(static_cast<std::size_t>(std::max(0, rowCount) * std::max(0, bodyWidth)), 0);
-			rowLineStarts.assign(static_cast<std::size_t>(std::max(0, rowCount)), 0);
-			rowLineEnds.assign(static_cast<std::size_t>(std::max(0, rowCount)), 0);
-			auto renderRows = [&](int yStart, int yEnd) -> bool {
-				MRTextBufferModel::ReadSnapshot workerSnapshot = snapshot;
-				std::map<std::size_t, MiniMapLineSample> sampledLineSamples;
-				auto lineSampleAt = [&](std::size_t lineIndex) -> const MiniMapLineSample & {
-					auto cached = sampledLineSamples.find(lineIndex);
-					if (cached != sampledLineSamples.end()) return cached->second;
-					MiniMapLineSample sample;
-					if (lineIndex < normalizedTotalLines) {
-						std::size_t lineStart = workerSnapshot.lineStartByIndex(lineIndex);
-						std::string lineText = workerSnapshot.lineText(lineStart);
-						std::size_t index = 0;
-						int visualColumn = 0;
-						while (index < lineText.size()) {
-							std::size_t current = index;
-							std::size_t next = index;
-							std::size_t width = 0;
-							if (!nextDisplayChar(lineText, next, width, visualColumn, settings)) break;
-							unsigned char ch = static_cast<unsigned char>(lineText[current]);
-							if (std::isspace(ch) == 0) {
-								const long long c = static_cast<long long>(visualColumn);
-								const long long w = static_cast<long long>(width);
-								const long long n = static_cast<long long>(dotCols);
-								const long long v = static_cast<long long>(viewportWidth);
-								const int dotColStart = static_cast<int>(c * n / v);
-								const int dotColEnd = static_cast<int>(((c + w) * n - 1) / v);
-								for (int dc = std::max(0, dotColStart); dc <= std::min(63, dotColEnd); ++dc)
-									sample.dotColumnBits |= (1ULL << dc);
-							}
-							visualColumn += static_cast<int>(width);
-							index = next;
-						}
-					}
-					auto inserted = sampledLineSamples.insert(std::make_pair(lineIndex, sample));
-					return inserted.first->second;
-				};
-
-				for (int y = yStart; y < yEnd; ++y) {
-					if (shouldStop()) return false;
-					std::pair<std::size_t, std::size_t> lineSpan = scaledInterval(static_cast<std::size_t>(y), static_cast<std::size_t>(rowCount), windowLineCount);
-					rowLineStarts[static_cast<std::size_t>(y)] = std::min(normalizedTotalLines, windowStartLine + lineSpan.first);
-					rowLineEnds[static_cast<std::size_t>(y)] = std::min(normalizedTotalLines, windowStartLine + lineSpan.second);
-					for (int x = 0; x < bodyWidth; ++x) {
-						unsigned char pattern = 0;
-						if (useBraille) {
-							static const unsigned char dotBits[4][2] = {{0x01, 0x08}, {0x02, 0x10}, {0x04, 0x20}, {0x40, 0x80}};
-							for (int py = 0; py < 4; ++py) {
-								std::size_t sampleRow = static_cast<std::size_t>(y * 4 + py);
-								if (sampleRow >= windowLineCount) continue;
-								std::size_t lineIndex = windowStartLine + scaledMidpoint(sampleRow, static_cast<std::size_t>(dotRows), windowLineCount);
-								const MiniMapLineSample &sample = lineSampleAt(lineIndex);
-								for (int px = 0; px < 2; ++px) {
-									const int dotColumn = x * 2 + px;
-									if (dotColumn < 64 && (sample.dotColumnBits & (1ULL << dotColumn)) != 0) pattern |= dotBits[py][px];
-								}
-							}
-						} else if (static_cast<std::size_t>(y) < windowLineCount) {
-							std::size_t lineIndex = windowStartLine + scaledMidpoint(static_cast<std::size_t>(y), static_cast<std::size_t>(rowCount), windowLineCount);
-							const MiniMapLineSample &sample = lineSampleAt(lineIndex);
-							if (x < 64 && (sample.dotColumnBits & (1ULL << x)) != 0) pattern = 1;
-						}
-						rowPatterns[static_cast<std::size_t>(y * bodyWidth + x)] = pattern;
-					}
-				}
-				return true;
-			};
-			const unsigned hardwareWorkers = std::max(1u, std::thread::hardware_concurrency());
-			const unsigned workerCount = totalMiniMapCells >= 512 ? std::min<unsigned>(hardwareWorkers, static_cast<unsigned>(std::max(1, rowCount))) : 1u;
-			if (workerCount == 1) {
-				if (!renderRows(0, rowCount)) {
-					result.status = mr::coprocessor::TaskStatus::Cancelled;
-					return result;
-				}
-			} else {
-				std::vector<std::future<bool>> workers;
-
-				workers.reserve(workerCount);
-				for (unsigned workerIndex = 0; workerIndex < workerCount; ++workerIndex) {
-					const int yStart = static_cast<int>((static_cast<std::size_t>(workerIndex) * static_cast<std::size_t>(rowCount)) / static_cast<std::size_t>(workerCount));
-					const int yEnd = static_cast<int>((static_cast<std::size_t>(workerIndex + 1) * static_cast<std::size_t>(rowCount)) / static_cast<std::size_t>(workerCount));
-					if (yStart >= yEnd) continue;
-					workers.push_back(std::async(std::launch::async, [&, yStart, yEnd]() { return renderRows(yStart, yEnd); }));
-				}
-				for (std::future<bool> &worker : workers)
-					if (!worker.get()) {
-						result.status = mr::coprocessor::TaskStatus::Cancelled;
-						return result;
-					}
-			}
-			result.status = mr::coprocessor::TaskStatus::Completed;
-			result.payload = std::make_shared<mr::coprocessor::MiniMapWarmupPayload>(useBraille, rowCount, bodyWidth, normalizedTotalLines, windowStartLine, windowLineCount, viewportWidth, std::move(rowPatterns), std::move(rowLineStarts), std::move(rowLineEnds));
-			return result;
-		});
-		if (mMiniMapWarmupTaskId != previousTaskId) notifyWindowTaskStateChanged();
-	}
-
-	MiniMapOverlayState computeMiniMapOverlayState(const MRTextBufferModel::Range &selection, std::size_t totalLines) const {
-		MiniMapOverlayState overlay;
-		auto addFindLineRange = [&](const MRTextBufferModel::Range &range) {
-			if (range.end <= range.start || mBufferModel.length() == 0) return;
-			const std::size_t startOffset = std::min(range.start, mBufferModel.length() - 1);
-			const std::size_t endOffset = std::min(range.end - 1, mBufferModel.length() - 1);
-			const std::size_t lineStart = std::min<std::size_t>(mBufferModel.lineIndex(startOffset), totalLines);
-			const std::size_t lineEnd = std::min<std::size_t>(mBufferModel.lineIndex(endOffset) + 1, totalLines);
-			if (lineEnd > lineStart) overlay.findLineRanges.push_back(std::make_pair(lineStart, lineEnd));
-		};
-
-		if (selection.end > selection.start) addFindLineRange(selection);
-		for (const MRTextBufferModel::Range &range : mFindMarkerRanges)
-			addFindLineRange(range);
-		normalizePairRangeList(overlay.findLineRanges);
-		for (const MRTextBufferModel::Range &range : mDirtyRanges) {
-			if (range.end <= range.start || range.start >= mBufferModel.length()) continue;
-			std::size_t startOffset = std::min(range.start, mBufferModel.length() - 1);
-			std::size_t endOffset = std::min(range.end - 1, mBufferModel.length() - 1);
-			std::size_t lineStart = std::min<std::size_t>(mBufferModel.lineIndex(startOffset), totalLines);
-			std::size_t lineEnd = std::min<std::size_t>(mBufferModel.lineIndex(endOffset) + 1, totalLines);
-			if (lineEnd > lineStart) overlay.dirtyLineRanges.push_back(std::make_pair(lineStart, lineEnd));
-		}
-		normalizePairRangeList(overlay.dirtyLineRanges);
-		return overlay;
-	}
-
-	static bool lineIntervalOverlaps(std::size_t start, std::size_t end, const std::vector<std::pair<std::size_t, std::size_t>> &ranges) noexcept {
-		for (const auto &range : ranges) {
-			if (range.second <= start) continue;
-			if (range.first >= end) continue;
-			return true;
-		}
-		return false;
-	}
-
-	void drawMiniMapGutter(TDrawBuffer &b, int y, int miniMapRows, const TextViewportGeometry &viewport, std::size_t totalLines, std::size_t topLine, bool useBraille, const std::string &viewportMarkerGlyph, const MiniMapPalette &palette, const MiniMapOverlayState &overlay) {
-		if (viewport.miniMapBodyWidth <= 0 || viewport.miniMapBodyX < 0 || viewport.miniMapInfoX < 0 || totalLines == 0 || miniMapRows <= 0) return;
-
-		const std::array<std::string, 256> &glyphTable = brailleGlyphTable();
-		const int bodyX = viewport.miniMapBodyX;
-		const int bodyWidth = viewport.miniMapBodyWidth;
-		const MiniMapSamplingWindow samplingWindow = miniMapSamplingWindowFor(totalLines, topLine, miniMapRows, useBraille);
-		const bool cacheReady = miniMapCacheReadyForViewport(viewport, useBraille, samplingWindow);
-		const bool stalePatternCacheUsable = !cacheReady && mMiniMapCache.bodyWidth == bodyWidth && mMiniMapCache.rowCount == miniMapRows && !mMiniMapCache.rowPatterns.empty();
-		std::size_t rowLineStart = 0;
-		std::size_t rowLineEnd = 0;
-
-		if (y >= miniMapRows) {
-			b.moveChar(static_cast<ushort>(bodyX), ' ', palette.normal, static_cast<ushort>(bodyWidth));
-			if (viewport.miniMapSeparatorX >= 0 && viewport.miniMapSeparatorX < size.x) b.moveChar(static_cast<ushort>(viewport.miniMapSeparatorX), ' ', palette.normal, 1);
-			b.moveChar(static_cast<ushort>(viewport.miniMapInfoX), ' ', palette.normal, 1);
-			return;
-		}
-
-		if ((cacheReady || stalePatternCacheUsable) && static_cast<std::size_t>(y) < mMiniMapCache.rowLineStarts.size() && static_cast<std::size_t>(y) < mMiniMapCache.rowLineEnds.size()) {
-			rowLineStart = mMiniMapCache.rowLineStarts[static_cast<std::size_t>(y)];
-			rowLineEnd = mMiniMapCache.rowLineEnds[static_cast<std::size_t>(y)];
-		} else {
-			std::pair<std::size_t, std::size_t> rowSpan = scaledInterval(static_cast<std::size_t>(y), static_cast<std::size_t>(std::max(miniMapRows, 1)), samplingWindow.lineCount);
-			const std::size_t normTotal = std::max<std::size_t>(1, totalLines);
-			rowLineStart = std::min(samplingWindow.startLine + rowSpan.first, normTotal);
-			rowLineEnd = std::min(samplingWindow.startLine + rowSpan.second, normTotal);
-		}
-
-		bool rowChanged = lineIntervalOverlaps(rowLineStart, rowLineEnd, overlay.dirtyLineRanges);
-		bool rowFind = lineIntervalOverlaps(rowLineStart, rowLineEnd, overlay.findLineRanges);
-		bool rowError = false;
-
-		for (int x = 0; x < bodyWidth; ++x) {
-			unsigned char pattern = 0;
-			if (cacheReady || stalePatternCacheUsable) {
-				std::size_t index = static_cast<std::size_t>(y * bodyWidth + x);
-				if (index < mMiniMapCache.rowPatterns.size()) pattern = mMiniMapCache.rowPatterns[index];
-			}
-			TColorAttr rowPriorityColor = palette.normal;
-			if (rowError) {
-				rowPriorityColor = palette.errorMarker;
-			} else if (rowFind) {
-				rowPriorityColor = palette.findMarker;
-			} else if (rowChanged) {
-				rowPriorityColor = palette.changed;
-			}
-			const bool rowOverlayActive = rowError || rowFind || rowChanged;
-			TColorAttr cellColor = (pattern != 0 || rowOverlayActive) ? rowPriorityColor : palette.normal;
-			if (useBraille) b.moveStr(static_cast<ushort>(bodyX + x), glyphTable[pattern], cellColor, 1);
-			else if (pattern != 0)
-				b.moveStr(static_cast<ushort>(bodyX + x), "\xE2\x96\x88", cellColor, 1); // U+2588
-			else
-				b.moveChar(static_cast<ushort>(bodyX + x), ' ', cellColor, 1);
-		}
-
-		if (viewport.miniMapSeparatorX >= 0 && viewport.miniMapSeparatorX < size.x) b.moveChar(static_cast<ushort>(viewport.miniMapSeparatorX), ' ', palette.normal, 1);
-
-		std::size_t clampedTopLine = std::min(topLine, totalLines - 1);
-		std::size_t visibleLines = static_cast<std::size_t>(std::max(miniMapRows, 1));
-		std::size_t viewportLineEnd = std::min(totalLines, clampedTopLine + visibleLines);
-		bool markerVisible = false;
-		if (rowLineEnd > rowLineStart) markerVisible = rowLineStart < viewportLineEnd && rowLineEnd > clampedTopLine;
-		if (markerVisible) b.moveStr(static_cast<ushort>(viewport.miniMapInfoX), viewportMarkerGlyph, palette.viewport, 1);
-		else
-			b.moveChar(static_cast<ushort>(viewport.miniMapInfoX), ' ', palette.normal, 1);
-	}
+	void drawMiniMapGutter(TDrawBuffer &b, int y, int miniMapRows, const TextViewportGeometry &viewport, std::size_t totalLines, std::size_t topLine, bool useBraille, const std::string &viewportMarkerGlyph, const MiniMapPalette &palette, const MiniMapOverlayState &overlay);
 
 	static bool nextDisplayChar(TStringView text, std::size_t &index, std::size_t &width, int visualColumn, const MREditSetupSettings &settings) noexcept {
 		if (index >= text.size()) return false;
@@ -2629,10 +2287,8 @@ class MRFileEditor : public TScroller {
 	}
 
 	int dynamicLargeFileWidthLimit() const {
-		const std::size_t cursor = mBufferModel.cursor();
-		const int cursorColumn = charColumn(mBufferModel.lineStart(cursor), cursor);
 		const int viewportWidth = textViewportWidth();
-		return std::max(std::max(viewportWidth, 256), std::max(delta.x + viewportWidth + 64, cursorColumn + 64));
+		return std::max(std::max(viewportWidth, 256), std::max(delta.x + viewportWidth + 64, displayedCursorColumn() + 64));
 	}
 
 	void scheduleLineIndexWarmupIfNeeded() {
@@ -2796,6 +2452,7 @@ class MRFileEditor : public TScroller {
 			limitX = longestLineWidth();
 			limitY = std::max<int>(1, static_cast<int>(mBufferModel.lineCount()));
 		}
+		limitX = std::max(limitX, displayedCursorColumn() + 1);
 		if (showEofMarker && limitY < INT_MAX) ++limitY;
 
 		int maxX = std::max(0, limitX - viewportWidth);
@@ -2812,9 +2469,8 @@ class MRFileEditor : public TScroller {
 		if (mIndicatorUpdateInProgress) return;
 		mIndicatorUpdateInProgress = true;
 		TextViewportGeometry viewport = textViewportGeometry();
-		std::size_t cursor = mBufferModel.cursor();
-		unsigned long visualColumn = static_cast<unsigned long>(charColumn(mBufferModel.lineStart(cursor), cursor));
-		unsigned long line = static_cast<unsigned long>(mBufferModel.lineIndex(cursor));
+		unsigned long visualColumn = static_cast<unsigned long>(displayedCursorColumn());
+		unsigned long line = static_cast<unsigned long>(mBufferModel.lineIndex(mBufferModel.cursor()));
 		long long localX = viewport.localXFromVisualColumn(static_cast<long long>(visualColumn));
 		long long localY = static_cast<long long>(line) - delta.y + viewport.topInset;
 
@@ -2835,9 +2491,8 @@ class MRFileEditor : public TScroller {
 	}
 
 	void ensureCursorVisible(bool centerCursor) {
-		std::size_t cursor = mBufferModel.cursor();
-		int visualColumn = charColumn(mBufferModel.lineStart(cursor), cursor);
-		int line = static_cast<int>(mBufferModel.lineIndex(cursor));
+		int visualColumn = displayedCursorColumn();
+		int line = static_cast<int>(mBufferModel.lineIndex(mBufferModel.cursor()));
 		int targetX = delta.x;
 		int targetY = delta.y;
 		int viewportWidth = textViewportWidth();
@@ -2856,7 +2511,7 @@ class MRFileEditor : public TScroller {
 		scrollTo(targetX, targetY);
 	}
 
-	void moveCursor(std::size_t target, bool extendSelection, bool centerCursor) {
+	void moveCursor(std::size_t target, bool extendSelection, bool centerCursor, int requestedVisualColumn = -1) {
 		target = canonicalCursorOffset(std::min(target, mBufferModel.length()));
 		if (extendSelection) {
 			std::size_t anchor = mBufferModel.hasSelection() ? mBufferModel.selection().anchor : mBufferModel.cursor();
@@ -2868,6 +2523,9 @@ class MRFileEditor : public TScroller {
 				mBufferModel.setCursorAndSelection(target, target, target);
 			mSelectionAnchor = target;
 		}
+		if (freeCursorMovementEnabled() && requestedVisualColumn >= 0) mCursorVisualColumn = std::max(actualCursorVisualColumn(target), requestedVisualColumn);
+		else
+			mCursorVisualColumn = actualCursorVisualColumn(target);
 		if (useApproximateLargeFileMetrics()) updateMetrics();
 		ensureCursorVisible(centerCursor);
 		scheduleSyntaxWarmupIfNeeded();
@@ -2915,7 +2573,7 @@ class MRFileEditor : public TScroller {
 		std::size_t insertPos = mBufferModel.cursor();
 		const MREditSetupSettings settings = configuredEditSetupSettings();
 		if (mBufferModel.hasSelection()) insertPos = mBufferModel.selection().range().start;
-		int visualColumn = charColumn(mBufferModel.lineStart(insertPos), insertPos);
+		int visualColumn = freeCursorMovementEnabled() && insertPos == mBufferModel.cursor() && !mBufferModel.hasSelection() ? displayedCursorColumn() : charColumn(mBufferModel.lineStart(insertPos), insertPos);
 		return std::string(static_cast<std::size_t>(tabDisplayWidth(settings, visualColumn)), ' ');
 	}
 
@@ -2946,10 +2604,10 @@ class MRFileEditor : public TScroller {
 				moveCursor(nextCharOffset(cursorOffset()), extend, false);
 				break;
 			case kbUp:
-				moveCursor(lineMoveOffset(cursorOffset(), -1), extend, false);
+				moveCursor(lineMoveOffset(cursorOffset(), -1, displayedCursorColumn()), extend, false, displayedCursorColumn());
 				break;
 			case kbDown:
-				moveCursor(lineMoveOffset(cursorOffset(), 1), extend, false);
+				moveCursor(lineMoveOffset(cursorOffset(), 1, displayedCursorColumn()), extend, false, displayedCursorColumn());
 				break;
 			case kbHome:
 				moveCursor(mAutoIndent ? charPtrOffset(lineStartOffset(cursorOffset()), 0) : lineStartOffset(cursorOffset()), extend, false);
@@ -2958,10 +2616,10 @@ class MRFileEditor : public TScroller {
 				moveCursor(lineEndOffset(cursorOffset()), extend, false);
 				break;
 			case kbPgUp:
-				moveCursor(lineMoveOffset(cursorOffset(), -(std::max(2, visibleTextRows()) - 1)), extend, true);
+				moveCursor(lineMoveOffset(cursorOffset(), -(std::max(2, visibleTextRows()) - 1), displayedCursorColumn()), extend, true, displayedCursorColumn());
 				break;
 			case kbPgDn:
-				moveCursor(lineMoveOffset(cursorOffset(), std::max(2, visibleTextRows()) - 1), extend, true);
+				moveCursor(lineMoveOffset(cursorOffset(), std::max(2, visibleTextRows()) - 1, displayedCursorColumn()), extend, true, displayedCursorColumn());
 				break;
 			case kbCtrlHome:
 				moveCursor(0, extend, true);
@@ -3096,16 +2754,16 @@ class MRFileEditor : public TScroller {
 				moveCursor(lineEndOffset(cursorOffset()), false, false);
 				break;
 			case cmLineUp:
-				moveCursor(lineMoveOffset(cursorOffset(), -1), false, false);
+				moveCursor(lineMoveOffset(cursorOffset(), -1, displayedCursorColumn()), false, false, displayedCursorColumn());
 				break;
 			case cmLineDown:
-				moveCursor(lineMoveOffset(cursorOffset(), 1), false, false);
+				moveCursor(lineMoveOffset(cursorOffset(), 1, displayedCursorColumn()), false, false, displayedCursorColumn());
 				break;
 			case cmPageUp:
-				moveCursor(lineMoveOffset(cursorOffset(), -(std::max(2, visibleTextRows()) - 1)), false, true);
+				moveCursor(lineMoveOffset(cursorOffset(), -(std::max(2, visibleTextRows()) - 1), displayedCursorColumn()), false, true, displayedCursorColumn());
 				break;
 			case cmPageDown:
-				moveCursor(lineMoveOffset(cursorOffset(), std::max(2, visibleTextRows()) - 1), false, true);
+				moveCursor(lineMoveOffset(cursorOffset(), std::max(2, visibleTextRows()) - 1, displayedCursorColumn()), false, true, displayedCursorColumn());
 				break;
 			case cmTextStart:
 				moveCursor(0, false, true);
@@ -3170,8 +2828,9 @@ class MRFileEditor : public TScroller {
 
 		select();
 		std::size_t anchor = (event.mouse.controlKeyState & kbShift) != 0 && mBufferModel.hasSelection() ? mBufferModel.selection().anchor : mBufferModel.cursor();
+		int targetColumn = 0;
 		mSelectionAnchor = anchor;
-		moveCursor(mouseOffset(makeLocal(event.mouse.where)), (event.mouse.controlKeyState & kbShift) != 0, false);
+		moveCursor(mouseOffset(makeLocal(event.mouse.where), &targetColumn), (event.mouse.controlKeyState & kbShift) != 0, false, targetColumn);
 
 		while (mouseEvent(event, evMouseMove | evMouseAuto)) {
 			if (event.what == evMouseAuto) {
@@ -3186,21 +2845,26 @@ class MRFileEditor : public TScroller {
 					++dy;
 				scrollTo(std::max(dx, 0), std::max(dy, 0));
 			}
-			std::size_t target = mouseOffset(makeLocal(event.mouse.where));
+			int dragColumn = 0;
+			std::size_t target = mouseOffset(makeLocal(event.mouse.where), &dragColumn);
 			mBufferModel.setCursorAndSelection(target, mSelectionAnchor, target);
+			if (freeCursorMovementEnabled()) mCursorVisualColumn = std::max(actualCursorVisualColumn(target), dragColumn);
+			else
+				mCursorVisualColumn = actualCursorVisualColumn(target);
 			updateIndicator();
 			drawView();
 		}
 		clearEvent(event);
 	}
 
-	std::size_t mouseOffset(TPoint local) noexcept {
+	std::size_t mouseOffset(TPoint local, int *visualColumnOut = nullptr) noexcept {
 		TextViewportGeometry viewport = textViewportGeometry();
 		const int textRows = std::max(1, visibleTextRows());
 		int clampedY = std::max(0, std::min(local.y - viewport.topInset, textRows - 1));
 		int row = clampedY + delta.y;
 		int column = viewport.textColumnFromLocalX(local.x);
 		std::size_t start = lineStartForIndex(static_cast<std::size_t>(std::max(row, 0)));
+		if (visualColumnOut != nullptr) *visualColumnOut = column;
 		return canonicalCursorOffset(charPtrOffset(start, column));
 	}
 
@@ -3519,6 +3183,7 @@ class MRFileEditor : public TScroller {
 		selStart = canonicalCursorOffset(selStart);
 		selEnd = canonicalCursorOffset(selEnd);
 		mBufferModel.setCursorAndSelection(cursorPos, selStart, selEnd);
+		syncDisplayedCursorColumnFromCursor(false);
 		mBufferModel.setModified(modifiedState);
 		if (changeSet == nullptr || changeSet->changed) mFindMarkerRanges.clear();
 		if (!modifiedState) clearDirtyRanges();
@@ -3547,6 +3212,7 @@ class MRFileEditor : public TScroller {
 	std::string mSyntaxTitleHint;
 	MRTextBufferModel mBufferModel;
 	std::size_t mSelectionAnchor;
+	int mCursorVisualColumn;
 	bool mIndicatorUpdateInProgress;
 	std::uint64_t mLineIndexWarmupTaskId;
 	std::size_t mLineIndexWarmupDocumentId;

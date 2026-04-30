@@ -3,7 +3,6 @@
 #define Uses_TDeskTop
 #define Uses_TDialog
 #define Uses_TFileDialog
-#define Uses_TFileList
 #define Uses_MsgBox
 #define Uses_TObject
 #define Uses_TButton
@@ -25,6 +24,7 @@
 #define Uses_TStaticText
 #define Uses_TRadioButtons
 #define Uses_TView
+#define Uses_TWindow
 #define Uses_TCheckBoxes
 #define Uses_TSItem
 #include <tvision/tv.h>
@@ -38,6 +38,8 @@
 #include "../ui/MRPalette.hpp"
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRMenuBar.hpp"
+#include "../ui/MREditWindow.hpp"
+#include "../ui/MRScopedHistoryDialogs.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "MRDirtyGating.hpp"
 #include "MRKeymapManager.hpp"
@@ -61,66 +63,6 @@ namespace {
 TFrame *initSetupDialogFrame(TRect bounds) {
 	return new MRFrame(bounds);
 }
-
-class TWheelFileDialog final : public TFileDialog {
-  public:
-	TWheelFileDialog(TStringView wildCard, TStringView title, TStringView inputName, ushort options) noexcept : TWindowInit(TFileDialog::initFrame), TFileDialog(wildCard, title, inputName, options, 0), dialogOptions(options) {
-		stripHistoryView(TRect(31, 3, 34, 4));
-	}
-
-	void handleEvent(TEvent &event) override {
-		if (event.what == evBroadcast && event.message.command == cmFileDoubleClicked && (dialogOptions & fdOpenButton) != 0) {
-			event.what = evCommand;
-			event.message.command = cmFileOpen;
-			TFileDialog::handleEvent(event);
-			return;
-		}
-		if (event.what == evMouseWheel && fileList != nullptr && fileList->containsMouse(event) && fileList->range > 0) {
-			const int delta = event.mouse.wheel == mwUp || event.mouse.wheel == mwLeft ? -1 : 1;
-			const short next = static_cast<short>(std::clamp<int>(fileList->focused + delta, 0, fileList->range - 1));
-
-			fileList->focusItemNum(next);
-			clearEvent(event);
-			return;
-		}
-		TFileDialog::handleEvent(event);
-	}
-
-  private:
-	void stripHistoryView(const TRect &bounds) {
-		for (TView *child = first(); child != nullptr;) {
-			TView *next = child->nextView();
-			if (child->getBounds() == bounds) {
-				remove(child);
-				TObject::destroy(child);
-				return;
-			}
-			child = next;
-		}
-	}
-
-	ushort dialogOptions = 0;
-};
-
-class TWheelChDirDialog final : public TChDirDialog {
-  public:
-	explicit TWheelChDirDialog(ushort options) noexcept : TWindowInit(TChDirDialog::initFrame), TChDirDialog(options, 0) {
-		stripHistoryView(TRect(42, 3, 45, 4));
-	}
-
-  private:
-	void stripHistoryView(const TRect &bounds) {
-		for (TView *child = first(); child != nullptr;) {
-			TView *next = child->nextView();
-			if (child->getBounds() == bounds) {
-				remove(child);
-				TObject::destroy(child);
-				return;
-			}
-			child = next;
-		}
-	}
-};
 
 using mr::dialogs::ensureMrmacExtension;
 using mr::dialogs::execDialogRaw;
@@ -231,8 +173,8 @@ std::string parentDirectoryOfPath(std::string_view path) {
 std::string resolveFileDialogSeedDirectory(MRDialogHistoryScope scope, const char *buffer) {
 	std::string seedPath = normalizeConfiguredPathInput(trimAscii(buffer != nullptr ? buffer : ""));
 
-	if (seedPath.empty()) seedPath = configuredLastFileDialogFilePath(scope);
 	if (seedPath.empty()) seedPath = configuredLastFileDialogPath(scope);
+	if (seedPath.empty()) seedPath = configuredLastFileDialogFilePath(scope);
 	if (pathIsDirectory(seedPath)) return seedPath;
 	return parentDirectoryOfPath(seedPath);
 }
@@ -252,55 +194,21 @@ bool deferRememberingLoadDialogPath(MRDialogHistoryScope scope) {
 	}
 }
 
-bool hasSeedPathSeparator(std::string_view value) {
-	return value.find('/') != std::string_view::npos || value.find('\\') != std::string_view::npos;
-}
+std::string dialogSeedFileName(std::string_view value) {
+	const std::string trimmed = trimAscii(value);
+	const std::string normalized = normalizeConfiguredPathInput(trimmed);
+	const std::size_t sep = normalized.find_last_of('/');
 
-bool isExecutableSeedCandidate(std::string_view path) {
-	const std::string pathString(path);
-	struct stat st;
-
-	if (path.empty()) return false;
-	if (::stat(pathString.c_str(), &st) != 0) return false;
-	if (!S_ISREG(st.st_mode)) return false;
-	return ::access(pathString.c_str(), X_OK) == 0;
-}
-
-std::string resolveExecutableSeedPath(std::string_view value) {
-	std::string trimmed = trimAscii(value);
-	std::string candidate;
-	const char *pathEnv = std::getenv("PATH");
-	std::size_t start = 0;
-
-	if (trimmed.empty()) return std::string();
-	if (hasSeedPathSeparator(trimmed) || trimmed[0] == '~') return normalizeConfiguredPathInput(trimmed);
-	if (pathEnv != nullptr && *pathEnv != '\0') {
-		const std::string pathList(pathEnv);
-		while (start <= pathList.size()) {
-			const std::size_t end = pathList.find(':', start);
-			std::string dir = end == std::string::npos ? pathList.substr(start) : pathList.substr(start, end - start);
-			if (!dir.empty()) {
-				candidate = normalizeConfiguredPathInput(dir + "/" + trimmed);
-				if (isExecutableSeedCandidate(candidate)) return candidate;
-			}
-			if (end == std::string::npos) break;
-			start = end + 1;
-		}
+	if (!normalized.empty()) {
+		if (sep == std::string::npos) return normalized;
+		return normalized.substr(sep + 1);
 	}
-	for (const char *fallbackDir : {"/usr/bin", "/bin"}) {
-		candidate = normalizeConfiguredPathInput(std::string(fallbackDir) + "/" + trimmed);
-		if (isExecutableSeedCandidate(candidate)) return candidate;
+	if (trimmed.find('/') != std::string::npos || trimmed.find('\\') != std::string::npos) {
+		const std::size_t rawSep = trimmed.find_last_of("/\\");
+		if (rawSep == std::string::npos) return trimmed;
+		return trimmed.substr(rawSep + 1);
 	}
-	return std::string();
-}
-
-std::string resolveSeedCurrentValue(MRDialogHistoryScope scope, std::string_view currentValue) {
-	const std::string trimmed = trimAscii(currentValue);
-
-	if (trimmed.empty()) return std::string();
-	if (scope == MRDialogHistoryScope::SetupShellExecutable) return resolveExecutableSeedPath(trimmed);
-	if (hasSeedPathSeparator(trimmed) || trimmed[0] == '~') return normalizeConfiguredPathInput(trimmed);
-	return std::string();
+	return trimmed;
 }
 
 bool confirmOverwriteForPath(const char *primaryLabel, const char *headline, const std::string &targetPath) {
@@ -668,11 +576,11 @@ void discardQueuedCancelEvent() {
 	discardQueuedCancelEventsForTarget(static_cast<TView *>(TProgram::deskTop));
 }
 
-bool browseUriWithFileDialog(MRDialogHistoryScope scope, const char *title, const std::string &currentValue, std::string &selectedUri) {
+bool browseUriWithFileDialog(MRDialogHistoryScope scope, const char *title, std::string &selectedUri) {
 	char fileName[MAXPATH];
 	ushort result;
 
-	mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.*", currentValue);
+	mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.*");
 	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.*", title, "~N~ame", fdOKButton, fileName);
 	if (result == cmCancel) {
 		discardQueuedCancelEvent();
@@ -682,15 +590,14 @@ bool browseUriWithFileDialog(MRDialogHistoryScope scope, const char *title, cons
 	return true;
 }
 
-bool browsePathWithDirectoryDialog(MRDialogHistoryScope scope, const std::string &currentValue, std::string &selectedPath) {
+bool browsePathWithDirectoryDialog(MRDialogHistoryScope scope, std::string &selectedPath) {
 	std::string originalCwd = readCurrentWorkingDirectory();
-	std::string seed = normalizeConfiguredPathInput(trimAscii(currentValue));
+	std::string seed = configuredLastFileDialogPath(scope);
 	std::string picked;
 	ushort result;
 
-	if (seed.empty()) seed = configuredLastFileDialogPath(scope);
 	if (!seed.empty()) (void)::chdir(seed.c_str());
-	result = execDialogRaw(mr::dialogs::createDirectoryDialog(cdNormal));
+	result = execDialogRaw(mr::dialogs::createDirectoryDialog(scope, cdNormal));
 	picked = readCurrentWorkingDirectory();
 	if (!originalCwd.empty()) (void)::chdir(originalCwd.c_str());
 	if (result == cmCancel) {
@@ -705,10 +612,9 @@ bool browsePathWithDirectoryDialog(MRDialogHistoryScope scope, const std::string
 bool chooseThemeFileForLoad(MRDialogHistoryScope scope, std::string &selectedUri) {
 	char fileName[MAXPATH];
 	ushort result;
-	std::string initialThemePath = configuredLastFileDialogFilePath(scope);
 
-	if (initialThemePath.empty()) initialThemePath = configuredColorThemeFilePath();
-	mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.mrmac", initialThemePath);
+	mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.mrmac");
+	mr::dialogs::suggestFileDialogName(fileName, sizeof(fileName), configuredColorThemeFilePath());
 	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.mrmac", "Load color theme", "~N~ame", fdOKButton, fileName);
 	if (result == cmCancel) {
 		discardQueuedCancelEvent();
@@ -721,10 +627,9 @@ bool chooseThemeFileForLoad(MRDialogHistoryScope scope, std::string &selectedUri
 bool chooseThemeFileForSave(MRDialogHistoryScope scope, std::string &selectedUri) {
 	char fileName[MAXPATH];
 	ushort result;
-	std::string initialThemePath = configuredLastFileDialogFilePath(scope);
 
-	if (initialThemePath.empty()) initialThemePath = configuredColorThemeFilePath();
-	mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.mrmac", initialThemePath);
+	mr::dialogs::seedFileDialogPath(scope, fileName, sizeof(fileName), "*.mrmac");
+	mr::dialogs::suggestFileDialogName(fileName, sizeof(fileName), configuredColorThemeFilePath());
 	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.mrmac", "Save color theme as", "~N~ame", fdOKButton, fileName);
 	if (result == cmCancel) {
 		discardQueuedCancelEvent();
@@ -1185,32 +1090,32 @@ class TPathsSetupDialog : public MRScrollableDialog {
 
 	void browseSettingsMacroUri() {
 		std::string selected;
-		if (browseUriWithFileDialog(MRDialogHistoryScope::SetupSettingsMacro, "Select settings macro URI", currentInputValue(mSettingsMacroPathField), selected)) setInputValue(mSettingsMacroPathField, selected);
+		if (browseUriWithFileDialog(MRDialogHistoryScope::SetupSettingsMacro, "Select settings macro URI", selected)) setInputValue(mSettingsMacroPathField, selected);
 	}
 
 	void browseMacroPath() {
 		std::string selected;
-		if (browsePathWithDirectoryDialog(MRDialogHistoryScope::SetupMacroDirectory, currentInputValue(mMacroDirectoryPathField), selected)) setInputValue(mMacroDirectoryPathField, selected);
+		if (browsePathWithDirectoryDialog(MRDialogHistoryScope::SetupMacroDirectory, selected)) setInputValue(mMacroDirectoryPathField, selected);
 	}
 
 	void browseHelpUri() {
 		std::string selected;
-		if (browseUriWithFileDialog(MRDialogHistoryScope::SetupHelpFile, "Select help file URI", currentInputValue(mHelpFilePathField), selected)) setInputValue(mHelpFilePathField, selected);
+		if (browseUriWithFileDialog(MRDialogHistoryScope::SetupHelpFile, "Select help file URI", selected)) setInputValue(mHelpFilePathField, selected);
 	}
 
 	void browseTempPath() {
 		std::string selected;
-		if (browsePathWithDirectoryDialog(MRDialogHistoryScope::SetupTempDirectory, currentInputValue(mTempDirectoryPathField), selected)) setInputValue(mTempDirectoryPathField, selected);
+		if (browsePathWithDirectoryDialog(MRDialogHistoryScope::SetupTempDirectory, selected)) setInputValue(mTempDirectoryPathField, selected);
 	}
 
 	void browseShellUri() {
 		std::string selected;
-		if (browseUriWithFileDialog(MRDialogHistoryScope::SetupShellExecutable, "Select shell executable URI", currentInputValue(mShellExecutablePathField), selected)) setInputValue(mShellExecutablePathField, selected);
+		if (browseUriWithFileDialog(MRDialogHistoryScope::SetupShellExecutable, "Select shell executable URI", selected)) setInputValue(mShellExecutablePathField, selected);
 	}
 
 	void browseLogUri() {
 		std::string selected;
-		if (browseUriWithFileDialog(MRDialogHistoryScope::SetupLogFile, "Select logfile URI", currentInputValue(mLogFilePathField), selected)) setInputValue(mLogFilePathField, selected);
+		if (browseUriWithFileDialog(MRDialogHistoryScope::SetupLogFile, "Select logfile URI", selected)) setInputValue(mLogFilePathField, selected);
 	}
 
 	DialogValidationResult validateDialogValues() {
@@ -1702,7 +1607,7 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 
 	void browseBackupDirectory() {
 		std::string selected;
-		if (browsePathWithDirectoryDialog(MRDialogHistoryScope::SetupBackupDirectory, currentInputValue(mBackupDirectoryField, kBackupDirectoryFieldSize), selected)) setInputValue(mBackupDirectoryField, kBackupDirectoryFieldSize, selected);
+		if (browsePathWithDirectoryDialog(MRDialogHistoryScope::SetupBackupDirectory, selected)) setInputValue(mBackupDirectoryField, kBackupDirectoryFieldSize, selected);
 		if (mBackupDirectoryField != nullptr) mBackupDirectoryField->select();
 	}
 
@@ -1991,6 +1896,7 @@ namespace {
 struct UserInterfaceSettingsDialogData {
 	ushort flags = 0;
 	ushort virtualDesktops = 1;
+	ushort cursorBehaviourChoice = 1;
 	char cursorPositionMarker[12] = {0};
 };
 
@@ -2033,12 +1939,12 @@ bool validateCursorPositionMarkerInput(std::string_view value, std::string &erro
 }
 
 bool userInterfaceSettingsDialogDataEqual(const UserInterfaceSettingsDialogData &lhs, const UserInterfaceSettingsDialogData &rhs) {
-	return lhs.flags == rhs.flags && lhs.virtualDesktops == rhs.virtualDesktops && readRecordField(lhs.cursorPositionMarker) == readRecordField(rhs.cursorPositionMarker);
+	return lhs.flags == rhs.flags && lhs.virtualDesktops == rhs.virtualDesktops && lhs.cursorBehaviourChoice == rhs.cursorBehaviourChoice && readRecordField(lhs.cursorPositionMarker) == readRecordField(rhs.cursorPositionMarker);
 }
 
 class TUserInterfaceSettingsDialog : public MRScrollableDialog {
   public:
-	TUserInterfaceSettingsDialog(bool initialWindowManager, bool initialMenulineMessages, int initialVirtualDesktops, bool initialAutoloadWorkspace, bool initialCyclicVirtualDesktops, const std::string &initialCursorPositionMarker) : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(68, 15), "User interface settings", 66, 13, initSetupDialogFrame) {
+	TUserInterfaceSettingsDialog(bool initialWindowManager, bool initialMenulineMessages, int initialVirtualDesktops, bool initialAutoloadWorkspace, bool initialCyclicVirtualDesktops, MRCursorBehaviour initialCursorBehaviour, const std::string &initialCursorPositionMarker) : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(68, 19), "User interface settings", 66, 17, initSetupDialogFrame) {
 
 		int const yStart = 2;
 
@@ -2051,16 +1957,21 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		addManaged(mVirtualDesktopsSlider, TRect(26, 7, 63, 8));
 		addManaged(new TLabel(TRect(3, 7, 25, 8), "~V~irtual desktops:", mVirtualDesktopsSlider), TRect(3, 7, 25, 8));
 
-		mCursorPositionMarkerField = new TInputLine(TRect(28, 9, 42, 10), 11);
-		addManaged(mCursorPositionMarkerField, TRect(28, 9, 42, 10));
-		addManaged(new TLabel(TRect(3, 9, 27, 10), "Cursor position ~m~arker: ", mCursorPositionMarkerField), TRect(3, 9, 27, 10));
+		addManaged(new TStaticText(TRect(3, 9, 27, 10), "Cursor behaviour:"), TRect(3, 9, 27, 10));
+		mCursorBehaviourField = new TRadioButtons(TRect(3, 10, 29, 12), new TSItem("~F~ree movement", new TSItem("~B~ound to text", nullptr)));
+		addManaged(mCursorBehaviourField, TRect(3, 10, 29, 12));
+
+		mCursorPositionMarkerField = new TInputLine(TRect(28, 13, 42, 14), 11);
+		addManaged(mCursorPositionMarkerField, TRect(28, 13, 42, 14));
+		addManaged(new TLabel(TRect(3, 13, 27, 14), "Cursor position ~m~arker: ", mCursorPositionMarkerField), TRect(3, 13, 27, 14));
 
 		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 2);
-		int buttonRow = 11;
+		int buttonRow = 15;
 		int buttonLeft = (66 - metrics.rowWidth) / 2;
 		mr::dialogs::addManagedUniformButtonRow(*this, buttonLeft, buttonRow, 2, buttons);
 
+		mInitialCursorBehaviourChoice = initialCursorBehaviour == MRCursorBehaviour::FreeMovement ? 0 : 1;
 		writeRecordField(mDataCursorMarker, sizeof(mDataCursorMarker), initialCursorPositionMarker);
 		setDialogValidationHook([this]() { return validateDialogValues(); });
 
@@ -2075,6 +1986,7 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 			mVirtualDesktopsSlider->getData(&val);
 			data->virtualDesktops = static_cast<ushort>(val);
 		}
+		if (mCursorBehaviourField != nullptr) mCursorBehaviourField->getData(&data->cursorBehaviourChoice);
 		if (mCursorPositionMarkerField != nullptr) mCursorPositionMarkerField->getData(data->cursorPositionMarker);
 	}
 
@@ -2085,6 +1997,10 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 			int32_t val = data->virtualDesktops;
 			mVirtualDesktopsSlider->setData(&val);
 		}
+		if (mCursorBehaviourField != nullptr) {
+			if (data->cursorBehaviourChoice > 1) data->cursorBehaviourChoice = mInitialCursorBehaviourChoice;
+			mCursorBehaviourField->setData(&data->cursorBehaviourChoice);
+		}
 		if (mCursorPositionMarkerField != nullptr) {
 			if (data->cursorPositionMarker[0] == '\0') writeRecordField(data->cursorPositionMarker, sizeof(data->cursorPositionMarker), mDataCursorMarker);
 			mCursorPositionMarkerField->setData(data->cursorPositionMarker);
@@ -2093,7 +2009,9 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 
 	TCheckBoxes *mOptionsField = nullptr;
 	MRNumericSlider *mVirtualDesktopsSlider = nullptr;
+	TRadioButtons *mCursorBehaviourField = nullptr;
 	TInputLine *mCursorPositionMarkerField = nullptr;
+	ushort mInitialCursorBehaviourChoice = 1;
 	char mDataCursorMarker[12] = {0};
 
   private:
@@ -2123,9 +2041,10 @@ static void runUserInterfaceSettingsDialogFlow() {
 		int currentVd = configuredVirtualDesktops();
 		bool currentAw = configuredAutoloadWorkspace();
 		bool currentCv = configuredCyclicVirtualDesktops();
+		MRCursorBehaviour currentCb = configuredCursorBehaviour();
 		std::string currentCp = configuredCursorPositionMarker();
 
-		TUserInterfaceSettingsDialog *dialog = new TUserInterfaceSettingsDialog(currentWm, currentMm, currentVd, currentAw, currentCv, currentCp);
+		TUserInterfaceSettingsDialog *dialog = new TUserInterfaceSettingsDialog(currentWm, currentMm, currentVd, currentAw, currentCv, currentCb, currentCp);
 		UserInterfaceSettingsDialogData dialogData;
 		if (currentWm) dialogData.flags |= 1;
 		if (currentMm) dialogData.flags |= 2;
@@ -2133,6 +2052,7 @@ static void runUserInterfaceSettingsDialogFlow() {
 		if (currentCv) dialogData.flags |= 8;
 
 		dialogData.virtualDesktops = static_cast<ushort>(currentVd);
+		dialogData.cursorBehaviourChoice = currentCb == MRCursorBehaviour::FreeMovement ? 0 : 1;
 		writeRecordField(dialogData.cursorPositionMarker, sizeof(dialogData.cursorPositionMarker), currentCp);
 
 		UserInterfaceSettingsDialogData baselineData = dialogData;
@@ -2142,10 +2062,15 @@ static void runUserInterfaceSettingsDialogFlow() {
 		bool newAw = (dialogData.flags & 4) != 0;
 		bool newCv = (dialogData.flags & 8) != 0;
 		int newVd = static_cast<int>(dialogData.virtualDesktops);
+		MRCursorBehaviour newCb = dialogData.cursorBehaviourChoice == 0 ? MRCursorBehaviour::FreeMovement : MRCursorBehaviour::BoundToText;
 		std::string newCp = readRecordField(dialogData.cursorPositionMarker);
 		const bool changed = mr::dialogs::isDialogDraftDirty(baselineData, dialogData, userInterfaceSettingsDialogDataEqual);
 		auto applyAndPersistUiSettings = [&]() -> bool {
 			std::string errorText;
+			if (!setConfiguredCursorBehaviour(newCb, &errorText)) {
+				setSetupDialogStatus(errorText, MRMenuBar::MarqueeKind::Warning);
+				return false;
+			}
 			if (!setConfiguredCursorPositionMarker(newCp, &errorText)) {
 				setSetupDialogStatus(errorText, MRMenuBar::MarqueeKind::Warning);
 				return false;
@@ -2155,6 +2080,8 @@ static void runUserInterfaceSettingsDialogFlow() {
 			setConfiguredAutoloadWorkspace(newAw, &errorText);
 			setConfiguredCyclicVirtualDesktops(newCv, &errorText);
 			applyVirtualDesktopConfigurationChange(newVd);
+			for (MREditWindow *window : allEditWindowsInZOrder())
+				if (window != nullptr && window->getEditor() != nullptr) window->getEditor()->refreshConfiguredVisualSettings();
 			if (!persistConfiguredSettingsSnapshot(&errorText)) postSetupFlowError("Installation / User interface settings", errorText);
 			return true;
 		};
@@ -2552,26 +2479,35 @@ MRDialogFoundation *createScrollableDialog(const char *title, int virtualWidth, 
 	return new MRDialogFoundation(centeredDialogRect(virtualWidth, virtualHeight), title, virtualWidth, virtualHeight);
 }
 
-TFileDialog *createFileDialog(const char *wildCard, const char *title, const char *inputName, ushort options) {
-	return new TWheelFileDialog(wildCard, title, inputName, options);
+TFileDialog *createFileDialog(MRDialogHistoryScope scope, const char *wildCard, const char *title, const char *inputName, ushort options) {
+	return mr::ui::createScopedFileDialog(scope, wildCard, title, inputName, options);
 }
 
-TDialog *createDirectoryDialog(ushort options) {
-	return new TWheelChDirDialog(options);
+TDialog *createDirectoryDialog(MRDialogHistoryScope scope, ushort options) {
+	return mr::ui::createScopedDirectoryDialog(scope, options);
 }
 
-void seedFileDialogPath(MRDialogHistoryScope scope, char *buffer, std::size_t bufferSize, const char *pattern, std::string_view currentValue) {
+void seedFileDialogPath(MRDialogHistoryScope scope, char *buffer, std::size_t bufferSize, const char *pattern) {
 	const char *safePattern = pattern != nullptr && *pattern != '\0' ? pattern : "*.*";
-	const std::string preferredCurrent = resolveSeedCurrentValue(scope, currentValue);
-	std::string rememberedFile = configuredLastFileDialogFilePath(scope);
 
 	writeRecordField(buffer, bufferSize, "");
 	initRememberedLoadDialogPath(scope, buffer, bufferSize, safePattern);
-	if (!preferredCurrent.empty()) {
-		writeRecordField(buffer, bufferSize, preferredCurrent);
-		return;
-	}
-	if (!rememberedFile.empty()) writeRecordField(buffer, bufferSize, rememberedFile);
+}
+
+void suggestFileDialogName(char *buffer, std::size_t bufferSize, std::string_view suggestedValue) {
+	const std::string fileName = dialogSeedFileName(suggestedValue);
+	const std::string seeded = readRecordField(buffer);
+	std::string directory;
+
+	if (fileName.empty()) return;
+	if (pathIsDirectory(seeded)) directory = normalizeConfiguredPathInput(seeded);
+	else
+		directory = parentDirectoryOfPath(seeded);
+	if (!directory.empty()) {
+		if (directory.back() != '/') directory += '/';
+		writeRecordField(buffer, bufferSize, directory + fileName);
+	} else
+		writeRecordField(buffer, bufferSize, fileName);
 }
 
 ushort execRememberingFileDialogWithData(MRDialogHistoryScope scope, const char *wildCard, const char *title, const char *inputName, ushort options, char *buffer) {
@@ -2579,7 +2515,7 @@ ushort execRememberingFileDialogWithData(MRDialogHistoryScope scope, const char 
 	std::string seedDirectory = resolveFileDialogSeedDirectory(scope, buffer);
 
 	if (!seedDirectory.empty()) (void)::chdir(seedDirectory.c_str());
-	const ushort result = execDialogRawWithData(createFileDialog(wildCard, title, inputName, options), buffer);
+	const ushort result = execDialogRawWithData(createFileDialog(scope, wildCard, title, inputName, options), buffer);
 	if (!originalCwd.empty()) (void)::chdir(originalCwd.c_str());
 
 	if (result != cmCancel && !deferRememberingLoadDialogPath(scope)) rememberLoadDialogPath(scope, buffer);

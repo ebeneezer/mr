@@ -3858,7 +3858,8 @@ bool promptBlockSavePath(std::string &outPath) {
 	MREditWindow *win = currentEditWindow();
 
 	outPath.clear();
-	mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::BlockSave, buffer, sizeof(buffer), "*.*", win != nullptr && win->currentFileName() != nullptr ? std::string_view(win->currentFileName()) : std::string_view());
+	mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::BlockSave, buffer, sizeof(buffer), "*.*");
+	mr::dialogs::suggestFileDialogName(buffer, sizeof(buffer), win != nullptr && win->currentFileName() != nullptr ? std::string_view(win->currentFileName()) : std::string_view());
 	result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::BlockSave, "*.*", "Save block as", "~N~ame", fdOKButton, buffer);
 	if (result == cmCancel) return false;
 	fexpand(buffer);
@@ -3870,10 +3871,9 @@ bool promptBlockSavePath(std::string &outPath) {
 bool promptBlockLoadPath(std::string &outPath) {
 	char buffer[MAXPATH] = {0};
 	ushort result = cmCancel;
-	MREditWindow *win = currentEditWindow();
 
 	outPath.clear();
-	mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::BlockLoad, buffer, sizeof(buffer), "*.*", win != nullptr && win->currentFileName() != nullptr ? std::string_view(win->currentFileName()) : std::string_view());
+	mr::dialogs::seedFileDialogPath(MRDialogHistoryScope::BlockLoad, buffer, sizeof(buffer), "*.*");
 	result = mr::dialogs::execRememberingFileDialogWithData(MRDialogHistoryScope::BlockLoad, "*.*", "Load block from", "~N~ame", fdOpenButton, buffer);
 	if (result == cmCancel) return false;
 	fexpand(buffer);

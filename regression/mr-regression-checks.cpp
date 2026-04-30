@@ -497,6 +497,14 @@ bool validateMrsetupEditorSettings(std::string &failureReason) {
 	return true;
 }
 
+bool validateMrsetupGlobalSettings(std::string &failureReason) {
+	if (configuredCursorBehaviour() != MRCursorBehaviour::FreeMovement) {
+		failureReason = "Startup context should apply CURSOR_BEHAVIOUR='FREE_MOVEMENT'.";
+		return false;
+	}
+	return true;
+}
+
 bool validateMrsetupColorSettings(std::string &failureReason) {
 	MRColorSetupSettings colors = configuredColorSetupSettings();
 
@@ -556,6 +564,7 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 	                           "MRSETUP('SHOW_EOF_MARKER_EMOJI', 'false');\n"
 	                           "MRSETUP('LINE_NUMBERS_POSITION', 'LEADING');\n"
 	                           "MRSETUP('LINE_NUM_ZERO_FILL', 'true');\n"
+	                           "MRSETUP('CURSOR_BEHAVIOUR', 'FREE_MOVEMENT');\n"
 	                           "MRSETUP('COLUMN_BLOCK_MOVE', 'LEAVE_SPACE');\n"
 	                           "MRSETUP('DEFAULT_MODE', 'OVERWRITE');\n"
 	                           "MRSETUP('WINDOWCOLORS', 'v1:10,11,12,13,14,15,16,17');\n"
@@ -587,6 +596,7 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 		}
 
 		if (!validateMrsetupCorePaths(failureReason)) return false;
+		if (!validateMrsetupGlobalSettings(failureReason)) return false;
 		if (!validateMrsetupEditorSettings(failureReason)) return false;
 		if (!validateMrsetupColorSettings(failureReason)) return false;
 	}
@@ -723,6 +733,10 @@ bool testSettingsMacroAutoCreate(std::string &failureReason) {
 	}
 	if (content.find("MRSETUP('VIRTUAL_DESKTOPS', '") == std::string::npos) {
 		failureReason = "Auto-created settings.mrmac is missing VIRTUAL_DESKTOPS.";
+		return false;
+	}
+	if (content.find("MRSETUP('CURSOR_BEHAVIOUR', '") == std::string::npos) {
+		failureReason = "Auto-created settings.mrmac is missing CURSOR_BEHAVIOUR.";
 		return false;
 	}
 	if (content.find("MRSETUP('AUTOLOAD_WORKSPACE', '") == std::string::npos) {
