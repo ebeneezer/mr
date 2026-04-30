@@ -8683,82 +8683,73 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				if (name == "MRSETUP") {
 					std::string setupKey;
 					std::string errorText;
-					MRSetupPaths dummyPaths = resolveSetupPathDefaults();
+					MRSetupPaths activePaths = resolveSetupPathDefaults();
 
 					if (!mrvmIsStartupSettingsMode()) throw std::runtime_error("MRSETUP is only allowed in settings.mrmac during startup.");
 					if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1])) throw std::runtime_error("MRSETUP expects (string, string).");
 					setupKey = upperKey(trimAscii(valueAsString(args[0])));
 					if (setupKey == "SETTINGS_VERSION") {
 						if (trimAscii(valueAsString(args[1])) != "2") throw std::runtime_error("MRSETUP(SETTINGS_VERSION) supports only version 2.");
-					} else if (setupKey == "MACROPATH") {
-						if (!setConfiguredMacroDirectoryPath(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(MACROPATH) failed: " + (errorText.empty() ? std::string("invalid path.") : errorText));
 					} else if (setupKey == "SETTINGSPATH") {
 						if (!setConfiguredSettingsMacroFilePath(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(SETTINGSPATH) failed: " + (errorText.empty() ? std::string("invalid path.") : errorText));
-					} else if (setupKey == "HELPPATH") {
-						if (!setConfiguredHelpFilePath(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(HELPPATH) failed: " + (errorText.empty() ? std::string("invalid path.") : errorText));
-					} else if (setupKey == "TEMPDIR") {
-						if (!setConfiguredTempDirectoryPath(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(TEMPDIR) failed: " + (errorText.empty() ? std::string("invalid path.") : errorText));
-					} else if (setupKey == "SHELLPATH") {
-						if (!setConfiguredShellExecutablePath(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(SHELLPATH) failed: " + (errorText.empty() ? std::string("invalid path.") : errorText));
-					} else if (setupKey == "LASTFILEDIALOGPATH") {
-						if (!setConfiguredLastFileDialogPath(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(LASTFILEDIALOGPATH) failed: " + (errorText.empty() ? std::string("invalid path.") : errorText));
+						activePaths.settingsMacroUri = configuredSettingsMacroFilePath();
 					} else if (setupKey == "KEYMAP_PROFILE") {
 						if (!applyConfiguredKeymapProfilePayload(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(KEYMAP_PROFILE) failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
 					} else if (setupKey == "KEYMAP_BIND") {
 						if (!applyConfiguredKeymapBindingPayload(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(KEYMAP_BIND) failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
 					} else if (setupKey == "ACTIVE_KEYMAP_PROFILE") {
 						if (!applyConfiguredActiveKeymapProfilePayload(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(ACTIVE_KEYMAP_PROFILE) failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
-					} else if (setupKey == "WINDOW_MANAGER" || setupKey == "MESSAGES" || setupKey == "SEARCH_TEXT_TYPE" || setupKey == "SEARCH_DIRECTION" || setupKey == "SEARCH_MODE" || setupKey == "SEARCH_CASE_SENSITIVE" || setupKey == "SEARCH_GLOBAL_SEARCH" || setupKey == "SEARCH_RESTRICT_MARKED_BLOCK" || setupKey == "SEARCH_ALL_WINDOWS" || setupKey == "SEARCH_LIST_ALL_OCCURRENCES" || setupKey == "SAR_TEXT_TYPE" || setupKey == "SAR_DIRECTION" || setupKey == "SAR_MODE" || setupKey == "SAR_LEAVE_CURSOR_AT" || setupKey == "SAR_CASE_SENSITIVE" || setupKey == "SAR_GLOBAL_SEARCH" || setupKey == "SAR_RESTRICT_MARKED_BLOCK" || setupKey == "SAR_ALL_WINDOWS" || setupKey == "SAR_REPLACE_MODE" || setupKey == "SAR_PROMPT_EACH_REPLACE" || setupKey == "MULTI_SEARCH_FILESPEC" || setupKey == "MULTI_SEARCH_TEXT" || setupKey == "MULTI_SEARCH_STARTING_PATH" || setupKey == "MULTI_SEARCH_SUBDIRECTORIES" || setupKey == "MULTI_SEARCH_CASE_SENSITIVE" || setupKey == "MULTI_SEARCH_REGULAR_EXPRESSIONS" ||
-					           setupKey == "MULTI_SEARCH_FILES_IN_MEMORY" || setupKey == "MULTI_SAR_FILESPEC" || setupKey == "MULTI_SAR_TEXT" || setupKey == "MULTI_SAR_REPLACEMENT" || setupKey == "MULTI_SAR_STARTING_PATH" || setupKey == "MULTI_SAR_SUBDIRECTORIES" || setupKey == "MULTI_SAR_CASE_SENSITIVE" || setupKey == "MULTI_SAR_REGULAR_EXPRESSIONS" || setupKey == "MULTI_SAR_FILES_IN_MEMORY" || setupKey == "MULTI_SAR_KEEP_FILES_OPEN" || setupKey == "VIRTUAL_DESKTOPS" || setupKey == "CYCLIC_VIRTUAL_DESKTOPS" || setupKey == "CURSOR_BEHAVIOUR" || setupKey == "CURSOR_POSITION_MARKER" || setupKey == "AUTOLOAD_WORKSPACE" || setupKey == "LOG_HANDLING" || setupKey == "LOGFILE" || setupKey == "AUTOEXEC_MACRO" || setupKey == "WORKSPACE" || setupKey == "MAX_PATH_HISTORY" || setupKey == "MAX_FILE_HISTORY" || setupKey == "PATH_HISTORY" || setupKey == "FILE_HISTORY" || setupKey == "DIALOG_LAST_PATH" || setupKey == "DIALOG_PATH_HISTORY" || setupKey == "DIALOG_FILE_HISTORY" || setupKey == "MULTI_FILESPEC_HISTORY" ||
-					           setupKey == "MULTI_PATH_HISTORY") {
-						if (!applyConfiguredSettingsAssignment(setupKey, valueAsString(args[1]), dummyPaths, &errorText)) throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
-					} else if (setupKey == "DEFAULT_PROFILE_DESCRIPTION") {
-						if (!setConfiguredDefaultProfileDescription(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(DEFAULT_PROFILE_DESCRIPTION) failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
-					} else if (setupKey == "COLORTHEMEURI") {
-						if (!setConfiguredColorThemeFilePath(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(COLORTHEMEURI) failed: " + (errorText.empty() ? std::string("invalid path.") : errorText));
-					} else if (setupKey == "KEYMAPURI") {
-						if (!setConfiguredKeymapFilePath(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(KEYMAPURI) failed: " + (errorText.empty() ? std::string("invalid path.") : errorText));
-					} else if (findEditSettingDescriptorByKey(setupKey) != nullptr) {
-						if (!applyConfiguredEditSetupValue(setupKey, valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
-						if (setupKey == "TAB_EXPAND") {
-							BackgroundEditSession *session = currentBackgroundEditSession();
-							if (session != nullptr) session->tabExpand = configuredTabExpandSetting();
-							else
-								g_runtimeEnv.tabExpand = configuredTabExpandSetting();
-						}
-					} else if (setupKey == "WINDOWCOLORS" || setupKey == "MENUDIALOGCOLORS" || setupKey == "HELPCOLORS" || setupKey == "OTHERCOLORS" || setupKey == "MINIMAPCOLORS") {
-						if (!applyConfiguredColorSetupValue(setupKey, valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
 					} else
-						throw std::runtime_error("MRSETUP supports keys: SETTINGS_VERSION, MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
-						                         "SHELLPATH, WINDOW_MANAGER, MESSAGES, SEARCH_TEXT_TYPE, SEARCH_DIRECTION, "
-						                         "SEARCH_MODE, SEARCH_CASE_SENSITIVE, SEARCH_GLOBAL_SEARCH, "
-						                         "SEARCH_RESTRICT_MARKED_BLOCK, SEARCH_ALL_WINDOWS, "
-						                         "SAR_TEXT_TYPE, SAR_DIRECTION, SAR_MODE, SAR_LEAVE_CURSOR_AT, "
-						                         "SAR_CASE_SENSITIVE, SAR_GLOBAL_SEARCH, SAR_RESTRICT_MARKED_BLOCK, "
-						                         "SAR_ALL_WINDOWS, "
-						                         "MULTI_SEARCH_FILESPEC, MULTI_SEARCH_TEXT, MULTI_SEARCH_STARTING_PATH, "
-						                         "MULTI_SEARCH_SUBDIRECTORIES, MULTI_SEARCH_CASE_SENSITIVE, "
-						                         "MULTI_SEARCH_REGULAR_EXPRESSIONS, MULTI_SEARCH_FILES_IN_MEMORY, "
-						                         "MULTI_SAR_FILESPEC, MULTI_SAR_TEXT, MULTI_SAR_REPLACEMENT, "
-						                         "MULTI_SAR_STARTING_PATH, MULTI_SAR_SUBDIRECTORIES, "
-						                         "MULTI_SAR_CASE_SENSITIVE, MULTI_SAR_REGULAR_EXPRESSIONS, "
-						                         "MULTI_SAR_FILES_IN_MEMORY, MULTI_SAR_KEEP_FILES_OPEN, "
-						                         "VIRTUAL_DESKTOPS, CYCLIC_VIRTUAL_DESKTOPS, CURSOR_BEHAVIOUR, "
-						                         "CURSOR_POSITION_MARKER, AUTOLOAD_WORKSPACE, LOG_HANDLING, LOGFILE, AUTOEXEC_MACRO, "
-						                         "LASTFILEDIALOGPATH, KEYMAP_PROFILE, KEYMAP_BIND, ACTIVE_KEYMAP_PROFILE, "
-						                         "MAX_PATH_HISTORY, MAX_FILE_HISTORY, PATH_HISTORY, FILE_HISTORY, "
-						                         "DIALOG_LAST_PATH, DIALOG_PATH_HISTORY, DIALOG_FILE_HISTORY, "
-						                         "MULTI_FILESPEC_HISTORY, MULTI_PATH_HISTORY, "
-						                         "DEFAULT_PROFILE_DESCRIPTION, COLORTHEMEURI, KEYMAPURI, PAGE_BREAK, WORD_DELIMITERS, DEFAULT_EXTENSIONS, "
-						                         "TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, DISPLAY_TABS, TAB_SIZE, LEFT_MARGIN, RIGHT_MARGIN, FORMAT_RULER, WORD_WRAP, "
-						                         "INDENT_STYLE, FILE_TYPE, BINARY_RECORD_LENGTH, POST_LOAD_MACRO, PRE_SAVE_MACRO, DEFAULT_PATH, "
-						                         "FORMAT_LINE, BACKUP_METHOD, BACKUP_FREQUENCY, BACKUP_EXTENSION, BACKUP_DIRECTORY, "
-						                         "AUTOSAVE_INACTIVITY_SECONDS, AUTOSAVE_INTERVAL_SECONDS, BACKUP_FILES, SHOW_EOF_MARKER, "
-						                         "SHOW_EOF_MARKER_EMOJI, LINE_NUMBERS_POSITION, LINE_NUM_ZERO_FILL, "
-						                         "MINIMAP_POSITION, MINIMAP_WIDTH, MINIMAP_MARKER_GLYPH, GUTTERS, PERSISTENT_BLOCKS, "
-						                         "CODE_FOLDING_POSITION, "
-						                         "COLUMN_BLOCK_MOVE, DEFAULT_MODE, CURSOR_STATUS_COLOR, WINDOWCOLORS, MENUDIALOGCOLORS, "
-						                         "HELPCOLORS, OTHERCOLORS, MINIMAPCOLORS.");
+						switch (classifySettingsKey(setupKey)) {
+							case MRSettingsKeyClass::Unknown:
+								throw std::runtime_error("MRSETUP supports keys: SETTINGS_VERSION, MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
+								                         "SHELLPATH, WINDOW_MANAGER, MESSAGES, SEARCH_TEXT_TYPE, SEARCH_DIRECTION, "
+								                         "SEARCH_MODE, SEARCH_CASE_SENSITIVE, SEARCH_GLOBAL_SEARCH, "
+								                         "SEARCH_RESTRICT_MARKED_BLOCK, SEARCH_ALL_WINDOWS, "
+								                         "SAR_TEXT_TYPE, SAR_DIRECTION, SAR_MODE, SAR_LEAVE_CURSOR_AT, "
+								                         "SAR_CASE_SENSITIVE, SAR_GLOBAL_SEARCH, SAR_RESTRICT_MARKED_BLOCK, "
+								                         "SAR_ALL_WINDOWS, "
+								                         "MULTI_SEARCH_FILESPEC, MULTI_SEARCH_TEXT, MULTI_SEARCH_STARTING_PATH, "
+								                         "MULTI_SEARCH_SUBDIRECTORIES, MULTI_SEARCH_CASE_SENSITIVE, "
+								                         "MULTI_SEARCH_REGULAR_EXPRESSIONS, MULTI_SEARCH_FILES_IN_MEMORY, "
+								                         "MULTI_SAR_FILESPEC, MULTI_SAR_TEXT, MULTI_SAR_REPLACEMENT, "
+								                         "MULTI_SAR_STARTING_PATH, MULTI_SAR_SUBDIRECTORIES, "
+								                         "MULTI_SAR_CASE_SENSITIVE, MULTI_SAR_REGULAR_EXPRESSIONS, "
+								                         "MULTI_SAR_FILES_IN_MEMORY, MULTI_SAR_KEEP_FILES_OPEN, "
+								                         "VIRTUAL_DESKTOPS, CYCLIC_VIRTUAL_DESKTOPS, CURSOR_BEHAVIOUR, "
+								                         "CURSOR_POSITION_MARKER, AUTOLOAD_WORKSPACE, LOG_HANDLING, LOGFILE, AUTOEXEC_MACRO, "
+								                         "LASTFILEDIALOGPATH, KEYMAP_PROFILE, KEYMAP_BIND, ACTIVE_KEYMAP_PROFILE, "
+								                         "MAX_PATH_HISTORY, MAX_FILE_HISTORY, PATH_HISTORY, FILE_HISTORY, "
+								                         "DIALOG_LAST_PATH, DIALOG_PATH_HISTORY, DIALOG_FILE_HISTORY, "
+								                         "MULTI_FILESPEC_HISTORY, MULTI_PATH_HISTORY, "
+								                         "DEFAULT_PROFILE_DESCRIPTION, COLORTHEMEURI, KEYMAPURI, PAGE_BREAK, WORD_DELIMITERS, DEFAULT_EXTENSIONS, "
+								                         "TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, DISPLAY_TABS, TAB_SIZE, LEFT_MARGIN, RIGHT_MARGIN, FORMAT_RULER, WORD_WRAP, "
+								                         "INDENT_STYLE, FILE_TYPE, BINARY_RECORD_LENGTH, POST_LOAD_MACRO, PRE_SAVE_MACRO, DEFAULT_PATH, "
+								                         "FORMAT_LINE, BACKUP_METHOD, BACKUP_FREQUENCY, BACKUP_EXTENSION, BACKUP_DIRECTORY, "
+								                         "AUTOSAVE_INACTIVITY_SECONDS, AUTOSAVE_INTERVAL_SECONDS, BACKUP_FILES, SHOW_EOF_MARKER, "
+								                         "SHOW_EOF_MARKER_EMOJI, LINE_NUMBERS_POSITION, LINE_NUM_ZERO_FILL, "
+								                         "MINIMAP_POSITION, MINIMAP_WIDTH, MINIMAP_MARKER_GLYPH, GUTTERS, PERSISTENT_BLOCKS, "
+								                         "CODE_FOLDING_POSITION, "
+								                         "COLUMN_BLOCK_MOVE, DEFAULT_MODE, CURSOR_STATUS_COLOR, WINDOWCOLORS, MENUDIALOGCOLORS, "
+								                         "HELPCOLORS, OTHERCOLORS, MINIMAPCOLORS.");
+							case MRSettingsKeyClass::Version:
+							case MRSettingsKeyClass::Path:
+							case MRSettingsKeyClass::Global:
+								if (!applyConfiguredSettingsAssignment(setupKey, valueAsString(args[1]), activePaths, &errorText)) throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
+								break;
+							case MRSettingsKeyClass::Edit:
+								if (!applyConfiguredEditSetupValue(setupKey, valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
+								if (setupKey == "TAB_EXPAND") {
+									BackgroundEditSession *session = currentBackgroundEditSession();
+									if (session != nullptr) session->tabExpand = configuredTabExpandSetting();
+									else
+										g_runtimeEnv.tabExpand = configuredTabExpandSetting();
+								}
+								break;
+							case MRSettingsKeyClass::ColorInline:
+								if (!applyConfiguredColorSetupValue(setupKey, valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
+								break;
+						}
 					runtimeErrorLevel() = 0;
 				} else if (name == "MRFEPROFILE") {
 					std::string errorText;

@@ -1547,6 +1547,29 @@ bool showFoundListDialog(MREditWindow *win, const std::string &pattern, const MR
 	return false;
 }
 
+std::string searchSeedFromCurrentSelection() {
+	MREditWindow *window = currentEditWindow();
+	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+	std::size_t start = 0;
+	std::size_t end = 0;
+	std::string text;
+
+	if (editor == nullptr) return std::string();
+	start = editor->selectionStartOffset();
+	end = editor->selectionEndOffset();
+	if (end < start) std::swap(start, end);
+	if (start >= end) return std::string();
+	text = editor->snapshotText();
+	if (start >= text.size()) return std::string();
+	end = std::min(end, text.size());
+	text = text.substr(start, end - start);
+	for (char &ch : text) {
+		const unsigned char uch = static_cast<unsigned char>(ch);
+		if (ch == '\r' || ch == '\n' || ch == '\t' || uch < 32) ch = ' ';
+	}
+	return text;
+}
+
 PromptReplaceDecision promptReplaceDecisionDialog(const std::string &title, const SearchPreviewParts &preview, const std::string &replacement) {
 	class PromptPreviewView : public TView {
 	  public:
@@ -1687,6 +1710,7 @@ bool promptSearchPattern(std::string &pattern, MRSearchDialogOptions &options) {
 		kInputBufferSize = 256
 	};
 	char patternInput[kInputBufferSize];
+	std::string selectionSeed;
 	ushort typeChoice = 0;
 	ushort directionChoice = options.direction == MRSearchDirection::Backward ? 1 : 0;
 	ushort modeChoice = 0;
@@ -1701,7 +1725,10 @@ bool promptSearchPattern(std::string &pattern, MRSearchDialogOptions &options) {
 
 	std::memset(patternInput, 0, sizeof(patternInput));
 	if (TProgram::deskTop == nullptr) return false;
-	if (!g_searchUiState.pattern.empty()) strnzcpy(patternInput, g_searchUiState.pattern.c_str(), sizeof(patternInput));
+	selectionSeed = searchSeedFromCurrentSelection();
+	if (!selectionSeed.empty()) strnzcpy(patternInput, selectionSeed.c_str(), sizeof(patternInput));
+	else if (!g_searchUiState.pattern.empty())
+		strnzcpy(patternInput, g_searchUiState.pattern.c_str(), sizeof(patternInput));
 
 	switch (options.textType) {
 		case MRSearchTextType::Literal:
@@ -1766,6 +1793,7 @@ bool promptSearchPattern(std::string &pattern, MRSearchDialogOptions &options) {
 		return result;
 	});
 	dialog->finalizeLayout();
+	if (patternField != nullptr) patternField->select();
 	result = TProgram::deskTop->execView(dialog);
 	if (result != cmCancel) {
 		patternField->getData(patternInput);
@@ -1794,6 +1822,7 @@ bool promptReplaceValues(std::string &pattern, std::string &replacement, MRSarDi
 	};
 	char patternInput[kPatternBufferSize];
 	char replacementInput[kReplacementBufferSize];
+	std::string selectionSeed;
 	ushort typeChoice = 0;
 	ushort directionChoice = options.direction == MRSearchDirection::Backward ? 1 : 0;
 	ushort modeChoice = 0;
@@ -1812,7 +1841,10 @@ bool promptReplaceValues(std::string &pattern, std::string &replacement, MRSarDi
 	std::memset(patternInput, 0, sizeof(patternInput));
 	std::memset(replacementInput, 0, sizeof(replacementInput));
 	if (TProgram::deskTop == nullptr) return false;
-	if (!g_searchUiState.pattern.empty()) strnzcpy(patternInput, g_searchUiState.pattern.c_str(), sizeof(patternInput));
+	selectionSeed = searchSeedFromCurrentSelection();
+	if (!selectionSeed.empty()) strnzcpy(patternInput, selectionSeed.c_str(), sizeof(patternInput));
+	else if (!g_searchUiState.pattern.empty())
+		strnzcpy(patternInput, g_searchUiState.pattern.c_str(), sizeof(patternInput));
 	if (!g_searchUiState.replacement.empty()) strnzcpy(replacementInput, g_searchUiState.replacement.c_str(), sizeof(replacementInput));
 
 	switch (options.textType) {
@@ -1886,6 +1918,7 @@ bool promptReplaceValues(std::string &pattern, std::string &replacement, MRSarDi
 		return result;
 	});
 	dialog->finalizeLayout();
+	if (patternField != nullptr) patternField->select();
 	result = TProgram::deskTop->execView(dialog);
 	if (result != cmCancel) {
 		patternField->getData(patternInput);

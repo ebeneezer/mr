@@ -170,17 +170,7 @@
     {
       "id": "b721e070-ae21-4123-a1f3-27b926375a16",
       "title": "Regression / Errors",
-      "cards": [
-        {
-          "id": "e3249ac9-926a-483a-887e-c421f8a6edc8",
-          "listId": "b721e070-ae21-4123-a1f3-27b926375a16",
-          "title": "Jeder Dialog erhält eine eigene File und Path History sowie speichern alle Dialoge den letzten Pfad und zeigen diesen im File Listing an.",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        }
-      ]
+      "cards": []
     },
     {
       "id": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
@@ -346,6 +336,15 @@
           "id": "1c4f0efa-1820-41e8-9750-7a0d685ce41e",
           "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
           "title": "Minimap Grundfunktionen",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "e3249ac9-926a-483a-887e-c421f8a6edc8",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Jeder Dialog erhält eine eigene File und Path History sowie speichern alle Dialoge den letzten Pfad und zeigen diesen im File Listing an.",
           "description": "",
           "labels": [],
           "checkboxes": [],

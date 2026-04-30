@@ -371,9 +371,8 @@ bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::
 	}
 
 	if (!loadColorThemeFile(configuredColorThemeFilePath(), &themeError)) {
-		MRColorSetupSettings defaults = resolveColorSetupDefaults();
 		markFlag(activeReport, MRSettingsLoadReport::ThemeFallbackUsed);
-		if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, defaults.windowColors.data(), defaults.windowColors.size(), errorMessage) || !setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, defaults.menuDialogColors.data(), defaults.menuDialogColors.size(), errorMessage) || !setConfiguredColorSetupGroupValues(MRColorSetupGroup::Help, defaults.helpColors.data(), defaults.helpColors.size(), errorMessage) || !setConfiguredColorSetupGroupValues(MRColorSetupGroup::Other, defaults.otherColors.data(), defaults.otherColors.size(), errorMessage)) return false;
+		mrLogMessage("Settings normalization retained in-memory color setup after theme load failure: " + configuredColorThemeFilePath() + " (" + themeError + ")");
 	}
 
 	if (errorMessage != nullptr) errorMessage->clear();
