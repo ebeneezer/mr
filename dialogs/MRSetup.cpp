@@ -276,16 +276,6 @@ int buttonCaptionWidth(const char *title) {
 	return static_cast<int>(visibleButtonCaption(title).size());
 }
 
-template <class InsertButtonFn> void appendUniformButtonRow(InsertButtonFn insertButton, int left, int top, std::span<const mr::dialogs::DialogButtonSpec> specs, int buttonWidth, int gap, std::vector<TButton *> *outButtons) {
-	int x = left;
-
-	for (const mr::dialogs::DialogButtonSpec &spec : specs) {
-		TButton *button = insertButton(TRect(x, top, x + buttonWidth, top + 2), spec);
-		if (outButtons != nullptr) outButtons->push_back(button);
-		x += buttonWidth + gap;
-	}
-}
-
 void postSetupFlowError(const char *scope, const std::string &errorText) {
 	if (errorText.empty()) return;
 	std::string text = scope != nullptr ? std::string(scope) + ": " + errorText : errorText;
@@ -2453,26 +2443,28 @@ DialogButtonRowMetrics measureUniformButtonRow(std::span<const DialogButtonSpec>
 
 void insertUniformButtonRow(MRDialogFoundation &dialog, int left, int top, int gap, std::span<const DialogButtonSpec> specs, int minButtonWidth, std::vector<TButton *> *outButtons) {
 	const DialogButtonRowMetrics metrics = measureUniformButtonRow(specs, gap, minButtonWidth);
+	int x = left;
 
-	appendUniformButtonRow(
-	    [&dialog](const TRect &rect, const DialogButtonSpec &spec) {
-		    TButton *button = new TButton(rect, spec.title, spec.command, spec.flags);
-		    dialog.insert(button);
-		    return button;
-	    },
-	    left, top, specs, metrics.buttonWidth, gap, outButtons);
+	for (const DialogButtonSpec &spec : specs) {
+		TRect rect(x, top, x + metrics.buttonWidth, top + 2);
+		TButton *button = new TButton(rect, spec.title, spec.command, spec.flags);
+		dialog.insert(button);
+		if (outButtons != nullptr) outButtons->push_back(button);
+		x += metrics.buttonWidth + gap;
+	}
 }
 
 void addManagedUniformButtonRow(MRScrollableDialog &dialog, int left, int top, int gap, std::span<const DialogButtonSpec> specs, int minButtonWidth, std::vector<TButton *> *outButtons) {
 	const DialogButtonRowMetrics metrics = measureUniformButtonRow(specs, gap, minButtonWidth);
+	int x = left;
 
-	appendUniformButtonRow(
-	    [&dialog](const TRect &rect, const DialogButtonSpec &spec) {
-		    TButton *button = new TButton(rect, spec.title, spec.command, spec.flags);
-		    dialog.addManaged(button, rect);
-		    return button;
-	    },
-	    left, top, specs, metrics.buttonWidth, gap, outButtons);
+	for (const DialogButtonSpec &spec : specs) {
+		TRect rect(x, top, x + metrics.buttonWidth, top + 2);
+		TButton *button = new TButton(rect, spec.title, spec.command, spec.flags);
+		dialog.addManaged(button, rect);
+		if (outButtons != nullptr) outButtons->push_back(button);
+		x += metrics.buttonWidth + gap;
+	}
 }
 
 MRDialogFoundation *createScrollableDialog(const char *title, int virtualWidth, int virtualHeight) {
