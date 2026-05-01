@@ -532,17 +532,12 @@ class MacroManagerDialog : public MRDialogFoundation, public MacroManagerActivat
 	}
 
 	void activateFocusedEntry(bool fromAutoexecList) override {
-		switch (fromAutoexecList) {
-			case true:
-				return;
-			case false:
-				if (selectedEntryHasCompileError()) {
-					showSelectedEntryError();
-					return;
-				}
-				handlePlayback();
-				return;
+		if (fromAutoexecList) return;
+		if (selectedEntryHasCompileError()) {
+			showSelectedEntryError();
+			return;
 		}
+		handlePlayback();
 	}
 
 	void noteListFocus(bool autoexecListFocused) override {

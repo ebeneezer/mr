@@ -193,9 +193,6 @@ enum : ushort {
 	cmMrMultiSkip = 4954
 };
 
-enum : uchar {
-};
-
 enum class PromptReplaceDecision : unsigned char {
 	Replace = 0,
 	Skip = 1,
@@ -1203,7 +1200,6 @@ constexpr const char *kNoMarkedBlockSelectedMessage = "No marked block selected.
 constexpr const char *kNoPreviousSearchMessage = "No previous search.";
 constexpr const char *kNoPreviousMultiFileSearchListMessage = "No previous multi-file search list.";
 constexpr const char *kNoCommandSpecifiedMessage = "No command specified.";
-constexpr const char *kNoBackgroundMacroTasksMessage = "No background macro tasks are running in this window.";
 constexpr const char *kWindowReadOnlyMessage = "Window is read-only.";
 constexpr const char *kChooseAnotherWindowForBlockMessage = "Choose another window for inter-window block operation.";
 constexpr const char *kNoMarkedBlockInSourceWindowMessage = "No block marked in the selected source window.";

@@ -6455,7 +6455,7 @@ static void addMacroUiItemListValue(const std::vector<Value> &args) {
 static int runMacroUiDialogDefinition() {
 	class MacroUiDialog final : public MRDialogFoundation {
 	  public:
-		explicit MacroUiDialog(const MacroUiDialogDefinition &definition) : TWindowInit(&TDialog::initFrame), MRDialogFoundation(macroDialogBounds(definition.width, definition.height, definition.x, definition.y), definition.title.empty() ? "DIALOG" : definition.title.c_str(), definition.width, definition.height), definition(definition) {
+		explicit MacroUiDialog(const MacroUiDialogDefinition &definition) : TWindowInit(&TDialog::initFrame), MRDialogFoundation(macroDialogBounds(definition.width, definition.height, definition.x, definition.y), definition.title.empty() ? "DIALOG" : definition.title.c_str(), definition.width, definition.height) {
 			ushort nextCommand = 41000;
 
 			for (const auto &label : definition.labels)
@@ -6552,7 +6552,6 @@ static int runMacroUiDialogDefinition() {
 		}
 
 	  private:
-		const MacroUiDialogDefinition &definition;
 		std::map<ushort, int> commandToId;
 		std::vector<std::pair<ushort, ushort>> buttonHotKeys;
 		std::vector<std::pair<int, TInputLine *>> inputLines;
