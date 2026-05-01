@@ -304,6 +304,9 @@ std::string quoteValue(const std::string &value) {
 
 } // namespace
 
+// This is a staging/verification/canonicalization pass. It may use the runtime
+// settings model as working storage while reading, normalizing and defaulting
+// settings, but it is not the final bootstrap apply contract.
 bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::string &source, MRSettingsLoadReport *report, std::string *errorMessage) {
 	MRSettingsLoadReport localReport;
 	MRSettingsLoadReport &activeReport = report != nullptr ? *report : localReport;

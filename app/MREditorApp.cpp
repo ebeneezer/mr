@@ -334,6 +334,9 @@ bool buildConfiguredSetupPathsSnapshot(MRSetupPaths &paths, std::string *errorMe
 	return true;
 }
 
+// This is a staging/canonicalization rewrite step. It may use the settings model
+// as working state, but it is not the final startup apply and does not establish
+// the authoritative runtime contract.
 bool normalizeSettingsMacroToCurrentModel(const std::string &settingsPath, const std::string &source, const std::string &reason, std::string *errorMessage) {
 	MRSettingsLoadReport report;
 	MRSetupPaths paths;
@@ -364,6 +367,9 @@ bool normalizeSettingsMacroToCurrentModel(const std::string &settingsPath, const
 	return true;
 }
 
+// This is the final startup apply path. The verified, canonicalized and compiled
+// settings.mrmac source is executed by the VM in startup mode, and the in-memory
+// settings state becomes authoritative only after this step succeeds.
 bool applySettingsSourceViaVm(const std::string &settingsPath, const std::string &source, std::string *errorMessage) {
 	size_t bytecodeSize = 0;
 	unsigned char *bytecode = nullptr;
@@ -422,6 +428,9 @@ bool applySettingsSourceViaVm(const std::string &settingsPath, const std::string
 	return true;
 }
 
+// This builds a canonical settings source from a staging/verification pass.
+// The loader work done here is not the final bootstrap apply; final application
+// still happens later through applySettingsSourceViaVm.
 bool buildCanonicalSettingsSource(const std::string &settingsPath, const std::string &source, MRSettingsLoadReport *report, std::string &canonicalSource, std::string *errorMessage) {
 	MRSetupPaths paths;
 	std::string normalizedPath = normalizeConfiguredPathInput(settingsPath);
@@ -501,6 +510,9 @@ ushort mrEditorDialog(int dialog, ...) {
 	}
 }
 
+// This function orchestrates bootstrap staging, canonicalization and the final
+// VM apply. The runtime settings state is authoritative only after the final
+// applySettingsSourceViaVm call completes successfully.
 bool loadStartupSettingsMacro(const std::string &overridePath, std::string *errorMessage) {
 	std::string settingsPath = overridePath.empty() ? defaultSettingsMacroFilePath() : overridePath;
 	std::string source;
