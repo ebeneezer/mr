@@ -6142,10 +6142,6 @@ static std::vector<std::string> parseMacroMenuItems(const std::string &menuSpec)
 	return items;
 }
 
-static std::vector<std::string> parseMacroListItems(const std::string &itemSpec) {
-	return parseMacroMenuItems(itemSpec);
-}
-
 static std::string macroUiListKey(const std::string &name) {
 	return upperKey(trimAscii(name));
 }
@@ -6157,7 +6153,7 @@ static std::vector<std::string> resolveMacroUiListItems(const std::string &itemS
 	const auto it = g_macroUiItemLists.find(key);
 
 	if (it != g_macroUiItemLists.end()) return it->second;
-	return parseMacroListItems(itemSpec);
+	return parseMacroMenuItems(itemSpec);
 }
 
 static int macroMenuDialogWidth(const MacroMenuRequest &request) noexcept {

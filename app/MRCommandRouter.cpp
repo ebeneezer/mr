@@ -1174,10 +1174,6 @@ std::vector<MultiFileSearchCandidate> collectMultiFileSearchCandidates(const MRM
 	return candidates;
 }
 
-[[maybe_unused]] TRect centeredDialogRect(short width, short height) {
-	return mr::dialogs::centeredDialogRect(width, height);
-}
-
 std::string escapeRegexLiteral(std::string_view value) {
 	static constexpr const char *kMetaChars = R"(\.^$|()[]{}*+?-)";
 	std::string escaped;
@@ -1271,13 +1267,6 @@ bool shouldCancelLongRunningSearch() {
 
 	if (pollEscFromTarget(TProgram::application != nullptr ? static_cast<TView *>(TProgram::application) : static_cast<TView *>(TProgram::deskTop))) return true;
 	return pollEscFromTarget(static_cast<TView *>(TProgram::deskTop));
-}
-
-[[maybe_unused]] void armTransientSelectionClear(const std::string &normalizedPath, std::size_t start, std::size_t end) {
-	g_pendingTransientSelectionClear.active = true;
-	g_pendingTransientSelectionClear.normalizedPath = normalizedPath;
-	g_pendingTransientSelectionClear.start = std::min(start, end);
-	g_pendingTransientSelectionClear.end = std::max(start, end);
 }
 
 struct SearchPreviewParts {

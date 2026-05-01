@@ -97,8 +97,9 @@ constexpr std::array catalogDefinitions{
 } // namespace
 
 const MRKeymapActionDefinition *MRKeymapActionCatalog::findById(std::string_view id) noexcept {
-	const auto it = std::ranges::find(catalogDefinitions, id, &MRKeymapActionDefinition::id);
-	return it != catalogDefinitions.end() ? &*it : nullptr;
+	for (const MRKeymapActionDefinition &definition : catalogDefinitions)
+		if (definition.id == id) return &definition;
+	return nullptr;
 }
 
 bool MRKeymapActionCatalog::contains(std::string_view id) noexcept {

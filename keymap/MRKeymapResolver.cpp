@@ -9,10 +9,10 @@ namespace {
 MRKeymapResolver g_runtimeKeymapResolver;
 
 const MRKeymapProfile *findActiveProfile(std::span<const MRKeymapProfile> profiles, std::string_view activeProfileName) noexcept {
-	const auto activeIt = std::ranges::find(profiles, activeProfileName, &MRKeymapProfile::name);
-	if (activeIt != profiles.end()) return &*activeIt;
-	const auto defaultIt = std::ranges::find(profiles, std::string_view("DEFAULT"), &MRKeymapProfile::name);
-	if (defaultIt != profiles.end()) return &*defaultIt;
+	for (const MRKeymapProfile &profile : profiles)
+		if (profile.name == activeProfileName) return &profile;
+	for (const MRKeymapProfile &profile : profiles)
+		if (profile.name == "DEFAULT") return &profile;
 	return profiles.empty() ? nullptr : &profiles.front();
 }
 } // namespace

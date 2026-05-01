@@ -35,11 +35,14 @@ bool MRKeymapTrie::rebuild(std::span<const MRKeymapBindingRecord> bindings, std:
 
 		for (const MRKeymapToken &token : binding.sequence.tokens()) {
 			auto &edges = nodes[nodeIndex].edges;
-			const auto it = std::ranges::find(edges, token, &Edge::token);
-			if (it != edges.end()) {
-				nodeIndex = it->nextIndex;
-				continue;
+			bool found = false;
+			for (const Edge &edge : edges) {
+				if (edge.token != token) continue;
+				nodeIndex = edge.nextIndex;
+				found = true;
+				break;
 			}
+			if (found) continue;
 			const std::size_t nextIndex = nodes.size();
 			edges.push_back(Edge{token, nextIndex});
 			nodes.emplace_back();
@@ -75,9 +78,14 @@ MRKeymapTrie::Decision MRKeymapTrie::decide(MRKeymapContext context, std::span<c
 	std::size_t nodeIndex = rootIndex;
 	for (const MRKeymapToken &token : sequence) {
 		const auto &edges = nodes[nodeIndex].edges;
-		const auto it = std::ranges::find(edges, token, &Edge::token);
-		if (it == edges.end()) return decision;
-		nodeIndex = it->nextIndex;
+		bool found = false;
+		for (const Edge &edge : edges) {
+			if (edge.token != token) continue;
+			nodeIndex = edge.nextIndex;
+			found = true;
+			break;
+		}
+		if (!found) return decision;
 	}
 
 	const Node &node = nodes[nodeIndex];
