@@ -2807,13 +2807,6 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 }
 
 bool applyConfiguredSettingsAssignment(const std::string &key, const std::string &value, MRSetupPaths &paths, std::string *errorMessage) {
-	auto applyValidatedNormalizedPath = [&](auto validator, auto setter, std::string &target) {
-		if (!validator(value, errorMessage)) return false;
-		if (!setter(value, errorMessage)) return false;
-		target = normalizeConfiguredPathInput(value);
-		return true;
-	};
-
 	switch (classifySettingsKey(key)) {
 		case MRSettingsKeyClass::Unknown:
 			return setError(errorMessage, "Unsupported MRSETUP key.");
@@ -2828,10 +2821,30 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
 			}
-			if (upper == "MACROPATH") return applyValidatedNormalizedPath(validateMacroDirectoryPath, setConfiguredMacroDirectoryPath, paths.macroPath);
-			if (upper == "HELPPATH") return applyValidatedNormalizedPath(validateHelpFilePath, setConfiguredHelpFilePath, paths.helpUri);
-			if (upper == "TEMPDIR") return applyValidatedNormalizedPath(validateTempDirectoryPath, setConfiguredTempDirectoryPath, paths.tempPath);
-			if (upper == "SHELLPATH") return applyValidatedNormalizedPath(validateShellExecutablePath, setConfiguredShellExecutablePath, paths.shellUri);
+			if (upper == "MACROPATH") {
+				if (!validateMacroDirectoryPath(value, errorMessage)) return false;
+				if (!setConfiguredMacroDirectoryPath(value, errorMessage)) return false;
+				paths.macroPath = normalizeConfiguredPathInput(value);
+				return true;
+			}
+			if (upper == "HELPPATH") {
+				if (!validateHelpFilePath(value, errorMessage)) return false;
+				if (!setConfiguredHelpFilePath(value, errorMessage)) return false;
+				paths.helpUri = normalizeConfiguredPathInput(value);
+				return true;
+			}
+			if (upper == "TEMPDIR") {
+				if (!validateTempDirectoryPath(value, errorMessage)) return false;
+				if (!setConfiguredTempDirectoryPath(value, errorMessage)) return false;
+				paths.tempPath = normalizeConfiguredPathInput(value);
+				return true;
+			}
+			if (upper == "SHELLPATH") {
+				if (!validateShellExecutablePath(value, errorMessage)) return false;
+				if (!setConfiguredShellExecutablePath(value, errorMessage)) return false;
+				paths.shellUri = normalizeConfiguredPathInput(value);
+				return true;
+			}
 			break;
 		}
 		case MRSettingsKeyClass::Global: {
