@@ -5,15 +5,14 @@
 #define Uses_TFileList
 #define Uses_THistory
 #define Uses_TInputLine
+#define Uses_TEvent
 #define Uses_TKeys
-#define Uses_TListViewer
 #define Uses_TObject
 #define Uses_TRect
-#define Uses_TScrollBar
 #define Uses_TView
 #include <tvision/tv.h>
 
-#include "MRFrame.hpp"
+#include "MRDropList.hpp"
 #include "MRScopedHistoryUI.hpp"
 
 #include "../config/MRDialogPaths.hpp"
@@ -25,116 +24,23 @@
 #include <vector>
 
 namespace {
-TFrame *initScopedHistoryDialogFrame(TRect bounds) {
-	return new MRFrame(bounds);
-}
-
 enum class ScopedDialogHistoryKind : unsigned char {
 	File = 0,
 	Path = 1
 };
 
-class ScopedHistoryListViewer final : public TListViewer {
-  public:
-	ScopedHistoryListViewer(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar, std::vector<std::string> aItems) noexcept : TListViewer(bounds, 1, aHScrollBar, aVScrollBar), items(std::move(aItems)) {
-		setRange(static_cast<short>(items.size()));
-		updateHorizontalRange();
-	}
-
-	void getText(char *dest, short item, short maxLen) override {
-		std::size_t copyLen = 0;
-
-		if (dest == nullptr || maxLen <= 0) return;
-		if (item < 0 || static_cast<std::size_t>(item) >= items.size()) {
-			dest[0] = EOS;
-			return;
-		}
-		copyLen = static_cast<std::size_t>(maxLen - 1);
-		std::strncpy(dest, items[static_cast<std::size_t>(item)].c_str(), copyLen);
-		dest[copyLen] = EOS;
-	}
-
-	void handleEvent(TEvent &event) override {
-		const bool doubleClick = event.what == evMouseDown && (event.mouse.buttons & mbLeftButton) != 0 && (event.mouse.eventFlags & meDoubleClick) != 0;
-
-		TListViewer::handleEvent(event);
-		if (doubleClick && focused >= 0 && focused < range) {
-			endModal(cmOK);
-			clearEvent(event);
-			return;
-		}
-		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter && focused >= 0 && focused < range) {
-			endModal(cmOK);
-			clearEvent(event);
-		}
-	}
-
-	std::string selectedValue() const {
-		if (focused < 0 || static_cast<std::size_t>(focused) >= items.size()) return std::string();
-		return items[static_cast<std::size_t>(focused)];
-	}
-
-  private:
-	void updateHorizontalRange() {
-		int width = 0;
-
-		for (const std::string &item : items)
-			width = std::max(width, cstrlen(item.c_str()));
-		if (hScrollBar != nullptr) hScrollBar->setRange(0, std::max(0, width - size.x + 1));
-	}
-
-	std::vector<std::string> items;
-};
-
-class ScopedHistoryPopupDialog final : public TDialog {
-  public:
-	ScopedHistoryPopupDialog(const TRect &bounds, std::vector<std::string> items) noexcept : TWindowInit(initScopedHistoryDialogFrame), TDialog(bounds, ""), scopedViewer(nullptr) {
-		flags = wfClose;
-		TRect viewerBounds = getExtent();
-		viewerBounds.grow(-1, -1);
-		scopedViewer = new ScopedHistoryListViewer(viewerBounds, standardScrollBar(sbHorizontal | sbHandleKeyboard), standardScrollBar(sbVertical | sbHandleKeyboard), std::move(items));
-		insert(scopedViewer);
-		selectNext(False);
-	}
-
-	TPalette &getPalette() const override {
-		static const TPalette palette = []() -> TPalette {
-			TColorAttr data[29];
-
-			for (int i = 0; i < 29; ++i)
-				data[i] = static_cast<TColorAttr>(i + 1);
-			data[3] = 24;
-			data[4] = 25;
-			return TPalette(data, 29);
-		}();
-		return const_cast<TPalette &>(palette);
-	}
-
-	void handleEvent(TEvent &event) override {
-		TDialog::handleEvent(event);
-		if (event.what == evMouseDown && !mouseInView(event.mouse.where)) {
-			endModal(cmCancel);
-			clearEvent(event);
-		}
-	}
-
-	std::string selectedValue() const {
-		return scopedViewer != nullptr ? scopedViewer->selectedValue() : std::string();
-	}
-
-  private:
-	ScopedHistoryListViewer *scopedViewer;
+enum : ushort {
+	cmMrScopedHistoryChoose = 3868,
+	cmMrScopedHistoryAccept
 };
 
 class ScopedHistoryButton final : public THistory {
   public:
-	ScopedHistoryButton(const TRect &bounds, TInputLine *aLink, MRDialogHistoryScope aScope, ScopedDialogHistoryKind aKind) noexcept : THistory(bounds, aLink, aKind == ScopedDialogHistoryKind::File ? kFileDialogHistoryId : kPathDialogHistoryId), scope(aScope), kind(aKind) {
+	ScopedHistoryButton(const TRect &bounds, TInputLine *aLink, ScopedDialogHistoryKind aKind) noexcept : THistory(bounds, aLink, aKind == ScopedDialogHistoryKind::File ? kFileDialogHistoryId : kPathDialogHistoryId), kind(aKind) {
 	}
 
 	void handleEvent(TEvent &event) override {
-		ScopedHistoryPopupDialog *historyDialog = nullptr;
-		TRect r, p;
-		ushort command = 0;
+		TView *target = owner;
 
 		TView::handleEvent(event);
 		if (event.what == evMouseDown || (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbDown && (link->state & sfFocused) != 0)) {
@@ -143,25 +49,9 @@ class ScopedHistoryButton final : public THistory {
 				return;
 			}
 			recordHistory(link->data);
-			r = link->getBounds();
-			r.a.x--;
-			r.b.x++;
-			r.b.y += 7;
-			r.a.y--;
-			p = owner->getExtent();
-			r.intersect(p);
-			r.b.y--;
-			historyDialog = initHistoryDialog(r);
-			if (historyDialog != nullptr) {
-				command = owner->execView(historyDialog);
-				if (command == cmOK) {
-					const std::string value = historyDialog->selectedValue();
-					strnzcpy(link->data, value.c_str(), link->maxLen + 1);
-					link->selectAll(True);
-					link->drawView();
-				}
-				destroy(historyDialog);
-			}
+			while (target != nullptr && dynamic_cast<TDialog *>(target) == nullptr)
+				target = target->owner;
+			message(target != nullptr ? target : owner, evCommand, cmMrScopedHistoryChoose, this);
 			clearEvent(event);
 		} else if (event.what == evBroadcast)
 			if ((event.message.command == cmReleasedFocus && event.message.infoPtr == link) || event.message.command == cmRecordHistory) recordHistory(link->data);
@@ -170,18 +60,15 @@ class ScopedHistoryButton final : public THistory {
 	void recordHistory(const char *) override {
 	}
 
-  private:
-	ScopedHistoryPopupDialog *initHistoryDialog(const TRect &bounds) {
-		std::vector<std::string> entries;
-
-		if (kind == ScopedDialogHistoryKind::File) configuredScopedDialogFileHistoryEntries(scope, entries);
-		else
-			configuredScopedDialogPathHistoryEntries(scope, entries);
-		if (entries.empty()) return nullptr;
-		return new ScopedHistoryPopupDialog(bounds, std::move(entries));
+	[[nodiscard]] TInputLine *linkedInput() const noexcept {
+		return link;
 	}
 
-	MRDialogHistoryScope scope;
+	[[nodiscard]] ScopedDialogHistoryKind historyKind() const noexcept {
+		return kind;
+	}
+
+  private:
 	ScopedDialogHistoryKind kind;
 };
 
@@ -192,6 +79,28 @@ class TWheelFileDialog final : public TFileDialog {
 	}
 
 	void handleEvent(TEvent &event) override {
+		if (historyDropList.visible()) {
+			if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEsc) {
+				hideHistoryList();
+				clearEvent(event);
+				return;
+			}
+			if (event.what == evMouseDown && !historyDropList.containsPoint(event.mouse.where) && (historyButton == nullptr || !historyButton->mouseInView(event.mouse.where))) {
+				hideHistoryList();
+				clearEvent(event);
+				return;
+			}
+		}
+		if (event.what == evCommand && event.message.command == cmMrScopedHistoryChoose) {
+			toggleHistoryList();
+			clearEvent(event);
+			return;
+		}
+		if (event.what == evCommand && event.message.command == cmMrScopedHistoryAccept) {
+			acceptHistorySelection();
+			clearEvent(event);
+			return;
+		}
 		if (event.what == evBroadcast && event.message.command == cmFileDoubleClicked && (dialogOptions & fdOpenButton) != 0) {
 			event.what = evCommand;
 			event.message.command = cmFileOpen;
@@ -210,6 +119,35 @@ class TWheelFileDialog final : public TFileDialog {
 	}
 
   private:
+	void toggleHistoryList() {
+		std::vector<std::string> entries;
+		TRect bounds;
+		short visibleRows = 7;
+
+		if (historyLink == nullptr) return;
+		configuredScopedDialogFileHistoryEntries(scope, entries);
+		if (entries.empty()) return;
+		bounds = historyLink->getBounds();
+		bounds.b.x++;
+		if (visibleRows > size.y - bounds.a.y - 1) visibleRows = static_cast<short>(size.y - bounds.a.y - 1);
+		if (visibleRows < 1) visibleRows = 1;
+		historyDropList.toggle(*this, bounds, entries, std::string(historyLink->data), this, cmMrScopedHistoryAccept, visibleRows);
+	}
+
+	void hideHistoryList() {
+		historyDropList.hide();
+		if (historyLink != nullptr) historyLink->selectAll(True);
+	}
+
+	void acceptHistorySelection() {
+		std::string value;
+
+		if (!historyDropList.acceptSelection(value) || historyLink == nullptr) return;
+		strnzcpy(historyLink->data, value.c_str(), historyLink->maxLen + 1);
+		historyLink->selectAll(True);
+		historyLink->drawView();
+	}
+
 	void replaceHistoryView(TInputLine *link, ScopedDialogHistoryKind kind) {
 		if (link == nullptr) return;
 		for (TView *child = first(); child != nullptr;) {
@@ -219,8 +157,10 @@ class TWheelFileDialog final : public TFileDialog {
 				const ushort childGrowMode = child->growMode;
 				remove(child);
 				TObject::destroy(child);
-				ScopedHistoryButton *history = new ScopedHistoryButton(childBounds, link, scope, kind);
+				ScopedHistoryButton *history = new ScopedHistoryButton(childBounds, link, kind);
 				history->growMode = childGrowMode;
+				historyButton = history;
+				historyLink = link;
 				insert(history);
 				return;
 			}
@@ -230,6 +170,9 @@ class TWheelFileDialog final : public TFileDialog {
 
 	MRDialogHistoryScope scope;
 	ushort dialogOptions = 0;
+	ScopedHistoryButton *historyButton = nullptr;
+	TInputLine *historyLink = nullptr;
+	MRDropList historyDropList;
 };
 
 class TWheelChDirDialog final : public TChDirDialog {
@@ -238,11 +181,66 @@ class TWheelChDirDialog final : public TChDirDialog {
 		replaceHistoryView(findInputLine(TRect(3, 3, 42, 4)), ScopedDialogHistoryKind::Path);
 	}
 
+	void handleEvent(TEvent &event) override {
+		if (historyDropList.visible()) {
+			if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEsc) {
+				hideHistoryList();
+				clearEvent(event);
+				return;
+			}
+			if (event.what == evMouseDown && !historyDropList.containsPoint(event.mouse.where) && (historyButton == nullptr || !historyButton->mouseInView(event.mouse.where))) {
+				hideHistoryList();
+				clearEvent(event);
+				return;
+			}
+		}
+		if (event.what == evCommand && event.message.command == cmMrScopedHistoryChoose) {
+			toggleHistoryList();
+			clearEvent(event);
+			return;
+		}
+		if (event.what == evCommand && event.message.command == cmMrScopedHistoryAccept) {
+			acceptHistorySelection();
+			clearEvent(event);
+			return;
+		}
+		TChDirDialog::handleEvent(event);
+	}
+
   private:
 	TInputLine *findInputLine(const TRect &bounds) {
 		for (TView *child = first(); child != nullptr; child = child->nextView())
 			if (child->getBounds() == bounds) return dynamic_cast<TInputLine *>(child);
 		return nullptr;
+	}
+
+	void toggleHistoryList() {
+		std::vector<std::string> entries;
+		TRect bounds;
+		short visibleRows = 7;
+
+		if (historyLink == nullptr) return;
+		configuredScopedDialogPathHistoryEntries(scope, entries);
+		if (entries.empty()) return;
+		bounds = historyLink->getBounds();
+		bounds.b.x++;
+		if (visibleRows > size.y - bounds.a.y - 1) visibleRows = static_cast<short>(size.y - bounds.a.y - 1);
+		if (visibleRows < 1) visibleRows = 1;
+		historyDropList.toggle(*this, bounds, entries, std::string(historyLink->data), this, cmMrScopedHistoryAccept, visibleRows);
+	}
+
+	void hideHistoryList() {
+		historyDropList.hide();
+		if (historyLink != nullptr) historyLink->selectAll(True);
+	}
+
+	void acceptHistorySelection() {
+		std::string value;
+
+		if (!historyDropList.acceptSelection(value) || historyLink == nullptr) return;
+		strnzcpy(historyLink->data, value.c_str(), historyLink->maxLen + 1);
+		historyLink->selectAll(True);
+		historyLink->drawView();
 	}
 
 	void replaceHistoryView(TInputLine *link, ScopedDialogHistoryKind kind) {
@@ -254,8 +252,10 @@ class TWheelChDirDialog final : public TChDirDialog {
 				const ushort childGrowMode = child->growMode;
 				remove(child);
 				TObject::destroy(child);
-				ScopedHistoryButton *history = new ScopedHistoryButton(childBounds, link, scope, kind);
+				ScopedHistoryButton *history = new ScopedHistoryButton(childBounds, link, kind);
 				history->growMode = childGrowMode;
+				historyButton = history;
+				historyLink = link;
 				insert(history);
 				return;
 			}
@@ -264,6 +264,9 @@ class TWheelChDirDialog final : public TChDirDialog {
 	}
 
 	MRDialogHistoryScope scope;
+	ScopedHistoryButton *historyButton = nullptr;
+	TInputLine *historyLink = nullptr;
+	MRDropList historyDropList;
 };
 
 } // namespace

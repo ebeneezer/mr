@@ -65,8 +65,6 @@ TFrame *initSetupDialogFrame(TRect bounds) {
 }
 
 using mr::dialogs::ensureMrmacExtension;
-using mr::dialogs::execDialogRaw;
-using mr::dialogs::execDialogRawWithData;
 using mr::dialogs::readRecordField;
 
 using mr::dialogs::writeRecordField;
@@ -587,7 +585,7 @@ bool browsePathWithDirectoryDialog(MRDialogHistoryScope scope, std::string &sele
 	ushort result;
 
 	if (!seed.empty()) (void)::chdir(seed.c_str());
-	result = execDialogRaw(mr::dialogs::createDirectoryDialog(scope, cdNormal));
+	result = mr::dialogs::execDialog(mr::dialogs::createDirectoryDialog(scope, cdNormal));
 	picked = readCurrentWorkingDirectory();
 	if (!originalCwd.empty()) (void)::chdir(originalCwd.c_str());
 	if (result == cmCancel) {
@@ -631,7 +629,7 @@ bool chooseThemeFileForSave(MRDialogHistoryScope scope, std::string &selectedUri
 }
 
 ushort execDialog(TDialog *dialog) {
-	ushort result = execDialogRaw(dialog);
+	ushort result = mr::dialogs::execDialog(dialog);
 	if (result == cmHelp) static_cast<void>(mrShowProjectHelp());
 	return result;
 }
@@ -2507,7 +2505,7 @@ ushort execRememberingFileDialogWithData(MRDialogHistoryScope scope, const char 
 	std::string seedDirectory = resolveFileDialogSeedDirectory(scope, buffer);
 
 	if (!seedDirectory.empty()) (void)::chdir(seedDirectory.c_str());
-	const ushort result = execDialogRawWithData(createFileDialog(scope, wildCard, title, inputName, options), buffer);
+	const ushort result = execDialogWithData(createFileDialog(scope, wildCard, title, inputName, options), buffer);
 	if (!originalCwd.empty()) (void)::chdir(originalCwd.c_str());
 
 	if (result != cmCancel && !deferRememberingLoadDialogPath(scope)) rememberLoadDialogPath(scope, buffer);

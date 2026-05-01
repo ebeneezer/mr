@@ -37,16 +37,8 @@ bool isGutterPositionTrailing(const std::string &position) noexcept {
 	return position == "TRAILING";
 }
 
-bool isMiniMapPositionLeading(const std::string &position) noexcept {
-	return isGutterPositionLeading(position);
-}
-
-bool isMiniMapPositionTrailing(const std::string &position) noexcept {
-	return isGutterPositionTrailing(position);
-}
-
 int normalizedMiniMapWidth(const MREditSetupSettings &settings) noexcept {
-	if (!isMiniMapPositionLeading(settings.miniMapPosition) && !isMiniMapPositionTrailing(settings.miniMapPosition)) return 0;
+	if (!isGutterPositionLeading(settings.miniMapPosition) && !isGutterPositionTrailing(settings.miniMapPosition)) return 0;
 	return std::max(2, std::min(settings.miniMapWidth, 20));
 }
 
@@ -141,8 +133,8 @@ MRTextViewportLayout::Geometry MRTextViewportLayout::geometryFor(const MREditSet
 	const int lineNumberWidth = lineNumberWidthFor(inputs, lineNumbersLeading || lineNumbersTrailing);
 	const int codeFoldingWidth = codeFoldingLeading || codeFoldingTrailing ? 1 : 0;
 	const int miniMapTotalWidth = normalizedMiniMapWidth(settings);
-	const bool leadingMiniMap = miniMapTotalWidth > 0 && isMiniMapPositionLeading(settings.miniMapPosition);
-	const bool trailingMiniMap = miniMapTotalWidth > 0 && isMiniMapPositionTrailing(settings.miniMapPosition);
+	const bool leadingMiniMap = miniMapTotalWidth > 0 && isGutterPositionLeading(settings.miniMapPosition);
+	const bool trailingMiniMap = miniMapTotalWidth > 0 && isGutterPositionTrailing(settings.miniMapPosition);
 	const std::string guttersOrder = normalizedGuttersOrder(settings.gutters);
 	const auto gutterWidthFor = [&](char marker) noexcept -> int {
 		switch (marker) {

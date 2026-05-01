@@ -12,7 +12,7 @@ class MRColumnListView : public TListBox {
   public:
 	using Row = std::vector<std::string>;
 
-	MRColumnListView(const TRect &bounds, TScrollBar *scrollBar, TView *relay = nullptr, ushort selectionCommand = 0, ushort activationCommand = 0) noexcept;
+	MRColumnListView(const TRect &bounds, TScrollBar *scrollBar, TView *relay = nullptr, ushort selectionCommand = 0, ushort activationCommand = 0, bool dropListColors = false) noexcept;
 
 	void setRows(const std::vector<Row> &rows, short selection = 0);
 	[[nodiscard]] short selectedIndex() const;
@@ -22,6 +22,7 @@ class MRColumnListView : public TListBox {
 
 	void focusItemNum(short item) override;
 	void selectItem(short item) override;
+	TColorAttr mapColor(uchar index) override;
 
   private:
 	void dispatchSelectionChanged();
@@ -32,6 +33,7 @@ class MRColumnListView : public TListBox {
 	TView *relayTarget = nullptr;
 	ushort relayCommand = 0;
 	ushort activationCommand = 0;
+	bool useDropListColors = false;
 };
 
 #endif

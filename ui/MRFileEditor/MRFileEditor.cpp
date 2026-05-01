@@ -1488,9 +1488,11 @@ std::string MRFileEditor::smartIndentFillForCursor() const {
 	const std::size_t lineStart = lineStartOffset(cursor);
 	const int baseColumn = leadingIndentColumnForLine(lineStart);
 	int targetColumn = baseColumn;
-	const mr::editor::ReadSnapshot snapshot = mBufferModel.readSnapshot();
 
-	if (mTreeSitterDocument.shouldIncreaseIndentOnNewLine(snapshot, cursor)) targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+	if (settings.smartIndenting && mTreeSitterDocument.activeLanguage() != MRTreeSitterDocument::Language::None) {
+		const mr::editor::ReadSnapshot snapshot = mBufferModel.readSnapshot();
+		if (mTreeSitterDocument.shouldIncreaseIndentOnNewLine(snapshot, cursor)) targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+	}
 	return buildEditIndentFill(settings, 1, targetColumn, configuredTabExpandSetting());
 }
 
@@ -2711,9 +2713,10 @@ Boolean MRFileEditor::confirmSaveOrDiscardNamed() {
 
 void MRFileEditor::refreshSyntaxContext() {
 	MRSyntaxLanguage oldLanguage = mBufferModel.language();
+	const MREditSetupSettings settings = configuredEditSetupSettings();
 	mBufferModel.setSyntaxContext(hasPersistentFileName() ? fileName : "", mSyntaxTitleHint);
 	if (mBufferModel.language() != oldLanguage) resetSyntaxWarmupState(true);
-	mTreeSitterDocument.setLanguageContext(hasPersistentFileName() ? fileName : "", mSyntaxTitleHint);
+	mTreeSitterDocument.setLanguageContext(hasPersistentFileName() ? fileName : "", mSyntaxTitleHint, settings.codeLanguage);
 	static_cast<void>(mTreeSitterDocument.syncToDocument(mBufferModel.readSnapshot(), mBufferModel.documentId(), mBufferModel.version()));
 }
 

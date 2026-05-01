@@ -31,7 +31,7 @@ void writeRecordField(char *dest, std::size_t destSize, const std::string &value
 }
 
 bool fileExtensionEditorSettingsDialogRecordsEqual(const FileExtensionEditorSettingsDialogRecord &lhs, const FileExtensionEditorSettingsDialogRecord &rhs) {
-	return readRecordField(lhs.pageBreak) == readRecordField(rhs.pageBreak) && readRecordField(lhs.wordDelimiters) == readRecordField(rhs.wordDelimiters) && readRecordField(lhs.defaultExtensions) == readRecordField(rhs.defaultExtensions) && readRecordField(lhs.tabSize) == readRecordField(rhs.tabSize) && readRecordField(lhs.leftMargin) == readRecordField(rhs.leftMargin) && readRecordField(lhs.rightMargin) == readRecordField(rhs.rightMargin) && readRecordField(lhs.binaryRecordLength) == readRecordField(rhs.binaryRecordLength) && readRecordField(lhs.postLoadMacro) == readRecordField(rhs.postLoadMacro) && readRecordField(lhs.preSaveMacro) == readRecordField(rhs.preSaveMacro) && readRecordField(lhs.defaultPath) == readRecordField(rhs.defaultPath) && readRecordField(lhs.formatLine) == readRecordField(rhs.formatLine) && readRecordField(lhs.cursorStatusColor) == readRecordField(rhs.cursorStatusColor) && readRecordField(lhs.miniMapWidth) == readRecordField(rhs.miniMapWidth) &&
+	return readRecordField(lhs.pageBreak) == readRecordField(rhs.pageBreak) && readRecordField(lhs.wordDelimiters) == readRecordField(rhs.wordDelimiters) && readRecordField(lhs.defaultExtensions) == readRecordField(rhs.defaultExtensions) && readRecordField(lhs.codeLanguage) == readRecordField(rhs.codeLanguage) && readRecordField(lhs.tabSize) == readRecordField(rhs.tabSize) && readRecordField(lhs.leftMargin) == readRecordField(rhs.leftMargin) && readRecordField(lhs.rightMargin) == readRecordField(rhs.rightMargin) && readRecordField(lhs.binaryRecordLength) == readRecordField(rhs.binaryRecordLength) && readRecordField(lhs.postLoadMacro) == readRecordField(rhs.postLoadMacro) && readRecordField(lhs.preSaveMacro) == readRecordField(rhs.preSaveMacro) && readRecordField(lhs.defaultPath) == readRecordField(rhs.defaultPath) && readRecordField(lhs.formatLine) == readRecordField(rhs.formatLine) && readRecordField(lhs.cursorStatusColor) == readRecordField(rhs.cursorStatusColor) && readRecordField(lhs.miniMapWidth) == readRecordField(rhs.miniMapWidth) &&
 	       readRecordField(lhs.miniMapMarkerGlyph) == readRecordField(rhs.miniMapMarkerGlyph) && readRecordField(lhs.gutters) == readRecordField(rhs.gutters) && lhs.optionsMask == rhs.optionsMask && lhs.tabExpandChoice == rhs.tabExpandChoice && lhs.indentStyleChoice == rhs.indentStyleChoice && lhs.fileTypeChoice == rhs.fileTypeChoice && lhs.columnBlockMoveChoice == rhs.columnBlockMoveChoice && lhs.defaultModeChoice == rhs.defaultModeChoice && lhs.lineNumbersPositionChoice == rhs.lineNumbersPositionChoice && lhs.codeFoldingPositionChoice == rhs.codeFoldingPositionChoice && lhs.miniMapPositionChoice == rhs.miniMapPositionChoice;
 }
 
@@ -49,6 +49,19 @@ void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDial
 	writeRecordField(record.pageBreak, sizeof(record.pageBreak), settings.pageBreak);
 	writeRecordField(record.wordDelimiters, sizeof(record.wordDelimiters), settings.wordDelimiters);
 	writeRecordField(record.defaultExtensions, sizeof(record.defaultExtensions), settings.defaultExtensions);
+	if (upperAscii(trimAscii(settings.codeLanguage)) == "AUTO") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "Auto");
+	else if (upperAscii(trimAscii(settings.codeLanguage)) == "C") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "C");
+	else if (upperAscii(trimAscii(settings.codeLanguage)) == "CPP") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "C++");
+	else if (upperAscii(trimAscii(settings.codeLanguage)) == "PYTHON") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "Python");
+	else if (upperAscii(trimAscii(settings.codeLanguage)) == "JAVASCRIPT") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "JavaScript");
+	else if (upperAscii(trimAscii(settings.codeLanguage)) == "TYPESCRIPT") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "TypeScript");
+	else if (upperAscii(trimAscii(settings.codeLanguage)) == "TSX") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "TSX");
+	else if (upperAscii(trimAscii(settings.codeLanguage)) == "BASH") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "Bash");
+	else if (upperAscii(trimAscii(settings.codeLanguage)) == "JSON") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "JSON");
+	else if (upperAscii(trimAscii(settings.codeLanguage)) == "PERL") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "Perl");
+	else if (upperAscii(trimAscii(settings.codeLanguage)) == "SWIFT") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "Swift");
+	else
+		writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "None");
 	writeRecordField(record.tabSize, sizeof(record.tabSize), std::to_string(settings.tabSize));
 	writeRecordField(record.leftMargin, sizeof(record.leftMargin), std::to_string(settings.leftMargin));
 	writeRecordField(record.rightMargin, sizeof(record.rightMargin), std::to_string(settings.rightMargin));
@@ -78,6 +91,9 @@ void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDial
 	if (settings.lineNumZeroFill) record.optionsMask |= kOptionLineNumZeroFill;
 	if (settings.displayTabs) record.optionsMask |= kOptionDisplayTabs;
 	if (settings.formatRuler) record.optionsMask |= kOptionFormatRuler;
+	if (settings.codeColoring) record.optionsMask |= kOptionCodeColoring;
+	if (settings.codeFoldingFeature) record.optionsMask |= kOptionCodeFoldingFeature;
+	if (settings.smartIndenting) record.optionsMask |= kOptionSmartIndenting;
 
 	record.tabExpandChoice = settings.tabExpand ? kTabExpandTabs : kTabExpandSpaces;
 	record.indentStyleChoice = (indentStyle == "AUTOMATIC") ? kIndentStyleAutomatic : (indentStyle == "SMART") ? kIndentStyleSmart : kIndentStyleOff;
@@ -94,6 +110,25 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.pageBreak = readRecordField(record.pageBreak);
 	settings.wordDelimiters = readRecordField(record.wordDelimiters);
 	settings.defaultExtensions = readRecordField(record.defaultExtensions);
+	{
+		std::string codeLanguage = upperAscii(trimAscii(readRecordField(record.codeLanguage)));
+		if (codeLanguage.empty() || codeLanguage == "NONE") settings.codeLanguage = "NONE";
+		else if (codeLanguage == "AUTO") settings.codeLanguage = "AUTO";
+		else if (codeLanguage == "C") settings.codeLanguage = "C";
+		else if (codeLanguage == "C++" || codeLanguage == "CPP") settings.codeLanguage = "CPP";
+		else if (codeLanguage == "PYTHON") settings.codeLanguage = "PYTHON";
+		else if (codeLanguage == "JAVASCRIPT") settings.codeLanguage = "JAVASCRIPT";
+		else if (codeLanguage == "TYPESCRIPT") settings.codeLanguage = "TYPESCRIPT";
+		else if (codeLanguage == "TSX") settings.codeLanguage = "TSX";
+		else if (codeLanguage == "BASH") settings.codeLanguage = "BASH";
+		else if (codeLanguage == "JSON") settings.codeLanguage = "JSON";
+		else if (codeLanguage == "PERL") settings.codeLanguage = "PERL";
+		else if (codeLanguage == "SWIFT") settings.codeLanguage = "SWIFT";
+		else {
+			errorText = "CODE_LANGUAGE must be None, Auto, C, C++, Python, JavaScript, TypeScript, TSX, Bash, JSON, Perl or Swift.";
+			return false;
+		}
+	}
 
 	{
 		std::string tabSizeText = readRecordField(record.tabSize);
@@ -226,6 +261,9 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	if (settings.showEofMarkerEmoji) settings.showEofMarker = true;
 	settings.lineNumZeroFill = (record.optionsMask & kOptionLineNumZeroFill) != 0;
 	settings.displayTabs = (record.optionsMask & kOptionDisplayTabs) != 0;
+	settings.codeColoring = (record.optionsMask & kOptionCodeColoring) != 0;
+	settings.codeFoldingFeature = (record.optionsMask & kOptionCodeFoldingFeature) != 0;
+	settings.smartIndenting = (record.optionsMask & kOptionSmartIndenting) != 0;
 	settings.lineNumbersPosition = (record.lineNumbersPositionChoice == kLineNumbersLeading) ? "LEADING" : (record.lineNumbersPositionChoice == kLineNumbersTrailing) ? "TRAILING" : "OFF";
 	if (settings.lineNumbersPosition == "OFF" && (record.optionsMask & kOptionShowLineNumbers) != 0) settings.lineNumbersPosition = "LEADING";
 	settings.showLineNumbers = settings.lineNumbersPosition != "OFF";
@@ -266,6 +304,10 @@ enum : unsigned long long {
 	kOvFormatRuler = ::kOvFormatRuler,
 	kOvWordWrap = ::kOvWordWrap,
 	kOvIndentStyle = ::kOvIndentStyle,
+	kOvCodeLanguage = ::kOvCodeLanguage,
+	kOvCodeColoring = ::kOvCodeColoring,
+	kOvSmartIndenting = ::kOvSmartIndenting,
+	kOvCodeFoldingFeature = ::kOvCodeFoldingFeature,
 	kOvFileType = ::kOvFileType,
 	kOvBinaryRecordLength = ::kOvBinaryRecordLength,
 	kOvPostLoadMacro = ::kOvPostLoadMacro,
@@ -380,6 +422,10 @@ enum : unsigned long long {
 	if (effective.formatRuler != defaults.formatRuler) mask |= kOvFormatRuler;
 	if (effective.wordWrap != defaults.wordWrap) mask |= kOvWordWrap;
 	if (upperAscii(effective.indentStyle) != upperAscii(defaults.indentStyle)) mask |= kOvIndentStyle;
+	if (upperAscii(trimAscii(effective.codeLanguage)) != upperAscii(trimAscii(defaults.codeLanguage))) mask |= kOvCodeLanguage;
+	if (effective.codeColoring != defaults.codeColoring) mask |= kOvCodeColoring;
+	if (effective.codeFoldingFeature != defaults.codeFoldingFeature) mask |= kOvCodeFoldingFeature;
+	if (effective.smartIndenting != defaults.smartIndenting) mask |= kOvSmartIndenting;
 	if (upperAscii(effective.fileType) != upperAscii(defaults.fileType)) mask |= kOvFileType;
 	if (effective.binaryRecordLength != defaults.binaryRecordLength) mask |= kOvBinaryRecordLength;
 	if (trimAscii(effective.postLoadMacro) != trimAscii(defaults.postLoadMacro)) mask |= kOvPostLoadMacro;
@@ -578,6 +624,19 @@ void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileE
 	writeRecordField(record.pageBreak, sizeof(record.pageBreak), settings.pageBreak);
 	writeRecordField(record.wordDelimiters, sizeof(record.wordDelimiters), settings.wordDelimiters);
 	writeRecordField(record.defaultExtensions, sizeof(record.defaultExtensions), settings.defaultExtensions);
+	if (upperAscii(trimAscii(settings.codeLanguage)) == "AUTO") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "Auto");
+	else if (upperAscii(trimAscii(settings.codeLanguage)) == "C") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "C");
+	else if (upperAscii(trimAscii(settings.codeLanguage)) == "CPP") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "C++");
+	else if (upperAscii(trimAscii(settings.codeLanguage)) == "PYTHON") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "Python");
+	else if (upperAscii(trimAscii(settings.codeLanguage)) == "JAVASCRIPT") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "JavaScript");
+	else if (upperAscii(trimAscii(settings.codeLanguage)) == "TYPESCRIPT") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "TypeScript");
+	else if (upperAscii(trimAscii(settings.codeLanguage)) == "TSX") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "TSX");
+	else if (upperAscii(trimAscii(settings.codeLanguage)) == "BASH") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "Bash");
+	else if (upperAscii(trimAscii(settings.codeLanguage)) == "JSON") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "JSON");
+	else if (upperAscii(trimAscii(settings.codeLanguage)) == "PERL") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "Perl");
+	else if (upperAscii(trimAscii(settings.codeLanguage)) == "SWIFT") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "Swift");
+	else
+		writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "None");
 	writeRecordField(record.tabSize, sizeof(record.tabSize), std::to_string(settings.tabSize));
 	writeRecordField(record.leftMargin, sizeof(record.leftMargin), std::to_string(settings.leftMargin));
 	writeRecordField(record.rightMargin, sizeof(record.rightMargin), std::to_string(settings.rightMargin));
@@ -604,6 +663,9 @@ void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileE
 	if (settings.lineNumZeroFill) record.optionsMask |= kOptionLineNumZeroFill;
 	if (settings.displayTabs) record.optionsMask |= kOptionDisplayTabs;
 	if (settings.formatRuler) record.optionsMask |= kOptionFormatRuler;
+	if (settings.codeColoring) record.optionsMask |= kOptionCodeColoring;
+	if (settings.codeFoldingFeature) record.optionsMask |= kOptionCodeFoldingFeature;
+	if (settings.smartIndenting) record.optionsMask |= kOptionSmartIndenting;
 
 	record.tabExpandChoice = settings.tabExpand ? kTabExpandTabs : kTabExpandSpaces;
 	record.indentStyleChoice = (indentStyle == "AUTOMATIC") ? kIndentStyleAutomatic : (indentStyle == "SMART") ? kIndentStyleSmart : kIndentStyleOff;

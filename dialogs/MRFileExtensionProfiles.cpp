@@ -329,7 +329,7 @@ bool browseDirectoryPath(MRDialogHistoryScope scope, std::string &selectedPath) 
 	ushort result;
 
 	if (!seed.empty()) (void)::chdir(seed.c_str());
-	result = mr::dialogs::execDialogRaw(mr::dialogs::createDirectoryDialog(scope, cdNormal));
+	result = mr::dialogs::execDialog(mr::dialogs::createDirectoryDialog(scope, cdNormal));
 	picked = readCurrentWorkingDirectory();
 	if (!originalCwd.empty()) (void)::chdir(originalCwd.c_str());
 	if (result == cmCancel) return false;
@@ -415,6 +415,18 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		void *originalInfoPtr = event.what == evBroadcast ? event.message.infoPtr : nullptr;
 		ushort originalKey = event.what == evKeyDown ? event.keyDown.keyCode : 0;
 
+		if (event.what == evKeyDown && event.keyDown.keyCode == kbEsc && editorSettingsPanel.codeLanguageListVisible()) {
+			editorSettingsPanel.hideCodeLanguageList();
+			refreshValidationState();
+			clearEvent(event);
+			return;
+		}
+		if (event.what == evMouseDown && editorSettingsPanel.codeLanguageListVisible() && !editorSettingsPanel.codeLanguageListContainsPoint(event.mouse.where)) {
+			editorSettingsPanel.hideCodeLanguageList();
+			refreshValidationState();
+			clearEvent(event);
+			return;
+		}
 		MRScrollableDialog::handleEvent(event);
 		if (originalWhat == evBroadcast && event.what == evBroadcast && event.message.command == cmMrSetupFilenameProfilesSelectionChanged && event.message.infoPtr == mProfileList) {
 			changeSelection(selectedListIndex(), false);
@@ -445,6 +457,15 @@ class TEditProfilesDialog : public MRScrollableDialog {
 					return;
 				case cmMrFileExtensionEditorSettingsPanelBrowseDefaultPath:
 					browseCurrentDefaultPath();
+					clearEvent(event);
+					return;
+				case cmMrFileExtensionEditorSettingsPanelChooseCodeLanguage:
+					editorSettingsPanel.toggleCodeLanguageList(*this);
+					clearEvent(event);
+					return;
+				case cmMrFileExtensionEditorSettingsPanelAcceptCodeLanguage:
+					if (editorSettingsPanel.acceptCodeLanguageListSelection()) saveWidgetsToCurrentDraft();
+					refreshValidationState();
 					clearEvent(event);
 					return;
 				case cmMrSetupFilenameProfilesHelp:

@@ -1,7 +1,6 @@
 #include "MRTreeSitterDocument.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cstdint>
 #include <new>
 #include <string>
@@ -89,18 +88,6 @@ const char *readTreeSitterSnapshot(void *payload, uint32_t byteIndex, TSPoint, u
 	return input.piece.data + chunkOffset;
 }
 
-TSTree *parseTreeSitterSnapshot(TSParser *parser, const TSTree *oldTree, const mr::editor::ReadSnapshot &snapshot) {
-	TreeSitterSnapshotInput input;
-	TSInput source;
-
-	input.snapshot = snapshot;
-	source.payload = &input;
-	source.read = readTreeSitterSnapshot;
-	source.encoding = TSInputEncodingUTF8;
-	source.decode = nullptr;
-	return ts_parser_parse(parser, oldTree, source);
-}
-
 } // namespace
 
 struct MRTreeSitterDocument::Impl {
@@ -126,37 +113,6 @@ struct MRTreeSitterDocument::Impl {
 	std::size_t documentId = 0;
 	std::size_t version = 0;
 
-	static Language detectLanguage(std::string_view path, std::string_view title) noexcept {
-		static const std::array<std::pair<std::string_view, Language>, 16> kExtensionMap = {{
-		    {".C", Language::C},
-		    {".H", Language::C},
-		    {".CC", Language::Cpp},
-		    {".CPP", Language::Cpp},
-		    {".CPPM", Language::Cpp},
-		    {".CXX", Language::Cpp},
-		    {".C++", Language::Cpp},
-		    {".CP", Language::Cpp},
-		    {".HH", Language::Cpp},
-		    {".HPP", Language::Cpp},
-		    {".HXX", Language::Cpp},
-		    {".H++", Language::Cpp},
-		    {".IPP", Language::Cpp},
-		    {".IXX", Language::Cpp},
-		    {".TPP", Language::Cpp},
-		    {".TXX", Language::Cpp},
-		}};
-		const std::string candidate = !path.empty() ? std::string(path) : std::string(title);
-		const std::size_t slashPos = candidate.find_last_of("/\\");
-		const std::size_t fileNameStart = slashPos == std::string::npos ? 0 : slashPos + 1;
-		const std::size_t dotPos = candidate.find_last_of('.');
-
-		if (candidate.empty() || dotPos == std::string::npos || dotPos < fileNameStart) return Language::None;
-		const std::string extension = upperAscii(candidate.substr(dotPos));
-		for (const auto &entry : kExtensionMap)
-			if (extension == entry.first) return entry.second;
-		return Language::None;
-	}
-
 	static Point pointAt(const mr::editor::TextDocument &document, std::size_t offset) noexcept {
 		Point point;
 
@@ -164,10 +120,6 @@ struct MRTreeSitterDocument::Impl {
 		point.row = static_cast<std::uint32_t>(std::min<std::size_t>(document.lineIndex(offset), UINT32_MAX));
 		point.column = static_cast<std::uint32_t>(std::min<std::size_t>(document.column(offset), UINT32_MAX));
 		return point;
-	}
-
-	void clearPendingEdit() noexcept {
-		pendingEdit = PendingEdit();
 	}
 
 	void clearTree() noexcept {
@@ -186,13 +138,6 @@ struct MRTreeSitterDocument::Impl {
 		}
 	}
 
-	void clearAll() noexcept {
-		clearPendingEdit();
-		clearTree();
-		releaseParser();
-		language = Language::None;
-	}
-
 	const TSLanguage *parserLanguage() const noexcept {
 		switch (language) {
 			case Language::C:
@@ -204,43 +149,6 @@ struct MRTreeSitterDocument::Impl {
 		}
 		return nullptr;
 	}
-
-	bool ensureParserLanguage() noexcept {
-		const TSLanguage *nextLanguage = parserLanguage();
-
-		if (nextLanguage == nullptr) return false;
-		if (parser == nullptr) parser = ts_parser_new();
-		if (parser == nullptr) return false;
-		if (ts_parser_language(parser) == nextLanguage) return true;
-		if (ts_parser_set_language(parser, nextLanguage)) return true;
-		clearTree();
-		releaseParser();
-		return false;
-	}
-
-	void capturePendingEdit(const mr::editor::TextDocument &currentDocument, const mr::editor::TextDocument &nextDocument, const mr::editor::DocumentChangeSet *changeSet) noexcept {
-		clearPendingEdit();
-		if (changeSet == nullptr || !changeSet->changed) return;
-		if (currentDocument.documentId() != nextDocument.documentId()) return;
-		const mr::editor::Range touched = changeSet->touchedRange.normalized();
-		const std::size_t start = std::min<std::size_t>(touched.start, changeSet->oldLength);
-		const long long delta = static_cast<long long>(changeSet->newLength) - static_cast<long long>(changeSet->oldLength);
-		std::size_t oldEnd = touched.end;
-		std::size_t newEnd = touched.end;
-
-		if (delta >= 0) oldEnd = oldEnd >= static_cast<std::size_t>(delta) ? oldEnd - static_cast<std::size_t>(delta) : start;
-		else
-			newEnd = newEnd >= static_cast<std::size_t>(-delta) ? newEnd - static_cast<std::size_t>(-delta) : start;
-		oldEnd = std::clamp(oldEnd, start, changeSet->oldLength);
-		newEnd = std::clamp(newEnd, start, changeSet->newLength);
-		pendingEdit.valid = true;
-		pendingEdit.startByte = start;
-		pendingEdit.oldEndByte = oldEnd;
-		pendingEdit.newEndByte = newEnd;
-		pendingEdit.startPoint = pointAt(currentDocument, start);
-		pendingEdit.oldEndPoint = pointAt(currentDocument, oldEnd);
-		pendingEdit.newEndPoint = pointAt(nextDocument, newEnd);
-	}
 };
 
 MRTreeSitterDocument::MRTreeSitterDocument() noexcept : mImpl(new (std::nothrow) Impl()) {
@@ -249,15 +157,25 @@ MRTreeSitterDocument::MRTreeSitterDocument() noexcept : mImpl(new (std::nothrow)
 MRTreeSitterDocument::~MRTreeSitterDocument() noexcept = default;
 
 void MRTreeSitterDocument::clear() noexcept {
-	if (mImpl != nullptr) mImpl->clearAll();
+	if (mImpl == nullptr) return;
+	mImpl->pendingEdit = Impl::PendingEdit();
+	mImpl->clearTree();
+	mImpl->releaseParser();
+	mImpl->language = Language::None;
 }
 
-void MRTreeSitterDocument::setLanguageContext(std::string_view path, std::string_view title) noexcept {
+void MRTreeSitterDocument::setLanguageContext(std::string_view, std::string_view, std::string_view configuredLanguage) noexcept {
 	if (mImpl == nullptr) return;
-	const Language nextLanguage = Impl::detectLanguage(path, title);
+	const std::string normalized = upperAscii(trimAscii(std::string(configuredLanguage)));
+	Language nextLanguage = Language::None;
+
+	if (normalized == "C")
+		nextLanguage = Language::C;
+	else if (normalized == "CPP")
+		nextLanguage = Language::Cpp;
 
 	if (nextLanguage == mImpl->language) return;
-	mImpl->clearPendingEdit();
+	mImpl->pendingEdit = Impl::PendingEdit();
 	mImpl->clearTree();
 	if (nextLanguage == Language::None) mImpl->releaseParser();
 	mImpl->language = nextLanguage;
@@ -265,21 +183,55 @@ void MRTreeSitterDocument::setLanguageContext(std::string_view path, std::string
 
 void MRTreeSitterDocument::prepareDocumentAdoption(const mr::editor::TextDocument &currentDocument, const mr::editor::TextDocument &nextDocument, const mr::editor::DocumentChangeSet *changeSet) noexcept {
 	if (mImpl == nullptr) return;
-	mImpl->capturePendingEdit(currentDocument, nextDocument, changeSet);
+	mImpl->pendingEdit = Impl::PendingEdit();
+	if (changeSet == nullptr || !changeSet->changed) return;
+	if (currentDocument.documentId() != nextDocument.documentId()) return;
+	const mr::editor::Range touched = changeSet->touchedRange.normalized();
+	const std::size_t start = std::min<std::size_t>(touched.start, changeSet->oldLength);
+	const long long delta = static_cast<long long>(changeSet->newLength) - static_cast<long long>(changeSet->oldLength);
+	std::size_t oldEnd = touched.end;
+	std::size_t newEnd = touched.end;
+
+	if (delta >= 0) oldEnd = oldEnd >= static_cast<std::size_t>(delta) ? oldEnd - static_cast<std::size_t>(delta) : start;
+	else
+		newEnd = newEnd >= static_cast<std::size_t>(-delta) ? newEnd - static_cast<std::size_t>(-delta) : start;
+	oldEnd = std::clamp(oldEnd, start, changeSet->oldLength);
+	newEnd = std::clamp(newEnd, start, changeSet->newLength);
+	mImpl->pendingEdit.valid = true;
+	mImpl->pendingEdit.startByte = start;
+	mImpl->pendingEdit.oldEndByte = oldEnd;
+	mImpl->pendingEdit.newEndByte = newEnd;
+	mImpl->pendingEdit.startPoint = Impl::pointAt(currentDocument, start);
+	mImpl->pendingEdit.oldEndPoint = Impl::pointAt(currentDocument, oldEnd);
+	mImpl->pendingEdit.newEndPoint = Impl::pointAt(nextDocument, newEnd);
 }
 
 bool MRTreeSitterDocument::syncToDocument(const mr::editor::ReadSnapshot &snapshot, std::size_t documentId, std::size_t version) noexcept {
 	if (mImpl == nullptr) return false;
 	if (mImpl->language == Language::None) {
-		mImpl->clearPendingEdit();
+		mImpl->pendingEdit = Impl::PendingEdit();
 		mImpl->clearTree();
 		mImpl->releaseParser();
 		return false;
 	}
 	if (mImpl->tree != nullptr && mImpl->documentId == documentId && mImpl->version == version && !mImpl->pendingEdit.valid) return true;
-	if (!mImpl->ensureParserLanguage()) {
-		mImpl->clearPendingEdit();
+	const TSLanguage *nextLanguage = mImpl->parserLanguage();
+
+	if (nextLanguage == nullptr) {
+		mImpl->pendingEdit = Impl::PendingEdit();
 		mImpl->clearTree();
+		return false;
+	}
+	if (mImpl->parser == nullptr) mImpl->parser = ts_parser_new();
+	if (mImpl->parser == nullptr) {
+		mImpl->pendingEdit = Impl::PendingEdit();
+		mImpl->clearTree();
+		return false;
+	}
+	if (ts_parser_language(mImpl->parser) != nextLanguage && !ts_parser_set_language(mImpl->parser, nextLanguage)) {
+		mImpl->pendingEdit = Impl::PendingEdit();
+		mImpl->clearTree();
+		mImpl->releaseParser();
 		return false;
 	}
 	const bool reuseTree = mImpl->tree != nullptr && mImpl->documentId == documentId && mImpl->pendingEdit.valid;
@@ -297,8 +249,18 @@ bool MRTreeSitterDocument::syncToDocument(const mr::editor::ReadSnapshot &snapsh
 		edit.new_end_point = TSPoint{mImpl->pendingEdit.newEndPoint.row, mImpl->pendingEdit.newEndPoint.column};
 		ts_tree_edit(previousTree, &edit);
 	}
-	parsedTree = parseTreeSitterSnapshot(mImpl->parser, reuseTree ? previousTree : nullptr, snapshot);
-	mImpl->clearPendingEdit();
+	{
+		TreeSitterSnapshotInput input;
+		TSInput source;
+
+		input.snapshot = snapshot;
+		source.payload = &input;
+		source.read = readTreeSitterSnapshot;
+		source.encoding = TSInputEncodingUTF8;
+		source.decode = nullptr;
+		parsedTree = ts_parser_parse(mImpl->parser, reuseTree ? previousTree : nullptr, source);
+	}
+	mImpl->pendingEdit = Impl::PendingEdit();
 	if (parsedTree == nullptr) {
 		mImpl->clearTree();
 		return false;

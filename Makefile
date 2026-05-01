@@ -117,6 +117,7 @@ CXX_SOURCES = \
 	mrmac/MRVM.cpp \
 	ui/MRFrame.cpp \
 	ui/MRColumnListView.cpp \
+	ui/MRDropList.cpp \
 	ui/MRFileEditor/MRFileEditor.cpp \
 	ui/MRFileEditor/MRMiniMap.cpp \
 	ui/MRFileEditor/MRTextFormatting.cpp \

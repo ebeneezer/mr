@@ -9,6 +9,8 @@
 
 #include "MRColumnListView.hpp"
 
+#include "../config/MRDialogPaths.hpp"
+
 #include <algorithm>
 #include <cstring>
 
@@ -41,7 +43,7 @@ class TPlainStringCollection : public TCollection {
 
 } // namespace
 
-MRColumnListView::MRColumnListView(const TRect &bounds, TScrollBar *scrollBar, TView *relay, ushort selectionCommand, ushort activationCommandValue) noexcept : TListBox(bounds, 1, scrollBar), relayTarget(relay), relayCommand(selectionCommand), activationCommand(activationCommandValue) {
+MRColumnListView::MRColumnListView(const TRect &bounds, TScrollBar *scrollBar, TView *relay, ushort selectionCommand, ushort activationCommandValue, bool dropListColors) noexcept : TListBox(bounds, 1, scrollBar), relayTarget(relay), relayCommand(selectionCommand), activationCommand(activationCommandValue), useDropListColors(dropListColors) {
 }
 
 void MRColumnListView::setRows(const std::vector<Row> &rows, short selection) {
@@ -74,6 +76,16 @@ short MRColumnListView::selectedIndex() const {
 	const_cast<MRColumnListView *>(this)->getData(&data);
 	if (data.selection >= rowValues.size()) return static_cast<short>(rowValues.size() - 1);
 	return static_cast<short>(data.selection);
+}
+
+TColorAttr MRColumnListView::mapColor(uchar index) {
+	unsigned char configured = 0;
+
+	if (!useDropListColors) return TListBox::mapColor(index);
+	if ((index == 1 || index == 2) && configuredColorSlotOverride(kMrPaletteDropListDescription, configured)) return configured;
+	if (index == 3 && configuredColorSlotOverride(58, configured)) return configured;
+	if (index == 4 && configuredColorSlotOverride(kMrPaletteDropListSelectedInactive, configured)) return configured;
+	return TListBox::mapColor(index);
 }
 
 void MRColumnListView::focusItemNum(short item) {

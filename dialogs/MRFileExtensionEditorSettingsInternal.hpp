@@ -1,7 +1,10 @@
 #ifndef MRFILEEXTENSIONEDITORSETTINGSPANELINTERNAL_HPP
 #define MRFILEEXTENSIONEDITORSETTINGSPANELINTERNAL_HPP
 
+#define Uses_TRect
 #include <tvision/tv.h>
+
+#include "../ui/MRDropList.hpp"
 
 #include <cstddef>
 
@@ -19,13 +22,16 @@ enum : ushort {
 	cmMrFileExtensionEditorSettingsPanelFocusChanged,
 	cmMrFileExtensionEditorSettingsPanelBrowsePostLoadMacro,
 	cmMrFileExtensionEditorSettingsPanelBrowsePreSaveMacro,
-	cmMrFileExtensionEditorSettingsPanelBrowseDefaultPath
+	cmMrFileExtensionEditorSettingsPanelBrowseDefaultPath,
+	cmMrFileExtensionEditorSettingsPanelChooseCodeLanguage,
+	cmMrFileExtensionEditorSettingsPanelAcceptCodeLanguage
 };
 
 enum {
 	kPageBreakFieldSize = 64,
 	kWordDelimsFieldSize = 256,
 	kDefaultExtsFieldSize = 256,
+	kCodeLanguageFieldSize = 32,
 	kTabSizeFieldSize = 8,
 	kLeftMarginFieldSize = 8,
 	kRightMarginFieldSize = 8,
@@ -51,7 +57,10 @@ enum : ushort {
 	kOptionShowEofMarkerEmoji = 0x0100,
 	kOptionWordWrap = 0x0200,
 	kOptionDisplayTabs = 0x0400,
-	kOptionFormatRuler = 0x0800
+	kOptionFormatRuler = 0x0800,
+	kOptionCodeColoring = 0x1000,
+	kOptionCodeFoldingFeature = 0x2000,
+	kOptionSmartIndenting = 0x4000
 };
 
 enum : ushort {
@@ -62,7 +71,10 @@ enum : ushort {
 	kLeftOptionLineNumZeroFill = 0x0010,
 	kLeftOptionWordWrap = 0x0020,
 	kLeftOptionDisplayTabs = 0x0040,
-	kLeftOptionFormatRuler = 0x0080
+	kLeftOptionFormatRuler = 0x0080,
+	kLeftOptionCodeColoring = 0x0100,
+	kLeftOptionCodeFoldingFeature = 0x0200,
+	kLeftOptionSmartIndenting = 0x0400
 };
 
 enum : ushort {
@@ -120,6 +132,7 @@ struct FileExtensionEditorSettingsDialogRecord {
 	char pageBreak[kPageBreakFieldSize];
 	char wordDelimiters[kWordDelimsFieldSize];
 	char defaultExtensions[kDefaultExtsFieldSize];
+	char codeLanguage[kCodeLanguageFieldSize];
 	char tabSize[kTabSizeFieldSize];
 	char leftMargin[kLeftMarginFieldSize];
 	char rightMargin[kRightMarginFieldSize];
@@ -166,6 +179,7 @@ class FileExtensionEditorSettingsPanel {
 	[[nodiscard]] std::string postLoadMacroValue() const;
 	[[nodiscard]] std::string preSaveMacroValue() const;
 	[[nodiscard]] std::string defaultPathValue() const;
+	[[nodiscard]] std::string codeLanguageValue() const;
 	[[nodiscard]] bool formatRulerEnabled() const noexcept;
 	[[nodiscard]] int currentFormatLineTabSize() const noexcept;
 	[[nodiscard]] int currentFormatLineLeftMargin() const noexcept;
@@ -175,6 +189,12 @@ class FileExtensionEditorSettingsPanel {
 	void setPostLoadMacroValue(const std::string &value);
 	void setPreSaveMacroValue(const std::string &value);
 	void setDefaultPathValue(const std::string &value);
+	void setCodeLanguageValue(const std::string &value);
+	void toggleCodeLanguageList(MRScrollableDialog &dialog);
+	void hideCodeLanguageList();
+	[[nodiscard]] bool codeLanguageListVisible() const noexcept;
+	[[nodiscard]] bool codeLanguageListContainsPoint(TPoint where) const noexcept;
+	[[nodiscard]] bool acceptCodeLanguageListSelection();
 	void syncDynamicStates();
 	TView *primaryView() const noexcept;
 
@@ -188,6 +208,7 @@ class FileExtensionEditorSettingsPanel {
 	TInputLine *pageBreakField = nullptr;
 	TInputLine *wordDelimitersField = nullptr;
 	TInputLine *defaultExtensionsField = nullptr;
+	TInputLine *codeLanguageField = nullptr;
 	MRNumericSlider *tabSizeSlider = nullptr;
 	TInputLine *leftMarginField = nullptr;
 	TInputLine *rightMarginField = nullptr;
@@ -201,6 +222,7 @@ class FileExtensionEditorSettingsPanel {
 	TView *postLoadMacroBrowseButton = nullptr;
 	TView *preSaveMacroBrowseButton = nullptr;
 	TView *defaultPathBrowseButton = nullptr;
+	TView *codeLanguageBrowseButton = nullptr;
 	TCheckBoxes *optionsLeftField = nullptr;
 	TRadioButtons *lineNumbersField = nullptr;
 	TRadioButtons *codeFoldingPositionField = nullptr;
@@ -214,6 +236,8 @@ class FileExtensionEditorSettingsPanel {
 	MRNumericSlider *miniMapWidthSlider = nullptr;
 	TInputLine *miniMapMarkerGlyphField = nullptr;
 	TInputLine *guttersField = nullptr;
+	TRect codeLanguageListAnchor;
+	MRDropList codeLanguageDropList;
 	int lastKnownLeftMarginForFormatLine = 1;
 	int lastKnownTabSizeForFormatLine = 8;
 	int lastKnownRightMarginForFormatLine = 78;

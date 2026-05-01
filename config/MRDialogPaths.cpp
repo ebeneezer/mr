@@ -915,6 +915,7 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"HELPCOLORS", MRSettingsKeyClass::ColorInline, false},
     {"OTHERCOLORS", MRSettingsKeyClass::ColorInline, false},
     {"MINIMAPCOLORS", MRSettingsKeyClass::ColorInline, false},
+    {"CODECOLORS", MRSettingsKeyClass::ColorInline, false},
 };
 
 const MREditSettingDescriptor *editSettingDescriptorByKeyInternal(const std::string &key);
@@ -934,6 +935,10 @@ static const MREditSettingDescriptor kEditSettingDescriptors[] = {
     {"FORMAT_RULER", "Format ruler", MREditSettingSection::Formatting, MREditSettingKind::Boolean, true, kOvFormatRuler},
     {"WORD_WRAP", "Word wrap", MREditSettingSection::Formatting, MREditSettingKind::Boolean, true, kOvWordWrap},
     {"INDENT_STYLE", "Indent style", MREditSettingSection::Formatting, MREditSettingKind::Choice, true, kOvIndentStyle},
+    {"CODE_LANGUAGE", "Code language", MREditSettingSection::Display, MREditSettingKind::Choice, true, kOvCodeLanguage},
+    {"CODE_COLORING", "Code coloring", MREditSettingSection::Display, MREditSettingKind::Boolean, true, kOvCodeColoring},
+    {"CODE_FOLDING", "Code folding", MREditSettingSection::Display, MREditSettingKind::Boolean, true, kOvCodeFoldingFeature},
+    {"SMART_INDENTING", "Smart indenting", MREditSettingSection::Display, MREditSettingKind::Boolean, true, kOvSmartIndenting},
     {"FILE_TYPE", "File type", MREditSettingSection::Formatting, MREditSettingKind::Choice, true, kOvFileType},
     {"BINARY_RECORD_LENGTH", "Binary record length", MREditSettingSection::Formatting, MREditSettingKind::Integer, true, kOvBinaryRecordLength},
     {"POST_LOAD_MACRO", "Post-load macro", MREditSettingSection::Macros, MREditSettingKind::String, true, kOvPostLoadMacro},
@@ -962,12 +967,53 @@ static const MREditSettingDescriptor kEditSettingDescriptors[] = {
     {"CURSOR_STATUS_COLOR", "Cursor status color", MREditSettingSection::Display, MREditSettingKind::String, true, kOvCursorStatusColor},
 };
 
-static const unsigned char kPaletteDialogFrame = 33;
-static const unsigned char kPaletteDialogText = 37;
-static const unsigned char kPaletteDialogBackground = 32;
+static const unsigned char kPaletteMenuDescription = 2;
+static const unsigned char kPaletteMenuGhostedDescription = 3;
+static const unsigned char kPaletteMenuHotkey = 4;
+static const unsigned char kPaletteMenuSelector = 5;
+static const unsigned char kPaletteMenuGhostedSelector = 6;
+static const unsigned char kPaletteMenuSelectedHotkey = 7;
+
+static const unsigned char kPaletteBlueWindowFrame = 8;
+static const unsigned char kPaletteBlueWindowBold = 9;
+static const unsigned char kPaletteBlueWindowText = 13;
+static const unsigned char kPaletteBlueWindowHighlight = 14;
+
+static const unsigned char kPaletteGrayDialogBackground = 32;
+static const unsigned char kPaletteGrayDialogFrame = 33;
+static const unsigned char kPaletteGrayDialogFrameAccent = 34;
+static const unsigned char kPaletteGrayDialogText = 37;
+static const unsigned char kPaletteDialogButtonDescription = 41;
+static const unsigned char kPaletteDialogButtonHotkey = 45;
+static const unsigned char kPaletteDialogButtonShadow = 46;
+static const unsigned char kPaletteDialogClusterHotkey = 49;
+static const unsigned char kPaletteDialogListFrameLegacyPrimary = 24;
+static const unsigned char kPaletteDialogListFrameLegacySecondary = 25;
+static const unsigned char kPaletteDialogListNormalLegacy = 26;
+static const unsigned char kPaletteDialogListFocusedLegacy = 27;
+static const unsigned char kPaletteDialogListSelectedLegacy = 28;
+static const unsigned char kPaletteDialogListTextLegacy = 29;
+static const unsigned char kPaletteDialogListFrameExtendedPrimary = 55;
+static const unsigned char kPaletteDialogListFrameExtendedSecondary = 56;
+static const unsigned char kPaletteDialogListNormal = 57;
+static const unsigned char kPaletteDialogListFocused = 58;
+static const unsigned char kPaletteDialogListSelectedInactive = 59;
+static const unsigned char kPaletteDialogListText = 60;
+static const unsigned char kPaletteBlueDialogBackground = 64;
+static const unsigned char kPaletteBlueDialogFrame = 65;
+static const unsigned char kPaletteBlueDialogFrameAccent = 66;
+static const unsigned char kPaletteBlueDialogText = 69;
+static const unsigned char kPaletteCyanDialogBackground = 96;
+static const unsigned char kPaletteCyanDialogFrame = 97;
+static const unsigned char kPaletteCyanDialogFrameAccent = 98;
+static const unsigned char kPaletteCyanDialogText = 101;
 static const unsigned char kPaletteDialogInactiveClusterGray = 62;
 static const unsigned char kPaletteDialogInactiveClusterBlue = 94;
 static const unsigned char kPaletteDialogInactiveClusterCyan = 126;
+static const unsigned char kPaletteHelpFrame = 128;
+static const unsigned char kPaletteHelpText = 133;
+static const unsigned char kPaletteHelpHighlight = 134;
+static const unsigned char kPaletteHelpChapter = 135;
 
 enum : std::size_t {
 	kMenuDialogIndexListboxSelector = 11,
@@ -975,7 +1021,9 @@ enum : std::size_t {
 	kMenuDialogIndexInactiveElements = 13,
 	kMenuDialogIndexDialogFrame = 14,
 	kMenuDialogIndexDialogText = 15,
-	kMenuDialogIndexDialogBackground = 16
+	kMenuDialogIndexDialogBackground = 16,
+	kMenuDialogIndexDropListDescription = 17,
+	kMenuDialogIndexDropListSelectedInactive = 18
 };
 
 struct ColorGroupDefinition {
@@ -993,30 +1041,34 @@ static const MRColorSetupItem kWindowColorItems[] = {
     // Current-line, current-line-in-block and changed-text intentionally use
     // dedicated app palette extension slots (136..138) to avoid recoloring
     // frame icons/scrollbar controls.
-    {"text", 13}, {"changed text", kMrPaletteChangedText}, {"highlighted text", 14}, {"EOF marker", kMrPaletteEofMarker}, {"window border", 8}, {"window bold", 9}, {"current line", kMrPaletteCurrentLine}, {"current line in block", kMrPaletteCurrentLineInBlock}, {"line numbers", kMrPaletteLineNumbers}, {"code folding", kMrPaletteCodeFolding}, {"format ruler", kMrPaletteFormatRuler},
+    {"text", kPaletteBlueWindowText}, {"changed text", kMrPaletteChangedText}, {"highlighted text", kPaletteBlueWindowHighlight}, {"EOF marker", kMrPaletteEofMarker}, {"window border", kPaletteBlueWindowFrame}, {"window bold", kPaletteBlueWindowBold}, {"current line", kMrPaletteCurrentLine}, {"current line in block", kMrPaletteCurrentLineInBlock}, {"line numbers", kMrPaletteLineNumbers}, {"code folding", kMrPaletteCodeFolding}, {"format ruler", kMrPaletteFormatRuler},
 };
 
 static const MRColorSetupItem kMenuDialogColorItems[] = {
     // Mixed group by design:
     // - Menu/status palette slots 2..6.
     // - Gray dialog block (32..63), as TDialog defaults to dpGrayDialog.
-    {"description of selectable menu element", 2}, {"description of ghosted menu element", 3}, {"hotkey of menu element", 4}, {"menu selector on selectable menu element", 5}, {"menu selector on ghosted menu element", 6}, {"description of buttons", 41}, {"hotkey on buttons", 45}, {"button shadow", 46}, {"selected element in unfocussed listbox", 59}, {"element description in listbox", 57}, {"hotkeys on radio buttons & check boxes", 49}, {"dialog selector", 58}, {"inactive radio buttons and checkboxes", kPaletteDialogInactiveClusterGray}, {"inactive dialog elements", kMrPaletteDialogInactiveElements}, {"dialog frame", kPaletteDialogFrame}, {"dialog text", kPaletteDialogText}, {"dialog background", kPaletteDialogBackground},
+    {"description of selectable menu element", kPaletteMenuDescription}, {"description of ghosted menu element", kPaletteMenuGhostedDescription}, {"hotkey of menu element", kPaletteMenuHotkey}, {"menu selector on selectable menu element", kPaletteMenuSelector}, {"menu selector on ghosted menu element", kPaletteMenuGhostedSelector}, {"description of buttons", kPaletteDialogButtonDescription}, {"hotkey on buttons", kPaletteDialogButtonHotkey}, {"button shadow", kPaletteDialogButtonShadow}, {"selected element in unfocussed listbox", kPaletteDialogListSelectedInactive}, {"element description in listbox", kPaletteDialogListNormal}, {"hotkeys on radio buttons & check boxes", kPaletteDialogClusterHotkey}, {"dialog selector", kPaletteDialogListFocused}, {"inactive radio buttons and checkboxes", kPaletteDialogInactiveClusterGray}, {"inactive dialog elements", kMrPaletteDialogInactiveElements}, {"dialog frame", kPaletteGrayDialogFrame}, {"dialog text", kPaletteGrayDialogText}, {"dialog background", kPaletteGrayDialogBackground}, {"element description in droplists", kMrPaletteDropListDescription}, {"selected element in unfocussed droplist", kMrPaletteDropListSelectedInactive},
 };
 
 static const MRColorSetupItem kHelpColorItems[] = {
-    {"Help-Text", 133}, {"help-Highlight", 134}, {"help-Chapter", 135}, {"help-Border", 128}, {"help-Link", 134}, {"help-F-keys", 135}, {"help-attr-1", 133}, {"help-attr-2", 134}, {"help-attr-3", 135},
+    {"Help-Text", kPaletteHelpText}, {"help-Highlight", kPaletteHelpHighlight}, {"help-Chapter", kPaletteHelpChapter}, {"help-Border", kPaletteHelpFrame}, {"help-Link", kPaletteHelpHighlight}, {"help-F-keys", kPaletteHelpChapter}, {"help-attr-1", kPaletteHelpText}, {"help-attr-2", kPaletteHelpHighlight}, {"help-attr-3", kPaletteHelpChapter},
 };
 
 static const MRColorSetupItem kOtherColorItems[] = {
-    {"statusline", 2}, {"statusline bold", 3}, {"function descriptions on statusline", 4}, {"function keys on statusline", 5}, {"error message", kMrPaletteMessageError}, {"message", kMrPaletteMessage}, {"warning message", kMrPaletteMessageWarning}, {"hero events", kMrPaletteMessageHero}, {"cursor position marker", kMrPaletteCursorPositionMarker}, {"desktop background", kMrPaletteDesktop}, {"virtual desktop marker", kMrPaletteVirtualDesktopMarker},
+    {"statusline", kPaletteMenuDescription}, {"statusline bold", kPaletteMenuGhostedDescription}, {"function descriptions on statusline", kPaletteMenuHotkey}, {"function keys on statusline", kPaletteMenuSelector}, {"error message", kMrPaletteMessageError}, {"message", kMrPaletteMessage}, {"warning message", kMrPaletteMessageWarning}, {"hero events", kMrPaletteMessageHero}, {"cursor position marker", kMrPaletteCursorPositionMarker}, {"desktop background", kMrPaletteDesktop}, {"virtual desktop marker", kMrPaletteVirtualDesktopMarker},
 };
 
 static const MRColorSetupItem kMiniMapColorItems[] = {
     {"normal", kMrPaletteMiniMapNormal}, {"viewport cursor", kMrPaletteMiniMapViewport}, {"changed", kMrPaletteMiniMapChanged}, {"find marker", kMrPaletteMiniMapFindMarker}, {"error marker", kMrPaletteMiniMapErrorMarker},
 };
 
+static const MRColorSetupItem kCodeColorItems[] = {
+    {"comments", kMrPaletteCodeComments}, {"strings", kMrPaletteCodeStrings}, {"characters", kMrPaletteCodeCharacters}, {"numbers", kMrPaletteCodeNumbers}, {"keywords", kMrPaletteCodeKeywords}, {"types", kMrPaletteCodeTypes}, {"directives", kMrPaletteCodeDirectives}, {"functions", kMrPaletteCodeFunctions}, {"builtins", kMrPaletteCodeBuiltins}, {"constants", kMrPaletteCodeConstants}, {"operators", kMrPaletteCodeOperators}, {"brackets", kMrPaletteCodeBrackets}, {"delimiters", kMrPaletteCodeDelimiters},
+};
+
 static const ColorGroupDefinition kColorGroups[] = {
-    {MRColorSetupGroup::Window, "WINDOW COLORS", "WINDOWCOLORS", kWindowColorItems, std::size(kWindowColorItems)}, {MRColorSetupGroup::MenuDialog, "MENU / DIALOG COLORS", "MENUDIALOGCOLORS", kMenuDialogColorItems, std::size(kMenuDialogColorItems)}, {MRColorSetupGroup::Help, "HELP COLORS", "HELPCOLORS", kHelpColorItems, std::size(kHelpColorItems)}, {MRColorSetupGroup::Other, "OTHER COLORS", "OTHERCOLORS", kOtherColorItems, std::size(kOtherColorItems)}, {MRColorSetupGroup::MiniMap, "MINIMAP COLORS", "MINIMAPCOLORS", kMiniMapColorItems, std::size(kMiniMapColorItems)},
+    {MRColorSetupGroup::Window, "WINDOW COLORS", "WINDOWCOLORS", kWindowColorItems, std::size(kWindowColorItems)}, {MRColorSetupGroup::MenuDialog, "MENU / DIALOG COLORS", "MENUDIALOGCOLORS", kMenuDialogColorItems, std::size(kMenuDialogColorItems)}, {MRColorSetupGroup::Help, "HELP COLORS", "HELPCOLORS", kHelpColorItems, std::size(kHelpColorItems)}, {MRColorSetupGroup::Other, "OTHER COLORS", "OTHERCOLORS", kOtherColorItems, std::size(kOtherColorItems)}, {MRColorSetupGroup::MiniMap, "MINIMAP COLORS", "MINIMAPCOLORS", kMiniMapColorItems, std::size(kMiniMapColorItems)}, {MRColorSetupGroup::Code, "CODE COLORS", "CODECOLORS", kCodeColorItems, std::size(kCodeColorItems)},
 };
 
 const ColorGroupDefinition *findColorGroupDefinition(MRColorSetupGroup group) {
@@ -1055,6 +1107,21 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 	if (paletteIndex == kMrPaletteMiniMapChanged) return defaults[14];
 	if (paletteIndex == kMrPaletteMiniMapFindMarker) return defaults[5];
 	if (paletteIndex == kMrPaletteMiniMapErrorMarker) return defaults[42];
+	if (paletteIndex == kMrPaletteCodeComments) return defaults[12];
+	if (paletteIndex == kMrPaletteCodeStrings) return defaults[14];
+	if (paletteIndex == kMrPaletteCodeCharacters) return defaults[14];
+	if (paletteIndex == kMrPaletteCodeNumbers) return defaults[13];
+	if (paletteIndex == kMrPaletteCodeKeywords) return defaults[11];
+	if (paletteIndex == kMrPaletteCodeTypes) return defaults[9];
+	if (paletteIndex == kMrPaletteCodeDirectives) return defaults[42];
+	if (paletteIndex == kMrPaletteCodeFunctions) return defaults[10];
+	if (paletteIndex == kMrPaletteCodeBuiltins) return defaults[43];
+	if (paletteIndex == kMrPaletteCodeConstants) return defaults[3];
+	if (paletteIndex == kMrPaletteCodeOperators) return defaults[37];
+	if (paletteIndex == kMrPaletteCodeBrackets) return defaults[9];
+	if (paletteIndex == kMrPaletteCodeDelimiters) return defaults[13];
+	if (paletteIndex == kMrPaletteDropListDescription) return defaults[57];
+	if (paletteIndex == kMrPaletteDropListSelectedInactive) return defaults[59];
 	if (paletteIndex == kMrPaletteDialogInactiveElements) return defaults[kPaletteDialogInactiveClusterGray];
 	if (paletteIndex == kMrPaletteDesktop) return 0x90;
 	if (paletteIndex == kMrPaletteVirtualDesktopMarker) return 0x9F;
@@ -1075,6 +1142,8 @@ MRColorSetupSettings defaultsFromColorGroups() {
 		settings.otherColors[i] = defaultColorForSlot(kOtherColorItems[i].paletteIndex);
 	for (std::size_t i = 0; i < settings.miniMapColors.size(); ++i)
 		settings.miniMapColors[i] = defaultColorForSlot(kMiniMapColorItems[i].paletteIndex);
+	for (std::size_t i = 0; i < settings.codeColors.size(); ++i)
+		settings.codeColors[i] = defaultColorForSlot(kCodeColorItems[i].paletteIndex);
 	return settings;
 }
 
@@ -1274,7 +1343,9 @@ bool parseMenuDialogColorListLiteral(const std::string &literal, std::array<unsi
 		outValues[i] = defaultColorForSlot(kMenuDialogColorItems[i].paletteIndex);
 
 	// Accepted formats:
-	// - 17: current format (..., inactive radio/checkbox, inactive dialog elements, dialog frame/text/background)
+	// - 19: current format with dedicated droplist colors.
+	// - 18: current format missing "selected element in unfocussed droplist".
+	// - 17: previous current format without dedicated droplist colors.
 	// - 16: previous format without inactive dialog elements
 	// - 15: previous format without inactive radio/checkbox and inactive dialog elements
 	// - 14: legacy format (..., dialog frame, dialog background[old=dialog text])
@@ -1287,30 +1358,36 @@ bool parseMenuDialogColorListLiteral(const std::string &literal, std::array<unsi
 		for (std::size_t i = 0; i < outValues.size(); ++i)
 			outValues[i] = parsed[i];
 	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 1) {
+		for (std::size_t i = 0; i < parsed.size(); ++i)
+			outValues[i] = parsed[i];
+	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 2) {
+		for (std::size_t i = 0; i < parsed.size(); ++i)
+			outValues[i] = parsed[i];
+	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 3) {
 		for (std::size_t i = 0; i <= kMenuDialogIndexInactiveCluster; ++i)
 			outValues[i] = parsed[i];
 		outValues[kMenuDialogIndexDialogFrame] = parsed[13];
 		outValues[kMenuDialogIndexDialogText] = parsed[14];
 		outValues[kMenuDialogIndexDialogBackground] = parsed[15];
-	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 2) {
-		for (std::size_t i = 0; i <= kMenuDialogIndexListboxSelector; ++i)
-			outValues[i] = parsed[i];
-		outValues[kMenuDialogIndexDialogFrame] = parsed[12];
-		outValues[kMenuDialogIndexDialogText] = parsed[13];
-		outValues[kMenuDialogIndexDialogBackground] = parsed[12];
-	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 3) {
-		for (std::size_t i = 0; i <= kMenuDialogIndexListboxSelector; ++i)
-			outValues[i] = parsed[i];
-		outValues[kMenuDialogIndexDialogFrame] = parsed[12];
-		outValues[kMenuDialogIndexDialogText] = parsed[13];
-		outValues[kMenuDialogIndexDialogBackground] = parsed[12];
 	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 4) {
 		for (std::size_t i = 0; i <= kMenuDialogIndexListboxSelector; ++i)
 			outValues[i] = parsed[i];
+		outValues[kMenuDialogIndexDialogFrame] = parsed[12];
+		outValues[kMenuDialogIndexDialogText] = parsed[13];
+		outValues[kMenuDialogIndexDialogBackground] = parsed[12];
 	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 5) {
+		for (std::size_t i = 0; i <= kMenuDialogIndexListboxSelector; ++i)
+			outValues[i] = parsed[i];
+		outValues[kMenuDialogIndexDialogFrame] = parsed[12];
+		outValues[kMenuDialogIndexDialogText] = parsed[13];
+		outValues[kMenuDialogIndexDialogBackground] = parsed[12];
+	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 6) {
+		for (std::size_t i = 0; i <= kMenuDialogIndexListboxSelector; ++i)
+			outValues[i] = parsed[i];
+	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 7) {
 		for (std::size_t i = 0; i < 11; ++i)
 			outValues[i] = parsed[i];
-	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 6) {
+	} else if (parsed.size() == MRColorSetupSettings::kMenuDialogCount - 8) {
 		for (std::size_t i = 0; i < 11; ++i)
 			outValues[i] = parsed[i];
 	} else {
@@ -1394,7 +1471,7 @@ std::string unescapeMrmacSingleQuotedLiteral(const std::string &value) {
 
 bool parseThemeSetupAssignments(const std::string &source, std::map<std::string, std::string> &assignments, std::string *errorMessage) {
 	static const std::regex pattern("MRSETUP\\s*\\(\\s*'([^']+)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex_constants::ECMAScript | std::regex_constants::icase);
-	std::set<std::string> allowed = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS", "MINIMAPCOLORS"};
+	std::set<std::string> allowed = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS", "MINIMAPCOLORS", "CODECOLORS"};
 	std::set<std::string> required = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS"};
 	std::sregex_iterator it(source.begin(), source.end(), pattern);
 	std::sregex_iterator end;
@@ -1412,6 +1489,10 @@ bool parseThemeSetupAssignments(const std::string &source, std::map<std::string,
 	if (assignments.find("MINIMAPCOLORS") == assignments.end()) {
 		MRColorSetupSettings defaults = resolveColorSetupDefaults();
 		assignments["MINIMAPCOLORS"] = formatColorListLiteral(defaults.miniMapColors);
+	}
+	if (assignments.find("CODECOLORS") == assignments.end()) {
+		MRColorSetupSettings defaults = resolveColorSetupDefaults();
+		assignments["CODECOLORS"] = formatColorListLiteral(defaults.codeColors);
 	}
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -2409,6 +2490,18 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 		normalized = normalizeIndentStyle(value);
 		if (normalized.empty()) return setError(errorMessage, "INDENT_STYLE must be OFF, AUTOMATIC or SMART.");
 		current.indentStyle = normalized;
+	} else if (upperKeyName == "CODE_LANGUAGE") {
+		normalized = upperAscii(trimAscii(value));
+		if (normalized.empty()) normalized = "NONE";
+		if (normalized != "NONE" && normalized != "AUTO" && normalized != "C" && normalized != "CPP" && normalized != "PYTHON" && normalized != "JAVASCRIPT" && normalized != "TYPESCRIPT" && normalized != "TSX" && normalized != "BASH" && normalized != "JSON" && normalized != "PERL" && normalized != "SWIFT")
+			return setError(errorMessage, "CODE_LANGUAGE must be NONE, AUTO, C, CPP, PYTHON, JAVASCRIPT, TYPESCRIPT, TSX, BASH, JSON, PERL or SWIFT.");
+		current.codeLanguage = normalized;
+	} else if (upperKeyName == "CODE_COLORING") {
+		if (!parseAndAssignBooleanLiteral(value, current.codeColoring, errorMessage)) return false;
+	} else if (upperKeyName == "CODE_FOLDING") {
+		if (!parseAndAssignBooleanLiteral(value, current.codeFoldingFeature, errorMessage)) return false;
+	} else if (upperKeyName == "SMART_INDENTING") {
+		if (!parseAndAssignBooleanLiteral(value, current.smartIndenting, errorMessage)) return false;
 	} else if (upperKeyName == "FILE_TYPE") {
 		normalized = normalizeFileType(value);
 		if (normalized.empty()) return setError(errorMessage, "FILE_TYPE must be LEGACY_TEXT, UNIX or BINARY.");
@@ -2522,6 +2615,10 @@ std::string editSetupValueLiteral(const MREditSetupSettings &settings, const cha
 	if (upperKey == "FORMAT_RULER") return formatEditSetupBoolean(settings.formatRuler);
 	if (upperKey == "WORD_WRAP") return formatEditSetupBoolean(settings.wordWrap);
 	if (upperKey == "INDENT_STYLE") return settings.indentStyle;
+	if (upperKey == "CODE_LANGUAGE") return settings.codeLanguage;
+	if (upperKey == "CODE_COLORING") return formatEditSetupBoolean(settings.codeColoring);
+	if (upperKey == "CODE_FOLDING") return formatEditSetupBoolean(settings.codeFoldingFeature);
+	if (upperKey == "SMART_INDENTING") return formatEditSetupBoolean(settings.smartIndenting);
 	if (upperKey == "FILE_TYPE") return settings.fileType;
 	if (upperKey == "BINARY_RECORD_LENGTH") return std::to_string(settings.binaryRecordLength);
 	if (upperKey == "POST_LOAD_MACRO") return settings.postLoadMacro;
@@ -2552,7 +2649,7 @@ std::string editSetupValueLiteral(const MREditSetupSettings &settings, const cha
 }
 
 unsigned long long supportedEditProfileOverrideMask() noexcept {
-	static constexpr unsigned long long mask = kOvPageBreak | kOvWordDelimiters | kOvDefaultExtensions | kOvTruncateSpaces | kOvEofCtrlZ | kOvEofCrLf | kOvTabExpand | kOvDisplayTabs | kOvTabSize | kOvLeftMargin | kOvRightMargin | kOvFormatRuler | kOvWordWrap | kOvIndentStyle | kOvFileType | kOvBinaryRecordLength | kOvPostLoadMacro | kOvPreSaveMacro | kOvDefaultPath | kOvFormatLine | kOvBackupFiles | kOvShowEofMarker | kOvShowEofMarkerEmoji | kOvLineNumZeroFill | kOvLineNumbersPosition | kOvMiniMapPosition | kOvMiniMapWidth | kOvMiniMapMarkerGlyph | kOvGutters | kOvPersistentBlocks | kOvCodeFoldingPosition | kOvColumnBlockMove | kOvDefaultMode | kOvCursorStatusColor;
+	static constexpr unsigned long long mask = kOvPageBreak | kOvWordDelimiters | kOvDefaultExtensions | kOvTruncateSpaces | kOvEofCtrlZ | kOvEofCrLf | kOvTabExpand | kOvDisplayTabs | kOvTabSize | kOvLeftMargin | kOvRightMargin | kOvFormatRuler | kOvWordWrap | kOvIndentStyle | kOvCodeLanguage | kOvCodeColoring | kOvCodeFoldingFeature | kOvSmartIndenting | kOvFileType | kOvBinaryRecordLength | kOvPostLoadMacro | kOvPreSaveMacro | kOvDefaultPath | kOvFormatLine | kOvBackupFiles | kOvShowEofMarker | kOvShowEofMarkerEmoji | kOvLineNumZeroFill | kOvLineNumbersPosition | kOvMiniMapPosition | kOvMiniMapWidth | kOvMiniMapMarkerGlyph | kOvGutters | kOvPersistentBlocks | kOvCodeFoldingPosition | kOvColumnBlockMove | kOvDefaultMode | kOvCursorStatusColor;
 	return mask;
 }
 
@@ -2692,6 +2789,10 @@ MREditSetupSettings resolveEditSetupDefaults() {
 	defaults.formatRuler = false;
 	defaults.wordWrap = true;
 	defaults.indentStyle = kIndentStyleOff;
+	defaults.codeLanguage = "NONE";
+	defaults.codeColoring = false;
+	defaults.codeFoldingFeature = false;
+	defaults.smartIndenting = false;
 	defaults.fileType = kFileTypeUnix;
 	defaults.binaryRecordLength = kDefaultBinaryRecordLength;
 	defaults.postLoadMacro.clear();
@@ -3186,6 +3287,10 @@ MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults, 
 	if ((overrides.mask & kOvFormatRuler) != 0) merged.formatRuler = overrides.values.formatRuler;
 	if ((overrides.mask & kOvWordWrap) != 0) merged.wordWrap = overrides.values.wordWrap;
 	if ((overrides.mask & kOvIndentStyle) != 0) merged.indentStyle = overrides.values.indentStyle;
+	if ((overrides.mask & kOvCodeLanguage) != 0) merged.codeLanguage = overrides.values.codeLanguage;
+	if ((overrides.mask & kOvCodeColoring) != 0) merged.codeColoring = overrides.values.codeColoring;
+	if ((overrides.mask & kOvCodeFoldingFeature) != 0) merged.codeFoldingFeature = overrides.values.codeFoldingFeature;
+	if ((overrides.mask & kOvSmartIndenting) != 0) merged.smartIndenting = overrides.values.smartIndenting;
 	if ((overrides.mask & kOvFileType) != 0) merged.fileType = overrides.values.fileType;
 	if ((overrides.mask & kOvBinaryRecordLength) != 0) merged.binaryRecordLength = overrides.values.binaryRecordLength;
 	if ((overrides.mask & kOvPostLoadMacro) != 0) merged.postLoadMacro = overrides.values.postLoadMacro;
@@ -3473,6 +3578,7 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	std::string defaultMode = normalizeDefaultMode(settings.defaultMode);
 	std::string indentStyle = normalizeIndentStyle(settings.indentStyle);
 	std::string fileType = normalizeFileType(settings.fileType);
+	std::string codeLanguage = upperAscii(trimAscii(settings.codeLanguage));
 	std::string lineNumbersPosition = normalizeLineNumbersPosition(settings.lineNumbersPosition);
 	std::string miniMapPosition = normalizeMiniMapPosition(settings.miniMapPosition);
 	std::string codeFoldingPosition = normalizeCodeFoldingPosition(settings.codeFoldingPosition);
@@ -3490,6 +3596,9 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	if (columnStyle.empty()) return setError(errorMessage, "COLUMN_BLOCK_MOVE must be DELETE_SPACE or LEAVE_SPACE.");
 	if (defaultMode.empty()) return setError(errorMessage, "DEFAULT_MODE must be INSERT or OVERWRITE.");
 	if (indentStyle.empty()) return setError(errorMessage, "INDENT_STYLE must be OFF, AUTOMATIC or SMART.");
+	if (codeLanguage.empty()) codeLanguage = "NONE";
+	if (codeLanguage != "NONE" && codeLanguage != "AUTO" && codeLanguage != "C" && codeLanguage != "CPP" && codeLanguage != "PYTHON" && codeLanguage != "JAVASCRIPT" && codeLanguage != "TYPESCRIPT" && codeLanguage != "TSX" && codeLanguage != "BASH" && codeLanguage != "JSON" && codeLanguage != "PERL" && codeLanguage != "SWIFT")
+		return setError(errorMessage, "CODE_LANGUAGE must be NONE, AUTO, C, CPP, PYTHON, JAVASCRIPT, TYPESCRIPT, TSX, BASH, JSON, PERL or SWIFT.");
 	if (fileType.empty()) return setError(errorMessage, "FILE_TYPE must be LEGACY_TEXT, UNIX or BINARY.");
 	if (lineNumbersPosition.empty()) lineNumbersPosition = settings.showLineNumbers ? kLineNumbersPositionLeading : kLineNumbersPositionOff;
 	if (miniMapPosition.empty()) return setError(errorMessage, "MINIMAP_POSITION must be OFF, LEADING or TRAILING.");
@@ -3515,6 +3624,10 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	normalized.formatRuler = settings.formatRuler;
 	normalized.wordWrap = settings.wordWrap;
 	normalized.indentStyle = indentStyle;
+	normalized.codeLanguage = codeLanguage;
+	normalized.codeColoring = settings.codeColoring;
+	normalized.codeFoldingFeature = settings.codeFoldingFeature;
+	normalized.smartIndenting = settings.smartIndenting;
 	normalized.fileType = fileType;
 	normalized.binaryRecordLength = settings.binaryRecordLength;
 	normalized.postLoadMacro = postLoadMacro;
@@ -3591,6 +3704,10 @@ bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned 
 			for (std::size_t i = 0; i < configured.miniMapColors.size(); ++i)
 				configured.miniMapColors[i] = values[i];
 			break;
+		case MRColorSetupGroup::Code:
+			for (std::size_t i = 0; i < configured.codeColors.size(); ++i)
+				configured.codeColors[i] = values[i];
+			break;
 	}
 	if (previous != configured) markConfiguredSettingsDirty();
 
@@ -3624,6 +3741,10 @@ void configuredColorSetupGroupValues(MRColorSetupGroup group, unsigned char *val
 		case MRColorSetupGroup::MiniMap:
 			for (std::size_t i = 0; i < configured.miniMapColors.size(); ++i)
 				values[i] = configured.miniMapColors[i];
+			break;
+		case MRColorSetupGroup::Code:
+			for (std::size_t i = 0; i < configured.codeColors.size(); ++i)
+				values[i] = configured.codeColors[i];
 			break;
 	}
 }
@@ -3681,6 +3802,7 @@ std::string buildColorThemeMacroSource() {
 	source += "MRSETUP('HELPCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.helpColors)) + "');\n";
 	source += "MRSETUP('OTHERCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.otherColors)) + "');\n";
 	source += "MRSETUP('MINIMAPCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.miniMapColors)) + "');\n";
+	source += "MRSETUP('CODECOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.codeColors)) + "');\n";
 	source += "END_MACRO;\n";
 	return source;
 }
@@ -3717,7 +3839,7 @@ bool loadColorThemeFile(const std::string &themeUri, std::string *errorMessage) 
 	std::string source;
 	std::string applyError;
 	std::map<std::string, std::string> assignments;
-	static const char *const order[] = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS", "MINIMAPCOLORS"};
+	static const char *const order[] = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS", "MINIMAPCOLORS", "CODECOLORS"};
 
 	if (!validateColorThemeFilePath(normalized, errorMessage)) return false;
 	if (!ensureColorThemeFileExists(normalized, errorMessage)) return false;
@@ -3787,6 +3909,9 @@ bool applyConfiguredColorSetupValue(const std::string &key, const std::string &v
 		case MRColorSetupGroup::MiniMap:
 			if (!parseColorListLiteral(value, configured.miniMapColors, errorMessage)) return false;
 			break;
+		case MRColorSetupGroup::Code:
+			if (!parseColorListLiteral(value, configured.codeColors, errorMessage)) return false;
+			break;
 	}
 
 	configuredColorSettings() = configured;
@@ -3806,70 +3931,80 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 	unsigned char dialogListNormal = 0;
 	unsigned char dialogListFocused = 0;
 	unsigned char dialogListSelected = 0;
+	unsigned char dropListNormal = 0;
+	unsigned char dropListSelected = 0;
 
 	// Turbo Vision menu hotkeys use two app slots:
 	// - slot 4: shortcut text (normal item)
 	// - slot 7: shortcut selection (selected item)
 	// Our setup exposes a single "entry-hotkey" control (slot 4), so keep both in sync.
-	if (paletteIndex == 7) {
+	if (paletteIndex == kPaletteMenuSelectedHotkey) {
 		for (std::size_t i = 0; i < std::size(kMenuDialogColorItems); ++i)
-			if (kMenuDialogColorItems[i].paletteIndex == 4) {
+			if (kMenuDialogColorItems[i].paletteIndex == kPaletteMenuHotkey) {
 				value = configured.menuDialogColors[i];
 				return true;
 			}
 	}
 
 	for (std::size_t i = 0; i < std::size(kMenuDialogColorItems); ++i) {
-		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogFrame) dialogFrame = configured.menuDialogColors[i];
-		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogText) dialogText = configured.menuDialogColors[i];
-		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogBackground) dialogBackground = configured.menuDialogColors[i];
-		if (kMenuDialogColorItems[i].paletteIndex == 57) dialogListNormal = configured.menuDialogColors[i];
-		if (kMenuDialogColorItems[i].paletteIndex == 58) dialogListFocused = configured.menuDialogColors[i];
-		if (kMenuDialogColorItems[i].paletteIndex == 59) dialogListSelected = configured.menuDialogColors[i];
+		if (kMenuDialogColorItems[i].paletteIndex == kPaletteGrayDialogFrame) dialogFrame = configured.menuDialogColors[i];
+		if (kMenuDialogColorItems[i].paletteIndex == kPaletteGrayDialogText) dialogText = configured.menuDialogColors[i];
+		if (kMenuDialogColorItems[i].paletteIndex == kPaletteGrayDialogBackground) dialogBackground = configured.menuDialogColors[i];
+		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogListNormal) dialogListNormal = configured.menuDialogColors[i];
+		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogListFocused) dialogListFocused = configured.menuDialogColors[i];
+		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogListSelectedInactive) dialogListSelected = configured.menuDialogColors[i];
+		if (kMenuDialogColorItems[i].paletteIndex == kMrPaletteDropListDescription) dropListNormal = configured.menuDialogColors[i];
+		if (kMenuDialogColorItems[i].paletteIndex == kMrPaletteDropListSelectedInactive) dropListSelected = configured.menuDialogColors[i];
 		if (kMenuDialogColorItems[i].paletteIndex == kPaletteDialogInactiveClusterGray) dialogInactiveCluster = configured.menuDialogColors[i];
 		if (kMenuDialogColorItems[i].paletteIndex == kMrPaletteDialogInactiveElements) dialogInactiveElements = configured.menuDialogColors[i];
 	}
 
 	switch (paletteIndex) {
-		case kPaletteDialogFrame:
-		case 34:
-		case 65:
-		case 66:
-		case 97:
-		case 98:
+		case kPaletteGrayDialogFrame:
+		case kPaletteGrayDialogFrameAccent:
+		case kPaletteBlueDialogFrame:
+		case kPaletteBlueDialogFrameAccent:
+		case kPaletteCyanDialogFrame:
+		case kPaletteCyanDialogFrameAccent:
 			value = dialogFrame;
 			return true;
-		case kPaletteDialogText:
-		case 69:
-		case 101:
+		case kPaletteGrayDialogText:
+		case kPaletteBlueDialogText:
+		case kPaletteCyanDialogText:
 			value = dialogText;
 			return true;
-		case kPaletteDialogBackground:
-		case 64:
-		case 96:
+		case kPaletteGrayDialogBackground:
+		case kPaletteBlueDialogBackground:
+		case kPaletteCyanDialogBackground:
 			value = dialogBackground;
 			return true;
-		case 24:
-		case 25:
-		case 55:
-		case 56:
+		case kPaletteDialogListFrameLegacyPrimary:
+		case kPaletteDialogListFrameLegacySecondary:
+		case kPaletteDialogListFrameExtendedPrimary:
+		case kPaletteDialogListFrameExtendedSecondary:
 			value = dialogFrame;
 			return true;
-		case 26:
-		case 57:
+		case kPaletteDialogListNormalLegacy:
+		case kPaletteDialogListNormal:
 			value = dialogListNormal;
 			return true;
-		case 27:
-		case 58:
+		case kPaletteDialogListFocusedLegacy:
+		case kPaletteDialogListFocused:
 			value = dialogListFocused;
 			return true;
-		case 28:
-		case 59:
+		case kPaletteDialogListSelectedLegacy:
+		case kPaletteDialogListSelectedInactive:
 			value = dialogListSelected;
 			return true;
-		case 29:
-		case 60:
+		case kPaletteDialogListTextLegacy:
+		case kPaletteDialogListText:
 			value = dialogText;
+			return true;
+		case kMrPaletteDropListDescription:
+			value = dropListNormal;
+			return true;
+		case kMrPaletteDropListSelectedInactive:
+			value = dropListSelected;
 			return true;
 		case kPaletteDialogInactiveClusterGray:
 		case kPaletteDialogInactiveClusterBlue:
@@ -3912,6 +4047,11 @@ bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &valu
 	for (std::size_t i = 0; i < std::size(kMiniMapColorItems); ++i)
 		if (kMiniMapColorItems[i].paletteIndex == paletteIndex) {
 			value = configured.miniMapColors[i];
+			return true;
+		}
+	for (std::size_t i = 0; i < std::size(kCodeColorItems); ++i)
+		if (kCodeColorItems[i].paletteIndex == paletteIndex) {
+			value = configured.codeColors[i];
 			return true;
 		}
 	return false;
@@ -4428,6 +4568,10 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source += "MRSETUP('FORMAT_RULER', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.formatRuler)) + "');\n";
 	source += "MRSETUP('WORD_WRAP', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.wordWrap)) + "');\n";
 	source += "MRSETUP('INDENT_STYLE', '" + escapeMrmacSingleQuotedLiteral(edit.indentStyle) + "');\n";
+	source += "MRSETUP('CODE_LANGUAGE', '" + escapeMrmacSingleQuotedLiteral(edit.codeLanguage) + "');\n";
+	source += "MRSETUP('CODE_COLORING', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.codeColoring)) + "');\n";
+	source += "MRSETUP('CODE_FOLDING', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.codeFoldingFeature)) + "');\n";
+	source += "MRSETUP('SMART_INDENTING', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.smartIndenting)) + "');\n";
 	source += "MRSETUP('FILE_TYPE', '" + escapeMrmacSingleQuotedLiteral(edit.fileType) + "');\n";
 	source += "MRSETUP('BINARY_RECORD_LENGTH', '" + std::to_string(edit.binaryRecordLength) + "');\n";
 	source += "MRSETUP('POST_LOAD_MACRO', '" + escapeMrmacSingleQuotedLiteral(edit.postLoadMacro) + "');\n";

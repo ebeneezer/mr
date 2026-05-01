@@ -8719,14 +8719,14 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 								                         "MULTI_FILESPEC_HISTORY, MULTI_PATH_HISTORY, "
 								                         "DEFAULT_PROFILE_DESCRIPTION, COLORTHEMEURI, KEYMAPURI, PAGE_BREAK, WORD_DELIMITERS, DEFAULT_EXTENSIONS, "
 								                         "TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, DISPLAY_TABS, TAB_SIZE, LEFT_MARGIN, RIGHT_MARGIN, FORMAT_RULER, WORD_WRAP, "
-								                         "INDENT_STYLE, FILE_TYPE, BINARY_RECORD_LENGTH, POST_LOAD_MACRO, PRE_SAVE_MACRO, DEFAULT_PATH, "
+								                         "INDENT_STYLE, CODE_LANGUAGE, CODE_COLORING, CODE_FOLDING, SMART_INDENTING, FILE_TYPE, BINARY_RECORD_LENGTH, POST_LOAD_MACRO, PRE_SAVE_MACRO, DEFAULT_PATH, "
 								                         "FORMAT_LINE, BACKUP_METHOD, BACKUP_FREQUENCY, BACKUP_EXTENSION, BACKUP_DIRECTORY, "
 								                         "AUTOSAVE_INACTIVITY_SECONDS, AUTOSAVE_INTERVAL_SECONDS, BACKUP_FILES, SHOW_EOF_MARKER, "
 								                         "SHOW_EOF_MARKER_EMOJI, LINE_NUMBERS_POSITION, LINE_NUM_ZERO_FILL, "
 								                         "MINIMAP_POSITION, MINIMAP_WIDTH, MINIMAP_MARKER_GLYPH, GUTTERS, PERSISTENT_BLOCKS, "
 								                         "CODE_FOLDING_POSITION, "
 								                         "COLUMN_BLOCK_MOVE, DEFAULT_MODE, CURSOR_STATUS_COLOR, WINDOWCOLORS, MENUDIALOGCOLORS, "
-								                         "HELPCOLORS, OTHERCOLORS, MINIMAPCOLORS.");
+								                         "HELPCOLORS, OTHERCOLORS, MINIMAPCOLORS, CODECOLORS.");
 							case MRSettingsKeyClass::Version:
 							case MRSettingsKeyClass::Path:
 							case MRSettingsKeyClass::Global:

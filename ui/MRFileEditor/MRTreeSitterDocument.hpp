@@ -27,7 +27,7 @@ class MRTreeSitterDocument {
 	MRTreeSitterDocument &operator=(const MRTreeSitterDocument &) = delete;
 
 	void clear() noexcept;
-	void setLanguageContext(std::string_view path, std::string_view title) noexcept;
+	void setLanguageContext(std::string_view path, std::string_view title, std::string_view configuredLanguage) noexcept;
 	void prepareDocumentAdoption(const mr::editor::TextDocument &currentDocument, const mr::editor::TextDocument &nextDocument, const mr::editor::DocumentChangeSet *changeSet) noexcept;
 	bool syncToDocument(const mr::editor::ReadSnapshot &snapshot, std::size_t documentId, std::size_t version) noexcept;
 	[[nodiscard]] bool shouldIncreaseIndentOnNewLine(const mr::editor::ReadSnapshot &snapshot, std::size_t cursorOffset) const noexcept;

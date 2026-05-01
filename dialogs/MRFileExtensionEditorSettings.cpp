@@ -42,7 +42,8 @@ constexpr int kDefaultBinaryRecordLength = 100;
 constexpr int kMinimumMiniMapWidth = 2;
 constexpr int kMaximumMiniMapWidth = 20;
 constexpr int kDefaultMiniMapWidth = 4;
-constexpr ushort kUiManagedOptionsMask = kOptionTruncateSpaces | kOptionEofCtrlZ | kOptionEofCrLf | kOptionPersistentBlocks | kOptionCodeFolding | kOptionWordWrap | kOptionShowLineNumbers | kOptionLineNumZeroFill | kOptionShowEofMarker | kOptionShowEofMarkerEmoji | kOptionDisplayTabs | kOptionFormatRuler;
+constexpr ushort kUiManagedOptionsMask = kOptionTruncateSpaces | kOptionEofCtrlZ | kOptionEofCrLf | kOptionPersistentBlocks | kOptionCodeFolding | kOptionWordWrap | kOptionShowLineNumbers | kOptionLineNumZeroFill | kOptionShowEofMarker | kOptionShowEofMarkerEmoji | kOptionDisplayTabs | kOptionFormatRuler | kOptionCodeColoring | kOptionCodeFoldingFeature | kOptionSmartIndenting;
+static const char *const kCodeLanguageChoices[] = {"None", "Auto", "C", "C++", "Python", "JavaScript", "TypeScript", "TSX", "Bash", "JSON", "Perl", "Swift"};
 
 struct FileExtensionEditorSettingsPanelLayout {
 	explicit FileExtensionEditorSettingsPanelLayout(const FileExtensionEditorSettingsPanelConfig &config)
@@ -423,6 +424,11 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	const int pageBreakRight = std::min(g.inputRight, g.inputLeft + 7);
 	const int wordDelimitersRight = std::min(g.inputRight, g.inputLeft + 16);
 	const int autoExtensionsRight = std::min(g.inputRight, g.inputLeft + 12);
+	const int codeLanguageLabelLeft = autoExtensionsRight + 2;
+	const int codeLanguageFieldLeft = codeLanguageLabelLeft + 15;
+	const int codeLanguageFieldRight = browseFieldRight;
+	const int codeLanguageListLeft = codeLanguageFieldLeft;
+	const int codeLanguageListRight = codeLanguageFieldRight;
 	const int tabSizeSliderRight = std::max(g.inputLeft + 1, g.inputRight - 2);
 	const int marginFieldWidth = std::max(kLeftMarginFieldSize, kRightMarginFieldSize) - 1;
 	const int leftMarginFieldRight = g.inputLeft + marginFieldWidth;
@@ -432,6 +438,12 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	const int binaryLabelLeft = g.labelLeft + 1;
 	const int binaryFieldLeft = g.inputLeft;
 	const int binaryFieldRight = binaryFieldLeft + 6;
+	const int tabExpandClusterRight = g.tabExpandRight - 1;
+	const int lineNumbersClusterRight = g.lineNumbersRight - 1;
+	const int eofMarkerClusterRight = g.eofMarkerRight - 4;
+	const int fileTypeClusterLeft = g.fileTypeLeft - 1;
+	const int fileTypeClusterRight = g.fileTypeRight + 2;
+	const int codeFoldingClusterRight = g.columnBlockMoveLeft + 41;
 
 	addPanelLabel(dialog, TRect(g.labelLeft + 1, g.pageBreakY, g.inputLeft - 2, g.pageBreakY + 1), "Page break:");
 	pageBreakField = addPanelInput(dialog, TRect(g.inputLeft, g.pageBreakY, pageBreakRight, g.pageBreakY + 1), kPageBreakFieldSize - 1);
@@ -442,7 +454,11 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	if (config.includeDefaultExtensions) {
 		addPanelLabel(dialog, TRect(g.labelLeft + 1, g.defaultExtensionsY, g.inputLeft - 2, g.defaultExtensionsY + 1), "Auto ext.:");
 		defaultExtensionsField = addPanelInput(dialog, TRect(g.inputLeft, g.defaultExtensionsY, autoExtensionsRight, g.defaultExtensionsY + 1), kDefaultExtsFieldSize - 1);
-	}
+			addPanelLabel(dialog, TRect(codeLanguageLabelLeft, g.defaultExtensionsY, codeLanguageFieldLeft - 1, g.defaultExtensionsY + 1), "Code language:");
+			codeLanguageField = addPanelInput(dialog, TRect(codeLanguageFieldLeft, g.defaultExtensionsY, codeLanguageFieldRight, g.defaultExtensionsY + 1), kCodeLanguageFieldSize - 1);
+			codeLanguageListAnchor = TRect(codeLanguageListLeft, g.defaultExtensionsY, codeLanguageListRight, g.defaultExtensionsY + 1);
+			codeLanguageBrowseButton = addPanelGlyphButton(dialog, TRect(browseLeft, g.defaultExtensionsY, g.inputRight, g.defaultExtensionsY + 1), "▾", cmMrFileExtensionEditorSettingsPanelChooseCodeLanguage);
+		}
 
 	addPanelLabel(dialog, TRect(g.labelLeft + 1, g.tabSizeY, g.inputLeft - 2, g.tabSizeY + 1), "Tab size:");
 	tabSizeSlider = addPanelNumericSlider(dialog, TRect(g.inputLeft, g.tabSizeY, tabSizeSliderRight, g.tabSizeY + 1), kMinimumTabSize, kMaximumTabSize, kDefaultTabSize, 1, 4, cmMrFileExtensionEditorSettingsPanelChanged);
@@ -473,19 +489,19 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	dialog.addManaged(formatRulerView, formatRulerView->getBounds());
 
 	addPanelLabel(dialog, TRect(g.optionsHeadingX, g.optionsHeadingY, config.dialogWidth - 2, g.optionsHeadingY + 1), "Options:");
-	optionsLeftField = addPanelCheckGroup(dialog, TRect(g.optionsLeft, g.optionsBodyY, g.optionsRight, g.optionsBodyY + 8), new TSItem("~T~runcate whitespace", new TSItem("Control-~Z~ at EOF", new TSItem("~C~R/LF at EOF", new TSItem("Persistent ~B~locks", new TSItem("leading ~0~ fill", new TSItem("word wrap", new TSItem("~D~isplay tabs", new TSItem("~F~ormat ruler", nullptr)))))))));
+	optionsLeftField = addPanelCheckGroup(dialog, TRect(g.optionsLeft, g.optionsBodyY, g.optionsRight, g.optionsBodyY + 11), new TSItem("~T~runcate whitespace", new TSItem("Control-~Z~ at EOF", new TSItem("~C~R/LF at EOF", new TSItem("Persistent ~B~locks", new TSItem("leading ~0~ fill", new TSItem("word wrap", new TSItem("~D~isplay tabs", new TSItem("~F~ormat ruler", new TSItem("Code c~O~loring", new TSItem("Code fo~L~ding", new TSItem("Smart inde~N~ting", nullptr))))))))))));
 
-	addPanelLabel(dialog, TRect(g.lineNumbersLeft, g.optionsHeadingY, g.lineNumbersRight, g.optionsHeadingY + 1), "Line numbers:");
-	lineNumbersField = addPanelRadioGroup(dialog, TRect(g.lineNumbersLeft, g.optionsBodyY, g.lineNumbersRight, g.optionsBodyY + 3), new TSItem("~O~ff", new TSItem("~L~eading", new TSItem("~T~railing", nullptr))));
+	addPanelLabel(dialog, TRect(g.lineNumbersLeft, g.optionsHeadingY, lineNumbersClusterRight, g.optionsHeadingY + 1), "Line numbers:");
+	lineNumbersField = addPanelRadioGroup(dialog, TRect(g.lineNumbersLeft, g.optionsBodyY, lineNumbersClusterRight, g.optionsBodyY + 3), new TSItem("~O~ff", new TSItem("~L~eading", new TSItem("~T~railing", nullptr))));
 
-	addPanelLabel(dialog, TRect(g.eofMarkerLeft, g.optionsHeadingY, g.eofMarkerRight, g.optionsHeadingY + 1), "EOF marker:");
-	eofMarkerField = addPanelRadioGroup(dialog, TRect(g.eofMarkerLeft, g.optionsBodyY, g.eofMarkerRight, g.optionsBodyY + 3), new TSItem("~N~one", new TSItem("~P~lain", new TSItem("~E~moji", nullptr))));
+	addPanelLabel(dialog, TRect(g.eofMarkerLeft, g.optionsHeadingY, eofMarkerClusterRight, g.optionsHeadingY + 1), "EOF marker:");
+	eofMarkerField = addPanelRadioGroup(dialog, TRect(g.eofMarkerLeft, g.optionsBodyY, eofMarkerClusterRight, g.optionsBodyY + 3), new TSItem("~N~one", new TSItem("~P~lain", new TSItem("~E~moji", nullptr))));
 
 	addPanelLabel(dialog, TRect(g.defaultModeLeft, g.optionsHeadingY, g.defaultModeRight, g.optionsHeadingY + 1), "Default mode:");
 	defaultModeField = addPanelRadioGroup(dialog, TRect(g.defaultModeLeft, g.optionsBodyY, g.defaultModeRight, g.optionsBodyY + 3), new TSItem("~I~nsert", new TSItem("Ove~R~write", nullptr)));
 
-	addPanelLabel(dialog, TRect(g.tabExpandLeft, g.tabExpandHeadingY, g.tabExpandRight, g.tabExpandHeadingY + 1), "Tab expand:");
-	tabExpandField = addPanelRadioGroup(dialog, TRect(g.tabExpandLeft, g.tabExpandBodyY, g.tabExpandRight, g.tabExpandBodyY + 3), new TSItem("~U~se tabs", new TSItem("Spa~X~es", nullptr)));
+	addPanelLabel(dialog, TRect(g.tabExpandLeft, g.tabExpandHeadingY, tabExpandClusterRight, g.tabExpandHeadingY + 1), "Tab expand:");
+	tabExpandField = addPanelRadioGroup(dialog, TRect(g.tabExpandLeft, g.tabExpandBodyY, tabExpandClusterRight, g.tabExpandBodyY + 3), new TSItem("~U~se tabs", new TSItem("Spa~X~es", nullptr)));
 
 	addPanelLabel(dialog, TRect(g.columnBlockMoveLeft, g.columnBlockMoveHeadingY, g.columnBlockMoveLeft + 18, g.columnBlockMoveHeadingY + 1), "Column block move:");
 	columnBlockMoveField = addPanelRadioGroup(dialog, TRect(g.columnBlockMoveLeft, g.columnBlockMoveBodyY, g.columnBlockMoveRight, g.columnBlockMoveBodyY + 3), new TSItem("Re~M~ove space", new TSItem("~K~eep space", nullptr)));
@@ -493,13 +509,13 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	addPanelLabel(dialog, TRect(g.indentStyleLeft, g.indentStyleHeadingY, g.indentStyleRight, g.indentStyleHeadingY + 1), "Indent style:");
 	indentStyleField = addPanelRadioGroup(dialog, TRect(g.indentStyleLeft, g.indentStyleBodyY, g.indentStyleRight, g.indentStyleBodyY + 3), new TSItem("off", new TSItem("automatic", new TSItem("smart", nullptr))));
 
-	addPanelLabel(dialog, TRect(g.fileTypeLeft, g.fileTypeHeadingY, g.fileTypeRight, g.fileTypeHeadingY + 1), "File type:");
-	fileTypeField = addPanelRadioGroup(dialog, TRect(g.fileTypeLeft, g.fileTypeBodyY, g.fileTypeRight, g.fileTypeBodyY + 3), new TSItem("legacy text (CR/LF)", new TSItem("UNIX (LF)", new TSItem("binary", nullptr))));
+	addPanelLabel(dialog, TRect(fileTypeClusterLeft, g.fileTypeHeadingY, fileTypeClusterRight, g.fileTypeHeadingY + 1), "File type:");
+	fileTypeField = addPanelRadioGroup(dialog, TRect(fileTypeClusterLeft, g.fileTypeBodyY, fileTypeClusterRight, g.fileTypeBodyY + 3), new TSItem("legacy text (CR/LF)", new TSItem("UNIX (LF)", new TSItem("binary", nullptr))));
 
 	addPanelLabel(dialog, TRect(g.columnBlockMoveLeft, g.miniMapHeadingY, g.columnBlockMoveLeft + 18, g.miniMapHeadingY + 1), "Mini map:");
 	miniMapPositionField = addPanelRadioGroup(dialog, TRect(g.columnBlockMoveLeft, g.miniMapBodyY, g.columnBlockMoveLeft + 24, g.miniMapBodyY + 3), new TSItem("~O~ff", new TSItem("~L~eading", new TSItem("~T~railing", nullptr))));
-	addPanelLabel(dialog, TRect(g.columnBlockMoveLeft + 27, g.miniMapHeadingY, g.columnBlockMoveLeft + 44, g.miniMapHeadingY + 1), "Code folding:");
-	codeFoldingPositionField = addPanelRadioGroup(dialog, TRect(g.columnBlockMoveLeft + 27, g.miniMapBodyY, g.columnBlockMoveLeft + 44, g.miniMapBodyY + 3), new TSItem("~O~ff", new TSItem("~L~eading", new TSItem("~T~railing", nullptr))));
+	addPanelLabel(dialog, TRect(g.columnBlockMoveLeft + 27, g.miniMapHeadingY, codeFoldingClusterRight, g.miniMapHeadingY + 1), "Code folding:");
+	codeFoldingPositionField = addPanelRadioGroup(dialog, TRect(g.columnBlockMoveLeft + 27, g.miniMapBodyY, codeFoldingClusterRight, g.miniMapBodyY + 3), new TSItem("~O~ff", new TSItem("~L~eading", new TSItem("~T~railing", nullptr))));
 	addPanelLabel(dialog, TRect(g.columnBlockMoveLeft, g.miniMapBodyY + 3, g.columnBlockMoveLeft + 24, g.miniMapBodyY + 4), "Width:");
 	miniMapWidthSlider = addPanelNumericSlider(dialog, TRect(g.columnBlockMoveLeft, g.miniMapBodyY + 4, g.columnBlockMoveLeft + 24, g.miniMapBodyY + 5), kMinimumMiniMapWidth, kMaximumMiniMapWidth, kDefaultMiniMapWidth, 1, 2, cmMrFileExtensionEditorSettingsPanelChanged);
 	addPanelLabel(dialog, TRect(g.columnBlockMoveLeft, g.miniMapBodyY + 5, g.columnBlockMoveLeft + 19, g.miniMapBodyY + 6), "Viewport cursor:");
@@ -544,6 +560,9 @@ ushort FileExtensionEditorSettingsPanel::currentOptionsMask() const noexcept {
 	if ((leftMask & kLeftOptionWordWrap) != 0) options |= kOptionWordWrap;
 	if ((leftMask & kLeftOptionDisplayTabs) != 0) options |= kOptionDisplayTabs;
 	if ((leftMask & kLeftOptionFormatRuler) != 0) options |= kOptionFormatRuler;
+	if ((leftMask & kLeftOptionCodeColoring) != 0) options |= kOptionCodeColoring;
+	if ((leftMask & kLeftOptionCodeFoldingFeature) != 0) options |= kOptionCodeFoldingFeature;
+	if ((leftMask & kLeftOptionSmartIndenting) != 0) options |= kOptionSmartIndenting;
 
 	switch (lineNumbersChoice) {
 		case kLineNumbersLeading:
@@ -586,6 +605,9 @@ void FileExtensionEditorSettingsPanel::setOptionsMask(ushort options) {
 	if ((options & kOptionWordWrap) != 0) leftMask |= kLeftOptionWordWrap;
 	if ((options & kOptionDisplayTabs) != 0) leftMask |= kLeftOptionDisplayTabs;
 	if ((options & kOptionFormatRuler) != 0) leftMask |= kLeftOptionFormatRuler;
+	if ((options & kOptionCodeColoring) != 0) leftMask |= kLeftOptionCodeColoring;
+	if ((options & kOptionCodeFoldingFeature) != 0) leftMask |= kLeftOptionCodeFoldingFeature;
+	if ((options & kOptionSmartIndenting) != 0) leftMask |= kLeftOptionSmartIndenting;
 
 	if ((options & kOptionShowLineNumbers) != 0) lineNumbersChoice = kLineNumbersLeading;
 	if ((options & kOptionCodeFolding) != 0) codeFoldingChoice = kCodeFoldingLeading;
@@ -602,6 +624,8 @@ void FileExtensionEditorSettingsPanel::loadFieldsFromRecord(const FileExtensionE
 	setInputLineValue(pageBreakField, record.pageBreak, sizeof(record.pageBreak));
 	setInputLineValue(wordDelimitersField, record.wordDelimiters, sizeof(record.wordDelimiters));
 	if (defaultExtensionsField != nullptr) setInputLineValue(defaultExtensionsField, record.defaultExtensions, sizeof(record.defaultExtensions));
+	codeLanguageDropList.hide();
+	if (codeLanguageField != nullptr) setInputLineValue(codeLanguageField, record.codeLanguage, sizeof(record.codeLanguage));
 	if (tabSizeSlider != nullptr) {
 		int32_t value = parseIntegerOrDefault(record.tabSize, kDefaultTabSize, kMinimumTabSize, kMaximumTabSize);
 		tabSizeSlider->setData(&value);
@@ -645,6 +669,7 @@ void FileExtensionEditorSettingsPanel::saveFieldsToRecord(FileExtensionEditorSet
 	readInputLineValue(pageBreakField, record.pageBreak, sizeof(record.pageBreak));
 	readInputLineValue(wordDelimitersField, record.wordDelimiters, sizeof(record.wordDelimiters));
 	if (defaultExtensionsField != nullptr) readInputLineValue(defaultExtensionsField, record.defaultExtensions, sizeof(record.defaultExtensions));
+	if (codeLanguageField != nullptr) readInputLineValue(codeLanguageField, record.codeLanguage, sizeof(record.codeLanguage));
 	writeSliderValue(tabSizeSlider, record.tabSize, sizeof(record.tabSize), kDefaultTabSize);
 	writeIntegerInputValue(leftMarginField, record.leftMargin, sizeof(record.leftMargin), kDefaultLeftMargin, kMinimumLeftMargin, kMaximumLeftMargin);
 	writeIntegerInputValue(rightMarginField, record.rightMargin, sizeof(record.rightMargin), kDefaultRightMargin, kMinimumRightMargin, kMaximumRightMargin);
@@ -756,6 +781,10 @@ std::string FileExtensionEditorSettingsPanel::defaultPathValue() const {
 	return readInputFieldValue(defaultPathField);
 }
 
+std::string FileExtensionEditorSettingsPanel::codeLanguageValue() const {
+	return readInputFieldValue(codeLanguageField);
+}
+
 void FileExtensionEditorSettingsPanel::setPostLoadMacroValue(const std::string &value) {
 	if (postLoadMacroField != nullptr) writeInputFieldValue(postLoadMacroField, value);
 }
@@ -766,6 +795,42 @@ void FileExtensionEditorSettingsPanel::setPreSaveMacroValue(const std::string &v
 
 void FileExtensionEditorSettingsPanel::setDefaultPathValue(const std::string &value) {
 	if (defaultPathField != nullptr) writeInputFieldValue(defaultPathField, value);
+}
+
+void FileExtensionEditorSettingsPanel::setCodeLanguageValue(const std::string &value) {
+	if (codeLanguageField != nullptr) writeInputFieldValue(codeLanguageField, value);
+}
+
+void FileExtensionEditorSettingsPanel::toggleCodeLanguageList(MRScrollableDialog &dialog) {
+	std::vector<std::string> values;
+
+	if (codeLanguageField == nullptr) return;
+	values.reserve(sizeof(kCodeLanguageChoices) / sizeof(kCodeLanguageChoices[0]));
+	for (const char *choice : kCodeLanguageChoices)
+		values.push_back(choice);
+	codeLanguageDropList.toggle(dialog, codeLanguageListAnchor, values, trimAscii(codeLanguageValue()), &dialog, cmMrFileExtensionEditorSettingsPanelAcceptCodeLanguage);
+}
+
+void FileExtensionEditorSettingsPanel::hideCodeLanguageList() {
+	codeLanguageDropList.hide();
+	if (codeLanguageField != nullptr) codeLanguageField->select();
+}
+
+bool FileExtensionEditorSettingsPanel::codeLanguageListVisible() const noexcept {
+	return codeLanguageDropList.visible();
+}
+
+bool FileExtensionEditorSettingsPanel::codeLanguageListContainsPoint(TPoint where) const noexcept {
+	return codeLanguageDropList.containsPoint(where);
+}
+
+bool FileExtensionEditorSettingsPanel::acceptCodeLanguageListSelection() {
+	std::string selectedValue;
+
+	if (!codeLanguageDropList.acceptSelection(selectedValue)) return false;
+	setCodeLanguageValue(selectedValue);
+	hideCodeLanguageList();
+	return true;
 }
 
 } // namespace MRFileExtensionProfilesInternal

@@ -91,14 +91,6 @@ inline void writeRecordField(char *dest, std::size_t destSize, std::string_view 
 	dest[destSize - 1] = '\0';
 }
 
-[[nodiscard]] inline ushort execDialogRaw(TDialog *dialog) {
-	return execDialog(dialog);
-}
-
-[[nodiscard]] inline ushort execDialogRawWithData(TDialog *dialog, void *data) {
-	return execDialogWithData(dialog, data);
-}
-
 } // namespace mr::dialogs
 
 [[nodiscard]] TRect centeredSetupDialogRect(int width, int height);

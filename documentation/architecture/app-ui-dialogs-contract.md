@@ -65,6 +65,17 @@ Dialogs may trigger:
 - Opportunistic changes to history behavior.
 - Changes to keymap, workspace or settings persistence from dialog code.
 
+## Deferred design note
+
+- `ui/MRDropList.*` may become a shared visual primitive for small string-selection popups.
+- Reuse for file/path history in load/save dialogs is not implicitly approved by its first use in file-extension settings.
+- A dedicated history tranche is required before reusing it there.
+- That tranche must explicitly review:
+  - cancel on outside click,
+  - integration with the existing scoped history button/popup flow,
+  - focus and event behavior inside load/save and directory dialogs.
+- Until such a tranche is approved, the code-language drop list and scoped history popups may remain separate.
+
 ## Required tests
 
 For dialog changes, test:
