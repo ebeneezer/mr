@@ -420,6 +420,4 @@ clean:
 		$(REGRESSION_PROBE_OBJECT) $(REGRESSION_PROBE_TARGET) \
 		misc/mr_keyin_probe.o misc/mr_tofrom_probe.o misc/mr_tofrom_dispatch_probe.o \
 		misc/mr_staged_nav_probe misc/mr_staged_mark_page_probe \
-		$(ABOUT_QUOTES_GENERATED) \
-		$(HELP_MARKDOWN_GENERATED) \
 		mrmac/lex.yy.c mrmac/parser.tab.c mrmac/parser.tab.h
