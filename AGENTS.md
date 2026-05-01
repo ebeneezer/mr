@@ -131,3 +131,36 @@ Do not remove existing `paplay` build signals from the Makefile.
 For file handoffs, provide a `tar.bz2` archive with changed files at correct relative paths.
 Do not provide placeholder paths.
 Do not provide patch chains unless explicitly requested.
+
+<!-- BEGIN CODEX_RESPONSE_BUDGET -->
+## Response Budget
+
+Codex must follow `documentation/codex/response-budget.md`.
+
+Routine responses must be compact. Codex must not restate the task, repeat known rules, or list unchanged constraints.
+
+Verbose explanations are allowed only for:
+- REJECT,
+- ABORTED,
+- explicit architecture decisions,
+- maintainer-requested analysis.
+
+Default report format:
+
+```text
+Decision:
+Files:
+Change:
+Build:
+Warnings:
+Next:
+```
+
+When protected architecture is not touched, report only:
+
+```text
+Protected architecture: no
+```
+
+When protected architecture is touched, stop and report the affected contract, files/functions, reason, and required maintainer decision.
+<!-- END CODEX_RESPONSE_BUDGET -->
