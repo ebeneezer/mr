@@ -25,7 +25,7 @@
 #include "../coprocessor/MRPerformance.hpp"
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MREditWindow.hpp"
-#include "../ui/MRFileEditor.hpp"
+#include "../ui/MRFileEditor/MRFileEditor.hpp"
 #include "../ui/MRTextBuffer.hpp"
 #include "../ui/MRWindowSupport.hpp"
 

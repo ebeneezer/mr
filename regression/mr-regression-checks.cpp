@@ -2352,7 +2352,7 @@ bool testIndicatorLineNumberColorWiringGuard(std::string &failureReason) {
 }
 
 bool testCurrentLineColorWiringGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor.hpp");
+	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.hpp");
 	std::string content;
 	std::string ioError;
 
@@ -2377,7 +2377,7 @@ bool testCurrentLineColorWiringGuard(std::string &failureReason) {
 }
 
 bool testChangedTextColorWiringGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor.hpp");
+	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.hpp");
 	std::string content;
 	std::string ioError;
 
@@ -2410,7 +2410,7 @@ bool testChangedTextColorWiringGuard(std::string &failureReason) {
 }
 
 bool testEditorCursorViewportGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor.hpp");
+	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.hpp");
 	std::string content;
 	std::string ioError;
 
@@ -2431,7 +2431,7 @@ bool testEditorCursorViewportGuard(std::string &failureReason) {
 }
 
 bool testEofVirtualLineColorGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor.hpp");
+	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.hpp");
 	std::string content;
 	std::string ioError;
 
@@ -2461,7 +2461,7 @@ bool testEofVirtualLineColorGuard(std::string &failureReason) {
 }
 
 bool testSaveAsOverwriteAndBackupWiringGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor.hpp");
+	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.hpp");
 	std::string content;
 	std::string ioError;
 

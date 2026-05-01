@@ -39,7 +39,7 @@
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRMenuBar.hpp"
 #include "../ui/MREditWindow.hpp"
-#include "../ui/MRScopedHistoryDialogs.hpp"
+#include "../ui/MRScopedHistoryUI.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "MRDirtyGating.hpp"
 #include "MRKeymapManager.hpp"

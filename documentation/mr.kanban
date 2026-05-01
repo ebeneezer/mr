@@ -139,15 +139,6 @@
           "comments": []
         },
         {
-          "id": "602988a6-2cff-4eed-865a-5ebe4888117d",
-          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
-          "title": "Treesitter Integration",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
           "id": "fa88fc7a-9995-45e3-83ff-85df18a8a05b",
           "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
           "title": "Batch Loading / Acquire",
@@ -164,6 +155,15 @@
               "comment": "IN Load Dialogen - auf Kommandozeile geht das ja schon"
             }
           ]
+        },
+        {
+          "id": "01e568c5-5863-43f5-96ac-f48feec44128",
+          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+          "title": "Macro Debugger",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
         }
       ]
     },
@@ -230,6 +230,15 @@
               "comment": "Suchtreffer, Errors, Warnings, Changed"
             }
           ]
+        },
+        {
+          "id": "602988a6-2cff-4eed-865a-5ebe4888117d",
+          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
+          "title": "Treesitter Integration",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
         }
       ]
     },

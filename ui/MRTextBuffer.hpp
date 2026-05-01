@@ -3,7 +3,7 @@
 
 #include <cstddef>
 
-#include "MRFileEditor.hpp"
+#include "MRFileEditor/MRFileEditor.hpp"
 
 class MRTextBuffer {
   public:

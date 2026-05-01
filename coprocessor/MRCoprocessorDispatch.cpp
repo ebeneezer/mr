@@ -19,7 +19,7 @@
 
 #include "../mrmac/MRVM.hpp"
 #include "../ui/MRMessageLineController.hpp"
-#include "../ui/MRFileEditor.hpp"
+#include "../ui/MRFileEditor/MRFileEditor.hpp"
 #include "../ui/MRIndicator.hpp"
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRWindowSupport.hpp"
