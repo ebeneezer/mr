@@ -36,6 +36,19 @@ Settings source -> keymap parse/canonicalize -> settings model -> resolver -> ru
 Keymap currently has loader-side staging/canonicalization behavior.
 Whether loader-side keymap application remains tolerated or becomes purely staging is a protected decision.
 
+The current tolerated transitional rule is K1:
+
+- the loader may read, validate and canonicalize keymap data,
+- the loader may write canonicalized keymap data into the runtime settings model before final VM apply,
+- that loader-side write is tolerated only because canonical settings serialization currently reads keymap data from `configuredKeymapProfiles()` and `configuredActiveKeymapProfile()`,
+- that loader-side write is not the final authoritative runtime keymap state.
+
+The long-term target remains K2:
+
+- keymap staging data should no longer be transported through the runtime settings model,
+- final authoritative keymap application should happen only through the VM startup apply,
+- this requires a separate and explicitly approved transport path from `loadKeymapProfilesFromSettingsSource(...)` to canonical settings serialization.
+
 Do not change this while working on unrelated settings or UI tasks.
 
 ## Forbidden without explicit approval

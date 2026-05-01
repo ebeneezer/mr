@@ -58,6 +58,20 @@ Do not “simplify” the bootstrap by collapsing staging and final VM applicati
 Theme and keymap behavior are separate contracts.
 Do not move theme or keymap application as part of bootstrap cleanup unless the task explicitly targets that contract.
 
+## Transitional keymap exception
+
+Keymap is currently a tolerated staging exception inside the VM-centered bootstrap contract.
+
+The loader may canonicalize keymap data and write that canonicalized result into the runtime settings model before the final VM apply.
+
+This exception exists because `buildSettingsMacroSource(...)` currently serializes keymap data from `configuredKeymapProfiles()` and `configuredActiveKeymapProfile()`.
+
+That loader-side keymap write is not the final authoritative runtime state.
+
+The final authoritative keymap state still arises only after the canonical source has been compiled and executed by the VM in startup mode.
+
+Do not extend this exception to other settings areas without an explicit contract decision.
+
 ## SAVE_SETTINGS
 
 `SAVE_SETTINGS` is not part of the bootstrap cleanup contract.
