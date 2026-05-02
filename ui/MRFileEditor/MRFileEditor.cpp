@@ -337,6 +337,22 @@ MRFileEditor::LoadTiming MRFileEditor::lastLoadTiming() const noexcept {
 }
 
 const char *MRFileEditor::syntaxLanguageName() const noexcept {
+	switch (mTreeSitterDocument.activeLanguage()) {
+		case MRTreeSitterDocument::Language::C:
+			return "C";
+		case MRTreeSitterDocument::Language::Cpp:
+			return "C++";
+		case MRTreeSitterDocument::Language::JavaScript:
+			return "JavaScript";
+		case MRTreeSitterDocument::Language::Python:
+			return "Python";
+		case MRTreeSitterDocument::Language::Json:
+			return "JSON";
+		case MRTreeSitterDocument::Language::MRMAC:
+			return "MRMAC";
+		case MRTreeSitterDocument::Language::None:
+			break;
+	}
 	return mBufferModel.languageName();
 }
 
@@ -450,8 +466,10 @@ bool MRFileEditor::applySyntaxWarmup(const mr::coprocessor::SyntaxWarmupPayload 
 	if (expectedTaskId == 0 || mSyntaxWarmupTaskId != expectedTaskId) return false;
 	if (mBufferModel.documentId() != mSyntaxWarmupDocumentId || mBufferModel.version() != expectedVersion) return false;
 	if (warmup.treeSitter) {
-		if (mTreeSitterDocument.activeLanguage() == MRTreeSitterDocument::Language::None) return false;
-		if (static_cast<unsigned char>(mTreeSitterDocument.activeLanguage()) != warmup.treeSitterLanguage) return false;
+		const MRTreeSitterDocument::Language activeTreeSitterLanguage = mTreeSitterDocument.activeLanguage();
+		const std::uint8_t activeTreeSitterLanguageId = static_cast<std::uint8_t>(activeTreeSitterLanguage);
+		if (activeTreeSitterLanguage == MRTreeSitterDocument::Language::None) return false;
+		if (activeTreeSitterLanguageId != warmup.treeSitterLanguage) return false;
 	} else if (mBufferModel.language() != warmup.language)
 		return false;
 
@@ -1300,6 +1318,33 @@ bool MRFileEditor::insertBufferText(const std::string &text) {
 	return adoptCommittedDocument(preview, start, start, start, true, &commit.change);
 }
 
+bool MRFileEditor::applyCurrentLineLeadingIndent(int targetColumn) {
+	const std::size_t cursor = cursorOffset();
+	const std::size_t lineStart = lineStartOffset(cursor);
+	const std::string lineText = mBufferModel.lineText(lineStart);
+	std::size_t indentBytes = 0;
+	MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "live-smart-dedent");
+	std::string replacement;
+	std::size_t newCursor = cursor;
+	int removeSpaces = configuredTabSize();
+
+	(void)targetColumn;
+
+	while (indentBytes < lineText.size() && (lineText[indentBytes] == ' ' || lineText[indentBytes] == '\t'))
+		++indentBytes;
+	if (indentBytes == 0) return false;
+	replacement.assign(lineText.data(), indentBytes);
+	if (!replacement.empty() && replacement.back() == '\t') replacement.pop_back();
+	else
+		while (!replacement.empty() && replacement.back() == ' ' && removeSpaces-- > 0)
+			replacement.pop_back();
+	transaction.replace(MRTextBufferModel::Range(lineStart, lineStart + indentBytes), replacement);
+	if (cursor <= lineStart + indentBytes) newCursor = lineStart + replacement.size();
+	else
+		newCursor = cursor - indentBytes + replacement.size();
+	return applyStagedTransaction(transaction, newCursor, newCursor, newCursor, true).applied();
+}
+
 bool MRFileEditor::replaceCurrentLineText(const std::string &text) {
 	std::size_t start = mBufferModel.lineStart(mBufferModel.cursor());
 	std::size_t end = mBufferModel.lineEnd(mBufferModel.cursor());
@@ -1500,6 +1545,28 @@ std::string MRFileEditor::smartIndentFillForCursor() {
 			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
 	}
 	return buildEditIndentFill(settings, 1, targetColumn, configuredTabExpandSetting());
+}
+
+void MRFileEditor::applyLiveSmartDedentAfterTextInput(const std::string &insertedText) {
+	const MREditSetupSettings settings = configuredEditSetupSettings();
+	const char lastChar = insertedText.empty() ? '\0' : insertedText.back();
+
+	if (!settings.smartIndenting || mTreeSitterDocument.activeLanguage() == MRTreeSitterDocument::Language::None) return;
+	if (insertedText.find('\n') != std::string::npos || insertedText.find('\r') != std::string::npos) return;
+	if (lastChar != ':' && lastChar != '}' && lastChar != ']' && lastChar != ')' && lastChar != 'E' && lastChar != 'e') return;
+	{
+		const mr::editor::ReadSnapshot snapshot = mBufferModel.readSnapshot();
+		const std::size_t cursor = cursorOffset();
+		const std::size_t lineStart = lineStartOffset(cursor);
+		const int baseColumn = leadingIndentColumnForLine(lineStart);
+		const int targetColumn = prevResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+
+		if (baseColumn <= 1 || targetColumn >= baseColumn) return;
+		if (!mTreeSitterDocument.syncToDocument(snapshot, mBufferModel.documentId(), mBufferModel.version())) return;
+		if (!mTreeSitterDocument.shouldDedentCurrentLine(snapshot, cursor)) return;
+	}
+	applyCurrentLineLeadingIndent(prevResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin,
+																	 leadingIndentColumnForLine(lineStartOffset(cursorOffset()))));
 }
 
 bool MRFileEditor::newLineWithPreferredIndent() {
@@ -2015,8 +2082,10 @@ void MRFileEditor::handleTextInput(TEvent &event) {
 	if ((event.keyDown.controlKeyState & kbPaste) != 0) {
 		char buf[512];
 		size_t length = 0;
-		while (textEvent(event, TSpan<char>(buf, sizeof(buf)), length))
-			insertBufferText(std::string(buf, length));
+		while (textEvent(event, TSpan<char>(buf, sizeof(buf)), length)) {
+			const std::string insertedText(buf, length);
+			if (insertBufferText(insertedText)) applyLiveSmartDedentAfterTextInput(insertedText);
+		}
 		applyLiveWordWrapAfterTextInput();
 		clearEvent(event);
 		return;
@@ -2024,11 +2093,14 @@ void MRFileEditor::handleTextInput(TEvent &event) {
 
 	const ushort mods = event.keyDown.controlKeyState;
 	const bool plainTab = (event.keyDown.keyCode == kbTab || event.keyDown.keyCode == kbCtrlI) && (mods & (kbShift | kbCtrlShift | kbAltShift | kbPaste)) == 0;
-	if (event.keyDown.textLength > 0) insertBufferText(std::string(event.keyDown.text, event.keyDown.textLength));
+	std::string insertedText;
+
+	if (event.keyDown.textLength > 0) insertedText.assign(event.keyDown.text, event.keyDown.textLength);
 	else if (plainTab)
-		insertBufferText(tabKeyText());
+		insertedText = tabKeyText();
 	else
-		insertBufferText(std::string(1, static_cast<char>(event.keyDown.charScan.charCode)));
+		insertedText.assign(1, static_cast<char>(event.keyDown.charScan.charCode));
+	if (insertBufferText(insertedText)) applyLiveSmartDedentAfterTextInput(insertedText);
 	applyLiveWordWrapAfterTextInput();
 	clearEvent(event);
 }
@@ -2571,6 +2643,7 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 	const std::size_t docId = mBufferModel.documentId();
 	const std::size_t version = mBufferModel.version();
 	const MRSyntaxLanguage language = mBufferModel.language();
+	const std::uint8_t warmupTreeSitterLanguage = static_cast<std::uint8_t>(treeSitterLanguage);
 	const std::size_t topLine = static_cast<std::size_t>(std::max(delta.y - 4, 0));
 	const int rowBudget = std::max(textRows + 8, 8);
 	std::vector<std::size_t> lineStarts = syntaxWarmupLineStarts(topLine, rowBudget);
@@ -2607,7 +2680,7 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 	mSyntaxWarmupBottomLine = bottomLine;
 	mSyntaxWarmupLanguage = language;
 	mSyntaxWarmupTreeSitterLanguage = treeSitterLanguage;
-	mSyntaxWarmupTaskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::SyntaxWarmup, docId, version, syntaxWarmupTaskLabel(), [snapshot, language, treeSitterLanguage, lineStarts](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
+	mSyntaxWarmupTaskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::SyntaxWarmup, docId, version, syntaxWarmupTaskLabel(), [snapshot, language, treeSitterLanguage, warmupTreeSitterLanguage, lineStarts](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
 		mr::coprocessor::Result result;
 		std::vector<mr::coprocessor::SyntaxWarmLine> warmed;
 		auto shouldStop = [&]() noexcept { return stopToken.stop_requested() || info.cancelRequested(); };
@@ -2635,7 +2708,7 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 				warmed.push_back(mr::coprocessor::SyntaxWarmLine(lineStarts[i], tmrBuildTokenMapForTextLine(language, snapshot.lineText(lineStarts[i]))));
 			}
 		result.status = mr::coprocessor::TaskStatus::Completed;
-		result.payload = std::make_shared<mr::coprocessor::SyntaxWarmupPayload>(language, treeSitterLanguage != MRTreeSitterDocument::Language::None, static_cast<unsigned char>(treeSitterLanguage), std::move(warmed));
+		result.payload = std::make_shared<mr::coprocessor::SyntaxWarmupPayload>(language, treeSitterLanguage != MRTreeSitterDocument::Language::None, warmupTreeSitterLanguage, std::move(warmed));
 		return result;
 	});
 	if (mSyntaxWarmupTaskId != previousTaskId) notifyWindowTaskStateChanged();

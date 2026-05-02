@@ -7,11 +7,8 @@
 
 enum class MRSyntaxLanguage : unsigned char {
 	PlainText,
-	CFamily,
 	MRMAC,
 	Make,
-	Json,
-	Ini,
 	Markdown
 };
 
@@ -31,6 +28,7 @@ enum class MRSyntaxToken : unsigned char {
 using MRSyntaxTokenMap = std::vector<MRSyntaxToken>;
 
 MRSyntaxLanguage tmrDetectSyntaxLanguage(const std::string &path, const std::string &title = std::string());
+std::string tmrDetectTreeSitterLanguageName(const std::string &path, const std::string &title = std::string());
 const char *tmrSyntaxLanguageName(MRSyntaxLanguage language) noexcept;
 MRSyntaxTokenMap tmrBuildTokenMapForTextLine(MRSyntaxLanguage language, const std::string &line);
 MRSyntaxTokenMap tmrBuildTokenMapForLine(MRSyntaxLanguage language, const std::string &text, std::size_t lineStart);

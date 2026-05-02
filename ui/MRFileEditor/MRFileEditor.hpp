@@ -319,6 +319,10 @@ class MRFileEditor : public TScroller {
 
 		std::string smartIndentFillForCursor();
 
+		bool applyCurrentLineLeadingIndent(int targetColumn);
+
+		void applyLiveSmartDedentAfterTextInput(const std::string &insertedText);
+
 		void effectiveFormatMargins(const MREditSetupSettings &settings, int &leftMargin, int &rightMargin) const noexcept;
 
 		bool wrapCurrentLineOnce(int leftMargin, int rightMargin);

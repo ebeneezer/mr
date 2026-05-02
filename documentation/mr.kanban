@@ -95,6 +95,24 @@
               "comment": "Explode, Magic Lamp?, Slide in/out?"
             }
           ]
+        },
+        {
+          "id": "950a00d6-e58b-48bf-8631-fb6f9731c784",
+          "listId": "442a00f0-c411-4725-9424-3182418b486d",
+          "title": "Vm compute lanes in cpu threads auslagern?",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "6892e28f-7a26-4c0c-b760-fc94791d1e71",
+          "listId": "442a00f0-c411-4725-9424-3182418b486d",
+          "title": "treeseitter grammars als module nachladen",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
         }
       ]
     },
@@ -161,17 +179,7 @@
     {
       "id": "b721e070-ae21-4123-a1f3-27b926375a16",
       "title": "Regression / Errors",
-      "cards": [
-        {
-          "id": "d2f4a85b-3476-4093-addf-f2c929baa780",
-          "listId": "b721e070-ae21-4123-a1f3-27b926375a16",
-          "title": "VM ist bei Key Mappings nicht die letzte Instanz, die den K/V Hash mit der einzigen Wahrheit versorgt. Es wird schon vorher zur Korrektur der settings.mrmac Inhalte der K/V Hash genutzt.",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        }
-      ]
+      "cards": []
     },
     {
       "id": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
@@ -208,10 +216,6 @@
           "labels": [],
           "checkboxes": [],
           "comments": [
-            {
-              "id": "5af646a4-0ebc-4089-ae7f-b5801d821c67",
-              "comment": "Tile links, rechts, oben, unten\nStack\nSpread"
-            },
             {
               "id": "727f7620-666a-45ee-980a-8bcbd9d48eb0",
               "comment": "Minimize/Restore? Wohin? In die F-Tasten Zeile? Srollbare F-Tasten Zeile??"
@@ -260,6 +264,15 @@
           "id": "d857df61-3b75-4a89-af53-11aee8857629",
           "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
           "title": "Bei Änderung der Farbcodes für changed text wird der editor nicht neu gezeichnet. der neue farbcode wird aber angewendet",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "d2f4a85b-3476-4093-addf-f2c929baa780",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "VM ist bei Key Mappings nicht die letzte Instanz, die den K/V Hash mit der einzigen Wahrheit versorgt. Es wird schon vorher zur Korrektur der settings.mrmac Inhalte der K/V Hash genutzt.",
           "description": "",
           "labels": [],
           "checkboxes": [],
@@ -424,7 +437,17 @@
   ],
   "archive": {
     "lists": [],
-    "cards": []
+    "cards": [
+      {
+        "id": "8fc3ecd9-1386-4d47-b0b8-4c9531bf5f17",
+        "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+        "title": "Minimize/Restore",
+        "description": "",
+        "labels": [],
+        "checkboxes": [],
+        "comments": []
+      }
+    ]
   },
   "settings": {
     "labels": [

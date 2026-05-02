@@ -15,6 +15,8 @@ struct DocumentChangeSet;
 
 }
 
+class MRFileEditor;
+
 class MRTreeSitterDocument {
   public:
 	enum class Language : unsigned char {
@@ -23,7 +25,8 @@ class MRTreeSitterDocument {
 		Cpp,
 		JavaScript,
 		Python,
-		Json
+		Json,
+		MRMAC
 	};
 
 	MRTreeSitterDocument() noexcept;
@@ -37,11 +40,14 @@ class MRTreeSitterDocument {
 	void prepareDocumentAdoption(const mr::editor::TextDocument &currentDocument, const mr::editor::TextDocument &nextDocument, const mr::editor::DocumentChangeSet *changeSet) noexcept;
 	bool syncToDocument(const mr::editor::ReadSnapshot &snapshot, std::size_t documentId, std::size_t version) noexcept;
 	[[nodiscard]] bool shouldIncreaseIndentOnNewLine(const mr::editor::ReadSnapshot &snapshot, std::size_t cursorOffset) const noexcept;
-	[[nodiscard]] static std::vector<MRSyntaxTokenMap> buildTokenMapsForSnapshotLines(Language language, const mr::editor::ReadSnapshot &snapshot, const std::vector<std::size_t> &lineStarts);
+	[[nodiscard]] bool shouldDedentCurrentLine(const mr::editor::ReadSnapshot &snapshot, std::size_t cursorOffset) const noexcept;
 	[[nodiscard]] Language activeLanguage() const noexcept;
 	[[nodiscard]] bool hasTree() const noexcept;
 
   private:
+	friend class MRFileEditor;
+
+	[[nodiscard]] static std::vector<MRSyntaxTokenMap> buildTokenMapsForSnapshotLines(Language language, const mr::editor::ReadSnapshot &snapshot, const std::vector<std::size_t> &lineStarts);
 	struct Impl;
 	std::unique_ptr<Impl> mImpl;
 };

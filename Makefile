@@ -148,6 +148,8 @@ C_SOURCES = \
 	tree-sitter/python/src/parser.c \
 	tree-sitter/python/src/scanner.c \
 	tree-sitter/json/src/parser.c \
+	tree-sitter/mrmac/src/parser.c \
+	tree-sitter/mrmac/src/scanner.c \
 	mrmac/mrmac.c \
 	mrmac/lex.yy.c \
 	mrmac/parser.tab.c
@@ -423,7 +425,7 @@ $(REGRESSION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(RE
 clean:
 	rm -f $(CXX_OBJECTS) $(C_OBJECTS) $(TARGET) $(STAGE_PROFILE_PROBE_OBJECT) \
 		$(STAGE_PROFILE_PROBE_TARGET) \
-		$(REGRESSION_PROBE_OBJECT) $(REGRESSION_PROBE_TARGET) \
+		$(REGRESSION_PROBE_OBJECT) \
 		misc/mr_keyin_probe.o misc/mr_tofrom_probe.o misc/mr_tofrom_dispatch_probe.o \
 		misc/mr_staged_nav_probe misc/mr_staged_mark_page_probe \
 		mrmac/lex.yy.c mrmac/parser.tab.c mrmac/parser.tab.h
