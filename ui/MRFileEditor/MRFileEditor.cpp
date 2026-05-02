@@ -4,7 +4,7 @@ MRFileEditor::LoadTiming::LoadTiming() noexcept : valid(false), bytes(0), lines(
 }
 
 MRFileEditor::MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar, TIndicator *aIndicator, TStringView aFileName) noexcept
-    : TScroller(bounds, aHScrollBar, aVScrollBar), mIndicator(aIndicator), mReadOnly(false), mInsertMode(true), mAutoIndent(false), mSyntaxTitleHint(), mBufferModel(), mSelectionAnchor(0), mCursorVisualColumn(0), mIndicatorUpdateInProgress(false), mLineIndexWarmupTaskId(0), mLineIndexWarmupDocumentId(0), mLineIndexWarmupVersion(0), mSyntaxTokenCache(), mSyntaxWarmupTaskId(0), mSyntaxWarmupDocumentId(0), mSyntaxWarmupVersion(0), mSyntaxWarmupTopLine(0), mSyntaxWarmupBottomLine(0), mSyntaxWarmupLanguage(MRSyntaxLanguage::PlainText), mTreeSitterDocument(), mMiniMapRenderer(), mSaveNormalizationCache(), mSaveNormalizationWarmupTaskId(0), mSaveNormalizationWarmupDocumentId(0), mSaveNormalizationWarmupVersion(0),
+    : TScroller(bounds, aHScrollBar, aVScrollBar), mIndicator(aIndicator), mReadOnly(false), mInsertMode(true), mAutoIndent(false), mSyntaxTitleHint(), mBufferModel(), mSelectionAnchor(0), mCursorVisualColumn(0), mIndicatorUpdateInProgress(false), mLineIndexWarmupTaskId(0), mLineIndexWarmupDocumentId(0), mLineIndexWarmupVersion(0), mSyntaxTokenCache(), mSyntaxWarmupTaskId(0), mSyntaxWarmupDocumentId(0), mSyntaxWarmupVersion(0), mSyntaxWarmupTopLine(0), mSyntaxWarmupBottomLine(0), mSyntaxWarmupLanguage(MRSyntaxLanguage::PlainText), mSyntaxWarmupTreeSitterLanguage(MRTreeSitterDocument::Language::None), mTreeSitterDocument(), mMiniMapRenderer(), mSaveNormalizationCache(), mSaveNormalizationWarmupTaskId(0), mSaveNormalizationWarmupDocumentId(0), mSaveNormalizationWarmupVersion(0),
       mSaveNormalizationWarmupOptionsHash(0), mSaveNormalizationWarmupSourceBytes(0), mSaveNormalizationWarmupStartedAt(std::chrono::steady_clock::time_point()), mSaveNormalizationThroughputBytesPerMicro(0.0), mSaveNormalizationThroughputSamples(0), mMiniMapInitialRenderReportedDocumentId(0), mBlockOverlayActive(false), mBlockOverlayMode(0), mBlockOverlayAnchor(0), mBlockOverlayEnd(0), mBlockOverlayTrackingCursor(false), mPreferredIndentColumn(1), mLastLoadTiming(), mLargeFileMetricsTraceValid(false), mLastLargeFileMetricsExactKnown(false), mLastLargeFileMetricsLimitY(0), mLastLargeFileMetricsMaxY(0), mLastLargeFileMetricsDeltaY(0), mLastLargeFileMetricsNewDeltaY(0) {
 	fileName[0] = EOS;
 	options |= ofFirstClick;
@@ -449,7 +449,11 @@ bool MRFileEditor::applyLineIndexWarmup(const mr::editor::LineIndexWarmupData &w
 bool MRFileEditor::applySyntaxWarmup(const mr::coprocessor::SyntaxWarmupPayload &warmup, std::size_t expectedVersion, std::uint64_t expectedTaskId) {
 	if (expectedTaskId == 0 || mSyntaxWarmupTaskId != expectedTaskId) return false;
 	if (mBufferModel.documentId() != mSyntaxWarmupDocumentId || mBufferModel.version() != expectedVersion) return false;
-	if (mBufferModel.language() != warmup.language) return false;
+	if (warmup.treeSitter) {
+		if (mTreeSitterDocument.activeLanguage() == MRTreeSitterDocument::Language::None) return false;
+		if (static_cast<unsigned char>(mTreeSitterDocument.activeLanguage()) != warmup.treeSitterLanguage) return false;
+	} else if (mBufferModel.language() != warmup.language)
+		return false;
 
 	mSyntaxTokenCache.clear();
 	for (std::size_t i = 0; i < warmup.lines.size(); ++i)
@@ -461,6 +465,7 @@ bool MRFileEditor::applySyntaxWarmup(const mr::coprocessor::SyntaxWarmupPayload 
 	mSyntaxWarmupTopLine = 0;
 	mSyntaxWarmupBottomLine = 0;
 	mSyntaxWarmupLanguage = MRSyntaxLanguage::PlainText;
+	mSyntaxWarmupTreeSitterLanguage = MRTreeSitterDocument::Language::None;
 	notifyWindowTaskStateChanged();
 	drawView();
 	return true;
@@ -1482,7 +1487,7 @@ std::string MRFileEditor::automaticIndentFillForCursor() const {
 	return buildEditIndentFill(settings, 1, targetColumn, configuredTabExpandSetting());
 }
 
-std::string MRFileEditor::smartIndentFillForCursor() const {
+std::string MRFileEditor::smartIndentFillForCursor() {
 	const MREditSetupSettings settings = configuredEditSetupSettings();
 	const std::size_t cursor = cursorOffset();
 	const std::size_t lineStart = lineStartOffset(cursor);
@@ -1491,7 +1496,8 @@ std::string MRFileEditor::smartIndentFillForCursor() const {
 
 	if (settings.smartIndenting && mTreeSitterDocument.activeLanguage() != MRTreeSitterDocument::Language::None) {
 		const mr::editor::ReadSnapshot snapshot = mBufferModel.readSnapshot();
-		if (mTreeSitterDocument.shouldIncreaseIndentOnNewLine(snapshot, cursor)) targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+		if (mTreeSitterDocument.syncToDocument(snapshot, mBufferModel.documentId(), mBufferModel.version()) && mTreeSitterDocument.shouldIncreaseIndentOnNewLine(snapshot, cursor))
+			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
 	}
 	return buildEditIndentFill(settings, 1, targetColumn, configuredTabExpandSetting());
 }
@@ -1754,6 +1760,7 @@ bool MRFileEditor::hasSyntaxTokensForLineStarts(const std::vector<std::size_t> &
 MRSyntaxTokenMap MRFileEditor::syntaxTokensForLine(std::size_t lineStart) const {
 	std::map<std::size_t, MRSyntaxTokenMap>::const_iterator found = mSyntaxTokenCache.find(lineStart);
 	if (found != mSyntaxTokenCache.end()) return found->second;
+	if (mTreeSitterDocument.activeLanguage() != MRTreeSitterDocument::Language::None) return MRSyntaxTokenMap(mBufferModel.lineText(lineStart).size(), MRSyntaxToken::Text);
 	return mBufferModel.tokenMapForLine(lineStart);
 }
 
@@ -2553,7 +2560,10 @@ void MRFileEditor::scheduleLineIndexWarmupIfNeeded() {
 
 void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 	const int textRows = visibleTextRows();
-	if (mBufferModel.language() == MRSyntaxLanguage::PlainText || textRows <= 0) {
+	const MRTreeSitterDocument::Language treeSitterLanguage = mTreeSitterDocument.activeLanguage();
+	const bool treeSitterActive = treeSitterLanguage != MRTreeSitterDocument::Language::None;
+
+	if ((!treeSitterActive && mBufferModel.language() == MRSyntaxLanguage::PlainText) || textRows <= 0) {
 		resetSyntaxWarmupState(true);
 		return;
 	}
@@ -2576,6 +2586,7 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 		mSyntaxWarmupTopLine = topLine;
 		mSyntaxWarmupBottomLine = bottomLine;
 		mSyntaxWarmupLanguage = language;
+		mSyntaxWarmupTreeSitterLanguage = treeSitterLanguage;
 		if (hadTask) {
 			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
 			notifyWindowTaskStateChanged();
@@ -2583,7 +2594,9 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 		return;
 	}
 
-	if (mSyntaxWarmupTaskId != 0 && mSyntaxWarmupDocumentId == docId && mSyntaxWarmupVersion == version && mSyntaxWarmupLanguage == language && topLine >= mSyntaxWarmupTopLine && bottomLine <= mSyntaxWarmupBottomLine) return;
+	if (mSyntaxWarmupTaskId != 0 && mSyntaxWarmupDocumentId == docId && mSyntaxWarmupVersion == version && mSyntaxWarmupLanguage == language && mSyntaxWarmupTreeSitterLanguage == treeSitterLanguage &&
+		topLine >= mSyntaxWarmupTopLine && bottomLine <= mSyntaxWarmupBottomLine)
+		return;
 
 	MRTextBufferModel::ReadSnapshot snapshot = mBufferModel.readSnapshot();
 	std::uint64_t previousTaskId = mSyntaxWarmupTaskId;
@@ -2593,7 +2606,8 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 	mSyntaxWarmupTopLine = topLine;
 	mSyntaxWarmupBottomLine = bottomLine;
 	mSyntaxWarmupLanguage = language;
-	mSyntaxWarmupTaskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::SyntaxWarmup, docId, version, syntaxWarmupTaskLabel(), [snapshot, language, lineStarts](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
+	mSyntaxWarmupTreeSitterLanguage = treeSitterLanguage;
+	mSyntaxWarmupTaskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::SyntaxWarmup, docId, version, syntaxWarmupTaskLabel(), [snapshot, language, treeSitterLanguage, lineStarts](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
 		mr::coprocessor::Result result;
 		std::vector<mr::coprocessor::SyntaxWarmLine> warmed;
 		auto shouldStop = [&]() noexcept { return stopToken.stop_requested() || info.cancelRequested(); };
@@ -2603,15 +2617,25 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 			return result;
 		}
 		warmed.reserve(lineStarts.size());
-		for (std::size_t i = 0; i < lineStarts.size(); ++i) {
-			if (shouldStop()) {
-				result.status = mr::coprocessor::TaskStatus::Cancelled;
-				return result;
+		if (treeSitterLanguage != MRTreeSitterDocument::Language::None) {
+			std::vector<MRSyntaxTokenMap> tokenMaps = MRTreeSitterDocument::buildTokenMapsForSnapshotLines(treeSitterLanguage, snapshot, lineStarts);
+			for (std::size_t i = 0; i < lineStarts.size(); ++i) {
+				if (shouldStop()) {
+					result.status = mr::coprocessor::TaskStatus::Cancelled;
+					return result;
+				}
+				warmed.push_back(mr::coprocessor::SyntaxWarmLine(lineStarts[i], i < tokenMaps.size() ? std::move(tokenMaps[i]) : MRSyntaxTokenMap()));
 			}
-			warmed.push_back(mr::coprocessor::SyntaxWarmLine(lineStarts[i], tmrBuildTokenMapForTextLine(language, snapshot.lineText(lineStarts[i]))));
-		}
+		} else
+			for (std::size_t i = 0; i < lineStarts.size(); ++i) {
+				if (shouldStop()) {
+					result.status = mr::coprocessor::TaskStatus::Cancelled;
+					return result;
+				}
+				warmed.push_back(mr::coprocessor::SyntaxWarmLine(lineStarts[i], tmrBuildTokenMapForTextLine(language, snapshot.lineText(lineStarts[i]))));
+			}
 		result.status = mr::coprocessor::TaskStatus::Completed;
-		result.payload = std::make_shared<mr::coprocessor::SyntaxWarmupPayload>(language, std::move(warmed));
+		result.payload = std::make_shared<mr::coprocessor::SyntaxWarmupPayload>(language, treeSitterLanguage != MRTreeSitterDocument::Language::None, static_cast<unsigned char>(treeSitterLanguage), std::move(warmed));
 		return result;
 	});
 	if (mSyntaxWarmupTaskId != previousTaskId) notifyWindowTaskStateChanged();
@@ -2713,11 +2737,13 @@ Boolean MRFileEditor::confirmSaveOrDiscardNamed() {
 
 void MRFileEditor::refreshSyntaxContext() {
 	MRSyntaxLanguage oldLanguage = mBufferModel.language();
+	const MRTreeSitterDocument::Language oldTreeSitterLanguage = mTreeSitterDocument.activeLanguage();
 	const MREditSetupSettings settings = configuredEditSetupSettings();
+	std::string configuredLanguage;
 	mBufferModel.setSyntaxContext(hasPersistentFileName() ? fileName : "", mSyntaxTitleHint);
-	if (mBufferModel.language() != oldLanguage) resetSyntaxWarmupState(true);
-	mTreeSitterDocument.setLanguageContext(hasPersistentFileName() ? fileName : "", mSyntaxTitleHint, settings.codeLanguage);
-	static_cast<void>(mTreeSitterDocument.syncToDocument(mBufferModel.readSnapshot(), mBufferModel.documentId(), mBufferModel.version()));
+	if (hasPersistentFileName() && mBufferModel.language() != MRSyntaxLanguage::MRMAC) configuredLanguage = settings.codeLanguage;
+	mTreeSitterDocument.setLanguageContext(hasPersistentFileName() ? fileName : "", mSyntaxTitleHint, configuredLanguage);
+	if (mBufferModel.language() != oldLanguage || mTreeSitterDocument.activeLanguage() != oldTreeSitterLanguage) resetSyntaxWarmupState(true);
 }
 
 void MRFileEditor::resetSyntaxWarmupState(bool clearCache) noexcept {
@@ -2730,6 +2756,7 @@ void MRFileEditor::resetSyntaxWarmupState(bool clearCache) noexcept {
 	mSyntaxWarmupTopLine = 0;
 	mSyntaxWarmupBottomLine = 0;
 	mSyntaxWarmupLanguage = MRSyntaxLanguage::PlainText;
+	mSyntaxWarmupTreeSitterLanguage = MRTreeSitterDocument::Language::None;
 	if (hadTask) {
 		static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledTaskId));
 		notifyWindowTaskStateChanged();

@@ -24,58 +24,15 @@
 #include <vector>
 
 namespace {
-enum class ScopedDialogHistoryKind : unsigned char {
-	File = 0,
-	Path = 1
-};
-
 enum : ushort {
 	cmMrScopedHistoryChoose = 3868,
 	cmMrScopedHistoryAccept
 };
 
-class ScopedHistoryButton final : public THistory {
-  public:
-	ScopedHistoryButton(const TRect &bounds, TInputLine *aLink, ScopedDialogHistoryKind aKind) noexcept : THistory(bounds, aLink, aKind == ScopedDialogHistoryKind::File ? kFileDialogHistoryId : kPathDialogHistoryId), kind(aKind) {
-	}
-
-	void handleEvent(TEvent &event) override {
-		TView *target = owner;
-
-		TView::handleEvent(event);
-		if (event.what == evMouseDown || (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbDown && (link->state & sfFocused) != 0)) {
-			if (!link->focus()) {
-				clearEvent(event);
-				return;
-			}
-			recordHistory(link->data);
-			while (target != nullptr && dynamic_cast<TDialog *>(target) == nullptr)
-				target = target->owner;
-			message(target != nullptr ? target : owner, evCommand, cmMrScopedHistoryChoose, this);
-			clearEvent(event);
-		} else if (event.what == evBroadcast)
-			if ((event.message.command == cmReleasedFocus && event.message.infoPtr == link) || event.message.command == cmRecordHistory) recordHistory(link->data);
-	}
-
-	void recordHistory(const char *) override {
-	}
-
-	[[nodiscard]] TInputLine *linkedInput() const noexcept {
-		return link;
-	}
-
-	[[nodiscard]] ScopedDialogHistoryKind historyKind() const noexcept {
-		return kind;
-	}
-
-  private:
-	ScopedDialogHistoryKind kind;
-};
-
 class TWheelFileDialog final : public TFileDialog {
-  public:
+ public:
 	TWheelFileDialog(MRDialogHistoryScope aScope, const char *wildCard, const char *title, const char *inputName, ushort options) noexcept : TWindowInit(TFileDialog::initFrame), TFileDialog(wildCard, title, inputName, options, 0), scope(aScope), dialogOptions(options) {
-		replaceHistoryView(static_cast<TInputLine *>(fileName), ScopedDialogHistoryKind::File);
+		replaceHistoryView(static_cast<TInputLine *>(fileName));
 	}
 
 	void handleEvent(TEvent &event) override {
@@ -85,7 +42,7 @@ class TWheelFileDialog final : public TFileDialog {
 				clearEvent(event);
 				return;
 			}
-			if (event.what == evMouseDown && !historyDropList.containsPoint(event.mouse.where) && (historyButton == nullptr || !historyButton->mouseInView(event.mouse.where))) {
+			if (event.what == evMouseDown && !historyDropList.containsPoint(event.mouse.where) && !historyDropList.buttonContainsPoint(event.mouse.where)) {
 				hideHistoryList();
 				clearEvent(event);
 				return;
@@ -148,7 +105,7 @@ class TWheelFileDialog final : public TFileDialog {
 		historyLink->drawView();
 	}
 
-	void replaceHistoryView(TInputLine *link, ScopedDialogHistoryKind kind) {
+	void replaceHistoryView(TInputLine *link) {
 		if (link == nullptr) return;
 		for (TView *child = first(); child != nullptr;) {
 			TView *next = child->nextView();
@@ -157,11 +114,9 @@ class TWheelFileDialog final : public TFileDialog {
 				const ushort childGrowMode = child->growMode;
 				remove(child);
 				TObject::destroy(child);
-				ScopedHistoryButton *history = new ScopedHistoryButton(childBounds, link, kind);
+				TView *history = historyDropList.createButton(*this, childBounds, link, this, cmMrScopedHistoryChoose, true);
 				history->growMode = childGrowMode;
-				historyButton = history;
 				historyLink = link;
-				insert(history);
 				return;
 			}
 			child = next;
@@ -170,15 +125,14 @@ class TWheelFileDialog final : public TFileDialog {
 
 	MRDialogHistoryScope scope;
 	ushort dialogOptions = 0;
-	ScopedHistoryButton *historyButton = nullptr;
 	TInputLine *historyLink = nullptr;
 	MRDropList historyDropList;
 };
 
 class TWheelChDirDialog final : public TChDirDialog {
-  public:
+ public:
 	TWheelChDirDialog(MRDialogHistoryScope aScope, ushort options) noexcept : TWindowInit(TChDirDialog::initFrame), TChDirDialog(options, 0), scope(aScope) {
-		replaceHistoryView(findInputLine(TRect(3, 3, 42, 4)), ScopedDialogHistoryKind::Path);
+		replaceHistoryView(findInputLine(TRect(3, 3, 42, 4)));
 	}
 
 	void handleEvent(TEvent &event) override {
@@ -188,7 +142,7 @@ class TWheelChDirDialog final : public TChDirDialog {
 				clearEvent(event);
 				return;
 			}
-			if (event.what == evMouseDown && !historyDropList.containsPoint(event.mouse.where) && (historyButton == nullptr || !historyButton->mouseInView(event.mouse.where))) {
+			if (event.what == evMouseDown && !historyDropList.containsPoint(event.mouse.where) && !historyDropList.buttonContainsPoint(event.mouse.where)) {
 				hideHistoryList();
 				clearEvent(event);
 				return;
@@ -243,7 +197,7 @@ class TWheelChDirDialog final : public TChDirDialog {
 		historyLink->drawView();
 	}
 
-	void replaceHistoryView(TInputLine *link, ScopedDialogHistoryKind kind) {
+	void replaceHistoryView(TInputLine *link) {
 		if (link == nullptr) return;
 		for (TView *child = first(); child != nullptr;) {
 			TView *next = child->nextView();
@@ -252,11 +206,9 @@ class TWheelChDirDialog final : public TChDirDialog {
 				const ushort childGrowMode = child->growMode;
 				remove(child);
 				TObject::destroy(child);
-				ScopedHistoryButton *history = new ScopedHistoryButton(childBounds, link, kind);
+				TView *history = historyDropList.createButton(*this, childBounds, link, this, cmMrScopedHistoryChoose, true);
 				history->growMode = childGrowMode;
-				historyButton = history;
 				historyLink = link;
-				insert(history);
 				return;
 			}
 			child = next;
@@ -264,7 +216,6 @@ class TWheelChDirDialog final : public TChDirDialog {
 	}
 
 	MRDialogHistoryScope scope;
-	ScopedHistoryButton *historyButton = nullptr;
 	TInputLine *historyLink = nullptr;
 	MRDropList historyDropList;
 };

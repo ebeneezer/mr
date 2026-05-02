@@ -21,6 +21,7 @@
 #include <pwd.h>
 #include <regex>
 #include <set>
+#include <span>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <string>
@@ -464,6 +465,537 @@ std::string effectiveRememberedLoadDirectory(MRDialogHistoryScope scope) {
 	remembered = latestReadableHistoryFileDirectory(state.fileHistory);
 	if (!remembered.empty()) return remembered;
 	return fallbackRememberedLoadDirectory();
+}
+
+bool setError(std::string *errorMessage, const std::string &message);
+std::string canonicalEditProfileId(const std::string &value);
+std::string canonicalEditProfileName(const std::string &value);
+std::string canonicalWindowColorThemeUri(const std::string &value);
+bool normalizeEditExtensionSelectorsInPlace(std::vector<std::string> &selectors, std::string *errorMessage);
+bool normalizeEditProfileOverridesInPlace(MREditExtensionProfile &profile, std::string *errorMessage);
+bool validateNormalizedEditProfiles(const std::vector<MREditExtensionProfile> &profiles, std::string *errorMessage);
+struct ColorGroupDefinition;
+const ColorGroupDefinition *findColorGroupDefinitionByKey(const std::string &key);
+template <std::size_t N> bool parseColorListLiteral(const std::string &literal, std::array<unsigned char, N> &outValues, std::string *errorMessage);
+bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned char, MRColorSetupSettings::kWindowCount> &outValues, std::string *errorMessage);
+bool parseMenuDialogColorListLiteral(const std::string &literal, std::array<unsigned char, MRColorSetupSettings::kMenuDialogCount> &outValues, std::string *errorMessage);
+bool parseOtherColorListLiteral(const std::string &literal, std::array<unsigned char, MRColorSetupSettings::kOtherCount> &outValues, std::string *errorMessage);
+
+struct MRSettingsSnapshot {
+	struct DialogHistoryState {
+		std::string lastPath;
+		std::vector<std::string> pathHistory;
+		std::vector<std::string> fileHistory;
+
+		auto operator==(const DialogHistoryState &) const noexcept -> bool = default;
+	};
+
+	MRSetupPaths paths;
+	bool windowManagerEnabled{true};
+	bool menulineMessagesEnabled{true};
+	MRSearchDialogOptions searchDialogOptions;
+	MRSarDialogOptions sarDialogOptions;
+	MRMultiSearchDialogOptions multiSearchDialogOptions;
+	MRMultiSarDialogOptions multiSarDialogOptions;
+	int virtualDesktops{1};
+	bool cyclicVirtualDesktops{false};
+	MRCursorBehaviour cursorBehaviour{MRCursorBehaviour::BoundToText};
+	std::string cursorPositionMarker{"R:C"};
+	bool autoloadWorkspace{false};
+	MRLogHandling logHandling{MRLogHandling::Volatile};
+	std::string logFilePath;
+	std::vector<std::string> autoexecMacros;
+	int maxPathHistory{15};
+	int maxFileHistory{15};
+	std::array<DialogHistoryState, static_cast<std::size_t>(MRDialogHistoryScope::Count)> dialogHistory;
+	std::vector<std::string> multiFilespecHistory;
+	std::vector<std::string> multiPathHistory;
+	std::string defaultProfileDescription{"Global defaults"};
+	MREditSetupSettings editSettings;
+	MRColorSetupSettings colorSettings;
+	std::string colorThemeFilePath;
+	std::vector<MREditExtensionProfile> editProfiles;
+	std::string keymapFilePath;
+	std::vector<MRKeymapProfile> keymapProfiles;
+	std::string activeKeymapProfile{"DEFAULT"};
+
+	auto operator==(const MRSettingsSnapshot &) const noexcept -> bool = default;
+};
+
+constexpr std::size_t kNoIndex = static_cast<std::size_t>(-1);
+
+const char *keymapDiagnosticSeverityName(MRKeymapDiagnosticSeverity severity) noexcept {
+	switch (severity) {
+		case MRKeymapDiagnosticSeverity::Warning:
+			return "warning";
+		case MRKeymapDiagnosticSeverity::Error:
+		default:
+			return "error";
+	}
+}
+
+std::string keymapDiagnosticIdentity(const MRKeymapDiagnostic &diagnostic) {
+	return std::to_string(static_cast<unsigned>(diagnostic.kind)) + "|" + std::to_string(static_cast<unsigned>(diagnostic.severity)) + "|" + std::to_string(diagnostic.profileIndex) + "|" + std::to_string(diagnostic.bindingIndex) + "|" + diagnostic.message;
+}
+
+std::string describeKeymapDiagnostic(std::span<const MRKeymapProfile> profiles, const MRKeymapDiagnostic &diagnostic) {
+	std::string text = diagnostic.message;
+
+	if (diagnostic.profileIndex != kNoIndex && diagnostic.profileIndex < profiles.size()) {
+		const MRKeymapProfile &profile = profiles[diagnostic.profileIndex];
+		text += " profile='" + profile.name + "'";
+		if (diagnostic.bindingIndex != kNoIndex && diagnostic.bindingIndex < profile.bindings.size()) {
+			const MRKeymapBindingRecord &binding = profile.bindings[diagnostic.bindingIndex];
+			text += " binding=" + std::to_string(diagnostic.bindingIndex + 1);
+			text += " target='" + binding.target.target + "'";
+			text += " sequence='" + binding.sequence.toString() + "'";
+		}
+	}
+	return text;
+}
+
+std::string summarizeKeymapLoadForLog(const MRKeymapLoadResult &load) {
+	std::string text = "Keymap bootstrap parse: active='" + load.activeProfileName + "' profiles=" + std::to_string(load.profiles.size()) + " diagnostics=" + std::to_string(load.diagnostics.size());
+
+	for (const MRKeymapProfile &profile : load.profiles)
+		text += " [" + profile.name + ":" + std::to_string(profile.bindings.size()) + "]";
+	return text;
+}
+
+std::string summarizeKeymapDiagnosticsForMessageLine(std::span<const MRKeymapDiagnostic> diagnostics, std::string_view operation) {
+	std::set<std::string> seen;
+	std::size_t errorCount = 0;
+	std::size_t warningCount = 0;
+
+	for (const MRKeymapDiagnostic &diagnostic : diagnostics) {
+		if (!seen.insert(keymapDiagnosticIdentity(diagnostic)).second) continue;
+		if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error) ++errorCount;
+		else
+			++warningCount;
+	}
+	if (errorCount == 0 && warningCount == 0) return std::string();
+	if (errorCount == 0) return std::string(operation) + ": " + std::to_string(warningCount) + " warning(s); see log.";
+	return std::string(operation) + ": removed " + std::to_string(errorCount) + " invalid key binding(s); see log.";
+}
+
+struct MRParsedSettingsAssignment {
+	std::string key;
+	std::string value;
+};
+
+struct MRParsedEditProfileDirective {
+	std::string operation;
+	std::string profileId;
+	std::string arg3;
+	std::string arg4;
+};
+
+struct MRParsedSettingsDocument {
+	std::vector<MRParsedSettingsAssignment> assignments;
+	std::vector<MRParsedEditProfileDirective> profileDirectives;
+};
+
+struct MRFlattenedEditProfile {
+	std::string id;
+	std::string name;
+	std::vector<std::string> extensions;
+	std::map<std::string, std::string> settings;
+};
+
+struct MRFlattenedSettingsDocument {
+	std::map<std::string, std::string> globals;
+	std::map<std::string, MRFlattenedEditProfile> profiles;
+};
+
+std::string unescapeMrmacSingleQuotedLiteral(const std::string &value) {
+	std::string out;
+	out.reserve(value.size());
+	for (std::size_t i = 0; i < value.size(); ++i) {
+		char ch = value[i];
+		if (ch == '\'' && i + 1 < value.size() && value[i + 1] == '\'') {
+			out.push_back('\'');
+			++i;
+		} else
+			out.push_back(ch);
+	}
+	return out;
+}
+
+std::string joinStrings(const std::vector<std::string> &values, std::string_view separator) {
+	std::string out;
+
+	for (std::size_t i = 0; i < values.size(); ++i) {
+		if (i != 0) out += separator;
+		out += values[i];
+	}
+	return out;
+}
+
+MRParsedSettingsDocument parseSettingsDocument(std::string_view source, bool acceptLegacyFeProfileToken) {
+	static const std::regex assignmentPattern("MRSETUP\\s*\\(\\s*'([^']+)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
+	static const std::regex profilePattern("MRFEPROFILE\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
+	static const std::regex profilePatternWithLegacy("(?:MRFEPROFILE|MREDITPROFILE)\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
+	const std::regex &activeProfilePattern = acceptLegacyFeProfileToken ? profilePatternWithLegacy : profilePattern;
+	MRParsedSettingsDocument document;
+	std::smatch match;
+	std::string remaining(source);
+
+	while (std::regex_search(remaining, match, assignmentPattern)) {
+		if (match.size() >= 3) {
+			MRParsedSettingsAssignment assignment;
+			assignment.key = upperAscii(trimAscii(match[1].str()));
+			assignment.value = unescapeMrmacSingleQuotedLiteral(match[2].str());
+			document.assignments.push_back(std::move(assignment));
+		}
+		remaining = match.suffix().str();
+	}
+
+	remaining.assign(source.data(), source.size());
+	while (std::regex_search(remaining, match, activeProfilePattern)) {
+		if (match.size() >= 5) {
+			MRParsedEditProfileDirective directive;
+			directive.operation = unescapeMrmacSingleQuotedLiteral(match[1].str());
+			directive.profileId = unescapeMrmacSingleQuotedLiteral(match[2].str());
+			directive.arg3 = unescapeMrmacSingleQuotedLiteral(match[3].str());
+			directive.arg4 = unescapeMrmacSingleQuotedLiteral(match[4].str());
+			document.profileDirectives.push_back(std::move(directive));
+		}
+		remaining = match.suffix().str();
+	}
+	return document;
+}
+
+std::size_t countLegacyFeProfileDirectives(std::string_view source) {
+	static const std::regex legacyProfilePattern("MREDITPROFILE\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
+	std::smatch match;
+	std::string remaining(source);
+	std::size_t count = 0;
+
+	while (std::regex_search(remaining, match, legacyProfilePattern)) {
+		++count;
+		remaining = match.suffix().str();
+	}
+	return count;
+}
+
+MRFlattenedSettingsDocument flattenSettingsDocument(const MRParsedSettingsDocument &document) {
+	MRFlattenedSettingsDocument flattened;
+	std::size_t pathHistoryIndex = 1;
+	std::size_t fileHistoryIndex = 1;
+	std::size_t dialogLastPathIndex = 1;
+	std::size_t dialogPathHistoryIndex = 1;
+	std::size_t dialogFileHistoryIndex = 1;
+	std::size_t autoexecMacroIndex = 1;
+
+	for (const MRParsedSettingsAssignment &assignment : document.assignments)
+		if (assignment.key == "PATH_HISTORY") flattened.globals[assignment.key + "[" + std::to_string(pathHistoryIndex++) + "]"] = assignment.value;
+		else if (assignment.key == "FILE_HISTORY")
+			flattened.globals[assignment.key + "[" + std::to_string(fileHistoryIndex++) + "]"] = assignment.value;
+		else if (assignment.key == "DIALOG_LAST_PATH")
+			flattened.globals[assignment.key + "[" + std::to_string(dialogLastPathIndex++) + "]"] = assignment.value;
+		else if (assignment.key == "DIALOG_PATH_HISTORY")
+			flattened.globals[assignment.key + "[" + std::to_string(dialogPathHistoryIndex++) + "]"] = assignment.value;
+		else if (assignment.key == "DIALOG_FILE_HISTORY")
+			flattened.globals[assignment.key + "[" + std::to_string(dialogFileHistoryIndex++) + "]"] = assignment.value;
+		else if (assignment.key == "AUTOEXEC_MACRO")
+			flattened.globals[assignment.key + "[" + std::to_string(autoexecMacroIndex++) + "]"] = assignment.value;
+		else
+			flattened.globals[assignment.key] = assignment.value;
+
+	for (const MRParsedEditProfileDirective &directive : document.profileDirectives) {
+		const std::string op = upperAscii(trimAscii(directive.operation));
+		const std::string profileId = trimAscii(directive.profileId);
+		MRFlattenedEditProfile &profile = flattened.profiles[profileId];
+		const std::string key = upperAscii(trimAscii(directive.arg3));
+
+		profile.id = profileId;
+		if (op == "DEFINE") {
+			profile.name = trimAscii(directive.arg3);
+			if (profile.name.empty()) profile.name = trimAscii(directive.arg4);
+			if (profile.name.empty()) profile.name = profileId;
+		} else if (op == "EXT") {
+			profile.extensions.push_back(normalizeEditExtensionSelector(directive.arg3));
+		} else if (op == "SET")
+			profile.settings[key] = directive.arg4;
+	}
+
+	for (auto &entry : flattened.profiles) {
+		auto &extensions = entry.second.extensions;
+		std::sort(extensions.begin(), extensions.end());
+		extensions.erase(std::unique(extensions.begin(), extensions.end()), extensions.end());
+	}
+
+	return flattened;
+}
+
+void appendChange(std::vector<MRSettingsChangeEntry> &changes, MRSettingsChangeEntry::Kind kind, const std::string &scope, const std::string &key, const std::string &oldValue, const std::string &newValue) {
+	MRSettingsChangeEntry change;
+
+	change.kind = kind;
+	change.scope = scope;
+	change.key = key;
+	change.oldValue = oldValue;
+	change.newValue = newValue;
+	changes.push_back(std::move(change));
+}
+
+void diffFlatMap(const std::string &scope, const std::map<std::string, std::string> &beforeMap, const std::map<std::string, std::string> &afterMap, std::vector<MRSettingsChangeEntry> &changes) {
+	std::set<std::string> keys;
+
+	for (const auto &entry : beforeMap)
+		keys.insert(entry.first);
+	for (const auto &entry : afterMap)
+		keys.insert(entry.first);
+
+	for (const std::string &key : keys) {
+		auto beforeIt = beforeMap.find(key);
+		auto afterIt = afterMap.find(key);
+
+		if (beforeIt == beforeMap.end()) {
+			appendChange(changes, MRSettingsChangeEntry::Kind::Added, scope, key, std::string(), afterIt->second);
+			continue;
+		}
+		if (afterIt == afterMap.end()) {
+			appendChange(changes, MRSettingsChangeEntry::Kind::Removed, scope, key, beforeIt->second, std::string());
+			continue;
+		}
+		if (beforeIt->second != afterIt->second) appendChange(changes, MRSettingsChangeEntry::Kind::Changed, scope, key, beforeIt->second, afterIt->second);
+	}
+}
+
+void diffFlattenedDocuments(const MRFlattenedSettingsDocument &before, const MRFlattenedSettingsDocument &after, std::vector<MRSettingsChangeEntry> &changes) {
+	diffFlatMap("settings", before.globals, after.globals, changes);
+
+	std::set<std::string> profileIds;
+	for (const auto &entry : before.profiles)
+		profileIds.insert(entry.first);
+	for (const auto &entry : after.profiles)
+		profileIds.insert(entry.first);
+
+	for (const std::string &profileId : profileIds) {
+		auto beforeIt = before.profiles.find(profileId);
+		auto afterIt = after.profiles.find(profileId);
+		const std::string scope = "fe-profile '" + profileId + "'";
+		std::map<std::string, std::string> beforeMap;
+		std::map<std::string, std::string> afterMap;
+
+		if (beforeIt != before.profiles.end()) {
+			beforeMap["PROFILE_NAME"] = beforeIt->second.name;
+			if (!beforeIt->second.extensions.empty()) beforeMap["EXTENSIONS"] = joinStrings(beforeIt->second.extensions, ", ");
+			for (const auto &entry : beforeIt->second.settings)
+				beforeMap[entry.first] = entry.second;
+		}
+		if (afterIt != after.profiles.end()) {
+			afterMap["PROFILE_NAME"] = afterIt->second.name;
+			if (!afterIt->second.extensions.empty()) afterMap["EXTENSIONS"] = joinStrings(afterIt->second.extensions, ", ");
+			for (const auto &entry : afterIt->second.settings)
+				afterMap[entry.first] = entry.second;
+		}
+		diffFlatMap(scope, beforeMap, afterMap, changes);
+	}
+}
+
+void markFlag(MRSettingsLoadReport &report, MRSettingsLoadReport::Flag flag) {
+	report.flags |= static_cast<unsigned int>(flag);
+}
+
+bool hasFlag(const MRSettingsLoadReport &report, MRSettingsLoadReport::Flag flag) {
+	return (report.flags & static_cast<unsigned int>(flag)) != 0;
+}
+
+std::string quoteValue(const std::string &value) {
+	return "'" + value + "'";
+}
+
+bool writeNormalizedBootstrapFiles(const MRSettingsSnapshot &snapshot, std::string_view previousSource, const std::string &canonicalSource, std::string *errorMessage) {
+	const std::string settingsPath = normalizeConfiguredPathInput(snapshot.paths.settingsMacroUri);
+	const std::string themePath = normalizeConfiguredPathInput(snapshot.colorThemeFilePath);
+	const std::filesystem::path settingsDir = std::filesystem::path(settingsPath).parent_path();
+	const std::filesystem::path themeDir = std::filesystem::path(themePath).parent_path();
+	static const std::regex workspacePattern(R"(MRSETUP\s*\(\s*'WORKSPACE'\s*,\s*'((?:''|[^'])*)'\s*\)\s*;?)", std::regex_constants::ECMAScript | std::regex_constants::icase);
+	std::string finalSource = canonicalSource;
+	std::string previousText(previousSource);
+	std::smatch match;
+	std::string workspaceLines;
+	std::error_code ec;
+
+	while (std::regex_search(previousText, match, workspacePattern)) {
+		workspaceLines += "MRSETUP('WORKSPACE', '";
+		workspaceLines += match[1].str();
+		workspaceLines += "');\n";
+		previousText = match.suffix().str();
+	}
+	if (!workspaceLines.empty()) {
+		const std::size_t endMacro = finalSource.rfind("END_MACRO;");
+
+		if (endMacro != std::string::npos) finalSource.insert(endMacro, workspaceLines);
+	}
+
+	if (!validateSettingsMacroFilePath(settingsPath, errorMessage)) return false;
+	if (!validateColorThemeFilePath(themePath, errorMessage)) return false;
+	if (!settingsDir.empty()) {
+		std::filesystem::create_directories(settingsDir, ec);
+		if (ec) {
+			if (errorMessage != nullptr) *errorMessage = "Unable to create settings directory: " + settingsDir.string();
+			return false;
+		}
+	}
+	if (!themeDir.empty()) {
+		ec.clear();
+		std::filesystem::create_directories(themeDir, ec);
+		if (ec) {
+			if (errorMessage != nullptr) *errorMessage = "Unable to create color theme directory: " + themeDir.string();
+			return false;
+		}
+	}
+	if (!writeTextFile(themePath, buildColorThemeMacroSource(snapshot.colorSettings))) {
+		if (errorMessage != nullptr) *errorMessage = "Unable to write color theme file: " + themePath;
+		return false;
+	}
+	if (!writeTextFile(settingsPath, finalSource)) {
+		if (errorMessage != nullptr) *errorMessage = "Unable to write settings macro file: " + settingsPath;
+		return false;
+	}
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+void trimHistoryToLimit(std::vector<std::string> &entries, int limit) {
+	if (limit < 0) limit = 0;
+	if (entries.size() > static_cast<std::size_t>(limit)) entries.resize(static_cast<std::size_t>(limit));
+}
+
+void addHistoryEntry(std::vector<std::string> &entries, const std::string &value, int limit) {
+	if (value.empty()) return;
+	entries.erase(std::remove(entries.begin(), entries.end(), value), entries.end());
+	entries.insert(entries.begin(), value);
+	trimHistoryToLimit(entries, limit);
+}
+
+void addSerializedHistoryEntry(std::vector<std::string> &entries, const std::string &value, int limit, bool normalizeAsPath) {
+	const std::string prepared = normalizeAsPath ? normalizeConfiguredPathInput(value) : trimAscii(value);
+
+	if (prepared.empty()) return;
+	for (const std::string &entry : entries)
+		if (entry == prepared) return;
+	entries.push_back(prepared);
+	trimHistoryToLimit(entries, limit);
+}
+
+std::string fallbackRememberedLoadDirectory(const MRSettingsSnapshot &snapshot) {
+	std::string macroDir = makeAbsolutePath(snapshot.paths.macroPath);
+	std::string cwd = currentWorkingDirectory();
+
+	if (isReadableDirectory(macroDir)) return macroDir;
+	if (isReadableDirectory(cwd)) return cwd;
+	return std::string();
+}
+
+bool setSnapshotScopedDialogLastPath(MRSettingsSnapshot &snapshot, MRDialogHistoryScope scope, const std::string &path, std::string *errorMessage) {
+	std::string normalized = normalizeConfiguredPathInput(path);
+	std::string directory;
+	MRSettingsSnapshot::DialogHistoryState &state = snapshot.dialogHistory[dialogHistoryScopeIndex(scope)];
+
+	if (!normalized.empty() && isReadableDirectory(normalized)) {
+		state.lastPath = normalized;
+		addHistoryEntry(state.pathHistory, normalized, snapshot.maxPathHistory);
+	} else if (!normalized.empty()) {
+		addHistoryEntry(state.fileHistory, normalized, snapshot.maxFileHistory);
+		directory = normalizedDialogDirectoryFromPath(normalized);
+		if (!directory.empty()) {
+			state.lastPath = directory;
+			addHistoryEntry(state.pathHistory, directory, snapshot.maxPathHistory);
+		}
+	} else if (state.lastPath.empty()) {
+		directory = fallbackRememberedLoadDirectory(snapshot);
+		if (!directory.empty()) {
+			state.lastPath = directory;
+			addHistoryEntry(state.pathHistory, directory, snapshot.maxPathHistory);
+		}
+	}
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool setSnapshotPathHistoryLimit(MRSettingsSnapshot &snapshot, int value, std::string *errorMessage) {
+	if (value < kHistoryLimitMin || value > kHistoryLimitMax) return setError(errorMessage, "MAX_PATH_HISTORY must be within 5..50.");
+	snapshot.maxPathHistory = value;
+	for (MRSettingsSnapshot::DialogHistoryState &state : snapshot.dialogHistory)
+		trimHistoryToLimit(state.pathHistory, value);
+	trimHistoryToLimit(snapshot.multiPathHistory, value);
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool setSnapshotFileHistoryLimit(MRSettingsSnapshot &snapshot, int value, std::string *errorMessage) {
+	if (value < kHistoryLimitMin || value > kHistoryLimitMax) return setError(errorMessage, "MAX_FILE_HISTORY must be within 5..50.");
+	snapshot.maxFileHistory = value;
+	for (MRSettingsSnapshot::DialogHistoryState &state : snapshot.dialogHistory)
+		trimHistoryToLimit(state.fileHistory, value);
+	trimHistoryToLimit(snapshot.multiFilespecHistory, value);
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool setSnapshotEditProfiles(MRSettingsSnapshot &snapshot, const std::vector<MREditExtensionProfile> &profiles, std::string *errorMessage) {
+	std::vector<MREditExtensionProfile> normalized = profiles;
+
+	for (MREditExtensionProfile &profile : normalized) {
+		profile.id = canonicalEditProfileId(profile.id);
+		profile.name = canonicalEditProfileName(profile.name);
+		profile.windowColorThemeUri = canonicalWindowColorThemeUri(profile.windowColorThemeUri);
+		if (!normalizeEditExtensionSelectorsInPlace(profile.extensions, errorMessage)) return false;
+		if (!normalizeEditProfileOverridesInPlace(profile, errorMessage)) return false;
+	}
+	if (!validateNormalizedEditProfiles(normalized, errorMessage)) return false;
+	snapshot.editProfiles = std::move(normalized);
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) {
+	MRSettingsSnapshot snapshot;
+
+	snapshot.paths = paths;
+	snapshot.windowManagerEnabled = configuredWindowManager();
+	snapshot.menulineMessagesEnabled = configuredMenulineMessages();
+	snapshot.searchDialogOptions = configuredSearchDialogOptions();
+	snapshot.sarDialogOptions = configuredSarDialogOptions();
+	snapshot.multiSearchDialogOptions = configuredMultiSearchDialogOptions();
+	snapshot.multiSarDialogOptions = configuredMultiSarDialogOptions();
+	snapshot.virtualDesktops = configuredVirtualDesktops();
+	snapshot.cyclicVirtualDesktops = configuredCyclicVirtualDesktops();
+	snapshot.cursorBehaviour = configuredCursorBehaviour();
+	snapshot.cursorPositionMarker = configuredCursorPositionMarker();
+	snapshot.autoloadWorkspace = configuredAutoloadWorkspace();
+	snapshot.logHandling = configuredLogHandling();
+	snapshot.logFilePath = configuredLogFilePath();
+	configuredAutoexecMacroEntries(snapshot.autoexecMacros);
+	snapshot.maxPathHistory = configuredMaxPathHistory();
+	snapshot.maxFileHistory = configuredMaxFileHistory();
+	snapshot.defaultProfileDescription = configuredDefaultProfileDescription();
+	snapshot.editSettings = configuredEditSetupSettings();
+	snapshot.colorSettings = configuredColorSetupSettings();
+	snapshot.colorThemeFilePath = configuredColorThemeFilePath();
+	snapshot.editProfiles = configuredEditExtensionProfiles();
+	snapshot.keymapFilePath = configuredKeymapFilePath();
+	snapshot.keymapProfiles = configuredKeymapProfiles();
+	snapshot.activeKeymapProfile = configuredActiveKeymapProfile();
+
+	for (std::size_t i = 0; i < static_cast<std::size_t>(MRDialogHistoryScope::Count); ++i) {
+		const MRDialogHistoryScope scope = static_cast<MRDialogHistoryScope>(i);
+		const MRScopedDialogHistoryState &configuredState = dialogHistoryState(scope);
+		MRSettingsSnapshot::DialogHistoryState &state = snapshot.dialogHistory[i];
+
+		state.lastPath = configuredState.lastPath;
+		for (const MRDialogHistoryEntry &entry : configuredState.pathHistory)
+			state.pathHistory.push_back(entry.value);
+		for (const MRDialogHistoryEntry &entry : configuredState.fileHistory)
+			state.fileHistory.push_back(entry.value);
+	}
+	configuredMultiFilespecHistoryEntries(snapshot.multiFilespecHistory);
+	configuredMultiPathHistoryEntries(snapshot.multiPathHistory);
+	return snapshot;
 }
 
 std::string executableDirectory() {
@@ -1454,21 +1986,6 @@ bool parseOtherColorListLiteral(const std::string &literal, std::array<unsigned 
 	return true;
 }
 
-std::string unescapeMrmacSingleQuotedLiteral(const std::string &value) {
-	std::string out;
-	out.reserve(value.size());
-	for (std::size_t i = 0; i < value.size(); ++i) {
-		char ch = value[i];
-		if (ch == '\'' && i + 1 < value.size() && value[i + 1] == '\'') {
-			out.push_back('\'');
-			++i;
-			continue;
-		}
-		out.push_back(ch);
-	}
-	return out;
-}
-
 bool parseThemeSetupAssignments(const std::string &source, std::map<std::string, std::string> &assignments, std::string *errorMessage) {
 	static const std::regex pattern("MRSETUP\\s*\\(\\s*'([^']+)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex_constants::ECMAScript | std::regex_constants::icase);
 	std::set<std::string> allowed = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS", "MINIMAPCOLORS", "CODECOLORS"};
@@ -1942,6 +2459,8 @@ bool parseBinaryRecordLengthLiteral(const std::string &value, int &outValue, std
 }
 
 } // namespace
+
+bool applyColorSetupValueInternal(MRColorSetupSettings &configured, const std::string &key, const std::string &value, std::string *errorMessage);
 
 int clampEditFormatTabSize(int tabSize) noexcept {
 	return std::max(2, std::min(tabSize, 32));
@@ -2707,6 +3226,7 @@ bool parseHistoryLimitLiteral(const std::string &value, int &outValue, std::stri
 bool setConfiguredPathHistoryLimitValue(int value, std::string *errorMessage);
 bool setConfiguredFileHistoryLimitValue(int value, std::string *errorMessage);
 bool setScopedDialogLastPath(MRDialogHistoryScope scope, const std::string &path, std::string *errorMessage);
+std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot);
 
 std::string normalizeConfiguredPathInput(std::string_view input) {
 	return makeAbsolutePath(normalizeDialogPath(expandUserPath(input).c_str()));
@@ -3253,6 +3773,638 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 	return setError(errorMessage, "Unsupported MRSETUP key.");
 }
 
+bool resetSettingsSnapshot(const std::string &settingsPath, MRSettingsSnapshot &snapshot, std::string *errorMessage) {
+	MRSetupPaths paths = resolveSetupPathDefaults();
+	std::string normalized;
+
+	snapshot = MRSettingsSnapshot();
+	snapshot.paths = paths;
+	normalized = normalizeConfiguredPathInput(settingsPath);
+	if (!validateSettingsMacroFilePath(normalized, errorMessage)) return false;
+	snapshot.paths.settingsMacroUri = makeAbsolutePath(normalized);
+	if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::SetupSettingsMacro, snapshot.paths.settingsMacroUri, errorMessage)) return false;
+	normalized = normalizeConfiguredPathInput(paths.macroPath);
+	if (!validateMacroDirectoryPath(paths.macroPath, errorMessage)) return false;
+	snapshot.paths.macroPath = makeAbsolutePath(normalized);
+	if (snapshot.dialogHistory[dialogHistoryScopeIndex(MRDialogHistoryScope::General)].pathHistory.empty() && isReadableDirectory(snapshot.paths.macroPath))
+		addHistoryEntry(snapshot.dialogHistory[dialogHistoryScopeIndex(MRDialogHistoryScope::General)].pathHistory, snapshot.paths.macroPath, snapshot.maxPathHistory);
+	normalized = normalizeConfiguredPathInput(paths.helpUri);
+	if (!validateHelpFilePath(paths.helpUri, errorMessage)) return false;
+	snapshot.paths.helpUri = makeAbsolutePath(normalized);
+	if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::SetupHelpFile, snapshot.paths.helpUri, errorMessage)) return false;
+	normalized = normalizeConfiguredPathInput(paths.tempPath);
+	if (!validateTempDirectoryPath(paths.tempPath, errorMessage)) return false;
+	snapshot.paths.tempPath = makeAbsolutePath(normalized);
+	normalized = normalizeConfiguredPathInput(paths.shellUri);
+	if (!validateShellExecutablePath(paths.shellUri, errorMessage)) return false;
+	snapshot.paths.shellUri = makeAbsolutePath(normalized);
+	if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::SetupShellExecutable, snapshot.paths.shellUri, errorMessage)) return false;
+	normalized = normalizeConfiguredPathInput(defaultLogFilePathForSettings(snapshot.paths.settingsMacroUri));
+	if (!validateLogFilePath(normalized, errorMessage)) return false;
+	snapshot.logFilePath = makeAbsolutePath(normalized);
+	if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::SetupLogFile, snapshot.logFilePath, errorMessage)) return false;
+	if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::General, snapshot.paths.macroPath, errorMessage)) return false;
+	snapshot.defaultProfileDescription = "Global defaults";
+	snapshot.editSettings = resolveEditSetupDefaults();
+	snapshot.colorSettings = defaultsFromColorGroups();
+	if (!setSnapshotEditProfiles(snapshot, std::vector<MREditExtensionProfile>(), errorMessage)) return false;
+	snapshot.keymapFilePath.clear();
+	normalized = normalizeConfiguredPathInput(defaultColorThemePathForSettings(snapshot.paths.settingsMacroUri));
+	if (!validateColorThemeFilePath(normalized, errorMessage)) return false;
+	snapshot.colorThemeFilePath = makeAbsolutePath(normalized);
+	if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::SetupThemeLoad, snapshot.colorThemeFilePath, errorMessage)) return false;
+	if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::SetupThemeSave, snapshot.colorThemeFilePath, errorMessage)) return false;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::string &key, const std::string &value, std::string *errorMessage) {
+	switch (classifySettingsKey(key)) {
+		case MRSettingsKeyClass::Unknown:
+			return setError(errorMessage, "Unsupported MRSETUP key.");
+		case MRSettingsKeyClass::Version:
+			if (trimAscii(value) != kCurrentSettingsVersion) return setError(errorMessage, "Unsupported settings version.");
+			if (errorMessage != nullptr) errorMessage->clear();
+			return true;
+		case MRSettingsKeyClass::Path: {
+			std::string upper = upperAscii(trimAscii(key));
+			if (upper == "SETTINGSPATH") {
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "MACROPATH") {
+				const std::string normalized = normalizeConfiguredPathInput(value);
+				MRSettingsSnapshot::DialogHistoryState &generalHistory = snapshot.dialogHistory[dialogHistoryScopeIndex(MRDialogHistoryScope::General)];
+
+				if (!validateMacroDirectoryPath(value, errorMessage)) return false;
+				snapshot.paths.macroPath = makeAbsolutePath(normalized);
+				if (generalHistory.pathHistory.empty() && isReadableDirectory(snapshot.paths.macroPath)) addHistoryEntry(generalHistory.pathHistory, snapshot.paths.macroPath, snapshot.maxPathHistory);
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "HELPPATH") {
+				const std::string normalized = normalizeConfiguredPathInput(value);
+
+				if (!validateHelpFilePath(value, errorMessage)) return false;
+				snapshot.paths.helpUri = makeAbsolutePath(normalized);
+				return setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::SetupHelpFile, snapshot.paths.helpUri, errorMessage);
+			}
+			if (upper == "TEMPDIR") {
+				const std::string normalized = normalizeConfiguredPathInput(value);
+
+				if (!validateTempDirectoryPath(value, errorMessage)) return false;
+				snapshot.paths.tempPath = makeAbsolutePath(normalized);
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "SHELLPATH") {
+				const std::string normalized = normalizeConfiguredPathInput(value);
+
+				if (!validateShellExecutablePath(value, errorMessage)) return false;
+				snapshot.paths.shellUri = makeAbsolutePath(normalized);
+				return setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::SetupShellExecutable, snapshot.paths.shellUri, errorMessage);
+			}
+			break;
+		}
+		case MRSettingsKeyClass::Global: {
+			std::string upper = upperAscii(trimAscii(key));
+			if (upper == "WINDOW_MANAGER") {
+				if (!parseBooleanLiteral(value, snapshot.windowManagerEnabled, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "MESSAGES") {
+				if (!parseBooleanLiteral(value, snapshot.menulineMessagesEnabled, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "SEARCH_TEXT_TYPE") {
+				if (!parseSearchTextTypeLiteral(value, snapshot.searchDialogOptions.textType, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "SEARCH_DIRECTION") {
+				if (!parseSearchDirectionLiteral(value, snapshot.searchDialogOptions.direction, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "SEARCH_MODE") {
+				if (!parseSearchModeLiteral(value, snapshot.searchDialogOptions.mode, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "SEARCH_CASE_SENSITIVE") {
+				if (!parseBooleanLiteral(value, snapshot.searchDialogOptions.caseSensitive, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "SEARCH_GLOBAL_SEARCH") {
+				if (!parseBooleanLiteral(value, snapshot.searchDialogOptions.globalSearch, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "SEARCH_RESTRICT_MARKED_BLOCK") {
+				if (!parseBooleanLiteral(value, snapshot.searchDialogOptions.restrictToMarkedBlock, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "SEARCH_ALL_WINDOWS") {
+				if (!parseBooleanLiteral(value, snapshot.searchDialogOptions.searchAllWindows, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "SEARCH_LIST_ALL_OCCURRENCES") {
+				bool listAll = false;
+				if (!parseBooleanLiteral(value, listAll, errorMessage)) return false;
+				snapshot.searchDialogOptions.mode = listAll ? MRSearchMode::ListAll : MRSearchMode::StopFirst;
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "SAR_TEXT_TYPE") {
+				if (!parseSearchTextTypeLiteral(value, snapshot.sarDialogOptions.textType, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "SAR_DIRECTION") {
+				if (!parseSearchDirectionLiteral(value, snapshot.sarDialogOptions.direction, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "SAR_MODE") {
+				if (!parseSarModeLiteral(value, snapshot.sarDialogOptions.mode, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "SAR_LEAVE_CURSOR_AT") {
+				if (!parseSarLeaveCursorLiteral(value, snapshot.sarDialogOptions.leaveCursorAt, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "SAR_CASE_SENSITIVE") {
+				if (!parseBooleanLiteral(value, snapshot.sarDialogOptions.caseSensitive, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "SAR_GLOBAL_SEARCH") {
+				if (!parseBooleanLiteral(value, snapshot.sarDialogOptions.globalSearch, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "SAR_RESTRICT_MARKED_BLOCK") {
+				if (!parseBooleanLiteral(value, snapshot.sarDialogOptions.restrictToMarkedBlock, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "SAR_ALL_WINDOWS") {
+				if (!parseBooleanLiteral(value, snapshot.sarDialogOptions.searchAllWindows, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "SAR_REPLACE_MODE") {
+				MRSarMode mode = MRSarMode::ReplaceFirst;
+				if (!parseSarModeLiteral(value, mode, errorMessage)) return false;
+				snapshot.sarDialogOptions.mode = mode == MRSarMode::ReplaceAll ? MRSarMode::ReplaceAll : MRSarMode::ReplaceFirst;
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "SAR_PROMPT_EACH_REPLACE") {
+				bool promptEach = false;
+				if (!parseBooleanLiteral(value, promptEach, errorMessage)) return false;
+				if (promptEach) snapshot.sarDialogOptions.mode = MRSarMode::PromptEach;
+				else if (snapshot.sarDialogOptions.mode == MRSarMode::PromptEach)
+					snapshot.sarDialogOptions.mode = MRSarMode::ReplaceFirst;
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "MULTI_SEARCH_FILESPEC") {
+				snapshot.multiSearchDialogOptions.filespec = trimAscii(value);
+				if (snapshot.multiSearchDialogOptions.filespec.empty()) snapshot.multiSearchDialogOptions.filespec = "*.*";
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "MULTI_SEARCH_TEXT") {
+				snapshot.multiSearchDialogOptions.searchText = value;
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "MULTI_SEARCH_STARTING_PATH") {
+				snapshot.multiSearchDialogOptions.startingPath = normalizeConfiguredPathInput(value);
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "MULTI_SEARCH_SUBDIRECTORIES") {
+				if (!parseBooleanLiteral(value, snapshot.multiSearchDialogOptions.searchSubdirectories, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "MULTI_SEARCH_CASE_SENSITIVE") {
+				if (!parseBooleanLiteral(value, snapshot.multiSearchDialogOptions.caseSensitive, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "MULTI_SEARCH_REGULAR_EXPRESSIONS") {
+				if (!parseBooleanLiteral(value, snapshot.multiSearchDialogOptions.regularExpressions, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "MULTI_SEARCH_FILES_IN_MEMORY") {
+				if (!parseBooleanLiteral(value, snapshot.multiSearchDialogOptions.searchFilesInMemory, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "MULTI_SAR_FILESPEC") {
+				snapshot.multiSarDialogOptions.filespec = trimAscii(value);
+				if (snapshot.multiSarDialogOptions.filespec.empty()) snapshot.multiSarDialogOptions.filespec = "*.*";
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "MULTI_SAR_TEXT") {
+				snapshot.multiSarDialogOptions.searchText = value;
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "MULTI_SAR_REPLACEMENT") {
+				snapshot.multiSarDialogOptions.replacementText = value;
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "MULTI_SAR_STARTING_PATH") {
+				snapshot.multiSarDialogOptions.startingPath = normalizeConfiguredPathInput(value);
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "MULTI_SAR_SUBDIRECTORIES") {
+				if (!parseBooleanLiteral(value, snapshot.multiSarDialogOptions.searchSubdirectories, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "MULTI_SAR_CASE_SENSITIVE") {
+				if (!parseBooleanLiteral(value, snapshot.multiSarDialogOptions.caseSensitive, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "MULTI_SAR_REGULAR_EXPRESSIONS") {
+				if (!parseBooleanLiteral(value, snapshot.multiSarDialogOptions.regularExpressions, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "MULTI_SAR_FILES_IN_MEMORY") {
+				if (!parseBooleanLiteral(value, snapshot.multiSarDialogOptions.searchFilesInMemory, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "MULTI_SAR_KEEP_FILES_OPEN") {
+				if (!parseBooleanLiteral(value, snapshot.multiSarDialogOptions.keepFilesOpen, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "VIRTUAL_DESKTOPS") {
+				int parsed = 1;
+				try {
+					parsed = std::stoi(value);
+				} catch (...) {
+					parsed = 1;
+				}
+				if (parsed < 1) parsed = 1;
+				if (parsed > 9) parsed = 9;
+				snapshot.virtualDesktops = parsed;
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "CYCLIC_VIRTUAL_DESKTOPS") {
+				if (!parseBooleanLiteral(value, snapshot.cyclicVirtualDesktops, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "CURSOR_BEHAVIOUR") {
+				if (!parseCursorBehaviourLiteral(value, snapshot.cursorBehaviour, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "CURSOR_POSITION_MARKER") return normalizeCursorPositionMarker(value, snapshot.cursorPositionMarker, errorMessage);
+			if (upper == "AUTOLOAD_WORKSPACE") {
+				if (!parseBooleanLiteral(value, snapshot.autoloadWorkspace, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "LOG_HANDLING") {
+				if (!parseLogHandlingLiteral(value, snapshot.logHandling, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "LOGFILE") {
+				const std::string normalized = normalizeConfiguredPathInput(value);
+
+				if (!validateLogFilePath(value, errorMessage)) return false;
+				snapshot.logFilePath = makeAbsolutePath(normalized);
+				return setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::SetupLogFile, snapshot.logFilePath, errorMessage);
+			}
+			if (upper == "AUTOEXEC_MACRO") {
+				const std::string normalized = normalizeAutoexecMacroEntry(value);
+				if (!validateAutoexecMacroEntry(normalized, errorMessage)) return false;
+				if (std::find(snapshot.autoexecMacros.begin(), snapshot.autoexecMacros.end(), normalized) == snapshot.autoexecMacros.end()) snapshot.autoexecMacros.push_back(normalized);
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "LASTFILEDIALOGPATH") return setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::General, value, errorMessage);
+			if (upper == "WORKSPACE") {
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "MAX_PATH_HISTORY") {
+				int parsed = 0;
+				if (!parseHistoryLimitLiteral(value, parsed, errorMessage, "MAX_PATH_HISTORY")) return false;
+				return setSnapshotPathHistoryLimit(snapshot, parsed, errorMessage);
+			}
+			if (upper == "MAX_FILE_HISTORY") {
+				int parsed = 0;
+				if (!parseHistoryLimitLiteral(value, parsed, errorMessage, "MAX_FILE_HISTORY")) return false;
+				return setSnapshotFileHistoryLimit(snapshot, parsed, errorMessage);
+			}
+			if (upper == "PATH_HISTORY") {
+				addSerializedHistoryEntry(snapshot.dialogHistory[dialogHistoryScopeIndex(MRDialogHistoryScope::General)].pathHistory, value, snapshot.maxPathHistory, true);
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "FILE_HISTORY") {
+				addSerializedHistoryEntry(snapshot.dialogHistory[dialogHistoryScopeIndex(MRDialogHistoryScope::General)].fileHistory, value, snapshot.maxFileHistory, true);
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == kDialogLastPathKey) {
+				MRDialogHistoryScope scope = MRDialogHistoryScope::General;
+				std::string parsedPath;
+
+				if (!parseScopedHistoryPayload(value, "path", scope, parsedPath, errorMessage)) return false;
+				return setSnapshotScopedDialogLastPath(snapshot, scope, parsedPath, errorMessage);
+			}
+			if (upper == kDialogPathHistoryKey) {
+				MRDialogHistoryScope scope = MRDialogHistoryScope::General;
+				std::string parsedValue;
+
+				if (!parseScopedHistoryPayload(value, "value", scope, parsedValue, errorMessage)) return false;
+				addSerializedHistoryEntry(snapshot.dialogHistory[dialogHistoryScopeIndex(scope)].pathHistory, parsedValue, snapshot.maxPathHistory, true);
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == kDialogFileHistoryKey) {
+				MRDialogHistoryScope scope = MRDialogHistoryScope::General;
+				std::string parsedValue;
+
+				if (!parseScopedHistoryPayload(value, "value", scope, parsedValue, errorMessage)) return false;
+				addSerializedHistoryEntry(snapshot.dialogHistory[dialogHistoryScopeIndex(scope)].fileHistory, parsedValue, snapshot.maxFileHistory, true);
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "MULTI_FILESPEC_HISTORY") {
+				addSerializedHistoryEntry(snapshot.multiFilespecHistory, value, snapshot.maxFileHistory, false);
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "MULTI_PATH_HISTORY") {
+				addSerializedHistoryEntry(snapshot.multiPathHistory, value, snapshot.maxPathHistory, true);
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "DEFAULT_PROFILE_DESCRIPTION") {
+				snapshot.defaultProfileDescription = trimAscii(value);
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == kKeymapSettingsKey) {
+				const std::string normalized = normalizeConfiguredPathInput(value);
+				struct stat st;
+
+				if (normalized.empty()) {
+					snapshot.keymapFilePath.clear();
+					if (errorMessage != nullptr) errorMessage->clear();
+					return true;
+				}
+				if (::stat(normalized.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) return setError(errorMessage, "Keymap URI must include a filename.");
+				snapshot.keymapFilePath = makeAbsolutePath(normalized);
+				if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::KeymapProfileLoad, snapshot.keymapFilePath, errorMessage)) return false;
+				return setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::KeymapProfileSave, snapshot.keymapFilePath, errorMessage);
+			}
+			if (upper == "ACTIVE_KEYMAP_PROFILE" || upper == "KEYMAP_PROFILE" || upper == "KEYMAP_BIND") {
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == kThemeSettingsKey) {
+				const std::string normalized = normalizeConfiguredPathInput(value);
+
+				if (!validateColorThemeFilePath(value, errorMessage)) return false;
+				snapshot.colorThemeFilePath = makeAbsolutePath(normalized);
+				if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::SetupThemeLoad, snapshot.colorThemeFilePath, errorMessage)) return false;
+				return setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::SetupThemeSave, snapshot.colorThemeFilePath, errorMessage);
+			}
+			break;
+		}
+		case MRSettingsKeyClass::Edit:
+			return applyEditSetupValueInternal(snapshot.editSettings, key, value, errorMessage);
+		case MRSettingsKeyClass::ColorInline:
+			return applyColorSetupValueInternal(snapshot.colorSettings, key, value, errorMessage);
+	}
+	return setError(errorMessage, "Unsupported MRSETUP key.");
+}
+
+bool applySettingsSnapshotEditExtensionProfileDirective(MRSettingsSnapshot &snapshot, const std::string &operation, const std::string &profileId, const std::string &arg3, const std::string &arg4, std::string *errorMessage) {
+	std::string op = upperAscii(trimAscii(operation));
+	std::string id = canonicalEditProfileId(profileId);
+	std::vector<MREditExtensionProfile> profiles = snapshot.editProfiles;
+	MREditExtensionProfile *profile = nullptr;
+
+	if (op.empty()) return setError(errorMessage, "MRFEPROFILE operation may not be empty.");
+	if (id.empty()) return setError(errorMessage, "MRFEPROFILE profile id may not be empty.");
+	for (std::size_t i = 0; i < profiles.size(); ++i)
+		if (profileIdLookupKey(profiles[i].id) == profileIdLookupKey(id)) {
+			profile = &profiles[i];
+			break;
+		}
+	if (op == "DEFINE") {
+		std::string name = canonicalEditProfileName(arg3);
+
+		if (name.empty() && trimAscii(arg4).empty()) name = id;
+		if (name.empty()) return setError(errorMessage, "MRFEPROFILE DEFINE requires a non-empty display name.");
+		if (profile != nullptr) return setError(errorMessage, "Duplicate extension profile id: " + id);
+		MREditExtensionProfile created;
+		created.id = id;
+		created.name = name;
+		created.overrides.values = resolveEditSetupDefaults();
+		profiles.push_back(created);
+		return setSnapshotEditProfiles(snapshot, profiles, errorMessage);
+	}
+	if (profile == nullptr) return setError(errorMessage, "Unknown extension profile id: " + id);
+	if (op == "EXT") {
+		profile->extensions.push_back(arg3);
+		return setSnapshotEditProfiles(snapshot, profiles, errorMessage);
+	}
+	if (op == "SET") {
+		if (upperAscii(trimAscii(arg3)) == kWindowColorThemeProfileKey) {
+			std::string normalizedTheme = canonicalWindowColorThemeUri(arg4);
+			if (!normalizedTheme.empty() && !validateColorThemeFilePath(normalizedTheme, errorMessage)) return false;
+			profile->windowColorThemeUri = normalizedTheme;
+			return setSnapshotEditProfiles(snapshot, profiles, errorMessage);
+		}
+		const MREditSettingDescriptor *descriptor = editSettingDescriptorByKeyInternal(arg3);
+
+		if (descriptor == nullptr) return setError(errorMessage, "Unknown edit setting key for extension profile.");
+		if (!descriptor->profileSupported) return setError(errorMessage, std::string("Setting is global-only and cannot be overridden: ") + descriptor->key);
+		if (!applyEditSetupValueInternal(profile->overrides.values, descriptor->key, arg4, errorMessage)) return false;
+		profile->overrides.mask |= descriptor->overrideBit;
+		return setSnapshotEditProfiles(snapshot, profiles, errorMessage);
+	}
+	return setError(errorMessage, "MRFEPROFILE supports operations DEFINE, EXT and SET.");
+}
+
+bool loadColorThemeFileIntoSettingsSnapshot(MRSettingsSnapshot &snapshot, std::string *errorMessage) {
+	std::string normalized = normalizeConfiguredPathInput(snapshot.colorThemeFilePath);
+	std::string source;
+	std::map<std::string, std::string> assignments;
+	static const char *const order[] = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS", "MINIMAPCOLORS", "CODECOLORS"};
+
+	if (!validateColorThemeFilePath(normalized, errorMessage)) return false;
+	if (!ensureColorThemeFileExists(normalized, errorMessage)) return false;
+	if (!readTextFile(normalized, source)) return setError(errorMessage, "Unable to read color theme file: " + normalized);
+	if (!parseThemeSetupAssignments(source, assignments, errorMessage)) return false;
+	for (const char *key : order) {
+		std::string applyError;
+		if (!applyColorSetupValueInternal(snapshot.colorSettings, key, assignments[key], &applyError)) return setError(errorMessage, "Theme apply failed for " + std::string(key) + ": " + applyError);
+	}
+	snapshot.colorThemeFilePath = makeAbsolutePath(normalized);
+	if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::SetupThemeLoad, snapshot.colorThemeFilePath, errorMessage)) return false;
+	if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::SetupThemeSave, snapshot.colorThemeFilePath, errorMessage)) return false;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+// This is a staging/verification/canonicalization pass. It builds a transient
+// settings snapshot while reading, normalizing and defaulting settings, but it
+// is not the final bootstrap apply contract.
+static bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::string &source, MRSettingsSnapshot &snapshot, MRSettingsLoadReport *report, std::string *errorMessage) {
+	MRSettingsLoadReport localReport;
+	MRSettingsLoadReport &activeReport = report != nullptr ? *report : localReport;
+	MRParsedSettingsDocument document = parseSettingsDocument(source, false);
+	std::set<std::string> canonicalKeysSeen;
+	std::string activeSettingsPath = normalizeConfiguredPathInput(settingsPath);
+	std::string applyError;
+	std::string themeError;
+
+	activeReport = MRSettingsLoadReport();
+	if (countLegacyFeProfileDirectives(source) != 0) markFlag(activeReport, MRSettingsLoadReport::ObsoleteFeProfileDropped);
+	if (!resetSettingsSnapshot(activeSettingsPath, snapshot, errorMessage)) return false;
+
+	for (const MRParsedSettingsAssignment &assignment : document.assignments) {
+		MRSettingsKeyClass keyClass = classifySettingsKey(assignment.key);
+
+		if (keyClass == MRSettingsKeyClass::Unknown) {
+			markFlag(activeReport, MRSettingsLoadReport::UnknownKeyDropped);
+			++activeReport.ignoredAssignmentCount;
+			continue;
+		}
+		if (isCanonicalSerializedSettingsKey(assignment.key) && !canonicalKeysSeen.insert(assignment.key).second) {
+			markFlag(activeReport, MRSettingsLoadReport::DuplicateKeySeen);
+			++activeReport.duplicateAssignmentCount;
+		}
+		if (keyClass == MRSettingsKeyClass::ColorInline) markFlag(activeReport, MRSettingsLoadReport::LegacyInlineColorsSeen);
+		if (assignment.key == "SETTINGSPATH" && normalizeConfiguredPathInput(assignment.value) != activeSettingsPath) markFlag(activeReport, MRSettingsLoadReport::AnchoredSettingsPath);
+		if (!applySettingsSnapshotAssignment(snapshot, assignment.key, assignment.value, &applyError)) {
+			markFlag(activeReport, MRSettingsLoadReport::InvalidValueReset);
+			++activeReport.ignoredAssignmentCount;
+			continue;
+		}
+		++activeReport.appliedAssignmentCount;
+	}
+
+	for (const MRParsedEditProfileDirective &directive : document.profileDirectives)
+		if (!applySettingsSnapshotEditExtensionProfileDirective(snapshot, directive.operation, directive.profileId, directive.arg3, directive.arg4, errorMessage)) return false;
+
+	{
+		MRKeymapLoadResult keymapLoad = loadKeymapProfilesFromSettingsSource(source);
+		const std::string diagnosticSummary = summarizeKeymapDiagnosticsForMessageLine(keymapLoad.diagnostics, "Keymap bootstrap");
+		std::set<std::string> loggedDiagnostics;
+
+		mrLogMessage(summarizeKeymapLoadForLog(keymapLoad));
+		for (const MRKeymapDiagnostic &diagnostic : keymapLoad.diagnostics) {
+			if (!loggedDiagnostics.insert(keymapDiagnosticIdentity(diagnostic)).second) continue;
+			mrLogMessage("Keymap bootstrap diagnostic [" + std::string(keymapDiagnosticSeverityName(diagnostic.severity)) + "]: " + describeKeymapDiagnostic(keymapLoad.profiles, diagnostic));
+		}
+		if (!diagnosticSummary.empty()) mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEventFollowup, diagnosticSummary, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
+		if (keymapLoad.profiles.empty()) keymapLoad.profiles.push_back(builtInDefaultKeymapProfile());
+		if (keymapLoad.activeProfileName.empty()) keymapLoad.activeProfileName = "DEFAULT";
+		if (std::ranges::find(keymapLoad.profiles, keymapLoad.activeProfileName, &MRKeymapProfile::name) == keymapLoad.profiles.end()) keymapLoad.activeProfileName = "DEFAULT";
+		if (keymapLoad.activeProfileName.empty() || std::ranges::find(keymapLoad.profiles, keymapLoad.activeProfileName, &MRKeymapProfile::name) == keymapLoad.profiles.end()) {
+			mrLogMessage("Keymap bootstrap canonicalized result could not be applied; falling back to DEFAULT.");
+			markFlag(activeReport, MRSettingsLoadReport::InvalidValueReset);
+			snapshot.keymapProfiles = std::vector<MRKeymapProfile>{builtInDefaultKeymapProfile()};
+			snapshot.activeKeymapProfile = "DEFAULT";
+		} else {
+			snapshot.keymapProfiles = std::move(keymapLoad.profiles);
+			snapshot.activeKeymapProfile = std::move(keymapLoad.activeProfileName);
+			mrLogMessage("Keymap bootstrap applied canonicalized result.");
+		}
+	}
+
+	if (canonicalKeysSeen.size() < canonicalSerializedSettingsKeyCount()) {
+		activeReport.defaultedCanonicalKeyCount = canonicalSerializedSettingsKeyCount() - canonicalKeysSeen.size();
+		markFlag(activeReport, MRSettingsLoadReport::MissingCanonicalKeyDefaulted);
+	}
+
+	if (!loadColorThemeFileIntoSettingsSnapshot(snapshot, &themeError)) {
+		markFlag(activeReport, MRSettingsLoadReport::ThemeFallbackUsed);
+		mrLogMessage("Settings normalization retained staged color setup after theme load failure: " + snapshot.colorThemeFilePath + " (" + themeError + ")");
+	}
+
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool buildCanonicalSettingsSource(const std::string &settingsPath, const std::string &source, MRSettingsLoadReport *report, std::string &canonicalSource, std::string *errorMessage) {
+	MRSettingsSnapshot snapshot;
+	std::string normalizedPath = normalizeConfiguredPathInput(settingsPath);
+
+	if (!loadAndNormalizeSettingsSource(normalizedPath, source, snapshot, report, errorMessage)) return false;
+	canonicalSource = buildSettingsMacroSource(snapshot);
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool prepareStartupSettingsSource(const std::string &settingsPath, const std::string &source, MRSettingsLoadReport *report, std::string &canonicalSource, std::string *errorMessage) {
+	MRSettingsLoadReport localReport;
+	MRSettingsLoadReport &activeReport = report != nullptr ? *report : localReport;
+	MRSettingsSnapshot snapshot;
+	std::string normalizedPath = normalizeConfiguredPathInput(settingsPath);
+	std::string rewriteError;
+	std::string summary;
+
+	activeReport = MRSettingsLoadReport();
+	if (!loadAndNormalizeSettingsSource(normalizedPath, source, snapshot, &activeReport, errorMessage)) return false;
+	canonicalSource = buildSettingsMacroSource(snapshot);
+	if (!activeReport.normalized()) {
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	if (!writeNormalizedBootstrapFiles(snapshot, source, canonicalSource, &rewriteError)) {
+		if (errorMessage != nullptr) *errorMessage = "Settings rewrite failed: " + rewriteError;
+		return false;
+	}
+	summary = describeSettingsLoadReport(activeReport);
+	mrLogMessage(("Settings normalized: " + normalizedPath).c_str());
+	if (!summary.empty()) mrLogMessage(("Settings normalization details: " + summary).c_str());
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+std::string describeSettingsLoadReport(const MRSettingsLoadReport &report) {
+	std::vector<std::string> parts;
+	std::string text;
+
+	if (hasFlag(report, MRSettingsLoadReport::UnknownKeyDropped)) parts.emplace_back("unknown keys dropped");
+	if (hasFlag(report, MRSettingsLoadReport::DuplicateKeySeen)) parts.emplace_back("duplicates resolved");
+	if (hasFlag(report, MRSettingsLoadReport::InvalidValueReset)) parts.emplace_back("invalid values reset to defaults");
+	if (hasFlag(report, MRSettingsLoadReport::MissingCanonicalKeyDefaulted)) parts.emplace_back("missing canonical keys defaulted");
+	if (hasFlag(report, MRSettingsLoadReport::LegacyInlineColorsSeen)) parts.emplace_back("legacy inline colors normalized");
+	if (hasFlag(report, MRSettingsLoadReport::ThemeFallbackUsed)) parts.emplace_back("theme fallback applied");
+	if (hasFlag(report, MRSettingsLoadReport::AnchoredSettingsPath)) parts.emplace_back("settings path anchored to active file");
+	if (hasFlag(report, MRSettingsLoadReport::ObsoleteFeProfileDropped)) parts.emplace_back("obsolete MREDITPROFILE directives dropped; FE profile defaults restored");
+	if (parts.empty()) return std::string();
+	for (std::size_t i = 0; i < parts.size(); ++i) {
+		if (i != 0) text += "; ";
+		text += parts[i];
+	}
+	return text;
+}
+
+bool diffSettingsSources(const std::string &beforeSource, const std::string &afterSource, std::vector<MRSettingsChangeEntry> &changes, std::string *errorMessage) {
+	const MRFlattenedSettingsDocument before = flattenSettingsDocument(parseSettingsDocument(beforeSource, true));
+	const MRFlattenedSettingsDocument after = flattenSettingsDocument(parseSettingsDocument(afterSource, true));
+
+	changes.clear();
+	diffFlattenedDocuments(before, after, changes);
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+std::string formatSettingsChangeForLog(const MRSettingsChangeEntry &change) {
+	std::string text = change.scope + " ";
+
+	if (change.kind == MRSettingsChangeEntry::Kind::Added) text += "+ " + change.key + " = " + quoteValue(change.newValue);
+	else if (change.kind == MRSettingsChangeEntry::Kind::Removed)
+		text += "- " + change.key + " (was " + quoteValue(change.oldValue) + ")";
+	else
+		text += change.key + ": " + quoteValue(change.oldValue) + " -> " + quoteValue(change.newValue);
+	return text;
+}
+
 const MREditSettingDescriptor *editSettingDescriptors(std::size_t &count) {
 	count = std::size(kEditSettingDescriptors);
 	return kEditSettingDescriptors;
@@ -3792,8 +4944,7 @@ std::string configuredColorThemeDisplayName() {
 	return name;
 }
 
-std::string buildColorThemeMacroSource() {
-	MRColorSetupSettings colors = configuredColorSetupSettings();
+std::string buildColorThemeMacroSource(const MRColorSetupSettings &colors) {
 	std::string source;
 
 	source += "$MACRO MR_COLOR_THEME FROM EDIT;\n";
@@ -3814,7 +4965,7 @@ bool writeColorThemeFile(const std::string &themeUri, std::string *errorMessage)
 
 	if (!validateColorThemeFilePath(themePath, errorMessage)) return false;
 	if (!ensureDirectoryTree(themeDir, errorMessage)) return false;
-	source = buildColorThemeMacroSource();
+	source = buildColorThemeMacroSource(configuredColorSetupSettings());
 	if (!writeTextFile(themePath, source)) return setError(errorMessage, "Unable to write color theme file: " + themePath);
 	if (!setConfiguredColorThemeFilePath(themePath, errorMessage)) return false;
 	if (errorMessage != nullptr) errorMessage->clear();
@@ -3823,15 +4974,19 @@ bool writeColorThemeFile(const std::string &themeUri, std::string *errorMessage)
 
 bool ensureColorThemeFileExists(const std::string &themeUri, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(themeUri);
+	std::string themeDir = directoryPartOf(normalized);
 	struct stat st;
 
 	if (!validateColorThemeFilePath(normalized, errorMessage)) return false;
 	if (::stat(normalized.c_str(), &st) == 0) {
 		if (S_ISDIR(st.st_mode)) return setError(errorMessage, "Color theme URI must include a filename.");
 		if (errorMessage != nullptr) errorMessage->clear();
-		return true;
+			return true;
 	}
-	return writeColorThemeFile(normalized, errorMessage);
+	if (!ensureDirectoryTree(themeDir, errorMessage)) return false;
+	if (!writeTextFile(normalized, buildColorThemeMacroSource(resolveColorSetupDefaults()))) return setError(errorMessage, "Unable to write color theme file: " + normalized);
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
 }
 
 bool loadColorThemeFile(const std::string &themeUri, std::string *errorMessage) {
@@ -3886,13 +5041,10 @@ const MRColorSetupItem *colorSetupGroupItems(MRColorSetupGroup group, std::size_
 	return definition->items;
 }
 
-bool applyConfiguredColorSetupValue(const std::string &key, const std::string &value, std::string *errorMessage) {
+bool applyColorSetupValueInternal(MRColorSetupSettings &configured, const std::string &key, const std::string &value, std::string *errorMessage) {
 	const ColorGroupDefinition *definition = findColorGroupDefinitionByKey(key);
-	MRColorSetupSettings configured = configuredColorSetupSettings();
-	const MRColorSetupSettings previous = configured;
 
 	if (definition == nullptr) return setError(errorMessage, "Unknown color setup key.");
-
 	switch (definition->group) {
 		case MRColorSetupGroup::Window:
 			if (!parseWindowColorListLiteral(value, configured.windowColors, errorMessage)) return false;
@@ -3913,6 +5065,15 @@ bool applyConfiguredColorSetupValue(const std::string &key, const std::string &v
 			if (!parseColorListLiteral(value, configured.codeColors, errorMessage)) return false;
 			break;
 	}
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool applyConfiguredColorSetupValue(const std::string &key, const std::string &value, std::string *errorMessage) {
+	MRColorSetupSettings configured = configuredColorSetupSettings();
+	const MRColorSetupSettings previous = configured;
+
+	if (!applyColorSetupValueInternal(configured, key, value, errorMessage)) return false;
 
 	configuredColorSettings() = configured;
 	configuredColorSettingsInitialized() = true;
@@ -4470,25 +5631,18 @@ std::string configuredLastFileDialogPath() {
 	return effectiveRememberedLoadDirectory(MRDialogHistoryScope::General);
 }
 
-std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
-	std::string settingsPath = normalizeConfiguredPathInput(paths.settingsMacroUri);
-	std::string macroDir = normalizeConfiguredPathInput(paths.macroPath);
-	std::string helpPath = normalizeConfiguredPathInput(paths.helpUri);
-	std::string tempDir = normalizeConfiguredPathInput(paths.tempPath);
-	std::string shellPath = normalizeConfiguredPathInput(paths.shellUri);
-	std::string themePath = configuredColorThemeFile().empty() ? defaultColorThemePathForSettings(settingsPath) : configuredColorThemeFilePath();
-	MREditSetupSettings edit = configuredEditSetupSettings();
+std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
+	std::string settingsPath = normalizeConfiguredPathInput(snapshot.paths.settingsMacroUri);
+	std::string macroDir = normalizeConfiguredPathInput(snapshot.paths.macroPath);
+	std::string helpPath = normalizeConfiguredPathInput(snapshot.paths.helpUri);
+	std::string tempDir = normalizeConfiguredPathInput(snapshot.paths.tempPath);
+	std::string shellPath = normalizeConfiguredPathInput(snapshot.paths.shellUri);
+	std::string themePath = snapshot.colorThemeFilePath.empty() ? defaultColorThemePathForSettings(settingsPath) : normalizeConfiguredPathInput(snapshot.colorThemeFilePath);
+	const MREditSetupSettings &edit = snapshot.editSettings;
 	std::string source;
-	std::vector<std::string> multiFilespecHistory;
-	std::vector<std::string> multiPathHistory;
-	std::vector<std::string> autoexecMacros;
 	std::size_t descriptorCount = 0;
 	const MREditSettingDescriptor *descriptors = editSettingDescriptors(descriptorCount);
 
-	themePath = normalizeConfiguredPathInput(themePath);
-	configuredMultiFilespecHistoryEntries(multiFilespecHistory);
-	configuredMultiPathHistoryEntries(multiPathHistory);
-	configuredAutoexecMacroEntries(autoexecMacros);
 	source += "$MACRO MR_SETTINGS FROM EDIT;\n";
 	source += "MRSETUP('" + std::string(kSettingsVersionKey) + "', '" + escapeMrmacSingleQuotedLiteral(kCurrentSettingsVersion) + "');\n";
 	source += "MRSETUP('SETTINGSPATH', '" + escapeMrmacSingleQuotedLiteral(settingsPath) + "');\n";
@@ -4496,64 +5650,64 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source += "MRSETUP('HELPPATH', '" + escapeMrmacSingleQuotedLiteral(helpPath) + "');\n";
 	source += "MRSETUP('TEMPDIR', '" + escapeMrmacSingleQuotedLiteral(tempDir) + "');\n";
 	source += "MRSETUP('SHELLPATH', '" + escapeMrmacSingleQuotedLiteral(shellPath) + "');\n";
-	source += "MRSETUP('WINDOW_MANAGER', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredWindowManager())) + "');\n";
-	source += "MRSETUP('MESSAGES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMenulineMessages())) + "');\n";
-	source += "MRSETUP('SEARCH_TEXT_TYPE', '" + escapeMrmacSingleQuotedLiteral(formatSearchTextType(configuredSearchDialogOptions().textType)) + "');\n";
-	source += "MRSETUP('SEARCH_DIRECTION', '" + escapeMrmacSingleQuotedLiteral(formatSearchDirection(configuredSearchDialogOptions().direction)) + "');\n";
-	source += "MRSETUP('SEARCH_MODE', '" + escapeMrmacSingleQuotedLiteral(formatSearchMode(configuredSearchDialogOptions().mode)) + "');\n";
-	source += "MRSETUP('SEARCH_CASE_SENSITIVE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredSearchDialogOptions().caseSensitive)) + "');\n";
-	source += "MRSETUP('SEARCH_GLOBAL_SEARCH', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredSearchDialogOptions().globalSearch)) + "');\n";
-	source += "MRSETUP('SEARCH_RESTRICT_MARKED_BLOCK', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredSearchDialogOptions().restrictToMarkedBlock)) + "');\n";
-	source += "MRSETUP('SEARCH_ALL_WINDOWS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredSearchDialogOptions().searchAllWindows)) + "');\n";
-	source += "MRSETUP('SAR_TEXT_TYPE', '" + escapeMrmacSingleQuotedLiteral(formatSearchTextType(configuredSarDialogOptions().textType)) + "');\n";
-	source += "MRSETUP('SAR_DIRECTION', '" + escapeMrmacSingleQuotedLiteral(formatSearchDirection(configuredSarDialogOptions().direction)) + "');\n";
-	source += "MRSETUP('SAR_MODE', '" + escapeMrmacSingleQuotedLiteral(formatSarMode(configuredSarDialogOptions().mode)) + "');\n";
-	source += "MRSETUP('SAR_LEAVE_CURSOR_AT', '" + escapeMrmacSingleQuotedLiteral(formatSarLeaveCursor(configuredSarDialogOptions().leaveCursorAt)) + "');\n";
-	source += "MRSETUP('SAR_CASE_SENSITIVE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredSarDialogOptions().caseSensitive)) + "');\n";
-	source += "MRSETUP('SAR_GLOBAL_SEARCH', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredSarDialogOptions().globalSearch)) + "');\n";
-	source += "MRSETUP('SAR_RESTRICT_MARKED_BLOCK', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredSarDialogOptions().restrictToMarkedBlock)) + "');\n";
-	source += "MRSETUP('SAR_ALL_WINDOWS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredSarDialogOptions().searchAllWindows)) + "');\n";
-	source += "MRSETUP('MULTI_SEARCH_FILESPEC', '" + escapeMrmacSingleQuotedLiteral(configuredMultiSearchDialogOptions().filespec) + "');\n";
-	source += "MRSETUP('MULTI_SEARCH_TEXT', '" + escapeMrmacSingleQuotedLiteral(configuredMultiSearchDialogOptions().searchText) + "');\n";
-	source += "MRSETUP('MULTI_SEARCH_STARTING_PATH', '" + escapeMrmacSingleQuotedLiteral(normalizeConfiguredPathInput(configuredMultiSearchDialogOptions().startingPath)) + "');\n";
-	source += "MRSETUP('MULTI_SEARCH_SUBDIRECTORIES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMultiSearchDialogOptions().searchSubdirectories)) + "');\n";
-	source += "MRSETUP('MULTI_SEARCH_CASE_SENSITIVE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMultiSearchDialogOptions().caseSensitive)) + "');\n";
-	source += "MRSETUP('MULTI_SEARCH_REGULAR_EXPRESSIONS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMultiSearchDialogOptions().regularExpressions)) + "');\n";
-	source += "MRSETUP('MULTI_SEARCH_FILES_IN_MEMORY', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMultiSearchDialogOptions().searchFilesInMemory)) + "');\n";
-	source += "MRSETUP('MULTI_SAR_FILESPEC', '" + escapeMrmacSingleQuotedLiteral(configuredMultiSarDialogOptions().filespec) + "');\n";
-	source += "MRSETUP('MULTI_SAR_TEXT', '" + escapeMrmacSingleQuotedLiteral(configuredMultiSarDialogOptions().searchText) + "');\n";
-	source += "MRSETUP('MULTI_SAR_REPLACEMENT', '" + escapeMrmacSingleQuotedLiteral(configuredMultiSarDialogOptions().replacementText) + "');\n";
-	source += "MRSETUP('MULTI_SAR_STARTING_PATH', '" + escapeMrmacSingleQuotedLiteral(normalizeConfiguredPathInput(configuredMultiSarDialogOptions().startingPath)) + "');\n";
-	source += "MRSETUP('MULTI_SAR_SUBDIRECTORIES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMultiSarDialogOptions().searchSubdirectories)) + "');\n";
-	source += "MRSETUP('MULTI_SAR_CASE_SENSITIVE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMultiSarDialogOptions().caseSensitive)) + "');\n";
-	source += "MRSETUP('MULTI_SAR_REGULAR_EXPRESSIONS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMultiSarDialogOptions().regularExpressions)) + "');\n";
-	source += "MRSETUP('MULTI_SAR_FILES_IN_MEMORY', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMultiSarDialogOptions().searchFilesInMemory)) + "');\n";
-	source += "MRSETUP('MULTI_SAR_KEEP_FILES_OPEN', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredMultiSarDialogOptions().keepFilesOpen)) + "');\n";
-	source += "MRSETUP('VIRTUAL_DESKTOPS', '" + std::to_string(configuredVirtualDesktops()) + "');\n";
-	source += "MRSETUP('CYCLIC_VIRTUAL_DESKTOPS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredCyclicVirtualDesktops())) + "');\n";
-	source += "MRSETUP('CURSOR_BEHAVIOUR', '" + escapeMrmacSingleQuotedLiteral(formatCursorBehaviourLiteral(configuredCursorBehaviour())) + "');\n";
-	source += "MRSETUP('CURSOR_POSITION_MARKER', '" + escapeMrmacSingleQuotedLiteral(configuredCursorPositionMarker()) + "');\n";
-	source += "MRSETUP('AUTOLOAD_WORKSPACE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(configuredAutoloadWorkspace())) + "');\n";
-	source += "MRSETUP('LOG_HANDLING', '" + escapeMrmacSingleQuotedLiteral(formatLogHandlingLiteral(configuredLogHandling())) + "');\n";
-	source += "MRSETUP('LOGFILE', '" + escapeMrmacSingleQuotedLiteral(configuredLogFilePath()) + "');\n";
-	for (const std::string &autoexecMacro : autoexecMacros)
-		source += "MRSETUP('AUTOEXEC_MACRO', '" + escapeMrmacSingleQuotedLiteral(autoexecMacro) + "');\n";
-	source += "MRSETUP('MAX_PATH_HISTORY', '" + std::to_string(configuredMaxPathHistory()) + "');\n";
-	source += "MRSETUP('MAX_FILE_HISTORY', '" + std::to_string(configuredMaxFileHistory()) + "');\n";
+	source += "MRSETUP('WINDOW_MANAGER', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.windowManagerEnabled)) + "');\n";
+	source += "MRSETUP('MESSAGES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.menulineMessagesEnabled)) + "');\n";
+	source += "MRSETUP('SEARCH_TEXT_TYPE', '" + escapeMrmacSingleQuotedLiteral(formatSearchTextType(snapshot.searchDialogOptions.textType)) + "');\n";
+	source += "MRSETUP('SEARCH_DIRECTION', '" + escapeMrmacSingleQuotedLiteral(formatSearchDirection(snapshot.searchDialogOptions.direction)) + "');\n";
+	source += "MRSETUP('SEARCH_MODE', '" + escapeMrmacSingleQuotedLiteral(formatSearchMode(snapshot.searchDialogOptions.mode)) + "');\n";
+	source += "MRSETUP('SEARCH_CASE_SENSITIVE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.searchDialogOptions.caseSensitive)) + "');\n";
+	source += "MRSETUP('SEARCH_GLOBAL_SEARCH', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.searchDialogOptions.globalSearch)) + "');\n";
+	source += "MRSETUP('SEARCH_RESTRICT_MARKED_BLOCK', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.searchDialogOptions.restrictToMarkedBlock)) + "');\n";
+	source += "MRSETUP('SEARCH_ALL_WINDOWS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.searchDialogOptions.searchAllWindows)) + "');\n";
+	source += "MRSETUP('SAR_TEXT_TYPE', '" + escapeMrmacSingleQuotedLiteral(formatSearchTextType(snapshot.sarDialogOptions.textType)) + "');\n";
+	source += "MRSETUP('SAR_DIRECTION', '" + escapeMrmacSingleQuotedLiteral(formatSearchDirection(snapshot.sarDialogOptions.direction)) + "');\n";
+	source += "MRSETUP('SAR_MODE', '" + escapeMrmacSingleQuotedLiteral(formatSarMode(snapshot.sarDialogOptions.mode)) + "');\n";
+	source += "MRSETUP('SAR_LEAVE_CURSOR_AT', '" + escapeMrmacSingleQuotedLiteral(formatSarLeaveCursor(snapshot.sarDialogOptions.leaveCursorAt)) + "');\n";
+	source += "MRSETUP('SAR_CASE_SENSITIVE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.sarDialogOptions.caseSensitive)) + "');\n";
+	source += "MRSETUP('SAR_GLOBAL_SEARCH', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.sarDialogOptions.globalSearch)) + "');\n";
+	source += "MRSETUP('SAR_RESTRICT_MARKED_BLOCK', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.sarDialogOptions.restrictToMarkedBlock)) + "');\n";
+	source += "MRSETUP('SAR_ALL_WINDOWS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.sarDialogOptions.searchAllWindows)) + "');\n";
+	source += "MRSETUP('MULTI_SEARCH_FILESPEC', '" + escapeMrmacSingleQuotedLiteral(snapshot.multiSearchDialogOptions.filespec) + "');\n";
+	source += "MRSETUP('MULTI_SEARCH_TEXT', '" + escapeMrmacSingleQuotedLiteral(snapshot.multiSearchDialogOptions.searchText) + "');\n";
+	source += "MRSETUP('MULTI_SEARCH_STARTING_PATH', '" + escapeMrmacSingleQuotedLiteral(normalizeConfiguredPathInput(snapshot.multiSearchDialogOptions.startingPath)) + "');\n";
+	source += "MRSETUP('MULTI_SEARCH_SUBDIRECTORIES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSearchDialogOptions.searchSubdirectories)) + "');\n";
+	source += "MRSETUP('MULTI_SEARCH_CASE_SENSITIVE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSearchDialogOptions.caseSensitive)) + "');\n";
+	source += "MRSETUP('MULTI_SEARCH_REGULAR_EXPRESSIONS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSearchDialogOptions.regularExpressions)) + "');\n";
+	source += "MRSETUP('MULTI_SEARCH_FILES_IN_MEMORY', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSearchDialogOptions.searchFilesInMemory)) + "');\n";
+	source += "MRSETUP('MULTI_SAR_FILESPEC', '" + escapeMrmacSingleQuotedLiteral(snapshot.multiSarDialogOptions.filespec) + "');\n";
+	source += "MRSETUP('MULTI_SAR_TEXT', '" + escapeMrmacSingleQuotedLiteral(snapshot.multiSarDialogOptions.searchText) + "');\n";
+	source += "MRSETUP('MULTI_SAR_REPLACEMENT', '" + escapeMrmacSingleQuotedLiteral(snapshot.multiSarDialogOptions.replacementText) + "');\n";
+	source += "MRSETUP('MULTI_SAR_STARTING_PATH', '" + escapeMrmacSingleQuotedLiteral(normalizeConfiguredPathInput(snapshot.multiSarDialogOptions.startingPath)) + "');\n";
+	source += "MRSETUP('MULTI_SAR_SUBDIRECTORIES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSarDialogOptions.searchSubdirectories)) + "');\n";
+	source += "MRSETUP('MULTI_SAR_CASE_SENSITIVE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSarDialogOptions.caseSensitive)) + "');\n";
+	source += "MRSETUP('MULTI_SAR_REGULAR_EXPRESSIONS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSarDialogOptions.regularExpressions)) + "');\n";
+	source += "MRSETUP('MULTI_SAR_FILES_IN_MEMORY', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSarDialogOptions.searchFilesInMemory)) + "');\n";
+	source += "MRSETUP('MULTI_SAR_KEEP_FILES_OPEN', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSarDialogOptions.keepFilesOpen)) + "');\n";
+	source += "MRSETUP('VIRTUAL_DESKTOPS', '" + std::to_string(snapshot.virtualDesktops) + "');\n";
+	source += "MRSETUP('CYCLIC_VIRTUAL_DESKTOPS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.cyclicVirtualDesktops)) + "');\n";
+	source += "MRSETUP('CURSOR_BEHAVIOUR', '" + escapeMrmacSingleQuotedLiteral(formatCursorBehaviourLiteral(snapshot.cursorBehaviour)) + "');\n";
+	source += "MRSETUP('CURSOR_POSITION_MARKER', '" + escapeMrmacSingleQuotedLiteral(snapshot.cursorPositionMarker) + "');\n";
+	source += "MRSETUP('AUTOLOAD_WORKSPACE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.autoloadWorkspace)) + "');\n";
+	source += "MRSETUP('LOG_HANDLING', '" + escapeMrmacSingleQuotedLiteral(formatLogHandlingLiteral(snapshot.logHandling)) + "');\n";
+	source += "MRSETUP('LOGFILE', '" + escapeMrmacSingleQuotedLiteral(snapshot.logFilePath) + "');\n";
+	for (const std::string &autoexecMacro : snapshot.autoexecMacros)
+			source += "MRSETUP('AUTOEXEC_MACRO', '" + escapeMrmacSingleQuotedLiteral(autoexecMacro) + "');\n";
+	source += "MRSETUP('MAX_PATH_HISTORY', '" + std::to_string(snapshot.maxPathHistory) + "');\n";
+	source += "MRSETUP('MAX_FILE_HISTORY', '" + std::to_string(snapshot.maxFileHistory) + "');\n";
 	for (const MRDialogHistoryScopeSpec &scopeSpec : kDialogHistoryScopeSpecs) {
-		const MRScopedDialogHistoryState &state = dialogHistoryState(scopeSpec.scope);
+		const MRSettingsSnapshot::DialogHistoryState &state = snapshot.dialogHistory[dialogHistoryScopeIndex(scopeSpec.scope)];
 
 		if (!state.lastPath.empty()) source += serializeScopedHistoryRecord(kDialogLastPathKey, scopeSpec.scope, "path", state.lastPath);
-		for (const MRDialogHistoryEntry &entry : state.pathHistory)
-			source += serializeScopedHistoryRecord(kDialogPathHistoryKey, scopeSpec.scope, "value", entry.value);
-		for (const MRDialogHistoryEntry &entry : state.fileHistory)
-			source += serializeScopedHistoryRecord(kDialogFileHistoryKey, scopeSpec.scope, "value", entry.value);
+		for (const std::string &entry : state.pathHistory)
+			source += serializeScopedHistoryRecord(kDialogPathHistoryKey, scopeSpec.scope, "value", entry);
+		for (const std::string &entry : state.fileHistory)
+			source += serializeScopedHistoryRecord(kDialogFileHistoryKey, scopeSpec.scope, "value", entry);
 	}
-	for (std::size_t i = 0; i < multiFilespecHistory.size(); ++i)
-		source += "MRSETUP('MULTI_FILESPEC_HISTORY', '" + escapeMrmacSingleQuotedLiteral(multiFilespecHistory[i]) + "');\n";
-	for (std::size_t i = 0; i < multiPathHistory.size(); ++i)
-		source += "MRSETUP('MULTI_PATH_HISTORY', '" + escapeMrmacSingleQuotedLiteral(multiPathHistory[i]) + "');\n";
-	source += "MRSETUP('DEFAULT_PROFILE_DESCRIPTION', '" + escapeMrmacSingleQuotedLiteral(configuredDefaultProfileDescription()) + "');\n";
+	for (const std::string &entry : snapshot.multiFilespecHistory)
+		source += "MRSETUP('MULTI_FILESPEC_HISTORY', '" + escapeMrmacSingleQuotedLiteral(entry) + "');\n";
+	for (const std::string &entry : snapshot.multiPathHistory)
+		source += "MRSETUP('MULTI_PATH_HISTORY', '" + escapeMrmacSingleQuotedLiteral(entry) + "');\n";
+	source += "MRSETUP('DEFAULT_PROFILE_DESCRIPTION', '" + escapeMrmacSingleQuotedLiteral(snapshot.defaultProfileDescription) + "');\n";
 	source += "MRSETUP('PAGE_BREAK', '" + escapeMrmacSingleQuotedLiteral(edit.pageBreak) + "');\n";
 	source += "MRSETUP('WORD_DELIMITERS', '" + escapeMrmacSingleQuotedLiteral(edit.wordDelimiters) + "');\n";
 	source += "MRSETUP('DEFAULT_EXTENSIONS', '" + escapeMrmacSingleQuotedLiteral(edit.defaultExtensions) + "');\n";
@@ -4599,10 +5753,10 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	source += "MRSETUP('DEFAULT_MODE', '" + escapeMrmacSingleQuotedLiteral(edit.defaultMode) + "');\n";
 	source += "MRSETUP('CURSOR_STATUS_COLOR', '" + escapeMrmacSingleQuotedLiteral(edit.cursorStatusColor) + "');\n";
 	source += "MRSETUP('" + std::string(kThemeSettingsKey) + "', '" + escapeMrmacSingleQuotedLiteral(themePath) + "');\n";
-	source += "MRSETUP('" + std::string(kKeymapSettingsKey) + "', '" + escapeMrmacSingleQuotedLiteral(configuredKeymapFilePath()) + "');\n";
-	source += serializeKeymapProfilesToSettingsSource(configuredKeymapProfiles(), configuredActiveKeymapProfile());
+	source += "MRSETUP('" + std::string(kKeymapSettingsKey) + "', '" + escapeMrmacSingleQuotedLiteral(snapshot.keymapFilePath) + "');\n";
+	source += serializeKeymapProfilesToSettingsSource(snapshot.keymapProfiles, snapshot.activeKeymapProfile);
 
-	for (const auto &profile : configuredEditExtensionProfiles()) {
+	for (const auto &profile : snapshot.editProfiles) {
 		source += "MRFEPROFILE('DEFINE', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', '" + escapeMrmacSingleQuotedLiteral(profile.name) + "', '');\n";
 		for (const std::string &ext : profile.extensions)
 			source += "MRFEPROFILE('EXT', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', '" + escapeMrmacSingleQuotedLiteral(ext) + "', '');\n";
@@ -4686,6 +5840,10 @@ std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
 	return source;
 }
 
+std::string buildSettingsMacroSource(const MRSetupPaths &paths) {
+	return buildSettingsMacroSource(captureConfiguredSettingsSnapshot(paths));
+}
+
 bool configuredSettingsDirty() {
 	return configuredSettingsDirtyFlag();
 }
@@ -4748,7 +5906,6 @@ bool writeSettingsMacroFile(const MRSetupPaths &paths, std::string *errorMessage
 bool ensureSettingsMacroFileExists(const std::string &settingsMacroUri, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(settingsMacroUri);
 	struct stat st;
-	MRSetupPaths defaults;
 
 	if (!validateSettingsMacroFilePath(normalized, errorMessage)) return false;
 	if (::stat(normalized.c_str(), &st) == 0) {
@@ -4757,9 +5914,22 @@ bool ensureSettingsMacroFileExists(const std::string &settingsMacroUri, std::str
 		return true;
 	}
 
-	defaults = resolveSetupPathDefaults();
-	defaults.settingsMacroUri = normalized;
-	return writeSettingsMacroFile(defaults, errorMessage);
+	{
+		MRSettingsSnapshot snapshot;
+		std::string settingsDir = directoryPartOf(normalized);
+		std::string themePath;
+		std::string themeDir;
+
+		if (!resetSettingsSnapshot(normalized, snapshot, errorMessage)) return false;
+		if (!ensureDirectoryTree(settingsDir, errorMessage)) return false;
+		themePath = normalizeConfiguredPathInput(snapshot.colorThemeFilePath);
+		themeDir = directoryPartOf(themePath);
+		if (!ensureDirectoryTree(themeDir, errorMessage)) return false;
+		if (!writeTextFile(themePath, buildColorThemeMacroSource(snapshot.colorSettings))) return setError(errorMessage, "Unable to write color theme file: " + themePath);
+		if (!writeTextFile(normalized, buildSettingsMacroSource(snapshot))) return setError(errorMessage, "Unable to write settings macro file: " + normalized);
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
 }
 
 void initRememberedLoadDialogPath(char *buffer, std::size_t bufferSize, const char *pattern) {

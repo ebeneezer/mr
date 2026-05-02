@@ -1,15 +1,78 @@
 #define Uses_TGroup
+#define Uses_TDialog
+#define Uses_TEvent
+#define Uses_THistory
+#define Uses_TInputLine
+#define Uses_TKeys
 #define Uses_TObject
+#define Uses_TRect
+#define Uses_TView
 #include <tvision/tv.h>
 
 #include "MRDropList.hpp"
 
 #include "MRColumnListView.hpp"
 
+#include <algorithm>
 #include <vector>
+
+namespace {
+
+class TDropListButton final : public THistory {
+  public:
+	TDropListButton(const TRect &bounds, TInputLine *link, TView *relay, ushort command, bool triggerDownKey) noexcept
+	    : THistory(bounds, link, 0), relay(relay), command(command), triggerDownKey(triggerDownKey) {
+		options |= ofSelectable | ofFirstClick;
+		eventMask |= evMouseDown | evKeyDown;
+	}
+
+	void handleEvent(TEvent &event) override {
+		if (event.what == evMouseDown || (triggerDownKey && event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbDown && (link->state & sfFocused) != 0)) {
+			if (!link->focus()) {
+				clearEvent(event);
+				return;
+			}
+			dispatchCommand();
+			clearEvent(event);
+			return;
+		}
+		if (event.what == evKeyDown) {
+			TKey key(event.keyDown);
+
+			if (key == TKey(kbEnter) || key == TKey(' ')) {
+				dispatchCommand();
+				clearEvent(event);
+				return;
+			}
+		}
+		TView::handleEvent(event);
+	}
+
+  private:
+	void dispatchCommand() {
+		TView *target = relay != nullptr ? relay : owner;
+
+		while (target != nullptr && dynamic_cast<TDialog *>(target) == nullptr)
+			target = target->owner;
+		message(target != nullptr ? target : relay, evCommand, command, this);
+	}
+
+	TView *relay = nullptr;
+	ushort command = 0;
+	bool triggerDownKey = false;
+};
+
+} // namespace
 
 MRDropList::~MRDropList() {
 	hide();
+}
+
+TView *MRDropList::createButton(TGroup &owner, const TRect &bounds, TInputLine *link, TView *relay, ushort command, bool triggerDownKey) {
+	if (buttonView != nullptr) return buttonView;
+	buttonView = new TDropListButton(bounds, link, relay, command, triggerDownKey);
+	owner.insert(buttonView);
+	return buttonView;
 }
 
 void MRDropList::toggle(TGroup &owner, const TRect &anchor, const std::vector<std::string> &values, const std::string &currentValue, TView *relay, ushort acceptCommand, short maxVisibleRows) {
@@ -62,6 +125,10 @@ bool MRDropList::visible() const noexcept {
 
 bool MRDropList::containsPoint(TPoint where) const noexcept {
 	return listView != nullptr && listView->mouseInView(where);
+}
+
+bool MRDropList::buttonContainsPoint(TPoint where) const noexcept {
+	return buttonView != nullptr && buttonView->mouseInView(where);
 }
 
 bool MRDropList::acceptSelection(std::string &selectedValue) {

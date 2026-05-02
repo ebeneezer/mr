@@ -319,54 +319,6 @@ class StartupSettingsModeGuard {
 	bool previous;
 };
 
-bool buildConfiguredSetupPathsSnapshot(MRSetupPaths &paths, std::string *errorMessage) {
-	paths.settingsMacroUri = configuredSettingsMacroFilePath();
-	paths.macroPath = defaultMacroDirectoryPath();
-	paths.helpUri = configuredHelpFilePath();
-	paths.tempPath = configuredTempDirectoryPath();
-	paths.shellUri = configuredShellExecutablePath();
-	if (paths.settingsMacroUri.empty()) paths.settingsMacroUri = defaultSettingsMacroFilePath();
-	if (paths.settingsMacroUri.empty()) {
-		if (errorMessage != nullptr) *errorMessage = "Settings path is empty.";
-		return false;
-	}
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-// This is a staging/canonicalization rewrite step. It may use the settings model
-// as working state, but it is not the final startup apply and does not establish
-// the authoritative runtime contract.
-bool normalizeSettingsMacroToCurrentModel(const std::string &settingsPath, const std::string &source, const std::string &reason, std::string *errorMessage) {
-	MRSettingsLoadReport report;
-	MRSetupPaths paths;
-	std::string normalizedPath = normalizeConfiguredPathInput(settingsPath);
-	std::string applyError;
-	std::string rewriteError;
-	std::string summary;
-	MRSettingsWriteReport writeReport;
-
-	if (!loadAndNormalizeSettingsSource(normalizedPath, source, &report, &applyError)) {
-		if (errorMessage != nullptr) *errorMessage = "Settings normalization failed: " + applyError;
-		return false;
-	}
-	if (!buildConfiguredSetupPathsSnapshot(paths, &rewriteError)) {
-		if (errorMessage != nullptr) *errorMessage = "Settings normalization failed: " + rewriteError;
-		return false;
-	}
-	if (!writeSettingsMacroFile(paths, &rewriteError, &writeReport)) {
-		if (errorMessage != nullptr) *errorMessage = "Settings normalization failed: " + rewriteError;
-		return false;
-	}
-	mrLogSettingsWriteReport("startup normalization", writeReport);
-
-	summary = describeSettingsLoadReport(report);
-	if (!reason.empty()) mrLogMessage(("Settings normalized: " + reason).c_str());
-	if (!summary.empty()) mrLogMessage(("Settings normalization details: " + summary).c_str());
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
 // This is the final startup apply path. The verified, canonicalized and compiled
 // settings.mrmac source is executed by the VM in startup mode, and the in-memory
 // settings state becomes authoritative only after this step succeeds.
@@ -424,20 +376,6 @@ bool applySettingsSourceViaVm(const std::string &settingsPath, const std::string
 		return false;
 	}
 	clearConfiguredSettingsDirty();
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-// This builds a canonical settings source from a staging/verification pass.
-// The loader work done here is not the final bootstrap apply; final application
-// still happens later through applySettingsSourceViaVm.
-bool buildCanonicalSettingsSource(const std::string &settingsPath, const std::string &source, MRSettingsLoadReport *report, std::string &canonicalSource, std::string *errorMessage) {
-	MRSetupPaths paths;
-	std::string normalizedPath = normalizeConfiguredPathInput(settingsPath);
-
-	if (!loadAndNormalizeSettingsSource(normalizedPath, source, report, errorMessage)) return false;
-	if (!buildConfiguredSetupPathsSnapshot(paths, errorMessage)) return false;
-	canonicalSource = buildSettingsMacroSource(paths);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -516,12 +454,8 @@ ushort mrEditorDialog(int dialog, ...) {
 bool loadStartupSettingsMacro(const std::string &overridePath, std::string *errorMessage) {
 	std::string settingsPath = overridePath.empty() ? defaultSettingsMacroFilePath() : overridePath;
 	std::string source;
-	std::string loadError;
 	MRSettingsLoadReport report;
-	std::string summary;
 	std::string canonicalSource;
-	MRSetupPaths paths;
-	MRSettingsWriteReport writeReport;
 
 	if (settingsPath.empty()) {
 		if (errorMessage != nullptr) *errorMessage = "Settings path is empty.";
@@ -532,40 +466,14 @@ bool loadStartupSettingsMacro(const std::string &overridePath, std::string *erro
 		return false;
 	}
 	if (!readTextFile(settingsPath, source)) {
-		loadError = "Settings load failed (read): " + settingsPath;
 		source.clear();
 	}
-	if (!buildCanonicalSettingsSource(settingsPath, source, &report, canonicalSource, &loadError)) {
-		if (!normalizeSettingsMacroToCurrentModel(settingsPath, source, loadError, errorMessage)) {
-			mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings normalization failed.");
-			return false;
-		}
-		if (!buildConfiguredSetupPathsSnapshot(paths, errorMessage)) {
-			mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings canonical source build failed after normalization.");
-			return false;
-		}
-		canonicalSource = buildSettingsMacroSource(paths);
-		if (errorMessage != nullptr) errorMessage->clear();
-		if (!loadAndNormalizeSettingsSource(settingsPath, canonicalSource, &report, errorMessage)) {
-			mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings canonicalization failed.");
-			return false;
-		}
-	} else if (report.normalized()) {
-		std::string rewriteError;
-		if (!buildConfiguredSetupPathsSnapshot(paths, &rewriteError) || !writeSettingsMacroFile(paths, &rewriteError, &writeReport)) {
-			if (errorMessage != nullptr) *errorMessage = "Settings rewrite failed: " + rewriteError;
-			mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings rewrite failed.");
-			return false;
-		}
-		mrLogSettingsWriteReport("startup canonical rewrite", writeReport);
-		summary = describeSettingsLoadReport(report);
-		mrLogMessage(("Settings normalized: " + settingsPath).c_str());
-		if (!summary.empty()) mrLogMessage(("Settings normalization details: " + summary).c_str());
+	if (!prepareStartupSettingsSource(settingsPath, source, &report, canonicalSource, errorMessage)) {
+		mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings canonicalization failed.");
+		return false;
 	}
-	loadError.clear();
-	if (!applySettingsSourceViaVm(settingsPath, canonicalSource, &loadError)) {
-		if (errorMessage != nullptr) *errorMessage = loadError;
-		mrLogMessage(loadError.empty() ? "Settings VM apply failed." : loadError.c_str());
+	if (!applySettingsSourceViaVm(settingsPath, canonicalSource, errorMessage)) {
+		mrLogMessage((errorMessage != nullptr && !errorMessage->empty()) ? errorMessage->c_str() : "Settings VM apply failed.");
 		return false;
 	}
 
@@ -1354,5 +1262,9 @@ bool mrApplySettingsSourceForTesting(const std::string &source, std::string *err
 }
 
 bool mrMigrateSettingsMacroToCurrentVersionForTesting(const std::string &settingsPath, const std::string &source, const std::string &reason, std::string *errorMessage) {
-	return normalizeSettingsMacroToCurrentModel(settingsPath, source, reason, errorMessage);
+	MRSettingsLoadReport report;
+	std::string canonicalSource;
+
+	(void)reason;
+	return prepareStartupSettingsSource(settingsPath, source, &report, canonicalSource, errorMessage);
 }

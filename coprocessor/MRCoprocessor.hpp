@@ -115,12 +115,14 @@ struct SyntaxWarmLine {
 
 struct SyntaxWarmupPayload final : Payload {
 	MRSyntaxLanguage language;
+	bool treeSitter;
+	unsigned char treeSitterLanguage;
 	std::vector<SyntaxWarmLine> lines;
 
-	SyntaxWarmupPayload() noexcept : language(MRSyntaxLanguage::PlainText), lines() {
+	SyntaxWarmupPayload() noexcept : language(MRSyntaxLanguage::PlainText), treeSitter(false), treeSitterLanguage(0), lines() {
 	}
 
-	SyntaxWarmupPayload(MRSyntaxLanguage aLanguage, std::vector<SyntaxWarmLine> aLines) : language(aLanguage), lines(std::move(aLines)) {
+	SyntaxWarmupPayload(MRSyntaxLanguage aLanguage, bool aTreeSitter, unsigned char aTreeSitterLanguage, std::vector<SyntaxWarmLine> aLines) : language(aLanguage), treeSitter(aTreeSitter), treeSitterLanguage(aTreeSitterLanguage), lines(std::move(aLines)) {
 	}
 };
 

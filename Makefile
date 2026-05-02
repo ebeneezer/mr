@@ -143,6 +143,11 @@ C_SOURCES = \
 	tree-sitter/c/src/parser.c \
 	tree-sitter/cpp/src/parser.c \
 	tree-sitter/cpp/src/scanner.c \
+	tree-sitter/javascript/src/parser.c \
+	tree-sitter/javascript/src/scanner.c \
+	tree-sitter/python/src/parser.c \
+	tree-sitter/python/src/scanner.c \
+	tree-sitter/json/src/parser.c \
 	mrmac/mrmac.c \
 	mrmac/lex.yy.c \
 	mrmac/parser.tab.c

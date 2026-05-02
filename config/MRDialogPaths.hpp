@@ -424,6 +424,7 @@ bool writeColorThemeFile(const std::string &themeUri, std::string *errorMessage 
 bool ensureColorThemeFileExists(const std::string &themeUri, std::string *errorMessage = nullptr);
 bool loadColorThemeFile(const std::string &themeUri, std::string *errorMessage = nullptr);
 bool loadWindowColorThemeGroupValues(const std::string &themeUri, std::array<unsigned char, MRColorSetupSettings::kWindowCount> &outValues, std::string *errorMessage = nullptr);
+[[nodiscard]] std::string buildColorThemeMacroSource(const MRColorSetupSettings &colors);
 
 [[nodiscard]] MRSettingsKeyClass classifySettingsKey(std::string_view key);
 [[nodiscard]] bool isCanonicalSerializedSettingsKey(std::string_view key);

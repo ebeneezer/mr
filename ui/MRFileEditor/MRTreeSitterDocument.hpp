@@ -3,6 +3,9 @@
 #include <cstddef>
 #include <memory>
 #include <string_view>
+#include <vector>
+
+#include "../MRSyntax.hpp"
 
 namespace mr::editor {
 
@@ -17,7 +20,10 @@ class MRTreeSitterDocument {
 	enum class Language : unsigned char {
 		None,
 		C,
-		Cpp
+		Cpp,
+		JavaScript,
+		Python,
+		Json
 	};
 
 	MRTreeSitterDocument() noexcept;
@@ -31,6 +37,7 @@ class MRTreeSitterDocument {
 	void prepareDocumentAdoption(const mr::editor::TextDocument &currentDocument, const mr::editor::TextDocument &nextDocument, const mr::editor::DocumentChangeSet *changeSet) noexcept;
 	bool syncToDocument(const mr::editor::ReadSnapshot &snapshot, std::size_t documentId, std::size_t version) noexcept;
 	[[nodiscard]] bool shouldIncreaseIndentOnNewLine(const mr::editor::ReadSnapshot &snapshot, std::size_t cursorOffset) const noexcept;
+	[[nodiscard]] static std::vector<MRSyntaxTokenMap> buildTokenMapsForSnapshotLines(Language language, const mr::editor::ReadSnapshot &snapshot, const std::vector<std::size_t> &lineStarts);
 	[[nodiscard]] Language activeLanguage() const noexcept;
 	[[nodiscard]] bool hasTree() const noexcept;
 

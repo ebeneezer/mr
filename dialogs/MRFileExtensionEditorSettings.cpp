@@ -457,7 +457,7 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 			addPanelLabel(dialog, TRect(codeLanguageLabelLeft, g.defaultExtensionsY, codeLanguageFieldLeft - 1, g.defaultExtensionsY + 1), "Code language:");
 			codeLanguageField = addPanelInput(dialog, TRect(codeLanguageFieldLeft, g.defaultExtensionsY, codeLanguageFieldRight, g.defaultExtensionsY + 1), kCodeLanguageFieldSize - 1);
 			codeLanguageListAnchor = TRect(codeLanguageListLeft, g.defaultExtensionsY, codeLanguageListRight, g.defaultExtensionsY + 1);
-			codeLanguageBrowseButton = addPanelGlyphButton(dialog, TRect(browseLeft, g.defaultExtensionsY, g.inputRight, g.defaultExtensionsY + 1), "▾", cmMrFileExtensionEditorSettingsPanelChooseCodeLanguage);
+			codeLanguageBrowseButton = codeLanguageDropList.createButton(dialog, TRect(browseLeft, g.defaultExtensionsY, g.inputRight, g.defaultExtensionsY + 1), codeLanguageField, &dialog, cmMrFileExtensionEditorSettingsPanelChooseCodeLanguage, false);
 		}
 
 	addPanelLabel(dialog, TRect(g.labelLeft + 1, g.tabSizeY, g.inputLeft - 2, g.tabSizeY + 1), "Tab size:");
@@ -821,7 +821,7 @@ bool FileExtensionEditorSettingsPanel::codeLanguageListVisible() const noexcept 
 }
 
 bool FileExtensionEditorSettingsPanel::codeLanguageListContainsPoint(TPoint where) const noexcept {
-	return codeLanguageDropList.containsPoint(where);
+	return codeLanguageDropList.containsPoint(where) || codeLanguageDropList.buttonContainsPoint(where);
 }
 
 bool FileExtensionEditorSettingsPanel::acceptCodeLanguageListSelection() {

@@ -130,15 +130,6 @@
           "comments": []
         },
         {
-          "id": "a24d42c4-f168-415f-85ca-90ac35821dc2",
-          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
-          "title": "Indenting",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
           "id": "fa88fc7a-9995-45e3-83ff-85df18a8a05b",
           "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
           "title": "Batch Loading / Acquire",
@@ -170,7 +161,17 @@
     {
       "id": "b721e070-ae21-4123-a1f3-27b926375a16",
       "title": "Regression / Errors",
-      "cards": []
+      "cards": [
+        {
+          "id": "d2f4a85b-3476-4093-addf-f2c929baa780",
+          "listId": "b721e070-ae21-4123-a1f3-27b926375a16",
+          "title": "VM ist bei Key Mappings nicht die letzte Instanz, die den K/V Hash mit der einzigen Wahrheit versorgt. Es wird schon vorher zur Korrektur der settings.mrmac Inhalte der K/V Hash genutzt.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        }
+      ]
     },
     {
       "id": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
@@ -232,9 +233,18 @@
           ]
         },
         {
-          "id": "602988a6-2cff-4eed-865a-5ebe4888117d",
+          "id": "996607be-2711-421a-9725-45719556dbdd",
           "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Treesitter Integration",
+          "title": "Code Coloring",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "a24d42c4-f168-415f-85ca-90ac35821dc2",
+          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
+          "title": "Indenting",
           "description": "",
           "labels": [],
           "checkboxes": [],
@@ -268,6 +278,15 @@
           "id": "49430a5d-ab87-421a-9eb6-728ed5339eb9",
           "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
           "title": "Key Mapping",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "602988a6-2cff-4eed-865a-5ebe4888117d",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Treesitter Integration",
           "description": "",
           "labels": [],
           "checkboxes": [],

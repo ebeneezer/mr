@@ -317,7 +317,7 @@ class MRFileEditor : public TScroller {
 
 		std::string automaticIndentFillForCursor() const;
 
-		std::string smartIndentFillForCursor() const;
+		std::string smartIndentFillForCursor();
 
 		void effectiveFormatMargins(const MREditSetupSettings &settings, int &leftMargin, int &rightMargin) const noexcept;
 
@@ -534,6 +534,7 @@ class MRFileEditor : public TScroller {
 	std::size_t mSyntaxWarmupTopLine;
 	std::size_t mSyntaxWarmupBottomLine;
 	MRSyntaxLanguage mSyntaxWarmupLanguage;
+	MRTreeSitterDocument::Language mSyntaxWarmupTreeSitterLanguage;
 	MRTreeSitterDocument mTreeSitterDocument;
 	MRMiniMapRenderer mMiniMapRenderer;
 	SaveNormalizationCache mSaveNormalizationCache;
