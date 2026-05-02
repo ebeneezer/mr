@@ -73,11 +73,11 @@ MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_M
 MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_MARK_SET_RANDOM_ACCESS" sequence="<Ctrl+K> <8>" description="Set random access mark 8"');
 MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_MARK_GET_RANDOM_ACCESS" sequence="<Ctrl+L> <9>" description="Get random access mark 9"');
 MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_MARK_SET_RANDOM_ACCESS" sequence="<Ctrl+K> <9>" description="Set random access mark 9"');
-MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=MACRO target="wordstar-extensions.mrmac^clone_line_above" sequence="<Ctrl+N>" description="clone line above"');
-MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_SEARCH_FORWARD" sequence="<Ctrl+K> <Ctrl+F>" description="find text"');
+MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_SEARCH_FORWARD" sequence="<Ctrl+K> <Ctrl+F>" description="search forward"');
 MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_BLOCK_SET_COLUMN_BEGIN" sequence="<Ctrl+K> <Ctrl+N>" description="mark column block"');
 MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_BLOCK_SET_COLUMN_BEGIN" sequence="<Ctrl+K> <N>" description="mark column block"');
 MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_SEARCH_REPLACE" sequence="<Ctrl+K> <Ctrl+A>" description="find & replace"');
 MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_SEARCH_REPLACE" sequence="<Ctrl+K> <A>" description="find & replace"');
 MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MR_TEXT_CENTER_LINE" sequence="<Ctrl+O> <C>" description="Center line"');
+MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_SEARCH_FORWARD" sequence="<Ctrl+K> <F>" description="search forward"');
 MRSETUP('ACTIVE_KEYMAP_PROFILE', 'name="WORDSTAR"');

@@ -1145,7 +1145,7 @@ bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
 }
 
 bool testMenuDialogColorGroupTargetsExpectedSlots(std::string &failureReason) {
-	static const unsigned char probeValues[] = {0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0x70, 0x71};
+	static const unsigned char probeValues[] = {0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0x70, 0x71, 0x72, 0x73};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::size_t itemCount = 0;
 	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::MenuDialog, itemCount);
@@ -1172,7 +1172,7 @@ bool testMenuDialogColorGroupTargetsExpectedSlots(std::string &failureReason) {
 		unsigned char slot = items[i].paletteIndex;
 		bool isMenuSlot = slot >= 2 && slot <= 6;
 		bool isGrayDialogSlot = slot >= 32 && slot <= 63;
-		bool isExtendedDialogSlot = slot == kMrPaletteDialogInactiveElements;
+		bool isExtendedDialogSlot = slot == kMrPaletteDialogInactiveElements || slot == kMrPaletteDropListDescription || slot == kMrPaletteDropListSelectedInactive;
 		if (!configuredColorSlotOverride(slot, value)) {
 			restore();
 			failureReason = "MENUDIALOGCOLORS item must override its mapped palette slot.";
@@ -1240,7 +1240,7 @@ bool testMenuDialogSemanticLabelsGuard(std::string &failureReason) {
 }
 
 bool testMenuEntryHotkeySelectionAliasGuard(std::string &failureReason) {
-	static const unsigned char probeValues[] = {0x71, 0x72, 0x7B, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7C, 0x7D, 0x7E, 0x7F, 0x70, 0x71, 0x72};
+	static const unsigned char probeValues[] = {0x71, 0x72, 0x7B, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7C, 0x7D, 0x7E, 0x7F, 0x70, 0x71, 0x72, 0x73, 0x74};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::string errorText;
 	unsigned char normalHotkey = 0;
@@ -2352,12 +2352,12 @@ bool testIndicatorLineNumberColorWiringGuard(std::string &failureReason) {
 }
 
 bool testCurrentLineColorWiringGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.hpp");
+	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.cpp");
 	std::string content;
 	std::string ioError;
 
 	if (!readTextFile(sourcePath, content, ioError)) {
-		failureReason = "Unable to read MRFileEditor.hpp for current-line color wiring guard: " + ioError;
+		failureReason = "Unable to read MRFileEditor.cpp for current-line color wiring guard: " + ioError;
 		return false;
 	}
 	if (content.find("TPalette palette(\"\\x06\\x07\\x09\\x0A\\x0B\\x0C\", 6);") == std::string::npos) {
@@ -2377,31 +2377,37 @@ bool testCurrentLineColorWiringGuard(std::string &failureReason) {
 }
 
 bool testChangedTextColorWiringGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.hpp");
-	std::string content;
+	const std::string headerPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.hpp");
+	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.cpp");
+	std::string headerContent;
+	std::string sourceContent;
 	std::string ioError;
 
-	if (!readTextFile(sourcePath, content, ioError)) {
+	if (!readTextFile(headerPath, headerContent, ioError)) {
 		failureReason = "Unable to read MRFileEditor.hpp for changed-text color wiring guard: " + ioError;
 		return false;
 	}
-	if (content.find("TAttrPair changedPair = getColor(0x0505);") == std::string::npos || content.find("bool changedChar = !currentLine && !currentLineInBlock && isDirtyOffset(documentPos);") == std::string::npos || content.find("TAttrPair effectivePair = changedChar ? changedPair : basePair;") == std::string::npos) {
+	if (!readTextFile(sourcePath, sourceContent, ioError)) {
+		failureReason = "Unable to read MRFileEditor.cpp for changed-text color wiring guard: " + ioError;
+		return false;
+	}
+	if (sourceContent.find("TAttrPair changedPair = getColor(0x0505);") == std::string::npos || sourceContent.find("bool changedChar = !currentLine && !currentLineInBlock && isDirtyOffset(documentPos);") == std::string::npos || sourceContent.find("TAttrPair effectivePair = changedChar ? changedPair : basePair;") == std::string::npos) {
 		failureReason = "Changed-text must be applied per character via dedicated dirty-range lookup.";
 		return false;
 	}
-	if (content.find("mDirtyRanges") == std::string::npos || content.find("void addDirtyRange(") == std::string::npos || content.find("isDirtyOffset(") == std::string::npos) {
+	if (headerContent.find("std::vector<MRTextBufferModel::Range> mDirtyRanges;") == std::string::npos || headerContent.find("void addDirtyRange(") == std::string::npos || headerContent.find("bool isDirtyOffset(std::size_t pos) const noexcept;") == std::string::npos || sourceContent.find("bool MRFileEditor::isDirtyOffset(") == std::string::npos) {
 		failureReason = "Changed-text wiring requires dedicated dirty-range tracking in MRFileEditor.";
 		return false;
 	}
-	if (content.find("remapDirtyRangesForAppliedChange(*changeSet);") == std::string::npos || content.find("void remapDirtyRangesForAppliedChange(") == std::string::npos) {
+	if (sourceContent.find("remapDirtyRangesForAppliedChange(*changeSet);") == std::string::npos || sourceContent.find("void MRFileEditor::remapDirtyRangesForAppliedChange(") == std::string::npos) {
 		failureReason = "Changed-text ranges must be remapped across edits to stay position-correct.";
 		return false;
 	}
-	if (content.find("if (pos >= mBufferModel.length())") == std::string::npos) {
+	if (sourceContent.find("if (pos >= mBufferModel.length())") == std::string::npos) {
 		failureReason = "Changed-text lookup must not clamp offsets beyond EOF into the last dirty character.";
 		return false;
 	}
-	if (content.find("else if (changedLine)") != std::string::npos) {
+	if (sourceContent.find("else if (changedLine)") != std::string::npos) {
 		failureReason = "Changed-text must not color whole lines anymore.";
 		return false;
 	}
@@ -2410,19 +2416,25 @@ bool testChangedTextColorWiringGuard(std::string &failureReason) {
 }
 
 bool testEditorCursorViewportGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.hpp");
-	std::string content;
+	const std::string headerPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.hpp");
+	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.cpp");
+	std::string headerContent;
+	std::string sourceContent;
 	std::string ioError;
 
-	if (!readTextFile(sourcePath, content, ioError)) {
+	if (!readTextFile(headerPath, headerContent, ioError)) {
 		failureReason = "Unable to read MRFileEditor.hpp for cursor viewport guard: " + ioError;
 		return false;
 	}
-	if (content.find("struct TextViewportGeometry") == std::string::npos || content.find("TextViewportGeometry textViewportGeometry() const noexcept") == std::string::npos || content.find("bool shouldShowEditorCursor(long long x, long long y, const TextViewportGeometry &viewport) const noexcept") == std::string::npos || content.find("const bool viewActive = (state & sfActive) != 0;") == std::string::npos || content.find("const bool viewSelected = (state & sfSelected) != 0;") == std::string::npos || content.find("if (shouldShowEditorCursor(localX, localY, viewport))") == std::string::npos) {
+	if (!readTextFile(sourcePath, sourceContent, ioError)) {
+		failureReason = "Unable to read MRFileEditor.cpp for cursor viewport guard: " + ioError;
+		return false;
+	}
+	if (headerContent.find("using TextViewportGeometry = MRTextViewportLayout::Geometry;") == std::string::npos || headerContent.find("TextViewportGeometry textViewportGeometry() const noexcept") == std::string::npos || headerContent.find("bool shouldShowEditorCursor(long long x, long long y, const TextViewportGeometry &viewport) const noexcept") == std::string::npos || sourceContent.find("return MRTextViewportLayout::shouldShowCursor(viewport, x, y, visibleTextRows(), (state & sfActive) != 0, (state & sfSelected) != 0);") == std::string::npos || sourceContent.find("if (shouldShowEditorCursor(localX, localY, viewport))") == std::string::npos) {
 		failureReason = "Editor cursor visibility must be gated by active/selected state and text viewport bounds.";
 		return false;
 	}
-	if (content.find("int column = viewport.textColumnFromLocalX(local.x);") == std::string::npos || content.find("TextViewportGeometry viewport = textViewportGeometry();") == std::string::npos) {
+	if (sourceContent.find("int column = viewport.textColumnFromLocalX(local.x);") == std::string::npos || sourceContent.find("TextViewportGeometry viewport = textViewportGeometry();") == std::string::npos) {
 		failureReason = "Mouse-to-text mapping must be routed through text viewport conversion.";
 		return false;
 	}
@@ -2431,12 +2443,12 @@ bool testEditorCursorViewportGuard(std::string &failureReason) {
 }
 
 bool testEofVirtualLineColorGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.hpp");
+	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.cpp");
 	std::string content;
 	std::string ioError;
 
 	if (!readTextFile(sourcePath, content, ioError)) {
-		failureReason = "Unable to read MRFileEditor.hpp for EOF virtual-line color guard: " + ioError;
+		failureReason = "Unable to read MRFileEditor.cpp for EOF virtual-line color guard: " + ioError;
 		return false;
 	}
 	if (content.find("bool isDocumentLine = lineIndex < totalLines;") == std::string::npos || content.find("formatSyntaxLine(buffer, linePtr, delta.x, textWidth, viewport.textLeft, isDocumentLine, drawEofMarker,") == std::string::npos) {
@@ -2461,12 +2473,12 @@ bool testEofVirtualLineColorGuard(std::string &failureReason) {
 }
 
 bool testSaveAsOverwriteAndBackupWiringGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.hpp");
+	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.cpp");
 	std::string content;
 	std::string ioError;
 
 	if (!readTextFile(sourcePath, content, ioError)) {
-		failureReason = "Unable to read MRFileEditor.hpp for Save As overwrite/backup guard: " + ioError;
+		failureReason = "Unable to read MRFileEditor.cpp for Save As overwrite/backup guard: " + ioError;
 		return false;
 	}
 	if (content.find("showUnsavedChangesDialog(\"Overwrite\", \"Target file exists. Overwrite?\",") == std::string::npos) {
@@ -2546,7 +2558,7 @@ bool testPersistentBlocksWiringGuard(std::string &failureReason) {
 		failureReason = "Persistent blocks must be parsed and serialized via MRSETUP in MRDialogPaths.";
 		return false;
 	}
-	if (vmContent.find("findEditSettingDescriptorByKey(setupKey)") == std::string::npos || vmContent.find("PERSISTENT_BLOCKS") == std::string::npos) {
+	if (vmContent.find("classifySettingsKey(setupKey)") == std::string::npos || vmContent.find("PERSISTENT_BLOCKS") == std::string::npos) {
 		failureReason = "MRVM startup whitelist must accept PERSISTENT_BLOCKS.";
 		return false;
 	}
@@ -2693,7 +2705,6 @@ bool testTabstopIndentingOps(std::string &failureReason) {
 	MRMacroStagedJobResult result;
 	mr::editor::CommitResult commit;
 	std::string vmError;
-	int tabWidth = configuredTabSizeSetting();
 	int expectedPosA = 0;
 	std::vector<std::string> savedOrder;
 	std::map<std::string, int> savedInts;
@@ -2750,9 +2761,10 @@ bool testTabstopIndentingOps(std::string &failureReason) {
 		return false;
 	}
 
-	if (tabWidth < 1) tabWidth = 1;
-	if (tabWidth > 32) tabWidth = 32;
-	expectedPosA = tabWidth + 1;
+	{
+		const MREditSetupSettings settings = configuredEditSetupSettings();
+		expectedPosA = resolvedEditFormatTabDisplayColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, 1);
+	}
 
 	if (!checkGlobalInt(result.globalInts, "TABOPS_EXP_I", expectedPosA, failureReason)) return false;
 	if (!checkGlobalInt(result.globalInts, "TABOPS_EXP_LEN", expectedPosA, failureReason)) return false;

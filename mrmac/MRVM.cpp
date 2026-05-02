@@ -4949,6 +4949,9 @@ static bool moveEditorTabRight(MRFileEditor *editor) {
 	if (currentEditorInsertMode()) {
 		return insertEditorText(editor, buildEditIndentFill(settings, col, targetCol, tabExpand));
 	}
+	if (editor == nullptr && tabExpand) {
+		return insertEditorText(nullptr, buildEditIndentFill(settings, col, targetCol, true));
+	}
 	if (editor == nullptr) {
 		lineStart = static_cast<uint>(session->document.lineStart(session->cursorOffset));
 		return setEditorCursor(nullptr, static_cast<uint>(backgroundCharPtrOffset(lineStart, targetCol - 1)));
