@@ -8011,151 +8011,172 @@ MRMacroJobResult mrvmRunBytecodeBackground(const unsigned char *bytecode, std::s
 	return result;
 }
 
-MRMacroStagedJobResult mrvmRunBytecodeStagedBackground(const unsigned char *bytecode, std::size_t length, const MRMacroStagedExecutionInput &input, std::stop_token stopToken, std::shared_ptr<std::atomic_bool> cancelFlag) {
-	MRMacroStagedJobResult result;
-	VirtualMachine vm;
+struct MRVMStagedExecutionContext {
+	const MRMacroStagedExecutionInput &input;
+	const std::stop_token &stopToken;
+	std::shared_ptr<std::atomic_bool> cancelFlag;
 	BackgroundEditSession session;
-	struct SessionGuard {
-		BackgroundEditSession *previous;
-		const std::stop_token *savedToken;
-		std::shared_ptr<std::atomic_bool> savedFlag;
 
-		SessionGuard(BackgroundEditSession *next, const std::stop_token *token, std::shared_ptr<std::atomic_bool> flag) noexcept : previous(g_backgroundEditSession), savedToken(g_backgroundMacroStopToken), savedFlag(g_backgroundMacroCancelFlag) {
-			g_backgroundEditSession = next;
-			g_backgroundMacroStopToken = token;
-			g_backgroundMacroCancelFlag = std::move(flag);
+	struct InstallGuard {
+		BackgroundEditSession *previousSession;
+		const std::stop_token *previousStopToken;
+		std::shared_ptr<std::atomic_bool> previousCancelFlag;
+
+		explicit InstallGuard(MRVMStagedExecutionContext &context) noexcept
+		    : previousSession(g_backgroundEditSession), previousStopToken(g_backgroundMacroStopToken), previousCancelFlag(g_backgroundMacroCancelFlag) {
+			g_backgroundEditSession = &context.session;
+			g_backgroundMacroStopToken = &context.stopToken;
+			g_backgroundMacroCancelFlag = context.cancelFlag;
 		}
 
-		~SessionGuard() {
-			g_backgroundEditSession = previous;
-			g_backgroundMacroStopToken = savedToken;
-			g_backgroundMacroCancelFlag = savedFlag;
+		~InstallGuard() {
+			g_backgroundEditSession = previousSession;
+			g_backgroundMacroStopToken = previousStopToken;
+			g_backgroundMacroCancelFlag = previousCancelFlag;
 		}
 	};
 
-	session.document = input.document;
-	session.transaction = mr::editor::StagedEditTransaction(input.baseVersion, "macro-staged-write");
-	session.cursorOffset = input.cursorOffset;
-	session.selectionStart = input.selectionStart;
-	session.selectionEnd = input.selectionEnd;
-	session.blockMode = input.blockMode;
-	session.blockMarkingOn = input.blockMarkingOn;
-	session.blockAnchor = input.blockAnchor;
-	session.blockEnd = input.blockEnd;
-	session.firstSave = input.firstSave;
-	session.eofInMemory = input.eofInMemory;
-	session.bufferId = input.bufferId;
-	session.temporaryFile = input.temporaryFile;
-	session.temporaryFileName = input.temporaryFileName;
-	session.currentWindow = input.currentWindow;
-	session.linkStatus = input.linkStatus;
-	session.windowCount = input.windowCount;
-	session.windowGeometryValid = input.windowGeometryValid;
-	session.windowX1 = input.windowX1;
-	session.windowY1 = input.windowY1;
-	session.windowX2 = input.windowX2;
-	session.windowY2 = input.windowY2;
-	session.globals.clear();
-	session.globalOrder.clear();
-	session.globalEnumIndex = 0;
-	for (const auto &i : input.globalOrder)
-		appendUniqueString(session.globalOrder, upperKey(i));
-	for (const auto &globalInt : input.globalInts) {
-		GlobalEntry entry;
-		std::string key = upperKey(globalInt.first);
-		entry.type = TYPE_INT;
-		entry.value = makeInt(globalInt.second);
-		if (session.globals.find(key) == session.globals.end()) appendUniqueString(session.globalOrder, key);
-		session.globals[key] = entry;
+	MRVMStagedExecutionContext(const MRMacroStagedExecutionInput &stagedInput, const std::stop_token &stagedStopToken, std::shared_ptr<std::atomic_bool> stagedCancelFlag)
+	    : input(stagedInput), stopToken(stagedStopToken), cancelFlag(std::move(stagedCancelFlag)), session() {
 	}
-	for (const auto &globalString : input.globalStrings) {
-		GlobalEntry entry;
-		std::string key = upperKey(globalString.first);
-		entry.type = TYPE_STR;
-		entry.value = makeString(globalString.second);
-		if (session.globals.find(key) == session.globals.end()) appendUniqueString(session.globalOrder, key);
-		session.globals[key] = entry;
+
+	void initializeSession() {
+		session.document = input.document;
+		session.transaction = mr::editor::StagedEditTransaction(input.baseVersion, "macro-staged-write");
+		session.cursorOffset = input.cursorOffset;
+		session.selectionStart = input.selectionStart;
+		session.selectionEnd = input.selectionEnd;
+		session.blockMode = input.blockMode;
+		session.blockMarkingOn = input.blockMarkingOn;
+		session.blockAnchor = input.blockAnchor;
+		session.blockEnd = input.blockEnd;
+		session.firstSave = input.firstSave;
+		session.eofInMemory = input.eofInMemory;
+		session.bufferId = input.bufferId;
+		session.temporaryFile = input.temporaryFile;
+		session.temporaryFileName = input.temporaryFileName;
+		session.currentWindow = input.currentWindow;
+		session.linkStatus = input.linkStatus;
+		session.windowCount = input.windowCount;
+		session.windowGeometryValid = input.windowGeometryValid;
+		session.windowX1 = input.windowX1;
+		session.windowY1 = input.windowY1;
+		session.windowX2 = input.windowX2;
+		session.windowY2 = input.windowY2;
+		session.globals.clear();
+		session.globalOrder.clear();
+		session.globalEnumIndex = 0;
+		for (const auto &i : input.globalOrder)
+			appendUniqueString(session.globalOrder, upperKey(i));
+		for (const auto &globalInt : input.globalInts) {
+			GlobalEntry entry;
+			std::string key = upperKey(globalInt.first);
+			entry.type = TYPE_INT;
+			entry.value = makeInt(globalInt.second);
+			if (session.globals.find(key) == session.globals.end()) appendUniqueString(session.globalOrder, key);
+			session.globals[key] = entry;
+		}
+		for (const auto &globalString : input.globalStrings) {
+			GlobalEntry entry;
+			std::string key = upperKey(globalString.first);
+			entry.type = TYPE_STR;
+			entry.value = makeString(globalString.second);
+			if (session.globals.find(key) == session.globals.end()) appendUniqueString(session.globalOrder, key);
+			session.globals[key] = entry;
+		}
+		session.loadedMacroDisplayNames.clear();
+		session.macroOrder.clear();
+		session.macroEnumIndex = 0;
+		session.deferredUiCommands.clear();
+		for (const auto &i : input.macroOrder)
+			appendUniqueString(session.macroOrder, upperKey(i));
+		for (const auto &macroDisplayName : input.macroDisplayNames) {
+			std::string key = upperKey(macroDisplayName.first);
+			session.loadedMacroDisplayNames[key] = macroDisplayName.second;
+			if (std::find(session.macroOrder.begin(), session.macroOrder.end(), key) == session.macroOrder.end()) session.macroOrder.push_back(key);
+		}
+		session.lastSearchValid = input.lastSearchValid;
+		session.lastSearchStart = input.lastSearchStart;
+		session.lastSearchEnd = input.lastSearchEnd;
+		session.lastSearchCursor = input.lastSearchCursor;
+		session.ignoreCase = input.ignoreCase;
+		session.tabExpand = input.tabExpand;
+		session.markStack.clear();
+		for (unsigned long i : input.markStack)
+			session.markStack.push_back(static_cast<uint>(i));
+		session.insertMode = input.insertMode;
+		session.indentLevel = input.indentLevel;
+		session.pageLines = std::max(1, input.pageLines);
+		session.fileName = input.fileName;
+		session.fileChanged = input.fileChanged;
+		session.screenWidth = input.screenWidth;
+		session.screenHeight = input.screenHeight;
+		session.screenCursorX = input.screenCursorX;
+		session.screenCursorY = input.screenCursorY;
+		session.clampState();
 	}
-	session.loadedMacroDisplayNames.clear();
-	session.macroOrder.clear();
-	session.macroEnumIndex = 0;
-	session.deferredUiCommands.clear();
-	for (const auto &i : input.macroOrder)
-		appendUniqueString(session.macroOrder, upperKey(i));
-	for (const auto &macroDisplayName : input.macroDisplayNames) {
-		std::string key = upperKey(macroDisplayName.first);
-		session.loadedMacroDisplayNames[key] = macroDisplayName.second;
-		if (std::find(session.macroOrder.begin(), session.macroOrder.end(), key) == session.macroOrder.end()) session.macroOrder.push_back(key);
+
+	MRMacroStagedJobResult buildResult(const VirtualMachine &vm) const {
+		MRMacroStagedJobResult result;
+
+		result.logLines = vm.log;
+		result.cancelled = vm.wasCancelled();
+		for (std::size_t i = 0; i < result.logLines.size(); ++i) {
+			if (result.logLines[i].rfind("VM Error:", 0) == 0) {
+				result.hadError = true;
+				break;
+			}
+		}
+		result.transaction = session.transaction;
+		result.cursorOffset = session.cursorOffset;
+		result.selectionStart = session.selectionStart;
+		result.selectionEnd = session.selectionEnd;
+		result.blockMode = session.blockMode;
+		result.blockMarkingOn = session.blockMarkingOn;
+		result.blockAnchor = session.blockAnchor;
+		result.blockEnd = session.blockEnd;
+		result.globalOrder.clear();
+		result.globalInts.clear();
+		result.globalStrings.clear();
+		result.globalOrder.reserve(session.globalOrder.size());
+		for (std::size_t i = 0; i < session.globalOrder.size(); ++i) {
+			const std::string &key = session.globalOrder[i];
+			std::map<std::string, GlobalEntry>::const_iterator it = session.globals.find(key);
+			if (it == session.globals.end()) continue;
+			result.globalOrder.push_back(key);
+			if (it->second.type == TYPE_INT) result.globalInts[key] = valueAsInt(it->second.value);
+			else if (it->second.type == TYPE_STR)
+				result.globalStrings[key] = valueAsString(it->second.value);
+		}
+		result.macroOrder = session.macroOrder;
+		result.macroDisplayNames = session.loadedMacroDisplayNames;
+		result.deferredUiCommands = session.deferredUiCommands;
+		result.lastSearchValid = session.lastSearchValid;
+		result.lastSearchStart = session.lastSearchStart;
+		result.lastSearchEnd = session.lastSearchEnd;
+		result.lastSearchCursor = session.lastSearchCursor;
+		result.ignoreCase = session.ignoreCase;
+		result.tabExpand = session.tabExpand;
+		result.markStack.reserve(session.markStack.size());
+		for (unsigned int i : session.markStack)
+			result.markStack.push_back(static_cast<std::size_t>(i));
+		result.insertMode = session.insertMode;
+		result.indentLevel = session.indentLevel;
+		result.fileName = session.fileName;
+		result.fileChanged = session.fileChanged;
+		return result;
 	}
-	session.lastSearchValid = input.lastSearchValid;
-	session.lastSearchStart = input.lastSearchStart;
-	session.lastSearchEnd = input.lastSearchEnd;
-	session.lastSearchCursor = input.lastSearchCursor;
-	session.ignoreCase = input.ignoreCase;
-	session.tabExpand = input.tabExpand;
-	session.markStack.clear();
-	for (unsigned long i : input.markStack)
-		session.markStack.push_back(static_cast<uint>(i));
-	session.insertMode = input.insertMode;
-	session.indentLevel = input.indentLevel;
-	session.pageLines = std::max(1, input.pageLines);
-	session.fileName = input.fileName;
-	session.fileChanged = input.fileChanged;
-	session.screenWidth = input.screenWidth;
-	session.screenHeight = input.screenHeight;
-	session.screenCursorX = input.screenCursorX;
-	session.screenCursorY = input.screenCursorY;
-	session.clampState();
-	SessionGuard sessionGuard(&session, &stopToken, std::move(cancelFlag));
+};
+
+MRMacroStagedJobResult mrvmRunBytecodeStagedBackground(const unsigned char *bytecode, std::size_t length, const MRMacroStagedExecutionInput &input, std::stop_token stopToken, std::shared_ptr<std::atomic_bool> cancelFlag) {
+	VirtualMachine vm;
+	MRVMStagedExecutionContext context(input, stopToken, std::move(cancelFlag));
+
+	context.initializeSession();
+	MRVMStagedExecutionContext::InstallGuard installGuard(context);
 	vm.setVerboseLogging(false);
 	vm.execute(bytecode, length);
-
-	result.logLines = vm.log;
-	result.cancelled = vm.wasCancelled();
-	for (std::size_t i = 0; i < result.logLines.size(); ++i) {
-		if (result.logLines[i].rfind("VM Error:", 0) == 0) {
-			result.hadError = true;
-			break;
-		}
-	}
-	result.transaction = session.transaction;
-	result.cursorOffset = session.cursorOffset;
-	result.selectionStart = session.selectionStart;
-	result.selectionEnd = session.selectionEnd;
-	result.blockMode = session.blockMode;
-	result.blockMarkingOn = session.blockMarkingOn;
-	result.blockAnchor = session.blockAnchor;
-	result.blockEnd = session.blockEnd;
-	result.globalOrder.clear();
-	result.globalInts.clear();
-	result.globalStrings.clear();
-	result.globalOrder.reserve(session.globalOrder.size());
-	for (std::size_t i = 0; i < session.globalOrder.size(); ++i) {
-		const std::string &key = session.globalOrder[i];
-		std::map<std::string, GlobalEntry>::const_iterator it = session.globals.find(key);
-		if (it == session.globals.end()) continue;
-		result.globalOrder.push_back(key);
-		if (it->second.type == TYPE_INT) result.globalInts[key] = valueAsInt(it->second.value);
-		else if (it->second.type == TYPE_STR)
-			result.globalStrings[key] = valueAsString(it->second.value);
-	}
-	result.macroOrder = session.macroOrder;
-	result.macroDisplayNames = session.loadedMacroDisplayNames;
-	result.deferredUiCommands = session.deferredUiCommands;
-	result.lastSearchValid = session.lastSearchValid;
-	result.lastSearchStart = session.lastSearchStart;
-	result.lastSearchEnd = session.lastSearchEnd;
-	result.lastSearchCursor = session.lastSearchCursor;
-	result.ignoreCase = session.ignoreCase;
-	result.tabExpand = session.tabExpand;
-	result.markStack.reserve(session.markStack.size());
-	for (unsigned int i : session.markStack)
-		result.markStack.push_back(static_cast<std::size_t>(i));
-	result.insertMode = session.insertMode;
-	result.indentLevel = session.indentLevel;
-	result.fileName = session.fileName;
-	result.fileChanged = session.fileChanged;
-	return result;
+	return context.buildResult(vm);
 }
 
 void mrvmSetProcessContext(int argc, char **argv) {
