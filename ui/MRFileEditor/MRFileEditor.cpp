@@ -2677,23 +2677,25 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 		return;
 	}
 
-	if (mSyntaxWarmupTaskId != 0 && mSyntaxWarmupDocumentId == docId && mSyntaxWarmupVersion == version && mSyntaxWarmupLanguage == language && mSyntaxWarmupTreeSitterLanguage == treeSitterLanguage &&
-		topLine >= mSyntaxWarmupTopLine && bottomLine <= mSyntaxWarmupBottomLine)
-		return;
+		if (mSyntaxWarmupTaskId != 0 && mSyntaxWarmupDocumentId == docId && mSyntaxWarmupVersion == version && mSyntaxWarmupLanguage == language && mSyntaxWarmupTreeSitterLanguage == treeSitterLanguage &&
+			topLine >= mSyntaxWarmupTopLine && bottomLine <= mSyntaxWarmupBottomLine)
+			return;
 
-	MRTextBufferModel::ReadSnapshot snapshot = mBufferModel.readSnapshot();
-	std::uint64_t previousTaskId = mSyntaxWarmupTaskId;
-	if (previousTaskId != 0) static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
-	mSyntaxWarmupDocumentId = docId;
-	mSyntaxWarmupVersion = version;
-	mSyntaxWarmupTopLine = topLine;
-	mSyntaxWarmupBottomLine = bottomLine;
-	mSyntaxWarmupLanguage = language;
-	mSyntaxWarmupTreeSitterLanguage = treeSitterLanguage;
-	mSyntaxWarmupTaskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::SyntaxWarmup, docId, version, syntaxWarmupTaskLabel(), [snapshot, language, treeSitterLanguage, warmupTreeSitterLanguage, lineStarts](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
-		mr::coprocessor::Result result;
-		std::vector<mr::coprocessor::SyntaxWarmLine> warmed;
-		auto shouldStop = [&]() noexcept { return stopToken.stop_requested() || info.cancelRequested(); };
+		MRTextBufferModel::ReadSnapshot snapshot = mBufferModel.readSnapshot();
+		std::uint64_t previousTaskId = mSyntaxWarmupTaskId;
+		const std::string coalescingKey = "syntax:" + std::to_string(static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(this))) + ":" + std::to_string(docId) + ":" + std::to_string(version) + ":" +
+		                                  std::to_string(static_cast<unsigned int>(language)) + ":" + (treeSitterActive ? "1" : "0") + ":" + std::to_string(static_cast<unsigned int>(warmupTreeSitterLanguage)) + ":" +
+		                                  std::to_string(topLine) + ":" + std::to_string(bottomLine);
+		mSyntaxWarmupDocumentId = docId;
+		mSyntaxWarmupVersion = version;
+		mSyntaxWarmupTopLine = topLine;
+		mSyntaxWarmupBottomLine = bottomLine;
+		mSyntaxWarmupLanguage = language;
+		mSyntaxWarmupTreeSitterLanguage = treeSitterLanguage;
+		mSyntaxWarmupTaskId = mr::coprocessor::globalCoprocessor().submitCoalesced(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::SyntaxWarmup, docId, version, coalescingKey, syntaxWarmupTaskLabel(), [snapshot, language, treeSitterLanguage, warmupTreeSitterLanguage, lineStarts](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
+			mr::coprocessor::Result result;
+			std::vector<mr::coprocessor::SyntaxWarmLine> warmed;
+			auto shouldStop = [&]() noexcept { return stopToken.stop_requested() || info.cancelRequested(); };
 		result.task = info;
 		if (shouldStop()) {
 			result.status = mr::coprocessor::TaskStatus::Cancelled;
