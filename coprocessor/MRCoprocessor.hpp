@@ -292,11 +292,15 @@ class Coprocessor {
 	void shutdown(bool drainResults = false);
 	void cancelPending();
 
-  private:
+	private:
 	struct Request {
 		TaskInfo task;
 		TaskFn fn;
 		std::uint64_t submittedMicros;
+		std::uint64_t laneSequence;
+
+		Request() noexcept : task(), fn(), submittedMicros(0), laneSequence(0) {
+		}
 	};
 
 	struct LaneState {
@@ -304,14 +308,18 @@ class Coprocessor {
 		std::mutex mutex;
 		std::condition_variable_any cv;
 		std::deque<Request> queue;
-		std::jthread worker;
+		std::uint64_t nextSubmitSequence;
+		std::uint64_t nextPublishSequence;
+		std::deque<std::uint64_t> skippedSequences;
+		std::map<std::uint64_t, Result> finishedResults;
+		std::vector<std::jthread> workers;
 
-		explicit LaneState(Lane aLane) noexcept : lane(aLane), mutex(), cv(), queue(), worker() {
+		explicit LaneState(Lane aLane) noexcept : lane(aLane), mutex(), cv(), queue(), nextSubmitSequence(1), nextPublishSequence(1), skippedSequences(), finishedResults(), workers() {
 		}
 	};
 
 	void startLane(LaneState &lane);
-	void workerLoop(LaneState &lane, std::stop_token stopToken);
+	void workerLoop(LaneState &lane, std::size_t workerIndex, std::stop_token stopToken);
 	void enqueueResult(Result result);
 	void forgetTask(std::uint64_t taskId);
 	LaneState &laneState(Lane lane) noexcept;
