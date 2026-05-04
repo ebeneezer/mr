@@ -5,7 +5,9 @@
 #include <tvision/tv.h>
 
 class TMenuBar;
+class TMenuItem;
 
 TMenuBar *createMRMenuBar(TRect r);
+TMenuItem *createMRWindowMenuPopupItems();
 
 #endif

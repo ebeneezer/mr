@@ -18,6 +18,9 @@ CLANG_TIDY ?= clang-tidy
 BEAR ?= bear
 LINT_FILE ?= mrmac/MRVM.cpp
 MR_BUILD_EPOCH := $(shell date +%s)
+TMP_BASE_DIR ?= /dev/shm
+TMP_COMPILER_LAUNCHER := $(abspath ./misc/mr-compiler-temp.sh)
+TMP_RUN = $(TMP_COMPILER_LAUNCHER)
 
 TVISION_SOURCE_DIR = ./tvision
 TVISION_PATCH_DIR ?= ./patches
@@ -47,10 +50,13 @@ TVISION_LIB = $(TVISION_BUILD_DIR)/libtvision.a
 TVISION_TOOLCHAIN_STAMP = $(TVISION_BUILD_DIR)/.mr-toolchain
 TVISION_C_COMPILER := $(shell command -v $(CC) 2>/dev/null || echo $(CC))
 TVISION_CXX_COMPILER := $(shell command -v $(CXX) 2>/dev/null || echo $(CXX))
+TVISION_TOOLCHAIN_SIGNATURE := $(TVISION_C_COMPILER)|$(TVISION_CXX_COMPILER)|$(TMP_COMPILER_LAUNCHER)
 TVISION_CMAKE_FLAGS = \
 	-DCMAKE_BUILD_TYPE=Debug \
 	-DCMAKE_C_COMPILER=$(TVISION_C_COMPILER) \
 	-DCMAKE_CXX_COMPILER=$(TVISION_CXX_COMPILER) \
+	-DCMAKE_C_COMPILER_LAUNCHER=$(TMP_COMPILER_LAUNCHER) \
+	-DCMAKE_CXX_COMPILER_LAUNCHER=$(TMP_COMPILER_LAUNCHER) \
 	-DCMAKE_CXX_STANDARD=20 \
 	-DCMAKE_CXX_STANDARD_REQUIRED=ON \
 	-DCMAKE_CXX_EXTENSIONS=ON \
@@ -284,15 +290,16 @@ $(TVISION_LOCAL_PATCH_STAMP): $(TVISION_PATCHES) Makefile
 	fi; \
 	touch $(TVISION_LOCAL_PATCH_STAMP)
 
-tvision-build: $(TVISION_SOURCE_DIR)/CMakeLists.txt $(TVISION_SOURCE_DIR)/source/CMakeLists.txt $(TVISION_LOCAL_PATCH_STAMP)
+tvision-build: $(TVISION_SOURCE_DIR)/CMakeLists.txt $(TVISION_SOURCE_DIR)/source/CMakeLists.txt $(TVISION_LOCAL_PATCH_STAMP) $(TMP_COMPILER_LAUNCHER)
 	@mkdir -p $(TVISION_SOURCE_DIR)/build
 	@if [ ! -f $(TVISION_SOURCE_DIR)/build/CMakeCache.txt ] || \
+		[ Makefile -nt $(TVISION_SOURCE_DIR)/build/CMakeCache.txt ] || \
 		[ $(TVISION_SOURCE_DIR)/CMakeLists.txt -nt $(TVISION_SOURCE_DIR)/build/CMakeCache.txt ] || \
 		[ $(TVISION_SOURCE_DIR)/source/CMakeLists.txt -nt $(TVISION_SOURCE_DIR)/build/CMakeCache.txt ] || \
 		[ ! -f $(TVISION_TOOLCHAIN_STAMP) ] || \
-		[ "$$(cat $(TVISION_TOOLCHAIN_STAMP) 2>/dev/null)" != "$(TVISION_C_COMPILER)|$(TVISION_CXX_COMPILER)" ]; then \
+		[ "$$(cat $(TVISION_TOOLCHAIN_STAMP) 2>/dev/null)" != "$(TVISION_TOOLCHAIN_SIGNATURE)" ]; then \
 		$(CMAKE) -S $(TVISION_SOURCE_DIR) -B $(TVISION_SOURCE_DIR)/build $(TVISION_CMAKE_FLAGS); \
-		printf '%s\n' "$(TVISION_C_COMPILER)|$(TVISION_CXX_COMPILER)" > $(TVISION_TOOLCHAIN_STAMP); \
+		printf '%s\n' "$(TVISION_TOOLCHAIN_SIGNATURE)" > $(TVISION_TOOLCHAIN_STAMP); \
 	fi
 	$(CMAKE) --build $(TVISION_SOURCE_DIR)/build --target tvision
 
@@ -403,24 +410,24 @@ piecetable/MRTextDocument.o: piecetable/MRTextDocument.cpp piecetable/MRTextDocu
 
 # 4. Linker call
 $(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS) | pcre2-check
-	$(CXX) -o $@ $^ $(LDFLAGS) || { paplay --volume=25000 /usr/share/sounds/ocean/stereo/battery-caution.oga; exit 1; }
+	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS) || { paplay --volume=25000 /usr/share/sounds/ocean/stereo/battery-caution.oga; exit 1; }
 	killall mr 2> /dev/null || true
 	paplay --volume=25000 /usr/share/sounds/freedesktop/stereo/service-login.oga || true
 
 $(STAGE_PROFILE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(STAGE_PROFILE_PROBE_OBJECT) | pcre2-check
-	$(CXX) -o $@ $^ $(LDFLAGS)
+	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
 $(REGRESSION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(REGRESSION_PROBE_OBJECT) | pcre2-check
-	$(CXX) -o $@ $^ $(LDFLAGS)
+	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
 
 # C++ compilations
 %.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@ || { paplay --volume=25000 /usr/share/sounds/ocean/stereo/battery-caution.oga; exit 1; }
+	$(TMP_RUN) $(CXX) $(CXXFLAGS) -c $< -o $@ || { paplay --volume=25000 /usr/share/sounds/ocean/stereo/battery-caution.oga; exit 1; }
 
 # C compilation
 %.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@ || { paplay --volume=25000 /usr/share/sounds/ocean/stereo/battery-caution.oga; exit 1; }
+	$(TMP_RUN) $(CC) $(CFLAGS) -c $< -o $@ || { paplay --volume=25000 /usr/share/sounds/ocean/stereo/battery-caution.oga; exit 1; }
 
 clean:
 	rm -f $(CXX_OBJECTS) $(C_OBJECTS) $(TARGET) $(STAGE_PROFILE_PROBE_OBJECT) \

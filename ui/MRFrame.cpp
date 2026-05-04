@@ -2,7 +2,11 @@
 #define Uses_TStaticText
 #define Uses_TText
 #define Uses_TDialog
+#define Uses_TMenuItem
 #include "MRFrame.hpp"
+#include "MREditWindow.hpp"
+#include "MRWindowManager.hpp"
+#include "../app/MRMenuFactory.hpp"
 
 #include <algorithm>
 #include <array>
@@ -20,10 +24,14 @@ static const char kFrameChars[33] = "   \xC0 \xB3\xDA\xC3 \xD9\xC4\xC1\xBF\xB4\x
                                     "\xBC\xCD\xCF\xBB\xB6\xD1 ";
 
 static const char *kCloseIcon = "[~\xFE~]";
-static const char *kZoomIcon = "[~\x18~]";
-static const char *kUnZoomIcon = "[~\x12~]";
+static const char *kZoomIcon = "[\x18]";
+static const char *kUnZoomIcon = "[\x12]";
+static const char *kMinimizeIcon = "[↓]";
 static const char *kDragIcon = "~\xC4\xD9~";
 static const char *kDragLeftIcon = "~\xC0\xC4~";
+static const char *kMinimizedHamburgerIcon = "☰";
+static const char *kMinimizedRestoreIcon = "↗";
+static const char *kMinimizedReinsertIcon = "↓";
 
 static constexpr char kDirtyMarkerIcon[] = "✍";
 static constexpr char kRecordingMarkerIcon[] = "📼";
@@ -42,6 +50,9 @@ static constexpr int kWordWrapMarkerSlotWidth = 3;
 static constexpr char kMarkerLeftBracket = '[';
 static constexpr char kMarkerRightBracket = ']';
 static constexpr int kMarkerGap = 1;
+static constexpr int kNormalControlGap = 1;
+static constexpr int kNormalRightPadding = 1;
+static constexpr int kMinimizedRightPadding = 0;
 
 int markerWidth(TStringView icon) noexcept {
 	return std::max(1, strwidth(icon));
@@ -53,6 +64,32 @@ int markerSpan(TStringView icon, int minWidth = 1) noexcept {
 
 int advanceMarkerX(int x, TStringView icon, int minWidth = 1) noexcept {
 	return x + markerSpan(icon, minWidth) + kMarkerGap;
+}
+
+int minimizedReinsertStart(int width) noexcept {
+	return width - kMinimizedRightPadding - strwidth(kMinimizedReinsertIcon);
+}
+
+int minimizedRestoreStart(int width) noexcept {
+	return minimizedReinsertStart(width) - strwidth(kMinimizedRestoreIcon);
+}
+
+int minimizedRightClusterWidth() noexcept {
+	return 1 + strwidth(kMinimizedRestoreIcon) + strwidth(kMinimizedReinsertIcon) + kMinimizedRightPadding;
+}
+
+int normalControlWidth(TStringView icon) noexcept {
+	return std::max(0, strwidth(icon));
+}
+
+int normalRightControlStart(int width, TStringView icon) noexcept {
+	return width - 1 - kNormalRightPadding - normalControlWidth(icon);
+}
+
+int normalZoomStart(int width, bool hasMinimizeButton) noexcept {
+	const int zoomWidth = normalControlWidth(kZoomIcon);
+	if (!hasMinimizeButton) return normalRightControlStart(width, kZoomIcon);
+	return normalRightControlStart(width, kMinimizeIcon) - kNormalControlGap - zoomWidth;
 }
 
 bool hasMarkerBlock(const MRFrame::MarkerState &state) noexcept {
@@ -253,26 +290,65 @@ void MRFrame::draw() {
 	cFrame = getColor(cFrame);
 	cTitle = getColor(cTitle);
 
+	MREditWindow *editWindow = dynamic_cast<MREditWindow *>(window);
+	if (editWindow != nullptr && MRWindowManager::isWindowMinimized(editWindow)) {
+		const char *title = MRWindowManager::minimizedDisplayTitle(editWindow);
+		const int hamburgerWidth = strwidth(kMinimizedHamburgerIcon);
+		const int bracketWidth = 1;
+		const int rightClusterWidth = minimizedRightClusterWidth();
+		const int restoreWidth = strwidth(kMinimizedRestoreIcon);
+		const int reinsertWidth = strwidth(kMinimizedReinsertIcon);
+		const int restoreStart = minimizedRestoreStart(width);
+		const int reinsertStart = minimizedReinsertStart(width);
+		const int titleWidth = std::min(MRWindowManager::minimizedDisplayTitleWidth(editWindow), std::max(0, width - hamburgerWidth - bracketWidth - rightClusterWidth));
+		int x = 0;
+
+		b.moveChar(0, ' ', cTitle, size.x);
+		b.moveStr(static_cast<ushort>(x), kMinimizedHamburgerIcon, cTitle, hamburgerWidth);
+		x += hamburgerWidth;
+		if (x < width) b.putChar(static_cast<ushort>(x++), '[');
+		if (title != nullptr && titleWidth > 0) {
+			b.moveStr(static_cast<ushort>(x), title, cTitle, titleWidth);
+			x += titleWidth;
+		}
+		if (x < restoreStart) b.putChar(static_cast<ushort>(x++), ']');
+		b.moveStr(static_cast<ushort>(restoreStart), kMinimizedRestoreIcon, cTitle, restoreWidth);
+		b.moveStr(static_cast<ushort>(reinsertStart), kMinimizedReinsertIcon, cTitle, reinsertWidth);
+		writeLine(0, 0, size.x, 1, b);
+		mrvmUiInvalidateScreenBase();
+		return;
+	}
+
 	drawFrameLine(b, 0, f, cFrame);
 
 	bool controlsVisible = isFocused;
+	const bool hasZoomButton = window != nullptr && (window->flags & wfZoom) != 0;
+	const bool hasMinimizeButton = window != nullptr;
+	const int minimizeStart = hasMinimizeButton ? normalRightControlStart(width, kMinimizeIcon) : width;
+	const int zoomStart = hasZoomButton ? normalZoomStart(width, hasMinimizeButton) : width;
+	const int controlClusterStart = hasZoomButton ? zoomStart : minimizeStart;
+	short numberPos = width - 3;
+	const bool hasWindowNumber = window != nullptr && window->number != wnNoNumber && window->number < 10;
 	short titleReserveRight = width - 2;
-	if (window != nullptr && window->number != wnNoNumber && window->number < 10) {
-		short numberPos = (window->flags & wfZoom) != 0 ? width - 7 : width - 3;
+	if (hasWindowNumber) {
+		if (hasMinimizeButton || hasZoomButton) numberPos = static_cast<short>(controlClusterStart - 2);
 		if (numberPos >= 1 && numberPos < width - 1) b.putChar(numberPos, window->number + '0');
-		titleReserveRight = numberPos - 3;
+		titleReserveRight = numberPos - 2;
 	}
 
 	if (controlsVisible && window != nullptr) {
+		const int clusterLeft = std::max(1, hasWindowNumber ? controlClusterStart - 2 : controlClusterStart);
 		if ((window->flags & wfClose) != 0) b.moveCStr(2, kCloseIcon, cFrame);
-		if ((window->flags & wfZoom) != 0) {
+		if (hasWindowNumber && numberPos >= 1 && numberPos < width - 1) b.putChar(numberPos, window->number + '0');
+		if (hasZoomButton) {
 			TPoint minSize, maxSize;
 			owner->sizeLimits(minSize, maxSize);
-			if (owner->size == maxSize) b.moveCStr(width - 5, kUnZoomIcon, cFrame);
+			if (owner->size == maxSize) b.moveStr(static_cast<ushort>(zoomStart), kUnZoomIcon, cFrame, normalControlWidth(kUnZoomIcon));
 			else
-				b.moveCStr(width - 5, kZoomIcon, cFrame);
-			titleReserveRight = std::min<short>(titleReserveRight, width - 7);
+				b.moveStr(static_cast<ushort>(zoomStart), kZoomIcon, cFrame, normalControlWidth(kZoomIcon));
 		}
+		if (hasMinimizeButton) b.moveStr(static_cast<ushort>(minimizeStart), kMinimizeIcon, cFrame, normalControlWidth(kMinimizeIcon));
+		if (hasMinimizeButton || hasZoomButton) titleReserveRight = std::min<short>(titleReserveRight, static_cast<short>(controlClusterStart - 2));
 	}
 
 	int markerX = markerStartColumn();
@@ -389,8 +465,34 @@ void MRFrame::handleEvent(TEvent &event) {
 	if (event.what == evMouseDown) {
 		TPoint mouse = makeLocal(event.mouse.where);
 		TWindow *window = static_cast<TWindow *>(owner);
+		MREditWindow *editWindow = dynamic_cast<MREditWindow *>(window);
 		if (mouse.y == 0 && window != nullptr) {
+			if (editWindow != nullptr && MRWindowManager::isWindowMinimized(editWindow)) {
+				if (mouse.x < strwidth(kMinimizedHamburgerIcon)) {
+					TMenuItem *items = createMRWindowMenuPopupItems();
+					if (items != nullptr) popupMenu(event.mouse.where, *items, owner);
+					clearEvent(event);
+				} else if (MRWindowManager::isMinimizedReinsertGlyphHit(editWindow, mouse)) {
+					event.what = evCommand;
+					event.message.command = cmResize;
+					event.message.infoPtr = owner;
+					putEvent(event);
+					clearEvent(event);
+				} else if (MRWindowManager::isMinimizedRestoreGlyphHit(editWindow, mouse) || (event.mouse.eventFlags & meDoubleClick) != 0) {
+					event.what = evCommand;
+					event.message.command = cmMrWindowMinimize;
+					event.message.infoPtr = owner;
+					putEvent(event);
+					clearEvent(event);
+				} else if ((window->flags & wfMove) != 0)
+					dragWindow(event, dmDragMove);
+				return;
+		}
 			bool controlsVisible = isFrameFocused(this);
+			const bool hasZoomButton = (window->flags & wfZoom) != 0;
+			const bool hasMinimizeButton = true;
+			const int minimizeStart = normalRightControlStart(size.x, kMinimizeIcon);
+			const int zoomStart = normalZoomStart(size.x, hasMinimizeButton);
 			if ((window->flags & wfClose) != 0 && controlsVisible && mouse.x >= 2 && mouse.x <= 4) {
 				while (mouseEvent(event, evMouse))
 					;
@@ -402,7 +504,13 @@ void MRFrame::handleEvent(TEvent &event) {
 					putEvent(event);
 					clearEvent(event);
 				}
-			} else if ((window->flags & wfZoom) != 0 && controlsVisible && ((mouse.x >= size.x - 5 && mouse.x <= size.x - 3) || (event.mouse.eventFlags & meDoubleClick))) {
+			} else if (controlsVisible && hasMinimizeButton && mouse.x >= minimizeStart && mouse.x < minimizeStart + normalControlWidth(kMinimizeIcon)) {
+				event.what = evCommand;
+				event.message.command = cmMrWindowMinimize;
+				event.message.infoPtr = owner;
+				putEvent(event);
+				clearEvent(event);
+			} else if (hasZoomButton && controlsVisible && ((mouse.x >= zoomStart && mouse.x < zoomStart + normalControlWidth(kZoomIcon)) || (event.mouse.eventFlags & meDoubleClick))) {
 				event.what = evCommand;
 				event.message.command = cmZoom;
 				event.message.infoPtr = owner;

@@ -4601,6 +4601,14 @@ bool handleMRCommand(ushort command) {
 			mrvmUiZoomCurrentWindow();
 			return true;
 
+		case cmMrWindowMinimize:
+			if (currentEditWindow() != nullptr) currentEditWindow()->isMinimized() ? currentEditWindow()->restoreWindow() : currentEditWindow()->minimizeWindow();
+			return true;
+
+		case cmMrWindowRestore:
+			if (currentEditWindow() != nullptr && currentEditWindow()->isMinimized()) currentEditWindow()->restoreWindow();
+			return true;
+
 		case cmMrWindowCascade:
 			return handleWindowCascade();
 

@@ -1,0 +1,86 @@
+--- a/source/platform/dispbuff.cpp
++++ b/source/platform/dispbuff.cpp
+@@ -19,7 +19,7 @@ DisplayBuffer::DisplayBuffer() noexcept :
+ #ifdef _WIN32
+     wideOverlapping(false)
+ #else
+-    wideOverlapping(true)
++    wideOverlapping(false)
+ #endif
+ {
+     // Check if FPS shall be limited.
+@@ -383,11 +383,11 @@ inline void FlushScreenAlgorithm::writeCell( const TCellChar &ch,
+ 
+ void FlushScreenAlgorithm::handleWideCharSpill() noexcept
+ {
+-    uchar width = cell->isWide();
++    int width = cell->isWide();
+     const auto Attr = cell->attr;
+-    if (x + width < size.x)
+-        writeCell();
+-    else {
++    const int wbegin = x;
++
++    if (x + width >= size.x) {
+         // Replace with spaces if it would otherwise be printed on the next line.
+         writeSpace();
+         while (--width && ++x < size.x) {
+@@ -400,14 +400,20 @@ void FlushScreenAlgorithm::handleWideCharSpill() noexcept
+         }
+         return;
+     }
+-    // Ensure character does not spill on next cells.
+-    int wbegin = x;
+-    while (width-- && ++x < size.x) {
++
++    int remaining = width;
++    while (remaining > 0 && ++x < size.x) {
++        --remaining;
+         getCell();
+         commitDirty();
+         if (!isTrail(*cell)) {
+             if (wideCanOverlap()) {
+-                // Write over the wide character.
++                const int overlapX = x;
++                x = wbegin;
++                getCell();
++                writeCell();
++                x = overlapX;
++                getCell();
+                 writeCell();
+             } else {
+                 // Replace the whole wide character with spaces.
+@@ -423,6 +429,13 @@ void FlushScreenAlgorithm::handleWideCharSpill() noexcept
+             return;
+         }
+     }
++
++    x = wbegin;
++    getCell();
++    writeCell();
++    x = wbegin + width;
++    getCell();
++
+     // If the next character has a different attribute, print it anyway
+     // to avoid attribute spill.
+     if (x + 1 < size.x) {
+--- a/source/platform/ttext.cpp
++++ b/source/platform/ttext.cpp
+@@ -344,6 +344,8 @@ TText::Lw TText::drawOneImpl( TSpan<TScreenCell> cells, size_t i,
+                 if (i < cells.size())
+                 {
+                     bool wide = mb.width > 1;
++                    if (wide && i + 1 >= cells.size())
++                        return {(size_t) mb.length, 0};
+                     cells[i]._ch.moveMultiByteChar({&text[j], (size_t) mb.length}, wide);
+                     bool drawTrail = (wide && i + 1 < cells.size());
+                     if (drawTrail)
+@@ -391,6 +393,8 @@ TText::Lw TText::drawOneImpl( TSpan<TScreenCell> cells, size_t i,
+             if (i < cells.size())
+             {
+                 bool wide = width > 1;
++                if (wide && i + 1 >= cells.size())
++                    return {1, 0};
+                 cells[i]._ch.moveMultiByteChar(textU8, wide);
+                 bool drawTrail = (wide && i + 1 < cells.size());
+                 if (drawTrail)

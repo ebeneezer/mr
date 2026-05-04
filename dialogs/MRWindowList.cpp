@@ -72,8 +72,9 @@ struct WindowListEntry {
 	std::string slotLabel;
 	std::string directoryLabel;
 	bool hidden;
+	bool minimized;
 
-	WindowListEntry() : window(nullptr), hidden(false) {
+	WindowListEntry() : window(nullptr), hidden(false), minimized(false) {
 	}
 };
 
@@ -395,6 +396,7 @@ class WindowListDialog : public MRDialogFoundation {
 				return;
 			}
 			if (mode == mrwlManageWindows) {
+				if (selected->isMinimized()) selected->restoreWindow();
 				mrScheduleWindowActivation(selected);
 				clearEvent(event);
 				return;
@@ -499,6 +501,7 @@ class WindowListDialog : public MRDialogFoundation {
 		std::string filePart = entry.fileLabel;
 		std::string dirPart = trimCopy(entry.directoryLabel);
 		if (entry.hidden) dirPart += " [hidden]";
+		if (entry.minimized) dirPart += " [minimized]";
 		return padRight(filePart, 24) + " " + padRight(entry.slotLabel, 2) + "  " + dirPart;
 	}
 
@@ -519,6 +522,7 @@ class WindowListDialog : public MRDialogFoundation {
 			entry.slotLabel = slotLabelFor(i);
 			entry.directoryLabel = directoryOf(fileName.empty() ? currentWorkingDirectory() : fileName);
 			entry.hidden = isWindowManuallyHidden(windows[i]);
+			entry.minimized = windows[i]->isMinimized();
 			entries.push_back(entry);
 			rows.push_back(renderRow(entry));
 		}

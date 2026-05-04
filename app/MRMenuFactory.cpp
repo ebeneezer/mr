@@ -35,8 +35,8 @@ TSubMenu *createEditMenu() {
 	return &(*new TSubMenu("~E~dit", kbAltE) + *new TMenuItem("~U~ndo", cmMrEditUndo, kbCtrlZ, hcNoContext, "CtrlZ") + *new TMenuItem("~R~edo", cmMrEditRedo, TKey('Z', kbCtrlShift | kbShift), hcNoContext, "ShiftCtrlZ") + newLine() + *new TMenuItem("~C~ut", cmMrEditCutToBuffer, kbCtrlIns, hcNoContext, "CtrlIns") + *new TMenuItem("co~P~y", cmMrEditCopyToBuffer, kbNoKey, hcNoContext, "CtrlGrey+") + *new TMenuItem("~A~ppend", cmMrEditAppendToBuffer, kbCtrlDel, hcNoContext, "CtrlDel") + *new TMenuItem("cut & ap~P~end", cmMrEditCutAndAppendToBuffer, kbNoKey, hcNoContext, "CtrlGrey-") + *new TMenuItem("~P~aste", cmMrEditPasteFromBuffer, kbShiftIns, hcNoContext, "ShiftIns") + newLine() + *new TMenuItem("re~P~eat", cmMrEditRepeatCommand, kbCtrlR, hcNoContext, "CtrlR"));
 }
 
-TSubMenu *createWindowMenu() {
-	return &(*new TSubMenu("~W~indow", kbAltW) + *new TMenuItem("~O~pen...", cmMrWindowOpen, kbNoKey, hcNoContext) + *new TMenuItem("~C~lose", cmMrWindowClose, kbNoKey, hcNoContext) + *new TMenuItem("~S~plit...", cmMrWindowSplit, kbNoKey, hcNoContext) + *new TMenuItem("~L~ist...", cmMrWindowList, kbCtrlF6, hcNoContext, "CtrlF6") + newLine() + *new TMenuItem("~N~ext", cmMrWindowNext, kbF6, hcNoContext, "F6") + *new TMenuItem("~P~revious", cmMrWindowPrevious, kbShiftF6, hcNoContext, "ShiftF6") + *new TMenuItem("~A~djacent...", cmMrWindowAdjacent, kbNoKey, hcNoContext) + newLine() + *new TMenuItem("~H~ide", cmMrWindowHide, kbNoKey, hcNoContext) + *new TMenuItem("~M~odify size", cmMrWindowModifySize, kbNoKey, hcNoContext, "ScrollLock") + *new TMenuItem("~Z~oom", cmMrWindowZoom, kbAltF6, hcNoContext, "AltF6") + *new TMenuItem("m~I~nimize", cmMrWindowMinimize, kbNoKey, hcNoContext) + *createOrganizeMenuItem() + newLine() + *new TMenuItem("lin~K~...", cmMrWindowLink, kbNoKey, hcNoContext) +
+TSubMenu *buildWindowMenu() {
+	return &(*new TSubMenu("~W~indow", kbAltW) + *new TMenuItem("~O~pen...", cmMrWindowOpen, kbNoKey, hcNoContext) + *new TMenuItem("~C~lose", cmMrWindowClose, kbNoKey, hcNoContext) + *new TMenuItem("~S~plit...", cmMrWindowSplit, kbNoKey, hcNoContext) + *new TMenuItem("~L~ist...", cmMrWindowList, kbCtrlF6, hcNoContext, "CtrlF6") + newLine() + *new TMenuItem("~N~ext", cmMrWindowNext, kbF6, hcNoContext, "F6") + *new TMenuItem("~P~revious", cmMrWindowPrevious, kbShiftF6, hcNoContext, "ShiftF6") + *new TMenuItem("~A~djacent...", cmMrWindowAdjacent, kbNoKey, hcNoContext) + newLine() + *new TMenuItem("~H~ide", cmMrWindowHide, kbNoKey, hcNoContext) + *new TMenuItem("~M~odify size", cmMrWindowModifySize, kbNoKey, hcNoContext, "ScrollLock") + *new TMenuItem("~Z~oom", cmMrWindowZoom, kbAltF6, hcNoContext, "AltF6") + *new TMenuItem("m~I~nimize", cmMrWindowMinimize, kbNoKey, hcNoContext) + *new TMenuItem("~R~estore", cmMrWindowRestore, kbNoKey, hcNoContext) + *createOrganizeMenuItem() + newLine() + *new TMenuItem("lin~K~...", cmMrWindowLink, kbNoKey, hcNoContext) +
 	         *new TMenuItem("~U~nlink", cmMrWindowUnlink, kbNoKey, hcNoContext));
 }
 
@@ -75,5 +75,17 @@ TSubMenu *createHelpMenu() {
 
 TMenuBar *createMRMenuBar(TRect r) {
 	r.b.y = r.a.y + 1;
-	return new MRMenuBar(r, *createFileMenu() + *createEditMenu() + *createWindowMenu() + *createBlockMenu() + *createSearchMenu() + *createTextMenu() + *createOtherMenu() + *createMacroMenu() + *createHelpMenu());
+	return new MRMenuBar(r, *createFileMenu() + *createEditMenu() + *buildWindowMenu() + *createBlockMenu() + *createSearchMenu() + *createTextMenu() + *createOtherMenu() + *createMacroMenu() + *createHelpMenu());
+}
+
+TMenuItem *createMRWindowMenuPopupItems() {
+	TSubMenu *windowMenu = buildWindowMenu();
+	TMenuItem *items = nullptr;
+
+	if (windowMenu != nullptr && windowMenu->subMenu != nullptr) {
+		items = windowMenu->subMenu->items;
+		windowMenu->subMenu->items = nullptr;
+	}
+	delete windowMenu;
+	return items;
 }

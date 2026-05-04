@@ -9,6 +9,7 @@ namespace {
 struct AppCommandState {
 	MREditWindow *window;
 	std::size_t windowCount;
+	bool isMinimizedWindow;
 	bool hasEditableWindow;
 	bool hasReadOnlyWindow;
 	bool hasDirtyWindow;
@@ -25,7 +26,7 @@ struct AppCommandState {
 	bool isCommunicationCommandWindow;
 	bool isLogWindow;
 
-	AppCommandState() : window(nullptr), windowCount(0), hasEditableWindow(false), hasReadOnlyWindow(false), hasDirtyWindow(false), hasPersistentFileName(false), canSaveInPlace(false), hasSelection(false), hasUndo(false), hasRedo(false), hasBlock(false), blockMarking(false), hasMacroTasks(false), hasExternalIoTasks(false), isCommunicationWindow(false), isCommunicationCommandWindow(false), isLogWindow(false) {
+	AppCommandState() : window(nullptr), windowCount(0), isMinimizedWindow(false), hasEditableWindow(false), hasReadOnlyWindow(false), hasDirtyWindow(false), hasPersistentFileName(false), canSaveInPlace(false), hasSelection(false), hasUndo(false), hasRedo(false), hasBlock(false), blockMarking(false), hasMacroTasks(false), hasExternalIoTasks(false), isCommunicationWindow(false), isCommunicationCommandWindow(false), isLogWindow(false) {
 	}
 };
 
@@ -43,6 +44,7 @@ AppCommandState appCommandState() {
 	state.windowCount = allEditWindowsInZOrder().size();
 	if (win == nullptr) return state;
 
+	state.isMinimizedWindow = win->isMinimized();
 	state.hasReadOnlyWindow = win->isReadOnly();
 	state.hasEditableWindow = !state.hasReadOnlyWindow;
 	state.hasDirtyWindow = win->isFileChanged();
@@ -97,7 +99,8 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrWindowHide, hasWindow);
 	setCommandEnabled(cmMrWindowModifySize, hasWindow);
 	setCommandEnabled(cmMrWindowZoom, hasWindow);
-	setCommandEnabled(cmMrWindowMinimize, false);
+	setCommandEnabled(cmMrWindowMinimize, hasWindow);
+	setCommandEnabled(cmMrWindowRestore, hasWindow && state.isMinimizedWindow);
 	setCommandEnabled(cmMrWindowCascade, hasWindow);
 	setCommandEnabled(cmMrWindowTile, hasWindow);
 	{

@@ -19,7 +19,7 @@ DisplayBuffer::DisplayBuffer() noexcept :
 #ifdef _WIN32
     wideOverlapping(false)
 #else
-    wideOverlapping(true)
+    wideOverlapping(false)
 #endif
 {
     // Check if FPS shall be limited.
@@ -383,11 +383,11 @@ inline void FlushScreenAlgorithm::writeCell( const TCellChar &ch,
 
 void FlushScreenAlgorithm::handleWideCharSpill() noexcept
 {
-    uchar width = cell->isWide();
+    int width = cell->isWide();
     const auto Attr = cell->attr;
-    if (x + width < size.x)
-        writeCell();
-    else {
+    const int wbegin = x;
+
+    if (x + width >= size.x) {
         // Replace with spaces if it would otherwise be printed on the next line.
         writeSpace();
         while (--width && ++x < size.x) {
@@ -400,14 +400,20 @@ void FlushScreenAlgorithm::handleWideCharSpill() noexcept
         }
         return;
     }
-    // Ensure character does not spill on next cells.
-    int wbegin = x;
-    while (width-- && ++x < size.x) {
+
+    int remaining = width;
+    while (remaining > 0 && ++x < size.x) {
+        --remaining;
         getCell();
         commitDirty();
         if (!isTrail(*cell)) {
             if (wideCanOverlap()) {
-                // Write over the wide character.
+                const int overlapX = x;
+                x = wbegin;
+                getCell();
+                writeCell();
+                x = overlapX;
+                getCell();
                 writeCell();
             } else {
                 // Replace the whole wide character with spaces.
@@ -423,6 +429,13 @@ void FlushScreenAlgorithm::handleWideCharSpill() noexcept
             return;
         }
     }
+
+    x = wbegin;
+    getCell();
+    writeCell();
+    x = wbegin + width;
+    getCell();
+
     // If the next character has a different attribute, print it anyway
     // to avoid attribute spill.
     if (x + 1 < size.x) {

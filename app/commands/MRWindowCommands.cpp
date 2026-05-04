@@ -31,6 +31,7 @@
 #include "MRPerformance.hpp"
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MREditWindow.hpp"
+#include "../../ui/MRWindowManager.hpp"
 #include "../../ui/MRWindowSupport.hpp"
 #include "../../dialogs/MRWindowList.hpp"
 #include "../../dialogs/MRSetupCommon.hpp"
@@ -90,9 +91,14 @@ struct WorkspaceEntry {
 	int height = -1;
 	int x = -1;
 	int y = -1;
+	int restoreWidth = -1;
+	int restoreHeight = -1;
+	int restoreX = -1;
+	int restoreY = -1;
 	int column = 1;
 	int line = 1;
 	int vd = 1;
+	bool minimized = false;
 };
 
 std::string escapeMrmacSingleQuotedLiteral(std::string_view value) {
@@ -142,7 +148,7 @@ void pruneManuallyHiddenWindows(const std::vector<MREditWindow *> &windows) {
 
 bool parseWorkspaceEntry(const std::string &line, WorkspaceEntry &entry) {
 	static const std::regex linePattern(R"(MRSETUP\s*\(\s*'WORKSPACE'\s*,\s*'((?:''|[^'])*)'\s*\)\s*;?)", std::regex_constants::ECMAScript | std::regex_constants::icase);
-	static const std::regex payloadPattern(R"(^URL=(.*) size=(-?\d+),(-?\d+) pos=(-?\d+),(-?\d+) cursor=(-?\d+),(-?\d+) vd=(-?\d+)$)", std::regex_constants::ECMAScript);
+	static const std::regex payloadPattern(R"(^URL=(.*) size=(-?\d+),(-?\d+) pos=(-?\d+),(-?\d+) cursor=(-?\d+),(-?\d+) vd=(-?\d+)(?: min=(0|1) restore=(-?\d+),(-?\d+) rpos=(-?\d+),(-?\d+))?$)", std::regex_constants::ECMAScript);
 	std::smatch match;
 	std::smatch payloadMatch;
 	std::string payload;
@@ -159,6 +165,18 @@ bool parseWorkspaceEntry(const std::string &line, WorkspaceEntry &entry) {
 	entry.column = std::stoi(payloadMatch[6].str());
 	entry.line = std::stoi(payloadMatch[7].str());
 	entry.vd = std::stoi(payloadMatch[8].str());
+	entry.minimized = payloadMatch[9].matched && payloadMatch[9].str() == "1";
+	if (payloadMatch[10].matched && payloadMatch[11].matched && payloadMatch[12].matched && payloadMatch[13].matched) {
+		entry.restoreWidth = std::stoi(payloadMatch[10].str());
+		entry.restoreHeight = std::stoi(payloadMatch[11].str());
+		entry.restoreX = std::stoi(payloadMatch[12].str());
+		entry.restoreY = std::stoi(payloadMatch[13].str());
+	} else {
+		entry.restoreWidth = entry.width;
+		entry.restoreHeight = entry.height;
+		entry.restoreX = entry.x;
+		entry.restoreY = entry.y;
+	}
 	return !entry.url.empty();
 }
 
@@ -189,19 +207,23 @@ std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths) {
 	for (MREditWindow *win : allEditWindowsInZOrder()) {
 		MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 		std::string url;
-		TRect r;
+		TRect bounds;
+		TRect restoreBounds;
 		int cursorColumn = 1;
 		int cursorLine = 1;
 		int vd = 1;
+		bool minimized = false;
 
 		if (win == nullptr || editor == nullptr) continue;
 		url = editor->persistentFileName();
 		if (url.empty()) continue;
-		r = win->getBounds();
+		bounds = win->isMinimized() ? win->minimizedWorkspaceBounds() : win->getBounds();
+		restoreBounds = win->restoreWorkspaceBounds();
 		cursorColumn = static_cast<int>(win->cursorColumnNumber());
 		cursorLine = static_cast<int>(win->cursorLineNumber());
 		vd = win->mVirtualDesktop;
-		source.insert(endMacro, "MRSETUP('WORKSPACE', 'URL=" + escapeMrmacSingleQuotedLiteral(url) + " size=" + std::to_string(r.b.x - r.a.x) + "," + std::to_string(r.b.y - r.a.y) + " pos=" + std::to_string(r.a.x) + "," + std::to_string(r.a.y) + " cursor=" + std::to_string(cursorColumn) + "," + std::to_string(cursorLine) + " vd=" + std::to_string(vd) + "');\n");
+		minimized = win->isMinimized();
+		source.insert(endMacro, "MRSETUP('WORKSPACE', 'URL=" + escapeMrmacSingleQuotedLiteral(url) + " size=" + std::to_string(bounds.b.x - bounds.a.x) + "," + std::to_string(bounds.b.y - bounds.a.y) + " pos=" + std::to_string(bounds.a.x) + "," + std::to_string(bounds.a.y) + " cursor=" + std::to_string(cursorColumn) + "," + std::to_string(cursorLine) + " vd=" + std::to_string(vd) + " min=" + std::to_string(minimized ? 1 : 0) + " restore=" + std::to_string(restoreBounds.b.x - restoreBounds.a.x) + "," + std::to_string(restoreBounds.b.y - restoreBounds.a.y) + " rpos=" + std::to_string(restoreBounds.a.x) + "," + std::to_string(restoreBounds.a.y) + "');\n");
 	}
 	return source;
 }
@@ -216,6 +238,7 @@ void setWindowManuallyHidden(MREditWindow *win, bool hidden) {
 	if (hidden) g_manuallyHiddenWindows.insert(win);
 	else
 		g_manuallyHiddenWindows.erase(win);
+	MRWindowManager::handleDesktopLayoutChange();
 	mrNotifyWindowTopologyChanged();
 }
 
@@ -257,6 +280,7 @@ void syncVirtualDesktopVisibility() {
 		TProgram::deskTop->drawView();
 	}
 	if (TProgram::application != nullptr) TProgram::application->redraw();
+	MRWindowManager::handleDesktopLayoutChange();
 }
 
 void setCurrentVirtualDesktop(int vd) {
@@ -386,8 +410,12 @@ void mrLoadWorkspace(const std::string &filename) {
 			continue;
 		}
 
-		if (entry.width > 0 && entry.height > 0 && entry.x >= 0 && entry.y >= 0) win->changeBounds(TRect(entry.x, entry.y, entry.x + entry.width, entry.y + entry.height));
 		win->mVirtualDesktop = std::min(std::max(entry.vd, 1), configuredVirtualDesktops());
+		if (entry.width > 0 && entry.height > 0 && entry.x >= 0 && entry.y >= 0) {
+			const TRect bounds(entry.x, entry.y, entry.x + entry.width, entry.y + entry.height);
+			const TRect restoreBounds(entry.restoreX, entry.restoreY, entry.restoreX + std::max(entry.restoreWidth, 1), entry.restoreY + std::max(entry.restoreHeight, 1));
+			MRWindowManager::applyWorkspaceState(win, bounds, restoreBounds, entry.minimized);
+		}
 		restoreEditorCursor(editor, entry.line, entry.column);
 	}
 	if (!failedFiles.empty()) {
@@ -407,7 +435,7 @@ MREditWindow *createEditorWindow(const char *title) {
 	MREditWindow *win;
 
 	if (TProgram::deskTop == nullptr) return nullptr;
-	bounds = TProgram::deskTop->getExtent();
+	bounds = MRWindowManager::usableDesktopBounds();
 	bounds.grow(-2, -1);
 	win = new MREditWindow(bounds, title, nextEditorWindowNumber());
 	TProgram::deskTop->insert(win);
@@ -776,11 +804,11 @@ bool handleWindowCascade() {
 
 	if (TProgram::deskTop == nullptr) return false;
 
-	desktopBounds = TProgram::deskTop->getExtent();
+	desktopBounds = MRWindowManager::usableDesktopBounds();
 
 	for (auto it = allWindows.rbegin(); it != allWindows.rend(); ++it) {
 		MREditWindow *win = *it;
-		if (win != nullptr && (win->state & sfVisible) != 0) {
+		if (win != nullptr && (win->state & sfVisible) != 0 && !win->isMinimized()) {
 			visibleWindows.push_back(win);
 		}
 	}
@@ -810,11 +838,11 @@ bool handleWindowTile() {
 
 	if (TProgram::deskTop == nullptr) return false;
 
-	desktopBounds = TProgram::deskTop->getExtent();
+	desktopBounds = MRWindowManager::usableDesktopBounds();
 
 	for (auto it = allWindows.rbegin(); it != allWindows.rend(); ++it) {
 		MREditWindow *win = *it;
-		if (win != nullptr && (win->state & sfVisible) != 0) {
+		if (win != nullptr && (win->state & sfVisible) != 0 && !win->isMinimized()) {
 			visibleWindows.push_back(win);
 		}
 	}

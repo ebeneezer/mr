@@ -33,6 +33,7 @@ enum : ushort {
 	cmMrWindowModifySize,
 	cmMrWindowZoom,
 	cmMrWindowMinimize,
+	cmMrWindowRestore,
 	cmMrWindowOrganize,
 	cmMrWindowLink,
 	cmMrWindowUnlink,

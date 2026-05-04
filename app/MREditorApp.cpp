@@ -36,6 +36,7 @@
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRStatusLine.hpp"
 #include "../ui/MRPalette.hpp"
+#include "../ui/MRWindowManager.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "MRAppState.hpp"
 #include "MRCommandRouter.hpp"
@@ -821,6 +822,7 @@ void MREditorApp::applyConfiguredDisplayLayout() {
 	if (desktopRect.b.y <= desktopRect.a.y) desktopRect.b.y = desktopRect.a.y + 1;
 	if (deskTop != nullptr) deskTop->locate(desktopRect);
 	applyConfiguredWindowFramePolicy();
+	MRWindowManager::handleDesktopLayoutChange();
 	if (deskTop != nullptr) deskTop->drawView();
 	if (menuBar != nullptr) menuBar->drawView();
 	if (statusLine != nullptr) statusLine->drawView();
@@ -1218,6 +1220,7 @@ void MREditorApp::idle() {
 			if (auto *mrFrame = dynamic_cast<MRFrame *>(window->frame)) mrFrame->tickTaskOverviewAnimation();
 		}
 	}
+	MRWindowManager::handleDesktopLayoutChange();
 	updateAppCommandState();
 }
 

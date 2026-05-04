@@ -344,6 +344,8 @@ TText::Lw TText::drawOneImpl( TSpan<TScreenCell> cells, size_t i,
                 if (i < cells.size())
                 {
                     bool wide = mb.width > 1;
+                    if (wide && i + 1 >= cells.size())
+                        return {(size_t) mb.length, 0};
                     cells[i]._ch.moveMultiByteChar({&text[j], (size_t) mb.length}, wide);
                     bool drawTrail = (wide && i + 1 < cells.size());
                     if (drawTrail)
@@ -391,6 +393,8 @@ TText::Lw TText::drawOneImpl( TSpan<TScreenCell> cells, size_t i,
             if (i < cells.size())
             {
                 bool wide = width > 1;
+                if (wide && i + 1 >= cells.size())
+                    return {1, 0};
                 cells[i]._ch.moveMultiByteChar(textU8, wide);
                 bool drawTrail = (wide && i + 1 < cells.size());
                 if (drawTrail)

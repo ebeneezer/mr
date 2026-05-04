@@ -1,4 +1,5 @@
 #include "MRFileEditor.hpp"
+#include "../MREditWindow.hpp"
 
 MRFileEditor::LoadTiming::LoadTiming() noexcept : valid(false), bytes(0), lines(0), mappedLoadMs(0.0), lineCountMs(0.0) {
 }
@@ -612,6 +613,8 @@ int MRFileEditor::visibleTextRows() const noexcept {
 
 void MRFileEditor::syncScrollBarsToState() noexcept {
 	bool show = (state & (sfActive | sfSelected)) != 0;
+	MREditWindow *window = dynamic_cast<MREditWindow *>(owner);
+	if (window != nullptr && window->isMinimized()) show = false;
 	if (hScrollBar != nullptr) {
 		if (show) hScrollBar->show();
 		else
@@ -1698,6 +1701,11 @@ bool MRFileEditor::dragFormatRulerAtLocalPoint(TEvent &event, TPoint local) {
 }
 
 void MRFileEditor::draw() {
+	MREditWindow *window = dynamic_cast<MREditWindow *>(owner);
+	if (window != nullptr && window->isMinimized()) {
+		syncScrollBarsToState();
+		return;
+	}
 	syncScrollBarsToState();
 	MREditSetupSettings editSettings = configuredEditSetupSettings();
 	std::size_t topLine = static_cast<std::size_t>(std::max(delta.y, 0));
@@ -2177,6 +2185,8 @@ void MRFileEditor::scrollDraw() {
 void MRFileEditor::setState(ushort aState, Boolean enable) {
 	TScroller::setState(aState, enable);
 	if ((aState & (sfActive | sfSelected)) != 0) syncScrollBarsToState();
+	MREditWindow *window = dynamic_cast<MREditWindow *>(owner);
+	if (window != nullptr && window->isMinimized()) return;
 	if (aState == sfCursorVis || mIndicatorUpdateInProgress) return;
 	updateIndicator();
 }

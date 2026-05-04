@@ -46,6 +46,8 @@ class MREditWindow;
 void setWindowManuallyHidden(MREditWindow *win, bool hidden);
 
 class MREditWindow : public TWindow {
+	friend class MRWindowManager;
+
   public:
 	struct TrackedTask {
 		std::uint64_t id;
@@ -70,7 +72,7 @@ class MREditWindow : public TWindow {
 		wrHelp
 	};
 
-	MREditWindow(const TRect &bounds, const char *title, int aNumber) : TWindowInit(&MREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr), hScrollBar(nullptr), indicator(nullptr), editor(nullptr), mBufferId(allocateBufferId()), mFirstSaveDone(false), mTemporaryFileUsed(false), mTemporaryFileName(), mIndentLevel(1), mBlockMode(bmNone), mBlockMarkingOn(false), mBlockAnchor(0), mBlockEnd(0), mColumnSortAscending(true), mTrackedCoprocessorTasks(), mWindowRole(wrText), mWindowRoleDetail(), mMacroQueuedCount(0), mMacroCompletedCount(0), mMacroConflictCount(0), mMacroCancelledCount(0), mMacroFailedCount(0), mLastMacroSummaryText(), mWindowPaletteData(defaultWindowPaletteData()), mWindowPalette(mWindowPaletteData.data(), static_cast<ushort>(mWindowPaletteData.size())), mCustomEofMarkerColorValid(false), mCustomEofMarkerColor(0), mClosePrepared(false) {
+	MREditWindow(const TRect &bounds, const char *title, int aNumber) : TWindowInit(&MREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr), hScrollBar(nullptr), indicator(nullptr), editor(nullptr), mBufferId(allocateBufferId()), mFirstSaveDone(false), mTemporaryFileUsed(false), mTemporaryFileName(), mIndentLevel(1), mBlockMode(bmNone), mBlockMarkingOn(false), mBlockAnchor(0), mBlockEnd(0), mColumnSortAscending(true), mTrackedCoprocessorTasks(), mWindowRole(wrText), mWindowRoleDetail(), mMacroQueuedCount(0), mMacroCompletedCount(0), mMacroConflictCount(0), mMacroCancelledCount(0), mMacroFailedCount(0), mLastMacroSummaryText(), mWindowPaletteData(defaultWindowPaletteData()), mWindowPalette(mWindowPaletteData.data(), static_cast<ushort>(mWindowPaletteData.size())), mCustomEofMarkerColorValid(false), mCustomEofMarkerColor(0), mClosePrepared(false), mMinimized(false), mRestoreBounds(bounds), mLastMinimizedBounds(0, 0, 0, 0) {
 		options |= ofTileable;
 
 		std::strncpy(displayTitle, (title != nullptr && *title != '\0') ? title : "Untitled", sizeof(displayTitle) - 1);
@@ -144,6 +146,11 @@ class MREditWindow : public TWindow {
 
 	void setState(ushort aState, Boolean enable) override {
 		TWindow::setState(aState, enable);
+		if (MRWindowManager::isWindowMinimized(this)) {
+			layoutEditorChrome();
+			if ((aState & (sfFocused | sfSelected | sfActive)) != 0 && frame != nullptr) frame->drawView();
+			return;
+		}
 		if ((aState & (sfFocused | sfSelected | sfActive)) != 0 && frame != nullptr) {
 			frame->drawView();
 			if (hScrollBar != nullptr) hScrollBar->drawView();
@@ -156,15 +163,50 @@ class MREditWindow : public TWindow {
 		MRWindowManager::handleDragView(this, event, mode, limits, minSize, maxSize);
 	}
 
+	void sizeLimits(TPoint &minSize, TPoint &maxSize) override {
+		TWindow::sizeLimits(minSize, maxSize);
+		if (MRWindowManager::isWindowMinimized(this)) {
+			minSize.x = MRWindowManager::minimizedWindowWidth(this);
+			minSize.y = 1;
+			maxSize = minSize;
+			return;
+		}
+		const TRect usableBounds = MRWindowManager::usableDesktopBounds();
+		const int usableWidth = std::max(1, usableBounds.b.x - usableBounds.a.x);
+		const int usableHeight = std::max(1, usableBounds.b.y - usableBounds.a.y);
+		maxSize.x = std::min<int>(maxSize.x, usableWidth);
+		maxSize.y = std::min<int>(maxSize.y, usableHeight);
+		if (minSize.x > maxSize.x) minSize.x = maxSize.x;
+		if (minSize.y > maxSize.y) minSize.y = maxSize.y;
+	}
+
 	void changeBounds(const TRect &bounds) override {
 		TWindow::changeBounds(bounds);
 		layoutEditorChrome();
+		if (MRWindowManager::isWindowMinimized(this)) {
+			if (frame != nullptr) frame->drawView();
+			return;
+		}
 		if (hScrollBar != nullptr) hScrollBar->drawView();
 		if (vScrollBar != nullptr) vScrollBar->drawView();
 		if (indicator != nullptr) indicator->drawView();
 	}
 
 	virtual void handleEvent(TEvent &event) override {
+		if (MRWindowManager::isWindowMinimized(this)) {
+			if (event.what == evCommand && (event.message.command == cmMrWindowMinimize || event.message.command == cmZoom)) {
+				MRWindowManager::restoreWindow(this);
+				clearEvent(event);
+				return;
+			}
+			if (event.what == evCommand && event.message.command == cmResize) {
+				MRWindowManager::reinsertMinimizedWindow(this);
+				clearEvent(event);
+				return;
+			}
+			TWindow::handleEvent(event);
+			return;
+		}
 		if (event.what == evCommand && event.message.command == cmClose && mWindowRole == wrLog) {
 			setWindowManuallyHidden(this, true);
 			hide();
@@ -414,6 +456,26 @@ class MREditWindow : public TWindow {
 
 	bool hasPersistentFileName() const {
 		return editor != nullptr && editor->hasPersistentFileName();
+	}
+
+	bool isMinimized() const noexcept {
+		return MRWindowManager::isWindowMinimized(this);
+	}
+
+	void minimizeWindow() {
+		MRWindowManager::minimizeWindow(this);
+	}
+
+	void restoreWindow() {
+		MRWindowManager::restoreWindow(this);
+	}
+
+	TRect minimizedWorkspaceBounds() const noexcept {
+		return MRWindowManager::minimizedBoundsForWorkspace(this);
+	}
+
+	TRect restoreWorkspaceBounds() const noexcept {
+		return MRWindowManager::restoreBoundsForWorkspace(this);
 	}
 
 	bool canSaveInPlace() const {
@@ -1309,6 +1371,14 @@ class MREditWindow : public TWindow {
 	}
 
 	void layoutEditorChrome() {
+		if (MRWindowManager::isWindowMinimized(this)) {
+			if (hScrollBar != nullptr) hScrollBar->hide();
+			if (vScrollBar != nullptr) vScrollBar->hide();
+			if (indicator != nullptr) indicator->hide();
+			if (editor != nullptr) editor->hide();
+			return;
+		}
+		if (editor != nullptr && (editor->state & sfVisible) == 0) editor->show();
 		if (hScrollBar != nullptr) {
 			TRect hRect(1, size.y - 1, size.x - 1, size.y);
 			hScrollBar->locate(hRect);
@@ -1760,6 +1830,9 @@ class MREditWindow : public TWindow {
 	bool mCustomEofMarkerColorValid;
 	TColorAttr mCustomEofMarkerColor;
 	bool mClosePrepared;
+	bool mMinimized;
+	TRect mRestoreBounds;
+	TRect mLastMinimizedBounds;
 	char displayTitle[MAXPATH];
 };
 
