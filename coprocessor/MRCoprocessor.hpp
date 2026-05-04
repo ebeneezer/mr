@@ -2,6 +2,7 @@
 #define MRCOPROCESSOR_HPP
 
 #include <condition_variable>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -302,6 +303,7 @@ class Coprocessor {
 	std::uint64_t submit(Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, std::string_view label, TaskFn fn);
 	std::uint64_t submitCoalesced(Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, std::string_view coalescingKey, std::string_view label, TaskFn fn);
 	std::size_t pump(std::size_t maxResults = 8);
+	std::size_t pumpFor(std::chrono::microseconds budget);
 	[[nodiscard]] CoprocessorSnapshot snapshot() const noexcept;
 	[[nodiscard]] std::size_t pendingResults() const noexcept;
 	void post(Result result);

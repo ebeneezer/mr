@@ -179,6 +179,36 @@ std::size_t Coprocessor::pump(std::size_t maxResults) {
 	return drained;
 }
 
+std::size_t Coprocessor::pumpFor(std::chrono::microseconds budget) {
+	if (budget <= std::chrono::microseconds::zero()) return 0;
+
+	const std::chrono::steady_clock::time_point startedAt = std::chrono::steady_clock::now();
+	std::size_t drained = 0;
+
+	for (;;) {
+		Result result;
+		ResultHandler handler;
+
+		{
+			std::lock_guard<std::mutex> lock(resultMutex);
+			if (results.empty()) break;
+			result = std::move(results.front());
+			results.pop_front();
+		}
+
+		{
+			std::lock_guard<std::mutex> lock(handlerMutex);
+			handler = resultHandler;
+		}
+
+		if (handler) handler(result);
+		++drained;
+		if (std::chrono::steady_clock::now() - startedAt >= budget) break;
+	}
+
+	return drained;
+}
+
 CoprocessorSnapshot Coprocessor::snapshot() const noexcept {
 	CoprocessorSnapshot out;
 
