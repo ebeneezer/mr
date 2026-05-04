@@ -275,6 +275,21 @@ struct Result {
 using TaskFn = std::function<Result(const TaskInfo &, std::stop_token)>;
 using ResultHandler = std::function<void(const Result &)>;
 
+struct CoprocessorLaneSnapshot {
+	std::size_t queueDepth;
+	unsigned int activeWorkers;
+
+	CoprocessorLaneSnapshot() noexcept : queueDepth(0), activeWorkers(0) {
+	}
+};
+
+struct CoprocessorSnapshot {
+	CoprocessorLaneSnapshot io;
+	CoprocessorLaneSnapshot compute;
+	CoprocessorLaneSnapshot miniMap;
+	CoprocessorLaneSnapshot macro;
+};
+
 class Coprocessor {
   public:
 	Coprocessor();
@@ -285,7 +300,9 @@ class Coprocessor {
 
 	void setResultHandler(ResultHandler handler);
 	std::uint64_t submit(Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, std::string_view label, TaskFn fn);
+	std::uint64_t submitCoalesced(Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, std::string_view coalescingKey, std::string_view label, TaskFn fn);
 	std::size_t pump(std::size_t maxResults = 8);
+	[[nodiscard]] CoprocessorSnapshot snapshot() const noexcept;
 	[[nodiscard]] std::size_t pendingResults() const noexcept;
 	void post(Result result);
 	bool cancelTask(std::uint64_t taskId);
@@ -296,25 +313,27 @@ class Coprocessor {
 	struct Request {
 		TaskInfo task;
 		TaskFn fn;
+		std::string coalescingKey;
 		std::uint64_t submittedMicros;
 		std::uint64_t laneSequence;
 
-		Request() noexcept : task(), fn(), submittedMicros(0), laneSequence(0) {
+		Request() noexcept : task(), fn(), coalescingKey(), submittedMicros(0), laneSequence(0) {
 		}
 	};
 
 	struct LaneState {
 		Lane lane;
-		std::mutex mutex;
+		mutable std::mutex mutex;
 		std::condition_variable_any cv;
 		std::deque<Request> queue;
+		std::atomic<unsigned int> activeWorkers;
 		std::uint64_t nextSubmitSequence;
 		std::uint64_t nextPublishSequence;
 		std::deque<std::uint64_t> skippedSequences;
 		std::map<std::uint64_t, Result> finishedResults;
 		std::vector<std::jthread> workers;
 
-		explicit LaneState(Lane aLane) noexcept : lane(aLane), mutex(), cv(), queue(), nextSubmitSequence(1), nextPublishSequence(1), skippedSequences(), finishedResults(), workers() {
+		explicit LaneState(Lane aLane) noexcept : lane(aLane), mutex(), cv(), queue(), activeWorkers(0), nextSubmitSequence(1), nextPublishSequence(1), skippedSequences(), finishedResults(), workers() {
 		}
 	};
 
@@ -330,8 +349,8 @@ class Coprocessor {
 	mutable std::mutex handlerMutex;
 	ResultHandler resultHandler;
 
-		std::atomic<std::uint64_t> nextTaskId;
-		std::mutex taskCancelMutex;
+	std::atomic<std::uint64_t> nextTaskId;
+	std::mutex taskCancelMutex;
 	std::unordered_map<std::uint64_t, std::shared_ptr<std::atomic_bool>> taskCancelFlags;
 	std::atomic<bool> shuttingDown;
 

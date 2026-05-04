@@ -71,6 +71,21 @@ void bindCurrentThreadToLaneCore(Lane lane, std::size_t workerIndex) noexcept {
 	(void)pthread_setaffinity_np(pthread_self(), sizeof(targetSet), &targetSet);
 }
 
+struct ActiveWorkerGuard {
+	std::atomic<unsigned int> &counter;
+
+	explicit ActiveWorkerGuard(std::atomic<unsigned int> &aCounter) noexcept : counter(aCounter) {
+		counter.fetch_add(1, std::memory_order_relaxed);
+	}
+
+	~ActiveWorkerGuard() {
+		counter.fetch_sub(1, std::memory_order_relaxed);
+	}
+
+	ActiveWorkerGuard(const ActiveWorkerGuard &) = delete;
+	ActiveWorkerGuard &operator=(const ActiveWorkerGuard &) = delete;
+};
+
 } // namespace
 
 Coprocessor::Coprocessor() : nextTaskId(1), shuttingDown(false), ioLane(Lane::Io), computeLane(Lane::Compute), miniMapLane(Lane::MiniMap), macroLane(Lane::Macro) {
@@ -90,11 +105,17 @@ void Coprocessor::setResultHandler(ResultHandler handler) {
 }
 
 std::uint64_t Coprocessor::submit(Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, std::string_view label, TaskFn fn) {
+	return submitCoalesced(lane, kind, documentId, baseVersion, std::string_view(), label, std::move(fn));
+}
+
+std::uint64_t Coprocessor::submitCoalesced(Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, std::string_view coalescingKey, std::string_view label, TaskFn fn) {
 	if (shuttingDown.load(std::memory_order_acquire)) return 0;
 
 	Request request;
 	LaneState &targetLaneState = laneState(lane);
 	const std::uint64_t taskId = nextTaskId.fetch_add(1, std::memory_order_relaxed);
+	std::vector<std::uint64_t> removedTaskIds;
+	const bool allowCoalescing = kind != TaskKind::MacroJob && !coalescingKey.empty();
 	request.task.id = taskId;
 	request.task.cancelFlag = std::make_shared<std::atomic_bool>(false);
 	request.task.lane = lane;
@@ -103,6 +124,7 @@ std::uint64_t Coprocessor::submit(Lane lane, TaskKind kind, std::size_t document
 	request.task.baseVersion = baseVersion;
 	request.task.label = label;
 	request.fn = std::move(fn);
+	if (allowCoalescing) request.coalescingKey.assign(coalescingKey.data(), coalescingKey.size());
 	request.submittedMicros = nowMicros();
 
 	{
@@ -112,9 +134,21 @@ std::uint64_t Coprocessor::submit(Lane lane, TaskKind kind, std::size_t document
 
 	{
 		std::lock_guard<std::mutex> lock(targetLaneState.mutex);
+		if (allowCoalescing) {
+			for (std::deque<Request>::iterator it = targetLaneState.queue.begin(); it != targetLaneState.queue.end();) {
+				if (it->task.kind == kind && it->coalescingKey == request.coalescingKey) {
+					if (it->task.id != 0) removedTaskIds.push_back(it->task.id);
+					it = targetLaneState.queue.erase(it);
+					continue;
+				}
+				++it;
+			}
+		}
 		if (lane == Lane::Macro) request.laneSequence = targetLaneState.nextSubmitSequence++;
 		targetLaneState.queue.push_back(std::move(request));
 	}
+	for (std::uint64_t removedTaskId : removedTaskIds)
+		forgetTask(removedTaskId);
 	targetLaneState.cv.notify_one();
 	return taskId;
 }
@@ -143,6 +177,36 @@ std::size_t Coprocessor::pump(std::size_t maxResults) {
 	}
 
 	return drained;
+}
+
+CoprocessorSnapshot Coprocessor::snapshot() const noexcept {
+	CoprocessorSnapshot out;
+
+	{
+		std::lock_guard<std::mutex> lock(ioLane.mutex);
+		out.io.queueDepth = ioLane.queue.size();
+	}
+	out.io.activeWorkers = ioLane.activeWorkers.load(std::memory_order_relaxed);
+
+	{
+		std::lock_guard<std::mutex> lock(computeLane.mutex);
+		out.compute.queueDepth = computeLane.queue.size();
+	}
+	out.compute.activeWorkers = computeLane.activeWorkers.load(std::memory_order_relaxed);
+
+	{
+		std::lock_guard<std::mutex> lock(miniMapLane.mutex);
+		out.miniMap.queueDepth = miniMapLane.queue.size();
+	}
+	out.miniMap.activeWorkers = miniMapLane.activeWorkers.load(std::memory_order_relaxed);
+
+	{
+		std::lock_guard<std::mutex> lock(macroLane.mutex);
+		out.macro.queueDepth = macroLane.queue.size();
+	}
+	out.macro.activeWorkers = macroLane.activeWorkers.load(std::memory_order_relaxed);
+
+	return out;
 }
 
 std::size_t Coprocessor::pendingResults() const noexcept {
@@ -264,6 +328,7 @@ void Coprocessor::workerLoop(LaneState &lane, std::size_t workerIndex, std::stop
 			request = std::move(lane.queue.front());
 			lane.queue.pop_front();
 		}
+		ActiveWorkerGuard activeWorkerGuard(lane.activeWorkers);
 
 		startedMicros = nowMicros();
 		result.task = request.task;

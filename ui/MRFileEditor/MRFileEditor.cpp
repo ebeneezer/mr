@@ -2613,10 +2613,10 @@ void MRFileEditor::scheduleLineIndexWarmupIfNeeded() {
 
 	MRTextBufferModel::ReadSnapshot snapshot = mBufferModel.readSnapshot();
 	std::uint64_t previousTaskId = mLineIndexWarmupTaskId;
-	if (previousTaskId != 0) static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
+	const std::string coalescingKey = "line-index:" + std::to_string(static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(this))) + ":" + std::to_string(docId) + ":" + std::to_string(version);
 	mLineIndexWarmupDocumentId = docId;
 	mLineIndexWarmupVersion = version;
-	mLineIndexWarmupTaskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::LineIndexWarmup, docId, version, lineIndexWarmupTaskLabel(), [snapshot](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
+	mLineIndexWarmupTaskId = mr::coprocessor::globalCoprocessor().submitCoalesced(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::LineIndexWarmup, docId, version, coalescingKey, lineIndexWarmupTaskLabel(), [snapshot](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
 		mr::coprocessor::Result result;
 		mr::editor::LineIndexWarmupData warmup;
 		result.task = info;
