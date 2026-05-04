@@ -94,13 +94,8 @@ std::uint64_t Coprocessor::submit(Lane lane, TaskKind kind, std::size_t document
 
 	Request request;
 	LaneState &targetLaneState = laneState(lane);
-	std::uint64_t taskId = 0;
-
-	{
-		std::lock_guard<std::mutex> idLock(nextTaskMutex);
-		taskId = nextTaskId++;
-		request.task.id = taskId;
-	}
+	const std::uint64_t taskId = nextTaskId.fetch_add(1, std::memory_order_relaxed);
+	request.task.id = taskId;
 	request.task.cancelFlag = std::make_shared<std::atomic_bool>(false);
 	request.task.lane = lane;
 	request.task.kind = kind;

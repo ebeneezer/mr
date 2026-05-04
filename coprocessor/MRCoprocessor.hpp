@@ -330,9 +330,8 @@ class Coprocessor {
 	mutable std::mutex handlerMutex;
 	ResultHandler resultHandler;
 
-	std::uint64_t nextTaskId;
-	std::mutex nextTaskMutex;
-	std::mutex taskCancelMutex;
+		std::atomic<std::uint64_t> nextTaskId;
+		std::mutex taskCancelMutex;
 	std::unordered_map<std::uint64_t, std::shared_ptr<std::atomic_bool>> taskCancelFlags;
 	std::atomic<bool> shuttingDown;
 
