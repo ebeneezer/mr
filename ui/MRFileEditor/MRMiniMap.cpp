@@ -302,8 +302,14 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 	}
 
 	std::uint64_t previousTaskId = mImpl->warmupTaskId;
+	const std::string coalescingKey = "minimap:" + std::to_string(static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(this))) + ":" + std::to_string(requestedWarmupKey.documentId) + ":" +
+	                                 std::to_string(requestedWarmupKey.version) + ":" + std::to_string(requestedWarmupKey.rowCount) + ":" + std::to_string(requestedWarmupKey.bodyWidth) + ":" +
+	                                 std::to_string(requestedWarmupKey.viewportWidth) + ":" + std::to_string(requestedWarmupKey.braille ? 1 : 0) + ":" + std::to_string(requestedWarmupKey.windowStartLine) + ":" +
+	                                 std::to_string(requestedWarmupKey.windowLineCount) + ":" + std::to_string(requestedWarmupKey.totalLines) + ":" + std::to_string(requestedWarmupKey.tabSize) + ":" +
+	                                 std::to_string(requestedWarmupKey.leftMargin) + ":" + std::to_string(requestedWarmupKey.rightMargin) + ":" + requestedWarmupKey.formatLine;
 	mImpl->warmupKey = std::move(requestedWarmupKey);
-	mImpl->warmupTaskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::MiniMap, mr::coprocessor::TaskKind::MiniMapWarmup, documentId, version, "rendering mini map", [snapshot, rowCount, bodyWidth, viewportWidth, useBraille, settings, totalLines, samplingWindow](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
+	mImpl->warmupTaskId = mr::coprocessor::globalCoprocessor().submitCoalesced(mr::coprocessor::Lane::MiniMap, mr::coprocessor::TaskKind::MiniMapWarmup, documentId, version, coalescingKey, "rendering mini map",
+	                                                                          [snapshot, rowCount, bodyWidth, viewportWidth, useBraille, settings, totalLines, samplingWindow](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
 		mr::coprocessor::Result result;
 		struct MiniMapLineSample {
 			std::uint64_t dotColumnBits = 0;
