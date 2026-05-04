@@ -124,15 +124,24 @@ struct MRMiniMapRenderer::Impl {
 		std::size_t lineCount = 1;
 	};
 
+	struct WarmupRenderKey {
+		std::size_t documentId = 0;
+		std::size_t version = 0;
+		int rowCount = 0;
+		int bodyWidth = 0;
+		int viewportWidth = 1;
+		bool braille = true;
+		std::size_t windowStartLine = 0;
+		std::size_t windowLineCount = 1;
+		std::size_t totalLines = 1;
+		std::string formatLine;
+		int tabSize = 8;
+		int leftMargin = 1;
+		int rightMargin = 78;
+	};
+
 	std::uint64_t warmupTaskId = 0;
-	std::size_t warmupDocumentId = 0;
-	std::size_t warmupVersion = 0;
-	int warmupRows = 0;
-	int warmupBodyWidth = 0;
-	int warmupViewportWidth = 0;
-	bool warmupBraille = true;
-	std::size_t warmupWindowStartLine = 0;
-	std::size_t warmupWindowLineCount = 0;
+	WarmupRenderKey warmupKey;
 	RenderCache cache;
 
 	static void normalizeLineMasks(std::vector<OverlayState::LineMask> &masks) {
@@ -182,14 +191,7 @@ struct MRMiniMapRenderer::Impl {
 		if (expectedTaskId != 0 && warmupTaskId != expectedTaskId) return signals;
 		if (warmupTaskId == 0) return signals;
 		warmupTaskId = 0;
-		warmupDocumentId = 0;
-		warmupVersion = 0;
-		warmupRows = 0;
-		warmupBodyWidth = 0;
-		warmupViewportWidth = 0;
-		warmupBraille = true;
-		warmupWindowStartLine = 0;
-		warmupWindowLineCount = 0;
+		warmupKey = WarmupRenderKey();
 		signals.notifyTaskStateChanged = true;
 		return signals;
 	}
@@ -244,7 +246,7 @@ MRMiniMapRenderer::ApplyWarmupResult MRMiniMapRenderer::applyWarmup(const mr::co
 
 	if (mImpl == nullptr) return result;
 	if (expectedTaskId == 0 || mImpl->warmupTaskId != expectedTaskId) return result;
-	if (documentId != mImpl->warmupDocumentId || version != expectedVersion) return result;
+	if (documentId != mImpl->warmupKey.documentId || version != expectedVersion) return result;
 	mImpl->cache.valid = true;
 	mImpl->cache.braille = payload.braille;
 	mImpl->cache.rowCount = payload.rowCount;
@@ -275,21 +277,32 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 	if (mImpl->cacheReadyForViewport(viewport, rowCount, useBraille, samplingWindow, documentId, version)) return signals;
 	const int bodyWidth = viewport.bodyWidth;
 	const int viewportWidth = std::max(1, viewport.width);
+	Impl::WarmupRenderKey requestedWarmupKey;
+	requestedWarmupKey.documentId = documentId;
+	requestedWarmupKey.version = version;
+	requestedWarmupKey.rowCount = rowCount;
+	requestedWarmupKey.bodyWidth = bodyWidth;
+	requestedWarmupKey.viewportWidth = viewportWidth;
+	requestedWarmupKey.braille = useBraille;
+	requestedWarmupKey.windowStartLine = samplingWindow.startLine;
+	requestedWarmupKey.windowLineCount = samplingWindow.lineCount;
+	requestedWarmupKey.totalLines = totalLines;
+	requestedWarmupKey.formatLine = settings.formatLine;
+	requestedWarmupKey.tabSize = settings.tabSize;
+	requestedWarmupKey.leftMargin = settings.leftMargin;
+	requestedWarmupKey.rightMargin = settings.rightMargin;
 	if (mImpl->warmupTaskId != 0) {
-		if (mImpl->warmupDocumentId == documentId && mImpl->warmupVersion == version && mImpl->warmupRows == rowCount && mImpl->warmupBodyWidth == bodyWidth && mImpl->warmupViewportWidth == viewportWidth && mImpl->warmupBraille == useBraille && mImpl->warmupWindowStartLine == samplingWindow.startLine && mImpl->warmupWindowLineCount == samplingWindow.lineCount) return signals;
+		if (mImpl->warmupKey.documentId == requestedWarmupKey.documentId && mImpl->warmupKey.version == requestedWarmupKey.version && mImpl->warmupKey.rowCount == requestedWarmupKey.rowCount && mImpl->warmupKey.bodyWidth == requestedWarmupKey.bodyWidth &&
+		    mImpl->warmupKey.viewportWidth == requestedWarmupKey.viewportWidth && mImpl->warmupKey.braille == requestedWarmupKey.braille && mImpl->warmupKey.windowStartLine == requestedWarmupKey.windowStartLine &&
+		    mImpl->warmupKey.windowLineCount == requestedWarmupKey.windowLineCount && mImpl->warmupKey.totalLines == requestedWarmupKey.totalLines && mImpl->warmupKey.formatLine == requestedWarmupKey.formatLine &&
+		    mImpl->warmupKey.tabSize == requestedWarmupKey.tabSize && mImpl->warmupKey.leftMargin == requestedWarmupKey.leftMargin && mImpl->warmupKey.rightMargin == requestedWarmupKey.rightMargin)
+			return signals;
 		static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mImpl->warmupTaskId));
 		signals.merge(mImpl->clearWarmupTask(mImpl->warmupTaskId));
 	}
 
 	std::uint64_t previousTaskId = mImpl->warmupTaskId;
-	mImpl->warmupDocumentId = documentId;
-	mImpl->warmupVersion = version;
-	mImpl->warmupRows = rowCount;
-	mImpl->warmupBodyWidth = bodyWidth;
-	mImpl->warmupViewportWidth = viewportWidth;
-	mImpl->warmupBraille = useBraille;
-	mImpl->warmupWindowStartLine = samplingWindow.startLine;
-	mImpl->warmupWindowLineCount = samplingWindow.lineCount;
+	mImpl->warmupKey = std::move(requestedWarmupKey);
 	mImpl->warmupTaskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::MiniMap, mr::coprocessor::TaskKind::MiniMapWarmup, documentId, version, "rendering mini map", [snapshot, rowCount, bodyWidth, viewportWidth, useBraille, settings, totalLines, samplingWindow](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
 		mr::coprocessor::Result result;
 		struct MiniMapLineSample {
