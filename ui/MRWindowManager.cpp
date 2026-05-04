@@ -28,6 +28,9 @@ constexpr int kMinimizedHeight = 1;
 constexpr int kMinimizedTitleMaxWidth = 20;
 constexpr int kMinimizedMinWidth = 4;
 constexpr int kMinimizedRightPadding = 0;
+constexpr char kMinimizedMenuGlyph[] = "≡";
+constexpr char kMinimizedRestoreGlyph[] = "▴";
+constexpr char kMinimizedReinsertGlyph[] = "▾";
 
 constexpr char kMinimizedEllipsis[] = "…";
 constexpr char kMinimizedFallbackTitle[] = "?No-File";
@@ -112,12 +115,24 @@ std::string minimizedDisplayTitleString(const MREditWindow *window) {
 	return truncateDisplayWidthMiddle(baseNameForMinimizedTitle(window), kMinimizedTitleMaxWidth);
 }
 
+int minimizedMenuWidth() noexcept {
+	return strwidth(kMinimizedMenuGlyph);
+}
+
+int minimizedRestoreWidth() noexcept {
+	return strwidth(kMinimizedRestoreGlyph);
+}
+
+int minimizedReinsertWidth() noexcept {
+	return strwidth(kMinimizedReinsertGlyph);
+}
+
 int minimizedTitleWidth(const MREditWindow *window) {
 	return strwidth(minimizedDisplayTitleString(window).c_str());
 }
 
 int minimizedWindowWidthValue(const MREditWindow *window) {
-	return std::max(kMinimizedMinWidth, strwidth("☰") + 1 + minimizedTitleWidth(window) + 1 + strwidth("↗") + strwidth("↓") + kMinimizedRightPadding);
+	return std::max(kMinimizedMinWidth, minimizedMenuWidth() + 1 + minimizedTitleWidth(window) + 1 + minimizedRestoreWidth() + minimizedReinsertWidth() + kMinimizedRightPadding);
 }
 
 TRect normalizedMinimizedBounds(const MREditWindow *window, const TRect &bounds, const TRect &desktop) {
@@ -143,10 +158,12 @@ bool minimizedBoundsFitDesktop(const MREditWindow *window, const TRect &bounds) 
 
 int minimizedRowsForDesktop(int virtualDesktop) {
 	const TRect desktop = fullDesktopBounds();
+	const int dockY = desktop.b.y - kMinimizedHeight;
 	int rows = 0;
 
 	for (MREditWindow *window : allEditWindowsInZOrder()) {
 		if (window == nullptr || !window->isMinimized() || !sameDesktopAndVisible(window, virtualDesktop)) continue;
+		if (window->getBounds().a.y != dockY) continue;
 		rows = std::max(rows, desktop.b.y - window->getBounds().a.y);
 	}
 	return std::min(rows, std::max(1, desktop.b.y - desktop.a.y));
@@ -187,7 +204,9 @@ void placeVisibleWindow(MREditWindow *window, const TRect &bounds) {
 
 void setHiddenWindowBounds(MREditWindow *window, const TRect &bounds) {
 	if (window == nullptr) return;
+	window->freeBuffer();
 	window->setBounds(bounds);
+	window->clip = window->getExtent();
 	if (window->frame != nullptr) {
 		const TRect extent = window->getExtent();
 		window->frame->setBounds(extent);
@@ -200,12 +219,13 @@ void markLayoutDirty() noexcept {
 
 void reflowMinimizedWindowsForDesktop(int virtualDesktop) {
 	const TRect desktop = fullDesktopBounds();
+	const int dockY = desktop.b.y - kMinimizedHeight;
 	std::vector<MREditWindow *> windows;
 	int nextX = desktop.a.x;
-	int nextY = desktop.b.y - kMinimizedHeight;
+	int nextY = dockY;
 
 	for (MREditWindow *window : allEditWindowsInZOrder())
-		if (window != nullptr && window->isMinimized() && sameDesktopAndVisible(window, virtualDesktop)) windows.push_back(window);
+		if (window != nullptr && window->isMinimized() && sameDesktopAndVisible(window, virtualDesktop) && window->getBounds().a.y == dockY) windows.push_back(window);
 
 	std::sort(windows.begin(), windows.end(), [](const MREditWindow *lhs, const MREditWindow *rhs) {
 		if (lhs->getBounds().a.y != rhs->getBounds().a.y) return lhs->getBounds().a.y > rhs->getBounds().a.y;
@@ -229,13 +249,14 @@ void reflowMinimizedWindowsForDesktop(int virtualDesktop) {
 
 TRect nextMinimizedBounds(MREditWindow *window) {
 	const TRect desktop = fullDesktopBounds();
+	const int dockY = desktop.b.y - kMinimizedHeight;
 	std::vector<MREditWindow *> windows;
 	int x = desktop.a.x;
-	int y = desktop.b.y - kMinimizedHeight;
+	int y = dockY;
 	const int width = minimizedWindowWidthValue(window);
 
 	for (MREditWindow *candidate : allEditWindowsInZOrder())
-		if (candidate != nullptr && candidate != window && candidate->isMinimized() && sameDesktopAndVisible(candidate, window->mVirtualDesktop)) windows.push_back(candidate);
+		if (candidate != nullptr && candidate != window && candidate->isMinimized() && sameDesktopAndVisible(candidate, window->mVirtualDesktop) && candidate->getBounds().a.y == dockY) windows.push_back(candidate);
 
 	std::sort(windows.begin(), windows.end(), [](const MREditWindow *lhs, const MREditWindow *rhs) {
 		if (lhs->getBounds().a.y != rhs->getBounds().a.y) return lhs->getBounds().a.y > rhs->getBounds().a.y;
@@ -417,6 +438,25 @@ TRect MRWindowManager::restoreBoundsForWorkspace(const MREditWindow *window) noe
 	return window->getBounds();
 }
 
+const MRWindowManager::MinimizedGlyphs &MRWindowManager::minimizedGlyphs() noexcept {
+	static const MinimizedGlyphs glyphs = {kMinimizedMenuGlyph, kMinimizedRestoreGlyph, kMinimizedReinsertGlyph};
+	return glyphs;
+}
+
+MRWindowManager::MinimizedLayout MRWindowManager::minimizedLayout(const MREditWindow *window, int width) noexcept {
+	const int menuWidth = minimizedMenuWidth();
+	const int restoreWidth = minimizedRestoreWidth();
+	const int reinsertWidth = minimizedReinsertWidth();
+	const int titleStart = std::min(width, menuWidth + 1);
+	const int reinsertEnd = std::max(0, width - kMinimizedRightPadding);
+	const int reinsertStart = std::max(titleStart, reinsertEnd - reinsertWidth);
+	const int restoreEnd = reinsertStart;
+	const int restoreStart = std::max(titleStart, restoreEnd - restoreWidth);
+	const int titleWidth = std::min(minimizedDisplayTitleWidth(window), std::max(0, restoreStart - titleStart - 1));
+
+	return {0, menuWidth, titleStart, titleStart + titleWidth, restoreStart, restoreEnd, reinsertStart, reinsertEnd};
+}
+
 const char *MRWindowManager::minimizedDisplayTitle(const MREditWindow *window) noexcept {
 	g_minimizedTitleBuffer = minimizedDisplayTitleString(window);
 	return g_minimizedTitleBuffer.c_str();
@@ -432,34 +472,37 @@ int MRWindowManager::minimizedWindowWidth(const MREditWindow *window) noexcept {
 
 bool MRWindowManager::isMinimizedRestoreGlyphHit(const MREditWindow *window, TPoint local) noexcept {
 	if (window == nullptr || !window->mMinimized || local.y != 0) return false;
-	const int restoreWidth = strwidth("↗");
-	const int reinsertWidth = strwidth("↓");
-	const int restoreStart = window->size.x - kMinimizedRightPadding - reinsertWidth - restoreWidth - 1;
-	return local.x >= restoreStart && local.x < restoreStart + restoreWidth;
+	const MinimizedLayout layout = minimizedLayout(window, window->size.x);
+	return local.x >= layout.restoreStart && local.x < layout.restoreEnd;
 }
 
 bool MRWindowManager::isMinimizedReinsertGlyphHit(const MREditWindow *window, TPoint local) noexcept {
 	if (window == nullptr || !window->mMinimized || local.y != 0) return false;
-	const int reinsertWidth = strwidth("↓");
-	const int reinsertStart = window->size.x - kMinimizedRightPadding - reinsertWidth - 1;
-	return local.x >= reinsertStart && local.x < reinsertStart + reinsertWidth;
+	const MinimizedLayout layout = minimizedLayout(window, window->size.x);
+	return local.x >= layout.reinsertStart && local.x < layout.reinsertEnd;
 }
 
 void MRWindowManager::minimizeWindow(MREditWindow *window) {
 	if (window == nullptr || window->mMinimized) return;
 	TRect target;
 	const bool wasVisible = (window->state & sfVisible) != 0;
-	window->mRestoreBounds = clampToBounds(window->getBounds(), usableDesktopBoundsForDesktop(window->mVirtualDesktop));
+	const TRect oldBounds = window->getBounds();
+	const bool oldShadowWasSet = (window->state & sfShadow) != 0;
+	window->mRestoreBounds = clampToBounds(oldBounds, usableDesktopBoundsForDesktop(window->mVirtualDesktop));
 	if (window->mLastMinimizedBounds.a.x < window->mLastMinimizedBounds.b.x && window->mLastMinimizedBounds.a.y < window->mLastMinimizedBounds.b.y) {
 		target = normalizedMinimizedBounds(window, window->mLastMinimizedBounds, fullDesktopBounds());
 		if (minimizedBoundsConflict(window, target)) target = nextMinimizedBounds(window);
 	} else
 		target = nextMinimizedBounds(window);
+	const bool shouldFlushAfterHide = wasVisible && oldShadowWasSet;
 	if (wasVisible) {
 		window->hide();
 		refreshDesktop();
-		TScreen::flushScreen();
+		if (shouldFlushAfterHide) TScreen::flushScreen();
 	}
+	window->mBufferedBeforeMinimize = (window->options & ofBuffered) != 0;
+	if (window->mBufferedBeforeMinimize) window->freeBuffer();
+	window->options &= ~ofBuffered;
 	window->mMinimized = true;
 	if ((window->state & sfShadow) != 0) window->setState(sfShadow, False);
 	setHiddenWindowBounds(window, target);
@@ -486,6 +529,9 @@ void MRWindowManager::restoreWindow(MREditWindow *window) {
 		window->hide();
 		refreshDesktop();
 	}
+	window->options = window->mBufferedBeforeMinimize ? ushort(window->options | ofBuffered) : ushort(window->options & ~ofBuffered);
+	window->freeBuffer();
+	window->mBufferedBeforeMinimize = false;
 	window->setState(sfShadow, True);
 	window->mMinimized = false;
 	setHiddenWindowBounds(window, target);

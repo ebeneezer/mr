@@ -72,7 +72,7 @@ class MREditWindow : public TWindow {
 		wrHelp
 	};
 
-	MREditWindow(const TRect &bounds, const char *title, int aNumber) : TWindowInit(&MREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr), hScrollBar(nullptr), indicator(nullptr), editor(nullptr), mBufferId(allocateBufferId()), mFirstSaveDone(false), mTemporaryFileUsed(false), mTemporaryFileName(), mIndentLevel(1), mBlockMode(bmNone), mBlockMarkingOn(false), mBlockAnchor(0), mBlockEnd(0), mColumnSortAscending(true), mTrackedCoprocessorTasks(), mWindowRole(wrText), mWindowRoleDetail(), mMacroQueuedCount(0), mMacroCompletedCount(0), mMacroConflictCount(0), mMacroCancelledCount(0), mMacroFailedCount(0), mLastMacroSummaryText(), mWindowPaletteData(defaultWindowPaletteData()), mWindowPalette(mWindowPaletteData.data(), static_cast<ushort>(mWindowPaletteData.size())), mCustomEofMarkerColorValid(false), mCustomEofMarkerColor(0), mClosePrepared(false), mMinimized(false), mRestoreBounds(bounds), mLastMinimizedBounds(0, 0, 0, 0) {
+	MREditWindow(const TRect &bounds, const char *title, int aNumber) : TWindowInit(&MREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr), hScrollBar(nullptr), indicator(nullptr), editor(nullptr), mBufferId(allocateBufferId()), mFirstSaveDone(false), mTemporaryFileUsed(false), mTemporaryFileName(), mIndentLevel(1), mBlockMode(bmNone), mBlockMarkingOn(false), mBlockAnchor(0), mBlockEnd(0), mColumnSortAscending(true), mTrackedCoprocessorTasks(), mWindowRole(wrText), mWindowRoleDetail(), mMacroQueuedCount(0), mMacroCompletedCount(0), mMacroConflictCount(0), mMacroCancelledCount(0), mMacroFailedCount(0), mLastMacroSummaryText(), mWindowPaletteData(defaultWindowPaletteData()), mWindowPalette(mWindowPaletteData.data(), static_cast<ushort>(mWindowPaletteData.size())), mCustomEofMarkerColorValid(false), mCustomEofMarkerColor(0), mClosePrepared(false), mMinimized(false), mBufferedBeforeMinimize(false), mRestoreBounds(bounds), mLastMinimizedBounds(0, 0, 0, 0) {
 		options |= ofTileable;
 
 		std::strncpy(displayTitle, (title != nullptr && *title != '\0') ? title : "Untitled", sizeof(displayTitle) - 1);
@@ -1831,6 +1831,7 @@ class MREditWindow : public TWindow {
 	TColorAttr mCustomEofMarkerColor;
 	bool mClosePrepared;
 	bool mMinimized;
+	bool mBufferedBeforeMinimize;
 	TRect mRestoreBounds;
 	TRect mLastMinimizedBounds;
 	char displayTitle[MAXPATH];

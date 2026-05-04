@@ -24,14 +24,11 @@ static const char kFrameChars[33] = "   \xC0 \xB3\xDA\xC3 \xD9\xC4\xC1\xBF\xB4\x
                                     "\xBC\xCD\xCF\xBB\xB6\xD1 ";
 
 static const char *kCloseIcon = "[~\xFE~]";
-static const char *kZoomIcon = "[\x18]";
-static const char *kUnZoomIcon = "[\x12]";
-static const char *kMinimizeIcon = "[↓]";
+static const char *kZoomIcon = "[▴]";
+static const char *kUnZoomIcon = "[▴]";
+static const char *kMinimizeIcon = "[▾]";
 static const char *kDragIcon = "~\xC4\xD9~";
 static const char *kDragLeftIcon = "~\xC0\xC4~";
-static const char *kMinimizedHamburgerIcon = "☰";
-static const char *kMinimizedRestoreIcon = "↗";
-static const char *kMinimizedReinsertIcon = "↓";
 
 static constexpr char kDirtyMarkerIcon[] = "✍";
 static constexpr char kRecordingMarkerIcon[] = "📼";
@@ -52,7 +49,6 @@ static constexpr char kMarkerRightBracket = ']';
 static constexpr int kMarkerGap = 1;
 static constexpr int kNormalControlGap = 1;
 static constexpr int kNormalRightPadding = 1;
-static constexpr int kMinimizedRightPadding = 0;
 
 int markerWidth(TStringView icon) noexcept {
 	return std::max(1, strwidth(icon));
@@ -64,18 +60,6 @@ int markerSpan(TStringView icon, int minWidth = 1) noexcept {
 
 int advanceMarkerX(int x, TStringView icon, int minWidth = 1) noexcept {
 	return x + markerSpan(icon, minWidth) + kMarkerGap;
-}
-
-int minimizedReinsertStart(int width) noexcept {
-	return width - kMinimizedRightPadding - strwidth(kMinimizedReinsertIcon);
-}
-
-int minimizedRestoreStart(int width) noexcept {
-	return minimizedReinsertStart(width) - strwidth(kMinimizedRestoreIcon);
-}
-
-int minimizedRightClusterWidth() noexcept {
-	return 1 + strwidth(kMinimizedRestoreIcon) + strwidth(kMinimizedReinsertIcon) + kMinimizedRightPadding;
 }
 
 int normalControlWidth(TStringView icon) noexcept {
@@ -292,28 +276,19 @@ void MRFrame::draw() {
 
 	MREditWindow *editWindow = dynamic_cast<MREditWindow *>(window);
 	if (editWindow != nullptr && MRWindowManager::isWindowMinimized(editWindow)) {
+		const MRWindowManager::MinimizedGlyphs &glyphs = MRWindowManager::minimizedGlyphs();
+		const MRWindowManager::MinimizedLayout layout = MRWindowManager::minimizedLayout(editWindow, width);
 		const char *title = MRWindowManager::minimizedDisplayTitle(editWindow);
-		const int hamburgerWidth = strwidth(kMinimizedHamburgerIcon);
-		const int bracketWidth = 1;
-		const int rightClusterWidth = minimizedRightClusterWidth();
-		const int restoreWidth = strwidth(kMinimizedRestoreIcon);
-		const int reinsertWidth = strwidth(kMinimizedReinsertIcon);
-		const int restoreStart = minimizedRestoreStart(width);
-		const int reinsertStart = minimizedReinsertStart(width);
-		const int titleWidth = std::min(MRWindowManager::minimizedDisplayTitleWidth(editWindow), std::max(0, width - hamburgerWidth - bracketWidth - rightClusterWidth));
-		int x = 0;
 
 		b.moveChar(0, ' ', cTitle, size.x);
-		b.moveStr(static_cast<ushort>(x), kMinimizedHamburgerIcon, cTitle, hamburgerWidth);
-		x += hamburgerWidth;
-		if (x < width) b.putChar(static_cast<ushort>(x++), '[');
-		if (title != nullptr && titleWidth > 0) {
-			b.moveStr(static_cast<ushort>(x), title, cTitle, titleWidth);
-			x += titleWidth;
+		if (layout.menuEnd > layout.menuStart) b.moveStr(static_cast<ushort>(layout.menuStart), glyphs.menu, cTitle, layout.menuEnd - layout.menuStart);
+		if (layout.menuEnd < width) b.putChar(static_cast<ushort>(layout.menuEnd), '[');
+		if (title != nullptr && layout.titleEnd > layout.titleStart) {
+			b.moveStr(static_cast<ushort>(layout.titleStart), title, cTitle, layout.titleEnd - layout.titleStart);
 		}
-		if (x < restoreStart) b.putChar(static_cast<ushort>(x++), ']');
-		b.moveStr(static_cast<ushort>(restoreStart), kMinimizedRestoreIcon, cTitle, restoreWidth);
-		b.moveStr(static_cast<ushort>(reinsertStart), kMinimizedReinsertIcon, cTitle, reinsertWidth);
+		if (layout.titleEnd < layout.restoreStart) b.putChar(static_cast<ushort>(layout.titleEnd), ']');
+		if (layout.restoreEnd > layout.restoreStart) b.moveStr(static_cast<ushort>(layout.restoreStart), glyphs.restore, cTitle, layout.restoreEnd - layout.restoreStart);
+		if (layout.reinsertEnd > layout.reinsertStart) b.moveStr(static_cast<ushort>(layout.reinsertStart), glyphs.reinsert, cTitle, layout.reinsertEnd - layout.reinsertStart);
 		writeLine(0, 0, size.x, 1, b);
 		mrvmUiInvalidateScreenBase();
 		return;
@@ -468,7 +443,8 @@ void MRFrame::handleEvent(TEvent &event) {
 		MREditWindow *editWindow = dynamic_cast<MREditWindow *>(window);
 		if (mouse.y == 0 && window != nullptr) {
 			if (editWindow != nullptr && MRWindowManager::isWindowMinimized(editWindow)) {
-				if (mouse.x < strwidth(kMinimizedHamburgerIcon)) {
+				const MRWindowManager::MinimizedLayout layout = MRWindowManager::minimizedLayout(editWindow, size.x);
+				if (mouse.x >= layout.menuStart && mouse.x < layout.menuEnd) {
 					TMenuItem *items = createMRWindowMenuPopupItems();
 					if (items != nullptr) popupMenu(event.mouse.where, *items, owner);
 					clearEvent(event);
