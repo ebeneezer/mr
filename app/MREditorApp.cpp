@@ -66,6 +66,7 @@
 
 namespace {
 static constexpr std::chrono::milliseconds kRecordingBlinkInterval(450);
+static constexpr std::chrono::microseconds kCoprocessorIdlePumpBudget(1000);
 
 bool shouldInvalidateScreenBaseForEvent(ushort eventWhat) noexcept {
 	switch (eventWhat) {
@@ -1198,7 +1199,7 @@ void MREditorApp::idle() {
 	updateRecordingBlink();
 	updateMacroBrainBlink();
 	warmIndexedMacroBindings();
-	mr::coprocessor::globalCoprocessor().pump(8);
+	mr::coprocessor::globalCoprocessor().pumpFor(kCoprocessorIdlePumpBudget);
 	pumpDeferredMacroUiPlayback();
 	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar)) {
 		mr::messageline::VisibleMessage message;
