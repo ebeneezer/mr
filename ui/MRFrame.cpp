@@ -454,7 +454,13 @@ void MRFrame::handleEvent(TEvent &event) {
 					event.message.infoPtr = owner;
 					putEvent(event);
 					clearEvent(event);
-				} else if (MRWindowManager::isMinimizedRestoreGlyphHit(editWindow, mouse) || (event.mouse.eventFlags & meDoubleClick) != 0) {
+				} else if ((event.mouse.eventFlags & meDoubleClick) != 0) {
+					event.what = evCommand;
+					event.message.command = cmMrWindowRestore;
+					event.message.infoPtr = owner;
+					putEvent(event);
+					clearEvent(event);
+				} else if (MRWindowManager::isMinimizedRestoreGlyphHit(editWindow, mouse)) {
 					event.what = evCommand;
 					event.message.command = cmMrWindowMinimize;
 					event.message.infoPtr = owner;

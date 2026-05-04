@@ -31,6 +31,7 @@
 #include "../config/MRDialogPaths.hpp"
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MREditWindow.hpp"
+#include "../ui/MRWindowManager.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
 namespace {
@@ -39,6 +40,7 @@ enum : ushort {
 	cmMRWindowListSave,
 	cmMRWindowListHide,
 	cmMRWindowListHideAll,
+	cmMRWindowListGet,
 	cmMRWorkspaceSave,
 	cmMRWorkspaceLoad,
 };
@@ -46,6 +48,11 @@ enum : ushort {
 class WindowListDialog;
 
 WindowListDialog *g_manageWindowListDialog = nullptr;
+constexpr const char *kHideToggleTitle = "Un/~H~ide";
+constexpr const char *kHideAllTitle = "Hide ~a~ll";
+constexpr const char *kRestoreTitle = "~R~estore";
+constexpr const char *kRestoreAllTitle = "Restore ~a~ll";
+constexpr const char *kGetTitle = "~G~et";
 
 bool windowListDebugEnabled() noexcept {
 	static int cached = -1;
@@ -68,6 +75,8 @@ void postWindowListClose(TView *dialog) {
 
 struct WindowListEntry {
 	MREditWindow *window;
+	std::string statusLabel;
+	std::string desktopLabel;
 	std::string fileLabel;
 	std::string slotLabel;
 	std::string directoryLabel;
@@ -236,15 +245,16 @@ class WindowListView : public TListViewer {
 
 	void handleEvent(TEvent &event) override {
 		const bool isDoubleClickActivation = event.what == evMouseDown && (event.mouse.buttons & mbLeftButton) != 0 && (event.mouse.eventFlags & meDoubleClick) != 0;
+		TView *target = owner != nullptr && owner->owner != nullptr ? owner->owner : owner;
 
 		TListViewer::handleEvent(event);
-		if (isDoubleClickActivation && focused >= 0 && focused < range) {
-			message(owner, evCommand, cmOK, nullptr);
+		if (isDoubleClickActivation && focused >= 0 && focused < range && target != nullptr) {
+			message(target, evCommand, cmOK, nullptr);
 			clearEvent(event);
 			return;
 		}
-		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter && focused >= 0 && focused < range) {
-			message(owner, evCommand, cmOK, nullptr);
+		if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEnter && focused >= 0 && focused < range && target != nullptr) {
+			message(target, evCommand, cmOK, nullptr);
 			clearEvent(event);
 		}
 	}
@@ -287,28 +297,48 @@ class WindowListDialog : public MRDialogFoundation {
 		}
 	}
 
-	WindowListDialog(MRWindowListMode aMode, MREditWindow *aCurrent, MREditWindow *aPreferred) : TWindowInit(&TDialog::initFrame), MRDialogFoundation(centeredBounds(computeWidth(), computeHeight(aMode, aCurrent)), "WINDOW LIST", computeWidth(), computeHeight(aMode, aCurrent)), mode(aMode), current(aCurrent), preferred(aPreferred), listView(nullptr), scrollBar(nullptr), hideToggleButton(nullptr), selected(nullptr), lastFocusedIndex(-1) {
-		int width = size.x;
-		int height = size.y;
+	WindowListDialog(MRWindowListMode aMode, MREditWindow *aCurrent, MREditWindow *aPreferred) : TWindowInit(&TDialog::initFrame), MRDialogFoundation(centeredSetupDialogRect(computeWidth(), computeHeight(aMode, aCurrent)), "WINDOW LIST", computeWidth(), computeHeight(aMode, aCurrent)), mode(aMode), current(aCurrent), preferred(aPreferred), listView(nullptr), scrollBar(nullptr), hideToggleButton(nullptr), hideAllButton(nullptr), getButton(nullptr), selected(nullptr), lastFocusedIndex(-1) {
+		int width = computeWidth();
+		int height = computeHeight(aMode, aCurrent);
 		int listTop = 6;
 		int listBottom = height - 6;
 		const int topButtonY = 2;
+		const int getButtonY = 4;
 		const int workspaceButtonY = height - 5;
 		const int bottomButtonY = height - 3;
 		const int buttonGap = 2;
 		const int workspaceGap = 4;
+		int topButtonLeft = 2;
+		int topButtonWidth = 0;
 		auto centeredRowStart = [width](int contentWidth) { return std::max(2, (width - contentWidth) / 2); };
 
 		{
-			const std::array topButtons{mr::dialogs::DialogButtonSpec{"~D~elete", cmMRWindowListDelete, bfNormal}, mr::dialogs::DialogButtonSpec{"~S~ave", cmMRWindowListSave, bfNormal}, mr::dialogs::DialogButtonSpec{"Un/~H~ide", cmMRWindowListHide, bfNormal}, mr::dialogs::DialogButtonSpec{"Hide ~a~ll", cmMRWindowListHideAll, bfNormal}};
+			const std::array topButtons{mr::dialogs::DialogButtonSpec{"~D~elete", cmMRWindowListDelete, bfNormal}, mr::dialogs::DialogButtonSpec{"~S~ave", cmMRWindowListSave, bfNormal}, mr::dialogs::DialogButtonSpec{kHideToggleTitle, cmMRWindowListHide, bfNormal}, mr::dialogs::DialogButtonSpec{kHideAllTitle, cmMRWindowListHideAll, bfNormal}};
+			const std::array widthCandidates{kHideToggleTitle, kHideAllTitle, kRestoreTitle, kRestoreAllTitle};
 			std::vector<TButton *> topButtonViews;
-			const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(topButtons, buttonGap);
-			const int left = centeredRowStart(metrics.rowWidth);
+			int minTopButtonWidth = 0;
+			mr::dialogs::DialogButtonRowMetrics metrics;
 
-			mr::dialogs::insertUniformButtonRow(*this, left, topButtonY, buttonGap, topButtons, 0, &topButtonViews);
+			for (const char *title : widthCandidates) {
+				const std::array candidate{mr::dialogs::DialogButtonSpec{title, 0, bfNormal}};
+				minTopButtonWidth = std::max(minTopButtonWidth, mr::dialogs::measureUniformButtonRow(candidate, buttonGap).buttonWidth);
+			}
+			metrics = mr::dialogs::measureUniformButtonRow(topButtons, buttonGap, minTopButtonWidth);
+			const int left = centeredRowStart(metrics.rowWidth);
+			topButtonLeft = left;
+			topButtonWidth = minTopButtonWidth;
+
+			mr::dialogs::insertUniformButtonRow(*this, left, topButtonY, buttonGap, topButtons, minTopButtonWidth, &topButtonViews);
 			if (topButtonViews.size() >= 3) hideToggleButton = topButtonViews[2];
+			if (topButtonViews.size() >= 4) hideAllButton = topButtonViews[3];
 		}
-		insert(new TStaticText(TRect(2, 5, 18, 6), "Select window:"));
+		{
+			const std::array getButtons{mr::dialogs::DialogButtonSpec{kGetTitle, cmMRWindowListGet, bfNormal}};
+			std::vector<TButton *> getButtonViews;
+
+			mr::dialogs::insertUniformButtonRow(*this, topButtonLeft, getButtonY, buttonGap, getButtons, topButtonWidth, &getButtonViews);
+			if (!getButtonViews.empty()) getButton = getButtonViews[0];
+		}
 
 		scrollBar = new TScrollBar(TRect(width - 3, listTop, width - 2, listBottom));
 		insert(scrollBar);
@@ -360,9 +390,11 @@ class WindowListDialog : public MRDialogFoundation {
 			line += listView != nullptr ? std::to_string(listView->focused) : "-1";
 			mrLogMessage(line);
 		}
+		if (owner != nullptr) makeFirst();
 		if (TProgram::deskTop != nullptr) TProgram::deskTop->setCurrent(this, TView::normalSelect);
 		else
 			select();
+		if (listView != nullptr) listView->select();
 		if (windowListDebugEnabled()) {
 			line = "Window List activateModeless after visible=";
 			line += (state & sfVisible) != 0 ? "1" : "0";
@@ -380,6 +412,10 @@ class WindowListDialog : public MRDialogFoundation {
 				refreshEntries();
 				if (listView != nullptr) listView->drawView();
 				drawView();
+				if ((state & sfVisible) != 0 && TProgram::deskTop != nullptr) {
+					MREditWindow *currentWindow = dynamic_cast<MREditWindow *>(TProgram::deskTop->current);
+					if (currentWindow != nullptr && currentWindow->isMinimized()) activateModeless();
+				}
 			}
 			clearEvent(event);
 			return;
@@ -397,7 +433,7 @@ class WindowListDialog : public MRDialogFoundation {
 			}
 			if (mode == mrwlManageWindows) {
 				if (selected->isMinimized()) selected->restoreWindow();
-				mrScheduleWindowActivation(selected);
+				static_cast<void>(mrActivateEditWindow(selected));
 				clearEvent(event);
 				return;
 			}
@@ -459,6 +495,23 @@ class WindowListDialog : public MRDialogFoundation {
 				handleHideAll();
 				clearEvent(event);
 				break;
+			case cmMRWindowListGet: {
+				MREditWindow *win = currentSelection();
+				if (win != nullptr && win->mVirtualDesktop != currentVirtualDesktop()) {
+					TGroup *content = managedContent();
+					win->mVirtualDesktop = currentVirtualDesktop();
+					syncVirtualDesktopVisibility();
+					MRWindowManager::handleDesktopLayoutChange();
+					mrNotifyWindowTopologyChanged();
+					refreshEntries();
+					updateHideToggleState();
+					if (content != nullptr) content->drawView();
+					if (listView != nullptr) listView->drawView();
+					drawView();
+				}
+				clearEvent(event);
+				break;
+			}
 			case cmMRWorkspaceSave:
 				saveWorkspaceWithDialog();
 				clearEvent(event);
@@ -482,27 +535,16 @@ class WindowListDialog : public MRDialogFoundation {
 	}
 
 	static int computeHeight(MRWindowListMode, MREditWindow *) {
-		std::size_t count = allEditWindows().size();
-		int visibleRows = std::max<int>(4, std::min<int>(static_cast<int>(count), 10));
 		TRect desk = TProgram::deskTop->getExtent();
 		int deskHeight = desk.b.y - desk.a.y;
-		int desired = visibleRows + 10;
-		return std::max(12, std::min(desired, deskHeight - 1));
-	}
-
-	static TRect centeredBounds(int width, int height) {
-		TRect desk = TProgram::deskTop->getExtent();
-		int left = desk.a.x + (desk.b.x - desk.a.x - width) / 2;
-		int top = desk.a.y + (desk.b.y - desk.a.y - height) / 2;
-		return TRect(left, top, left + width, top + height);
+		int listHeight = std::max(1, deskHeight / 2);
+		return std::max(12, listHeight + 12);
 	}
 
 	std::string renderRow(const WindowListEntry &entry) const {
 		std::string filePart = entry.fileLabel;
 		std::string dirPart = trimCopy(entry.directoryLabel);
-		if (entry.hidden) dirPart += " [hidden]";
-		if (entry.minimized) dirPart += " [minimized]";
-		return padRight(filePart, 24) + " " + padRight(entry.slotLabel, 2) + "  " + dirPart;
+		return padRight(entry.statusLabel, 5) + " " + padRight(entry.desktopLabel, 2) + " " + padRight(filePart, 24) + " " + padRight(entry.slotLabel, 2) + "  " + dirPart;
 	}
 
 	void collectEntries() {
@@ -518,11 +560,13 @@ class WindowListDialog : public MRDialogFoundation {
 			if (mode == mrwlSelectLinkTarget && windows[i] == current) continue;
 
 			entry.window = windows[i];
+			entry.hidden = isWindowManuallyHidden(windows[i]);
+			entry.minimized = windows[i]->isMinimized();
+			entry.statusLabel = entry.minimized ? "[min]" : (entry.hidden ? "[hid]" : "");
+			entry.desktopLabel = std::to_string(windows[i]->mVirtualDesktop);
 			entry.fileLabel = fileName.empty() ? (titleText.empty() ? "?No-File" : baseNameOf(titleText)) : baseNameOf(fileName);
 			entry.slotLabel = slotLabelFor(i);
 			entry.directoryLabel = directoryOf(fileName.empty() ? currentWorkingDirectory() : fileName);
-			entry.hidden = isWindowManuallyHidden(windows[i]);
-			entry.minimized = windows[i]->isMinimized();
 			entries.push_back(entry);
 			rows.push_back(renderRow(entry));
 		}
@@ -589,6 +633,11 @@ class WindowListDialog : public MRDialogFoundation {
 		MREditWindow *win = currentSelection();
 		std::string line;
 		if (win == nullptr) return;
+		if (win->isMinimized()) {
+			win->restoreWindow();
+			refreshEntries();
+			return;
+		}
 		line = "Window List handleHide";
 		line += (win->state & sfVisible) != 0 ? " hide " : " unhide ";
 		line += "'";
@@ -626,16 +675,55 @@ class WindowListDialog : public MRDialogFoundation {
 	}
 
 	void updateHideToggleState() {
+		MREditWindow *win = currentSelection();
 		const bool enabled = canToggleCurrentSelection();
+		const bool canGet = win != nullptr && win->mVirtualDesktop != currentVirtualDesktop();
 		if (hideToggleButton != nullptr) hideToggleButton->setState(sfDisabled, enabled ? False : True);
+		if (hideToggleButton != nullptr && win != nullptr) {
+			const char *title = win->isMinimized() ? kRestoreTitle : kHideToggleTitle;
+			if (std::strcmp(hideToggleButton->title, title) != 0) {
+				delete[] (char *) hideToggleButton->title;
+				hideToggleButton->title = newStr(title);
+				hideToggleButton->drawView();
+			}
+		}
+		if (hideAllButton != nullptr) {
+			const char *title = win != nullptr && win->isMinimized() ? kRestoreAllTitle : kHideAllTitle;
+			if (std::strcmp(hideAllButton->title, title) != 0) {
+				delete[] (char *) hideAllButton->title;
+				hideAllButton->title = newStr(title);
+				hideAllButton->drawView();
+			}
+		}
+		if (getButton != nullptr) {
+			TGroup *content = managedContent();
+			const bool wasVisible = (getButton->state & sfVisible) != 0;
+			getButton->setState(sfDisabled, canGet ? False : True);
+			if (canGet) {
+				if (!wasVisible) {
+					getButton->show();
+					if (content != nullptr) content->drawView();
+					drawView();
+				}
+			} else if (wasVisible) {
+				getButton->hide();
+				if (content != nullptr) content->drawView();
+				drawView();
+			}
+		}
 		lastFocusedIndex = listView != nullptr ? listView->focused : -1;
 	}
 
 	void handleHideAll() {
 		std::vector<MREditWindow *> windows = allEditWindows();
-		for (auto &window : windows)
-			hideWindow(window);
-		static_cast<void>(mrEnsureUsableWorkWindow());
+		if (currentSelection() != nullptr && currentSelection()->isMinimized()) {
+			for (auto &window : windows)
+				if (window != nullptr && window->isMinimized()) window->restoreWindow();
+		} else {
+			for (auto &window : windows)
+				hideWindow(window);
+			static_cast<void>(mrEnsureUsableWorkWindow());
+		}
 		refreshEntries();
 	}
 
@@ -645,6 +733,8 @@ class WindowListDialog : public MRDialogFoundation {
 	WindowListView *listView;
 	TScrollBar *scrollBar;
 	TButton *hideToggleButton;
+	TButton *hideAllButton;
+	TButton *getButton;
 	MREditWindow *selected;
 	int lastFocusedIndex;
 	std::vector<WindowListEntry> entries;
