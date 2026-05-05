@@ -349,6 +349,11 @@ struct TreeSitterSnapshotInput {
 	bool pieceValid = false;
 };
 
+struct DerivedSyntaxTokenMapRequest {
+	const mr::editor::ReadSnapshot &snapshot;
+	const std::vector<std::size_t> &lineStarts;
+};
+
 const char *readTreeSitterSnapshot(void *payload, uint32_t byteIndex, TSPoint, uint32_t *bytesRead) {
 	TreeSitterSnapshotInput &input = *static_cast<TreeSitterSnapshotInput *>(payload);
 	std::size_t pieceCount = input.snapshot.pieceCount();
@@ -408,12 +413,22 @@ TreeSitterTreeOwner parseTreeSitterSnapshotTree(const TSLanguage *parserLanguage
 	return tree;
 }
 
-void buildTokenMapsFromTreeSitterTree(MRTreeSitterDocument::Language language, const mr::editor::ReadSnapshot &snapshot, const std::vector<std::size_t> &lineStarts,
-									  const TSTree *tree, std::vector<MRSyntaxTokenMap> &tokenMaps) {
+std::vector<MRSyntaxTokenMap> makeDerivedTokenMaps(const DerivedSyntaxTokenMapRequest &request) {
+	std::vector<MRSyntaxTokenMap> tokenMaps;
+
+	tokenMaps.reserve(request.lineStarts.size());
+	for (std::size_t i = 0; i < request.lineStarts.size(); ++i)
+		tokenMaps.push_back(MRSyntaxTokenMap(request.snapshot.lineText(request.lineStarts[i]).size(), MRSyntaxToken::Text));
+	return tokenMaps;
+}
+
+// Tree-sitter stays canonical; MR token maps are derived syntax data for the requested lines.
+void deriveTokenMapsFromCanonicalTree(MRTreeSitterDocument::Language language, const DerivedSyntaxTokenMapRequest &request, const TSTree *tree,
+									  std::vector<MRSyntaxTokenMap> &tokenMaps) {
 	const TSNode root = ts_tree_root_node(tree);
 
-	for (std::size_t lineIndex = 0; lineIndex < lineStarts.size(); ++lineIndex) {
-		const std::size_t safeLineStart = std::min(lineStarts[lineIndex], snapshot.length());
+	for (std::size_t lineIndex = 0; lineIndex < request.lineStarts.size(); ++lineIndex) {
+		const std::size_t safeLineStart = std::min(request.lineStarts[lineIndex], request.snapshot.length());
 		const std::size_t lineEnd = safeLineStart + tokenMaps[lineIndex].size();
 		std::vector<TSNode> stack;
 
@@ -644,18 +659,17 @@ bool MRTreeSitterDocument::shouldDedentCurrentLine(const mr::editor::ReadSnapsho
 }
 
 std::vector<MRSyntaxTokenMap> MRTreeSitterDocument::buildTokenMapsForSnapshotLines(Language language, const mr::editor::ReadSnapshot &snapshot, const std::vector<std::size_t> &lineStarts) {
-	std::vector<MRSyntaxTokenMap> tokenMaps;
+	const DerivedSyntaxTokenMapRequest request{snapshot, lineStarts};
+	std::vector<MRSyntaxTokenMap> tokenMaps = makeDerivedTokenMaps(request);
 	const TSLanguage *parserLanguage = treeSitterParserLanguage(language);
 
-	tokenMaps.reserve(lineStarts.size());
-	for (std::size_t i = 0; i < lineStarts.size(); ++i) tokenMaps.push_back(MRSyntaxTokenMap(snapshot.lineText(lineStarts[i]).size(), MRSyntaxToken::Text));
 	if (lineStarts.empty()) return tokenMaps;
 	if (parserLanguage == nullptr) return tokenMaps;
 
 	TreeSitterTreeOwner tree = parseTreeSitterSnapshotTree(parserLanguage, snapshot);
 	if (tree.get() == nullptr) return tokenMaps;
 
-	buildTokenMapsFromTreeSitterTree(language, snapshot, lineStarts, tree.get(), tokenMaps);
+	deriveTokenMapsFromCanonicalTree(language, request, tree.get(), tokenMaps);
 	return tokenMaps;
 }
 
