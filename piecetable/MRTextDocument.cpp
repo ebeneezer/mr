@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <thread>
@@ -252,6 +254,37 @@ bool buildDirectInitialLineIndexParallel(const char *data, Offset length, std::v
 
 	totalLines = indexedLine + 1;
 	return true;
+}
+
+bool isParallelLineIndexValidationEnabled() noexcept {
+	const char *value = std::getenv("MR_VALIDATE_PARALLEL_LINE_INDEX");
+	return value != nullptr && std::strcmp(value, "1") == 0;
+}
+
+void assignLineIndexWarmupData(LineIndexWarmupData &warmup, std::vector<LineIndexCheckpoint> checkpoints, Offset indexedOffset, std::size_t indexedLine, std::size_t totalLines) {
+	warmup.checkpoints = std::move(checkpoints);
+	warmup.lazyIndexedOffset = indexedOffset;
+	warmup.lazyIndexedLine = indexedLine;
+	warmup.lazyLineIndexComplete = true;
+	warmup.lazyTotalLineCount = totalLines;
+}
+
+bool hasMatchingLineIndexWarmupData(const LineIndexWarmupData &left, const LineIndexWarmupData &right) noexcept {
+	if (left.lazyIndexedOffset != right.lazyIndexedOffset || left.lazyIndexedLine != right.lazyIndexedLine || left.lazyLineIndexComplete != right.lazyLineIndexComplete || left.lazyTotalLineCount != right.lazyTotalLineCount ||
+	    left.checkpoints.size() != right.checkpoints.size())
+		return false;
+
+	for (std::size_t i = 0; i < left.checkpoints.size(); ++i)
+		if (left.checkpoints[i].offset != right.checkpoints[i].offset || left.checkpoints[i].lineIndex != right.checkpoints[i].lineIndex) return false;
+
+	return true;
+}
+
+void logParallelLineIndexValidationMismatch(const LineIndexWarmupData &serialWarmup, const LineIndexWarmupData &parallelWarmup) noexcept {
+	std::fprintf(stderr,
+	             "MR line-index parallel validation mismatch: serial(checkpoints=%zu offset=%zu line=%zu complete=%d total=%zu) parallel(checkpoints=%zu offset=%zu line=%zu complete=%d total=%zu)\n",
+	             serialWarmup.checkpoints.size(), serialWarmup.lazyIndexedOffset, serialWarmup.lazyIndexedLine, serialWarmup.lazyLineIndexComplete ? 1 : 0, serialWarmup.lazyTotalLineCount, parallelWarmup.checkpoints.size(),
+	             parallelWarmup.lazyIndexedOffset, parallelWarmup.lazyIndexedLine, parallelWarmup.lazyLineIndexComplete ? 1 : 0, parallelWarmup.lazyTotalLineCount);
 }
 
 Offset directFindNextLineBreak(const char *data, Offset length, Offset start) noexcept {
@@ -1010,16 +1043,43 @@ bool ReadSnapshot::completeLineIndexWarmup(LineIndexWarmupData &warmup, std::sto
 	ensureLazyIndexSeeded();
 	if (!mLazyLineIndexComplete && mLineIndexCheckpoints.size() == 1 && mLineIndexCheckpoints[0].offset == 0 && mLineIndexCheckpoints[0].lineIndex == 0 && mLazyIndexedOffset == 0 && mLazyIndexedLine == 0) {
 		if (const char *data = directTextData()) {
+			if (isParallelLineIndexValidationEnabled()) {
+				LineIndexWarmupData serialWarmup;
+				LineIndexWarmupData parallelWarmup;
+				std::vector<LineIndexCheckpoint> serialCheckpoints;
+				std::vector<LineIndexCheckpoint> parallelCheckpoints;
+				Offset serialIndexedOffset = 0;
+				Offset parallelIndexedOffset = 0;
+				std::size_t serialIndexedLine = 0;
+				std::size_t parallelIndexedLine = 0;
+				std::size_t serialTotalLines = 1;
+				std::size_t parallelTotalLines = 1;
+
+				buildDirectInitialLineIndex(data, mLength, serialCheckpoints, serialIndexedOffset, serialIndexedLine, serialTotalLines);
+				assignLineIndexWarmupData(serialWarmup, std::move(serialCheckpoints), serialIndexedOffset, serialIndexedLine, serialTotalLines);
+
+				if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire))) return false;
+
+				if (buildDirectInitialLineIndexParallel(data, mLength, parallelCheckpoints, parallelIndexedOffset, parallelIndexedLine, parallelTotalLines, stopToken, cancelFlag)) {
+					assignLineIndexWarmupData(parallelWarmup, std::move(parallelCheckpoints), parallelIndexedOffset, parallelIndexedLine, parallelTotalLines);
+					if (hasMatchingLineIndexWarmupData(serialWarmup, parallelWarmup)) {
+						warmup = std::move(parallelWarmup);
+						return true;
+					}
+					logParallelLineIndexValidationMismatch(serialWarmup, parallelWarmup);
+				}
+				if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire))) return false;
+
+				warmup = std::move(serialWarmup);
+				return true;
+			}
+
 			std::vector<LineIndexCheckpoint> checkpoints;
 			Offset indexedOffset = 0;
 			std::size_t indexedLine = 0;
 			std::size_t totalLines = 1;
 			if (buildDirectInitialLineIndexParallel(data, mLength, checkpoints, indexedOffset, indexedLine, totalLines, stopToken, cancelFlag)) {
-				warmup.checkpoints = std::move(checkpoints);
-				warmup.lazyIndexedOffset = indexedOffset;
-				warmup.lazyIndexedLine = indexedLine;
-				warmup.lazyLineIndexComplete = true;
-				warmup.lazyTotalLineCount = totalLines;
+				assignLineIndexWarmupData(warmup, std::move(checkpoints), indexedOffset, indexedLine, totalLines);
 				return true;
 			}
 			if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire))) return false;
