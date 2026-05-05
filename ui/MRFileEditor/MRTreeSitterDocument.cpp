@@ -410,6 +410,7 @@ enum class SyntaxDerivationExecutionChoice : unsigned char {
 	Parallel
 };
 
+constexpr bool kEnableParallelSyntaxDerivationValidation = false;
 constexpr std::size_t kMinParallelSyntaxDerivationLineCount = 64;
 
 const char *readTreeSitterSnapshot(void *payload, uint32_t byteIndex, TSPoint, uint32_t *bytesRead) {
@@ -715,6 +716,10 @@ MRDerivedSyntaxData executeSyntaxDerivationPlanParallel(MRTreeSitterDocument::La
 	return mergeDerivedSyntaxChunks(std::move(chunks));
 }
 
+[[maybe_unused]] bool hasMatchingDerivedSyntaxTokenMaps(const MRDerivedSyntaxData &expected, const MRDerivedSyntaxData &actual) noexcept {
+	return expected.tokenMaps == actual.tokenMaps;
+}
+
 SyntaxDerivationExecutionChoice chooseSyntaxDerivationExecutionChoice(const DerivedSyntaxDerivationPlan &plan, std::size_t requestedLineCount,
 																	 unsigned int hardwareConcurrency) noexcept {
 	const std::size_t partitionCount = plan.partitions.size();
@@ -732,8 +737,17 @@ MRDerivedSyntaxData chooseSyntaxDerivationExecution(MRTreeSitterDocument::Langua
 	switch (chooseSyntaxDerivationExecutionChoice(plan, lineStarts.size(), std::thread::hardware_concurrency())) {
 		case SyntaxDerivationExecutionChoice::Serial:
 			return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
-		case SyntaxDerivationExecutionChoice::Parallel:
-			return executeSyntaxDerivationPlanParallel(language, snapshot, lineStarts, plan, canonicalTree);
+		case SyntaxDerivationExecutionChoice::Parallel: {
+			if constexpr (!kEnableParallelSyntaxDerivationValidation) {
+				return executeSyntaxDerivationPlanParallel(language, snapshot, lineStarts, plan, canonicalTree);
+			} else {
+				MRDerivedSyntaxData serialResult = executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+				MRDerivedSyntaxData parallelResult = executeSyntaxDerivationPlanParallel(language, snapshot, lineStarts, plan, canonicalTree);
+
+				if (!hasMatchingDerivedSyntaxTokenMaps(serialResult, parallelResult)) return serialResult;
+				return parallelResult;
+			}
+		}
 	}
 	return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
 }
