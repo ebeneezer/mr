@@ -1,7 +1,10 @@
 #include "MRMiniMap.hpp"
 
+#include "../MRWindowSupport.hpp"
+
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <future>
 #include <map>
 #include <memory>
@@ -98,6 +101,153 @@ bool miniMapCellHasOverlayBits(std::uint64_t lineBits, int x, bool useBraille) n
 		return leftBit != 0 || rightBit != 0;
 	}
 	return x < 64 && ((lineBits >> x) & 1ULL) != 0;
+}
+
+bool parallelMiniMapValidationEnabled() noexcept {
+	const char *value = std::getenv("MR_VALIDATE_PARALLEL_MINIMAP");
+	return value != nullptr && value[0] == '1' && value[1] == '\0';
+}
+
+unsigned miniMapWorkerCountFor(std::size_t totalMiniMapCells, int rowCount) noexcept {
+	const unsigned hardwareWorkers = std::max(1u, std::thread::hardware_concurrency());
+	return totalMiniMapCells >= 512 ? std::min<unsigned>(hardwareWorkers, static_cast<unsigned>(std::max(1, rowCount))) : 1u;
+}
+
+struct MiniMapLineSample {
+	std::uint64_t dotColumnBits = 0;
+};
+
+struct MiniMapWarmupBuildResult {
+	mr::coprocessor::TaskStatus status = mr::coprocessor::TaskStatus::Cancelled;
+	mr::coprocessor::MiniMapWarmupPayload payload;
+};
+
+MiniMapWarmupBuildResult buildMiniMapWarmupPayload(const mr::editor::ReadSnapshot &snapshot, int rowCount, int bodyWidth, int viewportWidth, bool useBraille, const MREditSetupSettings &settings,
+                                                   std::size_t totalLines, std::size_t windowStartLine, std::size_t windowLineCount, const mr::coprocessor::TaskInfo &info, std::stop_token stopToken,
+                                                   bool allowParallel) {
+	MiniMapWarmupBuildResult build;
+	std::vector<unsigned char> rowPatterns;
+	std::vector<std::size_t> rowLineStarts;
+	std::vector<std::size_t> rowLineEnds;
+	const int dotRows = useBraille ? std::max(1, rowCount * 4) : std::max(1, rowCount);
+	const int dotCols = useBraille ? std::max(1, bodyWidth * 2) : std::max(1, bodyWidth);
+	const std::size_t normalizedWindowLineCount = std::max<std::size_t>(1, windowLineCount);
+	const std::size_t totalMiniMapCells = static_cast<std::size_t>(std::max(1, rowCount)) * static_cast<std::size_t>(std::max(1, bodyWidth));
+	std::size_t normalizedTotalLines = std::max<std::size_t>(1, totalLines);
+	const auto shouldStop = [&]() noexcept { return stopToken.stop_requested() || info.cancelRequested(); };
+
+	if (shouldStop()) return build;
+	if (snapshot.exactLineCountKnown()) normalizedTotalLines = std::max<std::size_t>(1, snapshot.lineCount());
+	rowPatterns.assign(static_cast<std::size_t>(std::max(0, rowCount) * std::max(0, bodyWidth)), 0);
+	rowLineStarts.assign(static_cast<std::size_t>(std::max(0, rowCount)), 0);
+	rowLineEnds.assign(static_cast<std::size_t>(std::max(0, rowCount)), 0);
+	auto renderRows = [&](int yStart, int yEnd) -> bool {
+		mr::editor::ReadSnapshot workerSnapshot = snapshot;
+		std::map<std::size_t, MiniMapLineSample> sampledLineSamples;
+		auto lineSampleAt = [&](std::size_t lineIndex) -> const MiniMapLineSample & {
+			auto cached = sampledLineSamples.find(lineIndex);
+			if (cached != sampledLineSamples.end()) return cached->second;
+			MiniMapLineSample sample;
+			if (lineIndex < normalizedTotalLines) {
+				std::size_t lineStart = workerSnapshot.lineStartByIndex(lineIndex);
+				std::string lineText = workerSnapshot.lineText(lineStart);
+				std::size_t index = 0;
+				int visualColumn = 0;
+				while (index < lineText.size()) {
+					std::size_t current = index;
+					std::size_t next = index;
+					std::size_t width = 0;
+					if (!nextDisplayChar(lineText, next, width, visualColumn, settings)) break;
+					unsigned char ch = static_cast<unsigned char>(lineText[current]);
+					if (std::isspace(ch) == 0) {
+						const long long c = static_cast<long long>(visualColumn);
+						const long long w = static_cast<long long>(width);
+						const long long n = static_cast<long long>(dotCols);
+						const long long v = static_cast<long long>(viewportWidth);
+						const int dotColStart = static_cast<int>(c * n / v);
+						const int dotColEnd = static_cast<int>(((c + w) * n - 1) / v);
+						for (int dc = std::max(0, dotColStart); dc <= std::min(63, dotColEnd); ++dc)
+							sample.dotColumnBits |= (1ULL << dc);
+					}
+					visualColumn += static_cast<int>(width);
+					index = next;
+				}
+			}
+			auto inserted = sampledLineSamples.insert(std::make_pair(lineIndex, sample));
+			return inserted.first->second;
+		};
+
+		for (int y = yStart; y < yEnd; ++y) {
+			if (shouldStop()) return false;
+			std::pair<std::size_t, std::size_t> lineSpan = scaledInterval(static_cast<std::size_t>(y), static_cast<std::size_t>(rowCount), normalizedWindowLineCount);
+			rowLineStarts[static_cast<std::size_t>(y)] = std::min(normalizedTotalLines, windowStartLine + lineSpan.first);
+			rowLineEnds[static_cast<std::size_t>(y)] = std::min(normalizedTotalLines, windowStartLine + lineSpan.second);
+			for (int x = 0; x < bodyWidth; ++x) {
+				unsigned char pattern = 0;
+				if (useBraille) {
+					static const unsigned char dotBits[4][2] = {{0x01, 0x08}, {0x02, 0x10}, {0x04, 0x20}, {0x40, 0x80}};
+					for (int py = 0; py < 4; ++py) {
+						std::size_t sampleRow = static_cast<std::size_t>(y * 4 + py);
+						if (sampleRow >= normalizedWindowLineCount) continue;
+						std::size_t lineIndex = windowStartLine + scaledMidpoint(sampleRow, static_cast<std::size_t>(dotRows), normalizedWindowLineCount);
+						const MiniMapLineSample &sample = lineSampleAt(lineIndex);
+						for (int px = 0; px < 2; ++px) {
+							const int dotColumn = x * 2 + px;
+							if (dotColumn < 64 && (sample.dotColumnBits & (1ULL << dotColumn)) != 0) pattern |= dotBits[py][px];
+						}
+					}
+				} else if (static_cast<std::size_t>(y) < normalizedWindowLineCount) {
+					std::size_t lineIndex = windowStartLine + scaledMidpoint(static_cast<std::size_t>(y), static_cast<std::size_t>(rowCount), normalizedWindowLineCount);
+					const MiniMapLineSample &sample = lineSampleAt(lineIndex);
+					if (x < 64 && (sample.dotColumnBits & (1ULL << x)) != 0) pattern = 1;
+				}
+				rowPatterns[static_cast<std::size_t>(y * bodyWidth + x)] = pattern;
+			}
+		}
+		return true;
+	};
+
+	const unsigned workerCount = allowParallel ? miniMapWorkerCountFor(totalMiniMapCells, rowCount) : 1u;
+	if (workerCount == 1) {
+		if (!renderRows(0, rowCount)) return build;
+	} else {
+		std::vector<std::future<bool>> workers;
+
+		workers.reserve(workerCount);
+		for (unsigned workerIndex = 0; workerIndex < workerCount; ++workerIndex) {
+			const int yStart = static_cast<int>((static_cast<std::size_t>(workerIndex) * static_cast<std::size_t>(rowCount)) / static_cast<std::size_t>(workerCount));
+			const int yEnd = static_cast<int>((static_cast<std::size_t>(workerIndex + 1) * static_cast<std::size_t>(rowCount)) / static_cast<std::size_t>(workerCount));
+			if (yStart >= yEnd) continue;
+			workers.push_back(std::async(std::launch::async, [&, yStart, yEnd]() { return renderRows(yStart, yEnd); }));
+		}
+		for (std::future<bool> &worker : workers)
+			if (!worker.get()) return build;
+	}
+
+	build.status = mr::coprocessor::TaskStatus::Completed;
+	build.payload = mr::coprocessor::MiniMapWarmupPayload(useBraille, rowCount, bodyWidth, normalizedTotalLines, windowStartLine, normalizedWindowLineCount, viewportWidth, std::move(rowPatterns),
+	                                                      std::move(rowLineStarts), std::move(rowLineEnds));
+	return build;
+}
+
+bool miniMapWarmupPayloadsMatch(const mr::coprocessor::MiniMapWarmupPayload &lhs, const mr::coprocessor::MiniMapWarmupPayload &rhs) noexcept {
+	return lhs.braille == rhs.braille && lhs.rowCount == rhs.rowCount && lhs.bodyWidth == rhs.bodyWidth && lhs.totalLines == rhs.totalLines && lhs.windowStartLine == rhs.windowStartLine &&
+	       lhs.windowLineCount == rhs.windowLineCount && lhs.viewportWidth == rhs.viewportWidth && lhs.rowPatterns == rhs.rowPatterns && lhs.rowLineStarts == rhs.rowLineStarts &&
+	       lhs.rowLineEnds == rhs.rowLineEnds;
+}
+
+const char *miniMapWarmupMismatchField(const mr::coprocessor::MiniMapWarmupPayload &lhs, const mr::coprocessor::MiniMapWarmupPayload &rhs) noexcept {
+	if (lhs.braille != rhs.braille) return "braille";
+	if (lhs.rowCount != rhs.rowCount) return "rowCount";
+	if (lhs.bodyWidth != rhs.bodyWidth) return "bodyWidth";
+	if (lhs.totalLines != rhs.totalLines) return "totalLines";
+	if (lhs.windowStartLine != rhs.windowStartLine) return "windowStartLine";
+	if (lhs.windowLineCount != rhs.windowLineCount) return "windowLineCount";
+	if (lhs.viewportWidth != rhs.viewportWidth) return "viewportWidth";
+	if (lhs.rowPatterns != rhs.rowPatterns) return "rowPatterns";
+	if (lhs.rowLineStarts != rhs.rowLineStarts) return "rowLineStarts";
+	if (lhs.rowLineEnds != rhs.rowLineEnds) return "rowLineEnds";
+	return "";
 }
 
 } // namespace
@@ -311,119 +461,39 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 	mImpl->warmupTaskId = mr::coprocessor::globalCoprocessor().submitCoalesced(mr::coprocessor::Lane::MiniMap, mr::coprocessor::TaskKind::MiniMapWarmup, documentId, version, coalescingKey, "rendering mini map",
 	                                                                          [snapshot, rowCount, bodyWidth, viewportWidth, useBraille, settings, totalLines, samplingWindow](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
 		mr::coprocessor::Result result;
-		struct MiniMapLineSample {
-			std::uint64_t dotColumnBits = 0;
-		};
-		std::vector<unsigned char> rowPatterns;
-		std::vector<std::size_t> rowLineStarts;
-		std::vector<std::size_t> rowLineEnds;
-		const int dotRows = useBraille ? std::max(1, rowCount * 4) : std::max(1, rowCount);
-		const int dotCols = useBraille ? std::max(1, bodyWidth * 2) : std::max(1, bodyWidth);
-		const std::size_t windowStartLine = samplingWindow.startLine;
-		const std::size_t windowLineCount = std::max<std::size_t>(1, samplingWindow.lineCount);
-		const std::size_t totalMiniMapCells = static_cast<std::size_t>(std::max(1, rowCount)) * static_cast<std::size_t>(std::max(1, bodyWidth));
-		std::size_t normalizedTotalLines = std::max<std::size_t>(1, totalLines);
-		auto shouldStop = [&]() noexcept { return stopToken.stop_requested() || info.cancelRequested(); };
 		result.task = info;
+		const bool validateParallel = parallelMiniMapValidationEnabled();
+		const bool canRunParallel = miniMapWorkerCountFor(static_cast<std::size_t>(std::max(1, rowCount)) * static_cast<std::size_t>(std::max(1, bodyWidth)), rowCount) > 1;
 
-		if (shouldStop()) {
-			result.status = mr::coprocessor::TaskStatus::Cancelled;
-			return result;
-		}
-		if (snapshot.exactLineCountKnown()) normalizedTotalLines = std::max<std::size_t>(1, snapshot.lineCount());
-		rowPatterns.assign(static_cast<std::size_t>(std::max(0, rowCount) * std::max(0, bodyWidth)), 0);
-		rowLineStarts.assign(static_cast<std::size_t>(std::max(0, rowCount)), 0);
-		rowLineEnds.assign(static_cast<std::size_t>(std::max(0, rowCount)), 0);
-		auto renderRows = [&](int yStart, int yEnd) -> bool {
-			mr::editor::ReadSnapshot workerSnapshot = snapshot;
-			std::map<std::size_t, MiniMapLineSample> sampledLineSamples;
-			auto lineSampleAt = [&](std::size_t lineIndex) -> const MiniMapLineSample & {
-				auto cached = sampledLineSamples.find(lineIndex);
-				if (cached != sampledLineSamples.end()) return cached->second;
-				MiniMapLineSample sample;
-				if (lineIndex < normalizedTotalLines) {
-					std::size_t lineStart = workerSnapshot.lineStartByIndex(lineIndex);
-					std::string lineText = workerSnapshot.lineText(lineStart);
-					std::size_t index = 0;
-					int visualColumn = 0;
-					while (index < lineText.size()) {
-						std::size_t current = index;
-						std::size_t next = index;
-						std::size_t width = 0;
-						if (!nextDisplayChar(lineText, next, width, visualColumn, settings)) break;
-						unsigned char ch = static_cast<unsigned char>(lineText[current]);
-						if (std::isspace(ch) == 0) {
-							const long long c = static_cast<long long>(visualColumn);
-							const long long w = static_cast<long long>(width);
-							const long long n = static_cast<long long>(dotCols);
-							const long long v = static_cast<long long>(viewportWidth);
-							const int dotColStart = static_cast<int>(c * n / v);
-							const int dotColEnd = static_cast<int>(((c + w) * n - 1) / v);
-							for (int dc = std::max(0, dotColStart); dc <= std::min(63, dotColEnd); ++dc)
-								sample.dotColumnBits |= (1ULL << dc);
-						}
-						visualColumn += static_cast<int>(width);
-						index = next;
-					}
-				}
-				auto inserted = sampledLineSamples.insert(std::make_pair(lineIndex, sample));
-				return inserted.first->second;
-			};
-
-			for (int y = yStart; y < yEnd; ++y) {
-				if (shouldStop()) return false;
-				std::pair<std::size_t, std::size_t> lineSpan = scaledInterval(static_cast<std::size_t>(y), static_cast<std::size_t>(rowCount), windowLineCount);
-				rowLineStarts[static_cast<std::size_t>(y)] = std::min(normalizedTotalLines, windowStartLine + lineSpan.first);
-				rowLineEnds[static_cast<std::size_t>(y)] = std::min(normalizedTotalLines, windowStartLine + lineSpan.second);
-				for (int x = 0; x < bodyWidth; ++x) {
-					unsigned char pattern = 0;
-					if (useBraille) {
-						static const unsigned char dotBits[4][2] = {{0x01, 0x08}, {0x02, 0x10}, {0x04, 0x20}, {0x40, 0x80}};
-						for (int py = 0; py < 4; ++py) {
-							std::size_t sampleRow = static_cast<std::size_t>(y * 4 + py);
-							if (sampleRow >= windowLineCount) continue;
-							std::size_t lineIndex = windowStartLine + scaledMidpoint(sampleRow, static_cast<std::size_t>(dotRows), windowLineCount);
-							const MiniMapLineSample &sample = lineSampleAt(lineIndex);
-							for (int px = 0; px < 2; ++px) {
-								const int dotColumn = x * 2 + px;
-								if (dotColumn < 64 && (sample.dotColumnBits & (1ULL << dotColumn)) != 0) pattern |= dotBits[py][px];
-							}
-						}
-					} else if (static_cast<std::size_t>(y) < windowLineCount) {
-						std::size_t lineIndex = windowStartLine + scaledMidpoint(static_cast<std::size_t>(y), static_cast<std::size_t>(rowCount), windowLineCount);
-						const MiniMapLineSample &sample = lineSampleAt(lineIndex);
-						if (x < 64 && (sample.dotColumnBits & (1ULL << x)) != 0) pattern = 1;
-					}
-					rowPatterns[static_cast<std::size_t>(y * bodyWidth + x)] = pattern;
-				}
-			}
-			return true;
-		};
-		const unsigned hardwareWorkers = std::max(1u, std::thread::hardware_concurrency());
-		const unsigned workerCount = totalMiniMapCells >= 512 ? std::min<unsigned>(hardwareWorkers, static_cast<unsigned>(std::max(1, rowCount))) : 1u;
-		if (workerCount == 1) {
-			if (!renderRows(0, rowCount)) {
-				result.status = mr::coprocessor::TaskStatus::Cancelled;
+		if (validateParallel && canRunParallel) {
+			MiniMapWarmupBuildResult serialBuild =
+			    buildMiniMapWarmupPayload(snapshot, rowCount, bodyWidth, viewportWidth, useBraille, settings, totalLines, samplingWindow.startLine, samplingWindow.lineCount, info, stopToken, false);
+			if (serialBuild.status != mr::coprocessor::TaskStatus::Completed) {
+				result.status = serialBuild.status;
 				return result;
 			}
-		} else {
-			std::vector<std::future<bool>> workers;
-
-			workers.reserve(workerCount);
-			for (unsigned workerIndex = 0; workerIndex < workerCount; ++workerIndex) {
-				const int yStart = static_cast<int>((static_cast<std::size_t>(workerIndex) * static_cast<std::size_t>(rowCount)) / static_cast<std::size_t>(workerCount));
-				const int yEnd = static_cast<int>((static_cast<std::size_t>(workerIndex + 1) * static_cast<std::size_t>(rowCount)) / static_cast<std::size_t>(workerCount));
-				if (yStart >= yEnd) continue;
-				workers.push_back(std::async(std::launch::async, [&, yStart, yEnd]() { return renderRows(yStart, yEnd); }));
+			MiniMapWarmupBuildResult parallelBuild =
+			    buildMiniMapWarmupPayload(snapshot, rowCount, bodyWidth, viewportWidth, useBraille, settings, totalLines, samplingWindow.startLine, samplingWindow.lineCount, info, stopToken, true);
+			if (parallelBuild.status != mr::coprocessor::TaskStatus::Completed) {
+				result.status = parallelBuild.status;
+				return result;
 			}
-			for (std::future<bool> &worker : workers)
-				if (!worker.get()) {
-					result.status = mr::coprocessor::TaskStatus::Cancelled;
-					return result;
-				}
+			if (!miniMapWarmupPayloadsMatch(serialBuild.payload, parallelBuild.payload)) {
+				const char *field = miniMapWarmupMismatchField(serialBuild.payload, parallelBuild.payload);
+				mrLogMessage((std::string("MiniMap parallel validation mismatch on ") + field + "; using serial result.").c_str());
+				result.status = mr::coprocessor::TaskStatus::Completed;
+				result.payload = std::make_shared<mr::coprocessor::MiniMapWarmupPayload>(std::move(serialBuild.payload));
+				return result;
+			}
+			result.status = mr::coprocessor::TaskStatus::Completed;
+			result.payload = std::make_shared<mr::coprocessor::MiniMapWarmupPayload>(std::move(parallelBuild.payload));
+			return result;
 		}
-		result.status = mr::coprocessor::TaskStatus::Completed;
-		result.payload = std::make_shared<mr::coprocessor::MiniMapWarmupPayload>(useBraille, rowCount, bodyWidth, normalizedTotalLines, windowStartLine, windowLineCount, viewportWidth, std::move(rowPatterns), std::move(rowLineStarts), std::move(rowLineEnds));
+
+		MiniMapWarmupBuildResult build =
+		    buildMiniMapWarmupPayload(snapshot, rowCount, bodyWidth, viewportWidth, useBraille, settings, totalLines, samplingWindow.startLine, samplingWindow.lineCount, info, stopToken, true);
+		result.status = build.status;
+		if (build.status == mr::coprocessor::TaskStatus::Completed) result.payload = std::make_shared<mr::coprocessor::MiniMapWarmupPayload>(std::move(build.payload));
 		return result;
 	});
 	if (mImpl->warmupTaskId != previousTaskId) signals.notifyTaskStateChanged = true;

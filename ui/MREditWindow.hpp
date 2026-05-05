@@ -666,6 +666,10 @@ class MREditWindow : public TWindow {
 		return count;
 	}
 
+	bool hasTrackedTaskKind(mr::coprocessor::TaskKind kind) const noexcept {
+		return trackedTaskCount(kind) != 0;
+	}
+
 	bool hasTrackedMacroTasks() const noexcept {
 		return trackedMacroTaskCount() != 0;
 	}
@@ -724,23 +728,27 @@ class MREditWindow : public TWindow {
 					line = "Indicator";
 					break;
 				case mr::coprocessor::TaskKind::SyntaxWarmup:
-					line = "Syntax";
+					line = syntaxWarmingLabel();
 					break;
 				case mr::coprocessor::TaskKind::MiniMapWarmup:
-					line = "Mini map";
+					line = miniMapRenderingLabel();
 					break;
 				case mr::coprocessor::TaskKind::SaveNormalizationWarmup:
-					line = "Save cache";
+					line = saveNormalizationWarmingLabel();
 					break;
 				case mr::coprocessor::TaskKind::LineIndexWarmup:
-					line = "Line index";
+					line = lineIndexWarmingLabel();
 					break;
 				case mr::coprocessor::TaskKind::Custom:
 				default:
 					line = "Task";
 					break;
 			}
-			if (!task.label.empty()) {
+			if (task.kind != mr::coprocessor::TaskKind::SyntaxWarmup &&
+			    task.kind != mr::coprocessor::TaskKind::MiniMapWarmup &&
+			    task.kind != mr::coprocessor::TaskKind::SaveNormalizationWarmup &&
+			    task.kind != mr::coprocessor::TaskKind::LineIndexWarmup &&
+			    !task.label.empty()) {
 				line += ": ";
 				line += compactTaskLabel(task);
 			}
@@ -748,10 +756,10 @@ class MREditWindow : public TWindow {
 			lines.push_back(line);
 		}
 		if (editor != nullptr) {
-			if (editor->pendingLineIndexWarmupTaskId() != 0 && trackedTaskCount(mr::coprocessor::TaskKind::LineIndexWarmup) == 0) lines.push_back(bullet + " " + lineIndexWarmingLabel());
-			if (editor->pendingSyntaxWarmupTaskId() != 0 && trackedTaskCount(mr::coprocessor::TaskKind::SyntaxWarmup) == 0) lines.push_back(bullet + " " + syntaxWarmingLabel());
-			if (editor->pendingMiniMapWarmupTaskId() != 0 && trackedTaskCount(mr::coprocessor::TaskKind::MiniMapWarmup) == 0) lines.push_back(bullet + " " + miniMapRenderingLabel());
-			if (editor->pendingSaveNormalizationWarmupTaskId() != 0 && trackedTaskCount(mr::coprocessor::TaskKind::SaveNormalizationWarmup) == 0) lines.push_back(bullet + " " + saveNormalizationWarmingLabel());
+			if (editor->pendingLineIndexWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::LineIndexWarmup)) lines.push_back(bullet + " " + lineIndexWarmingLabel());
+			if (editor->pendingSyntaxWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::SyntaxWarmup)) lines.push_back(bullet + " " + syntaxWarmingLabel());
+			if (editor->pendingMiniMapWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::MiniMapWarmup)) lines.push_back(bullet + " " + miniMapRenderingLabel());
+			if (editor->pendingSaveNormalizationWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::SaveNormalizationWarmup)) lines.push_back(bullet + " " + saveNormalizationWarmingLabel());
 		}
 		return lines;
 	}
@@ -1600,10 +1608,10 @@ class MREditWindow : public TWindow {
 	void updateTaskMarkers() {
 		std::size_t taskCount = mTrackedCoprocessorTasks.size();
 		if (editor != nullptr) {
-			if (editor->pendingLineIndexWarmupTaskId() != 0) ++taskCount;
-			if (editor->pendingSyntaxWarmupTaskId() != 0) ++taskCount;
-			if (editor->pendingMiniMapWarmupTaskId() != 0) ++taskCount;
-			if (editor->pendingSaveNormalizationWarmupTaskId() != 0) ++taskCount;
+			if (editor->pendingLineIndexWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::LineIndexWarmup)) ++taskCount;
+			if (editor->pendingSyntaxWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::SyntaxWarmup)) ++taskCount;
+			if (editor->pendingMiniMapWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::MiniMapWarmup)) ++taskCount;
+			if (editor->pendingSaveNormalizationWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::SaveNormalizationWarmup)) ++taskCount;
 		}
 		if (indicator != nullptr) indicator->setTaskCount(taskCount);
 	}
