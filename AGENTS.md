@@ -53,6 +53,7 @@ Architecture contracts:
 - `documentation/architecture/keymap-contract.md`
 - `documentation/architecture/coprocessor-deferred-ui-contract.md`
 - `documentation/architecture/file-path-utilities-contract.md`
+- `documentation/architecture/syntax-analysis-contract.md`
 - `documentation/architecture/build-regression-contract.md`
 
 Only the contracts relevant to the requested change need to be read in full, but protected architecture must always be checked.
@@ -85,6 +86,7 @@ The following areas are protected and must not be changed opportunistically:
 - MacroCellGrid / MacroCellView / deferred UI playback,
 - TVision drawing/event mechanics,
 - keymap persistence and resolver semantics,
+- syntax analysis, Tree-sitter canonical parsing and derived syntax maps,
 - generated-file build model and regression checks.
 
 Workspace rule:
