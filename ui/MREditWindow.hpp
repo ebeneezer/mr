@@ -758,6 +758,7 @@ class MREditWindow : public TWindow {
 		if (editor != nullptr) {
 			if (editor->pendingLineIndexWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::LineIndexWarmup)) lines.push_back(bullet + " " + lineIndexWarmingLabel());
 			if (editor->pendingSyntaxWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::SyntaxWarmup)) lines.push_back(bullet + " " + syntaxWarmingLabel());
+			if (editor->syntaxWarmupDeferredStatusActive() && editor->pendingSyntaxWarmupTaskId() == 0) lines.push_back(bullet + " " + syntaxDeferredLabel());
 			if (editor->pendingMiniMapWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::MiniMapWarmup)) lines.push_back(bullet + " " + miniMapRenderingLabel());
 			if (editor->pendingSaveNormalizationWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::SaveNormalizationWarmup)) lines.push_back(bullet + " " + saveNormalizationWarmingLabel());
 		}
@@ -1618,6 +1619,7 @@ class MREditWindow : public TWindow {
 		if (editor != nullptr) {
 			if (editor->pendingLineIndexWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::LineIndexWarmup)) ++taskCount;
 			if (editor->pendingSyntaxWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::SyntaxWarmup)) ++taskCount;
+			if (editor->syntaxWarmupDeferredStatusActive() && editor->pendingSyntaxWarmupTaskId() == 0) ++taskCount;
 			if (editor->pendingMiniMapWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::MiniMapWarmup)) ++taskCount;
 			if (editor->pendingSaveNormalizationWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::SaveNormalizationWarmup)) ++taskCount;
 		}
@@ -1738,6 +1740,10 @@ class MREditWindow : public TWindow {
 
 	static const char *syntaxWarmingLabel() noexcept {
 		return "Syntax warming";
+	}
+
+	static const char *syntaxDeferredLabel() noexcept {
+		return "Syntax deferred";
 	}
 
 	static const char *miniMapRenderingLabel() noexcept {

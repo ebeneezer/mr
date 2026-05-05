@@ -121,6 +121,8 @@ class MRFileEditor : public TScroller {
 
 	bool syntaxWarmupPending() const noexcept;
 
+	bool syntaxWarmupDeferredStatusActive() const noexcept;
+
 	bool miniMapWarmupPending() const noexcept;
 
 	bool saveNormalizationWarmupPending() const noexcept;
@@ -504,6 +506,10 @@ class MRFileEditor : public TScroller {
 
 	void resetSyntaxWarmupState(bool clearCache) noexcept;
 
+	bool clearSyntaxWarmupDeferredStatus() noexcept;
+
+	void markSyntaxWarmupDeferredStatus() noexcept;
+
 		std::vector<std::size_t> syntaxWarmupLineStarts(std::size_t topLine, int rowCount) const;
 
 		bool hasSyntaxTokensForLineStarts(const std::vector<std::size_t> &lineStarts) const;
@@ -539,6 +545,7 @@ class MRFileEditor : public TScroller {
 	std::size_t mSyntaxWarmupBottomLine;
 	MRSyntaxLanguage mSyntaxWarmupLanguage;
 	MRTreeSitterDocument::Language mSyntaxWarmupTreeSitterLanguage;
+	std::chrono::steady_clock::time_point mSyntaxWarmupDeferredUntil;
 	MRTreeSitterDocument mTreeSitterDocument;
 	MRMiniMapRenderer mMiniMapRenderer;
 	SaveNormalizationCache mSaveNormalizationCache;
