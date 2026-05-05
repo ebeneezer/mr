@@ -10547,3 +10547,450 @@
 [00:06:47] Large-file metrics: doc=189 ver=1 file='/home/idoc/mr/misc/enwik9' stage=updateMetrics exact=1 estimated_lines=13147026 line_count=13147026 cursor_line=0 delta_y=0 new_delta_y=0 limit_y=13147027 max_y=13146987 text_rows=40
 [00:06:47] Loaded file into active window: /home/idoc/mr/misc/enwik9
 [00:07:05] Large-file metrics: doc=189 ver=1 file='/home/idoc/mr/misc/enwik9' stage=updateMetrics exact=1 estimated_lines=13147026 line_count=13147026 cursor_line=0 delta_y=13146987 new_delta_y=13146987 limit_y=13147027 max_y=13146987 text_rows=40
+[19:34:08] Keymap bootstrap parse: active='WORDSTAR' profiles=2 diagnostics=0 [DEFAULT:0] [WORDSTAR:80]
+[19:34:08] Keymap bootstrap applied canonicalized result.
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=1 [DEFAULT:0]
+[19:34:08] Keymap active profile set to 'DEFAULT'.
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=1 [DEFAULT:0]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:0]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:1]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:2]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:3]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:4]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:5]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:6]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:7]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:8]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:9]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:10]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:11]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:12]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:13]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:14]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:15]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:16]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:17]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:18]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:19]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:20]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:21]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:22]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:23]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:24]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:25]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:26]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:27]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:28]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:29]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:30]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:31]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:32]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:33]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:34]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:35]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:36]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:37]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:38]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:39]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:40]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:41]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:42]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:43]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:44]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:45]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:46]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:47]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:48]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:49]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:50]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:51]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:52]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:53]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:54]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:55]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:56]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:57]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:58]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:59]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:60]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:61]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:62]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:63]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:64]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:65]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:66]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:67]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:68]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:69]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:70]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:71]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:72]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:73]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:74]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:75]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:76]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:77]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:78]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:79]
+[19:34:08] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:80]
+[19:34:08] Keymap active profile set to 'WORDSTAR'.
+[19:34:08] Settings loaded via VM: /home/idoc/.config/mr/settings.mrmac
+[19:34:08] Color theme loaded: /home/idoc/mr/mrmac/macros/idocs-theme.mrmac
+[19:34:08] Settings MACROPATH: /home/idoc/mr/mrmac/macros
+[19:34:08] Autoexec bootstrap: no AUTOEXEC_MACRO entries configured.
+[19:34:08] Editor session started.
+[19:34:14] Large-file metrics: doc=189 ver=1 file='/home/idoc/mr/misc/enwik9' stage=updateMetrics exact=1 estimated_lines=13147026 line_count=13147026 cursor_line=0 delta_y=0 new_delta_y=0 limit_y=13147027 max_y=13146987 text_rows=40
+[19:34:14] Loaded file into active window: /home/idoc/mr/misc/enwik9
+[19:35:41] Cancelling coprocessor task #22 for window #2.
+[19:35:41] Preparing close for window #2 title='/home/idoc/mr/misc/enwik9' cancelled_tasks=1.
+[19:35:41] MREditorApp handling cmMrEnsureUsableWorkWindow
+[19:35:58] settings.mrmac write (exit snapshot): /home/idoc/.config/mr/settings.mrmac
+[19:35:58] settings.mrmac updated: 19 changed, 1 added, 0 removed.
+[19:35:58] settings DIALOG_FILE_HISTORY[10]: 'scope="SETUP_SETTINGS_MACRO" value="/home/idoc/.config/mr/settings.mrmac"' -> 'scope="KEYMAP_PROFILE_SAVE" value="/home/idoc/mr/mrmac/macros/wordstar.mrmac"'
+[19:35:58] settings DIALOG_FILE_HISTORY[11]: 'scope="SETUP_HELP_FILE" value="/home/idoc/mr/mr.hlp"' -> 'scope="SETUP_SETTINGS_MACRO" value="/home/idoc/.config/mr/settings.mrmac"'
+[19:35:58] settings DIALOG_FILE_HISTORY[12]: 'scope="SETUP_SHELL_EXECUTABLE" value="/usr/bin/zsh"' -> 'scope="SETUP_HELP_FILE" value="/home/idoc/mr/mr.hlp"'
+[19:35:58] settings DIALOG_FILE_HISTORY[13]: 'scope="SETUP_LOG_FILE" value="/home/idoc/mr/misc/mr.log"' -> 'scope="SETUP_SHELL_EXECUTABLE" value="/usr/bin/zsh"'
+[19:35:58] settings DIALOG_FILE_HISTORY[14]: 'scope="SETUP_LOG_FILE" value="/home/idoc/.config/mr/mr.log"' -> 'scope="SETUP_LOG_FILE" value="/home/idoc/mr/misc/mr.log"'
+[19:35:58] settings DIALOG_FILE_HISTORY[15]: 'scope="SETUP_THEME_LOAD" value="/home/idoc/mr/mrmac/macros/idocs-theme.mrmac"' -> 'scope="SETUP_LOG_FILE" value="/home/idoc/.config/mr/mr.log"'
+[19:35:58] settings DIALOG_FILE_HISTORY[16]: 'scope="SETUP_THEME_LOAD" value="/home/idoc/.config/mr/default-theme.mrmac"' -> 'scope="SETUP_THEME_LOAD" value="/home/idoc/mr/mrmac/macros/idocs-theme.mrmac"'
+[19:35:58] settings DIALOG_FILE_HISTORY[17]: 'scope="SETUP_THEME_LOAD" value="/tmp/test-color-theme.mrmac"' -> 'scope="SETUP_THEME_LOAD" value="/home/idoc/.config/mr/default-theme.mrmac"'
+[19:35:58] settings DIALOG_FILE_HISTORY[18]: 'scope="SETUP_THEME_SAVE" value="/home/idoc/mr/mrmac/macros/idocs-theme.mrmac"' -> 'scope="SETUP_THEME_LOAD" value="/tmp/test-color-theme.mrmac"'
+[19:35:58] settings DIALOG_FILE_HISTORY[19]: 'scope="SETUP_THEME_SAVE" value="/home/idoc/.config/mr/default-theme.mrmac"' -> 'scope="SETUP_THEME_SAVE" value="/home/idoc/mr/mrmac/macros/idocs-theme.mrmac"'
+[19:35:58] settings DIALOG_FILE_HISTORY[20]: 'scope="SETUP_THEME_SAVE" value="/tmp/test-color-theme.mrmac"' -> 'scope="SETUP_THEME_SAVE" value="/home/idoc/.config/mr/default-theme.mrmac"'
+[19:35:58] settings + DIALOG_FILE_HISTORY[21] = 'scope="SETUP_THEME_SAVE" value="/tmp/test-color-theme.mrmac"'
+[19:35:58] settings DIALOG_FILE_HISTORY[2]: 'scope="LOAD_FILE" value="/home/idoc/mr/misc/langlanglanglang日本語.cpp"' -> 'scope="LOAD_FILE" value="/home/idoc/mr/misc/enwik9"'
+[19:35:58] settings DIALOG_FILE_HISTORY[3]: 'scope="LOAD_FILE" value="/home/idoc/mr/misc/test für python colors.py"' -> 'scope="LOAD_FILE" value="/home/idoc/mr/misc/langlanglanglang日本語.cpp"'
+[19:35:58] settings DIALOG_FILE_HISTORY[4]: 'scope="LOAD_FILE" value="/home/idoc/C Testground/rle-encoder/rle_encoder.c"' -> 'scope="LOAD_FILE" value="/home/idoc/mr/misc/test für python colors.py"'
+[19:35:58] settings DIALOG_FILE_HISTORY[5]: 'scope="LOAD_FILE" value="/home/idoc/mr/misc/testblocksave.txt"' -> 'scope="LOAD_FILE" value="/home/idoc/C Testground/rle-encoder/rle_encoder.c"'
+[19:35:58] settings DIALOG_FILE_HISTORY[6]: 'scope="LOAD_FILE" value="/home/idoc/mr/misc/rotestfile.cpp"' -> 'scope="LOAD_FILE" value="/home/idoc/mr/misc/testblocksave.txt"'
+[19:35:58] settings DIALOG_FILE_HISTORY[7]: 'scope="LOAD_FILE" value="/home/idoc/mr/misc/testblocksave2.txt"' -> 'scope="LOAD_FILE" value="/home/idoc/mr/misc/rotestfile.cpp"'
+[19:35:58] settings DIALOG_FILE_HISTORY[8]: 'scope="KEYMAP_PROFILE_LOAD" value="/home/idoc/mr/mrmac/macros/wordstar.mrmac"' -> 'scope="LOAD_FILE" value="/home/idoc/mr/misc/testblocksave2.txt"'
+[19:35:58] settings DIALOG_FILE_HISTORY[9]: 'scope="KEYMAP_PROFILE_SAVE" value="/home/idoc/mr/mrmac/macros/wordstar.mrmac"' -> 'scope="KEYMAP_PROFILE_LOAD" value="/home/idoc/mr/mrmac/macros/wordstar.mrmac"'
+[19:40:06] Keymap bootstrap parse: active='WORDSTAR' profiles=2 diagnostics=0 [DEFAULT:0] [WORDSTAR:80]
+[19:40:06] Keymap bootstrap applied canonicalized result.
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=1 [DEFAULT:0]
+[19:40:06] Keymap active profile set to 'DEFAULT'.
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=1 [DEFAULT:0]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:0]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:1]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:2]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:3]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:4]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:5]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:6]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:7]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:8]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:9]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:10]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:11]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:12]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:13]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:14]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:15]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:16]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:17]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:18]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:19]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:20]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:21]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:22]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:23]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:24]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:25]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:26]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:27]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:28]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:29]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:30]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:31]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:32]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:33]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:34]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:35]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:36]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:37]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:38]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:39]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:40]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:41]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:42]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:43]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:44]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:45]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:46]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:47]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:48]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:49]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:50]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:51]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:52]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:53]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:54]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:55]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:56]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:57]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:58]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:59]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:60]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:61]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:62]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:63]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:64]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:65]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:66]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:67]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:68]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:69]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:70]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:71]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:72]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:73]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:74]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:75]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:76]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:77]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:78]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:79]
+[19:40:06] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:80]
+[19:40:06] Keymap active profile set to 'WORDSTAR'.
+[19:40:06] Settings loaded via VM: /home/idoc/.config/mr/settings.mrmac
+[19:40:06] Color theme loaded: /home/idoc/mr/mrmac/macros/idocs-theme.mrmac
+[19:40:06] Settings MACROPATH: /home/idoc/mr/mrmac/macros
+[19:40:06] Autoexec bootstrap: no AUTOEXEC_MACRO entries configured.
+[19:40:07] Large-file metrics: doc=186 ver=1 file='/home/idoc/mr/misc/enwik9' stage=updateMetrics exact=1 estimated_lines=13147026 line_count=13147026 cursor_line=0 delta_y=0 new_delta_y=0 limit_y=13147027 max_y=13146987 text_rows=40
+[19:40:07] Editor session started.
+[19:43:03] Cancelling coprocessor task #4 for window #2.
+[19:43:03] Preparing close for window #2 title='/home/idoc/mr/misc/enwik9' cancelled_tasks=1.
+[19:43:03] MREditorApp handling cmMrEnsureUsableWorkWindow
+[19:43:19] Large-file metrics: doc=199 ver=1 file='/home/idoc/mr/misc/enwik9' stage=updateMetrics exact=1 estimated_lines=13147026 line_count=13147026 cursor_line=0 delta_y=0 new_delta_y=0 limit_y=13147027 max_y=13146988 text_rows=39
+[19:43:19] Loaded file into active window: /home/idoc/mr/misc/enwik9
+[20:12:51] Keymap bootstrap parse: active='WORDSTAR' profiles=2 diagnostics=0 [DEFAULT:0] [WORDSTAR:80]
+[20:12:51] Keymap bootstrap applied canonicalized result.
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=1 [DEFAULT:0]
+[20:12:51] Keymap active profile set to 'DEFAULT'.
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=1 [DEFAULT:0]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:0]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:1]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:2]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:3]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:4]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:5]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:6]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:7]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:8]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:9]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:10]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:11]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:12]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:13]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:14]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:15]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:16]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:17]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:18]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:19]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:20]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:21]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:22]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:23]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:24]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:25]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:26]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:27]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:28]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:29]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:30]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:31]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:32]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:33]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:34]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:35]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:36]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:37]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:38]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:39]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:40]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:41]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:42]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:43]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:44]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:45]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:46]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:47]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:48]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:49]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:50]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:51]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:52]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:53]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:54]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:55]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:56]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:57]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:58]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:59]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:60]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:61]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:62]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:63]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:64]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:65]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:66]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:67]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:68]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:69]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:70]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:71]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:72]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:73]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:74]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:75]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:76]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:77]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:78]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:79]
+[20:12:51] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:80]
+[20:12:51] Keymap active profile set to 'WORDSTAR'.
+[20:12:51] Settings loaded via VM: /home/idoc/.config/mr/settings.mrmac
+[20:12:51] Color theme loaded: /home/idoc/mr/mrmac/macros/idocs-theme.mrmac
+[20:12:51] Settings MACROPATH: /home/idoc/mr/mrmac/macros
+[20:12:51] Autoexec bootstrap: no AUTOEXEC_MACRO entries configured.
+[20:12:51] Editor session started.
+[20:13:25] Keymap bootstrap parse: active='WORDSTAR' profiles=2 diagnostics=0 [DEFAULT:0] [WORDSTAR:80]
+[20:13:25] Keymap bootstrap applied canonicalized result.
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=1 [DEFAULT:0]
+[20:13:25] Keymap active profile set to 'DEFAULT'.
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=1 [DEFAULT:0]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:0]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:1]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:2]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:3]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:4]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:5]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:6]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:7]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:8]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:9]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:10]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:11]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:12]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:13]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:14]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:15]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:16]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:17]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:18]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:19]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:20]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:21]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:22]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:23]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:24]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:25]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:26]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:27]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:28]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:29]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:30]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:31]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:32]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:33]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:34]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:35]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:36]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:37]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:38]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:39]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:40]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:41]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:42]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:43]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:44]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:45]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:46]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:47]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:48]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:49]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:50]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:51]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:52]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:53]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:54]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:55]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:56]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:57]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:58]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:59]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:60]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:61]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:62]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:63]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:64]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:65]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:66]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:67]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:68]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:69]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:70]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:71]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:72]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:73]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:74]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:75]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:76]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:77]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:78]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:79]
+[20:13:25] Keymap configured state: active='DEFAULT' profiles=2 [DEFAULT:0] [WORDSTAR:80]
+[20:13:25] Keymap active profile set to 'WORDSTAR'.
+[20:13:25] Settings loaded via VM: /home/idoc/.config/mr/settings.mrmac
+[20:13:25] Color theme loaded: /home/idoc/mr/mrmac/macros/idocs-theme.mrmac
+[20:13:25] Settings MACROPATH: /home/idoc/mr/mrmac/macros
+[20:13:25] Autoexec bootstrap: no AUTOEXEC_MACRO entries configured.
+[20:13:25] WARMUP-CANCEL schedule kind=MiniMapWarmup task=2 doc=185 version=0
+[20:13:26] Large-file metrics: doc=188 ver=1 file='/home/idoc/mr/misc/enwik9' stage=updateMetrics exact=1 estimated_lines=13147026 line_count=13147026 cursor_line=0 delta_y=0 new_delta_y=0 limit_y=13147027 max_y=13146988 text_rows=39
+[20:13:26] WARMUP-CANCEL schedule kind=SyntaxWarmup task=4 doc=188 version=1
+[20:13:26] WARMUP-CANCEL syntax-parse start language=4 lines=47
+[20:13:26] WARMUP-CANCEL cancel kind=MiniMapWarmup task=2 reason=replace
+[20:13:26] WARMUP-CANCEL schedule kind=MiniMapWarmup task=6 doc=188 version=1
+[20:13:26] Editor session started.
+[20:13:26] WARMUP-CANCEL finish kind=MiniMapWarmup task=2 status=completed
+[20:13:26] WARMUP-CANCEL finish kind=MiniMapWarmup task=6 status=completed
+[20:14:01] WARMUP-CANCEL cancel kind=SyntaxWarmup task=4 reason=window-close
+[20:14:01] Cancelling coprocessor task #4 for window #2.
+[20:14:01] WARMUP-CANCEL syntax-parse cancel phase=parse
+[20:14:01] Preparing close for window #2 title='/home/idoc/mr/misc/enwik9' cancelled_tasks=1.
+[20:14:01] MREditorApp handling cmMrEnsureUsableWorkWindow
+[20:14:02] WARMUP-CANCEL syntax-parse cancel language=4 tree=no
+[20:14:02] WARMUP-CANCEL finish kind=SyntaxWarmup task=4 status=cancelled
+[20:14:32] WARMUP-CANCEL schedule kind=MiniMapWarmup task=10 doc=220 version=0
+[20:14:33] Large-file metrics: doc=223 ver=1 file='/home/idoc/mr/misc/enwik9' stage=updateMetrics exact=1 estimated_lines=13147026 line_count=13147026 cursor_line=0 delta_y=0 new_delta_y=0 limit_y=13147027 max_y=13146988 text_rows=39
+[20:14:33] WARMUP-CANCEL schedule kind=SyntaxWarmup task=12 doc=223 version=1
+[20:14:33] WARMUP-CANCEL syntax-parse start language=4 lines=47
+[20:14:33] WARMUP-CANCEL cancel kind=MiniMapWarmup task=10 reason=replace
+[20:14:33] WARMUP-CANCEL schedule kind=MiniMapWarmup task=14 doc=223 version=1
+[20:14:33] Loaded file into active window: /home/idoc/mr/misc/enwik9
+[20:14:33] WARMUP-CANCEL finish kind=MiniMapWarmup task=10 status=completed
+[20:14:33] WARMUP-CANCEL finish kind=MiniMapWarmup task=14 status=completed
+[20:14:44] WARMUP-CANCEL cancel kind=SyntaxWarmup task=12 reason=window-close
+[20:14:44] Cancelling coprocessor task #12 for window #3.
+[20:14:44] WARMUP-CANCEL syntax-parse cancel phase=parse
+[20:14:44] Preparing close for window #3 title='/home/idoc/mr/misc/enwik9' cancelled_tasks=1.
+[20:14:44] MREditorApp handling cmMrEnsureUsableWorkWindow
+[20:14:44] WARMUP-CANCEL syntax-parse cancel language=4 tree=no
+[20:14:44] WARMUP-CANCEL finish kind=SyntaxWarmup task=12 status=cancelled
+[20:15:23] WARMUP-CANCEL schedule kind=MiniMapWarmup task=17 doc=254 version=0
+[20:15:24] Large-file metrics: doc=257 ver=1 file='/home/idoc/mr/misc/enwik9' stage=updateMetrics exact=1 estimated_lines=13147026 line_count=13147026 cursor_line=0 delta_y=0 new_delta_y=0 limit_y=13147027 max_y=13146988 text_rows=39
+[20:15:24] WARMUP-CANCEL schedule kind=SyntaxWarmup task=19 doc=257 version=1
+[20:15:24] WARMUP-CANCEL syntax-parse start language=4 lines=47
+[20:15:24] WARMUP-CANCEL cancel kind=MiniMapWarmup task=17 reason=replace
+[20:15:24] WARMUP-CANCEL schedule kind=MiniMapWarmup task=21 doc=257 version=1
+[20:15:24] Loaded file into active window: /home/idoc/mr/misc/enwik9
+[20:15:24] WARMUP-CANCEL finish kind=MiniMapWarmup task=17 status=completed
+[20:15:24] WARMUP-CANCEL finish kind=MiniMapWarmup task=21 status=completed
+[20:15:44] WARMUP-CANCEL cancel kind=SyntaxWarmup task=19 reason=window-close
+[20:15:44] Cancelling coprocessor task #19 for window #4.
+[20:15:44] WARMUP-CANCEL syntax-parse cancel phase=parse
+[20:15:44] Exit requested; cancelling 1 running or pending coprocessor task.
+[20:15:45] WARMUP-CANCEL syntax-parse cancel language=4 tree=no
+[20:15:45] WARMUP-CANCEL finish kind=SyntaxWarmup task=19 status=cancelled
