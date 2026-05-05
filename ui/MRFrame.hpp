@@ -88,7 +88,6 @@ class MRFrame : public TFrame {
 	TaskOverviewProvider mTaskOverviewProvider;
 	MRTaskOverviewWindow *mTaskOverviewPopup;
 	TGroup *mTaskOverviewPopupOwner;
-	bool mTaskOverviewKeepAliveOnEmpty;
 };
 
 #endif
