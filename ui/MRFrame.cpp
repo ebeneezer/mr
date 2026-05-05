@@ -312,7 +312,6 @@ void MRFrame::draw() {
 	}
 
 	if (controlsVisible && window != nullptr) {
-		const int clusterLeft = std::max(1, hasWindowNumber ? controlClusterStart - 2 : controlClusterStart);
 		if ((window->flags & wfClose) != 0) b.moveCStr(2, kCloseIcon, cFrame);
 		if (hasWindowNumber && numberPos >= 1 && numberPos < width - 1) b.putChar(numberPos, window->number + '0');
 		if (hasZoomButton) {
