@@ -19,6 +19,7 @@ The contracts are not design essays. They define boundaries that must not be blu
 - `keymap-contract.md`
 - `coprocessor-deferred-ui-contract.md`
 - `file-path-utilities-contract.md`
+- `syntax-analysis-contract.md`
 - `build-regression-contract.md`
 
 ## Global invariant
