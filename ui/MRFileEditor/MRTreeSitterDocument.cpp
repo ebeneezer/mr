@@ -354,8 +354,15 @@ struct DerivedSyntaxTokenMapRequest {
 	const std::vector<std::size_t> &lineStarts;
 };
 
+struct ColorRun {
+	std::size_t startColumn = 0;
+	std::size_t endColumn = 0;
+	MRSyntaxToken token = MRSyntaxToken::Text;
+};
+
 struct MRDerivedSyntaxData {
 	std::vector<MRSyntaxTokenMap> tokenMaps;
+	std::vector<std::vector<ColorRun>> colorRuns;
 };
 
 const char *readTreeSitterSnapshot(void *payload, uint32_t byteIndex, TSPoint, uint32_t *bytesRead) {
@@ -421,6 +428,7 @@ MRDerivedSyntaxData makeDerivedSyntaxData(const DerivedSyntaxTokenMapRequest &re
 	MRDerivedSyntaxData derivedData;
 
 	derivedData.tokenMaps.reserve(request.lineStarts.size());
+	derivedData.colorRuns.resize(request.lineStarts.size());
 	for (std::size_t i = 0; i < request.lineStarts.size(); ++i)
 		derivedData.tokenMaps.push_back(MRSyntaxTokenMap(request.snapshot.lineText(request.lineStarts[i]).size(), MRSyntaxToken::Text));
 	return derivedData;
@@ -428,6 +436,30 @@ MRDerivedSyntaxData makeDerivedSyntaxData(const DerivedSyntaxTokenMapRequest &re
 
 std::vector<MRSyntaxTokenMap> releaseDerivedTokenMaps(MRDerivedSyntaxData &&derivedData) {
 	return std::move(derivedData.tokenMaps);
+}
+
+std::vector<ColorRun> buildColorRunsFromTokenMap(const MRSyntaxTokenMap &tokenMap) {
+	std::vector<ColorRun> colorRuns;
+
+	if (tokenMap.empty()) return colorRuns;
+
+	std::size_t runStart = 0;
+	MRSyntaxToken runToken = tokenMap[0];
+
+	for (std::size_t index = 1; index < tokenMap.size(); ++index) {
+		if (tokenMap[index] == runToken) continue;
+		colorRuns.push_back(ColorRun{runStart, index, runToken});
+		runStart = index;
+		runToken = tokenMap[index];
+	}
+	colorRuns.push_back(ColorRun{runStart, tokenMap.size(), runToken});
+	return colorRuns;
+}
+
+void deriveColorRunsFromTokenMaps(MRDerivedSyntaxData &derivedData) {
+	derivedData.colorRuns.clear();
+	derivedData.colorRuns.reserve(derivedData.tokenMaps.size());
+	for (const MRSyntaxTokenMap &tokenMap : derivedData.tokenMaps) derivedData.colorRuns.push_back(buildColorRunsFromTokenMap(tokenMap));
 }
 
 // Tree-sitter stays canonical; MR derived syntax data is an editor cache built from that tree.
@@ -672,13 +704,23 @@ std::vector<MRSyntaxTokenMap> MRTreeSitterDocument::buildTokenMapsForSnapshotLin
 	MRDerivedSyntaxData derivedData = makeDerivedSyntaxData(request);
 	const TSLanguage *parserLanguage = treeSitterParserLanguage(language);
 
-	if (lineStarts.empty()) return releaseDerivedTokenMaps(std::move(derivedData));
-	if (parserLanguage == nullptr) return releaseDerivedTokenMaps(std::move(derivedData));
+	if (lineStarts.empty()) {
+		deriveColorRunsFromTokenMaps(derivedData);
+		return releaseDerivedTokenMaps(std::move(derivedData));
+	}
+	if (parserLanguage == nullptr) {
+		deriveColorRunsFromTokenMaps(derivedData);
+		return releaseDerivedTokenMaps(std::move(derivedData));
+	}
 
 	TreeSitterTreeOwner tree = parseTreeSitterSnapshotTree(parserLanguage, snapshot);
-	if (tree.get() == nullptr) return releaseDerivedTokenMaps(std::move(derivedData));
+	if (tree.get() == nullptr) {
+		deriveColorRunsFromTokenMaps(derivedData);
+		return releaseDerivedTokenMaps(std::move(derivedData));
+	}
 
 	deriveTokenMapsFromCanonicalTree(language, request, tree.get(), derivedData);
+	deriveColorRunsFromTokenMaps(derivedData);
 	return releaseDerivedTokenMaps(std::move(derivedData));
 }
 
