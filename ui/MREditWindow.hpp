@@ -790,6 +790,10 @@ class MREditWindow : public TWindow {
 
 	std::size_t prepareCoprocessorTasksForShutdown() {
 		std::size_t clearedCount = mTrackedCoprocessorTasks.size();
+		const bool traceWarmupCancel = []() noexcept {
+			const char *value = std::getenv("MR_TRACE_WARMUP_CANCEL");
+			return value != nullptr && value[0] == '1' && value[1] == '\0';
+		}();
 
 		for (std::size_t i = 0; i < mTrackedCoprocessorTasks.size(); ++i) {
 			mrTraceCoprocessorTaskCancel(mBufferId, mTrackedCoprocessorTasks[i].id);
@@ -799,6 +803,7 @@ class MREditWindow : public TWindow {
 		if (editor != nullptr) {
 			std::uint64_t lineIndexTaskId = editor->pendingLineIndexWarmupTaskId();
 			if (lineIndexTaskId != 0) {
+				if (traceWarmupCancel) mrLogMessage(("WARMUP-CANCEL cancel kind=LineIndexWarmup task=" + std::to_string(lineIndexTaskId) + " reason=window-close").c_str());
 				mrTraceCoprocessorTaskCancel(mBufferId, lineIndexTaskId);
 				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(lineIndexTaskId));
 				editor->clearLineIndexWarmupTask(lineIndexTaskId);
@@ -806,6 +811,7 @@ class MREditWindow : public TWindow {
 			}
 			std::uint64_t syntaxTaskId = editor->pendingSyntaxWarmupTaskId();
 			if (syntaxTaskId != 0) {
+				if (traceWarmupCancel) mrLogMessage(("WARMUP-CANCEL cancel kind=SyntaxWarmup task=" + std::to_string(syntaxTaskId) + " reason=window-close").c_str());
 				mrTraceCoprocessorTaskCancel(mBufferId, syntaxTaskId);
 				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(syntaxTaskId));
 				editor->clearSyntaxWarmupTask(syntaxTaskId);
@@ -813,6 +819,7 @@ class MREditWindow : public TWindow {
 			}
 			std::uint64_t miniMapTaskId = editor->pendingMiniMapWarmupTaskId();
 			if (miniMapTaskId != 0) {
+				if (traceWarmupCancel) mrLogMessage(("WARMUP-CANCEL cancel kind=MiniMapWarmup task=" + std::to_string(miniMapTaskId) + " reason=window-close").c_str());
 				mrTraceCoprocessorTaskCancel(mBufferId, miniMapTaskId);
 				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(miniMapTaskId));
 				editor->clearMiniMapWarmupTask(miniMapTaskId);
@@ -820,6 +827,7 @@ class MREditWindow : public TWindow {
 			}
 			std::uint64_t saveNormalizationTaskId = editor->pendingSaveNormalizationWarmupTaskId();
 			if (saveNormalizationTaskId != 0) {
+				if (traceWarmupCancel) mrLogMessage(("WARMUP-CANCEL cancel kind=SaveNormalizationWarmup task=" + std::to_string(saveNormalizationTaskId) + " reason=window-close").c_str());
 				mrTraceCoprocessorTaskCancel(mBufferId, saveNormalizationTaskId);
 				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(saveNormalizationTaskId));
 				editor->clearSaveNormalizationWarmupTask(saveNormalizationTaskId);

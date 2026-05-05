@@ -1,7 +1,9 @@
 #pragma once
 
+#include <atomic>
 #include <cstddef>
 #include <memory>
+#include <stop_token>
 #include <string_view>
 #include <vector>
 
@@ -48,6 +50,8 @@ class MRTreeSitterDocument {
 	friend class MRFileEditor;
 
 	[[nodiscard]] static std::vector<MRSyntaxTokenMap> buildTokenMapsForSnapshotLines(Language language, const mr::editor::ReadSnapshot &snapshot, const std::vector<std::size_t> &lineStarts);
+	[[nodiscard]] static std::vector<MRSyntaxTokenMap> buildTokenMapsForSnapshotLines(Language language, const mr::editor::ReadSnapshot &snapshot, const std::vector<std::size_t> &lineStarts,
+	                                                                                 std::stop_token stopToken, const std::atomic_bool *cancelFlag);
 	struct Impl;
 	std::unique_ptr<Impl> mImpl;
 };

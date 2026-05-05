@@ -1,11 +1,14 @@
 #include "MRTreeSitterDocument.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cstdio>
 #include <cstdint>
 #include <cstdlib>
 #include <new>
+#include <sstream>
 #include <string>
+#include <stop_token>
 #include <thread>
 #include <utility>
 
@@ -13,6 +16,7 @@
 
 #include "../../app/utils/MRStringUtils.hpp"
 #include "../../piecetable/MRTextDocument.hpp"
+#include "../MRWindowSupport.hpp"
 #include "../MRSyntax.hpp"
 
 extern "C" const TSLanguage *tree_sitter_c(void);
@@ -23,6 +27,38 @@ extern "C" const TSLanguage *tree_sitter_json(void);
 extern "C" const TSLanguage *tree_sitter_mrmac(void);
 
 namespace {
+
+bool traceWarmupCancelEnabled() noexcept {
+	static const bool enabled = []() noexcept {
+		const char *value = std::getenv("MR_TRACE_WARMUP_CANCEL");
+		return value != nullptr && value[0] == '1' && value[1] == '\0';
+	}();
+	return enabled;
+}
+
+void logWarmupCancelTrace(const std::ostringstream &line) {
+	if (!traceWarmupCancelEnabled()) return;
+	mrLogMessage(line.str().c_str());
+}
+
+bool warmupCancelRequested(std::stop_token stopToken, const std::atomic_bool *cancelFlag) noexcept {
+	if (stopToken.stop_requested()) return true;
+	return cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire);
+}
+
+struct TreeSitterParseCancellationContext {
+	std::stop_token stopToken;
+	const std::atomic_bool *cancelFlag = nullptr;
+	bool cancelled = false;
+};
+
+bool treeSitterParseProgressCallback(TSParseState *state) {
+	if (state == nullptr || state->payload == nullptr) return false;
+	TreeSitterParseCancellationContext &context = *static_cast<TreeSitterParseCancellationContext *>(state->payload);
+
+	context.cancelled = warmupCancelRequested(context.stopToken, context.cancelFlag);
+	return context.cancelled;
+}
 
 struct TreeSitterParserOwner {
 	TSParser *value = nullptr;
@@ -454,14 +490,18 @@ const char *readTreeSitterSnapshot(void *payload, uint32_t byteIndex, TSPoint, u
 	return input.piece.data + chunkOffset;
 }
 
-TreeSitterTreeOwner parseTreeSitterSnapshotTree(const TSLanguage *parserLanguage, const mr::editor::ReadSnapshot &snapshot) noexcept {
+TreeSitterTreeOwner parseTreeSitterSnapshotTree(const TSLanguage *parserLanguage, const mr::editor::ReadSnapshot &snapshot, std::stop_token stopToken,
+												const std::atomic_bool *cancelFlag) noexcept {
 	TreeSitterParserOwner parser(ts_parser_new());
 
 	if (parser.get() == nullptr) return TreeSitterTreeOwner();
 	if (!ts_parser_set_language(parser.get(), parserLanguage)) return TreeSitterTreeOwner();
+	if (warmupCancelRequested(stopToken, cancelFlag)) return TreeSitterTreeOwner();
 
 	TreeSitterSnapshotInput input;
 	TSInput source;
+	TSParseOptions parseOptions;
+	TreeSitterParseCancellationContext parseContext;
 	TreeSitterTreeOwner tree;
 
 	input.snapshot = snapshot;
@@ -469,7 +509,19 @@ TreeSitterTreeOwner parseTreeSitterSnapshotTree(const TSLanguage *parserLanguage
 	source.read = readTreeSitterSnapshot;
 	source.encoding = TSInputEncodingUTF8;
 	source.decode = nullptr;
-	tree.reset(ts_parser_parse(parser.get(), nullptr, source));
+	parseContext.stopToken = stopToken;
+	parseContext.cancelFlag = cancelFlag;
+	parseOptions.payload = &parseContext;
+	parseOptions.progress_callback = treeSitterParseProgressCallback;
+	tree.reset(ts_parser_parse_with_options(parser.get(), nullptr, source, parseOptions));
+	if (parseContext.cancelled) {
+		if (traceWarmupCancelEnabled()) {
+			std::ostringstream line;
+			line << "WARMUP-CANCEL syntax-parse cancel phase=parse";
+			logWarmupCancelTrace(line);
+		}
+		return TreeSitterTreeOwner();
+	}
 	return tree;
 }
 
@@ -569,11 +621,12 @@ void deriveColorRunsFromTokenMaps(MRDerivedSyntaxData &derivedData) {
 	for (const MRSyntaxTokenMap &tokenMap : derivedData.tokenMaps) derivedData.colorRuns.push_back(buildColorRunsFromTokenMap(tokenMap));
 }
 
-void deriveTokenMapsForLineSliceFromCanonicalTree(MRTreeSitterDocument::Language language, const DerivedSyntaxLineSliceRequest &request, const TSTree *tree,
-									  MRDerivedSyntaxData &derivedData) {
+bool deriveTokenMapsForLineSliceFromCanonicalTree(MRTreeSitterDocument::Language language, const DerivedSyntaxLineSliceRequest &request, const TSTree *tree,
+									  std::stop_token stopToken, const std::atomic_bool *cancelFlag, MRDerivedSyntaxData &derivedData) {
 	const TSNode root = ts_tree_root_node(tree);
 
 	for (std::size_t derivedLineIndex = 0; derivedLineIndex < derivedData.tokenMaps.size(); ++derivedLineIndex) {
+		if (warmupCancelRequested(stopToken, cancelFlag)) return false;
 		const std::size_t lineIndex = request.lineIndexBegin + derivedLineIndex;
 		MRSyntaxTokenMap &tokenMap = derivedData.tokenMaps[derivedLineIndex];
 		const std::size_t safeLineStart = std::min(request.lineStarts[lineIndex], request.snapshot.length());
@@ -583,6 +636,7 @@ void deriveTokenMapsForLineSliceFromCanonicalTree(MRTreeSitterDocument::Language
 		if (tokenMap.empty()) continue;
 		stack.push_back(root);
 		while (!stack.empty()) {
+			if (warmupCancelRequested(stopToken, cancelFlag)) return false;
 			const TSNode node = stack.back();
 			stack.pop_back();
 
@@ -610,14 +664,15 @@ void deriveTokenMapsForLineSliceFromCanonicalTree(MRTreeSitterDocument::Language
 			for (std::size_t index = paintStart; index < paintEnd && index < tokenMap.size(); ++index) tokenMap[index] = token;
 		}
 	}
+	return true;
 }
 
 // Tree-sitter stays canonical; MR derived syntax data is an editor cache built from that tree.
 MRDerivedSyntaxData deriveSyntaxDataForLineSliceFromCanonicalTree(MRTreeSitterDocument::Language language, const DerivedSyntaxLineSliceRequest &request,
-																  const TSTree *tree) {
+																  const TSTree *tree, std::stop_token stopToken, const std::atomic_bool *cancelFlag) {
 	MRDerivedSyntaxData derivedData = initializeDerivedSyntaxData(request);
 
-	deriveTokenMapsForLineSliceFromCanonicalTree(language, request, tree, derivedData);
+	if (!deriveTokenMapsForLineSliceFromCanonicalTree(language, request, tree, stopToken, cancelFlag, derivedData)) return derivedData;
 	deriveColorRunsFromTokenMaps(derivedData);
 	return derivedData;
 }
@@ -628,19 +683,20 @@ TreeSitterTreeOwner copyCanonicalTreeForPartition(const TSTree *tree) noexcept {
 }
 
 MRDerivedSyntaxData deriveSyntaxChunkForPartitionFromCanonicalTree(MRTreeSitterDocument::Language language, const DerivedSyntaxLineSliceRequest &slice,
-																   const TSTree *canonicalTree) {
+																   const TSTree *canonicalTree, std::stop_token stopToken, const std::atomic_bool *cancelFlag) {
 	TreeSitterTreeOwner partitionTree = copyCanonicalTreeForPartition(canonicalTree);
 	const TSTree *treeForDerivation = partitionTree.get() != nullptr ? partitionTree.get() : canonicalTree;
 
-	return deriveSyntaxDataForLineSliceFromCanonicalTree(language, slice, treeForDerivation);
+	return deriveSyntaxDataForLineSliceFromCanonicalTree(language, slice, treeForDerivation, stopToken, cancelFlag);
 }
 
 bool deriveSyntaxChunkForPartitionFromCopiedTree(MRTreeSitterDocument::Language language, const DerivedSyntaxLineSliceRequest &slice,
-												 const TSTree *canonicalTree, MRDerivedSyntaxData &derivedData) {
+												 const TSTree *canonicalTree, std::stop_token stopToken, const std::atomic_bool *cancelFlag, MRDerivedSyntaxData &derivedData) {
 	TreeSitterTreeOwner partitionTree = copyCanonicalTreeForPartition(canonicalTree);
 
 	if (partitionTree.get() == nullptr) return false;
-	derivedData = deriveSyntaxDataForLineSliceFromCanonicalTree(language, slice, partitionTree.get());
+	if (warmupCancelRequested(stopToken, cancelFlag)) return false;
+	derivedData = deriveSyntaxDataForLineSliceFromCanonicalTree(language, slice, partitionTree.get(), stopToken, cancelFlag);
 	return true;
 }
 
@@ -652,41 +708,44 @@ MRDerivedSyntaxData mergeDerivedSyntaxChunks(std::vector<MRDerivedSyntaxData> &&
 }
 
 MRDerivedSyntaxData deriveSyntaxDataForLineSlicesFromCanonicalTree(MRTreeSitterDocument::Language language, const DerivedSyntaxLineSlices &slices,
-																   const TSTree *canonicalTree) {
+																   const TSTree *canonicalTree, std::stop_token stopToken, const std::atomic_bool *cancelFlag) {
 	std::vector<MRDerivedSyntaxData> chunks;
 
 	chunks.reserve(slices.size());
-	for (const DerivedSyntaxLineSliceRequest &slice : slices) chunks.push_back(deriveSyntaxChunkForPartitionFromCanonicalTree(language, slice, canonicalTree));
+	for (const DerivedSyntaxLineSliceRequest &slice : slices) {
+		if (warmupCancelRequested(stopToken, cancelFlag)) return initializeDerivedSyntaxData(slices);
+		chunks.push_back(deriveSyntaxChunkForPartitionFromCanonicalTree(language, slice, canonicalTree, stopToken, cancelFlag));
+	}
 	return mergeDerivedSyntaxChunks(std::move(chunks));
 }
 
 MRDerivedSyntaxData deriveSyntaxDataForPartitionsFromCanonicalTree(MRTreeSitterDocument::Language language, const mr::editor::ReadSnapshot &snapshot,
 																   const std::vector<std::size_t> &lineStarts, const DerivedSyntaxPartitions &partitions,
-																   const TSTree *tree) {
-	return deriveSyntaxDataForLineSlicesFromCanonicalTree(language, requestedLineSlices(snapshot, lineStarts, partitions), tree);
+																   const TSTree *tree, std::stop_token stopToken, const std::atomic_bool *cancelFlag) {
+	return deriveSyntaxDataForLineSlicesFromCanonicalTree(language, requestedLineSlices(snapshot, lineStarts, partitions), tree, stopToken, cancelFlag);
 }
 
 MRDerivedSyntaxData executeSyntaxDerivationPlanSerially(MRTreeSitterDocument::Language language, const mr::editor::ReadSnapshot &snapshot,
 														const std::vector<std::size_t> &lineStarts, const DerivedSyntaxDerivationPlan &plan,
-														const TSTree *canonicalTree) {
-	return deriveSyntaxDataForPartitionsFromCanonicalTree(language, snapshot, lineStarts, plan.partitions, canonicalTree);
+														const TSTree *canonicalTree, std::stop_token stopToken, const std::atomic_bool *cancelFlag) {
+	return deriveSyntaxDataForPartitionsFromCanonicalTree(language, snapshot, lineStarts, plan.partitions, canonicalTree, stopToken, cancelFlag);
 }
 
 MRDerivedSyntaxData executeSyntaxDerivationPlanParallel(MRTreeSitterDocument::Language language, const mr::editor::ReadSnapshot &snapshot,
 														const std::vector<std::size_t> &lineStarts, const DerivedSyntaxDerivationPlan &plan,
-														const TSTree *canonicalTree) {
+														const TSTree *canonicalTree, std::stop_token stopToken, const std::atomic_bool *cancelFlag) {
 	const DerivedSyntaxLineSlices slices = plannedLineSlices(snapshot, lineStarts, plan);
 	const unsigned int hardwareConcurrency = std::thread::hardware_concurrency();
 
-	if (canonicalTree == nullptr) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
-	if (slices.size() <= 1) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
-	if (hardwareConcurrency == 0) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
-	if (slices.size() > hardwareConcurrency) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
-	if (slices.size() != plan.partitions.size()) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+	if (canonicalTree == nullptr) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree, stopToken, cancelFlag);
+	if (slices.size() <= 1) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree, stopToken, cancelFlag);
+	if (hardwareConcurrency == 0) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree, stopToken, cancelFlag);
+	if (slices.size() > hardwareConcurrency) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree, stopToken, cancelFlag);
+	if (slices.size() != plan.partitions.size()) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree, stopToken, cancelFlag);
 
 	for (const DerivedSyntaxPartition &partition : plan.partitions)
 		if (!isValidDerivedSyntaxPartition(partition, lineStarts.size()))
-			return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+			return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree, stopToken, cancelFlag);
 
 	std::vector<ParallelDerivedSyntaxResultSlot> resultSlots(slices.size());
 
@@ -698,20 +757,23 @@ MRDerivedSyntaxData executeSyntaxDerivationPlanParallel(MRTreeSitterDocument::La
 			workers.emplace_back([&, sliceIndex] {
 				MRDerivedSyntaxData chunk;
 
-				if (!deriveSyntaxChunkForPartitionFromCopiedTree(language, slices[sliceIndex], canonicalTree, chunk)) return;
+				if (!deriveSyntaxChunkForPartitionFromCopiedTree(language, slices[sliceIndex], canonicalTree, stopToken, cancelFlag, chunk)) return;
 				resultSlots[sliceIndex].data = std::move(chunk);
 				resultSlots[sliceIndex].ready = true;
 			});
 		}
 	} catch (...) {
-		return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+		return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree, stopToken, cancelFlag);
 	}
 
 	std::vector<MRDerivedSyntaxData> chunks;
 
 	chunks.reserve(resultSlots.size());
 	for (ParallelDerivedSyntaxResultSlot &slot : resultSlots) {
-		if (!slot.ready) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+		if (!slot.ready) {
+			if (warmupCancelRequested(stopToken, cancelFlag)) return initializeDerivedSyntaxData(slices);
+			return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree, stopToken, cancelFlag);
+		}
 		chunks.push_back(std::move(slot.data));
 	}
 	return mergeDerivedSyntaxChunks(std::move(chunks));
@@ -760,23 +822,24 @@ SyntaxDerivationExecutionChoice chooseSyntaxDerivationExecutionChoice(const Deri
 
 MRDerivedSyntaxData chooseSyntaxDerivationExecution(MRTreeSitterDocument::Language language, const mr::editor::ReadSnapshot &snapshot,
 													const std::vector<std::size_t> &lineStarts, const DerivedSyntaxDerivationPlan &plan,
-													const TSTree *canonicalTree) {
+													const TSTree *canonicalTree, std::stop_token stopToken, const std::atomic_bool *cancelFlag) {
 	switch (chooseSyntaxDerivationExecutionChoice(plan, lineStarts.size(), std::thread::hardware_concurrency())) {
 		case SyntaxDerivationExecutionChoice::Serial:
-			return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+			return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree, stopToken, cancelFlag);
 		case SyntaxDerivationExecutionChoice::Parallel: {
 			if (!isParallelSyntaxValidationEnabled()) {
-				return executeSyntaxDerivationPlanParallel(language, snapshot, lineStarts, plan, canonicalTree);
+				return executeSyntaxDerivationPlanParallel(language, snapshot, lineStarts, plan, canonicalTree, stopToken, cancelFlag);
 			} else {
-				MRDerivedSyntaxData serialResult = executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
-				MRDerivedSyntaxData parallelResult = executeSyntaxDerivationPlanParallel(language, snapshot, lineStarts, plan, canonicalTree);
+				MRDerivedSyntaxData serialResult = executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree, stopToken, cancelFlag);
+				if (warmupCancelRequested(stopToken, cancelFlag)) return serialResult;
+				MRDerivedSyntaxData parallelResult = executeSyntaxDerivationPlanParallel(language, snapshot, lineStarts, plan, canonicalTree, stopToken, cancelFlag);
 
 				if (!hasMatchingDerivedSyntaxTokenMaps(serialResult, parallelResult)) return serialResult;
 				return parallelResult;
 			}
 		}
 	}
-	return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+	return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree, stopToken, cancelFlag);
 }
 
 std::vector<MRSyntaxTokenMap> exportRenderTokenMaps(MRDerivedSyntaxData &&derivedData) {
@@ -978,6 +1041,12 @@ bool MRTreeSitterDocument::shouldDedentCurrentLine(const mr::editor::ReadSnapsho
 }
 
 std::vector<MRSyntaxTokenMap> MRTreeSitterDocument::buildTokenMapsForSnapshotLines(Language language, const mr::editor::ReadSnapshot &snapshot, const std::vector<std::size_t> &lineStarts) {
+	return buildTokenMapsForSnapshotLines(language, snapshot, lineStarts, std::stop_token(), nullptr);
+}
+
+std::vector<MRSyntaxTokenMap> MRTreeSitterDocument::buildTokenMapsForSnapshotLines(Language language, const mr::editor::ReadSnapshot &snapshot,
+																	 const std::vector<std::size_t> &lineStarts, std::stop_token stopToken,
+																	 const std::atomic_bool *cancelFlag) {
 	const DerivedSyntaxDerivationPlan plan = buildSyntaxDerivationPlan(lineStarts);
 	const DerivedSyntaxLineSlices slices = plannedLineSlices(snapshot, lineStarts, plan);
 	MRDerivedSyntaxData derivedData = initializeDerivedSyntaxData(slices);
@@ -985,11 +1054,43 @@ std::vector<MRSyntaxTokenMap> MRTreeSitterDocument::buildTokenMapsForSnapshotLin
 
 	if (lineStarts.empty()) return exportRenderTokenMaps(std::move(derivedData));
 	if (parserLanguage == nullptr) return exportRenderTokenMaps(std::move(derivedData));
+	if (warmupCancelRequested(stopToken, cancelFlag)) {
+		if (traceWarmupCancelEnabled()) {
+			std::ostringstream line;
+			line << "WARMUP-CANCEL observed kind=SyntaxWarmup phase=before-parse";
+			logWarmupCancelTrace(line);
+		}
+		return exportRenderTokenMaps(std::move(derivedData));
+	}
 
-	TreeSitterTreeOwner tree = parseTreeSitterSnapshotTree(parserLanguage, snapshot);
-	if (tree.get() == nullptr) return exportRenderTokenMaps(std::move(derivedData));
+	if (traceWarmupCancelEnabled()) {
+		std::ostringstream line;
+		line << "WARMUP-CANCEL syntax-parse start language=" << static_cast<unsigned int>(language) << " lines=" << lineStarts.size();
+		logWarmupCancelTrace(line);
+	}
+	TreeSitterTreeOwner tree = parseTreeSitterSnapshotTree(parserLanguage, snapshot, stopToken, cancelFlag);
+	if (tree.get() == nullptr) {
+		if (traceWarmupCancelEnabled()) {
+			std::ostringstream line;
+			line << "WARMUP-CANCEL syntax-parse " << (warmupCancelRequested(stopToken, cancelFlag) ? "cancel" : "end") << " language=" << static_cast<unsigned int>(language)
+			     << " tree=no";
+			logWarmupCancelTrace(line);
+		}
+		return exportRenderTokenMaps(std::move(derivedData));
+	}
+	if (traceWarmupCancelEnabled()) {
+		std::ostringstream line;
+		line << "WARMUP-CANCEL syntax-parse end language=" << static_cast<unsigned int>(language) << " tree=yes";
+		logWarmupCancelTrace(line);
+	}
 
-	return exportRenderTokenMaps(chooseSyntaxDerivationExecution(language, snapshot, lineStarts, plan, tree.get()));
+	MRDerivedSyntaxData result = chooseSyntaxDerivationExecution(language, snapshot, lineStarts, plan, tree.get(), stopToken, cancelFlag);
+	if (warmupCancelRequested(stopToken, cancelFlag) && traceWarmupCancelEnabled()) {
+		std::ostringstream line;
+		line << "WARMUP-CANCEL observed kind=SyntaxWarmup phase=derive-token-maps";
+		logWarmupCancelTrace(line);
+	}
+	return exportRenderTokenMaps(std::move(result));
 }
 
 MRTreeSitterDocument::Language MRTreeSitterDocument::activeLanguage() const noexcept {

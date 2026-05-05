@@ -1,6 +1,26 @@
 #include "MRFileEditor.hpp"
 #include "../MREditWindow.hpp"
 
+#include <cstdlib>
+#include <sstream>
+
+namespace {
+
+bool traceWarmupCancelEnabled() noexcept {
+	static const bool enabled = []() noexcept {
+		const char *value = std::getenv("MR_TRACE_WARMUP_CANCEL");
+		return value != nullptr && value[0] == '1' && value[1] == '\0';
+	}();
+	return enabled;
+}
+
+void logWarmupCancelTrace(const std::ostringstream &line) {
+	if (!traceWarmupCancelEnabled()) return;
+	mrLogMessage(line.str().c_str());
+}
+
+} // namespace
+
 MRFileEditor::LoadTiming::LoadTiming() noexcept : valid(false), bytes(0), lines(0), mappedLoadMs(0.0), lineCountMs(0.0) {
 }
 
@@ -2600,6 +2620,11 @@ void MRFileEditor::scheduleLineIndexWarmupIfNeeded() {
 		mLineIndexWarmupDocumentId = 0;
 		mLineIndexWarmupVersion = 0;
 		if (hadTask) {
+			if (traceWarmupCancelEnabled()) {
+				std::ostringstream line;
+				line << "WARMUP-CANCEL cancel kind=LineIndexWarmup task=" << cancelledTaskId << " reason=replace";
+				logWarmupCancelTrace(line);
+			}
 			if (shouldTraceLargeFileDiagnostics()) traceLargeFileMessage("line-index-cancel", "reason=exact-line-count-known");
 			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledTaskId));
 			notifyWindowTaskStateChanged();
@@ -2613,7 +2638,14 @@ void MRFileEditor::scheduleLineIndexWarmupIfNeeded() {
 
 	MRTextBufferModel::ReadSnapshot snapshot = mBufferModel.readSnapshot();
 	std::uint64_t previousTaskId = mLineIndexWarmupTaskId;
-	if (previousTaskId != 0) static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
+	if (previousTaskId != 0) {
+		if (traceWarmupCancelEnabled()) {
+			std::ostringstream line;
+			line << "WARMUP-CANCEL cancel kind=LineIndexWarmup task=" << previousTaskId << " reason=replace";
+			logWarmupCancelTrace(line);
+		}
+		static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
+	}
 	const std::string coalescingKey = "line-index:" + std::to_string(static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(this))) + ":" + std::to_string(docId) + ":" + std::to_string(version);
 	mLineIndexWarmupDocumentId = docId;
 	mLineIndexWarmupVersion = version;
@@ -2633,6 +2665,11 @@ void MRFileEditor::scheduleLineIndexWarmupIfNeeded() {
 		result.payload = std::make_shared<mr::coprocessor::LineIndexWarmupPayload>(warmup);
 		return result;
 	});
+	if (traceWarmupCancelEnabled()) {
+		std::ostringstream line;
+		line << "WARMUP-CANCEL schedule kind=LineIndexWarmup task=" << mLineIndexWarmupTaskId << " doc=" << docId << " version=" << version;
+		logWarmupCancelTrace(line);
+	}
 	if (shouldTraceLargeFileDiagnostics()) {
 		std::ostringstream detail;
 		detail << "task=" << mLineIndexWarmupTaskId << " estimated_lines=" << mBufferModel.estimatedLineCount() << " cursor_line=" << mBufferModel.lineIndex(mBufferModel.cursor()) << " delta_y=" << delta.y;
@@ -2672,6 +2709,11 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 		mSyntaxWarmupLanguage = language;
 		mSyntaxWarmupTreeSitterLanguage = treeSitterLanguage;
 		if (hadTask) {
+			if (traceWarmupCancelEnabled()) {
+				std::ostringstream line;
+				line << "WARMUP-CANCEL cancel kind=SyntaxWarmup task=" << previousTaskId << " reason=replace";
+				logWarmupCancelTrace(line);
+			}
 			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
 			notifyWindowTaskStateChanged();
 		}
@@ -2684,7 +2726,14 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 
 	MRTextBufferModel::ReadSnapshot snapshot = mBufferModel.readSnapshot();
 	std::uint64_t previousTaskId = mSyntaxWarmupTaskId;
-	if (previousTaskId != 0) static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
+	if (previousTaskId != 0) {
+		if (traceWarmupCancelEnabled()) {
+			std::ostringstream line;
+			line << "WARMUP-CANCEL cancel kind=SyntaxWarmup task=" << previousTaskId << " reason=replace";
+			logWarmupCancelTrace(line);
+		}
+		static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
+	}
 	const std::string coalescingKey = "syntax:" + std::to_string(static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(this))) + ":" + std::to_string(docId) + ":" + std::to_string(version) + ":" +
 	                                  std::to_string(static_cast<unsigned int>(language)) + ":" + (treeSitterActive ? "1" : "0") + ":" + std::to_string(static_cast<unsigned int>(treeSitterLanguageId)) + ":" +
 	                                  std::to_string(topLine) + ":" + std::to_string(bottomLine);
@@ -2708,7 +2757,7 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 		warmedLines.reserve(warmupLineStarts.size());
 		if (treeSitterLanguage != MRTreeSitterDocument::Language::None) {
 			// The coprocessor keeps transporting token maps only; Tree-sitter derivation stays behind the document helper boundary.
-			std::vector<MRSyntaxTokenMap> tokenMaps = MRTreeSitterDocument::buildTokenMapsForSnapshotLines(treeSitterLanguage, snapshot, warmupLineStarts);
+			std::vector<MRSyntaxTokenMap> tokenMaps = MRTreeSitterDocument::buildTokenMapsForSnapshotLines(treeSitterLanguage, snapshot, warmupLineStarts, stopToken, info.cancelFlag.get());
 			for (std::size_t i = 0; i < warmupLineStarts.size(); ++i) {
 				if (shouldStop()) {
 					result.status = mr::coprocessor::TaskStatus::Cancelled;
@@ -2728,6 +2777,11 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 		result.payload = std::make_shared<mr::coprocessor::SyntaxWarmupPayload>(language, treeSitterLanguage != MRTreeSitterDocument::Language::None, treeSitterLanguageId, std::move(warmedLines));
 		return result;
 	});
+	if (traceWarmupCancelEnabled()) {
+		std::ostringstream line;
+		line << "WARMUP-CANCEL schedule kind=SyntaxWarmup task=" << mSyntaxWarmupTaskId << " doc=" << docId << " version=" << version;
+		logWarmupCancelTrace(line);
+	}
 	if (mSyntaxWarmupTaskId != previousTaskId) notifyWindowTaskStateChanged();
 }
 
@@ -2735,6 +2789,11 @@ void MRFileEditor::scheduleSaveNormalizationWarmupIfNeeded() {
 	invalidateSaveNormalizationCache();
 	if (mSaveNormalizationWarmupTaskId == 0) return;
 	std::uint64_t cancelledTaskId = mSaveNormalizationWarmupTaskId;
+	if (traceWarmupCancelEnabled()) {
+		std::ostringstream line;
+		line << "WARMUP-CANCEL cancel kind=SaveNormalizationWarmup task=" << cancelledTaskId << " reason=replace";
+		logWarmupCancelTrace(line);
+	}
 	static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledTaskId));
 	clearSaveNormalizationWarmupTask(cancelledTaskId);
 }
@@ -2848,6 +2907,11 @@ void MRFileEditor::resetSyntaxWarmupState(bool clearCache) noexcept {
 	mSyntaxWarmupLanguage = MRSyntaxLanguage::PlainText;
 	mSyntaxWarmupTreeSitterLanguage = MRTreeSitterDocument::Language::None;
 	if (hadTask) {
+		if (traceWarmupCancelEnabled()) {
+			std::ostringstream line;
+			line << "WARMUP-CANCEL cancel kind=SyntaxWarmup task=" << cancelledTaskId << " reason=replace";
+			logWarmupCancelTrace(line);
+		}
 		static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledTaskId));
 		notifyWindowTaskStateChanged();
 	}

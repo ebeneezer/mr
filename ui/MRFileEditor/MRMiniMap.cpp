@@ -8,10 +8,24 @@
 #include <future>
 #include <map>
 #include <memory>
+#include <sstream>
 #include <thread>
 #include <utility>
 
 namespace {
+
+bool traceWarmupCancelEnabled() noexcept {
+	static const bool enabled = []() noexcept {
+		const char *value = std::getenv("MR_TRACE_WARMUP_CANCEL");
+		return value != nullptr && value[0] == '1' && value[1] == '\0';
+	}();
+	return enabled;
+}
+
+void logWarmupCancelTrace(const std::ostringstream &line) {
+	if (!traceWarmupCancelEnabled()) return;
+	mrLogMessage(line.str().c_str());
+}
 
 int tabDisplayWidth(const MREditSetupSettings &settings, int visualColumn) noexcept {
 	const int currentColumn = std::max(1, visualColumn + 1);
@@ -136,7 +150,14 @@ MiniMapWarmupBuildResult buildMiniMapWarmupPayload(const mr::editor::ReadSnapsho
 	std::size_t normalizedTotalLines = std::max<std::size_t>(1, totalLines);
 	const auto shouldStop = [&]() noexcept { return stopToken.stop_requested() || info.cancelRequested(); };
 
-	if (shouldStop()) return build;
+	if (shouldStop()) {
+		if (traceWarmupCancelEnabled()) {
+			std::ostringstream line;
+			line << "WARMUP-CANCEL observed kind=MiniMapWarmup task=" << info.id << " phase=before-render";
+			logWarmupCancelTrace(line);
+		}
+		return build;
+	}
 	if (snapshot.exactLineCountKnown()) normalizedTotalLines = std::max<std::size_t>(1, snapshot.lineCount());
 	rowPatterns.assign(static_cast<std::size_t>(std::max(0, rowCount) * std::max(0, bodyWidth)), 0);
 	rowLineStarts.assign(static_cast<std::size_t>(std::max(0, rowCount)), 0);
@@ -178,7 +199,14 @@ MiniMapWarmupBuildResult buildMiniMapWarmupPayload(const mr::editor::ReadSnapsho
 		};
 
 		for (int y = yStart; y < yEnd; ++y) {
-			if (shouldStop()) return false;
+			if (shouldStop()) {
+				if (traceWarmupCancelEnabled()) {
+					std::ostringstream line;
+					line << "WARMUP-CANCEL observed kind=MiniMapWarmup task=" << info.id << " phase=row-render";
+					logWarmupCancelTrace(line);
+				}
+				return false;
+			}
 			std::pair<std::size_t, std::size_t> lineSpan = scaledInterval(static_cast<std::size_t>(y), static_cast<std::size_t>(rowCount), normalizedWindowLineCount);
 			rowLineStarts[static_cast<std::size_t>(y)] = std::min(normalizedTotalLines, windowStartLine + lineSpan.first);
 			rowLineEnds[static_cast<std::size_t>(y)] = std::min(normalizedTotalLines, windowStartLine + lineSpan.second);
@@ -447,6 +475,11 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 		    mImpl->warmupKey.windowLineCount == requestedWarmupKey.windowLineCount && mImpl->warmupKey.totalLines == requestedWarmupKey.totalLines && mImpl->warmupKey.formatLine == requestedWarmupKey.formatLine &&
 		    mImpl->warmupKey.tabSize == requestedWarmupKey.tabSize && mImpl->warmupKey.leftMargin == requestedWarmupKey.leftMargin && mImpl->warmupKey.rightMargin == requestedWarmupKey.rightMargin)
 			return signals;
+		if (traceWarmupCancelEnabled()) {
+			std::ostringstream line;
+			line << "WARMUP-CANCEL cancel kind=MiniMapWarmup task=" << mImpl->warmupTaskId << " reason=replace";
+			logWarmupCancelTrace(line);
+		}
 		static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mImpl->warmupTaskId));
 		signals.merge(mImpl->clearWarmupTask(mImpl->warmupTaskId));
 	}
@@ -496,6 +529,11 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 		if (build.status == mr::coprocessor::TaskStatus::Completed) result.payload = std::make_shared<mr::coprocessor::MiniMapWarmupPayload>(std::move(build.payload));
 		return result;
 	});
+	if (traceWarmupCancelEnabled()) {
+		std::ostringstream line;
+		line << "WARMUP-CANCEL schedule kind=MiniMapWarmup task=" << mImpl->warmupTaskId << " doc=" << documentId << " version=" << version;
+		logWarmupCancelTrace(line);
+	}
 	if (mImpl->warmupTaskId != previousTaskId) signals.notifyTaskStateChanged = true;
 	return signals;
 }

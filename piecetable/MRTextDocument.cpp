@@ -7,11 +7,14 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <sstream>
 #include <thread>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+#include "../ui/MRWindowSupport.hpp"
 
 #if defined(__SSE2__) && (defined(__x86_64__) || defined(__i386__))
 #include <emmintrin.h>
@@ -25,6 +28,24 @@ constexpr std::size_t kLazyLineIndexStride = 4096;
 constexpr Offset kMinParallelLineIndexBytes = 1u << 20;
 constexpr Offset kMinParallelLineIndexBytesPerWorker = 1u << 19;
 constexpr std::size_t kMaxParallelLineIndexWorkers = 4;
+
+bool traceWarmupCancelEnabled() noexcept {
+	static const bool enabled = []() noexcept {
+		const char *value = std::getenv("MR_TRACE_WARMUP_CANCEL");
+		return value != nullptr && value[0] == '1' && value[1] == '\0';
+	}();
+	return enabled;
+}
+
+void logWarmupCancelTrace(const std::ostringstream &line) {
+	if (!traceWarmupCancelEnabled()) return;
+	mrLogMessage(line.str().c_str());
+}
+
+bool warmupCancelRequested(std::stop_token stopToken, const std::atomic_bool *cancelFlag) noexcept {
+	if (stopToken.stop_requested()) return true;
+	return cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire);
+}
 
 std::size_t allocateDocumentId() noexcept {
 	static std::atomic<std::size_t> nextId(1);
@@ -127,6 +148,31 @@ void buildDirectInitialLineIndex(const char *data, Offset length, std::vector<Li
 	buildDirectInitialLineIndexScalar(data, length, checkpoints, indexedOffset, indexedLine);
 #endif
 	totalLines = indexedLine + 1;
+}
+
+bool buildDirectInitialLineIndexWarmupSerial(const char *data, Offset length, std::vector<LineIndexCheckpoint> &checkpoints, Offset &indexedOffset, std::size_t &indexedLine,
+											 std::size_t &totalLines, std::stop_token stopToken, const std::atomic_bool *cancelFlag) {
+	const Offset cancelStride = 1u << 16;
+	Offset skipLfAt = std::numeric_limits<Offset>::max();
+
+	checkpoints.clear();
+	checkpoints.push_back(LineIndexCheckpoint(0, 0));
+	indexedOffset = 0;
+	indexedLine = 0;
+
+	for (Offset i = 0; i < length; ++i) {
+		if ((i & (cancelStride - 1)) == 0 && warmupCancelRequested(stopToken, cancelFlag)) return false;
+		if (i == skipLfAt) {
+			skipLfAt = std::numeric_limits<Offset>::max();
+			continue;
+		}
+		if (!isLineBreakByte(data[i])) continue;
+		applyLineBreakAt(data, length, i, indexedOffset, indexedLine, checkpoints, skipLfAt);
+	}
+
+	if (warmupCancelRequested(stopToken, cancelFlag)) return false;
+	totalLines = indexedLine + 1;
+	return true;
 }
 
 inline std::size_t directCountLineBreaksInRange(const char *data, Offset length, Offset start, Offset end) noexcept;
@@ -236,7 +282,14 @@ bool buildDirectInitialLineIndexParallel(const char *data, Offset length, std::v
 		}
 	}
 
-	if (failed.load(std::memory_order_acquire)) return false;
+	if (failed.load(std::memory_order_acquire)) {
+		if (warmupCancelRequested(stopToken, cancelFlag) && traceWarmupCancelEnabled()) {
+			std::ostringstream line;
+			line << "WARMUP-CANCEL observed kind=LineIndexWarmup phase=parallel-worker";
+			logWarmupCancelTrace(line);
+		}
+		return false;
+	}
 
 	checkpoints.clear();
 	checkpoints.push_back(LineIndexCheckpoint(0, 0));
@@ -1055,7 +1108,14 @@ bool ReadSnapshot::completeLineIndexWarmup(LineIndexWarmupData &warmup, std::sto
 				std::size_t serialTotalLines = 1;
 				std::size_t parallelTotalLines = 1;
 
-				buildDirectInitialLineIndex(data, mLength, serialCheckpoints, serialIndexedOffset, serialIndexedLine, serialTotalLines);
+				if (!buildDirectInitialLineIndexWarmupSerial(data, mLength, serialCheckpoints, serialIndexedOffset, serialIndexedLine, serialTotalLines, stopToken, cancelFlag)) {
+					if (traceWarmupCancelEnabled()) {
+						std::ostringstream line;
+						line << "WARMUP-CANCEL observed kind=LineIndexWarmup phase=serial-direct-validation";
+						logWarmupCancelTrace(line);
+					}
+					return false;
+				}
 				assignLineIndexWarmupData(serialWarmup, std::move(serialCheckpoints), serialIndexedOffset, serialIndexedLine, serialTotalLines);
 
 				if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire))) return false;
@@ -1082,11 +1142,35 @@ bool ReadSnapshot::completeLineIndexWarmup(LineIndexWarmupData &warmup, std::sto
 				assignLineIndexWarmupData(warmup, std::move(checkpoints), indexedOffset, indexedLine, totalLines);
 				return true;
 			}
+			if (warmupCancelRequested(stopToken, cancelFlag)) {
+				if (traceWarmupCancelEnabled()) {
+					std::ostringstream line;
+					line << "WARMUP-CANCEL observed kind=LineIndexWarmup phase=parallel-direct";
+					logWarmupCancelTrace(line);
+				}
+				return false;
+			}
+			if (buildDirectInitialLineIndexWarmupSerial(data, mLength, checkpoints, indexedOffset, indexedLine, totalLines, stopToken, cancelFlag)) {
+				assignLineIndexWarmupData(warmup, std::move(checkpoints), indexedOffset, indexedLine, totalLines);
+				return true;
+			}
+			if (traceWarmupCancelEnabled()) {
+				std::ostringstream line;
+				line << "WARMUP-CANCEL observed kind=LineIndexWarmup phase=serial-direct";
+				logWarmupCancelTrace(line);
+			}
 			if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire))) return false;
 		}
 	}
 	while (!mLazyLineIndexComplete) {
-		if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire))) return false;
+		if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire))) {
+			if (traceWarmupCancelEnabled()) {
+				std::ostringstream line;
+				line << "WARMUP-CANCEL observed kind=LineIndexWarmup phase=lazy-stride";
+				logWarmupCancelTrace(line);
+			}
+			return false;
+		}
 		advanceLazyIndexByStride();
 	}
 	if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire))) return false;
