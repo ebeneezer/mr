@@ -2613,6 +2613,7 @@ void MRFileEditor::scheduleLineIndexWarmupIfNeeded() {
 
 	MRTextBufferModel::ReadSnapshot snapshot = mBufferModel.readSnapshot();
 	std::uint64_t previousTaskId = mLineIndexWarmupTaskId;
+	if (previousTaskId != 0) static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
 	const std::string coalescingKey = "line-index:" + std::to_string(static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(this))) + ":" + std::to_string(docId) + ":" + std::to_string(version);
 	mLineIndexWarmupDocumentId = docId;
 	mLineIndexWarmupVersion = version;
@@ -2683,6 +2684,7 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 
 	MRTextBufferModel::ReadSnapshot snapshot = mBufferModel.readSnapshot();
 	std::uint64_t previousTaskId = mSyntaxWarmupTaskId;
+	if (previousTaskId != 0) static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
 	const std::string coalescingKey = "syntax:" + std::to_string(static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(this))) + ":" + std::to_string(docId) + ":" + std::to_string(version) + ":" +
 	                                  std::to_string(static_cast<unsigned int>(language)) + ":" + (treeSitterActive ? "1" : "0") + ":" + std::to_string(static_cast<unsigned int>(treeSitterLanguageId)) + ":" +
 	                                  std::to_string(topLine) + ":" + std::to_string(bottomLine);
