@@ -728,7 +728,8 @@ class MREditWindow : public TWindow {
 					line = "Indicator";
 					break;
 				case mr::coprocessor::TaskKind::SyntaxWarmup:
-					line = syntaxWarmingLabel();
+					line = editor != nullptr ? editor->syntaxWarmupActivityText() : std::string();
+					if (line.empty()) line = !task.label.empty() ? task.label : syntaxWarmingLabel();
 					break;
 				case mr::coprocessor::TaskKind::MiniMapWarmup:
 					line = miniMapRenderingLabel();
@@ -757,7 +758,10 @@ class MREditWindow : public TWindow {
 		}
 		if (editor != nullptr) {
 			if (editor->pendingLineIndexWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::LineIndexWarmup)) lines.push_back(bullet + " " + lineIndexWarmingLabel());
-			if (editor->pendingSyntaxWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::SyntaxWarmup)) lines.push_back(bullet + " " + syntaxWarmingLabel());
+			if (editor->pendingSyntaxWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::SyntaxWarmup)) {
+				std::string line = editor->syntaxWarmupActivityText();
+				lines.push_back(bullet + " " + (line.empty() ? std::string(syntaxWarmingLabel()) : line));
+			}
 			if (editor->pendingMiniMapWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::MiniMapWarmup)) lines.push_back(bullet + " " + miniMapRenderingLabel());
 			if (editor->pendingSaveNormalizationWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::SaveNormalizationWarmup)) lines.push_back(bullet + " " + saveNormalizationWarmingLabel());
 		}

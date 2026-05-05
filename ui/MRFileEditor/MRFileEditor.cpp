@@ -7,6 +7,8 @@
 namespace {
 
 constexpr std::size_t kLargeFileTreeSitterSyntaxWarmupBytes = static_cast<std::size_t>(8) * 1024 * 1024;
+constexpr std::size_t kMaxSyntaxWarmupDetailPartitions = 4;
+constexpr std::size_t kMinParallelSyntaxWarmupDetailLineCount = 64;
 
 bool traceWarmupCancelEnabled() noexcept {
 	static const bool enabled = []() noexcept {
@@ -18,6 +20,21 @@ bool traceWarmupCancelEnabled() noexcept {
 
 bool shouldSkipFullTreeSitterSyntaxWarmup(std::size_t documentLength) noexcept {
 	return documentLength >= kLargeFileTreeSitterSyntaxWarmupBytes;
+}
+
+std::string buildSyntaxWarmupActivityText(MRTreeSitterDocument::Language treeSitterLanguage, std::size_t topLine, std::size_t bottomLine) {
+	if (treeSitterLanguage == MRTreeSitterDocument::Language::None) return "Syntax warming";
+
+	const std::size_t requestedLineCount = bottomLine > topLine ? (bottomLine - topLine) : 0;
+	const std::size_t partitionCount = requestedLineCount == 0 ? 0 : std::min(requestedLineCount, kMaxSyntaxWarmupDetailPartitions);
+	const unsigned int hardwareConcurrency = std::thread::hardware_concurrency();
+	const bool parallel = partitionCount > 1 && hardwareConcurrency != 0 && requestedLineCount >= kMinParallelSyntaxWarmupDetailLineCount && partitionCount <= hardwareConcurrency;
+	std::ostringstream text;
+
+	text << "Syntax warming " << (parallel ? "parallel" : "serial");
+	if (parallel) text << ", " << partitionCount << " workers";
+	if (partitionCount != 0) text << ", " << partitionCount << " partitions";
+	return text.str();
 }
 
 void logWarmupCancelTrace(const std::ostringstream &line) {
@@ -146,6 +163,11 @@ std::uint64_t MRFileEditor::pendingLineIndexWarmupTaskId() const noexcept {
 
 std::uint64_t MRFileEditor::pendingSyntaxWarmupTaskId() const noexcept {
 	return mSyntaxWarmupTaskId;
+}
+
+std::string MRFileEditor::syntaxWarmupActivityText() const {
+	if (mSyntaxWarmupTaskId == 0) return std::string();
+	return buildSyntaxWarmupActivityText(mSyntaxWarmupTreeSitterLanguage, mSyntaxWarmupTopLine, mSyntaxWarmupBottomLine);
 }
 
 std::uint64_t MRFileEditor::pendingMiniMapWarmupTaskId() const noexcept {
@@ -2774,6 +2796,7 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 	const std::string coalescingKey = "syntax:" + std::to_string(static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(this))) + ":" + std::to_string(docId) + ":" + std::to_string(version) + ":" +
 	                                  std::to_string(static_cast<unsigned int>(language)) + ":" + (treeSitterActive ? "1" : "0") + ":" + std::to_string(static_cast<unsigned int>(treeSitterLanguageId)) + ":" +
 	                                  std::to_string(topLine) + ":" + std::to_string(bottomLine);
+	const std::string syntaxWarmupActivityLabel = buildSyntaxWarmupActivityText(treeSitterLanguage, topLine, bottomLine);
 	mSyntaxWarmupDocumentId = docId;
 	mSyntaxWarmupVersion = version;
 	mSyntaxWarmupTopLine = topLine;
@@ -2781,7 +2804,7 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 	mSyntaxWarmupLanguage = language;
 	mSyntaxWarmupTreeSitterLanguage = treeSitterLanguage;
 	mSyntaxWarmupTaskId = mr::coprocessor::globalCoprocessor().submitCoalesced(
-		mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::SyntaxWarmup, docId, version, coalescingKey, syntaxWarmupTaskLabel(),
+		mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::SyntaxWarmup, docId, version, coalescingKey, syntaxWarmupActivityLabel.empty() ? syntaxWarmupTaskLabel() : syntaxWarmupActivityLabel,
 		[snapshot, language, treeSitterLanguage, treeSitterLanguageId, warmupLineStarts](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
 			mr::coprocessor::Result result;
 			std::vector<mr::coprocessor::SyntaxWarmLine> warmedLines;

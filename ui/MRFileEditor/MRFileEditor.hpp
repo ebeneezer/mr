@@ -109,6 +109,8 @@ class MRFileEditor : public TScroller {
 
 	std::uint64_t pendingSyntaxWarmupTaskId() const noexcept;
 
+	std::string syntaxWarmupActivityText() const;
+
 	std::uint64_t pendingMiniMapWarmupTaskId() const noexcept;
 
 	std::uint64_t pendingSaveNormalizationWarmupTaskId() const noexcept;
