@@ -758,10 +758,7 @@ class MREditWindow : public TWindow {
 		if (editor != nullptr) {
 			if (editor->pendingLineIndexWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::LineIndexWarmup)) lines.push_back(bullet + " " + lineIndexWarmingLabel());
 			if (editor->pendingSyntaxWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::SyntaxWarmup)) lines.push_back(bullet + " " + syntaxWarmingLabel());
-			if (editor->pendingSyntaxWarmupTaskId() == 0 && editor->consumeSyntaxWarmupDeferredStatus()) {
-				lines.push_back(bullet + " " + syntaxDeferredLabel());
-				const_cast<MREditWindow *>(this)->updateTaskMarkers();
-			}
+			if (editor->pendingSyntaxWarmupTaskId() == 0 && editor->syntaxWarmupDeferredStatusPending()) lines.push_back(bullet + " " + syntaxDeferredLabel());
 			if (editor->pendingMiniMapWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::MiniMapWarmup)) lines.push_back(bullet + " " + miniMapRenderingLabel());
 			if (editor->pendingSaveNormalizationWarmupTaskId() != 0 && !hasTrackedTaskKind(mr::coprocessor::TaskKind::SaveNormalizationWarmup)) lines.push_back(bullet + " " + saveNormalizationWarmingLabel());
 		}
@@ -893,6 +890,13 @@ class MREditWindow : public TWindow {
 
 	std::uint64_t pendingSaveNormalizationWarmupTaskId() const noexcept {
 		return editor != nullptr ? editor->pendingSaveNormalizationWarmupTaskId() : 0;
+	}
+
+	bool consumeSyntaxDeferredActivityNotice() {
+		if (editor == nullptr || !editor->consumeSyntaxWarmupDeferredStatus()) return false;
+		updateTaskMarkers();
+		if (frame != nullptr) frame->drawView();
+		return true;
 	}
 
 	bool usesApproximateMetrics() const noexcept {

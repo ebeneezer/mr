@@ -153,7 +153,7 @@ TPalette &MRTaskOverviewWindow::getPalette() const {
 	return paletteGray;
 }
 
-MRFrame::MRFrame(const TRect &bounds) noexcept : TFrame(bounds), mTaskOverviewPopup(nullptr), mTaskOverviewPopupOwner(nullptr) {
+MRFrame::MRFrame(const TRect &bounds) noexcept : TFrame(bounds), mTaskOverviewPopup(nullptr), mTaskOverviewPopupOwner(nullptr), mTaskOverviewKeepAliveOnEmpty(false) {
 }
 
 MRFrame::~MRFrame() {
@@ -474,6 +474,13 @@ void MRFrame::handleEvent(TEvent &event) {
 			const bool hasMinimizeButton = true;
 			const int minimizeStart = normalRightControlStart(size.x, kMinimizeIcon);
 			const int zoomStart = normalZoomStart(size.x, hasMinimizeButton);
+			const MarkerState state = markerState();
+			const int taskX = taskMarkerColumn(state);
+			if (taskX >= 0 && mouse.x >= taskX && mouse.x < taskX + markerSpan(kTaskMarkerIcon, kTaskMarkerSlotWidth)) {
+				showTaskOverview();
+				clearEvent(event);
+				return;
+			}
 			if ((window->flags & wfClose) != 0 && controlsVisible && mouse.x >= 2 && mouse.x <= 4) {
 				while (mouseEvent(event, evMouse))
 					;
@@ -519,6 +526,7 @@ void MRFrame::showTaskOverview() {
 	MarkerState state = markerState();
 	int taskX = taskMarkerColumn(state);
 	int width = 14;
+	MREditWindow *editWindow = dynamic_cast<MREditWindow *>(static_cast<TWindow *>(owner));
 
 	if (group == nullptr || !mTaskOverviewProvider || taskX < 0) return;
 	lines = mTaskOverviewProvider();
@@ -551,6 +559,7 @@ void MRFrame::showTaskOverview() {
 	mTaskOverviewPopupOwner = group;
 	mTaskOverviewPopup->makeFirst();
 	mTaskOverviewPopup->setState(sfActive, False);
+	mTaskOverviewKeepAliveOnEmpty = editWindow != nullptr && editWindow->consumeSyntaxDeferredActivityNotice();
 }
 
 void MRFrame::hideTaskOverview() {
@@ -559,25 +568,32 @@ void MRFrame::hideTaskOverview() {
 	TObject::destroy(mTaskOverviewPopup);
 	mTaskOverviewPopup = nullptr;
 	mTaskOverviewPopupOwner = nullptr;
+	mTaskOverviewKeepAliveOnEmpty = false;
 }
 
 void MRFrame::updateTaskHover(TPoint globalMouse, bool forceHide) {
 	MarkerState state = markerState();
 	int taskX = taskMarkerColumn(state);
+	bool hoveringPopup = false;
+	bool hoveringIcon = false;
 
 	if (forceHide || taskX < 0 || !mTaskOverviewProvider) {
 		hideTaskOverview();
 		return;
 	}
-	if (!mouseInView(globalMouse)) {
+	if (mTaskOverviewPopup != nullptr) {
+		TPoint popupOrigin = mTaskOverviewPopup->makeGlobal(TPoint(0, 0));
+		if (globalMouse.x >= popupOrigin.x && globalMouse.x < popupOrigin.x + mTaskOverviewPopup->size.x && globalMouse.y >= popupOrigin.y && globalMouse.y < popupOrigin.y + mTaskOverviewPopup->size.y) hoveringPopup = true;
+	}
+	if (mouseInView(globalMouse)) {
+		TPoint local = makeLocal(globalMouse);
+		hoveringIcon = local.y == 0 && local.x >= taskX && local.x < taskX + markerSpan(kTaskMarkerIcon, kTaskMarkerSlotWidth);
+	}
+	if (!hoveringIcon && !hoveringPopup) {
 		hideTaskOverview();
 		return;
 	}
-	TPoint local = makeLocal(globalMouse);
-	if (local.y != 0 || local.x < taskX || local.x >= taskX + markerSpan(kTaskMarkerIcon, kTaskMarkerSlotWidth)) {
-		hideTaskOverview();
-		return;
-	}
+	if (hoveringPopup && mTaskOverviewPopup != nullptr && mTaskOverviewKeepAliveOnEmpty) return;
 	showTaskOverview();
 }
 
@@ -585,8 +601,9 @@ void MRFrame::tickTaskOverviewAnimation() {
 	if (mTaskOverviewPopup == nullptr || !mTaskOverviewProvider) return;
 	std::vector<std::string> lines = mTaskOverviewProvider();
 	if (lines.empty()) {
-		hideTaskOverview();
+		if (!mTaskOverviewKeepAliveOnEmpty) hideTaskOverview();
 		return;
 	}
+	mTaskOverviewKeepAliveOnEmpty = false;
 	mTaskOverviewPopup->setLines(lines);
 }
