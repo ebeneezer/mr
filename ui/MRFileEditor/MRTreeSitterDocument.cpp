@@ -364,6 +364,10 @@ struct DerivedSyntaxPartition {
 using DerivedSyntaxLineSlices = std::vector<DerivedSyntaxLineSliceRequest>;
 using DerivedSyntaxPartitions = std::vector<DerivedSyntaxPartition>;
 
+struct DerivedSyntaxDerivationPlan {
+	DerivedSyntaxPartitions partitions;
+};
+
 struct ColorRun {
 	std::size_t startColumn = 0;
 	std::size_t endColumn = 0;
@@ -481,6 +485,13 @@ DerivedSyntaxPartitions planSyntaxDerivationPartitions(const std::vector<std::si
 	return partitions;
 }
 
+DerivedSyntaxDerivationPlan buildSyntaxDerivationPlan(const std::vector<std::size_t> &lineStarts) {
+	DerivedSyntaxDerivationPlan plan;
+
+	plan.partitions = planSyntaxDerivationPartitions(lineStarts);
+	return plan;
+}
+
 DerivedSyntaxLineSlices requestedLineSlices(const mr::editor::ReadSnapshot &snapshot, const std::vector<std::size_t> &lineStarts,
 											const DerivedSyntaxPartitions &partitions) {
 	DerivedSyntaxLineSlices slices;
@@ -491,6 +502,11 @@ DerivedSyntaxLineSlices requestedLineSlices(const mr::editor::ReadSnapshot &snap
 		slices.push_back(DerivedSyntaxLineSliceRequest{snapshot, lineStarts, partition.lineIndexBegin, partition.lineIndexEnd});
 	}
 	return slices;
+}
+
+DerivedSyntaxLineSlices plannedLineSlices(const mr::editor::ReadSnapshot &snapshot, const std::vector<std::size_t> &lineStarts,
+										  const DerivedSyntaxDerivationPlan &plan) {
+	return requestedLineSlices(snapshot, lineStarts, plan.partitions);
 }
 
 MRDerivedSyntaxData initializeDerivedSyntaxData(const DerivedSyntaxLineSliceRequest &request) {
@@ -624,6 +640,12 @@ MRDerivedSyntaxData deriveSyntaxDataForPartitionsFromCanonicalTree(MRTreeSitterD
 																   const std::vector<std::size_t> &lineStarts, const DerivedSyntaxPartitions &partitions,
 																   const TSTree *tree) {
 	return deriveSyntaxDataForLineSlicesFromCanonicalTree(language, requestedLineSlices(snapshot, lineStarts, partitions), tree);
+}
+
+MRDerivedSyntaxData executeSyntaxDerivationPlanSerially(MRTreeSitterDocument::Language language, const mr::editor::ReadSnapshot &snapshot,
+														const std::vector<std::size_t> &lineStarts, const DerivedSyntaxDerivationPlan &plan,
+														const TSTree *canonicalTree) {
+	return deriveSyntaxDataForPartitionsFromCanonicalTree(language, snapshot, lineStarts, plan.partitions, canonicalTree);
 }
 
 std::vector<MRSyntaxTokenMap> exportRenderTokenMaps(MRDerivedSyntaxData &&derivedData) {
@@ -825,8 +847,8 @@ bool MRTreeSitterDocument::shouldDedentCurrentLine(const mr::editor::ReadSnapsho
 }
 
 std::vector<MRSyntaxTokenMap> MRTreeSitterDocument::buildTokenMapsForSnapshotLines(Language language, const mr::editor::ReadSnapshot &snapshot, const std::vector<std::size_t> &lineStarts) {
-	const DerivedSyntaxPartitions partitions = planSyntaxDerivationPartitions(lineStarts);
-	const DerivedSyntaxLineSlices slices = requestedLineSlices(snapshot, lineStarts, partitions);
+	const DerivedSyntaxDerivationPlan plan = buildSyntaxDerivationPlan(lineStarts);
+	const DerivedSyntaxLineSlices slices = plannedLineSlices(snapshot, lineStarts, plan);
 	MRDerivedSyntaxData derivedData = initializeDerivedSyntaxData(slices);
 	const TSLanguage *parserLanguage = treeSitterParserLanguage(language);
 
@@ -836,7 +858,7 @@ std::vector<MRSyntaxTokenMap> MRTreeSitterDocument::buildTokenMapsForSnapshotLin
 	TreeSitterTreeOwner tree = parseTreeSitterSnapshotTree(parserLanguage, snapshot);
 	if (tree.get() == nullptr) return exportRenderTokenMaps(std::move(derivedData));
 
-	return exportRenderTokenMaps(deriveSyntaxDataForPartitionsFromCanonicalTree(language, snapshot, lineStarts, partitions, tree.get()));
+	return exportRenderTokenMaps(executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, tree.get()));
 }
 
 MRTreeSitterDocument::Language MRTreeSitterDocument::activeLanguage() const noexcept {
