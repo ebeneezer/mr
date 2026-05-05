@@ -576,6 +576,19 @@ MRDerivedSyntaxData deriveSyntaxDataForLineSliceFromCanonicalTree(MRTreeSitterDo
 	return derivedData;
 }
 
+TreeSitterTreeOwner copyCanonicalTreeForPartition(const TSTree *tree) noexcept {
+	if (tree == nullptr) return TreeSitterTreeOwner();
+	return TreeSitterTreeOwner(ts_tree_copy(tree));
+}
+
+MRDerivedSyntaxData deriveSyntaxChunkForPartitionFromCanonicalTree(MRTreeSitterDocument::Language language, const DerivedSyntaxLineSliceRequest &slice,
+																   const TSTree *canonicalTree) {
+	TreeSitterTreeOwner partitionTree = copyCanonicalTreeForPartition(canonicalTree);
+	const TSTree *treeForDerivation = partitionTree.get() != nullptr ? partitionTree.get() : canonicalTree;
+
+	return deriveSyntaxDataForLineSliceFromCanonicalTree(language, slice, treeForDerivation);
+}
+
 MRDerivedSyntaxData mergeDerivedSyntaxChunks(std::vector<MRDerivedSyntaxData> &&chunks) {
 	MRDerivedSyntaxData merged;
 
@@ -583,11 +596,12 @@ MRDerivedSyntaxData mergeDerivedSyntaxChunks(std::vector<MRDerivedSyntaxData> &&
 	return merged;
 }
 
-MRDerivedSyntaxData deriveSyntaxDataForLineSlicesFromCanonicalTree(MRTreeSitterDocument::Language language, const DerivedSyntaxLineSlices &slices, const TSTree *tree) {
+MRDerivedSyntaxData deriveSyntaxDataForLineSlicesFromCanonicalTree(MRTreeSitterDocument::Language language, const DerivedSyntaxLineSlices &slices,
+																   const TSTree *canonicalTree) {
 	std::vector<MRDerivedSyntaxData> chunks;
 
 	chunks.reserve(slices.size());
-	for (const DerivedSyntaxLineSliceRequest &slice : slices) chunks.push_back(deriveSyntaxDataForLineSliceFromCanonicalTree(language, slice, tree));
+	for (const DerivedSyntaxLineSliceRequest &slice : slices) chunks.push_back(deriveSyntaxChunkForPartitionFromCanonicalTree(language, slice, canonicalTree));
 	return mergeDerivedSyntaxChunks(std::move(chunks));
 }
 
