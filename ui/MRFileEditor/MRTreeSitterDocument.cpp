@@ -363,6 +363,19 @@ struct ColorRun {
 struct MRDerivedSyntaxData {
 	std::vector<MRSyntaxTokenMap> tokenMaps;
 	std::vector<std::vector<ColorRun>> colorRuns;
+
+	void initializeRenderTokenMaps(const DerivedSyntaxTokenMapRequest &request) {
+		tokenMaps.clear();
+		colorRuns.clear();
+		tokenMaps.reserve(request.lineStarts.size());
+		colorRuns.resize(request.lineStarts.size());
+		for (std::size_t i = 0; i < request.lineStarts.size(); ++i)
+			tokenMaps.push_back(MRSyntaxTokenMap(request.snapshot.lineText(request.lineStarts[i]).size(), MRSyntaxToken::Text));
+	}
+
+	std::vector<MRSyntaxTokenMap> exportRenderTokenMaps() && {
+		return std::move(tokenMaps);
+	}
 };
 
 const char *readTreeSitterSnapshot(void *payload, uint32_t byteIndex, TSPoint, uint32_t *bytesRead) {
@@ -424,18 +437,11 @@ TreeSitterTreeOwner parseTreeSitterSnapshotTree(const TSLanguage *parserLanguage
 	return tree;
 }
 
-MRDerivedSyntaxData makeDerivedSyntaxData(const DerivedSyntaxTokenMapRequest &request) {
+MRDerivedSyntaxData initializeDerivedSyntaxData(const DerivedSyntaxTokenMapRequest &request) {
 	MRDerivedSyntaxData derivedData;
 
-	derivedData.tokenMaps.reserve(request.lineStarts.size());
-	derivedData.colorRuns.resize(request.lineStarts.size());
-	for (std::size_t i = 0; i < request.lineStarts.size(); ++i)
-		derivedData.tokenMaps.push_back(MRSyntaxTokenMap(request.snapshot.lineText(request.lineStarts[i]).size(), MRSyntaxToken::Text));
+	derivedData.initializeRenderTokenMaps(request);
 	return derivedData;
-}
-
-std::vector<MRSyntaxTokenMap> releaseDerivedTokenMaps(MRDerivedSyntaxData &&derivedData) {
-	return std::move(derivedData.tokenMaps);
 }
 
 std::vector<ColorRun> buildColorRunsFromTokenMap(const MRSyntaxTokenMap &tokenMap) {
@@ -462,7 +468,6 @@ void deriveColorRunsFromTokenMaps(MRDerivedSyntaxData &derivedData) {
 	for (const MRSyntaxTokenMap &tokenMap : derivedData.tokenMaps) derivedData.colorRuns.push_back(buildColorRunsFromTokenMap(tokenMap));
 }
 
-// Tree-sitter stays canonical; MR derived syntax data is an editor cache built from that tree.
 void deriveTokenMapsFromCanonicalTree(MRTreeSitterDocument::Language language, const DerivedSyntaxTokenMapRequest &request, const TSTree *tree,
 									  MRDerivedSyntaxData &derivedData) {
 	const TSNode root = ts_tree_root_node(tree);
@@ -503,6 +508,17 @@ void deriveTokenMapsFromCanonicalTree(MRTreeSitterDocument::Language language, c
 			for (std::size_t index = paintStart; index < paintEnd && index < tokenMap.size(); ++index) tokenMap[index] = token;
 		}
 	}
+}
+
+// Tree-sitter stays canonical; MR derived syntax data is an editor cache built from that tree.
+void deriveSyntaxDataFromCanonicalTree(MRTreeSitterDocument::Language language, const DerivedSyntaxTokenMapRequest &request, const TSTree *tree,
+									   MRDerivedSyntaxData &derivedData) {
+	deriveTokenMapsFromCanonicalTree(language, request, tree, derivedData);
+	deriveColorRunsFromTokenMaps(derivedData);
+}
+
+std::vector<MRSyntaxTokenMap> exportRenderTokenMaps(MRDerivedSyntaxData &&derivedData) {
+	return std::move(derivedData).exportRenderTokenMaps();
 }
 
 } // namespace
@@ -701,27 +717,17 @@ bool MRTreeSitterDocument::shouldDedentCurrentLine(const mr::editor::ReadSnapsho
 
 std::vector<MRSyntaxTokenMap> MRTreeSitterDocument::buildTokenMapsForSnapshotLines(Language language, const mr::editor::ReadSnapshot &snapshot, const std::vector<std::size_t> &lineStarts) {
 	const DerivedSyntaxTokenMapRequest request{snapshot, lineStarts};
-	MRDerivedSyntaxData derivedData = makeDerivedSyntaxData(request);
+	MRDerivedSyntaxData derivedData = initializeDerivedSyntaxData(request);
 	const TSLanguage *parserLanguage = treeSitterParserLanguage(language);
 
-	if (lineStarts.empty()) {
-		deriveColorRunsFromTokenMaps(derivedData);
-		return releaseDerivedTokenMaps(std::move(derivedData));
-	}
-	if (parserLanguage == nullptr) {
-		deriveColorRunsFromTokenMaps(derivedData);
-		return releaseDerivedTokenMaps(std::move(derivedData));
-	}
+	if (lineStarts.empty()) return exportRenderTokenMaps(std::move(derivedData));
+	if (parserLanguage == nullptr) return exportRenderTokenMaps(std::move(derivedData));
 
 	TreeSitterTreeOwner tree = parseTreeSitterSnapshotTree(parserLanguage, snapshot);
-	if (tree.get() == nullptr) {
-		deriveColorRunsFromTokenMaps(derivedData);
-		return releaseDerivedTokenMaps(std::move(derivedData));
-	}
+	if (tree.get() == nullptr) return exportRenderTokenMaps(std::move(derivedData));
 
-	deriveTokenMapsFromCanonicalTree(language, request, tree.get(), derivedData);
-	deriveColorRunsFromTokenMaps(derivedData);
-	return releaseDerivedTokenMaps(std::move(derivedData));
+	deriveSyntaxDataFromCanonicalTree(language, request, tree.get(), derivedData);
+	return exportRenderTokenMaps(std::move(derivedData));
 }
 
 MRTreeSitterDocument::Language MRTreeSitterDocument::activeLanguage() const noexcept {
