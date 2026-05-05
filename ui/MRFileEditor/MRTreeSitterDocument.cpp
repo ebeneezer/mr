@@ -1,9 +1,12 @@
 #include "MRTreeSitterDocument.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstdint>
+#include <cstdlib>
 #include <new>
 #include <string>
+#include <thread>
 #include <utility>
 
 #include <tree_sitter/api.h>
@@ -20,6 +23,84 @@ extern "C" const TSLanguage *tree_sitter_json(void);
 extern "C" const TSLanguage *tree_sitter_mrmac(void);
 
 namespace {
+
+struct TreeSitterParserOwner {
+	TSParser *value = nullptr;
+
+	TreeSitterParserOwner() = default;
+	explicit TreeSitterParserOwner(TSParser *parser) noexcept : value(parser) {
+	}
+
+	TreeSitterParserOwner(const TreeSitterParserOwner &) = delete;
+	TreeSitterParserOwner &operator=(const TreeSitterParserOwner &) = delete;
+
+	TreeSitterParserOwner(TreeSitterParserOwner &&other) noexcept : value(other.release()) {
+	}
+
+	TreeSitterParserOwner &operator=(TreeSitterParserOwner &&other) noexcept {
+		if (this != &other) reset(other.release());
+		return *this;
+	}
+
+	~TreeSitterParserOwner() noexcept {
+		reset();
+	}
+
+	TSParser *get() const noexcept {
+		return value;
+	}
+
+	TSParser *release() noexcept {
+		TSParser *released = value;
+
+		value = nullptr;
+		return released;
+	}
+
+	void reset(TSParser *parser = nullptr) noexcept {
+		if (value != nullptr) ts_parser_delete(value);
+		value = parser;
+	}
+};
+
+struct TreeSitterTreeOwner {
+	TSTree *value = nullptr;
+
+	TreeSitterTreeOwner() = default;
+	explicit TreeSitterTreeOwner(TSTree *tree) noexcept : value(tree) {
+	}
+
+	TreeSitterTreeOwner(const TreeSitterTreeOwner &) = delete;
+	TreeSitterTreeOwner &operator=(const TreeSitterTreeOwner &) = delete;
+
+	TreeSitterTreeOwner(TreeSitterTreeOwner &&other) noexcept : value(other.release()) {
+	}
+
+	TreeSitterTreeOwner &operator=(TreeSitterTreeOwner &&other) noexcept {
+		if (this != &other) reset(other.release());
+		return *this;
+	}
+
+	~TreeSitterTreeOwner() noexcept {
+		reset();
+	}
+
+	TSTree *get() const noexcept {
+		return value;
+	}
+
+	TSTree *release() noexcept {
+		TSTree *released = value;
+
+		value = nullptr;
+		return released;
+	}
+
+	void reset(TSTree *tree = nullptr) noexcept {
+		if (value != nullptr) ts_tree_delete(value);
+		value = tree;
+	}
+};
 
 bool isIndentWhitespace(char ch) noexcept {
 	return ch == ' ' || ch == '\t';
@@ -271,6 +352,68 @@ struct TreeSitterSnapshotInput {
 	bool pieceValid = false;
 };
 
+struct DerivedSyntaxLineSliceRequest {
+	const mr::editor::ReadSnapshot &snapshot;
+	const std::vector<std::size_t> &lineStarts;
+	std::size_t lineIndexBegin = 0;
+	std::size_t lineIndexEnd = 0;
+};
+
+struct DerivedSyntaxPartition {
+	std::size_t lineIndexBegin = 0;
+	std::size_t lineIndexEnd = 0;
+};
+
+using DerivedSyntaxLineSlices = std::vector<DerivedSyntaxLineSliceRequest>;
+using DerivedSyntaxPartitions = std::vector<DerivedSyntaxPartition>;
+
+struct DerivedSyntaxDerivationPlan {
+	DerivedSyntaxPartitions partitions;
+};
+
+struct ColorRun {
+	std::size_t startColumn = 0;
+	std::size_t endColumn = 0;
+	MRSyntaxToken token = MRSyntaxToken::Text;
+};
+
+struct MRDerivedSyntaxData {
+	std::vector<MRSyntaxTokenMap> tokenMaps;
+	std::vector<std::vector<ColorRun>> colorRuns;
+
+	void initializeRenderTokenMaps(const DerivedSyntaxLineSliceRequest &request) {
+		tokenMaps.clear();
+		colorRuns.clear();
+		tokenMaps.reserve(request.lineIndexEnd - request.lineIndexBegin);
+		colorRuns.resize(request.lineIndexEnd - request.lineIndexBegin);
+		for (std::size_t lineIndex = request.lineIndexBegin; lineIndex < request.lineIndexEnd; ++lineIndex)
+			tokenMaps.push_back(MRSyntaxTokenMap(request.snapshot.lineText(request.lineStarts[lineIndex]).size(), MRSyntaxToken::Text));
+	}
+
+	std::vector<MRSyntaxTokenMap> exportRenderTokenMaps() && {
+		return std::move(tokenMaps);
+	}
+
+	void appendChunk(MRDerivedSyntaxData &&chunk) {
+		tokenMaps.reserve(tokenMaps.size() + chunk.tokenMaps.size());
+		colorRuns.reserve(colorRuns.size() + chunk.colorRuns.size());
+		for (MRSyntaxTokenMap &tokenMap : chunk.tokenMaps) tokenMaps.push_back(std::move(tokenMap));
+		for (std::vector<ColorRun> &runs : chunk.colorRuns) colorRuns.push_back(std::move(runs));
+	}
+};
+
+struct ParallelDerivedSyntaxResultSlot {
+	MRDerivedSyntaxData data;
+	bool ready = false;
+};
+
+enum class SyntaxDerivationExecutionChoice : unsigned char {
+	Serial,
+	Parallel
+};
+
+constexpr std::size_t kMinParallelSyntaxDerivationLineCount = 64;
+
 const char *readTreeSitterSnapshot(void *payload, uint32_t byteIndex, TSPoint, uint32_t *bytesRead) {
 	TreeSitterSnapshotInput &input = *static_cast<TreeSitterSnapshotInput *>(payload);
 	std::size_t pieceCount = input.snapshot.pieceCount();
@@ -311,39 +454,133 @@ const char *readTreeSitterSnapshot(void *payload, uint32_t byteIndex, TSPoint, u
 	return input.piece.data + chunkOffset;
 }
 
-TSTree *parseTreeSitterSnapshotTree(const TSLanguage *parserLanguage, const mr::editor::ReadSnapshot &snapshot) noexcept {
-	TSParser *parser = ts_parser_new();
+TreeSitterTreeOwner parseTreeSitterSnapshotTree(const TSLanguage *parserLanguage, const mr::editor::ReadSnapshot &snapshot) noexcept {
+	TreeSitterParserOwner parser(ts_parser_new());
 
-	if (parser == nullptr) return nullptr;
-	if (!ts_parser_set_language(parser, parserLanguage)) {
-		ts_parser_delete(parser);
-		return nullptr;
-	}
+	if (parser.get() == nullptr) return TreeSitterTreeOwner();
+	if (!ts_parser_set_language(parser.get(), parserLanguage)) return TreeSitterTreeOwner();
 
 	TreeSitterSnapshotInput input;
 	TSInput source;
-	TSTree *tree = nullptr;
+	TreeSitterTreeOwner tree;
 
 	input.snapshot = snapshot;
 	source.payload = &input;
 	source.read = readTreeSitterSnapshot;
 	source.encoding = TSInputEncodingUTF8;
 	source.decode = nullptr;
-	tree = ts_parser_parse(parser, nullptr, source);
-	ts_parser_delete(parser);
+	tree.reset(ts_parser_parse(parser.get(), nullptr, source));
 	return tree;
 }
 
-void buildTokenMapsFromTreeSitterTree(MRTreeSitterDocument::Language language, const mr::editor::ReadSnapshot &snapshot, const std::vector<std::size_t> &lineStarts,
-									  const TSTree *tree, std::vector<MRSyntaxTokenMap> &tokenMaps) {
+bool isValidDerivedSyntaxPartition(const DerivedSyntaxPartition &partition, std::size_t lineCount) {
+	return partition.lineIndexBegin < partition.lineIndexEnd && partition.lineIndexEnd <= lineCount;
+}
+
+DerivedSyntaxPartitions planSyntaxDerivationPartitions(const std::vector<std::size_t> &lineStarts) {
+	DerivedSyntaxPartitions partitions;
+	const std::size_t lineCount = lineStarts.size();
+	const std::size_t maxPartitionCount = 4;
+
+	if (lineCount == 0) return partitions;
+
+	const std::size_t partitionCount = std::min(lineCount, maxPartitionCount);
+	const std::size_t linesPerPartition = lineCount / partitionCount;
+	const std::size_t remainder = lineCount % partitionCount;
+	std::size_t lineIndexBegin = 0;
+
+	partitions.reserve(partitionCount);
+	for (std::size_t partitionIndex = 0; partitionIndex < partitionCount; ++partitionIndex) {
+		const std::size_t extraLine = partitionIndex < remainder ? 1 : 0;
+		const std::size_t lineIndexEnd = lineIndexBegin + linesPerPartition + extraLine;
+
+		partitions.push_back(DerivedSyntaxPartition{lineIndexBegin, lineIndexEnd});
+		lineIndexBegin = lineIndexEnd;
+	}
+	return partitions;
+}
+
+DerivedSyntaxDerivationPlan buildSyntaxDerivationPlan(const std::vector<std::size_t> &lineStarts) {
+	DerivedSyntaxDerivationPlan plan;
+
+	plan.partitions = planSyntaxDerivationPartitions(lineStarts);
+	return plan;
+}
+
+DerivedSyntaxLineSlices requestedLineSlices(const mr::editor::ReadSnapshot &snapshot, const std::vector<std::size_t> &lineStarts,
+											const DerivedSyntaxPartitions &partitions) {
+	DerivedSyntaxLineSlices slices;
+
+	slices.reserve(partitions.size());
+	for (const DerivedSyntaxPartition &partition : partitions) {
+		if (!isValidDerivedSyntaxPartition(partition, lineStarts.size())) continue;
+		slices.push_back(DerivedSyntaxLineSliceRequest{snapshot, lineStarts, partition.lineIndexBegin, partition.lineIndexEnd});
+	}
+	return slices;
+}
+
+DerivedSyntaxLineSlices plannedLineSlices(const mr::editor::ReadSnapshot &snapshot, const std::vector<std::size_t> &lineStarts,
+										  const DerivedSyntaxDerivationPlan &plan) {
+	return requestedLineSlices(snapshot, lineStarts, plan.partitions);
+}
+
+MRDerivedSyntaxData initializeDerivedSyntaxData(const DerivedSyntaxLineSliceRequest &request) {
+	MRDerivedSyntaxData derivedData;
+
+	derivedData.initializeRenderTokenMaps(request);
+	return derivedData;
+}
+
+MRDerivedSyntaxData initializeDerivedSyntaxData(const DerivedSyntaxLineSlices &slices) {
+	MRDerivedSyntaxData derivedData;
+
+	for (const DerivedSyntaxLineSliceRequest &slice : slices) {
+		derivedData.tokenMaps.reserve(derivedData.tokenMaps.size() + (slice.lineIndexEnd - slice.lineIndexBegin));
+		derivedData.colorRuns.reserve(derivedData.colorRuns.size() + (slice.lineIndexEnd - slice.lineIndexBegin));
+		for (std::size_t lineIndex = slice.lineIndexBegin; lineIndex < slice.lineIndexEnd; ++lineIndex) {
+			derivedData.tokenMaps.push_back(MRSyntaxTokenMap(slice.snapshot.lineText(slice.lineStarts[lineIndex]).size(), MRSyntaxToken::Text));
+			derivedData.colorRuns.push_back(std::vector<ColorRun>());
+		}
+	}
+	return derivedData;
+}
+
+std::vector<ColorRun> buildColorRunsFromTokenMap(const MRSyntaxTokenMap &tokenMap) {
+	std::vector<ColorRun> colorRuns;
+
+	if (tokenMap.empty()) return colorRuns;
+
+	std::size_t runStart = 0;
+	MRSyntaxToken runToken = tokenMap[0];
+
+	for (std::size_t index = 1; index < tokenMap.size(); ++index) {
+		if (tokenMap[index] == runToken) continue;
+		colorRuns.push_back(ColorRun{runStart, index, runToken});
+		runStart = index;
+		runToken = tokenMap[index];
+	}
+	colorRuns.push_back(ColorRun{runStart, tokenMap.size(), runToken});
+	return colorRuns;
+}
+
+void deriveColorRunsFromTokenMaps(MRDerivedSyntaxData &derivedData) {
+	derivedData.colorRuns.clear();
+	derivedData.colorRuns.reserve(derivedData.tokenMaps.size());
+	for (const MRSyntaxTokenMap &tokenMap : derivedData.tokenMaps) derivedData.colorRuns.push_back(buildColorRunsFromTokenMap(tokenMap));
+}
+
+void deriveTokenMapsForLineSliceFromCanonicalTree(MRTreeSitterDocument::Language language, const DerivedSyntaxLineSliceRequest &request, const TSTree *tree,
+									  MRDerivedSyntaxData &derivedData) {
 	const TSNode root = ts_tree_root_node(tree);
 
-	for (std::size_t lineIndex = 0; lineIndex < lineStarts.size(); ++lineIndex) {
-		const std::size_t safeLineStart = std::min(lineStarts[lineIndex], snapshot.length());
-		const std::size_t lineEnd = safeLineStart + tokenMaps[lineIndex].size();
+	for (std::size_t derivedLineIndex = 0; derivedLineIndex < derivedData.tokenMaps.size(); ++derivedLineIndex) {
+		const std::size_t lineIndex = request.lineIndexBegin + derivedLineIndex;
+		MRSyntaxTokenMap &tokenMap = derivedData.tokenMaps[derivedLineIndex];
+		const std::size_t safeLineStart = std::min(request.lineStarts[lineIndex], request.snapshot.length());
+		const std::size_t lineEnd = safeLineStart + tokenMap.size();
 		std::vector<TSNode> stack;
 
-		if (tokenMaps[lineIndex].empty()) continue;
+		if (tokenMap.empty()) continue;
 		stack.push_back(root);
 		while (!stack.empty()) {
 			const TSNode node = stack.back();
@@ -370,9 +607,180 @@ void buildTokenMapsFromTreeSitterTree(MRTreeSitterDocument::Language language, c
 
 			const std::size_t paintStart = std::max(nodeStart, safeLineStart) - safeLineStart;
 			const std::size_t paintEnd = std::min(nodeEnd, lineEnd) - safeLineStart;
-			for (std::size_t index = paintStart; index < paintEnd && index < tokenMaps[lineIndex].size(); ++index) tokenMaps[lineIndex][index] = token;
+			for (std::size_t index = paintStart; index < paintEnd && index < tokenMap.size(); ++index) tokenMap[index] = token;
 		}
 	}
+}
+
+// Tree-sitter stays canonical; MR derived syntax data is an editor cache built from that tree.
+MRDerivedSyntaxData deriveSyntaxDataForLineSliceFromCanonicalTree(MRTreeSitterDocument::Language language, const DerivedSyntaxLineSliceRequest &request,
+																  const TSTree *tree) {
+	MRDerivedSyntaxData derivedData = initializeDerivedSyntaxData(request);
+
+	deriveTokenMapsForLineSliceFromCanonicalTree(language, request, tree, derivedData);
+	deriveColorRunsFromTokenMaps(derivedData);
+	return derivedData;
+}
+
+TreeSitterTreeOwner copyCanonicalTreeForPartition(const TSTree *tree) noexcept {
+	if (tree == nullptr) return TreeSitterTreeOwner();
+	return TreeSitterTreeOwner(ts_tree_copy(tree));
+}
+
+MRDerivedSyntaxData deriveSyntaxChunkForPartitionFromCanonicalTree(MRTreeSitterDocument::Language language, const DerivedSyntaxLineSliceRequest &slice,
+																   const TSTree *canonicalTree) {
+	TreeSitterTreeOwner partitionTree = copyCanonicalTreeForPartition(canonicalTree);
+	const TSTree *treeForDerivation = partitionTree.get() != nullptr ? partitionTree.get() : canonicalTree;
+
+	return deriveSyntaxDataForLineSliceFromCanonicalTree(language, slice, treeForDerivation);
+}
+
+bool deriveSyntaxChunkForPartitionFromCopiedTree(MRTreeSitterDocument::Language language, const DerivedSyntaxLineSliceRequest &slice,
+												 const TSTree *canonicalTree, MRDerivedSyntaxData &derivedData) {
+	TreeSitterTreeOwner partitionTree = copyCanonicalTreeForPartition(canonicalTree);
+
+	if (partitionTree.get() == nullptr) return false;
+	derivedData = deriveSyntaxDataForLineSliceFromCanonicalTree(language, slice, partitionTree.get());
+	return true;
+}
+
+MRDerivedSyntaxData mergeDerivedSyntaxChunks(std::vector<MRDerivedSyntaxData> &&chunks) {
+	MRDerivedSyntaxData merged;
+
+	for (MRDerivedSyntaxData &chunk : chunks) merged.appendChunk(std::move(chunk));
+	return merged;
+}
+
+MRDerivedSyntaxData deriveSyntaxDataForLineSlicesFromCanonicalTree(MRTreeSitterDocument::Language language, const DerivedSyntaxLineSlices &slices,
+																   const TSTree *canonicalTree) {
+	std::vector<MRDerivedSyntaxData> chunks;
+
+	chunks.reserve(slices.size());
+	for (const DerivedSyntaxLineSliceRequest &slice : slices) chunks.push_back(deriveSyntaxChunkForPartitionFromCanonicalTree(language, slice, canonicalTree));
+	return mergeDerivedSyntaxChunks(std::move(chunks));
+}
+
+MRDerivedSyntaxData deriveSyntaxDataForPartitionsFromCanonicalTree(MRTreeSitterDocument::Language language, const mr::editor::ReadSnapshot &snapshot,
+																   const std::vector<std::size_t> &lineStarts, const DerivedSyntaxPartitions &partitions,
+																   const TSTree *tree) {
+	return deriveSyntaxDataForLineSlicesFromCanonicalTree(language, requestedLineSlices(snapshot, lineStarts, partitions), tree);
+}
+
+MRDerivedSyntaxData executeSyntaxDerivationPlanSerially(MRTreeSitterDocument::Language language, const mr::editor::ReadSnapshot &snapshot,
+														const std::vector<std::size_t> &lineStarts, const DerivedSyntaxDerivationPlan &plan,
+														const TSTree *canonicalTree) {
+	return deriveSyntaxDataForPartitionsFromCanonicalTree(language, snapshot, lineStarts, plan.partitions, canonicalTree);
+}
+
+MRDerivedSyntaxData executeSyntaxDerivationPlanParallel(MRTreeSitterDocument::Language language, const mr::editor::ReadSnapshot &snapshot,
+														const std::vector<std::size_t> &lineStarts, const DerivedSyntaxDerivationPlan &plan,
+														const TSTree *canonicalTree) {
+	const DerivedSyntaxLineSlices slices = plannedLineSlices(snapshot, lineStarts, plan);
+	const unsigned int hardwareConcurrency = std::thread::hardware_concurrency();
+
+	if (canonicalTree == nullptr) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+	if (slices.size() <= 1) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+	if (hardwareConcurrency == 0) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+	if (slices.size() > hardwareConcurrency) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+	if (slices.size() != plan.partitions.size()) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+
+	for (const DerivedSyntaxPartition &partition : plan.partitions)
+		if (!isValidDerivedSyntaxPartition(partition, lineStarts.size()))
+			return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+
+	std::vector<ParallelDerivedSyntaxResultSlot> resultSlots(slices.size());
+
+	try {
+		std::vector<std::jthread> workers;
+
+		workers.reserve(slices.size());
+		for (std::size_t sliceIndex = 0; sliceIndex < slices.size(); ++sliceIndex) {
+			workers.emplace_back([&, sliceIndex] {
+				MRDerivedSyntaxData chunk;
+
+				if (!deriveSyntaxChunkForPartitionFromCopiedTree(language, slices[sliceIndex], canonicalTree, chunk)) return;
+				resultSlots[sliceIndex].data = std::move(chunk);
+				resultSlots[sliceIndex].ready = true;
+			});
+		}
+	} catch (...) {
+		return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+	}
+
+	std::vector<MRDerivedSyntaxData> chunks;
+
+	chunks.reserve(resultSlots.size());
+	for (ParallelDerivedSyntaxResultSlot &slot : resultSlots) {
+		if (!slot.ready) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+		chunks.push_back(std::move(slot.data));
+	}
+	return mergeDerivedSyntaxChunks(std::move(chunks));
+}
+
+bool isParallelSyntaxValidationEnabled() noexcept {
+	const char *value = std::getenv("MR_VALIDATE_PARALLEL_SYNTAX");
+
+	return value != nullptr && value[0] == '1' && value[1] == '\0';
+}
+
+bool hasMatchingDerivedSyntaxTokenMaps(const MRDerivedSyntaxData &expected, const MRDerivedSyntaxData &actual) noexcept {
+	if (expected.tokenMaps.size() != actual.tokenMaps.size()) {
+		std::fprintf(stderr, "MR parallel syntax validation mismatch: token map count %zu != %zu\n", expected.tokenMaps.size(), actual.tokenMaps.size());
+		return false;
+	}
+	for (std::size_t lineIndex = 0; lineIndex < expected.tokenMaps.size(); ++lineIndex) {
+		const MRSyntaxTokenMap &expectedTokenMap = expected.tokenMaps[lineIndex];
+		const MRSyntaxTokenMap &actualTokenMap = actual.tokenMaps[lineIndex];
+
+		if (expectedTokenMap.size() != actualTokenMap.size()) {
+			std::fprintf(stderr, "MR parallel syntax validation mismatch: token map size at line %zu: %zu != %zu\n", lineIndex, expectedTokenMap.size(),
+						 actualTokenMap.size());
+			return false;
+		}
+		for (std::size_t tokenIndex = 0; tokenIndex < expectedTokenMap.size(); ++tokenIndex) {
+			if (expectedTokenMap[tokenIndex] == actualTokenMap[tokenIndex]) continue;
+			std::fprintf(stderr, "MR parallel syntax validation mismatch: token at line %zu, column %zu: %u != %u\n", lineIndex, tokenIndex,
+						 static_cast<unsigned int>(expectedTokenMap[tokenIndex]), static_cast<unsigned int>(actualTokenMap[tokenIndex]));
+			return false;
+		}
+	}
+	return true;
+}
+
+SyntaxDerivationExecutionChoice chooseSyntaxDerivationExecutionChoice(const DerivedSyntaxDerivationPlan &plan, std::size_t requestedLineCount,
+																	 unsigned int hardwareConcurrency) noexcept {
+	const std::size_t partitionCount = plan.partitions.size();
+
+	if (partitionCount <= 1) return SyntaxDerivationExecutionChoice::Serial;
+	if (hardwareConcurrency == 0) return SyntaxDerivationExecutionChoice::Serial;
+	if (requestedLineCount < kMinParallelSyntaxDerivationLineCount) return SyntaxDerivationExecutionChoice::Serial;
+	if (partitionCount > hardwareConcurrency) return SyntaxDerivationExecutionChoice::Serial;
+	return SyntaxDerivationExecutionChoice::Parallel;
+}
+
+MRDerivedSyntaxData chooseSyntaxDerivationExecution(MRTreeSitterDocument::Language language, const mr::editor::ReadSnapshot &snapshot,
+													const std::vector<std::size_t> &lineStarts, const DerivedSyntaxDerivationPlan &plan,
+													const TSTree *canonicalTree) {
+	switch (chooseSyntaxDerivationExecutionChoice(plan, lineStarts.size(), std::thread::hardware_concurrency())) {
+		case SyntaxDerivationExecutionChoice::Serial:
+			return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+		case SyntaxDerivationExecutionChoice::Parallel: {
+			if (!isParallelSyntaxValidationEnabled()) {
+				return executeSyntaxDerivationPlanParallel(language, snapshot, lineStarts, plan, canonicalTree);
+			} else {
+				MRDerivedSyntaxData serialResult = executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+				MRDerivedSyntaxData parallelResult = executeSyntaxDerivationPlanParallel(language, snapshot, lineStarts, plan, canonicalTree);
+
+				if (!hasMatchingDerivedSyntaxTokenMaps(serialResult, parallelResult)) return serialResult;
+				return parallelResult;
+			}
+		}
+	}
+	return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+}
+
+std::vector<MRSyntaxTokenMap> exportRenderTokenMaps(MRDerivedSyntaxData &&derivedData) {
+	return std::move(derivedData).exportRenderTokenMaps();
 }
 
 } // namespace
@@ -395,8 +803,8 @@ struct MRTreeSitterDocument::Impl {
 
 	Language language = Language::None;
 	PendingEdit pendingEdit;
-	TSParser *parser = nullptr;
-	TSTree *tree = nullptr;
+	TreeSitterParserOwner parser;
+	TreeSitterTreeOwner tree;
 	std::size_t documentId = 0;
 	std::size_t version = 0;
 
@@ -410,19 +818,13 @@ struct MRTreeSitterDocument::Impl {
 	}
 
 	void clearTree() noexcept {
-		if (tree != nullptr) {
-			ts_tree_delete(tree);
-			tree = nullptr;
-		}
+		tree.reset();
 		documentId = 0;
 		version = 0;
 	}
 
 	void releaseParser() noexcept {
-		if (parser != nullptr) {
-			ts_parser_delete(parser);
-			parser = nullptr;
-		}
+		parser.reset();
 	}
 
 	const TSLanguage *parserLanguage() const noexcept {
@@ -489,7 +891,7 @@ bool MRTreeSitterDocument::syncToDocument(const mr::editor::ReadSnapshot &snapsh
 		mImpl->releaseParser();
 		return false;
 	}
-	if (mImpl->tree != nullptr && mImpl->documentId == documentId && mImpl->version == version && !mImpl->pendingEdit.valid) return true;
+	if (mImpl->tree.get() != nullptr && mImpl->documentId == documentId && mImpl->version == version && !mImpl->pendingEdit.valid) return true;
 	const TSLanguage *nextLanguage = mImpl->parserLanguage();
 
 	if (nextLanguage == nullptr) {
@@ -497,21 +899,20 @@ bool MRTreeSitterDocument::syncToDocument(const mr::editor::ReadSnapshot &snapsh
 		mImpl->clearTree();
 		return false;
 	}
-	if (mImpl->parser == nullptr) mImpl->parser = ts_parser_new();
-	if (mImpl->parser == nullptr) {
+	if (mImpl->parser.get() == nullptr) mImpl->parser.reset(ts_parser_new());
+	if (mImpl->parser.get() == nullptr) {
 		mImpl->pendingEdit = Impl::PendingEdit();
 		mImpl->clearTree();
 		return false;
 	}
-	if (ts_parser_language(mImpl->parser) != nextLanguage && !ts_parser_set_language(mImpl->parser, nextLanguage)) {
+	if (ts_parser_language(mImpl->parser.get()) != nextLanguage && !ts_parser_set_language(mImpl->parser.get(), nextLanguage)) {
 		mImpl->pendingEdit = Impl::PendingEdit();
 		mImpl->clearTree();
 		mImpl->releaseParser();
 		return false;
 	}
-	const bool reuseTree = mImpl->tree != nullptr && mImpl->documentId == documentId && mImpl->pendingEdit.valid;
-	TSTree *previousTree = mImpl->tree;
-	TSTree *parsedTree = nullptr;
+	const bool reuseTree = mImpl->tree.get() != nullptr && mImpl->documentId == documentId && mImpl->pendingEdit.valid;
+	TSTree *previousTree = reuseTree ? mImpl->tree.get() : nullptr;
 
 	if (reuseTree) {
 		TSInputEdit edit;
@@ -527,49 +928,49 @@ bool MRTreeSitterDocument::syncToDocument(const mr::editor::ReadSnapshot &snapsh
 	{
 		TreeSitterSnapshotInput input;
 		TSInput source;
+		TreeSitterTreeOwner parsedTree;
 
 		input.snapshot = snapshot;
 		source.payload = &input;
 		source.read = readTreeSitterSnapshot;
 		source.encoding = TSInputEncodingUTF8;
 		source.decode = nullptr;
-		parsedTree = ts_parser_parse(mImpl->parser, reuseTree ? previousTree : nullptr, source);
+		parsedTree.reset(ts_parser_parse(mImpl->parser.get(), previousTree, source));
+		mImpl->pendingEdit = Impl::PendingEdit();
+		if (parsedTree.get() == nullptr) {
+			mImpl->clearTree();
+			return false;
+		}
+		mImpl->tree.reset(parsedTree.release());
 	}
-	mImpl->pendingEdit = Impl::PendingEdit();
-	if (parsedTree == nullptr) {
-		mImpl->clearTree();
-		return false;
-	}
-	if (previousTree != nullptr) ts_tree_delete(previousTree);
-	mImpl->tree = parsedTree;
 	mImpl->documentId = documentId;
 	mImpl->version = version;
 	return true;
 }
 
 bool MRTreeSitterDocument::shouldIncreaseIndentOnNewLine(const mr::editor::ReadSnapshot &snapshot, std::size_t cursorOffset) const noexcept {
-	if (mImpl == nullptr || mImpl->tree == nullptr) return false;
-	if (mImpl->language == Language::MRMAC) return shouldIncreaseMrmacIndent(snapshot, mImpl->tree, cursorOffset);
-	if (mImpl->language == Language::Python) return shouldIncreasePythonIndent(snapshot, mImpl->tree, cursorOffset);
+	if (mImpl == nullptr || mImpl->tree.get() == nullptr) return false;
+	if (mImpl->language == Language::MRMAC) return shouldIncreaseMrmacIndent(snapshot, mImpl->tree.get(), cursorOffset);
+	if (mImpl->language == Language::Python) return shouldIncreasePythonIndent(snapshot, mImpl->tree.get(), cursorOffset);
 	const std::size_t previousOffset = previousNonWhitespaceOnLine(snapshot, cursorOffset);
 	if (previousOffset >= snapshot.length()) return false;
 	const char previousChar = snapshot.charAt(previousOffset);
 	if (previousChar != '{' && previousChar != '(' && previousChar != '[') return false;
-	return !isCommentOrLiteralAtOffset(mImpl->tree, previousOffset);
+	return !isCommentOrLiteralAtOffset(mImpl->tree.get(), previousOffset);
 }
 
 bool MRTreeSitterDocument::shouldDedentCurrentLine(const mr::editor::ReadSnapshot &snapshot, std::size_t cursorOffset) const noexcept {
-	if (mImpl == nullptr || mImpl->tree == nullptr) return false;
+	if (mImpl == nullptr || mImpl->tree.get() == nullptr) return false;
 	switch (mImpl->language) {
 		case Language::MRMAC:
-			return shouldDedentMrmacLine(snapshot, mImpl->tree, cursorOffset);
+			return shouldDedentMrmacLine(snapshot, mImpl->tree.get(), cursorOffset);
 		case Language::Python:
-			return shouldDedentPythonLine(snapshot, mImpl->tree, cursorOffset);
+			return shouldDedentPythonLine(snapshot, mImpl->tree.get(), cursorOffset);
 		case Language::C:
 		case Language::Cpp:
 		case Language::JavaScript:
 		case Language::Json:
-			return shouldDedentBracketLine(snapshot, mImpl->tree, cursorOffset);
+			return shouldDedentBracketLine(snapshot, mImpl->tree.get(), cursorOffset);
 		case Language::None:
 			break;
 	}
@@ -577,21 +978,18 @@ bool MRTreeSitterDocument::shouldDedentCurrentLine(const mr::editor::ReadSnapsho
 }
 
 std::vector<MRSyntaxTokenMap> MRTreeSitterDocument::buildTokenMapsForSnapshotLines(Language language, const mr::editor::ReadSnapshot &snapshot, const std::vector<std::size_t> &lineStarts) {
-	std::vector<MRSyntaxTokenMap> tokenMaps;
+	const DerivedSyntaxDerivationPlan plan = buildSyntaxDerivationPlan(lineStarts);
+	const DerivedSyntaxLineSlices slices = plannedLineSlices(snapshot, lineStarts, plan);
+	MRDerivedSyntaxData derivedData = initializeDerivedSyntaxData(slices);
 	const TSLanguage *parserLanguage = treeSitterParserLanguage(language);
 
-	tokenMaps.reserve(lineStarts.size());
-	for (std::size_t i = 0; i < lineStarts.size(); ++i) tokenMaps.push_back(MRSyntaxTokenMap(snapshot.lineText(lineStarts[i]).size(), MRSyntaxToken::Text));
-	if (lineStarts.empty()) return tokenMaps;
-	if (parserLanguage == nullptr) return tokenMaps;
+	if (lineStarts.empty()) return exportRenderTokenMaps(std::move(derivedData));
+	if (parserLanguage == nullptr) return exportRenderTokenMaps(std::move(derivedData));
 
-	TSTree *tree = parseTreeSitterSnapshotTree(parserLanguage, snapshot);
-	if (tree == nullptr) return tokenMaps;
+	TreeSitterTreeOwner tree = parseTreeSitterSnapshotTree(parserLanguage, snapshot);
+	if (tree.get() == nullptr) return exportRenderTokenMaps(std::move(derivedData));
 
-	buildTokenMapsFromTreeSitterTree(language, snapshot, lineStarts, tree, tokenMaps);
-
-	ts_tree_delete(tree);
-	return tokenMaps;
+	return exportRenderTokenMaps(chooseSyntaxDerivationExecution(language, snapshot, lineStarts, plan, tree.get()));
 }
 
 MRTreeSitterDocument::Language MRTreeSitterDocument::activeLanguage() const noexcept {
@@ -599,5 +997,5 @@ MRTreeSitterDocument::Language MRTreeSitterDocument::activeLanguage() const noex
 }
 
 bool MRTreeSitterDocument::hasTree() const noexcept {
-	return mImpl != nullptr && mImpl->tree != nullptr;
+	return mImpl != nullptr && mImpl->tree.get() != nullptr;
 }
