@@ -7,8 +7,6 @@
 namespace {
 
 constexpr std::size_t kLargeFileTreeSitterSyntaxWarmupBytes = static_cast<std::size_t>(8) * 1024 * 1024;
-constexpr auto kSyntaxWarmupDeferredNotice = std::chrono::seconds(3);
-
 bool traceWarmupCancelEnabled() noexcept {
 	static const bool enabled = []() noexcept {
 		const char *value = std::getenv("MR_TRACE_WARMUP_CANCEL");
@@ -32,7 +30,7 @@ MRFileEditor::LoadTiming::LoadTiming() noexcept : valid(false), bytes(0), lines(
 }
 
 MRFileEditor::MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar, TIndicator *aIndicator, TStringView aFileName) noexcept
-    : TScroller(bounds, aHScrollBar, aVScrollBar), mIndicator(aIndicator), mReadOnly(false), mInsertMode(true), mAutoIndent(false), mSyntaxTitleHint(), mBufferModel(), mSelectionAnchor(0), mCursorVisualColumn(0), mIndicatorUpdateInProgress(false), mLineIndexWarmupTaskId(0), mLineIndexWarmupDocumentId(0), mLineIndexWarmupVersion(0), mSyntaxTokenCache(), mSyntaxWarmupTaskId(0), mSyntaxWarmupDocumentId(0), mSyntaxWarmupVersion(0), mSyntaxWarmupTopLine(0), mSyntaxWarmupBottomLine(0), mSyntaxWarmupLanguage(MRSyntaxLanguage::PlainText), mSyntaxWarmupTreeSitterLanguage(MRTreeSitterDocument::Language::None), mSyntaxWarmupDeferredUntil(std::chrono::steady_clock::time_point()), mTreeSitterDocument(), mMiniMapRenderer(), mSaveNormalizationCache(), mSaveNormalizationWarmupTaskId(0), mSaveNormalizationWarmupDocumentId(0), mSaveNormalizationWarmupVersion(0),
+    : TScroller(bounds, aHScrollBar, aVScrollBar), mIndicator(aIndicator), mReadOnly(false), mInsertMode(true), mAutoIndent(false), mSyntaxTitleHint(), mBufferModel(), mSelectionAnchor(0), mCursorVisualColumn(0), mIndicatorUpdateInProgress(false), mLineIndexWarmupTaskId(0), mLineIndexWarmupDocumentId(0), mLineIndexWarmupVersion(0), mSyntaxTokenCache(), mSyntaxWarmupTaskId(0), mSyntaxWarmupDocumentId(0), mSyntaxWarmupVersion(0), mSyntaxWarmupTopLine(0), mSyntaxWarmupBottomLine(0), mSyntaxWarmupLanguage(MRSyntaxLanguage::PlainText), mSyntaxWarmupTreeSitterLanguage(MRTreeSitterDocument::Language::None), mSyntaxWarmupDeferredPending(false), mTreeSitterDocument(), mMiniMapRenderer(), mSaveNormalizationCache(), mSaveNormalizationWarmupTaskId(0), mSaveNormalizationWarmupDocumentId(0), mSaveNormalizationWarmupVersion(0),
       mSaveNormalizationWarmupOptionsHash(0), mSaveNormalizationWarmupSourceBytes(0), mSaveNormalizationWarmupStartedAt(std::chrono::steady_clock::time_point()), mSaveNormalizationThroughputBytesPerMicro(0.0), mSaveNormalizationThroughputSamples(0), mMiniMapInitialRenderReportedDocumentId(0), mBlockOverlayActive(false), mBlockOverlayMode(0), mBlockOverlayAnchor(0), mBlockOverlayEnd(0), mBlockOverlayTrackingCursor(false), mPreferredIndentColumn(1), mLastLoadTiming(), mLargeFileMetricsTraceValid(false), mLastLargeFileMetricsExactKnown(false), mLastLargeFileMetricsLimitY(0), mLastLargeFileMetricsMaxY(0), mLastLargeFileMetricsDeltaY(0), mLastLargeFileMetricsNewDeltaY(0) {
 	fileName[0] = EOS;
 	options |= ofFirstClick;
@@ -173,8 +171,14 @@ bool MRFileEditor::syntaxWarmupPending() const noexcept {
 	return mSyntaxWarmupTaskId != 0;
 }
 
-bool MRFileEditor::syntaxWarmupDeferredStatusActive() const noexcept {
-	return mSyntaxWarmupDeferredUntil != std::chrono::steady_clock::time_point() && std::chrono::steady_clock::now() < mSyntaxWarmupDeferredUntil;
+bool MRFileEditor::syntaxWarmupDeferredStatusPending() const noexcept {
+	return mSyntaxWarmupDeferredPending;
+}
+
+bool MRFileEditor::consumeSyntaxWarmupDeferredStatus() noexcept {
+	if (!mSyntaxWarmupDeferredPending) return false;
+	mSyntaxWarmupDeferredPending = false;
+	return true;
 }
 
 bool MRFileEditor::miniMapWarmupPending() const noexcept {
@@ -2969,13 +2973,13 @@ void MRFileEditor::resetSyntaxWarmupState(bool clearCache) noexcept {
 }
 
 bool MRFileEditor::clearSyntaxWarmupDeferredStatus() noexcept {
-	const bool hadDeferred = mSyntaxWarmupDeferredUntil != std::chrono::steady_clock::time_point();
-	mSyntaxWarmupDeferredUntil = std::chrono::steady_clock::time_point();
+	const bool hadDeferred = mSyntaxWarmupDeferredPending;
+	mSyntaxWarmupDeferredPending = false;
 	return hadDeferred;
 }
 
 void MRFileEditor::markSyntaxWarmupDeferredStatus() noexcept {
-	mSyntaxWarmupDeferredUntil = std::chrono::steady_clock::now() + kSyntaxWarmupDeferredNotice;
+	mSyntaxWarmupDeferredPending = true;
 	notifyWindowTaskStateChanged();
 }
 
