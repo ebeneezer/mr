@@ -460,9 +460,24 @@ bool isValidDerivedSyntaxPartition(const DerivedSyntaxPartition &partition, std:
 
 DerivedSyntaxPartitions planSyntaxDerivationPartitions(const std::vector<std::size_t> &lineStarts) {
 	DerivedSyntaxPartitions partitions;
+	const std::size_t lineCount = lineStarts.size();
+	const std::size_t maxPartitionCount = 4;
 
-	if (lineStarts.empty()) return partitions;
-	partitions.push_back(DerivedSyntaxPartition{0, lineStarts.size()});
+	if (lineCount == 0) return partitions;
+
+	const std::size_t partitionCount = std::min(lineCount, maxPartitionCount);
+	const std::size_t linesPerPartition = lineCount / partitionCount;
+	const std::size_t remainder = lineCount % partitionCount;
+	std::size_t lineIndexBegin = 0;
+
+	partitions.reserve(partitionCount);
+	for (std::size_t partitionIndex = 0; partitionIndex < partitionCount; ++partitionIndex) {
+		const std::size_t extraLine = partitionIndex < remainder ? 1 : 0;
+		const std::size_t lineIndexEnd = lineIndexBegin + linesPerPartition + extraLine;
+
+		partitions.push_back(DerivedSyntaxPartition{lineIndexBegin, lineIndexEnd});
+		lineIndexBegin = lineIndexEnd;
+	}
 	return partitions;
 }
 
