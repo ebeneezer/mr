@@ -356,6 +356,8 @@ struct DerivedSyntaxLineSliceRequest {
 	std::size_t lineIndexEnd = 0;
 };
 
+using DerivedSyntaxLineSlices = std::vector<DerivedSyntaxLineSliceRequest>;
+
 struct ColorRun {
 	std::size_t startColumn = 0;
 	std::size_t endColumn = 0;
@@ -377,6 +379,13 @@ struct MRDerivedSyntaxData {
 
 	std::vector<MRSyntaxTokenMap> exportRenderTokenMaps() && {
 		return std::move(tokenMaps);
+	}
+
+	void appendChunk(MRDerivedSyntaxData &&chunk) {
+		tokenMaps.reserve(tokenMaps.size() + chunk.tokenMaps.size());
+		colorRuns.reserve(colorRuns.size() + chunk.colorRuns.size());
+		for (MRSyntaxTokenMap &tokenMap : chunk.tokenMaps) tokenMaps.push_back(std::move(tokenMap));
+		for (std::vector<ColorRun> &runs : chunk.colorRuns) colorRuns.push_back(std::move(runs));
 	}
 };
 
@@ -443,10 +452,31 @@ DerivedSyntaxLineSliceRequest requestedLineSlice(const mr::editor::ReadSnapshot 
 	return DerivedSyntaxLineSliceRequest{snapshot, lineStarts, 0, lineStarts.size()};
 }
 
+DerivedSyntaxLineSlices requestedLineSlices(const mr::editor::ReadSnapshot &snapshot, const std::vector<std::size_t> &lineStarts) {
+	DerivedSyntaxLineSlices slices;
+
+	slices.push_back(requestedLineSlice(snapshot, lineStarts));
+	return slices;
+}
+
 MRDerivedSyntaxData initializeDerivedSyntaxData(const DerivedSyntaxLineSliceRequest &request) {
 	MRDerivedSyntaxData derivedData;
 
 	derivedData.initializeRenderTokenMaps(request);
+	return derivedData;
+}
+
+MRDerivedSyntaxData initializeDerivedSyntaxData(const DerivedSyntaxLineSlices &slices) {
+	MRDerivedSyntaxData derivedData;
+
+	for (const DerivedSyntaxLineSliceRequest &slice : slices) {
+		derivedData.tokenMaps.reserve(derivedData.tokenMaps.size() + (slice.lineIndexEnd - slice.lineIndexBegin));
+		derivedData.colorRuns.reserve(derivedData.colorRuns.size() + (slice.lineIndexEnd - slice.lineIndexBegin));
+		for (std::size_t lineIndex = slice.lineIndexBegin; lineIndex < slice.lineIndexEnd; ++lineIndex) {
+			derivedData.tokenMaps.push_back(MRSyntaxTokenMap(slice.snapshot.lineText(slice.lineStarts[lineIndex]).size(), MRSyntaxToken::Text));
+			derivedData.colorRuns.push_back(std::vector<ColorRun>());
+		}
+	}
 	return derivedData;
 }
 
@@ -527,9 +557,24 @@ MRDerivedSyntaxData deriveSyntaxDataForLineSliceFromCanonicalTree(MRTreeSitterDo
 	return derivedData;
 }
 
-MRDerivedSyntaxData deriveSyntaxDataForRequestedLinesFromCanonicalTree(MRTreeSitterDocument::Language language, const mr::editor::ReadSnapshot &snapshot,
-																	   const std::vector<std::size_t> &lineStarts, const TSTree *tree) {
-	return deriveSyntaxDataForLineSliceFromCanonicalTree(language, requestedLineSlice(snapshot, lineStarts), tree);
+MRDerivedSyntaxData mergeDerivedSyntaxChunks(std::vector<MRDerivedSyntaxData> &&chunks) {
+	MRDerivedSyntaxData merged;
+
+	for (MRDerivedSyntaxData &chunk : chunks) merged.appendChunk(std::move(chunk));
+	return merged;
+}
+
+MRDerivedSyntaxData deriveSyntaxDataForLineSlicesFromCanonicalTree(MRTreeSitterDocument::Language language, const DerivedSyntaxLineSlices &slices, const TSTree *tree) {
+	std::vector<MRDerivedSyntaxData> chunks;
+
+	chunks.reserve(slices.size());
+	for (const DerivedSyntaxLineSliceRequest &slice : slices) chunks.push_back(deriveSyntaxDataForLineSliceFromCanonicalTree(language, slice, tree));
+	return mergeDerivedSyntaxChunks(std::move(chunks));
+}
+
+MRDerivedSyntaxData deriveSyntaxDataForRequestedLineSlicesFromCanonicalTree(MRTreeSitterDocument::Language language, const mr::editor::ReadSnapshot &snapshot,
+																			const std::vector<std::size_t> &lineStarts, const TSTree *tree) {
+	return deriveSyntaxDataForLineSlicesFromCanonicalTree(language, requestedLineSlices(snapshot, lineStarts), tree);
 }
 
 std::vector<MRSyntaxTokenMap> exportRenderTokenMaps(MRDerivedSyntaxData &&derivedData) {
@@ -731,8 +776,8 @@ bool MRTreeSitterDocument::shouldDedentCurrentLine(const mr::editor::ReadSnapsho
 }
 
 std::vector<MRSyntaxTokenMap> MRTreeSitterDocument::buildTokenMapsForSnapshotLines(Language language, const mr::editor::ReadSnapshot &snapshot, const std::vector<std::size_t> &lineStarts) {
-	const DerivedSyntaxLineSliceRequest request = requestedLineSlice(snapshot, lineStarts);
-	MRDerivedSyntaxData derivedData = initializeDerivedSyntaxData(request);
+	const DerivedSyntaxLineSlices slices = requestedLineSlices(snapshot, lineStarts);
+	MRDerivedSyntaxData derivedData = initializeDerivedSyntaxData(slices);
 	const TSLanguage *parserLanguage = treeSitterParserLanguage(language);
 
 	if (lineStarts.empty()) return exportRenderTokenMaps(std::move(derivedData));
@@ -741,7 +786,7 @@ std::vector<MRSyntaxTokenMap> MRTreeSitterDocument::buildTokenMapsForSnapshotLin
 	TreeSitterTreeOwner tree = parseTreeSitterSnapshotTree(parserLanguage, snapshot);
 	if (tree.get() == nullptr) return exportRenderTokenMaps(std::move(derivedData));
 
-	return exportRenderTokenMaps(deriveSyntaxDataForRequestedLinesFromCanonicalTree(language, snapshot, lineStarts, tree.get()));
+	return exportRenderTokenMaps(deriveSyntaxDataForRequestedLineSlicesFromCanonicalTree(language, snapshot, lineStarts, tree.get()));
 }
 
 MRTreeSitterDocument::Language MRTreeSitterDocument::activeLanguage() const noexcept {
