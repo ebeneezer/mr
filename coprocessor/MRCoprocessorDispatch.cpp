@@ -6,8 +6,9 @@
 #include "MRCoprocessorDispatch.hpp"
 
 #include <array>
-#include <chrono>
 #include <algorithm>
+#include <chrono>
+#include <cstdlib>
 #include <deque>
 #include <optional>
 #include <sstream>
@@ -31,6 +32,47 @@ const char *kMiniMapRenderAction = "Mini map rendering";
 const char *kSaveNormalizationWarmAction = "Save normalization warming";
 constexpr std::size_t kMacroUiPlaybackBudgetCommands = 48;
 const std::chrono::milliseconds kMacroUiPlaybackBudgetSlice(2);
+
+bool traceWarmupCancelEnabled() noexcept {
+	static const bool enabled = []() noexcept {
+		const char *value = std::getenv("MR_TRACE_WARMUP_CANCEL");
+		return value != nullptr && value[0] == '1' && value[1] == '\0';
+	}();
+	return enabled;
+}
+
+const char *warmupTaskKindName(mr::coprocessor::TaskKind kind) noexcept {
+	switch (kind) {
+		case mr::coprocessor::TaskKind::LineIndexWarmup:
+			return "LineIndexWarmup";
+		case mr::coprocessor::TaskKind::SyntaxWarmup:
+			return "SyntaxWarmup";
+		case mr::coprocessor::TaskKind::MiniMapWarmup:
+			return "MiniMapWarmup";
+		case mr::coprocessor::TaskKind::SaveNormalizationWarmup:
+			return "SaveNormalizationWarmup";
+		default:
+			break;
+	}
+	return nullptr;
+}
+
+void logWarmupCancelFinish(const mr::coprocessor::Result &result) {
+	if (!traceWarmupCancelEnabled()) return;
+	const char *kind = warmupTaskKindName(result.task.kind);
+	if (kind == nullptr) return;
+
+	std::ostringstream line;
+	line << "WARMUP-CANCEL finish kind=" << kind << " task=" << result.task.id;
+	if (result.cancelled()) line << " status=cancelled";
+	else if (result.completed())
+		line << " status=completed";
+	else if (result.failed())
+		line << " status=failed";
+	else
+		line << " status=unknown";
+	mrLogMessage(line.str().c_str());
+}
 
 constexpr std::array<const char *, mrducDelay + 1> kDeferredUiCommandNames{
     "UNKNOWN", "CREATE_WINDOW", "DELETE_WINDOW", "MODIFY_WINDOW", "LINK_WINDOW", "UNLINK_WINDOW", "ZOOM", "REDRAW", "NEW_SCREEN", "SWITCH_WINDOW", "SIZE_WINDOW", "MARQUEE", "MARQUEE_WARNING", "MARQUEE_ERROR", "MAKE_MESSAGE", "BRAIN", "PUT_BOX", "WRITE", "CLR_LINE", "GOTOXY", "PUT_LINE_NUM", "PUT_COL_NUM", "SCROLL_BOX_UP", "SCROLL_BOX_DN", "CLEAR_SCREEN", "KILL_BOX", "REGISTER_MENU_ITEM", "REMOVE_MENU_ITEM", "MESSAGEBOX", "DELAY",
@@ -649,6 +691,7 @@ void pumpDeferredMacroUiPlayback() {
 }
 
 void handleCoprocessorResult(const mr::coprocessor::Result &result) {
+	logWarmupCancelFinish(result);
 	if (result.completed()) {
 		const mr::coprocessor::IndicatorBlinkPayload *blink = dynamic_cast<const mr::coprocessor::IndicatorBlinkPayload *>(result.payload.get());
 		if (blink != nullptr) {
