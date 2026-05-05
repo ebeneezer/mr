@@ -5,6 +5,7 @@
 #include <cerrno>
 #include <cstring>
 #include <limits>
+#include <thread>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -19,6 +20,9 @@ namespace editor {
 
 namespace {
 constexpr std::size_t kLazyLineIndexStride = 4096;
+constexpr Offset kMinParallelLineIndexBytes = 1u << 20;
+constexpr Offset kMinParallelLineIndexBytesPerWorker = 1u << 19;
+constexpr std::size_t kMaxParallelLineIndexWorkers = 4;
 
 std::size_t allocateDocumentId() noexcept {
 	static std::atomic<std::size_t> nextId(1);
@@ -121,6 +125,133 @@ void buildDirectInitialLineIndex(const char *data, Offset length, std::vector<Li
 	buildDirectInitialLineIndexScalar(data, length, checkpoints, indexedOffset, indexedLine);
 #endif
 	totalLines = indexedLine + 1;
+}
+
+inline std::size_t directCountLineBreaksInRange(const char *data, Offset length, Offset start, Offset end) noexcept;
+
+struct DirectLineIndexPartition {
+	Offset start;
+	Offset end;
+
+	DirectLineIndexPartition() noexcept : start(0), end(0) {
+	}
+
+	DirectLineIndexPartition(Offset aStart, Offset aEnd) noexcept : start(aStart), end(aEnd) {
+	}
+};
+
+struct DirectLineIndexPartitionResult {
+	bool complete;
+	std::vector<Offset> lineStarts;
+
+	DirectLineIndexPartitionResult() noexcept : complete(false), lineStarts() {
+	}
+};
+
+std::vector<DirectLineIndexPartition> buildDirectLineIndexPartitions(Offset length, std::size_t workerCount) {
+	std::vector<DirectLineIndexPartition> partitions;
+	if (length == 0 || workerCount == 0) return partitions;
+
+	const Offset baseChunk = length / workerCount;
+	const Offset remainder = length % workerCount;
+	Offset start = 0;
+	for (std::size_t i = 0; i < workerCount; ++i) {
+		const Offset chunk = baseChunk + (i < remainder ? 1 : 0);
+		const Offset end = start + chunk;
+		if (end > start) partitions.push_back(DirectLineIndexPartition(start, end));
+		start = end;
+	}
+	return partitions;
+}
+
+std::size_t chooseParallelDirectLineIndexWorkerCount(Offset length) noexcept {
+	if (length < kMinParallelLineIndexBytes) return 0;
+
+	const unsigned int hardware = std::thread::hardware_concurrency();
+	if (hardware <= 1) return 0;
+
+	const Offset byWork = length / kMinParallelLineIndexBytesPerWorker;
+	if (byWork <= 1) return 0;
+
+	std::size_t workerCount = std::min(static_cast<std::size_t>(hardware), kMaxParallelLineIndexWorkers);
+	workerCount = std::min(workerCount, static_cast<std::size_t>(byWork));
+	return workerCount > 1 ? workerCount : 0;
+}
+
+bool buildDirectInitialLineIndexParallel(const char *data, Offset length, std::vector<LineIndexCheckpoint> &checkpoints, Offset &indexedOffset, std::size_t &indexedLine, std::size_t &totalLines, std::stop_token stopToken,
+                                         const std::atomic_bool *cancelFlag) {
+	const std::size_t workerCount = chooseParallelDirectLineIndexWorkerCount(length);
+	if (data == nullptr || workerCount == 0) return false;
+
+	const std::vector<DirectLineIndexPartition> partitions = buildDirectLineIndexPartitions(length, workerCount);
+	if (partitions.size() <= 1) return false;
+
+	std::vector<DirectLineIndexPartitionResult> partitionResults(partitions.size());
+	std::atomic_bool failed(false);
+	auto cancelled = [&](std::stop_token workerStopToken) noexcept {
+		if (failed.load(std::memory_order_acquire)) return true;
+		if (workerStopToken.stop_requested() || stopToken.stop_requested()) return true;
+		return cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire);
+	};
+
+	{
+		std::vector<std::jthread> workers;
+		workers.reserve(partitions.size());
+		for (std::size_t i = 0; i < partitions.size(); ++i) {
+			workers.emplace_back([&, i](std::stop_token workerStopToken) {
+				if (cancelled(workerStopToken)) {
+					failed.store(true, std::memory_order_release);
+					return;
+				}
+
+				const DirectLineIndexPartition partition = partitions[i];
+				DirectLineIndexPartitionResult result;
+				result.lineStarts.reserve(directCountLineBreaksInRange(data, length, partition.start, partition.end));
+
+				for (Offset at = partition.start; at < partition.end; ++at) {
+					if ((at & 0xFFFFu) == 0 && cancelled(workerStopToken)) {
+						failed.store(true, std::memory_order_release);
+						return;
+					}
+
+					const char ch = data[at];
+					if (!isLineBreakByte(ch)) continue;
+					if (ch == '\n' && at > 0 && data[at - 1] == '\r') continue;
+
+					Offset nextLineStart = at + 1;
+					if (ch == '\r' && at + 1 < length && data[at + 1] == '\n') nextLineStart = at + 2;
+					result.lineStarts.push_back(nextLineStart);
+				}
+
+				if (cancelled(workerStopToken)) {
+					failed.store(true, std::memory_order_release);
+					return;
+				}
+
+				result.complete = true;
+				partitionResults[i] = std::move(result);
+			});
+		}
+	}
+
+	if (failed.load(std::memory_order_acquire)) return false;
+
+	checkpoints.clear();
+	checkpoints.push_back(LineIndexCheckpoint(0, 0));
+	indexedOffset = 0;
+	indexedLine = 0;
+
+	for (std::size_t i = 0; i < partitionResults.size(); ++i) {
+		if (!partitionResults[i].complete) return false;
+		for (std::size_t j = 0; j < partitionResults[i].lineStarts.size(); ++j) {
+			indexedOffset = partitionResults[i].lineStarts[j];
+			++indexedLine;
+			appendLineCheckpoint(checkpoints, indexedOffset, indexedLine);
+		}
+	}
+
+	totalLines = indexedLine + 1;
+	return true;
 }
 
 Offset directFindNextLineBreak(const char *data, Offset length, Offset start) noexcept {
@@ -877,6 +1008,23 @@ LineIndexWarmupData ReadSnapshot::completeLineIndexWarmup() const {
 
 bool ReadSnapshot::completeLineIndexWarmup(LineIndexWarmupData &warmup, std::stop_token stopToken, const std::atomic_bool *cancelFlag) const {
 	ensureLazyIndexSeeded();
+	if (!mLazyLineIndexComplete && mLineIndexCheckpoints.size() == 1 && mLineIndexCheckpoints[0].offset == 0 && mLineIndexCheckpoints[0].lineIndex == 0 && mLazyIndexedOffset == 0 && mLazyIndexedLine == 0) {
+		if (const char *data = directTextData()) {
+			std::vector<LineIndexCheckpoint> checkpoints;
+			Offset indexedOffset = 0;
+			std::size_t indexedLine = 0;
+			std::size_t totalLines = 1;
+			if (buildDirectInitialLineIndexParallel(data, mLength, checkpoints, indexedOffset, indexedLine, totalLines, stopToken, cancelFlag)) {
+				warmup.checkpoints = std::move(checkpoints);
+				warmup.lazyIndexedOffset = indexedOffset;
+				warmup.lazyIndexedLine = indexedLine;
+				warmup.lazyLineIndexComplete = true;
+				warmup.lazyTotalLineCount = totalLines;
+				return true;
+			}
+			if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire))) return false;
+		}
+	}
 	while (!mLazyLineIndexComplete) {
 		if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire))) return false;
 		advanceLazyIndexByStride();
