@@ -405,6 +405,13 @@ struct ParallelDerivedSyntaxResultSlot {
 	bool ready = false;
 };
 
+enum class SyntaxDerivationExecutionChoice : unsigned char {
+	Serial,
+	Parallel
+};
+
+constexpr std::size_t kMinParallelSyntaxDerivationLineCount = 64;
+
 const char *readTreeSitterSnapshot(void *payload, uint32_t byteIndex, TSPoint, uint32_t *bytesRead) {
 	TreeSitterSnapshotInput &input = *static_cast<TreeSitterSnapshotInput *>(payload);
 	std::size_t pieceCount = input.snapshot.pieceCount();
@@ -708,11 +715,27 @@ MRDerivedSyntaxData executeSyntaxDerivationPlanParallel(MRTreeSitterDocument::La
 	return mergeDerivedSyntaxChunks(std::move(chunks));
 }
 
+SyntaxDerivationExecutionChoice chooseSyntaxDerivationExecutionChoice(const DerivedSyntaxDerivationPlan &plan, std::size_t requestedLineCount,
+																	 unsigned int hardwareConcurrency) noexcept {
+	const std::size_t partitionCount = plan.partitions.size();
+
+	if (partitionCount <= 1) return SyntaxDerivationExecutionChoice::Serial;
+	if (hardwareConcurrency == 0) return SyntaxDerivationExecutionChoice::Serial;
+	if (requestedLineCount < kMinParallelSyntaxDerivationLineCount) return SyntaxDerivationExecutionChoice::Serial;
+	if (partitionCount > hardwareConcurrency) return SyntaxDerivationExecutionChoice::Serial;
+	return SyntaxDerivationExecutionChoice::Parallel;
+}
+
 MRDerivedSyntaxData chooseSyntaxDerivationExecution(MRTreeSitterDocument::Language language, const mr::editor::ReadSnapshot &snapshot,
 													const std::vector<std::size_t> &lineStarts, const DerivedSyntaxDerivationPlan &plan,
 													const TSTree *canonicalTree) {
-	if (plan.partitions.size() <= 1) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
-	return executeSyntaxDerivationPlanParallel(language, snapshot, lineStarts, plan, canonicalTree);
+	switch (chooseSyntaxDerivationExecutionChoice(plan, lineStarts.size(), std::thread::hardware_concurrency())) {
+		case SyntaxDerivationExecutionChoice::Serial:
+			return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+		case SyntaxDerivationExecutionChoice::Parallel:
+			return executeSyntaxDerivationPlanParallel(language, snapshot, lineStarts, plan, canonicalTree);
+	}
+	return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
 }
 
 std::vector<MRSyntaxTokenMap> exportRenderTokenMaps(MRDerivedSyntaxData &&derivedData) {
