@@ -2653,14 +2653,14 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 	const std::size_t docId = mBufferModel.documentId();
 	const std::size_t version = mBufferModel.version();
 	const MRSyntaxLanguage language = mBufferModel.language();
-	const std::uint8_t warmupTreeSitterLanguage = static_cast<std::uint8_t>(treeSitterLanguage);
+	const std::uint8_t treeSitterLanguageId = static_cast<std::uint8_t>(treeSitterLanguage);
 	const std::size_t topLine = static_cast<std::size_t>(std::max(delta.y - 4, 0));
 	const int rowBudget = std::max(textRows + 8, 8);
-	std::vector<std::size_t> lineStarts = syntaxWarmupLineStarts(topLine, rowBudget);
-	if (lineStarts.empty()) return;
+	std::vector<std::size_t> warmupLineStarts = syntaxWarmupLineStarts(topLine, rowBudget);
+	if (warmupLineStarts.empty()) return;
 
-	const std::size_t bottomLine = topLine + lineStarts.size();
-	if (hasSyntaxTokensForLineStarts(lineStarts)) {
+	const std::size_t bottomLine = topLine + warmupLineStarts.size();
+	if (hasSyntaxTokensForLineStarts(warmupLineStarts)) {
 		std::uint64_t previousTaskId = mSyntaxWarmupTaskId;
 		bool hadTask = previousTaskId != 0;
 		mSyntaxWarmupTaskId = 0;
@@ -2677,50 +2677,53 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 		return;
 	}
 
-		if (mSyntaxWarmupTaskId != 0 && mSyntaxWarmupDocumentId == docId && mSyntaxWarmupVersion == version && mSyntaxWarmupLanguage == language && mSyntaxWarmupTreeSitterLanguage == treeSitterLanguage &&
-			topLine >= mSyntaxWarmupTopLine && bottomLine <= mSyntaxWarmupBottomLine)
-			return;
+	if (mSyntaxWarmupTaskId != 0 && mSyntaxWarmupDocumentId == docId && mSyntaxWarmupVersion == version && mSyntaxWarmupLanguage == language && mSyntaxWarmupTreeSitterLanguage == treeSitterLanguage &&
+		topLine >= mSyntaxWarmupTopLine && bottomLine <= mSyntaxWarmupBottomLine)
+		return;
 
-		MRTextBufferModel::ReadSnapshot snapshot = mBufferModel.readSnapshot();
-		std::uint64_t previousTaskId = mSyntaxWarmupTaskId;
-		const std::string coalescingKey = "syntax:" + std::to_string(static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(this))) + ":" + std::to_string(docId) + ":" + std::to_string(version) + ":" +
-		                                  std::to_string(static_cast<unsigned int>(language)) + ":" + (treeSitterActive ? "1" : "0") + ":" + std::to_string(static_cast<unsigned int>(warmupTreeSitterLanguage)) + ":" +
-		                                  std::to_string(topLine) + ":" + std::to_string(bottomLine);
-		mSyntaxWarmupDocumentId = docId;
-		mSyntaxWarmupVersion = version;
-		mSyntaxWarmupTopLine = topLine;
-		mSyntaxWarmupBottomLine = bottomLine;
-		mSyntaxWarmupLanguage = language;
-		mSyntaxWarmupTreeSitterLanguage = treeSitterLanguage;
-		mSyntaxWarmupTaskId = mr::coprocessor::globalCoprocessor().submitCoalesced(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::SyntaxWarmup, docId, version, coalescingKey, syntaxWarmupTaskLabel(), [snapshot, language, treeSitterLanguage, warmupTreeSitterLanguage, lineStarts](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
+	MRTextBufferModel::ReadSnapshot snapshot = mBufferModel.readSnapshot();
+	std::uint64_t previousTaskId = mSyntaxWarmupTaskId;
+	const std::string coalescingKey = "syntax:" + std::to_string(static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(this))) + ":" + std::to_string(docId) + ":" + std::to_string(version) + ":" +
+	                                  std::to_string(static_cast<unsigned int>(language)) + ":" + (treeSitterActive ? "1" : "0") + ":" + std::to_string(static_cast<unsigned int>(treeSitterLanguageId)) + ":" +
+	                                  std::to_string(topLine) + ":" + std::to_string(bottomLine);
+	mSyntaxWarmupDocumentId = docId;
+	mSyntaxWarmupVersion = version;
+	mSyntaxWarmupTopLine = topLine;
+	mSyntaxWarmupBottomLine = bottomLine;
+	mSyntaxWarmupLanguage = language;
+	mSyntaxWarmupTreeSitterLanguage = treeSitterLanguage;
+	mSyntaxWarmupTaskId = mr::coprocessor::globalCoprocessor().submitCoalesced(
+		mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::SyntaxWarmup, docId, version, coalescingKey, syntaxWarmupTaskLabel(),
+		[snapshot, language, treeSitterLanguage, treeSitterLanguageId, warmupLineStarts](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
 			mr::coprocessor::Result result;
-			std::vector<mr::coprocessor::SyntaxWarmLine> warmed;
+			std::vector<mr::coprocessor::SyntaxWarmLine> warmedLines;
 			auto shouldStop = [&]() noexcept { return stopToken.stop_requested() || info.cancelRequested(); };
 		result.task = info;
 		if (shouldStop()) {
 			result.status = mr::coprocessor::TaskStatus::Cancelled;
 			return result;
 		}
-		warmed.reserve(lineStarts.size());
+		warmedLines.reserve(warmupLineStarts.size());
 		if (treeSitterLanguage != MRTreeSitterDocument::Language::None) {
-			std::vector<MRSyntaxTokenMap> tokenMaps = MRTreeSitterDocument::buildTokenMapsForSnapshotLines(treeSitterLanguage, snapshot, lineStarts);
-			for (std::size_t i = 0; i < lineStarts.size(); ++i) {
+			// The coprocessor keeps transporting token maps only; Tree-sitter derivation stays behind the document helper boundary.
+			std::vector<MRSyntaxTokenMap> tokenMaps = MRTreeSitterDocument::buildTokenMapsForSnapshotLines(treeSitterLanguage, snapshot, warmupLineStarts);
+			for (std::size_t i = 0; i < warmupLineStarts.size(); ++i) {
 				if (shouldStop()) {
 					result.status = mr::coprocessor::TaskStatus::Cancelled;
 					return result;
 				}
-				warmed.push_back(mr::coprocessor::SyntaxWarmLine(lineStarts[i], i < tokenMaps.size() ? std::move(tokenMaps[i]) : MRSyntaxTokenMap()));
+				warmedLines.push_back(mr::coprocessor::SyntaxWarmLine(warmupLineStarts[i], i < tokenMaps.size() ? std::move(tokenMaps[i]) : MRSyntaxTokenMap()));
 			}
 		} else
-			for (std::size_t i = 0; i < lineStarts.size(); ++i) {
+			for (std::size_t i = 0; i < warmupLineStarts.size(); ++i) {
 				if (shouldStop()) {
 					result.status = mr::coprocessor::TaskStatus::Cancelled;
 					return result;
 				}
-				warmed.push_back(mr::coprocessor::SyntaxWarmLine(lineStarts[i], tmrBuildTokenMapForTextLine(language, snapshot.lineText(lineStarts[i]))));
+				warmedLines.push_back(mr::coprocessor::SyntaxWarmLine(warmupLineStarts[i], tmrBuildTokenMapForTextLine(language, snapshot.lineText(warmupLineStarts[i]))));
 			}
 		result.status = mr::coprocessor::TaskStatus::Completed;
-		result.payload = std::make_shared<mr::coprocessor::SyntaxWarmupPayload>(language, treeSitterLanguage != MRTreeSitterDocument::Language::None, warmupTreeSitterLanguage, std::move(warmed));
+		result.payload = std::make_shared<mr::coprocessor::SyntaxWarmupPayload>(language, treeSitterLanguage != MRTreeSitterDocument::Language::None, treeSitterLanguageId, std::move(warmedLines));
 		return result;
 	});
 	if (mSyntaxWarmupTaskId != previousTaskId) notifyWindowTaskStateChanged();
