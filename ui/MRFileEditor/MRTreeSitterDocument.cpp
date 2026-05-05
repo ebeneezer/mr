@@ -1,18 +1,23 @@
 #include "MRTreeSitterDocument.hpp"
 
 #include <algorithm>
+#include <chrono>
+#include <cstring>
 #include <cstdio>
 #include <cstdint>
 #include <cstdlib>
 #include <new>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #include <tree_sitter/api.h>
 
 #include "../../app/utils/MRStringUtils.hpp"
 #include "../../piecetable/MRTextDocument.hpp"
+#include "../MRWindowSupport.hpp"
 #include "../MRSyntax.hpp"
 
 extern "C" const TSLanguage *tree_sitter_c(void);
@@ -23,6 +28,39 @@ extern "C" const TSLanguage *tree_sitter_json(void);
 extern "C" const TSLanguage *tree_sitter_mrmac(void);
 
 namespace {
+
+bool traceWarmupParallelEnabled() noexcept {
+	static const bool enabled = []() noexcept {
+		const char *value = std::getenv("MR_TRACE_WARMUP_PARALLEL");
+		return value != nullptr && value[0] == '1' && value[1] == '\0';
+	}();
+	return enabled;
+}
+
+void logSyntaxTrace(const std::ostringstream &line) {
+	if (!traceWarmupParallelEnabled()) return;
+	mrLogMessage(line.str().c_str());
+}
+
+const char *treeSitterLanguageName(MRTreeSitterDocument::Language language) noexcept {
+	switch (language) {
+		case MRTreeSitterDocument::Language::C:
+			return "C";
+		case MRTreeSitterDocument::Language::Cpp:
+			return "CPP";
+		case MRTreeSitterDocument::Language::JavaScript:
+			return "JAVASCRIPT";
+		case MRTreeSitterDocument::Language::Python:
+			return "PYTHON";
+		case MRTreeSitterDocument::Language::Json:
+			return "JSON";
+		case MRTreeSitterDocument::Language::MRMAC:
+			return "MRMAC";
+		case MRTreeSitterDocument::Language::None:
+			break;
+	}
+	return "NONE";
+}
 
 struct TreeSitterParserOwner {
 	TSParser *value = nullptr;
@@ -405,6 +443,10 @@ struct MRDerivedSyntaxData {
 struct ParallelDerivedSyntaxResultSlot {
 	MRDerivedSyntaxData data;
 	bool ready = false;
+	bool treeCopySucceeded = false;
+	std::uint64_t runMicros = 0;
+	std::string traceStart;
+	std::string traceDone;
 };
 
 enum class SyntaxDerivationExecutionChoice : unsigned char {
@@ -413,6 +455,16 @@ enum class SyntaxDerivationExecutionChoice : unsigned char {
 };
 
 constexpr std::size_t kMinParallelSyntaxDerivationLineCount = 64;
+
+const char *syntaxDerivationSerialReason(const DerivedSyntaxDerivationPlan &plan, std::size_t requestedLineCount, unsigned int hardwareConcurrency) noexcept {
+	const std::size_t partitionCount = plan.partitions.size();
+
+	if (partitionCount <= 1) return "single-partition";
+	if (hardwareConcurrency == 0) return "hardware-concurrency-unknown";
+	if (requestedLineCount < kMinParallelSyntaxDerivationLineCount) return "below-line-threshold";
+	if (partitionCount > hardwareConcurrency) return "partitions-exceed-hardware";
+	return "parallel";
+}
 
 const char *readTreeSitterSnapshot(void *payload, uint32_t byteIndex, TSPoint, uint32_t *bytesRead) {
 	TreeSitterSnapshotInput &input = *static_cast<TreeSitterSnapshotInput *>(payload);
@@ -696,22 +748,62 @@ MRDerivedSyntaxData executeSyntaxDerivationPlanParallel(MRTreeSitterDocument::La
 		workers.reserve(slices.size());
 		for (std::size_t sliceIndex = 0; sliceIndex < slices.size(); ++sliceIndex) {
 			workers.emplace_back([&, sliceIndex] {
+				const auto sliceStartedAt = std::chrono::steady_clock::now();
+				const DerivedSyntaxPartition partition = plan.partitions[sliceIndex];
+				const std::size_t lineCount = partition.lineIndexEnd - partition.lineIndexBegin;
+				std::ostringstream traceStart;
+				std::ostringstream traceDone;
 				MRDerivedSyntaxData chunk;
 
-				if (!deriveSyntaxChunkForPartitionFromCopiedTree(language, slices[sliceIndex], canonicalTree, chunk)) return;
+				traceStart << "WARMUP-SYNTAX partition-start language=" << treeSitterLanguageName(language) << " index=" << sliceIndex << " line_index_begin=" << partition.lineIndexBegin
+				           << " line_index_end=" << partition.lineIndexEnd << " line_count=" << lineCount;
+				if (!deriveSyntaxChunkForPartitionFromCopiedTree(language, slices[sliceIndex], canonicalTree, chunk)) {
+					traceDone << "WARMUP-SYNTAX partition-done language=" << treeSitterLanguageName(language) << " index=" << sliceIndex << " line_index_begin=" << partition.lineIndexBegin
+					          << " line_index_end=" << partition.lineIndexEnd << " line_count=" << lineCount << " tree_copy=no status=fallback";
+					resultSlots[sliceIndex].traceStart = traceStart.str();
+					resultSlots[sliceIndex].traceDone = traceDone.str();
+					return;
+				}
 				resultSlots[sliceIndex].data = std::move(chunk);
 				resultSlots[sliceIndex].ready = true;
+				resultSlots[sliceIndex].treeCopySucceeded = true;
+				resultSlots[sliceIndex].runMicros =
+				    static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - sliceStartedAt).count());
+				traceDone << "WARMUP-SYNTAX partition-done language=" << treeSitterLanguageName(language) << " index=" << sliceIndex << " line_index_begin=" << partition.lineIndexBegin
+				          << " line_index_end=" << partition.lineIndexEnd << " line_count=" << lineCount << " tree_copy=yes status=ready duration_us=" << resultSlots[sliceIndex].runMicros;
+				resultSlots[sliceIndex].traceStart = traceStart.str();
+				resultSlots[sliceIndex].traceDone = traceDone.str();
 			});
 		}
 	} catch (...) {
+		if (traceWarmupParallelEnabled()) {
+			std::ostringstream line;
+			line << "WARMUP-SYNTAX execute language=" << treeSitterLanguageName(language) << " mode=parallel fallback_to_serial=yes reason=thread-launch-failed partitions=" << slices.size()
+			     << " hardware=" << hardwareConcurrency;
+			logSyntaxTrace(line);
+		}
 		return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
 	}
+
+	if (traceWarmupParallelEnabled())
+		for (const ParallelDerivedSyntaxResultSlot &slot : resultSlots) {
+			if (!slot.traceStart.empty()) mrLogMessage(slot.traceStart.c_str());
+			if (!slot.traceDone.empty()) mrLogMessage(slot.traceDone.c_str());
+		}
 
 	std::vector<MRDerivedSyntaxData> chunks;
 
 	chunks.reserve(resultSlots.size());
 	for (ParallelDerivedSyntaxResultSlot &slot : resultSlots) {
-		if (!slot.ready) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+		if (!slot.ready) {
+			if (traceWarmupParallelEnabled()) {
+				std::ostringstream line;
+				line << "WARMUP-SYNTAX execute language=" << treeSitterLanguageName(language) << " mode=parallel fallback_to_serial=yes reason=partition-not-ready partitions="
+				     << slices.size() << " hardware=" << hardwareConcurrency;
+				logSyntaxTrace(line);
+			}
+			return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+		}
 		chunks.push_back(std::move(slot.data));
 	}
 	return mergeDerivedSyntaxChunks(std::move(chunks));
@@ -749,29 +841,51 @@ bool hasMatchingDerivedSyntaxTokenMaps(const MRDerivedSyntaxData &expected, cons
 
 SyntaxDerivationExecutionChoice chooseSyntaxDerivationExecutionChoice(const DerivedSyntaxDerivationPlan &plan, std::size_t requestedLineCount,
 																	 unsigned int hardwareConcurrency) noexcept {
-	const std::size_t partitionCount = plan.partitions.size();
-
-	if (partitionCount <= 1) return SyntaxDerivationExecutionChoice::Serial;
-	if (hardwareConcurrency == 0) return SyntaxDerivationExecutionChoice::Serial;
-	if (requestedLineCount < kMinParallelSyntaxDerivationLineCount) return SyntaxDerivationExecutionChoice::Serial;
-	if (partitionCount > hardwareConcurrency) return SyntaxDerivationExecutionChoice::Serial;
-	return SyntaxDerivationExecutionChoice::Parallel;
+	return std::strcmp(syntaxDerivationSerialReason(plan, requestedLineCount, hardwareConcurrency), "parallel") == 0 ? SyntaxDerivationExecutionChoice::Parallel
+	                                                                                                                   : SyntaxDerivationExecutionChoice::Serial;
 }
 
 MRDerivedSyntaxData chooseSyntaxDerivationExecution(MRTreeSitterDocument::Language language, const mr::editor::ReadSnapshot &snapshot,
 													const std::vector<std::size_t> &lineStarts, const DerivedSyntaxDerivationPlan &plan,
 													const TSTree *canonicalTree) {
-	switch (chooseSyntaxDerivationExecutionChoice(plan, lineStarts.size(), std::thread::hardware_concurrency())) {
+	const unsigned int hardwareConcurrency = std::thread::hardware_concurrency();
+	const std::size_t partitionCount = plan.partitions.size();
+	const char *serialReason = syntaxDerivationSerialReason(plan, lineStarts.size(), hardwareConcurrency);
+
+	if (traceWarmupParallelEnabled()) {
+		std::ostringstream line;
+		line << "WARMUP-SYNTAX decide language=" << treeSitterLanguageName(language) << " snapshot_bytes=" << snapshot.length() << " line_starts=" << lineStarts.size()
+		     << " partitions=" << partitionCount << " hardware=" << hardwareConcurrency << " mode="
+		     << (std::strcmp(serialReason, "parallel") == 0 ? "parallel" : "serial");
+		if (std::strcmp(serialReason, "parallel") != 0) line << " reason=" << serialReason;
+		else
+			line << " worker_count=" << partitionCount;
+		logSyntaxTrace(line);
+	}
+
+	switch (chooseSyntaxDerivationExecutionChoice(plan, lineStarts.size(), hardwareConcurrency)) {
 		case SyntaxDerivationExecutionChoice::Serial:
 			return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
 		case SyntaxDerivationExecutionChoice::Parallel: {
 			if (!isParallelSyntaxValidationEnabled()) {
 				return executeSyntaxDerivationPlanParallel(language, snapshot, lineStarts, plan, canonicalTree);
 			} else {
+				if (traceWarmupParallelEnabled()) {
+					std::ostringstream line;
+					line << "WARMUP-SYNTAX validation language=" << treeSitterLanguageName(language) << " enabled=yes partitions=" << partitionCount << " worker_count=" << partitionCount;
+					logSyntaxTrace(line);
+				}
 				MRDerivedSyntaxData serialResult = executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
 				MRDerivedSyntaxData parallelResult = executeSyntaxDerivationPlanParallel(language, snapshot, lineStarts, plan, canonicalTree);
 
-				if (!hasMatchingDerivedSyntaxTokenMaps(serialResult, parallelResult)) return serialResult;
+				if (!hasMatchingDerivedSyntaxTokenMaps(serialResult, parallelResult)) {
+					if (traceWarmupParallelEnabled()) {
+						std::ostringstream line;
+						line << "WARMUP-SYNTAX validation language=" << treeSitterLanguageName(language) << " result=mismatch fallback_to_serial=yes";
+						logSyntaxTrace(line);
+					}
+					return serialResult;
+				}
 				return parallelResult;
 			}
 		}
@@ -978,18 +1092,58 @@ bool MRTreeSitterDocument::shouldDedentCurrentLine(const mr::editor::ReadSnapsho
 }
 
 std::vector<MRSyntaxTokenMap> MRTreeSitterDocument::buildTokenMapsForSnapshotLines(Language language, const mr::editor::ReadSnapshot &snapshot, const std::vector<std::size_t> &lineStarts) {
+	const auto startedAt = std::chrono::steady_clock::now();
 	const DerivedSyntaxDerivationPlan plan = buildSyntaxDerivationPlan(lineStarts);
 	const DerivedSyntaxLineSlices slices = plannedLineSlices(snapshot, lineStarts, plan);
 	MRDerivedSyntaxData derivedData = initializeDerivedSyntaxData(slices);
 	const TSLanguage *parserLanguage = treeSitterParserLanguage(language);
+	const bool traceWarmup = traceWarmupParallelEnabled();
+
+	if (traceWarmup) {
+		std::ostringstream line;
+		line << "WARMUP-SYNTAX begin language=" << treeSitterLanguageName(language) << " snapshot_bytes=" << snapshot.length() << " line_starts=" << lineStarts.size()
+		     << " parser_language=" << (parserLanguage != nullptr ? "yes" : "no");
+		logSyntaxTrace(line);
+	}
 
 	if (lineStarts.empty()) return exportRenderTokenMaps(std::move(derivedData));
-	if (parserLanguage == nullptr) return exportRenderTokenMaps(std::move(derivedData));
+	if (parserLanguage == nullptr) {
+		if (traceWarmup) {
+			std::ostringstream line;
+			line << "WARMUP-SYNTAX end language=" << treeSitterLanguageName(language) << " result=fallback reason=no-parser-language duration_us="
+			     << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
+			logSyntaxTrace(line);
+		}
+		return exportRenderTokenMaps(std::move(derivedData));
+	}
 
+	const auto parseStartedAt = std::chrono::steady_clock::now();
 	TreeSitterTreeOwner tree = parseTreeSitterSnapshotTree(parserLanguage, snapshot);
-	if (tree.get() == nullptr) return exportRenderTokenMaps(std::move(derivedData));
+	const auto parseMicros = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - parseStartedAt).count();
+	if (traceWarmup) {
+		std::ostringstream line;
+		line << "WARMUP-SYNTAX parse language=" << treeSitterLanguageName(language) << " duration_us=" << parseMicros << " tree=" << (tree.get() != nullptr ? "yes" : "no")
+		     << " partitions=" << plan.partitions.size();
+		logSyntaxTrace(line);
+	}
+	if (tree.get() == nullptr) {
+		if (traceWarmup) {
+			std::ostringstream line;
+			line << "WARMUP-SYNTAX end language=" << treeSitterLanguageName(language) << " result=fallback reason=parse-failed duration_us="
+			     << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
+			logSyntaxTrace(line);
+		}
+		return exportRenderTokenMaps(std::move(derivedData));
+	}
 
-	return exportRenderTokenMaps(chooseSyntaxDerivationExecution(language, snapshot, lineStarts, plan, tree.get()));
+	std::vector<MRSyntaxTokenMap> tokenMaps = exportRenderTokenMaps(chooseSyntaxDerivationExecution(language, snapshot, lineStarts, plan, tree.get()));
+	if (traceWarmup) {
+		std::ostringstream line;
+		line << "WARMUP-SYNTAX end language=" << treeSitterLanguageName(language) << " result=completed duration_us="
+		     << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count() << " token_maps=" << tokenMaps.size();
+		logSyntaxTrace(line);
+	}
+	return tokenMaps;
 }
 
 MRTreeSitterDocument::Language MRTreeSitterDocument::activeLanguage() const noexcept {

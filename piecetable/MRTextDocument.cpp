@@ -2,16 +2,20 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <sstream>
 #include <thread>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+#include "../ui/MRWindowSupport.hpp"
 
 #if defined(__SSE2__) && (defined(__x86_64__) || defined(__i386__))
 #include <emmintrin.h>
@@ -25,6 +29,19 @@ constexpr std::size_t kLazyLineIndexStride = 4096;
 constexpr Offset kMinParallelLineIndexBytes = 1u << 20;
 constexpr Offset kMinParallelLineIndexBytesPerWorker = 1u << 19;
 constexpr std::size_t kMaxParallelLineIndexWorkers = 4;
+
+bool traceWarmupParallelEnabled() noexcept {
+	static const bool enabled = []() noexcept {
+		const char *value = std::getenv("MR_TRACE_WARMUP_PARALLEL");
+		return value != nullptr && value[0] == '1' && value[1] == '\0';
+	}();
+	return enabled;
+}
+
+void logLineIndexTrace(const std::ostringstream &line) {
+	if (!traceWarmupParallelEnabled()) return;
+	mrLogMessage(line.str().c_str());
+}
 
 std::size_t allocateDocumentId() noexcept {
 	static std::atomic<std::size_t> nextId(1);
@@ -180,13 +197,30 @@ std::size_t chooseParallelDirectLineIndexWorkerCount(Offset length) noexcept {
 	return workerCount > 1 ? workerCount : 0;
 }
 
+const char *parallelDirectLineIndexSerialReason(Offset length) noexcept {
+	if (length < kMinParallelLineIndexBytes) return "below-byte-threshold";
+	const unsigned int hardware = std::thread::hardware_concurrency();
+	if (hardware <= 1) return "hardware-concurrency-too-small";
+	const Offset byWork = length / kMinParallelLineIndexBytesPerWorker;
+	if (byWork <= 1) return "below-work-per-worker-threshold";
+	if (chooseParallelDirectLineIndexWorkerCount(length) <= 1) return "single-worker";
+	return "parallel";
+}
+
 bool buildDirectInitialLineIndexParallel(const char *data, Offset length, std::vector<LineIndexCheckpoint> &checkpoints, Offset &indexedOffset, std::size_t &indexedLine, std::size_t &totalLines, std::stop_token stopToken,
                                          const std::atomic_bool *cancelFlag) {
+	const auto startedAt = std::chrono::steady_clock::now();
 	const std::size_t workerCount = chooseParallelDirectLineIndexWorkerCount(length);
 	if (data == nullptr || workerCount == 0) return false;
 
 	const std::vector<DirectLineIndexPartition> partitions = buildDirectLineIndexPartitions(length, workerCount);
 	if (partitions.size() <= 1) return false;
+
+	if (traceWarmupParallelEnabled()) {
+		std::ostringstream line;
+		line << "WARMUP-LINEINDEX begin-direct-parallel bytes=" << length << " partitions=" << partitions.size() << " worker_count=" << workerCount;
+		logLineIndexTrace(line);
+	}
 
 	std::vector<DirectLineIndexPartitionResult> partitionResults(partitions.size());
 	std::atomic_bool failed(false);
@@ -236,7 +270,14 @@ bool buildDirectInitialLineIndexParallel(const char *data, Offset length, std::v
 		}
 	}
 
-	if (failed.load(std::memory_order_acquire)) return false;
+	if (failed.load(std::memory_order_acquire)) {
+		if (traceWarmupParallelEnabled()) {
+			std::ostringstream line;
+			line << "WARMUP-LINEINDEX end-direct-parallel bytes=" << length << " result=fallback reason=worker-failed";
+			logLineIndexTrace(line);
+		}
+		return false;
+	}
 
 	checkpoints.clear();
 	checkpoints.push_back(LineIndexCheckpoint(0, 0));
@@ -253,6 +294,12 @@ bool buildDirectInitialLineIndexParallel(const char *data, Offset length, std::v
 	}
 
 	totalLines = indexedLine + 1;
+	if (traceWarmupParallelEnabled()) {
+		std::ostringstream line;
+		line << "WARMUP-LINEINDEX end-direct-parallel bytes=" << length << " result=completed checkpoints=" << checkpoints.size() << " total_lines=" << totalLines
+		     << " duration_us=" << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
+		logLineIndexTrace(line);
+	}
 	return true;
 }
 
@@ -1040,9 +1087,21 @@ LineIndexWarmupData ReadSnapshot::completeLineIndexWarmup() const {
 }
 
 bool ReadSnapshot::completeLineIndexWarmup(LineIndexWarmupData &warmup, std::stop_token stopToken, const std::atomic_bool *cancelFlag) const {
+	const bool traceWarmup = traceWarmupParallelEnabled();
+	const auto startedAt = std::chrono::steady_clock::now();
 	ensureLazyIndexSeeded();
 	if (!mLazyLineIndexComplete && mLineIndexCheckpoints.size() == 1 && mLineIndexCheckpoints[0].offset == 0 && mLineIndexCheckpoints[0].lineIndex == 0 && mLazyIndexedOffset == 0 && mLazyIndexedLine == 0) {
 		if (const char *data = directTextData()) {
+			if (traceWarmup) {
+				std::ostringstream line;
+				line << "WARMUP-LINEINDEX decide direct_mapped_original=yes bytes=" << mLength << " validation=" << (isParallelLineIndexValidationEnabled() ? "yes" : "no")
+				     << " mode=" << (std::strcmp(parallelDirectLineIndexSerialReason(mLength), "parallel") == 0 ? "parallel" : "serial");
+				if (std::strcmp(parallelDirectLineIndexSerialReason(mLength), "parallel") == 0)
+					line << " parallel_workers=" << chooseParallelDirectLineIndexWorkerCount(mLength);
+				else
+					line << " reason=" << parallelDirectLineIndexSerialReason(mLength);
+				logLineIndexTrace(line);
+			}
 			if (isParallelLineIndexValidationEnabled()) {
 				LineIndexWarmupData serialWarmup;
 				LineIndexWarmupData parallelWarmup;
@@ -1063,13 +1122,32 @@ bool ReadSnapshot::completeLineIndexWarmup(LineIndexWarmupData &warmup, std::sto
 				if (buildDirectInitialLineIndexParallel(data, mLength, parallelCheckpoints, parallelIndexedOffset, parallelIndexedLine, parallelTotalLines, stopToken, cancelFlag)) {
 					assignLineIndexWarmupData(parallelWarmup, std::move(parallelCheckpoints), parallelIndexedOffset, parallelIndexedLine, parallelTotalLines);
 					if (hasMatchingLineIndexWarmupData(serialWarmup, parallelWarmup)) {
+						if (traceWarmup) {
+							std::ostringstream line;
+							line << "WARMUP-LINEINDEX end direct_mapped_original=yes mode=parallel validation=yes result=completed checkpoints=" << parallelWarmup.checkpoints.size()
+							     << " total_lines=" << parallelWarmup.lazyTotalLineCount << " duration_us="
+							     << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
+							logLineIndexTrace(line);
+						}
 						warmup = std::move(parallelWarmup);
 						return true;
 					}
 					logParallelLineIndexValidationMismatch(serialWarmup, parallelWarmup);
+					if (traceWarmup) {
+						std::ostringstream line;
+						line << "WARMUP-LINEINDEX validation result=mismatch fallback_to_serial=yes";
+						logLineIndexTrace(line);
+					}
 				}
 				if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire))) return false;
 
+				if (traceWarmup) {
+					std::ostringstream line;
+					line << "WARMUP-LINEINDEX end direct_mapped_original=yes mode=serial validation=yes result=completed checkpoints=" << serialWarmup.checkpoints.size()
+					     << " total_lines=" << serialWarmup.lazyTotalLineCount << " duration_us="
+					     << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
+					logLineIndexTrace(line);
+				}
 				warmup = std::move(serialWarmup);
 				return true;
 			}
@@ -1080,10 +1158,27 @@ bool ReadSnapshot::completeLineIndexWarmup(LineIndexWarmupData &warmup, std::sto
 			std::size_t totalLines = 1;
 			if (buildDirectInitialLineIndexParallel(data, mLength, checkpoints, indexedOffset, indexedLine, totalLines, stopToken, cancelFlag)) {
 				assignLineIndexWarmupData(warmup, std::move(checkpoints), indexedOffset, indexedLine, totalLines);
+				if (traceWarmup) {
+					std::ostringstream line;
+					line << "WARMUP-LINEINDEX end direct_mapped_original=yes mode=parallel validation=no result=completed checkpoints=" << warmup.checkpoints.size()
+					     << " total_lines=" << warmup.lazyTotalLineCount << " duration_us="
+					     << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
+					logLineIndexTrace(line);
+				}
 				return true;
+			}
+			if (traceWarmup) {
+				std::ostringstream line;
+				line << "WARMUP-LINEINDEX fallback direct_mapped_original=yes reason=" << parallelDirectLineIndexSerialReason(mLength);
+				logLineIndexTrace(line);
 			}
 			if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire))) return false;
 		}
+	}
+	if (traceWarmup) {
+		std::ostringstream line;
+		line << "WARMUP-LINEINDEX decide direct_mapped_original=" << (directTextData() != nullptr ? "yes" : "no") << " mode=serial reason=piecewise-or-seeded";
+		logLineIndexTrace(line);
 	}
 	while (!mLazyLineIndexComplete) {
 		if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire))) return false;
@@ -1095,6 +1190,12 @@ bool ReadSnapshot::completeLineIndexWarmup(LineIndexWarmupData &warmup, std::sto
 	warmup.lazyIndexedLine = mLazyIndexedLine;
 	warmup.lazyLineIndexComplete = mLazyLineIndexComplete;
 	warmup.lazyTotalLineCount = mLazyTotalLineCount;
+	if (traceWarmup) {
+		std::ostringstream line;
+		line << "WARMUP-LINEINDEX end direct_mapped_original=no mode=serial result=completed checkpoints=" << warmup.checkpoints.size() << " total_lines=" << warmup.lazyTotalLineCount
+		     << " duration_us=" << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
+		logLineIndexTrace(line);
+	}
 	return true;
 }
 

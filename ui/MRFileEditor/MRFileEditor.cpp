@@ -1,6 +1,51 @@
 #include "MRFileEditor.hpp"
 #include "../MREditWindow.hpp"
 
+#include <cstdlib>
+#include <sstream>
+
+namespace {
+
+bool traceWarmupParallelEnabled() noexcept {
+	static const bool enabled = []() noexcept {
+		const char *value = std::getenv("MR_TRACE_WARMUP_PARALLEL");
+		return value != nullptr && value[0] == '1' && value[1] == '\0';
+	}();
+	return enabled;
+}
+
+const char *treeSitterLanguageName(MRTreeSitterDocument::Language language) noexcept {
+	switch (language) {
+		case MRTreeSitterDocument::Language::C:
+			return "C";
+		case MRTreeSitterDocument::Language::Cpp:
+			return "CPP";
+		case MRTreeSitterDocument::Language::JavaScript:
+			return "JAVASCRIPT";
+		case MRTreeSitterDocument::Language::Python:
+			return "PYTHON";
+		case MRTreeSitterDocument::Language::Json:
+			return "JSON";
+		case MRTreeSitterDocument::Language::MRMAC:
+			return "MRMAC";
+		case MRTreeSitterDocument::Language::None:
+			break;
+	}
+	return "NONE";
+}
+
+void logLineIndexWarmupTrace(const std::ostringstream &line) {
+	if (!traceWarmupParallelEnabled()) return;
+	mrLogMessage(line.str().c_str());
+}
+
+void logSyntaxWarmupTrace(const std::ostringstream &line) {
+	if (!traceWarmupParallelEnabled()) return;
+	mrLogMessage(line.str().c_str());
+}
+
+} // namespace
+
 MRFileEditor::LoadTiming::LoadTiming() noexcept : valid(false), bytes(0), lines(0), mappedLoadMs(0.0), lineCountMs(0.0) {
 }
 
@@ -2593,6 +2638,13 @@ bool MRFileEditor::writeDocumentToPath(const char *targetPath) {
 }
 
 void MRFileEditor::scheduleLineIndexWarmupIfNeeded() {
+	const bool traceWarmup = traceWarmupParallelEnabled();
+	const std::size_t docId = mBufferModel.documentId();
+	const std::size_t version = mBufferModel.version();
+	const std::size_t estimatedLines = mBufferModel.estimatedLineCount();
+	const std::size_t bufferLength = mBufferModel.length();
+	const char *fileNameForLog = persistentFileName();
+
 	if (!mBufferModel.document().hasMappedOriginal() || mBufferModel.document().exactLineCountKnown()) {
 		std::uint64_t cancelledTaskId = mLineIndexWarmupTaskId;
 		bool hadTask = cancelledTaskId != 0;
@@ -2604,16 +2656,29 @@ void MRFileEditor::scheduleLineIndexWarmupIfNeeded() {
 			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledTaskId));
 			notifyWindowTaskStateChanged();
 		}
+		if (traceWarmup) {
+			std::ostringstream line;
+			line << "WARMUP-LINEINDEX schedule doc=" << docId << " ver=" << version << " file=\"" << fileNameForLog << "\" bytes=" << bufferLength << " estimated_lines=" << estimatedLines
+			     << " planned=no reason=" << (mBufferModel.document().hasMappedOriginal() ? "exact-line-count-known" : "no-mapped-original") << " cancelled_old=" << (hadTask ? "yes" : "no");
+			logLineIndexWarmupTrace(line);
+		}
 		return;
 	}
 
-	const std::size_t docId = mBufferModel.documentId();
-	const std::size_t version = mBufferModel.version();
-	if (mLineIndexWarmupTaskId != 0 && mLineIndexWarmupDocumentId == docId && mLineIndexWarmupVersion == version) return;
+	if (mLineIndexWarmupTaskId != 0 && mLineIndexWarmupDocumentId == docId && mLineIndexWarmupVersion == version) {
+		if (traceWarmup) {
+			std::ostringstream line;
+			line << "WARMUP-LINEINDEX schedule doc=" << docId << " ver=" << version << " file=\"" << fileNameForLog << "\" bytes=" << bufferLength << " estimated_lines=" << estimatedLines
+			     << " planned=no reason=already-pending task=" << mLineIndexWarmupTaskId;
+			logLineIndexWarmupTrace(line);
+		}
+		return;
+	}
 
 	MRTextBufferModel::ReadSnapshot snapshot = mBufferModel.readSnapshot();
 	std::uint64_t previousTaskId = mLineIndexWarmupTaskId;
-	if (previousTaskId != 0) static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
+	const bool cancelledPreviousTask = previousTaskId != 0;
+	if (cancelledPreviousTask) static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
 	const std::string coalescingKey = "line-index:" + std::to_string(static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(this))) + ":" + std::to_string(docId) + ":" + std::to_string(version);
 	mLineIndexWarmupDocumentId = docId;
 	mLineIndexWarmupVersion = version;
@@ -2633,6 +2698,12 @@ void MRFileEditor::scheduleLineIndexWarmupIfNeeded() {
 		result.payload = std::make_shared<mr::coprocessor::LineIndexWarmupPayload>(warmup);
 		return result;
 	});
+	if (traceWarmup) {
+		std::ostringstream line;
+		line << "WARMUP-LINEINDEX schedule doc=" << docId << " ver=" << version << " file=\"" << fileNameForLog << "\" bytes=" << bufferLength << " estimated_lines=" << estimatedLines
+		     << " planned=yes cancelled_old=" << (cancelledPreviousTask ? "yes" : "no") << " new_task=" << mLineIndexWarmupTaskId;
+		logLineIndexWarmupTrace(line);
+	}
 	if (shouldTraceLargeFileDiagnostics()) {
 		std::ostringstream detail;
 		detail << "task=" << mLineIndexWarmupTaskId << " estimated_lines=" << mBufferModel.estimatedLineCount() << " cursor_line=" << mBufferModel.lineIndex(mBufferModel.cursor()) << " delta_y=" << delta.y;
@@ -2645,20 +2716,38 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 	const int textRows = visibleTextRows();
 	const MRTreeSitterDocument::Language treeSitterLanguage = mTreeSitterDocument.activeLanguage();
 	const bool treeSitterActive = treeSitterLanguage != MRTreeSitterDocument::Language::None;
+	const bool traceWarmup = traceWarmupParallelEnabled();
+	const std::size_t docId = mBufferModel.documentId();
+	const std::size_t version = mBufferModel.version();
+	const MRSyntaxLanguage language = mBufferModel.language();
+	const char *fileNameForLog = persistentFileName();
 
 	if ((!treeSitterActive && mBufferModel.language() == MRSyntaxLanguage::PlainText) || textRows <= 0) {
+		if (traceWarmup) {
+			std::ostringstream line;
+			line << "WARMUP-SYNTAX schedule doc=" << docId << " ver=" << version << " file=\"" << fileNameForLog << "\" syntax=" << tmrSyntaxLanguageName(language)
+			     << " tree_sitter=" << (treeSitterActive ? "yes" : "no") << " tree_language=" << treeSitterLanguageName(treeSitterLanguage) << " planned=no reason="
+			     << (textRows <= 0 ? "no-visible-text-rows" : "plain-text-without-tree-sitter");
+			logSyntaxWarmupTrace(line);
+		}
 		resetSyntaxWarmupState(true);
 		return;
 	}
 
-	const std::size_t docId = mBufferModel.documentId();
-	const std::size_t version = mBufferModel.version();
-	const MRSyntaxLanguage language = mBufferModel.language();
 	const std::uint8_t treeSitterLanguageId = static_cast<std::uint8_t>(treeSitterLanguage);
 	const std::size_t topLine = static_cast<std::size_t>(std::max(delta.y - 4, 0));
 	const int rowBudget = std::max(textRows + 8, 8);
 	std::vector<std::size_t> warmupLineStarts = syntaxWarmupLineStarts(topLine, rowBudget);
-	if (warmupLineStarts.empty()) return;
+	if (warmupLineStarts.empty()) {
+		if (traceWarmup) {
+			std::ostringstream line;
+			line << "WARMUP-SYNTAX schedule doc=" << docId << " ver=" << version << " file=\"" << fileNameForLog << "\" syntax=" << tmrSyntaxLanguageName(language)
+			     << " tree_sitter=" << (treeSitterActive ? "yes" : "no") << " tree_language=" << treeSitterLanguageName(treeSitterLanguage)
+			     << " planned=no reason=no-warmup-lines top=" << topLine << " row_budget=" << rowBudget;
+			logSyntaxWarmupTrace(line);
+		}
+		return;
+	}
 
 	const std::size_t bottomLine = topLine + warmupLineStarts.size();
 	if (hasSyntaxTokensForLineStarts(warmupLineStarts)) {
@@ -2675,16 +2764,34 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
 			notifyWindowTaskStateChanged();
 		}
+		if (traceWarmup) {
+			std::ostringstream line;
+			line << "WARMUP-SYNTAX schedule doc=" << docId << " ver=" << version << " file=\"" << fileNameForLog << "\" syntax=" << tmrSyntaxLanguageName(language)
+			     << " tree_sitter=" << (treeSitterActive ? "yes" : "no") << " tree_language=" << treeSitterLanguageName(treeSitterLanguage)
+			     << " line_starts=" << warmupLineStarts.size() << " top=" << topLine << " bottom=" << bottomLine << " planned=no reason=cache-hit cancelled_old="
+			     << (hadTask ? "yes" : "no");
+			logSyntaxWarmupTrace(line);
+		}
 		return;
 	}
 
 	if (mSyntaxWarmupTaskId != 0 && mSyntaxWarmupDocumentId == docId && mSyntaxWarmupVersion == version && mSyntaxWarmupLanguage == language && mSyntaxWarmupTreeSitterLanguage == treeSitterLanguage &&
-		topLine >= mSyntaxWarmupTopLine && bottomLine <= mSyntaxWarmupBottomLine)
+		topLine >= mSyntaxWarmupTopLine && bottomLine <= mSyntaxWarmupBottomLine) {
+		if (traceWarmup) {
+			std::ostringstream line;
+			line << "WARMUP-SYNTAX schedule doc=" << docId << " ver=" << version << " file=\"" << fileNameForLog << "\" syntax=" << tmrSyntaxLanguageName(language)
+			     << " tree_sitter=" << (treeSitterActive ? "yes" : "no") << " tree_language=" << treeSitterLanguageName(treeSitterLanguage)
+			     << " line_starts=" << warmupLineStarts.size() << " top=" << topLine << " bottom=" << bottomLine << " planned=no reason=covered-by-pending task="
+			     << mSyntaxWarmupTaskId << " pending_top=" << mSyntaxWarmupTopLine << " pending_bottom=" << mSyntaxWarmupBottomLine;
+			logSyntaxWarmupTrace(line);
+		}
 		return;
+	}
 
 	MRTextBufferModel::ReadSnapshot snapshot = mBufferModel.readSnapshot();
 	std::uint64_t previousTaskId = mSyntaxWarmupTaskId;
-	if (previousTaskId != 0) static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
+	const bool cancelledPreviousTask = previousTaskId != 0;
+	if (cancelledPreviousTask) static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
 	const std::string coalescingKey = "syntax:" + std::to_string(static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(this))) + ":" + std::to_string(docId) + ":" + std::to_string(version) + ":" +
 	                                  std::to_string(static_cast<unsigned int>(language)) + ":" + (treeSitterActive ? "1" : "0") + ":" + std::to_string(static_cast<unsigned int>(treeSitterLanguageId)) + ":" +
 	                                  std::to_string(topLine) + ":" + std::to_string(bottomLine);
@@ -2728,6 +2835,14 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 		result.payload = std::make_shared<mr::coprocessor::SyntaxWarmupPayload>(language, treeSitterLanguage != MRTreeSitterDocument::Language::None, treeSitterLanguageId, std::move(warmedLines));
 		return result;
 	});
+	if (traceWarmup) {
+		std::ostringstream line;
+		line << "WARMUP-SYNTAX schedule doc=" << docId << " ver=" << version << " file=\"" << fileNameForLog << "\" syntax=" << tmrSyntaxLanguageName(language)
+		     << " tree_sitter=" << (treeSitterActive ? "yes" : "no") << " tree_language=" << treeSitterLanguageName(treeSitterLanguage) << " line_starts=" << warmupLineStarts.size()
+		     << " top=" << topLine << " bottom=" << bottomLine << " path=" << (treeSitterActive ? "tree-sitter-derivation" : "plain-fallback") << " cancelled_old="
+		     << (cancelledPreviousTask ? "yes" : "no") << " new_task=" << mSyntaxWarmupTaskId;
+		logSyntaxWarmupTrace(line);
+	}
 	if (mSyntaxWarmupTaskId != previousTaskId) notifyWindowTaskStateChanged();
 }
 

@@ -4,14 +4,29 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstdlib>
 #include <future>
 #include <map>
 #include <memory>
+#include <sstream>
 #include <thread>
 #include <utility>
 
 namespace {
+
+bool traceWarmupParallelEnabled() noexcept {
+	static const bool enabled = []() noexcept {
+		const char *value = std::getenv("MR_TRACE_WARMUP_PARALLEL");
+		return value != nullptr && value[0] == '1' && value[1] == '\0';
+	}();
+	return enabled;
+}
+
+void logMiniMapTrace(const std::ostringstream &line) {
+	if (!traceWarmupParallelEnabled()) return;
+	mrLogMessage(line.str().c_str());
+}
 
 int tabDisplayWidth(const MREditSetupSettings &settings, int visualColumn) noexcept {
 	const int currentColumn = std::max(1, visualColumn + 1);
@@ -120,11 +135,17 @@ struct MiniMapLineSample {
 struct MiniMapWarmupBuildResult {
 	mr::coprocessor::TaskStatus status = mr::coprocessor::TaskStatus::Cancelled;
 	mr::coprocessor::MiniMapWarmupPayload payload;
+	unsigned workerCount = 1;
+	bool parallelRequested = false;
+	bool parallelExecuted = false;
+	bool fallbackToSerial = false;
+	std::uint64_t runMicros = 0;
 };
 
 MiniMapWarmupBuildResult buildMiniMapWarmupPayload(const mr::editor::ReadSnapshot &snapshot, int rowCount, int bodyWidth, int viewportWidth, bool useBraille, const MREditSetupSettings &settings,
                                                    std::size_t totalLines, std::size_t windowStartLine, std::size_t windowLineCount, const mr::coprocessor::TaskInfo &info, std::stop_token stopToken,
                                                    bool allowParallel) {
+	const auto startedAt = std::chrono::steady_clock::now();
 	MiniMapWarmupBuildResult build;
 	std::vector<unsigned char> rowPatterns;
 	std::vector<std::size_t> rowLineStarts;
@@ -208,6 +229,9 @@ MiniMapWarmupBuildResult buildMiniMapWarmupPayload(const mr::editor::ReadSnapsho
 	};
 
 	const unsigned workerCount = allowParallel ? miniMapWorkerCountFor(totalMiniMapCells, rowCount) : 1u;
+	build.workerCount = workerCount;
+	build.parallelRequested = allowParallel;
+	build.parallelExecuted = workerCount > 1;
 	if (workerCount == 1) {
 		if (!renderRows(0, rowCount)) return build;
 	} else {
@@ -227,6 +251,7 @@ MiniMapWarmupBuildResult buildMiniMapWarmupPayload(const mr::editor::ReadSnapsho
 	build.status = mr::coprocessor::TaskStatus::Completed;
 	build.payload = mr::coprocessor::MiniMapWarmupPayload(useBraille, rowCount, bodyWidth, normalizedTotalLines, windowStartLine, normalizedWindowLineCount, viewportWidth, std::move(rowPatterns),
 	                                                      std::move(rowLineStarts), std::move(rowLineEnds));
+	build.runMicros = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count());
 	return build;
 }
 
@@ -418,13 +443,22 @@ MRMiniMapRenderer::ApplyWarmupResult MRMiniMapRenderer::applyWarmup(const mr::co
 
 MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewport &viewport, int rowCount, bool useBraille, std::size_t totalLinesHint, std::size_t topLine, std::size_t documentId, std::size_t version, const mr::editor::ReadSnapshot &snapshot, const MREditSetupSettings &settings) {
 	Signals signals;
+	const bool traceWarmup = traceWarmupParallelEnabled();
 
 	if (mImpl == nullptr) return signals;
 	if (viewport.bodyWidth <= 0 || rowCount <= 0) return invalidate(true, documentId);
 	std::size_t totalLines = std::max<std::size_t>(1, totalLinesHint);
 	if (snapshot.exactLineCountKnown()) totalLines = std::max<std::size_t>(1, snapshot.lineCount());
 	const Impl::SamplingWindow samplingWindow = Impl::samplingWindowFor(totalLines, topLine, rowCount, useBraille);
-	if (mImpl->cacheReadyForViewport(viewport, rowCount, useBraille, samplingWindow, documentId, version)) return signals;
+	if (mImpl->cacheReadyForViewport(viewport, rowCount, useBraille, samplingWindow, documentId, version)) {
+		if (traceWarmup) {
+			std::ostringstream line;
+			line << "WARMUP-MINIMAP schedule doc=" << documentId << " ver=" << version << " total_lines=" << totalLines << " window_start=" << samplingWindow.startLine
+			     << " window_lines=" << samplingWindow.lineCount << " body_width=" << viewport.bodyWidth << " row_count=" << rowCount << " planned=no reason=cache-hit";
+			logMiniMapTrace(line);
+		}
+		return signals;
+	}
 	const int bodyWidth = viewport.bodyWidth;
 	const int viewportWidth = std::max(1, viewport.width);
 	Impl::WarmupRenderKey requestedWarmupKey;
@@ -445,8 +479,15 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 		if (mImpl->warmupKey.documentId == requestedWarmupKey.documentId && mImpl->warmupKey.version == requestedWarmupKey.version && mImpl->warmupKey.rowCount == requestedWarmupKey.rowCount && mImpl->warmupKey.bodyWidth == requestedWarmupKey.bodyWidth &&
 		    mImpl->warmupKey.viewportWidth == requestedWarmupKey.viewportWidth && mImpl->warmupKey.braille == requestedWarmupKey.braille && mImpl->warmupKey.windowStartLine == requestedWarmupKey.windowStartLine &&
 		    mImpl->warmupKey.windowLineCount == requestedWarmupKey.windowLineCount && mImpl->warmupKey.totalLines == requestedWarmupKey.totalLines && mImpl->warmupKey.formatLine == requestedWarmupKey.formatLine &&
-		    mImpl->warmupKey.tabSize == requestedWarmupKey.tabSize && mImpl->warmupKey.leftMargin == requestedWarmupKey.leftMargin && mImpl->warmupKey.rightMargin == requestedWarmupKey.rightMargin)
+		    mImpl->warmupKey.tabSize == requestedWarmupKey.tabSize && mImpl->warmupKey.leftMargin == requestedWarmupKey.leftMargin && mImpl->warmupKey.rightMargin == requestedWarmupKey.rightMargin) {
+			if (traceWarmup) {
+				std::ostringstream line;
+				line << "WARMUP-MINIMAP schedule doc=" << documentId << " ver=" << version << " total_lines=" << totalLines << " window_start=" << samplingWindow.startLine
+				     << " window_lines=" << samplingWindow.lineCount << " body_width=" << bodyWidth << " row_count=" << rowCount << " planned=no reason=already-pending task=" << mImpl->warmupTaskId;
+				logMiniMapTrace(line);
+			}
 			return signals;
+		}
 		static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mImpl->warmupTaskId));
 		signals.merge(mImpl->clearWarmupTask(mImpl->warmupTaskId));
 	}
@@ -461,9 +502,24 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 	mImpl->warmupTaskId = mr::coprocessor::globalCoprocessor().submitCoalesced(mr::coprocessor::Lane::MiniMap, mr::coprocessor::TaskKind::MiniMapWarmup, documentId, version, coalescingKey, "rendering mini map",
 	                                                                          [snapshot, rowCount, bodyWidth, viewportWidth, useBraille, settings, totalLines, samplingWindow](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
 		mr::coprocessor::Result result;
+		const bool traceWarmup = traceWarmupParallelEnabled();
+		const auto startedAt = std::chrono::steady_clock::now();
 		result.task = info;
 		const bool validateParallel = parallelMiniMapValidationEnabled();
-		const bool canRunParallel = miniMapWorkerCountFor(static_cast<std::size_t>(std::max(1, rowCount)) * static_cast<std::size_t>(std::max(1, bodyWidth)), rowCount) > 1;
+		const unsigned workerCount = miniMapWorkerCountFor(static_cast<std::size_t>(std::max(1, rowCount)) * static_cast<std::size_t>(std::max(1, bodyWidth)), rowCount);
+		const bool canRunParallel = workerCount > 1;
+
+		if (traceWarmup) {
+			std::ostringstream line;
+			line << "WARMUP-MINIMAP begin doc=" << info.documentId << " ver=" << info.baseVersion << " total_lines=" << totalLines << " window_start=" << samplingWindow.startLine
+			     << " window_lines=" << samplingWindow.lineCount << " body_width=" << bodyWidth << " row_count=" << rowCount << " viewport_width=" << viewportWidth
+			     << " validation=" << (validateParallel ? "yes" : "no") << " mode=" << (canRunParallel ? "parallel" : "serial");
+			if (canRunParallel)
+				line << " partitions=" << workerCount << " worker_count=" << workerCount;
+			else
+				line << " reason=below-parallel-threshold";
+			logMiniMapTrace(line);
+		}
 
 		if (validateParallel && canRunParallel) {
 			MiniMapWarmupBuildResult serialBuild =
@@ -481,9 +537,23 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 			if (!miniMapWarmupPayloadsMatch(serialBuild.payload, parallelBuild.payload)) {
 				const char *field = miniMapWarmupMismatchField(serialBuild.payload, parallelBuild.payload);
 				mrLogMessage((std::string("MiniMap parallel validation mismatch on ") + field + "; using serial result.").c_str());
+				if (traceWarmup) {
+					std::ostringstream line;
+					line << "WARMUP-MINIMAP end doc=" << info.documentId << " ver=" << info.baseVersion << " result=serial-fallback reason=validation-mismatch field=" << field
+					     << " serial_us=" << serialBuild.runMicros << " parallel_us=" << parallelBuild.runMicros << " total_us="
+					     << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
+					logMiniMapTrace(line);
+				}
 				result.status = mr::coprocessor::TaskStatus::Completed;
 				result.payload = std::make_shared<mr::coprocessor::MiniMapWarmupPayload>(std::move(serialBuild.payload));
 				return result;
+			}
+			if (traceWarmup) {
+				std::ostringstream line;
+				line << "WARMUP-MINIMAP end doc=" << info.documentId << " ver=" << info.baseVersion << " result=completed mode=parallel serial_us=" << serialBuild.runMicros
+				     << " parallel_us=" << parallelBuild.runMicros << " partitions=" << parallelBuild.workerCount << " worker_count=" << parallelBuild.workerCount << " total_us="
+				     << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
+				logMiniMapTrace(line);
 			}
 			result.status = mr::coprocessor::TaskStatus::Completed;
 			result.payload = std::make_shared<mr::coprocessor::MiniMapWarmupPayload>(std::move(parallelBuild.payload));
@@ -493,9 +563,25 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 		MiniMapWarmupBuildResult build =
 		    buildMiniMapWarmupPayload(snapshot, rowCount, bodyWidth, viewportWidth, useBraille, settings, totalLines, samplingWindow.startLine, samplingWindow.lineCount, info, stopToken, true);
 		result.status = build.status;
+		if (traceWarmup) {
+			std::ostringstream line;
+			line << "WARMUP-MINIMAP end doc=" << info.documentId << " ver=" << info.baseVersion << " result="
+			     << (build.status == mr::coprocessor::TaskStatus::Completed ? "completed" : "cancelled") << " mode=" << (build.parallelExecuted ? "parallel" : "serial")
+			     << " partitions=" << build.workerCount << " worker_count=" << build.workerCount << " fallback_to_serial=" << (build.fallbackToSerial ? "yes" : "no")
+			     << " total_us=" << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
+			if (!build.parallelExecuted) line << " reason=below-parallel-threshold";
+			logMiniMapTrace(line);
+		}
 		if (build.status == mr::coprocessor::TaskStatus::Completed) result.payload = std::make_shared<mr::coprocessor::MiniMapWarmupPayload>(std::move(build.payload));
 		return result;
 	});
+	if (traceWarmup) {
+		std::ostringstream line;
+		line << "WARMUP-MINIMAP schedule doc=" << documentId << " ver=" << version << " total_lines=" << totalLines << " window_start=" << samplingWindow.startLine
+		     << " window_lines=" << samplingWindow.lineCount << " body_width=" << bodyWidth << " row_count=" << rowCount << " planned=yes cancelled_old="
+		     << (previousTaskId != 0 ? "yes" : "no") << " new_task=" << mImpl->warmupTaskId;
+		logMiniMapTrace(line);
+	}
 	if (mImpl->warmupTaskId != previousTaskId) signals.notifyTaskStateChanged = true;
 	return signals;
 }
