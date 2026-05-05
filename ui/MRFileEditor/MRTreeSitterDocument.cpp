@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <new>
 #include <string>
+#include <thread>
 #include <utility>
 
 #include <tree_sitter/api.h>
@@ -399,6 +400,11 @@ struct MRDerivedSyntaxData {
 	}
 };
 
+struct ParallelDerivedSyntaxResultSlot {
+	MRDerivedSyntaxData data;
+	bool ready = false;
+};
+
 const char *readTreeSitterSnapshot(void *payload, uint32_t byteIndex, TSPoint, uint32_t *bytesRead) {
 	TreeSitterSnapshotInput &input = *static_cast<TreeSitterSnapshotInput *>(payload);
 	std::size_t pieceCount = input.snapshot.pieceCount();
@@ -620,6 +626,15 @@ MRDerivedSyntaxData deriveSyntaxChunkForPartitionFromCanonicalTree(MRTreeSitterD
 	return deriveSyntaxDataForLineSliceFromCanonicalTree(language, slice, treeForDerivation);
 }
 
+bool deriveSyntaxChunkForPartitionFromCopiedTree(MRTreeSitterDocument::Language language, const DerivedSyntaxLineSliceRequest &slice,
+												 const TSTree *canonicalTree, MRDerivedSyntaxData &derivedData) {
+	TreeSitterTreeOwner partitionTree = copyCanonicalTreeForPartition(canonicalTree);
+
+	if (partitionTree.get() == nullptr) return false;
+	derivedData = deriveSyntaxDataForLineSliceFromCanonicalTree(language, slice, partitionTree.get());
+	return true;
+}
+
 MRDerivedSyntaxData mergeDerivedSyntaxChunks(std::vector<MRDerivedSyntaxData> &&chunks) {
 	MRDerivedSyntaxData merged;
 
@@ -646,6 +661,58 @@ MRDerivedSyntaxData executeSyntaxDerivationPlanSerially(MRTreeSitterDocument::La
 														const std::vector<std::size_t> &lineStarts, const DerivedSyntaxDerivationPlan &plan,
 														const TSTree *canonicalTree) {
 	return deriveSyntaxDataForPartitionsFromCanonicalTree(language, snapshot, lineStarts, plan.partitions, canonicalTree);
+}
+
+MRDerivedSyntaxData executeSyntaxDerivationPlanParallel(MRTreeSitterDocument::Language language, const mr::editor::ReadSnapshot &snapshot,
+														const std::vector<std::size_t> &lineStarts, const DerivedSyntaxDerivationPlan &plan,
+														const TSTree *canonicalTree) {
+	const DerivedSyntaxLineSlices slices = plannedLineSlices(snapshot, lineStarts, plan);
+	const unsigned int hardwareConcurrency = std::thread::hardware_concurrency();
+
+	if (canonicalTree == nullptr) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+	if (slices.size() <= 1) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+	if (hardwareConcurrency == 0) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+	if (slices.size() > hardwareConcurrency) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+	if (slices.size() != plan.partitions.size()) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+
+	for (const DerivedSyntaxPartition &partition : plan.partitions)
+		if (!isValidDerivedSyntaxPartition(partition, lineStarts.size()))
+			return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+
+	std::vector<ParallelDerivedSyntaxResultSlot> resultSlots(slices.size());
+
+	try {
+		std::vector<std::jthread> workers;
+
+		workers.reserve(slices.size());
+		for (std::size_t sliceIndex = 0; sliceIndex < slices.size(); ++sliceIndex) {
+			workers.emplace_back([&, sliceIndex] {
+				MRDerivedSyntaxData chunk;
+
+				if (!deriveSyntaxChunkForPartitionFromCopiedTree(language, slices[sliceIndex], canonicalTree, chunk)) return;
+				resultSlots[sliceIndex].data = std::move(chunk);
+				resultSlots[sliceIndex].ready = true;
+			});
+		}
+	} catch (...) {
+		return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+	}
+
+	std::vector<MRDerivedSyntaxData> chunks;
+
+	chunks.reserve(resultSlots.size());
+	for (ParallelDerivedSyntaxResultSlot &slot : resultSlots) {
+		if (!slot.ready) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+		chunks.push_back(std::move(slot.data));
+	}
+	return mergeDerivedSyntaxChunks(std::move(chunks));
+}
+
+MRDerivedSyntaxData chooseSyntaxDerivationExecution(MRTreeSitterDocument::Language language, const mr::editor::ReadSnapshot &snapshot,
+													const std::vector<std::size_t> &lineStarts, const DerivedSyntaxDerivationPlan &plan,
+													const TSTree *canonicalTree) {
+	if (plan.partitions.size() <= 1) return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
+	return executeSyntaxDerivationPlanParallel(language, snapshot, lineStarts, plan, canonicalTree);
 }
 
 std::vector<MRSyntaxTokenMap> exportRenderTokenMaps(MRDerivedSyntaxData &&derivedData) {
@@ -858,7 +925,7 @@ std::vector<MRSyntaxTokenMap> MRTreeSitterDocument::buildTokenMapsForSnapshotLin
 	TreeSitterTreeOwner tree = parseTreeSitterSnapshotTree(parserLanguage, snapshot);
 	if (tree.get() == nullptr) return exportRenderTokenMaps(std::move(derivedData));
 
-	return exportRenderTokenMaps(executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, tree.get()));
+	return exportRenderTokenMaps(chooseSyntaxDerivationExecution(language, snapshot, lineStarts, plan, tree.get()));
 }
 
 MRTreeSitterDocument::Language MRTreeSitterDocument::activeLanguage() const noexcept {
