@@ -6,12 +6,18 @@
 
 namespace {
 
+constexpr std::size_t kLargeFileTreeSitterSyntaxWarmupBytes = static_cast<std::size_t>(8) * 1024 * 1024;
+
 bool traceWarmupCancelEnabled() noexcept {
 	static const bool enabled = []() noexcept {
 		const char *value = std::getenv("MR_TRACE_WARMUP_CANCEL");
 		return value != nullptr && value[0] == '1' && value[1] == '\0';
 	}();
 	return enabled;
+}
+
+bool shouldSkipFullTreeSitterSyntaxWarmup(std::size_t documentLength) noexcept {
+	return documentLength >= kLargeFileTreeSitterSyntaxWarmupBytes;
 }
 
 void logWarmupCancelTrace(const std::ostringstream &line) {
@@ -2682,6 +2688,7 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 	const int textRows = visibleTextRows();
 	const MRTreeSitterDocument::Language treeSitterLanguage = mTreeSitterDocument.activeLanguage();
 	const bool treeSitterActive = treeSitterLanguage != MRTreeSitterDocument::Language::None;
+	const std::size_t documentLength = mBufferModel.length();
 
 	if ((!treeSitterActive && mBufferModel.language() == MRSyntaxLanguage::PlainText) || textRows <= 0) {
 		resetSyntaxWarmupState(true);
@@ -2694,6 +2701,36 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 	const std::uint8_t treeSitterLanguageId = static_cast<std::uint8_t>(treeSitterLanguage);
 	const std::size_t topLine = static_cast<std::size_t>(std::max(delta.y - 4, 0));
 	const int rowBudget = std::max(textRows + 8, 8);
+
+	if (treeSitterActive && shouldSkipFullTreeSitterSyntaxWarmup(documentLength)) {
+		std::uint64_t cancelledTaskId = mSyntaxWarmupTaskId;
+		bool hadTask = cancelledTaskId != 0;
+
+		mSyntaxTokenCache.clear();
+		mSyntaxWarmupTaskId = 0;
+		mSyntaxWarmupDocumentId = 0;
+		mSyntaxWarmupVersion = 0;
+		mSyntaxWarmupTopLine = 0;
+		mSyntaxWarmupBottomLine = 0;
+		mSyntaxWarmupLanguage = MRSyntaxLanguage::PlainText;
+		mSyntaxWarmupTreeSitterLanguage = MRTreeSitterDocument::Language::None;
+		if (hadTask) {
+			if (traceWarmupCancelEnabled()) {
+				std::ostringstream line;
+				line << "WARMUP-CANCEL cancel kind=SyntaxWarmup task=" << cancelledTaskId << " reason=large-file-skip";
+				logWarmupCancelTrace(line);
+			}
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledTaskId));
+			notifyWindowTaskStateChanged();
+		}
+		if (shouldTraceLargeFileDiagnostics() && hadTask) {
+			std::ostringstream detail;
+			detail << "reason=full-tree-sitter-disabled bytes=" << documentLength << " threshold=" << kLargeFileTreeSitterSyntaxWarmupBytes;
+			traceLargeFileMessage("syntax-skip", detail.str());
+		}
+		return;
+	}
+
 	std::vector<std::size_t> warmupLineStarts = syntaxWarmupLineStarts(topLine, rowBudget);
 	if (warmupLineStarts.empty()) return;
 
