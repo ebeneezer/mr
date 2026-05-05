@@ -21,6 +21,84 @@ extern "C" const TSLanguage *tree_sitter_mrmac(void);
 
 namespace {
 
+struct TreeSitterParserOwner {
+	TSParser *value = nullptr;
+
+	TreeSitterParserOwner() = default;
+	explicit TreeSitterParserOwner(TSParser *parser) noexcept : value(parser) {
+	}
+
+	TreeSitterParserOwner(const TreeSitterParserOwner &) = delete;
+	TreeSitterParserOwner &operator=(const TreeSitterParserOwner &) = delete;
+
+	TreeSitterParserOwner(TreeSitterParserOwner &&other) noexcept : value(other.release()) {
+	}
+
+	TreeSitterParserOwner &operator=(TreeSitterParserOwner &&other) noexcept {
+		if (this != &other) reset(other.release());
+		return *this;
+	}
+
+	~TreeSitterParserOwner() noexcept {
+		reset();
+	}
+
+	TSParser *get() const noexcept {
+		return value;
+	}
+
+	TSParser *release() noexcept {
+		TSParser *released = value;
+
+		value = nullptr;
+		return released;
+	}
+
+	void reset(TSParser *parser = nullptr) noexcept {
+		if (value != nullptr) ts_parser_delete(value);
+		value = parser;
+	}
+};
+
+struct TreeSitterTreeOwner {
+	TSTree *value = nullptr;
+
+	TreeSitterTreeOwner() = default;
+	explicit TreeSitterTreeOwner(TSTree *tree) noexcept : value(tree) {
+	}
+
+	TreeSitterTreeOwner(const TreeSitterTreeOwner &) = delete;
+	TreeSitterTreeOwner &operator=(const TreeSitterTreeOwner &) = delete;
+
+	TreeSitterTreeOwner(TreeSitterTreeOwner &&other) noexcept : value(other.release()) {
+	}
+
+	TreeSitterTreeOwner &operator=(TreeSitterTreeOwner &&other) noexcept {
+		if (this != &other) reset(other.release());
+		return *this;
+	}
+
+	~TreeSitterTreeOwner() noexcept {
+		reset();
+	}
+
+	TSTree *get() const noexcept {
+		return value;
+	}
+
+	TSTree *release() noexcept {
+		TSTree *released = value;
+
+		value = nullptr;
+		return released;
+	}
+
+	void reset(TSTree *tree = nullptr) noexcept {
+		if (value != nullptr) ts_tree_delete(value);
+		value = tree;
+	}
+};
+
 bool isIndentWhitespace(char ch) noexcept {
 	return ch == ' ' || ch == '\t';
 }
@@ -311,26 +389,22 @@ const char *readTreeSitterSnapshot(void *payload, uint32_t byteIndex, TSPoint, u
 	return input.piece.data + chunkOffset;
 }
 
-TSTree *parseTreeSitterSnapshotTree(const TSLanguage *parserLanguage, const mr::editor::ReadSnapshot &snapshot) noexcept {
-	TSParser *parser = ts_parser_new();
+TreeSitterTreeOwner parseTreeSitterSnapshotTree(const TSLanguage *parserLanguage, const mr::editor::ReadSnapshot &snapshot) noexcept {
+	TreeSitterParserOwner parser(ts_parser_new());
 
-	if (parser == nullptr) return nullptr;
-	if (!ts_parser_set_language(parser, parserLanguage)) {
-		ts_parser_delete(parser);
-		return nullptr;
-	}
+	if (parser.get() == nullptr) return TreeSitterTreeOwner();
+	if (!ts_parser_set_language(parser.get(), parserLanguage)) return TreeSitterTreeOwner();
 
 	TreeSitterSnapshotInput input;
 	TSInput source;
-	TSTree *tree = nullptr;
+	TreeSitterTreeOwner tree;
 
 	input.snapshot = snapshot;
 	source.payload = &input;
 	source.read = readTreeSitterSnapshot;
 	source.encoding = TSInputEncodingUTF8;
 	source.decode = nullptr;
-	tree = ts_parser_parse(parser, nullptr, source);
-	ts_parser_delete(parser);
+	tree.reset(ts_parser_parse(parser.get(), nullptr, source));
 	return tree;
 }
 
@@ -395,8 +469,8 @@ struct MRTreeSitterDocument::Impl {
 
 	Language language = Language::None;
 	PendingEdit pendingEdit;
-	TSParser *parser = nullptr;
-	TSTree *tree = nullptr;
+	TreeSitterParserOwner parser;
+	TreeSitterTreeOwner tree;
 	std::size_t documentId = 0;
 	std::size_t version = 0;
 
@@ -410,19 +484,13 @@ struct MRTreeSitterDocument::Impl {
 	}
 
 	void clearTree() noexcept {
-		if (tree != nullptr) {
-			ts_tree_delete(tree);
-			tree = nullptr;
-		}
+		tree.reset();
 		documentId = 0;
 		version = 0;
 	}
 
 	void releaseParser() noexcept {
-		if (parser != nullptr) {
-			ts_parser_delete(parser);
-			parser = nullptr;
-		}
+		parser.reset();
 	}
 
 	const TSLanguage *parserLanguage() const noexcept {
@@ -489,7 +557,7 @@ bool MRTreeSitterDocument::syncToDocument(const mr::editor::ReadSnapshot &snapsh
 		mImpl->releaseParser();
 		return false;
 	}
-	if (mImpl->tree != nullptr && mImpl->documentId == documentId && mImpl->version == version && !mImpl->pendingEdit.valid) return true;
+	if (mImpl->tree.get() != nullptr && mImpl->documentId == documentId && mImpl->version == version && !mImpl->pendingEdit.valid) return true;
 	const TSLanguage *nextLanguage = mImpl->parserLanguage();
 
 	if (nextLanguage == nullptr) {
@@ -497,21 +565,20 @@ bool MRTreeSitterDocument::syncToDocument(const mr::editor::ReadSnapshot &snapsh
 		mImpl->clearTree();
 		return false;
 	}
-	if (mImpl->parser == nullptr) mImpl->parser = ts_parser_new();
-	if (mImpl->parser == nullptr) {
+	if (mImpl->parser.get() == nullptr) mImpl->parser.reset(ts_parser_new());
+	if (mImpl->parser.get() == nullptr) {
 		mImpl->pendingEdit = Impl::PendingEdit();
 		mImpl->clearTree();
 		return false;
 	}
-	if (ts_parser_language(mImpl->parser) != nextLanguage && !ts_parser_set_language(mImpl->parser, nextLanguage)) {
+	if (ts_parser_language(mImpl->parser.get()) != nextLanguage && !ts_parser_set_language(mImpl->parser.get(), nextLanguage)) {
 		mImpl->pendingEdit = Impl::PendingEdit();
 		mImpl->clearTree();
 		mImpl->releaseParser();
 		return false;
 	}
-	const bool reuseTree = mImpl->tree != nullptr && mImpl->documentId == documentId && mImpl->pendingEdit.valid;
-	TSTree *previousTree = mImpl->tree;
-	TSTree *parsedTree = nullptr;
+	const bool reuseTree = mImpl->tree.get() != nullptr && mImpl->documentId == documentId && mImpl->pendingEdit.valid;
+	TSTree *previousTree = reuseTree ? mImpl->tree.get() : nullptr;
 
 	if (reuseTree) {
 		TSInputEdit edit;
@@ -527,49 +594,49 @@ bool MRTreeSitterDocument::syncToDocument(const mr::editor::ReadSnapshot &snapsh
 	{
 		TreeSitterSnapshotInput input;
 		TSInput source;
+		TreeSitterTreeOwner parsedTree;
 
 		input.snapshot = snapshot;
 		source.payload = &input;
 		source.read = readTreeSitterSnapshot;
 		source.encoding = TSInputEncodingUTF8;
 		source.decode = nullptr;
-		parsedTree = ts_parser_parse(mImpl->parser, reuseTree ? previousTree : nullptr, source);
+		parsedTree.reset(ts_parser_parse(mImpl->parser.get(), previousTree, source));
+		mImpl->pendingEdit = Impl::PendingEdit();
+		if (parsedTree.get() == nullptr) {
+			mImpl->clearTree();
+			return false;
+		}
+		mImpl->tree.reset(parsedTree.release());
 	}
-	mImpl->pendingEdit = Impl::PendingEdit();
-	if (parsedTree == nullptr) {
-		mImpl->clearTree();
-		return false;
-	}
-	if (previousTree != nullptr) ts_tree_delete(previousTree);
-	mImpl->tree = parsedTree;
 	mImpl->documentId = documentId;
 	mImpl->version = version;
 	return true;
 }
 
 bool MRTreeSitterDocument::shouldIncreaseIndentOnNewLine(const mr::editor::ReadSnapshot &snapshot, std::size_t cursorOffset) const noexcept {
-	if (mImpl == nullptr || mImpl->tree == nullptr) return false;
-	if (mImpl->language == Language::MRMAC) return shouldIncreaseMrmacIndent(snapshot, mImpl->tree, cursorOffset);
-	if (mImpl->language == Language::Python) return shouldIncreasePythonIndent(snapshot, mImpl->tree, cursorOffset);
+	if (mImpl == nullptr || mImpl->tree.get() == nullptr) return false;
+	if (mImpl->language == Language::MRMAC) return shouldIncreaseMrmacIndent(snapshot, mImpl->tree.get(), cursorOffset);
+	if (mImpl->language == Language::Python) return shouldIncreasePythonIndent(snapshot, mImpl->tree.get(), cursorOffset);
 	const std::size_t previousOffset = previousNonWhitespaceOnLine(snapshot, cursorOffset);
 	if (previousOffset >= snapshot.length()) return false;
 	const char previousChar = snapshot.charAt(previousOffset);
 	if (previousChar != '{' && previousChar != '(' && previousChar != '[') return false;
-	return !isCommentOrLiteralAtOffset(mImpl->tree, previousOffset);
+	return !isCommentOrLiteralAtOffset(mImpl->tree.get(), previousOffset);
 }
 
 bool MRTreeSitterDocument::shouldDedentCurrentLine(const mr::editor::ReadSnapshot &snapshot, std::size_t cursorOffset) const noexcept {
-	if (mImpl == nullptr || mImpl->tree == nullptr) return false;
+	if (mImpl == nullptr || mImpl->tree.get() == nullptr) return false;
 	switch (mImpl->language) {
 		case Language::MRMAC:
-			return shouldDedentMrmacLine(snapshot, mImpl->tree, cursorOffset);
+			return shouldDedentMrmacLine(snapshot, mImpl->tree.get(), cursorOffset);
 		case Language::Python:
-			return shouldDedentPythonLine(snapshot, mImpl->tree, cursorOffset);
+			return shouldDedentPythonLine(snapshot, mImpl->tree.get(), cursorOffset);
 		case Language::C:
 		case Language::Cpp:
 		case Language::JavaScript:
 		case Language::Json:
-			return shouldDedentBracketLine(snapshot, mImpl->tree, cursorOffset);
+			return shouldDedentBracketLine(snapshot, mImpl->tree.get(), cursorOffset);
 		case Language::None:
 			break;
 	}
@@ -585,12 +652,10 @@ std::vector<MRSyntaxTokenMap> MRTreeSitterDocument::buildTokenMapsForSnapshotLin
 	if (lineStarts.empty()) return tokenMaps;
 	if (parserLanguage == nullptr) return tokenMaps;
 
-	TSTree *tree = parseTreeSitterSnapshotTree(parserLanguage, snapshot);
-	if (tree == nullptr) return tokenMaps;
+	TreeSitterTreeOwner tree = parseTreeSitterSnapshotTree(parserLanguage, snapshot);
+	if (tree.get() == nullptr) return tokenMaps;
 
-	buildTokenMapsFromTreeSitterTree(language, snapshot, lineStarts, tree, tokenMaps);
-
-	ts_tree_delete(tree);
+	buildTokenMapsFromTreeSitterTree(language, snapshot, lineStarts, tree.get(), tokenMaps);
 	return tokenMaps;
 }
 
@@ -599,5 +664,5 @@ MRTreeSitterDocument::Language MRTreeSitterDocument::activeLanguage() const noex
 }
 
 bool MRTreeSitterDocument::hasTree() const noexcept {
-	return mImpl != nullptr && mImpl->tree != nullptr;
+	return mImpl != nullptr && mImpl->tree.get() != nullptr;
 }
