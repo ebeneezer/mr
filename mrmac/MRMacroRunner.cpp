@@ -262,6 +262,7 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 
 	if (mrvmCanRunStagedInBackground(profile)) {
 		MRMacroStagedExecutionInput stagedInput;
+		MacroCommitConflictSnapshot conflictSnapshot;
 		MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 
 		if (win != nullptr && editor != nullptr) {
@@ -308,8 +309,38 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 					stagedInput.screenCursorY = cursorY;
 				}
 			}
+			conflictSnapshot.cursorOffset = stagedInput.cursorOffset;
+			conflictSnapshot.selectionStart = stagedInput.selectionStart;
+			conflictSnapshot.selectionEnd = stagedInput.selectionEnd;
+			conflictSnapshot.blockMode = stagedInput.blockMode;
+			conflictSnapshot.blockMarkingOn = stagedInput.blockMarkingOn;
+			conflictSnapshot.blockAnchor = stagedInput.blockAnchor;
+			conflictSnapshot.blockEnd = stagedInput.blockEnd;
+			conflictSnapshot.insertMode = stagedInput.insertMode;
+			conflictSnapshot.indentLevel = stagedInput.indentLevel;
+			conflictSnapshot.fileName = stagedInput.fileName;
+			conflictSnapshot.fileChanged = stagedInput.fileChanged;
+			conflictSnapshot.globalOrder = stagedInput.globalOrder;
+			conflictSnapshot.globalInts = stagedInput.globalInts;
+			conflictSnapshot.globalStrings = stagedInput.globalStrings;
+			conflictSnapshot.lastSearchValid = stagedInput.lastSearchValid;
+			conflictSnapshot.lastSearchStart = stagedInput.lastSearchStart;
+			conflictSnapshot.lastSearchEnd = stagedInput.lastSearchEnd;
+			conflictSnapshot.lastSearchCursor = stagedInput.lastSearchCursor;
+			conflictSnapshot.ignoreCase = stagedInput.ignoreCase;
+			conflictSnapshot.tabExpand = stagedInput.tabExpand;
+			conflictSnapshot.markStack = stagedInput.markStack;
+			conflictSnapshot.bufferId = stagedInput.bufferId;
+			conflictSnapshot.linkStatus = stagedInput.linkStatus;
+			conflictSnapshot.windowCount = stagedInput.windowCount;
+			conflictSnapshot.windowGeometryValid = stagedInput.windowGeometryValid;
+			conflictSnapshot.windowX1 = stagedInput.windowX1;
+			conflictSnapshot.windowY1 = stagedInput.windowY1;
+			conflictSnapshot.windowX2 = stagedInput.windowX2;
+			conflictSnapshot.windowY2 = stagedInput.windowY2;
 
-			taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Macro, mr::coprocessor::TaskKind::MacroJob, static_cast<std::size_t>(win->bufferId()), stagedInput.baseVersion, std::string("macro: ") + label, [label, bytecodeCopy = std::move(bytecodeCopy), stagedInput = std::move(stagedInput)](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) mutable {
+			taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Macro, mr::coprocessor::TaskKind::MacroJob, static_cast<std::size_t>(win->bufferId()), stagedInput.baseVersion,
+			                                                     std::string("macro: ") + label, [label, bytecodeCopy = std::move(bytecodeCopy), stagedInput = std::move(stagedInput), conflictSnapshot = std::move(conflictSnapshot)](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) mutable {
 				mr::coprocessor::Result result;
 				MRMacroStagedJobResult runResult;
 
@@ -324,8 +355,9 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 					result.status = mr::coprocessor::TaskStatus::Cancelled;
 					return result;
 				}
+				runResult.conflictSnapshot = conflictSnapshot;
 				result.status = mr::coprocessor::TaskStatus::Completed;
-				result.payload = std::make_shared<mr::coprocessor::MacroJobStagedPayload>(label, std::move(runResult.logLines), runResult.hadError, std::move(runResult.transaction), runResult.cursorOffset, runResult.selectionStart, runResult.selectionEnd, runResult.blockMode, runResult.blockMarkingOn, runResult.blockAnchor, runResult.blockEnd, std::move(runResult.globalOrder), std::move(runResult.globalInts), std::move(runResult.globalStrings), std::move(runResult.deferredUiCommands), runResult.lastSearchValid, runResult.lastSearchStart, runResult.lastSearchEnd, runResult.lastSearchCursor, runResult.ignoreCase, runResult.tabExpand, std::move(runResult.markStack), runResult.insertMode, runResult.indentLevel, std::move(runResult.fileName), runResult.fileChanged);
+				result.payload = std::make_shared<mr::coprocessor::MacroJobStagedPayload>(label, std::move(runResult.logLines), runResult.hadError, std::move(runResult.conflictSnapshot), std::move(runResult.transaction), runResult.cursorOffset, runResult.selectionStart, runResult.selectionEnd, runResult.blockMode, runResult.blockMarkingOn, runResult.blockAnchor, runResult.blockEnd, std::move(runResult.globalOrder), std::move(runResult.globalInts), std::move(runResult.globalStrings), std::move(runResult.deferredUiCommands), runResult.lastSearchValid, runResult.lastSearchStart, runResult.lastSearchEnd, runResult.lastSearchCursor, runResult.ignoreCase, runResult.tabExpand, std::move(runResult.markStack), runResult.insertMode, runResult.indentLevel, std::move(runResult.fileName), runResult.fileChanged);
 				return result;
 			});
 			if (taskId == 0) {

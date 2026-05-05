@@ -175,6 +175,93 @@ bool shouldDedentBracketLine(const mr::editor::ReadSnapshot &snapshot, const TST
 	return lineText.starts_with("}") || lineText.starts_with("]") || lineText.starts_with(")");
 }
 
+MRSyntaxToken syntaxTokenForTreeSitterNode(MRTreeSitterDocument::Language language, std::string_view type, std::string_view parentType) noexcept {
+	if (parentType == "pair" && (type == "string" || type == "property_identifier" || type == "shorthand_property_identifier")) return MRSyntaxToken::Key;
+	if (type.find("comment") != std::string_view::npos) return MRSyntaxToken::Comment;
+	if (type.find("preproc") != std::string_view::npos || type.find("directive") != std::string_view::npos || type == "hash_bang_line") return MRSyntaxToken::Directive;
+	if (type.find("string") != std::string_view::npos || type.find("char_literal") != std::string_view::npos || type == "escape_sequence") return MRSyntaxToken::String;
+	if (type.find("number") != std::string_view::npos || type.find("integer") != std::string_view::npos || type.find("float") != std::string_view::npos) return MRSyntaxToken::Number;
+
+	switch (language) {
+		case MRTreeSitterDocument::Language::C:
+			if (type == "true" || type == "false" || type == "null")
+				return MRSyntaxToken::Keyword;
+			else if (type == "primitive_type" || type == "type_identifier" || type == "sized_type_specifier")
+				return MRSyntaxToken::Type;
+			else if (type == "storage_class_specifier" || type == "type_qualifier")
+				return MRSyntaxToken::Keyword;
+			else if (type == "if" || type == "else" || type == "for" || type == "while" || type == "do" || type == "switch" || type == "case" || type == "default" ||
+					 type == "break" || type == "continue" || type == "return" || type == "goto" || type == "sizeof" || type == "typedef" || type == "struct" ||
+					 type == "union" || type == "enum" || type == "static" || type == "extern" || type == "inline" || type == "const" || type == "volatile")
+				return MRSyntaxToken::Keyword;
+			break;
+		case MRTreeSitterDocument::Language::Cpp:
+			if (type == "true" || type == "false" || type == "null" || type == "nullptr")
+				return MRSyntaxToken::Keyword;
+			else if (type == "primitive_type" || type == "type_identifier" || type == "sized_type_specifier" || type == "namespace_identifier" || type == "auto" ||
+					 type == "template_type" ||
+					 (type == "qualified_identifier" &&
+					  (parentType == "base_class_clause" || parentType == "class_specifier" || parentType == "struct_specifier" || parentType == "union_specifier" ||
+					   parentType == "type_requirement" || parentType == "compound_literal_expression")))
+				return MRSyntaxToken::Type;
+			else if (type == "storage_class_specifier" || type == "type_qualifier" || type == "this")
+				return MRSyntaxToken::Keyword;
+			else if (type == "if" || type == "else" || type == "for" || type == "while" || type == "do" || type == "switch" || type == "case" || type == "default" ||
+					 type == "break" || type == "continue" || type == "return" || type == "goto" || type == "try" || type == "catch" || type == "throw" ||
+					 type == "new" || type == "delete" || type == "void" || type == "typedef" || type == "struct" || type == "union" || type == "enum" ||
+					 type == "namespace" || type == "template" || type == "typename" || type == "using" || type == "public" || type == "private" ||
+					 type == "protected" || type == "virtual" || type == "override" || type == "constexpr" || type == "consteval" || type == "constinit" ||
+					 type == "explicit" || type == "final" || type == "inline" || type == "static" || type == "extern" || type == "volatile" || type == "mutable" ||
+					 type == "friend" || type == "operator" || type == "noexcept" || type == "requires" || type == "concept" || type == "sizeof" || type == "co_await" ||
+					 type == "co_return" || type == "co_yield")
+				return MRSyntaxToken::Keyword;
+			break;
+		case MRTreeSitterDocument::Language::JavaScript:
+			if (type == "true" || type == "false" || type == "null")
+				return MRSyntaxToken::Keyword;
+			else if (type == "undefined" || type == "null")
+				return MRSyntaxToken::Type;
+			else if (type == "this" || type == "super")
+				return MRSyntaxToken::Keyword;
+			else if (type == "if" || type == "else" || type == "for" || type == "while" || type == "do" || type == "switch" || type == "case" || type == "default" ||
+					 type == "break" || type == "continue" || type == "return" || type == "try" || type == "catch" || type == "throw" || type == "finally" ||
+					 type == "import" || type == "export" || type == "from" || type == "as" || type == "function" || type == "class" || type == "new" ||
+					 type == "delete" || type == "typeof" || type == "instanceof" || type == "yield" || type == "await" || type == "async" || type == "const" ||
+					 type == "let" || type == "var" || type == "extends" || type == "of" || type == "static" || type == "void" || type == "debugger" || type == "with" ||
+					 type == "get" || type == "set")
+				return MRSyntaxToken::Keyword;
+			break;
+		case MRTreeSitterDocument::Language::Python:
+			if (type == "true" || type == "false" || type == "none")
+				return MRSyntaxToken::Keyword;
+			else if (type == "identifier" && parentType == "type")
+				return MRSyntaxToken::Type;
+			else if (type == "if" || type == "elif" || type == "else" || type == "for" || type == "while" || type == "break" || type == "continue" || type == "return" ||
+					 type == "try" || type == "except" || type == "finally" || type == "raise" || type == "import" || type == "from" || type == "as" || type == "def" ||
+					 type == "class" || type == "lambda" || type == "yield" || type == "await" || type == "async" || type == "with" || type == "pass" || type == "assert" ||
+					 type == "match" || type == "case" || type == "global" || type == "nonlocal" || type == "del" || type == "and" || type == "or" || type == "not" ||
+					 type == "in" || type == "is" || type == "exec" || type == "print")
+				return MRSyntaxToken::Keyword;
+			break;
+		case MRTreeSitterDocument::Language::Json:
+			if (type == "true" || type == "false" || type == "null") return MRSyntaxToken::Keyword;
+			break;
+		case MRTreeSitterDocument::Language::MRMAC:
+			if (type == "directive" || type == "keyspec")
+				return MRSyntaxToken::Directive;
+			else if (type == "keyword")
+				return MRSyntaxToken::Keyword;
+			else if (type == "string_literal")
+				return MRSyntaxToken::String;
+			else if (type == "integer_literal")
+				return MRSyntaxToken::Number;
+			break;
+		case MRTreeSitterDocument::Language::None:
+			break;
+	}
+	return MRSyntaxToken::Text;
+}
+
 struct TreeSitterSnapshotInput {
 	mr::editor::ReadSnapshot snapshot;
 	std::size_t pieceIndex = 0;
@@ -222,6 +309,70 @@ const char *readTreeSitterSnapshot(void *payload, uint32_t byteIndex, TSPoint, u
 	const std::size_t available = input.piece.length - chunkOffset;
 	*bytesRead = static_cast<uint32_t>(std::min<std::size_t>(available, UINT32_MAX));
 	return input.piece.data + chunkOffset;
+}
+
+TSTree *parseTreeSitterSnapshotTree(const TSLanguage *parserLanguage, const mr::editor::ReadSnapshot &snapshot) noexcept {
+	TSParser *parser = ts_parser_new();
+
+	if (parser == nullptr) return nullptr;
+	if (!ts_parser_set_language(parser, parserLanguage)) {
+		ts_parser_delete(parser);
+		return nullptr;
+	}
+
+	TreeSitterSnapshotInput input;
+	TSInput source;
+	TSTree *tree = nullptr;
+
+	input.snapshot = snapshot;
+	source.payload = &input;
+	source.read = readTreeSitterSnapshot;
+	source.encoding = TSInputEncodingUTF8;
+	source.decode = nullptr;
+	tree = ts_parser_parse(parser, nullptr, source);
+	ts_parser_delete(parser);
+	return tree;
+}
+
+void buildTokenMapsFromTreeSitterTree(MRTreeSitterDocument::Language language, const mr::editor::ReadSnapshot &snapshot, const std::vector<std::size_t> &lineStarts,
+									  const TSTree *tree, std::vector<MRSyntaxTokenMap> &tokenMaps) {
+	const TSNode root = ts_tree_root_node(tree);
+
+	for (std::size_t lineIndex = 0; lineIndex < lineStarts.size(); ++lineIndex) {
+		const std::size_t safeLineStart = std::min(lineStarts[lineIndex], snapshot.length());
+		const std::size_t lineEnd = safeLineStart + tokenMaps[lineIndex].size();
+		std::vector<TSNode> stack;
+
+		if (tokenMaps[lineIndex].empty()) continue;
+		stack.push_back(root);
+		while (!stack.empty()) {
+			const TSNode node = stack.back();
+			stack.pop_back();
+
+			if (ts_node_is_null(node)) continue;
+			const std::size_t nodeStart = ts_node_start_byte(node);
+			const std::size_t nodeEnd = ts_node_end_byte(node);
+			if (nodeEnd <= safeLineStart || nodeStart >= lineEnd || nodeEnd <= nodeStart) continue;
+
+			const uint32_t childCount = ts_node_child_count(node);
+			for (uint32_t childIndex = childCount; childIndex > 0; --childIndex) stack.push_back(ts_node_child(node, childIndex - 1));
+
+			const char *typeName = ts_node_type(node);
+			if (typeName == nullptr || *typeName == '\0') continue;
+
+			const TSNode parent = ts_node_parent(node);
+			const char *parentTypeName = !ts_node_is_null(parent) ? ts_node_type(parent) : nullptr;
+			const std::string_view type(typeName);
+			const std::string_view parentType = parentTypeName != nullptr ? std::string_view(parentTypeName) : std::string_view();
+			const MRSyntaxToken token = syntaxTokenForTreeSitterNode(language, type, parentType);
+
+			if (token == MRSyntaxToken::Text) continue;
+
+			const std::size_t paintStart = std::max(nodeStart, safeLineStart) - safeLineStart;
+			const std::size_t paintEnd = std::min(nodeEnd, lineEnd) - safeLineStart;
+			for (std::size_t index = paintStart; index < paintEnd && index < tokenMaps[lineIndex].size(); ++index) tokenMaps[lineIndex][index] = token;
+		}
+	}
 }
 
 } // namespace
@@ -428,160 +579,16 @@ bool MRTreeSitterDocument::shouldDedentCurrentLine(const mr::editor::ReadSnapsho
 std::vector<MRSyntaxTokenMap> MRTreeSitterDocument::buildTokenMapsForSnapshotLines(Language language, const mr::editor::ReadSnapshot &snapshot, const std::vector<std::size_t> &lineStarts) {
 	std::vector<MRSyntaxTokenMap> tokenMaps;
 	const TSLanguage *parserLanguage = treeSitterParserLanguage(language);
-	TSParser *parser = nullptr;
-	TSTree *tree = nullptr;
 
 	tokenMaps.reserve(lineStarts.size());
 	for (std::size_t i = 0; i < lineStarts.size(); ++i) tokenMaps.push_back(MRSyntaxTokenMap(snapshot.lineText(lineStarts[i]).size(), MRSyntaxToken::Text));
 	if (lineStarts.empty()) return tokenMaps;
 	if (parserLanguage == nullptr) return tokenMaps;
 
-	parser = ts_parser_new();
-	if (parser == nullptr) return tokenMaps;
-	if (!ts_parser_set_language(parser, parserLanguage)) {
-		ts_parser_delete(parser);
-		return tokenMaps;
-	}
-	{
-		TreeSitterSnapshotInput input;
-		TSInput source;
-
-		input.snapshot = snapshot;
-		source.payload = &input;
-		source.read = readTreeSitterSnapshot;
-		source.encoding = TSInputEncodingUTF8;
-		source.decode = nullptr;
-		tree = ts_parser_parse(parser, nullptr, source);
-	}
-	ts_parser_delete(parser);
+	TSTree *tree = parseTreeSitterSnapshotTree(parserLanguage, snapshot);
 	if (tree == nullptr) return tokenMaps;
 
-	TSNode root = ts_tree_root_node(tree);
-	for (std::size_t lineIndex = 0; lineIndex < lineStarts.size(); ++lineIndex) {
-		const std::size_t safeLineStart = std::min(lineStarts[lineIndex], snapshot.length());
-		const std::size_t lineEnd = safeLineStart + tokenMaps[lineIndex].size();
-		std::vector<TSNode> stack;
-
-		if (tokenMaps[lineIndex].empty()) continue;
-		stack.push_back(root);
-		while (!stack.empty()) {
-			const TSNode node = stack.back();
-			stack.pop_back();
-
-			if (ts_node_is_null(node)) continue;
-			const std::size_t nodeStart = ts_node_start_byte(node);
-			const std::size_t nodeEnd = ts_node_end_byte(node);
-			if (nodeEnd <= safeLineStart || nodeStart >= lineEnd || nodeEnd <= nodeStart) continue;
-
-			const uint32_t childCount = ts_node_child_count(node);
-			for (uint32_t childIndex = childCount; childIndex > 0; --childIndex) stack.push_back(ts_node_child(node, childIndex - 1));
-
-			const char *typeName = ts_node_type(node);
-			if (typeName == nullptr || *typeName == '\0') continue;
-			const std::string_view type(typeName);
-			MRSyntaxToken token = MRSyntaxToken::Text;
-			TSNode parent = ts_node_parent(node);
-			const char *parentTypeName = !ts_node_is_null(parent) ? ts_node_type(parent) : nullptr;
-			const std::string_view parentType = parentTypeName != nullptr ? std::string_view(parentTypeName) : std::string_view();
-
-			if (parentType == "pair" && (type == "string" || type == "property_identifier" || type == "shorthand_property_identifier")) token = MRSyntaxToken::Key;
-			if (token == MRSyntaxToken::Text) {
-				if (type.find("comment") != std::string_view::npos) token = MRSyntaxToken::Comment;
-				else if (type.find("preproc") != std::string_view::npos || type.find("directive") != std::string_view::npos || type == "hash_bang_line")
-					token = MRSyntaxToken::Directive;
-				else if (type.find("string") != std::string_view::npos || type.find("char_literal") != std::string_view::npos || type == "escape_sequence")
-					token = MRSyntaxToken::String;
-				else if (type.find("number") != std::string_view::npos || type.find("integer") != std::string_view::npos || type.find("float") != std::string_view::npos)
-					token = MRSyntaxToken::Number;
-				else {
-					switch (language) {
-						case Language::C:
-							if (type == "true" || type == "false" || type == "null")
-								token = MRSyntaxToken::Keyword;
-							else if (type == "primitive_type" || type == "type_identifier" || type == "sized_type_specifier")
-								token = MRSyntaxToken::Type;
-							else if (type == "storage_class_specifier" || type == "type_qualifier")
-								token = MRSyntaxToken::Keyword;
-							else if (type == "if" || type == "else" || type == "for" || type == "while" || type == "do" || type == "switch" || type == "case" || type == "default" ||
-									 type == "break" || type == "continue" || type == "return" || type == "goto" || type == "sizeof" || type == "typedef" || type == "struct" ||
-									 type == "union" || type == "enum" || type == "static" || type == "extern" || type == "inline" || type == "const" || type == "volatile")
-								token = MRSyntaxToken::Keyword;
-							break;
-						case Language::Cpp:
-							if (type == "true" || type == "false" || type == "null" || type == "nullptr")
-								token = MRSyntaxToken::Keyword;
-							else if (type == "primitive_type" || type == "type_identifier" || type == "sized_type_specifier" || type == "namespace_identifier" ||
-									 type == "auto" || type == "template_type" ||
-									 (type == "qualified_identifier" &&
-									  (parentType == "base_class_clause" || parentType == "class_specifier" || parentType == "struct_specifier" || parentType == "union_specifier" ||
-									   parentType == "type_requirement" || parentType == "compound_literal_expression")))
-								token = MRSyntaxToken::Type;
-							else if (type == "storage_class_specifier" || type == "type_qualifier" || type == "this")
-								token = MRSyntaxToken::Keyword;
-							else if (type == "if" || type == "else" || type == "for" || type == "while" || type == "do" || type == "switch" || type == "case" || type == "default" ||
-									 type == "break" || type == "continue" || type == "return" || type == "goto" || type == "try" || type == "catch" || type == "throw" ||
-									 type == "new" || type == "delete" || type == "void" || type == "typedef" || type == "struct" || type == "union" || type == "enum" ||
-									 type == "namespace" || type == "template" || type == "typename" || type == "using" || type == "public" || type == "private" ||
-									 type == "protected" || type == "virtual" || type == "override" || type == "constexpr" || type == "consteval" || type == "constinit" ||
-									 type == "explicit" || type == "final" ||
-									 type == "inline" || type == "static" || type == "extern" || type == "volatile" || type == "mutable" || type == "friend" ||
-									 type == "operator" || type == "noexcept" || type == "requires" || type == "concept" || type == "sizeof" || type == "co_await" ||
-									 type == "co_return" || type == "co_yield")
-								token = MRSyntaxToken::Keyword;
-							break;
-						case Language::JavaScript:
-							if (type == "true" || type == "false" || type == "null")
-								token = MRSyntaxToken::Keyword;
-							else if (type == "undefined" || type == "null")
-								token = MRSyntaxToken::Type;
-							else if (type == "this" || type == "super")
-								token = MRSyntaxToken::Keyword;
-							else if (type == "if" || type == "else" || type == "for" || type == "while" || type == "do" || type == "switch" || type == "case" || type == "default" ||
-									 type == "break" || type == "continue" || type == "return" || type == "try" || type == "catch" || type == "throw" || type == "finally" ||
-									 type == "import" || type == "export" || type == "from" || type == "as" || type == "function" || type == "class" || type == "new" ||
-									 type == "delete" || type == "typeof" || type == "instanceof" || type == "yield" || type == "await" || type == "async" || type == "const" ||
-									 type == "let" || type == "var" || type == "extends" || type == "of" || type == "static" || type == "void" || type == "debugger" ||
-									 type == "with" || type == "get" || type == "set")
-								token = MRSyntaxToken::Keyword;
-							break;
-						case Language::Python:
-							if (type == "true" || type == "false" || type == "none")
-								token = MRSyntaxToken::Keyword;
-							else if (type == "identifier" && parentType == "type")
-								token = MRSyntaxToken::Type;
-							else if (type == "if" || type == "elif" || type == "else" || type == "for" || type == "while" || type == "break" || type == "continue" ||
-									 type == "return" || type == "try" || type == "except" || type == "finally" || type == "raise" || type == "import" || type == "from" ||
-									 type == "as" || type == "def" || type == "class" || type == "lambda" || type == "yield" || type == "await" || type == "async" ||
-									 type == "with" || type == "pass" || type == "assert" || type == "match" || type == "case" || type == "global" || type == "nonlocal" ||
-									 type == "del" || type == "and" || type == "or" || type == "not" || type == "in" || type == "is" || type == "exec" || type == "print")
-								token = MRSyntaxToken::Keyword;
-							break;
-						case Language::Json:
-							if (type == "true" || type == "false" || type == "null")
-								token = MRSyntaxToken::Keyword;
-							break;
-						case Language::MRMAC:
-							if (type == "directive" || type == "keyspec")
-								token = MRSyntaxToken::Directive;
-							else if (type == "keyword")
-								token = MRSyntaxToken::Keyword;
-							else if (type == "string_literal")
-								token = MRSyntaxToken::String;
-							else if (type == "integer_literal")
-								token = MRSyntaxToken::Number;
-							break;
-						case Language::None:
-							break;
-					}
-				}
-			}
-			if (token == MRSyntaxToken::Text) continue;
-
-			const std::size_t paintStart = std::max(nodeStart, safeLineStart) - safeLineStart;
-			const std::size_t paintEnd = std::min(nodeEnd, lineEnd) - safeLineStart;
-			for (std::size_t index = paintStart; index < paintEnd && index < tokenMaps[lineIndex].size(); ++index) tokenMaps[lineIndex][index] = token;
-		}
-	}
+	buildTokenMapsFromTreeSitterTree(language, snapshot, lineStarts, tree, tokenMaps);
 
 	ts_tree_delete(tree);
 	return tokenMaps;

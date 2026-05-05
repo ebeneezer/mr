@@ -184,6 +184,44 @@ struct MRMacroDeferredUiCommand {
 	}
 };
 
+struct MacroCommitConflictSnapshot {
+	std::size_t cursorOffset;
+	std::size_t selectionStart;
+	std::size_t selectionEnd;
+	int blockMode;
+	bool blockMarkingOn;
+	std::size_t blockAnchor;
+	std::size_t blockEnd;
+	bool insertMode;
+	int indentLevel;
+	std::string fileName;
+	bool fileChanged;
+	std::vector<std::string> globalOrder;
+	std::map<std::string, int> globalInts;
+	std::map<std::string, std::string> globalStrings;
+	bool lastSearchValid;
+	std::size_t lastSearchStart;
+	std::size_t lastSearchEnd;
+	std::size_t lastSearchCursor;
+	bool ignoreCase;
+	bool tabExpand;
+	std::vector<std::size_t> markStack;
+	int bufferId;
+	int linkStatus;
+	int windowCount;
+	bool windowGeometryValid;
+	int windowX1;
+	int windowY1;
+	int windowX2;
+	int windowY2;
+
+	MacroCommitConflictSnapshot() noexcept
+	    : cursorOffset(0), selectionStart(0), selectionEnd(0), blockMode(0), blockMarkingOn(false), blockAnchor(0), blockEnd(0), insertMode(true), indentLevel(1), fileName(), fileChanged(false), globalOrder(),
+	      globalInts(), globalStrings(), lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0), ignoreCase(false), tabExpand(true), markStack(), bufferId(0), linkStatus(0), windowCount(0),
+	      windowGeometryValid(false), windowX1(0), windowY1(0), windowX2(0), windowY2(0) {
+	}
+};
+
 struct MRMacroStagedExecutionInput {
 	mr::editor::TextDocument document;
 	std::size_t baseVersion;
@@ -237,6 +275,7 @@ struct MRMacroStagedJobResult {
 	std::vector<std::string> logLines;
 	bool hadError;
 	bool cancelled;
+	MacroCommitConflictSnapshot conflictSnapshot;
 	mr::editor::StagedEditTransaction transaction;
 	std::size_t cursorOffset;
 	std::size_t selectionStart;
@@ -263,7 +302,7 @@ struct MRMacroStagedJobResult {
 	std::string fileName;
 	bool fileChanged;
 
-	MRMacroStagedJobResult() noexcept : logLines(), hadError(false), cancelled(false), transaction(), cursorOffset(0), selectionStart(0), selectionEnd(0), blockMode(0), blockMarkingOn(false), blockAnchor(0), blockEnd(0), globalOrder(), globalInts(), globalStrings(), macroOrder(), macroDisplayNames(), deferredUiCommands(), lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0), ignoreCase(false), tabExpand(true), markStack(), insertMode(true), indentLevel(1), fileName(), fileChanged(false) {
+	MRMacroStagedJobResult() noexcept : logLines(), hadError(false), cancelled(false), conflictSnapshot(), transaction(), cursorOffset(0), selectionStart(0), selectionEnd(0), blockMode(0), blockMarkingOn(false), blockAnchor(0), blockEnd(0), globalOrder(), globalInts(), globalStrings(), macroOrder(), macroDisplayNames(), deferredUiCommands(), lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0), ignoreCase(false), tabExpand(true), markStack(), insertMode(true), indentLevel(1), fileName(), fileChanged(false) {
 	}
 };
 

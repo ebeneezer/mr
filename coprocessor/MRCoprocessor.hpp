@@ -2,6 +2,7 @@
 #define MRCOPROCESSOR_HPP
 
 #include <condition_variable>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -196,6 +197,7 @@ struct MacroJobStagedPayload final : Payload {
 	std::string displayName;
 	std::vector<std::string> logLines;
 	bool hadError;
+	MacroCommitConflictSnapshot conflictSnapshot;
 	mr::editor::StagedEditTransaction transaction;
 	std::size_t cursorOffset;
 	std::size_t selectionStart;
@@ -220,11 +222,11 @@ struct MacroJobStagedPayload final : Payload {
 	std::string fileName;
 	bool fileChanged;
 
-	MacroJobStagedPayload() noexcept : displayName(), logLines(), hadError(false), transaction(), cursorOffset(0), selectionStart(0), selectionEnd(0), blockMode(0), blockMarkingOn(false), blockAnchor(0), blockEnd(0), globalOrder(), globalInts(), globalStrings(), deferredUiCommands(), lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0), ignoreCase(false), tabExpand(true), markStack(), insertMode(true), indentLevel(1), fileName(), fileChanged(false) {
+	MacroJobStagedPayload() noexcept : displayName(), logLines(), hadError(false), conflictSnapshot(), transaction(), cursorOffset(0), selectionStart(0), selectionEnd(0), blockMode(0), blockMarkingOn(false), blockAnchor(0), blockEnd(0), globalOrder(), globalInts(), globalStrings(), deferredUiCommands(), lastSearchValid(false), lastSearchStart(0), lastSearchEnd(0), lastSearchCursor(0), ignoreCase(false), tabExpand(true), markStack(), insertMode(true), indentLevel(1), fileName(), fileChanged(false) {
 	}
 
-	MacroJobStagedPayload(std::string aDisplayName, std::vector<std::string> aLogLines, bool aHadError, mr::editor::StagedEditTransaction aTransaction, std::size_t aCursorOffset, std::size_t aSelectionStart, std::size_t aSelectionEnd, int aBlockMode, bool aBlockMarkingOn, std::size_t aBlockAnchor, std::size_t aBlockEnd, std::vector<std::string> aGlobalOrder, std::map<std::string, int> aGlobalInts, std::map<std::string, std::string> aGlobalStrings, std::vector<MRMacroDeferredUiCommand> aDeferredUiCommands, bool aLastSearchValid, std::size_t aLastSearchStart, std::size_t aLastSearchEnd, std::size_t aLastSearchCursor, bool anIgnoreCase, bool aTabExpand, std::vector<std::size_t> aMarkStack, bool aInsertMode, int anIndentLevel, std::string aFileName, bool aFileChanged)
-	    : displayName(std::move(aDisplayName)), logLines(std::move(aLogLines)), hadError(aHadError), transaction(std::move(aTransaction)), cursorOffset(aCursorOffset), selectionStart(aSelectionStart), selectionEnd(aSelectionEnd), blockMode(aBlockMode), blockMarkingOn(aBlockMarkingOn), blockAnchor(aBlockAnchor), blockEnd(aBlockEnd), globalOrder(std::move(aGlobalOrder)), globalInts(std::move(aGlobalInts)), globalStrings(std::move(aGlobalStrings)), deferredUiCommands(std::move(aDeferredUiCommands)), lastSearchValid(aLastSearchValid), lastSearchStart(aLastSearchStart), lastSearchEnd(aLastSearchEnd), lastSearchCursor(aLastSearchCursor), ignoreCase(anIgnoreCase), tabExpand(aTabExpand), markStack(std::move(aMarkStack)), insertMode(aInsertMode), indentLevel(anIndentLevel), fileName(std::move(aFileName)), fileChanged(aFileChanged) {
+	MacroJobStagedPayload(std::string aDisplayName, std::vector<std::string> aLogLines, bool aHadError, MacroCommitConflictSnapshot aConflictSnapshot, mr::editor::StagedEditTransaction aTransaction, std::size_t aCursorOffset, std::size_t aSelectionStart, std::size_t aSelectionEnd, int aBlockMode, bool aBlockMarkingOn, std::size_t aBlockAnchor, std::size_t aBlockEnd, std::vector<std::string> aGlobalOrder, std::map<std::string, int> aGlobalInts, std::map<std::string, std::string> aGlobalStrings, std::vector<MRMacroDeferredUiCommand> aDeferredUiCommands, bool aLastSearchValid, std::size_t aLastSearchStart, std::size_t aLastSearchEnd, std::size_t aLastSearchCursor, bool anIgnoreCase, bool aTabExpand, std::vector<std::size_t> aMarkStack, bool aInsertMode, int anIndentLevel, std::string aFileName, bool aFileChanged)
+	    : displayName(std::move(aDisplayName)), logLines(std::move(aLogLines)), hadError(aHadError), conflictSnapshot(std::move(aConflictSnapshot)), transaction(std::move(aTransaction)), cursorOffset(aCursorOffset), selectionStart(aSelectionStart), selectionEnd(aSelectionEnd), blockMode(aBlockMode), blockMarkingOn(aBlockMarkingOn), blockAnchor(aBlockAnchor), blockEnd(aBlockEnd), globalOrder(std::move(aGlobalOrder)), globalInts(std::move(aGlobalInts)), globalStrings(std::move(aGlobalStrings)), deferredUiCommands(std::move(aDeferredUiCommands)), lastSearchValid(aLastSearchValid), lastSearchStart(aLastSearchStart), lastSearchEnd(aLastSearchEnd), lastSearchCursor(aLastSearchCursor), ignoreCase(anIgnoreCase), tabExpand(aTabExpand), markStack(std::move(aMarkStack)), insertMode(aInsertMode), indentLevel(anIndentLevel), fileName(std::move(aFileName)), fileChanged(aFileChanged) {
 	}
 };
 
@@ -275,6 +277,21 @@ struct Result {
 using TaskFn = std::function<Result(const TaskInfo &, std::stop_token)>;
 using ResultHandler = std::function<void(const Result &)>;
 
+struct CoprocessorLaneSnapshot {
+	std::size_t queueDepth;
+	unsigned int activeWorkers;
+
+	CoprocessorLaneSnapshot() noexcept : queueDepth(0), activeWorkers(0) {
+	}
+};
+
+struct CoprocessorSnapshot {
+	CoprocessorLaneSnapshot io;
+	CoprocessorLaneSnapshot compute;
+	CoprocessorLaneSnapshot miniMap;
+	CoprocessorLaneSnapshot macro;
+};
+
 class Coprocessor {
   public:
 	Coprocessor();
@@ -285,33 +302,46 @@ class Coprocessor {
 
 	void setResultHandler(ResultHandler handler);
 	std::uint64_t submit(Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, std::string_view label, TaskFn fn);
+	std::uint64_t submitCoalesced(Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, std::string_view coalescingKey, std::string_view label, TaskFn fn);
 	std::size_t pump(std::size_t maxResults = 8);
+	std::size_t pumpFor(std::chrono::microseconds budget);
+	[[nodiscard]] CoprocessorSnapshot snapshot() const noexcept;
 	[[nodiscard]] std::size_t pendingResults() const noexcept;
 	void post(Result result);
 	bool cancelTask(std::uint64_t taskId);
 	void shutdown(bool drainResults = false);
 	void cancelPending();
 
-  private:
+	private:
 	struct Request {
 		TaskInfo task;
 		TaskFn fn;
+		std::string coalescingKey;
 		std::uint64_t submittedMicros;
+		std::uint64_t laneSequence;
+
+		Request() noexcept : task(), fn(), coalescingKey(), submittedMicros(0), laneSequence(0) {
+		}
 	};
 
 	struct LaneState {
 		Lane lane;
-		std::mutex mutex;
+		mutable std::mutex mutex;
 		std::condition_variable_any cv;
 		std::deque<Request> queue;
-		std::jthread worker;
+		std::atomic<unsigned int> activeWorkers;
+		std::uint64_t nextSubmitSequence;
+		std::uint64_t nextPublishSequence;
+		std::deque<std::uint64_t> skippedSequences;
+		std::map<std::uint64_t, Result> finishedResults;
+		std::vector<std::jthread> workers;
 
-		explicit LaneState(Lane aLane) noexcept : lane(aLane), mutex(), cv(), queue(), worker() {
+		explicit LaneState(Lane aLane) noexcept : lane(aLane), mutex(), cv(), queue(), activeWorkers(0), nextSubmitSequence(1), nextPublishSequence(1), skippedSequences(), finishedResults(), workers() {
 		}
 	};
 
 	void startLane(LaneState &lane);
-	void workerLoop(LaneState &lane, std::stop_token stopToken);
+	void workerLoop(LaneState &lane, std::size_t workerIndex, std::stop_token stopToken);
 	void enqueueResult(Result result);
 	void forgetTask(std::uint64_t taskId);
 	LaneState &laneState(Lane lane) noexcept;
@@ -322,8 +352,7 @@ class Coprocessor {
 	mutable std::mutex handlerMutex;
 	ResultHandler resultHandler;
 
-	std::uint64_t nextTaskId;
-	std::mutex nextTaskMutex;
+	std::atomic<std::uint64_t> nextTaskId;
 	std::mutex taskCancelMutex;
 	std::unordered_map<std::uint64_t, std::shared_ptr<std::atomic_bool>> taskCancelFlags;
 	std::atomic<bool> shuttingDown;

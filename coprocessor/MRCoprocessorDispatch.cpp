@@ -97,6 +97,53 @@ std::string formatTimingSummary(const mr::coprocessor::TaskTiming &timing) {
 	return " [q " + mr::performance::formatDuration(timing.queueMs()) + ", run " + mr::performance::formatDuration(timing.runMs()) + ", total " + mr::performance::formatDuration(timing.totalMs()) + "]";
 }
 
+MacroCommitConflictSnapshot captureMacroCommitConflictSnapshot(MREditWindow *window, MRFileEditor *editor) {
+	MacroCommitConflictSnapshot snapshot;
+
+	if (window == nullptr || editor == nullptr) return snapshot;
+	snapshot.cursorOffset = editor->cursorOffset();
+	snapshot.selectionStart = editor->selectionStartOffset();
+	snapshot.selectionEnd = editor->selectionEndOffset();
+	snapshot.blockMode = window->blockStatus();
+	snapshot.blockMarkingOn = window->isBlockMarking();
+	snapshot.blockAnchor = window->blockAnchorPtr();
+	snapshot.blockEnd = window->blockEffectiveEndPtr();
+	snapshot.insertMode = editor->insertModeEnabled();
+	snapshot.indentLevel = window->indentLevel();
+	snapshot.fileName = window->currentFileName();
+	snapshot.fileChanged = window->isFileChanged();
+	mrvmUiCopyGlobals(snapshot.globalOrder, snapshot.globalInts, snapshot.globalStrings);
+	snapshot.lastSearchValid = mrvmUiCopyWindowLastSearch(window, snapshot.fileName, snapshot.lastSearchStart, snapshot.lastSearchEnd, snapshot.lastSearchCursor);
+	mrvmUiCopyRuntimeOptions(snapshot.ignoreCase, snapshot.tabExpand);
+	snapshot.markStack = mrvmUiCopyWindowMarkStack(window);
+	snapshot.bufferId = window->bufferId();
+	snapshot.linkStatus = mrvmUiLinkStatus(window);
+	snapshot.windowCount = mrvmUiWindowCount();
+	snapshot.windowGeometryValid = mrvmUiWindowGeometry(window, snapshot.windowX1, snapshot.windowY1, snapshot.windowX2, snapshot.windowY2);
+	return snapshot;
+}
+
+const char *macroCommitConflictMarker(const MacroCommitConflictSnapshot &base, const MacroCommitConflictSnapshot &live) {
+	if (live.bufferId != base.bufferId) return "buffer";
+	if (live.cursorOffset != base.cursorOffset) return "cursor";
+	if (live.selectionStart != base.selectionStart || live.selectionEnd != base.selectionEnd) return "selection";
+	if (live.blockMode != base.blockMode || live.blockMarkingOn != base.blockMarkingOn || live.blockAnchor != base.blockAnchor || live.blockEnd != base.blockEnd) return "block";
+	if (live.insertMode != base.insertMode) return "insert-mode";
+	if (live.indentLevel != base.indentLevel) return "indent-level";
+	if (live.fileName != base.fileName) return "file-name";
+	if (live.fileChanged != base.fileChanged) return "file-changed";
+	if (live.globalOrder != base.globalOrder || live.globalInts != base.globalInts || live.globalStrings != base.globalStrings) return "globals";
+	if (live.lastSearchValid != base.lastSearchValid) return "last-search";
+	if (live.lastSearchValid && (live.lastSearchStart != base.lastSearchStart || live.lastSearchEnd != base.lastSearchEnd || live.lastSearchCursor != base.lastSearchCursor)) return "last-search";
+	if (live.ignoreCase != base.ignoreCase || live.tabExpand != base.tabExpand) return "runtime-options";
+	if (live.markStack != base.markStack) return "mark-stack";
+	if (live.linkStatus != base.linkStatus) return "link-status";
+	if (live.windowCount != base.windowCount) return "window-count";
+	if (live.windowGeometryValid != base.windowGeometryValid) return "window-geometry";
+	if (live.windowGeometryValid && (live.windowX1 != base.windowX1 || live.windowY1 != base.windowY1 || live.windowX2 != base.windowX2 || live.windowY2 != base.windowY2)) return "window-geometry";
+	return nullptr;
+}
+
 long long roundedMilliseconds(double valueMs) {
 	if (valueMs <= 0.0) return 0;
 	return static_cast<long long>(valueMs + 0.5);
@@ -754,24 +801,33 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			bool textChanged = false;
 			std::size_t currentVersion = 0;
 			std::string statusSummary;
+			const char *conflictMarker = nullptr;
 
 			if (targetWindow != nullptr && targetEditor != nullptr) {
 				currentVersion = targetEditor->documentVersion();
-				MRTextBufferModel::CommitResult commit = targetEditor->applyStagedTransaction(staged->transaction, staged->cursorOffset, staged->selectionStart, staged->selectionEnd, staged->fileChanged);
-				if (!commit.conflicted()) {
-					targetEditor->setInsertModeEnabled(staged->insertMode);
-					targetWindow->setIndentLevel(staged->indentLevel);
-					targetWindow->setCurrentFileName(staged->fileName.c_str());
-					targetWindow->applyCommittedBlockState(staged->blockMode, staged->blockMarkingOn, static_cast<uint>(staged->blockAnchor), static_cast<uint>(staged->blockEnd));
-					mrvmUiReplaceGlobals(staged->globalOrder, staged->globalInts, staged->globalStrings);
-					mrvmUiReplaceWindowLastSearch(targetWindow, staged->fileName, staged->lastSearchValid, staged->lastSearchStart, staged->lastSearchEnd, staged->lastSearchCursor);
-					mrvmUiReplaceRuntimeOptions(staged->ignoreCase, staged->tabExpand);
-					mrvmUiReplaceWindowMarkStack(targetWindow, staged->markStack);
-					mrvmUiSyncLinkedWindowsFrom(targetWindow);
-					accepted = true;
-					textChanged = commit.applied();
+				MacroCommitConflictSnapshot liveSnapshot = captureMacroCommitConflictSnapshot(targetWindow, targetEditor);
+				if (currentVersion != result.task.baseVersion) conflictMarker = "document-version";
+				else
+					conflictMarker = macroCommitConflictMarker(staged->conflictSnapshot, liveSnapshot);
+				if (conflictMarker == nullptr) {
+					MRTextBufferModel::CommitResult commit = targetEditor->applyStagedTransaction(staged->transaction, staged->cursorOffset, staged->selectionStart, staged->selectionEnd, staged->fileChanged);
+					if (commit.conflicted()) conflictMarker = "document-version";
+					else {
+						targetEditor->setInsertModeEnabled(staged->insertMode);
+						targetWindow->setIndentLevel(staged->indentLevel);
+						targetWindow->setCurrentFileName(staged->fileName.c_str());
+						targetWindow->applyCommittedBlockState(staged->blockMode, staged->blockMarkingOn, static_cast<uint>(staged->blockAnchor), static_cast<uint>(staged->blockEnd));
+						mrvmUiReplaceGlobals(staged->globalOrder, staged->globalInts, staged->globalStrings);
+						mrvmUiReplaceWindowLastSearch(targetWindow, staged->fileName, staged->lastSearchValid, staged->lastSearchStart, staged->lastSearchEnd, staged->lastSearchCursor);
+						mrvmUiReplaceRuntimeOptions(staged->ignoreCase, staged->tabExpand);
+						mrvmUiReplaceWindowMarkStack(targetWindow, staged->markStack);
+						mrvmUiSyncLinkedWindowsFrom(targetWindow);
+						accepted = true;
+						textChanged = commit.applied();
+					}
 				}
-			}
+			} else
+				conflictMarker = "target-window";
 
 			statusLine << "Background staged macro '" << staged->displayName << "'";
 			if (accepted) {
@@ -793,7 +849,8 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 					}
 				}
 			} else {
-				statusLine << " conflicted with a newer document state";
+				statusLine << " conflicted with newer runtime state";
+				if (conflictMarker != nullptr) statusLine << " [" << conflictMarker << "]";
 				if (currentVersion != 0) statusLine << " (snapshot " << result.task.baseVersion << ", current " << currentVersion << ")";
 				statusLine << "; commit aborted without rebase" << formatTimingSummary(result.timing) << ".";
 				statusSummary = statusLine.str();
