@@ -1,7 +1,9 @@
 #include "MRTreeSitterDocument.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstdint>
+#include <cstdlib>
 #include <new>
 #include <string>
 #include <thread>
@@ -410,7 +412,6 @@ enum class SyntaxDerivationExecutionChoice : unsigned char {
 	Parallel
 };
 
-constexpr bool kEnableParallelSyntaxDerivationValidation = false;
 constexpr std::size_t kMinParallelSyntaxDerivationLineCount = 64;
 
 const char *readTreeSitterSnapshot(void *payload, uint32_t byteIndex, TSPoint, uint32_t *bytesRead) {
@@ -716,8 +717,34 @@ MRDerivedSyntaxData executeSyntaxDerivationPlanParallel(MRTreeSitterDocument::La
 	return mergeDerivedSyntaxChunks(std::move(chunks));
 }
 
-[[maybe_unused]] bool hasMatchingDerivedSyntaxTokenMaps(const MRDerivedSyntaxData &expected, const MRDerivedSyntaxData &actual) noexcept {
-	return expected.tokenMaps == actual.tokenMaps;
+bool isParallelSyntaxValidationEnabled() noexcept {
+	const char *value = std::getenv("MR_VALIDATE_PARALLEL_SYNTAX");
+
+	return value != nullptr && value[0] == '1' && value[1] == '\0';
+}
+
+bool hasMatchingDerivedSyntaxTokenMaps(const MRDerivedSyntaxData &expected, const MRDerivedSyntaxData &actual) noexcept {
+	if (expected.tokenMaps.size() != actual.tokenMaps.size()) {
+		std::fprintf(stderr, "MR parallel syntax validation mismatch: token map count %zu != %zu\n", expected.tokenMaps.size(), actual.tokenMaps.size());
+		return false;
+	}
+	for (std::size_t lineIndex = 0; lineIndex < expected.tokenMaps.size(); ++lineIndex) {
+		const MRSyntaxTokenMap &expectedTokenMap = expected.tokenMaps[lineIndex];
+		const MRSyntaxTokenMap &actualTokenMap = actual.tokenMaps[lineIndex];
+
+		if (expectedTokenMap.size() != actualTokenMap.size()) {
+			std::fprintf(stderr, "MR parallel syntax validation mismatch: token map size at line %zu: %zu != %zu\n", lineIndex, expectedTokenMap.size(),
+						 actualTokenMap.size());
+			return false;
+		}
+		for (std::size_t tokenIndex = 0; tokenIndex < expectedTokenMap.size(); ++tokenIndex) {
+			if (expectedTokenMap[tokenIndex] == actualTokenMap[tokenIndex]) continue;
+			std::fprintf(stderr, "MR parallel syntax validation mismatch: token at line %zu, column %zu: %u != %u\n", lineIndex, tokenIndex,
+						 static_cast<unsigned int>(expectedTokenMap[tokenIndex]), static_cast<unsigned int>(actualTokenMap[tokenIndex]));
+			return false;
+		}
+	}
+	return true;
 }
 
 SyntaxDerivationExecutionChoice chooseSyntaxDerivationExecutionChoice(const DerivedSyntaxDerivationPlan &plan, std::size_t requestedLineCount,
@@ -738,7 +765,7 @@ MRDerivedSyntaxData chooseSyntaxDerivationExecution(MRTreeSitterDocument::Langua
 		case SyntaxDerivationExecutionChoice::Serial:
 			return executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
 		case SyntaxDerivationExecutionChoice::Parallel: {
-			if constexpr (!kEnableParallelSyntaxDerivationValidation) {
+			if (!isParallelSyntaxValidationEnabled()) {
 				return executeSyntaxDerivationPlanParallel(language, snapshot, lineStarts, plan, canonicalTree);
 			} else {
 				MRDerivedSyntaxData serialResult = executeSyntaxDerivationPlanSerially(language, snapshot, lineStarts, plan, canonicalTree);
