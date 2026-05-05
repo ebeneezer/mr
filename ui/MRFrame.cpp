@@ -204,6 +204,10 @@ int MRFrame::markersEndColumn(const MarkerState &state) const noexcept {
 	return hasMarkers ? x - kMarkerGap : x;
 }
 
+bool MRFrame::taskOverviewPopupContainsGlobalMouse(TPoint globalMouse) const {
+	return mTaskOverviewPopup != nullptr && mTaskOverviewPopup->mouseInView(globalMouse);
+}
+
 void MRFrame::drawFrameLine(TDrawBuffer &frameBuf, short y, short n, TColorAttr color) {
 	if (size.x <= 0) return;
 
@@ -440,7 +444,14 @@ void MRFrame::handleEvent(TEvent &event) {
 		TPoint mouse = makeLocal(event.mouse.where);
 		TWindow *window = static_cast<TWindow *>(owner);
 		MREditWindow *editWindow = dynamic_cast<MREditWindow *>(window);
+		MarkerState state = markerState();
+		int taskX = taskMarkerColumn(state);
+		bool taskMarkerHit = mouse.y == 0 && taskX >= 0 && mouse.x >= taskX && mouse.x < taskX + markerSpan(kTaskMarkerIcon, kTaskMarkerSlotWidth);
 		if (mouse.y == 0 && window != nullptr) {
+			if (taskMarkerHit) {
+				clearEvent(event);
+				return;
+			}
 			if (editWindow != nullptr && MRWindowManager::isWindowMinimized(editWindow)) {
 				const MRWindowManager::MinimizedLayout layout = MRWindowManager::minimizedLayout(editWindow, size.x);
 				if (mouse.x >= layout.menuStart && mouse.x < layout.menuEnd) {
@@ -569,10 +580,11 @@ void MRFrame::updateTaskHover(TPoint globalMouse, bool forceHide) {
 		hideTaskOverview();
 		return;
 	}
-	if (!mouseInView(globalMouse)) {
+	if (!mouseInView(globalMouse) && !taskOverviewPopupContainsGlobalMouse(globalMouse)) {
 		hideTaskOverview();
 		return;
 	}
+	if (taskOverviewPopupContainsGlobalMouse(globalMouse)) return;
 	TPoint local = makeLocal(globalMouse);
 	if (local.y != 0 || local.x < taskX || local.x >= taskX + markerSpan(kTaskMarkerIcon, kTaskMarkerSlotWidth)) {
 		hideTaskOverview();

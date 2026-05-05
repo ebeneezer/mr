@@ -81,6 +81,7 @@ class MRFrame : public TFrame {
 	int markerStartColumn() const noexcept;
 	int taskMarkerColumn(const MarkerState &state) const noexcept;
 	int markersEndColumn(const MarkerState &state) const noexcept;
+	bool taskOverviewPopupContainsGlobalMouse(TPoint globalMouse) const;
 	void showTaskOverview();
 	void hideTaskOverview();
 
