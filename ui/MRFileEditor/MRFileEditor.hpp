@@ -38,7 +38,6 @@
 #include "MRMiniMap.hpp"
 #include "MRTextFormatting.hpp"
 #include "MRTextViewport.hpp"
-#include "MRTreeSitterDocument.hpp"
 #include "../MRTextBufferModel.hpp"
 #include "../../config/MRDialogPaths.hpp"
 #include "../../app/MRCommands.hpp"
@@ -48,6 +47,29 @@
 #include "../MRWindowSupport.hpp"
 
 class MREditWindow;
+
+struct MRSyntaxCacheEntry {
+	MRSyntaxLineState stateIn;
+	MRSyntaxLineResult syntaxLine;
+
+	MRSyntaxCacheEntry() noexcept : stateIn(), syntaxLine() {
+	}
+
+	MRSyntaxCacheEntry(MRSyntaxLineState aStateIn, MRSyntaxLineResult aSyntaxLine) : stateIn(aStateIn), syntaxLine(std::move(aSyntaxLine)) {
+	}
+};
+
+struct MRSyntaxCheckpointEntry {
+	std::size_t lineStart;
+	std::size_t lineIndex;
+	MRSyntaxLineState stateIn;
+
+	MRSyntaxCheckpointEntry() noexcept : lineStart(0), lineIndex(0), stateIn() {
+	}
+
+	MRSyntaxCheckpointEntry(std::size_t aLineStart, std::size_t aLineIndex, MRSyntaxLineState aStateIn) noexcept : lineStart(aLineStart), lineIndex(aLineIndex), stateIn(aStateIn) {
+	}
+};
 
 class MRFileEditor : public TScroller {
   public:
@@ -112,6 +134,14 @@ class MRFileEditor : public TScroller {
 	std::uint64_t pendingMiniMapWarmupTaskId() const noexcept;
 
 	std::uint64_t pendingSaveNormalizationWarmupTaskId() const noexcept;
+
+	std::size_t syntaxWarmupTopLine() const noexcept;
+
+	std::size_t syntaxWarmupBottomLine() const noexcept;
+
+	std::size_t syntaxPrefetchTargetBottomLine() const noexcept;
+
+	std::size_t syntaxPrefetchReachedBottomLine() const noexcept;
 
 	bool shouldReportMiniMapInitialRender() const noexcept;
 
@@ -220,6 +250,7 @@ class MRFileEditor : public TScroller {
 	void syncIndicatorVisualSettings();
 
 	void notifyWindowTaskStateChanged();
+	void continueComputeWarmupIfNeeded();
 
 	std::string snapshotText() const;
 
@@ -256,6 +287,8 @@ class MRFileEditor : public TScroller {
 	const char *syntaxLanguageName() const noexcept;
 
 	MRSyntaxLanguage syntaxLanguage() const noexcept;
+
+	bool syntaxLanguageAutomatic() const noexcept;
 
 		bool canSaveInPlace() const;
 
@@ -406,7 +439,7 @@ class MRFileEditor : public TScroller {
 
 		void drawLineNumberGutter(TDrawBuffer &b, std::size_t lineIndex, bool showNumber, int drawX, int width, bool zeroFill);
 
-		void drawCodeFoldingGutter(TDrawBuffer &b, int drawX, int width);
+		void drawCodeFoldingGutter(TDrawBuffer &b, int drawX, int width, std::size_t lineStart, std::size_t lineIndex);
 
 	static const char *lineIndexWarmupTaskLabel() noexcept;
 
@@ -504,13 +537,21 @@ class MRFileEditor : public TScroller {
 
 	void resetSyntaxWarmupState(bool clearCache) noexcept;
 
+	void invalidateSyntaxCacheFromLineStart(std::size_t lineStart) noexcept;
+
 		std::vector<std::size_t> syntaxWarmupLineStarts(std::size_t topLine, int rowCount) const;
 
-		bool hasSyntaxTokensForLineStarts(const std::vector<std::size_t> &lineStarts) const;
+		bool syntaxCheckpointForLine(std::size_t lineIndex, MRSyntaxCheckpointEntry &checkpoint) const;
 
-		MRSyntaxTokenMap syntaxTokensForLine(std::size_t lineStart) const;
+		void rememberSyntaxCheckpoint(std::size_t lineStart, std::size_t lineIndex, const MRSyntaxLineState &stateIn) noexcept;
 
-		void formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, int hScroll, int width, int drawX, bool isDocumentLine, bool drawEofMarker, bool drawEofMarkerAsEmoji);
+		MRSyntaxLineState syntaxWarmupInitialState(std::size_t lineStart) const noexcept;
+
+		bool hasSyntaxTokensForLineStarts(const std::vector<std::size_t> &lineStarts, const MRSyntaxLineState &initialState = MRSyntaxLineState()) const;
+
+		MRSyntaxLineResult syntaxLineResultForLine(std::size_t lineStart, const MRSyntaxLineState &previousState);
+
+		void formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const MRSyntaxLineResult &syntaxLine, int hScroll, int width, int drawX, bool isDocumentLine, bool drawEofMarker, bool drawEofMarkerAsEmoji);
 
 		void drawEofMarkerGlyph(TDrawBuffer &b, int hScroll, int width, int drawX, TAttrPair basePair, bool drawEmoji);
 
@@ -531,15 +572,19 @@ class MRFileEditor : public TScroller {
 	std::uint64_t mLineIndexWarmupTaskId;
 	std::size_t mLineIndexWarmupDocumentId;
 	std::size_t mLineIndexWarmupVersion;
-	std::map<std::size_t, MRSyntaxTokenMap> mSyntaxTokenCache;
+	std::map<std::size_t, MRSyntaxCacheEntry> mSyntaxTokenCache;
+	std::map<std::size_t, MRSyntaxCheckpointEntry> mSyntaxCheckpoints;
 	std::uint64_t mSyntaxWarmupTaskId;
 	std::size_t mSyntaxWarmupDocumentId;
 	std::size_t mSyntaxWarmupVersion;
 	std::size_t mSyntaxWarmupTopLine;
 	std::size_t mSyntaxWarmupBottomLine;
 	MRSyntaxLanguage mSyntaxWarmupLanguage;
-	MRTreeSitterDocument::Language mSyntaxWarmupTreeSitterLanguage;
-	MRTreeSitterDocument mTreeSitterDocument;
+	std::size_t mSyntaxPrefetchDocumentId;
+	std::size_t mSyntaxPrefetchVersion;
+	std::size_t mSyntaxPrefetchTargetBottomLine;
+	std::size_t mSyntaxPrefetchReachedBottomLine;
+	MRSyntaxLanguage mSyntaxPrefetchLanguage;
 	MRMiniMapRenderer mMiniMapRenderer;
 	SaveNormalizationCache mSaveNormalizationCache;
 	std::uint64_t mSaveNormalizationWarmupTaskId;

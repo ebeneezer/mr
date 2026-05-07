@@ -623,6 +623,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				bool applied = false;
 				if (editor->documentVersion() == result.task.baseVersion) applied = editor->applyLineIndexWarmup(warmup->warmup, result.task.baseVersion);
 				if (!applied) editor->clearLineIndexWarmupTask(result.task.id);
+				else editor->continueComputeWarmupIfNeeded();
 				if (!recorded) {
 					recordTaskPerformance(result, kLineIndexWarmAction, window, editor->documentId(), editor->bufferLength(), window->currentFileName());
 					recorded = true;
@@ -646,6 +647,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				bool applied = false;
 				if (editor->documentVersion() == result.task.baseVersion) applied = editor->applySyntaxWarmup(*syntax, result.task.baseVersion, result.task.id);
 				if (!applied) editor->clearSyntaxWarmupTask(result.task.id);
+				else editor->continueComputeWarmupIfNeeded();
 				if (!recorded) {
 					recordTaskPerformance(result, kSyntaxWarmAction, window, editor->documentId(), editor->bufferLength(), window->currentFileName());
 					recorded = true;

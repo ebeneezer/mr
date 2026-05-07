@@ -28,7 +28,6 @@
 #include "../config/MRDialogPaths.hpp"
 #include "../dialogs/MRSetup.hpp"
 #include "../piecetable/MRTextDocument.hpp"
-#include "../ui/MRFileEditor/MRTreeSitterDocument.hpp"
 
 namespace {
 
@@ -1394,34 +1393,6 @@ bool testTouchedRangeMidInsertGuard(std::string &failureReason) {
 	if (result.change.touchedRange.start != 6 || result.change.touchedRange.end != 7) {
 		failureReason = "Touched range for mid-insert must stay local and must not extend to EOF.";
 		return false;
-	}
-	failureReason.clear();
-	return true;
-}
-
-bool testMrmacBomIndentGuard(std::string &failureReason) {
-	static const std::pair<const char *, const char *> kCases[] = {
-		{"macro-bom", "\xEF\xBB\xBF" "$macro test;\n"},
-		{"if-bom", "\xEF\xBB\xBF" "IF 1 THEN\n"},
-		{"while-bom", "\xEF\xBB\xBF" "WHILE 1 DO\n"},
-		{"else-bom", "\xEF\xBB\xBF" "ELSE\n"},
-	};
-	MRTreeSitterDocument treeDocument;
-
-	treeDocument.setLanguageContext("probe.mrmac", "probe.mrmac", "MRMAC");
-	for (const auto &entry : kCases) {
-		mr::editor::TextDocument document(entry.second);
-		const mr::editor::ReadSnapshot snapshot = document.readSnapshot();
-		const std::size_t cursorOffset = document.lineEnd(0);
-
-		if (!treeDocument.syncToDocument(snapshot, document.documentId(), document.version())) {
-			failureReason = std::string("Tree-sitter sync failed for case ") + entry.first + ".";
-			return false;
-		}
-		if (!treeDocument.shouldIncreaseIndentOnNewLine(snapshot, cursorOffset)) {
-			failureReason = std::string("MRMAC BOM indent guard failed for case ") + entry.first + ".";
-			return false;
-		}
 	}
 	failureReason.clear();
 	return true;
@@ -3696,7 +3667,6 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
 	runTest(ctx, "WINDOWCOLORS v3 + line numbers theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
 	runTest(ctx, "Touched-range mid-insert guard", testTouchedRangeMidInsertGuard);
-	runTest(ctx, "MRMAC BOM indent guard", testMrmacBomIndentGuard);
 	runTest(ctx, "TRUNCATE_SPACES save-only guard", testTruncateSpacesSaveOnlyGuard);
 	runTest(ctx, "Editor cursor viewport guard", testEditorCursorViewportGuard);
 	runTest(ctx, "EOF virtual-line color guard", testEofVirtualLineColorGuard);
@@ -3745,7 +3715,6 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
 	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
 	runTest(ctx, "WINDOWCOLORS v3 + line numbers theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
-	runTest(ctx, "MRMAC BOM indent guard", testMrmacBomIndentGuard);
 	runTest(ctx, "TRUNCATE_SPACES save-only guard", testTruncateSpacesSaveOnlyGuard);
 	runTest(ctx, "Indicator line-number color wiring guard", testIndicatorLineNumberColorWiringGuard);
 	runTest(ctx, "Current-line color wiring guard", testCurrentLineColorWiringGuard);

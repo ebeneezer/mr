@@ -11,6 +11,7 @@
 #define Uses_TRect
 #define Uses_TView
 #include <tvision/tv.h>
+#include <tvision/compat/borland/dos.h>
 
 #include "MRDropList.hpp"
 #include "MRScopedHistoryUI.hpp"
@@ -59,10 +60,17 @@ class TWheelFileDialog final : public TFileDialog {
 			return;
 		}
 		if (event.what == evBroadcast && event.message.command == cmFileDoubleClicked && (dialogOptions & fdOpenButton) != 0) {
-			event.what = evCommand;
-			event.message.command = cmFileOpen;
-			TFileDialog::handleEvent(event);
-			return;
+			TSearchRec *selectedEntry = static_cast<TSearchRec *>(event.message.infoPtr);
+
+			if (selectedEntry != nullptr) {
+				std::strcpy(fileName->data, selectedEntry->name);
+				if ((selectedEntry->attr & FA_DIREC) != 0) {
+					std::strcat(fileName->data, "\\");
+					std::strcat(fileName->data, wildCard);
+				}
+				fileName->selectAll(False);
+				fileName->drawView();
+			}
 		}
 		if (event.what == evMouseWheel && fileList != nullptr && fileList->containsMouse(event) && fileList->range > 0) {
 			const int delta = event.mouse.wheel == mwUp || event.mouse.wheel == mwLeft ? -1 : 1;

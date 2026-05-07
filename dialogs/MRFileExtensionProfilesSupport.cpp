@@ -30,6 +30,43 @@ void writeRecordField(char *dest, std::size_t destSize, const std::string &value
 	mr::dialogs::writeRecordField(dest, destSize, value);
 }
 
+const char *dialogCodeLanguageLabel(const std::string &codeLanguage) {
+	const std::string normalized = upperAscii(trimAscii(codeLanguage));
+
+	if (normalized == "AUTO") return "Automatic";
+	if (normalized == "C") return "C";
+	if (normalized == "CPP") return "C++";
+	if (normalized == "PYTHON") return "Python";
+	if (normalized == "JAVASCRIPT") return "JavaScript";
+	if (normalized == "TYPESCRIPT") return "TypeScript";
+	if (normalized == "TSX") return "TSX";
+	if (normalized == "BASH") return "Bash";
+	if (normalized == "JSON") return "JSON";
+	if (normalized == "PERL") return "Perl";
+	if (normalized == "SWIFT") return "Swift";
+	return "None";
+}
+
+bool parseDialogCodeLanguage(const std::string &dialogValue, std::string &canonicalValue) {
+	const std::string normalized = upperAscii(trimAscii(dialogValue));
+
+	if (normalized.empty() || normalized == "NONE") canonicalValue = "NONE";
+	else if (normalized == "AUTO" || normalized == "AUTOMATIC") canonicalValue = "AUTO";
+	else if (normalized == "C") canonicalValue = "C";
+	else if (normalized == "C++" || normalized == "CPP") canonicalValue = "CPP";
+	else if (normalized == "PYTHON") canonicalValue = "PYTHON";
+	else if (normalized == "JAVASCRIPT") canonicalValue = "JAVASCRIPT";
+	else if (normalized == "TYPESCRIPT") canonicalValue = "TYPESCRIPT";
+	else if (normalized == "TSX") canonicalValue = "TSX";
+	else if (normalized == "BASH") canonicalValue = "BASH";
+	else if (normalized == "JSON") canonicalValue = "JSON";
+	else if (normalized == "PERL") canonicalValue = "PERL";
+	else if (normalized == "SWIFT") canonicalValue = "SWIFT";
+	else
+		return false;
+	return true;
+}
+
 bool fileExtensionEditorSettingsDialogRecordsEqual(const FileExtensionEditorSettingsDialogRecord &lhs, const FileExtensionEditorSettingsDialogRecord &rhs) {
 	return readRecordField(lhs.pageBreak) == readRecordField(rhs.pageBreak) && readRecordField(lhs.wordDelimiters) == readRecordField(rhs.wordDelimiters) && readRecordField(lhs.defaultExtensions) == readRecordField(rhs.defaultExtensions) && readRecordField(lhs.codeLanguage) == readRecordField(rhs.codeLanguage) && readRecordField(lhs.tabSize) == readRecordField(rhs.tabSize) && readRecordField(lhs.leftMargin) == readRecordField(rhs.leftMargin) && readRecordField(lhs.rightMargin) == readRecordField(rhs.rightMargin) && readRecordField(lhs.binaryRecordLength) == readRecordField(rhs.binaryRecordLength) && readRecordField(lhs.postLoadMacro) == readRecordField(rhs.postLoadMacro) && readRecordField(lhs.preSaveMacro) == readRecordField(rhs.preSaveMacro) && readRecordField(lhs.defaultPath) == readRecordField(rhs.defaultPath) && readRecordField(lhs.formatLine) == readRecordField(rhs.formatLine) && readRecordField(lhs.cursorStatusColor) == readRecordField(rhs.cursorStatusColor) && readRecordField(lhs.miniMapWidth) == readRecordField(rhs.miniMapWidth) &&
 	       readRecordField(lhs.miniMapMarkerGlyph) == readRecordField(rhs.miniMapMarkerGlyph) && readRecordField(lhs.gutters) == readRecordField(rhs.gutters) && lhs.optionsMask == rhs.optionsMask && lhs.tabExpandChoice == rhs.tabExpandChoice && lhs.indentStyleChoice == rhs.indentStyleChoice && lhs.fileTypeChoice == rhs.fileTypeChoice && lhs.columnBlockMoveChoice == rhs.columnBlockMoveChoice && lhs.defaultModeChoice == rhs.defaultModeChoice && lhs.lineNumbersPositionChoice == rhs.lineNumbersPositionChoice && lhs.codeFoldingPositionChoice == rhs.codeFoldingPositionChoice && lhs.miniMapPositionChoice == rhs.miniMapPositionChoice;
@@ -49,19 +86,7 @@ void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDial
 	writeRecordField(record.pageBreak, sizeof(record.pageBreak), settings.pageBreak);
 	writeRecordField(record.wordDelimiters, sizeof(record.wordDelimiters), settings.wordDelimiters);
 	writeRecordField(record.defaultExtensions, sizeof(record.defaultExtensions), settings.defaultExtensions);
-	if (upperAscii(trimAscii(settings.codeLanguage)) == "AUTO") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "Auto");
-	else if (upperAscii(trimAscii(settings.codeLanguage)) == "C") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "C");
-	else if (upperAscii(trimAscii(settings.codeLanguage)) == "CPP") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "C++");
-	else if (upperAscii(trimAscii(settings.codeLanguage)) == "PYTHON") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "Python");
-	else if (upperAscii(trimAscii(settings.codeLanguage)) == "JAVASCRIPT") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "JavaScript");
-	else if (upperAscii(trimAscii(settings.codeLanguage)) == "TYPESCRIPT") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "TypeScript");
-	else if (upperAscii(trimAscii(settings.codeLanguage)) == "TSX") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "TSX");
-	else if (upperAscii(trimAscii(settings.codeLanguage)) == "BASH") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "Bash");
-	else if (upperAscii(trimAscii(settings.codeLanguage)) == "JSON") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "JSON");
-	else if (upperAscii(trimAscii(settings.codeLanguage)) == "PERL") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "Perl");
-	else if (upperAscii(trimAscii(settings.codeLanguage)) == "SWIFT") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "Swift");
-	else
-		writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "None");
+	writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), dialogCodeLanguageLabel(settings.codeLanguage));
 	writeRecordField(record.tabSize, sizeof(record.tabSize), std::to_string(settings.tabSize));
 	writeRecordField(record.leftMargin, sizeof(record.leftMargin), std::to_string(settings.leftMargin));
 	writeRecordField(record.rightMargin, sizeof(record.rightMargin), std::to_string(settings.rightMargin));
@@ -111,21 +136,8 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.wordDelimiters = readRecordField(record.wordDelimiters);
 	settings.defaultExtensions = readRecordField(record.defaultExtensions);
 	{
-		std::string codeLanguage = upperAscii(trimAscii(readRecordField(record.codeLanguage)));
-		if (codeLanguage.empty() || codeLanguage == "NONE") settings.codeLanguage = "NONE";
-		else if (codeLanguage == "AUTO") settings.codeLanguage = "AUTO";
-		else if (codeLanguage == "C") settings.codeLanguage = "C";
-		else if (codeLanguage == "C++" || codeLanguage == "CPP") settings.codeLanguage = "CPP";
-		else if (codeLanguage == "PYTHON") settings.codeLanguage = "PYTHON";
-		else if (codeLanguage == "JAVASCRIPT") settings.codeLanguage = "JAVASCRIPT";
-		else if (codeLanguage == "TYPESCRIPT") settings.codeLanguage = "TYPESCRIPT";
-		else if (codeLanguage == "TSX") settings.codeLanguage = "TSX";
-		else if (codeLanguage == "BASH") settings.codeLanguage = "BASH";
-		else if (codeLanguage == "JSON") settings.codeLanguage = "JSON";
-		else if (codeLanguage == "PERL") settings.codeLanguage = "PERL";
-		else if (codeLanguage == "SWIFT") settings.codeLanguage = "SWIFT";
-		else {
-			errorText = "CODE_LANGUAGE must be None, Auto, C, C++, Python, JavaScript, TypeScript, TSX, Bash, JSON, Perl or Swift.";
+		if (!parseDialogCodeLanguage(readRecordField(record.codeLanguage), settings.codeLanguage)) {
+			errorText = "CODE_LANGUAGE must be None, Automatic, C, C++, Python, JavaScript, TypeScript, TSX, Bash, JSON, Perl or Swift.";
 			return false;
 		}
 	}
@@ -624,19 +636,7 @@ void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileE
 	writeRecordField(record.pageBreak, sizeof(record.pageBreak), settings.pageBreak);
 	writeRecordField(record.wordDelimiters, sizeof(record.wordDelimiters), settings.wordDelimiters);
 	writeRecordField(record.defaultExtensions, sizeof(record.defaultExtensions), settings.defaultExtensions);
-	if (upperAscii(trimAscii(settings.codeLanguage)) == "AUTO") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "Auto");
-	else if (upperAscii(trimAscii(settings.codeLanguage)) == "C") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "C");
-	else if (upperAscii(trimAscii(settings.codeLanguage)) == "CPP") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "C++");
-	else if (upperAscii(trimAscii(settings.codeLanguage)) == "PYTHON") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "Python");
-	else if (upperAscii(trimAscii(settings.codeLanguage)) == "JAVASCRIPT") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "JavaScript");
-	else if (upperAscii(trimAscii(settings.codeLanguage)) == "TYPESCRIPT") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "TypeScript");
-	else if (upperAscii(trimAscii(settings.codeLanguage)) == "TSX") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "TSX");
-	else if (upperAscii(trimAscii(settings.codeLanguage)) == "BASH") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "Bash");
-	else if (upperAscii(trimAscii(settings.codeLanguage)) == "JSON") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "JSON");
-	else if (upperAscii(trimAscii(settings.codeLanguage)) == "PERL") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "Perl");
-	else if (upperAscii(trimAscii(settings.codeLanguage)) == "SWIFT") writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "Swift");
-	else
-		writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), "None");
+	writeRecordField(record.codeLanguage, sizeof(record.codeLanguage), dialogCodeLanguageLabel(settings.codeLanguage));
 	writeRecordField(record.tabSize, sizeof(record.tabSize), std::to_string(settings.tabSize));
 	writeRecordField(record.leftMargin, sizeof(record.leftMargin), std::to_string(settings.leftMargin));
 	writeRecordField(record.rightMargin, sizeof(record.rightMargin), std::to_string(settings.rightMargin));

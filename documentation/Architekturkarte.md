@@ -90,7 +90,7 @@ Nicht opportunistisch ändern: Pfad-/History-Semantik, ~-Expansion, Default-/Fal
 Bekannte technische Schulden: es existieren weiterhin mehrere lokale Pfadhelfer in unterschiedlichen Dateien; A2 hat gezeigt, dass diese nicht überall sicher durch öffentliche Projektfunktionen ersetzbar sind.
 9. Build / Generated Files / Regression Checks
 
-Zentrale Dateien: ￼Makefile, ￼generate_help_markdown.sh, ￼generate_about_quotes.sh, ￼regression/mr-regression-checks.cpp, ￼tree-sitter/Package.swift.
+Zentrale Dateien: ￼Makefile, ￼generate_help_markdown.sh, ￼generate_about_quotes.sh, ￼regression/mr-regression-checks.cpp
 Zentrale Klassen/Funktionen: Build-Regeln, generierte Header app/MRHelp.generated.hpp und app/MRAboutQuotes.generated.hpp, strukturelle Regression-Checks.
 Autoritativer Zustand: Makefile ist Build-Orchestrator; Regression-Checks kodieren zusätzliche Strukturverträge über bloßes Kompilieren hinaus.
 Wichtige Datenflüsse: Quellen/Skripte -> generierte Header -> Build; Quelltexte -> Regression-Checks -> Strukturfreigabe.

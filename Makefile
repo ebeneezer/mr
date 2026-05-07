@@ -35,7 +35,7 @@ PCRE2_LIB ?= /usr/lib/libpcre2-8.so
 PCRE2_HEADER ?= /usr/include/pcre2.h
 
 # Include paths
-INCLUDES = -I$(TVISION_ACTIVE_SOURCE_DIR)/include -I./mrmac -I./piecetable -I./ui -I./coprocessor -I./app -I./app/commands -I./dialogs -I./config -I./keymap -I./tree-sitter/lib/include
+INCLUDES = -I$(TVISION_ACTIVE_SOURCE_DIR)/include -I./mrmac -I./piecetable -I./ui -I./coprocessor -I./app -I./app/commands -I./dialogs -I./config -I./keymap
 
 # Language/runtime configuration.
 CXXSTD ?= gnu++20
@@ -128,7 +128,6 @@ CXX_SOURCES = \
 	ui/MRFileEditor/MRMiniMap.cpp \
 	ui/MRFileEditor/MRTextFormatting.cpp \
 	ui/MRFileEditor/MRTextViewport.cpp \
-	ui/MRFileEditor/MRTreeSitterDocument.cpp \
 	ui/MRMenuBar.cpp \
 	ui/MRMessageLineController.cpp \
 	ui/MRScopedHistoryUI.cpp \
@@ -145,17 +144,6 @@ CORE_CXX_OBJECTS = $(filter-out mr.o,$(CXX_OBJECTS))
 
 # C source files (In-Memory Macro Compiler)
 C_SOURCES = \
-	tree-sitter/lib/src/lib.c \
-	tree-sitter/c/src/parser.c \
-	tree-sitter/cpp/src/parser.c \
-	tree-sitter/cpp/src/scanner.c \
-	tree-sitter/javascript/src/parser.c \
-	tree-sitter/javascript/src/scanner.c \
-	tree-sitter/python/src/parser.c \
-	tree-sitter/python/src/scanner.c \
-	tree-sitter/json/src/parser.c \
-	tree-sitter/mrmac/src/parser.c \
-	tree-sitter/mrmac/src/scanner.c \
 	mrmac/mrmac.c \
 	mrmac/lex.yy.c \
 	mrmac/parser.tab.c
@@ -205,7 +193,6 @@ CONTEXT_ARCHIVE_ITEMS = \
 	piecetable \
 	keymap \
 	regression \
-	tree-sitter \
 	ui \
 	tvision
 
@@ -387,11 +374,10 @@ dialogs/MRFileExtensionEditorSettings.o: dialogs/MRFileExtensionEditorSettings.c
 dialogs/MRFileExtensionProfilesSupport.o: dialogs/MRFileExtensionProfilesSupport.cpp dialogs/MRFileExtensionProfilesSupport.hpp dialogs/MRFileExtensionEditorSettingsInternal.hpp dialogs/MRSetup.hpp config/MRDialogPaths.hpp app/MREditorApp.hpp
 dialogs/MRSetup.o: dialogs/MRSetup.cpp dialogs/MRSetup.hpp dialogs/MRSetupCommon.hpp app/MRCommands.hpp app/MREditorApp.hpp config/MRDialogPaths.hpp ui/MRScopedHistoryUI.hpp ui/MRWindowSupport.hpp
 dialogs/MRWindowList.o: dialogs/MRWindowList.cpp dialogs/MRWindowList.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp
-ui/MRFileEditor/MRFileEditor.o: ui/MRFileEditor/MRFileEditor.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFileEditor/MRMiniMap.hpp ui/MRFileEditor/MRTextFormatting.hpp ui/MRFileEditor/MRTextViewport.hpp ui/MRFileEditor/MRTreeSitterDocument.hpp
+ui/MRFileEditor/MRFileEditor.o: ui/MRFileEditor/MRFileEditor.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFileEditor/MRMiniMap.hpp ui/MRFileEditor/MRTextFormatting.hpp ui/MRFileEditor/MRTextViewport.hpp
 ui/MRFileEditor/MRMiniMap.o: ui/MRFileEditor/MRMiniMap.cpp ui/MRFileEditor/MRMiniMap.hpp piecetable/MRTextDocument.hpp config/MRDialogPaths.hpp coprocessor/MRCoprocessor.hpp
 ui/MRFileEditor/MRTextFormatting.o: ui/MRFileEditor/MRTextFormatting.cpp ui/MRFileEditor/MRTextFormatting.hpp config/MRDialogPaths.hpp
 ui/MRFileEditor/MRTextViewport.o: ui/MRFileEditor/MRTextViewport.cpp ui/MRFileEditor/MRTextViewport.hpp config/MRDialogPaths.hpp
-ui/MRFileEditor/MRTreeSitterDocument.o: ui/MRFileEditor/MRTreeSitterDocument.cpp ui/MRFileEditor/MRTreeSitterDocument.hpp piecetable/MRTextDocument.hpp app/utils/MRStringUtils.hpp
 ui/MRScopedHistoryUI.o: ui/MRScopedHistoryUI.cpp ui/MRScopedHistoryUI.hpp config/MRDialogPaths.hpp ui/MRFrame.hpp
 ui/MRNumericSlider.o: ui/MRNumericSlider.cpp ui/MRNumericSlider.hpp
 mrmac/MRMacroRunner.o: mrmac/MRMacroRunner.cpp mrmac/MRMacroRunner.hpp mrmac/mrmac.h mrmac/MRVM.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp

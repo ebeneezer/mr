@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <string>
 
+#include "../app/utils/MRStringUtils.hpp"
 #include "MRSyntax.hpp"
 #include "MRTextDocument.hpp"
 
@@ -34,7 +35,7 @@ class MRTextBufferModel {
 		bool blockMarkingOn = false;
 	};
 
-	MRTextBufferModel() noexcept : mDocument(), mCursor(), mSelection(), mModified(false), mLanguage(MRSyntaxLanguage::PlainText), mSyntaxPathHint(), mSyntaxTitleHint(), mUndoStack(), mRedoStack() {
+	MRTextBufferModel() noexcept : mDocument(), mCursor(), mSelection(), mModified(false), mLanguage(MRSyntaxLanguage::PlainText), mLanguageAutomatic(false), mLanguageConfidence(0), mSyntaxPathHint(), mSyntaxTitleHint(), mUndoStack(), mRedoStack() {
 	}
 
 	void setText(const char *data, std::size_t length) {
@@ -239,22 +240,69 @@ class MRTextBufferModel {
 		return true;
 	}
 
-	void setSyntaxContext(const std::string &path, const std::string &title = std::string()) {
+	void setSyntaxContext(const std::string &path, const std::string &title = std::string(), const std::string &codeLanguage = std::string()) {
+		const std::string normalizedCodeLanguage = upperAscii(trimAscii(codeLanguage));
+		const MRSyntaxLanguage detectedByPath = tmrDetectSyntaxLanguage(path, title);
+
 		mSyntaxPathHint = path;
 		mSyntaxTitleHint = title;
-		mLanguage = tmrDetectSyntaxLanguage(mSyntaxPathHint, mSyntaxTitleHint);
+		mLanguageAutomatic = normalizedCodeLanguage == "AUTO";
+		mLanguageConfidence = 0;
+		if (normalizedCodeLanguage.empty() || normalizedCodeLanguage == "NONE") {
+			mLanguage = detectedByPath;
+			return;
+		}
+		if (normalizedCodeLanguage == "AUTO") {
+			const MRSyntaxClassification classification = tmrClassifySyntaxLanguage(mSyntaxPathHint, mSyntaxTitleHint, text());
+			mLanguageConfidence = classification.confidence;
+			mLanguage = classification.language != MRSyntaxLanguage::PlainText ? classification.language : detectedByPath;
+			return;
+		}
+		if (normalizedCodeLanguage == "C") {
+			mLanguage = MRSyntaxLanguage::C;
+			return;
+		}
+		if (normalizedCodeLanguage == "CPP") {
+			mLanguage = MRSyntaxLanguage::Cpp;
+			return;
+		}
+		if (normalizedCodeLanguage == "PYTHON") {
+			mLanguage = MRSyntaxLanguage::Python;
+			return;
+		}
+		if (normalizedCodeLanguage == "JAVASCRIPT" || normalizedCodeLanguage == "TYPESCRIPT" || normalizedCodeLanguage == "TSX") {
+			mLanguage = MRSyntaxLanguage::JavaScript;
+			return;
+		}
+		if (normalizedCodeLanguage == "BASH") {
+			mLanguage = MRSyntaxLanguage::Zsh;
+			return;
+		}
+		if (normalizedCodeLanguage == "JSON") {
+			mLanguage = MRSyntaxLanguage::Json;
+			return;
+		}
+		if (normalizedCodeLanguage == "PERL") {
+			mLanguage = MRSyntaxLanguage::Perl;
+			return;
+		}
+		mLanguage = MRSyntaxLanguage::PlainText;
 	}
 
 	MRSyntaxLanguage language() const noexcept {
 		return mLanguage;
 	}
 
-	const char *languageName() const noexcept {
-		return tmrSyntaxLanguageName(mLanguage);
+	bool languageAutomatic() const noexcept {
+		return mLanguageAutomatic;
 	}
 
-	MRSyntaxTokenMap tokenMapForLine(std::size_t pos) const {
-		return tmrBuildTokenMapForTextLine(mLanguage, mDocument.lineText(pos));
+	std::uint16_t languageConfidence() const noexcept {
+		return mLanguageConfidence;
+	}
+
+	const char *languageName() const noexcept {
+		return tmrSyntaxLanguageName(mLanguage);
 	}
 
 	std::size_t lineStart(std::size_t pos) const noexcept {
@@ -312,6 +360,8 @@ class MRTextBufferModel {
 	Selection mSelection;
 	bool mModified;
 	MRSyntaxLanguage mLanguage;
+	bool mLanguageAutomatic;
+	std::uint16_t mLanguageConfidence;
 	std::string mSyntaxPathHint;
 	std::string mSyntaxTitleHint;
 	std::vector<CustomUndoRecord> mUndoStack;

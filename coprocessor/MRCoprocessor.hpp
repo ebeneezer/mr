@@ -104,25 +104,23 @@ struct LineIndexWarmupPayload final : Payload {
 
 struct SyntaxWarmLine {
 	std::size_t lineStart;
-	MRSyntaxTokenMap tokens;
+	MRSyntaxLineResult syntaxLine;
 
-	SyntaxWarmLine() noexcept : lineStart(0), tokens() {
+	SyntaxWarmLine() noexcept : lineStart(0), syntaxLine() {
 	}
 
-	SyntaxWarmLine(std::size_t aLineStart, MRSyntaxTokenMap aTokens) : lineStart(aLineStart), tokens(std::move(aTokens)) {
+	SyntaxWarmLine(std::size_t aLineStart, MRSyntaxLineResult aSyntaxLine) : lineStart(aLineStart), syntaxLine(std::move(aSyntaxLine)) {
 	}
 };
 
 struct SyntaxWarmupPayload final : Payload {
 	MRSyntaxLanguage language;
-	bool treeSitter;
-	std::uint8_t treeSitterLanguage;
 	std::vector<SyntaxWarmLine> lines;
 
-	SyntaxWarmupPayload() noexcept : language(MRSyntaxLanguage::PlainText), treeSitter(false), treeSitterLanguage(0), lines() {
+	SyntaxWarmupPayload() noexcept : language(MRSyntaxLanguage::PlainText), lines() {
 	}
 
-	SyntaxWarmupPayload(MRSyntaxLanguage aLanguage, bool aTreeSitter, std::uint8_t aTreeSitterLanguage, std::vector<SyntaxWarmLine> aLines) : language(aLanguage), treeSitter(aTreeSitter), treeSitterLanguage(aTreeSitterLanguage), lines(std::move(aLines)) {
+	SyntaxWarmupPayload(MRSyntaxLanguage aLanguage, std::vector<SyntaxWarmLine> aLines) : language(aLanguage), lines(std::move(aLines)) {
 	}
 };
 
@@ -272,6 +270,38 @@ struct Result {
 	}
 };
 
+struct ActiveTaskSnapshot {
+	std::size_t workerSlot;
+	TaskInfo task;
+	std::uint64_t queueMicros;
+	std::uint64_t runMicros;
+
+	ActiveTaskSnapshot() noexcept : workerSlot(0), task(), queueMicros(0), runMicros(0) {
+	}
+};
+
+struct LaneSnapshot {
+	Lane lane;
+	std::size_t workerCount;
+	bool active;
+	TaskInfo activeTask;
+	std::uint64_t activeQueueMicros;
+	std::uint64_t activeRunMicros;
+	std::vector<ActiveTaskSnapshot> activeTasks;
+	std::vector<TaskInfo> queuedTasks;
+
+	LaneSnapshot() noexcept : lane(Lane::Compute), workerCount(1), active(false), activeTask(), activeQueueMicros(0), activeRunMicros(0), activeTasks(), queuedTasks() {
+	}
+};
+
+struct Snapshot {
+	std::size_t pendingResults;
+	std::vector<LaneSnapshot> lanes;
+
+	Snapshot() noexcept : pendingResults(0), lanes() {
+	}
+};
+
 using TaskFn = std::function<Result(const TaskInfo &, std::stop_token)>;
 using ResultHandler = std::function<void(const Result &)>;
 
@@ -291,30 +321,57 @@ class Coprocessor {
 	bool cancelTask(std::uint64_t taskId);
 	void shutdown(bool drainResults = false);
 	void cancelPending();
+	[[nodiscard]] Snapshot snapshot() const;
 
   private:
+	enum class ComputePriority : unsigned char {
+		High,
+		Normal,
+		Low
+	};
+
 	struct Request {
 		TaskInfo task;
 		TaskFn fn;
 		std::uint64_t submittedMicros;
+		ComputePriority computePriority;
+	};
+
+	struct ActiveTaskState {
+		std::size_t workerSlot;
+		TaskInfo task;
+		std::uint64_t submittedMicros;
+		std::uint64_t startedMicros;
+		ComputePriority computePriority;
+
+		ActiveTaskState() noexcept : workerSlot(0), task(), submittedMicros(0), startedMicros(0), computePriority(ComputePriority::Normal) {
+		}
 	};
 
 	struct LaneState {
 		Lane lane;
-		std::mutex mutex;
+		mutable std::mutex mutex;
 		std::condition_variable_any cv;
 		std::deque<Request> queue;
-		std::jthread worker;
+		std::deque<Request> highQueue;
+		std::deque<Request> normalQueue;
+		std::deque<Request> lowQueue;
+		std::vector<ActiveTaskState> activeTasks;
+		std::vector<std::jthread> workers;
 
-		explicit LaneState(Lane aLane) noexcept : lane(aLane), mutex(), cv(), queue(), worker() {
+		explicit LaneState(Lane aLane) noexcept : lane(aLane), mutex(), cv(), queue(), highQueue(), normalQueue(), lowQueue(), activeTasks(), workers() {
 		}
 	};
 
 	void startLane(LaneState &lane);
-	void workerLoop(LaneState &lane, std::stop_token stopToken);
+	void workerLoop(LaneState &lane, std::size_t workerSlot, std::stop_token stopToken);
 	void enqueueResult(Result result);
 	void forgetTask(std::uint64_t taskId);
 	LaneState &laneState(Lane lane) noexcept;
+	ComputePriority computePriorityForTask(TaskKind kind) const noexcept;
+	bool laneHasQueuedWorkLocked(const LaneState &lane) const noexcept;
+	bool popNextRequestLocked(LaneState &lane, Request &request) noexcept;
+	std::size_t laneWorkerCount(Lane lane) const noexcept;
 
 	mutable std::mutex resultMutex;
 	std::deque<Result> results;

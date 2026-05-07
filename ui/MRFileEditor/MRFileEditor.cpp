@@ -1,11 +1,150 @@
 #include "MRFileEditor.hpp"
 #include "../MREditWindow.hpp"
 
+namespace {
+
+bool isIndentWhitespace(char ch) noexcept {
+	return ch == ' ' || ch == '\t';
+}
+
+bool isStatefulSyntaxLanguage(MRSyntaxLanguage language) noexcept {
+	return language == MRSyntaxLanguage::MRMAC || language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp || language == MRSyntaxLanguage::JavaScript || language == MRSyntaxLanguage::Python ||
+	       language == MRSyntaxLanguage::Markdown || language == MRSyntaxLanguage::Zsh || language == MRSyntaxLanguage::Perl;
+}
+
+std::string_view trimView(std::string_view text) noexcept {
+	std::size_t start = 0;
+	std::size_t end = text.size();
+
+	while (start < end && isIndentWhitespace(text[start]))
+		++start;
+	while (end > start && (text[end - 1] == ' ' || text[end - 1] == '\t' || text[end - 1] == '\r'))
+		--end;
+	return text.substr(start, end - start);
+}
+
+std::size_t lastSignificantByte(std::string_view text) noexcept {
+	std::size_t end = text.size();
+
+	while (end > 0) {
+		const char ch = text[end - 1];
+		if (ch != ' ' && ch != '\t' && ch != '\r') return end - 1;
+		--end;
+	}
+	return std::string_view::npos;
+}
+
+bool startsWithCloser(std::string_view trimmed) noexcept {
+	return !trimmed.empty() && (trimmed.front() == '}' || trimmed.front() == ']' || trimmed.front() == ')');
+}
+
+std::size_t leadingIndentBytes(std::string_view text) noexcept {
+	std::size_t index = 0;
+	while (index < text.size() && isIndentWhitespace(text[index]))
+		++index;
+	return index;
+}
+
+bool isPythonIndentLead(std::string_view upperLine) noexcept {
+	return upperLine == "ELSE:" || upperLine == "TRY:" || upperLine == "FINALLY:" || upperLine.starts_with("IF ") || upperLine.starts_with("ELIF ") || upperLine.starts_with("FOR ") || upperLine.starts_with("WHILE ") ||
+	       upperLine.starts_with("WITH ") || upperLine.starts_with("MATCH ") || upperLine.starts_with("CASE ") || upperLine.starts_with("EXCEPT ") || upperLine.starts_with("DEF ") || upperLine.starts_with("CLASS ") ||
+	       upperLine.starts_with("ASYNC DEF ") || upperLine.starts_with("ASYNC FOR ") || upperLine.starts_with("ASYNC WITH ");
+}
+
+bool isPythonDedentLead(std::string_view upperLine) noexcept {
+	return upperLine == "ELSE:" || upperLine == "FINALLY:" || upperLine == "EXCEPT:" || upperLine.starts_with("ELIF ") || upperLine.starts_with("CASE ") || upperLine.starts_with("EXCEPT ");
+}
+
+bool isShellIndentLead(std::string_view trimmed, std::string_view upperLine) noexcept {
+	const std::size_t last = lastSignificantByte(trimmed);
+	if (last != std::string_view::npos && trimmed[last] == '{') return true;
+	return upperLine == "THEN" || upperLine.ends_with(" THEN") || upperLine == "DO" || upperLine.ends_with(" DO") || upperLine == "ELSE" || upperLine.starts_with("ELIF ") ||
+	       (upperLine.starts_with("CASE ") && upperLine.ends_with(" IN"));
+}
+
+bool isShellDedentLead(std::string_view trimmed, std::string_view upperLine) noexcept {
+	return startsWithCloser(trimmed) || upperLine == "FI" || upperLine == "DONE" || upperLine == "ESAC" || upperLine == "ELSE" || upperLine.starts_with("ELIF ");
+}
+
+bool isPerlIndentLead(std::string_view trimmed) noexcept {
+	const std::size_t last = lastSignificantByte(trimmed);
+	return last != std::string_view::npos && (trimmed[last] == '{' || trimmed[last] == '[' || trimmed[last] == '(');
+}
+
+bool markdownContinuationColumn(std::string_view line, int &targetColumn) noexcept {
+	const std::size_t indent = leadingIndentBytes(line);
+	const std::string_view trimmed = trimView(line);
+	if (trimmed.empty()) return false;
+	if (trimmed.front() == '>') {
+		std::size_t marker = indent;
+		while (marker < line.size() && line[marker] == '>')
+			++marker;
+		while (marker < line.size() && line[marker] == ' ')
+			++marker;
+		targetColumn = static_cast<int>(marker) + 1;
+		return true;
+	}
+	if ((trimmed.front() == '-' || trimmed.front() == '*' || trimmed.front() == '+') && trimmed.size() > 1 && std::isspace(static_cast<unsigned char>(trimmed[1])) != 0) {
+		std::size_t marker = indent + 2;
+		if (trimmed.size() >= 5 && line.size() >= indent + 5 && line[indent + 2] == '[' && line[indent + 4] == ']') marker = indent + 6;
+		targetColumn = static_cast<int>(marker) + 1;
+		return true;
+	}
+	if (std::isdigit(static_cast<unsigned char>(trimmed.front())) != 0) {
+		std::size_t marker = indent;
+		while (marker < line.size() && std::isdigit(static_cast<unsigned char>(line[marker])) != 0)
+			++marker;
+		if (marker < line.size() && (line[marker] == '.' || line[marker] == ')')) {
+			++marker;
+			while (marker < line.size() && line[marker] == ' ')
+				++marker;
+			targetColumn = static_cast<int>(marker) + 1;
+			return true;
+		}
+	}
+	return false;
+}
+
+bool isMarkdownFenceLine(std::string_view trimmed) noexcept {
+	if (trimmed.size() < 3) return false;
+	const char marker = trimmed.front();
+	if (marker != '`' && marker != '~') return false;
+	std::size_t runLength = 0;
+	while (runLength < trimmed.size() && trimmed[runLength] == marker)
+		++runLength;
+	return runLength >= 3;
+}
+
+bool isMarkdownSetextUnderline(std::string_view trimmed) noexcept {
+	if (trimmed.size() < 3) return false;
+	const char marker = trimmed.front();
+	if (marker != '=' && marker != '-') return false;
+	for (char ch : trimmed)
+		if (ch != marker && ch != ' ' && ch != '\t') return false;
+	return true;
+}
+
+bool isMakeTargetLine(std::string_view trimmed) noexcept {
+	const std::size_t colon = trimmed.find(':');
+	const std::size_t eq = trimmed.find('=');
+	return colon != std::string_view::npos && colon > 0 && (eq == std::string_view::npos || colon < eq);
+}
+
+bool isPreprocessorFoldStart(std::string_view trimmed) noexcept {
+	return trimmed.starts_with("#if") || trimmed.starts_with("#ifdef") || trimmed.starts_with("#ifndef");
+}
+
+bool isPreprocessorFoldEnd(std::string_view trimmed) noexcept {
+	return trimmed.starts_with("#endif") || trimmed.starts_with("#else") || trimmed.starts_with("#elif");
+}
+
+} // namespace
+
 MRFileEditor::LoadTiming::LoadTiming() noexcept : valid(false), bytes(0), lines(0), mappedLoadMs(0.0), lineCountMs(0.0) {
 }
 
 MRFileEditor::MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar, TIndicator *aIndicator, TStringView aFileName) noexcept
-    : TScroller(bounds, aHScrollBar, aVScrollBar), mIndicator(aIndicator), mReadOnly(false), mInsertMode(true), mAutoIndent(false), mSyntaxTitleHint(), mBufferModel(), mSelectionAnchor(0), mCursorVisualColumn(0), mIndicatorUpdateInProgress(false), mLineIndexWarmupTaskId(0), mLineIndexWarmupDocumentId(0), mLineIndexWarmupVersion(0), mSyntaxTokenCache(), mSyntaxWarmupTaskId(0), mSyntaxWarmupDocumentId(0), mSyntaxWarmupVersion(0), mSyntaxWarmupTopLine(0), mSyntaxWarmupBottomLine(0), mSyntaxWarmupLanguage(MRSyntaxLanguage::PlainText), mSyntaxWarmupTreeSitterLanguage(MRTreeSitterDocument::Language::None), mTreeSitterDocument(), mMiniMapRenderer(), mSaveNormalizationCache(), mSaveNormalizationWarmupTaskId(0), mSaveNormalizationWarmupDocumentId(0), mSaveNormalizationWarmupVersion(0),
+    : TScroller(bounds, aHScrollBar, aVScrollBar), mIndicator(aIndicator), mReadOnly(false), mInsertMode(true), mAutoIndent(false), mSyntaxTitleHint(), mBufferModel(), mSelectionAnchor(0), mCursorVisualColumn(0), mIndicatorUpdateInProgress(false), mLineIndexWarmupTaskId(0), mLineIndexWarmupDocumentId(0), mLineIndexWarmupVersion(0), mSyntaxTokenCache(), mSyntaxCheckpoints(), mSyntaxWarmupTaskId(0), mSyntaxWarmupDocumentId(0), mSyntaxWarmupVersion(0), mSyntaxWarmupTopLine(0), mSyntaxWarmupBottomLine(0), mSyntaxWarmupLanguage(MRSyntaxLanguage::PlainText), mSyntaxPrefetchDocumentId(0), mSyntaxPrefetchVersion(0), mSyntaxPrefetchTargetBottomLine(0), mSyntaxPrefetchReachedBottomLine(0), mSyntaxPrefetchLanguage(MRSyntaxLanguage::PlainText), mMiniMapRenderer(), mSaveNormalizationCache(), mSaveNormalizationWarmupTaskId(0), mSaveNormalizationWarmupDocumentId(0), mSaveNormalizationWarmupVersion(0),
       mSaveNormalizationWarmupOptionsHash(0), mSaveNormalizationWarmupSourceBytes(0), mSaveNormalizationWarmupStartedAt(std::chrono::steady_clock::time_point()), mSaveNormalizationThroughputBytesPerMicro(0.0), mSaveNormalizationThroughputSamples(0), mMiniMapInitialRenderReportedDocumentId(0), mBlockOverlayActive(false), mBlockOverlayMode(0), mBlockOverlayAnchor(0), mBlockOverlayEnd(0), mBlockOverlayTrackingCursor(false), mPreferredIndentColumn(1), mLastLoadTiming(), mLargeFileMetricsTraceValid(false), mLastLargeFileMetricsExactKnown(false), mLastLargeFileMetricsLimitY(0), mLastLargeFileMetricsMaxY(0), mLastLargeFileMetricsDeltaY(0), mLastLargeFileMetricsNewDeltaY(0) {
 	fileName[0] = EOS;
 	options |= ofFirstClick;
@@ -128,6 +267,22 @@ std::uint64_t MRFileEditor::pendingMiniMapWarmupTaskId() const noexcept {
 
 std::uint64_t MRFileEditor::pendingSaveNormalizationWarmupTaskId() const noexcept {
 	return mSaveNormalizationWarmupTaskId;
+}
+
+std::size_t MRFileEditor::syntaxWarmupTopLine() const noexcept {
+	return mSyntaxWarmupTopLine;
+}
+
+std::size_t MRFileEditor::syntaxWarmupBottomLine() const noexcept {
+	return mSyntaxWarmupBottomLine;
+}
+
+std::size_t MRFileEditor::syntaxPrefetchTargetBottomLine() const noexcept {
+	return mSyntaxPrefetchTargetBottomLine;
+}
+
+std::size_t MRFileEditor::syntaxPrefetchReachedBottomLine() const noexcept {
+	return mSyntaxPrefetchReachedBottomLine;
 }
 
 bool MRFileEditor::shouldReportMiniMapInitialRender() const noexcept {
@@ -338,27 +493,15 @@ MRFileEditor::LoadTiming MRFileEditor::lastLoadTiming() const noexcept {
 }
 
 const char *MRFileEditor::syntaxLanguageName() const noexcept {
-	switch (mTreeSitterDocument.activeLanguage()) {
-		case MRTreeSitterDocument::Language::C:
-			return "C";
-		case MRTreeSitterDocument::Language::Cpp:
-			return "C++";
-		case MRTreeSitterDocument::Language::JavaScript:
-			return "JavaScript";
-		case MRTreeSitterDocument::Language::Python:
-			return "Python";
-		case MRTreeSitterDocument::Language::Json:
-			return "JSON";
-		case MRTreeSitterDocument::Language::MRMAC:
-			return "MRMAC";
-		case MRTreeSitterDocument::Language::None:
-			break;
-	}
 	return mBufferModel.languageName();
 }
 
 MRSyntaxLanguage MRFileEditor::syntaxLanguage() const noexcept {
 	return mBufferModel.language();
+}
+
+bool MRFileEditor::syntaxLanguageAutomatic() const noexcept {
+	return mBufferModel.languageAutomatic();
 }
 
 MRMiniMapRenderer::Palette MRFileEditor::resolveMiniMapPalette() {
@@ -446,7 +589,13 @@ void MRFileEditor::notifyWindowTaskStateChanged() {
 	if (owner != nullptr) message(owner, evBroadcast, cmUpdateTitle, 0);
 }
 
+void MRFileEditor::continueComputeWarmupIfNeeded() {
+	scheduleLineIndexWarmupIfNeeded();
+	scheduleSyntaxWarmupIfNeeded();
+}
+
 bool MRFileEditor::applyLineIndexWarmup(const mr::editor::LineIndexWarmupData &warmup, std::size_t expectedVersion) {
+	const bool exactLineCountWasKnown = mBufferModel.exactLineCountKnown();
 	if (shouldTraceLargeFileDiagnostics()) {
 		std::ostringstream detail;
 		detail << "expected_version=" << expectedVersion << " checkpoints=" << warmup.checkpoints.size() << " indexed_offset=" << warmup.lazyIndexedOffset << " indexed_line=" << warmup.lazyIndexedLine << " complete=" << (warmup.lazyLineIndexComplete ? 1 : 0) << " total_lines=" << warmup.lazyTotalLineCount;
@@ -456,6 +605,18 @@ bool MRFileEditor::applyLineIndexWarmup(const mr::editor::LineIndexWarmupData &w
 	mLineIndexWarmupTaskId = 0;
 	mLineIndexWarmupDocumentId = 0;
 	mLineIndexWarmupVersion = 0;
+	if (mBufferModel.exactLineCountKnown()) {
+		const std::size_t exactLineCount = std::max<std::size_t>(1, mBufferModel.lineCount());
+		const std::size_t lastValidTopLine = exactLineCount - 1;
+
+		if (mSyntaxPrefetchTargetBottomLine > exactLineCount) mSyntaxPrefetchTargetBottomLine = exactLineCount;
+		if (mSyntaxPrefetchReachedBottomLine > exactLineCount) mSyntaxPrefetchReachedBottomLine = exactLineCount;
+		if (mSyntaxWarmupTopLine > lastValidTopLine) mSyntaxWarmupTopLine = lastValidTopLine;
+		if (mSyntaxWarmupBottomLine > exactLineCount) mSyntaxWarmupBottomLine = exactLineCount;
+		if (mSyntaxWarmupBottomLine < mSyntaxWarmupTopLine) mSyntaxWarmupBottomLine = exactLineCount;
+		if (!exactLineCountWasKnown) applyMiniMapSignals(mMiniMapRenderer.invalidate(false, mBufferModel.documentId()));
+	}
+	scheduleSyntaxWarmupIfNeeded();
 	notifyWindowTaskStateChanged();
 	updateMetrics();
 	updateIndicator();
@@ -466,25 +627,60 @@ bool MRFileEditor::applyLineIndexWarmup(const mr::editor::LineIndexWarmupData &w
 bool MRFileEditor::applySyntaxWarmup(const mr::coprocessor::SyntaxWarmupPayload &warmup, std::size_t expectedVersion, std::uint64_t expectedTaskId) {
 	if (expectedTaskId == 0 || mSyntaxWarmupTaskId != expectedTaskId) return false;
 	if (mBufferModel.documentId() != mSyntaxWarmupDocumentId || mBufferModel.version() != expectedVersion) return false;
-	if (warmup.treeSitter) {
-		const MRTreeSitterDocument::Language activeTreeSitterLanguage = mTreeSitterDocument.activeLanguage();
-		const std::uint8_t activeTreeSitterLanguageId = static_cast<std::uint8_t>(activeTreeSitterLanguage);
-		if (activeTreeSitterLanguage == MRTreeSitterDocument::Language::None) return false;
-		if (activeTreeSitterLanguageId != warmup.treeSitterLanguage) return false;
-	} else if (mBufferModel.language() != warmup.language)
+	if (mBufferModel.language() != warmup.language)
 		return false;
 
-	mSyntaxTokenCache.clear();
-	for (std::size_t i = 0; i < warmup.lines.size(); ++i)
-		mSyntaxTokenCache[warmup.lines[i].lineStart] = warmup.lines[i].tokens;
+	const bool statefulSyntax = isStatefulSyntaxLanguage(warmup.language);
+	MRSyntaxLineState state = warmup.lines.empty() ? MRSyntaxLineState() : syntaxWarmupInitialState(warmup.lines.front().lineStart);
+	std::size_t lineIndex = 0;
+	std::size_t warmedBottomLine = 0;
 
+	if (!warmup.lines.empty()) {
+		lineIndex = mBufferModel.lineIndex(warmup.lines.front().lineStart);
+		warmedBottomLine = lineIndex + warmup.lines.size();
+		if (mBufferModel.exactLineCountKnown()) {
+			const std::size_t exactLineCount = std::max<std::size_t>(1, mBufferModel.lineCount());
+			if (warmedBottomLine > exactLineCount) warmedBottomLine = exactLineCount;
+		}
+	}
+
+	for (std::size_t i = 0; i < warmup.lines.size(); ++i) {
+		std::map<std::size_t, MRSyntaxCacheEntry>::iterator found = mSyntaxTokenCache.find(warmup.lines[i].lineStart);
+		bool stable = false;
+
+		if (found != mSyntaxTokenCache.end() && found->second.stateIn == state) {
+			const MRSyntaxLineResult &cachedLine = found->second.syntaxLine;
+			const MRSyntaxLineResult &warmLine = warmup.lines[i].syntaxLine;
+
+			if (cachedLine.stateOut == warmLine.stateOut && cachedLine.tokenRuns.size() == warmLine.tokenRuns.size()) {
+				stable = true;
+				for (std::size_t runIndex = 0; runIndex < cachedLine.tokenRuns.size(); ++runIndex) {
+					const MRSyntaxTokenRun &cachedRun = cachedLine.tokenRuns[runIndex];
+					const MRSyntaxTokenRun &warmRun = warmLine.tokenRuns[runIndex];
+
+					if (cachedRun.column != warmRun.column || cachedRun.length != warmRun.length || cachedRun.token != warmRun.token) {
+						stable = false;
+						break;
+					}
+				}
+			}
+		}
+		if (!stable) mSyntaxTokenCache[warmup.lines[i].lineStart] = MRSyntaxCacheEntry(state, warmup.lines[i].syntaxLine);
+		if (statefulSyntax) rememberSyntaxCheckpoint(warmup.lines[i].lineStart, lineIndex, state);
+		if (statefulSyntax) state = warmup.lines[i].syntaxLine.stateOut;
+		else
+			state = MRSyntaxLineState();
+		++lineIndex;
+	}
+
+	if (mSyntaxPrefetchDocumentId == mBufferModel.documentId() && mSyntaxPrefetchVersion == expectedVersion && mSyntaxPrefetchLanguage == warmup.language && warmedBottomLine > mSyntaxPrefetchReachedBottomLine)
+		mSyntaxPrefetchReachedBottomLine = warmedBottomLine;
 	mSyntaxWarmupTaskId = 0;
 	mSyntaxWarmupDocumentId = 0;
 	mSyntaxWarmupVersion = 0;
 	mSyntaxWarmupTopLine = 0;
 	mSyntaxWarmupBottomLine = 0;
 	mSyntaxWarmupLanguage = MRSyntaxLanguage::PlainText;
-	mSyntaxWarmupTreeSitterLanguage = MRTreeSitterDocument::Language::None;
 	notifyWindowTaskStateChanged();
 	drawView();
 	return true;
@@ -1465,10 +1661,10 @@ bool MRFileEditor::adoptCommittedDocument(const MRTextBufferModel::Document &doc
 	selEnd = std::min(selEnd, document.length());
 	if (selEnd < selStart) std::swap(selStart, selEnd);
 
-	mTreeSitterDocument.prepareDocumentAdoption(mBufferModel.document(), document, changeSet);
 	mBufferModel.document() = document;
 	invalidateSaveNormalizationCache();
-	resetSyntaxWarmupState(true);
+	resetSyntaxWarmupState(changeSet == nullptr || !changeSet->changed);
+	if (changeSet != nullptr && changeSet->changed) invalidateSyntaxCacheFromLineStart(mBufferModel.lineStart(changeSet->touchedRange.start));
 	applyMiniMapSignals(mMiniMapRenderer.invalidate(false, mBufferModel.documentId()));
 	refreshSyntaxContext();
 	cursorPos = canonicalCursorOffset(cursorPos);
@@ -1541,35 +1737,63 @@ std::string MRFileEditor::smartIndentFillForCursor() {
 	const std::size_t lineStart = lineStartOffset(cursor);
 	const int baseColumn = leadingIndentColumnForLine(lineStart);
 	int targetColumn = baseColumn;
+	std::string lineText = mBufferModel.lineText(lineStart);
+	std::size_t cursorInLine = cursor > lineStart ? std::min(cursor - lineStart, lineText.size()) : 0;
+	std::string_view beforeCursor(lineText.data(), cursorInLine);
+	std::string_view trimmedBeforeCursor = trimView(beforeCursor);
+	const MRSyntaxLanguage language = mBufferModel.language();
 
-	if (settings.smartIndenting && mTreeSitterDocument.activeLanguage() != MRTreeSitterDocument::Language::None) {
-		const mr::editor::ReadSnapshot snapshot = mBufferModel.readSnapshot();
-		if (mTreeSitterDocument.syncToDocument(snapshot, mBufferModel.documentId(), mBufferModel.version()) && mTreeSitterDocument.shouldIncreaseIndentOnNewLine(snapshot, cursor))
+	if (!settings.smartIndenting) return buildEditIndentFill(settings, 1, targetColumn, configuredTabExpandSetting());
+	if (language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp || language == MRSyntaxLanguage::JavaScript || language == MRSyntaxLanguage::Json) {
+		const std::size_t last = lastSignificantByte(beforeCursor);
+		if (last != std::string_view::npos && (beforeCursor[last] == '{' || beforeCursor[last] == '[' || beforeCursor[last] == '('))
 			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+	} else if (language == MRSyntaxLanguage::Python) {
+		const std::string upperLine = upperAscii(std::string(trimmedBeforeCursor));
+		if (!upperLine.empty() && upperLine.back() == ':' && isPythonIndentLead(upperLine))
+			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+	} else if (language == MRSyntaxLanguage::Zsh) {
+		const std::string upperLine = upperAscii(std::string(trimmedBeforeCursor));
+		if (isShellIndentLead(trimmedBeforeCursor, upperLine))
+			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+	} else if (language == MRSyntaxLanguage::Perl) {
+		if (isPerlIndentLead(trimmedBeforeCursor))
+			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+	} else if (language == MRSyntaxLanguage::Markdown) {
+		int markdownColumn = 0;
+		if (markdownContinuationColumn(beforeCursor, markdownColumn)) targetColumn = std::max(targetColumn, markdownColumn);
 	}
 	return buildEditIndentFill(settings, 1, targetColumn, configuredTabExpandSetting());
 }
 
 void MRFileEditor::applyLiveSmartDedentAfterTextInput(const std::string &insertedText) {
 	const MREditSetupSettings settings = configuredEditSetupSettings();
-	const char lastChar = insertedText.empty() ? '\0' : insertedText.back();
+	const MRSyntaxLanguage language = mBufferModel.language();
 
-	if (!settings.smartIndenting || mTreeSitterDocument.activeLanguage() == MRTreeSitterDocument::Language::None) return;
+	if (!settings.smartIndenting) return;
 	if (insertedText.find('\n') != std::string::npos || insertedText.find('\r') != std::string::npos) return;
-	if (lastChar != ':' && lastChar != '}' && lastChar != ']' && lastChar != ')' && lastChar != 'E' && lastChar != 'e') return;
-	{
-		const mr::editor::ReadSnapshot snapshot = mBufferModel.readSnapshot();
-		const std::size_t cursor = cursorOffset();
-		const std::size_t lineStart = lineStartOffset(cursor);
-		const int baseColumn = leadingIndentColumnForLine(lineStart);
-		const int targetColumn = prevResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+	if (language != MRSyntaxLanguage::C && language != MRSyntaxLanguage::Cpp && language != MRSyntaxLanguage::JavaScript && language != MRSyntaxLanguage::Json && language != MRSyntaxLanguage::Python &&
+	    language != MRSyntaxLanguage::Zsh && language != MRSyntaxLanguage::Perl) return;
 
-		if (baseColumn <= 1 || targetColumn >= baseColumn) return;
-		if (!mTreeSitterDocument.syncToDocument(snapshot, mBufferModel.documentId(), mBufferModel.version())) return;
-		if (!mTreeSitterDocument.shouldDedentCurrentLine(snapshot, cursor)) return;
-	}
-	applyCurrentLineLeadingIndent(prevResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin,
-																	 leadingIndentColumnForLine(lineStartOffset(cursorOffset()))));
+	const std::size_t lineStart = lineStartOffset(cursorOffset());
+	const int baseColumn = leadingIndentColumnForLine(lineStart);
+	if (baseColumn <= 1) return;
+
+	const std::string lineText = mBufferModel.lineText(lineStart);
+	const std::string_view trimmedLine = trimView(lineText);
+	bool shouldDedent = false;
+
+	if (language == MRSyntaxLanguage::Python) {
+		const std::string upperLine = upperAscii(std::string(trimmedLine));
+		shouldDedent = isPythonDedentLead(upperLine);
+	} else if (language == MRSyntaxLanguage::Zsh) {
+		const std::string upperLine = upperAscii(std::string(trimmedLine));
+		shouldDedent = isShellDedentLead(trimmedLine, upperLine);
+	} else
+		shouldDedent = startsWithCloser(trimmedLine);
+
+	if (!shouldDedent) return;
+	applyCurrentLineLeadingIndent(prevResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn));
 }
 
 bool MRFileEditor::newLineWithPreferredIndent() {
@@ -1708,9 +1932,6 @@ void MRFileEditor::draw() {
 	}
 	syncScrollBarsToState();
 	MREditSetupSettings editSettings = configuredEditSetupSettings();
-	std::size_t topLine = static_cast<std::size_t>(std::max(delta.y, 0));
-	std::size_t linePtr = lineStartForIndex(topLine);
-	std::size_t lineIndex = topLine;
 	std::size_t totalLines = 1;
 	TextViewportGeometry viewport = textViewportGeometryFor(editSettings);
 	bool showLineNumbers = viewport.lineNumberWidth > 0;
@@ -1718,17 +1939,8 @@ void MRFileEditor::draw() {
 	bool zeroFillLineNumbers = showLineNumbers && editSettings.lineNumZeroFill;
 	int textWidth = viewport.width;
 	MRTextBufferModel::Range selection = mBufferModel.selection().range().normalized();
-	if ((selection.end <= selection.start) && owner != nullptr) {
-		std::size_t lastSearchStart = 0;
-		std::size_t lastSearchEnd = 0;
-		std::size_t lastSearchCursor = 0;
-		std::string currentFileName = hasPersistentFileName() ? std::string(fileName) : std::string();
-
-		if (mrvmUiCopyWindowLastSearch(owner, currentFileName, lastSearchStart, lastSearchEnd, lastSearchCursor) && lastSearchEnd > lastSearchStart) {
-			selection.start = std::min(lastSearchStart, mBufferModel.length());
-			selection.end = std::min(lastSearchEnd, mBufferModel.length());
-		}
-	}
+	const MRSyntaxLanguage syntaxLanguage = mBufferModel.language();
+	const bool statefulSyntax = isStatefulSyntaxLanguage(syntaxLanguage);
 	MRMiniMapRenderer::Palette miniMapPalette = resolveMiniMapPalette();
 	const bool drawMiniMap = viewport.miniMapBodyWidth > 0 && viewport.miniMapInfoX >= 0;
 	const bool miniMapUseBraille = MRMiniMapRenderer::useBrailleRenderer();
@@ -1736,22 +1948,102 @@ void MRFileEditor::draw() {
 	const int miniMapRows = std::max(0, visibleTextRows());
 	if (mBufferModel.exactLineCountKnown()) totalLines = std::max<std::size_t>(1, mBufferModel.lineCount());
 	else
-		totalLines = std::max<std::size_t>(1, std::max<std::size_t>(mBufferModel.estimatedLineCount(), topLine + static_cast<std::size_t>(std::max(miniMapRows, 1))));
+		totalLines = std::max<std::size_t>(1, std::max<std::size_t>(mBufferModel.estimatedLineCount(), static_cast<std::size_t>(std::max(delta.y, 0)) + static_cast<std::size_t>(std::max(miniMapRows, 1))));
+	std::size_t topLine = static_cast<std::size_t>(std::max(delta.y, 0));
+	if (topLine >= totalLines) topLine = totalLines - 1;
+	std::size_t linePtr = lineStartForIndex(topLine);
+	std::size_t lineIndex = topLine;
 	const MRMiniMapRenderer::Viewport miniMapViewport = {viewport.width, viewport.miniMapBodyX, viewport.miniMapBodyWidth, viewport.miniMapInfoX, viewport.miniMapSeparatorX};
 	if (drawMiniMap) applyMiniMapSignals(mMiniMapRenderer.scheduleWarmupIfNeeded(miniMapViewport, miniMapRows, miniMapUseBraille, totalLines, topLine, mBufferModel.documentId(), mBufferModel.version(), mBufferModel.readSnapshot(), editSettings));
 	MRMiniMapRenderer::OverlayState miniMapOverlay = mMiniMapRenderer.computeOverlayState(mBufferModel.readSnapshot(), selection, mFindMarkerRanges, mDirtyRanges, totalLines, viewport.width, viewport.miniMapBodyWidth, miniMapUseBraille, editSettings);
+	std::vector<MRSyntaxLineResult> visibleSyntaxLines;
 
 	if (editSettings.formatRuler && viewport.topInset > 0) drawFormatRulerOverlay(viewport, editSettings);
 	const int textRows = std::max(0, visibleTextRows());
+	std::size_t immediateSyntaxLineBudget = 96;
+	std::size_t immediateSyntaxLinesUsed = 0;
+	if (statefulSyntax && mSyntaxWarmupTaskId != 0 && mSyntaxWarmupDocumentId == mBufferModel.documentId() && mSyntaxWarmupVersion == mBufferModel.version() && mSyntaxWarmupLanguage == syntaxLanguage &&
+		topLine >= mSyntaxWarmupTopLine && topLine + static_cast<std::size_t>(textRows) <= mSyntaxWarmupBottomLine)
+		immediateSyntaxLineBudget = 24;
+	if (statefulSyntax && textRows > 0) {
+		std::size_t preludeLines = static_cast<std::size_t>(textRows * 4);
+		std::size_t stateTopLine = topLine > preludeLines ? topLine - preludeLines : 0;
+		MRSyntaxCheckpointEntry checkpoint;
+		MRSyntaxLineState state;
+		std::vector<std::size_t> stateLineStarts;
+		bool useCheckpointStart = false;
+
+		if (syntaxCheckpointForLine(topLine, checkpoint) && checkpoint.lineIndex > stateTopLine) {
+			stateTopLine = checkpoint.lineIndex;
+			state = checkpoint.stateIn;
+			useCheckpointStart = true;
+		}
+		const int stateRowCount = static_cast<int>(topLine - stateTopLine + static_cast<std::size_t>(textRows));
+
+		if (useCheckpointStart) {
+			stateLineStarts.reserve(static_cast<std::size_t>(std::max(stateRowCount, 0)));
+			std::size_t stateLinePtr = checkpoint.lineStart;
+			const std::size_t exactLineCount = mBufferModel.exactLineCountKnown() ? std::max<std::size_t>(1, mBufferModel.lineCount()) : 0;
+			std::size_t stateLineIndex = checkpoint.lineIndex;
+			for (int i = 0; i < stateRowCount; ++i) {
+				if (mBufferModel.exactLineCountKnown() && stateLineIndex >= exactLineCount) break;
+				stateLineStarts.push_back(stateLinePtr);
+				++stateLineIndex;
+				if (i + 1 >= stateRowCount || stateLinePtr >= mBufferModel.length()) break;
+				std::size_t next = mBufferModel.nextLine(stateLinePtr);
+				if (next <= stateLinePtr) break;
+				stateLinePtr = next;
+			}
+		}
+		if (stateLineStarts.empty()) stateLineStarts = syntaxWarmupLineStarts(stateTopLine, stateRowCount);
+		const bool haveCompleteStatefulCache = hasSyntaxTokensForLineStarts(stateLineStarts, state);
+
+		visibleSyntaxLines.reserve(static_cast<std::size_t>(textRows));
+		for (std::size_t i = 0; i < stateLineStarts.size(); ++i) {
+			std::size_t stateLinePtr = stateLineStarts[i];
+			std::size_t stateLineIndex = stateTopLine + i;
+			MRSyntaxLineResult syntaxLine;
+			std::map<std::size_t, MRSyntaxCacheEntry>::iterator found = mSyntaxTokenCache.find(stateLinePtr);
+
+			if (haveCompleteStatefulCache) syntaxLine = found->second.syntaxLine;
+			else if (found != mSyntaxTokenCache.end() && found->second.stateIn == state) syntaxLine = found->second.syntaxLine;
+			else if (immediateSyntaxLinesUsed < immediateSyntaxLineBudget) {
+				syntaxLine = syntaxLineResultForLine(stateLinePtr, state);
+				++immediateSyntaxLinesUsed;
+			} else {
+				for (std::size_t plainIndex = i; plainIndex < stateLineStarts.size(); ++plainIndex) {
+					std::size_t plainLineIndex = stateTopLine + plainIndex;
+
+					if (plainLineIndex >= topLine) visibleSyntaxLines.push_back(tmrHighlightTextLine(MRSyntaxLanguage::PlainText, mBufferModel.lineText(stateLineStarts[plainIndex])));
+				}
+				break;
+			}
+			rememberSyntaxCheckpoint(stateLinePtr, stateLineIndex, state);
+			state = syntaxLine.stateOut;
+			if (stateLineIndex >= topLine) visibleSyntaxLines.push_back(syntaxLine);
+		}
+	}
 	for (int y = 0; y < textRows; ++y) {
 		TDrawBuffer buffer;
 		bool isDocumentLine = lineIndex < totalLines;
 		bool drawEofMarker = editSettings.showEofMarker && lineIndex == totalLines;
 		bool drawEofMarkerAsEmoji = drawEofMarker && editSettings.showEofMarkerEmoji;
+		MRSyntaxLineResult syntaxLine;
 		if (showLineNumbers) drawLineNumberGutter(buffer, lineIndex, isDocumentLine, viewport.lineNumberX, viewport.lineNumberWidth, zeroFillLineNumbers);
-		if (drawCodeFolding) drawCodeFoldingGutter(buffer, viewport.codeFoldingX, viewport.codeFoldingWidth);
+		if (drawCodeFolding) drawCodeFoldingGutter(buffer, viewport.codeFoldingX, viewport.codeFoldingWidth, linePtr, lineIndex);
 		if (drawMiniMap) mMiniMapRenderer.drawGutter(buffer, y, miniMapRows, size.x, miniMapViewport, totalLines, topLine, miniMapUseBraille, viewportMarkerGlyph, miniMapPalette, miniMapOverlay);
-		formatSyntaxLine(buffer, linePtr, delta.x, textWidth, viewport.textLeft, isDocumentLine, drawEofMarker, drawEofMarkerAsEmoji);
+		if (static_cast<std::size_t>(y) < visibleSyntaxLines.size()) syntaxLine = visibleSyntaxLines[static_cast<std::size_t>(y)];
+		else {
+			std::map<std::size_t, MRSyntaxCacheEntry>::iterator found = mSyntaxTokenCache.find(linePtr);
+
+			if (found != mSyntaxTokenCache.end() && found->second.stateIn == MRSyntaxLineState()) syntaxLine = found->second.syntaxLine;
+			else if (immediateSyntaxLinesUsed < immediateSyntaxLineBudget) {
+				syntaxLine = syntaxLineResultForLine(linePtr, MRSyntaxLineState());
+				++immediateSyntaxLinesUsed;
+			} else
+				syntaxLine = tmrHighlightTextLine(MRSyntaxLanguage::PlainText, mBufferModel.lineText(linePtr));
+		}
+		formatSyntaxLine(buffer, linePtr, syntaxLine, delta.x, textWidth, viewport.textLeft, isDocumentLine, drawEofMarker, drawEofMarkerAsEmoji);
 		writeBuf(0, y + viewport.topInset, size.x, 1, buffer);
 		if (linePtr < mBufferModel.length()) linePtr = mBufferModel.nextLine(linePtr);
 		++lineIndex;
@@ -1775,37 +2067,120 @@ void MRFileEditor::drawLineNumberGutter(TDrawBuffer &b, std::size_t lineIndex, b
 	b.moveStr(static_cast<ushort>(drawX), numberBuffer, color, static_cast<ushort>(width));
 }
 
-void MRFileEditor::drawCodeFoldingGutter(TDrawBuffer &b, int drawX, int width) {
+void MRFileEditor::drawCodeFoldingGutter(TDrawBuffer &b, int drawX, int width, std::size_t lineStart, std::size_t lineIndex) {
 	unsigned char configured = 0;
 	TColorAttr color = static_cast<TColorAttr>(getColor(0x0606));
+	TColorAttr markerColor = static_cast<TColorAttr>(getColor(0x0404));
+	char marker = ' ';
 
 	if (width <= 0) return;
 	if (configuredColorSlotOverride(kMrPaletteCodeFolding, configured)) color = static_cast<TColorAttr>(configured);
 	b.moveChar(static_cast<ushort>(drawX), ' ', color, static_cast<ushort>(width));
+	if (lineIndex >= std::max<std::size_t>(1, mBufferModel.lineCount()) && mBufferModel.exactLineCountKnown()) return;
+
+	const std::string lineText = mBufferModel.lineText(lineStart);
+	const std::string_view trimmed = trimView(lineText);
+	if (trimmed.empty()) return;
+
+	std::string nextLineText;
+	std::string_view nextTrimmed;
+	std::size_t nextIndent = 0;
+	if (lineStart < mBufferModel.length()) {
+		const std::size_t nextLineStart = mBufferModel.nextLine(lineStart);
+		if (nextLineStart > lineStart) {
+			nextLineText = mBufferModel.lineText(nextLineStart);
+			nextTrimmed = trimView(nextLineText);
+			nextIndent = leadingIndentBytes(nextLineText);
+		}
+	}
+
+	const MRSyntaxLanguage language = mBufferModel.language();
+	const std::size_t currentIndent = leadingIndentBytes(lineText);
+	const std::size_t last = lastSignificantByte(trimmed);
+	const bool trailingBlockOpen = last != std::string_view::npos && (trimmed[last] == '{' || trimmed[last] == '[' || trimmed[last] == '(');
+	const bool indentOpens = !nextTrimmed.empty() && nextIndent > currentIndent;
+	bool foldStart = false;
+	bool foldEnd = false;
+
+	switch (language) {
+		case MRSyntaxLanguage::C:
+		case MRSyntaxLanguage::Cpp:
+		case MRSyntaxLanguage::JavaScript:
+		case MRSyntaxLanguage::Json:
+			foldStart = trailingBlockOpen || isPreprocessorFoldStart(trimmed);
+			foldEnd = startsWithCloser(trimmed) || isPreprocessorFoldEnd(trimmed);
+			break;
+		case MRSyntaxLanguage::Python: {
+			const std::string upperLine = upperAscii(std::string(trimmed));
+			foldStart = indentOpens || (!upperLine.empty() && upperLine.back() == ':' && isPythonIndentLead(upperLine));
+			foldEnd = isPythonDedentLead(upperLine);
+			break;
+		}
+		case MRSyntaxLanguage::Zsh: {
+			const std::string upperLine = upperAscii(std::string(trimmed));
+			foldStart = indentOpens || isShellIndentLead(trimmed, upperLine);
+			foldEnd = isShellDedentLead(trimmed, upperLine);
+			break;
+		}
+		case MRSyntaxLanguage::Perl:
+			foldStart = indentOpens || isPerlIndentLead(trimmed);
+			foldEnd = startsWithCloser(trimmed);
+			break;
+		case MRSyntaxLanguage::Markdown:
+			foldStart = trimmed.starts_with("#") || isMarkdownFenceLine(trimmed) || (!nextTrimmed.empty() && isMarkdownSetextUnderline(nextTrimmed));
+			break;
+		case MRSyntaxLanguage::Make:
+			foldStart = isMakeTargetLine(trimmed) && !nextTrimmed.empty() && !nextLineText.empty() && nextLineText.front() == '\t';
+			break;
+		case MRSyntaxLanguage::MRMAC:
+			foldStart = trailingBlockOpen || indentOpens;
+			foldEnd = startsWithCloser(trimmed);
+			break;
+		case MRSyntaxLanguage::PlainText:
+		default:
+			foldStart = indentOpens;
+			break;
+	}
+
+	if (foldStart) marker = '+';
+	else if (foldEnd)
+		marker = '-';
+	if (marker == ' ') return;
+	b.moveChar(static_cast<ushort>(drawX + width / 2), marker, markerColor, 1);
 }
 
 TColorAttr MRFileEditor::tokenColor(MRSyntaxToken token, bool selected, TAttrPair pair) noexcept {
 	TColorAttr normal = static_cast<TColorAttr>(pair);
 	TColorAttr selectedAttr = static_cast<TColorAttr>(pair >> 8);
 	uchar background = static_cast<uchar>((selected ? selectedAttr : normal) & 0xF0);
+	auto configuredCodeColor = [background](unsigned char paletteSlot, unsigned char fallbackForeground) noexcept -> TColorAttr {
+		unsigned char configured = 0;
+
+		if (configuredColorSlotOverride(paletteSlot, configured)) return static_cast<TColorAttr>(background | (configured & 0x0F));
+		return static_cast<TColorAttr>(background | fallbackForeground);
+	};
 
 	if (selected) return selectedAttr;
 	switch (token) {
 		case MRSyntaxToken::Keyword:
+			return configuredCodeColor(kMrPaletteCodeKeywords, 0x0E);
 		case MRSyntaxToken::Directive:
+			return configuredCodeColor(kMrPaletteCodeDirectives, 0x0E);
 		case MRSyntaxToken::Section:
-			return static_cast<TColorAttr>(background | 0x0E);
-		case MRSyntaxToken::Type:
-		case MRSyntaxToken::Key:
-			return static_cast<TColorAttr>(background | 0x0B);
-		case MRSyntaxToken::Number:
-			return static_cast<TColorAttr>(background | 0x0A);
-		case MRSyntaxToken::String:
-			return static_cast<TColorAttr>(background | 0x0D);
-		case MRSyntaxToken::Comment:
-			return static_cast<TColorAttr>(background | 0x03);
 		case MRSyntaxToken::Heading:
-			return static_cast<TColorAttr>(background | 0x0F);
+			return configuredCodeColor(kMrPaletteCodeKeywords, 0x0E);
+		case MRSyntaxToken::Type:
+			return configuredCodeColor(kMrPaletteCodeTypes, 0x0B);
+		case MRSyntaxToken::Key:
+			return configuredCodeColor(kMrPaletteCodeConstants, 0x0B);
+		case MRSyntaxToken::Delimiter:
+			return configuredCodeColor(kMrPaletteCodeDelimiters, 0x09);
+		case MRSyntaxToken::Number:
+			return configuredCodeColor(kMrPaletteCodeNumbers, 0x0A);
+		case MRSyntaxToken::String:
+			return configuredCodeColor(kMrPaletteCodeStrings, 0x0D);
+		case MRSyntaxToken::Comment:
+			return configuredCodeColor(kMrPaletteCodeComments, 0x03);
 		default:
 			return normal;
 	}
@@ -1814,11 +2189,17 @@ TColorAttr MRFileEditor::tokenColor(MRSyntaxToken token, bool selected, TAttrPai
 std::vector<std::size_t> MRFileEditor::syntaxWarmupLineStarts(std::size_t topLine, int rowCount) const {
 	std::vector<std::size_t> lineStarts;
 	if (rowCount <= 0) return lineStarts;
+	if (mBufferModel.exactLineCountKnown()) {
+		const std::size_t exactLineCount = std::max<std::size_t>(1, mBufferModel.lineCount());
+		if (topLine >= exactLineCount) return lineStarts;
+		const std::size_t remainingLines = exactLineCount - topLine;
+		if (remainingLines < static_cast<std::size_t>(rowCount)) rowCount = static_cast<int>(remainingLines);
+	}
 
 	std::size_t lineStart = lineStartForIndex(topLine);
 	for (int i = 0; i < rowCount; ++i) {
 		lineStarts.push_back(lineStart);
-		if (lineStart >= mBufferModel.length()) break;
+		if (i + 1 >= rowCount || lineStart >= mBufferModel.length()) break;
 		std::size_t next = mBufferModel.nextLine(lineStart);
 		if (next <= lineStart) break;
 		lineStart = next;
@@ -1826,24 +2207,63 @@ std::vector<std::size_t> MRFileEditor::syntaxWarmupLineStarts(std::size_t topLin
 	return lineStarts;
 }
 
-bool MRFileEditor::hasSyntaxTokensForLineStarts(const std::vector<std::size_t> &lineStarts) const {
-	for (std::size_t i = 0; i < lineStarts.size(); ++i)
-		if (mSyntaxTokenCache.find(lineStarts[i]) == mSyntaxTokenCache.end()) return false;
+bool MRFileEditor::syntaxCheckpointForLine(std::size_t lineIndex, MRSyntaxCheckpointEntry &checkpoint) const {
+	std::map<std::size_t, MRSyntaxCheckpointEntry>::const_iterator found = mSyntaxCheckpoints.upper_bound(lineIndex);
+
+	if (found == mSyntaxCheckpoints.begin()) return false;
+	--found;
+	checkpoint = found->second;
 	return true;
 }
 
-MRSyntaxTokenMap MRFileEditor::syntaxTokensForLine(std::size_t lineStart) const {
-	std::map<std::size_t, MRSyntaxTokenMap>::const_iterator found = mSyntaxTokenCache.find(lineStart);
-	if (found != mSyntaxTokenCache.end()) return found->second;
-	if (mTreeSitterDocument.activeLanguage() != MRTreeSitterDocument::Language::None) return MRSyntaxTokenMap(mBufferModel.lineText(lineStart).size(), MRSyntaxToken::Text);
-	return mBufferModel.tokenMapForLine(lineStart);
+void MRFileEditor::rememberSyntaxCheckpoint(std::size_t lineStart, std::size_t lineIndex, const MRSyntaxLineState &stateIn) noexcept {
+	const std::size_t checkpointStride = 256;
+
+	if (lineIndex != 0 && lineIndex % checkpointStride != 0) return;
+	mSyntaxCheckpoints[lineIndex] = MRSyntaxCheckpointEntry(lineStart, lineIndex, stateIn);
 }
 
-void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, int hScroll, int width, int drawX, bool isDocumentLine, bool drawEofMarker, bool drawEofMarkerAsEmoji) {
+MRSyntaxLineState MRFileEditor::syntaxWarmupInitialState(std::size_t lineStart) const noexcept {
+	if (lineStart == 0) return MRSyntaxLineState();
+
+	const std::size_t lineIndex = mBufferModel.lineIndex(lineStart);
+	MRSyntaxCheckpointEntry checkpoint;
+
+	if (syntaxCheckpointForLine(lineIndex, checkpoint) && checkpoint.lineIndex == lineIndex && checkpoint.lineStart == lineStart) return checkpoint.stateIn;
+	return MRSyntaxLineState();
+}
+
+bool MRFileEditor::hasSyntaxTokensForLineStarts(const std::vector<std::size_t> &lineStarts, const MRSyntaxLineState &initialState) const {
+	const bool statefulSyntax = isStatefulSyntaxLanguage(mBufferModel.language());
+	MRSyntaxLineState state = initialState;
+
+	for (std::size_t i = 0; i < lineStarts.size(); ++i) {
+		std::map<std::size_t, MRSyntaxCacheEntry>::const_iterator found = mSyntaxTokenCache.find(lineStarts[i]);
+
+		if (found == mSyntaxTokenCache.end()) return false;
+		if (found->second.stateIn != state) return false;
+		if (statefulSyntax) state = found->second.syntaxLine.stateOut;
+		else
+			state = MRSyntaxLineState();
+	}
+	return true;
+}
+
+MRSyntaxLineResult MRFileEditor::syntaxLineResultForLine(std::size_t lineStart, const MRSyntaxLineState &previousState) {
+	std::map<std::size_t, MRSyntaxCacheEntry>::iterator found = mSyntaxTokenCache.find(lineStart);
+
+	if (found != mSyntaxTokenCache.end() && found->second.stateIn == previousState) return found->second.syntaxLine;
+
+	MRSyntaxLineResult syntaxLine = tmrHighlightTextLine(mBufferModel.language(), mBufferModel.lineText(lineStart), previousState);
+
+	mSyntaxTokenCache[lineStart] = MRSyntaxCacheEntry(previousState, syntaxLine);
+	return syntaxLine;
+}
+
+void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const MRSyntaxLineResult &syntaxLine, int hScroll, int width, int drawX, bool isDocumentLine, bool drawEofMarker, bool drawEofMarkerAsEmoji) {
 	TAttrPair basePair = getColor(0x0201);
 	TAttrPair changedPair = getColor(0x0505);
 	TAttrPair selectionPair = getColor(0x0201);
-	MRSyntaxTokenMap tokens;
 	MRTextBufferModel::Range selection;
 	std::size_t documentLength = mBufferModel.length();
 	std::size_t lineEnd = lineStart;
@@ -1876,7 +2296,6 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, int h
 	}
 	std::string lineText = mBufferModel.lineText(lineStart);
 	TStringView line(lineText.data(), lineText.size());
-	tokens = syntaxTokensForLine(lineStart);
 	selection = mBufferModel.selection().range();
 	lineEnd = mBufferModel.nextLine(lineStart);
 	lineIndex = mBufferModel.lineIndex(lineStart);
@@ -1913,6 +2332,7 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, int h
 	else if (currentLine)
 		basePair = getColor(0x0303);
 
+	std::size_t runIndex = 0;
 	while (bytePos < line.size() && x < width) {
 		std::size_t next = bytePos;
 		std::size_t charWidth = 0;
@@ -1920,13 +2340,24 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, int h
 
 		int nextVisual = visual + static_cast<int>(charWidth);
 		if (nextVisual > hScroll) {
-			std::size_t tokenIndex = bytePos;
 			std::size_t documentPos = lineStart + bytePos;
-			MRSyntaxToken token = tokenIndex < tokens.size() ? tokens[tokenIndex] : MRSyntaxToken::Text;
+			MRSyntaxToken token = MRSyntaxToken::Text;
 			bool selected = false;
 			TAttrPair tokenPair;
 			TColorAttr color;
 			int visibleWidth = 0;
+
+			while (runIndex < syntaxLine.tokenRuns.size()) {
+				const MRSyntaxTokenRun &run = syntaxLine.tokenRuns[runIndex];
+				const std::size_t runStart = static_cast<std::size_t>(run.column);
+				const std::size_t runEnd = runStart + static_cast<std::size_t>(run.length);
+				if (bytePos < runStart) break;
+				if (bytePos < runEnd) {
+					token = run.token;
+					break;
+				}
+				++runIndex;
+			}
 
 			if (overlayActive) {
 				if (overlayMode == 3) selected = overlayStart <= documentPos && documentPos < overlayEnd;
@@ -2050,7 +2481,7 @@ void MRFileEditor::ensureCursorVisible(bool centerCursor) {
 		targetY = line;
 	else if (line >= targetY + textRows)
 		targetY = line - textRows + 1;
-	scrollTo(targetX, targetY);
+	if (targetX != delta.x || targetY != delta.y) scrollTo(targetX, targetY);
 }
 
 void MRFileEditor::moveCursor(std::size_t target, bool extendSelection, bool centerCursor, int requestedVisualColumn) {
@@ -2236,10 +2667,10 @@ void MRFileEditor::handleKeyDown(TEvent &event) {
 			moveCursor(lineMoveOffset(cursorOffset(), std::max(2, visibleTextRows()) - 1, displayedCursorColumn()), extend, true, displayedCursorColumn());
 			break;
 		case kbCtrlHome:
-			moveCursor(0, extend, true);
+			moveCursor(0, false, false);
 			break;
 		case kbCtrlEnd:
-			moveCursor(bufferLength(), extend, true);
+			moveCursor(bufferLength(), false, false);
 			break;
 		case kbCtrlLeft:
 			moveCursor(prevWordOffset(cursorOffset()), extend, false);
@@ -2375,10 +2806,10 @@ void MRFileEditor::handleCommand(TEvent &event) {
 			moveCursor(lineMoveOffset(cursorOffset(), std::max(2, visibleTextRows()) - 1, displayedCursorColumn()), false, true, displayedCursorColumn());
 			break;
 		case cmTextStart:
-			moveCursor(0, false, true);
+			moveCursor(0, false, false);
 			break;
 		case cmTextEnd:
-			moveCursor(bufferLength(), false, true);
+			moveCursor(bufferLength(), false, false);
 			break;
 		case cmNewLine:
 			if (!mReadOnly) newLineWithPreferredIndent();
@@ -2619,12 +3050,13 @@ void MRFileEditor::scheduleLineIndexWarmupIfNeeded() {
 	mLineIndexWarmupTaskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::LineIndexWarmup, docId, version, lineIndexWarmupTaskLabel(), [snapshot](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
 		mr::coprocessor::Result result;
 		mr::editor::LineIndexWarmupData warmup;
+		static constexpr std::size_t kWorkerStrideBudget = 2;
 		result.task = info;
 		if (stopToken.stop_requested() || info.cancelRequested()) {
 			result.status = mr::coprocessor::TaskStatus::Cancelled;
 			return result;
 		}
-		if (!snapshot.completeLineIndexWarmup(warmup, stopToken, info.cancelFlag.get())) {
+		if (!snapshot.warmLineIndexChunk(warmup, kWorkerStrideBudget, stopToken, info.cancelFlag.get())) {
 			result.status = mr::coprocessor::TaskStatus::Cancelled;
 			return result;
 		}
@@ -2642,10 +3074,8 @@ void MRFileEditor::scheduleLineIndexWarmupIfNeeded() {
 
 void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 	const int textRows = visibleTextRows();
-	const MRTreeSitterDocument::Language treeSitterLanguage = mTreeSitterDocument.activeLanguage();
-	const bool treeSitterActive = treeSitterLanguage != MRTreeSitterDocument::Language::None;
 
-	if ((!treeSitterActive && mBufferModel.language() == MRSyntaxLanguage::PlainText) || textRows <= 0) {
+	if (mBufferModel.language() == MRSyntaxLanguage::PlainText || textRows <= 0) {
 		resetSyntaxWarmupState(true);
 		return;
 	}
@@ -2653,23 +3083,158 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 	const std::size_t docId = mBufferModel.documentId();
 	const std::size_t version = mBufferModel.version();
 	const MRSyntaxLanguage language = mBufferModel.language();
-	const std::uint8_t warmupTreeSitterLanguage = static_cast<std::uint8_t>(treeSitterLanguage);
-	const std::size_t topLine = static_cast<std::size_t>(std::max(delta.y - 4, 0));
+	const bool exactLineCountKnown = mBufferModel.exactLineCountKnown();
+	const std::size_t exactLineCount = exactLineCountKnown ? std::max<std::size_t>(1, mBufferModel.lineCount()) : 0;
+	std::size_t visibleTopLine = static_cast<std::size_t>(std::max(delta.y - 4, 0));
+	if (exactLineCountKnown && visibleTopLine >= exactLineCount) visibleTopLine = exactLineCount - 1;
 	const int rowBudget = std::max(textRows + 8, 8);
-	std::vector<std::size_t> lineStarts = syntaxWarmupLineStarts(topLine, rowBudget);
-	if (lineStarts.empty()) return;
+	const int backgroundRowBudget = rowBudget * 3;
+	const bool statefulSyntax = isStatefulSyntaxLanguage(language);
+	MRTextBufferModel::ReadSnapshot snapshot = mBufferModel.readSnapshot();
+	std::vector<std::size_t> visibleLineStarts = syntaxWarmupLineStarts(visibleTopLine, rowBudget);
+	if (visibleLineStarts.empty()) return;
 
-	const std::size_t bottomLine = topLine + lineStarts.size();
-	if (hasSyntaxTokensForLineStarts(lineStarts)) {
+	if (mSyntaxPrefetchDocumentId != docId || mSyntaxPrefetchVersion != version || mSyntaxPrefetchLanguage != language) {
+		mSyntaxPrefetchDocumentId = docId;
+		mSyntaxPrefetchVersion = version;
+		mSyntaxPrefetchTargetBottomLine = visibleTopLine;
+		mSyntaxPrefetchReachedBottomLine = visibleTopLine;
+		mSyntaxPrefetchLanguage = language;
+	}
+	mSyntaxPrefetchTargetBottomLine = std::max(mSyntaxPrefetchTargetBottomLine, visibleTopLine + static_cast<std::size_t>(backgroundRowBudget));
+	if (exactLineCountKnown) {
+		if (mSyntaxPrefetchTargetBottomLine > exactLineCount) mSyntaxPrefetchTargetBottomLine = exactLineCount;
+		if (mSyntaxPrefetchReachedBottomLine > exactLineCount) mSyntaxPrefetchReachedBottomLine = exactLineCount;
+	}
+	auto buildSyntaxRequest = [&](std::size_t requestTopLine, int requiredChunkRows, int warmupChunkRows, std::vector<std::size_t> &requiredLineStarts, std::vector<std::size_t> &warmupLineStarts,
+	                              MRSyntaxLineState &requiredState, std::size_t &requestBottomLine) {
+		requiredLineStarts = syntaxWarmupLineStarts(requestTopLine, requiredChunkRows);
+		warmupLineStarts = requiredLineStarts;
+		requiredState = MRSyntaxLineState();
+		requestBottomLine = requestTopLine + requiredLineStarts.size();
+		if (exactLineCountKnown && requestBottomLine > exactLineCount) requestBottomLine = exactLineCount;
+		if (requiredLineStarts.empty()) return;
+
+		if (statefulSyntax) {
+			std::size_t preludeLines = static_cast<std::size_t>(rowBudget * 4);
+			std::size_t stateTopLine = requestTopLine > preludeLines ? requestTopLine - preludeLines : 0;
+			MRSyntaxCheckpointEntry checkpoint;
+			bool useCheckpointStart = false;
+
+			if (syntaxCheckpointForLine(requestTopLine, checkpoint) && checkpoint.lineIndex > stateTopLine) {
+				stateTopLine = checkpoint.lineIndex;
+				requiredState = checkpoint.stateIn;
+				useCheckpointStart = true;
+			}
+			const int requiredRowCount = static_cast<int>(requestTopLine - stateTopLine + requiredLineStarts.size());
+			const int warmupRowCount = static_cast<int>(requestTopLine - stateTopLine + static_cast<std::size_t>(warmupChunkRows));
+
+			if (useCheckpointStart) {
+				requiredLineStarts.reserve(static_cast<std::size_t>(std::max(requiredRowCount, 0)));
+				warmupLineStarts.reserve(static_cast<std::size_t>(std::max(warmupRowCount, 0)));
+				std::size_t lineStart = checkpoint.lineStart;
+				std::size_t lineIndex = checkpoint.lineIndex;
+
+				requiredLineStarts.clear();
+				warmupLineStarts.clear();
+				for (int i = 0; i < warmupRowCount; ++i) {
+					if (exactLineCountKnown && lineIndex >= exactLineCount) break;
+					if (i < requiredRowCount) requiredLineStarts.push_back(lineStart);
+					warmupLineStarts.push_back(lineStart);
+					++lineIndex;
+					if (i + 1 >= warmupRowCount || lineStart >= mBufferModel.length()) break;
+					std::size_t next = mBufferModel.nextLine(lineStart);
+					if (next <= lineStart) break;
+					lineStart = next;
+				}
+			}
+			if (warmupLineStarts == requiredLineStarts) {
+				requiredLineStarts = syntaxWarmupLineStarts(stateTopLine, requiredRowCount);
+				warmupLineStarts = syntaxWarmupLineStarts(stateTopLine, warmupRowCount);
+			}
+			const std::size_t preludeCount = requiredLineStarts.size() > static_cast<std::size_t>(requiredChunkRows) ? requiredLineStarts.size() - static_cast<std::size_t>(requiredChunkRows) : 0;
+			requestBottomLine = requestTopLine + (warmupLineStarts.size() > preludeCount ? warmupLineStarts.size() - preludeCount : 0);
+			if (exactLineCountKnown && requestBottomLine > exactLineCount) requestBottomLine = exactLineCount;
+		} else
+			requestBottomLine = requestTopLine + warmupLineStarts.size();
+		if (exactLineCountKnown && requestBottomLine > exactLineCount) requestBottomLine = exactLineCount;
+	};
+
+	std::vector<std::size_t> requiredLineStarts;
+	std::vector<std::size_t> warmupLineStarts;
+	MRSyntaxLineState requiredState;
+	std::size_t bottomLine = 0;
+	std::size_t requestTopLine = visibleTopLine;
+	buildSyntaxRequest(visibleTopLine, static_cast<int>(visibleLineStarts.size()), backgroundRowBudget, requiredLineStarts, warmupLineStarts, requiredState, bottomLine);
+	const bool visibleCacheComplete = hasSyntaxTokensForLineStarts(requiredLineStarts, requiredState);
+
+	if (visibleCacheComplete) {
+		std::size_t prefetchCursor = std::max(visibleTopLine, mSyntaxPrefetchReachedBottomLine);
+
+		while (prefetchCursor < mSyntaxPrefetchTargetBottomLine) {
+			std::vector<std::size_t> continuationRequiredLineStarts;
+			std::vector<std::size_t> continuationWarmupLineStarts;
+			MRSyntaxLineState continuationState;
+			const int continuationRows = static_cast<int>(std::min<std::size_t>(static_cast<std::size_t>(rowBudget), mSyntaxPrefetchTargetBottomLine - prefetchCursor));
+			std::size_t continuationBottomLine = 0;
+
+			if (continuationRows <= 0) break;
+			buildSyntaxRequest(prefetchCursor, continuationRows, continuationRows, continuationRequiredLineStarts, continuationWarmupLineStarts, continuationState, continuationBottomLine);
+			if (continuationRequiredLineStarts.empty()) {
+				std::size_t eofBottomLine = prefetchCursor;
+				if (mBufferModel.exactLineCountKnown()) eofBottomLine = std::max<std::size_t>(1, mBufferModel.lineCount());
+				mSyntaxPrefetchReachedBottomLine = std::max(mSyntaxPrefetchReachedBottomLine, eofBottomLine);
+				if (mSyntaxPrefetchTargetBottomLine > eofBottomLine) mSyntaxPrefetchTargetBottomLine = eofBottomLine;
+				break;
+			}
+			if (!hasSyntaxTokensForLineStarts(continuationRequiredLineStarts, continuationState)) {
+				requestTopLine = prefetchCursor;
+				requiredLineStarts.swap(continuationRequiredLineStarts);
+				warmupLineStarts.swap(continuationWarmupLineStarts);
+				requiredState = continuationState;
+				bottomLine = continuationBottomLine;
+				if (exactLineCountKnown && bottomLine > exactLineCount) bottomLine = exactLineCount;
+				break;
+			}
+			if (continuationBottomLine <= prefetchCursor) break;
+			mSyntaxPrefetchReachedBottomLine = std::max(mSyntaxPrefetchReachedBottomLine, continuationBottomLine);
+			if (exactLineCountKnown && mSyntaxPrefetchReachedBottomLine > exactLineCount) mSyntaxPrefetchReachedBottomLine = exactLineCount;
+			prefetchCursor = mSyntaxPrefetchReachedBottomLine;
+		}
+
+		if (mSyntaxPrefetchReachedBottomLine >= mSyntaxPrefetchTargetBottomLine) {
+			std::uint64_t previousTaskId = mSyntaxWarmupTaskId;
+			bool hadTask = previousTaskId != 0;
+			mSyntaxWarmupTaskId = 0;
+			mSyntaxWarmupDocumentId = docId;
+			mSyntaxWarmupVersion = version;
+			mSyntaxWarmupTopLine = visibleTopLine;
+			mSyntaxWarmupBottomLine = bottomLine;
+			mSyntaxWarmupLanguage = language;
+			if (hadTask) {
+				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
+				notifyWindowTaskStateChanged();
+			}
+			return;
+		}
+	} else
+		mSyntaxPrefetchReachedBottomLine = visibleTopLine;
+	if (exactLineCountKnown && mSyntaxPrefetchReachedBottomLine > exactLineCount) mSyntaxPrefetchReachedBottomLine = exactLineCount;
+
+	if (visibleCacheComplete && bottomLine <= visibleTopLine) return;
+	if (mSyntaxWarmupTaskId != 0 && mSyntaxWarmupDocumentId == docId && mSyntaxWarmupVersion == version && mSyntaxWarmupLanguage == language && requestTopLine >= mSyntaxWarmupTopLine &&
+		bottomLine <= mSyntaxWarmupBottomLine)
+		return;
+
+	if (visibleCacheComplete && requiredLineStarts.empty()) {
 		std::uint64_t previousTaskId = mSyntaxWarmupTaskId;
 		bool hadTask = previousTaskId != 0;
 		mSyntaxWarmupTaskId = 0;
 		mSyntaxWarmupDocumentId = docId;
 		mSyntaxWarmupVersion = version;
-		mSyntaxWarmupTopLine = topLine;
+		mSyntaxWarmupTopLine = visibleTopLine;
 		mSyntaxWarmupBottomLine = bottomLine;
 		mSyntaxWarmupLanguage = language;
-		mSyntaxWarmupTreeSitterLanguage = treeSitterLanguage;
 		if (hadTask) {
 			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
 			notifyWindowTaskStateChanged();
@@ -2677,20 +3242,16 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 		return;
 	}
 
-	if (mSyntaxWarmupTaskId != 0 && mSyntaxWarmupDocumentId == docId && mSyntaxWarmupVersion == version && mSyntaxWarmupLanguage == language && mSyntaxWarmupTreeSitterLanguage == treeSitterLanguage &&
-		topLine >= mSyntaxWarmupTopLine && bottomLine <= mSyntaxWarmupBottomLine)
-		return;
-
-	MRTextBufferModel::ReadSnapshot snapshot = mBufferModel.readSnapshot();
 	std::uint64_t previousTaskId = mSyntaxWarmupTaskId;
 	if (previousTaskId != 0) static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
 	mSyntaxWarmupDocumentId = docId;
 	mSyntaxWarmupVersion = version;
-	mSyntaxWarmupTopLine = topLine;
+	mSyntaxWarmupTopLine = requestTopLine;
 	mSyntaxWarmupBottomLine = bottomLine;
 	mSyntaxWarmupLanguage = language;
-	mSyntaxWarmupTreeSitterLanguage = treeSitterLanguage;
-	mSyntaxWarmupTaskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::SyntaxWarmup, docId, version, syntaxWarmupTaskLabel(), [snapshot, language, treeSitterLanguage, warmupTreeSitterLanguage, lineStarts](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
+	mSyntaxWarmupTaskId =
+	    mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::SyntaxWarmup, docId, version, syntaxWarmupTaskLabel(),
+	                                                [snapshot, language, warmupLineStarts, statefulSyntax, requiredState](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
 		mr::coprocessor::Result result;
 		std::vector<mr::coprocessor::SyntaxWarmLine> warmed;
 		auto shouldStop = [&]() noexcept { return stopToken.stop_requested() || info.cancelRequested(); };
@@ -2699,26 +3260,19 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 			result.status = mr::coprocessor::TaskStatus::Cancelled;
 			return result;
 		}
-		warmed.reserve(lineStarts.size());
-		if (treeSitterLanguage != MRTreeSitterDocument::Language::None) {
-			std::vector<MRSyntaxTokenMap> tokenMaps = MRTreeSitterDocument::buildTokenMapsForSnapshotLines(treeSitterLanguage, snapshot, lineStarts);
-			for (std::size_t i = 0; i < lineStarts.size(); ++i) {
-				if (shouldStop()) {
-					result.status = mr::coprocessor::TaskStatus::Cancelled;
-					return result;
-				}
-				warmed.push_back(mr::coprocessor::SyntaxWarmLine(lineStarts[i], i < tokenMaps.size() ? std::move(tokenMaps[i]) : MRSyntaxTokenMap()));
+		warmed.reserve(warmupLineStarts.size());
+		MRSyntaxLineState state = statefulSyntax ? requiredState : MRSyntaxLineState();
+		for (std::size_t i = 0; i < warmupLineStarts.size(); ++i) {
+			if (shouldStop()) {
+				result.status = mr::coprocessor::TaskStatus::Cancelled;
+				return result;
 			}
-		} else
-			for (std::size_t i = 0; i < lineStarts.size(); ++i) {
-				if (shouldStop()) {
-					result.status = mr::coprocessor::TaskStatus::Cancelled;
-					return result;
-				}
-				warmed.push_back(mr::coprocessor::SyntaxWarmLine(lineStarts[i], tmrBuildTokenMapForTextLine(language, snapshot.lineText(lineStarts[i]))));
-			}
+			MRSyntaxLineResult syntaxLine = tmrHighlightTextLine(language, snapshot.lineText(warmupLineStarts[i]), statefulSyntax ? state : MRSyntaxLineState());
+			if (statefulSyntax) state = syntaxLine.stateOut;
+			warmed.push_back(mr::coprocessor::SyntaxWarmLine(warmupLineStarts[i], std::move(syntaxLine)));
+		}
 		result.status = mr::coprocessor::TaskStatus::Completed;
-		result.payload = std::make_shared<mr::coprocessor::SyntaxWarmupPayload>(language, treeSitterLanguage != MRTreeSitterDocument::Language::None, warmupTreeSitterLanguage, std::move(warmed));
+		result.payload = std::make_shared<mr::coprocessor::SyntaxWarmupPayload>(language, std::move(warmed));
 		return result;
 	});
 	if (mSyntaxWarmupTaskId != previousTaskId) notifyWindowTaskStateChanged();
@@ -2744,7 +3298,9 @@ void MRFileEditor::updateMetrics() {
 
 	if (useApproximateLargeFileMetrics()) {
 		limitX = dynamicLargeFileWidthLimit();
-		limitY = dynamicLargeFileLineLimit();
+		if (mBufferModel.exactLineCountKnown()) limitY = std::max<int>(1, static_cast<int>(mBufferModel.lineCount()));
+		else
+			limitY = dynamicLargeFileLineLimit();
 	} else {
 		limitX = longestLineWidth();
 		limitY = std::max<int>(1, static_cast<int>(mBufferModel.lineCount()));
@@ -2820,29 +3376,57 @@ Boolean MRFileEditor::confirmSaveOrDiscardNamed() {
 
 void MRFileEditor::refreshSyntaxContext() {
 	MRSyntaxLanguage oldLanguage = mBufferModel.language();
-	const MRTreeSitterDocument::Language oldTreeSitterLanguage = mTreeSitterDocument.activeLanguage();
-	const MREditSetupSettings settings = configuredEditSetupSettings();
-	std::string configuredLanguage;
-	mBufferModel.setSyntaxContext(hasPersistentFileName() ? fileName : "", mSyntaxTitleHint);
-	if (hasPersistentFileName() && mBufferModel.language() != MRSyntaxLanguage::MRMAC) configuredLanguage = settings.codeLanguage;
-	mTreeSitterDocument.setLanguageContext(hasPersistentFileName() ? fileName : "", mSyntaxTitleHint, configuredLanguage);
-	if (mBufferModel.language() != oldLanguage || mTreeSitterDocument.activeLanguage() != oldTreeSitterLanguage) resetSyntaxWarmupState(true);
+	const bool oldAutomatic = mBufferModel.languageAutomatic();
+	std::string codeLanguage = configuredEditSetupSettings().codeLanguage;
+
+	if (hasPersistentFileName()) {
+		MREditSetupSettings effective;
+		if (effectiveEditSetupSettingsForPath(fileName, effective, nullptr)) codeLanguage = effective.codeLanguage;
+	}
+	mBufferModel.setSyntaxContext(hasPersistentFileName() ? fileName : "", mSyntaxTitleHint, codeLanguage);
+	if (mBufferModel.language() != oldLanguage) resetSyntaxWarmupState(true);
+	if (mBufferModel.languageAutomatic() != oldAutomatic) drawView();
 }
 
 void MRFileEditor::resetSyntaxWarmupState(bool clearCache) noexcept {
 	std::uint64_t cancelledTaskId = mSyntaxWarmupTaskId;
 	bool hadTask = cancelledTaskId != 0;
-	if (clearCache) mSyntaxTokenCache.clear();
+	if (clearCache) {
+		mSyntaxTokenCache.clear();
+		mSyntaxCheckpoints.clear();
+	}
 	mSyntaxWarmupTaskId = 0;
 	mSyntaxWarmupDocumentId = 0;
 	mSyntaxWarmupVersion = 0;
 	mSyntaxWarmupTopLine = 0;
 	mSyntaxWarmupBottomLine = 0;
 	mSyntaxWarmupLanguage = MRSyntaxLanguage::PlainText;
-	mSyntaxWarmupTreeSitterLanguage = MRTreeSitterDocument::Language::None;
+	mSyntaxPrefetchDocumentId = 0;
+	mSyntaxPrefetchVersion = 0;
+	mSyntaxPrefetchTargetBottomLine = 0;
+	mSyntaxPrefetchReachedBottomLine = 0;
+	mSyntaxPrefetchLanguage = MRSyntaxLanguage::PlainText;
 	if (hadTask) {
 		static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledTaskId));
 		notifyWindowTaskStateChanged();
+	}
+}
+
+void MRFileEditor::invalidateSyntaxCacheFromLineStart(std::size_t lineStart) noexcept {
+	std::map<std::size_t, MRSyntaxCacheEntry>::iterator firstInvalid = mSyntaxTokenCache.lower_bound(lineStart);
+	std::size_t lineIndex = mBufferModel.lineIndex(lineStart);
+	std::map<std::size_t, MRSyntaxCheckpointEntry>::iterator firstInvalidCheckpoint = mSyntaxCheckpoints.lower_bound(lineIndex);
+
+	if (firstInvalid != mSyntaxTokenCache.end()) mSyntaxTokenCache.erase(firstInvalid, mSyntaxTokenCache.end());
+	if (firstInvalidCheckpoint != mSyntaxCheckpoints.end()) mSyntaxCheckpoints.erase(firstInvalidCheckpoint, mSyntaxCheckpoints.end());
+	if (mSyntaxPrefetchDocumentId == mBufferModel.documentId() && mSyntaxPrefetchVersion == mBufferModel.version()) {
+		if (mSyntaxPrefetchReachedBottomLine > lineIndex) mSyntaxPrefetchReachedBottomLine = lineIndex;
+		if (mSyntaxPrefetchTargetBottomLine < lineIndex) mSyntaxPrefetchTargetBottomLine = lineIndex;
+	}
+	if (mSyntaxWarmupTaskId != 0 && mSyntaxWarmupDocumentId == mBufferModel.documentId() && mSyntaxWarmupVersion == mBufferModel.version() && lineIndex <= mSyntaxWarmupBottomLine) {
+		const std::uint64_t cancelledTaskId = mSyntaxWarmupTaskId;
+		static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledTaskId));
+		clearSyntaxWarmupTask(cancelledTaskId);
 	}
 }
 

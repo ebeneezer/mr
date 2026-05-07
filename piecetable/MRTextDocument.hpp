@@ -416,6 +416,7 @@ class ReadSnapshot {
 	[[nodiscard]] std::size_t column(Offset pos) const noexcept;
 	[[nodiscard]] std::string lineText(Offset pos) const;
 	[[nodiscard]] LineIndexWarmupData completeLineIndexWarmup() const;
+	bool warmLineIndexChunk(LineIndexWarmupData &warmup, std::size_t maxStrides, std::stop_token stopToken, const std::atomic_bool *cancelFlag = nullptr) const;
 	bool completeLineIndexWarmup(LineIndexWarmupData &warmup, std::stop_token stopToken, const std::atomic_bool *cancelFlag = nullptr) const;
 
   private:

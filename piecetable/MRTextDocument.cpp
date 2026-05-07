@@ -799,6 +799,10 @@ std::size_t ReadSnapshot::lineIndex(Offset pos) const noexcept {
 	pos = clampOffset(pos);
 	ensureLazyIndexSeeded();
 	if (mLineIndexCheckpoints.empty()) return 0;
+	if (pos == mLength) {
+		ensureLazyIndexComplete();
+		return mLazyTotalLineCount > 0 ? mLazyTotalLineCount - 1 : 0;
+	}
 
 	std::size_t left = 0;
 	std::size_t right = mLineIndexCheckpoints.size();
@@ -875,9 +879,10 @@ LineIndexWarmupData ReadSnapshot::completeLineIndexWarmup() const {
 	return warmup;
 }
 
-bool ReadSnapshot::completeLineIndexWarmup(LineIndexWarmupData &warmup, std::stop_token stopToken, const std::atomic_bool *cancelFlag) const {
+bool ReadSnapshot::warmLineIndexChunk(LineIndexWarmupData &warmup, std::size_t maxStrides, std::stop_token stopToken, const std::atomic_bool *cancelFlag) const {
 	ensureLazyIndexSeeded();
-	while (!mLazyLineIndexComplete) {
+	if (maxStrides == 0) maxStrides = 1;
+	for (std::size_t strideIndex = 0; strideIndex < maxStrides && !mLazyLineIndexComplete; ++strideIndex) {
 		if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire))) return false;
 		advanceLazyIndexByStride();
 	}
@@ -888,6 +893,10 @@ bool ReadSnapshot::completeLineIndexWarmup(LineIndexWarmupData &warmup, std::sto
 	warmup.lazyLineIndexComplete = mLazyLineIndexComplete;
 	warmup.lazyTotalLineCount = mLazyTotalLineCount;
 	return true;
+}
+
+bool ReadSnapshot::completeLineIndexWarmup(LineIndexWarmupData &warmup, std::stop_token stopToken, const std::atomic_bool *cancelFlag) const {
+	return warmLineIndexChunk(warmup, std::numeric_limits<std::size_t>::max(), stopToken, cancelFlag);
 }
 
 bool ReadSnapshot::isLineBreakChar(char ch) const noexcept {
@@ -1237,6 +1246,10 @@ std::size_t TextDocument::lineIndex(Offset pos) const noexcept {
 	pos = clampOffset(pos);
 	ensureLazyIndexSeeded();
 	if (mLineIndexCheckpoints.empty()) return 0;
+	if (pos == mLength) {
+		ensureLazyIndexComplete();
+		return mLazyTotalLineCount > 0 ? mLazyTotalLineCount - 1 : 0;
+	}
 
 	std::size_t left = 0;
 	std::size_t right = mLineIndexCheckpoints.size();

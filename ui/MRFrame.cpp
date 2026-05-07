@@ -37,6 +37,7 @@ static constexpr char kMacroBrainMarkerIcon[] = "🧠";
 static constexpr char kReadOnlyMarkerIcon[] = "🔒";
 static constexpr char kInsertMarkerIcon[] = "✚";
 static constexpr char kWordWrapMarkerIcon[] = "\xE2\x94\x86\xE2\x86\xB5\xE2\x94\x86"; // ┆↵┆
+static constexpr int kLanguageMarkerSlotWidth = 1;
 static constexpr int kDirtyMarkerSlotWidth = 2;
 static constexpr int kRecordingMarkerSlotWidth = 2;
 static constexpr int kTaskMarkerSlotWidth = 2;
@@ -77,7 +78,7 @@ int normalZoomStart(int width, bool hasMinimizeButton) noexcept {
 }
 
 bool hasMarkerBlock(const MRFrame::MarkerState &state) noexcept {
-	return state.modified || state.insertMode || state.wordWrap || state.recording || state.macroBrain || state.background || state.readOnly;
+	return state.modified || state.insertMode || state.wordWrap || state.language || state.recording || state.macroBrain || state.background || state.readOnly;
 }
 
 bool isFrameFocused(const MRFrame *frame) noexcept {
@@ -153,7 +154,7 @@ TPalette &MRTaskOverviewWindow::getPalette() const {
 	return paletteGray;
 }
 
-MRFrame::MRFrame(const TRect &bounds) noexcept : TFrame(bounds), mTaskOverviewPopup(nullptr), mTaskOverviewPopupOwner(nullptr) {
+MRFrame::MRFrame(const TRect &bounds) noexcept : TFrame(bounds), mTaskOverviewPopup(nullptr), mTaskOverviewPopupOwner(nullptr), mTaskOverviewPinned(false) {
 }
 
 MRFrame::~MRFrame() {
@@ -185,6 +186,7 @@ int MRFrame::taskMarkerColumn(const MarkerState &state) const noexcept {
 	if (state.modified) x = advanceMarkerX(x, kDirtyMarkerIcon, kDirtyMarkerSlotWidth);
 	if (state.insertMode) x = advanceMarkerX(x, kInsertMarkerIcon, kInsertMarkerSlotWidth);
 	if (state.wordWrap) x = advanceMarkerX(x, kWordWrapMarkerIcon, kWordWrapMarkerSlotWidth);
+	if (state.language) x = advanceMarkerX(x, state.languageMarker != nullptr ? state.languageMarker : "", kLanguageMarkerSlotWidth);
 	if (state.recording) x = advanceMarkerX(x, kRecordingMarkerIcon, kRecordingMarkerSlotWidth);
 	if (state.macroBrain) x = advanceMarkerX(x, kMacroBrainMarkerIcon, kMacroBrainMarkerSlotWidth);
 	if (state.background) return x;
@@ -197,11 +199,18 @@ int MRFrame::markersEndColumn(const MarkerState &state) const noexcept {
 	if (state.modified) x = advanceMarkerX(x, kDirtyMarkerIcon, kDirtyMarkerSlotWidth), hasMarkers = true;
 	if (state.insertMode) x = advanceMarkerX(x, kInsertMarkerIcon, kInsertMarkerSlotWidth), hasMarkers = true;
 	if (state.wordWrap) x = advanceMarkerX(x, kWordWrapMarkerIcon, kWordWrapMarkerSlotWidth), hasMarkers = true;
+	if (state.language) x = advanceMarkerX(x, state.languageMarker != nullptr ? state.languageMarker : "", kLanguageMarkerSlotWidth), hasMarkers = true;
 	if (state.recording) x = advanceMarkerX(x, kRecordingMarkerIcon, kRecordingMarkerSlotWidth), hasMarkers = true;
 	if (state.macroBrain) x = advanceMarkerX(x, kMacroBrainMarkerIcon, kMacroBrainMarkerSlotWidth), hasMarkers = true;
 	if (state.background) x = advanceMarkerX(x, kTaskMarkerIcon, kTaskMarkerSlotWidth), hasMarkers = true;
 	if (state.readOnly) x = advanceMarkerX(x, kReadOnlyMarkerIcon, kReadOnlyMarkerSlotWidth), hasMarkers = true;
 	return hasMarkers ? x - kMarkerGap : x;
+}
+
+bool MRFrame::taskMarkerHit(TPoint localMouse, const MarkerState &state) const noexcept {
+	int taskX = taskMarkerColumn(state);
+
+	return taskX >= 0 && localMouse.y == 0 && localMouse.x >= taskX && localMouse.x < taskX + markerSpan(kTaskMarkerIcon, kTaskMarkerSlotWidth);
 }
 
 void MRFrame::drawFrameLine(TDrawBuffer &frameBuf, short y, short n, TColorAttr color) {
@@ -352,6 +361,13 @@ void MRFrame::draw() {
 		if (markers.wordWrapVisible) b.moveStr(static_cast<ushort>(markerX), kWordWrapMarkerIcon, cTitle, span);
 		markerX = advanceMarkerX(markerX, kWordWrapMarkerIcon, kWordWrapMarkerSlotWidth);
 	}
+	if (markers.language) {
+		const char *languageMarker = markers.languageMarker != nullptr ? markers.languageMarker : "";
+		int span = markerSpan(languageMarker, kLanguageMarkerSlotWidth);
+		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
+		if (markers.languageVisible) b.moveStr(static_cast<ushort>(markerX), languageMarker, cTitle, span);
+		markerX = advanceMarkerX(markerX, languageMarker, kLanguageMarkerSlotWidth);
+	}
 	if (markers.recording) {
 		TColorAttr recordingColor = cTitle;
 		setFore(recordingColor, TColorDesired(TColorRGB(0xFF, 0x55, 0x55)));
@@ -475,7 +491,15 @@ void MRFrame::handleEvent(TEvent &event) {
 			const bool hasMinimizeButton = true;
 			const int minimizeStart = normalRightControlStart(size.x, kMinimizeIcon);
 			const int zoomStart = normalZoomStart(size.x, hasMinimizeButton);
-			if ((window->flags & wfClose) != 0 && controlsVisible && mouse.x >= 2 && mouse.x <= 4) {
+			MarkerState state = markerState();
+			if (taskMarkerHit(mouse, state) && mTaskOverviewProvider) {
+				if (mTaskOverviewPopup != nullptr && mTaskOverviewPinned) hideTaskOverview();
+				else {
+					mTaskOverviewPinned = true;
+					showTaskOverview();
+				}
+				clearEvent(event);
+			} else if ((window->flags & wfClose) != 0 && controlsVisible && mouse.x >= 2 && mouse.x <= 4) {
 				while (mouseEvent(event, evMouse))
 					;
 				mouse = makeLocal(event.mouse.where);
@@ -519,7 +543,9 @@ void MRFrame::showTaskOverview() {
 	std::vector<std::string> lines;
 	MarkerState state = markerState();
 	int taskX = taskMarkerColumn(state);
-	int width = 14;
+	int width = 48;
+	int minWidth = 48;
+	int minHeight = 8;
 
 	if (group == nullptr || !mTaskOverviewProvider || taskX < 0) return;
 	lines = mTaskOverviewProvider();
@@ -529,8 +555,10 @@ void MRFrame::showTaskOverview() {
 	}
 	for (const std::string &line : lines)
 		if (strwidth(line.c_str()) + 4 > width) width = strwidth(line.c_str()) + 4;
+	if (group->size.x > 4) minWidth = std::min(minWidth, group->size.x - 2);
+	width = std::max(width, minWidth);
 	if (width > group->size.x - 2) width = std::max(12, group->size.x - 2);
-	int height = static_cast<int>(lines.size()) + 2;
+	int height = std::max(minHeight, static_cast<int>(lines.size()) + 2);
 	if (height > group->size.y - 2) height = std::max(3, group->size.y - 2);
 	TPoint topLeft = makeGlobal(TPoint(std::max(1, taskX - 1), 1));
 	topLeft = group->makeLocal(topLeft);
@@ -560,12 +588,14 @@ void MRFrame::hideTaskOverview() {
 	TObject::destroy(mTaskOverviewPopup);
 	mTaskOverviewPopup = nullptr;
 	mTaskOverviewPopupOwner = nullptr;
+	mTaskOverviewPinned = false;
 }
 
 void MRFrame::updateTaskHover(TPoint globalMouse, bool forceHide) {
 	MarkerState state = markerState();
 	int taskX = taskMarkerColumn(state);
 
+	if (mTaskOverviewPinned) return;
 	if (forceHide || taskX < 0 || !mTaskOverviewProvider) {
 		hideTaskOverview();
 		return;
