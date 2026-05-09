@@ -275,6 +275,10 @@ class MRTextBufferModel {
 			return;
 		}
 		if (normalizedCodeLanguage == "BASH") {
+			mLanguage = MRSyntaxLanguage::Bash;
+			return;
+		}
+		if (normalizedCodeLanguage == "ZSH") {
 			mLanguage = MRSyntaxLanguage::Zsh;
 			return;
 		}
@@ -284,6 +288,22 @@ class MRTextBufferModel {
 		}
 		if (normalizedCodeLanguage == "PERL") {
 			mLanguage = MRSyntaxLanguage::Perl;
+			return;
+		}
+		if (normalizedCodeLanguage == "SWIFT") {
+			mLanguage = MRSyntaxLanguage::Swift;
+			return;
+		}
+		if (normalizedCodeLanguage == "RUST") {
+			mLanguage = MRSyntaxLanguage::Rust;
+			return;
+		}
+		if (normalizedCodeLanguage == "GO") {
+			mLanguage = MRSyntaxLanguage::Go;
+			return;
+		}
+		if (normalizedCodeLanguage == "SYSTEMD") {
+			mLanguage = MRSyntaxLanguage::Systemd;
 			return;
 		}
 		mLanguage = MRSyntaxLanguage::PlainText;

@@ -46,13 +46,18 @@
           "comments": []
         },
         {
-          "id": "0e7f8ecd-c78d-48da-b684-22fcfaefbb08",
+          "id": "3f136c23-dea4-4cc1-b981-f32ee1c981f5",
           "listId": "442a00f0-c411-4725-9424-3182418b486d",
-          "title": "Font Konfiguration?",
+          "title": "Minimap Color Coding (erst wenn Entscheidung zur Compiler Integration gefallen ist)",
           "description": "",
           "labels": [],
           "checkboxes": [],
-          "comments": []
+          "comments": [
+            {
+              "id": "b5fbef5e-3d83-4df0-af34-c8b1686a5006",
+              "comment": "Errors, Warnings, Changed"
+            }
+          ]
         },
         {
           "id": "4837d859-b453-4072-a9a2-f473b9a8342a",
@@ -130,15 +135,6 @@
           "comments": []
         },
         {
-          "id": "d9673699-ede3-4290-b4aa-1d84ab83ec8a",
-          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
-          "title": "Code Folding",
-          "description": "Konfigurierbar für jedes FE Profil.",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
           "id": "fa88fc7a-9995-45e3-83ff-85df18a8a05b",
           "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
           "title": "Batch Loading / Acquire",
@@ -152,7 +148,7 @@
             },
             {
               "id": "f3626396-4ef7-4b14-b5a7-b5b2afeed8b2",
-              "comment": "IN Load Dialogen - auf Kommandozeile geht das ja schon"
+              "comment": "In Load Dialogen - auf Kommandozeile geht das ja schon"
             }
           ]
         },
@@ -164,13 +160,41 @@
           "labels": [],
           "checkboxes": [],
           "comments": []
+        },
+        {
+          "id": "2334004a-8190-4b38-a954-da0dd27c3f4a",
+          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+          "title": "Print Management via save-as PDF Export",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "d9673699-ede3-4290-b4aa-1d84ab83ec8a",
+          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+          "title": "Code Folding: mehr Sprachen",
+          "description": "Konfigurierbar für jedes FE Profil.",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
         }
       ]
     },
     {
       "id": "b721e070-ae21-4123-a1f3-27b926375a16",
       "title": "Regression / Errors",
-      "cards": []
+      "cards": [
+        {
+          "id": "e15c0ece-5c81-4259-8f69-88523081e123",
+          "listId": "b721e070-ae21-4123-a1f3-27b926375a16",
+          "title": "Sollte man die Code Analyse und das Line Indexing nicht von der Cursorposition nach oben und parallel nach unten führen - plus eine Tabelle welche Zeilenranges bereits aufgewärmt sind bis alle Zeilen aufgewärmt sind. Bei TOF dann eben nur nach unten und bei EOF eben nucr nach oben. Jeweils Coregesamtanzahl/4 in jede Richtung: Bei 16 Cores je 8 Blöcke nach oben und 8 nach unten rechnen.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        }
+      ]
     },
     {
       "id": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
@@ -183,7 +207,12 @@
           "description": "Gibt Rahmen und Übersicht über Aufwand der Implementierung.\n",
           "labels": [],
           "checkboxes": [],
-          "comments": []
+          "comments": [
+            {
+              "id": "768f9438-c0b1-4997-a626-70abba19b99d",
+              "comment": "Print rein auf PDF Export? Dann brauchen wir keinen Print Margin mehr"
+            }
+          ]
         },
         {
           "id": "40285382-e934-4b32-bd16-3acffa7645ef",
@@ -196,63 +225,12 @@
             {
               "id": "6d4a17f6-891d-4f2f-a414-a20147867cb3",
               "comment": "MRMAC Steuerung von TUI Objekten. Screen Operations Kapitel 23"
-            }
-          ]
-        },
-        {
-          "id": "adecbc95-314f-47b7-9f0b-ff99ffb8475d",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Window Manager",
-          "description": "via Menüleiste, bindbaren Hotkeys (mrmac Erweiterung!) sowie ziehen von Fenstern an die Desktop Ränder.\n",
-          "labels": [],
-          "checkboxes": [],
-          "comments": [
+            },
             {
-              "id": "727f7620-666a-45ee-980a-8bcbd9d48eb0",
-              "comment": "Minimize/Restore? Wohin? In die F-Tasten Zeile? Srollbare F-Tasten Zeile??"
+              "id": "0a5c4142-af28-4f0a-a5da-18549094c1e6",
+              "comment": "Doch ein Grid implementieren lassen? (Calculator)"
             }
           ]
-        },
-        {
-          "id": "950a00d6-e58b-48bf-8631-fb6f9731c784",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Vm compute lanes in cpu threads auslagern?",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
-          "id": "3f136c23-dea4-4cc1-b981-f32ee1c981f5",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Minimap Color Coding",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": [
-            {
-              "id": "b5fbef5e-3d83-4df0-af34-c8b1686a5006",
-              "comment": "Suchtreffer, Errors, Warnings, Changed"
-            }
-          ]
-        },
-        {
-          "id": "996607be-2711-421a-9725-45719556dbdd",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Code Coloring",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
-          "id": "602988a6-2cff-4eed-865a-5ebe4888117d",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Treesitter Integration: Mehr Sprachen",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
         },
         {
           "id": "a24d42c4-f168-415f-85ca-90ac35821dc2",
@@ -261,7 +239,12 @@
           "description": "",
           "labels": [],
           "checkboxes": [],
-          "comments": []
+          "comments": [
+            {
+              "id": "c55d38d8-0d2a-4de3-bce1-f0a4c34607ac",
+              "comment": "Verschiedene Einrückstile auswählbar machen"
+            }
+          ]
         }
       ]
     },
@@ -279,9 +262,90 @@
           "comments": []
         },
         {
+          "id": "284ae45b-a822-4539-8a65-270cc5883b42",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Neuer Farbcode in Gruppe Windows: code folding marker (serialisieren, laden, upgraden, anwenden via vm). Marker in Code Folding Gutter damit färben. Neue Glyphen für diese Marker: Dreieck nach rechts wenn eingeklappt, Dreieck nach unten wenn ausgeklappt.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "890076c7-5590-4ec6-8a7f-72b0dc317c63",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "MFS durch Load und Load-All Button in ergebnis Dialog ergänzen",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "8953636e-d312-425f-b5ed-91d803a23822",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Ein Doppelklick in die Dropliste läd sofort den doppelt geklickten Eintrag.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "394a29b8-c9b9-45d3-846b-24c0513a657d",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "In allen Load Dialogen muss ich mit der Eingabe eines Pfades in das Filenamen Feld nach Enter-Taste in den Pfad gebracht werden und im Verzeichnis Listung den Inhalt sehen. Es darf dann nicht wie jetzt die Dropliste aufgehen. Der Pfad muss auch in die History (wenn es technisch nicht ander geht dann anhängen von mit *.*) eingetragen werden.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "80bf5b05-946a-4c62-b014-484f2434be02",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Ein Doppelklick in die Dropliste läd sofort den doppelt geklickten Eintrag.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "e7e67ef6-02b9-4613-b24c-1a69e6b8a92a",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Bug: In allen Load Dialogen muss ich mit der Eingabe eines Pfades in das Filenamen Feld nach Enter-Taste in den Pfad gebracht werden und im Verzeichnis Listung den Inhalt sehen. Es darf dann nicht wie jetzt die Dropliste aufgehen. Der Pfad muss auch in die History (von mir aus mit *.*) eingetragen werden.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "0900fb03-9cc0-4fdb-a6ca-7740238183f5",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Mausrad scroll mit geöffneter drop list nicht in der droplist sondern in directory listing",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
           "id": "d2f4a85b-3476-4093-addf-f2c929baa780",
           "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
           "title": "VM ist bei Key Mappings nicht die letzte Instanz, die den K/V Hash mit der einzigen Wahrheit versorgt. Es wird schon vorher zur Korrektur der settings.mrmac Inhalte der K/V Hash genutzt.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "950a00d6-e58b-48bf-8631-fb6f9731c784",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Vm compute lanes in cpu threads auslagern?",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "996607be-2711-421a-9725-45719556dbdd",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Code Coloring",
           "description": "",
           "labels": [],
           "checkboxes": [],

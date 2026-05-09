@@ -1573,7 +1573,7 @@ static const MRColorSetupItem kWindowColorItems[] = {
     // Current-line, current-line-in-block and changed-text intentionally use
     // dedicated app palette extension slots (136..138) to avoid recoloring
     // frame icons/scrollbar controls.
-    {"text", kPaletteBlueWindowText}, {"changed text", kMrPaletteChangedText}, {"highlighted text", kPaletteBlueWindowHighlight}, {"EOF marker", kMrPaletteEofMarker}, {"window border", kPaletteBlueWindowFrame}, {"window bold", kPaletteBlueWindowBold}, {"current line", kMrPaletteCurrentLine}, {"current line in block", kMrPaletteCurrentLineInBlock}, {"line numbers", kMrPaletteLineNumbers}, {"code folding", kMrPaletteCodeFolding}, {"format ruler", kMrPaletteFormatRuler},
+    {"text", kPaletteBlueWindowText}, {"changed text", kMrPaletteChangedText}, {"highlighted text", kPaletteBlueWindowHighlight}, {"EOF marker", kMrPaletteEofMarker}, {"window border", kPaletteBlueWindowFrame}, {"window bold", kPaletteBlueWindowBold}, {"current line", kMrPaletteCurrentLine}, {"current line in block", kMrPaletteCurrentLineInBlock}, {"line numbers", kMrPaletteLineNumbers}, {"code folding", kMrPaletteCodeFolding}, {"code folding marker", kMrPaletteCodeFoldingMarker}, {"format ruler", kMrPaletteFormatRuler},
 };
 
 static const MRColorSetupItem kMenuDialogColorItems[] = {
@@ -1632,6 +1632,7 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 	if (paletteIndex == kMrPaletteCursorPositionMarker) return defaults[3];
 	if (paletteIndex == kMrPaletteLineNumbers) return defaults[9];
 	if (paletteIndex == kMrPaletteCodeFolding) return defaults[9];
+	if (paletteIndex == kMrPaletteCodeFoldingMarker) return defaults[9];
 	if (paletteIndex == kMrPaletteFormatRuler) return defaults[13];
 	if (paletteIndex == kMrPaletteEofMarker) return defaults[14];
 	if (paletteIndex == kMrPaletteMiniMapNormal) return defaults[13];
@@ -1708,8 +1709,8 @@ template <std::size_t N> std::string formatColorListLiteral(const std::array<uns
 std::string formatWindowColorListLiteral(const std::array<unsigned char, MRColorSetupSettings::kWindowCount> &values) {
 	std::string out = formatColorListLiteral(values);
 
-	// WINDOWCOLORS uses v4 (adds format-ruler color to v3's 10-value layout).
-	if (out.size() >= 2 && out[0] == 'v') out[1] = '4';
+	// WINDOWCOLORS uses v5 (adds code-folding-marker color to v4's 11-value layout).
+	if (out.size() >= 2 && out[0] == 'v') out[1] = '5';
 	return out;
 }
 
@@ -1748,13 +1749,18 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 	const unsigned char defaultEofMarker = defaultColorForSlot(kMrPaletteEofMarker);
 	const unsigned char defaultLineNumbers = defaultColorForSlot(kMrPaletteLineNumbers);
 	const unsigned char defaultCodeFolding = defaultColorForSlot(kMrPaletteCodeFolding);
+	const unsigned char defaultCodeFoldingMarker = defaultColorForSlot(kMrPaletteCodeFoldingMarker);
 	const unsigned char defaultFormatRuler = defaultColorForSlot(kMrPaletteFormatRuler);
 	unsigned char value = 0;
+	bool v5Format = false;
 	bool v4Format = false;
 	bool v3Format = false;
 	bool v2Format = false;
 
-	if (text.rfind("v4:", 0) == 0 || text.rfind("V4:", 0) == 0) {
+	if (text.rfind("v5:", 0) == 0 || text.rfind("V5:", 0) == 0) {
+		text = text.substr(3);
+		v5Format = true;
+	} else if (text.rfind("v4:", 0) == 0 || text.rfind("V4:", 0) == 0) {
 		text = text.substr(3);
 		v4Format = true;
 	} else if (text.rfind("v3:", 0) == 0 || text.rfind("V3:", 0) == 0) {
@@ -1777,21 +1783,28 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 	}
 
 	// Formats:
-	// - v4 + 11 values: current format (..., EOF marker, ..., line numbers, code folding, format ruler)
+	// - v5 + 12 values: current format (..., line numbers, code folding, code folding marker, format ruler)
+	// - v4 + 11 values: previous format without dedicated code-folding-marker color
 	// - v3 + 10 values: previous format without dedicated format-ruler color
 	// - v2 + 8 values: previous format (without EOF marker, line numbers, code folding)
 	// - v1 + 7 values: legacy format (without EOF marker and without line-number/folding colors)
 	// - v1 + 8 values: legacy format with EOF marker as 4th entry, no line-number/folding colors
 	// - unversioned 9 values: layout with line numbers but without code folding
-	if (v4Format) {
-		if (parsed.size() != MRColorSetupSettings::kWindowCount) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v4.");
+	if (v5Format) {
+		if (parsed.size() != MRColorSetupSettings::kWindowCount) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v5.");
 		for (std::size_t i = 0; i < outValues.size(); ++i)
 			outValues[i] = parsed[i];
-	} else if (v3Format) {
-		if (parsed.size() != MRColorSetupSettings::kWindowCount - 1) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v3.");
+	} else if (v4Format) {
+		if (parsed.size() != MRColorSetupSettings::kWindowCount - 1) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v4.");
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
-		outValues[10] = defaultFormatRuler;
+		outValues[11] = defaultCodeFoldingMarker;
+	} else if (v3Format) {
+		if (parsed.size() != MRColorSetupSettings::kWindowCount - 2) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v3.");
+		for (std::size_t i = 0; i < parsed.size(); ++i)
+			outValues[i] = parsed[i];
+		outValues[10] = defaultCodeFoldingMarker;
+		outValues[11] = defaultFormatRuler;
 	} else if (v2Format) {
 		if (parsed.size() != 8) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v2.");
 		outValues[0] = parsed[0];
@@ -1804,23 +1817,31 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 		outValues[7] = parsed[6];
 		outValues[8] = defaultLineNumbers;
 		outValues[9] = defaultCodeFolding;
-		outValues[10] = defaultFormatRuler;
+		outValues[10] = defaultCodeFoldingMarker;
+		outValues[11] = defaultFormatRuler;
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount) {
 		// Accept unversioned current layout as a tolerant input.
 		for (std::size_t i = 0; i < outValues.size(); ++i)
 			outValues[i] = parsed[i];
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 1) {
+		// Previous current layout without dedicated code-folding-marker color.
+		for (std::size_t i = 0; i < parsed.size(); ++i)
+			outValues[i] = parsed[i];
+		outValues[11] = defaultCodeFoldingMarker;
+	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 2) {
 		// Previous current layout without dedicated format-ruler color.
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
-		outValues[10] = defaultFormatRuler;
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 2) {
-		// Layout with EOF+line numbers and missing code-folding/format-ruler colors.
+		outValues[10] = defaultCodeFoldingMarker;
+		outValues[11] = defaultFormatRuler;
+	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 3) {
+		// Layout with EOF+line numbers and missing code-folding/marker/ruler colors.
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
 		outValues[9] = defaultCodeFolding;
-		outValues[10] = defaultFormatRuler;
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 3) {
+		outValues[10] = defaultCodeFoldingMarker;
+		outValues[11] = defaultFormatRuler;
+	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 4) {
 		// Legacy v1 with EOF marker and without line-number/folding/ruler colors.
 		outValues[0] = parsed[0];
 		outValues[1] = parsed[1];
@@ -1832,8 +1853,9 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 		outValues[7] = parsed[7];
 		outValues[8] = defaultLineNumbers;
 		outValues[9] = defaultCodeFolding;
-		outValues[10] = defaultFormatRuler;
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 4) {
+		outValues[10] = defaultCodeFoldingMarker;
+		outValues[11] = defaultFormatRuler;
+	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 5) {
 		// Legacy v1 without EOF marker and without line-number/folding/ruler colors.
 		outValues[0] = parsed[0];
 		outValues[1] = parsed[1];
@@ -1845,7 +1867,8 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 		outValues[7] = parsed[6];
 		outValues[8] = defaultLineNumbers;
 		outValues[9] = defaultCodeFolding;
-		outValues[10] = defaultFormatRuler;
+		outValues[10] = defaultCodeFoldingMarker;
+		outValues[11] = defaultFormatRuler;
 	} else
 		return setError(errorMessage, "Unexpected WINDOWCOLORS list size.");
 
@@ -4779,7 +4802,7 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	normalized.codeLanguage = codeLanguage;
 	normalized.codeColoring = settings.codeColoring;
 	normalized.codeFoldingFeature = settings.codeFoldingFeature;
-	normalized.smartIndenting = settings.smartIndenting;
+	normalized.smartIndenting = settings.smartIndenting || indentStyle == "SMART";
 	normalized.fileType = fileType;
 	normalized.binaryRecordLength = settings.binaryRecordLength;
 	normalized.postLoadMacro = postLoadMacro;

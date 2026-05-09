@@ -57,25 +57,121 @@ Erledigt:
 - Ctrl-End-/EOF-Fehler behoben
 - Ctrl-Home-/BOF-Sprungpfad an den robusten nicht-zentrierten Zielzustand angeglichen
 - große Dateien laufen über schrittweises Line-Index- und Syntax-Warmup statt Vollscan im Draw
-- vorhandene Lexer im Bestand: PlainText, C, C++, JavaScript, Python, JSON, zsh, Perl, MRMAC, Make, Markdown
-- Markdown, zsh und Perl sind im Editorpfad zustandsbehaftet verdrahtet und nicht mehr nur baseline-artig angebunden
+- vorhandene Lexer im Bestand: PlainText, C, C++, JavaScript, Python, JSON, Bash, zsh, Perl, MRMAC, Make, Markdown, Swift, Rust, Go, systemd et al.
+- Markdown, Bash, zsh, Perl, Swift, Rust, Go und systemd et al. sind im Editorpfad zustandsbehaftet verdrahtet und nicht mehr nur baseline-artig angebunden
 
 Erledigte Konsolidierung nach dem letzten Lexer-Block:
 
 - Syntax-Invalidation kappt überholte Warmup-Läufe und setzt die Prefetch-Frontier sauber zurück
 - Smart Indent wurde für zsh, Perl und Markdown nachgeschärft
 - heuristische Fold-Marker im Gutter sind ergänzt
+- funktionales Folding-Backend ist im Editorpfad aktiv:
+  - Fold-Spans
+  - offene/geschlossene Folds
+  - Fold-Kompression der Textansicht
+  - dynamische mehrspaltige Gutter-Breite
+  - Ebenenrahmen für geöffnete Strukturen
+- die UI-seitigen Syntax-Reschedule-Oszillationen wurden beseitigt; `drawView()` und no-op-`scrollDraw()` stoßen keinen Syntax-Warmup mehr an
 - Warmup-/Prefetch-Pending bleibt über sichtbare Task-Signale erkennbar
 - MiniMap und Viewport werden bei sehr großen Dateien nach exakter Zeilenzahl enger nachgeführt
 - automatische inhaltsheuristische Sprachklassifikation ist im Syntax-Modul umgesetzt
 - `CODE_LANGUAGE=AUTO` ist im Runtime-Pfad wirksam verdrahtet
 - der FE-Dialog führt die Sprachwahl als `Automatic`, intern bleibt die kanonische Serialisierung `AUTO`
 - die erkannte Sprache wird im Markerblock des Frames als technisches Kürzel angezeigt
+- `WINDOWCOLORS` wurde auf `v5` erweitert und enthält jetzt eine eigene `code folding marker`-Farbe mit Upgradepfad aus älteren Layouts
+- das Folding-Gutter nutzt getrennte Markerfarbe statt nur der Folding-Hintergrundfarbe
+- offene MR-DropLists übernehmen Mausrad-Ereignisse zentral statt sie an darunterliegende Listen weiterzureichen
+- Folding-Sprachadapter wurden gruppenweise nachgeschärft:
+  - `Python`, `zsh`, `Perl`
+  - `Markdown`, `Make`
+  - `JSON`, `JavaScript`
+- `MRMAC` verwendet im Folding einen parser-treuen Strukturadapter für
+  - `$MACRO ... END_MACRO`
+  - `IF ... THEN ... END`
+  - `IF ... THEN ... ELSE ... END`
+  - `WHILE ... DO ... END`
+- `MRMAC`-Makrogrenzen sind im Gutter sichtbar geklammert
+- Fold-Cache und Fold-Scan sind sprachübergreifend von reiner Viewport-Teilmenge auf einen stabileren Scanbereich umgestellt, damit Aufwärts-/Abwärtsscrollen nicht verschiedene Strukturgrundlagen erzeugt
+- der Fold-Bestand wird für bekannte Dokumentzeilenzahl sprachübergreifend dokumentweit aufgebaut und im Viewport nur noch projiziert; der Richtungsfehler beim Aufwärts-/Abwärtsscrollen ist damit im gemeinsamen Pfad beseitigt
+- das gemeinsame Gutter-Rendering unterstützt jetzt explizite Schwesterzweige:
+  - normaler Start `╭`
+  - Schwesterzweig `├`
+  - fortgesetzte Verzweigung `│`
+  - Ende `╰`
+- das Folding-Gutter nutzt jetzt ein einheitliches Klickmodell:
+  - Linksklick toggelt den direkt getroffenen Fold
+  - Rechtsklick toggelt alle sichtbaren Folds der getroffenen Spalte und aller Spalten rechts davon
+- `foldtrainer/mrfoldtrainer` ist als separates Batchtool eingeführt und als regulärer Härtungspfad für Folding etabliert
+- batchtrainer-gestützt bis zu einem tragfähigen `v1.0`-Stand nachgezogen:
+  - `MRMAC`
+  - `Perl`
+  - `JavaScript`
+  - `C`
+  - `C++`
+  - `zsh`
+  - `Swift`
+  - `Rust`
+  - `Go`
+- `bash` und `zsh` sind als getrennte Sprachpfade mit getrennten Markern und getrennter Dateierkennung verdrahtet; `bash` ist nicht mehr nur ein `zsh`-Alias
+- die `systemd`-Familie ist als eigene Sprachfamilie verdrahtet:
+  - `.service`
+  - `.socket`
+  - `.timer`
+  - `.mount`
+  - `.automount`
+  - `.target`
+  - `.path`
+  - `.slice`
+  - `.scope`
+  - `.swap`
+  - `.device`
+  - `.link`
+  - `.netdev`
+  - `.network`
+- `systemd`-Sections falten familienweit am letzten echten Inhaltseintrag statt nachlaufende Kommentar- und Leerblöcke mitzuziehen
+- der FE-Dialog ist auf den aktuellen Sprachbestand nachgeführt:
+  - `zsh` ist sichtbar auswählbar
+  - `systemd et al.` erscheint als sichtbarer Labeltext
+- die File-Dialoge wurden im bestehenden TVision-Pfad nachgeschärft:
+  - Pfadangabe im Dateinamenfeld navigiert per `Enter` in das Verzeichnis statt nur die History-Dropliste zu öffnen
+  - `~` wird im Load-Dialog lokal expandiert
+  - Doppelklick in der History-Dropliste lädt sofort
+- der MFS-Ergebnisdialog wurde im Suchmodus nachgeschärft:
+  - `Load` und `Load-All`
+  - Doppelklick in der linken Trefferliste lädt sofort
+  - der Fokus-Restore nach dem Schließen von Ergebnisdialog und MFS ist zentral über `mrActivateEditWindow(...)` gehärtet
+- der aktuelle `v1.0`-Sprachstand ist im Maintainer-Lauf für folgende Sprachen als tragfähig bestätigt:
+  - `bash`
+  - `C`
+  - `C++`
+  - `JavaScript`
+  - `Python`
+  - `JSON`
+  - `systemd et al.`
+  - `zsh`
+  - `Perl`
+  - `MRMAC`
+  - `Markdown`
+  - `Swift`
+  - `Rust`
+  - `Go`
+- `MRMAC` hat jetzt neben dem parser-treuen Folding auch einen eigenen Smart-Indent-/Smart-Undent-Pfad für
+  - `$MACRO ... END_MACRO`
+  - `IF ... THEN`
+  - `ELSE`
+  - `WHILE ... DO`
+  - `END`
+  - geschachtelte Blockkombinationen daraus
 
 Noch nicht erledigt:
 
-- Goldstandard für alle begonnenen Sprachen ist nur für einen Teil des Bestands erreicht
-- automatische Sprachklassifikation ist noch nicht über systematische Problemdatei-Mengen und Fehlklassifikationsmetriken gehärtet
+- automatische Sprachklassifikation zeigt derzeit keinen Handlungsbedarf; weitere Härtung bleibt nur Reserve für echte Fehlbefunde
+- aktuell sind keine weiteren Sprachaufnahmen für Folding oder Indenting gewünscht
+- der nächste Gesamtzug liegt daher ausschließlich in Konsolidierung des Bestands:
+  - Resthärtung des sprachübergreifenden Smart-Indent-/Undent-Pfads auf bereits unterstützten Sprachen
+  - Konsistenz zwischen Editor, FE-Dialog, Auto-Erkennung, Folding und den Batchtools `mrfoldtrainer` und `mrindenttrainer`
+  - UI-/Dialogpflege außerhalb neuer Sprachaufnahmen
+  - Dokumentation und Qualitätsstand des bestehenden `v1.0`-Sprachbestands
 
 ---
 
@@ -834,6 +930,13 @@ Erledigt:
 4. Smart-Indent-Nachschärfung für weitere Sprachsonderfälle
 ```
 
+Wichtig:
+
+```text
+Diese Phase hat nur die heuristische Gutter-Vorstufe geliefert.
+Sie ist ausdrücklich noch kein funktionales Folding-Backend.
+```
+
 ---
 
 ## Phase 17: Inhaltsheuristische Sprachklassifikation
@@ -891,6 +994,214 @@ Offen:
 3. optionale Ausweitung von Marker/Confidence auf spätere UI-Entscheidungen nur bei echtem Bedarf
 ```
 
+---
+
+## Phase 18: Strukturelles Folding-Backend
+
+Diese Phase folgt bewusst auf die Sprachklassifikation und steht inhaltlich auf der bereits früher benannten
+`Stufe 4: optionale Struktur`.
+
+Begründung:
+
+```text
+erst line-based Lexer-, Cache- und Klassifikationsbasis stabilisieren
+dann Strukturinformationen als eigenes Backend ergänzen
+```
+
+Ziel:
+
+```text
+funktionales Folding über alle unterstützten Sprachen
+ohne Parser im Draw-Hotpath
+ohne Vermischung mit dem Farbpfad
+```
+
+Kernmodell:
+
+```text
+FoldSpan
+    StartLine
+    EndLine
+    Level
+    OpenOrClosed
+    SourceKind
+```
+
+`SourceKind` ist dabei keine neue UI-Semantik, sondern nur die Herkunft der Struktur:
+
+```text
+DelimiterBlock
+IndentBlock
+FenceBlock
+HereDocumentBlock
+CommentBlock
+DirectiveBlock
+LanguageSpecific
+```
+
+Architekturregel:
+
+```text
+der Lexer liefert Struktursignale
+das Folding-System baut daraus Fold-Spans
+der Editor rendert nur den vorbereiteten Fold-Zustand
+```
+
+Nicht erlaubt:
+
+```text
+Klammer- oder Strukturparsing im Draw
+globaler Vollscan pro Repaint
+Scheinsemantik mit collapse/expand-Glyphen ohne echten Fold-Zustand
+```
+
+Gutter-Anforderungen:
+
+```text
+1. der Folding-Gutter wird mehrspaltig
+2. seine Breite wächst und schrumpft automatisch mit der maximal sichtbaren Schachtelung
+3. eingeklappt zeigt ein Fold-Start ein Dreieck nach rechts
+4. aufgeklappt zeigt der Gutter keine Dreiecke, sondern Ebenenrahmen
+5. pro Ebene wird eine eigene Gutter-Spalte verwendet
+```
+
+Rahmen-Darstellung für aufgeklappte Ebenen:
+
+```text
+Beginn: linke obere Single-Line-Ecke
+Mitte: vertikaler Single-Line-Strich
+Ende: linke untere Single-Line-Ecke
+```
+
+Diese Darstellung wird pro geschachtelter Ebene in einer eigenen Gutter-Spalte geführt.
+
+Sprachübergreifende Abdeckung:
+
+```text
+C / C++ / JavaScript / JSON:
+    Delimiter- und Directive-Blöcke
+
+Python / zsh / Make:
+    Indent-Blöcke
+
+Markdown:
+    Fence- und Abschnittsblöcke
+
+Perl:
+    Delimiter-, HereDoc- und POD-nahe Strukturbereiche
+
+MRMAC:
+    Block- und Delimiterstrukturen
+```
+
+Stand:
+
+```text
+erledigt:
+1. Fold-Datenmodell und Invalidationsregeln
+2. Span-Berechnung aus sprachspezifischen Struktursignalen
+3. dynamische mehrspaltige Gutter-Geometrie
+4. Renderpfad für eingeklappte Marker und aufgeklappte Ebenenrahmen
+5. Bedienung für Auf- und Zuklappen
+6. sprachübergreifend stabiler dokumentweiter Fold-Cache statt viewportabhängiger Richtungsartefakte
+7. Branch-Rendering mit expliziten Schwesterzweigen (`├`) im gemeinsamen Gutter-Pfad
+8. Batchtrainer-gestützte Sprachhärtung bis zu einem tragfähigen `v1.0`-Stand für die priorisierten Editor-Sprachen
+
+offen:
+9. restliche Sprachbestände und neue Sprachen im selben Batchtrainer-Verfahren nachziehen
+10. systematische Vollabnahme über den Sprachbestand und größere Problemdatei-Mengen
+```
+
+Wichtig:
+
+```text
+funktionales Folding ist ein eigenes Strukturbackend
+und keine Nebenwirkung des Syntax-Colorings
+```
+
+---
+
+## Späte Experimentalphase: Cursor-zentrierte bidirektionale Parallelisierung
+
+Diese Phase gehört bewusst ans Ende des laufenden Gesamtzugs.
+
+Sie wird erst betrachtet, wenn die drei Hauptfunktionen
+
+```text
+Coloring
+Folding
+Indenting
+```
+
+im Alltag getestet sauber funktionieren.
+
+Zusätzliche harte Voraussetzung:
+
+```text
+es gibt einen bekannten stabilen Commit als Rücksetzpunkt
+```
+
+Ziel:
+
+```text
+prüfen, ob strukturbezogene Analysen um die Cursor-Position herum
+bidirektional und blockweise parallelisiert werden können
+```
+
+Kernidee:
+
+```text
+von der Cursor-Position aus nach TOF und nach EOF arbeiten
+berechnete Zeilenbereiche in einer Range-Tabelle festhalten
+freie Worker-Slots opportunistisch weiter belegen
+```
+
+Wichtige Einschränkung:
+
+```text
+dies ist kein Automatismus für den stateful Coloring-Kern
+```
+
+Der stateful Lexer bleibt grundsätzlich verdächtig für:
+
+```text
+falsche State-Eingänge
+unsauberes Zusammensetzen von Teilbereichen
+Konvergenzprobleme zwischen Teilblöcken
+```
+
+Deshalb ist diese Phase ausdrücklich:
+
+```text
+zuerst Architektur- und Machbarkeitsprüfung
+nicht sofortiger Umbau des bestehenden Coloring-Kerns
+```
+
+Prüffragen:
+
+```text
+1. welche Teilanalysen dürfen bidirektional und blockweise parallel laufen
+2. welche müssen checkpoint-basiert strikt vorwärts bleiben
+3. ob Folding- und Indent-Strukturinfos stärker profitieren als Coloring
+4. ob ein messbarer Scheduling- und Latenzgewinn entsteht
+```
+
+Nicht erlaubt:
+
+```text
+Parallelisierung um jeden Preis
+Verlust von Korrektheit zugunsten von CPU-Auslastung
+neue Warmup-/Pending-/Viewport-Instabilität
+```
+
+Erfolgskriterium:
+
+```text
+nachweisbarer Geschwindigkeitsgewinn
+ohne Verschlechterung von Syntax-Korrektheit, Folding oder Indent
+und ohne Rückfall in Scheduling-Instabilitäten
+```
+
 ### Erkennungs-Subset je Sprache
 
 `PlainText`
@@ -937,13 +1248,32 @@ Offen:
 
 `zsh`
 
-- Shebang mit `zsh`, `sh`, `bash`, `ksh`
+- Shebang mit `zsh`
 - `${...}`
 - `$()`
 - `[[ ... ]]`
 - `case ... in`
 - `typeset`, `autoload`, `setopt`
 - Here-Docs `<<EOF`, `<<-EOF`
+
+`bash`
+
+- Shebang mit `bash`, `sh`, `ksh`
+- `${...}`
+- `$()`
+- `[[ ... ]]`
+- `case ... in`
+- `declare`, `readonly`, `shopt`, `source`
+- Here-Docs `<<EOF`, `<<-EOF`
+
+`systemd`
+
+- Dateifamilie `.service`, `.socket`, `.timer`, `.mount`, `.automount`, `.target`, `.path`, `.slice`, `.scope`, `.swap`, `.device`, optional `.link`, `.netdev`, `.network`
+- Section-Header wie `[Unit]`, `[Service]`, `[Install]`, `[Network]`
+- Schlüssel links von `=`
+- Kommentare mit `#` und `;`
+- Folding pro Section-Block
+- flaches Indent ohne aggressive Blockheuristik
 
 `Perl`
 
@@ -1017,6 +1347,10 @@ mit wenigen hochsignifikanten Treffern eine belastbare automatische Sprachwahl z
     Fold-Gutter, Task-Signale, MiniMap-/Viewport-Abstimmung, Smart-Indent-Nachschärfung
 15. automatische inhaltsheuristische Sprachklassifikation auf Basis der definierten Sprach-Subsets
 16. Härtung der Sprachklassifikation gegen Problemdateien und Fehlklassifikationen
+17. strukturelles Folding-Backend mit Fold-Spans, dynamischer Gutter-Breite und Ebenenrahmen
+18. Batchtrainer-gestützte Härtung des Folding-Backends gegen Sprachsonderfälle, Richtungsfehler und reale Korpora bis zum tragfähigen `v1.0`-Sprachset
+19. Vollabnahme und systematische Korpus-Härtung der restlichen Bestands- und Folgesprachen
+20. späte experimentelle Prüfung einer cursor-zentrierten bidirektionalen Parallelisierung nach Stabilisierung von Coloring, Folding und Indenting
 ```
 
 ---

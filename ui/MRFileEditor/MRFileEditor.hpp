@@ -71,6 +71,35 @@ struct MRSyntaxCheckpointEntry {
 	}
 };
 
+enum class MRFoldSourceKind : unsigned char {
+	Delimiter,
+	Indent,
+	Fence,
+	Section,
+	Directive,
+	Macro,
+	Target,
+	Generic
+};
+
+struct MRFoldSpan {
+	std::size_t startLine;
+	std::size_t endLine;
+	unsigned short level;
+	MRFoldSourceKind sourceKind;
+	bool open;
+	bool siblingContinuation;
+
+	MRFoldSpan() noexcept : startLine(0), endLine(0), level(0), sourceKind(MRFoldSourceKind::Generic), open(true), siblingContinuation(false) {
+	}
+
+	MRFoldSpan(std::size_t aStartLine, std::size_t aEndLine, unsigned short aLevel, MRFoldSourceKind aSourceKind, bool aOpen = true, bool aSiblingContinuation = false) noexcept
+	    : startLine(aStartLine), endLine(aEndLine), level(aLevel), sourceKind(aSourceKind), open(aOpen), siblingContinuation(aSiblingContinuation) {
+	}
+};
+
+std::string mrBuildFoldTrainingAscii(const std::string &text, MRSyntaxLanguage language);
+
 class MRFileEditor : public TScroller {
   public:
 	struct LoadTiming {
@@ -348,6 +377,8 @@ class MRFileEditor : public TScroller {
 
 		int leadingIndentColumnForLine(std::size_t lineStart) const noexcept;
 
+		int inferredShellIndentStepColumns(std::size_t lineStart, const MREditSetupSettings &settings) const noexcept;
+
 		std::string automaticIndentFillForCursor() const;
 
 		std::string smartIndentFillForCursor();
@@ -539,6 +570,22 @@ class MRFileEditor : public TScroller {
 
 	void invalidateSyntaxCacheFromLineStart(std::size_t lineStart) noexcept;
 
+	void invalidateFoldCache() noexcept;
+
+	void ensureVisibleFoldSpans(std::size_t topLine, int rowCount, MRSyntaxLanguage language);
+
+	int visibleFoldGutterColumns() const noexcept;
+
+	bool toggleFoldAtLine(std::size_t lineIndex);
+
+	bool foldingGutterHit(TPoint local, std::size_t *lineIndexOut = nullptr) const noexcept;
+
+	std::size_t documentLineForVisibleLine(std::size_t visibleLine) const noexcept;
+
+	std::size_t visibleLineForDocumentLine(std::size_t documentLine) const noexcept;
+
+	std::size_t foldedVisibleLineCount() const noexcept;
+
 		std::vector<std::size_t> syntaxWarmupLineStarts(std::size_t topLine, int rowCount) const;
 
 		bool syntaxCheckpointForLine(std::size_t lineIndex, MRSyntaxCheckpointEntry &checkpoint) const;
@@ -574,6 +621,8 @@ class MRFileEditor : public TScroller {
 	std::size_t mLineIndexWarmupVersion;
 	std::map<std::size_t, MRSyntaxCacheEntry> mSyntaxTokenCache;
 	std::map<std::size_t, MRSyntaxCheckpointEntry> mSyntaxCheckpoints;
+	std::vector<MRFoldSpan> mVisibleFoldSpans;
+	std::vector<MRFoldSpan> mEffectiveClosedFoldSpans;
 	std::uint64_t mSyntaxWarmupTaskId;
 	std::size_t mSyntaxWarmupDocumentId;
 	std::size_t mSyntaxWarmupVersion;
@@ -585,6 +634,13 @@ class MRFileEditor : public TScroller {
 	std::size_t mSyntaxPrefetchTargetBottomLine;
 	std::size_t mSyntaxPrefetchReachedBottomLine;
 	MRSyntaxLanguage mSyntaxPrefetchLanguage;
+	std::size_t mVisibleFoldDocumentId;
+	std::size_t mVisibleFoldVersion;
+	std::size_t mVisibleFoldTopLine;
+	std::size_t mVisibleFoldBottomLine;
+	MRSyntaxLanguage mVisibleFoldLanguage;
+	int mVisibleFoldGutterColumns;
+	std::map<std::size_t, MRFoldSpan> mClosedFoldSpans;
 	MRMiniMapRenderer mMiniMapRenderer;
 	SaveNormalizationCache mSaveNormalizationCache;
 	std::uint64_t mSaveNormalizationWarmupTaskId;

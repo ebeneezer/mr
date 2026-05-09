@@ -9,7 +9,8 @@ bool isIndentWhitespace(char ch) noexcept {
 
 bool isStatefulSyntaxLanguage(MRSyntaxLanguage language) noexcept {
 	return language == MRSyntaxLanguage::MRMAC || language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp || language == MRSyntaxLanguage::JavaScript || language == MRSyntaxLanguage::Python ||
-	       language == MRSyntaxLanguage::Markdown || language == MRSyntaxLanguage::Zsh || language == MRSyntaxLanguage::Perl;
+	       language == MRSyntaxLanguage::Markdown || language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh || language == MRSyntaxLanguage::Perl || language == MRSyntaxLanguage::Swift || language == MRSyntaxLanguage::Rust ||
+	       language == MRSyntaxLanguage::Go;
 }
 
 std::string_view trimView(std::string_view text) noexcept {
@@ -34,6 +35,25 @@ std::size_t lastSignificantByte(std::string_view text) noexcept {
 	return std::string_view::npos;
 }
 
+bool containsUpperToken(std::string_view text, std::string_view token) noexcept {
+	std::size_t pos = text.find(token);
+	while (pos != std::string_view::npos) {
+		const bool leftOk = pos == 0 || !(std::isalnum(static_cast<unsigned char>(text[pos - 1])) != 0 || text[pos - 1] == '_');
+		const std::size_t end = pos + token.size();
+		const bool rightOk = end >= text.size() || !(std::isalnum(static_cast<unsigned char>(text[end])) != 0 || text[end] == '_');
+		if (leftOk && rightOk) return true;
+		pos = text.find(token, pos + token.size());
+	}
+	return false;
+}
+
+std::string_view skipLeadingClosersAndSpace(std::string_view trimmed) noexcept {
+	std::size_t index = 0;
+	while (index < trimmed.size() && (trimmed[index] == '}' || trimmed[index] == ']' || trimmed[index] == ')' || trimmed[index] == ' ' || trimmed[index] == '\t'))
+		++index;
+	return trimmed.substr(index);
+}
+
 bool startsWithCloser(std::string_view trimmed) noexcept {
 	return !trimmed.empty() && (trimmed.front() == '}' || trimmed.front() == ']' || trimmed.front() == ')');
 }
@@ -48,27 +68,375 @@ std::size_t leadingIndentBytes(std::string_view text) noexcept {
 bool isPythonIndentLead(std::string_view upperLine) noexcept {
 	return upperLine == "ELSE:" || upperLine == "TRY:" || upperLine == "FINALLY:" || upperLine.starts_with("IF ") || upperLine.starts_with("ELIF ") || upperLine.starts_with("FOR ") || upperLine.starts_with("WHILE ") ||
 	       upperLine.starts_with("WITH ") || upperLine.starts_with("MATCH ") || upperLine.starts_with("CASE ") || upperLine.starts_with("EXCEPT ") || upperLine.starts_with("DEF ") || upperLine.starts_with("CLASS ") ||
-	       upperLine.starts_with("ASYNC DEF ") || upperLine.starts_with("ASYNC FOR ") || upperLine.starts_with("ASYNC WITH ");
+	       upperLine.starts_with("EXCEPT* ") || upperLine.starts_with("ASYNC DEF ") || upperLine.starts_with("ASYNC FOR ") || upperLine.starts_with("ASYNC WITH ");
 }
 
 bool isPythonDedentLead(std::string_view upperLine) noexcept {
-	return upperLine == "ELSE:" || upperLine == "FINALLY:" || upperLine == "EXCEPT:" || upperLine.starts_with("ELIF ") || upperLine.starts_with("CASE ") || upperLine.starts_with("EXCEPT ");
+	return upperLine == "ELSE:" || upperLine == "FINALLY:" || upperLine == "EXCEPT:" || upperLine.starts_with("ELIF ") || upperLine.starts_with("CASE ") || upperLine.starts_with("EXCEPT ") ||
+	       upperLine.starts_with("EXCEPT* ");
 }
 
 bool isShellIndentLead(std::string_view trimmed, std::string_view upperLine) noexcept {
 	const std::size_t last = lastSignificantByte(trimmed);
 	if (last != std::string_view::npos && trimmed[last] == '{') return true;
 	return upperLine == "THEN" || upperLine.ends_with(" THEN") || upperLine == "DO" || upperLine.ends_with(" DO") || upperLine == "ELSE" || upperLine.starts_with("ELIF ") ||
-	       (upperLine.starts_with("CASE ") && upperLine.ends_with(" IN"));
+	       (upperLine.starts_with("CASE ") && upperLine.ends_with(" IN")) || (upperLine.starts_with("SELECT ") && upperLine.ends_with(" DO")) || (upperLine.starts_with("UNTIL ") && upperLine.ends_with(" DO"));
 }
 
 bool isShellDedentLead(std::string_view trimmed, std::string_view upperLine) noexcept {
 	return startsWithCloser(trimmed) || upperLine == "FI" || upperLine == "DONE" || upperLine == "ESAC" || upperLine == "ELSE" || upperLine.starts_with("ELIF ");
 }
 
-bool isPerlIndentLead(std::string_view trimmed) noexcept {
+bool isShellFunctionHeadLine(std::string_view trimmed, std::string_view upperLine) noexcept {
+	const std::string_view normalized = trimView(trimmed);
+	if (normalized.empty()) return false;
+	if (upperLine.starts_with("FUNCTION ")) return true;
+	const std::size_t openParen = normalized.find('(');
+	const std::size_t closeParen = normalized.find(')');
+	if (openParen == std::string_view::npos || closeParen == std::string_view::npos || closeParen < openParen) return false;
+	if (normalized.find('{') != std::string_view::npos) return true;
+	if (closeParen != normalized.size() - 1) return false;
+	std::size_t nameEnd = openParen;
+	while (nameEnd > 0 && std::isspace(static_cast<unsigned char>(normalized[nameEnd - 1])) != 0)
+		--nameEnd;
+	if (nameEnd == 0) return false;
+	for (std::size_t i = 0; i < nameEnd; ++i) {
+		const unsigned char ch = static_cast<unsigned char>(normalized[i]);
+		if (!(std::isalnum(ch) != 0 || normalized[i] == '_')) return false;
+	}
+	for (std::size_t i = openParen + 1; i < closeParen; ++i)
+		if (!std::isspace(static_cast<unsigned char>(normalized[i]))) return false;
+	return true;
+}
+
+bool startsWithKeywordToken(std::string_view upperLine, std::string_view keyword) noexcept {
+	if (!upperLine.starts_with(keyword)) return false;
+	if (upperLine.size() == keyword.size()) return true;
+	const unsigned char next = static_cast<unsigned char>(upperLine[keyword.size()]);
+	return std::isspace(next) != 0 || next == '(' || next == '{' || next == ':';
+}
+
+enum : int {
+	kPerlBlockNone = 0,
+	kPerlBlockConditional = 1,
+	kPerlBlockGeneric = 2,
+};
+
+enum : int {
+	kShellBlockNone = 0,
+	kShellBlockConditional = 1,
+	kShellBlockLoop = 2,
+	kShellBlockCase = 3,
+};
+
+int shellIndentBlockKind(std::string_view upperLine) noexcept {
+	if (upperLine == "THEN" || upperLine.ends_with(" THEN") || upperLine == "ELSE" || upperLine.starts_with("ELIF ")) return kShellBlockConditional;
+	if (upperLine == "DO" || upperLine.ends_with(" DO") || upperLine.starts_with("SELECT ") || upperLine.starts_with("UNTIL ")) return kShellBlockLoop;
+	if (upperLine.starts_with("CASE ") && upperLine.ends_with(" IN")) return kShellBlockCase;
+	return kShellBlockNone;
+}
+
+int perlStructuredBlockKind(std::string_view trimmed, std::string_view upperLine) noexcept {
 	const std::size_t last = lastSignificantByte(trimmed);
-	return last != std::string_view::npos && (trimmed[last] == '{' || trimmed[last] == '[' || trimmed[last] == '(');
+	if (last == std::string_view::npos || trimmed[last] != '{') return kPerlBlockNone;
+	const std::string_view normalizedUpper = trimView(skipLeadingClosersAndSpace(upperLine));
+	if (startsWithKeywordToken(normalizedUpper, "IF") || startsWithKeywordToken(normalizedUpper, "UNLESS") || startsWithKeywordToken(normalizedUpper, "ELSIF") || normalizedUpper == "ELSE {")
+		return kPerlBlockConditional;
+	if (startsWithKeywordToken(normalizedUpper, "SUB") || startsWithKeywordToken(normalizedUpper, "FOR") || startsWithKeywordToken(normalizedUpper, "FOREACH") ||
+	    startsWithKeywordToken(normalizedUpper, "WHILE") || startsWithKeywordToken(normalizedUpper, "UNTIL") || startsWithKeywordToken(normalizedUpper, "GIVEN") ||
+	    startsWithKeywordToken(normalizedUpper, "WHEN") || normalizedUpper == "CONTINUE {" || startsWithKeywordToken(normalizedUpper, "TRY") || startsWithKeywordToken(normalizedUpper, "CATCH") ||
+	    startsWithKeywordToken(normalizedUpper, "FINALLY") || normalizedUpper == "BEGIN {" || normalizedUpper == "END {" || normalizedUpper == "INIT {" || normalizedUpper == "CHECK {" ||
+	    normalizedUpper == "UNITCHECK {" || startsWithKeywordToken(normalizedUpper, "PACKAGE"))
+		return kPerlBlockGeneric;
+	return kPerlBlockNone;
+}
+
+bool isPerlStructuredBlockLead(std::string_view trimmed, std::string_view upperLine) noexcept {
+	return perlStructuredBlockKind(trimmed, upperLine) != kPerlBlockNone;
+}
+
+bool isPerlSiblingLead(std::string_view upperLine) noexcept {
+	const std::string_view normalizedUpper = trimView(skipLeadingClosersAndSpace(upperLine));
+	return startsWithKeywordToken(normalizedUpper, "ELSIF") || normalizedUpper == "ELSE {" || normalizedUpper == "ELSE";
+}
+
+bool isJavaScriptSiblingLead(std::string_view upperLine) noexcept {
+	return upperLine.starts_with("ELSE") || upperLine.starts_with("CATCH") || upperLine.starts_with("FINALLY");
+}
+
+bool isCLikeSiblingLead(std::string_view upperLine) noexcept {
+	return upperLine.starts_with("ELSE") || upperLine.starts_with("CATCH");
+}
+
+bool isJavaScriptStructuralLeadLine(std::string_view upperLine) noexcept {
+	return upperLine == "DO" || upperLine.starts_with("ELSE") || upperLine.starts_with("TRY") || upperLine.starts_with("CATCH") || upperLine.starts_with("FINALLY") ||
+	       upperLine.starts_with("IF ") || upperLine.starts_with("FOR ") || upperLine.starts_with("WHILE ") || upperLine.starts_with("SWITCH ") || upperLine.starts_with("CLASS ") ||
+	       upperLine.starts_with("FUNCTION ") || upperLine.starts_with("ASYNC FUNCTION ") || upperLine.starts_with("EXPORT FUNCTION ") || upperLine.starts_with("EXPORT DEFAULT FUNCTION ") ||
+	       upperLine.starts_with("EXPORT ASYNC FUNCTION ") || upperLine.starts_with("EXPORT DEFAULT ASYNC FUNCTION ") || upperLine.starts_with("EXPORT CLASS ") ||
+	       upperLine.starts_with("EXPORT DEFAULT CLASS ");
+}
+
+bool isJavaScriptArrowFunctionLeadLine(std::string_view trimmed) noexcept {
+	const std::size_t arrow = trimmed.find("=>");
+	if (arrow == std::string_view::npos) return false;
+	const std::string_view afterArrow = trimView(trimmed.substr(arrow + 2));
+	return afterArrow.empty() || afterArrow.starts_with("{");
+}
+
+bool isCLikeCommentLikeLine(std::string_view trimmed) noexcept {
+	return trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with("*") || trimmed.starts_with("*/");
+}
+
+bool isCppLambdaLeadLine(std::string_view trimmed) noexcept {
+	const std::string_view normalizedTrimmed = trimView(skipLeadingClosersAndSpace(trimmed));
+	const std::size_t last = lastSignificantByte(normalizedTrimmed);
+	if (last == std::string_view::npos || normalizedTrimmed[last] != '{') return false;
+	const std::string_view beforeBrace = trimView(normalizedTrimmed.substr(0, last));
+	const std::size_t captureOpen = beforeBrace.find('[');
+	const std::size_t captureClose = beforeBrace.rfind(']');
+	if (captureOpen == std::string_view::npos || captureClose == std::string_view::npos || captureClose < captureOpen) return false;
+	const std::string_view afterCapture = trimView(beforeBrace.substr(captureClose + 1));
+	if (afterCapture.empty()) return true;
+	const std::string afterCaptureUpper = upperAscii(std::string(afterCapture));
+	return afterCapture.front() == '(' || afterCapture.front() == '<' || startsWithKeywordToken(afterCaptureUpper, "MUTABLE") || startsWithKeywordToken(afterCaptureUpper, "NOEXCEPT") ||
+	       startsWithKeywordToken(afterCaptureUpper, "REQUIRES") || afterCapture.starts_with("->");
+}
+
+bool isRustCommentLikeLine(std::string_view trimmed) noexcept;
+bool isRustStructuralLeadLine(std::string_view upperLine) noexcept;
+bool isGoStructuralLeadLine(std::string_view upperLine) noexcept;
+
+bool isCLikeStructuralLeadLine(std::string_view trimmed, std::string_view upperLine, MRSyntaxLanguage language) noexcept {
+	const std::string_view normalizedTrimmed = trimView(skipLeadingClosersAndSpace(trimmed));
+	const std::string_view normalizedUpper = trimView(skipLeadingClosersAndSpace(upperLine));
+	if (normalizedTrimmed.empty() || isCLikeCommentLikeLine(normalizedTrimmed) || normalizedTrimmed.front() == '#') return false;
+	if (language == MRSyntaxLanguage::Cpp && isCppLambdaLeadLine(normalizedTrimmed)) return true;
+	const std::size_t normalizedLast = lastSignificantByte(normalizedTrimmed);
+	const bool cppRequiresBraceLead = language == MRSyntaxLanguage::Cpp && normalizedLast != std::string_view::npos && normalizedTrimmed[normalizedLast] == '{' &&
+	                                  containsUpperToken(normalizedUpper, "REQUIRES");
+	if (normalizedUpper == "DO" || normalizedUpper.starts_with("ELSE") || normalizedUpper.starts_with("SWITCH ") || normalizedUpper.starts_with("IF ") ||
+	    normalizedUpper.starts_with("FOR ") || normalizedUpper.starts_with("WHILE ") || normalizedUpper.starts_with("TRY") || normalizedUpper.starts_with("CATCH"))
+		return true;
+	if (containsUpperToken(normalizedUpper, "STRUCT") || containsUpperToken(normalizedUpper, "UNION") || containsUpperToken(normalizedUpper, "ENUM") ||
+	    containsUpperToken(normalizedUpper, "EXTERN"))
+		return true;
+	if (language == MRSyntaxLanguage::Cpp && (containsUpperToken(normalizedUpper, "CLASS") || containsUpperToken(normalizedUpper, "NAMESPACE")))
+		return true;
+	if (language == MRSyntaxLanguage::Rust && isRustStructuralLeadLine(normalizedUpper)) return true;
+	if (language == MRSyntaxLanguage::Go && isGoStructuralLeadLine(normalizedUpper)) return true;
+	const std::size_t openParen = normalizedTrimmed.find('(');
+	if (openParen == std::string_view::npos) return false;
+	if (normalizedTrimmed.find(';') != std::string_view::npos && !cppRequiresBraceLead) return false;
+	if (normalizedTrimmed.find('=') != std::string_view::npos && normalizedTrimmed.find("==") == std::string_view::npos) return false;
+	return true;
+}
+
+bool isCppTemplatePrefixLead(std::string_view trimmed, std::string_view upperLine) noexcept {
+	const std::string_view normalizedTrimmed = trimView(skipLeadingClosersAndSpace(trimmed));
+	const std::string_view normalizedUpper = trimView(skipLeadingClosersAndSpace(upperLine));
+	if (normalizedTrimmed.find(';') != std::string_view::npos) return false;
+	return normalizedUpper == "TEMPLATE" || normalizedUpper.starts_with("TEMPLATE ") || normalizedUpper.starts_with("EXPORT TEMPLATE ") || normalizedUpper.starts_with("REQUIRES ");
+}
+
+bool isCLikeBraceFoldCandidateLine(std::string_view trimmed) noexcept {
+	const std::string_view normalizedTrimmed = trimView(trimmed);
+	if (normalizedTrimmed.empty() || isCLikeCommentLikeLine(normalizedTrimmed) || normalizedTrimmed.front() == '#') return false;
+	const std::size_t last = lastSignificantByte(normalizedTrimmed);
+	return last != std::string_view::npos && normalizedTrimmed[last] == '{';
+}
+
+bool isSwiftCommentLikeLine(std::string_view trimmed) noexcept {
+	return trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with("*") || trimmed.starts_with("*/");
+}
+
+bool isSwiftLabelIdentifier(std::string_view text) noexcept {
+	if (text.empty()) return false;
+	const unsigned char first = static_cast<unsigned char>(text.front());
+	if (!(std::isalpha(first) != 0 || text.front() == '_')) return false;
+	for (std::size_t i = 1; i < text.size(); ++i) {
+		const unsigned char ch = static_cast<unsigned char>(text[i]);
+		if (!(std::isalnum(ch) != 0 || text[i] == '_')) return false;
+	}
+	return true;
+}
+
+std::string_view skipSwiftLeadingLabels(std::string_view text) noexcept {
+	text = trimView(text);
+	while (!text.empty()) {
+		const std::size_t colon = text.find(':');
+		if (colon == std::string_view::npos || colon == 0) break;
+		const std::string_view candidate = trimView(text.substr(0, colon));
+		if (!isSwiftLabelIdentifier(candidate)) break;
+		const std::string_view rest = trimView(text.substr(colon + 1));
+		if (rest.empty()) break;
+		text = rest;
+	}
+	return text;
+}
+
+std::string_view normalizeSwiftStructuralLeadText(std::string_view text) noexcept {
+	return skipSwiftLeadingLabels(trimView(skipLeadingClosersAndSpace(text)));
+}
+
+bool isSwiftStructuralLeadLine(std::string_view upperLine) noexcept {
+	const std::string_view normalizedUpper = normalizeSwiftStructuralLeadText(upperLine);
+	if (normalizedUpper.empty() || isSwiftCommentLikeLine(normalizedUpper)) return false;
+	if (normalizedUpper == "DO" || normalizedUpper == "ELSE" || normalizedUpper.starts_with("ELSE ") || normalizedUpper.starts_with("CATCH") || normalizedUpper.starts_with("DEFER") ||
+	    normalizedUpper.starts_with("DO ") || normalizedUpper.starts_with("IF ") || normalizedUpper.starts_with("GUARD ") || normalizedUpper.starts_with("FOR ") ||
+	    normalizedUpper.starts_with("WHILE ") || normalizedUpper.starts_with("SWITCH ") || normalizedUpper.starts_with("REPEAT"))
+		return true;
+	return containsUpperToken(normalizedUpper, "FUNC") || containsUpperToken(normalizedUpper, "INIT") || containsUpperToken(normalizedUpper, "DEINIT") ||
+	       containsUpperToken(normalizedUpper, "SUBSCRIPT") || containsUpperToken(normalizedUpper, "STRUCT") || containsUpperToken(normalizedUpper, "CLASS") ||
+	       containsUpperToken(normalizedUpper, "ACTOR") || containsUpperToken(normalizedUpper, "ENUM") || containsUpperToken(normalizedUpper, "PROTOCOL") ||
+	       containsUpperToken(normalizedUpper, "EXTENSION");
+}
+
+bool isRustCommentLikeLine(std::string_view trimmed) noexcept {
+	return trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with("*") || trimmed.starts_with("*/");
+}
+
+bool isGoCommentLikeLine(std::string_view trimmed) noexcept {
+	return trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with("*") || trimmed.starts_with("*/");
+}
+
+std::string_view skipRustLeadingLabels(std::string_view text) noexcept {
+	text = trimView(skipLeadingClosersAndSpace(text));
+	while (!text.empty() && text.front() == '\'') {
+		const std::size_t colon = text.find(':');
+		if (colon == std::string_view::npos || colon <= 1) break;
+		const std::string_view candidate = trimView(text.substr(1, colon - 1));
+		if (!isSwiftLabelIdentifier(candidate)) break;
+		const std::string_view rest = trimView(text.substr(colon + 1));
+		if (rest.empty()) break;
+		text = rest;
+	}
+	return text;
+}
+
+std::string_view normalizeRustStructuralLeadText(std::string_view text) noexcept {
+	return skipRustLeadingLabels(trimView(skipLeadingClosersAndSpace(text)));
+}
+
+bool isRustStructuralLeadLine(std::string_view upperLine) noexcept {
+	const std::string_view normalizedUpper = normalizeRustStructuralLeadText(upperLine);
+	if (normalizedUpper.empty() || isRustCommentLikeLine(normalizedUpper)) return false;
+	if (normalizedUpper == "ELSE" || normalizedUpper.starts_with("ELSE ") || normalizedUpper.starts_with("IF ") || normalizedUpper.starts_with("FOR ") || normalizedUpper.starts_with("WHILE ") ||
+	    normalizedUpper.starts_with("LOOP") || normalizedUpper.starts_with("MATCH ") || normalizedUpper.starts_with("UNSAFE"))
+		return true;
+	if (normalizedUpper.starts_with("MACRO_RULES!")) return true;
+	return containsUpperToken(normalizedUpper, "FN") || containsUpperToken(normalizedUpper, "IMPL") || containsUpperToken(normalizedUpper, "TRAIT") || containsUpperToken(normalizedUpper, "STRUCT") ||
+	       containsUpperToken(normalizedUpper, "ENUM") || containsUpperToken(normalizedUpper, "UNION") || containsUpperToken(normalizedUpper, "MOD") || containsUpperToken(normalizedUpper, "MACRO");
+}
+
+std::string_view normalizeGoStructuralLeadText(std::string_view text) noexcept {
+	return skipSwiftLeadingLabels(trimView(skipLeadingClosersAndSpace(text)));
+}
+
+bool isGoStructuralLeadLine(std::string_view upperLine) noexcept {
+	const std::string_view normalizedUpper = normalizeGoStructuralLeadText(upperLine);
+	if (normalizedUpper.empty() || isGoCommentLikeLine(normalizedUpper)) return false;
+	if (normalizedUpper == "ELSE" || normalizedUpper.starts_with("ELSE ") || normalizedUpper.starts_with("IF ") || normalizedUpper == "FOR" || normalizedUpper.starts_with("FOR ") ||
+	    normalizedUpper == "SWITCH" || normalizedUpper.starts_with("SWITCH ") || normalizedUpper == "SELECT" || normalizedUpper.starts_with("SELECT "))
+		return true;
+	if (normalizedUpper.starts_with("FUNC ") || normalizedUpper.starts_with("FUNC(") || normalizedUpper.starts_with("GO FUNC(") || normalizedUpper.starts_with("DEFER FUNC(")) return true;
+	if (normalizedUpper.starts_with("TYPE ") && (containsUpperToken(normalizedUpper, "STRUCT") || containsUpperToken(normalizedUpper, "INTERFACE"))) return true;
+	return false;
+}
+
+bool isPerlPodStart(std::string_view trimmed) noexcept {
+	return trimmed.starts_with("=POD") || trimmed.starts_with("=HEAD") || trimmed.starts_with("=BEGIN") || trimmed.starts_with("=FOR") || trimmed.starts_with("=OVER");
+}
+
+bool isPerlPodEnd(std::string_view trimmed) noexcept {
+	return trimmed.starts_with("=CUT");
+}
+
+bool isCLikeStructuralBraceLead(std::string_view trimmed, std::string_view upperLine, std::string_view previousTrimmed, std::string_view previousUpperLine, std::string_view previousPreviousTrimmed,
+                                std::string_view previousPreviousUpperLine, MRSyntaxLanguage language) noexcept {
+	const std::size_t last = lastSignificantByte(trimmed);
+	if (last == std::string_view::npos || trimmed[last] != '{') return false;
+	if (language == MRSyntaxLanguage::Swift && isSwiftCommentLikeLine(trimmed)) return false;
+	if (language == MRSyntaxLanguage::Rust && isRustCommentLikeLine(trimmed)) return false;
+	if (language == MRSyntaxLanguage::Go && isGoCommentLikeLine(trimmed)) return false;
+	const std::string_view beforeBrace = trimView(trimmed.substr(0, last));
+	const std::string_view beforeBraceUpper = trimView(upperLine.substr(0, last));
+	const std::string_view normalizedBeforeBrace = trimView(skipLeadingClosersAndSpace(beforeBrace));
+	const std::string_view normalizedBeforeBraceUpper = language == MRSyntaxLanguage::Rust ? normalizeRustStructuralLeadText(beforeBraceUpper)
+	                                                                                        : trimView(skipLeadingClosersAndSpace(beforeBraceUpper));
+	if (!normalizedBeforeBrace.empty()) {
+		if (normalizedBeforeBrace.back() == ')') return true;
+		if ((language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp) && normalizedBeforeBrace.find(')') != std::string_view::npos) return true;
+	} else if (trimmed == "{") {
+		const std::size_t previousLast = lastSignificantByte(previousTrimmed);
+		if (previousLast != std::string_view::npos) {
+			if (previousTrimmed[previousLast] == ')') return true;
+			if (language == MRSyntaxLanguage::JavaScript && previousTrimmed[previousLast] == '=') return true;
+		}
+	}
+	if (language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp) {
+		const std::string_view structuralUpper = normalizedBeforeBraceUpper.empty() ? previousUpperLine : normalizedBeforeBraceUpper;
+		if (language == MRSyntaxLanguage::Cpp && beforeBrace.find(')') != std::string_view::npos && containsUpperToken(beforeBraceUpper, "REQUIRES")) return true;
+		return structuralUpper == "DO" || structuralUpper.starts_with("ELSE") || structuralUpper.starts_with("SWITCH ") || structuralUpper.starts_with("IF ") ||
+		       structuralUpper.starts_with("FOR ") || structuralUpper.starts_with("WHILE ") || containsUpperToken(structuralUpper, "STRUCT") || containsUpperToken(structuralUpper, "UNION") ||
+		       containsUpperToken(structuralUpper, "ENUM") || containsUpperToken(structuralUpper, "CLASS") || containsUpperToken(structuralUpper, "NAMESPACE") ||
+		       structuralUpper.starts_with("TRY") || structuralUpper.starts_with("CATCH") || containsUpperToken(structuralUpper, "EXTERN");
+	}
+	if (language == MRSyntaxLanguage::JavaScript) {
+		const std::string_view structuralUpper = normalizedBeforeBraceUpper.empty() ? previousUpperLine : normalizedBeforeBraceUpper;
+		const std::string_view structuralTrimmed = normalizedBeforeBrace.empty() ? previousTrimmed : normalizedBeforeBrace;
+		if (isJavaScriptStructuralLeadLine(structuralUpper) || isJavaScriptArrowFunctionLeadLine(structuralTrimmed)) return true;
+		if (beforeBrace.find(')') != std::string_view::npos || beforeBrace.find(']') != std::string_view::npos) {
+			if (isJavaScriptStructuralLeadLine(previousUpperLine) || isJavaScriptStructuralLeadLine(previousPreviousUpperLine)) return true;
+			if (isJavaScriptArrowFunctionLeadLine(previousTrimmed) || isJavaScriptArrowFunctionLeadLine(previousPreviousTrimmed)) return true;
+		}
+		if (trimmed == "{") {
+			if (isJavaScriptStructuralLeadLine(previousPreviousUpperLine)) return true;
+			if (isJavaScriptArrowFunctionLeadLine(previousTrimmed) || isJavaScriptArrowFunctionLeadLine(previousPreviousTrimmed)) return true;
+		} else if (normalizedBeforeBraceUpper.empty()) {
+			if (isJavaScriptStructuralLeadLine(previousPreviousUpperLine)) return true;
+		}
+		return false;
+	}
+	if (language == MRSyntaxLanguage::Swift) {
+		const std::string_view structuralUpper = normalizedBeforeBraceUpper.empty() ? previousUpperLine : normalizedBeforeBraceUpper;
+		if (isSwiftStructuralLeadLine(structuralUpper)) return true;
+		if (beforeBrace.find(')') != std::string_view::npos || beforeBrace.find(']') != std::string_view::npos) {
+			if (isSwiftStructuralLeadLine(previousUpperLine) || isSwiftStructuralLeadLine(previousPreviousUpperLine)) return true;
+		}
+		if (trimmed == "{") {
+			if (isSwiftStructuralLeadLine(previousUpperLine) || isSwiftStructuralLeadLine(previousPreviousUpperLine)) return true;
+		} else if (normalizedBeforeBraceUpper.empty()) {
+			if (isSwiftStructuralLeadLine(previousPreviousUpperLine)) return true;
+		}
+		return false;
+	}
+	if (language == MRSyntaxLanguage::Rust) {
+		const std::string_view structuralUpper = normalizedBeforeBraceUpper.empty() ? previousUpperLine : normalizedBeforeBraceUpper;
+		if (isRustStructuralLeadLine(structuralUpper)) return true;
+		if (beforeBrace.find(')') != std::string_view::npos || beforeBrace.find(']') != std::string_view::npos || beforeBrace.find('>') != std::string_view::npos) {
+			if (isRustStructuralLeadLine(previousUpperLine) || isRustStructuralLeadLine(previousPreviousUpperLine)) return true;
+		}
+		if (trimmed == "{") {
+			if (isRustStructuralLeadLine(previousUpperLine) || isRustStructuralLeadLine(previousPreviousUpperLine)) return true;
+		} else if (normalizedBeforeBraceUpper.empty()) {
+			if (isRustStructuralLeadLine(previousPreviousUpperLine)) return true;
+		}
+		return false;
+	}
+	if (language == MRSyntaxLanguage::Go) {
+		const std::string_view structuralUpper = normalizedBeforeBraceUpper.empty() ? previousUpperLine : normalizedBeforeBraceUpper;
+		if (isGoStructuralLeadLine(structuralUpper)) return true;
+		if (beforeBrace.find(')') != std::string_view::npos || beforeBrace.find(']') != std::string_view::npos) {
+			if (isGoStructuralLeadLine(previousUpperLine) || isGoStructuralLeadLine(previousPreviousUpperLine)) return true;
+		}
+		if (trimmed == "{") {
+			if (isGoStructuralLeadLine(previousUpperLine) || isGoStructuralLeadLine(previousPreviousUpperLine)) return true;
+		} else if (normalizedBeforeBraceUpper.empty()) {
+			if (isGoStructuralLeadLine(previousPreviousUpperLine)) return true;
+		}
+		return false;
+	}
+	return false;
 }
 
 bool markdownContinuationColumn(std::string_view line, int &targetColumn) noexcept {
@@ -135,16 +503,887 @@ bool isPreprocessorFoldStart(std::string_view trimmed) noexcept {
 }
 
 bool isPreprocessorFoldEnd(std::string_view trimmed) noexcept {
-	return trimmed.starts_with("#endif") || trimmed.starts_with("#else") || trimmed.starts_with("#elif");
+	return trimmed.starts_with("#endif");
+}
+
+bool isPreprocessorFoldSibling(std::string_view trimmed) noexcept {
+	return trimmed.starts_with("#else") || trimmed.starts_with("#elif");
+}
+
+bool isIndentFoldLanguage(MRSyntaxLanguage language) noexcept {
+	return language == MRSyntaxLanguage::Python || language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh || language == MRSyntaxLanguage::Perl || language == MRSyntaxLanguage::Make || language == MRSyntaxLanguage::MRMAC ||
+	       language == MRSyntaxLanguage::PlainText;
+}
+
+bool isShellSiblingLead(std::string_view upperLine) noexcept {
+	return upperLine == "ELSE" || upperLine.starts_with("ELIF ");
+}
+
+bool isMRMACMacroStart(std::string_view upperLine) noexcept {
+	return upperLine.starts_with("$MACRO ");
+}
+
+bool isMRMACMacroEnd(std::string_view upperLine) noexcept {
+	return upperLine == "END_MACRO" || upperLine == "END_MACRO;";
+}
+
+bool isMRMACIfLead(std::string_view upperLine) noexcept {
+	return upperLine.starts_with("IF ") && upperLine.ends_with(" THEN");
+}
+
+bool isMRMACElseLead(std::string_view upperLine) noexcept {
+	return upperLine == "ELSE";
+}
+
+bool isMRMACWhileLead(std::string_view upperLine) noexcept {
+	return upperLine.starts_with("WHILE ") && upperLine.ends_with(" DO");
+}
+
+bool isMRMACEndLead(std::string_view upperLine) noexcept {
+	return upperLine == "END" || upperLine == "END;";
+}
+
+bool isMRMACCommentLine(std::string_view trimmed) noexcept {
+	return !trimmed.empty() && trimmed.front() == ';';
+}
+
+bool isSystemdSectionHeader(std::string_view trimmed) noexcept {
+	if (trimmed.size() < 3 || trimmed.front() != '[' || trimmed.back() != ']') return false;
+	for (char ch : trimmed) {
+		if (std::isalnum(static_cast<unsigned char>(ch)) != 0) continue;
+		if (ch == '[' || ch == ']' || ch == '-' || ch == '_') continue;
+		return false;
+	}
+	return true;
+}
+
+bool isSystemdCommentLine(std::string_view trimmed) noexcept {
+	return !trimmed.empty() && (trimmed.front() == '#' || trimmed.front() == ';');
+}
+
+char matchingCloserForOpenDelimiter(char ch) noexcept {
+	switch (ch) {
+		case '{':
+			return '}';
+		case '[':
+			return ']';
+		case '(':
+			return ')';
+		default:
+			return 0;
+	}
+}
+
+char matchingOpenDelimiterForCloser(char ch) noexcept {
+	switch (ch) {
+		case '}':
+			return '{';
+		case ']':
+			return '[';
+		case ')':
+			return '(';
+		default:
+			return 0;
+	}
+}
+
+enum class SmartDedentKind {
+	None,
+	Delimiter,
+	ShellConditional,
+	ShellLoop,
+	ShellCase,
+	MRMACConditional,
+	MRMACEnd,
+	MRMACMacro,
+	PythonConditional,
+	PythonTry,
+	PythonCase,
+	PerlConditional,
+	CLikeElse,
+	CLikeCatch,
+};
+
+struct SmartDedentRequest {
+	SmartDedentKind kind = SmartDedentKind::None;
+	char closer = 0;
+};
+
+SmartDedentRequest classifySmartDedentRequest(std::string_view trimmed, MRSyntaxLanguage language) noexcept {
+	const std::string upperLine = upperAscii(std::string(trimView(trimmed)));
+	const std::string_view normalizedUpper = trimView(skipLeadingClosersAndSpace(upperLine));
+
+	if (startsWithCloser(trimmed)) return {SmartDedentKind::Delimiter, trimmed.front()};
+	switch (language) {
+		case MRSyntaxLanguage::Bash:
+		case MRSyntaxLanguage::Zsh:
+			if (upperLine == "FI" || normalizedUpper == "ELSE" || normalizedUpper.starts_with("ELIF ")) return {SmartDedentKind::ShellConditional, 0};
+			if (upperLine == "DONE") return {SmartDedentKind::ShellLoop, 0};
+			if (upperLine == "ESAC") return {SmartDedentKind::ShellCase, 0};
+			break;
+		case MRSyntaxLanguage::MRMAC:
+			if (isMRMACElseLead(upperLine)) return {SmartDedentKind::MRMACConditional, 0};
+			if (isMRMACEndLead(upperLine)) return {SmartDedentKind::MRMACEnd, 0};
+			if (isMRMACMacroEnd(upperLine)) return {SmartDedentKind::MRMACMacro, 0};
+			break;
+		case MRSyntaxLanguage::Python:
+			if (upperLine == "ELSE:" || upperLine.starts_with("ELIF ")) return {SmartDedentKind::PythonConditional, 0};
+			if (upperLine == "FINALLY:" || upperLine == "EXCEPT:" || upperLine.starts_with("EXCEPT ") || upperLine.starts_with("EXCEPT* ")) return {SmartDedentKind::PythonTry, 0};
+			if (upperLine.starts_with("CASE ")) return {SmartDedentKind::PythonCase, 0};
+			break;
+		case MRSyntaxLanguage::Perl:
+			if (startsWithKeywordToken(normalizedUpper, "ELSIF") || normalizedUpper == "ELSE {" || normalizedUpper == "ELSE") return {SmartDedentKind::PerlConditional, 0};
+			break;
+		case MRSyntaxLanguage::C:
+		case MRSyntaxLanguage::Cpp:
+		case MRSyntaxLanguage::JavaScript:
+		case MRSyntaxLanguage::Swift:
+		case MRSyntaxLanguage::Rust:
+		case MRSyntaxLanguage::Go:
+			if (normalizedUpper.starts_with("ELSE")) return {SmartDedentKind::CLikeElse, 0};
+			if (normalizedUpper.starts_with("CATCH") || normalizedUpper.starts_with("FINALLY")) return {SmartDedentKind::CLikeCatch, 0};
+			break;
+		default:
+			break;
+	}
+	return {};
+}
+
+bool isStandaloneSmartDedentLine(std::string_view trimmed, MRSyntaxLanguage language) noexcept {
+	const SmartDedentRequest request = classifySmartDedentRequest(trimmed, language);
+	if (request.kind == SmartDedentKind::None) return false;
+	if (request.kind != SmartDedentKind::Delimiter) return true;
+
+	const std::string_view remainder = trimView(skipLeadingClosersAndSpace(trimmed));
+	if (remainder.empty()) return true;
+	return classifySmartDedentRequest(remainder, language).kind != SmartDedentKind::None;
+}
+
+std::size_t trailingSmartDedentSplitOffset(std::string_view lineText, MRSyntaxLanguage language) noexcept {
+	for (std::size_t tokenStart = 0; tokenStart < lineText.size(); ++tokenStart) {
+		if (isIndentWhitespace(lineText[tokenStart])) continue;
+		if (!isStandaloneSmartDedentLine(lineText.substr(tokenStart), language)) continue;
+		if (trimView(lineText.substr(0, tokenStart)).empty()) continue;
+		if (tokenStart > 0) {
+			const unsigned char previous = static_cast<unsigned char>(lineText[tokenStart - 1]);
+			if (std::isalnum(previous) != 0 || lineText[tokenStart - 1] == '_') continue;
+		}
+		std::size_t splitStart = tokenStart;
+		while (splitStart > 0 && isIndentWhitespace(lineText[splitStart - 1]))
+			--splitStart;
+		return splitStart;
+	}
+	return std::string_view::npos;
+}
+
+bool isDedentSearchSkippableLine(std::string_view trimmed, MRSyntaxLanguage language) noexcept {
+	if (trimView(trimmed).empty()) return true;
+	switch (language) {
+		case MRSyntaxLanguage::Bash:
+		case MRSyntaxLanguage::Zsh:
+		case MRSyntaxLanguage::Python:
+		case MRSyntaxLanguage::Perl:
+			return trimmed.starts_with("#");
+		case MRSyntaxLanguage::MRMAC:
+			return isMRMACCommentLine(trimmed);
+		case MRSyntaxLanguage::C:
+		case MRSyntaxLanguage::Cpp:
+		case MRSyntaxLanguage::JavaScript:
+		case MRSyntaxLanguage::Json:
+			return isCLikeCommentLikeLine(trimmed);
+		case MRSyntaxLanguage::Swift:
+			return isSwiftCommentLikeLine(trimmed);
+		case MRSyntaxLanguage::Rust:
+			return isRustCommentLikeLine(trimmed);
+		case MRSyntaxLanguage::Go:
+			return isGoCommentLikeLine(trimmed);
+		default:
+			return false;
+	}
+}
+
+bool matchesSmartDedentAnchor(std::string_view trimmed, std::string_view upperLine, MRSyntaxLanguage language, SmartDedentRequest request) noexcept {
+	const std::string_view normalizedUpper = trimView(skipLeadingClosersAndSpace(upperLine));
+
+	switch (request.kind) {
+		case SmartDedentKind::Delimiter: {
+			const char opener = matchingOpenDelimiterForCloser(request.closer);
+			if (opener == 0) return false;
+			const std::size_t last = lastSignificantByte(trimmed);
+			return last != std::string_view::npos && trimmed[last] == opener;
+		}
+		case SmartDedentKind::ShellConditional:
+			return (language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh) && shellIndentBlockKind(upperLine) == kShellBlockConditional;
+		case SmartDedentKind::ShellLoop:
+			return (language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh) && shellIndentBlockKind(upperLine) == kShellBlockLoop;
+		case SmartDedentKind::ShellCase:
+			return (language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh) && shellIndentBlockKind(upperLine) == kShellBlockCase;
+		case SmartDedentKind::MRMACConditional:
+			return language == MRSyntaxLanguage::MRMAC && (isMRMACIfLead(upperLine) || isMRMACElseLead(upperLine));
+		case SmartDedentKind::MRMACEnd:
+			return language == MRSyntaxLanguage::MRMAC && (isMRMACIfLead(upperLine) || isMRMACElseLead(upperLine) || isMRMACWhileLead(upperLine));
+		case SmartDedentKind::MRMACMacro:
+			return language == MRSyntaxLanguage::MRMAC && isMRMACMacroStart(upperLine);
+		case SmartDedentKind::PythonConditional:
+			return language == MRSyntaxLanguage::Python && (upperLine.starts_with("IF ") || upperLine.starts_with("ELIF ") || upperLine == "ELSE:");
+		case SmartDedentKind::PythonTry:
+			return language == MRSyntaxLanguage::Python &&
+			       (upperLine == "TRY:" || upperLine == "FINALLY:" || upperLine == "EXCEPT:" || upperLine.starts_with("EXCEPT ") || upperLine.starts_with("EXCEPT* "));
+		case SmartDedentKind::PythonCase:
+			return language == MRSyntaxLanguage::Python && (upperLine.starts_with("MATCH ") || upperLine.starts_with("CASE "));
+		case SmartDedentKind::PerlConditional:
+			return language == MRSyntaxLanguage::Perl &&
+			       (startsWithKeywordToken(normalizedUpper, "IF") || startsWithKeywordToken(normalizedUpper, "UNLESS") || startsWithKeywordToken(normalizedUpper, "ELSIF") || normalizedUpper == "ELSE {");
+		case SmartDedentKind::CLikeElse:
+			return normalizedUpper.starts_with("IF ") || normalizedUpper.starts_with("ELSE");
+		case SmartDedentKind::CLikeCatch:
+			return normalizedUpper.starts_with("TRY") || normalizedUpper.starts_with("CATCH") || normalizedUpper.starts_with("FINALLY");
+		case SmartDedentKind::None:
+			return false;
+	}
+	return false;
+}
+
+int markdownHeadingLevel(std::string_view trimmed, std::string_view nextTrimmed) noexcept {
+	if (trimmed.starts_with("#")) {
+		std::size_t level = 0;
+		while (level < trimmed.size() && trimmed[level] == '#')
+			++level;
+		if (level > 0 && level <= 6 && (level == trimmed.size() || trimmed[level] == ' ' || trimmed[level] == '\t')) return static_cast<int>(level);
+	}
+	if (!nextTrimmed.empty() && isMarkdownSetextUnderline(nextTrimmed)) return nextTrimmed.front() == '=' ? 1 : 2;
+	return 0;
+}
+
+bool markdownFenceMarker(std::string_view trimmed, char &marker, std::size_t &runLength) noexcept {
+	if (!isMarkdownFenceLine(trimmed)) return false;
+	marker = trimmed.front();
+	runLength = 0;
+	while (runLength < trimmed.size() && trimmed[runLength] == marker)
+		++runLength;
+	return runLength >= 3;
+}
+
+bool isMarkdownFenceClose(std::string_view trimmed, char marker, std::size_t runLength) noexcept {
+	if (trimmed.empty() || trimmed.front() != marker) return false;
+	std::size_t currentRun = 0;
+	while (currentRun < trimmed.size() && trimmed[currentRun] == marker)
+		++currentRun;
+	return currentRun >= runLength;
+}
+
+bool isMarkdownListLead(std::string_view line, std::string_view trimmed, std::string_view nextTrimmed, std::size_t currentIndent, std::size_t nextIndent) noexcept {
+	if (trimmed.empty() || nextTrimmed.empty()) return false;
+	if (nextIndent <= currentIndent) return false;
+	if ((trimmed.front() == '-' || trimmed.front() == '*' || trimmed.front() == '+') && trimmed.size() > 1 && std::isspace(static_cast<unsigned char>(trimmed[1])) != 0) return true;
+	if (std::isdigit(static_cast<unsigned char>(trimmed.front())) != 0) {
+		std::size_t marker = currentIndent;
+		while (marker < line.size() && std::isdigit(static_cast<unsigned char>(line[marker])) != 0)
+			++marker;
+		return marker < line.size() && (line[marker] == '.' || line[marker] == ')');
+	}
+	return false;
+}
+
+bool isMarkdownBlockQuoteLead(std::string_view trimmed, std::string_view nextTrimmed) noexcept {
+	return !trimmed.empty() && !nextTrimmed.empty() && trimmed.front() == '>' && nextTrimmed.front() == '>';
+}
+
+bool isNonEmptyNonRecipeMakeLine(std::string_view lineText, std::string_view trimmed) noexcept {
+	return !trimmed.empty() && !lineText.empty() && lineText.front() != '\t';
+}
+
+bool isMakeDirectiveFoldStart(std::string_view trimmed) noexcept {
+	return trimmed.starts_with("ifeq") || trimmed.starts_with("ifneq") || trimmed.starts_with("ifdef") || trimmed.starts_with("ifndef") || trimmed.starts_with("define ");
+}
+
+bool isMakeDirectiveFoldEnd(std::string_view trimmed) noexcept {
+	return trimmed == "endif" || trimmed == "endef";
+}
+
+bool isMakeDirectiveFoldSibling(std::string_view trimmed) noexcept {
+	return trimmed == "else";
+}
+
+struct MRFoldOpenBlock {
+	std::size_t startLine = 0;
+	std::size_t indent = 0;
+	unsigned short level = 0;
+	MRFoldSourceKind sourceKind = MRFoldSourceKind::Generic;
+	char closer = 0;
+	char marker = 0;
+	std::size_t markerLength = 0;
+	int headingLevel = 0;
+	int languageBlockKind = 0;
+	bool siblingContinuation = false;
+	std::size_t lastContentLine = std::numeric_limits<std::size_t>::max();
+};
+
+struct MRFoldScanOutput {
+	std::vector<MRFoldSpan> spans;
+	int visibleMaxLevel = 1;
+};
+
+std::vector<std::string> splitFoldTrainingLines(const std::string &text) {
+	std::vector<std::string> lines;
+	std::size_t lineStart = 0;
+
+	while (lineStart <= text.size()) {
+		std::size_t lineEnd = text.find('\n', lineStart);
+		if (lineEnd == std::string::npos) lineEnd = text.size();
+		std::string line = text.substr(lineStart, lineEnd - lineStart);
+		if (!line.empty() && line.back() == '\r') line.pop_back();
+		lines.push_back(std::move(line));
+		if (lineEnd >= text.size()) break;
+		lineStart = lineEnd + 1;
+	}
+	if (lines.empty()) lines.push_back(std::string());
+	return lines;
+}
+
+MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &lineTexts, std::size_t baseLineIndex, std::size_t topLine, std::size_t requestBottomLine, MRSyntaxLanguage language,
+                                              const std::map<std::size_t, MRFoldSpan> &closedFoldSpans) {
+	MRFoldScanOutput output;
+	std::size_t currentLineIndex = baseLineIndex;
+
+	if (lineTexts.empty()) return output;
+
+	std::vector<MRFoldOpenBlock> openBlocks;
+	std::string previousLineText;
+	std::string previousUpperLine;
+	std::string previousPreviousLineText;
+	std::string previousPreviousUpperLine;
+	enum : int {
+		kLanguageBlockNone = 0,
+		kMRMACIfBlock = 1,
+		kMRMACWhileBlock = 2,
+	};
+	auto appendVisibleSpan = [&](const MRFoldOpenBlock &block, std::size_t endLine) {
+		if (endLine <= block.startLine) return;
+		const bool spanOpen = closedFoldSpans.find(block.startLine) == closedFoldSpans.end();
+		output.spans.push_back(MRFoldSpan(block.startLine, endLine, block.level, block.sourceKind, spanOpen, block.siblingContinuation));
+		if (!(endLine < topLine || block.startLine >= requestBottomLine)) output.visibleMaxLevel = std::max(output.visibleMaxLevel, static_cast<int>(block.level) + 1);
+	};
+	auto openBlock = [&](MRFoldSourceKind sourceKind, std::size_t indent, char closer = 0, char marker = 0, std::size_t markerLength = 0, int headingLevel = 0,
+	                     int languageBlockKind = kLanguageBlockNone, std::size_t startLine = std::numeric_limits<std::size_t>::max(),
+	                     bool siblingContinuation = false) {
+		MRFoldOpenBlock block;
+		unsigned short visibleLevel = 0;
+
+		for ([[maybe_unused]] const MRFoldOpenBlock &existingBlock : openBlocks)
+			++visibleLevel;
+		block.startLine = startLine == std::numeric_limits<std::size_t>::max() ? currentLineIndex : startLine;
+		block.indent = indent;
+		block.level = visibleLevel;
+		block.sourceKind = sourceKind;
+		block.closer = closer;
+		block.marker = marker;
+		block.markerLength = markerLength;
+		block.headingLevel = headingLevel;
+		block.languageBlockKind = languageBlockKind;
+		block.siblingContinuation = siblingContinuation;
+		block.lastContentLine = block.startLine;
+		openBlocks.push_back(block);
+	};
+
+	auto findRecentJavaScriptStructuralLeadLine = [&](std::size_t localLineIndex) noexcept -> std::size_t {
+		const std::size_t scanStart = localLineIndex > 4 ? localLineIndex - 4 : 0;
+		for (std::size_t candidate = localLineIndex + 1; candidate-- > scanStart;) {
+			const std::string_view candidateTrimmed = trimView(lineTexts[candidate]);
+			const std::string candidateUpper = upperAscii(std::string(candidateTrimmed));
+			if (isJavaScriptStructuralLeadLine(candidateUpper)) return baseLineIndex + candidate;
+			if (isJavaScriptArrowFunctionLeadLine(candidateTrimmed)) return baseLineIndex + candidate;
+			if (candidate == 0) break;
+		}
+		return currentLineIndex;
+	};
+
+	auto findRecentCLikeStructuralLeadLine = [&](std::size_t localLineIndex, MRSyntaxLanguage currentLanguage) noexcept -> std::size_t {
+		const std::size_t scanStart = localLineIndex > 80 ? localLineIndex - 80 : 0;
+		for (std::size_t candidate = localLineIndex + 1; candidate-- > scanStart;) {
+			const std::string_view candidateTrimmed = trimView(lineTexts[candidate]);
+			const std::string candidateUpper = upperAscii(std::string(candidateTrimmed));
+			if (isCLikeStructuralLeadLine(candidateTrimmed, candidateUpper, currentLanguage)) {
+				if (currentLanguage != MRSyntaxLanguage::Cpp) return baseLineIndex + candidate;
+				std::size_t headCandidate = candidate;
+				while (headCandidate > scanStart) {
+					const std::size_t previousCandidate = headCandidate - 1;
+					const std::string_view previousCandidateTrimmed = trimView(lineTexts[previousCandidate]);
+					if (previousCandidateTrimmed.empty() || isCLikeCommentLikeLine(previousCandidateTrimmed) || previousCandidateTrimmed.front() == '#') break;
+					const std::string previousCandidateUpper = upperAscii(std::string(previousCandidateTrimmed));
+					if (!isCppTemplatePrefixLead(previousCandidateTrimmed, previousCandidateUpper)) break;
+					headCandidate = previousCandidate;
+				}
+				return baseLineIndex + headCandidate;
+			}
+			if (candidate == 0) break;
+		}
+		return currentLineIndex;
+	};
+
+	auto findRecentCBraceStartLine = [&](std::size_t localLineIndex) noexcept -> std::size_t {
+		const std::size_t structuralLeadLine = findRecentCLikeStructuralLeadLine(localLineIndex, MRSyntaxLanguage::C);
+		if (structuralLeadLine != currentLineIndex) return structuralLeadLine;
+		const std::size_t scanStart = localLineIndex > 80 ? localLineIndex - 80 : 0;
+		for (std::size_t candidate = localLineIndex; candidate-- > scanStart;) {
+			const std::string_view candidateTrimmed = trimView(lineTexts[candidate]);
+			if (candidateTrimmed.empty() || isCLikeCommentLikeLine(candidateTrimmed)) {
+				if (candidate == 0) break;
+				continue;
+			}
+			if (candidateTrimmed.front() == '#') break;
+			return baseLineIndex + candidate;
+		}
+		return currentLineIndex;
+	};
+
+	auto findRecentSwiftStructuralLeadLine = [&](std::size_t localLineIndex) noexcept -> std::size_t {
+		const std::size_t scanStart = localLineIndex > 4 ? localLineIndex - 4 : 0;
+		for (std::size_t candidate = localLineIndex + 1; candidate-- > scanStart;) {
+			const std::string_view candidateTrimmed = trimView(lineTexts[candidate]);
+			const std::string candidateUpper = upperAscii(std::string(candidateTrimmed));
+			if (isSwiftStructuralLeadLine(candidateUpper)) return baseLineIndex + candidate;
+			if (candidate == 0) break;
+		}
+		return currentLineIndex;
+	};
+
+	auto findRecentRustStructuralLeadLine = [&](std::size_t localLineIndex) noexcept -> std::size_t {
+		const std::size_t scanStart = localLineIndex > 6 ? localLineIndex - 6 : 0;
+		for (std::size_t candidate = localLineIndex + 1; candidate-- > scanStart;) {
+			const std::string_view candidateTrimmed = trimView(lineTexts[candidate]);
+			const std::string candidateUpper = upperAscii(std::string(candidateTrimmed));
+			if (isRustStructuralLeadLine(candidateUpper)) return baseLineIndex + candidate;
+			if (candidate == 0) break;
+		}
+		return currentLineIndex;
+	};
+
+	auto findRecentGoStructuralLeadLine = [&](std::size_t localLineIndex) noexcept -> std::size_t {
+		const std::size_t scanStart = localLineIndex > 6 ? localLineIndex - 6 : 0;
+		for (std::size_t candidate = localLineIndex + 1; candidate-- > scanStart;) {
+			const std::string_view candidateTrimmed = trimView(lineTexts[candidate]);
+			const std::string candidateUpper = upperAscii(std::string(candidateTrimmed));
+			if (isGoStructuralLeadLine(candidateUpper)) return baseLineIndex + candidate;
+			if (candidate == 0) break;
+		}
+		return currentLineIndex;
+	};
+
+	auto findRecentShellStructuralLeadLine = [&](std::size_t localLineIndex, std::string_view trimmed, std::string_view upperLine) noexcept -> std::size_t {
+		const std::size_t scanStart = localLineIndex > 8 ? localLineIndex - 8 : 0;
+		const bool braceLine = trimView(trimmed) == "{";
+		const bool thenLead = upperLine == "THEN" || upperLine.ends_with(" THEN");
+		const bool doLead = upperLine == "DO" || upperLine.ends_with(" DO");
+		for (std::size_t candidate = localLineIndex + 1; candidate-- > scanStart;) {
+			const std::string_view candidateTrimmed = trimView(lineTexts[candidate]);
+			if (candidateTrimmed.empty() || candidateTrimmed.starts_with("#")) {
+				if (candidate == 0) break;
+				continue;
+			}
+			const std::string candidateUpper = upperAscii(std::string(candidateTrimmed));
+			if (braceLine && isShellFunctionHeadLine(candidateTrimmed, candidateUpper)) return baseLineIndex + candidate;
+			if (thenLead && (candidateUpper.starts_with("IF ") || candidateUpper.starts_with("ELIF "))) return baseLineIndex + candidate;
+			if (doLead && (candidateUpper.starts_with("FOR ") || candidateUpper.starts_with("WHILE ") || candidateUpper.starts_with("UNTIL ") || candidateUpper.starts_with("SELECT ")))
+				return baseLineIndex + candidate;
+			if (candidate == 0) break;
+		}
+		return currentLineIndex;
+	};
+
+	for (std::size_t localLineIndex = 0; localLineIndex < lineTexts.size(); ++localLineIndex) {
+		const std::size_t lineIndex = baseLineIndex + localLineIndex;
+		currentLineIndex = lineIndex;
+		const std::string &lineText = lineTexts[localLineIndex];
+		const std::string_view trimmed = trimView(lineText);
+		const std::string_view previousTrimmed = trimView(previousLineText);
+		const std::string_view previousPreviousTrimmed = trimView(previousPreviousLineText);
+		const std::size_t currentIndent = leadingIndentBytes(lineText);
+		const bool nonEmpty = !trimmed.empty();
+		const std::string upperLine = upperAscii(std::string(trimmed));
+		const std::string *nextLineTextPtr = localLineIndex + 1 < lineTexts.size() ? &lineTexts[localLineIndex + 1] : nullptr;
+		const std::string_view nextTrimmed = nextLineTextPtr != nullptr ? trimView(*nextLineTextPtr) : std::string_view();
+		const std::size_t nextIndent = nextLineTextPtr != nullptr ? leadingIndentBytes(*nextLineTextPtr) : 0;
+		const std::size_t currentLast = lastSignificantByte(trimmed);
+		const bool trailingBlockOpen = [&]() noexcept {
+			return currentLast != std::string_view::npos && (trimmed[currentLast] == '{' || trimmed[currentLast] == '[' || trimmed[currentLast] == '(');
+		}();
+		const bool indentOpens = !nextTrimmed.empty() && nextIndent > currentIndent;
+		const int headingLevel = language == MRSyntaxLanguage::Markdown ? markdownHeadingLevel(trimmed, nextTrimmed) : (language == MRSyntaxLanguage::Systemd && isSystemdSectionHeader(trimmed) ? 1 : 0);
+		const bool shellDedent = (language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh) && isShellDedentLead(trimmed, upperLine);
+		const bool shellSiblingLead = (language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh) && isShellSiblingLead(upperLine);
+		const bool pythonDedent = language == MRSyntaxLanguage::Python && isPythonDedentLead(upperLine);
+		const bool perlSiblingLead = language == MRSyntaxLanguage::Perl && isPerlSiblingLead(upperLine);
+		const bool perlSiblingAfterLeadingCloser = language == MRSyntaxLanguage::Perl && isPerlSiblingLead(upperAscii(std::string(skipLeadingClosersAndSpace(trimmed))));
+		const bool perlPodStart = language == MRSyntaxLanguage::Perl && isPerlPodStart(upperLine);
+		const bool perlPodEnd = language == MRSyntaxLanguage::Perl && isPerlPodEnd(upperLine);
+		const bool javascriptSiblingAfterLeadingCloser =
+		    language == MRSyntaxLanguage::JavaScript && isJavaScriptSiblingLead(upperAscii(std::string(skipLeadingClosersAndSpace(trimmed))));
+		const bool cLikeSiblingAfterLeadingCloser =
+		    (language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp || language == MRSyntaxLanguage::Swift || language == MRSyntaxLanguage::Rust ||
+		     language == MRSyntaxLanguage::Go) &&
+		    isCLikeSiblingLead(upperAscii(std::string(skipLeadingClosersAndSpace(trimmed))));
+		const bool mrmacMacroStart = language == MRSyntaxLanguage::MRMAC && isMRMACMacroStart(upperLine);
+		const bool mrmacMacroEnd = language == MRSyntaxLanguage::MRMAC && isMRMACMacroEnd(upperLine);
+		const bool mrmacIfLead = language == MRSyntaxLanguage::MRMAC && isMRMACIfLead(upperLine);
+		const bool mrmacElseLead = language == MRSyntaxLanguage::MRMAC && isMRMACElseLead(upperLine);
+		const bool mrmacWhileLead = language == MRSyntaxLanguage::MRMAC && isMRMACWhileLead(upperLine);
+		const bool mrmacEndLead = language == MRSyntaxLanguage::MRMAC && isMRMACEndLead(upperLine);
+		const bool preprocessorSibling = isPreprocessorFoldSibling(trimmed);
+		const bool makeDirectiveSibling = language == MRSyntaxLanguage::Make && isMakeDirectiveFoldSibling(trimmed);
+		const std::size_t recentJavaScriptLeadLine = [&]() noexcept -> std::size_t {
+			if (language != MRSyntaxLanguage::JavaScript || currentLast == std::string_view::npos || trimmed[currentLast] != '{') return currentLineIndex;
+			const std::string_view beforeBrace = trimView(trimmed.substr(0, currentLast));
+			if (trimmed != "{" && beforeBrace.find(')') == std::string_view::npos && beforeBrace.find(']') == std::string_view::npos) return currentLineIndex;
+			return findRecentJavaScriptStructuralLeadLine(localLineIndex);
+		}();
+		const std::size_t recentCLikeLeadLine = [&]() noexcept -> std::size_t {
+			if ((language != MRSyntaxLanguage::C && language != MRSyntaxLanguage::Cpp) || currentLast == std::string_view::npos || trimmed[currentLast] != '{') return currentLineIndex;
+			return findRecentCLikeStructuralLeadLine(localLineIndex, language);
+		}();
+		const std::size_t recentCBraceStartLine = [&]() noexcept -> std::size_t {
+			if (language != MRSyntaxLanguage::C || currentLast == std::string_view::npos || trimmed[currentLast] != '{') return currentLineIndex;
+			if (trimmed == "{") return findRecentCBraceStartLine(localLineIndex);
+			return currentLineIndex;
+		}();
+		const std::size_t recentSwiftLeadLine = [&]() noexcept -> std::size_t {
+			if (language != MRSyntaxLanguage::Swift || currentLast == std::string_view::npos || trimmed[currentLast] != '{') return currentLineIndex;
+			const std::string_view beforeBraceUpper = trimView(upperLine.substr(0, currentLast));
+			const std::string_view normalizedBeforeBraceUpper = normalizeSwiftStructuralLeadText(beforeBraceUpper);
+			if (trimmed != "{" && !normalizedBeforeBraceUpper.empty() && !isSwiftStructuralLeadLine(normalizedBeforeBraceUpper) &&
+			    beforeBraceUpper.find(')') == std::string_view::npos && beforeBraceUpper.find(']') == std::string_view::npos)
+				return currentLineIndex;
+			return findRecentSwiftStructuralLeadLine(localLineIndex);
+		}();
+		const std::size_t recentRustLeadLine = [&]() noexcept -> std::size_t {
+			if (language != MRSyntaxLanguage::Rust || currentLast == std::string_view::npos || trimmed[currentLast] != '{') return currentLineIndex;
+			const std::string_view beforeBraceUpper = trimView(upperLine.substr(0, currentLast));
+			const std::string_view normalizedBeforeBraceUpper = normalizeRustStructuralLeadText(beforeBraceUpper);
+			if (trimmed != "{" && !normalizedBeforeBraceUpper.empty() && !isRustStructuralLeadLine(normalizedBeforeBraceUpper) && beforeBraceUpper.find(')') == std::string_view::npos &&
+			    beforeBraceUpper.find(']') == std::string_view::npos && beforeBraceUpper.find('>') == std::string_view::npos)
+				return currentLineIndex;
+			return findRecentRustStructuralLeadLine(localLineIndex);
+		}();
+		const std::size_t recentGoLeadLine = [&]() noexcept -> std::size_t {
+			if (language != MRSyntaxLanguage::Go || currentLast == std::string_view::npos || trimmed[currentLast] != '{') return currentLineIndex;
+			const std::string_view beforeBraceUpper = trimView(upperLine.substr(0, currentLast));
+			const std::string_view normalizedBeforeBraceUpper = normalizeGoStructuralLeadText(beforeBraceUpper);
+			if (trimmed != "{" && !normalizedBeforeBraceUpper.empty() && !isGoStructuralLeadLine(normalizedBeforeBraceUpper) && beforeBraceUpper.find(')') == std::string_view::npos &&
+			    beforeBraceUpper.find(']') == std::string_view::npos)
+				return currentLineIndex;
+			return findRecentGoStructuralLeadLine(localLineIndex);
+		}();
+		const std::size_t recentShellLeadLine = [&]() noexcept -> std::size_t {
+			if (language != MRSyntaxLanguage::Bash && language != MRSyntaxLanguage::Zsh) return currentLineIndex;
+			if (trimmed == "{" || upperLine == "THEN" || upperLine.ends_with(" THEN") || upperLine == "DO" || upperLine.ends_with(" DO")) return findRecentShellStructuralLeadLine(localLineIndex, trimmed, upperLine);
+			return currentLineIndex;
+		}();
+		bool closedFenceThisLine = false;
+		bool mrmacMacroActive = false;
+		bool openSiblingContinuation = false;
+
+		if (language == MRSyntaxLanguage::MRMAC)
+			for (const MRFoldOpenBlock &block : openBlocks)
+				if (block.sourceKind == MRFoldSourceKind::Macro) {
+					mrmacMacroActive = true;
+					break;
+				}
+
+		if (language == MRSyntaxLanguage::Systemd && nonEmpty && !isSystemdSectionHeader(trimmed) && !isSystemdCommentLine(trimmed))
+			for (MRFoldOpenBlock &block : openBlocks)
+				if (block.sourceKind == MRFoldSourceKind::Section) {
+					block.lastContentLine = lineIndex;
+					break;
+				}
+
+		if (nonEmpty && lineIndex > baseLineIndex) {
+			std::size_t closerIndex = 0;
+			while (!openBlocks.empty() && closerIndex < trimmed.size() && openBlocks.back().sourceKind == MRFoldSourceKind::Delimiter && openBlocks.back().closer != 0 &&
+			       trimmed[closerIndex] == openBlocks.back().closer) {
+				appendVisibleSpan(openBlocks.back(), (perlSiblingAfterLeadingCloser || javascriptSiblingAfterLeadingCloser || cLikeSiblingAfterLeadingCloser) ? lineIndex - 1 : lineIndex);
+				openBlocks.pop_back();
+				++closerIndex;
+			}
+			if (perlSiblingAfterLeadingCloser || javascriptSiblingAfterLeadingCloser || cLikeSiblingAfterLeadingCloser) openSiblingContinuation = true;
+		}
+
+		if (mrmacMacroStart && lineIndex > baseLineIndex) {
+			while (!openBlocks.empty()) {
+				appendVisibleSpan(openBlocks.back(), lineIndex - 1);
+				openBlocks.pop_back();
+			}
+		}
+		if (mrmacMacroEnd && lineIndex > baseLineIndex) {
+			while (!openBlocks.empty() && openBlocks.back().sourceKind != MRFoldSourceKind::Macro) {
+				appendVisibleSpan(openBlocks.back(), lineIndex - 1);
+				openBlocks.pop_back();
+			}
+			if (!openBlocks.empty() && openBlocks.back().sourceKind == MRFoldSourceKind::Macro) {
+				appendVisibleSpan(openBlocks.back(), lineIndex);
+				openBlocks.pop_back();
+			}
+			mrmacMacroActive = false;
+		}
+		if (language == MRSyntaxLanguage::MRMAC && mrmacMacroActive && mrmacElseLead) {
+			while (!openBlocks.empty()) {
+				const MRFoldOpenBlock &block = openBlocks.back();
+				if (block.sourceKind == MRFoldSourceKind::Macro) break;
+				appendVisibleSpan(block, lineIndex - 1);
+				const int closedKind = block.languageBlockKind;
+				openBlocks.pop_back();
+				if (closedKind == kMRMACIfBlock) break;
+			}
+			openSiblingContinuation = true;
+		}
+		if (language == MRSyntaxLanguage::MRMAC && mrmacMacroActive && mrmacEndLead) {
+			while (!openBlocks.empty()) {
+				const MRFoldOpenBlock &block = openBlocks.back();
+				if (block.sourceKind == MRFoldSourceKind::Macro) break;
+				appendVisibleSpan(block, lineIndex);
+				openBlocks.pop_back();
+				break;
+			}
+		}
+
+		while (!openBlocks.empty()) {
+			const MRFoldOpenBlock block = openBlocks.back();
+			bool closeBlock = false;
+			std::size_t endLine = lineIndex;
+
+			switch (block.sourceKind) {
+				case MRFoldSourceKind::Fence:
+					if (nonEmpty && lineIndex > block.startLine && isMarkdownFenceClose(trimmed, block.marker, block.markerLength)) {
+						closeBlock = true;
+						closedFenceThisLine = true;
+					}
+					break;
+				case MRFoldSourceKind::Directive:
+					if (nonEmpty && lineIndex > block.startLine &&
+					    ((language == MRSyntaxLanguage::Perl && (perlPodEnd || perlPodStart)) ||
+					     (language != MRSyntaxLanguage::Make && language != MRSyntaxLanguage::Perl && (isPreprocessorFoldEnd(trimmed) || preprocessorSibling)) ||
+					     (language == MRSyntaxLanguage::Make && (isMakeDirectiveFoldEnd(trimmed) || makeDirectiveSibling)))) {
+						closeBlock = true;
+						if (language == MRSyntaxLanguage::Perl && perlPodStart) endLine = lineIndex - 1;
+						if (preprocessorSibling || makeDirectiveSibling) {
+							endLine = lineIndex - 1;
+							openSiblingContinuation = true;
+						}
+					}
+					break;
+				case MRFoldSourceKind::Macro:
+					if (nonEmpty && lineIndex > block.startLine && mrmacMacroStart) {
+						closeBlock = true;
+						endLine = lineIndex - 1;
+					}
+					break;
+				case MRFoldSourceKind::Delimiter:
+					if (language == MRSyntaxLanguage::Perl && perlSiblingLead && block.languageBlockKind == kPerlBlockConditional) {
+						closeBlock = true;
+						endLine = lineIndex - 1;
+					}
+					break;
+				case MRFoldSourceKind::Indent:
+					if (!nonEmpty || lineIndex <= block.startLine) break;
+					if ((language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh) && shellDedent) {
+						if (shellSiblingLead && block.languageBlockKind == kShellBlockConditional) {
+							closeBlock = true;
+							endLine = lineIndex - 1;
+							openSiblingContinuation = true;
+						} else if (upperLine == "FI" && block.languageBlockKind == kShellBlockConditional) {
+							closeBlock = true;
+						} else if (upperLine == "DONE" && block.languageBlockKind == kShellBlockLoop) {
+							closeBlock = true;
+						} else if (upperLine == "ESAC" && block.languageBlockKind == kShellBlockCase) {
+							closeBlock = true;
+						}
+					} else if (language == MRSyntaxLanguage::Python && pythonDedent) {
+						closeBlock = true;
+						endLine = lineIndex - 1;
+						if (upperLine == "ELSE:" || upperLine == "FINALLY:" || upperLine == "EXCEPT:" || upperLine.starts_with("ELIF ") || upperLine.starts_with("CASE ") ||
+						    upperLine.starts_with("EXCEPT ")) {
+							openSiblingContinuation = true;
+						}
+					} else if (language == MRSyntaxLanguage::Perl && perlSiblingLead) {
+						closeBlock = true;
+						endLine = lineIndex - 1;
+						openSiblingContinuation = true;
+					} else if (language != MRSyntaxLanguage::MRMAC && currentIndent <= block.indent) {
+						closeBlock = true;
+						endLine = lineIndex - 1;
+					}
+					break;
+				case MRFoldSourceKind::Section:
+					if (headingLevel > 0 && headingLevel <= block.headingLevel && lineIndex > block.startLine) {
+						closeBlock = true;
+						if (language == MRSyntaxLanguage::Systemd && block.lastContentLine != std::numeric_limits<std::size_t>::max() && block.lastContentLine > block.startLine)
+							endLine = block.lastContentLine;
+						else
+							endLine = lineIndex - 1;
+					}
+					break;
+				case MRFoldSourceKind::Target:
+					if (lineIndex > block.startLine && isNonEmptyNonRecipeMakeLine(lineText, trimmed)) {
+						closeBlock = true;
+						endLine = lineIndex - 1;
+					}
+					break;
+				case MRFoldSourceKind::Generic:
+				default:
+					break;
+			}
+
+			if (!closeBlock) break;
+			appendVisibleSpan(block, endLine);
+			openBlocks.pop_back();
+		}
+
+		switch (language) {
+			case MRSyntaxLanguage::C:
+				if (isCLikeBraceFoldCandidateLine(trimmed))
+					openBlock(MRFoldSourceKind::Delimiter, currentIndent, '}', 0, 0, 0, kLanguageBlockNone, recentCBraceStartLine, openSiblingContinuation);
+				if (isPreprocessorFoldStart(trimmed) || preprocessorSibling) openBlock(MRFoldSourceKind::Directive, currentIndent);
+				break;
+			case MRSyntaxLanguage::Cpp:
+				if (isCLikeStructuralBraceLead(trimmed, upperLine, previousTrimmed, previousUpperLine, previousPreviousTrimmed, previousPreviousUpperLine, language) ||
+				    (trimmed == "{" && recentCLikeLeadLine != currentLineIndex))
+					openBlock(MRFoldSourceKind::Delimiter, currentIndent, '}', 0, 0, 0, kLanguageBlockNone, recentCLikeLeadLine, openSiblingContinuation);
+				if (isPreprocessorFoldStart(trimmed) || preprocessorSibling) openBlock(MRFoldSourceKind::Directive, currentIndent);
+				break;
+			case MRSyntaxLanguage::JavaScript:
+				if (isCLikeStructuralBraceLead(trimmed, upperLine, previousTrimmed, previousUpperLine, previousPreviousTrimmed, previousPreviousUpperLine, language) ||
+				    recentJavaScriptLeadLine != currentLineIndex)
+					openBlock(MRFoldSourceKind::Delimiter, currentIndent, '}', 0, 0, 0, kLanguageBlockNone, recentJavaScriptLeadLine, openSiblingContinuation);
+				break;
+			case MRSyntaxLanguage::Swift:
+				if (isCLikeStructuralBraceLead(trimmed, upperLine, previousTrimmed, previousUpperLine, previousPreviousTrimmed, previousPreviousUpperLine, language))
+					openBlock(MRFoldSourceKind::Delimiter, currentIndent, '}', 0, 0, 0, kLanguageBlockNone, recentSwiftLeadLine, openSiblingContinuation);
+				break;
+			case MRSyntaxLanguage::Rust:
+				if (isCLikeStructuralBraceLead(trimmed, upperLine, previousTrimmed, previousUpperLine, previousPreviousTrimmed, previousPreviousUpperLine, language))
+					openBlock(MRFoldSourceKind::Delimiter, currentIndent, '}', 0, 0, 0, kLanguageBlockNone, recentRustLeadLine, openSiblingContinuation);
+				break;
+			case MRSyntaxLanguage::Go:
+				if (isCLikeStructuralBraceLead(trimmed, upperLine, previousTrimmed, previousUpperLine, previousPreviousTrimmed, previousPreviousUpperLine, language))
+					openBlock(MRFoldSourceKind::Delimiter, currentIndent, '}', 0, 0, 0, kLanguageBlockNone, recentGoLeadLine, openSiblingContinuation);
+				break;
+			case MRSyntaxLanguage::Systemd:
+				if (headingLevel > 0) openBlock(MRFoldSourceKind::Section, currentIndent, 0, 0, 0, headingLevel);
+				break;
+			case MRSyntaxLanguage::Json: {
+				const std::size_t last = lastSignificantByte(trimmed);
+				if (last != std::string_view::npos && (trimmed[last] == '{' || trimmed[last] == '['))
+					openBlock(MRFoldSourceKind::Delimiter, currentIndent, matchingCloserForOpenDelimiter(trimmed[last]));
+				break;
+			}
+			case MRSyntaxLanguage::Python:
+				if (!upperLine.empty() && upperLine.back() == ':' && isPythonIndentLead(upperLine)) openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, kLanguageBlockNone,
+				                                                                                                  std::numeric_limits<std::size_t>::max(), openSiblingContinuation);
+				break;
+			case MRSyntaxLanguage::Bash:
+			case MRSyntaxLanguage::Zsh:
+				if (trailingBlockOpen)
+					openBlock(MRFoldSourceKind::Delimiter, currentIndent, matchingCloserForOpenDelimiter(trimmed[lastSignificantByte(trimmed)]), 0, 0, 0, kLanguageBlockNone,
+					          recentShellLeadLine, openSiblingContinuation);
+				else if (isShellIndentLead(trimmed, upperLine))
+					openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, shellIndentBlockKind(upperLine), recentShellLeadLine, openSiblingContinuation);
+				break;
+			case MRSyntaxLanguage::Perl:
+				if (perlPodStart)
+					openBlock(MRFoldSourceKind::Directive, currentIndent);
+				else {
+					const int perlBlockKind = perlStructuredBlockKind(trimmed, upperLine);
+					if (perlBlockKind != kPerlBlockNone)
+						openBlock(MRFoldSourceKind::Delimiter, currentIndent, '}', 0, 0, 0, perlBlockKind, std::numeric_limits<std::size_t>::max(), openSiblingContinuation);
+				}
+				break;
+			case MRSyntaxLanguage::Markdown: {
+				char marker = 0;
+				std::size_t markerLength = 0;
+				if (!closedFenceThisLine && markdownFenceMarker(trimmed, marker, markerLength)) openBlock(MRFoldSourceKind::Fence, currentIndent, 0, marker, markerLength);
+				else if (headingLevel > 0)
+					openBlock(MRFoldSourceKind::Section, currentIndent, 0, 0, 0, headingLevel);
+				else if (isMarkdownBlockQuoteLead(trimmed, nextTrimmed) || isMarkdownListLead(lineText, trimmed, nextTrimmed, currentIndent, nextIndent))
+					openBlock(MRFoldSourceKind::Indent, currentIndent);
+				break;
+			}
+			case MRSyntaxLanguage::Make:
+				if (isMakeTargetLine(trimmed) && !nextTrimmed.empty() && nextLineTextPtr != nullptr && !nextLineTextPtr->empty() && (*nextLineTextPtr)[0] == '\t')
+					openBlock(MRFoldSourceKind::Target, currentIndent);
+				else if (isMakeDirectiveFoldStart(trimmed))
+					openBlock(MRFoldSourceKind::Directive, currentIndent);
+				break;
+			case MRSyntaxLanguage::MRMAC:
+				if (mrmacMacroStart) openBlock(MRFoldSourceKind::Macro, currentIndent);
+				else if (mrmacMacroActive && mrmacIfLead)
+					openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, kMRMACIfBlock);
+				else if (mrmacMacroActive && mrmacElseLead)
+					openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, kMRMACIfBlock, std::numeric_limits<std::size_t>::max(), true);
+				else if (mrmacMacroActive && mrmacWhileLead)
+					openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, kMRMACWhileBlock);
+				break;
+			case MRSyntaxLanguage::PlainText:
+			default:
+				if (isIndentFoldLanguage(language) && indentOpens) openBlock(MRFoldSourceKind::Indent, currentIndent);
+				break;
+		}
+
+		previousPreviousLineText = previousLineText;
+		previousPreviousUpperLine = previousUpperLine;
+		previousLineText = lineText;
+		previousUpperLine = upperLine;
+	}
+
+	const std::size_t finalLine = baseLineIndex + lineTexts.size() - 1;
+	for (const MRFoldOpenBlock &block : openBlocks)
+		if (language == MRSyntaxLanguage::Systemd && block.sourceKind == MRFoldSourceKind::Section && block.lastContentLine != std::numeric_limits<std::size_t>::max() && block.lastContentLine > block.startLine)
+			appendVisibleSpan(block, block.lastContentLine);
+		else
+			appendVisibleSpan(block, finalLine);
+	return output;
 }
 
 } // namespace
+
+std::string mrBuildFoldTrainingAscii(const std::string &text, MRSyntaxLanguage language) {
+	const std::vector<std::string> lineTexts = splitFoldTrainingLines(text);
+	const MRFoldScanOutput scan = computeFoldSpansForLineTexts(lineTexts, 0, 0, lineTexts.size(), language, std::map<std::size_t, MRFoldSpan>());
+	std::string output;
+	auto branchContinuesAtSameLevel = [&scan](const MRFoldSpan &span) noexcept {
+		for (const MRFoldSpan &candidate : scan.spans)
+			if (candidate.siblingContinuation && candidate.level == span.level && candidate.startLine == span.endLine + 1) return true;
+		return false;
+	};
+
+	for (std::size_t lineIndex = 0; lineIndex < lineTexts.size(); ++lineIndex) {
+		std::vector<std::string> gutter(static_cast<std::size_t>(std::max(1, scan.visibleMaxLevel)), " ");
+
+		for (const MRFoldSpan &span : scan.spans) {
+			if (span.level >= gutter.size()) continue;
+			if (lineIndex == span.startLine) gutter[span.level] = span.siblingContinuation ? "\xE2\x94\x9C" : "\xE2\x95\xAD";
+			else if (lineIndex == span.endLine)
+				gutter[span.level] = branchContinuesAtSameLevel(span) ? "\xE2\x94\x82" : "\xE2\x95\xB0";
+			else if (lineIndex > span.startLine && lineIndex < span.endLine)
+				gutter[span.level] = "\xE2\x94\x82";
+		}
+		char lineNumber[32];
+		std::snprintf(lineNumber, sizeof(lineNumber), "%6zu", lineIndex + 1);
+		output.append(lineNumber);
+		output.push_back(' ');
+		for (const std::string &cell : gutter)
+			output.append(cell);
+		output.append(" | ");
+		output.append(lineTexts[lineIndex]);
+		output.push_back('\n');
+	}
+	return output;
+}
 
 MRFileEditor::LoadTiming::LoadTiming() noexcept : valid(false), bytes(0), lines(0), mappedLoadMs(0.0), lineCountMs(0.0) {
 }
 
 MRFileEditor::MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar, TIndicator *aIndicator, TStringView aFileName) noexcept
-    : TScroller(bounds, aHScrollBar, aVScrollBar), mIndicator(aIndicator), mReadOnly(false), mInsertMode(true), mAutoIndent(false), mSyntaxTitleHint(), mBufferModel(), mSelectionAnchor(0), mCursorVisualColumn(0), mIndicatorUpdateInProgress(false), mLineIndexWarmupTaskId(0), mLineIndexWarmupDocumentId(0), mLineIndexWarmupVersion(0), mSyntaxTokenCache(), mSyntaxCheckpoints(), mSyntaxWarmupTaskId(0), mSyntaxWarmupDocumentId(0), mSyntaxWarmupVersion(0), mSyntaxWarmupTopLine(0), mSyntaxWarmupBottomLine(0), mSyntaxWarmupLanguage(MRSyntaxLanguage::PlainText), mSyntaxPrefetchDocumentId(0), mSyntaxPrefetchVersion(0), mSyntaxPrefetchTargetBottomLine(0), mSyntaxPrefetchReachedBottomLine(0), mSyntaxPrefetchLanguage(MRSyntaxLanguage::PlainText), mMiniMapRenderer(), mSaveNormalizationCache(), mSaveNormalizationWarmupTaskId(0), mSaveNormalizationWarmupDocumentId(0), mSaveNormalizationWarmupVersion(0),
+    : TScroller(bounds, aHScrollBar, aVScrollBar), mIndicator(aIndicator), mReadOnly(false), mInsertMode(true), mAutoIndent(false), mSyntaxTitleHint(), mBufferModel(), mSelectionAnchor(0), mCursorVisualColumn(0), mIndicatorUpdateInProgress(false), mLineIndexWarmupTaskId(0), mLineIndexWarmupDocumentId(0), mLineIndexWarmupVersion(0), mSyntaxTokenCache(), mSyntaxCheckpoints(), mSyntaxWarmupTaskId(0), mSyntaxWarmupDocumentId(0), mSyntaxWarmupVersion(0), mSyntaxWarmupTopLine(0), mSyntaxWarmupBottomLine(0), mSyntaxWarmupLanguage(MRSyntaxLanguage::PlainText), mSyntaxPrefetchDocumentId(0), mSyntaxPrefetchVersion(0), mSyntaxPrefetchTargetBottomLine(0), mSyntaxPrefetchReachedBottomLine(0), mSyntaxPrefetchLanguage(MRSyntaxLanguage::PlainText),
+      mVisibleFoldDocumentId(0), mVisibleFoldVersion(0), mVisibleFoldTopLine(0), mVisibleFoldBottomLine(0), mVisibleFoldLanguage(MRSyntaxLanguage::PlainText), mVisibleFoldGutterColumns(1), mMiniMapRenderer(), mSaveNormalizationCache(), mSaveNormalizationWarmupTaskId(0), mSaveNormalizationWarmupDocumentId(0), mSaveNormalizationWarmupVersion(0),
       mSaveNormalizationWarmupOptionsHash(0), mSaveNormalizationWarmupSourceBytes(0), mSaveNormalizationWarmupStartedAt(std::chrono::steady_clock::time_point()), mSaveNormalizationThroughputBytesPerMicro(0.0), mSaveNormalizationThroughputSamples(0), mMiniMapInitialRenderReportedDocumentId(0), mBlockOverlayActive(false), mBlockOverlayMode(0), mBlockOverlayAnchor(0), mBlockOverlayEnd(0), mBlockOverlayTrackingCursor(false), mPreferredIndentColumn(1), mLastLoadTiming(), mLargeFileMetricsTraceValid(false), mLastLargeFileMetricsExactKnown(false), mLastLargeFileMetricsLimitY(0), mLastLargeFileMetricsMaxY(0), mLastLargeFileMetricsDeltaY(0), mLastLargeFileMetricsNewDeltaY(0) {
 	fileName[0] = EOS;
 	options |= ofFirstClick;
@@ -453,7 +1692,7 @@ int MRFileEditor::currentLineNumber() const noexcept {
 }
 
 int MRFileEditor::currentViewRow() const noexcept {
-	return std::max(1, static_cast<int>(mBufferModel.lineIndex(mBufferModel.cursor())) - delta.y + 1);
+	return std::max(1, static_cast<int>(visibleLineForDocumentLine(mBufferModel.lineIndex(mBufferModel.cursor()))) - delta.y + 1);
 }
 
 int MRFileEditor::visibleViewportRows() const noexcept {
@@ -591,6 +1830,9 @@ void MRFileEditor::notifyWindowTaskStateChanged() {
 
 void MRFileEditor::continueComputeWarmupIfNeeded() {
 	scheduleLineIndexWarmupIfNeeded();
+	if (mSyntaxWarmupTaskId == 0 && mSyntaxPrefetchDocumentId == mBufferModel.documentId() && mSyntaxPrefetchVersion == mBufferModel.version() && mSyntaxPrefetchLanguage == mBufferModel.language() &&
+		mSyntaxPrefetchReachedBottomLine >= mSyntaxPrefetchTargetBottomLine)
+		return;
 	scheduleSyntaxWarmupIfNeeded();
 }
 
@@ -869,10 +2111,13 @@ void MRFileEditor::traceLargeFileMetrics(const char *stage, int limitY, int maxY
 
 MRFileEditor::TextViewportGeometry MRFileEditor::textViewportGeometryFor(const MREditSetupSettings &settings) const noexcept {
 	MRTextViewportLayout::Inputs inputs;
+	MRFileEditor *self = const_cast<MRFileEditor *>(this);
 	inputs.viewWidth = size.x;
 	inputs.visibleRows = visibleTextRows();
 	inputs.deltaX = delta.x;
 	inputs.deltaY = delta.y;
+	if (settings.codeFolding) self->ensureVisibleFoldSpans(static_cast<std::size_t>(std::max(delta.y, 0)), inputs.visibleRows, mBufferModel.language());
+	inputs.codeFoldingColumns = settings.codeFolding ? self->visibleFoldGutterColumns() : 1;
 	inputs.exactLineCountKnown = mBufferModel.exactLineCountKnown();
 	inputs.exactLineCount = mBufferModel.lineCount();
 	inputs.estimatedLineCount = mBufferModel.estimatedLineCount();
@@ -898,6 +2143,158 @@ int MRFileEditor::textColumnFromLocalX(int localX) const noexcept {
 
 int MRFileEditor::textViewportWidth() const {
 	return textViewportGeometry().width;
+}
+
+void MRFileEditor::invalidateFoldCache() noexcept {
+	mVisibleFoldSpans.clear();
+	mVisibleFoldDocumentId = 0;
+	mVisibleFoldVersion = 0;
+	mVisibleFoldTopLine = 0;
+	mVisibleFoldBottomLine = 0;
+	mVisibleFoldLanguage = MRSyntaxLanguage::PlainText;
+	mVisibleFoldGutterColumns = 1;
+}
+
+int MRFileEditor::visibleFoldGutterColumns() const noexcept {
+	return std::max(1, mVisibleFoldGutterColumns);
+}
+
+std::size_t MRFileEditor::documentLineForVisibleLine(std::size_t visibleLine) const noexcept {
+	if (mEffectiveClosedFoldSpans.empty()) return visibleLine;
+	std::size_t documentLine = visibleLine;
+	std::size_t hiddenBefore = 0;
+
+	for (const MRFoldSpan &span : mEffectiveClosedFoldSpans) {
+		const std::size_t hiddenLength = span.endLine > span.startLine ? span.endLine - span.startLine : 0;
+		const std::size_t visibleStart = span.startLine - hiddenBefore;
+		if (visibleLine <= visibleStart) break;
+		documentLine += hiddenLength;
+		hiddenBefore += hiddenLength;
+	}
+	return documentLine;
+}
+
+std::size_t MRFileEditor::visibleLineForDocumentLine(std::size_t documentLine) const noexcept {
+	if (mEffectiveClosedFoldSpans.empty()) return documentLine;
+	std::size_t hiddenBefore = 0;
+
+	for (const MRFoldSpan &span : mEffectiveClosedFoldSpans) {
+		const std::size_t hiddenLength = span.endLine > span.startLine ? span.endLine - span.startLine : 0;
+		if (documentLine > span.startLine && documentLine <= span.endLine) return span.startLine - hiddenBefore;
+		if (span.endLine < documentLine) hiddenBefore += hiddenLength;
+		else
+			break;
+	}
+	return documentLine - hiddenBefore;
+}
+
+std::size_t MRFileEditor::foldedVisibleLineCount() const noexcept {
+	std::size_t total = std::max<std::size_t>(1, mBufferModel.lineCount());
+
+	for (const MRFoldSpan &span : mEffectiveClosedFoldSpans)
+		if (span.endLine > span.startLine) total -= (span.endLine - span.startLine);
+	return std::max<std::size_t>(1, total);
+}
+
+bool MRFileEditor::toggleFoldAtLine(std::size_t lineIndex) {
+	for (const MRFoldSpan &span : mVisibleFoldSpans) {
+		if (span.startLine != lineIndex) continue;
+		if (span.open) mClosedFoldSpans[lineIndex] = MRFoldSpan(span.startLine, span.endLine, span.level, span.sourceKind, false, span.siblingContinuation);
+		else
+			mClosedFoldSpans.erase(lineIndex);
+		mEffectiveClosedFoldSpans.clear();
+		std::size_t coveredUntil = 0;
+		bool haveCovered = false;
+		for (const std::pair<const std::size_t, MRFoldSpan> &entry : mClosedFoldSpans) {
+			const MRFoldSpan &closedSpan = entry.second;
+			if (haveCovered && closedSpan.startLine <= coveredUntil) continue;
+			mEffectiveClosedFoldSpans.push_back(closedSpan);
+			coveredUntil = closedSpan.endLine;
+			haveCovered = true;
+		}
+		if (span.open) {
+			const std::size_t cursorLine = mBufferModel.lineIndex(mBufferModel.cursor());
+			if (cursorLine > span.startLine && cursorLine <= span.endLine) moveCursor(mBufferModel.lineStartByIndex(span.startLine), false, false);
+		}
+		invalidateFoldCache();
+		return true;
+	}
+	return false;
+}
+
+bool MRFileEditor::foldingGutterHit(TPoint local, std::size_t *lineIndexOut) const noexcept {
+	const TextViewportGeometry viewport = textViewportGeometry();
+	const int textRows = std::max(1, visibleTextRows());
+
+	if (viewport.codeFoldingWidth <= 0) return false;
+	if (local.x < viewport.codeFoldingX || local.x >= viewport.codeFoldingX + viewport.codeFoldingWidth) return false;
+	if (local.y < viewport.topInset || local.y >= viewport.topInset + textRows) return false;
+	if (lineIndexOut != nullptr) *lineIndexOut = documentLineForVisibleLine(static_cast<std::size_t>(std::max(0, delta.y + local.y - viewport.topInset)));
+	return true;
+}
+
+void MRFileEditor::ensureVisibleFoldSpans(std::size_t topLine, int rowCount, MRSyntaxLanguage language) {
+	const std::size_t docId = mBufferModel.documentId();
+	const std::size_t version = mBufferModel.version();
+
+	if (rowCount <= 0) {
+		invalidateFoldCache();
+		return;
+	}
+
+	const std::size_t exactLineCount = mBufferModel.exactLineCountKnown() ? std::max<std::size_t>(1, mBufferModel.lineCount()) : 0;
+	const std::size_t visibleTopLine = topLine;
+	topLine = documentLineForVisibleLine(visibleTopLine);
+	if (mBufferModel.exactLineCountKnown() && topLine >= exactLineCount) topLine = exactLineCount - 1;
+	std::size_t requestBottomLine = documentLineForVisibleLine(visibleTopLine + static_cast<std::size_t>(std::max(0, rowCount))) + 1;
+	if (mBufferModel.exactLineCountKnown() && requestBottomLine > exactLineCount) requestBottomLine = exactLineCount;
+	const bool documentWideFoldCache = mBufferModel.exactLineCountKnown();
+	auto updateVisibleFoldGutterColumnsForViewport = [&](std::size_t viewportTopLine, std::size_t viewportBottomLine) noexcept {
+		mVisibleFoldGutterColumns = 1;
+		for (const MRFoldSpan &span : mVisibleFoldSpans) {
+			if (span.endLine < viewportTopLine || span.startLine >= viewportBottomLine) continue;
+			mVisibleFoldGutterColumns = std::max(mVisibleFoldGutterColumns, static_cast<int>(span.level) + 1);
+		}
+	};
+	if (mVisibleFoldDocumentId == docId && mVisibleFoldVersion == version && mVisibleFoldLanguage == language &&
+	    ((documentWideFoldCache && mVisibleFoldTopLine == 0 && mVisibleFoldBottomLine == exactLineCount) ||
+	     (!documentWideFoldCache && topLine >= mVisibleFoldTopLine && requestBottomLine <= mVisibleFoldBottomLine))) {
+		updateVisibleFoldGutterColumnsForViewport(topLine, requestBottomLine);
+		return;
+	}
+
+	const std::size_t scanTail = 256;
+	const bool deterministicFoldScan = documentWideFoldCache || language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp || language == MRSyntaxLanguage::JavaScript ||
+	                                   language == MRSyntaxLanguage::Json || language == MRSyntaxLanguage::Swift || language == MRSyntaxLanguage::Rust || language == MRSyntaxLanguage::Go || language == MRSyntaxLanguage::Systemd ||
+	                                   language == MRSyntaxLanguage::Markdown || language == MRSyntaxLanguage::Python || language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh || language == MRSyntaxLanguage::Perl ||
+	                                   language == MRSyntaxLanguage::Make || language == MRSyntaxLanguage::MRMAC;
+	const std::size_t scanTopLine = deterministicFoldScan ? 0 : topLine;
+	std::size_t scanBottomLine = documentWideFoldCache ? exactLineCount : requestBottomLine + scanTail;
+	if (mBufferModel.exactLineCountKnown() && scanBottomLine > exactLineCount) scanBottomLine = exactLineCount;
+
+	mVisibleFoldSpans.clear();
+	mVisibleFoldDocumentId = docId;
+	mVisibleFoldVersion = version;
+	mVisibleFoldTopLine = scanTopLine;
+	mVisibleFoldBottomLine = scanBottomLine;
+	mVisibleFoldLanguage = language;
+	mVisibleFoldGutterColumns = 1;
+
+	if (scanBottomLine <= scanTopLine) return;
+	std::vector<std::string> lineTexts;
+	lineTexts.reserve(scanBottomLine - scanTopLine);
+	std::size_t lineStart = lineStartForIndex(scanTopLine);
+	for (std::size_t lineIndex = scanTopLine; lineIndex < scanBottomLine; ++lineIndex) {
+		lineTexts.push_back(mBufferModel.lineText(lineStart));
+		if (lineStart >= mBufferModel.length()) break;
+		const std::size_t nextLineStart = mBufferModel.nextLine(lineStart);
+		if (nextLineStart <= lineStart) break;
+		lineStart = nextLineStart;
+	}
+	const MRFoldScanOutput scan = computeFoldSpansForLineTexts(lineTexts, scanTopLine, topLine, requestBottomLine, language, mClosedFoldSpans);
+	mVisibleFoldSpans = scan.spans;
+	mVisibleFoldGutterColumns = std::max(1, scan.visibleMaxLevel);
+	updateVisibleFoldGutterColumnsForViewport(topLine, requestBottomLine);
 }
 
 std::string MRFileEditor::normalizedFormatRulerLine(const MREditSetupSettings &settings, int *leftMarginOut, int *rightMarginOut) const {
@@ -1030,7 +2427,7 @@ bool MRFileEditor::useApproximateLargeFileMetrics() const noexcept {
 
 int MRFileEditor::dynamicLargeFileLineLimit() const noexcept {
 	const std::size_t estimated = mBufferModel.estimatedLineCount();
-	const std::size_t currentLine = mBufferModel.lineIndex(mBufferModel.cursor());
+	const std::size_t currentLine = visibleLineForDocumentLine(mBufferModel.lineIndex(mBufferModel.cursor()));
 	const int textRows = std::max(1, visibleTextRows());
 	const std::size_t minimum = static_cast<std::size_t>(textRows);
 	const std::size_t margin = static_cast<std::size_t>(std::max(textRows * 4, 256));
@@ -1095,23 +2492,17 @@ std::size_t MRFileEditor::prevCharOffset(std::size_t pos) noexcept {
 }
 
 std::size_t MRFileEditor::lineMoveOffset(std::size_t pos, int deltaLines, int targetVisualColumn) noexcept {
-	std::size_t target = std::min(pos, mBufferModel.length());
+	const std::size_t currentDocumentLine = mBufferModel.lineIndex(std::min(pos, mBufferModel.length()));
+	const std::size_t currentVisibleLine = visibleLineForDocumentLine(currentDocumentLine);
+	std::size_t targetVisibleLine = currentVisibleLine;
+	std::size_t targetDocumentLine = currentDocumentLine;
 
 	if (targetVisualColumn < 0) targetVisualColumn = charColumn(mBufferModel.lineStart(pos), std::min(pos, mBufferModel.length()));
-	if (deltaLines < 0) {
-		for (std::size_t i = 0, distance = static_cast<std::size_t>(-deltaLines); i < distance; ++i) {
-			std::size_t prev = prevLineOffset(target);
-			if (prev == target) break;
-			target = prev;
-		}
-	} else {
-		for (int i = 0; i < deltaLines; ++i) {
-			std::size_t next = nextLineOffset(target);
-			if (next == target) break;
-			target = next;
-		}
-	}
-	return charPtrOffset(lineStartOffset(target), targetVisualColumn);
+	if (deltaLines < 0) targetVisibleLine = currentVisibleLine > static_cast<std::size_t>(-deltaLines) ? currentVisibleLine - static_cast<std::size_t>(-deltaLines) : 0;
+	else
+		targetVisibleLine = currentVisibleLine + static_cast<std::size_t>(deltaLines);
+	targetDocumentLine = documentLineForVisibleLine(targetVisibleLine);
+	return charPtrOffset(mBufferModel.lineStartByIndex(targetDocumentLine), targetVisualColumn);
 }
 
 std::size_t MRFileEditor::tabStopMoveOffset(std::size_t pos, bool forward) noexcept {
@@ -1518,6 +2909,7 @@ bool MRFileEditor::insertBufferText(const std::string &text) {
 }
 
 bool MRFileEditor::applyCurrentLineLeadingIndent(int targetColumn) {
+	const MREditSetupSettings settings = configuredEditSetupSettings();
 	const std::size_t cursor = cursorOffset();
 	const std::size_t lineStart = lineStartOffset(cursor);
 	const std::string lineText = mBufferModel.lineText(lineStart);
@@ -1525,18 +2917,11 @@ bool MRFileEditor::applyCurrentLineLeadingIndent(int targetColumn) {
 	MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "live-smart-dedent");
 	std::string replacement;
 	std::size_t newCursor = cursor;
-	int removeSpaces = configuredTabSize();
-
-	(void)targetColumn;
 
 	while (indentBytes < lineText.size() && (lineText[indentBytes] == ' ' || lineText[indentBytes] == '\t'))
 		++indentBytes;
-	if (indentBytes == 0) return false;
-	replacement.assign(lineText.data(), indentBytes);
-	if (!replacement.empty() && replacement.back() == '\t') replacement.pop_back();
-	else
-		while (!replacement.empty() && replacement.back() == ' ' && removeSpaces-- > 0)
-			replacement.pop_back();
+	replacement = buildEditIndentFill(settings, 1, std::max(1, targetColumn), configuredTabExpandSetting());
+	if (indentBytes == replacement.size() && lineText.compare(0, indentBytes, replacement) == 0) return false;
 	transaction.replace(MRTextBufferModel::Range(lineStart, lineStart + indentBytes), replacement);
 	if (cursor <= lineStart + indentBytes) newCursor = lineStart + replacement.size();
 	else
@@ -1665,6 +3050,11 @@ bool MRFileEditor::adoptCommittedDocument(const MRTextBufferModel::Document &doc
 	invalidateSaveNormalizationCache();
 	resetSyntaxWarmupState(changeSet == nullptr || !changeSet->changed);
 	if (changeSet != nullptr && changeSet->changed) invalidateSyntaxCacheFromLineStart(mBufferModel.lineStart(changeSet->touchedRange.start));
+	if (changeSet != nullptr && changeSet->changed) {
+		mClosedFoldSpans.clear();
+		mEffectiveClosedFoldSpans.clear();
+	}
+	invalidateFoldCache();
 	applyMiniMapSignals(mMiniMapRenderer.invalidate(false, mBufferModel.documentId()));
 	refreshSyntaxContext();
 	cursorPos = canonicalCursorOffset(cursorPos);
@@ -1702,7 +3092,9 @@ MRTextBufferModel::CommitResult MRFileEditor::applyStagedTransaction(const MRTex
 }
 
 bool MRFileEditor::newLineWithIndent(const std::string &fill) {
-	return insertBufferText(std::string("\n") + fill);
+	const bool applied = insertBufferText(std::string("\n") + fill);
+	if (applied) applyLiveSmartDedentAfterTextInput("");
+	return applied;
 }
 
 int MRFileEditor::leadingIndentColumnForLine(std::size_t lineStart) const noexcept {
@@ -1723,6 +3115,29 @@ int MRFileEditor::leadingIndentColumnForLine(std::size_t lineStart) const noexce
 	return visualColumn + 1;
 }
 
+int MRFileEditor::inferredShellIndentStepColumns(std::size_t lineStart, const MREditSetupSettings &settings) const noexcept {
+	const int baseColumn = leadingIndentColumnForLine(lineStart);
+	std::size_t currentLineStart = lineStart;
+
+	while (currentLineStart > 0) {
+		const std::size_t previousLineStart = prevLineOffset(currentLineStart);
+		if (previousLineStart == currentLineStart) break;
+		currentLineStart = previousLineStart;
+
+		const std::string previousLineText = mBufferModel.lineText(previousLineStart);
+		if (trimView(previousLineText).empty()) continue;
+
+		const int previousColumn = leadingIndentColumnForLine(previousLineStart);
+		if (previousColumn < baseColumn) return std::max(1, baseColumn - previousColumn);
+	}
+
+	if (!settings.tabExpand) {
+		const int nextColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+		return std::max(1, nextColumn - baseColumn);
+	}
+	return 4;
+}
+
 std::string MRFileEditor::automaticIndentFillForCursor() const {
 	const MREditSetupSettings settings = configuredEditSetupSettings();
 	const std::size_t lineStart = lineStartOffset(cursorOffset());
@@ -1741,23 +3156,74 @@ std::string MRFileEditor::smartIndentFillForCursor() {
 	std::size_t cursorInLine = cursor > lineStart ? std::min(cursor - lineStart, lineText.size()) : 0;
 	std::string_view beforeCursor(lineText.data(), cursorInLine);
 	std::string_view trimmedBeforeCursor = trimView(beforeCursor);
+	std::string previousLineText;
+	std::string previousPreviousLineText;
+	std::string_view previousTrimmed;
+	std::string previousUpperLine;
+	std::string previousPreviousUpperLine;
 	const MRSyntaxLanguage language = mBufferModel.language();
+	const bool smartEnabled = settings.smartIndenting || upperAscii(settings.indentStyle) == "SMART";
 
-	if (!settings.smartIndenting) return buildEditIndentFill(settings, 1, targetColumn, configuredTabExpandSetting());
-	if (language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp || language == MRSyntaxLanguage::JavaScript || language == MRSyntaxLanguage::Json) {
+	if (lineStart > 0) {
+		const std::size_t previousLineStart = lineStartOffset(lineStart - 1);
+		previousLineText = mBufferModel.lineText(previousLineStart);
+		previousTrimmed = trimView(previousLineText);
+		previousUpperLine = upperAscii(std::string(previousTrimmed));
+		if (previousLineStart > 0) {
+			const std::size_t previousPreviousLineStart = lineStartOffset(previousLineStart - 1);
+			previousPreviousLineText = mBufferModel.lineText(previousPreviousLineStart);
+			previousPreviousUpperLine = upperAscii(std::string(trimView(previousPreviousLineText)));
+		}
+	}
+
+	if (!smartEnabled) return buildEditIndentFill(settings, 1, targetColumn, configuredTabExpandSetting());
+	if (language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp) {
 		const std::size_t last = lastSignificantByte(beforeCursor);
-		if (last != std::string_view::npos && (beforeCursor[last] == '{' || beforeCursor[last] == '[' || beforeCursor[last] == '('))
+		if (last != std::string_view::npos && beforeCursor[last] == '{' &&
+		    isCLikeStructuralBraceLead(trimView(beforeCursor), upperAscii(std::string(trimView(beforeCursor))), previousTrimmed, previousUpperLine, trimView(previousPreviousLineText),
+		                               previousPreviousUpperLine, language))
+			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+	} else if (language == MRSyntaxLanguage::JavaScript || language == MRSyntaxLanguage::Json) {
+		const std::size_t last = lastSignificantByte(beforeCursor);
+		if (language == MRSyntaxLanguage::JavaScript && last != std::string_view::npos && beforeCursor[last] == '{' &&
+		    isCLikeStructuralBraceLead(trimView(beforeCursor), upperAscii(std::string(trimView(beforeCursor))), previousTrimmed, previousUpperLine, trimView(previousPreviousLineText),
+		                               previousPreviousUpperLine, language))
+			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+		else if (language == MRSyntaxLanguage::Json && last != std::string_view::npos && (beforeCursor[last] == '{' || beforeCursor[last] == '['))
+			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+	} else if (language == MRSyntaxLanguage::Swift) {
+		const std::size_t last = lastSignificantByte(beforeCursor);
+		if (last != std::string_view::npos && beforeCursor[last] == '{' &&
+		    isCLikeStructuralBraceLead(trimView(beforeCursor), upperAscii(std::string(trimView(beforeCursor))), previousTrimmed, previousUpperLine, trimView(previousPreviousLineText),
+		                               previousPreviousUpperLine, language))
+			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+	} else if (language == MRSyntaxLanguage::Rust || language == MRSyntaxLanguage::Go) {
+		const std::size_t last = lastSignificantByte(beforeCursor);
+		if (last != std::string_view::npos && beforeCursor[last] == '{' &&
+		    isCLikeStructuralBraceLead(trimView(beforeCursor), upperAscii(std::string(trimView(beforeCursor))), previousTrimmed, previousUpperLine, trimView(previousPreviousLineText),
+		                               previousPreviousUpperLine, language))
 			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
 	} else if (language == MRSyntaxLanguage::Python) {
 		const std::string upperLine = upperAscii(std::string(trimmedBeforeCursor));
 		if (!upperLine.empty() && upperLine.back() == ':' && isPythonIndentLead(upperLine))
 			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+	} else if (language == MRSyntaxLanguage::Bash) {
+		const std::string upperLine = upperAscii(std::string(trimmedBeforeCursor));
+		if (isShellIndentLead(trimmedBeforeCursor, upperLine)) targetColumn = baseColumn + inferredShellIndentStepColumns(lineStart, settings);
 	} else if (language == MRSyntaxLanguage::Zsh) {
 		const std::string upperLine = upperAscii(std::string(trimmedBeforeCursor));
 		if (isShellIndentLead(trimmedBeforeCursor, upperLine))
 			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
 	} else if (language == MRSyntaxLanguage::Perl) {
-		if (isPerlIndentLead(trimmedBeforeCursor))
+		const std::string upperLine = upperAscii(std::string(trimmedBeforeCursor));
+		if (isPerlStructuredBlockLead(trimmedBeforeCursor, upperLine))
+			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+	} else if (language == MRSyntaxLanguage::MRMAC) {
+		const std::string upperLine = upperAscii(std::string(trimmedBeforeCursor));
+		if (isMRMACMacroStart(upperLine) || isMRMACIfLead(upperLine) || isMRMACElseLead(upperLine) || isMRMACWhileLead(upperLine))
+			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+	} else if (language == MRSyntaxLanguage::Make) {
+		if (isMakeTargetLine(trimmedBeforeCursor) || isMakeDirectiveFoldStart(trimmedBeforeCursor))
 			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
 	} else if (language == MRSyntaxLanguage::Markdown) {
 		int markdownColumn = 0;
@@ -1769,11 +3235,14 @@ std::string MRFileEditor::smartIndentFillForCursor() {
 void MRFileEditor::applyLiveSmartDedentAfterTextInput(const std::string &insertedText) {
 	const MREditSetupSettings settings = configuredEditSetupSettings();
 	const MRSyntaxLanguage language = mBufferModel.language();
+	const bool smartEnabled = settings.smartIndenting || upperAscii(settings.indentStyle) == "SMART";
 
-	if (!settings.smartIndenting) return;
+	if (!smartEnabled) return;
 	if (insertedText.find('\n') != std::string::npos || insertedText.find('\r') != std::string::npos) return;
 	if (language != MRSyntaxLanguage::C && language != MRSyntaxLanguage::Cpp && language != MRSyntaxLanguage::JavaScript && language != MRSyntaxLanguage::Json && language != MRSyntaxLanguage::Python &&
-	    language != MRSyntaxLanguage::Zsh && language != MRSyntaxLanguage::Perl) return;
+	    language != MRSyntaxLanguage::Bash && language != MRSyntaxLanguage::Zsh && language != MRSyntaxLanguage::Perl && language != MRSyntaxLanguage::MRMAC && language != MRSyntaxLanguage::Swift &&
+	    language != MRSyntaxLanguage::Rust &&
+	    language != MRSyntaxLanguage::Go) return;
 
 	const std::size_t lineStart = lineStartOffset(cursorOffset());
 	const int baseColumn = leadingIndentColumnForLine(lineStart);
@@ -1781,23 +3250,56 @@ void MRFileEditor::applyLiveSmartDedentAfterTextInput(const std::string &inserte
 
 	const std::string lineText = mBufferModel.lineText(lineStart);
 	const std::string_view trimmedLine = trimView(lineText);
-	bool shouldDedent = false;
+	const SmartDedentRequest request = classifySmartDedentRequest(trimmedLine, language);
 
-	if (language == MRSyntaxLanguage::Python) {
-		const std::string upperLine = upperAscii(std::string(trimmedLine));
-		shouldDedent = isPythonDedentLead(upperLine);
-	} else if (language == MRSyntaxLanguage::Zsh) {
-		const std::string upperLine = upperAscii(std::string(trimmedLine));
-		shouldDedent = isShellDedentLead(trimmedLine, upperLine);
-	} else
-		shouldDedent = startsWithCloser(trimmedLine);
+	if (request.kind == SmartDedentKind::None) return;
 
-	if (!shouldDedent) return;
-	applyCurrentLineLeadingIndent(prevResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn));
+	int targetColumn = 0;
+	std::size_t previousLineStart = lineStart;
+	while (previousLineStart > 0) {
+		const std::size_t candidateLineStart = prevLineOffset(previousLineStart);
+		if (candidateLineStart == previousLineStart) break;
+		previousLineStart = candidateLineStart;
+
+		const std::string candidateLineText = mBufferModel.lineText(candidateLineStart);
+		const std::string_view candidateTrimmed = trimView(candidateLineText);
+		if (isDedentSearchSkippableLine(candidateTrimmed, language)) continue;
+
+		const int candidateColumn = leadingIndentColumnForLine(candidateLineStart);
+		if (candidateColumn >= baseColumn) continue;
+
+		const std::string candidateUpperLine = upperAscii(std::string(candidateTrimmed));
+		if (!matchesSmartDedentAnchor(candidateTrimmed, candidateUpperLine, language, request)) continue;
+		targetColumn = candidateColumn;
+		break;
+	}
+
+	if (targetColumn <= 0) {
+		if (language == MRSyntaxLanguage::Bash)
+			targetColumn = std::max(1, baseColumn - inferredShellIndentStepColumns(lineStart, settings));
+		else
+			targetColumn = prevResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+	}
+
+	applyCurrentLineLeadingIndent(targetColumn);
 }
 
 bool MRFileEditor::newLineWithPreferredIndent() {
 	const std::string indentStyle = upperAscii(configuredEditSetupSettings().indentStyle);
+	if (indentStyle == "SMART") {
+		const MRSyntaxLanguage language = mBufferModel.language();
+		const std::size_t cursor = cursorOffset();
+		const std::size_t lineStart = lineStartOffset(cursor);
+		const std::size_t lineEnd = lineEndOffset(lineStart);
+		if (cursor == lineEnd) {
+			const std::string lineText = mBufferModel.lineText(lineStart);
+			const std::size_t splitOffset = trailingSmartDedentSplitOffset(lineText, language);
+			if (splitOffset != std::string::npos) {
+				setCursorOffset(lineStart + splitOffset);
+				return newLineWithIndent(smartIndentFillForCursor());
+			}
+		}
+	}
 	if (indentStyle == "AUTOMATIC") return newLineWithIndent(automaticIndentFillForCursor());
 	if (indentStyle == "SMART") return newLineWithIndent(smartIndentFillForCursor());
 	return newLineWithIndent(preferredIndentFill());
@@ -1945,14 +3447,15 @@ void MRFileEditor::draw() {
 	const bool drawMiniMap = viewport.miniMapBodyWidth > 0 && viewport.miniMapInfoX >= 0;
 	const bool miniMapUseBraille = MRMiniMapRenderer::useBrailleRenderer();
 	std::string viewportMarkerGlyph = MRMiniMapRenderer::normalizedViewportMarkerGlyph(editSettings.miniMapMarkerGlyph);
+	const bool foldedView = !mClosedFoldSpans.empty();
 	const int miniMapRows = std::max(0, visibleTextRows());
-	if (mBufferModel.exactLineCountKnown()) totalLines = std::max<std::size_t>(1, mBufferModel.lineCount());
+	if (mBufferModel.exactLineCountKnown()) totalLines = foldedView ? foldedVisibleLineCount() : std::max<std::size_t>(1, mBufferModel.lineCount());
 	else
 		totalLines = std::max<std::size_t>(1, std::max<std::size_t>(mBufferModel.estimatedLineCount(), static_cast<std::size_t>(std::max(delta.y, 0)) + static_cast<std::size_t>(std::max(miniMapRows, 1))));
 	std::size_t topLine = static_cast<std::size_t>(std::max(delta.y, 0));
 	if (topLine >= totalLines) topLine = totalLines - 1;
-	std::size_t linePtr = lineStartForIndex(topLine);
-	std::size_t lineIndex = topLine;
+	std::size_t linePtr = mBufferModel.lineStartByIndex(documentLineForVisibleLine(topLine));
+	std::size_t lineIndex = documentLineForVisibleLine(topLine);
 	const MRMiniMapRenderer::Viewport miniMapViewport = {viewport.width, viewport.miniMapBodyX, viewport.miniMapBodyWidth, viewport.miniMapInfoX, viewport.miniMapSeparatorX};
 	if (drawMiniMap) applyMiniMapSignals(mMiniMapRenderer.scheduleWarmupIfNeeded(miniMapViewport, miniMapRows, miniMapUseBraille, totalLines, topLine, mBufferModel.documentId(), mBufferModel.version(), mBufferModel.readSnapshot(), editSettings));
 	MRMiniMapRenderer::OverlayState miniMapOverlay = mMiniMapRenderer.computeOverlayState(mBufferModel.readSnapshot(), selection, mFindMarkerRanges, mDirtyRanges, totalLines, viewport.width, viewport.miniMapBodyWidth, miniMapUseBraille, editSettings);
@@ -1965,7 +3468,7 @@ void MRFileEditor::draw() {
 	if (statefulSyntax && mSyntaxWarmupTaskId != 0 && mSyntaxWarmupDocumentId == mBufferModel.documentId() && mSyntaxWarmupVersion == mBufferModel.version() && mSyntaxWarmupLanguage == syntaxLanguage &&
 		topLine >= mSyntaxWarmupTopLine && topLine + static_cast<std::size_t>(textRows) <= mSyntaxWarmupBottomLine)
 		immediateSyntaxLineBudget = 24;
-	if (statefulSyntax && textRows > 0) {
+	if (!foldedView && statefulSyntax && textRows > 0) {
 		std::size_t preludeLines = static_cast<std::size_t>(textRows * 4);
 		std::size_t stateTopLine = topLine > preludeLines ? topLine - preludeLines : 0;
 		MRSyntaxCheckpointEntry checkpoint;
@@ -2025,30 +3528,35 @@ void MRFileEditor::draw() {
 	}
 	for (int y = 0; y < textRows; ++y) {
 		TDrawBuffer buffer;
-		bool isDocumentLine = lineIndex < totalLines;
-		bool drawEofMarker = editSettings.showEofMarker && lineIndex == totalLines;
+		const std::size_t visibleLineIndex = topLine + static_cast<std::size_t>(y);
+		const std::size_t currentLineIndex = foldedView ? documentLineForVisibleLine(visibleLineIndex) : lineIndex;
+		const std::size_t currentLinePtr = foldedView ? mBufferModel.lineStartByIndex(currentLineIndex) : linePtr;
+		bool isDocumentLine = visibleLineIndex < totalLines;
+		bool drawEofMarker = editSettings.showEofMarker && visibleLineIndex == totalLines;
 		bool drawEofMarkerAsEmoji = drawEofMarker && editSettings.showEofMarkerEmoji;
 		MRSyntaxLineResult syntaxLine;
-		if (showLineNumbers) drawLineNumberGutter(buffer, lineIndex, isDocumentLine, viewport.lineNumberX, viewport.lineNumberWidth, zeroFillLineNumbers);
-		if (drawCodeFolding) drawCodeFoldingGutter(buffer, viewport.codeFoldingX, viewport.codeFoldingWidth, linePtr, lineIndex);
+		if (showLineNumbers) drawLineNumberGutter(buffer, currentLineIndex, isDocumentLine, viewport.lineNumberX, viewport.lineNumberWidth, zeroFillLineNumbers);
+		if (drawCodeFolding) drawCodeFoldingGutter(buffer, viewport.codeFoldingX, viewport.codeFoldingWidth, currentLinePtr, currentLineIndex);
 		if (drawMiniMap) mMiniMapRenderer.drawGutter(buffer, y, miniMapRows, size.x, miniMapViewport, totalLines, topLine, miniMapUseBraille, viewportMarkerGlyph, miniMapPalette, miniMapOverlay);
 		if (static_cast<std::size_t>(y) < visibleSyntaxLines.size()) syntaxLine = visibleSyntaxLines[static_cast<std::size_t>(y)];
 		else {
-			std::map<std::size_t, MRSyntaxCacheEntry>::iterator found = mSyntaxTokenCache.find(linePtr);
+			std::map<std::size_t, MRSyntaxCacheEntry>::iterator found = mSyntaxTokenCache.find(currentLinePtr);
+			const MRSyntaxLineState initialState = statefulSyntax ? syntaxWarmupInitialState(currentLinePtr) : MRSyntaxLineState();
 
-			if (found != mSyntaxTokenCache.end() && found->second.stateIn == MRSyntaxLineState()) syntaxLine = found->second.syntaxLine;
+			if (found != mSyntaxTokenCache.end() && found->second.stateIn == initialState) syntaxLine = found->second.syntaxLine;
 			else if (immediateSyntaxLinesUsed < immediateSyntaxLineBudget) {
-				syntaxLine = syntaxLineResultForLine(linePtr, MRSyntaxLineState());
+				syntaxLine = syntaxLineResultForLine(currentLinePtr, initialState);
 				++immediateSyntaxLinesUsed;
 			} else
-				syntaxLine = tmrHighlightTextLine(MRSyntaxLanguage::PlainText, mBufferModel.lineText(linePtr));
+				syntaxLine = tmrHighlightTextLine(MRSyntaxLanguage::PlainText, mBufferModel.lineText(currentLinePtr));
 		}
-		formatSyntaxLine(buffer, linePtr, syntaxLine, delta.x, textWidth, viewport.textLeft, isDocumentLine, drawEofMarker, drawEofMarkerAsEmoji);
+		formatSyntaxLine(buffer, currentLinePtr, syntaxLine, delta.x, textWidth, viewport.textLeft, isDocumentLine, drawEofMarker, drawEofMarkerAsEmoji);
 		writeBuf(0, y + viewport.topInset, size.x, 1, buffer);
-		if (linePtr < mBufferModel.length()) linePtr = mBufferModel.nextLine(linePtr);
-		++lineIndex;
+		if (!foldedView) {
+			if (linePtr < mBufferModel.length()) linePtr = mBufferModel.nextLine(linePtr);
+			++lineIndex;
+		}
 	}
-	scheduleSyntaxWarmupIfNeeded();
 	scheduleSaveNormalizationWarmupIfNeeded();
 	updateIndicator();
 }
@@ -2070,83 +3578,35 @@ void MRFileEditor::drawLineNumberGutter(TDrawBuffer &b, std::size_t lineIndex, b
 void MRFileEditor::drawCodeFoldingGutter(TDrawBuffer &b, int drawX, int width, std::size_t lineStart, std::size_t lineIndex) {
 	unsigned char configured = 0;
 	TColorAttr color = static_cast<TColorAttr>(getColor(0x0606));
-	TColorAttr markerColor = static_cast<TColorAttr>(getColor(0x0404));
-	char marker = ' ';
+	TColorAttr markerColor = color;
+	auto branchContinuesAtSameLevel = [this](const MRFoldSpan &span) noexcept {
+		for (const MRFoldSpan &candidate : mVisibleFoldSpans)
+			if (candidate.siblingContinuation && candidate.level == span.level && candidate.startLine == span.endLine + 1) return true;
+		return false;
+	};
 
+	static_cast<void>(lineStart);
 	if (width <= 0) return;
 	if (configuredColorSlotOverride(kMrPaletteCodeFolding, configured)) color = static_cast<TColorAttr>(configured);
+	markerColor = color;
+	if (configuredColorSlotOverride(kMrPaletteCodeFoldingMarker, configured)) markerColor = static_cast<TColorAttr>(configured);
 	b.moveChar(static_cast<ushort>(drawX), ' ', color, static_cast<ushort>(width));
 	if (lineIndex >= std::max<std::size_t>(1, mBufferModel.lineCount()) && mBufferModel.exactLineCountKnown()) return;
-
-	const std::string lineText = mBufferModel.lineText(lineStart);
-	const std::string_view trimmed = trimView(lineText);
-	if (trimmed.empty()) return;
-
-	std::string nextLineText;
-	std::string_view nextTrimmed;
-	std::size_t nextIndent = 0;
-	if (lineStart < mBufferModel.length()) {
-		const std::size_t nextLineStart = mBufferModel.nextLine(lineStart);
-		if (nextLineStart > lineStart) {
-			nextLineText = mBufferModel.lineText(nextLineStart);
-			nextTrimmed = trimView(nextLineText);
-			nextIndent = leadingIndentBytes(nextLineText);
-		}
+	for (const MRFoldSpan &span : mVisibleFoldSpans) {
+		if (span.level >= static_cast<unsigned short>(width)) continue;
+		const char *glyph = nullptr;
+		if (!span.open) {
+			if (span.startLine != lineIndex) continue;
+			glyph = "\xE2\x96\xB6";
+		} else if (lineIndex == span.startLine)
+			glyph = span.siblingContinuation ? "\xE2\x94\x9C" : "\xE2\x95\xAD";
+		else if (lineIndex == span.endLine)
+			glyph = branchContinuesAtSameLevel(span) ? "\xE2\x94\x82" : "\xE2\x95\xB0";
+		else if (lineIndex > span.startLine && lineIndex < span.endLine)
+			glyph = "\xE2\x94\x82";
+		if (glyph == nullptr) continue;
+		b.moveStr(static_cast<ushort>(drawX + span.level), glyph, markerColor, 1);
 	}
-
-	const MRSyntaxLanguage language = mBufferModel.language();
-	const std::size_t currentIndent = leadingIndentBytes(lineText);
-	const std::size_t last = lastSignificantByte(trimmed);
-	const bool trailingBlockOpen = last != std::string_view::npos && (trimmed[last] == '{' || trimmed[last] == '[' || trimmed[last] == '(');
-	const bool indentOpens = !nextTrimmed.empty() && nextIndent > currentIndent;
-	bool foldStart = false;
-	bool foldEnd = false;
-
-	switch (language) {
-		case MRSyntaxLanguage::C:
-		case MRSyntaxLanguage::Cpp:
-		case MRSyntaxLanguage::JavaScript:
-		case MRSyntaxLanguage::Json:
-			foldStart = trailingBlockOpen || isPreprocessorFoldStart(trimmed);
-			foldEnd = startsWithCloser(trimmed) || isPreprocessorFoldEnd(trimmed);
-			break;
-		case MRSyntaxLanguage::Python: {
-			const std::string upperLine = upperAscii(std::string(trimmed));
-			foldStart = indentOpens || (!upperLine.empty() && upperLine.back() == ':' && isPythonIndentLead(upperLine));
-			foldEnd = isPythonDedentLead(upperLine);
-			break;
-		}
-		case MRSyntaxLanguage::Zsh: {
-			const std::string upperLine = upperAscii(std::string(trimmed));
-			foldStart = indentOpens || isShellIndentLead(trimmed, upperLine);
-			foldEnd = isShellDedentLead(trimmed, upperLine);
-			break;
-		}
-		case MRSyntaxLanguage::Perl:
-			foldStart = indentOpens || isPerlIndentLead(trimmed);
-			foldEnd = startsWithCloser(trimmed);
-			break;
-		case MRSyntaxLanguage::Markdown:
-			foldStart = trimmed.starts_with("#") || isMarkdownFenceLine(trimmed) || (!nextTrimmed.empty() && isMarkdownSetextUnderline(nextTrimmed));
-			break;
-		case MRSyntaxLanguage::Make:
-			foldStart = isMakeTargetLine(trimmed) && !nextTrimmed.empty() && !nextLineText.empty() && nextLineText.front() == '\t';
-			break;
-		case MRSyntaxLanguage::MRMAC:
-			foldStart = trailingBlockOpen || indentOpens;
-			foldEnd = startsWithCloser(trimmed);
-			break;
-		case MRSyntaxLanguage::PlainText:
-		default:
-			foldStart = indentOpens;
-			break;
-	}
-
-	if (foldStart) marker = '+';
-	else if (foldEnd)
-		marker = '-';
-	if (marker == ' ') return;
-	b.moveChar(static_cast<ushort>(drawX + width / 2), marker, markerColor, 1);
 }
 
 TColorAttr MRFileEditor::tokenColor(MRSyntaxToken token, bool selected, TAttrPair pair) noexcept {
@@ -2467,7 +3927,7 @@ void MRFileEditor::applyLiveWordWrapAfterTextInput() {
 
 void MRFileEditor::ensureCursorVisible(bool centerCursor) {
 	int visualColumn = displayedCursorColumn();
-	int line = static_cast<int>(mBufferModel.lineIndex(mBufferModel.cursor()));
+	int line = static_cast<int>(visibleLineForDocumentLine(mBufferModel.lineIndex(mBufferModel.cursor())));
 	int targetX = delta.x;
 	int targetY = delta.y;
 	int viewportWidth = textViewportWidth();
@@ -2608,7 +4068,6 @@ void MRFileEditor::scrollDraw() {
 		drawView();
 	} else {
 		if (useApproximateLargeFileMetrics()) updateMetrics();
-		scheduleSyntaxWarmupIfNeeded();
 		updateIndicator();
 	}
 }
@@ -2858,18 +4317,99 @@ void MRFileEditor::handleCommand(TEvent &event) {
 
 void MRFileEditor::handleMouse(TEvent &event) {
 	const TextViewportGeometry viewport = textViewportGeometry();
+	const TPoint local = makeLocal(event.mouse.where);
+	std::size_t foldLineIndex = 0;
+	auto rebuildEffectiveClosedFolds = [this]() {
+		mEffectiveClosedFoldSpans.clear();
+		std::size_t coveredUntil = 0;
+		bool haveCovered = false;
+		for (const std::pair<const std::size_t, MRFoldSpan> &entry : mClosedFoldSpans) {
+			const MRFoldSpan &closedSpan = entry.second;
+			if (haveCovered && closedSpan.startLine <= coveredUntil) continue;
+			mEffectiveClosedFoldSpans.push_back(closedSpan);
+			coveredUntil = closedSpan.endLine;
+			haveCovered = true;
+		}
+	};
+	auto gutterSpanAtPoint = [this, &local, &viewport](std::size_t lineIndex) noexcept -> const MRFoldSpan * {
+		const int level = local.x - viewport.codeFoldingX;
+		if (level < 0) return nullptr;
+		for (const MRFoldSpan &span : mVisibleFoldSpans) {
+			if (span.level != static_cast<unsigned short>(level)) continue;
+			if (!span.open) {
+				if (span.startLine == lineIndex) return &span;
+				continue;
+			}
+			if (lineIndex >= span.startLine && lineIndex <= span.endLine) return &span;
+		}
+		return nullptr;
+	};
+	auto toggleFoldColumnsFromPoint = [this, &local, &viewport, &rebuildEffectiveClosedFolds]() -> bool {
+		const int level = local.x - viewport.codeFoldingX;
+		if (level < 0) return false;
+		bool anyOpen = false;
+		for (const MRFoldSpan &span : mVisibleFoldSpans)
+			if (span.level >= static_cast<unsigned short>(level) && span.open) {
+				anyOpen = true;
+				break;
+			}
+		bool changed = false;
+		std::size_t cursorLine = mBufferModel.lineIndex(mBufferModel.cursor());
+		std::size_t foldCursorTarget = cursorLine;
+		bool foldCursorTargetValid = false;
 
-	if ((event.mouse.buttons & mbLeftButton) == 0) return;
-	if (dragFormatRulerAtLocalPoint(event, makeLocal(event.mouse.where))) {
+		for (const MRFoldSpan &span : mVisibleFoldSpans) {
+			if (span.level < static_cast<unsigned short>(level)) continue;
+			if (anyOpen) {
+				if (!span.open) continue;
+				mClosedFoldSpans[span.startLine] = MRFoldSpan(span.startLine, span.endLine, span.level, span.sourceKind, false, span.siblingContinuation);
+				if (cursorLine > span.startLine && cursorLine <= span.endLine && (!foldCursorTargetValid || span.startLine < foldCursorTarget)) {
+					foldCursorTarget = span.startLine;
+					foldCursorTargetValid = true;
+				}
+			} else {
+				if (span.open) continue;
+				mClosedFoldSpans.erase(span.startLine);
+			}
+			changed = true;
+		}
+		if (!changed) return false;
+		rebuildEffectiveClosedFolds();
+		if (foldCursorTargetValid) moveCursor(mBufferModel.lineStartByIndex(foldCursorTarget), false, false);
+		invalidateFoldCache();
+		updateMetrics();
+		drawView();
+		updateIndicator();
+		return true;
+	};
+
+	if ((event.mouse.buttons & (mbLeftButton | mbRightButton)) == 0) return;
+	if (dragFormatRulerAtLocalPoint(event, local)) {
 		clearEvent(event);
 		return;
+	}
+	if (foldingGutterHit(local, &foldLineIndex)) {
+		if ((event.mouse.buttons & mbRightButton) != 0 && toggleFoldColumnsFromPoint()) {
+			clearEvent(event);
+			return;
+		}
+		if ((event.mouse.buttons & mbLeftButton) != 0) {
+			const MRFoldSpan *clickedSpan = gutterSpanAtPoint(foldLineIndex);
+			if (clickedSpan != nullptr && toggleFoldAtLine(clickedSpan->startLine)) {
+				updateMetrics();
+				drawView();
+				updateIndicator();
+				clearEvent(event);
+				return;
+			}
+		}
 	}
 
 	select();
 	std::size_t anchor = (event.mouse.controlKeyState & kbShift) != 0 && mBufferModel.hasSelection() ? mBufferModel.selection().anchor : mBufferModel.cursor();
 	int targetColumn = 0;
 	mSelectionAnchor = anchor;
-	moveCursor(mouseOffset(makeLocal(event.mouse.where), &targetColumn), (event.mouse.controlKeyState & kbShift) != 0, false, targetColumn);
+	moveCursor(mouseOffset(local, &targetColumn), (event.mouse.controlKeyState & kbShift) != 0, false, targetColumn);
 
 	while (mouseEvent(event, evMouseMove | evMouseAuto)) {
 		if (event.what == evMouseAuto) {
@@ -2902,7 +4442,7 @@ std::size_t MRFileEditor::mouseOffset(TPoint local, int *visualColumnOut) noexce
 	int clampedY = std::max(0, std::min(local.y - viewport.topInset, textRows - 1));
 	int row = clampedY + delta.y;
 	int column = viewport.textColumnFromLocalX(local.x);
-	std::size_t start = lineStartForIndex(static_cast<std::size_t>(std::max(row, 0)));
+	std::size_t start = mBufferModel.lineStartByIndex(documentLineForVisibleLine(static_cast<std::size_t>(std::max(row, 0))));
 	if (visualColumnOut != nullptr) *visualColumnOut = column;
 	return canonicalCursorOffset(charPtrOffset(start, column));
 }
@@ -3086,22 +4626,23 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 	const bool exactLineCountKnown = mBufferModel.exactLineCountKnown();
 	const std::size_t exactLineCount = exactLineCountKnown ? std::max<std::size_t>(1, mBufferModel.lineCount()) : 0;
 	std::size_t visibleTopLine = static_cast<std::size_t>(std::max(delta.y - 4, 0));
-	if (exactLineCountKnown && visibleTopLine >= exactLineCount) visibleTopLine = exactLineCount - 1;
+	std::size_t documentTopLine = documentLineForVisibleLine(visibleTopLine);
+	if (exactLineCountKnown && documentTopLine >= exactLineCount) documentTopLine = exactLineCount - 1;
 	const int rowBudget = std::max(textRows + 8, 8);
 	const int backgroundRowBudget = rowBudget * 3;
 	const bool statefulSyntax = isStatefulSyntaxLanguage(language);
 	MRTextBufferModel::ReadSnapshot snapshot = mBufferModel.readSnapshot();
-	std::vector<std::size_t> visibleLineStarts = syntaxWarmupLineStarts(visibleTopLine, rowBudget);
+	std::vector<std::size_t> visibleLineStarts = syntaxWarmupLineStarts(documentTopLine, rowBudget);
 	if (visibleLineStarts.empty()) return;
 
 	if (mSyntaxPrefetchDocumentId != docId || mSyntaxPrefetchVersion != version || mSyntaxPrefetchLanguage != language) {
 		mSyntaxPrefetchDocumentId = docId;
 		mSyntaxPrefetchVersion = version;
-		mSyntaxPrefetchTargetBottomLine = visibleTopLine;
-		mSyntaxPrefetchReachedBottomLine = visibleTopLine;
+		mSyntaxPrefetchTargetBottomLine = documentTopLine;
+		mSyntaxPrefetchReachedBottomLine = documentTopLine;
 		mSyntaxPrefetchLanguage = language;
 	}
-	mSyntaxPrefetchTargetBottomLine = std::max(mSyntaxPrefetchTargetBottomLine, visibleTopLine + static_cast<std::size_t>(backgroundRowBudget));
+	mSyntaxPrefetchTargetBottomLine = std::max(mSyntaxPrefetchTargetBottomLine, documentTopLine + static_cast<std::size_t>(backgroundRowBudget));
 	if (exactLineCountKnown) {
 		if (mSyntaxPrefetchTargetBottomLine > exactLineCount) mSyntaxPrefetchTargetBottomLine = exactLineCount;
 		if (mSyntaxPrefetchReachedBottomLine > exactLineCount) mSyntaxPrefetchReachedBottomLine = exactLineCount;
@@ -3298,12 +4839,12 @@ void MRFileEditor::updateMetrics() {
 
 	if (useApproximateLargeFileMetrics()) {
 		limitX = dynamicLargeFileWidthLimit();
-		if (mBufferModel.exactLineCountKnown()) limitY = std::max<int>(1, static_cast<int>(mBufferModel.lineCount()));
+		if (mBufferModel.exactLineCountKnown()) limitY = std::max<int>(1, static_cast<int>(foldedVisibleLineCount()));
 		else
 			limitY = dynamicLargeFileLineLimit();
 	} else {
 		limitX = longestLineWidth();
-		limitY = std::max<int>(1, static_cast<int>(mBufferModel.lineCount()));
+		limitY = std::max<int>(1, static_cast<int>(foldedVisibleLineCount()));
 	}
 	limitX = std::max(limitX, displayedCursorColumn() + 1);
 	if (showEofMarker && limitY < INT_MAX) ++limitY;
@@ -3323,7 +4864,7 @@ void MRFileEditor::updateIndicator() {
 	mIndicatorUpdateInProgress = true;
 	TextViewportGeometry viewport = textViewportGeometry();
 	unsigned long visualColumn = static_cast<unsigned long>(displayedCursorColumn());
-	unsigned long line = static_cast<unsigned long>(mBufferModel.lineIndex(mBufferModel.cursor()));
+	unsigned long line = static_cast<unsigned long>(visibleLineForDocumentLine(mBufferModel.lineIndex(mBufferModel.cursor())));
 	long long localX = viewport.localXFromVisualColumn(static_cast<long long>(visualColumn));
 	long long localY = static_cast<long long>(line) - delta.y + viewport.topInset;
 
@@ -3385,6 +4926,11 @@ void MRFileEditor::refreshSyntaxContext() {
 	}
 	mBufferModel.setSyntaxContext(hasPersistentFileName() ? fileName : "", mSyntaxTitleHint, codeLanguage);
 	if (mBufferModel.language() != oldLanguage) resetSyntaxWarmupState(true);
+	if (mBufferModel.language() != oldLanguage) {
+		mClosedFoldSpans.clear();
+		mEffectiveClosedFoldSpans.clear();
+	}
+	invalidateFoldCache();
 	if (mBufferModel.languageAutomatic() != oldAutomatic) drawView();
 }
 

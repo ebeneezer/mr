@@ -41,9 +41,13 @@ const char *dialogCodeLanguageLabel(const std::string &codeLanguage) {
 	if (normalized == "TYPESCRIPT") return "TypeScript";
 	if (normalized == "TSX") return "TSX";
 	if (normalized == "BASH") return "Bash";
+	if (normalized == "ZSH") return "zsh";
 	if (normalized == "JSON") return "JSON";
 	if (normalized == "PERL") return "Perl";
 	if (normalized == "SWIFT") return "Swift";
+	if (normalized == "RUST") return "Rust";
+	if (normalized == "GO") return "Go";
+	if (normalized == "SYSTEMD") return "systemd et al.";
 	return "None";
 }
 
@@ -59,9 +63,13 @@ bool parseDialogCodeLanguage(const std::string &dialogValue, std::string &canoni
 	else if (normalized == "TYPESCRIPT") canonicalValue = "TYPESCRIPT";
 	else if (normalized == "TSX") canonicalValue = "TSX";
 	else if (normalized == "BASH") canonicalValue = "BASH";
+	else if (normalized == "ZSH") canonicalValue = "ZSH";
 	else if (normalized == "JSON") canonicalValue = "JSON";
 	else if (normalized == "PERL") canonicalValue = "PERL";
 	else if (normalized == "SWIFT") canonicalValue = "SWIFT";
+	else if (normalized == "RUST") canonicalValue = "RUST";
+	else if (normalized == "GO") canonicalValue = "GO";
+	else if (normalized == "SYSTEMD" || normalized == "SYSTEMD ET AL.") canonicalValue = "SYSTEMD";
 	else
 		return false;
 	return true;
@@ -137,7 +145,7 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.defaultExtensions = readRecordField(record.defaultExtensions);
 	{
 		if (!parseDialogCodeLanguage(readRecordField(record.codeLanguage), settings.codeLanguage)) {
-			errorText = "CODE_LANGUAGE must be None, Automatic, C, C++, Python, JavaScript, TypeScript, TSX, Bash, JSON, Perl or Swift.";
+			errorText = "CODE_LANGUAGE must be None, Automatic, C, C++, Python, JavaScript, TypeScript, TSX, Bash, zsh, JSON, Perl, Swift, Rust, Go or systemd et al..";
 			return false;
 		}
 	}
@@ -285,6 +293,7 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.persistentBlocks = (record.optionsMask & kOptionPersistentBlocks) != 0;
 	settings.tabExpand = record.tabExpandChoice == kTabExpandTabs;
 	settings.indentStyle = (record.indentStyleChoice == kIndentStyleAutomatic) ? "AUTOMATIC" : (record.indentStyleChoice == kIndentStyleSmart) ? "SMART" : "OFF";
+	if (settings.indentStyle == "SMART") settings.smartIndenting = true;
 	settings.fileType = (record.fileTypeChoice == kFileTypeLegacyText) ? "LEGACY_TEXT" : (record.fileTypeChoice == kFileTypeBinary) ? "BINARY" : "UNIX";
 	settings.columnBlockMove = (record.columnBlockMoveChoice == kColumnMoveLeaveSpace) ? "LEAVE_SPACE" : "DELETE_SPACE";
 	settings.defaultMode = (record.defaultModeChoice == kDefaultModeOverwrite) ? "OVERWRITE" : "INSERT";

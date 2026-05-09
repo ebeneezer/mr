@@ -692,6 +692,7 @@ TPalette buildColorSetupWorkingPalette() {
 		data[kMrPaletteMiniMapFindMarker - 1] = data[5 - 1];
 		data[kMrPaletteMiniMapErrorMarker - 1] = data[42 - 1];
 		data[kMrPaletteCodeFolding - 1] = data[9 - 1];
+		data[kMrPaletteCodeFoldingMarker - 1] = data[9 - 1];
 		data[kMrPaletteDesktop - 1] = 0x90;
 		data[kMrPaletteVirtualDesktopMarker - 1] = 0x9F;
 		return TPalette(data, static_cast<ushort>(kTotalSlots));

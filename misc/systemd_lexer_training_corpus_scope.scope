@@ -1,0 +1,1000 @@
+# systemd_lexer_training_corpus_scope.scope
+# Synthetic systemd/unit-file lexer-training corpus.
+# It is intentionally not meant to be installed or started.
+# Covers sections, assignments, comments, specifiers, escaping, lists, booleans, sizes and times.
+
+[Unit]
+Description=Lexer Training Scope
+Documentation=man:systemd.scope(5)
+PartOf=systemd_lexer_training_corpus_target.target
+After=basic.target
+
+# Common lexer-stress comments and escaped values
+# comment with = ; %i %n ${ENV} $MAINPID "quotes" 'single quotes' \ backslash
+X-LexerTraining-Key=literal=value=with=equals
+X-LexerTraining-Percent=%% %n %N %i %I %p %P %f %u %U %h %H %m %b
+X-LexerTraining-Spaces=alpha beta gamma
+X-LexerTraining-Quoted="quoted value with spaces"
+X-LexerTraining-Backslash=one\ two\ three
+X-LexerTraining-Semicolon=a;b;c
+X-LexerTraining-URL=https://example.invalid/path?a=1&b=two
+
+[Scope]
+TimeoutStopSec=15s
+SendSIGKILL=yes
+KillMode=control-group
+RestartKillSignal=SIGTERM
+CPUAccounting=yes
+MemoryAccounting=yes
+TasksAccounting=yes
+Delegate=no
+Slice=systemd_lexer_training_corpus_slice.slice
+
+# Common lexer-stress comments and escaped values
+# comment with = ; %i %n ${ENV} $MAINPID "quotes" 'single quotes' \ backslash
+X-LexerTraining-Key=literal=value=with=equals
+X-LexerTraining-Percent=%% %n %N %i %I %p %P %f %u %U %h %H %m %b
+X-LexerTraining-Spaces=alpha beta gamma
+X-LexerTraining-Quoted="quoted value with spaces"
+X-LexerTraining-Backslash=one\ two\ three
+X-LexerTraining-Semicolon=a;b;c
+X-LexerTraining-URL=https://example.invalid/path?a=1&b=two
+
+# generated scope block 001
+[X-LexerTraining]
+BlockIndex=1
+BlockName=Generated001
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 001 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 001
+BooleanValues=yes no true false on off 1 0
+TimeValues=1s 1min 1h 1day
+SizeValues=1K 1M 1G
+ListValue=one two three block-001
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/001
+GlobLike=/etc/lexer-training.d/*-001.conf
+URLLike=https://example.invalid/scope/001?a=1&b=two
+[Scope]
+TimeoutStopSec=1s
+Slice=generated-001.slice
+Delegate=yes
+
+# generated scope block 002
+[X-LexerTraining]
+BlockIndex=2
+BlockName=Generated002
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 002 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 002
+BooleanValues=yes no true false on off 1 0
+TimeValues=2s 2min 2h 2day
+SizeValues=2K 2M 2G
+ListValue=one two three block-002
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/002
+GlobLike=/etc/lexer-training.d/*-002.conf
+URLLike=https://example.invalid/scope/002?a=1&b=two
+[Scope]
+TimeoutStopSec=2s
+Slice=generated-002.slice
+Delegate=no
+
+# generated scope block 003
+[X-LexerTraining]
+BlockIndex=3
+BlockName=Generated003
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 003 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 003
+BooleanValues=yes no true false on off 1 0
+TimeValues=3s 3min 3h 3day
+SizeValues=3K 3M 3G
+ListValue=one two three block-003
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/003
+GlobLike=/etc/lexer-training.d/*-003.conf
+URLLike=https://example.invalid/scope/003?a=1&b=two
+[Scope]
+TimeoutStopSec=3s
+Slice=generated-003.slice
+Delegate=yes
+
+# generated scope block 004
+[X-LexerTraining]
+BlockIndex=4
+BlockName=Generated004
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 004 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 004
+BooleanValues=yes no true false on off 1 0
+TimeValues=4s 4min 4h 4day
+SizeValues=4K 4M 4G
+ListValue=one two three block-004
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/004
+GlobLike=/etc/lexer-training.d/*-004.conf
+URLLike=https://example.invalid/scope/004?a=1&b=two
+[Scope]
+TimeoutStopSec=4s
+Slice=generated-004.slice
+Delegate=no
+
+# generated scope block 005
+[X-LexerTraining]
+BlockIndex=5
+BlockName=Generated005
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 005 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 005
+BooleanValues=yes no true false on off 1 0
+TimeValues=5s 5min 5h 5day
+SizeValues=5K 5M 5G
+ListValue=one two three block-005
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/005
+GlobLike=/etc/lexer-training.d/*-005.conf
+URLLike=https://example.invalid/scope/005?a=1&b=two
+[Scope]
+TimeoutStopSec=5s
+Slice=generated-005.slice
+Delegate=yes
+
+# generated scope block 006
+[X-LexerTraining]
+BlockIndex=6
+BlockName=Generated006
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 006 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 006
+BooleanValues=yes no true false on off 1 0
+TimeValues=6s 6min 6h 6day
+SizeValues=6K 6M 6G
+ListValue=one two three block-006
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/006
+GlobLike=/etc/lexer-training.d/*-006.conf
+URLLike=https://example.invalid/scope/006?a=1&b=two
+[Scope]
+TimeoutStopSec=6s
+Slice=generated-006.slice
+Delegate=no
+
+# generated scope block 007
+[X-LexerTraining]
+BlockIndex=7
+BlockName=Generated007
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 007 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 007
+BooleanValues=yes no true false on off 1 0
+TimeValues=7s 7min 7h 7day
+SizeValues=7K 7M 7G
+ListValue=one two three block-007
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/007
+GlobLike=/etc/lexer-training.d/*-007.conf
+URLLike=https://example.invalid/scope/007?a=1&b=two
+[Scope]
+TimeoutStopSec=7s
+Slice=generated-007.slice
+Delegate=yes
+
+# generated scope block 008
+[X-LexerTraining]
+BlockIndex=8
+BlockName=Generated008
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 008 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 008
+BooleanValues=yes no true false on off 1 0
+TimeValues=8s 8min 8h 8day
+SizeValues=8K 8M 8G
+ListValue=one two three block-008
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/008
+GlobLike=/etc/lexer-training.d/*-008.conf
+URLLike=https://example.invalid/scope/008?a=1&b=two
+[Scope]
+TimeoutStopSec=8s
+Slice=generated-008.slice
+Delegate=no
+
+# generated scope block 009
+[X-LexerTraining]
+BlockIndex=9
+BlockName=Generated009
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 009 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 009
+BooleanValues=yes no true false on off 1 0
+TimeValues=9s 9min 9h 9day
+SizeValues=9K 9M 9G
+ListValue=one two three block-009
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/009
+GlobLike=/etc/lexer-training.d/*-009.conf
+URLLike=https://example.invalid/scope/009?a=1&b=two
+[Scope]
+TimeoutStopSec=9s
+Slice=generated-009.slice
+Delegate=yes
+
+# generated scope block 010
+[X-LexerTraining]
+BlockIndex=10
+BlockName=Generated010
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 010 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 010
+BooleanValues=yes no true false on off 1 0
+TimeValues=10s 10min 10h 10day
+SizeValues=10K 10M 10G
+ListValue=one two three block-010
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/010
+GlobLike=/etc/lexer-training.d/*-010.conf
+URLLike=https://example.invalid/scope/010?a=1&b=two
+[Scope]
+TimeoutStopSec=10s
+Slice=generated-010.slice
+Delegate=no
+
+# generated scope block 011
+[X-LexerTraining]
+BlockIndex=11
+BlockName=Generated011
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 011 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 011
+BooleanValues=yes no true false on off 1 0
+TimeValues=11s 11min 11h 11day
+SizeValues=11K 11M 11G
+ListValue=one two three block-011
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/011
+GlobLike=/etc/lexer-training.d/*-011.conf
+URLLike=https://example.invalid/scope/011?a=1&b=two
+[Scope]
+TimeoutStopSec=11s
+Slice=generated-011.slice
+Delegate=yes
+
+# generated scope block 012
+[X-LexerTraining]
+BlockIndex=12
+BlockName=Generated012
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 012 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 012
+BooleanValues=yes no true false on off 1 0
+TimeValues=12s 12min 12h 12day
+SizeValues=12K 12M 12G
+ListValue=one two three block-012
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/012
+GlobLike=/etc/lexer-training.d/*-012.conf
+URLLike=https://example.invalid/scope/012?a=1&b=two
+[Scope]
+TimeoutStopSec=12s
+Slice=generated-012.slice
+Delegate=no
+
+# generated scope block 013
+[X-LexerTraining]
+BlockIndex=13
+BlockName=Generated013
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 013 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 013
+BooleanValues=yes no true false on off 1 0
+TimeValues=13s 13min 13h 13day
+SizeValues=13K 13M 13G
+ListValue=one two three block-013
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/013
+GlobLike=/etc/lexer-training.d/*-013.conf
+URLLike=https://example.invalid/scope/013?a=1&b=two
+[Scope]
+TimeoutStopSec=13s
+Slice=generated-013.slice
+Delegate=yes
+
+# generated scope block 014
+[X-LexerTraining]
+BlockIndex=14
+BlockName=Generated014
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 014 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 014
+BooleanValues=yes no true false on off 1 0
+TimeValues=14s 14min 14h 14day
+SizeValues=14K 14M 14G
+ListValue=one two three block-014
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/014
+GlobLike=/etc/lexer-training.d/*-014.conf
+URLLike=https://example.invalid/scope/014?a=1&b=two
+[Scope]
+TimeoutStopSec=14s
+Slice=generated-014.slice
+Delegate=no
+
+# generated scope block 015
+[X-LexerTraining]
+BlockIndex=15
+BlockName=Generated015
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 015 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 015
+BooleanValues=yes no true false on off 1 0
+TimeValues=15s 15min 15h 15day
+SizeValues=15K 15M 15G
+ListValue=one two three block-015
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/015
+GlobLike=/etc/lexer-training.d/*-015.conf
+URLLike=https://example.invalid/scope/015?a=1&b=two
+[Scope]
+TimeoutStopSec=15s
+Slice=generated-015.slice
+Delegate=yes
+
+# generated scope block 016
+[X-LexerTraining]
+BlockIndex=16
+BlockName=Generated016
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 016 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 016
+BooleanValues=yes no true false on off 1 0
+TimeValues=16s 16min 16h 16day
+SizeValues=16K 16M 16G
+ListValue=one two three block-016
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/016
+GlobLike=/etc/lexer-training.d/*-016.conf
+URLLike=https://example.invalid/scope/016?a=1&b=two
+[Scope]
+TimeoutStopSec=16s
+Slice=generated-016.slice
+Delegate=no
+
+# generated scope block 017
+[X-LexerTraining]
+BlockIndex=17
+BlockName=Generated017
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 017 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 017
+BooleanValues=yes no true false on off 1 0
+TimeValues=17s 17min 17h 17day
+SizeValues=17K 17M 17G
+ListValue=one two three block-017
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/017
+GlobLike=/etc/lexer-training.d/*-017.conf
+URLLike=https://example.invalid/scope/017?a=1&b=two
+[Scope]
+TimeoutStopSec=17s
+Slice=generated-017.slice
+Delegate=yes
+
+# generated scope block 018
+[X-LexerTraining]
+BlockIndex=18
+BlockName=Generated018
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 018 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 018
+BooleanValues=yes no true false on off 1 0
+TimeValues=18s 18min 18h 18day
+SizeValues=18K 18M 18G
+ListValue=one two three block-018
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/018
+GlobLike=/etc/lexer-training.d/*-018.conf
+URLLike=https://example.invalid/scope/018?a=1&b=two
+[Scope]
+TimeoutStopSec=18s
+Slice=generated-018.slice
+Delegate=no
+
+# generated scope block 019
+[X-LexerTraining]
+BlockIndex=19
+BlockName=Generated019
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 019 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 019
+BooleanValues=yes no true false on off 1 0
+TimeValues=19s 19min 19h 19day
+SizeValues=19K 19M 19G
+ListValue=one two three block-019
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/019
+GlobLike=/etc/lexer-training.d/*-019.conf
+URLLike=https://example.invalid/scope/019?a=1&b=two
+[Scope]
+TimeoutStopSec=19s
+Slice=generated-019.slice
+Delegate=yes
+
+# generated scope block 020
+[X-LexerTraining]
+BlockIndex=20
+BlockName=Generated020
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 020 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 020
+BooleanValues=yes no true false on off 1 0
+TimeValues=20s 20min 20h 20day
+SizeValues=20K 20M 20G
+ListValue=one two three block-020
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/020
+GlobLike=/etc/lexer-training.d/*-020.conf
+URLLike=https://example.invalid/scope/020?a=1&b=two
+[Scope]
+TimeoutStopSec=20s
+Slice=generated-020.slice
+Delegate=no
+
+# generated scope block 021
+[X-LexerTraining]
+BlockIndex=21
+BlockName=Generated021
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 021 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 021
+BooleanValues=yes no true false on off 1 0
+TimeValues=21s 21min 21h 21day
+SizeValues=21K 21M 21G
+ListValue=one two three block-021
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/021
+GlobLike=/etc/lexer-training.d/*-021.conf
+URLLike=https://example.invalid/scope/021?a=1&b=two
+[Scope]
+TimeoutStopSec=21s
+Slice=generated-021.slice
+Delegate=yes
+
+# generated scope block 022
+[X-LexerTraining]
+BlockIndex=22
+BlockName=Generated022
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 022 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 022
+BooleanValues=yes no true false on off 1 0
+TimeValues=22s 22min 22h 22day
+SizeValues=22K 22M 22G
+ListValue=one two three block-022
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/022
+GlobLike=/etc/lexer-training.d/*-022.conf
+URLLike=https://example.invalid/scope/022?a=1&b=two
+[Scope]
+TimeoutStopSec=22s
+Slice=generated-022.slice
+Delegate=no
+
+# generated scope block 023
+[X-LexerTraining]
+BlockIndex=23
+BlockName=Generated023
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 023 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 023
+BooleanValues=yes no true false on off 1 0
+TimeValues=23s 23min 23h 23day
+SizeValues=23K 23M 23G
+ListValue=one two three block-023
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/023
+GlobLike=/etc/lexer-training.d/*-023.conf
+URLLike=https://example.invalid/scope/023?a=1&b=two
+[Scope]
+TimeoutStopSec=23s
+Slice=generated-023.slice
+Delegate=yes
+
+# generated scope block 024
+[X-LexerTraining]
+BlockIndex=24
+BlockName=Generated024
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 024 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 024
+BooleanValues=yes no true false on off 1 0
+TimeValues=24s 24min 24h 24day
+SizeValues=24K 24M 24G
+ListValue=one two three block-024
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/024
+GlobLike=/etc/lexer-training.d/*-024.conf
+URLLike=https://example.invalid/scope/024?a=1&b=two
+[Scope]
+TimeoutStopSec=24s
+Slice=generated-024.slice
+Delegate=no
+
+# generated scope block 025
+[X-LexerTraining]
+BlockIndex=25
+BlockName=Generated025
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 025 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 025
+BooleanValues=yes no true false on off 1 0
+TimeValues=25s 25min 25h 25day
+SizeValues=25K 25M 25G
+ListValue=one two three block-025
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/025
+GlobLike=/etc/lexer-training.d/*-025.conf
+URLLike=https://example.invalid/scope/025?a=1&b=two
+[Scope]
+TimeoutStopSec=25s
+Slice=generated-025.slice
+Delegate=yes
+
+# generated scope block 026
+[X-LexerTraining]
+BlockIndex=26
+BlockName=Generated026
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 026 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 026
+BooleanValues=yes no true false on off 1 0
+TimeValues=26s 26min 26h 26day
+SizeValues=26K 26M 26G
+ListValue=one two three block-026
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/026
+GlobLike=/etc/lexer-training.d/*-026.conf
+URLLike=https://example.invalid/scope/026?a=1&b=two
+[Scope]
+TimeoutStopSec=26s
+Slice=generated-026.slice
+Delegate=no
+
+# generated scope block 027
+[X-LexerTraining]
+BlockIndex=27
+BlockName=Generated027
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 027 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 027
+BooleanValues=yes no true false on off 1 0
+TimeValues=27s 27min 27h 27day
+SizeValues=27K 27M 27G
+ListValue=one two three block-027
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/027
+GlobLike=/etc/lexer-training.d/*-027.conf
+URLLike=https://example.invalid/scope/027?a=1&b=two
+[Scope]
+TimeoutStopSec=27s
+Slice=generated-027.slice
+Delegate=yes
+
+# generated scope block 028
+[X-LexerTraining]
+BlockIndex=28
+BlockName=Generated028
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 028 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 028
+BooleanValues=yes no true false on off 1 0
+TimeValues=28s 28min 28h 28day
+SizeValues=28K 28M 28G
+ListValue=one two three block-028
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/028
+GlobLike=/etc/lexer-training.d/*-028.conf
+URLLike=https://example.invalid/scope/028?a=1&b=two
+[Scope]
+TimeoutStopSec=28s
+Slice=generated-028.slice
+Delegate=no
+
+# generated scope block 029
+[X-LexerTraining]
+BlockIndex=29
+BlockName=Generated029
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 029 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 029
+BooleanValues=yes no true false on off 1 0
+TimeValues=29s 29min 29h 29day
+SizeValues=29K 29M 29G
+ListValue=one two three block-029
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/029
+GlobLike=/etc/lexer-training.d/*-029.conf
+URLLike=https://example.invalid/scope/029?a=1&b=two
+[Scope]
+TimeoutStopSec=29s
+Slice=generated-029.slice
+Delegate=yes
+
+# generated scope block 030
+[X-LexerTraining]
+BlockIndex=30
+BlockName=Generated030
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 030 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 030
+BooleanValues=yes no true false on off 1 0
+TimeValues=30s 30min 30h 30day
+SizeValues=30K 30M 30G
+ListValue=one two three block-030
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/030
+GlobLike=/etc/lexer-training.d/*-030.conf
+URLLike=https://example.invalid/scope/030?a=1&b=two
+[Scope]
+TimeoutStopSec=30s
+Slice=generated-030.slice
+Delegate=no
+
+# generated scope block 031
+[X-LexerTraining]
+BlockIndex=31
+BlockName=Generated031
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 031 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 031
+BooleanValues=yes no true false on off 1 0
+TimeValues=31s 31min 31h 31day
+SizeValues=31K 31M 31G
+ListValue=one two three block-031
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/031
+GlobLike=/etc/lexer-training.d/*-031.conf
+URLLike=https://example.invalid/scope/031?a=1&b=two
+[Scope]
+TimeoutStopSec=31s
+Slice=generated-031.slice
+Delegate=yes
+
+# generated scope block 032
+[X-LexerTraining]
+BlockIndex=32
+BlockName=Generated032
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 032 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 032
+BooleanValues=yes no true false on off 1 0
+TimeValues=32s 32min 32h 32day
+SizeValues=32K 32M 32G
+ListValue=one two three block-032
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/032
+GlobLike=/etc/lexer-training.d/*-032.conf
+URLLike=https://example.invalid/scope/032?a=1&b=two
+[Scope]
+TimeoutStopSec=32s
+Slice=generated-032.slice
+Delegate=no
+
+# generated scope block 033
+[X-LexerTraining]
+BlockIndex=33
+BlockName=Generated033
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 033 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 033
+BooleanValues=yes no true false on off 1 0
+TimeValues=33s 33min 33h 33day
+SizeValues=33K 33M 33G
+ListValue=one two three block-033
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/033
+GlobLike=/etc/lexer-training.d/*-033.conf
+URLLike=https://example.invalid/scope/033?a=1&b=two
+[Scope]
+TimeoutStopSec=33s
+Slice=generated-033.slice
+Delegate=yes
+
+# generated scope block 034
+[X-LexerTraining]
+BlockIndex=34
+BlockName=Generated034
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 034 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 034
+BooleanValues=yes no true false on off 1 0
+TimeValues=34s 34min 34h 34day
+SizeValues=34K 34M 34G
+ListValue=one two three block-034
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/034
+GlobLike=/etc/lexer-training.d/*-034.conf
+URLLike=https://example.invalid/scope/034?a=1&b=two
+[Scope]
+TimeoutStopSec=34s
+Slice=generated-034.slice
+Delegate=no
+
+# generated scope block 035
+[X-LexerTraining]
+BlockIndex=35
+BlockName=Generated035
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 035 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 035
+BooleanValues=yes no true false on off 1 0
+TimeValues=35s 35min 35h 35day
+SizeValues=35K 35M 35G
+ListValue=one two three block-035
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/035
+GlobLike=/etc/lexer-training.d/*-035.conf
+URLLike=https://example.invalid/scope/035?a=1&b=two
+[Scope]
+TimeoutStopSec=35s
+Slice=generated-035.slice
+Delegate=yes
+
+# generated scope block 036
+[X-LexerTraining]
+BlockIndex=36
+BlockName=Generated036
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 036 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 036
+BooleanValues=yes no true false on off 1 0
+TimeValues=36s 36min 36h 36day
+SizeValues=36K 36M 36G
+ListValue=one two three block-036
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/036
+GlobLike=/etc/lexer-training.d/*-036.conf
+URLLike=https://example.invalid/scope/036?a=1&b=two
+[Scope]
+TimeoutStopSec=36s
+Slice=generated-036.slice
+Delegate=no
+
+# generated scope block 037
+[X-LexerTraining]
+BlockIndex=37
+BlockName=Generated037
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 037 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 037
+BooleanValues=yes no true false on off 1 0
+TimeValues=37s 37min 37h 37day
+SizeValues=37K 37M 37G
+ListValue=one two three block-037
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/037
+GlobLike=/etc/lexer-training.d/*-037.conf
+URLLike=https://example.invalid/scope/037?a=1&b=two
+[Scope]
+TimeoutStopSec=37s
+Slice=generated-037.slice
+Delegate=yes
+
+# generated scope block 038
+[X-LexerTraining]
+BlockIndex=38
+BlockName=Generated038
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 038 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 038
+BooleanValues=yes no true false on off 1 0
+TimeValues=38s 38min 38h 38day
+SizeValues=38K 38M 38G
+ListValue=one two three block-038
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/038
+GlobLike=/etc/lexer-training.d/*-038.conf
+URLLike=https://example.invalid/scope/038?a=1&b=two
+[Scope]
+TimeoutStopSec=38s
+Slice=generated-038.slice
+Delegate=no
+
+# generated scope block 039
+[X-LexerTraining]
+BlockIndex=39
+BlockName=Generated039
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 039 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 039
+BooleanValues=yes no true false on off 1 0
+TimeValues=39s 39min 39h 39day
+SizeValues=39K 39M 39G
+ListValue=one two three block-039
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/039
+GlobLike=/etc/lexer-training.d/*-039.conf
+URLLike=https://example.invalid/scope/039?a=1&b=two
+[Scope]
+TimeoutStopSec=39s
+Slice=generated-039.slice
+Delegate=yes
+
+# generated scope block 040
+[X-LexerTraining]
+BlockIndex=40
+BlockName=Generated040
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 040 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 040
+BooleanValues=yes no true false on off 1 0
+TimeValues=40s 40min 40h 40day
+SizeValues=40K 40M 40G
+ListValue=one two three block-040
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/040
+GlobLike=/etc/lexer-training.d/*-040.conf
+URLLike=https://example.invalid/scope/040?a=1&b=two
+[Scope]
+TimeoutStopSec=40s
+Slice=generated-040.slice
+Delegate=no
+
+# generated scope block 041
+[X-LexerTraining]
+BlockIndex=41
+BlockName=Generated041
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 041 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 041
+BooleanValues=yes no true false on off 1 0
+TimeValues=41s 41min 41h 41day
+SizeValues=41K 41M 41G
+ListValue=one two three block-041
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/041
+GlobLike=/etc/lexer-training.d/*-041.conf
+URLLike=https://example.invalid/scope/041?a=1&b=two
+[Scope]
+TimeoutStopSec=41s
+Slice=generated-041.slice
+Delegate=yes
+
+# generated scope block 042
+[X-LexerTraining]
+BlockIndex=42
+BlockName=Generated042
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 042 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 042
+BooleanValues=yes no true false on off 1 0
+TimeValues=42s 42min 42h 42day
+SizeValues=42K 42M 42G
+ListValue=one two three block-042
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/042
+GlobLike=/etc/lexer-training.d/*-042.conf
+URLLike=https://example.invalid/scope/042?a=1&b=two
+[Scope]
+TimeoutStopSec=42s
+Slice=generated-042.slice
+Delegate=no
+
+# generated scope block 043
+[X-LexerTraining]
+BlockIndex=43
+BlockName=Generated043
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 043 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 043
+BooleanValues=yes no true false on off 1 0
+TimeValues=43s 43min 43h 43day
+SizeValues=43K 43M 43G
+ListValue=one two three block-043
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/043
+GlobLike=/etc/lexer-training.d/*-043.conf
+URLLike=https://example.invalid/scope/043?a=1&b=two
+[Scope]
+TimeoutStopSec=43s
+Slice=generated-043.slice
+Delegate=yes
+
+# generated scope block 044
+[X-LexerTraining]
+BlockIndex=44
+BlockName=Generated044
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 044 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 044
+BooleanValues=yes no true false on off 1 0
+TimeValues=44s 44min 44h 44day
+SizeValues=44K 44M 44G
+ListValue=one two three block-044
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/044
+GlobLike=/etc/lexer-training.d/*-044.conf
+URLLike=https://example.invalid/scope/044?a=1&b=two
+[Scope]
+TimeoutStopSec=44s
+Slice=generated-044.slice
+Delegate=no
+
+# generated scope block 045
+[X-LexerTraining]
+BlockIndex=45
+BlockName=Generated045
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 045 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 045
+BooleanValues=yes no true false on off 1 0
+TimeValues=45s 45min 45h 45day
+SizeValues=45K 45M 45G
+ListValue=one two three block-045
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/045
+GlobLike=/etc/lexer-training.d/*-045.conf
+URLLike=https://example.invalid/scope/045?a=1&b=two
+[Scope]
+TimeoutStopSec=45s
+Slice=generated-045.slice
+Delegate=yes
+
+# generated scope block 046
+[X-LexerTraining]
+BlockIndex=46
+BlockName=Generated046
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 046 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 046
+BooleanValues=yes no true false on off 1 0
+TimeValues=46s 46min 46h 46day
+SizeValues=46K 46M 46G
+ListValue=one two three block-046
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/046
+GlobLike=/etc/lexer-training.d/*-046.conf
+URLLike=https://example.invalid/scope/046?a=1&b=two
+[Scope]
+TimeoutStopSec=46s
+Slice=generated-046.slice
+Delegate=no
+
+# generated scope block 047
+[X-LexerTraining]
+BlockIndex=47
+BlockName=Generated047
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 047 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 047
+BooleanValues=yes no true false on off 1 0
+TimeValues=47s 47min 47h 47day
+SizeValues=47K 47M 47G
+ListValue=one two three block-047
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/047
+GlobLike=/etc/lexer-training.d/*-047.conf
+URLLike=https://example.invalid/scope/047?a=1&b=two
+[Scope]
+TimeoutStopSec=47s
+Slice=generated-047.slice
+Delegate=yes
+
+# generated scope block 048
+[X-LexerTraining]
+BlockIndex=48
+BlockName=Generated048
+SpecifierMix=%% %n %N %i %I %p %P %f %u %U %h %H %m
+QuotedValue="block 048 with spaces and = signs"
+EscapedValue=alpha\ beta\ gamma\ 048
+BooleanValues=yes no true false on off 1 0
+TimeValues=48s 48min 48h 48day
+SizeValues=48K 48M 48G
+ListValue=one two three block-048
+EnvironmentLike=NAME=value OTHER="two words" DOLLAR=$$literal
+PathLike=/var/lib/lexer-training/scope/048
+GlobLike=/etc/lexer-training.d/*-048.conf
+URLLike=https://example.invalid/scope/048?a=1&b=two
+[Scope]
+TimeoutStopSec=48s
+Slice=generated-048.slice

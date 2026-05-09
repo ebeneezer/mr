@@ -69,6 +69,16 @@ const char *const kPythonConstants[] = {
 	"False", "None", "True"
 };
 
+const char *const kBashKeywords[] = {
+	"alias", "break", "case", "continue", "coproc", "declare", "do", "done", "elif", "else", "esac", "eval", "exec", "export", "false", "fi", "for", "function", "if", "in",
+	"local", "readonly", "return", "select", "set", "shopt", "source", "then", "time", "true", "typeset", "until", "while"
+};
+
+const char *const kBashBuiltins[] = {
+	"bind", "builtin", "cd", "command", "compgen", "complete", "dirs", "disown", "echo", "enable", "fc", "getopts", "hash", "help", "history", "jobs", "kill", "let", "mapfile", "popd",
+	"printf", "pushd", "pwd", "read", "readarray", "set", "shift", "test", "trap", "type", "ulimit", "umask", "unalias", "unset", "wait"
+};
+
 const char *const kZshKeywords[] = {
 	"alias",     "autoload", "break",   "case",   "continue", "coproc",   "do",      "done",    "elif",   "else",   "esac",   "eval",    "exec",     "export",
 	"false",     "fi",       "float",   "for",    "function", "if",       "in",      "integer", "local",  "readonly", "repeat", "return",  "select",   "setopt",
@@ -87,6 +97,53 @@ const char *const kPerlKeywords[] = {
 	"require", "return","say",    "state",  "sub",       "undef",  "unless", "until",    "use",     "when",    "while",   "xor"
 };
 
+const char *const kSwiftKeywords[] = {
+	"actor", "as", "associatedtype", "async", "await", "break", "case", "catch", "class", "continue", "default", "defer", "deinit", "do", "else", "enum", "extension", "fallthrough",
+	"for", "func", "guard", "if", "import", "in", "init", "inout", "internal", "let", "mutating", "nonisolated", "open", "operator", "private", "protocol", "public", "repeat", "rethrows",
+	"return", "static", "struct", "subscript", "switch", "throw", "throws", "try", "typealias", "var", "where", "while"
+};
+
+const char *const kSwiftConstants[] = {
+	"false", "nil", "Self", "self", "super", "true"
+};
+
+const char *const kSwiftTypeKeywords[] = {
+	"Any", "AnyObject", "Bool", "Character", "Double", "Float", "Int", "Int8", "Int16", "Int32", "Int64", "Never", "String", "UInt", "UInt8", "UInt16", "UInt32", "UInt64", "Void"
+};
+
+const char *const kRustKeywords[] = {
+	"as",       "async",   "await",    "break",     "const",   "continue", "crate",   "dyn",     "else",   "enum",   "extern", "fn",      "for",    "if",      "impl",
+	"in",       "let",     "loop",     "macro_rules","match",   "mod",      "move",    "mut",     "pub",    "ref",    "return", "self",    "Self",   "static",  "struct",
+	"super",    "trait",   "type",     "union",     "unsafe",  "use",      "where",   "while",   "yield"
+};
+
+const char *const kRustConstants[] = {
+	"Err", "false", "None", "Ok", "Some", "true"
+};
+
+const char *const kRustTypeKeywords[] = {
+	"bool", "char", "f32", "f64", "i8", "i16", "i32", "i64", "i128", "isize", "str", "u8", "u16", "u32", "u64", "u128", "usize"
+};
+
+const char *const kGoKeywords[] = {
+	"break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough", "for", "func", "go", "goto", "if", "import", "interface", "map", "package", "range",
+	"return", "select", "struct", "switch", "type", "var"
+};
+
+const char *const kGoConstants[] = {
+	"false", "iota", "nil", "true"
+};
+
+const char *const kGoTypeKeywords[] = {
+	"any", "bool", "byte", "comparable", "complex64", "complex128", "error", "float32", "float64", "int", "int8", "int16", "int32", "int64", "rune", "string", "uint", "uint8", "uint16",
+	"uint32", "uint64", "uintptr"
+};
+
+const char *const kSystemdSections[] = {
+	"[UNIT]", "[SERVICE]", "[SOCKET]", "[TIMER]", "[MOUNT]", "[AUTOMOUNT]", "[TARGET]", "[PATH]", "[SLICE]", "[SCOPE]", "[SWAP]", "[DEVICE]", "[INSTALL]", "[LINK]", "[NETDEV]", "[MATCH]",
+	"[NETWORK]", "[ADDRESS]", "[ROUTE]", "[DHCPV4]", "[DHCPV6]", "[BRIDGE]", "[VLAN]"
+};
+
 std::string lowerCopy(const std::string &value) {
 	std::string result = value;
 	for (char &i : result)
@@ -103,6 +160,23 @@ std::string extensionPart(const std::string &value) {
 	std::string name = fileNamePart(value);
 	std::size_t pos = name.find_last_of('.');
 	return pos == std::string::npos ? std::string() : lowerCopy(name.substr(pos));
+}
+
+bool endsWithText(std::string_view text, std::string_view suffix) noexcept {
+	return text.size() >= suffix.size() && text.substr(text.size() - suffix.size()) == suffix;
+}
+
+bool hasSystemdUnitSuffix(std::string_view lowerName) noexcept {
+	static constexpr std::string_view kSystemdSuffixes[] = {
+		".service",   ".socket", ".timer", ".mount",  ".automount", ".target", ".path",   ".slice", ".scope",
+		".swap",      ".device", ".link",  ".netdev", ".network",   ".service.in", ".socket.in", ".timer.in",
+		".mount.in",  ".automount.in", ".target.in", ".path.in", ".slice.in", ".scope.in", ".swap.in",
+		".device.in", ".link.in", ".netdev.in", ".network.in"
+	};
+
+	for (std::string_view suffix : kSystemdSuffixes)
+		if (endsWithText(lowerName, suffix)) return true;
+	return false;
 }
 
 constexpr std::size_t kSyntaxLanguageCount = static_cast<std::size_t>(MRSyntaxLanguage::Markdown) + 1;
@@ -151,6 +225,13 @@ std::string lowerCopyView(std::string_view value) {
 	std::string result(value);
 	for (char &ch : result)
 		ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+	return result;
+}
+
+std::string upperCopyView(std::string_view value) {
+	std::string result(value);
+	for (char &ch : result)
+		ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
 	return result;
 }
 
@@ -508,6 +589,30 @@ static bool isAliasIntroducer(std::string_view word) {
 	return word == "using" || word == "typename";
 }
 
+static bool isSwiftTypeIntroducer(std::string_view word) {
+	return word == "actor" || word == "associatedtype" || word == "class" || word == "enum" || word == "extension" || word == "protocol" || word == "struct" || word == "typealias";
+}
+
+static bool isSwiftCallableIntroducer(std::string_view word) {
+	return word == "func" || word == "init" || word == "deinit" || word == "subscript";
+}
+
+static bool isRustTypeIntroducer(std::string_view word) {
+	return word == "enum" || word == "impl" || word == "mod" || word == "struct" || word == "trait" || word == "type" || word == "union";
+}
+
+static bool isRustCallableIntroducer(std::string_view word) {
+	return word == "fn" || word == "macro_rules";
+}
+
+static bool isGoTypeIntroducer(std::string_view word) {
+	return word == "interface" || word == "struct" || word == "type";
+}
+
+static bool isGoCallableIntroducer(std::string_view word) {
+	return word == "func";
+}
+
 static std::size_t previousNonWhitespaceIndex(std::string_view line, std::size_t pos) {
 	while (pos > 0) {
 		--pos;
@@ -541,6 +646,46 @@ static bool isFunctionLikeIdentifier(std::string_view line, std::size_t start, s
 		return ch != '#';
 	}
 	return true;
+}
+
+static bool findRustRawStringStart(std::string_view line, std::size_t pos, std::size_t &prefixEnd, std::size_t &hashCount) {
+	std::size_t cursor = pos;
+
+	if (cursor >= line.size()) return false;
+	if (line.compare(cursor, 2, "br") == 0 || line.compare(cursor, 2, "rb") == 0) cursor += 2;
+	else if (line[cursor] == 'r')
+		++cursor;
+	else
+		return false;
+
+	hashCount = 0;
+	while (cursor < line.size() && line[cursor] == '#') {
+		++hashCount;
+		++cursor;
+	}
+	if (cursor >= line.size() || line[cursor] != '"') return false;
+	prefixEnd = cursor + 1;
+	return true;
+}
+
+static std::size_t findRustRawStringEnd(std::string_view line, std::size_t contentStart, std::size_t hashCount) {
+	std::size_t cursor = contentStart;
+
+	while (cursor < line.size()) {
+		if (line[cursor] != '"') {
+			++cursor;
+			continue;
+		}
+		std::size_t end = cursor + 1;
+		std::size_t matchedHashes = 0;
+		while (matchedHashes < hashCount && end < line.size() && line[end] == '#') {
+			++matchedHashes;
+			++end;
+		}
+		if (matchedHashes == hashCount) return end;
+		++cursor;
+	}
+	return std::string_view::npos;
 }
 
 static bool endsWithPreprocessorContinuation(std::string_view line) {
@@ -1619,6 +1764,154 @@ void tokenizeZsh(MRSyntaxTokenMap &tokens, const std::string &line) {
 	}
 }
 
+void tokenizeBash(MRSyntaxTokenMap &tokens, const std::string &line) {
+	std::size_t trimmed = skipWhitespace(line);
+	if (trimmed != std::string::npos && line.compare(trimmed, 2, "#!") == 0) {
+		paint(tokens, trimmed, line.size(), MRSyntaxToken::Directive);
+		return;
+	}
+
+	bool expectCommand = true;
+	for (std::size_t i = 0; i < line.size();) {
+		if (isZshCommentStart(line, i)) {
+			paint(tokens, i, line.size(), MRSyntaxToken::Comment);
+			break;
+		}
+		if (line[i] == '\'' || line[i] == '"' || line[i] == '`') {
+			const std::size_t start = i;
+			const std::size_t end = consumeZshStringLiteral(line, i, line[i]);
+			paint(tokens, start, end, MRSyntaxToken::String);
+			i = end;
+			expectCommand = false;
+			continue;
+		}
+		if (line[i] == '$') {
+			const std::size_t start = i;
+			if (i + 2 < line.size() && line[i + 1] == '(' && line[i + 2] == '(') {
+				const std::size_t end = consumeBalancedRegion(line, i + 1, "((", "))");
+				paint(tokens, start, end, MRSyntaxToken::Directive);
+				i = end;
+				expectCommand = false;
+				continue;
+			}
+			if (i + 1 < line.size() && line[i + 1] == '(') {
+				const std::size_t end = consumeBalancedRegion(line, i + 1, "(", ")");
+				paint(tokens, start, end, MRSyntaxToken::Directive);
+				i = end;
+				expectCommand = false;
+				continue;
+			}
+			++i;
+			if (i < line.size() && line[i] == '{') {
+				const std::size_t end = consumeBalancedRegion(line, i, "{", "}");
+				paint(tokens, start, end, MRSyntaxToken::Directive);
+				i = end;
+				expectCommand = false;
+				continue;
+			}
+			if (i < line.size() && (isIdentifierStart(line[i]) || isDecimalDigitChar(line[i]) || line[i] == '@' || line[i] == '*' || line[i] == '#' || line[i] == '?' || line[i] == '!' || line[i] == '$' || line[i] == '-')) {
+				++i;
+				while (i < line.size() && isIdentifierChar(line[i]))
+					++i;
+				paint(tokens, start, i, MRSyntaxToken::Directive);
+				expectCommand = false;
+				continue;
+			}
+			paint(tokens, start, i, MRSyntaxToken::Delimiter);
+			expectCommand = false;
+			continue;
+		}
+		if ((line[i] == '<' || line[i] == '>') && i + 1 < line.size() && line[i + 1] == '(') {
+			const std::size_t end = consumeBalancedRegion(line, i + 1, "(", ")");
+			paint(tokens, i, end, MRSyntaxToken::Directive);
+			i = end;
+			expectCommand = false;
+			continue;
+		}
+		if (line[i] == '\\' && i + 1 < line.size()) {
+			paint(tokens, i, i + 2, MRSyntaxToken::Delimiter);
+			i += 2;
+			expectCommand = false;
+			continue;
+		}
+		if ((line[i] == '-' || isDecimalDigitChar(line[i])) && (i == 0 || !isIdentifierChar(line[i - 1]))) {
+			std::size_t end = i + (line[i] == '-' ? 1 : 0);
+			bool sawDigit = end > i;
+			while (end < line.size() && isDecimalDigitChar(line[end])) {
+				sawDigit = true;
+				++end;
+			}
+			if (end < line.size() && line[end] == '.') {
+				++end;
+				while (end < line.size() && isDecimalDigitChar(line[end])) {
+					sawDigit = true;
+					++end;
+				}
+			}
+			if (sawDigit) {
+				paint(tokens, i, end, MRSyntaxToken::Number);
+				i = end;
+				expectCommand = false;
+				continue;
+			}
+		}
+		if (isIdentifierStart(line[i])) {
+			const std::size_t wordStart = i;
+			std::size_t wordEnd = i + 1;
+			while (wordEnd < line.size() && (isIdentifierChar(line[wordEnd]) || line[wordEnd] == '-'))
+				++wordEnd;
+			if (isZshAssignmentWord(line, wordStart, wordEnd)) {
+				const std::size_t eq = line.find('=', wordStart);
+				paint(tokens, wordStart, eq, MRSyntaxToken::Key);
+				paint(tokens, eq, eq + 1, MRSyntaxToken::Delimiter);
+				i = eq + 1;
+				expectCommand = true;
+				continue;
+			}
+		}
+		if (isIdentifierStart(line[i])) {
+			const std::size_t start = i++;
+			while (i < line.size() && (isIdentifierChar(line[i]) || line[i] == '-'))
+				++i;
+			const std::string_view word(line.data() + start, i - start);
+			if (wordInList(word, kBashKeywords, sizeof(kBashKeywords) / sizeof(kBashKeywords[0]))) {
+				paint(tokens, start, i, MRSyntaxToken::Keyword);
+				expectCommand = word == "then" || word == "do" || word == "else" || word == "elif" || word == "if" || word == "for" || word == "while" || word == "until" || word == "case" || word == "select" || word == "function";
+				continue;
+			}
+			if (expectCommand && wordInList(word, kBashBuiltins, sizeof(kBashBuiltins) / sizeof(kBashBuiltins[0]))) {
+				paint(tokens, start, i, MRSyntaxToken::Key);
+				expectCommand = false;
+				continue;
+			}
+			if (i + 1 < line.size() && line[i] == '(' && line[i + 1] == ')') {
+				paint(tokens, start, i, MRSyntaxToken::Key);
+				expectCommand = false;
+				continue;
+			}
+			expectCommand = false;
+			continue;
+		}
+		{
+			const std::size_t delimiterLength = zshDelimiterLength(line, i);
+			if (delimiterLength > 0) {
+				paint(tokens, i, i + delimiterLength, MRSyntaxToken::Delimiter);
+				expectCommand = true;
+				i += delimiterLength;
+				continue;
+			}
+		}
+		if (isZshDelimiterChar(line[i])) {
+			paint(tokens, i, i + 1, MRSyntaxToken::Delimiter);
+			expectCommand = true;
+			++i;
+			continue;
+		}
+		if (!std::isspace(static_cast<unsigned char>(line[i]))) expectCommand = false;
+		++i;
+	}
+}
+
 void tokenizePerl(MRSyntaxTokenMap &tokens, const std::string &line) {
 	std::size_t trimmed = skipWhitespace(line);
 	if (trimmed != std::string::npos && line.compare(trimmed, 2, "#!") == 0) {
@@ -1863,6 +2156,128 @@ MRSyntaxLineResult MRZshSyntaxHighlighter::highlightLine(std::string_view line, 
 			result.stateOut.mode = MRSyntaxMode::HereDocument;
 			result.stateOut.flags = storePayloadLength(stripTabs ? kSyntaxFlagHereDocStripTabs : 0, label.size());
 			result.stateOut.payload = hashSyntaxPayload(label);
+		}
+	}
+
+	result.tokenRuns = tmrBuildTokenRunsFromTokenMap(tokens);
+	return result;
+}
+
+MRSyntaxLineResult MRBashSyntaxHighlighter::highlightLine(std::string_view line, MRSyntaxLineState previousState) {
+	MRSyntaxLineResult result;
+	result.stateOut = MRSyntaxLineState();
+	MRSyntaxTokenMap tokens(line.size(), MRSyntaxToken::Text);
+
+	if (previousState.mode == MRSyntaxMode::HereDocument) {
+		if (lineMatchesHereDocumentEnd(line, previousState)) {
+			paint(tokens, 0, line.size(), MRSyntaxToken::Directive);
+			result.tokenRuns = tmrBuildTokenRunsFromTokenMap(tokens);
+			return result;
+		}
+		paint(tokens, 0, line.size(), MRSyntaxToken::String);
+		result.stateOut = previousState;
+		result.tokenRuns = tmrBuildTokenRunsFromTokenMap(tokens);
+		return result;
+	}
+
+	if (previousState.mode == MRSyntaxMode::QuotedString) {
+		const char quote = static_cast<char>(previousState.payload);
+		const std::size_t end = findStringContinuationEnd(line, 0, quote);
+
+		paint(tokens, 0, end, MRSyntaxToken::String);
+		if (end == line.size()) {
+			result.stateOut.mode = MRSyntaxMode::QuotedString;
+			result.stateOut.payload = previousState.payload;
+			result.tokenRuns = tmrBuildTokenRunsFromTokenMap(tokens);
+			return result;
+		}
+		if (end < line.size()) {
+			MRSyntaxTokenMap suffixTokens(line.size() - end, MRSyntaxToken::Text);
+			tokenizeBash(suffixTokens, std::string(line.substr(end)));
+			for (std::size_t i = 0; i < suffixTokens.size(); ++i)
+				tokens[end + i] = suffixTokens[i];
+		}
+	} else
+		tokenizeBash(tokens, std::string(line));
+
+	for (std::size_t i = 0; i < line.size();) {
+		if (isZshCommentStart(line, i)) break;
+		if (line[i] == '\'' || line[i] == '"' || line[i] == '`') {
+			const std::size_t end = consumeZshStringLiteral(line, i, line[i]);
+			if (end == line.size()) {
+				paint(tokens, i, end, MRSyntaxToken::String);
+				result.stateOut.mode = MRSyntaxMode::QuotedString;
+				result.stateOut.payload = static_cast<std::uint32_t>(line[i]);
+			}
+			break;
+		}
+		if (line[i] == '\\' && i + 1 < line.size()) {
+			i += 2;
+			continue;
+		}
+		++i;
+	}
+
+	{
+		std::size_t operatorStart = 0;
+		std::size_t operatorEnd = 0;
+		std::string_view label;
+		bool stripTabs = false;
+		if (parseZshHereDocumentStart(line, operatorStart, operatorEnd, label, stripTabs)) {
+			paint(tokens, operatorStart, operatorEnd, MRSyntaxToken::Delimiter);
+			paint(tokens, skipWhitespaceView(line, operatorEnd), std::min(line.size(), skipWhitespaceView(line, operatorEnd) + label.size()), MRSyntaxToken::Directive);
+			result.stateOut.mode = MRSyntaxMode::HereDocument;
+			result.stateOut.flags = storePayloadLength(stripTabs ? kSyntaxFlagHereDocStripTabs : 0, label.size());
+			result.stateOut.payload = hashSyntaxPayload(label);
+		}
+	}
+
+	result.tokenRuns = tmrBuildTokenRunsFromTokenMap(tokens);
+	return result;
+}
+
+static bool isSystemdSectionHeader(std::string_view trimmed) noexcept {
+	if (trimmed.size() < 3 || trimmed.front() != '[' || trimmed.back() != ']') return false;
+	for (std::size_t i = 0; i < sizeof(kSystemdSections) / sizeof(kSystemdSections[0]); ++i)
+		if (trimmed == kSystemdSections[i]) return true;
+	return false;
+}
+
+MRSyntaxLineResult MRSystemdSyntaxHighlighter::highlightLine(std::string_view line, MRSyntaxLineState previousState) {
+	MRSyntaxLineResult result;
+	result.stateOut = previousState;
+	MRSyntaxTokenMap tokens(line.size(), MRSyntaxToken::Text);
+	const std::string_view trimmed = trimWhitespaceView(line);
+
+	if (trimmed.empty()) {
+		result.tokenRuns = tmrBuildTokenRunsFromTokenMap(tokens);
+		return result;
+	}
+	if (trimmed.front() == '#' || trimmed.front() == ';') {
+		paint(tokens, static_cast<std::size_t>(trimmed.data() - line.data()), line.size(), MRSyntaxToken::Comment);
+		result.tokenRuns = tmrBuildTokenRunsFromTokenMap(tokens);
+		return result;
+	}
+	if (isSystemdSectionHeader(upperCopyView(trimmed))) {
+		paint(tokens, static_cast<std::size_t>(trimmed.data() - line.data()), static_cast<std::size_t>(trimmed.data() - line.data()) + trimmed.size(), MRSyntaxToken::Section);
+		result.tokenRuns = tmrBuildTokenRunsFromTokenMap(tokens);
+		return result;
+	}
+
+	const std::size_t eq = trimmed.find('=');
+	if (eq != std::string_view::npos && eq > 0) {
+		const std::size_t keyStart = static_cast<std::size_t>(trimmed.data() - line.data());
+		bool validKey = true;
+		for (std::size_t i = 0; i < eq; ++i) {
+			const char ch = trimmed[i];
+			if (!(std::isalnum(static_cast<unsigned char>(ch)) != 0 || ch == '_' || ch == '-')) {
+				validKey = false;
+				break;
+			}
+		}
+		if (validKey) {
+			paint(tokens, keyStart, keyStart + eq, MRSyntaxToken::Key);
+			paint(tokens, keyStart + eq, keyStart + eq + 1, MRSyntaxToken::Delimiter);
 		}
 	}
 
@@ -2443,6 +2858,409 @@ MRSyntaxLineResult MRJavaScriptSyntaxHighlighter::highlightLine(std::string_view
 	return result;
 }
 
+MRSyntaxLineResult MRSwiftSyntaxHighlighter::highlightLine(std::string_view line, MRSyntaxLineState previousState) {
+	MRSyntaxLineResult result;
+	result.stateOut = MRSyntaxLineState();
+	std::size_t i = 0;
+	std::uint32_t commentDepth = previousState.mode == MRSyntaxMode::BlockComment ? (previousState.payload == 0 ? 1U : previousState.payload) : 0;
+	bool expectTypeName = false;
+	bool expectCallableName = false;
+	bool expectImportName = false;
+
+	if (commentDepth > 0) {
+		const std::size_t start = i;
+		while (i < line.size()) {
+			if (i + 1 < line.size() && line[i] == '/' && line[i + 1] == '*') {
+				++commentDepth;
+				i += 2;
+				continue;
+			}
+			if (i + 1 < line.size() && line[i] == '*' && line[i + 1] == '/') {
+				--commentDepth;
+				i += 2;
+				if (commentDepth == 0) break;
+				continue;
+			}
+			++i;
+		}
+		appendRun(result.tokenRuns, start, i, MRSyntaxToken::Comment);
+		if (commentDepth > 0) {
+			result.stateOut.mode = MRSyntaxMode::BlockComment;
+			result.stateOut.payload = commentDepth;
+			return result;
+		}
+	}
+
+	if (previousState.mode == MRSyntaxMode::QuotedString && (previousState.flags & kSyntaxFlagTripleQuoted) != 0) {
+		const std::size_t end = findTripleQuotedStringEnd(line, 0, '"');
+		if (end == std::string_view::npos) {
+			appendRun(result.tokenRuns, 0, line.size(), MRSyntaxToken::String);
+			result.stateOut.mode = MRSyntaxMode::QuotedString;
+			result.stateOut.flags = kSyntaxFlagTripleQuoted;
+			result.stateOut.payload = static_cast<std::uint32_t>('"');
+			return result;
+		}
+		appendRun(result.tokenRuns, 0, end, MRSyntaxToken::String);
+		i = end;
+	} else if (previousState.mode == MRSyntaxMode::QuotedString) {
+		const char quote = static_cast<char>(previousState.payload);
+		const std::size_t end = findStringContinuationEnd(line, 0, quote);
+		appendRun(result.tokenRuns, 0, end, MRSyntaxToken::String);
+		if (end == line.size()) {
+			result.stateOut.mode = MRSyntaxMode::QuotedString;
+			result.stateOut.payload = previousState.payload;
+			return result;
+		}
+		i = end;
+	}
+
+	while (i < line.size()) {
+		if (i + 1 < line.size() && line[i] == '/' && line[i + 1] == '/') {
+			appendRun(result.tokenRuns, i, line.size(), MRSyntaxToken::Comment);
+			break;
+		}
+
+		if (i + 1 < line.size() && line[i] == '/' && line[i + 1] == '*') {
+			const std::size_t start = i;
+			commentDepth = 1;
+			i += 2;
+			while (i < line.size()) {
+				if (i + 1 < line.size() && line[i] == '/' && line[i + 1] == '*') {
+					++commentDepth;
+					i += 2;
+					continue;
+				}
+				if (i + 1 < line.size() && line[i] == '*' && line[i + 1] == '/') {
+					--commentDepth;
+					i += 2;
+					if (commentDepth == 0) break;
+					continue;
+				}
+				++i;
+			}
+			appendRun(result.tokenRuns, start, std::min(i, line.size()), MRSyntaxToken::Comment);
+			if (commentDepth > 0) {
+				result.stateOut.mode = MRSyntaxMode::BlockComment;
+				result.stateOut.payload = commentDepth;
+				return result;
+			}
+			continue;
+		}
+
+		if (line[i] == '@') {
+			const std::size_t start = i++;
+			while (i < line.size() && isIdentifierChar(line[i])) ++i;
+			appendRun(result.tokenRuns, start, i, MRSyntaxToken::Directive);
+			continue;
+		}
+
+		if (line[i] == '#') {
+			const std::size_t start = i++;
+			while (i < line.size() && isIdentifierChar(line[i])) ++i;
+			appendRun(result.tokenRuns, start, i, MRSyntaxToken::Directive);
+			continue;
+		}
+
+		if (i + 2 < line.size() && line[i] == '"' && line[i + 1] == '"' && line[i + 2] == '"') {
+			const std::size_t start = i;
+			const std::size_t end = findTripleQuotedStringEnd(line, i + 3, '"');
+			if (end == std::string_view::npos) {
+				appendRun(result.tokenRuns, start, line.size(), MRSyntaxToken::String);
+				result.stateOut.mode = MRSyntaxMode::QuotedString;
+				result.stateOut.flags = kSyntaxFlagTripleQuoted;
+				result.stateOut.payload = static_cast<std::uint32_t>('"');
+				return result;
+			}
+			appendRun(result.tokenRuns, start, end, MRSyntaxToken::String);
+			i = end;
+			continue;
+		}
+
+		if (line[i] == '"' || line[i] == '\'') {
+			const std::size_t start = i;
+			const std::size_t end = consumeCppStringLiteral(line, i, line[i]);
+			appendRun(result.tokenRuns, start, end, MRSyntaxToken::String);
+			i = end;
+			continue;
+		}
+
+		if (isDecimalDigitChar(line[i]) || (line[i] == '.' && i + 1 < line.size() && isDecimalDigitChar(line[i + 1]))) {
+			const std::size_t start = i;
+			const std::size_t end = consumeCppNumber(line, i);
+			appendRun(result.tokenRuns, start, end, MRSyntaxToken::Number);
+			i = end;
+			continue;
+		}
+
+		if (isIdentifierStart(line[i])) {
+			const std::size_t start = i++;
+			while (i < line.size() && isIdentifierChar(line[i])) ++i;
+			const std::string_view word = line.substr(start, i - start);
+			if (wordInList(word, kSwiftKeywords, sizeof(kSwiftKeywords) / sizeof(kSwiftKeywords[0]))) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Keyword);
+				expectTypeName = isSwiftTypeIntroducer(word);
+				expectCallableName = isSwiftCallableIntroducer(word);
+				expectImportName = word == "import";
+				continue;
+			}
+			if (wordInList(word, kSwiftConstants, sizeof(kSwiftConstants) / sizeof(kSwiftConstants[0]))) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Key);
+				continue;
+			}
+			if (wordInList(word, kSwiftTypeKeywords, sizeof(kSwiftTypeKeywords) / sizeof(kSwiftTypeKeywords[0]))) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Type);
+				continue;
+			}
+			if (expectImportName || expectTypeName) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Type);
+				expectImportName = false;
+				expectTypeName = false;
+				continue;
+			}
+			if (expectCallableName) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Key);
+				expectCallableName = false;
+				continue;
+			}
+			if (isUpperCaseIdentifier(word)) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Type);
+				continue;
+			}
+			continue;
+		}
+
+		{
+			const std::size_t delimiterLength = cppDelimiterLength(line, i);
+			if (delimiterLength > 0) {
+				appendRun(result.tokenRuns, i, i + delimiterLength, MRSyntaxToken::Delimiter);
+				i += delimiterLength;
+				continue;
+			}
+		}
+
+		if (isCppDelimiterChar(line[i])) {
+			appendRun(result.tokenRuns, i, i + 1, MRSyntaxToken::Delimiter);
+			++i;
+			continue;
+		}
+
+		++i;
+	}
+
+	return result;
+}
+
+MRSyntaxLineResult MRRustSyntaxHighlighter::highlightLine(std::string_view line, MRSyntaxLineState previousState) {
+	MRSyntaxLineResult result;
+	result.stateOut = MRSyntaxLineState();
+	std::size_t i = 0;
+	std::uint32_t commentDepth = previousState.mode == MRSyntaxMode::BlockComment ? (previousState.payload == 0 ? 1U : previousState.payload) : 0;
+	bool expectTypeName = false;
+	bool expectCallableName = false;
+	bool expectImportName = false;
+
+	if (commentDepth > 0) {
+		const std::size_t start = i;
+		while (i < line.size()) {
+			if (i + 1 < line.size() && line[i] == '/' && line[i + 1] == '*') {
+				++commentDepth;
+				i += 2;
+				continue;
+			}
+			if (i + 1 < line.size() && line[i] == '*' && line[i + 1] == '/') {
+				--commentDepth;
+				i += 2;
+				if (commentDepth == 0) break;
+				continue;
+			}
+			++i;
+		}
+		appendRun(result.tokenRuns, start, i, MRSyntaxToken::Comment);
+		if (commentDepth > 0) {
+			result.stateOut.mode = MRSyntaxMode::BlockComment;
+			result.stateOut.payload = commentDepth;
+			return result;
+		}
+	}
+
+	if (previousState.mode == MRSyntaxMode::RawString) {
+		const std::size_t hashCount = payloadLength(previousState.flags);
+		const std::size_t end = findRustRawStringEnd(line, 0, hashCount);
+		if (end == std::string_view::npos) {
+			appendRun(result.tokenRuns, 0, line.size(), MRSyntaxToken::String);
+			result.stateOut.mode = MRSyntaxMode::RawString;
+			result.stateOut.flags = previousState.flags;
+			return result;
+		}
+		appendRun(result.tokenRuns, 0, end, MRSyntaxToken::String);
+		i = end;
+	} else if (previousState.mode == MRSyntaxMode::QuotedString) {
+		const char quote = static_cast<char>(previousState.payload);
+		const std::size_t end = findStringContinuationEnd(line, 0, quote);
+		appendRun(result.tokenRuns, 0, end, MRSyntaxToken::String);
+		if (end == line.size()) {
+			result.stateOut.mode = MRSyntaxMode::QuotedString;
+			result.stateOut.payload = previousState.payload;
+			return result;
+		}
+		i = end;
+	}
+
+	while (i < line.size()) {
+		if (i + 1 < line.size() && line[i] == '/' && line[i + 1] == '/') {
+			appendRun(result.tokenRuns, i, line.size(), MRSyntaxToken::Comment);
+			break;
+		}
+
+		if (i + 1 < line.size() && line[i] == '/' && line[i + 1] == '*') {
+			const std::size_t start = i;
+			commentDepth = 1;
+			i += 2;
+			while (i < line.size()) {
+				if (i + 1 < line.size() && line[i] == '/' && line[i + 1] == '*') {
+					++commentDepth;
+					i += 2;
+					continue;
+				}
+				if (i + 1 < line.size() && line[i] == '*' && line[i + 1] == '/') {
+					--commentDepth;
+					i += 2;
+					if (commentDepth == 0) break;
+					continue;
+				}
+				++i;
+			}
+			appendRun(result.tokenRuns, start, std::min(i, line.size()), MRSyntaxToken::Comment);
+			if (commentDepth > 0) {
+				result.stateOut.mode = MRSyntaxMode::BlockComment;
+				result.stateOut.payload = commentDepth;
+				return result;
+			}
+			continue;
+		}
+
+		if (line[i] == '#' && i + 1 < line.size() && line[i + 1] == '[') {
+			const std::size_t start = i;
+			std::size_t depth = 0;
+			while (i < line.size()) {
+				if (line[i] == '[') {
+					++depth;
+					++i;
+					continue;
+				}
+				if (line[i] == ']') {
+					++i;
+					if (depth > 0) --depth;
+					if (depth == 0) break;
+					continue;
+				}
+				++i;
+			}
+			appendRun(result.tokenRuns, start, std::min(i, line.size()), MRSyntaxToken::Directive);
+			continue;
+		}
+
+		{
+			std::size_t prefixEnd = 0;
+			std::size_t hashCount = 0;
+			if (findRustRawStringStart(line, i, prefixEnd, hashCount)) {
+				const std::size_t start = i;
+				const std::size_t end = findRustRawStringEnd(line, prefixEnd, hashCount);
+				if (end == std::string_view::npos) {
+					appendRun(result.tokenRuns, start, line.size(), MRSyntaxToken::String);
+					result.stateOut.mode = MRSyntaxMode::RawString;
+					result.stateOut.flags = storePayloadLength(0, hashCount);
+					return result;
+				}
+				appendRun(result.tokenRuns, start, end, MRSyntaxToken::String);
+				i = end;
+				continue;
+			}
+		}
+
+		if (line[i] == '"' || line[i] == '\'') {
+			const std::size_t start = i;
+			const std::size_t end = consumeCppStringLiteral(line, i, line[i]);
+			appendRun(result.tokenRuns, start, end, MRSyntaxToken::String);
+			if (end == line.size() && (line.empty() || line.back() != line[start])) {
+				result.stateOut.mode = MRSyntaxMode::QuotedString;
+				result.stateOut.payload = static_cast<std::uint32_t>(line[start]);
+				return result;
+			}
+			i = end;
+			continue;
+		}
+
+		if (isDecimalDigitChar(line[i]) || (line[i] == '.' && i + 1 < line.size() && isDecimalDigitChar(line[i + 1]))) {
+			const std::size_t start = i;
+			const std::size_t end = consumeCppNumber(line, i);
+			appendRun(result.tokenRuns, start, end, MRSyntaxToken::Number);
+			i = end;
+			continue;
+		}
+
+		if (isIdentifierStart(line[i])) {
+			const std::size_t start = i++;
+			while (i < line.size() && (isIdentifierChar(line[i]) || line[i] == '\'')) ++i;
+			const std::string_view word = line.substr(start, i - start);
+			if (wordInList(word, kRustKeywords, sizeof(kRustKeywords) / sizeof(kRustKeywords[0]))) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Keyword);
+				expectTypeName = isRustTypeIntroducer(word);
+				expectCallableName = isRustCallableIntroducer(word);
+				expectImportName = word == "use" || word == "crate" || word == "mod";
+				continue;
+			}
+			if (wordInList(word, kRustConstants, sizeof(kRustConstants) / sizeof(kRustConstants[0]))) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Key);
+				continue;
+			}
+			if (wordInList(word, kRustTypeKeywords, sizeof(kRustTypeKeywords) / sizeof(kRustTypeKeywords[0]))) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Type);
+				continue;
+			}
+			if (expectImportName || expectTypeName) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Type);
+				expectImportName = false;
+				expectTypeName = false;
+				continue;
+			}
+			if (expectCallableName) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Key);
+				expectCallableName = false;
+				continue;
+			}
+			if (i < line.size() && line[i] == '!') {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Key);
+				continue;
+			}
+			if (hasScopeQualifierBefore(line, start) || hasScopeQualifierAfter(line, i) || isUpperCaseIdentifier(word)) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Type);
+				continue;
+			}
+			continue;
+		}
+
+		{
+			const std::size_t delimiterLength = cppDelimiterLength(line, i);
+			if (delimiterLength > 0) {
+				appendRun(result.tokenRuns, i, i + delimiterLength, MRSyntaxToken::Delimiter);
+				i += delimiterLength;
+				continue;
+			}
+		}
+
+		if (isCppDelimiterChar(line[i])) {
+			appendRun(result.tokenRuns, i, i + 1, MRSyntaxToken::Delimiter);
+			++i;
+			continue;
+		}
+
+		++i;
+	}
+
+	return result;
+}
+
 MRSyntaxLineResult MRPythonSyntaxHighlighter::highlightLine(std::string_view line, MRSyntaxLineState previousState) {
 	MRSyntaxLineResult result;
 	std::size_t i = 0;
@@ -2622,6 +3440,169 @@ MRSyntaxLineResult MRJsonSyntaxHighlighter::highlightLine(std::string_view line,
 	return result;
 }
 
+MRSyntaxLineResult MRGoSyntaxHighlighter::highlightLine(std::string_view line, MRSyntaxLineState previousState) {
+	MRSyntaxLineResult result;
+	result.stateOut = MRSyntaxLineState();
+	std::size_t i = 0;
+	bool inBlockComment = previousState.mode == MRSyntaxMode::BlockComment;
+	bool expectTypeName = false;
+	bool expectCallableName = false;
+	bool expectImportName = false;
+
+	if (inBlockComment) {
+		const std::size_t start = i;
+		while (i < line.size()) {
+			if (i + 1 < line.size() && line[i] == '*' && line[i + 1] == '/') {
+				i += 2;
+				inBlockComment = false;
+				break;
+			}
+			++i;
+		}
+		appendRun(result.tokenRuns, start, i, MRSyntaxToken::Comment);
+		if (inBlockComment) {
+			result.stateOut.mode = MRSyntaxMode::BlockComment;
+			return result;
+		}
+	}
+
+	if (previousState.mode == MRSyntaxMode::RawString) {
+		const std::size_t end = line.find('`', 0);
+		if (end == std::string_view::npos) {
+			appendRun(result.tokenRuns, 0, line.size(), MRSyntaxToken::String);
+			result.stateOut.mode = MRSyntaxMode::RawString;
+			return result;
+		}
+		appendRun(result.tokenRuns, 0, end + 1, MRSyntaxToken::String);
+		i = end + 1;
+	} else if (previousState.mode == MRSyntaxMode::QuotedString) {
+		const char quote = static_cast<char>(previousState.payload);
+		const std::size_t end = findStringContinuationEnd(line, 0, quote);
+		appendRun(result.tokenRuns, 0, end, MRSyntaxToken::String);
+		if (end == line.size()) {
+			result.stateOut.mode = MRSyntaxMode::QuotedString;
+			result.stateOut.payload = previousState.payload;
+			return result;
+		}
+		i = end;
+	}
+
+	while (i < line.size()) {
+		if (i + 1 < line.size() && line[i] == '/' && line[i + 1] == '/') {
+			appendRun(result.tokenRuns, i, line.size(), MRSyntaxToken::Comment);
+			break;
+		}
+
+		if (i + 1 < line.size() && line[i] == '/' && line[i + 1] == '*') {
+			const std::size_t start = i;
+			i += 2;
+			while (i < line.size()) {
+				if (i + 1 < line.size() && line[i] == '*' && line[i + 1] == '/') {
+					i += 2;
+					break;
+				}
+				++i;
+			}
+			appendRun(result.tokenRuns, start, std::min(i, line.size()), MRSyntaxToken::Comment);
+			if (i >= line.size() && (line.size() < 2 || line.substr(line.size() - 2) != "*/")) {
+				result.stateOut.mode = MRSyntaxMode::BlockComment;
+				return result;
+			}
+			continue;
+		}
+
+		if (line[i] == '`') {
+			const std::size_t start = i;
+			const std::size_t end = line.find('`', i + 1);
+			if (end == std::string_view::npos) {
+				appendRun(result.tokenRuns, start, line.size(), MRSyntaxToken::String);
+				result.stateOut.mode = MRSyntaxMode::RawString;
+				return result;
+			}
+			appendRun(result.tokenRuns, start, end + 1, MRSyntaxToken::String);
+			i = end + 1;
+			continue;
+		}
+
+		if (line[i] == '"' || line[i] == '\'') {
+			const std::size_t start = i;
+			const std::size_t end = consumeCppStringLiteral(line, i, line[i]);
+			appendRun(result.tokenRuns, start, end, MRSyntaxToken::String);
+			if (end == line.size() && (line.empty() || line.back() != line[start])) {
+				result.stateOut.mode = MRSyntaxMode::QuotedString;
+				result.stateOut.payload = static_cast<std::uint32_t>(line[start]);
+				return result;
+			}
+			i = end;
+			continue;
+		}
+
+		if (isDecimalDigitChar(line[i]) || (line[i] == '.' && i + 1 < line.size() && isDecimalDigitChar(line[i + 1]))) {
+			const std::size_t start = i;
+			const std::size_t end = consumeCppNumber(line, i);
+			appendRun(result.tokenRuns, start, end, MRSyntaxToken::Number);
+			i = end;
+			continue;
+		}
+
+		if (isIdentifierStart(line[i])) {
+			const std::size_t start = i++;
+			while (i < line.size() && isIdentifierChar(line[i])) ++i;
+			const std::string_view word = line.substr(start, i - start);
+			if (wordInList(word, kGoKeywords, sizeof(kGoKeywords) / sizeof(kGoKeywords[0]))) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Keyword);
+				expectTypeName = isGoTypeIntroducer(word);
+				expectCallableName = isGoCallableIntroducer(word);
+				expectImportName = word == "import" || word == "package";
+				continue;
+			}
+			if (wordInList(word, kGoConstants, sizeof(kGoConstants) / sizeof(kGoConstants[0]))) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Key);
+				continue;
+			}
+			if (wordInList(word, kGoTypeKeywords, sizeof(kGoTypeKeywords) / sizeof(kGoTypeKeywords[0]))) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Type);
+				continue;
+			}
+			if (expectImportName || expectTypeName) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Type);
+				expectImportName = false;
+				expectTypeName = false;
+				continue;
+			}
+			if (expectCallableName) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Key);
+				expectCallableName = false;
+				continue;
+			}
+			if (isUpperCaseIdentifier(word)) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Type);
+				continue;
+			}
+			continue;
+		}
+
+		{
+			const std::size_t delimiterLength = cppDelimiterLength(line, i);
+			if (delimiterLength > 0) {
+				appendRun(result.tokenRuns, i, i + delimiterLength, MRSyntaxToken::Delimiter);
+				i += delimiterLength;
+				continue;
+			}
+		}
+
+		if (isCppDelimiterChar(line[i])) {
+			appendRun(result.tokenRuns, i, i + 1, MRSyntaxToken::Delimiter);
+			++i;
+			continue;
+		}
+
+		++i;
+	}
+
+	return result;
+}
+
 MRSyntaxLanguage tmrDetectSyntaxLanguage(const std::string &path, const std::string &title) {
 	std::string fileName = fileNamePart(!path.empty() ? path : title);
 	std::string lowerName = lowerCopy(fileName);
@@ -2633,10 +3614,17 @@ MRSyntaxLanguage tmrDetectSyntaxLanguage(const std::string &path, const std::str
 	if (ext == ".js" || ext == ".jsx" || ext == ".mjs" || ext == ".cjs" || ext == ".ts" || ext == ".tsx") return MRSyntaxLanguage::JavaScript;
 	if (ext == ".py" || ext == ".pyw") return MRSyntaxLanguage::Python;
 	if (ext == ".json" || ext == ".jsonc") return MRSyntaxLanguage::Json;
-	if (ext == ".zsh" || ext == ".sh" || ext == ".bash" || ext == ".ksh" || ext == ".zprofile" || ext == ".zshrc" || ext == ".zshenv" || ext == ".zlogin" || ext == ".zlogout") return MRSyntaxLanguage::Zsh;
-	if (lowerName == ".zshrc" || lowerName == ".zprofile" || lowerName == ".zshenv" || lowerName == ".zlogin" || lowerName == ".zlogout" || lowerName == ".bashrc" || lowerName == ".bash_profile" || lowerName == ".profile")
-		return MRSyntaxLanguage::Zsh;
+	if (ext == ".sh" || ext == ".bash" || ext == ".ksh") return MRSyntaxLanguage::Bash;
+	if (lowerName == ".bashrc" || lowerName == ".bash_profile" || lowerName == ".profile") return MRSyntaxLanguage::Bash;
+	if (ext == ".zsh" || ext == ".zprofile" || ext == ".zshrc" || ext == ".zshenv" || ext == ".zlogin" || ext == ".zlogout") return MRSyntaxLanguage::Zsh;
+	if (lowerName == ".zshrc" || lowerName == ".zprofile" || lowerName == ".zshenv" || lowerName == ".zlogin" || lowerName == ".zlogout") return MRSyntaxLanguage::Zsh;
 	if (ext == ".pl" || ext == ".pm" || ext == ".t" || ext == ".pod" || ext == ".cgi" || ext == ".psgi" || ext == ".perl") return MRSyntaxLanguage::Perl;
+	if (ext == ".swift") return MRSyntaxLanguage::Swift;
+	if (ext == ".rs") return MRSyntaxLanguage::Rust;
+	if (ext == ".go") return MRSyntaxLanguage::Go;
+	if (ext == ".service" || ext == ".socket" || ext == ".timer" || ext == ".mount" || ext == ".automount" || ext == ".target" || ext == ".path" || ext == ".slice" || ext == ".scope" ||
+	    ext == ".swap" || ext == ".device" || ext == ".link" || ext == ".netdev" || ext == ".network" || hasSystemdUnitSuffix(lowerName))
+		return MRSyntaxLanguage::Systemd;
 	if (ext == ".mrmac") return MRSyntaxLanguage::MRMAC;
 	if (ext == ".md" || ext == ".markdown" || lowerName == "readme") return MRSyntaxLanguage::Markdown;
 	return MRSyntaxLanguage::PlainText;
@@ -2672,6 +3660,21 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	const int jsonKeyLines = countJsonKeyLikeLines(sample, 32);
 	const int shellAssignmentLines = countShellAssignmentLines(sample, 16);
 	const int perlSigilDeclLines = countPerlSigilDeclLines(sample, 16);
+	const int rustFunctionLines = countLinePrefixMatches(lower, "fn ", 12) + countLinePrefixMatches(lower, "pub fn ", 12) + countLinePrefixMatches(lower, "async fn ", 8) +
+	                              countLinePrefixMatches(lower, "pub async fn ", 8);
+	const int rustImplLines = countLinePrefixMatches(lower, "impl ", 12);
+	const int rustStructLines = countLinePrefixMatches(lower, "struct ", 8) + countLinePrefixMatches(lower, "pub struct ", 8) + countLinePrefixMatches(lower, "enum ", 8) +
+	                            countLinePrefixMatches(lower, "pub enum ", 8) + countLinePrefixMatches(lower, "trait ", 8) + countLinePrefixMatches(lower, "pub trait ", 8);
+	const int goFunctionLines = countLinePrefixMatches(lower, "func ", 12) + countLinePrefixMatches(lower, "func (", 12);
+	const int goTypeLines = countLinePrefixMatches(lower, "type ", 12) + countMatches(lower, " struct {", 12) + countMatches(lower, " interface {", 12);
+	const int goPackageLines = countLinePrefixMatches(lower, "package ", 4);
+	const int goImportLines = countLinePrefixMatches(lower, "import ", 12);
+	const int systemdSectionLines = countLinePrefixMatches(lower, "[unit]", 8) + countLinePrefixMatches(lower, "[service]", 8) + countLinePrefixMatches(lower, "[socket]", 8) +
+	                                countLinePrefixMatches(lower, "[timer]", 8) + countLinePrefixMatches(lower, "[path]", 8) + countLinePrefixMatches(lower, "[mount]", 8) +
+	                                countLinePrefixMatches(lower, "[install]", 8) + countLinePrefixMatches(lower, "[network]", 8) + countLinePrefixMatches(lower, "[netdev]", 8) +
+	                                countLinePrefixMatches(lower, "[match]", 8);
+	const int systemdDirectiveLines = countLinePrefixMatches(lower, "description=", 12) + countLinePrefixMatches(lower, "execstart=", 12) + countLinePrefixMatches(lower, "wantedby=", 12) +
+	                                  countLinePrefixMatches(lower, "after=", 12) + countLinePrefixMatches(lower, "requires=", 12);
 	const int makeTargetLines = countMakeTargetLikeLines(sample, 16);
 	const int makeRecipeLines = countRecipeTabLines(sample, 16);
 	const int markdownStructureLines = countMarkdownStructureLines(sample, 24);
@@ -2679,15 +3682,37 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	const int braceCount = countCharacter(sample, '{', 32) + countCharacter(sample, '}', 32);
 	const int shellControlCount = countMatches(lower, "[[", 12) + countMatches(lower, "case ", 8) + countMatches(lower, "typeset ", 8) + countMatches(lower, "autoload ", 8) + countMatches(lower, "setopt ", 8);
 
+	if (detectedByPath == MRSyntaxLanguage::Systemd && systemdSectionLines > 0) return MRSyntaxClassification(MRSyntaxLanguage::Systemd, 96);
+	if (systemdSectionLines > 0 && systemdDirectiveLines > 0) return MRSyntaxClassification(MRSyntaxLanguage::Systemd, 94);
+
 	if (startsWithText(lowerShebang, "#!")) {
 		if (containsText(lowerShebang, "python")) addClassificationScore(scores, MRSyntaxLanguage::Python, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Python)] += 2;
 		if (containsText(lowerShebang, "perl")) addClassificationScore(scores, MRSyntaxLanguage::Perl, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Perl)] += 2;
-		if (containsText(lowerShebang, "zsh") || containsText(lowerShebang, "bash") || containsText(lowerShebang, "sh")) addClassificationScore(scores, MRSyntaxLanguage::Zsh, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Zsh)] += 2;
+		if (containsText(lowerShebang, "zsh")) addClassificationScore(scores, MRSyntaxLanguage::Zsh, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Zsh)] += 2;
+		if (containsText(lowerShebang, "bash") || containsText(lowerShebang, "/sh")) addClassificationScore(scores, MRSyntaxLanguage::Bash, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Bash)] += 2;
 		if (containsText(lowerShebang, "node")) addClassificationScore(scores, MRSyntaxLanguage::JavaScript, 12), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::JavaScript)] += 2;
 		if (containsText(lowerShebang, "make")) addClassificationScore(scores, MRSyntaxLanguage::Make, 8), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Make)] += 1;
+		if (containsText(lowerShebang, "rust")) addClassificationScore(scores, MRSyntaxLanguage::Rust, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Rust)] += 2;
+		if (containsText(lowerShebang, "go")) addClassificationScore(scores, MRSyntaxLanguage::Go, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Go)] += 2;
 	}
 
-	if (detectedByPath != MRSyntaxLanguage::PlainText) addClassificationScore(scores, detectedByPath, 4);
+	if (detectedByPath != MRSyntaxLanguage::PlainText) {
+		int pathBias = 4;
+		if (ext == ".c" || ext == ".h" || ext == ".cc" || ext == ".cpp" || ext == ".cxx" || ext == ".hh" || ext == ".hpp" || ext == ".hxx" || ext == ".ipp" || ext == ".tpp" || ext == ".inl" ||
+		    ext == ".js" || ext == ".jsx" || ext == ".mjs" || ext == ".cjs" || ext == ".ts" || ext == ".tsx" || ext == ".json" || ext == ".jsonc" || ext == ".pl" || ext == ".pm" ||
+		    ext == ".pod" || ext == ".swift" || ext == ".rs" || ext == ".go" || ext == ".mrmac" || ext == ".service" || ext == ".socket" || ext == ".timer" || ext == ".mount" ||
+		    ext == ".automount" || ext == ".target" || ext == ".path" || ext == ".slice" || ext == ".scope" || ext == ".swap" || ext == ".device" || ext == ".link" ||
+		    ext == ".netdev" || ext == ".network")
+			pathBias = 14;
+		if (detectedByPath == MRSyntaxLanguage::Systemd)
+			pathBias = 24;
+		else if (ext == ".py" || ext == ".pyw" || ext == ".zsh" || ext == ".sh" || ext == ".bash" || ext == ".ksh" || ext == ".md" || ext == ".markdown" || ext == ".service" ||
+		         ext == ".socket" || ext == ".timer" || ext == ".mount" || ext == ".automount" || ext == ".target" || ext == ".path" || ext == ".slice" || ext == ".scope" ||
+		         ext == ".swap" || ext == ".device" || ext == ".link" || ext == ".netdev" || ext == ".network")
+			pathBias = 10;
+		addClassificationScore(scores, detectedByPath, pathBias);
+		if (pathBias >= 10) ++strongSignals[syntaxLanguageIndex(detectedByPath)];
+	}
 	if (ext == ".pl" || ext == ".pm") addClassificationScore(scores, MRSyntaxLanguage::Perl, 6), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Perl)] += 1;
 	if (lowerName == "makefile" || lowerName == "gnumakefile") addClassificationScore(scores, MRSyntaxLanguage::Make, 10), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Make)] += 2;
 	if (lowerName == "readme" || startsWithText(lowerName, "readme.")) addClassificationScore(scores, MRSyntaxLanguage::Markdown, 6), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Markdown)] += 1;
@@ -2738,6 +3763,19 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	if (containsText(lower, "{") && containsText(lower, "}") && containsText(lower, "[") && containsText(lower, "]")) addClassificationScore(scores, MRSyntaxLanguage::Json, 4);
 	if (jsonKeyLines > 0) strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Json)] += std::min(4, jsonKeyLines);
 
+	addClassificationScore(scores, MRSyntaxLanguage::Bash, countMatches(lower, "[[", 12) * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Bash, countMatches(lower, "${", 16));
+	addClassificationScore(scores, MRSyntaxLanguage::Bash, countMatches(lower, "$(", 16));
+	addClassificationScore(scores, MRSyntaxLanguage::Bash, countMatches(lower, "case ", 8));
+	addClassificationScore(scores, MRSyntaxLanguage::Bash, countMatches(lower, " in\n", 8));
+	addClassificationScore(scores, MRSyntaxLanguage::Bash, countMatches(lower, "declare ", 8) * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Bash, countMatches(lower, "readonly ", 8) * 2);
+	addClassificationScore(scores, MRSyntaxLanguage::Bash, countMatches(lower, "shopt ", 8) * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Bash, countMatches(lower, "source ", 8) * 2);
+	addClassificationScore(scores, MRSyntaxLanguage::Bash, countMatches(lower, "<<", 8));
+	addClassificationScore(scores, MRSyntaxLanguage::Bash, shellAssignmentLines * 2);
+	if (countMatches(lower, "shopt ", 8) + shellAssignmentLines > 0) strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Bash)] += std::min(4, countMatches(lower, "shopt ", 8) + shellAssignmentLines);
+
 	addClassificationScore(scores, MRSyntaxLanguage::Zsh, countMatches(lower, "[[", 12) * 3);
 	addClassificationScore(scores, MRSyntaxLanguage::Zsh, countMatches(lower, "${", 16));
 	addClassificationScore(scores, MRSyntaxLanguage::Zsh, countMatches(lower, "$(", 16));
@@ -2749,6 +3787,17 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	addClassificationScore(scores, MRSyntaxLanguage::Zsh, countMatches(lower, "<<", 8));
 	addClassificationScore(scores, MRSyntaxLanguage::Zsh, shellAssignmentLines * 2);
 	if (shellControlCount + shellAssignmentLines > 0) strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Zsh)] += std::min(4, shellControlCount + shellAssignmentLines);
+
+	addClassificationScore(scores, MRSyntaxLanguage::Systemd, countLinePrefixMatches(lower, "[unit]", 8) * 6);
+	addClassificationScore(scores, MRSyntaxLanguage::Systemd, countLinePrefixMatches(lower, "[service]", 8) * 6);
+	addClassificationScore(scores, MRSyntaxLanguage::Systemd, countLinePrefixMatches(lower, "[install]", 8) * 4);
+	addClassificationScore(scores, MRSyntaxLanguage::Systemd, countLinePrefixMatches(lower, "execstart=", 12) * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Systemd, countLinePrefixMatches(lower, "wantedby=", 8) * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Systemd, countLinePrefixMatches(lower, "description=", 8) * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Systemd, countLinePrefixMatches(lower, "after=", 8) * 2);
+	addClassificationScore(scores, MRSyntaxLanguage::Systemd, countLinePrefixMatches(lower, "requires=", 8) * 2);
+	if (systemdSectionLines + countLinePrefixMatches(lower, "execstart=", 12) > 0)
+		strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Systemd)] += 3;
 
 	addClassificationScore(scores, MRSyntaxLanguage::Perl, countMatches(lower, "my ", 12) * 2);
 	addClassificationScore(scores, MRSyntaxLanguage::Perl, countMatches(lower, "our ", 8) * 2);
@@ -2766,6 +3815,52 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	addClassificationScore(scores, MRSyntaxLanguage::Perl, countMatches(sample, "%", 24) >= 2 ? 2 : 0);
 	addClassificationScore(scores, MRSyntaxLanguage::Perl, perlSigilDeclLines * 3);
 	if (perlSigilDeclLines > 0 || containsText(lower, "=pod") || containsText(lower, "package ")) strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Perl)] += std::min(4, perlSigilDeclLines + (containsText(lower, "=pod") ? 1 : 0) + (containsText(lower, "package ") ? 1 : 0));
+
+	addClassificationScore(scores, MRSyntaxLanguage::Swift, countLinePrefixMatches(lower, "import ", 12));
+	addClassificationScore(scores, MRSyntaxLanguage::Swift, countLinePrefixMatches(lower, "func ", 12) * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Swift, countLinePrefixMatches(lower, "guard ", 8) * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Swift, countLinePrefixMatches(lower, "let ", 12));
+	addClassificationScore(scores, MRSyntaxLanguage::Swift, countLinePrefixMatches(lower, "var ", 12));
+	addClassificationScore(scores, MRSyntaxLanguage::Swift, countLinePrefixMatches(lower, "extension ", 8) * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Swift, countLinePrefixMatches(lower, "protocol ", 8) * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Swift, countLinePrefixMatches(lower, "struct ", 8) * 2);
+	addClassificationScore(scores, MRSyntaxLanguage::Swift, countLinePrefixMatches(lower, "enum ", 8) * 2);
+	addClassificationScore(scores, MRSyntaxLanguage::Swift, countMatches(lower, "@available", 8) * 4);
+	addClassificationScore(scores, MRSyntaxLanguage::Swift, countMatches(lower, "@mainactor", 8) * 4);
+	addClassificationScore(scores, MRSyntaxLanguage::Swift, countMatches(lower, "nil", 16));
+	if (ext == ".swift") strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Swift)] += 2;
+	if (countLinePrefixMatches(lower, "func ", 12) + countLinePrefixMatches(lower, "extension ", 8) + countLinePrefixMatches(lower, "protocol ", 8) > 0)
+		strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Swift)] += 2;
+
+	addClassificationScore(scores, MRSyntaxLanguage::Rust, rustFunctionLines * 4);
+	addClassificationScore(scores, MRSyntaxLanguage::Rust, rustImplLines * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Rust, rustStructLines * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Rust, countLinePrefixMatches(lower, "use ", 12) * 2);
+	addClassificationScore(scores, MRSyntaxLanguage::Rust, countLinePrefixMatches(lower, "pub use ", 12) * 2);
+	addClassificationScore(scores, MRSyntaxLanguage::Rust, countLinePrefixMatches(lower, "mod ", 12) * 2);
+	addClassificationScore(scores, MRSyntaxLanguage::Rust, countMatches(lower, "::", 16) * 2);
+	addClassificationScore(scores, MRSyntaxLanguage::Rust, countMatches(lower, "match ", 12) * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Rust, countMatches(lower, "let ", 16));
+	addClassificationScore(scores, MRSyntaxLanguage::Rust, countMatches(lower, "mut ", 12));
+	addClassificationScore(scores, MRSyntaxLanguage::Rust, countMatches(lower, "#[", 12) * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Rust, countMatches(lower, "->", 16));
+	if (ext == ".rs") strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Rust)] += 2;
+	if (rustFunctionLines + rustImplLines + rustStructLines > 0)
+		strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Rust)] += std::min(4, rustFunctionLines + rustImplLines + rustStructLines);
+
+	addClassificationScore(scores, MRSyntaxLanguage::Go, goPackageLines * 6);
+	addClassificationScore(scores, MRSyntaxLanguage::Go, goImportLines * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Go, goFunctionLines * 4);
+	addClassificationScore(scores, MRSyntaxLanguage::Go, goTypeLines * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Go, countMatches(lower, ":=", 16) * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Go, countMatches(lower, "defer ", 8) * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Go, countMatches(lower, "go ", 8) * 2);
+	addClassificationScore(scores, MRSyntaxLanguage::Go, countMatches(lower, "select ", 8) * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Go, countMatches(lower, "chan ", 8) * 2);
+	addClassificationScore(scores, MRSyntaxLanguage::Go, countMatches(lower, "interface{}", 8) * 2);
+	if (ext == ".go") strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Go)] += 2;
+	if (goPackageLines + goImportLines + goFunctionLines + goTypeLines > 0)
+		strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Go)] += std::min(4, goPackageLines + goImportLines + goFunctionLines + goTypeLines);
 
 	addClassificationScore(scores, MRSyntaxLanguage::MRMAC, countMatches(lower, "$macro", 8) * 5);
 	addClassificationScore(scores, MRSyntaxLanguage::MRMAC, countMatches(lower, "$macro_file", 8) * 5);
@@ -2808,6 +3903,14 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 		addClassificationScore(scores, MRSyntaxLanguage::JavaScript, -2);
 		addClassificationScore(scores, MRSyntaxLanguage::Json, -2);
 	}
+	if (systemdSectionLines >= 2) {
+		addClassificationScore(scores, MRSyntaxLanguage::Systemd, 8);
+		strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Systemd)] += 2;
+		addClassificationScore(scores, MRSyntaxLanguage::Markdown, -8);
+		addClassificationScore(scores, MRSyntaxLanguage::Json, -3);
+		addClassificationScore(scores, MRSyntaxLanguage::Bash, -2);
+		addClassificationScore(scores, MRSyntaxLanguage::Zsh, -2);
+	}
 	if (makeTargetLines >= 2 && makeRecipeLines >= 1) {
 		addClassificationScore(scores, MRSyntaxLanguage::Make, 8);
 		strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Make)] += 2;
@@ -2815,6 +3918,10 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 		addClassificationScore(scores, MRSyntaxLanguage::Json, -3);
 		addClassificationScore(scores, MRSyntaxLanguage::Python, -2);
 	}
+	if (ext == ".c" || ext == ".h" || ext == ".cc" || ext == ".cpp" || ext == ".cxx" || ext == ".hh" || ext == ".hpp" || ext == ".hxx")
+		addClassificationScore(scores, MRSyntaxLanguage::Make, -10);
+	if (ext == ".js" || ext == ".jsx" || ext == ".mjs" || ext == ".cjs" || ext == ".ts" || ext == ".tsx")
+		addClassificationScore(scores, MRSyntaxLanguage::Make, -10);
 	if (perlSigilDeclLines >= 2) {
 		addClassificationScore(scores, MRSyntaxLanguage::Perl, 4);
 		++strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Perl)];
@@ -2833,6 +3940,22 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 		++strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Zsh)];
 		addClassificationScore(scores, MRSyntaxLanguage::Perl, -2);
 		addClassificationScore(scores, MRSyntaxLanguage::Json, -3);
+	}
+	if (ext == ".swift") {
+		addClassificationScore(scores, MRSyntaxLanguage::JavaScript, -8);
+		addClassificationScore(scores, MRSyntaxLanguage::Cpp, -8);
+		addClassificationScore(scores, MRSyntaxLanguage::Python, -6);
+	}
+	if (ext == ".rs") {
+		addClassificationScore(scores, MRSyntaxLanguage::Cpp, -8);
+		addClassificationScore(scores, MRSyntaxLanguage::JavaScript, -6);
+		addClassificationScore(scores, MRSyntaxLanguage::Swift, -4);
+	}
+	if (ext == ".go") {
+		addClassificationScore(scores, MRSyntaxLanguage::Cpp, -6);
+		addClassificationScore(scores, MRSyntaxLanguage::JavaScript, -6);
+		addClassificationScore(scores, MRSyntaxLanguage::Rust, -4);
+		addClassificationScore(scores, MRSyntaxLanguage::Swift, -4);
 	}
 	if (semicolonCount >= 6 || braceCount >= 12) {
 		addClassificationScore(scores, MRSyntaxLanguage::Markdown, -3);
@@ -2878,10 +4001,20 @@ const char *tmrSyntaxLanguageName(MRSyntaxLanguage language) noexcept {
 			return "Python";
 		case MRSyntaxLanguage::Json:
 			return "JSON";
+		case MRSyntaxLanguage::Bash:
+			return "Bash";
 		case MRSyntaxLanguage::Zsh:
-			return "Zsh";
+			return "zsh";
 		case MRSyntaxLanguage::Perl:
 			return "Perl";
+		case MRSyntaxLanguage::Swift:
+			return "Swift";
+		case MRSyntaxLanguage::Rust:
+			return "Rust";
+		case MRSyntaxLanguage::Go:
+			return "Go";
+		case MRSyntaxLanguage::Systemd:
+			return "systemd";
 		case MRSyntaxLanguage::MRMAC:
 			return "MRMAC";
 		case MRSyntaxLanguage::Make:
@@ -2905,10 +4038,20 @@ const char *tmrSyntaxLanguageMarker(MRSyntaxLanguage language) noexcept {
 			return "Py";
 		case MRSyntaxLanguage::Json:
 			return "Jn";
+		case MRSyntaxLanguage::Bash:
+			return "Ba";
 		case MRSyntaxLanguage::Zsh:
-			return "Sh";
+			return "Zh";
 		case MRSyntaxLanguage::Perl:
 			return "Pl";
+		case MRSyntaxLanguage::Swift:
+			return "Sw";
+		case MRSyntaxLanguage::Rust:
+			return "Rs";
+		case MRSyntaxLanguage::Go:
+			return "Go";
+		case MRSyntaxLanguage::Systemd:
+			return "Sd";
 		case MRSyntaxLanguage::MRMAC:
 			return "MM";
 		case MRSyntaxLanguage::Make:
@@ -2932,10 +4075,20 @@ std::uint32_t tmrSyntaxLanguageMarkerRgb(MRSyntaxLanguage language) noexcept {
 			return 0x4AA3D8;
 		case MRSyntaxLanguage::Json:
 			return 0x9FB3C8;
+		case MRSyntaxLanguage::Bash:
+			return 0x8FBF6A;
 		case MRSyntaxLanguage::Zsh:
 			return 0x6FBF73;
 		case MRSyntaxLanguage::Perl:
 			return 0xB084CC;
+		case MRSyntaxLanguage::Swift:
+			return 0xE58F65;
+		case MRSyntaxLanguage::Rust:
+			return 0xDEA584;
+		case MRSyntaxLanguage::Go:
+			return 0x6AA8FF;
+		case MRSyntaxLanguage::Systemd:
+			return 0xB0B87A;
 		case MRSyntaxLanguage::MRMAC:
 			return 0xE58F65;
 		case MRSyntaxLanguage::Make:
@@ -2998,12 +4151,32 @@ MRSyntaxLineResult tmrHighlightTextLine(MRSyntaxLanguage language, std::string_v
 			MRJsonSyntaxHighlighter highlighter;
 			return highlighter.highlightLine(line, previousState);
 		}
+		case MRSyntaxLanguage::Bash: {
+			MRBashSyntaxHighlighter highlighter;
+			return highlighter.highlightLine(line, previousState);
+		}
 		case MRSyntaxLanguage::Zsh: {
 			MRZshSyntaxHighlighter highlighter;
 			return highlighter.highlightLine(line, previousState);
 		}
 		case MRSyntaxLanguage::Perl: {
 			MRPerlSyntaxHighlighter highlighter;
+			return highlighter.highlightLine(line, previousState);
+		}
+		case MRSyntaxLanguage::Swift: {
+			MRSwiftSyntaxHighlighter highlighter;
+			return highlighter.highlightLine(line, previousState);
+		}
+		case MRSyntaxLanguage::Rust: {
+			MRRustSyntaxHighlighter highlighter;
+			return highlighter.highlightLine(line, previousState);
+		}
+		case MRSyntaxLanguage::Go: {
+			MRGoSyntaxHighlighter highlighter;
+			return highlighter.highlightLine(line, previousState);
+		}
+		case MRSyntaxLanguage::Systemd: {
+			MRSystemdSyntaxHighlighter highlighter;
 			return highlighter.highlightLine(line, previousState);
 		}
 		case MRSyntaxLanguage::Make: {

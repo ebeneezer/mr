@@ -119,6 +119,22 @@ void MRDropList::hide() {
 	itemValues.clear();
 }
 
+bool MRDropList::handleOpenListEvent(TEvent &event, bool hideOnOutsideMouseDown) {
+	if (!visible()) return false;
+	if (event.what == evKeyDown && ctrlToArrow(event.keyDown.keyCode) == kbEsc) {
+		hide();
+		event.what = evNothing;
+		return true;
+	}
+	if (event.what == evMouseWheel && listView != nullptr && listView->handleWheel(event)) return true;
+	if (hideOnOutsideMouseDown && event.what == evMouseDown && !containsPoint(event.mouse.where) && !buttonContainsPoint(event.mouse.where)) {
+		hide();
+		event.what = evNothing;
+		return true;
+	}
+	return false;
+}
+
 bool MRDropList::visible() const noexcept {
 	return listView != nullptr;
 }

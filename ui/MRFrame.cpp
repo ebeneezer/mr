@@ -32,8 +32,8 @@ static const char *kDragLeftIcon = "~\xC0\xC4~";
 
 static constexpr char kDirtyMarkerIcon[] = "✍";
 static constexpr char kRecordingMarkerIcon[] = "📼";
-static constexpr char kTaskMarkerIcon[] = "🧠";
-static constexpr char kMacroBrainMarkerIcon[] = "🧠";
+static constexpr char kTaskMarkerIcon[] = "⌬";
+static constexpr char kMacroBrainMarkerIcon[] = "⌬";
 static constexpr char kReadOnlyMarkerIcon[] = "🔒";
 static constexpr char kInsertMarkerIcon[] = "✚";
 static constexpr char kWordWrapMarkerIcon[] = "\xE2\x94\x86\xE2\x86\xB5\xE2\x94\x86"; // ┆↵┆
@@ -378,21 +378,15 @@ void MRFrame::draw() {
 		markerX = advanceMarkerX(markerX, kRecordingMarkerIcon, kRecordingMarkerSlotWidth);
 	}
 	if (markers.macroBrain) {
-		TColorAttr brainColor = cTitle;
-		setFore(brainColor, TColorDesired(TColorRGB(0xFF, 0x79, 0xC6)));
-		setStyle(brainColor, getStyle(brainColor) | slBold);
 		int span = markerSpan(kMacroBrainMarkerIcon, kMacroBrainMarkerSlotWidth);
 		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
-		if (markers.macroBrainVisible) b.moveStr(static_cast<ushort>(markerX), kMacroBrainMarkerIcon, brainColor, span);
+		if (markers.macroBrainVisible) b.moveStr(static_cast<ushort>(markerX), kMacroBrainMarkerIcon, cTitle, span);
 		markerX = advanceMarkerX(markerX, kMacroBrainMarkerIcon, kMacroBrainMarkerSlotWidth);
 	}
 	if (markers.background) {
-		TColorAttr taskColor = cTitle;
-		setFore(taskColor, TColorDesired(TColorRGB(0xFF, 0x79, 0xC6)));
-		setStyle(taskColor, getStyle(taskColor) | slBold);
 		int span = markerSpan(kTaskMarkerIcon, kTaskMarkerSlotWidth);
 		b.moveChar(static_cast<ushort>(markerX), ' ', cTitle, span);
-		if (markers.backgroundVisible) b.moveStr(static_cast<ushort>(markerX), kTaskMarkerIcon, taskColor, span);
+		if (markers.backgroundVisible) b.moveStr(static_cast<ushort>(markerX), kTaskMarkerIcon, cTitle, span);
 		markerX = advanceMarkerX(markerX, kTaskMarkerIcon, kTaskMarkerSlotWidth);
 	}
 	if (markers.readOnly) {

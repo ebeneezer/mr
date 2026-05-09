@@ -304,7 +304,7 @@ class MRIndicator : public TIndicator {
   private:
 	static constexpr char kDragFrame = '\xCD';
 	static constexpr char kNormalFrame = '\xC4';
-	static constexpr char kTaskMarkerIcon[] = "🧠";
+	static constexpr char kTaskMarkerIcon[] = "⌬";
 	static constexpr auto kBlinkSlice = std::chrono::milliseconds(10);
 	static constexpr int kBlinkSlicesPerTick = 25;
 
@@ -347,19 +347,12 @@ class MRIndicator : public TIndicator {
 
 	void drawTaskMarkers(TDrawBuffer &b, TColorAttr baseColor) const {
 		if (mTaskDisplayCount == 0 || (mTaskBlinkActive && !mTaskBlinkVisible)) return;
-		b.moveStr(5, kTaskMarkerIcon, taskMarkerColor(baseColor), 2);
+		b.moveStr(5, kTaskMarkerIcon, baseColor, 2);
 	}
 
 	int taskMarkerEndColumn() const noexcept {
 		if (mTaskDisplayCount == 0 || (mTaskBlinkActive && !mTaskBlinkVisible)) return 5;
 		return 7;
-	}
-
-	TColorAttr taskMarkerColor(TColorAttr baseColor) const {
-		TColorAttr taskColor = baseColor;
-		setFore(taskColor, TColorDesired(TColorRGB(0xFF, 0x79, 0xC6)));
-		setStyle(taskColor, getStyle(taskColor) | slBold);
-		return taskColor;
 	}
 
 	void showTaskOverview() {

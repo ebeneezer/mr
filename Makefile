@@ -72,6 +72,12 @@ TINFO_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libtinfo.so.6 ]; then echo -l
 LDFLAGS = $(PTHREAD_FLAGS) $(TVISION_LIB) $(PCRE2_LIB) $(NCURSESW_LIB) $(GPM_LIB) $(TINFO_LIB)
 
 TARGET = mr
+MRFOLDTRAINER_TARGET = foldtrainer/mrfoldtrainer
+MRFOLDTRAINER_SOURCE = foldtrainer/mrfoldtrainer.cpp
+MRFOLDTRAINER_OBJECT = foldtrainer/mrfoldtrainer.o
+MRINDENTTRAINER_TARGET = indenttrainer/mrindenttrainer
+MRINDENTTRAINER_SOURCE = indenttrainer/mrindenttrainer.cpp
+MRINDENTTRAINER_OBJECT = indenttrainer/mrindenttrainer.o
 STAGE_PROFILE_PROBE_TARGET = regression/mr_stage_profile_probe
 STAGE_PROFILE_PROBE_SOURCE = regression/mr_stage_profile_probe.cpp
 STAGE_PROFILE_PROBE_OBJECT = regression/mr_stage_profile_probe.o
@@ -154,11 +160,13 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 	tvision-upstream-init tvision-upstream-fetch tvision-subtree-pull tvision-apply-patches \
 	tvision-sync-safe tvision-status \
 	pcre2-check \
-	stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check \
+	mrfoldtrainer mrindenttrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check \
 	FORCE \
 	compile-commands lint-file context-tar tar-archives
 
 all: $(TARGET)
+mrfoldtrainer: $(MRFOLDTRAINER_TARGET)
+mrindenttrainer: $(MRINDENTTRAINER_TARGET)
 stage-profile-probe: $(STAGE_PROFILE_PROBE_TARGET)
 regression-probe: $(REGRESSION_PROBE_TARGET)
 regression-check: $(REGRESSION_PROBE_TARGET)
@@ -393,12 +401,19 @@ ui/MRWindowSupport.o: ui/MRWindowSupport.cpp ui/MRWindowSupport.hpp config/MRDia
 ui/MRSyntax.o: ui/MRSyntax.cpp ui/MRSyntax.hpp
 coprocessor/MRCoprocessor.o: coprocessor/MRCoprocessor.cpp coprocessor/MRCoprocessor.hpp piecetable/MRTextDocument.hpp
 piecetable/MRTextDocument.o: piecetable/MRTextDocument.cpp piecetable/MRTextDocument.hpp
+$(MRFOLDTRAINER_OBJECT): $(MRFOLDTRAINER_SOURCE) ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
 
 # 4. Linker call
 $(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS) || { paplay --volume=25000 /usr/share/sounds/ocean/stereo/battery-caution.oga; exit 1; }
 	killall mr 2> /dev/null || true
 	paplay --volume=25000 /usr/share/sounds/freedesktop/stereo/service-login.oga || true
+
+$(MRFOLDTRAINER_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MRFOLDTRAINER_OBJECT) | pcre2-check
+	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
+
+$(MRINDENTTRAINER_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MRINDENTTRAINER_OBJECT) | pcre2-check
+	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
 $(STAGE_PROFILE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(STAGE_PROFILE_PROBE_OBJECT) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
@@ -417,6 +432,8 @@ $(REGRESSION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(RE
 
 clean:
 	rm -f $(CXX_OBJECTS) $(C_OBJECTS) $(TARGET) $(STAGE_PROFILE_PROBE_OBJECT) \
+		$(MRFOLDTRAINER_OBJECT) $(MRFOLDTRAINER_TARGET) \
+		$(MRINDENTTRAINER_OBJECT) $(MRINDENTTRAINER_TARGET) \
 		$(STAGE_PROFILE_PROBE_TARGET) \
 		$(REGRESSION_PROBE_OBJECT) \
 		misc/mr_keyin_probe.o misc/mr_tofrom_probe.o misc/mr_tofrom_dispatch_probe.o \

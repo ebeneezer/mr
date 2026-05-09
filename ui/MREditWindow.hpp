@@ -225,7 +225,6 @@ class MREditWindow : public TWindow {
 		const std::size_t cursorBefore = editor != nullptr ? editor->cursorOffset() : 0;
 		const std::size_t selectionStartBefore = editor != nullptr ? editor->selectionStartOffset() : 0;
 		const std::size_t selectionEndBefore = editor != nullptr ? editor->selectionEndOffset() : 0;
-
 		maybeTraceTtyCollisionKeyEvent("window-pre", event);
 		traceCalculatorHotkeyEvent("window-pre", event);
 
