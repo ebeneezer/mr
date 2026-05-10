@@ -3,6 +3,13 @@
 
 namespace {
 
+static constexpr double kSlowEditorInsertThresholdMs = 50.0;
+static constexpr double kSlowEditorAdoptThresholdMs = 50.0;
+
+double elapsedMsSince(std::chrono::steady_clock::time_point startedAt) noexcept {
+	return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count();
+}
+
 bool isIndentWhitespace(char ch) noexcept {
 	return ch == ' ' || ch == '\t';
 }
@@ -1513,7 +1520,7 @@ MRFileEditor::LoadTiming::LoadTiming() noexcept : valid(false), bytes(0), lines(
 }
 
 MRFileEditor::MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar, TIndicator *aIndicator, TStringView aFileName) noexcept
-    : TScroller(bounds, aHScrollBar, aVScrollBar), mIndicator(aIndicator), mReadOnly(false), mInsertMode(true), mAutoIndent(false), mSyntaxTitleHint(), mBufferModel(), mSelectionAnchor(0), mCursorVisualColumn(0), mIndicatorUpdateInProgress(false), mLineIndexWarmupTaskId(0), mLineIndexWarmupDocumentId(0), mLineIndexWarmupVersion(0), mSyntaxTokenCache(), mSyntaxCheckpoints(), mSyntaxWarmupTaskId(0), mSyntaxWarmupDocumentId(0), mSyntaxWarmupVersion(0), mSyntaxWarmupTopLine(0), mSyntaxWarmupBottomLine(0), mSyntaxWarmupLanguage(MRSyntaxLanguage::PlainText), mSyntaxPrefetchDocumentId(0), mSyntaxPrefetchVersion(0), mSyntaxPrefetchTargetBottomLine(0), mSyntaxPrefetchReachedBottomLine(0), mSyntaxPrefetchLanguage(MRSyntaxLanguage::PlainText),
+    : TScroller(bounds, aHScrollBar, aVScrollBar), mIndicator(aIndicator), mReadOnly(false), mInsertMode(true), mAutoIndent(false), mSyntaxTitleHint(), mBufferModel(), mSelectionAnchor(0), mCursorVisualColumn(0), mIndicatorUpdateInProgress(false), mLineIndexWarmupTaskId(0), mLineIndexWarmupDocumentId(0), mLineIndexWarmupVersion(0), mSuppressLargeFileLineIndexWarmup(false), mSyntaxTokenCache(), mSyntaxCheckpoints(), mSyntaxWarmupTaskId(0), mSyntaxWarmupDocumentId(0), mSyntaxWarmupVersion(0), mSyntaxWarmupTopLine(0), mSyntaxWarmupBottomLine(0), mSyntaxWarmupLanguage(MRSyntaxLanguage::PlainText), mSyntaxPrefetchDocumentId(0), mSyntaxPrefetchVersion(0), mSyntaxPrefetchTargetBottomLine(0), mSyntaxPrefetchReachedBottomLine(0), mSyntaxPrefetchLanguage(MRSyntaxLanguage::PlainText),
       mVisibleFoldDocumentId(0), mVisibleFoldVersion(0), mVisibleFoldTopLine(0), mVisibleFoldBottomLine(0), mVisibleFoldLanguage(MRSyntaxLanguage::PlainText), mVisibleFoldGutterColumns(1), mMiniMapRenderer(), mSaveNormalizationCache(), mSaveNormalizationWarmupTaskId(0), mSaveNormalizationWarmupDocumentId(0), mSaveNormalizationWarmupVersion(0),
       mSaveNormalizationWarmupOptionsHash(0), mSaveNormalizationWarmupSourceBytes(0), mSaveNormalizationWarmupStartedAt(std::chrono::steady_clock::time_point()), mSaveNormalizationThroughputBytesPerMicro(0.0), mSaveNormalizationThroughputSamples(0), mMiniMapInitialRenderReportedDocumentId(0), mBlockOverlayActive(false), mBlockOverlayMode(0), mBlockOverlayAnchor(0), mBlockOverlayEnd(0), mBlockOverlayTrackingCursor(false), mPreferredIndentColumn(1), mLastLoadTiming(), mLargeFileMetricsTraceValid(false), mLastLargeFileMetricsExactKnown(false), mLastLargeFileMetricsLimitY(0), mLastLargeFileMetricsMaxY(0), mLastLargeFileMetricsDeltaY(0), mLastLargeFileMetricsNewDeltaY(0) {
 	fileName[0] = EOS;
@@ -2243,14 +2250,15 @@ void MRFileEditor::traceLargeFileMetrics(const char *stage, int limitY, int maxY
 MRFileEditor::TextViewportGeometry MRFileEditor::textViewportGeometryFor(const MREditSetupSettings &settings) const noexcept {
 	MRTextViewportLayout::Inputs inputs;
 	MRFileEditor *self = const_cast<MRFileEditor *>(this);
+	const bool approximateLargeFileMetrics = useApproximateLargeFileMetrics();
 	inputs.viewWidth = size.x;
 	inputs.visibleRows = visibleTextRows();
 	inputs.deltaX = delta.x;
 	inputs.deltaY = delta.y;
 	if (settings.codeFolding) self->ensureVisibleFoldSpans(static_cast<std::size_t>(std::max(delta.y, 0)), inputs.visibleRows, mBufferModel.language());
 	inputs.codeFoldingColumns = settings.codeFolding ? self->visibleFoldGutterColumns() : 1;
-	inputs.exactLineCountKnown = mBufferModel.exactLineCountKnown();
-	inputs.exactLineCount = mBufferModel.lineCount();
+	inputs.exactLineCountKnown = !approximateLargeFileMetrics && mBufferModel.exactLineCountKnown();
+	inputs.exactLineCount = inputs.exactLineCountKnown ? mBufferModel.lineCount() : 0;
 	inputs.estimatedLineCount = mBufferModel.estimatedLineCount();
 	return MRTextViewportLayout::geometryFor(settings, inputs);
 }
@@ -2368,19 +2376,21 @@ bool MRFileEditor::foldingGutterHit(TPoint local, std::size_t *lineIndexOut) con
 void MRFileEditor::ensureVisibleFoldSpans(std::size_t topLine, int rowCount, MRSyntaxLanguage language) {
 	const std::size_t docId = mBufferModel.documentId();
 	const std::size_t version = mBufferModel.version();
+	const bool approximateLargeFileMetrics = useApproximateLargeFileMetrics();
 
 	if (rowCount <= 0) {
 		invalidateFoldCache();
 		return;
 	}
 
-	const std::size_t exactLineCount = mBufferModel.exactLineCountKnown() ? std::max<std::size_t>(1, mBufferModel.lineCount()) : 0;
+	const bool exactLineCountKnown = !approximateLargeFileMetrics && mBufferModel.exactLineCountKnown();
+	const std::size_t exactLineCount = exactLineCountKnown ? std::max<std::size_t>(1, mBufferModel.lineCount()) : 0;
 	const std::size_t visibleTopLine = topLine;
 	topLine = documentLineForVisibleLine(visibleTopLine);
-	if (mBufferModel.exactLineCountKnown() && topLine >= exactLineCount) topLine = exactLineCount - 1;
+	if (exactLineCountKnown && topLine >= exactLineCount) topLine = exactLineCount - 1;
 	std::size_t requestBottomLine = documentLineForVisibleLine(visibleTopLine + static_cast<std::size_t>(std::max(0, rowCount))) + 1;
-	if (mBufferModel.exactLineCountKnown() && requestBottomLine > exactLineCount) requestBottomLine = exactLineCount;
-	const bool documentWideFoldCache = mBufferModel.exactLineCountKnown();
+	if (exactLineCountKnown && requestBottomLine > exactLineCount) requestBottomLine = exactLineCount;
+	const bool documentWideFoldCache = exactLineCountKnown;
 	auto updateVisibleFoldGutterColumnsForViewport = [&]() noexcept {
 		std::vector<unsigned short> actualDrawLevels;
 		auto rememberDisplayLevel = [&actualDrawLevels](unsigned short level) {
@@ -2418,7 +2428,7 @@ void MRFileEditor::ensureVisibleFoldSpans(std::size_t topLine, int rowCount, MRS
 	                                   language == MRSyntaxLanguage::Make || language == MRSyntaxLanguage::MRMAC;
 	const std::size_t scanTopLine = deterministicFoldScan ? 0 : topLine;
 	std::size_t scanBottomLine = documentWideFoldCache ? exactLineCount : requestBottomLine + scanTail;
-	if (mBufferModel.exactLineCountKnown() && scanBottomLine > exactLineCount) scanBottomLine = exactLineCount;
+	if (exactLineCountKnown && scanBottomLine > exactLineCount) scanBottomLine = exactLineCount;
 
 	mVisibleFoldSpans.clear();
 	mVisibleFoldDocumentId = docId;
@@ -3020,6 +3030,7 @@ int MRFileEditor::paddingColumnsBeforeInsertAtCursor() const noexcept {
 }
 
 bool MRFileEditor::insertBufferText(const std::string &text) {
+	const auto totalStartedAt = std::chrono::steady_clock::now();
 	std::string insertedText = text;
 	std::size_t start = mBufferModel.cursor();
 	std::size_t end = start;
@@ -3027,6 +3038,9 @@ bool MRFileEditor::insertBufferText(const std::string &text) {
 	MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "insert-buffer-text");
 	MRTextBufferModel::Document preview;
 	MRTextBufferModel::CommitResult commit;
+	double applyMs = 0.0;
+	double adoptMs = 0.0;
+	const bool traceLargeFile = shouldTraceLargeFileDiagnostics();
 
 	if (mReadOnly) return false;
 	if (!insertedText.empty()) {
@@ -3047,13 +3061,28 @@ bool MRFileEditor::insertBufferText(const std::string &text) {
 	transaction.replace(range, insertedText);
 	preview = mBufferModel.document();
 	pushUndoSnapshot();
+	const auto applyStartedAt = std::chrono::steady_clock::now();
 	commit = preview.tryApply(transaction);
+	applyMs = elapsedMsSince(applyStartedAt);
 	if (!commit.applied()) {
 		mBufferModel.popUndoSnapshot();
 		return false;
 	}
 	start = range.start + insertedText.size();
-	return adoptCommittedDocument(preview, start, start, start, true, &commit.change);
+	const auto adoptStartedAt = std::chrono::steady_clock::now();
+	const bool adopted = adoptCommittedDocument(preview, start, start, start, true, &commit.change);
+	adoptMs = elapsedMsSince(adoptStartedAt);
+	const double totalMs = elapsedMsSince(totalStartedAt);
+
+	if (totalMs >= kSlowEditorInsertThresholdMs || (traceLargeFile && totalMs >= 5.0)) {
+		std::ostringstream detail;
+		detail << "bytes=" << preview.length() << " insert_bytes=" << insertedText.size() << " apply_ms=" << applyMs << " adopt_ms=" << adoptMs << " total_ms=" << totalMs
+		       << " selection=" << (mBufferModel.hasSelection() ? 1 : 0) << " insert_mode=" << (mInsertMode ? 1 : 0);
+		if (traceLargeFile) traceLargeFileMessage("slow-insert", detail.str());
+		else
+			mrLogMessage(("Slow editor insert: " + detail.str()).c_str());
+	}
+	return adopted;
 }
 
 bool MRFileEditor::applyCurrentLineLeadingIndent(int targetColumn) {
@@ -3189,6 +3218,14 @@ bool MRFileEditor::replaceWholeBuffer(const std::string &text, std::size_t curso
 }
 
 bool MRFileEditor::adoptCommittedDocument(const MRTextBufferModel::Document &document, std::size_t cursorPos, std::size_t selStart, std::size_t selEnd, bool modifiedState, const MRTextBufferModel::DocumentChangeSet *changeSet) {
+	const auto totalStartedAt = std::chrono::steady_clock::now();
+	double preMetricsMs = 0.0;
+	double metricsMs = 0.0;
+	double warmupMs = 0.0;
+	double finalViewMs = 0.0;
+	const bool traceLargeFile = shouldTraceLargeFileDiagnostics() || document.hasMappedOriginal();
+	const bool suppressLineIndexWarmup = changeSet != nullptr && changeSet->changed && useApproximateLargeFileMetrics();
+
 	cursorPos = std::min(cursorPos, document.length());
 	selStart = std::min(selStart, document.length());
 	selEnd = std::min(selEnd, document.length());
@@ -3218,13 +3255,39 @@ bool MRFileEditor::adoptCommittedDocument(const MRTextBufferModel::Document &doc
 		addDirtyRange(changeSet->touchedRange);
 	}
 	mSelectionAnchor = selStart;
+	if (suppressLineIndexWarmup) {
+		const std::uint64_t cancelledTaskId = mLineIndexWarmupTaskId;
+		mSuppressLargeFileLineIndexWarmup = true;
+		if (cancelledTaskId != 0) {
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledTaskId));
+			clearLineIndexWarmupTask(cancelledTaskId);
+		}
+	} else
+		mSuppressLargeFileLineIndexWarmup = false;
+	preMetricsMs = elapsedMsSince(totalStartedAt);
+	const auto metricsStartedAt = std::chrono::steady_clock::now();
 	updateMetrics();
-	scheduleLineIndexWarmupIfNeeded();
+	metricsMs = elapsedMsSince(metricsStartedAt);
+	const auto warmupStartedAt = std::chrono::steady_clock::now();
+	if (!mSuppressLargeFileLineIndexWarmup) scheduleLineIndexWarmupIfNeeded();
 	scheduleSyntaxWarmupIfNeeded();
 	scheduleSaveNormalizationWarmupIfNeeded();
+	warmupMs = elapsedMsSince(warmupStartedAt);
+	const auto finalViewStartedAt = std::chrono::steady_clock::now();
 	ensureCursorVisible(false);
 	updateIndicator();
 	drawView();
+	finalViewMs = elapsedMsSince(finalViewStartedAt);
+	const double totalMs = elapsedMsSince(totalStartedAt);
+
+	if (totalMs >= kSlowEditorAdoptThresholdMs || (traceLargeFile && totalMs >= 5.0)) {
+		std::ostringstream detail;
+		detail << "bytes=" << document.length() << " changed=" << ((changeSet != nullptr && changeSet->changed) ? 1 : 0) << " pre_metrics_ms=" << preMetricsMs << " metrics_ms=" << metricsMs
+		       << " warmup_ms=" << warmupMs << " final_view_ms=" << finalViewMs << " total_ms=" << totalMs;
+		if (traceLargeFile) traceLargeFileMessage("slow-adopt", detail.str());
+		else
+			mrLogMessage(("Slow editor adopt: " + detail.str()).c_str());
+	}
 	return true;
 }
 
@@ -3296,6 +3359,7 @@ std::string MRFileEditor::automaticIndentFillForCursor() const {
 
 std::string MRFileEditor::smartIndentFillForCursor() {
 	const MREditSetupSettings settings = configuredEditSetupSettings();
+	const MRUiIndentStyle uiIndentStyle = configuredUiIndentStyle();
 	const std::size_t cursor = cursorOffset();
 	const std::size_t lineStart = lineStartOffset(cursor);
 	const int baseColumn = leadingIndentColumnForLine(lineStart);
@@ -3311,6 +3375,28 @@ std::string MRFileEditor::smartIndentFillForCursor() {
 	std::string previousPreviousUpperLine;
 	const MRSyntaxLanguage language = mBufferModel.language();
 	const bool smartEnabled = settings.smartIndenting || upperAscii(settings.indentStyle) == "SMART";
+	const auto braceIndentStepColumns = [&]() noexcept {
+		switch (uiIndentStyle) {
+			case MRUiIndentStyle::KandR:
+				return 2;
+			case MRUiIndentStyle::KandR4:
+				return 4;
+			case MRUiIndentStyle::Allman:
+				return 4;
+			case MRUiIndentStyle::Gnome:
+				return 2;
+			case MRUiIndentStyle::Whitesmiths:
+				return 4;
+			case MRUiIndentStyle::Horstmann:
+			default:
+				return 4;
+		}
+	};
+	const auto braceIndentedNextLine = [&]() noexcept {
+		return uiIndentStyle == MRUiIndentStyle::KandR || uiIndentStyle == MRUiIndentStyle::KandR4 || uiIndentStyle == MRUiIndentStyle::Gnome || uiIndentStyle == MRUiIndentStyle::Whitesmiths;
+	};
+	const auto bodyAlignsWithBraceLine = [&]() noexcept { return uiIndentStyle == MRUiIndentStyle::Whitesmiths; };
+	const auto braceIndentedColumn = [&](int column) noexcept { return column + braceIndentStepColumns(); };
 
 	if (lineStart > 0) {
 		const std::size_t previousLineStart = lineStartOffset(lineStart - 1);
@@ -3327,30 +3413,49 @@ std::string MRFileEditor::smartIndentFillForCursor() {
 	if (!smartEnabled) return buildEditIndentFill(settings, 1, targetColumn, configuredTabExpandSetting());
 	if (language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp) {
 		const std::size_t last = lastSignificantByte(beforeCursor);
-		if (last != std::string_view::npos && beforeCursor[last] == '{' &&
-		    isCLikeStructuralBraceLead(trimView(beforeCursor), upperAscii(std::string(trimView(beforeCursor))), previousTrimmed, previousUpperLine, trimView(previousPreviousLineText),
+		if (trimmedBeforeCursor == "{")
+			targetColumn = bodyAlignsWithBraceLine() ? baseColumn : braceIndentedColumn(baseColumn);
+		else if (last != std::string_view::npos && beforeCursor[last] == '{' &&
+		         isCLikeStructuralBraceLead(trimmedBeforeCursor, upperAscii(std::string(trimmedBeforeCursor)), previousTrimmed, previousUpperLine, trimView(previousPreviousLineText),
 		                               previousPreviousUpperLine, language))
-			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+			targetColumn = braceIndentedColumn(baseColumn);
+		else if (isCLikeStructuralLeadLine(trimmedBeforeCursor, upperAscii(std::string(trimmedBeforeCursor)), language))
+			targetColumn = braceIndentedNextLine() ? braceIndentedColumn(baseColumn) : baseColumn;
 	} else if (language == MRSyntaxLanguage::JavaScript || language == MRSyntaxLanguage::Json) {
 		const std::size_t last = lastSignificantByte(beforeCursor);
-		if (language == MRSyntaxLanguage::JavaScript && last != std::string_view::npos && beforeCursor[last] == '{' &&
-		    isCLikeStructuralBraceLead(trimView(beforeCursor), upperAscii(std::string(trimView(beforeCursor))), previousTrimmed, previousUpperLine, trimView(previousPreviousLineText),
+		if (language == MRSyntaxLanguage::JavaScript && trimmedBeforeCursor == "{")
+			targetColumn = bodyAlignsWithBraceLine() ? baseColumn : braceIndentedColumn(baseColumn);
+		else if (language == MRSyntaxLanguage::JavaScript && last != std::string_view::npos && beforeCursor[last] == '{' &&
+		         isCLikeStructuralBraceLead(trimmedBeforeCursor, upperAscii(std::string(trimmedBeforeCursor)), previousTrimmed, previousUpperLine, trimView(previousPreviousLineText),
 		                               previousPreviousUpperLine, language))
-			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+			targetColumn = braceIndentedColumn(baseColumn);
+		else if (language == MRSyntaxLanguage::JavaScript &&
+		         (isCLikeStructuralLeadLine(trimmedBeforeCursor, upperAscii(std::string(trimmedBeforeCursor)), language) || isJavaScriptArrowFunctionLeadLine(trimmedBeforeCursor)))
+			targetColumn = braceIndentedNextLine() ? braceIndentedColumn(baseColumn) : baseColumn;
 		else if (language == MRSyntaxLanguage::Json && last != std::string_view::npos && (beforeCursor[last] == '{' || beforeCursor[last] == '['))
 			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
 	} else if (language == MRSyntaxLanguage::Swift) {
+		const std::string upperLine = upperAscii(std::string(trimmedBeforeCursor));
 		const std::size_t last = lastSignificantByte(beforeCursor);
-		if (last != std::string_view::npos && beforeCursor[last] == '{' &&
-		    isCLikeStructuralBraceLead(trimView(beforeCursor), upperAscii(std::string(trimView(beforeCursor))), previousTrimmed, previousUpperLine, trimView(previousPreviousLineText),
+		if (trimmedBeforeCursor == "{")
+			targetColumn = bodyAlignsWithBraceLine() ? baseColumn : braceIndentedColumn(baseColumn);
+		else if (last != std::string_view::npos && beforeCursor[last] == '{' &&
+		         isCLikeStructuralBraceLead(trimmedBeforeCursor, upperLine, previousTrimmed, previousUpperLine, trimView(previousPreviousLineText),
 		                               previousPreviousUpperLine, language))
-			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+			targetColumn = braceIndentedColumn(baseColumn);
+		else if (isSwiftStructuralLeadLine(upperLine))
+			targetColumn = braceIndentedNextLine() ? braceIndentedColumn(baseColumn) : baseColumn;
 	} else if (language == MRSyntaxLanguage::Rust || language == MRSyntaxLanguage::Go) {
+		const std::string upperLine = upperAscii(std::string(trimmedBeforeCursor));
 		const std::size_t last = lastSignificantByte(beforeCursor);
-		if (last != std::string_view::npos && beforeCursor[last] == '{' &&
-		    isCLikeStructuralBraceLead(trimView(beforeCursor), upperAscii(std::string(trimView(beforeCursor))), previousTrimmed, previousUpperLine, trimView(previousPreviousLineText),
+		if (trimmedBeforeCursor == "{")
+			targetColumn = bodyAlignsWithBraceLine() ? baseColumn : braceIndentedColumn(baseColumn);
+		else if (last != std::string_view::npos && beforeCursor[last] == '{' &&
+		         isCLikeStructuralBraceLead(trimmedBeforeCursor, upperLine, previousTrimmed, previousUpperLine, trimView(previousPreviousLineText),
 		                               previousPreviousUpperLine, language))
-			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+			targetColumn = braceIndentedColumn(baseColumn);
+		else if ((language == MRSyntaxLanguage::Rust && isRustStructuralLeadLine(upperLine)) || (language == MRSyntaxLanguage::Go && isGoStructuralLeadLine(upperLine)))
+			targetColumn = braceIndentedNextLine() ? braceIndentedColumn(baseColumn) : baseColumn;
 	} else if (language == MRSyntaxLanguage::Python) {
 		const std::string upperLine = upperAscii(std::string(trimmedBeforeCursor));
 		if (!upperLine.empty() && upperLine.back() == ':' && isPythonIndentLead(upperLine))
@@ -4727,6 +4832,7 @@ bool MRFileEditor::writeDocumentToPath(const char *targetPath) {
 }
 
 void MRFileEditor::scheduleLineIndexWarmupIfNeeded() {
+	if (mSuppressLargeFileLineIndexWarmup) return;
 	if (!mBufferModel.document().hasMappedOriginal() || mBufferModel.document().exactLineCountKnown()) {
 		std::uint64_t cancelledTaskId = mLineIndexWarmupTaskId;
 		bool hadTask = cancelledTaskId != 0;
@@ -5002,9 +5108,7 @@ void MRFileEditor::updateMetrics() {
 
 	if (useApproximateLargeFileMetrics()) {
 		limitX = dynamicLargeFileWidthLimit();
-		if (mBufferModel.exactLineCountKnown()) limitY = std::max<int>(1, static_cast<int>(foldedVisibleLineCount()));
-		else
-			limitY = dynamicLargeFileLineLimit();
+		limitY = dynamicLargeFileLineLimit();
 	} else {
 		limitX = longestLineWidth();
 		limitY = std::max<int>(1, static_cast<int>(foldedVisibleLineCount()));

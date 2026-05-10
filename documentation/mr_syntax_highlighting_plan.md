@@ -1158,6 +1158,28 @@ berechnete Zeilenbereiche in einer Range-Tabelle festhalten
 freie Worker-Slots opportunistisch weiter belegen
 ```
 
+Aktueller Performance-Befund, der in dieser Phase ausdrücklich mitgeführt werden muss:
+
+```text
+bei sehr großen Dateien wird der Folding-Pfad mit zu globaler Strukturermittlung im Scroll-Hotpath zu teuer
+ohne Code Folding ist Scrollen wieder performant
+mit Code Folding wird Scrollen wieder laggy
+```
+
+Daraus folgt für Zug 20 zusätzlich:
+
+```text
+nicht nur cursor-zentriert denken
+sondern viewport-zentriert plus Sicherheitsrand
+```
+
+Praktische Relevanz:
+
+```text
+der sichtbare Bereich muss mit minimal nötiger Strukturinformation versorgt werden
+ohne im Hotpath dokumentweit oder unnötig tief nach TOF/EOF zu analysieren
+```
+
 Wichtige Einschränkung:
 
 ```text
@@ -1186,6 +1208,7 @@ Prüffragen:
 2. welche müssen checkpoint-basiert strikt vorwärts bleiben
 3. ob Folding- und Indent-Strukturinfos stärker profitieren als Coloring
 4. ob ein messbarer Scheduling- und Latenzgewinn entsteht
+5. wie ein viewport-zentrierter Folding-Scan mit Sicherheitsrand aufgebaut wird, ohne bei großen Dateien globale Strukturkosten in den Scroll-Hotpath zu ziehen
 ```
 
 Nicht erlaubt:

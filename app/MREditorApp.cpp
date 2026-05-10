@@ -66,6 +66,13 @@
 
 namespace {
 static constexpr std::chrono::milliseconds kRecordingBlinkInterval(450);
+static constexpr double kSlowStartupSettingsThresholdMs = 100.0;
+static constexpr double kSlowStartupVmApplyThresholdMs = 25.0;
+static constexpr double kSlowStartupMacroThresholdMs = 10.0;
+
+double elapsedMsSince(std::chrono::steady_clock::time_point startedAt) noexcept {
+	return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count();
+}
 
 bool shouldInvalidateScreenBaseForEvent(ushort eventWhat) noexcept {
 	switch (eventWhat) {
@@ -324,6 +331,7 @@ class StartupSettingsModeGuard {
 // settings.mrmac source is executed by the VM in startup mode, and the in-memory
 // settings state becomes authoritative only after this step succeeds.
 bool applySettingsSourceViaVm(const std::string &settingsPath, const std::string &source, std::string *errorMessage) {
+	const auto startedAt = std::chrono::steady_clock::now();
 	size_t bytecodeSize = 0;
 	unsigned char *bytecode = nullptr;
 	int macroCount = 0;
@@ -333,12 +341,24 @@ bool applySettingsSourceViaVm(const std::string &settingsPath, const std::string
 	std::string compileError;
 	std::string vmError;
 	std::string themeError;
+	double resetMs = 0.0;
+	double compileMs = 0.0;
+	double execMs = 0.0;
+	double themeMs = 0.0;
 
-	if (!resetConfiguredSettingsModel(normalizedSettingsPath, resetPaths, &vmError)) {
-		if (errorMessage != nullptr) *errorMessage = "Settings VM preload reset failed: " + vmError;
-		return false;
+	{
+		const auto phaseStartedAt = std::chrono::steady_clock::now();
+		if (!resetConfiguredSettingsModel(normalizedSettingsPath, resetPaths, &vmError)) {
+			if (errorMessage != nullptr) *errorMessage = "Settings VM preload reset failed: " + vmError;
+			return false;
+		}
+		resetMs = elapsedMsSince(phaseStartedAt);
 	}
-	bytecode = compile_macro_code(source.c_str(), &bytecodeSize);
+	{
+		const auto phaseStartedAt = std::chrono::steady_clock::now();
+		bytecode = compile_macro_code(source.c_str(), &bytecodeSize);
+		compileMs = elapsedMsSince(phaseStartedAt);
+	}
 	if (bytecode == nullptr) {
 		const char *err = get_last_compile_error();
 		compileError = (err != nullptr && *err != '\0') ? err : "Compilation failed.";
@@ -353,10 +373,12 @@ bool applySettingsSourceViaVm(const std::string &settingsPath, const std::string
 	}
 	{
 		StartupSettingsModeGuard startupSettingsMode;
+		const auto phaseStartedAt = std::chrono::steady_clock::now();
 		for (int i = 0; i < macroCount; ++i) {
 			int entry = get_compiled_macro_entry(i);
 			const char *macroName = get_compiled_macro_name(i);
 			std::size_t logStart = vm.log.size();
+			const auto macroStartedAt = std::chrono::steady_clock::now();
 
 			if (entry < 0 || static_cast<size_t>(entry) >= bytecodeSize) {
 				std::free(bytecode);
@@ -369,12 +391,36 @@ bool applySettingsSourceViaVm(const std::string &settingsPath, const std::string
 				if (errorMessage != nullptr) *errorMessage = "Settings load failed (runtime): " + vmError;
 				return false;
 			}
+			if (!mrvmFlushPendingStartupKeymapBatch(&vmError)) {
+				std::free(bytecode);
+				if (errorMessage != nullptr) *errorMessage = "Settings load failed (keymap batch): " + (vmError.empty() ? std::string("invalid keymap batch.") : vmError);
+				return false;
+			}
+			const double macroMs = elapsedMsSince(macroStartedAt);
+			if (macroMs >= kSlowStartupMacroThresholdMs) {
+				std::ostringstream detail;
+				detail << "Slow startup macro: index=" << i << " name=" << (macroName != nullptr ? macroName : "<unnamed>") << " ms=" << macroMs
+				       << " log_lines=" << (vm.log.size() - logStart);
+				mrLogMessage(detail.str());
+			}
 		}
+		execMs = elapsedMsSince(phaseStartedAt);
 	}
 	std::free(bytecode);
-	if (!loadColorThemeFile(configuredColorThemeFilePath(), &themeError)) {
-		if (errorMessage != nullptr) *errorMessage = "Color theme load failed: " + themeError;
-		return false;
+	{
+		const auto phaseStartedAt = std::chrono::steady_clock::now();
+		if (!loadColorThemeFile(configuredColorThemeFilePath(), &themeError)) {
+			if (errorMessage != nullptr) *errorMessage = "Color theme load failed: " + themeError;
+			return false;
+		}
+		themeMs = elapsedMsSince(phaseStartedAt);
+	}
+	const double totalMs = elapsedMsSince(startedAt);
+	if (totalMs >= kSlowStartupVmApplyThresholdMs) {
+		std::ostringstream detail;
+		detail << "Slow startup VM apply: reset_ms=" << resetMs << " compile_ms=" << compileMs << " exec_ms=" << execMs << " theme_ms=" << themeMs
+		       << " total_ms=" << totalMs << " macros=" << macroCount << " bytecode=" << bytecodeSize << " path=" << normalizedSettingsPath;
+		mrLogMessage(detail.str());
 	}
 	clearConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
@@ -453,34 +499,56 @@ ushort mrEditorDialog(int dialog, ...) {
 // VM apply. The runtime settings state is authoritative only after the final
 // applySettingsSourceViaVm call completes successfully.
 bool loadStartupSettingsMacro(const std::string &overridePath, std::string *errorMessage) {
+	const auto totalStartedAt = std::chrono::steady_clock::now();
 	std::string settingsPath = overridePath.empty() ? defaultSettingsMacroFilePath() : overridePath;
 	std::string source;
 	MRSettingsLoadReport report;
 	std::string canonicalSource;
+	double ensureMs = 0.0;
+	double readMs = 0.0;
+	double prepareMs = 0.0;
+	double applyMs = 0.0;
 
 	if (settingsPath.empty()) {
 		if (errorMessage != nullptr) *errorMessage = "Settings path is empty.";
 		return false;
 	}
+	const auto ensureStartedAt = std::chrono::steady_clock::now();
 	if (!ensureSettingsMacroFileExists(settingsPath, errorMessage)) {
+		ensureMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - ensureStartedAt).count();
 		mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings bootstrap failed (create defaults).");
 		return false;
 	}
+	ensureMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - ensureStartedAt).count();
+	const auto readStartedAt = std::chrono::steady_clock::now();
 	if (!readTextFile(settingsPath, source)) {
 		source.clear();
 	}
+	readMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - readStartedAt).count();
+	const auto prepareStartedAt = std::chrono::steady_clock::now();
 	if (!prepareStartupSettingsSource(settingsPath, source, &report, canonicalSource, errorMessage)) {
+		prepareMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - prepareStartedAt).count();
 		mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings canonicalization failed.");
 		return false;
 	}
+	prepareMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - prepareStartedAt).count();
+	const auto applyStartedAt = std::chrono::steady_clock::now();
 	if (!applySettingsSourceViaVm(settingsPath, canonicalSource, errorMessage)) {
+		applyMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - applyStartedAt).count();
 		mrLogMessage((errorMessage != nullptr && !errorMessage->empty()) ? errorMessage->c_str() : "Settings VM apply failed.");
 		return false;
 	}
+	applyMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - applyStartedAt).count();
 
 	mrLogMessage(("Settings loaded via VM: " + settingsPath).c_str());
 	mrLogMessage(("Color theme loaded: " + configuredColorThemeFilePath()).c_str());
 	mrLogMessage(("Settings MACROPATH: " + defaultMacroDirectoryPath()).c_str());
+	const double totalMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - totalStartedAt).count();
+	if (totalMs >= kSlowStartupSettingsThresholdMs) {
+		std::ostringstream detail;
+		detail << "Slow startup settings: ensure_ms=" << ensureMs << " read_ms=" << readMs << " prepare_ms=" << prepareMs << " vm_apply_ms=" << applyMs << " total_ms=" << totalMs << " path=" << settingsPath;
+		mrLogMessage(detail.str());
+	}
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }

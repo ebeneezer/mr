@@ -75,6 +75,12 @@ void applyVirtualDesktopConfigurationChange(int count);
 
 namespace {
 using Value = VirtualMachine::Value;
+static constexpr double kSlowMrsetupIntrinsicThresholdMs = 5.0;
+static constexpr double kSlowKeymapPayloadThresholdMs = 5.0;
+
+double elapsedMsSince(std::chrono::steady_clock::time_point startedAt) noexcept {
+	return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count();
+}
 
 struct GlobalEntry {
 	int type;
@@ -117,6 +123,59 @@ struct IndexedBoundMacroEntry {
 	}
 };
 
+struct StartupKeymapBatchState {
+	bool initialized = false;
+	bool profilesDirty = false;
+	bool activeDirty = false;
+	std::vector<MRKeymapProfile> profiles;
+	std::string activeProfile;
+};
+
+StartupKeymapBatchState &startupKeymapBatchState() {
+	static StartupKeymapBatchState state;
+	return state;
+}
+
+void clearStartupKeymapBatchState() noexcept {
+	StartupKeymapBatchState &state = startupKeymapBatchState();
+
+	state.initialized = false;
+	state.profilesDirty = false;
+	state.activeDirty = false;
+	state.profiles.clear();
+	state.activeProfile.clear();
+}
+
+void ensureStartupKeymapBatchInitialized() {
+	StartupKeymapBatchState &state = startupKeymapBatchState();
+
+	if (state.initialized) return;
+	state.profiles = configuredKeymapProfiles();
+	state.activeProfile = configuredActiveKeymapProfile();
+	state.initialized = true;
+}
+
+bool hasPendingStartupKeymapBatch() noexcept {
+	const StartupKeymapBatchState &state = startupKeymapBatchState();
+	return state.initialized && (state.profilesDirty || state.activeDirty);
+}
+
+bool flushStartupKeymapBatch(std::string *errorMessage) {
+	StartupKeymapBatchState &state = startupKeymapBatchState();
+
+	if (!state.initialized) {
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	if (state.profilesDirty)
+		if (!setConfiguredKeymapProfiles(state.profiles, errorMessage)) return false;
+	if (state.activeDirty)
+		if (!setConfiguredActiveKeymapProfile(state.activeProfile, errorMessage)) return false;
+	clearStartupKeymapBatchState();
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
 bool keymapDiagnosticsContainErrors(const std::vector<MRKeymapDiagnostic> &diagnostics) {
 	for (const MRKeymapDiagnostic &diagnostic : diagnostics)
 		if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error) return true;
@@ -136,38 +195,131 @@ bool assignKeymapPayloadError(std::string *errorMessage, std::string message) {
 }
 
 bool applyConfiguredActiveKeymapProfilePayload(const std::string &payload, std::string *errorMessage) {
+	const auto startedAt = std::chrono::steady_clock::now();
 	MRKeymapProfile activeProfileRecord;
+	const auto parseStartedAt = std::chrono::steady_clock::now();
 	const auto diagnostics = parseKeymapProfilePayload(payload, activeProfileRecord);
+	const double parseMs = elapsedMsSince(parseStartedAt);
 
 	if (keymapDiagnosticsContainErrors(diagnostics)) return assignKeymapPayloadError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
-	return setConfiguredActiveKeymapProfile(activeProfileRecord.name, errorMessage);
+	bool ok = false;
+	if (mrvmIsStartupSettingsMode()) {
+		ensureStartupKeymapBatchInitialized();
+		StartupKeymapBatchState &state = startupKeymapBatchState();
+		state.activeProfile = activeProfileRecord.name;
+		state.activeDirty = true;
+		ok = true;
+		if (errorMessage != nullptr) errorMessage->clear();
+	} else
+		ok = setConfiguredActiveKeymapProfile(activeProfileRecord.name, errorMessage);
+	const double totalMs = elapsedMsSince(startedAt);
+	if (totalMs >= kSlowKeymapPayloadThresholdMs) {
+		std::ostringstream detail;
+		detail << "Slow startup keymap payload: kind=ACTIVE profile='" << activeProfileRecord.name << "' parse_ms=" << parseMs << " total_ms=" << totalMs;
+		mrLogMessage(detail.str());
+	}
+	return ok;
 }
 
 bool applyConfiguredKeymapProfilePayload(const std::string &payload, std::string *errorMessage) {
+	const auto startedAt = std::chrono::steady_clock::now();
 	MRKeymapProfile profile;
+	const auto parseStartedAt = std::chrono::steady_clock::now();
 	const auto diagnostics = parseKeymapProfilePayload(payload, profile);
-	std::vector<MRKeymapProfile> profiles = configuredKeymapProfiles();
+	const double parseMs = elapsedMsSince(parseStartedAt);
 
 	if (keymapDiagnosticsContainErrors(diagnostics)) return assignKeymapPayloadError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
+	std::vector<MRKeymapProfile> profiles = configuredKeymapProfiles();
+	if (mrvmIsStartupSettingsMode()) {
+		ensureStartupKeymapBatchInitialized();
+		profiles = startupKeymapBatchState().profiles;
+	}
 	for (MRKeymapProfile &existing : profiles)
 		if (existing.name == profile.name) {
-			existing = std::move(profile);
-			return setConfiguredKeymapProfiles(profiles, errorMessage);
+			existing = profile;
+			const std::string profileName = existing.name;
+			const std::size_t bindingCount = existing.bindings.size();
+			if (mrvmIsStartupSettingsMode()) {
+				StartupKeymapBatchState &state = startupKeymapBatchState();
+				state.profiles = std::move(profiles);
+				state.profilesDirty = true;
+				if (errorMessage != nullptr) errorMessage->clear();
+				const double totalMs = elapsedMsSince(startedAt);
+				if (totalMs >= kSlowKeymapPayloadThresholdMs) {
+					std::ostringstream detail;
+					detail << "Slow startup keymap payload: kind=PROFILE profile='" << profileName << "' replaced=1 bindings=" << bindingCount
+					       << " parse_ms=" << parseMs << " total_ms=" << totalMs;
+					mrLogMessage(detail.str());
+				}
+				return true;
+			}
+			const bool ok = setConfiguredKeymapProfiles(profiles, errorMessage);
+			const double totalMs = elapsedMsSince(startedAt);
+			if (totalMs >= kSlowKeymapPayloadThresholdMs) {
+				std::ostringstream detail;
+				detail << "Slow startup keymap payload: kind=PROFILE profile='" << profileName << "' replaced=1 bindings=" << bindingCount << " parse_ms=" << parseMs
+				       << " total_ms=" << totalMs;
+				mrLogMessage(detail.str());
+			}
+			return ok;
 		}
-	profiles.push_back(std::move(profile));
-	return setConfiguredKeymapProfiles(profiles, errorMessage);
+	profiles.push_back(profile);
+	const std::string appendedName = profiles.back().name;
+	const std::size_t appendedBindingCount = profiles.back().bindings.size();
+	bool ok = false;
+	if (mrvmIsStartupSettingsMode()) {
+		StartupKeymapBatchState &state = startupKeymapBatchState();
+		state.profiles = std::move(profiles);
+		state.profilesDirty = true;
+		if (errorMessage != nullptr) errorMessage->clear();
+		ok = true;
+	} else
+		ok = setConfiguredKeymapProfiles(profiles, errorMessage);
+	const double totalMs = elapsedMsSince(startedAt);
+	if (totalMs >= kSlowKeymapPayloadThresholdMs) {
+		std::ostringstream detail;
+		detail << "Slow startup keymap payload: kind=PROFILE profile='" << appendedName << "' replaced=0 bindings=" << appendedBindingCount << " parse_ms=" << parseMs
+		       << " total_ms=" << totalMs;
+		mrLogMessage(detail.str());
+	}
+	return ok;
 }
 
 bool applyConfiguredKeymapBindingPayload(const std::string &payload, std::string *errorMessage) {
+	const auto startedAt = std::chrono::steady_clock::now();
 	MRKeymapBindingRecord binding;
+	const auto parseStartedAt = std::chrono::steady_clock::now();
 	const auto diagnostics = parseKeymapBindingPayload(payload, binding);
+	const double parseMs = elapsedMsSince(parseStartedAt);
 	std::vector<MRKeymapProfile> profiles = configuredKeymapProfiles();
 
 	if (keymapDiagnosticsContainErrors(diagnostics)) return assignKeymapPayloadError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
+	if (mrvmIsStartupSettingsMode()) {
+		ensureStartupKeymapBatchInitialized();
+		profiles = startupKeymapBatchState().profiles;
+	}
 	for (MRKeymapProfile &profile : profiles)
 		if (profile.name == binding.profileName) {
-			profile.bindings.push_back(std::move(binding));
-			return setConfiguredKeymapProfiles(profiles, errorMessage);
+			profile.bindings.push_back(binding);
+			const std::string profileName = profile.name;
+			const std::size_t bindingCount = profile.bindings.size();
+			bool ok = false;
+			if (mrvmIsStartupSettingsMode()) {
+				StartupKeymapBatchState &state = startupKeymapBatchState();
+				state.profiles = std::move(profiles);
+				state.profilesDirty = true;
+				if (errorMessage != nullptr) errorMessage->clear();
+				ok = true;
+			} else
+				ok = setConfiguredKeymapProfiles(profiles, errorMessage);
+			const double totalMs = elapsedMsSince(startedAt);
+			if (totalMs >= kSlowKeymapPayloadThresholdMs) {
+				std::ostringstream detail;
+				detail << "Slow startup keymap payload: kind=BIND profile='" << profileName << "' bindings=" << bindingCount << " parse_ms=" << parseMs
+				       << " total_ms=" << totalMs;
+				mrLogMessage(detail.str());
+			}
+			return ok;
 		}
 	return assignKeymapPayloadError(errorMessage, "Binding references unknown keymap profile: " + binding.profileName);
 }
@@ -8177,10 +8329,16 @@ std::vector<std::string> mrvmProcessArguments() {
 
 void mrvmSetStartupSettingsMode(bool enabled) noexcept {
 	g_startupSettingsMode = enabled;
+	if (enabled) clearStartupKeymapBatchState();
+	else if (hasPendingStartupKeymapBatch()) clearStartupKeymapBatchState();
 }
 
 bool mrvmIsStartupSettingsMode() noexcept {
 	return g_startupSettingsMode;
+}
+
+bool mrvmFlushPendingStartupKeymapBatch(std::string *errorMessage) {
+	return flushStartupKeymapBatch(errorMessage);
 }
 
 VirtualMachine::Value::Value() : type(TYPE_INT), i(0), r(0.0), c(0) {
@@ -8686,6 +8844,8 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					if (!mrvmIsStartupSettingsMode()) throw std::runtime_error("MRSETUP is only allowed in settings.mrmac during startup.");
 					if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1])) throw std::runtime_error("MRSETUP expects (string, string).");
 					setupKey = upperKey(trimAscii(valueAsString(args[0])));
+					if (setupKey != "KEYMAP_PROFILE" && setupKey != "KEYMAP_BIND" && setupKey != "ACTIVE_KEYMAP_PROFILE")
+						if (!mrvmFlushPendingStartupKeymapBatch(&errorText)) throw std::runtime_error("MRSETUP keymap batch flush failed: " + (errorText.empty() ? std::string("invalid keymap batch.") : errorText));
 					if (setupKey == "SETTINGS_VERSION") {
 						if (trimAscii(valueAsString(args[1])) != "2") throw std::runtime_error("MRSETUP(SETTINGS_VERSION) supports only version 2.");
 					} else if (setupKey == "SETTINGSPATH") {
@@ -8733,10 +8893,30 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							case MRSettingsKeyClass::Version:
 							case MRSettingsKeyClass::Path:
 							case MRSettingsKeyClass::Global:
-								if (!applyConfiguredSettingsAssignment(setupKey, valueAsString(args[1]), activePaths, &errorText)) throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
+								{
+									const auto applyStartedAt = std::chrono::steady_clock::now();
+									if (!applyConfiguredSettingsAssignment(setupKey, valueAsString(args[1]), activePaths, &errorText))
+										throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
+									const double applyMs = elapsedMsSince(applyStartedAt);
+									if (applyMs >= kSlowMrsetupIntrinsicThresholdMs) {
+										std::ostringstream detail;
+										detail << "Slow MRSETUP intrinsic: key=" << setupKey << " class=global ms=" << applyMs;
+										mrLogMessage(detail.str());
+									}
+								}
 								break;
 							case MRSettingsKeyClass::Edit:
-								if (!applyConfiguredEditSetupValue(setupKey, valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
+								{
+									const auto applyStartedAt = std::chrono::steady_clock::now();
+									if (!applyConfiguredEditSetupValue(setupKey, valueAsString(args[1]), &errorText))
+										throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
+									const double applyMs = elapsedMsSince(applyStartedAt);
+									if (applyMs >= kSlowMrsetupIntrinsicThresholdMs) {
+										std::ostringstream detail;
+										detail << "Slow MRSETUP intrinsic: key=" << setupKey << " class=edit ms=" << applyMs;
+										mrLogMessage(detail.str());
+									}
+								}
 								if (setupKey == "TAB_EXPAND") {
 									BackgroundEditSession *session = currentBackgroundEditSession();
 									if (session != nullptr) session->tabExpand = configuredTabExpandSetting();
@@ -8745,7 +8925,17 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 								}
 								break;
 							case MRSettingsKeyClass::ColorInline:
-								if (!applyConfiguredColorSetupValue(setupKey, valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
+								{
+									const auto applyStartedAt = std::chrono::steady_clock::now();
+									if (!applyConfiguredColorSetupValue(setupKey, valueAsString(args[1]), &errorText))
+										throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
+									const double applyMs = elapsedMsSince(applyStartedAt);
+									if (applyMs >= kSlowMrsetupIntrinsicThresholdMs) {
+										std::ostringstream detail;
+										detail << "Slow MRSETUP intrinsic: key=" << setupKey << " class=color ms=" << applyMs;
+										mrLogMessage(detail.str());
+									}
+								}
 								break;
 						}
 					runtimeErrorLevel() = 0;
