@@ -16,6 +16,7 @@ enum class MRSyntaxLanguage : unsigned char {
 	Json,
 	Bash,
 	Zsh,
+	Fish,
 	Perl,
 	Swift,
 	Rust,
@@ -141,6 +142,11 @@ class MRBashSyntaxHighlighter final : public MRSyntaxHighlighter {
 };
 
 class MRZshSyntaxHighlighter final : public MRSyntaxHighlighter {
+  public:
+	virtual MRSyntaxLineResult highlightLine(std::string_view line, MRSyntaxLineState previousState) override;
+};
+
+class MRFishSyntaxHighlighter final : public MRSyntaxHighlighter {
   public:
 	virtual MRSyntaxLineResult highlightLine(std::string_view line, MRSyntaxLineState previousState) override;
 };

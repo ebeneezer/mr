@@ -12,6 +12,7 @@ class MRColumnListView;
 class TGroup;
 class TInputLine;
 class TView;
+class MRScrollableDialog;
 
 class MRDropList {
   public:
@@ -32,6 +33,7 @@ class MRDropList {
 
 	MRColumnListView *listView = nullptr;
 	TGroup *listOwner = nullptr;
+	MRScrollableDialog *scrollOwner = nullptr;
 	TView *buttonView = nullptr;
 	std::vector<std::string> itemValues;
 };

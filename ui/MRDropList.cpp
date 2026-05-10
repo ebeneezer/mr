@@ -12,6 +12,7 @@
 #include "MRDropList.hpp"
 
 #include "MRColumnListView.hpp"
+#include "../dialogs/MRSetupCommon.hpp"
 
 #include <algorithm>
 #include <vector>
@@ -71,7 +72,10 @@ MRDropList::~MRDropList() {
 TView *MRDropList::createButton(TGroup &owner, const TRect &bounds, TInputLine *link, TView *relay, ushort command, bool triggerDownKey) {
 	if (buttonView != nullptr) return buttonView;
 	buttonView = new TDropListButton(bounds, link, relay, command, triggerDownKey);
-	owner.insert(buttonView);
+	if (MRScrollableDialog *scrollable = dynamic_cast<MRScrollableDialog *>(&owner))
+		scrollable->addManaged(buttonView, bounds);
+	else
+		owner.insert(buttonView);
 	return buttonView;
 }
 
@@ -103,16 +107,25 @@ void MRDropList::show(TGroup &owner, const TRect &anchor, const std::vector<std:
 		}
 
 	listView = new MRColumnListView(bounds, nullptr, relay, 0, acceptCommand, true);
-	listOwner = &owner;
 	itemValues = values;
-	listOwner->insert(listView);
+	if (MRScrollableDialog *scrollable = dynamic_cast<MRScrollableDialog *>(&owner)) {
+		scrollOwner = scrollable;
+		scrollOwner->addManaged(listView, bounds);
+	} else {
+		listOwner = &owner;
+		listOwner->insert(listView);
+	}
 	listView->setRows(rows, selection);
 	listView->select();
 }
 
 void MRDropList::hide() {
 	if (listView == nullptr) return;
-	if (listOwner != nullptr) listOwner->remove(listView);
+	if (scrollOwner != nullptr) {
+		scrollOwner->removeManaged(listView);
+		scrollOwner = nullptr;
+	} else if (listOwner != nullptr)
+		listOwner->remove(listView);
 	TObject::destroy(listView);
 	listView = nullptr;
 	listOwner = nullptr;

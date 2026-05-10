@@ -9,7 +9,7 @@ bool isIndentWhitespace(char ch) noexcept {
 
 bool isStatefulSyntaxLanguage(MRSyntaxLanguage language) noexcept {
 	return language == MRSyntaxLanguage::MRMAC || language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp || language == MRSyntaxLanguage::JavaScript || language == MRSyntaxLanguage::Python ||
-	       language == MRSyntaxLanguage::Markdown || language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh || language == MRSyntaxLanguage::Perl || language == MRSyntaxLanguage::Swift || language == MRSyntaxLanguage::Rust ||
+	       language == MRSyntaxLanguage::Markdown || language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh || language == MRSyntaxLanguage::Fish || language == MRSyntaxLanguage::Perl || language == MRSyntaxLanguage::Swift || language == MRSyntaxLanguage::Rust ||
 	       language == MRSyntaxLanguage::Go;
 }
 
@@ -109,6 +109,46 @@ bool isShellFunctionHeadLine(std::string_view trimmed, std::string_view upperLin
 	return true;
 }
 
+bool isFishFunctionLead(std::string_view upperLine) noexcept {
+	return upperLine.starts_with("FUNCTION ");
+}
+
+bool isFishIfLead(std::string_view upperLine) noexcept {
+	return upperLine.starts_with("IF ");
+}
+
+bool isFishElseIfLead(std::string_view upperLine) noexcept {
+	return upperLine.starts_with("ELSE IF ");
+}
+
+bool isFishElseLead(std::string_view upperLine) noexcept {
+	return upperLine == "ELSE";
+}
+
+bool isFishWhileLead(std::string_view upperLine) noexcept {
+	return upperLine.starts_with("WHILE ");
+}
+
+bool isFishForLead(std::string_view upperLine) noexcept {
+	return upperLine.starts_with("FOR ") && (upperLine.find(" IN ") != std::string_view::npos || upperLine.ends_with(" IN"));
+}
+
+bool isFishSwitchLead(std::string_view upperLine) noexcept {
+	return upperLine.starts_with("SWITCH ");
+}
+
+bool isFishCaseLead(std::string_view upperLine) noexcept {
+	return upperLine.starts_with("CASE ");
+}
+
+bool isFishBeginLead(std::string_view upperLine) noexcept {
+	return upperLine == "BEGIN";
+}
+
+bool isFishEndLead(std::string_view upperLine) noexcept {
+	return upperLine == "END";
+}
+
 bool startsWithKeywordToken(std::string_view upperLine, std::string_view keyword) noexcept {
 	if (!upperLine.starts_with(keyword)) return false;
 	if (upperLine.size() == keyword.size()) return true;
@@ -129,11 +169,29 @@ enum : int {
 	kShellBlockCase = 3,
 };
 
+enum : int {
+	kFishBlockNone = 0,
+	kFishBlockConditional = 1,
+	kFishBlockLoop = 2,
+	kFishBlockSwitch = 3,
+	kFishBlockCase = 4,
+	kFishBlockGeneric = 5,
+};
+
 int shellIndentBlockKind(std::string_view upperLine) noexcept {
 	if (upperLine == "THEN" || upperLine.ends_with(" THEN") || upperLine == "ELSE" || upperLine.starts_with("ELIF ")) return kShellBlockConditional;
 	if (upperLine == "DO" || upperLine.ends_with(" DO") || upperLine.starts_with("SELECT ") || upperLine.starts_with("UNTIL ")) return kShellBlockLoop;
 	if (upperLine.starts_with("CASE ") && upperLine.ends_with(" IN")) return kShellBlockCase;
 	return kShellBlockNone;
+}
+
+int fishIndentBlockKind(std::string_view upperLine) noexcept {
+	if (isFishIfLead(upperLine) || isFishElseIfLead(upperLine) || isFishElseLead(upperLine)) return kFishBlockConditional;
+	if (isFishWhileLead(upperLine) || isFishForLead(upperLine)) return kFishBlockLoop;
+	if (isFishSwitchLead(upperLine)) return kFishBlockSwitch;
+	if (isFishCaseLead(upperLine)) return kFishBlockCase;
+	if (isFishFunctionLead(upperLine) || isFishBeginLead(upperLine)) return kFishBlockGeneric;
+	return kFishBlockNone;
 }
 
 int perlStructuredBlockKind(std::string_view trimmed, std::string_view upperLine) noexcept {
@@ -593,6 +651,9 @@ enum class SmartDedentKind {
 	ShellConditional,
 	ShellLoop,
 	ShellCase,
+	FishConditional,
+	FishCase,
+	FishEnd,
 	MRMACConditional,
 	MRMACEnd,
 	MRMACMacro,
@@ -620,6 +681,11 @@ SmartDedentRequest classifySmartDedentRequest(std::string_view trimmed, MRSyntax
 			if (upperLine == "FI" || normalizedUpper == "ELSE" || normalizedUpper.starts_with("ELIF ")) return {SmartDedentKind::ShellConditional, 0};
 			if (upperLine == "DONE") return {SmartDedentKind::ShellLoop, 0};
 			if (upperLine == "ESAC") return {SmartDedentKind::ShellCase, 0};
+			break;
+		case MRSyntaxLanguage::Fish:
+			if (isFishElseIfLead(upperLine) || isFishElseLead(upperLine)) return {SmartDedentKind::FishConditional, 0};
+			if (isFishCaseLead(upperLine)) return {SmartDedentKind::FishCase, 0};
+			if (isFishEndLead(upperLine)) return {SmartDedentKind::FishEnd, 0};
 			break;
 		case MRSyntaxLanguage::MRMAC:
 			if (isMRMACElseLead(upperLine)) return {SmartDedentKind::MRMACConditional, 0};
@@ -683,6 +749,7 @@ bool isDedentSearchSkippableLine(std::string_view trimmed, MRSyntaxLanguage lang
 		case MRSyntaxLanguage::Zsh:
 		case MRSyntaxLanguage::Python:
 		case MRSyntaxLanguage::Perl:
+		case MRSyntaxLanguage::Fish:
 			return trimmed.starts_with("#");
 		case MRSyntaxLanguage::MRMAC:
 			return isMRMACCommentLine(trimmed);
@@ -718,6 +785,14 @@ bool matchesSmartDedentAnchor(std::string_view trimmed, std::string_view upperLi
 			return (language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh) && shellIndentBlockKind(upperLine) == kShellBlockLoop;
 		case SmartDedentKind::ShellCase:
 			return (language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh) && shellIndentBlockKind(upperLine) == kShellBlockCase;
+		case SmartDedentKind::FishConditional:
+			return language == MRSyntaxLanguage::Fish && (isFishIfLead(upperLine) || isFishElseIfLead(upperLine) || isFishElseLead(upperLine));
+		case SmartDedentKind::FishCase:
+			return language == MRSyntaxLanguage::Fish && (isFishCaseLead(upperLine) || isFishSwitchLead(upperLine));
+		case SmartDedentKind::FishEnd:
+			return language == MRSyntaxLanguage::Fish &&
+			       (isFishFunctionLead(upperLine) || isFishIfLead(upperLine) || isFishElseIfLead(upperLine) || isFishElseLead(upperLine) || isFishWhileLead(upperLine) ||
+			        isFishForLead(upperLine) || isFishSwitchLead(upperLine) || isFishBeginLead(upperLine));
 		case SmartDedentKind::MRMACConditional:
 			return language == MRSyntaxLanguage::MRMAC && (isMRMACIfLead(upperLine) || isMRMACElseLead(upperLine));
 		case SmartDedentKind::MRMACEnd:
@@ -857,6 +932,11 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 		kLanguageBlockNone = 0,
 		kMRMACIfBlock = 1,
 		kMRMACWhileBlock = 2,
+		kFishIfBlock = 3,
+		kFishLoopBlock = 4,
+		kFishSwitchBlock = 5,
+		kFishCaseBlock = 6,
+		kFishGenericBlock = 7,
 	};
 	auto appendVisibleSpan = [&](const MRFoldOpenBlock &block, std::size_t endLine) {
 		if (endLine <= block.startLine) return;
@@ -1012,6 +1092,10 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 		const int headingLevel = language == MRSyntaxLanguage::Markdown ? markdownHeadingLevel(trimmed, nextTrimmed) : (language == MRSyntaxLanguage::Systemd && isSystemdSectionHeader(trimmed) ? 1 : 0);
 		const bool shellDedent = (language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh) && isShellDedentLead(trimmed, upperLine);
 		const bool shellSiblingLead = (language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh) && isShellSiblingLead(upperLine);
+		const bool fishConditionalLead = language == MRSyntaxLanguage::Fish && (isFishElseIfLead(upperLine) || isFishElseLead(upperLine));
+		const bool fishCaseLead = language == MRSyntaxLanguage::Fish && isFishCaseLead(upperLine);
+		const bool fishEndLead = language == MRSyntaxLanguage::Fish && isFishEndLead(upperLine);
+		const int fishBlockKind = language == MRSyntaxLanguage::Fish ? fishIndentBlockKind(upperLine) : kFishBlockNone;
 		const bool pythonDedent = language == MRSyntaxLanguage::Python && isPythonDedentLead(upperLine);
 		const bool perlSiblingLead = language == MRSyntaxLanguage::Perl && isPerlSiblingLead(upperLine);
 		const bool perlSiblingAfterLeadingCloser = language == MRSyntaxLanguage::Perl && isPerlSiblingLead(upperAscii(std::string(skipLeadingClosersAndSpace(trimmed))));
@@ -1142,6 +1226,41 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 				appendVisibleSpan(block, lineIndex);
 				openBlocks.pop_back();
 				break;
+			}
+		}
+		if (language == MRSyntaxLanguage::Fish && fishConditionalLead) {
+			while (!openBlocks.empty()) {
+				const MRFoldOpenBlock &block = openBlocks.back();
+				appendVisibleSpan(block, lineIndex - 1);
+				const int closedKind = block.languageBlockKind;
+				openBlocks.pop_back();
+				if (closedKind == kFishIfBlock) break;
+			}
+			openSiblingContinuation = true;
+		}
+		if (language == MRSyntaxLanguage::Fish && fishCaseLead) {
+			bool closedFishCase = false;
+			while (!openBlocks.empty()) {
+				const MRFoldOpenBlock &block = openBlocks.back();
+				if (block.languageBlockKind == kFishSwitchBlock) break;
+				appendVisibleSpan(block, lineIndex - 1);
+				const int closedKind = block.languageBlockKind;
+				openBlocks.pop_back();
+				if (closedKind == kFishCaseBlock) {
+					closedFishCase = true;
+					break;
+				}
+			}
+			openSiblingContinuation = closedFishCase;
+		}
+		if (language == MRSyntaxLanguage::Fish && fishEndLead) {
+			while (!openBlocks.empty() && openBlocks.back().languageBlockKind == kFishCaseBlock) {
+				appendVisibleSpan(openBlocks.back(), lineIndex - 1);
+				openBlocks.pop_back();
+			}
+			if (!openBlocks.empty()) {
+				appendVisibleSpan(openBlocks.back(), lineIndex);
+				openBlocks.pop_back();
 			}
 		}
 
@@ -1286,6 +1405,18 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 					          recentShellLeadLine, openSiblingContinuation);
 				else if (isShellIndentLead(trimmed, upperLine))
 					openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, shellIndentBlockKind(upperLine), recentShellLeadLine, openSiblingContinuation);
+				break;
+			case MRSyntaxLanguage::Fish:
+				if (fishBlockKind == kFishBlockConditional)
+					openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, kFishIfBlock, std::numeric_limits<std::size_t>::max(), openSiblingContinuation);
+				else if (fishBlockKind == kFishBlockLoop)
+					openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, kFishLoopBlock);
+				else if (fishBlockKind == kFishBlockSwitch)
+					openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, kFishSwitchBlock);
+				else if (fishBlockKind == kFishBlockCase)
+					openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, kFishCaseBlock, std::numeric_limits<std::size_t>::max(), openSiblingContinuation);
+				else if (fishBlockKind == kFishBlockGeneric)
+					openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, kFishGenericBlock);
 				break;
 			case MRSyntaxLanguage::Perl:
 				if (perlPodStart)
@@ -2147,6 +2278,7 @@ int MRFileEditor::textViewportWidth() const {
 
 void MRFileEditor::invalidateFoldCache() noexcept {
 	mVisibleFoldSpans.clear();
+	mVisibleFoldDisplayLevels.clear();
 	mVisibleFoldDocumentId = 0;
 	mVisibleFoldVersion = 0;
 	mVisibleFoldTopLine = 0;
@@ -2249,23 +2381,39 @@ void MRFileEditor::ensureVisibleFoldSpans(std::size_t topLine, int rowCount, MRS
 	std::size_t requestBottomLine = documentLineForVisibleLine(visibleTopLine + static_cast<std::size_t>(std::max(0, rowCount))) + 1;
 	if (mBufferModel.exactLineCountKnown() && requestBottomLine > exactLineCount) requestBottomLine = exactLineCount;
 	const bool documentWideFoldCache = mBufferModel.exactLineCountKnown();
-	auto updateVisibleFoldGutterColumnsForViewport = [&](std::size_t viewportTopLine, std::size_t viewportBottomLine) noexcept {
-		mVisibleFoldGutterColumns = 1;
-		for (const MRFoldSpan &span : mVisibleFoldSpans) {
-			if (span.endLine < viewportTopLine || span.startLine >= viewportBottomLine) continue;
-			mVisibleFoldGutterColumns = std::max(mVisibleFoldGutterColumns, static_cast<int>(span.level) + 1);
+	auto updateVisibleFoldGutterColumnsForViewport = [&]() noexcept {
+		std::vector<unsigned short> actualDrawLevels;
+		auto rememberDisplayLevel = [&actualDrawLevels](unsigned short level) {
+			const auto it = std::lower_bound(actualDrawLevels.begin(), actualDrawLevels.end(), level);
+			if (it == actualDrawLevels.end() || *it != level) actualDrawLevels.insert(it, level);
+		};
+		const std::size_t visibleBottomLine = visibleTopLine + static_cast<std::size_t>(std::max(0, rowCount));
+
+		for (std::size_t visibleLine = visibleTopLine; visibleLine < visibleBottomLine; ++visibleLine) {
+			const std::size_t documentLine = documentLineForVisibleLine(visibleLine);
+			for (const MRFoldSpan &span : mVisibleFoldSpans) {
+				if (documentLine < span.startLine || documentLine > span.endLine) continue;
+				bool glyphVisible = false;
+				if (!span.open) glyphVisible = span.startLine == documentLine;
+				else if (documentLine == span.startLine || documentLine == span.endLine || (documentLine > span.startLine && documentLine < span.endLine)) glyphVisible = true;
+				if (!glyphVisible) continue;
+				rememberDisplayLevel(span.level);
+			}
 		}
+		mVisibleFoldDisplayLevels = std::move(actualDrawLevels);
+		mVisibleFoldGutterColumns = std::max(1, static_cast<int>(mVisibleFoldDisplayLevels.size()));
 	};
 	if (mVisibleFoldDocumentId == docId && mVisibleFoldVersion == version && mVisibleFoldLanguage == language &&
 	    ((documentWideFoldCache && mVisibleFoldTopLine == 0 && mVisibleFoldBottomLine == exactLineCount) ||
 	     (!documentWideFoldCache && topLine >= mVisibleFoldTopLine && requestBottomLine <= mVisibleFoldBottomLine))) {
-		updateVisibleFoldGutterColumnsForViewport(topLine, requestBottomLine);
+		updateVisibleFoldGutterColumnsForViewport();
 		return;
 	}
 
 	const std::size_t scanTail = 256;
 	const bool deterministicFoldScan = documentWideFoldCache || language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp || language == MRSyntaxLanguage::JavaScript ||
 	                                   language == MRSyntaxLanguage::Json || language == MRSyntaxLanguage::Swift || language == MRSyntaxLanguage::Rust || language == MRSyntaxLanguage::Go || language == MRSyntaxLanguage::Systemd ||
+	                                   language == MRSyntaxLanguage::Fish ||
 	                                   language == MRSyntaxLanguage::Markdown || language == MRSyntaxLanguage::Python || language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh || language == MRSyntaxLanguage::Perl ||
 	                                   language == MRSyntaxLanguage::Make || language == MRSyntaxLanguage::MRMAC;
 	const std::size_t scanTopLine = deterministicFoldScan ? 0 : topLine;
@@ -2279,6 +2427,7 @@ void MRFileEditor::ensureVisibleFoldSpans(std::size_t topLine, int rowCount, MRS
 	mVisibleFoldBottomLine = scanBottomLine;
 	mVisibleFoldLanguage = language;
 	mVisibleFoldGutterColumns = 1;
+	mVisibleFoldDisplayLevels.clear();
 
 	if (scanBottomLine <= scanTopLine) return;
 	std::vector<std::string> lineTexts;
@@ -2293,8 +2442,7 @@ void MRFileEditor::ensureVisibleFoldSpans(std::size_t topLine, int rowCount, MRS
 	}
 	const MRFoldScanOutput scan = computeFoldSpansForLineTexts(lineTexts, scanTopLine, topLine, requestBottomLine, language, mClosedFoldSpans);
 	mVisibleFoldSpans = scan.spans;
-	mVisibleFoldGutterColumns = std::max(1, scan.visibleMaxLevel);
-	updateVisibleFoldGutterColumnsForViewport(topLine, requestBottomLine);
+	updateVisibleFoldGutterColumnsForViewport();
 }
 
 std::string MRFileEditor::normalizedFormatRulerLine(const MREditSetupSettings &settings, int *leftMarginOut, int *rightMarginOut) const {
@@ -3214,6 +3362,9 @@ std::string MRFileEditor::smartIndentFillForCursor() {
 		const std::string upperLine = upperAscii(std::string(trimmedBeforeCursor));
 		if (isShellIndentLead(trimmedBeforeCursor, upperLine))
 			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+	} else if (language == MRSyntaxLanguage::Fish) {
+		const std::string upperLine = upperAscii(std::string(trimmedBeforeCursor));
+		if (fishIndentBlockKind(upperLine) != kFishBlockNone) targetColumn = baseColumn + inferredShellIndentStepColumns(lineStart, settings);
 	} else if (language == MRSyntaxLanguage::Perl) {
 		const std::string upperLine = upperAscii(std::string(trimmedBeforeCursor));
 		if (isPerlStructuredBlockLead(trimmedBeforeCursor, upperLine))
@@ -3240,7 +3391,7 @@ void MRFileEditor::applyLiveSmartDedentAfterTextInput(const std::string &inserte
 	if (!smartEnabled) return;
 	if (insertedText.find('\n') != std::string::npos || insertedText.find('\r') != std::string::npos) return;
 	if (language != MRSyntaxLanguage::C && language != MRSyntaxLanguage::Cpp && language != MRSyntaxLanguage::JavaScript && language != MRSyntaxLanguage::Json && language != MRSyntaxLanguage::Python &&
-	    language != MRSyntaxLanguage::Bash && language != MRSyntaxLanguage::Zsh && language != MRSyntaxLanguage::Perl && language != MRSyntaxLanguage::MRMAC && language != MRSyntaxLanguage::Swift &&
+	    language != MRSyntaxLanguage::Bash && language != MRSyntaxLanguage::Zsh && language != MRSyntaxLanguage::Fish && language != MRSyntaxLanguage::Perl && language != MRSyntaxLanguage::MRMAC && language != MRSyntaxLanguage::Swift &&
 	    language != MRSyntaxLanguage::Rust &&
 	    language != MRSyntaxLanguage::Go) return;
 
@@ -3270,12 +3421,15 @@ void MRFileEditor::applyLiveSmartDedentAfterTextInput(const std::string &inserte
 
 		const std::string candidateUpperLine = upperAscii(std::string(candidateTrimmed));
 		if (!matchesSmartDedentAnchor(candidateTrimmed, candidateUpperLine, language, request)) continue;
-		targetColumn = candidateColumn;
+		if (request.kind == SmartDedentKind::FishCase && isFishSwitchLead(candidateUpperLine))
+			targetColumn = candidateColumn + inferredShellIndentStepColumns(lineStart, settings);
+		else
+			targetColumn = candidateColumn;
 		break;
 	}
 
 	if (targetColumn <= 0) {
-		if (language == MRSyntaxLanguage::Bash)
+		if (language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Fish)
 			targetColumn = std::max(1, baseColumn - inferredShellIndentStepColumns(lineStart, settings));
 		else
 			targetColumn = prevResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
@@ -3584,6 +3738,11 @@ void MRFileEditor::drawCodeFoldingGutter(TDrawBuffer &b, int drawX, int width, s
 			if (candidate.siblingContinuation && candidate.level == span.level && candidate.startLine == span.endLine + 1) return true;
 		return false;
 	};
+	auto displayColumnForLevel = [this](unsigned short level) noexcept -> int {
+		const auto it = std::lower_bound(mVisibleFoldDisplayLevels.begin(), mVisibleFoldDisplayLevels.end(), level);
+		if (it == mVisibleFoldDisplayLevels.end() || *it != level) return -1;
+		return static_cast<int>(it - mVisibleFoldDisplayLevels.begin());
+	};
 
 	static_cast<void>(lineStart);
 	if (width <= 0) return;
@@ -3593,11 +3752,12 @@ void MRFileEditor::drawCodeFoldingGutter(TDrawBuffer &b, int drawX, int width, s
 	b.moveChar(static_cast<ushort>(drawX), ' ', color, static_cast<ushort>(width));
 	if (lineIndex >= std::max<std::size_t>(1, mBufferModel.lineCount()) && mBufferModel.exactLineCountKnown()) return;
 	for (const MRFoldSpan &span : mVisibleFoldSpans) {
-		if (span.level >= static_cast<unsigned short>(width)) continue;
+		const int displayColumn = displayColumnForLevel(span.level);
+		if (displayColumn < 0 || displayColumn >= width) continue;
 		const char *glyph = nullptr;
 		if (!span.open) {
 			if (span.startLine != lineIndex) continue;
-			glyph = "\xE2\x96\xB6";
+			glyph = "⟦";
 		} else if (lineIndex == span.startLine)
 			glyph = span.siblingContinuation ? "\xE2\x94\x9C" : "\xE2\x95\xAD";
 		else if (lineIndex == span.endLine)
@@ -3605,7 +3765,7 @@ void MRFileEditor::drawCodeFoldingGutter(TDrawBuffer &b, int drawX, int width, s
 		else if (lineIndex > span.startLine && lineIndex < span.endLine)
 			glyph = "\xE2\x94\x82";
 		if (glyph == nullptr) continue;
-		b.moveStr(static_cast<ushort>(drawX + span.level), glyph, markerColor, 1);
+		b.moveStr(static_cast<ushort>(drawX + displayColumn), glyph, markerColor, 1);
 	}
 }
 
@@ -4332,10 +4492,11 @@ void MRFileEditor::handleMouse(TEvent &event) {
 		}
 	};
 	auto gutterSpanAtPoint = [this, &local, &viewport](std::size_t lineIndex) noexcept -> const MRFoldSpan * {
-		const int level = local.x - viewport.codeFoldingX;
-		if (level < 0) return nullptr;
+		const int displayColumn = local.x - viewport.codeFoldingX;
+		if (displayColumn < 0 || static_cast<std::size_t>(displayColumn) >= mVisibleFoldDisplayLevels.size()) return nullptr;
+		const unsigned short level = mVisibleFoldDisplayLevels[static_cast<std::size_t>(displayColumn)];
 		for (const MRFoldSpan &span : mVisibleFoldSpans) {
-			if (span.level != static_cast<unsigned short>(level)) continue;
+			if (span.level != level) continue;
 			if (!span.open) {
 				if (span.startLine == lineIndex) return &span;
 				continue;
@@ -4345,11 +4506,12 @@ void MRFileEditor::handleMouse(TEvent &event) {
 		return nullptr;
 	};
 	auto toggleFoldColumnsFromPoint = [this, &local, &viewport, &rebuildEffectiveClosedFolds]() -> bool {
-		const int level = local.x - viewport.codeFoldingX;
-		if (level < 0) return false;
+		const int displayColumn = local.x - viewport.codeFoldingX;
+		if (displayColumn < 0 || static_cast<std::size_t>(displayColumn) >= mVisibleFoldDisplayLevels.size()) return false;
+		const unsigned short level = mVisibleFoldDisplayLevels[static_cast<std::size_t>(displayColumn)];
 		bool anyOpen = false;
 		for (const MRFoldSpan &span : mVisibleFoldSpans)
-			if (span.level >= static_cast<unsigned short>(level) && span.open) {
+			if (span.level >= level && span.open) {
 				anyOpen = true;
 				break;
 			}
@@ -4359,8 +4521,8 @@ void MRFileEditor::handleMouse(TEvent &event) {
 		bool foldCursorTargetValid = false;
 
 		for (const MRFoldSpan &span : mVisibleFoldSpans) {
-			if (span.level < static_cast<unsigned short>(level)) continue;
 			if (anyOpen) {
+				if (span.level < level) continue;
 				if (!span.open) continue;
 				mClosedFoldSpans[span.startLine] = MRFoldSpan(span.startLine, span.endLine, span.level, span.sourceKind, false, span.siblingContinuation);
 				if (cursorLine > span.startLine && cursorLine <= span.endLine && (!foldCursorTargetValid || span.startLine < foldCursorTarget)) {
@@ -4368,6 +4530,7 @@ void MRFileEditor::handleMouse(TEvent &event) {
 					foldCursorTargetValid = true;
 				}
 			} else {
+				if (span.level != level) continue;
 				if (span.open) continue;
 				mClosedFoldSpans.erase(span.startLine);
 			}

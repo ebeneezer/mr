@@ -72,6 +72,7 @@ static MRMultiSarDialogOptions g_multiSarDialogOptions;
 static int g_virtualDesktops = 1;
 static bool g_cyclicVirtualDesktops = false;
 static MRCursorBehaviour g_cursorBehaviour = MRCursorBehaviour::BoundToText;
+static MRUiIndentStyle g_uiIndentStyle = MRUiIndentStyle::KandR;
 static std::string g_cursorPositionMarker = "R:C";
 static bool g_autoloadWorkspace = false;
 static MRLogHandling g_logHandling = MRLogHandling::Volatile;
@@ -500,6 +501,7 @@ struct MRSettingsSnapshot {
 	int virtualDesktops{1};
 	bool cyclicVirtualDesktops{false};
 	MRCursorBehaviour cursorBehaviour{MRCursorBehaviour::BoundToText};
+	MRUiIndentStyle uiIndentStyle{MRUiIndentStyle::KandR};
 	std::string cursorPositionMarker{"R:C"};
 	bool autoloadWorkspace{false};
 	MRLogHandling logHandling{MRLogHandling::Volatile};
@@ -966,6 +968,7 @@ MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) 
 	snapshot.virtualDesktops = configuredVirtualDesktops();
 	snapshot.cyclicVirtualDesktops = configuredCyclicVirtualDesktops();
 	snapshot.cursorBehaviour = configuredCursorBehaviour();
+	snapshot.uiIndentStyle = configuredUiIndentStyle();
 	snapshot.cursorPositionMarker = configuredCursorPositionMarker();
 	snapshot.autoloadWorkspace = configuredAutoloadWorkspace();
 	snapshot.logHandling = configuredLogHandling();
@@ -1422,6 +1425,7 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
     {"CYCLIC_VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
     {"CURSOR_BEHAVIOUR", MRSettingsKeyClass::Global, true},
+    {"UI_INDENT_STYLE", MRSettingsKeyClass::Global, true},
     {"CURSOR_POSITION_MARKER", MRSettingsKeyClass::Global, true},
     {"AUTOLOAD_WORKSPACE", MRSettingsKeyClass::Global, true},
     {"LOG_HANDLING", MRSettingsKeyClass::Global, true},
@@ -2111,6 +2115,60 @@ bool parseCursorBehaviourLiteral(const std::string &value, MRCursorBehaviour &ou
 
 std::string formatCursorBehaviourLiteral(MRCursorBehaviour behaviour) {
 	return behaviour == MRCursorBehaviour::FreeMovement ? kCursorBehaviourFreeMovement : kCursorBehaviourBoundToText;
+}
+
+bool parseUiIndentStyleLiteral(const std::string &value, MRUiIndentStyle &outValue, std::string *errorMessage) {
+	const std::string upper = upperAscii(trimAscii(value));
+
+	if (upper == "K_AND_R" || upper == "K&R" || upper == "KANDR") {
+		outValue = MRUiIndentStyle::KandR;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	if (upper == "K_AND_R4" || upper == "K&R4" || upper == "KANDR4") {
+		outValue = MRUiIndentStyle::KandR4;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	if (upper == "ALLMAN") {
+		outValue = MRUiIndentStyle::Allman;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	if (upper == "GNOME") {
+		outValue = MRUiIndentStyle::Gnome;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	if (upper == "WHITESMITHS") {
+		outValue = MRUiIndentStyle::Whitesmiths;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	if (upper == "HORSTMANN" || upper == "HORTMANN") {
+		outValue = MRUiIndentStyle::Horstmann;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	return setError(errorMessage, "UI_INDENT_STYLE must be K_AND_R, K_AND_R4, ALLMAN, GNOME, WHITESMITHS or HORSTMANN.");
+}
+
+std::string formatUiIndentStyleLiteral(MRUiIndentStyle style) {
+	switch (style) {
+		case MRUiIndentStyle::KandR4:
+			return "K_AND_R4";
+		case MRUiIndentStyle::Allman:
+			return "ALLMAN";
+		case MRUiIndentStyle::Gnome:
+			return "GNOME";
+		case MRUiIndentStyle::Whitesmiths:
+			return "WHITESMITHS";
+		case MRUiIndentStyle::Horstmann:
+			return "HORSTMANN";
+		case MRUiIndentStyle::KandR:
+		default:
+			return "K_AND_R";
+	}
 }
 
 std::string canonicalBooleanLiteral(bool value) {
@@ -3035,8 +3093,10 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 	} else if (upperKeyName == "CODE_LANGUAGE") {
 		normalized = upperAscii(trimAscii(value));
 		if (normalized.empty()) normalized = "NONE";
-		if (normalized != "NONE" && normalized != "AUTO" && normalized != "C" && normalized != "CPP" && normalized != "PYTHON" && normalized != "JAVASCRIPT" && normalized != "TYPESCRIPT" && normalized != "TSX" && normalized != "BASH" && normalized != "JSON" && normalized != "PERL" && normalized != "SWIFT")
-			return setError(errorMessage, "CODE_LANGUAGE must be NONE, AUTO, C, CPP, PYTHON, JAVASCRIPT, TYPESCRIPT, TSX, BASH, JSON, PERL or SWIFT.");
+		if (normalized != "NONE" && normalized != "AUTO" && normalized != "C" && normalized != "CPP" && normalized != "PYTHON" && normalized != "JAVASCRIPT" && normalized != "TYPESCRIPT" && normalized != "TSX" &&
+			normalized != "BASH" && normalized != "ZSH" && normalized != "FISH" && normalized != "JSON" && normalized != "PERL" && normalized != "SWIFT" && normalized != "RUST" && normalized != "GO" &&
+			normalized != "SYSTEMD" && normalized != "MAKE" && normalized != "MRMAC" && normalized != "MARKDOWN")
+			return setError(errorMessage, "CODE_LANGUAGE must be NONE, AUTO, C, CPP, PYTHON, JAVASCRIPT, TYPESCRIPT, TSX, BASH, ZSH, FISH, JSON, PERL, SWIFT, RUST, GO, SYSTEMD, MAKE, MRMAC or MARKDOWN.");
 		current.codeLanguage = normalized;
 	} else if (upperKeyName == "CODE_COLORING") {
 		if (!parseAndAssignBooleanLiteral(value, current.codeColoring, errorMessage)) return false;
@@ -3419,6 +3479,7 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredMultiSearchDialogOptions(MRMultiSearchDialogOptions(), errorMessage)) return false;
 	if (!setConfiguredMultiSarDialogOptions(MRMultiSarDialogOptions(), errorMessage)) return false;
 	if (!setConfiguredCursorBehaviour(MRCursorBehaviour::BoundToText, errorMessage)) return false;
+	if (!setConfiguredUiIndentStyle(MRUiIndentStyle::KandR, errorMessage)) return false;
 	if (!setConfiguredCursorPositionMarker("R:C", errorMessage)) return false;
 	g_logHandling = MRLogHandling::Volatile;
 	configuredAutoexecMacroStorage().clear();
@@ -3705,6 +3766,11 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				MRCursorBehaviour behaviour = MRCursorBehaviour::BoundToText;
 				if (!parseCursorBehaviourLiteral(value, behaviour, errorMessage)) return false;
 				return setConfiguredCursorBehaviour(behaviour, errorMessage);
+			}
+			if (upper == "UI_INDENT_STYLE") {
+				MRUiIndentStyle style = MRUiIndentStyle::KandR;
+				if (!parseUiIndentStyleLiteral(value, style, errorMessage)) return false;
+				return setConfiguredUiIndentStyle(style, errorMessage);
 			}
 			if (upper == "CURSOR_POSITION_MARKER") return setConfiguredCursorPositionMarker(value, errorMessage);
 			if (upper == "AUTOLOAD_WORKSPACE") {
@@ -4074,6 +4140,10 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 			}
 			if (upper == "CURSOR_BEHAVIOUR") {
 				if (!parseCursorBehaviourLiteral(value, snapshot.cursorBehaviour, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "UI_INDENT_STYLE") {
+				if (!parseUiIndentStyleLiteral(value, snapshot.uiIndentStyle, errorMessage)) return false;
 				return true;
 			}
 			if (upper == "CURSOR_POSITION_MARKER") return normalizeCursorPositionMarker(value, snapshot.cursorPositionMarker, errorMessage);
@@ -4772,8 +4842,10 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	if (defaultMode.empty()) return setError(errorMessage, "DEFAULT_MODE must be INSERT or OVERWRITE.");
 	if (indentStyle.empty()) return setError(errorMessage, "INDENT_STYLE must be OFF, AUTOMATIC or SMART.");
 	if (codeLanguage.empty()) codeLanguage = "NONE";
-	if (codeLanguage != "NONE" && codeLanguage != "AUTO" && codeLanguage != "C" && codeLanguage != "CPP" && codeLanguage != "PYTHON" && codeLanguage != "JAVASCRIPT" && codeLanguage != "TYPESCRIPT" && codeLanguage != "TSX" && codeLanguage != "BASH" && codeLanguage != "JSON" && codeLanguage != "PERL" && codeLanguage != "SWIFT")
-		return setError(errorMessage, "CODE_LANGUAGE must be NONE, AUTO, C, CPP, PYTHON, JAVASCRIPT, TYPESCRIPT, TSX, BASH, JSON, PERL or SWIFT.");
+	if (codeLanguage != "NONE" && codeLanguage != "AUTO" && codeLanguage != "C" && codeLanguage != "CPP" && codeLanguage != "PYTHON" && codeLanguage != "JAVASCRIPT" && codeLanguage != "TYPESCRIPT" && codeLanguage != "TSX" &&
+		codeLanguage != "BASH" && codeLanguage != "ZSH" && codeLanguage != "FISH" && codeLanguage != "JSON" && codeLanguage != "PERL" && codeLanguage != "SWIFT" && codeLanguage != "RUST" && codeLanguage != "GO" &&
+		codeLanguage != "SYSTEMD" && codeLanguage != "MAKE" && codeLanguage != "MRMAC" && codeLanguage != "MARKDOWN")
+		return setError(errorMessage, "CODE_LANGUAGE must be NONE, AUTO, C, CPP, PYTHON, JAVASCRIPT, TYPESCRIPT, TSX, BASH, ZSH, FISH, JSON, PERL, SWIFT, RUST, GO, SYSTEMD, MAKE, MRMAC or MARKDOWN.");
 	if (fileType.empty()) return setError(errorMessage, "FILE_TYPE must be LEGACY_TEXT, UNIX or BINARY.");
 	if (lineNumbersPosition.empty()) lineNumbersPosition = settings.showLineNumbers ? kLineNumbersPositionLeading : kLineNumbersPositionOff;
 	if (miniMapPosition.empty()) return setError(errorMessage, "MINIMAP_POSITION must be OFF, LEADING or TRAILING.");
@@ -5485,6 +5557,17 @@ MRCursorBehaviour configuredCursorBehaviour() {
 	return g_cursorBehaviour;
 }
 
+bool setConfiguredUiIndentStyle(MRUiIndentStyle style, std::string *errorMessage) {
+	if (g_uiIndentStyle != style) markConfiguredSettingsDirty();
+	g_uiIndentStyle = style;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+MRUiIndentStyle configuredUiIndentStyle() {
+	return g_uiIndentStyle;
+}
+
 bool setConfiguredCursorPositionMarker(const std::string &value, std::string *errorMessage) {
 	std::string normalized;
 
@@ -5709,6 +5792,7 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('VIRTUAL_DESKTOPS', '" + std::to_string(snapshot.virtualDesktops) + "');\n";
 	source += "MRSETUP('CYCLIC_VIRTUAL_DESKTOPS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.cyclicVirtualDesktops)) + "');\n";
 	source += "MRSETUP('CURSOR_BEHAVIOUR', '" + escapeMrmacSingleQuotedLiteral(formatCursorBehaviourLiteral(snapshot.cursorBehaviour)) + "');\n";
+	source += "MRSETUP('UI_INDENT_STYLE', '" + escapeMrmacSingleQuotedLiteral(formatUiIndentStyleLiteral(snapshot.uiIndentStyle)) + "');\n";
 	source += "MRSETUP('CURSOR_POSITION_MARKER', '" + escapeMrmacSingleQuotedLiteral(snapshot.cursorPositionMarker) + "');\n";
 	source += "MRSETUP('AUTOLOAD_WORKSPACE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.autoloadWorkspace)) + "');\n";
 	source += "MRSETUP('LOG_HANDLING', '" + escapeMrmacSingleQuotedLiteral(formatLogHandlingLiteral(snapshot.logHandling)) + "');\n";

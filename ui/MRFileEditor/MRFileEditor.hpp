@@ -622,6 +622,7 @@ class MRFileEditor : public TScroller {
 	std::map<std::size_t, MRSyntaxCacheEntry> mSyntaxTokenCache;
 	std::map<std::size_t, MRSyntaxCheckpointEntry> mSyntaxCheckpoints;
 	std::vector<MRFoldSpan> mVisibleFoldSpans;
+	std::vector<unsigned short> mVisibleFoldDisplayLevels;
 	std::vector<MRFoldSpan> mEffectiveClosedFoldSpans;
 	std::uint64_t mSyntaxWarmupTaskId;
 	std::size_t mSyntaxWarmupDocumentId;

@@ -27,6 +27,8 @@ bool parseLanguageName(const std::string &name, MRSyntaxLanguage &language) noex
 		language = MRSyntaxLanguage::Bash;
 	else if (name == "zsh")
 		language = MRSyntaxLanguage::Zsh;
+	else if (name == "fish")
+		language = MRSyntaxLanguage::Fish;
 	else if (name == "perl" || name == "pl")
 		language = MRSyntaxLanguage::Perl;
 	else if (name == "swift" || name == "sw")
@@ -64,6 +66,8 @@ const char *languageName(MRSyntaxLanguage language) noexcept {
 			return "Bash";
 		case MRSyntaxLanguage::Zsh:
 			return "zsh";
+		case MRSyntaxLanguage::Fish:
+			return "fish";
 		case MRSyntaxLanguage::Perl:
 			return "Perl";
 		case MRSyntaxLanguage::Swift:

@@ -91,6 +91,15 @@ const char *const kZshBuiltins[] = {
 	"zformat", "zle", "zmodload"
 };
 
+const char *const kFishKeywords[] = {
+	"and", "begin", "break", "builtin", "case", "command", "continue", "else", "end", "for", "function", "if", "in", "not", "or", "return", "switch", "time", "while"
+};
+
+const char *const kFishBuiltins[] = {
+	"abbr", "argparse", "bg", "bind", "builtin", "cd", "command", "complete", "contains", "count", "echo", "emit", "eval", "exec", "fg", "math", "path", "printf", "pwd", "read", "set", "set_color",
+	"source", "status", "string", "test", "type", "ulimit", "wait"
+};
+
 const char *const kPerlKeywords[] = {
 	"BEGIN",   "CHECK", "END",    "INIT",   "UNITCHECK", "and",    "cmp",    "continue", "default", "defined", "do",      "else",    "elsif", "eq",     "for",   "foreach",
 	"ge",      "given", "goto",   "gt",     "if",        "last",   "le",     "local",    "lt",      "my",      "ne",      "next",    "no",    "our",    "package","redo",
@@ -1265,6 +1274,17 @@ static bool isZshAssignmentWord(std::string_view line, std::size_t start, std::s
 	return true;
 }
 
+static bool isFishCommandChar(char ch) {
+	return isIdentifierChar(ch) || ch == '-';
+}
+
+static bool isFishCommentStart(std::string_view line, std::size_t pos) {
+	if (pos >= line.size() || line[pos] != '#') return false;
+	if (pos == 0) return true;
+	const char previous = line[pos - 1];
+	return std::isspace(static_cast<unsigned char>(previous)) != 0 || previous == ';' || previous == '(' || previous == ')' || previous == '|';
+}
+
 static bool isPerlDelimiterChar(char ch) {
 	switch (ch) {
 		case '(':
@@ -1912,6 +1932,134 @@ void tokenizeBash(MRSyntaxTokenMap &tokens, const std::string &line) {
 	}
 }
 
+void tokenizeFish(MRSyntaxTokenMap &tokens, const std::string &line) {
+	std::size_t trimmed = skipWhitespace(line);
+	if (trimmed != std::string::npos && line.compare(trimmed, 2, "#!") == 0) {
+		paint(tokens, trimmed, line.size(), MRSyntaxToken::Directive);
+		return;
+	}
+
+	bool expectCommand = true;
+	bool expectFunctionName = false;
+	for (std::size_t i = 0; i < line.size();) {
+		if (isFishCommentStart(line, i)) {
+			paint(tokens, i, line.size(), MRSyntaxToken::Comment);
+			break;
+		}
+		if (line[i] == '\'' || line[i] == '"') {
+			const std::size_t start = i;
+			const std::size_t end = consumeZshStringLiteral(line, i, line[i]);
+			paint(tokens, start, end, MRSyntaxToken::String);
+			i = end;
+			expectCommand = false;
+			expectFunctionName = false;
+			continue;
+		}
+		if (line[i] == '$') {
+			const std::size_t start = i;
+			++i;
+			if (i < line.size() && isIdentifierStart(line[i])) {
+				++i;
+				while (i < line.size() && isIdentifierChar(line[i]))
+					++i;
+				if (i < line.size() && line[i] == '[') {
+					const std::size_t end = consumeBalancedRegion(line, i, "[", "]");
+					i = end;
+				}
+				paint(tokens, start, i, MRSyntaxToken::Directive);
+				expectCommand = false;
+				expectFunctionName = false;
+				continue;
+			}
+			paint(tokens, start, i, MRSyntaxToken::Delimiter);
+			expectCommand = false;
+			expectFunctionName = false;
+			continue;
+		}
+		if (line[i] == '(') {
+			const std::size_t end = consumeBalancedRegion(line, i, "(", ")");
+			if (end > i) {
+				paint(tokens, i, end, MRSyntaxToken::Directive);
+				i = end;
+				expectCommand = false;
+				expectFunctionName = false;
+				continue;
+			}
+		}
+		if ((line[i] == '-' || isDecimalDigitChar(line[i])) && (i == 0 || !isIdentifierChar(line[i - 1]))) {
+			std::size_t end = i + (line[i] == '-' ? 1 : 0);
+			bool sawDigit = end > i;
+			while (end < line.size() && isDecimalDigitChar(line[end])) {
+				sawDigit = true;
+				++end;
+			}
+			if (end < line.size() && line[end] == '.') {
+				++end;
+				while (end < line.size() && isDecimalDigitChar(line[end])) {
+					sawDigit = true;
+					++end;
+				}
+			}
+			if (sawDigit) {
+				paint(tokens, i, end, MRSyntaxToken::Number);
+				i = end;
+				expectCommand = false;
+				expectFunctionName = false;
+				continue;
+			}
+		}
+		if (isIdentifierStart(line[i])) {
+			const std::size_t start = i++;
+			while (i < line.size() && isFishCommandChar(line[i]))
+				++i;
+			const std::string_view word(line.data() + start, i - start);
+			if (expectFunctionName) {
+				paint(tokens, start, i, MRSyntaxToken::Key);
+				expectCommand = false;
+				expectFunctionName = false;
+				continue;
+			}
+			if (wordInList(word, kFishKeywords, sizeof(kFishKeywords) / sizeof(kFishKeywords[0]))) {
+				paint(tokens, start, i, MRSyntaxToken::Keyword);
+				expectCommand = word == "and" || word == "or" || word == "begin" || word == "case" || word == "else" || word == "for" || word == "function" || word == "if" || word == "switch" || word == "while";
+				expectFunctionName = word == "function";
+				continue;
+			}
+			if (expectCommand && wordInList(word, kFishBuiltins, sizeof(kFishBuiltins) / sizeof(kFishBuiltins[0]))) {
+				paint(tokens, start, i, MRSyntaxToken::Key);
+				expectCommand = false;
+				expectFunctionName = false;
+				continue;
+			}
+			expectCommand = false;
+			expectFunctionName = false;
+			continue;
+		}
+		{
+			const std::size_t delimiterLength = zshDelimiterLength(line, i);
+			if (delimiterLength > 0) {
+				paint(tokens, i, i + delimiterLength, MRSyntaxToken::Delimiter);
+				expectCommand = true;
+				expectFunctionName = false;
+				i += delimiterLength;
+				continue;
+			}
+		}
+		if (isZshDelimiterChar(line[i])) {
+			paint(tokens, i, i + 1, MRSyntaxToken::Delimiter);
+			expectCommand = line[i] == ';' || line[i] == '|';
+			expectFunctionName = false;
+			++i;
+			continue;
+		}
+		if (!std::isspace(static_cast<unsigned char>(line[i]))) {
+			expectCommand = false;
+			expectFunctionName = false;
+		}
+		++i;
+	}
+}
+
 void tokenizePerl(MRSyntaxTokenMap &tokens, const std::string &line) {
 	std::size_t trimmed = skipWhitespace(line);
 	if (trimmed != std::string::npos && line.compare(trimmed, 2, "#!") == 0) {
@@ -2230,6 +2378,53 @@ MRSyntaxLineResult MRBashSyntaxHighlighter::highlightLine(std::string_view line,
 			result.stateOut.flags = storePayloadLength(stripTabs ? kSyntaxFlagHereDocStripTabs : 0, label.size());
 			result.stateOut.payload = hashSyntaxPayload(label);
 		}
+	}
+
+	result.tokenRuns = tmrBuildTokenRunsFromTokenMap(tokens);
+	return result;
+}
+
+MRSyntaxLineResult MRFishSyntaxHighlighter::highlightLine(std::string_view line, MRSyntaxLineState previousState) {
+	MRSyntaxLineResult result;
+	result.stateOut = MRSyntaxLineState();
+	MRSyntaxTokenMap tokens(line.size(), MRSyntaxToken::Text);
+
+	if (previousState.mode == MRSyntaxMode::QuotedString) {
+		const char quote = static_cast<char>(previousState.payload);
+		const std::size_t end = findStringContinuationEnd(line, 0, quote);
+
+		paint(tokens, 0, end, MRSyntaxToken::String);
+		if (end == line.size()) {
+			result.stateOut.mode = MRSyntaxMode::QuotedString;
+			result.stateOut.payload = previousState.payload;
+			result.tokenRuns = tmrBuildTokenRunsFromTokenMap(tokens);
+			return result;
+		}
+		if (end < line.size()) {
+			MRSyntaxTokenMap suffixTokens(line.size() - end, MRSyntaxToken::Text);
+			tokenizeFish(suffixTokens, std::string(line.substr(end)));
+			for (std::size_t i = 0; i < suffixTokens.size(); ++i)
+				tokens[end + i] = suffixTokens[i];
+		}
+	} else
+		tokenizeFish(tokens, std::string(line));
+
+	for (std::size_t i = 0; i < line.size();) {
+		if (isFishCommentStart(line, i)) break;
+		if (line[i] == '\'' || line[i] == '"') {
+			const std::size_t end = consumeZshStringLiteral(line, i, line[i]);
+			if (end == line.size()) {
+				paint(tokens, i, end, MRSyntaxToken::String);
+				result.stateOut.mode = MRSyntaxMode::QuotedString;
+				result.stateOut.payload = static_cast<std::uint32_t>(line[i]);
+			}
+			break;
+		}
+		if (line[i] == '\\' && i + 1 < line.size()) {
+			i += 2;
+			continue;
+		}
+		++i;
 	}
 
 	result.tokenRuns = tmrBuildTokenRunsFromTokenMap(tokens);
@@ -3618,6 +3813,7 @@ MRSyntaxLanguage tmrDetectSyntaxLanguage(const std::string &path, const std::str
 	if (lowerName == ".bashrc" || lowerName == ".bash_profile" || lowerName == ".profile") return MRSyntaxLanguage::Bash;
 	if (ext == ".zsh" || ext == ".zprofile" || ext == ".zshrc" || ext == ".zshenv" || ext == ".zlogin" || ext == ".zlogout") return MRSyntaxLanguage::Zsh;
 	if (lowerName == ".zshrc" || lowerName == ".zprofile" || lowerName == ".zshenv" || lowerName == ".zlogin" || lowerName == ".zlogout") return MRSyntaxLanguage::Zsh;
+	if (ext == ".fish" || lowerName == "config.fish") return MRSyntaxLanguage::Fish;
 	if (ext == ".pl" || ext == ".pm" || ext == ".t" || ext == ".pod" || ext == ".cgi" || ext == ".psgi" || ext == ".perl") return MRSyntaxLanguage::Perl;
 	if (ext == ".swift") return MRSyntaxLanguage::Swift;
 	if (ext == ".rs") return MRSyntaxLanguage::Rust;
@@ -3659,6 +3855,12 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	const int pythonBlockHeaders = countPythonBlockHeaders(sample, 16);
 	const int jsonKeyLines = countJsonKeyLikeLines(sample, 32);
 	const int shellAssignmentLines = countShellAssignmentLines(sample, 16);
+	const int fishFunctionLines = countLinePrefixMatches(lower, "function ", 12);
+	const int fishSetLines = countLinePrefixMatches(lower, "set ", 16) + countLinePrefixMatches(lower, "set -", 16);
+	const int fishSwitchLines = countLinePrefixMatches(lower, "switch ", 12) + countLinePrefixMatches(lower, "case ", 16);
+	const int fishBlockLines =
+	    countLinePrefixMatches(lower, "begin", 12) + countLinePrefixMatches(lower, "if ", 16) + countLinePrefixMatches(lower, "else if ", 16) + countLinePrefixMatches(lower, "else", 8) +
+	    countLinePrefixMatches(lower, "for ", 12) + countLinePrefixMatches(lower, "while ", 12) + countLinePrefixMatches(lower, "end", 24);
 	const int perlSigilDeclLines = countPerlSigilDeclLines(sample, 16);
 	const int rustFunctionLines = countLinePrefixMatches(lower, "fn ", 12) + countLinePrefixMatches(lower, "pub fn ", 12) + countLinePrefixMatches(lower, "async fn ", 8) +
 	                              countLinePrefixMatches(lower, "pub async fn ", 8);
@@ -3690,6 +3892,7 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 		if (containsText(lowerShebang, "perl")) addClassificationScore(scores, MRSyntaxLanguage::Perl, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Perl)] += 2;
 		if (containsText(lowerShebang, "zsh")) addClassificationScore(scores, MRSyntaxLanguage::Zsh, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Zsh)] += 2;
 		if (containsText(lowerShebang, "bash") || containsText(lowerShebang, "/sh")) addClassificationScore(scores, MRSyntaxLanguage::Bash, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Bash)] += 2;
+		if (containsText(lowerShebang, "fish")) addClassificationScore(scores, MRSyntaxLanguage::Fish, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Fish)] += 2;
 		if (containsText(lowerShebang, "node")) addClassificationScore(scores, MRSyntaxLanguage::JavaScript, 12), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::JavaScript)] += 2;
 		if (containsText(lowerShebang, "make")) addClassificationScore(scores, MRSyntaxLanguage::Make, 8), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Make)] += 1;
 		if (containsText(lowerShebang, "rust")) addClassificationScore(scores, MRSyntaxLanguage::Rust, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Rust)] += 2;
@@ -3706,7 +3909,7 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 			pathBias = 14;
 		if (detectedByPath == MRSyntaxLanguage::Systemd)
 			pathBias = 24;
-		else if (ext == ".py" || ext == ".pyw" || ext == ".zsh" || ext == ".sh" || ext == ".bash" || ext == ".ksh" || ext == ".md" || ext == ".markdown" || ext == ".service" ||
+		else if (ext == ".py" || ext == ".pyw" || ext == ".zsh" || ext == ".sh" || ext == ".bash" || ext == ".ksh" || ext == ".fish" || ext == ".md" || ext == ".markdown" || ext == ".service" ||
 		         ext == ".socket" || ext == ".timer" || ext == ".mount" || ext == ".automount" || ext == ".target" || ext == ".path" || ext == ".slice" || ext == ".scope" ||
 		         ext == ".swap" || ext == ".device" || ext == ".link" || ext == ".netdev" || ext == ".network")
 			pathBias = 10;
@@ -3787,6 +3990,19 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	addClassificationScore(scores, MRSyntaxLanguage::Zsh, countMatches(lower, "<<", 8));
 	addClassificationScore(scores, MRSyntaxLanguage::Zsh, shellAssignmentLines * 2);
 	if (shellControlCount + shellAssignmentLines > 0) strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Zsh)] += std::min(4, shellControlCount + shellAssignmentLines);
+
+	addClassificationScore(scores, MRSyntaxLanguage::Fish, fishFunctionLines * 4);
+	addClassificationScore(scores, MRSyntaxLanguage::Fish, fishSetLines * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Fish, fishSwitchLines * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Fish, fishBlockLines * 2);
+	addClassificationScore(scores, MRSyntaxLanguage::Fish, countMatches(lower, "string ", 12) * 2);
+	addClassificationScore(scores, MRSyntaxLanguage::Fish, countMatches(lower, "contains --", 8) * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Fish, countMatches(lower, "argparse ", 8) * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Fish, countMatches(lower, "math ", 8) * 2);
+	addClassificationScore(scores, MRSyntaxLanguage::Fish, countMatches(lower, "path ", 8) * 2);
+	addClassificationScore(scores, MRSyntaxLanguage::Fish, countMatches(lower, "count $", 8) * 2);
+	if (fishFunctionLines + fishSetLines + fishSwitchLines + countMatches(lower, "argparse ", 8) > 0)
+		strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Fish)] += std::min(4, fishFunctionLines + fishSetLines + fishSwitchLines + countMatches(lower, "argparse ", 8));
 
 	addClassificationScore(scores, MRSyntaxLanguage::Systemd, countLinePrefixMatches(lower, "[unit]", 8) * 6);
 	addClassificationScore(scores, MRSyntaxLanguage::Systemd, countLinePrefixMatches(lower, "[service]", 8) * 6);
@@ -4005,6 +4221,8 @@ const char *tmrSyntaxLanguageName(MRSyntaxLanguage language) noexcept {
 			return "Bash";
 		case MRSyntaxLanguage::Zsh:
 			return "zsh";
+		case MRSyntaxLanguage::Fish:
+			return "fish";
 		case MRSyntaxLanguage::Perl:
 			return "Perl";
 		case MRSyntaxLanguage::Swift:
@@ -4042,6 +4260,8 @@ const char *tmrSyntaxLanguageMarker(MRSyntaxLanguage language) noexcept {
 			return "Ba";
 		case MRSyntaxLanguage::Zsh:
 			return "Zh";
+		case MRSyntaxLanguage::Fish:
+			return "Fi";
 		case MRSyntaxLanguage::Perl:
 			return "Pl";
 		case MRSyntaxLanguage::Swift:
@@ -4079,6 +4299,8 @@ std::uint32_t tmrSyntaxLanguageMarkerRgb(MRSyntaxLanguage language) noexcept {
 			return 0x8FBF6A;
 		case MRSyntaxLanguage::Zsh:
 			return 0x6FBF73;
+		case MRSyntaxLanguage::Fish:
+			return 0x5FBF9A;
 		case MRSyntaxLanguage::Perl:
 			return 0xB084CC;
 		case MRSyntaxLanguage::Swift:
@@ -4157,6 +4379,10 @@ MRSyntaxLineResult tmrHighlightTextLine(MRSyntaxLanguage language, std::string_v
 		}
 		case MRSyntaxLanguage::Zsh: {
 			MRZshSyntaxHighlighter highlighter;
+			return highlighter.highlightLine(line, previousState);
+		}
+		case MRSyntaxLanguage::Fish: {
+			MRFishSyntaxHighlighter highlighter;
 			return highlighter.highlightLine(line, previousState);
 		}
 		case MRSyntaxLanguage::Perl: {

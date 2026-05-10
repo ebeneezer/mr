@@ -118,6 +118,7 @@ class MRScrollableDialog : public TDialog {
 	void handleEvent(TEvent &event) override;
 
 	void addManaged(TView *view, const TRect &base);
+	void removeManaged(TView *view);
 	void initScrollIfNeeded();
 	void selectContent();
 	void scrollToOrigin();

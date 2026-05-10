@@ -42,6 +42,7 @@ const char *dialogCodeLanguageLabel(const std::string &codeLanguage) {
 	if (normalized == "TSX") return "TSX";
 	if (normalized == "BASH") return "Bash";
 	if (normalized == "ZSH") return "zsh";
+	if (normalized == "FISH") return "fish";
 	if (normalized == "JSON") return "JSON";
 	if (normalized == "PERL") return "Perl";
 	if (normalized == "SWIFT") return "Swift";
@@ -64,6 +65,7 @@ bool parseDialogCodeLanguage(const std::string &dialogValue, std::string &canoni
 	else if (normalized == "TSX") canonicalValue = "TSX";
 	else if (normalized == "BASH") canonicalValue = "BASH";
 	else if (normalized == "ZSH") canonicalValue = "ZSH";
+	else if (normalized == "FISH") canonicalValue = "FISH";
 	else if (normalized == "JSON") canonicalValue = "JSON";
 	else if (normalized == "PERL") canonicalValue = "PERL";
 	else if (normalized == "SWIFT") canonicalValue = "SWIFT";
@@ -145,7 +147,7 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.defaultExtensions = readRecordField(record.defaultExtensions);
 	{
 		if (!parseDialogCodeLanguage(readRecordField(record.codeLanguage), settings.codeLanguage)) {
-			errorText = "CODE_LANGUAGE must be None, Automatic, C, C++, Python, JavaScript, TypeScript, TSX, Bash, zsh, JSON, Perl, Swift, Rust, Go or systemd et al..";
+			errorText = "CODE_LANGUAGE must be None, Automatic, C, C++, Python, JavaScript, TypeScript, TSX, Bash, zsh, fish, JSON, Perl, Swift, Rust, Go or systemd et al..";
 			return false;
 		}
 	}

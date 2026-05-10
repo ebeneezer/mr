@@ -2,9 +2,11 @@
 #define Uses_TDialog
 #define Uses_TFileDialog
 #define Uses_TFileInputLine
+#define Uses_TFileInfoPane
 #define Uses_TFileList
 #define Uses_THistory
 #define Uses_TInputLine
+#define Uses_TDrawBuffer
 #define Uses_TEvent
 #define Uses_TKeys
 #define Uses_TObject
@@ -12,6 +14,7 @@
 #define Uses_TView
 #include <tvision/tv.h>
 #include <tvision/compat/borland/dos.h>
+#include <tvision/compat/borland/io.h>
 
 #include "MRDropList.hpp"
 #include "MRScopedHistoryUI.hpp"
@@ -19,6 +22,7 @@
 #include "../config/MRDialogPaths.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -29,6 +33,88 @@ namespace {
 enum : ushort {
 	cmMrScopedHistoryChoose = 3868,
 	cmMrScopedHistoryAccept
+};
+
+const char *const kMonthNames[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+
+std::string humanReadableFileSize(long size) {
+	if (size < 0) size = 0;
+	if (size < 1024) return std::to_string(size) + "b";
+	if (size < 1024 * 1024) return std::to_string(size / 1024) + "k";
+	if (size < 1024 * 1024 * 1024) return std::to_string(size / (1024 * 1024)) + "M";
+	return std::to_string(size / (1024 * 1024 * 1024)) + "G";
+}
+
+std::string middleEllipsized(std::string_view text, std::size_t maxWidth) {
+	if (text.size() <= maxWidth) return std::string(text);
+	if (maxWidth <= 3) return std::string(text.substr(0, maxWidth));
+	const std::size_t leftCount = (maxWidth - 3) / 2;
+	const std::size_t rightCount = maxWidth - 3 - leftCount;
+	return std::string(text.substr(0, leftCount)) + "..." + std::string(text.substr(text.size() - rightCount));
+}
+
+std::string fileDateTimeText(const TSearchRec &file) {
+	const struct ftime *time = reinterpret_cast<const struct ftime *>(&file.time);
+	const int monthIndex = std::clamp<int>(time->ft_month - 1, 0, 11);
+	int hour = time->ft_hour;
+	const bool pm = hour >= 12;
+	hour %= 12;
+	if (hour == 0) hour = 12;
+
+	char buffer[64] = {0};
+	std::snprintf(buffer, sizeof(buffer), "%s %02d,%04d %02d:%02d%s", kMonthNames[monthIndex], time->ft_day, time->ft_year + 1980, hour, time->ft_min, pm ? "p" : "a");
+	return std::string(buffer);
+}
+
+class TScopedFileInfoPane final : public TView {
+ public:
+	TScopedFileInfoPane(const TRect &bounds) noexcept : TView(bounds) {
+		eventMask |= evBroadcast;
+	}
+
+	void draw() override {
+		TDrawBuffer buffer;
+		TColorAttr color = getColor(0x01);
+		TFileDialog *dialog = dynamic_cast<TFileDialog *>(owner);
+
+		buffer.moveChar(0, ' ', color, static_cast<ushort>(size.x));
+		if (dialog != nullptr) {
+			char path[MAXPATH] = {0};
+			std::size_t copied = strnzcpy(path, dialog->directory != nullptr ? dialog->directory : "", MAXPATH);
+			strnzcpy(path + copied, dialog->wildCard, MAXPATH - copied);
+			fexpand(path);
+			buffer.moveStr(1, path, color, static_cast<ushort>(std::max(0, size.x - 1)));
+		}
+		writeLine(0, 0, static_cast<ushort>(size.x), 1, buffer);
+
+		buffer.moveChar(0, ' ', color, static_cast<ushort>(size.x));
+		if (fileBlock.name[0] != '\0') {
+			const std::string sizeText = humanReadableFileSize(fileBlock.size);
+			const std::string dateTimeText = fileDateTimeText(fileBlock);
+			const std::string rightText = sizeText + "  " + dateTimeText;
+			const int rightStart = std::max(1, size.x - 1 - static_cast<int>(rightText.size()));
+			const int nameWidth = std::max(0, rightStart - 2);
+			const std::string nameText = middleEllipsized(fileBlock.name, static_cast<std::size_t>(nameWidth));
+
+			if (!nameText.empty()) buffer.moveStr(1, nameText.c_str(), color, static_cast<ushort>(std::max(0, rightStart - 1)));
+			buffer.moveStr(static_cast<short>(rightStart), rightText.c_str(), color, static_cast<ushort>(std::max(0, size.x - rightStart)));
+		}
+		writeLine(0, 1, static_cast<ushort>(size.x), 1, buffer);
+
+		buffer.moveChar(0, ' ', color, static_cast<ushort>(size.x));
+		writeLine(0, 2, static_cast<ushort>(size.x), static_cast<ushort>(std::max(0, size.y - 2)), buffer);
+	}
+
+	void handleEvent(TEvent &event) override {
+		TView::handleEvent(event);
+		if (event.what == evBroadcast && event.message.command == cmFileFocused) {
+			fileBlock = *static_cast<TSearchRec *>(event.message.infoPtr);
+			drawView();
+		}
+	}
+
+ private:
+	TSearchRec fileBlock = {};
 };
 
 class TFileDialogEnterInterceptor final : public TView {
@@ -60,6 +146,7 @@ class TWheelFileDialog final : public TFileDialog {
 	TWheelFileDialog(MRDialogHistoryScope aScope, const char *wildCard, const char *title, const char *inputName, ushort options) noexcept : TWindowInit(TFileDialog::initFrame), TFileDialog(wildCard, title, inputName, options, 0), scope(aScope), dialogOptions(options) {
 		insert(new TFileDialogEnterInterceptor(fileName));
 		replaceHistoryView(static_cast<TInputLine *>(fileName));
+		replaceInfoPane();
 	}
 
 	void handleEvent(TEvent &event) override {
@@ -187,6 +274,23 @@ class TWheelFileDialog final : public TFileDialog {
 				TView *history = historyDropList.createButton(*this, childBounds, link, this, cmMrScopedHistoryChoose, true);
 				history->growMode = childGrowMode;
 				historyLink = link;
+				return;
+			}
+			child = next;
+		}
+	}
+
+	void replaceInfoPane() {
+		for (TView *child = first(); child != nullptr;) {
+			TView *next = child->nextView();
+			if (dynamic_cast<TFileInfoPane *>(child) != nullptr) {
+				const TRect childBounds = child->getBounds();
+				const ushort childGrowMode = child->growMode;
+				remove(child);
+				TObject::destroy(child);
+				TView *pane = new TScopedFileInfoPane(childBounds);
+				insert(pane);
+				pane->growMode = childGrowMode;
 				return;
 			}
 			child = next;

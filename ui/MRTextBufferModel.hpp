@@ -282,6 +282,10 @@ class MRTextBufferModel {
 			mLanguage = MRSyntaxLanguage::Zsh;
 			return;
 		}
+		if (normalizedCodeLanguage == "FISH") {
+			mLanguage = MRSyntaxLanguage::Fish;
+			return;
+		}
 		if (normalizedCodeLanguage == "JSON") {
 			mLanguage = MRSyntaxLanguage::Json;
 			return;

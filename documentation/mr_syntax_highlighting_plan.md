@@ -167,11 +167,13 @@ Noch nicht erledigt:
 
 - automatische Sprachklassifikation zeigt derzeit keinen Handlungsbedarf; weitere Härtung bleibt nur Reserve für echte Fehlbefunde
 - aktuell sind keine weiteren Sprachaufnahmen für Folding oder Indenting gewünscht
+- `fish` bleibt als nächster explizit vorgesehener Sprachkandidat in der Integrationssammlung; der vorhandene Korpus in `misc/` bleibt dafür bewusst liegen
 - der nächste Gesamtzug liegt daher ausschließlich in Konsolidierung des Bestands:
   - Resthärtung des sprachübergreifenden Smart-Indent-/Undent-Pfads auf bereits unterstützten Sprachen
   - Konsistenz zwischen Editor, FE-Dialog, Auto-Erkennung, Folding und den Batchtools `mrfoldtrainer` und `mrindenttrainer`
   - UI-/Dialogpflege außerhalb neuer Sprachaufnahmen
   - Dokumentation und Qualitätsstand des bestehenden `v1.0`-Sprachbestands
+  - danach gezielte Aufnahme von `fish` als nächster neuer Sprachzug
 
 ---
 

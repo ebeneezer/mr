@@ -8715,7 +8715,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 								                         "MULTI_SAR_CASE_SENSITIVE, MULTI_SAR_REGULAR_EXPRESSIONS, "
 								                         "MULTI_SAR_FILES_IN_MEMORY, MULTI_SAR_KEEP_FILES_OPEN, "
 								                         "VIRTUAL_DESKTOPS, CYCLIC_VIRTUAL_DESKTOPS, CURSOR_BEHAVIOUR, "
-								                         "CURSOR_POSITION_MARKER, AUTOLOAD_WORKSPACE, LOG_HANDLING, LOGFILE, AUTOEXEC_MACRO, "
+								                         "UI_INDENT_STYLE, CURSOR_POSITION_MARKER, AUTOLOAD_WORKSPACE, LOG_HANDLING, LOGFILE, AUTOEXEC_MACRO, "
 								                         "LASTFILEDIALOGPATH, KEYMAP_PROFILE, KEYMAP_BIND, ACTIVE_KEYMAP_PROFILE, "
 								                         "MAX_PATH_HISTORY, MAX_FILE_HISTORY, PATH_HISTORY, FILE_HISTORY, "
 								                         "DIALOG_LAST_PATH, DIALOG_PATH_HISTORY, DIALOG_FILE_HISTORY, "

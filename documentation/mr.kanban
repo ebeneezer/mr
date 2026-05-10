@@ -171,13 +171,18 @@
           "comments": []
         },
         {
-          "id": "d9673699-ede3-4290-b4aa-1d84ab83ec8a",
+          "id": "a24d42c4-f168-415f-85ca-90ac35821dc2",
           "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
-          "title": "Code Folding: mehr Sprachen",
-          "description": "Konfigurierbar für jedes FE Profil.",
+          "title": "Indenting",
+          "description": "",
           "labels": [],
           "checkboxes": [],
-          "comments": []
+          "comments": [
+            {
+              "id": "c55d38d8-0d2a-4de3-bce1-f0a4c34607ac",
+              "comment": "Verschiedene Einrückstile auswählbar machen"
+            }
+          ]
         }
       ]
     },
@@ -233,18 +238,13 @@
           ]
         },
         {
-          "id": "a24d42c4-f168-415f-85ca-90ac35821dc2",
+          "id": "d9673699-ede3-4290-b4aa-1d84ab83ec8a",
           "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Indenting",
-          "description": "",
+          "title": "Code Folding: mehr Sprachen",
+          "description": "Konfigurierbar für jedes FE Profil.",
           "labels": [],
           "checkboxes": [],
-          "comments": [
-            {
-              "id": "c55d38d8-0d2a-4de3-bce1-f0a4c34607ac",
-              "comment": "Verschiedene Einrückstile auswählbar machen"
-            }
-          ]
+          "comments": []
         }
       ]
     },

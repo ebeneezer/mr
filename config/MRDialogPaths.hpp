@@ -192,6 +192,15 @@ enum class MRCursorBehaviour : unsigned char {
 	FreeMovement = 1
 };
 
+enum class MRUiIndentStyle : unsigned char {
+	KandR = 0,
+	KandR4 = 1,
+	Allman = 2,
+	Gnome = 3,
+	Whitesmiths = 4,
+	Horstmann = 5
+};
+
 enum class MRSettingsKeyClass : unsigned char {
 	Unknown,
 	Version,
@@ -499,6 +508,8 @@ bool setConfiguredCyclicVirtualDesktops(bool enabled, std::string *errorMessage 
 [[nodiscard]] bool configuredCyclicVirtualDesktops();
 bool setConfiguredCursorBehaviour(MRCursorBehaviour behaviour, std::string *errorMessage = nullptr);
 [[nodiscard]] MRCursorBehaviour configuredCursorBehaviour();
+bool setConfiguredUiIndentStyle(MRUiIndentStyle style, std::string *errorMessage = nullptr);
+[[nodiscard]] MRUiIndentStyle configuredUiIndentStyle();
 bool setConfiguredCursorPositionMarker(const std::string &value, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string configuredCursorPositionMarker();
 bool setConfiguredAutoloadWorkspace(bool enabled, std::string *errorMessage = nullptr);
