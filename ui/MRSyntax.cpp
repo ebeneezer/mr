@@ -3832,6 +3832,9 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	const std::string fileName = fileNamePart(!path.empty() ? path : title);
 	const std::string lowerName = lowerCopy(fileName);
 	const std::string ext = extensionPart(fileName);
+	const bool forceCLanguageByExtension = ext == ".c";
+	const bool forceCppLanguageByExtension =
+	    ext == ".cc" || ext == ".cpp" || ext == ".cxx" || ext == ".hh" || ext == ".hpp" || ext == ".hxx" || ext == ".ipp" || ext == ".tpp" || ext == ".inl";
 	const std::string_view sample = classificationSample(text);
 	const std::string lowerSample = lowerCopyView(sample);
 	const std::string_view lower = lowerSample;
@@ -3839,6 +3842,10 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	const std::string lowerFirstLine = lowerCopyView(firstLine);
 	const std::string_view lowerShebang = lowerFirstLine;
 	const MRSyntaxLanguage detectedByPath = tmrDetectSyntaxLanguage(path, title);
+
+	if (forceCLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::C, 100);
+	if (forceCppLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::Cpp, 100);
+
 	const int includeLines = countLinePrefixMatches(lower, "#include", 8);
 	const int defineLines = countLinePrefixMatches(lower, "#define", 8);
 	const int typedefLines = countLinePrefixMatches(lower, "typedef ", 8);

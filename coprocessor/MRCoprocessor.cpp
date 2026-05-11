@@ -376,6 +376,7 @@ Coprocessor::ComputePriority Coprocessor::computePriorityForTask(TaskKind kind) 
 		case TaskKind::IndicatorBlink:
 			return ComputePriority::High;
 		case TaskKind::SyntaxWarmup:
+		case TaskKind::FoldWarmup:
 		case TaskKind::SaveNormalizationWarmup:
 			return ComputePriority::Normal;
 		case TaskKind::Custom:

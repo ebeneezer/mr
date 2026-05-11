@@ -32,14 +32,6 @@
 
 namespace {
 
-static constexpr double kSlowSettingsAssignmentThresholdMs = 5.0;
-static constexpr double kSlowPrepareStartupSettingsThresholdMs = 20.0;
-static constexpr double kSlowKeymapSettingsThresholdMs = 5.0;
-
-double elapsedMsSince(std::chrono::steady_clock::time_point startedAt) noexcept {
-	return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count();
-}
-
 std::string summarizeConfiguredKeymapsForLog(const std::vector<MRKeymapProfile> &profiles, std::string_view activeProfileName) {
 	std::string text = "Keymap configured state: active='" + std::string(activeProfileName) + "' profiles=" + std::to_string(profiles.size());
 
@@ -3521,21 +3513,12 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 }
 
 bool applyConfiguredSettingsAssignment(const std::string &key, const std::string &value, MRSetupPaths &paths, std::string *errorMessage) {
-	const auto startedAt = std::chrono::steady_clock::now();
-	auto logIfSlow = [&]() {
-		const double elapsedMs = elapsedMsSince(startedAt);
-		if (elapsedMs < kSlowSettingsAssignmentThresholdMs) return;
-		std::ostringstream detail;
-		detail << "Slow MRSETUP assignment: key=" << key << " ms=" << elapsedMs << " value_bytes=" << value.size();
-		mrLogMessage(detail.str());
-	};
 	switch (classifySettingsKey(key)) {
 		case MRSettingsKeyClass::Unknown:
 			return setError(errorMessage, "Unsupported MRSETUP key.");
 		case MRSettingsKeyClass::Version:
 			if (trimAscii(value) != kCurrentSettingsVersion) return setError(errorMessage, "Unsupported settings version.");
 			if (errorMessage != nullptr) errorMessage->clear();
-			logIfSlow();
 			return true;
 		case MRSettingsKeyClass::Path: {
 			std::string upper = upperAscii(trimAscii(key));
@@ -4450,53 +4433,27 @@ bool buildCanonicalSettingsSource(const std::string &settingsPath, const std::st
 }
 
 bool prepareStartupSettingsSource(const std::string &settingsPath, const std::string &source, MRSettingsLoadReport *report, std::string &canonicalSource, std::string *errorMessage) {
-	const auto totalStartedAt = std::chrono::steady_clock::now();
 	MRSettingsLoadReport localReport;
 	MRSettingsLoadReport &activeReport = report != nullptr ? *report : localReport;
 	MRSettingsSnapshot snapshot;
 	std::string normalizedPath = normalizeConfiguredPathInput(settingsPath);
 	std::string rewriteError;
 	std::string summary;
-	double loadNormalizeMs = 0.0;
-	double buildMs = 0.0;
-	double rewriteMs = 0.0;
 
 	activeReport = MRSettingsLoadReport();
-	const auto loadNormalizeStartedAt = std::chrono::steady_clock::now();
-	if (!loadAndNormalizeSettingsSource(normalizedPath, source, snapshot, &activeReport, errorMessage)) {
-		loadNormalizeMs = elapsedMsSince(loadNormalizeStartedAt);
-		return false;
-	}
-	loadNormalizeMs = elapsedMsSince(loadNormalizeStartedAt);
-	const auto buildStartedAt = std::chrono::steady_clock::now();
+	if (!loadAndNormalizeSettingsSource(normalizedPath, source, snapshot, &activeReport, errorMessage)) return false;
 	canonicalSource = buildSettingsMacroSource(snapshot);
-	buildMs = elapsedMsSince(buildStartedAt);
 	if (!activeReport.normalized()) {
-		const double totalMs = elapsedMsSince(totalStartedAt);
-		if (totalMs >= kSlowPrepareStartupSettingsThresholdMs) {
-			std::ostringstream detail;
-			detail << "Slow startup prepare: load_normalize_ms=" << loadNormalizeMs << " build_ms=" << buildMs << " rewrite_ms=0 total_ms=" << totalMs << " normalized=0 path=" << normalizedPath;
-			mrLogMessage(detail.str());
-		}
 		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
-	const auto rewriteStartedAt = std::chrono::steady_clock::now();
 	if (!writeNormalizedBootstrapFiles(snapshot, source, canonicalSource, &rewriteError)) {
-		rewriteMs = elapsedMsSince(rewriteStartedAt);
 		if (errorMessage != nullptr) *errorMessage = "Settings rewrite failed: " + rewriteError;
 		return false;
 	}
-	rewriteMs = elapsedMsSince(rewriteStartedAt);
 	summary = describeSettingsLoadReport(activeReport);
 	mrLogMessage(("Settings normalized: " + normalizedPath).c_str());
 	if (!summary.empty()) mrLogMessage(("Settings normalization details: " + summary).c_str());
-	const double totalMs = elapsedMsSince(totalStartedAt);
-	if (totalMs >= kSlowPrepareStartupSettingsThresholdMs) {
-		std::ostringstream detail;
-		detail << "Slow startup prepare: load_normalize_ms=" << loadNormalizeMs << " build_ms=" << buildMs << " rewrite_ms=" << rewriteMs << " total_ms=" << totalMs << " normalized=1 path=" << normalizedPath;
-		mrLogMessage(detail.str());
-	}
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -4663,45 +4620,31 @@ const std::vector<MRKeymapProfile> &configuredKeymapProfiles() {
 }
 
 bool setConfiguredKeymapProfiles(const std::vector<MRKeymapProfile> &profiles, std::string *errorMessage) {
-	const auto startedAt = std::chrono::steady_clock::now();
 	std::vector<MRKeymapProfile> normalized = profiles;
 	const std::vector<MRKeymapProfile> previousProfiles = configuredKeymapProfilesValue();
 	const std::string previousActive = configuredActiveKeymapProfileValue();
 	bool hasDefault = false;
 	std::string runtimeError;
-	double normalizeMs = 0.0;
-	double validateMs = 0.0;
-	double rebuildMs = 0.0;
 
-	{
-		const auto phaseStartedAt = std::chrono::steady_clock::now();
-		for (MRKeymapProfile &profile : normalized) {
-			profile.name = trimAscii(profile.name);
-			profile.description = trimAscii(profile.description);
-			for (MRKeymapBindingRecord &binding : profile.bindings) {
-				binding.profileName = trimAscii(binding.profileName);
-				binding.target.target = trimAscii(binding.target.target);
-				binding.description = trimAscii(binding.description);
-			}
-			if (upperAscii(profile.name) == "DEFAULT") {
-				profile.name = "DEFAULT";
-				hasDefault = true;
-			}
+	for (MRKeymapProfile &profile : normalized) {
+		profile.name = trimAscii(profile.name);
+		profile.description = trimAscii(profile.description);
+		for (MRKeymapBindingRecord &binding : profile.bindings) {
+			binding.profileName = trimAscii(binding.profileName);
+			binding.target.target = trimAscii(binding.target.target);
+			binding.description = trimAscii(binding.description);
 		}
-		normalizeMs = elapsedMsSince(phaseStartedAt);
+		if (upperAscii(profile.name) == "DEFAULT") {
+			profile.name = "DEFAULT";
+			hasDefault = true;
+		}
 	}
 	if (!hasDefault) normalized.insert(normalized.begin(), builtInDefaultKeymapProfile());
 
-	const auto validateStartedAt = std::chrono::steady_clock::now();
 	const auto diagnostics = validateKeymapProfiles(normalized);
-	validateMs = elapsedMsSince(validateStartedAt);
 	for (const MRKeymapDiagnostic &diagnostic : diagnostics)
 		if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error) return setError(errorMessage, diagnostic.message);
-	{
-		const auto rebuildStartedAt = std::chrono::steady_clock::now();
-		if (!runtimeKeymapResolver().rebuild(normalized, configuredActiveKeymapProfileValue(), &runtimeError)) return setError(errorMessage, runtimeError);
-		rebuildMs = elapsedMsSince(rebuildStartedAt);
-	}
+	if (!runtimeKeymapResolver().rebuild(normalized, configuredActiveKeymapProfileValue(), &runtimeError)) return setError(errorMessage, runtimeError);
 
 	configuredKeymapProfilesValue() = normalized;
 	if (configuredActiveKeymapProfileValue().empty()) configuredActiveKeymapProfileValue() = "DEFAULT";
@@ -4709,13 +4652,6 @@ bool setConfiguredKeymapProfiles(const std::vector<MRKeymapProfile> &profiles, s
 		configuredActiveKeymapProfileValue() = "DEFAULT";
 	if (previousProfiles != configuredKeymapProfilesValue() || previousActive != configuredActiveKeymapProfileValue()) markConfiguredSettingsDirty();
 	mrLogMessage(summarizeConfiguredKeymapsForLog(configuredKeymapProfilesValue(), configuredActiveKeymapProfileValue()));
-	const double totalMs = elapsedMsSince(startedAt);
-	if (totalMs >= kSlowKeymapSettingsThresholdMs) {
-		std::ostringstream detail;
-		detail << "Slow keymap profiles apply: profiles=" << configuredKeymapProfilesValue().size() << " active='" << configuredActiveKeymapProfileValue() << "' normalize_ms=" << normalizeMs
-		       << " validate_ms=" << validateMs << " rebuild_ms=" << rebuildMs << " total_ms=" << totalMs;
-		mrLogMessage(detail.str());
-	}
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -4754,7 +4690,6 @@ std::string configuredActiveKeymapProfile() {
 }
 
 bool setConfiguredActiveKeymapProfile(const std::string &value, std::string *errorMessage) {
-	const auto startedAt = std::chrono::steady_clock::now();
 	std::string normalized = trimAscii(value);
 	const std::string previous = configuredActiveKeymapProfileValue();
 	std::string runtimeError;
@@ -4762,19 +4697,13 @@ bool setConfiguredActiveKeymapProfile(const std::string &value, std::string *err
 	if (normalized.empty()) normalized = "DEFAULT";
 	for (const MRKeymapProfile &profile : configuredKeymapProfilesValue())
 		if (profile.name == normalized) {
-			if (!runtimeKeymapResolver().rebuild(configuredKeymapProfilesValue(), normalized, &runtimeError)) return setError(errorMessage, runtimeError);
-			configuredActiveKeymapProfileValue() = normalized;
-			if (previous != configuredActiveKeymapProfileValue()) markConfiguredSettingsDirty();
-			mrLogMessage("Keymap active profile set to '" + normalized + "'.");
-			const double totalMs = elapsedMsSince(startedAt);
-			if (totalMs >= kSlowKeymapSettingsThresholdMs) {
-				std::ostringstream detail;
-				detail << "Slow keymap active apply: active='" << normalized << "' profiles=" << configuredKeymapProfilesValue().size() << " total_ms=" << totalMs;
-				mrLogMessage(detail.str());
-			}
-			if (errorMessage != nullptr) errorMessage->clear();
-			return true;
-		}
+		if (!runtimeKeymapResolver().rebuild(configuredKeymapProfilesValue(), normalized, &runtimeError)) return setError(errorMessage, runtimeError);
+		configuredActiveKeymapProfileValue() = normalized;
+		if (previous != configuredActiveKeymapProfileValue()) markConfiguredSettingsDirty();
+		mrLogMessage("Keymap active profile set to '" + normalized + "'.");
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
 	return setError(errorMessage, "Unknown keymap profile: " + normalized);
 }
 

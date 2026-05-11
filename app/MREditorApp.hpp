@@ -24,6 +24,7 @@ class MREditorApp : public TApplication {
 	void handleEvent(TEvent &event) override;
 	void idle() override;
 	TPalette &getPalette() const override;
+	bool quitPrepared() const noexcept;
 
   private:
 	void prepareForQuit();

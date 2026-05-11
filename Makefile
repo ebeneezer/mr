@@ -84,6 +84,9 @@ STAGE_PROFILE_PROBE_OBJECT = regression/mr_stage_profile_probe.o
 REGRESSION_PROBE_TARGET = regression/mr-regression-checks
 REGRESSION_PROBE_SOURCE = regression/mr-regression-checks.cpp
 REGRESSION_PROBE_OBJECT = regression/mr-regression-checks.o
+PHASE1_REPRO_PROBE_TARGET = misc/mr_phase1_repro_probe
+PHASE1_REPRO_PROBE_SOURCE = misc/mr_phase1_repro_probe.cpp
+PHASE1_REPRO_PROBE_OBJECT = misc/mr_phase1_repro_probe.o
 MRMAC_V1_SUITE_SCRIPT = misc/run_mrmac_v1_suite.sh
 ABOUT_QUOTES_GENERATOR = ./generate_about_quotes.sh
 ABOUT_QUOTES_GENERATED = app/MRAboutQuotes.generated.hpp
@@ -124,6 +127,10 @@ CXX_SOURCES = \
 	config/MRDialogPaths.cpp \
 	config/MRSettingsLoader.cpp \
 	app/commands/MRExternalCommand.cpp \
+	derivedstate/MRDerivedStateBase.cpp \
+	derivedstate/MRFoldingDerivedState.cpp \
+	derivedstate/MRMiniMapDerivedState.cpp \
+	derivedstate/MRSyntaxDerivedState.cpp \
 	coprocessor/MRPerformance.cpp \
 	coprocessor/MRCoprocessorDispatch.cpp \
 	mrmac/MRVM.cpp \
@@ -160,7 +167,7 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 	tvision-upstream-init tvision-upstream-fetch tvision-subtree-pull tvision-apply-patches \
 	tvision-sync-safe tvision-status \
 	pcre2-check \
-	mrfoldtrainer mrindenttrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check \
+	mrfoldtrainer mrindenttrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe \
 	FORCE \
 	compile-commands lint-file context-tar tar-archives
 
@@ -169,6 +176,7 @@ mrfoldtrainer: $(MRFOLDTRAINER_TARGET)
 mrindenttrainer: $(MRINDENTTRAINER_TARGET)
 stage-profile-probe: $(STAGE_PROFILE_PROBE_TARGET)
 regression-probe: $(REGRESSION_PROBE_TARGET)
+phase1-repro-probe: $(PHASE1_REPRO_PROBE_TARGET)
 regression-check: $(REGRESSION_PROBE_TARGET)
 	./$(REGRESSION_PROBE_TARGET) --full
 regression-check-core: $(REGRESSION_PROBE_TARGET)
@@ -421,6 +429,9 @@ $(STAGE_PROFILE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $
 $(REGRESSION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(REGRESSION_PROBE_OBJECT) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
+$(PHASE1_REPRO_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(PHASE1_REPRO_PROBE_OBJECT) | pcre2-check
+	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
+
 
 # C++ compilations
 %.o: %.cpp
@@ -436,6 +447,7 @@ clean:
 		$(MRINDENTTRAINER_OBJECT) $(MRINDENTTRAINER_TARGET) \
 		$(STAGE_PROFILE_PROBE_TARGET) \
 		$(REGRESSION_PROBE_OBJECT) \
+		$(PHASE1_REPRO_PROBE_OBJECT) $(PHASE1_REPRO_PROBE_TARGET) \
 		misc/mr_keyin_probe.o misc/mr_tofrom_probe.o misc/mr_tofrom_dispatch_probe.o \
 		misc/mr_staged_nav_probe misc/mr_staged_mark_page_probe \
 		mrmac/lex.yy.c mrmac/parser.tab.c mrmac/parser.tab.h

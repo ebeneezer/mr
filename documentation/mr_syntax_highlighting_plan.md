@@ -1123,108 +1123,207 @@ und keine Nebenwirkung des Syntax-Colorings
 
 ---
 
-## Späte Experimentalphase: Cursor-zentrierte bidirektionale Parallelisierung
+## Kombinierter Zug 19 + 20: Inkrementelle Gültigkeitsbereiche statt Hotpath-Warmups
 
-Diese Phase gehört bewusst ans Ende des laufenden Gesamtzugs.
+Die bisherige Spätphase wird ersetzt.
 
-Sie wird erst betrachtet, wenn die drei Hauptfunktionen
+Grund:
 
 ```text
-Coloring
-Folding
-Indenting
+die bisherige Coprocessor-/Warmup-Orchestrierung ist zu hypertroph geworden
+und hat den Editorpfad nicht zuverlässig entlastet
 ```
 
-im Alltag getestet sauber funktionieren.
-
-Zusätzliche harte Voraussetzung:
+Neue Grundregel:
 
 ```text
-es gibt einen bekannten stabilen Commit als Rücksetzpunkt
+alle Dateien werden gleich behandelt
+es gibt keine Sonderpfade nach Dateigröße
 ```
 
-Ziel:
+Die Unterscheidung zwischen kleinen und großen Dateien hat
 
 ```text
-prüfen, ob strukturbezogene Analysen um die Cursor-Position herum
-bidirektional und blockweise parallelisiert werden können
+zu viele Scheduler-, Viewport- und Invalidation-Sonderfälle erzeugt
 ```
 
-Kernidee:
+und ist damit selbst Teil des Performanceproblems geworden.
+
+Neues Zielbild:
 
 ```text
-von der Cursor-Position aus nach TOF und nach EOF arbeiten
-berechnete Zeilenbereiche in einer Range-Tabelle festhalten
-freie Worker-Slots opportunistisch weiter belegen
+Dokument bleibt Primärzustand
+Syntax, Folding und MiniMap sind drei abgeleitete Zustandsstores
+jeder Zustandsstore führt dokumentweite Gültigkeits- und Ungültigkeitsbereiche
+nach Edit wird nur invalidiert
+die UI darf stale Daten weiter anzeigen oder vorübergehend lückenhaft sein
+aber sie darf nicht auf Hintergrundauffüllung warten
 ```
 
-Aktueller Performance-Befund, der in dieser Phase ausdrücklich mitgeführt werden muss:
+Kernaussage:
 
 ```text
-bei sehr großen Dateien wird der Folding-Pfad mit zu globaler Strukturermittlung im Scroll-Hotpath zu teuer
-ohne Code Folding ist Scrollen wieder performant
-mit Code Folding wird Scrollen wieder laggy
+Tippen hat Vorrang vor Decorator-Systemen
 ```
 
-Daraus folgt für Zug 20 zusätzlich:
+Das bedeutet ausdrücklich:
 
 ```text
-nicht nur cursor-zentriert denken
-sondern viewport-zentriert plus Sicherheitsrand
+1. Syntax darf pro Zeichen nicht erneut den sichtbaren Bereich vollständig anwärmen
+2. Folding darf seine Struktur nicht aus viewportnahen Hotpath-Scans wiederholt neu ableiten
+3. MiniMap darf nach Edit nicht sofort wieder in den Interaktionspfad zurückdrücken
 ```
 
-Praktische Relevanz:
+### Architekturprinzip
+
+Die PieceTable-Idee wird nicht kopiert, aber konzeptionell wiederholt:
 
 ```text
-der sichtbare Bereich muss mit minimal nötiger Strukturinformation versorgt werden
-ohne im Hotpath dokumentweit oder unnötig tief nach TOF/EOF zu analysieren
+stabiler Primärzustand
+plus inkrementell gepflegte Zusatzdaten
+plus explizite Gültigkeitsbereiche
 ```
 
-Wichtige Einschränkung:
+Für die drei abgeleiteten Systeme bedeutet das:
 
 ```text
-dies ist kein Automatismus für den stateful Coloring-Kern
+Syntax:
+    Token-/Run-Cache pro Zeile
+    State-Checkpoints für stateful languages
+    dokumentweite Gültigkeitsintervalle
+
+Folding:
+    dokumentweite Fold-Span-Truth
+    getrennte Viewport-Projektion
+    dokumentweite Gültigkeitsintervalle
+
+MiniMap:
+    globaler Darstellungszustand
+    dokumentweite Sampling-/Line-Validität
+    getrennte sichtbare Projektion
 ```
 
-Der stateful Lexer bleibt grundsätzlich verdächtig für:
+Wichtig:
 
 ```text
-falsche State-Eingänge
-unsauberes Zusammensetzen von Teilbereichen
-Konvergenzprobleme zwischen Teilblöcken
+das ist keine dreifache PieceTable
+sondern dieselbe Betriebslogik für abgeleitete Daten
 ```
 
-Deshalb ist diese Phase ausdrücklich:
+### Rückbau des Coprocessors
+
+Der Coprocessor bleibt erlaubt, aber nur in einer stark vereinfachten Rolle:
 
 ```text
-zuerst Architektur- und Machbarkeitsprüfung
-nicht sofortiger Umbau des bestehenden Coloring-Kerns
+schlichter Hintergrund-Ausführer
+nicht Orchestrator des Editor-Hotpaths
 ```
 
-Prüffragen:
+Das heißt:
 
 ```text
-1. welche Teilanalysen dürfen bidirektional und blockweise parallel laufen
-2. welche müssen checkpoint-basiert strikt vorwärts bleiben
-3. ob Folding- und Indent-Strukturinfos stärker profitieren als Coloring
-4. ob ein messbarer Scheduling- und Latenzgewinn entsteht
-5. wie ein viewport-zentrierter Folding-Scan mit Sicherheitsrand aufgebaut wird, ohne bei großen Dateien globale Strukturkosten in den Scroll-Hotpath zu ziehen
+kein hektisches pro-Edit-Taskleben
+keine dateigrößenabhängigen Sonderscheduler
+keine versionsgetriebene Warmup-Sturmserie im Editorpfad
+kein erneutes Anwerfen von Syntax/Folding/MiniMap nur weil ein Commit passiert ist
+```
+
+Hintergrundarbeit bleibt notwendig,
+
+```text
+aber sie wird nur aus Invaliditätsbereichen gespeist
+nicht aus jeder sichtbaren Sofortinteraktion
+```
+
+### Zug 19 neu
+
+Zug 19 stellt Syntax und Folding auf die gemeinsame Inkrementalmechanik um.
+
+Umfang:
+
+```text
+Syntax:
+    Cache, Checkpoints, Validitätsintervalle
+    keine Hotpath-Warmups pro Edit
+    Viewport fordert nur fehlende Teilbereiche an
+
+Folding:
+    dokumentweite Fold-Spans als Wahrheitszustand
+    Viewport nur noch als Projektion
+    keine erneute globale oder viewportgetriebene Strukturermittlung im Scroll-/Edit-Hotpath
+
+Coprocessor:
+    bestehende Warmup-Orchestrierung deutlich zurückbauen
+    nur noch gezielte Hintergrundauffüllung invalidierter Bereiche
+```
+
+### Zug 20 neu
+
+Zug 20 stellt MiniMap auf dieselbe Mechanik um.
+
+Umfang:
+
+```text
+MiniMap:
+    globaler Renderzustand mit Validitätsbereichen
+    voller Erstscan im Hintergrund ist zulässig
+    nach Edit nur Invalidierung betroffener Bereiche
+    keine Sofort-Neuberechnung im Interaktionspfad
+
+UI:
+    letzte gültige MiniMap-Projektion darf stehen bleiben
+    unvollständige Anzeige ist zulässig
+    blockierendes Nachziehen ist unzulässig
+```
+
+### Praktische Konsequenz für den Editorpfad
+
+Nach einem Commit gilt:
+
+```text
+1. ChangeSet auswerten
+2. in Syntax/Folding/MiniMap nur Gültigkeitsbereiche beschneiden
+3. Cursor/Viewport normal fortsetzen
+4. sichtbare Darstellung mit bereits vorhandenem Zustand zeichnen
+5. Hintergrund nur für fehlende Bereiche anfordern
+```
+
+Nicht mehr erlaubt:
+
+```text
+Commit -> sofort Syntax neu planen
+Commit -> sofort Folding erneut anstoßen
+Commit -> sofort MiniMap wieder aufwecken
+Commit -> sichtbaren Bereich pro Zeichen vollständig nachwärmen
+```
+
+### Prüfkriterien
+
+Die kombinierte Phase ist erst erfolgreich, wenn:
+
+```text
+1. Tippen in derselben Datei nicht progressiv langsamer wird
+2. Syntax pro Zeichen nicht denselben Bereich erneut vollständig aufweckt
+3. Folding unabhängig von Dateigröße kein Scroll- oder Eingabelag erzeugt
+4. MiniMap an/aus den Editor nicht mehr zwischen bedienbar und unbedienbar kippen lässt
+5. stale oder verspätete Darstellung akzeptabel ist, Eingabelag aber nicht
 ```
 
 Nicht erlaubt:
 
 ```text
-Parallelisierung um jeden Preis
-Verlust von Korrektheit zugunsten von CPU-Auslastung
+neue Größen-Sonderpfade
 neue Warmup-/Pending-/Viewport-Instabilität
+CPU-Auslastung als Selbstzweck
+Verlust von Korrektheit zugunsten scheinbarer Responsivität
 ```
 
 Erfolgskriterium:
 
 ```text
-nachweisbarer Geschwindigkeitsgewinn
-ohne Verschlechterung von Syntax-Korrektheit, Folding oder Indent
-und ohne Rückfall in Scheduling-Instabilitäten
+ein einheitlicher, deutlich schlankerer Editorpfad
+ohne Dateigrößenverzweigung
+mit strikt vom Tippen entkoppelter Hintergrundauffüllung
 ```
 
 ### Erkennungs-Subset je Sprache
@@ -1374,8 +1473,15 @@ mit wenigen hochsignifikanten Treffern eine belastbare automatische Sprachwahl z
 16. Härtung der Sprachklassifikation gegen Problemdateien und Fehlklassifikationen
 17. strukturelles Folding-Backend mit Fold-Spans, dynamischer Gutter-Breite und Ebenenrahmen
 18. Batchtrainer-gestützte Härtung des Folding-Backends gegen Sprachsonderfälle, Richtungsfehler und reale Korpora bis zum tragfähigen `v1.0`-Sprachset
-19. Vollabnahme und systematische Korpus-Härtung der restlichen Bestands- und Folgesprachen
-20. späte experimentelle Prüfung einer cursor-zentrierten bidirektionalen Parallelisierung nach Stabilisierung von Coloring, Folding und Indenting
+19. kombinierter Architekturzug:
+    Syntax und Folding auf dokumentweite Gültigkeitsbereiche,
+    Checkpoints und stale-while-revalidate umstellen;
+    Coprocessor-Orchestrierung deutlich zurückbauen;
+    keine Dateigrößen-Sonderpfade mehr
+20. MiniMap auf dieselbe Inkrementalmechanik umstellen:
+    globaler Darstellungszustand,
+    dokumentweite Gültigkeitsbereiche,
+    reine Hintergrundauffüllung ohne Eingabe-Hotpath-Kopplung
 ```
 
 ---

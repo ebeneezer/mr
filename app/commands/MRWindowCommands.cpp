@@ -219,8 +219,8 @@ std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths) {
 		if (url.empty()) continue;
 		bounds = win->isMinimized() ? win->minimizedWorkspaceBounds() : win->getBounds();
 		restoreBounds = win->restoreWorkspaceBounds();
-		cursorColumn = static_cast<int>(win->cursorColumnNumber());
-		cursorLine = static_cast<int>(win->cursorLineNumber());
+		cursorColumn = editor->currentColumnNumber();
+		cursorLine = editor->currentLineNumber();
 		vd = win->mVirtualDesktop;
 		minimized = win->isMinimized();
 		source.insert(endMacro, "MRSETUP('WORKSPACE', 'URL=" + escapeMrmacSingleQuotedLiteral(url) + " size=" + std::to_string(bounds.b.x - bounds.a.x) + "," + std::to_string(bounds.b.y - bounds.a.y) + " pos=" + std::to_string(bounds.a.x) + "," + std::to_string(bounds.a.y) + " cursor=" + std::to_string(cursorColumn) + "," + std::to_string(cursorLine) + " vd=" + std::to_string(vd) + " min=" + std::to_string(minimized ? 1 : 0) + " restore=" + std::to_string(restoreBounds.b.x - restoreBounds.a.x) + "," + std::to_string(restoreBounds.b.y - restoreBounds.a.y) + " rpos=" + std::to_string(restoreBounds.a.x) + "," + std::to_string(restoreBounds.a.y) + "');\n");

@@ -23,19 +23,20 @@ static const unsigned char kInitFrame[19] = {0x06, 0x0A, 0x0C, 0x05, 0x00, 0x05,
 static const char kFrameChars[33] = "   \xC0 \xB3\xDA\xC3 \xD9\xC4\xC1\xBF\xB4\xC2\xC5   \xC8 \xBA\xC9\xC7 "
                                     "\xBC\xCD\xCF\xBB\xB6\xD1 ";
 
-static const char *kCloseIcon = "[~\xFE~]";
+static const char *kCloseIcon = "[\xFE]";
 static const char *kZoomIcon = "[▴]";
 static const char *kUnZoomIcon = "[▴]";
 static const char *kMinimizeIcon = "[▾]";
-static const char *kDragIcon = "~\xC4\xD9~";
-static const char *kDragLeftIcon = "~\xC0\xC4~";
+static const char *kDragIcon = "\xC4\xD9";
+static const char *kDragLeftIcon = "\xC0\xC4";
 
-static constexpr char kDirtyMarkerIcon[] = "✍";
+static constexpr char kDirtyMarkerIcon[] = "✎";
 static constexpr char kRecordingMarkerIcon[] = "📼";
-static constexpr char kTaskMarkerIcon[] = "⌬";
-static constexpr char kMacroBrainMarkerIcon[] = "⌬";
-static constexpr char kReadOnlyMarkerIcon[] = "🔒";
-static constexpr char kInsertMarkerIcon[] = "✚";
+static constexpr char kActivityMarkerIcon[] = "⌬";
+static constexpr const char *kTaskMarkerIcon = kActivityMarkerIcon;
+static constexpr const char *kMacroBrainMarkerIcon = kActivityMarkerIcon;
+static constexpr char kReadOnlyMarkerIcon[] = "⚿";
+static constexpr char kInsertMarkerIcon[] = "⌶";
 static constexpr char kWordWrapMarkerIcon[] = "\xE2\x94\x86\xE2\x86\xB5\xE2\x94\x86"; // ┆↵┆
 static constexpr int kLanguageMarkerSlotWidth = 1;
 static constexpr int kDirtyMarkerSlotWidth = 2;
@@ -537,9 +538,9 @@ void MRFrame::showTaskOverview() {
 	std::vector<std::string> lines;
 	MarkerState state = markerState();
 	int taskX = taskMarkerColumn(state);
-	int width = 48;
-	int minWidth = 48;
-	int minHeight = 8;
+	int width = 56;
+	int minWidth = 56;
+	int minHeight = 10;
 
 	if (group == nullptr || !mTaskOverviewProvider || taskX < 0) return;
 	lines = mTaskOverviewProvider();

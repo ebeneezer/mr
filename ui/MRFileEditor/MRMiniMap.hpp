@@ -14,6 +14,9 @@
 #include "../../coprocessor/MRCoprocessor.hpp"
 #include "../../piecetable/MRTextDocument.hpp"
 
+std::vector<std::string> mrBuildViewportScanLineTextsParallel(const mr::editor::ReadSnapshot &snapshot, std::size_t scanTopLine, std::size_t scanBottomLine, std::size_t focusTopLine,
+                                                              std::size_t focusBottomLine);
+
 class MRMiniMapRenderer {
   public:
 	struct Palette {
@@ -69,7 +72,8 @@ class MRMiniMapRenderer {
 	Signals clearWarmupTask(std::uint64_t expectedTaskId) noexcept;
 	Signals invalidate(bool cancelTask, std::size_t documentId) noexcept;
 	ApplyWarmupResult applyWarmup(const mr::coprocessor::MiniMapWarmupPayload &payload, std::size_t expectedVersion, std::uint64_t expectedTaskId, std::size_t documentId, std::size_t version) noexcept;
-	Signals scheduleWarmupIfNeeded(const Viewport &viewport, int rowCount, bool useBraille, std::size_t totalLinesHint, std::size_t topLine, std::size_t documentId, std::size_t version, const mr::editor::ReadSnapshot &snapshot, const MREditSetupSettings &settings);
+	Signals scheduleWarmupIfNeeded(const Viewport &viewport, int rowCount, bool useBraille, std::size_t totalLinesHint, std::size_t topLine, std::size_t documentId, std::size_t version, const mr::editor::ReadSnapshot &snapshot,
+	                              const MREditSetupSettings &settings, bool preservePendingTaskForSameDocument = false);
 	OverlayState computeOverlayState(const mr::editor::ReadSnapshot &snapshot, const mr::editor::Range &selection, const std::vector<mr::editor::Range> &findRanges, const std::vector<mr::editor::Range> &dirtyRanges, std::size_t totalLines, int viewportWidth, int miniMapBodyWidth, bool useBraille, const MREditSetupSettings &settings) const;
 	void drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, int viewWidth, const Viewport &viewport, std::size_t totalLines, std::size_t topLine, bool useBraille, const std::string &viewportMarkerGlyph, const Palette &palette, const OverlayState &overlay) const;
 

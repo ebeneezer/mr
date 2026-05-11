@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <future>
 #include <map>
 #include <memory>
@@ -9,6 +10,8 @@
 #include <utility>
 
 namespace {
+
+static constexpr auto kLargeFileViewportWarmupDebounce = std::chrono::milliseconds(180);
 
 int tabDisplayWidth(const MREditSetupSettings &settings, int visualColumn) noexcept {
 	const int currentColumn = std::max(1, visualColumn + 1);
@@ -133,6 +136,9 @@ struct MRMiniMapRenderer::Impl {
 	bool warmupBraille = true;
 	std::size_t warmupWindowStartLine = 0;
 	std::size_t warmupWindowLineCount = 0;
+	std::size_t lastWarmupScheduledWindowStartLine = 0;
+	std::size_t lastWarmupScheduledWindowLineCount = 0;
+	std::chrono::steady_clock::time_point lastWarmupScheduledAt;
 	RenderCache cache;
 
 	static void normalizeLineMasks(std::vector<OverlayState::LineMask> &masks) {
@@ -243,8 +249,15 @@ MRMiniMapRenderer::ApplyWarmupResult MRMiniMapRenderer::applyWarmup(const mr::co
 	ApplyWarmupResult result;
 
 	if (mImpl == nullptr) return result;
-	if (expectedTaskId == 0 || mImpl->warmupTaskId != expectedTaskId) return result;
 	if (documentId != mImpl->warmupDocumentId || version != expectedVersion) return result;
+	const bool matchingPendingTask = expectedTaskId != 0 && mImpl->warmupTaskId == expectedTaskId;
+	const bool missingVisibleProjection =
+	    !mImpl->cache.valid || mImpl->cache.documentId != documentId || mImpl->cache.documentVersion != version || mImpl->cache.bodyWidth <= 0 || mImpl->cache.rowCount <= 0 || mImpl->cache.rowPatterns.empty();
+	if (!matchingPendingTask && !missingVisibleProjection) return result;
+	const bool visualChanged = !mImpl->cache.valid || mImpl->cache.braille != payload.braille || mImpl->cache.rowCount != payload.rowCount || mImpl->cache.bodyWidth != payload.bodyWidth ||
+	                           mImpl->cache.totalLines != std::max<std::size_t>(1, payload.totalLines) || mImpl->cache.windowStartLine != payload.windowStartLine ||
+	                           mImpl->cache.windowLineCount != std::max<std::size_t>(1, payload.windowLineCount) || mImpl->cache.viewportWidth != std::max(1, payload.viewportWidth) ||
+	                           mImpl->cache.rowPatterns != payload.rowPatterns || mImpl->cache.rowLineStarts != payload.rowLineStarts || mImpl->cache.rowLineEnds != payload.rowLineEnds;
 	mImpl->cache.valid = true;
 	mImpl->cache.braille = payload.braille;
 	mImpl->cache.rowCount = payload.rowCount;
@@ -258,13 +271,14 @@ MRMiniMapRenderer::ApplyWarmupResult MRMiniMapRenderer::applyWarmup(const mr::co
 	mImpl->cache.rowPatterns = payload.rowPatterns;
 	mImpl->cache.rowLineStarts = payload.rowLineStarts;
 	mImpl->cache.rowLineEnds = payload.rowLineEnds;
-	result.signals.merge(mImpl->clearWarmupTask(expectedTaskId));
-	result.signals.redraw = true;
+	if (matchingPendingTask) result.signals.merge(mImpl->clearWarmupTask(expectedTaskId));
+	result.signals.redraw = visualChanged;
 	result.applied = true;
 	return result;
 }
 
-MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewport &viewport, int rowCount, bool useBraille, std::size_t totalLinesHint, std::size_t topLine, std::size_t documentId, std::size_t version, const mr::editor::ReadSnapshot &snapshot, const MREditSetupSettings &settings) {
+MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewport &viewport, int rowCount, bool useBraille, std::size_t totalLinesHint, std::size_t topLine, std::size_t documentId, std::size_t version,
+                                                                     const mr::editor::ReadSnapshot &snapshot, const MREditSetupSettings &settings, bool preservePendingTaskForSameDocument) {
 	Signals signals;
 
 	if (mImpl == nullptr) return signals;
@@ -275,8 +289,14 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 	if (mImpl->cacheReadyForViewport(viewport, rowCount, useBraille, samplingWindow, documentId, version)) return signals;
 	const int bodyWidth = viewport.bodyWidth;
 	const int viewportWidth = std::max(1, viewport.width);
+	if (preservePendingTaskForSameDocument && mImpl->warmupTaskId == 0 && mImpl->warmupDocumentId == documentId && mImpl->warmupRows == rowCount && mImpl->warmupBodyWidth == bodyWidth &&
+	    mImpl->warmupViewportWidth == viewportWidth && mImpl->warmupBraille == useBraille && mImpl->lastWarmupScheduledWindowStartLine == samplingWindow.startLine &&
+	    mImpl->lastWarmupScheduledWindowLineCount == samplingWindow.lineCount && mImpl->lastWarmupScheduledAt != std::chrono::steady_clock::time_point() &&
+	    std::chrono::steady_clock::now() - mImpl->lastWarmupScheduledAt < kLargeFileViewportWarmupDebounce)
+		return signals;
 	if (mImpl->warmupTaskId != 0) {
 		if (mImpl->warmupDocumentId == documentId && mImpl->warmupVersion == version && mImpl->warmupRows == rowCount && mImpl->warmupBodyWidth == bodyWidth && mImpl->warmupViewportWidth == viewportWidth && mImpl->warmupBraille == useBraille && mImpl->warmupWindowStartLine == samplingWindow.startLine && mImpl->warmupWindowLineCount == samplingWindow.lineCount) return signals;
+		if (preservePendingTaskForSameDocument && mImpl->warmupDocumentId == documentId && mImpl->warmupVersion == version) return signals;
 		static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mImpl->warmupTaskId));
 		signals.merge(mImpl->clearWarmupTask(mImpl->warmupTaskId));
 	}
@@ -290,7 +310,12 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 	mImpl->warmupBraille = useBraille;
 	mImpl->warmupWindowStartLine = samplingWindow.startLine;
 	mImpl->warmupWindowLineCount = samplingWindow.lineCount;
-	mImpl->warmupTaskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::MiniMap, mr::coprocessor::TaskKind::MiniMapWarmup, documentId, version, "rendering mini map", [snapshot, rowCount, bodyWidth, viewportWidth, useBraille, settings, totalLines, samplingWindow](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
+	mImpl->lastWarmupScheduledWindowStartLine = samplingWindow.startLine;
+	mImpl->lastWarmupScheduledWindowLineCount = samplingWindow.lineCount;
+	mImpl->lastWarmupScheduledAt = std::chrono::steady_clock::now();
+	mImpl->warmupTaskId = mr::coprocessor::globalCoprocessor().submit(
+	    mr::coprocessor::Lane::MiniMap, mr::coprocessor::TaskKind::MiniMapWarmup, documentId, version, "rendering mini map",
+	    [snapshot, rowCount, bodyWidth, viewportWidth, useBraille, settings, totalLines, samplingWindow, topLine](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
 		mr::coprocessor::Result result;
 		struct MiniMapLineSample {
 			std::uint64_t dotColumnBits = 0;
@@ -312,39 +337,46 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 			return result;
 		}
 		if (snapshot.exactLineCountKnown()) normalizedTotalLines = std::max<std::size_t>(1, snapshot.lineCount());
+		std::vector<std::string> windowLineTexts =
+		    mrBuildViewportScanLineTextsParallel(snapshot, windowStartLine, windowStartLine + windowLineCount, topLine, topLine + static_cast<std::size_t>(std::max(rowCount, 1)));
+		if (shouldStop()) {
+			result.status = mr::coprocessor::TaskStatus::Cancelled;
+			return result;
+		}
 		rowPatterns.assign(static_cast<std::size_t>(std::max(0, rowCount) * std::max(0, bodyWidth)), 0);
 		rowLineStarts.assign(static_cast<std::size_t>(std::max(0, rowCount)), 0);
 		rowLineEnds.assign(static_cast<std::size_t>(std::max(0, rowCount)), 0);
 		auto renderRows = [&](int yStart, int yEnd) -> bool {
-			mr::editor::ReadSnapshot workerSnapshot = snapshot;
 			std::map<std::size_t, MiniMapLineSample> sampledLineSamples;
 			auto lineSampleAt = [&](std::size_t lineIndex) -> const MiniMapLineSample & {
 				auto cached = sampledLineSamples.find(lineIndex);
 				if (cached != sampledLineSamples.end()) return cached->second;
 				MiniMapLineSample sample;
-				if (lineIndex < normalizedTotalLines) {
-					std::size_t lineStart = workerSnapshot.lineStartByIndex(lineIndex);
-					std::string lineText = workerSnapshot.lineText(lineStart);
-					std::size_t index = 0;
-					int visualColumn = 0;
-					while (index < lineText.size()) {
-						std::size_t current = index;
-						std::size_t next = index;
-						std::size_t width = 0;
-						if (!nextDisplayChar(lineText, next, width, visualColumn, settings)) break;
-						unsigned char ch = static_cast<unsigned char>(lineText[current]);
-						if (std::isspace(ch) == 0) {
-							const long long c = static_cast<long long>(visualColumn);
-							const long long w = static_cast<long long>(width);
-							const long long n = static_cast<long long>(dotCols);
-							const long long v = static_cast<long long>(viewportWidth);
-							const int dotColStart = static_cast<int>(c * n / v);
-							const int dotColEnd = static_cast<int>(((c + w) * n - 1) / v);
-							for (int dc = std::max(0, dotColStart); dc <= std::min(63, dotColEnd); ++dc)
-								sample.dotColumnBits |= (1ULL << dc);
+				if (lineIndex < normalizedTotalLines && lineIndex >= windowStartLine) {
+					const std::size_t localLineIndex = lineIndex - windowStartLine;
+					if (localLineIndex < windowLineTexts.size()) {
+						const std::string &lineText = windowLineTexts[localLineIndex];
+						std::size_t index = 0;
+						int visualColumn = 0;
+						while (index < lineText.size()) {
+							std::size_t current = index;
+							std::size_t next = index;
+							std::size_t width = 0;
+							if (!nextDisplayChar(lineText, next, width, visualColumn, settings)) break;
+							unsigned char ch = static_cast<unsigned char>(lineText[current]);
+							if (std::isspace(ch) == 0) {
+								const long long c = static_cast<long long>(visualColumn);
+								const long long w = static_cast<long long>(width);
+								const long long n = static_cast<long long>(dotCols);
+								const long long v = static_cast<long long>(viewportWidth);
+								const int dotColStart = static_cast<int>(c * n / v);
+								const int dotColEnd = static_cast<int>(((c + w) * n - 1) / v);
+								for (int dc = std::max(0, dotColStart); dc <= std::min(63, dotColEnd); ++dc)
+									sample.dotColumnBits |= (1ULL << dc);
+							}
+							visualColumn += static_cast<int>(width);
+							index = next;
 						}
-						visualColumn += static_cast<int>(width);
-						index = next;
 					}
 				}
 				auto inserted = sampledLineSamples.insert(std::make_pair(lineIndex, sample));

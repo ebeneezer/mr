@@ -123,8 +123,34 @@ class MREditWindow : public TWindow {
 	}
 
 	virtual ~MREditWindow() override {
+		{
+			std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+			if (out) {
+				std::time_t now = std::time(nullptr);
+				std::tm *tmNow = std::localtime(&now);
+				char buffer[32];
+				if (tmNow != nullptr && std::strftime(buffer, sizeof(buffer), "%H:%M:%S", tmNow) != 0) out << "[" << buffer << "] ";
+				else
+					out << "[--:--:--] ";
+				out << "MREditWindow destructor begin #" << mBufferId << " title='" << (getTitle(0) != nullptr ? getTitle(0) : "?") << "' editor_present=" << (editor != nullptr ? 1 : 0) << ".\n";
+				out.flush();
+			}
+		}
 		prepareForClose();
 		mrNotifyWindowTopologyChanged();
+		{
+			std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+			if (out) {
+				std::time_t now = std::time(nullptr);
+				std::tm *tmNow = std::localtime(&now);
+				char buffer[32];
+				if (tmNow != nullptr && std::strftime(buffer, sizeof(buffer), "%H:%M:%S", tmNow) != 0) out << "[" << buffer << "] ";
+				else
+					out << "[--:--:--] ";
+				out << "MREditWindow destructor end #" << mBufferId << ".\n";
+				out.flush();
+			}
+		}
 	}
 
 	virtual void close() override {
@@ -422,6 +448,14 @@ class MREditWindow : public TWindow {
 
 	bool hasRedoHistory() const {
 		return buffer().hasRedoHistory();
+	}
+
+	std::size_t undoStackDepth() const {
+		return buffer().undoStackDepth();
+	}
+
+	std::size_t redoStackDepth() const {
+		return buffer().redoStackDepth();
 	}
 
 	TPoint cursorPoint() const {
@@ -729,6 +763,9 @@ class MREditWindow : public TWindow {
 				case mr::coprocessor::TaskKind::SyntaxWarmup:
 					line = "Syntax";
 					break;
+				case mr::coprocessor::TaskKind::FoldWarmup:
+					line = "Folding";
+					break;
 				case mr::coprocessor::TaskKind::MiniMapWarmup:
 					line = "Mini map";
 					break;
@@ -751,11 +788,13 @@ class MREditWindow : public TWindow {
 			lines.push_back(line);
 		}
 		if (editor != nullptr) {
-			const bool lineIndexPending = editor->pendingLineIndexWarmupTaskId() != 0 || !editor->exactLineCountKnown();
-			const bool syntaxPending = editor->pendingSyntaxWarmupTaskId() != 0 || editor->syntaxPrefetchReachedBottomLine() < editor->syntaxPrefetchTargetBottomLine();
+			const bool lineIndexPending = editor->pendingLineIndexWarmupTaskId() != 0;
+			const bool syntaxPending = editor->pendingSyntaxWarmupTaskId() != 0;
+			const bool foldPending = editor->pendingFoldWarmupTaskId() != 0;
 
 			if (lineIndexPending && trackedTaskCount(mr::coprocessor::TaskKind::LineIndexWarmup) == 0) lines.push_back(bullet + " " + lineIndexWarmingLabel());
 			if (syntaxPending && trackedTaskCount(mr::coprocessor::TaskKind::SyntaxWarmup) == 0) lines.push_back(bullet + " " + syntaxWarmingLabel());
+			if (foldPending && trackedTaskCount(mr::coprocessor::TaskKind::FoldWarmup) == 0) lines.push_back(bullet + " Folding");
 			if (editor->pendingMiniMapWarmupTaskId() != 0 && trackedTaskCount(mr::coprocessor::TaskKind::MiniMapWarmup) == 0) lines.push_back(bullet + " " + miniMapRenderingLabel());
 			if (editor->pendingSaveNormalizationWarmupTaskId() != 0 && trackedTaskCount(mr::coprocessor::TaskKind::SaveNormalizationWarmup) == 0) lines.push_back(bullet + " " + saveNormalizationWarmingLabel());
 
@@ -779,15 +818,21 @@ class MREditWindow : public TWindow {
 				line += std::to_string(estimatedLineCount());
 				lines.push_back(line);
 			}
+			if (!editor->lastUiHotpathTrace().empty()) lines.push_back(std::string("UI: ") + editor->lastUiHotpathTrace());
 		}
 		lines.push_back(std::string("Results pending: ") + std::to_string(snapshot.pendingResults));
 		for (const mr::coprocessor::LaneSnapshot &lane : snapshot.lanes) {
 			std::string line = std::string("Lane ") + laneLabel(lane.lane) + ": ";
+			const std::size_t activeWorkerCount = lane.activeTasks.size();
 
 			if (lane.activeTasks.empty()) line += "idle";
 			else {
 				line += "act ";
-				line += std::to_string(lane.activeTasks.size());
+				line += std::to_string(activeWorkerCount);
+				if (lane.workerCount > 1) {
+					line += "/";
+					line += std::to_string(lane.workerCount);
+				}
 			}
 			line += " q ";
 			line += std::to_string(lane.queuedTasks.size());
@@ -814,13 +859,13 @@ class MREditWindow : public TWindow {
 					workerLine += " ";
 					workerLine += compactTaskLabelLimited(activeTask->task.kind, activeTask->task.label, 18);
 				}
-				workerLine += " d";
+				workerLine += " doc ";
 				workerLine += std::to_string(activeTask->task.documentId);
-				workerLine += "/v";
+				workerLine += " v";
 				workerLine += std::to_string(activeTask->task.baseVersion);
-				workerLine += " r";
+				workerLine += " run ";
 				workerLine += formatMicrosElapsed(activeTask->runMicros);
-				workerLine += " q";
+				workerLine += " wait ";
 				workerLine += formatMicrosElapsed(activeTask->queueMicros);
 				lines.push_back(workerLine);
 			}
@@ -894,6 +939,13 @@ class MREditWindow : public TWindow {
 				editor->clearSyntaxWarmupTask(syntaxTaskId);
 				++clearedCount;
 			}
+			std::uint64_t foldTaskId = editor->pendingFoldWarmupTaskId();
+			if (foldTaskId != 0) {
+				mrTraceCoprocessorTaskCancel(mBufferId, foldTaskId);
+				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(foldTaskId));
+				editor->clearFoldWarmupTask(foldTaskId);
+				++clearedCount;
+			}
 			std::uint64_t miniMapTaskId = editor->pendingMiniMapWarmupTaskId();
 			if (miniMapTaskId != 0) {
 				mrTraceCoprocessorTaskCancel(mBufferId, miniMapTaskId);
@@ -956,6 +1008,10 @@ class MREditWindow : public TWindow {
 
 	std::uint64_t pendingSyntaxWarmupTaskId() const noexcept {
 		return editor != nullptr ? editor->pendingSyntaxWarmupTaskId() : 0;
+	}
+
+	std::uint64_t pendingFoldWarmupTaskId() const noexcept {
+		return editor != nullptr ? editor->pendingFoldWarmupTaskId() : 0;
 	}
 
 	std::uint64_t pendingMiniMapWarmupTaskId() const noexcept {
@@ -1535,12 +1591,51 @@ class MREditWindow : public TWindow {
 		std::ostringstream line;
 		const char *title = getTitle(0);
 		std::size_t cancelledCount = 0;
+		const auto startedAt = std::chrono::steady_clock::now();
+		long long clearUndoRedoMs = 0;
+		long long destroyEditorMs = 0;
+		std::size_t undoBefore = 0;
+		std::size_t redoBefore = 0;
+		std::size_t undoAfter = 0;
+		std::size_t redoAfter = 0;
+		const bool modified = isFileChanged();
+		const std::size_t lengthBeforeClose = bufferLength();
+		const std::size_t addBeforeClose = addBufferLength();
+		const std::size_t piecesBeforeClose = pieceCount();
 
 		if (mClosePrepared) return;
 		mClosePrepared = true;
 		cancelledCount = prepareCoprocessorTasksForShutdown();
-		line << "Preparing close for window #" << mBufferId << " title='" << (title != nullptr ? title : "?") << "' cancelled_tasks=" << cancelledCount << ".";
-		mrLogMessage(line.str().c_str());
+		if (editor != nullptr) {
+			undoBefore = editor->bufferModel().undoStackDepth();
+			redoBefore = editor->bufferModel().redoStackDepth();
+			const auto clearStartedAt = std::chrono::steady_clock::now();
+			editor->bufferModel().clearUndoRedo();
+			clearUndoRedoMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - clearStartedAt).count();
+			undoAfter = editor->bufferModel().undoStackDepth();
+			redoAfter = editor->bufferModel().redoStackDepth();
+			const auto destroyStartedAt = std::chrono::steady_clock::now();
+			remove(editor);
+			TObject::destroy(editor);
+			editor = nullptr;
+			destroyEditorMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - destroyStartedAt).count();
+		}
+		line << "Preparing close for window #" << mBufferId << " title='" << (title != nullptr ? title : "?") << "'"
+		     << " cancelled_tasks=" << cancelledCount << " modified=" << (modified ? 1 : 0) << " len=" << lengthBeforeClose << " add=" << addBeforeClose << " pieces=" << piecesBeforeClose
+		     << " undo_before=" << undoBefore << " redo_before=" << redoBefore << " undo_after=" << undoAfter << " redo_after=" << redoAfter << " clear_undo_redo_ms=" << clearUndoRedoMs
+		     << " destroy_editor_ms=" << destroyEditorMs << " took_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startedAt).count() << ".";
+		{
+			std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+			if (out) {
+				std::time_t now = std::time(nullptr);
+				std::tm *tmNow = std::localtime(&now);
+				char buffer[32];
+				if (tmNow != nullptr && std::strftime(buffer, sizeof(buffer), "%H:%M:%S", tmNow) != 0) out << "[" << buffer << "] " << line.str() << '\n';
+				else
+					out << "[--:--:--] " << line.str() << '\n';
+				out.flush();
+			}
+		}
 	}
 
 	static void scheduleEnsureUsableWorkWindow() {
@@ -1709,10 +1804,9 @@ class MREditWindow : public TWindow {
 		if (editor != nullptr) {
 			if (editor->pendingLineIndexWarmupTaskId() != 0) ++taskCount;
 			if (editor->pendingSyntaxWarmupTaskId() != 0) ++taskCount;
+			if (editor->pendingFoldWarmupTaskId() != 0) ++taskCount;
 			if (editor->pendingMiniMapWarmupTaskId() != 0) ++taskCount;
 			if (editor->pendingSaveNormalizationWarmupTaskId() != 0) ++taskCount;
-			if (editor->pendingLineIndexWarmupTaskId() == 0 && !editor->exactLineCountKnown()) ++taskCount;
-			if (editor->pendingSyntaxWarmupTaskId() == 0 && editor->syntaxPrefetchReachedBottomLine() < editor->syntaxPrefetchTargetBottomLine()) ++taskCount;
 		}
 		if (indicator != nullptr) indicator->setTaskCount(taskCount);
 	}
@@ -1836,6 +1930,8 @@ class MREditWindow : public TWindow {
 				return "LineIndex";
 			case mr::coprocessor::TaskKind::SyntaxWarmup:
 				return "Syntax";
+			case mr::coprocessor::TaskKind::FoldWarmup:
+				return "Folding";
 			case mr::coprocessor::TaskKind::MiniMapWarmup:
 				return "MiniMap";
 			case mr::coprocessor::TaskKind::SaveNormalizationWarmup:

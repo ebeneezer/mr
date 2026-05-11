@@ -1,14 +1,17 @@
 #include "MRFileEditor.hpp"
 #include "../MREditWindow.hpp"
+#include "../../app/MREditorApp.hpp"
+
+#include <chrono>
+#include <ctime>
+#include <future>
+#include <sstream>
+#include <thread>
 
 namespace {
 
-static constexpr double kSlowEditorInsertThresholdMs = 50.0;
-static constexpr double kSlowEditorAdoptThresholdMs = 50.0;
-
-double elapsedMsSince(std::chrono::steady_clock::time_point startedAt) noexcept {
-	return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count();
-}
+static constexpr std::size_t kLargeFileWarmupTraceBytes = static_cast<std::size_t>(8) * 1024 * 1024;
+static constexpr auto kSlowNavigationTraceThreshold = std::chrono::microseconds(2000);
 
 bool isIndentWhitespace(char ch) noexcept {
 	return ch == ' ' || ch == '\t';
@@ -18,6 +21,36 @@ bool isStatefulSyntaxLanguage(MRSyntaxLanguage language) noexcept {
 	return language == MRSyntaxLanguage::MRMAC || language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp || language == MRSyntaxLanguage::JavaScript || language == MRSyntaxLanguage::Python ||
 	       language == MRSyntaxLanguage::Markdown || language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh || language == MRSyntaxLanguage::Fish || language == MRSyntaxLanguage::Perl || language == MRSyntaxLanguage::Swift || language == MRSyntaxLanguage::Rust ||
 	       language == MRSyntaxLanguage::Go;
+}
+
+static constexpr auto kLargeFileViewportWarmupDebounce = std::chrono::milliseconds(180);
+static constexpr auto kLargeFileMiniMapEditDebounce = std::chrono::milliseconds(500);
+
+std::string directProbeTimestamp() {
+	std::array<char, 32> buffer{};
+	const std::time_t now = std::time(nullptr);
+	const std::tm *tmNow = std::localtime(&now);
+
+	if (tmNow == nullptr) return std::string("--:--:--");
+	if (std::strftime(buffer.data(), buffer.size(), "%H:%M:%S", tmNow) == 0) return std::string("--:--:--");
+	return std::string(buffer.data());
+}
+
+void appendDirectProbeLog(std::string_view message) {
+	std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+
+	if (!out) return;
+	out << "[" << directProbeTimestamp() << "] " << message << '\n';
+	out.flush();
+}
+
+bool quitTailTraceActive() noexcept {
+	const auto *app = dynamic_cast<const MREditorApp *>(TProgram::application);
+	return app != nullptr && app->quitPrepared();
+}
+
+template <class Duration> long long traceMicros(Duration duration) {
+	return std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
 }
 
 std::string_view trimView(std::string_view text) noexcept {
@@ -906,6 +939,105 @@ struct MRFoldScanOutput {
 	int visibleMaxLevel = 1;
 };
 
+struct MRFoldWarmupPayload final : mr::coprocessor::Payload {
+	MRSyntaxLanguage language;
+	std::size_t scanTopLine;
+	std::size_t scanBottomLine;
+	int visibleGutterColumns;
+	std::vector<std::string> lineTexts;
+	std::vector<MRFoldSpan> spans;
+
+	MRFoldWarmupPayload() noexcept : language(MRSyntaxLanguage::PlainText), scanTopLine(0), scanBottomLine(0), visibleGutterColumns(1), lineTexts(), spans() {
+	}
+
+	MRFoldWarmupPayload(MRSyntaxLanguage aLanguage, std::size_t aScanTopLine, std::size_t aScanBottomLine, int aVisibleGutterColumns, std::vector<std::string> aLineTexts,
+	                   std::vector<MRFoldSpan> aSpans)
+	    : language(aLanguage), scanTopLine(aScanTopLine), scanBottomLine(aScanBottomLine), visibleGutterColumns(std::max(1, aVisibleGutterColumns)), lineTexts(std::move(aLineTexts)),
+	      spans(std::move(aSpans)) {
+	}
+};
+
+struct MRViewportScanChunk {
+	std::size_t startLine = 0;
+	std::size_t endLine = 0;
+	std::vector<std::string> lineTexts;
+};
+
+void appendFoldScanLineTexts(std::vector<std::string> &target, const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t startLine, std::size_t endLine) {
+	if (endLine <= startLine) return;
+	std::size_t lineStart = snapshot.lineStartByIndex(startLine);
+
+	for (std::size_t lineIndex = startLine; lineIndex < endLine; ++lineIndex) {
+		target.push_back(snapshot.lineText(lineStart));
+		if (lineStart >= snapshot.length()) break;
+		const std::size_t nextLineStart = snapshot.nextLine(lineStart);
+		if (nextLineStart <= lineStart) break;
+		lineStart = nextLineStart;
+	}
+}
+
+std::vector<MRViewportScanChunk> planViewportScanChunks(std::size_t scanTopLine, std::size_t scanBottomLine, std::size_t focusTopLine, std::size_t focusBottomLine) {
+	static constexpr std::size_t chunkLineCount = 256;
+	std::vector<MRViewportScanChunk> chunks;
+
+	if (scanBottomLine <= scanTopLine) return chunks;
+	focusTopLine = std::clamp(focusTopLine, scanTopLine, scanBottomLine);
+	focusBottomLine = std::clamp(focusBottomLine, focusTopLine, scanBottomLine);
+	if (focusBottomLine <= focusTopLine) focusBottomLine = std::min(scanBottomLine, focusTopLine + chunkLineCount);
+	chunks.push_back(MRViewportScanChunk{focusTopLine, focusBottomLine, {}});
+	std::size_t aboveLine = focusTopLine;
+	std::size_t belowLine = focusBottomLine;
+
+	while (aboveLine > scanTopLine || belowLine < scanBottomLine) {
+		if (aboveLine > scanTopLine) {
+			const std::size_t chunkStartLine = aboveLine > chunkLineCount ? std::max(scanTopLine, aboveLine - chunkLineCount) : scanTopLine;
+			chunks.push_back(MRViewportScanChunk{chunkStartLine, aboveLine, {}});
+			aboveLine = chunkStartLine;
+		}
+		if (belowLine < scanBottomLine) {
+			const std::size_t chunkEndLine = std::min(scanBottomLine, belowLine + chunkLineCount);
+			chunks.push_back(MRViewportScanChunk{belowLine, chunkEndLine, {}});
+			belowLine = chunkEndLine;
+		}
+	}
+	std::sort(chunks.begin(), chunks.end(), [](const MRViewportScanChunk &lhs, const MRViewportScanChunk &rhs) { return lhs.startLine < rhs.startLine; });
+	return chunks;
+}
+
+std::vector<std::string> buildViewportScanLineTextsParallelImpl(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t scanTopLine, std::size_t scanBottomLine, std::size_t focusTopLine,
+                                                                std::size_t focusBottomLine) {
+	std::vector<MRViewportScanChunk> chunks = planViewportScanChunks(scanTopLine, scanBottomLine, focusTopLine, focusBottomLine);
+	std::vector<std::string> lineTexts;
+
+	if (chunks.empty()) return lineTexts;
+	if (chunks.size() == 1) {
+		lineTexts.reserve(chunks.front().endLine - chunks.front().startLine);
+		appendFoldScanLineTexts(lineTexts, snapshot, chunks.front().startLine, chunks.front().endLine);
+		return lineTexts;
+	}
+
+	std::vector<std::future<std::vector<std::string>>> workers;
+	workers.reserve(chunks.size());
+	for (const MRViewportScanChunk &chunk : chunks) {
+		workers.push_back(std::async(std::launch::async, [&snapshot, startLine = chunk.startLine, endLine = chunk.endLine]() {
+			std::vector<std::string> chunkLines;
+			chunkLines.reserve(endLine > startLine ? endLine - startLine : 0);
+			appendFoldScanLineTexts(chunkLines, snapshot, startLine, endLine);
+			return chunkLines;
+		}));
+	}
+
+	std::size_t reservedLines = 0;
+	for (std::size_t chunkIndex = 0; chunkIndex < chunks.size(); ++chunkIndex) {
+		chunks[chunkIndex].lineTexts = workers[chunkIndex].get();
+		reservedLines += chunks[chunkIndex].lineTexts.size();
+	}
+	lineTexts.reserve(reservedLines);
+	for (MRViewportScanChunk &chunk : chunks)
+		std::move(chunk.lineTexts.begin(), chunk.lineTexts.end(), std::back_inserter(lineTexts));
+	return lineTexts;
+}
+
 std::vector<std::string> splitFoldTrainingLines(const std::string &text) {
 	std::vector<std::string> lines;
 	std::size_t lineStart = 0;
@@ -1482,6 +1614,11 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 
 } // namespace
 
+std::vector<std::string> mrBuildViewportScanLineTextsParallel(const mr::editor::ReadSnapshot &snapshot, std::size_t scanTopLine, std::size_t scanBottomLine, std::size_t focusTopLine,
+                                                              std::size_t focusBottomLine) {
+	return buildViewportScanLineTextsParallelImpl(snapshot, scanTopLine, scanBottomLine, focusTopLine, focusBottomLine);
+}
+
 std::string mrBuildFoldTrainingAscii(const std::string &text, MRSyntaxLanguage language) {
 	const std::vector<std::string> lineTexts = splitFoldTrainingLines(text);
 	const MRFoldScanOutput scan = computeFoldSpansForLineTexts(lineTexts, 0, 0, lineTexts.size(), language, std::map<std::size_t, MRFoldSpan>());
@@ -1519,15 +1656,27 @@ std::string mrBuildFoldTrainingAscii(const std::string &text, MRSyntaxLanguage l
 MRFileEditor::LoadTiming::LoadTiming() noexcept : valid(false), bytes(0), lines(0), mappedLoadMs(0.0), lineCountMs(0.0) {
 }
 
+MRFileEditor::DestructionProbe::~DestructionProbe() {
+	if (!active) return;
+	std::ostringstream line;
+	line << "MRFileEditor destroy buffer_id=" << bufferId << " title='" << title << "' len=" << length << " add=" << addBufferLength << " pieces=" << pieceCount << " undo=" << undoDepth
+	     << " redo=" << redoDepth << " took_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startedAt).count() << ".";
+	appendDirectProbeLog(line.str());
+}
+
 MRFileEditor::MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar, TIndicator *aIndicator, TStringView aFileName) noexcept
-    : TScroller(bounds, aHScrollBar, aVScrollBar), mIndicator(aIndicator), mReadOnly(false), mInsertMode(true), mAutoIndent(false), mSyntaxTitleHint(), mBufferModel(), mSelectionAnchor(0), mCursorVisualColumn(0), mIndicatorUpdateInProgress(false), mLineIndexWarmupTaskId(0), mLineIndexWarmupDocumentId(0), mLineIndexWarmupVersion(0), mSuppressLargeFileLineIndexWarmup(false), mSyntaxTokenCache(), mSyntaxCheckpoints(), mSyntaxWarmupTaskId(0), mSyntaxWarmupDocumentId(0), mSyntaxWarmupVersion(0), mSyntaxWarmupTopLine(0), mSyntaxWarmupBottomLine(0), mSyntaxWarmupLanguage(MRSyntaxLanguage::PlainText), mSyntaxPrefetchDocumentId(0), mSyntaxPrefetchVersion(0), mSyntaxPrefetchTargetBottomLine(0), mSyntaxPrefetchReachedBottomLine(0), mSyntaxPrefetchLanguage(MRSyntaxLanguage::PlainText),
-      mVisibleFoldDocumentId(0), mVisibleFoldVersion(0), mVisibleFoldTopLine(0), mVisibleFoldBottomLine(0), mVisibleFoldLanguage(MRSyntaxLanguage::PlainText), mVisibleFoldGutterColumns(1), mMiniMapRenderer(), mSaveNormalizationCache(), mSaveNormalizationWarmupTaskId(0), mSaveNormalizationWarmupDocumentId(0), mSaveNormalizationWarmupVersion(0),
-      mSaveNormalizationWarmupOptionsHash(0), mSaveNormalizationWarmupSourceBytes(0), mSaveNormalizationWarmupStartedAt(std::chrono::steady_clock::time_point()), mSaveNormalizationThroughputBytesPerMicro(0.0), mSaveNormalizationThroughputSamples(0), mMiniMapInitialRenderReportedDocumentId(0), mBlockOverlayActive(false), mBlockOverlayMode(0), mBlockOverlayAnchor(0), mBlockOverlayEnd(0), mBlockOverlayTrackingCursor(false), mPreferredIndentColumn(1), mLastLoadTiming(), mLargeFileMetricsTraceValid(false), mLastLargeFileMetricsExactKnown(false), mLastLargeFileMetricsLimitY(0), mLastLargeFileMetricsMaxY(0), mLastLargeFileMetricsDeltaY(0), mLastLargeFileMetricsNewDeltaY(0) {
+    : TScroller(bounds, aHScrollBar, aVScrollBar), mIndicator(aIndicator), mReadOnly(false), mInsertMode(true), mAutoIndent(false), mSyntaxTitleHint(), mBufferModel(), mSelectionAnchor(0), mCursorVisualColumn(0), mIndicatorUpdateInProgress(false), mLineIndexWarmupTaskId(0), mLineIndexWarmupDocumentId(0), mLineIndexWarmupVersion(0), mSuppressLargeFileLineIndexWarmup(false), mSyntaxState(), mFoldState(), mMiniMapState(), mSaveNormalizationCache(), mSaveNormalizationWarmupTaskId(0), mSaveNormalizationWarmupDocumentId(0), mSaveNormalizationWarmupVersion(0),
+      mSaveNormalizationWarmupOptionsHash(0), mSaveNormalizationWarmupSourceBytes(0), mSaveNormalizationWarmupStartedAt(std::chrono::steady_clock::time_point()), mSaveNormalizationThroughputBytesPerMicro(0.0), mSaveNormalizationThroughputSamples(0), mBlockOverlayActive(false), mBlockOverlayMode(0), mBlockOverlayAnchor(0), mBlockOverlayEnd(0), mBlockOverlayTrackingCursor(false), mPreferredIndentColumn(1), mLastLoadTiming(), mCachedCursorLineDocumentId(0), mCachedCursorLineVersion(0), mCachedCursorLineOffset(0), mCachedCursorLineIndexValue(0) {
 	fileName[0] = EOS;
 	options |= ofFirstClick;
 	eventMask |= evMouse | evKeyboard | evCommand;
 	if (!aFileName.empty()) setPersistentFileName(aFileName);
 	syncFromEditorState(false);
+}
+
+MRFileEditor::~MRFileEditor() {
+	mDestructionProbe.arm(static_cast<int>(mBufferModel.documentId()), persistentFileName(), mBufferModel.length(), mBufferModel.document().addBufferLength(), mBufferModel.document().pieceCount(),
+	                     mBufferModel.undoStackDepth(), mBufferModel.redoStackDepth());
 }
 
 bool MRFileEditor::isReadOnly() const {
@@ -1635,11 +1784,15 @@ std::uint64_t MRFileEditor::pendingLineIndexWarmupTaskId() const noexcept {
 }
 
 std::uint64_t MRFileEditor::pendingSyntaxWarmupTaskId() const noexcept {
-	return mSyntaxWarmupTaskId;
+	return mSyntaxState.warmupState().taskId;
+}
+
+std::uint64_t MRFileEditor::pendingFoldWarmupTaskId() const noexcept {
+	return mFoldState.warmupState().taskId;
 }
 
 std::uint64_t MRFileEditor::pendingMiniMapWarmupTaskId() const noexcept {
-	return mMiniMapRenderer.pendingWarmupTaskId();
+	return mMiniMapState.renderer().pendingWarmupTaskId();
 }
 
 std::uint64_t MRFileEditor::pendingSaveNormalizationWarmupTaskId() const noexcept {
@@ -1647,27 +1800,31 @@ std::uint64_t MRFileEditor::pendingSaveNormalizationWarmupTaskId() const noexcep
 }
 
 std::size_t MRFileEditor::syntaxWarmupTopLine() const noexcept {
-	return mSyntaxWarmupTopLine;
+	return mSyntaxState.warmupState().topLine;
 }
 
 std::size_t MRFileEditor::syntaxWarmupBottomLine() const noexcept {
-	return mSyntaxWarmupBottomLine;
+	return mSyntaxState.warmupState().bottomLine;
 }
 
 std::size_t MRFileEditor::syntaxPrefetchTargetBottomLine() const noexcept {
-	return mSyntaxPrefetchTargetBottomLine;
+	return mSyntaxState.prefetchState().targetBottomLine;
 }
 
 std::size_t MRFileEditor::syntaxPrefetchReachedBottomLine() const noexcept {
-	return mSyntaxPrefetchReachedBottomLine;
+	return mSyntaxState.prefetchState().reachedBottomLine;
 }
 
 bool MRFileEditor::shouldReportMiniMapInitialRender() const noexcept {
-	return mMiniMapInitialRenderReportedDocumentId != mBufferModel.documentId();
+	return mMiniMapState.shouldReportInitialRender(mBufferModel.documentId());
 }
 
 void MRFileEditor::markMiniMapInitialRenderReported() noexcept {
-	mMiniMapInitialRenderReportedDocumentId = mBufferModel.documentId();
+	mMiniMapState.markInitialRenderReported(mBufferModel.documentId());
+}
+
+const std::string &MRFileEditor::lastUiHotpathTrace() const noexcept {
+	return mLastUiHotpathTrace;
 }
 
 bool MRFileEditor::lineIndexWarmupPending() const noexcept {
@@ -1675,11 +1832,11 @@ bool MRFileEditor::lineIndexWarmupPending() const noexcept {
 }
 
 bool MRFileEditor::syntaxWarmupPending() const noexcept {
-	return mSyntaxWarmupTaskId != 0;
+	return mSyntaxState.warmupState().taskId != 0;
 }
 
 bool MRFileEditor::miniMapWarmupPending() const noexcept {
-	return mMiniMapRenderer.pendingWarmupTaskId() != 0;
+	return mMiniMapState.renderer().pendingWarmupTaskId() != 0;
 }
 
 bool MRFileEditor::saveNormalizationWarmupPending() const noexcept {
@@ -1719,6 +1876,20 @@ int MRFileEditor::displayedCursorColumn() const noexcept {
 	const int actualColumn = actualCursorVisualColumn(mBufferModel.cursor());
 	if (!freeCursorMovementEnabled()) return actualColumn;
 	return std::max(actualColumn, mCursorVisualColumn);
+}
+
+std::size_t MRFileEditor::cachedCursorLineIndex() const noexcept {
+	const std::size_t documentId = mBufferModel.documentId();
+	const std::size_t version = mBufferModel.version();
+	const std::size_t cursor = mBufferModel.cursor();
+
+	if (mCachedCursorLineDocumentId == documentId && mCachedCursorLineVersion == version && mCachedCursorLineOffset == cursor) return mCachedCursorLineIndexValue;
+
+	mCachedCursorLineDocumentId = documentId;
+	mCachedCursorLineVersion = version;
+	mCachedCursorLineOffset = cursor;
+	mCachedCursorLineIndexValue = mBufferModel.lineIndex(cursor);
+	return mCachedCursorLineIndexValue;
 }
 
 void MRFileEditor::syncDisplayedCursorColumnFromCursor(bool preserveFreeColumn) noexcept {
@@ -1784,6 +1955,7 @@ std::string MRFileEditor::lineTextAtOffset(std::size_t pos) const {
 }
 
 int MRFileEditor::charColumn(std::size_t start, std::size_t pos) const noexcept {
+	const auto startedAt = std::chrono::steady_clock::now();
 	std::size_t lineStart = mBufferModel.lineStart(start);
 	std::string lineText = mBufferModel.lineText(lineStart);
 	TStringView line(lineText.data(), lineText.size());
@@ -1800,6 +1972,13 @@ int MRFileEditor::charColumn(std::size_t start, std::size_t pos) const noexcept 
 		if (next > end) break;
 		visual += static_cast<int>(width);
 		p = next;
+	}
+	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+	if (totalElapsed >= kSlowNavigationTraceThreshold) {
+		std::ostringstream trace;
+		trace << "Phase1 nav charColumn total_us=" << traceMicros(totalElapsed) << " start=" << start << " pos=" << pos << " line_start=" << lineStart << " end_bytes=" << end
+		      << " line_bytes=" << line.size() << " len=" << mBufferModel.length() << " add=" << mBufferModel.document().addBufferLength() << " pieces=" << mBufferModel.document().pieceCount();
+		appendDirectProbeLog(trace.str());
 	}
 	return visual;
 }
@@ -1826,11 +2005,15 @@ std::size_t MRFileEditor::offsetForGlobalPoint(TPoint where) noexcept {
 }
 
 int MRFileEditor::currentLineNumber() const noexcept {
-	return static_cast<int>(mBufferModel.lineIndex(mBufferModel.cursor())) + 1;
+	return static_cast<int>(cachedCursorLineIndex()) + 1;
+}
+
+int MRFileEditor::currentColumnNumber() const noexcept {
+	return displayedCursorColumn() + 1;
 }
 
 int MRFileEditor::currentViewRow() const noexcept {
-	return std::max(1, static_cast<int>(visibleLineForDocumentLine(mBufferModel.lineIndex(mBufferModel.cursor()))) - delta.y + 1);
+	return std::max(1, static_cast<int>(visibleLineForDocumentLine(cachedCursorLineIndex())) - delta.y + 1);
 }
 
 int MRFileEditor::visibleViewportRows() const noexcept {
@@ -1966,37 +2149,85 @@ void MRFileEditor::notifyWindowTaskStateChanged() {
 	if (owner != nullptr) message(owner, evBroadcast, cmUpdateTitle, 0);
 }
 
-void MRFileEditor::continueComputeWarmupIfNeeded() {
-	scheduleLineIndexWarmupIfNeeded();
-	if (mSyntaxWarmupTaskId == 0 && mSyntaxPrefetchDocumentId == mBufferModel.documentId() && mSyntaxPrefetchVersion == mBufferModel.version() && mSyntaxPrefetchLanguage == mBufferModel.language() &&
-		mSyntaxPrefetchReachedBottomLine >= mSyntaxPrefetchTargetBottomLine)
+void MRFileEditor::continueComputeWarmupIfNeeded(const char *reason) {
+	const MRSyntaxDerivedState::WarmupState &warmupState = mSyntaxState.warmupState();
+	const MRSyntaxDerivedState::PrefetchState &prefetchState = mSyntaxState.prefetchState();
+	const bool pieceTableOnly = pieceTableOnlyPhaseActive();
+	const bool foldingEnabled = foldingPipelineEnabled();
+	const bool miniMapEnabled = miniMapPipelineEnabled();
+	if (shouldTraceLargeFileWarmupDiagnostics()) {
+		std::string detail = "reason=" + std::string(reason != nullptr ? reason : "unspecified") + " line_task=" + std::to_string(mLineIndexWarmupTaskId) + " syntax_task=" + std::to_string(warmupState.taskId) +
+		                     " prefetch=" + std::to_string(prefetchState.reachedBottomLine) + "/" + std::to_string(prefetchState.targetBottomLine);
+		traceLargeFileWarmup(mLastComputeWarmupTrace, "continue", std::move(detail));
+	}
+	if (pieceTableOnly) {
+		if (mLineIndexWarmupTaskId != 0) {
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mLineIndexWarmupTaskId));
+			clearLineIndexWarmupTask(mLineIndexWarmupTaskId);
+		}
+		if (!foldingEnabled && mFoldState.warmupState().taskId != 0) {
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mFoldState.warmupState().taskId));
+			clearFoldWarmupTask(mFoldState.warmupState().taskId);
+		}
+		if (!miniMapEnabled) {
+			const std::uint64_t miniMapTaskId = mMiniMapState.renderer().pendingWarmupTaskId();
+			if (miniMapTaskId != 0) {
+				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(miniMapTaskId));
+				clearMiniMapWarmupTask(miniMapTaskId);
+			}
+		}
+		clearSaveNormalizationWarmupTask();
+	}
+	if (!pieceTableOnly) scheduleLineIndexWarmupIfNeeded();
+	if (!syntaxPipelineEnabled()) {
+		if (warmupState.taskId != 0) {
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(warmupState.taskId));
+			clearSyntaxWarmupTask(warmupState.taskId);
+		}
 		return;
+	}
+	if (warmupState.taskId == 0 && prefetchState.documentId == mBufferModel.documentId() && prefetchState.version == mBufferModel.version() && prefetchState.language == mBufferModel.language() &&
+		prefetchState.reachedBottomLine >= prefetchState.targetBottomLine) {
+		if (shouldTraceLargeFileWarmupDiagnostics()) {
+			std::string detail = "reason=" + std::string(reason != nullptr ? reason : "unspecified") + " action=skip-syntax-complete prefetch=" + std::to_string(prefetchState.reachedBottomLine) + "/" +
+			                     std::to_string(prefetchState.targetBottomLine);
+			traceLargeFileWarmup(mLastComputeWarmupTrace, "continue", std::move(detail));
+		}
+		return;
+	}
 	scheduleSyntaxWarmupIfNeeded();
 }
 
 bool MRFileEditor::applyLineIndexWarmup(const mr::editor::LineIndexWarmupData &warmup, std::size_t expectedVersion) {
 	const bool exactLineCountWasKnown = mBufferModel.exactLineCountKnown();
-	if (shouldTraceLargeFileDiagnostics()) {
-		std::ostringstream detail;
-		detail << "expected_version=" << expectedVersion << " checkpoints=" << warmup.checkpoints.size() << " indexed_offset=" << warmup.lazyIndexedOffset << " indexed_line=" << warmup.lazyIndexedLine << " complete=" << (warmup.lazyLineIndexComplete ? 1 : 0) << " total_lines=" << warmup.lazyTotalLineCount;
-		traceLargeFileMessage("line-index-apply", detail.str());
-	}
 	if (!mBufferModel.adoptLineIndexWarmup(warmup, expectedVersion)) return false;
+	if (shouldTraceLargeFileWarmupDiagnostics()) {
+		std::string detail = "action=apply checkpoints=" + std::to_string(warmup.checkpoints.size()) + " indexed_line=" + std::to_string(warmup.lazyIndexedLine) + " complete=" +
+		                     std::to_string(warmup.lazyLineIndexComplete ? 1 : 0);
+		if (mBufferModel.exactLineCountKnown()) detail += " exact_lines=" + std::to_string(mBufferModel.lineCount());
+		traceLargeFileWarmup(mLastLineIndexWarmupTrace, "line-index", std::move(detail));
+	}
 	mLineIndexWarmupTaskId = 0;
 	mLineIndexWarmupDocumentId = 0;
 	mLineIndexWarmupVersion = 0;
 	if (mBufferModel.exactLineCountKnown()) {
 		const std::size_t exactLineCount = std::max<std::size_t>(1, mBufferModel.lineCount());
 		const std::size_t lastValidTopLine = exactLineCount - 1;
+		MRSyntaxDerivedState::PrefetchState &prefetchState = mSyntaxState.prefetchState();
+		MRSyntaxDerivedState::WarmupState &warmupState = mSyntaxState.warmupState();
 
-		if (mSyntaxPrefetchTargetBottomLine > exactLineCount) mSyntaxPrefetchTargetBottomLine = exactLineCount;
-		if (mSyntaxPrefetchReachedBottomLine > exactLineCount) mSyntaxPrefetchReachedBottomLine = exactLineCount;
-		if (mSyntaxWarmupTopLine > lastValidTopLine) mSyntaxWarmupTopLine = lastValidTopLine;
-		if (mSyntaxWarmupBottomLine > exactLineCount) mSyntaxWarmupBottomLine = exactLineCount;
-		if (mSyntaxWarmupBottomLine < mSyntaxWarmupTopLine) mSyntaxWarmupBottomLine = exactLineCount;
-		if (!exactLineCountWasKnown) applyMiniMapSignals(mMiniMapRenderer.invalidate(false, mBufferModel.documentId()));
+		if (mFoldState.warmupState().taskId != 0) {
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mFoldState.warmupState().taskId));
+			clearFoldWarmupTask(mFoldState.warmupState().taskId);
+		}
+		if (prefetchState.targetBottomLine > exactLineCount) prefetchState.targetBottomLine = exactLineCount;
+		if (prefetchState.reachedBottomLine > exactLineCount) prefetchState.reachedBottomLine = exactLineCount;
+		if (warmupState.topLine > lastValidTopLine) warmupState.topLine = lastValidTopLine;
+		if (warmupState.bottomLine > exactLineCount) warmupState.bottomLine = exactLineCount;
+		if (warmupState.bottomLine < warmupState.topLine) warmupState.bottomLine = exactLineCount;
+		if (!exactLineCountWasKnown) applyMiniMapSignals(mMiniMapState.renderer().invalidate(false, mBufferModel.documentId()));
 	}
-	scheduleSyntaxWarmupIfNeeded();
+	if (syntaxPipelineEnabled()) scheduleSyntaxWarmupIfNeeded();
 	notifyWindowTaskStateChanged();
 	updateMetrics();
 	updateIndicator();
@@ -2005,8 +2236,18 @@ bool MRFileEditor::applyLineIndexWarmup(const mr::editor::LineIndexWarmupData &w
 }
 
 bool MRFileEditor::applySyntaxWarmup(const mr::coprocessor::SyntaxWarmupPayload &warmup, std::size_t expectedVersion, std::uint64_t expectedTaskId) {
-	if (expectedTaskId == 0 || mSyntaxWarmupTaskId != expectedTaskId) return false;
-	if (mBufferModel.documentId() != mSyntaxWarmupDocumentId || mBufferModel.version() != expectedVersion) return false;
+	MRSyntaxDerivedState::WarmupState &warmupState = mSyntaxState.warmupState();
+	MRSyntaxDerivedState::PrefetchState &prefetchState = mSyntaxState.prefetchState();
+	std::map<std::size_t, MRSyntaxCacheEntry> &tokenCache = mSyntaxState.tokenCache();
+	if (!syntaxPipelineEnabled()) {
+		if (expectedTaskId != 0 && warmupState.taskId == expectedTaskId) {
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(expectedTaskId));
+			clearSyntaxWarmupTask(expectedTaskId);
+		}
+		return false;
+	}
+	if (expectedTaskId == 0 || warmupState.taskId != expectedTaskId) return false;
+	if (mBufferModel.documentId() != warmupState.documentId || mBufferModel.version() != expectedVersion) return false;
 	if (mBufferModel.language() != warmup.language)
 		return false;
 
@@ -2014,9 +2255,11 @@ bool MRFileEditor::applySyntaxWarmup(const mr::coprocessor::SyntaxWarmupPayload 
 	MRSyntaxLineState state = warmup.lines.empty() ? MRSyntaxLineState() : syntaxWarmupInitialState(warmup.lines.front().lineStart);
 	std::size_t lineIndex = 0;
 	std::size_t warmedBottomLine = 0;
+	std::size_t warmedStartLine = 0;
 
 	if (!warmup.lines.empty()) {
 		lineIndex = mBufferModel.lineIndex(warmup.lines.front().lineStart);
+		warmedStartLine = lineIndex;
 		warmedBottomLine = lineIndex + warmup.lines.size();
 		if (mBufferModel.exactLineCountKnown()) {
 			const std::size_t exactLineCount = std::max<std::size_t>(1, mBufferModel.lineCount());
@@ -2025,10 +2268,10 @@ bool MRFileEditor::applySyntaxWarmup(const mr::coprocessor::SyntaxWarmupPayload 
 	}
 
 	for (std::size_t i = 0; i < warmup.lines.size(); ++i) {
-		std::map<std::size_t, MRSyntaxCacheEntry>::iterator found = mSyntaxTokenCache.find(warmup.lines[i].lineStart);
+		std::map<std::size_t, MRSyntaxCacheEntry>::iterator found = tokenCache.find(warmup.lines[i].lineStart);
 		bool stable = false;
 
-		if (found != mSyntaxTokenCache.end() && found->second.stateIn == state) {
+		if (found != tokenCache.end() && found->second.stateIn == state) {
 			const MRSyntaxLineResult &cachedLine = found->second.syntaxLine;
 			const MRSyntaxLineResult &warmLine = warmup.lines[i].syntaxLine;
 
@@ -2045,29 +2288,31 @@ bool MRFileEditor::applySyntaxWarmup(const mr::coprocessor::SyntaxWarmupPayload 
 				}
 			}
 		}
-		if (!stable) mSyntaxTokenCache[warmup.lines[i].lineStart] = MRSyntaxCacheEntry(state, warmup.lines[i].syntaxLine);
+		if (!stable) tokenCache[warmup.lines[i].lineStart] = MRSyntaxCacheEntry(state, warmup.lines[i].syntaxLine);
 		if (statefulSyntax) rememberSyntaxCheckpoint(warmup.lines[i].lineStart, lineIndex, state);
 		if (statefulSyntax) state = warmup.lines[i].syntaxLine.stateOut;
 		else
 			state = MRSyntaxLineState();
 		++lineIndex;
 	}
+	if (warmedBottomLine > warmedStartLine) rememberSyntaxWarmedLineRange(warmedStartLine, warmedBottomLine);
 
-	if (mSyntaxPrefetchDocumentId == mBufferModel.documentId() && mSyntaxPrefetchVersion == expectedVersion && mSyntaxPrefetchLanguage == warmup.language && warmedBottomLine > mSyntaxPrefetchReachedBottomLine)
-		mSyntaxPrefetchReachedBottomLine = warmedBottomLine;
-	mSyntaxWarmupTaskId = 0;
-	mSyntaxWarmupDocumentId = 0;
-	mSyntaxWarmupVersion = 0;
-	mSyntaxWarmupTopLine = 0;
-	mSyntaxWarmupBottomLine = 0;
-	mSyntaxWarmupLanguage = MRSyntaxLanguage::PlainText;
+	if (prefetchState.documentId == mBufferModel.documentId() && prefetchState.version == expectedVersion && prefetchState.language == warmup.language && warmedBottomLine > prefetchState.reachedBottomLine)
+		prefetchState.reachedBottomLine = warmedBottomLine;
+	if (shouldTraceLargeFileWarmupDiagnostics()) {
+		std::string detail = "action=apply task=" + std::to_string(expectedTaskId) + " lines=" + std::to_string(warmup.lines.size()) + " warmed_range=" + std::to_string(warmedStartLine) + ".." +
+		                     std::to_string(warmedBottomLine) + " warmed_bottom=" + std::to_string(warmedBottomLine) + " prefetch=" + std::to_string(prefetchState.reachedBottomLine) + "/" +
+		                     std::to_string(prefetchState.targetBottomLine);
+		traceLargeFileWarmup(mLastSyntaxWarmupTrace, "syntax", std::move(detail));
+	}
+	warmupState = MRSyntaxDerivedState::WarmupState();
 	notifyWindowTaskStateChanged();
 	drawView();
 	return true;
 }
 
 bool MRFileEditor::applyMiniMapWarmup(const mr::coprocessor::MiniMapWarmupPayload &payload, std::size_t expectedVersion, std::uint64_t expectedTaskId) {
-	MRMiniMapRenderer::ApplyWarmupResult result = mMiniMapRenderer.applyWarmup(payload, expectedVersion, expectedTaskId, mBufferModel.documentId(), mBufferModel.version());
+	MRMiniMapRenderer::ApplyWarmupResult result = mMiniMapState.renderer().applyWarmup(payload, expectedVersion, expectedTaskId, mBufferModel.documentId(), mBufferModel.version());
 	applyMiniMapSignals(result.signals);
 	return result.applied;
 }
@@ -2081,6 +2326,29 @@ bool MRFileEditor::applySaveNormalizationWarmup(const mr::coprocessor::SaveNorma
 	return true;
 }
 
+bool MRFileEditor::applyFoldWarmup(const mr::coprocessor::Payload &payload, std::size_t expectedVersion, std::uint64_t expectedTaskId) {
+	MRFoldingDerivedState::WarmupState &warmupState = mFoldState.warmupState();
+	MRFoldingDerivedState::VisibleState &visibleState = mFoldState.visibleState();
+	if (expectedTaskId == 0 || warmupState.taskId != expectedTaskId) return false;
+	if (mBufferModel.documentId() != warmupState.documentId || mBufferModel.version() != expectedVersion) return false;
+	const MRFoldWarmupPayload *foldWarmup = dynamic_cast<const MRFoldWarmupPayload *>(&payload);
+	if (foldWarmup == nullptr) return false;
+	if (mBufferModel.language() != foldWarmup->language) return false;
+
+	visibleState.spans = foldWarmup->spans;
+	visibleState.documentId = mBufferModel.documentId();
+	visibleState.version = expectedVersion;
+	visibleState.topLine = foldWarmup->scanTopLine;
+	visibleState.bottomLine = foldWarmup->scanBottomLine;
+	visibleState.language = foldWarmup->language;
+	visibleState.lineTexts = foldWarmup->lineTexts;
+	visibleState.displayLevels.clear();
+	visibleState.gutterColumns = std::max(1, foldWarmup->visibleGutterColumns);
+	clearFoldWarmupTask(expectedTaskId);
+	drawView();
+	return true;
+}
+
 void MRFileEditor::clearLineIndexWarmupTask(std::uint64_t expectedTaskId) noexcept {
 	if (expectedTaskId != 0 && mLineIndexWarmupTaskId != expectedTaskId) return;
 	if (mLineIndexWarmupTaskId == 0) return;
@@ -2091,19 +2359,15 @@ void MRFileEditor::clearLineIndexWarmupTask(std::uint64_t expectedTaskId) noexce
 }
 
 void MRFileEditor::clearSyntaxWarmupTask(std::uint64_t expectedTaskId) noexcept {
-	if (expectedTaskId != 0 && mSyntaxWarmupTaskId != expectedTaskId) return;
-	if (mSyntaxWarmupTaskId == 0) return;
-	mSyntaxWarmupTaskId = 0;
-	mSyntaxWarmupDocumentId = 0;
-	mSyntaxWarmupVersion = 0;
-	mSyntaxWarmupTopLine = 0;
-	mSyntaxWarmupBottomLine = 0;
-	mSyntaxWarmupLanguage = MRSyntaxLanguage::PlainText;
+	MRSyntaxDerivedState::WarmupState &warmupState = mSyntaxState.warmupState();
+	if (expectedTaskId != 0 && warmupState.taskId != expectedTaskId) return;
+	if (warmupState.taskId == 0) return;
+	warmupState = MRSyntaxDerivedState::WarmupState();
 	notifyWindowTaskStateChanged();
 }
 
 void MRFileEditor::clearMiniMapWarmupTask(std::uint64_t expectedTaskId) noexcept {
-	applyMiniMapSignals(mMiniMapRenderer.clearWarmupTask(expectedTaskId));
+	applyMiniMapSignals(mMiniMapState.renderer().clearWarmupTask(expectedTaskId));
 }
 
 void MRFileEditor::applyMiniMapSignals(const MRMiniMapRenderer::Signals &signals) {
@@ -2120,6 +2384,14 @@ void MRFileEditor::clearSaveNormalizationWarmupTask(std::uint64_t expectedTaskId
 	mSaveNormalizationWarmupOptionsHash = 0;
 	mSaveNormalizationWarmupSourceBytes = 0;
 	mSaveNormalizationWarmupStartedAt = std::chrono::steady_clock::time_point();
+	notifyWindowTaskStateChanged();
+}
+
+void MRFileEditor::clearFoldWarmupTask(std::uint64_t expectedTaskId) noexcept {
+	MRFoldingDerivedState::WarmupState &warmupState = mFoldState.warmupState();
+	if (expectedTaskId != 0 && warmupState.taskId != expectedTaskId) return;
+	if (warmupState.taskId == 0) return;
+	mFoldState.clearWarmupState();
 	notifyWindowTaskStateChanged();
 }
 
@@ -2212,51 +2484,34 @@ int MRFileEditor::decimalDigits(std::size_t value) noexcept {
 	return digits;
 }
 
-bool MRFileEditor::shouldTraceLargeFileDiagnostics() const noexcept {
-	return mBufferModel.document().hasMappedOriginal() && mBufferModel.document().length() >= static_cast<std::size_t>(8) * 1024 * 1024;
+bool MRFileEditor::shouldTraceLargeFileWarmupDiagnostics() const noexcept {
+	return mBufferModel.document().length() >= kLargeFileWarmupTraceBytes;
 }
 
-void MRFileEditor::traceLargeFileMessage(const char *stage, const std::string &detail) const {
-	if (!shouldTraceLargeFileDiagnostics()) return;
-	std::ostringstream line;
-
-	line << "Large-file " << stage << ": doc=" << mBufferModel.documentId() << " ver=" << mBufferModel.version();
-	if (hasPersistentFileName()) line << " file='" << fileName << "'";
-	if (!detail.empty()) line << " " << detail;
-	mrLogMessage(line.str());
-}
-
-void MRFileEditor::traceLargeFileMetrics(const char *stage, int limitY, int maxY, int textRows, int newDeltaY) {
-	if (!shouldTraceLargeFileDiagnostics()) return;
-	const bool exactKnown = mBufferModel.exactLineCountKnown();
-	const bool nearBottom = std::max(delta.y, newDeltaY) >= std::max(0, maxY - 2);
-	const bool clamped = newDeltaY != delta.y;
-
-	if (!nearBottom && !clamped && exactKnown == mLastLargeFileMetricsExactKnown && mLargeFileMetricsTraceValid) return;
-	if (mLargeFileMetricsTraceValid && exactKnown == mLastLargeFileMetricsExactKnown && limitY == mLastLargeFileMetricsLimitY && maxY == mLastLargeFileMetricsMaxY && delta.y == mLastLargeFileMetricsDeltaY && newDeltaY == mLastLargeFileMetricsNewDeltaY) return;
-	std::ostringstream detail;
-	detail << "stage=" << stage << " exact=" << (exactKnown ? 1 : 0) << " estimated_lines=" << mBufferModel.estimatedLineCount();
-	if (exactKnown) detail << " line_count=" << mBufferModel.lineCount();
-	detail << " cursor_line=" << mBufferModel.lineIndex(mBufferModel.cursor()) << " delta_y=" << delta.y << " new_delta_y=" << newDeltaY << " limit_y=" << limitY << " max_y=" << maxY << " text_rows=" << textRows;
-	traceLargeFileMessage("metrics", detail.str());
-	mLargeFileMetricsTraceValid = true;
-	mLastLargeFileMetricsExactKnown = exactKnown;
-	mLastLargeFileMetricsLimitY = limitY;
-	mLastLargeFileMetricsMaxY = maxY;
-	mLastLargeFileMetricsDeltaY = delta.y;
-	mLastLargeFileMetricsNewDeltaY = newDeltaY;
+void MRFileEditor::traceLargeFileWarmup(std::string &slot, const char *stage, std::string detail) {
+	if (!shouldTraceLargeFileWarmupDiagnostics()) return;
+	std::string line = "Large-file warmup ";
+	line += stage != nullptr ? stage : "unknown";
+	line += ": doc=" + std::to_string(mBufferModel.documentId());
+	line += " ver=" + std::to_string(mBufferModel.version());
+	if (hasPersistentFileName()) line += " file='" + std::string(fileName) + "'";
+	if (!detail.empty()) line += " " + detail;
+	if (line == slot) return;
+	slot = line;
+	mrLogMessage(line);
 }
 
 MRFileEditor::TextViewportGeometry MRFileEditor::textViewportGeometryFor(const MREditSetupSettings &settings) const noexcept {
 	MRTextViewportLayout::Inputs inputs;
 	MRFileEditor *self = const_cast<MRFileEditor *>(this);
 	const bool approximateLargeFileMetrics = useApproximateLargeFileMetrics();
+	const bool foldingEnabled = foldingPipelineEnabled();
 	inputs.viewWidth = size.x;
 	inputs.visibleRows = visibleTextRows();
 	inputs.deltaX = delta.x;
 	inputs.deltaY = delta.y;
-	if (settings.codeFolding) self->ensureVisibleFoldSpans(static_cast<std::size_t>(std::max(delta.y, 0)), inputs.visibleRows, mBufferModel.language());
-	inputs.codeFoldingColumns = settings.codeFolding ? self->visibleFoldGutterColumns() : 1;
+	if (foldingEnabled && settings.codeFolding) self->ensureVisibleFoldSpans(static_cast<std::size_t>(std::max(delta.y, 0)), inputs.visibleRows, mBufferModel.language());
+	inputs.codeFoldingColumns = foldingEnabled && settings.codeFolding ? self->visibleFoldGutterColumns() : 1;
 	inputs.exactLineCountKnown = !approximateLargeFileMetrics && mBufferModel.exactLineCountKnown();
 	inputs.exactLineCount = inputs.exactLineCountKnown ? mBufferModel.lineCount() : 0;
 	inputs.estimatedLineCount = mBufferModel.estimatedLineCount();
@@ -2284,27 +2539,21 @@ int MRFileEditor::textViewportWidth() const {
 	return textViewportGeometry().width;
 }
 
-void MRFileEditor::invalidateFoldCache() noexcept {
-	mVisibleFoldSpans.clear();
-	mVisibleFoldDisplayLevels.clear();
-	mVisibleFoldDocumentId = 0;
-	mVisibleFoldVersion = 0;
-	mVisibleFoldTopLine = 0;
-	mVisibleFoldBottomLine = 0;
-	mVisibleFoldLanguage = MRSyntaxLanguage::PlainText;
-	mVisibleFoldGutterColumns = 1;
+void MRFileEditor::invalidateFoldCache(bool preserveVisibleProjection) noexcept {
+	mFoldState.clearVisibleState(preserveVisibleProjection);
 }
 
 int MRFileEditor::visibleFoldGutterColumns() const noexcept {
-	return std::max(1, mVisibleFoldGutterColumns);
+	return mFoldState.visibleGutterColumns();
 }
 
 std::size_t MRFileEditor::documentLineForVisibleLine(std::size_t visibleLine) const noexcept {
-	if (mEffectiveClosedFoldSpans.empty()) return visibleLine;
+	const std::vector<MRFoldSpan> &effectiveClosedFoldSpans = mFoldState.effectiveClosedFoldSpans();
+	if (effectiveClosedFoldSpans.empty()) return visibleLine;
 	std::size_t documentLine = visibleLine;
 	std::size_t hiddenBefore = 0;
 
-	for (const MRFoldSpan &span : mEffectiveClosedFoldSpans) {
+	for (const MRFoldSpan &span : effectiveClosedFoldSpans) {
 		const std::size_t hiddenLength = span.endLine > span.startLine ? span.endLine - span.startLine : 0;
 		const std::size_t visibleStart = span.startLine - hiddenBefore;
 		if (visibleLine <= visibleStart) break;
@@ -2315,10 +2564,11 @@ std::size_t MRFileEditor::documentLineForVisibleLine(std::size_t visibleLine) co
 }
 
 std::size_t MRFileEditor::visibleLineForDocumentLine(std::size_t documentLine) const noexcept {
-	if (mEffectiveClosedFoldSpans.empty()) return documentLine;
+	const std::vector<MRFoldSpan> &effectiveClosedFoldSpans = mFoldState.effectiveClosedFoldSpans();
+	if (effectiveClosedFoldSpans.empty()) return documentLine;
 	std::size_t hiddenBefore = 0;
 
-	for (const MRFoldSpan &span : mEffectiveClosedFoldSpans) {
+	for (const MRFoldSpan &span : effectiveClosedFoldSpans) {
 		const std::size_t hiddenLength = span.endLine > span.startLine ? span.endLine - span.startLine : 0;
 		if (documentLine > span.startLine && documentLine <= span.endLine) return span.startLine - hiddenBefore;
 		if (span.endLine < documentLine) hiddenBefore += hiddenLength;
@@ -2329,32 +2579,30 @@ std::size_t MRFileEditor::visibleLineForDocumentLine(std::size_t documentLine) c
 }
 
 std::size_t MRFileEditor::foldedVisibleLineCount() const noexcept {
+	const std::vector<MRFoldSpan> &effectiveClosedFoldSpans = mFoldState.effectiveClosedFoldSpans();
 	std::size_t total = std::max<std::size_t>(1, mBufferModel.lineCount());
 
-	for (const MRFoldSpan &span : mEffectiveClosedFoldSpans)
+	for (const MRFoldSpan &span : effectiveClosedFoldSpans)
 		if (span.endLine > span.startLine) total -= (span.endLine - span.startLine);
 	return std::max<std::size_t>(1, total);
 }
 
 bool MRFileEditor::toggleFoldAtLine(std::size_t lineIndex) {
-	for (const MRFoldSpan &span : mVisibleFoldSpans) {
+	std::vector<MRFoldSpan> &visibleFoldSpans = mFoldState.visibleState().spans;
+	std::map<std::size_t, MRFoldSpan> &closedFoldSpans = mFoldState.closedFoldSpans();
+	for (const MRFoldSpan &span : visibleFoldSpans) {
 		if (span.startLine != lineIndex) continue;
-		if (span.open) mClosedFoldSpans[lineIndex] = MRFoldSpan(span.startLine, span.endLine, span.level, span.sourceKind, false, span.siblingContinuation);
+		if (span.open) closedFoldSpans[lineIndex] = MRFoldSpan(span.startLine, span.endLine, span.level, span.sourceKind, false, span.siblingContinuation);
 		else
-			mClosedFoldSpans.erase(lineIndex);
-		mEffectiveClosedFoldSpans.clear();
-		std::size_t coveredUntil = 0;
-		bool haveCovered = false;
-		for (const std::pair<const std::size_t, MRFoldSpan> &entry : mClosedFoldSpans) {
-			const MRFoldSpan &closedSpan = entry.second;
-			if (haveCovered && closedSpan.startLine <= coveredUntil) continue;
-			mEffectiveClosedFoldSpans.push_back(closedSpan);
-			coveredUntil = closedSpan.endLine;
-			haveCovered = true;
-		}
+			closedFoldSpans.erase(lineIndex);
+		mFoldState.rebuildEffectiveClosedFolds();
 		if (span.open) {
 			const std::size_t cursorLine = mBufferModel.lineIndex(mBufferModel.cursor());
 			if (cursorLine > span.startLine && cursorLine <= span.endLine) moveCursor(mBufferModel.lineStartByIndex(span.startLine), false, false);
+		}
+		if (mFoldState.warmupState().taskId != 0) {
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mFoldState.warmupState().taskId));
+			clearFoldWarmupTask(mFoldState.warmupState().taskId);
 		}
 		invalidateFoldCache();
 		return true;
@@ -2374,9 +2622,18 @@ bool MRFileEditor::foldingGutterHit(TPoint local, std::size_t *lineIndexOut) con
 }
 
 void MRFileEditor::ensureVisibleFoldSpans(std::size_t topLine, int rowCount, MRSyntaxLanguage language) {
+	if (!foldingPipelineEnabled()) {
+		if (mFoldState.warmupState().taskId != 0) {
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mFoldState.warmupState().taskId));
+			clearFoldWarmupTask(mFoldState.warmupState().taskId);
+		}
+		invalidateFoldCache();
+		return;
+	}
 	const std::size_t docId = mBufferModel.documentId();
 	const std::size_t version = mBufferModel.version();
 	const bool approximateLargeFileMetrics = useApproximateLargeFileMetrics();
+	MRFoldingDerivedState::VisibleState &visibleState = mFoldState.visibleState();
 
 	if (rowCount <= 0) {
 		invalidateFoldCache();
@@ -2390,7 +2647,6 @@ void MRFileEditor::ensureVisibleFoldSpans(std::size_t topLine, int rowCount, MRS
 	if (exactLineCountKnown && topLine >= exactLineCount) topLine = exactLineCount - 1;
 	std::size_t requestBottomLine = documentLineForVisibleLine(visibleTopLine + static_cast<std::size_t>(std::max(0, rowCount))) + 1;
 	if (exactLineCountKnown && requestBottomLine > exactLineCount) requestBottomLine = exactLineCount;
-	const bool documentWideFoldCache = exactLineCountKnown;
 	auto updateVisibleFoldGutterColumnsForViewport = [&]() noexcept {
 		std::vector<unsigned short> actualDrawLevels;
 		auto rememberDisplayLevel = [&actualDrawLevels](unsigned short level) {
@@ -2401,7 +2657,7 @@ void MRFileEditor::ensureVisibleFoldSpans(std::size_t topLine, int rowCount, MRS
 
 		for (std::size_t visibleLine = visibleTopLine; visibleLine < visibleBottomLine; ++visibleLine) {
 			const std::size_t documentLine = documentLineForVisibleLine(visibleLine);
-			for (const MRFoldSpan &span : mVisibleFoldSpans) {
+			for (const MRFoldSpan &span : visibleState.spans) {
 				if (documentLine < span.startLine || documentLine > span.endLine) continue;
 				bool glyphVisible = false;
 				if (!span.open) glyphVisible = span.startLine == documentLine;
@@ -2410,49 +2666,21 @@ void MRFileEditor::ensureVisibleFoldSpans(std::size_t topLine, int rowCount, MRS
 				rememberDisplayLevel(span.level);
 			}
 		}
-		mVisibleFoldDisplayLevels = std::move(actualDrawLevels);
-		mVisibleFoldGutterColumns = std::max(1, static_cast<int>(mVisibleFoldDisplayLevels.size()));
+		visibleState.displayLevels = std::move(actualDrawLevels);
+		visibleState.gutterColumns = std::max(1, static_cast<int>(visibleState.displayLevels.size()));
 	};
-	if (mVisibleFoldDocumentId == docId && mVisibleFoldVersion == version && mVisibleFoldLanguage == language &&
-	    ((documentWideFoldCache && mVisibleFoldTopLine == 0 && mVisibleFoldBottomLine == exactLineCount) ||
-	     (!documentWideFoldCache && topLine >= mVisibleFoldTopLine && requestBottomLine <= mVisibleFoldBottomLine))) {
+	if (visibleState.documentId == docId && visibleState.version == version && visibleState.language == language && topLine >= visibleState.topLine && requestBottomLine <= visibleState.bottomLine) {
 		updateVisibleFoldGutterColumnsForViewport();
 		return;
 	}
 
-	const std::size_t scanTail = 256;
-	const bool deterministicFoldScan = documentWideFoldCache || language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp || language == MRSyntaxLanguage::JavaScript ||
-	                                   language == MRSyntaxLanguage::Json || language == MRSyntaxLanguage::Swift || language == MRSyntaxLanguage::Rust || language == MRSyntaxLanguage::Go || language == MRSyntaxLanguage::Systemd ||
-	                                   language == MRSyntaxLanguage::Fish ||
-	                                   language == MRSyntaxLanguage::Markdown || language == MRSyntaxLanguage::Python || language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh || language == MRSyntaxLanguage::Perl ||
-	                                   language == MRSyntaxLanguage::Make || language == MRSyntaxLanguage::MRMAC;
-	const std::size_t scanTopLine = deterministicFoldScan ? 0 : topLine;
-	std::size_t scanBottomLine = documentWideFoldCache ? exactLineCount : requestBottomLine + scanTail;
+	const int safeRowCount = std::max(1, rowCount);
+	const std::size_t viewportMargin = approximateLargeFileMetrics ? static_cast<std::size_t>(std::max(safeRowCount * 2, 64)) : static_cast<std::size_t>(std::max(safeRowCount * 2, 32));
+	const std::size_t scanTopLine = topLine > viewportMargin ? topLine - viewportMargin : 0;
+	std::size_t scanBottomLine = requestBottomLine + viewportMargin;
 	if (exactLineCountKnown && scanBottomLine > exactLineCount) scanBottomLine = exactLineCount;
-
-	mVisibleFoldSpans.clear();
-	mVisibleFoldDocumentId = docId;
-	mVisibleFoldVersion = version;
-	mVisibleFoldTopLine = scanTopLine;
-	mVisibleFoldBottomLine = scanBottomLine;
-	mVisibleFoldLanguage = language;
-	mVisibleFoldGutterColumns = 1;
-	mVisibleFoldDisplayLevels.clear();
-
-	if (scanBottomLine <= scanTopLine) return;
-	std::vector<std::string> lineTexts;
-	lineTexts.reserve(scanBottomLine - scanTopLine);
-	std::size_t lineStart = lineStartForIndex(scanTopLine);
-	for (std::size_t lineIndex = scanTopLine; lineIndex < scanBottomLine; ++lineIndex) {
-		lineTexts.push_back(mBufferModel.lineText(lineStart));
-		if (lineStart >= mBufferModel.length()) break;
-		const std::size_t nextLineStart = mBufferModel.nextLine(lineStart);
-		if (nextLineStart <= lineStart) break;
-		lineStart = nextLineStart;
-	}
-	const MRFoldScanOutput scan = computeFoldSpansForLineTexts(lineTexts, scanTopLine, topLine, requestBottomLine, language, mClosedFoldSpans);
-	mVisibleFoldSpans = scan.spans;
-	updateVisibleFoldGutterColumnsForViewport();
+	scheduleFoldWarmupIfNeeded(scanTopLine, scanBottomLine, topLine, requestBottomLine, language);
+	if (visibleState.documentId == docId && visibleState.version == version && visibleState.language == language) updateVisibleFoldGutterColumnsForViewport();
 }
 
 std::string MRFileEditor::normalizedFormatRulerLine(const MREditSetupSettings &settings, int *leftMarginOut, int *rightMarginOut) const {
@@ -2472,6 +2700,10 @@ const char *MRFileEditor::syntaxWarmupTaskLabel() noexcept {
 
 const char *MRFileEditor::saveNormalizationWarmupTaskLabel() noexcept {
 	return "save-normalization";
+}
+
+const char *MRFileEditor::foldWarmupTaskLabel() noexcept {
+	return "fold-warmup";
 }
 
 bool MRFileEditor::lineIntersectsDirtyRanges(std::size_t lineStart, std::size_t lineEnd) const noexcept {
@@ -2585,7 +2817,7 @@ bool MRFileEditor::useApproximateLargeFileMetrics() const noexcept {
 
 int MRFileEditor::dynamicLargeFileLineLimit() const noexcept {
 	const std::size_t estimated = mBufferModel.estimatedLineCount();
-	const std::size_t currentLine = visibleLineForDocumentLine(mBufferModel.lineIndex(mBufferModel.cursor()));
+	const std::size_t currentLine = visibleLineForDocumentLine(cachedCursorLineIndex());
 	const int textRows = std::max(1, visibleTextRows());
 	const std::size_t minimum = static_cast<std::size_t>(textRows);
 	const std::size_t margin = static_cast<std::size_t>(std::max(textRows * 4, 256));
@@ -2650,17 +2882,50 @@ std::size_t MRFileEditor::prevCharOffset(std::size_t pos) noexcept {
 }
 
 std::size_t MRFileEditor::lineMoveOffset(std::size_t pos, int deltaLines, int targetVisualColumn) noexcept {
-	const std::size_t currentDocumentLine = mBufferModel.lineIndex(std::min(pos, mBufferModel.length()));
+	const auto startedAt = std::chrono::steady_clock::now();
+	const std::size_t clampedPos = std::min(pos, mBufferModel.length());
+	const auto lineIndexStartedAt = std::chrono::steady_clock::now();
+	const std::size_t currentDocumentLine = mBufferModel.lineIndex(clampedPos);
+	const auto lineIndexElapsed = std::chrono::steady_clock::now() - lineIndexStartedAt;
+	const auto visibleLineStartedAt = std::chrono::steady_clock::now();
 	const std::size_t currentVisibleLine = visibleLineForDocumentLine(currentDocumentLine);
+	const auto visibleLineElapsed = std::chrono::steady_clock::now() - visibleLineStartedAt;
 	std::size_t targetVisibleLine = currentVisibleLine;
 	std::size_t targetDocumentLine = currentDocumentLine;
+	std::chrono::steady_clock::duration charColumnElapsed{};
+	std::chrono::steady_clock::duration documentLineElapsed{};
+	std::chrono::steady_clock::duration charPtrElapsed{};
 
-	if (targetVisualColumn < 0) targetVisualColumn = charColumn(mBufferModel.lineStart(pos), std::min(pos, mBufferModel.length()));
+	if (targetVisualColumn < 0) {
+		const auto charColumnStartedAt = std::chrono::steady_clock::now();
+		targetVisualColumn = charColumn(mBufferModel.lineStart(pos), clampedPos);
+		charColumnElapsed = std::chrono::steady_clock::now() - charColumnStartedAt;
+	}
 	if (deltaLines < 0) targetVisibleLine = currentVisibleLine > static_cast<std::size_t>(-deltaLines) ? currentVisibleLine - static_cast<std::size_t>(-deltaLines) : 0;
 	else
 		targetVisibleLine = currentVisibleLine + static_cast<std::size_t>(deltaLines);
-	targetDocumentLine = documentLineForVisibleLine(targetVisibleLine);
-	return charPtrOffset(mBufferModel.lineStartByIndex(targetDocumentLine), targetVisualColumn);
+	{
+		const auto documentLineStartedAt = std::chrono::steady_clock::now();
+		targetDocumentLine = documentLineForVisibleLine(targetVisibleLine);
+		documentLineElapsed = std::chrono::steady_clock::now() - documentLineStartedAt;
+	}
+	std::size_t targetOffset = 0;
+	{
+		const auto charPtrStartedAt = std::chrono::steady_clock::now();
+		targetOffset = charPtrOffset(mBufferModel.lineStartByIndex(targetDocumentLine), targetVisualColumn);
+		charPtrElapsed = std::chrono::steady_clock::now() - charPtrStartedAt;
+	}
+	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+	if (totalElapsed >= kSlowNavigationTraceThreshold) {
+		std::ostringstream line;
+		line << "Phase1 nav lineMoveOffset total_us=" << traceMicros(totalElapsed) << " line_index_us=" << traceMicros(lineIndexElapsed) << " visible_map_us=" << traceMicros(visibleLineElapsed)
+		     << " char_column_us=" << traceMicros(charColumnElapsed) << " document_map_us=" << traceMicros(documentLineElapsed) << " char_ptr_us=" << traceMicros(charPtrElapsed) << " pos=" << clampedPos
+		     << " delta_lines=" << deltaLines << " target_visual=" << targetVisualColumn << " current_doc_line=" << currentDocumentLine << " current_visible_line=" << currentVisibleLine
+		     << " target_doc_line=" << targetDocumentLine << " target_visible_line=" << targetVisibleLine << " len=" << mBufferModel.length() << " add=" << mBufferModel.document().addBufferLength()
+		     << " pieces=" << mBufferModel.document().pieceCount() << " undo=" << mBufferModel.undoStackDepth() << " redo=" << mBufferModel.redoStackDepth();
+		appendDirectProbeLog(line.str());
+	}
+	return targetOffset;
 }
 
 std::size_t MRFileEditor::tabStopMoveOffset(std::size_t pos, bool forward) noexcept {
@@ -2695,6 +2960,7 @@ std::size_t MRFileEditor::nextWordOffset(std::size_t pos) noexcept {
 }
 
 std::size_t MRFileEditor::charPtrOffset(std::size_t start, int pos) noexcept {
+	const auto startedAt = std::chrono::steady_clock::now();
 	std::size_t lineStart = mBufferModel.lineStart(start);
 	std::string lineText = mBufferModel.lineText(lineStart);
 	TStringView line(lineText.data(), lineText.size());
@@ -2710,6 +2976,13 @@ std::size_t MRFileEditor::charPtrOffset(std::size_t start, int pos) noexcept {
 		if (visual + static_cast<int>(width) > target) break;
 		visual += static_cast<int>(width);
 		p = next;
+	}
+	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+	if (totalElapsed >= kSlowNavigationTraceThreshold) {
+		std::ostringstream trace;
+		trace << "Phase1 nav charPtrOffset total_us=" << traceMicros(totalElapsed) << " start=" << start << " line_start=" << lineStart << " target_visual=" << pos << " line_bytes=" << line.size()
+		      << " len=" << mBufferModel.length() << " add=" << mBufferModel.document().addBufferLength() << " pieces=" << mBufferModel.document().pieceCount();
+		appendDirectProbeLog(trace.str());
 	}
 	return lineStart + p;
 }
@@ -2814,25 +3087,16 @@ void MRFileEditor::pushUndoSnapshot() {
 		record.blockEnd = mBlockOverlayEnd;
 		record.blockMarkingOn = mBlockOverlayActive;
 	}
-	mBufferModel.pushUndoSnapshot(record);
+	mBufferModel.pushUndoSnapshot(std::move(record));
 }
 
 bool MRFileEditor::replaceBufferData(const char *data, uint length) {
 	std::string text;
 	MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "replace-buffer-data");
-	MRTextBufferModel::Document preview;
-	MRTextBufferModel::CommitResult commit;
 
 	if (data != nullptr && length != 0) text.assign(data, length);
 	transaction.setText(text);
-	preview = mBufferModel.document();
-	pushUndoSnapshot();
-	commit = preview.tryApply(transaction);
-	if (!commit.applied()) {
-		mBufferModel.popUndoSnapshot();
-		return false;
-	}
-	return adoptCommittedDocument(preview, 0, 0, 0, false);
+	return applyStagedTransaction(transaction, 0, 0, 0, false).applied();
 }
 
 bool MRFileEditor::replaceBufferText(const char *text) {
@@ -2843,21 +3107,12 @@ bool MRFileEditor::replaceBufferText(const char *text) {
 bool MRFileEditor::appendBufferData(const char *data, uint length) {
 	std::string text;
 	MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "append-buffer-data");
-	MRTextBufferModel::Document preview;
-	MRTextBufferModel::CommitResult commit;
 	std::size_t endPtr = mBufferModel.length();
 
 	if (length == 0) return true;
 	if (data != nullptr) text.assign(data, length);
 	transaction.insert(endPtr, text);
-	preview = mBufferModel.document();
-	pushUndoSnapshot();
-	commit = preview.tryApply(transaction);
-	if (!commit.applied()) {
-		mBufferModel.popUndoSnapshot();
-		return false;
-	}
-	return adoptCommittedDocument(preview, endPtr + text.size(), endPtr + text.size(), endPtr + text.size(), false);
+	return applyStagedTransaction(transaction, endPtr + text.size(), endPtr + text.size(), endPtr + text.size(), false).applied();
 }
 
 bool MRFileEditor::appendBufferText(const char *text) {
@@ -2904,14 +3159,7 @@ bool MRFileEditor::formatParagraph(int leftMargin, int rightMargin) {
 
 	MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "format-paragraph");
 	transaction.replace(MRTextBufferModel::Range(start, end), formattedText);
-	MRTextBufferModel::Document preview = mBufferModel.document();
-	pushUndoSnapshot();
-	MRTextBufferModel::CommitResult commit = preview.tryApply(transaction);
-	if (!commit.applied()) {
-		mBufferModel.popUndoSnapshot();
-		return false;
-	}
-	return adoptCommittedDocument(preview, start, start, start, true, &commit.change);
+	return applyStagedTransaction(transaction, start, start, start, true).applied();
 }
 
 bool MRFileEditor::formatDocument(int leftMargin, int rightMargin) {
@@ -3002,8 +3250,6 @@ void MRFileEditor::setSelectionOffsets(std::size_t start, std::size_t end, Boole
 bool MRFileEditor::replaceRangeAndSelect(uint start, uint end, const char *data, uint length) {
 	std::string text;
 	MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "replace-range-select");
-	MRTextBufferModel::Document preview;
-	MRTextBufferModel::CommitResult commit;
 	MRTextBufferModel::Range range;
 
 	if (mReadOnly) return false;
@@ -3011,14 +3257,7 @@ bool MRFileEditor::replaceRangeAndSelect(uint start, uint end, const char *data,
 	range = MRTextBufferModel::Range(start, end).clamped(mBufferModel.length());
 	if (data != nullptr && length != 0) text.assign(data, length);
 	transaction.replace(range, text);
-	preview = mBufferModel.document();
-	pushUndoSnapshot();
-	commit = preview.tryApply(transaction);
-	if (!commit.applied()) {
-		mBufferModel.popUndoSnapshot();
-		return false;
-	}
-	return adoptCommittedDocument(preview, range.start, range.start, range.start + text.size(), true, &commit.change);
+	return applyStagedTransaction(transaction, range.start, range.start, range.start + text.size(), true).applied();
 }
 
 int MRFileEditor::paddingColumnsBeforeInsertAtCursor() const noexcept {
@@ -3030,17 +3269,11 @@ int MRFileEditor::paddingColumnsBeforeInsertAtCursor() const noexcept {
 }
 
 bool MRFileEditor::insertBufferText(const std::string &text) {
-	const auto totalStartedAt = std::chrono::steady_clock::now();
 	std::string insertedText = text;
 	std::size_t start = mBufferModel.cursor();
 	std::size_t end = start;
 	MRTextBufferModel::Range range;
 	MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "insert-buffer-text");
-	MRTextBufferModel::Document preview;
-	MRTextBufferModel::CommitResult commit;
-	double applyMs = 0.0;
-	double adoptMs = 0.0;
-	const bool traceLargeFile = shouldTraceLargeFileDiagnostics();
 
 	if (mReadOnly) return false;
 	if (!insertedText.empty()) {
@@ -3059,30 +3292,8 @@ bool MRFileEditor::insertBufferText(const std::string &text) {
 	}
 	range = MRTextBufferModel::Range(start, end).clamped(mBufferModel.length());
 	transaction.replace(range, insertedText);
-	preview = mBufferModel.document();
-	pushUndoSnapshot();
-	const auto applyStartedAt = std::chrono::steady_clock::now();
-	commit = preview.tryApply(transaction);
-	applyMs = elapsedMsSince(applyStartedAt);
-	if (!commit.applied()) {
-		mBufferModel.popUndoSnapshot();
-		return false;
-	}
 	start = range.start + insertedText.size();
-	const auto adoptStartedAt = std::chrono::steady_clock::now();
-	const bool adopted = adoptCommittedDocument(preview, start, start, start, true, &commit.change);
-	adoptMs = elapsedMsSince(adoptStartedAt);
-	const double totalMs = elapsedMsSince(totalStartedAt);
-
-	if (totalMs >= kSlowEditorInsertThresholdMs || (traceLargeFile && totalMs >= 5.0)) {
-		std::ostringstream detail;
-		detail << "bytes=" << preview.length() << " insert_bytes=" << insertedText.size() << " apply_ms=" << applyMs << " adopt_ms=" << adoptMs << " total_ms=" << totalMs
-		       << " selection=" << (mBufferModel.hasSelection() ? 1 : 0) << " insert_mode=" << (mInsertMode ? 1 : 0);
-		if (traceLargeFile) traceLargeFileMessage("slow-insert", detail.str());
-		else
-			mrLogMessage(("Slow editor insert: " + detail.str()).c_str());
-	}
-	return adopted;
+	return applyStagedTransaction(transaction, start, start, start, true).applied();
 }
 
 bool MRFileEditor::applyCurrentLineLeadingIndent(int targetColumn) {
@@ -3110,19 +3321,10 @@ bool MRFileEditor::replaceCurrentLineText(const std::string &text) {
 	std::size_t start = mBufferModel.lineStart(mBufferModel.cursor());
 	std::size_t end = mBufferModel.lineEnd(mBufferModel.cursor());
 	MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "replace-current-line");
-	MRTextBufferModel::Document preview;
-	MRTextBufferModel::CommitResult commit;
 
 	if (mReadOnly) return false;
 	transaction.replace(MRTextBufferModel::Range(start, end), text);
-	preview = mBufferModel.document();
-	pushUndoSnapshot();
-	commit = preview.tryApply(transaction);
-	if (!commit.applied()) {
-		mBufferModel.popUndoSnapshot();
-		return false;
-	}
-	return adoptCommittedDocument(preview, start, start, start, true, &commit.change);
+	return applyStagedTransaction(transaction, start, start, start, true).applied();
 }
 
 bool MRFileEditor::centerCurrentLine(int leftMargin, int rightMargin) {
@@ -3161,8 +3363,6 @@ bool MRFileEditor::deleteCharsAtCursor(int count) {
 	std::size_t start = mBufferModel.cursor();
 	std::size_t end = start;
 	MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "delete-chars-at-cursor");
-	MRTextBufferModel::Document preview;
-	MRTextBufferModel::CommitResult commit;
 
 	if (mReadOnly) return false;
 	if (count <= 0) return true;
@@ -3170,77 +3370,72 @@ bool MRFileEditor::deleteCharsAtCursor(int count) {
 		end = nextCharOffset(end);
 	if (end <= start) return true;
 	transaction.erase(MRTextBufferModel::Range(start, end));
-	preview = mBufferModel.document();
-	pushUndoSnapshot();
-	commit = preview.tryApply(transaction);
-	if (!commit.applied()) {
-		mBufferModel.popUndoSnapshot();
-		return false;
-	}
-	return adoptCommittedDocument(preview, start, start, start, true, &commit.change);
+	return applyStagedTransaction(transaction, start, start, start, true).applied();
 }
 
 bool MRFileEditor::deleteCurrentLineText() {
 	std::size_t start = mBufferModel.lineStart(mBufferModel.cursor());
 	std::size_t end = mBufferModel.nextLine(mBufferModel.cursor());
 	MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "delete-current-line");
-	MRTextBufferModel::Document preview;
-	MRTextBufferModel::CommitResult commit;
 
 	if (mReadOnly) return false;
 	transaction.erase(MRTextBufferModel::Range(start, end));
-	preview = mBufferModel.document();
-	pushUndoSnapshot();
-	commit = preview.tryApply(transaction);
-	if (!commit.applied()) {
-		mBufferModel.popUndoSnapshot();
-		return false;
-	}
-	return adoptCommittedDocument(preview, start, start, start, true, &commit.change);
+	return applyStagedTransaction(transaction, start, start, start, true).applied();
 }
 
 bool MRFileEditor::replaceWholeBuffer(const std::string &text, std::size_t cursorPos) {
 	MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "replace-whole-buffer");
-	MRTextBufferModel::Document preview;
-	MRTextBufferModel::CommitResult commit;
 
 	if (mReadOnly) return false;
 	transaction.setText(text);
-	preview = mBufferModel.document();
-	pushUndoSnapshot();
-	commit = preview.tryApply(transaction);
-	if (!commit.applied()) {
-		mBufferModel.popUndoSnapshot();
-		return false;
-	}
 	cursorPos = std::min(cursorPos, text.size());
-	return adoptCommittedDocument(preview, cursorPos, cursorPos, cursorPos, true, &commit.change);
+	return applyStagedTransaction(transaction, cursorPos, cursorPos, cursorPos, true).applied();
 }
 
-bool MRFileEditor::adoptCommittedDocument(const MRTextBufferModel::Document &document, std::size_t cursorPos, std::size_t selStart, std::size_t selEnd, bool modifiedState, const MRTextBufferModel::DocumentChangeSet *changeSet) {
-	const auto totalStartedAt = std::chrono::steady_clock::now();
-	double preMetricsMs = 0.0;
-	double metricsMs = 0.0;
-	double warmupMs = 0.0;
-	double finalViewMs = 0.0;
-	const bool traceLargeFile = shouldTraceLargeFileDiagnostics() || document.hasMappedOriginal();
+bool MRFileEditor::syncAfterCommittedDocument(std::size_t cursorPos, std::size_t selStart, std::size_t selEnd, bool modifiedState, const MRTextBufferModel::DocumentChangeSet *changeSet) {
+	const MRTextBufferModel::Document &document = mBufferModel.document();
 	const bool suppressLineIndexWarmup = changeSet != nullptr && changeSet->changed && useApproximateLargeFileMetrics();
+	const bool preserveStaleMiniMapDuringEdit = changeSet != nullptr && changeSet->changed && useApproximateLargeFileMetrics();
+	const bool pieceTableOnly = pieceTableOnlyPhaseActive();
+	const bool miniMapEnabled = miniMapPipelineEnabled();
 
 	cursorPos = std::min(cursorPos, document.length());
 	selStart = std::min(selStart, document.length());
 	selEnd = std::min(selEnd, document.length());
 	if (selEnd < selStart) std::swap(selStart, selEnd);
 
-	mBufferModel.document() = document;
 	invalidateSaveNormalizationCache();
 	resetSyntaxWarmupState(changeSet == nullptr || !changeSet->changed);
 	if (changeSet != nullptr && changeSet->changed) invalidateSyntaxCacheFromLineStart(mBufferModel.lineStart(changeSet->touchedRange.start));
-	if (changeSet != nullptr && changeSet->changed) {
-		mClosedFoldSpans.clear();
-		mEffectiveClosedFoldSpans.clear();
+	if (mFoldState.warmupState().taskId != 0) {
+		static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mFoldState.warmupState().taskId));
+		clearFoldWarmupTask(mFoldState.warmupState().taskId);
 	}
-	invalidateFoldCache();
-	applyMiniMapSignals(mMiniMapRenderer.invalidate(false, mBufferModel.documentId()));
+	if (changeSet != nullptr && changeSet->changed) {
+		mFoldState.clearClosedFolds();
+	}
+	invalidateFoldCache(changeSet != nullptr && changeSet->changed && useApproximateLargeFileMetrics());
+	if (!miniMapEnabled) {
+		const std::uint64_t cancelledMiniMapTaskId = mMiniMapState.renderer().pendingWarmupTaskId();
+		mMiniMapState.clearLastEditAt();
+		mMiniMapState.clearOverlayCache();
+		if (cancelledMiniMapTaskId != 0) {
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledMiniMapTaskId));
+			applyMiniMapSignals(mMiniMapState.renderer().clearWarmupTask(cancelledMiniMapTaskId));
+		}
+	} else if (preserveStaleMiniMapDuringEdit) {
+		const std::uint64_t cancelledMiniMapTaskId = mMiniMapState.renderer().pendingWarmupTaskId();
+
+		mMiniMapState.setLastEditAt(std::chrono::steady_clock::now());
+		if (cancelledMiniMapTaskId != 0) {
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledMiniMapTaskId));
+			applyMiniMapSignals(mMiniMapState.renderer().clearWarmupTask(cancelledMiniMapTaskId));
+		}
+	} else {
+		mMiniMapState.clearLastEditAt();
+		mMiniMapState.clearOverlayCache();
+	}
+	if (miniMapEnabled) applyMiniMapSignals(mMiniMapState.renderer().invalidate(false, mBufferModel.documentId()));
 	refreshSyntaxContext();
 	cursorPos = canonicalCursorOffset(cursorPos);
 	selStart = canonicalCursorOffset(selStart);
@@ -3255,7 +3450,14 @@ bool MRFileEditor::adoptCommittedDocument(const MRTextBufferModel::Document &doc
 		addDirtyRange(changeSet->touchedRange);
 	}
 	mSelectionAnchor = selStart;
-	if (suppressLineIndexWarmup) {
+	if (pieceTableOnly) {
+		const std::uint64_t cancelledTaskId = mLineIndexWarmupTaskId;
+		mSuppressLargeFileLineIndexWarmup = true;
+		if (cancelledTaskId != 0) {
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledTaskId));
+			clearLineIndexWarmupTask(cancelledTaskId);
+		}
+	} else if (suppressLineIndexWarmup) {
 		const std::uint64_t cancelledTaskId = mLineIndexWarmupTaskId;
 		mSuppressLargeFileLineIndexWarmup = true;
 		if (cancelledTaskId != 0) {
@@ -3264,39 +3466,26 @@ bool MRFileEditor::adoptCommittedDocument(const MRTextBufferModel::Document &doc
 		}
 	} else
 		mSuppressLargeFileLineIndexWarmup = false;
-	preMetricsMs = elapsedMsSince(totalStartedAt);
-	const auto metricsStartedAt = std::chrono::steady_clock::now();
 	updateMetrics();
-	metricsMs = elapsedMsSince(metricsStartedAt);
-	const auto warmupStartedAt = std::chrono::steady_clock::now();
-	if (!mSuppressLargeFileLineIndexWarmup) scheduleLineIndexWarmupIfNeeded();
-	scheduleSyntaxWarmupIfNeeded();
+	if (!pieceTableOnly && !mSuppressLargeFileLineIndexWarmup) scheduleLineIndexWarmupIfNeeded();
+	if (syntaxPipelineEnabled()) scheduleSyntaxWarmupIfNeeded();
 	scheduleSaveNormalizationWarmupIfNeeded();
-	warmupMs = elapsedMsSince(warmupStartedAt);
-	const auto finalViewStartedAt = std::chrono::steady_clock::now();
 	ensureCursorVisible(false);
 	updateIndicator();
 	drawView();
-	finalViewMs = elapsedMsSince(finalViewStartedAt);
-	const double totalMs = elapsedMsSince(totalStartedAt);
-
-	if (totalMs >= kSlowEditorAdoptThresholdMs || (traceLargeFile && totalMs >= 5.0)) {
-		std::ostringstream detail;
-		detail << "bytes=" << document.length() << " changed=" << ((changeSet != nullptr && changeSet->changed) ? 1 : 0) << " pre_metrics_ms=" << preMetricsMs << " metrics_ms=" << metricsMs
-		       << " warmup_ms=" << warmupMs << " final_view_ms=" << finalViewMs << " total_ms=" << totalMs;
-		if (traceLargeFile) traceLargeFileMessage("slow-adopt", detail.str());
-		else
-			mrLogMessage(("Slow editor adopt: " + detail.str()).c_str());
-	}
 	return true;
 }
 
-MRTextBufferModel::CommitResult MRFileEditor::applyStagedTransaction(const MRTextBufferModel::StagedTransaction &transaction, std::size_t cursorPos, std::size_t selStart, std::size_t selEnd, bool modifiedState) {
-	MRTextBufferModel::Document preview = mBufferModel.document();
-	pushUndoSnapshot();
-	MRTextBufferModel::CommitResult result = preview.tryApply(transaction);
+bool MRFileEditor::adoptCommittedDocument(const MRTextBufferModel::Document &document, std::size_t cursorPos, std::size_t selStart, std::size_t selEnd, bool modifiedState, const MRTextBufferModel::DocumentChangeSet *changeSet) {
+	mBufferModel.document() = document;
+	return syncAfterCommittedDocument(cursorPos, selStart, selEnd, modifiedState, changeSet);
+}
 
-	if (result.applied()) adoptCommittedDocument(preview, cursorPos, selStart, selEnd, modifiedState, &result.change);
+MRTextBufferModel::CommitResult MRFileEditor::applyStagedTransaction(const MRTextBufferModel::StagedTransaction &transaction, std::size_t cursorPos, std::size_t selStart, std::size_t selEnd, bool modifiedState) {
+	pushUndoSnapshot();
+	MRTextBufferModel::CommitResult result = mBufferModel.tryApplyStagedTransaction(transaction);
+
+	if (result.applied()) syncAfterCommittedDocument(cursorPos, selStart, selEnd, modifiedState, &result.change);
 	else
 		mBufferModel.popUndoSnapshot();
 	return result;
@@ -3613,13 +3802,14 @@ void MRFileEditor::drawFormatRulerOverlay(const TextViewportGeometry &viewport, 
 	TColorAttr normal = static_cast<TColorAttr>(getColor(0x0606));
 	const TColorAttr accent = static_cast<TColorAttr>(getColor(0x0404));
 	const std::string normalized = normalizedFormatRulerLine(settings);
+	const std::size_t cursorLineIndex = cachedCursorLineIndex();
 
 	if (configuredColorSlotOverride(kMrPaletteFormatRuler, configured)) normal = static_cast<TColorAttr>(configured);
 	buffer.moveChar(0, ' ', normal, size.x);
 	for (int x = 0; x < viewport.width; ++x) {
 		const int column = viewport.deltaX + x + 1;
 		const char ch = column >= 1 && column <= static_cast<int>(normalized.size()) ? normalized[static_cast<std::size_t>(column - 1)] : ' ';
-		const bool atCursor = static_cast<int>(mBufferModel.lineIndex(mBufferModel.cursor())) == delta.y && displayedCursorColumn() == viewport.deltaX + x;
+		const bool atCursor = static_cast<int>(cursorLineIndex) == delta.y && displayedCursorColumn() == viewport.deltaX + x;
 		buffer.moveChar(static_cast<ushort>(viewport.textLeft + x), ch, atCursor ? accent : normal, 1);
 	}
 	writeBuf(0, 0, size.x, 1, buffer);
@@ -3693,21 +3883,25 @@ void MRFileEditor::draw() {
 	}
 	syncScrollBarsToState();
 	MREditSetupSettings editSettings = configuredEditSetupSettings();
+	const bool foldingEnabled = foldingPipelineEnabled();
+	const bool miniMapEnabled = miniMapPipelineEnabled();
 	std::size_t totalLines = 1;
 	TextViewportGeometry viewport = textViewportGeometryFor(editSettings);
 	bool showLineNumbers = viewport.lineNumberWidth > 0;
-	bool drawCodeFolding = viewport.codeFoldingWidth > 0;
+	bool drawCodeFolding = foldingEnabled && viewport.codeFoldingWidth > 0;
 	bool zeroFillLineNumbers = showLineNumbers && editSettings.lineNumZeroFill;
 	int textWidth = viewport.width;
 	MRTextBufferModel::Range selection = mBufferModel.selection().range().normalized();
 	const MRSyntaxLanguage syntaxLanguage = mBufferModel.language();
-	const bool statefulSyntax = isStatefulSyntaxLanguage(syntaxLanguage);
+	const bool syntaxEnabled = syntaxPipelineEnabled();
+	const bool statefulSyntax = syntaxEnabled && isStatefulSyntaxLanguage(syntaxLanguage);
 	MRMiniMapRenderer::Palette miniMapPalette = resolveMiniMapPalette();
-	const bool drawMiniMap = viewport.miniMapBodyWidth > 0 && viewport.miniMapInfoX >= 0;
+	const bool drawMiniMap = miniMapEnabled && viewport.miniMapBodyWidth > 0 && viewport.miniMapInfoX >= 0;
 	const bool miniMapUseBraille = MRMiniMapRenderer::useBrailleRenderer();
 	std::string viewportMarkerGlyph = MRMiniMapRenderer::normalizedViewportMarkerGlyph(editSettings.miniMapMarkerGlyph);
-	const bool foldedView = !mClosedFoldSpans.empty();
+	const bool foldedView = foldingEnabled && !mFoldState.closedFoldSpans().empty();
 	const int miniMapRows = std::max(0, visibleTextRows());
+	const auto now = std::chrono::steady_clock::now();
 	if (mBufferModel.exactLineCountKnown()) totalLines = foldedView ? foldedVisibleLineCount() : std::max<std::size_t>(1, mBufferModel.lineCount());
 	else
 		totalLines = std::max<std::size_t>(1, std::max<std::size_t>(mBufferModel.estimatedLineCount(), static_cast<std::size_t>(std::max(delta.y, 0)) + static_cast<std::size_t>(std::max(miniMapRows, 1))));
@@ -3716,16 +3910,52 @@ void MRFileEditor::draw() {
 	std::size_t linePtr = mBufferModel.lineStartByIndex(documentLineForVisibleLine(topLine));
 	std::size_t lineIndex = documentLineForVisibleLine(topLine);
 	const MRMiniMapRenderer::Viewport miniMapViewport = {viewport.width, viewport.miniMapBodyX, viewport.miniMapBodyWidth, viewport.miniMapInfoX, viewport.miniMapSeparatorX};
-	if (drawMiniMap) applyMiniMapSignals(mMiniMapRenderer.scheduleWarmupIfNeeded(miniMapViewport, miniMapRows, miniMapUseBraille, totalLines, topLine, mBufferModel.documentId(), mBufferModel.version(), mBufferModel.readSnapshot(), editSettings));
-	MRMiniMapRenderer::OverlayState miniMapOverlay = mMiniMapRenderer.computeOverlayState(mBufferModel.readSnapshot(), selection, mFindMarkerRanges, mDirtyRanges, totalLines, viewport.width, viewport.miniMapBodyWidth, miniMapUseBraille, editSettings);
+	const bool throttleMiniMapForEditBurst =
+	    drawMiniMap && useApproximateLargeFileMetrics() && mMiniMapState.lastEditAt() != std::chrono::steady_clock::time_point() && now - mMiniMapState.lastEditAt() < kLargeFileMiniMapEditDebounce;
+	if (drawMiniMap) {
+		if (throttleMiniMapForEditBurst) {
+			if (shouldTraceLargeFileWarmupDiagnostics()) {
+				std::string detail = "action=defer-edit-burst task=" + std::to_string(mMiniMapState.renderer().pendingWarmupTaskId()) + " top_line=" + std::to_string(topLine) + " rows=" + std::to_string(miniMapRows) +
+				                     " total_lines=" + std::to_string(totalLines);
+				traceLargeFileWarmup(mLastMiniMapWarmupTrace, "minimap", std::move(detail));
+			}
+		} else {
+			const std::uint64_t previousMiniMapTaskId = mMiniMapState.renderer().pendingWarmupTaskId();
+			MRMiniMapRenderer::Signals miniMapSignals = mMiniMapState.renderer().scheduleWarmupIfNeeded(miniMapViewport, miniMapRows, miniMapUseBraille, totalLines, topLine, mBufferModel.documentId(), mBufferModel.version(),
+			                                                                                      mBufferModel.readSnapshot(), editSettings, useApproximateLargeFileMetrics());
+			const std::uint64_t currentMiniMapTaskId = mMiniMapState.renderer().pendingWarmupTaskId();
+			if (shouldTraceLargeFileWarmupDiagnostics() && (currentMiniMapTaskId != previousMiniMapTaskId || miniMapSignals.notifyTaskStateChanged)) {
+				std::string detail = "action=" + std::string(currentMiniMapTaskId == 0 ? "idle" : (currentMiniMapTaskId == previousMiniMapTaskId ? "reuse" : "schedule")) + " task=" +
+				                     std::to_string(currentMiniMapTaskId) + " top_line=" + std::to_string(topLine) + " rows=" + std::to_string(miniMapRows) + " total_lines=" + std::to_string(totalLines);
+				traceLargeFileWarmup(mLastMiniMapWarmupTrace, "minimap", std::move(detail));
+			}
+			applyMiniMapSignals(miniMapSignals);
+		}
+	}
+	MRMiniMapRenderer::OverlayState miniMapOverlay;
+	if (drawMiniMap) {
+		const bool miniMapOverlayCacheCompatible = mMiniMapState.overlayCache().documentId == mBufferModel.documentId() && mMiniMapState.overlayCache().viewportWidth == viewport.width &&
+		                                           mMiniMapState.overlayCache().bodyWidth == viewport.miniMapBodyWidth && mMiniMapState.overlayCache().braille == miniMapUseBraille;
+
+		if (throttleMiniMapForEditBurst && miniMapOverlayCacheCompatible) miniMapOverlay = mMiniMapState.overlayCache().overlay;
+		else {
+			miniMapOverlay = mMiniMapState.renderer().computeOverlayState(mBufferModel.readSnapshot(), selection, mFindMarkerRanges, mDirtyRanges, totalLines, viewport.width, viewport.miniMapBodyWidth, miniMapUseBraille, editSettings);
+			mMiniMapState.overlayCache().documentId = mBufferModel.documentId();
+			mMiniMapState.overlayCache().viewportWidth = viewport.width;
+			mMiniMapState.overlayCache().bodyWidth = viewport.miniMapBodyWidth;
+			mMiniMapState.overlayCache().braille = miniMapUseBraille;
+			mMiniMapState.overlayCache().overlay = miniMapOverlay;
+		}
+	}
 	std::vector<MRSyntaxLineResult> visibleSyntaxLines;
 
 	if (editSettings.formatRuler && viewport.topInset > 0) drawFormatRulerOverlay(viewport, editSettings);
 	const int textRows = std::max(0, visibleTextRows());
 	std::size_t immediateSyntaxLineBudget = 96;
 	std::size_t immediateSyntaxLinesUsed = 0;
-	if (statefulSyntax && mSyntaxWarmupTaskId != 0 && mSyntaxWarmupDocumentId == mBufferModel.documentId() && mSyntaxWarmupVersion == mBufferModel.version() && mSyntaxWarmupLanguage == syntaxLanguage &&
-		topLine >= mSyntaxWarmupTopLine && topLine + static_cast<std::size_t>(textRows) <= mSyntaxWarmupBottomLine)
+	const MRSyntaxDerivedState::WarmupState &syntaxWarmupState = mSyntaxState.warmupState();
+	if (statefulSyntax && syntaxWarmupState.taskId != 0 && syntaxWarmupState.documentId == mBufferModel.documentId() && syntaxWarmupState.version == mBufferModel.version() &&
+		syntaxWarmupState.language == syntaxLanguage && topLine >= syntaxWarmupState.topLine && topLine + static_cast<std::size_t>(textRows) <= syntaxWarmupState.bottomLine)
 		immediateSyntaxLineBudget = 24;
 	if (!foldedView && statefulSyntax && textRows > 0) {
 		std::size_t preludeLines = static_cast<std::size_t>(textRows * 4);
@@ -3765,10 +3995,10 @@ void MRFileEditor::draw() {
 			std::size_t stateLinePtr = stateLineStarts[i];
 			std::size_t stateLineIndex = stateTopLine + i;
 			MRSyntaxLineResult syntaxLine;
-			std::map<std::size_t, MRSyntaxCacheEntry>::iterator found = mSyntaxTokenCache.find(stateLinePtr);
+			std::map<std::size_t, MRSyntaxCacheEntry>::iterator found = mSyntaxState.tokenCache().find(stateLinePtr);
 
 			if (haveCompleteStatefulCache) syntaxLine = found->second.syntaxLine;
-			else if (found != mSyntaxTokenCache.end() && found->second.stateIn == state) syntaxLine = found->second.syntaxLine;
+			else if (found != mSyntaxState.tokenCache().end() && found->second.stateIn == state) syntaxLine = found->second.syntaxLine;
 			else if (immediateSyntaxLinesUsed < immediateSyntaxLineBudget) {
 				syntaxLine = syntaxLineResultForLine(stateLinePtr, state);
 				++immediateSyntaxLinesUsed;
@@ -3796,13 +4026,14 @@ void MRFileEditor::draw() {
 		MRSyntaxLineResult syntaxLine;
 		if (showLineNumbers) drawLineNumberGutter(buffer, currentLineIndex, isDocumentLine, viewport.lineNumberX, viewport.lineNumberWidth, zeroFillLineNumbers);
 		if (drawCodeFolding) drawCodeFoldingGutter(buffer, viewport.codeFoldingX, viewport.codeFoldingWidth, currentLinePtr, currentLineIndex);
-		if (drawMiniMap) mMiniMapRenderer.drawGutter(buffer, y, miniMapRows, size.x, miniMapViewport, totalLines, topLine, miniMapUseBraille, viewportMarkerGlyph, miniMapPalette, miniMapOverlay);
-		if (static_cast<std::size_t>(y) < visibleSyntaxLines.size()) syntaxLine = visibleSyntaxLines[static_cast<std::size_t>(y)];
+		if (drawMiniMap) mMiniMapState.renderer().drawGutter(buffer, y, miniMapRows, size.x, miniMapViewport, totalLines, topLine, miniMapUseBraille, viewportMarkerGlyph, miniMapPalette, miniMapOverlay);
+		if (!syntaxEnabled) syntaxLine = tmrHighlightTextLine(MRSyntaxLanguage::PlainText, mBufferModel.lineText(currentLinePtr));
+		else if (static_cast<std::size_t>(y) < visibleSyntaxLines.size()) syntaxLine = visibleSyntaxLines[static_cast<std::size_t>(y)];
 		else {
-			std::map<std::size_t, MRSyntaxCacheEntry>::iterator found = mSyntaxTokenCache.find(currentLinePtr);
+			std::map<std::size_t, MRSyntaxCacheEntry>::iterator found = mSyntaxState.tokenCache().find(currentLinePtr);
 			const MRSyntaxLineState initialState = statefulSyntax ? syntaxWarmupInitialState(currentLinePtr) : MRSyntaxLineState();
 
-			if (found != mSyntaxTokenCache.end() && found->second.stateIn == initialState) syntaxLine = found->second.syntaxLine;
+			if (found != mSyntaxState.tokenCache().end() && found->second.stateIn == initialState) syntaxLine = found->second.syntaxLine;
 			else if (immediateSyntaxLinesUsed < immediateSyntaxLineBudget) {
 				syntaxLine = syntaxLineResultForLine(currentLinePtr, initialState);
 				++immediateSyntaxLinesUsed;
@@ -3839,14 +4070,15 @@ void MRFileEditor::drawCodeFoldingGutter(TDrawBuffer &b, int drawX, int width, s
 	TColorAttr color = static_cast<TColorAttr>(getColor(0x0606));
 	TColorAttr markerColor = color;
 	auto branchContinuesAtSameLevel = [this](const MRFoldSpan &span) noexcept {
-		for (const MRFoldSpan &candidate : mVisibleFoldSpans)
+		for (const MRFoldSpan &candidate : mFoldState.visibleState().spans)
 			if (candidate.siblingContinuation && candidate.level == span.level && candidate.startLine == span.endLine + 1) return true;
 		return false;
 	};
 	auto displayColumnForLevel = [this](unsigned short level) noexcept -> int {
-		const auto it = std::lower_bound(mVisibleFoldDisplayLevels.begin(), mVisibleFoldDisplayLevels.end(), level);
-		if (it == mVisibleFoldDisplayLevels.end() || *it != level) return -1;
-		return static_cast<int>(it - mVisibleFoldDisplayLevels.begin());
+		const std::vector<unsigned short> &displayLevels = mFoldState.visibleState().displayLevels;
+		const auto it = std::lower_bound(displayLevels.begin(), displayLevels.end(), level);
+		if (it == displayLevels.end() || *it != level) return -1;
+		return static_cast<int>(it - displayLevels.begin());
 	};
 
 	static_cast<void>(lineStart);
@@ -3856,7 +4088,7 @@ void MRFileEditor::drawCodeFoldingGutter(TDrawBuffer &b, int drawX, int width, s
 	if (configuredColorSlotOverride(kMrPaletteCodeFoldingMarker, configured)) markerColor = static_cast<TColorAttr>(configured);
 	b.moveChar(static_cast<ushort>(drawX), ' ', color, static_cast<ushort>(width));
 	if (lineIndex >= std::max<std::size_t>(1, mBufferModel.lineCount()) && mBufferModel.exactLineCountKnown()) return;
-	for (const MRFoldSpan &span : mVisibleFoldSpans) {
+	for (const MRFoldSpan &span : mFoldState.visibleState().spans) {
 		const int displayColumn = displayColumnForLevel(span.level);
 		if (displayColumn < 0 || displayColumn >= width) continue;
 		const char *glyph = nullptr;
@@ -3933,9 +4165,10 @@ std::vector<std::size_t> MRFileEditor::syntaxWarmupLineStarts(std::size_t topLin
 }
 
 bool MRFileEditor::syntaxCheckpointForLine(std::size_t lineIndex, MRSyntaxCheckpointEntry &checkpoint) const {
-	std::map<std::size_t, MRSyntaxCheckpointEntry>::const_iterator found = mSyntaxCheckpoints.upper_bound(lineIndex);
+	const std::map<std::size_t, MRSyntaxCheckpointEntry> &checkpoints = mSyntaxState.checkpoints();
+	std::map<std::size_t, MRSyntaxCheckpointEntry>::const_iterator found = checkpoints.upper_bound(lineIndex);
 
-	if (found == mSyntaxCheckpoints.begin()) return false;
+	if (found == checkpoints.begin()) return false;
 	--found;
 	checkpoint = found->second;
 	return true;
@@ -3945,7 +4178,7 @@ void MRFileEditor::rememberSyntaxCheckpoint(std::size_t lineStart, std::size_t l
 	const std::size_t checkpointStride = 256;
 
 	if (lineIndex != 0 && lineIndex % checkpointStride != 0) return;
-	mSyntaxCheckpoints[lineIndex] = MRSyntaxCheckpointEntry(lineStart, lineIndex, stateIn);
+	mSyntaxState.checkpoints()[lineIndex] = MRSyntaxCheckpointEntry(lineStart, lineIndex, stateIn);
 }
 
 MRSyntaxLineState MRFileEditor::syntaxWarmupInitialState(std::size_t lineStart) const noexcept {
@@ -3960,12 +4193,13 @@ MRSyntaxLineState MRFileEditor::syntaxWarmupInitialState(std::size_t lineStart) 
 
 bool MRFileEditor::hasSyntaxTokensForLineStarts(const std::vector<std::size_t> &lineStarts, const MRSyntaxLineState &initialState) const {
 	const bool statefulSyntax = isStatefulSyntaxLanguage(mBufferModel.language());
+	const std::map<std::size_t, MRSyntaxCacheEntry> &tokenCache = mSyntaxState.tokenCache();
 	MRSyntaxLineState state = initialState;
 
 	for (std::size_t i = 0; i < lineStarts.size(); ++i) {
-		std::map<std::size_t, MRSyntaxCacheEntry>::const_iterator found = mSyntaxTokenCache.find(lineStarts[i]);
+		std::map<std::size_t, MRSyntaxCacheEntry>::const_iterator found = tokenCache.find(lineStarts[i]);
 
-		if (found == mSyntaxTokenCache.end()) return false;
+		if (found == tokenCache.end()) return false;
 		if (found->second.stateIn != state) return false;
 		if (statefulSyntax) state = found->second.syntaxLine.stateOut;
 		else
@@ -3974,14 +4208,34 @@ bool MRFileEditor::hasSyntaxTokensForLineStarts(const std::vector<std::size_t> &
 	return true;
 }
 
-MRSyntaxLineResult MRFileEditor::syntaxLineResultForLine(std::size_t lineStart, const MRSyntaxLineState &previousState) {
-	std::map<std::size_t, MRSyntaxCacheEntry>::iterator found = mSyntaxTokenCache.find(lineStart);
+std::size_t MRFileEditor::syntaxCachedCoveragePrefix(const std::vector<std::size_t> &lineStarts, const MRSyntaxLineState &initialState, MRSyntaxLineState *stateOut) const {
+	const bool statefulSyntax = isStatefulSyntaxLanguage(mBufferModel.language());
+	const std::map<std::size_t, MRSyntaxCacheEntry> &tokenCache = mSyntaxState.tokenCache();
+	MRSyntaxLineState state = initialState;
+	std::size_t coveredCount = 0;
 
-	if (found != mSyntaxTokenCache.end() && found->second.stateIn == previousState) return found->second.syntaxLine;
+	for (; coveredCount < lineStarts.size(); ++coveredCount) {
+		std::map<std::size_t, MRSyntaxCacheEntry>::const_iterator found = tokenCache.find(lineStarts[coveredCount]);
+
+		if (found == tokenCache.end()) break;
+		if (found->second.stateIn != state) break;
+		if (statefulSyntax) state = found->second.syntaxLine.stateOut;
+		else
+			state = MRSyntaxLineState();
+	}
+	if (stateOut != nullptr) *stateOut = state;
+	return coveredCount;
+}
+
+MRSyntaxLineResult MRFileEditor::syntaxLineResultForLine(std::size_t lineStart, const MRSyntaxLineState &previousState) {
+	std::map<std::size_t, MRSyntaxCacheEntry> &tokenCache = mSyntaxState.tokenCache();
+	std::map<std::size_t, MRSyntaxCacheEntry>::iterator found = tokenCache.find(lineStart);
+
+	if (found != tokenCache.end() && found->second.stateIn == previousState) return found->second.syntaxLine;
 
 	MRSyntaxLineResult syntaxLine = tmrHighlightTextLine(mBufferModel.language(), mBufferModel.lineText(lineStart), previousState);
 
-	mSyntaxTokenCache[lineStart] = MRSyntaxCacheEntry(previousState, syntaxLine);
+	tokenCache[lineStart] = MRSyntaxCacheEntry(previousState, syntaxLine);
 	return syntaxLine;
 }
 
@@ -4192,7 +4446,7 @@ void MRFileEditor::applyLiveWordWrapAfterTextInput() {
 
 void MRFileEditor::ensureCursorVisible(bool centerCursor) {
 	int visualColumn = displayedCursorColumn();
-	int line = static_cast<int>(visibleLineForDocumentLine(mBufferModel.lineIndex(mBufferModel.cursor())));
+	int line = static_cast<int>(visibleLineForDocumentLine(cachedCursorLineIndex()));
 	int targetX = delta.x;
 	int targetY = delta.y;
 	int viewportWidth = textViewportWidth();
@@ -4210,6 +4464,7 @@ void MRFileEditor::ensureCursorVisible(bool centerCursor) {
 }
 
 void MRFileEditor::moveCursor(std::size_t target, bool extendSelection, bool centerCursor, int requestedVisualColumn) {
+	const auto startedAt = std::chrono::steady_clock::now();
 	target = canonicalCursorOffset(std::min(target, mBufferModel.length()));
 	if (extendSelection) {
 		std::size_t anchor = mBufferModel.hasSelection() ? mBufferModel.selection().anchor : mBufferModel.cursor();
@@ -4221,14 +4476,49 @@ void MRFileEditor::moveCursor(std::size_t target, bool extendSelection, bool cen
 			mBufferModel.setCursorAndSelection(target, target, target);
 		mSelectionAnchor = target;
 	}
-	if (freeCursorMovementEnabled() && requestedVisualColumn >= 0) mCursorVisualColumn = std::max(actualCursorVisualColumn(target), requestedVisualColumn);
-	else
-		mCursorVisualColumn = actualCursorVisualColumn(target);
-	if (useApproximateLargeFileMetrics()) updateMetrics();
-	ensureCursorVisible(centerCursor);
+	std::chrono::steady_clock::duration visualColumnElapsed{};
+	std::chrono::steady_clock::duration updateMetricsElapsed{};
+	std::chrono::steady_clock::duration ensureVisibleElapsed{};
+	std::chrono::steady_clock::duration updateIndicatorElapsed{};
+	std::chrono::steady_clock::duration drawViewElapsed{};
+	{
+		const auto visualColumnStartedAt = std::chrono::steady_clock::now();
+		if (freeCursorMovementEnabled() && requestedVisualColumn >= 0) mCursorVisualColumn = std::max(actualCursorVisualColumn(target), requestedVisualColumn);
+		else
+			mCursorVisualColumn = actualCursorVisualColumn(target);
+		visualColumnElapsed = std::chrono::steady_clock::now() - visualColumnStartedAt;
+	}
+	if (useApproximateLargeFileMetrics()) {
+		const auto updateMetricsStartedAt = std::chrono::steady_clock::now();
+		updateMetrics();
+		updateMetricsElapsed = std::chrono::steady_clock::now() - updateMetricsStartedAt;
+	}
+	{
+		const auto ensureVisibleStartedAt = std::chrono::steady_clock::now();
+		ensureCursorVisible(centerCursor);
+		ensureVisibleElapsed = std::chrono::steady_clock::now() - ensureVisibleStartedAt;
+	}
 	scheduleSyntaxWarmupIfNeeded();
-	updateIndicator();
-	drawView();
+	{
+		const auto updateIndicatorStartedAt = std::chrono::steady_clock::now();
+		updateIndicator();
+		updateIndicatorElapsed = std::chrono::steady_clock::now() - updateIndicatorStartedAt;
+	}
+	{
+		const auto drawViewStartedAt = std::chrono::steady_clock::now();
+		drawView();
+		drawViewElapsed = std::chrono::steady_clock::now() - drawViewStartedAt;
+	}
+	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+	if (totalElapsed >= kSlowNavigationTraceThreshold) {
+		std::ostringstream line;
+		line << "Phase1 nav moveCursor total_us=" << traceMicros(totalElapsed) << " visual_column_us=" << traceMicros(visualColumnElapsed) << " update_metrics_us=" << traceMicros(updateMetricsElapsed)
+		     << " ensure_visible_us=" << traceMicros(ensureVisibleElapsed) << " update_indicator_us=" << traceMicros(updateIndicatorElapsed) << " draw_view_us=" << traceMicros(drawViewElapsed)
+		     << " target=" << target << " extend=" << (extendSelection ? 1 : 0) << " center=" << (centerCursor ? 1 : 0) << " requested_visual=" << requestedVisualColumn << " cursor_line=" << cachedCursorLineIndex()
+		     << " delta_x=" << delta.x << " delta_y=" << delta.y << " len=" << mBufferModel.length() << " add=" << mBufferModel.document().addBufferLength() << " pieces=" << mBufferModel.document().pieceCount()
+		     << " undo=" << mBufferModel.undoStackDepth() << " redo=" << mBufferModel.redoStackDepth();
+		appendDirectProbeLog(line.str());
+	}
 }
 
 bool MRFileEditor::isTextInputEvent(const TEvent &event) const {
@@ -4350,6 +4640,7 @@ void MRFileEditor::handleKeyDown(TEvent &event) {
 	ushort key = ctrlToArrow(event.keyDown.keyCode);
 	const ushort mods = event.keyDown.controlKeyState;
 	bool extend = hasShiftModifier(mods);
+	int coalescedPageCount = 1;
 	const bool shiftTabPressed = event.keyDown.keyCode == kbShiftTab || ((event.keyDown.keyCode == kbTab || event.keyDown.keyCode == kbCtrlI) && hasShiftModifier(mods));
 
 	if (shiftTabPressed) {
@@ -4385,11 +4676,47 @@ void MRFileEditor::handleKeyDown(TEvent &event) {
 			moveCursor(lineEndOffset(cursorOffset()), extend, false);
 			break;
 		case kbPgUp:
-			moveCursor(lineMoveOffset(cursorOffset(), -(std::max(2, visibleTextRows()) - 1), displayedCursorColumn()), extend, true, displayedCursorColumn());
+		{
+			static constexpr int maxCoalescedPages = 8;
+
+			if (TApplication *app = dynamic_cast<TApplication *>(TProgram::application); app != nullptr) {
+				while (coalescedPageCount < maxCoalescedPages) {
+					TEvent queuedEvent;
+					std::memset(&queuedEvent, 0, sizeof(queuedEvent));
+					static_cast<TView *>(app)->getEvent(queuedEvent, 0);
+					if (queuedEvent.what == evNothing) break;
+					if (queuedEvent.what == evKeyDown && ctrlToArrow(queuedEvent.keyDown.keyCode) == kbPgUp && queuedEvent.keyDown.controlKeyState == mods) {
+						++coalescedPageCount;
+						continue;
+					}
+					app->putEvent(queuedEvent);
+					break;
+				}
+			}
+			moveCursor(lineMoveOffset(cursorOffset(), -(std::max(2, visibleTextRows()) - 1) * coalescedPageCount, displayedCursorColumn()), extend, true, displayedCursorColumn());
 			break;
+		}
 		case kbPgDn:
-			moveCursor(lineMoveOffset(cursorOffset(), std::max(2, visibleTextRows()) - 1, displayedCursorColumn()), extend, true, displayedCursorColumn());
+		{
+			static constexpr int maxCoalescedPages = 8;
+
+			if (TApplication *app = dynamic_cast<TApplication *>(TProgram::application); app != nullptr) {
+				while (coalescedPageCount < maxCoalescedPages) {
+					TEvent queuedEvent;
+					std::memset(&queuedEvent, 0, sizeof(queuedEvent));
+					static_cast<TView *>(app)->getEvent(queuedEvent, 0);
+					if (queuedEvent.what == evNothing) break;
+					if (queuedEvent.what == evKeyDown && ctrlToArrow(queuedEvent.keyDown.keyCode) == kbPgDn && queuedEvent.keyDown.controlKeyState == mods) {
+						++coalescedPageCount;
+						continue;
+					}
+					app->putEvent(queuedEvent);
+					break;
+				}
+			}
+			moveCursor(lineMoveOffset(cursorOffset(), (std::max(2, visibleTextRows()) - 1) * coalescedPageCount, displayedCursorColumn()), extend, true, displayedCursorColumn());
 			break;
+		}
 		case kbCtrlHome:
 			moveCursor(0, false, false);
 			break;
@@ -4584,23 +4911,13 @@ void MRFileEditor::handleMouse(TEvent &event) {
 	const TextViewportGeometry viewport = textViewportGeometry();
 	const TPoint local = makeLocal(event.mouse.where);
 	std::size_t foldLineIndex = 0;
-	auto rebuildEffectiveClosedFolds = [this]() {
-		mEffectiveClosedFoldSpans.clear();
-		std::size_t coveredUntil = 0;
-		bool haveCovered = false;
-		for (const std::pair<const std::size_t, MRFoldSpan> &entry : mClosedFoldSpans) {
-			const MRFoldSpan &closedSpan = entry.second;
-			if (haveCovered && closedSpan.startLine <= coveredUntil) continue;
-			mEffectiveClosedFoldSpans.push_back(closedSpan);
-			coveredUntil = closedSpan.endLine;
-			haveCovered = true;
-		}
-	};
 	auto gutterSpanAtPoint = [this, &local, &viewport](std::size_t lineIndex) noexcept -> const MRFoldSpan * {
+		const std::vector<unsigned short> &displayLevels = mFoldState.visibleState().displayLevels;
+		const std::vector<MRFoldSpan> &visibleSpans = mFoldState.visibleState().spans;
 		const int displayColumn = local.x - viewport.codeFoldingX;
-		if (displayColumn < 0 || static_cast<std::size_t>(displayColumn) >= mVisibleFoldDisplayLevels.size()) return nullptr;
-		const unsigned short level = mVisibleFoldDisplayLevels[static_cast<std::size_t>(displayColumn)];
-		for (const MRFoldSpan &span : mVisibleFoldSpans) {
+		if (displayColumn < 0 || static_cast<std::size_t>(displayColumn) >= displayLevels.size()) return nullptr;
+		const unsigned short level = displayLevels[static_cast<std::size_t>(displayColumn)];
+		for (const MRFoldSpan &span : visibleSpans) {
 			if (span.level != level) continue;
 			if (!span.open) {
 				if (span.startLine == lineIndex) return &span;
@@ -4610,12 +4927,15 @@ void MRFileEditor::handleMouse(TEvent &event) {
 		}
 		return nullptr;
 	};
-	auto toggleFoldColumnsFromPoint = [this, &local, &viewport, &rebuildEffectiveClosedFolds]() -> bool {
+	auto toggleFoldColumnsFromPoint = [this, &local, &viewport]() -> bool {
+		const std::vector<unsigned short> &displayLevels = mFoldState.visibleState().displayLevels;
+		const std::vector<MRFoldSpan> &visibleSpans = mFoldState.visibleState().spans;
+		std::map<std::size_t, MRFoldSpan> &closedFoldSpans = mFoldState.closedFoldSpans();
 		const int displayColumn = local.x - viewport.codeFoldingX;
-		if (displayColumn < 0 || static_cast<std::size_t>(displayColumn) >= mVisibleFoldDisplayLevels.size()) return false;
-		const unsigned short level = mVisibleFoldDisplayLevels[static_cast<std::size_t>(displayColumn)];
+		if (displayColumn < 0 || static_cast<std::size_t>(displayColumn) >= displayLevels.size()) return false;
+		const unsigned short level = displayLevels[static_cast<std::size_t>(displayColumn)];
 		bool anyOpen = false;
-		for (const MRFoldSpan &span : mVisibleFoldSpans)
+		for (const MRFoldSpan &span : visibleSpans)
 			if (span.level >= level && span.open) {
 				anyOpen = true;
 				break;
@@ -4625,11 +4945,11 @@ void MRFileEditor::handleMouse(TEvent &event) {
 		std::size_t foldCursorTarget = cursorLine;
 		bool foldCursorTargetValid = false;
 
-		for (const MRFoldSpan &span : mVisibleFoldSpans) {
+		for (const MRFoldSpan &span : visibleSpans) {
 			if (anyOpen) {
 				if (span.level < level) continue;
 				if (!span.open) continue;
-				mClosedFoldSpans[span.startLine] = MRFoldSpan(span.startLine, span.endLine, span.level, span.sourceKind, false, span.siblingContinuation);
+				closedFoldSpans[span.startLine] = MRFoldSpan(span.startLine, span.endLine, span.level, span.sourceKind, false, span.siblingContinuation);
 				if (cursorLine > span.startLine && cursorLine <= span.endLine && (!foldCursorTargetValid || span.startLine < foldCursorTarget)) {
 					foldCursorTarget = span.startLine;
 					foldCursorTargetValid = true;
@@ -4637,13 +4957,17 @@ void MRFileEditor::handleMouse(TEvent &event) {
 			} else {
 				if (span.level != level) continue;
 				if (span.open) continue;
-				mClosedFoldSpans.erase(span.startLine);
+				closedFoldSpans.erase(span.startLine);
 			}
 			changed = true;
 		}
 		if (!changed) return false;
-		rebuildEffectiveClosedFolds();
+		mFoldState.rebuildEffectiveClosedFolds();
 		if (foldCursorTargetValid) moveCursor(mBufferModel.lineStartByIndex(foldCursorTarget), false, false);
+		if (mFoldState.warmupState().taskId != 0) {
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mFoldState.warmupState().taskId));
+			clearFoldWarmupTask(mFoldState.warmupState().taskId);
+		}
 		invalidateFoldCache();
 		updateMetrics();
 		drawView();
@@ -4832,7 +5156,29 @@ bool MRFileEditor::writeDocumentToPath(const char *targetPath) {
 }
 
 void MRFileEditor::scheduleLineIndexWarmupIfNeeded() {
-	if (mSuppressLargeFileLineIndexWarmup) return;
+	if (pieceTableOnlyPhaseActive()) {
+		if (mLineIndexWarmupTaskId != 0) {
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mLineIndexWarmupTaskId));
+			clearLineIndexWarmupTask(mLineIndexWarmupTaskId);
+		}
+		return;
+	}
+	if (useApproximateLargeFileMetrics()) {
+		std::uint64_t cancelledTaskId = mLineIndexWarmupTaskId;
+		if (cancelledTaskId != 0) {
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledTaskId));
+			clearLineIndexWarmupTask(cancelledTaskId);
+		}
+		if (shouldTraceLargeFileWarmupDiagnostics()) {
+			std::string detail = "action=skip-approx existing_task=" + std::to_string(cancelledTaskId);
+			traceLargeFileWarmup(mLastLineIndexWarmupTrace, "line-index", std::move(detail));
+		}
+		return;
+	}
+	if (mSuppressLargeFileLineIndexWarmup) {
+		if (shouldTraceLargeFileWarmupDiagnostics()) traceLargeFileWarmup(mLastLineIndexWarmupTrace, "line-index", "action=skip-suppressed");
+		return;
+	}
 	if (!mBufferModel.document().hasMappedOriginal() || mBufferModel.document().exactLineCountKnown()) {
 		std::uint64_t cancelledTaskId = mLineIndexWarmupTaskId;
 		bool hadTask = cancelledTaskId != 0;
@@ -4840,16 +5186,37 @@ void MRFileEditor::scheduleLineIndexWarmupIfNeeded() {
 		mLineIndexWarmupDocumentId = 0;
 		mLineIndexWarmupVersion = 0;
 		if (hadTask) {
-			if (shouldTraceLargeFileDiagnostics()) traceLargeFileMessage("line-index-cancel", "reason=exact-line-count-known");
 			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledTaskId));
 			notifyWindowTaskStateChanged();
+		}
+		if (shouldTraceLargeFileWarmupDiagnostics()) {
+			std::string detail = "action=skip-exact-known existing_task=" + std::to_string(cancelledTaskId);
+			traceLargeFileWarmup(mLastLineIndexWarmupTrace, "line-index", std::move(detail));
+		}
+		return;
+	}
+	if (mBufferModel.document().hasMappedOriginal() && mBufferModel.document().addBufferLength() > 0) {
+		std::uint64_t cancelledTaskId = mLineIndexWarmupTaskId;
+		if (cancelledTaskId != 0) {
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledTaskId));
+			clearLineIndexWarmupTask(cancelledTaskId);
+		}
+		if (shouldTraceLargeFileWarmupDiagnostics()) {
+			std::string detail = "action=skip-edited-mapped existing_task=" + std::to_string(cancelledTaskId) + " add_buffer=" + std::to_string(mBufferModel.document().addBufferLength());
+			traceLargeFileWarmup(mLastLineIndexWarmupTrace, "line-index", std::move(detail));
 		}
 		return;
 	}
 
 	const std::size_t docId = mBufferModel.documentId();
 	const std::size_t version = mBufferModel.version();
-	if (mLineIndexWarmupTaskId != 0 && mLineIndexWarmupDocumentId == docId && mLineIndexWarmupVersion == version) return;
+	if (mLineIndexWarmupTaskId != 0 && mLineIndexWarmupDocumentId == docId && mLineIndexWarmupVersion == version) {
+		if (shouldTraceLargeFileWarmupDiagnostics()) {
+			std::string detail = "action=reuse task=" + std::to_string(mLineIndexWarmupTaskId);
+			traceLargeFileWarmup(mLastLineIndexWarmupTrace, "line-index", std::move(detail));
+		}
+		return;
+	}
 
 	MRTextBufferModel::ReadSnapshot snapshot = mBufferModel.readSnapshot();
 	std::uint64_t previousTaskId = mLineIndexWarmupTaskId;
@@ -4873,15 +5240,19 @@ void MRFileEditor::scheduleLineIndexWarmupIfNeeded() {
 		result.payload = std::make_shared<mr::coprocessor::LineIndexWarmupPayload>(warmup);
 		return result;
 	});
-	if (shouldTraceLargeFileDiagnostics()) {
-		std::ostringstream detail;
-		detail << "task=" << mLineIndexWarmupTaskId << " estimated_lines=" << mBufferModel.estimatedLineCount() << " cursor_line=" << mBufferModel.lineIndex(mBufferModel.cursor()) << " delta_y=" << delta.y;
-		traceLargeFileMessage("line-index-schedule", detail.str());
+	if (shouldTraceLargeFileWarmupDiagnostics()) {
+		std::string detail = "action=schedule task=" + std::to_string(mLineIndexWarmupTaskId) + " estimated_lines=" + std::to_string(mBufferModel.estimatedLineCount()) + " cursor_line=" +
+		                     std::to_string(mBufferModel.lineIndex(mBufferModel.cursor()));
+		traceLargeFileWarmup(mLastLineIndexWarmupTrace, "line-index", std::move(detail));
 	}
 	if (mLineIndexWarmupTaskId != previousTaskId) notifyWindowTaskStateChanged();
 }
 
 void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
+	if (!syntaxPipelineEnabled()) {
+		resetSyntaxWarmupState(true);
+		return;
+	}
 	const int textRows = visibleTextRows();
 
 	if (mBufferModel.language() == MRSyntaxLanguage::PlainText || textRows <= 0) {
@@ -4892,29 +5263,37 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 	const std::size_t docId = mBufferModel.documentId();
 	const std::size_t version = mBufferModel.version();
 	const MRSyntaxLanguage language = mBufferModel.language();
+	const bool viewportLocalLargeFileWarmup = useApproximateLargeFileMetrics();
 	const bool exactLineCountKnown = mBufferModel.exactLineCountKnown();
 	const std::size_t exactLineCount = exactLineCountKnown ? std::max<std::size_t>(1, mBufferModel.lineCount()) : 0;
-	std::size_t visibleTopLine = static_cast<std::size_t>(std::max(delta.y - 4, 0));
+	MRSyntaxDerivedState::WarmupState &warmupState = mSyntaxState.warmupState();
+	MRSyntaxDerivedState::PrefetchState &prefetchState = mSyntaxState.prefetchState();
+	std::size_t visibleTopLine = static_cast<std::size_t>(std::max(delta.y - (viewportLocalLargeFileWarmup ? 1 : 4), 0));
 	std::size_t documentTopLine = documentLineForVisibleLine(visibleTopLine);
 	if (exactLineCountKnown && documentTopLine >= exactLineCount) documentTopLine = exactLineCount - 1;
-	const int rowBudget = std::max(textRows + 8, 8);
-	const int backgroundRowBudget = rowBudget * 3;
+	const int rowBudget = viewportLocalLargeFileWarmup ? std::max(textRows + 4, 8) : std::max(textRows + 8, 8);
+	const int backgroundRowBudget = viewportLocalLargeFileWarmup ? rowBudget : rowBudget * 3;
 	const bool statefulSyntax = isStatefulSyntaxLanguage(language);
 	MRTextBufferModel::ReadSnapshot snapshot = mBufferModel.readSnapshot();
 	std::vector<std::size_t> visibleLineStarts = syntaxWarmupLineStarts(documentTopLine, rowBudget);
 	if (visibleLineStarts.empty()) return;
+	mSyntaxState.ensureWarmedLineRangeOwner(docId, language);
 
-	if (mSyntaxPrefetchDocumentId != docId || mSyntaxPrefetchVersion != version || mSyntaxPrefetchLanguage != language) {
-		mSyntaxPrefetchDocumentId = docId;
-		mSyntaxPrefetchVersion = version;
-		mSyntaxPrefetchTargetBottomLine = documentTopLine;
-		mSyntaxPrefetchReachedBottomLine = documentTopLine;
-		mSyntaxPrefetchLanguage = language;
+	if (viewportLocalLargeFileWarmup || prefetchState.documentId != docId || prefetchState.version != version || prefetchState.language != language) {
+		prefetchState.documentId = docId;
+		prefetchState.version = version;
+		prefetchState.targetBottomLine = documentTopLine;
+		prefetchState.reachedBottomLine = documentTopLine;
+		prefetchState.language = language;
 	}
-	mSyntaxPrefetchTargetBottomLine = std::max(mSyntaxPrefetchTargetBottomLine, documentTopLine + static_cast<std::size_t>(backgroundRowBudget));
+	if (viewportLocalLargeFileWarmup) {
+		prefetchState.targetBottomLine = documentTopLine + static_cast<std::size_t>(backgroundRowBudget);
+		prefetchState.reachedBottomLine = documentTopLine;
+	} else
+		prefetchState.targetBottomLine = std::max(prefetchState.targetBottomLine, documentTopLine + static_cast<std::size_t>(backgroundRowBudget));
 	if (exactLineCountKnown) {
-		if (mSyntaxPrefetchTargetBottomLine > exactLineCount) mSyntaxPrefetchTargetBottomLine = exactLineCount;
-		if (mSyntaxPrefetchReachedBottomLine > exactLineCount) mSyntaxPrefetchReachedBottomLine = exactLineCount;
+		if (prefetchState.targetBottomLine > exactLineCount) prefetchState.targetBottomLine = exactLineCount;
+		if (prefetchState.reachedBottomLine > exactLineCount) prefetchState.reachedBottomLine = exactLineCount;
 	}
 	auto buildSyntaxRequest = [&](std::size_t requestTopLine, int requiredChunkRows, int warmupChunkRows, std::vector<std::size_t> &requiredLineStarts, std::vector<std::size_t> &warmupLineStarts,
 	                              MRSyntaxLineState &requiredState, std::size_t &requestBottomLine) {
@@ -4926,7 +5305,7 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 		if (requiredLineStarts.empty()) return;
 
 		if (statefulSyntax) {
-			std::size_t preludeLines = static_cast<std::size_t>(rowBudget * 4);
+			std::size_t preludeLines = static_cast<std::size_t>(rowBudget * (viewportLocalLargeFileWarmup ? 2 : 4));
 			std::size_t stateTopLine = requestTopLine > preludeLines ? requestTopLine - preludeLines : 0;
 			MRSyntaxCheckpointEntry checkpoint;
 			bool useCheckpointStart = false;
@@ -4975,17 +5354,54 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 	MRSyntaxLineState requiredState;
 	std::size_t bottomLine = 0;
 	std::size_t requestTopLine = visibleTopLine;
+	std::size_t trimmedCoveredPrefixCount = 0;
 	buildSyntaxRequest(visibleTopLine, static_cast<int>(visibleLineStarts.size()), backgroundRowBudget, requiredLineStarts, warmupLineStarts, requiredState, bottomLine);
-	const bool visibleCacheComplete = hasSyntaxTokensForLineStarts(requiredLineStarts, requiredState);
+	const bool visibleRangeCovered = syntaxWarmedLineRangeCovered(requestTopLine, bottomLine);
+	MRSyntaxLineState visibleCoveredState = requiredState;
+	const std::size_t visibleCoveredPrefixCount = syntaxCachedCoveragePrefix(requiredLineStarts, requiredState, &visibleCoveredState);
+	const bool visibleCacheComplete = visibleRangeCovered && visibleCoveredPrefixCount == requiredLineStarts.size();
+
+	if (!visibleCacheComplete && visibleCoveredPrefixCount > 0) {
+		trimmedCoveredPrefixCount = visibleCoveredPrefixCount;
+		requiredState = visibleCoveredState;
+		requiredLineStarts.erase(requiredLineStarts.begin(), requiredLineStarts.begin() + static_cast<std::ptrdiff_t>(visibleCoveredPrefixCount));
+		if (visibleCoveredPrefixCount >= warmupLineStarts.size()) warmupLineStarts.clear();
+		else
+			warmupLineStarts.erase(warmupLineStarts.begin(), warmupLineStarts.begin() + static_cast<std::ptrdiff_t>(visibleCoveredPrefixCount));
+		if (!requiredLineStarts.empty()) requestTopLine = mBufferModel.lineIndex(requiredLineStarts.front());
+	}
+
+	if (viewportLocalLargeFileWarmup && visibleCacheComplete) {
+		std::uint64_t previousTaskId = warmupState.taskId;
+		bool hadTask = previousTaskId != 0;
+		warmupState = MRSyntaxDerivedState::WarmupState();
+		warmupState.documentId = docId;
+		warmupState.version = version;
+		warmupState.topLine = visibleTopLine;
+		warmupState.bottomLine = bottomLine;
+		warmupState.language = language;
+		prefetchState.reachedBottomLine = std::max(prefetchState.reachedBottomLine, bottomLine);
+		if (exactLineCountKnown && prefetchState.reachedBottomLine > exactLineCount) prefetchState.reachedBottomLine = exactLineCount;
+		if (hadTask) {
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
+			notifyWindowTaskStateChanged();
+		}
+		if (shouldTraceLargeFileWarmupDiagnostics()) {
+			std::string detail = "action=cancel-visible-complete previous_task=" + std::to_string(previousTaskId) + " top=" + std::to_string(visibleTopLine) + " bottom=" + std::to_string(bottomLine) +
+			                     " prefetch=" + std::to_string(prefetchState.reachedBottomLine) + "/" + std::to_string(prefetchState.targetBottomLine);
+			traceLargeFileWarmup(mLastSyntaxWarmupTrace, "syntax", std::move(detail));
+		}
+		return;
+	}
 
 	if (visibleCacheComplete) {
-		std::size_t prefetchCursor = std::max(visibleTopLine, mSyntaxPrefetchReachedBottomLine);
+		std::size_t prefetchCursor = std::max(visibleTopLine, prefetchState.reachedBottomLine);
 
-		while (prefetchCursor < mSyntaxPrefetchTargetBottomLine) {
+		while (prefetchCursor < prefetchState.targetBottomLine) {
 			std::vector<std::size_t> continuationRequiredLineStarts;
 			std::vector<std::size_t> continuationWarmupLineStarts;
 			MRSyntaxLineState continuationState;
-			const int continuationRows = static_cast<int>(std::min<std::size_t>(static_cast<std::size_t>(rowBudget), mSyntaxPrefetchTargetBottomLine - prefetchCursor));
+			const int continuationRows = static_cast<int>(std::min<std::size_t>(static_cast<std::size_t>(rowBudget), prefetchState.targetBottomLine - prefetchCursor));
 			std::size_t continuationBottomLine = 0;
 
 			if (continuationRows <= 0) break;
@@ -4993,12 +5409,32 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 			if (continuationRequiredLineStarts.empty()) {
 				std::size_t eofBottomLine = prefetchCursor;
 				if (mBufferModel.exactLineCountKnown()) eofBottomLine = std::max<std::size_t>(1, mBufferModel.lineCount());
-				mSyntaxPrefetchReachedBottomLine = std::max(mSyntaxPrefetchReachedBottomLine, eofBottomLine);
-				if (mSyntaxPrefetchTargetBottomLine > eofBottomLine) mSyntaxPrefetchTargetBottomLine = eofBottomLine;
+				prefetchState.reachedBottomLine = std::max(prefetchState.reachedBottomLine, eofBottomLine);
+				if (prefetchState.targetBottomLine > eofBottomLine) prefetchState.targetBottomLine = eofBottomLine;
 				break;
 			}
-			if (!hasSyntaxTokensForLineStarts(continuationRequiredLineStarts, continuationState)) {
-				requestTopLine = prefetchCursor;
+			const bool continuationRangeCovered = syntaxWarmedLineRangeCovered(prefetchCursor, continuationBottomLine);
+			MRSyntaxLineState continuationCoveredState = continuationState;
+			const std::size_t continuationCoveredPrefixCount = syntaxCachedCoveragePrefix(continuationRequiredLineStarts, continuationState, &continuationCoveredState);
+
+			if (!continuationRangeCovered || continuationCoveredPrefixCount != continuationRequiredLineStarts.size()) {
+				trimmedCoveredPrefixCount = continuationCoveredPrefixCount;
+				if (continuationCoveredPrefixCount > 0) {
+					continuationState = continuationCoveredState;
+					continuationRequiredLineStarts.erase(continuationRequiredLineStarts.begin(),
+					                                     continuationRequiredLineStarts.begin() + static_cast<std::ptrdiff_t>(continuationCoveredPrefixCount));
+					if (continuationCoveredPrefixCount >= continuationWarmupLineStarts.size()) continuationWarmupLineStarts.clear();
+					else
+						continuationWarmupLineStarts.erase(continuationWarmupLineStarts.begin(),
+						                                   continuationWarmupLineStarts.begin() + static_cast<std::ptrdiff_t>(continuationCoveredPrefixCount));
+				}
+				if (continuationRequiredLineStarts.empty()) {
+					prefetchState.reachedBottomLine = std::max(prefetchState.reachedBottomLine, continuationBottomLine);
+					if (exactLineCountKnown && prefetchState.reachedBottomLine > exactLineCount) prefetchState.reachedBottomLine = exactLineCount;
+					prefetchCursor = prefetchState.reachedBottomLine;
+					continue;
+				}
+				requestTopLine = mBufferModel.lineIndex(continuationRequiredLineStarts.front());
 				requiredLineStarts.swap(continuationRequiredLineStarts);
 				warmupLineStarts.swap(continuationWarmupLineStarts);
 				requiredState = continuationState;
@@ -5007,59 +5443,92 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 				break;
 			}
 			if (continuationBottomLine <= prefetchCursor) break;
-			mSyntaxPrefetchReachedBottomLine = std::max(mSyntaxPrefetchReachedBottomLine, continuationBottomLine);
-			if (exactLineCountKnown && mSyntaxPrefetchReachedBottomLine > exactLineCount) mSyntaxPrefetchReachedBottomLine = exactLineCount;
-			prefetchCursor = mSyntaxPrefetchReachedBottomLine;
+			prefetchState.reachedBottomLine = std::max(prefetchState.reachedBottomLine, continuationBottomLine);
+			if (exactLineCountKnown && prefetchState.reachedBottomLine > exactLineCount) prefetchState.reachedBottomLine = exactLineCount;
+			prefetchCursor = prefetchState.reachedBottomLine;
 		}
 
-		if (mSyntaxPrefetchReachedBottomLine >= mSyntaxPrefetchTargetBottomLine) {
-			std::uint64_t previousTaskId = mSyntaxWarmupTaskId;
+		if (prefetchState.reachedBottomLine >= prefetchState.targetBottomLine) {
+			std::uint64_t previousTaskId = warmupState.taskId;
 			bool hadTask = previousTaskId != 0;
-			mSyntaxWarmupTaskId = 0;
-			mSyntaxWarmupDocumentId = docId;
-			mSyntaxWarmupVersion = version;
-			mSyntaxWarmupTopLine = visibleTopLine;
-			mSyntaxWarmupBottomLine = bottomLine;
-			mSyntaxWarmupLanguage = language;
+			warmupState = MRSyntaxDerivedState::WarmupState();
+			warmupState.documentId = docId;
+			warmupState.version = version;
+			warmupState.topLine = visibleTopLine;
+			warmupState.bottomLine = bottomLine;
+			warmupState.language = language;
 			if (hadTask) {
 				static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
 				notifyWindowTaskStateChanged();
 			}
+			if (shouldTraceLargeFileWarmupDiagnostics()) {
+				std::string detail = "action=skip-prefetch-complete previous_task=" + std::to_string(previousTaskId) + " prefetch=" + std::to_string(prefetchState.reachedBottomLine) + "/" +
+				                     std::to_string(prefetchState.targetBottomLine);
+				traceLargeFileWarmup(mLastSyntaxWarmupTrace, "syntax", std::move(detail));
+			}
 			return;
 		}
 	} else
-		mSyntaxPrefetchReachedBottomLine = visibleTopLine;
-	if (exactLineCountKnown && mSyntaxPrefetchReachedBottomLine > exactLineCount) mSyntaxPrefetchReachedBottomLine = exactLineCount;
+		prefetchState.reachedBottomLine = visibleTopLine;
+	if (exactLineCountKnown && prefetchState.reachedBottomLine > exactLineCount) prefetchState.reachedBottomLine = exactLineCount;
 
 	if (visibleCacheComplete && bottomLine <= visibleTopLine) return;
-	if (mSyntaxWarmupTaskId != 0 && mSyntaxWarmupDocumentId == docId && mSyntaxWarmupVersion == version && mSyntaxWarmupLanguage == language && requestTopLine >= mSyntaxWarmupTopLine &&
-		bottomLine <= mSyntaxWarmupBottomLine)
-		return;
-
-	if (visibleCacheComplete && requiredLineStarts.empty()) {
-		std::uint64_t previousTaskId = mSyntaxWarmupTaskId;
-		bool hadTask = previousTaskId != 0;
-		mSyntaxWarmupTaskId = 0;
-		mSyntaxWarmupDocumentId = docId;
-		mSyntaxWarmupVersion = version;
-		mSyntaxWarmupTopLine = visibleTopLine;
-		mSyntaxWarmupBottomLine = bottomLine;
-		mSyntaxWarmupLanguage = language;
-		if (hadTask) {
-			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
-			notifyWindowTaskStateChanged();
+	if (warmupState.taskId != 0 && warmupState.documentId == docId && warmupState.version == version && warmupState.language == language && requestTopLine >= warmupState.topLine &&
+		bottomLine <= warmupState.bottomLine) {
+		if (shouldTraceLargeFileWarmupDiagnostics()) {
+			std::string detail = "action=reuse task=" + std::to_string(warmupState.taskId) + " top=" + std::to_string(requestTopLine) + " bottom=" + std::to_string(bottomLine);
+			traceLargeFileWarmup(mLastSyntaxWarmupTrace, "syntax", std::move(detail));
 		}
 		return;
 	}
 
-	std::uint64_t previousTaskId = mSyntaxWarmupTaskId;
+	if (visibleCacheComplete && requiredLineStarts.empty()) {
+		std::uint64_t previousTaskId = warmupState.taskId;
+		bool hadTask = previousTaskId != 0;
+		warmupState = MRSyntaxDerivedState::WarmupState();
+		warmupState.documentId = docId;
+		warmupState.version = version;
+		warmupState.topLine = visibleTopLine;
+		warmupState.bottomLine = bottomLine;
+		warmupState.language = language;
+		if (hadTask) {
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
+			notifyWindowTaskStateChanged();
+		}
+		if (shouldTraceLargeFileWarmupDiagnostics()) traceLargeFileWarmup(mLastSyntaxWarmupTrace, "syntax", "action=skip-empty-request");
+		return;
+	}
+
+	if (viewportLocalLargeFileWarmup && warmupState.taskId != 0 && warmupState.documentId == docId && warmupState.version == version && warmupState.language == language) {
+		if (shouldTraceLargeFileWarmupDiagnostics()) {
+			std::string detail = "action=defer-pending task=" + std::to_string(warmupState.taskId) + " top=" + std::to_string(requestTopLine) + " bottom=" + std::to_string(bottomLine) +
+			                     " prefetch=" + std::to_string(prefetchState.reachedBottomLine) + "/" + std::to_string(prefetchState.targetBottomLine);
+			traceLargeFileWarmup(mLastSyntaxWarmupTrace, "syntax", std::move(detail));
+		}
+		return;
+	}
+
+	if (viewportLocalLargeFileWarmup && warmupState.taskId == 0 && mSyntaxState.lastScheduledTopLine() == requestTopLine && mSyntaxState.lastScheduledBottomLine() == bottomLine) {
+		const auto now = std::chrono::steady_clock::now();
+		if (mSyntaxState.lastScheduledAt() != std::chrono::steady_clock::time_point() && now - mSyntaxState.lastScheduledAt() < kLargeFileViewportWarmupDebounce) {
+			if (shouldTraceLargeFileWarmupDiagnostics()) {
+				std::string detail = "action=defer-burst top=" + std::to_string(requestTopLine) + " bottom=" + std::to_string(bottomLine) + " prefetch=" +
+				                     std::to_string(prefetchState.reachedBottomLine) + "/" + std::to_string(prefetchState.targetBottomLine);
+				traceLargeFileWarmup(mLastSyntaxWarmupTrace, "syntax", std::move(detail));
+			}
+			return;
+		}
+	}
+
+	std::uint64_t previousTaskId = warmupState.taskId;
 	if (previousTaskId != 0) static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
-	mSyntaxWarmupDocumentId = docId;
-	mSyntaxWarmupVersion = version;
-	mSyntaxWarmupTopLine = requestTopLine;
-	mSyntaxWarmupBottomLine = bottomLine;
-	mSyntaxWarmupLanguage = language;
-	mSyntaxWarmupTaskId =
+	warmupState.documentId = docId;
+	warmupState.version = version;
+	warmupState.topLine = requestTopLine;
+	warmupState.bottomLine = bottomLine;
+	warmupState.language = language;
+	mSyntaxState.rememberScheduledRequest(requestTopLine, bottomLine, std::chrono::steady_clock::now());
+	warmupState.taskId =
 	    mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::SyntaxWarmup, docId, version, syntaxWarmupTaskLabel(),
 	                                                [snapshot, language, warmupLineStarts, statefulSyntax, requiredState](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
 		mr::coprocessor::Result result;
@@ -5084,11 +5553,89 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 		result.status = mr::coprocessor::TaskStatus::Completed;
 		result.payload = std::make_shared<mr::coprocessor::SyntaxWarmupPayload>(language, std::move(warmed));
 		return result;
-	});
-	if (mSyntaxWarmupTaskId != previousTaskId) notifyWindowTaskStateChanged();
+		});
+	if (shouldTraceLargeFileWarmupDiagnostics()) {
+		std::string detail = "action=schedule task=" + std::to_string(warmupState.taskId) + " top=" + std::to_string(requestTopLine) + " bottom=" + std::to_string(bottomLine) + " lines=" +
+		                     std::to_string(warmupLineStarts.size()) + " skip_prefix=" + std::to_string(trimmedCoveredPrefixCount) + " prefetch=" + std::to_string(prefetchState.reachedBottomLine) +
+		                     "/" + std::to_string(prefetchState.targetBottomLine);
+		traceLargeFileWarmup(mLastSyntaxWarmupTrace, "syntax", std::move(detail));
+	}
+	if (warmupState.taskId != previousTaskId) notifyWindowTaskStateChanged();
+}
+
+void MRFileEditor::scheduleFoldWarmupIfNeeded(std::size_t scanTopLine, std::size_t scanBottomLine, std::size_t topLine, std::size_t requestBottomLine, MRSyntaxLanguage language) {
+	if (!foldingPipelineEnabled()) {
+		if (mFoldState.warmupState().taskId != 0) {
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mFoldState.warmupState().taskId));
+			clearFoldWarmupTask(mFoldState.warmupState().taskId);
+		}
+		invalidateFoldCache();
+		return;
+	}
+	MRFoldingDerivedState::WarmupState &warmupState = mFoldState.warmupState();
+	MRFoldingDerivedState::VisibleState &visibleState = mFoldState.visibleState();
+	if (scanBottomLine <= scanTopLine) {
+		clearFoldWarmupTask();
+		return;
+	}
+
+	const std::size_t docId = mBufferModel.documentId();
+	const std::size_t version = mBufferModel.version();
+	if (warmupState.taskId != 0 && warmupState.documentId == docId && warmupState.version == version && warmupState.language == language && scanTopLine >= warmupState.topLine &&
+	    scanBottomLine <= warmupState.bottomLine)
+		return;
+
+	MRTextBufferModel::ReadSnapshot snapshot = mBufferModel.readSnapshot();
+
+	std::uint64_t previousTaskId = warmupState.taskId;
+	if (previousTaskId != 0) static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(previousTaskId));
+	warmupState.documentId = docId;
+	warmupState.version = version;
+	warmupState.topLine = scanTopLine;
+	warmupState.bottomLine = scanBottomLine;
+	warmupState.language = language;
+	warmupState.taskId = mr::coprocessor::globalCoprocessor().submit(
+	    mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::FoldWarmup, docId, version, foldWarmupTaskLabel(),
+	    [snapshot, language, scanTopLine, scanBottomLine, topLine, requestBottomLine, closedFoldSpans = mFoldState.closedFoldSpans()](const mr::coprocessor::TaskInfo &info,
+	                                                                                                                                                                               std::stop_token stopToken) {
+		    mr::coprocessor::Result result;
+		    auto shouldStop = [&]() noexcept { return stopToken.stop_requested() || info.cancelRequested(); };
+		    result.task = info;
+		    if (shouldStop()) {
+			    result.status = mr::coprocessor::TaskStatus::Cancelled;
+			    return result;
+		    }
+
+		    std::vector<std::string> lineTexts = mrBuildViewportScanLineTextsParallel(snapshot, scanTopLine, scanBottomLine, topLine, requestBottomLine);
+		    if (shouldStop()) {
+			    result.status = mr::coprocessor::TaskStatus::Cancelled;
+			    return result;
+		    }
+
+		    const std::size_t actualBottomLine = scanTopLine + lineTexts.size();
+		    MRFoldScanOutput scan = computeFoldSpansForLineTexts(lineTexts, scanTopLine, topLine, requestBottomLine, language, closedFoldSpans);
+		    result.status = mr::coprocessor::TaskStatus::Completed;
+		    result.payload = std::make_shared<MRFoldWarmupPayload>(language, scanTopLine, actualBottomLine, scan.visibleMaxLevel, std::move(lineTexts), std::move(scan.spans));
+		    return result;
+	    });
+	if (shouldTraceLargeFileWarmupDiagnostics()) {
+		std::string detail = "action=schedule task=" + std::to_string(warmupState.taskId) + " top=" + std::to_string(scanTopLine) + " bottom=" + std::to_string(scanBottomLine) + " cached=" +
+		                     std::to_string(visibleState.topLine) + "/" + std::to_string(visibleState.bottomLine);
+		traceLargeFileWarmup(mLastComputeWarmupTrace, "fold", std::move(detail));
+	}
+	if (warmupState.taskId != previousTaskId) notifyWindowTaskStateChanged();
 }
 
 void MRFileEditor::scheduleSaveNormalizationWarmupIfNeeded() {
+	if (pieceTableOnlyPhaseActive()) {
+		if (mSaveNormalizationWarmupTaskId != 0) {
+			std::uint64_t cancelledTaskId = mSaveNormalizationWarmupTaskId;
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledTaskId));
+			clearSaveNormalizationWarmupTask(cancelledTaskId);
+		}
+		invalidateSaveNormalizationCache();
+		return;
+	}
 	invalidateSaveNormalizationCache();
 	if (mSaveNormalizationWarmupTaskId == 0) return;
 	std::uint64_t cancelledTaskId = mSaveNormalizationWarmupTaskId;
@@ -5097,6 +5644,7 @@ void MRFileEditor::scheduleSaveNormalizationWarmupIfNeeded() {
 }
 
 void MRFileEditor::updateMetrics() {
+	const auto startedAt = std::chrono::steady_clock::now();
 	int limitX = 1;
 	int limitY = 1;
 	TextViewportGeometry viewport = textViewportGeometry();
@@ -5105,13 +5653,22 @@ void MRFileEditor::updateMetrics() {
 	int viewportWidth = viewport.width;
 	const int textRows = std::max(1, visibleTextRows());
 	const bool showEofMarker = configuredEditSetupSettings().showEofMarker;
+	const bool quitTail = quitTailTraceActive();
 
-	if (useApproximateLargeFileMetrics()) {
+	if (useApproximateLargeFileMetrics() || quitTail) {
+		const auto lineLimitStartedAt = std::chrono::steady_clock::now();
 		limitX = dynamicLargeFileWidthLimit();
 		limitY = dynamicLargeFileLineLimit();
+		if (shouldTraceLargeFileWarmupDiagnostics()) {
+			const auto totalUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count();
+			const auto lineLimitUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - lineLimitStartedAt).count();
+			mLastUiHotpathTrace = "metrics_us=" + std::to_string(totalUs) + " line_limit_us=" + std::to_string(lineLimitUs) + " cursor_line=" + std::to_string(cachedCursorLineIndex()) +
+			                      " est_lines=" + std::to_string(mBufferModel.estimatedLineCount()) + " limitY=" + std::to_string(limitY);
+		}
 	} else {
 		limitX = longestLineWidth();
-		limitY = std::max<int>(1, static_cast<int>(foldedVisibleLineCount()));
+		limitY = foldingPipelineEnabled() ? std::max<int>(1, static_cast<int>(foldedVisibleLineCount())) : std::max<int>(1, static_cast<int>(mBufferModel.lineCount()));
+		mLastUiHotpathTrace.clear();
 	}
 	limitX = std::max(limitX, displayedCursorColumn() + 1);
 	if (showEofMarker && limitY < INT_MAX) ++limitY;
@@ -5120,7 +5677,6 @@ void MRFileEditor::updateMetrics() {
 	int maxY = std::max(0, limitY - textRows);
 	int newDeltaX = std::min(std::max(delta.x, 0), maxX);
 	int newDeltaY = std::min(std::max(delta.y, 0), maxY);
-	traceLargeFileMetrics("updateMetrics", limitY, maxY, textRows, newDeltaY);
 
 	setLimit(limitX + gutterWidth + rightInset, limitY + viewport.topInset);
 	if (newDeltaX != delta.x || newDeltaY != delta.y) scrollTo(newDeltaX, newDeltaY);
@@ -5131,7 +5687,7 @@ void MRFileEditor::updateIndicator() {
 	mIndicatorUpdateInProgress = true;
 	TextViewportGeometry viewport = textViewportGeometry();
 	unsigned long visualColumn = static_cast<unsigned long>(displayedCursorColumn());
-	unsigned long line = static_cast<unsigned long>(visibleLineForDocumentLine(mBufferModel.lineIndex(mBufferModel.cursor())));
+	unsigned long line = static_cast<unsigned long>(visibleLineForDocumentLine(cachedCursorLineIndex()));
 	long long localX = viewport.localXFromVisualColumn(static_cast<long long>(visualColumn));
 	long long localY = static_cast<long long>(line) - delta.y + viewport.topInset;
 
@@ -5194,31 +5750,36 @@ void MRFileEditor::refreshSyntaxContext() {
 	mBufferModel.setSyntaxContext(hasPersistentFileName() ? fileName : "", mSyntaxTitleHint, codeLanguage);
 	if (mBufferModel.language() != oldLanguage) resetSyntaxWarmupState(true);
 	if (mBufferModel.language() != oldLanguage) {
-		mClosedFoldSpans.clear();
-		mEffectiveClosedFoldSpans.clear();
+		if (mFoldState.warmupState().taskId != 0) {
+			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mFoldState.warmupState().taskId));
+			clearFoldWarmupTask(mFoldState.warmupState().taskId);
+		}
+		mFoldState.clearClosedFolds();
 	}
 	invalidateFoldCache();
 	if (mBufferModel.languageAutomatic() != oldAutomatic) drawView();
 }
 
+bool MRFileEditor::pieceTableOnlyPhaseActive() const noexcept {
+	return true;
+}
+
+bool MRFileEditor::syntaxPipelineEnabled() const noexcept {
+	return true;
+}
+
+bool MRFileEditor::foldingPipelineEnabled() const noexcept {
+	return true;
+}
+
+bool MRFileEditor::miniMapPipelineEnabled() const noexcept {
+	return true;
+}
+
 void MRFileEditor::resetSyntaxWarmupState(bool clearCache) noexcept {
-	std::uint64_t cancelledTaskId = mSyntaxWarmupTaskId;
+	std::uint64_t cancelledTaskId = mSyntaxState.warmupState().taskId;
 	bool hadTask = cancelledTaskId != 0;
-	if (clearCache) {
-		mSyntaxTokenCache.clear();
-		mSyntaxCheckpoints.clear();
-	}
-	mSyntaxWarmupTaskId = 0;
-	mSyntaxWarmupDocumentId = 0;
-	mSyntaxWarmupVersion = 0;
-	mSyntaxWarmupTopLine = 0;
-	mSyntaxWarmupBottomLine = 0;
-	mSyntaxWarmupLanguage = MRSyntaxLanguage::PlainText;
-	mSyntaxPrefetchDocumentId = 0;
-	mSyntaxPrefetchVersion = 0;
-	mSyntaxPrefetchTargetBottomLine = 0;
-	mSyntaxPrefetchReachedBottomLine = 0;
-	mSyntaxPrefetchLanguage = MRSyntaxLanguage::PlainText;
+	mSyntaxState.resetState(clearCache);
 	if (hadTask) {
 		static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledTaskId));
 		notifyWindowTaskStateChanged();
@@ -5226,21 +5787,42 @@ void MRFileEditor::resetSyntaxWarmupState(bool clearCache) noexcept {
 }
 
 void MRFileEditor::invalidateSyntaxCacheFromLineStart(std::size_t lineStart) noexcept {
-	std::map<std::size_t, MRSyntaxCacheEntry>::iterator firstInvalid = mSyntaxTokenCache.lower_bound(lineStart);
+	std::map<std::size_t, MRSyntaxCacheEntry> &tokenCache = mSyntaxState.tokenCache();
+	std::map<std::size_t, MRSyntaxCheckpointEntry> &checkpoints = mSyntaxState.checkpoints();
+	MRSyntaxDerivedState::PrefetchState &prefetchState = mSyntaxState.prefetchState();
+	MRSyntaxDerivedState::WarmupState &warmupState = mSyntaxState.warmupState();
+	std::map<std::size_t, MRSyntaxCacheEntry>::iterator firstInvalid = tokenCache.lower_bound(lineStart);
 	std::size_t lineIndex = mBufferModel.lineIndex(lineStart);
-	std::map<std::size_t, MRSyntaxCheckpointEntry>::iterator firstInvalidCheckpoint = mSyntaxCheckpoints.lower_bound(lineIndex);
+	std::map<std::size_t, MRSyntaxCheckpointEntry>::iterator firstInvalidCheckpoint = checkpoints.lower_bound(lineIndex);
 
-	if (firstInvalid != mSyntaxTokenCache.end()) mSyntaxTokenCache.erase(firstInvalid, mSyntaxTokenCache.end());
-	if (firstInvalidCheckpoint != mSyntaxCheckpoints.end()) mSyntaxCheckpoints.erase(firstInvalidCheckpoint, mSyntaxCheckpoints.end());
-	if (mSyntaxPrefetchDocumentId == mBufferModel.documentId() && mSyntaxPrefetchVersion == mBufferModel.version()) {
-		if (mSyntaxPrefetchReachedBottomLine > lineIndex) mSyntaxPrefetchReachedBottomLine = lineIndex;
-		if (mSyntaxPrefetchTargetBottomLine < lineIndex) mSyntaxPrefetchTargetBottomLine = lineIndex;
+	if (firstInvalid != tokenCache.end()) tokenCache.erase(firstInvalid, tokenCache.end());
+	if (firstInvalidCheckpoint != checkpoints.end()) checkpoints.erase(firstInvalidCheckpoint, checkpoints.end());
+	invalidateSyntaxWarmedLineRangesFrom(lineIndex);
+	if (prefetchState.documentId == mBufferModel.documentId() && prefetchState.version == mBufferModel.version()) {
+		if (prefetchState.reachedBottomLine > lineIndex) prefetchState.reachedBottomLine = lineIndex;
+		if (prefetchState.targetBottomLine < lineIndex) prefetchState.targetBottomLine = lineIndex;
 	}
-	if (mSyntaxWarmupTaskId != 0 && mSyntaxWarmupDocumentId == mBufferModel.documentId() && mSyntaxWarmupVersion == mBufferModel.version() && lineIndex <= mSyntaxWarmupBottomLine) {
-		const std::uint64_t cancelledTaskId = mSyntaxWarmupTaskId;
+	if (warmupState.taskId != 0 && warmupState.documentId == mBufferModel.documentId() && warmupState.version == mBufferModel.version() && lineIndex <= warmupState.bottomLine) {
+		const std::uint64_t cancelledTaskId = warmupState.taskId;
 		static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledTaskId));
 		clearSyntaxWarmupTask(cancelledTaskId);
 	}
+}
+
+void MRFileEditor::clearSyntaxWarmedLineRanges() noexcept {
+	mSyntaxState.clearWarmedLineRanges();
+}
+
+void MRFileEditor::rememberSyntaxWarmedLineRange(std::size_t startLine, std::size_t endLine) noexcept {
+	mSyntaxState.rememberWarmedLineRange(mBufferModel.documentId(), mBufferModel.language(), startLine, endLine);
+}
+
+void MRFileEditor::invalidateSyntaxWarmedLineRangesFrom(std::size_t lineIndex) noexcept {
+	mSyntaxState.invalidateWarmedLineRangesFrom(mBufferModel.documentId(), mBufferModel.language(), lineIndex);
+}
+
+bool MRFileEditor::syntaxWarmedLineRangeCovered(std::size_t startLine, std::size_t endLine) const noexcept {
+	return mSyntaxState.warmedLineRangeCovered(mBufferModel.documentId(), mBufferModel.language(), startLine, endLine);
 }
 
 void MRFileEditor::clearDirtyRanges() noexcept {

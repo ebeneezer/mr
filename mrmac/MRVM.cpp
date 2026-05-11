@@ -75,12 +75,6 @@ void applyVirtualDesktopConfigurationChange(int count);
 
 namespace {
 using Value = VirtualMachine::Value;
-static constexpr double kSlowMrsetupIntrinsicThresholdMs = 5.0;
-static constexpr double kSlowKeymapPayloadThresholdMs = 5.0;
-
-double elapsedMsSince(std::chrono::steady_clock::time_point startedAt) noexcept {
-	return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count();
-}
 
 struct GlobalEntry {
 	int type;
@@ -195,11 +189,8 @@ bool assignKeymapPayloadError(std::string *errorMessage, std::string message) {
 }
 
 bool applyConfiguredActiveKeymapProfilePayload(const std::string &payload, std::string *errorMessage) {
-	const auto startedAt = std::chrono::steady_clock::now();
 	MRKeymapProfile activeProfileRecord;
-	const auto parseStartedAt = std::chrono::steady_clock::now();
 	const auto diagnostics = parseKeymapProfilePayload(payload, activeProfileRecord);
-	const double parseMs = elapsedMsSince(parseStartedAt);
 
 	if (keymapDiagnosticsContainErrors(diagnostics)) return assignKeymapPayloadError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
 	bool ok = false;
@@ -212,21 +203,12 @@ bool applyConfiguredActiveKeymapProfilePayload(const std::string &payload, std::
 		if (errorMessage != nullptr) errorMessage->clear();
 	} else
 		ok = setConfiguredActiveKeymapProfile(activeProfileRecord.name, errorMessage);
-	const double totalMs = elapsedMsSince(startedAt);
-	if (totalMs >= kSlowKeymapPayloadThresholdMs) {
-		std::ostringstream detail;
-		detail << "Slow startup keymap payload: kind=ACTIVE profile='" << activeProfileRecord.name << "' parse_ms=" << parseMs << " total_ms=" << totalMs;
-		mrLogMessage(detail.str());
-	}
 	return ok;
 }
 
 bool applyConfiguredKeymapProfilePayload(const std::string &payload, std::string *errorMessage) {
-	const auto startedAt = std::chrono::steady_clock::now();
 	MRKeymapProfile profile;
-	const auto parseStartedAt = std::chrono::steady_clock::now();
 	const auto diagnostics = parseKeymapProfilePayload(payload, profile);
-	const double parseMs = elapsedMsSince(parseStartedAt);
 
 	if (keymapDiagnosticsContainErrors(diagnostics)) return assignKeymapPayloadError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
 	std::vector<MRKeymapProfile> profiles = configuredKeymapProfiles();
@@ -237,60 +219,29 @@ bool applyConfiguredKeymapProfilePayload(const std::string &payload, std::string
 	for (MRKeymapProfile &existing : profiles)
 		if (existing.name == profile.name) {
 			existing = profile;
-			const std::string profileName = existing.name;
-			const std::size_t bindingCount = existing.bindings.size();
 			if (mrvmIsStartupSettingsMode()) {
 				StartupKeymapBatchState &state = startupKeymapBatchState();
 				state.profiles = std::move(profiles);
 				state.profilesDirty = true;
 				if (errorMessage != nullptr) errorMessage->clear();
-				const double totalMs = elapsedMsSince(startedAt);
-				if (totalMs >= kSlowKeymapPayloadThresholdMs) {
-					std::ostringstream detail;
-					detail << "Slow startup keymap payload: kind=PROFILE profile='" << profileName << "' replaced=1 bindings=" << bindingCount
-					       << " parse_ms=" << parseMs << " total_ms=" << totalMs;
-					mrLogMessage(detail.str());
-				}
 				return true;
 			}
-			const bool ok = setConfiguredKeymapProfiles(profiles, errorMessage);
-			const double totalMs = elapsedMsSince(startedAt);
-			if (totalMs >= kSlowKeymapPayloadThresholdMs) {
-				std::ostringstream detail;
-				detail << "Slow startup keymap payload: kind=PROFILE profile='" << profileName << "' replaced=1 bindings=" << bindingCount << " parse_ms=" << parseMs
-				       << " total_ms=" << totalMs;
-				mrLogMessage(detail.str());
-			}
-			return ok;
+			return setConfiguredKeymapProfiles(profiles, errorMessage);
 		}
 	profiles.push_back(profile);
-	const std::string appendedName = profiles.back().name;
-	const std::size_t appendedBindingCount = profiles.back().bindings.size();
-	bool ok = false;
 	if (mrvmIsStartupSettingsMode()) {
 		StartupKeymapBatchState &state = startupKeymapBatchState();
 		state.profiles = std::move(profiles);
 		state.profilesDirty = true;
 		if (errorMessage != nullptr) errorMessage->clear();
-		ok = true;
-	} else
-		ok = setConfiguredKeymapProfiles(profiles, errorMessage);
-	const double totalMs = elapsedMsSince(startedAt);
-	if (totalMs >= kSlowKeymapPayloadThresholdMs) {
-		std::ostringstream detail;
-		detail << "Slow startup keymap payload: kind=PROFILE profile='" << appendedName << "' replaced=0 bindings=" << appendedBindingCount << " parse_ms=" << parseMs
-		       << " total_ms=" << totalMs;
-		mrLogMessage(detail.str());
+		return true;
 	}
-	return ok;
+	return setConfiguredKeymapProfiles(profiles, errorMessage);
 }
 
 bool applyConfiguredKeymapBindingPayload(const std::string &payload, std::string *errorMessage) {
-	const auto startedAt = std::chrono::steady_clock::now();
 	MRKeymapBindingRecord binding;
-	const auto parseStartedAt = std::chrono::steady_clock::now();
 	const auto diagnostics = parseKeymapBindingPayload(payload, binding);
-	const double parseMs = elapsedMsSince(parseStartedAt);
 	std::vector<MRKeymapProfile> profiles = configuredKeymapProfiles();
 
 	if (keymapDiagnosticsContainErrors(diagnostics)) return assignKeymapPayloadError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
@@ -301,25 +252,14 @@ bool applyConfiguredKeymapBindingPayload(const std::string &payload, std::string
 	for (MRKeymapProfile &profile : profiles)
 		if (profile.name == binding.profileName) {
 			profile.bindings.push_back(binding);
-			const std::string profileName = profile.name;
-			const std::size_t bindingCount = profile.bindings.size();
-			bool ok = false;
 			if (mrvmIsStartupSettingsMode()) {
 				StartupKeymapBatchState &state = startupKeymapBatchState();
 				state.profiles = std::move(profiles);
 				state.profilesDirty = true;
 				if (errorMessage != nullptr) errorMessage->clear();
-				ok = true;
-			} else
-				ok = setConfiguredKeymapProfiles(profiles, errorMessage);
-			const double totalMs = elapsedMsSince(startedAt);
-			if (totalMs >= kSlowKeymapPayloadThresholdMs) {
-				std::ostringstream detail;
-				detail << "Slow startup keymap payload: kind=BIND profile='" << profileName << "' bindings=" << bindingCount << " parse_ms=" << parseMs
-				       << " total_ms=" << totalMs;
-				mrLogMessage(detail.str());
+				return true;
 			}
-			return ok;
+			return setConfiguredKeymapProfiles(profiles, errorMessage);
 		}
 	return assignKeymapPayloadError(errorMessage, "Binding references unknown keymap profile: " + binding.profileName);
 }
@@ -4897,57 +4837,72 @@ static bool deleteCurrentBlock(MREditWindow *win, MRFileEditor *editor, bool lea
 	int mode;
 	uint anchor;
 	uint end;
-	std::string text;
 	if (!currentBlockInfo(win, editor, mode, anchor, end)) return false;
-	text = snapshotEditorText(editor);
 	if (mode == MREditWindow::bmStream) {
 		std::size_t start = std::min<std::size_t>(anchor, end);
 		std::size_t finish = std::max<std::size_t>(anchor, end);
-		text.erase(start, finish - start);
-		if (!replaceEditorBuffer(editor, text, start)) return false;
+		MRTextBufferModel::StagedTransaction transaction(editor->readSnapshot(), "delete-current-block-stream");
+		transaction.erase(MRTextBufferModel::Range(start, finish));
+		if (!editor->applyStagedTransaction(transaction, start, start, start, true).applied()) return false;
 		clearCurrentBlockMode();
 		return true;
 	}
 	if (mode == MREditWindow::bmLine) {
-		SplitTextBuffer buf = splitBufferLines(text);
-		int line1 = std::min(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
-		int line2 = std::max(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
-		if (buf.lines.empty()) return false;
-		line1 = std::max(0, std::min(line1, static_cast<int>(buf.lines.size()) - 1));
-		line2 = std::max(line1, std::min(line2, static_cast<int>(buf.lines.size()) - 1));
-		buf.lines.erase(buf.lines.begin() + line1, buf.lines.begin() + line2 + 1);
-		if (buf.lines.empty()) {
-			buf.lines.emplace_back();
-			buf.trailingNewline = false;
-		}
-		if (!replaceEditorBuffer(editor, joinBufferLines(buf), bufferOffsetForLine(buf, std::min(line1, static_cast<int>(buf.lines.size()) - 1)))) return false;
+		const int anchorLine = lineIndexForPtr(editor, anchor);
+		const int endLine = lineIndexForPtr(editor, end);
+		const std::size_t line1Seed = anchorLine <= endLine ? static_cast<std::size_t>(anchor) : static_cast<std::size_t>(end);
+		const std::size_t line2Seed = anchorLine >= endLine ? static_cast<std::size_t>(anchor) : static_cast<std::size_t>(end);
+		const std::size_t start = editor->lineStartOffset(line1Seed);
+		const std::size_t line2Start = editor->lineStartOffset(line2Seed);
+		const std::size_t finish = editor->nextLineOffset(line2Start);
+		MRTextBufferModel::StagedTransaction transaction(editor->readSnapshot(), "delete-current-block-line");
+		transaction.erase(MRTextBufferModel::Range(start, finish));
+		if (!editor->applyStagedTransaction(transaction, start, start, start, true).applied()) return false;
 		clearCurrentBlockMode();
 		return true;
 	}
 	if (mode == MREditWindow::bmColumn) {
-		SplitTextBuffer buf = splitBufferLines(text);
 		int row1 = std::min(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
 		int row2 = std::max(lineIndexForPtr(editor, anchor), lineIndexForPtr(editor, end));
 		int col1 = std::min(blockCol1Value(win, editor), blockCol2Value(win, editor));
 		int col2 = std::max(blockCol1Value(win, editor), blockCol2Value(win, editor));
 		int width = std::max(1, col2 - col1);
-		if (buf.lines.empty()) return false;
-		row1 = std::max(0, std::min(row1, static_cast<int>(buf.lines.size()) - 1));
-		row2 = std::max(row1, std::min(row2, static_cast<int>(buf.lines.size()) - 1));
+		const int anchorLine = lineIndexForPtr(editor, anchor);
+		const int endLine = lineIndexForPtr(editor, end);
+		const std::size_t startCol = static_cast<std::size_t>(std::max(0, col1 - 1));
+		const std::size_t row1Seed = anchorLine <= endLine ? static_cast<std::size_t>(anchor) : static_cast<std::size_t>(end);
+		std::vector<std::size_t> lineStarts;
+		std::vector<std::string> lineTexts;
+		MRTextBufferModel::StagedTransaction transaction(editor->readSnapshot(), "delete-current-block-column");
+		std::size_t currentLineStart = editor->lineStartOffset(row1Seed);
+
+		lineStarts.reserve(static_cast<std::size_t>(std::max(0, row2 - row1 + 1)));
+		lineTexts.reserve(static_cast<std::size_t>(std::max(0, row2 - row1 + 1)));
 		for (int row = row1; row <= row2; ++row) {
-			std::string &line = buf.lines[static_cast<std::size_t>(row)];
-			std::size_t startCol = static_cast<std::size_t>(std::max(0, col1 - 1));
+			lineStarts.push_back(currentLineStart);
+			lineTexts.push_back(editor->lineTextAtOffset(currentLineStart));
+			currentLineStart = editor->nextLineOffset(currentLineStart);
+		}
+
+		for (int row = row2; row >= row1; --row) {
+			const std::size_t idx = static_cast<std::size_t>(row - row1);
+			const std::size_t lineStart = lineStarts[idx];
+			const std::string &line = lineTexts[idx];
+
 			if (leaveColumnSpace) {
-				if (line.size() < startCol) line.append(startCol - line.size(), ' ');
-				if (line.size() < startCol + static_cast<std::size_t>(width)) line.append(startCol + static_cast<std::size_t>(width) - line.size(), ' ');
-			}
-			if (startCol < line.size()) {
-				if (leaveColumnSpace) line.replace(startCol, static_cast<std::size_t>(width), static_cast<std::size_t>(width), ' ');
-				else
-					line.erase(startCol, std::min<std::size_t>(static_cast<std::size_t>(width), line.size() - startCol));
+				const std::size_t targetLength = std::max(line.size(), startCol + static_cast<std::size_t>(width));
+				if (targetLength > line.size()) transaction.insert(lineStart + line.size(), std::string(targetLength - line.size(), ' '));
+				transaction.replace(MRTextBufferModel::Range(lineStart + startCol, lineStart + startCol + static_cast<std::size_t>(width)),
+				                    std::string(static_cast<std::size_t>(width), ' '));
+			} else if (startCol < line.size()) {
+				const std::size_t eraseWidth = std::min<std::size_t>(static_cast<std::size_t>(width), line.size() - startCol);
+				transaction.erase(MRTextBufferModel::Range(lineStart + startCol, lineStart + startCol + eraseWidth));
 			}
 		}
-		if (!replaceEditorBuffer(editor, joinBufferLines(buf), bufferOffsetForLineColumn(buf, row1, std::max(0, col1 - 1)))) return false;
+
+		std::size_t finalCursor = lineStarts.empty() ? 0 : lineStarts.front() + std::min(startCol, lineTexts.front().size());
+		if (leaveColumnSpace) finalCursor = lineStarts.empty() ? 0 : lineStarts.front() + startCol;
+		if (!editor->applyStagedTransaction(transaction, finalCursor, finalCursor, finalCursor, true).applied()) return false;
 		clearCurrentBlockMode();
 		return true;
 	}
@@ -8893,30 +8848,12 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 							case MRSettingsKeyClass::Version:
 							case MRSettingsKeyClass::Path:
 							case MRSettingsKeyClass::Global:
-								{
-									const auto applyStartedAt = std::chrono::steady_clock::now();
-									if (!applyConfiguredSettingsAssignment(setupKey, valueAsString(args[1]), activePaths, &errorText))
-										throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
-									const double applyMs = elapsedMsSince(applyStartedAt);
-									if (applyMs >= kSlowMrsetupIntrinsicThresholdMs) {
-										std::ostringstream detail;
-										detail << "Slow MRSETUP intrinsic: key=" << setupKey << " class=global ms=" << applyMs;
-										mrLogMessage(detail.str());
-									}
-								}
+								if (!applyConfiguredSettingsAssignment(setupKey, valueAsString(args[1]), activePaths, &errorText))
+									throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
 								break;
 							case MRSettingsKeyClass::Edit:
-								{
-									const auto applyStartedAt = std::chrono::steady_clock::now();
-									if (!applyConfiguredEditSetupValue(setupKey, valueAsString(args[1]), &errorText))
-										throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
-									const double applyMs = elapsedMsSince(applyStartedAt);
-									if (applyMs >= kSlowMrsetupIntrinsicThresholdMs) {
-										std::ostringstream detail;
-										detail << "Slow MRSETUP intrinsic: key=" << setupKey << " class=edit ms=" << applyMs;
-										mrLogMessage(detail.str());
-									}
-								}
+								if (!applyConfiguredEditSetupValue(setupKey, valueAsString(args[1]), &errorText))
+									throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
 								if (setupKey == "TAB_EXPAND") {
 									BackgroundEditSession *session = currentBackgroundEditSession();
 									if (session != nullptr) session->tabExpand = configuredTabExpandSetting();
@@ -8925,17 +8862,8 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 								}
 								break;
 							case MRSettingsKeyClass::ColorInline:
-								{
-									const auto applyStartedAt = std::chrono::steady_clock::now();
-									if (!applyConfiguredColorSetupValue(setupKey, valueAsString(args[1]), &errorText))
-										throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
-									const double applyMs = elapsedMsSince(applyStartedAt);
-									if (applyMs >= kSlowMrsetupIntrinsicThresholdMs) {
-										std::ostringstream detail;
-										detail << "Slow MRSETUP intrinsic: key=" << setupKey << " class=color ms=" << applyMs;
-										mrLogMessage(detail.str());
-									}
-								}
+								if (!applyConfiguredColorSetupValue(setupKey, valueAsString(args[1]), &errorText))
+									throw std::runtime_error("MRSETUP(" + setupKey + ") failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
 								break;
 						}
 					runtimeErrorLevel() = 0;

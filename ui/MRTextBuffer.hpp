@@ -1,6 +1,7 @@
 #ifndef MRTEXTBUFFER_HPP
 #define MRTEXTBUFFER_HPP
 
+#include <algorithm>
 #include <cstddef>
 
 #include "MRFileEditor/MRFileEditor.hpp"
@@ -83,27 +84,18 @@ class MRTextBuffer {
 	}
 
 	unsigned long cursorLineNumber() const noexcept {
-		if (mEditor != nullptr) {
-			const MRTextBufferModel &model = mEditor->bufferModel();
-			return static_cast<unsigned long>(model.lineIndex(model.cursor())) + 1UL;
-		}
-		return 1UL;
+		return mEditor != nullptr ? static_cast<unsigned long>(mEditor->currentLineNumber()) : 1UL;
 	}
 
 	unsigned long cursorColumnNumber() const noexcept {
-		if (mEditor != nullptr) {
-			const MRTextBufferModel &model = mEditor->bufferModel();
-			return static_cast<unsigned long>(model.column(model.cursor())) + 1UL;
-		}
-		return 1UL;
+		return mEditor != nullptr ? static_cast<unsigned long>(mEditor->currentColumnNumber()) : 1UL;
 	}
 
 	TPoint cursorPoint() const noexcept {
 		TPoint point = {0, 0};
 		if (mEditor != nullptr) {
-			const MRTextBufferModel &model = mEditor->bufferModel();
-			point.x = static_cast<short>(model.column(model.cursor()));
-			point.y = static_cast<short>(model.lineIndex(model.cursor()));
+			point.x = static_cast<short>(std::max(0, mEditor->currentColumnNumber() - 1));
+			point.y = static_cast<short>(std::max(0, mEditor->currentLineNumber() - 1));
 		}
 		return point;
 	}

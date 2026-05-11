@@ -36,6 +36,7 @@ enum class TaskKind : unsigned char {
 	Custom,
 	LineIndexWarmup,
 	SyntaxWarmup,
+	FoldWarmup,
 	MiniMapWarmup,
 	SaveNormalizationWarmup,
 	IndicatorBlink,
