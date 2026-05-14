@@ -389,6 +389,21 @@ bool isSwiftStructuralLeadLine(std::string_view upperLine) noexcept {
 	       containsUpperToken(normalizedUpper, "EXTENSION");
 }
 
+bool isSwiftAccessorLeadLine(std::string_view upperLine) noexcept {
+	const std::string_view normalizedUpper = normalizeSwiftStructuralLeadText(upperLine);
+	if (normalizedUpper.empty() || isSwiftCommentLikeLine(normalizedUpper)) return false;
+	return normalizedUpper == "GET" || normalizedUpper.starts_with("GET ") || normalizedUpper == "SET" || normalizedUpper.starts_with("SET ") || normalizedUpper == "WILLSET" ||
+	       normalizedUpper.starts_with("WILLSET ") || normalizedUpper == "DIDSET" || normalizedUpper.starts_with("DIDSET ");
+}
+
+bool isSwiftPropertyBlockLeadLine(std::string_view trimmedLine, std::string_view upperLine) noexcept {
+	const std::string_view normalizedUpper = normalizeSwiftStructuralLeadText(upperLine);
+	const std::string_view normalizedTrimmed = normalizeSwiftStructuralLeadText(trimmedLine);
+	if (normalizedUpper.empty() || normalizedTrimmed.empty() || isSwiftCommentLikeLine(normalizedUpper)) return false;
+	if (!containsUpperToken(normalizedUpper, "VAR") && !containsUpperToken(normalizedUpper, "LET")) return false;
+	return normalizedTrimmed.find('{') != std::string_view::npos && (normalizedTrimmed.find(':') != std::string_view::npos || normalizedTrimmed.find('=') != std::string_view::npos);
+}
+
 bool isRustCommentLikeLine(std::string_view trimmed) noexcept {
 	return trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with("*") || trimmed.starts_with("*/");
 }
@@ -596,6 +611,10 @@ bool isMakeTargetLine(std::string_view trimmed) noexcept {
 	return colon != std::string_view::npos && colon > 0 && (eq == std::string_view::npos || colon < eq);
 }
 
+bool isMakeRecipeLine(std::string_view lineText) noexcept {
+	return !lineText.empty() && lineText.front() == '\t';
+}
+
 bool isPreprocessorFoldStart(std::string_view trimmed) noexcept {
 	return trimmed.starts_with("#if") || trimmed.starts_with("#ifdef") || trimmed.starts_with("#ifndef");
 }
@@ -643,6 +662,13 @@ bool isMRMACEndLead(std::string_view upperLine) noexcept {
 
 bool isMRMACCommentLine(std::string_view trimmed) noexcept {
 	return !trimmed.empty() && trimmed.front() == ';';
+}
+
+std::string_view stripMRMACTrailingComment(std::string_view text) noexcept {
+	const std::size_t commentStart = text.find_first_of(';');
+	if (commentStart == std::string_view::npos) return text;
+	if (commentStart == 0 || !isIndentWhitespace(text[commentStart - 1])) return text;
+	return trimView(text.substr(0, commentStart));
 }
 
 bool isSystemdSectionHeader(std::string_view trimmed) noexcept {
@@ -711,7 +737,9 @@ struct SmartDedentRequest {
 };
 
 SmartDedentRequest classifySmartDedentRequest(std::string_view trimmed, MRSyntaxLanguage language) noexcept {
-	const std::string upperLine = upperAscii(std::string(trimView(trimmed)));
+	std::string_view normalizedTrimmed = trimView(trimmed);
+	if (language == MRSyntaxLanguage::MRMAC) normalizedTrimmed = stripMRMACTrailingComment(normalizedTrimmed);
+	const std::string upperLine = upperAscii(std::string(normalizedTrimmed));
 	const std::string_view normalizedUpper = trimView(skipLeadingClosersAndSpace(upperLine));
 
 	if (startsWithCloser(trimmed)) return {SmartDedentKind::Delimiter, trimmed.front()};
@@ -810,6 +838,10 @@ bool isDedentSearchSkippableLine(std::string_view trimmed, MRSyntaxLanguage lang
 }
 
 bool matchesSmartDedentAnchor(std::string_view trimmed, std::string_view upperLine, MRSyntaxLanguage language, SmartDedentRequest request) noexcept {
+	if (language == MRSyntaxLanguage::MRMAC) {
+		trimmed = stripMRMACTrailingComment(trimmed);
+		upperLine = stripMRMACTrailingComment(upperLine);
+	}
 	const std::string_view normalizedUpper = trimView(skipLeadingClosersAndSpace(upperLine));
 
 	switch (request.kind) {
@@ -905,7 +937,7 @@ bool isMarkdownBlockQuoteLead(std::string_view trimmed, std::string_view nextTri
 }
 
 bool isNonEmptyNonRecipeMakeLine(std::string_view lineText, std::string_view trimmed) noexcept {
-	return !trimmed.empty() && !lineText.empty() && lineText.front() != '\t';
+	return !trimmed.empty() && !isMakeRecipeLine(lineText);
 }
 
 bool isMakeDirectiveFoldStart(std::string_view trimmed) noexcept {
@@ -1577,7 +1609,7 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 				break;
 			}
 			case MRSyntaxLanguage::Make:
-				if (isMakeTargetLine(trimmed) && !nextTrimmed.empty() && nextLineTextPtr != nullptr && !nextLineTextPtr->empty() && (*nextLineTextPtr)[0] == '\t')
+				if (!isMakeRecipeLine(lineText) && isMakeTargetLine(trimmed) && !nextTrimmed.empty() && nextLineTextPtr != nullptr && isMakeRecipeLine(*nextLineTextPtr))
 					openBlock(MRFoldSourceKind::Target, currentIndent);
 				else if (isMakeDirectiveFoldStart(trimmed))
 					openBlock(MRFoldSourceKind::Directive, currentIndent);
@@ -2506,6 +2538,7 @@ MRFileEditor::TextViewportGeometry MRFileEditor::textViewportGeometryFor(const M
 	MRFileEditor *self = const_cast<MRFileEditor *>(this);
 	const bool approximateLargeFileMetrics = useApproximateLargeFileMetrics();
 	const bool foldingEnabled = foldingPipelineEnabled();
+	MREditSetupSettings viewportSettings = settings;
 	inputs.viewWidth = size.x;
 	inputs.visibleRows = visibleTextRows();
 	inputs.deltaX = delta.x;
@@ -2515,7 +2548,11 @@ MRFileEditor::TextViewportGeometry MRFileEditor::textViewportGeometryFor(const M
 	inputs.exactLineCountKnown = !approximateLargeFileMetrics && mBufferModel.exactLineCountKnown();
 	inputs.exactLineCount = inputs.exactLineCountKnown ? mBufferModel.lineCount() : 0;
 	inputs.estimatedLineCount = mBufferModel.estimatedLineCount();
-	return MRTextViewportLayout::geometryFor(settings, inputs);
+	if (!foldingEnabled) {
+		viewportSettings.codeFolding = false;
+		viewportSettings.codeFoldingPosition = "OFF";
+	}
+	return MRTextViewportLayout::geometryFor(viewportSettings, inputs);
 }
 
 MRFileEditor::TextViewportGeometry MRFileEditor::textViewportGeometry() const noexcept {
@@ -3517,6 +3554,9 @@ int MRFileEditor::leadingIndentColumnForLine(std::size_t lineStart) const noexce
 
 int MRFileEditor::inferredShellIndentStepColumns(std::size_t lineStart, const MREditSetupSettings &settings) const noexcept {
 	const int baseColumn = leadingIndentColumnForLine(lineStart);
+	const std::string currentLineText = mBufferModel.lineText(lineStart);
+	const std::size_t currentIndentLength = leadingIndentBytes(currentLineText);
+	const std::string_view currentIndent(currentLineText.data(), currentIndentLength);
 	std::size_t currentLineStart = lineStart;
 
 	while (currentLineStart > 0) {
@@ -3528,7 +3568,30 @@ int MRFileEditor::inferredShellIndentStepColumns(std::size_t lineStart, const MR
 		if (trimView(previousLineText).empty()) continue;
 
 		const int previousColumn = leadingIndentColumnForLine(previousLineStart);
-		if (previousColumn < baseColumn) return std::max(1, baseColumn - previousColumn);
+		if (previousColumn < baseColumn) {
+			const std::size_t previousIndentLength = leadingIndentBytes(previousLineText);
+			const std::string_view previousIndent(previousLineText.data(), previousIndentLength);
+
+			if (currentIndent.starts_with(previousIndent)) {
+				const std::string_view stepFill = currentIndent.substr(previousIndent.size());
+				if (!stepFill.empty()) {
+					TStringView fill(stepFill.data(), stepFill.size());
+					std::size_t index = 0;
+					int visualColumn = std::max(0, previousColumn - 1);
+
+					while (index < fill.size()) {
+						std::size_t next = index;
+						std::size_t width = 0;
+						if (!nextDisplayChar(fill, next, width, visualColumn, settings)) break;
+						visualColumn += static_cast<int>(width);
+						index = next;
+					}
+					const int stepColumns = visualColumn - std::max(0, previousColumn - 1);
+					if (stepColumns > 0) return stepColumns;
+				}
+			}
+			return std::max(1, baseColumn - previousColumn);
+		}
 	}
 
 	if (!settings.tabExpand) {
@@ -3563,7 +3626,8 @@ std::string MRFileEditor::smartIndentFillForCursor() {
 	std::string previousUpperLine;
 	std::string previousPreviousUpperLine;
 	const MRSyntaxLanguage language = mBufferModel.language();
-	const bool smartEnabled = settings.smartIndenting || upperAscii(settings.indentStyle) == "SMART";
+	const bool smartEnabled = upperAscii(settings.indentStyle) == "SMART";
+	const bool neutralAutoScratchIndent = mBufferModel.languageAutomatic() && !hasPersistentFileName();
 	const auto braceIndentStepColumns = [&]() noexcept {
 		switch (uiIndentStyle) {
 			case MRUiIndentStyle::KandR:
@@ -3600,6 +3664,7 @@ std::string MRFileEditor::smartIndentFillForCursor() {
 	}
 
 	if (!smartEnabled) return buildEditIndentFill(settings, 1, targetColumn, configuredTabExpandSetting());
+	if (neutralAutoScratchIndent) return automaticIndentFillForCursor();
 	if (language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp) {
 		const std::size_t last = lastSignificantByte(beforeCursor);
 		if (trimmedBeforeCursor == "{")
@@ -3626,13 +3691,35 @@ std::string MRFileEditor::smartIndentFillForCursor() {
 	} else if (language == MRSyntaxLanguage::Swift) {
 		const std::string upperLine = upperAscii(std::string(trimmedBeforeCursor));
 		const std::size_t last = lastSignificantByte(beforeCursor);
+		const auto isSwiftCurrentLead = [&]() noexcept {
+			return isSwiftStructuralLeadLine(upperLine) || isSwiftAccessorLeadLine(upperLine) || isSwiftPropertyBlockLeadLine(trimmedBeforeCursor, upperLine);
+		};
+		const auto hasRecentSwiftStructuralLead = [&]() {
+			std::size_t probeLineStart = lineStart;
+			int scannedNonEmptyLines = 0;
+			while (probeLineStart > 0 && scannedNonEmptyLines < 12) {
+				const std::size_t previousLineStart = lineStartOffset(probeLineStart - 1);
+				if (previousLineStart == probeLineStart) break;
+				probeLineStart = previousLineStart;
+
+				const std::string candidateLine = mBufferModel.lineText(previousLineStart);
+				const std::string_view candidateTrimmed = trimView(candidateLine);
+				if (candidateTrimmed.empty() || isSwiftCommentLikeLine(candidateTrimmed)) continue;
+
+				++scannedNonEmptyLines;
+				const std::string candidateUpper = upperAscii(std::string(candidateTrimmed));
+				if (isSwiftStructuralLeadLine(candidateUpper) || isSwiftAccessorLeadLine(candidateUpper) || isSwiftPropertyBlockLeadLine(candidateTrimmed, candidateUpper)) return true;
+				if (lastSignificantByte(candidateTrimmed) != std::string_view::npos && candidateTrimmed.back() == '{') return false;
+			}
+			return false;
+		};
 		if (trimmedBeforeCursor == "{")
 			targetColumn = bodyAlignsWithBraceLine() ? baseColumn : braceIndentedColumn(baseColumn);
 		else if (last != std::string_view::npos && beforeCursor[last] == '{' &&
-		         isCLikeStructuralBraceLead(trimmedBeforeCursor, upperLine, previousTrimmed, previousUpperLine, trimView(previousPreviousLineText),
-		                               previousPreviousUpperLine, language))
+		         (isCLikeStructuralBraceLead(trimmedBeforeCursor, upperLine, previousTrimmed, previousUpperLine, trimView(previousPreviousLineText), previousPreviousUpperLine, language) ||
+		          hasRecentSwiftStructuralLead()))
 			targetColumn = braceIndentedColumn(baseColumn);
-		else if (isSwiftStructuralLeadLine(upperLine))
+		else if (isSwiftCurrentLead())
 			targetColumn = braceIndentedNextLine() ? braceIndentedColumn(baseColumn) : baseColumn;
 	} else if (language == MRSyntaxLanguage::Rust || language == MRSyntaxLanguage::Go) {
 		const std::string upperLine = upperAscii(std::string(trimmedBeforeCursor));
@@ -3651,20 +3738,106 @@ std::string MRFileEditor::smartIndentFillForCursor() {
 			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
 	} else if (language == MRSyntaxLanguage::Bash) {
 		const std::string upperLine = upperAscii(std::string(trimmedBeforeCursor));
-		if (isShellIndentLead(trimmedBeforeCursor, upperLine)) targetColumn = baseColumn + inferredShellIndentStepColumns(lineStart, settings);
+		if (isShellIndentLead(trimmedBeforeCursor, upperLine)) {
+			std::size_t nextLineStart = lineStart;
+			while (nextLineStart < mBufferModel.length()) {
+				const std::size_t candidateLineStart = nextLineOffset(nextLineStart);
+				if (candidateLineStart <= nextLineStart) break;
+				nextLineStart = candidateLineStart;
+
+				const std::string candidateLineText = mBufferModel.lineText(candidateLineStart);
+				const std::string_view candidateTrimmed = trimView(candidateLineText);
+				if (candidateTrimmed.empty()) continue;
+
+				const int candidateColumn = leadingIndentColumnForLine(candidateLineStart);
+				if (candidateColumn > baseColumn) {
+					targetColumn = candidateColumn;
+					break;
+				}
+				if (candidateColumn <= baseColumn) break;
+			}
+			if (targetColumn == baseColumn) targetColumn = baseColumn + inferredShellIndentStepColumns(lineStart, settings);
+		}
 	} else if (language == MRSyntaxLanguage::Zsh) {
 		const std::string upperLine = upperAscii(std::string(trimmedBeforeCursor));
-		if (isShellIndentLead(trimmedBeforeCursor, upperLine))
-			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+		if (isShellIndentLead(trimmedBeforeCursor, upperLine)) {
+			std::size_t nextLineStart = lineStart;
+			while (nextLineStart < mBufferModel.length()) {
+				const std::size_t candidateLineStart = nextLineOffset(nextLineStart);
+				if (candidateLineStart <= nextLineStart) break;
+				nextLineStart = candidateLineStart;
+
+				const std::string candidateLineText = mBufferModel.lineText(candidateLineStart);
+				const std::string_view candidateTrimmed = trimView(candidateLineText);
+				if (candidateTrimmed.empty() || candidateTrimmed.starts_with("#")) continue;
+
+				const int candidateColumn = leadingIndentColumnForLine(candidateLineStart);
+				if (candidateColumn > baseColumn) {
+					targetColumn = candidateColumn;
+					break;
+				}
+				break;
+			}
+			if (targetColumn == baseColumn)
+				targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+		}
 	} else if (language == MRSyntaxLanguage::Fish) {
 		const std::string upperLine = upperAscii(std::string(trimmedBeforeCursor));
-		if (fishIndentBlockKind(upperLine) != kFishBlockNone) targetColumn = baseColumn + inferredShellIndentStepColumns(lineStart, settings);
+		if (fishIndentBlockKind(upperLine) != kFishBlockNone) {
+			std::size_t nextLineStart = lineStart;
+			while (nextLineStart < mBufferModel.length()) {
+				const std::size_t candidateLineStart = nextLineOffset(nextLineStart);
+				if (candidateLineStart <= nextLineStart) break;
+				nextLineStart = candidateLineStart;
+
+				const std::string candidateLineText = mBufferModel.lineText(candidateLineStart);
+				const std::string_view candidateTrimmed = trimView(candidateLineText);
+				if (candidateTrimmed.empty() || candidateTrimmed.starts_with("#")) continue;
+
+				const int candidateColumn = leadingIndentColumnForLine(candidateLineStart);
+				if (candidateColumn > baseColumn) {
+					targetColumn = candidateColumn;
+					break;
+				}
+				break;
+			}
+			if (targetColumn == baseColumn) targetColumn = baseColumn + inferredShellIndentStepColumns(lineStart, settings);
+		}
 	} else if (language == MRSyntaxLanguage::Perl) {
 		const std::string upperLine = upperAscii(std::string(trimmedBeforeCursor));
-		if (isPerlStructuredBlockLead(trimmedBeforeCursor, upperLine))
-			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+		if (isPerlStructuredBlockLead(trimmedBeforeCursor, upperLine)) {
+			bool inPod = false;
+			std::size_t nextLineStart = lineStart;
+			while (nextLineStart < mBufferModel.length()) {
+				const std::size_t candidateLineStart = nextLineOffset(nextLineStart);
+				if (candidateLineStart <= nextLineStart) break;
+				nextLineStart = candidateLineStart;
+
+				const std::string candidateLineText = mBufferModel.lineText(candidateLineStart);
+				const std::string_view candidateTrimmed = trimView(candidateLineText);
+				if (candidateTrimmed.empty()) continue;
+				if (inPod) {
+					if (isPerlPodEnd(candidateTrimmed)) inPod = false;
+					continue;
+				}
+				if (isPerlPodStart(candidateTrimmed)) {
+					inPod = true;
+					continue;
+				}
+				if (candidateTrimmed.starts_with("#")) continue;
+
+				const int candidateColumn = leadingIndentColumnForLine(candidateLineStart);
+				if (candidateColumn > baseColumn) {
+					targetColumn = candidateColumn;
+					break;
+				}
+				break;
+			}
+			if (targetColumn == baseColumn)
+				targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+		}
 	} else if (language == MRSyntaxLanguage::MRMAC) {
-		const std::string upperLine = upperAscii(std::string(trimmedBeforeCursor));
+		const std::string upperLine = upperAscii(std::string(stripMRMACTrailingComment(trimmedBeforeCursor)));
 		if (isMRMACMacroStart(upperLine) || isMRMACIfLead(upperLine) || isMRMACElseLead(upperLine) || isMRMACWhileLead(upperLine))
 			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
 	} else if (language == MRSyntaxLanguage::Make) {
@@ -3680,9 +3853,11 @@ std::string MRFileEditor::smartIndentFillForCursor() {
 void MRFileEditor::applyLiveSmartDedentAfterTextInput(const std::string &insertedText) {
 	const MREditSetupSettings settings = configuredEditSetupSettings();
 	const MRSyntaxLanguage language = mBufferModel.language();
-	const bool smartEnabled = settings.smartIndenting || upperAscii(settings.indentStyle) == "SMART";
+	const bool smartEnabled = upperAscii(settings.indentStyle) == "SMART";
+	const bool neutralAutoScratchIndent = mBufferModel.languageAutomatic() && !hasPersistentFileName();
 
 	if (!smartEnabled) return;
+	if (neutralAutoScratchIndent) return;
 	if (insertedText.find('\n') != std::string::npos || insertedText.find('\r') != std::string::npos) return;
 	if (language != MRSyntaxLanguage::C && language != MRSyntaxLanguage::Cpp && language != MRSyntaxLanguage::JavaScript && language != MRSyntaxLanguage::Json && language != MRSyntaxLanguage::Python &&
 	    language != MRSyntaxLanguage::Bash && language != MRSyntaxLanguage::Zsh && language != MRSyntaxLanguage::Fish && language != MRSyntaxLanguage::Perl && language != MRSyntaxLanguage::MRMAC && language != MRSyntaxLanguage::Swift &&
@@ -3734,6 +3909,7 @@ void MRFileEditor::applyLiveSmartDedentAfterTextInput(const std::string &inserte
 
 bool MRFileEditor::newLineWithPreferredIndent() {
 	const std::string indentStyle = upperAscii(configuredEditSetupSettings().indentStyle);
+	const bool neutralAutoScratchIndent = mBufferModel.languageAutomatic() && !hasPersistentFileName();
 	if (indentStyle == "SMART") {
 		const MRSyntaxLanguage language = mBufferModel.language();
 		const std::size_t cursor = cursorOffset();
@@ -3749,6 +3925,7 @@ bool MRFileEditor::newLineWithPreferredIndent() {
 		}
 	}
 	if (indentStyle == "AUTOMATIC") return newLineWithIndent(automaticIndentFillForCursor());
+	if (indentStyle == "SMART" && neutralAutoScratchIndent) return newLineWithIndent(automaticIndentFillForCursor());
 	if (indentStyle == "SMART") return newLineWithIndent(smartIndentFillForCursor());
 	return newLineWithIndent(preferredIndentFill());
 }
@@ -3912,8 +4089,10 @@ void MRFileEditor::draw() {
 	const MRMiniMapRenderer::Viewport miniMapViewport = {viewport.width, viewport.miniMapBodyX, viewport.miniMapBodyWidth, viewport.miniMapInfoX, viewport.miniMapSeparatorX};
 	const bool throttleMiniMapForEditBurst =
 	    drawMiniMap && useApproximateLargeFileMetrics() && mMiniMapState.lastEditAt() != std::chrono::steady_clock::time_point() && now - mMiniMapState.lastEditAt() < kLargeFileMiniMapEditDebounce;
+	const bool haveMiniMapProjection = drawMiniMap && mMiniMapState.renderer().hasProjection(miniMapRows, miniMapViewport.bodyWidth);
+	const bool deferMiniMapWarmupForEditBurst = throttleMiniMapForEditBurst && haveMiniMapProjection;
 	if (drawMiniMap) {
-		if (throttleMiniMapForEditBurst) {
+		if (deferMiniMapWarmupForEditBurst) {
 			if (shouldTraceLargeFileWarmupDiagnostics()) {
 				std::string detail = "action=defer-edit-burst task=" + std::to_string(mMiniMapState.renderer().pendingWarmupTaskId()) + " top_line=" + std::to_string(topLine) + " rows=" + std::to_string(miniMapRows) +
 				                     " total_lines=" + std::to_string(totalLines);
@@ -3934,16 +4113,39 @@ void MRFileEditor::draw() {
 	}
 	MRMiniMapRenderer::OverlayState miniMapOverlay;
 	if (drawMiniMap) {
-		const bool miniMapOverlayCacheCompatible = mMiniMapState.overlayCache().documentId == mBufferModel.documentId() && mMiniMapState.overlayCache().viewportWidth == viewport.width &&
-		                                           mMiniMapState.overlayCache().bodyWidth == viewport.miniMapBodyWidth && mMiniMapState.overlayCache().braille == miniMapUseBraille;
+		auto rangeSignature = [](const std::vector<MRTextBufferModel::Range> &ranges) noexcept {
+			std::uint64_t signature = 1469598103934665603ULL;
+			auto mixValue = [&signature](std::size_t value) noexcept {
+				signature ^= static_cast<std::uint64_t>(value) + 0x9E3779B97F4A7C15ULL + (signature << 6) + (signature >> 2);
+			};
+			for (const MRTextBufferModel::Range &range : ranges) {
+				mixValue(range.start);
+				mixValue(range.end);
+			}
+			return signature;
+		};
+		const std::uint64_t findSignature = rangeSignature(mFindMarkerRanges);
+		const std::uint64_t dirtySignature = rangeSignature(mDirtyRanges);
+		const bool miniMapOverlayCacheCompatible = mMiniMapState.overlayCache().documentId == mBufferModel.documentId() &&
+		                                           mMiniMapState.overlayCache().documentVersion == mBufferModel.version() && mMiniMapState.overlayCache().totalLines == totalLines &&
+		                                           mMiniMapState.overlayCache().viewportWidth == viewport.width && mMiniMapState.overlayCache().bodyWidth == viewport.miniMapBodyWidth &&
+		                                           mMiniMapState.overlayCache().braille == miniMapUseBraille && mMiniMapState.overlayCache().selectionStart == selection.start &&
+		                                           mMiniMapState.overlayCache().selectionEnd == selection.end && mMiniMapState.overlayCache().findSignature == findSignature &&
+		                                           mMiniMapState.overlayCache().dirtySignature == dirtySignature;
 
-		if (throttleMiniMapForEditBurst && miniMapOverlayCacheCompatible) miniMapOverlay = mMiniMapState.overlayCache().overlay;
+		if (miniMapOverlayCacheCompatible) miniMapOverlay = mMiniMapState.overlayCache().overlay;
 		else {
 			miniMapOverlay = mMiniMapState.renderer().computeOverlayState(mBufferModel.readSnapshot(), selection, mFindMarkerRanges, mDirtyRanges, totalLines, viewport.width, viewport.miniMapBodyWidth, miniMapUseBraille, editSettings);
 			mMiniMapState.overlayCache().documentId = mBufferModel.documentId();
+			mMiniMapState.overlayCache().documentVersion = mBufferModel.version();
+			mMiniMapState.overlayCache().totalLines = totalLines;
 			mMiniMapState.overlayCache().viewportWidth = viewport.width;
 			mMiniMapState.overlayCache().bodyWidth = viewport.miniMapBodyWidth;
 			mMiniMapState.overlayCache().braille = miniMapUseBraille;
+			mMiniMapState.overlayCache().selectionStart = selection.start;
+			mMiniMapState.overlayCache().selectionEnd = selection.end;
+			mMiniMapState.overlayCache().findSignature = findSignature;
+			mMiniMapState.overlayCache().dirtySignature = dirtySignature;
 			mMiniMapState.overlayCache().overlay = miniMapOverlay;
 		}
 	}
@@ -4524,8 +4726,9 @@ void MRFileEditor::moveCursor(std::size_t target, bool extendSelection, bool cen
 bool MRFileEditor::isTextInputEvent(const TEvent &event) const {
 	if (event.what != evKeyDown) return false;
 	const ushort mods = event.keyDown.controlKeyState;
-	const bool plainTab = (event.keyDown.keyCode == kbTab || event.keyDown.keyCode == kbCtrlI) && (mods & (kbShift | kbCtrlShift | kbAltShift | kbPaste)) == 0;
-	return (event.keyDown.controlKeyState & kbPaste) != 0 || event.keyDown.textLength > 0 || plainTab || (event.keyDown.charScan.charCode >= 32 && event.keyDown.charScan.charCode < 255);
+	const bool plainTab = event.keyDown.charScan.charCode == 9 && (mods & (kbShift | kbCtrlShift | kbAltShift | kbPaste)) == 0;
+	const bool singleByteText = event.keyDown.charScan.charCode >= 32 && event.keyDown.charScan.charCode < 255;
+	return (event.keyDown.controlKeyState & kbPaste) != 0 || plainTab || singleByteText;
 }
 
 void MRFileEditor::handleTextInput(TEvent &event) {
@@ -4546,14 +4749,19 @@ void MRFileEditor::handleTextInput(TEvent &event) {
 	}
 
 	const ushort mods = event.keyDown.controlKeyState;
-	const bool plainTab = (event.keyDown.keyCode == kbTab || event.keyDown.keyCode == kbCtrlI) && (mods & (kbShift | kbCtrlShift | kbAltShift | kbPaste)) == 0;
+	const bool plainTab = event.keyDown.charScan.charCode == 9 && (mods & (kbShift | kbCtrlShift | kbAltShift | kbPaste)) == 0;
 	std::string insertedText;
 
-	if (event.keyDown.textLength > 0) insertedText.assign(event.keyDown.text, event.keyDown.textLength);
-	else if (plainTab)
+	if (plainTab)
 		insertedText = tabKeyText();
-	else
+	else if (event.keyDown.charScan.charCode >= 32 && event.keyDown.charScan.charCode < 255)
 		insertedText.assign(1, static_cast<char>(event.keyDown.charScan.charCode));
+	else
+		insertedText.clear();
+	if (insertedText.empty()) {
+		clearEvent(event);
+		return;
+	}
 	if (insertBufferText(insertedText)) applyLiveSmartDedentAfterTextInput(insertedText);
 	applyLiveWordWrapAfterTextInput();
 	clearEvent(event);
@@ -5741,12 +5949,7 @@ Boolean MRFileEditor::confirmSaveOrDiscardNamed() {
 void MRFileEditor::refreshSyntaxContext() {
 	MRSyntaxLanguage oldLanguage = mBufferModel.language();
 	const bool oldAutomatic = mBufferModel.languageAutomatic();
-	std::string codeLanguage = configuredEditSetupSettings().codeLanguage;
-
-	if (hasPersistentFileName()) {
-		MREditSetupSettings effective;
-		if (effectiveEditSetupSettingsForPath(fileName, effective, nullptr)) codeLanguage = effective.codeLanguage;
-	}
+	const std::string codeLanguage = effectiveCodeLanguageSetting();
 	mBufferModel.setSyntaxContext(hasPersistentFileName() ? fileName : "", mSyntaxTitleHint, codeLanguage);
 	if (mBufferModel.language() != oldLanguage) resetSyntaxWarmupState(true);
 	if (mBufferModel.language() != oldLanguage) {
@@ -5764,12 +5967,29 @@ bool MRFileEditor::pieceTableOnlyPhaseActive() const noexcept {
 	return true;
 }
 
-bool MRFileEditor::syntaxPipelineEnabled() const noexcept {
-	return true;
+std::string MRFileEditor::effectiveCodeLanguageSetting() const {
+	std::string codeLanguage = configuredEditSetupSettings().codeLanguage;
+
+	if (hasPersistentFileName()) {
+		MREditSetupSettings effective;
+		if (effectiveEditSetupSettingsForPath(fileName, effective, nullptr)) codeLanguage = effective.codeLanguage;
+	}
+	return upperAscii(trimAscii(codeLanguage));
 }
 
-bool MRFileEditor::foldingPipelineEnabled() const noexcept {
-	return true;
+bool MRFileEditor::languageFeaturesEnabled() const {
+	const std::string codeLanguage = effectiveCodeLanguageSetting();
+
+	if (codeLanguage.empty() || codeLanguage == "NONE") return false;
+	return mBufferModel.language() != MRSyntaxLanguage::PlainText;
+}
+
+bool MRFileEditor::syntaxPipelineEnabled() const {
+	return languageFeaturesEnabled();
+}
+
+bool MRFileEditor::foldingPipelineEnabled() const {
+	return languageFeaturesEnabled();
 }
 
 bool MRFileEditor::miniMapPipelineEnabled() const noexcept {

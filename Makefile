@@ -72,12 +72,12 @@ TINFO_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libtinfo.so.6 ]; then echo -l
 LDFLAGS = $(PTHREAD_FLAGS) $(TVISION_LIB) $(PCRE2_LIB) $(NCURSESW_LIB) $(GPM_LIB) $(TINFO_LIB)
 
 TARGET = mr
-MRFOLDTRAINER_TARGET = foldtrainer/mrfoldtrainer
-MRFOLDTRAINER_SOURCE = foldtrainer/mrfoldtrainer.cpp
-MRFOLDTRAINER_OBJECT = foldtrainer/mrfoldtrainer.o
-MRINDENTTRAINER_TARGET = indenttrainer/mrindenttrainer
-MRINDENTTRAINER_SOURCE = indenttrainer/mrindenttrainer.cpp
-MRINDENTTRAINER_OBJECT = indenttrainer/mrindenttrainer.o
+MRFOLDTRAINER_TARGET = trainers/foldtrainer/mrfoldtrainer
+MRFOLDTRAINER_SOURCE = trainers/foldtrainer/mrfoldtrainer.cpp
+MRFOLDTRAINER_OBJECT = trainers/foldtrainer/mrfoldtrainer.o
+MRINDENTTRAINER_TARGET = trainers/indenttrainer/mrindenttrainer
+MRINDENTTRAINER_SOURCE = trainers/indenttrainer/mrindenttrainer.cpp
+MRINDENTTRAINER_OBJECT = trainers/indenttrainer/mrindenttrainer.o
 STAGE_PROFILE_PROBE_TARGET = regression/mr_stage_profile_probe
 STAGE_PROFILE_PROBE_SOURCE = regression/mr_stage_profile_probe.cpp
 STAGE_PROFILE_PROBE_OBJECT = regression/mr_stage_profile_probe.o
@@ -410,6 +410,7 @@ ui/MRSyntax.o: ui/MRSyntax.cpp ui/MRSyntax.hpp
 coprocessor/MRCoprocessor.o: coprocessor/MRCoprocessor.cpp coprocessor/MRCoprocessor.hpp piecetable/MRTextDocument.hpp
 piecetable/MRTextDocument.o: piecetable/MRTextDocument.cpp piecetable/MRTextDocument.hpp
 $(MRFOLDTRAINER_OBJECT): $(MRFOLDTRAINER_SOURCE) ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
+$(MRINDENTTRAINER_OBJECT): $(MRINDENTTRAINER_SOURCE) config/MRDialogPaths.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
 
 # 4. Linker call
 $(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS) | pcre2-check

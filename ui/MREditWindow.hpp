@@ -154,9 +154,15 @@ class MREditWindow : public TWindow {
 	}
 
 	virtual void close() override {
-		prepareForClose();
-		scheduleEnsureUsableWorkWindow();
 		TWindow::close();
+	}
+
+	virtual Boolean valid(ushort command) override {
+		if (command != cmClose) return TWindow::valid(command);
+		if (!TWindow::valid(command)) return False;
+		scheduleEnsureUsableWorkWindow();
+		prepareForClose();
+		return True;
 	}
 
 	virtual TPalette &getPalette() const override {

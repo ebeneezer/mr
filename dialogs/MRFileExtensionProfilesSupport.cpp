@@ -128,7 +128,6 @@ void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDial
 	if (settings.formatRuler) record.optionsMask |= kOptionFormatRuler;
 	if (settings.codeColoring) record.optionsMask |= kOptionCodeColoring;
 	if (settings.codeFoldingFeature) record.optionsMask |= kOptionCodeFoldingFeature;
-	if (settings.smartIndenting) record.optionsMask |= kOptionSmartIndenting;
 
 	record.tabExpandChoice = settings.tabExpand ? kTabExpandTabs : kTabExpandSpaces;
 	record.indentStyleChoice = (indentStyle == "AUTOMATIC") ? kIndentStyleAutomatic : (indentStyle == "SMART") ? kIndentStyleSmart : kIndentStyleOff;
@@ -285,7 +284,6 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.displayTabs = (record.optionsMask & kOptionDisplayTabs) != 0;
 	settings.codeColoring = (record.optionsMask & kOptionCodeColoring) != 0;
 	settings.codeFoldingFeature = (record.optionsMask & kOptionCodeFoldingFeature) != 0;
-	settings.smartIndenting = (record.optionsMask & kOptionSmartIndenting) != 0;
 	settings.lineNumbersPosition = (record.lineNumbersPositionChoice == kLineNumbersLeading) ? "LEADING" : (record.lineNumbersPositionChoice == kLineNumbersTrailing) ? "TRAILING" : "OFF";
 	if (settings.lineNumbersPosition == "OFF" && (record.optionsMask & kOptionShowLineNumbers) != 0) settings.lineNumbersPosition = "LEADING";
 	settings.showLineNumbers = settings.lineNumbersPosition != "OFF";
@@ -295,7 +293,6 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.persistentBlocks = (record.optionsMask & kOptionPersistentBlocks) != 0;
 	settings.tabExpand = record.tabExpandChoice == kTabExpandTabs;
 	settings.indentStyle = (record.indentStyleChoice == kIndentStyleAutomatic) ? "AUTOMATIC" : (record.indentStyleChoice == kIndentStyleSmart) ? "SMART" : "OFF";
-	if (settings.indentStyle == "SMART") settings.smartIndenting = true;
 	settings.fileType = (record.fileTypeChoice == kFileTypeLegacyText) ? "LEGACY_TEXT" : (record.fileTypeChoice == kFileTypeBinary) ? "BINARY" : "UNIX";
 	settings.columnBlockMove = (record.columnBlockMoveChoice == kColumnMoveLeaveSpace) ? "LEAVE_SPACE" : "DELETE_SPACE";
 	settings.defaultMode = (record.defaultModeChoice == kDefaultModeOverwrite) ? "OVERWRITE" : "INSERT";
@@ -329,7 +326,6 @@ enum : unsigned long long {
 	kOvIndentStyle = ::kOvIndentStyle,
 	kOvCodeLanguage = ::kOvCodeLanguage,
 	kOvCodeColoring = ::kOvCodeColoring,
-	kOvSmartIndenting = ::kOvSmartIndenting,
 	kOvCodeFoldingFeature = ::kOvCodeFoldingFeature,
 	kOvFileType = ::kOvFileType,
 	kOvBinaryRecordLength = ::kOvBinaryRecordLength,
@@ -448,7 +444,6 @@ enum : unsigned long long {
 	if (upperAscii(trimAscii(effective.codeLanguage)) != upperAscii(trimAscii(defaults.codeLanguage))) mask |= kOvCodeLanguage;
 	if (effective.codeColoring != defaults.codeColoring) mask |= kOvCodeColoring;
 	if (effective.codeFoldingFeature != defaults.codeFoldingFeature) mask |= kOvCodeFoldingFeature;
-	if (effective.smartIndenting != defaults.smartIndenting) mask |= kOvSmartIndenting;
 	if (upperAscii(effective.fileType) != upperAscii(defaults.fileType)) mask |= kOvFileType;
 	if (effective.binaryRecordLength != defaults.binaryRecordLength) mask |= kOvBinaryRecordLength;
 	if (trimAscii(effective.postLoadMacro) != trimAscii(defaults.postLoadMacro)) mask |= kOvPostLoadMacro;
@@ -676,7 +671,6 @@ void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileE
 	if (settings.formatRuler) record.optionsMask |= kOptionFormatRuler;
 	if (settings.codeColoring) record.optionsMask |= kOptionCodeColoring;
 	if (settings.codeFoldingFeature) record.optionsMask |= kOptionCodeFoldingFeature;
-	if (settings.smartIndenting) record.optionsMask |= kOptionSmartIndenting;
 
 	record.tabExpandChoice = settings.tabExpand ? kTabExpandTabs : kTabExpandSpaces;
 	record.indentStyleChoice = (indentStyle == "AUTOMATIC") ? kIndentStyleAutomatic : (indentStyle == "SMART") ? kIndentStyleSmart : kIndentStyleOff;

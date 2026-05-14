@@ -60,8 +60,7 @@ enum : ushort {
 	kOptionDisplayTabs = 0x0400,
 	kOptionFormatRuler = 0x0800,
 	kOptionCodeColoring = 0x1000,
-	kOptionCodeFoldingFeature = 0x2000,
-	kOptionSmartIndenting = 0x4000
+	kOptionCodeFoldingFeature = 0x2000
 };
 
 enum : ushort {
@@ -74,8 +73,7 @@ enum : ushort {
 	kLeftOptionDisplayTabs = 0x0040,
 	kLeftOptionFormatRuler = 0x0080,
 	kLeftOptionCodeColoring = 0x0100,
-	kLeftOptionCodeFoldingFeature = 0x0200,
-	kLeftOptionSmartIndenting = 0x0400
+	kLeftOptionCodeFoldingFeature = 0x0200
 };
 
 enum : ushort {

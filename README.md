@@ -20,7 +20,7 @@
 
 - American Cybernetics (makers of Multi-Edit) went out of business in 2020 and stopped development of the TUI version of Multi-Edit years bevor
 - mr is a rewrite of the classic programmers editor Multi-Edit by American Cybernetics for Linux terminals
-- mr is constructed aroud a macro language processor, that compiles macro files based on the MEMAC script language. Now called MRMAC the language is backwards code compatible towards the MEMAC dialect but renewed and extended for modern systems. The mrmac lexer and parser were contructed by using lexx and bison as the goldstandard tools under UNIX. All is handled in-RAM for maximum speed utilising precompiled and on-demand compiled macro files
+- mr is constructed aroud a macro language processor, that compiles macro files based on the MEMAC script language. Now called MRMAC the language is backwards code compatible towards the MEMAC dialect but renewed and extended for modern systems. The mrmac lexer and parser were contructed by using lexx and bison as the goldstandard tools under UNIX. All is handled in-RAM for maximum speed utilising precompiled and on-demand compiled macro files. See screenshot: mr is running a utility calculator written in MRMAC
 - mr uses
   - the Turbo Visison C++ rewrite TVISION from magiblot on GitHub. TVISION can also be steered from mrmac macros - just like it was in the old days with Multi-Edit
   - advanced data processing models like piecetables, addbuffers, tries and more to edit files larger than system memory and provide file I/O with blazing speed: It loads 1 GB text und under one single second und indexes the whole text in under 800 milliseconds (no BS)
@@ -47,3 +47,13 @@
 ![mr running under vscode terminal](documentation/pngsjpegs/screenshot01.png)
 ![mr running in terminal showing menu structure](documentation/pngsjpegs/screenshot02.png)
 ![mr showing color setup dialog](documentation/pngsjpegs/screenshot03.png)
+![mr showing code folding, syntax highlighting and minimap](documentation/pngsjpegs/screenshot04.png)
+![mr showing key mapping](documentation/pngsjpegs/screenshot05.png)
+![mr showing ui settings](documentation/pngsjpegs/screenshot06.png)
+![mr showing MFS](documentation/pngsjpegs/screenshot07.png)
+![mr showing macro manager](documentation/pngsjpegs/screenshot08.png)
+![mr showing utility mrmac calculator source and running](documentation/pngsjpegs/screenshot09.png)
+![mr showing file extension dialog language support](documentation/pngsjpegs/screenshot10.png)
+
+
+

@@ -306,7 +306,6 @@ void TermIO::keyModsOn(ConsoleCtl &con) noexcept
         "\x1B[?2004s"   // Save bracketed paste.
         "\x1B[?2004h"   // Enable bracketed paste.
         "\x1B[>4;1m"    // Enable modifyOtherKeys (XTerm).
-        "\x1B[>5u"      // Disambiguate escape codes (1) + Report alternate keys (4) (Kitty).
         "\x1B[?9001h"   // Enable win32-input-mode (Conpty).
         far2lEnableSeq  // Enable far2l terminal extensions.
     );
@@ -343,7 +342,6 @@ void TermIO::keyModsOff(ConsoleCtl &con) noexcept
 {
     TStringView seq = far2lDisableSeq
                       "\x1B[?9001l" // Disable win32-input-mode (Conpty).
-                      "\x1B[<u"     // Restore previous keyboard mode (Kitty).
                       "\x1B[>4m"    // Reset modifyOtherKeys (XTerm).
                       "\x1B[?2004l" // Disable bracketed paste.
                       "\x1B[?2004r" // Restore bracketed paste.

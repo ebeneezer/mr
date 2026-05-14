@@ -563,9 +563,13 @@ class MRFileEditor : public TScroller {
 
 		bool pieceTableOnlyPhaseActive() const noexcept;
 
-		bool syntaxPipelineEnabled() const noexcept;
+		std::string effectiveCodeLanguageSetting() const;
 
-		bool foldingPipelineEnabled() const noexcept;
+		bool languageFeaturesEnabled() const;
+
+		bool syntaxPipelineEnabled() const;
+
+		bool foldingPipelineEnabled() const;
 
 		bool miniMapPipelineEnabled() const noexcept;
 

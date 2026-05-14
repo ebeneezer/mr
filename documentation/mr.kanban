@@ -186,24 +186,6 @@
       "title": "Regression / Errors",
       "cards": [
         {
-          "id": "e15c0ece-5c81-4259-8f69-88523081e123",
-          "listId": "b721e070-ae21-4123-a1f3-27b926375a16",
-          "title": "Sollte man die Code Analyse und das Line Indexing nicht von der Cursorposition nach oben und parallel nach unten führen - plus eine Tabelle welche Zeilenranges bereits aufgewärmt sind bis alle Zeilen aufgewärmt sind. Bei TOF dann eben nur nach unten und bei EOF eben nucr nach oben. Jeweils Coregesamtanzahl/4 in jede Richtung: Bei 16 Cores je 8 Blöcke nach oben und 8 nach unten rechnen.",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
-          "id": "279d949e-bfcb-474b-a09d-7f747f5c5093",
-          "listId": "b721e070-ae21-4123-a1f3-27b926375a16",
-          "title": "Nochmal alle Folding Sprachen durchtesten ob die Klammerungen sauber erkannt werden.",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
           "id": "9e5fe557-f87c-44b2-81c3-784a6368fbbf",
           "listId": "b721e070-ae21-4123-a1f3-27b926375a16",
           "title": "Einige Sourcefiles sind viel zu gross. Neu sinnhaft strukturieren und entschlacken.",
@@ -249,10 +231,34 @@
               "comment": "Doch ein Grid implementieren lassen? (Calculator)"
             }
           ]
+        }
+      ]
+    },
+    {
+      "id": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+      "title": "Done",
+      "cards": [
+        {
+          "id": "d857df61-3b75-4a89-af53-11aee8857629",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Bei Änderung der Farbcodes für changed text wird der editor nicht neu gezeichnet. der neue farbcode wird aber angewendet",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "279d949e-bfcb-474b-a09d-7f747f5c5093",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Nochmal alle Folding Sprachen durchtesten ob die Klammerungen sauber erkannt werden.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
         },
         {
           "id": "a24d42c4-f168-415f-85ca-90ac35821dc2",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
           "title": "Indenting",
           "description": "",
           "labels": [],
@@ -265,24 +271,18 @@
           ]
         },
         {
-          "id": "f15639e1-8d0d-438b-9dbf-0ce189765a99",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Sprachklassifizierer erkennt bei cpp korpus fish",
+          "id": "e15c0ece-5c81-4259-8f69-88523081e123",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Sollte man die Code Analyse und das Line Indexing nicht von der Cursorposition nach oben und parallel nach unten führen - plus eine Tabelle welche Zeilenranges bereits aufgewärmt sind bis alle Zeilen aufgewärmt sind. Bei TOF dann eben nur nach unten und bei EOF eben nucr nach oben. Jeweils Coregesamtanzahl/4 in jede Richtung: Bei 16 Cores je 8 Blöcke nach oben und 8 nach unten rechnen.",
           "description": "",
           "labels": [],
           "checkboxes": [],
           "comments": []
-        }
-      ]
-    },
-    {
-      "id": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
-      "title": "Done",
-      "cards": [
+        },
         {
-          "id": "d857df61-3b75-4a89-af53-11aee8857629",
+          "id": "f15639e1-8d0d-438b-9dbf-0ce189765a99",
           "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
-          "title": "Bei Änderung der Farbcodes für changed text wird der editor nicht neu gezeichnet. der neue farbcode wird aber angewendet",
+          "title": "Sprachklassifizierer erkennt bei cpp korpus fish",
           "description": "",
           "labels": [],
           "checkboxes": [],

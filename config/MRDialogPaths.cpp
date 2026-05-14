@@ -1475,7 +1475,6 @@ static const MREditSettingDescriptor kEditSettingDescriptors[] = {
     {"CODE_LANGUAGE", "Code language", MREditSettingSection::Display, MREditSettingKind::Choice, true, kOvCodeLanguage},
     {"CODE_COLORING", "Code coloring", MREditSettingSection::Display, MREditSettingKind::Boolean, true, kOvCodeColoring},
     {"CODE_FOLDING", "Code folding", MREditSettingSection::Display, MREditSettingKind::Boolean, true, kOvCodeFoldingFeature},
-    {"SMART_INDENTING", "Smart indenting", MREditSettingSection::Display, MREditSettingKind::Boolean, true, kOvSmartIndenting},
     {"FILE_TYPE", "File type", MREditSettingSection::Formatting, MREditSettingKind::Choice, true, kOvFileType},
     {"BINARY_RECORD_LENGTH", "Binary record length", MREditSettingSection::Formatting, MREditSettingKind::Integer, true, kOvBinaryRecordLength},
     {"POST_LOAD_MACRO", "Post-load macro", MREditSettingSection::Macros, MREditSettingKind::String, true, kOvPostLoadMacro},
@@ -3103,8 +3102,6 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 		if (!parseAndAssignBooleanLiteral(value, current.codeColoring, errorMessage)) return false;
 	} else if (upperKeyName == "CODE_FOLDING") {
 		if (!parseAndAssignBooleanLiteral(value, current.codeFoldingFeature, errorMessage)) return false;
-	} else if (upperKeyName == "SMART_INDENTING") {
-		if (!parseAndAssignBooleanLiteral(value, current.smartIndenting, errorMessage)) return false;
 	} else if (upperKeyName == "FILE_TYPE") {
 		normalized = normalizeFileType(value);
 		if (normalized.empty()) return setError(errorMessage, "FILE_TYPE must be LEGACY_TEXT, UNIX or BINARY.");
@@ -3221,7 +3218,6 @@ std::string editSetupValueLiteral(const MREditSetupSettings &settings, const cha
 	if (upperKey == "CODE_LANGUAGE") return settings.codeLanguage;
 	if (upperKey == "CODE_COLORING") return formatEditSetupBoolean(settings.codeColoring);
 	if (upperKey == "CODE_FOLDING") return formatEditSetupBoolean(settings.codeFoldingFeature);
-	if (upperKey == "SMART_INDENTING") return formatEditSetupBoolean(settings.smartIndenting);
 	if (upperKey == "FILE_TYPE") return settings.fileType;
 	if (upperKey == "BINARY_RECORD_LENGTH") return std::to_string(settings.binaryRecordLength);
 	if (upperKey == "POST_LOAD_MACRO") return settings.postLoadMacro;
@@ -3252,7 +3248,7 @@ std::string editSetupValueLiteral(const MREditSetupSettings &settings, const cha
 }
 
 unsigned long long supportedEditProfileOverrideMask() noexcept {
-	static constexpr unsigned long long mask = kOvPageBreak | kOvWordDelimiters | kOvDefaultExtensions | kOvTruncateSpaces | kOvEofCtrlZ | kOvEofCrLf | kOvTabExpand | kOvDisplayTabs | kOvTabSize | kOvLeftMargin | kOvRightMargin | kOvFormatRuler | kOvWordWrap | kOvIndentStyle | kOvCodeLanguage | kOvCodeColoring | kOvCodeFoldingFeature | kOvSmartIndenting | kOvFileType | kOvBinaryRecordLength | kOvPostLoadMacro | kOvPreSaveMacro | kOvDefaultPath | kOvFormatLine | kOvBackupFiles | kOvShowEofMarker | kOvShowEofMarkerEmoji | kOvLineNumZeroFill | kOvLineNumbersPosition | kOvMiniMapPosition | kOvMiniMapWidth | kOvMiniMapMarkerGlyph | kOvGutters | kOvPersistentBlocks | kOvCodeFoldingPosition | kOvColumnBlockMove | kOvDefaultMode | kOvCursorStatusColor;
+	static constexpr unsigned long long mask = kOvPageBreak | kOvWordDelimiters | kOvDefaultExtensions | kOvTruncateSpaces | kOvEofCtrlZ | kOvEofCrLf | kOvTabExpand | kOvDisplayTabs | kOvTabSize | kOvLeftMargin | kOvRightMargin | kOvFormatRuler | kOvWordWrap | kOvIndentStyle | kOvCodeLanguage | kOvCodeColoring | kOvCodeFoldingFeature | kOvFileType | kOvBinaryRecordLength | kOvPostLoadMacro | kOvPreSaveMacro | kOvDefaultPath | kOvFormatLine | kOvBackupFiles | kOvShowEofMarker | kOvShowEofMarkerEmoji | kOvLineNumZeroFill | kOvLineNumbersPosition | kOvMiniMapPosition | kOvMiniMapWidth | kOvMiniMapMarkerGlyph | kOvGutters | kOvPersistentBlocks | kOvCodeFoldingPosition | kOvColumnBlockMove | kOvDefaultMode | kOvCursorStatusColor;
 	return mask;
 }
 
@@ -3396,7 +3392,6 @@ MREditSetupSettings resolveEditSetupDefaults() {
 	defaults.codeLanguage = "NONE";
 	defaults.codeColoring = false;
 	defaults.codeFoldingFeature = false;
-	defaults.smartIndenting = false;
 	defaults.fileType = kFileTypeUnix;
 	defaults.binaryRecordLength = kDefaultBinaryRecordLength;
 	defaults.postLoadMacro.clear();
@@ -4536,7 +4531,6 @@ MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults, 
 	if ((overrides.mask & kOvCodeLanguage) != 0) merged.codeLanguage = overrides.values.codeLanguage;
 	if ((overrides.mask & kOvCodeColoring) != 0) merged.codeColoring = overrides.values.codeColoring;
 	if ((overrides.mask & kOvCodeFoldingFeature) != 0) merged.codeFoldingFeature = overrides.values.codeFoldingFeature;
-	if ((overrides.mask & kOvSmartIndenting) != 0) merged.smartIndenting = overrides.values.smartIndenting;
 	if ((overrides.mask & kOvFileType) != 0) merged.fileType = overrides.values.fileType;
 	if ((overrides.mask & kOvBinaryRecordLength) != 0) merged.binaryRecordLength = overrides.values.binaryRecordLength;
 	if ((overrides.mask & kOvPostLoadMacro) != 0) merged.postLoadMacro = overrides.values.postLoadMacro;
@@ -4875,7 +4869,6 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	normalized.codeLanguage = codeLanguage;
 	normalized.codeColoring = settings.codeColoring;
 	normalized.codeFoldingFeature = settings.codeFoldingFeature;
-	normalized.smartIndenting = settings.smartIndenting || indentStyle == "SMART";
 	normalized.fileType = fileType;
 	normalized.binaryRecordLength = settings.binaryRecordLength;
 	normalized.postLoadMacro = postLoadMacro;
@@ -5833,7 +5826,6 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('CODE_LANGUAGE', '" + escapeMrmacSingleQuotedLiteral(edit.codeLanguage) + "');\n";
 	source += "MRSETUP('CODE_COLORING', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.codeColoring)) + "');\n";
 	source += "MRSETUP('CODE_FOLDING', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.codeFoldingFeature)) + "');\n";
-	source += "MRSETUP('SMART_INDENTING', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.smartIndenting)) + "');\n";
 	source += "MRSETUP('FILE_TYPE', '" + escapeMrmacSingleQuotedLiteral(edit.fileType) + "');\n";
 	source += "MRSETUP('BINARY_RECORD_LENGTH', '" + std::to_string(edit.binaryRecordLength) + "');\n";
 	source += "MRSETUP('POST_LOAD_MACRO', '" + escapeMrmacSingleQuotedLiteral(edit.postLoadMacro) + "');\n";

@@ -130,6 +130,7 @@ struct MRMiniMapRenderer::Impl {
 	std::uint64_t warmupTaskId = 0;
 	std::size_t warmupDocumentId = 0;
 	std::size_t warmupVersion = 0;
+	std::size_t warmupTopLine = 0;
 	int warmupRows = 0;
 	int warmupBodyWidth = 0;
 	int warmupViewportWidth = 0;
@@ -140,6 +141,10 @@ struct MRMiniMapRenderer::Impl {
 	std::size_t lastWarmupScheduledWindowLineCount = 0;
 	std::chrono::steady_clock::time_point lastWarmupScheduledAt;
 	RenderCache cache;
+
+	static bool hasProjectionFor(const RenderCache &cache, int rowCount, int bodyWidth) noexcept {
+		return cache.bodyWidth == bodyWidth && cache.rowCount == rowCount && !cache.rowPatterns.empty();
+	}
 
 	static void normalizeLineMasks(std::vector<OverlayState::LineMask> &masks) {
 		if (masks.empty()) return;
@@ -178,6 +183,23 @@ struct MRMiniMapRenderer::Impl {
 		return window;
 	}
 
+	static bool pendingWindowStillUseful(std::size_t pendingTopLine, const SamplingWindow &pendingWindow, std::size_t requestedTopLine, int requestedRows) noexcept {
+		const std::size_t visibleRows = static_cast<std::size_t>(std::max(requestedRows, 1));
+		const std::size_t pendingWindowLineCount = std::max<std::size_t>(1, pendingWindow.lineCount);
+		const std::size_t pendingWindowEnd = pendingWindow.startLine + pendingWindowLineCount;
+		const std::size_t requestedBottomLine = requestedTopLine + visibleRows;
+		if (requestedTopLine < pendingWindow.startLine || requestedBottomLine > pendingWindowEnd) return false;
+
+		const std::size_t focusDelta = pendingTopLine > requestedTopLine ? pendingTopLine - requestedTopLine : requestedTopLine - pendingTopLine;
+		if (focusDelta <= visibleRows) return true;
+
+		const std::size_t guardBand = std::max<std::size_t>(visibleRows, pendingWindowLineCount / 5);
+		const std::size_t effectiveGuard = std::min(guardBand, pendingWindowLineCount);
+		const std::size_t preferredStart = pendingWindow.startLine + effectiveGuard;
+		const std::size_t preferredEnd = pendingWindowEnd > effectiveGuard ? pendingWindowEnd - effectiveGuard : pendingWindow.startLine;
+		return preferredStart < preferredEnd && requestedTopLine >= preferredStart && requestedBottomLine <= preferredEnd;
+	}
+
 	bool cacheReadyForViewport(const Viewport &viewport, int rowCount, bool braille, const SamplingWindow &window, std::size_t documentId, std::size_t version) const noexcept {
 		return cache.valid && cache.documentId == documentId && cache.documentVersion == version && cache.rowCount == rowCount && cache.bodyWidth == viewport.bodyWidth && cache.viewportWidth == std::max(1, viewport.width) && cache.braille == braille && cache.windowStartLine == window.startLine && cache.windowLineCount == std::max<std::size_t>(1, window.lineCount);
 	}
@@ -190,6 +212,7 @@ struct MRMiniMapRenderer::Impl {
 		warmupTaskId = 0;
 		warmupDocumentId = 0;
 		warmupVersion = 0;
+		warmupTopLine = 0;
 		warmupRows = 0;
 		warmupBodyWidth = 0;
 		warmupViewportWidth = 0;
@@ -235,6 +258,10 @@ std::string MRMiniMapRenderer::normalizedViewportMarkerGlyph(const std::string &
 
 std::uint64_t MRMiniMapRenderer::pendingWarmupTaskId() const noexcept {
 	return mImpl != nullptr ? mImpl->warmupTaskId : 0;
+}
+
+bool MRMiniMapRenderer::hasProjection(int rowCount, int bodyWidth) const noexcept {
+	return mImpl != nullptr && Impl::hasProjectionFor(mImpl->cache, rowCount, bodyWidth);
 }
 
 MRMiniMapRenderer::Signals MRMiniMapRenderer::clearWarmupTask(std::uint64_t expectedTaskId) noexcept {
@@ -289,6 +316,7 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 	if (mImpl->cacheReadyForViewport(viewport, rowCount, useBraille, samplingWindow, documentId, version)) return signals;
 	const int bodyWidth = viewport.bodyWidth;
 	const int viewportWidth = std::max(1, viewport.width);
+	const bool haveProjection = Impl::hasProjectionFor(mImpl->cache, rowCount, bodyWidth);
 	if (preservePendingTaskForSameDocument && mImpl->warmupTaskId == 0 && mImpl->warmupDocumentId == documentId && mImpl->warmupRows == rowCount && mImpl->warmupBodyWidth == bodyWidth &&
 	    mImpl->warmupViewportWidth == viewportWidth && mImpl->warmupBraille == useBraille && mImpl->lastWarmupScheduledWindowStartLine == samplingWindow.startLine &&
 	    mImpl->lastWarmupScheduledWindowLineCount == samplingWindow.lineCount && mImpl->lastWarmupScheduledAt != std::chrono::steady_clock::time_point() &&
@@ -296,7 +324,10 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 		return signals;
 	if (mImpl->warmupTaskId != 0) {
 		if (mImpl->warmupDocumentId == documentId && mImpl->warmupVersion == version && mImpl->warmupRows == rowCount && mImpl->warmupBodyWidth == bodyWidth && mImpl->warmupViewportWidth == viewportWidth && mImpl->warmupBraille == useBraille && mImpl->warmupWindowStartLine == samplingWindow.startLine && mImpl->warmupWindowLineCount == samplingWindow.lineCount) return signals;
-		if (preservePendingTaskForSameDocument && mImpl->warmupDocumentId == documentId && mImpl->warmupVersion == version) return signals;
+		if (preservePendingTaskForSameDocument && mImpl->warmupDocumentId == documentId && mImpl->warmupVersion == version) {
+			const Impl::SamplingWindow pendingWindow = {mImpl->warmupWindowStartLine, std::max<std::size_t>(1, mImpl->warmupWindowLineCount)};
+			if (Impl::pendingWindowStillUseful(mImpl->warmupTopLine, pendingWindow, topLine, rowCount) && haveProjection) return signals;
+		}
 		static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mImpl->warmupTaskId));
 		signals.merge(mImpl->clearWarmupTask(mImpl->warmupTaskId));
 	}
@@ -304,6 +335,7 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 	std::uint64_t previousTaskId = mImpl->warmupTaskId;
 	mImpl->warmupDocumentId = documentId;
 	mImpl->warmupVersion = version;
+	mImpl->warmupTopLine = topLine;
 	mImpl->warmupRows = rowCount;
 	mImpl->warmupBodyWidth = bodyWidth;
 	mImpl->warmupViewportWidth = viewportWidth;

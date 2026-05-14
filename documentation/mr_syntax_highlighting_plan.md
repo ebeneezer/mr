@@ -62,6 +62,16 @@ Erledigt:
 
 Erledigte Konsolidierung nach dem letzten Lexer-Block:
 
+- der Dokumentkern wurde über den reinen Syntaxzug hinaus grundlegend stabilisiert:
+  - der editierte Zustand verwendet wieder einen belastbaren exakten Zeilenindex
+  - Whole-buffer-Hotpaths wurden aus kritischen Edit-Pfaden entfernt
+  - Insert- und Erase-Pfade bleiben auch auf großen Dateien bedienbar
+  - Block-Delete läuft nicht mehr über Vollsnapshot plus Whole-buffer-Replace
+  - Undo-/Redo- und Restore-Pfade wurden aus den blockierenden Voll-Rebuilds herausgeführt
+- die Quit- und Lebensdauerpfade wurden bereinigt:
+  - `exit-discard` läuft nicht mehr in teure Nachläufe wie `longestLineWidth()`
+  - Dirty-Gating ist wieder korrekt
+  - der normale Quit-Pfad ist wieder praktisch sofort
 - Syntax-Invalidation kappt überholte Warmup-Läufe und setzt die Prefetch-Frontier sauber zurück
 - Smart Indent wurde für zsh, Perl und Markdown nachgeschärft
 - heuristische Fold-Marker im Gutter sind ergänzt
@@ -74,6 +84,7 @@ Erledigte Konsolidierung nach dem letzten Lexer-Block:
 - die UI-seitigen Syntax-Reschedule-Oszillationen wurden beseitigt; `drawView()` und no-op-`scrollDraw()` stoßen keinen Syntax-Warmup mehr an
 - Warmup-/Prefetch-Pending bleibt über sichtbare Task-Signale erkennbar
 - MiniMap und Viewport werden bei sehr großen Dateien nach exakter Zeilenzahl enger nachgeführt
+- aufgestaute Paging-Ereignisse bei gehaltenem `PageUp`/`PageDown` wurden durch Coalescing entschärft; der Editor bleibt dabei bedienbar
 - automatische inhaltsheuristische Sprachklassifikation ist im Syntax-Modul umgesetzt
 - `CODE_LANGUAGE=AUTO` ist im Runtime-Pfad wirksam verdrahtet
 - der FE-Dialog führt die Sprachwahl als `Automatic`, intern bleibt die kanonische Serialisierung `AUTO`
@@ -101,7 +112,8 @@ Erledigte Konsolidierung nach dem letzten Lexer-Block:
 - das Folding-Gutter nutzt jetzt ein einheitliches Klickmodell:
   - Linksklick toggelt den direkt getroffenen Fold
   - Rechtsklick toggelt alle sichtbaren Folds der getroffenen Spalte und aller Spalten rechts davon
-- `foldtrainer/mrfoldtrainer` ist als separates Batchtool eingeführt und als regulärer Härtungspfad für Folding etabliert
+- `trainers/foldtrainer/mrfoldtrainer` ist als separates Batchtool eingeführt und als regulärer Härtungspfad für Folding etabliert
+- `trainers/indenttrainer/mrindenttrainer` ist als separates Batchtool eingeführt und als regulärer Härtungspfad für Smart Indent / Smart Undent etabliert
 - batchtrainer-gestützt bis zu einem tragfähigen `v1.0`-Stand nachgezogen:
   - `MRMAC`
   - `Perl`
@@ -112,6 +124,9 @@ Erledigte Konsolidierung nach dem letzten Lexer-Block:
   - `Swift`
   - `Rust`
   - `Go`
+- Smart Indent wurde batchtrainer-gestützt zusätzlich nachgezogen für:
+  - `bash`
+  - `fish`
 - `bash` und `zsh` sind als getrennte Sprachpfade mit getrennten Markern und getrennter Dateierkennung verdrahtet; `bash` ist nicht mehr nur ein `zsh`-Alias
 - die `systemd`-Familie ist als eigene Sprachfamilie verdrahtet:
   - `.service`
@@ -162,18 +177,39 @@ Erledigte Konsolidierung nach dem letzten Lexer-Block:
   - `WHILE ... DO`
   - `END`
   - geschachtelte Blockkombinationen daraus
+- Syntax, Folding und MiniMap laufen jetzt wieder gemeinsam auf einer bereinigten Foundation:
+  - Syntax ist viewportnah reaktiviert und auch auf sehr großen Dateien bedienbar
+  - Folding nutzt einen viewportzentrierten Up/Down-Scanner, arbeitet dateigrößenunabhängig und fällt nach Viewport-Ruhe sofort ab
+  - die MiniMap ist wieder sichtbar, nutzt denselben gemeinsamen Scannerkern wie Folding und ist von der früheren globalen `pieceTableOnly`-Blockade entkoppelt
+- die MiniMap-Reaktivität ist auf dieser Foundation nachgeschärft:
+  - letzte brauchbare Projektion bleibt sichtbar
+  - viewportnahe Requests werden sauberer nachgeführt
+  - Overlay-Neuberechnung läuft nur noch bei echter Nutzänderung
+- der Nicht-Brace-Bestand ist trainergestützt auf größere Realkorpora nachgezogen:
+  - `bash`
+  - `zsh`
+  - `Perl`
+  - `fish`
+- breite Korpusrunden auf dem aktuell unterstützten Smart-Indent-Bestand haben zuletzt keine offenen belegten `strict`-Restfehler mehr ergeben
+
+Aktueller Qualitätsstand:
+
+- Inserts: sauber und auch in großer Menge bedienbar
+- normale Deletes: sauber
+- Block-Delete: sofort
+- `PageUp` / `PageDown`: bedienbar, kein langer Event-Stau nach Loslassen
+- Syntax: bedienbar auf sehr großen Dateien
+- Folding: schnell genug und mit sauberem CPU-Abklingen
+- MiniMap: funktional korrekt und sichtbar
+- MiniMap-Reaktivität: auf der bestehenden Foundation ausreichend nachgezogen
+- `exit-discard`: praktisch sofort
 
 Noch nicht erledigt:
 
-- automatische Sprachklassifikation zeigt derzeit keinen Handlungsbedarf; weitere Härtung bleibt nur Reserve für echte Fehlbefunde
-- aktuell sind keine weiteren Sprachaufnahmen für Folding oder Indenting gewünscht
-- `fish` bleibt als nächster explizit vorgesehener Sprachkandidat in der Integrationssammlung; der vorhandene Korpus in `misc/` bleibt dafür bewusst liegen
-- der nächste Gesamtzug liegt daher ausschließlich in Konsolidierung des Bestands:
-  - Resthärtung des sprachübergreifenden Smart-Indent-/Undent-Pfads auf bereits unterstützten Sprachen
-  - Konsistenz zwischen Editor, FE-Dialog, Auto-Erkennung, Folding und den Batchtools `mrfoldtrainer` und `mrindenttrainer`
-  - UI-/Dialogpflege außerhalb neuer Sprachaufnahmen
-  - Dokumentation und Qualitätsstand des bestehenden `v1.0`-Sprachbestands
-  - danach gezielte Aufnahme von `fish` als nächster neuer Sprachzug
+- bezogen auf diesen Plan besteht derzeit kein offener Pflichtpunkt mehr im bestehenden `v1.0`-Bestand
+- automatische Sprachklassifikation zeigt derzeit keinen Handlungsbedarf; weitere Härtung bleibt Reserve für echte Fehlbefunde
+- weitere Korpusrunden, neue Sprachaufnahmen oder zusätzliche UI-/Dialogpflege sind eigenständige Folgethemen und nicht mehr Teil dieses Restzugs
+- ein Themenwechsel ist daher vertretbar, solange kein neuer belegter Fehlbefund aus dem aktuellen Bestand auftaucht
 
 ---
 

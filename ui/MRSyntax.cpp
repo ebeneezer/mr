@@ -288,6 +288,36 @@ int countLinePrefixMatches(std::string_view text, std::string_view prefix, int m
 	return count;
 }
 
+bool isCLikeFunctionHeaderLine(std::string_view line) noexcept {
+	static constexpr std::string_view kPrefixes[] = {
+		"int ",      "void ",       "char ",         "short ",       "long ",      "float ",      "double ",      "signed ",
+		"unsigned ", "static int ", "static void ",  "static char ", "static long ","static float ","static double ","const char "
+	};
+
+	line = trimWhitespaceView(line);
+	if (line.empty()) return false;
+	for (std::string_view prefix : kPrefixes) {
+		if (!startsWithText(line, prefix)) continue;
+		const std::size_t lparen = line.find('(');
+		const std::size_t rparen = line.find(')', lparen == std::string_view::npos ? 0 : lparen + 1);
+		if (lparen == std::string_view::npos || rparen == std::string_view::npos || lparen == 0) return false;
+		if (line.find('=', 0) != std::string_view::npos && line.find('=', 0) < lparen) return false;
+		const char beforeParen = line[lparen - 1];
+		if (!(std::isalnum(static_cast<unsigned char>(beforeParen)) || beforeParen == '_')) return false;
+		return true;
+	}
+	return false;
+}
+
+int countCLikeFunctionHeaderLines(std::string_view text, int maxCount = INT_MAX) noexcept {
+	int count = 0;
+	std::size_t pos = 0;
+
+	while (pos < text.size() && count < maxCount)
+		if (isCLikeFunctionHeaderLine(nextLineView(text, pos))) ++count;
+	return count;
+}
+
 bool isPythonBlockHeader(std::string_view line) noexcept {
 	static const std::array<std::string_view, 15> prefixes = {
 		"def ", "class ", "if ", "elif ", "else:", "for ", "while ", "with ", "try:", "except", "finally:", "async def ", "match ", "case ", "except*"
@@ -3847,11 +3877,17 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	if (forceCppLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::Cpp, 100);
 
 	const int includeLines = countLinePrefixMatches(lower, "#include", 8);
+	const int cStdHeaderIncludes = countMatches(lower, "<assert.h>", 4) + countMatches(lower, "<ctype.h>", 4) + countMatches(lower, "<errno.h>", 4) + countMatches(lower, "<float.h>", 4) +
+	                               countMatches(lower, "<limits.h>", 4) + countMatches(lower, "<math.h>", 4) + countMatches(lower, "<setjmp.h>", 4) + countMatches(lower, "<signal.h>", 4) +
+	                               countMatches(lower, "<stdarg.h>", 4) + countMatches(lower, "<stdbool.h>", 4) + countMatches(lower, "<stddef.h>", 4) + countMatches(lower, "<stdint.h>", 4) +
+	                               countMatches(lower, "<stdio.h>", 4) + countMatches(lower, "<stdlib.h>", 4) + countMatches(lower, "<string.h>", 4) + countMatches(lower, "<time.h>", 4);
 	const int defineLines = countLinePrefixMatches(lower, "#define", 8);
 	const int typedefLines = countLinePrefixMatches(lower, "typedef ", 8);
 	const int namespaceLines = countLinePrefixMatches(lower, "namespace ", 8);
 	const int templateLines = countLinePrefixMatches(lower, "template<", 8);
 	const int cppClassLines = countLinePrefixMatches(lower, "class ", 8);
+	const int mainFunctionMentions = countMatches(lower, "main(", 4);
+	const int cFunctionHeaderLines = countCLikeFunctionHeaderLines(sample, 8);
 	const int importLines = countLinePrefixMatches(lower, "import ", 8);
 	const int exportLines = countLinePrefixMatches(lower, "export ", 8);
 	const int functionLines = countLinePrefixMatches(lower, "function ", 8);
@@ -3928,12 +3964,24 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	if (lowerName == "readme" || startsWithText(lowerName, "readme.")) addClassificationScore(scores, MRSyntaxLanguage::Markdown, 6), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Markdown)] += 1;
 
 	addClassificationScore(scores, MRSyntaxLanguage::C, includeLines * 5);
+	addClassificationScore(scores, MRSyntaxLanguage::C, cStdHeaderIncludes * 4);
 	addClassificationScore(scores, MRSyntaxLanguage::C, defineLines * 3);
 	addClassificationScore(scores, MRSyntaxLanguage::C, typedefLines * 3);
 	addClassificationScore(scores, MRSyntaxLanguage::C, countMatches(lower, "struct ", 8) * 2);
 	addClassificationScore(scores, MRSyntaxLanguage::C, countMatches(lower, "enum ", 8) * 2);
 	addClassificationScore(scores, MRSyntaxLanguage::C, countMatches(lower, "->", 12));
+	addClassificationScore(scores, MRSyntaxLanguage::C, cFunctionHeaderLines * 4);
 	if (includeLines + typedefLines > 0) strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::C)] += std::min(3, includeLines + typedefLines);
+	if (cStdHeaderIncludes > 0) strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::C)] += std::min(2, cStdHeaderIncludes);
+	if (cFunctionHeaderLines > 0 && namespaceLines == 0 && templateLines == 0 && cppClassLines == 0 && countMatches(lower, "::", 16) == 0) {
+		if (braceCount >= 2) addClassificationScore(scores, MRSyntaxLanguage::C, 4);
+		if (defineLines > 0) addClassificationScore(scores, MRSyntaxLanguage::C, 3);
+		strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::C)] += std::min(2, cFunctionHeaderLines);
+	}
+	if (includeLines > 0 && mainFunctionMentions > 0 && namespaceLines == 0 && templateLines == 0 && cppClassLines == 0 && countMatches(lower, "::", 16) == 0) {
+		addClassificationScore(scores, MRSyntaxLanguage::C, 4 + mainFunctionMentions * 2);
+		++strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::C)];
+	}
 
 	addClassificationScore(scores, MRSyntaxLanguage::Cpp, namespaceLines * 4);
 	addClassificationScore(scores, MRSyntaxLanguage::Cpp, templateLines * 4);
@@ -4280,11 +4328,11 @@ const char *tmrSyntaxLanguageMarker(MRSyntaxLanguage language) noexcept {
 		case MRSyntaxLanguage::Systemd:
 			return "Sd";
 		case MRSyntaxLanguage::MRMAC:
-			return "MM";
+			return "MR";
 		case MRSyntaxLanguage::Make:
-			return "Mk";
+			return "MK";
 		case MRSyntaxLanguage::Markdown:
-			return "Md";
+			return "MD";
 		default:
 			return "";
 	}

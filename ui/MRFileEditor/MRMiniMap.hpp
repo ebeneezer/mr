@@ -69,6 +69,7 @@ class MRMiniMapRenderer {
 	static std::string normalizedViewportMarkerGlyph(const std::string &configuredGlyph);
 
 	std::uint64_t pendingWarmupTaskId() const noexcept;
+	bool hasProjection(int rowCount, int bodyWidth) const noexcept;
 	Signals clearWarmupTask(std::uint64_t expectedTaskId) noexcept;
 	Signals invalidate(bool cancelTask, std::size_t documentId) noexcept;
 	ApplyWarmupResult applyWarmup(const mr::coprocessor::MiniMapWarmupPayload &payload, std::size_t expectedVersion, std::uint64_t expectedTaskId, std::size_t documentId, std::size_t version) noexcept;

@@ -1128,6 +1128,7 @@ Offset ReadSnapshot::prevLine(Offset pos) const noexcept {
 std::size_t ReadSnapshot::lineIndex(Offset pos) const noexcept {
 	pos = clampOffset(pos);
 	if (hasEditedLineStartIndex()) {
+		if (pos == mLength && mLength > 0 && isLineBreakChar(charAt(mLength - 1))) return mEditedLineStarts->size() - 1;
 		const Offset lookupPos = pos == mLength && mLength > 0 ? mLength - 1 : pos;
 		return lineIndexFromExactStarts(*mEditedLineStarts, lookupPos);
 	}
@@ -1660,6 +1661,17 @@ std::size_t TextDocument::lineIndex(Offset pos) const noexcept {
 	const Offset requestedPos = pos;
 	pos = clampOffset(pos);
 	if (hasEditedLineStartIndex()) {
+		if (pos == mLength && mLength > 0 && isLineBreakChar(charAt(mLength - 1))) {
+			const std::size_t result = mEditedLineStarts->size() - 1;
+			const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+			if (totalElapsed >= kSlowDocumentTraceThreshold) {
+				std::ostringstream line;
+				line << "Phase1 doc lineIndex total_us=" << traceMicros(totalElapsed) << " pos=" << requestedPos << " result=" << result << " exact_lines=" << mEditedLineStarts->size()
+				     << " len=" << mLength << " add=" << mAddBuffer.size() << " pieces=" << pieceCount() << " direct=0 eof_trailing_break=1";
+				appendDocumentTrace(line.str());
+			}
+			return result;
+		}
 		const Offset lookupPos = pos == mLength && mLength > 0 ? mLength - 1 : pos;
 		const std::size_t result = lineIndexFromExactStarts(*mEditedLineStarts, lookupPos);
 		const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
@@ -2086,8 +2098,7 @@ void TextDocument::updateEditedLineStartIndexForInsert(Offset offset, std::strin
 	if (!mEditedLineStarts.unique()) mEditedLineStarts = std::make_shared<std::vector<Offset>>(*mEditedLineStarts);
 	std::vector<Offset> &starts = *mEditedLineStarts;
 	std::vector<Offset> insertedStarts;
-	const bool hasSuffix = offset < (mLength - static_cast<Offset>(text.size()));
-	appendLineStartsFromInsertedText(insertedStarts, offset, text, hasSuffix);
+	appendLineStartsFromInsertedText(insertedStarts, offset, text, true);
 
 	std::vector<Offset>::iterator suffix = std::upper_bound(starts.begin() + 1, starts.end(), offset);
 	for (std::vector<Offset>::iterator it = suffix; it != starts.end(); ++it)
