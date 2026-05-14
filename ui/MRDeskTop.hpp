@@ -10,6 +10,8 @@
 #include "../config/MRDialogPaths.hpp"
 
 #include <algorithm>
+#include <ctime>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -91,6 +93,19 @@ class MRDesktopBackground : public TBackground {
 class MRDeskTop : public TDeskTop {
   public:
 	MRDeskTop(const TRect &r) : TDeskInit(&MRDeskTop::initBackground), TDeskTop(r) {
+	}
+
+	virtual ~MRDeskTop() override {
+		std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+		if (!out) return;
+		std::time_t now = std::time(nullptr);
+		std::tm *tmNow = std::localtime(&now);
+		char buffer[32];
+		if (tmNow != nullptr && std::strftime(buffer, sizeof(buffer), "%H:%M:%S", tmNow) != 0) out << "[" << buffer << "] ";
+		else
+			out << "[--:--:--] ";
+		out << "MRDeskTop destructor begin.\n";
+		out.flush();
 	}
 
   private:

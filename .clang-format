@@ -1,7 +1,7 @@
 BasedOnStyle: LLVM
 
-IndentWidth: 4
-TabWidth: 4
+IndentWidth: 3
+TabWidth: 3
 UseTab: ForIndentation
 
 BreakBeforeBraces: Attach
@@ -21,4 +21,4 @@ PenaltyBreakBeforeFirstCallParameter: 1000000
 IndentCaseLabels: true
 ReflowComments: false
 SortIncludes: false
-ColumnLimit: 1000
+ColumnLimit: 2048

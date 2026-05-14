@@ -1,11 +1,13 @@
 #include "MRTextDocument.hpp"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cerrno>
-#include <cstdio>
-#include <cstdlib>
+#include <chrono>
 #include <cstring>
+#include <ctime>
+#include <fstream>
 #include <limits>
 #include <sstream>
 #include <thread>
@@ -13,8 +15,6 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
-
-#include "../ui/MRWindowSupport.hpp"
 
 #if defined(__SSE2__) && (defined(__x86_64__) || defined(__i386__))
 #include <emmintrin.h>
@@ -25,31 +25,38 @@ namespace editor {
 
 namespace {
 constexpr std::size_t kLazyLineIndexStride = 4096;
-constexpr Offset kMinParallelLineIndexBytes = 1u << 20;
-constexpr Offset kMinParallelLineIndexBytesPerWorker = 1u << 19;
-constexpr std::size_t kMaxParallelLineIndexWorkers = 4;
-
-bool traceWarmupCancelEnabled() noexcept {
-	static const bool enabled = []() noexcept {
-		const char *value = std::getenv("MR_TRACE_WARMUP_CANCEL");
-		return value != nullptr && value[0] == '1' && value[1] == '\0';
-	}();
-	return enabled;
-}
-
-void logWarmupCancelTrace(const std::ostringstream &line) {
-	if (!traceWarmupCancelEnabled()) return;
-	mrLogMessage(line.str().c_str());
-}
-
-bool warmupCancelRequested(std::stop_token stopToken, const std::atomic_bool *cancelFlag) noexcept {
-	if (stopToken.stop_requested()) return true;
-	return cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire);
-}
+constexpr std::size_t kPiecewiseLineIndexCheckpointStride = 64;
+constexpr std::size_t kLazyLineStartCatchupWindow = 256;
+constexpr Offset kLargeMappedEditNormalizationLength = static_cast<Offset>(8) * 1024 * 1024;
+constexpr std::size_t kLargeMappedEditNormalizationPieceThreshold = 256;
+constexpr Offset kDirectLineIndexTargetChunkBytes = static_cast<Offset>(1) * 1024 * 1024;
+constexpr auto kSlowDocumentTraceThreshold = std::chrono::microseconds(2000);
 
 std::size_t allocateDocumentId() noexcept {
 	static std::atomic<std::size_t> nextId(1);
 	return nextId.fetch_add(1, std::memory_order_relaxed);
+}
+
+std::string directTraceTimestamp() {
+	std::array<char, 32> buffer{};
+	const std::time_t now = std::time(nullptr);
+	const std::tm *tmNow = std::localtime(&now);
+
+	if (tmNow == nullptr) return std::string("--:--:--");
+	if (std::strftime(buffer.data(), buffer.size(), "%H:%M:%S", tmNow) == 0) return std::string("--:--:--");
+	return std::string(buffer.data());
+}
+
+void appendDocumentTrace(std::string_view message) {
+	std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+
+	if (!out) return;
+	out << "[" << directTraceTimestamp() << "] " << message << '\n';
+	out.flush();
+}
+
+template <class Duration> long long traceMicros(Duration duration) {
+	return std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
 }
 
 template <class Doc> char piecewiseCharAt(const Doc &doc, Offset pos) noexcept {
@@ -73,6 +80,10 @@ inline void appendLineCheckpoint(std::vector<LineIndexCheckpoint> &checkpoints, 
 	if ((lineIndex % kLazyLineIndexStride) == 0) checkpoints.push_back(LineIndexCheckpoint(lineStart, lineIndex));
 }
 
+inline std::size_t checkpointStrideForMode(bool directMode) noexcept {
+	return directMode ? kLazyLineIndexStride : kPiecewiseLineIndexCheckpointStride;
+}
+
 inline void applyLineBreakAt(const char *data, Offset length, Offset breakOffset, Offset &lineStart, std::size_t &lineIndex, std::vector<LineIndexCheckpoint> &checkpoints, Offset &skipLfAt) {
 	const char ch = data[breakOffset];
 	Offset nextLineStart = breakOffset + 1;
@@ -85,6 +96,9 @@ inline void applyLineBreakAt(const char *data, Offset length, Offset breakOffset
 	++lineIndex;
 	appendLineCheckpoint(checkpoints, lineStart, lineIndex);
 }
+
+Offset directFindNextLineBreak(const char *data, Offset length, Offset start) noexcept;
+inline std::size_t countLineBreaksChunk(const char *data, Offset length, bool &prevWasCR) noexcept;
 
 [[maybe_unused]] void buildDirectInitialLineIndexScalar(const char *data, Offset length, std::vector<LineIndexCheckpoint> &checkpoints, Offset &lineStart, std::size_t &lineIndex) {
 	Offset skipLfAt = std::numeric_limits<Offset>::max();
@@ -136,7 +150,82 @@ void buildDirectInitialLineIndexSse2(const char *data, Offset length, std::vecto
 }
 #endif
 
-void buildDirectInitialLineIndex(const char *data, Offset length, std::vector<LineIndexCheckpoint> &checkpoints, Offset &indexedOffset, std::size_t &indexedLine, std::size_t &totalLines) {
+struct DirectLineIndexChunk {
+	Offset start;
+	Offset end;
+	std::size_t breakCount;
+	std::size_t startLineIndex;
+	Offset lastLineStart;
+	std::vector<LineIndexCheckpoint> checkpoints;
+
+	DirectLineIndexChunk() noexcept : start(0), end(0), breakCount(0), startLineIndex(0), lastLineStart(0), checkpoints() {
+	}
+};
+
+Offset nextDirectLineStartAtOrAfter(const char *data, Offset length, Offset pos) noexcept {
+	pos = std::min(pos, length);
+	if (data == nullptr || pos == 0 || pos >= length) return pos;
+	if (data[pos - 1] == '\n') return pos;
+	if (data[pos - 1] == '\r') return data[pos] == '\n' ? std::min(length, pos + 1) : pos;
+
+	const Offset breakPos = directFindNextLineBreak(data, length, pos);
+	if (breakPos >= length) return length;
+	if (data[breakPos] == '\r' && breakPos + 1 < length && data[breakPos + 1] == '\n') return breakPos + 2;
+	return breakPos + 1;
+}
+
+std::vector<DirectLineIndexChunk> planDirectLineIndexChunks(const char *data, Offset length) {
+	std::vector<DirectLineIndexChunk> chunks;
+	chunks.reserve(1);
+	if (data == nullptr || length == 0) {
+		chunks.push_back(DirectLineIndexChunk());
+		chunks.back().start = 0;
+		chunks.back().end = length;
+		chunks.back().lastLineStart = 0;
+		return chunks;
+	}
+
+	unsigned int hardwareThreads = std::thread::hardware_concurrency();
+	if (hardwareThreads == 0) hardwareThreads = 1;
+	const std::size_t requestedWorkers = std::max<std::size_t>(1, static_cast<std::size_t>((length + kDirectLineIndexTargetChunkBytes - 1) / kDirectLineIndexTargetChunkBytes));
+	const std::size_t workerCount = std::max<std::size_t>(1, std::min<std::size_t>(hardwareThreads, requestedWorkers));
+	if (workerCount == 1) {
+		chunks.push_back(DirectLineIndexChunk());
+		chunks.back().start = 0;
+		chunks.back().end = length;
+		chunks.back().lastLineStart = 0;
+		return chunks;
+	}
+
+	std::vector<Offset> boundaries;
+	boundaries.reserve(workerCount + 1);
+	boundaries.push_back(0);
+	for (std::size_t i = 1; i < workerCount; ++i) {
+		const Offset ideal = static_cast<Offset>((static_cast<long double>(length) * static_cast<long double>(i)) / static_cast<long double>(workerCount));
+		const Offset boundary = nextDirectLineStartAtOrAfter(data, length, ideal);
+		if (boundary > boundaries.back() && boundary < length) boundaries.push_back(boundary);
+	}
+	boundaries.push_back(length);
+
+	chunks.reserve(boundaries.size() > 1 ? boundaries.size() - 1 : 1);
+	for (std::size_t i = 0; i + 1 < boundaries.size(); ++i) {
+		if (boundaries[i + 1] < boundaries[i]) continue;
+		DirectLineIndexChunk chunk;
+		chunk.start = boundaries[i];
+		chunk.end = boundaries[i + 1];
+		chunk.lastLineStart = chunk.start;
+		chunks.push_back(std::move(chunk));
+	}
+	if (chunks.empty()) {
+		chunks.push_back(DirectLineIndexChunk());
+		chunks.back().start = 0;
+		chunks.back().end = length;
+		chunks.back().lastLineStart = 0;
+	}
+	return chunks;
+}
+
+void buildDirectInitialLineIndexSingleThreaded(const char *data, Offset length, std::vector<LineIndexCheckpoint> &checkpoints, Offset &indexedOffset, std::size_t &indexedLine, std::size_t &totalLines) {
 	checkpoints.clear();
 	checkpoints.push_back(LineIndexCheckpoint(0, 0));
 	indexedOffset = 0;
@@ -150,194 +239,74 @@ void buildDirectInitialLineIndex(const char *data, Offset length, std::vector<Li
 	totalLines = indexedLine + 1;
 }
 
-bool buildDirectInitialLineIndexWarmupSerial(const char *data, Offset length, std::vector<LineIndexCheckpoint> &checkpoints, Offset &indexedOffset, std::size_t &indexedLine,
-											 std::size_t &totalLines, std::stop_token stopToken, const std::atomic_bool *cancelFlag) {
-	const Offset cancelStride = 1u << 16;
-	Offset skipLfAt = std::numeric_limits<Offset>::max();
+void countDirectLineIndexChunkBreaks(const char *data, DirectLineIndexChunk &chunk) noexcept {
+	if (data == nullptr || chunk.end <= chunk.start) {
+		chunk.breakCount = 0;
+		return;
+	}
+	bool prevWasCR = false;
+	chunk.breakCount = countLineBreaksChunk(data + chunk.start, chunk.end - chunk.start, prevWasCR);
+}
+
+void collectDirectLineIndexChunkCheckpoints(const char *data, Offset length, DirectLineIndexChunk &chunk) {
+	chunk.checkpoints.clear();
+	chunk.lastLineStart = chunk.start;
+
+	if (data == nullptr || chunk.end < chunk.start) return;
+
+	Offset lineStart = chunk.start;
+	std::size_t lineIndex = chunk.startLineIndex;
+	while (lineStart < chunk.end) {
+		if (lineIndex != 0 && (lineIndex % kLazyLineIndexStride) == 0) chunk.checkpoints.push_back(LineIndexCheckpoint(lineStart, lineIndex));
+		const Offset breakPos = directFindNextLineBreak(data, chunk.end, lineStart);
+		if (breakPos >= chunk.end) break;
+		if (data[breakPos] == '\r' && breakPos + 1 < chunk.end && data[breakPos + 1] == '\n') lineStart = breakPos + 2;
+		else
+			lineStart = breakPos + 1;
+		++lineIndex;
+		chunk.lastLineStart = lineStart;
+	}
+
+	if (chunk.end == length && lineStart == length && lineIndex != 0 && (lineIndex % kLazyLineIndexStride) == 0) chunk.checkpoints.push_back(LineIndexCheckpoint(lineStart, lineIndex));
+}
+
+void buildDirectInitialLineIndex(const char *data, Offset length, std::vector<LineIndexCheckpoint> &checkpoints, Offset &indexedOffset, std::size_t &indexedLine, std::size_t &totalLines) {
+	std::vector<DirectLineIndexChunk> chunks = planDirectLineIndexChunks(data, length);
+	if (chunks.size() <= 1) {
+		buildDirectInitialLineIndexSingleThreaded(data, length, checkpoints, indexedOffset, indexedLine, totalLines);
+		return;
+	}
+
+	std::vector<std::thread> workers;
+	workers.reserve(chunks.size());
+	for (std::size_t i = 0; i < chunks.size(); ++i)
+		workers.emplace_back([data, &chunks, i]() { countDirectLineIndexChunkBreaks(data, chunks[i]); });
+	for (std::thread &worker : workers)
+		worker.join();
+
+	std::size_t totalBreaks = 0;
+	for (DirectLineIndexChunk &chunk : chunks) {
+		chunk.startLineIndex = totalBreaks;
+		totalBreaks += chunk.breakCount;
+	}
+
+	workers.clear();
+	workers.reserve(chunks.size());
+	for (std::size_t i = 0; i < chunks.size(); ++i)
+		workers.emplace_back([data, length, &chunks, i]() { collectDirectLineIndexChunkCheckpoints(data, length, chunks[i]); });
+	for (std::thread &worker : workers)
+		worker.join();
 
 	checkpoints.clear();
+	checkpoints.reserve(1 + totalBreaks / kLazyLineIndexStride);
 	checkpoints.push_back(LineIndexCheckpoint(0, 0));
-	indexedOffset = 0;
-	indexedLine = 0;
+	for (const DirectLineIndexChunk &chunk : chunks)
+		for (const LineIndexCheckpoint &checkpoint : chunk.checkpoints)
+			checkpoints.push_back(checkpoint);
 
-	for (Offset i = 0; i < length; ++i) {
-		if ((i & (cancelStride - 1)) == 0 && warmupCancelRequested(stopToken, cancelFlag)) return false;
-		if (i == skipLfAt) {
-			skipLfAt = std::numeric_limits<Offset>::max();
-			continue;
-		}
-		if (!isLineBreakByte(data[i])) continue;
-		applyLineBreakAt(data, length, i, indexedOffset, indexedLine, checkpoints, skipLfAt);
-	}
-
-	if (warmupCancelRequested(stopToken, cancelFlag)) return false;
-	totalLines = indexedLine + 1;
-	return true;
-}
-
-inline std::size_t directCountLineBreaksInRange(const char *data, Offset length, Offset start, Offset end) noexcept;
-
-struct DirectLineIndexPartition {
-	Offset start;
-	Offset end;
-
-	DirectLineIndexPartition() noexcept : start(0), end(0) {
-	}
-
-	DirectLineIndexPartition(Offset aStart, Offset aEnd) noexcept : start(aStart), end(aEnd) {
-	}
-};
-
-struct DirectLineIndexPartitionResult {
-	bool complete;
-	std::vector<Offset> lineStarts;
-
-	DirectLineIndexPartitionResult() noexcept : complete(false), lineStarts() {
-	}
-};
-
-std::vector<DirectLineIndexPartition> buildDirectLineIndexPartitions(Offset length, std::size_t workerCount) {
-	std::vector<DirectLineIndexPartition> partitions;
-	if (length == 0 || workerCount == 0) return partitions;
-
-	const Offset baseChunk = length / workerCount;
-	const Offset remainder = length % workerCount;
-	Offset start = 0;
-	for (std::size_t i = 0; i < workerCount; ++i) {
-		const Offset chunk = baseChunk + (i < remainder ? 1 : 0);
-		const Offset end = start + chunk;
-		if (end > start) partitions.push_back(DirectLineIndexPartition(start, end));
-		start = end;
-	}
-	return partitions;
-}
-
-std::size_t chooseParallelDirectLineIndexWorkerCount(Offset length) noexcept {
-	if (length < kMinParallelLineIndexBytes) return 0;
-
-	const unsigned int hardware = std::thread::hardware_concurrency();
-	if (hardware <= 1) return 0;
-
-	const Offset byWork = length / kMinParallelLineIndexBytesPerWorker;
-	if (byWork <= 1) return 0;
-
-	std::size_t workerCount = std::min(static_cast<std::size_t>(hardware), kMaxParallelLineIndexWorkers);
-	workerCount = std::min(workerCount, static_cast<std::size_t>(byWork));
-	return workerCount > 1 ? workerCount : 0;
-}
-
-bool buildDirectInitialLineIndexParallel(const char *data, Offset length, std::vector<LineIndexCheckpoint> &checkpoints, Offset &indexedOffset, std::size_t &indexedLine, std::size_t &totalLines, std::stop_token stopToken,
-                                         const std::atomic_bool *cancelFlag) {
-	const std::size_t workerCount = chooseParallelDirectLineIndexWorkerCount(length);
-	if (data == nullptr || workerCount == 0) return false;
-
-	const std::vector<DirectLineIndexPartition> partitions = buildDirectLineIndexPartitions(length, workerCount);
-	if (partitions.size() <= 1) return false;
-
-	std::vector<DirectLineIndexPartitionResult> partitionResults(partitions.size());
-	std::atomic_bool failed(false);
-	auto cancelled = [&](std::stop_token workerStopToken) noexcept {
-		if (failed.load(std::memory_order_acquire)) return true;
-		if (workerStopToken.stop_requested() || stopToken.stop_requested()) return true;
-		return cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire);
-	};
-
-	{
-		std::vector<std::jthread> workers;
-		workers.reserve(partitions.size());
-		for (std::size_t i = 0; i < partitions.size(); ++i) {
-			workers.emplace_back([&, i](std::stop_token workerStopToken) {
-				if (cancelled(workerStopToken)) {
-					failed.store(true, std::memory_order_release);
-					return;
-				}
-
-				const DirectLineIndexPartition partition = partitions[i];
-				DirectLineIndexPartitionResult result;
-				result.lineStarts.reserve(directCountLineBreaksInRange(data, length, partition.start, partition.end));
-
-				for (Offset at = partition.start; at < partition.end; ++at) {
-					if ((at & 0xFFFFu) == 0 && cancelled(workerStopToken)) {
-						failed.store(true, std::memory_order_release);
-						return;
-					}
-
-					const char ch = data[at];
-					if (!isLineBreakByte(ch)) continue;
-					if (ch == '\n' && at > 0 && data[at - 1] == '\r') continue;
-
-					Offset nextLineStart = at + 1;
-					if (ch == '\r' && at + 1 < length && data[at + 1] == '\n') nextLineStart = at + 2;
-					result.lineStarts.push_back(nextLineStart);
-				}
-
-				if (cancelled(workerStopToken)) {
-					failed.store(true, std::memory_order_release);
-					return;
-				}
-
-				result.complete = true;
-				partitionResults[i] = std::move(result);
-			});
-		}
-	}
-
-	if (failed.load(std::memory_order_acquire)) {
-		if (warmupCancelRequested(stopToken, cancelFlag) && traceWarmupCancelEnabled()) {
-			std::ostringstream line;
-			line << "WARMUP-CANCEL observed kind=LineIndexWarmup phase=parallel-worker";
-			logWarmupCancelTrace(line);
-		}
-		return false;
-	}
-
-	checkpoints.clear();
-	checkpoints.push_back(LineIndexCheckpoint(0, 0));
-	indexedOffset = 0;
-	indexedLine = 0;
-
-	for (std::size_t i = 0; i < partitionResults.size(); ++i) {
-		if (!partitionResults[i].complete) return false;
-		for (std::size_t j = 0; j < partitionResults[i].lineStarts.size(); ++j) {
-			indexedOffset = partitionResults[i].lineStarts[j];
-			++indexedLine;
-			appendLineCheckpoint(checkpoints, indexedOffset, indexedLine);
-		}
-	}
-
-	totalLines = indexedLine + 1;
-	return true;
-}
-
-bool isParallelLineIndexValidationEnabled() noexcept {
-	const char *value = std::getenv("MR_VALIDATE_PARALLEL_LINE_INDEX");
-	return value != nullptr && std::strcmp(value, "1") == 0;
-}
-
-void assignLineIndexWarmupData(LineIndexWarmupData &warmup, std::vector<LineIndexCheckpoint> checkpoints, Offset indexedOffset, std::size_t indexedLine, std::size_t totalLines) {
-	warmup.checkpoints = std::move(checkpoints);
-	warmup.lazyIndexedOffset = indexedOffset;
-	warmup.lazyIndexedLine = indexedLine;
-	warmup.lazyLineIndexComplete = true;
-	warmup.lazyTotalLineCount = totalLines;
-}
-
-bool hasMatchingLineIndexWarmupData(const LineIndexWarmupData &left, const LineIndexWarmupData &right) noexcept {
-	if (left.lazyIndexedOffset != right.lazyIndexedOffset || left.lazyIndexedLine != right.lazyIndexedLine || left.lazyLineIndexComplete != right.lazyLineIndexComplete || left.lazyTotalLineCount != right.lazyTotalLineCount ||
-	    left.checkpoints.size() != right.checkpoints.size())
-		return false;
-
-	for (std::size_t i = 0; i < left.checkpoints.size(); ++i)
-		if (left.checkpoints[i].offset != right.checkpoints[i].offset || left.checkpoints[i].lineIndex != right.checkpoints[i].lineIndex) return false;
-
-	return true;
-}
-
-void logParallelLineIndexValidationMismatch(const LineIndexWarmupData &serialWarmup, const LineIndexWarmupData &parallelWarmup) noexcept {
-	std::fprintf(stderr,
-	             "MR line-index parallel validation mismatch: serial(checkpoints=%zu offset=%zu line=%zu complete=%d total=%zu) parallel(checkpoints=%zu offset=%zu line=%zu complete=%d total=%zu)\n",
-	             serialWarmup.checkpoints.size(), serialWarmup.lazyIndexedOffset, serialWarmup.lazyIndexedLine, serialWarmup.lazyLineIndexComplete ? 1 : 0, serialWarmup.lazyTotalLineCount, parallelWarmup.checkpoints.size(),
-	             parallelWarmup.lazyIndexedOffset, parallelWarmup.lazyIndexedLine, parallelWarmup.lazyLineIndexComplete ? 1 : 0, parallelWarmup.lazyTotalLineCount);
+	totalLines = totalBreaks + 1;
+	indexedLine = totalLines - 1;
+	indexedOffset = chunks.back().lastLineStart;
 }
 
 Offset directFindNextLineBreak(const char *data, Offset length, Offset start) noexcept {
@@ -580,6 +549,108 @@ template <class Doc> Offset piecewiseLineStartByIndex(const Doc &doc, std::size_
 	return pos;
 }
 
+template <class Starts> std::size_t lineIndexFromExactStarts(const Starts &starts, Offset pos) noexcept {
+	if (starts.empty()) return 0;
+	const auto it = std::upper_bound(starts.begin(), starts.end(), pos);
+	if (it == starts.begin()) return 0;
+	return static_cast<std::size_t>(std::distance(starts.begin(), it) - 1);
+}
+
+template <class Starts> Offset lineStartFromExactStarts(const Starts &starts, std::size_t index) noexcept {
+	if (starts.empty()) return 0;
+	return index < starts.size() ? starts[index] : starts.back();
+}
+
+void appendLineStartsFromInsertedText(std::vector<Offset> &starts, Offset baseOffset, std::string_view text, bool includeTerminalStart) {
+	bool endedWithBreak = false;
+	for (std::size_t i = 0; i < text.size();) {
+		if (text[i] == '\r') {
+			++i;
+			if (i < text.size() && text[i] == '\n') ++i;
+			endedWithBreak = true;
+			if (i < text.size()) starts.push_back(baseOffset + static_cast<Offset>(i));
+			continue;
+		}
+		if (text[i] == '\n') {
+			++i;
+			endedWithBreak = true;
+			if (i < text.size()) starts.push_back(baseOffset + static_cast<Offset>(i));
+			continue;
+		}
+		endedWithBreak = false;
+		++i;
+	}
+	if (includeTerminalStart && endedWithBreak && !text.empty()) starts.push_back(baseOffset + static_cast<Offset>(text.size()));
+}
+
+template <class Doc> Offset localLineStartForDoc(const Doc &doc, Offset pos) noexcept {
+	return doc.lineStart(pos);
+}
+
+template <class Doc> std::size_t localCountLineBreaksForDoc(const Doc &doc, Offset start, Offset end) noexcept {
+	return piecewiseCountLineBreaksInRange(doc, start, end);
+}
+
+template <class Doc> Offset localInterpolatedLineStartByIndex(const Doc &doc, std::size_t index, const std::vector<LineIndexCheckpoint> &checkpoints, bool lazyComplete, std::size_t lazyTotalLineCount) noexcept {
+	if (checkpoints.empty()) return 0;
+	if (lazyComplete && index >= lazyTotalLineCount) index = lazyTotalLineCount > 0 ? lazyTotalLineCount - 1 : 0;
+
+	std::size_t left = 0;
+	std::size_t right = checkpoints.size();
+	while (left < right) {
+		std::size_t mid = left + (right - left) / 2;
+		if (checkpoints[mid].lineIndex <= index) left = mid + 1;
+		else
+			right = mid;
+	}
+
+	const LineIndexCheckpoint checkpoint = checkpoints[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
+	Offset cursor = checkpoint.offset;
+	std::size_t line = checkpoint.lineIndex;
+
+	for (std::size_t iteration = 0; iteration < 3 && !lazyComplete; ++iteration) {
+		const std::size_t remainingLines = index > line ? index - line : 0;
+		if (remainingLines <= kLazyLineStartCatchupWindow) break;
+
+		const std::size_t estimatedTotalLines = std::max<std::size_t>(doc.estimatedLineCount(), line + 1);
+		if (estimatedTotalLines <= line + 1 || cursor >= doc.length()) break;
+
+		const std::size_t estimatedRemainingLines = estimatedTotalLines - line - 1;
+		const Offset remainingBytes = doc.length() - cursor;
+		if (estimatedRemainingLines == 0 || remainingBytes == 0) break;
+
+		const long double avgBytesPerLine = static_cast<long double>(remainingBytes) / static_cast<long double>(estimatedRemainingLines);
+		Offset approx = cursor + static_cast<Offset>(std::min<long double>(remainingBytes, avgBytesPerLine * static_cast<long double>(remainingLines)));
+		approx = doc.clampOffset(approx);
+		Offset approxStart = localLineStartForDoc(doc, approx);
+		if (approxStart <= cursor) break;
+
+		std::size_t advanced = localCountLineBreaksForDoc(doc, cursor, approxStart);
+		if (advanced == 0) break;
+
+		if (advanced > remainingLines) {
+			const long double scale = static_cast<long double>(remainingLines) / static_cast<long double>(advanced);
+			const Offset delta = approxStart - cursor;
+			const Offset scaledDelta = std::max<Offset>(1, static_cast<Offset>(static_cast<long double>(delta) * scale));
+			approxStart = localLineStartForDoc(doc, cursor + scaledDelta);
+			if (approxStart <= cursor) break;
+			advanced = localCountLineBreaksForDoc(doc, cursor, approxStart);
+			if (advanced == 0 || advanced > remainingLines) break;
+		}
+
+		cursor = approxStart;
+		line += advanced;
+	}
+
+	while (line < index) {
+		const Offset next = doc.nextLine(cursor);
+		if (next <= cursor) break;
+		cursor = next;
+		++line;
+	}
+	return cursor;
+}
+
 template <class Doc> std::string piecewiseRangeText(const Doc &doc, Offset start, Offset end) {
 	start = doc.clampOffset(start);
 	end = doc.clampOffset(end);
@@ -741,19 +812,38 @@ std::string MappedFileSource::sliceText(TextSpan span) const {
 	return std::string(data() + bounded.start, bounded.length);
 }
 
+void AppendBuffer::ensureUnique() {
+	if (!mText) {
+		mText = std::make_shared<std::string>();
+		return;
+	}
+	if (!mText.unique()) mText = std::make_shared<std::string>(*mText);
+}
+
 TextSpan AppendBuffer::append(std::string_view text) {
-	TextSpan span(mText.size(), text.size());
-	mText.append(text.data(), text.size());
+	ensureUnique();
+	TextSpan span(mText->size(), text.size());
+	mText->append(text.data(), text.size());
 	return span;
 }
 
 void AppendBuffer::clear() noexcept {
-	mText.clear();
+	if (!mText) {
+		mText = std::make_shared<std::string>();
+		return;
+	}
+	if (mText.unique()) mText->clear();
+	else
+		mText = std::make_shared<std::string>();
+}
+
+void AppendBuffer::setSharedText(const std::shared_ptr<const std::string> &text) noexcept {
+	mText = text != nullptr ? std::const_pointer_cast<std::string>(text) : std::make_shared<std::string>();
 }
 
 std::string AppendBuffer::sliceText(TextSpan span) const {
-	TextSpan bounded = span.clamped(mText.size());
-	return mText.substr(bounded.start, bounded.length);
+	TextSpan bounded = span.clamped(size());
+	return mText != nullptr ? mText->substr(bounded.start, bounded.length) : std::string();
 }
 
 TextSpan StagedAddBuffer::append(std::string_view text) {
@@ -810,12 +900,16 @@ void StagedEditTransaction::replace(Range range, std::string_view text) {
 StagedEditTransaction::StagedEditTransaction(const ReadSnapshot &snapshot, std::string_view label) : mBaseVersion(snapshot.version()), mLabel(label) {
 }
 
-TextDocument::TextDocument() noexcept : mLength(0), mDocumentId(allocateDocumentId()), mVersion(0), mCacheDirty(false), mLazyIndexedOffset(0), mLazyIndexedLine(0), mLazyLineIndexComplete(false), mLazyTotalLineCount(1) {
+TextDocument::TextDocument() noexcept : mOriginalBuffer(std::make_shared<std::string>()), mLength(0), mDocumentId(allocateDocumentId()), mVersion(0), mCacheDirty(false), mLazyIndexedOffset(0), mLazyIndexedLine(0), mLazyLineIndexComplete(false), mLazyTotalLineCount(1) {
+	mPieces = std::make_shared<std::vector<Piece>>();
 	resetLazyLineIndex();
+	mEditedLineStarts = std::make_shared<std::vector<Offset>>(1, 0);
 }
 
-TextDocument::TextDocument(std::string_view text) : mLength(0), mDocumentId(allocateDocumentId()), mVersion(0), mCacheDirty(false), mLazyIndexedOffset(0), mLazyIndexedLine(0), mLazyLineIndexComplete(false), mLazyTotalLineCount(1) {
+TextDocument::TextDocument(std::string_view text) : mOriginalBuffer(std::make_shared<std::string>()), mLength(0), mDocumentId(allocateDocumentId()), mVersion(0), mCacheDirty(false), mLazyIndexedOffset(0), mLazyIndexedLine(0), mLazyLineIndexComplete(false), mLazyTotalLineCount(1) {
+	mPieces = std::make_shared<std::vector<Piece>>();
 	resetLazyLineIndex();
+	mEditedLineStarts = std::make_shared<std::vector<Offset>>(1, 0);
 	initializeFromOriginal(text, true);
 }
 
@@ -842,13 +936,14 @@ Snapshot TextDocument::snapshot() const {
 }
 
 ReadSnapshot TextDocument::readSnapshot() const {
+	const auto startedAt = std::chrono::steady_clock::now();
 	ReadSnapshot snapshot;
 	snapshot.mDocumentId = mDocumentId;
 	snapshot.mVersion = mVersion;
 	snapshot.mMappedOriginal = mMappedOriginal;
-	snapshot.mOriginalBuffer = std::make_shared<const std::string>(mOriginalBuffer);
-	snapshot.mAddBuffer = std::make_shared<const std::string>(mAddBuffer.text());
-	snapshot.mPieces = std::make_shared<const std::vector<Piece>>(mPieces);
+	snapshot.mOriginalBuffer = mOriginalBuffer;
+	snapshot.mAddBuffer = mAddBuffer.sharedText();
+	snapshot.mPieces = mPieces;
 	snapshot.mLength = mLength;
 	snapshot.mCacheDirty = mCacheDirty;
 	snapshot.mMaterializedText = mCacheDirty ? std::string() : mMaterializedText;
@@ -857,7 +952,16 @@ ReadSnapshot TextDocument::readSnapshot() const {
 	snapshot.mLazyIndexedLine = mLazyIndexedLine;
 	snapshot.mLazyLineIndexComplete = mLazyLineIndexComplete;
 	snapshot.mLazyTotalLineCount = mLazyTotalLineCount;
+	snapshot.mEditedLineStarts = mEditedLineStarts;
 	if (snapshot.mLineIndexCheckpoints.empty()) snapshot.resetLazyLineIndex();
+	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+	if (totalElapsed >= kSlowDocumentTraceThreshold) {
+		std::ostringstream line;
+		line << "Phase1 doc readSnapshot total_us=" << traceMicros(totalElapsed) << " len=" << mLength << " add=" << mAddBuffer.size() << " pieces=" << pieceCount() << " exact_lines="
+		     << (mEditedLineStarts != nullptr ? mEditedLineStarts->size() : 0) << " snap_exact_lines=" << (snapshot.mEditedLineStarts != nullptr ? snapshot.mEditedLineStarts->size() : 0) << " lazy_checkpoints=" << snapshot.mLineIndexCheckpoints.size() << " lazy_complete="
+		     << (snapshot.mLazyLineIndexComplete ? 1 : 0);
+		appendDocumentTrace(line.str());
+	}
 	return snapshot;
 }
 
@@ -868,16 +972,9 @@ void TextDocument::restoreFromSnapshot(const ReadSnapshot &snapshot) {
 		mDocumentId = snapshot.mDocumentId;
 		mVersion = snapshot.mVersion;
 		mMappedOriginal = snapshot.mMappedOriginal;
-		if (snapshot.mOriginalBuffer) mOriginalBuffer = *snapshot.mOriginalBuffer;
-		else
-			mOriginalBuffer.clear();
-
-		mAddBuffer.clear();
-		if (snapshot.mAddBuffer) mAddBuffer.append(*snapshot.mAddBuffer);
-
-		if (snapshot.mPieces) mPieces = *snapshot.mPieces;
-		else
-			mPieces.clear();
+		mOriginalBuffer = snapshot.mOriginalBuffer != nullptr ? std::const_pointer_cast<std::string>(snapshot.mOriginalBuffer) : std::make_shared<std::string>();
+		mAddBuffer.setSharedText(snapshot.mAddBuffer);
+		mPieces = snapshot.mPieces != nullptr ? std::const_pointer_cast<std::vector<Piece>>(snapshot.mPieces) : std::make_shared<std::vector<Piece>>();
 
 		mLength = snapshot.mLength;
 		mCacheDirty = snapshot.mCacheDirty;
@@ -887,6 +984,8 @@ void TextDocument::restoreFromSnapshot(const ReadSnapshot &snapshot) {
 		mLazyIndexedLine = snapshot.mLazyIndexedLine;
 		mLazyLineIndexComplete = snapshot.mLazyLineIndexComplete;
 		mLazyTotalLineCount = snapshot.mLazyTotalLineCount;
+		mEditedLineStarts = snapshot.mEditedLineStarts != nullptr ? std::const_pointer_cast<std::vector<Offset>>(snapshot.mEditedLineStarts) : std::shared_ptr<std::vector<Offset>>();
+		if (mEditedLineStarts == nullptr || mEditedLineStarts->empty()) rebuildEditedLineStartIndex();
 	}
 }
 
@@ -911,6 +1010,10 @@ bool TextDocument::adoptLineIndexWarmup(const LineIndexWarmupData &warmup, std::
 	mLazyTotalLineCount = warmup.lazyTotalLineCount;
 	if (mLineIndexCheckpoints.empty()) resetLazyLineIndex();
 	return true;
+}
+
+bool ReadSnapshot::hasEditedLineStartIndex() const noexcept {
+	return mEditedLineStarts != nullptr && !mEditedLineStarts->empty();
 }
 
 ReadSnapshot::ReadSnapshot() noexcept : mDocumentId(0), mVersion(0), mLength(0), mCacheDirty(false), mLazyIndexedOffset(0), mLazyIndexedLine(0), mLazyLineIndexComplete(true), mLazyTotalLineCount(1) {
@@ -962,11 +1065,13 @@ Offset ReadSnapshot::clampOffset(Offset pos) const noexcept {
 }
 
 std::size_t ReadSnapshot::lineCount() const noexcept {
+	if (hasEditedLineStartIndex()) return mEditedLineStarts->size();
 	ensureLazyIndexComplete();
 	return mLazyTotalLineCount;
 }
 
 Offset ReadSnapshot::lineStart(Offset pos) const noexcept {
+	if (hasEditedLineStartIndex()) return lineStartFromExactStarts(*mEditedLineStarts, lineIndex(pos));
 	if (const char *data = directTextData()) {
 		pos = clampOffset(pos);
 		Offset breakPos = directFindPrevLineBreak(data, pos);
@@ -986,6 +1091,10 @@ Offset ReadSnapshot::lineEnd(Offset pos) const noexcept {
 }
 
 Offset ReadSnapshot::nextLine(Offset pos) const noexcept {
+	if (hasEditedLineStartIndex()) {
+		const std::size_t line = lineIndex(pos);
+		return line + 1 < mEditedLineStarts->size() ? (*mEditedLineStarts)[line + 1] : mLength;
+	}
 	if (const char *data = directTextData()) {
 		pos = lineEnd(pos);
 		if (pos < mLength) {
@@ -1000,6 +1109,10 @@ Offset ReadSnapshot::nextLine(Offset pos) const noexcept {
 }
 
 Offset ReadSnapshot::prevLine(Offset pos) const noexcept {
+	if (hasEditedLineStartIndex()) {
+		const std::size_t line = lineIndex(pos);
+		return line == 0 ? 0 : (*mEditedLineStarts)[line - 1];
+	}
 	if (const char *data = directTextData()) {
 		pos = lineStart(pos);
 		if (pos == 0) return 0;
@@ -1014,8 +1127,17 @@ Offset ReadSnapshot::prevLine(Offset pos) const noexcept {
 
 std::size_t ReadSnapshot::lineIndex(Offset pos) const noexcept {
 	pos = clampOffset(pos);
+	if (hasEditedLineStartIndex()) {
+		if (pos == mLength && mLength > 0 && isLineBreakChar(charAt(mLength - 1))) return mEditedLineStarts->size() - 1;
+		const Offset lookupPos = pos == mLength && mLength > 0 ? mLength - 1 : pos;
+		return lineIndexFromExactStarts(*mEditedLineStarts, lookupPos);
+	}
 	ensureLazyIndexSeeded();
 	if (mLineIndexCheckpoints.empty()) return 0;
+	if (pos == mLength) {
+		ensureLazyIndexComplete();
+		return mLazyTotalLineCount > 0 ? mLazyTotalLineCount - 1 : 0;
+	}
 
 	std::size_t left = 0;
 	std::size_t right = mLineIndexCheckpoints.size();
@@ -1035,31 +1157,16 @@ std::size_t ReadSnapshot::lineIndex(Offset pos) const noexcept {
 }
 
 Offset ReadSnapshot::lineStartByIndex(std::size_t index) const noexcept {
-	ensureLazyIndexForLine(index);
+	if (hasEditedLineStartIndex()) return lineStartFromExactStarts(*mEditedLineStarts, index);
+	ensureLazyIndexSeeded();
 	if (mLineIndexCheckpoints.empty()) return 0;
-	if (mLazyLineIndexComplete && index >= mLazyTotalLineCount) index = mLazyTotalLineCount > 0 ? mLazyTotalLineCount - 1 : 0;
-
-	std::size_t left = 0;
-	std::size_t right = mLineIndexCheckpoints.size();
-	while (left < right) {
-		std::size_t mid = left + (right - left) / 2;
-		if (mLineIndexCheckpoints[mid].lineIndex <= index) left = mid + 1;
-		else
-			right = mid;
-	}
-	LineIndexCheckpoint checkpoint = mLineIndexCheckpoints[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
-	Offset cursor = checkpoint.offset;
-	std::size_t line = checkpoint.lineIndex;
-	while (line < index) {
-		Offset next = cursor;
-		if (!advanceLine(next)) break;
-		cursor = next;
-		++line;
-	}
-	return cursor;
+	if (directTextData() != nullptr || mLazyLineIndexComplete || index <= mLineIndexCheckpoints.back().lineIndex + kLazyLineStartCatchupWindow) ensureLazyIndexForLine(index);
+	if (mLineIndexCheckpoints.empty()) return 0;
+	return localInterpolatedLineStartByIndex(*this, index, mLineIndexCheckpoints, mLazyLineIndexComplete, mLazyTotalLineCount);
 }
 
 std::size_t ReadSnapshot::estimatedLineCount() const noexcept {
+	if (hasEditedLineStartIndex()) return mEditedLineStarts->size();
 	ensureLazyIndexSeeded();
 	if (mLazyLineIndexComplete) return mLazyTotalLineCount;
 	if (!mMappedOriginal.mapped()) return piecewiseLineCount(*this);
@@ -1071,6 +1178,7 @@ std::size_t ReadSnapshot::estimatedLineCount() const noexcept {
 }
 
 bool ReadSnapshot::exactLineCountKnown() const noexcept {
+	if (hasEditedLineStartIndex()) return true;
 	return !mMappedOriginal.mapped() || mLazyLineIndexComplete;
 }
 
@@ -1092,85 +1200,11 @@ LineIndexWarmupData ReadSnapshot::completeLineIndexWarmup() const {
 	return warmup;
 }
 
-bool ReadSnapshot::completeLineIndexWarmup(LineIndexWarmupData &warmup, std::stop_token stopToken, const std::atomic_bool *cancelFlag) const {
+bool ReadSnapshot::warmLineIndexChunk(LineIndexWarmupData &warmup, std::size_t maxStrides, std::stop_token stopToken, const std::atomic_bool *cancelFlag) const {
 	ensureLazyIndexSeeded();
-	if (!mLazyLineIndexComplete && mLineIndexCheckpoints.size() == 1 && mLineIndexCheckpoints[0].offset == 0 && mLineIndexCheckpoints[0].lineIndex == 0 && mLazyIndexedOffset == 0 && mLazyIndexedLine == 0) {
-		if (const char *data = directTextData()) {
-			if (isParallelLineIndexValidationEnabled()) {
-				LineIndexWarmupData serialWarmup;
-				LineIndexWarmupData parallelWarmup;
-				std::vector<LineIndexCheckpoint> serialCheckpoints;
-				std::vector<LineIndexCheckpoint> parallelCheckpoints;
-				Offset serialIndexedOffset = 0;
-				Offset parallelIndexedOffset = 0;
-				std::size_t serialIndexedLine = 0;
-				std::size_t parallelIndexedLine = 0;
-				std::size_t serialTotalLines = 1;
-				std::size_t parallelTotalLines = 1;
-
-				if (!buildDirectInitialLineIndexWarmupSerial(data, mLength, serialCheckpoints, serialIndexedOffset, serialIndexedLine, serialTotalLines, stopToken, cancelFlag)) {
-					if (traceWarmupCancelEnabled()) {
-						std::ostringstream line;
-						line << "WARMUP-CANCEL observed kind=LineIndexWarmup phase=serial-direct-validation";
-						logWarmupCancelTrace(line);
-					}
-					return false;
-				}
-				assignLineIndexWarmupData(serialWarmup, std::move(serialCheckpoints), serialIndexedOffset, serialIndexedLine, serialTotalLines);
-
-				if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire))) return false;
-
-				if (buildDirectInitialLineIndexParallel(data, mLength, parallelCheckpoints, parallelIndexedOffset, parallelIndexedLine, parallelTotalLines, stopToken, cancelFlag)) {
-					assignLineIndexWarmupData(parallelWarmup, std::move(parallelCheckpoints), parallelIndexedOffset, parallelIndexedLine, parallelTotalLines);
-					if (hasMatchingLineIndexWarmupData(serialWarmup, parallelWarmup)) {
-						warmup = std::move(parallelWarmup);
-						return true;
-					}
-					logParallelLineIndexValidationMismatch(serialWarmup, parallelWarmup);
-				}
-				if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire))) return false;
-
-				warmup = std::move(serialWarmup);
-				return true;
-			}
-
-			std::vector<LineIndexCheckpoint> checkpoints;
-			Offset indexedOffset = 0;
-			std::size_t indexedLine = 0;
-			std::size_t totalLines = 1;
-			if (buildDirectInitialLineIndexParallel(data, mLength, checkpoints, indexedOffset, indexedLine, totalLines, stopToken, cancelFlag)) {
-				assignLineIndexWarmupData(warmup, std::move(checkpoints), indexedOffset, indexedLine, totalLines);
-				return true;
-			}
-			if (warmupCancelRequested(stopToken, cancelFlag)) {
-				if (traceWarmupCancelEnabled()) {
-					std::ostringstream line;
-					line << "WARMUP-CANCEL observed kind=LineIndexWarmup phase=parallel-direct";
-					logWarmupCancelTrace(line);
-				}
-				return false;
-			}
-			if (buildDirectInitialLineIndexWarmupSerial(data, mLength, checkpoints, indexedOffset, indexedLine, totalLines, stopToken, cancelFlag)) {
-				assignLineIndexWarmupData(warmup, std::move(checkpoints), indexedOffset, indexedLine, totalLines);
-				return true;
-			}
-			if (traceWarmupCancelEnabled()) {
-				std::ostringstream line;
-				line << "WARMUP-CANCEL observed kind=LineIndexWarmup phase=serial-direct";
-				logWarmupCancelTrace(line);
-			}
-			if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire))) return false;
-		}
-	}
-	while (!mLazyLineIndexComplete) {
-		if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire))) {
-			if (traceWarmupCancelEnabled()) {
-				std::ostringstream line;
-				line << "WARMUP-CANCEL observed kind=LineIndexWarmup phase=lazy-stride";
-				logWarmupCancelTrace(line);
-			}
-			return false;
-		}
+	if (maxStrides == 0) maxStrides = 1;
+	for (std::size_t strideIndex = 0; strideIndex < maxStrides && !mLazyLineIndexComplete; ++strideIndex) {
+		if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire))) return false;
 		advanceLazyIndexByStride();
 	}
 	if (stopToken.stop_requested() || (cancelFlag != nullptr && cancelFlag->load(std::memory_order_acquire))) return false;
@@ -1182,16 +1216,30 @@ bool ReadSnapshot::completeLineIndexWarmup(LineIndexWarmupData &warmup, std::sto
 	return true;
 }
 
+bool ReadSnapshot::completeLineIndexWarmup(LineIndexWarmupData &warmup, std::stop_token stopToken, const std::atomic_bool *cancelFlag) const {
+	return warmLineIndexChunk(warmup, std::numeric_limits<std::size_t>::max(), stopToken, cancelFlag);
+}
+
 bool ReadSnapshot::isLineBreakChar(char ch) const noexcept {
 	return ch == '\n' || ch == '\r';
 }
 
 bool ReadSnapshot::hasDirectOriginalView() const noexcept {
-	return mMappedOriginal.mapped() && addBufferLength() == 0 && mPieces != nullptr && mPieces->size() == 1 && (*mPieces)[0].source == BufferKind::Original && (*mPieces)[0].span.start == 0 && (*mPieces)[0].span.length == mLength;
+	if (mPieces == nullptr || mPieces->size() != 1) return false;
+
+	const Piece &piece = (*mPieces)[0];
+	if (piece.span.start != 0 || piece.span.length != mLength) return false;
+	if (piece.source == BufferKind::Original) return originalData() != nullptr;
+	if (piece.source == BufferKind::Add) return mAddBuffer != nullptr;
+	return false;
 }
 
 const char *ReadSnapshot::directTextData() const noexcept {
-	return hasDirectOriginalView() ? mMappedOriginal.data() : nullptr;
+	if (!hasDirectOriginalView() || mPieces == nullptr || mPieces->empty()) return nullptr;
+
+	const Piece &piece = (*mPieces)[0];
+	if (piece.source == BufferKind::Original) return originalData();
+	return mAddBuffer != nullptr ? mAddBuffer->data() : nullptr;
 }
 
 void ReadSnapshot::resetLazyLineIndex() noexcept {
@@ -1228,6 +1276,7 @@ void ReadSnapshot::ensureLazyIndexSeeded() const noexcept {
 void ReadSnapshot::advanceLazyIndexByStride() const noexcept {
 	ensureLazyIndexSeeded();
 	if (mLazyLineIndexComplete) return;
+	const std::size_t checkpointStride = checkpointStrideForMode(directTextData() != nullptr);
 
 	for (std::size_t steps = 0; steps < kLazyLineIndexStride; ++steps) {
 		Offset next = mLazyIndexedOffset;
@@ -1238,7 +1287,7 @@ void ReadSnapshot::advanceLazyIndexByStride() const noexcept {
 		}
 		mLazyIndexedOffset = next;
 		++mLazyIndexedLine;
-		if ((mLazyIndexedLine % kLazyLineIndexStride) == 0) mLineIndexCheckpoints.push_back(LineIndexCheckpoint(mLazyIndexedOffset, mLazyIndexedLine));
+		if ((mLazyIndexedLine % checkpointStride) == 0) mLineIndexCheckpoints.push_back(LineIndexCheckpoint(mLazyIndexedOffset, mLazyIndexedLine));
 	}
 }
 
@@ -1301,9 +1350,9 @@ bool TextDocument::loadMappedFile(const std::string &path, std::string &error) {
 }
 
 PieceChunkView TextDocument::pieceChunk(std::size_t index) const noexcept {
-	if (index >= mPieces.size()) return PieceChunkView();
+	if (mPieces == nullptr || index >= mPieces->size()) return PieceChunkView();
 
-	const Piece &piece = mPieces[index];
+	const Piece &piece = (*mPieces)[index];
 	if (piece.empty()) return PieceChunkView();
 	if (piece.source == BufferKind::Original) {
 		const char *base = originalData();
@@ -1328,6 +1377,7 @@ void TextDocument::apply(const EditTransaction &transaction) {
 }
 
 CommitResult TextDocument::tryApply(const EditTransaction &transaction, std::size_t expectedVersion) {
+	const auto startedAt = std::chrono::steady_clock::now();
 	CommitResult result;
 	result.expectedVersion = expectedVersion;
 	result.actualVersion = mVersion;
@@ -1377,10 +1427,19 @@ CommitResult TextDocument::tryApply(const EditTransaction &transaction, std::siz
 	result.change.oldLength = oldLength;
 	result.change.newLength = mLength;
 	if (touched) result.change.touchedRange = Range(touchStart, touchEnd).normalized();
+	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+	if (totalElapsed >= kSlowDocumentTraceThreshold) {
+		std::ostringstream line;
+		line << "Phase1 doc tryApply total_us=" << traceMicros(totalElapsed) << " ops=" << ops.size() << " old_len=" << oldLength << " new_len=" << mLength << " add=" << mAddBuffer.size()
+		     << " pieces=" << pieceCount() << " exact_lines=" << (mEditedLineStarts != nullptr ? mEditedLineStarts->size() : 0) << " lazy_checkpoints=" << mLineIndexCheckpoints.size();
+		if (touched) line << " touch_start=" << touchStart << " touch_end=" << touchEnd;
+		appendDocumentTrace(line.str());
+	}
 	return result;
 }
 
 CommitResult TextDocument::tryApply(const StagedEditTransaction &transaction) {
+	const auto startedAt = std::chrono::steady_clock::now();
 	CommitResult result;
 	result.expectedVersion = transaction.baseVersion();
 	result.actualVersion = mVersion;
@@ -1430,6 +1489,14 @@ CommitResult TextDocument::tryApply(const StagedEditTransaction &transaction) {
 	result.change.oldLength = oldLength;
 	result.change.newLength = mLength;
 	if (touched) result.change.touchedRange = Range(touchStart, touchEnd).normalized();
+	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+	if (totalElapsed >= kSlowDocumentTraceThreshold) {
+		std::ostringstream line;
+		line << "Phase1 doc tryApplyStaged total_us=" << traceMicros(totalElapsed) << " ops=" << ops.size() << " old_len=" << oldLength << " new_len=" << mLength << " add=" << mAddBuffer.size()
+		     << " pieces=" << pieceCount() << " exact_lines=" << (mEditedLineStarts != nullptr ? mEditedLineStarts->size() : 0) << " lazy_checkpoints=" << mLineIndexCheckpoints.size();
+		if (touched) line << " touch_start=" << touchStart << " touch_end=" << touchEnd;
+		appendDocumentTrace(line.str());
+	}
 	return result;
 }
 
@@ -1455,16 +1522,17 @@ void TextDocument::replaceFromStaged(Range range, const StagedAddBuffer &buffer,
 }
 
 void TextDocument::flatten() {
-	if (mPieces.size() <= 1 && mAddBuffer.size() == 0 && !mMappedOriginal.mapped()) return;
+	if ((mPieces == nullptr || mPieces->size() <= 1) && mAddBuffer.size() == 0 && !mMappedOriginal.mapped()) return;
 
 	std::string currentText = text();
-	mOriginalBuffer = std::move(currentText);
+	mOriginalBuffer = std::make_shared<std::string>(std::move(currentText));
 	mMappedOriginal.reset();
 	mAddBuffer.clear();
 
-	mPieces.clear();
-	mPieces.emplace_back(BufferKind::Original, TextSpan(0, mOriginalBuffer.length()));
-	mLength = mOriginalBuffer.length();
+	ensureUniquePieces();
+	mPieces->clear();
+	mPieces->emplace_back(BufferKind::Original, TextSpan(0, mOriginalBuffer->length()));
+	mLength = mOriginalBuffer->length();
 
 	markDirty();
 	bumpVersion();
@@ -1475,18 +1543,51 @@ Offset TextDocument::clampOffset(Offset pos) const noexcept {
 }
 
 std::size_t TextDocument::lineCount() const noexcept {
+	const auto startedAt = std::chrono::steady_clock::now();
+	if (hasEditedLineStartIndex()) {
+		const std::size_t result = mEditedLineStarts->size();
+		const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+		if (totalElapsed >= kSlowDocumentTraceThreshold) {
+			std::ostringstream line;
+			line << "Phase1 doc lineCount total_us=" << traceMicros(totalElapsed) << " result=" << result << " exact_lines=" << result << " len=" << mLength << " add=" << mAddBuffer.size()
+			     << " pieces=" << pieceCount();
+			appendDocumentTrace(line.str());
+		}
+		return result;
+	}
 	ensureLazyIndexComplete();
-	return mLazyTotalLineCount;
+	const std::size_t result = mLazyTotalLineCount;
+	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+	if (totalElapsed >= kSlowDocumentTraceThreshold) {
+		std::ostringstream line;
+		line << "Phase1 doc lineCount total_us=" << traceMicros(totalElapsed) << " result=" << result << " lazy_complete=" << (mLazyLineIndexComplete ? 1 : 0)
+		     << " lazy_indexed_line=" << mLazyIndexedLine << " checkpoints=" << mLineIndexCheckpoints.size() << " len=" << mLength << " add=" << mAddBuffer.size()
+		     << " pieces=" << pieceCount();
+		appendDocumentTrace(line.str());
+	}
+	return result;
 }
 
 Offset TextDocument::lineStart(Offset pos) const noexcept {
-	if (const char *data = directTextData()) {
+	const auto startedAt = std::chrono::steady_clock::now();
+	const Offset requestedPos = pos;
+	const bool direct = directTextData() != nullptr;
+	Offset result = 0;
+	if (hasEditedLineStartIndex()) result = lineStartFromExactStarts(*mEditedLineStarts, lineIndex(pos));
+	else if (const char *data = directTextData()) {
 		pos = clampOffset(pos);
 		Offset breakPos = directFindPrevLineBreak(data, pos);
-		return breakPos == static_cast<Offset>(-1) ? 0 : breakPos + 1;
+		result = breakPos == static_cast<Offset>(-1) ? 0 : breakPos + 1;
+	} else
+		result = piecewiseLineStart(*this, pos);
+	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+	if (totalElapsed >= kSlowDocumentTraceThreshold) {
+		std::ostringstream line;
+		line << "Phase1 doc lineStart total_us=" << traceMicros(totalElapsed) << " pos=" << requestedPos << " result=" << result << " len=" << mLength << " add=" << mAddBuffer.size() << " pieces=" << pieceCount()
+		     << " direct=" << (direct ? 1 : 0);
+		appendDocumentTrace(line.str());
 	}
-
-	return piecewiseLineStart(*this, pos);
+	return result;
 }
 
 Offset TextDocument::lineEnd(Offset pos) const noexcept {
@@ -1499,36 +1600,104 @@ Offset TextDocument::lineEnd(Offset pos) const noexcept {
 }
 
 Offset TextDocument::nextLine(Offset pos) const noexcept {
-	if (const char *data = directTextData()) {
+	const auto startedAt = std::chrono::steady_clock::now();
+	const Offset requestedPos = pos;
+	const bool direct = directTextData() != nullptr;
+	Offset result = 0;
+	if (hasEditedLineStartIndex()) {
+		const std::size_t line = lineIndex(pos);
+		result = line + 1 < mEditedLineStarts->size() ? (*mEditedLineStarts)[line + 1] : mLength;
+	} else if (const char *data = directTextData()) {
 		pos = lineEnd(pos);
 		if (pos < mLength) {
 			if (data[pos] == '\r' && pos + 1 < mLength && data[pos + 1] == '\n') pos += 2;
 			else
 				++pos;
 		}
-		return pos;
+		result = pos;
+	} else
+		result = piecewiseNextLine(*this, pos);
+	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+	if (totalElapsed >= kSlowDocumentTraceThreshold) {
+		std::ostringstream line;
+		line << "Phase1 doc nextLine total_us=" << traceMicros(totalElapsed) << " pos=" << requestedPos << " result=" << result << " len=" << mLength << " add=" << mAddBuffer.size() << " pieces=" << pieceCount()
+		     << " direct=" << (direct ? 1 : 0);
+		appendDocumentTrace(line.str());
 	}
-
-	return piecewiseNextLine(*this, pos);
+	return result;
 }
 
 Offset TextDocument::prevLine(Offset pos) const noexcept {
-	if (const char *data = directTextData()) {
+	const auto startedAt = std::chrono::steady_clock::now();
+	const Offset requestedPos = pos;
+	const bool direct = directTextData() != nullptr;
+	Offset result = 0;
+	if (hasEditedLineStartIndex()) {
+		const std::size_t line = lineIndex(pos);
+		result = line == 0 ? 0 : (*mEditedLineStarts)[line - 1];
+	} else if (const char *data = directTextData()) {
 		pos = lineStart(pos);
-		if (pos == 0) return 0;
-		--pos;
-		if (pos > 0 && data[pos - 1] == '\r' && data[pos] == '\n') --pos;
-		Offset breakPos = directFindPrevLineBreak(data, pos);
-		return breakPos == static_cast<Offset>(-1) ? 0 : breakPos + 1;
+		if (pos == 0) result = 0;
+		else {
+			--pos;
+			if (pos > 0 && data[pos - 1] == '\r' && data[pos] == '\n') --pos;
+			Offset breakPos = directFindPrevLineBreak(data, pos);
+			result = breakPos == static_cast<Offset>(-1) ? 0 : breakPos + 1;
+		}
+	} else
+		result = piecewisePrevLine(*this, pos);
+	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+	if (totalElapsed >= kSlowDocumentTraceThreshold) {
+		std::ostringstream line;
+		line << "Phase1 doc prevLine total_us=" << traceMicros(totalElapsed) << " pos=" << requestedPos << " result=" << result << " len=" << mLength << " add=" << mAddBuffer.size() << " pieces=" << pieceCount()
+		     << " direct=" << (direct ? 1 : 0);
+		appendDocumentTrace(line.str());
 	}
-
-	return piecewisePrevLine(*this, pos);
+	return result;
 }
 
 std::size_t TextDocument::lineIndex(Offset pos) const noexcept {
+	const auto startedAt = std::chrono::steady_clock::now();
+	const Offset requestedPos = pos;
 	pos = clampOffset(pos);
+	if (hasEditedLineStartIndex()) {
+		if (pos == mLength && mLength > 0 && isLineBreakChar(charAt(mLength - 1))) {
+			const std::size_t result = mEditedLineStarts->size() - 1;
+			const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+			if (totalElapsed >= kSlowDocumentTraceThreshold) {
+				std::ostringstream line;
+				line << "Phase1 doc lineIndex total_us=" << traceMicros(totalElapsed) << " pos=" << requestedPos << " result=" << result << " exact_lines=" << mEditedLineStarts->size()
+				     << " len=" << mLength << " add=" << mAddBuffer.size() << " pieces=" << pieceCount() << " direct=0 eof_trailing_break=1";
+				appendDocumentTrace(line.str());
+			}
+			return result;
+		}
+		const Offset lookupPos = pos == mLength && mLength > 0 ? mLength - 1 : pos;
+		const std::size_t result = lineIndexFromExactStarts(*mEditedLineStarts, lookupPos);
+		const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+		if (totalElapsed >= kSlowDocumentTraceThreshold) {
+			std::ostringstream line;
+			line << "Phase1 doc lineIndex total_us=" << traceMicros(totalElapsed) << " pos=" << requestedPos << " result=" << result << " exact_lines=" << mEditedLineStarts->size()
+			     << " len=" << mLength << " add=" << mAddBuffer.size() << " pieces=" << pieceCount() << " direct=0";
+			appendDocumentTrace(line.str());
+		}
+		return result;
+	}
 	ensureLazyIndexSeeded();
+	std::size_t result = 0;
 	if (mLineIndexCheckpoints.empty()) return 0;
+	if (pos == mLength) {
+		ensureLazyIndexComplete();
+		result = mLazyTotalLineCount > 0 ? mLazyTotalLineCount - 1 : 0;
+		const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+		if (totalElapsed >= kSlowDocumentTraceThreshold) {
+			std::ostringstream line;
+			line << "Phase1 doc lineIndex total_us=" << traceMicros(totalElapsed) << " pos=" << requestedPos << " result=" << result << " checkpoints=" << mLineIndexCheckpoints.size()
+			     << " lazy_complete=" << (mLazyLineIndexComplete ? 1 : 0) << " len=" << mLength << " add=" << mAddBuffer.size() << " pieces=" << pieceCount() << " direct=" << (directTextData() != nullptr ? 1 : 0);
+			appendDocumentTrace(line.str());
+		}
+		return result;
+	}
 
 	std::size_t left = 0;
 	std::size_t right = mLineIndexCheckpoints.size();
@@ -1539,40 +1708,56 @@ std::size_t TextDocument::lineIndex(Offset pos) const noexcept {
 			right = mid;
 	}
 	LineIndexCheckpoint checkpoint = mLineIndexCheckpoints[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
-	if (checkpoint.offset >= pos) return checkpoint.lineIndex;
-	if (const char *data = directTextData()) {
+	if (checkpoint.offset >= pos) result = checkpoint.lineIndex;
+	else if (const char *data = directTextData()) {
 		const std::size_t delta = directCountLineBreaksInRange(data, mLength, checkpoint.offset, pos);
-		return checkpoint.lineIndex + delta;
+		result = checkpoint.lineIndex + delta;
+	} else
+		result = checkpoint.lineIndex + piecewiseCountLineBreaksInRange(*this, checkpoint.offset, pos);
+	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+	if (totalElapsed >= kSlowDocumentTraceThreshold) {
+		std::ostringstream line;
+		line << "Phase1 doc lineIndex total_us=" << traceMicros(totalElapsed) << " pos=" << requestedPos << " result=" << result << " checkpoint_offset=" << checkpoint.offset
+		     << " checkpoint_line=" << checkpoint.lineIndex << " checkpoints=" << mLineIndexCheckpoints.size() << " lazy_complete=" << (mLazyLineIndexComplete ? 1 : 0) << " len=" << mLength
+		     << " add=" << mAddBuffer.size() << " pieces=" << pieceCount() << " direct=" << (directTextData() != nullptr ? 1 : 0);
+		appendDocumentTrace(line.str());
 	}
-	return checkpoint.lineIndex + piecewiseCountLineBreaksInRange(*this, checkpoint.offset, pos);
+	return result;
 }
 
 Offset TextDocument::lineStartByIndex(std::size_t index) const noexcept {
-	ensureLazyIndexForLine(index);
+	const auto startedAt = std::chrono::steady_clock::now();
+	const std::size_t requestedIndex = index;
+	if (hasEditedLineStartIndex()) {
+		const Offset cursor = lineStartFromExactStarts(*mEditedLineStarts, index);
+		const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+		if (totalElapsed >= kSlowDocumentTraceThreshold) {
+			std::ostringstream trace;
+			trace << "Phase1 doc lineStartByIndex total_us=" << traceMicros(totalElapsed) << " requested_index=" << requestedIndex << " resolved_index=" << index << " result=" << cursor
+			      << " exact_lines=" << mEditedLineStarts->size() << " len=" << mLength << " add=" << mAddBuffer.size() << " pieces=" << pieceCount() << " direct=0";
+			appendDocumentTrace(trace.str());
+		}
+		return cursor;
+	}
+	ensureLazyIndexSeeded();
+	if (mLineIndexCheckpoints.empty()) return 0;
+	if (directTextData() != nullptr || mLazyLineIndexComplete || index <= mLineIndexCheckpoints.back().lineIndex + kLazyLineStartCatchupWindow) ensureLazyIndexForLine(index);
 	if (mLineIndexCheckpoints.empty()) return 0;
 	if (mLazyLineIndexComplete && index >= mLazyTotalLineCount) index = mLazyTotalLineCount > 0 ? mLazyTotalLineCount - 1 : 0;
-
-	std::size_t left = 0;
-	std::size_t right = mLineIndexCheckpoints.size();
-	while (left < right) {
-		std::size_t mid = left + (right - left) / 2;
-		if (mLineIndexCheckpoints[mid].lineIndex <= index) left = mid + 1;
-		else
-			right = mid;
-	}
-	LineIndexCheckpoint checkpoint = mLineIndexCheckpoints[left == 0 ? 0 : static_cast<std::size_t>(left - 1)];
-	Offset cursor = checkpoint.offset;
-	std::size_t line = checkpoint.lineIndex;
-	while (line < index) {
-		Offset next = cursor;
-		if (!advanceLine(next)) break;
-		cursor = next;
-		++line;
+	const Offset cursor = localInterpolatedLineStartByIndex(*this, index, mLineIndexCheckpoints, mLazyLineIndexComplete, mLazyTotalLineCount);
+	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+	if (totalElapsed >= kSlowDocumentTraceThreshold) {
+		std::ostringstream trace;
+		trace << "Phase1 doc lineStartByIndex total_us=" << traceMicros(totalElapsed) << " requested_index=" << requestedIndex << " resolved_index=" << index << " result=" << cursor
+		      << " checkpoints=" << mLineIndexCheckpoints.size() << " lazy_complete=" << (mLazyLineIndexComplete ? 1 : 0) << " len=" << mLength << " add=" << mAddBuffer.size() << " pieces=" << pieceCount()
+		      << " direct=" << (directTextData() != nullptr ? 1 : 0);
+		appendDocumentTrace(trace.str());
 	}
 	return cursor;
 }
 
 std::size_t TextDocument::estimatedLineCount() const noexcept {
+	if (hasEditedLineStartIndex()) return mEditedLineStarts->size();
 	ensureLazyIndexSeeded();
 	if (mLazyLineIndexComplete) return mLazyTotalLineCount;
 	if (!mMappedOriginal.mapped()) return piecewiseLineCount(*this);
@@ -1584,19 +1769,42 @@ std::size_t TextDocument::estimatedLineCount() const noexcept {
 }
 
 bool TextDocument::exactLineCountKnown() const noexcept {
+	if (hasEditedLineStartIndex()) return true;
 	return !mMappedOriginal.mapped() || mLazyLineIndexComplete;
 }
 
 std::size_t TextDocument::column(Offset pos) const noexcept {
+	const auto startedAt = std::chrono::steady_clock::now();
+	const Offset requestedPos = pos;
 	pos = clampOffset(pos);
-	return pos - lineStart(pos);
+	const std::size_t result = pos - lineStart(pos);
+	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+	if (totalElapsed >= kSlowDocumentTraceThreshold) {
+		std::ostringstream line;
+		line << "Phase1 doc column total_us=" << traceMicros(totalElapsed) << " pos=" << requestedPos << " result=" << result << " len=" << mLength << " add=" << mAddBuffer.size() << " pieces=" << pieceCount()
+		     << " direct=" << (directTextData() != nullptr ? 1 : 0);
+		appendDocumentTrace(line.str());
+	}
+	return result;
 }
 
 std::string TextDocument::lineText(Offset pos) const {
+	const auto startedAt = std::chrono::steady_clock::now();
+	const Offset requestedPos = pos;
 	Offset start = lineStart(pos);
 	Offset end = lineEnd(pos);
-	if (const char *data = directTextData()) return std::string(data + start, end - start);
-	return piecewiseRangeText(*this, start, end);
+	std::string result;
+	if (const char *data = directTextData()) result = std::string(data + start, end - start);
+	else
+		result = piecewiseRangeText(*this, start, end);
+	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+	if (totalElapsed >= kSlowDocumentTraceThreshold) {
+		std::ostringstream line;
+		line << "Phase1 doc lineText total_us=" << traceMicros(totalElapsed) << " pos=" << requestedPos << " start=" << start << " end=" << end << " bytes=" << result.size() << " len=" << mLength
+		     << " add=" << mAddBuffer.size() << " pieces=" << pieceCount() << " direct=" << (directTextData() != nullptr ? 1 : 0);
+		appendDocumentTrace(line.str());
+	}
+	return result;
 }
 
 bool TextDocument::isLineBreakChar(char ch) const noexcept {
@@ -1610,28 +1818,40 @@ bool TextDocument::setTextNoVersionBump(std::string_view text) {
 }
 
 void TextDocument::initializeFromOriginal(std::string_view text, bool bumpVersionFlag) {
-	mOriginalBuffer.assign(text.data(), text.size());
+	mOriginalBuffer = std::make_shared<std::string>(text.data(), text.size());
 	mMappedOriginal.reset();
 	mAddBuffer.clear();
-	mPieces.clear();
-	mLength = mOriginalBuffer.size();
-	resetLazyLineIndex();
-	if (!mOriginalBuffer.empty()) mPieces.push_back(Piece(BufferKind::Original, TextSpan(0, mOriginalBuffer.size())));
-	mMaterializedText = mOriginalBuffer;
+	ensureUniquePieces();
+	mPieces->clear();
+	mLength = mOriginalBuffer->size();
+	if (!mOriginalBuffer->empty()) mPieces->push_back(Piece(BufferKind::Original, TextSpan(0, mOriginalBuffer->size())));
+	mMaterializedText = *mOriginalBuffer;
 	mCacheDirty = false;
+	if (const char *data = directTextData()) {
+		buildDirectInitialLineIndex(data, mLength, mLineIndexCheckpoints, mLazyIndexedOffset, mLazyIndexedLine, mLazyTotalLineCount);
+		mLazyLineIndexComplete = true;
+	} else
+		resetLazyLineIndex();
+	rebuildEditedLineStartIndex();
 	if (bumpVersionFlag) bumpVersion();
 }
 
 void TextDocument::initializeFromMappedSource(const MappedFileSource &source, bool bumpVersionFlag) {
-	mOriginalBuffer.clear();
+	mOriginalBuffer = std::make_shared<std::string>();
 	mMappedOriginal = source;
 	mAddBuffer.clear();
-	mPieces.clear();
+	ensureUniquePieces();
+	mPieces->clear();
 	mLength = mMappedOriginal.size();
-	resetLazyLineIndex();
 	mMaterializedText.clear();
 	mCacheDirty = mLength != 0;
-	if (mLength != 0) mPieces.push_back(Piece(BufferKind::Original, TextSpan(0, mLength)));
+	if (mLength != 0) mPieces->push_back(Piece(BufferKind::Original, TextSpan(0, mLength)));
+	if (const char *data = directTextData()) {
+		buildDirectInitialLineIndex(data, mLength, mLineIndexCheckpoints, mLazyIndexedOffset, mLazyIndexedLine, mLazyTotalLineCount);
+		mLazyLineIndexComplete = true;
+	} else
+		resetLazyLineIndex();
+	rebuildEditedLineStartIndex();
 	if (bumpVersionFlag) bumpVersion();
 }
 
@@ -1643,23 +1863,40 @@ void TextDocument::markDirty() noexcept {
 	mCacheDirty = true;
 }
 
+void TextDocument::ensureUniqueOriginalBuffer() {
+	if (!mOriginalBuffer) {
+		mOriginalBuffer = std::make_shared<std::string>();
+		return;
+	}
+	if (!mOriginalBuffer.unique()) mOriginalBuffer = std::make_shared<std::string>(*mOriginalBuffer);
+}
+
+void TextDocument::ensureUniquePieces() {
+	if (!mPieces) {
+		mPieces = std::make_shared<std::vector<Piece>>();
+		return;
+	}
+	if (!mPieces.unique()) mPieces = std::make_shared<std::vector<Piece>>(*mPieces);
+}
+
 void TextDocument::ensureMaterialized() const noexcept {
 	if (!mCacheDirty) return;
 
 	mMaterializedText.clear();
 	mMaterializedText.reserve(mLength);
-	for (const auto &piece : mPieces)
-		mMaterializedText += pieceText(piece);
+	if (mPieces != nullptr)
+		for (const auto &piece : *mPieces)
+			mMaterializedText += pieceText(piece);
 	mCacheDirty = false;
 }
 
 std::string TextDocument::pieceText(const Piece &piece) const {
-	if (piece.source == BufferKind::Original) return mMappedOriginal.mapped() ? mMappedOriginal.sliceText(piece.span) : mOriginalBuffer.substr(piece.span.start, piece.span.length);
+	if (piece.source == BufferKind::Original) return mMappedOriginal.mapped() ? mMappedOriginal.sliceText(piece.span) : (mOriginalBuffer != nullptr ? mOriginalBuffer->substr(piece.span.start, piece.span.length) : std::string());
 	return mAddBuffer.sliceText(piece.span);
 }
 
 const char *TextDocument::originalData() const noexcept {
-	return mMappedOriginal.mapped() ? mMappedOriginal.data() : mOriginalBuffer.data();
+	return mMappedOriginal.mapped() ? mMappedOriginal.data() : (mOriginalBuffer != nullptr ? mOriginalBuffer->data() : nullptr);
 }
 
 bool TextDocument::applyOperationNoVersionBump(const EditOperation &operation) {
@@ -1697,60 +1934,262 @@ std::size_t TextDocument::splitAt(Offset offset) {
 	Offset consumed = 0;
 
 	if (logical == 0) return 0;
-	if (logical >= mLength) return mPieces.size();
+	if (mPieces == nullptr || logical >= mLength) return pieceCount();
 
-	for (std::size_t i = 0; i < mPieces.size(); ++i) {
-		Offset pieceLen = mPieces[i].span.length;
+	ensureUniquePieces();
+
+	for (std::size_t i = 0; i < mPieces->size(); ++i) {
+		Offset pieceLen = (*mPieces)[i].span.length;
 		Offset pieceEnd = consumed + pieceLen;
 
 		if (logical == consumed) return i;
 		if (logical == pieceEnd) return i + 1;
 		if (consumed < logical && logical < pieceEnd) {
 			Offset leftLen = logical - consumed;
-			Piece left = mPieces[i];
-			Piece right = mPieces[i];
+			Piece left = (*mPieces)[i];
+			Piece right = (*mPieces)[i];
 			left.span.length = leftLen;
 			right.span.start += leftLen;
 			right.span.length -= leftLen;
-			mPieces[i] = left;
-			mPieces.insert(mPieces.begin() + static_cast<std::ptrdiff_t>(i + 1), right);
+			(*mPieces)[i] = left;
+			mPieces->insert(mPieces->begin() + static_cast<std::ptrdiff_t>(i + 1), right);
 			return i + 1;
 		}
 		consumed = pieceEnd;
 	}
 
-	return mPieces.size();
+	return mPieces->size();
 }
 
 bool TextDocument::eraseNoVersionBump(Range range) {
+	const auto startedAt = std::chrono::steady_clock::now();
 	Range bounded = range.clamped(mLength);
 	if (bounded.empty()) return false;
 
+	std::chrono::steady_clock::duration splitElapsed{};
+	std::chrono::steady_clock::duration eraseElapsed{};
+	std::chrono::steady_clock::duration compactElapsed{};
+	std::chrono::steady_clock::duration invalidateElapsed{};
+	std::chrono::steady_clock::duration lineIndexElapsed{};
+	const std::size_t piecesBefore = pieceCount();
+	const std::size_t exactLinesBefore = hasEditedLineStartIndex() ? mEditedLineStarts->size() : 0;
 	std::size_t startIndex = splitAt(bounded.start);
 	std::size_t endIndex = splitAt(bounded.end);
+	splitElapsed = std::chrono::steady_clock::now() - startedAt;
 
-	if (startIndex < endIndex) mPieces.erase(mPieces.begin() + static_cast<std::ptrdiff_t>(startIndex), mPieces.begin() + static_cast<std::ptrdiff_t>(endIndex));
+	{
+		const auto eraseStartedAt = std::chrono::steady_clock::now();
+		if (startIndex < endIndex) mPieces->erase(mPieces->begin() + static_cast<std::ptrdiff_t>(startIndex), mPieces->begin() + static_cast<std::ptrdiff_t>(endIndex));
+		eraseElapsed = std::chrono::steady_clock::now() - eraseStartedAt;
+	}
 	mLength -= bounded.end - bounded.start;
-	compactPieces();
-	invalidateLazyLineIndexFrom(bounded.start);
+	{
+		const auto compactStartedAt = std::chrono::steady_clock::now();
+		compactPieces();
+		compactElapsed = std::chrono::steady_clock::now() - compactStartedAt;
+	}
+	{
+		const auto invalidateStartedAt = std::chrono::steady_clock::now();
+		invalidateLazyLineIndexFrom(bounded.start);
+		invalidateElapsed = std::chrono::steady_clock::now() - invalidateStartedAt;
+	}
+	{
+		const auto lineIndexStartedAt = std::chrono::steady_clock::now();
+		if (!hasEditedLineStartIndex()) rebuildEditedLineStartIndex();
+		updateEditedLineStartIndexForErase(bounded);
+		lineIndexElapsed = std::chrono::steady_clock::now() - lineIndexStartedAt;
+	}
 	markDirty();
+	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+	if (totalElapsed >= kSlowDocumentTraceThreshold) {
+		std::ostringstream line;
+		line << "Phase1 doc eraseNoVersionBump total_us=" << traceMicros(totalElapsed) << " split_us=" << traceMicros(splitElapsed) << " erase_us=" << traceMicros(eraseElapsed)
+		     << " compact_us=" << traceMicros(compactElapsed) << " invalidate_us=" << traceMicros(invalidateElapsed) << " line_index_us=" << traceMicros(lineIndexElapsed)
+		     << " start=" << bounded.start << " end=" << bounded.end << " erased_bytes=" << bounded.length() << " pieces_before=" << piecesBefore << " pieces_after=" << pieceCount()
+		     << " exact_lines_before=" << exactLinesBefore << " exact_lines_after=" << (hasEditedLineStartIndex() ? mEditedLineStarts->size() : 0) << " len=" << mLength
+		     << " add=" << mAddBuffer.size();
+		appendDocumentTrace(line.str());
+	}
 	return true;
 }
 
 bool TextDocument::replaceNoVersionBump(Range range, std::string_view text) {
+	const auto startedAt = std::chrono::steady_clock::now();
 	Range bounded = range.clamped(mLength);
+	const auto eraseStartedAt = std::chrono::steady_clock::now();
 	bool removed = eraseNoVersionBump(bounded);
-	if (text.empty()) return removed;
-
-	return insertAddSpanNoVersionBump(bounded.start, mAddBuffer.append(text)) || removed;
+	const auto eraseElapsed = std::chrono::steady_clock::now() - eraseStartedAt;
+	bool inserted = false;
+	std::chrono::steady_clock::duration insertElapsed{};
+	if (!text.empty()) {
+		const auto insertStartedAt = std::chrono::steady_clock::now();
+		inserted = insertAddSpanNoVersionBump(bounded.start, mAddBuffer.append(text));
+		insertElapsed = std::chrono::steady_clock::now() - insertStartedAt;
+	}
+	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+	if (totalElapsed >= kSlowDocumentTraceThreshold) {
+		std::ostringstream line;
+		line << "Phase1 doc replaceNoVersionBump total_us=" << traceMicros(totalElapsed) << " erase_us=" << traceMicros(eraseElapsed) << " insert_us=" << traceMicros(insertElapsed)
+		     << " start=" << bounded.start << " end=" << bounded.end << " removed_bytes=" << bounded.length() << " inserted_bytes=" << text.size() << " len=" << mLength
+		     << " add=" << mAddBuffer.size() << " pieces=" << pieceCount() << " exact_lines=" << (hasEditedLineStartIndex() ? mEditedLineStarts->size() : 0);
+		appendDocumentTrace(line.str());
+	}
+	return inserted || removed;
 }
 
 bool TextDocument::hasDirectOriginalView() const noexcept {
-	return mMappedOriginal.mapped() && mAddBuffer.size() == 0 && mPieces.size() == 1 && mPieces[0].source == BufferKind::Original && mPieces[0].span.start == 0 && mPieces[0].span.length == mLength;
+	if (mPieces == nullptr || mPieces->size() != 1) return false;
+
+	const Piece &piece = (*mPieces)[0];
+	if (piece.span.start != 0 || piece.span.length != mLength) return false;
+	if (piece.source == BufferKind::Original) return originalData() != nullptr;
+	if (piece.source == BufferKind::Add) return mAddBuffer.size() >= piece.span.length;
+	return false;
 }
 
 const char *TextDocument::directTextData() const noexcept {
-	return hasDirectOriginalView() ? mMappedOriginal.data() : nullptr;
+	if (!hasDirectOriginalView() || mPieces == nullptr || mPieces->empty()) return nullptr;
+
+	const Piece &piece = (*mPieces)[0];
+	if (piece.source == BufferKind::Original) return originalData();
+	return mAddBuffer.text().data();
+}
+
+bool TextDocument::hasEditedLineStartIndex() const noexcept {
+	return mEditedLineStarts != nullptr && !mEditedLineStarts->empty();
+}
+
+void TextDocument::clearEditedLineStartIndex() noexcept {
+	mEditedLineStarts = std::make_shared<std::vector<Offset>>(1, 0);
+}
+
+void TextDocument::rebuildEditedLineStartIndex() {
+	std::shared_ptr<std::vector<Offset>> starts = std::make_shared<std::vector<Offset>>();
+	starts->reserve(std::max<std::size_t>(mLineIndexCheckpoints.empty() ? 1 : mLineIndexCheckpoints.back().lineIndex + 1, std::max<std::size_t>(1, mLength / 80 + 1)));
+	starts->push_back(0);
+
+	Offset cursor = 0;
+	while (cursor < mLength) {
+		Offset next = cursor;
+		if (!advanceLine(next) || next <= cursor) break;
+		starts->push_back(next);
+		cursor = next;
+	}
+
+	mEditedLineStarts = starts;
+}
+
+void TextDocument::updateEditedLineStartIndexForInsert(Offset offset, std::string_view text) {
+	const auto startedAt = std::chrono::steady_clock::now();
+	if (text.empty()) return;
+	if (!hasEditedLineStartIndex()) {
+		rebuildEditedLineStartIndex();
+		const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+		if (totalElapsed >= kSlowDocumentTraceThreshold) {
+			std::ostringstream line;
+			line << "Phase1 doc updateEditedLineStartIndexForInsert total_us=" << traceMicros(totalElapsed) << " offset=" << offset << " inserted_bytes=" << text.size()
+			     << " mode=rebuild-missing len=" << mLength << " add=" << mAddBuffer.size() << " pieces=" << pieceCount() << " exact_lines="
+			     << (mEditedLineStarts != nullptr ? mEditedLineStarts->size() : 0);
+			appendDocumentTrace(line.str());
+		}
+		return;
+	}
+
+	if (!mEditedLineStarts.unique()) mEditedLineStarts = std::make_shared<std::vector<Offset>>(*mEditedLineStarts);
+	std::vector<Offset> &starts = *mEditedLineStarts;
+	std::vector<Offset> insertedStarts;
+	appendLineStartsFromInsertedText(insertedStarts, offset, text, true);
+
+	std::vector<Offset>::iterator suffix = std::upper_bound(starts.begin() + 1, starts.end(), offset);
+	for (std::vector<Offset>::iterator it = suffix; it != starts.end(); ++it)
+		*it += static_cast<Offset>(text.size());
+	starts.insert(suffix, insertedStarts.begin(), insertedStarts.end());
+	starts.erase(std::unique(starts.begin(), starts.end()), starts.end());
+	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+	if (totalElapsed >= kSlowDocumentTraceThreshold) {
+		std::ostringstream line;
+		line << "Phase1 doc updateEditedLineStartIndexForInsert total_us=" << traceMicros(totalElapsed) << " offset=" << offset << " inserted_bytes=" << text.size()
+		     << " inserted_lines=" << insertedStarts.size() << " total_exact_lines=" << mEditedLineStarts->size() << " len=" << mLength << " add=" << mAddBuffer.size() << " pieces=" << pieceCount();
+		appendDocumentTrace(line.str());
+	}
+}
+
+void TextDocument::updateEditedLineStartIndexForErase(Range range) {
+	const auto startedAt = std::chrono::steady_clock::now();
+	if (range.empty()) return;
+	if (!hasEditedLineStartIndex()) {
+		rebuildEditedLineStartIndex();
+		const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+		if (totalElapsed >= kSlowDocumentTraceThreshold) {
+			std::ostringstream line;
+			line << "Phase1 doc updateEditedLineStartIndexForErase total_us=" << traceMicros(totalElapsed) << " start=" << range.start << " end=" << range.end
+			     << " erased_bytes=" << range.length() << " mode=rebuild-missing len=" << mLength << " add=" << mAddBuffer.size() << " pieces=" << pieceCount()
+			     << " exact_lines=" << (mEditedLineStarts != nullptr ? mEditedLineStarts->size() : 0);
+			appendDocumentTrace(line.str());
+		}
+		return;
+	}
+
+	if (!mEditedLineStarts.unique()) mEditedLineStarts = std::make_shared<std::vector<Offset>>(*mEditedLineStarts);
+	std::vector<Offset> &starts = *mEditedLineStarts;
+	const std::size_t baseLineIndex = lineIndexFromExactStarts(starts, range.start);
+	const Offset baseOffset = lineStartFromExactStarts(starts, baseLineIndex);
+	const Offset erasedBytes = range.length();
+	std::vector<Offset>::iterator removedBegin = starts.begin() + static_cast<std::ptrdiff_t>(baseLineIndex + 1);
+	std::vector<Offset>::iterator removedEnd = std::upper_bound(removedBegin, starts.end(), range.end);
+	const std::size_t suffixIndex = static_cast<std::size_t>(removedBegin - starts.begin());
+
+	starts.erase(removedBegin, removedEnd);
+	for (std::size_t i = suffixIndex; i < starts.size(); ++i)
+		starts[i] -= erasedBytes;
+
+	const bool hasSuffix = suffixIndex < starts.size();
+	const Offset stopOffset = hasSuffix ? starts[suffixIndex] : mLength;
+	std::vector<Offset> rebuiltStarts;
+	Offset cursor = baseOffset;
+	while (cursor < mLength) {
+		Offset next = cursor;
+		if (!advanceLine(next) || next <= cursor) break;
+		if (next > stopOffset) break;
+		if (hasSuffix && next == stopOffset) break;
+		rebuiltStarts.push_back(next);
+		cursor = next;
+		if (!hasSuffix && next == stopOffset) break;
+	}
+	starts.insert(starts.begin() + static_cast<std::ptrdiff_t>(suffixIndex), rebuiltStarts.begin(), rebuiltStarts.end());
+	starts.erase(std::unique(starts.begin(), starts.end()), starts.end());
+	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+	if (totalElapsed >= kSlowDocumentTraceThreshold) {
+		std::ostringstream line;
+		line << "Phase1 doc updateEditedLineStartIndexForErase total_us=" << traceMicros(totalElapsed) << " start=" << range.start << " end=" << range.end
+		     << " erased_bytes=" << erasedBytes << " rebuilt_lines=" << rebuiltStarts.size() << " total_exact_lines=" << mEditedLineStarts->size() << " len=" << mLength
+		     << " add=" << mAddBuffer.size() << " pieces=" << pieceCount();
+		appendDocumentTrace(line.str());
+	}
+}
+
+void TextDocument::normalizeLargeMappedEditStateNoVersionBump() {
+	if (!mMappedOriginal.mapped()) return;
+	if (mLength < kLargeMappedEditNormalizationLength) return;
+	if (mPieces == nullptr || mPieces->size() < kLargeMappedEditNormalizationPieceThreshold) return;
+
+	std::string currentText = text();
+	mMappedOriginal.reset();
+	mOriginalBuffer = std::make_shared<std::string>();
+	mAddBuffer.clear();
+	TextSpan fullSpan = mAddBuffer.append(currentText);
+	ensureUniquePieces();
+	mPieces->clear();
+	mPieces->emplace_back(BufferKind::Add, fullSpan);
+	mLength = static_cast<Offset>(currentText.size());
+	mMaterializedText = std::move(currentText);
+	mCacheDirty = false;
+	if (const char *data = directTextData()) {
+		buildDirectInitialLineIndex(data, mLength, mLineIndexCheckpoints, mLazyIndexedOffset, mLazyIndexedLine, mLazyTotalLineCount);
+		mLazyLineIndexComplete = true;
+	} else
+		resetLazyLineIndex();
+	rebuildEditedLineStartIndex();
 }
 
 void TextDocument::resetLazyLineIndex() noexcept {
@@ -1787,6 +2226,7 @@ void TextDocument::ensureLazyIndexSeeded() const noexcept {
 void TextDocument::advanceLazyIndexByStride() const noexcept {
 	ensureLazyIndexSeeded();
 	if (mLazyLineIndexComplete) return;
+	const std::size_t checkpointStride = checkpointStrideForMode(directTextData() != nullptr);
 
 	for (std::size_t steps = 0; steps < kLazyLineIndexStride; ++steps) {
 		Offset next = mLazyIndexedOffset;
@@ -1797,7 +2237,7 @@ void TextDocument::advanceLazyIndexByStride() const noexcept {
 		}
 		mLazyIndexedOffset = next;
 		++mLazyIndexedLine;
-		if ((mLazyIndexedLine % kLazyLineIndexStride) == 0) mLineIndexCheckpoints.push_back(LineIndexCheckpoint(mLazyIndexedOffset, mLazyIndexedLine));
+		if ((mLazyIndexedLine % checkpointStride) == 0) mLineIndexCheckpoints.push_back(LineIndexCheckpoint(mLazyIndexedOffset, mLazyIndexedLine));
 	}
 }
 
@@ -1847,33 +2287,55 @@ void TextDocument::invalidateLazyLineIndexFrom(Offset offset) noexcept {
 }
 
 bool TextDocument::insertAddSpanNoVersionBump(Offset offset, TextSpan span) {
+	const auto startedAt = std::chrono::steady_clock::now();
 	Offset logical = clampOffset(offset);
+	const auto splitStartedAt = std::chrono::steady_clock::now();
 	std::size_t index = splitAt(logical);
+	const auto splitElapsed = std::chrono::steady_clock::now() - splitStartedAt;
 
-	if (!span.empty()) mPieces.insert(mPieces.begin() + static_cast<std::ptrdiff_t>(index), Piece(BufferKind::Add, span));
+	if (!span.empty()) mPieces->insert(mPieces->begin() + static_cast<std::ptrdiff_t>(index), Piece(BufferKind::Add, span));
 	else
 		return false;
 
 	mLength += span.length;
+	const auto compactStartedAt = std::chrono::steady_clock::now();
 	compactPieces();
+	const auto compactElapsed = std::chrono::steady_clock::now() - compactStartedAt;
+	const auto invalidateStartedAt = std::chrono::steady_clock::now();
 	invalidateLazyLineIndexFrom(logical);
+	const auto invalidateElapsed = std::chrono::steady_clock::now() - invalidateStartedAt;
+	std::string_view inserted(mAddBuffer.text().data() + span.start, span.length);
+	const auto indexStartedAt = std::chrono::steady_clock::now();
+	if (!hasEditedLineStartIndex()) rebuildEditedLineStartIndex();
+	updateEditedLineStartIndexForInsert(logical, inserted);
+	const auto indexElapsed = std::chrono::steady_clock::now() - indexStartedAt;
 	markDirty();
+	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+	if (totalElapsed >= kSlowDocumentTraceThreshold) {
+		std::ostringstream line;
+		line << "Phase1 doc insertAddSpanNoVersionBump total_us=" << traceMicros(totalElapsed) << " split_us=" << traceMicros(splitElapsed) << " compact_us=" << traceMicros(compactElapsed)
+		     << " invalidate_us=" << traceMicros(invalidateElapsed) << " line_index_us=" << traceMicros(indexElapsed) << " offset=" << offset << " logical=" << logical << " bytes=" << span.length
+		     << " len=" << mLength << " add=" << mAddBuffer.size() << " pieces=" << pieceCount() << " exact_lines=" << (mEditedLineStarts != nullptr ? mEditedLineStarts->size() : 0);
+		appendDocumentTrace(line.str());
+	}
 	return true;
 }
 
 void TextDocument::compactPieces() {
 	std::vector<Piece> compacted;
-	compacted.reserve(mPieces.size());
+	compacted.reserve(pieceCount());
 
-	for (const auto &piece : mPieces) {
-		if (piece.empty()) continue;
-		if (!compacted.empty() && compacted.back().source == piece.source && compacted.back().span.end() == piece.span.start) {
-			compacted.back().span.length += piece.span.length;
-		} else
-			compacted.push_back(piece);
-	}
+	if (mPieces != nullptr)
+		for (const auto &piece : *mPieces) {
+			if (piece.empty()) continue;
+			if (!compacted.empty() && compacted.back().source == piece.source && compacted.back().span.end() == piece.span.start) {
+				compacted.back().span.length += piece.span.length;
+			} else
+				compacted.push_back(piece);
+		}
 
-	mPieces.swap(compacted);
+	ensureUniquePieces();
+	mPieces->swap(compacted);
 }
 
 } // namespace editor

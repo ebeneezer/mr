@@ -38,8 +38,10 @@
 #include "MRMiniMap.hpp"
 #include "MRTextFormatting.hpp"
 #include "MRTextViewport.hpp"
-#include "MRTreeSitterDocument.hpp"
 #include "../MRTextBufferModel.hpp"
+#include "../../derivedstate/MRFoldingDerivedState.hpp"
+#include "../../derivedstate/MRMiniMapDerivedState.hpp"
+#include "../../derivedstate/MRSyntaxDerivedState.hpp"
 #include "../../config/MRDialogPaths.hpp"
 #include "../../app/MRCommands.hpp"
 #include "../../app/utils/MRFileIOUtils.hpp"
@@ -48,6 +50,8 @@
 #include "../MRWindowSupport.hpp"
 
 class MREditWindow;
+
+std::string mrBuildFoldTrainingAscii(const std::string &text, MRSyntaxLanguage language);
 
 class MRFileEditor : public TScroller {
   public:
@@ -61,7 +65,35 @@ class MRFileEditor : public TScroller {
 		LoadTiming() noexcept;
 	};
 
+	struct DestructionProbe {
+		bool active = false;
+		int bufferId = 0;
+		std::string title;
+		std::size_t length = 0;
+		std::size_t addBufferLength = 0;
+		std::size_t pieceCount = 0;
+		std::size_t undoDepth = 0;
+		std::size_t redoDepth = 0;
+		std::chrono::steady_clock::time_point startedAt = std::chrono::steady_clock::time_point();
+
+		void arm(int aBufferId, const char *aTitle, std::size_t aLength, std::size_t aAddBufferLength, std::size_t aPieceCount, std::size_t aUndoDepth, std::size_t aRedoDepth) {
+			active = true;
+			bufferId = aBufferId;
+			title = aTitle != nullptr ? aTitle : "?";
+			length = aLength;
+			addBufferLength = aAddBufferLength;
+			pieceCount = aPieceCount;
+			undoDepth = aUndoDepth;
+			redoDepth = aRedoDepth;
+			startedAt = std::chrono::steady_clock::now();
+		}
+
+		~DestructionProbe();
+	};
+
 	MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScrollBar *aVScrollBar, TIndicator *aIndicator, TStringView aFileName) noexcept;
+
+	virtual ~MRFileEditor() override;
 
 	bool isReadOnly() const;
 
@@ -109,13 +141,25 @@ class MRFileEditor : public TScroller {
 
 	std::uint64_t pendingSyntaxWarmupTaskId() const noexcept;
 
+	std::uint64_t pendingFoldWarmupTaskId() const noexcept;
+
 	std::uint64_t pendingMiniMapWarmupTaskId() const noexcept;
 
 	std::uint64_t pendingSaveNormalizationWarmupTaskId() const noexcept;
 
+	std::size_t syntaxWarmupTopLine() const noexcept;
+
+	std::size_t syntaxWarmupBottomLine() const noexcept;
+
+	std::size_t syntaxPrefetchTargetBottomLine() const noexcept;
+
+	std::size_t syntaxPrefetchReachedBottomLine() const noexcept;
+
 	bool shouldReportMiniMapInitialRender() const noexcept;
 
 	void markMiniMapInitialRenderReported() noexcept;
+
+	const std::string &lastUiHotpathTrace() const noexcept;
 
 	bool lineIndexWarmupPending() const noexcept;
 
@@ -138,6 +182,8 @@ class MRFileEditor : public TScroller {
 	int actualCursorVisualColumn(std::size_t offset) const noexcept;
 
 	int displayedCursorColumn() const noexcept;
+
+	std::size_t cachedCursorLineIndex() const noexcept;
 
 	void syncDisplayedCursorColumnFromCursor(bool preserveFreeColumn) noexcept;
 
@@ -207,6 +253,8 @@ class MRFileEditor : public TScroller {
 
 	int currentLineNumber() const noexcept;
 
+	int currentColumnNumber() const noexcept;
+
 	int currentViewRow() const noexcept;
 
 	int visibleViewportRows() const noexcept;
@@ -220,6 +268,7 @@ class MRFileEditor : public TScroller {
 	void syncIndicatorVisualSettings();
 
 	void notifyWindowTaskStateChanged();
+	void continueComputeWarmupIfNeeded(const char *reason = nullptr);
 
 	std::string snapshotText() const;
 
@@ -241,6 +290,8 @@ class MRFileEditor : public TScroller {
 
 	bool applySaveNormalizationWarmup(const mr::coprocessor::SaveNormalizationWarmupPayload &payload, std::size_t expectedVersion, std::uint64_t expectedTaskId, double runMicros);
 
+	bool applyFoldWarmup(const mr::coprocessor::Payload &payload, std::size_t expectedVersion, std::uint64_t expectedTaskId);
+
 	void clearLineIndexWarmupTask(std::uint64_t expectedTaskId) noexcept;
 
 	void clearSyntaxWarmupTask(std::uint64_t expectedTaskId) noexcept;
@@ -251,11 +302,15 @@ class MRFileEditor : public TScroller {
 
 	void clearSaveNormalizationWarmupTask(std::uint64_t expectedTaskId = 0) noexcept;
 
+	void clearFoldWarmupTask(std::uint64_t expectedTaskId = 0) noexcept;
+
 	void setSyntaxTitleHint(const std::string &title);
 
 	const char *syntaxLanguageName() const noexcept;
 
 	MRSyntaxLanguage syntaxLanguage() const noexcept;
+
+	bool syntaxLanguageAutomatic() const noexcept;
 
 		bool canSaveInPlace() const;
 
@@ -315,6 +370,8 @@ class MRFileEditor : public TScroller {
 
 		int leadingIndentColumnForLine(std::size_t lineStart) const noexcept;
 
+		int inferredShellIndentStepColumns(std::size_t lineStart, const MREditSetupSettings &settings) const noexcept;
+
 		std::string automaticIndentFillForCursor() const;
 
 		std::string smartIndentFillForCursor();
@@ -362,11 +419,9 @@ class MRFileEditor : public TScroller {
 
 	static int decimalDigits(std::size_t value) noexcept;
 
-	bool shouldTraceLargeFileDiagnostics() const noexcept;
+	bool shouldTraceLargeFileWarmupDiagnostics() const noexcept;
 
-	void traceLargeFileMessage(const char *stage, const std::string &detail) const;
-
-	void traceLargeFileMetrics(const char *stage, int limitY, int maxY, int textRows, int newDeltaY);
+	void traceLargeFileWarmup(std::string &slot, const char *stage, std::string detail);
 
 	struct SaveNormalizationCache {
 		bool valid = false;
@@ -406,13 +461,15 @@ class MRFileEditor : public TScroller {
 
 		void drawLineNumberGutter(TDrawBuffer &b, std::size_t lineIndex, bool showNumber, int drawX, int width, bool zeroFill);
 
-		void drawCodeFoldingGutter(TDrawBuffer &b, int drawX, int width);
+		void drawCodeFoldingGutter(TDrawBuffer &b, int drawX, int width, std::size_t lineStart, std::size_t lineIndex);
 
 	static const char *lineIndexWarmupTaskLabel() noexcept;
 
 	static const char *syntaxWarmupTaskLabel() noexcept;
 
 	static const char *saveNormalizationWarmupTaskLabel() noexcept;
+
+	static const char *foldWarmupTaskLabel() noexcept;
 
 	bool lineIntersectsDirtyRanges(std::size_t lineStart, std::size_t lineEnd) const noexcept;
 
@@ -449,6 +506,8 @@ class MRFileEditor : public TScroller {
 	void scheduleLineIndexWarmupIfNeeded();
 
 	void scheduleSyntaxWarmupIfNeeded();
+
+	void scheduleFoldWarmupIfNeeded(std::size_t scanTopLine, std::size_t scanBottomLine, std::size_t topLine, std::size_t requestBottomLine, MRSyntaxLanguage language);
 
 	bool resolveSaveOptionsForPath(const char *path, MRTextSaveOptions &options, std::size_t *optionsHash = nullptr) const;
 
@@ -500,20 +559,67 @@ class MRFileEditor : public TScroller {
 
 		TColorAttr tokenColor(MRSyntaxToken token, bool selected, TAttrPair pair) noexcept;
 
-	void refreshSyntaxContext();
+		void refreshSyntaxContext();
 
-	void resetSyntaxWarmupState(bool clearCache) noexcept;
+		bool pieceTableOnlyPhaseActive() const noexcept;
+
+		std::string effectiveCodeLanguageSetting() const;
+
+		bool languageFeaturesEnabled() const;
+
+		bool syntaxPipelineEnabled() const;
+
+		bool foldingPipelineEnabled() const;
+
+		bool miniMapPipelineEnabled() const noexcept;
+
+		void resetSyntaxWarmupState(bool clearCache) noexcept;
+
+		void invalidateSyntaxCacheFromLineStart(std::size_t lineStart) noexcept;
+
+		void clearSyntaxWarmedLineRanges() noexcept;
+
+		void rememberSyntaxWarmedLineRange(std::size_t startLine, std::size_t endLine) noexcept;
+
+		void invalidateSyntaxWarmedLineRangesFrom(std::size_t lineIndex) noexcept;
+
+		bool syntaxWarmedLineRangeCovered(std::size_t startLine, std::size_t endLine) const noexcept;
+
+	void invalidateFoldCache(bool preserveVisibleProjection = false) noexcept;
+
+	void ensureVisibleFoldSpans(std::size_t topLine, int rowCount, MRSyntaxLanguage language);
+
+	int visibleFoldGutterColumns() const noexcept;
+
+	bool toggleFoldAtLine(std::size_t lineIndex);
+
+	bool foldingGutterHit(TPoint local, std::size_t *lineIndexOut = nullptr) const noexcept;
+
+	std::size_t documentLineForVisibleLine(std::size_t visibleLine) const noexcept;
+
+	std::size_t visibleLineForDocumentLine(std::size_t documentLine) const noexcept;
+
+	std::size_t foldedVisibleLineCount() const noexcept;
 
 		std::vector<std::size_t> syntaxWarmupLineStarts(std::size_t topLine, int rowCount) const;
 
-		bool hasSyntaxTokensForLineStarts(const std::vector<std::size_t> &lineStarts) const;
+		bool syntaxCheckpointForLine(std::size_t lineIndex, MRSyntaxCheckpointEntry &checkpoint) const;
 
-		MRSyntaxTokenMap syntaxTokensForLine(std::size_t lineStart) const;
+		void rememberSyntaxCheckpoint(std::size_t lineStart, std::size_t lineIndex, const MRSyntaxLineState &stateIn) noexcept;
 
-		void formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, int hScroll, int width, int drawX, bool isDocumentLine, bool drawEofMarker, bool drawEofMarkerAsEmoji);
+		MRSyntaxLineState syntaxWarmupInitialState(std::size_t lineStart) const noexcept;
+
+		bool hasSyntaxTokensForLineStarts(const std::vector<std::size_t> &lineStarts, const MRSyntaxLineState &initialState = MRSyntaxLineState()) const;
+
+		std::size_t syntaxCachedCoveragePrefix(const std::vector<std::size_t> &lineStarts, const MRSyntaxLineState &initialState, MRSyntaxLineState *stateOut = nullptr) const;
+
+		MRSyntaxLineResult syntaxLineResultForLine(std::size_t lineStart, const MRSyntaxLineState &previousState);
+
+		void formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const MRSyntaxLineResult &syntaxLine, int hScroll, int width, int drawX, bool isDocumentLine, bool drawEofMarker, bool drawEofMarkerAsEmoji);
 
 		void drawEofMarkerGlyph(TDrawBuffer &b, int hScroll, int width, int drawX, TAttrPair basePair, bool drawEmoji);
 
+		bool syncAfterCommittedDocument(std::size_t cursorPos, std::size_t selStart, std::size_t selEnd, bool modifiedState, const MRTextBufferModel::DocumentChangeSet *changeSet = nullptr);
 		bool adoptCommittedDocument(const MRTextBufferModel::Document &document, std::size_t cursorPos, std::size_t selStart, std::size_t selEnd, bool modifiedState, const MRTextBufferModel::DocumentChangeSet *changeSet = nullptr);
 
 	TIndicator *mIndicator;
@@ -522,25 +628,20 @@ class MRFileEditor : public TScroller {
 	TColorAttr mCustomWindowEofMarkerColorOverride = 0;
 	bool mInsertMode;
 	bool mAutoIndent;
-	char fileName[MAXPATH];
-	std::string mSyntaxTitleHint;
-	MRTextBufferModel mBufferModel;
+		char fileName[MAXPATH];
+		std::string mSyntaxTitleHint;
+		DestructionProbe mDestructionProbe;
+		MRTextBufferModel mBufferModel;
 	std::size_t mSelectionAnchor;
 	int mCursorVisualColumn;
 	bool mIndicatorUpdateInProgress;
 	std::uint64_t mLineIndexWarmupTaskId;
 	std::size_t mLineIndexWarmupDocumentId;
 	std::size_t mLineIndexWarmupVersion;
-	std::map<std::size_t, MRSyntaxTokenMap> mSyntaxTokenCache;
-	std::uint64_t mSyntaxWarmupTaskId;
-	std::size_t mSyntaxWarmupDocumentId;
-	std::size_t mSyntaxWarmupVersion;
-	std::size_t mSyntaxWarmupTopLine;
-	std::size_t mSyntaxWarmupBottomLine;
-	MRSyntaxLanguage mSyntaxWarmupLanguage;
-	MRTreeSitterDocument::Language mSyntaxWarmupTreeSitterLanguage;
-	MRTreeSitterDocument mTreeSitterDocument;
-	MRMiniMapRenderer mMiniMapRenderer;
+	bool mSuppressLargeFileLineIndexWarmup;
+	MRSyntaxDerivedState mSyntaxState;
+	MRFoldingDerivedState mFoldState;
+	MRMiniMapDerivedState mMiniMapState;
 	SaveNormalizationCache mSaveNormalizationCache;
 	std::uint64_t mSaveNormalizationWarmupTaskId;
 	std::size_t mSaveNormalizationWarmupDocumentId;
@@ -550,7 +651,6 @@ class MRFileEditor : public TScroller {
 	std::chrono::steady_clock::time_point mSaveNormalizationWarmupStartedAt;
 	double mSaveNormalizationThroughputBytesPerMicro;
 	std::size_t mSaveNormalizationThroughputSamples;
-	std::size_t mMiniMapInitialRenderReportedDocumentId;
 	bool mBlockOverlayActive;
 	int mBlockOverlayMode;
 	std::size_t mBlockOverlayAnchor;
@@ -560,12 +660,15 @@ class MRFileEditor : public TScroller {
 	std::vector<MRTextBufferModel::Range> mFindMarkerRanges;
 	std::vector<MRTextBufferModel::Range> mDirtyRanges;
 	LoadTiming mLastLoadTiming;
-	bool mLargeFileMetricsTraceValid;
-	bool mLastLargeFileMetricsExactKnown;
-	int mLastLargeFileMetricsLimitY;
-	int mLastLargeFileMetricsMaxY;
-	int mLastLargeFileMetricsDeltaY;
-	int mLastLargeFileMetricsNewDeltaY;
+	mutable std::size_t mCachedCursorLineDocumentId;
+	mutable std::size_t mCachedCursorLineVersion;
+	mutable std::size_t mCachedCursorLineOffset;
+	mutable std::size_t mCachedCursorLineIndexValue;
+	std::string mLastLineIndexWarmupTrace;
+	std::string mLastSyntaxWarmupTrace;
+	std::string mLastMiniMapWarmupTrace;
+	std::string mLastComputeWarmupTrace;
+	std::string mLastUiHotpathTrace;
 
 	void clearDirtyRanges() noexcept;
 

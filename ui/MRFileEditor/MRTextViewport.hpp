@@ -12,6 +12,7 @@ class MRTextViewportLayout {
 		int visibleRows = 0;
 		int deltaX = 0;
 		int deltaY = 0;
+		int codeFoldingColumns = 1;
 		bool exactLineCountKnown = false;
 		std::size_t exactLineCount = 0;
 		std::size_t estimatedLineCount = 0;

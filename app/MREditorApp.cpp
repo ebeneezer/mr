@@ -370,6 +370,11 @@ bool applySettingsSourceViaVm(const std::string &settingsPath, const std::string
 				if (errorMessage != nullptr) *errorMessage = "Settings load failed (runtime): " + vmError;
 				return false;
 			}
+			if (!mrvmFlushPendingStartupKeymapBatch(&vmError)) {
+				std::free(bytecode);
+				if (errorMessage != nullptr) *errorMessage = "Settings load failed (keymap batch): " + (vmError.empty() ? std::string("invalid keymap batch.") : vmError);
+				return false;
+			}
 		}
 	}
 	std::free(bytecode);
@@ -789,9 +794,25 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 	updateAppCommandState();
 }
 
+bool MREditorApp::quitPrepared() const noexcept {
+	return exitPrepared;
+}
+
 MREditorApp::~MREditorApp() {
+	const auto prepareStartedAt = std::chrono::steady_clock::now();
 	prepareForQuit();
+	{
+		std::ostringstream line;
+		line << "App destructor phase prepare_for_quit took_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - prepareStartedAt).count() << ".";
+		mrLogMessage(line.str().c_str());
+	}
+	const auto shutdownStartedAt = std::chrono::steady_clock::now();
 	mr::coprocessor::globalCoprocessor().shutdown(true);
+	{
+		std::ostringstream line;
+		line << "App destructor phase coprocessor_shutdown took_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - shutdownStartedAt).count() << ".";
+		mrLogMessage(line.str().c_str());
+	}
 }
 
 void MREditorApp::applyConfiguredWindowFramePolicy() {
@@ -832,18 +853,43 @@ void MREditorApp::applyConfiguredDisplayLayout() {
 void MREditorApp::prepareForQuit() {
 	if (exitPrepared) return;
 
+	const auto quitStartedAt = std::chrono::steady_clock::now();
 	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 	std::size_t pendingTaskCount = 0;
 	std::string settingsError;
 	MRSettingsWriteReport settingsWriteReport;
+	{
+		std::ostringstream line;
+		line << "Quit prepare begin windows=" << windows.size() << ".";
+		mrLogMessage(line.str().c_str());
+	}
+	for (auto *window : windows) {
+		if (window == nullptr) continue;
+		std::ostringstream line;
+		line << "Quit window state #" << window->number << " modified=" << (window->isFileChanged() ? 1 : 0) << " len=" << window->bufferLength() << " add=" << window->addBufferLength()
+		     << " pieces=" << window->pieceCount() << " undo=" << window->undoStackDepth() << " redo=" << window->redoStackDepth() << ".";
+		mrLogMessage(line.str().c_str());
+	}
 
+	const auto snapshotStartedAt = std::chrono::steady_clock::now();
 	if (!persistConfiguredSettingsSnapshot(&settingsError, &settingsWriteReport) && !settingsError.empty()) mrLogMessage(("Settings snapshot on exit failed: " + settingsError).c_str());
 	else
 		mrLogSettingsWriteReport("exit snapshot", settingsWriteReport);
+	{
+		std::ostringstream line;
+		line << "Quit phase settings_snapshot took_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - snapshotStartedAt).count() << ".";
+		mrLogMessage(line.str().c_str());
+	}
 
 	exitPrepared = true;
+	const auto cancelStartedAt = std::chrono::steady_clock::now();
 	for (auto &window : windows)
 		if (window != nullptr) pendingTaskCount += window->prepareCoprocessorTasksForShutdown();
+	{
+		std::ostringstream line;
+		line << "Quit phase cancel_tasks took_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - cancelStartedAt).count() << " pending=" << pendingTaskCount << ".";
+		mrLogMessage(line.str().c_str());
+	}
 
 	if (pendingTaskCount != 0) {
 		std::string line = "Exit requested; cancelling ";
@@ -852,12 +898,29 @@ void MREditorApp::prepareForQuit() {
 		if (pendingTaskCount != 1) line += "s";
 		line += ".";
 		mrLogMessage(line.c_str());
+		const auto pumpStartedAt = std::chrono::steady_clock::now();
 		mr::coprocessor::globalCoprocessor().pump(64);
+		{
+			std::ostringstream pumpLine;
+			pumpLine << "Quit phase pump_after_cancel took_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - pumpStartedAt).count() << ".";
+			mrLogMessage(pumpLine.str().c_str());
+		}
 	}
 	cancelForegroundMacroDelays();
 	if (configuredLogHandling() == MRLogHandling::Persist) {
 		const std::string logPath = configuredLogFilePath();
+		const auto appendStartedAt = std::chrono::steady_clock::now();
 		if (!mrAppendLogBufferToFile(logPath, &settingsError)) mrLogMessage(("MR log append on exit failed: " + settingsError).c_str());
+		{
+			std::ostringstream line;
+			line << "Quit phase append_log took_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - appendStartedAt).count() << ".";
+			mrLogMessage(line.str().c_str());
+		}
+	}
+	{
+		std::ostringstream line;
+		line << "Quit prepare end total_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - quitStartedAt).count() << ".";
+		mrLogMessage(line.str().c_str());
 	}
 }
 

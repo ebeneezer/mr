@@ -415,16 +415,8 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		void *originalInfoPtr = event.what == evBroadcast ? event.message.infoPtr : nullptr;
 		ushort originalKey = event.what == evKeyDown ? event.keyDown.keyCode : 0;
 
-		if (event.what == evKeyDown && event.keyDown.keyCode == kbEsc && editorSettingsPanel.codeLanguageListVisible()) {
-			editorSettingsPanel.hideCodeLanguageList();
+		if (editorSettingsPanel.handleCodeLanguageListEvent(event)) {
 			refreshValidationState();
-			clearEvent(event);
-			return;
-		}
-		if (event.what == evMouseDown && editorSettingsPanel.codeLanguageListVisible() && !editorSettingsPanel.codeLanguageListContainsPoint(event.mouse.where)) {
-			editorSettingsPanel.hideCodeLanguageList();
-			refreshValidationState();
-			clearEvent(event);
 			return;
 		}
 		MRScrollableDialog::handleEvent(event);

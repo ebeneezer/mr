@@ -692,6 +692,7 @@ TPalette buildColorSetupWorkingPalette() {
 		data[kMrPaletteMiniMapFindMarker - 1] = data[5 - 1];
 		data[kMrPaletteMiniMapErrorMarker - 1] = data[42 - 1];
 		data[kMrPaletteCodeFolding - 1] = data[9 - 1];
+		data[kMrPaletteCodeFoldingMarker - 1] = data[9 - 1];
 		data[kMrPaletteDesktop - 1] = 0x90;
 		data[kMrPaletteVirtualDesktopMarker - 1] = 0x9F;
 		return TPalette(data, static_cast<ushort>(kTotalSlots));
@@ -707,7 +708,7 @@ TPalette buildColorSetupWorkingPalette() {
 }
 
 bool applyWorkingColorPaletteToConfigured(const TPalette &palette, std::string &errorText) {
-	static const MRColorSetupGroup groups[] = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog, MRColorSetupGroup::Help, MRColorSetupGroup::Other, MRColorSetupGroup::MiniMap};
+	static const MRColorSetupGroup groups[] = {MRColorSetupGroup::Window, MRColorSetupGroup::MenuDialog, MRColorSetupGroup::Help, MRColorSetupGroup::Other, MRColorSetupGroup::MiniMap, MRColorSetupGroup::Code};
 
 	for (auto group : groups) {
 		std::size_t count = 0;
@@ -1885,6 +1886,7 @@ struct UserInterfaceSettingsDialogData {
 	ushort flags = 0;
 	ushort virtualDesktops = 1;
 	ushort cursorBehaviourChoice = 1;
+	ushort uiIndentStyleChoice = 0;
 	char cursorPositionMarker[12] = {0};
 };
 
@@ -1927,12 +1929,77 @@ bool validateCursorPositionMarkerInput(std::string_view value, std::string &erro
 }
 
 bool userInterfaceSettingsDialogDataEqual(const UserInterfaceSettingsDialogData &lhs, const UserInterfaceSettingsDialogData &rhs) {
-	return lhs.flags == rhs.flags && lhs.virtualDesktops == rhs.virtualDesktops && lhs.cursorBehaviourChoice == rhs.cursorBehaviourChoice && readRecordField(lhs.cursorPositionMarker) == readRecordField(rhs.cursorPositionMarker);
+	return lhs.flags == rhs.flags && lhs.virtualDesktops == rhs.virtualDesktops && lhs.cursorBehaviourChoice == rhs.cursorBehaviourChoice && lhs.uiIndentStyleChoice == rhs.uiIndentStyleChoice &&
+	       readRecordField(lhs.cursorPositionMarker) == readRecordField(rhs.cursorPositionMarker);
 }
+
+class TIndentStylePreview : public TView {
+  public:
+	TIndentStylePreview(const TRect &bounds) noexcept : TView(bounds) {
+		eventMask = 0;
+	}
+
+	void setStyle(ushort choice) {
+		if (mStyleChoice != choice) {
+			mStyleChoice = choice;
+			drawView();
+		}
+	}
+
+	void draw() override {
+		TDrawBuffer buffer;
+		const TAttrPair boxColor(0x1F);
+		const auto lines = previewLinesFor(mStyleChoice);
+		const char topLeft = static_cast<char>(0xC9);
+		const char topRight = static_cast<char>(0xBB);
+		const char bottomLeft = static_cast<char>(0xC8);
+		const char bottomRight = static_cast<char>(0xBC);
+		const char horizontal = static_cast<char>(0xCD);
+		const char vertical = static_cast<char>(0xBA);
+
+		for (int y = 0; y < size.y; ++y) {
+			buffer.moveChar(0, ' ', boxColor, size.x);
+			if (y == 0 || y == size.y - 1) {
+				buffer.putChar(0, y == 0 ? topLeft : bottomLeft);
+				buffer.moveChar(1, horizontal, boxColor, std::max(0, size.x - 2));
+				buffer.putChar(size.x - 1, y == 0 ? topRight : bottomRight);
+			} else {
+				buffer.putChar(0, vertical);
+				buffer.putChar(size.x - 1, vertical);
+				const int lineIndex = y - 1;
+				if (lineIndex >= 0 && lineIndex < static_cast<int>(lines.size())) buffer.moveStr(2, lines[static_cast<std::size_t>(lineIndex)], boxColor, std::max(0, size.x - 3));
+			}
+			writeLine(0, y, size.x, 1, buffer);
+		}
+	}
+
+  private:
+	static std::array<const char *, 7> previewLinesFor(ushort choice) noexcept {
+		switch (choice) {
+			case 5:
+				return {"if (ready)", "{   work(width);", "    notify(width);", "}", "else", "{   recover(width);", "}"};
+			case 4:
+				return {"if (ready)", "    {", "    work(width);", "    }", "else", "    {", "    recover(width);"};
+			case 3:
+				return {"if (ready)", "  {", "    work(width);", "  }", "else", "  {", "    recover(width);"};
+			case 2:
+				return {"if (ready)", "{", "    work(width);", "}", "else", "{", "    recover(width);"};
+			case 1:
+				return {"if (ready) {", "    work(width);", "    notify(width);", "} else {", "    recover(width);", "    notify(width);", "}"};
+			case 0:
+			default:
+				return {"if (ready) {", "  work(width);", "  notify(width);", "} else {", "  recover(width);", "  notify(width);", "}"};
+		}
+	}
+
+	ushort mStyleChoice = 0;
+};
 
 class TUserInterfaceSettingsDialog : public MRScrollableDialog {
   public:
-	TUserInterfaceSettingsDialog(bool initialWindowManager, bool initialMenulineMessages, int initialVirtualDesktops, bool initialAutoloadWorkspace, bool initialCyclicVirtualDesktops, MRCursorBehaviour initialCursorBehaviour, const std::string &initialCursorPositionMarker) : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(68, 19), "User interface settings", 66, 17, initSetupDialogFrame) {
+	TUserInterfaceSettingsDialog(bool initialWindowManager, bool initialMenulineMessages, int initialVirtualDesktops, bool initialAutoloadWorkspace, bool initialCyclicVirtualDesktops, MRCursorBehaviour initialCursorBehaviour,
+	                            MRUiIndentStyle initialUiIndentStyle, const std::string &initialCursorPositionMarker)
+	    : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(68, 24), "User interface settings", 66, 22, initSetupDialogFrame) {
 
 		int const yStart = 2;
 
@@ -1941,29 +2008,67 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		mOptionsField = cb;
 		addManaged(mOptionsField, mOptionsField->getBounds());
 
-		mVirtualDesktopsSlider = new MRNumericSlider(TRect(26, 7, 63, 8), 1, 9, initialVirtualDesktops, 1, 1, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
-		addManaged(mVirtualDesktopsSlider, TRect(26, 7, 63, 8));
-		addManaged(new TLabel(TRect(3, 7, 25, 8), "~V~irtual desktops:", mVirtualDesktopsSlider), TRect(3, 7, 25, 8));
+		mVirtualDesktopsSlider = new MRNumericSlider(TRect(24, 7, 61, 8), 1, 9, initialVirtualDesktops, 1, 1, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged);
+		addManaged(mVirtualDesktopsSlider, TRect(24, 7, 61, 8));
+		addManaged(new TLabel(TRect(2, 7, 23, 8), "~V~irtual desktops:", mVirtualDesktopsSlider), TRect(2, 7, 23, 8));
 
-		addManaged(new TStaticText(TRect(3, 9, 27, 10), "Cursor behaviour:"), TRect(3, 9, 27, 10));
-		mCursorBehaviourField = new TRadioButtons(TRect(3, 10, 29, 12), new TSItem("~F~ree movement", new TSItem("~B~ound to text", nullptr)));
-		addManaged(mCursorBehaviourField, TRect(3, 10, 29, 12));
+		mCursorPositionMarkerField = new TInputLine(TRect(28, 8, 42, 9), 11);
+		addManaged(mCursorPositionMarkerField, TRect(28, 8, 42, 9));
+		addManaged(new TLabel(TRect(2, 8, 27, 9), "Cursor position ~m~arker:", mCursorPositionMarkerField), TRect(2, 8, 27, 9));
 
-		mCursorPositionMarkerField = new TInputLine(TRect(28, 13, 42, 14), 11);
-		addManaged(mCursorPositionMarkerField, TRect(28, 13, 42, 14));
-		addManaged(new TLabel(TRect(3, 13, 27, 14), "Cursor position ~m~arker: ", mCursorPositionMarkerField), TRect(3, 13, 27, 14));
+		addManaged(new TStaticText(TRect(36, 2, 56, 3), "Cursor behaviour:"), TRect(36, 2, 56, 3));
+		mCursorBehaviourField = new TRadioButtons(TRect(36, 3, 58, 6), new TSItem("~F~ree movement", new TSItem("~B~ound to text", nullptr)));
+		addManaged(mCursorBehaviourField, TRect(36, 3, 58, 6));
+
+		addManaged(new TStaticText(TRect(3, 10, 20, 11), "Indent style:"), TRect(3, 10, 20, 11));
+		mIndentStyleField = new TRadioButtons(TRect(3, 11, 23, 20), new TSItem("~K~&R", new TSItem("K&R~4~", new TSItem("~A~llman", new TSItem("~G~nome", new TSItem("~W~hitesmiths", new TSItem("~H~orstmann", nullptr)))))));
+		addManaged(mIndentStyleField, TRect(3, 11, 23, 20));
+		mIndentStylePreview = new TIndentStylePreview(TRect(25, 11, 65, 20));
+		addManaged(mIndentStylePreview, TRect(25, 11, 65, 20));
 
 		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 2);
-		int buttonRow = 15;
+		int buttonRow = 21;
 		int buttonLeft = (66 - metrics.rowWidth) / 2;
 		mr::dialogs::addManagedUniformButtonRow(*this, buttonLeft, buttonRow, 2, buttons);
 
 		mInitialCursorBehaviourChoice = initialCursorBehaviour == MRCursorBehaviour::FreeMovement ? 0 : 1;
 		writeRecordField(mDataCursorMarker, sizeof(mDataCursorMarker), initialCursorPositionMarker);
+		if (mIndentStyleField != nullptr) {
+			ushort styleChoice = 0;
+			switch (initialUiIndentStyle) {
+				case MRUiIndentStyle::KandR4:
+					styleChoice = 1;
+					break;
+				case MRUiIndentStyle::Allman:
+					styleChoice = 2;
+					break;
+				case MRUiIndentStyle::Gnome:
+					styleChoice = 3;
+					break;
+				case MRUiIndentStyle::Whitesmiths:
+					styleChoice = 4;
+					break;
+				case MRUiIndentStyle::Horstmann:
+					styleChoice = 5;
+					break;
+				case MRUiIndentStyle::KandR:
+				default:
+					styleChoice = 0;
+					break;
+			}
+			mIndentStyleField->setData(&styleChoice);
+			mLastIndentStyleChoice = styleChoice;
+			if (mIndentStylePreview != nullptr) mIndentStylePreview->setStyle(styleChoice);
+		}
 		setDialogValidationHook([this]() { return validateDialogValues(); });
 
 		selectContent();
+	}
+
+	void handleEvent(TEvent &event) override {
+		MRScrollableDialog::handleEvent(event);
+		refreshIndentStylePreview();
 	}
 
 	void getData(void *rec) override {
@@ -1975,6 +2080,7 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 			data->virtualDesktops = static_cast<ushort>(val);
 		}
 		if (mCursorBehaviourField != nullptr) mCursorBehaviourField->getData(&data->cursorBehaviourChoice);
+		if (mIndentStyleField != nullptr) mIndentStyleField->getData(&data->uiIndentStyleChoice);
 		if (mCursorPositionMarkerField != nullptr) mCursorPositionMarkerField->getData(data->cursorPositionMarker);
 	}
 
@@ -1989,6 +2095,10 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 			if (data->cursorBehaviourChoice > 1) data->cursorBehaviourChoice = mInitialCursorBehaviourChoice;
 			mCursorBehaviourField->setData(&data->cursorBehaviourChoice);
 		}
+		if (mIndentStyleField != nullptr) {
+			if (data->uiIndentStyleChoice > 5) data->uiIndentStyleChoice = 0;
+			mIndentStyleField->setData(&data->uiIndentStyleChoice);
+		}
 		if (mCursorPositionMarkerField != nullptr) {
 			if (data->cursorPositionMarker[0] == '\0') writeRecordField(data->cursorPositionMarker, sizeof(data->cursorPositionMarker), mDataCursorMarker);
 			mCursorPositionMarkerField->setData(data->cursorPositionMarker);
@@ -1999,7 +2109,10 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 	MRNumericSlider *mVirtualDesktopsSlider = nullptr;
 	TRadioButtons *mCursorBehaviourField = nullptr;
 	TInputLine *mCursorPositionMarkerField = nullptr;
+	TRadioButtons *mIndentStyleField = nullptr;
+	TIndentStylePreview *mIndentStylePreview = nullptr;
 	ushort mInitialCursorBehaviourChoice = 1;
+	ushort mLastIndentStyleChoice = 0;
 	char mDataCursorMarker[12] = {0};
 
   private:
@@ -2016,6 +2129,19 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		result.warningText = errorText;
 		return result;
 	}
+
+	ushort currentIndentStyleChoice() const {
+		ushort value = 0;
+		if (mIndentStyleField != nullptr) const_cast<TRadioButtons *>(mIndentStyleField)->getData(&value);
+		return value;
+	}
+
+	void refreshIndentStylePreview() {
+		const ushort choice = currentIndentStyleChoice();
+		if (choice == mLastIndentStyleChoice) return;
+		mLastIndentStyleChoice = choice;
+		if (mIndentStylePreview != nullptr) mIndentStylePreview->setStyle(choice);
+	}
 };
 
 } // namespace
@@ -2030,9 +2156,10 @@ static void runUserInterfaceSettingsDialogFlow() {
 		bool currentAw = configuredAutoloadWorkspace();
 		bool currentCv = configuredCyclicVirtualDesktops();
 		MRCursorBehaviour currentCb = configuredCursorBehaviour();
+		MRUiIndentStyle currentUiIndentStyle = configuredUiIndentStyle();
 		std::string currentCp = configuredCursorPositionMarker();
 
-		TUserInterfaceSettingsDialog *dialog = new TUserInterfaceSettingsDialog(currentWm, currentMm, currentVd, currentAw, currentCv, currentCb, currentCp);
+		TUserInterfaceSettingsDialog *dialog = new TUserInterfaceSettingsDialog(currentWm, currentMm, currentVd, currentAw, currentCv, currentCb, currentUiIndentStyle, currentCp);
 		UserInterfaceSettingsDialogData dialogData;
 		if (currentWm) dialogData.flags |= 1;
 		if (currentMm) dialogData.flags |= 2;
@@ -2041,6 +2168,7 @@ static void runUserInterfaceSettingsDialogFlow() {
 
 		dialogData.virtualDesktops = static_cast<ushort>(currentVd);
 		dialogData.cursorBehaviourChoice = currentCb == MRCursorBehaviour::FreeMovement ? 0 : 1;
+		dialogData.uiIndentStyleChoice = static_cast<ushort>(currentUiIndentStyle);
 		writeRecordField(dialogData.cursorPositionMarker, sizeof(dialogData.cursorPositionMarker), currentCp);
 
 		UserInterfaceSettingsDialogData baselineData = dialogData;
@@ -2051,11 +2179,16 @@ static void runUserInterfaceSettingsDialogFlow() {
 		bool newCv = (dialogData.flags & 8) != 0;
 		int newVd = static_cast<int>(dialogData.virtualDesktops);
 		MRCursorBehaviour newCb = dialogData.cursorBehaviourChoice == 0 ? MRCursorBehaviour::FreeMovement : MRCursorBehaviour::BoundToText;
+		MRUiIndentStyle newUiIndentStyle = static_cast<MRUiIndentStyle>(dialogData.uiIndentStyleChoice);
 		std::string newCp = readRecordField(dialogData.cursorPositionMarker);
 		const bool changed = mr::dialogs::isDialogDraftDirty(baselineData, dialogData, userInterfaceSettingsDialogDataEqual);
 		auto applyAndPersistUiSettings = [&]() -> bool {
 			std::string errorText;
 			if (!setConfiguredCursorBehaviour(newCb, &errorText)) {
+				setSetupDialogStatus(errorText, MRMenuBar::MarqueeKind::Warning);
+				return false;
+			}
+			if (!setConfiguredUiIndentStyle(newUiIndentStyle, &errorText)) {
 				setSetupDialogStatus(errorText, MRMenuBar::MarqueeKind::Warning);
 				return false;
 			}
@@ -2189,6 +2322,19 @@ void MRScrollableDialog::addManaged(TView *view, const TRect &base) {
 		mContent->insert(view);
 	} else
 		insert(view);
+}
+
+void MRScrollableDialog::removeManaged(TView *view) {
+	if (view == nullptr) return;
+	for (auto it = mManagedViews.begin(); it != mManagedViews.end(); ++it)
+		if (it->view == view) {
+			if (mContent != nullptr)
+				mContent->remove(view);
+			else
+				remove(view);
+			mManagedViews.erase(it);
+			return;
+		}
 }
 
 void MRScrollableDialog::selectContent() {

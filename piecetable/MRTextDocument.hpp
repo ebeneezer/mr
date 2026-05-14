@@ -103,7 +103,7 @@ struct Piece {
 };
 
 class MappedFileSource {
-  public:
+ public:
 	MappedFileSource() noexcept : mState() {
 	}
 
@@ -123,38 +123,46 @@ class MappedFileSource {
 	[[nodiscard]] const std::string &path() const noexcept;
 	[[nodiscard]] std::string sliceText(TextSpan span) const;
 
-  private:
+ private:
 	struct State;
 	std::shared_ptr<State> mState;
 };
 
 class AppendBuffer {
-  public:
-	AppendBuffer() noexcept : mText() {
+ public:
+	AppendBuffer() noexcept : mText(std::make_shared<std::string>()) {
 	}
 
 	TextSpan append(std::string_view text);
 	void clear() noexcept;
 
 	[[nodiscard]] const std::string &text() const noexcept {
-		return mText;
+		return *mText;
 	}
 
 	[[nodiscard]] std::size_t size() const noexcept {
-		return mText.size();
+		return mText != nullptr ? mText->size() : 0;
 	}
+
+	[[nodiscard]] std::shared_ptr<const std::string> sharedText() const noexcept {
+		return mText;
+	}
+
+	void setSharedText(const std::shared_ptr<const std::string> &text) noexcept;
 
 	[[nodiscard]] std::string sliceText(TextSpan span) const;
 
-  private:
-	std::string mText;
+ private:
+	void ensureUnique();
+
+	std::shared_ptr<std::string> mText;
 };
 
 class ReadSnapshot;
 
 // Separate producer-side buffer for future async macro work; commits remain serialized.
 class StagedAddBuffer {
-  public:
+ public:
 	StagedAddBuffer() noexcept : mText() {
 	}
 
@@ -175,7 +183,7 @@ class StagedAddBuffer {
 
 	[[nodiscard]] std::string sliceText(TextSpan span) const;
 
-  private:
+ private:
 	std::string mText;
 };
 
@@ -199,7 +207,7 @@ struct EditOperation {
 };
 
 class EditTransaction {
-  public:
+ public:
 	EditTransaction() noexcept : mLabel(), mOperations() {
 	}
 
@@ -227,7 +235,7 @@ class EditTransaction {
 	void erase(Range range);
 	void replace(Range range, std::string_view text);
 
-  private:
+ private:
 	std::string mLabel;
 	std::vector<EditOperation> mOperations;
 };
@@ -245,7 +253,7 @@ struct StagedEditOperation {
 };
 
 class StagedEditTransaction {
-  public:
+ public:
 	StagedEditTransaction() noexcept : mBaseVersion(0), mLabel(), mAddBuffer(), mOperations() {
 	}
 
@@ -294,7 +302,7 @@ class StagedEditTransaction {
 	void erase(Range range);
 	void replace(Range range, std::string_view text);
 
-  private:
+ private:
 	std::size_t mBaseVersion;
 	std::string mLabel;
 	StagedAddBuffer mAddBuffer;
@@ -375,7 +383,7 @@ struct LineIndexWarmupData {
 };
 
 class ReadSnapshot {
-  public:
+ public:
 	ReadSnapshot() noexcept;
 
 	[[nodiscard]] std::size_t documentId() const noexcept {
@@ -416,12 +424,14 @@ class ReadSnapshot {
 	[[nodiscard]] std::size_t column(Offset pos) const noexcept;
 	[[nodiscard]] std::string lineText(Offset pos) const;
 	[[nodiscard]] LineIndexWarmupData completeLineIndexWarmup() const;
+	bool warmLineIndexChunk(LineIndexWarmupData &warmup, std::size_t maxStrides, std::stop_token stopToken, const std::atomic_bool *cancelFlag = nullptr) const;
 	bool completeLineIndexWarmup(LineIndexWarmupData &warmup, std::stop_token stopToken, const std::atomic_bool *cancelFlag = nullptr) const;
 
-  private:
+ private:
 	friend class TextDocument;
 
 	bool isLineBreakChar(char ch) const noexcept;
+	bool hasEditedLineStartIndex() const noexcept;
 	bool hasDirectOriginalView() const noexcept;
 	const char *directTextData() const noexcept;
 	void resetLazyLineIndex() noexcept;
@@ -450,10 +460,11 @@ class ReadSnapshot {
 	mutable std::size_t mLazyIndexedLine;
 	mutable bool mLazyLineIndexComplete;
 	mutable std::size_t mLazyTotalLineCount;
+	std::shared_ptr<const std::vector<Offset>> mEditedLineStarts;
 };
 
 class TextDocument {
-  public:
+ public:
 	TextDocument() noexcept;
 	explicit TextDocument(std::string_view text);
 
@@ -483,7 +494,7 @@ class TextDocument {
 	}
 
 	[[nodiscard]] std::size_t originalLength() const noexcept {
-		return mMappedOriginal.mapped() ? mMappedOriginal.size() : mOriginalBuffer.size();
+		return mMappedOriginal.mapped() ? mMappedOriginal.size() : (mOriginalBuffer != nullptr ? mOriginalBuffer->size() : 0);
 	}
 
 	[[nodiscard]] std::size_t addBufferLength() const noexcept {
@@ -491,7 +502,7 @@ class TextDocument {
 	}
 
 	[[nodiscard]] std::size_t pieceCount() const noexcept {
-		return mPieces.size();
+		return mPieces != nullptr ? mPieces->size() : 0;
 	}
 
 	bool loadMappedFile(const std::string &path, std::string &error);
@@ -529,7 +540,7 @@ class TextDocument {
 	[[nodiscard]] std::size_t column(Offset pos) const noexcept;
 	[[nodiscard]] std::string lineText(Offset pos) const;
 
-  private:
+ private:
 	bool isLineBreakChar(char ch) const noexcept;
 	void initializeFromOriginal(std::string_view text, bool bumpVersionFlag);
 	void initializeFromMappedSource(const MappedFileSource &source, bool bumpVersionFlag);
@@ -542,8 +553,14 @@ class TextDocument {
 	bool applyOperationNoVersionBump(const EditOperation &operation);
 	bool applyStagedOperationNoVersionBump(const StagedEditOperation &operation, const StagedAddBuffer &buffer);
 	bool replaceNoVersionBump(Range range, std::string_view text);
+	bool hasEditedLineStartIndex() const noexcept;
 	bool hasDirectOriginalView() const noexcept;
 	const char *directTextData() const noexcept;
+	void normalizeLargeMappedEditStateNoVersionBump();
+	void clearEditedLineStartIndex() noexcept;
+	void rebuildEditedLineStartIndex();
+	void updateEditedLineStartIndexForInsert(Offset offset, std::string_view text);
+	void updateEditedLineStartIndexForErase(Range range);
 	void resetLazyLineIndex() noexcept;
 	bool advanceLine(Offset &offset) const noexcept;
 	bool directAdvanceLine(Offset &offset) const noexcept;
@@ -553,16 +570,18 @@ class TextDocument {
 	void ensureLazyIndexForOffset(Offset targetOffset) const noexcept;
 	void ensureLazyIndexComplete() const noexcept;
 	void invalidateLazyLineIndexFrom(Offset offset) noexcept;
+	void ensureUniqueOriginalBuffer();
+	void ensureUniquePieces();
 
 	std::size_t splitAt(Offset offset);
 	bool eraseNoVersionBump(Range range);
 	bool insertAddSpanNoVersionBump(Offset offset, TextSpan span);
 	void compactPieces();
 
-	std::string mOriginalBuffer;
+	std::shared_ptr<std::string> mOriginalBuffer;
 	MappedFileSource mMappedOriginal;
 	AppendBuffer mAddBuffer;
-	std::vector<Piece> mPieces;
+	std::shared_ptr<std::vector<Piece>> mPieces;
 	Offset mLength;
 	std::size_t mDocumentId;
 	std::size_t mVersion;
@@ -573,6 +592,7 @@ class TextDocument {
 	mutable std::size_t mLazyIndexedLine;
 	mutable bool mLazyLineIndexComplete;
 	mutable std::size_t mLazyTotalLineCount;
+	std::shared_ptr<std::vector<Offset>> mEditedLineStarts;
 };
 
 } // namespace editor

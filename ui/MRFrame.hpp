@@ -11,6 +11,7 @@
 #include <tvision/tv.h>
 
 #include <functional>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -51,11 +52,16 @@ class MRFrame : public TFrame {
 		bool recordingVisible;
 		bool macroBrain;
 		bool macroBrainVisible;
+		bool language;
+		bool languageVisible;
+		const char *languageMarker;
+		std::uint32_t languageMarkerRgb;
 
-		MarkerState() noexcept : modified(false), insertMode(false), insertModeVisible(false), wordWrap(false), wordWrapVisible(false), background(false), backgroundVisible(false), readOnly(false), readOnlyVisible(false), recording(false), recordingVisible(false), macroBrain(false), macroBrainVisible(false) {
+		MarkerState() noexcept : modified(false), insertMode(false), insertModeVisible(false), wordWrap(false), wordWrapVisible(false), background(false), backgroundVisible(false), readOnly(false), readOnlyVisible(false), recording(false), recordingVisible(false), macroBrain(false), macroBrainVisible(false), language(false), languageVisible(false), languageMarker(nullptr), languageMarkerRgb(0) {
 		}
 
-		MarkerState(bool aModified, bool anInsertMode, bool anInsertModeVisible, bool aWordWrap, bool aWordWrapVisible, bool aBackground, bool aBackgroundVisible, bool aReadOnly, bool aReadOnlyVisible, bool aRecording, bool aRecordingVisible, bool aMacroBrain, bool aMacroBrainVisible) noexcept : modified(aModified), insertMode(anInsertMode), insertModeVisible(anInsertModeVisible), wordWrap(aWordWrap), wordWrapVisible(aWordWrapVisible), background(aBackground), backgroundVisible(aBackgroundVisible), readOnly(aReadOnly), readOnlyVisible(aReadOnlyVisible), recording(aRecording), recordingVisible(aRecordingVisible), macroBrain(aMacroBrain), macroBrainVisible(aMacroBrainVisible) {
+		MarkerState(bool aModified, bool anInsertMode, bool anInsertModeVisible, bool aWordWrap, bool aWordWrapVisible, bool aBackground, bool aBackgroundVisible, bool aReadOnly, bool aReadOnlyVisible, bool aRecording, bool aRecordingVisible, bool aMacroBrain, bool aMacroBrainVisible, bool aLanguage, bool aLanguageVisible, const char *aLanguageMarker, std::uint32_t aLanguageMarkerRgb) noexcept
+		    : modified(aModified), insertMode(anInsertMode), insertModeVisible(anInsertModeVisible), wordWrap(aWordWrap), wordWrapVisible(aWordWrapVisible), background(aBackground), backgroundVisible(aBackgroundVisible), readOnly(aReadOnly), readOnlyVisible(aReadOnlyVisible), recording(aRecording), recordingVisible(aRecordingVisible), macroBrain(aMacroBrain), macroBrainVisible(aMacroBrainVisible), language(aLanguage), languageVisible(aLanguageVisible), languageMarker(aLanguageMarker), languageMarkerRgb(aLanguageMarkerRgb) {
 		}
 	};
 
@@ -81,6 +87,7 @@ class MRFrame : public TFrame {
 	int markerStartColumn() const noexcept;
 	int taskMarkerColumn(const MarkerState &state) const noexcept;
 	int markersEndColumn(const MarkerState &state) const noexcept;
+	bool taskMarkerHit(TPoint localMouse, const MarkerState &state) const noexcept;
 	void showTaskOverview();
 	void hideTaskOverview();
 
@@ -88,6 +95,7 @@ class MRFrame : public TFrame {
 	TaskOverviewProvider mTaskOverviewProvider;
 	MRTaskOverviewWindow *mTaskOverviewPopup;
 	TGroup *mTaskOverviewPopupOwner;
+	bool mTaskOverviewPinned;
 };
 
 #endif

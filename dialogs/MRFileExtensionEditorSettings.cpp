@@ -42,8 +42,8 @@ constexpr int kDefaultBinaryRecordLength = 100;
 constexpr int kMinimumMiniMapWidth = 2;
 constexpr int kMaximumMiniMapWidth = 20;
 constexpr int kDefaultMiniMapWidth = 4;
-constexpr ushort kUiManagedOptionsMask = kOptionTruncateSpaces | kOptionEofCtrlZ | kOptionEofCrLf | kOptionPersistentBlocks | kOptionCodeFolding | kOptionWordWrap | kOptionShowLineNumbers | kOptionLineNumZeroFill | kOptionShowEofMarker | kOptionShowEofMarkerEmoji | kOptionDisplayTabs | kOptionFormatRuler | kOptionCodeColoring | kOptionCodeFoldingFeature | kOptionSmartIndenting;
-static const char *const kCodeLanguageChoices[] = {"None", "Auto", "C", "C++", "Python", "JavaScript", "TypeScript", "TSX", "Bash", "JSON", "Perl", "Swift"};
+constexpr ushort kUiManagedOptionsMask = kOptionTruncateSpaces | kOptionEofCtrlZ | kOptionEofCrLf | kOptionPersistentBlocks | kOptionCodeFolding | kOptionWordWrap | kOptionShowLineNumbers | kOptionLineNumZeroFill | kOptionShowEofMarker | kOptionShowEofMarkerEmoji | kOptionDisplayTabs | kOptionFormatRuler | kOptionCodeColoring | kOptionCodeFoldingFeature;
+static const char *const kCodeLanguageChoices[] = {"None", "Automatic", "C", "C++", "Python", "JavaScript", "TypeScript", "TSX", "Bash", "zsh", "fish", "JSON", "Perl", "Swift", "Rust", "Go", "systemd et al."};
 
 struct FileExtensionEditorSettingsPanelLayout {
 	explicit FileExtensionEditorSettingsPanelLayout(const FileExtensionEditorSettingsPanelConfig &config)
@@ -489,7 +489,7 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	dialog.addManaged(formatRulerView, formatRulerView->getBounds());
 
 	addPanelLabel(dialog, TRect(g.optionsHeadingX, g.optionsHeadingY, config.dialogWidth - 2, g.optionsHeadingY + 1), "Options:");
-	optionsLeftField = addPanelCheckGroup(dialog, TRect(g.optionsLeft, g.optionsBodyY, g.optionsRight, g.optionsBodyY + 11), new TSItem("~T~runcate whitespace", new TSItem("Control-~Z~ at EOF", new TSItem("~C~R/LF at EOF", new TSItem("Persistent ~B~locks", new TSItem("leading ~0~ fill", new TSItem("word wrap", new TSItem("~D~isplay tabs", new TSItem("~F~ormat ruler", new TSItem("Code c~O~loring", new TSItem("Code fo~L~ding", new TSItem("Smart inde~N~ting", nullptr))))))))))));
+	optionsLeftField = addPanelCheckGroup(dialog, TRect(g.optionsLeft, g.optionsBodyY, g.optionsRight, g.optionsBodyY + 10), new TSItem("~T~runcate whitespace", new TSItem("Control-~Z~ at EOF", new TSItem("~C~R/LF at EOF", new TSItem("Persistent ~B~locks", new TSItem("leading ~0~ fill", new TSItem("word wrap", new TSItem("~D~isplay tabs", new TSItem("~F~ormat ruler", new TSItem("Code c~O~loring", new TSItem("Code fo~L~ding", nullptr)))))))))));
 
 	addPanelLabel(dialog, TRect(g.lineNumbersLeft, g.optionsHeadingY, lineNumbersClusterRight, g.optionsHeadingY + 1), "Line numbers:");
 	lineNumbersField = addPanelRadioGroup(dialog, TRect(g.lineNumbersLeft, g.optionsBodyY, lineNumbersClusterRight, g.optionsBodyY + 3), new TSItem("~O~ff", new TSItem("~L~eading", new TSItem("~T~railing", nullptr))));
@@ -562,7 +562,6 @@ ushort FileExtensionEditorSettingsPanel::currentOptionsMask() const noexcept {
 	if ((leftMask & kLeftOptionFormatRuler) != 0) options |= kOptionFormatRuler;
 	if ((leftMask & kLeftOptionCodeColoring) != 0) options |= kOptionCodeColoring;
 	if ((leftMask & kLeftOptionCodeFoldingFeature) != 0) options |= kOptionCodeFoldingFeature;
-	if ((leftMask & kLeftOptionSmartIndenting) != 0) options |= kOptionSmartIndenting;
 
 	switch (lineNumbersChoice) {
 		case kLineNumbersLeading:
@@ -607,7 +606,6 @@ void FileExtensionEditorSettingsPanel::setOptionsMask(ushort options) {
 	if ((options & kOptionFormatRuler) != 0) leftMask |= kLeftOptionFormatRuler;
 	if ((options & kOptionCodeColoring) != 0) leftMask |= kLeftOptionCodeColoring;
 	if ((options & kOptionCodeFoldingFeature) != 0) leftMask |= kLeftOptionCodeFoldingFeature;
-	if ((options & kOptionSmartIndenting) != 0) leftMask |= kLeftOptionSmartIndenting;
 
 	if ((options & kOptionShowLineNumbers) != 0) lineNumbersChoice = kLineNumbersLeading;
 	if ((options & kOptionCodeFolding) != 0) codeFoldingChoice = kCodeFoldingLeading;
@@ -814,6 +812,10 @@ void FileExtensionEditorSettingsPanel::toggleCodeLanguageList(MRScrollableDialog
 void FileExtensionEditorSettingsPanel::hideCodeLanguageList() {
 	codeLanguageDropList.hide();
 	if (codeLanguageField != nullptr) codeLanguageField->select();
+}
+
+bool FileExtensionEditorSettingsPanel::handleCodeLanguageListEvent(TEvent &event) {
+	return codeLanguageDropList.handleOpenListEvent(event);
 }
 
 bool FileExtensionEditorSettingsPanel::codeLanguageListVisible() const noexcept {

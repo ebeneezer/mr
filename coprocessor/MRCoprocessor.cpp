@@ -1,5 +1,6 @@
 #include "MRCoprocessor.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <exception>
 #include <utility>
@@ -50,41 +51,17 @@ unsigned int laneAffinitySlot(Lane lane) noexcept {
 	return 0;
 }
 
-std::size_t laneWorkerCount(Lane lane) noexcept {
-	if (lane != Lane::Macro) return 1;
-	const std::size_t coreCount = availableAffinityCores().size();
-	if (coreCount < 4) return 1;
-	return 2;
-}
-
-void bindCurrentThreadToLaneCore(Lane lane, std::size_t workerIndex) noexcept {
+void bindCurrentThreadToLaneCore(Lane lane, std::size_t workerSlot) noexcept {
 	const std::vector<int> availableCores = availableAffinityCores();
 	if (availableCores.empty()) return;
 
-	unsigned int slot = laneAffinitySlot(lane);
-	if (lane == Lane::Macro) slot += static_cast<unsigned int>(workerIndex);
-
-	const int targetCore = availableCores[slot % availableCores.size()];
+	const unsigned int laneSlot = laneAffinitySlot(lane);
+	const int targetCore = availableCores[(laneSlot + static_cast<unsigned int>(workerSlot)) % availableCores.size()];
 	cpu_set_t targetSet;
 	CPU_ZERO(&targetSet);
 	CPU_SET(targetCore, &targetSet);
 	(void)pthread_setaffinity_np(pthread_self(), sizeof(targetSet), &targetSet);
 }
-
-struct ActiveWorkerGuard {
-	std::atomic<unsigned int> &counter;
-
-	explicit ActiveWorkerGuard(std::atomic<unsigned int> &aCounter) noexcept : counter(aCounter) {
-		counter.fetch_add(1, std::memory_order_relaxed);
-	}
-
-	~ActiveWorkerGuard() {
-		counter.fetch_sub(1, std::memory_order_relaxed);
-	}
-
-	ActiveWorkerGuard(const ActiveWorkerGuard &) = delete;
-	ActiveWorkerGuard &operator=(const ActiveWorkerGuard &) = delete;
-};
 
 } // namespace
 
@@ -126,6 +103,7 @@ std::uint64_t Coprocessor::submitCoalesced(Lane lane, TaskKind kind, std::size_t
 	request.fn = std::move(fn);
 	if (allowCoalescing) request.coalescingKey.assign(coalescingKey.data(), coalescingKey.size());
 	request.submittedMicros = nowMicros();
+	request.computePriority = computePriorityForTask(kind);
 
 	{
 		std::lock_guard<std::mutex> lock(taskCancelMutex);
@@ -134,18 +112,38 @@ std::uint64_t Coprocessor::submitCoalesced(Lane lane, TaskKind kind, std::size_t
 
 	{
 		std::lock_guard<std::mutex> lock(targetLaneState.mutex);
-		if (allowCoalescing) {
-			for (std::deque<Request>::iterator it = targetLaneState.queue.begin(); it != targetLaneState.queue.end();) {
+		auto eraseMatching = [&](std::deque<Request> &queue) {
+			for (std::deque<Request>::iterator it = queue.begin(); it != queue.end();) {
 				if (it->task.kind == kind && it->coalescingKey == request.coalescingKey) {
 					if (it->task.id != 0) removedTaskIds.push_back(it->task.id);
-					it = targetLaneState.queue.erase(it);
+					it = queue.erase(it);
 					continue;
 				}
 				++it;
 			}
+		};
+		if (allowCoalescing) {
+			eraseMatching(targetLaneState.queue);
+			eraseMatching(targetLaneState.highQueue);
+			eraseMatching(targetLaneState.normalQueue);
+			eraseMatching(targetLaneState.lowQueue);
 		}
-		if (lane == Lane::Macro) request.laneSequence = targetLaneState.nextSubmitSequence++;
-		targetLaneState.queue.push_back(std::move(request));
+		if (lane == Lane::Compute) {
+			switch (request.computePriority) {
+				case ComputePriority::High:
+					targetLaneState.highQueue.push_back(std::move(request));
+					break;
+				case ComputePriority::Low:
+					targetLaneState.lowQueue.push_back(std::move(request));
+					break;
+				case ComputePriority::Normal:
+				default:
+					targetLaneState.normalQueue.push_back(std::move(request));
+					break;
+			}
+		} else {
+			targetLaneState.queue.push_back(std::move(request));
+		}
 	}
 	for (std::uint64_t removedTaskId : removedTaskIds)
 		forgetTask(removedTaskId);
@@ -209,36 +207,6 @@ std::size_t Coprocessor::pumpFor(std::chrono::microseconds budget) {
 	return drained;
 }
 
-CoprocessorSnapshot Coprocessor::snapshot() const noexcept {
-	CoprocessorSnapshot out;
-
-	{
-		std::lock_guard<std::mutex> lock(ioLane.mutex);
-		out.io.queueDepth = ioLane.queue.size();
-	}
-	out.io.activeWorkers = ioLane.activeWorkers.load(std::memory_order_relaxed);
-
-	{
-		std::lock_guard<std::mutex> lock(computeLane.mutex);
-		out.compute.queueDepth = computeLane.queue.size();
-	}
-	out.compute.activeWorkers = computeLane.activeWorkers.load(std::memory_order_relaxed);
-
-	{
-		std::lock_guard<std::mutex> lock(miniMapLane.mutex);
-		out.miniMap.queueDepth = miniMapLane.queue.size();
-	}
-	out.miniMap.activeWorkers = miniMapLane.activeWorkers.load(std::memory_order_relaxed);
-
-	{
-		std::lock_guard<std::mutex> lock(macroLane.mutex);
-		out.macro.queueDepth = macroLane.queue.size();
-	}
-	out.macro.activeWorkers = macroLane.activeWorkers.load(std::memory_order_relaxed);
-
-	return out;
-}
-
 std::size_t Coprocessor::pendingResults() const noexcept {
 	std::lock_guard<std::mutex> lock(resultMutex);
 	return results.size();
@@ -268,30 +236,34 @@ bool Coprocessor::cancelTask(std::uint64_t taskId) {
 void Coprocessor::cancelPending() {
 	LaneState *laneStates[] = {&ioLane, &computeLane, &miniMapLane, &macroLane};
 
-	for (LaneState *lane : laneStates) {
-		std::vector<std::uint64_t> clearedTaskIds;
-		for (std::jthread &worker : lane->workers)
-			if (worker.joinable()) worker.request_stop();
-		{
-			std::lock_guard<std::mutex> lock(lane->mutex);
-			for (const Request &request : lane->queue) {
-				if (request.task.id != 0) clearedTaskIds.push_back(request.task.id);
-				if (lane->lane == Lane::Macro && request.laneSequence != 0) lane->skippedSequences.push_back(request.laneSequence);
-			}
-			lane->queue.clear();
-			while (!lane->skippedSequences.empty() && lane->skippedSequences.front() == lane->nextPublishSequence) {
-				lane->skippedSequences.pop_front();
-				++lane->nextPublishSequence;
-			}
-		}
-		for (std::uint64_t taskId : clearedTaskIds) forgetTask(taskId);
-		lane->cv.notify_all();
-	}
-
 	{
 		std::lock_guard<std::mutex> lock(taskCancelMutex);
 		for (auto &cancelEntry : taskCancelFlags)
 			if (cancelEntry.second != nullptr) cancelEntry.second->store(true, std::memory_order_release);
+	}
+
+	for (LaneState *lane : laneStates) {
+		std::vector<std::uint64_t> clearedTaskIds;
+		for (std::size_t workerIndex = 0; workerIndex < lane->workers.size(); ++workerIndex)
+			if (lane->workers[workerIndex].joinable()) lane->workers[workerIndex].request_stop();
+		{
+			std::lock_guard<std::mutex> lock(lane->mutex);
+			for (const Request &request : lane->queue)
+				if (request.task.id != 0) clearedTaskIds.push_back(request.task.id);
+			for (const Request &request : lane->highQueue)
+				if (request.task.id != 0) clearedTaskIds.push_back(request.task.id);
+			for (const Request &request : lane->normalQueue)
+				if (request.task.id != 0) clearedTaskIds.push_back(request.task.id);
+			for (const Request &request : lane->lowQueue)
+				if (request.task.id != 0) clearedTaskIds.push_back(request.task.id);
+			lane->queue.clear();
+			lane->highQueue.clear();
+			lane->normalQueue.clear();
+			lane->lowQueue.clear();
+			lane->activeTasks.clear();
+		}
+		for (std::uint64_t taskId : clearedTaskIds) forgetTask(taskId);
+		lane->cv.notify_all();
 	}
 }
 
@@ -306,7 +278,11 @@ void Coprocessor::shutdown(bool drainResults) {
 	cancelPending();
 
 	auto joinLaneWorkers = [](LaneState &lane) {
-		std::vector<std::jthread> joinedWorkers = std::move(lane.workers);
+		for (std::size_t workerIndex = 0; workerIndex < lane.workers.size(); ++workerIndex) {
+			if (!lane.workers[workerIndex].joinable()) continue;
+			std::jthread joinedWorker = std::move(lane.workers[workerIndex]);
+		}
+		lane.workers.clear();
 	};
 
 	joinLaneWorkers(ioLane);
@@ -334,33 +310,37 @@ void Coprocessor::shutdown(bool drainResults) {
 
 void Coprocessor::startLane(LaneState &lane) {
 	const std::size_t workerCount = laneWorkerCount(lane.lane);
+
 	lane.workers.clear();
 	lane.workers.reserve(workerCount);
-	for (std::size_t workerIndex = 0; workerIndex < workerCount; ++workerIndex)
-		lane.workers.emplace_back([this, &lane, workerIndex](std::stop_token stopToken) { workerLoop(lane, workerIndex, stopToken); });
+	for (std::size_t workerSlot = 0; workerSlot < workerCount; ++workerSlot)
+		lane.workers.push_back(std::jthread([this, &lane, workerSlot](std::stop_token stopToken) { workerLoop(lane, workerSlot, stopToken); }));
 }
 
-void Coprocessor::workerLoop(LaneState &lane, std::size_t workerIndex, std::stop_token stopToken) {
-	bindCurrentThreadToLaneCore(lane.lane, workerIndex);
+void Coprocessor::workerLoop(LaneState &lane, std::size_t workerSlot, std::stop_token stopToken) {
+	bindCurrentThreadToLaneCore(lane.lane, workerSlot);
 
 	for (;;) {
 		Request request;
 		Result result;
 		std::uint64_t startedMicros = 0;
 		std::uint64_t finishedMicros = 0;
-		std::vector<Result> publishResults;
 
 		{
 			std::unique_lock<std::mutex> lock(lane.mutex);
-			lane.cv.wait(lock, stopToken, [&lane]() { return !lane.queue.empty(); });
-			if (stopToken.stop_requested() && lane.queue.empty()) break;
-			if (lane.queue.empty()) continue;
-			request = std::move(lane.queue.front());
-			lane.queue.pop_front();
-		}
-		ActiveWorkerGuard activeWorkerGuard(lane.activeWorkers);
+			lane.cv.wait(lock, stopToken, [this, &lane]() { return laneHasQueuedWorkLocked(lane); });
+			if (stopToken.stop_requested() && !laneHasQueuedWorkLocked(lane)) break;
+			if (!popNextRequestLocked(lane, request)) continue;
+			startedMicros = nowMicros();
+			ActiveTaskState activeTask;
 
-		startedMicros = nowMicros();
+			activeTask.workerSlot = workerSlot;
+			activeTask.task = request.task;
+			activeTask.submittedMicros = request.submittedMicros;
+			activeTask.startedMicros = startedMicros;
+			activeTask.computePriority = request.computePriority;
+			lane.activeTasks.push_back(std::move(activeTask));
+		}
 		result.task = request.task;
 		try {
 			if (stopToken.stop_requested() || request.task.cancelRequested()) {
@@ -386,29 +366,16 @@ void Coprocessor::workerLoop(LaneState &lane, std::size_t workerIndex, std::stop
 		if (finishedMicros >= startedMicros) result.timing.runMicros = finishedMicros - startedMicros;
 		if (finishedMicros >= request.submittedMicros) result.timing.totalMicros = finishedMicros - request.submittedMicros;
 
-		forgetTask(request.task.id);
 		{
 			std::lock_guard<std::mutex> lock(lane.mutex);
-			if (lane.lane != Lane::Macro || request.laneSequence == 0) {
-				publishResults.push_back(std::move(result));
-			} else {
-				lane.finishedResults.emplace(request.laneSequence, std::move(result));
-				for (;;) {
-					while (!lane.skippedSequences.empty() && lane.skippedSequences.front() == lane.nextPublishSequence) {
-						lane.skippedSequences.pop_front();
-						++lane.nextPublishSequence;
-					}
-
-					std::map<std::uint64_t, Result>::iterator publishIt = lane.finishedResults.find(lane.nextPublishSequence);
-					if (publishIt == lane.finishedResults.end()) break;
-					publishResults.push_back(std::move(publishIt->second));
-					lane.finishedResults.erase(publishIt);
-					++lane.nextPublishSequence;
-				}
+			for (std::vector<ActiveTaskState>::iterator it = lane.activeTasks.begin(); it != lane.activeTasks.end(); ++it) {
+				if (it->workerSlot != workerSlot || it->task.id != request.task.id) continue;
+				lane.activeTasks.erase(it);
+				break;
 			}
 		}
-		for (Result &publishResult : publishResults)
-			enqueueResult(std::move(publishResult));
+		forgetTask(request.task.id);
+		enqueueResult(std::move(result));
 	}
 }
 
@@ -420,6 +387,119 @@ void Coprocessor::enqueueResult(Result result) {
 void Coprocessor::forgetTask(std::uint64_t taskId) {
 	std::lock_guard<std::mutex> lock(taskCancelMutex);
 	taskCancelFlags.erase(taskId);
+}
+
+Snapshot Coprocessor::snapshot() const {
+	Snapshot snapshot;
+	const LaneState *laneStates[] = {&ioLane, &computeLane, &miniMapLane, &macroLane};
+	const std::uint64_t currentMicros = nowMicros();
+
+	snapshot.pendingResults = pendingResults();
+	snapshot.lanes.reserve(4);
+	for (std::size_t laneIndex = 0; laneIndex < 4; ++laneIndex) {
+		const LaneState &lane = *laneStates[laneIndex];
+		LaneSnapshot laneSnapshot;
+
+		laneSnapshot.lane = lane.lane;
+		{
+			std::lock_guard<std::mutex> lock(lane.mutex);
+			laneSnapshot.workerCount = lane.workers.empty() ? 1 : lane.workers.size();
+			laneSnapshot.activeTasks.reserve(lane.activeTasks.size());
+			for (std::size_t activeIndex = 0; activeIndex < lane.activeTasks.size(); ++activeIndex) {
+				ActiveTaskSnapshot activeSnapshot;
+				const ActiveTaskState &activeTask = lane.activeTasks[activeIndex];
+
+				activeSnapshot.workerSlot = activeTask.workerSlot;
+				activeSnapshot.task = activeTask.task;
+				if (activeTask.startedMicros >= activeTask.submittedMicros) activeSnapshot.queueMicros = activeTask.startedMicros - activeTask.submittedMicros;
+				if (currentMicros >= activeTask.startedMicros) activeSnapshot.runMicros = currentMicros - activeTask.startedMicros;
+				laneSnapshot.activeTasks.push_back(std::move(activeSnapshot));
+			}
+			laneSnapshot.active = !laneSnapshot.activeTasks.empty();
+			if (laneSnapshot.active) {
+				laneSnapshot.activeTask = laneSnapshot.activeTasks.front().task;
+				laneSnapshot.activeQueueMicros = laneSnapshot.activeTasks.front().queueMicros;
+				laneSnapshot.activeRunMicros = laneSnapshot.activeTasks.front().runMicros;
+			}
+			laneSnapshot.queuedTasks.reserve(lane.queue.size() + lane.highQueue.size() + lane.normalQueue.size() + lane.lowQueue.size());
+			for (std::size_t taskIndex = 0; taskIndex < lane.highQueue.size(); ++taskIndex)
+				laneSnapshot.queuedTasks.push_back(lane.highQueue[taskIndex].task);
+			for (std::size_t taskIndex = 0; taskIndex < lane.normalQueue.size(); ++taskIndex)
+				laneSnapshot.queuedTasks.push_back(lane.normalQueue[taskIndex].task);
+			for (std::size_t taskIndex = 0; taskIndex < lane.lowQueue.size(); ++taskIndex)
+				laneSnapshot.queuedTasks.push_back(lane.lowQueue[taskIndex].task);
+			for (std::size_t taskIndex = 0; taskIndex < lane.queue.size(); ++taskIndex)
+				laneSnapshot.queuedTasks.push_back(lane.queue[taskIndex].task);
+		}
+		snapshot.lanes.push_back(std::move(laneSnapshot));
+	}
+	return snapshot;
+}
+
+Coprocessor::ComputePriority Coprocessor::computePriorityForTask(TaskKind kind) const noexcept {
+	switch (kind) {
+		case TaskKind::LineIndexWarmup:
+		case TaskKind::IndicatorBlink:
+			return ComputePriority::High;
+		case TaskKind::SyntaxWarmup:
+		case TaskKind::FoldWarmup:
+		case TaskKind::SaveNormalizationWarmup:
+			return ComputePriority::Normal;
+		case TaskKind::Custom:
+		default:
+			return ComputePriority::Low;
+	}
+}
+
+bool Coprocessor::laneHasQueuedWorkLocked(const LaneState &lane) const noexcept {
+	if (lane.lane == Lane::Compute) return !lane.highQueue.empty() || !lane.normalQueue.empty() || !lane.lowQueue.empty();
+	return !lane.queue.empty();
+}
+
+bool Coprocessor::popNextRequestLocked(LaneState &lane, Request &request) noexcept {
+	if (lane.lane != Lane::Compute) {
+		if (lane.queue.empty()) return false;
+		request = std::move(lane.queue.front());
+		lane.queue.pop_front();
+		return true;
+	}
+
+	std::size_t activeHighCount = 0;
+	for (std::size_t activeIndex = 0; activeIndex < lane.activeTasks.size(); ++activeIndex)
+		if (lane.activeTasks[activeIndex].computePriority == ComputePriority::High) ++activeHighCount;
+
+	if (!lane.highQueue.empty()) {
+		if (activeHighCount == 0 || lane.normalQueue.empty() || lane.activeTasks.size() <= 1) {
+			request = std::move(lane.highQueue.front());
+			lane.highQueue.pop_front();
+			return true;
+		}
+	}
+	if (!lane.normalQueue.empty()) {
+		request = std::move(lane.normalQueue.front());
+		lane.normalQueue.pop_front();
+		return true;
+	}
+	if (!lane.highQueue.empty()) {
+		request = std::move(lane.highQueue.front());
+		lane.highQueue.pop_front();
+		return true;
+	}
+	if (!lane.lowQueue.empty()) {
+		request = std::move(lane.lowQueue.front());
+		lane.lowQueue.pop_front();
+		return true;
+	}
+	return false;
+}
+
+std::size_t Coprocessor::laneWorkerCount(Lane lane) const noexcept {
+	const unsigned int hardwareThreads = std::max(1u, std::thread::hardware_concurrency());
+
+	if (lane != Lane::Compute) return 1;
+	if (hardwareThreads >= 8) return 3;
+	if (hardwareThreads >= 4) return 2;
+	return 1;
 }
 
 Coprocessor::LaneState &Coprocessor::laneState(Lane lane) noexcept {

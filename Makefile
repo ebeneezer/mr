@@ -35,7 +35,7 @@ PCRE2_LIB ?= /usr/lib/libpcre2-8.so
 PCRE2_HEADER ?= /usr/include/pcre2.h
 
 # Include paths
-INCLUDES = -I$(TVISION_ACTIVE_SOURCE_DIR)/include -I./mrmac -I./piecetable -I./ui -I./coprocessor -I./app -I./app/commands -I./dialogs -I./config -I./keymap -I./tree-sitter/lib/include
+INCLUDES = -I$(TVISION_ACTIVE_SOURCE_DIR)/include -I./mrmac -I./piecetable -I./ui -I./coprocessor -I./app -I./app/commands -I./dialogs -I./config -I./keymap
 
 # Language/runtime configuration.
 CXXSTD ?= gnu++20
@@ -72,12 +72,21 @@ TINFO_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libtinfo.so.6 ]; then echo -l
 LDFLAGS = $(PTHREAD_FLAGS) $(TVISION_LIB) $(PCRE2_LIB) $(NCURSESW_LIB) $(GPM_LIB) $(TINFO_LIB)
 
 TARGET = mr
+MRFOLDTRAINER_TARGET = trainers/foldtrainer/mrfoldtrainer
+MRFOLDTRAINER_SOURCE = trainers/foldtrainer/mrfoldtrainer.cpp
+MRFOLDTRAINER_OBJECT = trainers/foldtrainer/mrfoldtrainer.o
+MRINDENTTRAINER_TARGET = trainers/indenttrainer/mrindenttrainer
+MRINDENTTRAINER_SOURCE = trainers/indenttrainer/mrindenttrainer.cpp
+MRINDENTTRAINER_OBJECT = trainers/indenttrainer/mrindenttrainer.o
 STAGE_PROFILE_PROBE_TARGET = regression/mr_stage_profile_probe
 STAGE_PROFILE_PROBE_SOURCE = regression/mr_stage_profile_probe.cpp
 STAGE_PROFILE_PROBE_OBJECT = regression/mr_stage_profile_probe.o
 REGRESSION_PROBE_TARGET = regression/mr-regression-checks
 REGRESSION_PROBE_SOURCE = regression/mr-regression-checks.cpp
 REGRESSION_PROBE_OBJECT = regression/mr-regression-checks.o
+PHASE1_REPRO_PROBE_TARGET = misc/mr_phase1_repro_probe
+PHASE1_REPRO_PROBE_SOURCE = misc/mr_phase1_repro_probe.cpp
+PHASE1_REPRO_PROBE_OBJECT = misc/mr_phase1_repro_probe.o
 MRMAC_V1_SUITE_SCRIPT = misc/run_mrmac_v1_suite.sh
 ABOUT_QUOTES_GENERATOR = ./generate_about_quotes.sh
 ABOUT_QUOTES_GENERATED = app/MRAboutQuotes.generated.hpp
@@ -118,6 +127,10 @@ CXX_SOURCES = \
 	config/MRDialogPaths.cpp \
 	config/MRSettingsLoader.cpp \
 	app/commands/MRExternalCommand.cpp \
+	derivedstate/MRDerivedStateBase.cpp \
+	derivedstate/MRFoldingDerivedState.cpp \
+	derivedstate/MRMiniMapDerivedState.cpp \
+	derivedstate/MRSyntaxDerivedState.cpp \
 	coprocessor/MRPerformance.cpp \
 	coprocessor/MRCoprocessorDispatch.cpp \
 	mrmac/MRVM.cpp \
@@ -128,7 +141,6 @@ CXX_SOURCES = \
 	ui/MRFileEditor/MRMiniMap.cpp \
 	ui/MRFileEditor/MRTextFormatting.cpp \
 	ui/MRFileEditor/MRTextViewport.cpp \
-	ui/MRFileEditor/MRTreeSitterDocument.cpp \
 	ui/MRMenuBar.cpp \
 	ui/MRMessageLineController.cpp \
 	ui/MRScopedHistoryUI.cpp \
@@ -145,17 +157,6 @@ CORE_CXX_OBJECTS = $(filter-out mr.o,$(CXX_OBJECTS))
 
 # C source files (In-Memory Macro Compiler)
 C_SOURCES = \
-	tree-sitter/lib/src/lib.c \
-	tree-sitter/c/src/parser.c \
-	tree-sitter/cpp/src/parser.c \
-	tree-sitter/cpp/src/scanner.c \
-	tree-sitter/javascript/src/parser.c \
-	tree-sitter/javascript/src/scanner.c \
-	tree-sitter/python/src/parser.c \
-	tree-sitter/python/src/scanner.c \
-	tree-sitter/json/src/parser.c \
-	tree-sitter/mrmac/src/parser.c \
-	tree-sitter/mrmac/src/scanner.c \
 	mrmac/mrmac.c \
 	mrmac/lex.yy.c \
 	mrmac/parser.tab.c
@@ -166,13 +167,16 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 	tvision-upstream-init tvision-upstream-fetch tvision-subtree-pull tvision-apply-patches \
 	tvision-sync-safe tvision-status \
 	pcre2-check \
-	stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check \
+	mrfoldtrainer mrindenttrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe \
 	FORCE \
 	compile-commands lint-file context-tar tar-archives
 
 all: $(TARGET)
+mrfoldtrainer: $(MRFOLDTRAINER_TARGET)
+mrindenttrainer: $(MRINDENTTRAINER_TARGET)
 stage-profile-probe: $(STAGE_PROFILE_PROBE_TARGET)
 regression-probe: $(REGRESSION_PROBE_TARGET)
+phase1-repro-probe: $(PHASE1_REPRO_PROBE_TARGET)
 regression-check: $(REGRESSION_PROBE_TARGET)
 	./$(REGRESSION_PROBE_TARGET) --full
 regression-check-core: $(REGRESSION_PROBE_TARGET)
@@ -205,7 +209,6 @@ CONTEXT_ARCHIVE_ITEMS = \
 	piecetable \
 	keymap \
 	regression \
-	tree-sitter \
 	ui \
 	tvision
 
@@ -387,11 +390,10 @@ dialogs/MRFileExtensionEditorSettings.o: dialogs/MRFileExtensionEditorSettings.c
 dialogs/MRFileExtensionProfilesSupport.o: dialogs/MRFileExtensionProfilesSupport.cpp dialogs/MRFileExtensionProfilesSupport.hpp dialogs/MRFileExtensionEditorSettingsInternal.hpp dialogs/MRSetup.hpp config/MRDialogPaths.hpp app/MREditorApp.hpp
 dialogs/MRSetup.o: dialogs/MRSetup.cpp dialogs/MRSetup.hpp dialogs/MRSetupCommon.hpp app/MRCommands.hpp app/MREditorApp.hpp config/MRDialogPaths.hpp ui/MRScopedHistoryUI.hpp ui/MRWindowSupport.hpp
 dialogs/MRWindowList.o: dialogs/MRWindowList.cpp dialogs/MRWindowList.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp
-ui/MRFileEditor/MRFileEditor.o: ui/MRFileEditor/MRFileEditor.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFileEditor/MRMiniMap.hpp ui/MRFileEditor/MRTextFormatting.hpp ui/MRFileEditor/MRTextViewport.hpp ui/MRFileEditor/MRTreeSitterDocument.hpp
+ui/MRFileEditor/MRFileEditor.o: ui/MRFileEditor/MRFileEditor.cpp ui/MRFileEditor/MRFileEditor.hpp ui/MRFileEditor/MRMiniMap.hpp ui/MRFileEditor/MRTextFormatting.hpp ui/MRFileEditor/MRTextViewport.hpp
 ui/MRFileEditor/MRMiniMap.o: ui/MRFileEditor/MRMiniMap.cpp ui/MRFileEditor/MRMiniMap.hpp piecetable/MRTextDocument.hpp config/MRDialogPaths.hpp coprocessor/MRCoprocessor.hpp
 ui/MRFileEditor/MRTextFormatting.o: ui/MRFileEditor/MRTextFormatting.cpp ui/MRFileEditor/MRTextFormatting.hpp config/MRDialogPaths.hpp
 ui/MRFileEditor/MRTextViewport.o: ui/MRFileEditor/MRTextViewport.cpp ui/MRFileEditor/MRTextViewport.hpp config/MRDialogPaths.hpp
-ui/MRFileEditor/MRTreeSitterDocument.o: ui/MRFileEditor/MRTreeSitterDocument.cpp ui/MRFileEditor/MRTreeSitterDocument.hpp piecetable/MRTextDocument.hpp app/utils/MRStringUtils.hpp
 ui/MRScopedHistoryUI.o: ui/MRScopedHistoryUI.cpp ui/MRScopedHistoryUI.hpp config/MRDialogPaths.hpp ui/MRFrame.hpp
 ui/MRNumericSlider.o: ui/MRNumericSlider.cpp ui/MRNumericSlider.hpp
 mrmac/MRMacroRunner.o: mrmac/MRMacroRunner.cpp mrmac/MRMacroRunner.hpp mrmac/mrmac.h mrmac/MRVM.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
@@ -407,6 +409,8 @@ ui/MRWindowSupport.o: ui/MRWindowSupport.cpp ui/MRWindowSupport.hpp config/MRDia
 ui/MRSyntax.o: ui/MRSyntax.cpp ui/MRSyntax.hpp
 coprocessor/MRCoprocessor.o: coprocessor/MRCoprocessor.cpp coprocessor/MRCoprocessor.hpp piecetable/MRTextDocument.hpp
 piecetable/MRTextDocument.o: piecetable/MRTextDocument.cpp piecetable/MRTextDocument.hpp
+$(MRFOLDTRAINER_OBJECT): $(MRFOLDTRAINER_SOURCE) ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
+$(MRINDENTTRAINER_OBJECT): $(MRINDENTTRAINER_SOURCE) config/MRDialogPaths.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
 
 # 4. Linker call
 $(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS) | pcre2-check
@@ -414,10 +418,19 @@ $(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS) | pcre2-check
 	killall mr 2> /dev/null || true
 	paplay --volume=25000 /usr/share/sounds/freedesktop/stereo/service-login.oga || true
 
+$(MRFOLDTRAINER_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MRFOLDTRAINER_OBJECT) | pcre2-check
+	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
+
+$(MRINDENTTRAINER_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(MRINDENTTRAINER_OBJECT) | pcre2-check
+	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
+
 $(STAGE_PROFILE_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(STAGE_PROFILE_PROBE_OBJECT) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
 $(REGRESSION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(REGRESSION_PROBE_OBJECT) | pcre2-check
+	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
+
+$(PHASE1_REPRO_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(PHASE1_REPRO_PROBE_OBJECT) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS)
 
 
@@ -431,8 +444,11 @@ $(REGRESSION_PROBE_TARGET): $(TVISION_LIB) $(CORE_CXX_OBJECTS) $(C_OBJECTS) $(RE
 
 clean:
 	rm -f $(CXX_OBJECTS) $(C_OBJECTS) $(TARGET) $(STAGE_PROFILE_PROBE_OBJECT) \
+		$(MRFOLDTRAINER_OBJECT) $(MRFOLDTRAINER_TARGET) \
+		$(MRINDENTTRAINER_OBJECT) $(MRINDENTTRAINER_TARGET) \
 		$(STAGE_PROFILE_PROBE_TARGET) \
 		$(REGRESSION_PROBE_OBJECT) \
+		$(PHASE1_REPRO_PROBE_OBJECT) $(PHASE1_REPRO_PROBE_TARGET) \
 		misc/mr_keyin_probe.o misc/mr_tofrom_probe.o misc/mr_tofrom_dispatch_probe.o \
 		misc/mr_staged_nav_probe misc/mr_staged_mark_page_probe \
 		mrmac/lex.yy.c mrmac/parser.tab.c mrmac/parser.tab.h

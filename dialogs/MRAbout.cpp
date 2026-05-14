@@ -344,7 +344,7 @@ class MRAbout : public MRDialogFoundation {
 	MRAbout() noexcept : TWindowInit(&TDialog::initFrame), MRDialogFoundation(centeredRect(76, 16), "ABOUT", 76, 16), mQuoteBox(nullptr), mDoneButton(nullptr), mQuoteIndex(0), mQuoteRandomState(0), mQuoteModeEnabled(false), mRotationTimer(nullptr), mRearmRotationAfterAnimation(false), mDonePressTracking(false), mDoneLongPressTriggered(false), mSuppressNextDoneCommand(false) {
 		eventMask |= evBroadcast;
 		insertCenteredStaticLine(this, size.x, 2, std::string("Multi-Edit Revisited ") + mrAboutDisplayVersion());
-		insertCenteredStaticLine(this, size.x, 3, "Dr. Michael \"iDoc\" Raus & Codex AI");
+		insertCenteredStaticLine(this, size.x, 3, "Dr. Michael H. Raus & Codex AI");
 
 		mQuoteBox = new MRAboutQuoteBox(TRect(4, 5, size.x - 4, 13));
 		insert(mQuoteBox);

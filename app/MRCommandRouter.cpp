@@ -187,6 +187,9 @@ enum : ushort {
 	cmMrMultiFileSelectionChanged = 4901,
 	cmMrMultiFileMatchPrev = 4902,
 	cmMrMultiFileMatchNext = 4903,
+	cmMrMultiLoad = 4904,
+	cmMrMultiLoadAll = 4905,
+	cmMrMultiLoadKeepDialog = 4906,
 	cmMrMultiDone = 4951,
 	cmMrMultiReplace = 4952,
 	cmMrMultiReplaceAll = 4953,
@@ -2671,6 +2674,13 @@ MultiFileSearchFileResult *currentSessionFile(MultiFileSearchSession &session) {
 	return &session.files[session.selectedFileIndex];
 }
 
+MREditWindow *preferredSessionRestoreWindow(MultiFileSearchSession &session, MREditWindow *fallback) {
+	MultiFileSearchFileResult *selectedFile = currentSessionFile(session);
+
+	if (selectedFile != nullptr && selectedFile->window != nullptr && selectedFile->window->getEditor() != nullptr) return selectedFile->window;
+	return fallback;
+}
+
 SearchMatchEntry *currentSessionMatch(MultiFileSearchSession &session) {
 	MultiFileSearchFileResult *file = currentSessionFile(session);
 	if (file == nullptr || file->matches.empty()) return nullptr;
@@ -2700,6 +2710,9 @@ std::size_t sessionCurrentMatchOrdinal(const MultiFileSearchSession &session) {
 	}
 	return 0;
 }
+
+bool activateSessionCurrentMatch(MultiFileSearchSession &session);
+bool loadAllSessionFiles(MultiFileSearchSession &session, std::string &errorText);
 
 bool moveSessionMatch(MultiFileSearchSession &session, int direction, bool wrap) {
 	if (session.files.empty()) return false;
@@ -2821,7 +2834,7 @@ bool buildMultiPreviewBlock(const std::string &text, const SearchMatchEntry &mat
 
 class MultiFileListView : public TListViewer {
   public:
-	MultiFileListView(const TRect &bounds, TScrollBar *aScrollBar, MultiFileSearchSession &session) noexcept : TListViewer(bounds, 1, nullptr, aScrollBar), session(session) {
+	MultiFileListView(const TRect &bounds, TScrollBar *aScrollBar, MultiFileSearchSession &session, TView *dialogOwner) noexcept : TListViewer(bounds, 1, nullptr, aScrollBar), session(session), dialogOwner(dialogOwner) {
 		setRange(static_cast<short>(session.files.size()));
 	}
 
@@ -2871,8 +2884,17 @@ class MultiFileListView : public TListViewer {
 		message(owner, evBroadcast, cmMrMultiFileSelectionChanged, this);
 	}
 
+	void selectItem(short item) override {
+		if (item >= 0 && static_cast<std::size_t>(item) < session.files.size()) {
+			session.selectedFileIndex = static_cast<std::size_t>(item);
+			message(owner, evBroadcast, cmMrMultiFileSelectionChanged, this);
+			if (!session.replaceMode && dialogOwner != nullptr) message(dialogOwner, evCommand, cmMrMultiLoadKeepDialog, this);
+		}
+	}
+
   private:
 	MultiFileSearchSession &session;
+	TView *dialogOwner = nullptr;
 };
 
 class MultiPreviewHeaderView : public TView {
@@ -2960,7 +2982,7 @@ class MultiPreviewView : public TView {
 
 	void handleEvent(TEvent &event) override {
 		if (event.what == evMouseDown && containsMouse(event) && (event.mouse.buttons & mbLeftButton) != 0 && (event.mouse.eventFlags & meDoubleClick) != 0) {
-			message(owner, evCommand, session.replaceMode ? cmMrMultiReplace : cmMrMultiDone, this);
+			message(owner, evCommand, session.replaceMode ? cmMrMultiReplace : cmMrMultiLoad, this);
 			clearEvent(event);
 			return;
 		}
@@ -3001,7 +3023,9 @@ enum class MultiDialogAction : unsigned char {
 	Done = 1,
 	Replace = 2,
 	ReplaceAll = 3,
-	Skip = 4
+	Skip = 4,
+	Load = 5,
+	LoadAll = 6
 };
 
 MultiDialogAction runMultiFileResultsDialog(MultiFileSearchSession &session) {
@@ -3015,19 +3039,21 @@ MultiDialogAction runMultiFileResultsDialog(MultiFileSearchSession &session) {
 			const int gap = 2;
 			listScrollBar = new TScrollBar(TRect(29, listTop, 30, listBottom));
 			addManaged(listScrollBar, TRect(29, listTop, 30, listBottom));
-			listView = new MultiFileListView(TRect(2, listTop, 29, listBottom), listScrollBar, session);
+			listView = new MultiFileListView(TRect(2, listTop, 29, listBottom), listScrollBar, session, this);
 			addManaged(listView, TRect(2, listTop, 29, listBottom));
 			previewView = new MultiPreviewView(TRect(32, listTop, 116, listBottom), session);
 			addManaged(previewView, TRect(32, listTop, 116, listBottom));
 			previewHeaderView = new MultiPreviewHeaderView(TRect(32, 1, 116, 2), session);
 			addManaged(previewHeaderView, TRect(32, 1, 116, 2));
-			addManaged(new TLabel(TRect(2, 1, 16, 2), "Fi~l~es:", listView), TRect(2, 1, 16, 2));
 			if (session.replaceMode) {
 				const std::array buttons{mr::dialogs::DialogButtonSpec{"~R~eplace", cmMrMultiReplace, bfDefault}, mr::dialogs::DialogButtonSpec{"Replace ~A~ll", cmMrMultiReplaceAll, bfNormal}, mr::dialogs::DialogButtonSpec{"~S~kip", cmMrMultiSkip, bfNormal}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
 				const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, gap);
 				mr::dialogs::addManagedUniformButtonRow(*this, (118 - metrics.rowWidth) / 2, buttonTop, gap, buttons);
 			} else {
-				const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmMrMultiDone, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+				const std::array buttons{mr::dialogs::DialogButtonSpec{"~L~oad", cmMrMultiLoad, bfDefault},
+				                         mr::dialogs::DialogButtonSpec{"Load ~A~ll", cmMrMultiLoadAll, bfNormal},
+				                         mr::dialogs::DialogButtonSpec{"~D~one", cmMrMultiDone, bfNormal},
+				                         mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
 				const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, gap);
 				mr::dialogs::addManagedUniformButtonRow(*this, (118 - metrics.rowWidth) / 2, buttonTop, gap, buttons);
 			}
@@ -3047,6 +3073,8 @@ MultiDialogAction runMultiFileResultsDialog(MultiFileSearchSession &session) {
 		void handleEvent(TEvent &event) override {
 			if (event.what == evCommand) {
 				switch (event.message.command) {
+					case cmMrMultiLoad:
+					case cmMrMultiLoadAll:
 					case cmMrMultiDone:
 					case cmMrMultiReplace:
 					case cmMrMultiReplaceAll:
@@ -3088,6 +3116,16 @@ MultiDialogAction runMultiFileResultsDialog(MultiFileSearchSession &session) {
 				clearEvent(event);
 				return;
 			}
+			if (event.what == evCommand && event.message.command == cmMrMultiLoadKeepDialog) {
+				static_cast<void>(activateSessionCurrentMatch(session));
+				if (owner != nullptr) makeFirst();
+				if (TProgram::deskTop != nullptr) TProgram::deskTop->setCurrent(this, TView::normalSelect);
+				else
+					select();
+				if (listView != nullptr) listView->select();
+				clearEvent(event);
+				return;
+			}
 		}
 
 	  private:
@@ -3104,6 +3142,8 @@ MultiDialogAction runMultiFileResultsDialog(MultiFileSearchSession &session) {
 	if (session.files.empty() || TProgram::deskTop == nullptr) return MultiDialogAction::Cancel;
 	dialog = new MultiFileResultsDialog(session);
 	result = mr::dialogs::execDialog(dialog);
+	if (result == cmMrMultiLoad) return MultiDialogAction::Load;
+	if (result == cmMrMultiLoadAll) return MultiDialogAction::LoadAll;
 	if (result == cmMrMultiDone) return MultiDialogAction::Done;
 	if (result == cmMrMultiReplace) return MultiDialogAction::Replace;
 	if (result == cmMrMultiReplaceAll) return MultiDialogAction::ReplaceAll;
@@ -3143,6 +3183,14 @@ bool activateSessionCurrentMatch(MultiFileSearchSession &session) {
 	g_searchUiState.lastStart = match->start;
 	g_searchUiState.lastEnd = end;
 	g_searchUiState.lastOptions = searchOptions;
+	return true;
+}
+
+bool loadAllSessionFiles(MultiFileSearchSession &session, std::string &errorText) {
+	for (MultiFileSearchFileResult &file : session.files) {
+		if (!ensureWindowLoadedForSessionFile(file, false, errorText)) return false;
+	}
+	errorText.clear();
 	return true;
 }
 
@@ -3602,14 +3650,34 @@ bool handleSearchReplace() {
 bool handleSearchMultiFileSearch() {
 	MRMultiSearchDialogOptions options = configuredMultiSearchDialogOptions();
 	std::string pattern;
+	MREditWindow *previousWindow = currentEditWindow();
 	for (;;) {
 		MultiFileSearchSession session;
-		if (!promptMultiFileSearchValues(pattern, options, session)) return true;
+		std::string errorText;
+		if (!promptMultiFileSearchValues(pattern, options, session)) {
+			if (MREditWindow *restoreWindow = preferredSessionRestoreWindow(g_lastMultiFileSearchSession, previousWindow)) static_cast<void>(mrActivateEditWindow(restoreWindow));
+			return true;
+		}
 		g_lastMultiFileSearchSession = session;
 		rememberMultiFileSearchResultContext();
 		switch (runMultiFileResultsDialog(g_lastMultiFileSearchSession)) {
 			case MultiDialogAction::Done:
+				if (MREditWindow *restoreWindow = preferredSessionRestoreWindow(g_lastMultiFileSearchSession, previousWindow)) static_cast<void>(mrActivateEditWindow(restoreWindow));
+				rememberMultiFileSearchResultContext();
+				return true;
+			case MultiDialogAction::Load:
 				static_cast<void>(activateSessionCurrentMatch(g_lastMultiFileSearchSession));
+				if (MREditWindow *restoreWindow = preferredSessionRestoreWindow(g_lastMultiFileSearchSession, previousWindow)) static_cast<void>(mrActivateEditWindow(restoreWindow));
+				rememberMultiFileSearchResultContext();
+				return true;
+			case MultiDialogAction::LoadAll:
+				if (!loadAllSessionFiles(g_lastMultiFileSearchSession, errorText)) {
+					if (!errorText.empty()) postSearchError(errorText);
+					closeTemporaryWindowsForSession(g_lastMultiFileSearchSession);
+					return true;
+				}
+				static_cast<void>(activateSessionCurrentMatch(g_lastMultiFileSearchSession));
+				if (MREditWindow *restoreWindow = preferredSessionRestoreWindow(g_lastMultiFileSearchSession, previousWindow)) static_cast<void>(mrActivateEditWindow(restoreWindow));
 				rememberMultiFileSearchResultContext();
 				return true;
 			case MultiDialogAction::Cancel:
@@ -3623,6 +3691,8 @@ bool handleSearchMultiFileSearch() {
 
 bool handleSearchListFilesFromLastSearch() {
 	MultiDialogAction action = MultiDialogAction::Cancel;
+	std::string errorText;
+	MREditWindow *previousWindow = currentEditWindow();
 
 	if (!g_lastMultiFileSearchSession.valid || g_lastMultiFileSearchSession.files.empty()) {
 		postDialogWarning(kNoPreviousMultiFileSearchListMessage);
@@ -3630,7 +3700,16 @@ bool handleSearchListFilesFromLastSearch() {
 	}
 	rememberMultiFileSearchResultContext();
 	action = runMultiFileResultsDialog(g_lastMultiFileSearchSession);
-	if (action == MultiDialogAction::Done) static_cast<void>(activateSessionCurrentMatch(g_lastMultiFileSearchSession));
+	if (action == MultiDialogAction::Load) static_cast<void>(activateSessionCurrentMatch(g_lastMultiFileSearchSession));
+	if (action == MultiDialogAction::LoadAll) {
+		if (!loadAllSessionFiles(g_lastMultiFileSearchSession, errorText)) {
+			if (!errorText.empty()) postSearchError(errorText);
+			closeTemporaryWindowsForSession(g_lastMultiFileSearchSession);
+			return true;
+		}
+		static_cast<void>(activateSessionCurrentMatch(g_lastMultiFileSearchSession));
+	}
+	if (MREditWindow *restoreWindow = preferredSessionRestoreWindow(g_lastMultiFileSearchSession, previousWindow)) static_cast<void>(mrActivateEditWindow(restoreWindow));
 	return true;
 }
 

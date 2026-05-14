@@ -131,7 +131,7 @@ MRTextViewportLayout::Geometry MRTextViewportLayout::geometryFor(const MREditSet
 	const bool codeFoldingLeading = codeFoldingPosition == "LEADING";
 	const bool codeFoldingTrailing = codeFoldingPosition == "TRAILING";
 	const int lineNumberWidth = lineNumberWidthFor(inputs, lineNumbersLeading || lineNumbersTrailing);
-	const int codeFoldingWidth = codeFoldingLeading || codeFoldingTrailing ? 1 : 0;
+	const int codeFoldingWidth = codeFoldingLeading || codeFoldingTrailing ? std::max(1, inputs.codeFoldingColumns) : 0;
 	const int miniMapTotalWidth = normalizedMiniMapWidth(settings);
 	const bool leadingMiniMap = miniMapTotalWidth > 0 && isGutterPositionLeading(settings.miniMapPosition);
 	const bool trailingMiniMap = miniMapTotalWidth > 0 && isGutterPositionTrailing(settings.miniMapPosition);

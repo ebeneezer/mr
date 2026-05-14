@@ -78,6 +78,23 @@ short MRColumnListView::selectedIndex() const {
 	return static_cast<short>(data.selection);
 }
 
+bool MRColumnListView::handleWheel(TEvent &event) {
+	int delta = 0;
+	short next = 0;
+
+	if (event.what != evMouseWheel || !containsMouse(event) || range <= 0) return false;
+	if (event.mouse.wheel == mwUp || event.mouse.wheel == mwLeft) delta = -1;
+	else if (event.mouse.wheel == mwDown || event.mouse.wheel == mwRight)
+		delta = 1;
+	else
+		return false;
+
+	next = static_cast<short>(std::clamp<int>(focused + delta, 0, range - 1));
+	focusItemNum(next);
+	clearEvent(event);
+	return true;
+}
+
 TColorAttr MRColumnListView::mapColor(uchar index) {
 	unsigned char configured = 0;
 

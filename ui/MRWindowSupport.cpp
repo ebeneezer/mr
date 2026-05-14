@@ -333,6 +333,7 @@ bool mrActivateEditWindow(MREditWindow *win) {
 	setWindowManuallyHidden(win, false);
 	setCurrentVirtualDesktop(win->mVirtualDesktop);
 	if ((win->state & sfVisible) == 0) win->show();
+	if (TProgram::deskTop != nullptr && TProgram::deskTop->current != win) TProgram::deskTop->setCurrent(win, TView::normalSelect);
 	win->select();
 	if (focusDebugEnabled()) {
 		line = "mrActivateEditWindow after target='";

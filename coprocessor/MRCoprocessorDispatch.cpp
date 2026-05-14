@@ -28,6 +28,7 @@
 namespace {
 const char *kLineIndexWarmAction = "Line index warming";
 const char *kSyntaxWarmAction = "Syntax warming";
+const char *kFoldWarmAction = "Fold warming";
 const char *kMiniMapRenderAction = "Mini map rendering";
 const char *kSaveNormalizationWarmAction = "Save normalization warming";
 constexpr std::size_t kMacroUiPlaybackBudgetCommands = 48;
@@ -713,6 +714,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				bool applied = false;
 				if (editor->documentVersion() == result.task.baseVersion) applied = editor->applyLineIndexWarmup(warmup->warmup, result.task.baseVersion);
 				if (!applied) editor->clearLineIndexWarmupTask(result.task.id);
+				else editor->continueComputeWarmupIfNeeded("after-line-index");
 				if (!recorded) {
 					recordTaskPerformance(result, kLineIndexWarmAction, window, editor->documentId(), editor->bufferLength(), window->currentFileName());
 					recorded = true;
@@ -736,12 +738,35 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				bool applied = false;
 				if (editor->documentVersion() == result.task.baseVersion) applied = editor->applySyntaxWarmup(*syntax, result.task.baseVersion, result.task.id);
 				if (!applied) editor->clearSyntaxWarmupTask(result.task.id);
+				else editor->continueComputeWarmupIfNeeded("after-syntax");
 				if (!recorded) {
 					recordTaskPerformance(result, kSyntaxWarmAction, window, editor->documentId(), editor->bufferLength(), window->currentFileName());
 					recorded = true;
 				}
 			}
 			if (!recorded) recordTaskPerformance(result, kSyntaxWarmAction, nullptr, result.task.documentId, 0, result.task.label);
+			return;
+		}
+
+		if (result.task.kind == mr::coprocessor::TaskKind::FoldWarmup && result.payload != nullptr) {
+			std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+			bool recorded = false;
+			for (auto &window : windows) {
+				MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+				if (editor == nullptr) continue;
+				if (editor->documentId() != result.task.documentId) {
+					editor->clearFoldWarmupTask(result.task.id);
+					continue;
+				}
+				bool applied = false;
+				if (editor->documentVersion() == result.task.baseVersion) applied = editor->applyFoldWarmup(*result.payload, result.task.baseVersion, result.task.id);
+				if (!applied) editor->clearFoldWarmupTask(result.task.id);
+				if (!recorded) {
+					recordTaskPerformance(result, kFoldWarmAction, window, editor->documentId(), editor->bufferLength(), window->currentFileName());
+					recorded = true;
+				}
+			}
+			if (!recorded) recordTaskPerformance(result, kFoldWarmAction, nullptr, result.task.documentId, 0, result.task.label);
 			return;
 		}
 
@@ -997,6 +1022,21 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			editor->clearSyntaxWarmupTask(result.task.id);
 		}
 		if (!recorded) recordTaskPerformance(result, kSyntaxWarmAction, nullptr, result.task.documentId, 0, result.task.label);
+	}
+
+	if (result.task.kind == mr::coprocessor::TaskKind::FoldWarmup) {
+		std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
+		bool recorded = false;
+		for (auto &window : windows) {
+			MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+			if (editor == nullptr) continue;
+			if (!recorded && editor->documentId() == result.task.documentId) {
+				recordTaskPerformance(result, kFoldWarmAction, window, editor->documentId(), editor->bufferLength(), window->currentFileName());
+				recorded = true;
+			}
+			editor->clearFoldWarmupTask(result.task.id);
+		}
+		if (!recorded) recordTaskPerformance(result, kFoldWarmAction, nullptr, result.task.documentId, 0, result.task.label);
 	}
 
 	if (result.task.kind == mr::coprocessor::TaskKind::MiniMapWarmup) {

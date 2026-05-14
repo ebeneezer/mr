@@ -130,9 +130,11 @@ Do not remove existing `paplay` build signals from the Makefile.
 
 ## Handoff rule
 
-For file handoffs, provide a `tar.bz2` archive with changed files at correct relative paths.
+Provide a file handoff only when explicitly requested by the maintainer.
+If a file handoff is requested, provide a `tar.bz2` archive with changed files at correct relative paths.
 Do not provide placeholder paths.
-Do not provide patch chains unless explicitly requested.
+Do not provide patch chains.
+Do not paste file contents into the chat.
 
 <!-- BEGIN CODEX_RESPONSE_BUDGET -->
 ## Response Budget

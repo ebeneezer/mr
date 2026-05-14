@@ -1,11 +1,45 @@
 #ifndef MRTEXTBUFFERMODEL_HPP
 #define MRTEXTBUFFERMODEL_HPP
 
+#include <array>
+#include <chrono>
 #include <cstddef>
+#include <ctime>
+#include <fstream>
+#include <sstream>
 #include <string>
 
+#include "../app/utils/MRStringUtils.hpp"
 #include "MRSyntax.hpp"
 #include "MRTextDocument.hpp"
+
+namespace {
+
+static constexpr auto kSlowUndoTraceThreshold = std::chrono::microseconds(2000);
+
+inline std::string undoTraceTimestamp() {
+	std::array<char, 32> buffer{};
+	const std::time_t now = std::time(nullptr);
+	const std::tm *tmNow = std::localtime(&now);
+
+	if (tmNow == nullptr) return std::string("--:--:--");
+	if (std::strftime(buffer.data(), buffer.size(), "%H:%M:%S", tmNow) == 0) return std::string("--:--:--");
+	return std::string(buffer.data());
+}
+
+inline void appendUndoTrace(std::string_view message) {
+	std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+
+	if (!out) return;
+	out << "[" << undoTraceTimestamp() << "] " << message << '\n';
+	out.flush();
+}
+
+template <class Duration> inline long long undoTraceMicros(Duration duration) {
+	return std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
+}
+
+} // namespace
 
 class MRTextBufferModel {
   public:
@@ -34,7 +68,7 @@ class MRTextBufferModel {
 		bool blockMarkingOn = false;
 	};
 
-	MRTextBufferModel() noexcept : mDocument(), mCursor(), mSelection(), mModified(false), mLanguage(MRSyntaxLanguage::PlainText), mSyntaxPathHint(), mSyntaxTitleHint(), mUndoStack(), mRedoStack() {
+	MRTextBufferModel() noexcept : mDocument(), mCursor(), mSelection(), mModified(false), mLanguage(MRSyntaxLanguage::PlainText), mLanguageAutomatic(false), mLanguageConfidence(0), mSyntaxPathHint(), mSyntaxTitleHint(), mUndoStack(), mRedoStack() {
 	}
 
 	void setText(const char *data, std::size_t length) {
@@ -176,13 +210,31 @@ class MRTextBufferModel {
 	}
 
 	void clearUndoRedo() noexcept {
+		const auto startedAt = std::chrono::steady_clock::now();
+		const std::size_t undoBefore = mUndoStack.size();
+		const std::size_t redoBefore = mRedoStack.size();
 		mUndoStack.clear();
 		mRedoStack.clear();
+		const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+		if (totalElapsed >= kSlowUndoTraceThreshold) {
+			std::ostringstream line;
+			line << "Phase1 undo clearUndoRedo total_us=" << undoTraceMicros(totalElapsed) << " undo_before=" << undoBefore << " redo_before=" << redoBefore << " len=" << mDocument.length()
+			     << " add=" << mDocument.addBufferLength() << " pieces=" << mDocument.pieceCount();
+			appendUndoTrace(line.str());
+		}
 	}
 
-	void pushUndoSnapshot(const CustomUndoRecord &record) {
-		mUndoStack.push_back(record);
+	void pushUndoSnapshot(CustomUndoRecord &&record) {
+		const auto startedAt = std::chrono::steady_clock::now();
+		mUndoStack.push_back(std::move(record));
 		mRedoStack.clear();
+		const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+		if (totalElapsed >= kSlowUndoTraceThreshold) {
+			std::ostringstream line;
+			line << "Phase1 undo pushUndoSnapshot total_us=" << undoTraceMicros(totalElapsed) << " undo=" << mUndoStack.size() << " redo=" << mRedoStack.size() << " len=" << mDocument.length()
+			     << " add=" << mDocument.addBufferLength() << " pieces=" << mDocument.pieceCount();
+			appendUndoTrace(line.str());
+		}
 	}
 
 	void popUndoSnapshot() {
@@ -190,19 +242,23 @@ class MRTextBufferModel {
 	}
 
 	bool undo(CustomUndoRecord *outRecord = nullptr) {
+		const auto startedAt = std::chrono::steady_clock::now();
 		if (mUndoStack.empty()) return false;
 
 		CustomUndoRecord redoRecord;
+		const auto redoSnapshotStartedAt = std::chrono::steady_clock::now();
 		redoRecord.preSnapshot = mDocument.readSnapshot();
+		const auto redoSnapshotElapsed = std::chrono::steady_clock::now() - redoSnapshotStartedAt;
 		redoRecord.cursor = mCursor.offset;
 		redoRecord.selAnchor = mSelection.anchor;
 		redoRecord.selCursor = mSelection.cursor;
 		redoRecord.modifiedState = mModified;
-		mRedoStack.push_back(redoRecord);
+		mRedoStack.push_back(std::move(redoRecord));
 
 		const CustomUndoRecord &undoRecord = mUndoStack.back();
+		const auto restoreStartedAt = std::chrono::steady_clock::now();
 		mDocument.restoreFromSnapshot(undoRecord.preSnapshot);
-		static_cast<void>(mDocument.adoptLineIndexWarmup(undoRecord.preSnapshot.completeLineIndexWarmup(), 0));
+		const auto restoreElapsed = std::chrono::steady_clock::now() - restoreStartedAt;
 		mCursor.offset = undoRecord.cursor;
 		mSelection.anchor = undoRecord.selAnchor;
 		mSelection.cursor = undoRecord.selCursor;
@@ -211,23 +267,34 @@ class MRTextBufferModel {
 
 		mUndoStack.pop_back();
 		clampState();
+		const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+		if (totalElapsed >= kSlowUndoTraceThreshold) {
+			std::ostringstream line;
+			line << "Phase1 undo undo total_us=" << undoTraceMicros(totalElapsed) << " snapshot_us=" << undoTraceMicros(redoSnapshotElapsed) << " restore_us=" << undoTraceMicros(restoreElapsed)
+			     << " undo=" << mUndoStack.size() << " redo=" << mRedoStack.size() << " len=" << mDocument.length() << " add=" << mDocument.addBufferLength() << " pieces=" << mDocument.pieceCount();
+			appendUndoTrace(line.str());
+		}
 		return true;
 	}
 
 	bool redo(CustomUndoRecord *outRecord = nullptr) {
+		const auto startedAt = std::chrono::steady_clock::now();
 		if (mRedoStack.empty()) return false;
 
 		CustomUndoRecord undoRecord;
+		const auto undoSnapshotStartedAt = std::chrono::steady_clock::now();
 		undoRecord.preSnapshot = mDocument.readSnapshot();
+		const auto undoSnapshotElapsed = std::chrono::steady_clock::now() - undoSnapshotStartedAt;
 		undoRecord.cursor = mCursor.offset;
 		undoRecord.selAnchor = mSelection.anchor;
 		undoRecord.selCursor = mSelection.cursor;
 		undoRecord.modifiedState = mModified;
-		mUndoStack.push_back(undoRecord);
+		mUndoStack.push_back(std::move(undoRecord));
 
 		const CustomUndoRecord &redoRecord = mRedoStack.back();
+		const auto restoreStartedAt = std::chrono::steady_clock::now();
 		mDocument.restoreFromSnapshot(redoRecord.preSnapshot);
-		static_cast<void>(mDocument.adoptLineIndexWarmup(redoRecord.preSnapshot.completeLineIndexWarmup(), 0));
+		const auto restoreElapsed = std::chrono::steady_clock::now() - restoreStartedAt;
 		mCursor.offset = redoRecord.cursor;
 		mSelection.anchor = redoRecord.selAnchor;
 		mSelection.cursor = redoRecord.selCursor;
@@ -236,25 +303,103 @@ class MRTextBufferModel {
 
 		mRedoStack.pop_back();
 		clampState();
+		const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;
+		if (totalElapsed >= kSlowUndoTraceThreshold) {
+			std::ostringstream line;
+			line << "Phase1 undo redo total_us=" << undoTraceMicros(totalElapsed) << " snapshot_us=" << undoTraceMicros(undoSnapshotElapsed) << " restore_us=" << undoTraceMicros(restoreElapsed)
+			     << " undo=" << mUndoStack.size() << " redo=" << mRedoStack.size() << " len=" << mDocument.length() << " add=" << mDocument.addBufferLength() << " pieces=" << mDocument.pieceCount();
+			appendUndoTrace(line.str());
+		}
 		return true;
 	}
 
-	void setSyntaxContext(const std::string &path, const std::string &title = std::string()) {
+	void setSyntaxContext(const std::string &path, const std::string &title = std::string(), const std::string &codeLanguage = std::string()) {
+		const std::string normalizedCodeLanguage = upperAscii(trimAscii(codeLanguage));
+		const MRSyntaxLanguage detectedByPath = tmrDetectSyntaxLanguage(path, title);
+
 		mSyntaxPathHint = path;
 		mSyntaxTitleHint = title;
-		mLanguage = tmrDetectSyntaxLanguage(mSyntaxPathHint, mSyntaxTitleHint);
+		mLanguageAutomatic = normalizedCodeLanguage == "AUTO";
+		mLanguageConfidence = 0;
+		if (normalizedCodeLanguage.empty() || normalizedCodeLanguage == "NONE") {
+			mLanguage = detectedByPath;
+			return;
+		}
+		if (normalizedCodeLanguage == "AUTO") {
+			const MRSyntaxClassification classification = tmrClassifySyntaxLanguage(mSyntaxPathHint, mSyntaxTitleHint, text());
+			mLanguageConfidence = classification.confidence;
+			mLanguage = classification.language != MRSyntaxLanguage::PlainText ? classification.language : detectedByPath;
+			return;
+		}
+		if (normalizedCodeLanguage == "C") {
+			mLanguage = MRSyntaxLanguage::C;
+			return;
+		}
+		if (normalizedCodeLanguage == "CPP") {
+			mLanguage = MRSyntaxLanguage::Cpp;
+			return;
+		}
+		if (normalizedCodeLanguage == "PYTHON") {
+			mLanguage = MRSyntaxLanguage::Python;
+			return;
+		}
+		if (normalizedCodeLanguage == "JAVASCRIPT" || normalizedCodeLanguage == "TYPESCRIPT" || normalizedCodeLanguage == "TSX") {
+			mLanguage = MRSyntaxLanguage::JavaScript;
+			return;
+		}
+		if (normalizedCodeLanguage == "BASH") {
+			mLanguage = MRSyntaxLanguage::Bash;
+			return;
+		}
+		if (normalizedCodeLanguage == "ZSH") {
+			mLanguage = MRSyntaxLanguage::Zsh;
+			return;
+		}
+		if (normalizedCodeLanguage == "FISH") {
+			mLanguage = MRSyntaxLanguage::Fish;
+			return;
+		}
+		if (normalizedCodeLanguage == "JSON") {
+			mLanguage = MRSyntaxLanguage::Json;
+			return;
+		}
+		if (normalizedCodeLanguage == "PERL") {
+			mLanguage = MRSyntaxLanguage::Perl;
+			return;
+		}
+		if (normalizedCodeLanguage == "SWIFT") {
+			mLanguage = MRSyntaxLanguage::Swift;
+			return;
+		}
+		if (normalizedCodeLanguage == "RUST") {
+			mLanguage = MRSyntaxLanguage::Rust;
+			return;
+		}
+		if (normalizedCodeLanguage == "GO") {
+			mLanguage = MRSyntaxLanguage::Go;
+			return;
+		}
+		if (normalizedCodeLanguage == "SYSTEMD") {
+			mLanguage = MRSyntaxLanguage::Systemd;
+			return;
+		}
+		mLanguage = MRSyntaxLanguage::PlainText;
 	}
 
 	MRSyntaxLanguage language() const noexcept {
 		return mLanguage;
 	}
 
-	const char *languageName() const noexcept {
-		return tmrSyntaxLanguageName(mLanguage);
+	bool languageAutomatic() const noexcept {
+		return mLanguageAutomatic;
 	}
 
-	MRSyntaxTokenMap tokenMapForLine(std::size_t pos) const {
-		return tmrBuildTokenMapForTextLine(mLanguage, mDocument.lineText(pos));
+	std::uint16_t languageConfidence() const noexcept {
+		return mLanguageConfidence;
+	}
+
+	const char *languageName() const noexcept {
+		return tmrSyntaxLanguageName(mLanguage);
 	}
 
 	std::size_t lineStart(std::size_t pos) const noexcept {
@@ -312,6 +457,8 @@ class MRTextBufferModel {
 	Selection mSelection;
 	bool mModified;
 	MRSyntaxLanguage mLanguage;
+	bool mLanguageAutomatic;
+	std::uint16_t mLanguageConfidence;
 	std::string mSyntaxPathHint;
 	std::string mSyntaxTitleHint;
 	std::vector<CustomUndoRecord> mUndoStack;

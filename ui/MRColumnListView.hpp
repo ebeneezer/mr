@@ -3,6 +3,7 @@
 
 #define Uses_TListBox
 #define Uses_TScrollBar
+#define Uses_TEvent
 #include <tvision/tv.h>
 
 #include <string>
@@ -16,6 +17,7 @@ class MRColumnListView : public TListBox {
 
 	void setRows(const std::vector<Row> &rows, short selection = 0);
 	[[nodiscard]] short selectedIndex() const;
+	[[nodiscard]] bool handleWheel(TEvent &event);
 	[[nodiscard]] const std::vector<Row> &rows() const noexcept {
 		return rowValues;
 	}

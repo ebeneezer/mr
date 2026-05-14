@@ -37,6 +37,7 @@ enum class TaskKind : unsigned char {
 	Custom,
 	LineIndexWarmup,
 	SyntaxWarmup,
+	FoldWarmup,
 	MiniMapWarmup,
 	SaveNormalizationWarmup,
 	IndicatorBlink,
@@ -105,25 +106,23 @@ struct LineIndexWarmupPayload final : Payload {
 
 struct SyntaxWarmLine {
 	std::size_t lineStart;
-	MRSyntaxTokenMap tokens;
+	MRSyntaxLineResult syntaxLine;
 
-	SyntaxWarmLine() noexcept : lineStart(0), tokens() {
+	SyntaxWarmLine() noexcept : lineStart(0), syntaxLine() {
 	}
 
-	SyntaxWarmLine(std::size_t aLineStart, MRSyntaxTokenMap aTokens) : lineStart(aLineStart), tokens(std::move(aTokens)) {
+	SyntaxWarmLine(std::size_t aLineStart, MRSyntaxLineResult aSyntaxLine) : lineStart(aLineStart), syntaxLine(std::move(aSyntaxLine)) {
 	}
 };
 
 struct SyntaxWarmupPayload final : Payload {
 	MRSyntaxLanguage language;
-	bool treeSitter;
-	std::uint8_t treeSitterLanguage;
 	std::vector<SyntaxWarmLine> lines;
 
-	SyntaxWarmupPayload() noexcept : language(MRSyntaxLanguage::PlainText), treeSitter(false), treeSitterLanguage(0), lines() {
+	SyntaxWarmupPayload() noexcept : language(MRSyntaxLanguage::PlainText), lines() {
 	}
 
-	SyntaxWarmupPayload(MRSyntaxLanguage aLanguage, bool aTreeSitter, std::uint8_t aTreeSitterLanguage, std::vector<SyntaxWarmLine> aLines) : language(aLanguage), treeSitter(aTreeSitter), treeSitterLanguage(aTreeSitterLanguage), lines(std::move(aLines)) {
+	SyntaxWarmupPayload(MRSyntaxLanguage aLanguage, std::vector<SyntaxWarmLine> aLines) : language(aLanguage), lines(std::move(aLines)) {
 	}
 };
 
@@ -274,23 +273,40 @@ struct Result {
 	}
 };
 
-using TaskFn = std::function<Result(const TaskInfo &, std::stop_token)>;
-using ResultHandler = std::function<void(const Result &)>;
+struct ActiveTaskSnapshot {
+	std::size_t workerSlot;
+	TaskInfo task;
+	std::uint64_t queueMicros;
+	std::uint64_t runMicros;
 
-struct CoprocessorLaneSnapshot {
-	std::size_t queueDepth;
-	unsigned int activeWorkers;
-
-	CoprocessorLaneSnapshot() noexcept : queueDepth(0), activeWorkers(0) {
+	ActiveTaskSnapshot() noexcept : workerSlot(0), task(), queueMicros(0), runMicros(0) {
 	}
 };
 
-struct CoprocessorSnapshot {
-	CoprocessorLaneSnapshot io;
-	CoprocessorLaneSnapshot compute;
-	CoprocessorLaneSnapshot miniMap;
-	CoprocessorLaneSnapshot macro;
+struct LaneSnapshot {
+	Lane lane;
+	std::size_t workerCount;
+	bool active;
+	TaskInfo activeTask;
+	std::uint64_t activeQueueMicros;
+	std::uint64_t activeRunMicros;
+	std::vector<ActiveTaskSnapshot> activeTasks;
+	std::vector<TaskInfo> queuedTasks;
+
+	LaneSnapshot() noexcept : lane(Lane::Compute), workerCount(1), active(false), activeTask(), activeQueueMicros(0), activeRunMicros(0), activeTasks(), queuedTasks() {
+	}
 };
+
+struct Snapshot {
+	std::size_t pendingResults;
+	std::vector<LaneSnapshot> lanes;
+
+	Snapshot() noexcept : pendingResults(0), lanes() {
+	}
+};
+
+using TaskFn = std::function<Result(const TaskInfo &, std::stop_token)>;
+using ResultHandler = std::function<void(const Result &)>;
 
 class Coprocessor {
   public:
@@ -305,22 +321,38 @@ class Coprocessor {
 	std::uint64_t submitCoalesced(Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, std::string_view coalescingKey, std::string_view label, TaskFn fn);
 	std::size_t pump(std::size_t maxResults = 8);
 	std::size_t pumpFor(std::chrono::microseconds budget);
-	[[nodiscard]] CoprocessorSnapshot snapshot() const noexcept;
 	[[nodiscard]] std::size_t pendingResults() const noexcept;
 	void post(Result result);
 	bool cancelTask(std::uint64_t taskId);
 	void shutdown(bool drainResults = false);
 	void cancelPending();
+	[[nodiscard]] Snapshot snapshot() const;
 
-	private:
+  private:
+	enum class ComputePriority : unsigned char {
+		High,
+		Normal,
+		Low
+	};
 	struct Request {
 		TaskInfo task;
 		TaskFn fn;
 		std::string coalescingKey;
 		std::uint64_t submittedMicros;
-		std::uint64_t laneSequence;
+		ComputePriority computePriority;
 
-		Request() noexcept : task(), fn(), coalescingKey(), submittedMicros(0), laneSequence(0) {
+		Request() noexcept : task(), fn(), coalescingKey(), submittedMicros(0), computePriority(ComputePriority::Normal) {
+		}
+	};
+
+	struct ActiveTaskState {
+		std::size_t workerSlot;
+		TaskInfo task;
+		std::uint64_t submittedMicros;
+		std::uint64_t startedMicros;
+		ComputePriority computePriority;
+
+		ActiveTaskState() noexcept : workerSlot(0), task(), submittedMicros(0), startedMicros(0), computePriority(ComputePriority::Normal) {
 		}
 	};
 
@@ -329,22 +361,25 @@ class Coprocessor {
 		mutable std::mutex mutex;
 		std::condition_variable_any cv;
 		std::deque<Request> queue;
-		std::atomic<unsigned int> activeWorkers;
-		std::uint64_t nextSubmitSequence;
-		std::uint64_t nextPublishSequence;
-		std::deque<std::uint64_t> skippedSequences;
-		std::map<std::uint64_t, Result> finishedResults;
+		std::deque<Request> highQueue;
+		std::deque<Request> normalQueue;
+		std::deque<Request> lowQueue;
+		std::vector<ActiveTaskState> activeTasks;
 		std::vector<std::jthread> workers;
 
-		explicit LaneState(Lane aLane) noexcept : lane(aLane), mutex(), cv(), queue(), activeWorkers(0), nextSubmitSequence(1), nextPublishSequence(1), skippedSequences(), finishedResults(), workers() {
+		explicit LaneState(Lane aLane) noexcept : lane(aLane), mutex(), cv(), queue(), highQueue(), normalQueue(), lowQueue(), activeTasks(), workers() {
 		}
 	};
 
 	void startLane(LaneState &lane);
-	void workerLoop(LaneState &lane, std::size_t workerIndex, std::stop_token stopToken);
+	void workerLoop(LaneState &lane, std::size_t workerSlot, std::stop_token stopToken);
 	void enqueueResult(Result result);
 	void forgetTask(std::uint64_t taskId);
 	LaneState &laneState(Lane lane) noexcept;
+	ComputePriority computePriorityForTask(TaskKind kind) const noexcept;
+	bool laneHasQueuedWorkLocked(const LaneState &lane) const noexcept;
+	bool popNextRequestLocked(LaneState &lane, Request &request) noexcept;
+	std::size_t laneWorkerCount(Lane lane) const noexcept;
 
 	mutable std::mutex resultMutex;
 	std::deque<Result> results;

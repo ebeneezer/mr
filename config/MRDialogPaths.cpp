@@ -9,6 +9,7 @@
 #include "MRSettingsLoader.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cerrno>
 #include <cctype>
 #include <ctime>
@@ -72,6 +73,7 @@ static MRMultiSarDialogOptions g_multiSarDialogOptions;
 static int g_virtualDesktops = 1;
 static bool g_cyclicVirtualDesktops = false;
 static MRCursorBehaviour g_cursorBehaviour = MRCursorBehaviour::BoundToText;
+static MRUiIndentStyle g_uiIndentStyle = MRUiIndentStyle::KandR;
 static std::string g_cursorPositionMarker = "R:C";
 static bool g_autoloadWorkspace = false;
 static MRLogHandling g_logHandling = MRLogHandling::Volatile;
@@ -500,6 +502,7 @@ struct MRSettingsSnapshot {
 	int virtualDesktops{1};
 	bool cyclicVirtualDesktops{false};
 	MRCursorBehaviour cursorBehaviour{MRCursorBehaviour::BoundToText};
+	MRUiIndentStyle uiIndentStyle{MRUiIndentStyle::KandR};
 	std::string cursorPositionMarker{"R:C"};
 	bool autoloadWorkspace{false};
 	MRLogHandling logHandling{MRLogHandling::Volatile};
@@ -966,6 +969,7 @@ MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) 
 	snapshot.virtualDesktops = configuredVirtualDesktops();
 	snapshot.cyclicVirtualDesktops = configuredCyclicVirtualDesktops();
 	snapshot.cursorBehaviour = configuredCursorBehaviour();
+	snapshot.uiIndentStyle = configuredUiIndentStyle();
 	snapshot.cursorPositionMarker = configuredCursorPositionMarker();
 	snapshot.autoloadWorkspace = configuredAutoloadWorkspace();
 	snapshot.logHandling = configuredLogHandling();
@@ -1422,6 +1426,7 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
     {"CYCLIC_VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
     {"CURSOR_BEHAVIOUR", MRSettingsKeyClass::Global, true},
+    {"UI_INDENT_STYLE", MRSettingsKeyClass::Global, true},
     {"CURSOR_POSITION_MARKER", MRSettingsKeyClass::Global, true},
     {"AUTOLOAD_WORKSPACE", MRSettingsKeyClass::Global, true},
     {"LOG_HANDLING", MRSettingsKeyClass::Global, true},
@@ -1470,7 +1475,6 @@ static const MREditSettingDescriptor kEditSettingDescriptors[] = {
     {"CODE_LANGUAGE", "Code language", MREditSettingSection::Display, MREditSettingKind::Choice, true, kOvCodeLanguage},
     {"CODE_COLORING", "Code coloring", MREditSettingSection::Display, MREditSettingKind::Boolean, true, kOvCodeColoring},
     {"CODE_FOLDING", "Code folding", MREditSettingSection::Display, MREditSettingKind::Boolean, true, kOvCodeFoldingFeature},
-    {"SMART_INDENTING", "Smart indenting", MREditSettingSection::Display, MREditSettingKind::Boolean, true, kOvSmartIndenting},
     {"FILE_TYPE", "File type", MREditSettingSection::Formatting, MREditSettingKind::Choice, true, kOvFileType},
     {"BINARY_RECORD_LENGTH", "Binary record length", MREditSettingSection::Formatting, MREditSettingKind::Integer, true, kOvBinaryRecordLength},
     {"POST_LOAD_MACRO", "Post-load macro", MREditSettingSection::Macros, MREditSettingKind::String, true, kOvPostLoadMacro},
@@ -1573,7 +1577,7 @@ static const MRColorSetupItem kWindowColorItems[] = {
     // Current-line, current-line-in-block and changed-text intentionally use
     // dedicated app palette extension slots (136..138) to avoid recoloring
     // frame icons/scrollbar controls.
-    {"text", kPaletteBlueWindowText}, {"changed text", kMrPaletteChangedText}, {"highlighted text", kPaletteBlueWindowHighlight}, {"EOF marker", kMrPaletteEofMarker}, {"window border", kPaletteBlueWindowFrame}, {"window bold", kPaletteBlueWindowBold}, {"current line", kMrPaletteCurrentLine}, {"current line in block", kMrPaletteCurrentLineInBlock}, {"line numbers", kMrPaletteLineNumbers}, {"code folding", kMrPaletteCodeFolding}, {"format ruler", kMrPaletteFormatRuler},
+    {"text", kPaletteBlueWindowText}, {"changed text", kMrPaletteChangedText}, {"highlighted text", kPaletteBlueWindowHighlight}, {"EOF marker", kMrPaletteEofMarker}, {"window border", kPaletteBlueWindowFrame}, {"window bold", kPaletteBlueWindowBold}, {"current line", kMrPaletteCurrentLine}, {"current line in block", kMrPaletteCurrentLineInBlock}, {"line numbers", kMrPaletteLineNumbers}, {"code folding", kMrPaletteCodeFolding}, {"code folding marker", kMrPaletteCodeFoldingMarker}, {"format ruler", kMrPaletteFormatRuler},
 };
 
 static const MRColorSetupItem kMenuDialogColorItems[] = {
@@ -1632,6 +1636,7 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 	if (paletteIndex == kMrPaletteCursorPositionMarker) return defaults[3];
 	if (paletteIndex == kMrPaletteLineNumbers) return defaults[9];
 	if (paletteIndex == kMrPaletteCodeFolding) return defaults[9];
+	if (paletteIndex == kMrPaletteCodeFoldingMarker) return defaults[9];
 	if (paletteIndex == kMrPaletteFormatRuler) return defaults[13];
 	if (paletteIndex == kMrPaletteEofMarker) return defaults[14];
 	if (paletteIndex == kMrPaletteMiniMapNormal) return defaults[13];
@@ -1708,8 +1713,8 @@ template <std::size_t N> std::string formatColorListLiteral(const std::array<uns
 std::string formatWindowColorListLiteral(const std::array<unsigned char, MRColorSetupSettings::kWindowCount> &values) {
 	std::string out = formatColorListLiteral(values);
 
-	// WINDOWCOLORS uses v4 (adds format-ruler color to v3's 10-value layout).
-	if (out.size() >= 2 && out[0] == 'v') out[1] = '4';
+	// WINDOWCOLORS uses v5 (adds code-folding-marker color to v4's 11-value layout).
+	if (out.size() >= 2 && out[0] == 'v') out[1] = '5';
 	return out;
 }
 
@@ -1748,13 +1753,18 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 	const unsigned char defaultEofMarker = defaultColorForSlot(kMrPaletteEofMarker);
 	const unsigned char defaultLineNumbers = defaultColorForSlot(kMrPaletteLineNumbers);
 	const unsigned char defaultCodeFolding = defaultColorForSlot(kMrPaletteCodeFolding);
+	const unsigned char defaultCodeFoldingMarker = defaultColorForSlot(kMrPaletteCodeFoldingMarker);
 	const unsigned char defaultFormatRuler = defaultColorForSlot(kMrPaletteFormatRuler);
 	unsigned char value = 0;
+	bool v5Format = false;
 	bool v4Format = false;
 	bool v3Format = false;
 	bool v2Format = false;
 
-	if (text.rfind("v4:", 0) == 0 || text.rfind("V4:", 0) == 0) {
+	if (text.rfind("v5:", 0) == 0 || text.rfind("V5:", 0) == 0) {
+		text = text.substr(3);
+		v5Format = true;
+	} else if (text.rfind("v4:", 0) == 0 || text.rfind("V4:", 0) == 0) {
 		text = text.substr(3);
 		v4Format = true;
 	} else if (text.rfind("v3:", 0) == 0 || text.rfind("V3:", 0) == 0) {
@@ -1777,21 +1787,28 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 	}
 
 	// Formats:
-	// - v4 + 11 values: current format (..., EOF marker, ..., line numbers, code folding, format ruler)
+	// - v5 + 12 values: current format (..., line numbers, code folding, code folding marker, format ruler)
+	// - v4 + 11 values: previous format without dedicated code-folding-marker color
 	// - v3 + 10 values: previous format without dedicated format-ruler color
 	// - v2 + 8 values: previous format (without EOF marker, line numbers, code folding)
 	// - v1 + 7 values: legacy format (without EOF marker and without line-number/folding colors)
 	// - v1 + 8 values: legacy format with EOF marker as 4th entry, no line-number/folding colors
 	// - unversioned 9 values: layout with line numbers but without code folding
-	if (v4Format) {
-		if (parsed.size() != MRColorSetupSettings::kWindowCount) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v4.");
+	if (v5Format) {
+		if (parsed.size() != MRColorSetupSettings::kWindowCount) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v5.");
 		for (std::size_t i = 0; i < outValues.size(); ++i)
 			outValues[i] = parsed[i];
-	} else if (v3Format) {
-		if (parsed.size() != MRColorSetupSettings::kWindowCount - 1) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v3.");
+	} else if (v4Format) {
+		if (parsed.size() != MRColorSetupSettings::kWindowCount - 1) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v4.");
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
-		outValues[10] = defaultFormatRuler;
+		outValues[11] = defaultCodeFoldingMarker;
+	} else if (v3Format) {
+		if (parsed.size() != MRColorSetupSettings::kWindowCount - 2) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v3.");
+		for (std::size_t i = 0; i < parsed.size(); ++i)
+			outValues[i] = parsed[i];
+		outValues[10] = defaultCodeFoldingMarker;
+		outValues[11] = defaultFormatRuler;
 	} else if (v2Format) {
 		if (parsed.size() != 8) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v2.");
 		outValues[0] = parsed[0];
@@ -1804,23 +1821,31 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 		outValues[7] = parsed[6];
 		outValues[8] = defaultLineNumbers;
 		outValues[9] = defaultCodeFolding;
-		outValues[10] = defaultFormatRuler;
+		outValues[10] = defaultCodeFoldingMarker;
+		outValues[11] = defaultFormatRuler;
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount) {
 		// Accept unversioned current layout as a tolerant input.
 		for (std::size_t i = 0; i < outValues.size(); ++i)
 			outValues[i] = parsed[i];
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 1) {
+		// Previous current layout without dedicated code-folding-marker color.
+		for (std::size_t i = 0; i < parsed.size(); ++i)
+			outValues[i] = parsed[i];
+		outValues[11] = defaultCodeFoldingMarker;
+	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 2) {
 		// Previous current layout without dedicated format-ruler color.
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
-		outValues[10] = defaultFormatRuler;
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 2) {
-		// Layout with EOF+line numbers and missing code-folding/format-ruler colors.
+		outValues[10] = defaultCodeFoldingMarker;
+		outValues[11] = defaultFormatRuler;
+	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 3) {
+		// Layout with EOF+line numbers and missing code-folding/marker/ruler colors.
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
 		outValues[9] = defaultCodeFolding;
-		outValues[10] = defaultFormatRuler;
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 3) {
+		outValues[10] = defaultCodeFoldingMarker;
+		outValues[11] = defaultFormatRuler;
+	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 4) {
 		// Legacy v1 with EOF marker and without line-number/folding/ruler colors.
 		outValues[0] = parsed[0];
 		outValues[1] = parsed[1];
@@ -1832,8 +1857,9 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 		outValues[7] = parsed[7];
 		outValues[8] = defaultLineNumbers;
 		outValues[9] = defaultCodeFolding;
-		outValues[10] = defaultFormatRuler;
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 4) {
+		outValues[10] = defaultCodeFoldingMarker;
+		outValues[11] = defaultFormatRuler;
+	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 5) {
 		// Legacy v1 without EOF marker and without line-number/folding/ruler colors.
 		outValues[0] = parsed[0];
 		outValues[1] = parsed[1];
@@ -1845,7 +1871,8 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 		outValues[7] = parsed[6];
 		outValues[8] = defaultLineNumbers;
 		outValues[9] = defaultCodeFolding;
-		outValues[10] = defaultFormatRuler;
+		outValues[10] = defaultCodeFoldingMarker;
+		outValues[11] = defaultFormatRuler;
 	} else
 		return setError(errorMessage, "Unexpected WINDOWCOLORS list size.");
 
@@ -2088,6 +2115,60 @@ bool parseCursorBehaviourLiteral(const std::string &value, MRCursorBehaviour &ou
 
 std::string formatCursorBehaviourLiteral(MRCursorBehaviour behaviour) {
 	return behaviour == MRCursorBehaviour::FreeMovement ? kCursorBehaviourFreeMovement : kCursorBehaviourBoundToText;
+}
+
+bool parseUiIndentStyleLiteral(const std::string &value, MRUiIndentStyle &outValue, std::string *errorMessage) {
+	const std::string upper = upperAscii(trimAscii(value));
+
+	if (upper == "K_AND_R" || upper == "K&R" || upper == "KANDR") {
+		outValue = MRUiIndentStyle::KandR;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	if (upper == "K_AND_R4" || upper == "K&R4" || upper == "KANDR4") {
+		outValue = MRUiIndentStyle::KandR4;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	if (upper == "ALLMAN") {
+		outValue = MRUiIndentStyle::Allman;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	if (upper == "GNOME") {
+		outValue = MRUiIndentStyle::Gnome;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	if (upper == "WHITESMITHS") {
+		outValue = MRUiIndentStyle::Whitesmiths;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	if (upper == "HORSTMANN" || upper == "HORTMANN") {
+		outValue = MRUiIndentStyle::Horstmann;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	return setError(errorMessage, "UI_INDENT_STYLE must be K_AND_R, K_AND_R4, ALLMAN, GNOME, WHITESMITHS or HORSTMANN.");
+}
+
+std::string formatUiIndentStyleLiteral(MRUiIndentStyle style) {
+	switch (style) {
+		case MRUiIndentStyle::KandR4:
+			return "K_AND_R4";
+		case MRUiIndentStyle::Allman:
+			return "ALLMAN";
+		case MRUiIndentStyle::Gnome:
+			return "GNOME";
+		case MRUiIndentStyle::Whitesmiths:
+			return "WHITESMITHS";
+		case MRUiIndentStyle::Horstmann:
+			return "HORSTMANN";
+		case MRUiIndentStyle::KandR:
+		default:
+			return "K_AND_R";
+	}
 }
 
 std::string canonicalBooleanLiteral(bool value) {
@@ -3012,15 +3093,15 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 	} else if (upperKeyName == "CODE_LANGUAGE") {
 		normalized = upperAscii(trimAscii(value));
 		if (normalized.empty()) normalized = "NONE";
-		if (normalized != "NONE" && normalized != "AUTO" && normalized != "C" && normalized != "CPP" && normalized != "PYTHON" && normalized != "JAVASCRIPT" && normalized != "TYPESCRIPT" && normalized != "TSX" && normalized != "BASH" && normalized != "JSON" && normalized != "PERL" && normalized != "SWIFT")
-			return setError(errorMessage, "CODE_LANGUAGE must be NONE, AUTO, C, CPP, PYTHON, JAVASCRIPT, TYPESCRIPT, TSX, BASH, JSON, PERL or SWIFT.");
+		if (normalized != "NONE" && normalized != "AUTO" && normalized != "C" && normalized != "CPP" && normalized != "PYTHON" && normalized != "JAVASCRIPT" && normalized != "TYPESCRIPT" && normalized != "TSX" &&
+			normalized != "BASH" && normalized != "ZSH" && normalized != "FISH" && normalized != "JSON" && normalized != "PERL" && normalized != "SWIFT" && normalized != "RUST" && normalized != "GO" &&
+			normalized != "SYSTEMD" && normalized != "MAKE" && normalized != "MRMAC" && normalized != "MARKDOWN")
+			return setError(errorMessage, "CODE_LANGUAGE must be NONE, AUTO, C, CPP, PYTHON, JAVASCRIPT, TYPESCRIPT, TSX, BASH, ZSH, FISH, JSON, PERL, SWIFT, RUST, GO, SYSTEMD, MAKE, MRMAC or MARKDOWN.");
 		current.codeLanguage = normalized;
 	} else if (upperKeyName == "CODE_COLORING") {
 		if (!parseAndAssignBooleanLiteral(value, current.codeColoring, errorMessage)) return false;
 	} else if (upperKeyName == "CODE_FOLDING") {
 		if (!parseAndAssignBooleanLiteral(value, current.codeFoldingFeature, errorMessage)) return false;
-	} else if (upperKeyName == "SMART_INDENTING") {
-		if (!parseAndAssignBooleanLiteral(value, current.smartIndenting, errorMessage)) return false;
 	} else if (upperKeyName == "FILE_TYPE") {
 		normalized = normalizeFileType(value);
 		if (normalized.empty()) return setError(errorMessage, "FILE_TYPE must be LEGACY_TEXT, UNIX or BINARY.");
@@ -3137,7 +3218,6 @@ std::string editSetupValueLiteral(const MREditSetupSettings &settings, const cha
 	if (upperKey == "CODE_LANGUAGE") return settings.codeLanguage;
 	if (upperKey == "CODE_COLORING") return formatEditSetupBoolean(settings.codeColoring);
 	if (upperKey == "CODE_FOLDING") return formatEditSetupBoolean(settings.codeFoldingFeature);
-	if (upperKey == "SMART_INDENTING") return formatEditSetupBoolean(settings.smartIndenting);
 	if (upperKey == "FILE_TYPE") return settings.fileType;
 	if (upperKey == "BINARY_RECORD_LENGTH") return std::to_string(settings.binaryRecordLength);
 	if (upperKey == "POST_LOAD_MACRO") return settings.postLoadMacro;
@@ -3168,7 +3248,7 @@ std::string editSetupValueLiteral(const MREditSetupSettings &settings, const cha
 }
 
 unsigned long long supportedEditProfileOverrideMask() noexcept {
-	static constexpr unsigned long long mask = kOvPageBreak | kOvWordDelimiters | kOvDefaultExtensions | kOvTruncateSpaces | kOvEofCtrlZ | kOvEofCrLf | kOvTabExpand | kOvDisplayTabs | kOvTabSize | kOvLeftMargin | kOvRightMargin | kOvFormatRuler | kOvWordWrap | kOvIndentStyle | kOvCodeLanguage | kOvCodeColoring | kOvCodeFoldingFeature | kOvSmartIndenting | kOvFileType | kOvBinaryRecordLength | kOvPostLoadMacro | kOvPreSaveMacro | kOvDefaultPath | kOvFormatLine | kOvBackupFiles | kOvShowEofMarker | kOvShowEofMarkerEmoji | kOvLineNumZeroFill | kOvLineNumbersPosition | kOvMiniMapPosition | kOvMiniMapWidth | kOvMiniMapMarkerGlyph | kOvGutters | kOvPersistentBlocks | kOvCodeFoldingPosition | kOvColumnBlockMove | kOvDefaultMode | kOvCursorStatusColor;
+	static constexpr unsigned long long mask = kOvPageBreak | kOvWordDelimiters | kOvDefaultExtensions | kOvTruncateSpaces | kOvEofCtrlZ | kOvEofCrLf | kOvTabExpand | kOvDisplayTabs | kOvTabSize | kOvLeftMargin | kOvRightMargin | kOvFormatRuler | kOvWordWrap | kOvIndentStyle | kOvCodeLanguage | kOvCodeColoring | kOvCodeFoldingFeature | kOvFileType | kOvBinaryRecordLength | kOvPostLoadMacro | kOvPreSaveMacro | kOvDefaultPath | kOvFormatLine | kOvBackupFiles | kOvShowEofMarker | kOvShowEofMarkerEmoji | kOvLineNumZeroFill | kOvLineNumbersPosition | kOvMiniMapPosition | kOvMiniMapWidth | kOvMiniMapMarkerGlyph | kOvGutters | kOvPersistentBlocks | kOvCodeFoldingPosition | kOvColumnBlockMove | kOvDefaultMode | kOvCursorStatusColor;
 	return mask;
 }
 
@@ -3312,7 +3392,6 @@ MREditSetupSettings resolveEditSetupDefaults() {
 	defaults.codeLanguage = "NONE";
 	defaults.codeColoring = false;
 	defaults.codeFoldingFeature = false;
-	defaults.smartIndenting = false;
 	defaults.fileType = kFileTypeUnix;
 	defaults.binaryRecordLength = kDefaultBinaryRecordLength;
 	defaults.postLoadMacro.clear();
@@ -3396,6 +3475,7 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredMultiSearchDialogOptions(MRMultiSearchDialogOptions(), errorMessage)) return false;
 	if (!setConfiguredMultiSarDialogOptions(MRMultiSarDialogOptions(), errorMessage)) return false;
 	if (!setConfiguredCursorBehaviour(MRCursorBehaviour::BoundToText, errorMessage)) return false;
+	if (!setConfiguredUiIndentStyle(MRUiIndentStyle::KandR, errorMessage)) return false;
 	if (!setConfiguredCursorPositionMarker("R:C", errorMessage)) return false;
 	g_logHandling = MRLogHandling::Volatile;
 	configuredAutoexecMacroStorage().clear();
@@ -3682,6 +3762,11 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				MRCursorBehaviour behaviour = MRCursorBehaviour::BoundToText;
 				if (!parseCursorBehaviourLiteral(value, behaviour, errorMessage)) return false;
 				return setConfiguredCursorBehaviour(behaviour, errorMessage);
+			}
+			if (upper == "UI_INDENT_STYLE") {
+				MRUiIndentStyle style = MRUiIndentStyle::KandR;
+				if (!parseUiIndentStyleLiteral(value, style, errorMessage)) return false;
+				return setConfiguredUiIndentStyle(style, errorMessage);
 			}
 			if (upper == "CURSOR_POSITION_MARKER") return setConfiguredCursorPositionMarker(value, errorMessage);
 			if (upper == "AUTOLOAD_WORKSPACE") {
@@ -4051,6 +4136,10 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 			}
 			if (upper == "CURSOR_BEHAVIOUR") {
 				if (!parseCursorBehaviourLiteral(value, snapshot.cursorBehaviour, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "UI_INDENT_STYLE") {
+				if (!parseUiIndentStyleLiteral(value, snapshot.uiIndentStyle, errorMessage)) return false;
 				return true;
 			}
 			if (upper == "CURSOR_POSITION_MARKER") return normalizeCursorPositionMarker(value, snapshot.cursorPositionMarker, errorMessage);
@@ -4442,7 +4531,6 @@ MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults, 
 	if ((overrides.mask & kOvCodeLanguage) != 0) merged.codeLanguage = overrides.values.codeLanguage;
 	if ((overrides.mask & kOvCodeColoring) != 0) merged.codeColoring = overrides.values.codeColoring;
 	if ((overrides.mask & kOvCodeFoldingFeature) != 0) merged.codeFoldingFeature = overrides.values.codeFoldingFeature;
-	if ((overrides.mask & kOvSmartIndenting) != 0) merged.smartIndenting = overrides.values.smartIndenting;
 	if ((overrides.mask & kOvFileType) != 0) merged.fileType = overrides.values.fileType;
 	if ((overrides.mask & kOvBinaryRecordLength) != 0) merged.binaryRecordLength = overrides.values.binaryRecordLength;
 	if ((overrides.mask & kOvPostLoadMacro) != 0) merged.postLoadMacro = overrides.values.postLoadMacro;
@@ -4603,13 +4691,13 @@ bool setConfiguredActiveKeymapProfile(const std::string &value, std::string *err
 	if (normalized.empty()) normalized = "DEFAULT";
 	for (const MRKeymapProfile &profile : configuredKeymapProfilesValue())
 		if (profile.name == normalized) {
-			if (!runtimeKeymapResolver().rebuild(configuredKeymapProfilesValue(), normalized, &runtimeError)) return setError(errorMessage, runtimeError);
-			configuredActiveKeymapProfileValue() = normalized;
-			if (previous != configuredActiveKeymapProfileValue()) markConfiguredSettingsDirty();
-			mrLogMessage("Keymap active profile set to '" + normalized + "'.");
-			if (errorMessage != nullptr) errorMessage->clear();
-			return true;
-		}
+		if (!runtimeKeymapResolver().rebuild(configuredKeymapProfilesValue(), normalized, &runtimeError)) return setError(errorMessage, runtimeError);
+		configuredActiveKeymapProfileValue() = normalized;
+		if (previous != configuredActiveKeymapProfileValue()) markConfiguredSettingsDirty();
+		mrLogMessage("Keymap active profile set to '" + normalized + "'.");
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
 	return setError(errorMessage, "Unknown keymap profile: " + normalized);
 }
 
@@ -4749,8 +4837,10 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	if (defaultMode.empty()) return setError(errorMessage, "DEFAULT_MODE must be INSERT or OVERWRITE.");
 	if (indentStyle.empty()) return setError(errorMessage, "INDENT_STYLE must be OFF, AUTOMATIC or SMART.");
 	if (codeLanguage.empty()) codeLanguage = "NONE";
-	if (codeLanguage != "NONE" && codeLanguage != "AUTO" && codeLanguage != "C" && codeLanguage != "CPP" && codeLanguage != "PYTHON" && codeLanguage != "JAVASCRIPT" && codeLanguage != "TYPESCRIPT" && codeLanguage != "TSX" && codeLanguage != "BASH" && codeLanguage != "JSON" && codeLanguage != "PERL" && codeLanguage != "SWIFT")
-		return setError(errorMessage, "CODE_LANGUAGE must be NONE, AUTO, C, CPP, PYTHON, JAVASCRIPT, TYPESCRIPT, TSX, BASH, JSON, PERL or SWIFT.");
+	if (codeLanguage != "NONE" && codeLanguage != "AUTO" && codeLanguage != "C" && codeLanguage != "CPP" && codeLanguage != "PYTHON" && codeLanguage != "JAVASCRIPT" && codeLanguage != "TYPESCRIPT" && codeLanguage != "TSX" &&
+		codeLanguage != "BASH" && codeLanguage != "ZSH" && codeLanguage != "FISH" && codeLanguage != "JSON" && codeLanguage != "PERL" && codeLanguage != "SWIFT" && codeLanguage != "RUST" && codeLanguage != "GO" &&
+		codeLanguage != "SYSTEMD" && codeLanguage != "MAKE" && codeLanguage != "MRMAC" && codeLanguage != "MARKDOWN")
+		return setError(errorMessage, "CODE_LANGUAGE must be NONE, AUTO, C, CPP, PYTHON, JAVASCRIPT, TYPESCRIPT, TSX, BASH, ZSH, FISH, JSON, PERL, SWIFT, RUST, GO, SYSTEMD, MAKE, MRMAC or MARKDOWN.");
 	if (fileType.empty()) return setError(errorMessage, "FILE_TYPE must be LEGACY_TEXT, UNIX or BINARY.");
 	if (lineNumbersPosition.empty()) lineNumbersPosition = settings.showLineNumbers ? kLineNumbersPositionLeading : kLineNumbersPositionOff;
 	if (miniMapPosition.empty()) return setError(errorMessage, "MINIMAP_POSITION must be OFF, LEADING or TRAILING.");
@@ -4779,7 +4869,6 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	normalized.codeLanguage = codeLanguage;
 	normalized.codeColoring = settings.codeColoring;
 	normalized.codeFoldingFeature = settings.codeFoldingFeature;
-	normalized.smartIndenting = settings.smartIndenting;
 	normalized.fileType = fileType;
 	normalized.binaryRecordLength = settings.binaryRecordLength;
 	normalized.postLoadMacro = postLoadMacro;
@@ -5462,6 +5551,17 @@ MRCursorBehaviour configuredCursorBehaviour() {
 	return g_cursorBehaviour;
 }
 
+bool setConfiguredUiIndentStyle(MRUiIndentStyle style, std::string *errorMessage) {
+	if (g_uiIndentStyle != style) markConfiguredSettingsDirty();
+	g_uiIndentStyle = style;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+MRUiIndentStyle configuredUiIndentStyle() {
+	return g_uiIndentStyle;
+}
+
 bool setConfiguredCursorPositionMarker(const std::string &value, std::string *errorMessage) {
 	std::string normalized;
 
@@ -5686,6 +5786,7 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('VIRTUAL_DESKTOPS', '" + std::to_string(snapshot.virtualDesktops) + "');\n";
 	source += "MRSETUP('CYCLIC_VIRTUAL_DESKTOPS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.cyclicVirtualDesktops)) + "');\n";
 	source += "MRSETUP('CURSOR_BEHAVIOUR', '" + escapeMrmacSingleQuotedLiteral(formatCursorBehaviourLiteral(snapshot.cursorBehaviour)) + "');\n";
+	source += "MRSETUP('UI_INDENT_STYLE', '" + escapeMrmacSingleQuotedLiteral(formatUiIndentStyleLiteral(snapshot.uiIndentStyle)) + "');\n";
 	source += "MRSETUP('CURSOR_POSITION_MARKER', '" + escapeMrmacSingleQuotedLiteral(snapshot.cursorPositionMarker) + "');\n";
 	source += "MRSETUP('AUTOLOAD_WORKSPACE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.autoloadWorkspace)) + "');\n";
 	source += "MRSETUP('LOG_HANDLING', '" + escapeMrmacSingleQuotedLiteral(formatLogHandlingLiteral(snapshot.logHandling)) + "');\n";
@@ -5725,7 +5826,6 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('CODE_LANGUAGE', '" + escapeMrmacSingleQuotedLiteral(edit.codeLanguage) + "');\n";
 	source += "MRSETUP('CODE_COLORING', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.codeColoring)) + "');\n";
 	source += "MRSETUP('CODE_FOLDING', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.codeFoldingFeature)) + "');\n";
-	source += "MRSETUP('SMART_INDENTING', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.smartIndenting)) + "');\n";
 	source += "MRSETUP('FILE_TYPE', '" + escapeMrmacSingleQuotedLiteral(edit.fileType) + "');\n";
 	source += "MRSETUP('BINARY_RECORD_LENGTH', '" + std::to_string(edit.binaryRecordLength) + "');\n";
 	source += "MRSETUP('POST_LOAD_MACRO', '" + escapeMrmacSingleQuotedLiteral(edit.postLoadMacro) + "');\n";

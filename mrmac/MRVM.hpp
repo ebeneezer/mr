@@ -109,6 +109,7 @@ void mrvmSetProcessContext(int argc, char **argv);
 std::vector<std::string> mrvmProcessArguments();
 void mrvmSetStartupSettingsMode(bool enabled) noexcept;
 bool mrvmIsStartupSettingsMode() noexcept;
+bool mrvmFlushPendingStartupKeymapBatch(std::string *errorMessage);
 MRMacroExecutionProfile mrvmAnalyzeBytecode(const unsigned char *bytecode, std::size_t length);
 std::string mrvmDescribeExecutionProfile(const MRMacroExecutionProfile &profile);
 bool mrvmCanRunInBackground(const MRMacroExecutionProfile &profile) noexcept;

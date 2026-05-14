@@ -37,7 +37,6 @@ struct MREditSetupSettings {
 	std::string codeLanguage;
 	bool codeColoring;
 	bool codeFoldingFeature;
-	bool smartIndenting;
 	std::string fileType;
 	int binaryRecordLength;
 	std::string postLoadMacro;
@@ -67,7 +66,7 @@ struct MREditSetupSettings {
 	std::string miniMapMarkerGlyph;
 	std::string gutters;
 
-	MREditSetupSettings() noexcept : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false), eofCrLf(false), tabExpand(true), displayTabs(false), tabSize(8), leftMargin(1), rightMargin(78), formatRuler(false), wordWrap(true), indentStyle(), codeLanguage("NONE"), codeColoring(false), codeFoldingFeature(false), smartIndenting(false), fileType(), binaryRecordLength(100), postLoadMacro(), preSaveMacro(), defaultPath(), formatLine(), backupMethod("BAK_FILE"), backupFrequency("FIRST_SAVE_ONLY"), backupExtension("bak"), backupDirectory(), autosaveInactivitySeconds(15), autosaveIntervalSeconds(180), backupFiles(true), showEofMarker(false), showEofMarkerEmoji(true), showLineNumbers(false), lineNumbersPosition("OFF"), lineNumZeroFill(false), persistentBlocks(true), codeFolding(false), codeFoldingPosition("OFF"), columnBlockMove(), defaultMode(), cursorStatusColor(), miniMapPosition("OFF"), miniMapWidth(4), miniMapMarkerGlyph("│"), gutters("LCM") {
+	MREditSetupSettings() noexcept : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false), eofCrLf(false), tabExpand(true), displayTabs(false), tabSize(8), leftMargin(1), rightMargin(78), formatRuler(false), wordWrap(true), indentStyle(), codeLanguage("NONE"), codeColoring(false), codeFoldingFeature(false), fileType(), binaryRecordLength(100), postLoadMacro(), preSaveMacro(), defaultPath(), formatLine(), backupMethod("BAK_FILE"), backupFrequency("FIRST_SAVE_ONLY"), backupExtension("bak"), backupDirectory(), autosaveInactivitySeconds(15), autosaveIntervalSeconds(180), backupFiles(true), showEofMarker(false), showEofMarkerEmoji(true), showLineNumbers(false), lineNumbersPosition("OFF"), lineNumZeroFill(false), persistentBlocks(true), codeFolding(false), codeFoldingPosition("OFF"), columnBlockMove(), defaultMode(), cursorStatusColor(), miniMapPosition("OFF"), miniMapWidth(4), miniMapMarkerGlyph("│"), gutters("LCM") {
 	}
 
 	auto operator==(const MREditSetupSettings &) const noexcept -> bool = default;
@@ -139,7 +138,6 @@ enum MREditSetupOverrideMask : unsigned long long {
 	kOvFormatRuler = 1ull << 41,
 	kOvCodeLanguage = 1ull << 42,
 	kOvCodeColoring = 1ull << 43,
-	kOvSmartIndenting = 1ull << 44,
 	kOvCodeFoldingFeature = 1ull << 45,
 };
 
@@ -190,6 +188,15 @@ enum class MRLogHandling : unsigned char {
 enum class MRCursorBehaviour : unsigned char {
 	BoundToText = 0,
 	FreeMovement = 1
+};
+
+enum class MRUiIndentStyle : unsigned char {
+	KandR = 0,
+	KandR4 = 1,
+	Allman = 2,
+	Gnome = 3,
+	Whitesmiths = 4,
+	Horstmann = 5
 };
 
 enum class MRSettingsKeyClass : unsigned char {
@@ -333,11 +340,12 @@ enum : unsigned char {
 	kMrPaletteCodeDelimiters = 168,
 	kMrPaletteDropListDescription = 169,
 	kMrPaletteDropListSelectedInactive = 170,
-	kMrPaletteMax = kMrPaletteDropListSelectedInactive
+	kMrPaletteCodeFoldingMarker = 171,
+	kMrPaletteMax = kMrPaletteCodeFoldingMarker
 };
 
 struct MRColorSetupSettings {
-	static const std::size_t kWindowCount = 11;
+	static const std::size_t kWindowCount = 12;
 	static const std::size_t kMenuDialogCount = 19;
 	static const std::size_t kHelpCount = 9;
 	static const std::size_t kOtherCount = 11;
@@ -498,6 +506,8 @@ bool setConfiguredCyclicVirtualDesktops(bool enabled, std::string *errorMessage 
 [[nodiscard]] bool configuredCyclicVirtualDesktops();
 bool setConfiguredCursorBehaviour(MRCursorBehaviour behaviour, std::string *errorMessage = nullptr);
 [[nodiscard]] MRCursorBehaviour configuredCursorBehaviour();
+bool setConfiguredUiIndentStyle(MRUiIndentStyle style, std::string *errorMessage = nullptr);
+[[nodiscard]] MRUiIndentStyle configuredUiIndentStyle();
 bool setConfiguredCursorPositionMarker(const std::string &value, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string configuredCursorPositionMarker();
 bool setConfiguredAutoloadWorkspace(bool enabled, std::string *errorMessage = nullptr);

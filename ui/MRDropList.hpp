@@ -2,6 +2,7 @@
 #define MRDROPLIST_HPP
 
 #define Uses_TRect
+#define Uses_TEvent
 #include <tvision/tv.h>
 
 #include <string>
@@ -11,6 +12,7 @@ class MRColumnListView;
 class TGroup;
 class TInputLine;
 class TView;
+class MRScrollableDialog;
 
 class MRDropList {
   public:
@@ -20,6 +22,7 @@ class MRDropList {
 	TView *createButton(TGroup &owner, const TRect &bounds, TInputLine *link, TView *relay, ushort command, bool triggerDownKey);
 	void toggle(TGroup &owner, const TRect &anchor, const std::vector<std::string> &values, const std::string &currentValue, TView *relay, ushort acceptCommand, short maxVisibleRows = 0);
 	void hide();
+	[[nodiscard]] bool handleOpenListEvent(TEvent &event, bool hideOnOutsideMouseDown = true);
 	[[nodiscard]] bool visible() const noexcept;
 	[[nodiscard]] bool acceptSelection(std::string &selectedValue);
 	[[nodiscard]] bool containsPoint(TPoint where) const noexcept;
@@ -30,6 +33,7 @@ class MRDropList {
 
 	MRColumnListView *listView = nullptr;
 	TGroup *listOwner = nullptr;
+	MRScrollableDialog *scrollOwner = nullptr;
 	TView *buttonView = nullptr;
 	std::vector<std::string> itemValues;
 };

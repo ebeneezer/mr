@@ -264,19 +264,19 @@ class MRIndicator : public TIndicator {
 	}
 
 	bool shouldDrawReadOnlyMarker() const noexcept {
-		return mReadOnly && (!mReadOnlyBlinkActive || mReadOnlyBlinkVisible);
+		return mReadOnly;
 	}
 
 	bool shouldDrawInsertMarker() const noexcept {
-		return mInsertModeDisplayState && (!mInsertBlinkActive || mInsertBlinkVisible);
+		return mInsertModeDisplayState;
 	}
 
 	bool shouldDrawWordWrapMarker() const noexcept {
-		return mWordWrapDisplayState && (!mWordWrapBlinkActive || mWordWrapBlinkVisible);
+		return mWordWrapDisplayState;
 	}
 
 	bool shouldDrawTaskMarker() const noexcept {
-		return mTaskDisplayCount != 0 && (!mTaskBlinkActive || mTaskBlinkVisible);
+		return mTaskDisplayCount != 0;
 	}
 
 	bool hasReadOnlyMarkerSlot() const noexcept {
@@ -304,7 +304,7 @@ class MRIndicator : public TIndicator {
   private:
 	static constexpr char kDragFrame = '\xCD';
 	static constexpr char kNormalFrame = '\xC4';
-	static constexpr char kTaskMarkerIcon[] = "🧠";
+	static constexpr char kTaskMarkerIcon[] = "⌬";
 	static constexpr auto kBlinkSlice = std::chrono::milliseconds(10);
 	static constexpr int kBlinkSlicesPerTick = 25;
 
@@ -347,19 +347,12 @@ class MRIndicator : public TIndicator {
 
 	void drawTaskMarkers(TDrawBuffer &b, TColorAttr baseColor) const {
 		if (mTaskDisplayCount == 0 || (mTaskBlinkActive && !mTaskBlinkVisible)) return;
-		b.moveStr(5, kTaskMarkerIcon, taskMarkerColor(baseColor), 2);
+		b.moveStr(5, kTaskMarkerIcon, baseColor, 2);
 	}
 
 	int taskMarkerEndColumn() const noexcept {
 		if (mTaskDisplayCount == 0 || (mTaskBlinkActive && !mTaskBlinkVisible)) return 5;
 		return 7;
-	}
-
-	TColorAttr taskMarkerColor(TColorAttr baseColor) const {
-		TColorAttr taskColor = baseColor;
-		setFore(taskColor, TColorDesired(TColorRGB(0xFF, 0x79, 0xC6)));
-		setStyle(taskColor, getStyle(taskColor) | slBold);
-		return taskColor;
 	}
 
 	void showTaskOverview() {
@@ -457,25 +450,18 @@ class MRIndicator : public TIndicator {
 
 	void startReadOnlyBlink() {
 		cancelReadOnlyBlinkChain(false);
-		++mBlinkGeneration;
-		mReadOnlyBlinkActive = true;
+		mReadOnlyBlinkActive = false;
 		mReadOnlyBlinkVisible = true;
-		mReadOnlyBlinkUntil = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-		scheduleReadOnlyBlinkTick(false);
+		drawView();
+		redrawFrame();
 	}
 
 	void startInsertBlink() {
-		if (mInsertBlinkTaskId != 0) {
-			mr::coprocessor::globalCoprocessor().cancelTask(mInsertBlinkTaskId);
-			mInsertBlinkTaskId = 0;
-		}
-		++mInsertBlinkGeneration;
-		mInsertBlinkActive = true;
+		cancelInsertBlinkChain(false);
+		mInsertBlinkActive = false;
 		mInsertBlinkVisible = true;
-		mInsertBlinkUntil = std::chrono::steady_clock::now() + std::chrono::seconds(5);
 		drawView();
 		redrawFrame();
-		scheduleInsertBlinkTick(false);
 	}
 
 	void cancelReadOnlyBlinkChain(bool redraw) {
@@ -516,17 +502,11 @@ class MRIndicator : public TIndicator {
 	}
 
 	void startWordWrapBlink() {
-		if (mWordWrapBlinkTaskId != 0) {
-			mr::coprocessor::globalCoprocessor().cancelTask(mWordWrapBlinkTaskId);
-			mWordWrapBlinkTaskId = 0;
-		}
-		++mWordWrapBlinkGeneration;
-		mWordWrapBlinkActive = true;
+		cancelWordWrapBlinkChain(false);
+		mWordWrapBlinkActive = false;
 		mWordWrapBlinkVisible = true;
-		mWordWrapBlinkUntil = std::chrono::steady_clock::now() + std::chrono::seconds(5);
 		drawView();
 		redrawFrame();
-		scheduleWordWrapBlinkTick(false);
 	}
 
 	void cancelWordWrapBlinkChain(bool redraw) {
@@ -549,17 +529,11 @@ class MRIndicator : public TIndicator {
 	}
 
 	void startTaskBlink() {
-		if (mTaskBlinkTaskId != 0) {
-			mr::coprocessor::globalCoprocessor().cancelTask(mTaskBlinkTaskId);
-			mTaskBlinkTaskId = 0;
-		}
-		++mTaskBlinkGeneration;
-		mTaskBlinkActive = true;
+		cancelTaskBlinkChain(false);
+		mTaskBlinkActive = false;
 		mTaskBlinkVisible = true;
-		mTaskBlinkUntil = std::chrono::steady_clock::now() + std::chrono::seconds(3);
 		drawView();
 		redrawFrame();
-		scheduleTaskBlinkTick(false);
 	}
 
 	void cancelTaskBlinkChain(bool redraw) {
