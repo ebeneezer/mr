@@ -2,7 +2,7 @@
 #include <tvision/tv.h>
 
 #include "MRExternalCommand.hpp"
-#include "MRDialogPaths.hpp"
+#include "../../config/settings/MRSettingsRuntime.hpp"
 
 #include <array>
 #include <cctype>

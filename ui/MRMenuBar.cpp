@@ -18,7 +18,7 @@
 
 #include "../app/MRCommands.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
-#include "../config/MRDialogPaths.hpp"
+#include "../config/settings/MRSettingsRuntime.hpp"
 #include "../keymap/MRKeymapContext.hpp"
 #include "../keymap/MRKeymapResolver.hpp"
 #include "../mrmac/MRMacroRunner.hpp"

@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "../../config/MRDialogPaths.hpp"
+#include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../coprocessor/MRCoprocessor.hpp"
 #include "../../piecetable/MRTextDocument.hpp"
 

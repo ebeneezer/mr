@@ -1,6 +1,6 @@
 #include "MRKeymapResolver.hpp"
 
-#include "../config/MRDialogPaths.hpp"
+#include "../config/settings/MRSettingsRuntime.hpp"
 
 #include <array>
 #include <algorithm>

@@ -12,7 +12,7 @@
 #include "MRDropList.hpp"
 
 #include "MRColumnListView.hpp"
-#include "../dialogs/MRSetupCommon.hpp"
+#include "../dialogs/setup/MRSetupCommon.hpp"
 
 #include <algorithm>
 #include <vector>

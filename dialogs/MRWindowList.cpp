@@ -15,7 +15,7 @@
 #include <tvision/tv.h>
 
 #include "MRWindowList.hpp"
-#include "MRSetupCommon.hpp"
+#include "setup/MRSetupCommon.hpp"
 #include "../app/MRCommands.hpp"
 
 #include <algorithm>
@@ -28,7 +28,7 @@
 #include <unistd.h>
 
 #include "../app/commands/MRWindowCommands.hpp"
-#include "../config/MRDialogPaths.hpp"
+#include "../config/settings/MRSettingsRuntime.hpp"
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRWindowManager.hpp"

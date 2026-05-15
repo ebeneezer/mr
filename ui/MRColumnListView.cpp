@@ -9,7 +9,7 @@
 
 #include "MRColumnListView.hpp"
 
-#include "../config/MRDialogPaths.hpp"
+#include "../config/settings/MRSettingsRuntime.hpp"
 
 #include <algorithm>
 #include <cstring>

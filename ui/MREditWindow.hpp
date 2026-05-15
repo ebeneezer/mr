@@ -38,7 +38,7 @@
 #include "../keymap/MRKeymapContext.hpp"
 #include "../keymap/MRKeymapToken.hpp"
 #include "../dialogs/MRWindowList.hpp"
-#include "../config/MRDialogPaths.hpp"
+#include "../config/settings/MRSettingsRuntime.hpp"
 #include "../mrmac/MRVM.hpp"
 
 void mrTraceCoprocessorTaskCancel(int bufferId, std::uint64_t taskId);

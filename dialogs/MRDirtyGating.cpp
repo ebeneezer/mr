@@ -10,7 +10,7 @@
 
 #include "MRDirtyGating.hpp"
 
-#include "MRSetupCommon.hpp"
+#include "setup/MRSetupCommon.hpp"
 
 #include <array>
 #include <string>

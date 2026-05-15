@@ -7,7 +7,7 @@
 #include <tvision/tv.h>
 
 #include "../app/commands/MRWindowCommands.hpp"
-#include "../config/MRDialogPaths.hpp"
+#include "../config/settings/MRSettingsRuntime.hpp"
 
 #include <algorithm>
 #include <ctime>

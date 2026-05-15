@@ -10,7 +10,7 @@
 #include <tvision/tv.h>
 
 #include "MRAbout.hpp"
-#include "MRSetupCommon.hpp"
+#include "setup/MRSetupCommon.hpp"
 
 #include <algorithm>
 #include <array>

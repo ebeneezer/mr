@@ -1,7 +1,7 @@
-#ifndef MRSETTINGSLOADER_HPP
-#define MRSETTINGSLOADER_HPP
+#ifndef MRSETTINGSSTORAGE_HPP
+#define MRSETTINGSSTORAGE_HPP
 
-#include "MRDialogPaths.hpp"
+#include "MRSettingsRuntime.hpp"
 
 #include <cstddef>
 #include <string>
@@ -50,5 +50,22 @@ bool prepareStartupSettingsSource(const std::string &settingsPath, const std::st
 [[nodiscard]] std::string describeSettingsLoadReport(const MRSettingsLoadReport &report);
 bool diffSettingsSources(const std::string &beforeSource, const std::string &afterSource, std::vector<MRSettingsChangeEntry> &changes, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string formatSettingsChangeForLog(const MRSettingsChangeEntry &change);
+
+struct MRSettingsWriteReport {
+	std::string settingsPath;
+	bool fileWritten = false;
+	bool contentChanged = false;
+	std::size_t addedCount = 0;
+	std::size_t removedCount = 0;
+	std::size_t changedCount = 0;
+	std::vector<std::string> logLines;
+};
+
+[[nodiscard]] std::string buildSettingsMacroSource(const MRSetupPaths &paths);
+[[nodiscard]] bool configuredSettingsDirty();
+void clearConfiguredSettingsDirty();
+bool persistConfiguredSettingsSnapshot(std::string *errorMessage = nullptr, MRSettingsWriteReport *report = nullptr);
+bool writeSettingsMacroFile(const MRSetupPaths &paths, std::string *errorMessage = nullptr, MRSettingsWriteReport *report = nullptr);
+bool ensureSettingsMacroFileExists(const std::string &settingsMacroUri, std::string *errorMessage = nullptr);
 
 #endif

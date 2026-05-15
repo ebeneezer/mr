@@ -3,7 +3,7 @@
 #include "MREditWindow.hpp"
 #include "MRWindowSupport.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
-#include "../config/MRDialogPaths.hpp"
+#include "../config/settings/MRSettingsRuntime.hpp"
 #include "../dialogs/MRWindowList.hpp"
 
 #define Uses_TApplication

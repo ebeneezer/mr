@@ -42,7 +42,7 @@
 #include "../../derivedstate/MRFoldingDerivedState.hpp"
 #include "../../derivedstate/MRMiniMapDerivedState.hpp"
 #include "../../derivedstate/MRSyntaxDerivedState.hpp"
-#include "../../config/MRDialogPaths.hpp"
+#include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../app/MRCommands.hpp"
 #include "../../app/utils/MRFileIOUtils.hpp"
 #include "../../app/utils/MRStringUtils.hpp"

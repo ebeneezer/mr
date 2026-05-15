@@ -11,7 +11,7 @@
 
 #include <string>
 
-#include "../config/MRDialogPaths.hpp"
+#include "../config/settings/MRSettingsRuntime.hpp"
 #include "../ui/MRMenuBar.hpp"
 
 namespace {

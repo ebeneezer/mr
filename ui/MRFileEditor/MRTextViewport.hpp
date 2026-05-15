@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <string>
 
-#include "../../config/MRDialogPaths.hpp"
+#include "../../config/settings/MRSettingsRuntime.hpp"
 
 class MRTextViewportLayout {
   public:

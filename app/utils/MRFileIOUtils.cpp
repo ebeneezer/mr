@@ -1,5 +1,5 @@
 #include "MRFileIOUtils.hpp"
-#include "../../config/MRDialogPaths.hpp"
+#include "../../config/settings/MRSettingsRuntime.hpp"
 #include "MRStringUtils.hpp"
 #include <algorithm>
 #include <cstdint>

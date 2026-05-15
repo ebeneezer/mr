@@ -1,7 +1,7 @@
 #include "MRAppState.hpp"
 
 #include "../app/commands/MRWindowCommands.hpp"
-#include "../config/MRDialogPaths.hpp"
+#include "../config/settings/MRSettingsRuntime.hpp"
 #include "../ui/MREditWindow.hpp"
 #include "MRCommands.hpp"
 

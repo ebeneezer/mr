@@ -1,4 +1,4 @@
-#include "../../config/MRDialogPaths.hpp"
+#include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../ui/MRFileEditor/MRFileEditor.hpp"
 #include "../../ui/MRSyntax.hpp"
 

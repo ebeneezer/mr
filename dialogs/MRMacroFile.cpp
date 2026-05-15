@@ -19,12 +19,13 @@
 #include <tvision/tv.h>
 
 #include "MRMacroFile.hpp"
-#include "MRSetupCommon.hpp"
+#include "setup/MRSetupCommon.hpp"
 
 #include "../mrmac/MRMacroRunner.hpp"
 #include "../mrmac/mrmac.h"
 #include "../mrmac/MRVM.hpp"
-#include "../config/MRDialogPaths.hpp"
+#include "../config/settings/MRSettingsRuntime.hpp"
+#include "../config/settings/MRSettingsStorage.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../ui/MRFrame.hpp"
 #include "../ui/MRMessageLineController.hpp"
