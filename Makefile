@@ -5,6 +5,7 @@
 # - link explicitly against ./tvision/build/libtvision.a
 # - no variant/object-dir refactor
 
+PKG_CONFIG ?= pkg-config
 CXX = g++
 CC = gcc
 FLEX = flex
@@ -34,8 +35,11 @@ TVISION_ACTIVE_BUILD_DIR := $(TVISION_SOURCE_DIR)/build
 PCRE2_LIB ?= /usr/lib/libpcre2-8.so
 PCRE2_HEADER ?= /usr/include/pcre2.h
 
+PDF_EXPORT_CFLAGS := $(shell $(PKG_CONFIG) --cflags pangocairo cairo 2>/dev/null)
+PDF_EXPORT_LIBS := $(shell $(PKG_CONFIG) --libs pangocairo cairo 2>/dev/null)
+
 # Include paths
-INCLUDES = -I$(TVISION_ACTIVE_SOURCE_DIR)/include -I./mrmac -I./piecetable -I./ui -I./coprocessor -I./app -I./app/commands -I./dialogs -I./config -I./keymap
+INCLUDES = -I$(TVISION_ACTIVE_SOURCE_DIR)/include -I./mrmac -I./piecetable -I./ui -I./coprocessor -I./app -I./app/commands -I./dialogs -I./config -I./keymap $(PDF_EXPORT_CFLAGS)
 
 # Language/runtime configuration.
 CXXSTD ?= gnu++20
@@ -69,7 +73,7 @@ TVISION_CMAKE_FLAGS = \
 NCURSESW_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libncursesw.so.6 ]; then echo -l:libncursesw.so.6; else echo -lncursesw; fi)
 GPM_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libgpm.so.2 ]; then echo -l:libgpm.so.2; else echo -lgpm; fi)
 TINFO_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libtinfo.so.6 ]; then echo -l:libtinfo.so.6; else echo -ltinfo; fi)
-LDFLAGS = $(PTHREAD_FLAGS) $(TVISION_LIB) $(PCRE2_LIB) $(NCURSESW_LIB) $(GPM_LIB) $(TINFO_LIB)
+LDFLAGS = $(PTHREAD_FLAGS) $(TVISION_LIB) $(PCRE2_LIB) $(NCURSESW_LIB) $(GPM_LIB) $(TINFO_LIB) $(PDF_EXPORT_LIBS)
 
 TARGET = mr
 MRFOLDTRAINER_TARGET = trainers/foldtrainer/mrfoldtrainer
@@ -98,6 +102,7 @@ HELP_MARKDOWN_GENERATED = app/MRHelp.generated.hpp
 CXX_SOURCES = \
 	app/utils/MRStringUtils.cpp \
 	app/utils/MRFileIOUtils.cpp \
+	app/export/MRPdfTextExporter.cpp \
 	mr.cpp \
 	app/MRAppState.cpp \
 	app/MRCommandRouter.cpp \
@@ -123,6 +128,7 @@ CXX_SOURCES = \
 	dialogs/MRFileInformation.cpp \
 	dialogs/MRKeymapManager.cpp \
 	dialogs/MRMacroFile.cpp \
+	dialogs/MRPdfExportDialog.cpp \
 	dialogs/extensions/MRFileExtensionProfiles.cpp \
 	dialogs/extensions/MRFileExtensionEditorSettings.cpp \
 	dialogs/extensions/MRFileExtensionProfilesSupport.cpp \

@@ -375,6 +375,7 @@ MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) 
 	snapshot.sarDialogOptions = configuredSarDialogOptions();
 	snapshot.multiSearchDialogOptions = configuredMultiSearchDialogOptions();
 	snapshot.multiSarDialogOptions = configuredMultiSarDialogOptions();
+	snapshot.pdfExportSettings = configuredPdfExportSettings();
 	snapshot.virtualDesktops = configuredVirtualDesktops();
 	snapshot.cyclicVirtualDesktops = configuredCyclicVirtualDesktops();
 	snapshot.cursorBehaviour = configuredCursorBehaviour();
@@ -526,6 +527,17 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('MULTI_SAR_REGULAR_EXPRESSIONS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSarDialogOptions.regularExpressions)) + "');\n";
 	source += "MRSETUP('MULTI_SAR_FILES_IN_MEMORY', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSarDialogOptions.searchFilesInMemory)) + "');\n";
 	source += "MRSETUP('MULTI_SAR_KEEP_FILES_OPEN', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.multiSarDialogOptions.keepFilesOpen)) + "');\n";
+	source += "MRSETUP('PDF_EXPORT_PATH', '" + escapeMrmacSingleQuotedLiteral(snapshot.pdfExportSettings.outputPath) + "');\n";
+	source += "MRSETUP('PDF_EXPORT_PAGE_SEPARATOR', '" + escapeMrmacSingleQuotedLiteral(snapshot.pdfExportSettings.pageSeparatorLiteral) + "');\n";
+	source += "MRSETUP('PDF_EXPORT_FONT_FAMILY', '" + escapeMrmacSingleQuotedLiteral(snapshot.pdfExportSettings.fontFamily) + "');\n";
+	source += "MRSETUP('PDF_EXPORT_FONT_SIZE', '" + std::to_string(snapshot.pdfExportSettings.fontSizePoints) + "');\n";
+	source += "MRSETUP('PDF_EXPORT_HEADER_LINE', '" + escapeMrmacSingleQuotedLiteral(snapshot.pdfExportSettings.headerLine) + "');\n";
+	source += "MRSETUP('PDF_EXPORT_FOOTER_LINE', '" + escapeMrmacSingleQuotedLiteral(snapshot.pdfExportSettings.footerLine) + "');\n";
+	source += "MRSETUP('PDF_EXPORT_TEXT_WIDTH', '" + escapeMrmacSingleQuotedLiteral(snapshot.pdfExportSettings.textWidth) + "');\n";
+	source += "MRSETUP('PDF_EXPORT_LEFT_MARGIN_POINTS', '" + escapeMrmacSingleQuotedLiteral(snapshot.pdfExportSettings.leftMarginPoints) + "');\n";
+	source += "MRSETUP('PDF_EXPORT_RIGHT_MARGIN_POINTS', '" + escapeMrmacSingleQuotedLiteral(snapshot.pdfExportSettings.rightMarginPoints) + "');\n";
+	source += "MRSETUP('PDF_EXPORT_TOP_MARGIN_POINTS', '" + escapeMrmacSingleQuotedLiteral(snapshot.pdfExportSettings.topMarginPoints) + "');\n";
+	source += "MRSETUP('PDF_EXPORT_BOTTOM_MARGIN_POINTS', '" + escapeMrmacSingleQuotedLiteral(snapshot.pdfExportSettings.bottomMarginPoints) + "');\n";
 	source += "MRSETUP('VIRTUAL_DESKTOPS', '" + std::to_string(snapshot.virtualDesktops) + "');\n";
 	source += "MRSETUP('CYCLIC_VIRTUAL_DESKTOPS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.cyclicVirtualDesktops)) + "');\n";
 	source += "MRSETUP('CURSOR_BEHAVIOUR', '" + escapeMrmacSingleQuotedLiteral(formatCursorBehaviourLiteral(snapshot.cursorBehaviour)) + "');\n";

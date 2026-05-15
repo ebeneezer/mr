@@ -23,6 +23,7 @@ MRSearchDialogOptions g_searchDialogOptions;
 MRSarDialogOptions g_sarDialogOptions;
 MRMultiSearchDialogOptions g_multiSearchDialogOptions;
 MRMultiSarDialogOptions g_multiSarDialogOptions;
+MRPdfExportSettings g_pdfExportSettings;
 int g_virtualDesktops = 1;
 bool g_cyclicVirtualDesktops = false;
 MRCursorBehaviour g_cursorBehaviour = MRCursorBehaviour::BoundToText;
@@ -502,6 +503,21 @@ bool setConfiguredMultiSarDialogOptions(const MRMultiSarDialogOptions &options, 
 
 MRMultiSarDialogOptions configuredMultiSarDialogOptions() {
 	return g_multiSarDialogOptions;
+}
+
+bool setConfiguredPdfExportSettings(const MRPdfExportSettings &settings, std::string *errorMessage) {
+	const MRPdfExportSettings previousSettings = g_pdfExportSettings;
+	const MRScopedDialogHistoryState previousHistory = dialogHistoryState(MRDialogHistoryScope::PdfExport);
+
+	g_pdfExportSettings = settings;
+	if (!trimAscii(settings.outputPath).empty()) static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::PdfExport, settings.outputPath, nullptr));
+	if (previousSettings != g_pdfExportSettings || previousHistory != dialogHistoryState(MRDialogHistoryScope::PdfExport)) markConfiguredSettingsDirty();
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+MRPdfExportSettings configuredPdfExportSettings() {
+	return g_pdfExportSettings;
 }
 
 bool setConfiguredVirtualDesktops(int count, std::string *errorMessage) {
