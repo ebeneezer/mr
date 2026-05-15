@@ -17,11 +17,11 @@
 #define Uses_TView
 #include <tvision/tv.h>
 
-#include "MRSetupCommon.hpp"
-#include "MRSetup.hpp"
+#include "setup/MRSetupCommon.hpp"
+#include "setup/MRSetup.hpp"
 
 #include "../app/MRCommands.hpp"
-#include "../config/MRDialogPaths.hpp"
+#include "../config/settings/MRSettingsRuntime.hpp"
 #include "../ui/MRFrame.hpp"
 
 #include <array>

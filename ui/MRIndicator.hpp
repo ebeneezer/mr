@@ -24,7 +24,7 @@
 #include <utility>
 #include <vector>
 
-#include "../config/MRDialogPaths.hpp"
+#include "../config/settings/MRSettingsRuntime.hpp"
 #include "MRCoprocessor.hpp"
 
 void mrvmUiInvalidateScreenBase() noexcept;

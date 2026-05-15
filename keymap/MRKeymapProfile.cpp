@@ -3,7 +3,7 @@
 #include "MRKeymapActionCatalog.hpp"
 #include "../app/utils/MRFileIOUtils.hpp"
 #include "../app/utils/MRStringUtils.hpp"
-#include "../config/MRDialogPaths.hpp"
+#include "../config/settings/MRSettingsRuntime.hpp"
 #include "../mrmac/mrmac.h"
 
 #include <algorithm>

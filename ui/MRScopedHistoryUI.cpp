@@ -19,7 +19,7 @@
 #include "MRDropList.hpp"
 #include "MRScopedHistoryUI.hpp"
 
-#include "../config/MRDialogPaths.hpp"
+#include "../config/settings/MRSettingsRuntime.hpp"
 
 #include <algorithm>
 #include <cstdio>

@@ -1,13 +1,14 @@
-#include "../app/utils/MRStringUtils.hpp"
+#include "../../app/utils/MRStringUtils.hpp"
 #include "MRFileExtensionProfilesSupport.hpp"
 
-#include "MRSetupCommon.hpp"
-#include "MRSetup.hpp"
+#include "../setup/MRSetupCommon.hpp"
+#include "../setup/MRSetup.hpp"
 
-#include "../app/commands/MRWindowCommands.hpp"
-#include "../config/MRDialogPaths.hpp"
-#include "../ui/MREditWindow.hpp"
-#include "../ui/MRWindowSupport.hpp"
+#include "../../app/commands/MRWindowCommands.hpp"
+#include "../../config/settings/MRSettingsRuntime.hpp"
+#include "../../config/settings/MRSettingsStorage.hpp"
+#include "../../ui/MREditWindow.hpp"
+#include "../../ui/MRWindowSupport.hpp"
 
 #include <algorithm>
 #include <array>

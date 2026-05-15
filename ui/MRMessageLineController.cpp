@@ -1,4 +1,4 @@
-#include "../config/MRDialogPaths.hpp"
+#include "../config/settings/MRSettingsRuntime.hpp"
 #include "MRMessageLineController.hpp"
 
 #include <algorithm>

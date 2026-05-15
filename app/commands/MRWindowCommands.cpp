@@ -27,14 +27,14 @@
 #include <unistd.h>
 #include <vector>
 
-#include "MRDialogPaths.hpp"
+#include "../../config/settings/MRSettingsRuntime.hpp"
 #include "MRPerformance.hpp"
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MREditWindow.hpp"
 #include "../../ui/MRWindowManager.hpp"
 #include "../../ui/MRWindowSupport.hpp"
 #include "../../dialogs/MRWindowList.hpp"
-#include "../../dialogs/MRSetupCommon.hpp"
+#include "../../dialogs/setup/MRSetupCommon.hpp"
 
 namespace {
 void postWindowCommandError(std::string_view text) {
@@ -77,9 +77,7 @@ short nextEditorWindowNumber() {
 } // namespace
 
 #include "../utils/MRFileIOUtils.hpp"
-#include "../config/MRDialogPaths.hpp"
-#include "../config/MRSettingsLoader.hpp"
-#include "../ui/MRMessageLineController.hpp"
+#include "../config/settings/MRSettingsStorage.hpp"
 
 static int g_currentVirtualDesktop = 1;
 static std::set<const MREditWindow *> g_manuallyHiddenWindows;

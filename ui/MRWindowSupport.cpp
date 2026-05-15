@@ -24,9 +24,10 @@
 
 #include "../app/MRCommands.hpp"
 #include "../app/MRCommandRouter.hpp"
-#include "../config/MRDialogPaths.hpp"
+#include "../config/settings/MRSettingsRuntime.hpp"
+#include "../config/settings/MRSettingsStorage.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
-#include "../dialogs/MRSetupCommon.hpp"
+#include "../dialogs/setup/MRSetupCommon.hpp"
 #include "../keymap/MRKeymapResolver.hpp"
 #include "../keymap/MRKeymapToken.hpp"
 #include "MRMessageLineController.hpp"

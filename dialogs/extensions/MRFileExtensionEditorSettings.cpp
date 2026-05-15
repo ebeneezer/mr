@@ -12,9 +12,9 @@
 
 #include "MRFileExtensionEditorSettingsInternal.hpp"
 #include "MRNumericSlider.hpp"
-#include "MRSetupCommon.hpp"
-#include "../config/MRDialogPaths.hpp"
-#include "../ui/MRWindowSupport.hpp"
+#include "../setup/MRSetupCommon.hpp"
+#include "../../config/settings/MRSettingsRuntime.hpp"
+#include "../../ui/MRWindowSupport.hpp"
 
 #include <algorithm>
 #include <cstdlib>

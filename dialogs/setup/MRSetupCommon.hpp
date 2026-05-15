@@ -1,5 +1,5 @@
-#include "../app/utils/MRStringUtils.hpp"
-#include "../config/MRDialogPaths.hpp"
+#include "../../app/utils/MRStringUtils.hpp"
+#include "../../config/settings/MRSettingsRuntime.hpp"
 #ifndef MRSETUPDIALOGCOMMON_HPP
 #define MRSETUPDIALOGCOMMON_HPP
 

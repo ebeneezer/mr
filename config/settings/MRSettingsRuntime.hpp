@@ -1,7 +1,8 @@
-#ifndef MRDIALOGPATHS_HPP
-#define MRDIALOGPATHS_HPP
+#ifndef MRSETTINGSRUNTIME_HPP
+#define MRSETTINGSRUNTIME_HPP
 
-#include "../keymap/MRKeymapProfile.hpp"
+#include "MRSettingsAssignments.hpp"
+#include "../../keymap/MRKeymapProfile.hpp"
 
 #include <array>
 #include <cstddef>
@@ -434,12 +435,6 @@ bool loadColorThemeFile(const std::string &themeUri, std::string *errorMessage =
 bool loadWindowColorThemeGroupValues(const std::string &themeUri, std::array<unsigned char, MRColorSetupSettings::kWindowCount> &outValues, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string buildColorThemeMacroSource(const MRColorSetupSettings &colors);
 
-[[nodiscard]] MRSettingsKeyClass classifySettingsKey(std::string_view key);
-[[nodiscard]] bool isCanonicalSerializedSettingsKey(std::string_view key);
-[[nodiscard]] std::size_t canonicalSerializedSettingsKeyCount();
-bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths &paths, std::string *errorMessage = nullptr);
-bool applyConfiguredSettingsAssignment(const std::string &key, const std::string &value, MRSetupPaths &paths, std::string *errorMessage = nullptr);
-
 const MREditSettingDescriptor *editSettingDescriptors(std::size_t &count);
 [[nodiscard]] const MREditSettingDescriptor *findEditSettingDescriptorByKey(std::string_view key);
 [[nodiscard]] std::string normalizeEditExtensionSelector(std::string_view value);
@@ -522,22 +517,6 @@ void rememberConfiguredAutoexecMacroDiagnostic(const std::string &fileName, cons
 [[nodiscard]] bool configuredAutoexecMacroDiagnosticForFile(const std::string &fileName, std::string &errorText);
 bool setConfiguredLastFileDialogPath(const std::string &path, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string configuredLastFileDialogPath();
-struct MRSettingsWriteReport {
-	std::string settingsPath;
-	bool fileWritten = false;
-	bool contentChanged = false;
-	std::size_t addedCount = 0;
-	std::size_t removedCount = 0;
-	std::size_t changedCount = 0;
-	std::vector<std::string> logLines;
-};
-
-[[nodiscard]] std::string buildSettingsMacroSource(const MRSetupPaths &paths);
-[[nodiscard]] bool configuredSettingsDirty();
-void clearConfiguredSettingsDirty();
-bool persistConfiguredSettingsSnapshot(std::string *errorMessage = nullptr, MRSettingsWriteReport *report = nullptr);
-bool writeSettingsMacroFile(const MRSetupPaths &paths, std::string *errorMessage = nullptr, MRSettingsWriteReport *report = nullptr);
-bool ensureSettingsMacroFileExists(const std::string &settingsMacroUri, std::string *errorMessage = nullptr);
 bool validateSettingsMacroFilePath(const std::string &path, std::string *errorMessage = nullptr);
 bool setConfiguredSettingsMacroFilePath(const std::string &path, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string configuredSettingsMacroFilePath();

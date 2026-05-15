@@ -23,6 +23,9 @@
 
 #include "mrmac.h"
 #include "MRVM.hpp"
+#include "vm/MRVMDeferredUi.hpp"
+#include "vm/MRVMScreen.hpp"
+#include "vm/MRVMSettings.hpp"
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -55,9 +58,10 @@
 #include "../ui/MRMenuBar.hpp"
 #include "../ui/MRStatusLine.hpp"
 #include "../ui/MRMessageLineController.hpp"
-#include "../dialogs/MRSetupCommon.hpp"
+#include "../dialogs/setup/MRSetupCommon.hpp"
 #include "../dialogs/MRWindowList.hpp"
-#include "../config/MRDialogPaths.hpp"
+#include "../config/settings/MRSettingsRuntime.hpp"
+#include "../config/settings/MRSettingsStorage.hpp"
 #include "../keymap/MRKeymapProfile.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "../coprocessor/MRCoprocessor.hpp"
@@ -116,153 +120,6 @@ struct IndexedBoundMacroEntry {
 	IndexedBoundMacroEntry(const TKey &aKey, std::string aFilePath) : key(aKey), filePath(std::move(aFilePath)) {
 	}
 };
-
-struct StartupKeymapBatchState {
-	bool initialized = false;
-	bool profilesDirty = false;
-	bool activeDirty = false;
-	std::vector<MRKeymapProfile> profiles;
-	std::string activeProfile;
-};
-
-StartupKeymapBatchState &startupKeymapBatchState() {
-	static StartupKeymapBatchState state;
-	return state;
-}
-
-void clearStartupKeymapBatchState() noexcept {
-	StartupKeymapBatchState &state = startupKeymapBatchState();
-
-	state.initialized = false;
-	state.profilesDirty = false;
-	state.activeDirty = false;
-	state.profiles.clear();
-	state.activeProfile.clear();
-}
-
-void ensureStartupKeymapBatchInitialized() {
-	StartupKeymapBatchState &state = startupKeymapBatchState();
-
-	if (state.initialized) return;
-	state.profiles = configuredKeymapProfiles();
-	state.activeProfile = configuredActiveKeymapProfile();
-	state.initialized = true;
-}
-
-bool hasPendingStartupKeymapBatch() noexcept {
-	const StartupKeymapBatchState &state = startupKeymapBatchState();
-	return state.initialized && (state.profilesDirty || state.activeDirty);
-}
-
-bool flushStartupKeymapBatch(std::string *errorMessage) {
-	StartupKeymapBatchState &state = startupKeymapBatchState();
-
-	if (!state.initialized) {
-		if (errorMessage != nullptr) errorMessage->clear();
-		return true;
-	}
-	if (state.profilesDirty)
-		if (!setConfiguredKeymapProfiles(state.profiles, errorMessage)) return false;
-	if (state.activeDirty)
-		if (!setConfiguredActiveKeymapProfile(state.activeProfile, errorMessage)) return false;
-	clearStartupKeymapBatchState();
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
-}
-
-bool keymapDiagnosticsContainErrors(const std::vector<MRKeymapDiagnostic> &diagnostics) {
-	for (const MRKeymapDiagnostic &diagnostic : diagnostics)
-		if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error) return true;
-	return false;
-}
-
-std::string firstKeymapDiagnosticMessage(const std::vector<MRKeymapDiagnostic> &diagnostics) {
-	for (const MRKeymapDiagnostic &diagnostic : diagnostics)
-		if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error) return diagnostic.message;
-	if (!diagnostics.empty()) return diagnostics.front().message;
-	return "invalid keymap payload.";
-}
-
-bool assignKeymapPayloadError(std::string *errorMessage, std::string message) {
-	if (errorMessage != nullptr) *errorMessage = std::move(message);
-	return false;
-}
-
-bool applyConfiguredActiveKeymapProfilePayload(const std::string &payload, std::string *errorMessage) {
-	MRKeymapProfile activeProfileRecord;
-	const auto diagnostics = parseKeymapProfilePayload(payload, activeProfileRecord);
-
-	if (keymapDiagnosticsContainErrors(diagnostics)) return assignKeymapPayloadError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
-	bool ok = false;
-	if (mrvmIsStartupSettingsMode()) {
-		ensureStartupKeymapBatchInitialized();
-		StartupKeymapBatchState &state = startupKeymapBatchState();
-		state.activeProfile = activeProfileRecord.name;
-		state.activeDirty = true;
-		ok = true;
-		if (errorMessage != nullptr) errorMessage->clear();
-	} else
-		ok = setConfiguredActiveKeymapProfile(activeProfileRecord.name, errorMessage);
-	return ok;
-}
-
-bool applyConfiguredKeymapProfilePayload(const std::string &payload, std::string *errorMessage) {
-	MRKeymapProfile profile;
-	const auto diagnostics = parseKeymapProfilePayload(payload, profile);
-
-	if (keymapDiagnosticsContainErrors(diagnostics)) return assignKeymapPayloadError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
-	std::vector<MRKeymapProfile> profiles = configuredKeymapProfiles();
-	if (mrvmIsStartupSettingsMode()) {
-		ensureStartupKeymapBatchInitialized();
-		profiles = startupKeymapBatchState().profiles;
-	}
-	for (MRKeymapProfile &existing : profiles)
-		if (existing.name == profile.name) {
-			existing = profile;
-			if (mrvmIsStartupSettingsMode()) {
-				StartupKeymapBatchState &state = startupKeymapBatchState();
-				state.profiles = std::move(profiles);
-				state.profilesDirty = true;
-				if (errorMessage != nullptr) errorMessage->clear();
-				return true;
-			}
-			return setConfiguredKeymapProfiles(profiles, errorMessage);
-		}
-	profiles.push_back(profile);
-	if (mrvmIsStartupSettingsMode()) {
-		StartupKeymapBatchState &state = startupKeymapBatchState();
-		state.profiles = std::move(profiles);
-		state.profilesDirty = true;
-		if (errorMessage != nullptr) errorMessage->clear();
-		return true;
-	}
-	return setConfiguredKeymapProfiles(profiles, errorMessage);
-}
-
-bool applyConfiguredKeymapBindingPayload(const std::string &payload, std::string *errorMessage) {
-	MRKeymapBindingRecord binding;
-	const auto diagnostics = parseKeymapBindingPayload(payload, binding);
-	std::vector<MRKeymapProfile> profiles = configuredKeymapProfiles();
-
-	if (keymapDiagnosticsContainErrors(diagnostics)) return assignKeymapPayloadError(errorMessage, firstKeymapDiagnosticMessage(diagnostics));
-	if (mrvmIsStartupSettingsMode()) {
-		ensureStartupKeymapBatchInitialized();
-		profiles = startupKeymapBatchState().profiles;
-	}
-	for (MRKeymapProfile &profile : profiles)
-		if (profile.name == binding.profileName) {
-			profile.bindings.push_back(binding);
-			if (mrvmIsStartupSettingsMode()) {
-				StartupKeymapBatchState &state = startupKeymapBatchState();
-				state.profiles = std::move(profiles);
-				state.profilesDirty = true;
-				if (errorMessage != nullptr) errorMessage->clear();
-				return true;
-			}
-			return setConfiguredKeymapProfiles(profiles, errorMessage);
-		}
-	return assignKeymapPayloadError(errorMessage, "Binding references unknown keymap profile: " + binding.profileName);
-}
 
 struct MacroStackFrame {
 	std::string macroName;
@@ -502,150 +359,11 @@ struct ExecutionState {
 
 static RuntimeEnvironment g_runtimeEnv;
 static std::recursive_mutex g_vmExecutionMutex;
-static std::atomic<std::uint64_t> g_macroScreenMutationEpoch(1);
-static std::atomic<std::uint64_t> g_macroScreenFlushCount(0);
-class MacroCellGrid;
-
-struct ScreenStateCoordinator {
-	std::atomic<std::uint64_t> baseGeneration{1};
-	std::atomic<std::uint64_t> overlayGeneration{1};
-	std::atomic<bool> baseInvalidated{false};
-
-	void noteMacroOverlayMutation(std::uint64_t generation) noexcept {
-		overlayGeneration.store(generation, std::memory_order_relaxed);
-	}
-
-	void noteDirectScreenMutation(std::uint64_t generation) noexcept {
-		baseGeneration.store(generation, std::memory_order_relaxed);
-		baseInvalidated.store(true, std::memory_order_relaxed);
-	}
-
-	void noteBaseRedraw(std::uint64_t generation) noexcept {
-		baseGeneration.store(generation, std::memory_order_relaxed);
-		baseInvalidated.store(false, std::memory_order_relaxed);
-	}
-
-	[[nodiscard]] bool needsOverlayReprojection() const noexcept {
-		return baseInvalidated.load(std::memory_order_relaxed);
-	}
-};
-
-static ScreenStateCoordinator g_screenStateCoordinator;
-
-struct UiScreenStateFacade {
-	static std::uint64_t nextGeneration() noexcept {
-		return g_macroScreenMutationEpoch.fetch_add(1, std::memory_order_relaxed) + 1;
-	}
-
-	static void noteMacroOverlayMutation() noexcept {
-		g_screenStateCoordinator.noteMacroOverlayMutation(nextGeneration());
-	}
-
-	static void noteBaseMutation() noexcept {
-		g_screenStateCoordinator.noteDirectScreenMutation(nextGeneration());
-	}
-
-	static void noteBaseRedraw() noexcept {
-		g_screenStateCoordinator.noteBaseRedraw(mrvmUiScreenMutationEpoch());
-	}
-
-	[[nodiscard]] static bool needsOverlayReprojection() noexcept {
-		return g_screenStateCoordinator.needsOverlayReprojection();
-	}
-
-	[[nodiscard]] static std::pair<bool, bool> renderBaseThenOverlayIfNeeded(MacroCellGrid &grid) noexcept;
-	[[nodiscard]] static bool renderOverlay(MacroCellGrid &grid) noexcept;
-};
-
 static thread_local BackgroundEditSession *g_backgroundEditSession = nullptr;
 static thread_local const std::stop_token *g_backgroundMacroStopToken = nullptr;
 static thread_local std::shared_ptr<std::atomic_bool> g_backgroundMacroCancelFlag;
 static thread_local ExecutionState *g_executionState = nullptr;
 static thread_local int g_keyReplayDepth = 0;
-static thread_local bool g_startupSettingsMode = false;
-struct MacroScreenLineColOverlayState {
-	bool haveLine = false;
-	bool haveCol = false;
-	int line = 0;
-	int col = 0;
-};
-static MacroScreenLineColOverlayState g_macroScreenLineColOverlay;
-
-struct MacroCell {
-	char ch = ' ';
-	uchar attr = 0x07;
-	bool known = false;
-};
-
-struct MacroScreenBoxSnapshot {
-	int width = 0;
-	int height = 0;
-	int x1 = 0;
-	int y1 = 0;
-	int x2 = 0;
-	int y2 = 0;
-	std::vector<MacroCell> cells;
-};
-
-class MacroCellView final : public TView {
-  public:
-	MacroCellView(const TRect &bounds, MacroCellGrid &grid) noexcept;
-	void draw() override;
-
-  private:
-	MacroCellGrid &grid;
-};
-
-class MacroCellGrid {
-  public:
-	bool putBox(int x1, int y1, int x2, int y2, int bgColor, int fgColor, const std::string &title, bool shadow);
-	bool writeText(const std::string &text, int x, int y, int bgColor, int fgColor);
-	bool clearLine(int col, int row, int count);
-	bool clearScreen(int attr);
-	bool scrollBox(int x1, int y1, int x2, int y2, int attr, bool down);
-	bool putLineColOverlay(int line, int col, bool haveLine, bool haveCol);
-	bool killBox();
-	void drawKnownCells(MacroCellView &view);
-	void beginProjectionBatch() noexcept;
-	void endProjectionBatch() noexcept;
-
-  private:
-	friend struct UiScreenStateFacade;
-
-	int width = 0;
-	int height = 0;
-	std::vector<MacroCell> cells;
-	std::vector<MacroScreenBoxSnapshot> boxStack;
-	MacroCellView *view = nullptr;
-
-	bool ensureGeometry();
-	bool ensureView();
-	[[nodiscard]] std::size_t indexFor(int x, int y) const noexcept;
-	[[nodiscard]] static uchar composeAttribute(int bgColor, int fgColor) noexcept;
-	bool writeCell(int x, int y, char ch, uchar attr);
-	bool copyCell(int dstX, int dstY, int srcX, int srcY);
-	bool fillRect(int x1, int y1, int x2, int y2, char ch, uchar attr);
-	bool writeString(int x, int y, const std::string &text, uchar attr);
-	void pushSnapshot(int x1, int y1, int x2, int y2);
-	void projectAll();
-	void projectRowSpan(MacroCellView &targetView, int y, int x1, int x2);
-	void projectDirtyRows(MacroCellView &targetView);
-	void redrawBaseAndOverlay();
-	void markDirtyRow(int y) noexcept;
-	void clearDirtyRows() noexcept;
-	void markFullProjection() noexcept;
-	[[nodiscard]] bool hasDirtyRows() const noexcept;
-	[[nodiscard]] bool hasKnownCells() const noexcept;
-
-	std::vector<unsigned char> dirtyRows;
-	bool fullProjectionPending = true;
-	bool geometryResetPending = false;
-	int projectionBatchDepth = 0;
-	bool flushPending = false;
-};
-
-static MacroCellGrid g_macroCellGrid;
-
 static std::string valueAsString(const Value &value);
 static int valueAsInt(const Value &value);
 static bool isStringLike(const Value &value);
@@ -668,7 +386,7 @@ static bool parseRunMacroSpec(const std::string &spec, std::string &filePart, st
 static bool ensureLoadedFileResident(const std::string &fileKey);
 static bool evictTransientFileImage(const std::string &fileKey);
 static bool currentBackgroundChildMacroAllowed(const LoadedMacroFile &file) noexcept;
-static std::string expandUserPath(const std::string &path);
+std::string expandUserPath(const std::string &path);
 static bool fileExistsPath(const std::string &path);
 static std::vector<MREditWindow *> allEditWindows();
 static void cleanupWindowLinkGroups();
@@ -677,16 +395,16 @@ static bool isWindowLinked(MREditWindow *win);
 static int currentLinkStatus();
 static MREditWindow *selectLinkTargetWindow(MREditWindow *current);
 static bool prepareWindowLink(MREditWindow *current, MREditWindow *target, MREditWindow *&source, MREditWindow *&dest);
-static bool linkCurrentEditWindow();
-static bool unlinkCurrentEditWindow();
+bool linkCurrentEditWindow();
+bool unlinkCurrentEditWindow();
 static void syncLinkedWindowsFrom(MREditWindow *source);
-static bool redrawCurrentEditWindow();
-static bool redrawEntireScreen();
-static bool zoomCurrentEditWindow();
+bool redrawCurrentEditWindow();
+bool redrawEntireScreen();
+bool zoomCurrentEditWindow();
 static int findFirstFileMatch(const std::string &pattern);
 static int findNextFileMatch();
-static MREditWindow *activeMacroEditWindow();
-static MRFileEditor *currentEditor();
+MREditWindow *activeMacroEditWindow();
+MRFileEditor *currentEditor();
 static BackgroundEditSession *currentBackgroundEditSession() noexcept;
 static ExecutionState *currentExecutionState() noexcept;
 static bool backgroundMacroCancelRequested() noexcept;
@@ -766,15 +484,15 @@ static bool currentEditorAtEol(MRFileEditor *editor);
 static int currentEditorRow(MRFileEditor *editor);
 static int currentEditorPage(MRFileEditor *editor);
 static int currentEditorPageLine(MRFileEditor *editor);
-static bool markEditorPosition(MREditWindow *win, MRFileEditor *editor);
-static bool gotoEditorMark(MREditWindow *win, MRFileEditor *editor);
+bool markEditorPosition(MREditWindow *win, MRFileEditor *editor);
+bool gotoEditorMark(MREditWindow *win, MRFileEditor *editor);
 static bool popEditorMark(MREditWindow *win);
-static bool setEditorRandomAccessMark(MREditWindow *win, MRFileEditor *editor, int index);
-static bool gotoEditorRandomAccessMark(MREditWindow *win, MRFileEditor *editor, int index);
+bool setEditorRandomAccessMark(MREditWindow *win, MRFileEditor *editor, int index);
+bool gotoEditorRandomAccessMark(MREditWindow *win, MRFileEditor *editor, int index);
 static bool moveEditorPageUp(MRFileEditor *editor);
 static bool moveEditorPageDown(MRFileEditor *editor);
-static bool moveEditorNextPageBreak(MRFileEditor *editor);
-static bool moveEditorLastPageBreak(MRFileEditor *editor);
+bool moveEditorNextPageBreak(MRFileEditor *editor);
+bool moveEditorLastPageBreak(MRFileEditor *editor);
 static bool replaceEditorBuffer(MRFileEditor *editor, const std::string &text, std::size_t cursorPos);
 static SplitTextBuffer splitBufferLines(const std::string &text);
 static std::string joinBufferLines(const SplitTextBuffer &buffer);
@@ -782,25 +500,26 @@ static std::size_t bufferOffsetForLine(const SplitTextBuffer &buffer, int lineIn
 static std::size_t bufferOffsetForLineColumn(const SplitTextBuffer &buffer, int lineIndex, int colIndex);
 static int lineIndexForPtr(MRFileEditor *editor, uint ptr);
 static bool currentBlockInfo(MREditWindow *win, MRFileEditor *editor, int &mode, uint &anchor, uint &end);
-static bool copyCurrentBlock(MREditWindow *win, MRFileEditor *editor);
-static bool moveCurrentBlock(MREditWindow *win, MRFileEditor *editor);
-static bool deleteCurrentBlock(MREditWindow *win, MRFileEditor *editor, bool leaveColumnSpace = false);
-static bool indentCurrentBlock(MREditWindow *win, MRFileEditor *editor);
-static bool undentCurrentBlock(MREditWindow *win, MRFileEditor *editor);
-static bool copyBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWindow *destWin, MRFileEditor *destEditor);
-static bool moveBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWindow *destWin, MRFileEditor *destEditor);
-static bool extractCurrentBlockText(MREditWindow *win, MRFileEditor *editor, std::string &out);
-static bool saveCurrentBlockToFile(MREditWindow *win, MRFileEditor *editor, const std::string &path);
+bool copyCurrentBlock(MREditWindow *win, MRFileEditor *editor);
+bool moveCurrentBlock(MREditWindow *win, MRFileEditor *editor);
+bool deleteCurrentBlock(MREditWindow *win, MRFileEditor *editor, bool leaveColumnSpace = false);
+bool indentCurrentBlock(MREditWindow *win, MRFileEditor *editor);
+bool undentCurrentBlock(MREditWindow *win, MRFileEditor *editor);
+bool copyBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWindow *destWin, MRFileEditor *destEditor);
+bool moveBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWindow *destWin, MRFileEditor *destEditor);
+bool extractCurrentBlockText(MREditWindow *win, MRFileEditor *editor, std::string &out);
+bool saveCurrentBlockToFile(MREditWindow *win, MRFileEditor *editor, const std::string &path);
 static int countEditWindows();
 static int currentEditWindowIndex();
 static bool currentWindowGeometry(int &x1, int &y1, int &x2, int &y2);
-static bool queueDeferredUiProcedure(const std::string &name, const std::vector<Value> &args, int &errorCode);
-static bool createEditWindow();
-static bool switchEditWindow(int index);
-static bool sizeCurrentEditWindow(int x1, int y1, int x2, int y2);
-static bool deleteCurrentEditWindow();
-static bool eraseCurrentEditWindow();
-static bool modifyCurrentEditWindow();
+static bool queueDeferredUiProcedureImpl(const std::string &name, const std::vector<Value> &args, int &errorCode);
+static bool enqueueDeferredUiCommandImpl(const MRMacroDeferredUiCommand &command, int &errorCode);
+bool createEditWindow();
+bool switchEditWindow(int index);
+bool sizeCurrentEditWindow(int x1, int y1, int x2, int y2);
+bool deleteCurrentEditWindow();
+bool eraseCurrentEditWindow();
+bool modifyCurrentEditWindow();
 static bool parseIndexedBindingHeaders(const std::string &source, std::vector<TKey> &keys);
 static std::vector<std::string> listMrmacFilesInDirectory(const std::string &directoryPath);
 static std::string normalizeKeySpecToken(const std::string &spec);
@@ -811,8 +530,7 @@ static int currentUiMacroMode();
 static bool macroAllowsUiMode(const MacroRef &macroRef, int mode) noexcept;
 static bool executeLoadedMacro(std::map<std::string, MacroRef>::iterator macroIt, const std::string &macroKey, const std::string &paramPart, std::vector<std::string> *logSink);
 static bool tryLoadIndexedMacroForKey(const TKey &pressed);
-static bool reapplyMacroLineColOverlayIfActive();
-static bool currentExecutingMacroSpec(std::string &macroSpec);
+static bool currentExecutingMacroSpecImpl(std::string &macroSpec);
 static bool composeLoadedMacroSpec(const MacroRef &macroRef, std::string &macroSpec);
 static std::string menuLabelFromBindingKey(const TKey &key);
 static std::string normalizeMenuKeySpec(std::string keySpec);
@@ -826,10 +544,6 @@ static std::string upperKey(const std::string &value) {
 }
 
 static constexpr const char *kMacroWorkingMessageText = "working...";
-static constexpr const char *kTvCallMessageBox = "MESSAGEBOX";
-static constexpr const char *kTvCallVideoMode = "VIDEO_MODE";
-static constexpr const char *kTvCallVideoCard = "VIDEO_CARD";
-static constexpr const char *kTvCallToggle = "TOGGLE";
 
 static bool startsWithTokenInsensitive(const std::string &text, std::size_t pos, const char *token) {
 	std::size_t i = 0;
@@ -849,807 +563,6 @@ static bool startsWithTokenInsensitive(const std::string &text, std::size_t pos,
 static void appendUniqueString(std::vector<std::string> &values, const std::string &value) {
 	if (value.empty()) return;
 	if (std::find(values.begin(), values.end(), value) == values.end()) values.push_back(value);
-}
-
-static void noteExecutionFlags(MRMacroExecutionProfile &profile, unsigned flags, const std::string &symbol = std::string()) {
-	if (flags == 0) return;
-	profile.flags |= flags;
-	if (symbol.empty()) return;
-	if ((flags & mrefStagedWrite) != 0) appendUniqueString(profile.stagedWriteSymbols, symbol);
-	if ((flags & mrefUiAffinity) != 0) appendUniqueString(profile.uiAffinitySymbols, symbol);
-	if ((flags & mrefExternalIo) != 0) appendUniqueString(profile.externalIoSymbols, symbol);
-}
-
-static bool skipBytecodeBytes(std::size_t length, std::size_t &ip, std::size_t count) {
-	if (count > length || ip > length - count) return false;
-	ip += count;
-	return true;
-}
-
-static bool readBytecodeCString(const unsigned char *bytecode, std::size_t length, std::size_t &ip, std::string &out) {
-	std::size_t start = ip;
-	if (bytecode == nullptr || ip >= length) return false;
-	while (ip < length && bytecode[ip] != '\0')
-		++ip;
-	if (ip >= length) return false;
-	out.assign(reinterpret_cast<const char *>(bytecode + start), ip - start);
-	++ip;
-	return true;
-}
-
-static unsigned classifyPureOpcode(unsigned char opcode) {
-	switch (opcode) {
-		case OP_PUSH_I:
-		case OP_PUSH_R:
-		case OP_PUSH_S:
-		case OP_STORE_VAR:
-		case OP_LOAD_VAR:
-		case OP_GOTO:
-		case OP_DEF_VAR:
-		case OP_JZ:
-		case OP_CALL:
-		case OP_RET:
-		case OP_VAL:
-		case OP_RVAL:
-		case OP_FIRST_GLOBAL:
-		case OP_NEXT_GLOBAL:
-		case OP_HALT:
-		case OP_ADD:
-		case OP_SUB:
-		case OP_MUL:
-		case OP_DIV:
-		case OP_MOD:
-		case OP_NEG:
-		case OP_CMP_EQ:
-		case OP_CMP_NE:
-		case OP_CMP_LT:
-		case OP_CMP_GT:
-		case OP_CMP_LE:
-		case OP_CMP_GE:
-		case OP_AND:
-		case OP_OR:
-		case OP_NOT:
-		case OP_SHL:
-		case OP_SHR:
-		case OP_BIT_AND:
-		case OP_BIT_OR:
-		case OP_BIT_XOR:
-			return mrefBackgroundSafe;
-		default:
-			return 0;
-	}
-}
-
-static unsigned classifyIntrinsicName(const std::string &name) {
-	if (name == "VERSION") return mrefBackgroundSafe;
-	if (name == "FILE_EXISTS" || name == "FIRST_FILE" || name == "NEXT_FILE" || name == "GET_ENVIRONMENT") return mrefExternalIo;
-	if (name == "FILE_ATTR" || name == "COPY_FILE" || name == "RENAME_FILE" || name == "SWITCH_FILE") return mrefUiAffinity | mrefExternalIo;
-	if (name == "GLOBAL_STR" || name == "GLOBAL_INT" || name == "INQ_MACRO") return mrefUiAffinity;
-	if (name == "BLOCK_TEXT") return mrefUiAffinity;
-	if (name == "CHECK_KEY" || name == "BAR_MENU" || name == "V_MENU" || name == "STRING_IN" || name == "UI_EXEC" || name == "UI_TEXT" || name == "UI_INDEX") return mrefUiAffinity;
-	if (name == "UTF8") return mrefBackgroundSafe;
-	if (name == "OS_BACK" || name == "OS_COLOR") return mrefUiAffinity;
-	if (name == "SCREEN_LENGTH" || name == "SCREEN_WIDTH" || name == "WHEREX" || name == "WHEREY") return mrefUiAffinity;
-	if (name == "SEARCH_FWD" || name == "SEARCH_BWD" || name == "GET_WORD") return mrefUiAffinity;
-	return mrefBackgroundSafe;
-}
-
-static unsigned classifyProcVarName(const std::string &name) {
-	if (name == "EXPAND_TABS" || name == "TABS_TO_SPACES") return mrefBackgroundSafe;
-	return mrefUiAffinity;
-}
-
-static unsigned classifyLoadVarName(const std::string &name) {
-	if (name == "FIRST_MACRO" || name == "NEXT_MACRO") return mrefUiAffinity;
-	if (name == "IGNORE_CASE" || name == "REG_EXP_STAT" || name == "TAB_EXPAND" || name == "DISPLAY_TABS") return mrefUiAffinity;
-	if (name == "VIRTUAL_DESKTOPS" || name == "CYCLIC_VIRTUAL_DESKTOPS") return mrefUiAffinity;
-	if (name == "DOC_MODE" || name == "PRINT_MARGIN") return mrefUiAffinity;
-	if (name == "INSERT_MODE" || name == "INDENT_LEVEL" || name == "GET_LINE" || name == "CUR_CHAR" || name == "C_COL" || name == "C_LINE" || name == "C_ROW" || name == "C_PAGE" || name == "PG_LINE" || name == "AT_EOF" || name == "AT_EOL" || name == "BLOCK_STAT" || name == "BLOCK_LINE1" || name == "BLOCK_LINE2" || name == "BLOCK_COL1" || name == "BLOCK_COL2" || name == "MARKING" || name == "FILE_CHANGED" || name == "FILE_NAME") return mrefUiAffinity;
-	if (name == "CUR_WINDOW" || name == "LINK_STAT" || name == "WIN_X1" || name == "WIN_Y1" || name == "WIN_X2" || name == "WIN_Y2" || name == "WINDOW_COUNT" || name == "KEY1" || name == "KEY2" || name == "FIRST_SAVE" || name == "BUFFER_ID" || name == "TMP_FILE" || name == "TMP_FILE_NAME" || name == "LAST_FILE_ATTR" || name == "LAST_FILE_SIZE" || name == "LAST_FILE_TIME" || name == "CUR_FILE_ATTR" || name == "CUR_FILE_SIZE" || name == "READ_ONLY" || name == "FOUND_X" || name == "FOUND_Y" || name == "FOUND_STR" || name == "SEARCH_FILE") return mrefUiAffinity;
-	return 0;
-}
-
-static unsigned classifyStoreVarName(const std::string &name) {
-	if (name == "IGNORE_CASE" || name == "REG_EXP_STAT" || name == "TAB_EXPAND" || name == "INSERT_MODE" || name == "INDENT_LEVEL" || name == "FILE_CHANGED" || name == "FILE_NAME" || name == "VIRTUAL_DESKTOPS" || name == "CYCLIC_VIRTUAL_DESKTOPS") return mrefUiAffinity | mrefStagedWrite;
-	if (name == "DOC_MODE" || name == "PRINT_MARGIN") return mrefUiAffinity;
-	return 0;
-}
-
-static unsigned classifyProcName(const std::string &name) {
-	if (name == "MRSETUP") return mrefUiAffinity;
-	if (name == "MAKE_MESSAGE") return mrefUiAffinity;
-	if (name == "REGISTER_MENU_ITEM" || name == "REMOVE_MENU_ITEM") return mrefUiAffinity;
-	if (name == "CREATE_GLOBAL_STR" || name == "SET_GLOBAL_STR" || name == "SET_GLOBAL_INT" || name == "UNLOAD_MACRO") return name == "UNLOAD_MACRO" ? mrefUiAffinity : (mrefUiAffinity | mrefStagedWrite);
-	if (name == "LOAD_MACRO_FILE" || name == "CHANGE_DIR" || name == "DEL_FILE" || name == "SET_FILE_ATTR") return mrefExternalIo;
-	if (name == "SHELL_TO_OS") return mrefUiAffinity | mrefExternalIo;
-	if (name == "LOAD_FILE" || name == "SAVE_FILE" || name == "SAVE_BLOCK") return mrefUiAffinity | mrefExternalIo;
-	if (name == "UI_DIALOG" || name == "UI_LABEL" || name == "UI_BUTTON" || name == "UI_DISPLAY" || name == "UI_INPUT" || name == "UI_LISTBOX") return mrefUiAffinity;
-	if (name == "SAVE_SETTINGS") return mrefUiAffinity | mrefExternalIo;
-	if (name == "BEEP") return mrefUiAffinity;
-	if (name == "WRITE_SOD") return mrefUiAffinity;
-	if (name == "REPLACE" || name == "TEXT" || name == "PUT_LINE" || name == "CR" || name == "KEY_IN" || name == "DEL_CHAR" || name == "DEL_CHARS" || name == "DEL_LINE" || name == "INDENT" || name == "UNDENT" || name == "COPY_BLOCK" || name == "MOVE_BLOCK" || name == "DELETE_BLOCK" || name == "ERASE_WINDOW" || name == "WINDOW_COPY" || name == "WINDOW_MOVE") return mrefUiAffinity | mrefStagedWrite;
-	if (name == "RUN_MACRO") return mrefUiAffinity | mrefStagedWrite;
-	if (name == "DELAY") return mrefBackgroundSafe;
-	if (name == "SET_INDENT_LEVEL" || name == "LEFT" || name == "RIGHT" || name == "UP" || name == "DOWN" || name == "HOME" || name == "EOL" || name == "TOF" || name == "EOF" || name == "WORD_LEFT" || name == "WORD_RIGHT" || name == "FIRST_WORD" || name == "MARK_POS" || name == "GOTO_MARK" || name == "POP_MARK" || name == "PAGE_UP" || name == "PAGE_DOWN" || name == "NEXT_PAGE_BREAK" || name == "LAST_PAGE_BREAK" || name == "TAB_RIGHT" || name == "TAB_LEFT" || name == "BLOCK_BEGIN" || name == "BLOCK_LINE" || name == "COL_BLOCK_BEGIN" || name == "BLOCK_COL" || name == "STR_BLOCK_BEGIN" || name == "BLOCK_END" || name == "BLOCK_OFF" || name == "CREATE_WINDOW" || name == "DELETE_WINDOW" || name == "MODIFY_WINDOW" || name == "LINK_WINDOW" || name == "UNLINK_WINDOW" || name == "ZOOM" || name == "REDRAW" || name == "NEW_SCREEN" || name == "READ_KEY" || name == "PUSH_KEY" || name == "PASS_KEY" || name == "PUSH_LABELS" || name == "POP_LABELS" || name == "FLABEL" || name == "MACRO_TO_KEY" ||
-	    name == "CMD_TO_KEY" || name == "UNASSIGN_KEY" || name == "UNASSIGN_ALL_KEYS" || name == "KEY_RECORD" || name == "PLAY_KEY_MACRO" || name == "SAVE_OS_SCREEN" || name == "REST_OS_SCREEN" || name == "QUIT" || name == "GOTO_LINE" || name == "GOTO_COL" || name == "SWITCH_WINDOW" || name == "SIZE_WINDOW" || name == "MOVE_WIN_TO_NEXT_DESKTOP" || name == "MOVE_WIN_TO_PREV_DESKTOP" || name == "MOVE_VIEWPORT_RIGHT" || name == "MOVE_VIEWPORT_LEFT" || name == "SAVE_WORKSPACE" || name == "LOAD_WORKSPACE" || name == "SAVE_SETTINGS")
-		return mrefUiAffinity;
-	return mrefUiAffinity;
-}
-
-static unsigned classifyTvCallName(const std::string &name) {
-	if (name == "MESSAGEBOX") return mrefUiAffinity;
-	return mrefUiAffinity;
-}
-
-static void bumpMacroScreenMutationEpoch() noexcept {
-	UiScreenStateFacade::noteBaseMutation();
-}
-
-static void noteMacroScreenFlush() noexcept {
-	g_macroScreenFlushCount.fetch_add(1, std::memory_order_relaxed);
-}
-
-static bool returnWithMacroScreenMutation(bool ok) noexcept {
-	if (ok) UiScreenStateFacade::noteMacroOverlayMutation();
-	return ok;
-}
-
-static bool returnWithDirectScreenMutation(bool ok) noexcept {
-	if (ok) UiScreenStateFacade::noteBaseMutation();
-	return ok;
-}
-
-// Render sink classification for the Strangler foundation:
-// ordinary-view-draw: regular TView::draw(), writeLine() and writeBuf() implementations in app/ui/dialogs.
-// base-redraw-trigger: forceMacroUiMessageRefresh(), redrawCurrentEditWindow() and redrawEntireScreen().
-// overlay-render: MacroCellView::draw(), MacroCellGrid::projectRowSpan(), projectAll() and redrawBaseAndOverlay().
-// unsafe-physical-write: direct physical screen-buffer access outside TVision internals and guarded facade sinks.
-static void forceMacroUiMessageRefresh(TApplication *app) {
-	if (app == nullptr) return;
-	if (app->menuBar != nullptr) app->menuBar->drawView();
-	if (app->statusLine != nullptr) app->statusLine->drawView();
-	noteMacroScreenFlush();
-	TScreen::flushScreen();
-}
-
-std::pair<bool, bool> UiScreenStateFacade::renderBaseThenOverlayIfNeeded(MacroCellGrid &grid) noexcept {
-	const bool baseReprojectionNeeded = grid.geometryResetPending || UiScreenStateFacade::needsOverlayReprojection();
-	if (baseReprojectionNeeded && TProgram::application != nullptr) {
-		TProgram::application->drawView();
-		grid.markFullProjection();
-	}
-	return {baseReprojectionNeeded, renderOverlay(grid)};
-}
-
-bool UiScreenStateFacade::renderOverlay(MacroCellGrid &grid) noexcept {
-	if (grid.view == nullptr || !grid.hasKnownCells()) return false;
-	if (grid.fullProjectionPending) {
-		grid.view->drawView();
-		return true;
-	}
-	if (!grid.hasDirtyRows()) return false;
-	grid.projectDirtyRows(*grid.view);
-	return true;
-}
-
-static bool applyMarqueeProc(const std::string &name, const std::vector<Value> &args) {
-	TApplication *app = dynamic_cast<TApplication *>(TProgram::application);
-	mr::messageline::Kind kind = mr::messageline::Kind::Info;
-	mr::messageline::VisibleMessage existingMessage;
-	std::string text;
-
-	if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error(name + " expects one string argument.");
-	if (app == nullptr || dynamic_cast<MRMenuBar *>(app->menuBar) == nullptr) throw std::runtime_error(name + " requires an active menu bar.");
-
-	if (name == "MARQUEE_WARNING") kind = mr::messageline::Kind::Warning;
-	else if (name == "MARQUEE_ERROR")
-		kind = mr::messageline::Kind::Error;
-
-	text = valueAsString(args[0]);
-	if (text.empty()) {
-		if (!mr::messageline::currentOwnerMessage(mr::messageline::Owner::MacroMarquee, existingMessage)) return true;
-		mr::messageline::clearOwner(mr::messageline::Owner::MacroMarquee);
-	} else {
-		if (mr::messageline::currentOwnerMessage(mr::messageline::Owner::MacroMarquee, existingMessage) && existingMessage.kind == kind && existingMessage.text == text) return true;
-		mr::messageline::postSticky(mr::messageline::Owner::MacroMarquee, text, kind, mr::messageline::kPriorityMedium);
-	}
-	forceMacroUiMessageRefresh(app);
-	return returnWithDirectScreenMutation(true);
-}
-
-static bool applyMakeMessageProc(const std::vector<Value> &args) {
-	TApplication *app = dynamic_cast<TApplication *>(TProgram::application);
-	mr::messageline::VisibleMessage existingMessage;
-	std::string text;
-
-	if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("MAKE_MESSAGE expects one string argument.");
-	if (app == nullptr || dynamic_cast<MRMenuBar *>(app->menuBar) == nullptr) throw std::runtime_error("MAKE_MESSAGE requires an active menu bar.");
-
-	text = valueAsString(args[0]);
-	if (text.empty()) {
-		if (!mr::messageline::currentOwnerMessage(mr::messageline::Owner::MacroMessage, existingMessage)) return true;
-		mr::messageline::clearOwner(mr::messageline::Owner::MacroMessage);
-	} else {
-		if (mr::messageline::currentOwnerMessage(mr::messageline::Owner::MacroMessage, existingMessage) && existingMessage.kind == mr::messageline::Kind::Info && existingMessage.text == text) return true;
-		mr::messageline::postAutoTimed(mr::messageline::Owner::MacroMessage, text, mr::messageline::Kind::Info, mr::messageline::kPriorityMedium);
-	}
-	forceMacroUiMessageRefresh(app);
-	return returnWithDirectScreenMutation(true);
-}
-
-static bool applyBrainProc(const std::string &name, const std::vector<Value> &args) {
-	bool enabled = false;
-	bool activeChanged = false;
-	bool visibleChanged = false;
-	MREditWindow *window = nullptr;
-
-	if (args.size() != 1 || !isNumeric(args[0])) throw std::runtime_error(name + " expects one integer argument.");
-
-	enabled = valueAsInt(args[0]) != 0;
-	activeChanged = mrIsMacroBrainMarkerActive() != enabled;
-	visibleChanged = mrIsMacroBrainMarkerVisible() != enabled;
-	if (!activeChanged && !visibleChanged) return true;
-	mrSetMacroBrainMarkerActive(enabled);
-	if (enabled) mrSetMacroBrainMarkerVisible(true);
-	else
-		mrSetMacroBrainMarkerVisible(false);
-	window = activeMacroEditWindow();
-	if (window != nullptr && window->frame != nullptr && (window->state & sfVisible) != 0) {
-		window->frame->drawView();
-		return returnWithDirectScreenMutation(true);
-	}
-	return true;
-}
-
-static uchar composeScreenAttribute(int bgColor, int fgColor) noexcept {
-	if ((bgColor & 0xFF) == 0) return static_cast<uchar>(fgColor & 0xFF);
-	return static_cast<uchar>(((bgColor & 0x0F) << 4) | (fgColor & 0x0F));
-}
-
-MacroCellView::MacroCellView(const TRect &bounds, MacroCellGrid &aGrid) noexcept : TView(bounds), grid(aGrid) {
-	growMode = gfGrowHiX | gfGrowHiY;
-	options &= static_cast<ushort>(~ofSelectable);
-}
-
-void MacroCellView::draw() {
-	grid.drawKnownCells(*this);
-}
-
-bool MacroCellGrid::ensureGeometry() {
-	const int nextWidth = static_cast<int>(TDisplay::getCols());
-	const int nextHeight = static_cast<int>(TDisplay::getRows());
-	if (nextWidth <= 0 || nextHeight <= 0) return false;
-	if (nextWidth == width && nextHeight == height && cells.size() == static_cast<std::size_t>(width) * static_cast<std::size_t>(height)) return true;
-
-	width = nextWidth;
-	height = nextHeight;
-	cells.assign(static_cast<std::size_t>(width) * static_cast<std::size_t>(height), MacroCell());
-	dirtyRows.assign(static_cast<std::size_t>(height), 0);
-	boxStack.clear();
-	fullProjectionPending = true;
-	geometryResetPending = true;
-	if (view != nullptr) {
-		TRect bounds(0, 0, static_cast<short>(width), static_cast<short>(height));
-		view->locate(bounds);
-	}
-	return true;
-}
-
-bool MacroCellGrid::ensureView() {
-	if (!ensureGeometry() || TProgram::application == nullptr) return false;
-	if (view != nullptr && view->owner != nullptr) return true;
-
-	TRect bounds(0, 0, static_cast<short>(width), static_cast<short>(height));
-	view = new MacroCellView(bounds, *this);
-	TProgram::application->insert(view);
-	return true;
-}
-
-std::size_t MacroCellGrid::indexFor(int x, int y) const noexcept {
-	return static_cast<std::size_t>(y) * static_cast<std::size_t>(width) + static_cast<std::size_t>(x);
-}
-
-uchar MacroCellGrid::composeAttribute(int bgColor, int fgColor) noexcept {
-	return composeScreenAttribute(bgColor, fgColor);
-}
-
-bool MacroCellGrid::writeCell(int x, int y, char ch, uchar attr) {
-	if (x < 0 || y < 0 || x >= width || y >= height) return false;
-	MacroCell &cell = cells[indexFor(x, y)];
-	const bool changed = !cell.known || cell.ch != ch || cell.attr != attr;
-	cell.ch = ch;
-	cell.attr = attr;
-	cell.known = true;
-	if (changed) markDirtyRow(y);
-	return changed;
-}
-
-bool MacroCellGrid::copyCell(int dstX, int dstY, int srcX, int srcY) {
-	if (dstX < 0 || dstY < 0 || srcX < 0 || srcY < 0 || dstX >= width || dstY >= height || srcX >= width || srcY >= height) return false;
-	MacroCell &dst = cells[indexFor(dstX, dstY)];
-	const MacroCell src = cells[indexFor(srcX, srcY)];
-	const bool changed = dst.known != src.known || dst.ch != src.ch || dst.attr != src.attr;
-	dst = src;
-	if (changed) markDirtyRow(dstY);
-	return changed;
-}
-
-bool MacroCellGrid::fillRect(int x1, int y1, int x2, int y2, char ch, uchar attr) {
-	bool changed = false;
-	x1 = std::max(0, std::min(x1, width - 1));
-	x2 = std::max(0, std::min(x2, width - 1));
-	y1 = std::max(0, std::min(y1, height - 1));
-	y2 = std::max(0, std::min(y2, height - 1));
-	if (x1 > x2 || y1 > y2) return false;
-	for (int y = y1; y <= y2; ++y)
-		for (int x = x1; x <= x2; ++x)
-			changed = writeCell(x, y, ch, attr) || changed;
-	return changed;
-}
-
-bool MacroCellGrid::writeString(int x, int y, const std::string &text, uchar attr) {
-	if (text.empty() || y < 0 || y >= height) return false;
-	bool changed = false;
-	for (std::size_t i = 0; i < text.size(); ++i) {
-		const int xx = x + static_cast<int>(i);
-		if (xx < 0) continue;
-		if (xx >= width) break;
-		changed = writeCell(xx, y, text[i], attr) || changed;
-	}
-	return changed;
-}
-
-void MacroCellGrid::pushSnapshot(int x1, int y1, int x2, int y2) {
-	MacroScreenBoxSnapshot snapshot;
-	x1 = std::max(0, std::min(x1, width - 1));
-	x2 = std::max(0, std::min(x2, width - 1));
-	y1 = std::max(0, std::min(y1, height - 1));
-	y2 = std::max(0, std::min(y2, height - 1));
-	if (x1 > x2 || y1 > y2) return;
-
-	snapshot.width = width;
-	snapshot.height = height;
-	snapshot.x1 = x1;
-	snapshot.y1 = y1;
-	snapshot.x2 = x2;
-	snapshot.y2 = y2;
-	snapshot.cells.reserve(static_cast<std::size_t>(x2 - x1 + 1) * static_cast<std::size_t>(y2 - y1 + 1));
-	for (int y = y1; y <= y2; ++y) {
-		const MacroCell *row = &cells[indexFor(x1, y)];
-		snapshot.cells.insert(snapshot.cells.end(), row, row + (x2 - x1 + 1));
-	}
-	boxStack.push_back(std::move(snapshot));
-}
-
-void MacroCellGrid::projectRowSpan(MacroCellView &targetView, int y, int x1, int x2) {
-	if (x1 > x2 || y < 0 || y >= height) return;
-	std::vector<TScreenCell> row(static_cast<std::size_t>(x2 - x1 + 1));
-	for (int x = x1; x <= x2; ++x) {
-		const MacroCell &cell = cells[indexFor(x, y)];
-		setCell(row[static_cast<std::size_t>(x - x1)], cell.ch, TColorAttr(cell.attr));
-	}
-	targetView.writeBuf(static_cast<short>(x1), static_cast<short>(y), static_cast<short>(x2 - x1 + 1), 1, row.data());
-}
-
-void MacroCellGrid::drawKnownCells(MacroCellView &targetView) {
-	if (!ensureGeometry()) return;
-	for (int y = 0; y < height; ++y) {
-		int spanStart = -1;
-		for (int x = 0; x <= width; ++x) {
-			const bool known = x < width && cells[indexFor(x, y)].known;
-			if (known && spanStart < 0) spanStart = x;
-			else if (!known && spanStart >= 0) {
-				projectRowSpan(targetView, y, spanStart, x - 1);
-				spanStart = -1;
-			}
-		}
-	}
-}
-
-void MacroCellGrid::projectDirtyRows(MacroCellView &targetView) {
-	if (!ensureGeometry()) return;
-	for (int y = 0; y < height; ++y) {
-		if (y >= static_cast<int>(dirtyRows.size()) || dirtyRows[static_cast<std::size_t>(y)] == 0) continue;
-		int spanStart = -1;
-		for (int x = 0; x <= width; ++x) {
-			const bool known = x < width && cells[indexFor(x, y)].known;
-			if (known && spanStart < 0) spanStart = x;
-			else if (!known && spanStart >= 0) {
-				projectRowSpan(targetView, y, spanStart, x - 1);
-				spanStart = -1;
-			}
-		}
-	}
-}
-
-void MacroCellGrid::markDirtyRow(int y) noexcept {
-	if (y < 0 || y >= height) return;
-	if (dirtyRows.size() != static_cast<std::size_t>(height)) dirtyRows.assign(static_cast<std::size_t>(height), 0);
-	dirtyRows[static_cast<std::size_t>(y)] = 1;
-}
-
-void MacroCellGrid::clearDirtyRows() noexcept {
-	if (dirtyRows.empty()) return;
-	std::fill(dirtyRows.begin(), dirtyRows.end(), static_cast<unsigned char>(0));
-}
-
-void MacroCellGrid::markFullProjection() noexcept {
-	fullProjectionPending = true;
-}
-
-void MacroCellGrid::beginProjectionBatch() noexcept {
-	++projectionBatchDepth;
-}
-
-void MacroCellGrid::endProjectionBatch() noexcept {
-	if (projectionBatchDepth <= 0) return;
-	--projectionBatchDepth;
-	if (projectionBatchDepth == 0 && flushPending) {
-		noteMacroScreenFlush();
-		TScreen::flushScreen();
-		flushPending = false;
-	}
-}
-
-bool MacroCellGrid::hasDirtyRows() const noexcept {
-	if (dirtyRows.size() != static_cast<std::size_t>(height)) return false;
-	return std::find(dirtyRows.begin(), dirtyRows.end(), static_cast<unsigned char>(1)) != dirtyRows.end();
-}
-
-bool MacroCellGrid::hasKnownCells() const noexcept {
-	return std::find_if(cells.begin(), cells.end(), [](const MacroCell &cell) { return cell.known; }) != cells.end();
-}
-
-void MacroCellGrid::projectAll() {
-	if (!ensureView()) return;
-	const auto [baseReprojectionNeeded, projectedOverlay] = UiScreenStateFacade::renderBaseThenOverlayIfNeeded(*this);
-	if (baseReprojectionNeeded || projectedOverlay) {
-		if (projectionBatchDepth > 0) flushPending = true;
-		else {
-			noteMacroScreenFlush();
-			TScreen::flushScreen();
-		}
-	}
-	if (baseReprojectionNeeded) {
-		UiScreenStateFacade::noteBaseRedraw();
-		geometryResetPending = false;
-	}
-	clearDirtyRows();
-	fullProjectionPending = false;
-}
-
-void MacroCellGrid::redrawBaseAndOverlay() {
-	if (!ensureView()) return;
-	if (TProgram::application != nullptr) TProgram::application->drawView();
-	markFullProjection();
-	const bool projectedOverlay = UiScreenStateFacade::renderOverlay(*this);
-	(void)projectedOverlay;
-	if (projectionBatchDepth > 0) flushPending = true;
-	else {
-		noteMacroScreenFlush();
-		TScreen::flushScreen();
-	}
-	UiScreenStateFacade::noteBaseRedraw();
-	geometryResetPending = false;
-	clearDirtyRows();
-	fullProjectionPending = false;
-}
-
-bool MacroCellGrid::putBox(int x1, int y1, int x2, int y2, int bgColor, int fgColor, const std::string &title, bool shadow) {
-	if (!ensureGeometry()) return true;
-	x1 -= 1;
-	y1 -= 1;
-	x2 -= 1;
-	y2 -= 1;
-	if (x1 > x2) std::swap(x1, x2);
-	if (y1 > y2) std::swap(y1, y2);
-	x1 = std::max(0, std::min(x1, width - 1));
-	x2 = std::max(0, std::min(x2, width - 1));
-	y1 = std::max(0, std::min(y1, height - 1));
-	y2 = std::max(0, std::min(y2, height - 1));
-	if (x1 > x2 || y1 > y2) return true;
-
-	const uchar attr = composeAttribute(bgColor, fgColor);
-	bool changed = false;
-	pushSnapshot(x1, y1, shadow ? x2 + 1 : x2, shadow ? y2 + 1 : y2);
-	changed = fillRect(x1, y1, x2, y2, ' ', attr) || changed;
-	for (int x = x1 + 1; x < x2; ++x) {
-		changed = writeCell(x, y1, '-', attr) || changed;
-		changed = writeCell(x, y2, '-', attr) || changed;
-	}
-	for (int y = y1 + 1; y < y2; ++y) {
-		changed = writeCell(x1, y, '|', attr) || changed;
-		changed = writeCell(x2, y, '|', attr) || changed;
-	}
-	changed = writeCell(x1, y1, '+', attr) || changed;
-	changed = writeCell(x2, y1, '+', attr) || changed;
-	changed = writeCell(x1, y2, '+', attr) || changed;
-	changed = writeCell(x2, y2, '+', attr) || changed;
-
-	std::string clippedTitle = title;
-	if (!clippedTitle.empty() && x2 - x1 >= 2) {
-		const int maxTitleLen = x2 - x1 - 1;
-		if (static_cast<int>(clippedTitle.size()) > maxTitleLen) clippedTitle = clippedTitle.substr(0, static_cast<std::size_t>(maxTitleLen));
-		const int titleStart = x1 + 1 + std::max(0, (maxTitleLen - static_cast<int>(clippedTitle.size())) / 2);
-		changed = writeString(titleStart, y1, clippedTitle, attr) || changed;
-	}
-
-	if (shadow) {
-		if (x2 + 1 < width) changed = fillRect(x2 + 1, y1 + 1, x2 + 1, y2 + 1, ' ', 0x08) || changed;
-		if (y2 + 1 < height) changed = fillRect(x1 + 1, y2 + 1, x2 + 1, y2 + 1, ' ', 0x08) || changed;
-	}
-	if (changed) projectAll();
-	return true;
-}
-
-bool MacroCellGrid::writeText(const std::string &text, int x, int y, int bgColor, int fgColor) {
-	if (!ensureGeometry()) return true;
-	if (writeString(x - 1, y - 1, text, composeAttribute(bgColor, fgColor))) projectAll();
-	return true;
-}
-
-bool MacroCellGrid::clearLine(int col, int row, int count) {
-	if (!ensureGeometry()) return true;
-	int x = 0;
-	int y = 0;
-	int widthToClear = width;
-	TApplication *app = dynamic_cast<TApplication *>(TProgram::application);
-
-	if (col != 0 || row != 0 || count != 0) {
-		x = std::max(0, col - 1);
-		y = row - 1;
-		widthToClear = count;
-		if (y < 0 || y >= height || x >= width || widthToClear <= 0) return true;
-		widthToClear = std::min(widthToClear, width - x);
-	} else {
-		y = app != nullptr ? std::max(0, std::min(app->cursor.y, height - 1)) : 0;
-	}
-
-	uchar attr = 0x07;
-	const MacroCell &rowHead = cells[indexFor(0, y)];
-	if (rowHead.known) attr = rowHead.attr;
-	if (fillRect(x, y, x + widthToClear - 1, y, ' ', attr)) projectAll();
-	return true;
-}
-
-bool MacroCellGrid::clearScreen(int attr) {
-	if (!ensureGeometry()) return true;
-	boxStack.clear();
-	const bool changed = fillRect(0, 0, width - 1, height - 1, ' ', static_cast<uchar>(attr & 0xFF));
-	bool cursorMoved = false;
-	if (TApplication *app = dynamic_cast<TApplication *>(TProgram::application)) {
-		cursorMoved = app->cursor.x != 0 || app->cursor.y != 0;
-		app->setCursor(0, 0);
-		app->showCursor();
-	}
-	if (changed || cursorMoved) projectAll();
-	return true;
-}
-
-bool MacroCellGrid::scrollBox(int x1, int y1, int x2, int y2, int attr, bool down) {
-	if (!ensureGeometry()) return true;
-	x1 -= 1;
-	y1 -= 1;
-	x2 -= 1;
-	y2 -= 1;
-	if (x1 > x2) std::swap(x1, x2);
-	if (y1 > y2) std::swap(y1, y2);
-	x1 = std::max(0, std::min(x1, width - 1));
-	x2 = std::max(0, std::min(x2, width - 1));
-	y1 = std::max(0, std::min(y1, height - 1));
-	y2 = std::max(0, std::min(y2, height - 1));
-	if (x1 > x2 || y1 > y2) return true;
-
-	const uchar fillAttr = static_cast<uchar>(attr & 0xFF);
-	bool changed = false;
-	if (y2 - y1 + 1 <= 1) {
-		changed = fillRect(x1, y1, x2, y2, ' ', fillAttr);
-		if (changed) projectAll();
-		return true;
-	}
-	if (down) {
-		for (int y = y2; y > y1; --y)
-			for (int x = x1; x <= x2; ++x)
-				changed = copyCell(x, y, x, y - 1) || changed;
-		changed = fillRect(x1, y1, x2, y1, ' ', fillAttr) || changed;
-	} else {
-		for (int y = y1; y < y2; ++y)
-			for (int x = x1; x <= x2; ++x)
-				changed = copyCell(x, y, x, y + 1) || changed;
-		changed = fillRect(x1, y2, x2, y2, ' ', fillAttr) || changed;
-	}
-	if (changed) projectAll();
-	return true;
-}
-
-bool MacroCellGrid::putLineColOverlay(int line, int col, bool haveLine, bool haveCol) {
-	if (!ensureGeometry()) return true;
-	const int y = height - 1;
-	const int fieldStart = std::max(0, width - 24);
-	const std::string text = "L:" + std::to_string(haveLine ? line : 0) + " C:" + std::to_string(haveCol ? col : 0);
-	bool changed = false;
-	changed = fillRect(fieldStart, y, width - 1, y, ' ', 0x07) || changed;
-	changed = writeString(std::max(fieldStart, width - static_cast<int>(text.size())), y, text, 0x07) || changed;
-	if (changed) projectAll();
-	return true;
-}
-
-bool MacroCellGrid::killBox() {
-	if (!ensureGeometry()) return true;
-	if (boxStack.empty()) {
-		if (geometryResetPending) {
-			redrawBaseAndOverlay();
-			reapplyMacroLineColOverlayIfActive();
-		}
-		return true;
-	}
-	MacroScreenBoxSnapshot snapshot = std::move(boxStack.back());
-	boxStack.pop_back();
-	if (snapshot.width != width || snapshot.height != height) {
-		boxStack.clear();
-		markFullProjection();
-		redrawBaseAndOverlay();
-		reapplyMacroLineColOverlayIfActive();
-		return true;
-	}
-
-	const int sourceWidth = snapshot.x2 - snapshot.x1 + 1;
-	if (sourceWidth <= 0 || snapshot.y2 < snapshot.y1) return true;
-	bool changed = false;
-	for (int y = snapshot.y1; y <= snapshot.y2; ++y) {
-		const std::size_t rowIndex = static_cast<std::size_t>(y - snapshot.y1) * static_cast<std::size_t>(sourceWidth);
-		if (rowIndex + static_cast<std::size_t>(sourceWidth) > snapshot.cells.size()) break;
-		for (int x = snapshot.x1; x <= snapshot.x2; ++x) {
-			MacroCell &cell = cells[indexFor(x, y)];
-			const MacroCell &restored = snapshot.cells[rowIndex + static_cast<std::size_t>(x - snapshot.x1)];
-			if (cell.known != restored.known || cell.ch != restored.ch || cell.attr != restored.attr) {
-				changed = true;
-				markDirtyRow(y);
-			}
-			cell = restored;
-		}
-	}
-	if (changed) {
-		markFullProjection();
-		redrawBaseAndOverlay();
-		reapplyMacroLineColOverlayIfActive();
-	}
-	return true;
-}
-
-static bool applyPutBoxProc(const std::string &name, const std::vector<Value> &args) {
-	int x1 = 0;
-	int y1 = 0;
-	int x2 = 0;
-	int y2 = 0;
-	int bgColor = 0;
-	int fgColor = 0;
-	std::string title;
-	bool shadow = false;
-
-	if (args.size() != 8 || args[0].type != TYPE_INT || args[1].type != TYPE_INT || args[2].type != TYPE_INT || args[3].type != TYPE_INT || args[4].type != TYPE_INT || args[5].type != TYPE_INT || !isStringLike(args[6]) || args[7].type != TYPE_INT) throw std::runtime_error(name + " expects (int, int, int, int, int, int, string, int).");
-
-	x1 = valueAsInt(args[0]);
-	y1 = valueAsInt(args[1]);
-	x2 = valueAsInt(args[2]);
-	y2 = valueAsInt(args[3]);
-	bgColor = valueAsInt(args[4]);
-	fgColor = valueAsInt(args[5]);
-	title = valueAsString(args[6]);
-	shadow = valueAsInt(args[7]) != 0;
-
-	g_macroCellGrid.putBox(x1, y1, x2, y2, bgColor, fgColor, title, shadow);
-	return returnWithMacroScreenMutation(true);
-}
-
-static bool applyWriteProc(const std::string &name, const std::vector<Value> &args) {
-	std::string text;
-	int x = 0;
-	int y = 0;
-	int bgColor = 0;
-	int fgColor = 0;
-
-	if (args.size() != 5 || !isStringLike(args[0]) || args[1].type != TYPE_INT || args[2].type != TYPE_INT || args[3].type != TYPE_INT || args[4].type != TYPE_INT) throw std::runtime_error(name + " expects (string, int, int, int, int).");
-
-	text = valueAsString(args[0]);
-	x = valueAsInt(args[1]);
-	y = valueAsInt(args[2]);
-	bgColor = valueAsInt(args[3]);
-	fgColor = valueAsInt(args[4]);
-
-	g_macroCellGrid.writeText(text, x, y, bgColor, fgColor);
-	return returnWithMacroScreenMutation(true);
-}
-
-static bool applyClrLineProc(const std::string &name, const std::vector<Value> &args) {
-	int col = 0;
-	int row = 0;
-	int count = 0;
-
-	if (!(args.empty() || (args.size() == 3 && args[0].type == TYPE_INT && args[1].type == TYPE_INT && args[2].type == TYPE_INT))) throw std::runtime_error(name + " expects no arguments or (int, int, int).");
-
-	if (!args.empty()) {
-		col = valueAsInt(args[0]);
-		row = valueAsInt(args[1]);
-		count = valueAsInt(args[2]);
-	}
-	g_macroCellGrid.clearLine(col, row, count);
-	return returnWithMacroScreenMutation(true);
-}
-
-static bool applyGotoxyProc(const std::string &name, const std::vector<Value> &args) {
-	TApplication *app = dynamic_cast<TApplication *>(TProgram::application);
-	int width = static_cast<int>(TDisplay::getCols());
-	int height = static_cast<int>(TDisplay::getRows());
-	int x = 1;
-	int y = 1;
-
-	if (args.size() != 2 || args[0].type != TYPE_INT || args[1].type != TYPE_INT) throw std::runtime_error(name + " expects (int, int).");
-	if (app == nullptr || width <= 0 || height <= 0) return true;
-
-	x = std::max(1, std::min(valueAsInt(args[0]), width));
-	y = std::max(1, std::min(valueAsInt(args[1]), height));
-	app->setCursor(x - 1, y - 1);
-	app->showCursor();
-	app->drawCursor();
-	return returnWithDirectScreenMutation(true);
-}
-
-static bool renderMacroLineColOverlay() {
-	return g_macroCellGrid.putLineColOverlay(g_macroScreenLineColOverlay.line, g_macroScreenLineColOverlay.col, g_macroScreenLineColOverlay.haveLine, g_macroScreenLineColOverlay.haveCol);
-}
-
-static bool reapplyMacroLineColOverlayIfActive() {
-	if (!g_macroScreenLineColOverlay.haveLine && !g_macroScreenLineColOverlay.haveCol) return true;
-	return renderMacroLineColOverlay();
-}
-
-static bool applyPutLineColNumberProc(const std::string &name, const std::vector<Value> &args) {
-	if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error(name + " expects one integer argument.");
-
-	if (name == "PUT_LINE_NUM") {
-		g_macroScreenLineColOverlay.line = valueAsInt(args[0]);
-		g_macroScreenLineColOverlay.haveLine = true;
-	} else {
-		g_macroScreenLineColOverlay.col = valueAsInt(args[0]);
-		g_macroScreenLineColOverlay.haveCol = true;
-	}
-	renderMacroLineColOverlay();
-	return returnWithMacroScreenMutation(true);
-}
-
-static bool applyScrollBoxProc(const std::string &name, const std::vector<Value> &args, bool down) {
-	int x1 = 0;
-	int y1 = 0;
-	int x2 = 0;
-	int y2 = 0;
-	int attr = 0x07;
-
-	if (args.size() != 5 || args[0].type != TYPE_INT || args[1].type != TYPE_INT || args[2].type != TYPE_INT || args[3].type != TYPE_INT || args[4].type != TYPE_INT) throw std::runtime_error(name + " expects (int, int, int, int, int).");
-
-	x1 = valueAsInt(args[0]);
-	y1 = valueAsInt(args[1]);
-	x2 = valueAsInt(args[2]);
-	y2 = valueAsInt(args[3]);
-	attr = valueAsInt(args[4]);
-	g_macroCellGrid.scrollBox(x1, y1, x2, y2, attr, down);
-	return returnWithMacroScreenMutation(true);
-}
-
-static bool applyClearScreenProc(const std::string &name, const std::vector<Value> &args) {
-	int attr = 0x07;
-
-	if (!(args.empty() || (args.size() == 1 && args[0].type == TYPE_INT))) throw std::runtime_error(name + " expects no arguments or one integer argument.");
-
-	if (!args.empty()) attr = valueAsInt(args[0]);
-	g_macroCellGrid.clearScreen(attr);
-	return returnWithMacroScreenMutation(true);
-}
-
-static bool applyKillBoxProc(const std::string &name, const std::vector<Value> &args) {
-	if (!args.empty()) throw std::runtime_error(name + " expects no arguments.");
-	g_macroCellGrid.killBox();
-	return returnWithMacroScreenMutation(true);
 }
 
 static void logMacroProfileLine(const char *prefix, const LoadedMacroFile &file) {
@@ -2080,7 +993,7 @@ static bool deleteFilePath(const std::string &path) {
 	return std::remove(expanded.c_str()) == 0;
 }
 
-static std::string expandUserPath(const std::string &path) {
+std::string expandUserPath(const std::string &path) {
 	if (path.size() >= 2 && path[0] == '~' && path[1] == '/') {
 		const char *home = std::getenv("HOME");
 		if (home != nullptr && *home != '\0') return std::string(home) + path.substr(1);
@@ -2171,12 +1084,12 @@ static int findNextFileMatch() {
 	return 0;
 }
 
-static MREditWindow *activeMacroEditWindow() {
+MREditWindow *activeMacroEditWindow() {
 	if (TProgram::deskTop == nullptr || TProgram::deskTop->current == nullptr) return nullptr;
 	return dynamic_cast<MREditWindow *>(TProgram::deskTop->current);
 }
 
-static MRFileEditor *currentEditor() {
+MRFileEditor *currentEditor() {
 	MREditWindow *win = activeMacroEditWindow();
 	return win != nullptr ? win->getEditor() : nullptr;
 }
@@ -3224,7 +2137,7 @@ static int currentEditorPageLine(MRFileEditor *editor) {
 	return currentLine - lineIndexForPtr(editor, static_cast<uint>(lastBreak));
 }
 
-static bool markEditorPosition(MREditWindow *win, MRFileEditor *editor) {
+bool markEditorPosition(MREditWindow *win, MRFileEditor *editor) {
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (editor == nullptr) {
 		if (session == nullptr) return false;
@@ -3240,7 +2153,7 @@ static bool validRandomAccessMarkIndex(int index) noexcept {
 	return index >= 1 && index <= 9;
 }
 
-static bool gotoEditorMark(MREditWindow *win, MRFileEditor *editor) {
+bool gotoEditorMark(MREditWindow *win, MRFileEditor *editor) {
 	std::map<const void *, std::vector<uint>>::iterator it;
 	uint pos;
 	BackgroundEditSession *session = currentBackgroundEditSession();
@@ -3272,7 +2185,7 @@ static bool popEditorMark(MREditWindow *win) {
 	return true;
 }
 
-static bool setEditorRandomAccessMark(MREditWindow *win, MRFileEditor *editor, int index) {
+bool setEditorRandomAccessMark(MREditWindow *win, MRFileEditor *editor, int index) {
 	BackgroundEditSession *session = currentBackgroundEditSession();
 
 	if (!validRandomAccessMarkIndex(index)) return false;
@@ -3286,7 +2199,7 @@ static bool setEditorRandomAccessMark(MREditWindow *win, MRFileEditor *editor, i
 	return true;
 }
 
-static bool gotoEditorRandomAccessMark(MREditWindow *win, MRFileEditor *editor, int index) {
+bool gotoEditorRandomAccessMark(MREditWindow *win, MRFileEditor *editor, int index) {
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	std::map<const void *, std::array<std::optional<uint>, 10>>::iterator it;
 
@@ -3327,7 +2240,7 @@ static bool moveEditorPageDown(MRFileEditor *editor) {
 	return setEditorCursor(editor, editor->lineMoveOffset(editor->cursorOffset(), pageLines));
 }
 
-static bool moveEditorNextPageBreak(MRFileEditor *editor) {
+bool moveEditorNextPageBreak(MRFileEditor *editor) {
 	std::string text;
 	std::string::size_type pos;
 	char pageBreak = configuredPageBreakCharacter();
@@ -3346,7 +2259,7 @@ static bool moveEditorNextPageBreak(MRFileEditor *editor) {
 	return setEditorCursor(editor, editor->nextLineOffset(static_cast<uint>(pos)));
 }
 
-static bool moveEditorLastPageBreak(MRFileEditor *editor) {
+bool moveEditorLastPageBreak(MRFileEditor *editor) {
 	std::string text;
 	std::string::size_type pos;
 	std::size_t start;
@@ -3575,7 +2488,7 @@ static int blockCol2Value(MREditWindow *win, MRFileEditor *editor) {
 	return std::max(aCol, bCol);
 }
 
-static bool beginCurrentBlockMode(int mode) {
+bool beginCurrentBlockMode(int mode) {
 	MREditWindow *win = activeMacroEditWindow();
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (win != nullptr) {
@@ -3596,7 +2509,7 @@ static bool beginCurrentBlockMode(int mode) {
 	return true;
 }
 
-static bool endCurrentBlockMode() {
+bool endCurrentBlockMode() {
 	MREditWindow *win = activeMacroEditWindow();
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (win != nullptr) {
@@ -3609,7 +2522,7 @@ static bool endCurrentBlockMode() {
 	return true;
 }
 
-static bool clearCurrentBlockMode() {
+bool clearCurrentBlockMode() {
 	MREditWindow *win = activeMacroEditWindow();
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (win != nullptr) {
@@ -3683,7 +2596,7 @@ static void collectEditWindowByIndex(TView *view, void *arg) {
 	if (lookup->currentIndex == lookup->targetIndex) lookup->result = win;
 }
 
-static MREditWindow *editWindowByIndex(int index) {
+MREditWindow *editWindowByIndex(int index) {
 	EditWindowLookup lookup;
 	if (index <= 0 || TProgram::deskTop == nullptr) return nullptr;
 	lookup.targetIndex = index;
@@ -3840,7 +2753,7 @@ static bool prepareWindowLink(MREditWindow *current, MREditWindow *target, MREdi
 	return true;
 }
 
-static bool linkCurrentEditWindow() {
+bool linkCurrentEditWindow() {
 	MREditWindow *current = activeMacroEditWindow();
 	MREditWindow *target;
 	MREditWindow *source = nullptr;
@@ -3856,7 +2769,7 @@ static bool linkCurrentEditWindow() {
 	return true;
 }
 
-static bool unlinkCurrentEditWindow() {
+bool unlinkCurrentEditWindow() {
 	MREditWindow *current = activeMacroEditWindow();
 	if (current == nullptr) return false;
 	cleanupWindowLinkGroups();
@@ -3877,7 +2790,7 @@ static void syncLinkedWindowsFrom(MREditWindow *source) {
 	}
 }
 
-static bool redrawCurrentEditWindow() {
+bool redrawCurrentEditWindow() {
 	MREditWindow *win = activeMacroEditWindow();
 	MRFileEditor *editor = currentEditor();
 	if (win == nullptr) return false;
@@ -3886,7 +2799,7 @@ static bool redrawCurrentEditWindow() {
 	return true;
 }
 
-static bool redrawEntireScreen() {
+bool redrawEntireScreen() {
 	std::vector<MREditWindow *> windows = allEditWindows();
 	if (TProgram::deskTop == nullptr) return false;
 	TProgram::deskTop->drawView();
@@ -3895,7 +2808,7 @@ static bool redrawEntireScreen() {
 	return true;
 }
 
-static bool zoomCurrentEditWindow() {
+bool zoomCurrentEditWindow() {
 	MREditWindow *win = activeMacroEditWindow();
 	if (win == nullptr) return false;
 	message(win, evCommand, cmZoom, nullptr);
@@ -4054,7 +2967,7 @@ static bool setCurrentWindowAttrValue(int value) {
 	return true;
 }
 
-static bool createEditWindow() {
+bool createEditWindow() {
 	MREditWindow *win;
 
 	win = createEditorWindow("?No-File?");
@@ -4063,7 +2976,7 @@ static bool createEditWindow() {
 	return true;
 }
 
-static bool switchEditWindow(int index) {
+bool switchEditWindow(int index) {
 	int count;
 	MREditWindow *win;
 	if (TProgram::deskTop == nullptr) return false;
@@ -4077,7 +2990,7 @@ static bool switchEditWindow(int index) {
 	return true;
 }
 
-static bool sizeCurrentEditWindow(int x1, int y1, int x2, int y2) {
+bool sizeCurrentEditWindow(int x1, int y1, int x2, int y2) {
 	MREditWindow *win = activeMacroEditWindow();
 	TRect desk;
 	TRect bounds;
@@ -4096,14 +3009,14 @@ static bool sizeCurrentEditWindow(int x1, int y1, int x2, int y2) {
 	return true;
 }
 
-static bool deleteCurrentEditWindow() {
+bool deleteCurrentEditWindow() {
 	MREditWindow *win = activeMacroEditWindow();
 	if (win == nullptr) return false;
 	win->close();
 	return true;
 }
 
-static bool eraseCurrentEditWindow() {
+bool eraseCurrentEditWindow() {
 	MREditWindow *win = activeMacroEditWindow();
 	MRFileEditor *editor = currentEditor();
 	BackgroundEditSession *session = currentBackgroundEditSession();
@@ -4126,14 +3039,14 @@ static bool eraseCurrentEditWindow() {
 	return true;
 }
 
-static bool modifyCurrentEditWindow() {
+bool modifyCurrentEditWindow() {
 	MREditWindow *win = activeMacroEditWindow();
 	if (win == nullptr) return false;
 	message(win, evCommand, cmResize, nullptr);
 	return true;
 }
 
-static bool queueDeferredUiProcedure(const std::string &name, const std::vector<Value> &args, int &errorCode) {
+static bool queueDeferredUiProcedureImpl(const std::string &name, const std::vector<Value> &args, int &errorCode) {
 	BackgroundEditSession *session = currentBackgroundEditSession();
 
 	errorCode = 0;
@@ -4304,213 +3217,26 @@ static bool queueDeferredUiProcedure(const std::string &name, const std::vector<
 	return false;
 }
 
-enum class DeferredVisualUiProc {
-	Unknown,
-	MakeMessage,
-	MarqueeInfo,
-	MarqueeWarning,
-	MarqueeError,
-	Working,
-	Brain,
-	PutBox,
-	Write,
-	ClrLine,
-	Gotoxy,
-	PutLineNum,
-	PutColNum,
-	ScrollBoxUp,
-	ScrollBoxDn,
-	ClearScreen,
-	KillBox
-};
-
-static DeferredVisualUiProc classifyDeferredVisualUiProc(const std::string &name) noexcept {
-	if (name == "MAKE_MESSAGE") return DeferredVisualUiProc::MakeMessage;
-	if (name == "MARQUEE") return DeferredVisualUiProc::MarqueeInfo;
-	if (name == "MARQUEE_WARNING") return DeferredVisualUiProc::MarqueeWarning;
-	if (name == "MARQUEE_ERROR") return DeferredVisualUiProc::MarqueeError;
-	if (name == "WORKING") return DeferredVisualUiProc::Working;
-	if (name == "BRAIN") return DeferredVisualUiProc::Brain;
-	if (name == "PUT_BOX") return DeferredVisualUiProc::PutBox;
-	if (name == "WRITE") return DeferredVisualUiProc::Write;
-	if (name == "CLR_LINE") return DeferredVisualUiProc::ClrLine;
-	if (name == "GOTOXY") return DeferredVisualUiProc::Gotoxy;
-	if (name == "PUT_LINE_NUM") return DeferredVisualUiProc::PutLineNum;
-	if (name == "PUT_COL_NUM") return DeferredVisualUiProc::PutColNum;
-	if (name == "SCROLL_BOX_UP") return DeferredVisualUiProc::ScrollBoxUp;
-	if (name == "SCROLL_BOX_DN") return DeferredVisualUiProc::ScrollBoxDn;
-	if (name == "CLEAR_SCREEN") return DeferredVisualUiProc::ClearScreen;
-	if (name == "KILL_BOX") return DeferredVisualUiProc::KillBox;
-	return DeferredVisualUiProc::Unknown;
-}
-
-static bool buildDeferredVisualUiProcedureCommand(const std::string &name, const std::vector<Value> &args, MRMacroDeferredUiCommand &command) {
-	switch (classifyDeferredVisualUiProc(name)) {
-		case DeferredVisualUiProc::MakeMessage:
-			if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("MAKE_MESSAGE expects one string argument.");
-			command = MRMacroDeferredUiCommand(mrducMakeMessage, 0, 0, 0, 0, 0, 0, 0, 0, valueAsString(args[0]));
-			return true;
-		case DeferredVisualUiProc::MarqueeInfo:
-		case DeferredVisualUiProc::MarqueeWarning:
-		case DeferredVisualUiProc::MarqueeError:
-			if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error(name + " expects one string argument.");
-			command = MRMacroDeferredUiCommand(name == "MARQUEE" ? mrducMarqueeInfo : (name == "MARQUEE_WARNING" ? mrducMarqueeWarning : mrducMarqueeError), 0, 0, 0, 0, 0, 0, 0, 0, valueAsString(args[0]));
-			return true;
-		case DeferredVisualUiProc::Working:
-			if (!args.empty()) throw std::runtime_error("WORKING expects no arguments.");
-			command = MRMacroDeferredUiCommand(mrducMarqueeWarning, 0, 0, 0, 0, 0, 0, 0, 0, kMacroWorkingMessageText);
-			return true;
-		case DeferredVisualUiProc::Brain:
-			if (args.size() != 1 || !isNumeric(args[0])) throw std::runtime_error("BRAIN expects one integer argument.");
-			command = MRMacroDeferredUiCommand(mrducBrain, valueAsInt(args[0]) != 0 ? 1 : 0);
-			return true;
-		case DeferredVisualUiProc::PutBox:
-			if (args.size() != 8 || args[0].type != TYPE_INT || args[1].type != TYPE_INT || args[2].type != TYPE_INT || args[3].type != TYPE_INT || args[4].type != TYPE_INT || args[5].type != TYPE_INT || !isStringLike(args[6]) || args[7].type != TYPE_INT) throw std::runtime_error(name + " expects (int, int, int, int, int, int, string, int).");
-			command = MRMacroDeferredUiCommand(mrducPutBox, valueAsInt(args[0]), valueAsInt(args[1]), valueAsInt(args[2]), valueAsInt(args[3]), valueAsInt(args[4]), valueAsInt(args[5]), valueAsInt(args[7]), 0, valueAsString(args[6]));
-			return true;
-		case DeferredVisualUiProc::Write:
-			if (args.size() != 5 || !isStringLike(args[0]) || args[1].type != TYPE_INT || args[2].type != TYPE_INT || args[3].type != TYPE_INT || args[4].type != TYPE_INT) throw std::runtime_error(name + " expects (string, int, int, int, int).");
-			command = MRMacroDeferredUiCommand(mrducWrite, valueAsInt(args[1]), valueAsInt(args[2]), valueAsInt(args[3]), valueAsInt(args[4]), 0, 0, 0, 0, valueAsString(args[0]));
-			return true;
-		case DeferredVisualUiProc::ClrLine:
-			if (!(args.empty() || (args.size() == 3 && args[0].type == TYPE_INT && args[1].type == TYPE_INT && args[2].type == TYPE_INT))) throw std::runtime_error(name + " expects no arguments or (int, int, int).");
-			command = args.empty() ? MRMacroDeferredUiCommand(mrducClrLine) : MRMacroDeferredUiCommand(mrducClrLine, valueAsInt(args[0]), valueAsInt(args[1]), valueAsInt(args[2]));
-			return true;
-		case DeferredVisualUiProc::Gotoxy:
-			if (args.size() != 2 || args[0].type != TYPE_INT || args[1].type != TYPE_INT) throw std::runtime_error(name + " expects (int, int).");
-			command = MRMacroDeferredUiCommand(mrducGotoxy, valueAsInt(args[0]), valueAsInt(args[1]));
-			return true;
-		case DeferredVisualUiProc::PutLineNum:
-		case DeferredVisualUiProc::PutColNum:
-			if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error(name + " expects one integer argument.");
-			command = MRMacroDeferredUiCommand(classifyDeferredVisualUiProc(name) == DeferredVisualUiProc::PutLineNum ? mrducPutLineNum : mrducPutColNum, valueAsInt(args[0]));
-			return true;
-		case DeferredVisualUiProc::ScrollBoxUp:
-		case DeferredVisualUiProc::ScrollBoxDn:
-			if (args.size() != 5 || args[0].type != TYPE_INT || args[1].type != TYPE_INT || args[2].type != TYPE_INT || args[3].type != TYPE_INT || args[4].type != TYPE_INT) throw std::runtime_error(name + " expects (int, int, int, int, int).");
-			command = MRMacroDeferredUiCommand(classifyDeferredVisualUiProc(name) == DeferredVisualUiProc::ScrollBoxUp ? mrducScrollBoxUp : mrducScrollBoxDn, valueAsInt(args[0]), valueAsInt(args[1]), valueAsInt(args[2]), valueAsInt(args[3]), valueAsInt(args[4]), 0, 0, 0);
-			return true;
-		case DeferredVisualUiProc::ClearScreen:
-			if (!(args.empty() || (args.size() == 1 && args[0].type == TYPE_INT))) throw std::runtime_error(name + " expects no arguments or one integer argument.");
-			command = MRMacroDeferredUiCommand(mrducClearScreen, args.empty() ? 0x07 : valueAsInt(args[0]));
-			return true;
-		case DeferredVisualUiProc::KillBox:
-			if (!args.empty()) throw std::runtime_error(name + " expects no arguments.");
-			command = MRMacroDeferredUiCommand(mrducKillBox);
-			return true;
-		case DeferredVisualUiProc::Unknown:
-			return false;
-	}
-	return false;
-}
-
-static bool dispatchDeferredVisualUiProcedure(const std::string &name, const std::vector<Value> &args, int &errorCode) {
-	MRMacroDeferredUiCommand command;
-
-	errorCode = 0;
-	if (currentBackgroundEditSession() != nullptr) return queueDeferredUiProcedure(name, args, errorCode);
-	if (!buildDeferredVisualUiProcedureCommand(name, args, command)) return false;
-	mrvmUiRenderFacadeRenderDeferredCommand(command);
-	return true;
-}
-
-enum class DeferredMenuUiProc {
-	Unknown,
-	RegisterMenuItem,
-	RemoveMenuItem
-};
-
-static DeferredMenuUiProc classifyDeferredMenuUiProc(const std::string &name) noexcept {
-	if (name == "REGISTER_MENU_ITEM") return DeferredMenuUiProc::RegisterMenuItem;
-	if (name == "REMOVE_MENU_ITEM") return DeferredMenuUiProc::RemoveMenuItem;
-	return DeferredMenuUiProc::Unknown;
-}
-
-static bool buildDeferredMenuUiProcedureCommand(const std::string &name, const std::vector<Value> &args, MRMacroDeferredUiCommand &command) {
-	std::string macroSpec;
-
-	if (!currentExecutingMacroSpec(macroSpec)) throw std::runtime_error(name + " requires an active macro context.");
-
-	switch (classifyDeferredMenuUiProc(name)) {
-		case DeferredMenuUiProc::RegisterMenuItem:
-			if ((args.size() != 2 && args.size() != 3) || !isStringLike(args[0]) || !isStringLike(args[1]) || (args.size() == 3 && !isStringLike(args[2]))) throw std::runtime_error("REGISTER_MENU_ITEM expects (string, string[, string]).");
-			command.type = mrducRegisterMenuItem;
-			command.text = valueAsString(args[0]);
-			command.text2 = valueAsString(args[1]);
-			command.text3 = args.size() == 3 ? valueAsString(args[2]) : macroSpec;
-			command.text4 = macroSpec;
-			return true;
-		case DeferredMenuUiProc::RemoveMenuItem:
-			if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1])) throw std::runtime_error("REMOVE_MENU_ITEM expects (string, string).");
-			command.type = mrducRemoveMenuItem;
-			command.text = valueAsString(args[0]);
-			command.text2 = valueAsString(args[1]);
-			command.text3 = macroSpec;
-			return true;
-		case DeferredMenuUiProc::Unknown:
-			return false;
-	}
-	return false;
-}
-
-static bool applyDeferredMenuUiProcedureCommand(const MRMacroDeferredUiCommand &command) {
-	std::string errorText;
-
-	switch (command.type) {
-		case mrducRegisterMenuItem:
-			if (!mrvmUiRegisterMenuItem(command.text, command.text2, command.text3, command.text4, &errorText)) throw std::runtime_error("REGISTER_MENU_ITEM failed: " + (errorText.empty() ? std::string("unable to register menu item.") : errorText));
-			return true;
-		case mrducRemoveMenuItem:
-			if (!mrvmUiRemoveMenuItem(command.text, command.text2, command.text3, &errorText)) throw std::runtime_error("REMOVE_MENU_ITEM failed: " + (errorText.empty() ? std::string("unable to remove menu item.") : errorText));
-			return true;
-		default:
-			return false;
-	}
-}
-
-static bool dispatchDeferredMenuUiProcedure(const std::string &name, const std::vector<Value> &args, int &errorCode) {
-	MRMacroDeferredUiCommand command;
-
-	errorCode = 0;
-	if (currentBackgroundEditSession() != nullptr) return queueDeferredUiProcedure(name, args, errorCode);
-	if (!buildDeferredMenuUiProcedureCommand(name, args, command)) return false;
-	return applyDeferredMenuUiProcedureCommand(command);
-}
-
-static std::string composeTvCallText(const std::vector<Value> &args) {
-	std::string text;
-	for (std::size_t i = 0; i < args.size(); ++i) {
-		if (i != 0) text.push_back(' ');
-		text += valueAsString(args[i]);
-	}
-	return text;
-}
-
-static bool dispatchDeferredUiTvCall(const std::string &nameUpper, const std::vector<Value> &args, int &errorCode) {
+static bool enqueueDeferredUiCommandImpl(const MRMacroDeferredUiCommand &command, int &errorCode) {
 	BackgroundEditSession *session = currentBackgroundEditSession();
 
 	errorCode = 0;
-	if (nameUpper == kTvCallMessageBox) {
-		MRMacroDeferredUiCommand command(mrducMessageBox, 0, 0, 0, 0, 0, 0, 0, 0, composeTvCallText(args));
-		if (session != nullptr) session->deferredUiCommands.push_back(command);
-		else
-			mrvmUiRenderFacadeRenderDeferredCommand(command);
-		return true;
-	}
-	if (nameUpper == kTvCallVideoMode || nameUpper == kTvCallVideoCard || nameUpper == kTvCallToggle) throw std::runtime_error("TVCALL " + nameUpper + " is not implemented.");
-	return false;
+	if (session == nullptr) return false;
+	session->deferredUiCommands.push_back(command);
+	return true;
 }
+
 
 static bool configuredColumnBlockMoveLeavesSpace() {
 	std::string mode = upperKey(configuredEditSetupSettings().columnBlockMove);
 	return mode == "LEAVE_SPACE" || mode == "LEAVE";
 }
 
-static bool shouldLeaveColumnSpaceForDelete(MREditWindow *win) {
+bool shouldLeaveColumnSpaceForDelete(MREditWindow *win) {
 	return blockStatusValue(win) == MREditWindow::bmColumn && configuredColumnBlockMoveLeavesSpace();
 }
 
-static bool copyBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWindow *destWin, MRFileEditor *destEditor) {
+bool copyBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWindow *destWin, MRFileEditor *destEditor) {
 	int mode;
 	uint anchor;
 	uint end;
@@ -4599,7 +3325,7 @@ static bool copyBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, M
 	return false;
 }
 
-static bool moveBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWindow *destWin, MRFileEditor *destEditor) {
+bool moveBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWindow *destWin, MRFileEditor *destEditor) {
 	bool leaveColumnSpace = false;
 	if (srcWin == nullptr || srcEditor == nullptr || destWin == nullptr || destEditor == nullptr) return false;
 	if (srcWin == destWin) return moveCurrentBlock(srcWin, destEditor);
@@ -4610,7 +3336,7 @@ static bool moveBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, M
 	return true;
 }
 
-static bool extractCurrentBlockText(MREditWindow *win, MRFileEditor *editor, std::string &out) {
+bool extractCurrentBlockText(MREditWindow *win, MRFileEditor *editor, std::string &out) {
 	int mode;
 	uint anchor;
 	uint end;
@@ -4663,7 +3389,7 @@ static bool extractCurrentBlockText(MREditWindow *win, MRFileEditor *editor, std
 	return false;
 }
 
-static bool saveCurrentBlockToFile(MREditWindow *win, MRFileEditor *editor, const std::string &path) {
+bool saveCurrentBlockToFile(MREditWindow *win, MRFileEditor *editor, const std::string &path) {
 	std::ofstream outFile;
 	std::string blockText;
 	if (!extractCurrentBlockText(win, editor, blockText)) return false;
@@ -4674,7 +3400,7 @@ static bool saveCurrentBlockToFile(MREditWindow *win, MRFileEditor *editor, cons
 	return outFile.good();
 }
 
-static bool copyCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
+bool copyCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
 	int mode;
 	uint anchor;
 	uint end;
@@ -4743,7 +3469,7 @@ static bool copyCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
 	return false;
 }
 
-static bool moveCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
+bool moveCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
 	int mode;
 	uint anchor;
 	uint end;
@@ -4833,7 +3559,7 @@ static bool moveCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
 	return false;
 }
 
-static bool deleteCurrentBlock(MREditWindow *win, MRFileEditor *editor, bool leaveColumnSpace) {
+bool deleteCurrentBlock(MREditWindow *win, MRFileEditor *editor, bool leaveColumnSpace) {
 	int mode;
 	uint anchor;
 	uint end;
@@ -5034,15 +3760,15 @@ static bool shiftCurrentBlockIndent(MREditWindow *win, MRFileEditor *editor, boo
 	return setCurrentBlockState(mode, false, static_cast<uint>(bufferOffsetForLineColumn(buf, anchorLine, adjustedColumn(anchorLine, anchorCol))), static_cast<uint>(bufferOffsetForLineColumn(buf, endLine, adjustedColumn(endLine, endCol))));
 }
 
-static bool indentCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
+bool indentCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
 	return shiftCurrentBlockIndent(win, editor, false);
 }
 
-static bool undentCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
+bool undentCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
 	return shiftCurrentBlockIndent(win, editor, true);
 }
 
-static bool moveEditorTabRight(MRFileEditor *editor) {
+bool moveEditorTabRight(MRFileEditor *editor) {
 	const MREditSetupSettings settings = configuredEditSetupSettings();
 	int col;
 	int targetCol;
@@ -5067,7 +3793,7 @@ static bool moveEditorTabRight(MRFileEditor *editor) {
 	return setEditorCursor(editor, editor->charPtrOffset(lineStart, targetCol - 1));
 }
 
-static bool moveEditorTabLeft(MRFileEditor *editor) {
+bool moveEditorTabLeft(MRFileEditor *editor) {
 	const MREditSetupSettings settings = configuredEditSetupSettings();
 	const int currentColumn = currentEditorColumn(editor);
 	uint lineStart;
@@ -5083,12 +3809,12 @@ static bool moveEditorTabLeft(MRFileEditor *editor) {
 	return setEditorCursor(editor, editor->charPtrOffset(lineStart, targetCol - 1));
 }
 
-static bool indentEditor(MRFileEditor *editor) {
+bool indentEditor(MRFileEditor *editor) {
 	if (!moveEditorTabRight(editor)) return false;
 	return setCurrentEditorIndentLevel(currentEditorColumn(editor));
 }
 
-static bool undentEditor(MRFileEditor *editor) {
+bool undentEditor(MRFileEditor *editor) {
 	if (!moveEditorTabLeft(editor)) return false;
 	return setCurrentEditorIndentLevel(currentEditorColumn(editor));
 }
@@ -6927,7 +5653,7 @@ static bool executeRuntimeMacroSpec(const std::string &spec, std::vector<std::st
 	return executeLoadedMacro(macroIt, macroKey, paramPart, logLines);
 }
 
-static bool currentExecutingMacroSpec(std::string &macroSpec) {
+static bool currentExecutingMacroSpecImpl(std::string &macroSpec) {
 	const std::string macroDisplayName = !g_runtimeEnv.macroStack.empty() ? trimAscii(g_runtimeEnv.macroStack.back().macroName) : std::string();
 	const auto macroIt = g_runtimeEnv.loadedMacros.find(upperKey(macroDisplayName));
 	std::string fileDisplayName;
@@ -6945,6 +5671,7 @@ static bool currentExecutingMacroSpec(std::string &macroSpec) {
 	macroSpec = fileDisplayName + "^" + macroIt->second.displayName;
 	return true;
 }
+
 
 static bool composeLoadedMacroSpec(const MacroRef &macroRef, std::string &macroSpec) {
 	std::string fileDisplayName;
@@ -7764,327 +6491,168 @@ static Value applyIntrinsic(const std::string &name, const std::vector<Value> &a
 }
 } // namespace
 
-MRMacroExecutionProfile mrvmAnalyzeBytecode(const unsigned char *bytecode, std::size_t length) {
-	MRMacroExecutionProfile profile;
-	std::size_t ip = 0;
-
-	if (bytecode == nullptr || length == 0) return profile;
-
-	while (ip < length) {
-		unsigned char opcode = bytecode[ip++];
-		++profile.opcodeCount;
-		noteExecutionFlags(profile, classifyPureOpcode(opcode));
-
-		switch (opcode) {
-			case OP_PUSH_I:
-				if (!skipBytecodeBytes(length, ip, sizeof(int))) return profile;
-				break;
-			case OP_PUSH_R:
-				if (!skipBytecodeBytes(length, ip, sizeof(double))) return profile;
-				break;
-			case OP_PUSH_S:
-			case OP_DEF_VAR:
-			case OP_VAL:
-			case OP_RVAL: {
-				std::string ignored;
-				if (!readBytecodeCString(bytecode, length, ip, ignored)) return profile;
-				break;
-			}
-			case OP_LOAD_VAR: {
-				std::string name;
-				if (!readBytecodeCString(bytecode, length, ip, name)) return profile;
-				name = upperKey(name);
-				noteExecutionFlags(profile, classifyLoadVarName(name), name);
-				break;
-			}
-			case OP_STORE_VAR: {
-				std::string name;
-				if (!skipBytecodeBytes(length, ip, sizeof(unsigned char)) || !readBytecodeCString(bytecode, length, ip, name)) return profile;
-				name = upperKey(name);
-				noteExecutionFlags(profile, classifyStoreVarName(name), name);
-				break;
-			}
-			case OP_GOTO:
-			case OP_CALL:
-			case OP_JZ:
-				if (!skipBytecodeBytes(length, ip, sizeof(int))) return profile;
-				break;
-			case OP_FIRST_GLOBAL: {
-				std::string ignored;
-				if (!readBytecodeCString(bytecode, length, ip, ignored)) return profile;
-				noteExecutionFlags(profile, mrefUiAffinity, "FIRST_GLOBAL");
-				break;
-			}
-			case OP_NEXT_GLOBAL: {
-				std::string ignored;
-				if (!readBytecodeCString(bytecode, length, ip, ignored)) return profile;
-				noteExecutionFlags(profile, mrefUiAffinity, "NEXT_GLOBAL");
-				break;
-			}
-			case OP_INTRINSIC: {
-				std::string name;
-				if (!readBytecodeCString(bytecode, length, ip, name) || !skipBytecodeBytes(length, ip, sizeof(unsigned char))) return profile;
-				++profile.intrinsicCount;
-				name = upperKey(name);
-				noteExecutionFlags(profile, classifyIntrinsicName(name), name);
-				break;
-			}
-			case OP_PROC_VAR: {
-				std::string name;
-				std::string variableName;
-				unsigned char argc = 0;
-				if (!readBytecodeCString(bytecode, length, ip, name) || !skipBytecodeBytes(length, ip, sizeof(unsigned char))) return profile;
-				argc = bytecode[ip - 1];
-				if (argc == 0 || argc > 2) return profile;
-				if (!readBytecodeCString(bytecode, length, ip, variableName)) return profile;
-				if (argc > 1) {
-					std::string ignored;
-					if (!readBytecodeCString(bytecode, length, ip, ignored)) return profile;
-				}
-				++profile.procVarCount;
-				name = upperKey(name);
-				noteExecutionFlags(profile, classifyProcVarName(name), name);
-				break;
-			}
-			case OP_PROC: {
-				std::string name;
-				if (!readBytecodeCString(bytecode, length, ip, name) || !skipBytecodeBytes(length, ip, sizeof(unsigned char))) return profile;
-				++profile.procCount;
-				name = upperKey(name);
-				noteExecutionFlags(profile, classifyProcName(name), name);
-				break;
-			}
-			case OP_TVCALL: {
-				std::string name;
-				if (!readBytecodeCString(bytecode, length, ip, name) || !skipBytecodeBytes(length, ip, sizeof(unsigned char))) return profile;
-				++profile.tvCallCount;
-				name = upperKey(name);
-				noteExecutionFlags(profile, classifyTvCallName(name), name);
-				break;
-			}
-			case OP_RET:
-			case OP_HALT:
-			case OP_ADD:
-			case OP_SUB:
-			case OP_MUL:
-			case OP_DIV:
-			case OP_MOD:
-			case OP_NEG:
-			case OP_CMP_EQ:
-			case OP_CMP_NE:
-			case OP_CMP_LT:
-			case OP_CMP_GT:
-			case OP_CMP_LE:
-			case OP_CMP_GE:
-			case OP_AND:
-			case OP_OR:
-			case OP_NOT:
-			case OP_SHL:
-			case OP_SHR:
-			case OP_BIT_AND:
-			case OP_BIT_OR:
-			case OP_BIT_XOR:
-				break;
-			default: {
-				char unknownOp[32];
-				std::snprintf(unknownOp, sizeof(unknownOp), "UNKNOWN_OPCODE_%02X", opcode);
-				noteExecutionFlags(profile, mrefUiAffinity, unknownOp);
-				return profile;
-			}
-		}
-	}
-
-	return profile;
+bool queueDeferredUiProcedure(const std::string &name, const std::vector<VirtualMachine::Value> &args, int &errorCode) {
+	return queueDeferredUiProcedureImpl(name, args, errorCode);
 }
 
-std::string mrvmDescribeExecutionProfile(const MRMacroExecutionProfile &profile) {
-	std::vector<std::string> parts;
-	std::ostringstream out;
-
-	if (profile.has(mrefBackgroundSafe)) parts.emplace_back("background-safe");
-	if (profile.has(mrefStagedWrite)) parts.emplace_back("staged-write");
-	if (profile.has(mrefUiAffinity)) parts.emplace_back("ui-affin");
-	if (profile.has(mrefExternalIo)) parts.emplace_back("external-io");
-	if (parts.empty()) parts.emplace_back("unclassified");
-
-	for (std::size_t i = 0; i < parts.size(); ++i) {
-		if (i != 0) out << ", ";
-		out << parts[i];
-	}
-
-	out << " [ops=" << profile.opcodeCount << ", intr=" << profile.intrinsicCount << ", proc=" << profile.procCount << ", procvar=" << profile.procVarCount << ", tv=" << profile.tvCallCount << "]";
-	return out.str();
+bool enqueueDeferredUiCommand(const MRMacroDeferredUiCommand &command, int &errorCode) {
+	return enqueueDeferredUiCommandImpl(command, errorCode);
 }
 
-bool mrvmCanRunInBackground(const MRMacroExecutionProfile &profile) noexcept {
-	return profile.has(mrefBackgroundSafe) && !profile.has(mrefStagedWrite | mrefUiAffinity | mrefExternalIo);
+bool currentExecutingMacroSpec(std::string &macroSpec) {
+	return currentExecutingMacroSpecImpl(macroSpec);
 }
 
-namespace {
-bool isSupportedStagedSymbol(const std::string &value) noexcept {
-	static const char *const kAllowed[] = {"TEXT",
-	                                       "PUT_LINE",
-	                                       "CR",
-	                                       "DEL_CHAR",
-	                                       "DEL_CHARS",
-	                                       "DEL_LINE",
-	                                       "REPLACE",
-	                                       "GET_LINE",
-	                                       "CUR_CHAR",
-	                                       "GET_WORD",
-	                                       "C_COL",
-	                                       "C_LINE",
-	                                       "C_ROW",
-	                                       "C_PAGE",
-	                                       "PG_LINE",
-	                                       "AT_EOF",
-	                                       "AT_EOL",
-	                                       "INSERT_MODE",
-	                                       "INDENT_LEVEL",
-	                                       "SET_INDENT_LEVEL",
-	                                       "LEFT",
-	                                       "RIGHT",
-	                                       "UP",
-	                                       "DOWN",
-	                                       "HOME",
-	                                       "EOL",
-	                                       "TOF",
-	                                       "EOF",
-	                                       "WORD_LEFT",
-	                                       "WORD_RIGHT",
-	                                       "FIRST_WORD",
-	                                       "GOTO_LINE",
-	                                       "GOTO_COL",
-	                                       "TAB_RIGHT",
-	                                       "TAB_LEFT",
-	                                       "INDENT",
-	                                       "UNDENT",
-	                                       "MARK_POS",
-	                                       "GOTO_MARK",
-	                                       "POP_MARK",
-	                                       "PAGE_UP",
-	                                       "PAGE_DOWN",
-	                                       "NEXT_PAGE_BREAK",
-	                                       "LAST_PAGE_BREAK",
-	                                       "SEARCH_FWD",
-	                                       "SEARCH_BWD",
-	                                       "RUN_MACRO",
-	                                       "BLOCK_BEGIN",
-	                                       "BLOCK_LINE",
-	                                       "COL_BLOCK_BEGIN",
-	                                       "BLOCK_COL",
-	                                       "STR_BLOCK_BEGIN",
-	                                       "BLOCK_END",
-	                                       "BLOCK_OFF",
-	                                       "COPY_BLOCK",
-	                                       "MOVE_BLOCK",
-	                                       "DELETE_BLOCK",
-	                                       "ERASE_WINDOW",
-	                                       "BLOCK_STAT",
-	                                       "BLOCK_LINE1",
-	                                       "BLOCK_LINE2",
-	                                       "BLOCK_COL1",
-	                                       "BLOCK_COL2",
-	                                       "MARKING",
-	                                       "FIRST_SAVE",
-	                                       "BUFFER_ID",
-	                                       "TMP_FILE",
-	                                       "TMP_FILE_NAME",
-	                                       "CUR_WINDOW",
-	                                       "LINK_STAT",
-	                                       "WINDOW_COUNT",
-	                                       "VIRTUAL_DESKTOPS",
-	                                       "CYCLIC_VIRTUAL_DESKTOPS",
-	                                       "KEY1",
-	                                       "KEY2",
-	                                       "WIN_X1",
-	                                       "WIN_Y1",
-	                                       "WIN_X2",
-	                                       "WIN_Y2",
-	                                       "GLOBAL_STR",
-	                                       "GLOBAL_INT",
-	                                       "FIRST_GLOBAL",
-	                                       "NEXT_GLOBAL",
-	                                       "CREATE_GLOBAL_STR",
-	                                       "SET_GLOBAL_STR",
-	                                       "SET_GLOBAL_INT",
-	                                       "INQ_MACRO",
-	                                       "FIRST_MACRO",
-	                                       "NEXT_MACRO",
-	                                       "CREATE_WINDOW",
-	                                       "DELETE_WINDOW",
-	                                       "MODIFY_WINDOW",
-	                                       "LINK_WINDOW",
-	                                       "UNLINK_WINDOW",
-	                                       "ZOOM",
-	                                       "REDRAW",
-	                                       "NEW_SCREEN",
-	                                       "SWITCH_WINDOW",
-	                                       "SIZE_WINDOW",
-	                                       "MOVE_WIN_TO_NEXT_DESKTOP",
-	                                       "MOVE_WIN_TO_PREV_DESKTOP",
-	                                       "MOVE_VIEWPORT_RIGHT",
-	                                       "MOVE_VIEWPORT_LEFT",
-	                                       "SAVE_WORKSPACE",
-	                                       "LOAD_WORKSPACE",
-	                                       "SAVE_SETTINGS",
-	                                       "FILE_CHANGED",
-	                                       "FILE_NAME",
-	                                       "IGNORE_CASE",
-	                                       "TAB_EXPAND",
-	                                       "DISPLAY_TABS",
-	                                       "PUSH_LABELS",
-	                                       "POP_LABELS",
-	                                       "FLABEL",
-	                                       "MARQUEE",
-	                                       "MARQUEE_WARNING",
-	                                       "MARQUEE_ERROR",
-	                                       "WORKING",
-	                                       "BRAIN",
-	                                       "SCREEN_LENGTH",
-	                                       "SCREEN_WIDTH",
-	                                       "WHEREX",
-	                                       "WHEREY",
-	                                       "PUT_BOX",
-	                                       "WRITE",
-	                                       "CLR_LINE",
-	                                       "GOTOXY",
-	                                       "PUT_LINE_NUM",
-	                                       "PUT_COL_NUM",
-	                                       "SCROLL_BOX_UP",
-	                                       "SCROLL_BOX_DN",
-	                                       "CLEAR_SCREEN",
-	                                       "KILL_BOX",
-	                                       "MESSAGEBOX"};
-
-	for (const char *symbol : kAllowed)
-		if (value == symbol) return true;
-	return false;
+std::string mrvmEditorExpandUserPath(const std::string &path) {
+	return expandUserPath(path);
 }
 
-bool containsOnlySupportedStagedSymbols(const std::vector<std::string> &values) noexcept {
-	for (const auto &value : values)
-		if (!isSupportedStagedSymbol(value)) return false;
-	return true;
-}
-} // namespace
-
-bool mrvmCanRunStagedInBackground(const MRMacroExecutionProfile &profile) noexcept {
-	if (profile.has(mrefExternalIo)) return false;
-	if (!profile.has(mrefUiAffinity) && !profile.has(mrefStagedWrite)) return false;
-	if (!containsOnlySupportedStagedSymbols(profile.stagedWriteSymbols)) return false;
-	if (!containsOnlySupportedStagedSymbols(profile.uiAffinitySymbols)) return false;
-	return true;
+MREditWindow *mrvmEditorActiveWindow() {
+	return activeMacroEditWindow();
 }
 
-std::vector<std::string> mrvmUnsupportedStagedSymbols(const MRMacroExecutionProfile &profile) {
-	std::vector<std::string> unsupported;
+MRFileEditor *mrvmEditorCurrentEditor() {
+	return currentEditor();
+}
 
-	for (const auto &stagedWriteSymbol : profile.stagedWriteSymbols)
-		if (!isSupportedStagedSymbol(stagedWriteSymbol)) appendUniqueString(unsupported, stagedWriteSymbol);
-	for (const auto &uiAffinitySymbol : profile.uiAffinitySymbols)
-		if (!isSupportedStagedSymbol(uiAffinitySymbol)) appendUniqueString(unsupported, uiAffinitySymbol);
-	return unsupported;
+bool mrvmEditorMarkPosition(MREditWindow *win, MRFileEditor *editor) {
+	return markEditorPosition(win, editor);
+}
+
+bool mrvmEditorGotoMark(MREditWindow *win, MRFileEditor *editor) {
+	return gotoEditorMark(win, editor);
+}
+
+bool mrvmEditorSetRandomAccessMark(MREditWindow *win, MRFileEditor *editor, int index) {
+	return setEditorRandomAccessMark(win, editor, index);
+}
+
+bool mrvmEditorGotoRandomAccessMark(MREditWindow *win, MRFileEditor *editor, int index) {
+	return gotoEditorRandomAccessMark(win, editor, index);
+}
+
+bool mrvmEditorBeginBlockMode(int mode) {
+	return beginCurrentBlockMode(mode);
+}
+
+bool mrvmEditorEndBlockMode() {
+	return endCurrentBlockMode();
+}
+
+bool mrvmEditorClearBlockMode() {
+	return clearCurrentBlockMode();
+}
+
+bool mrvmEditorMoveCursorToNextPageBreak(MRFileEditor *editor) {
+	return moveEditorNextPageBreak(editor);
+}
+
+bool mrvmEditorMoveCursorToPrevPageBreak(MRFileEditor *editor) {
+	return moveEditorLastPageBreak(editor);
+}
+
+bool mrvmEditorMoveCursorTabRight(MRFileEditor *editor) {
+	return moveEditorTabRight(editor);
+}
+
+bool mrvmEditorMoveCursorTabLeft(MRFileEditor *editor) {
+	return moveEditorTabLeft(editor);
+}
+
+bool mrvmEditorIndentCursor(MRFileEditor *editor) {
+	return indentEditor(editor);
+}
+
+bool mrvmEditorUndentCursor(MRFileEditor *editor) {
+	return undentEditor(editor);
+}
+
+bool mrvmEditorCopyCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
+	return copyCurrentBlock(win, editor);
+}
+
+bool mrvmEditorMoveCurrentBlock(MREditWindow *win, MRFileEditor *editor) {
+	return moveCurrentBlock(win, editor);
+}
+
+bool mrvmEditorDeleteCurrentBlock(MREditWindow *win, MRFileEditor *editor, bool leaveColumnSpace) {
+	return deleteCurrentBlock(win, editor, leaveColumnSpace);
+}
+
+bool mrvmEditorExtractCurrentBlockText(MREditWindow *win, MRFileEditor *editor, std::string &out) {
+	return extractCurrentBlockText(win, editor, out);
+}
+
+bool mrvmEditorIndentBlock(MREditWindow *win, MRFileEditor *editor) {
+	return indentCurrentBlock(win, editor);
+}
+
+bool mrvmEditorUndentBlock(MREditWindow *win, MRFileEditor *editor) {
+	return undentCurrentBlock(win, editor);
+}
+
+MREditWindow *mrvmEditorWindowByIndex(int index) {
+	return editWindowByIndex(index);
+}
+
+bool mrvmEditorCopyBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWindow *destWin, MRFileEditor *destEditor) {
+	return copyBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
+}
+
+bool mrvmEditorMoveBlockFromWindow(MREditWindow *srcWin, MRFileEditor *srcEditor, MREditWindow *destWin, MRFileEditor *destEditor) {
+	return moveBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
+}
+
+bool mrvmEditorShouldLeaveColumnSpaceForDelete(MREditWindow *win) {
+	return shouldLeaveColumnSpaceForDelete(win);
+}
+
+bool mrvmEditorSaveCurrentBlockToFile(MREditWindow *win, MRFileEditor *editor, const std::string &path) {
+	return saveCurrentBlockToFile(win, editor, path);
+}
+
+bool mrvmEditorLinkCurrentWindow() {
+	return linkCurrentEditWindow();
+}
+
+bool mrvmEditorUnlinkCurrentWindow() {
+	return unlinkCurrentEditWindow();
+}
+
+bool mrvmEditorRedrawCurrentWindow() {
+	return redrawCurrentEditWindow();
+}
+
+bool mrvmEditorRedrawEntireScreen() {
+	return redrawEntireScreen();
+}
+
+bool mrvmEditorZoomCurrentWindow() {
+	return zoomCurrentEditWindow();
+}
+
+bool mrvmEditorCreateWindow() {
+	return createEditWindow();
+}
+
+bool mrvmEditorSwitchWindow(int index) {
+	return switchEditWindow(index);
+}
+
+bool mrvmEditorSizeCurrentWindow(int x1, int y1, int x2, int y2) {
+	return sizeCurrentEditWindow(x1, y1, x2, y2);
+}
+
+bool mrvmEditorDeleteCurrentWindow() {
+	return deleteCurrentEditWindow();
+}
+
+bool mrvmEditorEraseCurrentWindow() {
+	return eraseCurrentEditWindow();
+}
+
+bool mrvmEditorModifyCurrentWindow() {
+	return modifyCurrentEditWindow();
 }
 
 MRMacroJobResult mrvmRunBytecodeBackground(const unsigned char *bytecode, std::size_t length, std::stop_token stopToken, std::shared_ptr<std::atomic_bool> cancelFlag) {
@@ -8301,20 +6869,6 @@ void mrvmSetProcessContext(int argc, char **argv) {
 
 std::vector<std::string> mrvmProcessArguments() {
 	return g_runtimeEnv.processArgs;
-}
-
-void mrvmSetStartupSettingsMode(bool enabled) noexcept {
-	g_startupSettingsMode = enabled;
-	if (enabled) clearStartupKeymapBatchState();
-	else if (hasPendingStartupKeymapBatch()) clearStartupKeymapBatchState();
-}
-
-bool mrvmIsStartupSettingsMode() noexcept {
-	return g_startupSettingsMode;
-}
-
-bool mrvmFlushPendingStartupKeymapBatch(std::string *errorMessage) {
-	return flushStartupKeymapBatch(errorMessage);
 }
 
 VirtualMachine::Value::Value() : type(TYPE_INT), i(0), r(0.0), c(0) {
@@ -8828,11 +7382,12 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						if (!setConfiguredSettingsMacroFilePath(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(SETTINGSPATH) failed: " + (errorText.empty() ? std::string("invalid path.") : errorText));
 						activePaths.settingsMacroUri = configuredSettingsMacroFilePath();
 					} else if (setupKey == "KEYMAP_PROFILE") {
-						if (!applyConfiguredKeymapProfilePayload(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(KEYMAP_PROFILE) failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
+						if (!mrvmApplyConfiguredKeymapProfilePayload(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(KEYMAP_PROFILE) failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
 					} else if (setupKey == "KEYMAP_BIND") {
-						if (!applyConfiguredKeymapBindingPayload(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(KEYMAP_BIND) failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
+						if (!mrvmApplyConfiguredKeymapBindingPayload(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(KEYMAP_BIND) failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
 					} else if (setupKey == "ACTIVE_KEYMAP_PROFILE") {
-						if (!applyConfiguredActiveKeymapProfilePayload(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(ACTIVE_KEYMAP_PROFILE) failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
+						if (!mrvmApplyConfiguredActiveKeymapProfilePayload(valueAsString(args[1]), &errorText))
+							throw std::runtime_error("MRSETUP(ACTIVE_KEYMAP_PROFILE) failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
 					} else
 						switch (classifySettingsKey(setupKey)) {
 							case MRSettingsKeyClass::Unknown:
@@ -9494,7 +8049,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						ok = returnWithDirectScreenMutation(true);
 					} else if (name == "SAVE_SETTINGS") {
 						std::string errorText;
-						ok = persistConfiguredSettingsSnapshot(&errorText);
+						ok = mrvmPersistConfiguredSettingsSnapshot(&errorText);
 						if (!ok) throw std::runtime_error("SAVE_SETTINGS failed: " + (errorText.empty() ? std::string("Unable to persist settings snapshot.") : errorText));
 					}
 					runtimeErrorLevel() = ok ? 0 : 1001;
@@ -9815,241 +8370,6 @@ bool mrvmUiCursorPosition(int &x, int &y) {
 	return true;
 }
 
-std::uint64_t mrvmUiScreenMutationEpoch() noexcept {
-	return g_macroScreenMutationEpoch.load(std::memory_order_relaxed);
-}
-
-void mrvmUiInvalidateScreenBase() noexcept {
-	UiScreenStateFacade::noteBaseMutation();
-}
-
-void mrvmUiTouchScreenMutationEpoch() noexcept {
-	bumpMacroScreenMutationEpoch();
-}
-
-void mrvmUiBeginMacroScreenBatch() noexcept {
-	g_macroCellGrid.beginProjectionBatch();
-}
-
-void mrvmUiEndMacroScreenBatch() noexcept {
-	g_macroCellGrid.endProjectionBatch();
-}
-
-std::uint64_t mrvmUiMacroScreenFlushCount() noexcept {
-	return g_macroScreenFlushCount.load(std::memory_order_relaxed);
-}
-
-void mrvmUiResetMacroScreenFlushCount() noexcept {
-	g_macroScreenFlushCount.store(0, std::memory_order_relaxed);
-}
-
-bool mrvmUiSetCurrentWindow(const void *windowKey) {
-	MREditWindow *win;
-
-	if (TProgram::deskTop == nullptr || windowKey == nullptr) return false;
-	win = const_cast<MREditWindow *>(static_cast<const MREditWindow *>(windowKey));
-	if (win == nullptr) return false;
-	TProgram::deskTop->setCurrent(win, TView::normalSelect);
-	returnWithDirectScreenMutation(true);
-	return true;
-}
-
-bool mrvmUiCreateWindow() {
-	return returnWithDirectScreenMutation(createEditWindow());
-}
-
-bool mrvmUiDeleteCurrentWindow() {
-	return returnWithDirectScreenMutation(deleteCurrentEditWindow());
-}
-
-bool mrvmUiEraseCurrentWindow() {
-	return returnWithDirectScreenMutation(eraseCurrentEditWindow());
-}
-
-bool mrvmUiModifyCurrentWindow() {
-	return returnWithDirectScreenMutation(modifyCurrentEditWindow());
-}
-
-bool mrvmUiSwitchWindow(int index) {
-	return returnWithDirectScreenMutation(switchEditWindow(index));
-}
-
-bool mrvmUiSizeCurrentWindow(int x1, int y1, int x2, int y2) {
-	return returnWithDirectScreenMutation(sizeCurrentEditWindow(x1, y1, x2, y2));
-}
-
-bool mrvmUiPushMarker() {
-	return markEditorPosition(activeMacroEditWindow(), currentEditor());
-}
-
-bool mrvmUiGetMarker() {
-	return gotoEditorMark(activeMacroEditWindow(), currentEditor());
-}
-
-bool mrvmUiSetRandomAccessMark(int index) {
-	return setEditorRandomAccessMark(activeMacroEditWindow(), currentEditor(), index);
-}
-
-bool mrvmUiGetRandomAccessMark(int index) {
-	return gotoEditorRandomAccessMark(activeMacroEditWindow(), currentEditor(), index);
-}
-
-bool mrvmUiBlockBeginLine() {
-	return beginCurrentBlockMode(MREditWindow::bmLine);
-}
-
-bool mrvmUiBlockBeginColumn() {
-	return beginCurrentBlockMode(MREditWindow::bmColumn);
-}
-
-bool mrvmUiBlockBeginStream() {
-	return beginCurrentBlockMode(MREditWindow::bmStream);
-}
-
-bool mrvmUiBlockEndMarking() {
-	return endCurrentBlockMode();
-}
-
-bool mrvmUiBlockTurnMarkingOff() {
-	return clearCurrentBlockMode();
-}
-
-bool mrvmUiCopyBlock() {
-	MREditWindow *win = activeMacroEditWindow();
-	MRFileEditor *editor = currentEditor();
-	if (win == nullptr || editor == nullptr) return false;
-	return copyCurrentBlock(win, editor);
-}
-
-bool mrvmUiMoveBlock() {
-	MREditWindow *win = activeMacroEditWindow();
-	MRFileEditor *editor = currentEditor();
-	if (win == nullptr || editor == nullptr) return false;
-	return moveCurrentBlock(win, editor);
-}
-
-bool mrvmUiDeleteBlock() {
-	MREditWindow *win = activeMacroEditWindow();
-	MRFileEditor *editor = currentEditor();
-	if (win == nullptr || editor == nullptr) return false;
-	return deleteCurrentBlock(win, editor, shouldLeaveColumnSpaceForDelete(win));
-}
-
-bool mrvmUiExtractCurrentBlockText(std::string &out) {
-	MREditWindow *win = activeMacroEditWindow();
-	MRFileEditor *editor = currentEditor();
-	if (win == nullptr || editor == nullptr) return false;
-	return extractCurrentBlockText(win, editor, out);
-}
-
-bool mrvmUiIndentBlock() {
-	MREditWindow *win = activeMacroEditWindow();
-	MRFileEditor *editor = currentEditor();
-	if (win == nullptr || editor == nullptr) return false;
-	return indentCurrentBlock(win, editor);
-}
-
-bool mrvmUiUndentBlock() {
-	MREditWindow *win = activeMacroEditWindow();
-	MRFileEditor *editor = currentEditor();
-	if (win == nullptr || editor == nullptr) return false;
-	return undentCurrentBlock(win, editor);
-}
-
-bool mrvmUiMoveCursorToNextPageBreak() {
-	return moveEditorNextPageBreak(currentEditor());
-}
-
-bool mrvmUiMoveCursorToPrevPageBreak() {
-	return moveEditorLastPageBreak(currentEditor());
-}
-
-bool mrvmUiCursorTabRight() {
-	return moveEditorTabRight(currentEditor());
-}
-
-bool mrvmUiCursorTabLeft() {
-	return moveEditorTabLeft(currentEditor());
-}
-
-bool mrvmUiCursorIndent() {
-	return indentEditor(currentEditor());
-}
-
-bool mrvmUiCursorUndent() {
-	return undentEditor(currentEditor());
-}
-
-bool mrvmUiWindowCopyBlock(int sourceWindowIndex) {
-	MREditWindow *destWin = activeMacroEditWindow();
-	MRFileEditor *destEditor = currentEditor();
-	MREditWindow *srcWin = editWindowByIndex(sourceWindowIndex);
-	MRFileEditor *srcEditor = srcWin != nullptr ? srcWin->getEditor() : nullptr;
-	if (destWin == nullptr || destEditor == nullptr || srcWin == nullptr || srcEditor == nullptr) return false;
-	if (srcWin == destWin) return false;
-	return copyBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
-}
-
-bool mrvmUiWindowMoveBlock(int sourceWindowIndex) {
-	MREditWindow *destWin = activeMacroEditWindow();
-	MRFileEditor *destEditor = currentEditor();
-	MREditWindow *srcWin = editWindowByIndex(sourceWindowIndex);
-	MRFileEditor *srcEditor = srcWin != nullptr ? srcWin->getEditor() : nullptr;
-	if (destWin == nullptr || destEditor == nullptr || srcWin == nullptr || srcEditor == nullptr) return false;
-	if (srcWin == destWin) return false;
-	return moveBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
-}
-
-bool mrvmUiWindowCopyBlockFromWindow(const void *sourceWindowKey) {
-	MREditWindow *destWin = activeMacroEditWindow();
-	MRFileEditor *destEditor = currentEditor();
-	MREditWindow *srcWin = const_cast<MREditWindow *>(static_cast<const MREditWindow *>(sourceWindowKey));
-	MRFileEditor *srcEditor = srcWin != nullptr ? srcWin->getEditor() : nullptr;
-	if (destWin == nullptr || destEditor == nullptr || srcWin == nullptr || srcEditor == nullptr) return false;
-	if (srcWin == destWin) return false;
-	return copyBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
-}
-
-bool mrvmUiWindowMoveBlockFromWindow(const void *sourceWindowKey) {
-	MREditWindow *destWin = activeMacroEditWindow();
-	MRFileEditor *destEditor = currentEditor();
-	MREditWindow *srcWin = const_cast<MREditWindow *>(static_cast<const MREditWindow *>(sourceWindowKey));
-	MRFileEditor *srcEditor = srcWin != nullptr ? srcWin->getEditor() : nullptr;
-	if (destWin == nullptr || destEditor == nullptr || srcWin == nullptr || srcEditor == nullptr) return false;
-	if (srcWin == destWin) return false;
-	return moveBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
-}
-
-bool mrvmUiWindowCopyBlockBetween(const void *sourceWindowKey, const void *targetWindowKey) {
-	MREditWindow *srcWin = const_cast<MREditWindow *>(static_cast<const MREditWindow *>(sourceWindowKey));
-	MREditWindow *destWin = const_cast<MREditWindow *>(static_cast<const MREditWindow *>(targetWindowKey));
-	MRFileEditor *srcEditor = srcWin != nullptr ? srcWin->getEditor() : nullptr;
-	MRFileEditor *destEditor = destWin != nullptr ? destWin->getEditor() : nullptr;
-	if (destWin == nullptr || destEditor == nullptr || srcWin == nullptr || srcEditor == nullptr) return false;
-	if (srcWin == destWin) return false;
-	return copyBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
-}
-
-bool mrvmUiWindowMoveBlockBetween(const void *sourceWindowKey, const void *targetWindowKey) {
-	MREditWindow *srcWin = const_cast<MREditWindow *>(static_cast<const MREditWindow *>(sourceWindowKey));
-	MREditWindow *destWin = const_cast<MREditWindow *>(static_cast<const MREditWindow *>(targetWindowKey));
-	MRFileEditor *srcEditor = srcWin != nullptr ? srcWin->getEditor() : nullptr;
-	MRFileEditor *destEditor = destWin != nullptr ? destWin->getEditor() : nullptr;
-	if (destWin == nullptr || destEditor == nullptr || srcWin == nullptr || srcEditor == nullptr) return false;
-	if (srcWin == destWin) return false;
-	return moveBlockFromWindow(srcWin, srcEditor, destWin, destEditor);
-}
-
-bool mrvmUiSaveBlockToFile(const std::string &pathSpec) {
-	MREditWindow *win = activeMacroEditWindow();
-	MRFileEditor *editor = currentEditor();
-	std::string path;
-	if (win == nullptr || editor == nullptr) return false;
-	path = expandUserPath(pathSpec);
-	if (path.empty()) return false;
-	return saveCurrentBlockToFile(win, editor, path);
-}
-
 void mrvmUiReplaceWindowMarkStack(const void *windowKey, const std::vector<std::size_t> &offsets) {
 	std::vector<uint> marks;
 
@@ -10138,172 +8458,6 @@ void mrvmUiReplaceRuntimeOptions(bool ignoreCase, bool tabExpand) {
 
 void mrvmUiSyncLinkedWindowsFrom(MREditWindow *window) {
 	syncLinkedWindowsFrom(window);
-}
-
-bool mrvmUiLinkCurrentWindow() {
-	return returnWithDirectScreenMutation(linkCurrentEditWindow());
-}
-
-bool mrvmUiUnlinkCurrentWindow() {
-	return returnWithDirectScreenMutation(unlinkCurrentEditWindow());
-}
-
-bool mrvmUiZoomCurrentWindow() {
-	return returnWithDirectScreenMutation(zoomCurrentEditWindow());
-}
-
-bool mrvmUiRedrawCurrentWindow() {
-	return returnWithDirectScreenMutation(redrawCurrentEditWindow());
-}
-
-bool mrvmUiNewScreen() {
-	return returnWithDirectScreenMutation(redrawEntireScreen());
-}
-
-bool mrvmUiMarquee(int kind, const std::string &text) {
-	try {
-		std::vector<Value> args;
-		std::string name = "MARQUEE";
-
-		args.push_back(makeString(text));
-		if (kind > 0) name = (kind == 1) ? "MARQUEE_WARNING" : "MARQUEE_ERROR";
-		return applyMarqueeProc(name, args);
-	} catch (...) {
-		return false;
-	}
-}
-
-bool mrvmUiBrain(bool enabled) {
-	try {
-		std::vector<Value> args;
-		args.push_back(makeInt(enabled ? 1 : 0));
-		return applyBrainProc("BRAIN", args);
-	} catch (...) {
-		return false;
-	}
-}
-
-bool mrvmUiPutBox(int x1, int y1, int x2, int y2, int bgColor, int fgColor, const std::string &title, int shadow) {
-	try {
-		std::vector<Value> args;
-		args.push_back(makeInt(x1));
-		args.push_back(makeInt(y1));
-		args.push_back(makeInt(x2));
-		args.push_back(makeInt(y2));
-		args.push_back(makeInt(bgColor));
-		args.push_back(makeInt(fgColor));
-		args.push_back(makeString(title));
-		args.push_back(makeInt(shadow));
-		return applyPutBoxProc("PUT_BOX", args);
-	} catch (...) {
-		return false;
-	}
-}
-
-bool mrvmUiWrite(const std::string &text, int x, int y, int bgColor, int fgColor) {
-	try {
-		std::vector<Value> args;
-		args.push_back(makeString(text));
-		args.push_back(makeInt(x));
-		args.push_back(makeInt(y));
-		args.push_back(makeInt(bgColor));
-		args.push_back(makeInt(fgColor));
-		return applyWriteProc("WRITE", args);
-	} catch (...) {
-		return false;
-	}
-}
-
-bool mrvmUiClrLine(int col, int row, int count) {
-	try {
-		std::vector<Value> args;
-		if (col != 0 || row != 0 || count != 0) {
-			args.push_back(makeInt(col));
-			args.push_back(makeInt(row));
-			args.push_back(makeInt(count));
-		}
-		return applyClrLineProc("CLR_LINE", args);
-	} catch (...) {
-		return false;
-	}
-}
-
-bool mrvmUiGotoxy(int x, int y) {
-	try {
-		std::vector<Value> args;
-		args.push_back(makeInt(x));
-		args.push_back(makeInt(y));
-		return applyGotoxyProc("GOTOXY", args);
-	} catch (...) {
-		return false;
-	}
-}
-
-bool mrvmUiPutLineNum(int line) {
-	try {
-		std::vector<Value> args;
-		args.push_back(makeInt(line));
-		return applyPutLineColNumberProc("PUT_LINE_NUM", args);
-	} catch (...) {
-		return false;
-	}
-}
-
-bool mrvmUiPutColNum(int col) {
-	try {
-		std::vector<Value> args;
-		args.push_back(makeInt(col));
-		return applyPutLineColNumberProc("PUT_COL_NUM", args);
-	} catch (...) {
-		return false;
-	}
-}
-
-bool mrvmUiScrollBoxUp(int x1, int y1, int x2, int y2, int attr) {
-	try {
-		std::vector<Value> args;
-		args.push_back(makeInt(x1));
-		args.push_back(makeInt(y1));
-		args.push_back(makeInt(x2));
-		args.push_back(makeInt(y2));
-		args.push_back(makeInt(attr));
-		return applyScrollBoxProc("SCROLL_BOX_UP", args, false);
-	} catch (...) {
-		return false;
-	}
-}
-
-bool mrvmUiScrollBoxDn(int x1, int y1, int x2, int y2, int attr) {
-	try {
-		std::vector<Value> args;
-		args.push_back(makeInt(x1));
-		args.push_back(makeInt(y1));
-		args.push_back(makeInt(x2));
-		args.push_back(makeInt(y2));
-		args.push_back(makeInt(attr));
-		return applyScrollBoxProc("SCROLL_BOX_DN", args, true);
-	} catch (...) {
-		return false;
-	}
-}
-
-bool mrvmUiClearScreen(int attr) {
-	try {
-		std::vector<Value> args;
-		args.push_back(makeInt(attr));
-		return applyClearScreenProc("CLEAR_SCREEN", args);
-	} catch (...) {
-		return false;
-	}
-}
-
-bool mrvmUiKillBox() {
-	try {
-		std::vector<Value> args;
-		return applyKillBoxProc("KILL_BOX", args);
-	} catch (...) {
-		return false;
-	}
 }
 
 bool mrvmUiRegisterMenuItem(const std::string &menuTitle, const std::string &itemTitle, const std::string &macroSpec, const std::string &ownerSpec, std::string *errorMessage) {

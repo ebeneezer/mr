@@ -20,17 +20,17 @@
 #include <tvision/tv.h>
 
 #include "MRFileExtensionEditorSettingsInternal.hpp"
-#include "MRDirtyGating.hpp"
+#include "../MRDirtyGating.hpp"
 #include "MRFileExtensionProfilesSupport.hpp"
-#include "MRSetupCommon.hpp"
-#include "../app/utils/MRStringUtils.hpp"
+#include "../setup/MRSetupCommon.hpp"
+#include "../../app/utils/MRStringUtils.hpp"
 
-#include "../app/MREditorApp.hpp"
-#include "../config/MRDialogPaths.hpp"
-#include "../ui/MRWindowSupport.hpp"
-#include "../ui/MRMessageLineController.hpp"
-#include "../ui/MRMenuBar.hpp"
-#include "../app/commands/MRWindowCommands.hpp"
+#include "../../app/MREditorApp.hpp"
+#include "../../config/settings/MRSettingsRuntime.hpp"
+#include "../../ui/MRWindowSupport.hpp"
+#include "../../ui/MRMessageLineController.hpp"
+#include "../../ui/MRMenuBar.hpp"
+#include "../../app/commands/MRWindowCommands.hpp"
 
 #include <algorithm>
 #include <array>

@@ -1,7 +1,7 @@
 #ifndef MRFILECOMMANDS_HPP
 #define MRFILECOMMANDS_HPP
 
-#include "../../config/MRDialogPaths.hpp"
+#include "../../config/settings/MRSettingsRuntime.hpp"
 
 #include <cstddef>
 #include <string>

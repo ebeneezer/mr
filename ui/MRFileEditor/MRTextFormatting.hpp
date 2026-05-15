@@ -3,7 +3,7 @@
 #include <string>
 #include <string_view>
 
-#include "../../config/MRDialogPaths.hpp"
+#include "../../config/settings/MRSettingsRuntime.hpp"
 
 class MRTextFormatting {
   public:

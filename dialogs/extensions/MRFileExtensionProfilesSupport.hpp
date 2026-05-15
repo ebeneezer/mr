@@ -1,10 +1,10 @@
-#include "../app/utils/MRStringUtils.hpp"
+#include "../../app/utils/MRStringUtils.hpp"
 #ifndef MRFILEEXTENSIONPROFILESSUPPORT_HPP
 #define MRFILEEXTENSIONPROFILESSUPPORT_HPP
 
 #include "MRFileExtensionEditorSettingsInternal.hpp"
 
-#include "../config/MRDialogPaths.hpp"
+#include "../../config/settings/MRSettingsRuntime.hpp"
 
 #include <cstddef>
 #include <string>
