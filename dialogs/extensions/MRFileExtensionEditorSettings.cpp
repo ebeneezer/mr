@@ -421,7 +421,6 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	const int browseWidth = 2;
 	const int browseLeft = g.inputRight - browseWidth;
 	const int browseFieldRight = browseLeft;
-	const int pageBreakRight = std::min(g.inputRight, g.inputLeft + 7);
 	const int wordDelimitersRight = std::min(g.inputRight, g.inputLeft + 16);
 	const int autoExtensionsRight = std::min(g.inputRight, g.inputLeft + 12);
 	const int codeLanguageLabelLeft = autoExtensionsRight + 2;
@@ -445,11 +444,8 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 	const int fileTypeClusterRight = g.fileTypeRight + 2;
 	const int codeFoldingClusterRight = g.columnBlockMoveLeft + 41;
 
-	addPanelLabel(dialog, TRect(g.labelLeft + 1, g.pageBreakY, g.inputLeft - 2, g.pageBreakY + 1), "Page break:");
-	pageBreakField = addPanelInput(dialog, TRect(g.inputLeft, g.pageBreakY, pageBreakRight, g.pageBreakY + 1), kPageBreakFieldSize - 1);
-
-	addPanelLabel(dialog, TRect(g.labelLeft + 1, g.wordDelimitersY, g.inputLeft - 2, g.wordDelimitersY + 1), "Word delim:");
-	wordDelimitersField = addPanelInput(dialog, TRect(g.inputLeft, g.wordDelimitersY, wordDelimitersRight, g.wordDelimitersY + 1), kWordDelimsFieldSize - 1);
+	addPanelLabel(dialog, TRect(g.labelLeft + 1, g.pageBreakY, g.inputLeft - 2, g.pageBreakY + 1), "Word delim:");
+	wordDelimitersField = addPanelInput(dialog, TRect(g.inputLeft, g.pageBreakY, wordDelimitersRight, g.pageBreakY + 1), kWordDelimsFieldSize - 1);
 
 	if (config.includeDefaultExtensions) {
 		addPanelLabel(dialog, TRect(g.labelLeft + 1, g.defaultExtensionsY, g.inputLeft - 2, g.defaultExtensionsY + 1), "Auto ext.:");
@@ -525,7 +521,7 @@ void FileExtensionEditorSettingsPanel::buildViews(MRScrollableDialog &dialog) {
 }
 
 TView *FileExtensionEditorSettingsPanel::primaryView() const noexcept {
-	return pageBreakField;
+	return wordDelimitersField;
 }
 
 void FileExtensionEditorSettingsPanel::setInputLineValue(TInputLine *inputLine, const char *value, std::size_t capacity) {
@@ -619,7 +615,7 @@ void FileExtensionEditorSettingsPanel::setOptionsMask(ushort options) {
 }
 
 void FileExtensionEditorSettingsPanel::loadFieldsFromRecord(const FileExtensionEditorSettingsDialogRecord &record) {
-	setInputLineValue(pageBreakField, record.pageBreak, sizeof(record.pageBreak));
+	if (pageBreakField != nullptr) setInputLineValue(pageBreakField, record.pageBreak, sizeof(record.pageBreak));
 	setInputLineValue(wordDelimitersField, record.wordDelimiters, sizeof(record.wordDelimiters));
 	if (defaultExtensionsField != nullptr) setInputLineValue(defaultExtensionsField, record.defaultExtensions, sizeof(record.defaultExtensions));
 	codeLanguageDropList.hide();
@@ -664,7 +660,7 @@ void FileExtensionEditorSettingsPanel::loadFieldsFromRecord(const FileExtensionE
 }
 
 void FileExtensionEditorSettingsPanel::saveFieldsToRecord(FileExtensionEditorSettingsDialogRecord &record) const {
-	readInputLineValue(pageBreakField, record.pageBreak, sizeof(record.pageBreak));
+	if (pageBreakField != nullptr) readInputLineValue(pageBreakField, record.pageBreak, sizeof(record.pageBreak));
 	readInputLineValue(wordDelimitersField, record.wordDelimiters, sizeof(record.wordDelimiters));
 	if (defaultExtensionsField != nullptr) readInputLineValue(defaultExtensionsField, record.defaultExtensions, sizeof(record.defaultExtensions));
 	if (codeLanguageField != nullptr) readInputLineValue(codeLanguageField, record.codeLanguage, sizeof(record.codeLanguage));

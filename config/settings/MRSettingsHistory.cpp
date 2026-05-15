@@ -37,6 +37,7 @@ const std::array<MRDialogHistoryScopeSpec, static_cast<std::size_t>(MRDialogHist
     MRDialogHistoryScopeSpec{MRDialogHistoryScope::SetupBackupDirectory, "SETUP_BACKUP_DIRECTORY"},
     MRDialogHistoryScopeSpec{MRDialogHistoryScope::SetupThemeLoad, "SETUP_THEME_LOAD"},
     MRDialogHistoryScopeSpec{MRDialogHistoryScope::SetupThemeSave, "SETUP_THEME_SAVE"},
+    MRDialogHistoryScopeSpec{MRDialogHistoryScope::PdfExport, "PDF_EXPORT"},
     MRDialogHistoryScopeSpec{MRDialogHistoryScope::ExtensionThemeFile, "EXTENSION_THEME_FILE"},
     MRDialogHistoryScopeSpec{MRDialogHistoryScope::ExtensionPostLoadMacro, "EXTENSION_POST_LOAD_MACRO"},
     MRDialogHistoryScopeSpec{MRDialogHistoryScope::ExtensionPreSaveMacro, "EXTENSION_PRE_SAVE_MACRO"},

@@ -300,6 +300,22 @@ struct MRMultiSarDialogOptions {
 	auto operator==(const MRMultiSarDialogOptions &) const noexcept -> bool = default;
 };
 
+struct MRPdfExportSettings {
+	std::string outputPath;
+	std::string pageSeparatorLiteral{"\\f"};
+	std::string fontFamily{"DejaVu Sans Mono"};
+	int fontSizePoints{10};
+	std::string headerLine;
+	std::string footerLine;
+	std::string textWidth{"78"};
+	std::string leftMarginPoints{"50"};
+	std::string rightMarginPoints{"50"};
+	std::string topMarginPoints{"50"};
+	std::string bottomMarginPoints{"50"};
+
+	auto operator==(const MRPdfExportSettings &) const noexcept -> bool = default;
+};
+
 struct MRColorSetupItem {
 	const char *label;
 	unsigned char paletteIndex;
@@ -393,6 +409,7 @@ enum class MRDialogHistoryScope : unsigned char {
 	SetupBackupDirectory,
 	SetupThemeLoad,
 	SetupThemeSave,
+	PdfExport,
 	ExtensionThemeFile,
 	ExtensionPostLoadMacro,
 	ExtensionPreSaveMacro,
@@ -491,6 +508,8 @@ bool setConfiguredMultiSearchDialogOptions(const MRMultiSearchDialogOptions &opt
 [[nodiscard]] MRMultiSearchDialogOptions configuredMultiSearchDialogOptions();
 bool setConfiguredMultiSarDialogOptions(const MRMultiSarDialogOptions &options, std::string *errorMessage = nullptr);
 [[nodiscard]] MRMultiSarDialogOptions configuredMultiSarDialogOptions();
+bool setConfiguredPdfExportSettings(const MRPdfExportSettings &settings, std::string *errorMessage = nullptr);
+[[nodiscard]] MRPdfExportSettings configuredPdfExportSettings();
 void configuredMultiFilespecHistoryEntries(std::vector<std::string> &outValues);
 void configuredMultiPathHistoryEntries(std::vector<std::string> &outValues);
 bool addConfiguredMultiFilespecHistoryEntry(const std::string &value, std::string *errorMessage = nullptr);

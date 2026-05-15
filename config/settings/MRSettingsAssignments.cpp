@@ -226,6 +226,19 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"MULTI_SAR_KEEP_FILES_OPEN", MRSettingsKeyClass::Global, true},
     {"MULTI_FILESPEC_HISTORY", MRSettingsKeyClass::Global, false},
     {"MULTI_PATH_HISTORY", MRSettingsKeyClass::Global, false},
+    {"PDF_EXPORT_PATH", MRSettingsKeyClass::Global, true},
+    {"PDF_EXPORT_PAGE_SEPARATOR", MRSettingsKeyClass::Global, true},
+    {"PDF_EXPORT_FONT_FAMILY", MRSettingsKeyClass::Global, true},
+    {"PDF_EXPORT_FONT_SIZE", MRSettingsKeyClass::Global, true},
+    {"PDF_EXPORT_HEADER_LINE", MRSettingsKeyClass::Global, true},
+    {"PDF_EXPORT_FOOTER_LINE", MRSettingsKeyClass::Global, true},
+    {"PDF_EXPORT_USE_PRINT_MARGIN", MRSettingsKeyClass::Global, false},
+    {"PDF_EXPORT_PRINT_MARGIN_COLUMNS", MRSettingsKeyClass::Global, false},
+    {"PDF_EXPORT_TEXT_WIDTH", MRSettingsKeyClass::Global, true},
+    {"PDF_EXPORT_LEFT_MARGIN_POINTS", MRSettingsKeyClass::Global, true},
+    {"PDF_EXPORT_RIGHT_MARGIN_POINTS", MRSettingsKeyClass::Global, true},
+    {"PDF_EXPORT_TOP_MARGIN_POINTS", MRSettingsKeyClass::Global, true},
+    {"PDF_EXPORT_BOTTOM_MARGIN_POINTS", MRSettingsKeyClass::Global, true},
     {"VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
     {"CYCLIC_VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
     {"CURSOR_BEHAVIOUR", MRSettingsKeyClass::Global, true},
@@ -520,6 +533,7 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredSarDialogOptions(MRSarDialogOptions(), errorMessage)) return false;
 	if (!setConfiguredMultiSearchDialogOptions(MRMultiSearchDialogOptions(), errorMessage)) return false;
 	if (!setConfiguredMultiSarDialogOptions(MRMultiSarDialogOptions(), errorMessage)) return false;
+	if (!setConfiguredPdfExportSettings(MRPdfExportSettings(), errorMessage)) return false;
 	if (!setConfiguredCursorBehaviour(MRCursorBehaviour::BoundToText, errorMessage)) return false;
 	if (!setConfiguredUiIndentStyle(MRUiIndentStyle::KandR, errorMessage)) return false;
 	if (!setConfiguredCursorPositionMarker("R:C", errorMessage)) return false;
@@ -785,6 +799,113 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				MRMultiSarDialogOptions options = configuredMultiSarDialogOptions();
 				if (!parseBooleanLiteral(value, options.keepFilesOpen, errorMessage)) return false;
 				return setConfiguredMultiSarDialogOptions(options, errorMessage);
+			}
+			if (upper == "PDF_EXPORT_PATH") {
+				MRPdfExportSettings settings = configuredPdfExportSettings();
+				settings.outputPath = value;
+				return setConfiguredPdfExportSettings(settings, errorMessage);
+			}
+			if (upper == "PDF_EXPORT_PAGE_SEPARATOR") {
+				MRPdfExportSettings settings = configuredPdfExportSettings();
+				settings.pageSeparatorLiteral = value;
+				return setConfiguredPdfExportSettings(settings, errorMessage);
+			}
+			if (upper == "PDF_EXPORT_FONT_FAMILY") {
+				MRPdfExportSettings settings = configuredPdfExportSettings();
+				settings.fontFamily = value;
+				return setConfiguredPdfExportSettings(settings, errorMessage);
+			}
+			if (upper == "PDF_EXPORT_FONT_SIZE") {
+				const std::string trimmed = trimAscii(value);
+				char *end = nullptr;
+				const long parsed = std::strtol(trimmed.c_str(), &end, 10);
+				MRPdfExportSettings settings = configuredPdfExportSettings();
+
+				if (trimmed.empty() || end == trimmed.c_str() || end == nullptr || *end != '\0' || parsed < 1 || parsed > 40) return setError(errorMessage, "PDF_EXPORT_FONT_SIZE must be within 1..40.");
+				settings.fontSizePoints = static_cast<int>(parsed);
+				return setConfiguredPdfExportSettings(settings, errorMessage);
+			}
+			if (upper == "PDF_EXPORT_HEADER_LINE") {
+				MRPdfExportSettings settings = configuredPdfExportSettings();
+				settings.headerLine = value;
+				return setConfiguredPdfExportSettings(settings, errorMessage);
+			}
+			if (upper == "PDF_EXPORT_FOOTER_LINE") {
+				MRPdfExportSettings settings = configuredPdfExportSettings();
+				settings.footerLine = value;
+				return setConfiguredPdfExportSettings(settings, errorMessage);
+			}
+			if (upper == "PDF_EXPORT_USE_PRINT_MARGIN") {
+				bool enabled = true;
+				MRPdfExportSettings settings = configuredPdfExportSettings();
+
+				if (!parseBooleanLiteral(value, enabled, errorMessage)) return false;
+				if (!enabled) settings.textWidth = "0";
+				return setConfiguredPdfExportSettings(settings, errorMessage);
+			}
+			if (upper == "PDF_EXPORT_PRINT_MARGIN_COLUMNS") {
+				const std::string trimmed = trimAscii(value);
+				char *end = nullptr;
+				const long parsed = std::strtol(trimmed.c_str(), &end, 10);
+				MRPdfExportSettings settings = configuredPdfExportSettings();
+
+				if (trimmed.empty() || end == trimmed.c_str() || end == nullptr || *end != '\0' || parsed < 0 || parsed > 9999) return setError(errorMessage, "PDF_EXPORT_TEXT_WIDTH must be within 0..9999.");
+				if (trimAscii(settings.textWidth) == "0") {
+					if (errorMessage != nullptr) errorMessage->clear();
+					return true;
+				}
+				settings.textWidth = value;
+				return setConfiguredPdfExportSettings(settings, errorMessage);
+			}
+			if (upper == "PDF_EXPORT_TEXT_WIDTH") {
+				const std::string trimmed = trimAscii(value);
+				char *end = nullptr;
+				const long parsed = std::strtol(trimmed.c_str(), &end, 10);
+				MRPdfExportSettings settings = configuredPdfExportSettings();
+
+				if (trimmed.empty() || end == trimmed.c_str() || end == nullptr || *end != '\0' || parsed < 0 || parsed > 9999) return setError(errorMessage, "PDF_EXPORT_TEXT_WIDTH must be within 0..9999.");
+				settings.textWidth = value;
+				return setConfiguredPdfExportSettings(settings, errorMessage);
+			}
+			if (upper == "PDF_EXPORT_LEFT_MARGIN_POINTS") {
+				const std::string trimmed = trimAscii(value);
+				char *end = nullptr;
+				const long parsed = std::strtol(trimmed.c_str(), &end, 10);
+				MRPdfExportSettings settings = configuredPdfExportSettings();
+
+				if (trimmed.empty() || end == trimmed.c_str() || end == nullptr || *end != '\0' || parsed < 0 || parsed > 9999) return setError(errorMessage, "PDF_EXPORT_LEFT_MARGIN_POINTS must be within 0..9999.");
+				settings.leftMarginPoints = value;
+				return setConfiguredPdfExportSettings(settings, errorMessage);
+			}
+			if (upper == "PDF_EXPORT_RIGHT_MARGIN_POINTS") {
+				const std::string trimmed = trimAscii(value);
+				char *end = nullptr;
+				const long parsed = std::strtol(trimmed.c_str(), &end, 10);
+				MRPdfExportSettings settings = configuredPdfExportSettings();
+
+				if (trimmed.empty() || end == trimmed.c_str() || end == nullptr || *end != '\0' || parsed < 0 || parsed > 9999) return setError(errorMessage, "PDF_EXPORT_RIGHT_MARGIN_POINTS must be within 0..9999.");
+				settings.rightMarginPoints = value;
+				return setConfiguredPdfExportSettings(settings, errorMessage);
+			}
+			if (upper == "PDF_EXPORT_TOP_MARGIN_POINTS") {
+				const std::string trimmed = trimAscii(value);
+				char *end = nullptr;
+				const long parsed = std::strtol(trimmed.c_str(), &end, 10);
+				MRPdfExportSettings settings = configuredPdfExportSettings();
+
+				if (trimmed.empty() || end == trimmed.c_str() || end == nullptr || *end != '\0' || parsed < 0 || parsed > 9999) return setError(errorMessage, "PDF_EXPORT_TOP_MARGIN_POINTS must be within 0..9999.");
+				settings.topMarginPoints = value;
+				return setConfiguredPdfExportSettings(settings, errorMessage);
+			}
+			if (upper == "PDF_EXPORT_BOTTOM_MARGIN_POINTS") {
+				const std::string trimmed = trimAscii(value);
+				char *end = nullptr;
+				const long parsed = std::strtol(trimmed.c_str(), &end, 10);
+				MRPdfExportSettings settings = configuredPdfExportSettings();
+
+				if (trimmed.empty() || end == trimmed.c_str() || end == nullptr || *end != '\0' || parsed < 0 || parsed > 9999) return setError(errorMessage, "PDF_EXPORT_BOTTOM_MARGIN_POINTS must be within 0..9999.");
+				settings.bottomMarginPoints = value;
+				return setConfiguredPdfExportSettings(settings, errorMessage);
 			}
 			if (upper == "VIRTUAL_DESKTOPS") {
 				int parsed = 1;
@@ -1116,6 +1237,108 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 			}
 			if (upper == "MULTI_SAR_KEEP_FILES_OPEN") {
 				if (!parseBooleanLiteral(value, snapshot.multiSarDialogOptions.keepFilesOpen, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "PDF_EXPORT_PATH") {
+				snapshot.pdfExportSettings.outputPath = value;
+				if (!trimAscii(value).empty()) return setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::PdfExport, value, errorMessage);
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "PDF_EXPORT_PAGE_SEPARATOR") {
+				snapshot.pdfExportSettings.pageSeparatorLiteral = value;
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "PDF_EXPORT_FONT_FAMILY") {
+				snapshot.pdfExportSettings.fontFamily = value;
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "PDF_EXPORT_FONT_SIZE") {
+				const std::string trimmed = trimAscii(value);
+				char *end = nullptr;
+				const long parsed = std::strtol(trimmed.c_str(), &end, 10);
+
+				if (trimmed.empty() || end == trimmed.c_str() || end == nullptr || *end != '\0' || parsed < 1 || parsed > 40) return setError(errorMessage, "PDF_EXPORT_FONT_SIZE must be within 1..40.");
+				snapshot.pdfExportSettings.fontSizePoints = static_cast<int>(parsed);
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "PDF_EXPORT_HEADER_LINE") {
+				snapshot.pdfExportSettings.headerLine = value;
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "PDF_EXPORT_FOOTER_LINE") {
+				snapshot.pdfExportSettings.footerLine = value;
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "PDF_EXPORT_USE_PRINT_MARGIN") {
+				bool enabled = true;
+				if (!parseBooleanLiteral(value, enabled, errorMessage)) return false;
+				if (!enabled) snapshot.pdfExportSettings.textWidth = "0";
+				return true;
+			}
+			if (upper == "PDF_EXPORT_PRINT_MARGIN_COLUMNS") {
+				const std::string trimmed = trimAscii(value);
+				char *end = nullptr;
+				const long parsed = std::strtol(trimmed.c_str(), &end, 10);
+
+				if (trimmed.empty() || end == trimmed.c_str() || end == nullptr || *end != '\0' || parsed < 0 || parsed > 9999) return setError(errorMessage, "PDF_EXPORT_TEXT_WIDTH must be within 0..9999.");
+				if (trimAscii(snapshot.pdfExportSettings.textWidth) != "0") snapshot.pdfExportSettings.textWidth = value;
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "PDF_EXPORT_TEXT_WIDTH") {
+				const std::string trimmed = trimAscii(value);
+				char *end = nullptr;
+				const long parsed = std::strtol(trimmed.c_str(), &end, 10);
+
+				if (trimmed.empty() || end == trimmed.c_str() || end == nullptr || *end != '\0' || parsed < 0 || parsed > 9999) return setError(errorMessage, "PDF_EXPORT_TEXT_WIDTH must be within 0..9999.");
+				snapshot.pdfExportSettings.textWidth = value;
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "PDF_EXPORT_LEFT_MARGIN_POINTS") {
+				const std::string trimmed = trimAscii(value);
+				char *end = nullptr;
+				const long parsed = std::strtol(trimmed.c_str(), &end, 10);
+
+				if (trimmed.empty() || end == trimmed.c_str() || end == nullptr || *end != '\0' || parsed < 0 || parsed > 9999) return setError(errorMessage, "PDF_EXPORT_LEFT_MARGIN_POINTS must be within 0..9999.");
+				snapshot.pdfExportSettings.leftMarginPoints = value;
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "PDF_EXPORT_RIGHT_MARGIN_POINTS") {
+				const std::string trimmed = trimAscii(value);
+				char *end = nullptr;
+				const long parsed = std::strtol(trimmed.c_str(), &end, 10);
+
+				if (trimmed.empty() || end == trimmed.c_str() || end == nullptr || *end != '\0' || parsed < 0 || parsed > 9999) return setError(errorMessage, "PDF_EXPORT_RIGHT_MARGIN_POINTS must be within 0..9999.");
+				snapshot.pdfExportSettings.rightMarginPoints = value;
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "PDF_EXPORT_TOP_MARGIN_POINTS") {
+				const std::string trimmed = trimAscii(value);
+				char *end = nullptr;
+				const long parsed = std::strtol(trimmed.c_str(), &end, 10);
+
+				if (trimmed.empty() || end == trimmed.c_str() || end == nullptr || *end != '\0' || parsed < 0 || parsed > 9999) return setError(errorMessage, "PDF_EXPORT_TOP_MARGIN_POINTS must be within 0..9999.");
+				snapshot.pdfExportSettings.topMarginPoints = value;
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "PDF_EXPORT_BOTTOM_MARGIN_POINTS") {
+				const std::string trimmed = trimAscii(value);
+				char *end = nullptr;
+				const long parsed = std::strtol(trimmed.c_str(), &end, 10);
+
+				if (trimmed.empty() || end == trimmed.c_str() || end == nullptr || *end != '\0' || parsed < 0 || parsed > 9999) return setError(errorMessage, "PDF_EXPORT_BOTTOM_MARGIN_POINTS must be within 0..9999.");
+				snapshot.pdfExportSettings.bottomMarginPoints = value;
+				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
 			}
 			if (upper == "VIRTUAL_DESKTOPS") {
