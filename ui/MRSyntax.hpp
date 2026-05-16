@@ -14,6 +14,8 @@ enum class MRSyntaxLanguage : unsigned char {
 	JavaScript,
 	Python,
 	Json,
+	Yaml,
+	Xml,
 	Bash,
 	Zsh,
 	Fish,
@@ -21,6 +23,7 @@ enum class MRSyntaxLanguage : unsigned char {
 	Swift,
 	Rust,
 	Go,
+	Pascal,
 	Systemd,
 	MRMAC,
 	Make,
@@ -136,6 +139,16 @@ class MRJsonSyntaxHighlighter final : public MRSyntaxHighlighter {
 	virtual MRSyntaxLineResult highlightLine(std::string_view line, MRSyntaxLineState previousState) override;
 };
 
+class MRYamlSyntaxHighlighter final : public MRSyntaxHighlighter {
+  public:
+	virtual MRSyntaxLineResult highlightLine(std::string_view line, MRSyntaxLineState previousState) override;
+};
+
+class MRXmlSyntaxHighlighter final : public MRSyntaxHighlighter {
+  public:
+	virtual MRSyntaxLineResult highlightLine(std::string_view line, MRSyntaxLineState previousState) override;
+};
+
 class MRBashSyntaxHighlighter final : public MRSyntaxHighlighter {
   public:
 	virtual MRSyntaxLineResult highlightLine(std::string_view line, MRSyntaxLineState previousState) override;
@@ -167,6 +180,11 @@ class MRRustSyntaxHighlighter final : public MRSyntaxHighlighter {
 };
 
 class MRGoSyntaxHighlighter final : public MRSyntaxHighlighter {
+  public:
+	virtual MRSyntaxLineResult highlightLine(std::string_view line, MRSyntaxLineState previousState) override;
+};
+
+class MRPascalSyntaxHighlighter final : public MRSyntaxHighlighter {
   public:
 	virtual MRSyntaxLineResult highlightLine(std::string_view line, MRSyntaxLineState previousState) override;
 };

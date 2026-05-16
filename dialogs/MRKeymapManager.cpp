@@ -22,7 +22,9 @@
 #include "MRDirtyGating.hpp"
 #include "setup/MRSetup.hpp"
 #include "setup/MRSetupCommon.hpp"
+#include "../app/MRVersion.hpp"
 #include "../app/utils/MRFileIOUtils.hpp"
+#include "../app/utils/MRStringUtils.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../config/settings/MRSettingsStorage.hpp"
 #include "../keymap/MRKeymapActionCatalog.hpp"
@@ -40,6 +42,7 @@
 #include <cstring>
 #include <dirent.h>
 #include <map>
+#include <regex>
 #include <set>
 #include <span>
 #include <string>
@@ -78,6 +81,7 @@ constexpr int kBindingDescriptionFieldSize = 128;
 constexpr int kBindingFilterFieldSize = 64;
 constexpr int kTargetFilterFieldSize = 64;
 constexpr char kBindingRecordingGlyph[] = "📼";
+constexpr std::string_view kKeymapVersionSetupKey = "KEYMAP_VERSION";
 
 TFrame *initMrDialogFrame(TRect bounds) {
 	return new MRFrame(bounds);
@@ -167,6 +171,73 @@ std::string summarizeDraftForLog(const KeymapManagerDraft &draft) {
 	for (const MRKeymapProfile &profile : draft.profiles)
 		text += " [" + profile.name + ":" + std::to_string(profile.bindings.size()) + "]";
 	return text;
+}
+
+std::string escapeMrmacSingleQuotedLiteral(const std::string &value) {
+	std::string out;
+
+	out.reserve(value.size() + 8);
+	for (const char ch : value) {
+		if (ch == '\'') out += "''";
+		else
+			out.push_back(ch);
+	}
+	return out;
+}
+
+std::string unescapeMrmacSingleQuotedLiteral(const std::string &value) {
+	std::string out;
+
+	out.reserve(value.size());
+	for (std::size_t i = 0; i < value.size(); ++i) {
+		if (value[i] == '\'' && i + 1 < value.size() && value[i + 1] == '\'') {
+			out.push_back('\'');
+			++i;
+		} else
+			out.push_back(value[i]);
+	}
+	return out;
+}
+
+bool validateKeymapFileVersion(const std::string &source, bool &upgradeRequired, std::string &errorText) {
+	static const std::regex assignmentPattern("MRSETUP\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
+	const std::uint64_t currentVersion = mrCurrentPersistenceVersion();
+	std::smatch match;
+	std::string remaining = source;
+	bool versionSeen = false;
+
+	upgradeRequired = false;
+	errorText.clear();
+	while (std::regex_search(remaining, match, assignmentPattern)) {
+		const std::string key = upperAscii(trimAscii(unescapeMrmacSingleQuotedLiteral(match[1].str())));
+		const std::string value = trimAscii(unescapeMrmacSingleQuotedLiteral(match[2].str()));
+
+		if (key == kKeymapVersionSetupKey) {
+			std::uint64_t parsedVersion = 0;
+
+			versionSeen = true;
+			if (!mrParsePersistenceVersion(value, parsedVersion)) {
+				errorText = "Invalid keymap file version.";
+				return false;
+			}
+			if (parsedVersion > currentVersion) {
+				errorText = "Keymap file targets newer build version: " + value;
+				return false;
+			}
+			if (parsedVersion < currentVersion) upgradeRequired = true;
+		}
+		remaining = match.suffix().str();
+	}
+	if (!versionSeen) upgradeRequired = true;
+	return true;
+}
+
+std::string buildSerializedKeymapFileSource(const KeymapManagerDraft &draft) {
+	std::string source;
+
+	source += "MRSETUP('KEYMAP_VERSION', '" + escapeMrmacSingleQuotedLiteral(mrCurrentPersistenceVersionString()) + "');\n";
+	source += serializeKeymapProfilesToSettingsSource(draft.profiles, draft.activeProfileName);
+	return source;
 }
 
 std::string stripTargetPrefix(std::string_view target) {
@@ -542,11 +613,14 @@ bool chooseKeymapFileForSave(std::string &selectedUri) {
 bool loadKeymapDraftFromFile(const std::string &path, KeymapManagerDraft &draft, std::string &errorText, std::vector<MRKeymapDiagnostic> *diagnosticsOut = nullptr) {
 	std::string source;
 	std::string readError;
+	bool upgradeRequired = false;
 
 	if (!readTextFile(path, source, readError)) {
 		errorText = readError;
 		return false;
 	}
+	if (!validateKeymapFileVersion(source, upgradeRequired, errorText)) return false;
+	if (upgradeRequired) mrLogMessage("Keymap file version upgrade required: " + path);
 	MRKeymapLoadResult result = loadKeymapProfilesFromSettingsSource(source);
 
 	draft.profiles = result.profiles;
@@ -581,7 +655,7 @@ bool saveKeymapDraftToFile(const KeymapManagerDraft &draft, const std::string &p
 		errorText = "Keymap file path is empty.";
 		return false;
 	}
-	if (!writeTextFile(path, serializeKeymapProfilesToSettingsSource(draft.profiles, draft.activeProfileName))) {
+	if (!writeTextFile(path, buildSerializedKeymapFileSource(draft))) {
 		errorText = "Could not write keymap file: " + path;
 		return false;
 	}

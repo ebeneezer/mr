@@ -12,8 +12,13 @@ namespace {
 constexpr std::uint16_t kSyntaxFlagCLanguage = 0x0001;
 constexpr std::uint16_t kSyntaxFlagTripleQuoted = 0x0002;
 constexpr std::uint16_t kSyntaxFlagHereDocStripTabs = 0x0004;
+constexpr std::uint16_t kSyntaxFlagPascalDirective = 0x0008;
 constexpr std::uint16_t kSyntaxFlagPayloadLengthShift = 8;
 constexpr std::uint16_t kSyntaxFlagPayloadLengthMask = 0xFF00;
+constexpr std::uint32_t kSyntaxPayloadXmlComment = 1;
+constexpr std::uint32_t kSyntaxPayloadXmlCdata = 2;
+constexpr std::uint32_t kSyntaxPayloadXmlDirective = 3;
+constexpr std::uint32_t kSyntaxPayloadXmlProcessing = 4;
 
 const char *const kMrmacKeywords[] = {
 	"IF", "THEN", "ELSE", "END", "WHILE", "DO", "TVCALL", "CALL", "RET", "GOTO", "TO", "FROM", "TRANS", "DUMP", "PERM", "AND", "OR", "NOT", "SHL", "SHR", "MOD"
@@ -148,6 +153,20 @@ const char *const kGoTypeKeywords[] = {
 	"uint32", "uint64", "uintptr"
 };
 
+const char *const kPascalKeywords[] = {
+	"AND", "ARRAY", "ASM", "BEGIN", "CASE", "CLASS", "COMP", "CONST", "CONSTRUCTOR", "DESTRUCTOR", "DIV", "DO", "DOWNTO", "ELSE", "END", "EXCEPT", "EXIT", "EXTERNAL", "FILE", "FINALLY", "FOR",
+	"FUNCTION", "GOTO", "IF", "IMPLEMENTATION", "INTERFACE", "LABEL", "MOD", "NOT", "OBJECT", "OF", "OR", "ORD", "PRIVATE", "PROCEDURE", "PROGRAM", "PROPERTY", "PROTECTED", "PUBLIC", "PUBLISHED",
+	"RECORD", "REPEAT", "SHL", "SHR", "THEN", "TO", "TRY", "TYPE", "UNIT", "UNTIL", "USES", "VAR", "WHILE", "WITH", "XOR"
+};
+
+const char *const kPascalTypeKeywords[] = {
+	"BOOLEAN", "BYTE", "CHAR", "DOUBLE", "EXTENDED", "INTEGER", "LONGINT", "REAL", "SHORTINT", "SINGLE", "STRING", "WORD"
+};
+
+const char *const kPascalConstants[] = {
+	"FALSE", "NIL", "TRUE"
+};
+
 const char *const kSystemdSections[] = {
 	"[UNIT]", "[SERVICE]", "[SOCKET]", "[TIMER]", "[MOUNT]", "[AUTOMOUNT]", "[TARGET]", "[PATH]", "[SLICE]", "[SCOPE]", "[SWAP]", "[DEVICE]", "[INSTALL]", "[LINK]", "[NETDEV]", "[MATCH]",
 	"[NETWORK]", "[ADDRESS]", "[ROUTE]", "[DHCPV4]", "[DHCPV6]", "[BRIDGE]", "[VLAN]"
@@ -192,6 +211,21 @@ static bool isRawStringDelimiterChar(char ch) {
 	return std::isalnum(value) || ch == '_';
 }
 
+static bool isYamlIdentifierChar(char ch) {
+	unsigned char value = static_cast<unsigned char>(ch);
+	return std::isalnum(value) || ch == '_' || ch == '-';
+}
+
+static bool isXmlNameStartChar(char ch) {
+	unsigned char value = static_cast<unsigned char>(ch);
+	return std::isalpha(value) || ch == '_' || ch == ':';
+}
+
+static bool isXmlNameChar(char ch) {
+	unsigned char value = static_cast<unsigned char>(ch);
+	return std::isalnum(value) || ch == '_' || ch == ':' || ch == '-' || ch == '.';
+}
+
 static std::size_t skipWhitespaceView(std::string_view text, std::size_t pos = 0) {
 	while (pos < text.size() && (text[pos] == ' ' || text[pos] == '\t'))
 		++pos;
@@ -209,6 +243,97 @@ static std::string_view trimWhitespaceView(std::string_view text) noexcept {
 	while (!text.empty() && (text.front() == ' ' || text.front() == '\t' || text.front() == '\r')) text.remove_prefix(1);
 	while (!text.empty() && (text.back() == ' ' || text.back() == '\t' || text.back() == '\r')) text.remove_suffix(1);
 	return text;
+}
+
+static std::size_t findYamlCommentStart(std::string_view text) noexcept {
+	bool inSingleQuote = false;
+	bool inDoubleQuote = false;
+
+	for (std::size_t i = 0; i < text.size(); ++i) {
+		const char ch = text[i];
+		if (inSingleQuote) {
+			if (ch == '\'' && i + 1 < text.size() && text[i + 1] == '\'') {
+				++i;
+				continue;
+			}
+			if (ch == '\'') inSingleQuote = false;
+			continue;
+		}
+		if (inDoubleQuote) {
+			if (ch == '\\' && i + 1 < text.size()) {
+				++i;
+				continue;
+			}
+			if (ch == '"') inDoubleQuote = false;
+			continue;
+		}
+		if (ch == '\'') {
+			inSingleQuote = true;
+			continue;
+		}
+		if (ch == '"') {
+			inDoubleQuote = true;
+			continue;
+		}
+		if (ch == '#' && (i == 0 || std::isspace(static_cast<unsigned char>(text[i - 1])) != 0)) return i;
+	}
+	return std::string_view::npos;
+}
+
+static std::size_t findYamlKeyDelimiter(std::string_view text) noexcept {
+	bool inSingleQuote = false;
+	bool inDoubleQuote = false;
+	int flowDepth = 0;
+	std::size_t i = skipWhitespaceView(text);
+
+	if (i < text.size() && text[i] == '-') {
+		const std::size_t next = i + 1;
+		if (next < text.size() && std::isspace(static_cast<unsigned char>(text[next])) != 0) i = skipWhitespaceView(text, next + 1);
+	}
+
+	for (; i < text.size(); ++i) {
+		const char ch = text[i];
+		if (inSingleQuote) {
+			if (ch == '\'' && i + 1 < text.size() && text[i + 1] == '\'') {
+				++i;
+				continue;
+			}
+			if (ch == '\'') inSingleQuote = false;
+			continue;
+		}
+		if (inDoubleQuote) {
+			if (ch == '\\' && i + 1 < text.size()) {
+				++i;
+				continue;
+			}
+			if (ch == '"') inDoubleQuote = false;
+			continue;
+		}
+		if (ch == '\'') {
+			inSingleQuote = true;
+			continue;
+		}
+		if (ch == '"') {
+			inDoubleQuote = true;
+			continue;
+		}
+		if (ch == '[' || ch == '{') {
+			++flowDepth;
+			continue;
+		}
+		if ((ch == ']' || ch == '}') && flowDepth > 0) {
+			--flowDepth;
+			continue;
+		}
+		if (flowDepth > 0) continue;
+		if (ch != ':') continue;
+		if (i + 1 < text.size()) {
+			const char next = text[i + 1];
+			if (!(std::isspace(static_cast<unsigned char>(next)) != 0 || next == '#' || next == '|' || next == '>' || next == '[' || next == '{')) continue;
+		}
+		return i;
+	}
+	return std::string_view::npos;
 }
 
 static bool isMrmacDelimiterChar(char ch) {
@@ -246,6 +371,42 @@ static std::size_t mrmacDelimiterLength(std::string_view line, std::size_t pos) 
 	if (pos + 1 >= line.size()) return 0;
 	if ((line[pos] == '<' && line[pos + 1] == '=') || (line[pos] == '>' && line[pos + 1] == '=') || (line[pos] == '<' && line[pos + 1] == '>') || (line[pos] == ':' && line[pos + 1] == '=') ||
 		(line[pos] == '.' && line[pos + 1] == '.') || (line[pos] == '&' && line[pos + 1] == '&') || (line[pos] == '|' && line[pos + 1] == '|'))
+		return 2;
+	return 0;
+}
+
+static bool isPascalDelimiterChar(char ch) {
+	switch (ch) {
+		case '@':
+		case '(':
+		case ')':
+		case '=':
+		case '*':
+		case '+':
+		case '-':
+		case '/':
+		case '[':
+		case ']':
+		case '.':
+		case ',':
+		case '$':
+		case '#':
+		case '<':
+		case '>':
+		case ':':
+		case ';':
+			return true;
+		default:
+			return false;
+	}
+}
+
+static std::size_t pascalDelimiterLength(std::string_view line, std::size_t pos) {
+	if (pos + 1 >= line.size()) return 0;
+	const char ch0 = line[pos];
+	const char ch1 = line[pos + 1];
+
+	if ((ch0 == ':' && ch1 == '=') || (ch0 == '<' && ch1 == '=') || (ch0 == '>' && ch1 == '=') || (ch0 == '<' && ch1 == '>') || (ch0 == '.' && ch1 == '.'))
 		return 2;
 	return 0;
 }
@@ -1163,6 +1324,108 @@ static void appendRun(std::vector<MRSyntaxTokenRun> &runs, std::size_t start, st
 		}
 	}
 	runs.push_back(MRSyntaxTokenRun(static_cast<std::uint32_t>(start), static_cast<std::uint32_t>(end - start), token));
+}
+
+static std::size_t skipXmlName(std::string_view text, std::size_t pos) {
+	if (pos >= text.size() || !isXmlNameStartChar(text[pos])) return pos;
+	++pos;
+	while (pos < text.size() && isXmlNameChar(text[pos]))
+		++pos;
+	return pos;
+}
+
+static std::size_t findXmlCommentEnd(std::string_view line, std::size_t start) {
+	const std::size_t end = line.find("-->", start);
+	return end == std::string_view::npos ? std::string_view::npos : end + 3;
+}
+
+static std::size_t findXmlCdataEnd(std::string_view line, std::size_t start) {
+	const std::size_t end = line.find("]]>", start);
+	return end == std::string_view::npos ? std::string_view::npos : end + 3;
+}
+
+static std::size_t findXmlMarkupEnd(std::string_view line, std::size_t start) {
+	char quote = '\0';
+
+	for (std::size_t i = start; i < line.size(); ++i) {
+		const char ch = line[i];
+		if (quote != '\0') {
+			if (ch == quote) quote = '\0';
+			continue;
+		}
+		if (ch == '"' || ch == '\'') {
+			quote = ch;
+			continue;
+		}
+		if (ch == '>') return i + 1;
+	}
+	return std::string_view::npos;
+}
+
+static std::size_t findXmlProcessingEnd(std::string_view line, std::size_t start) {
+	char quote = '\0';
+
+	for (std::size_t i = start; i < line.size(); ++i) {
+		const char ch = line[i];
+		if (quote != '\0') {
+			if (ch == quote) quote = '\0';
+			continue;
+		}
+		if (ch == '"' || ch == '\'') {
+			quote = ch;
+			continue;
+		}
+		if (ch == '?' && i + 1 < line.size() && line[i + 1] == '>') return i + 2;
+	}
+	return std::string_view::npos;
+}
+
+static void appendXmlTagRuns(std::vector<MRSyntaxTokenRun> &runs, std::string_view line, std::size_t start, std::size_t end) {
+	if (start >= end || start >= line.size() || line[start] != '<') return;
+
+	std::size_t i = start;
+	appendRun(runs, i, i + 1, MRSyntaxToken::Delimiter);
+	++i;
+
+	if (i < end && (line[i] == '/' || line[i] == '?')) {
+		appendRun(runs, i, i + 1, MRSyntaxToken::Delimiter);
+		++i;
+	}
+
+	if (i < end && isXmlNameStartChar(line[i])) {
+		const std::size_t nameEnd = std::min(skipXmlName(line, i), end);
+		appendRun(runs, i, nameEnd, MRSyntaxToken::Keyword);
+		i = nameEnd;
+	}
+
+	while (i < end) {
+		if (line[i] == '"' || line[i] == '\'') {
+			const std::size_t stringStart = i;
+			const char quote = line[i++];
+			while (i < end && line[i] != quote)
+				++i;
+			if (i < end) ++i;
+			appendRun(runs, stringStart, i, MRSyntaxToken::String);
+			continue;
+		}
+		if (i + 1 < end && line[i] == '/' && line[i + 1] == '>') {
+			appendRun(runs, i, i + 2, MRSyntaxToken::Delimiter);
+			i += 2;
+			continue;
+		}
+		if (line[i] == '>' || line[i] == '/' || line[i] == '=' || line[i] == '?') {
+			appendRun(runs, i, i + 1, MRSyntaxToken::Delimiter);
+			++i;
+			continue;
+		}
+		if (isXmlNameStartChar(line[i])) {
+			const std::size_t nameEnd = std::min(skipXmlName(line, i), end);
+			appendRun(runs, i, nameEnd, MRSyntaxToken::Key);
+			i = nameEnd;
+			continue;
+		}
+		++i;
+	}
 }
 
 static MRSyntaxTokenMap tokenMapFromRuns(std::size_t length, const std::vector<MRSyntaxTokenRun> &runs) {
@@ -3389,6 +3652,370 @@ MRSyntaxLineResult MRJsonSyntaxHighlighter::highlightLine(std::string_view line,
 	return result;
 }
 
+MRSyntaxLineResult MRYamlSyntaxHighlighter::highlightLine(std::string_view line, MRSyntaxLineState previousState) {
+	MRSyntaxLineResult result;
+	result.stateOut = previousState;
+
+	const std::size_t commentStart = findYamlCommentStart(line);
+	const std::string_view content = commentStart == std::string_view::npos ? line : line.substr(0, commentStart);
+	const std::size_t keyDelimiter = findYamlKeyDelimiter(content);
+
+	for (std::size_t i = 0; i < content.size();) {
+		if (line[i] == '"' || line[i] == '\'') {
+			const std::size_t start = i;
+			const char quote = line[i++];
+
+			while (i < content.size()) {
+				if (quote == '\'' && line[i] == '\'' && i + 1 < content.size() && line[i + 1] == '\'') {
+					i += 2;
+					continue;
+				}
+				if (quote == '"' && line[i] == '\\' && i + 1 < content.size()) {
+					i += 2;
+					continue;
+				}
+				if (line[i] == quote) {
+					++i;
+					break;
+				}
+				++i;
+			}
+			appendRun(result.tokenRuns, start, i, start < keyDelimiter ? MRSyntaxToken::Key : MRSyntaxToken::String);
+			continue;
+		}
+
+		if (line[i] == '-' && (i == 0 || std::isspace(static_cast<unsigned char>(line[i - 1])) != 0)) {
+			const std::size_t next = i + 1;
+			if (next < content.size() && std::isspace(static_cast<unsigned char>(line[next])) != 0) {
+				appendRun(result.tokenRuns, i, next, MRSyntaxToken::Delimiter);
+				i = next;
+				continue;
+			}
+		}
+
+		if (keyDelimiter != std::string_view::npos && i == keyDelimiter) {
+			appendRun(result.tokenRuns, i, i + 1, MRSyntaxToken::Delimiter);
+			++i;
+			continue;
+		}
+
+		if ((line[i] == '|' || line[i] == '>') && i > keyDelimiter && (i == 0 || std::isspace(static_cast<unsigned char>(line[i - 1])) != 0)) {
+			appendRun(result.tokenRuns, i, i + 1, MRSyntaxToken::Delimiter);
+			++i;
+			continue;
+		}
+
+		if (line[i] == '-' || isDecimalDigitChar(line[i])) {
+			const std::size_t start = i;
+			const std::size_t end = consumeJsonNumber(content, i);
+			if (end > start + (line[start] == '-' ? 1U : 0U)) {
+				appendRun(result.tokenRuns, start, end, MRSyntaxToken::Number);
+				i = end;
+				continue;
+			}
+		}
+
+		if (isYamlIdentifierChar(line[i])) {
+			const std::size_t start = i++;
+			while (i < content.size() && isYamlIdentifierChar(line[i])) ++i;
+			const std::string_view word = line.substr(start, i - start);
+			const std::string upperWord = upperCopyView(word);
+
+			if (keyDelimiter != std::string_view::npos && i <= keyDelimiter) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Key);
+				continue;
+			}
+			if (upperWord == "TRUE" || upperWord == "FALSE" || upperWord == "NULL" || upperWord == "YES" || upperWord == "NO" || upperWord == "ON" || upperWord == "OFF" || upperWord == "~") {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Keyword);
+				continue;
+			}
+			continue;
+		}
+
+		if (line[i] == '[' || line[i] == ']' || line[i] == '{' || line[i] == '}' || line[i] == ',' || line[i] == '?' || line[i] == '&' || line[i] == '*' || line[i] == '!') {
+			appendRun(result.tokenRuns, i, i + 1, MRSyntaxToken::Delimiter);
+			++i;
+			continue;
+		}
+
+		++i;
+	}
+
+	if (commentStart != std::string_view::npos) appendRun(result.tokenRuns, commentStart, line.size(), MRSyntaxToken::Comment);
+	return result;
+}
+
+MRSyntaxLineResult MRXmlSyntaxHighlighter::highlightLine(std::string_view line, MRSyntaxLineState previousState) {
+	MRSyntaxLineResult result;
+	result.stateOut = MRSyntaxLineState();
+	std::size_t i = 0;
+
+	if (previousState.mode == MRSyntaxMode::BlockComment) {
+		std::size_t end = std::string_view::npos;
+		MRSyntaxToken token = MRSyntaxToken::Comment;
+
+		switch (previousState.payload) {
+			case kSyntaxPayloadXmlComment:
+				end = findXmlCommentEnd(line, 0);
+				token = MRSyntaxToken::Comment;
+				break;
+			case kSyntaxPayloadXmlCdata:
+				end = findXmlCdataEnd(line, 0);
+				token = MRSyntaxToken::String;
+				break;
+			case kSyntaxPayloadXmlDirective:
+				end = findXmlMarkupEnd(line, 0);
+				token = MRSyntaxToken::Directive;
+				break;
+			case kSyntaxPayloadXmlProcessing:
+				end = findXmlProcessingEnd(line, 0);
+				token = MRSyntaxToken::Directive;
+				break;
+			default:
+				break;
+		}
+
+		if (end == std::string_view::npos) {
+			appendRun(result.tokenRuns, 0, line.size(), token);
+			result.stateOut = previousState;
+			return result;
+		}
+		appendRun(result.tokenRuns, 0, end, token);
+		i = end;
+	}
+
+	if (previousState.mode == MRSyntaxMode::QuotedString) {
+		const char quote = static_cast<char>(previousState.payload);
+		const std::size_t start = i;
+		while (i < line.size() && line[i] != quote)
+			++i;
+		if (i < line.size()) ++i;
+		appendRun(result.tokenRuns, start, i, MRSyntaxToken::String);
+		if (i >= line.size() && (line.empty() || line.back() != quote)) {
+			result.stateOut.mode = MRSyntaxMode::QuotedString;
+			result.stateOut.payload = previousState.payload;
+			return result;
+		}
+	}
+
+	while (i < line.size()) {
+		if (i + 4 <= line.size() && line.substr(i, 4) == "<!--") {
+			const std::size_t end = findXmlCommentEnd(line, i + 4);
+			if (end == std::string_view::npos) {
+				appendRun(result.tokenRuns, i, line.size(), MRSyntaxToken::Comment);
+				result.stateOut.mode = MRSyntaxMode::BlockComment;
+				result.stateOut.payload = kSyntaxPayloadXmlComment;
+				return result;
+			}
+			appendRun(result.tokenRuns, i, end, MRSyntaxToken::Comment);
+			i = end;
+			continue;
+		}
+		if (i + 9 <= line.size() && line.substr(i, 9) == "<![CDATA[") {
+			const std::size_t end = findXmlCdataEnd(line, i + 9);
+			if (end == std::string_view::npos) {
+				appendRun(result.tokenRuns, i, line.size(), MRSyntaxToken::String);
+				result.stateOut.mode = MRSyntaxMode::BlockComment;
+				result.stateOut.payload = kSyntaxPayloadXmlCdata;
+				return result;
+			}
+			appendRun(result.tokenRuns, i, end, MRSyntaxToken::String);
+			i = end;
+			continue;
+		}
+		if (i + 2 <= line.size() && line.substr(i, 2) == "<?") {
+			const std::size_t end = findXmlProcessingEnd(line, i + 2);
+			if (end == std::string_view::npos) {
+				appendRun(result.tokenRuns, i, line.size(), MRSyntaxToken::Directive);
+				result.stateOut.mode = MRSyntaxMode::BlockComment;
+				result.stateOut.payload = kSyntaxPayloadXmlProcessing;
+				return result;
+			}
+			appendRun(result.tokenRuns, i, end, MRSyntaxToken::Directive);
+			i = end;
+			continue;
+		}
+		if (i + 2 <= line.size() && line.substr(i, 2) == "<!" && (i + 4 > line.size() || line.substr(i, 4) != "<!--")) {
+			const std::size_t end = findXmlMarkupEnd(line, i + 2);
+			if (end == std::string_view::npos) {
+				appendRun(result.tokenRuns, i, line.size(), MRSyntaxToken::Directive);
+				result.stateOut.mode = MRSyntaxMode::BlockComment;
+				result.stateOut.payload = kSyntaxPayloadXmlDirective;
+				return result;
+			}
+			appendRun(result.tokenRuns, i, end, MRSyntaxToken::Directive);
+			i = end;
+			continue;
+		}
+		if (line[i] == '<') {
+			const std::size_t end = findXmlMarkupEnd(line, i + 1);
+			const std::size_t tokenEnd = end == std::string_view::npos ? line.size() : end;
+			appendXmlTagRuns(result.tokenRuns, line, i, tokenEnd);
+			if (end == std::string_view::npos) {
+				char pendingQuote = '\0';
+				for (std::size_t j = i + 1; j < line.size(); ++j) {
+					if (pendingQuote != '\0') {
+						if (line[j] == pendingQuote) pendingQuote = '\0';
+						continue;
+					}
+					if (line[j] == '"' || line[j] == '\'') pendingQuote = line[j];
+				}
+				if (pendingQuote != '\0') {
+					result.stateOut.mode = MRSyntaxMode::QuotedString;
+					result.stateOut.payload = static_cast<std::uint32_t>(pendingQuote);
+				}
+				return result;
+			}
+			i = end;
+			continue;
+		}
+		++i;
+	}
+
+	return result;
+}
+
+MRSyntaxLineResult MRPascalSyntaxHighlighter::highlightLine(std::string_view line, MRSyntaxLineState previousState) {
+	MRSyntaxLineResult result;
+	result.stateOut = MRSyntaxLineState();
+	std::size_t i = 0;
+
+	if (previousState.mode == MRSyntaxMode::BlockComment) {
+		const std::size_t start = 0;
+		const MRSyntaxToken continuedToken = (previousState.flags & kSyntaxFlagPascalDirective) != 0 ? MRSyntaxToken::Directive : MRSyntaxToken::Comment;
+		if (previousState.payload == static_cast<std::uint32_t>('{')) {
+			while (i < line.size() && line[i] != '}')
+				++i;
+			if (i < line.size()) ++i;
+		} else {
+			while (i + 1 < line.size() && !(line[i] == '*' && line[i + 1] == ')'))
+				++i;
+			if (i + 1 < line.size()) i += 2;
+			else
+				i = line.size();
+		}
+		appendRun(result.tokenRuns, start, i, continuedToken);
+		if (i >= line.size() && (previousState.payload == static_cast<std::uint32_t>('{') ? (line.empty() || line.back() != '}') : (line.size() < 2 || line.substr(line.size() - 2) != "*)"))) {
+			result.stateOut.mode = MRSyntaxMode::BlockComment;
+			result.stateOut.payload = previousState.payload;
+			result.stateOut.flags = previousState.flags;
+			return result;
+		}
+	}
+
+	while (i < line.size()) {
+		if (i + 1 < line.size() && line[i] == '/' && line[i + 1] == '/') {
+			appendRun(result.tokenRuns, i, line.size(), MRSyntaxToken::Comment);
+			break;
+		}
+
+		if (line[i] == '{') {
+			const std::size_t start = i++;
+			const bool isDirective = i < line.size() && line[i] == '$';
+			while (i < line.size() && line[i] != '}')
+				++i;
+			if (i < line.size()) ++i;
+			appendRun(result.tokenRuns, start, i, isDirective ? MRSyntaxToken::Directive : MRSyntaxToken::Comment);
+			if (i >= line.size() && (line.empty() || line.back() != '}')) {
+				result.stateOut.mode = MRSyntaxMode::BlockComment;
+				result.stateOut.payload = static_cast<std::uint32_t>('{');
+				result.stateOut.flags = isDirective ? kSyntaxFlagPascalDirective : 0;
+				return result;
+			}
+			continue;
+		}
+
+		if (i + 1 < line.size() && line[i] == '(' && line[i + 1] == '*') {
+			const std::size_t start = i;
+			const bool isDirective = i + 2 < line.size() && line[i + 2] == '$';
+			i += 2;
+			while (i + 1 < line.size() && !(line[i] == '*' && line[i + 1] == ')'))
+				++i;
+			if (i + 1 < line.size()) i += 2;
+			else
+				i = line.size();
+			appendRun(result.tokenRuns, start, i, isDirective ? MRSyntaxToken::Directive : MRSyntaxToken::Comment);
+			if (i >= line.size() && (line.size() < 2 || line.substr(line.size() - 2) != "*)")) {
+				result.stateOut.mode = MRSyntaxMode::BlockComment;
+				result.stateOut.payload = static_cast<std::uint32_t>('*');
+				result.stateOut.flags = isDirective ? kSyntaxFlagPascalDirective : 0;
+				return result;
+			}
+			continue;
+		}
+
+		if (line[i] == '\'') {
+			const std::size_t start = i++;
+			while (i < line.size()) {
+				if (line[i] == '\'' && i + 1 < line.size() && line[i + 1] == '\'') {
+					i += 2;
+					continue;
+				}
+				if (line[i] == '\'') {
+					++i;
+					break;
+				}
+				++i;
+			}
+			appendRun(result.tokenRuns, start, i, MRSyntaxToken::String);
+			continue;
+		}
+
+		if (line[i] == '$' && i + 1 < line.size() && isHexDigitChar(line[i + 1])) {
+			const std::size_t start = i++;
+			while (i < line.size() && isHexDigitChar(line[i])) ++i;
+			appendRun(result.tokenRuns, start, i, MRSyntaxToken::Number);
+			continue;
+		}
+
+		if (isDecimalDigitChar(line[i]) || (line[i] == '.' && i + 1 < line.size() && isDecimalDigitChar(line[i + 1]))) {
+			const std::size_t start = i;
+			const std::size_t end = consumeCppNumber(line, i);
+			appendRun(result.tokenRuns, start, end, MRSyntaxToken::Number);
+			i = end;
+			continue;
+		}
+
+		if (isIdentifierStart(line[i])) {
+			const std::size_t start = i++;
+			while (i < line.size() && isIdentifierChar(line[i])) ++i;
+			const std::string_view word = line.substr(start, i - start);
+			if (mrmacWordInList(word, kPascalKeywords, sizeof(kPascalKeywords) / sizeof(kPascalKeywords[0]))) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Keyword);
+				continue;
+			}
+			if (mrmacWordInList(word, kPascalTypeKeywords, sizeof(kPascalTypeKeywords) / sizeof(kPascalTypeKeywords[0]))) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Type);
+				continue;
+			}
+			if (mrmacWordInList(word, kPascalConstants, sizeof(kPascalConstants) / sizeof(kPascalConstants[0]))) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Key);
+				continue;
+			}
+			continue;
+		}
+
+		{
+			const std::size_t delimiterLength = pascalDelimiterLength(line, i);
+			if (delimiterLength > 0) {
+				appendRun(result.tokenRuns, i, i + delimiterLength, MRSyntaxToken::Delimiter);
+				i += delimiterLength;
+				continue;
+			}
+		}
+
+		if (isPascalDelimiterChar(line[i])) {
+			appendRun(result.tokenRuns, i, i + 1, MRSyntaxToken::Delimiter);
+			++i;
+			continue;
+		}
+
+		++i;
+	}
+
+	return result;
+}
+
 MRSyntaxLineResult MRGoSyntaxHighlighter::highlightLine(std::string_view line, MRSyntaxLineState previousState) {
 	MRSyntaxLineResult result;
 	result.stateOut = MRSyntaxLineState();
@@ -3603,6 +4230,14 @@ MRSyntaxLineResult tmrHighlightTextLine(MRSyntaxLanguage language, std::string_v
 			MRJsonSyntaxHighlighter highlighter;
 			return highlighter.highlightLine(line, previousState);
 		}
+		case MRSyntaxLanguage::Yaml: {
+			MRYamlSyntaxHighlighter highlighter;
+			return highlighter.highlightLine(line, previousState);
+		}
+		case MRSyntaxLanguage::Xml: {
+			MRXmlSyntaxHighlighter highlighter;
+			return highlighter.highlightLine(line, previousState);
+		}
 		case MRSyntaxLanguage::Bash: {
 			MRBashSyntaxHighlighter highlighter;
 			return highlighter.highlightLine(line, previousState);
@@ -3629,6 +4264,10 @@ MRSyntaxLineResult tmrHighlightTextLine(MRSyntaxLanguage language, std::string_v
 		}
 		case MRSyntaxLanguage::Go: {
 			MRGoSyntaxHighlighter highlighter;
+			return highlighter.highlightLine(line, previousState);
+		}
+		case MRSyntaxLanguage::Pascal: {
+			MRPascalSyntaxHighlighter highlighter;
 			return highlighter.highlightLine(line, previousState);
 		}
 		case MRSyntaxLanguage::Systemd: {

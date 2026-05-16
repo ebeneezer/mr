@@ -18,6 +18,7 @@ struct MRSettingsLoadReport {
 		ThemeFallbackUsed = 1u << 5,
 		AnchoredSettingsPath = 1u << 6,
 		ObsoleteFeProfileDropped = 1u << 7,
+		VersionUpgradeRequired = 1u << 8,
 	};
 
 	unsigned int flags = None;

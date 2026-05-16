@@ -17,6 +17,11 @@ There is one authoritative runtime settings model: the central in-memory model i
 `settings.mrmac` is serialization and bootstrap input.
 It is not the runtime authority.
 
+The runtime model is the complete current-version settings model.
+
+Older or partial settings inputs must be upgraded by bootstrap normalization
+into that complete current model before final authoritative startup apply.
+
 ## Invariants
 
 - No shadow settings stores.
@@ -25,6 +30,8 @@ It is not the runtime authority.
 - No duplicate ownership for the same setting.
 - Unknown/obsolete keys are not semantically carried forward.
 - Missing current keys are supplied from defaults.
+- Known valid older settings are carried forward into the current model by
+  canonical meaning.
 - Settings keys must have one canonical spelling and one canonical meaning.
 
 ## MRSETUP

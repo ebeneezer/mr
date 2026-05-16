@@ -70,6 +70,7 @@ std::string mr::settings::storage::describeSettingsLoadReportImpl(const MRSettin
 	if (hasFlag(report, MRSettingsLoadReport::ThemeFallbackUsed)) parts.emplace_back("theme fallback applied");
 	if (hasFlag(report, MRSettingsLoadReport::AnchoredSettingsPath)) parts.emplace_back("settings path anchored to active file");
 	if (hasFlag(report, MRSettingsLoadReport::ObsoleteFeProfileDropped)) parts.emplace_back("obsolete MREDITPROFILE directives dropped; FE profile defaults restored");
+	if (hasFlag(report, MRSettingsLoadReport::VersionUpgradeRequired)) parts.emplace_back("persisted version upgraded");
 	if (parts.empty()) return std::string();
 	for (std::size_t i = 0; i < parts.size(); ++i) {
 		if (i != 0) text += "; ";

@@ -363,6 +363,14 @@ class MRTextBufferModel {
 			mLanguage = MRSyntaxLanguage::Json;
 			return;
 		}
+		if (normalizedCodeLanguage == "YAML") {
+			mLanguage = MRSyntaxLanguage::Yaml;
+			return;
+		}
+		if (normalizedCodeLanguage == "XML") {
+			mLanguage = MRSyntaxLanguage::Xml;
+			return;
+		}
 		if (normalizedCodeLanguage == "PERL") {
 			mLanguage = MRSyntaxLanguage::Perl;
 			return;
@@ -377,6 +385,10 @@ class MRTextBufferModel {
 		}
 		if (normalizedCodeLanguage == "GO") {
 			mLanguage = MRSyntaxLanguage::Go;
+			return;
+		}
+		if (normalizedCodeLanguage == "PASCAL") {
+			mLanguage = MRSyntaxLanguage::Pascal;
 			return;
 		}
 		if (normalizedCodeLanguage == "SYSTEMD") {

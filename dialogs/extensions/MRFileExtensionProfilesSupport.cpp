@@ -45,10 +45,13 @@ const char *dialogCodeLanguageLabel(const std::string &codeLanguage) {
 	if (normalized == "ZSH") return "zsh";
 	if (normalized == "FISH") return "fish";
 	if (normalized == "JSON") return "JSON";
+	if (normalized == "YAML") return "YAML";
+	if (normalized == "XML") return "XML";
 	if (normalized == "PERL") return "Perl";
 	if (normalized == "SWIFT") return "Swift";
 	if (normalized == "RUST") return "Rust";
 	if (normalized == "GO") return "Go";
+	if (normalized == "PASCAL") return "Pascal";
 	if (normalized == "SYSTEMD") return "systemd et al.";
 	return "None";
 }
@@ -68,10 +71,13 @@ bool parseDialogCodeLanguage(const std::string &dialogValue, std::string &canoni
 	else if (normalized == "ZSH") canonicalValue = "ZSH";
 	else if (normalized == "FISH") canonicalValue = "FISH";
 	else if (normalized == "JSON") canonicalValue = "JSON";
+	else if (normalized == "YAML") canonicalValue = "YAML";
+	else if (normalized == "XML") canonicalValue = "XML";
 	else if (normalized == "PERL") canonicalValue = "PERL";
 	else if (normalized == "SWIFT") canonicalValue = "SWIFT";
 	else if (normalized == "RUST") canonicalValue = "RUST";
 	else if (normalized == "GO") canonicalValue = "GO";
+	else if (normalized == "PASCAL") canonicalValue = "PASCAL";
 	else if (normalized == "SYSTEMD" || normalized == "SYSTEMD ET AL.") canonicalValue = "SYSTEMD";
 	else
 		return false;
@@ -147,7 +153,7 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.defaultExtensions = readRecordField(record.defaultExtensions);
 	{
 		if (!parseDialogCodeLanguage(readRecordField(record.codeLanguage), settings.codeLanguage)) {
-			errorText = "CODE_LANGUAGE must be None, Automatic, C, C++, Python, JavaScript, TypeScript, TSX, Bash, zsh, fish, JSON, Perl, Swift, Rust, Go or systemd et al..";
+			errorText = "CODE_LANGUAGE must be None, Automatic, C, C++, Python, JavaScript, TypeScript, TSX, Bash, zsh, fish, JSON, YAML, XML, Perl, Swift, Rust, Go, Pascal or systemd et al..";
 			return false;
 		}
 	}

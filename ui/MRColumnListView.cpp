@@ -107,8 +107,34 @@ TColorAttr MRColumnListView::mapColor(uchar index) {
 
 void MRColumnListView::focusItemNum(short item) {
 	const short oldFocused = focused;
+	const short oldTopItem = topItem;
 
-	TListBox::focusItemNum(item);
+	if (vScrollBar != nullptr) {
+		TListBox::focusItemNum(item);
+		if (focused != oldFocused) dispatchSelectionChanged();
+		return;
+	}
+	if (item < 0)
+		item = 0;
+	else if (item >= range && range > 0)
+		item = range - 1;
+	if (range == 0) return;
+
+	focused = item;
+	if (size.y > 0) {
+		if (item < topItem) {
+			if (numCols == 1)
+				topItem = item;
+			else
+				topItem = item - item % size.y;
+		} else if (item >= topItem + size.y * numCols) {
+			if (numCols == 1)
+				topItem = item - size.y + 1;
+			else
+				topItem = item - item % size.y - (size.y * (numCols - 1));
+		}
+	}
+	if (focused != oldFocused || topItem != oldTopItem) drawView();
 	if (focused != oldFocused) dispatchSelectionChanged();
 }
 

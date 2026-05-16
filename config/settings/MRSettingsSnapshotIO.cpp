@@ -1,3 +1,4 @@
+#include "../../app/MRVersion.hpp"
 #include "../../app/utils/MRFileIOUtils.hpp"
 #include "../../app/utils/MRStringUtils.hpp"
 #include "MRSettingsEditSetup.hpp"
@@ -25,7 +26,6 @@ static const char *const kThemeSettingsKey = "COLORTHEMEURI";
 static const char *const kKeymapSettingsKey = "KEYMAPURI";
 static const char *const kWindowColorThemeProfileKey = "WINDOW_COLORTHEME_URI";
 static const char *const kSettingsVersionKey = "SETTINGS_VERSION";
-static const char *const kCurrentSettingsVersion = "2";
 static const char *const kSearchTextTypeLiteral = "LITERAL";
 static const char *const kSearchTextTypePcre = "PCRE";
 static const char *const kSearchTextTypeWord = "WORD";
@@ -489,7 +489,7 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	const MREditSettingDescriptor *descriptors = editSettingDescriptors(descriptorCount);
 
 	source += "$MACRO MR_SETTINGS FROM EDIT;\n";
-	source += "MRSETUP('" + std::string(kSettingsVersionKey) + "', '" + escapeMrmacSingleQuotedLiteral(kCurrentSettingsVersion) + "');\n";
+	source += "MRSETUP('" + std::string(kSettingsVersionKey) + "', '" + escapeMrmacSingleQuotedLiteral(mrCurrentPersistenceVersionString()) + "');\n";
 	source += "MRSETUP('SETTINGSPATH', '" + escapeMrmacSingleQuotedLiteral(settingsPath) + "');\n";
 	source += "MRSETUP('MACROPATH', '" + escapeMrmacSingleQuotedLiteral(macroDir) + "');\n";
 	source += "MRSETUP('HELPPATH', '" + escapeMrmacSingleQuotedLiteral(helpPath) + "');\n";

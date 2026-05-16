@@ -1,4 +1,5 @@
 #include <unordered_map>
+#include "../app/MRVersion.hpp"
 #include "../app/utils/MRConstants.hpp"
 #include "../app/utils/MRFileIOUtils.hpp"
 #include "../app/utils/MRStringUtils.hpp"
@@ -7377,7 +7378,8 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					if (setupKey != "KEYMAP_PROFILE" && setupKey != "KEYMAP_BIND" && setupKey != "ACTIVE_KEYMAP_PROFILE")
 						if (!mrvmFlushPendingStartupKeymapBatch(&errorText)) throw std::runtime_error("MRSETUP keymap batch flush failed: " + (errorText.empty() ? std::string("invalid keymap batch.") : errorText));
 					if (setupKey == "SETTINGS_VERSION") {
-						if (trimAscii(valueAsString(args[1])) != "2") throw std::runtime_error("MRSETUP(SETTINGS_VERSION) supports only version 2.");
+						if (trimAscii(valueAsString(args[1])) != mrCurrentPersistenceVersionString())
+							throw std::runtime_error("MRSETUP(SETTINGS_VERSION) supports only the current build version.");
 					} else if (setupKey == "SETTINGSPATH") {
 						if (!setConfiguredSettingsMacroFilePath(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(SETTINGSPATH) failed: " + (errorText.empty() ? std::string("invalid path.") : errorText));
 						activePaths.settingsMacroUri = configuredSettingsMacroFilePath();

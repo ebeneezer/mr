@@ -26,7 +26,7 @@ bool isIndentWhitespace(char ch) noexcept {
 bool isStatefulSyntaxLanguage(MRSyntaxLanguage language) noexcept {
 	return language == MRSyntaxLanguage::MRMAC || language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp || language == MRSyntaxLanguage::JavaScript || language == MRSyntaxLanguage::Python ||
 	       language == MRSyntaxLanguage::Markdown || language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh || language == MRSyntaxLanguage::Fish || language == MRSyntaxLanguage::Perl || language == MRSyntaxLanguage::Swift || language == MRSyntaxLanguage::Rust ||
-	       language == MRSyntaxLanguage::Go;
+	       language == MRSyntaxLanguage::Go || language == MRSyntaxLanguage::Pascal || language == MRSyntaxLanguage::Xml;
 }
 
 static constexpr auto kLargeFileViewportWarmupDebounce = std::chrono::milliseconds(180);
@@ -202,6 +202,21 @@ bool startsWithKeywordToken(std::string_view upperLine, std::string_view keyword
 	return std::isspace(next) != 0 || next == '(' || next == '{' || next == ':';
 }
 
+bool isPascalIfLead(std::string_view upperLine) noexcept;
+bool isPascalBeginLead(std::string_view upperLine) noexcept;
+bool isPascalRecordLead(std::string_view upperLine) noexcept;
+bool isPascalCaseLead(std::string_view upperLine) noexcept;
+bool isPascalRepeatLead(std::string_view upperLine) noexcept;
+bool isPascalElseLead(std::string_view upperLine) noexcept;
+bool isPascalClassLead(std::string_view upperLine) noexcept;
+bool isPascalObjectLead(std::string_view upperLine) noexcept;
+bool isPascalTryLead(std::string_view upperLine) noexcept;
+bool isPascalExceptLead(std::string_view upperLine) noexcept;
+bool isPascalFinallyLead(std::string_view upperLine) noexcept;
+bool isPascalUntilLead(std::string_view upperLine) noexcept;
+bool isPascalEndLead(std::string_view upperLine) noexcept;
+bool isPascalDoLead(std::string_view upperLine) noexcept;
+
 enum : int {
 	kPerlBlockNone = 0,
 	kPerlBlockConditional = 1,
@@ -224,6 +239,14 @@ enum : int {
 	kFishBlockGeneric = 5,
 };
 
+enum : int {
+	kPascalBlockNone = 0,
+	kPascalBlockGeneric = 1,
+	kPascalBlockConditional = 2,
+	kPascalBlockRepeat = 3,
+	kPascalBlockTry = 4,
+};
+
 int shellIndentBlockKind(std::string_view upperLine) noexcept {
 	if (upperLine == "THEN" || upperLine.ends_with(" THEN") || upperLine == "ELSE" || upperLine.starts_with("ELIF ")) return kShellBlockConditional;
 	if (upperLine == "DO" || upperLine.ends_with(" DO") || upperLine.starts_with("SELECT ") || upperLine.starts_with("UNTIL ")) return kShellBlockLoop;
@@ -238,6 +261,15 @@ int fishIndentBlockKind(std::string_view upperLine) noexcept {
 	if (isFishCaseLead(upperLine)) return kFishBlockCase;
 	if (isFishFunctionLead(upperLine) || isFishBeginLead(upperLine)) return kFishBlockGeneric;
 	return kFishBlockNone;
+}
+
+int pascalIndentBlockKind(std::string_view upperLine) noexcept {
+	if (isPascalIfLead(upperLine) || isPascalElseLead(upperLine)) return kPascalBlockConditional;
+	if (isPascalBeginLead(upperLine) || isPascalRecordLead(upperLine) || isPascalCaseLead(upperLine) || isPascalDoLead(upperLine) || isPascalClassLead(upperLine) || isPascalObjectLead(upperLine))
+		return kPascalBlockGeneric;
+	if (isPascalRepeatLead(upperLine)) return kPascalBlockRepeat;
+	if (isPascalTryLead(upperLine) || isPascalExceptLead(upperLine) || isPascalFinallyLead(upperLine)) return kPascalBlockTry;
+	return kPascalBlockNone;
 }
 
 int perlStructuredBlockKind(std::string_view trimmed, std::string_view upperLine) noexcept {
@@ -635,7 +667,7 @@ bool isPreprocessorFoldSibling(std::string_view trimmed) noexcept {
 
 bool isIndentFoldLanguage(MRSyntaxLanguage language) noexcept {
 	return language == MRSyntaxLanguage::Python || language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh || language == MRSyntaxLanguage::Perl || language == MRSyntaxLanguage::Make || language == MRSyntaxLanguage::MRMAC ||
-	       language == MRSyntaxLanguage::PlainText;
+	       language == MRSyntaxLanguage::Yaml || language == MRSyntaxLanguage::PlainText;
 }
 
 bool isShellSiblingLead(std::string_view upperLine) noexcept {
@@ -670,6 +702,149 @@ bool isMRMACCommentLine(std::string_view trimmed) noexcept {
 	return !trimmed.empty() && trimmed.front() == ';';
 }
 
+bool isPascalIfLead(std::string_view upperLine) noexcept {
+	return upperLine.starts_with("IF ") && upperLine.find(" THEN") != std::string_view::npos;
+}
+
+bool isPascalBeginLead(std::string_view upperLine) noexcept {
+	return upperLine == "BEGIN" || upperLine == "BEGIN;";
+}
+
+bool isPascalRecordLead(std::string_view upperLine) noexcept {
+	return upperLine == "RECORD" || upperLine == "RECORD;" || upperLine.ends_with(" RECORD");
+}
+
+bool isPascalCaseLead(std::string_view upperLine) noexcept {
+	return upperLine.starts_with("CASE ") && upperLine.find(" OF") != std::string_view::npos;
+}
+
+bool isPascalRepeatLead(std::string_view upperLine) noexcept {
+	return upperLine == "REPEAT" || upperLine == "REPEAT;";
+}
+
+bool isPascalElseLead(std::string_view upperLine) noexcept {
+	return upperLine == "ELSE" || upperLine == "ELSE;";
+}
+
+bool isPascalClassLead(std::string_view upperLine) noexcept {
+	return upperLine == "CLASS" || upperLine == "CLASS;" || upperLine.find("= CLASS") != std::string_view::npos;
+}
+
+bool isPascalObjectLead(std::string_view upperLine) noexcept {
+	return upperLine == "OBJECT" || upperLine == "OBJECT;" || upperLine.find("= OBJECT") != std::string_view::npos;
+}
+
+bool isPascalTryLead(std::string_view upperLine) noexcept {
+	return upperLine == "TRY" || upperLine == "TRY;";
+}
+
+bool isPascalExceptLead(std::string_view upperLine) noexcept {
+	return upperLine == "EXCEPT" || upperLine == "EXCEPT;";
+}
+
+bool isPascalFinallyLead(std::string_view upperLine) noexcept {
+	return upperLine == "FINALLY" || upperLine == "FINALLY;";
+}
+
+bool isPascalUntilLead(std::string_view upperLine) noexcept {
+	return upperLine.starts_with("UNTIL ");
+}
+
+bool isPascalEndLead(std::string_view upperLine) noexcept {
+	return upperLine == "END" || upperLine == "END;" || upperLine == "END.";
+}
+
+bool isPascalDoLead(std::string_view upperLine) noexcept {
+	return upperLine.ends_with(" DO");
+}
+
+bool isPascalCommentLikeLine(std::string_view trimmed) noexcept {
+	return trimmed.starts_with("//");
+}
+
+bool isXmlNameStartChar(char ch) noexcept {
+	const unsigned char value = static_cast<unsigned char>(ch);
+	return std::isalpha(value) != 0 || ch == '_' || ch == ':';
+}
+
+bool isXmlNameChar(char ch) noexcept {
+	const unsigned char value = static_cast<unsigned char>(ch);
+	return std::isalnum(value) != 0 || ch == '_' || ch == ':' || ch == '-' || ch == '.';
+}
+
+std::size_t skipXmlName(std::string_view text, std::size_t pos) noexcept {
+	if (pos >= text.size() || !isXmlNameStartChar(text[pos])) return pos;
+	++pos;
+	while (pos < text.size() && isXmlNameChar(text[pos]))
+		++pos;
+	return pos;
+}
+
+bool parseXmlLeadingOpenTag(std::string_view trimmed, std::string_view &tagName) noexcept {
+	const std::string_view normalized = trimView(trimmed);
+	std::size_t pos = 0;
+	char quote = '\0';
+	std::size_t closePos = std::string_view::npos;
+	std::size_t lastNonSpace = std::string_view::npos;
+
+	tagName = {};
+	if (normalized.size() < 3 || normalized.front() != '<') return false;
+	if (normalized[1] == '/' || normalized[1] == '!' || normalized[1] == '?') return false;
+	pos = skipXmlName(normalized, 1);
+	if (pos <= 1) return false;
+	tagName = normalized.substr(1, pos - 1);
+	for (std::size_t i = pos; i < normalized.size(); ++i) {
+		const char ch = normalized[i];
+		if (quote != '\0') {
+			if (ch == quote) quote = '\0';
+			continue;
+		}
+		if (ch == '"' || ch == '\'') {
+			quote = ch;
+			continue;
+		}
+		if (ch == '>') {
+			closePos = i;
+			break;
+		}
+		if (std::isspace(static_cast<unsigned char>(ch)) == 0) lastNonSpace = i;
+	}
+	if (closePos == std::string_view::npos || quote != '\0') return false;
+	if (lastNonSpace != std::string_view::npos && normalized[lastNonSpace] == '/') return false;
+	return true;
+}
+
+bool parseXmlLeadingCloseTag(std::string_view trimmed, std::string_view &tagName) noexcept {
+	const std::string_view normalized = trimView(trimmed);
+	std::size_t pos = 0;
+
+	tagName = {};
+	if (normalized.size() < 4 || !normalized.starts_with("</")) return false;
+	pos = skipXmlName(normalized, 2);
+	if (pos <= 2) return false;
+	tagName = normalized.substr(2, pos - 2);
+	while (pos < normalized.size() && std::isspace(static_cast<unsigned char>(normalized[pos])) != 0)
+		++pos;
+	return pos < normalized.size() && normalized[pos] == '>';
+}
+
+bool isXmlCommentLikeLine(std::string_view trimmed) noexcept {
+	const std::string_view normalized = trimView(trimmed);
+	return normalized.starts_with("<!--") || normalized.starts_with("<?") || normalized.starts_with("<!");
+}
+
+bool isYamlIndentLead(std::string_view trimmed) noexcept {
+	const std::string_view normalized = trimView(trimmed);
+	if (normalized.empty() || normalized.starts_with("#")) return false;
+	if (normalized == "-") return true;
+	if ((normalized.front() == '-' || normalized.front() == '?') && normalized.size() > 1 && std::isspace(static_cast<unsigned char>(normalized[1])) != 0) {
+		const std::size_t last = lastSignificantByte(normalized);
+		return last != std::string_view::npos && (normalized[last] == ':' || normalized[last] == '|' || normalized[last] == '>');
+	}
+	const std::size_t last = lastSignificantByte(normalized);
+	return last != std::string_view::npos && (normalized[last] == ':' || normalized[last] == '|' || normalized[last] == '>');
+}
+
 std::string_view stripMRMACTrailingComment(std::string_view text) noexcept {
 	const std::size_t commentStart = text.find_first_of(';');
 	if (commentStart == std::string_view::npos) return text;
@@ -689,6 +864,26 @@ bool isSystemdSectionHeader(std::string_view trimmed) noexcept {
 
 bool isSystemdCommentLine(std::string_view trimmed) noexcept {
 	return !trimmed.empty() && (trimmed.front() == '#' || trimmed.front() == ';');
+}
+
+bool isSystemdDirectiveLine(std::string_view trimmed) noexcept {
+	const std::string_view normalized = trimView(trimmed);
+	if (normalized.empty() || isSystemdCommentLine(normalized) || isSystemdSectionHeader(normalized)) return false;
+	const std::size_t eq = normalized.find('=');
+	if (eq == std::string_view::npos || eq == 0) return false;
+	for (std::size_t i = 0; i < eq; ++i) {
+		const char ch = normalized[i];
+		if (std::isalnum(static_cast<unsigned char>(ch)) != 0 || ch == '_' || ch == '-') continue;
+		return false;
+	}
+	return true;
+}
+
+bool isSystemdContinuationLead(std::string_view trimmed) noexcept {
+	const std::string_view normalized = trimView(trimmed);
+	if (!isSystemdDirectiveLine(normalized)) return false;
+	const std::size_t last = lastSignificantByte(normalized);
+	return last != std::string_view::npos && normalized[last] == '\\';
 }
 
 char matchingCloserForOpenDelimiter(char ch) noexcept {
@@ -733,6 +928,11 @@ enum class SmartDedentKind {
 	PythonTry,
 	PythonCase,
 	PerlConditional,
+	PascalConditional,
+	PascalTry,
+	PascalEnd,
+	PascalRepeat,
+	XmlTag,
 	CLikeElse,
 	CLikeCatch,
 };
@@ -740,6 +940,7 @@ enum class SmartDedentKind {
 struct SmartDedentRequest {
 	SmartDedentKind kind = SmartDedentKind::None;
 	char closer = 0;
+	std::string_view tagName;
 };
 
 SmartDedentRequest classifySmartDedentRequest(std::string_view trimmed, MRSyntaxLanguage language) noexcept {
@@ -774,6 +975,17 @@ SmartDedentRequest classifySmartDedentRequest(std::string_view trimmed, MRSyntax
 		case MRSyntaxLanguage::Perl:
 			if (startsWithKeywordToken(normalizedUpper, "ELSIF") || normalizedUpper == "ELSE {" || normalizedUpper == "ELSE") return {SmartDedentKind::PerlConditional, 0};
 			break;
+		case MRSyntaxLanguage::Pascal:
+			if (isPascalElseLead(normalizedUpper)) return {SmartDedentKind::PascalConditional, 0};
+			if (isPascalExceptLead(normalizedUpper) || isPascalFinallyLead(normalizedUpper)) return {SmartDedentKind::PascalTry, 0};
+			if (isPascalUntilLead(normalizedUpper)) return {SmartDedentKind::PascalRepeat, 0};
+			if (isPascalEndLead(normalizedUpper)) return {SmartDedentKind::PascalEnd, 0};
+			break;
+		case MRSyntaxLanguage::Xml: {
+			std::string_view tagName;
+			if (parseXmlLeadingCloseTag(normalizedTrimmed, tagName)) return {SmartDedentKind::XmlTag, 0, tagName};
+			break;
+		}
 		case MRSyntaxLanguage::C:
 		case MRSyntaxLanguage::Cpp:
 		case MRSyntaxLanguage::JavaScript:
@@ -838,6 +1050,12 @@ bool isDedentSearchSkippableLine(std::string_view trimmed, MRSyntaxLanguage lang
 			return isRustCommentLikeLine(trimmed);
 		case MRSyntaxLanguage::Go:
 			return isGoCommentLikeLine(trimmed);
+		case MRSyntaxLanguage::Pascal:
+			return isPascalCommentLikeLine(trimmed);
+		case MRSyntaxLanguage::Systemd:
+			return isSystemdCommentLine(trimmed);
+		case MRSyntaxLanguage::Xml:
+			return isXmlCommentLikeLine(trimmed);
 		default:
 			return false;
 	}
@@ -887,6 +1105,21 @@ bool matchesSmartDedentAnchor(std::string_view trimmed, std::string_view upperLi
 		case SmartDedentKind::PerlConditional:
 			return language == MRSyntaxLanguage::Perl &&
 			       (startsWithKeywordToken(normalizedUpper, "IF") || startsWithKeywordToken(normalizedUpper, "UNLESS") || startsWithKeywordToken(normalizedUpper, "ELSIF") || normalizedUpper == "ELSE {");
+		case SmartDedentKind::PascalConditional:
+			return language == MRSyntaxLanguage::Pascal && (isPascalIfLead(normalizedUpper) || isPascalElseLead(normalizedUpper));
+		case SmartDedentKind::PascalTry:
+			return language == MRSyntaxLanguage::Pascal && (isPascalTryLead(normalizedUpper) || isPascalExceptLead(normalizedUpper) || isPascalFinallyLead(normalizedUpper));
+		case SmartDedentKind::PascalEnd:
+			return language == MRSyntaxLanguage::Pascal &&
+			       (isPascalBeginLead(normalizedUpper) || isPascalRecordLead(normalizedUpper) || isPascalCaseLead(normalizedUpper) || isPascalIfLead(normalizedUpper) || isPascalElseLead(normalizedUpper) ||
+			        isPascalDoLead(normalizedUpper) || isPascalClassLead(normalizedUpper) || isPascalObjectLead(normalizedUpper) || isPascalTryLead(normalizedUpper) || isPascalExceptLead(normalizedUpper) ||
+			        isPascalFinallyLead(normalizedUpper));
+		case SmartDedentKind::PascalRepeat:
+			return language == MRSyntaxLanguage::Pascal && isPascalRepeatLead(normalizedUpper);
+		case SmartDedentKind::XmlTag: {
+			std::string_view tagName;
+			return language == MRSyntaxLanguage::Xml && parseXmlLeadingOpenTag(trimmed, tagName) && tagName == request.tagName;
+		}
 		case SmartDedentKind::CLikeElse:
 			return normalizedUpper.starts_with("IF ") || normalizedUpper.starts_with("ELSE");
 		case SmartDedentKind::CLikeCatch:
@@ -1473,6 +1706,24 @@ std::string MRFileEditor::smartIndentFillForCursor() {
 		const std::string upperLine = upperAscii(std::string(stripMRMACTrailingComment(trimmedBeforeCursor)));
 		if (isMRMACMacroStart(upperLine) || isMRMACIfLead(upperLine) || isMRMACElseLead(upperLine) || isMRMACWhileLead(upperLine))
 			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+	} else if (language == MRSyntaxLanguage::Yaml) {
+		if (isYamlIndentLead(trimmedBeforeCursor))
+			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+	} else if (language == MRSyntaxLanguage::Xml) {
+		std::string_view tagName;
+		if (parseXmlLeadingOpenTag(trimmedBeforeCursor, tagName))
+			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+	} else if (language == MRSyntaxLanguage::Systemd) {
+		if (isSystemdContinuationLead(trimmedBeforeCursor)) {
+			if (baseColumn > 1)
+				targetColumn = baseColumn;
+			else
+				targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
+		}
+	} else if (language == MRSyntaxLanguage::Pascal) {
+		const std::string upperLine = upperAscii(std::string(trimmedBeforeCursor));
+		if (pascalIndentBlockKind(upperLine) != kPascalBlockNone)
+			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
 	} else if (language == MRSyntaxLanguage::Make) {
 		if (isMakeTargetLine(trimmedBeforeCursor) || isMakeDirectiveFoldStart(trimmedBeforeCursor))
 			targetColumn = nextResolvedEditFormatTabStopColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, baseColumn);
@@ -1494,8 +1745,9 @@ void MRFileEditor::applyLiveSmartDedentAfterTextInput(const std::string &inserte
 	if (insertedText.find('\n') != std::string::npos || insertedText.find('\r') != std::string::npos) return;
 	if (language != MRSyntaxLanguage::C && language != MRSyntaxLanguage::Cpp && language != MRSyntaxLanguage::JavaScript && language != MRSyntaxLanguage::Json && language != MRSyntaxLanguage::Python &&
 	    language != MRSyntaxLanguage::Bash && language != MRSyntaxLanguage::Zsh && language != MRSyntaxLanguage::Fish && language != MRSyntaxLanguage::Perl && language != MRSyntaxLanguage::MRMAC && language != MRSyntaxLanguage::Swift &&
-	    language != MRSyntaxLanguage::Rust &&
-	    language != MRSyntaxLanguage::Go) return;
+	    language != MRSyntaxLanguage::Rust && language != MRSyntaxLanguage::Go && language != MRSyntaxLanguage::Pascal && language != MRSyntaxLanguage::Systemd &&
+	    language != MRSyntaxLanguage::Xml)
+		return;
 
 	const std::size_t lineStart = lineStartOffset(cursorOffset());
 	const int baseColumn = leadingIndentColumnForLine(lineStart);
@@ -1503,6 +1755,10 @@ void MRFileEditor::applyLiveSmartDedentAfterTextInput(const std::string &inserte
 
 	const std::string lineText = mBufferModel.lineText(lineStart);
 	const std::string_view trimmedLine = trimView(lineText);
+	if (language == MRSyntaxLanguage::Systemd && isSystemdSectionHeader(trimmedLine)) {
+		applyCurrentLineLeadingIndent(1);
+		return;
+	}
 	const SmartDedentRequest request = classifySmartDedentRequest(trimmedLine, language);
 
 	if (request.kind == SmartDedentKind::None) return;

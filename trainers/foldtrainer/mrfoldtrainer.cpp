@@ -19,6 +19,10 @@ bool parseLanguageName(const std::string &name, MRSyntaxLanguage &language) noex
 		language = MRSyntaxLanguage::JavaScript;
 	else if (name == "json")
 		language = MRSyntaxLanguage::Json;
+	else if (name == "yaml" || name == "yml")
+		language = MRSyntaxLanguage::Yaml;
+	else if (name == "xml" || name == "xsd" || name == "xsl" || name == "xslt" || name == "svg")
+		language = MRSyntaxLanguage::Xml;
 	else if (name == "python" || name == "py")
 		language = MRSyntaxLanguage::Python;
 	else if (name == "markdown" || name == "md")
@@ -37,6 +41,8 @@ bool parseLanguageName(const std::string &name, MRSyntaxLanguage &language) noex
 		language = MRSyntaxLanguage::Rust;
 	else if (name == "go")
 		language = MRSyntaxLanguage::Go;
+	else if (name == "pascal" || name == "pas")
+		language = MRSyntaxLanguage::Pascal;
 	else if (name == "systemd" || name == "sd")
 		language = MRSyntaxLanguage::Systemd;
 	else if (name == "make" || name == "mk")
@@ -62,6 +68,10 @@ const char *languageName(MRSyntaxLanguage language) noexcept {
 			return "Python";
 		case MRSyntaxLanguage::Json:
 			return "JSON";
+		case MRSyntaxLanguage::Yaml:
+			return "YAML";
+		case MRSyntaxLanguage::Xml:
+			return "XML";
 		case MRSyntaxLanguage::Bash:
 			return "Bash";
 		case MRSyntaxLanguage::Zsh:
@@ -76,6 +86,8 @@ const char *languageName(MRSyntaxLanguage language) noexcept {
 			return "Rust";
 		case MRSyntaxLanguage::Go:
 			return "Go";
+		case MRSyntaxLanguage::Pascal:
+			return "Pascal";
 		case MRSyntaxLanguage::Systemd:
 			return "systemd";
 		case MRSyntaxLanguage::MRMAC:

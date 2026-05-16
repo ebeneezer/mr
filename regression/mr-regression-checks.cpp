@@ -1,3 +1,4 @@
+#include "../app/MRVersion.hpp"
 #include "../app/utils/MRFileIOUtils.hpp"
 #define Uses_TKeys
 #include <tvision/tv.h>
@@ -1886,14 +1887,14 @@ bool testEditProfileCaseSensitiveExtensionMatchGuard(std::string &failureReason)
 
 bool testLegacyEditProfileMacroDropToDefaultsGuard(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
-	std::string source = R"($MACRO MR_SETTINGS FROM EDIT;
-MRSETUP('SETTINGS_VERSION', '2');
-MRSETUP('TAB_SIZE', '8');
-MREDITPROFILE('DEFINE', 'legacy_cpp', 'Legacy C++', '');
-MREDITPROFILE('EXT', 'legacy_cpp', 'cpp', '');
-MREDITPROFILE('SET', 'legacy_cpp', 'TAB_SIZE', '5');
-END_MACRO;
-)";
+	const std::string currentVersion = mrCurrentPersistenceVersionString();
+	std::string source = "$MACRO MR_SETTINGS FROM EDIT;\n"
+	                     "MRSETUP('SETTINGS_VERSION', '" + currentVersion + "');\n"
+	                     "MRSETUP('TAB_SIZE', '8');\n"
+	                     "MREDITPROFILE('DEFINE', 'legacy_cpp', 'Legacy C++', '');\n"
+	                     "MREDITPROFILE('EXT', 'legacy_cpp', 'cpp', '');\n"
+	                     "MREDITPROFILE('SET', 'legacy_cpp', 'TAB_SIZE', '5');\n"
+	                     "END_MACRO;\n";
 	std::string errorText;
 	std::string restoreError;
 	bool restored = false;
@@ -1937,8 +1938,9 @@ END_MACRO;
 bool testEditProfileCaseSensitiveMacroRoundtripGuard(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
 	MRSetupPaths paths = resolveSetupPathDefaults();
+	const std::string currentVersion = mrCurrentPersistenceVersionString();
 	std::string source = "$MACRO MR_SETTINGS FROM EDIT;\n"
-	                     "MRSETUP('SETTINGS_VERSION', '2');\n"
+	                     "MRSETUP('SETTINGS_VERSION', '" + currentVersion + "');\n"
 	                     "MRSETUP('TAB_SIZE', '8');\n"
 	                     "MRFEPROFILE('DEFINE', 'c_lower', 'Lower C', '');\n"
 	                     "MRFEPROFILE('EXT', 'c_lower', 'c', '');\n"
@@ -2040,8 +2042,9 @@ bool testEditProfileCaseSensitiveMacroRoundtripGuard(std::string &failureReason)
 
 bool testEditProfileDuplicateExactExtensionMacroGuard(std::string &failureReason) {
 	RuntimeSettingsSnapshot snapshot = captureRuntimeSettingsSnapshot();
+	const std::string currentVersion = mrCurrentPersistenceVersionString();
 	std::string source = "$MACRO MR_SETTINGS FROM EDIT;\n"
-	                     "MRSETUP('SETTINGS_VERSION', '2');\n"
+	                     "MRSETUP('SETTINGS_VERSION', '" + currentVersion + "');\n"
 	                     "MRFEPROFILE('DEFINE', 'c_one', 'One', '');\n"
 	                     "MRFEPROFILE('EXT', 'c_one', 'c', '');\n"
 	                     "MRFEPROFILE('DEFINE', 'c_two', 'Two', '');\n"
@@ -2262,10 +2265,10 @@ bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) 
 
 bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureReason) {
 	const std::string themePath = "/tmp/mr-windowcolors-line-numbers-theme.mrmac";
-	const std::string windowColorsPrefix = "MRSETUP('WINDOWCOLORS', 'v4:";
+	const std::string windowColorsPrefix = "MRSETUP('WINDOWCOLORS', 'v5:";
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::string previousThemePath = configuredColorThemeFilePath();
-	const std::array<unsigned char, MRColorSetupSettings::kWindowCount> probeValues = {0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B};
+	const std::array<unsigned char, MRColorSetupSettings::kWindowCount> probeValues = {0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C};
 	std::string errorText;
 	std::string content;
 	unsigned char slotValue = 0;
@@ -2293,7 +2296,7 @@ bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureRea
 		return false;
 	}
 	if (content.find(windowColorsPrefix) == std::string::npos) {
-		failureReason = "Saved theme must serialize WINDOWCOLORS using v4 list format.";
+		failureReason = "Saved theme must serialize WINDOWCOLORS using canonical v5 list format.";
 		restore();
 		return false;
 	}
@@ -2316,7 +2319,7 @@ bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureRea
 		MRColorSetupSettings loaded = configuredColorSetupSettings();
 		for (std::size_t i = 0; i < probeValues.size(); ++i)
 			if (loaded.windowColors[i] != probeValues[i]) {
-				failureReason = "WINDOWCOLORS v3 roundtrip mismatch after theme reload.";
+				failureReason = "WINDOWCOLORS v5 roundtrip mismatch after theme reload.";
 				restore();
 				return false;
 			}
@@ -2331,7 +2334,12 @@ bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureRea
 		restore();
 		return false;
 	}
-	if (!configuredColorSlotOverride(kMrPaletteFormatRuler, slotValue) || slotValue != probeValues[10]) {
+	if (!configuredColorSlotOverride(kMrPaletteCodeFoldingMarker, slotValue) || slotValue != probeValues[10]) {
+		failureReason = "Code-folding-marker palette slot must be restored from WINDOWCOLORS theme value.";
+		restore();
+		return false;
+	}
+	if (!configuredColorSlotOverride(kMrPaletteFormatRuler, slotValue) || slotValue != probeValues[11]) {
 		failureReason = "Format-ruler palette slot must be restored from WINDOWCOLORS theme value.";
 		restore();
 		return false;
@@ -2445,8 +2453,10 @@ bool testChangedTextColorWiringGuard(std::string &failureReason) {
 bool testEditorCursorViewportGuard(std::string &failureReason) {
 	const std::string headerPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.hpp");
 	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.cpp");
+	const std::string viewportPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorViewport.cpp");
 	std::string headerContent;
 	std::string sourceContent;
+	std::string viewportContent;
 	std::string ioError;
 
 	if (!readTextFile(headerPath, headerContent, ioError)) {
@@ -2457,7 +2467,14 @@ bool testEditorCursorViewportGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRFileEditor.cpp for cursor viewport guard: " + ioError;
 		return false;
 	}
-	if (headerContent.find("using TextViewportGeometry = MRTextViewportLayout::Geometry;") == std::string::npos || headerContent.find("TextViewportGeometry textViewportGeometry() const noexcept") == std::string::npos || headerContent.find("bool shouldShowEditorCursor(long long x, long long y, const TextViewportGeometry &viewport) const noexcept") == std::string::npos || sourceContent.find("return MRTextViewportLayout::shouldShowCursor(viewport, x, y, visibleTextRows(), (state & sfActive) != 0, (state & sfSelected) != 0);") == std::string::npos || sourceContent.find("if (shouldShowEditorCursor(localX, localY, viewport))") == std::string::npos) {
+	if (!readTextFile(viewportPath, viewportContent, ioError)) {
+		failureReason = "Unable to read MRFileEditorViewport.cpp for cursor viewport guard: " + ioError;
+		return false;
+	}
+	if (headerContent.find("using TextViewportGeometry = MRTextViewportLayout::Geometry;") == std::string::npos || headerContent.find("TextViewportGeometry textViewportGeometry() const noexcept") == std::string::npos ||
+	    headerContent.find("bool shouldShowEditorCursor(long long x, long long y, const TextViewportGeometry &viewport) const noexcept") == std::string::npos ||
+	    viewportContent.find("return MRTextViewportLayout::shouldShowCursor(viewport, x, y, visibleTextRows(), (state & sfActive) != 0, (state & sfSelected) != 0);") == std::string::npos ||
+	    viewportContent.find("if (shouldShowEditorCursor(localX, localY, viewport))") == std::string::npos) {
 		failureReason = "Editor cursor visibility must be gated by active/selected state and text viewport bounds.";
 		return false;
 	}
@@ -2470,15 +2487,17 @@ bool testEditorCursorViewportGuard(std::string &failureReason) {
 }
 
 bool testEofVirtualLineColorGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.cpp");
+	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorViewport.cpp");
 	std::string content;
 	std::string ioError;
 
 	if (!readTextFile(sourcePath, content, ioError)) {
-		failureReason = "Unable to read MRFileEditor.cpp for EOF virtual-line color guard: " + ioError;
+		failureReason = "Unable to read MRFileEditorViewport.cpp for EOF virtual-line color guard: " + ioError;
 		return false;
 	}
-	if (content.find("bool isDocumentLine = lineIndex < totalLines;") == std::string::npos || content.find("formatSyntaxLine(buffer, linePtr, delta.x, textWidth, viewport.textLeft, isDocumentLine, drawEofMarker,") == std::string::npos) {
+	if (content.find("bool isDocumentLine = visibleLineIndex < totalLines;") == std::string::npos ||
+	    content.find("formatSyntaxLine(buffer, currentLinePtr, syntaxLine, delta.x, textWidth, viewport.textLeft, isDocumentLine, drawEofMarker, drawEofMarkerAsEmoji);") ==
+	        std::string::npos) {
 		failureReason = "Draw path must pass document-line state into syntax line formatter.";
 		return false;
 	}
@@ -2501,14 +2520,20 @@ bool testEofVirtualLineColorGuard(std::string &failureReason) {
 
 bool testSaveAsOverwriteAndBackupWiringGuard(std::string &failureReason) {
 	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.cpp");
+	const std::string viewportPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorViewport.cpp");
 	std::string content;
+	std::string viewportContent;
 	std::string ioError;
 
 	if (!readTextFile(sourcePath, content, ioError)) {
 		failureReason = "Unable to read MRFileEditor.cpp for Save As overwrite/backup guard: " + ioError;
 		return false;
 	}
-	if (content.find("showUnsavedChangesDialog(\"Overwrite\", \"Target file exists. Overwrite?\",") == std::string::npos) {
+	if (!readTextFile(viewportPath, viewportContent, ioError)) {
+		failureReason = "Unable to read MRFileEditorViewport.cpp for Save As overwrite/backup guard: " + ioError;
+		return false;
+	}
+	if (viewportContent.find("showUnsavedChangesDialog(\"Overwrite\", \"Target file exists. Overwrite?\",") == std::string::npos) {
 		failureReason = "Save As must ask for overwrite confirmation via centralized UnsavedChanges dialog.";
 		return false;
 	}
@@ -2526,14 +2551,14 @@ bool testSaveAsOverwriteAndBackupWiringGuard(std::string &failureReason) {
 }
 
 bool testThemeAndMacroSaveOverwriteWiringGuard(std::string &failureReason) {
-	const std::string setupDialogsPath = absolutePathFromCwd("dialogs/setup/MRSetup.cpp");
+	const std::string setupDialogsPath = absolutePathFromCwd("dialogs/setup/MRSetupSections.cpp");
 	const std::string appPath = absolutePathFromCwd("app/MREditorApp.cpp");
 	std::string setupContent;
 	std::string appContent;
 	std::string ioError;
 
 	if (!readTextFile(setupDialogsPath, setupContent, ioError)) {
-		failureReason = "Unable to read MRSetup.cpp for theme overwrite guard: " + ioError;
+		failureReason = "Unable to read MRSetupSections.cpp for theme overwrite guard: " + ioError;
 		return false;
 	}
 	if (!readTextFile(appPath, appContent, ioError)) {
@@ -3502,7 +3527,12 @@ bool testCoprocessorScreenRendererBoundaryGuard(std::string &failureReason) {
 		return false;
 	}
 	static constexpr const char *kForbiddenDirectScreenRenderers[] = {"mrvmUiCreateWindow(", "mrvmUiDeleteCurrentWindow(", "mrvmUiEraseCurrentWindow(", "mrvmUiModifyCurrentWindow(", "mrvmUiLinkCurrentWindow(", "mrvmUiUnlinkCurrentWindow(", "mrvmUiZoomCurrentWindow(", "mrvmUiRedrawCurrentWindow(", "mrvmUiNewScreen(", "mrvmUiMarquee(", "mrvmUiBrain(", "mrvmUiPutBox(", "mrvmUiWrite(", "mrvmUiClrLine(", "mrvmUiGotoxy(", "mrvmUiPutLineNum(", "mrvmUiPutColNum(", "mrvmUiScrollBoxUp(", "mrvmUiScrollBoxDn(", "mrvmUiClearScreen(", "mrvmUiKillBox(", "mrvmUiMessageBox("};
-	static constexpr const char *kAllowedUiBridgeCalls[] = {"mrvmUiBeginMacroScreenBatch(", "mrvmUiCursorPosition(", "mrvmUiEndMacroScreenBatch(", "mrvmUiRenderFacadeRenderDeferredCommand(", "mrvmUiReplaceGlobals(", "mrvmUiReplaceRuntimeOptions(", "mrvmUiReplaceWindowLastSearch(", "mrvmUiReplaceWindowMarkStack(", "mrvmUiScreenHeight(", "mrvmUiScreenMutationEpoch(", "mrvmUiScreenWidth(", "mrvmUiSetCurrentWindow(", "mrvmUiSyncLinkedWindowsFrom("};
+	static constexpr const char *kAllowedUiBridgeCalls[] = {"mrvmUiBeginMacroScreenBatch(",   "mrvmUiCopyGlobals(",         "mrvmUiCopyRuntimeOptions(",   "mrvmUiCopyWindowLastSearch(",
+	                                                        "mrvmUiCopyWindowMarkStack(",   "mrvmUiCursorPosition(",       "mrvmUiEndMacroScreenBatch(", "mrvmUiLinkStatus(",
+	                                                        "mrvmUiRenderFacadeRenderDeferredCommand(",                     "mrvmUiReplaceGlobals(",      "mrvmUiReplaceRuntimeOptions(",
+	                                                        "mrvmUiReplaceWindowLastSearch(", "mrvmUiReplaceWindowMarkStack(", "mrvmUiScreenHeight(",     "mrvmUiScreenMutationEpoch(",
+	                                                        "mrvmUiScreenWidth(",            "mrvmUiSetCurrentWindow(",     "mrvmUiSyncLinkedWindowsFrom(", "mrvmUiWindowCount(",
+	                                                        "mrvmUiWindowGeometry("};
 
 	for (const char *needle : kForbiddenDirectScreenRenderers)
 		if (dispatchContent.find(needle) != std::string::npos) {
@@ -3704,7 +3734,7 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Edit profile duplicate exact extension rejection", testEditProfileDuplicateExactExtensionMacroGuard);
 	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
 	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
-	runTest(ctx, "WINDOWCOLORS v3 + line numbers theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
+	runTest(ctx, "WINDOWCOLORS v5 + line numbers theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
 	runTest(ctx, "Touched-range mid-insert guard", testTouchedRangeMidInsertGuard);
 	runTest(ctx, "TRUNCATE_SPACES save-only guard", testTruncateSpacesSaveOnlyGuard);
 	runTest(ctx, "Editor cursor viewport guard", testEditorCursorViewportGuard);
@@ -3753,7 +3783,7 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Edit profile duplicate exact extension rejection", testEditProfileDuplicateExactExtensionMacroGuard);
 	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
 	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
-	runTest(ctx, "WINDOWCOLORS v3 + line numbers theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
+	runTest(ctx, "WINDOWCOLORS v5 + line numbers theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
 	runTest(ctx, "TRUNCATE_SPACES save-only guard", testTruncateSpacesSaveOnlyGuard);
 	runTest(ctx, "Indicator line-number color wiring guard", testIndicatorLineNumberColorWiringGuard);
 	runTest(ctx, "Current-line color wiring guard", testCurrentLineColorWiringGuard);

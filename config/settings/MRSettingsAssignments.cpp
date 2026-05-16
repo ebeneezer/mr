@@ -1,6 +1,7 @@
+#include "../../app/commands/MRWindowCommands.hpp"
+#include "../../app/MRVersion.hpp"
 #include "../../app/utils/MRFileIOUtils.hpp"
 #include "../../app/utils/MRStringUtils.hpp"
-#include "../../app/commands/MRWindowCommands.hpp"
 #include "MRSettingsAssignments.hpp"
 #include "MRSettingsEditSetup.hpp"
 #include "MRSettingsHistory.hpp"
@@ -152,7 +153,6 @@ static const char *const kThemeSettingsKey = "COLORTHEMEURI";
 static const char *const kKeymapSettingsKey = "KEYMAPURI";
 static const char *const kWindowColorThemeProfileKey = "WINDOW_COLORTHEME_URI";
 static const char *const kSettingsVersionKey = "SETTINGS_VERSION";
-static const char *const kCurrentSettingsVersion = "2";
 static const char *const kSearchTextTypeLiteral = "LITERAL";
 static const char *const kSearchTextTypePcre = "PCRE";
 static const char *const kSearchTextTypeWord = "WORD";
@@ -575,7 +575,7 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 		case MRSettingsKeyClass::Unknown:
 			return setError(errorMessage, "Unsupported MRSETUP key.");
 		case MRSettingsKeyClass::Version:
-			if (trimAscii(value) != kCurrentSettingsVersion) return setError(errorMessage, "Unsupported settings version.");
+			if (trimAscii(value) != mrCurrentPersistenceVersionString()) return setError(errorMessage, "Unsupported settings version for current build.");
 			if (errorMessage != nullptr) errorMessage->clear();
 			return true;
 		case MRSettingsKeyClass::Path: {
@@ -1045,7 +1045,7 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 		case MRSettingsKeyClass::Unknown:
 			return setError(errorMessage, "Unsupported MRSETUP key.");
 		case MRSettingsKeyClass::Version:
-			if (trimAscii(value) != kCurrentSettingsVersion) return setError(errorMessage, "Unsupported settings version.");
+			if (trimAscii(value) != mrCurrentPersistenceVersionString()) return setError(errorMessage, "Unsupported settings version for current build.");
 			if (errorMessage != nullptr) errorMessage->clear();
 			return true;
 		case MRSettingsKeyClass::Path: {
@@ -1565,16 +1565,17 @@ bool applySettingsSnapshotEditExtensionProfileDirective(MRSettingsSnapshot &snap
 	return setError(errorMessage, "MRFEPROFILE supports operations DEFINE, EXT and SET.");
 }
 
-bool loadColorThemeFileIntoSettingsSnapshot(MRSettingsSnapshot &snapshot, std::string *errorMessage) {
+bool loadColorThemeFileIntoSettingsSnapshot(MRSettingsSnapshot &snapshot, bool *upgradeRequired, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(snapshot.colorThemeFilePath);
 	std::string source;
 	std::map<std::string, std::string> assignments;
 	static const char *const order[] = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS", "MINIMAPCOLORS", "CODECOLORS"};
+	bool localUpgradeRequired = false;
 
 	if (!validateColorThemeFilePath(normalized, errorMessage)) return false;
 	if (!ensureColorThemeFileExists(normalized, errorMessage)) return false;
 	if (!readTextFile(normalized, source)) return setError(errorMessage, "Unable to read color theme file: " + normalized);
-	if (!parseThemeSetupAssignments(source, assignments, errorMessage)) return false;
+	if (!parseThemeSetupAssignments(source, assignments, &localUpgradeRequired, errorMessage)) return false;
 	for (const char *key : order) {
 		std::string applyError;
 		if (!applyColorSetupValueInternal(snapshot.colorSettings, key, assignments[key], &applyError)) return setError(errorMessage, "Theme apply failed for " + std::string(key) + ": " + applyError);
@@ -1582,6 +1583,7 @@ bool loadColorThemeFileIntoSettingsSnapshot(MRSettingsSnapshot &snapshot, std::s
 	snapshot.colorThemeFilePath = makeAbsolutePath(normalized);
 	if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::SetupThemeLoad, snapshot.colorThemeFilePath, errorMessage)) return false;
 	if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::SetupThemeSave, snapshot.colorThemeFilePath, errorMessage)) return false;
+	if (upgradeRequired != nullptr) *upgradeRequired = localUpgradeRequired;
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }

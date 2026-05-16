@@ -1,5 +1,7 @@
-#include "../../keymap/MRKeymapResolver.hpp"
 #include "../../app/commands/MRWindowCommands.hpp"
+#include "../../app/MRVersion.hpp"
+#include "../../app/utils/MRStringUtils.hpp"
+#include "../../keymap/MRKeymapResolver.hpp"
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MRWindowSupport.hpp"
 #include <tvision/tv.h>
@@ -80,6 +82,7 @@ bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::
 	std::string activeSettingsPath = normalizeConfiguredPathInput(settingsPath);
 	std::string applyError;
 	std::string themeError;
+	const std::uint64_t currentPersistenceVersion = mrCurrentPersistenceVersion();
 
 	activeReport = MRSettingsLoadReport();
 	if (countLegacyFeProfileDirectives(source) != 0) markFlag(activeReport, MRSettingsLoadReport::ObsoleteFeProfileDropped);
@@ -99,6 +102,23 @@ bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::
 		}
 		if (keyClass == MRSettingsKeyClass::ColorInline) markFlag(activeReport, MRSettingsLoadReport::LegacyInlineColorsSeen);
 		if (assignment.key == "SETTINGSPATH" && normalizeConfiguredPathInput(assignment.value) != activeSettingsPath) markFlag(activeReport, MRSettingsLoadReport::AnchoredSettingsPath);
+		if (keyClass == MRSettingsKeyClass::Version) {
+			const std::string versionLiteral = trimAscii(assignment.value);
+			std::uint64_t parsedVersion = 0;
+
+			if (!mrParsePersistenceVersion(versionLiteral, parsedVersion)) {
+				markFlag(activeReport, MRSettingsLoadReport::InvalidValueReset);
+				++activeReport.ignoredAssignmentCount;
+				continue;
+			}
+			if (parsedVersion > currentPersistenceVersion) {
+				if (errorMessage != nullptr) *errorMessage = "Settings source targets newer build version: " + versionLiteral;
+				return false;
+			}
+			if (parsedVersion < currentPersistenceVersion) markFlag(activeReport, MRSettingsLoadReport::VersionUpgradeRequired);
+			++activeReport.appliedAssignmentCount;
+			continue;
+		}
 		if (!applySettingsSnapshotAssignment(snapshot, assignment.key, assignment.value, &applyError)) {
 			markFlag(activeReport, MRSettingsLoadReport::InvalidValueReset);
 			++activeReport.ignoredAssignmentCount;
@@ -141,9 +161,18 @@ bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::
 		markFlag(activeReport, MRSettingsLoadReport::MissingCanonicalKeyDefaulted);
 	}
 
-	if (!loadColorThemeFileIntoSettingsSnapshot(snapshot, &themeError)) {
-		markFlag(activeReport, MRSettingsLoadReport::ThemeFallbackUsed);
-		mrLogMessage("Settings normalization retained staged color setup after theme load failure: " + snapshot.colorThemeFilePath + " (" + themeError + ")");
+	{
+		bool themeUpgradeRequired = false;
+
+		if (!loadColorThemeFileIntoSettingsSnapshot(snapshot, &themeUpgradeRequired, &themeError)) {
+			if (themeError.find("newer build version") != std::string::npos) {
+				if (errorMessage != nullptr) *errorMessage = themeError;
+				return false;
+			}
+			markFlag(activeReport, MRSettingsLoadReport::ThemeFallbackUsed);
+			mrLogMessage("Settings normalization retained staged color setup after theme load failure: " + snapshot.colorThemeFilePath + " (" + themeError + ")");
+		} else if (themeUpgradeRequired)
+			markFlag(activeReport, MRSettingsLoadReport::VersionUpgradeRequired);
 	}
 
 	if (errorMessage != nullptr) errorMessage->clear();

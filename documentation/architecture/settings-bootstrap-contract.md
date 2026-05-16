@@ -21,6 +21,25 @@ The settings bootstrap is VM-centered.
 
 `settings.mrmac` is a verified and canonicalized macro source.
 
+The bootstrap owns the valid version of the settings source.
+
+An older or partial settings file is input to bootstrap normalization, not an
+authority over the accepted settings version.
+
+Known settings from older sources are carried forward by meaning into the
+current model where still valid.
+
+Unknown or obsolete settings are dropped during normalization.
+
+Missing settings required by the current model are supplied from current
+defaults.
+
+The bootstrap derives the current canonical settings source from that complete
+normalized model.
+
+When canonical rewrite is performed, the rewritten source must use the current
+canonical settings version rather than preserve the older source version.
+
 The VM is the final startup apply actor.
 
 The loader may stage, verify and canonicalize settings. It may currently use the settings model as a working medium for this staging pass. That staging state is not the final runtime authority.
@@ -36,15 +55,16 @@ The intended conceptual sequence is:
 1. ensure settings file exists,
 2. read source,
 3. verify and normalize source,
-4. drop obsolete/unknown entries as specified,
-5. derive canonical source,
-6. optionally rewrite canonical source,
-7. reset runtime settings model,
-8. compile canonical source,
-9. execute VM in startup settings mode,
-10. perform explicit post-apply steps,
-11. clear dirty state,
-12. mark runtime model authoritative.
+4. keep known still-valid settings and drop obsolete/unknown entries as specified,
+5. supply missing current settings from defaults,
+6. derive canonical current-version source,
+7. optionally rewrite canonical source,
+8. reset runtime settings model,
+9. compile canonical source,
+10. execute VM in startup settings mode,
+11. perform explicit post-apply steps,
+12. clear dirty state,
+13. mark runtime model authoritative.
 
 ## Current transitional rule
 

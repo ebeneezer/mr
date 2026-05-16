@@ -27,7 +27,7 @@ bool isIndentWhitespace(char ch) noexcept {
 bool isStatefulSyntaxLanguage(MRSyntaxLanguage language) noexcept {
 	return language == MRSyntaxLanguage::MRMAC || language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp || language == MRSyntaxLanguage::JavaScript || language == MRSyntaxLanguage::Python ||
 	       language == MRSyntaxLanguage::Markdown || language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh || language == MRSyntaxLanguage::Fish || language == MRSyntaxLanguage::Perl || language == MRSyntaxLanguage::Swift || language == MRSyntaxLanguage::Rust ||
-	       language == MRSyntaxLanguage::Go;
+	       language == MRSyntaxLanguage::Go || language == MRSyntaxLanguage::Pascal || language == MRSyntaxLanguage::Xml;
 }
 
 static constexpr auto kLargeFileViewportWarmupDebounce = std::chrono::milliseconds(180);
@@ -203,6 +203,21 @@ bool startsWithKeywordToken(std::string_view upperLine, std::string_view keyword
 	return std::isspace(next) != 0 || next == '(' || next == '{' || next == ':';
 }
 
+bool isPascalIfLead(std::string_view upperLine) noexcept;
+bool isPascalBeginLead(std::string_view upperLine) noexcept;
+bool isPascalRecordLead(std::string_view upperLine) noexcept;
+bool isPascalCaseLead(std::string_view upperLine) noexcept;
+bool isPascalRepeatLead(std::string_view upperLine) noexcept;
+bool isPascalElseLead(std::string_view upperLine) noexcept;
+bool isPascalClassLead(std::string_view upperLine) noexcept;
+bool isPascalObjectLead(std::string_view upperLine) noexcept;
+bool isPascalTryLead(std::string_view upperLine) noexcept;
+bool isPascalExceptLead(std::string_view upperLine) noexcept;
+bool isPascalFinallyLead(std::string_view upperLine) noexcept;
+bool isPascalUntilLead(std::string_view upperLine) noexcept;
+bool isPascalEndLead(std::string_view upperLine) noexcept;
+bool isPascalDoLead(std::string_view upperLine) noexcept;
+
 enum : int {
 	kPerlBlockNone = 0,
 	kPerlBlockConditional = 1,
@@ -225,6 +240,14 @@ enum : int {
 	kFishBlockGeneric = 5,
 };
 
+enum : int {
+	kPascalBlockNone = 0,
+	kPascalBlockGeneric = 1,
+	kPascalBlockConditional = 2,
+	kPascalBlockRepeat = 3,
+	kPascalBlockTry = 4,
+};
+
 int shellIndentBlockKind(std::string_view upperLine) noexcept {
 	if (upperLine == "THEN" || upperLine.ends_with(" THEN") || upperLine == "ELSE" || upperLine.starts_with("ELIF ")) return kShellBlockConditional;
 	if (upperLine == "DO" || upperLine.ends_with(" DO") || upperLine.starts_with("SELECT ") || upperLine.starts_with("UNTIL ")) return kShellBlockLoop;
@@ -239,6 +262,15 @@ int fishIndentBlockKind(std::string_view upperLine) noexcept {
 	if (isFishCaseLead(upperLine)) return kFishBlockCase;
 	if (isFishFunctionLead(upperLine) || isFishBeginLead(upperLine)) return kFishBlockGeneric;
 	return kFishBlockNone;
+}
+
+int pascalIndentBlockKind(std::string_view upperLine) noexcept {
+	if (isPascalIfLead(upperLine) || isPascalElseLead(upperLine)) return kPascalBlockConditional;
+	if (isPascalBeginLead(upperLine) || isPascalRecordLead(upperLine) || isPascalCaseLead(upperLine) || isPascalDoLead(upperLine) || isPascalClassLead(upperLine) || isPascalObjectLead(upperLine))
+		return kPascalBlockGeneric;
+	if (isPascalRepeatLead(upperLine)) return kPascalBlockRepeat;
+	if (isPascalTryLead(upperLine) || isPascalExceptLead(upperLine) || isPascalFinallyLead(upperLine)) return kPascalBlockTry;
+	return kPascalBlockNone;
 }
 
 int perlStructuredBlockKind(std::string_view trimmed, std::string_view upperLine) noexcept {
@@ -636,7 +668,7 @@ bool isPreprocessorFoldSibling(std::string_view trimmed) noexcept {
 
 bool isIndentFoldLanguage(MRSyntaxLanguage language) noexcept {
 	return language == MRSyntaxLanguage::Python || language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh || language == MRSyntaxLanguage::Perl || language == MRSyntaxLanguage::Make || language == MRSyntaxLanguage::MRMAC ||
-	       language == MRSyntaxLanguage::PlainText;
+	       language == MRSyntaxLanguage::Yaml || language == MRSyntaxLanguage::PlainText;
 }
 
 bool isShellSiblingLead(std::string_view upperLine) noexcept {
@@ -669,6 +701,137 @@ bool isMRMACEndLead(std::string_view upperLine) noexcept {
 
 bool isMRMACCommentLine(std::string_view trimmed) noexcept {
 	return !trimmed.empty() && trimmed.front() == ';';
+}
+
+bool isPascalIfLead(std::string_view upperLine) noexcept {
+	return upperLine.starts_with("IF ") && upperLine.find(" THEN") != std::string_view::npos;
+}
+
+bool isPascalBeginLead(std::string_view upperLine) noexcept {
+	return upperLine == "BEGIN" || upperLine == "BEGIN;";
+}
+
+bool isPascalRecordLead(std::string_view upperLine) noexcept {
+	return upperLine == "RECORD" || upperLine == "RECORD;" || upperLine.ends_with(" RECORD");
+}
+
+bool isPascalCaseLead(std::string_view upperLine) noexcept {
+	return upperLine.starts_with("CASE ") && upperLine.find(" OF") != std::string_view::npos;
+}
+
+bool isPascalRepeatLead(std::string_view upperLine) noexcept {
+	return upperLine == "REPEAT" || upperLine == "REPEAT;";
+}
+
+bool isPascalElseLead(std::string_view upperLine) noexcept {
+	return upperLine == "ELSE" || upperLine == "ELSE;";
+}
+
+bool isPascalClassLead(std::string_view upperLine) noexcept {
+	return upperLine == "CLASS" || upperLine == "CLASS;" || upperLine.find("= CLASS") != std::string_view::npos;
+}
+
+bool isPascalObjectLead(std::string_view upperLine) noexcept {
+	return upperLine == "OBJECT" || upperLine == "OBJECT;" || upperLine.find("= OBJECT") != std::string_view::npos;
+}
+
+bool isPascalTryLead(std::string_view upperLine) noexcept {
+	return upperLine == "TRY" || upperLine == "TRY;";
+}
+
+bool isPascalExceptLead(std::string_view upperLine) noexcept {
+	return upperLine == "EXCEPT" || upperLine == "EXCEPT;";
+}
+
+bool isPascalFinallyLead(std::string_view upperLine) noexcept {
+	return upperLine == "FINALLY" || upperLine == "FINALLY;";
+}
+
+bool isPascalUntilLead(std::string_view upperLine) noexcept {
+	return upperLine.starts_with("UNTIL ");
+}
+
+bool isPascalEndLead(std::string_view upperLine) noexcept {
+	return upperLine == "END" || upperLine == "END;" || upperLine == "END.";
+}
+
+bool isPascalDoLead(std::string_view upperLine) noexcept {
+	return upperLine.ends_with(" DO");
+}
+
+bool isPascalCommentLikeLine(std::string_view trimmed) noexcept {
+	return trimmed.starts_with("//");
+}
+
+bool isXmlNameStartChar(char ch) noexcept {
+	const unsigned char value = static_cast<unsigned char>(ch);
+	return std::isalpha(value) != 0 || ch == '_' || ch == ':';
+}
+
+bool isXmlNameChar(char ch) noexcept {
+	const unsigned char value = static_cast<unsigned char>(ch);
+	return std::isalnum(value) != 0 || ch == '_' || ch == ':' || ch == '-' || ch == '.';
+}
+
+std::size_t skipXmlName(std::string_view text, std::size_t pos) noexcept {
+	if (pos >= text.size() || !isXmlNameStartChar(text[pos])) return pos;
+	++pos;
+	while (pos < text.size() && isXmlNameChar(text[pos]))
+		++pos;
+	return pos;
+}
+
+bool parseXmlLeadingOpenTag(std::string_view trimmed, std::string_view &tagName) noexcept {
+	const std::string_view normalized = trimView(trimmed);
+	std::size_t pos = 0;
+	char quote = '\0';
+	std::size_t closePos = std::string_view::npos;
+	std::size_t lastNonSpace = std::string_view::npos;
+
+	tagName = {};
+	if (normalized.size() < 3 || normalized.front() != '<') return false;
+	if (normalized[1] == '/' || normalized[1] == '!' || normalized[1] == '?') return false;
+	pos = skipXmlName(normalized, 1);
+	if (pos <= 1) return false;
+	tagName = normalized.substr(1, pos - 1);
+	for (std::size_t i = pos; i < normalized.size(); ++i) {
+		const char ch = normalized[i];
+		if (quote != '\0') {
+			if (ch == quote) quote = '\0';
+			continue;
+		}
+		if (ch == '"' || ch == '\'') {
+			quote = ch;
+			continue;
+		}
+		if (ch == '>') {
+			closePos = i;
+			break;
+		}
+		if (std::isspace(static_cast<unsigned char>(ch)) == 0) lastNonSpace = i;
+	}
+	if (closePos == std::string_view::npos || quote != '\0') return false;
+	if (lastNonSpace != std::string_view::npos && normalized[lastNonSpace] == '/') return false;
+	return true;
+}
+
+bool parseXmlLeadingCloseTag(std::string_view trimmed, std::string_view &tagName) noexcept {
+	const std::string_view normalized = trimView(trimmed);
+	std::size_t pos = 0;
+
+	tagName = {};
+	if (normalized.size() < 4 || !normalized.starts_with("</")) return false;
+	pos = skipXmlName(normalized, 2);
+	if (pos <= 2) return false;
+	tagName = normalized.substr(2, pos - 2);
+	while (pos < normalized.size() && std::isspace(static_cast<unsigned char>(normalized[pos])) != 0)
+		++pos;
+	return pos < normalized.size() && normalized[pos] == '>';
+}
+
+bool isXmlCommentLikeLine(std::string_view trimmed) noexcept {
+	const std::string_view normalized = trimView(trimmed);
+	return normalized.starts_with("<!--") || normalized.starts_with("<?") || normalized.starts_with("<!");
 }
 
 std::string_view stripMRMACTrailingComment(std::string_view text) noexcept {
@@ -734,6 +897,11 @@ enum class SmartDedentKind {
 	PythonTry,
 	PythonCase,
 	PerlConditional,
+	PascalConditional,
+	PascalTry,
+	PascalEnd,
+	PascalRepeat,
+	XmlTag,
 	CLikeElse,
 	CLikeCatch,
 };
@@ -741,6 +909,7 @@ enum class SmartDedentKind {
 struct SmartDedentRequest {
 	SmartDedentKind kind = SmartDedentKind::None;
 	char closer = 0;
+	std::string_view tagName;
 };
 
 SmartDedentRequest classifySmartDedentRequest(std::string_view trimmed, MRSyntaxLanguage language) noexcept {
@@ -775,6 +944,17 @@ SmartDedentRequest classifySmartDedentRequest(std::string_view trimmed, MRSyntax
 		case MRSyntaxLanguage::Perl:
 			if (startsWithKeywordToken(normalizedUpper, "ELSIF") || normalizedUpper == "ELSE {" || normalizedUpper == "ELSE") return {SmartDedentKind::PerlConditional, 0};
 			break;
+		case MRSyntaxLanguage::Pascal:
+			if (isPascalElseLead(normalizedUpper)) return {SmartDedentKind::PascalConditional, 0};
+			if (isPascalExceptLead(normalizedUpper) || isPascalFinallyLead(normalizedUpper)) return {SmartDedentKind::PascalTry, 0};
+			if (isPascalUntilLead(normalizedUpper)) return {SmartDedentKind::PascalRepeat, 0};
+			if (isPascalEndLead(normalizedUpper)) return {SmartDedentKind::PascalEnd, 0};
+			break;
+		case MRSyntaxLanguage::Xml: {
+			std::string_view tagName;
+			if (parseXmlLeadingCloseTag(normalizedTrimmed, tagName)) return {SmartDedentKind::XmlTag, 0, tagName};
+			break;
+		}
 		case MRSyntaxLanguage::C:
 		case MRSyntaxLanguage::Cpp:
 		case MRSyntaxLanguage::JavaScript:
@@ -839,6 +1019,10 @@ bool isDedentSearchSkippableLine(std::string_view trimmed, MRSyntaxLanguage lang
 			return isRustCommentLikeLine(trimmed);
 		case MRSyntaxLanguage::Go:
 			return isGoCommentLikeLine(trimmed);
+		case MRSyntaxLanguage::Pascal:
+			return isPascalCommentLikeLine(trimmed);
+		case MRSyntaxLanguage::Xml:
+			return isXmlCommentLikeLine(trimmed);
 		default:
 			return false;
 	}
@@ -888,6 +1072,21 @@ bool matchesSmartDedentAnchor(std::string_view trimmed, std::string_view upperLi
 		case SmartDedentKind::PerlConditional:
 			return language == MRSyntaxLanguage::Perl &&
 			       (startsWithKeywordToken(normalizedUpper, "IF") || startsWithKeywordToken(normalizedUpper, "UNLESS") || startsWithKeywordToken(normalizedUpper, "ELSIF") || normalizedUpper == "ELSE {");
+		case SmartDedentKind::PascalConditional:
+			return language == MRSyntaxLanguage::Pascal && (isPascalIfLead(normalizedUpper) || isPascalElseLead(normalizedUpper));
+		case SmartDedentKind::PascalTry:
+			return language == MRSyntaxLanguage::Pascal && (isPascalTryLead(normalizedUpper) || isPascalExceptLead(normalizedUpper) || isPascalFinallyLead(normalizedUpper));
+		case SmartDedentKind::PascalEnd:
+			return language == MRSyntaxLanguage::Pascal &&
+			       (isPascalBeginLead(normalizedUpper) || isPascalRecordLead(normalizedUpper) || isPascalCaseLead(normalizedUpper) || isPascalIfLead(normalizedUpper) || isPascalElseLead(normalizedUpper) ||
+			        isPascalDoLead(normalizedUpper) || isPascalClassLead(normalizedUpper) || isPascalObjectLead(normalizedUpper) || isPascalTryLead(normalizedUpper) || isPascalExceptLead(normalizedUpper) ||
+			        isPascalFinallyLead(normalizedUpper));
+		case SmartDedentKind::PascalRepeat:
+			return language == MRSyntaxLanguage::Pascal && isPascalRepeatLead(normalizedUpper);
+		case SmartDedentKind::XmlTag: {
+			std::string_view tagName;
+			return language == MRSyntaxLanguage::Xml && parseXmlLeadingOpenTag(trimmed, tagName) && tagName == request.tagName;
+		}
 		case SmartDedentKind::CLikeElse:
 			return normalizedUpper.starts_with("IF ") || normalizedUpper.starts_with("ELSE");
 		case SmartDedentKind::CLikeCatch:
@@ -971,6 +1170,7 @@ struct MRFoldOpenBlock {
 	int languageBlockKind = 0;
 	bool siblingContinuation = false;
 	std::size_t lastContentLine = std::numeric_limits<std::size_t>::max();
+	std::string xmlTagName;
 };
 
 struct MRFoldScanOutput {
@@ -1115,6 +1315,7 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 		kFishSwitchBlock = 5,
 		kFishCaseBlock = 6,
 		kFishGenericBlock = 7,
+		kXmlTagBlock = 8,
 	};
 	auto appendVisibleSpan = [&](const MRFoldOpenBlock &block, std::size_t endLine) {
 		if (endLine <= block.startLine) return;
@@ -1124,7 +1325,7 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 	};
 	auto openBlock = [&](MRFoldSourceKind sourceKind, std::size_t indent, char closer = 0, char marker = 0, std::size_t markerLength = 0, int headingLevel = 0,
 	                     int languageBlockKind = kLanguageBlockNone, std::size_t startLine = std::numeric_limits<std::size_t>::max(),
-	                     bool siblingContinuation = false) {
+	                     bool siblingContinuation = false, std::string_view xmlTagName = std::string_view()) {
 		MRFoldOpenBlock block;
 		unsigned short visibleLevel = 0;
 
@@ -1141,6 +1342,7 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 		block.languageBlockKind = languageBlockKind;
 		block.siblingContinuation = siblingContinuation;
 		block.lastContentLine = block.startLine;
+		block.xmlTagName.assign(xmlTagName.begin(), xmlTagName.end());
 		openBlocks.push_back(block);
 	};
 
@@ -1274,6 +1476,16 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 		const bool fishCaseLead = language == MRSyntaxLanguage::Fish && isFishCaseLead(upperLine);
 		const bool fishEndLead = language == MRSyntaxLanguage::Fish && isFishEndLead(upperLine);
 		const int fishBlockKind = language == MRSyntaxLanguage::Fish ? fishIndentBlockKind(upperLine) : kFishBlockNone;
+		const bool pascalElseLead = language == MRSyntaxLanguage::Pascal && isPascalElseLead(upperLine);
+		const bool pascalExceptLead = language == MRSyntaxLanguage::Pascal && isPascalExceptLead(upperLine);
+		const bool pascalFinallyLead = language == MRSyntaxLanguage::Pascal && isPascalFinallyLead(upperLine);
+		const bool pascalEndLead = language == MRSyntaxLanguage::Pascal && isPascalEndLead(upperLine);
+		const bool pascalUntilLead = language == MRSyntaxLanguage::Pascal && isPascalUntilLead(upperLine);
+		const int pascalBlockKind = language == MRSyntaxLanguage::Pascal ? pascalIndentBlockKind(upperLine) : kPascalBlockNone;
+		std::string_view xmlLeadingOpenTagName;
+		const bool xmlLeadingOpenTag = language == MRSyntaxLanguage::Xml && parseXmlLeadingOpenTag(trimmed, xmlLeadingOpenTagName);
+		std::string_view xmlLeadingCloseTagName;
+		const bool xmlLeadingCloseTag = language == MRSyntaxLanguage::Xml && parseXmlLeadingCloseTag(trimmed, xmlLeadingCloseTagName);
 		const bool pythonDedent = language == MRSyntaxLanguage::Python && isPythonDedentLead(upperLine);
 		const bool perlSiblingLead = language == MRSyntaxLanguage::Perl && isPerlSiblingLead(upperLine);
 		const bool perlSiblingAfterLeadingCloser = language == MRSyntaxLanguage::Perl && isPerlSiblingLead(upperAscii(std::string(skipLeadingClosersAndSpace(trimmed))));
@@ -1441,7 +1653,31 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 				openBlocks.pop_back();
 			}
 		}
-
+		if (language == MRSyntaxLanguage::Pascal && pascalElseLead) {
+			while (!openBlocks.empty()) {
+				const MRFoldOpenBlock &block = openBlocks.back();
+				appendVisibleSpan(block, lineIndex - 1);
+				const int closedKind = block.languageBlockKind;
+				openBlocks.pop_back();
+				if (closedKind == kPascalBlockConditional) break;
+			}
+			openSiblingContinuation = true;
+		}
+		if (language == MRSyntaxLanguage::Pascal && (pascalExceptLead || pascalFinallyLead)) {
+			while (!openBlocks.empty()) {
+				const MRFoldOpenBlock &block = openBlocks.back();
+				appendVisibleSpan(block, lineIndex - 1);
+				const int closedKind = block.languageBlockKind;
+				openBlocks.pop_back();
+				if (closedKind == kPascalBlockTry) break;
+			}
+			openSiblingContinuation = true;
+		}
+		if (language == MRSyntaxLanguage::Xml && xmlLeadingCloseTag && !openBlocks.empty() && openBlocks.back().languageBlockKind == kXmlTagBlock &&
+		    openBlocks.back().xmlTagName == xmlLeadingCloseTagName) {
+			appendVisibleSpan(openBlocks.back(), lineIndex);
+			openBlocks.pop_back();
+		}
 		while (!openBlocks.empty()) {
 			const MRFoldOpenBlock block = openBlocks.back();
 			bool closeBlock = false;
@@ -1504,7 +1740,21 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 						closeBlock = true;
 						endLine = lineIndex - 1;
 						openSiblingContinuation = true;
-					} else if (language != MRSyntaxLanguage::MRMAC && currentIndent <= block.indent) {
+					} else if (language == MRSyntaxLanguage::Pascal) {
+						if (pascalElseLead && block.languageBlockKind == kPascalBlockConditional) {
+							closeBlock = true;
+							endLine = lineIndex - 1;
+							openSiblingContinuation = true;
+						} else if ((pascalExceptLead || pascalFinallyLead) && block.languageBlockKind == kPascalBlockTry) {
+							closeBlock = true;
+							endLine = lineIndex - 1;
+							openSiblingContinuation = true;
+						} else if (pascalUntilLead && block.languageBlockKind == kPascalBlockRepeat) {
+							closeBlock = true;
+						} else if (pascalEndLead && block.languageBlockKind != kPascalBlockRepeat) {
+							closeBlock = true;
+						}
+					} else if (language != MRSyntaxLanguage::MRMAC && language != MRSyntaxLanguage::Xml && currentIndent <= block.indent) {
 						closeBlock = true;
 						endLine = lineIndex - 1;
 					}
@@ -1604,6 +1854,20 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 					if (perlBlockKind != kPerlBlockNone)
 						openBlock(MRFoldSourceKind::Delimiter, currentIndent, '}', 0, 0, 0, perlBlockKind, std::numeric_limits<std::size_t>::max(), openSiblingContinuation);
 				}
+				break;
+			case MRSyntaxLanguage::Pascal:
+				if (pascalBlockKind == kPascalBlockConditional)
+					openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, kPascalBlockConditional, std::numeric_limits<std::size_t>::max(), openSiblingContinuation);
+				else if (pascalBlockKind == kPascalBlockGeneric)
+					openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, kPascalBlockGeneric);
+				else if (pascalBlockKind == kPascalBlockRepeat)
+					openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, kPascalBlockRepeat);
+				else if (pascalBlockKind == kPascalBlockTry)
+					openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, kPascalBlockTry, std::numeric_limits<std::size_t>::max(), openSiblingContinuation);
+				break;
+			case MRSyntaxLanguage::Xml:
+				if (xmlLeadingOpenTag)
+					openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, kXmlTagBlock, std::numeric_limits<std::size_t>::max(), openSiblingContinuation, xmlLeadingOpenTagName);
 				break;
 			case MRSyntaxLanguage::Markdown: {
 				char marker = 0;

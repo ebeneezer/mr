@@ -43,7 +43,8 @@ constexpr int kMinimumMiniMapWidth = 2;
 constexpr int kMaximumMiniMapWidth = 20;
 constexpr int kDefaultMiniMapWidth = 4;
 constexpr ushort kUiManagedOptionsMask = kOptionTruncateSpaces | kOptionEofCtrlZ | kOptionEofCrLf | kOptionPersistentBlocks | kOptionCodeFolding | kOptionWordWrap | kOptionShowLineNumbers | kOptionLineNumZeroFill | kOptionShowEofMarker | kOptionShowEofMarkerEmoji | kOptionDisplayTabs | kOptionFormatRuler | kOptionCodeColoring | kOptionCodeFoldingFeature;
-static const char *const kCodeLanguageChoices[] = {"None", "Automatic", "C", "C++", "Python", "JavaScript", "TypeScript", "TSX", "Bash", "zsh", "fish", "JSON", "Perl", "Swift", "Rust", "Go", "systemd et al."};
+static const char *const kCodeLanguageChoices[] = {"None", "Automatic", "C", "C++", "Python", "JavaScript", "TypeScript", "TSX", "Bash", "zsh", "fish", "JSON", "YAML", "XML", "Perl", "Swift", "Rust", "Go", "Pascal", "systemd et al."};
+constexpr short kCodeLanguageMaxVisibleRows = 10;
 
 struct FileExtensionEditorSettingsPanelLayout {
 	explicit FileExtensionEditorSettingsPanelLayout(const FileExtensionEditorSettingsPanelConfig &config)
@@ -802,7 +803,7 @@ void FileExtensionEditorSettingsPanel::toggleCodeLanguageList(MRScrollableDialog
 	values.reserve(sizeof(kCodeLanguageChoices) / sizeof(kCodeLanguageChoices[0]));
 	for (const char *choice : kCodeLanguageChoices)
 		values.push_back(choice);
-	codeLanguageDropList.toggle(dialog, codeLanguageListAnchor, values, trimAscii(codeLanguageValue()), &dialog, cmMrFileExtensionEditorSettingsPanelAcceptCodeLanguage);
+	codeLanguageDropList.toggle(dialog, codeLanguageListAnchor, values, trimAscii(codeLanguageValue()), &dialog, cmMrFileExtensionEditorSettingsPanelAcceptCodeLanguage, kCodeLanguageMaxVisibleRows);
 }
 
 void FileExtensionEditorSettingsPanel::hideCodeLanguageList() {

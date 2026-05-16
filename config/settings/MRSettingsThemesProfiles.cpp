@@ -1,3 +1,4 @@
+#include "../../app/MRVersion.hpp"
 #include "../../app/utils/MRFileIOUtils.hpp"
 #include "../../app/utils/MRStringUtils.hpp"
 #include "../../keymap/MRKeymapResolver.hpp"
@@ -26,6 +27,8 @@ bool setError(std::string *errorMessage, const std::string &message) {
 	if (errorMessage != nullptr) *errorMessage = message;
 	return false;
 }
+
+constexpr std::string_view kThemeVersionKey = "THEME_VERSION";
 
 std::string toUpperHexByte(unsigned char value);
 
@@ -400,7 +403,7 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 		if (parsed.size() != MRColorSetupSettings::kWindowCount - 1) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v4.");
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
-		outValues[11] = defaultCodeFoldingMarker;
+		outValues[11] = defaultFormatRuler;
 	} else if (v3Format) {
 		if (parsed.size() != MRColorSetupSettings::kWindowCount - 2) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v3.");
 		for (std::size_t i = 0; i < parsed.size(); ++i)
@@ -427,7 +430,7 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 1) {
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
-		outValues[11] = defaultCodeFoldingMarker;
+		outValues[11] = defaultFormatRuler;
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 2) {
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
@@ -626,8 +629,9 @@ std::string defaultColorThemePathForSettings(std::string_view settingsPath) {
 	return appendFileName(dir, "default-theme.mrmac");
 }
 
-bool parseThemeSetupAssignments(const std::string &source, std::map<std::string, std::string> &assignments, std::string *errorMessage) {
+bool parseThemeSetupAssignments(const std::string &source, std::map<std::string, std::string> &assignments, bool *upgradeRequired, std::string *errorMessage) {
 	static const std::regex pattern("MRSETUP\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
+	bool localUpgradeRequired = false;
 	assignments.clear();
 
 	auto begin = std::sregex_iterator(source.begin(), source.end(), pattern);
@@ -639,6 +643,20 @@ bool parseThemeSetupAssignments(const std::string &source, std::map<std::string,
 		if (key.empty()) continue;
 		assignments[upperAscii(key)] = value;
 	}
+	{
+		const auto versionIt = assignments.find(std::string(kThemeVersionKey));
+		const std::uint64_t currentVersion = mrCurrentPersistenceVersion();
+
+		if (versionIt == assignments.end()) localUpgradeRequired = true;
+		else {
+			const std::string versionLiteral = trimAscii(versionIt->second);
+			std::uint64_t parsedVersion = 0;
+
+			if (!mrParsePersistenceVersion(versionLiteral, parsedVersion)) return setError(errorMessage, "Invalid theme file version.");
+			if (parsedVersion > currentVersion) return setError(errorMessage, "Theme file targets newer build version: " + versionLiteral);
+			if (parsedVersion < currentVersion) localUpgradeRequired = true;
+		}
+	}
 
 	MRColorSetupSettings defaults = resolveColorSetupDefaults();
 	if (!assignments.contains("WINDOWCOLORS")) assignments["WINDOWCOLORS"] = formatWindowColorListLiteral(defaults.windowColors);
@@ -647,6 +665,7 @@ bool parseThemeSetupAssignments(const std::string &source, std::map<std::string,
 	if (!assignments.contains("OTHERCOLORS")) assignments["OTHERCOLORS"] = formatColorListLiteral(defaults.otherColors);
 	if (!assignments.contains("MINIMAPCOLORS")) assignments["MINIMAPCOLORS"] = formatColorListLiteral(defaults.miniMapColors);
 	if (!assignments.contains("CODECOLORS")) assignments["CODECOLORS"] = formatColorListLiteral(defaults.codeColors);
+	if (upgradeRequired != nullptr) *upgradeRequired = localUpgradeRequired;
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -938,6 +957,7 @@ std::string buildColorThemeMacroSource(const MRColorSetupSettings &colors) {
 	std::string source;
 
 	source += "$MACRO MR_COLOR_THEME FROM EDIT;\n";
+	source += "MRSETUP('THEME_VERSION', '" + escapeMrmacSingleQuotedLiteral(mrCurrentPersistenceVersionString()) + "');\n";
 	source += "MRSETUP('WINDOWCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatWindowColorListLiteral(colors.windowColors)) + "');\n";
 	source += "MRSETUP('MENUDIALOGCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.menuDialogColors)) + "');\n";
 	source += "MRSETUP('HELPCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.helpColors)) + "');\n";
@@ -984,14 +1004,16 @@ bool loadColorThemeFile(const std::string &themeUri, std::string *errorMessage) 
 	std::string source;
 	std::string applyError;
 	std::map<std::string, std::string> assignments;
+	bool upgradeRequired = false;
 	static const char *const order[] = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS", "MINIMAPCOLORS", "CODECOLORS"};
 
 	if (!validateColorThemeFilePath(normalized, errorMessage)) return false;
 	if (!ensureColorThemeFileExists(normalized, errorMessage)) return false;
 	if (!readTextFile(normalized, source)) return setError(errorMessage, "Unable to read color theme file: " + normalized);
-	if (!parseThemeSetupAssignments(source, assignments, errorMessage)) return false;
+	if (!parseThemeSetupAssignments(source, assignments, &upgradeRequired, errorMessage)) return false;
 	for (const char *key : order)
 		if (!applyConfiguredColorSetupValue(key, assignments[key], &applyError)) return setError(errorMessage, "Theme apply failed for " + std::string(key) + ": " + applyError);
+	if (upgradeRequired) mrLogMessage("Color theme version upgrade required: " + normalized);
 	if (!setConfiguredColorThemeFilePath(normalized, errorMessage)) return false;
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -1001,11 +1023,13 @@ bool loadWindowColorThemeGroupValues(const std::string &themeUri, std::array<uns
 	std::string normalized = normalizeConfiguredPathInput(themeUri);
 	std::string source;
 	std::map<std::string, std::string> assignments;
+	bool upgradeRequired = false;
 
 	if (!validateColorThemeFilePath(normalized, errorMessage)) return false;
 	if (!ensureColorThemeFileExists(normalized, errorMessage)) return false;
 	if (!readTextFile(normalized, source)) return setError(errorMessage, "Unable to read color theme file: " + normalized);
-	if (!parseThemeSetupAssignments(source, assignments, errorMessage)) return false;
+	if (!parseThemeSetupAssignments(source, assignments, &upgradeRequired, errorMessage)) return false;
+	(void)upgradeRequired;
 	if (!parseWindowColorListLiteral(assignments["WINDOWCOLORS"], outValues, errorMessage)) return false;
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;

@@ -12,6 +12,10 @@ const char *tmrSyntaxLanguageName(MRSyntaxLanguage language) noexcept {
 			return "Python";
 		case MRSyntaxLanguage::Json:
 			return "JSON";
+		case MRSyntaxLanguage::Yaml:
+			return "YAML";
+		case MRSyntaxLanguage::Xml:
+			return "XML";
 		case MRSyntaxLanguage::Bash:
 			return "Bash";
 		case MRSyntaxLanguage::Zsh:
@@ -26,6 +30,8 @@ const char *tmrSyntaxLanguageName(MRSyntaxLanguage language) noexcept {
 			return "Rust";
 		case MRSyntaxLanguage::Go:
 			return "Go";
+		case MRSyntaxLanguage::Pascal:
+			return "Pascal";
 		case MRSyntaxLanguage::Systemd:
 			return "systemd";
 		case MRSyntaxLanguage::MRMAC:
@@ -51,6 +57,10 @@ const char *tmrSyntaxLanguageMarker(MRSyntaxLanguage language) noexcept {
 			return "Py";
 		case MRSyntaxLanguage::Json:
 			return "Jn";
+		case MRSyntaxLanguage::Yaml:
+			return "Ya";
+		case MRSyntaxLanguage::Xml:
+			return "Xm";
 		case MRSyntaxLanguage::Bash:
 			return "Ba";
 		case MRSyntaxLanguage::Zsh:
@@ -65,6 +75,8 @@ const char *tmrSyntaxLanguageMarker(MRSyntaxLanguage language) noexcept {
 			return "Rs";
 		case MRSyntaxLanguage::Go:
 			return "Go";
+		case MRSyntaxLanguage::Pascal:
+			return "Pa";
 		case MRSyntaxLanguage::Systemd:
 			return "Sd";
 		case MRSyntaxLanguage::MRMAC:
@@ -90,6 +102,10 @@ std::uint32_t tmrSyntaxLanguageMarkerRgb(MRSyntaxLanguage language) noexcept {
 			return 0x4AA3D8;
 		case MRSyntaxLanguage::Json:
 			return 0x9FB3C8;
+		case MRSyntaxLanguage::Yaml:
+			return 0x78B883;
+		case MRSyntaxLanguage::Xml:
+			return 0xD08A6A;
 		case MRSyntaxLanguage::Bash:
 			return 0x8FBF6A;
 		case MRSyntaxLanguage::Zsh:
@@ -104,6 +120,8 @@ std::uint32_t tmrSyntaxLanguageMarkerRgb(MRSyntaxLanguage language) noexcept {
 			return 0xDEA584;
 		case MRSyntaxLanguage::Go:
 			return 0x6AA8FF;
+		case MRSyntaxLanguage::Pascal:
+			return 0xD49A57;
 		case MRSyntaxLanguage::Systemd:
 			return 0xB0B87A;
 		case MRSyntaxLanguage::MRMAC:
@@ -116,4 +134,3 @@ std::uint32_t tmrSyntaxLanguageMarkerRgb(MRSyntaxLanguage language) noexcept {
 			return 0;
 	}
 }
-

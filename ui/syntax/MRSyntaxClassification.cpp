@@ -201,6 +201,19 @@ int countJsonKeyLikeLines(std::string_view text, int maxCount = INT_MAX) noexcep
 	return count;
 }
 
+int countXmlTagLikeLines(std::string_view text, int maxCount = INT_MAX) noexcept {
+	int count = 0;
+	std::size_t pos = 0;
+
+	while (pos < text.size() && count < maxCount) {
+		const std::string_view line = trimWhitespaceView(nextLineView(text, pos));
+		if (line.size() < 3 || line.front() != '<' || line.find('>') == std::string_view::npos) continue;
+		const char second = line[1];
+		if (second == '?' || second == '!' || second == '/' || std::isalpha(static_cast<unsigned char>(second)) != 0 || second == '_' || second == ':') ++count;
+	}
+	return count;
+}
+
 int countShellAssignmentLines(std::string_view text, int maxCount = INT_MAX) noexcept {
 	int count = 0;
 	std::size_t pos = 0;
@@ -301,6 +314,8 @@ MRSyntaxLanguage tmrDetectSyntaxLanguage(const std::string &path, const std::str
 	if (ext == ".js" || ext == ".jsx" || ext == ".mjs" || ext == ".cjs" || ext == ".ts" || ext == ".tsx") return MRSyntaxLanguage::JavaScript;
 	if (ext == ".py" || ext == ".pyw") return MRSyntaxLanguage::Python;
 	if (ext == ".json" || ext == ".jsonc") return MRSyntaxLanguage::Json;
+	if (ext == ".yml" || ext == ".yaml") return MRSyntaxLanguage::Yaml;
+	if (ext == ".xml" || ext == ".xsd" || ext == ".xsl" || ext == ".xslt" || ext == ".svg") return MRSyntaxLanguage::Xml;
 	if (ext == ".sh" || ext == ".bash" || ext == ".ksh") return MRSyntaxLanguage::Bash;
 	if (lowerName == ".bashrc" || lowerName == ".bash_profile" || lowerName == ".profile") return MRSyntaxLanguage::Bash;
 	if (ext == ".zsh" || ext == ".zprofile" || ext == ".zshrc" || ext == ".zshenv" || ext == ".zlogin" || ext == ".zlogout") return MRSyntaxLanguage::Zsh;
@@ -310,6 +325,7 @@ MRSyntaxLanguage tmrDetectSyntaxLanguage(const std::string &path, const std::str
 	if (ext == ".swift") return MRSyntaxLanguage::Swift;
 	if (ext == ".rs") return MRSyntaxLanguage::Rust;
 	if (ext == ".go") return MRSyntaxLanguage::Go;
+	if (ext == ".pas" || ext == ".pp" || ext == ".lpr" || ext == ".dpr") return MRSyntaxLanguage::Pascal;
 	if (ext == ".service" || ext == ".socket" || ext == ".timer" || ext == ".mount" || ext == ".automount" || ext == ".target" || ext == ".path" || ext == ".slice" || ext == ".scope" ||
 	    ext == ".swap" || ext == ".device" || ext == ".link" || ext == ".netdev" || ext == ".network" || hasSystemdUnitSuffix(lowerName))
 		return MRSyntaxLanguage::Systemd;
@@ -327,6 +343,9 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	const bool forceCLanguageByExtension = ext == ".c";
 	const bool forceCppLanguageByExtension =
 	    ext == ".cc" || ext == ".cpp" || ext == ".cxx" || ext == ".hh" || ext == ".hpp" || ext == ".hxx" || ext == ".ipp" || ext == ".tpp" || ext == ".inl";
+	const bool forceYamlLanguageByExtension = ext == ".yml" || ext == ".yaml";
+	const bool forceXmlLanguageByExtension = ext == ".xml" || ext == ".xsd" || ext == ".xsl" || ext == ".xslt" || ext == ".svg";
+	const bool forcePascalLanguageByExtension = ext == ".pas" || ext == ".pp" || ext == ".lpr" || ext == ".dpr";
 	const std::string_view sample = classificationSample(text);
 	const std::string lowerSample = lowerCopyView(sample);
 	const std::string_view lower = lowerSample;
@@ -337,6 +356,9 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 
 	if (forceCLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::C, 100);
 	if (forceCppLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::Cpp, 100);
+	if (forceYamlLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::Yaml, 100);
+	if (forceXmlLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::Xml, 100);
+	if (forcePascalLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::Pascal, 100);
 
 	const int includeLines = countLinePrefixMatches(lower, "#include", 8);
 	const int cStdHeaderIncludes = countMatches(lower, "<assert.h>", 4) + countMatches(lower, "<ctype.h>", 4) + countMatches(lower, "<errno.h>", 4) + countMatches(lower, "<float.h>", 4) +
@@ -359,6 +381,7 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	const int pythonClassLines = countLinePrefixMatches(lower, "class ", 8);
 	const int pythonBlockHeaders = countPythonBlockHeaders(sample, 16);
 	const int jsonKeyLines = countJsonKeyLikeLines(sample, 32);
+	const int xmlTagLines = countXmlTagLikeLines(sample, 32);
 	const int shellAssignmentLines = countShellAssignmentLines(sample, 16);
 	const int fishFunctionLines = countLinePrefixMatches(lower, "function ", 12);
 	const int fishSetLines = countLinePrefixMatches(lower, "set ", 16) + countLinePrefixMatches(lower, "set -", 16);
@@ -408,7 +431,7 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 		int pathBias = 4;
 		if (ext == ".c" || ext == ".h" || ext == ".cc" || ext == ".cpp" || ext == ".cxx" || ext == ".hh" || ext == ".hpp" || ext == ".hxx" || ext == ".ipp" || ext == ".tpp" || ext == ".inl" ||
 		    ext == ".js" || ext == ".jsx" || ext == ".mjs" || ext == ".cjs" || ext == ".ts" || ext == ".tsx" || ext == ".json" || ext == ".jsonc" || ext == ".pl" || ext == ".pm" ||
-		    ext == ".pod" || ext == ".swift" || ext == ".rs" || ext == ".go" || ext == ".mrmac" || ext == ".service" || ext == ".socket" || ext == ".timer" || ext == ".mount" ||
+		    ext == ".pod" || ext == ".swift" || ext == ".rs" || ext == ".go" || ext == ".xml" || ext == ".xsd" || ext == ".xsl" || ext == ".xslt" || ext == ".svg" || ext == ".mrmac" || ext == ".service" || ext == ".socket" || ext == ".timer" || ext == ".mount" ||
 		    ext == ".automount" || ext == ".target" || ext == ".path" || ext == ".slice" || ext == ".scope" || ext == ".swap" || ext == ".device" || ext == ".link" ||
 		    ext == ".netdev" || ext == ".network")
 			pathBias = 14;
@@ -482,6 +505,17 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	addClassificationScore(scores, MRSyntaxLanguage::Json, countMatches(lower, "null", 8));
 	if (containsText(lower, "{") && containsText(lower, "}") && containsText(lower, "[") && containsText(lower, "]")) addClassificationScore(scores, MRSyntaxLanguage::Json, 4);
 	if (jsonKeyLines > 0) strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Json)] += std::min(4, jsonKeyLines);
+
+	addClassificationScore(scores, MRSyntaxLanguage::Xml, countMatches(lower, "<?xml", 2) * 8);
+	addClassificationScore(scores, MRSyntaxLanguage::Xml, countMatches(lower, "</", 16) * 2);
+	addClassificationScore(scores, MRSyntaxLanguage::Xml, countMatches(lower, "<!--", 8) * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Xml, countMatches(lower, "/>", 16));
+	addClassificationScore(scores, MRSyntaxLanguage::Xml, countMatches(lower, "=\"", 16) * 2);
+	addClassificationScore(scores, MRSyntaxLanguage::Xml, countMatches(lower, "<![cdata[", 4) * 4);
+	addClassificationScore(scores, MRSyntaxLanguage::Xml, countMatches(lower, "<!doctype", 4) * 4);
+	addClassificationScore(scores, MRSyntaxLanguage::Xml, xmlTagLines * 2);
+	if (containsText(lower, "<?xml") || containsText(lower, "<![cdata[") || containsText(lower, "<!doctype")) strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Xml)] += 2;
+	if (xmlTagLines >= 2) strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Xml)] += std::min(3, xmlTagLines);
 
 	addClassificationScore(scores, MRSyntaxLanguage::Bash, countMatches(lower, "[[", 12) * 3);
 	addClassificationScore(scores, MRSyntaxLanguage::Bash, countMatches(lower, "${", 16));
@@ -627,6 +661,13 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 		addClassificationScore(scores, MRSyntaxLanguage::Python, -4);
 		addClassificationScore(scores, MRSyntaxLanguage::Zsh, -3);
 		addClassificationScore(scores, MRSyntaxLanguage::Perl, -5);
+	}
+	if (xmlTagLines >= 3) {
+		addClassificationScore(scores, MRSyntaxLanguage::Xml, 6);
+		++strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Xml)];
+		addClassificationScore(scores, MRSyntaxLanguage::Json, -4);
+		addClassificationScore(scores, MRSyntaxLanguage::Markdown, -4);
+		addClassificationScore(scores, MRSyntaxLanguage::Systemd, -3);
 	}
 	if (markdownStructureLines >= 3) {
 		addClassificationScore(scores, MRSyntaxLanguage::Markdown, 4);
