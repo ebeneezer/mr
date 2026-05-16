@@ -1,4 +1,4 @@
-MRSETUP('KEYMAP_VERSION', '1778960460');
+MRSETUP('KEYMAP_VERSION', '1778962202');
 MRSETUP('KEYMAP_PROFILE', 'name="DEFAULT" description="build-in defaults"');
 MRSETUP('KEYMAP_PROFILE', 'name="WORDSTAR" description="WordStar Core"');
 MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_CURSOR_UP" sequence="<Ctrl+E>" description="Cursor up"');

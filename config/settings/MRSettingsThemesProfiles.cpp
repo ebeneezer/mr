@@ -28,8 +28,6 @@ bool setError(std::string *errorMessage, const std::string &message) {
 	return false;
 }
 
-constexpr std::string_view kThemeVersionKey = "THEME_VERSION";
-
 std::string toUpperHexByte(unsigned char value);
 
 std::string summarizeConfiguredKeymapsForLog(const std::vector<MRKeymapProfile> &profiles, std::string_view activeProfileName) {
@@ -644,7 +642,7 @@ bool parseThemeSetupAssignments(const std::string &source, std::map<std::string,
 		assignments[upperAscii(key)] = value;
 	}
 	{
-		const auto versionIt = assignments.find(std::string(kThemeVersionKey));
+		const auto versionIt = assignments.find(std::string(mrThemeVersionSetupKey()));
 		const std::uint64_t currentVersion = mrCurrentPersistenceVersion();
 
 		if (versionIt == assignments.end()) localUpgradeRequired = true;
@@ -652,8 +650,8 @@ bool parseThemeSetupAssignments(const std::string &source, std::map<std::string,
 			const std::string versionLiteral = trimAscii(versionIt->second);
 			std::uint64_t parsedVersion = 0;
 
-			if (!mrParsePersistenceVersion(versionLiteral, parsedVersion)) return setError(errorMessage, "Invalid theme file version.");
-			if (parsedVersion > currentVersion) return setError(errorMessage, "Theme file targets newer build version: " + versionLiteral);
+			if (!mrParsePersistenceVersion(versionLiteral, parsedVersion)) return setError(errorMessage, mrInvalidPersistenceVersionMessage("theme file"));
+			if (parsedVersion > currentVersion) return setError(errorMessage, mrFuturePersistenceVersionMessage("Theme file", versionLiteral));
 			if (parsedVersion < currentVersion) localUpgradeRequired = true;
 		}
 	}
@@ -957,7 +955,7 @@ std::string buildColorThemeMacroSource(const MRColorSetupSettings &colors) {
 	std::string source;
 
 	source += "$MACRO MR_COLOR_THEME FROM EDIT;\n";
-	source += "MRSETUP('THEME_VERSION', '" + escapeMrmacSingleQuotedLiteral(mrCurrentPersistenceVersionString()) + "');\n";
+	source += "MRSETUP('" + std::string(mrThemeVersionSetupKey()) + "', '" + escapeMrmacSingleQuotedLiteral(mrCurrentPersistenceVersionString()) + "');\n";
 	source += "MRSETUP('WINDOWCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatWindowColorListLiteral(colors.windowColors)) + "');\n";
 	source += "MRSETUP('MENUDIALOGCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.menuDialogColors)) + "');\n";
 	source += "MRSETUP('HELPCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.helpColors)) + "');\n";

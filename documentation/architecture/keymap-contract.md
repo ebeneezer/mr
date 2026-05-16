@@ -18,9 +18,14 @@ Configured keymap profiles and the active profile belong to the settings runtime
 
 The resolver is a runtime projection of that model.
 
+External keymap files are versioned persistence artifacts.
+
 ## Data flow
 
 Settings source -> keymap parse/canonicalize -> settings model -> resolver -> runtime key handling.
+
+For external keymap files, the canonical persisted version is the running
+build's `MR_BUILD_EPOCH`.
 
 ## Invariants
 
@@ -30,6 +35,8 @@ Settings source -> keymap parse/canonicalize -> settings model -> resolver -> ru
 - Resolver rebuild semantics must not change as formatting cleanup.
 - Diagnostics texts and severity must not change without approval.
 - Loader and dialog roles must not be merged casually.
+- External keymap files with versions lower than the running build are upgrade input.
+- External keymap files with versions higher than the running build are invalid.
 
 ## Bootstrap relation
 
@@ -58,6 +65,7 @@ Do not change this while working on unrelated settings or UI tasks.
 - Changing resolver lookup/fallback behavior.
 - Moving diagnostics to a shared API without a dedicated plan.
 - Changing persisted keymap ordering or canonicalization.
+- Preserving stale external keymap version markers on write.
 
 ## Required tests
 

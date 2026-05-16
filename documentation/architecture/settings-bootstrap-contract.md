@@ -23,6 +23,9 @@ The settings bootstrap is VM-centered.
 
 The bootstrap owns the valid version of the settings source.
 
+The canonical persistence version is the current `MR_BUILD_EPOCH` of the
+running build.
+
 An older or partial settings file is input to bootstrap normalization, not an
 authority over the accepted settings version.
 
@@ -39,6 +42,12 @@ normalized model.
 
 When canonical rewrite is performed, the rewritten source must use the current
 canonical settings version rather than preserve the older source version.
+
+Any persisted settings source with a version lower than the running
+`MR_BUILD_EPOCH` is upgrade-required input.
+
+Any persisted settings source with a version higher than the running
+`MR_BUILD_EPOCH` must be rejected as a future-version source.
 
 The VM is the final startup apply actor.
 
@@ -77,6 +86,9 @@ Do not “simplify” the bootstrap by collapsing staging and final VM applicati
 
 Theme and keymap behavior are separate contracts.
 Do not move theme or keymap application as part of bootstrap cleanup unless the task explicitly targets that contract.
+
+External theme and keymap files follow the same build-epoch version rule when
+they are loaded through bootstrap-related paths.
 
 ## Transitional keymap exception
 

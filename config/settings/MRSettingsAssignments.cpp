@@ -152,7 +152,6 @@ void addSerializedHistoryEntry(std::vector<std::string> &entries, const std::str
 static const char *const kThemeSettingsKey = "COLORTHEMEURI";
 static const char *const kKeymapSettingsKey = "KEYMAPURI";
 static const char *const kWindowColorThemeProfileKey = "WINDOW_COLORTHEME_URI";
-static const char *const kSettingsVersionKey = "SETTINGS_VERSION";
 static const char *const kSearchTextTypeLiteral = "LITERAL";
 static const char *const kSearchTextTypePcre = "PCRE";
 static const char *const kSearchTextTypeWord = "WORD";
@@ -182,7 +181,7 @@ struct MRSettingsKeyDescriptor {
 };
 
 static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
-    {kSettingsVersionKey, MRSettingsKeyClass::Version, true},
+    {mrSettingsVersionSetupKey(), MRSettingsKeyClass::Version, true},
     {"SETTINGSPATH", MRSettingsKeyClass::Path, true},
     {"MACROPATH", MRSettingsKeyClass::Path, true},
     {"HELPPATH", MRSettingsKeyClass::Path, true},
@@ -575,7 +574,7 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 		case MRSettingsKeyClass::Unknown:
 			return setError(errorMessage, "Unsupported MRSETUP key.");
 		case MRSettingsKeyClass::Version:
-			if (trimAscii(value) != mrCurrentPersistenceVersionString()) return setError(errorMessage, "Unsupported settings version for current build.");
+			if (trimAscii(value) != mrCurrentPersistenceVersionString()) return setError(errorMessage, mrUnsupportedCurrentBuildVersionMessage("settings source"));
 			if (errorMessage != nullptr) errorMessage->clear();
 			return true;
 		case MRSettingsKeyClass::Path: {
@@ -1045,7 +1044,7 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 		case MRSettingsKeyClass::Unknown:
 			return setError(errorMessage, "Unsupported MRSETUP key.");
 		case MRSettingsKeyClass::Version:
-			if (trimAscii(value) != mrCurrentPersistenceVersionString()) return setError(errorMessage, "Unsupported settings version for current build.");
+			if (trimAscii(value) != mrCurrentPersistenceVersionString()) return setError(errorMessage, mrUnsupportedCurrentBuildVersionMessage("settings source"));
 			if (errorMessage != nullptr) errorMessage->clear();
 			return true;
 		case MRSettingsKeyClass::Path: {

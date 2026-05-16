@@ -81,7 +81,6 @@ constexpr int kBindingDescriptionFieldSize = 128;
 constexpr int kBindingFilterFieldSize = 64;
 constexpr int kTargetFilterFieldSize = 64;
 constexpr char kBindingRecordingGlyph[] = "📼";
-constexpr std::string_view kKeymapVersionSetupKey = "KEYMAP_VERSION";
 
 TFrame *initMrDialogFrame(TRect bounds) {
 	return new MRFrame(bounds);
@@ -212,16 +211,16 @@ bool validateKeymapFileVersion(const std::string &source, bool &upgradeRequired,
 		const std::string key = upperAscii(trimAscii(unescapeMrmacSingleQuotedLiteral(match[1].str())));
 		const std::string value = trimAscii(unescapeMrmacSingleQuotedLiteral(match[2].str()));
 
-		if (key == kKeymapVersionSetupKey) {
+		if (key == mrKeymapVersionSetupKey()) {
 			std::uint64_t parsedVersion = 0;
 
 			versionSeen = true;
 			if (!mrParsePersistenceVersion(value, parsedVersion)) {
-				errorText = "Invalid keymap file version.";
+				errorText = mrInvalidPersistenceVersionMessage("keymap file");
 				return false;
 			}
 			if (parsedVersion > currentVersion) {
-				errorText = "Keymap file targets newer build version: " + value;
+				errorText = mrFuturePersistenceVersionMessage("Keymap file", value);
 				return false;
 			}
 			if (parsedVersion < currentVersion) upgradeRequired = true;
@@ -235,7 +234,7 @@ bool validateKeymapFileVersion(const std::string &source, bool &upgradeRequired,
 std::string buildSerializedKeymapFileSource(const KeymapManagerDraft &draft) {
 	std::string source;
 
-	source += "MRSETUP('KEYMAP_VERSION', '" + escapeMrmacSingleQuotedLiteral(mrCurrentPersistenceVersionString()) + "');\n";
+	source += "MRSETUP('" + std::string(mrKeymapVersionSetupKey()) + "', '" + escapeMrmacSingleQuotedLiteral(mrCurrentPersistenceVersionString()) + "');\n";
 	source += serializeKeymapProfilesToSettingsSource(draft.profiles, draft.activeProfileName);
 	return source;
 }

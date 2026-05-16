@@ -112,7 +112,7 @@ bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::
 				continue;
 			}
 			if (parsedVersion > currentPersistenceVersion) {
-				if (errorMessage != nullptr) *errorMessage = "Settings source targets newer build version: " + versionLiteral;
+				if (errorMessage != nullptr) *errorMessage = mrFuturePersistenceVersionMessage("Settings source", versionLiteral);
 				return false;
 			}
 			if (parsedVersion < currentPersistenceVersion) markFlag(activeReport, MRSettingsLoadReport::VersionUpgradeRequired);
@@ -165,7 +165,7 @@ bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::
 		bool themeUpgradeRequired = false;
 
 		if (!loadColorThemeFileIntoSettingsSnapshot(snapshot, &themeUpgradeRequired, &themeError)) {
-			if (themeError.find("newer build version") != std::string::npos) {
+			if (themeError.rfind(mrFuturePersistenceVersionMessagePrefix("Theme file"), 0) == 0) {
 				if (errorMessage != nullptr) *errorMessage = themeError;
 				return false;
 			}

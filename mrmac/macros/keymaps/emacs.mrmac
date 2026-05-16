@@ -1,4 +1,4 @@
-MRSETUP('KEYMAP_VERSION', '1778960460');
+MRSETUP('KEYMAP_VERSION', '1778962202');
 MRSETUP('KEYMAP_PROFILE', 'name="DEFAULT" description="built-in defaults"');
 MRSETUP('KEYMAP_PROFILE', 'name="EMACS" description="Emacs core"');
 MRSETUP('KEYMAP_BIND', 'name="EMACS" context=EDIT type=ACTION target="MRMAC_CURSOR_UP" sequence="<Ctrl+P>" description="Cursor up"');

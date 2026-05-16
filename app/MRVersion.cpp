@@ -11,6 +11,9 @@ namespace {
 constexpr char kMrDisplayVersion[] = "0.2.0-dev";
 constexpr char kBuildLabel[] = " (build ";
 constexpr char kBuildSuffix[] = ")";
+constexpr char kSettingsVersionSetupKey[] = "SETTINGS_VERSION";
+constexpr char kThemeVersionSetupKey[] = "THEME_VERSION";
+constexpr char kKeymapVersionSetupKey[] = "KEYMAP_VERSION";
 } // namespace
 
 const char *mrDisplayVersion() noexcept {
@@ -43,4 +46,32 @@ bool mrParsePersistenceVersion(std::string_view text, std::uint64_t &outVersion)
 	}
 	outVersion = parsed;
 	return true;
+}
+
+const char *mrSettingsVersionSetupKey() noexcept {
+	return kSettingsVersionSetupKey;
+}
+
+const char *mrThemeVersionSetupKey() noexcept {
+	return kThemeVersionSetupKey;
+}
+
+const char *mrKeymapVersionSetupKey() noexcept {
+	return kKeymapVersionSetupKey;
+}
+
+std::string mrInvalidPersistenceVersionMessage(std::string_view artifact) {
+	return "Invalid " + std::string(artifact) + " version.";
+}
+
+std::string mrFuturePersistenceVersionMessagePrefix(std::string_view artifact) {
+	return std::string(artifact) + " targets newer build version: ";
+}
+
+std::string mrFuturePersistenceVersionMessage(std::string_view artifact, std::string_view versionLiteral) {
+	return mrFuturePersistenceVersionMessagePrefix(artifact) + std::string(versionLiteral);
+}
+
+std::string mrUnsupportedCurrentBuildVersionMessage(std::string_view artifact) {
+	return "Unsupported " + std::string(artifact) + " version for current build.";
 }

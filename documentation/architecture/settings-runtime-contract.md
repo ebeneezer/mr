@@ -22,6 +22,9 @@ The runtime model is the complete current-version settings model.
 Older or partial settings inputs must be upgraded by bootstrap normalization
 into that complete current model before final authoritative startup apply.
 
+The current-version model is defined by the running build's `MR_BUILD_EPOCH`,
+not by a long-lived schema constant.
+
 ## Invariants
 
 - No shadow settings stores.
@@ -33,6 +36,8 @@ into that complete current model before final authoritative startup apply.
 - Known valid older settings are carried forward into the current model by
   canonical meaning.
 - Settings keys must have one canonical spelling and one canonical meaning.
+- Persisted versions lower than the running `MR_BUILD_EPOCH` are upgrade input.
+- Persisted versions higher than the running `MR_BUILD_EPOCH` are invalid.
 
 ## MRSETUP
 
