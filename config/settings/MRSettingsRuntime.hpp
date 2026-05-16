@@ -316,6 +316,13 @@ struct MRPdfExportSettings {
 	auto operator==(const MRPdfExportSettings &) const noexcept -> bool = default;
 };
 
+struct MRAcquireSettings {
+	std::string commandLine;
+	std::vector<std::string> commandHistory;
+
+	auto operator==(const MRAcquireSettings &) const noexcept -> bool = default;
+};
+
 struct MRColorSetupItem {
 	const char *label;
 	unsigned char paletteIndex;
@@ -510,6 +517,8 @@ bool setConfiguredMultiSarDialogOptions(const MRMultiSarDialogOptions &options, 
 [[nodiscard]] MRMultiSarDialogOptions configuredMultiSarDialogOptions();
 bool setConfiguredPdfExportSettings(const MRPdfExportSettings &settings, std::string *errorMessage = nullptr);
 [[nodiscard]] MRPdfExportSettings configuredPdfExportSettings();
+bool setConfiguredAcquireSettings(const MRAcquireSettings &settings, std::string *errorMessage = nullptr);
+[[nodiscard]] MRAcquireSettings configuredAcquireSettings();
 void configuredMultiFilespecHistoryEntries(std::vector<std::string> &outValues);
 void configuredMultiPathHistoryEntries(std::vector<std::string> &outValues);
 bool addConfiguredMultiFilespecHistoryEntry(const std::string &value, std::string *errorMessage = nullptr);

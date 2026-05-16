@@ -376,6 +376,7 @@ MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) 
 	snapshot.multiSearchDialogOptions = configuredMultiSearchDialogOptions();
 	snapshot.multiSarDialogOptions = configuredMultiSarDialogOptions();
 	snapshot.pdfExportSettings = configuredPdfExportSettings();
+	snapshot.acquireSettings = configuredAcquireSettings();
 	snapshot.virtualDesktops = configuredVirtualDesktops();
 	snapshot.cyclicVirtualDesktops = configuredCyclicVirtualDesktops();
 	snapshot.cursorBehaviour = configuredCursorBehaviour();
@@ -538,6 +539,9 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('PDF_EXPORT_RIGHT_MARGIN_POINTS', '" + escapeMrmacSingleQuotedLiteral(snapshot.pdfExportSettings.rightMarginPoints) + "');\n";
 	source += "MRSETUP('PDF_EXPORT_TOP_MARGIN_POINTS', '" + escapeMrmacSingleQuotedLiteral(snapshot.pdfExportSettings.topMarginPoints) + "');\n";
 	source += "MRSETUP('PDF_EXPORT_BOTTOM_MARGIN_POINTS', '" + escapeMrmacSingleQuotedLiteral(snapshot.pdfExportSettings.bottomMarginPoints) + "');\n";
+	source += "MRSETUP('ACQUIRE_COMMAND', '" + escapeMrmacSingleQuotedLiteral(snapshot.acquireSettings.commandLine) + "');\n";
+	for (const std::string &entry : snapshot.acquireSettings.commandHistory)
+		source += "MRSETUP('ACQUIRE_COMMAND_HISTORY', '" + escapeMrmacSingleQuotedLiteral(entry) + "');\n";
 	source += "MRSETUP('VIRTUAL_DESKTOPS', '" + std::to_string(snapshot.virtualDesktops) + "');\n";
 	source += "MRSETUP('CYCLIC_VIRTUAL_DESKTOPS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.cyclicVirtualDesktops)) + "');\n";
 	source += "MRSETUP('CURSOR_BEHAVIOUR', '" + escapeMrmacSingleQuotedLiteral(formatCursorBehaviourLiteral(snapshot.cursorBehaviour)) + "');\n";

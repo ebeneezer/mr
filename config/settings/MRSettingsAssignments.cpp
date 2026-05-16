@@ -239,6 +239,8 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"PDF_EXPORT_RIGHT_MARGIN_POINTS", MRSettingsKeyClass::Global, true},
     {"PDF_EXPORT_TOP_MARGIN_POINTS", MRSettingsKeyClass::Global, true},
     {"PDF_EXPORT_BOTTOM_MARGIN_POINTS", MRSettingsKeyClass::Global, true},
+    {"ACQUIRE_COMMAND", MRSettingsKeyClass::Global, true},
+    {"ACQUIRE_COMMAND_HISTORY", MRSettingsKeyClass::Global, false},
     {"VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
     {"CYCLIC_VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
     {"CURSOR_BEHAVIOUR", MRSettingsKeyClass::Global, true},
@@ -534,6 +536,7 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredMultiSearchDialogOptions(MRMultiSearchDialogOptions(), errorMessage)) return false;
 	if (!setConfiguredMultiSarDialogOptions(MRMultiSarDialogOptions(), errorMessage)) return false;
 	if (!setConfiguredPdfExportSettings(MRPdfExportSettings(), errorMessage)) return false;
+	if (!setConfiguredAcquireSettings(MRAcquireSettings(), errorMessage)) return false;
 	if (!setConfiguredCursorBehaviour(MRCursorBehaviour::BoundToText, errorMessage)) return false;
 	if (!setConfiguredUiIndentStyle(MRUiIndentStyle::KandR, errorMessage)) return false;
 	if (!setConfiguredCursorPositionMarker("R:C", errorMessage)) return false;
@@ -906,6 +909,18 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				if (trimmed.empty() || end == trimmed.c_str() || end == nullptr || *end != '\0' || parsed < 0 || parsed > 9999) return setError(errorMessage, "PDF_EXPORT_BOTTOM_MARGIN_POINTS must be within 0..9999.");
 				settings.bottomMarginPoints = value;
 				return setConfiguredPdfExportSettings(settings, errorMessage);
+			}
+			if (upper == "ACQUIRE_COMMAND") {
+				MRAcquireSettings settings = configuredAcquireSettings();
+				settings.commandLine = value;
+				return setConfiguredAcquireSettings(settings, errorMessage);
+			}
+			if (upper == "ACQUIRE_COMMAND_HISTORY") {
+				MRAcquireSettings settings = configuredAcquireSettings();
+				const std::string trimmed = trimAscii(value);
+
+				if (!trimmed.empty()) settings.commandHistory.push_back(trimmed);
+				return setConfiguredAcquireSettings(settings, errorMessage);
 			}
 			if (upper == "VIRTUAL_DESKTOPS") {
 				int parsed = 1;
@@ -1338,6 +1353,17 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 
 				if (trimmed.empty() || end == trimmed.c_str() || end == nullptr || *end != '\0' || parsed < 0 || parsed > 9999) return setError(errorMessage, "PDF_EXPORT_BOTTOM_MARGIN_POINTS must be within 0..9999.");
 				snapshot.pdfExportSettings.bottomMarginPoints = value;
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "ACQUIRE_COMMAND") {
+				snapshot.acquireSettings.commandLine = value;
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "ACQUIRE_COMMAND_HISTORY") {
+				const std::string trimmed = trimAscii(value);
+				if (!trimmed.empty()) snapshot.acquireSettings.commandHistory.push_back(trimmed);
 				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
 			}

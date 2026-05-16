@@ -30,12 +30,17 @@
 #include "../dialogs/setup/MRSetupCommon.hpp"
 #include "../keymap/MRKeymapResolver.hpp"
 #include "../keymap/MRKeymapToken.hpp"
+#include "MRFrame.hpp"
 #include "MRMessageLineController.hpp"
 #include "MREditWindow.hpp"
 
 namespace {
 constexpr std::string_view kHelpWindowTitle = "MR HELP";
 constexpr std::string_view kLogWindowTitle = "MR LOG";
+
+TFrame *initMrDialogFrame(TRect bounds) {
+	return new MRFrame(bounds);
+}
 
 std::string g_logBuffer;
 std::size_t g_logPersistedBytes = 0;
@@ -126,7 +131,7 @@ std::string describeDesktopCurrentView() {
 
 class TBindingKeyCaptureDialog : public MRDialogFoundation {
   public:
-	TBindingKeyCaptureDialog(const char *title, const char *prompt) : TWindowInit(&TDialog::initFrame), MRDialogFoundation(centeredSetupDialogRect(52, 8), title != nullptr ? title : "Bind Key", 52, 8), captureAccepted(false), capturedKeyCode(kbNoKey), capturedControlState(0) {
+	TBindingKeyCaptureDialog(const char *title, const char *prompt) : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(52, 8), title != nullptr ? title : "Bind Key", 52, 8, initMrDialogFrame), captureAccepted(false), capturedKeyCode(kbNoKey), capturedControlState(0) {
 		insert(new TStaticText(TRect(2, 2, 50, 6), prompt != nullptr ? prompt : "Press key to bind.\nEsc = cancel."));
 	}
 

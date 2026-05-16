@@ -1,5 +1,6 @@
 #include "MRAppState.hpp"
 
+#include "router/MRCommandRouterSearchMultiFile.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../ui/MREditWindow.hpp"
@@ -137,7 +138,7 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrSearchReplace, canModify);
 	setCommandEnabled(cmMrSearchRepeatPrevious, hasEditor);
 	setCommandEnabled(cmMrSearchMultiFileSearch, true);
-	setCommandEnabled(cmMrSearchListFilesFromLastSearch, true);
+	setCommandEnabled(cmMrSearchListFilesFromLastSearch, hasPreviousMultiFileSearchResults());
 	setCommandEnabled(cmMrSearchMultiFileSearchReplace, true);
 	setCommandEnabled(cmMrSearchPushMarker, hasEditor);
 	setCommandEnabled(cmMrSearchGetMarker, hasEditor);

@@ -1,4 +1,5 @@
 #define Uses_TChDirDialog
+#define Uses_TButton
 #define Uses_TDialog
 #define Uses_TFileDialog
 #define Uses_TFileInputLine
@@ -17,6 +18,7 @@
 #include <tvision/compat/borland/io.h>
 
 #include "MRDropList.hpp"
+#include "MRFrame.hpp"
 #include "MRScopedHistoryUI.hpp"
 
 #include "../config/settings/MRSettingsRuntime.hpp"
@@ -34,6 +36,10 @@ enum : ushort {
 	cmMrScopedHistoryChoose = 3868,
 	cmMrScopedHistoryAccept
 };
+
+TFrame *initScopedHistoryDialogFrame(TRect bounds) {
+	return new MRFrame(bounds);
+}
 
 const char *const kMonthNames[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
@@ -143,7 +149,7 @@ class TFileDialogEnterInterceptor final : public TView {
 
 class TWheelFileDialog final : public TFileDialog {
  public:
-	TWheelFileDialog(MRDialogHistoryScope aScope, const char *wildCard, const char *title, const char *inputName, ushort options) noexcept : TWindowInit(TFileDialog::initFrame), TFileDialog(wildCard, title, inputName, options, 0), scope(aScope), dialogOptions(options) {
+	TWheelFileDialog(MRDialogHistoryScope aScope, const char *wildCard, const char *title, const char *inputName, ushort options) noexcept : TWindowInit(initScopedHistoryDialogFrame), TFileDialog(wildCard, title, inputName, options, 0), scope(aScope), dialogOptions(options) {
 		insert(new TFileDialogEnterInterceptor(fileName));
 		replaceHistoryView(static_cast<TInputLine *>(fileName));
 		replaceInfoPane();
@@ -231,7 +237,7 @@ class TWheelFileDialog final : public TFileDialog {
 		return result;
 	}
 
-  private:
+ private:
 	void toggleHistoryList() {
 		std::vector<std::string> entries;
 		TRect bounds;
@@ -305,7 +311,7 @@ class TWheelFileDialog final : public TFileDialog {
 
 class TWheelChDirDialog final : public TChDirDialog {
  public:
-	TWheelChDirDialog(MRDialogHistoryScope aScope, ushort options) noexcept : TWindowInit(TChDirDialog::initFrame), TChDirDialog(options, 0), scope(aScope) {
+	TWheelChDirDialog(MRDialogHistoryScope aScope, ushort options) noexcept : TWindowInit(initScopedHistoryDialogFrame), TChDirDialog(options, 0), scope(aScope) {
 		replaceHistoryView(findInputLine(TRect(3, 3, 42, 4)));
 	}
 
@@ -394,5 +400,4 @@ TFileDialog *createScopedFileDialog(MRDialogHistoryScope scope, const char *wild
 TDialog *createScopedDirectoryDialog(MRDialogHistoryScope scope, unsigned short options) {
 	return new TWheelChDirDialog(scope, options);
 }
-
 } // namespace mr::ui

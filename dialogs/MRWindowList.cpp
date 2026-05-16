@@ -31,10 +31,15 @@
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MREditWindow.hpp"
+#include "../ui/MRFrame.hpp"
 #include "../ui/MRWindowManager.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
 namespace {
+TFrame *initMrDialogFrame(TRect bounds) {
+	return new MRFrame(bounds);
+}
+
 enum : ushort {
 	cmMRWindowListDelete = 200,
 	cmMRWindowListSave,
@@ -297,7 +302,7 @@ class WindowListDialog : public MRDialogFoundation {
 		}
 	}
 
-	WindowListDialog(MRWindowListMode aMode, MREditWindow *aCurrent, MREditWindow *aPreferred) : TWindowInit(&TDialog::initFrame), MRDialogFoundation(centeredSetupDialogRect(computeWidth(), computeHeight(aMode, aCurrent)), "WINDOW LIST", computeWidth(), computeHeight(aMode, aCurrent)), mode(aMode), current(aCurrent), preferred(aPreferred), listView(nullptr), scrollBar(nullptr), hideToggleButton(nullptr), hideAllButton(nullptr), getButton(nullptr), selected(nullptr), lastFocusedIndex(-1) {
+	WindowListDialog(MRWindowListMode aMode, MREditWindow *aCurrent, MREditWindow *aPreferred) : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(computeWidth(), computeHeight(aMode, aCurrent)), "WINDOW LIST", computeWidth(), computeHeight(aMode, aCurrent), initMrDialogFrame), mode(aMode), current(aCurrent), preferred(aPreferred), listView(nullptr), scrollBar(nullptr), hideToggleButton(nullptr), hideAllButton(nullptr), getButton(nullptr), selected(nullptr), lastFocusedIndex(-1) {
 		int width = computeWidth();
 		int height = computeHeight(aMode, aCurrent);
 		int listTop = 6;

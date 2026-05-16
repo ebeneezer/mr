@@ -36,6 +36,7 @@
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRStatusLine.hpp"
 #include "../ui/MRPalette.hpp"
+#include "../ui/MRFrame.hpp"
 #include "../ui/MRWindowManager.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "MRAppState.hpp"
@@ -67,6 +68,10 @@
 namespace {
 static constexpr std::chrono::milliseconds kRecordingBlinkInterval(450);
 static constexpr std::chrono::microseconds kCoprocessorIdlePumpBudget(1000);
+
+TFrame *initMrDialogFrame(TRect bounds) {
+	return new MRFrame(bounds);
+}
 
 bool shouldInvalidateScreenBaseForEvent(ushort eventWhat) noexcept {
 	switch (eventWhat) {
@@ -100,7 +105,7 @@ void postAppError(std::string_view text) {
 
 class TMacroBindCaptureDialog : public MRDialogFoundation {
   public:
-	TMacroBindCaptureDialog() : TWindowInit(&TDialog::initFrame), MRDialogFoundation(centeredSetupDialogRect(52, 8), "Bind Recorded Macro Key", 52, 8), captureAccepted(false), capturedKeyCode(kbNoKey), capturedControlState(0) {
+	TMacroBindCaptureDialog() : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(52, 8), "Bind Recorded Macro Key", 52, 8, initMrDialogFrame), captureAccepted(false), capturedKeyCode(kbNoKey), capturedControlState(0) {
 		insert(new TStaticText(TRect(2, 2, 50, 6), "Press key to bind the recorded macro.\nEsc = no binding."));
 	}
 

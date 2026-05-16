@@ -24,6 +24,7 @@ MRSarDialogOptions g_sarDialogOptions;
 MRMultiSearchDialogOptions g_multiSearchDialogOptions;
 MRMultiSarDialogOptions g_multiSarDialogOptions;
 MRPdfExportSettings g_pdfExportSettings;
+MRAcquireSettings g_acquireSettings;
 int g_virtualDesktops = 1;
 bool g_cyclicVirtualDesktops = false;
 MRCursorBehaviour g_cursorBehaviour = MRCursorBehaviour::BoundToText;
@@ -36,6 +37,22 @@ std::map<std::string, std::string> g_autoexecMacroDiagnostics;
 bool setError(std::string *errorMessage, const std::string &message) {
 	if (errorMessage != nullptr) *errorMessage = message;
 	return false;
+}
+
+void normalizeAcquireCommandHistory(std::vector<std::string> &history) {
+	constexpr std::size_t kAcquireHistoryLimit = 15;
+	std::vector<std::string> normalized;
+
+	normalized.reserve(history.size());
+	for (const std::string &entry : history) {
+		const std::string trimmed = trimAscii(entry);
+
+		if (trimmed.empty()) continue;
+		if (std::find(normalized.begin(), normalized.end(), trimmed) != normalized.end()) continue;
+		normalized.push_back(trimmed);
+		if (normalized.size() >= kAcquireHistoryLimit) break;
+	}
+	history = std::move(normalized);
 }
 
 std::string pathFromEnvironment(const char *name) {
@@ -518,6 +535,27 @@ bool setConfiguredPdfExportSettings(const MRPdfExportSettings &settings, std::st
 
 MRPdfExportSettings configuredPdfExportSettings() {
 	return g_pdfExportSettings;
+}
+
+bool setConfiguredAcquireSettings(const MRAcquireSettings &settings, std::string *errorMessage) {
+	const MRAcquireSettings previousSettings = g_acquireSettings;
+	MRAcquireSettings normalized = settings;
+
+	normalized.commandLine = trimAscii(normalized.commandLine);
+	normalizeAcquireCommandHistory(normalized.commandHistory);
+	if (!normalized.commandLine.empty()) {
+		normalized.commandHistory.erase(std::remove(normalized.commandHistory.begin(), normalized.commandHistory.end(), normalized.commandLine), normalized.commandHistory.end());
+		normalized.commandHistory.insert(normalized.commandHistory.begin(), normalized.commandLine);
+		normalizeAcquireCommandHistory(normalized.commandHistory);
+	}
+	g_acquireSettings = std::move(normalized);
+	if (previousSettings != g_acquireSettings) markConfiguredSettingsDirty();
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+MRAcquireSettings configuredAcquireSettings() {
+	return g_acquireSettings;
 }
 
 bool setConfiguredVirtualDesktops(int count, std::string *errorMessage) {

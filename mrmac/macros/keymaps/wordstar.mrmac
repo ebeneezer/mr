@@ -80,4 +80,7 @@ MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_S
 MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_SEARCH_REPLACE" sequence="<Ctrl+K> <A>" description="find & replace"');
 MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MR_TEXT_CENTER_LINE" sequence="<Ctrl+O> <C>" description="Center line"');
 MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_SEARCH_FORWARD" sequence="<Ctrl+K> <F>" description="search forward"');
+MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_DELETE_LINE" sequence="<Ctrl+Y>" description="delete line"');
+MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_DELETE_TO_EOL" sequence="<Ctrl+Q> <Ctrl+L>" description="delete to EOL"');
+MRSETUP('KEYMAP_BIND', 'name="WORDSTAR" context=EDIT type=ACTION target="MRMAC_DELETE_TO_EOL" sequence="<Ctrl+Q> <L>" description="delete to EOL"');
 MRSETUP('ACTIVE_KEYMAP_PROFILE', 'name="WORDSTAR"');

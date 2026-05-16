@@ -6,6 +6,7 @@
 enum : ushort {
 	cmMrFileOpen = 110,
 	cmMrFileLoad,
+	cmMrFileAcquire,
 	cmMrFileSave,
 	cmMrFileSaveAs,
 	cmMrFileInformation,

@@ -48,6 +48,7 @@
 #include <vector>
 
 #include "../dialogs/MRFileInformation.hpp"
+#include "../dialogs/MRAcquireDialog.hpp"
 #include "../dialogs/MRAbout.hpp"
 #include "../dialogs/MRPdfExportDialog.hpp"
 #include "../dialogs/setup/MRSetup.hpp"
@@ -66,6 +67,7 @@
 #include "../dialogs/MRMacroFile.hpp"
 #include "../dialogs/MRWindowList.hpp"
 #include "../ui/MREditWindow.hpp"
+#include "../ui/MRFrame.hpp"
 #include "../ui/MRMenuBar.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "../coprocessor/MRCoprocessor.hpp"
@@ -78,6 +80,10 @@
 
 namespace {
 bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandLine, bool replaceBuffer, bool activate, bool closeOnFailure);
+
+TFrame *initMrDialogFrame(TRect bounds) {
+	return new MRFrame(bounds);
+}
 
 struct CharacterTableEntry {
 	std::string text;
@@ -254,6 +260,8 @@ const char *placeholderCommandTitle(ushort command) {
 			return "File / Open";
 		case cmMrFileLoad:
 			return "File / Load";
+		case cmMrFileAcquire:
+			return "File / Acquire";
 		case cmMrFileSave:
 			return "File / Save";
 		case cmMrFileSaveAs:
@@ -787,7 +795,7 @@ class CharacterTableView final : public TView {
 
 class CharacterTableDialog final : public MRDialogFoundation {
   public:
-	CharacterTableDialog(const CharacterTableLayout &layout, std::vector<CharacterTableEntry> entries) : TWindowInit(&TDialog::initFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(layout.width, layout.height), layout.title, layout.width, layout.height) {
+	CharacterTableDialog(const CharacterTableLayout &layout, std::vector<CharacterTableEntry> entries) : TWindowInit(initMrDialogFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(layout.width, layout.height), layout.title, layout.width, layout.height, initMrDialogFrame) {
 		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"C~a~ncel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 2);
 		const int buttonLeft = (layout.width - metrics.rowWidth) / 2;
@@ -830,7 +838,7 @@ class NumericInputDialog final : public MRDialogFoundation {
 		bool showHelp = true;
 	};
 
-	NumericInputDialog(const char *title, const char *label, const char *helpText, int initialValue, int minValue, int maxValue, const Layout &layout) : TWindowInit(&TDialog::initFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(layout.width, layout.height), title, layout.width, layout.height), mHelpText(helpText != nullptr ? helpText : ""), mMinValue(minValue), mMaxValue(maxValue) {
+	NumericInputDialog(const char *title, const char *label, const char *helpText, int initialValue, int minValue, int maxValue, const Layout &layout) : TWindowInit(initMrDialogFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(layout.width, layout.height), title, layout.width, layout.height, initMrDialogFrame), mHelpText(helpText != nullptr ? helpText : ""), mMinValue(minValue), mMaxValue(maxValue) {
 		char buffer[32] = {0};
 
 		std::snprintf(buffer, sizeof(buffer), "%d", initialValue);
@@ -1310,6 +1318,11 @@ bool handleFileLoad() {
 	logLine += target->currentFileName();
 	if (target->isReadOnly()) logLine += " [read-only]";
 	mrLogMessage(logLine.c_str());
+	return true;
+}
+
+bool handleFileAcquire() {
+	static_cast<void>(runAcquireDialog(MRAcquireMode::OpenFile));
 	return true;
 }
 
@@ -1945,6 +1958,9 @@ bool handleMRCommand(ushort command) {
 
 		case cmMrFileLoad:
 			return handleFileLoad();
+
+		case cmMrFileAcquire:
+			return handleFileAcquire();
 
 		case cmMrFileSave:
 			static_cast<void>(saveCurrentEditWindow());

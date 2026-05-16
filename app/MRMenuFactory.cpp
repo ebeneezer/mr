@@ -28,7 +28,7 @@ TMenuItem *createLowerCaseItem() {
 }
 
 TSubMenu *createFileMenu() {
-	return &(*new TSubMenu("~F~ile", kbAltF) + *new TMenuItem("~O~pen...", cmMrFileOpen, kbF3, hcNoContext, "F3") + *new TMenuItem("~L~oad...", cmMrFileLoad, kbNoKey, hcNoContext) + *new TMenuItem("~S~ave", cmMrFileSave, kbF2, hcNoContext, "F2") + *new TMenuItem("save ~A~s...", cmMrFileSaveAs, kbCtrlF2, hcNoContext, "CtrlF2") + *new TMenuItem("~I~nfo...", cmMrFileInformation, kbNoKey, hcNoContext) + newLine() + *new TMenuItem("~M~erge...", cmMrFileMerge, kbNoKey, hcNoContext) + *new TMenuItem("E~x~port to PDF...", cmMrFilePrint, kbNoKey, hcNoContext) + newLine() + *new TMenuItem("~O~S shell", cmMrFileShellToDos, kbAltF9, hcNoContext, "AltF9") + newLine() + *new TMenuItem("E~x~it", cmQuit, kbAltX, hcNoContext, "Alt-X"));
+	return &(*new TSubMenu("~F~ile", kbAltF) + *new TMenuItem("~O~pen...", cmMrFileOpen, kbF3, hcNoContext, "F3") + *new TMenuItem("~L~oad...", cmMrFileLoad, kbNoKey, hcNoContext) + *new TMenuItem("A~q~uire...", cmMrFileAcquire, kbNoKey, hcNoContext) + *new TMenuItem("~S~ave", cmMrFileSave, kbF2, hcNoContext, "F2") + *new TMenuItem("save ~A~s...", cmMrFileSaveAs, kbCtrlF2, hcNoContext, "CtrlF2") + *new TMenuItem("~I~nfo...", cmMrFileInformation, kbNoKey, hcNoContext) + newLine() + *new TMenuItem("~M~erge...", cmMrFileMerge, kbNoKey, hcNoContext) + *new TMenuItem("E~x~port to PDF...", cmMrFilePrint, kbNoKey, hcNoContext) + *new TMenuItem("E~x~it", cmQuit, kbAltX, hcNoContext, "Alt-X"));
 }
 
 TSubMenu *createEditMenu() {

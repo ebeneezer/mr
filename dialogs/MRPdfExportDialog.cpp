@@ -19,10 +19,15 @@
 
 #include "../app/export/MRPdfTextExporter.hpp"
 #include "../ui/MRDropList.hpp"
+#include "../ui/MRFrame.hpp"
 #include "../ui/MRNumericSlider.hpp"
 #include "setup/MRSetupCommon.hpp"
 
 namespace {
+
+TFrame *initMrDialogFrame(TRect bounds) {
+	return new MRFrame(bounds);
+}
 
 enum : ushort {
 	cmMrPdfExportChooseOutputPath = 3868,
@@ -114,7 +119,7 @@ class TInlineGlyphButton final : public TView {
 
 class TPdfExportDialog final : public MRDialogFoundation {
   public:
-	TPdfExportDialog() : TWindowInit(&TDialog::initFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(kDialogWidth, kDialogHeight), "Export to PDF", kDialogWidth, kDialogHeight) {
+	TPdfExportDialog() : TWindowInit(initMrDialogFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(kDialogWidth, kDialogHeight), "Export to PDF", kDialogWidth, kDialogHeight, initMrDialogFrame) {
 		static constexpr std::array buttons{
 		    mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault},
 		    mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal},

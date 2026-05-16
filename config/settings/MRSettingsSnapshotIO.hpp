@@ -28,6 +28,7 @@ struct MRSettingsSnapshot {
 	MRMultiSearchDialogOptions multiSearchDialogOptions;
 	MRMultiSarDialogOptions multiSarDialogOptions;
 	MRPdfExportSettings pdfExportSettings;
+	MRAcquireSettings acquireSettings;
 	int virtualDesktops{1};
 	bool cyclicVirtualDesktops{false};
 	MRCursorBehaviour cursorBehaviour{MRCursorBehaviour::BoundToText};

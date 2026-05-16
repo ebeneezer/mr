@@ -30,6 +30,7 @@
 #include "../../ui/MRWindowSupport.hpp"
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MRMenuBar.hpp"
+#include "../../ui/MRFrame.hpp"
 #include "../../app/commands/MRWindowCommands.hpp"
 
 #include <algorithm>
@@ -47,6 +48,10 @@
 
 namespace {
 using namespace MRFileExtensionProfilesInternal;
+
+TFrame *initMrDialogFrame(TRect bounds) {
+	return new MRFrame(bounds);
+}
 
 enum : ushort {
 	cmMrSetupFilenameProfilesHelp = 3820,
@@ -384,7 +389,7 @@ void postDialogError(const std::string &text) {
 
 class TEditProfilesDialog : public MRScrollableDialog {
   public:
-	TEditProfilesDialog(const std::vector<EditProfileDraft> &workingDrafts) : TWindowInit(&TDialog::initFrame), MRScrollableDialog(centeredSetupDialogRect(kDialogWidth, kVisibleHeight), "FILENAME EXTENSIONS", kDialogWidth, kVirtualHeight), draftList(workingDrafts), editorSettingsPanel(makeEditorSettingsPanelConfig(kDialogWidth - 1, 37, 56, kDialogWidth - 2, 6)) {
+	TEditProfilesDialog(const std::vector<EditProfileDraft> &workingDrafts) : TWindowInit(initMrDialogFrame), MRScrollableDialog(centeredSetupDialogRect(kDialogWidth, kVisibleHeight), "FILENAME EXTENSIONS", kDialogWidth, kVirtualHeight, initMrDialogFrame), draftList(workingDrafts), editorSettingsPanel(makeEditorSettingsPanelConfig(kDialogWidth - 1, 37, 56, kDialogWidth - 2, 6)) {
 		buildViews();
 		setDialogValidationHook([this]() { return validateDialogValues(); });
 		if (!draftList.empty()) mCurrentIndex = 0;

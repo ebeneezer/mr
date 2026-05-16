@@ -9,6 +9,7 @@
 
 #include "MRFileInformation.hpp"
 #include "setup/MRSetupCommon.hpp"
+#include "../ui/MRFrame.hpp"
 
 #include <algorithm>
 #include <array>
@@ -31,6 +32,10 @@
 
 namespace {
 constexpr const char *kNoActiveFileWindowMessage = "No active file window.";
+
+TFrame *initMrDialogFrame(TRect bounds) {
+	return new MRFrame(bounds);
+}
 
 struct FileInformationPage {
 	std::string title;
@@ -139,7 +144,7 @@ const char *blockModeLabel(MREditWindow *win) {
 
 class FileInformationDialog : public MRDialogFoundation {
   public:
-	FileInformationDialog(const FileInformationPage &page, std::size_t pageIndex, std::size_t pageCount, bool hasPrev, bool hasNext) : TWindowInit(&TDialog::initFrame), MRDialogFoundation(centeredBounds(computeWidth(page), computeHeight(page)), "FILE INFORMATION", computeWidth(page), computeHeight(page)), hasPrevInfo(hasPrev), hasNextInfo(hasNext) {
+	FileInformationDialog(const FileInformationPage &page, std::size_t pageIndex, std::size_t pageCount, bool hasPrev, bool hasNext) : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredBounds(computeWidth(page), computeHeight(page)), "FILE INFORMATION", computeWidth(page), computeHeight(page), initMrDialogFrame), hasPrevInfo(hasPrev), hasNextInfo(hasNext) {
 		int width = size.x;
 		int height = size.y;
 		int y = 2;

@@ -11,6 +11,7 @@
 
 #include "MRAbout.hpp"
 #include "setup/MRSetupCommon.hpp"
+#include "../ui/MRFrame.hpp"
 
 #include <algorithm>
 #include <array>
@@ -31,6 +32,10 @@ constexpr uint kAnimationTickMs = 100;
 constexpr uint kQuoteRotateMs = 10000;
 constexpr uint kDoneLongPressMs = 700;
 constexpr ushort cmAboutDone = 0x6A10;
+
+TFrame *initMrDialogFrame(TRect bounds) {
+	return new MRFrame(bounds);
+}
 
 TRect centeredRect(int width, int height) {
 	return mr::dialogs::centeredDialogRect(width, height);
@@ -341,7 +346,7 @@ class MRAboutQuoteBox : public TView {
 
 class MRAbout : public MRDialogFoundation {
   public:
-	MRAbout() noexcept : TWindowInit(&TDialog::initFrame), MRDialogFoundation(centeredRect(76, 16), "ABOUT", 76, 16), mQuoteBox(nullptr), mDoneButton(nullptr), mQuoteIndex(0), mQuoteRandomState(0), mQuoteModeEnabled(false), mRotationTimer(nullptr), mRearmRotationAfterAnimation(false), mDonePressTracking(false), mDoneLongPressTriggered(false), mSuppressNextDoneCommand(false) {
+	MRAbout() noexcept : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredRect(76, 16), "ABOUT", 76, 16, initMrDialogFrame), mQuoteBox(nullptr), mDoneButton(nullptr), mQuoteIndex(0), mQuoteRandomState(0), mQuoteModeEnabled(false), mRotationTimer(nullptr), mRearmRotationAfterAnimation(false), mDonePressTracking(false), mDoneLongPressTriggered(false), mSuppressNextDoneCommand(false) {
 		eventMask |= evBroadcast;
 		insertCenteredStaticLine(this, size.x, 2, std::string("Multi-Edit Revisited ") + mrAboutDisplayVersion());
 		insertCenteredStaticLine(this, size.x, 3, "Dr. Michael H. Raus & Codex AI");

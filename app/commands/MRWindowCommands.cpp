@@ -31,6 +31,7 @@
 #include "MRPerformance.hpp"
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MREditWindow.hpp"
+#include "../../ui/MRScopedHistoryUI.hpp"
 #include "../../ui/MRWindowManager.hpp"
 #include "../../ui/MRWindowSupport.hpp"
 #include "../../dialogs/MRWindowList.hpp"
@@ -627,11 +628,14 @@ void postLoadHeroEvents(const std::string &resolvedPath, std::size_t bytes, doub
 } // namespace
 
 bool promptForPath(const char *title, char *fileName, std::size_t fileNameSize) {
+	ushort result = cmCancel;
+
 	if (fileName == nullptr || fileNameSize == 0) return false;
 	fileName[0] = '\0';
 	const MRDialogHistoryScope scope = std::string_view(title != nullptr ? title : "") == "Load File" ? MRDialogHistoryScope::LoadFile : MRDialogHistoryScope::OpenFile;
 	mr::dialogs::seedFileDialogPath(scope, fileName, fileNameSize, "*.*");
-	if (mr::dialogs::execRememberingFileDialogWithData(scope, "*.*", title, "~N~ame", fdOpenButton, fileName) == cmCancel) return false;
+	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.*", title, "~N~ame", fdOpenButton, fileName);
+	if (result == cmCancel) return false;
 	return true;
 }
 
@@ -673,26 +677,27 @@ bool saveWindowSnapshotToPath(MREditWindow *win, const std::string &resolvedPath
 	return outFile.good();
 }
 
-bool resolveReadableExistingPath(MRDialogHistoryScope scope, const char *path, std::string &resolvedPath) {
+bool resolveReadableExistingPath(MRDialogHistoryScope scope, const char *path, std::string &resolvedPath, bool reportErrors) {
 	bool disableExtensionSearch = false;
 	std::string rawInput = expandUserPath(path != nullptr ? std::string_view(path) : std::string_view());
 
+	static_cast<void>(scope);
 	resolvedPath = rawInput;
 	if (!resolvedPath.empty() && resolvedPath.back() == '.' && !hasWildcardPattern(resolvedPath)) {
 		disableExtensionSearch = true;
 		resolvedPath.pop_back();
 	}
 	if (resolvedPath.empty()) {
-		postWindowCommandError("No file name specified.");
+		if (reportErrors) postWindowCommandError("No file name specified.");
 		return false;
 	}
 	if (::access(resolvedPath.c_str(), F_OK) != 0 && !disableExtensionSearch && !hasWildcardPattern(resolvedPath) && !hasExtensionInBaseName(resolvedPath)) static_cast<void>(resolveWithConfiguredExtensions(resolvedPath, resolvedPath));
 	if (access(resolvedPath.c_str(), F_OK) != 0) {
-		postWindowCommandError("File does not exist: " + resolvedPath);
+		if (reportErrors) postWindowCommandError("File does not exist: " + resolvedPath);
 		return false;
 	}
 	if (access(resolvedPath.c_str(), R_OK) != 0) {
-		postWindowCommandError("File is not readable: " + resolvedPath);
+		if (reportErrors) postWindowCommandError("File is not readable: " + resolvedPath);
 		return false;
 	}
 	return true;
@@ -727,6 +732,85 @@ bool loadResolvedFileIntoWindow(MREditWindow *win, const std::string &resolvedPa
 	mr::performance::recordUiEvent("Line count", static_cast<std::size_t>(win->bufferId()), win->documentId(), bytes, lineCountMs, resolvedPath);
 	postLoadHeroEvents(resolvedPath, bytes, loadMs, lines, lineCountMs);
 	return true;
+}
+
+bool openResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths, MRLoadedWindowActivation activation, MREditWindow *restoreWindow) {
+	MREditWindow *current = currentEditWindow();
+	MREditWindow *previousActive = restoreWindow != nullptr ? restoreWindow : current;
+	MREditWindow *lastLoadedWindow = nullptr;
+
+	for (const std::string &resolvedPath : resolvedPaths) {
+		MREditWindow *target = findReusableEmptyWindow(current);
+		bool createdTarget = false;
+
+		if (target == nullptr) {
+			target = createEditorWindow("?No-File?");
+			createdTarget = true;
+		}
+		if (target == nullptr) continue;
+		if (!loadResolvedFileIntoWindow(target, resolvedPath, "Open file")) {
+			forgetLoadDialogPath(MRDialogHistoryScope::OpenFile, resolvedPath.c_str());
+			if (createdTarget) message(target, evCommand, cmClose, nullptr);
+			if (target != nullptr && isEmptyUntitledEditableWindow(target) && current != target && current != nullptr) static_cast<void>(mrActivateEditWindow(current));
+			continue;
+		}
+		rememberLoadDialogPath(MRDialogHistoryScope::OpenFile, resolvedPath.c_str());
+		lastLoadedWindow = target;
+		current = target;
+	}
+	if (lastLoadedWindow != nullptr) {
+		if (activation == MRLoadedWindowActivation::ActivateLast) static_cast<void>(mrActivateEditWindow(lastLoadedWindow));
+		else if (previousActive != nullptr && previousActive != lastLoadedWindow)
+			static_cast<void>(mrActivateEditWindow(previousActive));
+	}
+	return lastLoadedWindow != nullptr;
+}
+
+bool loadResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths, MRLoadedWindowActivation activation, MREditWindow *restoreWindow) {
+	MREditWindow *target = currentEditWindow();
+	MREditWindow *previousActive = restoreWindow != nullptr ? restoreWindow : target;
+	MREditWindow *lastLoadedWindow = nullptr;
+	bool createdTarget = false;
+	bool first = true;
+
+	if (resolvedPaths.empty()) return false;
+	if (target == nullptr) {
+		target = createEditorWindow("?No-File?");
+		createdTarget = true;
+	} else if (!target->confirmAbandonForReload())
+		return false;
+	for (const std::string &resolvedPath : resolvedPaths) {
+		MREditWindow *loadTarget = target;
+		bool createdLoadTarget = false;
+
+		if (!first) {
+			loadTarget = findReusableEmptyWindow(nullptr);
+			if (loadTarget == nullptr) {
+				loadTarget = createEditorWindow("?No-File?");
+				createdLoadTarget = true;
+			}
+		}
+		if (loadTarget == nullptr) {
+			first = false;
+			continue;
+		}
+		if (!loadResolvedFileIntoWindow(loadTarget, resolvedPath, "Load file")) {
+			forgetLoadDialogPath(MRDialogHistoryScope::LoadFile, resolvedPath.c_str());
+			if (createdLoadTarget || (first && createdTarget)) message(loadTarget, evCommand, cmClose, nullptr);
+			if (first && createdTarget) target = nullptr;
+			first = false;
+			continue;
+		}
+		rememberLoadDialogPath(MRDialogHistoryScope::LoadFile, resolvedPath.c_str());
+		lastLoadedWindow = loadTarget;
+		first = false;
+	}
+	if (lastLoadedWindow != nullptr) {
+		if (activation == MRLoadedWindowActivation::ActivateLast) static_cast<void>(mrActivateEditWindow(lastLoadedWindow));
+		else if (previousActive != nullptr && previousActive != lastLoadedWindow)
+			static_cast<void>(mrActivateEditWindow(previousActive));
+	}
+	return lastLoadedWindow != nullptr;
 }
 
 bool saveCurrentEditWindow() {

@@ -29,9 +29,14 @@
 #include "../../config/settings/MRSettingsStorage.hpp"
 #include "../../dialogs/setup/MRSetup.hpp"
 #include "../../dialogs/setup/MRSetupCommon.hpp"
+#include "../../ui/MRFrame.hpp"
 #include "../MRCommands.hpp"
 
 namespace {
+
+TFrame *initMrDialogFrame(TRect bounds) {
+	return new MRFrame(bounds);
+}
 
 enum : ushort {
 	cmMrMultiFileSelectionChanged = 4901,
@@ -52,7 +57,7 @@ class SubmitInterceptDialog : public MRDialogFoundation {
   public:
 	using SubmitHook = std::function<void()>;
 
-	SubmitInterceptDialog(const char *title, int virtualWidth, int virtualHeight) : TWindowInit(&TDialog::initFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(virtualWidth, virtualHeight), title, virtualWidth, virtualHeight) {
+	SubmitInterceptDialog(const char *title, int virtualWidth, int virtualHeight) : TWindowInit(initMrDialogFrame), MRDialogFoundation(mr::dialogs::centeredDialogRect(virtualWidth, virtualHeight), title, virtualWidth, virtualHeight, initMrDialogFrame) {
 	}
 
 	void setSubmitHook(SubmitHook hook) {
@@ -628,7 +633,7 @@ bool promptMultiFileSarValues(const std::string &patternSeed, const std::string 
 MultiDialogAction runMultiFileResultsDialog(MultiFileSearchSession &session) {
 	class MultiFileResultsDialog : public MRScrollableDialog {
 	  public:
-		MultiFileResultsDialog(MultiFileSearchSession &session) : TWindowInit(&TDialog::initFrame), MRScrollableDialog(centeredSetupDialogRect(118, 28), session.replaceMode ? "MULTIPLE FILE SEARCH AND REPLACE" : "MULTIPLE FILE SEARCH", 118, 28), session(session) {
+		MultiFileResultsDialog(MultiFileSearchSession &session) : TWindowInit(initMrDialogFrame), MRScrollableDialog(centeredSetupDialogRect(118, 28), session.replaceMode ? "MULTIPLE FILE SEARCH AND REPLACE" : "MULTIPLE FILE SEARCH", 118, 28, initMrDialogFrame), session(session) {
 			const short buttonTop = 24;
 			const short rows = static_cast<short>(buttonTop - 4);
 			const short listTop = 2;

@@ -11,6 +11,7 @@
 #include "MRDirtyGating.hpp"
 
 #include "setup/MRSetupCommon.hpp"
+#include "../ui/MRFrame.hpp"
 
 #include <array>
 #include <string>
@@ -22,6 +23,10 @@
 namespace mr {
 namespace dialogs {
 namespace {
+
+TFrame *initMrDialogFrame(TRect bounds) {
+	return new MRFrame(bounds);
+}
 
 TRect centeredRect(int width, int height) {
 	return mr::dialogs::centeredDialogRect(width, height);
@@ -111,7 +116,7 @@ std::string joinCommaSeparatedItems(const std::vector<std::string> &values) {
 
 class TDirtyItemDialog : public MRDialogFoundation {
   public:
-	TDirtyItemDialog(const char *dialogTitle, const char *headline, const char *itemsLabel, const char *joinedItems, const char *primaryLabel) : TWindowInit(&TDialog::initFrame), MRDialogFoundation(centeredSetupDialogRect(74, 11), dialogTitle != nullptr ? dialogTitle : "UNSAVED CHANGES", 74, 11) {
+	TDirtyItemDialog(const char *dialogTitle, const char *headline, const char *itemsLabel, const char *joinedItems, const char *primaryLabel) : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(74, 11), dialogTitle != nullptr ? dialogTitle : "UNSAVED CHANGES", 74, 11, initMrDialogFrame) {
 		const std::array buttons{mr::dialogs::DialogButtonSpec{primaryLabel != nullptr ? primaryLabel : "~S~ave", cmYes, bfDefault}, mr::dialogs::DialogButtonSpec{"~D~iscard", cmNo, bfNormal}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 3);
 		const int buttonLeft = (74 - metrics.rowWidth) / 2;

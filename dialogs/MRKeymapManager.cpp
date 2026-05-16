@@ -563,6 +563,10 @@ MRKeymapCanonicalizationResult canonicalizeDraftForCommit(const KeymapManagerDra
 	return canonicalizeKeymapProfiles(draft.profiles, draft.activeProfileName, MRKeymapCanonicalizationMode::TrustedCommit);
 }
 
+KeymapManagerDraft canonicalizedDraftForComparison(const KeymapManagerDraft &draft) {
+	return draftFromCanonicalizedResult(canonicalizeDraftForCommit(draft));
+}
+
 void applyCommitCanonicalization(KeymapManagerDraft &draft, std::string_view operation) {
 	const MRKeymapCanonicalizationResult canonicalized = canonicalizeDraftForCommit(draft);
 	const std::string summary = summarizeKeymapDiagnosticsForMessageLine(canonicalized.diagnostics, operation);
@@ -599,6 +603,22 @@ bool saveKeymapDraftToConfiguredState(const KeymapManagerDraft &draft, const std
 	mrLogMessage(summarizeDraftForLog(draft));
 	errorText.clear();
 	return true;
+}
+
+bool doesKeymapDraftMatchFile(const KeymapManagerDraft &draft, const std::string &fileUri) {
+	KeymapManagerDraft loadedDraft;
+	std::string errorText;
+
+	if (fileUri.empty()) return false;
+	if (!loadKeymapDraftFromFile(fileUri, loadedDraft, errorText)) return false;
+	return canonicalizedDraftForComparison(draft) == canonicalizedDraftForComparison(loadedDraft);
+}
+
+std::string initialKeymapManagerFileUri(const KeymapManagerDraft &draft) {
+	const std::string configuredFileUri = configuredKeymapFilePath();
+
+	if (!doesKeymapDraftMatchFile(draft, configuredFileUri)) return std::string();
+	return configuredFileUri;
 }
 
 bool persistDialogHistorySnapshot(std::string &errorText, const char *logLabel) {
@@ -703,7 +723,7 @@ class TBindingEditorDialog : public MRDialogFoundation {
 
 	void handleEvent(TEvent &event) override {
 		if (event.what == evCommand && event.message.command == cmMrSetupKeymapBindingCapture) {
-			startSequenceRecording();
+			toggleSequenceRecording();
 			clearEvent(event);
 			return;
 		}
@@ -724,7 +744,7 @@ class TBindingEditorDialog : public MRDialogFoundation {
 		if (originalWhat != evCommand) return;
 		switch (originalCommand) {
 			case cmMrSetupKeymapBindingCapture:
-				startSequenceRecording();
+				toggleSequenceRecording();
 				clearEvent(event);
 				return;
 			case cmMrSetupKeymapBindingHelp:
@@ -990,11 +1010,7 @@ class TBindingEditorDialog : public MRDialogFoundation {
 			return true;
 		}
 		if (pressed == TKey(kbAltF10)) {
-			recordingSequence = false;
-			mr::messageline::clearOwner(mr::messageline::Owner::DialogInteraction);
-			updateRecordingMarker();
-			setDoneButtonDisabled(false);
-			runDialogValidation();
+			finishSequenceRecording();
 			clearEvent(event);
 			return true;
 		}
@@ -1008,6 +1024,14 @@ class TBindingEditorDialog : public MRDialogFoundation {
 		runDialogValidation();
 		clearEvent(event);
 		return true;
+	}
+
+	void finishSequenceRecording() {
+		recordingSequence = false;
+		mr::messageline::clearOwner(mr::messageline::Owner::DialogInteraction);
+		updateRecordingMarker();
+		setDoneButtonDisabled(false);
+		runDialogValidation();
 	}
 
 	std::string joinRecordedSequence() const {
@@ -1028,6 +1052,14 @@ class TBindingEditorDialog : public MRDialogFoundation {
 		mSequenceField->setText("");
 		setDoneButtonDisabled(true);
 		mr::messageline::postSticky(mr::messageline::Owner::DialogInteraction, "now recording key sequence, ALT-F10 ends, ESC aborts", mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
+	}
+
+	void toggleSequenceRecording() {
+		if (recordingSequence) {
+			finishSequenceRecording();
+			return;
+		}
+		startSequenceRecording();
 	}
 
 	bool updateRecordingBlink() {
@@ -1764,7 +1796,7 @@ KeymapManagerDraft currentConfiguredKeymapDraft() {
 void runKeymapManagerDialogFlow() {
 	KeymapManagerDraft baselineDraft = currentConfiguredKeymapDraft();
 	KeymapManagerDraft workingDraft = baselineDraft;
-	std::string currentFileUri = configuredKeymapFilePath();
+	std::string currentFileUri = initialKeymapManagerFileUri(baselineDraft);
 	std::string persistedFileUri = currentFileUri;
 	bool running = true;
 
