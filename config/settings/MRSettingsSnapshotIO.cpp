@@ -22,8 +22,6 @@
 
 namespace {
 
-static const char *const kThemeSettingsKey = "COLORTHEMEURI";
-static const char *const kKeymapSettingsKey = "KEYMAPURI";
 static const char *const kWindowColorThemeProfileKey = "WINDOW_COLORTHEME_URI";
 static const char *const kSearchTextTypeLiteral = "LITERAL";
 static const char *const kSearchTextTypePcre = "PCRE";
@@ -251,9 +249,7 @@ bool ensureDirectoryTree(const std::string &directoryPath, std::string *errorMes
 
 bool writeNormalizedBootstrapFiles(const MRSettingsSnapshot &snapshot, std::string_view previousSource, const std::string &canonicalSource, std::string *errorMessage) {
 	const std::string settingsPath = normalizeConfiguredPathInput(snapshot.paths.settingsMacroUri);
-	const std::string themePath = normalizeConfiguredPathInput(snapshot.colorThemeFilePath);
 	const std::filesystem::path settingsDir = std::filesystem::path(settingsPath).parent_path();
-	const std::filesystem::path themeDir = std::filesystem::path(themePath).parent_path();
 	static const std::regex workspacePattern(R"(MRSETUP\s*\(\s*'WORKSPACE'\s*,\s*'((?:''|[^'])*)'\s*\)\s*;?)", std::regex_constants::ECMAScript | std::regex_constants::icase);
 	std::string finalSource = canonicalSource;
 	std::string previousText(previousSource);
@@ -274,25 +270,12 @@ bool writeNormalizedBootstrapFiles(const MRSettingsSnapshot &snapshot, std::stri
 	}
 
 	if (!validateSettingsMacroFilePath(settingsPath, errorMessage)) return false;
-	if (!validateColorThemeFilePath(themePath, errorMessage)) return false;
 	if (!settingsDir.empty()) {
 		std::filesystem::create_directories(settingsDir, ec);
 		if (ec) {
 			if (errorMessage != nullptr) *errorMessage = "Unable to create settings directory: " + settingsDir.string();
 			return false;
 		}
-	}
-	if (!themeDir.empty()) {
-		ec.clear();
-		std::filesystem::create_directories(themeDir, ec);
-		if (ec) {
-			if (errorMessage != nullptr) *errorMessage = "Unable to create color theme directory: " + themeDir.string();
-			return false;
-		}
-	}
-	if (!writeTextFile(themePath, buildColorThemeMacroSource(snapshot.colorSettings))) {
-		if (errorMessage != nullptr) *errorMessage = "Unable to write color theme file: " + themePath;
-		return false;
 	}
 	if (!writeTextFile(settingsPath, finalSource)) {
 		if (errorMessage != nullptr) *errorMessage = "Unable to write settings macro file: " + settingsPath;
@@ -390,9 +373,7 @@ MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) 
 	snapshot.defaultProfileDescription = configuredDefaultProfileDescription();
 	snapshot.editSettings = configuredEditSetupSettings();
 	snapshot.colorSettings = configuredColorSetupSettings();
-	snapshot.colorThemeFilePath = configuredColorThemeFilePath();
 	snapshot.editProfiles = configuredEditExtensionProfiles();
-	snapshot.keymapFilePath = configuredKeymapFilePath();
 	snapshot.keymapProfiles = configuredKeymapProfiles();
 	snapshot.activeKeymapProfile = configuredActiveKeymapProfile();
 
@@ -481,7 +462,6 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	std::string helpPath = normalizeConfiguredPathInput(snapshot.paths.helpUri);
 	std::string tempDir = normalizeConfiguredPathInput(snapshot.paths.tempPath);
 	std::string shellPath = normalizeConfiguredPathInput(snapshot.paths.shellUri);
-	std::string themePath = snapshot.colorThemeFilePath.empty() ? defaultColorThemePathForSettings(settingsPath) : normalizeConfiguredPathInput(snapshot.colorThemeFilePath);
 	const MREditSetupSettings &edit = snapshot.editSettings;
 	std::string source;
 	std::size_t descriptorCount = 0;
@@ -610,9 +590,6 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('COLUMN_BLOCK_MOVE', '" + escapeMrmacSingleQuotedLiteral(edit.columnBlockMove) + "');\n";
 	source += "MRSETUP('DEFAULT_MODE', '" + escapeMrmacSingleQuotedLiteral(edit.defaultMode) + "');\n";
 	source += "MRSETUP('CURSOR_STATUS_COLOR', '" + escapeMrmacSingleQuotedLiteral(edit.cursorStatusColor) + "');\n";
-	source += "MRSETUP('" + std::string(kThemeSettingsKey) + "', '" + escapeMrmacSingleQuotedLiteral(themePath) + "');\n";
-	source += "MRSETUP('" + std::string(kKeymapSettingsKey) + "', '" + escapeMrmacSingleQuotedLiteral(snapshot.keymapFilePath) + "');\n";
-	source += serializeKeymapProfilesToSettingsSource(snapshot.keymapProfiles, snapshot.activeKeymapProfile);
 
 	for (const auto &profile : snapshot.editProfiles) {
 		source += "MRFEPROFILE('DEFINE', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', '" + escapeMrmacSingleQuotedLiteral(profile.name) + "', '');\n";

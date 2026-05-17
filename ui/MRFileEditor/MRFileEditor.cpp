@@ -3409,10 +3409,16 @@ void MRFileEditor::handleKeyDown(TEvent &event) {
 
 	switch (key) {
 		case kbLeft:
-			moveCursor(prevCharOffset(cursorOffset()), extend, false);
+			if (freeCursorMovementEnabled() && !extend && !mBufferModel.hasSelection() && displayedCursorColumn() > actualCursorVisualColumn(cursorOffset()))
+				moveCursor(cursorOffset(), false, false, displayedCursorColumn() - 1);
+			else
+				moveCursor(prevCharOffset(cursorOffset()), extend, false);
 			break;
 		case kbRight:
-			moveCursor(nextCharOffset(cursorOffset()), extend, false);
+			if (freeCursorMovementEnabled() && !extend && !mBufferModel.hasSelection() && cursorOffset() == lineEndOffset(cursorOffset()))
+				moveCursor(cursorOffset(), false, false, displayedCursorColumn() + 1);
+			else
+				moveCursor(nextCharOffset(cursorOffset()), extend, false);
 			break;
 		case kbUp:
 			moveCursor(lineMoveOffset(cursorOffset(), -1, displayedCursorColumn()), extend, false, displayedCursorColumn());
@@ -3540,18 +3546,60 @@ void MRFileEditor::handleCommand(TEvent &event) {
 			break;
 		case cmMrEditUndo: {
 			MRTextBufferModel::CustomUndoRecord record;
+			const MRTextBufferModel::ReadSnapshot oldSnapshot = mBufferModel.readSnapshot();
+			const std::size_t oldLength = mBufferModel.length();
+			const std::size_t oldVersion = mBufferModel.version();
 			if (mBufferModel.undo(&record)) {
 				const bool modifiedState = mBufferModel.isModified();
-				adoptCommittedDocument(mBufferModel.document(), mBufferModel.cursor(), mBufferModel.selectionStart(), mBufferModel.selectionEnd(), modifiedState);
+				const std::size_t newLength = mBufferModel.length();
+				std::size_t prefix = 0;
+				while (prefix < oldLength && prefix < newLength && oldSnapshot.charAt(prefix) == mBufferModel.charAt(prefix))
+					++prefix;
+				std::size_t oldSuffix = oldLength;
+				std::size_t newSuffix = newLength;
+				while (oldSuffix > prefix && newSuffix > prefix && oldSnapshot.charAt(oldSuffix - 1) == mBufferModel.charAt(newSuffix - 1)) {
+					--oldSuffix;
+					--newSuffix;
+				}
+				const std::size_t touchedLength = std::max(oldSuffix - prefix, newSuffix - prefix);
+				MRTextBufferModel::DocumentChangeSet changeSet;
+				changeSet.changed = true;
+				changeSet.oldLength = oldLength;
+				changeSet.newLength = newLength;
+				changeSet.oldVersion = oldVersion;
+				changeSet.newVersion = mBufferModel.version();
+				changeSet.touchedRange = MRTextBufferModel::Range(prefix, prefix + touchedLength);
+				adoptCommittedDocument(mBufferModel.document(), mBufferModel.cursor(), mBufferModel.selectionStart(), mBufferModel.selectionEnd(), modifiedState, &changeSet);
 				if (owner != nullptr) setBlockOverlayState(record.blockMode, record.blockAnchor, record.blockEnd, record.blockMarkingOn, false);
 			}
 			break;
 		}
 		case cmMrEditRedo: {
 			MRTextBufferModel::CustomUndoRecord record;
+			const MRTextBufferModel::ReadSnapshot oldSnapshot = mBufferModel.readSnapshot();
+			const std::size_t oldLength = mBufferModel.length();
+			const std::size_t oldVersion = mBufferModel.version();
 			if (mBufferModel.redo(&record)) {
 				const bool modifiedState = mBufferModel.isModified();
-				adoptCommittedDocument(mBufferModel.document(), mBufferModel.cursor(), mBufferModel.selectionStart(), mBufferModel.selectionEnd(), modifiedState);
+				const std::size_t newLength = mBufferModel.length();
+				std::size_t prefix = 0;
+				while (prefix < oldLength && prefix < newLength && oldSnapshot.charAt(prefix) == mBufferModel.charAt(prefix))
+					++prefix;
+				std::size_t oldSuffix = oldLength;
+				std::size_t newSuffix = newLength;
+				while (oldSuffix > prefix && newSuffix > prefix && oldSnapshot.charAt(oldSuffix - 1) == mBufferModel.charAt(newSuffix - 1)) {
+					--oldSuffix;
+					--newSuffix;
+				}
+				const std::size_t touchedLength = std::max(oldSuffix - prefix, newSuffix - prefix);
+				MRTextBufferModel::DocumentChangeSet changeSet;
+				changeSet.changed = true;
+				changeSet.oldLength = oldLength;
+				changeSet.newLength = newLength;
+				changeSet.oldVersion = oldVersion;
+				changeSet.newVersion = mBufferModel.version();
+				changeSet.touchedRange = MRTextBufferModel::Range(prefix, prefix + touchedLength);
+				adoptCommittedDocument(mBufferModel.document(), mBufferModel.cursor(), mBufferModel.selectionStart(), mBufferModel.selectionEnd(), modifiedState, &changeSet);
 				if (owner != nullptr) setBlockOverlayState(record.blockMode, record.blockAnchor, record.blockEnd, record.blockMarkingOn, false);
 			}
 			break;
@@ -3578,10 +3626,16 @@ void MRFileEditor::handleCommand(TEvent &event) {
 			if (!mReadOnly) replaceSelectionText(std::string());
 			break;
 		case cmCharLeft:
-			moveCursor(prevCharOffset(cursorOffset()), false, false);
+			if (freeCursorMovementEnabled() && !mBufferModel.hasSelection() && displayedCursorColumn() > actualCursorVisualColumn(cursorOffset()))
+				moveCursor(cursorOffset(), false, false, displayedCursorColumn() - 1);
+			else
+				moveCursor(prevCharOffset(cursorOffset()), false, false);
 			break;
 		case cmCharRight:
-			moveCursor(nextCharOffset(cursorOffset()), false, false);
+			if (freeCursorMovementEnabled() && !mBufferModel.hasSelection() && cursorOffset() == lineEndOffset(cursorOffset()))
+				moveCursor(cursorOffset(), false, false, displayedCursorColumn() + 1);
+			else
+				moveCursor(nextCharOffset(cursorOffset()), false, false);
 			break;
 		case cmWordLeft:
 			moveCursor(prevWordOffset(cursorOffset()), false, false);

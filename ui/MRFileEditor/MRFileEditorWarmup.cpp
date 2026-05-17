@@ -732,8 +732,8 @@ void MRFileEditor::refreshSyntaxContext() {
 			clearFoldWarmupTask(mFoldState.warmupState().taskId);
 		}
 		mFoldState.clearClosedFolds();
+		invalidateFoldCache();
 	}
-	invalidateFoldCache();
 	if (mBufferModel.languageAutomatic() != oldAutomatic) drawView();
 }
 

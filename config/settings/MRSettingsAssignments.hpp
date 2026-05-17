@@ -16,6 +16,5 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 bool applyConfiguredSettingsAssignment(const std::string &key, const std::string &value, MRSetupPaths &paths, std::string *errorMessage = nullptr);
 bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::string &key, const std::string &value, std::string *errorMessage);
 bool applySettingsSnapshotEditExtensionProfileDirective(MRSettingsSnapshot &snapshot, const std::string &operation, const std::string &profileId, const std::string &arg3, const std::string &arg4, std::string *errorMessage);
-bool loadColorThemeFileIntoSettingsSnapshot(MRSettingsSnapshot &snapshot, bool *upgradeRequired, std::string *errorMessage);
 
 #endif

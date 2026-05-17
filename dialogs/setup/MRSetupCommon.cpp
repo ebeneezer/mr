@@ -447,6 +447,11 @@ MRDialogFoundation::MRDialogFoundation(const TRect &bounds, const char *title, i
     : TWindowInit(frameFactory), MRScrollableDialog(bounds, title, virtualWidth, virtualHeight, frameFactory) {
 }
 
+void MRDialogFoundation::setState(ushort aState, Boolean enable) {
+	MRScrollableDialog::setState(aState, enable);
+	if ((aState & (sfFocused | sfSelected | sfActive)) != 0 && frame != nullptr) frame->drawView();
+}
+
 void MRDialogFoundation::insert(TView *view) {
 	if (view == nullptr) return;
 	if (view == managedContent()) {

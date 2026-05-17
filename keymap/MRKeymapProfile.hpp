@@ -101,6 +101,6 @@ struct MRKeymapCanonicalizationResult {
 [[nodiscard]] MRKeymapCanonicalizationResult canonicalizeKeymapProfiles(std::span<const MRKeymapProfile> profiles, std::string_view activeProfileName, MRKeymapCanonicalizationMode mode);
 [[nodiscard]] MRKeymapLoadResult loadKeymapProfilesFromSettingsSource(std::string_view source);
 [[nodiscard]] std::string serializeKeymapProfilesToSettingsSource(std::span<const MRKeymapProfile> profiles, std::string_view activeProfileName);
-[[nodiscard]] MRKeymapProfile builtInDefaultKeymapProfile();
+[[nodiscard]] std::string buildExecutableKeymapMacroSource(std::span<const MRKeymapProfile> profiles, std::string_view activeProfileName);
 
 #endif

@@ -530,6 +530,7 @@ static bool replayKeyInputSequence(const std::string &sequence);
 static int currentUiMacroMode();
 static bool macroAllowsUiMode(const MacroRef &macroRef, int mode) noexcept;
 static bool executeLoadedMacro(std::map<std::string, MacroRef>::iterator macroIt, const std::string &macroKey, const std::string &paramPart, std::vector<std::string> *logSink);
+static bool executeLoadedMacroWithConfiguredKeymapBatch(std::map<std::string, MacroRef>::iterator macroIt, const std::string &macroKey, const std::string &paramPart, std::vector<std::string> *logSink);
 static bool tryLoadIndexedMacroForKey(const TKey &pressed);
 static bool currentExecutingMacroSpecImpl(std::string &macroSpec);
 static bool composeLoadedMacroSpec(const MacroRef &macroRef, std::string &macroSpec);
@@ -5519,6 +5520,29 @@ static bool executeLoadedMacro(std::map<std::string, MacroRef>::iterator macroIt
 	return true;
 }
 
+static bool executeLoadedMacroWithConfiguredKeymapBatch(std::map<std::string, MacroRef>::iterator macroIt, const std::string &macroKey, const std::string &paramPart, std::vector<std::string> *logSink) {
+	bool configuredKeymapBatch = false;
+	std::string keymapBatchError;
+	const auto fileIt = g_runtimeEnv.loadedFiles.find(macroIt->second.fileKey);
+
+	if (fileIt != g_runtimeEnv.loadedFiles.end()) {
+		const std::vector<std::string> unsupported = mrvmUnsupportedStagedSymbols(fileIt->second.profile);
+		for (const std::string &symbol : unsupported)
+			if (symbol == "KEYMAP_RESET" || symbol == "KEYMAP_PROFILE" || symbol == "KEYMAP_BIND" || symbol == "ACTIVE_KEYMAP_PROFILE") {
+				configuredKeymapBatch = true;
+				break;
+			}
+	}
+	if (configuredKeymapBatch) mrvmBeginConfiguredKeymapBatch();
+	const bool executed = executeLoadedMacro(macroIt, macroKey, paramPart, logSink);
+	if (configuredKeymapBatch && !mrvmEndConfiguredKeymapBatch(&keymapBatchError)) {
+		runtimeErrorLevel() = 1001;
+		if (logSink != nullptr) logSink->push_back("VM Error: keymap batch flush failed: " + (keymapBatchError.empty() ? std::string("invalid keymap batch.") : keymapBatchError));
+		return false;
+	}
+	return executed;
+}
+
 static bool parseRunMacroSpec(const std::string &spec, std::string &filePart, std::string &macroPart, std::string &paramPart) {
 	std::string trimmed = trimAscii(spec);
 	std::size_t spacePos;
@@ -5651,7 +5675,7 @@ static bool executeRuntimeMacroSpec(const std::string &spec, std::vector<std::st
 		runtimeErrorLevel() = 5001;
 		return false;
 	}
-	return executeLoadedMacro(macroIt, macroKey, paramPart, logLines);
+	return executeLoadedMacroWithConfiguredKeymapBatch(macroIt, macroKey, paramPart, logLines);
 }
 
 static bool currentExecutingMacroSpecImpl(std::string &macroSpec) {
@@ -7367,36 +7391,90 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				readCString(name);
 				unsigned char argc = bytecode[ip++];
 				std::vector<Value> args = popArgs(argc);
-				if (name == "MRSETUP") {
-					std::string setupKey;
-					std::string errorText;
-					MRSetupPaths activePaths = resolveSetupPathDefaults();
+					if (name == "KEYMAP_RESET") {
+						if (!args.empty()) throw std::runtime_error("KEYMAP_RESET expects no arguments.");
+						if (!setConfiguredKeymapProfiles(std::vector<MRKeymapProfile>(), nullptr)) throw std::runtime_error("KEYMAP_RESET failed: invalid keymap state.");
+						if (!setConfiguredActiveKeymapProfile("", nullptr)) throw std::runtime_error("KEYMAP_RESET failed: invalid active keymap profile.");
+						runtimeErrorLevel() = 0;
+					} else if (name == "KEYMAP_VERSION" || name == "THEME_VERSION") {
+						const std::string versionLiteral = args.size() == 1 && isStringLike(args[0]) ? trimAscii(valueAsString(args[0])) : std::string();
+						std::uint64_t parsedVersion = 0;
+						const std::string artifactLabel = name == "KEYMAP_VERSION" ? "Keymap" : "Theme";
 
-					if (!mrvmIsStartupSettingsMode()) throw std::runtime_error("MRSETUP is only allowed in settings.mrmac during startup.");
-					if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1])) throw std::runtime_error("MRSETUP expects (string, string).");
-					setupKey = upperKey(trimAscii(valueAsString(args[0])));
-					if (setupKey != "KEYMAP_PROFILE" && setupKey != "KEYMAP_BIND" && setupKey != "ACTIVE_KEYMAP_PROFILE")
-						if (!mrvmFlushPendingStartupKeymapBatch(&errorText)) throw std::runtime_error("MRSETUP keymap batch flush failed: " + (errorText.empty() ? std::string("invalid keymap batch.") : errorText));
-					if (setupKey == "SETTINGS_VERSION") {
-						if (trimAscii(valueAsString(args[1])) != mrCurrentPersistenceVersionString())
-							throw std::runtime_error("MRSETUP(SETTINGS_VERSION) supports only the current build version.");
-					} else if (setupKey == "SETTINGSPATH") {
-						if (!setConfiguredSettingsMacroFilePath(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(SETTINGSPATH) failed: " + (errorText.empty() ? std::string("invalid path.") : errorText));
-						activePaths.settingsMacroUri = configuredSettingsMacroFilePath();
-					} else if (setupKey == "KEYMAP_PROFILE") {
-						if (!mrvmApplyConfiguredKeymapProfilePayload(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(KEYMAP_PROFILE) failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
-					} else if (setupKey == "KEYMAP_BIND") {
-						if (!mrvmApplyConfiguredKeymapBindingPayload(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(KEYMAP_BIND) failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
-					} else if (setupKey == "ACTIVE_KEYMAP_PROFILE") {
-						if (!mrvmApplyConfiguredActiveKeymapProfilePayload(valueAsString(args[1]), &errorText))
-							throw std::runtime_error("MRSETUP(ACTIVE_KEYMAP_PROFILE) failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
-					} else
+						if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error(name + " expects (string).");
+						if (!mrParsePersistenceVersion(versionLiteral, parsedVersion))
+							throw std::runtime_error(name + " failed: invalid persistence version.");
+						if (parsedVersion > mrCurrentPersistenceVersion())
+							throw std::runtime_error(name + " failed: future build version " + versionLiteral + " is not supported.");
+						if (parsedVersion < mrCurrentPersistenceVersion()) mrLogMessage((artifactLabel + " file version upgrade required: " + versionLiteral).c_str());
+						runtimeErrorLevel() = 0;
+					} else if (name == "KEYMAP_PROFILE") {
+						std::string errorText;
+						if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("KEYMAP_PROFILE expects (string).");
+						if (!mrvmApplyConfiguredKeymapProfilePayload(valueAsString(args[0]), &errorText)) throw std::runtime_error("KEYMAP_PROFILE failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
+						runtimeErrorLevel() = 0;
+					} else if (name == "KEYMAP_BIND") {
+						std::string errorText;
+						if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("KEYMAP_BIND expects (string).");
+						if (!mrvmApplyConfiguredKeymapBindingPayload(valueAsString(args[0]), &errorText)) throw std::runtime_error("KEYMAP_BIND failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
+						runtimeErrorLevel() = 0;
+					} else if (name == "ACTIVE_KEYMAP_PROFILE") {
+						std::string errorText;
+						if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("ACTIVE_KEYMAP_PROFILE expects (string).");
+						if (!mrvmApplyConfiguredActiveKeymapProfilePayload(valueAsString(args[0]), &errorText)) throw std::runtime_error("ACTIVE_KEYMAP_PROFILE failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
+						runtimeErrorLevel() = 0;
+					} else if (name == "THEME_RESET") {
+						std::string errorText;
+						const MRColorSetupSettings defaults = resolveColorSetupDefaults();
+						if (!args.empty()) throw std::runtime_error("THEME_RESET expects no arguments.");
+						if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Window, defaults.windowColors.data(), defaults.windowColors.size(), &errorText))
+							throw std::runtime_error("THEME_RESET failed: " + (errorText.empty() ? std::string("invalid window colors.") : errorText));
+						if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MenuDialog, defaults.menuDialogColors.data(), defaults.menuDialogColors.size(), &errorText))
+							throw std::runtime_error("THEME_RESET failed: " + (errorText.empty() ? std::string("invalid menu/dialog colors.") : errorText));
+						if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Help, defaults.helpColors.data(), defaults.helpColors.size(), &errorText))
+							throw std::runtime_error("THEME_RESET failed: " + (errorText.empty() ? std::string("invalid help colors.") : errorText));
+						if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Other, defaults.otherColors.data(), defaults.otherColors.size(), &errorText))
+							throw std::runtime_error("THEME_RESET failed: " + (errorText.empty() ? std::string("invalid other colors.") : errorText));
+						if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::MiniMap, defaults.miniMapColors.data(), defaults.miniMapColors.size(), &errorText))
+							throw std::runtime_error("THEME_RESET failed: " + (errorText.empty() ? std::string("invalid minimap colors.") : errorText));
+						if (!setConfiguredColorSetupGroupValues(MRColorSetupGroup::Code, defaults.codeColors.data(), defaults.codeColors.size(), &errorText))
+							throw std::runtime_error("THEME_RESET failed: " + (errorText.empty() ? std::string("invalid code colors.") : errorText));
+						if (!setConfiguredColorThemeDisplayName("", &errorText)) throw std::runtime_error("THEME_RESET failed: " + (errorText.empty() ? std::string("invalid theme display name.") : errorText));
+						runtimeErrorLevel() = 0;
+					} else if (name == "THEME_NAME" || name == "WINDOWCOLORS" || name == "MENUDIALOGCOLORS" || name == "HELPCOLORS" || name == "OTHERCOLORS" || name == "MINIMAPCOLORS" || name == "CODECOLORS") {
+						std::string errorText;
+						if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error(name + " expects (string).");
+						if (name == "THEME_NAME") {
+							if (!setConfiguredColorThemeDisplayName(valueAsString(args[0]), &errorText)) throw std::runtime_error("THEME_NAME failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
+						} else if (!applyConfiguredColorSetupValue(name, valueAsString(args[0]), &errorText, false))
+							throw std::runtime_error(name + " failed: " + (errorText.empty() ? std::string("invalid value.") : errorText));
+						runtimeErrorLevel() = 0;
+					} else if (name == "MRSETUP") {
+						std::string setupKey;
+						std::string errorText;
+						MRSetupPaths activePaths = resolveSetupPathDefaults();
+
+						if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1])) throw std::runtime_error("MRSETUP expects (string, string).");
+						setupKey = upperKey(trimAscii(valueAsString(args[0])));
+						if (!mrvmIsStartupSettingsMode()) throw std::runtime_error("MRSETUP is only allowed in settings.mrmac during startup.");
+						if (setupKey == "SETTINGS_VERSION") {
+							const std::string versionLiteral = trimAscii(valueAsString(args[1]));
+							std::uint64_t parsedVersion = 0;
+
+							if (!mrParsePersistenceVersion(versionLiteral, parsedVersion))
+								throw std::runtime_error("MRSETUP(" + setupKey + ") failed: invalid persistence version.");
+							if (parsedVersion > mrCurrentPersistenceVersion())
+								throw std::runtime_error("MRSETUP(" + setupKey + ") failed: future build version " + versionLiteral + " is not supported.");
+						} else if (setupKey == "SETTINGSPATH") {
+							if (!setConfiguredSettingsMacroFilePath(valueAsString(args[1]), &errorText)) throw std::runtime_error("MRSETUP(SETTINGSPATH) failed: " + (errorText.empty() ? std::string("invalid path.") : errorText));
+							activePaths.settingsMacroUri = configuredSettingsMacroFilePath();
+						} else
 						switch (classifySettingsKey(setupKey)) {
-							case MRSettingsKeyClass::Unknown:
-								throw std::runtime_error("MRSETUP supports keys: SETTINGS_VERSION, MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
-								                         "SHELLPATH, WINDOW_MANAGER, MESSAGES, SEARCH_TEXT_TYPE, SEARCH_DIRECTION, "
-								                         "SEARCH_MODE, SEARCH_CASE_SENSITIVE, SEARCH_GLOBAL_SEARCH, "
-								                         "SEARCH_RESTRICT_MARKED_BLOCK, SEARCH_ALL_WINDOWS, "
+								case MRSettingsKeyClass::Unknown:
+									throw std::runtime_error("MRSETUP supports keys: SETTINGS_VERSION, MACROPATH, SETTINGSPATH, HELPPATH, TEMPDIR, "
+									                         "SHELLPATH, WINDOW_MANAGER, MESSAGES, SEARCH_TEXT_TYPE, SEARCH_DIRECTION, "
+									                         "SEARCH_MODE, SEARCH_CASE_SENSITIVE, SEARCH_GLOBAL_SEARCH, "
+									                         "SEARCH_RESTRICT_MARKED_BLOCK, SEARCH_ALL_WINDOWS, "
 								                         "SAR_TEXT_TYPE, SAR_DIRECTION, SAR_MODE, SAR_LEAVE_CURSOR_AT, "
 								                         "SAR_CASE_SENSITIVE, SAR_GLOBAL_SEARCH, SAR_RESTRICT_MARKED_BLOCK, "
 								                         "SAR_ALL_WINDOWS, "
@@ -7406,23 +7484,22 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 								                         "MULTI_SAR_FILESPEC, MULTI_SAR_TEXT, MULTI_SAR_REPLACEMENT, "
 								                         "MULTI_SAR_STARTING_PATH, MULTI_SAR_SUBDIRECTORIES, "
 								                         "MULTI_SAR_CASE_SENSITIVE, MULTI_SAR_REGULAR_EXPRESSIONS, "
-								                         "MULTI_SAR_FILES_IN_MEMORY, MULTI_SAR_KEEP_FILES_OPEN, "
-								                         "VIRTUAL_DESKTOPS, CYCLIC_VIRTUAL_DESKTOPS, CURSOR_BEHAVIOUR, "
-								                         "UI_INDENT_STYLE, CURSOR_POSITION_MARKER, AUTOLOAD_WORKSPACE, LOG_HANDLING, LOGFILE, AUTOEXEC_MACRO, "
-								                         "LASTFILEDIALOGPATH, KEYMAP_PROFILE, KEYMAP_BIND, ACTIVE_KEYMAP_PROFILE, "
-								                         "MAX_PATH_HISTORY, MAX_FILE_HISTORY, PATH_HISTORY, FILE_HISTORY, "
-								                         "DIALOG_LAST_PATH, DIALOG_PATH_HISTORY, DIALOG_FILE_HISTORY, "
-								                         "MULTI_FILESPEC_HISTORY, MULTI_PATH_HISTORY, "
-								                         "DEFAULT_PROFILE_DESCRIPTION, COLORTHEMEURI, KEYMAPURI, PAGE_BREAK, WORD_DELIMITERS, DEFAULT_EXTENSIONS, "
-								                         "TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, DISPLAY_TABS, TAB_SIZE, LEFT_MARGIN, RIGHT_MARGIN, FORMAT_RULER, WORD_WRAP, "
+									                         "MULTI_SAR_FILES_IN_MEMORY, MULTI_SAR_KEEP_FILES_OPEN, "
+									                         "VIRTUAL_DESKTOPS, CYCLIC_VIRTUAL_DESKTOPS, CURSOR_BEHAVIOUR, "
+									                         "UI_INDENT_STYLE, CURSOR_POSITION_MARKER, AUTOLOAD_WORKSPACE, LOG_HANDLING, LOGFILE, AUTOEXEC_MACRO, "
+									                         "LASTFILEDIALOGPATH, "
+									                         "MAX_PATH_HISTORY, MAX_FILE_HISTORY, PATH_HISTORY, FILE_HISTORY, "
+									                         "DIALOG_LAST_PATH, DIALOG_PATH_HISTORY, DIALOG_FILE_HISTORY, "
+									                         "MULTI_FILESPEC_HISTORY, MULTI_PATH_HISTORY, "
+									                         "DEFAULT_PROFILE_DESCRIPTION, PAGE_BREAK, WORD_DELIMITERS, DEFAULT_EXTENSIONS, "
+									                         "TRUNCATE_SPACES, EOF_CTRL_Z, EOF_CR_LF, TAB_EXPAND, DISPLAY_TABS, TAB_SIZE, LEFT_MARGIN, RIGHT_MARGIN, FORMAT_RULER, WORD_WRAP, "
 								                         "INDENT_STYLE, CODE_LANGUAGE, CODE_COLORING, CODE_FOLDING, FILE_TYPE, BINARY_RECORD_LENGTH, POST_LOAD_MACRO, PRE_SAVE_MACRO, DEFAULT_PATH, "
 								                         "FORMAT_LINE, BACKUP_METHOD, BACKUP_FREQUENCY, BACKUP_EXTENSION, BACKUP_DIRECTORY, "
 								                         "AUTOSAVE_INACTIVITY_SECONDS, AUTOSAVE_INTERVAL_SECONDS, BACKUP_FILES, SHOW_EOF_MARKER, "
 								                         "SHOW_EOF_MARKER_EMOJI, LINE_NUMBERS_POSITION, LINE_NUM_ZERO_FILL, "
 								                         "MINIMAP_POSITION, MINIMAP_WIDTH, MINIMAP_MARKER_GLYPH, GUTTERS, PERSISTENT_BLOCKS, "
 								                         "CODE_FOLDING_POSITION, "
-								                         "COLUMN_BLOCK_MOVE, DEFAULT_MODE, CURSOR_STATUS_COLOR, WINDOWCOLORS, MENUDIALOGCOLORS, "
-								                         "HELPCOLORS, OTHERCOLORS, MINIMAPCOLORS, CODECOLORS.");
+								                         "COLUMN_BLOCK_MOVE, DEFAULT_MODE, CURSOR_STATUS_COLOR.");
 							case MRSettingsKeyClass::Version:
 							case MRSettingsKeyClass::Path:
 							case MRSettingsKeyClass::Global:
@@ -8148,7 +8225,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						runtimeErrorLevel() = 5001;
 						continue;
 					}
-					if (!executeLoadedMacro(mit, macroKey, paramPart, &log)) continue;
+					if (!executeLoadedMacroWithConfiguredKeymapBatch(mit, macroKey, paramPart, &log)) continue;
 				} else {
 					throw std::runtime_error("Unknown procedure: " + name);
 				}
@@ -8751,7 +8828,7 @@ bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKe
 
 			logCalculatorHotkeyState("vm-loaded-match", pressed, it->second.displayName);
 			executedMacroName = it->second.displayName;
-			executeLoadedMacro(it, macroKey, std::string(), logLines);
+			executeLoadedMacroWithConfiguredKeymapBatch(it, macroKey, std::string(), logLines);
 			return true;
 		}
 		return false;

@@ -50,7 +50,7 @@ struct MRSettingsSnapshot {
 	std::vector<MREditExtensionProfile> editProfiles;
 	std::string keymapFilePath;
 	std::vector<MRKeymapProfile> keymapProfiles;
-	std::string activeKeymapProfile{"DEFAULT"};
+	std::string activeKeymapProfile;
 
 	auto operator==(const MRSettingsSnapshot &) const noexcept -> bool = default;
 };

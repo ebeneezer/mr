@@ -1,0 +1,263 @@
+$MACRO REGISTER_DESKTOP_UTILITIES FROM EDIT;
+IF GLOBAL_INT('DESKTOP_UTILITIES_REGISTERED') = 0 THEN
+    REGISTER_MENU_ITEM('Tools', 'ASCII table', 'desktoputils^SHOW_ASCII_TABLE');
+    REGISTER_MENU_ITEM('Tools', 'Emoji table', 'desktoputils^SHOW_EMOJI_TABLE');
+    SET_GLOBAL_INT('DESKTOP_UTILITIES_REGISTERED', TRUE);
+END;
+MACRO_TO_KEY('<AltShftA>', 'desktoputils^SHOW_ASCII_TABLE', 0);
+MACRO_TO_KEY('<AltShftE>', 'desktoputils^SHOW_EMOJI_TABLE', 0);
+END_MACRO;
+
+$MACRO DesktopUtilsAsciiLabel FROM EDIT;
+DEF_INT(Code);
+
+Code := GLOBAL_INT('DESKTOPUTILS_ASCII_CODE');
+
+IF Code < 32 THEN
+    RETURN_STR := '^' + CHAR(64 + Code);
+ELSE
+    IF Code = 32 THEN
+        RETURN_STR := 'SP';
+    ELSE
+        IF Code = 127 THEN
+            RETURN_STR := '^?';
+        ELSE
+            IF Code = 160 THEN
+                RETURN_STR := 'NBSP';
+            ELSE
+                RETURN_STR := UTF8(Code);
+            END;
+        END;
+    END;
+END;
+END_MACRO;
+
+$MACRO DesktopUtilsBuildAsciiItems FROM EDIT;
+DEF_INT(Code);
+
+UI_LIST_CLEAR('DESKTOPUTILS_ASCII_ITEMS');
+Code := 0;
+WHILE Code <= 255 DO
+    IF Code < 128 THEN
+        SET_GLOBAL_INT('DESKTOPUTILS_ASCII_CODE', Code);
+        RUN_MACRO('DesktopUtilsAsciiLabel');
+        UI_LIST_ADD('DESKTOPUTILS_ASCII_ITEMS', STR(Code) + ' ' + RETURN_STR);
+    ELSE
+        IF Code >= 160 THEN
+            SET_GLOBAL_INT('DESKTOPUTILS_ASCII_CODE', Code);
+            RUN_MACRO('DesktopUtilsAsciiLabel');
+            UI_LIST_ADD('DESKTOPUTILS_ASCII_ITEMS', STR(Code) + ' ' + RETURN_STR);
+        END;
+    END;
+    Code := Code + 1;
+END;
+SET_GLOBAL_INT('DESKTOPUTILS_ASCII_ITEMS_READY', TRUE);
+END_MACRO;
+
+$MACRO DesktopUtilsAppendEmojiRange FROM EDIT;
+DEF_INT(Codepoint, RangeEnd);
+
+Codepoint := GLOBAL_INT('DESKTOPUTILS_EMOJI_RANGE_START');
+RangeEnd := GLOBAL_INT('DESKTOPUTILS_EMOJI_RANGE_END');
+WHILE Codepoint <= RangeEnd DO
+    UI_LIST_ADD('DESKTOPUTILS_EMOJI_ITEMS', UTF8(Codepoint) + ' ' + STR(Codepoint));
+    Codepoint := Codepoint + 1;
+END;
+END_MACRO;
+
+$MACRO DesktopUtilsBuildEmojiItems FROM EDIT;
+UI_LIST_CLEAR('DESKTOPUTILS_EMOJI_ITEMS');
+
+SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_RANGE_START', $2300);
+SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_RANGE_END', $23FF);
+RUN_MACRO('DesktopUtilsAppendEmojiRange');
+
+SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_RANGE_START', $2600);
+SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_RANGE_END', $27BF);
+RUN_MACRO('DesktopUtilsAppendEmojiRange');
+
+SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_RANGE_START', $1F1E6);
+SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_RANGE_END', $1F1FF);
+RUN_MACRO('DesktopUtilsAppendEmojiRange');
+
+SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_RANGE_START', $1F300);
+SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_RANGE_END', $1F5FF);
+RUN_MACRO('DesktopUtilsAppendEmojiRange');
+
+SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_RANGE_START', $1F600);
+SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_RANGE_END', $1F64F);
+RUN_MACRO('DesktopUtilsAppendEmojiRange');
+
+SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_RANGE_START', $1F680);
+SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_RANGE_END', $1F6FF);
+RUN_MACRO('DesktopUtilsAppendEmojiRange');
+
+SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_RANGE_START', $1F780);
+SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_RANGE_END', $1F7FF);
+RUN_MACRO('DesktopUtilsAppendEmojiRange');
+
+SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_RANGE_START', $1F900);
+SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_RANGE_END', $1F9FF);
+RUN_MACRO('DesktopUtilsAppendEmojiRange');
+
+SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_RANGE_START', $1FA70);
+SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_RANGE_END', $1FAFF);
+RUN_MACRO('DesktopUtilsAppendEmojiRange');
+
+SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_ITEMS_READY', TRUE);
+END_MACRO;
+
+$MACRO DesktopUtilsEmojiCodepointFromIndex FROM EDIT;
+DEF_INT(Offset);
+
+Offset := GLOBAL_INT('DESKTOPUTILS_EMOJI_INDEX') - 1;
+RETURN_INT := 0;
+IF Offset < 0 THEN
+    RETURN_INT := 0;
+ELSE
+    IF Offset < 256 THEN
+        RETURN_INT := $2300 + Offset;
+    ELSE
+        Offset := Offset - 256;
+        IF Offset < 448 THEN
+            RETURN_INT := $2600 + Offset;
+        ELSE
+            Offset := Offset - 448;
+            IF Offset < 26 THEN
+                RETURN_INT := $1F1E6 + Offset;
+            ELSE
+                Offset := Offset - 26;
+                IF Offset < 768 THEN
+                    RETURN_INT := $1F300 + Offset;
+                ELSE
+                    Offset := Offset - 768;
+                    IF Offset < 80 THEN
+                        RETURN_INT := $1F600 + Offset;
+                    ELSE
+                        Offset := Offset - 80;
+                        IF Offset < 128 THEN
+                            RETURN_INT := $1F680 + Offset;
+                        ELSE
+                            Offset := Offset - 128;
+                            IF Offset < 128 THEN
+                                RETURN_INT := $1F780 + Offset;
+                            ELSE
+                                Offset := Offset - 128;
+                                IF Offset < 256 THEN
+                                    RETURN_INT := $1F900 + Offset;
+                                ELSE
+                                    Offset := Offset - 256;
+                                    IF Offset < 144 THEN
+                                        RETURN_INT := $1FA70 + Offset;
+                                    END;
+                                END;
+                            END;
+                        END;
+                    END;
+                END;
+            END;
+        END;
+    END;
+END;
+END_MACRO;
+
+$MACRO SHOW_ASCII_TABLE FROM EDIT;
+DEF_INT(Choice, Done, Start, SelectedIndex, Code);
+
+IF WINDOW_COUNT = 0 THEN
+    MARQUEE_ERROR('Open a text window first.');
+ELSE
+    IF READ_ONLY THEN
+        MARQUEE_ERROR('Window is read-only.');
+    ELSE
+        IF GLOBAL_INT('DESKTOPUTILS_ASCII_ITEMS_READY') = 0 THEN
+            RUN_MACRO('DesktopUtilsBuildAsciiItems');
+        END;
+        Start := GLOBAL_INT('DESKTOPUTILS_ASCII_START');
+        IF Start <= 0 THEN
+            Start := 1;
+        END;
+        Done := FALSE;
+        WHILE NOT Done DO
+            UI_DIALOG(0, 0, 44, 18, 'ASCII table');
+            UI_LISTBOX(2, 2, 40, 10, 1, 'Characters', 'DESKTOPUTILS_ASCII_ITEMS', Start);
+            UI_BUTTON(2, 14, 12, 2, '~I~nsert<Enter>');
+            UI_BUTTON(16, 14, 12, 3, 'C~a~ncel');
+            UI_BUTTON(30, 14, 12, 4, '~H~elp');
+            Choice := UI_EXEC;
+            SelectedIndex := UI_INDEX(1);
+            IF SelectedIndex > 0 THEN
+                Start := SelectedIndex;
+                SET_GLOBAL_INT('DESKTOPUTILS_ASCII_START', Start);
+            END;
+            IF (Choice = 1) OR (Choice = 2) THEN
+                IF SelectedIndex > 0 THEN
+                    Code := SelectedIndex - 1;
+                    IF Code >= 128 THEN
+                        Code := Code + 32;
+                    END;
+                    TEXT(UTF8(Code));
+                END;
+                Done := TRUE;
+            END;
+            IF (Choice = 0) OR (Choice = 3) THEN
+                Done := TRUE;
+            END;
+            IF Choice = 4 THEN
+                MAKE_MESSAGE('Enter or Insert posts the selected ASCII character.');
+            END;
+        END;
+    END;
+END;
+END_MACRO;
+
+$MACRO SHOW_EMOJI_TABLE FROM EDIT;
+DEF_INT(Choice, Done, Start, SelectedIndex, Codepoint);
+
+IF WINDOW_COUNT = 0 THEN
+    MARQUEE_ERROR('Open a text window first.');
+ELSE
+    IF READ_ONLY THEN
+        MARQUEE_ERROR('Window is read-only.');
+    ELSE
+        IF GLOBAL_INT('DESKTOPUTILS_EMOJI_ITEMS_READY') = 0 THEN
+            RUN_MACRO('DesktopUtilsBuildEmojiItems');
+        END;
+        Start := GLOBAL_INT('DESKTOPUTILS_EMOJI_START');
+        IF Start <= 0 THEN
+            Start := 1;
+        END;
+        Done := FALSE;
+        WHILE NOT Done DO
+            UI_DIALOG(0, 0, 44, 18, 'Emoji table');
+            UI_LISTBOX(2, 2, 40, 10, 1, 'Emoji', 'DESKTOPUTILS_EMOJI_ITEMS', Start);
+            UI_BUTTON(2, 14, 12, 2, '~I~nsert<Enter>');
+            UI_BUTTON(16, 14, 12, 3, 'C~a~ncel');
+            UI_BUTTON(30, 14, 12, 4, '~H~elp');
+            Choice := UI_EXEC;
+            SelectedIndex := UI_INDEX(1);
+            IF SelectedIndex > 0 THEN
+                Start := SelectedIndex;
+                SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_START', Start);
+            END;
+            IF (Choice = 1) OR (Choice = 2) THEN
+                IF SelectedIndex > 0 THEN
+                    SET_GLOBAL_INT('DESKTOPUTILS_EMOJI_INDEX', SelectedIndex);
+                    RUN_MACRO('DesktopUtilsEmojiCodepointFromIndex');
+                    Codepoint := RETURN_INT;
+                    IF Codepoint > 0 THEN
+                        TEXT(UTF8(Codepoint));
+                    END;
+                END;
+                Done := TRUE;
+            END;
+            IF (Choice = 0) OR (Choice = 3) THEN
+                Done := TRUE;
+            END;
+            IF Choice = 4 THEN
+                MAKE_MESSAGE('Enter or Insert posts the selected emoji.');
+            END;
+        END;
+    END;
+END;
+END_MACRO;

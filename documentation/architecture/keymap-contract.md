@@ -29,7 +29,7 @@ build's `MR_BUILD_EPOCH`.
 
 ## Invariants
 
-- `DEFAULT` fallback semantics must remain explicit.
+- No active or invalid runtime keymap must fall back to built-in command handling.
 - Active profile selection must remain deliberate.
 - Keymap persistence format must not change incidentally.
 - Resolver rebuild semantics must not change as formatting cleanup.
@@ -71,9 +71,9 @@ Do not change this while working on unrelated settings or UI tasks.
 
 For keymap changes, test:
 
-- load default profile,
 - load active profile,
 - missing active profile fallback,
+- invalid active profile fallback,
 - duplicate/conflicting bindings,
 - dialog load/save,
 - resolver rebuild,

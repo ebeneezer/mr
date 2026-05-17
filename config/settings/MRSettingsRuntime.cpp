@@ -146,14 +146,11 @@ bool mr::settings::storage::persistConfiguredSettingsSnapshotImpl(std::string *e
 bool mr::settings::storage::writeSettingsMacroFileImpl(const MRSetupPaths &paths, std::string *errorMessage, MRSettingsWriteReport *report) {
 	std::string settingsPath = normalizeConfiguredPathInput(paths.settingsMacroUri);
 	std::string settingsDir = directoryPartOf(settingsPath);
-	std::string themePath = configuredColorThemeFile().empty() ? defaultColorThemePathForSettings(settingsPath) : configuredColorThemeFilePath();
 	std::string source;
 	std::string previousSource;
 
 	if (!validateSettingsMacroFilePath(settingsPath, errorMessage)) return false;
 	if (!ensureDirectoryTree(settingsDir, errorMessage)) return false;
-	if (!writeColorThemeFile(themePath, errorMessage)) return false;
-	if (!setConfiguredColorThemeFilePath(themePath, errorMessage)) return false;
 	static_cast<void>(readTextFile(settingsPath, previousSource));
 	source = configuredAutoloadWorkspace() ? buildSettingsMacroSourceWithWorkspace(paths) : buildSettingsMacroSource(paths);
 	if (!writeTextFile(settingsPath, source)) return setError(errorMessage, "Unable to write settings macro file: " + settingsPath);
@@ -177,15 +174,9 @@ bool mr::settings::storage::ensureSettingsMacroFileExistsImpl(const std::string 
 	{
 		MRSettingsSnapshot snapshot;
 		std::string settingsDir = directoryPartOf(normalized);
-		std::string themePath;
-		std::string themeDir;
 
 		if (!resetSettingsSnapshot(normalized, snapshot, errorMessage)) return false;
 		if (!ensureDirectoryTree(settingsDir, errorMessage)) return false;
-		themePath = normalizeConfiguredPathInput(snapshot.colorThemeFilePath);
-		themeDir = directoryPartOf(themePath);
-		if (!ensureDirectoryTree(themeDir, errorMessage)) return false;
-		if (!writeTextFile(themePath, buildColorThemeMacroSource(snapshot.colorSettings))) return setError(errorMessage, "Unable to write color theme file: " + themePath);
 		if (!writeTextFile(normalized, buildSettingsMacroSource(snapshot))) return setError(errorMessage, "Unable to write settings macro file: " + normalized);
 		if (errorMessage != nullptr) errorMessage->clear();
 		return true;

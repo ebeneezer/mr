@@ -109,6 +109,29 @@
               "comment": "Explode, Magic Lamp?, Slide in/out?"
             }
           ]
+        },
+        {
+          "id": "4ac50537-a42c-492a-b451-372698b6ae2d",
+          "listId": "442a00f0-c411-4725-9424-3182418b486d",
+          "title": "Snippet System mit Platzhaltern und Navigation",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "44b96008-898d-4e5d-8f9a-d8236bd7c05d",
+          "listId": "442a00f0-c411-4725-9424-3182418b486d",
+          "title": "LSP Support",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": [
+            {
+              "id": "684e96a2-aff5-4f5d-b492-b388ce36d8d9",
+              "comment": "LSP-Integration für Diagnose, Navigation und Autocomplete bedeutet im Kern, dass der Editor mit einem externen Language Server spricht, statt Sprachintelligenz selbst ad hoc zu implementieren.\n\nWas der Nutzer davon konkret merkt\n\nFehler und Warnungen direkt im Editor, möglichst schon beim Tippen\nGo to Definition, Find References, Hover-Infos\nkontextabhängige Autovervollständigung statt nur wortbasierter Vorschläge\noptional später: Rename Symbol, Signature Help, Code Actions\nSinnvoller Zuschnitt für eine erste Ausbaustufe\n\nDiagnose\n\nServer starten\nDokument öffnen/ändern/speichern an den Server melden\nDiagnosen empfangen und im UI anzeigen\nNavigation\n\nDefinition anspringen\nReferenzen in einer Liste anzeigen\neinfache Positionssprünge zwischen Datei/Zeile/Spalte\nAutocomplete\n\nCompletion an Cursorposition anfragen\nTrefferliste anzeigen\nausgewählten Vorschlag einfügen\nDas wäre ein brauchbares erstes Thema. Rename, Code Actions, Formatting, Semantic Tokens würde ich bewusst nicht in denselben ersten Schnitt ziehen.\n\nWarum das ein gutes Thema ist\n\nhoher sichtbarer Nutzwert\nnicht auf eine einzelne Sprache begrenzt\nstrategisch stärker als eine isolierte Editorfunktion\nschafft eine technische Grundlage für mehrere spätere Features\nTechnische Teilprobleme\n\nProzessmanagement: Server starten, neu starten, beenden\nProtokolltransport: meist JSON-RPC über stdin/stdout\nDokument-Synchronisation: Full Sync oder Incremental Sync\nCapability-Handling: jeder Server kann etwas anderes\nUI-Anbindung: Listen, Status, Fehleranzeige, Sprungziele\nKonfiguration: welcher Server für welche Dateitypen, Startkommando, Root-Erkennung\nWichtige Produktentscheidungen\n\nNur lokale Serverprozesse oder später auch Remote?\nErst nur eine Sprache gut unterstützen oder Infrastruktur generisch bauen?\nDiagnosen live bei jeder Änderung oder nur bei Save?\nCompletion minimalistisch halten oder direkt mit Dokumentation/Hinweisen?\nRisiken im bestehenden System\n\nFalls Sie das später wirklich umsetzen lassen wollen, ist das kein “reines Feature ohne Architekturwirkung”. Typisch berührt es:\n\nUI-Dialoge und Listenansichten\nasynchrone/deferred UI\nRuntime-Settings\nDateipfad- und Projektwurzel-Logik\nvorhandene Syntax-/Sprachfunktionen, falls es Überschneidungen gibt\nGerade deshalb ist es ein gutes größeres Thema, aber kein kleiner Nebenpunkt.\n\nEmpfohlene Formulierung für die Karte\n\nLSP-Integration: Diagnosen, Definitionen, Referenzen und Autocomplete\n\nDas ist präziser als die Kurzform und setzt den Umfang sauberer. Wenn Sie möchten, formuliere ich daraus auch noch eine kompakte Board-Karte plus 3 bis 5 konkrete Unteraufgaben."
+            }
+          ]
         }
       ]
     },
@@ -151,6 +174,24 @@
           "labels": [],
           "checkboxes": [],
           "comments": []
+        },
+        {
+          "id": "e73163a9-275c-481d-961e-38fa62deb9fa",
+          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+          "title": "Theme Verwaltung für Syntax Highlighting (bereits vorbereitet via mrmac)",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "3e6b2535-2d04-453b-9214-22dac0c2642d",
+          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+          "title": "An Feiertagen animierte ASCII Grafiken auf em Desktop zeigen: Halloween, Weihnachten, Ostern, Sonnen wende etc ...",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
         }
       ]
     },
@@ -162,6 +203,15 @@
           "id": "d2cb32e6-21dc-43ee-adba-457d26767458",
           "listId": "b721e070-ae21-4123-a1f3-27b926375a16",
           "title": "Task Overlay sinnvoller gestalten",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "c8e78f9a-1422-4d79-ad10-901b53c85080",
+          "listId": "b721e070-ae21-4123-a1f3-27b926375a16",
+          "title": "Keine Eingabefelder für human readable names für Color Themes und Key Mappings",
           "description": "",
           "labels": [],
           "checkboxes": [],
@@ -204,6 +254,15 @@
               "comment": "Doch ein Grid implementieren lassen? (Calculator)"
             }
           ]
+        },
+        {
+          "id": "ca6e9471-391b-46ba-8a24-26c36e5922ec",
+          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
+          "title": "mrmac comfort funktionen",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
         }
       ]
     },

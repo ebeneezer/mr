@@ -11,9 +11,7 @@ MRKeymapResolver g_runtimeKeymapResolver;
 const MRKeymapProfile *findActiveProfile(std::span<const MRKeymapProfile> profiles, std::string_view activeProfileName) noexcept {
 	for (const MRKeymapProfile &profile : profiles)
 		if (profile.name == activeProfileName) return &profile;
-	for (const MRKeymapProfile &profile : profiles)
-		if (profile.name == "DEFAULT") return &profile;
-	return profiles.empty() ? nullptr : &profiles.front();
+	return nullptr;
 }
 } // namespace
 

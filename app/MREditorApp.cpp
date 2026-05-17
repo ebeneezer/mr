@@ -338,7 +338,6 @@ bool applySettingsSourceViaVm(const std::string &settingsPath, const std::string
 	std::string normalizedSettingsPath = normalizeConfiguredPathInput(settingsPath);
 	std::string compileError;
 	std::string vmError;
-	std::string themeError;
 
 	if (!resetConfiguredSettingsModel(normalizedSettingsPath, resetPaths, &vmError)) {
 		if (errorMessage != nullptr) *errorMessage = "Settings VM preload reset failed: " + vmError;
@@ -383,10 +382,6 @@ bool applySettingsSourceViaVm(const std::string &settingsPath, const std::string
 		}
 	}
 	std::free(bytecode);
-	if (!loadColorThemeFile(configuredColorThemeFilePath(), &themeError)) {
-		if (errorMessage != nullptr) *errorMessage = "Color theme load failed: " + themeError;
-		return false;
-	}
 	clearConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -490,7 +485,6 @@ bool loadStartupSettingsMacro(const std::string &overridePath, std::string *erro
 	}
 
 	mrLogMessage(("Settings loaded via VM: " + settingsPath).c_str());
-	mrLogMessage(("Color theme loaded: " + configuredColorThemeFilePath()).c_str());
 	mrLogMessage(("Settings MACROPATH: " + defaultMacroDirectoryPath()).c_str());
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -1224,6 +1218,13 @@ void MREditorApp::handleEvent(TEvent &event) {
 		return;
 	}
 	if (keystrokeRecording && event.what == evKeyDown) appendRecordedKeyEvent(event);
+	if (event.what == evKeyDown && (event.keyDown.controlKeyState & kbCtrlShift) != 0 && (event.keyDown.controlKeyState & kbAltShift) != 0 && (event.keyDown.controlKeyState & kbShift) == 0) {
+		const TKey pressed(event.keyDown);
+		if ((pressed == TKey('Z', kbCtrlShift | kbAltShift) || event.keyDown.keyCode == kbCtrlZ || event.keyDown.keyCode == kbAltZ) && TView::commandEnabled(cmMrEditRedo) && handleMRCommand(cmMrEditRedo)) {
+			clearEvent(event);
+			return;
+		}
+	}
 
 	if (event.what == evCommand && event.message.command == cmMrDeferredActivateWindow) {
 		mrLogMessage("MREditorApp handling cmMrDeferredActivateWindow");

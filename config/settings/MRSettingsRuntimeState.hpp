@@ -17,6 +17,7 @@ std::string &configuredTempDirectory();
 std::string &configuredShellExecutable();
 std::string &configuredLogFile();
 std::string &configuredColorThemeFile();
+std::string &configuredColorThemeDisplayNameValue();
 MREditSetupSettings &configuredEditSettings();
 std::vector<MREditExtensionProfile> &configuredEditProfiles();
 std::vector<MRKeymapProfile> &configuredKeymapProfilesValue();

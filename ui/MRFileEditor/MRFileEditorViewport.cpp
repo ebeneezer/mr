@@ -175,11 +175,7 @@ void MRFileEditor::ensureVisibleFoldSpans(std::size_t topLine, int rowCount, MRS
 	std::size_t requestBottomLine = documentLineForVisibleLine(visibleTopLine + static_cast<std::size_t>(std::max(0, rowCount))) + 1;
 	if (exactLineCountKnown && requestBottomLine > exactLineCount) requestBottomLine = exactLineCount;
 	auto updateVisibleFoldGutterColumnsForViewport = [&]() noexcept {
-		std::vector<unsigned short> actualDrawLevels;
-		auto rememberDisplayLevel = [&actualDrawLevels](unsigned short level) {
-			const auto it = std::lower_bound(actualDrawLevels.begin(), actualDrawLevels.end(), level);
-			if (it == actualDrawLevels.end() || *it != level) actualDrawLevels.insert(it, level);
-		};
+		int maxDisplayLevel = -1;
 		const std::size_t visibleBottomLine = visibleTopLine + static_cast<std::size_t>(std::max(0, rowCount));
 
 		for (std::size_t visibleLine = visibleTopLine; visibleLine < visibleBottomLine; ++visibleLine) {
@@ -190,11 +186,14 @@ void MRFileEditor::ensureVisibleFoldSpans(std::size_t topLine, int rowCount, MRS
 				if (!span.open) glyphVisible = span.startLine == documentLine;
 				else if (documentLine == span.startLine || documentLine == span.endLine || (documentLine > span.startLine && documentLine < span.endLine)) glyphVisible = true;
 				if (!glyphVisible) continue;
-				rememberDisplayLevel(span.level);
+				maxDisplayLevel = std::max(maxDisplayLevel, static_cast<int>(span.level));
 			}
 		}
-		visibleState.displayLevels = std::move(actualDrawLevels);
-		visibleState.gutterColumns = std::max(1, static_cast<int>(visibleState.displayLevels.size()));
+		visibleState.gutterColumns = std::max(1, maxDisplayLevel + 1);
+		visibleState.displayLevels.clear();
+		visibleState.displayLevels.reserve(static_cast<std::size_t>(visibleState.gutterColumns));
+		for (int level = 0; level < visibleState.gutterColumns; ++level)
+			visibleState.displayLevels.push_back(static_cast<unsigned short>(level));
 	};
 	if (visibleState.documentId == docId && visibleState.version == version && visibleState.language == language && topLine >= visibleState.topLine && requestBottomLine <= visibleState.bottomLine) {
 		updateVisibleFoldGutterColumnsForViewport();

@@ -84,6 +84,8 @@ void mrvmSetProcessContext(int argc, char **argv);
 std::vector<std::string> mrvmProcessArguments();
 void mrvmSetStartupSettingsMode(bool enabled) noexcept;
 bool mrvmIsStartupSettingsMode() noexcept;
+void mrvmBeginConfiguredKeymapBatch() noexcept;
+bool mrvmEndConfiguredKeymapBatch(std::string *errorMessage);
 bool mrvmFlushPendingStartupKeymapBatch(std::string *errorMessage);
 
 struct MRMacroJobResult {

@@ -13,6 +13,19 @@ BISON = bison
 CMAKE ?= cmake
 GIT ?= git
 PATCH ?= patch
+USE_CCACHE ?= auto
+CCACHE ?= ccache
+CCACHE_AVAILABLE := $(shell command -v $(CCACHE) 2>/dev/null)
+ifeq ($(USE_CCACHE),auto)
+export MR_USE_CCACHE := $(if $(CCACHE_AVAILABLE),1,0)
+else ifeq ($(USE_CCACHE),1)
+export MR_USE_CCACHE := 1
+else ifeq ($(USE_CCACHE),yes)
+export MR_USE_CCACHE := 1
+else
+export MR_USE_CCACHE := 0
+endif
+export MR_CCACHE := $(CCACHE)
 NPROC ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
 MAKEFLAGS += -j$(NPROC)
 CLANG_TIDY ?= clang-tidy
@@ -204,6 +217,13 @@ C_OBJECTS = $(C_SOURCES:.c=.o)
 	mrfoldtrainer mrindenttrainer stage-profile-probe regression-probe regression-check regression-check-core regression-check-full mrmac-v1-check phase1-repro-probe \
 	FORCE \
 	compile-commands lint-file context-tar tar-archives
+
+ifneq ($(filter clean,$(MAKECMDGOALS)),)
+ifneq ($(filter all,$(MAKECMDGOALS)),)
+.NOTPARALLEL:
+all: clean
+endif
+endif
 
 all: $(TARGET)
 mrfoldtrainer: $(MRFOLDTRAINER_TARGET)

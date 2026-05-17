@@ -1,6 +1,7 @@
 #include "MRKeymapProfile.hpp"
 
 #include "MRKeymapActionCatalog.hpp"
+#include "../app/MRVersion.hpp"
 #include "../app/utils/MRFileIOUtils.hpp"
 #include "../app/utils/MRStringUtils.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
@@ -30,7 +31,7 @@ constexpr std::string_view kBindingContextMember = "CONTEXT";
 constexpr std::string_view kBindingTypeMember = "TYPE";
 constexpr std::string_view kBindingTargetMember = "TARGET";
 constexpr std::string_view kBindingSequenceMember = "SEQUENCE";
-const char *const kAssignmentPattern = "MRSETUP\\s*\\(\\s*'([^']+)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)";
+const char *const kAssignmentPattern = "(?:MRSETUP\\s*\\(\\s*'([^']+)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)|([A-Z_][A-Z0-9_]*)\\s*\\(\\s*'((?:''|[^'])*)'\\s*\\))";
 
 struct PayloadMember {
 	std::string key;
@@ -219,7 +220,6 @@ std::size_t findProfileIndex(std::span<const MRKeymapProfile> profiles, std::str
 void normalizeKeymapProfile(MRKeymapProfile &profile) {
 	profile.name = trimAscii(profile.name);
 	profile.description = trimAscii(profile.description);
-	if (upperAscii(profile.name) == "DEFAULT") profile.name = "DEFAULT";
 	for (MRKeymapBindingRecord &binding : profile.bindings) {
 		binding.profileName = trimAscii(binding.profileName);
 		binding.target.target = trimAscii(binding.target.target);
@@ -250,6 +250,18 @@ std::string unescapeMrmacSingleQuotedLiteral(std::string_view value) {
 			out.push_back('\'');
 			++i;
 		} else
+			out.push_back(ch);
+	}
+	return out;
+}
+
+std::string escapeSingleQuotedLiteral(std::string_view value) {
+	std::string out;
+
+	out.reserve(value.size() + 8);
+	for (const char ch : value) {
+		if (ch == '\'') out += "''";
+		else
 			out.push_back(ch);
 	}
 	return out;
@@ -524,8 +536,6 @@ MRKeymapCanonicalizationResult canonicalizeKeymapProfiles(std::span<const MRKeym
 		result.profiles.push_back(std::move(normalizedProfile));
 	}
 
-	if (findProfileIndex(result.profiles, "DEFAULT") == kNoIndex) result.profiles.insert(result.profiles.begin(), builtInDefaultKeymapProfile());
-
 	for (std::size_t profileIndex = 0; profileIndex < result.profiles.size(); ++profileIndex) {
 		MRKeymapProfile &profile = result.profiles[profileIndex];
 		std::vector<MRKeymapBindingRecord> cleanedBindings;
@@ -587,13 +597,7 @@ MRKeymapCanonicalizationResult canonicalizeKeymapProfiles(std::span<const MRKeym
 		profile.bindings = std::move(cleanedBindings);
 	}
 
-	if (result.activeProfileName.empty() || findProfileIndex(result.profiles, result.activeProfileName) == kNoIndex) {
-		if (findProfileIndex(result.profiles, "DEFAULT") != kNoIndex) result.activeProfileName = "DEFAULT";
-		else if (!result.profiles.empty())
-			result.activeProfileName = result.profiles.front().name;
-		else
-			result.activeProfileName = "DEFAULT";
-	}
+	if (result.activeProfileName.empty() || findProfileIndex(result.profiles, result.activeProfileName) == kNoIndex) result.activeProfileName.clear();
 	return result;
 }
 
@@ -666,8 +670,9 @@ MRKeymapLoadResult loadKeymapProfilesFromSettingsSource(std::string_view source)
 	std::string remaining(source);
 
 	while (std::regex_search(remaining, match, assignmentPattern)) {
-		const std::string key = upperAscii(trimAscii(match[1].str()));
-		const std::string payload = unescapeMrmacSingleQuotedLiteral(match[2].str());
+		const bool mrsetupRecord = match[1].matched;
+		const std::string key = upperAscii(trimAscii(mrsetupRecord ? match[1].str() : match[3].str()));
+		const std::string payload = unescapeMrmacSingleQuotedLiteral(mrsetupRecord ? match[2].str() : match[4].str());
 
 		if (key == kActiveKeymapProfileSetupKey) {
 			MRKeymapProfile activeRecord;
@@ -715,14 +720,6 @@ MRKeymapLoadResult loadKeymapProfilesFromSettingsSource(std::string_view source)
 		result.profiles[ownerIndex].bindings.push_back(std::move(parsedBinding.binding));
 	}
 
-	if (result.activeProfileName.empty()) {
-		for (const MRKeymapProfile &profile : result.profiles)
-			if (upperAscii(profile.name) == "DEFAULT") {
-				result.activeProfileName = profile.name;
-				break;
-			}
-		if (result.activeProfileName.empty() && !result.profiles.empty()) result.activeProfileName = result.profiles.front().name;
-	}
 	{
 		MRKeymapCanonicalizationResult canonicalized = canonicalizeKeymapProfiles(result.profiles, result.activeProfileName, MRKeymapCanonicalizationMode::UntrustedIngress);
 		result.activeProfileName = std::move(canonicalized.activeProfileName);
@@ -740,10 +737,22 @@ std::string serializeKeymapProfilesToSettingsSource(std::span<const MRKeymapProf
 	for (const MRKeymapProfile &profile : profiles)
 		for (const MRKeymapBindingRecord &binding : profile.bindings)
 			source += serializeMrsetupRecord(kKeymapBindingSetupKey, serializeBindingPayload(binding));
-	source += serializeMrsetupRecord(kActiveKeymapProfileSetupKey, "name=\"" + escapePayloadQuotedString(activeProfileName) + "\"");
+	if (!trimAscii(std::string(activeProfileName)).empty()) source += serializeMrsetupRecord(kActiveKeymapProfileSetupKey, "name=\"" + escapePayloadQuotedString(activeProfileName) + "\"");
 	return source;
 }
 
-MRKeymapProfile builtInDefaultKeymapProfile() {
-	return {"DEFAULT", "build-in defaults", {}};
+std::string buildExecutableKeymapMacroSource(std::span<const MRKeymapProfile> profiles, std::string_view activeProfileName) {
+	std::string source;
+
+	source += "$MACRO MR_KEYMAP FROM EDIT;\n";
+	source += "KEYMAP_RESET();\n";
+	source += "KEYMAP_VERSION('" + escapeSingleQuotedLiteral(mrCurrentPersistenceVersionString()) + "');\n";
+	for (const MRKeymapProfile &profile : profiles)
+		source += "KEYMAP_PROFILE('" + escapeSingleQuotedLiteral(serializeProfilePayload(profile)) + "');\n";
+	for (const MRKeymapProfile &profile : profiles)
+		for (const MRKeymapBindingRecord &binding : profile.bindings)
+			source += "KEYMAP_BIND('" + escapeSingleQuotedLiteral(serializeBindingPayload(binding)) + "');\n";
+	if (!trimAscii(std::string(activeProfileName)).empty()) source += "ACTIVE_KEYMAP_PROFILE('name=\"" + escapeSingleQuotedLiteral(escapePayloadQuotedString(activeProfileName)) + "\"');\n";
+	source += "END_MACRO;\n";
+	return source;
 }

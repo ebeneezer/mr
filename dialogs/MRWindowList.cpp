@@ -48,6 +48,7 @@ enum : ushort {
 	cmMRWindowListGet,
 	cmMRWorkspaceSave,
 	cmMRWorkspaceLoad,
+	cmMRWindowListActivate,
 };
 
 class WindowListDialog;
@@ -76,6 +77,15 @@ void postWindowListClose(TView *dialog) {
 	closeEvent.message.command = cmClose;
 	closeEvent.message.infoPtr = dialog;
 	dialog->putEvent(closeEvent);
+}
+
+void postWindowListActivate(TView *dialog) {
+	if (dialog == nullptr) return;
+	TEvent activateEvent{};
+	activateEvent.what = evCommand;
+	activateEvent.message.command = cmMRWindowListActivate;
+	activateEvent.message.infoPtr = dialog;
+	dialog->putEvent(activateEvent);
 }
 
 struct WindowListEntry {
@@ -358,11 +368,19 @@ class WindowListDialog : public MRDialogFoundation {
 			mr::dialogs::insertUniformButtonRow(*this, left, workspaceButtonY, workspaceGap, workspaceButtons);
 		}
 		{
-			const std::array bottomButtons{mr::dialogs::DialogButtonSpec{"~D~one", mode == mrwlManageWindows ? cmClose : cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
-			const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(bottomButtons, buttonGap);
-			const int left = centeredRowStart(metrics.rowWidth);
+			if (mode == mrwlManageWindows) {
+				const std::array bottomButtons{mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+				const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(bottomButtons, buttonGap);
+				const int left = centeredRowStart(metrics.rowWidth);
 
-			mr::dialogs::insertUniformButtonRow(*this, left, bottomButtonY, buttonGap, bottomButtons);
+				mr::dialogs::insertUniformButtonRow(*this, left, bottomButtonY, buttonGap, bottomButtons);
+			} else {
+				const std::array bottomButtons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+				const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(bottomButtons, buttonGap);
+				const int left = centeredRowStart(metrics.rowWidth);
+
+				mr::dialogs::insertUniformButtonRow(*this, left, bottomButtonY, buttonGap, bottomButtons);
+			}
 		}
 
 		refreshEntries();
@@ -412,6 +430,11 @@ class WindowListDialog : public MRDialogFoundation {
 	}
 
 	void handleEvent(TEvent &event) override {
+		if (event.what == evCommand && event.message.command == cmMRWindowListActivate && event.message.infoPtr == this) {
+			activateModeless();
+			clearEvent(event);
+			return;
+		}
 		if (event.what == evBroadcast && event.message.command == cmMrWindowTopologyChanged) {
 			if (mode == mrwlManageWindows) {
 				refreshEntries();
@@ -757,14 +780,14 @@ MREditWindow *mrShowWindowListDialog(MRWindowListMode mode, MREditWindow *curren
 
 	if (mode == mrwlManageWindows) {
 		if (g_manageWindowListDialog != nullptr) {
-			g_manageWindowListDialog->activateModeless();
+			postWindowListActivate(g_manageWindowListDialog);
 			return nullptr;
 		}
 		dialog = new WindowListDialog(mode, current, preferred);
 		dialog->finalizeLayout();
 		g_manageWindowListDialog = dialog;
 		TProgram::deskTop->insert(dialog);
-		dialog->activateModeless();
+		postWindowListActivate(dialog);
 		return nullptr;
 	}
 
@@ -799,7 +822,7 @@ MREditWindow *mrShowWindowListDialog(MRWindowListMode mode, MREditWindow *curren
 }
 
 void mrRefreshManageWindowListDialog() {
-	if (g_manageWindowListDialog != nullptr) g_manageWindowListDialog->activateModeless();
+	if (g_manageWindowListDialog != nullptr) postWindowListActivate(g_manageWindowListDialog);
 }
 
 void mrNotifyWindowTopologyChanged() {

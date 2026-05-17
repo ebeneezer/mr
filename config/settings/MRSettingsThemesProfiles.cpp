@@ -2,6 +2,7 @@
 #include "../../app/utils/MRFileIOUtils.hpp"
 #include "../../app/utils/MRStringUtils.hpp"
 #include "../../keymap/MRKeymapResolver.hpp"
+#include "../../mrmac/MRMacroRunner.hpp"
 #include "../../ui/MRWindowSupport.hpp"
 #include "MRSettingsHistory.hpp"
 #include "MRSettingsRuntime.hpp"
@@ -628,7 +629,7 @@ std::string defaultColorThemePathForSettings(std::string_view settingsPath) {
 }
 
 bool parseThemeSetupAssignments(const std::string &source, std::map<std::string, std::string> &assignments, bool *upgradeRequired, std::string *errorMessage) {
-	static const std::regex pattern("MRSETUP\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
+	static const std::regex pattern("(?:MRSETUP\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)|([A-Z_][A-Z0-9_]*)\\s*\\(\\s*'((?:''|[^'])*)'\\s*\\))", std::regex::icase);
 	bool localUpgradeRequired = false;
 	assignments.clear();
 
@@ -636,8 +637,9 @@ bool parseThemeSetupAssignments(const std::string &source, std::map<std::string,
 	auto end = std::sregex_iterator();
 
 	for (auto it = begin; it != end; ++it) {
-		std::string key = trimAscii(unescapeMrmacSingleQuotedLiteral((*it)[1].str()));
-		std::string value = unescapeMrmacSingleQuotedLiteral((*it)[2].str());
+		const bool mrsetupRecord = (*it)[1].matched;
+		std::string key = trimAscii(unescapeMrmacSingleQuotedLiteral(mrsetupRecord ? (*it)[1].str() : (*it)[3].str()));
+		std::string value = unescapeMrmacSingleQuotedLiteral(mrsetupRecord ? (*it)[2].str() : (*it)[4].str());
 		if (key.empty()) continue;
 		assignments[upperAscii(key)] = value;
 	}
@@ -706,7 +708,6 @@ const MRColorSetupItem *colorSetupGroupItems(MRColorSetupGroup group, std::size_
 bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned char *values, std::size_t count, std::string *errorMessage) {
 	const ColorGroupDefinition *definition = findColorGroupDefinition(group);
 	MRColorSetupSettings &configured = configuredColorSettings();
-	const MRColorSetupSettings previous = configuredColorSetupSettings();
 
 	ensureConfiguredColorSettingsInitialized();
 	if (definition == nullptr) return setError(errorMessage, "Unknown color setup group.");
@@ -732,7 +733,7 @@ bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned 
 			for (std::size_t i = 0; i < configured.codeColors.size(); ++i) configured.codeColors[i] = values[i];
 			break;
 	}
-	if (previous != configured) markConfiguredSettingsDirty();
+	configuredColorThemeDisplayNameValue().clear();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -764,14 +765,13 @@ void configuredColorSetupGroupValues(MRColorSetupGroup group, unsigned char *val
 	}
 }
 
-bool applyConfiguredColorSetupValue(const std::string &key, const std::string &value, std::string *errorMessage) {
+bool applyConfiguredColorSetupValue(const std::string &key, const std::string &value, std::string *errorMessage, bool clearThemeDisplayName) {
 	MRColorSetupSettings configured = configuredColorSetupSettings();
-	const MRColorSetupSettings previous = configured;
 
 	if (!applyColorSetupValueInternal(configured, key, value, errorMessage)) return false;
 	configuredColorSettings() = configured;
 	configuredColorSettingsInitialized() = true;
-	if (previous != configured) markConfiguredSettingsDirty();
+	if (clearThemeDisplayName) configuredColorThemeDisplayNameValue().clear();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -924,15 +924,11 @@ bool validateColorThemeFilePath(const std::string &path, std::string *errorMessa
 
 bool setConfiguredColorThemeFilePath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
-	const std::string previousTheme = configuredColorThemeFile();
-	const MRScopedDialogHistoryState previousLoadHistory = dialogHistoryState(MRDialogHistoryScope::SetupThemeLoad);
-	const MRScopedDialogHistoryState previousSaveHistory = dialogHistoryState(MRDialogHistoryScope::SetupThemeSave);
 
 	if (!validateColorThemeFilePath(path, errorMessage)) return false;
 	configuredColorThemeFile() = makeAbsolutePath(normalized);
 	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupThemeLoad, configuredColorThemeFile(), nullptr));
 	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::SetupThemeSave, configuredColorThemeFile(), nullptr));
-	if (previousTheme != configuredColorThemeFile() || previousLoadHistory != dialogHistoryState(MRDialogHistoryScope::SetupThemeLoad) || previousSaveHistory != dialogHistoryState(MRDialogHistoryScope::SetupThemeSave)) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -944,24 +940,32 @@ std::string configuredColorThemeFilePath() {
 }
 
 std::string configuredColorThemeDisplayName() {
-	std::string path = configuredColorThemeFilePath();
-	std::string name = fileNamePartOf(path);
+	std::string name = trimAscii(configuredColorThemeDisplayNameValue());
 
-	if (name.empty()) return std::string("<none>");
+	if (name.empty()) return std::string("default");
 	return name;
+}
+
+bool setConfiguredColorThemeDisplayName(const std::string &name, std::string *errorMessage) {
+	configuredColorThemeDisplayNameValue() = trimAscii(name);
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
 }
 
 std::string buildColorThemeMacroSource(const MRColorSetupSettings &colors) {
 	std::string source;
+	const std::string themeName = trimAscii(configuredColorThemeDisplayNameValue());
 
 	source += "$MACRO MR_COLOR_THEME FROM EDIT;\n";
-	source += "MRSETUP('" + std::string(mrThemeVersionSetupKey()) + "', '" + escapeMrmacSingleQuotedLiteral(mrCurrentPersistenceVersionString()) + "');\n";
-	source += "MRSETUP('WINDOWCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatWindowColorListLiteral(colors.windowColors)) + "');\n";
-	source += "MRSETUP('MENUDIALOGCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.menuDialogColors)) + "');\n";
-	source += "MRSETUP('HELPCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.helpColors)) + "');\n";
-	source += "MRSETUP('OTHERCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.otherColors)) + "');\n";
-	source += "MRSETUP('MINIMAPCOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.miniMapColors)) + "');\n";
-	source += "MRSETUP('CODECOLORS', '" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.codeColors)) + "');\n";
+	source += "THEME_RESET();\n";
+	source += "THEME_VERSION('" + escapeMrmacSingleQuotedLiteral(mrCurrentPersistenceVersionString()) + "');\n";
+	source += "WINDOWCOLORS('" + escapeMrmacSingleQuotedLiteral(formatWindowColorListLiteral(colors.windowColors)) + "');\n";
+	source += "MENUDIALOGCOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.menuDialogColors)) + "');\n";
+	source += "HELPCOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.helpColors)) + "');\n";
+	source += "OTHERCOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.otherColors)) + "');\n";
+	source += "MINIMAPCOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.miniMapColors)) + "');\n";
+	source += "CODECOLORS('" + escapeMrmacSingleQuotedLiteral(formatColorListLiteral(colors.codeColors)) + "');\n";
+	if (!themeName.empty()) source += "THEME_NAME('" + escapeMrmacSingleQuotedLiteral(themeName) + "');\n";
 	source += "END_MACRO;\n";
 	return source;
 }
@@ -999,19 +1003,12 @@ bool ensureColorThemeFileExists(const std::string &themeUri, std::string *errorM
 
 bool loadColorThemeFile(const std::string &themeUri, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(themeUri);
-	std::string source;
-	std::string applyError;
-	std::map<std::string, std::string> assignments;
-	bool upgradeRequired = false;
-	static const char *const order[] = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS", "MINIMAPCOLORS", "CODECOLORS"};
 
 	if (!validateColorThemeFilePath(normalized, errorMessage)) return false;
 	if (!ensureColorThemeFileExists(normalized, errorMessage)) return false;
-	if (!readTextFile(normalized, source)) return setError(errorMessage, "Unable to read color theme file: " + normalized);
-	if (!parseThemeSetupAssignments(source, assignments, &upgradeRequired, errorMessage)) return false;
-	for (const char *key : order)
-		if (!applyConfiguredColorSetupValue(key, assignments[key], &applyError)) return setError(errorMessage, "Theme apply failed for " + std::string(key) + ": " + applyError);
-	if (upgradeRequired) mrLogMessage("Color theme version upgrade required: " + normalized);
+	if (!runMacroFileByPath(normalized.c_str(), errorMessage, false)) return false;
+	if (trimAscii(configuredColorThemeDisplayNameValue()).empty())
+		if (!setConfiguredColorThemeDisplayName(fileNamePartOf(normalized), errorMessage)) return false;
 	if (!setConfiguredColorThemeFilePath(normalized, errorMessage)) return false;
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -1054,9 +1051,7 @@ const std::vector<MRKeymapProfile> &configuredKeymapProfiles() {
 
 bool setConfiguredKeymapProfiles(const std::vector<MRKeymapProfile> &profiles, std::string *errorMessage) {
 	std::vector<MRKeymapProfile> normalized = profiles;
-	const std::vector<MRKeymapProfile> previousProfiles = configuredKeymapProfilesValue();
-	const std::string previousActive = configuredActiveKeymapProfileValue();
-	bool hasDefault = false;
+	std::string normalizedActiveProfile = configuredActiveKeymapProfileValue();
 	std::string runtimeError;
 
 	for (MRKeymapProfile &profile : normalized) {
@@ -1067,23 +1062,16 @@ bool setConfiguredKeymapProfiles(const std::vector<MRKeymapProfile> &profiles, s
 			binding.target.target = trimAscii(binding.target.target);
 			binding.description = trimAscii(binding.description);
 		}
-		if (upperAscii(profile.name) == "DEFAULT") {
-			profile.name = "DEFAULT";
-			hasDefault = true;
-		}
 	}
-	if (!hasDefault) normalized.insert(normalized.begin(), builtInDefaultKeymapProfile());
+	if (normalizedActiveProfile.empty() || std::ranges::find(normalized, normalizedActiveProfile, &MRKeymapProfile::name) == normalized.end()) normalizedActiveProfile.clear();
 
 	const auto diagnostics = validateKeymapProfiles(normalized);
 	for (const MRKeymapDiagnostic &diagnostic : diagnostics)
 		if (diagnostic.severity == MRKeymapDiagnosticSeverity::Error) return setError(errorMessage, diagnostic.message);
-	if (!runtimeKeymapResolver().rebuild(normalized, configuredActiveKeymapProfileValue(), &runtimeError)) return setError(errorMessage, runtimeError);
+	if (!runtimeKeymapResolver().rebuild(normalized, normalizedActiveProfile, &runtimeError)) return setError(errorMessage, runtimeError);
 
 	configuredKeymapProfilesValue() = normalized;
-	if (configuredActiveKeymapProfileValue().empty()) configuredActiveKeymapProfileValue() = "DEFAULT";
-	else if (std::ranges::find(normalized, configuredActiveKeymapProfileValue(), &MRKeymapProfile::name) == normalized.end())
-		configuredActiveKeymapProfileValue() = "DEFAULT";
-	if (previousProfiles != configuredKeymapProfilesValue() || previousActive != configuredActiveKeymapProfileValue()) markConfiguredSettingsDirty();
+	configuredActiveKeymapProfileValue() = normalizedActiveProfile;
 	mrLogMessage(summarizeConfiguredKeymapsForLog(configuredKeymapProfilesValue(), configuredActiveKeymapProfileValue()));
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
@@ -1096,16 +1084,10 @@ std::string configuredKeymapFilePath() {
 
 bool setConfiguredKeymapFilePath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
-	const std::string previousFile = configuredKeymapFileValue();
-	const MRScopedDialogHistoryState previousLoadHistory = dialogHistoryState(MRDialogHistoryScope::KeymapProfileLoad);
-	const MRScopedDialogHistoryState previousSaveHistory = dialogHistoryState(MRDialogHistoryScope::KeymapProfileSave);
 	struct stat st;
 
 	if (normalized.empty()) {
-		if (!configuredKeymapFileValue().empty()) {
-			configuredKeymapFileValue().clear();
-			markConfiguredSettingsDirty();
-		}
+		if (!configuredKeymapFileValue().empty()) configuredKeymapFileValue().clear();
 		if (errorMessage != nullptr) errorMessage->clear();
 		return true;
 	}
@@ -1113,7 +1095,6 @@ bool setConfiguredKeymapFilePath(const std::string &path, std::string *errorMess
 	configuredKeymapFileValue() = makeAbsolutePath(normalized);
 	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::KeymapProfileLoad, configuredKeymapFileValue(), nullptr));
 	static_cast<void>(setScopedDialogLastPath(MRDialogHistoryScope::KeymapProfileSave, configuredKeymapFileValue(), nullptr));
-	if (previousFile != configuredKeymapFileValue() || previousLoadHistory != dialogHistoryState(MRDialogHistoryScope::KeymapProfileLoad) || previousSaveHistory != dialogHistoryState(MRDialogHistoryScope::KeymapProfileSave)) markConfiguredSettingsDirty();
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -1124,18 +1105,14 @@ std::string configuredActiveKeymapProfile() {
 
 bool setConfiguredActiveKeymapProfile(const std::string &value, std::string *errorMessage) {
 	std::string normalized = trimAscii(value);
-	const std::string previous = configuredActiveKeymapProfileValue();
 	std::string runtimeError;
 
-	if (normalized.empty()) normalized = "DEFAULT";
-	for (const MRKeymapProfile &profile : configuredKeymapProfilesValue())
-		if (profile.name == normalized) {
-			if (!runtimeKeymapResolver().rebuild(configuredKeymapProfilesValue(), normalized, &runtimeError)) return setError(errorMessage, runtimeError);
-			configuredActiveKeymapProfileValue() = normalized;
-			if (previous != configuredActiveKeymapProfileValue()) markConfiguredSettingsDirty();
-			mrLogMessage("Keymap active profile set to '" + normalized + "'.");
-			if (errorMessage != nullptr) errorMessage->clear();
-			return true;
-		}
-	return setError(errorMessage, "Unknown keymap profile: " + normalized);
+	if (!normalized.empty() && std::ranges::find(configuredKeymapProfilesValue(), normalized, &MRKeymapProfile::name) == configuredKeymapProfilesValue().end()) normalized.clear();
+	if (!runtimeKeymapResolver().rebuild(configuredKeymapProfilesValue(), normalized, &runtimeError)) return setError(errorMessage, runtimeError);
+	configuredActiveKeymapProfileValue() = normalized;
+	if (normalized.empty()) mrLogMessage("Keymap active profile cleared; built-in key handling remains active.");
+	else
+		mrLogMessage("Keymap active profile set to '" + normalized + "'.");
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
 }

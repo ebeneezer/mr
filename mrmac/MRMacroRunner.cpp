@@ -189,7 +189,7 @@ void showErrorBox(const char *title, const char *text) {
 	messageBox(mfError | mfOKButton, "%s:\n\n%s", title, text);
 }
 
-bool runMacroSource(const char *displayName, const char *source, const MRMacroExecutionProfile *routeProfile = nullptr) {
+bool runMacroSource(const char *displayName, const char *source, const MRMacroExecutionProfile *routeProfile, std::string *errorMessage, bool showErrorDialogs) {
 	size_t bytecodeSize = 0;
 	unsigned char *bytecode = nullptr;
 	std::shared_ptr<VirtualMachine> vm = std::make_shared<VirtualMachine>();
@@ -199,12 +199,15 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 	MREditWindow *win = currentEditWindow();
 	std::uint64_t taskId = 0;
 
+	if (errorMessage != nullptr) errorMessage->clear();
 	if (source == nullptr) {
-		showErrorBox("Macro Loader", "No macro source available.");
+		if (errorMessage != nullptr) *errorMessage = "No macro source available.";
+		if (showErrorDialogs) showErrorBox("Macro Loader", "No macro source available.");
 		return false;
 	}
 	if (!vm) {
-		showErrorBox("Macro Loader", "Unable to create VM.");
+		if (errorMessage != nullptr) *errorMessage = "Unable to create VM.";
+		if (showErrorDialogs) showErrorBox("Macro Loader", "Unable to create VM.");
 		return false;
 	}
 
@@ -212,7 +215,8 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 	if (bytecode == nullptr) {
 		const char *err = get_last_compile_error();
 		if (err == nullptr || *err == '\0') err = "Compilation failed.";
-		showErrorBox(displayName != nullptr ? displayName : "Macro Loader", err);
+		if (errorMessage != nullptr) *errorMessage = err;
+		if (showErrorDialogs) showErrorBox(displayName != nullptr ? displayName : "Macro Loader", err);
 		return false;
 	}
 
@@ -241,7 +245,8 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 			return result;
 		});
 		if (taskId == 0) {
-			showErrorBox(label.c_str(), "Unable to start background macro worker.");
+			if (errorMessage != nullptr) *errorMessage = "Unable to start background macro worker.";
+			if (showErrorDialogs) showErrorBox(label.c_str(), "Unable to start background macro worker.");
 			return false;
 		}
 		if (win != nullptr) {
@@ -361,7 +366,8 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 				return result;
 			});
 			if (taskId == 0) {
-				showErrorBox(label.c_str(), "Unable to start staged background macro worker.");
+				if (errorMessage != nullptr) *errorMessage = "Unable to start staged background macro worker.";
+				if (showErrorDialogs) showErrorBox(label.c_str(), "Unable to start staged background macro worker.");
 				return false;
 			}
 			win->trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::MacroJob, label);
@@ -389,6 +395,7 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 		queuePendingForegroundMacro(label, vm);
 		mrLogMessage(("Macro '" + label + "' yielded on DELAY; execution will resume asynchronously.").c_str());
 	}
+	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
 
@@ -470,7 +477,16 @@ bool runMacroFileByPath(const char *path, std::string *errorMessage, bool showEr
 
 	macroSpec = resolvedPath + "^" + macroName;
 	runnerSource = "$MACRO MacroPlaybackLauncher;\nRUN_MACRO('" + escapeMrmacSingleQuotedLiteral(macroSpec) + "');\nEND_MACRO;\n";
-	if (!runMacroSource(macroSpec.c_str(), runnerSource.c_str(), &targetProfile)) {
+	if (!runMacroSource(macroSpec.c_str(), runnerSource.c_str(), &targetProfile, errorMessage, showErrorDialogs)) {
+		if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "Macro execution failed.";
+		return false;
+	}
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool runMacroSourceText(const char *displayName, const char *source, std::string *errorMessage, bool showErrorDialogs) {
+	if (!runMacroSource(displayName, source, nullptr, errorMessage, showErrorDialogs)) {
 		if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "Macro execution failed.";
 		return false;
 	}

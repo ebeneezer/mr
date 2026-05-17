@@ -154,6 +154,7 @@ class MRDialogFoundation : public MRScrollableDialog {
 	MRDialogFoundation(const TRect &bounds, const char *title, int virtualWidth, int virtualHeight);
 	MRDialogFoundation(const TRect &bounds, const char *title, int virtualWidth, int virtualHeight, TFrame *(*frameFactory)(TRect));
 
+	void setState(ushort aState, Boolean enable) override;
 	void insert(TView *view);
 	void finalizeLayout();
 

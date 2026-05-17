@@ -1,0 +1,782 @@
+$MACRO ComfortDuplicate FROM EDIT;
+DEF_INT(BlockState, StartLine, EndLine, StartCol, EndCol, OriginalLine, OriginalCol);
+DEF_STR(BlockText, LineText);
+
+IF WINDOW_COUNT = 0 THEN
+    MARQUEE_ERROR('Open a text window first.');
+ELSE
+    IF READ_ONLY THEN
+        MARQUEE_ERROR('Window is read-only.');
+    ELSE
+        BlockState := BLOCK_STAT;
+        IF BlockState = 0 THEN
+            OriginalLine := C_LINE;
+            OriginalCol := C_COL;
+            LineText := GET_LINE;
+            EOL;
+            CR;
+            TEXT(LineText);
+            GOTO_LINE(OriginalLine + 1);
+            GOTO_COL(OriginalCol);
+        ELSE
+            StartLine := BLOCK_LINE1;
+            EndLine := BLOCK_LINE2;
+            StartCol := BLOCK_COL1;
+            EndCol := BLOCK_COL2;
+            BlockText := BLOCK_TEXT;
+            IF BlockState = 1 THEN
+                GOTO_LINE(EndLine);
+                EOL;
+                CR;
+                TEXT(BlockText);
+                GOTO_LINE(EndLine + 1);
+                GOTO_COL(1);
+            ELSE
+                IF BlockState = 2 THEN
+                    GOTO_LINE(StartLine);
+                    GOTO_COL(EndCol);
+                    COPY_BLOCK;
+                    GOTO_LINE(StartLine);
+                    GOTO_COL(EndCol);
+                ELSE
+                    GOTO_LINE(EndLine);
+                    GOTO_COL(EndCol);
+                    TEXT(BlockText);
+                END;
+            END;
+        END;
+    END;
+END;
+END_MACRO;
+
+$MACRO ComfortSortSelectedLinesUnique FROM EDIT;
+DEF_INT(BlockState, StartLine, EndLine, CurrentLine);
+DEF_STR(PreviousText, CurrentText);
+
+IF WINDOW_COUNT = 0 THEN
+    MARQUEE_ERROR('Open a text window first.');
+ELSE
+    IF READ_ONLY THEN
+        MARQUEE_ERROR('Window is read-only.');
+    ELSE
+        BlockState := BLOCK_STAT;
+        IF BlockState = 0 THEN
+            MARQUEE_ERROR('Mark multiple lines first.');
+        ELSE
+            IF BlockState = 2 THEN
+                MARQUEE_ERROR('Use the built-in sort for column blocks.');
+            ELSE
+                StartLine := BLOCK_LINE1;
+                EndLine := BLOCK_LINE2;
+                IF StartLine >= EndLine THEN
+                    MARQUEE_ERROR('Mark multiple lines first.');
+                ELSE
+                    RUN_MACRO('ComfortSortSelectedLines');
+                    CurrentLine := StartLine + 1;
+                    WHILE CurrentLine <= EndLine DO
+                        GOTO_LINE(CurrentLine - 1);
+                        PreviousText := GET_LINE;
+                        DOWN;
+                        CurrentText := GET_LINE;
+                        IF CurrentText = PreviousText THEN
+                            DEL_LINE;
+                            EndLine := EndLine - 1;
+                        ELSE
+                            CurrentLine := CurrentLine + 1;
+                        END;
+                    END;
+                    GOTO_LINE(StartLine);
+                    GOTO_COL(1);
+                END;
+            END;
+        END;
+    END;
+END;
+END_MACRO;
+
+$MACRO ComfortToggleLineComment FROM EDIT;
+DEF_INT(BlockState, StartLine, EndLine, CurrentLine, OriginalLine, OriginalCol, Index, FirstTextCol, SawText, AllCommented, Done, RemoveLen);
+DEF_STR(LineText, FirstChar, Prefix, NextChar, NewText);
+
+IF WINDOW_COUNT = 0 THEN
+    MARQUEE_ERROR('Open a text window first.');
+ELSE
+    IF READ_ONLY THEN
+        MARQUEE_ERROR('Window is read-only.');
+    ELSE
+        OriginalLine := C_LINE;
+        OriginalCol := C_COL;
+        BlockState := BLOCK_STAT;
+        IF BlockState = 0 THEN
+            StartLine := C_LINE;
+            EndLine := C_LINE;
+        ELSE
+            StartLine := BLOCK_LINE1;
+            EndLine := BLOCK_LINE2;
+        END;
+
+        SawText := 0;
+        AllCommented := 1;
+        CurrentLine := StartLine;
+        WHILE CurrentLine <= EndLine DO
+            GOTO_LINE(CurrentLine);
+            LineText := GET_LINE;
+            Index := 1;
+            Done := 0;
+            WHILE (Done = 0) AND (Index <= LENGTH(LineText)) DO
+                FirstChar := COPY(LineText, Index, 1);
+                IF (FirstChar = ' ') OR (FirstChar = UTF8(9)) THEN
+                    Index := Index + 1;
+                ELSE
+                    Done := 1;
+                END;
+            END;
+            IF Index <= LENGTH(LineText) THEN
+                SawText := 1;
+                Prefix := COPY(LineText, Index, 2);
+                IF Prefix <> '//' THEN
+                    AllCommented := 0;
+                END;
+            END;
+            CurrentLine := CurrentLine + 1;
+        END;
+        IF SawText = 0 THEN
+            AllCommented := 0;
+        END;
+
+        CurrentLine := StartLine;
+        WHILE CurrentLine <= EndLine DO
+            GOTO_LINE(CurrentLine);
+            LineText := GET_LINE;
+            Index := 1;
+            Done := 0;
+            WHILE (Done = 0) AND (Index <= LENGTH(LineText)) DO
+                FirstChar := COPY(LineText, Index, 1);
+                IF (FirstChar = ' ') OR (FirstChar = UTF8(9)) THEN
+                    Index := Index + 1;
+                ELSE
+                    Done := 1;
+                END;
+            END;
+            IF Index <= LENGTH(LineText) THEN
+                IF AllCommented = 1 THEN
+                    RemoveLen := 2;
+                    NextChar := COPY(LineText, Index + 2, 1);
+                    IF NextChar = ' ' THEN
+                        RemoveLen := 3;
+                    END;
+                    NewText := COPY(LineText, 1, Index - 1) + COPY(LineText, Index + RemoveLen, LENGTH(LineText));
+                ELSE
+                    NewText := COPY(LineText, 1, Index - 1) + '// ' + COPY(LineText, Index, LENGTH(LineText));
+                END;
+                PUT_LINE(NewText);
+            END;
+            CurrentLine := CurrentLine + 1;
+        END;
+
+        GOTO_LINE(OriginalLine);
+        GOTO_COL(OriginalCol);
+    END;
+END;
+END_MACRO;
+
+$MACRO ComfortAlignAssignments FROM EDIT;
+DEF_INT(BlockState, StartLine, EndLine, CurrentLine, EqualPos, MaxLeft, LeftLen, PadLen, TrimDone, Index);
+DEF_STR(LineText, LeftText, RightText, LastChar, FirstChar, Padding, NewText);
+
+IF WINDOW_COUNT = 0 THEN
+    MARQUEE_ERROR('Open a text window first.');
+ELSE
+    IF READ_ONLY THEN
+        MARQUEE_ERROR('Window is read-only.');
+    ELSE
+        BlockState := BLOCK_STAT;
+        IF BlockState = 0 THEN
+            MARQUEE_ERROR('Mark assignment lines first.');
+        ELSE
+            IF BlockState = 2 THEN
+                MARQUEE_ERROR('Column blocks are not supported.');
+            ELSE
+                StartLine := BLOCK_LINE1;
+                EndLine := BLOCK_LINE2;
+                MaxLeft := 0;
+                CurrentLine := StartLine;
+                WHILE CurrentLine <= EndLine DO
+                    GOTO_LINE(CurrentLine);
+                    LineText := GET_LINE;
+                    EqualPos := POS('=', LineText);
+                    IF EqualPos > 0 THEN
+                        LeftText := COPY(LineText, 1, EqualPos - 1);
+                        TrimDone := 0;
+                        WHILE (TrimDone = 0) AND (LENGTH(LeftText) > 0) DO
+                            LastChar := COPY(LeftText, LENGTH(LeftText), 1);
+                            IF (LastChar = ' ') OR (LastChar = UTF8(9)) THEN
+                                LeftText := COPY(LeftText, 1, LENGTH(LeftText) - 1);
+                            ELSE
+                                TrimDone := 1;
+                            END;
+                        END;
+                        LeftLen := LENGTH(LeftText);
+                        IF LeftLen > MaxLeft THEN
+                            MaxLeft := LeftLen;
+                        END;
+                    END;
+                    CurrentLine := CurrentLine + 1;
+                END;
+
+                CurrentLine := StartLine;
+                WHILE CurrentLine <= EndLine DO
+                    GOTO_LINE(CurrentLine);
+                    LineText := GET_LINE;
+                    EqualPos := POS('=', LineText);
+                    IF EqualPos > 0 THEN
+                        LeftText := COPY(LineText, 1, EqualPos - 1);
+                        RightText := COPY(LineText, EqualPos + 1, LENGTH(LineText));
+
+                        TrimDone := 0;
+                        WHILE (TrimDone = 0) AND (LENGTH(LeftText) > 0) DO
+                            LastChar := COPY(LeftText, LENGTH(LeftText), 1);
+                            IF (LastChar = ' ') OR (LastChar = UTF8(9)) THEN
+                                LeftText := COPY(LeftText, 1, LENGTH(LeftText) - 1);
+                            ELSE
+                                TrimDone := 1;
+                            END;
+                        END;
+
+                        TrimDone := 0;
+                        WHILE (TrimDone = 0) AND (LENGTH(RightText) > 0) DO
+                            FirstChar := COPY(RightText, 1, 1);
+                            IF (FirstChar = ' ') OR (FirstChar = UTF8(9)) THEN
+                                RightText := COPY(RightText, 2, LENGTH(RightText) - 1);
+                            ELSE
+                                TrimDone := 1;
+                            END;
+                        END;
+
+                        Padding := '';
+                        PadLen := MaxLeft - LENGTH(LeftText);
+                        Index := 0;
+                        WHILE Index < PadLen DO
+                            Padding := Padding + ' ';
+                            Index := Index + 1;
+                        END;
+                        NewText := LeftText + Padding + ' = ' + RightText;
+                        PUT_LINE(NewText);
+                    END;
+                    CurrentLine := CurrentLine + 1;
+                END;
+
+                GOTO_LINE(StartLine);
+                GOTO_COL(1);
+            END;
+        END;
+    END;
+END;
+END_MACRO;
+
+$MACRO ComfortSmartHome FROM EDIT;
+DEF_INT(Index, FirstTextCol, Done);
+DEF_STR(LineText, FirstChar);
+
+IF WINDOW_COUNT = 0 THEN
+    MARQUEE_ERROR('Open a text window first.');
+ELSE
+    LineText := GET_LINE;
+    Index := 1;
+    Done := 0;
+    WHILE (Done = 0) AND (Index <= LENGTH(LineText)) DO
+        FirstChar := COPY(LineText, Index, 1);
+        IF (FirstChar = ' ') OR (FirstChar = UTF8(9)) THEN
+            Index := Index + 1;
+        ELSE
+            Done := 1;
+        END;
+    END;
+    IF Index > LENGTH(LineText) THEN
+        FirstTextCol := 1;
+    ELSE
+        FirstTextCol := Index;
+    END;
+    IF C_COL = FirstTextCol THEN
+        GOTO_COL(1);
+    ELSE
+        GOTO_COL(FirstTextCol);
+    END;
+END;
+END_MACRO;
+
+$MACRO ComfortSurroundParentheses FROM EDIT;
+DEF_INT(BlockState, StartLine, StartCol);
+DEF_STR(BlockText);
+
+IF WINDOW_COUNT = 0 THEN
+    MARQUEE_ERROR('Open a text window first.');
+ELSE
+    IF READ_ONLY THEN
+        MARQUEE_ERROR('Window is read-only.');
+    ELSE
+        BlockState := BLOCK_STAT;
+        IF BlockState = 0 THEN
+            MARQUEE_ERROR('Mark text first.');
+        ELSE
+            IF BlockState = 2 THEN
+                MARQUEE_ERROR('Column blocks are not supported.');
+            ELSE
+                StartLine := BLOCK_LINE1;
+                StartCol := BLOCK_COL1;
+                BlockText := BLOCK_TEXT;
+                DELETE_BLOCK;
+                TEXT('(' + BlockText + ')');
+                GOTO_LINE(StartLine);
+                GOTO_COL(StartCol + 1);
+            END;
+        END;
+    END;
+END;
+END_MACRO;
+
+$MACRO ComfortSurroundBrackets FROM EDIT;
+DEF_INT(BlockState, StartLine, StartCol);
+DEF_STR(BlockText);
+
+IF WINDOW_COUNT = 0 THEN
+    MARQUEE_ERROR('Open a text window first.');
+ELSE
+    IF READ_ONLY THEN
+        MARQUEE_ERROR('Window is read-only.');
+    ELSE
+        BlockState := BLOCK_STAT;
+        IF BlockState = 0 THEN
+            MARQUEE_ERROR('Mark text first.');
+        ELSE
+            IF BlockState = 2 THEN
+                MARQUEE_ERROR('Column blocks are not supported.');
+            ELSE
+                StartLine := BLOCK_LINE1;
+                StartCol := BLOCK_COL1;
+                BlockText := BLOCK_TEXT;
+                DELETE_BLOCK;
+                TEXT('[' + BlockText + ']');
+                GOTO_LINE(StartLine);
+                GOTO_COL(StartCol + 1);
+            END;
+        END;
+    END;
+END;
+END_MACRO;
+
+$MACRO ComfortSurroundBraces FROM EDIT;
+DEF_INT(BlockState, StartLine, StartCol);
+DEF_STR(BlockText);
+
+IF WINDOW_COUNT = 0 THEN
+    MARQUEE_ERROR('Open a text window first.');
+ELSE
+    IF READ_ONLY THEN
+        MARQUEE_ERROR('Window is read-only.');
+    ELSE
+        BlockState := BLOCK_STAT;
+        IF BlockState = 0 THEN
+            MARQUEE_ERROR('Mark text first.');
+        ELSE
+            IF BlockState = 2 THEN
+                MARQUEE_ERROR('Column blocks are not supported.');
+            ELSE
+                StartLine := BLOCK_LINE1;
+                StartCol := BLOCK_COL1;
+                BlockText := BLOCK_TEXT;
+                DELETE_BLOCK;
+                TEXT('{' + BlockText + '}');
+                GOTO_LINE(StartLine);
+                GOTO_COL(StartCol + 1);
+            END;
+        END;
+    END;
+END;
+END_MACRO;
+
+$MACRO ComfortSurroundQuotes FROM EDIT;
+DEF_INT(BlockState, StartLine, StartCol);
+DEF_STR(BlockText);
+
+IF WINDOW_COUNT = 0 THEN
+    MARQUEE_ERROR('Open a text window first.');
+ELSE
+    IF READ_ONLY THEN
+        MARQUEE_ERROR('Window is read-only.');
+    ELSE
+        BlockState := BLOCK_STAT;
+        IF BlockState = 0 THEN
+            MARQUEE_ERROR('Mark text first.');
+        ELSE
+            IF BlockState = 2 THEN
+                MARQUEE_ERROR('Column blocks are not supported.');
+            ELSE
+                StartLine := BLOCK_LINE1;
+                StartCol := BLOCK_COL1;
+                BlockText := BLOCK_TEXT;
+                DELETE_BLOCK;
+                TEXT('"' + BlockText + '"');
+                GOTO_LINE(StartLine);
+                GOTO_COL(StartCol + 1);
+            END;
+        END;
+    END;
+END;
+END_MACRO;
+
+$MACRO ComfortMoveUp FROM EDIT;
+DEF_INT(BlockState, StartLine, StartCol, OriginalLine, OriginalCol);
+
+IF WINDOW_COUNT = 0 THEN
+    MARQUEE_ERROR('Open a text window first.');
+ELSE
+    IF READ_ONLY THEN
+        MARQUEE_ERROR('Window is read-only.');
+    ELSE
+        BlockState := BLOCK_STAT;
+        IF BlockState = 0 THEN
+            OriginalLine := C_LINE;
+            OriginalCol := C_COL;
+            IF OriginalLine > 1 THEN
+                BLOCK_BEGIN;
+                BLOCK_END;
+                GOTO_LINE(OriginalLine - 1);
+                GOTO_COL(1);
+                MOVE_BLOCK;
+                GOTO_LINE(OriginalLine - 1);
+                GOTO_COL(OriginalCol);
+            END;
+        ELSE
+            StartLine := BLOCK_LINE1;
+            StartCol := BLOCK_COL1;
+            IF StartLine > 1 THEN
+                GOTO_LINE(StartLine - 1);
+                IF BlockState = 1 THEN
+                    GOTO_COL(1);
+                ELSE
+                    GOTO_COL(StartCol);
+                END;
+                MOVE_BLOCK;
+                GOTO_LINE(StartLine - 1);
+                IF BlockState = 1 THEN
+                    GOTO_COL(1);
+                ELSE
+                    GOTO_COL(StartCol);
+                END;
+            END;
+        END;
+    END;
+END;
+END_MACRO;
+
+$MACRO ComfortMoveDown FROM EDIT;
+DEF_INT(BlockState, StartLine, EndLine, StartCol, OriginalLine, OriginalCol);
+
+IF WINDOW_COUNT = 0 THEN
+    MARQUEE_ERROR('Open a text window first.');
+ELSE
+    IF READ_ONLY THEN
+        MARQUEE_ERROR('Window is read-only.');
+    ELSE
+        BlockState := BLOCK_STAT;
+        IF BlockState = 0 THEN
+            OriginalLine := C_LINE;
+            OriginalCol := C_COL;
+            DOWN;
+            IF C_LINE <> OriginalLine THEN
+                BLOCK_BEGIN;
+                BLOCK_END;
+                GOTO_LINE(OriginalLine);
+                GOTO_COL(1);
+                MOVE_BLOCK;
+                GOTO_LINE(OriginalLine + 1);
+                GOTO_COL(OriginalCol);
+            END;
+        ELSE
+            StartLine := BLOCK_LINE1;
+            EndLine := BLOCK_LINE2;
+            StartCol := BLOCK_COL1;
+            GOTO_LINE(EndLine + 1);
+            IF C_LINE <> EndLine THEN
+                IF BlockState = 1 THEN
+                    BLOCK_BEGIN;
+                    BLOCK_END;
+                    GOTO_LINE(StartLine);
+                    GOTO_COL(1);
+                    MOVE_BLOCK;
+                    GOTO_LINE(StartLine + 1);
+                    GOTO_COL(1);
+                ELSE
+                    GOTO_COL(StartCol);
+                    MOVE_BLOCK;
+                    GOTO_LINE(StartLine + 1);
+                    GOTO_COL(StartCol);
+                END;
+            END;
+        END;
+END;
+END;
+END_MACRO;
+
+$MACRO ComfortDeleteLine FROM EDIT;
+DEF_INT(BlockState, OriginalLine);
+
+IF WINDOW_COUNT = 0 THEN
+    MARQUEE_ERROR('Open a text window first.');
+ELSE
+    IF READ_ONLY THEN
+        MARQUEE_ERROR('Window is read-only.');
+    ELSE
+        BlockState := BLOCK_STAT;
+        IF BlockState = 0 THEN
+            OriginalLine := C_LINE;
+            DEL_LINE;
+            GOTO_LINE(OriginalLine);
+        ELSE
+            DELETE_BLOCK;
+        END;
+    END;
+END;
+END_MACRO;
+
+$MACRO ComfortJoinLines FROM EDIT;
+DEF_INT(BlockState, StartLine, EndLine, JoinLine, Remaining, TrimDone, OriginalLine, OriginalCol);
+DEF_STR(LineText, NextLine, JoinedText, LastChar, FirstChar);
+
+IF WINDOW_COUNT = 0 THEN
+    MARQUEE_ERROR('Open a text window first.');
+ELSE
+    IF READ_ONLY THEN
+        MARQUEE_ERROR('Window is read-only.');
+    ELSE
+        BlockState := BLOCK_STAT;
+        IF BlockState = 0 THEN
+            OriginalLine := C_LINE;
+            OriginalCol := C_COL;
+            JoinLine := OriginalLine;
+            Remaining := 1;
+        ELSE
+            JoinLine := BLOCK_LINE1;
+            Remaining := BLOCK_LINE2 - BLOCK_LINE1;
+        END;
+
+        WHILE Remaining > 0 DO
+            GOTO_LINE(JoinLine);
+            LineText := GET_LINE;
+            DOWN;
+            IF C_LINE = JoinLine THEN
+                Remaining := 0;
+            ELSE
+                NextLine := GET_LINE;
+
+                TrimDone := 0;
+                WHILE (TrimDone = 0) AND (LENGTH(LineText) > 0) DO
+                    LastChar := COPY(LineText, LENGTH(LineText), 1);
+                    IF (LastChar = ' ') OR (LastChar = UTF8(9)) THEN
+                        LineText := COPY(LineText, 1, LENGTH(LineText) - 1);
+                    ELSE
+                        TrimDone := 1;
+                    END;
+                END;
+
+                TrimDone := 0;
+                WHILE (TrimDone = 0) AND (LENGTH(NextLine) > 0) DO
+                    FirstChar := COPY(NextLine, 1, 1);
+                    IF (FirstChar = ' ') OR (FirstChar = UTF8(9)) THEN
+                        NextLine := COPY(NextLine, 2, LENGTH(NextLine) - 1);
+                    ELSE
+                        TrimDone := 1;
+                    END;
+                END;
+
+                IF (LENGTH(LineText) > 0) AND (LENGTH(NextLine) > 0) THEN
+                    JoinedText := LineText + ' ' + NextLine;
+                ELSE
+                    JoinedText := LineText + NextLine;
+                END;
+
+                GOTO_LINE(JoinLine);
+                PUT_LINE(JoinedText);
+                GOTO_LINE(JoinLine + 1);
+                DEL_LINE;
+                Remaining := Remaining - 1;
+            END;
+        END;
+
+        IF BlockState = 0 THEN
+            GOTO_LINE(OriginalLine);
+            GOTO_COL(OriginalCol);
+        ELSE
+            GOTO_LINE(JoinLine);
+            GOTO_COL(1);
+        END;
+    END;
+END;
+END_MACRO;
+
+$MACRO ComfortTrimTrailingWhitespace FROM EDIT;
+DEF_INT(BlockState, StartLine, EndLine, CurrentLine, TrimDone, OriginalLine, OriginalCol);
+DEF_STR(LineText, LastChar);
+
+IF WINDOW_COUNT = 0 THEN
+    MARQUEE_ERROR('Open a text window first.');
+ELSE
+    IF READ_ONLY THEN
+        MARQUEE_ERROR('Window is read-only.');
+    ELSE
+        BlockState := BLOCK_STAT;
+        IF BlockState = 0 THEN
+            StartLine := C_LINE;
+            EndLine := C_LINE;
+            OriginalLine := C_LINE;
+            OriginalCol := C_COL;
+        ELSE
+            StartLine := BLOCK_LINE1;
+            EndLine := BLOCK_LINE2;
+        END;
+
+        CurrentLine := StartLine;
+        WHILE CurrentLine <= EndLine DO
+            GOTO_LINE(CurrentLine);
+            LineText := GET_LINE;
+            TrimDone := 0;
+            WHILE (TrimDone = 0) AND (LENGTH(LineText) > 0) DO
+                LastChar := COPY(LineText, LENGTH(LineText), 1);
+                IF (LastChar = ' ') OR (LastChar = UTF8(9)) THEN
+                    LineText := COPY(LineText, 1, LENGTH(LineText) - 1);
+                ELSE
+                    TrimDone := 1;
+                END;
+            END;
+            PUT_LINE(LineText);
+            CurrentLine := CurrentLine + 1;
+        END;
+
+        IF BlockState = 0 THEN
+            GOTO_LINE(OriginalLine);
+            GOTO_COL(OriginalCol);
+        ELSE
+            GOTO_LINE(StartLine);
+            GOTO_COL(1);
+        END;
+    END;
+END;
+END_MACRO;
+
+$MACRO ComfortTrimTrailingBlankLines FROM EDIT;
+DEF_INT(Done, TrimDone, OriginalLine, OriginalCol);
+DEF_STR(LineText, LastChar);
+
+IF WINDOW_COUNT = 0 THEN
+    MARQUEE_ERROR('Open a text window first.');
+ELSE
+    IF READ_ONLY THEN
+        MARQUEE_ERROR('Window is read-only.');
+    ELSE
+        OriginalLine := C_LINE;
+        OriginalCol := C_COL;
+        Done := 0;
+
+        WHILE Done = 0 DO
+            EOF;
+            LineText := GET_LINE;
+            TrimDone := 0;
+            WHILE (TrimDone = 0) AND (LENGTH(LineText) > 0) DO
+                LastChar := COPY(LineText, LENGTH(LineText), 1);
+                IF (LastChar = ' ') OR (LastChar = UTF8(9)) THEN
+                    LineText := COPY(LineText, 1, LENGTH(LineText) - 1);
+                ELSE
+                    TrimDone := 1;
+                END;
+            END;
+
+            IF (LineText = '') AND (C_LINE > 1) THEN
+                DEL_LINE;
+            ELSE
+                Done := 1;
+            END;
+        END;
+
+        GOTO_LINE(OriginalLine);
+        GOTO_COL(OriginalCol);
+    END;
+END;
+END_MACRO;
+
+$MACRO ComfortSortSelectedLines FROM EDIT;
+DEF_INT(BlockState, StartLine, EndLine, CurrentLine, Swapped, LeftLen, RightLen, CompareIndex, LeftCode, RightCode, CompareDone, ShouldSwap);
+DEF_STR(LeftText, RightText, LeftChar, RightChar);
+
+IF WINDOW_COUNT = 0 THEN
+    MARQUEE_ERROR('Open a text window first.');
+ELSE
+    IF READ_ONLY THEN
+        MARQUEE_ERROR('Window is read-only.');
+    ELSE
+        BlockState := BLOCK_STAT;
+        IF BlockState = 0 THEN
+            MARQUEE_ERROR('Mark multiple lines first.');
+        ELSE
+            IF BlockState = 2 THEN
+                MARQUEE_ERROR('Use the built-in sort for column blocks.');
+            ELSE
+                StartLine := BLOCK_LINE1;
+                EndLine := BLOCK_LINE2;
+                IF StartLine >= EndLine THEN
+                    MARQUEE_ERROR('Mark multiple lines first.');
+                ELSE
+                    Swapped := 1;
+                    WHILE Swapped = 1 DO
+                        Swapped := 0;
+                        CurrentLine := StartLine;
+                        WHILE CurrentLine < EndLine DO
+                            GOTO_LINE(CurrentLine);
+                            LeftText := GET_LINE;
+                            DOWN;
+                            RightText := GET_LINE;
+
+                            LeftLen := LENGTH(LeftText);
+                            RightLen := LENGTH(RightText);
+                            CompareIndex := 1;
+                            CompareDone := 0;
+                            ShouldSwap := 0;
+
+                            WHILE (CompareDone = 0) AND (CompareIndex <= LeftLen) AND (CompareIndex <= RightLen) DO
+                                LeftChar := COPY(LeftText, CompareIndex, 1);
+                                RightChar := COPY(RightText, CompareIndex, 1);
+                                LeftCode := ASCII(LeftChar);
+                                RightCode := ASCII(RightChar);
+                                IF LeftCode > RightCode THEN
+                                    ShouldSwap := 1;
+                                    CompareDone := 1;
+                                ELSE
+                                    IF LeftCode < RightCode THEN
+                                        CompareDone := 1;
+                                    ELSE
+                                        CompareIndex := CompareIndex + 1;
+                                    END;
+                                END;
+                            END;
+
+                            IF (CompareDone = 0) AND (LeftLen > RightLen) THEN
+                                ShouldSwap := 1;
+                            END;
+
+                            IF ShouldSwap = 1 THEN
+                                PUT_LINE(LeftText);
+                                GOTO_LINE(CurrentLine);
+                                PUT_LINE(RightText);
+                                Swapped := 1;
+                            END;
+                            CurrentLine := CurrentLine + 1;
+                        END;
+                    END;
+                    GOTO_LINE(StartLine);
+                    GOTO_COL(1);
+                END;
+            END;
+        END;
+    END;
+END;
+END_MACRO;

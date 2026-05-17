@@ -473,27 +473,6 @@ static void lexer_next(Lexer *lex, Token *tok) {
 		}
 	}
 
-	if (*lex->p == '<') {
-		const char *q = lex->p + 1;
-		while (*q != '\0' && *q != '>' && *q != '\n')
-			++q;
-		if (*q == '>') {
-			len = (size_t)(q - lex->p + 1);
-			text = (char *)malloc(len + 1);
-			if (text == NULL) {
-				tok->kind = TOK_ERROR;
-				tok->text = xstrdup("Out of memory.");
-				return;
-			}
-			memcpy(text, lex->p, len);
-			text[len] = '\0';
-			tok->kind = TOK_KEYSPEC;
-			tok->text = text;
-			lex->p = q + 1;
-			return;
-		}
-	}
-
 	if (*lex->p == '\'') {
 		char buffer[MAX_STRING_LITERAL + 1];
 		size_t out = 0;
@@ -685,6 +664,26 @@ static void lexer_next(Lexer *lex, Token *tok) {
 		tok->text = xstrdup(">=");
 		lex->p += 2;
 		return;
+	}
+	if (*lex->p == '<' && isalpha((unsigned char)lex->p[1])) {
+		const char *q = lex->p + 1;
+		while (*q != '\0' && *q != '>' && *q != '\n')
+			++q;
+		if (*q == '>') {
+			len = (size_t)(q - lex->p + 1);
+			text = (char *)malloc(len + 1);
+			if (text == NULL) {
+				tok->kind = TOK_ERROR;
+				tok->text = xstrdup("Out of memory.");
+				return;
+			}
+			memcpy(text, lex->p, len);
+			text[len] = '\0';
+			tok->kind = TOK_KEYSPEC;
+			tok->text = text;
+			lex->p = q + 1;
+			return;
+		}
 	}
 
 	switch (*lex->p) {
@@ -2061,6 +2060,20 @@ static const ProcSignature kProcSignatures[] = {
     PROC_SIG1("DELAY", CALL_ARG_INT, "DELAY"),
     PROC_SIG0("BEEP", "BEEP"),
     PROC_SIG2("MRSETUP", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, "MRSETUP"),
+    PROC_SIG0("KEYMAP_RESET", "KEYMAP_RESET"),
+    PROC_SIG1("KEYMAP_VERSION", CALL_ARG_STRINGLIKE, "KEYMAP_VERSION"),
+    PROC_SIG1("KEYMAP_PROFILE", CALL_ARG_STRINGLIKE, "KEYMAP_PROFILE"),
+    PROC_SIG1("KEYMAP_BIND", CALL_ARG_STRINGLIKE, "KEYMAP_BIND"),
+    PROC_SIG1("ACTIVE_KEYMAP_PROFILE", CALL_ARG_STRINGLIKE, "ACTIVE_KEYMAP_PROFILE"),
+    PROC_SIG0("THEME_RESET", "THEME_RESET"),
+    PROC_SIG1("THEME_VERSION", CALL_ARG_STRINGLIKE, "THEME_VERSION"),
+    PROC_SIG1("THEME_NAME", CALL_ARG_STRINGLIKE, "THEME_NAME"),
+    PROC_SIG1("WINDOWCOLORS", CALL_ARG_STRINGLIKE, "WINDOWCOLORS"),
+    PROC_SIG1("MENUDIALOGCOLORS", CALL_ARG_STRINGLIKE, "MENUDIALOGCOLORS"),
+    PROC_SIG1("HELPCOLORS", CALL_ARG_STRINGLIKE, "HELPCOLORS"),
+    PROC_SIG1("OTHERCOLORS", CALL_ARG_STRINGLIKE, "OTHERCOLORS"),
+    PROC_SIG1("MINIMAPCOLORS", CALL_ARG_STRINGLIKE, "MINIMAPCOLORS"),
+    PROC_SIG1("CODECOLORS", CALL_ARG_STRINGLIKE, "CODECOLORS"),
     PROC_SIG4("MRFEPROFILE", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, "MRFEPROFILE"),
     PROC_SIG1("LOAD_MACRO_FILE", CALL_ARG_STRINGLIKE, "LOAD_MACRO_FILE"),
     PROC_SIG1("UNLOAD_MACRO", CALL_ARG_STRINGLIKE, "UNLOAD_MACRO"),

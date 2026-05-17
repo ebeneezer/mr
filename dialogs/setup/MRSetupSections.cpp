@@ -1774,12 +1774,17 @@ void runColorSetupDialogFlow() {
 			case cmMrColorSaveTheme: {
 				std::string themeUri;
 				std::string activeThemeUri = normalizeConfiguredPathInput(configuredColorThemeFilePath());
+				std::string activeThemeDisplayName = configuredColorThemeDisplayName();
 				bool overwriteActiveTheme = false;
 
 				if (!chooseThemeFileForSave(MRDialogHistoryScope::SetupThemeSave, themeUri)) break;
 				if (!confirmOverwriteForPath("Overwrite", "Theme file exists. Overwrite?", themeUri)) break;
 				overwriteActiveTheme = normalizeConfiguredPathInput(themeUri) == activeThemeUri;
 				if (!applyWorkingColorPaletteToConfigured(workingPalette, errorText)) {
+					postSetupFlowError("Color Setup / Save Theme", errorText);
+					break;
+				}
+				if (!setConfiguredColorThemeDisplayName(activeThemeDisplayName, &errorText)) {
 					postSetupFlowError("Color Setup / Save Theme", errorText);
 					break;
 				}
@@ -2073,9 +2078,14 @@ void runUserInterfaceSettingsDialogFlow() {
 
 bool mrSaveColorThemeFromWorkingPaletteForTesting(const TPalette &workingPalette, const std::string &themeUri, std::string *errorMessage) {
 	std::string errorText;
+	std::string activeThemeDisplayName = configuredColorThemeDisplayName();
 	MRSetupPaths paths = resolveSetupPathDefaults();
 
 	if (!applyWorkingColorPaletteToConfigured(workingPalette, errorText)) {
+		if (errorMessage != nullptr) *errorMessage = errorText;
+		return false;
+	}
+	if (!setConfiguredColorThemeDisplayName(activeThemeDisplayName, &errorText)) {
 		if (errorMessage != nullptr) *errorMessage = errorText;
 		return false;
 	}

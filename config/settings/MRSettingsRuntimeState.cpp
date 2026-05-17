@@ -202,6 +202,11 @@ std::string &configuredColorThemeFile() {
 	return value;
 }
 
+std::string &configuredColorThemeDisplayNameValue() {
+	static std::string value;
+	return value;
+}
+
 MREditSetupSettings &configuredEditSettings() {
 	static MREditSetupSettings value;
 	return value;
@@ -228,7 +233,7 @@ std::string &configuredKeymapFileValue() {
 }
 
 std::string &configuredActiveKeymapProfileValue() {
-	static std::string value = "DEFAULT";
+	static std::string value;
 	return value;
 }
 
@@ -323,10 +328,14 @@ std::string normalizeAutoexecMacroEntry(std::string_view value) {
 
 bool validateAutoexecMacroEntry(const std::string &value, std::string *errorMessage) {
 	const std::string normalized = normalizeDialogPath(normalizeAutoexecMacroEntry(value).c_str());
+	std::filesystem::path relativePath;
 
 	if (normalized.empty()) return setError(errorMessage, "Autoexec macro name must not be empty.");
-	if (hasDirectorySeparator(normalized) || normalized.find(':') != std::string::npos)
-		return setError(errorMessage, "Autoexec macro must be a file name under MACROPATH.");
+	if (normalized.find(':') != std::string::npos) return setError(errorMessage, "Autoexec macro must be a relative path under MACROPATH.");
+	relativePath = std::filesystem::path(normalized);
+	if (relativePath.is_absolute()) return setError(errorMessage, "Autoexec macro must be a relative path under MACROPATH.");
+	for (const std::filesystem::path &part : relativePath)
+		if (part == "..") return setError(errorMessage, "Autoexec macro must stay under MACROPATH.");
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }

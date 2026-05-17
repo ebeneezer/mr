@@ -5,19 +5,6 @@
 
 static const char *const kAboutQuotes[] = {
     "\"I live again.\" Caleb (Blood)",
-    "\"It is never enough.\" Frank Cotton (Hellraiser)",
-    "\"C makes it easy to shoot yourself in the foot; C++ makes it harder, but when you do it blows your whole leg off.“ Bjarne Stroustrup",
-    "\"Talk is cheap. Show me the code.“ Linus Torvalds",
-    "\"My main conclusion after spending ten years of my life working on the TeX project is that software is hard. It's harder than anything else I've ever had to do.“ Donald Knuth",
-    "\"Coding makes me horny.\" Michael 'iDoc' Raus",
-    "\"Software and cathedrals are much the same – first we build them, then we pray.\" Sam Redwine",
-    "\"There are only two hard things in Computer Science: cache invalidation and naming things.\" Phil Karlton",
-    "\"Theory is when you know everything but nothing works. Practice is when everything works but no one knows why. In programming, theory and practice are combined: nothing works and no one knows why.\" Anonymous",
-    "\"Everyone knows that debugging is twice as hard as writing a program in the first place. So if you're as clever as you can be when you write it, how will you ever debug it?\" Brian W. Kernighan",
-    "\"Software is getting slower more rapidly than hardware becomes faster.\" Niklaus Wirth",
-    "\"Code never lies; comments sometimes do.\" Ron Jeffries",
-    "\"Software is a gas. It expands to fit the container it's in.\" Nathan Myhrvold",
-    "\"The three chief virtues of a programmer are: Laziness, Impatience and Hubris.\" Larry Wall",
 };
 
 constexpr std::size_t kAboutQuoteCount = sizeof(kAboutQuotes) / sizeof(kAboutQuotes[0]);

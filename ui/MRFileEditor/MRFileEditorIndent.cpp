@@ -1317,7 +1317,7 @@ bool MRFileEditor::syncAfterCommittedDocument(std::size_t cursorPos, std::size_t
 	if (changeSet != nullptr && changeSet->changed) {
 		mFoldState.clearClosedFolds();
 	}
-	invalidateFoldCache(changeSet != nullptr && changeSet->changed && useApproximateLargeFileMetrics());
+	invalidateFoldCache(changeSet != nullptr && changeSet->changed);
 	if (!miniMapEnabled) {
 		const std::uint64_t cancelledMiniMapTaskId = mMiniMapState.renderer().pendingWarmupTaskId();
 		mMiniMapState.clearLastEditAt();

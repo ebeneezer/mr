@@ -149,8 +149,6 @@ void addSerializedHistoryEntry(std::vector<std::string> &entries, const std::str
 	trimSnapshotHistoryToLimit(entries, limit);
 }
 
-static const char *const kThemeSettingsKey = "COLORTHEMEURI";
-static const char *const kKeymapSettingsKey = "KEYMAPURI";
 static const char *const kWindowColorThemeProfileKey = "WINDOW_COLORTHEME_URI";
 static const char *const kSearchTextTypeLiteral = "LITERAL";
 static const char *const kSearchTextTypePcre = "PCRE";
@@ -259,17 +257,6 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {kDialogPathHistoryKey, MRSettingsKeyClass::Global, false},
     {kDialogFileHistoryKey, MRSettingsKeyClass::Global, false},
     {"DEFAULT_PROFILE_DESCRIPTION", MRSettingsKeyClass::Global, true},
-    {kKeymapSettingsKey, MRSettingsKeyClass::Global, true},
-    {"ACTIVE_KEYMAP_PROFILE", MRSettingsKeyClass::Global, true},
-    {"KEYMAP_PROFILE", MRSettingsKeyClass::Global, false},
-    {"KEYMAP_BIND", MRSettingsKeyClass::Global, false},
-    {kThemeSettingsKey, MRSettingsKeyClass::Global, true},
-    {"WINDOWCOLORS", MRSettingsKeyClass::ColorInline, false},
-    {"MENUDIALOGCOLORS", MRSettingsKeyClass::ColorInline, false},
-    {"HELPCOLORS", MRSettingsKeyClass::ColorInline, false},
-    {"OTHERCOLORS", MRSettingsKeyClass::ColorInline, false},
-    {"MINIMAPCOLORS", MRSettingsKeyClass::ColorInline, false},
-    {"CODECOLORS", MRSettingsKeyClass::ColorInline, false},
 };
 
 bool parseBooleanLiteral(const std::string &value, bool &outValue, std::string *errorMessage) {
@@ -544,10 +531,11 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), errorMessage)) return false;
 	configuredColorSettings() = resolveColorSetupDefaults();
 	configuredColorSettingsInitialized() = true;
+	configuredColorThemeDisplayNameValue().clear();
 	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(), errorMessage)) return false;
 	if (!setConfiguredKeymapProfiles(std::vector<MRKeymapProfile>(), errorMessage)) return false;
 	if (!setConfiguredKeymapFilePath("", errorMessage)) return false;
-	if (!setConfiguredActiveKeymapProfile("DEFAULT", errorMessage)) return false;
+	if (!setConfiguredActiveKeymapProfile("", errorMessage)) return false;
 	if (!setConfiguredColorThemeFilePath(defaultColorThemeFilePath(), errorMessage)) return false;
 	configuredPathHistoryLimit() = kHistoryLimitDefault;
 	configuredFileHistoryLimit() = kHistoryLimitDefault;
@@ -1023,18 +1011,12 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				return true;
 			}
 			if (upper == "DEFAULT_PROFILE_DESCRIPTION") return setConfiguredDefaultProfileDescription(value, errorMessage);
-			if (upper == kKeymapSettingsKey) return setConfiguredKeymapFilePath(value, errorMessage);
-			if (upper == "ACTIVE_KEYMAP_PROFILE" || upper == "KEYMAP_PROFILE" || upper == "KEYMAP_BIND") {
-				if (errorMessage != nullptr) errorMessage->clear();
-				return true;
-			}
-			if (upper == kThemeSettingsKey) return setConfiguredColorThemeFilePath(value, errorMessage);
 			break;
 		}
 		case MRSettingsKeyClass::Edit:
 			return applyConfiguredEditSetupValue(key, value, errorMessage);
 		case MRSettingsKeyClass::ColorInline:
-			return applyConfiguredColorSetupValue(key, value, errorMessage);
+			return setError(errorMessage, "Inline color settings are not supported in settings.mrmac.");
 	}
 	return setError(errorMessage, "Unsupported MRSETUP key.");
 }
@@ -1479,38 +1461,12 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
 			}
-			if (upper == kKeymapSettingsKey) {
-				const std::string normalized = normalizeConfiguredPathInput(value);
-				struct stat st;
-
-				if (normalized.empty()) {
-					snapshot.keymapFilePath.clear();
-					if (errorMessage != nullptr) errorMessage->clear();
-					return true;
-				}
-				if (::stat(normalized.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) return setError(errorMessage, "Keymap URI must include a filename.");
-				snapshot.keymapFilePath = makeAbsolutePath(normalized);
-				if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::KeymapProfileLoad, snapshot.keymapFilePath, errorMessage)) return false;
-				return setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::KeymapProfileSave, snapshot.keymapFilePath, errorMessage);
-			}
-			if (upper == "ACTIVE_KEYMAP_PROFILE" || upper == "KEYMAP_PROFILE" || upper == "KEYMAP_BIND") {
-				if (errorMessage != nullptr) errorMessage->clear();
-				return true;
-			}
-			if (upper == kThemeSettingsKey) {
-				const std::string normalized = normalizeConfiguredPathInput(value);
-
-				if (!validateColorThemeFilePath(value, errorMessage)) return false;
-				snapshot.colorThemeFilePath = makeAbsolutePath(normalized);
-				if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::SetupThemeLoad, snapshot.colorThemeFilePath, errorMessage)) return false;
-				return setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::SetupThemeSave, snapshot.colorThemeFilePath, errorMessage);
-			}
 			break;
 		}
 		case MRSettingsKeyClass::Edit:
 			return applyEditSetupValueInternal(snapshot.editSettings, key, value, errorMessage);
 		case MRSettingsKeyClass::ColorInline:
-			return applyColorSetupValueInternal(snapshot.colorSettings, key, value, errorMessage);
+			return setError(errorMessage, "Inline color settings are not supported in settings.mrmac.");
 	}
 	return setError(errorMessage, "Unsupported MRSETUP key.");
 }
@@ -1562,27 +1518,4 @@ bool applySettingsSnapshotEditExtensionProfileDirective(MRSettingsSnapshot &snap
 		return setSnapshotEditProfiles(snapshot, profiles, errorMessage);
 	}
 	return setError(errorMessage, "MRFEPROFILE supports operations DEFINE, EXT and SET.");
-}
-
-bool loadColorThemeFileIntoSettingsSnapshot(MRSettingsSnapshot &snapshot, bool *upgradeRequired, std::string *errorMessage) {
-	std::string normalized = normalizeConfiguredPathInput(snapshot.colorThemeFilePath);
-	std::string source;
-	std::map<std::string, std::string> assignments;
-	static const char *const order[] = {"WINDOWCOLORS", "MENUDIALOGCOLORS", "HELPCOLORS", "OTHERCOLORS", "MINIMAPCOLORS", "CODECOLORS"};
-	bool localUpgradeRequired = false;
-
-	if (!validateColorThemeFilePath(normalized, errorMessage)) return false;
-	if (!ensureColorThemeFileExists(normalized, errorMessage)) return false;
-	if (!readTextFile(normalized, source)) return setError(errorMessage, "Unable to read color theme file: " + normalized);
-	if (!parseThemeSetupAssignments(source, assignments, &localUpgradeRequired, errorMessage)) return false;
-	for (const char *key : order) {
-		std::string applyError;
-		if (!applyColorSetupValueInternal(snapshot.colorSettings, key, assignments[key], &applyError)) return setError(errorMessage, "Theme apply failed for " + std::string(key) + ": " + applyError);
-	}
-	snapshot.colorThemeFilePath = makeAbsolutePath(normalized);
-	if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::SetupThemeLoad, snapshot.colorThemeFilePath, errorMessage)) return false;
-	if (!setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::SetupThemeSave, snapshot.colorThemeFilePath, errorMessage)) return false;
-	if (upgradeRequired != nullptr) *upgradeRequired = localUpgradeRequired;
-	if (errorMessage != nullptr) errorMessage->clear();
-	return true;
 }

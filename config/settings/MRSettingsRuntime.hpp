@@ -441,7 +441,7 @@ void rememberLoadDialogPath(const char *path);
 [[nodiscard]] MRColorSetupSettings configuredColorSetupSettings();
 bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::string *errorMessage = nullptr);
 bool applyConfiguredEditSetupValue(const std::string &key, const std::string &value, std::string *errorMessage = nullptr);
-bool applyConfiguredColorSetupValue(const std::string &key, const std::string &value, std::string *errorMessage = nullptr);
+bool applyConfiguredColorSetupValue(const std::string &key, const std::string &value, std::string *errorMessage = nullptr, bool clearThemeDisplayName = true);
 bool configuredColorSlotOverride(unsigned char paletteIndex, unsigned char &value);
 const char *colorSetupGroupTitle(MRColorSetupGroup group);
 const char *colorSetupGroupKey(MRColorSetupGroup group);
@@ -450,6 +450,7 @@ bool setConfiguredColorSetupGroupValues(MRColorSetupGroup group, const unsigned 
 void configuredColorSetupGroupValues(MRColorSetupGroup group, unsigned char *values, std::size_t count);
 [[nodiscard]] std::string configuredColorThemeFilePath();
 [[nodiscard]] std::string configuredColorThemeDisplayName();
+bool setConfiguredColorThemeDisplayName(const std::string &name, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string defaultColorThemeFilePath();
 bool validateColorThemeFilePath(const std::string &path, std::string *errorMessage = nullptr);
 bool setConfiguredColorThemeFilePath(const std::string &path, std::string *errorMessage = nullptr);

@@ -29,6 +29,7 @@
 #include "../config/settings/MRSettingsStorage.hpp"
 #include "../keymap/MRKeymapActionCatalog.hpp"
 #include "../keymap/MRKeymapProfile.hpp"
+#include "../mrmac/MRMacroRunner.hpp"
 #include "../mrmac/mrmac.h"
 #include "../ui/MRColumnListView.hpp"
 #include "../ui/MRFrame.hpp"
@@ -41,6 +42,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <dirent.h>
+#include <filesystem>
 #include <map>
 #include <regex>
 #include <set>
@@ -160,28 +162,12 @@ struct KeymapManagerDraft {
 	auto operator==(const KeymapManagerDraft &) const noexcept -> bool = default;
 };
 
-bool isDefaultProfileName(std::string_view name) {
-	return upperAscii(std::string(name)) == "DEFAULT";
-}
-
 std::string summarizeDraftForLog(const KeymapManagerDraft &draft) {
 	std::string text = "Keymap dialog state: active='" + draft.activeProfileName + "' profiles=" + std::to_string(draft.profiles.size());
 
 	for (const MRKeymapProfile &profile : draft.profiles)
 		text += " [" + profile.name + ":" + std::to_string(profile.bindings.size()) + "]";
 	return text;
-}
-
-std::string escapeMrmacSingleQuotedLiteral(const std::string &value) {
-	std::string out;
-
-	out.reserve(value.size() + 8);
-	for (const char ch : value) {
-		if (ch == '\'') out += "''";
-		else
-			out.push_back(ch);
-	}
-	return out;
 }
 
 std::string unescapeMrmacSingleQuotedLiteral(const std::string &value) {
@@ -199,7 +185,7 @@ std::string unescapeMrmacSingleQuotedLiteral(const std::string &value) {
 }
 
 bool validateKeymapFileVersion(const std::string &source, bool &upgradeRequired, std::string &errorText) {
-	static const std::regex assignmentPattern("MRSETUP\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
+	static const std::regex assignmentPattern("(?:MRSETUP\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)|([A-Z_][A-Z0-9_]*)\\s*\\(\\s*'((?:''|[^'])*)'\\s*\\))", std::regex::icase);
 	const std::uint64_t currentVersion = mrCurrentPersistenceVersion();
 	std::smatch match;
 	std::string remaining = source;
@@ -208,8 +194,9 @@ bool validateKeymapFileVersion(const std::string &source, bool &upgradeRequired,
 	upgradeRequired = false;
 	errorText.clear();
 	while (std::regex_search(remaining, match, assignmentPattern)) {
-		const std::string key = upperAscii(trimAscii(unescapeMrmacSingleQuotedLiteral(match[1].str())));
-		const std::string value = trimAscii(unescapeMrmacSingleQuotedLiteral(match[2].str()));
+		const bool mrsetupRecord = match[1].matched;
+		const std::string key = upperAscii(trimAscii(unescapeMrmacSingleQuotedLiteral(mrsetupRecord ? match[1].str() : match[3].str())));
+		const std::string value = trimAscii(unescapeMrmacSingleQuotedLiteral(mrsetupRecord ? match[2].str() : match[4].str()));
 
 		if (key == mrKeymapVersionSetupKey()) {
 			std::uint64_t parsedVersion = 0;
@@ -232,11 +219,7 @@ bool validateKeymapFileVersion(const std::string &source, bool &upgradeRequired,
 }
 
 std::string buildSerializedKeymapFileSource(const KeymapManagerDraft &draft) {
-	std::string source;
-
-	source += "MRSETUP('" + std::string(mrKeymapVersionSetupKey()) + "', '" + escapeMrmacSingleQuotedLiteral(mrCurrentPersistenceVersionString()) + "');\n";
-	source += serializeKeymapProfilesToSettingsSource(draft.profiles, draft.activeProfileName);
-	return source;
+	return buildExecutableKeymapMacroSource(draft.profiles, draft.activeProfileName);
 }
 
 std::string stripTargetPrefix(std::string_view target) {
@@ -259,16 +242,6 @@ std::string compactActionDescription(std::string_view text) {
 		if (pos != std::string::npos) result.replace(pos, needle.size(), replacement);
 	}
 	return result;
-}
-
-bool dialogOwnsVisualFocus(const TView *view) noexcept {
-	const TView *dialog = view;
-	const TView *top = view != nullptr ? static_cast<const TView *>(const_cast<TView *>(view)->TopView()) : nullptr;
-
-	while (dialog != nullptr && dynamic_cast<const TDialog *>(dialog) == nullptr)
-		dialog = dialog->owner;
-	if (top != nullptr && dialog != nullptr && (top->state & sfModal) != 0) return top == dialog;
-	return dialog != nullptr ? (dialog->state & sfFocused) != 0 : false;
 }
 
 class TInlineGlyphButton : public TView {
@@ -332,7 +305,7 @@ class TActiveProfileField : public TView {
 
 	void draw() override {
 		TDrawBuffer buffer;
-		TColorAttr color = dialogOwnsVisualFocus(this) ? getColor(2) : getColor(1);
+		TColorAttr color = getColor(1);
 		std::string shown = "active: " + mText;
 		int start = 0;
 
@@ -407,23 +380,10 @@ class TNotifyingInputLine : public TInputLine {
 	ushort mChangeCommand = 0;
 };
 
-void ensureDefaultProfile(KeymapManagerDraft &draft) {
-	bool hasDefault = false;
-
-	for (MRKeymapProfile &profile : draft.profiles)
-		if (isDefaultProfileName(profile.name)) {
-			profile.name = "DEFAULT";
-			hasDefault = true;
-			break;
-		}
-	if (!hasDefault) draft.profiles.insert(draft.profiles.begin(), MRKeymapProfile{"DEFAULT", "build-in defaults", {}});
-	if (draft.activeProfileName.empty()) draft.activeProfileName = "DEFAULT";
-}
-
 std::size_t activeProfileIndex(const KeymapManagerDraft &draft) {
 	for (std::size_t i = 0; i < draft.profiles.size(); ++i)
 		if (draft.profiles[i].name == draft.activeProfileName) return i;
-	return draft.profiles.empty() ? kNoIndex : 0;
+	return kNoIndex;
 }
 
 KeymapManagerDraft draftFromCanonicalizedResult(const MRKeymapCanonicalizationResult &result) {
@@ -431,8 +391,6 @@ KeymapManagerDraft draftFromCanonicalizedResult(const MRKeymapCanonicalizationRe
 
 	draft.profiles = result.profiles;
 	draft.activeProfileName = result.activeProfileName;
-	ensureDefaultProfile(draft);
-	if (draft.activeProfileName.empty() || activeProfileIndex(draft) == kNoIndex) draft.activeProfileName = "DEFAULT";
 	return draft;
 }
 
@@ -538,21 +496,54 @@ std::vector<BindingTargetChoice> buildActionTargetChoices() {
 	return choices;
 }
 
+void collectMacroRelativePathsRecursively(const std::string &macroDirectory, std::vector<std::string> &relativePaths) {
+	namespace fs = std::filesystem;
+
+	std::error_code ec;
+	const fs::path root = fs::path(macroDirectory);
+
+	if (macroDirectory.empty() || !fs::exists(root, ec) || !fs::is_directory(root, ec)) return;
+	for (fs::recursive_directory_iterator it(root, fs::directory_options::skip_permission_denied, ec), end; it != end; it.increment(ec)) {
+		const fs::path fullPath = it->path();
+		fs::path relativePath;
+
+		if (ec) {
+			ec.clear();
+			continue;
+		}
+		if (!it->is_regular_file(ec)) {
+			ec.clear();
+			continue;
+		}
+		if (ec) {
+			ec.clear();
+			continue;
+		}
+		if (!mr::dialogs::hasMrmacExtension(fullPath.filename().string())) continue;
+		relativePath = fs::relative(fullPath, root, ec);
+		if (ec) {
+			ec.clear();
+			continue;
+		}
+		relativePaths.push_back(mr::dialogs::normalizeTvPathSeparators(relativePath.generic_string()));
+	}
+}
+
 std::vector<BindingTargetChoice> buildMacroTargetChoices() {
+	namespace fs = std::filesystem;
+
 	std::vector<BindingTargetChoice> choices;
 	std::set<std::string> seen;
 	const std::string macroDirectory = configuredMacroDirectoryPath();
-	DIR *directory = !macroDirectory.empty() ? ::opendir(macroDirectory.c_str()) : nullptr;
+	std::vector<std::string> relativePaths;
 
-	if (directory == nullptr) return choices;
-	for (;;) {
-		dirent *entry = ::readdir(directory);
-		if (entry == nullptr) break;
-		const std::string fileName = entry->d_name;
+	collectMacroRelativePathsRecursively(macroDirectory, relativePaths);
+	for (const std::string &relativePath : relativePaths) {
 		std::string source;
+		const std::string fullPath = mr::dialogs::normalizeTvPathSeparators((fs::path(macroDirectory) / fs::path(relativePath)).generic_string());
+		const std::string fileName = fs::path(relativePath).filename().string();
 
-		if (fileName == "." || fileName == ".." || !mr::dialogs::hasMrmacExtension(fileName)) continue;
-		if (!readTextFile(macroDirectory + "/" + fileName, source)) continue;
+		if (!readTextFile(fullPath, source)) continue;
 		std::size_t bytecodeSize = 0;
 		unsigned char *bytecode = compile_macro_code(source.c_str(), &bytecodeSize);
 
@@ -560,7 +551,7 @@ std::vector<BindingTargetChoice> buildMacroTargetChoices() {
 		for (int i = 0; i < get_compiled_macro_count(); ++i) {
 			const char *compiledName = get_compiled_macro_name(i);
 			const std::string macroName = trimAscii(compiledName != nullptr ? compiledName : "");
-			const std::string bindingTarget = composeMacroBindingTarget(fileName, macroName);
+			const std::string bindingTarget = composeMacroBindingTarget(relativePath, macroName);
 			if (macroName.empty() || bindingTarget.empty()) continue;
 			const std::string seenKey = upperAscii(bindingTarget);
 			if (!seen.insert(seenKey).second) continue;
@@ -568,7 +559,6 @@ std::vector<BindingTargetChoice> buildMacroTargetChoices() {
 		}
 		std::free(bytecode);
 	}
-	::closedir(directory);
 	std::sort(choices.begin(), choices.end(), [](const BindingTargetChoice &lhs, const BindingTargetChoice &rhs) { return upperAscii(macroSpecMacroPart(lhs.target)) < upperAscii(macroSpecMacroPart(rhs.target)); });
 	return choices;
 }
@@ -624,7 +614,6 @@ bool loadKeymapDraftFromFile(const std::string &path, KeymapManagerDraft &draft,
 
 	draft.profiles = result.profiles;
 	draft.activeProfileName = result.activeProfileName;
-	ensureDefaultProfile(draft);
 	if (diagnosticsOut != nullptr) *diagnosticsOut = result.diagnostics;
 	mrLogMessage("Keymap file loaded from '" + path + "'.");
 	mrLogMessage(summarizeDraftForLog(draft));
@@ -665,14 +654,19 @@ bool saveKeymapDraftToFile(const KeymapManagerDraft &draft, const std::string &p
 }
 
 bool saveKeymapDraftToConfiguredState(const KeymapManagerDraft &draft, const std::string &fileUri, std::string &errorText) {
-	MRSettingsWriteReport writeReport;
-
-	if (!setConfiguredKeymapProfiles(draft.profiles, &errorText)) return false;
+	if (!runMacroFileByPath(fileUri.c_str(), &errorText, false)) return false;
 	if (!setConfiguredKeymapFilePath(fileUri, &errorText)) return false;
-	if (!setConfiguredActiveKeymapProfile(draft.activeProfileName, &errorText)) return false;
-	if (!persistConfiguredSettingsSnapshot(&errorText, &writeReport)) return false;
-	mrLogSettingsWriteReport("save keymap settings", writeReport);
-	mrLogMessage("Keymap dialog persisted to configured state.");
+	mrLogMessage("Keymap dialog applied via VM macro execution.");
+	mrLogMessage(summarizeDraftForLog(draft));
+	errorText.clear();
+	return true;
+}
+
+bool applyKeymapDraftToConfiguredState(const KeymapManagerDraft &draft, std::string &errorText) {
+	const std::string source = buildSerializedKeymapFileSource(draft);
+
+	if (!runMacroSourceText("Keymap dialog", source.c_str(), &errorText, false)) return false;
+	mrLogMessage("Keymap dialog applied current draft via VM macro execution.");
 	mrLogMessage(summarizeDraftForLog(draft));
 	errorText.clear();
 	return true;
@@ -1177,11 +1171,10 @@ class TBindingEditorDialog : public MRDialogFoundation {
 
 class TProfileEditorDialog : public MRDialogFoundation {
   public:
-	TProfileEditorDialog(const MRKeymapProfile &profile, std::vector<std::string> peerNames, bool lockName) : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(74, 12), "EDIT PROFILE", 74, 12, initMrDialogFrame), draft(profile), peerProfileNames(std::move(peerNames)), originalName(profile.name), nameLocked(lockName) {
+	TProfileEditorDialog(const MRKeymapProfile &profile, std::vector<std::string> peerNames) : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(74, 12), "EDIT PROFILE", 74, 12, initMrDialogFrame), draft(profile), peerProfileNames(std::move(peerNames)) {
 		buildViews();
 		loadDraftToFields();
 		setDialogValidationHook([this]() { return validateValues(); });
-		if (nameLocked && mNameField != nullptr) mNameField->setState(sfDisabled, True);
 		finalizeLayout();
 	}
 
@@ -1252,22 +1245,17 @@ class TProfileEditorDialog : public MRDialogFoundation {
 	}
 
 	void saveFieldsToDraft() {
-		if (!nameLocked) draft.name = fieldText(mNameField, kProfileNameFieldSize);
+		draft.name = fieldText(mNameField, kProfileNameFieldSize);
 		draft.description = fieldText(mDescriptionField, kProfileDescriptionFieldSize);
 	}
 
 	DialogValidationResult validateValues() {
 		DialogValidationResult result;
-		const std::string name = nameLocked ? originalName : fieldText(mNameField, kProfileNameFieldSize);
+		const std::string name = fieldText(mNameField, kProfileNameFieldSize);
 
 		if (name.empty()) {
 			result.valid = false;
 			result.warningText = "Profile name must not be empty.";
-			return result;
-		}
-		if (nameLocked && !isDefaultProfileName(name)) {
-			result.valid = false;
-			result.warningText = "DEFAULT profile name is fixed.";
 			return result;
 		}
 		for (const std::string &peerName : peerProfileNames)
@@ -1281,8 +1269,6 @@ class TProfileEditorDialog : public MRDialogFoundation {
 
 	MRKeymapProfile draft;
 	std::vector<std::string> peerProfileNames;
-	std::string originalName;
-	bool nameLocked = false;
 	TInputLine *mNameField = nullptr;
 	TInputLine *mDescriptionField = nullptr;
 };
@@ -1310,7 +1296,6 @@ void showProfileEditorHelpDialog() {
 	lines.push_back("");
 	lines.push_back("Name is the stable keymap profile identifier.");
 	lines.push_back("Description is shown in the profile list.");
-	lines.push_back("DEFAULT stays present and keeps its fixed name.");
 	TDialog *dialog = createSetupSimplePreviewDialog("PROFILE EDITOR HELP", 72, 11, lines, false);
 	if (dialog != nullptr) {
 		TProgram::deskTop->execView(dialog);
@@ -1321,7 +1306,6 @@ void showProfileEditorHelpDialog() {
 class TKeymapManagerDialog : public MRScrollableDialog {
   public:
 	TKeymapManagerDialog(const KeymapManagerDraft &baseline, const std::string &initialFileUri) : TWindowInit(initMrDialogFrame), MRScrollableDialog(centeredSetupDialogRect(kDialogWidth, kVisibleHeight), "KEY MANAGER", kDialogWidth, kVirtualHeight, initMrDialogFrame), persistedBaselineDraft(baseline), workingDraft(baseline), fileUri(initialFileUri), persistedFileUri(initialFileUri) {
-		ensureDefaultProfile(workingDraft);
 		buildViews();
 		setDialogValidationHook([this]() { return validateDialogValues(); });
 		refreshAllViews();
@@ -1448,7 +1432,7 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 		const std::array bindingButtons{mr::dialogs::DialogButtonSpec{"~N~ew", cmMrSetupKeymapBindingAdd, bfNormal}, mr::dialogs::DialogButtonSpec{"~E~dit", cmMrSetupKeymapBindingEdit, bfNormal}, mr::dialogs::DialogButtonSpec{"De~l~ete", cmMrSetupKeymapBindingDelete, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics bindingMetrics = mr::dialogs::measureUniformButtonRow(bindingButtons, bindingButtonGap);
 		const int bindingButtonLeft = bindingLeft + std::max(0, ((bindingScrollLeft - bindingLeft) - bindingMetrics.rowWidth) / 2);
-		const std::array bottomButtons{mr::dialogs::DialogButtonSpec{"~L~oad", cmMrSetupKeymapLoad, bfNormal}, mr::dialogs::DialogButtonSpec{"~S~ave", cmMrSetupKeymapSave, bfNormal}, mr::dialogs::DialogButtonSpec{"Save ~A~s", cmMrSetupKeymapSaveAs, bfNormal}, mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmMrSetupKeymapHelp, bfNormal}};
+		const std::array bottomButtons{mr::dialogs::DialogButtonSpec{"~L~oad", cmMrSetupKeymapLoad, bfNormal}, mr::dialogs::DialogButtonSpec{"~S~ave", cmMrSetupKeymapSave, bfNormal}, mr::dialogs::DialogButtonSpec{"Save ~A~s", cmMrSetupKeymapSaveAs, bfNormal}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmMrSetupKeymapHelp, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics bottomMetrics = mr::dialogs::measureUniformButtonRow(bottomButtons, gap);
 		const int filterLabelWidth = 8;
 		const int filterFieldWidth = 28;
@@ -1488,7 +1472,8 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 	void refreshProfileList() {
 		if (mProfileList == nullptr) return;
 		const std::size_t index = activeProfileIndex(workingDraft);
-		mProfileList->setRows(buildProfileRows(workingDraft), index == kNoIndex ? 0 : static_cast<short>(index));
+		const short selection = index == kNoIndex ? 0 : static_cast<short>(index);
+		mProfileList->setRows(buildProfileRows(workingDraft), selection);
 	}
 
 	void refreshBindingList() {
@@ -1510,7 +1495,14 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 	}
 
 	void refreshActiveProfile() {
-		if (mActiveProfileField != nullptr) mActiveProfileField->setText(workingDraft.activeProfileName);
+		if (mActiveProfileField == nullptr) return;
+		std::string activeText = workingDraft.activeProfileName;
+		const std::size_t index = activeProfileIndex(workingDraft);
+		if (index != kNoIndex && index < workingDraft.profiles.size()) {
+			const std::string description = trimAscii(workingDraft.profiles[index].description);
+			if (!description.empty()) activeText += " (" + description + ")";
+		}
+		mActiveProfileField->setText(activeText);
 	}
 
 	void activateSelectedProfile() {
@@ -1528,11 +1520,6 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 		if (workingDraft.profiles.empty()) {
 			result.valid = false;
 			result.warningText = "At least one keymap profile is required.";
-			return result;
-		}
-		if (activeProfileIndex(workingDraft) == kNoIndex) {
-			result.valid = false;
-			result.warningText = "Active profile must refer to an existing profile.";
 			return result;
 		}
 		return result;
@@ -1593,13 +1580,12 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 
 	bool editProfileWithDialog(MRKeymapProfile &profile, std::size_t editedIndex) {
 		std::vector<std::string> peerNames;
-		const bool lockName = isDefaultProfileName(profile.name);
 
 		peerNames.reserve(workingDraft.profiles.size());
 		for (std::size_t i = 0; i < workingDraft.profiles.size(); ++i)
 			if (i != editedIndex) peerNames.push_back(workingDraft.profiles[i].name);
 		for (;;) {
-			TProfileEditorDialog *dialog = new TProfileEditorDialog(profile, peerNames, lockName);
+			TProfileEditorDialog *dialog = new TProfileEditorDialog(profile, peerNames);
 			MRKeymapProfile edited = profile;
 			ushort result = cmCancel;
 
@@ -1651,14 +1637,9 @@ class TKeymapManagerDialog : public MRScrollableDialog {
 		if (profileIndex == kNoIndex || profileIndex >= workingDraft.profiles.size()) return;
 		const MRKeymapProfile &profile = workingDraft.profiles[profileIndex];
 
-		if (isDefaultProfileName(profile.name)) {
-			postDialogWarning("DEFAULT profile cannot be deleted.");
-			return;
-		}
 		if (!mr::dialogs::runDialogConfirm("Delete profile?", "Delete", profile.name.c_str())) return;
 		workingDraft.profiles.erase(workingDraft.profiles.begin() + static_cast<std::ptrdiff_t>(profileIndex));
-		ensureDefaultProfile(workingDraft);
-		if (activeProfileIndex(workingDraft) == kNoIndex) workingDraft.activeProfileName = workingDraft.profiles.front().name;
+		if (activeProfileIndex(workingDraft) == kNoIndex) workingDraft.activeProfileName.clear();
 		refreshAllViews();
 	}
 
@@ -1841,10 +1822,10 @@ void showKeymapManagerHelpDialog() {
 	lines.push_back("");
 	lines.push_back("Select the active profile in the left profile list.");
 	lines.push_back("The right list shows token, translated description and key sequence.");
-	lines.push_back("Load reads an external keymap/profile file.");
-	lines.push_back("Save and Save As write the external keymap/profile file and settings.mrmac.");
-	lines.push_back("Done writes the active profile and all loaded profiles to settings.mrmac.");
-	lines.push_back("DEFAULT is always present.");
+	lines.push_back("Load reads an external keymap/profile macro file.");
+	lines.push_back("Save and Save As write the external keymap/profile macro file.");
+	lines.push_back("Restart persistence for a keymap now comes from AUTOEXEC-marked keymap macros.");
+	lines.push_back("If no active profile is set, built-in key handling remains active.");
 	TDialog *dialog = createSetupSimplePreviewDialog("KEY MANAGER HELP", 82, 14, lines, false);
 	if (dialog != nullptr) {
 		TProgram::deskTop->execView(dialog);
@@ -1857,8 +1838,6 @@ KeymapManagerDraft currentConfiguredKeymapDraft() {
 
 	draft.profiles = configuredKeymapProfiles();
 	draft.activeProfileName = configuredActiveKeymapProfile();
-	ensureDefaultProfile(draft);
-	if (draft.activeProfileName.empty() || activeProfileIndex(draft) == kNoIndex) draft.activeProfileName = "DEFAULT";
 	mrLogMessage("Keymap dialog opened from configured state.");
 	mrLogMessage(summarizeDraftForLog(draft));
 	return draft;
@@ -1889,7 +1868,7 @@ void runKeymapManagerDialogFlow() {
 				break;
 			case cmOK:
 				applyCommitCanonicalization(workingDraft, "Keymap done");
-				if (!saveKeymapDraftToConfiguredState(workingDraft, currentFileUri, errorText)) {
+				if (!applyKeymapDraftToConfiguredState(workingDraft, errorText)) {
 					postDialogError(errorText);
 					break;
 				}
@@ -1903,9 +1882,20 @@ void runKeymapManagerDialogFlow() {
 					const mr::dialogs::UnsavedChangesChoice choice = mr::dialogs::runDialogDirtyGating("Discard changed keymap profiles?");
 					if (choice == mr::dialogs::UnsavedChangesChoice::Save) {
 						applyCommitCanonicalization(workingDraft, "Keymap done");
-						if (!saveKeymapDraftToConfiguredState(workingDraft, currentFileUri, errorText)) {
-							postDialogError(errorText);
-							break;
+						if (!currentFileUri.empty()) {
+							if (!saveKeymapDraftToFile(workingDraft, currentFileUri, errorText)) {
+								postDialogError(errorText);
+								break;
+							}
+							if (!saveKeymapDraftToConfiguredState(workingDraft, currentFileUri, errorText)) {
+								postDialogError(errorText);
+								break;
+							}
+						} else {
+							if (!applyKeymapDraftToConfiguredState(workingDraft, errorText)) {
+								postDialogError(errorText);
+								break;
+							}
 						}
 						baselineDraft = workingDraft;
 						persistedFileUri = currentFileUri;

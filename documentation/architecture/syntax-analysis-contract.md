@@ -2,18 +2,15 @@
 
 ## Purpose
 
-This contract defines how MR uses Tree-sitter and MR-owned derived syntax data for syntax coloring, smart indentation and code folding.
+This contract defines how MR uses MR-owned syntax analysis and derived syntax data for syntax coloring, smart indentation and code folding.
 
-Tree-sitter is the canonical structural syntax source for languages supported by `MRTreeSitterDocument`.
 MR-owned syntax data is derived editor data and must not be treated as the canonical syntax source.
 
-## Canonical syntax source
+## Source authority
 
-The canonical Tree-sitter tree is versioned by document id, document version and language.
+The source text, document id, document version and configured language are the authority for syntax-derived state.
 
-MR must not merge Tree-sitter subtrees, construct Tree-sitter trees from external node fragments, depend on Tree-sitter internals, or fork Tree-sitter for syntax-tree composition.
-
-Tree-sitter is used through its public API only.
+Derived syntax caches must be rebuilt or invalidated from those inputs. They must not become independent source truth.
 
 ## Derived editor data
 
@@ -32,10 +29,6 @@ Derived data may be rebuilt, discarded or replaced when the document version, la
 Derived data must not become the canonical syntax source.
 
 ## Parallelism
-
-Parallelism must be applied to derivation from the canonical Tree-sitter tree, not to external composition of Tree-sitter trees.
-
-Workers may use Tree-sitter tree copies when analyzing disjoint ranges.
 
 Parallel workers must emit MR-owned derived data only.
 
@@ -57,7 +50,7 @@ MR must prefer missing or conservative semantic assistance over wrong semantic a
 
 Syntax coloring may use staged quality levels.
 
-Coloring may be absent, lexical, stale, structural or Tree-sitter-derived, provided the state is represented explicitly.
+Coloring may be absent, lexical, stale or structural, provided the state is represented explicitly.
 
 Large files should prefer compact color runs over per-character token maps.
 
@@ -65,13 +58,13 @@ A stale or provisional coloring state must not be hidden from the syntax cache m
 
 ## Smart indentation
 
-Smart indentation must use Tree-sitter-derived structural context when available.
+Smart indentation must use reliable MR-derived structural context when available.
 
 If reliable structural context is unavailable, indentation must fall back conservatively.
 
 A conservative fallback may preserve the previous non-empty line indentation or handle obvious bracket cases.
 
-The fallback must not pretend to be Tree-sitter-accurate.
+The fallback must not pretend to be structurally exact.
 
 ## Folding
 
@@ -100,4 +93,4 @@ Do not introduce generic syntax helper abstractions that blur these roles:
 - folding range,
 - large-file budget policy.
 
-When syntax analysis changes touch the coprocessor, editor rendering or Tree-sitter integration, the plan must state which role is being changed and which roles are deliberately left unchanged.
+When syntax analysis changes touch the coprocessor or editor rendering, the plan must state which role is being changed and which roles are deliberately left unchanged.
