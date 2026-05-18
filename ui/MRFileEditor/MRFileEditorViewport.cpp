@@ -532,74 +532,8 @@ void MRFileEditor::draw() {
 			mMiniMapState.overlayCache().overlay = miniMapOverlay;
 		}
 	}
-	std::vector<MRSyntaxLineResult> visibleSyntaxLines;
-
 	if (editSettings.formatRuler && viewport.topInset > 0) drawFormatRulerOverlay(viewport, editSettings);
 	const int textRows = std::max(0, visibleTextRows());
-	std::size_t immediateSyntaxLineBudget = 96;
-	std::size_t immediateSyntaxLinesUsed = 0;
-	const MRSyntaxDerivedState::WarmupState &syntaxWarmupState = mSyntaxState.warmupState();
-	if (statefulSyntax && syntaxWarmupState.taskId != 0 && syntaxWarmupState.documentId == mBufferModel.documentId() && syntaxWarmupState.version == mBufferModel.version() &&
-		syntaxWarmupState.language == syntaxLanguage && topLine >= syntaxWarmupState.topLine && topLine + static_cast<std::size_t>(textRows) <= syntaxWarmupState.bottomLine)
-		immediateSyntaxLineBudget = 24;
-	if (!foldedView && statefulSyntax && textRows > 0) {
-		std::size_t preludeLines = static_cast<std::size_t>(textRows * 4);
-		std::size_t stateTopLine = topLine > preludeLines ? topLine - preludeLines : 0;
-		MRSyntaxCheckpointEntry checkpoint;
-		MRSyntaxLineState state;
-		std::vector<std::size_t> stateLineStarts;
-		bool useCheckpointStart = false;
-
-		if (syntaxCheckpointForLine(topLine, checkpoint) && checkpoint.lineIndex > stateTopLine) {
-			stateTopLine = checkpoint.lineIndex;
-			state = checkpoint.stateIn;
-			useCheckpointStart = true;
-		}
-		const int stateRowCount = static_cast<int>(topLine - stateTopLine + static_cast<std::size_t>(textRows));
-
-		if (useCheckpointStart) {
-			stateLineStarts.reserve(static_cast<std::size_t>(std::max(stateRowCount, 0)));
-			std::size_t stateLinePtr = checkpoint.lineStart;
-			const std::size_t exactLineCount = mBufferModel.exactLineCountKnown() ? std::max<std::size_t>(1, mBufferModel.lineCount()) : 0;
-			std::size_t stateLineIndex = checkpoint.lineIndex;
-			for (int i = 0; i < stateRowCount; ++i) {
-				if (mBufferModel.exactLineCountKnown() && stateLineIndex >= exactLineCount) break;
-				stateLineStarts.push_back(stateLinePtr);
-				++stateLineIndex;
-				if (i + 1 >= stateRowCount || stateLinePtr >= mBufferModel.length()) break;
-				std::size_t next = mBufferModel.nextLine(stateLinePtr);
-				if (next <= stateLinePtr) break;
-				stateLinePtr = next;
-			}
-		}
-		if (stateLineStarts.empty()) stateLineStarts = syntaxWarmupLineStarts(stateTopLine, stateRowCount);
-		const bool haveCompleteStatefulCache = hasSyntaxTokensForLineStarts(stateLineStarts, state);
-
-		visibleSyntaxLines.reserve(static_cast<std::size_t>(textRows));
-		for (std::size_t i = 0; i < stateLineStarts.size(); ++i) {
-			std::size_t stateLinePtr = stateLineStarts[i];
-			std::size_t stateLineIndex = stateTopLine + i;
-			MRSyntaxLineResult syntaxLine;
-			std::map<std::size_t, MRSyntaxCacheEntry>::iterator found = mSyntaxState.tokenCache().find(stateLinePtr);
-
-			if (haveCompleteStatefulCache) syntaxLine = found->second.syntaxLine;
-			else if (found != mSyntaxState.tokenCache().end() && found->second.stateIn == state) syntaxLine = found->second.syntaxLine;
-			else if (immediateSyntaxLinesUsed < immediateSyntaxLineBudget) {
-				syntaxLine = syntaxLineResultForLine(stateLinePtr, state);
-				++immediateSyntaxLinesUsed;
-			} else {
-				for (std::size_t plainIndex = i; plainIndex < stateLineStarts.size(); ++plainIndex) {
-					std::size_t plainLineIndex = stateTopLine + plainIndex;
-
-					if (plainLineIndex >= topLine) visibleSyntaxLines.push_back(tmrHighlightTextLine(MRSyntaxLanguage::PlainText, mBufferModel.lineText(stateLineStarts[plainIndex])));
-				}
-				break;
-			}
-			rememberSyntaxCheckpoint(stateLinePtr, stateLineIndex, state);
-			state = syntaxLine.stateOut;
-			if (stateLineIndex >= topLine) visibleSyntaxLines.push_back(syntaxLine);
-		}
-	}
 	for (int y = 0; y < textRows; ++y) {
 		TDrawBuffer buffer;
 		const std::size_t visibleLineIndex = topLine + static_cast<std::size_t>(y);
@@ -612,18 +546,11 @@ void MRFileEditor::draw() {
 		if (showLineNumbers) drawLineNumberGutter(buffer, currentLineIndex, isDocumentLine, viewport.lineNumberX, viewport.lineNumberWidth, zeroFillLineNumbers);
 		if (drawCodeFolding) drawCodeFoldingGutter(buffer, viewport.codeFoldingX, viewport.codeFoldingWidth, currentLinePtr, currentLineIndex);
 		if (drawMiniMap) mMiniMapState.renderer().drawGutter(buffer, y, miniMapRows, size.x, miniMapViewport, totalLines, topLine, miniMapUseBraille, viewportMarkerGlyph, miniMapPalette, miniMapOverlay);
-		if (!syntaxEnabled) syntaxLine = tmrHighlightTextLine(MRSyntaxLanguage::PlainText, mBufferModel.lineText(currentLinePtr));
-		else if (static_cast<std::size_t>(y) < visibleSyntaxLines.size()) syntaxLine = visibleSyntaxLines[static_cast<std::size_t>(y)];
-		else {
-			std::map<std::size_t, MRSyntaxCacheEntry>::iterator found = mSyntaxState.tokenCache().find(currentLinePtr);
-			const MRSyntaxLineState initialState = statefulSyntax ? syntaxWarmupInitialState(currentLinePtr) : MRSyntaxLineState();
+		if (syntaxEnabled) {
+			std::map<std::size_t, MRSyntaxCacheEntry>::const_iterator found = mSyntaxState.tokenCache().find(currentLinePtr);
+			const bool statefulCacheReady = !statefulSyntax || syntaxWarmedLineRangeCovered(currentLineIndex, currentLineIndex + 1);
 
-			if (found != mSyntaxState.tokenCache().end() && found->second.stateIn == initialState) syntaxLine = found->second.syntaxLine;
-			else if (immediateSyntaxLinesUsed < immediateSyntaxLineBudget) {
-				syntaxLine = syntaxLineResultForLine(currentLinePtr, initialState);
-				++immediateSyntaxLinesUsed;
-			} else
-				syntaxLine = tmrHighlightTextLine(MRSyntaxLanguage::PlainText, mBufferModel.lineText(currentLinePtr));
+			if (found != mSyntaxState.tokenCache().end() && statefulCacheReady) syntaxLine = found->second.syntaxLine;
 		}
 		formatSyntaxLine(buffer, currentLinePtr, syntaxLine, delta.x, textWidth, viewport.textLeft, isDocumentLine, drawEofMarker, drawEofMarkerAsEmoji);
 		writeBuf(0, y + viewport.topInset, size.x, 1, buffer);
@@ -632,6 +559,7 @@ void MRFileEditor::draw() {
 			++lineIndex;
 		}
 	}
+	if (syntaxEnabled) scheduleSyntaxWarmupIfNeeded();
 	scheduleSaveNormalizationWarmupIfNeeded();
 	updateIndicator();
 }

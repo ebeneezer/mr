@@ -158,4 +158,5 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrOtherAsciiTable, canModify);
 	setCommandEnabled(cmMrOtherEmojiTable, canModify);
 	setCommandEnabled(cmMrMacroToggleRecording, hasEditor);
+	setCommandEnabled(cmMrHelpPerformancePanel, true);
 }

@@ -12,6 +12,8 @@
 #include <string>
 #include <vector>
 
+class MRPerformancePanel;
+
 class MREditorApp : public TApplication {
   public:
 	static TMenuBar *initMRMenuBar(TRect r);
@@ -41,6 +43,9 @@ class MREditorApp : public TApplication {
 	void updateMacroBrainBlink();
 	void bootstrapIndexedMacroBindings();
 	void warmIndexedMacroBindings();
+	void initializePerformancePanel();
+	void togglePerformancePanel();
+	void updatePerformancePanel();
 	void applyConfiguredDisplayLayout();
 	void applyConfiguredWindowFramePolicy();
 
@@ -55,6 +60,10 @@ class MREditorApp : public TApplication {
 	std::chrono::steady_clock::time_point macroBrainBlinkToggleAt;
 	bool indexedMacroWarmupActive;
 	std::size_t indexedMacroWarmupLoadedFiles;
+	bool performancePanelVisible;
+	MRPerformancePanel *performancePanel;
+	unsigned performancePanelFrame;
+	std::chrono::steady_clock::time_point performancePanelRefreshAt;
 };
 
 // Regression-only hooks used by regression/mr-regression-checks.cpp.

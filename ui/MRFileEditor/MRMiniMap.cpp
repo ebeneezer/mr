@@ -345,8 +345,9 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 	mImpl->lastWarmupScheduledWindowStartLine = samplingWindow.startLine;
 	mImpl->lastWarmupScheduledWindowLineCount = samplingWindow.lineCount;
 	mImpl->lastWarmupScheduledAt = std::chrono::steady_clock::now();
+	std::string miniMapTaskLabel = "rendering mini map lines " + std::to_string(samplingWindow.startLine + 1) + "-" + std::to_string(samplingWindow.startLine + samplingWindow.lineCount);
 	mImpl->warmupTaskId = mr::coprocessor::globalCoprocessor().submit(
-	    mr::coprocessor::Lane::MiniMap, mr::coprocessor::TaskKind::MiniMapWarmup, documentId, version, "rendering mini map",
+	    mr::coprocessor::Lane::MiniMap, mr::coprocessor::TaskKind::MiniMapWarmup, documentId, version, miniMapTaskLabel,
 	    [snapshot, rowCount, bodyWidth, viewportWidth, useBraille, settings, totalLines, samplingWindow, topLine](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
 		mr::coprocessor::Result result;
 		struct MiniMapLineSample {

@@ -36,6 +36,7 @@
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRStatusLine.hpp"
 #include "../ui/MRPalette.hpp"
+#include "../ui/MRPerformancePanel.hpp"
 #include "../ui/MRFrame.hpp"
 #include "../ui/MRWindowManager.hpp"
 #include "../ui/MRWindowSupport.hpp"
@@ -774,9 +775,10 @@ TDeskTop *MREditorApp::initMRDeskTop(TRect r) {
 	return new MRDeskTop(r);
 }
 
-MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditorApp::initMRMenuBar, &MREditorApp::initMRDeskTop), exitPrepared(false), keystrokeRecording(false), recordingMarkerVisible(false), macroBrainMarkerVisible(false), recordedMacroCounter(0), recordingBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), macroBrainBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), indexedMacroWarmupActive(false), indexedMacroWarmupLoadedFiles(0) {
+MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditorApp::initMRMenuBar, &MREditorApp::initMRDeskTop), exitPrepared(false), keystrokeRecording(false), recordingMarkerVisible(false), macroBrainMarkerVisible(false), recordedMacroCounter(0), recordingBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), macroBrainBlinkToggleAt(std::chrono::steady_clock::now() + kRecordingBlinkInterval), indexedMacroWarmupActive(false), indexedMacroWarmupLoadedFiles(0), performancePanelVisible(false), performancePanel(nullptr), performancePanelFrame(0), performancePanelRefreshAt(std::chrono::steady_clock::now()) {
 	TEditor::editorDialog = mrEditorDialog;
 	mr::coprocessor::globalCoprocessor().setResultHandler(handleCoprocessorResult);
+	initializePerformancePanel();
 	loadStartupSettingsMacro(std::string(), nullptr);
 	applyConfiguredDisplayLayout();
 	bootstrapIndexedMacroBindings();
@@ -824,10 +826,40 @@ void MREditorApp::applyConfiguredWindowFramePolicy() {
 	}
 }
 
+void MREditorApp::initializePerformancePanel() {
+	if (performancePanel != nullptr) return;
+
+	TRect appRect = getExtent();
+	TRect panelRect(0, 1, appRect.b.x - appRect.a.x, 1 + MRPerformancePanel::kPreferredHeight);
+
+	performancePanel = new MRPerformancePanel(panelRect);
+	insert(performancePanel);
+	performancePanel->hide();
+}
+
+void MREditorApp::togglePerformancePanel() {
+	performancePanelVisible = !performancePanelVisible;
+	applyConfiguredDisplayLayout();
+	updatePerformancePanel();
+}
+
+void MREditorApp::updatePerformancePanel() {
+	static constexpr std::chrono::milliseconds kPanelRefreshInterval(120);
+	const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+
+	if (!performancePanelVisible || performancePanel == nullptr) return;
+	if (now < performancePanelRefreshAt) return;
+	performancePanelRefreshAt = now + kPanelRefreshInterval;
+	performancePanel->setAnimationFrame(++performancePanelFrame);
+}
+
 void MREditorApp::applyConfiguredDisplayLayout() {
 	bool statusVisible = true;
 	TRect appRect = getExtent();
 	TRect desktopRect;
+	const int appHeight = appRect.b.y - appRect.a.y;
+	const int maxPanelHeight = std::max(0, appHeight - 2);
+	const int panelHeight = performancePanelVisible ? std::min(MRPerformancePanel::kPreferredHeight, maxPanelHeight) : 0;
 
 	if (menuBar != nullptr) {
 		menuBar->show();
@@ -836,9 +868,19 @@ void MREditorApp::applyConfiguredDisplayLayout() {
 		mrStatus->setShowFunctionKeyLabels(true);
 		mrStatus->show();
 	}
+	if (performancePanel != nullptr) {
+		if (panelHeight > 0) {
+			TRect panelRect(0, 1, appRect.b.x - appRect.a.x, 1 + panelHeight);
+			performancePanel->locate(panelRect);
+			performancePanel->show();
+			performancePanel->drawView();
+		} else {
+			performancePanel->hide();
+		}
+	}
 	desktopRect.a.x = 0;
 	desktopRect.b.x = appRect.b.x - appRect.a.x;
-	desktopRect.a.y = 1;
+	desktopRect.a.y = 1 + panelHeight;
 	desktopRect.b.y = appRect.b.y - appRect.a.y - (statusVisible ? 1 : 0);
 	if (desktopRect.b.y <= desktopRect.a.y) desktopRect.b.y = desktopRect.a.y + 1;
 	if (deskTop != nullptr) deskTop->locate(desktopRect);
@@ -1240,6 +1282,11 @@ void MREditorApp::handleEvent(TEvent &event) {
 		clearEvent(event);
 		return;
 	}
+	if (event.what == evCommand && event.message.command == cmMrHelpPerformancePanel) {
+		togglePerformancePanel();
+		clearEvent(event);
+		return;
+	}
 	if (event.what == evKeyDown && currentEditWindow() == nullptr) {
 		std::string executedMacroName;
 		if (mrvmRunAssignedMacroForKey(event.keyDown.keyCode, event.keyDown.controlKeyState, executedMacroName, nullptr)) {
@@ -1270,6 +1317,7 @@ void MREditorApp::idle() {
 	warmIndexedMacroBindings();
 	mr::coprocessor::globalCoprocessor().pumpFor(kCoprocessorIdlePumpBudget);
 	pumpDeferredMacroUiPlayback();
+	updatePerformancePanel();
 	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar)) {
 		mr::messageline::VisibleMessage message;
 		std::string rightStatus = buildTopRightCursorStatus();

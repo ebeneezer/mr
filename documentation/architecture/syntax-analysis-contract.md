@@ -56,6 +56,18 @@ Large files should prefer compact color runs over per-character token maps.
 
 A stale or provisional coloring state must not be hidden from the syntax cache model.
 
+## Rendering boundary
+
+Editor rendering is a consumer of derived syntax data.
+
+Draw and other UI rendering paths must not perform syntax analysis synchronously.
+
+Rendering may read existing derived caches, request or schedule analysis work, and render plain, stale or provisional coloring when cache data is missing.
+
+Cache misses must not turn the UI thread into a syntax worker. Syntax analysis that creates or refreshes token runs, structural line state, fold ranges or indentation hints belongs to the coprocessor and pumped apply path.
+
+This is the standard rule for all file sizes. Large files do not get a separate rendering architecture; they only make the latency risk visible sooner.
+
 ## Smart indentation
 
 Smart indentation must use reliable MR-derived structural context when available.
@@ -89,6 +101,7 @@ Do not introduce generic syntax helper abstractions that blur these roles:
 - canonical parse,
 - derived editor data,
 - rendering cache,
+- rendering consumer,
 - indentation decision,
 - folding range,
 - large-file budget policy.
