@@ -94,6 +94,7 @@ enum : ushort {
 	cmMrHelpKeys,
 	cmMrHelpDetailedIndex,
 	cmMrHelpPreviousTopic,
+	cmMrHelpPerformancePanel,
 	cmMrHelpAbout,
 
 	cmMrSetupEditSettings,

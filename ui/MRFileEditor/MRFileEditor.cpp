@@ -2382,6 +2382,8 @@ MRMiniMapRenderer::Palette MRFileEditor::resolveMiniMapPalette() {
 
 void MRFileEditor::refreshConfiguredVisualSettings() {
 	syncDisplayedCursorColumnFromCursor(true);
+	refreshSyntaxContext();
+	invalidateFoldCache();
 	syncIndicatorVisualSettings();
 	updateMetrics();
 	scheduleSyntaxWarmupIfNeeded();
@@ -3992,8 +3994,9 @@ void MRFileEditor::scheduleFoldWarmupIfNeeded(std::size_t scanTopLine, std::size
 	warmupState.topLine = scanTopLine;
 	warmupState.bottomLine = scanBottomLine;
 	warmupState.language = language;
+	std::string foldTaskLabel = std::string(foldWarmupTaskLabel()) + " lines " + std::to_string(scanTopLine + 1) + "-" + std::to_string(scanBottomLine);
 	warmupState.taskId = mr::coprocessor::globalCoprocessor().submit(
-	    mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::FoldWarmup, docId, version, foldWarmupTaskLabel(),
+	    mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::FoldWarmup, docId, version, foldTaskLabel,
 	    [snapshot, language, scanTopLine, scanBottomLine, topLine, requestBottomLine, closedFoldSpans = mFoldState.closedFoldSpans()](const mr::coprocessor::TaskInfo &info,
 	                                                                                                                                                                               std::stop_token stopToken) {
 		    mr::coprocessor::Result result;

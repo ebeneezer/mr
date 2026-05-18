@@ -613,8 +613,6 @@ class MRFileEditor : public TScroller {
 
 		std::size_t syntaxCachedCoveragePrefix(const std::vector<std::size_t> &lineStarts, const MRSyntaxLineState &initialState, MRSyntaxLineState *stateOut = nullptr) const;
 
-		MRSyntaxLineResult syntaxLineResultForLine(std::size_t lineStart, const MRSyntaxLineState &previousState);
-
 		void formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const MRSyntaxLineResult &syntaxLine, int hScroll, int width, int drawX, bool isDocumentLine, bool drawEofMarker, bool drawEofMarkerAsEmoji);
 
 		void drawEofMarkerGlyph(TDrawBuffer &b, int hScroll, int width, int drawX, TAttrPair basePair, bool drawEmoji);

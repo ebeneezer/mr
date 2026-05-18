@@ -68,7 +68,7 @@ TSubMenu *createMacroMenu() {
 }
 
 TSubMenu *createHelpMenu() {
-	return &(*new TSubMenu("~H~elp", kbAltH) + *new TMenuItem("~T~able of contents", cmMrHelpContents, kbF1, hcNoContext, "F1") + *new TMenuItem("~K~eys", cmMrHelpKeys, kbF1, hcNoContext, "F1") + *new TMenuItem("detailed ~I~ndex", cmMrHelpDetailedIndex, kbShiftF1, hcNoContext, "ShiftF1") + *new TMenuItem("~P~revious topic", cmMrHelpPreviousTopic, kbAltF1, hcNoContext, "AltF1") + *new TMenuItem("~A~bout...", cmMrHelpAbout, kbNoKey, hcNoContext));
+	return &(*new TSubMenu("~H~elp", kbAltH) + *new TMenuItem("~T~able of contents", cmMrHelpContents, kbF1, hcNoContext, "F1") + *new TMenuItem("~K~eys", cmMrHelpKeys, kbF1, hcNoContext, "F1") + *new TMenuItem("detailed ~I~ndex", cmMrHelpDetailedIndex, kbShiftF1, hcNoContext, "ShiftF1") + *new TMenuItem("~P~revious topic", cmMrHelpPreviousTopic, kbAltF1, hcNoContext, "AltF1") + newLine() + *new TMenuItem("~P~erformance panel", cmMrHelpPerformancePanel, kbNoKey, hcNoContext) + *new TMenuItem("~A~bout...", cmMrHelpAbout, kbNoKey, hcNoContext));
 }
 
 } // namespace

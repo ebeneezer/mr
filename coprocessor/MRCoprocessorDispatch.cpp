@@ -124,6 +124,36 @@ std::string externalIoDisplayName(const mr::coprocessor::TaskInfo &task) {
 	return "external command";
 }
 
+std::string lineRangeText(std::size_t topLine, std::size_t bottomLineExclusive) {
+	if (bottomLineExclusive <= topLine) return std::string();
+	return "lines " + std::to_string(topLine + 1) + "-" + std::to_string(bottomLineExclusive);
+}
+
+std::string taskLabelLineRange(const mr::coprocessor::TaskInfo &task) {
+	const std::string marker = " lines ";
+	const std::size_t markerPos = task.label.find(marker);
+
+	if (markerPos == std::string::npos) return std::string();
+	return task.label.substr(markerPos + 1);
+}
+
+std::string detailWithLineRange(const std::string &detail, const std::string &lineRange) {
+	if (lineRange.empty()) return detail;
+	if (detail.empty()) return lineRange;
+	return detail + " " + lineRange;
+}
+
+std::string syntaxLineRangeDetail(const mr::coprocessor::SyntaxWarmupPayload &syntax, MRFileEditor *editor, const mr::coprocessor::TaskInfo &task) {
+	if (editor == nullptr || syntax.lines.empty()) return taskLabelLineRange(task);
+	const std::size_t topLine = editor->lineIndexOfOffset(syntax.lines.front().lineStart);
+	const std::size_t bottomLine = editor->lineIndexOfOffset(syntax.lines.back().lineStart) + 1;
+	return lineRangeText(topLine, bottomLine);
+}
+
+std::string miniMapLineRangeDetail(const mr::coprocessor::MiniMapWarmupPayload &miniMap) {
+	return lineRangeText(miniMap.windowStartLine, miniMap.windowStartLine + miniMap.windowLineCount);
+}
+
 void recordTaskPerformance(const mr::coprocessor::Result &result, const std::string &action, MREditWindow *win, std::size_t documentId, std::size_t bytes, const std::string &detail) {
 	mr::performance::recordBackgroundResult(result, action, win != nullptr ? static_cast<std::size_t>(win->bufferId()) : 0, documentId, bytes, detail);
 }
@@ -740,7 +770,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				if (!applied) editor->clearSyntaxWarmupTask(result.task.id);
 				else editor->continueComputeWarmupIfNeeded("after-syntax");
 				if (!recorded) {
-					recordTaskPerformance(result, kSyntaxWarmAction, window, editor->documentId(), editor->bufferLength(), window->currentFileName());
+					recordTaskPerformance(result, kSyntaxWarmAction, window, editor->documentId(), editor->bufferLength(), detailWithLineRange(window->currentFileName(), syntaxLineRangeDetail(*syntax, editor, result.task)));
 					recorded = true;
 				}
 			}
@@ -762,7 +792,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				if (editor->documentVersion() == result.task.baseVersion) applied = editor->applyFoldWarmup(*result.payload, result.task.baseVersion, result.task.id);
 				if (!applied) editor->clearFoldWarmupTask(result.task.id);
 				if (!recorded) {
-					recordTaskPerformance(result, kFoldWarmAction, window, editor->documentId(), editor->bufferLength(), window->currentFileName());
+					recordTaskPerformance(result, kFoldWarmAction, window, editor->documentId(), editor->bufferLength(), detailWithLineRange(window->currentFileName(), taskLabelLineRange(result.task)));
 					recorded = true;
 				}
 			}
@@ -794,7 +824,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 					}
 				}
 				if (!recorded) {
-					recordTaskPerformance(result, kMiniMapRenderAction, window, editor->documentId(), editor->bufferLength(), window->currentFileName());
+					recordTaskPerformance(result, kMiniMapRenderAction, window, editor->documentId(), editor->bufferLength(), detailWithLineRange(window->currentFileName(), miniMapLineRangeDetail(*miniMap)));
 					recorded = true;
 				}
 			}
@@ -1016,7 +1046,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 			if (editor == nullptr) continue;
 			if (!recorded && editor->documentId() == result.task.documentId) {
-				recordTaskPerformance(result, kSyntaxWarmAction, window, editor->documentId(), editor->bufferLength(), window->currentFileName());
+				recordTaskPerformance(result, kSyntaxWarmAction, window, editor->documentId(), editor->bufferLength(), detailWithLineRange(window->currentFileName(), taskLabelLineRange(result.task)));
 				recorded = true;
 			}
 			editor->clearSyntaxWarmupTask(result.task.id);
@@ -1031,7 +1061,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 			if (editor == nullptr) continue;
 			if (!recorded && editor->documentId() == result.task.documentId) {
-				recordTaskPerformance(result, kFoldWarmAction, window, editor->documentId(), editor->bufferLength(), window->currentFileName());
+				recordTaskPerformance(result, kFoldWarmAction, window, editor->documentId(), editor->bufferLength(), detailWithLineRange(window->currentFileName(), taskLabelLineRange(result.task)));
 				recorded = true;
 			}
 			editor->clearFoldWarmupTask(result.task.id);
@@ -1046,7 +1076,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 			if (editor == nullptr) continue;
 			if (!recorded && editor->documentId() == result.task.documentId) {
-				recordTaskPerformance(result, kMiniMapRenderAction, window, editor->documentId(), editor->bufferLength(), window->currentFileName());
+				recordTaskPerformance(result, kMiniMapRenderAction, window, editor->documentId(), editor->bufferLength(), detailWithLineRange(window->currentFileName(), taskLabelLineRange(result.task)));
 				recorded = true;
 			}
 			editor->clearMiniMapWarmupTask(result.task.id);

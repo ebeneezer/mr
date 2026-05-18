@@ -409,6 +409,8 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Help / Detailed index";
 		case cmMrHelpPreviousTopic:
 			return "Help / Previous topic";
+		case cmMrHelpPerformancePanel:
+			return "Help / Performance panel";
 		case cmMrHelpAbout:
 			return "Help / About";
 

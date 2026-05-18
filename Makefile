@@ -187,6 +187,7 @@ CXX_SOURCES = \
 	ui/MRFileEditor/MRTextViewport.cpp \
 	ui/MRMenuBar.cpp \
 	ui/MRMessageLineController.cpp \
+	ui/MRPerformancePanel.cpp \
 	ui/MRScopedHistoryUI.cpp \
 	ui/MRWindowManager.cpp \
 	ui/MRNumericSlider.cpp \

@@ -286,17 +286,6 @@ std::size_t MRFileEditor::syntaxCachedCoveragePrefix(const std::vector<std::size
 	return coveredCount;
 }
 
-MRSyntaxLineResult MRFileEditor::syntaxLineResultForLine(std::size_t lineStart, const MRSyntaxLineState &previousState) {
-	std::map<std::size_t, MRSyntaxCacheEntry> &tokenCache = mSyntaxState.tokenCache();
-	std::map<std::size_t, MRSyntaxCacheEntry>::iterator found = tokenCache.find(lineStart);
-
-	if (found != tokenCache.end() && found->second.stateIn == previousState) return found->second.syntaxLine;
-
-	MRSyntaxLineResult syntaxLine = tmrHighlightTextLine(mBufferModel.language(), mBufferModel.lineText(lineStart), previousState);
-
-	tokenCache[lineStart] = MRSyntaxCacheEntry(previousState, syntaxLine);
-	return syntaxLine;
-}
 void MRFileEditor::scheduleLineIndexWarmupIfNeeded() {
 	if (pieceTableOnlyPhaseActive()) {
 		if (mLineIndexWarmupTaskId != 0) {
@@ -670,8 +659,9 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 	warmupState.bottomLine = bottomLine;
 	warmupState.language = language;
 	mSyntaxState.rememberScheduledRequest(requestTopLine, bottomLine, std::chrono::steady_clock::now());
+	std::string syntaxTaskLabel = std::string(syntaxWarmupTaskLabel()) + " lines " + std::to_string(requestTopLine + 1) + "-" + std::to_string(bottomLine);
 	warmupState.taskId =
-	    mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::SyntaxWarmup, docId, version, syntaxWarmupTaskLabel(),
+	    mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Compute, mr::coprocessor::TaskKind::SyntaxWarmup, docId, version, syntaxTaskLabel,
 	                                                [snapshot, language, warmupLineStarts, statefulSyntax, requiredState](const mr::coprocessor::TaskInfo &info, std::stop_token stopToken) {
 		mr::coprocessor::Result result;
 		std::vector<mr::coprocessor::SyntaxWarmLine> warmed;

@@ -1308,13 +1308,13 @@ bool effectiveEditSetupSettingsForPath(const std::string &path, MREditSetupSetti
 bool effectiveEditWindowColorThemePathForPath(const std::string &path, std::string &themeUri, std::string *matchedProfileName) {
 	std::string ext = extensionSelectorForPath(path);
 
-	themeUri = configuredColorThemeFilePath();
+	themeUri.clear();
 	if (matchedProfileName != nullptr) matchedProfileName->clear();
 	if (ext.empty()) return true;
 	for (const MREditExtensionProfile &profile : configuredEditProfiles())
 		for (const std::string &selector : profile.extensions)
 			if (selector == ext) {
-				if (!profile.windowColorThemeUri.empty()) themeUri = profile.windowColorThemeUri;
+				themeUri = profile.windowColorThemeUri;
 				if (matchedProfileName != nullptr) *matchedProfileName = profile.name;
 				return true;
 			}
