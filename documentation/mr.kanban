@@ -176,15 +176,6 @@
           "comments": []
         },
         {
-          "id": "e73163a9-275c-481d-961e-38fa62deb9fa",
-          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
-          "title": "Theme Verwaltung für Syntax Highlighting (bereits vorbereitet via mrmac)",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
           "id": "3e6b2535-2d04-453b-9214-22dac0c2642d",
           "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
           "title": "An Feiertagen animierte ASCII Grafiken auf em Desktop zeigen: Halloween, Weihnachten, Ostern, Sonnen wende etc ...",
@@ -198,26 +189,7 @@
     {
       "id": "b721e070-ae21-4123-a1f3-27b926375a16",
       "title": "Regression / Errors",
-      "cards": [
-        {
-          "id": "d2cb32e6-21dc-43ee-adba-457d26767458",
-          "listId": "b721e070-ae21-4123-a1f3-27b926375a16",
-          "title": "Task Overlay sinnvoller gestalten",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
-          "id": "c8e78f9a-1422-4d79-ad10-901b53c85080",
-          "listId": "b721e070-ae21-4123-a1f3-27b926375a16",
-          "title": "Keine Eingabefelder für human readable names für Color Themes und Key Mappings",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        }
-      ]
+      "cards": []
     },
     {
       "id": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
@@ -254,15 +226,6 @@
               "comment": "Doch ein Grid implementieren lassen? (Calculator)"
             }
           ]
-        },
-        {
-          "id": "ca6e9471-391b-46ba-8a24-26c36e5922ec",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "mrmac comfort funktionen",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
         }
       ]
     },
@@ -280,9 +243,36 @@
           "comments": []
         },
         {
+          "id": "c8e78f9a-1422-4d79-ad10-901b53c85080",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Keine Eingabefelder für human readable names für Color Themes und Key Mappings",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "ca6e9471-391b-46ba-8a24-26c36e5922ec",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "mrmac comfort funktionen",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
           "id": "9e5fe557-f87c-44b2-81c3-784a6368fbbf",
           "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
           "title": "Einige Sourcefiles sind viel zu gross. Neu sinnhaft strukturieren und entschlacken.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "d2cb32e6-21dc-43ee-adba-457d26767458",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Task Overlay sinnvoller gestalten",
           "description": "",
           "labels": [],
           "checkboxes": [],
