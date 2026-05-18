@@ -3805,10 +3805,15 @@ void MRFileEditor::handleMouse(TEvent &event) {
 	}
 
 	select();
-	std::size_t anchor = (event.mouse.controlKeyState & kbShift) != 0 && mBufferModel.hasSelection() ? mBufferModel.selection().anchor : mBufferModel.cursor();
 	int targetColumn = 0;
+	std::size_t anchor = mouseOffset(local, &targetColumn);
 	mSelectionAnchor = anchor;
-	moveCursor(mouseOffset(local, &targetColumn), (event.mouse.controlKeyState & kbShift) != 0, false, targetColumn);
+	mBufferModel.setCursorAndSelection(anchor, anchor, anchor);
+	if (freeCursorMovementEnabled()) mCursorVisualColumn = std::max(actualCursorVisualColumn(anchor), targetColumn);
+	else
+		mCursorVisualColumn = actualCursorVisualColumn(anchor);
+	updateIndicator();
+	drawView();
 
 	while (mouseEvent(event, evMouseMove | evMouseAuto)) {
 		if (event.what == evMouseAuto) {

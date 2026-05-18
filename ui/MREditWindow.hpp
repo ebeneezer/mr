@@ -1748,11 +1748,11 @@ class MREditWindow : public TWindow {
 			syncBlockVisual();
 			return;
 		}
-		if (originalEvent == evMouseDown && mBlockMode == bmNone) {
+		if (originalEvent == evMouseDown && !markingBefore) {
 			const std::size_t selectionStartNow = editor->selectionStartOffset();
 			const std::size_t selectionEndNow = editor->selectionEndOffset();
 
-			// Mouse drag selection without an explicit mode defaults to stream block.
+			// Mouse drag selection is authoritative for the next committed stream block.
 			if (selectionStartNow != selectionEndNow && (selectionStartNow != selectionStartBefore || selectionEndNow != selectionEndBefore)) {
 				mBlockMode = bmStream;
 				mBlockMarkingOn = false;
