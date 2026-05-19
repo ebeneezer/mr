@@ -75,10 +75,13 @@
 namespace {
 struct SearchUiState {
 	bool hasPrevious = false;
+	bool hasAcceptedPattern = false;
 	std::string pattern;
+	std::string acceptedPattern;
 	std::string replacement;
 	std::size_t lastStart = 0;
 	std::size_t lastEnd = 0;
+	MRSearchDialogOptions acceptedOptions;
 	MRSearchDialogOptions lastOptions;
 };
 
@@ -467,6 +470,8 @@ bool promptSearchPattern(std::string &pattern, MRSearchDialogOptions &options) {
 	if (TProgram::deskTop == nullptr) return false;
 	selectionSeed = searchSeedFromCurrentSelection();
 	if (!selectionSeed.empty()) strnzcpy(patternInput, selectionSeed.c_str(), sizeof(patternInput));
+	else if (!g_searchUiState.acceptedPattern.empty())
+		strnzcpy(patternInput, g_searchUiState.acceptedPattern.c_str(), sizeof(patternInput));
 	else if (!g_searchUiState.pattern.empty())
 		strnzcpy(patternInput, g_searchUiState.pattern.c_str(), sizeof(patternInput));
 
@@ -549,6 +554,9 @@ bool promptSearchPattern(std::string &pattern, MRSearchDialogOptions &options) {
 		options.globalSearch = (optionMask & 0x0002) != 0;
 		options.restrictToMarkedBlock = (optionMask & 0x0004) != 0;
 		options.searchAllWindows = (optionMask & 0x0008) != 0;
+		g_searchUiState.hasAcceptedPattern = true;
+		g_searchUiState.acceptedPattern = pattern;
+		g_searchUiState.acceptedOptions = options;
 		static_cast<void>(setConfiguredSearchDialogOptions(options));
 	}
 	TObject::destroy(dialog);
@@ -1143,4 +1151,14 @@ void clearTransientSelectionIfPending(const TEvent &event) {
 		}
 		break;
 	}
+}
+
+void currentSearchPatternSnapshot(std::string &pattern, MRSearchDialogOptions &options) {
+	if (g_searchUiState.hasAcceptedPattern) {
+		pattern = g_searchUiState.acceptedPattern;
+		options = g_searchUiState.acceptedOptions;
+		return;
+	}
+	pattern = g_searchUiState.pattern;
+	options = g_searchUiState.hasPrevious ? g_searchUiState.lastOptions : configuredSearchDialogOptions();
 }

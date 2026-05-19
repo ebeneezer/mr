@@ -7,6 +7,8 @@ enum : ushort {
 	cmMrFileOpen = 110,
 	cmMrFileLoad,
 	cmMrFileAcquire,
+	cmMrFileOpenLiveLog,
+	cmMrFileOpenJournal,
 	cmMrFileSave,
 	cmMrFileSaveAs,
 	cmMrFileInformation,
@@ -106,6 +108,7 @@ enum : ushort {
 	cmMrSetupBackupsAutosave,
 	cmMrSetupSearchAndReplaceDefaults,
 	cmMrSetupUserInterfaceSettings,
+	cmMrSetupLiveLogs,
 
 	cmMrColorWindowColors,
 	cmMrColorMenuDialogColors,

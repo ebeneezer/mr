@@ -12,7 +12,7 @@
 
 class MRPerformancePanel : public TView {
   public:
-	static constexpr int kPreferredHeight = 9;
+	static constexpr int kPreferredHeight = 10;
 
 	explicit MRPerformancePanel(const TRect &bounds) noexcept;
 
@@ -26,9 +26,20 @@ class MRPerformancePanel : public TView {
 		TColorAttr color;
 	};
 
+	struct HeldLaneDisplay {
+		std::string queueText;
+		unsigned queueUntilFrame;
+		std::string workerText;
+		unsigned workerUntilFrame;
+
+		HeldLaneDisplay() noexcept : queueText(), queueUntilFrame(0), workerText(), workerUntilFrame(0) {
+		}
+	};
+
 	void writePanelLine(int y, const std::string &line, TColorAttr color);
 	void writePanelSegments(int y, const std::vector<PanelSegment> &segments, TColorAttr fillColor);
 	unsigned mAnimationFrame;
+	std::vector<HeldLaneDisplay> mLaneDisplayHold;
 };
 
 #endif

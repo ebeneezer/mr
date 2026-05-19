@@ -5,9 +5,7 @@
 
 #include <chrono>
 #include <ctime>
-#include <future>
 #include <sstream>
-#include <thread>
 
 #if defined(__clang__)
 #pragma clang diagnostic push
@@ -1255,21 +1253,11 @@ std::vector<std::string> buildViewportScanLineTextsParallelImpl(const MRTextBuff
 		return lineTexts;
 	}
 
-	std::vector<std::future<std::vector<std::string>>> workers;
-	workers.reserve(chunks.size());
-	for (const MRViewportScanChunk &chunk : chunks) {
-		workers.push_back(std::async(std::launch::async, [&snapshot, startLine = chunk.startLine, endLine = chunk.endLine]() {
-			std::vector<std::string> chunkLines;
-			chunkLines.reserve(endLine > startLine ? endLine - startLine : 0);
-			appendFoldScanLineTexts(chunkLines, snapshot, startLine, endLine);
-			return chunkLines;
-		}));
-	}
-
 	std::size_t reservedLines = 0;
-	for (std::size_t chunkIndex = 0; chunkIndex < chunks.size(); ++chunkIndex) {
-		chunks[chunkIndex].lineTexts = workers[chunkIndex].get();
-		reservedLines += chunks[chunkIndex].lineTexts.size();
+	for (MRViewportScanChunk &chunk : chunks) {
+		chunk.lineTexts.reserve(chunk.endLine > chunk.startLine ? chunk.endLine - chunk.startLine : 0);
+		appendFoldScanLineTexts(chunk.lineTexts, snapshot, chunk.startLine, chunk.endLine);
+		reservedLines += chunk.lineTexts.size();
 	}
 	lineTexts.reserve(reservedLines);
 	for (MRViewportScanChunk &chunk : chunks)
@@ -1956,7 +1944,7 @@ std::string mrBuildFoldTrainingAscii(const std::string &text, MRSyntaxLanguage l
 	return output;
 }
 
-MRFileEditor::LoadTiming::LoadTiming() noexcept : valid(false), bytes(0), lines(0), mappedLoadMs(0.0), lineCountMs(0.0) {
+MRFileEditor::LoadTiming::LoadTiming() noexcept : valid(false), bytes(0), lines(0), linesExact(false), mappedLoadMs(0.0), lineCountMs(0.0) {
 }
 
 MRFileEditor::DestructionProbe::~DestructionProbe() {
@@ -2031,7 +2019,6 @@ bool MRFileEditor::isDocumentModified() const noexcept {
 void MRFileEditor::setDocumentModified(bool changed) {
 	mBufferModel.setModified(changed);
 	if (!changed) {
-		mBufferModel.document().flatten();
 		mBufferModel.clearUndoRedo();
 		clearDirtyRanges();
 	}
@@ -2543,8 +2530,13 @@ TPalette &MRFileEditor::getPalette() const {
 Boolean MRFileEditor::valid(ushort command) {
 	if (command == cmValid || command == cmReleasedFocus) return True;
 	if (mReadOnly || !mBufferModel.isModified()) return True;
-	if (!canSaveInPlace()) return confirmSaveOrDiscardUntitled();
-	return confirmSaveOrDiscardNamed();
+	const auto startedAt = std::chrono::steady_clock::now();
+	Boolean result = !canSaveInPlace() ? confirmSaveOrDiscardUntitled() : confirmSaveOrDiscardNamed();
+	std::ostringstream trace;
+	trace << "Phase1 discard editor valid total_us=" << traceMicros(std::chrono::steady_clock::now() - startedAt) << " result=" << (result == True ? 1 : 0) << " len=" << mBufferModel.length()
+	      << " add=" << mBufferModel.document().addBufferLength() << " pieces=" << mBufferModel.document().pieceCount() << " modified=" << (mBufferModel.isModified() ? 1 : 0);
+	appendDirectProbeLog(trace.str());
+	return result;
 }
 
 bool MRFileEditor::isWordByte(char ch) noexcept {
@@ -2802,15 +2794,14 @@ bool MRFileEditor::loadMappedFile(TStringView path, std::string &error) {
 	mLastLoadTiming = LoadTiming();
 	if (!document.loadMappedFile(path, error)) return false;
 	const double mappedLoadMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - mapStartedAt).count();
-	const auto lineCountStartedAt = std::chrono::steady_clock::now();
-	const std::size_t lines = document.lineCount();
-	const double lineCountMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - lineCountStartedAt).count();
+	const std::size_t lines = document.estimatedLineCount();
 
 	mLastLoadTiming.valid = true;
 	mLastLoadTiming.bytes = document.length();
 	mLastLoadTiming.lines = lines;
+	mLastLoadTiming.linesExact = document.exactLineCountKnown();
 	mLastLoadTiming.mappedLoadMs = mappedLoadMs;
-	mLastLoadTiming.lineCountMs = lineCountMs;
+	mLastLoadTiming.lineCountMs = 0.0;
 	setPersistentFileName(path);
 	if (!adoptCommittedDocument(document, 0, 0, 0, false)) {
 		clearPersistentFileName();
@@ -2818,6 +2809,7 @@ bool MRFileEditor::loadMappedFile(TStringView path, std::string &error) {
 		error = "Unable to adopt mapped document.";
 		return false;
 	}
+	scheduleLineIndexWarmupIfNeeded();
 	return true;
 }
 
@@ -2866,6 +2858,7 @@ Boolean MRFileEditor::saveAsWithoutOverwritePrompt() noexcept {
 void MRFileEditor::pushUndoSnapshot() {
 	MRTextBufferModel::CustomUndoRecord record;
 	record.preSnapshot = mBufferModel.readSnapshot();
+	record.preSnapshot.dropExactLineStartIndex();
 	record.cursor = mBufferModel.cursor();
 	record.modifiedState = mBufferModel.isModified();
 	if (mBufferModel.hasSelection()) {
@@ -2912,6 +2905,63 @@ bool MRFileEditor::appendBufferData(const char *data, uint length) {
 bool MRFileEditor::appendBufferText(const char *text) {
 	uint length = text != nullptr ? static_cast<uint>(std::strlen(text)) : 0;
 	return appendBufferData(text, length);
+}
+
+void MRFileEditor::setCommunicationViewerOptions(bool lineNumbers) {
+	mCommunicationViewerMode = true;
+	mCommunicationViewerLineNumbers = lineNumbers;
+	refreshSyntaxContext();
+	refreshViewState();
+}
+
+bool MRFileEditor::appendLogViewerData(const char *data, uint length) {
+	std::string text;
+	MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "append-log-viewer-data");
+	const std::size_t oldCursor = mBufferModel.cursor();
+	const std::size_t oldSelectionStart = mBufferModel.selectionStart();
+	const std::size_t oldSelectionEnd = mBufferModel.selectionEnd();
+	const std::size_t endPtr = mBufferModel.length();
+	const int oldDeltaX = delta.x;
+	const int oldDeltaY = delta.y;
+	const int visibleRows = std::max(1, visibleTextRows());
+	const int oldMaxY = std::max(0, static_cast<int>(std::max<std::size_t>(1, mBufferModel.lineCount())) - visibleRows);
+	const bool follow = oldDeltaY >= oldMaxY;
+
+	if (data == nullptr || length == 0) return true;
+	text.assign(data, length);
+	transaction.insert(endPtr, text);
+	if (!applyStagedTransaction(transaction, follow ? endPtr + text.size() : oldCursor, follow ? endPtr + text.size() : oldSelectionStart, follow ? endPtr + text.size() : oldSelectionEnd, false).applied()) return false;
+	if (follow) {
+		const int maxY = std::max(0, static_cast<int>(std::max<std::size_t>(1, mBufferModel.lineCount())) - visibleRows);
+		scrollTo(oldDeltaX, maxY);
+	} else
+		scrollTo(oldDeltaX, oldDeltaY);
+	drawView();
+	return true;
+}
+
+bool MRFileEditor::prependLogViewerData(const char *data, uint length) {
+	std::string text;
+	MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "prepend-log-viewer-data");
+	const std::size_t oldCursor = mBufferModel.cursor();
+	const std::size_t oldSelectionStart = mBufferModel.selectionStart();
+	const std::size_t oldSelectionEnd = mBufferModel.selectionEnd();
+	const int oldDeltaX = delta.x;
+	const int oldDeltaY = delta.y;
+	const bool follow = delta.y <= 0;
+	int insertedLines = 0;
+
+	if (data == nullptr || length == 0) return true;
+	text.assign(data, length);
+	for (char ch : text)
+		if (ch == '\n') ++insertedLines;
+	transaction.insert(0, text);
+	if (!applyStagedTransaction(transaction, follow ? 0 : oldCursor + text.size(), follow ? 0 : oldSelectionStart + text.size(), follow ? 0 : oldSelectionEnd + text.size(), false).applied()) return false;
+	if (follow) scrollTo(oldDeltaX, 0);
+	else
+		scrollTo(oldDeltaX, std::max(0, oldDeltaY + insertedLines));
+	drawView();
+	return true;
 }
 
 bool MRFileEditor::formatParagraph(int rightMargin) {
@@ -4042,10 +4092,19 @@ Boolean MRFileEditor::confirmSaveOrDiscardUntitled() {
 		persistentName = trimAscii(fileName);
 		if (!persistentName.empty() && upperAscii(persistentName) != "?NO-FILE?") detail = persistentName.c_str();
 	}
-	switch (mr::dialogs::showUnsavedChangesDialog("Save As", "Window has unsaved changes.", detail)) {
+	const auto startedAt = std::chrono::steady_clock::now();
+	appendDirectProbeLog("Phase1 discard untitled dialog begin");
+	const mr::dialogs::UnsavedChangesChoice choice = mr::dialogs::showUnsavedChangesDialog("Save As", "Window has unsaved changes.", detail);
+	{
+		std::ostringstream trace;
+		trace << "Phase1 discard untitled dialog end total_us=" << traceMicros(std::chrono::steady_clock::now() - startedAt) << " choice=" << static_cast<int>(choice);
+		appendDirectProbeLog(trace.str());
+	}
+	switch (choice) {
 		case mr::dialogs::UnsavedChangesChoice::Save:
 			return saveAsWithPrompt();
 		case mr::dialogs::UnsavedChangesChoice::Discard:
+			appendDirectProbeLog("Phase1 discard untitled accepted");
 			setDocumentModified(false);
 			return True;
 		default:
@@ -4054,10 +4113,19 @@ Boolean MRFileEditor::confirmSaveOrDiscardUntitled() {
 }
 
 Boolean MRFileEditor::confirmSaveOrDiscardNamed() {
-	switch (mr::dialogs::showUnsavedChangesDialog("Save", "Save changes to:", fileName)) {
+	const auto startedAt = std::chrono::steady_clock::now();
+	appendDirectProbeLog("Phase1 discard named dialog begin");
+	const mr::dialogs::UnsavedChangesChoice choice = mr::dialogs::showUnsavedChangesDialog("Save", "Save changes to:", fileName);
+	{
+		std::ostringstream trace;
+		trace << "Phase1 discard named dialog end total_us=" << traceMicros(std::chrono::steady_clock::now() - startedAt) << " choice=" << static_cast<int>(choice);
+		appendDirectProbeLog(trace.str());
+	}
+	switch (choice) {
 		case mr::dialogs::UnsavedChangesChoice::Save:
 			return saveInPlace();
 		case mr::dialogs::UnsavedChangesChoice::Discard:
+			appendDirectProbeLog("Phase1 discard named accepted");
 			setDocumentModified(false);
 			return True;
 		default:

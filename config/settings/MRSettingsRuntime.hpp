@@ -323,6 +323,23 @@ struct MRAcquireSettings {
 	auto operator==(const MRAcquireSettings &) const noexcept -> bool = default;
 };
 
+enum class MRLiveLogScrollDirection {
+	Down,
+	Up
+};
+
+struct MRLiveLogSettings {
+	bool reportSearchHitsOnMessageLine{true};
+	bool reportSearchHitsWithSystemBeep{false};
+	bool reportSearchHitsWithAudioSignal{false};
+	MRLiveLogScrollDirection scrollDirection{MRLiveLogScrollDirection::Down};
+	bool showLineNumbers{true};
+	bool showTimestamps{false};
+	std::string audioSignalUri;
+
+	auto operator==(const MRLiveLogSettings &) const noexcept -> bool = default;
+};
+
 struct MRColorSetupItem {
 	const char *label;
 	unsigned char paletteIndex;
@@ -398,6 +415,7 @@ enum class MRDialogHistoryScope : unsigned char {
 	General = 0,
 	EditorSaveAs,
 	OpenFile,
+	LiveLogOpen,
 	LoadFile,
 	SaveLogAs,
 	BlockSave,
@@ -520,6 +538,8 @@ bool setConfiguredPdfExportSettings(const MRPdfExportSettings &settings, std::st
 [[nodiscard]] MRPdfExportSettings configuredPdfExportSettings();
 bool setConfiguredAcquireSettings(const MRAcquireSettings &settings, std::string *errorMessage = nullptr);
 [[nodiscard]] MRAcquireSettings configuredAcquireSettings();
+bool setConfiguredLiveLogSettings(const MRLiveLogSettings &settings, std::string *errorMessage = nullptr);
+[[nodiscard]] MRLiveLogSettings configuredLiveLogSettings();
 void configuredMultiFilespecHistoryEntries(std::vector<std::string> &outValues);
 void configuredMultiPathHistoryEntries(std::vector<std::string> &outValues);
 bool addConfiguredMultiFilespecHistoryEntry(const std::string &value, std::string *errorMessage = nullptr);

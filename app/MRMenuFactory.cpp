@@ -28,7 +28,7 @@ TMenuItem *createLowerCaseItem() {
 }
 
 TSubMenu *createFileMenu() {
-	return &(*new TSubMenu("~F~ile", kbAltF) + *new TMenuItem("~O~pen...", cmMrFileOpen, kbF3, hcNoContext, "F3") + *new TMenuItem("~L~oad...", cmMrFileLoad, kbNoKey, hcNoContext) + *new TMenuItem("A~q~uire...", cmMrFileAcquire, kbNoKey, hcNoContext) + *new TMenuItem("~S~ave", cmMrFileSave, kbF2, hcNoContext, "F2") + *new TMenuItem("save ~A~s...", cmMrFileSaveAs, kbCtrlF2, hcNoContext, "CtrlF2") + *new TMenuItem("~I~nfo...", cmMrFileInformation, kbNoKey, hcNoContext) + newLine() + *new TMenuItem("~M~erge...", cmMrFileMerge, kbNoKey, hcNoContext) + *new TMenuItem("E~x~port to PDF...", cmMrFilePrint, kbNoKey, hcNoContext) + *new TMenuItem("E~x~it", cmQuit, kbAltX, hcNoContext, "Alt-X"));
+	return &(*new TSubMenu("~F~ile", kbAltF) + *new TMenuItem("~O~pen...", cmMrFileOpen, kbF3, hcNoContext, "F3") + *new TMenuItem("~L~oad...", cmMrFileLoad, kbNoKey, hcNoContext) + *new TMenuItem("A~q~uire...", cmMrFileAcquire, kbNoKey, hcNoContext) + *new TMenuItem("Open live lo~G~...", cmMrFileOpenLiveLog, kbNoKey, hcNoContext) + *new TMenuItem("Open ~J~ournal...", cmMrFileOpenJournal, kbNoKey, hcNoContext) + *new TMenuItem("~S~ave", cmMrFileSave, kbF2, hcNoContext, "F2") + *new TMenuItem("save ~A~s...", cmMrFileSaveAs, kbCtrlF2, hcNoContext, "CtrlF2") + *new TMenuItem("~I~nfo...", cmMrFileInformation, kbNoKey, hcNoContext) + newLine() + *new TMenuItem("~M~erge...", cmMrFileMerge, kbNoKey, hcNoContext) + *new TMenuItem("E~x~port to PDF...", cmMrFilePrint, kbNoKey, hcNoContext) + *new TMenuItem("E~x~it", cmQuit, kbAltX, hcNoContext, "Alt-X"));
 }
 
 TSubMenu *createEditMenu() {
@@ -56,7 +56,7 @@ TSubMenu *createTextMenu() {
 }
 
 TMenuItem *createInstallationAndSetupMenuItem() {
-	return new TMenuItem("~I~nstallation and setup", kbNoKey, new TMenu(*new TMenuItem("~C~olor setup", cmMrSetupColorSetup, kbNoKey, hcNoContext) + *new TMenuItem("~K~ey mapping", cmMrSetupKeyMapping, kbNoKey, hcNoContext) + *new TMenuItem("~M~ouse / Key repeat", cmMrSetupMouseKeyRepeat, kbNoKey, hcNoContext) + *new TMenuItem("~F~ilename extensions", cmMrSetupFilenameExtensions, kbNoKey, hcNoContext) + *new TMenuItem("~P~aths", cmMrSetupPaths, kbNoKey, hcNoContext) + *new TMenuItem("~B~ackups / Autosave", cmMrSetupBackupsAutosave, kbNoKey, hcNoContext) + *new TMenuItem("~U~ser interface settings", cmMrSetupUserInterfaceSettings, kbNoKey, hcNoContext)), hcNoContext);
+	return new TMenuItem("~I~nstallation and setup", kbNoKey, new TMenu(*new TMenuItem("~C~olor setup", cmMrSetupColorSetup, kbNoKey, hcNoContext) + *new TMenuItem("~K~ey mapping", cmMrSetupKeyMapping, kbNoKey, hcNoContext) + *new TMenuItem("~M~ouse / Key repeat", cmMrSetupMouseKeyRepeat, kbNoKey, hcNoContext) + *new TMenuItem("~F~ilename extensions", cmMrSetupFilenameExtensions, kbNoKey, hcNoContext) + *new TMenuItem("~P~aths", cmMrSetupPaths, kbNoKey, hcNoContext) + *new TMenuItem("~B~ackups / Autosave", cmMrSetupBackupsAutosave, kbNoKey, hcNoContext) + *new TMenuItem("~U~ser interface settings", cmMrSetupUserInterfaceSettings, kbNoKey, hcNoContext) + *new TMenuItem("~L~ive logs", cmMrSetupLiveLogs, kbNoKey, hcNoContext)), hcNoContext);
 }
 
 TSubMenu *createOtherMenu() {

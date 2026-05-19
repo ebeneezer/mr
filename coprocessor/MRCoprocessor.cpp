@@ -47,6 +47,8 @@ unsigned int laneAffinitySlot(Lane lane) noexcept {
 			return 2;
 		case Lane::Macro:
 			return 3;
+		case Lane::Extern:
+			return 4;
 	}
 	return 0;
 }
@@ -65,7 +67,7 @@ void bindCurrentThreadToLaneCore(Lane lane, std::size_t workerSlot) noexcept {
 
 } // namespace
 
-Coprocessor::Coprocessor() : nextTaskId(1), shuttingDown(false), ioLane(Lane::Io), computeLane(Lane::Compute), miniMapLane(Lane::MiniMap), macroLane(Lane::Macro) {
+Coprocessor::Coprocessor() : nextTaskId(1), shuttingDown(false), ioLane(Lane::Io), computeLane(Lane::Compute), miniMapLane(Lane::MiniMap), macroLane(Lane::Macro), nextExternalSourceId(1), nextExternalActivitySequence(1), externalMutex(), externalSources() {
 	startLane(ioLane);
 	startLane(computeLane);
 	startLane(miniMapLane);
@@ -86,10 +88,15 @@ std::uint64_t Coprocessor::submit(Lane lane, TaskKind kind, std::size_t document
 }
 
 std::uint64_t Coprocessor::submitCoalesced(Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, std::string_view coalescingKey, std::string_view label, TaskFn fn) {
+	LaneState &targetLaneState = laneState(lane);
+
+	return submitToLaneState(targetLaneState, lane, kind, documentId, baseVersion, coalescingKey, label, std::move(fn));
+}
+
+std::uint64_t Coprocessor::submitToLaneState(LaneState &targetLaneState, Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, std::string_view coalescingKey, std::string_view label, TaskFn fn) {
 	if (shuttingDown.load(std::memory_order_acquire)) return 0;
 
 	Request request;
-	LaneState &targetLaneState = laneState(lane);
 	const std::uint64_t taskId = nextTaskId.fetch_add(1, std::memory_order_relaxed);
 	std::vector<std::uint64_t> removedTaskIds;
 	const bool allowCoalescing = kind != TaskKind::MacroJob && !coalescingKey.empty();
@@ -149,6 +156,102 @@ std::uint64_t Coprocessor::submitCoalesced(Lane lane, TaskKind kind, std::size_t
 		forgetTask(removedTaskId);
 	targetLaneState.cv.notify_one();
 	return taskId;
+}
+
+std::size_t Coprocessor::registerExternalSource(ExternalSourceKind kind, std::string_view displayName) {
+	static constexpr unsigned char kSourceColors[] = {0x30, 0x20, 0x60, 0x70, 0x50};
+	const std::size_t sourceId = static_cast<std::size_t>(nextExternalSourceId.fetch_add(1, std::memory_order_relaxed));
+	ExternalSourceState source;
+
+	source.sourceId = sourceId;
+	source.kind = kind;
+	switch (kind) {
+		case ExternalSourceKind::Journal:
+			source.tag = "JOU";
+			break;
+		case ExternalSourceKind::Device:
+			source.tag = "DEV";
+			break;
+		case ExternalSourceKind::Network:
+			source.tag = "NET";
+			break;
+		case ExternalSourceKind::Pipe:
+			source.tag = "PIP";
+			break;
+		case ExternalSourceKind::File:
+		default:
+			source.tag = "FIL";
+			break;
+	}
+	source.displayName.assign(displayName.data(), displayName.size());
+	source.colorIndex = kSourceColors[(sourceId - 1) % (sizeof(kSourceColors) / sizeof(kSourceColors[0]))];
+	source.running = false;
+	source.active = true;
+	source.taskId = 0;
+	source.receivedBytes = 0;
+	source.lane = std::make_unique<LaneState>(Lane::Extern, sourceId);
+
+	{
+		std::lock_guard<std::mutex> lock(externalMutex);
+		externalSources.push_back(std::move(source));
+	}
+	return sourceId;
+}
+
+std::uint64_t Coprocessor::submitExternal(std::size_t sourceId, std::string_view label, TaskFn fn) {
+	LaneState *targetLane = nullptr;
+	std::uint64_t taskId;
+
+	{
+		std::lock_guard<std::mutex> lock(externalMutex);
+		ExternalSourceState *source = findExternalSourceLocked(sourceId);
+		if (source == nullptr || source->lane == nullptr) return 0;
+		targetLane = source->lane.get();
+		if (targetLane->workers.empty()) startLane(*targetLane);
+	}
+
+	taskId = submitToLaneState(*targetLane, Lane::Extern, TaskKind::ExternalIo, sourceId, 0, std::string_view(), label, std::move(fn));
+	if (taskId != 0) {
+		std::lock_guard<std::mutex> lock(externalMutex);
+		ExternalSourceState *source = findExternalSourceLocked(sourceId);
+		if (source != nullptr) {
+			source->running = true;
+			source->taskId = taskId;
+		}
+	}
+	return taskId;
+}
+
+bool Coprocessor::cancelExternalSource(std::size_t sourceId) {
+	std::uint64_t taskId = 0;
+
+	{
+		std::lock_guard<std::mutex> lock(externalMutex);
+		ExternalSourceState *source = findExternalSourceLocked(sourceId);
+		if (source == nullptr) return false;
+		taskId = source->taskId;
+	}
+	return taskId != 0 && cancelTask(taskId);
+}
+
+void Coprocessor::unregisterExternalSource(std::size_t sourceId) {
+	std::unique_ptr<LaneState> removedLane;
+
+	cancelExternalSource(sourceId);
+	{
+		std::lock_guard<std::mutex> lock(externalMutex);
+		for (std::vector<ExternalSourceState>::iterator it = externalSources.begin(); it != externalSources.end(); ++it) {
+			if (it->sourceId != sourceId) continue;
+			if (it->lane != nullptr) {
+				for (std::jthread &worker : it->lane->workers)
+					if (worker.joinable()) worker.request_stop();
+				it->lane->cv.notify_all();
+				removedLane = std::move(it->lane);
+			}
+			externalSources.erase(it);
+			break;
+		}
+	}
 }
 
 std::size_t Coprocessor::pump(std::size_t maxResults) {
@@ -230,16 +333,26 @@ bool Coprocessor::cancelTask(std::uint64_t taskId) {
 	computeLane.cv.notify_all();
 	miniMapLane.cv.notify_all();
 	macroLane.cv.notify_all();
+	{
+		std::lock_guard<std::mutex> lock(externalMutex);
+		for (ExternalSourceState &source : externalSources)
+			if (source.lane != nullptr) source.lane->cv.notify_all();
+	}
 	return true;
 }
 
 void Coprocessor::cancelPending() {
-	LaneState *laneStates[] = {&ioLane, &computeLane, &miniMapLane, &macroLane};
+	std::vector<LaneState *> laneStates = {&ioLane, &computeLane, &miniMapLane, &macroLane};
 
 	{
 		std::lock_guard<std::mutex> lock(taskCancelMutex);
 		for (auto &cancelEntry : taskCancelFlags)
 			if (cancelEntry.second != nullptr) cancelEntry.second->store(true, std::memory_order_release);
+	}
+	{
+		std::lock_guard<std::mutex> lock(externalMutex);
+		for (ExternalSourceState &source : externalSources)
+			if (source.lane != nullptr) laneStates.push_back(source.lane.get());
 	}
 
 	for (LaneState *lane : laneStates) {
@@ -289,6 +402,19 @@ void Coprocessor::shutdown(bool drainResults) {
 	joinLaneWorkers(computeLane);
 	joinLaneWorkers(miniMapLane);
 	joinLaneWorkers(macroLane);
+	{
+		std::vector<LaneState *> externalLaneStates;
+		{
+			std::lock_guard<std::mutex> lock(externalMutex);
+			externalLaneStates.reserve(externalSources.size());
+			for (ExternalSourceState &source : externalSources)
+				if (source.lane != nullptr) externalLaneStates.push_back(source.lane.get());
+		}
+		for (LaneState *lane : externalLaneStates)
+			if (lane != nullptr) joinLaneWorkers(*lane);
+		std::lock_guard<std::mutex> lock(externalMutex);
+		externalSources.clear();
+	}
 
 	if (drainResults)
 		while (pump(64) != 0)
@@ -380,6 +506,7 @@ void Coprocessor::workerLoop(LaneState &lane, std::size_t workerSlot, std::stop_
 }
 
 void Coprocessor::enqueueResult(Result result) {
+	noteExternalResult(result);
 	std::lock_guard<std::mutex> lock(resultMutex);
 	results.push_back(std::move(result));
 }
@@ -387,6 +514,53 @@ void Coprocessor::enqueueResult(Result result) {
 void Coprocessor::forgetTask(std::uint64_t taskId) {
 	std::lock_guard<std::mutex> lock(taskCancelMutex);
 	taskCancelFlags.erase(taskId);
+}
+
+void Coprocessor::noteExternalResult(const Result &result) {
+	const ExternalIoChunkPayload *chunk = dynamic_cast<const ExternalIoChunkPayload *>(result.payload.get());
+	const std::size_t sourceId = chunk != nullptr ? chunk->channelId : result.task.documentId;
+
+	if (sourceId == 0) return;
+	std::lock_guard<std::mutex> lock(externalMutex);
+	ExternalSourceState *source = findExternalSourceLocked(sourceId);
+	if (source == nullptr) return;
+
+	if (chunk != nullptr) {
+		static constexpr std::size_t kMaxStreamSample = 240;
+		std::string incoming;
+
+		source->active = true;
+		source->running = true;
+		source->receivedBytes += chunk->text.size();
+		source->activitySequence = nextExternalActivitySequence.fetch_add(1, std::memory_order_relaxed);
+		incoming.reserve(std::min<std::size_t>(kMaxStreamSample, chunk->text.size()));
+		for (char ch : chunk->text) {
+			unsigned char byte = static_cast<unsigned char>(ch);
+			if (byte < 32 || byte == 127) ch = ' ';
+			incoming.push_back(ch);
+			if (incoming.size() >= kMaxStreamSample) break;
+		}
+		source->streamSample.insert(0, incoming);
+		if (source->streamSample.size() > kMaxStreamSample) source->streamSample.resize(kMaxStreamSample);
+		return;
+	}
+
+	if (result.task.lane == Lane::Extern && result.task.kind == TaskKind::ExternalIo) {
+		source->running = false;
+		source->taskId = 0;
+	}
+}
+
+Coprocessor::ExternalSourceState *Coprocessor::findExternalSourceLocked(std::size_t sourceId) noexcept {
+	for (ExternalSourceState &source : externalSources)
+		if (source.sourceId == sourceId) return &source;
+	return nullptr;
+}
+
+const Coprocessor::ExternalSourceState *Coprocessor::findExternalSourceLocked(std::size_t sourceId) const noexcept {
+	for (const ExternalSourceState &source : externalSources)
+		if (source.sourceId == sourceId) return &source;
+	return nullptr;
 }
 
 Snapshot Coprocessor::snapshot() const {
@@ -432,6 +606,26 @@ Snapshot Coprocessor::snapshot() const {
 				laneSnapshot.queuedTasks.push_back(lane.queue[taskIndex].task);
 		}
 		snapshot.lanes.push_back(std::move(laneSnapshot));
+	}
+	{
+		std::lock_guard<std::mutex> lock(externalMutex);
+		snapshot.externalSources.reserve(externalSources.size());
+		for (const ExternalSourceState &source : externalSources) {
+			ExternalSourceSnapshot sourceSnapshot;
+
+			sourceSnapshot.sourceId = source.sourceId;
+			sourceSnapshot.kind = source.kind;
+			sourceSnapshot.tag = source.tag;
+			sourceSnapshot.displayName = source.displayName;
+			sourceSnapshot.colorIndex = source.colorIndex;
+			sourceSnapshot.running = source.running;
+			sourceSnapshot.active = source.active;
+			sourceSnapshot.taskId = source.taskId;
+			sourceSnapshot.receivedBytes = source.receivedBytes;
+			sourceSnapshot.activitySequence = source.activitySequence;
+			sourceSnapshot.streamSample = source.streamSample;
+			snapshot.externalSources.push_back(std::move(sourceSnapshot));
+		}
 	}
 	return snapshot;
 }
@@ -510,6 +704,7 @@ Coprocessor::LaneState &Coprocessor::laneState(Lane lane) noexcept {
 			return miniMapLane;
 		case Lane::Macro:
 			return macroLane;
+		case Lane::Extern:
 		case Lane::Compute:
 		default:
 			return computeLane;

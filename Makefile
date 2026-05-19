@@ -163,6 +163,7 @@ CXX_SOURCES = \
 	config/settings/MRSettingsRuntime.cpp \
 	config/settings/MRSettingsStorage.cpp \
 	app/commands/MRExternalCommand.cpp \
+	app/commands/MRLogViewer.cpp \
 	derivedstate/MRDerivedStateBase.cpp \
 	derivedstate/MRFoldingDerivedState.cpp \
 	derivedstate/MRMiniMapDerivedState.cpp \

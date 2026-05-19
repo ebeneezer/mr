@@ -30,7 +30,16 @@ enum class Lane : unsigned char {
 	Io,
 	Compute,
 	MiniMap,
-	Macro
+	Macro,
+	Extern
+};
+
+enum class ExternalSourceKind : unsigned char {
+	File,
+	Journal,
+	Device,
+	Network,
+	Pipe
 };
 
 enum class TaskKind : unsigned char {
@@ -158,25 +167,28 @@ struct SaveNormalizationWarmupPayload final : Payload {
 
 struct ExternalIoChunkPayload final : Payload {
 	std::size_t channelId;
+	std::size_t targetBufferId;
+	std::size_t searchHitCount;
 	std::string text;
 
-	ExternalIoChunkPayload() noexcept : channelId(0), text() {
+	ExternalIoChunkPayload() noexcept : channelId(0), targetBufferId(0), searchHitCount(0), text() {
 	}
 
-	ExternalIoChunkPayload(std::size_t aChannelId, std::string aText) : channelId(aChannelId), text(std::move(aText)) {
+	ExternalIoChunkPayload(std::size_t aChannelId, std::string aText, std::size_t aTargetBufferId = 0, std::size_t aSearchHitCount = 0) : channelId(aChannelId), targetBufferId(aTargetBufferId), searchHitCount(aSearchHitCount), text(std::move(aText)) {
 	}
 };
 
 struct ExternalIoFinishedPayload final : Payload {
 	std::size_t channelId;
+	std::size_t targetBufferId;
 	int exitCode;
 	bool signaled;
 	int signalNumber;
 
-	ExternalIoFinishedPayload() noexcept : channelId(0), exitCode(0), signaled(false), signalNumber(0) {
+	ExternalIoFinishedPayload() noexcept : channelId(0), targetBufferId(0), exitCode(0), signaled(false), signalNumber(0) {
 	}
 
-	ExternalIoFinishedPayload(std::size_t aChannelId, int aExitCode, bool aSignaled, int aSignalNumber) noexcept : channelId(aChannelId), exitCode(aExitCode), signaled(aSignaled), signalNumber(aSignalNumber) {
+	ExternalIoFinishedPayload(std::size_t aChannelId, int aExitCode, bool aSignaled, int aSignalNumber, std::size_t aTargetBufferId = 0) noexcept : channelId(aChannelId), targetBufferId(aTargetBufferId), exitCode(aExitCode), signaled(aSignaled), signalNumber(aSignalNumber) {
 	}
 };
 
@@ -297,11 +309,29 @@ struct LaneSnapshot {
 	}
 };
 
+struct ExternalSourceSnapshot {
+	std::size_t sourceId;
+	ExternalSourceKind kind;
+	std::string tag;
+	std::string displayName;
+	unsigned char colorIndex;
+	bool running;
+	bool active;
+	std::uint64_t taskId;
+	std::uint64_t receivedBytes;
+	std::uint64_t activitySequence;
+	std::string streamSample;
+
+	ExternalSourceSnapshot() noexcept : sourceId(0), kind(ExternalSourceKind::File), tag(), displayName(), colorIndex(0), running(false), active(false), taskId(0), receivedBytes(0), activitySequence(0), streamSample() {
+	}
+};
+
 struct Snapshot {
 	std::size_t pendingResults;
 	std::vector<LaneSnapshot> lanes;
+	std::vector<ExternalSourceSnapshot> externalSources;
 
-	Snapshot() noexcept : pendingResults(0), lanes() {
+	Snapshot() noexcept : pendingResults(0), lanes(), externalSources() {
 	}
 };
 
@@ -319,6 +349,10 @@ class Coprocessor {
 	void setResultHandler(ResultHandler handler);
 	std::uint64_t submit(Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, std::string_view label, TaskFn fn);
 	std::uint64_t submitCoalesced(Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, std::string_view coalescingKey, std::string_view label, TaskFn fn);
+	std::size_t registerExternalSource(ExternalSourceKind kind, std::string_view displayName);
+	std::uint64_t submitExternal(std::size_t sourceId, std::string_view label, TaskFn fn);
+	bool cancelExternalSource(std::size_t sourceId);
+	void unregisterExternalSource(std::size_t sourceId);
 	std::size_t pump(std::size_t maxResults = 8);
 	std::size_t pumpFor(std::chrono::microseconds budget);
 	[[nodiscard]] std::size_t pendingResults() const noexcept;
@@ -358,6 +392,7 @@ class Coprocessor {
 
 	struct LaneState {
 		Lane lane;
+		std::size_t externalSourceId;
 		mutable std::mutex mutex;
 		std::condition_variable_any cv;
 		std::deque<Request> queue;
@@ -367,14 +402,36 @@ class Coprocessor {
 		std::vector<ActiveTaskState> activeTasks;
 		std::vector<std::jthread> workers;
 
-		explicit LaneState(Lane aLane) noexcept : lane(aLane), mutex(), cv(), queue(), highQueue(), normalQueue(), lowQueue(), activeTasks(), workers() {
+		explicit LaneState(Lane aLane, std::size_t aExternalSourceId = 0) noexcept : lane(aLane), externalSourceId(aExternalSourceId), mutex(), cv(), queue(), highQueue(), normalQueue(), lowQueue(), activeTasks(), workers() {
+		}
+	};
+
+	struct ExternalSourceState {
+		std::size_t sourceId;
+		ExternalSourceKind kind;
+		std::string tag;
+		std::string displayName;
+		unsigned char colorIndex;
+		bool running;
+		bool active;
+		std::uint64_t taskId;
+		std::uint64_t receivedBytes;
+		std::uint64_t activitySequence;
+		std::string streamSample;
+		std::unique_ptr<LaneState> lane;
+
+		ExternalSourceState() noexcept : sourceId(0), kind(ExternalSourceKind::File), tag(), displayName(), colorIndex(0), running(false), active(false), taskId(0), receivedBytes(0), activitySequence(0), streamSample(), lane() {
 		}
 	};
 
 	void startLane(LaneState &lane);
 	void workerLoop(LaneState &lane, std::size_t workerSlot, std::stop_token stopToken);
+	std::uint64_t submitToLaneState(LaneState &targetLaneState, Lane lane, TaskKind kind, std::size_t documentId, std::size_t baseVersion, std::string_view coalescingKey, std::string_view label, TaskFn fn);
 	void enqueueResult(Result result);
 	void forgetTask(std::uint64_t taskId);
+	void noteExternalResult(const Result &result);
+	ExternalSourceState *findExternalSourceLocked(std::size_t sourceId) noexcept;
+	const ExternalSourceState *findExternalSourceLocked(std::size_t sourceId) const noexcept;
 	LaneState &laneState(Lane lane) noexcept;
 	ComputePriority computePriorityForTask(TaskKind kind) const noexcept;
 	bool laneHasQueuedWorkLocked(const LaneState &lane) const noexcept;
@@ -396,6 +453,10 @@ class Coprocessor {
 	LaneState computeLane;
 	LaneState miniMapLane;
 	LaneState macroLane;
+	std::atomic<std::uint64_t> nextExternalSourceId;
+	std::atomic<std::uint64_t> nextExternalActivitySequence;
+	mutable std::mutex externalMutex;
+	std::vector<ExternalSourceState> externalSources;
 };
 
 Coprocessor &globalCoprocessor();

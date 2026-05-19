@@ -3,10 +3,8 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
-#include <future>
 #include <map>
 #include <memory>
-#include <thread>
 #include <utility>
 
 namespace {
@@ -64,23 +62,6 @@ const std::array<std::string, 256> &brailleGlyphTable() {
 	return table;
 }
 
-std::size_t scaledMidpoint(std::size_t sampleIndex, std::size_t sampleCount, std::size_t targetCount) noexcept {
-	if (sampleCount == 0 || targetCount == 0) return 0;
-	unsigned long long numerator = static_cast<unsigned long long>(sampleIndex) * 2ull + 1ull;
-	unsigned long long scaled = numerator * static_cast<unsigned long long>(targetCount);
-	unsigned long long denominator = static_cast<unsigned long long>(sampleCount) * 2ull;
-	std::size_t mapped = static_cast<std::size_t>(scaled / denominator);
-	return std::min(mapped, targetCount - 1);
-}
-
-std::pair<std::size_t, std::size_t> scaledInterval(std::size_t index, std::size_t count, std::size_t targetCount) noexcept {
-	if (count == 0 || targetCount == 0) return std::make_pair(0u, 0u);
-	std::size_t start = (index * targetCount) / count;
-	std::size_t end = ((index + 1) * targetCount + count - 1) / count;
-	if (end <= start) end = std::min(targetCount, start + 1);
-	return std::make_pair(std::min(start, targetCount), std::min(end, targetCount));
-}
-
 bool ratioCellInRange(int from, int to, int viewportWidth, int cellIndex, int cellCount) noexcept {
 	if (from < 0 || to <= 0 || from >= to || viewportWidth <= 0 || cellCount <= 0) return false;
 	long long cellLeft = static_cast<long long>(cellIndex) * viewportWidth;
@@ -101,6 +82,39 @@ bool miniMapCellHasOverlayBits(std::uint64_t lineBits, int x, bool useBraille) n
 		return leftBit != 0 || rightBit != 0;
 	}
 	return x < 64 && ((lineBits >> x) & 1ULL) != 0;
+}
+
+std::vector<std::string> buildViewportAnchoredLineTexts(const mr::editor::ReadSnapshot &snapshot, std::size_t windowStartLine, std::size_t windowLineCount, std::size_t focusTopLine) {
+	std::vector<std::string> lineTexts;
+
+	if (windowLineCount == 0) return lineTexts;
+	lineTexts.resize(windowLineCount);
+	const std::size_t windowEndLine = windowStartLine + windowLineCount;
+	const std::size_t focusLine = std::clamp(focusTopLine, windowStartLine, windowEndLine - 1);
+	const std::size_t focusIndex = focusLine - windowStartLine;
+	std::size_t lineStart = snapshot.lineStartByIndex(focusLine);
+
+	lineTexts[focusIndex] = snapshot.lineText(lineStart);
+
+	std::size_t forwardStart = lineStart;
+	for (std::size_t lineIndex = focusLine + 1; lineIndex < windowEndLine; ++lineIndex) {
+		if (forwardStart >= snapshot.length()) break;
+		const std::size_t nextLineStart = snapshot.nextLine(forwardStart);
+		if (nextLineStart <= forwardStart) break;
+		forwardStart = nextLineStart;
+		lineTexts[lineIndex - windowStartLine] = snapshot.lineText(forwardStart);
+	}
+
+	std::size_t backwardStart = lineStart;
+	for (std::size_t lineIndex = focusLine; lineIndex > windowStartLine; --lineIndex) {
+		if (backwardStart == 0) break;
+		const std::size_t previousLineStart = snapshot.prevLine(backwardStart);
+		if (previousLineStart >= backwardStart) break;
+		backwardStart = previousLineStart;
+		lineTexts[lineIndex - windowStartLine - 1] = snapshot.lineText(backwardStart);
+	}
+
+	return lineTexts;
 }
 
 } // namespace
@@ -165,21 +179,17 @@ struct MRMiniMapRenderer::Impl {
 
 	static SamplingWindow samplingWindowFor(std::size_t totalLines, std::size_t topLine, int rowCount, bool useBraille) noexcept {
 		const std::size_t normalizedTotalLines = std::max<std::size_t>(1, totalLines);
-		const std::size_t normalizedRowCount = std::max<std::size_t>(1, static_cast<std::size_t>(std::max(rowCount, 1)));
-		const std::size_t samplingRowCount = useBraille ? normalizedRowCount * 4u : normalizedRowCount;
-		const std::size_t maxWindowLineCount = normalizedRowCount * 9u;
+		const std::size_t lineSamplesPerRow = useBraille ? 4 : 1;
+		const std::size_t normalizedRowCount = std::max<std::size_t>(1, static_cast<std::size_t>(std::max(rowCount, 1)) * lineSamplesPerRow);
 		SamplingWindow window;
-		if (normalizedTotalLines <= maxWindowLineCount) {
+		if (normalizedTotalLines <= normalizedRowCount) {
 			window.startLine = 0;
-			window.lineCount = std::max(normalizedTotalLines, samplingRowCount);
+			window.lineCount = normalizedTotalLines;
 			return window;
 		}
-		window.lineCount = std::max<std::size_t>(1, maxWindowLineCount);
 		const std::size_t clampedTop = std::min(topLine, normalizedTotalLines - 1);
-		std::size_t preferredStart = 0;
-		if (clampedTop > window.lineCount / 2) preferredStart = clampedTop - window.lineCount / 2;
-		const std::size_t maxStart = normalizedTotalLines - window.lineCount;
-		window.startLine = std::min(preferredStart, maxStart);
+		window.startLine = clampedTop;
+		window.lineCount = std::min(normalizedRowCount, normalizedTotalLines - clampedTop);
 		return window;
 	}
 
@@ -317,7 +327,7 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 	const int bodyWidth = viewport.bodyWidth;
 	const int viewportWidth = std::max(1, viewport.width);
 	const bool haveProjection = Impl::hasProjectionFor(mImpl->cache, rowCount, bodyWidth);
-	if (preservePendingTaskForSameDocument && mImpl->warmupTaskId == 0 && mImpl->warmupDocumentId == documentId && mImpl->warmupRows == rowCount && mImpl->warmupBodyWidth == bodyWidth &&
+	if (preservePendingTaskForSameDocument && mImpl->warmupTaskId == 0 && mImpl->warmupDocumentId == documentId && mImpl->warmupVersion == version && mImpl->warmupRows == rowCount && mImpl->warmupBodyWidth == bodyWidth &&
 	    mImpl->warmupViewportWidth == viewportWidth && mImpl->warmupBraille == useBraille && mImpl->lastWarmupScheduledWindowStartLine == samplingWindow.startLine &&
 	    mImpl->lastWarmupScheduledWindowLineCount == samplingWindow.lineCount && mImpl->lastWarmupScheduledAt != std::chrono::steady_clock::time_point() &&
 	    std::chrono::steady_clock::now() - mImpl->lastWarmupScheduledAt < kLargeFileViewportWarmupDebounce)
@@ -356,11 +366,9 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 		std::vector<unsigned char> rowPatterns;
 		std::vector<std::size_t> rowLineStarts;
 		std::vector<std::size_t> rowLineEnds;
-		const int dotRows = useBraille ? std::max(1, rowCount * 4) : std::max(1, rowCount);
 		const int dotCols = useBraille ? std::max(1, bodyWidth * 2) : std::max(1, bodyWidth);
 		const std::size_t windowStartLine = samplingWindow.startLine;
 		const std::size_t windowLineCount = std::max<std::size_t>(1, samplingWindow.lineCount);
-		const std::size_t totalMiniMapCells = static_cast<std::size_t>(std::max(1, rowCount)) * static_cast<std::size_t>(std::max(1, bodyWidth));
 		std::size_t normalizedTotalLines = std::max<std::size_t>(1, totalLines);
 		auto shouldStop = [&]() noexcept { return stopToken.stop_requested() || info.cancelRequested(); };
 		result.task = info;
@@ -370,8 +378,7 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 			return result;
 		}
 		if (snapshot.exactLineCountKnown()) normalizedTotalLines = std::max<std::size_t>(1, snapshot.lineCount());
-		std::vector<std::string> windowLineTexts =
-		    mrBuildViewportScanLineTextsParallel(snapshot, windowStartLine, windowStartLine + windowLineCount, topLine, topLine + static_cast<std::size_t>(std::max(rowCount, 1)));
+		std::vector<std::string> windowLineTexts = buildViewportAnchoredLineTexts(snapshot, windowStartLine, windowLineCount, topLine);
 		if (shouldStop()) {
 			result.status = mr::coprocessor::TaskStatus::Cancelled;
 			return result;
@@ -418,25 +425,32 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 
 			for (int y = yStart; y < yEnd; ++y) {
 				if (shouldStop()) return false;
-				std::pair<std::size_t, std::size_t> lineSpan = scaledInterval(static_cast<std::size_t>(y), static_cast<std::size_t>(rowCount), windowLineCount);
-				rowLineStarts[static_cast<std::size_t>(y)] = std::min(normalizedTotalLines, windowStartLine + lineSpan.first);
-				rowLineEnds[static_cast<std::size_t>(y)] = std::min(normalizedTotalLines, windowStartLine + lineSpan.second);
+				const std::size_t rowSampleStart = useBraille ? static_cast<std::size_t>(y) * 4 : static_cast<std::size_t>(y);
+				const std::size_t rowSampleCount = useBraille ? 4 : 1;
+				if (rowSampleStart < windowLineCount) {
+					rowLineStarts[static_cast<std::size_t>(y)] = std::min(normalizedTotalLines, windowStartLine + rowSampleStart);
+					rowLineEnds[static_cast<std::size_t>(y)] = std::min(normalizedTotalLines, windowStartLine + std::min(windowLineCount, rowSampleStart + rowSampleCount));
+				} else {
+					rowLineStarts[static_cast<std::size_t>(y)] = std::min(normalizedTotalLines, windowStartLine + windowLineCount);
+					rowLineEnds[static_cast<std::size_t>(y)] = rowLineStarts[static_cast<std::size_t>(y)];
+				}
 				for (int x = 0; x < bodyWidth; ++x) {
 					unsigned char pattern = 0;
 					if (useBraille) {
 						static const unsigned char dotBits[4][2] = {{0x01, 0x08}, {0x02, 0x10}, {0x04, 0x20}, {0x40, 0x80}};
 						for (int py = 0; py < 4; ++py) {
-							std::size_t sampleRow = static_cast<std::size_t>(y * 4 + py);
-							if (sampleRow >= windowLineCount) continue;
-							std::size_t lineIndex = windowStartLine + scaledMidpoint(sampleRow, static_cast<std::size_t>(dotRows), windowLineCount);
-							const MiniMapLineSample &sample = lineSampleAt(lineIndex);
-							for (int px = 0; px < 2; ++px) {
-								const int dotColumn = x * 2 + px;
-								if (dotColumn < 64 && (sample.dotColumnBits & (1ULL << dotColumn)) != 0) pattern |= dotBits[py][px];
+							const std::size_t sampleOffset = static_cast<std::size_t>(y) * 4 + static_cast<std::size_t>(py);
+							if (sampleOffset < windowLineCount) {
+								const std::size_t lineIndex = windowStartLine + sampleOffset;
+								const MiniMapLineSample &sample = lineSampleAt(lineIndex);
+								for (int px = 0; px < 2; ++px) {
+									const int dotColumn = x * 2 + px;
+									if (dotColumn < 64 && (sample.dotColumnBits & (1ULL << dotColumn)) != 0) pattern |= dotBits[py][px];
+								}
 							}
 						}
 					} else if (static_cast<std::size_t>(y) < windowLineCount) {
-						std::size_t lineIndex = windowStartLine + scaledMidpoint(static_cast<std::size_t>(y), static_cast<std::size_t>(rowCount), windowLineCount);
+						std::size_t lineIndex = windowStartLine + static_cast<std::size_t>(y);
 						const MiniMapLineSample &sample = lineSampleAt(lineIndex);
 						if (x < 64 && (sample.dotColumnBits & (1ULL << x)) != 0) pattern = 1;
 					}
@@ -445,28 +459,9 @@ MRMiniMapRenderer::Signals MRMiniMapRenderer::scheduleWarmupIfNeeded(const Viewp
 			}
 			return true;
 		};
-		const unsigned hardwareWorkers = std::max(1u, std::thread::hardware_concurrency());
-		const unsigned workerCount = totalMiniMapCells >= 512 ? std::min<unsigned>(hardwareWorkers, static_cast<unsigned>(std::max(1, rowCount))) : 1u;
-		if (workerCount == 1) {
-			if (!renderRows(0, rowCount)) {
-				result.status = mr::coprocessor::TaskStatus::Cancelled;
-				return result;
-			}
-		} else {
-			std::vector<std::future<bool>> workers;
-
-			workers.reserve(workerCount);
-			for (unsigned workerIndex = 0; workerIndex < workerCount; ++workerIndex) {
-				const int yStart = static_cast<int>((static_cast<std::size_t>(workerIndex) * static_cast<std::size_t>(rowCount)) / static_cast<std::size_t>(workerCount));
-				const int yEnd = static_cast<int>((static_cast<std::size_t>(workerIndex + 1) * static_cast<std::size_t>(rowCount)) / static_cast<std::size_t>(workerCount));
-				if (yStart >= yEnd) continue;
-				workers.push_back(std::async(std::launch::async, [&, yStart, yEnd]() { return renderRows(yStart, yEnd); }));
-			}
-			for (std::future<bool> &worker : workers)
-				if (!worker.get()) {
-					result.status = mr::coprocessor::TaskStatus::Cancelled;
-					return result;
-				}
+		if (!renderRows(0, rowCount)) {
+			result.status = mr::coprocessor::TaskStatus::Cancelled;
+			return result;
 		}
 		result.status = mr::coprocessor::TaskStatus::Completed;
 		result.payload = std::make_shared<mr::coprocessor::MiniMapWarmupPayload>(useBraille, rowCount, bodyWidth, normalizedTotalLines, windowStartLine, windowLineCount, viewportWidth, std::move(rowPatterns), std::move(rowLineStarts), std::move(rowLineEnds));
@@ -545,7 +540,10 @@ void MRMiniMapRenderer::drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, 
 	const int bodyWidth = viewport.bodyWidth;
 	const Impl::SamplingWindow samplingWindow = Impl::samplingWindowFor(totalLines, topLine, miniMapRows, useBraille);
 	const bool cacheReady = mImpl->cacheReadyForViewport(viewport, miniMapRows, useBraille, samplingWindow, mImpl->cache.documentId, mImpl->cache.documentVersion);
-	const bool stalePatternCacheUsable = !cacheReady && mImpl->cache.bodyWidth == bodyWidth && mImpl->cache.rowCount == miniMapRows && !mImpl->cache.rowPatterns.empty();
+	const bool stalePatternCacheUsable =
+	    !cacheReady && mImpl->cache.documentId != 0 && mImpl->cache.bodyWidth == bodyWidth && mImpl->cache.rowCount == miniMapRows && mImpl->cache.viewportWidth == std::max(1, viewport.width) &&
+	    mImpl->cache.braille == useBraille && mImpl->cache.windowStartLine == samplingWindow.startLine && mImpl->cache.windowLineCount == std::max<std::size_t>(1, samplingWindow.lineCount) &&
+	    !mImpl->cache.rowPatterns.empty();
 	std::size_t rowLineStart = 0;
 	std::size_t rowLineEnd = 0;
 
@@ -560,10 +558,16 @@ void MRMiniMapRenderer::drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, 
 		rowLineStart = mImpl->cache.rowLineStarts[static_cast<std::size_t>(y)];
 		rowLineEnd = mImpl->cache.rowLineEnds[static_cast<std::size_t>(y)];
 	} else {
-		std::pair<std::size_t, std::size_t> rowSpan = scaledInterval(static_cast<std::size_t>(y), static_cast<std::size_t>(std::max(miniMapRows, 1)), samplingWindow.lineCount);
 		const std::size_t normTotal = std::max<std::size_t>(1, totalLines);
-		rowLineStart = std::min(samplingWindow.startLine + rowSpan.first, normTotal);
-		rowLineEnd = std::min(samplingWindow.startLine + rowSpan.second, normTotal);
+		const std::size_t rowSampleStart = useBraille ? static_cast<std::size_t>(y) * 4 : static_cast<std::size_t>(y);
+		const std::size_t rowSampleCount = useBraille ? 4 : 1;
+		if (rowSampleStart < samplingWindow.lineCount) {
+			rowLineStart = std::min(samplingWindow.startLine + rowSampleStart, normTotal);
+			rowLineEnd = std::min(normTotal, samplingWindow.startLine + std::min(samplingWindow.lineCount, rowSampleStart + rowSampleCount));
+		} else {
+			rowLineStart = std::min(samplingWindow.startLine + samplingWindow.lineCount, normTotal);
+			rowLineEnd = rowLineStart;
+		}
 	}
 
 	for (int x = 0; x < bodyWidth; ++x) {
@@ -576,17 +580,17 @@ void MRMiniMapRenderer::drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, 
 		bool cellChanged = false;
 		bool cellError = false;
 		if (useBraille) {
-			for (int py = 0; py < 4 && (!cellFind || !cellChanged); ++py) {
-				std::size_t sampleRow = static_cast<std::size_t>(y * 4 + py);
-				if (sampleRow >= samplingWindow.lineCount) continue;
-				std::size_t lineIndex = samplingWindow.startLine + scaledMidpoint(sampleRow, static_cast<std::size_t>(std::max(miniMapRows * 4, 1)), samplingWindow.lineCount);
+			for (int py = 0; py < 4; ++py) {
+				const std::size_t sampleOffset = static_cast<std::size_t>(y) * 4 + static_cast<std::size_t>(py);
+				if (sampleOffset >= samplingWindow.lineCount) break;
+				const std::size_t lineIndex = samplingWindow.startLine + sampleOffset;
 				const std::uint64_t findBits = Impl::lineMaskBits(overlay.findLineMasks, lineIndex);
 				const std::uint64_t dirtyBits = Impl::lineMaskBits(overlay.dirtyLineMasks, lineIndex);
 				if (!cellFind && miniMapCellHasOverlayBits(findBits, x, true)) cellFind = true;
 				if (!cellChanged && miniMapCellHasOverlayBits(dirtyBits, x, true)) cellChanged = true;
 			}
 		} else {
-			std::size_t lineIndex = samplingWindow.startLine + scaledMidpoint(static_cast<std::size_t>(y), static_cast<std::size_t>(std::max(miniMapRows, 1)), samplingWindow.lineCount);
+			std::size_t lineIndex = samplingWindow.startLine + static_cast<std::size_t>(y);
 			const std::uint64_t findBits = Impl::lineMaskBits(overlay.findLineMasks, lineIndex);
 			const std::uint64_t dirtyBits = Impl::lineMaskBits(overlay.dirtyLineMasks, lineIndex);
 			cellFind = miniMapCellHasOverlayBits(findBits, x, false);

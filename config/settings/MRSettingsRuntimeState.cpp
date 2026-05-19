@@ -25,6 +25,7 @@ MRMultiSearchDialogOptions g_multiSearchDialogOptions;
 MRMultiSarDialogOptions g_multiSarDialogOptions;
 MRPdfExportSettings g_pdfExportSettings;
 MRAcquireSettings g_acquireSettings;
+MRLiveLogSettings g_liveLogSettings;
 int g_virtualDesktops = 1;
 bool g_cyclicVirtualDesktops = false;
 MRCursorBehaviour g_cursorBehaviour = MRCursorBehaviour::BoundToText;
@@ -565,6 +566,17 @@ bool setConfiguredAcquireSettings(const MRAcquireSettings &settings, std::string
 
 MRAcquireSettings configuredAcquireSettings() {
 	return g_acquireSettings;
+}
+
+bool setConfiguredLiveLogSettings(const MRLiveLogSettings &settings, std::string *errorMessage) {
+	if (g_liveLogSettings != settings) markConfiguredSettingsDirty();
+	g_liveLogSettings = settings;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+MRLiveLogSettings configuredLiveLogSettings() {
+	return g_liveLogSettings;
 }
 
 bool setConfiguredVirtualDesktops(int count, std::string *errorMessage) {

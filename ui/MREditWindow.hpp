@@ -159,9 +159,62 @@ class MREditWindow : public TWindow {
 
 	virtual Boolean valid(ushort command) override {
 		if (command != cmClose) return TWindow::valid(command);
-		if (!TWindow::valid(command)) return False;
+		const auto closeValidStartedAt = std::chrono::steady_clock::now();
+		{
+			std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+			if (out) {
+				std::time_t now = std::time(nullptr);
+				std::tm *tmNow = std::localtime(&now);
+				char buffer[32];
+				if (tmNow != nullptr && std::strftime(buffer, sizeof(buffer), "%H:%M:%S", tmNow) != 0) out << "[" << buffer << "] ";
+				else
+					out << "[--:--:--] ";
+				out << "Phase1 discard window valid begin #" << mBufferId << " title='" << (getTitle(0) != nullptr ? getTitle(0) : "?") << "'.\n";
+				out.flush();
+			}
+		}
+		if (!TWindow::valid(command)) {
+			std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+			if (out) {
+				std::time_t now = std::time(nullptr);
+				std::tm *tmNow = std::localtime(&now);
+				char buffer[32];
+				if (tmNow != nullptr && std::strftime(buffer, sizeof(buffer), "%H:%M:%S", tmNow) != 0) out << "[" << buffer << "] ";
+				else
+					out << "[--:--:--] ";
+				out << "Phase1 discard window valid editor rejected #" << mBufferId << " total_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - closeValidStartedAt).count() << ".\n";
+				out.flush();
+			}
+			return False;
+		}
+		{
+			std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+			if (out) {
+				std::time_t now = std::time(nullptr);
+				std::tm *tmNow = std::localtime(&now);
+				char buffer[32];
+				if (tmNow != nullptr && std::strftime(buffer, sizeof(buffer), "%H:%M:%S", tmNow) != 0) out << "[" << buffer << "] ";
+				else
+					out << "[--:--:--] ";
+				out << "Phase1 discard window valid editor accepted #" << mBufferId << " total_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - closeValidStartedAt).count() << ".\n";
+				out.flush();
+			}
+		}
 		scheduleEnsureUsableWorkWindow();
 		prepareForClose();
+		{
+			std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+			if (out) {
+				std::time_t now = std::time(nullptr);
+				std::tm *tmNow = std::localtime(&now);
+				char buffer[32];
+				if (tmNow != nullptr && std::strftime(buffer, sizeof(buffer), "%H:%M:%S", tmNow) != 0) out << "[" << buffer << "] ";
+				else
+					out << "[--:--:--] ";
+				out << "Phase1 discard window valid end #" << mBufferId << " total_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - closeValidStartedAt).count() << ".\n";
+				out.flush();
+			}
+		}
 		return True;
 	}
 
@@ -634,6 +687,21 @@ class MREditWindow : public TWindow {
 	bool appendTextBuffer(const char *text) {
 		if (editor == nullptr) return false;
 		return editor->appendBufferText(text);
+	}
+
+	bool appendLogViewerText(const char *text) {
+		if (editor == nullptr || text == nullptr) return false;
+		return editor->appendLogViewerData(text, static_cast<uint>(std::strlen(text)));
+	}
+
+	bool prependLogViewerText(const char *text) {
+		if (editor == nullptr || text == nullptr) return false;
+		return editor->prependLogViewerData(text, static_cast<uint>(std::strlen(text)));
+	}
+
+	void setLogViewerOptions(bool lineNumbers) {
+		if (editor == nullptr) return;
+		editor->setCommunicationViewerOptions(lineNumbers);
 	}
 
 	void setDisplayTitle(const char *title) {
@@ -1926,6 +1994,8 @@ class MREditWindow : public TWindow {
 				return "MiniMap";
 			case mr::coprocessor::Lane::Macro:
 				return "Macro";
+			case mr::coprocessor::Lane::Extern:
+				return "Extern";
 		}
 		return "Lane";
 	}

@@ -46,8 +46,11 @@ struct Event {
 	double queueMs;
 	double runMs;
 	double totalMs;
+	bool derivedStateApplied;
 
-	Event() noexcept : sequence(0), wallClock(0), scope(Scope::Ui), outcome(Outcome::Completed), lane(mr::coprocessor::Lane::Compute), action(), detail(), bufferId(0), documentId(0), bytes(0), queueMs(0.0), runMs(0.0), totalMs(0.0) {
+	Event() noexcept
+	    : sequence(0), wallClock(0), scope(Scope::Ui), outcome(Outcome::Completed), lane(mr::coprocessor::Lane::Compute), action(), detail(), bufferId(0), documentId(0), bytes(0), queueMs(0.0),
+	      runMs(0.0), totalMs(0.0), derivedStateApplied(false) {
 	}
 };
 
@@ -63,6 +66,8 @@ struct MessageLineNotice {
 void recordUiEvent(std::string_view action, std::size_t bufferId, std::size_t documentId, std::size_t bytes, double totalMs, std::string_view detail = {}, Outcome outcome = Outcome::Completed);
 void recordBackgroundResult(const mr::coprocessor::Result &result, std::string_view action, std::size_t bufferId, std::size_t documentId, std::size_t bytes, std::string_view detail = {});
 void recordBackgroundEvent(mr::coprocessor::Lane lane, Outcome outcome, const mr::coprocessor::TaskTiming &timing, std::string_view action, std::size_t bufferId, std::size_t documentId, std::size_t bytes, std::string_view detail = {});
+void recordBackgroundEvent(mr::coprocessor::Lane lane, Outcome outcome, const mr::coprocessor::TaskTiming &timing, std::string_view action, std::size_t bufferId, std::size_t documentId, std::size_t bytes,
+                           std::string_view detail, bool derivedStateApplied);
 
 [[nodiscard]] std::vector<Event> recentForWindow(std::size_t bufferId, std::size_t documentId, std::size_t maxCount = 6);
 [[nodiscard]] std::vector<Event> recentGlobal(std::size_t maxCount = 6);

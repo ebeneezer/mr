@@ -16,7 +16,6 @@ bool isStatefulSyntaxLanguage(MRSyntaxLanguage language) noexcept {
 	       language == MRSyntaxLanguage::Go || language == MRSyntaxLanguage::Pascal;
 }
 
-static constexpr auto kLargeFileMiniMapEditDebounce = std::chrono::milliseconds(500);
 bool quitTailTraceActive() noexcept {
 	const auto *app = dynamic_cast<const MREditorApp *>(TProgram::application);
 	return app != nullptr && app->quitPrepared();
@@ -38,6 +37,13 @@ MRFileEditor::TextViewportGeometry MRFileEditor::textViewportGeometryFor(const M
 	inputs.exactLineCountKnown = !approximateLargeFileMetrics && mBufferModel.exactLineCountKnown();
 	inputs.exactLineCount = inputs.exactLineCountKnown ? mBufferModel.lineCount() : 0;
 	inputs.estimatedLineCount = mBufferModel.estimatedLineCount();
+	if (mCommunicationViewerMode) {
+		viewportSettings.showLineNumbers = mCommunicationViewerLineNumbers;
+		viewportSettings.lineNumbersPosition = mCommunicationViewerLineNumbers ? "LEADING" : "OFF";
+		viewportSettings.codeFolding = false;
+		viewportSettings.codeFoldingPosition = "OFF";
+		viewportSettings.miniMapPosition = "OFF";
+	}
 	if (!foldingEnabled) {
 		viewportSettings.codeFolding = false;
 		viewportSettings.codeFoldingPosition = "OFF";
@@ -461,7 +467,6 @@ void MRFileEditor::draw() {
 	std::string viewportMarkerGlyph = MRMiniMapRenderer::normalizedViewportMarkerGlyph(editSettings.miniMapMarkerGlyph);
 	const bool foldedView = foldingEnabled && !mFoldState.closedFoldSpans().empty();
 	const int miniMapRows = std::max(0, visibleTextRows());
-	const auto now = std::chrono::steady_clock::now();
 	if (mBufferModel.exactLineCountKnown()) totalLines = foldedView ? foldedVisibleLineCount() : std::max<std::size_t>(1, mBufferModel.lineCount());
 	else
 		totalLines = std::max<std::size_t>(1, std::max<std::size_t>(mBufferModel.estimatedLineCount(), static_cast<std::size_t>(std::max(delta.y, 0)) + static_cast<std::size_t>(std::max(miniMapRows, 1))));
@@ -470,29 +475,17 @@ void MRFileEditor::draw() {
 	std::size_t linePtr = mBufferModel.lineStartByIndex(documentLineForVisibleLine(topLine));
 	std::size_t lineIndex = documentLineForVisibleLine(topLine);
 	const MRMiniMapRenderer::Viewport miniMapViewport = {viewport.width, viewport.miniMapBodyX, viewport.miniMapBodyWidth, viewport.miniMapInfoX, viewport.miniMapSeparatorX};
-	const bool throttleMiniMapForEditBurst =
-	    drawMiniMap && useApproximateLargeFileMetrics() && mMiniMapState.lastEditAt() != std::chrono::steady_clock::time_point() && now - mMiniMapState.lastEditAt() < kLargeFileMiniMapEditDebounce;
-	const bool haveMiniMapProjection = drawMiniMap && mMiniMapState.renderer().hasProjection(miniMapRows, miniMapViewport.bodyWidth);
-	const bool deferMiniMapWarmupForEditBurst = throttleMiniMapForEditBurst && haveMiniMapProjection;
 	if (drawMiniMap) {
-		if (deferMiniMapWarmupForEditBurst) {
-			if (shouldTraceLargeFileWarmupDiagnostics()) {
-				std::string detail = "action=defer-edit-burst task=" + std::to_string(mMiniMapState.renderer().pendingWarmupTaskId()) + " top_line=" + std::to_string(topLine) + " rows=" + std::to_string(miniMapRows) +
-				                     " total_lines=" + std::to_string(totalLines);
-				traceLargeFileWarmup(mLastMiniMapWarmupTrace, "minimap", std::move(detail));
-			}
-		} else {
-			const std::uint64_t previousMiniMapTaskId = mMiniMapState.renderer().pendingWarmupTaskId();
-			MRMiniMapRenderer::Signals miniMapSignals = mMiniMapState.renderer().scheduleWarmupIfNeeded(miniMapViewport, miniMapRows, miniMapUseBraille, totalLines, topLine, mBufferModel.documentId(), mBufferModel.version(),
-			                                                                                      mBufferModel.readSnapshot(), editSettings, useApproximateLargeFileMetrics());
-			const std::uint64_t currentMiniMapTaskId = mMiniMapState.renderer().pendingWarmupTaskId();
-			if (shouldTraceLargeFileWarmupDiagnostics() && (currentMiniMapTaskId != previousMiniMapTaskId || miniMapSignals.notifyTaskStateChanged)) {
-				std::string detail = "action=" + std::string(currentMiniMapTaskId == 0 ? "idle" : (currentMiniMapTaskId == previousMiniMapTaskId ? "reuse" : "schedule")) + " task=" +
-				                     std::to_string(currentMiniMapTaskId) + " top_line=" + std::to_string(topLine) + " rows=" + std::to_string(miniMapRows) + " total_lines=" + std::to_string(totalLines);
-				traceLargeFileWarmup(mLastMiniMapWarmupTrace, "minimap", std::move(detail));
-			}
-			applyMiniMapSignals(miniMapSignals);
+		const std::uint64_t previousMiniMapTaskId = mMiniMapState.renderer().pendingWarmupTaskId();
+		MRMiniMapRenderer::Signals miniMapSignals = mMiniMapState.renderer().scheduleWarmupIfNeeded(miniMapViewport, miniMapRows, miniMapUseBraille, totalLines, topLine, mBufferModel.documentId(), mBufferModel.version(),
+		                                                                                      mBufferModel.readSnapshot(), editSettings, useApproximateLargeFileMetrics());
+		const std::uint64_t currentMiniMapTaskId = mMiniMapState.renderer().pendingWarmupTaskId();
+		if (shouldTraceLargeFileWarmupDiagnostics() && (currentMiniMapTaskId != previousMiniMapTaskId || miniMapSignals.notifyTaskStateChanged)) {
+			std::string detail = "action=" + std::string(currentMiniMapTaskId == 0 ? "idle" : (currentMiniMapTaskId == previousMiniMapTaskId ? "reuse" : "schedule")) + " task=" +
+			                     std::to_string(currentMiniMapTaskId) + " top_line=" + std::to_string(topLine) + " rows=" + std::to_string(miniMapRows) + " total_lines=" + std::to_string(totalLines);
+			traceLargeFileWarmup(mLastMiniMapWarmupTrace, "minimap", std::move(detail));
 		}
+		applyMiniMapSignals(miniMapSignals);
 	}
 	MRMiniMapRenderer::OverlayState miniMapOverlay;
 	if (drawMiniMap) {
@@ -543,7 +536,15 @@ void MRFileEditor::draw() {
 		bool drawEofMarker = editSettings.showEofMarker && visibleLineIndex == totalLines;
 		bool drawEofMarkerAsEmoji = drawEofMarker && editSettings.showEofMarkerEmoji;
 		MRSyntaxLineResult syntaxLine;
-		if (showLineNumbers) drawLineNumberGutter(buffer, currentLineIndex, isDocumentLine, viewport.lineNumberX, viewport.lineNumberWidth, zeroFillLineNumbers);
+		if (showLineNumbers) {
+			std::size_t displayLineNumber = currentLineIndex + 1;
+			if (mCommunicationViewerMode && configuredLiveLogSettings().scrollDirection == MRLiveLogScrollDirection::Up) {
+				const std::size_t totalLineCount =
+				    mBufferModel.exactLineCountKnown() ? std::max<std::size_t>(1, mBufferModel.lineCount()) : std::max<std::size_t>(1, mBufferModel.estimatedLineCount());
+				if (currentLineIndex < totalLineCount) displayLineNumber = totalLineCount - currentLineIndex;
+			}
+			drawLineNumberGutter(buffer, displayLineNumber, isDocumentLine, viewport.lineNumberX, viewport.lineNumberWidth, zeroFillLineNumbers);
+		}
 		if (drawCodeFolding) drawCodeFoldingGutter(buffer, viewport.codeFoldingX, viewport.codeFoldingWidth, currentLinePtr, currentLineIndex);
 		if (drawMiniMap) mMiniMapState.renderer().drawGutter(buffer, y, miniMapRows, size.x, miniMapViewport, totalLines, topLine, miniMapUseBraille, viewportMarkerGlyph, miniMapPalette, miniMapOverlay);
 		if (syntaxEnabled) {
@@ -564,7 +565,7 @@ void MRFileEditor::draw() {
 	updateIndicator();
 }
 
-void MRFileEditor::drawLineNumberGutter(TDrawBuffer &b, std::size_t lineIndex, bool showNumber, int drawX, int width, bool zeroFill) {
+void MRFileEditor::drawLineNumberGutter(TDrawBuffer &b, std::size_t lineNumber, bool showNumber, int drawX, int width, bool zeroFill) {
 	TColorAttr color = static_cast<TColorAttr>(getColor(0x0606));
 	char numberBuffer[32];
 	int digits = std::max(1, width);
@@ -572,9 +573,9 @@ void MRFileEditor::drawLineNumberGutter(TDrawBuffer &b, std::size_t lineIndex, b
 	if (width <= 0) return;
 	b.moveChar(static_cast<ushort>(drawX), ' ', color, static_cast<ushort>(width));
 	if (!showNumber) return;
-	if (zeroFill) std::snprintf(numberBuffer, sizeof(numberBuffer), "%0*lu", digits, static_cast<unsigned long>(lineIndex + 1));
+	if (zeroFill) std::snprintf(numberBuffer, sizeof(numberBuffer), "%0*lu", digits, static_cast<unsigned long>(lineNumber));
 	else
-		std::snprintf(numberBuffer, sizeof(numberBuffer), "%*lu", digits, static_cast<unsigned long>(lineIndex + 1));
+		std::snprintf(numberBuffer, sizeof(numberBuffer), "%*lu", digits, static_cast<unsigned long>(lineNumber));
 	b.moveStr(static_cast<ushort>(drawX), numberBuffer, color, static_cast<ushort>(width));
 }
 
@@ -600,7 +601,7 @@ void MRFileEditor::drawCodeFoldingGutter(TDrawBuffer &b, int drawX, int width, s
 	markerColor = color;
 	if (configuredColorSlotOverride(kMrPaletteCodeFoldingMarker, configured)) markerColor = static_cast<TColorAttr>(configured);
 	b.moveChar(static_cast<ushort>(drawX), ' ', color, static_cast<ushort>(width));
-	if (lineIndex >= std::max<std::size_t>(1, mBufferModel.lineCount()) && mBufferModel.exactLineCountKnown()) return;
+	if (mBufferModel.exactLineCountKnown() && lineIndex >= std::max<std::size_t>(1, mBufferModel.lineCount())) return;
 	for (const MRFoldSpan &span : mFoldState.visibleState().spans) {
 		const int displayColumn = displayColumnForLevel(span.level);
 		if (displayColumn < 0 || displayColumn >= width) continue;
@@ -816,7 +817,7 @@ void MRFileEditor::updateMetrics() {
 	const bool showEofMarker = configuredEditSetupSettings().showEofMarker;
 	const bool quitTail = quitTailTraceActive();
 
-	if (useApproximateLargeFileMetrics() || quitTail) {
+	if (useApproximateLargeFileMetrics() || quitTail || !mBufferModel.exactLineCountKnown()) {
 		const auto lineLimitStartedAt = std::chrono::steady_clock::now();
 		limitX = dynamicLargeFileWidthLimit();
 		limitY = dynamicLargeFileLineLimit();

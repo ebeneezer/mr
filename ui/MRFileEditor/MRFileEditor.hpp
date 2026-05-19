@@ -59,6 +59,7 @@ class MRFileEditor : public TScroller {
 		bool valid;
 		std::size_t bytes;
 		std::size_t lines;
+		bool linesExact;
 		double mappedLoadMs;
 		double lineCountMs;
 
@@ -188,6 +189,7 @@ class MRFileEditor : public TScroller {
 	void syncDisplayedCursorColumnFromCursor(bool preserveFreeColumn) noexcept;
 
 	void refreshConfiguredVisualSettings();
+	void setCommunicationViewerOptions(bool lineNumbers);
 
 	std::size_t cursorOffset() const noexcept;
 
@@ -333,6 +335,8 @@ class MRFileEditor : public TScroller {
 		bool appendBufferData(const char *data, uint length);
 
 		bool appendBufferText(const char *text);
+		bool appendLogViewerData(const char *data, uint length);
+		bool prependLogViewerData(const char *data, uint length);
 
 		bool replaceRangeAndSelect(uint start, uint end, const char *data, uint length);
 
@@ -459,7 +463,7 @@ class MRFileEditor : public TScroller {
 
 	bool dragFormatRulerAtLocalPoint(TEvent &event, TPoint local);
 
-		void drawLineNumberGutter(TDrawBuffer &b, std::size_t lineIndex, bool showNumber, int drawX, int width, bool zeroFill);
+		void drawLineNumberGutter(TDrawBuffer &b, std::size_t lineNumber, bool showNumber, int drawX, int width, bool zeroFill);
 
 		void drawCodeFoldingGutter(TDrawBuffer &b, int drawX, int width, std::size_t lineStart, std::size_t lineIndex);
 
@@ -624,6 +628,8 @@ class MRFileEditor : public TScroller {
 	bool mReadOnly;
 	bool mCustomWindowEofMarkerColorOverrideValid = false;
 	TColorAttr mCustomWindowEofMarkerColorOverride = 0;
+	bool mCommunicationViewerMode = false;
+	bool mCommunicationViewerLineNumbers = true;
 	bool mInsertMode;
 	bool mAutoIndent;
 		char fileName[MAXPATH];

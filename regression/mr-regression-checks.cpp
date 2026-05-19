@@ -569,10 +569,10 @@ bool testMrsetupStartupOnly(std::string &failureReason) {
 	                           "MRSETUP('CURSOR_BEHAVIOUR', 'FREE_MOVEMENT');\n"
 	                           "MRSETUP('COLUMN_BLOCK_MOVE', 'LEAVE_SPACE');\n"
 	                           "MRSETUP('DEFAULT_MODE', 'OVERWRITE');\n"
-	                           "MRSETUP('WINDOWCOLORS', 'v1:10,11,12,13,14,15,16,17');\n"
-	                           "MRSETUP('MENUDIALOGCOLORS', 'v1:20,21,22,23,24,25,26,27,28,29,2A');\n"
-	                           "MRSETUP('HELPCOLORS', 'v1:30,31,32,33,34,35,36,37,38');\n"
-	                           "MRSETUP('OTHERCOLORS', 'v1:40,41,42,43,44,45,46');\n"
+	                           "WINDOWCOLORS('v1:10,11,12,13,14,15,16,17');\n"
+	                           "MENUDIALOGCOLORS('v1:20,21,22,23,24,25,26,27,28,29,2A');\n"
+	                           "HELPCOLORS('v1:30,31,32,33,34,35,36,37,38');\n"
+	                           "OTHERCOLORS('v1:40,41,42,43,44,45,46');\n"
 	                           "END_MACRO;\n";
 	std::vector<unsigned char> bytecode;
 	std::string macroName;
@@ -797,28 +797,13 @@ bool testSettingsMacroAutoCreate(std::string &failureReason) {
 		failureReason = "Auto-created settings.mrmac is missing DEFAULT_MODE.";
 		return false;
 	}
-	if (content.find("MRSETUP('COLORTHEMEURI', '") == std::string::npos) {
-		failureReason = "Auto-created settings.mrmac is missing COLORTHEMEURI.";
-		return false;
-	}
 	if (content.find("MRSETUP('WINDOWCOLORS', '") != std::string::npos || content.find("MRSETUP('MENUDIALOGCOLORS', '") != std::string::npos || content.find("MRSETUP('HELPCOLORS', '") != std::string::npos || content.find("MRSETUP('OTHERCOLORS', '") != std::string::npos) {
 		failureReason = "settings.mrmac must not contain direct color lists after theme migration.";
 		return false;
 	}
-	{
-		static const std::regex themePattern("MRSETUP\\('COLORTHEMEURI',\\s*'((?:''|[^'])*)'\\);", std::regex_constants::ECMAScript | std::regex_constants::icase);
-		std::smatch match;
-		std::string themePath;
-		struct stat themeStat;
-		if (!std::regex_search(content, match, themePattern) || match.size() < 2) {
-			failureReason = "Unable to parse COLORTHEMEURI from auto-created settings.mrmac.";
-			return false;
-		}
-		themePath = match[1].str();
-		if (::stat(themePath.c_str(), &themeStat) != 0 || !S_ISREG(themeStat.st_mode)) {
-			failureReason = "Auto-created COLORTHEMEURI target is missing.";
-			return false;
-		}
+	if (content.find("MRSETUP('COLORTHEMEURI', '") != std::string::npos) {
+		failureReason = "Auto-created settings.mrmac must not persist obsolete COLORTHEMEURI.";
+		return false;
 	}
 	if (content.find("MRSETUP('CURSORVISIBILITY', '") != std::string::npos) {
 		failureReason = "Auto-created settings.mrmac must not include deprecated CURSORVISIBILITY.";
@@ -2210,7 +2195,7 @@ bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) 
 		failureReason = "Unable to read saved theme file after Color Setup save-theme probe: " + errorText;
 		return false;
 	}
-	if (content.find("MRSETUP('WINDOWCOLORS', '") == std::string::npos || content.find("MRSETUP('MENUDIALOGCOLORS', '") == std::string::npos || content.find("MRSETUP('HELPCOLORS', '") == std::string::npos || content.find("MRSETUP('OTHERCOLORS', '") == std::string::npos || content.find("MRSETUP('MINIMAPCOLORS', '") == std::string::npos) {
+	if (content.find("WINDOWCOLORS('") == std::string::npos || content.find("MENUDIALOGCOLORS('") == std::string::npos || content.find("HELPCOLORS('") == std::string::npos || content.find("OTHERCOLORS('") == std::string::npos || content.find("MINIMAPCOLORS('") == std::string::npos) {
 		restore();
 		failureReason = "Saved color theme must contain all color group assignments.";
 		return false;
@@ -2265,7 +2250,7 @@ bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) 
 
 bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureReason) {
 	const std::string themePath = "/tmp/mr-windowcolors-line-numbers-theme.mrmac";
-	const std::string windowColorsPrefix = "MRSETUP('WINDOWCOLORS', 'v5:";
+	const std::string windowColorsPrefix = "WINDOWCOLORS('v5:";
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::string previousThemePath = configuredColorThemeFilePath();
 	const std::array<unsigned char, MRColorSetupSettings::kWindowCount> probeValues = {0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C};
@@ -2679,8 +2664,8 @@ bool testBlockHotkeyModifierRoutingGuard(std::string &failureReason) {
 		failureReason = "Block hotkey routing must distinguish F7/Shift+F7/Ctrl+F7 and Ctrl+F9 by modifier state.";
 		return false;
 	}
-	if (content.find("if (originalEvent == evMouseDown && mBlockMode == bmNone)") == std::string::npos || content.find("// Mouse drag selection without an explicit mode defaults to stream block.") == std::string::npos) {
-		failureReason = "Mouse-drag default to stream block must only apply when no explicit block mode is active.";
+	if (content.find("if (originalEvent == evMouseDown && !markingBefore)") == std::string::npos || content.find("// Mouse drag selection is authoritative for the next committed stream block.") == std::string::npos) {
+		failureReason = "Mouse-drag block selection must let the latest selection replace the previous committed block.";
 		return false;
 	}
 	failureReason.clear();

@@ -48,6 +48,10 @@ bool runSetupDialogCommand(unsigned short command) {
 			runUserInterfaceSettingsDialogFlow();
 			return true;
 
+		case cmMrSetupLiveLogs:
+			runLiveLogsSetupDialogFlow();
+			return true;
+
 		default:
 			return false;
 	}

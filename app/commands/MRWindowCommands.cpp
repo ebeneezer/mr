@@ -584,12 +584,16 @@ namespace {
 	return static_cast<long long>(valueMs + 0.5);
 }
 
-void postLoadHeroEvents(const std::string &resolvedPath, std::size_t bytes, double loadMs, std::size_t lineCount, double lineCountMs) {
+void postLoadHeroEvents(const std::string &resolvedPath, std::size_t bytes, double loadMs, std::size_t lineCount, bool lineCountExact, double lineCountMs) {
 	const std::string fileName = baseNameForDisplay(resolvedPath);
 	const std::string loadText = "loaded " + fileName + " in " + (roundedMilliseconds(loadMs) >= 1 ? std::to_string(roundedMilliseconds(loadMs)) : "<1") + " ms";
-	const std::string lineText = "indexed " + std::to_string(bytes) + " bytes, " + std::to_string(lineCount) + " lines, " + std::to_string(roundedMilliseconds(lineCountMs)) + " ms";
+	std::string lineText;
 	const std::chrono::milliseconds loadDuration = mr::messageline::autoDurationForText(loadText);
 
+	if (lineCountExact)
+		lineText = "indexed " + std::to_string(bytes) + " bytes, " + std::to_string(lineCount) + " lines, " + std::to_string(roundedMilliseconds(lineCountMs)) + " ms";
+	else
+		lineText = "mapped " + std::to_string(bytes) + " bytes, est. " + std::to_string(lineCount) + " lines, index warming";
 	mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEvent, loadText, mr::messageline::Kind::Success, mr::messageline::kPriorityHigh);
 	mr::messageline::postAutoTimedAfter(mr::messageline::Owner::HeroEventFollowup, lineText, mr::messageline::Kind::Info, loadDuration, mr::messageline::kPriorityLow);
 }
@@ -627,16 +631,20 @@ void postLoadHeroEvents(const std::string &resolvedPath, std::size_t bytes, doub
 }
 } // namespace
 
-bool promptForPath(const char *title, char *fileName, std::size_t fileNameSize) {
+bool promptForPath(MRDialogHistoryScope scope, const char *title, char *fileName, std::size_t fileNameSize) {
 	ushort result = cmCancel;
 
 	if (fileName == nullptr || fileNameSize == 0) return false;
 	fileName[0] = '\0';
-	const MRDialogHistoryScope scope = std::string_view(title != nullptr ? title : "") == "Load File" ? MRDialogHistoryScope::LoadFile : MRDialogHistoryScope::OpenFile;
 	mr::dialogs::seedFileDialogPath(scope, fileName, fileNameSize, "*.*");
 	result = mr::dialogs::execRememberingFileDialogWithData(scope, "*.*", title, "~N~ame", fdOpenButton, fileName);
 	if (result == cmCancel) return false;
 	return true;
+}
+
+bool promptForPath(const char *title, char *fileName, std::size_t fileNameSize) {
+	const MRDialogHistoryScope scope = std::string_view(title != nullptr ? title : "") == "Load File" ? MRDialogHistoryScope::LoadFile : MRDialogHistoryScope::OpenFile;
+	return promptForPath(scope, title, fileName, fileNameSize);
 }
 
 bool promptForSaveAsPath(const char *title, const char *initialPath, std::string &outResolvedPath) {
@@ -713,24 +721,30 @@ bool loadResolvedFileIntoWindow(MREditWindow *win, const std::string &resolvedPa
 	const MRFileEditor::LoadTiming timing = win->lastLoadTiming();
 	std::size_t bytes = win->bufferLength();
 	std::size_t lines = 0;
+	bool linesExact = false;
 	double loadMs = 0.0;
 	double lineCountMs = 0.0;
 
 	if (timing.valid) {
 		bytes = timing.bytes;
 		lines = timing.lines;
+		linesExact = timing.linesExact;
 		loadMs = timing.mappedLoadMs;
 		lineCountMs = timing.lineCountMs;
 	} else {
 		loadMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - fallbackLoadStartedAt).count();
-		const auto lineCountStartedAt = std::chrono::steady_clock::now();
-		lines = win->bufferLineCount();
-		lineCountMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - lineCountStartedAt).count();
+		if (win->exactLineCountKnown()) {
+			const auto lineCountStartedAt = std::chrono::steady_clock::now();
+			lines = win->bufferLineCount();
+			lineCountMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - lineCountStartedAt).count();
+			linesExact = true;
+		} else
+			lines = win->estimatedLineCount();
 	}
 
 	mr::performance::recordUiEvent(operationLabel != nullptr ? operationLabel : "Load file", static_cast<std::size_t>(win->bufferId()), win->documentId(), bytes, loadMs, resolvedPath);
 	mr::performance::recordUiEvent("Line count", static_cast<std::size_t>(win->bufferId()), win->documentId(), bytes, lineCountMs, resolvedPath);
-	postLoadHeroEvents(resolvedPath, bytes, loadMs, lines, lineCountMs);
+	postLoadHeroEvents(resolvedPath, bytes, loadMs, lines, linesExact, lineCountMs);
 	return true;
 }
 

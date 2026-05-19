@@ -63,6 +63,7 @@
 #include "../mrmac/MRVM.hpp"
 #include "../app/commands/MRExternalCommand.hpp"
 #include "../app/commands/MRFileCommands.hpp"
+#include "../app/commands/MRLogViewer.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../dialogs/MRMacroFile.hpp"
 #include "../dialogs/MRWindowList.hpp"
@@ -262,6 +263,10 @@ const char *placeholderCommandTitle(ushort command) {
 			return "File / Load";
 		case cmMrFileAcquire:
 			return "File / Acquire";
+		case cmMrFileOpenLiveLog:
+			return "File / Open Live Log";
+		case cmMrFileOpenJournal:
+			return "File / Open Journal";
 		case cmMrFileSave:
 			return "File / Save";
 		case cmMrFileSaveAs:
@@ -274,6 +279,8 @@ const char *placeholderCommandTitle(ushort command) {
 			return "File / Export to PDF";
 		case cmMrFileShellToDos:
 			return "File / Shell";
+		case cmMrSetupLiveLogs:
+			return "Setup / Live logs";
 
 		case cmMrEditUndo:
 			return "Edit / Undo";
@@ -1964,6 +1971,12 @@ bool handleMRCommand(ushort command) {
 		case cmMrFileAcquire:
 			return handleFileAcquire();
 
+		case cmMrFileOpenLiveLog:
+			return openLiveLogViewer();
+
+		case cmMrFileOpenJournal:
+			return openJournalViewer();
+
 		case cmMrFileSave:
 			static_cast<void>(saveCurrentEditWindow());
 			return true;
@@ -2147,6 +2160,7 @@ bool handleMRCommand(ushort command) {
 		case cmMrSetupPaths:
 		case cmMrSetupBackupsAutosave:
 		case cmMrSetupUserInterfaceSettings:
+		case cmMrSetupLiveLogs:
 		case cmMrSetupSearchAndReplaceDefaults: {
 			if (runSetupDialogCommand(command)) return true;
 			const char *title = placeholderCommandTitle(command);

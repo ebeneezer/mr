@@ -62,6 +62,16 @@ std::string formatLogHandlingLiteral(MRLogHandling handling) {
 	return kLogHandlingVolatile;
 }
 
+std::string formatLiveLogScrollDirectionLiteral(MRLiveLogScrollDirection direction) {
+	switch (direction) {
+		case MRLiveLogScrollDirection::Up:
+			return "UP";
+		case MRLiveLogScrollDirection::Down:
+		default:
+			return "DOWN";
+	}
+}
+
 std::string formatCursorBehaviourLiteral(MRCursorBehaviour behaviour) {
 	return behaviour == MRCursorBehaviour::FreeMovement ? kCursorBehaviourFreeMovement : kCursorBehaviourBoundToText;
 }
@@ -359,6 +369,7 @@ MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) 
 	snapshot.multiSarDialogOptions = configuredMultiSarDialogOptions();
 	snapshot.pdfExportSettings = configuredPdfExportSettings();
 	snapshot.acquireSettings = configuredAcquireSettings();
+	snapshot.liveLogSettings = configuredLiveLogSettings();
 	snapshot.virtualDesktops = configuredVirtualDesktops();
 	snapshot.cyclicVirtualDesktops = configuredCyclicVirtualDesktops();
 	snapshot.cursorBehaviour = configuredCursorBehaviour();
@@ -521,6 +532,13 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('ACQUIRE_COMMAND', '" + escapeMrmacSingleQuotedLiteral(snapshot.acquireSettings.commandLine) + "');\n";
 	for (const std::string &entry : snapshot.acquireSettings.commandHistory)
 		source += "MRSETUP('ACQUIRE_COMMAND_HISTORY', '" + escapeMrmacSingleQuotedLiteral(entry) + "');\n";
+	source += "MRSETUP('LIVE_LOG_REPORT_MESSAGE_LINE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.liveLogSettings.reportSearchHitsOnMessageLine)) + "');\n";
+	source += "MRSETUP('LIVE_LOG_REPORT_BEEP', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.liveLogSettings.reportSearchHitsWithSystemBeep)) + "');\n";
+	source += "MRSETUP('LIVE_LOG_REPORT_AUDIO', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.liveLogSettings.reportSearchHitsWithAudioSignal)) + "');\n";
+	source += "MRSETUP('LIVE_LOG_SCROLL_DIRECTION', '" + escapeMrmacSingleQuotedLiteral(formatLiveLogScrollDirectionLiteral(snapshot.liveLogSettings.scrollDirection)) + "');\n";
+	source += "MRSETUP('LIVE_LOG_LINE_NUMBERS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.liveLogSettings.showLineNumbers)) + "');\n";
+	source += "MRSETUP('LIVE_LOG_TIMESTAMPS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.liveLogSettings.showTimestamps)) + "');\n";
+	source += "MRSETUP('LIVE_LOG_AUDIO_URI', '" + escapeMrmacSingleQuotedLiteral(snapshot.liveLogSettings.audioSignalUri) + "');\n";
 	source += "MRSETUP('VIRTUAL_DESKTOPS', '" + std::to_string(snapshot.virtualDesktops) + "');\n";
 	source += "MRSETUP('CYCLIC_VIRTUAL_DESKTOPS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.cyclicVirtualDesktops)) + "');\n";
 	source += "MRSETUP('CURSOR_BEHAVIOUR', '" + escapeMrmacSingleQuotedLiteral(formatCursorBehaviourLiteral(snapshot.cursorBehaviour)) + "');\n";
