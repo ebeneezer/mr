@@ -2914,7 +2914,7 @@ void MRFileEditor::setCommunicationViewerOptions(bool lineNumbers) {
 	refreshViewState();
 }
 
-bool MRFileEditor::appendLogViewerData(const char *data, uint length) {
+bool MRFileEditor::appendLogViewerData(const char *data, uint length, const std::vector<std::pair<std::size_t, std::size_t>> *chunkFindRanges) {
 	std::string text;
 	MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "append-log-viewer-data");
 	const std::size_t oldCursor = mBufferModel.cursor();
@@ -2931,6 +2931,16 @@ bool MRFileEditor::appendLogViewerData(const char *data, uint length) {
 	text.assign(data, length);
 	transaction.insert(endPtr, text);
 	if (!applyStagedTransaction(transaction, follow ? endPtr + text.size() : oldCursor, follow ? endPtr + text.size() : oldSelectionStart, follow ? endPtr + text.size() : oldSelectionEnd, false).applied()) return false;
+	if (chunkFindRanges != nullptr) {
+		mFindMarkerRanges.clear();
+		for (const auto &rangePair : *chunkFindRanges) {
+			const std::size_t start = std::min(endPtr + rangePair.first, mBufferModel.length());
+			const std::size_t end = std::min(endPtr + rangePair.second, mBufferModel.length());
+
+			if (end > start) mFindMarkerRanges.push_back(MRTextBufferModel::Range(start, end));
+		}
+		normalizeRangeList(mFindMarkerRanges);
+	}
 	if (follow) {
 		const int maxY = std::max(0, static_cast<int>(std::max<std::size_t>(1, mBufferModel.lineCount())) - visibleRows);
 		scrollTo(oldDeltaX, maxY);
@@ -2940,7 +2950,7 @@ bool MRFileEditor::appendLogViewerData(const char *data, uint length) {
 	return true;
 }
 
-bool MRFileEditor::prependLogViewerData(const char *data, uint length) {
+bool MRFileEditor::prependLogViewerData(const char *data, uint length, const std::vector<std::pair<std::size_t, std::size_t>> *chunkFindRanges) {
 	std::string text;
 	MRTextBufferModel::StagedTransaction transaction(mBufferModel.readSnapshot(), "prepend-log-viewer-data");
 	const std::size_t oldCursor = mBufferModel.cursor();
@@ -2957,6 +2967,16 @@ bool MRFileEditor::prependLogViewerData(const char *data, uint length) {
 		if (ch == '\n') ++insertedLines;
 	transaction.insert(0, text);
 	if (!applyStagedTransaction(transaction, follow ? 0 : oldCursor + text.size(), follow ? 0 : oldSelectionStart + text.size(), follow ? 0 : oldSelectionEnd + text.size(), false).applied()) return false;
+	if (chunkFindRanges != nullptr) {
+		mFindMarkerRanges.clear();
+		for (const auto &rangePair : *chunkFindRanges) {
+			const std::size_t start = std::min(rangePair.first, mBufferModel.length());
+			const std::size_t end = std::min(rangePair.second, mBufferModel.length());
+
+			if (end > start) mFindMarkerRanges.push_back(MRTextBufferModel::Range(start, end));
+		}
+		normalizeRangeList(mFindMarkerRanges);
+	}
 	if (follow) scrollTo(oldDeltaX, 0);
 	else
 		scrollTo(oldDeltaX, std::max(0, oldDeltaY + insertedLines));

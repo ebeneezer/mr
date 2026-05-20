@@ -244,7 +244,9 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"LIVE_LOG_SCROLL_DIRECTION", MRSettingsKeyClass::Global, true},
     {"LIVE_LOG_LINE_NUMBERS", MRSettingsKeyClass::Global, true},
     {"LIVE_LOG_TIMESTAMPS", MRSettingsKeyClass::Global, true},
+    {"LIVE_LOG_SYNTAX_HIGHLIGHTING", MRSettingsKeyClass::Global, true},
     {"LIVE_LOG_AUDIO_URI", MRSettingsKeyClass::Global, true},
+    {"LIVE_LOG_JOURNAL_TAG_HISTORY", MRSettingsKeyClass::Global, false},
     {"VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
     {"CYCLIC_VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
     {"CURSOR_BEHAVIOUR", MRSettingsKeyClass::Global, true},
@@ -1003,9 +1005,19 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				if (!parseBooleanLiteral(value, settings.showTimestamps, errorMessage)) return false;
 				return setConfiguredLiveLogSettings(settings, errorMessage);
 			}
+			if (upper == "LIVE_LOG_SYNTAX_HIGHLIGHTING") {
+				MRLiveLogSettings settings = configuredLiveLogSettings();
+				if (!parseBooleanLiteral(value, settings.syntaxHighlighting, errorMessage)) return false;
+				return setConfiguredLiveLogSettings(settings, errorMessage);
+			}
 			if (upper == "LIVE_LOG_AUDIO_URI") {
 				MRLiveLogSettings settings = configuredLiveLogSettings();
 				settings.audioSignalUri = normalizeConfiguredPathInput(value);
+				return setConfiguredLiveLogSettings(settings, errorMessage);
+			}
+			if (upper == "LIVE_LOG_JOURNAL_TAG_HISTORY") {
+				MRLiveLogSettings settings = configuredLiveLogSettings();
+				settings.journalAppTagHistory.push_back(value);
 				return setConfiguredLiveLogSettings(settings, errorMessage);
 			}
 			if (upper == "AUTOEXEC_MACRO") return addConfiguredAutoexecMacroEntry(value, errorMessage);
@@ -1472,8 +1484,17 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 				if (!parseBooleanLiteral(value, snapshot.liveLogSettings.showTimestamps, errorMessage)) return false;
 				return true;
 			}
+			if (upper == "LIVE_LOG_SYNTAX_HIGHLIGHTING") {
+				if (!parseBooleanLiteral(value, snapshot.liveLogSettings.syntaxHighlighting, errorMessage)) return false;
+				return true;
+			}
 			if (upper == "LIVE_LOG_AUDIO_URI") {
 				snapshot.liveLogSettings.audioSignalUri = normalizeConfiguredPathInput(value);
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "LIVE_LOG_JOURNAL_TAG_HISTORY") {
+				snapshot.liveLogSettings.journalAppTagHistory.push_back(value);
 				if (errorMessage != nullptr) errorMessage->clear();
 				return true;
 			}

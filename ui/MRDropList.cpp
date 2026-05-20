@@ -122,10 +122,13 @@ void MRDropList::show(TGroup &owner, const TRect &anchor, const std::vector<std:
 void MRDropList::hide() {
 	if (listView == nullptr) return;
 	if (scrollOwner != nullptr) {
+		if (scrollOwner->current == listView) scrollOwner->setCurrent(nullptr, TView::leaveSelect);
 		scrollOwner->removeManaged(listView);
 		scrollOwner = nullptr;
-	} else if (listOwner != nullptr)
+	} else if (listOwner != nullptr) {
+		if (listOwner->current == listView) listOwner->setCurrent(nullptr, TView::leaveSelect);
 		listOwner->remove(listView);
+	}
 	TObject::destroy(listView);
 	listView = nullptr;
 	listOwner = nullptr;

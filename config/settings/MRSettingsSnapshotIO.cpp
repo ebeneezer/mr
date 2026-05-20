@@ -538,7 +538,10 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('LIVE_LOG_SCROLL_DIRECTION', '" + escapeMrmacSingleQuotedLiteral(formatLiveLogScrollDirectionLiteral(snapshot.liveLogSettings.scrollDirection)) + "');\n";
 	source += "MRSETUP('LIVE_LOG_LINE_NUMBERS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.liveLogSettings.showLineNumbers)) + "');\n";
 	source += "MRSETUP('LIVE_LOG_TIMESTAMPS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.liveLogSettings.showTimestamps)) + "');\n";
+	source += "MRSETUP('LIVE_LOG_SYNTAX_HIGHLIGHTING', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.liveLogSettings.syntaxHighlighting)) + "');\n";
 	source += "MRSETUP('LIVE_LOG_AUDIO_URI', '" + escapeMrmacSingleQuotedLiteral(snapshot.liveLogSettings.audioSignalUri) + "');\n";
+	for (const std::string &entry : snapshot.liveLogSettings.journalAppTagHistory)
+		source += "MRSETUP('LIVE_LOG_JOURNAL_TAG_HISTORY', '" + escapeMrmacSingleQuotedLiteral(entry) + "');\n";
 	source += "MRSETUP('VIRTUAL_DESKTOPS', '" + std::to_string(snapshot.virtualDesktops) + "');\n";
 	source += "MRSETUP('CYCLIC_VIRTUAL_DESKTOPS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.cyclicVirtualDesktops)) + "');\n";
 	source += "MRSETUP('CURSOR_BEHAVIOUR', '" + escapeMrmacSingleQuotedLiteral(formatCursorBehaviourLiteral(snapshot.cursorBehaviour)) + "');\n";

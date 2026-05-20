@@ -187,9 +187,14 @@ struct MRMiniMapRenderer::Impl {
 			window.lineCount = normalizedTotalLines;
 			return window;
 		}
+		window.lineCount = normalizedRowCount;
 		const std::size_t clampedTop = std::min(topLine, normalizedTotalLines - 1);
-		window.startLine = clampedTop;
-		window.lineCount = std::min(normalizedRowCount, normalizedTotalLines - clampedTop);
+		const std::size_t halfWindow = normalizedRowCount / 2;
+		if (clampedTop <= halfWindow) window.startLine = 0;
+		else {
+			const std::size_t centeredStart = clampedTop - halfWindow;
+			window.startLine = centeredStart + normalizedRowCount >= normalizedTotalLines ? normalizedTotalLines - normalizedRowCount : centeredStart;
+		}
 		return window;
 	}
 
@@ -544,30 +549,12 @@ void MRMiniMapRenderer::drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, 
 	    !cacheReady && mImpl->cache.documentId != 0 && mImpl->cache.bodyWidth == bodyWidth && mImpl->cache.rowCount == miniMapRows && mImpl->cache.viewportWidth == std::max(1, viewport.width) &&
 	    mImpl->cache.braille == useBraille && mImpl->cache.windowStartLine == samplingWindow.startLine && mImpl->cache.windowLineCount == std::max<std::size_t>(1, samplingWindow.lineCount) &&
 	    !mImpl->cache.rowPatterns.empty();
-	std::size_t rowLineStart = 0;
-	std::size_t rowLineEnd = 0;
 
 	if (y >= miniMapRows) {
 		buffer.moveChar(static_cast<ushort>(bodyX), ' ', palette.normal, static_cast<ushort>(bodyWidth));
 		if (viewport.separatorX >= 0 && viewport.separatorX < viewWidth) buffer.moveChar(static_cast<ushort>(viewport.separatorX), ' ', palette.normal, 1);
 		buffer.moveChar(static_cast<ushort>(viewport.infoX), ' ', palette.normal, 1);
 		return;
-	}
-
-	if ((cacheReady || stalePatternCacheUsable) && static_cast<std::size_t>(y) < mImpl->cache.rowLineStarts.size() && static_cast<std::size_t>(y) < mImpl->cache.rowLineEnds.size()) {
-		rowLineStart = mImpl->cache.rowLineStarts[static_cast<std::size_t>(y)];
-		rowLineEnd = mImpl->cache.rowLineEnds[static_cast<std::size_t>(y)];
-	} else {
-		const std::size_t normTotal = std::max<std::size_t>(1, totalLines);
-		const std::size_t rowSampleStart = useBraille ? static_cast<std::size_t>(y) * 4 : static_cast<std::size_t>(y);
-		const std::size_t rowSampleCount = useBraille ? 4 : 1;
-		if (rowSampleStart < samplingWindow.lineCount) {
-			rowLineStart = std::min(samplingWindow.startLine + rowSampleStart, normTotal);
-			rowLineEnd = std::min(normTotal, samplingWindow.startLine + std::min(samplingWindow.lineCount, rowSampleStart + rowSampleCount));
-		} else {
-			rowLineStart = std::min(samplingWindow.startLine + samplingWindow.lineCount, normTotal);
-			rowLineEnd = rowLineStart;
-		}
 	}
 
 	for (int x = 0; x < bodyWidth; ++x) {
@@ -613,11 +600,36 @@ void MRMiniMapRenderer::drawGutter(TDrawBuffer &buffer, int y, int miniMapRows, 
 
 	if (viewport.separatorX >= 0 && viewport.separatorX < viewWidth) buffer.moveChar(static_cast<ushort>(viewport.separatorX), ' ', palette.normal, 1);
 
-	std::size_t clampedTopLine = std::min(topLine, totalLines - 1);
-	std::size_t visibleLines = static_cast<std::size_t>(std::max(miniMapRows, 1));
-	std::size_t viewportLineEnd = std::min(totalLines, clampedTopLine + visibleLines);
-	bool markerVisible = false;
-	if (rowLineEnd > rowLineStart) markerVisible = rowLineStart < viewportLineEnd && rowLineEnd > clampedTopLine;
+	const std::size_t clampedTopLine = std::min(topLine, totalLines - 1);
+	const std::size_t visibleLines = static_cast<std::size_t>(std::max(miniMapRows, 1));
+	const std::size_t viewportLineEnd = std::min(totalLines, clampedTopLine + visibleLines);
+	const std::size_t markerRowCount = static_cast<std::size_t>(std::max(miniMapRows, 1));
+	const std::size_t markerWindowStart = samplingWindow.startLine;
+	const std::size_t markerWindowLineCount = std::max<std::size_t>(1, samplingWindow.lineCount);
+	const std::size_t markerWindowEnd = std::min(totalLines, markerWindowStart + markerWindowLineCount);
+	const std::size_t markerViewportStart = std::min(std::max(clampedTopLine, markerWindowStart), markerWindowEnd);
+	const std::size_t markerViewportEnd = std::min(std::max(viewportLineEnd, markerViewportStart), markerWindowEnd);
+	std::size_t markerStart = (markerViewportStart - markerWindowStart) * markerRowCount / markerWindowLineCount;
+	std::size_t markerEnd = ((markerViewportEnd - markerWindowStart) * markerRowCount + markerWindowLineCount - 1) / markerWindowLineCount;
+	const std::size_t minMarkerRows = std::min<std::size_t>(3, markerRowCount);
+	const std::size_t maxMarkerRows = std::min<std::size_t>(6, markerRowCount);
+
+	if (markerStart >= markerRowCount) markerStart = markerRowCount - 1;
+	if (markerEnd <= markerStart) markerEnd = markerStart + 1;
+	if (markerEnd - markerStart > maxMarkerRows) {
+		const std::size_t center = markerStart + (markerEnd - markerStart) / 2;
+		markerStart = center > maxMarkerRows / 2 ? center - maxMarkerRows / 2 : 0;
+		markerEnd = std::min(markerRowCount, markerStart + maxMarkerRows);
+		if (markerEnd - markerStart < maxMarkerRows) markerStart = markerEnd > maxMarkerRows ? markerEnd - maxMarkerRows : 0;
+	}
+	if (markerEnd - markerStart < minMarkerRows) {
+		const std::size_t grow = minMarkerRows - (markerEnd - markerStart);
+		const std::size_t growDown = std::min(grow, markerRowCount - markerEnd);
+		markerEnd += growDown;
+		markerStart -= grow - growDown > markerStart ? markerStart : grow - growDown;
+	}
+	if (markerEnd > markerRowCount) markerEnd = markerRowCount;
+	const bool markerVisible = static_cast<std::size_t>(y) >= markerStart && static_cast<std::size_t>(y) < markerEnd;
 	if (markerVisible) buffer.moveStr(static_cast<ushort>(viewport.infoX), viewportMarkerGlyph, palette.viewport, 1);
 	else
 		buffer.moveChar(static_cast<ushort>(viewport.infoX), ' ', palette.normal, 1);

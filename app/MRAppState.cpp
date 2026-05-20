@@ -14,6 +14,7 @@ struct AppCommandState {
 	bool hasEditableWindow;
 	bool hasReadOnlyWindow;
 	bool hasDirtyWindow;
+	bool hasAnyDirtyWindow;
 	bool hasPersistentFileName;
 	bool canSaveInPlace;
 	bool hasSelection;
@@ -27,7 +28,7 @@ struct AppCommandState {
 	bool isCommunicationCommandWindow;
 	bool isLogWindow;
 
-	AppCommandState() : window(nullptr), windowCount(0), isMinimizedWindow(false), hasEditableWindow(false), hasReadOnlyWindow(false), hasDirtyWindow(false), hasPersistentFileName(false), canSaveInPlace(false), hasSelection(false), hasUndo(false), hasRedo(false), hasBlock(false), blockMarking(false), hasMacroTasks(false), hasExternalIoTasks(false), isCommunicationWindow(false), isCommunicationCommandWindow(false), isLogWindow(false) {
+	AppCommandState() : window(nullptr), windowCount(0), isMinimizedWindow(false), hasEditableWindow(false), hasReadOnlyWindow(false), hasDirtyWindow(false), hasAnyDirtyWindow(false), hasPersistentFileName(false), canSaveInPlace(false), hasSelection(false), hasUndo(false), hasRedo(false), hasBlock(false), blockMarking(false), hasMacroTasks(false), hasExternalIoTasks(false), isCommunicationWindow(false), isCommunicationCommandWindow(false), isLogWindow(false) {
 	}
 };
 
@@ -43,6 +44,11 @@ AppCommandState appCommandState() {
 
 	state.window = win;
 	state.windowCount = allEditWindowsInZOrder().size();
+	for (MREditWindow *window : allEditWindowsInZOrder())
+		if (window != nullptr && window->isFileChanged() && !window->isReadOnly()) {
+			state.hasAnyDirtyWindow = true;
+			break;
+		}
 	if (win == nullptr) return state;
 
 	state.isMinimizedWindow = win->isMinimized();
@@ -77,6 +83,8 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrFileLoad, true);
 	setCommandEnabled(cmMrFileSave, canModify && state.hasDirtyWindow);
 	setCommandEnabled(cmMrFileSaveAs, canSaveAs);
+	setCommandEnabled(cmMrFileSaveAll, state.hasAnyDirtyWindow);
+	setCommandEnabled(cmMrFileRevert, hasEditor && state.hasPersistentFileName);
 	setCommandEnabled(cmMrFileInformation, hasEditor);
 	setCommandEnabled(cmMrFileMerge, hasEditor);
 	setCommandEnabled(cmMrFilePrint, hasEditor);

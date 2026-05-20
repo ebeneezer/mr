@@ -335,7 +335,9 @@ struct MRLiveLogSettings {
 	MRLiveLogScrollDirection scrollDirection{MRLiveLogScrollDirection::Down};
 	bool showLineNumbers{true};
 	bool showTimestamps{false};
+	bool syntaxHighlighting{false};
 	std::string audioSignalUri;
+	std::vector<std::string> journalAppTagHistory;
 
 	auto operator==(const MRLiveLogSettings &) const noexcept -> bool = default;
 };

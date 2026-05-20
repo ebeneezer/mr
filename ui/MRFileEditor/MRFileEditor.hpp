@@ -335,8 +335,8 @@ class MRFileEditor : public TScroller {
 		bool appendBufferData(const char *data, uint length);
 
 		bool appendBufferText(const char *text);
-		bool appendLogViewerData(const char *data, uint length);
-		bool prependLogViewerData(const char *data, uint length);
+		bool appendLogViewerData(const char *data, uint length, const std::vector<std::pair<std::size_t, std::size_t>> *chunkFindRanges = nullptr);
+		bool prependLogViewerData(const char *data, uint length, const std::vector<std::pair<std::size_t, std::size_t>> *chunkFindRanges = nullptr);
 
 		bool replaceRangeAndSelect(uint start, uint end, const char *data, uint length);
 
@@ -476,6 +476,8 @@ class MRFileEditor : public TScroller {
 	static const char *foldWarmupTaskLabel() noexcept;
 
 	bool lineIntersectsDirtyRanges(std::size_t lineStart, std::size_t lineEnd) const noexcept;
+
+	bool findMarkerContainsOffset(std::size_t offset) const noexcept;
 
 	MRMiniMapRenderer::Palette resolveMiniMapPalette();
 

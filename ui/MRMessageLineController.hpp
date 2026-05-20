@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace mr {
 namespace messageline {
@@ -30,6 +31,11 @@ struct VisibleMessage {
 	bool active;
 	Kind kind;
 	std::string text;
+	struct Segment {
+		Kind kind;
+		std::string text;
+	};
+	std::vector<Segment> segments;
 
 	VisibleMessage() noexcept : active(false), kind(Kind::Info), text() {
 	}
@@ -42,6 +48,7 @@ static constexpr int kPriorityMedium = 20;
 static constexpr int kPriorityHigh = 30;
 
 Token postTimed(Owner owner, std::string_view text, Kind kind, std::chrono::milliseconds duration, int priority);
+Token postTimedSegments(Owner owner, const std::vector<VisibleMessage::Segment> &segments, Kind kind, std::chrono::milliseconds duration, int priority);
 Token postSticky(Owner owner, std::string_view text, Kind kind, int priority);
 [[nodiscard]] std::chrono::milliseconds autoDurationForText(std::string_view text, std::chrono::milliseconds perCharacter = std::chrono::milliseconds(100));
 Token postAutoTimed(Owner owner, std::string_view text, Kind kind, int priority, std::chrono::milliseconds perCharacter = std::chrono::milliseconds(100));

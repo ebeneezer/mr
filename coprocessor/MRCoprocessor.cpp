@@ -37,28 +37,21 @@ std::vector<int> availableAffinityCores() noexcept {
 	return availableCores;
 }
 
-unsigned int laneAffinitySlot(Lane lane) noexcept {
-	switch (lane) {
-		case Lane::Io:
-			return 0;
-		case Lane::Compute:
-			return 1;
-		case Lane::MiniMap:
-			return 2;
-		case Lane::Macro:
-			return 3;
-		case Lane::Extern:
-			return 4;
-	}
-	return 0;
+const std::vector<int> &cachedAffinityCores() noexcept {
+	static const std::vector<int> cores = availableAffinityCores();
+	return cores;
 }
 
-void bindCurrentThreadToLaneCore(Lane lane, std::size_t workerSlot) noexcept {
-	const std::vector<int> availableCores = availableAffinityCores();
+std::uint64_t nextWorkerActivationAffinitySlot() noexcept {
+	static std::atomic<std::uint64_t> nextSlot{0};
+	return nextSlot.fetch_add(1, std::memory_order_relaxed);
+}
+
+void bindCurrentThreadToModuloCore(std::uint64_t affinitySlot) noexcept {
+	const std::vector<int> &availableCores = cachedAffinityCores();
 	if (availableCores.empty()) return;
 
-	const unsigned int laneSlot = laneAffinitySlot(lane);
-	const int targetCore = availableCores[(laneSlot + static_cast<unsigned int>(workerSlot)) % availableCores.size()];
+	const int targetCore = availableCores[static_cast<std::size_t>(affinitySlot % availableCores.size())];
 	cpu_set_t targetSet;
 	CPU_ZERO(&targetSet);
 	CPU_SET(targetCore, &targetSet);
@@ -444,8 +437,6 @@ void Coprocessor::startLane(LaneState &lane) {
 }
 
 void Coprocessor::workerLoop(LaneState &lane, std::size_t workerSlot, std::stop_token stopToken) {
-	bindCurrentThreadToLaneCore(lane.lane, workerSlot);
-
 	for (;;) {
 		Request request;
 		Result result;
@@ -467,6 +458,7 @@ void Coprocessor::workerLoop(LaneState &lane, std::size_t workerSlot, std::stop_
 			activeTask.computePriority = request.computePriority;
 			lane.activeTasks.push_back(std::move(activeTask));
 		}
+		bindCurrentThreadToModuloCore(nextWorkerActivationAffinitySlot());
 		result.task = request.task;
 		try {
 			if (stopToken.stop_requested() || request.task.cancelRequested()) {

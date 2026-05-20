@@ -827,43 +827,14 @@ bool loadResolvedFilesIntoWindows(const std::vector<std::string> &resolvedPaths,
 	return lastLoadedWindow != nullptr;
 }
 
-bool saveCurrentEditWindow() {
-	MREditWindow *win = currentEditWindow();
-
-	if (win == nullptr) return false;
-	if (win->isReadOnly()) {
-		messageBox(mfInformation | mfOKButton, "Window is read-only.");
-		mrLogMessage("Save rejected for read-only window.");
-		return false;
-	}
-	if (!win->isFileChanged()) return true;
-	if (win->canSaveInPlace()) {
-		auto startedAt = std::chrono::steady_clock::now();
-		if (!win->saveCurrentFile()) {
-			mrLogMessage("Save failed.");
-			return false;
-		}
-		mr::performance::recordUiEvent("Save file", static_cast<std::size_t>(win->bufferId()), win->documentId(), win->bufferLength(), std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count(), win->currentFileName());
-		mrLogMessage("Window saved.");
-		return true;
-	}
-	if (!win->saveCurrentFileAs()) {
-		mrLogMessage("Save failed.");
-		return false;
-	}
-	mrLogMessage("Window saved as a new file.");
-	return true;
-}
-
-bool saveCurrentEditWindowAs() {
-	MREditWindow *win = currentEditWindow();
+bool saveEditWindowAs(MREditWindow *win) {
 	std::string resolvedPath;
 	bool isLogWindow = false;
 	const char *initialPath = nullptr;
 
 	if (win == nullptr) return false;
-	isLogWindow = win->windowRole() == MREditWindow::wrLog;
 	if (win->isReadOnly()) {
+		isLogWindow = win->windowRole() == MREditWindow::wrLog;
 		if (!isLogWindow) {
 			messageBox(mfInformation | mfOKButton, "Window is read-only.");
 			mrLogMessage("Save As rejected for read-only window.");
@@ -884,13 +855,109 @@ bool saveCurrentEditWindowAs() {
 		return true;
 	}
 	auto startedAt = std::chrono::steady_clock::now();
+	MREditWindow *previousActive = currentEditWindow();
+	if (previousActive != win) static_cast<void>(mrActivateEditWindow(win));
 	if (!win->saveCurrentFileAs()) {
+		if (previousActive != nullptr && previousActive != win) static_cast<void>(mrActivateEditWindow(previousActive));
 		mrLogMessage("Save As failed.");
 		return false;
 	}
+	if (previousActive != nullptr && previousActive != win) static_cast<void>(mrActivateEditWindow(previousActive));
 	mr::performance::recordUiEvent("Save file as", static_cast<std::size_t>(win->bufferId()), win->documentId(), win->bufferLength(), std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count(), win->currentFileName());
 	mrLogMessage("Window saved as a new file.");
 	return true;
+}
+
+bool saveAllDirtyEditWindows() {
+	std::vector<MREditWindow *> dirtyWindows;
+	std::size_t savedCount = 0;
+
+	for (MREditWindow *win : allEditWindowsInZOrder()) {
+		if (win == nullptr || !win->isFileChanged() || win->isReadOnly()) continue;
+		dirtyWindows.push_back(win);
+	}
+	if (dirtyWindows.empty()) {
+		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "No dirty windows to save.", mr::messageline::Kind::Info, mr::messageline::kPriorityMedium);
+		return true;
+	}
+	for (MREditWindow *win : dirtyWindows) {
+		if (win == nullptr || !win->isFileChanged() || win->isReadOnly()) continue;
+		if (win->canSaveInPlace()) {
+			auto startedAt = std::chrono::steady_clock::now();
+			if (!win->saveCurrentFile()) {
+				postWindowCommandError("Save all stopped: save failed.");
+				mrLogMessage("Save all failed.");
+				return false;
+			}
+			mr::performance::recordUiEvent("Save file", static_cast<std::size_t>(win->bufferId()), win->documentId(), win->bufferLength(), std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count(), win->currentFileName());
+			++savedCount;
+			continue;
+		}
+		if (!saveEditWindowAs(win)) {
+			postWindowCommandError("Save all cancelled.");
+			mrLogMessage("Save all cancelled.");
+			return false;
+		}
+		++savedCount;
+	}
+	{
+		std::ostringstream line;
+		line << "Saved " << savedCount << " dirty window";
+		if (savedCount != 1) line << "s";
+		line << ".";
+		mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, line.str(), mr::messageline::Kind::Info, mr::messageline::kPriorityMedium);
+		mrLogMessage(line.str());
+	}
+	return true;
+}
+
+bool revertEditWindow(MREditWindow *win) {
+	std::string path;
+
+	if (win == nullptr) return false;
+	path = win->currentFileName();
+	if (path.empty()) {
+		postWindowCommandError("No saved file to revert to.");
+		return false;
+	}
+	if (win->isFileChanged() && messageBox(mfConfirmation | mfYesButton | mfNoButton, "Revert window and discard changes?\n%s", path.c_str()) != cmYes) return false;
+	auto startedAt = std::chrono::steady_clock::now();
+	if (!win->loadFromFile(path.c_str())) {
+		postWindowCommandError("Unable to revert file: " + path);
+		mrLogMessage("Revert failed.");
+		return false;
+	}
+	mr::performance::recordUiEvent("Revert file", static_cast<std::size_t>(win->bufferId()), win->documentId(), win->bufferLength(), std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count(), path);
+	mrLogMessage("Window reverted.");
+	return true;
+}
+
+bool saveCurrentEditWindow() {
+	MREditWindow *win = currentEditWindow();
+
+	if (win == nullptr) return false;
+	if (win->isReadOnly()) {
+		messageBox(mfInformation | mfOKButton, "Window is read-only.");
+		mrLogMessage("Save rejected for read-only window.");
+		return false;
+	}
+	if (!win->isFileChanged()) return true;
+	if (win->canSaveInPlace()) {
+		auto startedAt = std::chrono::steady_clock::now();
+		if (!win->saveCurrentFile()) {
+			mrLogMessage("Save failed.");
+			return false;
+		}
+		mr::performance::recordUiEvent("Save file", static_cast<std::size_t>(win->bufferId()), win->documentId(), win->bufferLength(), std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count(), win->currentFileName());
+		mrLogMessage("Window saved.");
+		return true;
+	}
+	return saveEditWindowAs(win);
+}
+
+bool saveCurrentEditWindowAs() {
+	MREditWindow *win = currentEditWindow();
+	return saveEditWindowAs(win);
 }
 
 bool handleWindowCascade() {

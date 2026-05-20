@@ -126,7 +126,9 @@ enum : ushort {
 	cmMrOtherEmojiTable,
 	cmMrEnsureUsableWorkWindow,
 	cmMrDeferredActivateWindow,
-	cmMrWindowTopologyChanged
+	cmMrWindowTopologyChanged,
+	cmMrFileSaveAll,
+	cmMrFileRevert
 };
 
 #endif

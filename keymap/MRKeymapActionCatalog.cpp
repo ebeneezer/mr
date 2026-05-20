@@ -79,6 +79,8 @@ constexpr std::array catalogDefinitions{
     mrmac("MRMAC_BLOCK_MATH", "Perform math on block"),
     mrmac("MRMAC_BLOCK_EXTEND_BY_MOTION", "Shift cursor block mark"),
     mrmac("MRMAC_FILE_SAVE", "Save file"),
+    mr("MR_FILE_SAVE_ALL", "Save all dirty files"),
+    mr("MR_FILE_REVERT", "Revert file"),
     mr("MR_SAVE_BLOCK_TO_FILE", "Save block to file"),
     mr("MR_LOAD_BLOCK_FROM_FILE", "Load block from file"),
     mr("MR_TEXT_CENTER_LINE", "Center current line"),

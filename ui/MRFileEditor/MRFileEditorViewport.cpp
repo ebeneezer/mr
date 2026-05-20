@@ -248,6 +248,15 @@ bool MRFileEditor::lineIntersectsDirtyRanges(std::size_t lineStart, std::size_t 
 	return false;
 }
 
+bool MRFileEditor::findMarkerContainsOffset(std::size_t offset) const noexcept {
+	for (const MRTextBufferModel::Range &range : mFindMarkerRanges) {
+		if (range.end <= offset) continue;
+		if (range.start > offset) break;
+		return true;
+	}
+	return false;
+}
+
 bool MRFileEditor::ratioCellActive(int numerator, int denominator, int cellIndex, int cellCount) noexcept {
 	if (numerator <= 0 || denominator <= 0 || cellCount <= 0) return false;
 	if (numerator >= denominator) return true;
@@ -765,9 +774,16 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, const
 			} else
 				selected = selection.start <= documentPos && documentPos < selection.end;
 			bool changedChar = !currentLine && !currentLineInBlock && isDirtyOffset(documentPos);
+			bool findMarkedChar = !selected && findMarkerContainsOffset(documentPos);
 			TAttrPair effectivePair = changedChar ? changedPair : basePair;
 			tokenPair = selected ? selectionPair : effectivePair;
 			color = tokenColor(token, selected, tokenPair);
+			if (findMarkedChar) {
+				unsigned char warningAttr = 0;
+				if (configuredColorSlotOverride(kMrPaletteMessageWarning, warningAttr)) color = static_cast<TColorAttr>((color & 0xF0) | (warningAttr & 0x0F));
+				else
+					color = static_cast<TColorAttr>((color & 0xF0) | 0x0E);
+			}
 			visibleWidth = nextVisual - std::max(visual, hScroll);
 
 			if (line[bytePos] == '\t' && displayTabs && visual >= hScroll && visibleWidth > 0) {

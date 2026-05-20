@@ -56,6 +56,22 @@ void normalizeAcquireCommandHistory(std::vector<std::string> &history) {
 	history = std::move(normalized);
 }
 
+void normalizeLiveLogSettings(MRLiveLogSettings &settings) {
+	constexpr std::size_t kJournalAppTagHistoryLimit = 20;
+	std::vector<std::string> normalizedHistory;
+
+	normalizedHistory.reserve(settings.journalAppTagHistory.size());
+	for (const std::string &entry : settings.journalAppTagHistory) {
+		const std::string trimmed = trimAscii(entry);
+
+		if (trimmed.empty()) continue;
+		if (std::find(normalizedHistory.begin(), normalizedHistory.end(), trimmed) != normalizedHistory.end()) continue;
+		normalizedHistory.push_back(trimmed);
+		if (normalizedHistory.size() >= kJournalAppTagHistoryLimit) break;
+	}
+	settings.journalAppTagHistory = std::move(normalizedHistory);
+}
+
 std::string pathFromEnvironment(const char *name) {
 	const char *value = std::getenv(name);
 	return value != nullptr && *value != '\0' ? makeAbsolutePath(normalizeDialogPath(expandUserPath(value).c_str())) : std::string();
@@ -569,8 +585,11 @@ MRAcquireSettings configuredAcquireSettings() {
 }
 
 bool setConfiguredLiveLogSettings(const MRLiveLogSettings &settings, std::string *errorMessage) {
-	if (g_liveLogSettings != settings) markConfiguredSettingsDirty();
-	g_liveLogSettings = settings;
+	MRLiveLogSettings normalized = settings;
+
+	normalizeLiveLogSettings(normalized);
+	if (g_liveLogSettings != normalized) markConfiguredSettingsDirty();
+	g_liveLogSettings = normalized;
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }

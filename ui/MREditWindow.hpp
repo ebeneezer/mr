@@ -280,6 +280,65 @@ class MREditWindow : public TWindow {
 		if (indicator != nullptr) indicator->drawView();
 	}
 
+	bool editorScrollBarArrowPart(TScrollBar *scrollBar, TPoint global, int &part) const {
+		if (scrollBar == nullptr || (scrollBar->state & sfVisible) == 0) return false;
+
+		TPoint local = scrollBar->makeLocal(global);
+		if (local.x < 0 || local.y < 0 || local.x >= scrollBar->size.x || local.y >= scrollBar->size.y) return false;
+
+		if (scrollBar->size.x == 1) {
+			if (local.y == 0) {
+				part = sbUpArrow;
+				return true;
+			}
+			if (local.y == scrollBar->size.y - 1) {
+				part = sbDownArrow;
+				return true;
+			}
+			return false;
+		}
+
+		if (local.x == 0) {
+			part = sbLeftArrow;
+			return true;
+		}
+		if (local.x == scrollBar->size.x - 1) {
+			part = sbRightArrow;
+			return true;
+		}
+		return false;
+	}
+
+	bool handleEditorScrollBarArrowHold(TEvent &event) {
+		if (event.what != evMouseDown || (event.mouse.buttons & mbLeftButton) == 0) return false;
+
+		TScrollBar *scrollBar = nullptr;
+		int part = 0;
+		if (editorScrollBarArrowPart(vScrollBar, event.mouse.where, part)) scrollBar = vScrollBar;
+		else if (editorScrollBarArrowPart(hScrollBar, event.mouse.where, part))
+			scrollBar = hScrollBar;
+		if (scrollBar == nullptr) return false;
+
+		select();
+		scrollBar->setValue(scrollBar->value + scrollBar->scrollStep(part));
+		clearEvent(event);
+
+		bool repeat = true;
+		int waitMs = 220;
+		for (;;) {
+			TEvent next{};
+			getEvent(next, waitMs);
+			if (next.what == evMouseUp) break;
+			if ((next.what & (evMouseDown | evMouseMove | evMouseAuto)) != 0) {
+				int currentPart = 0;
+				repeat = editorScrollBarArrowPart(scrollBar, next.mouse.where, currentPart) && currentPart == part;
+			}
+			if (repeat) scrollBar->setValue(scrollBar->value + scrollBar->scrollStep(part));
+			waitMs = 35;
+		}
+		return true;
+	}
+
 	virtual void handleEvent(TEvent &event) override {
 		if (MRWindowManager::isWindowMinimized(this)) {
 			if (event.what == evCommand && (event.message.command == cmMrWindowMinimize || event.message.command == cmZoom)) {
@@ -302,6 +361,7 @@ class MREditWindow : public TWindow {
 			clearEvent(event);
 			return;
 		}
+		if (handleEditorScrollBarArrowHold(event)) return;
 		const ushort originalEvent = event.what;
 		const ushort keyCodeBefore = event.what == evKeyDown ? ctrlToArrow(event.keyDown.keyCode) : static_cast<ushort>(0);
 		const ushort keyModifiersBefore = event.what == evKeyDown ? event.keyDown.controlKeyState : static_cast<ushort>(0);
@@ -689,14 +749,14 @@ class MREditWindow : public TWindow {
 		return editor->appendBufferText(text);
 	}
 
-	bool appendLogViewerText(const char *text) {
+	bool appendLogViewerText(const char *text, const std::vector<std::pair<std::size_t, std::size_t>> *chunkFindRanges = nullptr) {
 		if (editor == nullptr || text == nullptr) return false;
-		return editor->appendLogViewerData(text, static_cast<uint>(std::strlen(text)));
+		return editor->appendLogViewerData(text, static_cast<uint>(std::strlen(text)), chunkFindRanges);
 	}
 
-	bool prependLogViewerText(const char *text) {
+	bool prependLogViewerText(const char *text, const std::vector<std::pair<std::size_t, std::size_t>> *chunkFindRanges = nullptr) {
 		if (editor == nullptr || text == nullptr) return false;
-		return editor->prependLogViewerData(text, static_cast<uint>(std::strlen(text)));
+		return editor->prependLogViewerData(text, static_cast<uint>(std::strlen(text)), chunkFindRanges);
 	}
 
 	void setLogViewerOptions(bool lineNumbers) {

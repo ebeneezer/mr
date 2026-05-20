@@ -1,4 +1,10 @@
 #define Uses_TApplication
+#define Uses_TButton
+#define Uses_TDialog
+#define Uses_TInputLine
+#define Uses_TLabel
+#define Uses_TProgram
+#define Uses_TScrollBar
 #define Uses_MsgBox
 #include <tvision/tv.h>
 
@@ -10,10 +16,13 @@
 #include "../router/MRCommandRouterSearchCore.hpp"
 #include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../coprocessor/MRCoprocessor.hpp"
+#include "../../ui/MRColumnListView.hpp"
 #include "../../ui/MREditWindow.hpp"
+#include "../../ui/MRDropList.hpp"
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MRWindowSupport.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cerrno>
 #include <chrono>
@@ -30,6 +39,7 @@
 #include <sys/wait.h>
 #include <thread>
 #include <unistd.h>
+#include <vector>
 
 namespace {
 
@@ -57,6 +67,166 @@ void postLogViewerError(std::string_view text) {
 struct LogSearchSnapshot {
 	std::string pattern;
 	MRSearchDialogOptions options;
+};
+
+constexpr ushort cmJournalTagHistory = 0x7350;
+constexpr ushort cmJournalTagHistoryAccept = 0x7351;
+constexpr ushort cmJournalTagSelectionChanged = 0x7352;
+constexpr ushort cmJournalTagSelectionAccepted = 0x7353;
+
+std::vector<std::string> collectJournalSyslogIdentifiers() {
+	std::vector<std::string> identifiers;
+	int pipeFds[2] = {-1, -1};
+	pid_t pid = -1;
+	std::string output;
+	char buffer[4096];
+
+	if (::pipe(pipeFds) != 0) return identifiers;
+	pid = ::fork();
+	if (pid == 0) {
+		::close(pipeFds[0]);
+		if (::dup2(pipeFds[1], STDOUT_FILENO) < 0) _exit(127);
+		::close(pipeFds[1]);
+		::execlp("journalctl", "journalctl", "-F", "SYSLOG_IDENTIFIER", static_cast<char *>(nullptr));
+		_exit(127);
+	}
+	::close(pipeFds[1]);
+	pipeFds[1] = -1;
+	if (pid < 0) {
+		::close(pipeFds[0]);
+		return identifiers;
+	}
+	for (;;) {
+		const ssize_t got = ::read(pipeFds[0], buffer, sizeof(buffer));
+		if (got > 0) {
+			output.append(buffer, static_cast<std::size_t>(got));
+			continue;
+		}
+		if (got == 0) break;
+		if (errno == EINTR) continue;
+		break;
+	}
+	::close(pipeFds[0]);
+	static_cast<void>(::waitpid(pid, nullptr, 0));
+
+	std::istringstream lines(output);
+	for (std::string line; std::getline(lines, line);) {
+		line = trimInput(line);
+		if (line.empty()) continue;
+		if (std::find(identifiers.begin(), identifiers.end(), line) == identifiers.end()) identifiers.push_back(line);
+	}
+	std::sort(identifiers.begin(), identifiers.end());
+	return identifiers;
+}
+
+class JournalTagDialog : public TDialog {
+  public:
+	JournalTagDialog(const std::vector<std::string> &historyValues, const std::vector<std::string> &identifierValues)
+	    : TWindowInit(initFrame), TDialog(TRect(0, 0, 62, 18), "Open Journal"), tagField(nullptr), history(historyValues), identifiers(identifierValues) {
+		options |= ofCentered;
+		tagField = new TInputLine(TRect(14, 3, 51, 4), 127);
+		insert(new TLabel(TRect(3, 3, 13, 4), "App ~t~ag:", tagField));
+		insert(tagField);
+		historyButton = historyDropList.createButton(*this, TRect(51, 3, 54, 4), tagField, this, cmJournalTagHistory, true);
+		insert(new TLabel(TRect(3, 5, 24, 6), "Journal identifiers:", nullptr));
+		identifierScrollBar = new TScrollBar(TRect(55, 6, 56, 14));
+		insert(identifierScrollBar);
+		identifierList = new MRColumnListView(TRect(3, 6, 55, 14), identifierScrollBar, this, cmJournalTagSelectionChanged, cmJournalTagSelectionAccepted);
+		insert(identifierList);
+		setIdentifierRows();
+		insert(new TButton(TRect(18, 15, 28, 17), "~O~K", cmOK, bfDefault));
+		insert(new TButton(TRect(33, 15, 45, 17), "~C~ancel", cmCancel, bfNormal));
+		selectNext(False);
+	}
+
+	void handleEvent(TEvent &event) override {
+		if (historyDropList.handleOpenListEvent(event)) return;
+		if (event.what == evCommand) {
+			if (event.message.command == cmJournalTagHistory) {
+				historyDropList.toggle(*this, TRect(14, 4, 54, 5), history, currentTag(), this, cmJournalTagHistoryAccept, 8);
+				clearEvent(event);
+				return;
+			}
+			if (event.message.command == cmJournalTagHistoryAccept) {
+				acceptDropListValue(historyDropList);
+				clearEvent(event);
+				return;
+			}
+			if (event.message.command == cmJournalTagSelectionAccepted) {
+				acceptIdentifierSelection();
+				endModal(cmOK);
+				clearEvent(event);
+				return;
+			}
+		}
+		if (event.what == evBroadcast && event.message.command == cmJournalTagSelectionChanged) {
+			acceptIdentifierSelection();
+			clearEvent(event);
+			return;
+		}
+
+		TDialog::handleEvent(event);
+	}
+
+	std::string selectedTag() const {
+		return currentTag();
+	}
+
+  private:
+	std::string currentTag() const {
+		std::array<char, 128> buffer{};
+
+		if (tagField == nullptr) return std::string();
+		tagField->getData(buffer.data());
+		return trimInput(buffer.data());
+	}
+
+	void setCurrentTag(const std::string &value) {
+		if (tagField == nullptr) return;
+		tagField->setData(const_cast<char *>(value.c_str()));
+		tagField->select();
+	}
+
+	void setCurrentTagFromList(const std::string &value) {
+		if (tagField == nullptr) return;
+		tagField->setData(const_cast<char *>(value.c_str()));
+	}
+
+	void acceptDropListValue(MRDropList &dropList) {
+		std::string selected;
+
+		if (!dropList.acceptSelection(selected)) return;
+		setCurrentTag(selected);
+		historyDropList.hide();
+	}
+
+	void setIdentifierRows() {
+		std::vector<MRColumnListView::Row> rows;
+
+		if (identifierList == nullptr) return;
+		rows.reserve(identifiers.size());
+		for (const std::string &identifier : identifiers)
+			rows.push_back(MRColumnListView::Row{identifier});
+		identifierList->setRows(rows, 0);
+	}
+
+	void acceptIdentifierSelection() {
+		short selection = -1;
+
+		if (identifierList == nullptr) return;
+		selection = identifierList->selectedIndex();
+		if (selection < 0 || static_cast<std::size_t>(selection) >= identifiers.size()) return;
+		setCurrentTagFromList(identifiers[static_cast<std::size_t>(selection)]);
+		historyDropList.hide();
+	}
+
+	TInputLine *tagField;
+	TView *historyButton = nullptr;
+	TScrollBar *identifierScrollBar = nullptr;
+	MRColumnListView *identifierList = nullptr;
+	MRDropList historyDropList;
+	std::vector<std::string> history;
+	std::vector<std::string> identifiers;
 };
 
 std::string currentTimeStampPrefix() {
@@ -353,19 +523,26 @@ bool openLiveLogViewer() {
 }
 
 bool openJournalViewer() {
-	std::array<char, 128> tagBuffer{};
 	std::string appTag;
 	MREditWindow *win;
 	std::string title;
 	LogSearchSnapshot search;
 	MRLiveLogSettings liveLogSettings = configuredLiveLogSettings();
+	JournalTagDialog *dialog = new JournalTagDialog(liveLogSettings.journalAppTagHistory, collectJournalSyslogIdentifiers());
 
-	if (inputBox("Open Journal", "App ~t~ag", tagBuffer.data(), static_cast<uchar>(tagBuffer.size() - 1)) == cmCancel) return true;
-	appTag = trimInput(tagBuffer.data());
+	if (TProgram::deskTop == nullptr || TProgram::deskTop->execView(dialog) == cmCancel) {
+		TObject::destroy(dialog);
+		return true;
+	}
+	appTag = dialog->selectedTag();
+	TObject::destroy(dialog);
 	if (appTag.empty()) {
 		postLogViewerError("No journal app tag specified.");
 		return true;
 	}
+	liveLogSettings.journalAppTagHistory.erase(std::remove(liveLogSettings.journalAppTagHistory.begin(), liveLogSettings.journalAppTagHistory.end(), appTag), liveLogSettings.journalAppTagHistory.end());
+	liveLogSettings.journalAppTagHistory.insert(liveLogSettings.journalAppTagHistory.begin(), appTag);
+	static_cast<void>(setConfiguredLiveLogSettings(liveLogSettings));
 	currentSearchPatternSnapshot(search.pattern, search.options);
 
 	title = "JOURNAL: " + appTag;

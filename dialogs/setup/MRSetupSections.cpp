@@ -2086,11 +2086,13 @@ struct LiveLogsDialogRecord {
 	ushort scrollDirection;
 	ushort lineNumbers;
 	ushort timestamps;
+	ushort syntaxHighlighting;
 	char audioUri[kPathFieldSize];
 };
 
 bool liveLogsDialogRecordEqual(const LiveLogsDialogRecord &lhs, const LiveLogsDialogRecord &rhs) {
 	return lhs.messageLine == rhs.messageLine && lhs.systemBeep == rhs.systemBeep && lhs.audioSignal == rhs.audioSignal && lhs.scrollDirection == rhs.scrollDirection && lhs.lineNumbers == rhs.lineNumbers && lhs.timestamps == rhs.timestamps &&
+	       lhs.syntaxHighlighting == rhs.syntaxHighlighting &&
 	       std::strcmp(lhs.audioUri, rhs.audioUri) == 0;
 }
 
@@ -2126,8 +2128,8 @@ class LiveLogsSetupDialog : public MRScrollableDialog {
 		if (!audioAvailable) audioField->setState(sfDisabled, True);
 
 		addManaged(new TStaticText(TRect(36, 2, 54, 3), "Viewer:"), TRect(36, 2, 54, 3));
-		lineNumbersField = new TCheckBoxes(TRect(36, 3, 58, 5), new TSItem("line numbers", new TSItem("time stamps", nullptr)));
-		addManaged(lineNumbersField, TRect(36, 3, 58, 5));
+		lineNumbersField = new TCheckBoxes(TRect(36, 3, 58, 6), new TSItem("line numbers", new TSItem("time stamps", new TSItem("syntax highlighting", nullptr))));
+		addManaged(lineNumbersField, TRect(36, 3, 58, 6));
 
 		addManaged(new TStaticText(TRect(3, 8, 24, 9), "Scroll direction:"), TRect(3, 8, 24, 9));
 		scrollDirectionField = new TRadioButtons(TRect(3, 9, 20, 11), new TSItem("down", new TSItem("up", nullptr)));
@@ -2157,6 +2159,7 @@ class LiveLogsSetupDialog : public MRScrollableDialog {
 		if (audioAvailable && record->audioSignal != 0) hitFlags |= 4;
 		if (record->lineNumbers != 0) viewerFlags |= 1;
 		if (record->timestamps != 0) viewerFlags |= 2;
+		if (record->syntaxHighlighting != 0) viewerFlags |= 4;
 		if (messageLineField != nullptr) messageLineField->setData(&hitFlags);
 		if (audioField != nullptr) {
 			ushort audio = (hitFlags & 4) != 0 ? 1 : 0;
@@ -2187,6 +2190,7 @@ class LiveLogsSetupDialog : public MRScrollableDialog {
 		if (scrollDirectionField != nullptr) scrollDirectionField->getData(&record->scrollDirection);
 		record->lineNumbers = (viewerFlags & 1) != 0 ? 1 : 0;
 		record->timestamps = (viewerFlags & 2) != 0 ? 1 : 0;
+		record->syntaxHighlighting = (viewerFlags & 4) != 0 ? 1 : 0;
 		if (audioUriField != nullptr) audioUriField->getData(record->audioUri);
 	}
 
@@ -2215,6 +2219,7 @@ void runLiveLogsSetupDialogFlow() {
 		record.scrollDirection = settings.scrollDirection == MRLiveLogScrollDirection::Up ? 1 : 0;
 		record.lineNumbers = settings.showLineNumbers ? 1 : 0;
 		record.timestamps = settings.showTimestamps ? 1 : 0;
+		record.syntaxHighlighting = settings.syntaxHighlighting ? 1 : 0;
 		writeRecordField(record.audioUri, sizeof(record.audioUri), settings.audioSignalUri);
 
 		LiveLogsDialogRecord baselineRecord = record;
@@ -2227,6 +2232,7 @@ void runLiveLogsSetupDialogFlow() {
 			settings.scrollDirection = record.scrollDirection == 1 ? MRLiveLogScrollDirection::Up : MRLiveLogScrollDirection::Down;
 			settings.showLineNumbers = record.lineNumbers != 0;
 			settings.showTimestamps = record.timestamps != 0;
+			settings.syntaxHighlighting = record.syntaxHighlighting != 0;
 			settings.audioSignalUri = normalizeConfiguredPathInput(record.audioUri);
 			if (!setConfiguredLiveLogSettings(settings, &errorText)) {
 				postSetupFlowError("Live logs", errorText);

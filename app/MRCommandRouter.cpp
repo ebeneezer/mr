@@ -239,6 +239,8 @@ constexpr std::array kKeymapActionDispatchTable{
     KeymapActionDispatchEntry{"MRMAC_BLOCK_MATH", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::BlockMath},
     KeymapActionDispatchEntry{"MRMAC_BLOCK_EXTEND_BY_MOTION", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ExtendBlockByMotion},
     KeymapActionDispatchEntry{"MRMAC_FILE_SAVE", KeymapDispatchKind::AppCommand, cmMrFileSave, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_FILE_SAVE_ALL", KeymapDispatchKind::AppCommand, cmMrFileSaveAll, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_FILE_REVERT", KeymapDispatchKind::AppCommand, cmMrFileRevert, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_SAVE_BLOCK_TO_FILE", KeymapDispatchKind::AppCommand, cmMrBlockSaveToDisk, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_LOAD_BLOCK_FROM_FILE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::LoadBlockFromFile},
     KeymapActionDispatchEntry{"MR_TEXT_CENTER_LINE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CenterLine},
@@ -271,6 +273,10 @@ const char *placeholderCommandTitle(ushort command) {
 			return "File / Save";
 		case cmMrFileSaveAs:
 			return "File / Save As";
+		case cmMrFileSaveAll:
+			return "File / Save All";
+		case cmMrFileRevert:
+			return "File / Revert";
 		case cmMrFileInformation:
 			return "File / Information";
 		case cmMrFileMerge:
@@ -1983,6 +1989,14 @@ bool handleMRCommand(ushort command) {
 
 		case cmMrFileSaveAs:
 			static_cast<void>(saveCurrentEditWindowAs());
+			return true;
+
+		case cmMrFileSaveAll:
+			static_cast<void>(saveAllDirtyEditWindows());
+			return true;
+
+		case cmMrFileRevert:
+			static_cast<void>(revertEditWindow(currentEditWindow()));
 			return true;
 
 		case cmMrFileInformation:

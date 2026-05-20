@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <deque>
+#include <fcntl.h>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -251,42 +252,104 @@ void playLiveLogAudioSignal(const std::string &uri) {
 	::_exit(127);
 }
 
-std::size_t countCurrentLiveLogSearchHits(std::string_view text) {
+void emitTerminalBell() {
+	int tty = ::open("/dev/tty", O_WRONLY | O_CLOEXEC);
+
+	if (tty >= 0) {
+		static_cast<void>(::write(tty, "\a", 1));
+		::close(tty);
+		return;
+	}
+	if (::write(STDERR_FILENO, "\a", 1) == 1) return;
+	static_cast<void>(::write(STDOUT_FILENO, "\a", 1));
+}
+
+bool collectCurrentLiveLogSearchMatches(std::string_view text, std::vector<SearchMatchEntry> &matches) {
 	std::string pattern;
 	MRSearchDialogOptions options;
 	pcre2_code *code = nullptr;
 	std::string regexError;
-	std::vector<SearchMatchEntry> matches;
 	std::string chunkText;
 
 	currentSearchPatternSnapshot(pattern, options);
-	if (pattern.empty() || text.empty()) return 0;
-	if (!compileSearchRegex(buildSearchPatternExpression(pattern, options.textType), !options.caseSensitive, &code, regexError)) return 0;
+	matches.clear();
+	if (pattern.empty() || text.empty()) return false;
+	if (!compileSearchRegex(buildSearchPatternExpression(pattern, options.textType), !options.caseSensitive, &code, regexError)) return false;
 	chunkText.assign(text.data(), text.size());
 	if (!collectRegexMatches(chunkText, code, matches)) {
 		pcre2_code_free(code);
-		return 0;
+		return false;
 	}
 	pcre2_code_free(code);
-	return matches.size();
+	return !matches.empty();
 }
 
-void reportLiveLogSearchHits(std::size_t searchHitCount, MREditWindow *win) {
+std::string baseNameOf(std::string_view path) {
+	const std::size_t pos = path.find_last_of("\\/");
+	if (pos == std::string_view::npos) return std::string(path);
+	return std::string(path.substr(pos + 1));
+}
+
+std::string liveLogSearchHitPrefix(MREditWindow *win) {
+	const char *title = win != nullptr ? win->getTitle(0) : nullptr;
+	const std::string titleText = title != nullptr ? title : "";
+	const std::string detail = win != nullptr ? win->windowRoleDetail() : std::string();
+
+	if (titleText.rfind("JOURNAL: ", 0) == 0) return "[JOU]" + titleText.substr(9);
+	if (!detail.empty()) return baseNameOf(detail);
+	if (titleText.rfind("LIVELOG: ", 0) == 0) return titleText.substr(9);
+	return titleText.empty() ? "log" : titleText;
+}
+
+void appendMessageSegment(std::vector<mr::messageline::VisibleMessage::Segment> &segments, mr::messageline::Kind kind, std::string_view text) {
+	if (text.empty()) return;
+	if (!segments.empty() && segments.back().kind == kind) {
+		segments.back().text.append(text.data(), text.size());
+		return;
+	}
+	mr::messageline::VisibleMessage::Segment segment;
+	segment.kind = kind;
+	segment.text.assign(text.data(), text.size());
+	segments.push_back(std::move(segment));
+}
+
+std::vector<mr::messageline::VisibleMessage::Segment> liveLogSearchHitMessageSegments(MREditWindow *win, std::string_view text, const std::vector<SearchMatchEntry> &matches) {
+	std::vector<mr::messageline::VisibleMessage::Segment> segments;
+	std::size_t lineStart = 0;
+	std::size_t lineEnd = text.size();
+
+	if (matches.empty()) return segments;
+	lineStart = text.rfind('\n', matches.front().start);
+	if (lineStart == std::string_view::npos) lineStart = 0;
+	else
+		++lineStart;
+	lineEnd = text.find('\n', matches.front().start);
+	if (lineEnd == std::string_view::npos) lineEnd = text.size();
+
+	appendMessageSegment(segments, mr::messageline::Kind::Info, liveLogSearchHitPrefix(win));
+	appendMessageSegment(segments, mr::messageline::Kind::Info, ": ");
+	std::size_t cursor = lineStart;
+	for (const SearchMatchEntry &match : matches) {
+		if (match.start < lineStart || match.start >= lineEnd) continue;
+		const std::size_t start = std::min(match.start, lineEnd);
+		const std::size_t end = std::min(match.end > match.start ? match.end : match.start + 1, lineEnd);
+		if (start > cursor) appendMessageSegment(segments, mr::messageline::Kind::Info, text.substr(cursor, start - cursor));
+		if (end > start) appendMessageSegment(segments, mr::messageline::Kind::Warning, text.substr(start, end - start));
+		cursor = end;
+	}
+	if (cursor < lineEnd) appendMessageSegment(segments, mr::messageline::Kind::Info, text.substr(cursor, lineEnd - cursor));
+	return segments;
+}
+
+void reportLiveLogSearchHits(const std::vector<SearchMatchEntry> &matches, MREditWindow *win, std::string_view text) {
 	const MRLiveLogSettings settings = configuredLiveLogSettings();
 
-	if (searchHitCount == 0) return;
+	if (matches.empty()) return;
 	if (settings.reportSearchHitsOnMessageLine) {
-		std::string text = "Live log search hit";
-		if (searchHitCount != 1) text += "s";
-		text += ": ";
-		text += std::to_string(searchHitCount);
-		if (win != nullptr && win->getTitle(0) != nullptr) {
-			text += " in ";
-			text += win->getTitle(0);
-		}
-		mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEventFollowup, text, mr::messageline::Kind::Warning, mr::messageline::kPriorityMedium);
+		const std::vector<mr::messageline::VisibleMessage::Segment> segments = liveLogSearchHitMessageSegments(win, text, matches);
+		mr::messageline::postTimedSegments(mr::messageline::Owner::HeroEventFollowup, segments, mr::messageline::Kind::Info, std::chrono::seconds(2), mr::messageline::kPriorityMedium);
 	}
-	if (settings.reportSearchHitsWithSystemBeep) static_cast<void>(::write(STDERR_FILENO, "\a", 1));
+	if (settings.reportSearchHitsWithSystemBeep) emitTerminalBell();
 	if (settings.reportSearchHitsWithAudioSignal) playLiveLogAudioSignal(settings.audioSignalUri);
 }
 
@@ -919,13 +982,20 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			MREditWindow *win = findEditWindowByBufferId(static_cast<int>(targetBufferId));
 			if (win != nullptr) {
 				const MRLiveLogSettings liveLogSettings = configuredLiveLogSettings();
-				const std::size_t searchHitCount = countCurrentLiveLogSearchHits(chunk->text);
-				if (liveLogSettings.scrollDirection == MRLiveLogScrollDirection::Up) win->prependLogViewerText(chunk->text.c_str());
+				std::vector<SearchMatchEntry> searchMatches;
+				std::vector<std::pair<std::size_t, std::size_t>> findRanges;
+
+				if (collectCurrentLiveLogSearchMatches(chunk->text, searchMatches)) {
+					findRanges.reserve(searchMatches.size());
+					for (const SearchMatchEntry &match : searchMatches)
+						if (match.end > match.start) findRanges.push_back({match.start, match.end});
+				}
+				if (liveLogSettings.scrollDirection == MRLiveLogScrollDirection::Up) win->prependLogViewerText(chunk->text.c_str(), &findRanges);
 				else
-					win->appendLogViewerText(chunk->text.c_str());
+					win->appendLogViewerText(chunk->text.c_str(), &findRanges);
 				win->setReadOnly(true);
 				win->setFileChanged(false);
-				reportLiveLogSearchHits(searchHitCount, win);
+				reportLiveLogSearchHits(searchMatches, win, chunk->text);
 			}
 			return;
 		}

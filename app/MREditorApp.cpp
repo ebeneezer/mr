@@ -716,6 +716,15 @@ MRMenuBar::MarqueeKind mapMessageNoticeKind(mr::messageline::Kind kind) {
 	}
 }
 
+std::vector<MRMenuBar::MarqueeSegment> mapMessageNoticeSegments(const std::vector<mr::messageline::VisibleMessage::Segment> &segments) {
+	std::vector<MRMenuBar::MarqueeSegment> mapped;
+
+	mapped.reserve(segments.size());
+	for (const mr::messageline::VisibleMessage::Segment &segment : segments)
+		mapped.push_back(MRMenuBar::MarqueeSegment{segment.text, mapMessageNoticeKind(segment.kind)});
+	return mapped;
+}
+
 bool isHeroVisibleMessage(const mr::messageline::VisibleMessage &visible) {
 	mr::messageline::VisibleMessage ownerMessage;
 	if (mr::messageline::currentOwnerMessage(mr::messageline::Owner::HeroEvent, ownerMessage) && ownerMessage.kind == visible.kind && ownerMessage.text == visible.text) return true;
@@ -1326,7 +1335,9 @@ void MREditorApp::idle() {
 		if (mr::messageline::currentVisibleMessage(message)) {
 			MRMenuBar::MarqueeKind marqueeKind = mapMessageNoticeKind(message.kind);
 			if (isHeroVisibleMessage(message)) marqueeKind = MRMenuBar::MarqueeKind::Hero;
-			mrMenuBar->setAutoMarqueeStatus(message.text, marqueeKind);
+			if (!message.segments.empty()) mrMenuBar->setAutoMarqueeStatusSegments(mapMessageNoticeSegments(message.segments), marqueeKind);
+			else
+				mrMenuBar->setAutoMarqueeStatus(message.text, marqueeKind);
 		} else
 			mrMenuBar->setAutoMarqueeStatus(std::string());
 		mrMenuBar->tickMarquee();

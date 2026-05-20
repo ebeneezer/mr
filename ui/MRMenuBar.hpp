@@ -20,6 +20,13 @@ class MRMenuBar : public TMenuBar {
 		Hero
 	};
 
+	struct MarqueeSegment {
+		std::string text;
+		MarqueeKind kind = MarqueeKind::Info;
+
+		auto operator==(const MarqueeSegment &) const noexcept -> bool = default;
+	};
+
 	MRMenuBar(const TRect &r, TSubMenu &aMenu);
 	~MRMenuBar() override;
 
@@ -46,12 +53,15 @@ class MRMenuBar : public TMenuBar {
 	}
 
 	void setAutoMarqueeStatus(const std::string &status, MarqueeKind kind = MarqueeKind::Info) {
-		if (mAutoMarqueeStatus != status || mAutoMarqueeKind != kind) {
+		if (mAutoMarqueeStatus != status || mAutoMarqueeKind != kind || !mAutoMarqueeSegments.empty()) {
 			mAutoMarqueeStatus = status;
 			mAutoMarqueeKind = kind;
+			mAutoMarqueeSegments.clear();
 			drawView();
 		}
 	}
+
+	void setAutoMarqueeStatusSegments(const std::vector<MarqueeSegment> &segments, MarqueeKind kind = MarqueeKind::Info);
 
 	void setManualMarqueeStatus(const std::string &status) {
 		setManualMarqueeStatus(status, MarqueeKind::Info);
@@ -109,9 +119,11 @@ class MRMenuBar : public TMenuBar {
 		mMarqueeDirection = -1;
 		mMarqueeLaneWidth = 0;
 		mMarqueeActiveText.clear();
+		mMarqueeActiveSegments.clear();
 		mMarqueeActiveKind = MarqueeKind::Info;
 		mMarqueeHasPending = false;
 		mMarqueePendingText.clear();
+		mMarqueePendingSegments.clear();
 		mMarqueePendingKind = MarqueeKind::Info;
 		mMarqueeScrollNextAt = std::chrono::steady_clock::time_point::min();
 		mMarqueeIntroActive = false;
@@ -136,6 +148,7 @@ class MRMenuBar : public TMenuBar {
 	ushort mNextRuntimeCommand = 0x7400;
 	std::string mRightStatus;
 	std::string mAutoMarqueeStatus;
+	std::vector<MarqueeSegment> mAutoMarqueeSegments;
 	std::string mManualMarqueeStatus;
 	MarqueeKind mManualMarqueeKind = MarqueeKind::Info;
 	MarqueeKind mAutoMarqueeKind;
@@ -143,9 +156,11 @@ class MRMenuBar : public TMenuBar {
 	int mMarqueeDirection = -1;
 	int mMarqueeLaneWidth = 0;
 	std::string mMarqueeActiveText;
+	std::vector<MarqueeSegment> mMarqueeActiveSegments;
 	MarqueeKind mMarqueeActiveKind = MarqueeKind::Info;
 	bool mMarqueeHasPending = false;
 	std::string mMarqueePendingText;
+	std::vector<MarqueeSegment> mMarqueePendingSegments;
 	MarqueeKind mMarqueePendingKind = MarqueeKind::Info;
 	std::chrono::steady_clock::time_point mMarqueeScrollNextAt = std::chrono::steady_clock::time_point::min();
 	bool mMarqueeIntroActive = false;
