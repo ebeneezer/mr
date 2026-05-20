@@ -5,6 +5,7 @@
 #include <chrono>
 #include <ctime>
 #include <future>
+#include <limits>
 #include <sstream>
 #include <thread>
 
@@ -77,6 +78,13 @@ void MRFileEditor::continueComputeWarmupIfNeeded(const char *reason) {
 
 bool MRFileEditor::applyLineIndexWarmup(const mr::editor::LineIndexWarmupData &warmup, std::size_t expectedVersion) {
 	const bool exactLineCountWasKnown = mBufferModel.exactLineCountKnown();
+	bool preserveTopOffset = false;
+	std::size_t topOffsetBeforeExactIndex = 0;
+	if (!exactLineCountWasKnown && mBufferModel.length() > 0) {
+		const std::size_t visibleTopLine = static_cast<std::size_t>(std::max(delta.y, 0));
+		topOffsetBeforeExactIndex = mBufferModel.lineStartByIndex(documentLineForVisibleLine(visibleTopLine));
+		preserveTopOffset = true;
+	}
 	if (!mBufferModel.adoptLineIndexWarmup(warmup, expectedVersion)) return false;
 	if (shouldTraceLargeFileWarmupDiagnostics()) {
 		std::string detail = "action=apply checkpoints=" + std::to_string(warmup.checkpoints.size()) + " indexed_line=" + std::to_string(warmup.lazyIndexedLine) + " complete=" +
@@ -102,13 +110,23 @@ bool MRFileEditor::applyLineIndexWarmup(const mr::editor::LineIndexWarmupData &w
 		if (warmupState.topLine > lastValidTopLine) warmupState.topLine = lastValidTopLine;
 		if (warmupState.bottomLine > exactLineCount) warmupState.bottomLine = exactLineCount;
 		if (warmupState.bottomLine < warmupState.topLine) warmupState.bottomLine = exactLineCount;
-		if (!exactLineCountWasKnown) applyMiniMapSignals(mMiniMapState.renderer().invalidate(false, mBufferModel.documentId()));
+		if (!exactLineCountWasKnown) {
+			if (preserveTopOffset) {
+				const std::size_t anchorDocumentLine = mBufferModel.lineIndex(topOffsetBeforeExactIndex);
+				const std::size_t anchorVisibleLine = visibleLineForDocumentLine(anchorDocumentLine);
+				const int maxDeltaY = std::numeric_limits<int>::max();
+				delta.y = anchorVisibleLine > static_cast<std::size_t>(maxDeltaY) ? maxDeltaY : static_cast<int>(anchorVisibleLine);
+			}
+			applyMiniMapSignals(mMiniMapState.renderer().invalidate(true, mBufferModel.documentId()));
+		}
 	}
 	if (syntaxPipelineEnabled()) scheduleSyntaxWarmupIfNeeded();
 	notifyWindowTaskStateChanged();
-	updateMetrics();
-	updateIndicator();
-	drawView();
+	if (mBufferModel.exactLineCountKnown()) {
+		updateMetrics();
+		updateIndicator();
+		drawView();
+	}
 	return true;
 }
 
@@ -291,18 +309,6 @@ void MRFileEditor::scheduleLineIndexWarmupIfNeeded() {
 		if (mLineIndexWarmupTaskId != 0) {
 			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(mLineIndexWarmupTaskId));
 			clearLineIndexWarmupTask(mLineIndexWarmupTaskId);
-		}
-		return;
-	}
-	if (useApproximateLargeFileMetrics()) {
-		std::uint64_t cancelledTaskId = mLineIndexWarmupTaskId;
-		if (cancelledTaskId != 0) {
-			static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(cancelledTaskId));
-			clearLineIndexWarmupTask(cancelledTaskId);
-		}
-		if (shouldTraceLargeFileWarmupDiagnostics()) {
-			std::string detail = "action=skip-approx existing_task=" + std::to_string(cancelledTaskId);
-			traceLargeFileWarmup(mLastLineIndexWarmupTrace, "line-index", std::move(detail));
 		}
 		return;
 	}
@@ -728,12 +734,13 @@ void MRFileEditor::refreshSyntaxContext() {
 }
 
 bool MRFileEditor::pieceTableOnlyPhaseActive() const noexcept {
-	return true;
+	return false;
 }
 
 std::string MRFileEditor::effectiveCodeLanguageSetting() const {
 	std::string codeLanguage = configuredEditSetupSettings().codeLanguage;
 
+	if (mCommunicationViewerMode) return "NONE";
 	if (hasPersistentFileName()) {
 		MREditSetupSettings effective;
 		if (effectiveEditSetupSettingsForPath(fileName, effective, nullptr)) codeLanguage = effective.codeLanguage;
@@ -744,6 +751,7 @@ std::string MRFileEditor::effectiveCodeLanguageSetting() const {
 bool MRFileEditor::languageFeaturesEnabled() const {
 	const std::string codeLanguage = effectiveCodeLanguageSetting();
 
+	if (mCommunicationViewerMode) return false;
 	if (codeLanguage.empty() || codeLanguage == "NONE") return false;
 	return mBufferModel.language() != MRSyntaxLanguage::PlainText;
 }
@@ -757,7 +765,7 @@ bool MRFileEditor::foldingPipelineEnabled() const {
 }
 
 bool MRFileEditor::miniMapPipelineEnabled() const noexcept {
-	return true;
+	return !mCommunicationViewerMode;
 }
 
 void MRFileEditor::resetSyntaxWarmupState(bool clearCache) noexcept {

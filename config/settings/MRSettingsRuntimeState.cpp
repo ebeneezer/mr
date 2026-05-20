@@ -25,6 +25,7 @@ MRMultiSearchDialogOptions g_multiSearchDialogOptions;
 MRMultiSarDialogOptions g_multiSarDialogOptions;
 MRPdfExportSettings g_pdfExportSettings;
 MRAcquireSettings g_acquireSettings;
+MRLiveLogSettings g_liveLogSettings;
 int g_virtualDesktops = 1;
 bool g_cyclicVirtualDesktops = false;
 MRCursorBehaviour g_cursorBehaviour = MRCursorBehaviour::BoundToText;
@@ -53,6 +54,22 @@ void normalizeAcquireCommandHistory(std::vector<std::string> &history) {
 		if (normalized.size() >= kAcquireHistoryLimit) break;
 	}
 	history = std::move(normalized);
+}
+
+void normalizeLiveLogSettings(MRLiveLogSettings &settings) {
+	constexpr std::size_t kJournalAppTagHistoryLimit = 20;
+	std::vector<std::string> normalizedHistory;
+
+	normalizedHistory.reserve(settings.journalAppTagHistory.size());
+	for (const std::string &entry : settings.journalAppTagHistory) {
+		const std::string trimmed = trimAscii(entry);
+
+		if (trimmed.empty()) continue;
+		if (std::find(normalizedHistory.begin(), normalizedHistory.end(), trimmed) != normalizedHistory.end()) continue;
+		normalizedHistory.push_back(trimmed);
+		if (normalizedHistory.size() >= kJournalAppTagHistoryLimit) break;
+	}
+	settings.journalAppTagHistory = std::move(normalizedHistory);
 }
 
 std::string pathFromEnvironment(const char *name) {
@@ -565,6 +582,20 @@ bool setConfiguredAcquireSettings(const MRAcquireSettings &settings, std::string
 
 MRAcquireSettings configuredAcquireSettings() {
 	return g_acquireSettings;
+}
+
+bool setConfiguredLiveLogSettings(const MRLiveLogSettings &settings, std::string *errorMessage) {
+	MRLiveLogSettings normalized = settings;
+
+	normalizeLiveLogSettings(normalized);
+	if (g_liveLogSettings != normalized) markConfiguredSettingsDirty();
+	g_liveLogSettings = normalized;
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+MRLiveLogSettings configuredLiveLogSettings() {
+	return g_liveLogSettings;
 }
 
 bool setConfiguredVirtualDesktops(int count, std::string *errorMessage) {

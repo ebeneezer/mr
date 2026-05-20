@@ -600,6 +600,10 @@ bool ReadSnapshot::exactLineCountKnown() const noexcept {
 	return !mMappedOriginal.mapped() || mLazyLineIndexComplete;
 }
 
+void ReadSnapshot::dropExactLineStartIndex() noexcept {
+	mEditedLineStarts.reset();
+}
+
 std::size_t ReadSnapshot::column(Offset pos) const noexcept {
 	pos = clampOffset(pos);
 	return pos - lineStart(pos);
@@ -815,7 +819,6 @@ void TextDocument::restoreFromSnapshot(const ReadSnapshot &snapshot) {
 		mLazyLineIndexComplete = snapshot.mLazyLineIndexComplete;
 		mLazyTotalLineCount = snapshot.mLazyTotalLineCount;
 		mEditedLineStarts = snapshot.mEditedLineStarts != nullptr ? std::const_pointer_cast<std::vector<Offset>>(snapshot.mEditedLineStarts) : std::shared_ptr<std::vector<Offset>>();
-		if (mEditedLineStarts == nullptr || mEditedLineStarts->empty()) rebuildEditedLineStartIndex();
 	}
 }
 
@@ -1126,7 +1129,7 @@ void TextDocument::initializeFromMappedSource(const MappedFileSource &source, bo
 		mLazyLineIndexComplete = true;
 	} else
 		resetLazyLineIndex();
-	rebuildEditedLineStartIndex();
+	mEditedLineStarts.reset();
 	if (bumpVersionFlag) bumpVersion();
 }
 
@@ -1282,7 +1285,7 @@ void TextDocument::normalizeLargeMappedEditStateNoVersionBump() {
 		mLazyLineIndexComplete = true;
 	} else
 		resetLazyLineIndex();
-	rebuildEditedLineStartIndex();
+	mEditedLineStarts.reset();
 }
 
 void TextDocument::resetLazyLineIndex() noexcept {
@@ -1358,6 +1361,14 @@ void TextDocument::ensureLazyIndexComplete() const noexcept {
 	}
 	while (!mLazyLineIndexComplete)
 		advanceLazyIndexByStride();
+}
+
+void TextDocument::shiftLazyLineIndexForInsertWithoutLineBreak(Offset offset, Offset length) noexcept {
+	if (length <= 0 || mLineIndexCheckpoints.empty()) return;
+	offset = clampOffset(offset);
+	for (LineIndexCheckpoint &checkpoint : mLineIndexCheckpoints)
+		if (checkpoint.offset > offset) checkpoint.offset += length;
+	if (mLazyIndexedOffset > offset) mLazyIndexedOffset += length;
 }
 
 void TextDocument::invalidateLazyLineIndexFrom(Offset offset) noexcept {

@@ -18,6 +18,8 @@ const char *laneName(mr::coprocessor::Lane lane) noexcept {
 			return "MiniMap";
 		case mr::coprocessor::Lane::Macro:
 			return "Macro";
+		case mr::coprocessor::Lane::Extern:
+			return "Extern";
 		case mr::coprocessor::Lane::Compute:
 		default:
 			return "Compute";
@@ -97,11 +99,11 @@ std::string fixedText(std::string text, std::size_t width) {
 	return text;
 }
 
-std::string fixedTaskBlock(const char *label, char marker, std::uint64_t micros, bool showDuration) {
+std::string fixedTaskBlock(const char *label, char marker, std::uint64_t micros, bool showDuration, bool derivedStateApplied = false) {
 	static constexpr std::size_t kBlockWidth = 12;
 	std::string text;
 
-	text = "[";
+	text = derivedStateApplied ? "<" : "[";
 	text += marker;
 	text += label;
 	if (showDuration) {
@@ -109,7 +111,7 @@ std::string fixedTaskBlock(const char *label, char marker, std::uint64_t micros,
 		text += msText(micros);
 	}
 	text = fixedText(text, kBlockWidth - 1);
-	text += "]";
+	text += derivedStateApplied ? ">" : "]";
 	return text;
 }
 
@@ -181,9 +183,39 @@ std::string completedBlocksForLane(mr::coprocessor::Lane lane, const std::vector
 	for (const mr::performance::Event &event : events) {
 		if (event.scope != mr::performance::Scope::Background || event.lane != lane) continue;
 		if (!line.empty()) line += " ";
-		line += fixedTaskBlock(eventShortName(event), eventMarker(event), static_cast<std::uint64_t>(event.totalMs * 1000.0), true);
+		line += fixedTaskBlock(eventShortName(event), eventMarker(event), static_cast<std::uint64_t>(event.totalMs * 1000.0), true, event.derivedStateApplied);
 		++count;
 		if (count >= kMaxBlocks) break;
+	}
+	return line;
+}
+
+std::string recentQueueBlocksForLane(mr::coprocessor::Lane lane, const std::vector<mr::performance::Event> &events, std::size_t maxWidth) {
+	std::string line;
+
+	for (const mr::performance::Event &event : events) {
+		if (event.scope != mr::performance::Scope::Background || event.lane != lane) continue;
+		if (event.queueMs <= 0.0) continue;
+		std::string block = fixedTaskBlock(eventShortName(event), ' ', static_cast<std::uint64_t>(event.queueMs * 1000.0), true);
+		const std::size_t nextWidth = line.empty() ? block.size() : line.size() + 1 + block.size();
+		if (nextWidth > maxWidth) break;
+		if (!line.empty()) line += " ";
+		line += block;
+	}
+	return line;
+}
+
+std::string recentRunBlocksForLane(mr::coprocessor::Lane lane, const std::vector<mr::performance::Event> &events, std::size_t maxWidth) {
+	std::string line;
+
+	for (const mr::performance::Event &event : events) {
+		if (event.scope != mr::performance::Scope::Background || event.lane != lane) continue;
+		if (event.runMs <= 0.0) continue;
+		std::string block = fixedTaskBlock(eventShortName(event), ' ', static_cast<std::uint64_t>(event.runMs * 1000.0), true, event.derivedStateApplied);
+		const std::size_t nextWidth = line.empty() ? block.size() : line.size() + 1 + block.size();
+		if (nextWidth > maxWidth) break;
+		if (!line.empty()) line += " ";
+		line += block;
 	}
 	return line;
 }
@@ -205,9 +237,59 @@ std::string compactRecent(const std::vector<mr::performance::Event> &events, std
 	return line;
 }
 
+const mr::coprocessor::ExternalSourceSnapshot *activeExternalSource(const std::vector<mr::coprocessor::ExternalSourceSnapshot> &sources) {
+	const mr::coprocessor::ExternalSourceSnapshot *active = nullptr;
+
+	for (const mr::coprocessor::ExternalSourceSnapshot &source : sources) {
+		if (source.streamSample.empty()) continue;
+		if (active == nullptr || source.activitySequence > active->activitySequence) active = &source;
+	}
+	return active;
+}
+
+std::string shortExternalSourceName(std::string name) {
+	std::size_t pos = name.find_last_of("\\/");
+
+	if (pos != std::string::npos) name = name.substr(pos + 1);
+	if (name.empty()) name = "source";
+	if (name.size() > 12) name.resize(12);
+	return name;
+}
+
+std::string fixedTextWithoutMarker(std::string text, std::size_t width) {
+	for (char &ch : text)
+		if (static_cast<unsigned char>(ch) < 32) ch = ' ';
+	if (text.size() > width) {
+		text.resize(width);
+		return text;
+	}
+	while (text.size() < width)
+		text.push_back(' ');
+	return text;
+}
+
+std::string externalStreamText(std::string sample, std::size_t width, unsigned frame) {
+	static const char *kPhase[] = {"   ", " > ", " >>", ">>>"};
+	const std::string phase = kPhase[frame % 4];
+
+	if (width == 0) return std::string();
+	if (width <= phase.size()) return fixedText(phase, width);
+	if (sample.empty()) sample = "idle";
+	if (sample.size() > width - phase.size() - 1) sample.resize(width - phase.size() - 1);
+	return fixedText(phase + " " + sample, width);
+}
+
+std::size_t runningExternalSourceCount(const std::vector<mr::coprocessor::ExternalSourceSnapshot> &sources) noexcept {
+	std::size_t count = 0;
+
+	for (const mr::coprocessor::ExternalSourceSnapshot &source : sources)
+		if (source.running) ++count;
+	return count;
+}
+
 } // namespace
 
-MRPerformancePanel::MRPerformancePanel(const TRect &bounds) noexcept : TView(bounds), mAnimationFrame(0) {
+MRPerformancePanel::MRPerformancePanel(const TRect &bounds) noexcept : TView(bounds), mAnimationFrame(0), mLaneDisplayHold() {
 	options |= ofBuffered;
 	options &= ~ofSelectable;
 	eventMask = 0;
@@ -235,15 +317,72 @@ void MRPerformancePanel::draw() {
 	line = " PERF ";
 	line += " results:";
 	line += std::to_string(snapshot.pendingResults);
+	line += " extern:";
+	line += std::to_string(runningExternalSourceCount(snapshot.externalSources));
 	line += "  recent: ";
-	line += compactRecent(recent, static_cast<std::size_t>(std::max(0, size.x - 26)));
+	line += compactRecent(recent, static_cast<std::size_t>(std::max(0, size.x - 35)));
 	writePanelLine(y++, line, header);
 
-	for (const mr::coprocessor::LaneSnapshot &lane : snapshot.lanes) {
+	{
+		const mr::coprocessor::ExternalSourceSnapshot *source = activeExternalSource(snapshot.externalSources);
+		std::vector<PanelSegment> segments;
+		static constexpr std::size_t kLanePrefixWidth = 25;
+		static constexpr std::size_t kStreamFieldWidth = 70;
+		std::string prefix = "Extern";
+
+		while (prefix.size() < 8)
+			prefix.push_back(' ');
+		prefix += " q:0 ";
+
+		if (source != nullptr) {
+			prefix += fixedText(source->tag, 3);
+			prefix += " ";
+			prefix += shortExternalSourceName(source->displayName);
+		} else
+			prefix += "idle";
+		prefix = fixedTextWithoutMarker(prefix, kLanePrefixWidth);
+		segments.push_back(PanelSegment{prefix, laneColor});
+		if (source != nullptr) segments.push_back(PanelSegment{externalStreamText(source->streamSample, kStreamFieldWidth, mAnimationFrame), static_cast<TColorAttr>(source->colorIndex)});
+		else
+			segments.push_back(PanelSegment{externalStreamText("idle", kStreamFieldWidth, mAnimationFrame), queueColor});
+		writePanelSegments(y++, segments, queueColor);
+	}
+
+	for (std::size_t laneIndex = 0; laneIndex < snapshot.lanes.size(); ++laneIndex) {
+		const mr::coprocessor::LaneSnapshot &lane = snapshot.lanes[laneIndex];
+		if (mLaneDisplayHold.size() <= laneIndex) mLaneDisplayHold.resize(laneIndex + 1);
+		HeldLaneDisplay &hold = mLaneDisplayHold[laneIndex];
+		static constexpr std::size_t kQueueFieldWidth = 70;
+		static constexpr std::size_t kWorkerRecentWidth = 58;
 		std::string queue = queueBlocks(lane, mAnimationFrame);
 		std::string workers = workerBlocks(lane);
 		std::string completed = completedBlocksForLane(lane.lane, recent);
+		std::string recentQueue = recentQueueBlocksForLane(lane.lane, recent, kQueueFieldWidth);
+		std::string recentRun = recentRunBlocksForLane(lane.lane, recent, kWorkerRecentWidth);
 		std::vector<PanelSegment> segments;
+
+		if (!lane.queuedTasks.empty()) {
+			hold.queueText = queue;
+			hold.queueUntilFrame = mAnimationFrame + 8;
+		} else if (hold.queueUntilFrame != 0 && mAnimationFrame <= hold.queueUntilFrame) {
+			queue = hold.queueText;
+		} else if (!recentQueue.empty()) {
+			queue = fixedText(recentQueue, kQueueFieldWidth);
+		} else {
+			hold.queueText.clear();
+			hold.queueUntilFrame = 0;
+		}
+		if (!lane.activeTasks.empty()) {
+			hold.workerText = workers;
+			hold.workerUntilFrame = mAnimationFrame + 8;
+		} else if (hold.workerUntilFrame != 0 && mAnimationFrame <= hold.workerUntilFrame) {
+			workers = hold.workerText;
+		} else if (!recentRun.empty()) {
+			workers = recentRun;
+		} else {
+			hold.workerText.clear();
+			hold.workerUntilFrame = 0;
+		}
 
 		line = laneName(lane.lane);
 		while (line.size() < 8)

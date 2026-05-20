@@ -622,8 +622,7 @@ bool TextDocument::eraseNoVersionBump(Range range) {
 	}
 	{
 		const auto lineIndexStartedAt = std::chrono::steady_clock::now();
-		if (!hasEditedLineStartIndex()) rebuildEditedLineStartIndex();
-		updateEditedLineStartIndexForErase(bounded);
+		if (hasEditedLineStartIndex()) updateEditedLineStartIndexForErase(bounded);
 		lineIndexElapsed = std::chrono::steady_clock::now() - lineIndexStartedAt;
 	}
 	markDirty();
@@ -679,13 +678,21 @@ bool TextDocument::insertAddSpanNoVersionBump(Offset offset, TextSpan span) {
 	const auto compactStartedAt = std::chrono::steady_clock::now();
 	compactPieces();
 	const auto compactElapsed = std::chrono::steady_clock::now() - compactStartedAt;
-	const auto invalidateStartedAt = std::chrono::steady_clock::now();
-	invalidateLazyLineIndexFrom(logical);
-	const auto invalidateElapsed = std::chrono::steady_clock::now() - invalidateStartedAt;
 	std::string_view inserted(mAddBuffer.text().data() + span.start, span.length);
+	bool insertedLineBreak = false;
+	for (char ch : inserted) {
+		if (isLineBreakChar(ch)) {
+			insertedLineBreak = true;
+			break;
+		}
+	}
+	const auto invalidateStartedAt = std::chrono::steady_clock::now();
+	if (insertedLineBreak) invalidateLazyLineIndexFrom(logical);
+	else
+		shiftLazyLineIndexForInsertWithoutLineBreak(logical, span.length);
+	const auto invalidateElapsed = std::chrono::steady_clock::now() - invalidateStartedAt;
 	const auto indexStartedAt = std::chrono::steady_clock::now();
-	if (!hasEditedLineStartIndex()) rebuildEditedLineStartIndex();
-	updateEditedLineStartIndexForInsert(logical, inserted);
+	if (hasEditedLineStartIndex()) updateEditedLineStartIndexForInsert(logical, inserted);
 	const auto indexElapsed = std::chrono::steady_clock::now() - indexStartedAt;
 	markDirty();
 	const auto totalElapsed = std::chrono::steady_clock::now() - startedAt;

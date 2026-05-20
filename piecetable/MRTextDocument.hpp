@@ -426,6 +426,7 @@ class ReadSnapshot {
 	[[nodiscard]] LineIndexWarmupData completeLineIndexWarmup() const;
 	bool warmLineIndexChunk(LineIndexWarmupData &warmup, std::size_t maxStrides, std::stop_token stopToken, const std::atomic_bool *cancelFlag = nullptr) const;
 	bool completeLineIndexWarmup(LineIndexWarmupData &warmup, std::stop_token stopToken, const std::atomic_bool *cancelFlag = nullptr) const;
+	void dropExactLineStartIndex() noexcept;
 
  private:
 	friend class TextDocument;
@@ -569,6 +570,7 @@ class TextDocument {
 	void ensureLazyIndexForLine(std::size_t targetLine) const noexcept;
 	void ensureLazyIndexForOffset(Offset targetOffset) const noexcept;
 	void ensureLazyIndexComplete() const noexcept;
+	void shiftLazyLineIndexForInsertWithoutLineBreak(Offset offset, Offset length) noexcept;
 	void invalidateLazyLineIndexFrom(Offset offset) noexcept;
 	void ensureUniqueOriginalBuffer();
 	void ensureUniquePieces();

@@ -10,14 +10,20 @@
 #include <chrono>
 #include <cstdlib>
 #include <deque>
+#include <fcntl.h>
 #include <optional>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
+#include <unistd.h>
 
 #include "MRPerformance.hpp"
 #include "MRWindowCommands.hpp"
 
+#include "../app/router/MRCommandRouterSearch.hpp"
+#include "../app/router/MRCommandRouterSearchCore.hpp"
+#include "../config/settings/MRSettingsRuntime.hpp"
 #include "../mrmac/MRVM.hpp"
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRFileEditor/MRFileEditor.hpp"
@@ -94,6 +100,8 @@ const char *coprocessorLaneName(mr::coprocessor::Lane lane) {
 			return "minimap";
 		case mr::coprocessor::Lane::Macro:
 			return "macro";
+		case mr::coprocessor::Lane::Extern:
+			return "extern";
 		case mr::coprocessor::Lane::Compute:
 		default:
 			return "compute";
@@ -154,8 +162,10 @@ std::string miniMapLineRangeDetail(const mr::coprocessor::MiniMapWarmupPayload &
 	return lineRangeText(miniMap.windowStartLine, miniMap.windowStartLine + miniMap.windowLineCount);
 }
 
-void recordTaskPerformance(const mr::coprocessor::Result &result, const std::string &action, MREditWindow *win, std::size_t documentId, std::size_t bytes, const std::string &detail) {
-	mr::performance::recordBackgroundResult(result, action, win != nullptr ? static_cast<std::size_t>(win->bufferId()) : 0, documentId, bytes, detail);
+void recordTaskPerformance(const mr::coprocessor::Result &result, const std::string &action, MREditWindow *win, std::size_t documentId, std::size_t bytes, const std::string &detail,
+                           bool derivedStateApplied = false) {
+	mr::performance::Outcome outcome = result.failed() ? mr::performance::Outcome::Failed : (result.cancelled() ? mr::performance::Outcome::Cancelled : mr::performance::Outcome::Completed);
+	mr::performance::recordBackgroundEvent(result.task.lane, outcome, result.timing, action, win != nullptr ? static_cast<std::size_t>(win->bufferId()) : 0, documentId, bytes, detail, derivedStateApplied);
 }
 
 void recordMacroPerformance(const mr::coprocessor::Result &result, MREditWindow *win, std::size_t documentId, std::size_t bytes, const std::string &detail, mr::performance::Outcome outcome = mr::performance::Outcome::Completed) {
@@ -230,6 +240,117 @@ void postMiniMapHeroEvent(const mr::coprocessor::TaskTiming &timing, const mr::c
 
 	mr::messageline::postAutoTimed(mr::messageline::Owner::HeroEvent, heroText, mr::messageline::Kind::Success, mr::messageline::kPriorityHigh);
 	mr::messageline::clearOwner(mr::messageline::Owner::HeroEventFollowup);
+}
+
+void playLiveLogAudioSignal(const std::string &uri) {
+	pid_t childPid;
+
+	if (uri.empty()) return;
+	childPid = ::fork();
+	if (childPid != 0) return;
+	::execlp("paplay", "paplay", uri.c_str(), static_cast<char *>(nullptr));
+	::_exit(127);
+}
+
+void emitTerminalBell() {
+	int tty = ::open("/dev/tty", O_WRONLY | O_CLOEXEC);
+
+	if (tty >= 0) {
+		static_cast<void>(::write(tty, "\a", 1));
+		::close(tty);
+		return;
+	}
+	if (::write(STDERR_FILENO, "\a", 1) == 1) return;
+	static_cast<void>(::write(STDOUT_FILENO, "\a", 1));
+}
+
+bool collectCurrentLiveLogSearchMatches(std::string_view text, std::vector<SearchMatchEntry> &matches) {
+	std::string pattern;
+	MRSearchDialogOptions options;
+	pcre2_code *code = nullptr;
+	std::string regexError;
+	std::string chunkText;
+
+	currentSearchPatternSnapshot(pattern, options);
+	matches.clear();
+	if (pattern.empty() || text.empty()) return false;
+	if (!compileSearchRegex(buildSearchPatternExpression(pattern, options.textType), !options.caseSensitive, &code, regexError)) return false;
+	chunkText.assign(text.data(), text.size());
+	if (!collectRegexMatches(chunkText, code, matches)) {
+		pcre2_code_free(code);
+		return false;
+	}
+	pcre2_code_free(code);
+	return !matches.empty();
+}
+
+std::string baseNameOf(std::string_view path) {
+	const std::size_t pos = path.find_last_of("\\/");
+	if (pos == std::string_view::npos) return std::string(path);
+	return std::string(path.substr(pos + 1));
+}
+
+std::string liveLogSearchHitPrefix(MREditWindow *win) {
+	const char *title = win != nullptr ? win->getTitle(0) : nullptr;
+	const std::string titleText = title != nullptr ? title : "";
+	const std::string detail = win != nullptr ? win->windowRoleDetail() : std::string();
+
+	if (titleText.rfind("JOURNAL: ", 0) == 0) return "[JOU]" + titleText.substr(9);
+	if (!detail.empty()) return baseNameOf(detail);
+	if (titleText.rfind("LIVELOG: ", 0) == 0) return titleText.substr(9);
+	return titleText.empty() ? "log" : titleText;
+}
+
+void appendMessageSegment(std::vector<mr::messageline::VisibleMessage::Segment> &segments, mr::messageline::Kind kind, std::string_view text) {
+	if (text.empty()) return;
+	if (!segments.empty() && segments.back().kind == kind) {
+		segments.back().text.append(text.data(), text.size());
+		return;
+	}
+	mr::messageline::VisibleMessage::Segment segment;
+	segment.kind = kind;
+	segment.text.assign(text.data(), text.size());
+	segments.push_back(std::move(segment));
+}
+
+std::vector<mr::messageline::VisibleMessage::Segment> liveLogSearchHitMessageSegments(MREditWindow *win, std::string_view text, const std::vector<SearchMatchEntry> &matches) {
+	std::vector<mr::messageline::VisibleMessage::Segment> segments;
+	std::size_t lineStart = 0;
+	std::size_t lineEnd = text.size();
+
+	if (matches.empty()) return segments;
+	lineStart = text.rfind('\n', matches.front().start);
+	if (lineStart == std::string_view::npos) lineStart = 0;
+	else
+		++lineStart;
+	lineEnd = text.find('\n', matches.front().start);
+	if (lineEnd == std::string_view::npos) lineEnd = text.size();
+
+	appendMessageSegment(segments, mr::messageline::Kind::Info, liveLogSearchHitPrefix(win));
+	appendMessageSegment(segments, mr::messageline::Kind::Info, ": ");
+	std::size_t cursor = lineStart;
+	for (const SearchMatchEntry &match : matches) {
+		if (match.start < lineStart || match.start >= lineEnd) continue;
+		const std::size_t start = std::min(match.start, lineEnd);
+		const std::size_t end = std::min(match.end > match.start ? match.end : match.start + 1, lineEnd);
+		if (start > cursor) appendMessageSegment(segments, mr::messageline::Kind::Info, text.substr(cursor, start - cursor));
+		if (end > start) appendMessageSegment(segments, mr::messageline::Kind::Warning, text.substr(start, end - start));
+		cursor = end;
+	}
+	if (cursor < lineEnd) appendMessageSegment(segments, mr::messageline::Kind::Info, text.substr(cursor, lineEnd - cursor));
+	return segments;
+}
+
+void reportLiveLogSearchHits(const std::vector<SearchMatchEntry> &matches, MREditWindow *win, std::string_view text) {
+	const MRLiveLogSettings settings = configuredLiveLogSettings();
+
+	if (matches.empty()) return;
+	if (settings.reportSearchHitsOnMessageLine) {
+		const std::vector<mr::messageline::VisibleMessage::Segment> segments = liveLogSearchHitMessageSegments(win, text, matches);
+		mr::messageline::postTimedSegments(mr::messageline::Owner::HeroEventFollowup, segments, mr::messageline::Kind::Info, std::chrono::seconds(2), mr::messageline::kPriorityMedium);
+	}
+	if (settings.reportSearchHitsWithSystemBeep) emitTerminalBell();
+	if (settings.reportSearchHitsWithAudioSignal) playLiveLogAudioSignal(settings.audioSignalUri);
 }
 
 void appendMacroLogLines(const std::vector<std::string> &logLines) {
@@ -746,7 +867,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				if (!applied) editor->clearLineIndexWarmupTask(result.task.id);
 				else editor->continueComputeWarmupIfNeeded("after-line-index");
 				if (!recorded) {
-					recordTaskPerformance(result, kLineIndexWarmAction, window, editor->documentId(), editor->bufferLength(), window->currentFileName());
+					recordTaskPerformance(result, kLineIndexWarmAction, window, editor->documentId(), editor->bufferLength(), window->currentFileName(), applied);
 					recorded = true;
 				}
 			}
@@ -770,7 +891,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				if (!applied) editor->clearSyntaxWarmupTask(result.task.id);
 				else editor->continueComputeWarmupIfNeeded("after-syntax");
 				if (!recorded) {
-					recordTaskPerformance(result, kSyntaxWarmAction, window, editor->documentId(), editor->bufferLength(), detailWithLineRange(window->currentFileName(), syntaxLineRangeDetail(*syntax, editor, result.task)));
+					recordTaskPerformance(result, kSyntaxWarmAction, window, editor->documentId(), editor->bufferLength(), detailWithLineRange(window->currentFileName(), syntaxLineRangeDetail(*syntax, editor, result.task)), applied);
 					recorded = true;
 				}
 			}
@@ -792,7 +913,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				if (editor->documentVersion() == result.task.baseVersion) applied = editor->applyFoldWarmup(*result.payload, result.task.baseVersion, result.task.id);
 				if (!applied) editor->clearFoldWarmupTask(result.task.id);
 				if (!recorded) {
-					recordTaskPerformance(result, kFoldWarmAction, window, editor->documentId(), editor->bufferLength(), detailWithLineRange(window->currentFileName(), taskLabelLineRange(result.task)));
+					recordTaskPerformance(result, kFoldWarmAction, window, editor->documentId(), editor->bufferLength(), detailWithLineRange(window->currentFileName(), taskLabelLineRange(result.task)), applied);
 					recorded = true;
 				}
 			}
@@ -824,7 +945,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 					}
 				}
 				if (!recorded) {
-					recordTaskPerformance(result, kMiniMapRenderAction, window, editor->documentId(), editor->bufferLength(), detailWithLineRange(window->currentFileName(), miniMapLineRangeDetail(*miniMap)));
+					recordTaskPerformance(result, kMiniMapRenderAction, window, editor->documentId(), editor->bufferLength(), detailWithLineRange(window->currentFileName(), miniMapLineRangeDetail(*miniMap)), applied);
 					recorded = true;
 				}
 			}
@@ -857,11 +978,24 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 
 		const mr::coprocessor::ExternalIoChunkPayload *chunk = dynamic_cast<const mr::coprocessor::ExternalIoChunkPayload *>(result.payload.get());
 		if (chunk != nullptr) {
-			MREditWindow *win = findEditWindowByBufferId(static_cast<int>(chunk->channelId));
+			const std::size_t targetBufferId = chunk->targetBufferId != 0 ? chunk->targetBufferId : chunk->channelId;
+			MREditWindow *win = findEditWindowByBufferId(static_cast<int>(targetBufferId));
 			if (win != nullptr) {
-				win->appendTextBuffer(chunk->text.c_str());
+				const MRLiveLogSettings liveLogSettings = configuredLiveLogSettings();
+				std::vector<SearchMatchEntry> searchMatches;
+				std::vector<std::pair<std::size_t, std::size_t>> findRanges;
+
+				if (collectCurrentLiveLogSearchMatches(chunk->text, searchMatches)) {
+					findRanges.reserve(searchMatches.size());
+					for (const SearchMatchEntry &match : searchMatches)
+						if (match.end > match.start) findRanges.push_back({match.start, match.end});
+				}
+				if (liveLogSettings.scrollDirection == MRLiveLogScrollDirection::Up) win->prependLogViewerText(chunk->text.c_str(), &findRanges);
+				else
+					win->appendLogViewerText(chunk->text.c_str(), &findRanges);
 				win->setReadOnly(true);
 				win->setFileChanged(false);
+				reportLiveLogSearchHits(searchMatches, win, chunk->text);
 			}
 			return;
 		}
@@ -869,7 +1003,8 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 		const mr::coprocessor::ExternalIoFinishedPayload *finished = dynamic_cast<const mr::coprocessor::ExternalIoFinishedPayload *>(result.payload.get());
 		if (finished != nullptr) {
 			std::ostringstream statusLine;
-			MREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(finished->channelId));
+			const std::size_t targetBufferId = finished->targetBufferId != 0 ? finished->targetBufferId : finished->channelId;
+			MREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(targetBufferId));
 			if (targetWindow != nullptr) {
 				std::string exitLine = communicationExitLine(*finished);
 				targetWindow->appendTextBuffer(exitLine.c_str());
@@ -881,6 +1016,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				recordTaskPerformance(result, "External command", nullptr, 0, 0, externalIoDisplayName(result.task));
 			}
 			mrTraceCoprocessorTaskRelease(static_cast<int>(finished->channelId), result.task.id, "finished");
+			if (result.task.lane == mr::coprocessor::Lane::Extern) mr::coprocessor::globalCoprocessor().unregisterExternalSource(result.task.documentId);
 			statusLine << "Communication session #" << finished->channelId << " ";
 			if (finished->signaled) statusLine << "terminated by signal " << finished->signalNumber;
 			else
@@ -997,6 +1133,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 		if (result.cancelled()) mrTraceCoprocessorTaskRelease(static_cast<int>(result.task.documentId), result.task.id, "cancelled");
 		else if (result.failed())
 			mrTraceCoprocessorTaskRelease(static_cast<int>(result.task.documentId), result.task.id, "failed");
+		if (result.task.lane == mr::coprocessor::Lane::Extern) mr::coprocessor::globalCoprocessor().unregisterExternalSource(result.task.documentId);
 	}
 
 	if (result.task.kind == mr::coprocessor::TaskKind::MacroJob) {

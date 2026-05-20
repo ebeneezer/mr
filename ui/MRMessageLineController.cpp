@@ -17,6 +17,7 @@ struct Slot {
 	bool active = false;
 	Kind kind = Kind::Info;
 	std::string text;
+	std::vector<VisibleMessage::Segment> segments;
 	std::chrono::steady_clock::time_point expiresAt = std::chrono::steady_clock::time_point::max();
 	bool timed = false;
 	int priority = 0;
@@ -66,6 +67,7 @@ void expireLocked(State &shared, std::chrono::steady_clock::time_point now) {
 		if (slot.active && slot.timed && now >= slot.expiresAt) {
 			slot.active = false;
 			slot.text.clear();
+			slot.segments.clear();
 			slot.timed = false;
 			slot.expiresAt = std::chrono::steady_clock::time_point::max();
 			slot.priority = 0;
@@ -77,6 +79,7 @@ bool exportSlot(const Slot &slot, VisibleMessage &out) {
 	out.active = true;
 	out.kind = slot.kind;
 	out.text = slot.text;
+	out.segments = slot.segments;
 	return true;
 }
 
@@ -95,6 +98,33 @@ Token postTimed(Owner owner, std::string_view text, Kind kind, std::chrono::mill
 	slot->active = !text.empty();
 	slot->kind = kind;
 	slot->text = text;
+	slot->segments.clear();
+	slot->timed = !text.empty();
+	slot->expiresAt = text.empty() ? std::chrono::steady_clock::time_point::max() : now + duration;
+	slot->priority = text.empty() ? 0 : priority;
+	slot->token = shared.nextToken++;
+	slot->sequence = shared.nextSequence++;
+	return slot->token;
+}
+
+Token postTimedSegments(Owner owner, const std::vector<VisibleMessage::Segment> &segments, Kind kind, std::chrono::milliseconds duration, int priority) {
+	if (!configuredMenulineMessages()) return 0;
+	State &shared = state();
+	std::lock_guard<std::mutex> lock(shared.mutex);
+	const auto now = std::chrono::steady_clock::now();
+	Slot *slot = slotForOwner(shared, owner);
+	std::string text;
+
+	if (slot == nullptr) return 0;
+	for (const VisibleMessage::Segment &segment : segments)
+		text += segment.text;
+
+	expireLocked(shared, now);
+	duration = text.empty() ? std::chrono::milliseconds(0) : duration;
+	slot->active = !text.empty();
+	slot->kind = kind;
+	slot->text = text;
+	slot->segments = segments;
 	slot->timed = !text.empty();
 	slot->expiresAt = text.empty() ? std::chrono::steady_clock::time_point::max() : now + duration;
 	slot->priority = text.empty() ? 0 : priority;
@@ -113,6 +143,7 @@ Token postSticky(Owner owner, std::string_view text, Kind kind, int priority) {
 	slot->active = !text.empty();
 	slot->kind = kind;
 	slot->text = text;
+	slot->segments.clear();
 	slot->timed = false;
 	slot->expiresAt = std::chrono::steady_clock::time_point::max();
 	slot->priority = text.empty() ? 0 : priority;
@@ -145,6 +176,7 @@ void clearOwner(Owner owner) {
 
 	slot->active = false;
 	slot->text.clear();
+	slot->segments.clear();
 	slot->timed = false;
 	slot->expiresAt = std::chrono::steady_clock::time_point::max();
 	slot->priority = 0;
@@ -161,6 +193,7 @@ void clearOwnerToken(Owner owner, Token token) {
 	if (slot->token != token) return;
 	slot->active = false;
 	slot->text.clear();
+	slot->segments.clear();
 	slot->timed = false;
 	slot->expiresAt = std::chrono::steady_clock::time_point::max();
 	slot->priority = 0;

@@ -248,6 +248,7 @@ class MRTextBufferModel {
 		CustomUndoRecord redoRecord;
 		const auto redoSnapshotStartedAt = std::chrono::steady_clock::now();
 		redoRecord.preSnapshot = mDocument.readSnapshot();
+		redoRecord.preSnapshot.dropExactLineStartIndex();
 		const auto redoSnapshotElapsed = std::chrono::steady_clock::now() - redoSnapshotStartedAt;
 		redoRecord.cursor = mCursor.offset;
 		redoRecord.selAnchor = mSelection.anchor;
@@ -284,6 +285,7 @@ class MRTextBufferModel {
 		CustomUndoRecord undoRecord;
 		const auto undoSnapshotStartedAt = std::chrono::steady_clock::now();
 		undoRecord.preSnapshot = mDocument.readSnapshot();
+		undoRecord.preSnapshot.dropExactLineStartIndex();
 		const auto undoSnapshotElapsed = std::chrono::steady_clock::now() - undoSnapshotStartedAt;
 		undoRecord.cursor = mCursor.offset;
 		undoRecord.selAnchor = mSelection.anchor;

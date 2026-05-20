@@ -3,6 +3,10 @@
 
 #include <tvision/tv.h>
 
+#include "../../config/settings/MRSettingsRuntime.hpp"
+
+#include <string>
+
 [[nodiscard]] bool handleSearchFindText();
 [[nodiscard]] bool handleSearchRepeatPrevious();
 [[nodiscard]] bool handleSearchReplace();
@@ -11,5 +15,6 @@
 [[nodiscard]] bool handleSearchMultiFileSearchReplace();
 [[nodiscard]] bool handleSearchResultsNext();
 void clearTransientSelectionIfPending(const TEvent &event);
+void currentSearchPatternSnapshot(std::string &pattern, MRSearchDialogOptions &options);
 
 #endif

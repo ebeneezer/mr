@@ -1,4 +1,5 @@
 #define Uses_TApplication
+#define Uses_TButton
 #define Uses_TCheckBoxes
 #define Uses_TChDirDialog
 #define Uses_TDeskTop
@@ -2068,6 +2069,213 @@ void runUserInterfaceSettingsDialogFlow() {
 				}
 				break;
 
+			default:
+				running = false;
+				break;
+		}
+	}
+	clearSetupDialogStatus();
+}
+
+namespace {
+
+struct LiveLogsDialogRecord {
+	ushort messageLine;
+	ushort systemBeep;
+	ushort audioSignal;
+	ushort scrollDirection;
+	ushort lineNumbers;
+	ushort timestamps;
+	ushort syntaxHighlighting;
+	char audioUri[kPathFieldSize];
+};
+
+bool liveLogsDialogRecordEqual(const LiveLogsDialogRecord &lhs, const LiveLogsDialogRecord &rhs) {
+	return lhs.messageLine == rhs.messageLine && lhs.systemBeep == rhs.systemBeep && lhs.audioSignal == rhs.audioSignal && lhs.scrollDirection == rhs.scrollDirection && lhs.lineNumbers == rhs.lineNumbers && lhs.timestamps == rhs.timestamps &&
+	       lhs.syntaxHighlighting == rhs.syntaxHighlighting &&
+	       std::strcmp(lhs.audioUri, rhs.audioUri) == 0;
+}
+
+bool paplayAvailable() {
+	const char *pathValue = std::getenv("PATH");
+	std::string path = pathValue != nullptr ? pathValue : "";
+	std::size_t start = 0;
+
+	while (start <= path.size()) {
+		std::size_t end = path.find(':', start);
+		std::string directory = end == std::string::npos ? path.substr(start) : path.substr(start, end - start);
+		std::string candidate;
+
+		if (directory.empty()) directory = ".";
+		candidate = directory;
+		if (!candidate.empty() && candidate.back() != '/') candidate.push_back('/');
+		candidate += "paplay";
+		if (::access(candidate.c_str(), X_OK) == 0) return true;
+		if (end == std::string::npos) break;
+		start = end + 1;
+	}
+	return false;
+}
+
+class LiveLogsSetupDialog : public MRScrollableDialog {
+  public:
+	LiveLogsSetupDialog() : TWindowInit(initSetupDialogFrame), MRScrollableDialog(centeredSetupDialogRect(66, 19), "Live Logs", 64, 17, initSetupDialogFrame), messageLineField(nullptr), audioField(nullptr), scrollDirectionField(nullptr), lineNumbersField(nullptr), audioUriField(nullptr), audioAvailable(paplayAvailable()) {
+		addManaged(new TStaticText(TRect(3, 2, 35, 3), "Search hits:"), TRect(3, 2, 35, 3));
+		messageLineField = new TCheckBoxes(TRect(3, 3, 34, 5), new TSItem("report on message line", new TSItem("system beep", nullptr)));
+		addManaged(messageLineField, TRect(3, 3, 34, 5));
+		audioField = new TCheckBoxes(TRect(3, 5, 34, 6), new TSItem("audible signal via paplay", nullptr));
+		addManaged(audioField, TRect(3, 5, 34, 6));
+		if (!audioAvailable) audioField->setState(sfDisabled, True);
+
+		addManaged(new TStaticText(TRect(36, 2, 54, 3), "Viewer:"), TRect(36, 2, 54, 3));
+		lineNumbersField = new TCheckBoxes(TRect(36, 3, 58, 6), new TSItem("line numbers", new TSItem("time stamps", new TSItem("syntax highlighting", nullptr))));
+		addManaged(lineNumbersField, TRect(36, 3, 58, 6));
+
+		addManaged(new TStaticText(TRect(3, 8, 24, 9), "Scroll direction:"), TRect(3, 8, 24, 9));
+		scrollDirectionField = new TRadioButtons(TRect(3, 9, 20, 11), new TSItem("down", new TSItem("up", nullptr)));
+		addManaged(scrollDirectionField, TRect(3, 9, 20, 11));
+
+		audioUriField = new TInputLine(TRect(36, 10, 62, 11), kPathFieldSize - 1);
+		addManaged(new TLabel(TRect(36, 9, 54, 10), "~A~udio URI:", audioUriField), TRect(36, 9, 54, 10));
+		addManaged(audioUriField, TRect(36, 10, 62, 11));
+		if (!audioAvailable) audioUriField->setState(sfDisabled, True);
+
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~D~one", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}};
+		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 2);
+		const int buttonLeft = (64 - metrics.rowWidth) / 2;
+		mr::dialogs::addManagedUniformButtonRow(*this, buttonLeft, 14, 2, buttons);
+
+		selectContent();
+	}
+
+	void setData(void *rec) override {
+		LiveLogsDialogRecord *record = static_cast<LiveLogsDialogRecord *>(rec);
+		ushort hitFlags = 0;
+		ushort viewerFlags = 0;
+
+		if (record == nullptr) return;
+		if (record->messageLine != 0) hitFlags |= 1;
+		if (record->systemBeep != 0) hitFlags |= 2;
+		if (audioAvailable && record->audioSignal != 0) hitFlags |= 4;
+		if (record->lineNumbers != 0) viewerFlags |= 1;
+		if (record->timestamps != 0) viewerFlags |= 2;
+		if (record->syntaxHighlighting != 0) viewerFlags |= 4;
+		if (messageLineField != nullptr) messageLineField->setData(&hitFlags);
+		if (audioField != nullptr) {
+			ushort audio = (hitFlags & 4) != 0 ? 1 : 0;
+			audioField->setData(&audio);
+		}
+		if (scrollDirectionField != nullptr) scrollDirectionField->setData(&record->scrollDirection);
+		if (lineNumbersField != nullptr) lineNumbersField->setData(&viewerFlags);
+		if (audioUriField != nullptr) audioUriField->setData(record->audioUri);
+	}
+
+	void getData(void *rec) override {
+		LiveLogsDialogRecord *record = static_cast<LiveLogsDialogRecord *>(rec);
+		ushort hitFlags = 0;
+		ushort viewerFlags = 0;
+
+		if (record == nullptr) return;
+		if (messageLineField != nullptr) messageLineField->getData(&hitFlags);
+		if (audioField != nullptr) {
+			ushort audio = 0;
+			audioField->getData(&audio);
+			if (audio != 0) hitFlags |= 4;
+		}
+		if (lineNumbersField != nullptr) lineNumbersField->getData(&viewerFlags);
+		record->messageLine = (hitFlags & 1) != 0 ? 1 : 0;
+		record->systemBeep = (hitFlags & 2) != 0 ? 1 : 0;
+		record->audioSignal = (hitFlags & 4) != 0 ? 1 : 0;
+		if (!audioAvailable) record->audioSignal = 0;
+		if (scrollDirectionField != nullptr) scrollDirectionField->getData(&record->scrollDirection);
+		record->lineNumbers = (viewerFlags & 1) != 0 ? 1 : 0;
+		record->timestamps = (viewerFlags & 2) != 0 ? 1 : 0;
+		record->syntaxHighlighting = (viewerFlags & 4) != 0 ? 1 : 0;
+		if (audioUriField != nullptr) audioUriField->getData(record->audioUri);
+	}
+
+  private:
+	TCheckBoxes *messageLineField;
+	TCheckBoxes *audioField;
+	TRadioButtons *scrollDirectionField;
+	TCheckBoxes *lineNumbersField;
+	TInputLine *audioUriField;
+	bool audioAvailable;
+};
+
+} // namespace
+
+void runLiveLogsSetupDialogFlow() {
+	bool running = true;
+
+	while (running) {
+		MRLiveLogSettings settings = configuredLiveLogSettings();
+		LiveLogsDialogRecord record{};
+		std::string errorText;
+
+		record.messageLine = settings.reportSearchHitsOnMessageLine ? 1 : 0;
+		record.systemBeep = settings.reportSearchHitsWithSystemBeep ? 1 : 0;
+		record.audioSignal = settings.reportSearchHitsWithAudioSignal ? 1 : 0;
+		record.scrollDirection = settings.scrollDirection == MRLiveLogScrollDirection::Up ? 1 : 0;
+		record.lineNumbers = settings.showLineNumbers ? 1 : 0;
+		record.timestamps = settings.showTimestamps ? 1 : 0;
+		record.syntaxHighlighting = settings.syntaxHighlighting ? 1 : 0;
+		writeRecordField(record.audioUri, sizeof(record.audioUri), settings.audioSignalUri);
+
+		LiveLogsDialogRecord baselineRecord = record;
+		ushort result = execDialogWithDataCapture(new LiveLogsSetupDialog(), &record);
+		const bool changed = mr::dialogs::isDialogDraftDirty(baselineRecord, record, liveLogsDialogRecordEqual);
+		auto applyAndPersistLiveLogSettings = [&]() -> bool {
+			settings.reportSearchHitsOnMessageLine = record.messageLine != 0;
+			settings.reportSearchHitsWithSystemBeep = record.systemBeep != 0;
+			settings.reportSearchHitsWithAudioSignal = record.audioSignal != 0;
+			settings.scrollDirection = record.scrollDirection == 1 ? MRLiveLogScrollDirection::Up : MRLiveLogScrollDirection::Down;
+			settings.showLineNumbers = record.lineNumbers != 0;
+			settings.showTimestamps = record.timestamps != 0;
+			settings.syntaxHighlighting = record.syntaxHighlighting != 0;
+			settings.audioSignalUri = normalizeConfiguredPathInput(record.audioUri);
+			if (!setConfiguredLiveLogSettings(settings, &errorText)) {
+				postSetupFlowError("Live logs", errorText);
+				return false;
+			}
+			for (MREditWindow *window : allEditWindowsInZOrder()) {
+				if (window == nullptr || !window->isCommunicationWindow()) continue;
+				window->setLogViewerOptions(settings.showLineNumbers);
+				window->drawView();
+			}
+			if (!persistConfiguredSettingsSnapshot(&errorText)) {
+				postSetupFlowError("Live logs", errorText);
+				return false;
+			}
+			return true;
+		};
+
+		switch (result) {
+			case cmOK:
+				if (changed && !applyAndPersistLiveLogSettings()) break;
+				running = false;
+				break;
+			case cmClose:
+			case cmCancel:
+				if (!changed) {
+					running = false;
+					break;
+				}
+				switch (mr::dialogs::runDialogDirtyGating("Live log settings have unsaved changes.")) {
+					case mr::dialogs::UnsavedChangesChoice::Save:
+						if (!applyAndPersistLiveLogSettings()) break;
+						running = false;
+						break;
+					case mr::dialogs::UnsavedChangesChoice::Discard:
+						running = false;
+						break;
+					case mr::dialogs::UnsavedChangesChoice::Cancel:
+						discardQueuedCancelEvent();
+						break;
+					default:
+						break;
+				}
+				break;
 			default:
 				running = false;
 				break;

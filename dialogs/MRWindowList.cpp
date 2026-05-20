@@ -34,6 +34,7 @@
 #include "../ui/MRFrame.hpp"
 #include "../ui/MRWindowManager.hpp"
 #include "../ui/MRWindowSupport.hpp"
+#include "../app/commands/MRFileCommands.hpp"
 
 namespace {
 TFrame *initMrDialogFrame(TRect bounds) {
@@ -45,6 +46,9 @@ enum : ushort {
 	cmMRWindowListSave,
 	cmMRWindowListHide,
 	cmMRWindowListHideAll,
+	cmMRWindowListSaveAll,
+	cmMRWindowListSaveAs,
+	cmMRWindowListRevert,
 	cmMRWindowListGet,
 	cmMRWorkspaceSave,
 	cmMRWorkspaceLoad,
@@ -318,7 +322,7 @@ class WindowListDialog : public MRDialogFoundation {
 		int listTop = 6;
 		int listBottom = height - 6;
 		const int topButtonY = 2;
-		const int getButtonY = 4;
+		const int actionButtonY = 4;
 		const int workspaceButtonY = height - 5;
 		const int bottomButtonY = height - 3;
 		const int buttonGap = 2;
@@ -329,7 +333,7 @@ class WindowListDialog : public MRDialogFoundation {
 
 		{
 			const std::array topButtons{mr::dialogs::DialogButtonSpec{"~D~elete", cmMRWindowListDelete, bfNormal}, mr::dialogs::DialogButtonSpec{"~S~ave", cmMRWindowListSave, bfNormal}, mr::dialogs::DialogButtonSpec{kHideToggleTitle, cmMRWindowListHide, bfNormal}, mr::dialogs::DialogButtonSpec{kHideAllTitle, cmMRWindowListHideAll, bfNormal}};
-			const std::array widthCandidates{kHideToggleTitle, kHideAllTitle, kRestoreTitle, kRestoreAllTitle};
+			const std::array widthCandidates{kHideToggleTitle, kHideAllTitle, kRestoreTitle, kRestoreAllTitle, "Save ~a~ll", "Save a~s~", "~R~evert", kGetTitle};
 			std::vector<TButton *> topButtonViews;
 			int minTopButtonWidth = 0;
 			mr::dialogs::DialogButtonRowMetrics metrics;
@@ -348,11 +352,11 @@ class WindowListDialog : public MRDialogFoundation {
 			if (topButtonViews.size() >= 4) hideAllButton = topButtonViews[3];
 		}
 		{
-			const std::array getButtons{mr::dialogs::DialogButtonSpec{kGetTitle, cmMRWindowListGet, bfNormal}};
-			std::vector<TButton *> getButtonViews;
+			const std::array actionButtons{mr::dialogs::DialogButtonSpec{"Save ~a~ll", cmMRWindowListSaveAll, bfNormal}, mr::dialogs::DialogButtonSpec{"Save a~s~", cmMRWindowListSaveAs, bfNormal}, mr::dialogs::DialogButtonSpec{"~R~evert", cmMRWindowListRevert, bfNormal}, mr::dialogs::DialogButtonSpec{kGetTitle, cmMRWindowListGet, bfNormal}};
+			std::vector<TButton *> actionButtonViews;
 
-			mr::dialogs::insertUniformButtonRow(*this, topButtonLeft, getButtonY, buttonGap, getButtons, topButtonWidth, &getButtonViews);
-			if (!getButtonViews.empty()) getButton = getButtonViews[0];
+			mr::dialogs::insertUniformButtonRow(*this, topButtonLeft, actionButtonY, buttonGap, actionButtons, topButtonWidth, &actionButtonViews);
+			if (actionButtonViews.size() >= 4) getButton = actionButtonViews[3];
 		}
 
 		scrollBar = new TScrollBar(TRect(width - 3, listTop, width - 2, listBottom));
@@ -481,6 +485,10 @@ class WindowListDialog : public MRDialogFoundation {
 					handleSave();
 					clearEvent(event);
 					return;
+				case kbF8:
+					handleSaveAll();
+					clearEvent(event);
+					return;
 				case kbF4:
 					if (canToggleCurrentSelection()) handleHide();
 					clearEvent(event);
@@ -513,6 +521,18 @@ class WindowListDialog : public MRDialogFoundation {
 				break;
 			case cmMRWindowListSave:
 				handleSave();
+				clearEvent(event);
+				break;
+			case cmMRWindowListSaveAll:
+				handleSaveAll();
+				clearEvent(event);
+				break;
+			case cmMRWindowListSaveAs:
+				handleSaveAs();
+				clearEvent(event);
+				break;
+			case cmMRWindowListRevert:
+				handleRevert();
 				clearEvent(event);
 				break;
 			case cmMRWindowListHide:
@@ -655,6 +675,28 @@ class WindowListDialog : public MRDialogFoundation {
 		if (win == nullptr) return;
 		saveWindow(win);
 		refreshEntries();
+	}
+
+	void handleSaveAll() {
+		static_cast<void>(saveAllDirtyEditWindows());
+		refreshEntries();
+		activateModeless();
+	}
+
+	void handleSaveAs() {
+		MREditWindow *win = currentSelection();
+		if (win == nullptr) return;
+		static_cast<void>(saveEditWindowAs(win));
+		refreshEntries();
+		activateModeless();
+	}
+
+	void handleRevert() {
+		MREditWindow *win = currentSelection();
+		if (win == nullptr) return;
+		static_cast<void>(revertEditWindow(win));
+		refreshEntries();
+		activateModeless();
 	}
 
 	void handleHide() {

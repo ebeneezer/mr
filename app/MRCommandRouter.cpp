@@ -63,6 +63,7 @@
 #include "../mrmac/MRVM.hpp"
 #include "../app/commands/MRExternalCommand.hpp"
 #include "../app/commands/MRFileCommands.hpp"
+#include "../app/commands/MRLogViewer.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../dialogs/MRMacroFile.hpp"
 #include "../dialogs/MRWindowList.hpp"
@@ -238,6 +239,8 @@ constexpr std::array kKeymapActionDispatchTable{
     KeymapActionDispatchEntry{"MRMAC_BLOCK_MATH", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::BlockMath},
     KeymapActionDispatchEntry{"MRMAC_BLOCK_EXTEND_BY_MOTION", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ExtendBlockByMotion},
     KeymapActionDispatchEntry{"MRMAC_FILE_SAVE", KeymapDispatchKind::AppCommand, cmMrFileSave, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_FILE_SAVE_ALL", KeymapDispatchKind::AppCommand, cmMrFileSaveAll, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_FILE_REVERT", KeymapDispatchKind::AppCommand, cmMrFileRevert, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_SAVE_BLOCK_TO_FILE", KeymapDispatchKind::AppCommand, cmMrBlockSaveToDisk, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_LOAD_BLOCK_FROM_FILE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::LoadBlockFromFile},
     KeymapActionDispatchEntry{"MR_TEXT_CENTER_LINE", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CenterLine},
@@ -262,10 +265,18 @@ const char *placeholderCommandTitle(ushort command) {
 			return "File / Load";
 		case cmMrFileAcquire:
 			return "File / Acquire";
+		case cmMrFileOpenLiveLog:
+			return "File / Open Live Log";
+		case cmMrFileOpenJournal:
+			return "File / Open Journal";
 		case cmMrFileSave:
 			return "File / Save";
 		case cmMrFileSaveAs:
 			return "File / Save As";
+		case cmMrFileSaveAll:
+			return "File / Save All";
+		case cmMrFileRevert:
+			return "File / Revert";
 		case cmMrFileInformation:
 			return "File / Information";
 		case cmMrFileMerge:
@@ -274,6 +285,8 @@ const char *placeholderCommandTitle(ushort command) {
 			return "File / Export to PDF";
 		case cmMrFileShellToDos:
 			return "File / Shell";
+		case cmMrSetupLiveLogs:
+			return "Setup / Live logs";
 
 		case cmMrEditUndo:
 			return "Edit / Undo";
@@ -1964,12 +1977,26 @@ bool handleMRCommand(ushort command) {
 		case cmMrFileAcquire:
 			return handleFileAcquire();
 
+		case cmMrFileOpenLiveLog:
+			return openLiveLogViewer();
+
+		case cmMrFileOpenJournal:
+			return openJournalViewer();
+
 		case cmMrFileSave:
 			static_cast<void>(saveCurrentEditWindow());
 			return true;
 
 		case cmMrFileSaveAs:
 			static_cast<void>(saveCurrentEditWindowAs());
+			return true;
+
+		case cmMrFileSaveAll:
+			static_cast<void>(saveAllDirtyEditWindows());
+			return true;
+
+		case cmMrFileRevert:
+			static_cast<void>(revertEditWindow(currentEditWindow()));
 			return true;
 
 		case cmMrFileInformation:
@@ -2147,6 +2174,7 @@ bool handleMRCommand(ushort command) {
 		case cmMrSetupPaths:
 		case cmMrSetupBackupsAutosave:
 		case cmMrSetupUserInterfaceSettings:
+		case cmMrSetupLiveLogs:
 		case cmMrSetupSearchAndReplaceDefaults: {
 			if (runSetupDialogCommand(command)) return true;
 			const char *title = placeholderCommandTitle(command);

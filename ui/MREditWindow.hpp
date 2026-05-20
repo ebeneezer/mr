@@ -159,9 +159,62 @@ class MREditWindow : public TWindow {
 
 	virtual Boolean valid(ushort command) override {
 		if (command != cmClose) return TWindow::valid(command);
-		if (!TWindow::valid(command)) return False;
+		const auto closeValidStartedAt = std::chrono::steady_clock::now();
+		{
+			std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+			if (out) {
+				std::time_t now = std::time(nullptr);
+				std::tm *tmNow = std::localtime(&now);
+				char buffer[32];
+				if (tmNow != nullptr && std::strftime(buffer, sizeof(buffer), "%H:%M:%S", tmNow) != 0) out << "[" << buffer << "] ";
+				else
+					out << "[--:--:--] ";
+				out << "Phase1 discard window valid begin #" << mBufferId << " title='" << (getTitle(0) != nullptr ? getTitle(0) : "?") << "'.\n";
+				out.flush();
+			}
+		}
+		if (!TWindow::valid(command)) {
+			std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+			if (out) {
+				std::time_t now = std::time(nullptr);
+				std::tm *tmNow = std::localtime(&now);
+				char buffer[32];
+				if (tmNow != nullptr && std::strftime(buffer, sizeof(buffer), "%H:%M:%S", tmNow) != 0) out << "[" << buffer << "] ";
+				else
+					out << "[--:--:--] ";
+				out << "Phase1 discard window valid editor rejected #" << mBufferId << " total_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - closeValidStartedAt).count() << ".\n";
+				out.flush();
+			}
+			return False;
+		}
+		{
+			std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+			if (out) {
+				std::time_t now = std::time(nullptr);
+				std::tm *tmNow = std::localtime(&now);
+				char buffer[32];
+				if (tmNow != nullptr && std::strftime(buffer, sizeof(buffer), "%H:%M:%S", tmNow) != 0) out << "[" << buffer << "] ";
+				else
+					out << "[--:--:--] ";
+				out << "Phase1 discard window valid editor accepted #" << mBufferId << " total_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - closeValidStartedAt).count() << ".\n";
+				out.flush();
+			}
+		}
 		scheduleEnsureUsableWorkWindow();
 		prepareForClose();
+		{
+			std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
+			if (out) {
+				std::time_t now = std::time(nullptr);
+				std::tm *tmNow = std::localtime(&now);
+				char buffer[32];
+				if (tmNow != nullptr && std::strftime(buffer, sizeof(buffer), "%H:%M:%S", tmNow) != 0) out << "[" << buffer << "] ";
+				else
+					out << "[--:--:--] ";
+				out << "Phase1 discard window valid end #" << mBufferId << " total_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - closeValidStartedAt).count() << ".\n";
+				out.flush();
+			}
+		}
 		return True;
 	}
 
@@ -227,6 +280,65 @@ class MREditWindow : public TWindow {
 		if (indicator != nullptr) indicator->drawView();
 	}
 
+	bool editorScrollBarArrowPart(TScrollBar *scrollBar, TPoint global, int &part) const {
+		if (scrollBar == nullptr || (scrollBar->state & sfVisible) == 0) return false;
+
+		TPoint local = scrollBar->makeLocal(global);
+		if (local.x < 0 || local.y < 0 || local.x >= scrollBar->size.x || local.y >= scrollBar->size.y) return false;
+
+		if (scrollBar->size.x == 1) {
+			if (local.y == 0) {
+				part = sbUpArrow;
+				return true;
+			}
+			if (local.y == scrollBar->size.y - 1) {
+				part = sbDownArrow;
+				return true;
+			}
+			return false;
+		}
+
+		if (local.x == 0) {
+			part = sbLeftArrow;
+			return true;
+		}
+		if (local.x == scrollBar->size.x - 1) {
+			part = sbRightArrow;
+			return true;
+		}
+		return false;
+	}
+
+	bool handleEditorScrollBarArrowHold(TEvent &event) {
+		if (event.what != evMouseDown || (event.mouse.buttons & mbLeftButton) == 0) return false;
+
+		TScrollBar *scrollBar = nullptr;
+		int part = 0;
+		if (editorScrollBarArrowPart(vScrollBar, event.mouse.where, part)) scrollBar = vScrollBar;
+		else if (editorScrollBarArrowPart(hScrollBar, event.mouse.where, part))
+			scrollBar = hScrollBar;
+		if (scrollBar == nullptr) return false;
+
+		select();
+		scrollBar->setValue(scrollBar->value + scrollBar->scrollStep(part));
+		clearEvent(event);
+
+		bool repeat = true;
+		int waitMs = 220;
+		for (;;) {
+			TEvent next{};
+			getEvent(next, waitMs);
+			if (next.what == evMouseUp) break;
+			if ((next.what & (evMouseDown | evMouseMove | evMouseAuto)) != 0) {
+				int currentPart = 0;
+				repeat = editorScrollBarArrowPart(scrollBar, next.mouse.where, currentPart) && currentPart == part;
+			}
+			if (repeat) scrollBar->setValue(scrollBar->value + scrollBar->scrollStep(part));
+			waitMs = 35;
+		}
+		return true;
+	}
+
 	virtual void handleEvent(TEvent &event) override {
 		if (MRWindowManager::isWindowMinimized(this)) {
 			if (event.what == evCommand && (event.message.command == cmMrWindowMinimize || event.message.command == cmZoom)) {
@@ -249,6 +361,7 @@ class MREditWindow : public TWindow {
 			clearEvent(event);
 			return;
 		}
+		if (handleEditorScrollBarArrowHold(event)) return;
 		const ushort originalEvent = event.what;
 		const ushort keyCodeBefore = event.what == evKeyDown ? ctrlToArrow(event.keyDown.keyCode) : static_cast<ushort>(0);
 		const ushort keyModifiersBefore = event.what == evKeyDown ? event.keyDown.controlKeyState : static_cast<ushort>(0);
@@ -634,6 +747,21 @@ class MREditWindow : public TWindow {
 	bool appendTextBuffer(const char *text) {
 		if (editor == nullptr) return false;
 		return editor->appendBufferText(text);
+	}
+
+	bool appendLogViewerText(const char *text, const std::vector<std::pair<std::size_t, std::size_t>> *chunkFindRanges = nullptr) {
+		if (editor == nullptr || text == nullptr) return false;
+		return editor->appendLogViewerData(text, static_cast<uint>(std::strlen(text)), chunkFindRanges);
+	}
+
+	bool prependLogViewerText(const char *text, const std::vector<std::pair<std::size_t, std::size_t>> *chunkFindRanges = nullptr) {
+		if (editor == nullptr || text == nullptr) return false;
+		return editor->prependLogViewerData(text, static_cast<uint>(std::strlen(text)), chunkFindRanges);
+	}
+
+	void setLogViewerOptions(bool lineNumbers) {
+		if (editor == nullptr) return;
+		editor->setCommunicationViewerOptions(lineNumbers);
 	}
 
 	void setDisplayTitle(const char *title) {
@@ -1926,6 +2054,8 @@ class MREditWindow : public TWindow {
 				return "MiniMap";
 			case mr::coprocessor::Lane::Macro:
 				return "Macro";
+			case mr::coprocessor::Lane::Extern:
+				return "Extern";
 		}
 		return "Lane";
 	}

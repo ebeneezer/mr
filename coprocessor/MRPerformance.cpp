@@ -63,6 +63,8 @@ const char *laneLabel(mr::coprocessor::Lane lane) {
 			return "minimap";
 		case mr::coprocessor::Lane::Macro:
 			return "macro";
+		case mr::coprocessor::Lane::Extern:
+			return "extern";
 		case mr::coprocessor::Lane::Compute:
 		default:
 			return "compute";
@@ -112,6 +114,11 @@ void recordBackgroundResult(const mr::coprocessor::Result &result, std::string_v
 }
 
 void recordBackgroundEvent(mr::coprocessor::Lane lane, Outcome outcome, const mr::coprocessor::TaskTiming &timing, std::string_view action, std::size_t bufferId, std::size_t documentId, std::size_t bytes, std::string_view detail) {
+	recordBackgroundEvent(lane, outcome, timing, action, bufferId, documentId, bytes, detail, false);
+}
+
+void recordBackgroundEvent(mr::coprocessor::Lane lane, Outcome outcome, const mr::coprocessor::TaskTiming &timing, std::string_view action, std::size_t bufferId, std::size_t documentId, std::size_t bytes,
+                           std::string_view detail, bool derivedStateApplied) {
 	EventStore &store = eventStore();
 	std::lock_guard<std::mutex> lock(store.mutex);
 	Event event;
@@ -127,6 +134,7 @@ void recordBackgroundEvent(mr::coprocessor::Lane lane, Outcome outcome, const mr
 	event.queueMs = timing.queueMs();
 	event.runMs = timing.runMs();
 	event.totalMs = timing.totalMs();
+	event.derivedStateApplied = derivedStateApplied;
 	appendEvent(store, event);
 }
 

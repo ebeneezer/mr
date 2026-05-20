@@ -5,15 +5,6 @@
       "title": "Backlog",
       "cards": [
         {
-          "id": "e582ea46-09dc-4e28-bce7-3227dac67813",
-          "listId": "442a00f0-c411-4725-9424-3182418b486d",
-          "title": "Save All mit Dialog/List Window",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
           "id": "894819d8-5602-4020-a529-8a115b2ab661",
           "listId": "442a00f0-c411-4725-9424-3182418b486d",
           "title": "Refactoring: Intrinsics vorschlagen wo es Sinn macht",
@@ -44,6 +35,20 @@
           "labels": [],
           "checkboxes": [],
           "comments": []
+        },
+        {
+          "id": "3e6b2535-2d04-453b-9214-22dac0c2642d",
+          "listId": "442a00f0-c411-4725-9424-3182418b486d",
+          "title": "Zu besonderen Events (etwa Feiertagen) wenn länger idle animierte ASCII Grafiken auf dem Desktop rendern (1 frame alle 2 Sekunden): Halloween, Weihnachten, Ostern, Sonnenwende, mein Geburtstag, Weltuntergang, Ankunft der Marsianer etc ...",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": [
+            {
+              "id": "f68f1b3f-06d5-4bd6-a2f7-ece69722f56c",
+              "comment": "Entscheidung: Log-Syntax-Highlighting nicht endgültig rauswerfen. Später per Checkbox im Live-Logs-Setup steuerbar machen, damit MRLogViewer plain bleiben kann, aber optional leichte Log-Dekoration bekommt."
+            }
+          ]
         },
         {
           "id": "3f136c23-dea4-4cc1-b981-f32ee1c981f5",
@@ -83,20 +88,6 @@
           ]
         },
         {
-          "id": "f9883d7e-c8f9-43e7-8856-bbd3bcdb789c",
-          "listId": "442a00f0-c411-4725-9424-3182418b486d",
-          "title": "Code Prettifier",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": [
-            {
-              "id": "2830a7bb-cc8d-4593-b100-453287e41049",
-              "comment": "- code prettyfier: wie syntaxregeln definieren?"
-            }
-          ]
-        },
-        {
           "id": "d2168d40-7377-4678-b6b5-8e72ee20daff",
           "listId": "442a00f0-c411-4725-9424-3182418b486d",
           "title": "Windowanimations",
@@ -107,29 +98,6 @@
             {
               "id": "0ec235fb-d8f5-43e7-b8c9-e35c0194bb8a",
               "comment": "Explode, Magic Lamp?, Slide in/out?"
-            }
-          ]
-        },
-        {
-          "id": "4ac50537-a42c-492a-b451-372698b6ae2d",
-          "listId": "442a00f0-c411-4725-9424-3182418b486d",
-          "title": "Snippet System mit Platzhaltern und Navigation",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
-          "id": "44b96008-898d-4e5d-8f9a-d8236bd7c05d",
-          "listId": "442a00f0-c411-4725-9424-3182418b486d",
-          "title": "LSP Support",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": [
-            {
-              "id": "684e96a2-aff5-4f5d-b492-b388ce36d8d9",
-              "comment": "LSP-Integration für Diagnose, Navigation und Autocomplete bedeutet im Kern, dass der Editor mit einem externen Language Server spricht, statt Sprachintelligenz selbst ad hoc zu implementieren.\n\nWas der Nutzer davon konkret merkt\n\nFehler und Warnungen direkt im Editor, möglichst schon beim Tippen\nGo to Definition, Find References, Hover-Infos\nkontextabhängige Autovervollständigung statt nur wortbasierter Vorschläge\noptional später: Rename Symbol, Signature Help, Code Actions\nSinnvoller Zuschnitt für eine erste Ausbaustufe\n\nDiagnose\n\nServer starten\nDokument öffnen/ändern/speichern an den Server melden\nDiagnosen empfangen und im UI anzeigen\nNavigation\n\nDefinition anspringen\nReferenzen in einer Liste anzeigen\neinfache Positionssprünge zwischen Datei/Zeile/Spalte\nAutocomplete\n\nCompletion an Cursorposition anfragen\nTrefferliste anzeigen\nausgewählten Vorschlag einfügen\nDas wäre ein brauchbares erstes Thema. Rename, Code Actions, Formatting, Semantic Tokens würde ich bewusst nicht in denselben ersten Schnitt ziehen.\n\nWarum das ein gutes Thema ist\n\nhoher sichtbarer Nutzwert\nnicht auf eine einzelne Sprache begrenzt\nstrategisch stärker als eine isolierte Editorfunktion\nschafft eine technische Grundlage für mehrere spätere Features\nTechnische Teilprobleme\n\nProzessmanagement: Server starten, neu starten, beenden\nProtokolltransport: meist JSON-RPC über stdin/stdout\nDokument-Synchronisation: Full Sync oder Incremental Sync\nCapability-Handling: jeder Server kann etwas anderes\nUI-Anbindung: Listen, Status, Fehleranzeige, Sprungziele\nKonfiguration: welcher Server für welche Dateitypen, Startkommando, Root-Erkennung\nWichtige Produktentscheidungen\n\nNur lokale Serverprozesse oder später auch Remote?\nErst nur eine Sprache gut unterstützen oder Infrastruktur generisch bauen?\nDiagnosen live bei jeder Änderung oder nur bei Save?\nCompletion minimalistisch halten oder direkt mit Dokumentation/Hinweisen?\nRisiken im bestehenden System\n\nFalls Sie das später wirklich umsetzen lassen wollen, ist das kein “reines Feature ohne Architekturwirkung”. Typisch berührt es:\n\nUI-Dialoge und Listenansichten\nasynchrone/deferred UI\nRuntime-Settings\nDateipfad- und Projektwurzel-Logik\nvorhandene Syntax-/Sprachfunktionen, falls es Überschneidungen gibt\nGerade deshalb ist es ein gutes größeres Thema, aber kein kleiner Nebenpunkt.\n\nEmpfohlene Formulierung für die Karte\n\nLSP-Integration: Diagnosen, Definitionen, Referenzen und Autocomplete\n\nDas ist präziser als die Kurzform und setzt den Umfang sauberer. Wenn Sie möchten, formuliere ich daraus auch noch eine kompakte Board-Karte plus 3 bis 5 konkrete Unteraufgaben."
             }
           ]
         }
@@ -146,7 +114,12 @@
           "description": "",
           "labels": [],
           "checkboxes": [],
-          "comments": []
+          "comments": [
+            {
+              "id": "7d9d8e4d-46f9-4401-ba51-7ab3f2c10e6d",
+              "comment": "Darstellung: hex, octal, binär, dezimal\neinstellbare Anzahl bytes pro Zeile, dann ein vertikaler Rahmentrenner, dann ASCII Darstellung, nicht-darstellbare Zeichen als \".\" darstellen\n\nDie Defaultbreite wird durch die record length aus FE Setup bestimmt.\n\nDragging am vertikalen Trenner stellt die Breite ein.\n\nIm Text Menü eine FUnktion vorsehen: \"Mark C String ON/OFF\" - ghosted wenn kein Hex Editor offen ist. Schaltet Hintergrund highlighting für C Strings an/aus. "
+            }
+          ]
         },
         {
           "id": "01e568c5-5863-43f5-96ac-f48feec44128",
@@ -167,22 +140,41 @@
           "comments": []
         },
         {
-          "id": "3b3e722c-d891-4883-8350-72ffd872f92e",
+          "id": "4ac50537-a42c-492a-b451-372698b6ae2d",
           "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
-          "title": "updatendes Log Window mit highlight suche und akustischem treffer",
+          "title": "Snippet System mit Platzhaltern und Navigation",
           "description": "",
           "labels": [],
           "checkboxes": [],
           "comments": []
         },
         {
-          "id": "3e6b2535-2d04-453b-9214-22dac0c2642d",
+          "id": "44b96008-898d-4e5d-8f9a-d8236bd7c05d",
           "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
-          "title": "An Feiertagen animierte ASCII Grafiken auf em Desktop zeigen: Halloween, Weihnachten, Ostern, Sonnen wende etc ...",
+          "title": "LSP Support",
           "description": "",
           "labels": [],
           "checkboxes": [],
-          "comments": []
+          "comments": [
+            {
+              "id": "684e96a2-aff5-4f5d-b492-b388ce36d8d9",
+              "comment": "LSP-Integration für Diagnose, Navigation und Autocomplete bedeutet im Kern, dass der Editor mit einem externen Language Server spricht, statt Sprachintelligenz selbst ad hoc zu implementieren.\n\nWas der Nutzer davon konkret merkt\n\nFehler und Warnungen direkt im Editor, möglichst schon beim Tippen\nGo to Definition, Find References, Hover-Infos\nkontextabhängige Autovervollständigung statt nur wortbasierter Vorschläge\noptional später: Rename Symbol, Signature Help, Code Actions\nSinnvoller Zuschnitt für eine erste Ausbaustufe\n\nDiagnose\n\nServer starten\nDokument öffnen/ändern/speichern an den Server melden\nDiagnosen empfangen und im UI anzeigen\nNavigation\n\nDefinition anspringen\nReferenzen in einer Liste anzeigen\neinfache Positionssprünge zwischen Datei/Zeile/Spalte\nAutocomplete\n\nCompletion an Cursorposition anfragen\nTrefferliste anzeigen\nausgewählten Vorschlag einfügen\nDas wäre ein brauchbares erstes Thema. Rename, Code Actions, Formatting, Semantic Tokens würde ich bewusst nicht in denselben ersten Schnitt ziehen.\n\nWarum das ein gutes Thema ist\n\nhoher sichtbarer Nutzwert\nnicht auf eine einzelne Sprache begrenzt\nstrategisch stärker als eine isolierte Editorfunktion\nschafft eine technische Grundlage für mehrere spätere Features\nTechnische Teilprobleme\n\nProzessmanagement: Server starten, neu starten, beenden\nProtokolltransport: meist JSON-RPC über stdin/stdout\nDokument-Synchronisation: Full Sync oder Incremental Sync\nCapability-Handling: jeder Server kann etwas anderes\nUI-Anbindung: Listen, Status, Fehleranzeige, Sprungziele\nKonfiguration: welcher Server für welche Dateitypen, Startkommando, Root-Erkennung\nWichtige Produktentscheidungen\n\nNur lokale Serverprozesse oder später auch Remote?\nErst nur eine Sprache gut unterstützen oder Infrastruktur generisch bauen?\nDiagnosen live bei jeder Änderung oder nur bei Save?\nCompletion minimalistisch halten oder direkt mit Dokumentation/Hinweisen?\nRisiken im bestehenden System\n\nFalls Sie das später wirklich umsetzen lassen wollen, ist das kein “reines Feature ohne Architekturwirkung”. Typisch berührt es:\n\nUI-Dialoge und Listenansichten\nasynchrone/deferred UI\nRuntime-Settings\nDateipfad- und Projektwurzel-Logik\nvorhandene Syntax-/Sprachfunktionen, falls es Überschneidungen gibt\nGerade deshalb ist es ein gutes größeres Thema, aber kein kleiner Nebenpunkt.\n\nEmpfohlene Formulierung für die Karte\n\nLSP-Integration: Diagnosen, Definitionen, Referenzen und Autocomplete\n\nDas ist präziser als die Kurzform und setzt den Umfang sauberer. Wenn Sie möchten, formuliere ich daraus auch noch eine kompakte Board-Karte plus 3 bis 5 konkrete Unteraufgaben."
+            }
+          ]
+        },
+        {
+          "id": "f9883d7e-c8f9-43e7-8856-bbd3bcdb789c",
+          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+          "title": "Code Prettifier",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": [
+            {
+              "id": "2830a7bb-cc8d-4593-b100-453287e41049",
+              "comment": "- code prettyfier: wie syntaxregeln definieren?"
+            }
+          ]
         }
       ]
     },
@@ -226,6 +218,15 @@
               "comment": "Doch ein Grid implementieren lassen? (Calculator)"
             }
           ]
+        },
+        {
+          "id": "e582ea46-09dc-4e28-bce7-3227dac67813",
+          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
+          "title": "Save All mit Dialog/List Window",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
         }
       ]
     },
@@ -233,6 +234,15 @@
       "id": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
       "title": "Done",
       "cards": [
+        {
+          "id": "cd48e0ee-1739-4a98-9bb2-4020d597de94",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Ist sichergestellt dass jede extern lane einen eigenene cpu core erhält?",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
         {
           "id": "d857df61-3b75-4a89-af53-11aee8857629",
           "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
@@ -243,9 +253,54 @@
           "comments": []
         },
         {
+          "id": "3b3e722c-d891-4883-8350-72ffd872f92e",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "updatendes Log Window mit highlight suche und akustischem treffer",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "d41c2326-0cc2-46e1-8c6f-866ab9978230",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "extern lane data line abgeschnitten",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
           "id": "c8e78f9a-1422-4d79-ad10-901b53c85080",
           "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
           "title": "Keine Eingabefelder für human readable names für Color Themes und Key Mappings",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "f4dde2d8-588e-43db-84fa-b638f9ef2d1e",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "halten der scrollbalken buttons scrollt nicht weiter",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "ff9ce316-b473-45b7-a578-3a3c17b02b12",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Minimap flackert wieder in enwik9 - ist aber performant. Wurde dort etwas geändert seit gestern?",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "14253a7f-1a9c-4b3b-8a26-c5e50eed043a",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Der Viewport Marker der Mini Map bewegt sich nicht mehr in grossen Dateien (in kleinen Dateien funktioniert es)",
           "description": "",
           "labels": [],
           "checkboxes": [],

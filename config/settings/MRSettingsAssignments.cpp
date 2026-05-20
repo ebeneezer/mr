@@ -238,6 +238,15 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"PDF_EXPORT_BOTTOM_MARGIN_POINTS", MRSettingsKeyClass::Global, true},
     {"ACQUIRE_COMMAND", MRSettingsKeyClass::Global, true},
     {"ACQUIRE_COMMAND_HISTORY", MRSettingsKeyClass::Global, false},
+    {"LIVE_LOG_REPORT_MESSAGE_LINE", MRSettingsKeyClass::Global, true},
+    {"LIVE_LOG_REPORT_BEEP", MRSettingsKeyClass::Global, true},
+    {"LIVE_LOG_REPORT_AUDIO", MRSettingsKeyClass::Global, true},
+    {"LIVE_LOG_SCROLL_DIRECTION", MRSettingsKeyClass::Global, true},
+    {"LIVE_LOG_LINE_NUMBERS", MRSettingsKeyClass::Global, true},
+    {"LIVE_LOG_TIMESTAMPS", MRSettingsKeyClass::Global, true},
+    {"LIVE_LOG_SYNTAX_HIGHLIGHTING", MRSettingsKeyClass::Global, true},
+    {"LIVE_LOG_AUDIO_URI", MRSettingsKeyClass::Global, true},
+    {"LIVE_LOG_JOURNAL_TAG_HISTORY", MRSettingsKeyClass::Global, false},
     {"VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
     {"CYCLIC_VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
     {"CURSOR_BEHAVIOUR", MRSettingsKeyClass::Global, true},
@@ -294,6 +303,22 @@ bool parseLogHandlingLiteral(const std::string &value, MRLogHandling &outValue, 
 		return true;
 	}
 	return setError(errorMessage, "Expected log handling VOLATILE, PERSIST or JOURNALCTL.");
+}
+
+bool parseLiveLogScrollDirectionLiteral(const std::string &value, MRLiveLogScrollDirection &outValue, std::string *errorMessage) {
+	const std::string upper = upperAscii(trimAscii(value));
+
+	if (upper == "DOWN") {
+		outValue = MRLiveLogScrollDirection::Down;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	if (upper == "UP") {
+		outValue = MRLiveLogScrollDirection::Up;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	return setError(errorMessage, "LIVE_LOG_SCROLL_DIRECTION must be DOWN or UP.");
 }
 
 bool parseCursorBehaviourLiteral(const std::string &value, MRCursorBehaviour &outValue, std::string *errorMessage) {
@@ -523,6 +548,7 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredMultiSarDialogOptions(MRMultiSarDialogOptions(), errorMessage)) return false;
 	if (!setConfiguredPdfExportSettings(MRPdfExportSettings(), errorMessage)) return false;
 	if (!setConfiguredAcquireSettings(MRAcquireSettings(), errorMessage)) return false;
+	if (!setConfiguredLiveLogSettings(MRLiveLogSettings(), errorMessage)) return false;
 	if (!setConfiguredCursorBehaviour(MRCursorBehaviour::BoundToText, errorMessage)) return false;
 	if (!setConfiguredUiIndentStyle(MRUiIndentStyle::KandR, errorMessage)) return false;
 	if (!setConfiguredCursorPositionMarker("R:C", errorMessage)) return false;
@@ -949,6 +975,51 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				return setConfiguredLogHandling(handling, errorMessage);
 			}
 			if (upper == "LOGFILE") return setConfiguredLogFilePath(value, errorMessage);
+			if (upper == "LIVE_LOG_REPORT_MESSAGE_LINE") {
+				MRLiveLogSettings settings = configuredLiveLogSettings();
+				if (!parseBooleanLiteral(value, settings.reportSearchHitsOnMessageLine, errorMessage)) return false;
+				return setConfiguredLiveLogSettings(settings, errorMessage);
+			}
+			if (upper == "LIVE_LOG_REPORT_BEEP") {
+				MRLiveLogSettings settings = configuredLiveLogSettings();
+				if (!parseBooleanLiteral(value, settings.reportSearchHitsWithSystemBeep, errorMessage)) return false;
+				return setConfiguredLiveLogSettings(settings, errorMessage);
+			}
+			if (upper == "LIVE_LOG_REPORT_AUDIO") {
+				MRLiveLogSettings settings = configuredLiveLogSettings();
+				if (!parseBooleanLiteral(value, settings.reportSearchHitsWithAudioSignal, errorMessage)) return false;
+				return setConfiguredLiveLogSettings(settings, errorMessage);
+			}
+			if (upper == "LIVE_LOG_SCROLL_DIRECTION") {
+				MRLiveLogSettings settings = configuredLiveLogSettings();
+				if (!parseLiveLogScrollDirectionLiteral(value, settings.scrollDirection, errorMessage)) return false;
+				return setConfiguredLiveLogSettings(settings, errorMessage);
+			}
+			if (upper == "LIVE_LOG_LINE_NUMBERS") {
+				MRLiveLogSettings settings = configuredLiveLogSettings();
+				if (!parseBooleanLiteral(value, settings.showLineNumbers, errorMessage)) return false;
+				return setConfiguredLiveLogSettings(settings, errorMessage);
+			}
+			if (upper == "LIVE_LOG_TIMESTAMPS") {
+				MRLiveLogSettings settings = configuredLiveLogSettings();
+				if (!parseBooleanLiteral(value, settings.showTimestamps, errorMessage)) return false;
+				return setConfiguredLiveLogSettings(settings, errorMessage);
+			}
+			if (upper == "LIVE_LOG_SYNTAX_HIGHLIGHTING") {
+				MRLiveLogSettings settings = configuredLiveLogSettings();
+				if (!parseBooleanLiteral(value, settings.syntaxHighlighting, errorMessage)) return false;
+				return setConfiguredLiveLogSettings(settings, errorMessage);
+			}
+			if (upper == "LIVE_LOG_AUDIO_URI") {
+				MRLiveLogSettings settings = configuredLiveLogSettings();
+				settings.audioSignalUri = normalizeConfiguredPathInput(value);
+				return setConfiguredLiveLogSettings(settings, errorMessage);
+			}
+			if (upper == "LIVE_LOG_JOURNAL_TAG_HISTORY") {
+				MRLiveLogSettings settings = configuredLiveLogSettings();
+				settings.journalAppTagHistory.push_back(value);
+				return setConfiguredLiveLogSettings(settings, errorMessage);
+			}
 			if (upper == "AUTOEXEC_MACRO") return addConfiguredAutoexecMacroEntry(value, errorMessage);
 			if (upper == "LASTFILEDIALOGPATH") return setConfiguredLastFileDialogPath(value, errorMessage);
 			if (upper == "WORKSPACE") {
@@ -1388,6 +1459,44 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 				if (!validateLogFilePath(value, errorMessage)) return false;
 				snapshot.logFilePath = makeAbsolutePath(normalized);
 				return setSnapshotScopedDialogLastPath(snapshot, MRDialogHistoryScope::SetupLogFile, snapshot.logFilePath, errorMessage);
+			}
+			if (upper == "LIVE_LOG_REPORT_MESSAGE_LINE") {
+				if (!parseBooleanLiteral(value, snapshot.liveLogSettings.reportSearchHitsOnMessageLine, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "LIVE_LOG_REPORT_BEEP") {
+				if (!parseBooleanLiteral(value, snapshot.liveLogSettings.reportSearchHitsWithSystemBeep, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "LIVE_LOG_REPORT_AUDIO") {
+				if (!parseBooleanLiteral(value, snapshot.liveLogSettings.reportSearchHitsWithAudioSignal, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "LIVE_LOG_SCROLL_DIRECTION") {
+				if (!parseLiveLogScrollDirectionLiteral(value, snapshot.liveLogSettings.scrollDirection, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "LIVE_LOG_LINE_NUMBERS") {
+				if (!parseBooleanLiteral(value, snapshot.liveLogSettings.showLineNumbers, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "LIVE_LOG_TIMESTAMPS") {
+				if (!parseBooleanLiteral(value, snapshot.liveLogSettings.showTimestamps, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "LIVE_LOG_SYNTAX_HIGHLIGHTING") {
+				if (!parseBooleanLiteral(value, snapshot.liveLogSettings.syntaxHighlighting, errorMessage)) return false;
+				return true;
+			}
+			if (upper == "LIVE_LOG_AUDIO_URI") {
+				snapshot.liveLogSettings.audioSignalUri = normalizeConfiguredPathInput(value);
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
+			}
+			if (upper == "LIVE_LOG_JOURNAL_TAG_HISTORY") {
+				snapshot.liveLogSettings.journalAppTagHistory.push_back(value);
+				if (errorMessage != nullptr) errorMessage->clear();
+				return true;
 			}
 			if (upper == "AUTOEXEC_MACRO") {
 				const std::string normalized = normalizeAutoexecMacroEntry(value);

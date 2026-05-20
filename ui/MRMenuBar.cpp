@@ -175,6 +175,19 @@ MRMenuBar::~MRMenuBar() {
 	mBaseMenu = nullptr;
 }
 
+void MRMenuBar::setAutoMarqueeStatusSegments(const std::vector<MarqueeSegment> &segments, MarqueeKind kind) {
+	std::string status;
+
+	for (const MarqueeSegment &segment : segments)
+		status += segment.text;
+	if (mAutoMarqueeStatus != status || mAutoMarqueeKind != kind || mAutoMarqueeSegments != segments) {
+		mAutoMarqueeStatus = status;
+		mAutoMarqueeKind = kind;
+		mAutoMarqueeSegments = segments;
+		drawView();
+	}
+}
+
 void MRMenuBar::handleEvent(TEvent &event) {
 	if (mrHandleRuntimeKeymapEvent(event, MRKeymapContext::Menu, nullptr)) return;
 	if (event.what == evKeyDown && currentEditWindow() != nullptr && runtimeKeymapResolver().hasPending(MRKeymapContext::Edit)) return;
@@ -450,9 +463,11 @@ void MRMenuBar::tickMarquee() {
 				mMarqueeOutroStartedAt = std::chrono::steady_clock::time_point::min();
 				if (mMarqueeHasPending) {
 					mMarqueeActiveText = mMarqueePendingText;
+					mMarqueeActiveSegments = mMarqueePendingSegments;
 					mMarqueeActiveKind = mMarqueePendingKind;
 					mMarqueeHasPending = false;
 					mMarqueePendingText.clear();
+					mMarqueePendingSegments.clear();
 					mMarqueePendingKind = MarqueeKind::Info;
 					mMarqueeOffset = std::max(0, static_cast<int>(mMarqueeActiveText.size()) - mMarqueeLaneWidth);
 					mMarqueeDirection = -1;
@@ -604,7 +619,8 @@ void MRMenuBar::draw() {
 		const int newLaneWidth = laneEnd - laneStart + 1;
 		auto now = std::chrono::steady_clock::now();
 		mMarqueeLaneWidth = newLaneWidth;
-		if (targetText == mMarqueeActiveText && targetMarqueeKind == mMarqueeActiveKind) {
+		const std::vector<MarqueeSegment> targetSegments = mManualMarqueeStatus.empty() ? mAutoMarqueeSegments : std::vector<MarqueeSegment>();
+		if (targetText == mMarqueeActiveText && targetMarqueeKind == mMarqueeActiveKind && targetSegments == mMarqueeActiveSegments) {
 			if (mMarqueeHasPending) {
 				mMarqueeHasPending = false;
 				mMarqueePendingText.clear();
@@ -620,14 +636,17 @@ void MRMenuBar::draw() {
 		} else {
 			mMarqueeHasPending = true;
 			mMarqueePendingText = targetText;
+			mMarqueePendingSegments = targetSegments;
 			mMarqueePendingKind = targetMarqueeKind;
 			// No outgoing animation when there is no currently visible text.
 			// Start the incoming animation immediately.
 			if (mMarqueeActiveText.empty()) {
 				mMarqueeActiveText = mMarqueePendingText;
+				mMarqueeActiveSegments = mMarqueePendingSegments;
 				mMarqueeActiveKind = mMarqueePendingKind;
 				mMarqueeHasPending = false;
 				mMarqueePendingText.clear();
+				mMarqueePendingSegments.clear();
 				mMarqueePendingKind = MarqueeKind::Info;
 				mMarqueeOffset = std::max(0, static_cast<int>(mMarqueeActiveText.size()) - mMarqueeLaneWidth);
 				mMarqueeDirection = -1;
@@ -665,9 +684,11 @@ void MRMenuBar::draw() {
 		}
 		if (mMarqueeActiveText.empty() && mMarqueeHasPending && !mMarqueeOutroActive) {
 			mMarqueeActiveText = mMarqueePendingText;
+			mMarqueeActiveSegments = mMarqueePendingSegments;
 			mMarqueeActiveKind = mMarqueePendingKind;
 			mMarqueeHasPending = false;
 			mMarqueePendingText.clear();
+			mMarqueePendingSegments.clear();
 			mMarqueePendingKind = MarqueeKind::Info;
 			mMarqueeOffset = std::max(0, static_cast<int>(mMarqueeActiveText.size()) - mMarqueeLaneWidth);
 			mMarqueeDirection = -1;
@@ -708,10 +729,39 @@ void MRMenuBar::draw() {
 			else
 				cMarquee = TColorAttr(biosAttr);
 		}
+		auto colorForMarqueeKind = [](MarqueeKind kind) -> TColorAttr {
+			const MRColorSetupSettings colors = configuredColorSetupSettings();
+			unsigned char biosAttr = colors.otherColors[5];
+			unsigned char slot = kMrPaletteMessage;
+
+			switch (kind) {
+				case MarqueeKind::Warning:
+					slot = kMrPaletteMessageWarning;
+					biosAttr = colors.otherColors[6];
+					break;
+				case MarqueeKind::Error:
+					slot = kMrPaletteMessageError;
+					biosAttr = colors.otherColors[4];
+					break;
+				case MarqueeKind::Hero:
+					slot = kMrPaletteMessageHero;
+					biosAttr = colors.otherColors[7];
+					break;
+				case MarqueeKind::Success:
+				case MarqueeKind::Info:
+				default:
+					slot = kMrPaletteMessage;
+					biosAttr = colors.otherColors[5];
+					break;
+			}
+			if (configuredColorSlotOverride(slot, biosAttr)) return TColorAttr(biosAttr);
+			return TColorAttr(biosAttr);
+		};
 		int marqueeTextLen = static_cast<int>(mMarqueeActiveText.size());
 		int drawStart = laneStart;
 		const char *drawPtr = mMarqueeActiveText.c_str();
 		int drawLen = marqueeTextLen;
+		int drawOffset = 0;
 
 		if (marqueeTextLen <= 0) {
 			// no-op
@@ -723,6 +773,7 @@ void MRMenuBar::draw() {
 			if (mMarqueeOffset > maxOffset) mMarqueeOffset = maxOffset;
 			drawPtr = mMarqueeActiveText.c_str() + mMarqueeOffset;
 			drawLen = mMarqueeLaneWidth;
+			drawOffset = mMarqueeOffset;
 		}
 		if (mMarqueeIntroActive) drawStart += mMarqueeIntroShift;
 		else if (mMarqueeOutroActive)
@@ -730,7 +781,28 @@ void MRMenuBar::draw() {
 		if (drawStart <= laneEnd) {
 			int visibleLen = laneEnd - drawStart + 1;
 			if (visibleLen > drawLen) visibleLen = drawLen;
-			if (visibleLen > 0) b.moveStr(static_cast<ushort>(drawStart), drawPtr, cMarquee, static_cast<ushort>(visibleLen));
+			if (visibleLen > 0 && mMarqueeActiveSegments.empty()) b.moveStr(static_cast<ushort>(drawStart), drawPtr, cMarquee, static_cast<ushort>(visibleLen));
+			else if (visibleLen > 0) {
+				int segmentStart = 0;
+				int written = 0;
+
+				for (const MarqueeSegment &segment : mMarqueeActiveSegments) {
+					const int segmentLen = static_cast<int>(segment.text.size());
+					const int segmentEnd = segmentStart + segmentLen;
+					const int visibleStart = std::max(segmentStart, drawOffset);
+					const int visibleEnd = std::min(segmentEnd, drawOffset + visibleLen);
+
+					if (visibleEnd > visibleStart) {
+						const int sourceOffset = visibleStart - segmentStart;
+						const int targetOffset = visibleStart - drawOffset;
+						const int count = visibleEnd - visibleStart;
+						b.moveStr(static_cast<ushort>(drawStart + targetOffset), segment.text.c_str() + sourceOffset, colorForMarqueeKind(segment.kind), static_cast<ushort>(count));
+						written += count;
+					}
+					segmentStart = segmentEnd;
+				}
+				if (written < visibleLen) b.moveStr(static_cast<ushort>(drawStart + written), drawPtr + written, cMarquee, static_cast<ushort>(visibleLen - written));
+			}
 		}
 	} else {
 		resetMarqueeState();
