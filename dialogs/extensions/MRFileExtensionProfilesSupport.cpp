@@ -365,9 +365,12 @@ enum : unsigned long long {
 		errorText = "Profile ID may not be empty.";
 		return false;
 	}
-	if (id.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.") != std::string::npos) {
-		errorText = "Profile ID allows only letters, digits, '_', '-' and '.'.";
-		return false;
+	for (char ch : id) {
+		unsigned char c = static_cast<unsigned char>(ch);
+		if (!std::isalnum(c) && c != '_' && c != '-' && c != '.') {
+			errorText = "Profile ID allows only letters, digits, '_', '-' and '.'.";
+			return false;
+		}
 	}
 	errorText.clear();
 	return true;
