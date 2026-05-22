@@ -173,6 +173,7 @@ CXX_SOURCES = \
 	mrmac/vm/MRVMDeferredUi.cpp \
 	mrmac/vm/MRVMEditor.cpp \
 	mrmac/vm/MRVMHash.cpp \
+	mrmac/vm/MRVMSnippet.cpp \
 	mrmac/vm/MRVMValue.cpp \
 	mrmac/vm/MRVMSettings.cpp \
 	mrmac/vm/MRVMScreen.cpp \

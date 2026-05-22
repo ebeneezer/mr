@@ -26,6 +26,7 @@
 #include "MRVM.hpp"
 #include "vm/MRVMDeferredUi.hpp"
 #include "vm/MRVMHash.hpp"
+#include "vm/MRVMSnippet.hpp"
 #include "vm/MRVMValue.hpp"
 #include "vm/MRVMScreen.hpp"
 #include "vm/MRVMSettings.hpp"
@@ -57,7 +58,6 @@
 #include <vector>
 
 #include "../ui/MREditWindow.hpp"
-#include "../ui/MRSidekickEditor.hpp"
 #include "../app/MRCommandRouter.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../ui/MRMenuBar.hpp"
@@ -1154,181 +1154,11 @@ MRFileEditor *currentEditor() {
 	return win != nullptr ? win->getEditor() : nullptr;
 }
 
-struct MacroSnippetStartData {
-	bool found = false;
-	std::size_t start = 0;
-	std::size_t end = 0;
-	std::string key;
-};
-
-static bool isSnippetWordChar(char ch) noexcept {
-	const unsigned char uch = static_cast<unsigned char>(ch);
-	return std::isalnum(uch) != 0 || ch == '_';
-}
-
-static MacroSnippetStartData findSnippetTriggerAtCursor(MRFileEditor *editor) {
-	MacroSnippetStartData result;
-	std::size_t cursor = 0;
-	std::size_t lineStart = 0;
-	std::size_t lineEnd = 0;
-	std::size_t probe = 0;
-	std::size_t rightProbe = 0;
-
-	if (editor == nullptr) return result;
-	cursor = editor->cursorOffset();
-	lineStart = editor->lineStartOffset(cursor);
-	lineEnd = editor->lineEndOffset(cursor);
-	if (cursor < lineEnd && isSnippetWordChar(editor->charAtOffset(cursor))) {
-		probe = cursor;
-	} else if (cursor > lineStart && isSnippetWordChar(editor->charAtOffset(cursor - 1))) {
-		probe = cursor - 1;
-	} else {
-		rightProbe = cursor;
-		while (rightProbe < lineEnd && std::isspace(static_cast<unsigned char>(editor->charAtOffset(rightProbe))) != 0)
-			++rightProbe;
-		if (rightProbe < lineEnd && isSnippetWordChar(editor->charAtOffset(rightProbe)))
-			probe = rightProbe;
-		else
-			return result;
-	}
-	result.start = probe;
-	while (result.start > lineStart && isSnippetWordChar(editor->charAtOffset(result.start - 1)))
-		--result.start;
-	result.end = probe + 1;
-	while (result.end < lineEnd && isSnippetWordChar(editor->charAtOffset(result.end)))
-		++result.end;
-	if (result.end <= result.start) return result;
-	for (std::size_t pos = result.start; pos < result.end; ++pos)
-		result.key.push_back(editor->charAtOffset(pos));
-	result.key = upperKey(result.key);
-	result.found = !result.key.empty();
-	return result;
-}
-
-static std::string snippetLanguageKey(MRSyntaxLanguage language) {
-	switch (language) {
-		case MRSyntaxLanguage::C:
-			return "C";
-		case MRSyntaxLanguage::Cpp:
-			return "CPP";
-		case MRSyntaxLanguage::JavaScript:
-			return "JAVASCRIPT";
-		case MRSyntaxLanguage::Python:
-			return "PYTHON";
-		case MRSyntaxLanguage::Json:
-			return "JSON";
-		case MRSyntaxLanguage::Yaml:
-			return "YAML";
-		case MRSyntaxLanguage::Xml:
-			return "XML";
-		case MRSyntaxLanguage::Bash:
-			return "BASH";
-		case MRSyntaxLanguage::Zsh:
-			return "ZSH";
-		case MRSyntaxLanguage::Fish:
-			return "FISH";
-		case MRSyntaxLanguage::Perl:
-			return "PERL";
-		case MRSyntaxLanguage::Swift:
-			return "SWIFT";
-		case MRSyntaxLanguage::Rust:
-			return "RUST";
-		case MRSyntaxLanguage::Go:
-			return "GO";
-		case MRSyntaxLanguage::Pascal:
-			return "PASCAL";
-		case MRSyntaxLanguage::Systemd:
-			return "SYSTEMD";
-		case MRSyntaxLanguage::MRMAC:
-			return "MRMAC";
-		case MRSyntaxLanguage::Make:
-			return "MAKE";
-		case MRSyntaxLanguage::Markdown:
-			return "MARKDOWN";
-		case MRSyntaxLanguage::PlainText:
-		default:
-			return std::string();
-	}
-}
-
-static bool readHashStringCase(const MRVMHashStore &store, const Value &hash, const char *lowerKey, std::string &out) {
-	Value value;
-
-	if (hash.type != TYPE_HASH) return false;
-	if (mrvmHashContainsValue(store, g_runtimeEnv.globalHashStore, hash, lowerKey))
-		value = mrvmHashReadValue(store, g_runtimeEnv.globalHashStore, hash, lowerKey);
-	else {
-		const std::string upper = upperKey(lowerKey);
-		if (!mrvmHashContainsValue(store, g_runtimeEnv.globalHashStore, hash, upper)) return false;
-		value = mrvmHashReadValue(store, g_runtimeEnv.globalHashStore, hash, upper);
-	}
-	if (!isStringLike(value)) return false;
-	out = valueAsString(value);
-	return true;
-}
-
-struct PreparedSnippetText {
-	std::string body;
-	std::vector<MRSidekickSpan> placeholders;
-};
-
-static PreparedSnippetText expandSnippetDefaults(const MRVMHashStore &store, const Value &snippetHash, std::string body) {
-	Value placeholders;
-	PreparedSnippetText prepared{body, {}};
-
-	if (snippetHash.type != TYPE_HASH) return prepared;
-	if (mrvmHashContainsValue(store, g_runtimeEnv.globalHashStore, snippetHash, "placeholders"))
-		placeholders = mrvmHashReadValue(store, g_runtimeEnv.globalHashStore, snippetHash, "placeholders");
-	else if (mrvmHashContainsValue(store, g_runtimeEnv.globalHashStore, snippetHash, "PLACEHOLDERS"))
-		placeholders = mrvmHashReadValue(store, g_runtimeEnv.globalHashStore, snippetHash, "PLACEHOLDERS");
-	else
-		return prepared;
-	if (placeholders.type != TYPE_HASH) return prepared;
-	for (const std::string &key : mrvmHashRuntimeStoreForValue(store, g_runtimeEnv.globalHashStore, placeholders).keys(placeholders.hashHandle)) {
-		Value placeholder = mrvmHashReadValue(store, g_runtimeEnv.globalHashStore, placeholders, key);
-		std::string defaultText;
-		const std::string marker = "//" + key;
-		std::size_t pos = 0;
-
-		if (placeholder.type != TYPE_HASH) continue;
-		if (!readHashStringCase(store, placeholder, "default", defaultText)) continue;
-		while ((pos = prepared.body.find(marker, pos)) != std::string::npos) {
-			prepared.body.replace(pos, marker.size(), defaultText);
-			prepared.placeholders.push_back(MRSidekickSpan{pos, pos + defaultText.size()});
-			pos += defaultText.size();
-		}
-	}
-	std::sort(prepared.placeholders.begin(), prepared.placeholders.end(), [](const MRSidekickSpan &a, const MRSidekickSpan &b) { return a.start < b.start; });
-	return prepared;
-}
-
 static bool openSnippetSidekickFromActiveEditor(MRVMHashStore &store) {
-	MREditWindow *win = activeMacroEditWindow();
-	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
-	MacroSnippetStartData trigger;
 	GlobalEntry rootEntry;
-	Value languageHash;
-	Value snippetHash;
-	std::string languageKey;
-	std::string body;
-	std::string title;
-	PreparedSnippetText prepared;
 
-	if (win == nullptr || editor == nullptr || editor->isReadOnly()) return false;
-	trigger = findSnippetTriggerAtCursor(editor);
-	if (!trigger.found) return false;
-	languageKey = snippetLanguageKey(win->syntaxLanguage());
-	if (languageKey.empty()) return false;
 	if (!readGlobalValue("SNIPPETS", rootEntry) || rootEntry.type != TYPE_HASH || rootEntry.value.type != TYPE_HASH) return false;
-	if (!mrvmHashContainsValue(store, g_runtimeEnv.globalHashStore, rootEntry.value, languageKey)) return false;
-	languageHash = mrvmHashReadValue(store, g_runtimeEnv.globalHashStore, rootEntry.value, languageKey);
-	if (languageHash.type != TYPE_HASH || !mrvmHashContainsValue(store, g_runtimeEnv.globalHashStore, languageHash, trigger.key)) return false;
-	snippetHash = mrvmHashReadValue(store, g_runtimeEnv.globalHashStore, languageHash, trigger.key);
-	if (snippetHash.type != TYPE_HASH) return false;
-	if (!readHashStringCase(store, snippetHash, "body", body)) return false;
-	if (!readHashStringCase(store, snippetHash, "name", title)) title = trigger.key;
-	prepared = expandSnippetDefaults(store, snippetHash, body);
-	return mrOpenSnippetSidekick(win, trigger.start, trigger.end, prepared.body, title, prepared.placeholders);
+	return mrvmSnippetOpenSidekickFromActiveEditor(activeMacroEditWindow(), store, g_runtimeEnv.globalHashStore, rootEntry.value);
 }
 
 static BackgroundEditSession *currentBackgroundEditSession() noexcept {
@@ -8025,7 +7855,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					GlobalEntry rootEntry;
 					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("SNIPPETS_UNLOAD expects one string argument.");
 					if (readGlobalValue("SNIPPETS", rootEntry) && rootEntry.type == TYPE_HASH && rootEntry.value.type == TYPE_HASH) {
-						mrvmHashEraseValue(*mHashStore, g_runtimeEnv.globalHashStore, rootEntry.value, upperKey(valueAsString(args[0])));
+						mrvmSnippetUnloadLanguage(*mHashStore, g_runtimeEnv.globalHashStore, rootEntry.value, valueAsString(args[0]));
 					}
 					runtimeErrorLevel() = 0;
 				} else if (name == "SNIPPET_NEXT_PLACEHOLDER") {
