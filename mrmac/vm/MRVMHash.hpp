@@ -28,4 +28,12 @@ class MRVMHashStore {
 	std::map<int, std::map<std::string, VirtualMachine::Value>> hashes;
 };
 
+MRVMHashStore &mrvmHashRuntimeStoreForValue(MRVMHashStore &localStore, MRVMHashStore &globalStore, const VirtualMachine::Value &hashValue);
+const MRVMHashStore &mrvmHashRuntimeStoreForValue(const MRVMHashStore &localStore, const MRVMHashStore &globalStore, const VirtualMachine::Value &hashValue);
+VirtualMachine::Value mrvmHashCopyValueForStore(const VirtualMachine::Value &value, MRVMHashStore &localStore, MRVMHashStore &globalStore, MRVMHashStore &targetStore, bool targetGlobalStorage);
+bool mrvmHashContainsValue(const MRVMHashStore &localStore, const MRVMHashStore &globalStore, const VirtualMachine::Value &hashValue, const std::string &key);
+VirtualMachine::Value mrvmHashReadValue(const MRVMHashStore &localStore, const MRVMHashStore &globalStore, const VirtualMachine::Value &hashValue, const std::string &key);
+void mrvmHashWriteValue(MRVMHashStore &localStore, MRVMHashStore &globalStore, const VirtualMachine::Value &hashValue, const std::string &key, const VirtualMachine::Value &value);
+void mrvmHashEraseValue(MRVMHashStore &localStore, MRVMHashStore &globalStore, const VirtualMachine::Value &hashValue, const std::string &key);
+
 #endif

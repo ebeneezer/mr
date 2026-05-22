@@ -377,49 +377,6 @@ static std::string valueAsString(const Value &value);
 static int valueAsInt(const Value &value);
 static bool isArrayType(int type);
 
-static MRVMHashStore &runtimeHashStoreForValue(MRVMHashStore &localStore, const Value &hashValue) {
-	return hashValue.globalStorage ? g_runtimeEnv.globalHashStore : localStore;
-}
-
-static const MRVMHashStore &runtimeHashStoreForValue(const MRVMHashStore &localStore, const Value &hashValue) {
-	return hashValue.globalStorage ? g_runtimeEnv.globalHashStore : localStore;
-}
-
-static Value copyValueForHashStore(const Value &value, MRVMHashStore &localStore, MRVMHashStore &targetStore, bool targetGlobalStorage) {
-	Value copied = value;
-
-	if (copied.type == TYPE_HASH) {
-		MRVMHashStore &sourceStore = runtimeHashStoreForValue(localStore, copied);
-		if (&sourceStore == &targetStore && copied.globalStorage == targetGlobalStorage) return copied;
-		copied.hashHandle = targetStore.cloneHashFrom(sourceStore, copied.hashHandle, targetGlobalStorage);
-		copied.globalStorage = targetGlobalStorage;
-		return copied;
-	}
-	if (isArrayType(copied.type)) {
-		for (Value &arrayValue : copied.arrayValues)
-			arrayValue = copyValueForHashStore(arrayValue, localStore, targetStore, targetGlobalStorage);
-	}
-	copied.globalStorage = targetGlobalStorage;
-	return copied;
-}
-
-static bool hashContainsValue(const MRVMHashStore &localStore, const Value &hashValue, const std::string &key) {
-	return runtimeHashStoreForValue(localStore, hashValue).contains(hashValue.hashHandle, key);
-}
-
-static Value hashReadValue(const MRVMHashStore &localStore, const Value &hashValue, const std::string &key) {
-	return runtimeHashStoreForValue(localStore, hashValue).read(hashValue.hashHandle, key);
-}
-
-static void hashWriteValue(MRVMHashStore &localStore, const Value &hashValue, const std::string &key, const Value &value) {
-	MRVMHashStore &targetStore = runtimeHashStoreForValue(localStore, hashValue);
-	targetStore.write(hashValue.hashHandle, key, copyValueForHashStore(value, localStore, targetStore, hashValue.globalStorage));
-}
-
-static void hashEraseValue(MRVMHashStore &localStore, const Value &hashValue, const std::string &key) {
-	runtimeHashStoreForValue(localStore, hashValue).erase(hashValue.hashHandle, key);
-}
-
 static bool isStringLike(const Value &value);
 static bool isNumeric(const Value &value);
 static void enforceStringLength(const std::string &s);
@@ -989,7 +946,7 @@ static Value coerceArrayElementForStore(const Value &value, int elementType, MRV
 	Value coerced = coerceForStore(value, elementType);
 	if (coerced.type == TYPE_HASH) {
 		MRVMHashStore &targetStore = targetGlobalStorage ? g_runtimeEnv.globalHashStore : localStore;
-		return copyValueForHashStore(coerced, localStore, targetStore, targetGlobalStorage);
+		return mrvmHashCopyValueForStore(coerced, localStore, g_runtimeEnv.globalHashStore, targetStore, targetGlobalStorage);
 	}
 	coerced.globalStorage = targetGlobalStorage;
 	return coerced;
@@ -1435,12 +1392,12 @@ static bool readHashStringCase(const MRVMHashStore &store, const Value &hash, co
 	Value value;
 
 	if (hash.type != TYPE_HASH) return false;
-	if (hashContainsValue(store, hash, lowerKey))
-		value = hashReadValue(store, hash, lowerKey);
+	if (mrvmHashContainsValue(store, g_runtimeEnv.globalHashStore, hash, lowerKey))
+		value = mrvmHashReadValue(store, g_runtimeEnv.globalHashStore, hash, lowerKey);
 	else {
 		const std::string upper = upperKey(lowerKey);
-		if (!hashContainsValue(store, hash, upper)) return false;
-		value = hashReadValue(store, hash, upper);
+		if (!mrvmHashContainsValue(store, g_runtimeEnv.globalHashStore, hash, upper)) return false;
+		value = mrvmHashReadValue(store, g_runtimeEnv.globalHashStore, hash, upper);
 	}
 	if (!isStringLike(value)) return false;
 	out = valueAsString(value);
@@ -1457,15 +1414,15 @@ static PreparedSnippetText expandSnippetDefaults(const MRVMHashStore &store, con
 	PreparedSnippetText prepared{body, {}};
 
 	if (snippetHash.type != TYPE_HASH) return prepared;
-	if (hashContainsValue(store, snippetHash, "placeholders"))
-		placeholders = hashReadValue(store, snippetHash, "placeholders");
-	else if (hashContainsValue(store, snippetHash, "PLACEHOLDERS"))
-		placeholders = hashReadValue(store, snippetHash, "PLACEHOLDERS");
+	if (mrvmHashContainsValue(store, g_runtimeEnv.globalHashStore, snippetHash, "placeholders"))
+		placeholders = mrvmHashReadValue(store, g_runtimeEnv.globalHashStore, snippetHash, "placeholders");
+	else if (mrvmHashContainsValue(store, g_runtimeEnv.globalHashStore, snippetHash, "PLACEHOLDERS"))
+		placeholders = mrvmHashReadValue(store, g_runtimeEnv.globalHashStore, snippetHash, "PLACEHOLDERS");
 	else
 		return prepared;
 	if (placeholders.type != TYPE_HASH) return prepared;
-	for (const std::string &key : runtimeHashStoreForValue(store, placeholders).keys(placeholders.hashHandle)) {
-		Value placeholder = hashReadValue(store, placeholders, key);
+	for (const std::string &key : mrvmHashRuntimeStoreForValue(store, g_runtimeEnv.globalHashStore, placeholders).keys(placeholders.hashHandle)) {
+		Value placeholder = mrvmHashReadValue(store, g_runtimeEnv.globalHashStore, placeholders, key);
 		std::string defaultText;
 		const std::string marker = "//" + key;
 		std::size_t pos = 0;
@@ -1500,10 +1457,10 @@ static bool openSnippetSidekickFromActiveEditor(MRVMHashStore &store) {
 	languageKey = snippetLanguageKey(win->syntaxLanguage());
 	if (languageKey.empty()) return false;
 	if (!readGlobalValue("SNIPPETS", rootEntry) || rootEntry.type != TYPE_HASH || rootEntry.value.type != TYPE_HASH) return false;
-	if (!hashContainsValue(store, rootEntry.value, languageKey)) return false;
-	languageHash = hashReadValue(store, rootEntry.value, languageKey);
-	if (languageHash.type != TYPE_HASH || !hashContainsValue(store, languageHash, trigger.key)) return false;
-	snippetHash = hashReadValue(store, languageHash, trigger.key);
+	if (!mrvmHashContainsValue(store, g_runtimeEnv.globalHashStore, rootEntry.value, languageKey)) return false;
+	languageHash = mrvmHashReadValue(store, g_runtimeEnv.globalHashStore, rootEntry.value, languageKey);
+	if (languageHash.type != TYPE_HASH || !mrvmHashContainsValue(store, g_runtimeEnv.globalHashStore, languageHash, trigger.key)) return false;
+	snippetHash = mrvmHashReadValue(store, g_runtimeEnv.globalHashStore, languageHash, trigger.key);
 	if (snippetHash.type != TYPE_HASH) return false;
 	if (!readHashStringCase(store, snippetHash, "body", body)) return false;
 	if (!readHashStringCase(store, snippetHash, "name", title)) title = trigger.key;
@@ -4719,7 +4676,7 @@ static void setGlobalValueFromStore(const std::string &name, int type, const Val
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	Value stored = value;
 
-	if (type == TYPE_HASH || isArrayType(type)) stored = copyValueForHashStore(value, localStore, g_runtimeEnv.globalHashStore, true);
+	if (type == TYPE_HASH || isArrayType(type)) stored = mrvmHashCopyValueForStore(value, localStore, g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, true);
 	else
 		stored.globalStorage = true;
 	if (session != nullptr && type != TYPE_HASH && !isArrayType(type)) {
@@ -6874,25 +6831,25 @@ static Value applyIntrinsic(VirtualMachine &vm, const std::string &name, const s
 	}
 	if (name == "EXISTS") {
 		if (args.size() != 2 || args[0].type != TYPE_HASH || !isStringLike(args[1])) throw std::runtime_error("EXISTS expects (hash, string).");
-		return makeInt(hashContainsValue(vm.localHashStore(), args[0], valueAsString(args[1])) ? 1 : 0);
+		return makeInt(mrvmHashContainsValue(vm.localHashStore(), g_runtimeEnv.globalHashStore, args[0], valueAsString(args[1])) ? 1 : 0);
 	}
 		if (name == "HAS_VALUE") {
 			if (args.size() != 2 || args[0].type != TYPE_HASH || !isStringLike(args[1])) throw std::runtime_error("HAS_VALUE expects (hash, string).");
 			const std::string key = valueAsString(args[1]);
-			if (!hashContainsValue(vm.localHashStore(), args[0], key)) return makeInt(0);
-			return makeInt(valueHasContent(hashReadValue(vm.localHashStore(), args[0], key)) ? 1 : 0);
+			if (!mrvmHashContainsValue(vm.localHashStore(), g_runtimeEnv.globalHashStore, args[0], key)) return makeInt(0);
+			return makeInt(valueHasContent(mrvmHashReadValue(vm.localHashStore(), g_runtimeEnv.globalHashStore, args[0], key)) ? 1 : 0);
 		}
 		if (name == "KEYS") {
 			Value result = makeArray(TYPE_STR);
 			if (args.size() != 1 || args[0].type != TYPE_HASH) throw std::runtime_error("KEYS expects one hash argument.");
-			for (const std::string &key : runtimeHashStoreForValue(vm.localHashStore(), args[0]).keys(args[0].hashHandle))
+			for (const std::string &key : mrvmHashRuntimeStoreForValue(vm.localHashStore(), g_runtimeEnv.globalHashStore, args[0]).keys(args[0].hashHandle))
 				result.arrayValues.push_back(makeString(key));
 			return result;
 		}
 		if (name == "VALUES") {
 			Value result = makeArray(TYPE_STR);
 			if (args.size() != 1 || args[0].type != TYPE_HASH) throw std::runtime_error("VALUES expects one hash argument.");
-			for (const Value &value : runtimeHashStoreForValue(vm.localHashStore(), args[0]).values(args[0].hashHandle))
+			for (const Value &value : mrvmHashRuntimeStoreForValue(vm.localHashStore(), g_runtimeEnv.globalHashStore, args[0]).values(args[0].hashHandle))
 				result.arrayValues.push_back(makeString(valueAsString(value)));
 			return result;
 		}
@@ -7711,7 +7668,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				if (!isStringLike(key)) throw std::runtime_error("type mismatch");
 				it = variables.find(varName);
 				if (it == variables.end() || it->second.type != TYPE_HASH) throw std::runtime_error("Invalid hash value.");
-				push(hashReadValue(*mHashStore, it->second, valueAsString(key)));
+				push(mrvmHashReadValue(*mHashStore, g_runtimeEnv.globalHashStore, it->second, valueAsString(key)));
 				appendLogLine("Load hash value: " + varName);
 			} else if (opcode == OP_HASH_LOAD_VALUE) {
 				Value key;
@@ -7720,7 +7677,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				hash = pop();
 				if (hash.type != TYPE_HASH) throw std::runtime_error("Invalid hash value.");
 				if (!isStringLike(key)) throw std::runtime_error("type mismatch");
-				push(hashReadValue(*mHashStore, hash, valueAsString(key)));
+				push(mrvmHashReadValue(*mHashStore, g_runtimeEnv.globalHashStore, hash, valueAsString(key)));
 				appendLogLine("Load hash value from expression.");
 			} else if (opcode == OP_HASH_STORE) {
 				std::string varName;
@@ -7734,7 +7691,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				it = variables.find(varName);
 				if (it == variables.end() || it->second.type != TYPE_HASH) throw std::runtime_error("Invalid hash value.");
 				if (value.type == TYPE_STR) enforceStringLength(value.s);
-				hashWriteValue(*mHashStore, it->second, valueAsString(key), value);
+				mrvmHashWriteValue(*mHashStore, g_runtimeEnv.globalHashStore, it->second, valueAsString(key), value);
 				appendLogLine("Store hash value: " + varName);
 			} else if (opcode == OP_HASH_STORE_VALUE) {
 				Value value;
@@ -7746,7 +7703,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				if (hash.type != TYPE_HASH) throw std::runtime_error("Invalid hash value.");
 				if (!isStringLike(key)) throw std::runtime_error("type mismatch");
 				if (value.type == TYPE_STR) enforceStringLength(value.s);
-				hashWriteValue(*mHashStore, hash, valueAsString(key), value);
+				mrvmHashWriteValue(*mHashStore, g_runtimeEnv.globalHashStore, hash, valueAsString(key), value);
 				appendLogLine("Store hash value from expression.");
 			} else if (opcode == OP_ARRAY_LOAD) {
 				std::string varName;
@@ -8188,7 +8145,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					GlobalEntry rootEntry;
 					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("SNIPPETS_UNLOAD expects one string argument.");
 					if (readGlobalValue("SNIPPETS", rootEntry) && rootEntry.type == TYPE_HASH && rootEntry.value.type == TYPE_HASH) {
-						hashEraseValue(*mHashStore, rootEntry.value, upperKey(valueAsString(args[0])));
+						mrvmHashEraseValue(*mHashStore, g_runtimeEnv.globalHashStore, rootEntry.value, upperKey(valueAsString(args[0])));
 					}
 					runtimeErrorLevel() = 0;
 				} else if (name == "SNIPPET_NEXT_PLACEHOLDER") {

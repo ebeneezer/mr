@@ -4,6 +4,12 @@
 
 #include "../mrmac.h"
 
+namespace {
+bool isArrayValueType(int type) {
+	return type == TYPE_INT_ARRAY || type == TYPE_STR_ARRAY || type == TYPE_CHAR_ARRAY || type == TYPE_REAL_ARRAY || type == TYPE_HASH_ARRAY;
+}
+} // namespace
+
 void MRVMHashStore::clear() {
 	hashes.clear();
 	nextHandle = 1;
@@ -116,4 +122,47 @@ std::vector<VirtualMachine::Value> MRVMHashStore::values(int handle) const {
 	for (const std::pair<const std::string, VirtualMachine::Value> &entry : hashIt->second)
 		result.push_back(entry.second);
 	return result;
+}
+
+MRVMHashStore &mrvmHashRuntimeStoreForValue(MRVMHashStore &localStore, MRVMHashStore &globalStore, const VirtualMachine::Value &hashValue) {
+	return hashValue.globalStorage ? globalStore : localStore;
+}
+
+const MRVMHashStore &mrvmHashRuntimeStoreForValue(const MRVMHashStore &localStore, const MRVMHashStore &globalStore, const VirtualMachine::Value &hashValue) {
+	return hashValue.globalStorage ? globalStore : localStore;
+}
+
+VirtualMachine::Value mrvmHashCopyValueForStore(const VirtualMachine::Value &value, MRVMHashStore &localStore, MRVMHashStore &globalStore, MRVMHashStore &targetStore, bool targetGlobalStorage) {
+	VirtualMachine::Value copied = value;
+
+	if (copied.type == TYPE_HASH) {
+		MRVMHashStore &sourceStore = mrvmHashRuntimeStoreForValue(localStore, globalStore, copied);
+		if (&sourceStore == &targetStore && copied.globalStorage == targetGlobalStorage) return copied;
+		copied.hashHandle = targetStore.cloneHashFrom(sourceStore, copied.hashHandle, targetGlobalStorage);
+		copied.globalStorage = targetGlobalStorage;
+		return copied;
+	}
+	if (isArrayValueType(copied.type)) {
+		for (VirtualMachine::Value &arrayValue : copied.arrayValues)
+			arrayValue = mrvmHashCopyValueForStore(arrayValue, localStore, globalStore, targetStore, targetGlobalStorage);
+	}
+	copied.globalStorage = targetGlobalStorage;
+	return copied;
+}
+
+bool mrvmHashContainsValue(const MRVMHashStore &localStore, const MRVMHashStore &globalStore, const VirtualMachine::Value &hashValue, const std::string &key) {
+	return mrvmHashRuntimeStoreForValue(localStore, globalStore, hashValue).contains(hashValue.hashHandle, key);
+}
+
+VirtualMachine::Value mrvmHashReadValue(const MRVMHashStore &localStore, const MRVMHashStore &globalStore, const VirtualMachine::Value &hashValue, const std::string &key) {
+	return mrvmHashRuntimeStoreForValue(localStore, globalStore, hashValue).read(hashValue.hashHandle, key);
+}
+
+void mrvmHashWriteValue(MRVMHashStore &localStore, MRVMHashStore &globalStore, const VirtualMachine::Value &hashValue, const std::string &key, const VirtualMachine::Value &value) {
+	MRVMHashStore &targetStore = mrvmHashRuntimeStoreForValue(localStore, globalStore, hashValue);
+	targetStore.write(hashValue.hashHandle, key, mrvmHashCopyValueForStore(value, localStore, globalStore, targetStore, hashValue.globalStorage));
+}
+
+void mrvmHashEraseValue(MRVMHashStore &localStore, MRVMHashStore &globalStore, const VirtualMachine::Value &hashValue, const std::string &key) {
+	mrvmHashRuntimeStoreForValue(localStore, globalStore, hashValue).erase(hashValue.hashHandle, key);
 }
