@@ -609,6 +609,15 @@ void MRFileEditor::scheduleSyntaxWarmupIfNeeded() {
 		prefetchState.reachedBottomLine = visibleTopLine;
 	if (exactLineCountKnown && prefetchState.reachedBottomLine > exactLineCount) prefetchState.reachedBottomLine = exactLineCount;
 
+	if (warmupState.taskId != 0 && !mr::coprocessor::globalCoprocessor().hasTaskState(warmupState.taskId)) {
+		std::uint64_t staleTaskId = warmupState.taskId;
+		clearSyntaxWarmupTask(staleTaskId);
+		if (shouldTraceLargeFileWarmupDiagnostics()) {
+			std::string detail = "action=clear-stale task=" + std::to_string(staleTaskId) + " top=" + std::to_string(requestTopLine) + " bottom=" + std::to_string(bottomLine);
+			traceLargeFileWarmup(mLastSyntaxWarmupTrace, "syntax", std::move(detail));
+		}
+	}
+
 	if (visibleCacheComplete && bottomLine <= visibleTopLine) return;
 	if (warmupState.taskId != 0 && warmupState.documentId == docId && warmupState.version == version && warmupState.language == language && requestTopLine >= warmupState.topLine &&
 		bottomLine <= warmupState.bottomLine) {

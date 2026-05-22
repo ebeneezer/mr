@@ -356,6 +356,7 @@ class Coprocessor {
 	std::size_t pump(std::size_t maxResults = 8);
 	std::size_t pumpFor(std::chrono::microseconds budget);
 	[[nodiscard]] std::size_t pendingResults() const noexcept;
+	[[nodiscard]] bool hasTaskState(std::uint64_t taskId) noexcept;
 	void post(Result result);
 	bool cancelTask(std::uint64_t taskId);
 	void shutdown(bool drainResults = false);
