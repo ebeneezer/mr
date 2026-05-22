@@ -625,24 +625,35 @@ static const char *keymapActionIdForMacroCommand(const std::string &name) noexce
 	    MacroKeymapActionCommand{"FORCE_SAVE", "MR_FILE_FORCE_SAVE"},
 	    MacroKeymapActionCommand{"INDENT_BLOCK", "MRMAC_BLOCK_INDENT"},
 	    MacroKeymapActionCommand{"JUSTIFY_PARAGRAPH", "MR_JUSTIFY_PARAGRAPH"},
+	    MacroKeymapActionCommand{"LIST_MATCHED_FILES", "MRMAC_SEARCH_LIST_MATCHED_FILES"},
+	    MacroKeymapActionCommand{"LOAD_BLOCK", "MR_LOAD_BLOCK_FROM_FILE"},
 	    MacroKeymapActionCommand{"MARK_WORD_RIGHT", "MRMAC_BLOCK_MARK_WORD_RIGHT"},
+	    MacroKeymapActionCommand{"MULTI_FILE_SEARCH", "MRMAC_SEARCH_MULTI_FILE"},
 	    MacroKeymapActionCommand{"NEXT_SEARCH_RESULT", "MR_SEARCH_RESULTS_NEXT"},
 	    MacroKeymapActionCommand{"PASTE_BLOCK", "MRMAC_BLOCK_COPY_FROM_BUFFER"},
 	    MacroKeymapActionCommand{"PASTE_FROM_CLIPBOARD", "MRMAC_BLOCK_PASTE_FROM_CLIPBOARD"},
 	    MacroKeymapActionCommand{"REDO", "MRMAC_REDO_LAST_UNDO"},
 	    MacroKeymapActionCommand{"REFORMAT_DOCUMENT", "MR_TEXT_REFORMAT_DOCUMENT"},
 	    MacroKeymapActionCommand{"REFORMAT_PARAGRAPH", "MR_TEXT_REFORMAT_PARAGRAPH"},
+	    MacroKeymapActionCommand{"REVERT_FILE", "MR_FILE_REVERT"},
 	    MacroKeymapActionCommand{"REPEAT_SEARCH", "MRMAC_SEARCH_REPEAT_LAST"},
 	    MacroKeymapActionCommand{"SAVE_ALL", "MR_FILE_SAVE_ALL"},
 	    MacroKeymapActionCommand{"SCROLL_DOWN", "MRMAC_VIEW_SCROLL_DOWN"},
 	    MacroKeymapActionCommand{"SCROLL_UP", "MRMAC_VIEW_SCROLL_UP"},
+	    MacroKeymapActionCommand{"SEARCH", "MRMAC_SEARCH_FORWARD"},
+	    MacroKeymapActionCommand{"SEARCH_REPLACE", "MRMAC_SEARCH_REPLACE"},
+	    MacroKeymapActionCommand{"SET_LEFT_MARGIN", "MR_SET_LEFT_MARGIN"},
+	    MacroKeymapActionCommand{"SET_RIGHT_MARGIN", "MR_SET_RIGHT_MARGIN"},
 	    MacroKeymapActionCommand{"SORT_COLUMN_BLOCK_TOGGLE", "MR_SORT_COLUMN_BLOCK_TOGGLE"},
 	    MacroKeymapActionCommand{"START_OF_BLOCK", "MRMAC_CURSOR_START_OF_BLOCK"},
 	    MacroKeymapActionCommand{"TOGGLE_FORMAT_RULER", "MR_TOGGLE_FORMAT_RULER"},
 	    MacroKeymapActionCommand{"TOGGLE_WORD_WRAP", "MR_TOGGLE_WORD_WRAP"},
 	    MacroKeymapActionCommand{"TOP_OF_WINDOW", "MRMAC_CURSOR_TOP_OF_WINDOW"},
 	    MacroKeymapActionCommand{"UNDO", "MRMAC_UNDO"},
-	    MacroKeymapActionCommand{"UNDENT_BLOCK", "MRMAC_BLOCK_UNDENT"}};
+	    MacroKeymapActionCommand{"UNDENT_BLOCK", "MRMAC_BLOCK_UNDENT"},
+	    MacroKeymapActionCommand{"WINDOW_COPY_BLOCK", "MRMAC_BLOCK_COPY_INTERWINDOW"},
+	    MacroKeymapActionCommand{"WINDOW_MOVE_BLOCK", "MRMAC_BLOCK_MOVE_INTERWINDOW"},
+	    MacroKeymapActionCommand{"EXIT_SAVE_ALL", "MR_EXIT_DIRTY_SAVE_ALL"}};
 
 	for (const MacroKeymapActionCommand &command : commands)
 		if (name == command.name) return command.actionId;
@@ -8392,7 +8403,15 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					MREditWindow *win = activeMacroEditWindow();
 					MRFileEditor *editor = currentEditor();
 					std::string path;
-					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("SAVE_BLOCK expects one string argument.");
+					if (args.empty()) {
+						if (currentBackgroundEditSession() != nullptr) {
+							runtimeErrorLevel() = 1001;
+							continue;
+						}
+						runtimeErrorLevel() = dispatchMRKeymapAction("MR_SAVE_BLOCK_TO_FILE") ? 0 : 1001;
+						continue;
+					}
+					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("SAVE_BLOCK expects zero or one string argument.");
 					if (win == nullptr || editor == nullptr) {
 						runtimeErrorLevel() = 1001;
 						continue;
@@ -8784,7 +8803,15 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					runtimeErrorLevel() = ok ? 0 : 1001;
 				} else if (name == "GOTO_LINE") {
 					MRFileEditor *editor = currentEditor();
-					if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("GOTO_LINE expects one integer argument.");
+					if (args.empty()) {
+						if (currentBackgroundEditSession() != nullptr) {
+							runtimeErrorLevel() = 1001;
+							continue;
+						}
+						runtimeErrorLevel() = dispatchMRKeymapAction("MRMAC_CURSOR_GOTO_LINE") ? 0 : 1001;
+						continue;
+					}
+					if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("GOTO_LINE expects zero or one integer argument.");
 					if (editor == nullptr && currentBackgroundEditSession() == nullptr) {
 						runtimeErrorLevel() = 1001;
 						continue;

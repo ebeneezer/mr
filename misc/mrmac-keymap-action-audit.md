@@ -25,7 +25,7 @@ MRMAC_VIEW_SCROLL_UP              	Scroll window up          	Custom:ScrollWindo
 MRMAC_VIEW_SCROLL_DOWN            	Scroll window down        	Custom:ScrollWindowDown                     	-              	SCROLL_DOWN;             	Z1 simple dispatcher 	add
 MRMAC_CURSOR_START_OF_BLOCK       	Cursor to start of block  	WindowMethod:CursorStartOfBlock             	-              	START_OF_BLOCK;          	Z1 simple dispatcher 	add
 MRMAC_CURSOR_END_OF_BLOCK         	Cursor to end of block    	WindowMethod:CursorEndOfBlock               	-              	END_OF_BLOCK;            	Z1 simple dispatcher 	add
-MRMAC_CURSOR_GOTO_LINE            	Move cursor to line num   	AppCommand:cmMrSearchGotoLineNumber         	GOTO_LINE      	GOTO_LINE;               	Z3 dialog/interactive	keep
+MRMAC_CURSOR_GOTO_LINE            	Move cursor to line num   	AppCommand:cmMrSearchGotoLineNumber         	GOTO_LINE      	GOTO_LINE;               	Z3 dialog/interactive	added bare dialog
 MRMAC_CURSOR_INDENT               	Indent                    	Custom:CursorIndent                         	INDENT         	INDENT;                  	Z1 simple dispatcher 	keep
 MRMAC_CURSOR_TAB_RIGHT            	Tab right                 	Custom:CursorTabRight                       	TAB_RIGHT      	TAB_RIGHT;               	Z1 simple dispatcher 	keep
 MRMAC_CURSOR_TAB_LEFT             	Tab left                  	Custom:CursorTabLeft                        	TAB_LEFT       	TAB_LEFT;                	Z1 simple dispatcher 	keep
@@ -44,11 +44,11 @@ MRMAC_DELETE_LINE                 	Delete line               	EditorCommand:cmDe
 MRMAC_DELETE_BACKWARD_TO_HOME     	Backspace to home         	EditorCommand:cmDelStart                    	-              	BACK_HOME;               	Z1 simple dispatcher 	add
 MRMAC_UNDO                        	Undo                      	AppCommand:cmMrEditUndo                     	-              	UNDO;                    	Z1 simple dispatcher 	add
 MRMAC_REDO_LAST_UNDO              	Undo your last undo       	AppCommand:cmMrEditRedo                     	-              	REDO;                    	Z1 simple dispatcher 	add
-MRMAC_SEARCH_FORWARD              	Search                    	AppCommand:cmMrSearchFindText               	-              	SEARCH;                  	Z3 dialog/interactive	add
-MRMAC_SEARCH_REPLACE              	Search and replace        	AppCommand:cmMrSearchReplace                	-              	SEARCH_REPLACE;          	Z3 dialog/interactive	add
+MRMAC_SEARCH_FORWARD              	Search                    	AppCommand:cmMrSearchFindText               	-              	SEARCH;                  	Z3 dialog/interactive	added
+MRMAC_SEARCH_REPLACE              	Search and replace        	AppCommand:cmMrSearchReplace                	-              	SEARCH_REPLACE;          	Z3 dialog/interactive	added
 MRMAC_SEARCH_REPEAT_LAST          	Repeat last Search/Replace	AppCommand:cmMrSearchRepeatPrevious         	-              	REPEAT_SEARCH;           	Z1 simple dispatcher 	add
-MRMAC_SEARCH_MULTI_FILE           	Multi file search         	AppCommand:cmMrSearchMultiFileSearch        	-              	MULTI_FILE_SEARCH;       	Z3 dialog/interactive	add
-MRMAC_SEARCH_LIST_MATCHED_FILES   	List matched files        	AppCommand:cmMrSearchListFilesFromLastSearch	-              	LIST_MATCHED_FILES;      	Z3 dialog/interactive	add
+MRMAC_SEARCH_MULTI_FILE           	Multi file search         	AppCommand:cmMrSearchMultiFileSearch        	-              	MULTI_FILE_SEARCH;       	Z3 dialog/interactive	added
+MRMAC_SEARCH_LIST_MATCHED_FILES   	List matched files        	AppCommand:cmMrSearchListFilesFromLastSearch	-              	LIST_MATCHED_FILES;      	Z3 dialog/interactive	added
 MRMAC_BLOCK_COPY_TO_CLIPBOARD     	Copy to MS Windows        	Custom:CopyMarkedBlockToSystemClipboard     	-              	COPY_BLOCK_TO_CLIPBOARD; 	Z1 simple dispatcher 	add
 MRMAC_BLOCK_PASTE_FROM_CLIPBOARD  	Paste from MS Windows     	AppCommand:cmMrEditPasteFromBuffer          	-              	PASTE_FROM_CLIPBOARD;    	Z1 simple dispatcher 	add
 MRMAC_BLOCK_MARK_STREAM           	Mark a stream block       	AppCommand:cmMrBlockMarkStream              	-              	STR_BLOCK_BEGIN;         	Z1 simple dispatcher 	add
@@ -62,8 +62,8 @@ MRMAC_BLOCK_INDENT                	Indent block              	AppCommand:cmMrBlo
 MRMAC_BLOCK_COPY                  	Copy the marked block     	AppCommand:cmMrBlockCopy                    	COPY_BLOCK     	COPY_BLOCK;              	Z1 simple dispatcher 	keep
 MRMAC_BLOCK_MOVE                  	Move marked block         	AppCommand:cmMrBlockMove                    	MOVE_BLOCK     	MOVE_BLOCK;              	Z1 simple dispatcher 	keep
 MRMAC_BLOCK_DELETE                	Delete marked block       	AppCommand:cmMrBlockDelete                  	DELETE_BLOCK   	DELETE_BLOCK;            	Z1 simple dispatcher 	keep
-MRMAC_BLOCK_COPY_INTERWINDOW      	Interwindow block copy    	AppCommand:cmMrBlockWindowCopy              	-              	WINDOW_COPY_BLOCK;       	Z3 dialog/interactive	add
-MRMAC_BLOCK_MOVE_INTERWINDOW      	Interwindow block move    	AppCommand:cmMrBlockWindowMove              	-              	WINDOW_MOVE_BLOCK;       	Z3 dialog/interactive	add
+MRMAC_BLOCK_COPY_INTERWINDOW      	Interwindow block copy    	AppCommand:cmMrBlockWindowCopy              	-              	WINDOW_COPY_BLOCK;       	Z3 dialog/interactive	added
+MRMAC_BLOCK_MOVE_INTERWINDOW      	Interwindow block move    	AppCommand:cmMrBlockWindowMove              	-              	WINDOW_MOVE_BLOCK;       	Z3 dialog/interactive	added
 MRMAC_BLOCK_MOVE_TO_BUFFER        	Move block to buffer      	AppCommand:cmMrEditCutToBuffer              	-              	CUT_BLOCK;               	Z1 simple dispatcher 	add
 MRMAC_BLOCK_APPEND_TO_BUFFER      	Append block to buffer    	AppCommand:cmMrEditAppendToBuffer           	-              	APPEND_BLOCK;            	Z1 simple dispatcher 	add
 MRMAC_BLOCK_CUT_APPEND_TO_BUFFER  	Cut and Append Block      	AppCommand:cmMrEditCutAndAppendToBuffer     	-              	CUT_APPEND_BLOCK;        	Z1 simple dispatcher 	add
@@ -72,18 +72,18 @@ MRMAC_BLOCK_MATH                  	Perform math on block     	Custom:BlockMath  
 MRMAC_BLOCK_EXTEND_BY_MOTION      	Shift cursor block mark   	Custom:ExtendBlockByMotion                  	-              	EXTEND_BLOCK_BY_MOTION(s);	Z2 sequence-dependent	added
 MRMAC_FILE_SAVE                   	Save file                 	AppCommand:cmMrFileSave                     	SAVE_FILE      	SAVE_FILE;               	Z1 simple dispatcher 	keep
 MR_FILE_SAVE_ALL                  	Save all dirty files      	AppCommand:cmMrFileSaveAll                  	-              	SAVE_ALL;                	Z1 simple dispatcher 	add
-MR_FILE_REVERT                    	Revert file               	AppCommand:cmMrFileRevert                   	-              	REVERT_FILE;             	Z3 dialog/interactive	add
-MR_SAVE_BLOCK_TO_FILE             	Save block to file        	AppCommand:cmMrBlockSaveToDisk              	SAVE_BLOCK     	SAVE_BLOCK;              	Z3 dialog/interactive	keep
-MR_LOAD_BLOCK_FROM_FILE           	Load block from file      	Custom:LoadBlockFromFile                    	-              	LOAD_BLOCK;              	Z3 dialog/interactive	add
+MR_FILE_REVERT                    	Revert file               	AppCommand:cmMrFileRevert                   	-              	REVERT_FILE;             	Z3 dialog/interactive	added
+MR_SAVE_BLOCK_TO_FILE             	Save block to file        	AppCommand:cmMrBlockSaveToDisk              	SAVE_BLOCK     	SAVE_BLOCK;              	Z3 dialog/interactive	added bare dialog
+MR_LOAD_BLOCK_FROM_FILE           	Load block from file      	Custom:LoadBlockFromFile                    	-              	LOAD_BLOCK;              	Z3 dialog/interactive	added
 MR_TEXT_CENTER_LINE               	Center current line       	Custom:CenterLine                           	-              	CENTER_LINE;             	Z1 simple dispatcher 	add
 MR_TEXT_REFORMAT_PARAGRAPH        	Reformat paragraph        	Custom:ReformatParagraph                    	-              	REFORMAT_PARAGRAPH;      	Z1 simple dispatcher 	add
 MR_TEXT_REFORMAT_DOCUMENT         	Reformat document         	Custom:ReformatDocument                     	-              	REFORMAT_DOCUMENT;       	Z1 simple dispatcher 	add
 MR_TOGGLE_FORMAT_RULER            	Toggle format ruler       	Custom:ToggleFormatRuler                    	-              	TOGGLE_FORMAT_RULER;     	Z1 simple dispatcher 	add
 MR_TOGGLE_WORD_WRAP               	Toggle word wrap          	Custom:ToggleWordWrap                       	-              	TOGGLE_WORD_WRAP;        	Z1 simple dispatcher 	add
-MR_SET_LEFT_MARGIN                	Set left margin           	Custom:SetLeftMargin                        	-              	SET_LEFT_MARGIN;         	Z3 dialog/interactive	add
-MR_SET_RIGHT_MARGIN               	Set right margin          	Custom:SetRightMargin                       	-              	SET_RIGHT_MARGIN;        	Z3 dialog/interactive	add
+MR_SET_LEFT_MARGIN                	Set left margin           	Custom:SetLeftMargin                        	-              	SET_LEFT_MARGIN;         	Z3 dialog/interactive	added
+MR_SET_RIGHT_MARGIN               	Set right margin          	Custom:SetRightMargin                       	-              	SET_RIGHT_MARGIN;        	Z3 dialog/interactive	added
 MR_JUSTIFY_PARAGRAPH              	Justify paragraph         	Custom:JustifyParagraph                     	-              	JUSTIFY_PARAGRAPH;       	Z1 simple dispatcher 	add
 MR_SORT_COLUMN_BLOCK_TOGGLE       	Sort marked column block  	Custom:SortColumnBlockToggle                	-              	SORT_COLUMN_BLOCK_TOGGLE;	Z1 simple dispatcher 	add
 MR_FILE_FORCE_SAVE                	Force save                	Custom:ForceSave                            	-              	FORCE_SAVE;              	Z1 simple dispatcher 	add
-MR_EXIT_DIRTY_SAVE_ALL            	Exit with save-all dialog 	Custom:ExitDirtySaveAll                     	-              	EXIT_SAVE_ALL;           	Z3 dialog/interactive	add
+MR_EXIT_DIRTY_SAVE_ALL            	Exit with save-all dialog 	Custom:ExitDirtySaveAll                     	-              	EXIT_SAVE_ALL;           	Z3 dialog/interactive	added
 MR_SEARCH_RESULTS_NEXT            	Next search result        	Custom:SearchResultsNext                    	-              	NEXT_SEARCH_RESULT;      	Z1 simple dispatcher 	add
