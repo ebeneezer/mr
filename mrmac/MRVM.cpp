@@ -6383,6 +6383,53 @@ static bool unloadMacroFromRegistry(const std::string &macroName) {
 	return true;
 }
 
+static bool applyHashIntrinsic(VirtualMachine &vm, const std::string &name, const std::vector<Value> &args, Value &out) {
+	if (name == "GLOBAL_HASH") {
+		GlobalEntry entry;
+		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("GLOBAL_HASH expects one string argument.");
+		if (!readGlobalValue(valueAsString(args[0]), entry) || entry.type != TYPE_HASH || entry.value.type != TYPE_HASH) {
+			Value value = makeHash(g_runtimeEnv.globalHashStore.createHash(), true);
+			setGlobalValue(valueAsString(args[0]), TYPE_HASH, value);
+			out = value;
+			return true;
+		}
+		out = entry.value;
+		return true;
+	}
+	if (name == "EXISTS") {
+		if (args.size() != 2 || args[0].type != TYPE_HASH || !isStringLike(args[1])) throw std::runtime_error("EXISTS expects (hash, string).");
+		out = makeInt(mrvmHashContainsValue(vm.localHashStore(), g_runtimeEnv.globalHashStore, args[0], valueAsString(args[1])) ? 1 : 0);
+		return true;
+	}
+	if (name == "HAS_VALUE") {
+		if (args.size() != 2 || args[0].type != TYPE_HASH || !isStringLike(args[1])) throw std::runtime_error("HAS_VALUE expects (hash, string).");
+		const std::string key = valueAsString(args[1]);
+		if (!mrvmHashContainsValue(vm.localHashStore(), g_runtimeEnv.globalHashStore, args[0], key)) {
+			out = makeInt(0);
+			return true;
+		}
+		out = makeInt(valueHasContent(mrvmHashReadValue(vm.localHashStore(), g_runtimeEnv.globalHashStore, args[0], key)) ? 1 : 0);
+		return true;
+	}
+	if (name == "KEYS") {
+		Value result = mrvmMakeArrayValue(TYPE_STR);
+		if (args.size() != 1 || args[0].type != TYPE_HASH) throw std::runtime_error("KEYS expects one hash argument.");
+		for (const std::string &key : mrvmHashRuntimeStoreForValue(vm.localHashStore(), g_runtimeEnv.globalHashStore, args[0]).keys(args[0].hashHandle))
+			result.arrayValues.push_back(makeString(key));
+		out = result;
+		return true;
+	}
+	if (name == "VALUES") {
+		Value result = mrvmMakeArrayValue(TYPE_STR);
+		if (args.size() != 1 || args[0].type != TYPE_HASH) throw std::runtime_error("VALUES expects one hash argument.");
+		for (const Value &value : mrvmHashRuntimeStoreForValue(vm.localHashStore(), g_runtimeEnv.globalHashStore, args[0]).values(args[0].hashHandle))
+			result.arrayValues.push_back(makeString(valueAsString(value)));
+		out = result;
+		return true;
+	}
+	return false;
+}
+
 static Value applyIntrinsic(VirtualMachine &vm, const std::string &name, const std::vector<Value> &args) {
 	if (name == "STR") {
 		if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("STR expects one integer argument.");
@@ -6682,40 +6729,10 @@ static Value applyIntrinsic(VirtualMachine &vm, const std::string &name, const s
 		if (it == g_runtimeEnv.globals.end() || it->second.type != TYPE_INT) return makeInt(0);
 		return it->second.value;
 	}
-	if (name == "GLOBAL_HASH") {
-		GlobalEntry entry;
-		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("GLOBAL_HASH expects one string argument.");
-		if (!readGlobalValue(valueAsString(args[0]), entry) || entry.type != TYPE_HASH || entry.value.type != TYPE_HASH) {
-			Value value = makeHash(g_runtimeEnv.globalHashStore.createHash(), true);
-			setGlobalValue(valueAsString(args[0]), TYPE_HASH, value);
-			return value;
-		}
-		return entry.value;
+	{
+		Value result;
+		if (applyHashIntrinsic(vm, name, args, result)) return result;
 	}
-	if (name == "EXISTS") {
-		if (args.size() != 2 || args[0].type != TYPE_HASH || !isStringLike(args[1])) throw std::runtime_error("EXISTS expects (hash, string).");
-		return makeInt(mrvmHashContainsValue(vm.localHashStore(), g_runtimeEnv.globalHashStore, args[0], valueAsString(args[1])) ? 1 : 0);
-	}
-		if (name == "HAS_VALUE") {
-			if (args.size() != 2 || args[0].type != TYPE_HASH || !isStringLike(args[1])) throw std::runtime_error("HAS_VALUE expects (hash, string).");
-			const std::string key = valueAsString(args[1]);
-			if (!mrvmHashContainsValue(vm.localHashStore(), g_runtimeEnv.globalHashStore, args[0], key)) return makeInt(0);
-			return makeInt(valueHasContent(mrvmHashReadValue(vm.localHashStore(), g_runtimeEnv.globalHashStore, args[0], key)) ? 1 : 0);
-		}
-		if (name == "KEYS") {
-			Value result = mrvmMakeArrayValue(TYPE_STR);
-			if (args.size() != 1 || args[0].type != TYPE_HASH) throw std::runtime_error("KEYS expects one hash argument.");
-			for (const std::string &key : mrvmHashRuntimeStoreForValue(vm.localHashStore(), g_runtimeEnv.globalHashStore, args[0]).keys(args[0].hashHandle))
-				result.arrayValues.push_back(makeString(key));
-			return result;
-		}
-		if (name == "VALUES") {
-			Value result = mrvmMakeArrayValue(TYPE_STR);
-			if (args.size() != 1 || args[0].type != TYPE_HASH) throw std::runtime_error("VALUES expects one hash argument.");
-			for (const Value &value : mrvmHashRuntimeStoreForValue(vm.localHashStore(), g_runtimeEnv.globalHashStore, args[0]).values(args[0].hashHandle))
-				result.arrayValues.push_back(makeString(valueAsString(value)));
-			return result;
-		}
 	if (name == "CHECK_KEY") {
 		int key1 = 0;
 		int key2 = 0;
