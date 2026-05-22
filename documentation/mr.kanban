@@ -184,6 +184,15 @@
           "labels": [],
           "checkboxes": [],
           "comments": []
+        },
+        {
+          "id": "a9b47629-56da-4931-9276-646a378f7582",
+          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+          "title": "Snippet Macros für weitere Sprachen",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
         }
       ]
     },
@@ -204,15 +213,6 @@
           "id": "a456c7e5-0bee-4652-b4db-5d46a401da15",
           "listId": "b721e070-ae21-4123-a1f3-27b926375a16",
           "title": "Alle MRMAC Intrinsics müssen auch aus MRMAC Makros aufrufbar sein.",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
-          "id": "d610ea5f-941f-4d1c-8a51-635f25f87d8c",
-          "listId": "b721e070-ae21-4123-a1f3-27b926375a16",
-          "title": "core dumped bei space in history droplist bei file-load",
           "description": "",
           "labels": [],
           "checkboxes": [],
@@ -255,33 +255,6 @@
               "comment": "Doch ein Grid implementieren lassen? (Calculator)"
             }
           ]
-        },
-        {
-          "id": "f20ce83f-6032-404a-bad0-9ad69c0d9bf4",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Hashes mit linked Zugriff zu LValues machen.",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
-          "id": "f6efc338-e026-4327-b59a-f4f50004f55e",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Globals müssen unabhängig vom Typ gleich langlebig sein. Der bestehende staged Global-Copy/Replace-Pfad ist für TYPE_HASH noch nicht vollständig nachgezogen.",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
-          "id": "4ac50537-a42c-492a-b451-372698b6ae2d",
-          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Snippet System mit Platzhaltern und Navigation",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
         }
       ]
     },
@@ -308,9 +281,45 @@
           "comments": []
         },
         {
+          "id": "d610ea5f-941f-4d1c-8a51-635f25f87d8c",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "core dumped bei space in history droplist bei file-load",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "4ac50537-a42c-492a-b451-372698b6ae2d",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Snippet System mit Platzhaltern und Navigation",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "f20ce83f-6032-404a-bad0-9ad69c0d9bf4",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Hashes mit linked Zugriff zu LValues machen.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
           "id": "d857df61-3b75-4a89-af53-11aee8857629",
           "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
           "title": "Bei Änderung der Farbcodes für changed text wird der editor nicht neu gezeichnet. der neue farbcode wird aber angewendet",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "f6efc338-e026-4327-b59a-f4f50004f55e",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Globals müssen unabhängig vom Typ gleich langlebig sein. Der bestehende staged Global-Copy/Replace-Pfad ist für TYPE_HASH noch nicht vollständig nachgezogen.",
           "description": "",
           "labels": [],
           "checkboxes": [],

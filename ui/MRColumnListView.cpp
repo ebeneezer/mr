@@ -149,11 +149,17 @@ void MRColumnListView::dispatchSelectionChanged() {
 
 void MRColumnListView::dispatchActivation() {
 	TView *target = relayTarget != nullptr ? relayTarget : owner;
+	TEvent event{};
 
 	if (activationCommand == 0) return;
 	while (target != nullptr && dynamic_cast<TDialog *>(target) == nullptr)
 		target = target->owner;
-	message(target != nullptr ? target : owner, evCommand, activationCommand, this);
+	target = target != nullptr ? target : owner;
+	if (target == nullptr) return;
+
+	event.what = evCommand;
+	event.message.command = activationCommand;
+	target->putEvent(event);
 }
 
 void MRColumnListView::selectItem(short item) {
