@@ -134,6 +134,48 @@ unsigned classifyStoreVarName(const std::string &name) {
 	return 0;
 }
 
+bool isKeymapActionMacroCommand(const std::string &name) {
+	static constexpr const char *commands[] = {"APPEND_BLOCK",
+	                                           "BACK_HOME",
+	                                           "BACK_WORD",
+	                                           "BLOCK_MATH",
+	                                           "BOTTOM_OF_WINDOW",
+	                                           "CENTER_LINE",
+	                                           "CENTER_LINE_ON_SCREEN",
+	                                           "COPY_BLOCK_TO_CLIPBOARD",
+	                                           "CUT_APPEND_BLOCK",
+	                                           "CUT_BLOCK",
+	                                           "DEL_CHAR_OR_BLOCK",
+	                                           "DEL_EOL",
+	                                           "DEL_WORD",
+	                                           "END_OF_BLOCK",
+	                                           "FORCE_SAVE",
+	                                           "INDENT_BLOCK",
+	                                           "JUSTIFY_PARAGRAPH",
+	                                           "MARK_WORD_RIGHT",
+	                                           "NEXT_SEARCH_RESULT",
+	                                           "PASTE_BLOCK",
+	                                           "PASTE_FROM_CLIPBOARD",
+	                                           "REDO",
+	                                           "REFORMAT_DOCUMENT",
+	                                           "REFORMAT_PARAGRAPH",
+	                                           "REPEAT_SEARCH",
+	                                           "SAVE_ALL",
+	                                           "SCROLL_DOWN",
+	                                           "SCROLL_UP",
+	                                           "SORT_COLUMN_BLOCK_TOGGLE",
+	                                           "START_OF_BLOCK",
+	                                           "TOGGLE_FORMAT_RULER",
+	                                           "TOGGLE_WORD_WRAP",
+	                                           "TOP_OF_WINDOW",
+	                                           "UNDO",
+	                                           "UNDENT_BLOCK"};
+
+	for (const char *command : commands)
+		if (name == command) return true;
+	return false;
+}
+
 unsigned classifyProcName(const std::string &name) {
 	if (name == "MRSETUP") return mrefUiAffinity;
 	if (name == "MAKE_MESSAGE") return mrefUiAffinity;
@@ -150,6 +192,7 @@ unsigned classifyProcName(const std::string &name) {
 	if (name == "SNIPPET_START" || name == "SNIPPETS_UNLOAD" || name == "SNIPPET_NEXT_PLACEHOLDER" || name == "SNIPPET_PREV_PLACEHOLDER") return mrefUiAffinity;
 	if (name == "RUN_MACRO") return mrefUiAffinity | mrefStagedWrite;
 	if (name == "DELAY") return mrefBackgroundSafe;
+	if (isKeymapActionMacroCommand(name)) return mrefUiAffinity;
 	if (name == "SET_INDENT_LEVEL" || name == "LEFT" || name == "RIGHT" || name == "UP" || name == "DOWN" || name == "HOME" || name == "EOL" || name == "TOF" || name == "EOF" || name == "WORD_LEFT" || name == "WORD_RIGHT" || name == "FIRST_WORD" || name == "MARK_POS" || name == "GOTO_MARK" || name == "POP_MARK" || name == "PAGE_UP" || name == "PAGE_DOWN" || name == "NEXT_PAGE_BREAK" || name == "LAST_PAGE_BREAK" || name == "TAB_RIGHT" || name == "TAB_LEFT" || name == "BLOCK_BEGIN" || name == "BLOCK_LINE" || name == "COL_BLOCK_BEGIN" || name == "BLOCK_COL" || name == "STR_BLOCK_BEGIN" || name == "BLOCK_END" || name == "BLOCK_OFF" || name == "CREATE_WINDOW" || name == "DELETE_WINDOW" || name == "MODIFY_WINDOW" || name == "LINK_WINDOW" || name == "UNLINK_WINDOW" || name == "ZOOM" || name == "REDRAW" || name == "NEW_SCREEN" || name == "READ_KEY" || name == "PUSH_KEY" || name == "PASS_KEY" || name == "PUSH_LABELS" || name == "POP_LABELS" || name == "FLABEL" || name == "MACRO_TO_KEY" ||
 	    name == "CMD_TO_KEY" || name == "UNASSIGN_KEY" || name == "UNASSIGN_ALL_KEYS" || name == "KEY_RECORD" || name == "PLAY_KEY_MACRO" || name == "SAVE_OS_SCREEN" || name == "REST_OS_SCREEN" || name == "QUIT" || name == "GOTO_LINE" || name == "GOTO_COL" || name == "SWITCH_WINDOW" || name == "SIZE_WINDOW" || name == "MOVE_WIN_TO_NEXT_DESKTOP" || name == "MOVE_WIN_TO_PREV_DESKTOP" || name == "MOVE_VIEWPORT_RIGHT" || name == "MOVE_VIEWPORT_LEFT" || name == "SAVE_WORKSPACE" || name == "LOAD_WORKSPACE" || name == "SAVE_SETTINGS")
 		return mrefUiAffinity;

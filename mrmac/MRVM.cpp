@@ -57,6 +57,7 @@
 
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRSidekickEditor.hpp"
+#include "../app/MRCommandRouter.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../ui/MRMenuBar.hpp"
 #include "../ui/MRStatusLine.hpp"
@@ -581,6 +582,7 @@ static bool dispatchSyntheticKeyToUi(const TKey &key, const char *text = nullptr
 static bool replayKeyInputSequence(const std::string &sequence);
 static int currentUiMacroMode();
 static bool macroAllowsUiMode(const MacroRef &macroRef, int mode) noexcept;
+static const char *keymapActionIdForMacroCommand(const std::string &name) noexcept;
 static bool executeLoadedMacro(std::map<std::string, MacroRef>::iterator macroIt, const std::string &macroKey, const std::string &paramPart, std::vector<std::string> *logSink);
 static bool executeLoadedMacroWithConfiguredKeymapBatch(std::map<std::string, MacroRef>::iterator macroIt, const std::string &macroKey, const std::string &paramPart, std::vector<std::string> *logSink);
 static bool tryLoadIndexedMacroForKey(const TKey &pressed);
@@ -598,6 +600,54 @@ static std::string upperKey(const std::string &value) {
 }
 
 static constexpr const char *kMacroWorkingMessageText = "working...";
+
+struct MacroKeymapActionCommand {
+	const char *name;
+	const char *actionId;
+};
+
+static const char *keymapActionIdForMacroCommand(const std::string &name) noexcept {
+	static constexpr std::array commands{
+	    MacroKeymapActionCommand{"APPEND_BLOCK", "MRMAC_BLOCK_APPEND_TO_BUFFER"},
+	    MacroKeymapActionCommand{"BACK_HOME", "MRMAC_DELETE_BACKWARD_TO_HOME"},
+	    MacroKeymapActionCommand{"BACK_WORD", "MRMAC_DELETE_BACKWARD_WORD"},
+	    MacroKeymapActionCommand{"BLOCK_MATH", "MRMAC_BLOCK_MATH"},
+	    MacroKeymapActionCommand{"BOTTOM_OF_WINDOW", "MRMAC_CURSOR_BOTTOM_OF_WINDOW"},
+	    MacroKeymapActionCommand{"CENTER_LINE", "MR_TEXT_CENTER_LINE"},
+	    MacroKeymapActionCommand{"CENTER_LINE_ON_SCREEN", "MRMAC_VIEW_CENTER_LINE"},
+	    MacroKeymapActionCommand{"COPY_BLOCK_TO_CLIPBOARD", "MRMAC_BLOCK_COPY_TO_CLIPBOARD"},
+	    MacroKeymapActionCommand{"CUT_APPEND_BLOCK", "MRMAC_BLOCK_CUT_APPEND_TO_BUFFER"},
+	    MacroKeymapActionCommand{"CUT_BLOCK", "MRMAC_BLOCK_MOVE_TO_BUFFER"},
+	    MacroKeymapActionCommand{"DEL_CHAR_OR_BLOCK", "MRMAC_DELETE_FORWARD_CHAR_OR_BLOCK"},
+	    MacroKeymapActionCommand{"DEL_EOL", "MRMAC_DELETE_TO_EOL"},
+	    MacroKeymapActionCommand{"DEL_WORD", "MRMAC_DELETE_FORWARD_WORD"},
+	    MacroKeymapActionCommand{"END_OF_BLOCK", "MRMAC_CURSOR_END_OF_BLOCK"},
+	    MacroKeymapActionCommand{"FORCE_SAVE", "MR_FILE_FORCE_SAVE"},
+	    MacroKeymapActionCommand{"INDENT_BLOCK", "MRMAC_BLOCK_INDENT"},
+	    MacroKeymapActionCommand{"JUSTIFY_PARAGRAPH", "MR_JUSTIFY_PARAGRAPH"},
+	    MacroKeymapActionCommand{"MARK_WORD_RIGHT", "MRMAC_BLOCK_MARK_WORD_RIGHT"},
+	    MacroKeymapActionCommand{"NEXT_SEARCH_RESULT", "MR_SEARCH_RESULTS_NEXT"},
+	    MacroKeymapActionCommand{"PASTE_BLOCK", "MRMAC_BLOCK_COPY_FROM_BUFFER"},
+	    MacroKeymapActionCommand{"PASTE_FROM_CLIPBOARD", "MRMAC_BLOCK_PASTE_FROM_CLIPBOARD"},
+	    MacroKeymapActionCommand{"REDO", "MRMAC_REDO_LAST_UNDO"},
+	    MacroKeymapActionCommand{"REFORMAT_DOCUMENT", "MR_TEXT_REFORMAT_DOCUMENT"},
+	    MacroKeymapActionCommand{"REFORMAT_PARAGRAPH", "MR_TEXT_REFORMAT_PARAGRAPH"},
+	    MacroKeymapActionCommand{"REPEAT_SEARCH", "MRMAC_SEARCH_REPEAT_LAST"},
+	    MacroKeymapActionCommand{"SAVE_ALL", "MR_FILE_SAVE_ALL"},
+	    MacroKeymapActionCommand{"SCROLL_DOWN", "MRMAC_VIEW_SCROLL_DOWN"},
+	    MacroKeymapActionCommand{"SCROLL_UP", "MRMAC_VIEW_SCROLL_UP"},
+	    MacroKeymapActionCommand{"SORT_COLUMN_BLOCK_TOGGLE", "MR_SORT_COLUMN_BLOCK_TOGGLE"},
+	    MacroKeymapActionCommand{"START_OF_BLOCK", "MRMAC_CURSOR_START_OF_BLOCK"},
+	    MacroKeymapActionCommand{"TOGGLE_FORMAT_RULER", "MR_TOGGLE_FORMAT_RULER"},
+	    MacroKeymapActionCommand{"TOGGLE_WORD_WRAP", "MR_TOGGLE_WORD_WRAP"},
+	    MacroKeymapActionCommand{"TOP_OF_WINDOW", "MRMAC_CURSOR_TOP_OF_WINDOW"},
+	    MacroKeymapActionCommand{"UNDO", "MRMAC_UNDO"},
+	    MacroKeymapActionCommand{"UNDENT_BLOCK", "MRMAC_BLOCK_UNDENT"}};
+
+	for (const MacroKeymapActionCommand &command : commands)
+		if (name == command.name) return command.actionId;
+	return nullptr;
+}
 
 static bool startsWithTokenInsensitive(const std::string &text, std::size_t pos, const char *token) {
 	std::size_t i = 0;
@@ -8596,6 +8646,13 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					}
 					wordWrapEditorLine(editor);
 					runtimeErrorLevel() = 0;
+				} else if (const char *actionId = keymapActionIdForMacroCommand(name)) {
+					if (!args.empty()) throw std::runtime_error((name + " expects no arguments.").c_str());
+					if (currentBackgroundEditSession() != nullptr) {
+						runtimeErrorLevel() = 1001;
+						continue;
+					}
+					runtimeErrorLevel() = dispatchMRKeymapAction(actionId) ? 0 : 1001;
 				} else if (name == "LEFT" || name == "RIGHT" || name == "UP" || name == "DOWN" || name == "HOME" || name == "EOL" || name == "TOF" || name == "EOF" || name == "WORD_LEFT" || name == "WORD_RIGHT" || name == "FIRST_WORD" || name == "MARK_POS" || name == "GOTO_MARK" || name == "POP_MARK" || name == "PAGE_UP" || name == "PAGE_DOWN" || name == "NEXT_PAGE_BREAK" || name == "LAST_PAGE_BREAK" || name == "TAB_RIGHT" || name == "TAB_LEFT" || name == "INDENT" || name == "UNDENT" || name == "BLOCK_BEGIN" || name == "BLOCK_LINE" || name == "COL_BLOCK_BEGIN" || name == "BLOCK_COL" || name == "STR_BLOCK_BEGIN" || name == "BLOCK_END" || name == "BLOCK_OFF" || name == "BLOCK_STAT" || name == "COPY_BLOCK" || name == "MOVE_BLOCK" || name == "DELETE_BLOCK" || name == "CREATE_WINDOW" || name == "DELETE_WINDOW" || name == "ERASE_WINDOW" || name == "MODIFY_WINDOW" || name == "LINK_WINDOW" || name == "UNLINK_WINDOW" || name == "ZOOM" || name == "REDRAW" || name == "NEW_SCREEN" ||
 				           name == "MOVE_WIN_TO_NEXT_DESKTOP" || name == "MOVE_WIN_TO_PREV_DESKTOP" || name == "MOVE_VIEWPORT_RIGHT" || name == "MOVE_VIEWPORT_LEFT" || name == "SAVE_WORKSPACE" || name == "LOAD_WORKSPACE" || name == "SAVE_SETTINGS") {
 					MRFileEditor *editor = currentEditor();
