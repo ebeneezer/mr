@@ -14,6 +14,7 @@
 #include "vm/MRVMProfile.hpp"
 
 class MREditWindow;
+class MRVMHashStore;
 
 class VirtualMachine {
   public:
@@ -23,6 +24,10 @@ class VirtualMachine {
 		double r;
 		std::string s;
 		unsigned char c;
+		int hashHandle;
+		int arrayElementType;
+		std::vector<Value> arrayValues;
+		bool globalStorage;
 
 		Value();
 	};
@@ -30,6 +35,7 @@ class VirtualMachine {
   private:
 	std::vector<Value> stack;
 	std::map<std::string, Value> variables;
+	std::unique_ptr<MRVMHashStore> mHashStore;
 	bool verboseLogging;
 	bool logTruncated;
 	bool mAsyncDelayPending;
@@ -62,9 +68,17 @@ class VirtualMachine {
 	bool cancelledExecution;
 
 	VirtualMachine();
+	~VirtualMachine();
 	void setVerboseLogging(bool enable) noexcept {
 		verboseLogging = enable;
 	}
+	int hashCreate();
+	MRVMHashStore &localHashStore();
+	const MRVMHashStore &localHashStore() const;
+	bool hashContains(int handle, const std::string &key) const;
+	Value hashRead(int handle, const std::string &key) const;
+	void hashWrite(int handle, const std::string &key, const Value &value);
+	void hashErase(int handle, const std::string &key);
 	void execute(const unsigned char *bytecode, size_t length);
 	void executeAt(const unsigned char *bytecode, size_t length, size_t entryOffset, const std::string &parameterString, const std::string &macroName, bool resetState, bool firstRun);
 	void setAsyncDelayEnabled(bool enabled) noexcept {
@@ -372,7 +386,6 @@ bool mrvmRunMacroSpec(const std::string &spec, std::string *errorMessage = nullp
 void mrvmBootstrapBoundMacroIndex(const std::string &directoryPath, std::size_t *fileCount = nullptr, std::size_t *bindingCount = nullptr);
 bool mrvmWarmLoadNextIndexedMacroFile(std::string *loadedFilePath = nullptr, std::string *failedFilePath = nullptr, std::string *errorMessage = nullptr);
 bool mrvmHasPendingIndexedMacroWarmup();
-
 bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKeyState, std::string &executedMacroName, std::vector<std::string> *logLines = nullptr);
 
 #endif

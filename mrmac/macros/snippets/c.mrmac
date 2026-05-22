@@ -1,0 +1,75 @@
+$MACRO REGISTER_C_SNIPPETS FROM EDIT;
+DEF_HASH(Snippets, CSnippets, Snippet, Placeholders, Placeholder1, Placeholder2, Placeholder3, Placeholder4);
+
+Snippets := GLOBAL_HASH('SNIPPETS');
+
+Placeholder1['default'] := 'int i = 0';
+Placeholder1['hint'] := 'Loop initializer';
+Placeholder2['default'] := 'i < limit';
+Placeholder2['hint'] := 'Loop condition';
+Placeholder3['default'] := '++i';
+Placeholder3['hint'] := 'Loop increment';
+Placeholder4['default'] := '/* body */';
+Placeholder4['hint'] := 'Loop body';
+Placeholders['1'] := Placeholder1;
+Placeholders['2'] := Placeholder2;
+Placeholders['3'] := Placeholder3;
+Placeholders['4'] := Placeholder4;
+Snippet['name'] := 'C for';
+Snippet['trigger'] := 'for';
+Snippet['body'] := <<BODY
+for (//1; //2; //3) {
+    //4
+}
+BODY;
+Snippet['placeholders'] := Placeholders;
+CSnippets['FOR'] := Snippet;
+
+DEF_HASH(IfSnippet, IfPlaceholders, IfPlaceholder1, IfPlaceholder2);
+IfPlaceholder1['default'] := 'condition';
+IfPlaceholder1['hint'] := 'If condition';
+IfPlaceholder2['default'] := '/* body */';
+IfPlaceholder2['hint'] := 'If body';
+IfPlaceholders['1'] := IfPlaceholder1;
+IfPlaceholders['2'] := IfPlaceholder2;
+IfSnippet['name'] := 'C if';
+IfSnippet['trigger'] := 'if';
+IfSnippet['body'] := <<BODY
+if (//1) {
+    //2
+}
+BODY;
+IfSnippet['placeholders'] := IfPlaceholders;
+CSnippets['IF'] := IfSnippet;
+
+DEF_HASH(WhileSnippet, WhilePlaceholders, WhilePlaceholder1, WhilePlaceholder2);
+WhilePlaceholder1['default'] := 'condition';
+WhilePlaceholder1['hint'] := 'While condition';
+WhilePlaceholder2['default'] := '/* body */';
+WhilePlaceholder2['hint'] := 'While body';
+WhilePlaceholders['1'] := WhilePlaceholder1;
+WhilePlaceholders['2'] := WhilePlaceholder2;
+WhileSnippet['name'] := 'C while';
+WhileSnippet['trigger'] := 'while';
+WhileSnippet['body'] := <<BODY
+while (//1) {
+    //2
+}
+BODY;
+WhileSnippet['placeholders'] := WhilePlaceholders;
+CSnippets['WHILE'] := WhileSnippet;
+
+Snippets['C'] := CSnippets;
+SET_GLOBAL_HASH('SNIPPETS', Snippets);
+
+MACRO_TO_KEY('<Ctrl+Space>', 'c^C_SNIPPET_EXPAND_KEYWORD', 0);
+MACRO_TO_KEY('<Ctrl+@>', 'c^C_SNIPPET_EXPAND_KEYWORD', 0);
+END_MACRO;
+
+$MACRO C_SNIPPET_EXPAND_KEYWORD FROM EDIT;
+SNIPPET_START();
+END_MACRO;
+
+$MACRO C_SNIPPETS_UNLOAD FROM EDIT;
+SNIPPETS_UNLOAD('C');
+END_MACRO;

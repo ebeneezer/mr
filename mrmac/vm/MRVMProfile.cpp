@@ -57,6 +57,13 @@ unsigned classifyPureOpcode(unsigned char opcode) {
 		case OP_LOAD_VAR:
 		case OP_GOTO:
 		case OP_DEF_VAR:
+		case OP_HASH_LOAD:
+		case OP_HASH_STORE:
+		case OP_HASH_LOAD_VALUE:
+		case OP_HASH_STORE_VALUE:
+		case OP_ARRAY_LOAD:
+		case OP_ARRAY_STORE:
+		case OP_ARRAY_LOAD_VALUE:
 		case OP_JZ:
 		case OP_CALL:
 		case OP_RET:
@@ -115,6 +122,7 @@ unsigned classifyLoadVarName(const std::string &name) {
 	if (name == "IGNORE_CASE" || name == "REG_EXP_STAT" || name == "TAB_EXPAND" || name == "DISPLAY_TABS") return mrefUiAffinity;
 	if (name == "VIRTUAL_DESKTOPS" || name == "CYCLIC_VIRTUAL_DESKTOPS") return mrefUiAffinity;
 	if (name == "DOC_MODE" || name == "PRINT_MARGIN") return mrefUiAffinity;
+	if (name == "GLOBAL_HASH") return mrefUiAffinity;
 	if (name == "INSERT_MODE" || name == "INDENT_LEVEL" || name == "GET_LINE" || name == "CUR_CHAR" || name == "C_COL" || name == "C_LINE" || name == "C_ROW" || name == "C_PAGE" || name == "PG_LINE" || name == "AT_EOF" || name == "AT_EOL" || name == "BLOCK_STAT" || name == "BLOCK_LINE1" || name == "BLOCK_LINE2" || name == "BLOCK_COL1" || name == "BLOCK_COL2" || name == "MARKING" || name == "FILE_CHANGED" || name == "FILE_NAME") return mrefUiAffinity;
 	if (name == "CUR_WINDOW" || name == "LINK_STAT" || name == "WIN_X1" || name == "WIN_Y1" || name == "WIN_X2" || name == "WIN_Y2" || name == "WINDOW_COUNT" || name == "KEY1" || name == "KEY2" || name == "FIRST_SAVE" || name == "BUFFER_ID" || name == "TMP_FILE" || name == "TMP_FILE_NAME" || name == "LAST_FILE_ATTR" || name == "LAST_FILE_SIZE" || name == "LAST_FILE_TIME" || name == "CUR_FILE_ATTR" || name == "CUR_FILE_SIZE" || name == "READ_ONLY" || name == "FOUND_X" || name == "FOUND_Y" || name == "FOUND_STR" || name == "SEARCH_FILE") return mrefUiAffinity;
 	return 0;
@@ -130,7 +138,7 @@ unsigned classifyProcName(const std::string &name) {
 	if (name == "MRSETUP") return mrefUiAffinity;
 	if (name == "MAKE_MESSAGE") return mrefUiAffinity;
 	if (name == "REGISTER_MENU_ITEM" || name == "REMOVE_MENU_ITEM") return mrefUiAffinity;
-	if (name == "CREATE_GLOBAL_STR" || name == "SET_GLOBAL_STR" || name == "SET_GLOBAL_INT" || name == "UNLOAD_MACRO") return name == "UNLOAD_MACRO" ? mrefUiAffinity : (mrefUiAffinity | mrefStagedWrite);
+	if (name == "CREATE_GLOBAL_STR" || name == "SET_GLOBAL_STR" || name == "SET_GLOBAL_INT" || name == "SET_GLOBAL_HASH" || name == "UNLOAD_MACRO") return name == "UNLOAD_MACRO" ? mrefUiAffinity : (mrefUiAffinity | mrefStagedWrite);
 	if (name == "LOAD_MACRO_FILE" || name == "CHANGE_DIR" || name == "DEL_FILE" || name == "SET_FILE_ATTR") return mrefExternalIo;
 	if (name == "SHELL_TO_OS") return mrefUiAffinity | mrefExternalIo;
 	if (name == "LOAD_FILE" || name == "SAVE_FILE" || name == "SAVE_BLOCK") return mrefUiAffinity | mrefExternalIo;
@@ -139,6 +147,7 @@ unsigned classifyProcName(const std::string &name) {
 	if (name == "BEEP") return mrefUiAffinity;
 	if (name == "WRITE_SOD") return mrefUiAffinity;
 	if (name == "REPLACE" || name == "TEXT" || name == "PUT_LINE" || name == "CR" || name == "KEY_IN" || name == "DEL_CHAR" || name == "DEL_CHARS" || name == "DEL_LINE" || name == "INDENT" || name == "UNDENT" || name == "COPY_BLOCK" || name == "MOVE_BLOCK" || name == "DELETE_BLOCK" || name == "ERASE_WINDOW" || name == "WINDOW_COPY" || name == "WINDOW_MOVE") return mrefUiAffinity | mrefStagedWrite;
+	if (name == "SNIPPET_START" || name == "SNIPPETS_UNLOAD" || name == "SNIPPET_NEXT_PLACEHOLDER" || name == "SNIPPET_PREV_PLACEHOLDER") return mrefUiAffinity;
 	if (name == "RUN_MACRO") return mrefUiAffinity | mrefStagedWrite;
 	if (name == "DELAY") return mrefBackgroundSafe;
 	if (name == "SET_INDENT_LEVEL" || name == "LEFT" || name == "RIGHT" || name == "UP" || name == "DOWN" || name == "HOME" || name == "EOL" || name == "TOF" || name == "EOF" || name == "WORD_LEFT" || name == "WORD_RIGHT" || name == "FIRST_WORD" || name == "MARK_POS" || name == "GOTO_MARK" || name == "POP_MARK" || name == "PAGE_UP" || name == "PAGE_DOWN" || name == "NEXT_PAGE_BREAK" || name == "LAST_PAGE_BREAK" || name == "TAB_RIGHT" || name == "TAB_LEFT" || name == "BLOCK_BEGIN" || name == "BLOCK_LINE" || name == "COL_BLOCK_BEGIN" || name == "BLOCK_COL" || name == "STR_BLOCK_BEGIN" || name == "BLOCK_END" || name == "BLOCK_OFF" || name == "CREATE_WINDOW" || name == "DELETE_WINDOW" || name == "MODIFY_WINDOW" || name == "LINK_WINDOW" || name == "UNLINK_WINDOW" || name == "ZOOM" || name == "REDRAW" || name == "NEW_SCREEN" || name == "READ_KEY" || name == "PUSH_KEY" || name == "PASS_KEY" || name == "PUSH_LABELS" || name == "POP_LABELS" || name == "FLABEL" || name == "MACRO_TO_KEY" ||
@@ -319,11 +328,15 @@ MRMacroExecutionProfile mrvmAnalyzeBytecode(const unsigned char *bytecode, std::
 				if (!skipBytecodeBytes(length, ip, sizeof(double))) return profile;
 				break;
 			case OP_PUSH_S:
-			case OP_DEF_VAR:
 			case OP_VAL:
 			case OP_RVAL: {
 				std::string ignored;
 				if (!readBytecodeCString(bytecode, length, ip, ignored)) return profile;
+				break;
+			}
+			case OP_DEF_VAR: {
+				std::string ignored;
+				if (!skipBytecodeBytes(length, ip, sizeof(unsigned char)) || !readBytecodeCString(bytecode, length, ip, ignored)) return profile;
 				break;
 			}
 			case OP_LOAD_VAR: {
@@ -331,6 +344,22 @@ MRMacroExecutionProfile mrvmAnalyzeBytecode(const unsigned char *bytecode, std::
 				if (!readBytecodeCString(bytecode, length, ip, name)) return profile;
 				name = upperProfileKey(name);
 				noteExecutionFlags(profile, classifyLoadVarName(name), name);
+				break;
+			}
+			case OP_HASH_LOAD:
+			case OP_HASH_STORE: {
+				std::string ignored;
+				if (!readBytecodeCString(bytecode, length, ip, ignored)) return profile;
+				break;
+			}
+			case OP_HASH_LOAD_VALUE:
+			case OP_HASH_STORE_VALUE:
+			case OP_ARRAY_LOAD_VALUE:
+				break;
+			case OP_ARRAY_LOAD:
+			case OP_ARRAY_STORE: {
+				std::string ignored;
+				if (!readBytecodeCString(bytecode, length, ip, ignored)) return profile;
 				break;
 			}
 			case OP_STORE_VAR: {

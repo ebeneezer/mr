@@ -12,6 +12,7 @@
 #define MAX_LABELS 500
 #define MAX_PENDING_REFS 1000
 #define MAX_STRING_LITERAL 254
+#define TYPE_INFER 1000
 
 typedef struct {
 	char name[MAX_SYMBOL_NAME + 1];
@@ -79,6 +80,7 @@ typedef enum {
 	TOK_DEF_STR,
 	TOK_DEF_CHAR,
 	TOK_DEF_REAL,
+	TOK_DEF_HASH,
 	TOK_IF,
 	TOK_THEN,
 	TOK_ELSE,
@@ -119,6 +121,8 @@ typedef enum {
 	TOK_COLON,
 	TOK_LPAREN,
 	TOK_RPAREN,
+	TOK_LBRACKET,
+	TOK_RBRACKET,
 	TOK_ERROR
 } TokenKind;
 
@@ -430,6 +434,103 @@ static int ident_eq(const char *a, const char *b) {
 	return strcasecmp(a, b) == 0;
 }
 
+static int heredoc_line_terminates(const char *line, const char *marker, size_t marker_len, const char **after_marker) {
+	const char *p = line + marker_len;
+
+	if (strncmp(line, marker, marker_len) != 0) return 0;
+	while (*p == ' ' || *p == '\t')
+		++p;
+	if (*p == ';') {
+		if (after_marker != NULL) *after_marker = p;
+		return 1;
+	}
+	if (*p == '\r') ++p;
+	if (*p == '\n' || *p == '\0') {
+		if (after_marker != NULL) *after_marker = p;
+		return 1;
+	}
+	return 0;
+}
+
+static int lexer_try_heredoc(Lexer *lex, Token *tok) {
+	const char *marker_start;
+	const char *marker_end;
+	const char *line_start;
+	const char *q;
+	char marker[MAX_SYMBOL_NAME + 1];
+	char buffer[MAX_STRING_LITERAL + 1];
+	size_t marker_len;
+	size_t out = 0;
+
+	if (lex->p[0] != '<' || lex->p[1] != '<' || !is_ident_start((unsigned char)lex->p[2])) return 0;
+
+	marker_start = lex->p + 2;
+	marker_end = marker_start + 1;
+	while (is_ident_part((unsigned char)*marker_end))
+		++marker_end;
+
+	marker_len = (size_t)(marker_end - marker_start);
+	if (marker_len == 0 || marker_len > MAX_SYMBOL_NAME) {
+		tok->kind = TOK_ERROR;
+		tok->text = xstrdup("Heredoc marker too long.");
+		return 1;
+	}
+
+	q = marker_end;
+	while (*q == ' ' || *q == '\t')
+		++q;
+	if (*q == '\r') ++q;
+	if (*q != '\n') return 0;
+
+	memcpy(marker, marker_start, marker_len);
+	marker[marker_len] = '\0';
+
+	lex->p = q + 1;
+	lex->line++;
+	while (*lex->p != '\0') {
+		line_start = lex->p;
+		if (strncmp(line_start, marker, marker_len) == 0) {
+			const char *after_marker = NULL;
+			if (heredoc_line_terminates(line_start, marker, marker_len, &after_marker)) {
+				buffer[out] = '\0';
+				tok->kind = TOK_STRING_LITERAL;
+				tok->text = xstrdup(buffer);
+				if (tok->text == NULL) {
+					tok->kind = TOK_ERROR;
+					tok->text = xstrdup("Out of memory.");
+					return 1;
+				}
+				lex->p = after_marker;
+				if (*lex->p == '\r') ++lex->p;
+				if (*lex->p == '\n') {
+					++lex->p;
+					lex->line++;
+				}
+				return 1;
+			}
+		}
+
+		while (*lex->p != '\0') {
+			if (out >= MAX_STRING_LITERAL) {
+				tok->kind = TOK_ERROR;
+				tok->text = xstrdup("String constant too long.");
+				return 1;
+			}
+			buffer[out++] = *lex->p;
+			if (*lex->p == '\n') {
+				lex->line++;
+				++lex->p;
+				break;
+			}
+			++lex->p;
+		}
+	}
+
+	tok->kind = TOK_ERROR;
+	tok->text = xstrdup("Premature end of file.");
+	return 1;
+}
+
 static void lexer_next(Lexer *lex, Token *tok) {
 	const char *start;
 	char *text;
@@ -508,6 +609,8 @@ static void lexer_next(Lexer *lex, Token *tok) {
 		return;
 	}
 
+	if (lexer_try_heredoc(lex, tok)) return;
+
 	if (isdigit((unsigned char)*lex->p)) {
 		const char *q = lex->p;
 		int is_real = 0;
@@ -580,6 +683,8 @@ static void lexer_next(Lexer *lex, Token *tok) {
 			tok->kind = TOK_DEF_CHAR;
 		else if (ident_eq(text, "DEF_REAL"))
 			tok->kind = TOK_DEF_REAL;
+		else if (ident_eq(text, "DEF_HASH"))
+			tok->kind = TOK_DEF_HASH;
 		else if (ident_eq(text, "IF"))
 			tok->kind = TOK_IF;
 		else if (ident_eq(text, "THEN"))
@@ -762,6 +867,16 @@ static void lexer_next(Lexer *lex, Token *tok) {
 			tok->text = xstrdup(")");
 			++lex->p;
 			return;
+		case '[':
+			tok->kind = TOK_LBRACKET;
+			tok->text = xstrdup("[");
+			++lex->p;
+			return;
+		case ']':
+			tok->kind = TOK_RBRACKET;
+			tok->text = xstrdup("]");
+			++lex->p;
+			return;
 		default: {
 			char buf[64];
 			snprintf(buf, sizeof(buf), "Unexpected character: '%c'", *lex->p);
@@ -807,6 +922,52 @@ static int is_numeric_type(int type) {
 
 static int is_stringlike_type(int type) {
 	return type == TYPE_STR || type == TYPE_CHAR;
+}
+
+static int is_hash_type(int type) {
+	return type == TYPE_HASH;
+}
+
+static int is_array_type(int type) {
+	return type == TYPE_INT_ARRAY || type == TYPE_STR_ARRAY || type == TYPE_CHAR_ARRAY || type == TYPE_REAL_ARRAY || type == TYPE_HASH_ARRAY;
+}
+
+static int array_type_for_element_type(int type) {
+	switch (type) {
+		case TYPE_INT:
+			return TYPE_INT_ARRAY;
+		case TYPE_STR:
+			return TYPE_STR_ARRAY;
+		case TYPE_CHAR:
+			return TYPE_CHAR_ARRAY;
+		case TYPE_REAL:
+			return TYPE_REAL_ARRAY;
+		case TYPE_HASH:
+			return TYPE_HASH_ARRAY;
+		default:
+			return 0;
+	}
+}
+
+static int array_element_type_for_array_type(int type) {
+	switch (type) {
+		case TYPE_INT_ARRAY:
+			return TYPE_INT;
+		case TYPE_STR_ARRAY:
+			return TYPE_STR;
+		case TYPE_CHAR_ARRAY:
+			return TYPE_CHAR;
+		case TYPE_REAL_ARRAY:
+			return TYPE_REAL;
+		case TYPE_HASH_ARRAY:
+			return TYPE_HASH;
+		default:
+			return TYPE_INFER;
+	}
+}
+
+static int is_inferred_type(int type) {
+	return type == TYPE_INFER;
 }
 
 static int validate_keyspec(const char *text, int line) {
@@ -992,10 +1153,13 @@ static int emit_define_variable(const char *name, int type) {
 }
 
 static int can_assign_type(int target, int source) {
+	if (is_inferred_type(source)) return 1;
 	if (target == TYPE_INT) return source == TYPE_INT;
 	if (target == TYPE_REAL) return source == TYPE_REAL || source == TYPE_INT;
 	if (target == TYPE_STR) return source == TYPE_STR || source == TYPE_CHAR;
 	if (target == TYPE_CHAR) return source == TYPE_CHAR || source == TYPE_STR;
+	if (target == TYPE_HASH) return source == TYPE_HASH;
+	if (is_array_type(target)) return source == target;
 	return 0;
 }
 
@@ -1195,13 +1359,19 @@ typedef enum {
 	CALL_ARG_NONE = 0,
 	CALL_ARG_INT,
 	CALL_ARG_REAL,
-	CALL_ARG_STRINGLIKE
+	CALL_ARG_STRINGLIKE,
+	CALL_ARG_HASH,
+	CALL_ARG_ARRAY,
+	CALL_ARG_LENGTH_TARGET
 } CallArgKind;
 
 static int call_arg_matches_type(CallArgKind expected, int actual_type) {
 	if (expected == CALL_ARG_INT) return actual_type == TYPE_INT;
 	if (expected == CALL_ARG_REAL) return actual_type == TYPE_REAL;
 	if (expected == CALL_ARG_STRINGLIKE) return is_stringlike_type(actual_type);
+	if (expected == CALL_ARG_HASH) return actual_type == TYPE_HASH;
+	if (expected == CALL_ARG_ARRAY) return is_array_type(actual_type);
+	if (expected == CALL_ARG_LENGTH_TARGET) return is_stringlike_type(actual_type) || is_array_type(actual_type);
 	return 1;
 }
 
@@ -1212,6 +1382,11 @@ static int validate_call_arguments(const CallArgKind *expected_args, int expecte
 		set_compile_error(line, "Type mismatch or syntax error.");
 		return -1;
 	}
+	for (i = 0; i < argc; ++i)
+		if (is_inferred_type(args[i].type)) {
+			set_compile_error(line, "Can not infer result type.");
+			return -1;
+		}
 	for (i = 0; i < argc; ++i)
 		if (!call_arg_matches_type(expected_args[i], args[i].type)) {
 			set_compile_error(line, "Type mismatch or syntax error.");
@@ -1332,6 +1507,7 @@ static const IntrinsicSignature kIntrinsicSignatures[] = {
     INTR_SIG1("CAPS", CALL_ARG_STRINGLIKE, TYPE_STR),
     INTR_SIG3("COPY", CALL_ARG_STRINGLIKE, CALL_ARG_INT, CALL_ARG_INT, TYPE_STR),
     INTR_SIG1("LENGTH", CALL_ARG_STRINGLIKE, TYPE_INT),
+    INTR_SIG1("LEN", CALL_ARG_LENGTH_TARGET, TYPE_INT),
     INTR_SIG2("POS", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, TYPE_INT),
     INTR_SIG3("XPOS", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, CALL_ARG_INT, TYPE_INT),
     INTR_SIG3("STR_DEL", CALL_ARG_STRINGLIKE, CALL_ARG_INT, CALL_ARG_INT, TYPE_STR),
@@ -1353,10 +1529,15 @@ static const IntrinsicSignature kIntrinsicSignatures[] = {
     INTR_SIG1("PARAM_STR", CALL_ARG_INT, TYPE_STR),
     INTR_SIG1("GLOBAL_STR", CALL_ARG_STRINGLIKE, TYPE_STR),
     INTR_SIG1("GLOBAL_INT", CALL_ARG_STRINGLIKE, TYPE_INT),
+    INTR_SIG1("GLOBAL_HASH", CALL_ARG_STRINGLIKE, TYPE_HASH),
     INTR_SIG0_BARE("CHECK_KEY", TYPE_INT),
     INTR_SIG0_BARE("VERSION", TYPE_STR),
     INTR_SIG0_BARE("OS_BACK", TYPE_INT),
     INTR_SIG0_BARE("OS_COLOR", TYPE_INT),
+    INTR_SIG2("EXISTS", CALL_ARG_HASH, CALL_ARG_STRINGLIKE, TYPE_INT),
+    INTR_SIG2("HAS_VALUE", CALL_ARG_HASH, CALL_ARG_STRINGLIKE, TYPE_INT),
+    INTR_SIG1("KEYS", CALL_ARG_HASH, TYPE_STR_ARRAY),
+    INTR_SIG1("VALUES", CALL_ARG_HASH, TYPE_STR_ARRAY),
     INTR_SIG2("PARSE_STR", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, TYPE_STR),
     INTR_SIG2("PARSE_INT", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, TYPE_INT),
     INTR_SIG1("INQ_MACRO", CALL_ARG_STRINGLIKE, TYPE_INT),
@@ -1496,6 +1677,37 @@ static int parse_global_iterator_intrinsic_call(Parser *ps, const char *name, Ex
 	return 0;
 }
 
+static int parse_collection_postfixes(Parser *ps, ExprInfo *out) {
+	while (ps->tok.kind == TOK_LBRACKET) {
+		ExprInfo key;
+		int line = ps->tok.line;
+
+		parser_next(ps);
+		if (parse_expression(ps, 1, &key) != 0) return -1;
+		if (parser_expect(ps, TOK_RBRACKET, "']' expected.") != 0) return -1;
+
+		if (is_hash_type(out->type) || (is_inferred_type(out->type) && is_stringlike_type(key.type))) {
+			if (!is_stringlike_type(key.type)) {
+				set_compile_error(line, "Type mismatch or syntax error.");
+				return -1;
+			}
+			emit_byte(OP_HASH_LOAD_VALUE);
+			out->type = TYPE_INFER;
+		} else if (is_array_type(out->type) || (is_inferred_type(out->type) && key.type == TYPE_INT)) {
+			if (key.type != TYPE_INT) {
+				set_compile_error(line, "Type mismatch or syntax error.");
+				return -1;
+			}
+			emit_byte(OP_ARRAY_LOAD_VALUE);
+			out->type = is_inferred_type(out->type) ? TYPE_INFER : array_element_type_for_array_type(out->type);
+		} else {
+			set_compile_error(line, "Type mismatch or syntax error.");
+			return -1;
+		}
+	}
+	return 0;
+}
+
 static int parse_primary(Parser *ps, ExprInfo *out) {
 	char *name;
 	int var_type;
@@ -1505,7 +1717,7 @@ static int parse_primary(Parser *ps, ExprInfo *out) {
 		emit_int(ps->tok.ival);
 		out->type = TYPE_INT;
 		parser_next(ps);
-		return 0;
+		return parse_collection_postfixes(ps, out);
 	}
 
 	if (ps->tok.kind == TOK_REAL_LITERAL) {
@@ -1513,7 +1725,7 @@ static int parse_primary(Parser *ps, ExprInfo *out) {
 		emit_double(ps->tok.rval);
 		out->type = TYPE_REAL;
 		parser_next(ps);
-		return 0;
+		return parse_collection_postfixes(ps, out);
 	}
 
 	if (ps->tok.kind == TOK_STRING_LITERAL) {
@@ -1521,7 +1733,7 @@ static int parse_primary(Parser *ps, ExprInfo *out) {
 		emit_string(ps->tok.text);
 		out->type = TYPE_STR;
 		parser_next(ps);
-		return 0;
+		return parse_collection_postfixes(ps, out);
 	}
 
 	if (ps->tok.kind == TOK_KEYSPEC) {
@@ -1529,12 +1741,13 @@ static int parse_primary(Parser *ps, ExprInfo *out) {
 		emit_string(ps->tok.text);
 		out->type = TYPE_STR;
 		parser_next(ps);
-		return 0;
+		return parse_collection_postfixes(ps, out);
 	}
 
 	if (parser_accept(ps, TOK_LPAREN)) {
 		if (parse_expression(ps, 1, out) != 0) return -1;
-		return parser_expect(ps, TOK_RPAREN, "')' expected.");
+		if (parser_expect(ps, TOK_RPAREN, "')' expected.") != 0) return -1;
+		return parse_collection_postfixes(ps, out);
 	}
 
 	if (ps->tok.kind == TOK_IDENTIFIER) {
@@ -1557,20 +1770,20 @@ static int parse_primary(Parser *ps, ExprInfo *out) {
 				emit_int(builtin_value);
 				out->type = TYPE_INT;
 				free(name);
-				return 0;
+				return parse_collection_postfixes(ps, out);
 			}
 			if (lookup_builtin_variable(name, &builtin_var_type)) {
 				emit_byte(OP_LOAD_VAR);
 				emit_string(name);
 				out->type = builtin_var_type;
 				free(name);
-				return 0;
+				return parse_collection_postfixes(ps, out);
 			}
 		}
 
 		if (try_emit_bare_intrinsic_call(name, out)) {
 			free(name);
-			return 0;
+			return parse_collection_postfixes(ps, out);
 		}
 
 		if (parser_accept(ps, TOK_LPAREN)) {
@@ -1662,7 +1875,7 @@ static int parse_primary(Parser *ps, ExprInfo *out) {
 			out->type = spec->result_type;
 
 			free(name);
-			return 0;
+			return parse_collection_postfixes(ps, out);
 		}
 
 		if (lookup_symbol(name, &var_type) < 0) {
@@ -1674,7 +1887,7 @@ static int parse_primary(Parser *ps, ExprInfo *out) {
 		emit_string(name);
 		out->type = var_type;
 		free(name);
-		return 0;
+		return parse_collection_postfixes(ps, out);
 	}
 
 	set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
@@ -1684,6 +1897,10 @@ static int parse_primary(Parser *ps, ExprInfo *out) {
 static int parse_unary(Parser *ps, ExprInfo *out) {
 	if (parser_accept(ps, TOK_MINUS)) {
 		if (parse_unary(ps, out) != 0) return -1;
+		if (is_inferred_type(out->type)) {
+			set_compile_error(ps->tok.line, "Can not infer result type.");
+			return -1;
+		}
 		if (!is_numeric_type(out->type)) {
 			set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
 			return -1;
@@ -1694,6 +1911,10 @@ static int parse_unary(Parser *ps, ExprInfo *out) {
 
 	if (parser_accept(ps, TOK_NOT)) {
 		if (parse_unary(ps, out) != 0) return -1;
+		if (is_inferred_type(out->type)) {
+			set_compile_error(ps->tok.line, "Can not infer result type.");
+			return -1;
+		}
 		if (out->type != TYPE_INT) {
 			set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
 			return -1;
@@ -1707,6 +1928,37 @@ static int parse_unary(Parser *ps, ExprInfo *out) {
 }
 
 static int combine_binary(TokenKind op, int line, ExprInfo *lhs, const ExprInfo *rhs) {
+	if (is_inferred_type(lhs->type) || is_inferred_type(rhs->type)) {
+		if (is_inferred_type(lhs->type) && is_inferred_type(rhs->type)) {
+			set_compile_error(line, "Can not infer result type.");
+			return -1;
+		}
+		if (op == TOK_EQ || op == TOK_NE) {
+			int concrete_type = is_inferred_type(lhs->type) ? rhs->type : lhs->type;
+			if (is_numeric_type(concrete_type) || is_stringlike_type(concrete_type)) {
+				emit_byte(op == TOK_EQ ? OP_CMP_EQ : OP_CMP_NE);
+				lhs->type = TYPE_INT;
+				return 0;
+			}
+		}
+		if (op == TOK_LT || op == TOK_GT || op == TOK_LE || op == TOK_GE) {
+			int concrete_type = is_inferred_type(lhs->type) ? rhs->type : lhs->type;
+			if (is_numeric_type(concrete_type)) {
+				if (op == TOK_LT) emit_byte(OP_CMP_LT);
+				else if (op == TOK_GT)
+					emit_byte(OP_CMP_GT);
+				else if (op == TOK_LE)
+					emit_byte(OP_CMP_LE);
+				else
+					emit_byte(OP_CMP_GE);
+				lhs->type = TYPE_INT;
+				return 0;
+			}
+		}
+		set_compile_error(line, "Can not infer result type.");
+		return -1;
+	}
+
 	if (op == TOK_PLUS) {
 		if (is_stringlike_type(lhs->type) && is_stringlike_type(rhs->type)) {
 			emit_byte(OP_ADD);
@@ -1805,6 +2057,7 @@ static int parse_variable_declaration(Parser *ps, int decl_type) {
 
 	for (;;) {
 		char *name;
+		int actual_type = decl_type;
 		if (ps->tok.kind != TOK_IDENTIFIER) {
 			set_compile_error(ps->tok.line, "Variable name expected.");
 			return -1;
@@ -1814,13 +2067,25 @@ static int parse_variable_declaration(Parser *ps, int decl_type) {
 			set_compile_error(ps->tok.line, "Out of memory.");
 			return -1;
 		}
-		if (add_symbol(name, decl_type) != 0) {
+		parser_next(ps);
+		if (parser_accept(ps, TOK_LBRACKET)) {
+			if (parser_expect(ps, TOK_RBRACKET, "']' expected.") != 0) {
+				free(name);
+				return -1;
+			}
+			actual_type = array_type_for_element_type(decl_type);
+			if (actual_type == 0) {
+				set_compile_error(ps->tok.line, "Type mismatch or syntax error.");
+				free(name);
+				return -1;
+			}
+		}
+		if (add_symbol(name, actual_type) != 0) {
 			free(name);
 			return -1;
 		}
-		emit_define_variable(name, decl_type);
+		emit_define_variable(name, actual_type);
 		free(name);
-		parser_next(ps);
 		if (!parser_accept(ps, TOK_COMMA)) break;
 	}
 
@@ -1847,6 +2112,91 @@ static int parse_assignment_after_name(Parser *ps, const char *name, int line) {
 	emit_byte((unsigned char)var_type);
 	emit_string(name);
 	return 0;
+}
+
+static int parse_hash_lvalue_tail_assignment(Parser *ps, int line, int require_key) {
+	ExprInfo key;
+	ExprInfo value;
+	int saw_key = 0;
+
+	while (ps->tok.kind == TOK_LBRACKET) {
+		parser_next(ps);
+		if (parse_expression(ps, 1, &key) != 0) return -1;
+		if (!is_stringlike_type(key.type)) {
+			set_compile_error(line, "Type mismatch or syntax error.");
+			return -1;
+		}
+		if (parser_expect(ps, TOK_RBRACKET, "']' expected.") != 0) return -1;
+		saw_key = 1;
+		if (ps->tok.kind == TOK_LBRACKET) emit_byte(OP_HASH_LOAD_VALUE);
+	}
+	if (require_key && !saw_key) {
+		set_compile_error(line, "'[' expected.");
+		return -1;
+	}
+	if (parser_expect(ps, TOK_ASSIGN, "':=' expected.") != 0) return -1;
+	if (parse_expression(ps, 1, &value) != 0) return -1;
+
+	emit_byte(OP_HASH_STORE_VALUE);
+	return 0;
+}
+
+static int parse_hash_assignment_after_name(Parser *ps, const char *name, int line) {
+	int var_type = 0;
+
+	if (lookup_symbol(name, &var_type) < 0 || !is_hash_type(var_type)) {
+		set_compile_error(line, "Variable expected.");
+		return -1;
+	}
+
+	emit_byte(OP_LOAD_VAR);
+	emit_string(name);
+	return parse_hash_lvalue_tail_assignment(ps, line, 1);
+}
+
+static int parse_array_assignment_after_name(Parser *ps, const char *name, int line) {
+	ExprInfo index;
+	ExprInfo value;
+	int var_type = 0;
+
+	if (lookup_symbol(name, &var_type) < 0 || !is_array_type(var_type)) {
+		set_compile_error(line, "Variable expected.");
+		return -1;
+	}
+	parser_next(ps);
+	if (parse_expression(ps, 1, &index) != 0) return -1;
+	if (index.type != TYPE_INT) {
+		set_compile_error(line, "Type mismatch or syntax error.");
+		return -1;
+	}
+	if (parser_expect(ps, TOK_RBRACKET, "']' expected.") != 0) return -1;
+	if (parser_expect(ps, TOK_ASSIGN, "':=' expected.") != 0) return -1;
+	if (parse_expression(ps, 1, &value) != 0) return -1;
+	if (!can_assign_type(array_element_type_for_array_type(var_type), value.type)) {
+		set_compile_error(line, "Type mismatch or syntax error.");
+		return -1;
+	}
+
+	emit_byte(OP_ARRAY_STORE);
+	emit_string(name);
+	return 0;
+}
+
+static int parse_hash_intrinsic_assignment_after_name(Parser *ps, const char *name, int line) {
+	ExprInfo args[8];
+	int argc = 0;
+	const IntrinsicSignature *spec = find_intrinsic_signature(name);
+
+	if (spec == NULL || spec->result_type != TYPE_HASH) {
+		set_compile_error(line, "Type mismatch or syntax error.");
+		return -1;
+	}
+	if (parser_expect(ps, TOK_LPAREN, "'(' expected.") != 0) return -1;
+	if (parse_argument_expressions(ps, args, &argc, 8) != 0) return -1;
+	if (parser_expect(ps, TOK_RPAREN, "')' expected.") != 0) return -1;
+	if (validate_call_arguments(spec->args, spec->argc, args, argc, line) != 0) return -1;
+	emit_intrinsic_call(spec->name, argc);
+	return parse_hash_lvalue_tail_assignment(ps, line, 1);
 }
 
 static int parse_goto_statement(Parser *ps) {
@@ -2038,6 +2388,11 @@ static const ProcSignature kProcSignatures[] = {
     PROC_SIG2("CREATE_GLOBAL_STR", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, "CREATE_GLOBAL_STR"),
     PROC_SIG2("SET_GLOBAL_STR", CALL_ARG_STRINGLIKE, CALL_ARG_STRINGLIKE, "SET_GLOBAL_STR"),
     PROC_SIG2("SET_GLOBAL_INT", CALL_ARG_STRINGLIKE, CALL_ARG_INT, "SET_GLOBAL_INT"),
+    PROC_SIG2("SET_GLOBAL_HASH", CALL_ARG_STRINGLIKE, CALL_ARG_HASH, "SET_GLOBAL_HASH"),
+    PROC_SIG0("SNIPPET_START", "SNIPPET_START"),
+    PROC_SIG1("SNIPPETS_UNLOAD", CALL_ARG_STRINGLIKE, "SNIPPETS_UNLOAD"),
+    PROC_SIG1("SNIPPET_NEXT_PLACEHOLDER", CALL_ARG_STRINGLIKE, "SNIPPET_NEXT_PLACEHOLDER"),
+    PROC_SIG1("SNIPPET_PREV_PLACEHOLDER", CALL_ARG_STRINGLIKE, "SNIPPET_PREV_PLACEHOLDER"),
     PROC_SIG1("RUN_MACRO", CALL_ARG_STRINGLIKE, "RUN_MACRO"),
     PROC_SIG1("MARQUEE", CALL_ARG_STRINGLIKE, NULL),
     PROC_SIG1("MARQUEE_WARNING", CALL_ARG_STRINGLIKE, NULL),
@@ -2215,6 +2570,10 @@ static int parse_if_statement(Parser *ps) {
 
 	if (parser_expect(ps, TOK_IF, "Syntax Error.") != 0) return -1;
 	if (parse_expression(ps, 1, &cond) != 0) return -1;
+	if (is_inferred_type(cond.type)) {
+		set_compile_error(ps->tok.line, "Can not infer result type.");
+		return -1;
+	}
 	if (cond.type != TYPE_INT) {
 		set_compile_error(ps->tok.line, "IF expression must be integer.");
 		return -1;
@@ -2251,6 +2610,10 @@ static int parse_while_statement(Parser *ps) {
 	if (parser_expect(ps, TOK_WHILE, "Syntax Error.") != 0) return -1;
 	loop_start = (int)emit_get_pos();
 	if (parse_expression(ps, 1, &cond) != 0) return -1;
+	if (is_inferred_type(cond.type)) {
+		set_compile_error(ps->tok.line, "Can not infer result type.");
+		return -1;
+	}
 	if (cond.type != TYPE_INT) {
 		set_compile_error(ps->tok.line, "WHILE expression must be integer.");
 		return -1;
@@ -2381,7 +2744,31 @@ static int parse_identifier_statement(Parser *ps, int *out_needs_semicolon) {
 		return rc;
 	}
 	if (ps->tok.kind == TOK_LPAREN) {
-		int rc = parse_proc_statement_after_name(ps, name, line);
+		int rc;
+		if (find_intrinsic_signature(name) != NULL && find_intrinsic_signature(name)->result_type == TYPE_HASH)
+			rc = parse_hash_intrinsic_assignment_after_name(ps, name, line);
+		else
+			rc = parse_proc_statement_after_name(ps, name, line);
+		free(name);
+		return rc;
+	}
+	if (ps->tok.kind == TOK_LBRACKET) {
+		int var_type = 0;
+		int rc;
+		if (lookup_symbol(name, &var_type) < 0) {
+			set_compile_error(line, "Variable expected.");
+			free(name);
+			return -1;
+		}
+		if (is_hash_type(var_type))
+			rc = parse_hash_assignment_after_name(ps, name, line);
+		else if (is_array_type(var_type))
+			rc = parse_array_assignment_after_name(ps, name, line);
+		else {
+			set_compile_error(line, "Variable expected.");
+			free(name);
+			return -1;
+		}
 		free(name);
 		return rc;
 	}
@@ -2411,6 +2798,9 @@ static int declaration_type_from_token(TokenKind kind, int *out_type) {
 			return 0;
 		case TOK_DEF_REAL:
 			*out_type = TYPE_REAL;
+			return 0;
+		case TOK_DEF_HASH:
+			*out_type = TYPE_HASH;
 			return 0;
 		default:
 			return -1;
@@ -2468,6 +2858,7 @@ static int parse_statement(Parser *ps) {
 		case TOK_DEF_STR:
 		case TOK_DEF_CHAR:
 		case TOK_DEF_REAL:
+		case TOK_DEF_HASH:
 			rc = parse_typed_declaration_statement(ps, ps->tok.kind);
 			break;
 		case TOK_IDENTIFIER:

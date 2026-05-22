@@ -8,8 +8,6 @@
 PKG_CONFIG ?= pkg-config
 CXX = g++
 CC = gcc
-FLEX = flex
-BISON = bison
 CMAKE ?= cmake
 GIT ?= git
 PATCH ?= patch
@@ -174,6 +172,7 @@ CXX_SOURCES = \
 	mrmac/vm/MRVMProfile.cpp \
 	mrmac/vm/MRVMDeferredUi.cpp \
 	mrmac/vm/MRVMEditor.cpp \
+	mrmac/vm/MRVMHash.cpp \
 	mrmac/vm/MRVMSettings.cpp \
 	mrmac/vm/MRVMScreen.cpp \
 	ui/MRFrame.cpp \
@@ -189,6 +188,7 @@ CXX_SOURCES = \
 	ui/MRMenuBar.cpp \
 	ui/MRMessageLineController.cpp \
 	ui/MRPerformancePanel.cpp \
+	ui/MRSidekickEditor.cpp \
 	ui/MRScopedHistoryUI.cpp \
 	ui/MRWindowManager.cpp \
 	ui/MRNumericSlider.cpp \
@@ -206,9 +206,7 @@ CORE_CXX_OBJECTS = $(filter-out mr.o,$(CXX_OBJECTS))
 
 # C source files (In-Memory Macro Compiler)
 C_SOURCES = \
-	mrmac/mrmac.c \
-	mrmac/lex.yy.c \
-	mrmac/parser.tab.c
+	mrmac/mrmac.c
 
 C_OBJECTS = $(C_SOURCES:.c=.o)
 
@@ -405,13 +403,6 @@ clean-tvision:
 
 rebuild-tvision: clean-tvision $(TVISION_LIB)
 
-# 1. Flex and Bison generation
-mrmac/parser.tab.c mrmac/parser.tab.h &: mrmac/parser.y
-	$(BISON) -d -o mrmac/parser.tab.c mrmac/parser.y
-
-mrmac/lex.yy.c: mrmac/lexer.l mrmac/parser.tab.h
-	$(FLEX) -o mrmac/lex.yy.c mrmac/lexer.l
-
 $(ABOUT_QUOTES_GENERATED): README.md $(ABOUT_QUOTES_GENERATOR)
 	@mkdir -p $(dir $@)
 	bash $(ABOUT_QUOTES_GENERATOR) README.md $@
@@ -420,13 +411,10 @@ $(HELP_MARKDOWN_GENERATED): $(HELP_MARKDOWN_SOURCE) $(HELP_MARKDOWN_GENERATOR)
 	@mkdir -p $(dir $@)
 	bash $(HELP_MARKDOWN_GENERATOR) $(HELP_MARKDOWN_SOURCE) $@
 
-# 2. Dependencies for C compilation
-mrmac/lex.yy.o: CFLAGS += -Wno-unused-function
-mrmac/lex.yy.o: mrmac/lex.yy.c mrmac/parser.tab.h
-mrmac/parser.tab.o: mrmac/parser.tab.c mrmac/parser.tab.h mrmac/mrmac.h
-mrmac/mrmac.o: mrmac/mrmac.c mrmac/parser.tab.h mrmac/mrmac.h
+# 1. Dependencies for C compilation
+mrmac/mrmac.o: mrmac/mrmac.c mrmac/mrmac.h
 
-# 3. Dependencies for C++ compilation
+# 2. Dependencies for C++ compilation
 $(CXX_OBJECTS): | $(ABOUT_QUOTES_GENERATED) $(HELP_MARKDOWN_GENERATED)
 
 mr.o: mr.cpp mrmac/MRVM.hpp app/MREditorApp.hpp ui/MRPalette.hpp $(HELP_MARKDOWN_GENERATED)
@@ -472,10 +460,11 @@ config/settings/MRSettingsStorage.o: config/settings/MRSettingsStorage.cpp confi
 app/commands/MRExternalCommand.o: app/commands/MRExternalCommand.cpp app/commands/MRExternalCommand.hpp config/settings/MRSettingsRuntime.hpp coprocessor/MRCoprocessor.hpp
 coprocessor/MRPerformance.o: coprocessor/MRPerformance.cpp coprocessor/MRPerformance.hpp coprocessor/MRCoprocessor.hpp
 coprocessor/MRCoprocessorDispatch.o: coprocessor/MRCoprocessorDispatch.cpp coprocessor/MRCoprocessorDispatch.hpp coprocessor/MRPerformance.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRIndicator.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
-mrmac/MRVM.o: mrmac/MRVM.cpp mrmac/MRVM.hpp mrmac/vm/MRVMDeferredUi.hpp mrmac/vm/MRVMEditor.hpp mrmac/vm/MRVMSettings.hpp mrmac/vm/MRVMScreen.hpp mrmac/mrmac.h dialogs/MRWindowList.hpp ui/MRWindowSupport.hpp ui/MREditWindow.hpp ui/MRTextBuffer.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRTextBufferModel.hpp ui/MRSyntax.hpp piecetable/MRTextDocument.hpp
+mrmac/MRVM.o: mrmac/MRVM.cpp mrmac/MRVM.hpp mrmac/vm/MRVMDeferredUi.hpp mrmac/vm/MRVMEditor.hpp mrmac/vm/MRVMHash.hpp mrmac/vm/MRVMSettings.hpp mrmac/vm/MRVMScreen.hpp mrmac/mrmac.h dialogs/MRWindowList.hpp ui/MRWindowSupport.hpp ui/MREditWindow.hpp ui/MRTextBuffer.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRTextBufferModel.hpp ui/MRSyntax.hpp piecetable/MRTextDocument.hpp
 mrmac/vm/MRVMProfile.o: mrmac/vm/MRVMProfile.cpp mrmac/vm/MRVMProfile.hpp mrmac/mrmac.h
 mrmac/vm/MRVMDeferredUi.o: mrmac/vm/MRVMDeferredUi.cpp mrmac/vm/MRVMDeferredUi.hpp mrmac/MRVM.hpp
 mrmac/vm/MRVMEditor.o: mrmac/vm/MRVMEditor.cpp mrmac/vm/MRVMEditor.hpp mrmac/vm/MRVMScreen.hpp mrmac/MRVM.hpp ui/MREditWindow.hpp ui/MRFileEditor/MRFileEditor.hpp
+mrmac/vm/MRVMHash.o: mrmac/vm/MRVMHash.cpp mrmac/vm/MRVMHash.hpp mrmac/MRVM.hpp
 mrmac/vm/MRVMSettings.o: mrmac/vm/MRVMSettings.cpp mrmac/vm/MRVMSettings.hpp mrmac/MRVM.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsStorage.hpp keymap/MRKeymapProfile.hpp
 mrmac/vm/MRVMScreen.o: mrmac/vm/MRVMScreen.cpp mrmac/vm/MRVMScreen.hpp mrmac/MRVM.hpp ui/MRMenuBar.hpp ui/MRMessageLineController.hpp ui/MRWindowSupport.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp
 ui/MRPalette.o: ui/MRPalette.cpp ui/MRPalette.hpp
@@ -487,7 +476,7 @@ piecetable/MRTextDocumentLineIndex.o: piecetable/MRTextDocumentLineIndex.cpp pie
 $(MRFOLDTRAINER_OBJECT): $(MRFOLDTRAINER_SOURCE) ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
 $(MRINDENTTRAINER_OBJECT): $(MRINDENTTRAINER_SOURCE) config/settings/MRSettingsRuntime.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntax.hpp
 
-# 4. Linker call
+# 3. Linker call
 $(TARGET): $(TVISION_LIB) $(CXX_OBJECTS) $(C_OBJECTS) | pcre2-check
 	$(TMP_RUN) $(CXX) -o $@ $^ $(LDFLAGS) || { paplay --volume=25000 /usr/share/sounds/ocean/stereo/battery-caution.oga; exit 1; }
 	killall mr 2> /dev/null || true
@@ -526,5 +515,4 @@ clean:
 		$(PHASE1_REPRO_PROBE_OBJECT) $(PHASE1_REPRO_PROBE_TARGET) \
 		config/MRDialogPaths.o config/MRSettingsLoader.o \
 		misc/mr_keyin_probe.o misc/mr_tofrom_probe.o misc/mr_tofrom_dispatch_probe.o \
-		misc/mr_staged_nav_probe misc/mr_staged_mark_page_probe \
-		mrmac/lex.yy.c mrmac/parser.tab.c mrmac/parser.tab.h
+		misc/mr_staged_nav_probe misc/mr_staged_mark_page_probe

@@ -44,6 +44,7 @@
 void mrTraceCoprocessorTaskCancel(int bufferId, std::uint64_t taskId);
 class MREditWindow;
 void setWindowManuallyHidden(MREditWindow *win, bool hidden);
+void mrDropSidekickForParent(const MREditWindow *parent);
 
 class MREditWindow : public TWindow {
 	friend class MRWindowManager;
@@ -123,6 +124,7 @@ class MREditWindow : public TWindow {
 	}
 
 	virtual ~MREditWindow() override {
+		mrDropSidekickForParent(this);
 		{
 			std::ofstream out("misc/mr.log", std::ios::out | std::ios::app | std::ios::binary);
 			if (out) {
@@ -269,6 +271,7 @@ class MREditWindow : public TWindow {
 	}
 
 	void changeBounds(const TRect &bounds) override {
+		mrDropSidekickForParent(this);
 		TWindow::changeBounds(bounds);
 		layoutEditorChrome();
 		if (MRWindowManager::isWindowMinimized(this)) {

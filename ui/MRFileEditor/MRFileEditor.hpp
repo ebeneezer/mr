@@ -258,6 +258,7 @@ class MRFileEditor : public TScroller {
 	int currentColumnNumber() const noexcept;
 
 	int currentViewRow() const noexcept;
+	int currentViewColumn() const noexcept;
 
 	int visibleViewportRows() const noexcept;
 

@@ -33,17 +33,17 @@ Schnittstellen: VM-Startup, App-Bootstrap, Dialoge, WindowCommands, Keymap, Them
 AGENTS-Grenzen: ein autoritatives Laufzeitmodell, keine Shadow-Stores, keine Save/Reload-Workarounds.
 Nicht opportunistisch ändern: Settings-Laufzeitmodell, settings.mrmac-Semantik, MRSETUP-Key-Bedeutung, Persistenzpfade.
 Bekannte technische Schulden: Startup-Flow gesplittet, Persistenzpfade doppelt, Workspace-Serialisierung separat eingemischt, VM greift in Settings-Anwendung/Persistenz ein.
-4. mrmac Lexer / Parser / Compiler
+4. mrmac Compiler / Macro Runner
 
-Zentrale Dateien: ￼mrmac/lexer.l, ￼mrmac/parser.y, ￼mrmac/mrmac.c, ￼mrmac/MRMacroRunner.cpp.
-Zentrale Klassen/Funktionen: Flex/Bison-Scanner und Parser, Bytecode-Erzeugung, Macro-Runner für Vorder-/Hintergrundmakros.
+Zentrale Dateien: ￼mrmac/mrmac.c, ￼mrmac/MRMacroRunner.cpp.
+Zentrale Klassen/Funktionen: custom mrmac compiler, Bytecode-Erzeugung, Macro-Runner für Vorder-/Hintergrundmakros.
 Autoritativer Zustand: geparste Makroquelle und erzeugter Bytecode; keine Settings-Autorität.
-Wichtige Datenflüsse: Datei/Text -> Lexer -> Parser -> Bytecode -> VM/Runner.
+Wichtige Datenflüsse: Datei/Text -> custom compiler -> Bytecode -> VM/Runner.
 Kritische Seiteneffekte: Makroaufrufe können UI, TVCALL, Settings-Startup und Background-Jobs auslösen.
 Schnittstellen: VM, App, Coprocessor, Dateisystem.
-AGENTS-Grenzen: keine opportunistischen Sprachsemantik-Änderungen, keine ungeklärten Parser-/Compiler-Abkürzungen.
+AGENTS-Grenzen: keine opportunistischen Sprachsemantik-Änderungen, keine ungeklärten Compiler-Abkürzungen.
 Nicht opportunistisch ändern: Grammar, Bytecode-OpCodes, Startup-Kontext für MRSETUP.
-Bekannte technische Schulden: generierte Artefakte und historische Makro-Semantik sind stabilitätskritisch; Änderungen brauchen Regression-Abdeckung.
+Bekannte technische Schulden: historische Makro-Semantik ist stabilitätskritisch; Änderungen brauchen Regression-Abdeckung.
 5. VM / Intrinsics / TVCALL
 
 Zentrale Dateien: ￼mrmac/MRVM.cpp, ￼mrmac/MRVM.hpp.

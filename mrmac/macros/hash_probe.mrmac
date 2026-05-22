@@ -1,0 +1,55 @@
+$MACRO HashProbe FROM EDIT;
+DEF_HASH(Snippet, Languages, CSnippet, LoadedLanguage, LoadedSnippet, Placeholders, Placeholder1, Placeholder2, LoadedPlaceholders, LoadedPlaceholder);
+DEF_STR(Name, Body, HintText);
+DEF_INT(Enabled, Count, HasBody, HasPlaceholder1, HasPlaceholder3);
+
+Snippet['name'] := 'for-loop';
+Snippet['enabled'] := 1;
+Snippet['count'] := 42;
+Placeholder1['default'] := 'int i = 0';
+Placeholder1['hint'] := 'Loop initializer';
+Placeholder2['default'] := 'i < limit';
+Placeholder2['hint'] := 'Loop condition';
+Placeholders['1'] := Placeholder1;
+Placeholders['2'] := Placeholder2;
+Snippet['placeholders'] := Placeholders;
+Snippet['body'] := <<BODY
+for (int i = 0; i < limit; ++i) {
+    /* #1 */
+}
+BODY;
+
+CSnippet['for'] := Snippet;
+Languages['C'] := CSnippet;
+
+LoadedLanguage := Languages['C'];
+LoadedSnippet := Languages['C']['for'];
+
+Name := LoadedSnippet['name'];
+Body := LoadedSnippet['body'];
+Enabled := LoadedSnippet['enabled'];
+Count := LoadedSnippet['count'];
+HasBody := EXISTS(LoadedSnippet, 'body');
+HasPlaceholder1 := 0;
+HasPlaceholder3 := 0;
+IF EXISTS(LoadedSnippet, 'placeholders') = 1 THEN
+    LoadedPlaceholders := LoadedSnippet['placeholders'];
+    HasPlaceholder1 := EXISTS(LoadedPlaceholders, '1');
+    HasPlaceholder3 := EXISTS(LoadedPlaceholders, '3');
+    IF HasPlaceholder1 = 1 THEN
+        LoadedPlaceholder := LoadedPlaceholders['1'];
+        HintText := LoadedPlaceholder['hint'];
+    END;
+END;
+
+IF Enabled = 1 THEN
+    WRITE_SOD('Hash probe log: ' + Name + ', count=' + STR(Count));
+    WRITE_SOD('Hash probe heredoc bytes=' + STR(LENGTH(Body)));
+    WRITE_SOD('Hash probe exists body=' + STR(HasBody) + ', ph1=' + STR(HasPlaceholder1) + ', ph3=' + STR(HasPlaceholder3));
+    WRITE_SOD('Hash probe hint=' + HintText);
+    MAKE_MESSAGE('Hash probe: ' + Name + ', count=' + STR(Count) + ', ph1=' + STR(HasPlaceholder1));
+ELSE
+    WRITE_SOD('Hash probe log: disabled');
+    MAKE_MESSAGE('Hash probe: disabled');
+END;
+END_MACRO;

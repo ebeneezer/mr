@@ -140,15 +140,6 @@
           "comments": []
         },
         {
-          "id": "4ac50537-a42c-492a-b451-372698b6ae2d",
-          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
-          "title": "Snippet System mit Platzhaltern und Navigation",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
           "id": "44b96008-898d-4e5d-8f9a-d8236bd7c05d",
           "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
           "title": "LSP Support",
@@ -163,6 +154,15 @@
           ]
         },
         {
+          "id": "46352779-58c7-489a-bb8b-5d120f7bcdd7",
+          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+          "title": "Neues UI WIdget: Textfeld mit Speed Search und History Droplist",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
           "id": "f9883d7e-c8f9-43e7-8856-bbd3bcdb789c",
           "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
           "title": "Code Prettifier",
@@ -175,13 +175,59 @@
               "comment": "- code prettyfier: wie syntaxregeln definieren?"
             }
           ]
+        },
+        {
+          "id": "8928dbb0-09f5-4305-8238-95844e4f8d67",
+          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
+          "title": "Eigene Speed-Search Textfeld Klasse mit History Droplist von TVISION ableiten: Übernimmt Array von Strings in denen gesucht wird und lässt Freitext Editiing zu.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
         }
       ]
     },
     {
       "id": "b721e070-ae21-4123-a1f3-27b926375a16",
       "title": "Regression / Errors",
-      "cards": []
+      "cards": [
+        {
+          "id": "9c8f092f-4f43-4a0b-bf4d-1ed482e4d4b0",
+          "listId": "b721e070-ae21-4123-a1f3-27b926375a16",
+          "title": "MRVM.cpp nach Hash-Spracherweiterung weiter ausdünnen",
+          "description": "Nach der geplanten Hash-Erweiterung erneut prüfen, welche VM-Domänen aus MRVM.cpp in vorhandene oder neue mrmac/vm-Module ausgelagert werden können. Keine opportunistische Ausdünnung während der Hash-Implementierung.",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "a456c7e5-0bee-4652-b4db-5d46a401da15",
+          "listId": "b721e070-ae21-4123-a1f3-27b926375a16",
+          "title": "Alle MRMAC Intrinsics müssen auch aus MRMAC Makros aufrufbar sein.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "d610ea5f-941f-4d1c-8a51-635f25f87d8c",
+          "listId": "b721e070-ae21-4123-a1f3-27b926375a16",
+          "title": "core dumped bei space in history droplist bei file-load",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "dbca98e3-2953-4314-8e12-3bcb4342cf07",
+          "listId": "b721e070-ae21-4123-a1f3-27b926375a16",
+          "title": "Snippets in neuem Snippet Editorfenster editieren und per Window-Copy einfügen. Snippet Editor hat keinen Rahmen und eine automatische fixe Grösse",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        }
+      ]
     },
     {
       "id": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
@@ -218,6 +264,33 @@
               "comment": "Doch ein Grid implementieren lassen? (Calculator)"
             }
           ]
+        },
+        {
+          "id": "f20ce83f-6032-404a-bad0-9ad69c0d9bf4",
+          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
+          "title": "Hashes mit linked Zugriff zu LValues machen.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "f6efc338-e026-4327-b59a-f4f50004f55e",
+          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
+          "title": "Globals müssen unabhängig vom Typ gleich langlebig sein. Der bestehende staged Global-Copy/Replace-Pfad ist für TYPE_HASH noch nicht vollständig nachgezogen.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "4ac50537-a42c-492a-b451-372698b6ae2d",
+          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
+          "title": "Snippet System mit Platzhaltern und Navigation",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
         }
       ]
     },
@@ -235,10 +308,28 @@
           "comments": []
         },
         {
+          "id": "b1c7fb09-0851-499f-ac2c-55078f6e80a4",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Backspace bei markiertem Block sollte delete Block ausführen",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
           "id": "d857df61-3b75-4a89-af53-11aee8857629",
           "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
           "title": "Bei Änderung der Farbcodes für changed text wird der editor nicht neu gezeichnet. der neue farbcode wird aber angewendet",
           "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "5361897e-e330-4fb1-9803-9b9f6cf97cde",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "MRMAC Compiler-Doppelspur konsolidieren",
+          "description": "Prüfen und planen, wie der Flex/Bison-Pfad und der handgeschriebene Compilerpfad in mrmac.c wieder zu einer einzigen kanonischen Compilerstrecke zusammengeführt werden können. Ziel: eine Wahrheit für Lexing, Parsing, Typprüfung und Bytecode-Emission. Kein opportunistischer Umbau während Feature-Arbeiten.",
           "labels": [],
           "checkboxes": [],
           "comments": []

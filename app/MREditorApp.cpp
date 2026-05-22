@@ -231,6 +231,12 @@ bool keyInTokenFromEvent(ushort keyCode, ushort controlKeyState, std::string &ou
 	static const NamedKeySpec named[] = {{"Enter", kbEnter}, {"Tab", kbTab}, {"Esc", kbEsc}, {"Backspace", kbBack}, {"Up", kbUp}, {"Down", kbDown}, {"Left", kbLeft}, {"Right", kbRight}, {"PgUp", kbPgUp}, {"PgDn", kbPgDn}, {"Home", kbHome}, {"End", kbEnd}, {"Ins", kbIns}, {"Del", kbDel}, {"Grey-", kbGrayMinus}, {"Grey+", kbGrayPlus}, {"Grey*", static_cast<ushort>('*')}, {"Space", static_cast<ushort>(' ')}, {"Minus", static_cast<ushort>('-')}, {"Equal", static_cast<ushort>('=')}, {"F1", kbF1}, {"F2", kbF2}, {"F3", kbF3}, {"F4", kbF4}, {"F5", kbF5}, {"F6", kbF6}, {"F7", kbF7}, {"F8", kbF8}, {"F9", kbF9}, {"F10", kbF10}, {"F11", kbF11}, {"F12", kbF12}};
 	TKey pressed(keyCode, controlKeyState);
 
+	if (keyCode == kbNoKey && (controlKeyState & kbCtrlShift) != 0 && (controlKeyState & (kbAltShift | kbPaste)) == 0) {
+		outToken = "<CtrlSpace>";
+		mrLogMessage("KEYDBG record raw Ctrl-Space normalized to <CtrlSpace>");
+		return true;
+	}
+
 	for (const ComboSpec &combo : combos)
 		for (const NamedKeySpec &entry : named)
 			if (pressed == TKey(entry.code, combo.mods)) {

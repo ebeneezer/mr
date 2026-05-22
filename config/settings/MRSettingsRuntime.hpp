@@ -384,7 +384,9 @@ enum : unsigned char {
 	kMrPaletteDropListDescription = 169,
 	kMrPaletteDropListSelectedInactive = 170,
 	kMrPaletteCodeFoldingMarker = 171,
-	kMrPaletteMax = kMrPaletteCodeFoldingMarker
+	kMrPaletteSidekickEditorText = 172,
+	kMrPaletteSidekickEditorHighlight = 173,
+	kMrPaletteMax = kMrPaletteSidekickEditorHighlight
 };
 
 struct MRColorSetupSettings {
@@ -393,7 +395,7 @@ struct MRColorSetupSettings {
 	static const std::size_t kHelpCount = 9;
 	static const std::size_t kOtherCount = 11;
 	static const std::size_t kMiniMapCount = 5;
-	static const std::size_t kCodeCount = 13;
+	static const std::size_t kCodeCount = 15;
 
 	std::array<unsigned char, kWindowCount> windowColors;
 	std::array<unsigned char, kMenuDialogCount> menuDialogColors;

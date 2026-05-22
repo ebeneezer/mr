@@ -2306,6 +2306,10 @@ int MRFileEditor::currentViewRow() const noexcept {
 	return std::max(1, static_cast<int>(visibleLineForDocumentLine(cachedCursorLineIndex())) - delta.y + 1);
 }
 
+int MRFileEditor::currentViewColumn() const noexcept {
+	return std::max(1, displayedCursorColumn() - delta.x + 1);
+}
+
 int MRFileEditor::visibleViewportRows() const noexcept {
 	return std::max(1, visibleTextRows());
 }

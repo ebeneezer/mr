@@ -25,6 +25,7 @@
 #include "mrmac.h"
 #include "MRVM.hpp"
 #include "vm/MRVMDeferredUi.hpp"
+#include "vm/MRVMHash.hpp"
 #include "vm/MRVMScreen.hpp"
 #include "vm/MRVMSettings.hpp"
 #include <algorithm>
@@ -55,6 +56,7 @@
 #include <vector>
 
 #include "../ui/MREditWindow.hpp"
+#include "../ui/MRSidekickEditor.hpp"
 #include "../app/commands/MRWindowCommands.hpp"
 #include "../ui/MRMenuBar.hpp"
 #include "../ui/MRStatusLine.hpp"
@@ -85,6 +87,10 @@ struct GlobalEntry {
 	int type;
 	Value value;
 };
+
+static void setGlobalValue(const std::string &name, int type, const Value &value);
+static void setGlobalValueFromStore(const std::string &name, int type, const Value &value, MRVMHashStore &localStore);
+static bool readGlobalValue(const std::string &name, GlobalEntry &entry);
 
 struct MacroRef {
 	std::string fileKey;
@@ -198,6 +204,7 @@ struct RuntimeEnvironment {
 	std::map<std::string, GlobalEntry> globals;
 	std::vector<std::string> globalOrder;
 	std::size_t globalEnumIndex;
+	MRVMHashStore globalHashStore;
 	std::string parameterString;
 	int returnInt;
 	std::string returnStr;
@@ -367,6 +374,51 @@ static thread_local ExecutionState *g_executionState = nullptr;
 static thread_local int g_keyReplayDepth = 0;
 static std::string valueAsString(const Value &value);
 static int valueAsInt(const Value &value);
+static bool isArrayType(int type);
+
+static MRVMHashStore &runtimeHashStoreForValue(MRVMHashStore &localStore, const Value &hashValue) {
+	return hashValue.globalStorage ? g_runtimeEnv.globalHashStore : localStore;
+}
+
+static const MRVMHashStore &runtimeHashStoreForValue(const MRVMHashStore &localStore, const Value &hashValue) {
+	return hashValue.globalStorage ? g_runtimeEnv.globalHashStore : localStore;
+}
+
+static Value copyValueForHashStore(const Value &value, MRVMHashStore &localStore, MRVMHashStore &targetStore, bool targetGlobalStorage) {
+	Value copied = value;
+
+	if (copied.type == TYPE_HASH) {
+		MRVMHashStore &sourceStore = runtimeHashStoreForValue(localStore, copied);
+		if (&sourceStore == &targetStore && copied.globalStorage == targetGlobalStorage) return copied;
+		copied.hashHandle = targetStore.cloneHashFrom(sourceStore, copied.hashHandle, targetGlobalStorage);
+		copied.globalStorage = targetGlobalStorage;
+		return copied;
+	}
+	if (isArrayType(copied.type)) {
+		for (Value &arrayValue : copied.arrayValues)
+			arrayValue = copyValueForHashStore(arrayValue, localStore, targetStore, targetGlobalStorage);
+	}
+	copied.globalStorage = targetGlobalStorage;
+	return copied;
+}
+
+static bool hashContainsValue(const MRVMHashStore &localStore, const Value &hashValue, const std::string &key) {
+	return runtimeHashStoreForValue(localStore, hashValue).contains(hashValue.hashHandle, key);
+}
+
+static Value hashReadValue(const MRVMHashStore &localStore, const Value &hashValue, const std::string &key) {
+	return runtimeHashStoreForValue(localStore, hashValue).read(hashValue.hashHandle, key);
+}
+
+static void hashWriteValue(MRVMHashStore &localStore, const Value &hashValue, const std::string &key, const Value &value) {
+	MRVMHashStore &targetStore = runtimeHashStoreForValue(localStore, hashValue);
+	targetStore.write(hashValue.hashHandle, key, copyValueForHashStore(value, localStore, targetStore, hashValue.globalStorage));
+}
+
+static void hashEraseValue(MRVMHashStore &localStore, const Value &hashValue, const std::string &key) {
+	runtimeHashStoreForValue(localStore, hashValue).erase(hashValue.hashHandle, key);
+}
+
 static bool isStringLike(const Value &value);
 static bool isNumeric(const Value &value);
 static void enforceStringLength(const std::string &s);
@@ -602,6 +654,59 @@ static Value makeChar(unsigned char value) {
 	return v;
 }
 
+static Value makeHash(int handle, bool globalStorage = false) {
+	Value v;
+	v.type = TYPE_HASH;
+	v.hashHandle = handle;
+	v.globalStorage = globalStorage;
+	return v;
+}
+
+static bool isArrayType(int type) {
+	return type == TYPE_INT_ARRAY || type == TYPE_STR_ARRAY || type == TYPE_CHAR_ARRAY || type == TYPE_REAL_ARRAY || type == TYPE_HASH_ARRAY;
+}
+
+static int arrayTypeForElementType(int elementType) {
+	switch (elementType) {
+		case TYPE_INT:
+			return TYPE_INT_ARRAY;
+		case TYPE_STR:
+			return TYPE_STR_ARRAY;
+		case TYPE_CHAR:
+			return TYPE_CHAR_ARRAY;
+		case TYPE_REAL:
+			return TYPE_REAL_ARRAY;
+		case TYPE_HASH:
+			return TYPE_HASH_ARRAY;
+		default:
+			throw std::runtime_error("unknown array element type");
+	}
+}
+
+static int arrayElementTypeForArrayType(int arrayType) {
+	switch (arrayType) {
+		case TYPE_INT_ARRAY:
+			return TYPE_INT;
+		case TYPE_STR_ARRAY:
+			return TYPE_STR;
+		case TYPE_CHAR_ARRAY:
+			return TYPE_CHAR;
+		case TYPE_REAL_ARRAY:
+			return TYPE_REAL;
+		case TYPE_HASH_ARRAY:
+			return TYPE_HASH;
+		default:
+			throw std::runtime_error("array value expected");
+	}
+}
+
+static Value makeArray(int elementType) {
+	Value v;
+	v.type = arrayTypeForElementType(elementType);
+	v.arrayElementType = elementType;
+	return v;
+}
+
 static std::string charToString(unsigned char c) {
 	if (c == 0) return std::string();
 	return std::string(1, static_cast<char>(c));
@@ -707,6 +812,29 @@ static int valueAsInt(const Value &value) {
 	throw std::runtime_error("integer value expected");
 }
 
+static bool valueHasContent(const Value &value) {
+	switch (value.type) {
+		case TYPE_INT:
+			return value.i != 0;
+		case TYPE_REAL:
+			return value.r != 0.0;
+		case TYPE_CHAR:
+			return value.c != 0;
+		case TYPE_STR:
+			return !value.s.empty();
+		case TYPE_HASH:
+			return value.hashHandle > 0;
+		case TYPE_INT_ARRAY:
+		case TYPE_STR_ARRAY:
+		case TYPE_CHAR_ARRAY:
+		case TYPE_REAL_ARRAY:
+		case TYPE_HASH_ARRAY:
+			return !value.arrayValues.empty();
+		default:
+			return false;
+	}
+}
+
 static int compareValues(const Value &a, const Value &b) {
 	if (isStringLike(a) && isStringLike(b)) {
 		std::string as = valueAsString(a);
@@ -735,6 +863,14 @@ static Value defaultValueForType(int type) {
 			return makeReal(0.0);
 		case TYPE_CHAR:
 			return makeChar(0);
+		case TYPE_HASH:
+			return makeHash(0);
+		case TYPE_INT_ARRAY:
+		case TYPE_STR_ARRAY:
+		case TYPE_CHAR_ARRAY:
+		case TYPE_REAL_ARRAY:
+		case TYPE_HASH_ARRAY:
+			return makeArray(arrayElementTypeForArrayType(type));
 		case TYPE_STR:
 		default:
 			return makeString("");
@@ -765,9 +901,50 @@ static Value coerceForStore(const Value &value, int targetType) {
 			}
 			throw std::runtime_error("type mismatch");
 
+		case TYPE_HASH:
+			if (value.type == TYPE_HASH) return value;
+			throw std::runtime_error("type mismatch");
+
+		case TYPE_INT_ARRAY:
+		case TYPE_STR_ARRAY:
+		case TYPE_CHAR_ARRAY:
+		case TYPE_REAL_ARRAY:
+		case TYPE_HASH_ARRAY:
+			if (value.type == targetType) return value;
+			throw std::runtime_error("type mismatch");
+
 		default:
 			throw std::runtime_error("unknown variable type");
 	}
+}
+
+static Value arrayReadValue(const Value &arrayValue, int index) {
+	if (!isArrayType(arrayValue.type)) throw std::runtime_error("array value expected");
+	if (index <= 0 || static_cast<std::size_t>(index) > arrayValue.arrayValues.size()) throw std::runtime_error("array index out of range");
+	return arrayValue.arrayValues[static_cast<std::size_t>(index - 1)];
+}
+
+static Value coerceArrayElementForStore(const Value &value, int elementType, MRVMHashStore &localStore, bool targetGlobalStorage) {
+	Value coerced = coerceForStore(value, elementType);
+	if (coerced.type == TYPE_HASH) {
+		MRVMHashStore &targetStore = targetGlobalStorage ? g_runtimeEnv.globalHashStore : localStore;
+		return copyValueForHashStore(coerced, localStore, targetStore, targetGlobalStorage);
+	}
+	coerced.globalStorage = targetGlobalStorage;
+	return coerced;
+}
+
+static void arrayWriteValue(Value &arrayValue, int index, const Value &value, MRVMHashStore &localStore) {
+	Value stored;
+
+	if (!isArrayType(arrayValue.type)) throw std::runtime_error("array value expected");
+	if (index <= 0) throw std::runtime_error("array index out of range");
+	stored = coerceArrayElementForStore(value, arrayValue.arrayElementType, localStore, arrayValue.globalStorage);
+	if (static_cast<std::size_t>(index) > arrayValue.arrayValues.size()) {
+		Value defaultElement = coerceArrayElementForStore(defaultValueForType(arrayValue.arrayElementType), arrayValue.arrayElementType, localStore, arrayValue.globalStorage);
+		arrayValue.arrayValues.resize(static_cast<std::size_t>(index), defaultElement);
+	}
+	arrayValue.arrayValues[static_cast<std::size_t>(index - 1)] = stored;
 }
 
 static void enforceStringLength(const std::string &s) {
@@ -1094,6 +1271,183 @@ MREditWindow *activeMacroEditWindow() {
 MRFileEditor *currentEditor() {
 	MREditWindow *win = activeMacroEditWindow();
 	return win != nullptr ? win->getEditor() : nullptr;
+}
+
+struct MacroSnippetStartData {
+	bool found = false;
+	std::size_t start = 0;
+	std::size_t end = 0;
+	std::string key;
+};
+
+static bool isSnippetWordChar(char ch) noexcept {
+	const unsigned char uch = static_cast<unsigned char>(ch);
+	return std::isalnum(uch) != 0 || ch == '_';
+}
+
+static MacroSnippetStartData findSnippetTriggerAtCursor(MRFileEditor *editor) {
+	MacroSnippetStartData result;
+	std::size_t cursor = 0;
+	std::size_t lineStart = 0;
+	std::size_t lineEnd = 0;
+	std::size_t probe = 0;
+	std::size_t rightProbe = 0;
+
+	if (editor == nullptr) return result;
+	cursor = editor->cursorOffset();
+	lineStart = editor->lineStartOffset(cursor);
+	lineEnd = editor->lineEndOffset(cursor);
+	if (cursor < lineEnd && isSnippetWordChar(editor->charAtOffset(cursor))) {
+		probe = cursor;
+	} else if (cursor > lineStart && isSnippetWordChar(editor->charAtOffset(cursor - 1))) {
+		probe = cursor - 1;
+	} else {
+		rightProbe = cursor;
+		while (rightProbe < lineEnd && std::isspace(static_cast<unsigned char>(editor->charAtOffset(rightProbe))) != 0)
+			++rightProbe;
+		if (rightProbe < lineEnd && isSnippetWordChar(editor->charAtOffset(rightProbe)))
+			probe = rightProbe;
+		else
+			return result;
+	}
+	result.start = probe;
+	while (result.start > lineStart && isSnippetWordChar(editor->charAtOffset(result.start - 1)))
+		--result.start;
+	result.end = probe + 1;
+	while (result.end < lineEnd && isSnippetWordChar(editor->charAtOffset(result.end)))
+		++result.end;
+	if (result.end <= result.start) return result;
+	for (std::size_t pos = result.start; pos < result.end; ++pos)
+		result.key.push_back(editor->charAtOffset(pos));
+	result.key = upperKey(result.key);
+	result.found = !result.key.empty();
+	return result;
+}
+
+static std::string snippetLanguageKey(MRSyntaxLanguage language) {
+	switch (language) {
+		case MRSyntaxLanguage::C:
+			return "C";
+		case MRSyntaxLanguage::Cpp:
+			return "CPP";
+		case MRSyntaxLanguage::JavaScript:
+			return "JAVASCRIPT";
+		case MRSyntaxLanguage::Python:
+			return "PYTHON";
+		case MRSyntaxLanguage::Json:
+			return "JSON";
+		case MRSyntaxLanguage::Yaml:
+			return "YAML";
+		case MRSyntaxLanguage::Xml:
+			return "XML";
+		case MRSyntaxLanguage::Bash:
+			return "BASH";
+		case MRSyntaxLanguage::Zsh:
+			return "ZSH";
+		case MRSyntaxLanguage::Fish:
+			return "FISH";
+		case MRSyntaxLanguage::Perl:
+			return "PERL";
+		case MRSyntaxLanguage::Swift:
+			return "SWIFT";
+		case MRSyntaxLanguage::Rust:
+			return "RUST";
+		case MRSyntaxLanguage::Go:
+			return "GO";
+		case MRSyntaxLanguage::Pascal:
+			return "PASCAL";
+		case MRSyntaxLanguage::Systemd:
+			return "SYSTEMD";
+		case MRSyntaxLanguage::MRMAC:
+			return "MRMAC";
+		case MRSyntaxLanguage::Make:
+			return "MAKE";
+		case MRSyntaxLanguage::Markdown:
+			return "MARKDOWN";
+		case MRSyntaxLanguage::PlainText:
+		default:
+			return std::string();
+	}
+}
+
+static bool readHashStringCase(const MRVMHashStore &store, const Value &hash, const char *lowerKey, std::string &out) {
+	Value value;
+
+	if (hash.type != TYPE_HASH) return false;
+	if (hashContainsValue(store, hash, lowerKey))
+		value = hashReadValue(store, hash, lowerKey);
+	else {
+		const std::string upper = upperKey(lowerKey);
+		if (!hashContainsValue(store, hash, upper)) return false;
+		value = hashReadValue(store, hash, upper);
+	}
+	if (!isStringLike(value)) return false;
+	out = valueAsString(value);
+	return true;
+}
+
+struct PreparedSnippetText {
+	std::string body;
+	std::vector<MRSidekickSpan> placeholders;
+};
+
+static PreparedSnippetText expandSnippetDefaults(const MRVMHashStore &store, const Value &snippetHash, std::string body) {
+	Value placeholders;
+	PreparedSnippetText prepared{body, {}};
+
+	if (snippetHash.type != TYPE_HASH) return prepared;
+	if (hashContainsValue(store, snippetHash, "placeholders"))
+		placeholders = hashReadValue(store, snippetHash, "placeholders");
+	else if (hashContainsValue(store, snippetHash, "PLACEHOLDERS"))
+		placeholders = hashReadValue(store, snippetHash, "PLACEHOLDERS");
+	else
+		return prepared;
+	if (placeholders.type != TYPE_HASH) return prepared;
+	for (const std::string &key : runtimeHashStoreForValue(store, placeholders).keys(placeholders.hashHandle)) {
+		Value placeholder = hashReadValue(store, placeholders, key);
+		std::string defaultText;
+		const std::string marker = "//" + key;
+		std::size_t pos = 0;
+
+		if (placeholder.type != TYPE_HASH) continue;
+		if (!readHashStringCase(store, placeholder, "default", defaultText)) continue;
+		while ((pos = prepared.body.find(marker, pos)) != std::string::npos) {
+			prepared.body.replace(pos, marker.size(), defaultText);
+			prepared.placeholders.push_back(MRSidekickSpan{pos, pos + defaultText.size()});
+			pos += defaultText.size();
+		}
+	}
+	std::sort(prepared.placeholders.begin(), prepared.placeholders.end(), [](const MRSidekickSpan &a, const MRSidekickSpan &b) { return a.start < b.start; });
+	return prepared;
+}
+
+static bool openSnippetSidekickFromActiveEditor(MRVMHashStore &store) {
+	MREditWindow *win = activeMacroEditWindow();
+	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
+	MacroSnippetStartData trigger;
+	GlobalEntry rootEntry;
+	Value languageHash;
+	Value snippetHash;
+	std::string languageKey;
+	std::string body;
+	std::string title;
+	PreparedSnippetText prepared;
+
+	if (win == nullptr || editor == nullptr || editor->isReadOnly()) return false;
+	trigger = findSnippetTriggerAtCursor(editor);
+	if (!trigger.found) return false;
+	languageKey = snippetLanguageKey(win->syntaxLanguage());
+	if (languageKey.empty()) return false;
+	if (!readGlobalValue("SNIPPETS", rootEntry) || rootEntry.type != TYPE_HASH || rootEntry.value.type != TYPE_HASH) return false;
+	if (!hashContainsValue(store, rootEntry.value, languageKey)) return false;
+	languageHash = hashReadValue(store, rootEntry.value, languageKey);
+	if (languageHash.type != TYPE_HASH || !hashContainsValue(store, languageHash, trigger.key)) return false;
+	snippetHash = hashReadValue(store, languageHash, trigger.key);
+	if (snippetHash.type != TYPE_HASH) return false;
+	if (!readHashStringCase(store, snippetHash, "body", body)) return false;
+	if (!readHashStringCase(store, snippetHash, "name", title)) title = trigger.key;
+	prepared = expandSnippetDefaults(store, snippetHash, body);
+	return mrOpenSnippetSidekick(win, trigger.start, trigger.end, prepared.body, title, prepared.placeholders);
 }
 
 static BackgroundEditSession *currentBackgroundEditSession() noexcept {
@@ -4268,20 +4622,76 @@ static std::string parseNamedValue(const std::string &needle, const std::string 
 	return source.substr(pos, end - pos);
 }
 
-static void setGlobalValue(const std::string &name, int type, const Value &value) {
-	BackgroundEditSession *session = currentBackgroundEditSession();
+static void setGlobalValueDirect(const std::string &name, int type, const Value &value) {
 	std::string key = upperKey(name);
 	GlobalEntry entry;
 
 	entry.type = type;
 	entry.value = value;
-	if (session != nullptr) {
-		if (session->globals.find(key) == session->globals.end()) session->globalOrder.push_back(key);
-		session->globals[key] = entry;
-		return;
-	}
+	entry.value.globalStorage = true;
 	if (g_runtimeEnv.globals.find(key) == g_runtimeEnv.globals.end()) g_runtimeEnv.globalOrder.push_back(key);
 	g_runtimeEnv.globals[key] = entry;
+}
+
+static void setSessionGlobalValueDirect(BackgroundEditSession &session, const std::string &name, int type, const Value &value) {
+	std::string key = upperKey(name);
+	GlobalEntry entry;
+
+	entry.type = type;
+	entry.value = value;
+	entry.value.globalStorage = true;
+	if (session.globals.find(key) == session.globals.end()) appendUniqueString(session.globalOrder, key);
+	session.globals[key] = entry;
+}
+
+static void setGlobalValue(const std::string &name, int type, const Value &value) {
+	BackgroundEditSession *session = currentBackgroundEditSession();
+
+	if (session != nullptr) {
+		setSessionGlobalValueDirect(*session, name, type, value);
+		return;
+	}
+	setGlobalValueDirect(name, type, value);
+}
+
+static void setGlobalValueFromStore(const std::string &name, int type, const Value &value, MRVMHashStore &localStore) {
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	Value stored = value;
+
+	if (type == TYPE_HASH || isArrayType(type)) stored = copyValueForHashStore(value, localStore, g_runtimeEnv.globalHashStore, true);
+	else
+		stored.globalStorage = true;
+	if (session != nullptr && type != TYPE_HASH && !isArrayType(type)) {
+		setSessionGlobalValueDirect(*session, name, type, stored);
+		return;
+	}
+	setGlobalValueDirect(name, type, stored);
+}
+
+static std::vector<int> currentGlobalHashRoots() {
+	std::vector<int> roots;
+
+	for (const std::pair<const std::string, GlobalEntry> &entry : g_runtimeEnv.globals) {
+		if (entry.second.type == TYPE_HASH && entry.second.value.type == TYPE_HASH && !entry.second.value.globalStorage) roots.push_back(entry.second.value.hashHandle);
+	}
+	return roots;
+}
+
+static bool readGlobalValue(const std::string &name, GlobalEntry &entry) {
+	const std::string key = upperKey(name);
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (session != nullptr) {
+		std::map<std::string, GlobalEntry>::const_iterator sessionIt = session->globals.find(key);
+		if (sessionIt != session->globals.end()) {
+			entry = sessionIt->second;
+			return true;
+		}
+	}
+	std::map<std::string, GlobalEntry>::const_iterator it = g_runtimeEnv.globals.find(key);
+
+	if (it == g_runtimeEnv.globals.end()) return false;
+	entry = it->second;
+	return true;
 }
 
 static bool fileExists(const std::string &path) {
@@ -4429,7 +4839,7 @@ static std::string normalizeKeySpecToken(const std::string &spec) {
 	trimmed = trimmed.substr(1, trimmed.size() - 2);
 	for (char i : trimmed) {
 		unsigned char ch = static_cast<unsigned char>(i);
-		if (std::isspace(ch) != 0 || ch == '_') continue;
+		if (std::isspace(ch) != 0 || ch == '_' || ch == '+') continue;
 		normalized.push_back(static_cast<char>(std::toupper(ch)));
 	}
 	return normalized;
@@ -6092,7 +6502,7 @@ static bool unloadMacroFromRegistry(const std::string &macroName) {
 	return true;
 }
 
-static Value applyIntrinsic(const std::string &name, const std::vector<Value> &args) {
+static Value applyIntrinsic(VirtualMachine &vm, const std::string &name, const std::vector<Value> &args) {
 	if (name == "STR") {
 		if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("STR expects one integer argument.");
 		return makeString(valueAsString(args[0]));
@@ -6128,13 +6538,18 @@ static Value applyIntrinsic(const std::string &name, const std::vector<Value> &a
 		start = static_cast<std::size_t>(pos - 1);
 		return makeString(s.substr(start, static_cast<std::size_t>(count)));
 	}
-	if (name == "LENGTH") {
-		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("LENGTH expects one string argument.");
-		return makeInt(static_cast<int>(valueAsString(args[0]).size()));
-	}
-	if (name == "POS") {
-		std::string needle;
-		std::string haystack;
+		if (name == "LENGTH") {
+			if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("LENGTH expects one string argument.");
+			return makeInt(static_cast<int>(valueAsString(args[0]).size()));
+		}
+		if (name == "LEN") {
+			if (args.size() != 1 || (!isStringLike(args[0]) && !isArrayType(args[0].type))) throw std::runtime_error("LEN expects one string or array argument.");
+			if (isArrayType(args[0].type)) return makeInt(static_cast<int>(args[0].arrayValues.size()));
+			return makeInt(static_cast<int>(valueAsString(args[0]).size()));
+		}
+		if (name == "POS") {
+			std::string needle;
+			std::string haystack;
 		std::size_t pos;
 		if (args.size() != 2 || !isStringLike(args[0]) || !isStringLike(args[1])) throw std::runtime_error("POS expects (substring, string).");
 		needle = valueAsString(args[0]);
@@ -6371,29 +6786,55 @@ static Value applyIntrinsic(const std::string &name, const std::vector<Value> &a
 		return makeString(g_runtimeEnv.processArgs[static_cast<std::size_t>(index - 1)]);
 	}
 	if (name == "GLOBAL_STR") {
-		BackgroundEditSession *session;
 		std::map<std::string, GlobalEntry>::const_iterator it;
 		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("GLOBAL_STR expects one string argument.");
 		std::string key = upperKey(valueAsString(args[0]));
-		session = currentBackgroundEditSession();
-		if (session != nullptr) it = session->globals.find(key);
-		else
-			it = g_runtimeEnv.globals.find(key);
-		if ((session != nullptr && it == session->globals.end()) || (session == nullptr && it == g_runtimeEnv.globals.end()) || it->second.type != TYPE_STR) return makeString("");
-		return makeString(valueAsString(it->second.value));
+		it = g_runtimeEnv.globals.find(key);
+		if (it == g_runtimeEnv.globals.end() || it->second.type != TYPE_STR) return makeString("");
+		return it->second.value;
 	}
 	if (name == "GLOBAL_INT") {
-		BackgroundEditSession *session;
 		std::map<std::string, GlobalEntry>::const_iterator it;
 		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("GLOBAL_INT expects one string argument.");
 		std::string key = upperKey(valueAsString(args[0]));
-		session = currentBackgroundEditSession();
-		if (session != nullptr) it = session->globals.find(key);
-		else
-			it = g_runtimeEnv.globals.find(key);
-		if ((session != nullptr && it == session->globals.end()) || (session == nullptr && it == g_runtimeEnv.globals.end()) || it->second.type != TYPE_INT) return makeInt(0);
-		return makeInt(valueAsInt(it->second.value));
+		it = g_runtimeEnv.globals.find(key);
+		if (it == g_runtimeEnv.globals.end() || it->second.type != TYPE_INT) return makeInt(0);
+		return it->second.value;
 	}
+	if (name == "GLOBAL_HASH") {
+		GlobalEntry entry;
+		if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("GLOBAL_HASH expects one string argument.");
+		if (!readGlobalValue(valueAsString(args[0]), entry) || entry.type != TYPE_HASH || entry.value.type != TYPE_HASH) {
+			Value value = makeHash(g_runtimeEnv.globalHashStore.createHash(), true);
+			setGlobalValue(valueAsString(args[0]), TYPE_HASH, value);
+			return value;
+		}
+		return entry.value;
+	}
+	if (name == "EXISTS") {
+		if (args.size() != 2 || args[0].type != TYPE_HASH || !isStringLike(args[1])) throw std::runtime_error("EXISTS expects (hash, string).");
+		return makeInt(hashContainsValue(vm.localHashStore(), args[0], valueAsString(args[1])) ? 1 : 0);
+	}
+		if (name == "HAS_VALUE") {
+			if (args.size() != 2 || args[0].type != TYPE_HASH || !isStringLike(args[1])) throw std::runtime_error("HAS_VALUE expects (hash, string).");
+			const std::string key = valueAsString(args[1]);
+			if (!hashContainsValue(vm.localHashStore(), args[0], key)) return makeInt(0);
+			return makeInt(valueHasContent(hashReadValue(vm.localHashStore(), args[0], key)) ? 1 : 0);
+		}
+		if (name == "KEYS") {
+			Value result = makeArray(TYPE_STR);
+			if (args.size() != 1 || args[0].type != TYPE_HASH) throw std::runtime_error("KEYS expects one hash argument.");
+			for (const std::string &key : runtimeHashStoreForValue(vm.localHashStore(), args[0]).keys(args[0].hashHandle))
+				result.arrayValues.push_back(makeString(key));
+			return result;
+		}
+		if (name == "VALUES") {
+			Value result = makeArray(TYPE_STR);
+			if (args.size() != 1 || args[0].type != TYPE_HASH) throw std::runtime_error("VALUES expects one hash argument.");
+			for (const Value &value : runtimeHashStoreForValue(vm.localHashStore(), args[0]).values(args[0].hashHandle))
+				result.arrayValues.push_back(makeString(valueAsString(value)));
+			return result;
+		}
 	if (name == "CHECK_KEY") {
 		int key1 = 0;
 		int key2 = 0;
@@ -6896,10 +7337,40 @@ std::vector<std::string> mrvmProcessArguments() {
 	return g_runtimeEnv.processArgs;
 }
 
-VirtualMachine::Value::Value() : type(TYPE_INT), i(0), r(0.0), c(0) {
+VirtualMachine::Value::Value() : type(TYPE_INT), i(0), r(0.0), c(0), hashHandle(0), arrayElementType(TYPE_INT), arrayValues(), globalStorage(false) {
 }
 
-VirtualMachine::VirtualMachine() : verboseLogging(true), logTruncated(false), mAsyncDelayPending(false), mAsyncDelayReady(false), mAsyncDelayEnabled(true), mAsyncLength(0), mAsyncIp(0), mAsyncReturnInt(0), mAsyncErrorLevel(0), mAsyncMacroFramePushed(false), mAsyncDelayTaskId(0), mAsyncDelayGeneration(0), mAsyncDelayMillis(0), cancelledExecution(false) {
+VirtualMachine::VirtualMachine() : mHashStore(std::make_unique<MRVMHashStore>()), verboseLogging(true), logTruncated(false), mAsyncDelayPending(false), mAsyncDelayReady(false), mAsyncDelayEnabled(true), mAsyncLength(0), mAsyncIp(0), mAsyncReturnInt(0), mAsyncErrorLevel(0), mAsyncMacroFramePushed(false), mAsyncDelayTaskId(0), mAsyncDelayGeneration(0), mAsyncDelayMillis(0), cancelledExecution(false) {
+}
+
+VirtualMachine::~VirtualMachine() = default;
+
+MRVMHashStore &VirtualMachine::localHashStore() {
+	return *mHashStore;
+}
+
+const MRVMHashStore &VirtualMachine::localHashStore() const {
+	return *mHashStore;
+}
+
+bool VirtualMachine::hashContains(int handle, const std::string &key) const {
+	return mHashStore->contains(handle, key);
+}
+
+int VirtualMachine::hashCreate() {
+	return mHashStore->createHash();
+}
+
+VirtualMachine::Value VirtualMachine::hashRead(int handle, const std::string &key) const {
+	return mHashStore->read(handle, key);
+}
+
+void VirtualMachine::hashWrite(int handle, const std::string &key, const Value &value) {
+	mHashStore->write(handle, key, value);
+}
+
+void VirtualMachine::hashErase(int handle, const std::string &key) {
+	mHashStore->erase(handle, key);
 }
 
 void VirtualMachine::appendLogLine(const std::string &line, bool important) {
@@ -7063,6 +7534,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 		}
 
 		variables.clear();
+		mHashStore->clearExceptRoots(currentGlobalHashRoots());
 		stack.clear();
 		cancelledExecution = false;
 		if (resetState) {
@@ -7143,7 +7615,10 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				std::string varName;
 				int varType = static_cast<int>(bytecode[ip++]);
 				readCString(varName);
-				variables[varName] = defaultValueForType(varType);
+				if (varType == TYPE_HASH)
+					variables[varName] = makeHash(mHashStore->createHash());
+				else
+					variables[varName] = defaultValueForType(varType);
 				appendLogLine("Define variable: " + varName);
 			} else if (opcode == OP_LOAD_VAR) {
 				std::string varName;
@@ -7166,6 +7641,84 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				if (value.type == TYPE_STR) enforceStringLength(value.s);
 				if (!storeSpecialVariable(varName, value)) variables[varName] = value;
 				appendLogLine("Store variable: " + varName);
+			} else if (opcode == OP_HASH_LOAD) {
+				std::string varName;
+				Value key;
+				std::map<std::string, Value>::const_iterator it;
+				readCString(varName);
+				key = pop();
+				if (!isStringLike(key)) throw std::runtime_error("type mismatch");
+				it = variables.find(varName);
+				if (it == variables.end() || it->second.type != TYPE_HASH) throw std::runtime_error("Invalid hash value.");
+				push(hashReadValue(*mHashStore, it->second, valueAsString(key)));
+				appendLogLine("Load hash value: " + varName);
+			} else if (opcode == OP_HASH_LOAD_VALUE) {
+				Value key;
+				Value hash;
+				key = pop();
+				hash = pop();
+				if (hash.type != TYPE_HASH) throw std::runtime_error("Invalid hash value.");
+				if (!isStringLike(key)) throw std::runtime_error("type mismatch");
+				push(hashReadValue(*mHashStore, hash, valueAsString(key)));
+				appendLogLine("Load hash value from expression.");
+			} else if (opcode == OP_HASH_STORE) {
+				std::string varName;
+				Value value;
+				Value key;
+				std::map<std::string, Value>::const_iterator it;
+				readCString(varName);
+				value = pop();
+				key = pop();
+				if (!isStringLike(key)) throw std::runtime_error("type mismatch");
+				it = variables.find(varName);
+				if (it == variables.end() || it->second.type != TYPE_HASH) throw std::runtime_error("Invalid hash value.");
+				if (value.type == TYPE_STR) enforceStringLength(value.s);
+				hashWriteValue(*mHashStore, it->second, valueAsString(key), value);
+				appendLogLine("Store hash value: " + varName);
+			} else if (opcode == OP_HASH_STORE_VALUE) {
+				Value value;
+				Value key;
+				Value hash;
+				value = pop();
+				key = pop();
+				hash = pop();
+				if (hash.type != TYPE_HASH) throw std::runtime_error("Invalid hash value.");
+				if (!isStringLike(key)) throw std::runtime_error("type mismatch");
+				if (value.type == TYPE_STR) enforceStringLength(value.s);
+				hashWriteValue(*mHashStore, hash, valueAsString(key), value);
+				appendLogLine("Store hash value from expression.");
+			} else if (opcode == OP_ARRAY_LOAD) {
+				std::string varName;
+				Value index;
+				std::map<std::string, Value>::const_iterator it;
+				readCString(varName);
+				index = pop();
+				if (index.type != TYPE_INT) throw std::runtime_error("type mismatch");
+				it = variables.find(varName);
+				if (it == variables.end() || !isArrayType(it->second.type)) throw std::runtime_error("Invalid array value.");
+				push(arrayReadValue(it->second, index.i));
+				appendLogLine("Load array value: " + varName);
+			} else if (opcode == OP_ARRAY_LOAD_VALUE) {
+				Value index;
+				Value arrayValue;
+				index = pop();
+				arrayValue = pop();
+				if (index.type != TYPE_INT) throw std::runtime_error("type mismatch");
+				push(arrayReadValue(arrayValue, index.i));
+				appendLogLine("Load array value from expression.");
+			} else if (opcode == OP_ARRAY_STORE) {
+				std::string varName;
+				Value value;
+				Value index;
+				std::map<std::string, Value>::iterator it;
+				readCString(varName);
+				value = pop();
+				index = pop();
+				if (index.type != TYPE_INT) throw std::runtime_error("type mismatch");
+				it = variables.find(varName);
+				if (it == variables.end() || !isArrayType(it->second.type)) throw std::runtime_error("Invalid array value.");
+				arrayWriteValue(it->second, index.i, value, *mHashStore);
+				appendLogLine("Store array value: " + varName);
 			} else if (opcode == OP_GOTO) {
 				int target;
 				readInt(target);
@@ -7298,7 +7851,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				readCString(name);
 				unsigned char argc = bytecode[ip++];
 				std::vector<Value> args = popArgs(argc);
-				push(applyIntrinsic(name, args));
+				push(applyIntrinsic(*this, name, args));
 			} else if (opcode == OP_VAL || opcode == OP_RVAL) {
 				std::string varName;
 				Value source;
@@ -7328,12 +7881,12 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				}
 				push(makeInt(resultCode));
 			} else if (opcode == OP_FIRST_GLOBAL || opcode == OP_NEXT_GLOBAL) {
-				BackgroundEditSession *session = currentBackgroundEditSession();
 				std::string targetVar;
 				readCString(targetVar);
+				BackgroundEditSession *session = currentBackgroundEditSession();
+
 				if (session != nullptr) {
 					if (opcode == OP_FIRST_GLOBAL) session->globalEnumIndex = 0;
-
 					while (session->globalEnumIndex < session->globalOrder.size()) {
 						const std::string &key = session->globalOrder[session->globalEnumIndex++];
 						std::map<std::string, GlobalEntry>::const_iterator it = session->globals.find(key);
@@ -7342,17 +7895,19 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						push(makeString(key));
 						goto handled_global_enum;
 					}
-				} else {
-					if (opcode == OP_FIRST_GLOBAL) g_runtimeEnv.globalEnumIndex = 0;
+					variables[targetVar] = makeInt(0);
+					push(makeString(""));
+					goto handled_global_enum;
+				}
 
-					while (g_runtimeEnv.globalEnumIndex < g_runtimeEnv.globalOrder.size()) {
-						const std::string &key = g_runtimeEnv.globalOrder[g_runtimeEnv.globalEnumIndex++];
-						std::map<std::string, GlobalEntry>::const_iterator it = g_runtimeEnv.globals.find(key);
-						if (it == g_runtimeEnv.globals.end()) continue;
-						variables[targetVar] = makeInt(it->second.type == TYPE_INT ? 1 : 0);
-						push(makeString(key));
-						goto handled_global_enum;
-					}
+				if (opcode == OP_FIRST_GLOBAL) g_runtimeEnv.globalEnumIndex = 0;
+				while (g_runtimeEnv.globalEnumIndex < g_runtimeEnv.globalOrder.size()) {
+					const std::string &key = g_runtimeEnv.globalOrder[g_runtimeEnv.globalEnumIndex++];
+					std::map<std::string, GlobalEntry>::const_iterator it = g_runtimeEnv.globals.find(key);
+					if (it == g_runtimeEnv.globals.end()) continue;
+					variables[targetVar] = makeInt(it->second.type == TYPE_INT ? 1 : 0);
+					push(makeString(key));
+					goto handled_global_enum;
 				}
 				variables[targetVar] = makeInt(0);
 				push(makeString(""));
@@ -7562,6 +8117,25 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				} else if (name == "SET_GLOBAL_INT") {
 					if (args.size() != 2 || !isStringLike(args[0]) || args[1].type != TYPE_INT) throw std::runtime_error("SET_GLOBAL_INT expects (string, int).");
 					setGlobalValue(valueAsString(args[0]), TYPE_INT, makeInt(args[1].i));
+				} else if (name == "SET_GLOBAL_HASH") {
+					if (args.size() != 2 || !isStringLike(args[0]) || args[1].type != TYPE_HASH) throw std::runtime_error("SET_GLOBAL_HASH expects (string, hash).");
+					setGlobalValueFromStore(valueAsString(args[0]), TYPE_HASH, args[1], *mHashStore);
+				} else if (name == "SNIPPET_START") {
+					if (!args.empty()) throw std::runtime_error("SNIPPET_START expects no arguments.");
+					runtimeErrorLevel() = openSnippetSidekickFromActiveEditor(*mHashStore) ? 0 : 0;
+				} else if (name == "SNIPPETS_UNLOAD") {
+					GlobalEntry rootEntry;
+					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("SNIPPETS_UNLOAD expects one string argument.");
+					if (readGlobalValue("SNIPPETS", rootEntry) && rootEntry.type == TYPE_HASH && rootEntry.value.type == TYPE_HASH) {
+						hashEraseValue(*mHashStore, rootEntry.value, upperKey(valueAsString(args[0])));
+					}
+					runtimeErrorLevel() = 0;
+				} else if (name == "SNIPPET_NEXT_PLACEHOLDER") {
+					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("SNIPPET_NEXT_PLACEHOLDER expects (string).");
+					runtimeErrorLevel() = 0;
+				} else if (name == "SNIPPET_PREV_PLACEHOLDER") {
+					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("SNIPPET_PREV_PLACEHOLDER expects (string).");
+					runtimeErrorLevel() = 0;
 				} else if (name == "MARQUEE" || name == "MARQUEE_WARNING" || name == "MARQUEE_ERROR" || name == "MAKE_MESSAGE") {
 					int deferredError = 0;
 					if (dispatchDeferredVisualUiProcedure(name, args, deferredError)) {
@@ -8488,7 +9062,17 @@ void mrvmUiReplaceWindowLastSearch(const void *windowKey, const std::string &fil
 }
 
 void mrvmUiReplaceGlobals(const std::vector<std::string> &order, const std::map<std::string, int> &ints, const std::map<std::string, std::string> &strings) {
+	std::map<std::string, GlobalEntry> preservedHashes;
+	std::vector<std::string> preservedHashOrder;
 	std::set<std::string> seen;
+
+	for (const std::string &key : g_runtimeEnv.globalOrder) {
+		std::map<std::string, GlobalEntry>::const_iterator it = g_runtimeEnv.globals.find(key);
+		if (it == g_runtimeEnv.globals.end() || it->second.type != TYPE_HASH) continue;
+		if (ints.find(key) != ints.end() || strings.find(key) != strings.end()) continue;
+		preservedHashOrder.push_back(key);
+		preservedHashes[key] = it->second;
+	}
 
 	g_runtimeEnv.globals.clear();
 	g_runtimeEnv.globalOrder.clear();
@@ -8510,6 +9094,7 @@ void mrvmUiReplaceGlobals(const std::vector<std::string> &order, const std::map<
 			entry.type = TYPE_STR;
 			entry.value = makeString(strIt->second);
 		}
+		entry.value.globalStorage = true;
 		g_runtimeEnv.globalOrder.push_back(key);
 		g_runtimeEnv.globals[key] = entry;
 	}
@@ -8520,6 +9105,7 @@ void mrvmUiReplaceGlobals(const std::vector<std::string> &order, const std::map<
 		if (!seen.insert(key).second) continue;
 		entry.type = TYPE_INT;
 		entry.value = makeInt(it.second);
+		entry.value.globalStorage = true;
 		g_runtimeEnv.globalOrder.push_back(key);
 		g_runtimeEnv.globals[key] = entry;
 	}
@@ -8529,8 +9115,18 @@ void mrvmUiReplaceGlobals(const std::vector<std::string> &order, const std::map<
 		if (!seen.insert(key).second) continue;
 		entry.type = TYPE_STR;
 		entry.value = makeString(string.second);
+		entry.value.globalStorage = true;
 		g_runtimeEnv.globalOrder.push_back(key);
 		g_runtimeEnv.globals[key] = entry;
+	}
+
+	for (const std::string &key : preservedHashOrder) {
+		std::map<std::string, GlobalEntry>::const_iterator hashIt;
+		if (!seen.insert(key).second) continue;
+		hashIt = preservedHashes.find(key);
+		if (hashIt == preservedHashes.end()) continue;
+		g_runtimeEnv.globalOrder.push_back(key);
+		g_runtimeEnv.globals[key] = hashIt->second;
 	}
 }
 
@@ -8820,6 +9416,8 @@ bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKe
 	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
 	TKey pressed(keyCode, controlKeyState);
 	int mode = currentUiMacroMode();
+	const bool rawCtrlSpace = keyCode == kbNoKey && (controlKeyState & kbCtrlShift) != 0 && (controlKeyState & (kbAltShift | kbPaste)) == 0;
+	bool traceSnippetKey = false;
 	auto dispatchLoadedBinding = [&]() -> bool {
 		for (std::size_t i = g_runtimeEnv.macroOrder.size(); i > 0; --i) {
 			const std::string &macroKey = g_runtimeEnv.macroOrder[i - 1];
@@ -8831,6 +9429,7 @@ bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKe
 			if (!bindingKeysEqual(pressed, it->second.assignedKey)) continue;
 
 			logCalculatorHotkeyState("vm-loaded-match", pressed, it->second.displayName);
+			if (traceSnippetKey) mrLogMessage(("KEYDBG vm loaded binding match macro=" + it->second.displayName).c_str());
 			executedMacroName = it->second.displayName;
 			executeLoadedMacroWithConfiguredKeymapBatch(it, macroKey, std::string(), logLines);
 			return true;
@@ -8838,17 +9437,31 @@ bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKe
 		return false;
 	};
 
+	if (rawCtrlSpace) pressed = TKey(static_cast<ushort>(' '), kbCtrlShift);
+	traceSnippetKey = rawCtrlSpace || (pressed.code == static_cast<ushort>(' ') && (pressed.mods & kbCtrlShift) != 0) || (pressed.code == static_cast<ushort>('@') && (pressed.mods & kbCtrlShift) != 0);
 	executedMacroName.clear();
 	if (logLines != nullptr) logLines->clear();
 	if (g_keyReplayDepth > 0) return false;
+	if (traceSnippetKey) {
+		char line[512];
+		std::snprintf(line, sizeof(line), "KEYDBG vm assigned-key rawCode=0x%04X rawMods=0x%04X code=0x%04X mods=0x%04X mode=%d explicit=%zu loaded=%zu indexed=%zu", static_cast<unsigned>(keyCode), static_cast<unsigned>(controlKeyState), static_cast<unsigned>(pressed.code), static_cast<unsigned>(pressed.mods), mode, g_runtimeEnv.explicitKeyBindings.size(), g_runtimeEnv.loadedMacros.size(), g_runtimeEnv.indexedBoundMacros.size());
+		mrLogMessage(line);
+	}
 	logCalculatorHotkeyState("vm-enter", pressed);
 	if (executeExplicitKeyBinding(pressed, mode, logLines)) {
 		executedMacroName = "<bound>";
 		logCalculatorHotkeyState("vm-explicit-consumed", pressed);
+		if (traceSnippetKey) mrLogMessage("KEYDBG vm assigned-key consumed by explicit binding");
 		return true;
 	}
+	if (traceSnippetKey) mrLogMessage("KEYDBG vm assigned-key no explicit binding");
 	if (dispatchLoadedBinding()) return true;
-	if (!tryLoadIndexedMacroForKey(pressed)) return false;
+	if (traceSnippetKey) mrLogMessage("KEYDBG vm assigned-key no loaded binding");
+	if (!tryLoadIndexedMacroForKey(pressed)) {
+		if (traceSnippetKey) mrLogMessage("KEYDBG vm assigned-key no indexed binding");
+		return false;
+	}
 	logCalculatorHotkeyState("vm-indexed-loaded", pressed);
+	if (traceSnippetKey) mrLogMessage("KEYDBG vm assigned-key indexed binding loaded");
 	return dispatchLoadedBinding();
 }

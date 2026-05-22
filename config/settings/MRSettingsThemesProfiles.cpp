@@ -211,7 +211,7 @@ static const MRColorSetupItem kMiniMapColorItems[] = {
 };
 
 static const MRColorSetupItem kCodeColorItems[] = {
-    {"comments", kMrPaletteCodeComments}, {"strings", kMrPaletteCodeStrings}, {"characters", kMrPaletteCodeCharacters}, {"numbers", kMrPaletteCodeNumbers}, {"keywords", kMrPaletteCodeKeywords}, {"types", kMrPaletteCodeTypes}, {"directives", kMrPaletteCodeDirectives}, {"functions", kMrPaletteCodeFunctions}, {"builtins", kMrPaletteCodeBuiltins}, {"constants", kMrPaletteCodeConstants}, {"operators", kMrPaletteCodeOperators}, {"brackets", kMrPaletteCodeBrackets}, {"delimiters", kMrPaletteCodeDelimiters},
+    {"comments", kMrPaletteCodeComments}, {"strings", kMrPaletteCodeStrings}, {"characters", kMrPaletteCodeCharacters}, {"numbers", kMrPaletteCodeNumbers}, {"keywords", kMrPaletteCodeKeywords}, {"types", kMrPaletteCodeTypes}, {"directives", kMrPaletteCodeDirectives}, {"functions", kMrPaletteCodeFunctions}, {"builtins", kMrPaletteCodeBuiltins}, {"constants", kMrPaletteCodeConstants}, {"operators", kMrPaletteCodeOperators}, {"brackets", kMrPaletteCodeBrackets}, {"delimiters", kMrPaletteCodeDelimiters}, {"sidekick editor text", kMrPaletteSidekickEditorText}, {"sidekick editor highlight", kMrPaletteSidekickEditorHighlight},
 };
 
 static const ColorGroupDefinition kColorGroups[] = {
@@ -272,6 +272,8 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 	if (paletteIndex == kMrPaletteCodeOperators) return defaults[37];
 	if (paletteIndex == kMrPaletteCodeBrackets) return defaults[9];
 	if (paletteIndex == kMrPaletteCodeDelimiters) return defaults[13];
+	if (paletteIndex == kMrPaletteSidekickEditorText) return 0x30;
+	if (paletteIndex == kMrPaletteSidekickEditorHighlight) return 0xE0;
 	if (paletteIndex == kMrPaletteDropListDescription) return defaults[57];
 	if (paletteIndex == kMrPaletteDropListSelectedInactive) return defaults[59];
 	if (paletteIndex == kMrPaletteDialogInactiveElements) return defaults[kPaletteDialogInactiveClusterGray];
@@ -349,6 +351,34 @@ template <std::size_t N> bool parseColorListLiteral(const std::string &literal, 
 	}
 	if (itemIndex != N) return setError(errorMessage, "Unexpected color list size.");
 	if (text.find(',', cursor) != std::string::npos) return setError(errorMessage, "Too many color values in list.");
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+bool parseCodeColorListLiteral(const std::string &literal, std::array<unsigned char, MRColorSetupSettings::kCodeCount> &outValues, std::string *errorMessage) {
+	std::string text = trimAscii(literal);
+	std::size_t cursor = 0;
+	std::vector<unsigned char> parsed;
+	unsigned char value = 0;
+
+	if (text.rfind("v1:", 0) == 0 || text.rfind("V1:", 0) == 0) text = text.substr(3);
+	if (text.empty()) return setError(errorMessage, "Empty color list.");
+	while (cursor <= text.size()) {
+		std::size_t comma = text.find(',', cursor);
+		std::string token = text.substr(cursor, comma == std::string::npos ? std::string::npos : comma - cursor);
+
+		if (!parseHexColorToken(token, value)) return setError(errorMessage, "Expected hex color list (e.g. v1:70,7F,...).");
+		parsed.push_back(value);
+		if (comma == std::string::npos) break;
+		cursor = comma + 1;
+	}
+	if (parsed.size() != outValues.size() && parsed.size() != outValues.size() - 2) return setError(errorMessage, "Unexpected CODECOLORS list size.");
+	for (std::size_t i = 0; i < parsed.size(); ++i)
+		outValues[i] = parsed[i];
+	if (parsed.size() == outValues.size() - 2) {
+		outValues[outValues.size() - 2] = defaultColorForSlot(kMrPaletteSidekickEditorText);
+		outValues[outValues.size() - 1] = defaultColorForSlot(kMrPaletteSidekickEditorHighlight);
+	}
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -609,7 +639,7 @@ bool applyColorSetupValueInternalImpl(MRColorSetupSettings &configured, const st
 			if (!parseColorListLiteral(value, configured.miniMapColors, errorMessage)) return false;
 			break;
 		case MRColorSetupGroup::Code:
-			if (!parseColorListLiteral(value, configured.codeColors, errorMessage)) return false;
+			if (!parseCodeColorListLiteral(value, configured.codeColors, errorMessage)) return false;
 			break;
 	}
 	if (errorMessage != nullptr) errorMessage->clear();

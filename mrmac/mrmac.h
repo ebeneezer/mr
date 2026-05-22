@@ -23,6 +23,13 @@
 #define OP_GOTO 0x34
 #define OP_DEF_VAR 0x35
 #define OP_PUSH_R 0x36
+#define OP_HASH_LOAD 0x37
+#define OP_HASH_STORE 0x38
+#define OP_HASH_LOAD_VALUE 0x39
+#define OP_HASH_STORE_VALUE 0x3A
+#define OP_ARRAY_LOAD 0x3B
+#define OP_ARRAY_STORE 0x3C
+#define OP_ARRAY_LOAD_VALUE 0x3D
 #define OP_HALT 0xFF
 
 /* Arithmetic */
@@ -56,6 +63,12 @@
 #define TYPE_STR 2
 #define TYPE_CHAR 3
 #define TYPE_REAL 4
+#define TYPE_HASH 5
+#define TYPE_INT_ARRAY 6
+#define TYPE_STR_ARRAY 7
+#define TYPE_CHAR_ARRAY 8
+#define TYPE_REAL_ARRAY 9
+#define TYPE_HASH_ARRAY 10
 
 /* Macro attribute flags */
 #define MACRO_ATTR_TRANS 0x01
