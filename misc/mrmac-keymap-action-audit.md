@@ -32,9 +32,9 @@ MRMAC_CURSOR_TAB_LEFT             	Tab left                  	Custom:CursorTabLe
 MRMAC_CURSOR_UNDENT               	Undent                    	Custom:CursorUndent                         	UNDENT         	UNDENT;                  	Z1 simple dispatcher 	keep
 MRMAC_MARK_PUSH_POSITION          	Mark position on stack    	AppCommand:cmMrSearchPushMarker             	MARK_POS       	MARK_POS;                	Z1 simple dispatcher 	keep
 MRMAC_MARK_POP_POSITION           	Get position from stack   	AppCommand:cmMrSearchGetMarker              	POP_MARK       	POP_MARK;                	Z1 simple dispatcher 	keep
-MRMAC_MARK_SET_RANDOM_ACCESS      	Set a random access mark  	Custom:SetRandomAccessMark                  	-              	SET_RANDOM_MARK;         	Z2 sequence-dependent	add
+MRMAC_MARK_SET_RANDOM_ACCESS      	Set a random access mark  	Custom:SetRandomAccessMark                  	-              	SET_RANDOM_MARK(n);      	Z2 sequence-dependent	added
 MRMAC_VIEW_CENTER_LINE            	Center line on screen     	WindowMethod:ViewCenterLine                 	-              	CENTER_LINE_ON_SCREEN;   	Z1 simple dispatcher 	add
-MRMAC_MARK_GET_RANDOM_ACCESS      	Get random access mark    	Custom:GetRandomAccessMark                  	-              	GET_RANDOM_MARK;         	Z2 sequence-dependent	add
+MRMAC_MARK_GET_RANDOM_ACCESS      	Get random access mark    	Custom:GetRandomAccessMark                  	-              	GET_RANDOM_MARK(n);      	Z2 sequence-dependent	added
 MRMAC_DELETE_TO_EOL               	Delete to end of line     	EditorCommand:cmDelEnd                      	-              	DEL_EOL;                 	Z1 simple dispatcher 	add
 MRMAC_DELETE_FORWARD_CHAR_OR_BLOCK	Del character (or block)  	Custom:DeleteForwardCharOrBlock             	-              	DEL_CHAR_OR_BLOCK;       	Z1 simple dispatcher 	add
 MRMAC_DELETE_FORWARD_WORD         	Delete word forward       	EditorCommand:cmDelWord                     	-              	DEL_WORD;                	Z1 simple dispatcher 	add
@@ -69,7 +69,7 @@ MRMAC_BLOCK_APPEND_TO_BUFFER      	Append block to buffer    	AppCommand:cmMrEdi
 MRMAC_BLOCK_CUT_APPEND_TO_BUFFER  	Cut and Append Block      	AppCommand:cmMrEditCutAndAppendToBuffer     	-              	CUT_APPEND_BLOCK;        	Z1 simple dispatcher 	add
 MRMAC_BLOCK_COPY_FROM_BUFFER      	Copy block from buffer    	AppCommand:cmMrEditPasteFromBuffer          	-              	PASTE_BLOCK;             	Z1 simple dispatcher 	add
 MRMAC_BLOCK_MATH                  	Perform math on block     	Custom:BlockMath                            	-              	BLOCK_MATH;              	Z1 simple dispatcher 	add
-MRMAC_BLOCK_EXTEND_BY_MOTION      	Shift cursor block mark   	Custom:ExtendBlockByMotion                  	-              	EXTEND_BLOCK_BY_MOTION;  	Z2 sequence-dependent	add
+MRMAC_BLOCK_EXTEND_BY_MOTION      	Shift cursor block mark   	Custom:ExtendBlockByMotion                  	-              	EXTEND_BLOCK_BY_MOTION(s);	Z2 sequence-dependent	added
 MRMAC_FILE_SAVE                   	Save file                 	AppCommand:cmMrFileSave                     	SAVE_FILE      	SAVE_FILE;               	Z1 simple dispatcher 	keep
 MR_FILE_SAVE_ALL                  	Save all dirty files      	AppCommand:cmMrFileSaveAll                  	-              	SAVE_ALL;                	Z1 simple dispatcher 	add
 MR_FILE_REVERT                    	Revert file               	AppCommand:cmMrFileRevert                   	-              	REVERT_FILE;             	Z3 dialog/interactive	add

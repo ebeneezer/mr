@@ -8653,6 +8653,21 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 						continue;
 					}
 					runtimeErrorLevel() = dispatchMRKeymapAction(actionId) ? 0 : 1001;
+				} else if (name == "SET_RANDOM_MARK" || name == "GET_RANDOM_MARK") {
+					if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error((name + " expects one integer argument.").c_str());
+					if (currentBackgroundEditSession() != nullptr) {
+						runtimeErrorLevel() = 1001;
+						continue;
+					}
+					const std::string sequenceText = "<" + std::to_string(args[0].i) + ">";
+					runtimeErrorLevel() = dispatchMRKeymapAction(name == "SET_RANDOM_MARK" ? "MRMAC_MARK_SET_RANDOM_ACCESS" : "MRMAC_MARK_GET_RANDOM_ACCESS", sequenceText) ? 0 : 1001;
+				} else if (name == "EXTEND_BLOCK_BY_MOTION") {
+					if (args.size() != 1 || !isStringLike(args[0])) throw std::runtime_error("EXTEND_BLOCK_BY_MOTION expects one key sequence string argument.");
+					if (currentBackgroundEditSession() != nullptr) {
+						runtimeErrorLevel() = 1001;
+						continue;
+					}
+					runtimeErrorLevel() = dispatchMRKeymapAction("MRMAC_BLOCK_EXTEND_BY_MOTION", valueAsString(args[0])) ? 0 : 1001;
 				} else if (name == "LEFT" || name == "RIGHT" || name == "UP" || name == "DOWN" || name == "HOME" || name == "EOL" || name == "TOF" || name == "EOF" || name == "WORD_LEFT" || name == "WORD_RIGHT" || name == "FIRST_WORD" || name == "MARK_POS" || name == "GOTO_MARK" || name == "POP_MARK" || name == "PAGE_UP" || name == "PAGE_DOWN" || name == "NEXT_PAGE_BREAK" || name == "LAST_PAGE_BREAK" || name == "TAB_RIGHT" || name == "TAB_LEFT" || name == "INDENT" || name == "UNDENT" || name == "BLOCK_BEGIN" || name == "BLOCK_LINE" || name == "COL_BLOCK_BEGIN" || name == "BLOCK_COL" || name == "STR_BLOCK_BEGIN" || name == "BLOCK_END" || name == "BLOCK_OFF" || name == "BLOCK_STAT" || name == "COPY_BLOCK" || name == "MOVE_BLOCK" || name == "DELETE_BLOCK" || name == "CREATE_WINDOW" || name == "DELETE_WINDOW" || name == "ERASE_WINDOW" || name == "MODIFY_WINDOW" || name == "LINK_WINDOW" || name == "UNLINK_WINDOW" || name == "ZOOM" || name == "REDRAW" || name == "NEW_SCREEN" ||
 				           name == "MOVE_WIN_TO_NEXT_DESKTOP" || name == "MOVE_WIN_TO_PREV_DESKTOP" || name == "MOVE_VIEWPORT_RIGHT" || name == "MOVE_VIEWPORT_LEFT" || name == "SAVE_WORKSPACE" || name == "LOAD_WORKSPACE" || name == "SAVE_SETTINGS") {
 					MRFileEditor *editor = currentEditor();
