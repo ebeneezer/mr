@@ -217,15 +217,6 @@
           "labels": [],
           "checkboxes": [],
           "comments": []
-        },
-        {
-          "id": "dbca98e3-2953-4314-8e12-3bcb4342cf07",
-          "listId": "b721e070-ae21-4123-a1f3-27b926375a16",
-          "title": "Snippets in neuem Snippet Editorfenster editieren und per Window-Copy einfügen. Snippet Editor hat keinen Rahmen und eine automatische fixe Grösse",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
         }
       ]
     },
@@ -320,6 +311,15 @@
           "id": "d857df61-3b75-4a89-af53-11aee8857629",
           "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
           "title": "Bei Änderung der Farbcodes für changed text wird der editor nicht neu gezeichnet. der neue farbcode wird aber angewendet",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "dbca98e3-2953-4314-8e12-3bcb4342cf07",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Snippets in neuem Snippet Editorfenster editieren und per Window-Copy einfügen. Snippet Editor hat keinen Rahmen und eine automatische fixe Grösse",
           "description": "",
           "labels": [],
           "checkboxes": [],
