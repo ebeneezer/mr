@@ -1,14 +1,10 @@
 #include "MRVMHash.hpp"
 
+#include "MRVMValue.hpp"
+
 #include <stdexcept>
 
 #include "../mrmac.h"
-
-namespace {
-bool isArrayValueType(int type) {
-	return type == TYPE_INT_ARRAY || type == TYPE_STR_ARRAY || type == TYPE_CHAR_ARRAY || type == TYPE_REAL_ARRAY || type == TYPE_HASH_ARRAY;
-}
-} // namespace
 
 void MRVMHashStore::clear() {
 	hashes.clear();
@@ -142,7 +138,7 @@ VirtualMachine::Value mrvmHashCopyValueForStore(const VirtualMachine::Value &val
 		copied.globalStorage = targetGlobalStorage;
 		return copied;
 	}
-	if (isArrayValueType(copied.type)) {
+	if (mrvmValueIsArrayType(copied.type)) {
 		for (VirtualMachine::Value &arrayValue : copied.arrayValues)
 			arrayValue = mrvmHashCopyValueForStore(arrayValue, localStore, globalStore, targetStore, targetGlobalStorage);
 	}

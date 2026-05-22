@@ -26,6 +26,7 @@
 #include "MRVM.hpp"
 #include "vm/MRVMDeferredUi.hpp"
 #include "vm/MRVMHash.hpp"
+#include "vm/MRVMValue.hpp"
 #include "vm/MRVMScreen.hpp"
 #include "vm/MRVMSettings.hpp"
 #include <algorithm>
@@ -375,7 +376,6 @@ static thread_local ExecutionState *g_executionState = nullptr;
 static thread_local int g_keyReplayDepth = 0;
 static std::string valueAsString(const Value &value);
 static int valueAsInt(const Value &value);
-static bool isArrayType(int type);
 
 static bool isStringLike(const Value &value);
 static bool isNumeric(const Value &value);
@@ -680,51 +680,6 @@ static Value makeHash(int handle, bool globalStorage = false) {
 	return v;
 }
 
-static bool isArrayType(int type) {
-	return type == TYPE_INT_ARRAY || type == TYPE_STR_ARRAY || type == TYPE_CHAR_ARRAY || type == TYPE_REAL_ARRAY || type == TYPE_HASH_ARRAY;
-}
-
-static int arrayTypeForElementType(int elementType) {
-	switch (elementType) {
-		case TYPE_INT:
-			return TYPE_INT_ARRAY;
-		case TYPE_STR:
-			return TYPE_STR_ARRAY;
-		case TYPE_CHAR:
-			return TYPE_CHAR_ARRAY;
-		case TYPE_REAL:
-			return TYPE_REAL_ARRAY;
-		case TYPE_HASH:
-			return TYPE_HASH_ARRAY;
-		default:
-			throw std::runtime_error("unknown array element type");
-	}
-}
-
-static int arrayElementTypeForArrayType(int arrayType) {
-	switch (arrayType) {
-		case TYPE_INT_ARRAY:
-			return TYPE_INT;
-		case TYPE_STR_ARRAY:
-			return TYPE_STR;
-		case TYPE_CHAR_ARRAY:
-			return TYPE_CHAR;
-		case TYPE_REAL_ARRAY:
-			return TYPE_REAL;
-		case TYPE_HASH_ARRAY:
-			return TYPE_HASH;
-		default:
-			throw std::runtime_error("array value expected");
-	}
-}
-
-static Value makeArray(int elementType) {
-	Value v;
-	v.type = arrayTypeForElementType(elementType);
-	v.arrayElementType = elementType;
-	return v;
-}
-
 static std::string charToString(unsigned char c) {
 	if (c == 0) return std::string();
 	return std::string(1, static_cast<char>(c));
@@ -871,98 +826,6 @@ static int compareValues(const Value &a, const Value &b) {
 	}
 
 	throw std::runtime_error("type mismatch");
-}
-
-static Value defaultValueForType(int type) {
-	switch (type) {
-		case TYPE_INT:
-			return makeInt(0);
-		case TYPE_REAL:
-			return makeReal(0.0);
-		case TYPE_CHAR:
-			return makeChar(0);
-		case TYPE_HASH:
-			return makeHash(0);
-		case TYPE_INT_ARRAY:
-		case TYPE_STR_ARRAY:
-		case TYPE_CHAR_ARRAY:
-		case TYPE_REAL_ARRAY:
-		case TYPE_HASH_ARRAY:
-			return makeArray(arrayElementTypeForArrayType(type));
-		case TYPE_STR:
-		default:
-			return makeString("");
-	}
-}
-
-static Value coerceForStore(const Value &value, int targetType) {
-	switch (targetType) {
-		case TYPE_INT:
-			if (value.type == TYPE_INT) return value;
-			throw std::runtime_error("type mismatch");
-
-		case TYPE_REAL:
-			if (value.type == TYPE_REAL) return value;
-			if (value.type == TYPE_INT) return makeReal(static_cast<double>(value.i));
-			throw std::runtime_error("type mismatch");
-
-		case TYPE_STR:
-			if (value.type == TYPE_STR) return value;
-			if (value.type == TYPE_CHAR) return makeString(charToString(value.c));
-			throw std::runtime_error("type mismatch");
-
-		case TYPE_CHAR:
-			if (value.type == TYPE_CHAR) return value;
-			if (value.type == TYPE_STR) {
-				if (value.s.empty()) return makeChar(0);
-				return makeChar(static_cast<unsigned char>(value.s[0]));
-			}
-			throw std::runtime_error("type mismatch");
-
-		case TYPE_HASH:
-			if (value.type == TYPE_HASH) return value;
-			throw std::runtime_error("type mismatch");
-
-		case TYPE_INT_ARRAY:
-		case TYPE_STR_ARRAY:
-		case TYPE_CHAR_ARRAY:
-		case TYPE_REAL_ARRAY:
-		case TYPE_HASH_ARRAY:
-			if (value.type == targetType) return value;
-			throw std::runtime_error("type mismatch");
-
-		default:
-			throw std::runtime_error("unknown variable type");
-	}
-}
-
-static Value arrayReadValue(const Value &arrayValue, int index) {
-	if (!isArrayType(arrayValue.type)) throw std::runtime_error("array value expected");
-	if (index <= 0 || static_cast<std::size_t>(index) > arrayValue.arrayValues.size()) throw std::runtime_error("array index out of range");
-	return arrayValue.arrayValues[static_cast<std::size_t>(index - 1)];
-}
-
-static Value coerceArrayElementForStore(const Value &value, int elementType, MRVMHashStore &localStore, bool targetGlobalStorage) {
-	Value coerced = coerceForStore(value, elementType);
-	if (coerced.type == TYPE_HASH) {
-		MRVMHashStore &targetStore = targetGlobalStorage ? g_runtimeEnv.globalHashStore : localStore;
-		return mrvmHashCopyValueForStore(coerced, localStore, g_runtimeEnv.globalHashStore, targetStore, targetGlobalStorage);
-	}
-	coerced.globalStorage = targetGlobalStorage;
-	return coerced;
-}
-
-static void arrayWriteValue(Value &arrayValue, int index, const Value &value, MRVMHashStore &localStore) {
-	Value stored;
-
-	if (!isArrayType(arrayValue.type)) throw std::runtime_error("array value expected");
-	if (index <= 0) throw std::runtime_error("array index out of range");
-	stored = coerceArrayElementForStore(value, arrayValue.arrayElementType, localStore, arrayValue.globalStorage);
-	if (static_cast<std::size_t>(index) > arrayValue.arrayValues.size()) {
-		Value defaultElement = coerceArrayElementForStore(defaultValueForType(arrayValue.arrayElementType), arrayValue.arrayElementType, localStore, arrayValue.globalStorage);
-		arrayValue.arrayValues.resize(static_cast<std::size_t>(index), defaultElement);
-	}
-	arrayValue.arrayValues[static_cast<std::size_t>(index - 1)] = stored;
 }
 
 static void enforceStringLength(const std::string &s) {
@@ -4676,10 +4539,10 @@ static void setGlobalValueFromStore(const std::string &name, int type, const Val
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	Value stored = value;
 
-	if (type == TYPE_HASH || isArrayType(type)) stored = mrvmHashCopyValueForStore(value, localStore, g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, true);
+	if (type == TYPE_HASH || mrvmValueIsArrayType(type)) stored = mrvmHashCopyValueForStore(value, localStore, g_runtimeEnv.globalHashStore, g_runtimeEnv.globalHashStore, true);
 	else
 		stored.globalStorage = true;
-	if (session != nullptr && type != TYPE_HASH && !isArrayType(type)) {
+	if (session != nullptr && type != TYPE_HASH && !mrvmValueIsArrayType(type)) {
 		setSessionGlobalValueDirect(*session, name, type, stored);
 		return;
 	}
@@ -6561,8 +6424,8 @@ static Value applyIntrinsic(VirtualMachine &vm, const std::string &name, const s
 			return makeInt(static_cast<int>(valueAsString(args[0]).size()));
 		}
 		if (name == "LEN") {
-			if (args.size() != 1 || (!isStringLike(args[0]) && !isArrayType(args[0].type))) throw std::runtime_error("LEN expects one string or array argument.");
-			if (isArrayType(args[0].type)) return makeInt(static_cast<int>(args[0].arrayValues.size()));
+			if (args.size() != 1 || (!isStringLike(args[0]) && !mrvmValueIsArrayType(args[0].type))) throw std::runtime_error("LEN expects one string or array argument.");
+			if (mrvmValueIsArrayType(args[0].type)) return makeInt(static_cast<int>(args[0].arrayValues.size()));
 			return makeInt(static_cast<int>(valueAsString(args[0]).size()));
 		}
 		if (name == "POS") {
@@ -6840,14 +6703,14 @@ static Value applyIntrinsic(VirtualMachine &vm, const std::string &name, const s
 			return makeInt(valueHasContent(mrvmHashReadValue(vm.localHashStore(), g_runtimeEnv.globalHashStore, args[0], key)) ? 1 : 0);
 		}
 		if (name == "KEYS") {
-			Value result = makeArray(TYPE_STR);
+			Value result = mrvmMakeArrayValue(TYPE_STR);
 			if (args.size() != 1 || args[0].type != TYPE_HASH) throw std::runtime_error("KEYS expects one hash argument.");
 			for (const std::string &key : mrvmHashRuntimeStoreForValue(vm.localHashStore(), g_runtimeEnv.globalHashStore, args[0]).keys(args[0].hashHandle))
 				result.arrayValues.push_back(makeString(key));
 			return result;
 		}
 		if (name == "VALUES") {
-			Value result = makeArray(TYPE_STR);
+			Value result = mrvmMakeArrayValue(TYPE_STR);
 			if (args.size() != 1 || args[0].type != TYPE_HASH) throw std::runtime_error("VALUES expects one hash argument.");
 			for (const Value &value : mrvmHashRuntimeStoreForValue(vm.localHashStore(), g_runtimeEnv.globalHashStore, args[0]).values(args[0].hashHandle))
 				result.arrayValues.push_back(makeString(valueAsString(value)));
@@ -7636,7 +7499,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				if (varType == TYPE_HASH)
 					variables[varName] = makeHash(mHashStore->createHash());
 				else
-					variables[varName] = defaultValueForType(varType);
+					variables[varName] = mrvmDefaultValueForType(varType);
 				appendLogLine("Define variable: " + varName);
 			} else if (opcode == OP_LOAD_VAR) {
 				std::string varName;
@@ -7655,7 +7518,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				std::string varName;
 				int targetType = static_cast<int>(bytecode[ip++]);
 				readCString(varName);
-				Value value = coerceForStore(pop(), targetType);
+				Value value = mrvmCoerceForStore(pop(), targetType);
 				if (value.type == TYPE_STR) enforceStringLength(value.s);
 				if (!storeSpecialVariable(varName, value)) variables[varName] = value;
 				appendLogLine("Store variable: " + varName);
@@ -7713,8 +7576,8 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				index = pop();
 				if (index.type != TYPE_INT) throw std::runtime_error("type mismatch");
 				it = variables.find(varName);
-				if (it == variables.end() || !isArrayType(it->second.type)) throw std::runtime_error("Invalid array value.");
-				push(arrayReadValue(it->second, index.i));
+				if (it == variables.end() || !mrvmValueIsArrayType(it->second.type)) throw std::runtime_error("Invalid array value.");
+				push(mrvmArrayReadValue(it->second, index.i));
 				appendLogLine("Load array value: " + varName);
 			} else if (opcode == OP_ARRAY_LOAD_VALUE) {
 				Value index;
@@ -7722,7 +7585,7 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				index = pop();
 				arrayValue = pop();
 				if (index.type != TYPE_INT) throw std::runtime_error("type mismatch");
-				push(arrayReadValue(arrayValue, index.i));
+				push(mrvmArrayReadValue(arrayValue, index.i));
 				appendLogLine("Load array value from expression.");
 			} else if (opcode == OP_ARRAY_STORE) {
 				std::string varName;
@@ -7734,8 +7597,8 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 				index = pop();
 				if (index.type != TYPE_INT) throw std::runtime_error("type mismatch");
 				it = variables.find(varName);
-				if (it == variables.end() || !isArrayType(it->second.type)) throw std::runtime_error("Invalid array value.");
-				arrayWriteValue(it->second, index.i, value, *mHashStore);
+				if (it == variables.end() || !mrvmValueIsArrayType(it->second.type)) throw std::runtime_error("Invalid array value.");
+				mrvmArrayWriteValue(it->second, index.i, value, *mHashStore, g_runtimeEnv.globalHashStore);
 				appendLogLine("Store array value: " + varName);
 			} else if (opcode == OP_GOTO) {
 				int target;
