@@ -1,29 +1,30 @@
 $MACRO REGISTER_C_SNIPPETS FROM EDIT;
-DEF_HASH(Snippets, CSnippets, Snippet, Placeholders, Placeholder1, Placeholder2, Placeholder3, Placeholder4);
+DEF_HASH(Snippets, CSnippets);
 
 Snippets := GLOBAL_HASH('SNIPPETS');
 
-Placeholder1['default'] := 'int i = 0';
-Placeholder1['hint'] := 'Loop initializer';
-Placeholder2['default'] := 'i < limit';
-Placeholder2['hint'] := 'Loop condition';
-Placeholder3['default'] := '++i';
-Placeholder3['hint'] := 'Loop increment';
-Placeholder4['default'] := '/* body */';
-Placeholder4['hint'] := 'Loop body';
-Placeholders['1'] := Placeholder1;
-Placeholders['2'] := Placeholder2;
-Placeholders['3'] := Placeholder3;
-Placeholders['4'] := Placeholder4;
-Snippet['name'] := 'C for';
-Snippet['trigger'] := 'for';
-Snippet['body'] := <<BODY
+DEF_HASH(ForSnippet, ForPlaceholders, ForPlaceholder1, ForPlaceholder2, ForPlaceholder3, ForPlaceholder4);
+ForPlaceholder1['default'] := 'int i = 0';
+ForPlaceholder1['hint'] := 'Loop initializer';
+ForPlaceholder2['default'] := 'i < limit';
+ForPlaceholder2['hint'] := 'Loop condition';
+ForPlaceholder3['default'] := '++i';
+ForPlaceholder3['hint'] := 'Loop increment';
+ForPlaceholder4['default'] := '/* body */';
+ForPlaceholder4['hint'] := 'Loop body';
+ForPlaceholders['1'] := ForPlaceholder1;
+ForPlaceholders['2'] := ForPlaceholder2;
+ForPlaceholders['3'] := ForPlaceholder3;
+ForPlaceholders['4'] := ForPlaceholder4;
+ForSnippet['name'] := 'C for';
+ForSnippet['trigger'] := 'for';
+ForSnippet['body'] := <<BODY
 for (//1; //2; //3) {
     //4
 }
 BODY;
-Snippet['placeholders'] := Placeholders;
-CSnippets['FOR'] := Snippet;
+ForSnippet['placeholders'] := ForPlaceholders;
+CSnippets['FOR'] := ForSnippet;
 
 DEF_HASH(IfSnippet, IfPlaceholders, IfPlaceholder1, IfPlaceholder2);
 IfPlaceholder1['default'] := 'condition';
@@ -58,6 +59,461 @@ while (//1) {
 BODY;
 WhileSnippet['placeholders'] := WhilePlaceholders;
 CSnippets['WHILE'] := WhileSnippet;
+
+DEF_HASH(DoSnippet, DoPlaceholders, DoPlaceholder1, DoPlaceholder2);
+DoPlaceholder1['default'] := '/* body */';
+DoPlaceholder1['hint'] := 'Loop body';
+DoPlaceholder2['default'] := 'condition';
+DoPlaceholder2['hint'] := 'Loop condition';
+DoPlaceholders['1'] := DoPlaceholder1;
+DoPlaceholders['2'] := DoPlaceholder2;
+DoSnippet['name'] := 'C do while';
+DoSnippet['trigger'] := 'do';
+DoSnippet['body'] := <<BODY
+do {
+    //1
+} while (//2);
+BODY;
+DoSnippet['placeholders'] := DoPlaceholders;
+CSnippets['DO'] := DoSnippet;
+
+DEF_HASH(SwitchSnippet, SwitchPlaceholders, SwitchPlaceholder1, SwitchPlaceholder2, SwitchPlaceholder3);
+SwitchPlaceholder1['default'] := 'value';
+SwitchPlaceholder1['hint'] := 'Switch expression';
+SwitchPlaceholder2['default'] := 'case_value';
+SwitchPlaceholder2['hint'] := 'First case value';
+SwitchPlaceholder3['default'] := '/* body */';
+SwitchPlaceholder3['hint'] := 'Case body';
+SwitchPlaceholders['1'] := SwitchPlaceholder1;
+SwitchPlaceholders['2'] := SwitchPlaceholder2;
+SwitchPlaceholders['3'] := SwitchPlaceholder3;
+SwitchSnippet['name'] := 'C switch';
+SwitchSnippet['trigger'] := 'switch';
+SwitchSnippet['body'] := <<BODY
+switch (//1) {
+case //2:
+    //3
+    break;
+default:
+    break;
+}
+BODY;
+SwitchSnippet['placeholders'] := SwitchPlaceholders;
+CSnippets['SWITCH'] := SwitchSnippet;
+
+DEF_HASH(CaseSnippet, CasePlaceholders, CasePlaceholder1, CasePlaceholder2);
+CasePlaceholder1['default'] := 'value';
+CasePlaceholder1['hint'] := 'Case value';
+CasePlaceholder2['default'] := '/* body */';
+CasePlaceholder2['hint'] := 'Case body';
+CasePlaceholders['1'] := CasePlaceholder1;
+CasePlaceholders['2'] := CasePlaceholder2;
+CaseSnippet['name'] := 'C case';
+CaseSnippet['trigger'] := 'case';
+CaseSnippet['body'] := <<BODY
+case //1:
+    //2
+    break;
+BODY;
+CaseSnippet['placeholders'] := CasePlaceholders;
+CSnippets['CASE'] := CaseSnippet;
+
+DEF_HASH(DefaultSnippet, DefaultPlaceholders, DefaultPlaceholder1);
+DefaultPlaceholder1['default'] := '/* body */';
+DefaultPlaceholder1['hint'] := 'Default body';
+DefaultPlaceholders['1'] := DefaultPlaceholder1;
+DefaultSnippet['name'] := 'C default';
+DefaultSnippet['trigger'] := 'default';
+DefaultSnippet['body'] := <<BODY
+default:
+    //1
+    break;
+BODY;
+DefaultSnippet['placeholders'] := DefaultPlaceholders;
+CSnippets['DEFAULT'] := DefaultSnippet;
+
+DEF_HASH(ElseSnippet, ElsePlaceholders, ElsePlaceholder1);
+ElsePlaceholder1['default'] := '/* body */';
+ElsePlaceholder1['hint'] := 'Else body';
+ElsePlaceholders['1'] := ElsePlaceholder1;
+ElseSnippet['name'] := 'C else';
+ElseSnippet['trigger'] := 'else';
+ElseSnippet['body'] := <<BODY
+else {
+    //1
+}
+BODY;
+ElseSnippet['placeholders'] := ElsePlaceholders;
+CSnippets['ELSE'] := ElseSnippet;
+
+DEF_HASH(ElseIfSnippet, ElseIfPlaceholders, ElseIfPlaceholder1, ElseIfPlaceholder2);
+ElseIfPlaceholder1['default'] := 'condition';
+ElseIfPlaceholder1['hint'] := 'Else-if condition';
+ElseIfPlaceholder2['default'] := '/* body */';
+ElseIfPlaceholder2['hint'] := 'Else-if body';
+ElseIfPlaceholders['1'] := ElseIfPlaceholder1;
+ElseIfPlaceholders['2'] := ElseIfPlaceholder2;
+ElseIfSnippet['name'] := 'C else if';
+ElseIfSnippet['trigger'] := 'elseif';
+ElseIfSnippet['body'] := <<BODY
+else if (//1) {
+    //2
+}
+BODY;
+ElseIfSnippet['placeholders'] := ElseIfPlaceholders;
+CSnippets['ELSEIF'] := ElseIfSnippet;
+
+DEF_HASH(ReturnSnippet, ReturnPlaceholders, ReturnPlaceholder1);
+ReturnPlaceholder1['default'] := 'value';
+ReturnPlaceholder1['hint'] := 'Return expression';
+ReturnPlaceholders['1'] := ReturnPlaceholder1;
+ReturnSnippet['name'] := 'C return';
+ReturnSnippet['trigger'] := 'return';
+ReturnSnippet['body'] := <<BODY
+return //1;
+BODY;
+ReturnSnippet['placeholders'] := ReturnPlaceholders;
+CSnippets['RETURN'] := ReturnSnippet;
+
+DEF_HASH(IncludeSnippet, IncludePlaceholders, IncludePlaceholder1);
+IncludePlaceholder1['default'] := 'stdio.h';
+IncludePlaceholder1['hint'] := 'Header name';
+IncludePlaceholders['1'] := IncludePlaceholder1;
+IncludeSnippet['name'] := 'C include';
+IncludeSnippet['trigger'] := 'include';
+IncludeSnippet['body'] := <<BODY
+#include <//1>
+BODY;
+IncludeSnippet['placeholders'] := IncludePlaceholders;
+CSnippets['INCLUDE'] := IncludeSnippet;
+
+DEF_HASH(DefineSnippet, DefinePlaceholders, DefinePlaceholder1, DefinePlaceholder2);
+DefinePlaceholder1['default'] := 'NAME';
+DefinePlaceholder1['hint'] := 'Macro name';
+DefinePlaceholder2['default'] := 'value';
+DefinePlaceholder2['hint'] := 'Macro value';
+DefinePlaceholders['1'] := DefinePlaceholder1;
+DefinePlaceholders['2'] := DefinePlaceholder2;
+DefineSnippet['name'] := 'C define';
+DefineSnippet['trigger'] := 'define';
+DefineSnippet['body'] := <<BODY
+#define //1 //2
+BODY;
+DefineSnippet['placeholders'] := DefinePlaceholders;
+CSnippets['DEFINE'] := DefineSnippet;
+
+DEF_HASH(IfdefSnippet, IfdefPlaceholders, IfdefPlaceholder1, IfdefPlaceholder2);
+IfdefPlaceholder1['default'] := 'FEATURE';
+IfdefPlaceholder1['hint'] := 'Preprocessor symbol';
+IfdefPlaceholder2['default'] := '/* body */';
+IfdefPlaceholder2['hint'] := 'Guarded body';
+IfdefPlaceholders['1'] := IfdefPlaceholder1;
+IfdefPlaceholders['2'] := IfdefPlaceholder2;
+IfdefSnippet['name'] := 'C ifdef';
+IfdefSnippet['trigger'] := 'ifdef';
+IfdefSnippet['body'] := <<BODY
+#ifdef //1
+//2
+#endif
+BODY;
+IfdefSnippet['placeholders'] := IfdefPlaceholders;
+CSnippets['IFDEF'] := IfdefSnippet;
+
+DEF_HASH(IfndefSnippet, IfndefPlaceholders, IfndefPlaceholder1, IfndefPlaceholder2);
+IfndefPlaceholder1['default'] := 'FEATURE';
+IfndefPlaceholder1['hint'] := 'Preprocessor symbol';
+IfndefPlaceholder2['default'] := '/* body */';
+IfndefPlaceholder2['hint'] := 'Guarded body';
+IfndefPlaceholders['1'] := IfndefPlaceholder1;
+IfndefPlaceholders['2'] := IfndefPlaceholder2;
+IfndefSnippet['name'] := 'C ifndef';
+IfndefSnippet['trigger'] := 'ifndef';
+IfndefSnippet['body'] := <<BODY
+#ifndef //1
+//2
+#endif
+BODY;
+IfndefSnippet['placeholders'] := IfndefPlaceholders;
+CSnippets['IFNDEF'] := IfndefSnippet;
+
+DEF_HASH(HeaderGuardSnippet, HeaderGuardPhs, HeaderGuardPh1, HeaderGuardPh2);
+HeaderGuardPh1['default'] := 'PROJECT_HEADER_H';
+HeaderGuardPh1['hint'] := 'Header guard symbol';
+HeaderGuardPh2['default'] := '/* declarations */';
+HeaderGuardPh2['hint'] := 'Header content';
+HeaderGuardPhs['1'] := HeaderGuardPh1;
+HeaderGuardPhs['2'] := HeaderGuardPh2;
+HeaderGuardSnippet['name'] := 'C header guard';
+HeaderGuardSnippet['trigger'] := 'guard';
+HeaderGuardSnippet['body'] := <<BODY
+#ifndef //1
+#define //1
+
+//2
+
+#endif /* //1 */
+BODY;
+HeaderGuardSnippet['placeholders'] := HeaderGuardPhs;
+CSnippets['HEADER_GUARD'] := HeaderGuardSnippet;
+
+DEF_HASH(MainSnippet, MainPlaceholders, MainPlaceholder1);
+MainPlaceholder1['default'] := '/* body */';
+MainPlaceholder1['hint'] := 'Main body';
+MainPlaceholders['1'] := MainPlaceholder1;
+MainSnippet['name'] := 'C main';
+MainSnippet['trigger'] := 'main';
+MainSnippet['body'] := <<BODY
+int main(int argc, char **argv) {
+    //1
+    return 0;
+}
+BODY;
+MainSnippet['placeholders'] := MainPlaceholders;
+CSnippets['MAIN'] := MainSnippet;
+
+DEF_HASH(FunctionSnippet, FunctionPlaceholders, FunctionPlaceholder1, FunctionPlaceholder2, FunctionPlaceholder3, FunctionPlaceholder4);
+FunctionPlaceholder1['default'] := 'int';
+FunctionPlaceholder1['hint'] := 'Return type';
+FunctionPlaceholder2['default'] := 'function_name';
+FunctionPlaceholder2['hint'] := 'Function name';
+FunctionPlaceholder3['default'] := 'void';
+FunctionPlaceholder3['hint'] := 'Parameter list';
+FunctionPlaceholder4['default'] := '/* body */';
+FunctionPlaceholder4['hint'] := 'Function body';
+FunctionPlaceholders['1'] := FunctionPlaceholder1;
+FunctionPlaceholders['2'] := FunctionPlaceholder2;
+FunctionPlaceholders['3'] := FunctionPlaceholder3;
+FunctionPlaceholders['4'] := FunctionPlaceholder4;
+FunctionSnippet['name'] := 'C function';
+FunctionSnippet['trigger'] := 'func';
+FunctionSnippet['body'] := <<BODY
+//1 //2(//3) {
+    //4
+}
+BODY;
+FunctionSnippet['placeholders'] := FunctionPlaceholders;
+CSnippets['FUNCTION'] := FunctionSnippet;
+
+DEF_HASH(StructSnippet, StructPlaceholders, StructPlaceholder1, StructPlaceholder2);
+StructPlaceholder1['default'] := 'Name';
+StructPlaceholder1['hint'] := 'Struct name';
+StructPlaceholder2['default'] := 'int value;';
+StructPlaceholder2['hint'] := 'Struct fields';
+StructPlaceholders['1'] := StructPlaceholder1;
+StructPlaceholders['2'] := StructPlaceholder2;
+StructSnippet['name'] := 'C struct';
+StructSnippet['trigger'] := 'struct';
+StructSnippet['body'] := <<BODY
+typedef struct //1 {
+    //2
+} //1;
+BODY;
+StructSnippet['placeholders'] := StructPlaceholders;
+CSnippets['STRUCT'] := StructSnippet;
+
+DEF_HASH(EnumSnippet, EnumPlaceholders, EnumPlaceholder1, EnumPlaceholder2);
+EnumPlaceholder1['default'] := 'Name';
+EnumPlaceholder1['hint'] := 'Enum name';
+EnumPlaceholder2['default'] := 'NameValue';
+EnumPlaceholder2['hint'] := 'First enumerator';
+EnumPlaceholders['1'] := EnumPlaceholder1;
+EnumPlaceholders['2'] := EnumPlaceholder2;
+EnumSnippet['name'] := 'C enum';
+EnumSnippet['trigger'] := 'enum';
+EnumSnippet['body'] := <<BODY
+typedef enum //1 {
+    //2
+} //1;
+BODY;
+EnumSnippet['placeholders'] := EnumPlaceholders;
+CSnippets['ENUM'] := EnumSnippet;
+
+DEF_HASH(UnionSnippet, UnionPlaceholders, UnionPlaceholder1, UnionPlaceholder2);
+UnionPlaceholder1['default'] := 'Name';
+UnionPlaceholder1['hint'] := 'Union name';
+UnionPlaceholder2['default'] := 'int value;';
+UnionPlaceholder2['hint'] := 'Union fields';
+UnionPlaceholders['1'] := UnionPlaceholder1;
+UnionPlaceholders['2'] := UnionPlaceholder2;
+UnionSnippet['name'] := 'C union';
+UnionSnippet['trigger'] := 'union';
+UnionSnippet['body'] := <<BODY
+typedef union //1 {
+    //2
+} //1;
+BODY;
+UnionSnippet['placeholders'] := UnionPlaceholders;
+CSnippets['UNION'] := UnionSnippet;
+
+DEF_HASH(TypedefSnippet, TypedefPlaceholders, TypedefPlaceholder1, TypedefPlaceholder2);
+TypedefPlaceholder1['default'] := 'existing_type';
+TypedefPlaceholder1['hint'] := 'Existing type';
+TypedefPlaceholder2['default'] := 'new_type';
+TypedefPlaceholder2['hint'] := 'New type name';
+TypedefPlaceholders['1'] := TypedefPlaceholder1;
+TypedefPlaceholders['2'] := TypedefPlaceholder2;
+TypedefSnippet['name'] := 'C typedef';
+TypedefSnippet['trigger'] := 'typedef';
+TypedefSnippet['body'] := <<BODY
+typedef //1 //2;
+BODY;
+TypedefSnippet['placeholders'] := TypedefPlaceholders;
+CSnippets['TYPEDEF'] := TypedefSnippet;
+
+DEF_HASH(MallocSnippet, MallocPlaceholders, MallocPlaceholder1, MallocPlaceholder2, MallocPlaceholder3);
+MallocPlaceholder1['default'] := 'type';
+MallocPlaceholder1['hint'] := 'Element type';
+MallocPlaceholder2['default'] := 'ptr';
+MallocPlaceholder2['hint'] := 'Pointer variable';
+MallocPlaceholder3['default'] := 'count';
+MallocPlaceholder3['hint'] := 'Element count';
+MallocPlaceholders['1'] := MallocPlaceholder1;
+MallocPlaceholders['2'] := MallocPlaceholder2;
+MallocPlaceholders['3'] := MallocPlaceholder3;
+MallocSnippet['name'] := 'C malloc';
+MallocSnippet['trigger'] := 'malloc';
+MallocSnippet['body'] := <<BODY
+//1 *//2 = malloc(sizeof(*//2) * //3);
+if (//2 == NULL) {
+    return -1;
+}
+BODY;
+MallocSnippet['placeholders'] := MallocPlaceholders;
+CSnippets['MALLOC'] := MallocSnippet;
+
+DEF_HASH(CallocSnippet, CallocPlaceholders, CallocPlaceholder1, CallocPlaceholder2, CallocPlaceholder3);
+CallocPlaceholder1['default'] := 'type';
+CallocPlaceholder1['hint'] := 'Element type';
+CallocPlaceholder2['default'] := 'ptr';
+CallocPlaceholder2['hint'] := 'Pointer variable';
+CallocPlaceholder3['default'] := 'count';
+CallocPlaceholder3['hint'] := 'Element count';
+CallocPlaceholders['1'] := CallocPlaceholder1;
+CallocPlaceholders['2'] := CallocPlaceholder2;
+CallocPlaceholders['3'] := CallocPlaceholder3;
+CallocSnippet['name'] := 'C calloc';
+CallocSnippet['trigger'] := 'calloc';
+CallocSnippet['body'] := <<BODY
+//1 *//2 = calloc(//3, sizeof(*//2));
+if (//2 == NULL) {
+    return -1;
+}
+BODY;
+CallocSnippet['placeholders'] := CallocPlaceholders;
+CSnippets['CALLOC'] := CallocSnippet;
+
+DEF_HASH(FreeSnippet, FreePlaceholders, FreePlaceholder1);
+FreePlaceholder1['default'] := 'ptr';
+FreePlaceholder1['hint'] := 'Pointer variable';
+FreePlaceholders['1'] := FreePlaceholder1;
+FreeSnippet['name'] := 'C free';
+FreeSnippet['trigger'] := 'free';
+FreeSnippet['body'] := <<BODY
+free(//1);
+//1 = NULL;
+BODY;
+FreeSnippet['placeholders'] := FreePlaceholders;
+CSnippets['FREE'] := FreeSnippet;
+
+DEF_HASH(PrintfSnippet, PrintfPlaceholders, PrintfPlaceholder1, PrintfPlaceholder2);
+PrintfPlaceholder1['default'] := 'message';
+PrintfPlaceholder1['hint'] := 'Format text';
+PrintfPlaceholder2['default'] := 'value';
+PrintfPlaceholder2['hint'] := 'Format argument';
+PrintfPlaceholders['1'] := PrintfPlaceholder1;
+PrintfPlaceholders['2'] := PrintfPlaceholder2;
+PrintfSnippet['name'] := 'C printf';
+PrintfSnippet['trigger'] := 'printf';
+PrintfSnippet['body'] := <<BODY
+printf("//1\n", //2);
+BODY;
+PrintfSnippet['placeholders'] := PrintfPlaceholders;
+CSnippets['PRINTF'] := PrintfSnippet;
+
+DEF_HASH(FprintfSnippet, FprintfPlaceholders, FprintfPlaceholder1, FprintfPlaceholder2, FprintfPlaceholder3);
+FprintfPlaceholder1['default'] := 'stderr';
+FprintfPlaceholder1['hint'] := 'Output stream';
+FprintfPlaceholder2['default'] := 'message';
+FprintfPlaceholder2['hint'] := 'Format text';
+FprintfPlaceholder3['default'] := 'value';
+FprintfPlaceholder3['hint'] := 'Format argument';
+FprintfPlaceholders['1'] := FprintfPlaceholder1;
+FprintfPlaceholders['2'] := FprintfPlaceholder2;
+FprintfPlaceholders['3'] := FprintfPlaceholder3;
+FprintfSnippet['name'] := 'C fprintf';
+FprintfSnippet['trigger'] := 'fprintf';
+FprintfSnippet['body'] := <<BODY
+fprintf(//1, "//2\n", //3);
+BODY;
+FprintfSnippet['placeholders'] := FprintfPlaceholders;
+CSnippets['FPRINTF'] := FprintfSnippet;
+
+DEF_HASH(SnprintfSnippet, SnprintfPlaceholders, SnprintfPlaceholder1, SnprintfPlaceholder2, SnprintfPlaceholder3, SnprintfPlaceholder4);
+SnprintfPlaceholder1['default'] := 'buffer';
+SnprintfPlaceholder1['hint'] := 'Destination buffer';
+SnprintfPlaceholder2['default'] := 'sizeof(buffer)';
+SnprintfPlaceholder2['hint'] := 'Buffer size';
+SnprintfPlaceholder3['default'] := 'format';
+SnprintfPlaceholder3['hint'] := 'Format text';
+SnprintfPlaceholder4['default'] := 'value';
+SnprintfPlaceholder4['hint'] := 'Format argument';
+SnprintfPlaceholders['1'] := SnprintfPlaceholder1;
+SnprintfPlaceholders['2'] := SnprintfPlaceholder2;
+SnprintfPlaceholders['3'] := SnprintfPlaceholder3;
+SnprintfPlaceholders['4'] := SnprintfPlaceholder4;
+SnprintfSnippet['name'] := 'C snprintf';
+SnprintfSnippet['trigger'] := 'snprintf';
+SnprintfSnippet['body'] := <<BODY
+snprintf(//1, //2, "//3", //4);
+BODY;
+SnprintfSnippet['placeholders'] := SnprintfPlaceholders;
+CSnippets['SNPRINTF'] := SnprintfSnippet;
+
+DEF_HASH(AssertSnippet, AssertPlaceholders, AssertPlaceholder1);
+AssertPlaceholder1['default'] := 'condition';
+AssertPlaceholder1['hint'] := 'Assert condition';
+AssertPlaceholders['1'] := AssertPlaceholder1;
+AssertSnippet['name'] := 'C assert';
+AssertSnippet['trigger'] := 'assert';
+AssertSnippet['body'] := <<BODY
+assert(//1);
+BODY;
+AssertSnippet['placeholders'] := AssertPlaceholders;
+CSnippets['ASSERT'] := AssertSnippet;
+
+DEF_HASH(ForEachSnippet, ForEachPlaceholders, ForEachPlaceholder1, ForEachPlaceholder2, ForEachPlaceholder3);
+ForEachPlaceholder1['default'] := 'i';
+ForEachPlaceholder1['hint'] := 'Index variable';
+ForEachPlaceholder2['default'] := 'count';
+ForEachPlaceholder2['hint'] := 'Element count';
+ForEachPlaceholder3['default'] := '/* body */';
+ForEachPlaceholder3['hint'] := 'Loop body';
+ForEachPlaceholders['1'] := ForEachPlaceholder1;
+ForEachPlaceholders['2'] := ForEachPlaceholder2;
+ForEachPlaceholders['3'] := ForEachPlaceholder3;
+ForEachSnippet['name'] := 'C indexed loop';
+ForEachSnippet['trigger'] := 'foreach';
+ForEachSnippet['body'] := <<BODY
+for (size_t //1 = 0; //1 < //2; ++//1) {
+    //3
+}
+BODY;
+ForEachSnippet['placeholders'] := ForEachPlaceholders;
+CSnippets['FOR_EACH'] := ForEachSnippet;
+
+DEF_HASH(CommentBlockSnippet, CommentBlockPhs, CommentBlockPh1);
+CommentBlockPh1['default'] := 'description';
+CommentBlockPh1['hint'] := 'Comment text';
+CommentBlockPhs['1'] := CommentBlockPh1;
+CommentBlockSnippet['name'] := 'C comment block';
+CommentBlockSnippet['trigger'] := 'comment';
+CommentBlockSnippet['body'] := <<BODY
+/*
+ * //1
+ */
+BODY;
+CommentBlockSnippet['placeholders'] := CommentBlockPhs;
+CSnippets['COMMENT_BLOCK'] := CommentBlockSnippet;
 
 Snippets['C'] := CSnippets;
 SET_GLOBAL_HASH('SNIPPETS', Snippets);
