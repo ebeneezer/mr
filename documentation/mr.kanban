@@ -184,15 +184,6 @@
           "labels": [],
           "checkboxes": [],
           "comments": []
-        },
-        {
-          "id": "a9b47629-56da-4931-9276-646a378f7582",
-          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
-          "title": "Snippet Macros für weitere Sprachen",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
         }
       ]
     },
@@ -262,6 +253,15 @@
       "id": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
       "title": "Done",
       "cards": [
+        {
+          "id": "a9b47629-56da-4931-9276-646a378f7582",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Snippet Macros für weitere Sprachen",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
         {
           "id": "cd48e0ee-1739-4a98-9bb2-4020d597de94",
           "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
