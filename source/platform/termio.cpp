@@ -814,6 +814,8 @@ static ParseResult parseWin32InputModeKey(const CSIData &csi, TEvent &ev, InputS
     kev.dwControlKeyState = (ushort) csi.getValue(4, 0);
     kev.wRepeatCount = (ushort) csi.getValue(5, 1);
 
+    regenerateMissingScanCodeFromVirtualKeyCode(kev);
+
     if (kev.bKeyDown && getWin32Key(kev, ev, state))
     {
         TermIO::normalizeKey(ev.keyDown);

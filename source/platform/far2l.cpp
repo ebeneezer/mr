@@ -1,9 +1,7 @@
-#define Uses_TKeys
 #include <tvision/tv.h>
 
 #include <internal/far2l.h>
 #include <internal/win32con.h>
-#include <internal/constmap.h>
 #include <internal/base64.h>
 #include <internal/events.h>
 #include <internal/conctl.h>
@@ -25,50 +23,6 @@ static TStringView f2lClientId =
     sprintf(f2lClientIdData, "%032llu", (unsigned long long) time(nullptr)),
     f2lClientIdData
 );
-
-static const const_unordered_map<uchar, ushort> virtualKeyCodeToKeyCode =
-{
-    { VK_BACK,      kbBack       }, { VK_TAB,       kbTab        },
-    { VK_RETURN,    kbEnter      }, { VK_ESCAPE,    kbEsc        },
-    { '0',          0x0B00 | '0' }, { '1',          0x0200 | '1' },
-    { '2',          0x0300 | '2' }, { '3',          0x0400 | '3' },
-    { '4',          0x0500 | '4' }, { '5',          0x0600 | '5' },
-    { '6',          0x0700 | '6' }, { '7',          0x0800 | '7' },
-    { '8',          0x0900 | '8' }, { '9',          0x0A00 | '9' },
-    { VK_SPACE,     0x3900 | ' ' }, { 'A',          0x1E00 | 'A' },
-    { 'B',          0x3000 | 'B' }, { 'C',          0x2E00 | 'C' },
-    { 'D',          0x2000 | 'D' }, { 'E',          0x1200 | 'E' },
-    { 'F',          0x2100 | 'F' }, { 'G',          0x2200 | 'G' },
-    { 'H',          0x2300 | 'H' }, { 'I',          0x1700 | 'I' },
-    { 'J',          0x2400 | 'J' }, { 'K',          0x2500 | 'K' },
-    { 'L',          0x2600 | 'L' }, { 'M',          0x3200 | 'M' },
-    { 'N',          0x3100 | 'N' }, { 'O',          0x1800 | 'O' },
-    { 'P',          0x1900 | 'P' }, { 'Q',          0x1000 | 'Q' },
-    { 'R',          0x1300 | 'R' }, { 'S',          0x1F00 | 'S' },
-    { 'T',          0x1400 | 'T' }, { 'U',          0x1600 | 'U' },
-    { 'V',          0x2F00 | 'V' }, { 'W',          0x1100 | 'W' },
-    { 'X',          0x2D00 | 'X' }, { 'Y',          0x1500 | 'Y' },
-    { 'Z',          0x2C00 | 'Z' }, { VK_PRIOR,     kbPgUp       },
-    { VK_NEXT,      kbPgDn       }, { VK_END,       kbEnd        },
-    { VK_HOME,      kbHome       }, { VK_LEFT,      kbLeft       },
-    { VK_UP,        kbUp         }, { VK_RIGHT,     kbRight      },
-    { VK_DOWN,      kbDown       }, { VK_INSERT,    kbIns        },
-    { VK_DELETE,    kbDel        }, { VK_NUMPAD0,   0x5200 | '0' },
-    { VK_NUMPAD1,   0x4F00 | '1' }, { VK_NUMPAD2,   0x5000 | '2' },
-    { VK_NUMPAD3,   0x5100 | '3' }, { VK_NUMPAD4,   0x4B00 | '4' },
-    { VK_NUMPAD5,   0x4C00 | '5' }, { VK_NUMPAD6,   0x4D00 | '6' },
-    { VK_NUMPAD7,   0x4700 | '7' }, { VK_NUMPAD8,   0x4800 | '8' },
-    { VK_NUMPAD9,   0x4900 | '9' }, { VK_MULTIPLY,  0x3700 | '*' },
-    { VK_ADD,       0x4E00 | '+' }, { VK_SEPARATOR, 0x7E00 | ',' },
-    { VK_SUBTRACT,  0x4A00 | '-' }, { VK_DECIMAL,   0x5300 | '.' },
-    { VK_DIVIDE,    0x3500 | '/' }, { VK_F1,        kbF1         },
-    { VK_F2,        kbF2         }, { VK_F3,        kbF3         },
-    { VK_F4,        kbF4         }, { VK_F5,        kbF5         },
-    { VK_F6,        kbF6         }, { VK_F7,        kbF7         },
-    { VK_F8,        kbF8         }, { VK_F9,        kbF9         },
-    { VK_F10,       kbF10        }, { VK_F11,       kbF11        },
-    { VK_F12,       kbF12        },
-};
 
 ParseResult parseFar2lInput(GetChBuf &buf, TEvent &ev, InputState &state) noexcept
 // Pre: "\x1B_f2l" has just been read.
@@ -104,21 +58,7 @@ ParseResult parseFar2lInput(GetChBuf &buf, TEvent &ev, InputState &state) noexce
             reverseBytes((uint32_t &) kev.uChar.UnicodeChar);
 #endif
 
-            if (uint16_t keyCode = virtualKeyCodeToKeyCode[kev.wVirtualKeyCode])
-            {
-                kev.wVirtualScanCode = keyCode >> 8;
-                // Overwrite the UnicodeChar unless it is expected to be
-                // non-null but it is already not.
-                if (kev.uChar.UnicodeChar == L'\0' || (keyCode & 0xFF) == 0)
-                    kev.uChar.UnicodeChar = keyCode & 0xFF;
-                // If the Ctrl or Alt modifiers are present, the event is not
-                // meant to produce text, so clear the UnicodeChar. Unlike on
-                // Windows, we do not expect AltGr to be reported as Ctrl+Alt.
-                if ( (kev.dwControlKeyState & (kbCtrlShift | kbAltShift)) &&
-                     L' ' <= kev.uChar.UnicodeChar &&
-                     L'\x7F' != kev.uChar.UnicodeChar )
-                    kev.uChar.UnicodeChar = L'\0';
-            }
+            regenerateMissingScanCodeFromVirtualKeyCode(kev);
 
             if (getWin32Key(kev, ev, state))
             {
