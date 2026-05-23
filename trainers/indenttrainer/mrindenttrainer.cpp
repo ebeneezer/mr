@@ -754,8 +754,8 @@ bool mayNeedSmartDedentProbe(std::string_view lineText, MRSyntaxLanguage languag
 bool containsTrailingSmartSplitToken(std::string_view lineText, MRSyntaxLanguage language) {
 	const std::string_view trimmed = trimView(lineText);
 	if (trimmed.empty()) return false;
-	const std::size_t firstNonSpace = lineText.find_first_not_of(" \t");
-	if (firstNonSpace == std::string_view::npos) return false;
+	const std::size_t firstNonSpace = lineText.size() - ltrimView(lineText).size();
+	if (firstNonSpace == lineText.size()) return false;
 
 	for (char ch : {'}', ']', ')'}) {
 		const std::size_t pos = lineText.find(ch);
