@@ -1,0 +1,310 @@
+$MACRO REGISTER_JAVASCRIPT_SNIPPETS FROM EDIT;
+DEF_HASH(Snippets, JsSnippets);
+
+Snippets := GLOBAL_HASH('SNIPPETS');
+
+DEF_HASH(Js01);
+Js01['name'] := 'JavaScript import';
+Js01['trigger'] := 'import';
+Js01['body'] := <<BODY
+import { name } from './module.js';
+BODY;
+JsSnippets['IMPORT'] := Js01;
+
+DEF_HASH(Js02);
+Js02['name'] := 'JavaScript export';
+Js02['trigger'] := 'export';
+Js02['body'] := <<BODY
+export { name };
+BODY;
+JsSnippets['EXPORT'] := Js02;
+
+DEF_HASH(Js03);
+Js03['name'] := 'JavaScript function';
+Js03['trigger'] := 'function';
+Js03['body'] := <<BODY
+function name(value) {
+  return value;
+}
+BODY;
+JsSnippets['FUNCTION'] := Js03;
+
+DEF_HASH(Js04);
+Js04['name'] := 'JavaScript arrow';
+Js04['trigger'] := 'arrow';
+Js04['body'] := <<BODY
+const name = (value) => {
+  return value;
+};
+BODY;
+JsSnippets['ARROW'] := Js04;
+
+DEF_HASH(Js05);
+Js05['name'] := 'JavaScript async function';
+Js05['trigger'] := 'async';
+Js05['body'] := <<BODY
+async function name() {
+  const result = await operation();
+  return result;
+}
+BODY;
+JsSnippets['ASYNC'] := Js05;
+
+DEF_HASH(Js06);
+Js06['name'] := 'JavaScript class';
+Js06['trigger'] := 'class';
+Js06['body'] := <<BODY
+class Name {
+  constructor(value) {
+    this.value = value;
+  }
+}
+BODY;
+JsSnippets['CLASS'] := Js06;
+
+DEF_HASH(Js07);
+Js07['name'] := 'JavaScript method';
+Js07['trigger'] := 'method';
+Js07['body'] := <<BODY
+methodName(value) {
+  return value;
+}
+BODY;
+JsSnippets['METHOD'] := Js07;
+
+DEF_HASH(Js08);
+Js08['name'] := 'JavaScript if';
+Js08['trigger'] := 'if';
+Js08['body'] := <<BODY
+if (condition) {
+}
+BODY;
+JsSnippets['IF'] := Js08;
+
+DEF_HASH(Js09);
+Js09['name'] := 'JavaScript else if';
+Js09['trigger'] := 'elseif';
+Js09['body'] := <<BODY
+else if (condition) {
+}
+BODY;
+JsSnippets['ELSEIF'] := Js09;
+
+DEF_HASH(Js10);
+Js10['name'] := 'JavaScript switch';
+Js10['trigger'] := 'switch';
+Js10['body'] := <<BODY
+switch (value) {
+  case expected:
+    break;
+  default:
+    break;
+}
+BODY;
+JsSnippets['SWITCH'] := Js10;
+
+DEF_HASH(Js11);
+Js11['name'] := 'JavaScript for';
+Js11['trigger'] := 'for';
+Js11['body'] := <<BODY
+for (let i = 0; i < count; i += 1) {
+}
+BODY;
+JsSnippets['FOR'] := Js11;
+
+DEF_HASH(Js12);
+Js12['name'] := 'JavaScript for of';
+Js12['trigger'] := 'forof';
+Js12['body'] := <<BODY
+for (const item of items) {
+}
+BODY;
+JsSnippets['FOROF'] := Js12;
+
+DEF_HASH(Js13);
+Js13['name'] := 'JavaScript for in';
+Js13['trigger'] := 'forin';
+Js13['body'] := <<BODY
+for (const key in object) {
+  if (Object.hasOwn(object, key)) {
+  }
+}
+BODY;
+JsSnippets['FORIN'] := Js13;
+
+DEF_HASH(Js14);
+Js14['name'] := 'JavaScript while';
+Js14['trigger'] := 'while';
+Js14['body'] := <<BODY
+while (condition) {
+}
+BODY;
+JsSnippets['WHILE'] := Js14;
+
+DEF_HASH(Js15);
+Js15['name'] := 'JavaScript try catch';
+Js15['trigger'] := 'try';
+Js15['body'] := <<BODY
+try {
+} catch (error) {
+}
+BODY;
+JsSnippets['TRY'] := Js15;
+
+DEF_HASH(Js16);
+Js16['name'] := 'JavaScript promise';
+Js16['trigger'] := 'promise';
+Js16['body'] := <<BODY
+return new Promise((resolve, reject) => {
+  resolve(value);
+});
+BODY;
+JsSnippets['PROMISE'] := Js16;
+
+DEF_HASH(Js17);
+Js17['name'] := 'JavaScript fetch';
+Js17['trigger'] := 'fetch';
+Js17['body'] := <<BODY
+const response = await fetch(url);
+if (!response.ok) {
+  throw new Error(`HTTP ${response.status}`);
+}
+const data = await response.json();
+BODY;
+JsSnippets['FETCH'] := Js17;
+
+DEF_HASH(Js18);
+Js18['name'] := 'JavaScript map';
+Js18['trigger'] := 'map';
+Js18['body'] := <<BODY
+const values = items.map((item) => item.value);
+BODY;
+JsSnippets['MAP'] := Js18;
+
+DEF_HASH(Js19);
+Js19['name'] := 'JavaScript filter';
+Js19['trigger'] := 'filter';
+Js19['body'] := <<BODY
+const values = items.filter((item) => item.enabled);
+BODY;
+JsSnippets['FILTER'] := Js19;
+
+DEF_HASH(Js20);
+Js20['name'] := 'JavaScript reduce';
+Js20['trigger'] := 'reduce';
+Js20['body'] := <<BODY
+const total = items.reduce((sum, item) => sum + item.value, 0);
+BODY;
+JsSnippets['REDUCE'] := Js20;
+
+DEF_HASH(Js21);
+Js21['name'] := 'JavaScript destructuring';
+Js21['trigger'] := 'destructure';
+Js21['body'] := <<BODY
+const { name, value } = object;
+BODY;
+JsSnippets['DESTRUCTURE'] := Js21;
+
+DEF_HASH(Js22);
+Js22['name'] := 'JavaScript template';
+Js22['trigger'] := 'template';
+Js22['body'] := <<BODY
+const text = `${name}: ${value}`;
+BODY;
+JsSnippets['TEMPLATE'] := Js22;
+
+DEF_HASH(Js23);
+Js23['name'] := 'JavaScript module main';
+Js23['trigger'] := 'main';
+Js23['body'] := <<BODY
+async function main() {
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
+BODY;
+JsSnippets['MAIN'] := Js23;
+
+DEF_HASH(Js24);
+Js24['name'] := 'JavaScript event listener';
+Js24['trigger'] := 'listener';
+Js24['body'] := <<BODY
+element.addEventListener('click', (event) => {
+  event.preventDefault();
+});
+BODY;
+JsSnippets['LISTENER'] := Js24;
+
+DEF_HASH(Js25);
+Js25['name'] := 'JavaScript timeout';
+Js25['trigger'] := 'timeout';
+Js25['body'] := <<BODY
+const timer = setTimeout(() => {
+}, 1000);
+BODY;
+JsSnippets['TIMEOUT'] := Js25;
+
+DEF_HASH(Js26);
+Js26['name'] := 'JavaScript interval';
+Js26['trigger'] := 'interval';
+Js26['body'] := <<BODY
+const timer = setInterval(() => {
+}, 1000);
+BODY;
+JsSnippets['INTERVAL'] := Js26;
+
+DEF_HASH(Js27);
+Js27['name'] := 'JavaScript test';
+Js27['trigger'] := 'test';
+Js27['body'] := <<BODY
+test('name', () => {
+  expect(actual).toBe(expected);
+});
+BODY;
+JsSnippets['TEST'] := Js27;
+
+DEF_HASH(Js28);
+Js28['name'] := 'JavaScript describe';
+Js28['trigger'] := 'describe';
+Js28['body'] := <<BODY
+describe('name', () => {
+  it('case', () => {
+  });
+});
+BODY;
+JsSnippets['DESCRIBE'] := Js28;
+
+DEF_HASH(Js29);
+Js29['name'] := 'JavaScript console log';
+Js29['trigger'] := 'log';
+Js29['body'] := <<BODY
+console.log({ name, value });
+BODY;
+JsSnippets['LOG'] := Js29;
+
+DEF_HASH(Js30);
+Js30['name'] := 'JavaScript comment block';
+Js30['trigger'] := 'comment';
+Js30['body'] := <<BODY
+/*
+ * description
+ */
+BODY;
+JsSnippets['COMMENT'] := Js30;
+
+Snippets['JAVASCRIPT'] := JsSnippets;
+SET_GLOBAL_HASH('SNIPPETS', Snippets);
+
+MACRO_TO_KEY('<Ctrl+Space>', 'javascript^JAVASCRIPT_SNIPPET_EXPAND_KEYWORD', 0);
+MACRO_TO_KEY('<Ctrl+@>', 'javascript^JAVASCRIPT_SNIPPET_EXPAND_KEYWORD', 0);
+END_MACRO;
+
+$MACRO JAVASCRIPT_SNIPPET_EXPAND_KEYWORD FROM EDIT;
+SNIPPET_START();
+END_MACRO;
+
+$MACRO JAVASCRIPT_SNIPPETS_UNLOAD FROM EDIT;
+SNIPPETS_UNLOAD('JAVASCRIPT');
+END_MACRO;

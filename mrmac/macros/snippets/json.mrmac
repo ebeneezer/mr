@@ -1,0 +1,183 @@
+$MACRO REGISTER_JSON_SNIPPETS FROM EDIT;
+DEF_HASH(Snippets, JsonSnippets);
+
+Snippets := GLOBAL_HASH('SNIPPETS');
+
+DEF_HASH(Json01);
+Json01['name'] := 'JSON object';
+Json01['trigger'] := 'object';
+Json01['body'] := <<BODY
+{
+  "key": "value"
+}
+BODY;
+JsonSnippets['OBJECT'] := Json01;
+
+DEF_HASH(Json02);
+Json02['name'] := 'JSON array';
+Json02['trigger'] := 'array';
+Json02['body'] := <<BODY
+[
+  "value"
+]
+BODY;
+JsonSnippets['ARRAY'] := Json02;
+
+DEF_HASH(Json03);
+Json03['name'] := 'JSON string property';
+Json03['trigger'] := 'string';
+Json03['body'] := <<BODY
+"name": "value"
+BODY;
+JsonSnippets['STRING'] := Json03;
+
+DEF_HASH(Json04);
+Json04['name'] := 'JSON number property';
+Json04['trigger'] := 'number';
+Json04['body'] := <<BODY
+"name": 0
+BODY;
+JsonSnippets['NUMBER'] := Json04;
+
+DEF_HASH(Json05);
+Json05['name'] := 'JSON boolean property';
+Json05['trigger'] := 'bool';
+Json05['body'] := <<BODY
+"enabled": true
+BODY;
+JsonSnippets['BOOL'] := Json05;
+
+DEF_HASH(Json06);
+Json06['name'] := 'JSON null property';
+Json06['trigger'] := 'null';
+Json06['body'] := <<BODY
+"value": null
+BODY;
+JsonSnippets['NULL'] := Json06;
+
+DEF_HASH(Json07);
+Json07['name'] := 'JSON nested object';
+Json07['trigger'] := 'nested';
+Json07['body'] := <<BODY
+"name": {
+  "key": "value"
+}
+BODY;
+JsonSnippets['NESTED'] := Json07;
+
+DEF_HASH(Json08);
+Json08['name'] := 'JSON object array';
+Json08['trigger'] := 'objects';
+Json08['body'] := <<BODY
+"items": [
+  {
+    "name": "value"
+  }
+]
+BODY;
+JsonSnippets['OBJECTS'] := Json08;
+
+DEF_HASH(Json09);
+Json09['name'] := 'JSON schema root';
+Json09['trigger'] := 'schema';
+Json09['body'] := <<BODY
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+  }
+}
+BODY;
+JsonSnippets['SCHEMA'] := Json09;
+
+DEF_HASH(Json10);
+Json10['name'] := 'JSON schema string';
+Json10['trigger'] := 'schemastring';
+Json10['body'] := <<BODY
+"name": {
+  "type": "string"
+}
+BODY;
+JsonSnippets['SCHEMASTRING'] := Json10;
+
+DEF_HASH(Json11);
+Json11['name'] := 'JSON package';
+Json11['trigger'] := 'package';
+Json11['body'] := <<BODY
+{
+  "name": "project",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}
+BODY;
+JsonSnippets['PACKAGE'] := Json11;
+
+DEF_HASH(Json12);
+Json12['name'] := 'JSON tsconfig';
+Json12['trigger'] := 'tsconfig';
+Json12['body'] := <<BODY
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "strict": true
+  }
+}
+BODY;
+JsonSnippets['TSCONFIG'] := Json12;
+
+DEF_HASH(Json13);
+Json13['name'] := 'JSON VS Code launch';
+Json13['trigger'] := 'launch';
+Json13['body'] := <<BODY
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Launch"
+    }
+  ]
+}
+BODY;
+JsonSnippets['LAUNCH'] := Json13;
+
+DEF_HASH(Json14);
+Json14['name'] := 'JSON settings';
+Json14['trigger'] := 'settings';
+Json14['body'] := <<BODY
+{
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true
+}
+BODY;
+JsonSnippets['SETTINGS'] := Json14;
+
+DEF_HASH(Json15);
+Json15['name'] := 'JSON dependency';
+Json15['trigger'] := 'dependency';
+Json15['body'] := <<BODY
+"dependencies": {
+  "name": "version"
+}
+BODY;
+JsonSnippets['DEPENDENCY'] := Json15;
+
+Snippets['JSON'] := JsonSnippets;
+SET_GLOBAL_HASH('SNIPPETS', Snippets);
+
+MACRO_TO_KEY('<Ctrl+Space>', 'json^JSON_SNIPPET_EXPAND_KEYWORD', 0);
+MACRO_TO_KEY('<Ctrl+@>', 'json^JSON_SNIPPET_EXPAND_KEYWORD', 0);
+END_MACRO;
+
+$MACRO JSON_SNIPPET_EXPAND_KEYWORD FROM EDIT;
+SNIPPET_START();
+END_MACRO;
+
+$MACRO JSON_SNIPPETS_UNLOAD FROM EDIT;
+SNIPPETS_UNLOAD('JSON');
+END_MACRO;

@@ -1,0 +1,308 @@
+$MACRO REGISTER_GO_SNIPPETS FROM EDIT;
+DEF_HASH(Snippets, GoSnippets);
+
+Snippets := GLOBAL_HASH('SNIPPETS');
+
+DEF_HASH(Go01);
+Go01['name'] := 'Go package';
+Go01['trigger'] := 'package';
+Go01['body'] := <<BODY
+package main
+BODY;
+GoSnippets['PACKAGE'] := Go01;
+
+DEF_HASH(Go02);
+Go02['name'] := 'Go import';
+Go02['trigger'] := 'import';
+Go02['body'] := <<BODY
+import (
+	"fmt"
+)
+BODY;
+GoSnippets['IMPORT'] := Go02;
+
+DEF_HASH(Go03);
+Go03['name'] := 'Go main';
+Go03['trigger'] := 'main';
+Go03['body'] := <<BODY
+func main() {
+}
+BODY;
+GoSnippets['MAIN'] := Go03;
+
+DEF_HASH(Go04);
+Go04['name'] := 'Go function';
+Go04['trigger'] := 'func';
+Go04['body'] := <<BODY
+func name() error {
+	return nil
+}
+BODY;
+GoSnippets['FUNC'] := Go04;
+
+DEF_HASH(Go05);
+Go05['name'] := 'Go method';
+Go05['trigger'] := 'method';
+Go05['body'] := <<BODY
+func (v *Value) Method() error {
+	return nil
+}
+BODY;
+GoSnippets['METHOD'] := Go05;
+
+DEF_HASH(Go06);
+Go06['name'] := 'Go struct';
+Go06['trigger'] := 'struct';
+Go06['body'] := <<BODY
+type Name struct {
+	Value int
+}
+BODY;
+GoSnippets['STRUCT'] := Go06;
+
+DEF_HASH(Go07);
+Go07['name'] := 'Go interface';
+Go07['trigger'] := 'interface';
+Go07['body'] := <<BODY
+type Name interface {
+	Value() int
+}
+BODY;
+GoSnippets['INTERFACE'] := Go07;
+
+DEF_HASH(Go08);
+Go08['name'] := 'Go const';
+Go08['trigger'] := 'const';
+Go08['body'] := <<BODY
+const Name = "value"
+BODY;
+GoSnippets['CONST'] := Go08;
+
+DEF_HASH(Go09);
+Go09['name'] := 'Go var';
+Go09['trigger'] := 'var';
+Go09['body'] := <<BODY
+var value Type
+BODY;
+GoSnippets['VAR'] := Go09;
+
+DEF_HASH(Go10);
+Go10['name'] := 'Go if';
+Go10['trigger'] := 'if';
+Go10['body'] := <<BODY
+if condition {
+}
+BODY;
+GoSnippets['IF'] := Go10;
+
+DEF_HASH(Go11);
+Go11['name'] := 'Go if err';
+Go11['trigger'] := 'iferr';
+Go11['body'] := <<BODY
+if err != nil {
+	return err
+}
+BODY;
+GoSnippets['IFERR'] := Go11;
+
+DEF_HASH(Go12);
+Go12['name'] := 'Go for';
+Go12['trigger'] := 'for';
+Go12['body'] := <<BODY
+for i := 0; i < count; i++ {
+}
+BODY;
+GoSnippets['FOR'] := Go12;
+
+DEF_HASH(Go13);
+Go13['name'] := 'Go range';
+Go13['trigger'] := 'range';
+Go13['body'] := <<BODY
+for index, value := range values {
+	_ = index
+	_ = value
+}
+BODY;
+GoSnippets['RANGE'] := Go13;
+
+DEF_HASH(Go14);
+Go14['name'] := 'Go switch';
+Go14['trigger'] := 'switch';
+Go14['body'] := <<BODY
+switch value {
+case expected:
+default:
+}
+BODY;
+GoSnippets['SWITCH'] := Go14;
+
+DEF_HASH(Go15);
+Go15['name'] := 'Go select';
+Go15['trigger'] := 'select';
+Go15['body'] := <<BODY
+select {
+case value := <-ch:
+	_ = value
+default:
+}
+BODY;
+GoSnippets['SELECT'] := Go15;
+
+DEF_HASH(Go16);
+Go16['name'] := 'Go goroutine';
+Go16['trigger'] := 'go';
+Go16['body'] := <<BODY
+go func() {
+}()
+BODY;
+GoSnippets['GOROUTINE'] := Go16;
+
+DEF_HASH(Go17);
+Go17['name'] := 'Go defer';
+Go17['trigger'] := 'defer';
+Go17['body'] := <<BODY
+defer func() {
+}()
+BODY;
+GoSnippets['DEFER'] := Go17;
+
+DEF_HASH(Go18);
+Go18['name'] := 'Go context';
+Go18['trigger'] := 'context';
+Go18['body'] := <<BODY
+ctx, cancel := context.WithCancel(context.Background())
+defer cancel()
+BODY;
+GoSnippets['CONTEXT'] := Go18;
+
+DEF_HASH(Go19);
+Go19['name'] := 'Go channel';
+Go19['trigger'] := 'chan';
+Go19['body'] := <<BODY
+ch := make(chan Type)
+BODY;
+GoSnippets['CHAN'] := Go19;
+
+DEF_HASH(Go20);
+Go20['name'] := 'Go slice';
+Go20['trigger'] := 'slice';
+Go20['body'] := <<BODY
+values := make([]Type, 0, count)
+values = append(values, value)
+BODY;
+GoSnippets['SLICE'] := Go20;
+
+DEF_HASH(Go21);
+Go21['name'] := 'Go map';
+Go21['trigger'] := 'map';
+Go21['body'] := <<BODY
+values := make(map[Key]Value)
+values[key] = value
+BODY;
+GoSnippets['MAP'] := Go21;
+
+DEF_HASH(Go22);
+Go22['name'] := 'Go test';
+Go22['trigger'] := 'test';
+Go22['body'] := <<BODY
+func TestName(t *testing.T) {
+	t.Helper()
+}
+BODY;
+GoSnippets['TEST'] := Go22;
+
+DEF_HASH(Go23);
+Go23['name'] := 'Go table test';
+Go23['trigger'] := 'tabletest';
+Go23['body'] := <<BODY
+tests := []struct {
+	name string
+	want int
+}{
+	{name: "case", want: 0},
+}
+for _, tt := range tests {
+	t.Run(tt.name, func(t *testing.T) {
+	})
+}
+BODY;
+GoSnippets['TABLETEST'] := Go23;
+
+DEF_HASH(Go24);
+Go24['name'] := 'Go error wrap';
+Go24['trigger'] := 'wrap';
+Go24['body'] := <<BODY
+return fmt.Errorf("operation failed: %w", err)
+BODY;
+GoSnippets['WRAP'] := Go24;
+
+DEF_HASH(Go25);
+Go25['name'] := 'Go json tag';
+Go25['trigger'] := 'jsontag';
+Go25['body'] := <<BODY
+Value string `json:"value"`
+BODY;
+GoSnippets['JSONTAG'] := Go25;
+
+DEF_HASH(Go26);
+Go26['name'] := 'Go http handler';
+Go26['trigger'] := 'handler';
+Go26['body'] := <<BODY
+func handler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+BODY;
+GoSnippets['HANDLER'] := Go26;
+
+DEF_HASH(Go27);
+Go27['name'] := 'Go mutex';
+Go27['trigger'] := 'mutex';
+Go27['body'] := <<BODY
+mu.Lock()
+defer mu.Unlock()
+BODY;
+GoSnippets['MUTEX'] := Go27;
+
+DEF_HASH(Go28);
+Go28['name'] := 'Go recover';
+Go28['trigger'] := 'recover';
+Go28['body'] := <<BODY
+defer func() {
+	if r := recover(); r != nil {
+	}
+}()
+BODY;
+GoSnippets['RECOVER'] := Go28;
+
+DEF_HASH(Go29);
+Go29['name'] := 'Go printf';
+Go29['trigger'] := 'printf';
+Go29['body'] := <<BODY
+fmt.Printf("%s: %v\n", name, value)
+BODY;
+GoSnippets['PRINTF'] := Go29;
+
+DEF_HASH(Go30);
+Go30['name'] := 'Go comment block';
+Go30['trigger'] := 'comment';
+Go30['body'] := <<BODY
+/*
+description
+*/
+BODY;
+GoSnippets['COMMENT'] := Go30;
+
+Snippets['GO'] := GoSnippets;
+SET_GLOBAL_HASH('SNIPPETS', Snippets);
+
+MACRO_TO_KEY('<Ctrl+Space>', 'go^GO_SNIPPET_EXPAND_KEYWORD', 0);
+MACRO_TO_KEY('<Ctrl+@>', 'go^GO_SNIPPET_EXPAND_KEYWORD', 0);
+END_MACRO;
+
+$MACRO GO_SNIPPET_EXPAND_KEYWORD FROM EDIT;
+SNIPPET_START();
+END_MACRO;
+
+$MACRO GO_SNIPPETS_UNLOAD FROM EDIT;
+SNIPPETS_UNLOAD('GO');
+END_MACRO;

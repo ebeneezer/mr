@@ -1,0 +1,310 @@
+$MACRO REGISTER_RUST_SNIPPETS FROM EDIT;
+DEF_HASH(Snippets, RustSnippets);
+
+Snippets := GLOBAL_HASH('SNIPPETS');
+
+DEF_HASH(Rs01);
+Rs01['name'] := 'Rust use';
+Rs01['trigger'] := 'use';
+Rs01['body'] := <<BODY
+use std::collections::HashMap;
+BODY;
+RustSnippets['USE'] := Rs01;
+
+DEF_HASH(Rs02);
+Rs02['name'] := 'Rust module';
+Rs02['trigger'] := 'mod';
+Rs02['body'] := <<BODY
+mod name {
+}
+BODY;
+RustSnippets['MOD'] := Rs02;
+
+DEF_HASH(Rs03);
+Rs03['name'] := 'Rust main';
+Rs03['trigger'] := 'main';
+Rs03['body'] := <<BODY
+fn main() {
+}
+BODY;
+RustSnippets['MAIN'] := Rs03;
+
+DEF_HASH(Rs04);
+Rs04['name'] := 'Rust function';
+Rs04['trigger'] := 'fn';
+Rs04['body'] := <<BODY
+fn function_name() -> Result<(), Error> {
+	Ok(())
+}
+BODY;
+RustSnippets['FN'] := Rs04;
+
+DEF_HASH(Rs05);
+Rs05['name'] := 'Rust struct';
+Rs05['trigger'] := 'struct';
+Rs05['body'] := <<BODY
+struct Name {
+	value: i32,
+}
+BODY;
+RustSnippets['STRUCT'] := Rs05;
+
+DEF_HASH(Rs06);
+Rs06['name'] := 'Rust enum';
+Rs06['trigger'] := 'enum';
+Rs06['body'] := <<BODY
+enum Name {
+	First,
+	Second,
+}
+BODY;
+RustSnippets['ENUM'] := Rs06;
+
+DEF_HASH(Rs07);
+Rs07['name'] := 'Rust impl';
+Rs07['trigger'] := 'impl';
+Rs07['body'] := <<BODY
+impl Name {
+	pub fn new() -> Self {
+		Self { value: 0 }
+	}
+}
+BODY;
+RustSnippets['IMPL'] := Rs07;
+
+DEF_HASH(Rs08);
+Rs08['name'] := 'Rust trait';
+Rs08['trigger'] := 'trait';
+Rs08['body'] := <<BODY
+trait Name {
+	fn value(&self) -> i32;
+}
+BODY;
+RustSnippets['TRAIT'] := Rs08;
+
+DEF_HASH(Rs09);
+Rs09['name'] := 'Rust match';
+Rs09['trigger'] := 'match';
+Rs09['body'] := <<BODY
+match value {
+	Some(item) => item,
+	None => return,
+}
+BODY;
+RustSnippets['MATCH'] := Rs09;
+
+DEF_HASH(Rs10);
+Rs10['name'] := 'Rust if let';
+Rs10['trigger'] := 'iflet';
+Rs10['body'] := <<BODY
+if let Some(value) = maybe_value {
+}
+BODY;
+RustSnippets['IFLET'] := Rs10;
+
+DEF_HASH(Rs11);
+Rs11['name'] := 'Rust while let';
+Rs11['trigger'] := 'whilelet';
+Rs11['body'] := <<BODY
+while let Some(value) = iter.next() {
+}
+BODY;
+RustSnippets['WHILELET'] := Rs11;
+
+DEF_HASH(Rs12);
+Rs12['name'] := 'Rust for';
+Rs12['trigger'] := 'for';
+Rs12['body'] := <<BODY
+for item in items {
+}
+BODY;
+RustSnippets['FOR'] := Rs12;
+
+DEF_HASH(Rs13);
+Rs13['name'] := 'Rust loop';
+Rs13['trigger'] := 'loop';
+Rs13['body'] := <<BODY
+loop {
+	break;
+}
+BODY;
+RustSnippets['LOOP'] := Rs13;
+
+DEF_HASH(Rs14);
+Rs14['name'] := 'Rust result';
+Rs14['trigger'] := 'result';
+Rs14['body'] := <<BODY
+let value = operation()?;
+BODY;
+RustSnippets['RESULT'] := Rs14;
+
+DEF_HASH(Rs15);
+Rs15['name'] := 'Rust option';
+Rs15['trigger'] := 'option';
+Rs15['body'] := <<BODY
+let value = maybe_value.unwrap_or(default_value);
+BODY;
+RustSnippets['OPTION'] := Rs15;
+
+DEF_HASH(Rs16);
+Rs16['name'] := 'Rust vec';
+Rs16['trigger'] := 'vec';
+Rs16['body'] := <<BODY
+let mut values: Vec<Type> = Vec::new();
+values.push(value);
+BODY;
+RustSnippets['VEC'] := Rs16;
+
+DEF_HASH(Rs17);
+Rs17['name'] := 'Rust hashmap';
+Rs17['trigger'] := 'hashmap';
+Rs17['body'] := <<BODY
+let mut values: HashMap<Key, Value> = HashMap::new();
+values.insert(key, value);
+BODY;
+RustSnippets['HASHMAP'] := Rs17;
+
+DEF_HASH(Rs18);
+Rs18['name'] := 'Rust test';
+Rs18['trigger'] := 'test';
+Rs18['body'] := <<BODY
+#[test]
+fn test_name() {
+	assert_eq!(actual, expected);
+}
+BODY;
+RustSnippets['TEST'] := Rs18;
+
+DEF_HASH(Rs19);
+Rs19['name'] := 'Rust derive';
+Rs19['trigger'] := 'derive';
+Rs19['body'] := <<BODY
+#[derive(Debug, Clone, PartialEq, Eq)]
+BODY;
+RustSnippets['DERIVE'] := Rs19;
+
+DEF_HASH(Rs20);
+Rs20['name'] := 'Rust macro rules';
+Rs20['trigger'] := 'macro';
+Rs20['body'] := <<BODY
+macro_rules! name {
+	() => {
+	};
+}
+BODY;
+RustSnippets['MACRO'] := Rs20;
+
+DEF_HASH(Rs21);
+Rs21['name'] := 'Rust async function';
+Rs21['trigger'] := 'asyncfn';
+Rs21['body'] := <<BODY
+async fn function_name() -> Result<(), Error> {
+	Ok(())
+}
+BODY;
+RustSnippets['ASYNCFN'] := Rs21;
+
+DEF_HASH(Rs22);
+Rs22['name'] := 'Rust closure';
+Rs22['trigger'] := 'closure';
+Rs22['body'] := <<BODY
+let callback = |value| {
+	value
+};
+BODY;
+RustSnippets['CLOSURE'] := Rs22;
+
+DEF_HASH(Rs23);
+Rs23['name'] := 'Rust iterator';
+Rs23['trigger'] := 'iter';
+Rs23['body'] := <<BODY
+let values: Vec<_> = items.iter().map(|item| item.value()).collect();
+BODY;
+RustSnippets['ITER'] := Rs23;
+
+DEF_HASH(Rs24);
+Rs24['name'] := 'Rust From impl';
+Rs24['trigger'] := 'from';
+Rs24['body'] := <<BODY
+impl From<Source> for Target {
+	fn from(value: Source) -> Self {
+		Self { value }
+	}
+}
+BODY;
+RustSnippets['FROM'] := Rs24;
+
+DEF_HASH(Rs25);
+Rs25['name'] := 'Rust Display impl';
+Rs25['trigger'] := 'display';
+Rs25['body'] := <<BODY
+impl std::fmt::Display for Name {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "{}", self.value)
+	}
+}
+BODY;
+RustSnippets['DISPLAY'] := Rs25;
+
+DEF_HASH(Rs26);
+Rs26['name'] := 'Rust error enum';
+Rs26['trigger'] := 'error';
+Rs26['body'] := <<BODY
+#[derive(Debug)]
+enum Error {
+	InvalidValue,
+}
+BODY;
+RustSnippets['ERROR'] := Rs26;
+
+DEF_HASH(Rs27);
+Rs27['name'] := 'Rust cfg';
+Rs27['trigger'] := 'cfg';
+Rs27['body'] := <<BODY
+#[cfg(test)]
+mod tests {
+}
+BODY;
+RustSnippets['CFG'] := Rs27;
+
+DEF_HASH(Rs28);
+Rs28['name'] := 'Rust unsafe';
+Rs28['trigger'] := 'unsafe';
+Rs28['body'] := <<BODY
+unsafe {
+}
+BODY;
+RustSnippets['UNSAFE'] := Rs28;
+
+DEF_HASH(Rs29);
+Rs29['name'] := 'Rust println';
+Rs29['trigger'] := 'println';
+Rs29['body'] := <<BODY
+println!("{} {}", name, value);
+BODY;
+RustSnippets['PRINTLN'] := Rs29;
+
+DEF_HASH(Rs30);
+Rs30['name'] := 'Rust comment block';
+Rs30['trigger'] := 'comment';
+Rs30['body'] := <<BODY
+/*
+ * description
+ */
+BODY;
+RustSnippets['COMMENT'] := Rs30;
+
+Snippets['RUST'] := RustSnippets;
+SET_GLOBAL_HASH('SNIPPETS', Snippets);
+
+MACRO_TO_KEY('<Ctrl+Space>', 'rust^RUST_SNIPPET_EXPAND_KEYWORD', 0);
+MACRO_TO_KEY('<Ctrl+@>', 'rust^RUST_SNIPPET_EXPAND_KEYWORD', 0);
+END_MACRO;
+
+$MACRO RUST_SNIPPET_EXPAND_KEYWORD FROM EDIT;
+SNIPPET_START();
+END_MACRO;
+
+$MACRO RUST_SNIPPETS_UNLOAD FROM EDIT;
+SNIPPETS_UNLOAD('RUST');
+END_MACRO;

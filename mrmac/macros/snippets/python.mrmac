@@ -1,0 +1,304 @@
+$MACRO REGISTER_PYTHON_SNIPPETS FROM EDIT;
+DEF_HASH(Snippets, PySnippets);
+
+Snippets := GLOBAL_HASH('SNIPPETS');
+
+DEF_HASH(Py01);
+Py01['name'] := 'Python import';
+Py01['trigger'] := 'import';
+Py01['body'] := <<BODY
+import module
+BODY;
+PySnippets['IMPORT'] := Py01;
+
+DEF_HASH(Py02);
+Py02['name'] := 'Python from import';
+Py02['trigger'] := 'from';
+Py02['body'] := <<BODY
+from module import name
+BODY;
+PySnippets['FROM'] := Py02;
+
+DEF_HASH(Py03);
+Py03['name'] := 'Python main';
+Py03['trigger'] := 'main';
+Py03['body'] := <<BODY
+def main() -> int:
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+BODY;
+PySnippets['MAIN'] := Py03;
+
+DEF_HASH(Py04);
+Py04['name'] := 'Python function';
+Py04['trigger'] := 'def';
+Py04['body'] := <<BODY
+def name(value):
+    return value
+BODY;
+PySnippets['DEF'] := Py04;
+
+DEF_HASH(Py05);
+Py05['name'] := 'Python async function';
+Py05['trigger'] := 'async';
+Py05['body'] := <<BODY
+async def name(value):
+    result = await operation(value)
+    return result
+BODY;
+PySnippets['ASYNC'] := Py05;
+
+DEF_HASH(Py06);
+Py06['name'] := 'Python class';
+Py06['trigger'] := 'class';
+Py06['body'] := <<BODY
+class Name:
+    def __init__(self, value):
+        self.value = value
+BODY;
+PySnippets['CLASS'] := Py06;
+
+DEF_HASH(Py07);
+Py07['name'] := 'Python dataclass';
+Py07['trigger'] := 'dataclass';
+Py07['body'] := <<BODY
+@dataclass
+class Name:
+    value: int
+BODY;
+PySnippets['DATACLASS'] := Py07;
+
+DEF_HASH(Py08);
+Py08['name'] := 'Python property';
+Py08['trigger'] := 'property';
+Py08['body'] := <<BODY
+@property
+def value(self):
+    return self._value
+BODY;
+PySnippets['PROPERTY'] := Py08;
+
+DEF_HASH(Py09);
+Py09['name'] := 'Python if';
+Py09['trigger'] := 'if';
+Py09['body'] := <<BODY
+if condition:
+    pass
+BODY;
+PySnippets['IF'] := Py09;
+
+DEF_HASH(Py10);
+Py10['name'] := 'Python elif';
+Py10['trigger'] := 'elif';
+Py10['body'] := <<BODY
+elif condition:
+    pass
+BODY;
+PySnippets['ELIF'] := Py10;
+
+DEF_HASH(Py11);
+Py11['name'] := 'Python for';
+Py11['trigger'] := 'for';
+Py11['body'] := <<BODY
+for item in items:
+    pass
+BODY;
+PySnippets['FOR'] := Py11;
+
+DEF_HASH(Py12);
+Py12['name'] := 'Python enumerate';
+Py12['trigger'] := 'enumerate';
+Py12['body'] := <<BODY
+for index, item in enumerate(items):
+    pass
+BODY;
+PySnippets['ENUMERATE'] := Py12;
+
+DEF_HASH(Py13);
+Py13['name'] := 'Python while';
+Py13['trigger'] := 'while';
+Py13['body'] := <<BODY
+while condition:
+    pass
+BODY;
+PySnippets['WHILE'] := Py13;
+
+DEF_HASH(Py14);
+Py14['name'] := 'Python try except';
+Py14['trigger'] := 'try';
+Py14['body'] := <<BODY
+try:
+    operation()
+except Exception as exc:
+    raise
+BODY;
+PySnippets['TRY'] := Py14;
+
+DEF_HASH(Py15);
+Py15['name'] := 'Python with';
+Py15['trigger'] := 'with';
+Py15['body'] := <<BODY
+with open(path, "r", encoding="utf-8") as handle:
+    data = handle.read()
+BODY;
+PySnippets['WITH'] := Py15;
+
+DEF_HASH(Py16);
+Py16['name'] := 'Python match';
+Py16['trigger'] := 'match';
+Py16['body'] := <<BODY
+match value:
+    case expected:
+        pass
+    case _:
+        pass
+BODY;
+PySnippets['MATCH'] := Py16;
+
+DEF_HASH(Py17);
+Py17['name'] := 'Python list comprehension';
+Py17['trigger'] := 'listcomp';
+Py17['body'] := <<BODY
+values = [item.value for item in items if item.enabled]
+BODY;
+PySnippets['LISTCOMP'] := Py17;
+
+DEF_HASH(Py18);
+Py18['name'] := 'Python dict comprehension';
+Py18['trigger'] := 'dictcomp';
+Py18['body'] := <<BODY
+values = {item.key: item.value for item in items}
+BODY;
+PySnippets['DICTCOMP'] := Py18;
+
+DEF_HASH(Py19);
+Py19['name'] := 'Python generator';
+Py19['trigger'] := 'generator';
+Py19['body'] := <<BODY
+def values(items):
+    for item in items:
+        yield item
+BODY;
+PySnippets['GENERATOR'] := Py19;
+
+DEF_HASH(Py20);
+Py20['name'] := 'Python decorator';
+Py20['trigger'] := 'decorator';
+Py20['body'] := <<BODY
+def decorator(func):
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+    return wrapper
+BODY;
+PySnippets['DECORATOR'] := Py20;
+
+DEF_HASH(Py21);
+Py21['name'] := 'Python context manager';
+Py21['trigger'] := 'context';
+Py21['body'] := <<BODY
+@contextmanager
+def name():
+    try:
+        yield
+    finally:
+        pass
+BODY;
+PySnippets['CONTEXT'] := Py21;
+
+DEF_HASH(Py22);
+Py22['name'] := 'Python argparse';
+Py22['trigger'] := 'argparse';
+Py22['body'] := <<BODY
+parser = argparse.ArgumentParser()
+parser.add_argument("path")
+args = parser.parse_args()
+BODY;
+PySnippets['ARGPARSE'] := Py22;
+
+DEF_HASH(Py23);
+Py23['name'] := 'Python logging';
+Py23['trigger'] := 'logging';
+Py23['body'] := <<BODY
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+BODY;
+PySnippets['LOGGING'] := Py23;
+
+DEF_HASH(Py24);
+Py24['name'] := 'Python pathlib';
+Py24['trigger'] := 'path';
+Py24['body'] := <<BODY
+path = Path(filename)
+text = path.read_text(encoding="utf-8")
+BODY;
+PySnippets['PATH'] := Py24;
+
+DEF_HASH(Py25);
+Py25['name'] := 'Python json';
+Py25['trigger'] := 'json';
+Py25['body'] := <<BODY
+data = json.loads(text)
+output = json.dumps(data, indent=2)
+BODY;
+PySnippets['JSON'] := Py25;
+
+DEF_HASH(Py26);
+Py26['name'] := 'Python pytest';
+Py26['trigger'] := 'test';
+Py26['body'] := <<BODY
+def test_name():
+    assert actual == expected
+BODY;
+PySnippets['TEST'] := Py26;
+
+DEF_HASH(Py27);
+Py27['name'] := 'Python fixture';
+Py27['trigger'] := 'fixture';
+Py27['body'] := <<BODY
+@pytest.fixture
+def name():
+    return value
+BODY;
+PySnippets['FIXTURE'] := Py27;
+
+DEF_HASH(Py28);
+Py28['name'] := 'Python type alias';
+Py28['trigger'] := 'typealias';
+Py28['body'] := <<BODY
+Name = dict[str, object]
+BODY;
+PySnippets['TYPEALIAS'] := Py28;
+
+DEF_HASH(Py29);
+Py29['name'] := 'Python print';
+Py29['trigger'] := 'print';
+Py29['body'] := <<BODY
+print(f"{name}: {value}")
+BODY;
+PySnippets['PRINT'] := Py29;
+
+DEF_HASH(Py30);
+Py30['name'] := 'Python docstring';
+Py30['trigger'] := 'docstring';
+Py30['body'] := <<BODY
+"""Describe the object."""
+BODY;
+PySnippets['DOCSTRING'] := Py30;
+
+Snippets['PYTHON'] := PySnippets;
+SET_GLOBAL_HASH('SNIPPETS', Snippets);
+
+MACRO_TO_KEY('<Ctrl+Space>', 'python^PYTHON_SNIPPET_EXPAND_KEYWORD', 0);
+MACRO_TO_KEY('<Ctrl+@>', 'python^PYTHON_SNIPPET_EXPAND_KEYWORD', 0);
+END_MACRO;
+
+$MACRO PYTHON_SNIPPET_EXPAND_KEYWORD FROM EDIT;
+SNIPPET_START();
+END_MACRO;
+
+$MACRO PYTHON_SNIPPETS_UNLOAD FROM EDIT;
+SNIPPETS_UNLOAD('PYTHON');
+END_MACRO;

@@ -1,0 +1,285 @@
+$MACRO REGISTER_FISH_SNIPPETS FROM EDIT;
+DEF_HASH(Snippets, FishSnippets);
+
+Snippets := GLOBAL_HASH('SNIPPETS');
+
+DEF_HASH(Fi01);
+Fi01['name'] := 'Fish shebang';
+Fi01['trigger'] := 'shebang';
+Fi01['body'] := <<BODY
+#!/usr/bin/env fish
+BODY;
+FishSnippets['SHEBANG'] := Fi01;
+
+DEF_HASH(Fi02);
+Fi02['name'] := 'Fish function';
+Fi02['trigger'] := 'function';
+Fi02['body'] := <<BODY
+function name
+end
+BODY;
+FishSnippets['FUNCTION'] := Fi02;
+
+DEF_HASH(Fi03);
+Fi03['name'] := 'Fish main';
+Fi03['trigger'] := 'main';
+Fi03['body'] := <<BODY
+function main
+    return 0
+end
+
+main $argv
+BODY;
+FishSnippets['MAIN'] := Fi03;
+
+DEF_HASH(Fi04);
+Fi04['name'] := 'Fish argument';
+Fi04['trigger'] := 'arg';
+Fi04['body'] := <<BODY
+set -l value $argv[1]
+BODY;
+FishSnippets['ARG'] := Fi04;
+
+DEF_HASH(Fi05);
+Fi05['name'] := 'Fish local';
+Fi05['trigger'] := 'local';
+Fi05['body'] := <<BODY
+set -l value default
+BODY;
+FishSnippets['LOCAL'] := Fi05;
+
+DEF_HASH(Fi06);
+Fi06['name'] := 'Fish global';
+Fi06['trigger'] := 'global';
+Fi06['body'] := <<BODY
+set -g value default
+BODY;
+FishSnippets['GLOBAL'] := Fi06;
+
+DEF_HASH(Fi07);
+Fi07['name'] := 'Fish export';
+Fi07['trigger'] := 'export';
+Fi07['body'] := <<BODY
+set -gx NAME value
+BODY;
+FishSnippets['EXPORT'] := Fi07;
+
+DEF_HASH(Fi08);
+Fi08['name'] := 'Fish if';
+Fi08['trigger'] := 'if';
+Fi08['body'] := <<BODY
+if test condition
+end
+BODY;
+FishSnippets['IF'] := Fi08;
+
+DEF_HASH(Fi09);
+Fi09['name'] := 'Fish else if';
+Fi09['trigger'] := 'elseif';
+Fi09['body'] := <<BODY
+else if test condition
+BODY;
+FishSnippets['ELSEIF'] := Fi09;
+
+DEF_HASH(Fi10);
+Fi10['name'] := 'Fish switch';
+Fi10['trigger'] := 'switch';
+Fi10['body'] := <<BODY
+switch $value
+    case pattern
+    case '*'
+end
+BODY;
+FishSnippets['SWITCH'] := Fi10;
+
+DEF_HASH(Fi11);
+Fi11['name'] := 'Fish for';
+Fi11['trigger'] := 'for';
+Fi11['body'] := <<BODY
+for item in $items
+end
+BODY;
+FishSnippets['FOR'] := Fi11;
+
+DEF_HASH(Fi12);
+Fi12['name'] := 'Fish while';
+Fi12['trigger'] := 'while';
+Fi12['body'] := <<BODY
+while test condition
+end
+BODY;
+FishSnippets['WHILE'] := Fi12;
+
+DEF_HASH(Fi13);
+Fi13['name'] := 'Fish read';
+Fi13['trigger'] := 'read';
+Fi13['body'] := <<BODY
+read -l value
+BODY;
+FishSnippets['READ'] := Fi13;
+
+DEF_HASH(Fi14);
+Fi14['name'] := 'Fish read loop';
+Fi14['trigger'] := 'readloop';
+Fi14['body'] := <<BODY
+while read -l line
+end < $file
+BODY;
+FishSnippets['READLOOP'] := Fi14;
+
+DEF_HASH(Fi15);
+Fi15['name'] := 'Fish contains';
+Fi15['trigger'] := 'contains';
+Fi15['body'] := <<BODY
+if contains -- $needle $haystack
+end
+BODY;
+FishSnippets['CONTAINS'] := Fi15;
+
+DEF_HASH(Fi16);
+Fi16['name'] := 'Fish string match';
+Fi16['trigger'] := 'match';
+Fi16['body'] := <<BODY
+if string match -q -- pattern $value
+end
+BODY;
+FishSnippets['MATCH'] := Fi16;
+
+DEF_HASH(Fi17);
+Fi17['name'] := 'Fish string replace';
+Fi17['trigger'] := 'replace';
+Fi17['body'] := <<BODY
+set value (string replace -- old new $value)
+BODY;
+FishSnippets['REPLACE'] := Fi17;
+
+DEF_HASH(Fi18);
+Fi18['name'] := 'Fish path';
+Fi18['trigger'] := 'path';
+Fi18['body'] := <<BODY
+set base (path basename $file)
+set dir (path dirname $file)
+BODY;
+FishSnippets['PATH'] := Fi18;
+
+DEF_HASH(Fi19);
+Fi19['name'] := 'Fish test file';
+Fi19['trigger'] := 'exists';
+Fi19['body'] := <<BODY
+if test -f $file
+end
+BODY;
+FishSnippets['EXISTS'] := Fi19;
+
+DEF_HASH(Fi20);
+Fi20['name'] := 'Fish test dir';
+Fi20['trigger'] := 'dir';
+Fi20['body'] := <<BODY
+if test -d $dir
+end
+BODY;
+FishSnippets['DIR'] := Fi20;
+
+DEF_HASH(Fi21);
+Fi21['name'] := 'Fish command check';
+Fi21['trigger'] := 'command';
+Fi21['body'] := <<BODY
+if not type -q tool
+    echo "missing tool: tool" >&2
+    return 1
+end
+BODY;
+FishSnippets['COMMAND'] := Fi21;
+
+DEF_HASH(Fi22);
+Fi22['name'] := 'Fish argparse';
+Fi22['trigger'] := 'argparse';
+Fi22['body'] := <<BODY
+argparse h/help v/verbose -- $argv
+or return
+BODY;
+FishSnippets['ARGPARSE'] := Fi22;
+
+DEF_HASH(Fi23);
+Fi23['name'] := 'Fish complete';
+Fi23['trigger'] := 'complete';
+Fi23['body'] := <<BODY
+complete -c command -s h -l help -d 'Show help'
+BODY;
+FishSnippets['COMPLETE'] := Fi23;
+
+DEF_HASH(Fi24);
+Fi24['name'] := 'Fish abbreviate';
+Fi24['trigger'] := 'abbr';
+Fi24['body'] := <<BODY
+abbr -a name 'command'
+BODY;
+FishSnippets['ABBR'] := Fi24;
+
+DEF_HASH(Fi25);
+Fi25['name'] := 'Fish event handler';
+Fi25['trigger'] := 'event';
+Fi25['body'] := <<BODY
+function name --on-event event_name
+end
+BODY;
+FishSnippets['EVENT'] := Fi25;
+
+DEF_HASH(Fi26);
+Fi26['name'] := 'Fish status check';
+Fi26['trigger'] := 'status';
+Fi26['body'] := <<BODY
+if test $status -ne 0
+    return $status
+end
+BODY;
+FishSnippets['STATUS'] := Fi26;
+
+DEF_HASH(Fi27);
+Fi27['name'] := 'Fish tempdir';
+Fi27['trigger'] := 'tempdir';
+Fi27['body'] := <<BODY
+set -l tmpdir (mktemp -d)
+BODY;
+FishSnippets['TEMPDIR'] := Fi27;
+
+DEF_HASH(Fi28);
+Fi28['name'] := 'Fish source';
+Fi28['trigger'] := 'source';
+Fi28['body'] := <<BODY
+source $file
+BODY;
+FishSnippets['SOURCE'] := Fi28;
+
+DEF_HASH(Fi29);
+Fi29['name'] := 'Fish echo';
+Fi29['trigger'] := 'echo';
+Fi29['body'] := <<BODY
+echo "$name: $value"
+BODY;
+FishSnippets['ECHO'] := Fi29;
+
+DEF_HASH(Fi30);
+Fi30['name'] := 'Fish comment block';
+Fi30['trigger'] := 'comment';
+Fi30['body'] := <<BODY
+# -----------------------------------------------------------------------------
+# description
+# -----------------------------------------------------------------------------
+BODY;
+FishSnippets['COMMENT'] := Fi30;
+
+Snippets['FISH'] := FishSnippets;
+SET_GLOBAL_HASH('SNIPPETS', Snippets);
+
+MACRO_TO_KEY('<Ctrl+Space>', 'fish^FISH_SNIPPET_EXPAND_KEYWORD', 0);
+MACRO_TO_KEY('<Ctrl+@>', 'fish^FISH_SNIPPET_EXPAND_KEYWORD', 0);
+END_MACRO;
+
+$MACRO FISH_SNIPPET_EXPAND_KEYWORD FROM EDIT;
+SNIPPET_START();
+END_MACRO;
+
+$MACRO FISH_SNIPPETS_UNLOAD FROM EDIT;
+SNIPPETS_UNLOAD('FISH');
+END_MACRO;
