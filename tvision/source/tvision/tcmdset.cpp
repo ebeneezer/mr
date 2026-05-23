@@ -47,14 +47,14 @@ TCommandSet& TCommandSet::operator = ( const TCommandSet& tc ) noexcept
 
 Boolean TCommandSet::has( int cmd ) noexcept
 {
-    if( cmd >= 0 && loc( cmd ) < 32 )
+    if( loc( cmd ) < 32 )
         return Boolean( (cmds[ loc( cmd ) ] & mask( cmd )) != 0 );
     return False;
 }
 
 void TCommandSet::disableCmd( int cmd ) noexcept
 {
-    if( cmd >= 0 && loc( cmd ) < 32 )
+    if( loc( cmd ) < 32 )
         cmds[ loc( cmd ) ] &= ~mask( cmd );
 }
 
@@ -72,7 +72,7 @@ void TCommandSet::disableCmd( const TCommandSet& tc ) noexcept
 
 void TCommandSet::enableCmd( int cmd ) noexcept
 {
-    if( cmd >= 0 && loc( cmd ) < 32 )
+    if( loc( cmd ) < 32 )
         cmds[ loc( cmd ) ] |= mask( cmd );
 }
 
@@ -119,3 +119,4 @@ int operator == ( const TCommandSet& tc1, const TCommandSet& tc2 ) noexcept
             return 0;
     return 1;
 }
+

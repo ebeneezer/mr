@@ -306,7 +306,7 @@ There are a few environment variables that affect the behaviour of all Turbo Vis
     * Support for Conpty's [`win32-input-mode`](https://github.com/microsoft/terminal/blob/37b0cfd32ba0aa54e0fe50bb158154d906472a89/doc/specs/%234999%20-%20Improved%20keyboard%20handling%20in%20Conpty.md) (available in WSL).
     * Support for [far2l](https://github.com/elfmz/far2l)'s terminal extensions.
     * Support for key modifiers (via `TIOCLINUX`) and mouse (via GPM) in the Linux console.
-* Custom signal handler that restores the terminal state before the program crashes.
+* Custom signal handler that restores the terminal state before the program gets terminated or suspended by these signals: `SIGINT`, `SIGQUIT`, `SIGILL`, `SIGABRT`, `SIGBUS`, `SIGFPE`, `SIGSEGV`, `SIGPIPE`, `SIGTERM`, `SIGTSTP`.
 * When `stderr` is a tty, messages written to it are redirected to a buffer to prevent them from messing up the display and are eventually printed to the console when exiting or suspending the application.
     * The buffer used for this purpose has a limited size, so writes to `stderr` will fail once the buffer is full. If you wish to preserve all of `stderr`, just redirect it into a file from the command line with `2>`.
 

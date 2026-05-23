@@ -12,6 +12,7 @@ namespace tvision
 
 bool getWin32Key(const KEY_EVENT_RECORD &, TEvent &, InputState &) noexcept;
 void getWin32Mouse(const MOUSE_EVENT_RECORD &, TEvent &, InputState &) noexcept;
+void regenerateMissingScanCodeFromVirtualKeyCode(KEY_EVENT_RECORD &) noexcept;
 
 #ifdef _WIN32
 

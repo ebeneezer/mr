@@ -46,6 +46,8 @@ TEST(TermIO, ShouldReadWin32InputModeKeys)
         {"\x1B[112;59;0;1;8;1_", {keyDownEv(kbCtrlF1, kbLeftCtrl)}},
         {"\x1B[112;59;;1;8_", {keyDownEv(kbCtrlF1, kbLeftCtrl)}},
         {"\x1B[112;59;0;0;8;1_", {}},
+        // Zeroed scan code
+        {"\x1B[65;0;65;1;16;1_", {keyDownEv(0x1e41, kbShift, "A")}},
         // https://github.com/microsoft/terminal/issues/15083
         { // SGR mouse event
             "\x1B[0;0;27;1;0;1_" // \x1B[<0;52;12M
