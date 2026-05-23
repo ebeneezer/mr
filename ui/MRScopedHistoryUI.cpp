@@ -156,7 +156,16 @@ class TWheelFileDialog final : public TFileDialog {
 	}
 
 	void handleEvent(TEvent &event) override {
-		if (historyDropList.handleOpenListEvent(event)) return;
+		std::vector<std::string> entries;
+
+		configuredScopedDialogFileHistoryEntries(scope, entries);
+		if (historyLink != nullptr) {
+			TRect bounds = historyLink->getBounds();
+			short visibleRows = scopedHistoryVisibleRows(bounds);
+
+			bounds.b.x++;
+			if (historyDropList.handleLinkedInputEvent(event, *this, bounds, entries, historyLink, this, cmMrScopedHistoryAccept, visibleRows)) return;
+		}
 		if (event.what == evCommand && event.message.command == cmMrScopedHistoryChoose) {
 			toggleHistoryList();
 			clearEvent(event);
@@ -241,16 +250,21 @@ class TWheelFileDialog final : public TFileDialog {
 	void toggleHistoryList() {
 		std::vector<std::string> entries;
 		TRect bounds;
-		short visibleRows = 7;
 
 		if (historyLink == nullptr) return;
 		configuredScopedDialogFileHistoryEntries(scope, entries);
 		if (entries.empty()) return;
 		bounds = historyLink->getBounds();
 		bounds.b.x++;
+		historyDropList.toggle(*this, bounds, entries, std::string(historyLink->data), this, cmMrScopedHistoryAccept, scopedHistoryVisibleRows(bounds));
+	}
+
+	short scopedHistoryVisibleRows(const TRect &bounds) const {
+		short visibleRows = 7;
+
 		if (visibleRows > size.y - bounds.a.y - 1) visibleRows = static_cast<short>(size.y - bounds.a.y - 1);
 		if (visibleRows < 1) visibleRows = 1;
-		historyDropList.toggle(*this, bounds, entries, std::string(historyLink->data), this, cmMrScopedHistoryAccept, visibleRows);
+		return visibleRows;
 	}
 
 	void hideHistoryList() {
@@ -316,7 +330,16 @@ class TWheelChDirDialog final : public TChDirDialog {
 	}
 
 	void handleEvent(TEvent &event) override {
-		if (historyDropList.handleOpenListEvent(event)) return;
+		std::vector<std::string> entries;
+
+		configuredScopedDialogPathHistoryEntries(scope, entries);
+		if (historyLink != nullptr) {
+			TRect bounds = historyLink->getBounds();
+			short visibleRows = scopedHistoryVisibleRows(bounds);
+
+			bounds.b.x++;
+			if (historyDropList.handleLinkedInputEvent(event, *this, bounds, entries, historyLink, this, cmMrScopedHistoryAccept, visibleRows)) return;
+		}
 		if (event.what == evCommand && event.message.command == cmMrScopedHistoryChoose) {
 			toggleHistoryList();
 			clearEvent(event);
@@ -340,16 +363,21 @@ class TWheelChDirDialog final : public TChDirDialog {
 	void toggleHistoryList() {
 		std::vector<std::string> entries;
 		TRect bounds;
-		short visibleRows = 7;
 
 		if (historyLink == nullptr) return;
 		configuredScopedDialogPathHistoryEntries(scope, entries);
 		if (entries.empty()) return;
 		bounds = historyLink->getBounds();
 		bounds.b.x++;
+		historyDropList.toggle(*this, bounds, entries, std::string(historyLink->data), this, cmMrScopedHistoryAccept, scopedHistoryVisibleRows(bounds));
+	}
+
+	short scopedHistoryVisibleRows(const TRect &bounds) const {
+		short visibleRows = 7;
+
 		if (visibleRows > size.y - bounds.a.y - 1) visibleRows = static_cast<short>(size.y - bounds.a.y - 1);
 		if (visibleRows < 1) visibleRows = 1;
-		historyDropList.toggle(*this, bounds, entries, std::string(historyLink->data), this, cmMrScopedHistoryAccept, visibleRows);
+		return visibleRows;
 	}
 
 	void hideHistoryList() {

@@ -140,7 +140,7 @@ class JournalTagDialog : public TDialog {
 	}
 
 	void handleEvent(TEvent &event) override {
-		if (historyDropList.handleOpenListEvent(event)) return;
+		if (historyDropList.handleLinkedInputEvent(event, *this, TRect(14, 4, 54, 5), history, tagField, this, cmJournalTagHistoryAccept, 8)) return;
 		if (event.what == evCommand) {
 			if (event.message.command == cmJournalTagHistory) {
 				historyDropList.toggle(*this, TRect(14, 4, 54, 5), history, currentTag(), this, cmJournalTagHistoryAccept, 8);

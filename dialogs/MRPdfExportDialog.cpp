@@ -235,8 +235,8 @@ class TPdfExportDialog final : public MRDialogFoundation {
 	}
 
 	void handleEvent(TEvent &event) override {
-		if (outputPathDropList.handleOpenListEvent(event)) return;
-		if (fontFamilyDropList.handleOpenListEvent(event)) return;
+		if (outputPathDropList.handleLinkedInputEvent(event, *this, mOutputPathListAnchor, outputPathChoices(false), mOutputPath, this, cmMrPdfExportAcceptOutputPath, outputPathVisibleRows())) return;
+		if (fontFamilyDropList.handleLinkedInputEvent(event, *this, mFontFamilyListAnchor, MRPdfTextExporter::availableFontFamilies(), mFontFamily, this, cmMrPdfExportAcceptFontFamily, fontFamilyVisibleRows())) return;
 		if (event.what == evCommand && event.message.command == cmMrPdfExportChooseOutputPath) {
 			toggleOutputPathList();
 			clearEvent(event);
@@ -305,16 +305,11 @@ class TPdfExportDialog final : public MRDialogFoundation {
 	}
 
 	void toggleOutputPathList() {
-		std::vector<std::string> values;
+		std::vector<std::string> values = outputPathChoices(true);
 		const std::string currentValue = inputLineValue(mOutputPath);
-		short visibleRows = 7;
 
-		configuredScopedDialogFileHistoryEntries(MRDialogHistoryScope::PdfExport, values);
-		if (!trimAscii(currentValue).empty() && std::find(values.begin(), values.end(), currentValue) == values.end()) values.insert(values.begin(), currentValue);
 		if (values.empty()) return;
-		if (visibleRows > size.y - mOutputPathListAnchor.a.y - 1) visibleRows = static_cast<short>(size.y - mOutputPathListAnchor.a.y - 1);
-		if (visibleRows < 1) visibleRows = 1;
-		outputPathDropList.toggle(*this, mOutputPathListAnchor, values, currentValue, this, cmMrPdfExportAcceptOutputPath, visibleRows);
+		outputPathDropList.toggle(*this, mOutputPathListAnchor, values, currentValue, this, cmMrPdfExportAcceptOutputPath, outputPathVisibleRows());
 	}
 
 	void acceptOutputPathListSelection() {
@@ -341,12 +336,34 @@ class TPdfExportDialog final : public MRDialogFoundation {
 	void toggleFontFamilyList() {
 		std::vector<std::string> values = MRPdfTextExporter::availableFontFamilies();
 		const std::string currentValue = inputLineValue(mFontFamily);
-		short visibleRows = 10;
 
 		if (values.empty()) return;
+		fontFamilyDropList.toggle(*this, mFontFamilyListAnchor, values, currentValue, this, cmMrPdfExportAcceptFontFamily, fontFamilyVisibleRows());
+	}
+
+	std::vector<std::string> outputPathChoices(bool includeCurrentValue) const {
+		std::vector<std::string> values;
+		const std::string currentValue = inputLineValue(mOutputPath);
+
+		configuredScopedDialogFileHistoryEntries(MRDialogHistoryScope::PdfExport, values);
+		if (includeCurrentValue && !trimAscii(currentValue).empty() && std::find(values.begin(), values.end(), currentValue) == values.end()) values.insert(values.begin(), currentValue);
+		return values;
+	}
+
+	short outputPathVisibleRows() const {
+		short visibleRows = 7;
+
+		if (visibleRows > size.y - mOutputPathListAnchor.a.y - 1) visibleRows = static_cast<short>(size.y - mOutputPathListAnchor.a.y - 1);
+		if (visibleRows < 1) visibleRows = 1;
+		return visibleRows;
+	}
+
+	short fontFamilyVisibleRows() const {
+		short visibleRows = 10;
+
 		if (visibleRows > size.y - mFontFamilyListAnchor.a.y - 1) visibleRows = static_cast<short>(size.y - mFontFamilyListAnchor.a.y - 1);
 		if (visibleRows < 1) visibleRows = 1;
-		fontFamilyDropList.toggle(*this, mFontFamilyListAnchor, values, currentValue, this, cmMrPdfExportAcceptFontFamily, visibleRows);
+		return visibleRows;
 	}
 
 	void acceptFontFamilyListSelection() {

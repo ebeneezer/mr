@@ -811,8 +811,13 @@ void FileExtensionEditorSettingsPanel::hideCodeLanguageList() {
 	if (codeLanguageField != nullptr) codeLanguageField->select();
 }
 
-bool FileExtensionEditorSettingsPanel::handleCodeLanguageListEvent(TEvent &event) {
-	return codeLanguageDropList.handleOpenListEvent(event);
+bool FileExtensionEditorSettingsPanel::handleCodeLanguageListEvent(TEvent &event, MRScrollableDialog &dialog) {
+	std::vector<std::string> values;
+
+	values.reserve(sizeof(kCodeLanguageChoices) / sizeof(kCodeLanguageChoices[0]));
+	for (const char *choice : kCodeLanguageChoices)
+		values.push_back(choice);
+	return codeLanguageDropList.handleLinkedInputEvent(event, dialog, codeLanguageListAnchor, values, codeLanguageField, &dialog, cmMrFileExtensionEditorSettingsPanelAcceptCodeLanguage, kCodeLanguageMaxVisibleRows);
 }
 
 bool FileExtensionEditorSettingsPanel::codeLanguageListVisible() const noexcept {

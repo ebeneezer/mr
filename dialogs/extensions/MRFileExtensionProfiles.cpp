@@ -420,7 +420,7 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		void *originalInfoPtr = event.what == evBroadcast ? event.message.infoPtr : nullptr;
 		ushort originalKey = event.what == evKeyDown ? event.keyDown.keyCode : 0;
 
-		if (editorSettingsPanel.handleCodeLanguageListEvent(event)) {
+		if (editorSettingsPanel.handleCodeLanguageListEvent(event, *this)) {
 			refreshValidationState();
 			return;
 		}

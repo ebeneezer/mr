@@ -131,15 +131,6 @@
           "comments": []
         },
         {
-          "id": "d9673699-ede3-4290-b4aa-1d84ab83ec8a",
-          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
-          "title": "Code Folding: mehr Sprachen",
-          "description": "Konfigurierbar für jedes FE Profil.",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
           "id": "44b96008-898d-4e5d-8f9a-d8236bd7c05d",
           "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
           "title": "LSP Support",
@@ -152,15 +143,6 @@
               "comment": "LSP-Integration für Diagnose, Navigation und Autocomplete bedeutet im Kern, dass der Editor mit einem externen Language Server spricht, statt Sprachintelligenz selbst ad hoc zu implementieren.\n\nWas der Nutzer davon konkret merkt\n\nFehler und Warnungen direkt im Editor, möglichst schon beim Tippen\nGo to Definition, Find References, Hover-Infos\nkontextabhängige Autovervollständigung statt nur wortbasierter Vorschläge\noptional später: Rename Symbol, Signature Help, Code Actions\nSinnvoller Zuschnitt für eine erste Ausbaustufe\n\nDiagnose\n\nServer starten\nDokument öffnen/ändern/speichern an den Server melden\nDiagnosen empfangen und im UI anzeigen\nNavigation\n\nDefinition anspringen\nReferenzen in einer Liste anzeigen\neinfache Positionssprünge zwischen Datei/Zeile/Spalte\nAutocomplete\n\nCompletion an Cursorposition anfragen\nTrefferliste anzeigen\nausgewählten Vorschlag einfügen\nDas wäre ein brauchbares erstes Thema. Rename, Code Actions, Formatting, Semantic Tokens würde ich bewusst nicht in denselben ersten Schnitt ziehen.\n\nWarum das ein gutes Thema ist\n\nhoher sichtbarer Nutzwert\nnicht auf eine einzelne Sprache begrenzt\nstrategisch stärker als eine isolierte Editorfunktion\nschafft eine technische Grundlage für mehrere spätere Features\nTechnische Teilprobleme\n\nProzessmanagement: Server starten, neu starten, beenden\nProtokolltransport: meist JSON-RPC über stdin/stdout\nDokument-Synchronisation: Full Sync oder Incremental Sync\nCapability-Handling: jeder Server kann etwas anderes\nUI-Anbindung: Listen, Status, Fehleranzeige, Sprungziele\nKonfiguration: welcher Server für welche Dateitypen, Startkommando, Root-Erkennung\nWichtige Produktentscheidungen\n\nNur lokale Serverprozesse oder später auch Remote?\nErst nur eine Sprache gut unterstützen oder Infrastruktur generisch bauen?\nDiagnosen live bei jeder Änderung oder nur bei Save?\nCompletion minimalistisch halten oder direkt mit Dokumentation/Hinweisen?\nRisiken im bestehenden System\n\nFalls Sie das später wirklich umsetzen lassen wollen, ist das kein “reines Feature ohne Architekturwirkung”. Typisch berührt es:\n\nUI-Dialoge und Listenansichten\nasynchrone/deferred UI\nRuntime-Settings\nDateipfad- und Projektwurzel-Logik\nvorhandene Syntax-/Sprachfunktionen, falls es Überschneidungen gibt\nGerade deshalb ist es ein gutes größeres Thema, aber kein kleiner Nebenpunkt.\n\nEmpfohlene Formulierung für die Karte\n\nLSP-Integration: Diagnosen, Definitionen, Referenzen und Autocomplete\n\nDas ist präziser als die Kurzform und setzt den Umfang sauberer. Wenn Sie möchten, formuliere ich daraus auch noch eine kompakte Board-Karte plus 3 bis 5 konkrete Unteraufgaben."
             }
           ]
-        },
-        {
-          "id": "46352779-58c7-489a-bb8b-5d120f7bcdd7",
-          "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
-          "title": "Neues UI WIdget: Textfeld mit Speed Search und History Droplist",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
         },
         {
           "id": "f9883d7e-c8f9-43e7-8856-bbd3bcdb789c",
@@ -177,9 +159,9 @@
           ]
         },
         {
-          "id": "8928dbb0-09f5-4305-8238-95844e4f8d67",
+          "id": "d6f74a92-19b9-4e59-97ce-0fd2f415aebd",
           "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
-          "title": "Eigene Speed-Search Textfeld Klasse mit History Droplist von TVISION ableiten: Übernimmt Array von Strings in denen gesucht wird und lässt Freitext Editiing zu.",
+          "title": "File Compare",
           "description": "",
           "labels": [],
           "checkboxes": [],
@@ -190,26 +172,7 @@
     {
       "id": "b721e070-ae21-4123-a1f3-27b926375a16",
       "title": "Regression / Errors",
-      "cards": [
-        {
-          "id": "9c8f092f-4f43-4a0b-bf4d-1ed482e4d4b0",
-          "listId": "b721e070-ae21-4123-a1f3-27b926375a16",
-          "title": "MRVM.cpp nach Hash-Spracherweiterung weiter ausdünnen",
-          "description": "Nach der geplanten Hash-Erweiterung erneut prüfen, welche VM-Domänen aus MRVM.cpp in vorhandene oder neue mrmac/vm-Module ausgelagert werden können. Keine opportunistische Ausdünnung während der Hash-Implementierung.",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
-          "id": "a456c7e5-0bee-4652-b4db-5d46a401da15",
-          "listId": "b721e070-ae21-4123-a1f3-27b926375a16",
-          "title": "Alle MRMAC Intrinsics müssen auch aus MRMAC Makros aufrufbar sein.",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        }
-      ]
+      "cards": []
     },
     {
       "id": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
@@ -246,6 +209,33 @@
               "comment": "Doch ein Grid implementieren lassen? (Calculator)"
             }
           ]
+        },
+        {
+          "id": "9a5f3f46-9173-4245-9f5f-16e996469a1c",
+          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
+          "title": "mr/patches prüfen ob wor das noch brauchen.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "d9673699-ede3-4290-b4aa-1d84ab83ec8a",
+          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
+          "title": "Code Folding: Kotlin und C#",
+          "description": "Konfigurierbar für jedes FE Profil.",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "3c66a890-e0d4-4647-96ba-addbf75a6f3d",
+          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
+          "title": "Codebase bereinigen, so dass wir problemlos vom Upstream TV updaten können. Offenbar wurde an meinem Contract vorbei in TV geschrieben. Wir sollten das zum Anlass nehmen die neueste Version von TV zu holen und zu integrieren. UNsere Anpassungen finden nur über Vererbung statt.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
         }
       ]
     },
@@ -272,9 +262,45 @@
           "comments": []
         },
         {
+          "id": "46352779-58c7-489a-bb8b-5d120f7bcdd7",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Neues UI WIdget: Textfeld mit Speed Search und Droplist",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "9c8f092f-4f43-4a0b-bf4d-1ed482e4d4b0",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "MRVM.cpp nach Hash-Spracherweiterung weiter ausdünnen",
+          "description": "Nach der geplanten Hash-Erweiterung erneut prüfen, welche VM-Domänen aus MRVM.cpp in vorhandene oder neue mrmac/vm-Module ausgelagert werden können. Keine opportunistische Ausdünnung während der Hash-Implementierung.",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
           "id": "b1c7fb09-0851-499f-ac2c-55078f6e80a4",
           "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
           "title": "Backspace bei markiertem Block sollte delete Block ausführen",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "ae1ce662-9ae5-401b-8a6b-3f7bed1d3a5e",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "documentation/pngsjpegs/syntax warming endet nicht.png zeigt syntax warming obwohl nicht zu warmen da ist",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "a456c7e5-0bee-4652-b4db-5d46a401da15",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Alle MRMAC Intrinsics müssen auch aus MRMAC Makros aufrufbar sein.",
           "description": "",
           "labels": [],
           "checkboxes": [],

@@ -263,7 +263,7 @@ class TAcquireDialog final : public MRDialogFoundation {
 	}
 
 	void handleEvent(TEvent &event) override {
-		if (commandHistoryDropList.handleOpenListEvent(event)) return;
+		if (commandHistoryDropList.handleLinkedInputEvent(event, *this, commandHistoryAnchor, commandHistory, mCommandField, this, cmMrAcquireAcceptHistory, commandHistoryVisibleRows())) return;
 		if (event.what == evNothing && loadPending) {
 			performPendingLoad();
 			clearEvent(event);
@@ -406,13 +406,18 @@ class TAcquireDialog final : public MRDialogFoundation {
 	}
 
 	void toggleCommandHistoryList() {
-		short visibleRows = 7;
 		const std::string currentValue = mCommandField != nullptr ? std::string(mCommandField->data) : std::string();
 
 		if (commandHistory.empty()) return;
+		commandHistoryDropList.toggle(*this, commandHistoryAnchor, commandHistory, currentValue, this, cmMrAcquireAcceptHistory, commandHistoryVisibleRows());
+	}
+
+	short commandHistoryVisibleRows() const {
+		short visibleRows = 7;
+
 		if (visibleRows > size.y - commandHistoryAnchor.a.y - 1) visibleRows = static_cast<short>(size.y - commandHistoryAnchor.a.y - 1);
 		if (visibleRows < 1) visibleRows = 1;
-		commandHistoryDropList.toggle(*this, commandHistoryAnchor, commandHistory, currentValue, this, cmMrAcquireAcceptHistory, visibleRows);
+		return visibleRows;
 	}
 
 	void acceptCommandHistorySelection() {

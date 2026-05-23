@@ -191,7 +191,7 @@ class FileExtensionEditorSettingsPanel {
 	void setCodeLanguageValue(const std::string &value);
 	void toggleCodeLanguageList(MRScrollableDialog &dialog);
 	void hideCodeLanguageList();
-	[[nodiscard]] bool handleCodeLanguageListEvent(TEvent &event);
+	[[nodiscard]] bool handleCodeLanguageListEvent(TEvent &event, MRScrollableDialog &dialog);
 	[[nodiscard]] bool codeLanguageListVisible() const noexcept;
 	[[nodiscard]] bool codeLanguageListContainsPoint(TPoint where) const noexcept;
 	[[nodiscard]] bool acceptCodeLanguageListSelection();
