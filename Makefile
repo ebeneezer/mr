@@ -397,8 +397,8 @@ tvision-status:
 	echo "Patch stamp:"; \
 	if [ -f "$(TVISION_LOCAL_PATCH_STAMP)" ]; then echo "applied ($(TVISION_LOCAL_PATCH_STAMP))"; else echo "not applied"; fi
 
-tvision-sync-safe:
-	bash misc/tvision-sync-safe.sh
+tvision-sync-safe: tvision-subtree-pull
+	$(MAKE) tvision-apply-patches
 
 clean-tvision:
 	rm -rf $(TVISION_SOURCE_DIR)/build $(TVISION_LOCAL_PATCH_STAMP)

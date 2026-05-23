@@ -48,6 +48,24 @@ class TRelayColorGroupList : public TColorGroupList {
 		if (curGroup != nullptr) message(mRelay, evBroadcast, cmNewColorItem, curGroup);
 	}
 
+	void handleEvent(TEvent &event) override {
+		TColorGroupList::handleEvent(event);
+		if (event.what != evBroadcast || event.message.command != cmSaveColorIndex) return;
+		TColorGroup *curGroup = groups;
+		short index = focused;
+		while (curGroup != nullptr && index-- > 0)
+			curGroup = curGroup->next;
+		if (curGroup == nullptr) return;
+		uchar itemCount = 0;
+		for (TColorItem *curItem = curGroup->items; curItem != nullptr; curItem = curItem->next)
+			++itemCount;
+		if (itemCount == 0) {
+			curGroup->index = 0;
+			return;
+		}
+		if (curGroup->index >= itemCount) curGroup->index = static_cast<uchar>(itemCount - 1);
+	}
+
   private:
 	TView *mRelay = nullptr;
 };

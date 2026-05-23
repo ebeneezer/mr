@@ -514,22 +514,8 @@ void TColorGroupList::handleEvent(TEvent& ev)
 void TColorGroupList::setGroupIndex(uchar groupNum, uchar itemNum)
 {
     TColorGroup* g = getGroup(groupNum);
-    if (g) {
-        uchar itemCount = 0;
-        TColorItem* cur = g->items;
-
-        while (cur != 0) {
-            ++itemCount;
-            cur = cur->next;
-        }
-        if (itemCount == 0) {
-            g->index = 0;
-            return;
-        }
-        if (itemNum >= itemCount)
-            itemNum = (uchar) (itemCount - 1);
+    if (g)
         g->index = itemNum;
-    }
 }
 
 uchar TColorGroupList::getGroupIndex(uchar groupNum)
