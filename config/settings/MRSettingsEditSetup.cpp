@@ -905,8 +905,9 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 		if (normalized.empty()) normalized = "NONE";
 		if (normalized != "NONE" && normalized != "AUTO" && normalized != "C" && normalized != "CPP" && normalized != "PYTHON" && normalized != "JAVASCRIPT" && normalized != "TYPESCRIPT" && normalized != "TSX" &&
 			normalized != "BASH" && normalized != "ZSH" && normalized != "FISH" && normalized != "JSON" && normalized != "YAML" && normalized != "XML" && normalized != "PERL" && normalized != "SWIFT" &&
-			normalized != "RUST" && normalized != "GO" && normalized != "PASCAL" && normalized != "SYSTEMD" && normalized != "MAKE" && normalized != "MRMAC" && normalized != "MARKDOWN")
-			return setError(errorMessage, "CODE_LANGUAGE must be NONE, AUTO, C, CPP, PYTHON, JAVASCRIPT, TYPESCRIPT, TSX, BASH, ZSH, FISH, JSON, YAML, XML, PERL, SWIFT, RUST, GO, PASCAL, SYSTEMD, MAKE, MRMAC or MARKDOWN.");
+			normalized != "RUST" && normalized != "GO" && normalized != "PASCAL" && normalized != "SYSTEMD" && normalized != "MAKE" && normalized != "MRMAC" && normalized != "MARKDOWN" && normalized != "KOTLIN" &&
+			normalized != "CSHARP")
+			return setError(errorMessage, "CODE_LANGUAGE must be NONE, AUTO, C, CPP, PYTHON, JAVASCRIPT, TYPESCRIPT, TSX, BASH, ZSH, FISH, JSON, YAML, XML, PERL, SWIFT, RUST, GO, PASCAL, SYSTEMD, MAKE, MRMAC, MARKDOWN, KOTLIN or CSHARP.");
 		current.codeLanguage = normalized;
 	} else if (upperKeyName == "CODE_COLORING") {
 		if (!parseAndAssignBooleanLiteral(value, current.codeColoring, errorMessage)) return false;
@@ -1226,6 +1227,7 @@ bool setConfiguredEditExtensionProfiles(const std::vector<MREditExtensionProfile
 		profile.id = canonicalEditProfileId(profile.id);
 		profile.name = canonicalEditProfileName(profile.name);
 		profile.windowColorThemeUri = canonicalWindowColorThemeUri(profile.windowColorThemeUri);
+		profile.compilerProfileId = canonicalCompilerProfileId(profile.compilerProfileId);
 		if (!normalizeEditExtensionSelectorsInPlace(profile.extensions, errorMessage)) return false;
 		if (!normalizeEditProfileOverridesInPlace(profile, errorMessage)) return false;
 	}
@@ -1276,6 +1278,10 @@ bool applyConfiguredEditExtensionProfileDirective(const std::string &operation, 
 			profile->windowColorThemeUri = normalizedTheme;
 			return setConfiguredEditExtensionProfiles(profiles, errorMessage);
 		}
+		if (upperAscii(trimAscii(arg3)) == "COMPILER_PROFILE") {
+			profile->compilerProfileId = canonicalCompilerProfileId(arg4);
+			return setConfiguredEditExtensionProfiles(profiles, errorMessage);
+		}
 
 		const MREditSettingDescriptor *descriptor = editSettingDescriptorByKeyInternal(arg3);
 		if (descriptor == nullptr) return setError(errorMessage, "Unknown edit setting key for extension profile.");
@@ -1321,6 +1327,41 @@ bool effectiveEditWindowColorThemePathForPath(const std::string &path, std::stri
 	return true;
 }
 
+bool effectiveCompilerProfileForPath(const std::string &path, MRCompilerProfile &out, std::string *matchedProfileName, std::string *errorMessage) {
+	std::string ext = extensionSelectorForPath(path);
+	std::string compilerProfileId;
+	bool profileMatched = false;
+
+	out = MRCompilerProfile();
+	if (matchedProfileName != nullptr) matchedProfileName->clear();
+	if (errorMessage != nullptr) errorMessage->clear();
+	if (ext.empty()) return setError(errorMessage, "No filename extension for compiler profile lookup.");
+	for (const MREditExtensionProfile &profile : configuredEditProfiles()) {
+		if (profileMatched) break;
+		for (const std::string &selector : profile.extensions) {
+			if (profileMatched) break;
+			if (selector == ext) {
+				compilerProfileId = canonicalCompilerProfileId(profile.compilerProfileId);
+				if (matchedProfileName != nullptr) *matchedProfileName = profile.name;
+				profileMatched = true;
+			}
+		}
+	}
+	if (!profileMatched) return setError(errorMessage, "No filename extension profile matched this source file.");
+	if (compilerProfileId.empty()) return setError(errorMessage, "No compiler profile linked for this filename extension.");
+	for (const MRCompilerProfile &profile : configuredCompilerProfiles())
+		if (profile.id == compilerProfileId) {
+			out = profile;
+			return true;
+		}
+	for (const MRCompilerProfile &profile : defaultCompilerProfiles())
+		if (profile.id == compilerProfileId) {
+			out = profile;
+			return true;
+		}
+	return setError(errorMessage, "Linked compiler profile is not configured: " + compilerProfileId);
+}
+
 MREditSetupSettings configuredEditSetupSettings() {
 	static bool initialized = false;
 	MREditSetupSettings &configured = configuredEditSettings();
@@ -1364,8 +1405,9 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	if (codeLanguage.empty()) codeLanguage = "NONE";
 	if (codeLanguage != "NONE" && codeLanguage != "AUTO" && codeLanguage != "C" && codeLanguage != "CPP" && codeLanguage != "PYTHON" && codeLanguage != "JAVASCRIPT" && codeLanguage != "TYPESCRIPT" && codeLanguage != "TSX" &&
 		codeLanguage != "BASH" && codeLanguage != "ZSH" && codeLanguage != "FISH" && codeLanguage != "JSON" && codeLanguage != "YAML" && codeLanguage != "XML" && codeLanguage != "PERL" && codeLanguage != "SWIFT" &&
-		codeLanguage != "RUST" && codeLanguage != "GO" && codeLanguage != "PASCAL" && codeLanguage != "SYSTEMD" && codeLanguage != "MAKE" && codeLanguage != "MRMAC" && codeLanguage != "MARKDOWN")
-		return setError(errorMessage, "CODE_LANGUAGE must be NONE, AUTO, C, CPP, PYTHON, JAVASCRIPT, TYPESCRIPT, TSX, BASH, ZSH, FISH, JSON, YAML, XML, PERL, SWIFT, RUST, GO, PASCAL, SYSTEMD, MAKE, MRMAC or MARKDOWN.");
+		codeLanguage != "RUST" && codeLanguage != "GO" && codeLanguage != "PASCAL" && codeLanguage != "SYSTEMD" && codeLanguage != "MAKE" && codeLanguage != "MRMAC" && codeLanguage != "MARKDOWN" &&
+		codeLanguage != "KOTLIN" && codeLanguage != "CSHARP")
+		return setError(errorMessage, "CODE_LANGUAGE must be NONE, AUTO, C, CPP, PYTHON, JAVASCRIPT, TYPESCRIPT, TSX, BASH, ZSH, FISH, JSON, YAML, XML, PERL, SWIFT, RUST, GO, PASCAL, SYSTEMD, MAKE, MRMAC, MARKDOWN, KOTLIN or CSHARP.");
 	if (fileType.empty()) return setError(errorMessage, "FILE_TYPE must be LEGACY_TEXT, UNIX or BINARY.");
 	if (lineNumbersPosition.empty()) lineNumbersPosition = settings.showLineNumbers ? kLineNumbersPositionLeading : kLineNumbersPositionOff;
 	if (miniMapPosition.empty()) return setError(errorMessage, "MINIMAP_POSITION must be OFF, LEADING or TRAILING.");

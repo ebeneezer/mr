@@ -62,6 +62,8 @@ enum : ushort {
 	cmMrSetupFilenameProfilesBrowsePostLoadMacro,
 	cmMrSetupFilenameProfilesBrowsePreSaveMacro,
 	cmMrSetupFilenameProfilesBrowseDefaultPath,
+	cmMrSetupFilenameProfilesChooseCompilerProfile,
+	cmMrSetupFilenameProfilesAcceptCompilerProfile,
 	cmMrSetupFilenameProfilesSelectionChanged,
 	cmMrSetupFilenameProfilesFieldChanged,
 	cmMrSetupFilenameProfilesFieldFocusChanged
@@ -71,7 +73,8 @@ enum {
 	kProfileIdFieldSize = 64,
 	kProfileNameFieldSize = 128,
 	kProfileExtensionsFieldSize = 256,
-	kProfileColorThemeFieldSize = 256
+	kProfileColorThemeFieldSize = 256,
+	kCompilerProfileFieldSize = 64
 };
 
 const char *kDefaultProfileId = "DEFAULT";
@@ -362,6 +365,23 @@ bool browseColorThemeUri(MRDialogHistoryScope scope, std::string &selectedUri) {
 	return true;
 }
 
+std::vector<std::string> compilerProfileIdChoices() {
+	std::vector<std::string> choices;
+	std::vector<MRCompilerProfile> defaultProfiles;
+	const std::vector<MRCompilerProfile> *profiles = &configuredCompilerProfiles();
+
+	if (profiles->empty()) {
+		defaultProfiles = defaultCompilerProfiles();
+		profiles = &defaultProfiles;
+	}
+	for (const MRCompilerProfile &profile : *profiles) {
+		const std::string id = canonicalCompilerProfileId(profile.id);
+		if (!id.empty() && std::find(choices.begin(), choices.end(), id) == choices.end()) choices.push_back(id);
+	}
+	std::sort(choices.begin(), choices.end());
+	return choices;
+}
+
 FileExtensionEditorSettingsPanelConfig makeEditorSettingsPanelConfig(int dialogWidth, int labelLeft, int inputLeft, int inputRight, int topY) {
 	FileExtensionEditorSettingsPanelConfig panelConfig;
 	panelConfig.topY = topY;
@@ -389,7 +409,7 @@ void postDialogError(const std::string &text) {
 
 class TEditProfilesDialog : public MRScrollableDialog {
   public:
-	TEditProfilesDialog(const std::vector<EditProfileDraft> &workingDrafts) : TWindowInit(initMrDialogFrame), MRScrollableDialog(centeredSetupDialogRect(kDialogWidth, kVisibleHeight), "FILENAME EXTENSIONS", kDialogWidth, kVirtualHeight, initMrDialogFrame), draftList(workingDrafts), editorSettingsPanel(makeEditorSettingsPanelConfig(kDialogWidth - 1, 37, 56, kDialogWidth - 2, 6)) {
+	TEditProfilesDialog(const std::vector<EditProfileDraft> &workingDrafts) : TWindowInit(initMrDialogFrame), MRScrollableDialog(centeredSetupDialogRect(kDialogWidth, kVisibleHeight), "FILENAME EXTENSIONS", kDialogWidth, kVirtualHeight, initMrDialogFrame), draftList(workingDrafts), editorSettingsPanel(makeEditorSettingsPanelConfig(kDialogWidth - 1, 37, 56, kDialogWidth - 2, 7)) {
 		buildViews();
 		setDialogValidationHook([this]() { return validateDialogValues(); });
 		if (!draftList.empty()) mCurrentIndex = 0;
@@ -420,9 +440,49 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		void *originalInfoPtr = event.what == evBroadcast ? event.message.infoPtr : nullptr;
 		ushort originalKey = event.what == evKeyDown ? event.keyDown.keyCode : 0;
 
+		if (mCompilerProfileField != nullptr && mCompilerProfileField->handleDropListEvent(event)) {
+			refreshValidationState();
+			return;
+		}
 		if (editorSettingsPanel.handleCodeLanguageListEvent(event, *this)) {
 			refreshValidationState();
 			return;
+		}
+		if (originalWhat == evCommand) {
+			switch (originalCommand) {
+				case cmMrFileExtensionEditorSettingsPanelChooseCodeLanguage:
+					if (editorSettingsPanel.codeLanguageListVisible())
+						editorSettingsPanel.hideCodeLanguageList();
+					else
+						editorSettingsPanel.toggleCodeLanguageList(*this);
+					clearEvent(event);
+					return;
+				case cmMrFileExtensionEditorSettingsPanelAcceptCodeLanguage:
+					if (editorSettingsPanel.acceptCodeLanguageListSelection()) saveWidgetsToCurrentDraft();
+					refreshValidationState();
+					clearEvent(event);
+					return;
+				case cmMrSetupFilenameProfilesChooseCompilerProfile:
+					if (mCompilerProfileField != nullptr) {
+						if (mCompilerProfileField->dropListVisible()) {
+							mCompilerProfileField->hideDropList();
+							mCompilerProfileField->select();
+						} else
+							mCompilerProfileField->toggleDropList(*this, mCompilerProfileListAnchor, this, cmMrSetupFilenameProfilesAcceptCompilerProfile, 8);
+					}
+					clearEvent(event);
+					return;
+				case cmMrSetupFilenameProfilesAcceptCompilerProfile:
+					if (mCompilerProfileField != nullptr && mCompilerProfileField->acceptDropListSelection()) {
+						mCompilerProfileField->select();
+						saveWidgetsToCurrentDraft();
+					}
+					refreshValidationState();
+					clearEvent(event);
+					return;
+				default:
+					break;
+			}
 		}
 		MRScrollableDialog::handleEvent(event);
 		if (originalWhat == evBroadcast && event.what == evBroadcast && event.message.command == cmMrSetupFilenameProfilesSelectionChanged && event.message.infoPtr == mProfileList) {
@@ -454,15 +514,6 @@ class TEditProfilesDialog : public MRScrollableDialog {
 					return;
 				case cmMrFileExtensionEditorSettingsPanelBrowseDefaultPath:
 					browseCurrentDefaultPath();
-					clearEvent(event);
-					return;
-				case cmMrFileExtensionEditorSettingsPanelChooseCodeLanguage:
-					editorSettingsPanel.toggleCodeLanguageList(*this);
-					clearEvent(event);
-					return;
-				case cmMrFileExtensionEditorSettingsPanelAcceptCodeLanguage:
-					if (editorSettingsPanel.acceptCodeLanguageListSelection()) saveWidgetsToCurrentDraft();
-					refreshValidationState();
 					clearEvent(event);
 					return;
 				case cmMrSetupFilenameProfilesHelp:
@@ -570,6 +621,12 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		mProfileColorThemeField = addInput(TRect(fieldLeft, 5, fieldRight, 6), kProfileColorThemeFieldSize - 1);
 		mProfileColorThemeBrowseButton = addGlyphButton(TRect(colorGlyphLeft, 5, colorGlyphRight, 6), cmMrSetupFilenameProfilesBrowseColorTheme);
 
+		mCompilerProfileLabel = addLabel(TRect(rightLeft, 6, fieldLeft - 1, 7), "Compiler profile:");
+		mCompilerProfileField = new MRStringChoiceField(TRect(fieldLeft, 6, fieldRight, 7), kCompilerProfileFieldSize - 1);
+		addManaged(mCompilerProfileField, TRect(fieldLeft, 6, fieldRight, 7));
+		mCompilerProfileListAnchor = TRect(fieldLeft, 7, fieldRight, 8);
+		mCompilerProfileDropButton = mCompilerProfileField->createDropListButton(*this, TRect(colorGlyphLeft, 6, colorGlyphRight, 7), this, cmMrSetupFilenameProfilesChooseCompilerProfile, true);
+
 		editorSettingsPanel.buildViews(*this);
 
 		mr::dialogs::addManagedUniformButtonRow(*this, bottomButtonLeft, bottomTop, 2, bottomButtons);
@@ -591,6 +648,10 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		writeInputLineString(mProfileNameField, draft.name, kProfileNameFieldSize);
 		writeInputLineString(mProfileExtensionsField, draft.extensionsLiteral, kProfileExtensionsFieldSize);
 		writeInputLineString(mProfileColorThemeField, draft.colorThemeUri, kProfileColorThemeFieldSize);
+		if (mCompilerProfileField != nullptr) {
+			mCompilerProfileField->setChoices(compilerProfileIdChoices());
+			mCompilerProfileField->setValue(draft.compilerProfileId);
+		}
 		editorSettingsPanel.loadFieldsFromRecord(draft.settingsRecord);
 	}
 
@@ -599,14 +660,17 @@ class TEditProfilesDialog : public MRScrollableDialog {
 		applyFieldState(mProfileNameField, false, "");
 		applyFieldState(mProfileExtensionsField, isDefault, "read-only with DEFAULT profile");
 		applyFieldState(mProfileColorThemeField, false, "");
+		if (mCompilerProfileField != nullptr) mCompilerProfileField->setState(sfDisabled, isDefault ? True : False);
 		if (mProfileColorThemeBrowseButton != nullptr) {
 			mProfileColorThemeBrowseButton->setState(sfVisible, True);
 			mProfileColorThemeBrowseButton->setState(sfDisabled, False);
 		}
+		if (mCompilerProfileDropButton != nullptr) mCompilerProfileDropButton->setState(sfDisabled, isDefault ? True : False);
 		setLabelInactive(mProfileIdLabel, isDefault);
 		setLabelInactive(mProfileNameLabel, false);
 		setLabelInactive(mProfileExtensionsLabel, isDefault);
 		setLabelInactive(mProfileColorThemeLabel, false);
+		setLabelInactive(mCompilerProfileLabel, isDefault);
 		if (mDeleteButton != nullptr) mDeleteButton->setState(sfDisabled, isDefault ? True : False);
 	}
 
@@ -625,12 +689,14 @@ class TEditProfilesDialog : public MRScrollableDialog {
 			draft.name = readInputLineString(mProfileNameField, kProfileNameFieldSize);
 			draft.extensionsLiteral.clear();
 			draft.colorThemeUri = readInputLineString(mProfileColorThemeField, kProfileColorThemeFieldSize);
+			draft.compilerProfileId.clear();
 			return;
 		}
 		draft.id = readInputLineString(mProfileIdField, kProfileIdFieldSize);
 		draft.name = readInputLineString(mProfileNameField, kProfileNameFieldSize);
 		draft.extensionsLiteral = readInputLineString(mProfileExtensionsField, kProfileExtensionsFieldSize);
 		draft.colorThemeUri = readInputLineString(mProfileColorThemeField, kProfileColorThemeFieldSize);
+		draft.compilerProfileId = canonicalCompilerProfileId(readInputLineString(mCompilerProfileField, kCompilerProfileFieldSize));
 	}
 
 	EditProfileDraft collectCurrentDraftFromWidgets() const {
@@ -643,11 +709,13 @@ class TEditProfilesDialog : public MRScrollableDialog {
 			draft.name = readInputLineString(mProfileNameField, kProfileNameFieldSize);
 			draft.extensionsLiteral.clear();
 			draft.colorThemeUri = readInputLineString(mProfileColorThemeField, kProfileColorThemeFieldSize);
+			draft.compilerProfileId.clear();
 		} else {
 			draft.id = readInputLineString(mProfileIdField, kProfileIdFieldSize);
 			draft.name = readInputLineString(mProfileNameField, kProfileNameFieldSize);
 			draft.extensionsLiteral = readInputLineString(mProfileExtensionsField, kProfileExtensionsFieldSize);
 			draft.colorThemeUri = readInputLineString(mProfileColorThemeField, kProfileColorThemeFieldSize);
+			draft.compilerProfileId = canonicalCompilerProfileId(readInputLineString(mCompilerProfileField, kCompilerProfileFieldSize));
 		}
 		return draft;
 	}
@@ -812,11 +880,15 @@ class TEditProfilesDialog : public MRScrollableDialog {
 	TInactiveStaticText *mProfileNameLabel = nullptr;
 	TInactiveStaticText *mProfileExtensionsLabel = nullptr;
 	TInactiveStaticText *mProfileColorThemeLabel = nullptr;
+	TInactiveStaticText *mCompilerProfileLabel = nullptr;
 	TInputLine *mProfileIdField = nullptr;
 	TInputLine *mProfileNameField = nullptr;
 	TInputLine *mProfileExtensionsField = nullptr;
 	TInputLine *mProfileColorThemeField = nullptr;
+	MRStringChoiceField *mCompilerProfileField = nullptr;
 	TInlineGlyphButton *mProfileColorThemeBrowseButton = nullptr;
+	TView *mCompilerProfileDropButton = nullptr;
+	TRect mCompilerProfileListAnchor;
 	TButton *mDeleteButton = nullptr;
 	bool mIsValid = true;
 	FileExtensionEditorSettingsPanel editorSettingsPanel;

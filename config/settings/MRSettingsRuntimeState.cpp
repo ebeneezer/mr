@@ -234,6 +234,11 @@ std::vector<MREditExtensionProfile> &configuredEditProfiles() {
 	return value;
 }
 
+std::vector<MRCompilerProfile> &configuredCompilerProfilesValue() {
+	static std::vector<MRCompilerProfile> value;
+	return value;
+}
+
 std::vector<MRKeymapProfile> &configuredKeymapProfilesValue() {
 	static std::vector<MRKeymapProfile> value;
 	return value;

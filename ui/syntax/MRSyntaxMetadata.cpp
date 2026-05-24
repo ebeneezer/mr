@@ -30,6 +30,10 @@ const char *tmrSyntaxLanguageName(MRSyntaxLanguage language) noexcept {
 			return "Rust";
 		case MRSyntaxLanguage::Go:
 			return "Go";
+		case MRSyntaxLanguage::Kotlin:
+			return "Kotlin";
+		case MRSyntaxLanguage::CSharp:
+			return "C#";
 		case MRSyntaxLanguage::Pascal:
 			return "Pascal";
 		case MRSyntaxLanguage::Systemd:
@@ -75,6 +79,10 @@ const char *tmrSyntaxLanguageMarker(MRSyntaxLanguage language) noexcept {
 			return "Rs";
 		case MRSyntaxLanguage::Go:
 			return "Go";
+		case MRSyntaxLanguage::Kotlin:
+			return "Kt";
+		case MRSyntaxLanguage::CSharp:
+			return "C#";
 		case MRSyntaxLanguage::Pascal:
 			return "Pa";
 		case MRSyntaxLanguage::Systemd:
@@ -120,6 +128,10 @@ std::uint32_t tmrSyntaxLanguageMarkerRgb(MRSyntaxLanguage language) noexcept {
 			return 0xDEA584;
 		case MRSyntaxLanguage::Go:
 			return 0x6AA8FF;
+		case MRSyntaxLanguage::Kotlin:
+			return 0xB58CFF;
+		case MRSyntaxLanguage::CSharp:
+			return 0x8BC34A;
 		case MRSyntaxLanguage::Pascal:
 			return 0xD49A57;
 		case MRSyntaxLanguage::Systemd:

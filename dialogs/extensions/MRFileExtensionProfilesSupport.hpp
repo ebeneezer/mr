@@ -41,6 +41,7 @@ struct EditProfileDraft {
 	std::string name;
 	std::string extensionsLiteral;
 	std::string colorThemeUri;
+	std::string compilerProfileId;
 	FileExtensionEditorSettingsDialogRecord settingsRecord;
 };
 

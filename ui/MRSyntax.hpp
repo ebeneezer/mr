@@ -23,6 +23,8 @@ enum class MRSyntaxLanguage : unsigned char {
 	Swift,
 	Rust,
 	Go,
+	Kotlin,
+	CSharp,
 	Pascal,
 	Systemd,
 	MRMAC,
@@ -180,6 +182,16 @@ class MRRustSyntaxHighlighter final : public MRSyntaxHighlighter {
 };
 
 class MRGoSyntaxHighlighter final : public MRSyntaxHighlighter {
+  public:
+	virtual MRSyntaxLineResult highlightLine(std::string_view line, MRSyntaxLineState previousState) override;
+};
+
+class MRKotlinSyntaxHighlighter final : public MRSyntaxHighlighter {
+  public:
+	virtual MRSyntaxLineResult highlightLine(std::string_view line, MRSyntaxLineState previousState) override;
+};
+
+class MRCSharpSyntaxHighlighter final : public MRSyntaxHighlighter {
   public:
 	virtual MRSyntaxLineResult highlightLine(std::string_view line, MRSyntaxLineState previousState) override;
 };

@@ -325,6 +325,8 @@ MRSyntaxLanguage tmrDetectSyntaxLanguage(const std::string &path, const std::str
 	if (ext == ".swift") return MRSyntaxLanguage::Swift;
 	if (ext == ".rs") return MRSyntaxLanguage::Rust;
 	if (ext == ".go") return MRSyntaxLanguage::Go;
+	if (ext == ".kt" || ext == ".kts") return MRSyntaxLanguage::Kotlin;
+	if (ext == ".cs" || ext == ".csx" || ext == ".cake") return MRSyntaxLanguage::CSharp;
 	if (ext == ".pas" || ext == ".pp" || ext == ".lpr" || ext == ".dpr") return MRSyntaxLanguage::Pascal;
 	if (ext == ".service" || ext == ".socket" || ext == ".timer" || ext == ".mount" || ext == ".automount" || ext == ".target" || ext == ".path" || ext == ".slice" || ext == ".scope" ||
 	    ext == ".swap" || ext == ".device" || ext == ".link" || ext == ".netdev" || ext == ".network" || hasSystemdUnitSuffix(lowerName))
@@ -345,6 +347,8 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	    ext == ".cc" || ext == ".cpp" || ext == ".cxx" || ext == ".hh" || ext == ".hpp" || ext == ".hxx" || ext == ".ipp" || ext == ".tpp" || ext == ".inl";
 	const bool forceYamlLanguageByExtension = ext == ".yml" || ext == ".yaml";
 	const bool forceXmlLanguageByExtension = ext == ".xml" || ext == ".xsd" || ext == ".xsl" || ext == ".xslt" || ext == ".svg";
+	const bool forceKotlinLanguageByExtension = ext == ".kt" || ext == ".kts";
+	const bool forceCSharpLanguageByExtension = ext == ".cs" || ext == ".csx" || ext == ".cake";
 	const bool forcePascalLanguageByExtension = ext == ".pas" || ext == ".pp" || ext == ".lpr" || ext == ".dpr";
 	const std::string_view sample = classificationSample(text);
 	const std::string lowerSample = lowerCopyView(sample);
@@ -358,6 +362,8 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	if (forceCppLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::Cpp, 100);
 	if (forceYamlLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::Yaml, 100);
 	if (forceXmlLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::Xml, 100);
+	if (forceKotlinLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::Kotlin, 100);
+	if (forceCSharpLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::CSharp, 100);
 	if (forcePascalLanguageByExtension) return MRSyntaxClassification(MRSyntaxLanguage::Pascal, 100);
 
 	const int includeLines = countLinePrefixMatches(lower, "#include", 8);
@@ -399,6 +405,15 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	const int goTypeLines = countLinePrefixMatches(lower, "type ", 12) + countMatches(lower, " struct {", 12) + countMatches(lower, " interface {", 12);
 	const int goPackageLines = countLinePrefixMatches(lower, "package ", 4);
 	const int goImportLines = countLinePrefixMatches(lower, "import ", 12);
+	const int kotlinFunctionLines = countLinePrefixMatches(lower, "fun ", 12) + countLinePrefixMatches(lower, "suspend fun ", 8) + countMatches(lower, " fun ", 16);
+	const int kotlinTypeLines = countLinePrefixMatches(lower, "class ", 8) + countLinePrefixMatches(lower, "data class ", 8) + countLinePrefixMatches(lower, "sealed class ", 8) +
+	                            countLinePrefixMatches(lower, "enum class ", 8) + countLinePrefixMatches(lower, "interface ", 8) + countLinePrefixMatches(lower, "object ", 8);
+	const int kotlinValueLines = countLinePrefixMatches(lower, "val ", 12) + countLinePrefixMatches(lower, "var ", 12);
+	const int csharpTypeLines = countMatches(lower, " class ", 12) + countMatches(lower, " interface ", 12) + countMatches(lower, " struct ", 12) + countMatches(lower, " record ", 12) +
+	                            countLinePrefixMatches(lower, "class ", 8) + countLinePrefixMatches(lower, "interface ", 8) + countLinePrefixMatches(lower, "struct ", 8) +
+	                            countLinePrefixMatches(lower, "record ", 8);
+	const int csharpNamespaceLines = countLinePrefixMatches(lower, "namespace ", 8) + countMatches(lower, "\nnamespace ", 8);
+	const int csharpUsingLines = countLinePrefixMatches(lower, "using ", 12);
 	const int systemdSectionLines = countLinePrefixMatches(lower, "[unit]", 8) + countLinePrefixMatches(lower, "[service]", 8) + countLinePrefixMatches(lower, "[socket]", 8) +
 	                                countLinePrefixMatches(lower, "[timer]", 8) + countLinePrefixMatches(lower, "[path]", 8) + countLinePrefixMatches(lower, "[mount]", 8) +
 	                                countLinePrefixMatches(lower, "[install]", 8) + countLinePrefixMatches(lower, "[network]", 8) + countLinePrefixMatches(lower, "[netdev]", 8) +
@@ -425,13 +440,15 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 		if (containsText(lowerShebang, "make")) addClassificationScore(scores, MRSyntaxLanguage::Make, 8), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Make)] += 1;
 		if (containsText(lowerShebang, "rust")) addClassificationScore(scores, MRSyntaxLanguage::Rust, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Rust)] += 2;
 		if (containsText(lowerShebang, "go")) addClassificationScore(scores, MRSyntaxLanguage::Go, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Go)] += 2;
+		if (containsText(lowerShebang, "kotlin")) addClassificationScore(scores, MRSyntaxLanguage::Kotlin, 14), strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Kotlin)] += 2;
 	}
 
 	if (detectedByPath != MRSyntaxLanguage::PlainText) {
 		int pathBias = 4;
 		if (ext == ".c" || ext == ".h" || ext == ".cc" || ext == ".cpp" || ext == ".cxx" || ext == ".hh" || ext == ".hpp" || ext == ".hxx" || ext == ".ipp" || ext == ".tpp" || ext == ".inl" ||
 		    ext == ".js" || ext == ".jsx" || ext == ".mjs" || ext == ".cjs" || ext == ".ts" || ext == ".tsx" || ext == ".json" || ext == ".jsonc" || ext == ".pl" || ext == ".pm" ||
-		    ext == ".pod" || ext == ".swift" || ext == ".rs" || ext == ".go" || ext == ".xml" || ext == ".xsd" || ext == ".xsl" || ext == ".xslt" || ext == ".svg" || ext == ".mrmac" || ext == ".service" || ext == ".socket" || ext == ".timer" || ext == ".mount" ||
+		    ext == ".pod" || ext == ".swift" || ext == ".rs" || ext == ".go" || ext == ".kt" || ext == ".kts" || ext == ".cs" || ext == ".csx" || ext == ".cake" || ext == ".xml" ||
+		    ext == ".xsd" || ext == ".xsl" || ext == ".xslt" || ext == ".svg" || ext == ".mrmac" || ext == ".service" || ext == ".socket" || ext == ".timer" || ext == ".mount" ||
 		    ext == ".automount" || ext == ".target" || ext == ".path" || ext == ".slice" || ext == ".scope" || ext == ".swap" || ext == ".device" || ext == ".link" ||
 		    ext == ".netdev" || ext == ".network")
 			pathBias = 14;
@@ -629,6 +646,36 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 	if (goPackageLines + goImportLines + goFunctionLines + goTypeLines > 0)
 		strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Go)] += std::min(4, goPackageLines + goImportLines + goFunctionLines + goTypeLines);
 
+	addClassificationScore(scores, MRSyntaxLanguage::Kotlin, countLinePrefixMatches(lower, "package ", 8) * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Kotlin, countLinePrefixMatches(lower, "import ", 12));
+	addClassificationScore(scores, MRSyntaxLanguage::Kotlin, kotlinFunctionLines * 4);
+	addClassificationScore(scores, MRSyntaxLanguage::Kotlin, kotlinTypeLines * 4);
+	addClassificationScore(scores, MRSyntaxLanguage::Kotlin, kotlinValueLines * 2);
+	addClassificationScore(scores, MRSyntaxLanguage::Kotlin, countMatches(lower, "data class ", 8) * 4);
+	addClassificationScore(scores, MRSyntaxLanguage::Kotlin, countMatches(lower, "companion object", 8) * 4);
+	addClassificationScore(scores, MRSyntaxLanguage::Kotlin, countMatches(lower, "when ", 12) * 3);
+	addClassificationScore(scores, MRSyntaxLanguage::Kotlin, countMatches(lower, "?:", 12) * 2);
+	addClassificationScore(scores, MRSyntaxLanguage::Kotlin, countMatches(lower, "!!", 12) * 2);
+	if (ext == ".kt" || ext == ".kts") strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Kotlin)] += 2;
+	if (kotlinFunctionLines + kotlinTypeLines > 0)
+		strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::Kotlin)] += std::min(4, kotlinFunctionLines + kotlinTypeLines);
+
+	addClassificationScore(scores, MRSyntaxLanguage::CSharp, csharpUsingLines * 2);
+	addClassificationScore(scores, MRSyntaxLanguage::CSharp, csharpNamespaceLines * 4);
+	addClassificationScore(scores, MRSyntaxLanguage::CSharp, csharpTypeLines * 4);
+	addClassificationScore(scores, MRSyntaxLanguage::CSharp, countMatches(lower, "public ", 12));
+	addClassificationScore(scores, MRSyntaxLanguage::CSharp, countMatches(lower, "private ", 12));
+	addClassificationScore(scores, MRSyntaxLanguage::CSharp, countMatches(lower, "protected ", 12));
+	addClassificationScore(scores, MRSyntaxLanguage::CSharp, countMatches(lower, "internal ", 12));
+	addClassificationScore(scores, MRSyntaxLanguage::CSharp, countMatches(lower, "async ", 12));
+	addClassificationScore(scores, MRSyntaxLanguage::CSharp, countMatches(lower, "await ", 12));
+	addClassificationScore(scores, MRSyntaxLanguage::CSharp, countMatches(lower, "string ", 12));
+	addClassificationScore(scores, MRSyntaxLanguage::CSharp, countMatches(lower, "var ", 12));
+	addClassificationScore(scores, MRSyntaxLanguage::CSharp, countMatches(lower, "=>", 12));
+	if (ext == ".cs" || ext == ".csx" || ext == ".cake") strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::CSharp)] += 2;
+	if (csharpTypeLines + csharpNamespaceLines > 0)
+		strongSignals[syntaxLanguageIndex(MRSyntaxLanguage::CSharp)] += std::min(4, csharpTypeLines + csharpNamespaceLines);
+
 	addClassificationScore(scores, MRSyntaxLanguage::MRMAC, countMatches(lower, "$macro", 8) * 5);
 	addClassificationScore(scores, MRSyntaxLanguage::MRMAC, countMatches(lower, "$macro_file", 8) * 5);
 	addClassificationScore(scores, MRSyntaxLanguage::MRMAC, countMatches(lower, "tvcall", 8) * 5);
@@ -729,6 +776,18 @@ MRSyntaxClassification tmrClassifySyntaxLanguage(const std::string &path, const 
 		addClassificationScore(scores, MRSyntaxLanguage::Cpp, -6);
 		addClassificationScore(scores, MRSyntaxLanguage::JavaScript, -6);
 		addClassificationScore(scores, MRSyntaxLanguage::Rust, -4);
+		addClassificationScore(scores, MRSyntaxLanguage::Swift, -4);
+	}
+	if (ext == ".kt" || ext == ".kts") {
+		addClassificationScore(scores, MRSyntaxLanguage::JavaScript, -6);
+		addClassificationScore(scores, MRSyntaxLanguage::Swift, -4);
+		addClassificationScore(scores, MRSyntaxLanguage::Go, -4);
+		addClassificationScore(scores, MRSyntaxLanguage::CSharp, -4);
+	}
+	if (ext == ".cs" || ext == ".csx" || ext == ".cake") {
+		addClassificationScore(scores, MRSyntaxLanguage::JavaScript, -6);
+		addClassificationScore(scores, MRSyntaxLanguage::Cpp, -4);
+		addClassificationScore(scores, MRSyntaxLanguage::Kotlin, -4);
 		addClassificationScore(scores, MRSyntaxLanguage::Swift, -4);
 	}
 	if (semicolonCount >= 6 || braceCount >= 12) {

@@ -60,7 +60,8 @@ enum : ushort {
 	kOptionDisplayTabs = 0x0400,
 	kOptionFormatRuler = 0x0800,
 	kOptionCodeColoring = 0x1000,
-	kOptionCodeFoldingFeature = 0x2000
+	kOptionCodeFoldingFeature = 0x2000,
+	kOptionBackupFiles = 0x4000
 };
 
 enum : ushort {

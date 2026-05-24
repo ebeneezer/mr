@@ -8,12 +8,14 @@
 #include <cctype>
 #include <cerrno>
 #include <cstring>
+#include <filesystem>
 #include <fcntl.h>
 #include <poll.h>
 #include <signal.h>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -30,6 +32,41 @@ namespace {
 	std::string result(path.substr(start, end - start));
 	if (result.size() >= 2 && ((result.front() == '"' && result.back() == '"') || (result.front() == '\'' && result.back() == '\''))) result = result.substr(1, result.size() - 2);
 	return result;
+}
+
+std::string shellQuote(const std::string &value) {
+	std::string out = "'";
+
+	for (char ch : value) {
+		if (ch == '\'') out += "'\\''";
+		else
+			out.push_back(ch);
+	}
+	out.push_back('\'');
+	return out;
+}
+
+bool setError(std::string *errorMessage, const std::string &message) {
+	if (errorMessage != nullptr) *errorMessage = message;
+	return false;
+}
+
+std::string compilerOutputPathForSource(const std::string &sourcePath) {
+	std::filesystem::path source(sourcePath);
+	std::filesystem::path output = source;
+
+	output.replace_extension();
+	if (output.empty() || output == source) {
+		output = source;
+		output += ".out";
+	}
+	return output.string();
+}
+
+bool pathIsDirectory(const std::string &path) {
+	std::error_code error;
+
+	return std::filesystem::is_directory(path, error);
 }
 } // namespace
 
@@ -51,6 +88,33 @@ std::string shortenCommandTitle(std::string_view command) {
 	if (trimmed.empty()) trimmed = "(empty)";
 	if (trimmed.size() > 54) trimmed = trimmed.substr(0, 51) + "...";
 	return "CMD: " + trimmed;
+}
+
+bool buildCompilerProfileCommandLine(const MRCompilerProfile &profile, const std::string &sourcePath, std::string &commandLine, std::string *errorMessage) {
+	std::string toolchain = profile.toolchain;
+	std::string source = trimPathInput(sourcePath);
+	std::ostringstream command;
+
+	commandLine.clear();
+	if (source.empty()) return setError(errorMessage, "No source file selected for build.");
+	if (profile.executablePath.empty()) return setError(errorMessage, "Compiler profile has no executable path.");
+	if (toolchain != "GCC" && toolchain != "CLANG" && toolchain != "SWIFT") return setError(errorMessage, "Build current file currently supports GCC, CLANG and SWIFT compiler profiles.");
+
+	command << shellQuote(profile.executablePath);
+	if (!profile.buildFlags.empty()) command << ' ' << profile.buildFlags;
+	for (const std::string &path : profile.includePaths)
+		if (!path.empty()) command << " -I" << shellQuote(path);
+	for (const std::string &path : profile.libraryPaths)
+		if (!path.empty()) command << " -L" << shellQuote(path);
+	if (toolchain == "SWIFT")
+		for (const std::string &path : profile.runtimePaths)
+			if (!path.empty() && pathIsDirectory(path)) command << " -Xlinker -rpath -Xlinker " << shellQuote(path);
+	command << ' ' << shellQuote(source);
+	command << " -o " << shellQuote(compilerOutputPathForSource(source));
+
+	commandLine = command.str();
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
 }
 
 mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &info, std::stop_token stopToken, std::size_t channelId, const std::string &command) {

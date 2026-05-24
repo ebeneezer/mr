@@ -20,6 +20,7 @@ std::string &configuredColorThemeFile();
 std::string &configuredColorThemeDisplayNameValue();
 MREditSetupSettings &configuredEditSettings();
 std::vector<MREditExtensionProfile> &configuredEditProfiles();
+std::vector<MRCompilerProfile> &configuredCompilerProfilesValue();
 std::vector<MRKeymapProfile> &configuredKeymapProfilesValue();
 std::string &configuredDefaultProfileDescriptionValue();
 std::string &configuredKeymapFileValue();

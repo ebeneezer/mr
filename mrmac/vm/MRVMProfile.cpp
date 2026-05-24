@@ -188,7 +188,7 @@ bool isKeymapActionMacroCommand(const std::string &name) {
 }
 
 unsigned classifyProcName(const std::string &name) {
-	if (name == "MRSETUP") return mrefUiAffinity;
+	if (name == "MRSETUP" || name == "MRCOMPILERPROFILE") return mrefUiAffinity;
 	if (name == "MAKE_MESSAGE") return mrefUiAffinity;
 	if (name == "REGISTER_MENU_ITEM" || name == "REMOVE_MENU_ITEM") return mrefUiAffinity;
 	if (name == "CREATE_GLOBAL_STR" || name == "SET_GLOBAL_STR" || name == "SET_GLOBAL_INT" || name == "SET_GLOBAL_HASH" || name == "UNLOAD_MACRO") return name == "UNLOAD_MACRO" ? mrefUiAffinity : (mrefUiAffinity | mrefStagedWrite);

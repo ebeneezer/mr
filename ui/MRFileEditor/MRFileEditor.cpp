@@ -25,7 +25,7 @@ bool isIndentWhitespace(char ch) noexcept {
 bool isStatefulSyntaxLanguage(MRSyntaxLanguage language) noexcept {
 	return language == MRSyntaxLanguage::MRMAC || language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp || language == MRSyntaxLanguage::JavaScript || language == MRSyntaxLanguage::Python ||
 	       language == MRSyntaxLanguage::Markdown || language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh || language == MRSyntaxLanguage::Fish || language == MRSyntaxLanguage::Perl || language == MRSyntaxLanguage::Swift || language == MRSyntaxLanguage::Rust ||
-	       language == MRSyntaxLanguage::Go || language == MRSyntaxLanguage::Pascal || language == MRSyntaxLanguage::Xml;
+	       language == MRSyntaxLanguage::Go || language == MRSyntaxLanguage::Kotlin || language == MRSyntaxLanguage::CSharp || language == MRSyntaxLanguage::Pascal || language == MRSyntaxLanguage::Xml;
 }
 
 static constexpr auto kLargeFileViewportWarmupDebounce = std::chrono::milliseconds(180);
@@ -340,6 +340,8 @@ bool isCppLambdaLeadLine(std::string_view trimmed) noexcept {
 bool isRustCommentLikeLine(std::string_view trimmed) noexcept;
 bool isRustStructuralLeadLine(std::string_view upperLine) noexcept;
 bool isGoStructuralLeadLine(std::string_view upperLine) noexcept;
+bool isKotlinStructuralLeadLine(std::string_view upperLine) noexcept;
+bool isCSharpStructuralLeadLine(std::string_view upperLine) noexcept;
 
 bool isCLikeStructuralLeadLine(std::string_view trimmed, std::string_view upperLine, MRSyntaxLanguage language) noexcept {
 	const std::string_view normalizedTrimmed = trimView(skipLeadingClosersAndSpace(trimmed));
@@ -359,6 +361,8 @@ bool isCLikeStructuralLeadLine(std::string_view trimmed, std::string_view upperL
 		return true;
 	if (language == MRSyntaxLanguage::Rust && isRustStructuralLeadLine(normalizedUpper)) return true;
 	if (language == MRSyntaxLanguage::Go && isGoStructuralLeadLine(normalizedUpper)) return true;
+	if (language == MRSyntaxLanguage::Kotlin && isKotlinStructuralLeadLine(normalizedUpper)) return true;
+	if (language == MRSyntaxLanguage::CSharp && isCSharpStructuralLeadLine(normalizedUpper)) return true;
 	const std::size_t openParen = normalizedTrimmed.find('(');
 	if (openParen == std::string_view::npos) return false;
 	if (normalizedTrimmed.find(';') != std::string_view::npos && !cppRequiresBraceLead) return false;
@@ -449,6 +453,14 @@ bool isGoCommentLikeLine(std::string_view trimmed) noexcept {
 	return trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with("*") || trimmed.starts_with("*/");
 }
 
+bool isKotlinCommentLikeLine(std::string_view trimmed) noexcept {
+	return trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with("*") || trimmed.starts_with("*/");
+}
+
+bool isCSharpCommentLikeLine(std::string_view trimmed) noexcept {
+	return trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with("*") || trimmed.starts_with("*/");
+}
+
 std::string_view skipRustLeadingLabels(std::string_view text) noexcept {
 	text = trimView(skipLeadingClosersAndSpace(text));
 	while (!text.empty() && text.front() == '\'') {
@@ -493,6 +505,35 @@ bool isGoStructuralLeadLine(std::string_view upperLine) noexcept {
 	return false;
 }
 
+std::string_view normalizeKotlinStructuralLeadText(std::string_view text) noexcept {
+	return trimView(skipLeadingClosersAndSpace(text));
+}
+
+bool isKotlinStructuralLeadLine(std::string_view upperLine) noexcept {
+	const std::string_view normalizedUpper = normalizeKotlinStructuralLeadText(upperLine);
+	if (normalizedUpper.empty() || isKotlinCommentLikeLine(normalizedUpper)) return false;
+	if (normalizedUpper == "ELSE" || normalizedUpper.starts_with("ELSE ") || normalizedUpper.starts_with("IF ") || normalizedUpper.starts_with("FOR ") || normalizedUpper.starts_with("WHILE ") ||
+	    normalizedUpper.starts_with("WHEN ") || normalizedUpper.starts_with("TRY") || normalizedUpper.starts_with("CATCH") || normalizedUpper.starts_with("FINALLY") || normalizedUpper.starts_with("DO "))
+		return true;
+	return containsUpperToken(normalizedUpper, "FUN") || containsUpperToken(normalizedUpper, "CLASS") || containsUpperToken(normalizedUpper, "INTERFACE") ||
+	       containsUpperToken(normalizedUpper, "OBJECT") || containsUpperToken(normalizedUpper, "ENUM") || containsUpperToken(normalizedUpper, "COMPANION");
+}
+
+std::string_view normalizeCSharpStructuralLeadText(std::string_view text) noexcept {
+	return trimView(skipLeadingClosersAndSpace(text));
+}
+
+bool isCSharpStructuralLeadLine(std::string_view upperLine) noexcept {
+	const std::string_view normalizedUpper = normalizeCSharpStructuralLeadText(upperLine);
+	if (normalizedUpper.empty() || isCSharpCommentLikeLine(normalizedUpper) || normalizedUpper.starts_with("#")) return false;
+	if (normalizedUpper == "ELSE" || normalizedUpper.starts_with("ELSE ") || normalizedUpper.starts_with("IF ") || normalizedUpper.starts_with("FOR ") || normalizedUpper.starts_with("FOREACH ") ||
+	    normalizedUpper.starts_with("WHILE ") || normalizedUpper.starts_with("DO") || normalizedUpper.starts_with("SWITCH ") || normalizedUpper.starts_with("TRY") || normalizedUpper.starts_with("CATCH") ||
+	    normalizedUpper.starts_with("FINALLY") || normalizedUpper.starts_with("LOCK ") || normalizedUpper.starts_with("USING ") || normalizedUpper.starts_with("NAMESPACE "))
+		return true;
+	return containsUpperToken(normalizedUpper, "CLASS") || containsUpperToken(normalizedUpper, "STRUCT") || containsUpperToken(normalizedUpper, "INTERFACE") ||
+	       containsUpperToken(normalizedUpper, "ENUM") || containsUpperToken(normalizedUpper, "RECORD");
+}
+
 bool isPerlPodStart(std::string_view trimmed) noexcept {
 	return trimmed.starts_with("=POD") || trimmed.starts_with("=HEAD") || trimmed.starts_with("=BEGIN") || trimmed.starts_with("=FOR") || trimmed.starts_with("=OVER");
 }
@@ -508,6 +549,8 @@ bool isCLikeStructuralBraceLead(std::string_view trimmed, std::string_view upper
 	if (language == MRSyntaxLanguage::Swift && isSwiftCommentLikeLine(trimmed)) return false;
 	if (language == MRSyntaxLanguage::Rust && isRustCommentLikeLine(trimmed)) return false;
 	if (language == MRSyntaxLanguage::Go && isGoCommentLikeLine(trimmed)) return false;
+	if (language == MRSyntaxLanguage::Kotlin && isKotlinCommentLikeLine(trimmed)) return false;
+	if (language == MRSyntaxLanguage::CSharp && isCSharpCommentLikeLine(trimmed)) return false;
 	const std::string_view beforeBrace = trimView(trimmed.substr(0, last));
 	const std::string_view beforeBraceUpper = trimView(upperLine.substr(0, last));
 	const std::string_view normalizedBeforeBrace = trimView(skipLeadingClosersAndSpace(beforeBrace));
@@ -573,9 +616,9 @@ bool isCLikeStructuralBraceLead(std::string_view trimmed, std::string_view upper
 		}
 		return false;
 	}
-	if (language == MRSyntaxLanguage::Go) {
-		const std::string_view structuralUpper = normalizedBeforeBraceUpper.empty() ? previousUpperLine : normalizedBeforeBraceUpper;
-		if (isGoStructuralLeadLine(structuralUpper)) return true;
+		if (language == MRSyntaxLanguage::Go) {
+			const std::string_view structuralUpper = normalizedBeforeBraceUpper.empty() ? previousUpperLine : normalizedBeforeBraceUpper;
+			if (isGoStructuralLeadLine(structuralUpper)) return true;
 		if (beforeBrace.find(')') != std::string_view::npos || beforeBrace.find(']') != std::string_view::npos) {
 			if (isGoStructuralLeadLine(previousUpperLine) || isGoStructuralLeadLine(previousPreviousUpperLine)) return true;
 		}
@@ -584,8 +627,34 @@ bool isCLikeStructuralBraceLead(std::string_view trimmed, std::string_view upper
 		} else if (normalizedBeforeBraceUpper.empty()) {
 			if (isGoStructuralLeadLine(previousPreviousUpperLine)) return true;
 		}
-		return false;
-	}
+			return false;
+		}
+		if (language == MRSyntaxLanguage::Kotlin) {
+			const std::string_view structuralUpper = normalizedBeforeBraceUpper.empty() ? previousUpperLine : normalizedBeforeBraceUpper;
+			if (isKotlinStructuralLeadLine(structuralUpper)) return true;
+			if (beforeBrace.find(')') != std::string_view::npos || beforeBrace.find(']') != std::string_view::npos) {
+				if (isKotlinStructuralLeadLine(previousUpperLine) || isKotlinStructuralLeadLine(previousPreviousUpperLine)) return true;
+			}
+			if (trimmed == "{") {
+				if (isKotlinStructuralLeadLine(previousUpperLine) || isKotlinStructuralLeadLine(previousPreviousUpperLine)) return true;
+			} else if (normalizedBeforeBraceUpper.empty()) {
+				if (isKotlinStructuralLeadLine(previousPreviousUpperLine)) return true;
+			}
+			return false;
+		}
+		if (language == MRSyntaxLanguage::CSharp) {
+			const std::string_view structuralUpper = normalizedBeforeBraceUpper.empty() ? previousUpperLine : normalizedBeforeBraceUpper;
+			if (isCSharpStructuralLeadLine(structuralUpper)) return true;
+			if (beforeBrace.find(')') != std::string_view::npos || beforeBrace.find(']') != std::string_view::npos) {
+				if (isCSharpStructuralLeadLine(previousUpperLine) || isCSharpStructuralLeadLine(previousPreviousUpperLine)) return true;
+			}
+			if (trimmed == "{") {
+				if (isCSharpStructuralLeadLine(previousUpperLine) || isCSharpStructuralLeadLine(previousPreviousUpperLine)) return true;
+			} else if (normalizedBeforeBraceUpper.empty()) {
+				if (isCSharpStructuralLeadLine(previousPreviousUpperLine)) return true;
+			}
+			return false;
+		}
 	return false;
 }
 
@@ -956,11 +1025,13 @@ SmartDedentRequest classifySmartDedentRequest(std::string_view trimmed, MRSyntax
 		case MRSyntaxLanguage::C:
 		case MRSyntaxLanguage::Cpp:
 		case MRSyntaxLanguage::JavaScript:
-		case MRSyntaxLanguage::Swift:
-		case MRSyntaxLanguage::Rust:
-		case MRSyntaxLanguage::Go:
-			if (normalizedUpper.starts_with("ELSE")) return {SmartDedentKind::CLikeElse, 0};
-			if (normalizedUpper.starts_with("CATCH") || normalizedUpper.starts_with("FINALLY")) return {SmartDedentKind::CLikeCatch, 0};
+			case MRSyntaxLanguage::Swift:
+			case MRSyntaxLanguage::Rust:
+			case MRSyntaxLanguage::Go:
+			case MRSyntaxLanguage::Kotlin:
+			case MRSyntaxLanguage::CSharp:
+				if (normalizedUpper.starts_with("ELSE")) return {SmartDedentKind::CLikeElse, 0};
+				if (normalizedUpper.starts_with("CATCH") || normalizedUpper.starts_with("FINALLY")) return {SmartDedentKind::CLikeCatch, 0};
 			break;
 		default:
 			break;
@@ -1017,6 +1088,10 @@ bool isDedentSearchSkippableLine(std::string_view trimmed, MRSyntaxLanguage lang
 			return isRustCommentLikeLine(trimmed);
 		case MRSyntaxLanguage::Go:
 			return isGoCommentLikeLine(trimmed);
+		case MRSyntaxLanguage::Kotlin:
+			return isKotlinCommentLikeLine(trimmed);
+		case MRSyntaxLanguage::CSharp:
+			return isCSharpCommentLikeLine(trimmed) || trimmed.starts_with("#");
 		case MRSyntaxLanguage::Pascal:
 			return isPascalCommentLikeLine(trimmed);
 		case MRSyntaxLanguage::Xml:
@@ -1407,18 +1482,40 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 		return currentLineIndex;
 	};
 
-	auto findRecentGoStructuralLeadLine = [&](std::size_t localLineIndex) noexcept -> std::size_t {
-		const std::size_t scanStart = localLineIndex > 6 ? localLineIndex - 6 : 0;
-		for (std::size_t candidate = localLineIndex + 1; candidate-- > scanStart;) {
-			const std::string_view candidateTrimmed = trimView(lineTexts[candidate]);
+		auto findRecentGoStructuralLeadLine = [&](std::size_t localLineIndex) noexcept -> std::size_t {
+			const std::size_t scanStart = localLineIndex > 6 ? localLineIndex - 6 : 0;
+			for (std::size_t candidate = localLineIndex + 1; candidate-- > scanStart;) {
+				const std::string_view candidateTrimmed = trimView(lineTexts[candidate]);
 			const std::string candidateUpper = upperAscii(std::string(candidateTrimmed));
 			if (isGoStructuralLeadLine(candidateUpper)) return baseLineIndex + candidate;
 			if (candidate == 0) break;
-		}
-		return currentLineIndex;
-	};
+			}
+			return currentLineIndex;
+		};
 
-	auto findRecentShellStructuralLeadLine = [&](std::size_t localLineIndex, std::string_view trimmed, std::string_view upperLine) noexcept -> std::size_t {
+		auto findRecentKotlinStructuralLeadLine = [&](std::size_t localLineIndex) noexcept -> std::size_t {
+			const std::size_t scanStart = localLineIndex > 6 ? localLineIndex - 6 : 0;
+			for (std::size_t candidate = localLineIndex + 1; candidate-- > scanStart;) {
+				const std::string_view candidateTrimmed = trimView(lineTexts[candidate]);
+				const std::string candidateUpper = upperAscii(std::string(candidateTrimmed));
+				if (isKotlinStructuralLeadLine(candidateUpper)) return baseLineIndex + candidate;
+				if (candidate == 0) break;
+			}
+			return currentLineIndex;
+		};
+
+		auto findRecentCSharpStructuralLeadLine = [&](std::size_t localLineIndex) noexcept -> std::size_t {
+			const std::size_t scanStart = localLineIndex > 8 ? localLineIndex - 8 : 0;
+			for (std::size_t candidate = localLineIndex + 1; candidate-- > scanStart;) {
+				const std::string_view candidateTrimmed = trimView(lineTexts[candidate]);
+				const std::string candidateUpper = upperAscii(std::string(candidateTrimmed));
+				if (isCSharpStructuralLeadLine(candidateUpper)) return baseLineIndex + candidate;
+				if (candidate == 0) break;
+			}
+			return currentLineIndex;
+		};
+
+		auto findRecentShellStructuralLeadLine = [&](std::size_t localLineIndex, std::string_view trimmed, std::string_view upperLine) noexcept -> std::size_t {
 		const std::size_t scanStart = localLineIndex > 8 ? localLineIndex - 8 : 0;
 		const bool braceLine = trimView(trimmed) == "{";
 		const bool thenLead = upperLine == "THEN" || upperLine.ends_with(" THEN");
@@ -1481,10 +1578,10 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 		const bool perlPodEnd = language == MRSyntaxLanguage::Perl && isPerlPodEnd(upperLine);
 		const bool javascriptSiblingAfterLeadingCloser =
 		    language == MRSyntaxLanguage::JavaScript && isJavaScriptSiblingLead(upperAscii(std::string(skipLeadingClosersAndSpace(trimmed))));
-		const bool cLikeSiblingAfterLeadingCloser =
-		    (language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp || language == MRSyntaxLanguage::Swift || language == MRSyntaxLanguage::Rust ||
-		     language == MRSyntaxLanguage::Go) &&
-		    isCLikeSiblingLead(upperAscii(std::string(skipLeadingClosersAndSpace(trimmed))));
+			const bool cLikeSiblingAfterLeadingCloser =
+			    (language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp || language == MRSyntaxLanguage::Swift || language == MRSyntaxLanguage::Rust ||
+			     language == MRSyntaxLanguage::Go || language == MRSyntaxLanguage::Kotlin || language == MRSyntaxLanguage::CSharp) &&
+			    isCLikeSiblingLead(upperAscii(std::string(skipLeadingClosersAndSpace(trimmed))));
 		const bool mrmacMacroStart = language == MRSyntaxLanguage::MRMAC && isMRMACMacroStart(upperLine);
 		const bool mrmacMacroEnd = language == MRSyntaxLanguage::MRMAC && isMRMACMacroEnd(upperLine);
 		const bool mrmacIfLead = language == MRSyntaxLanguage::MRMAC && isMRMACIfLead(upperLine);
@@ -1525,16 +1622,34 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 			    beforeBraceUpper.find(']') == std::string_view::npos && beforeBraceUpper.find('>') == std::string_view::npos)
 				return currentLineIndex;
 			return findRecentRustStructuralLeadLine(localLineIndex);
-		}();
-		const std::size_t recentGoLeadLine = [&]() noexcept -> std::size_t {
-			if (language != MRSyntaxLanguage::Go || currentLast == std::string_view::npos || trimmed[currentLast] != '{') return currentLineIndex;
-			const std::string_view beforeBraceUpper = trimView(upperLine.substr(0, currentLast));
-			const std::string_view normalizedBeforeBraceUpper = normalizeGoStructuralLeadText(beforeBraceUpper);
-			if (trimmed != "{" && !normalizedBeforeBraceUpper.empty() && !isGoStructuralLeadLine(normalizedBeforeBraceUpper) && beforeBraceUpper.find(')') == std::string_view::npos &&
-			    beforeBraceUpper.find(']') == std::string_view::npos)
-				return currentLineIndex;
-			return findRecentGoStructuralLeadLine(localLineIndex);
-		}();
+			}();
+			const std::size_t recentGoLeadLine = [&]() noexcept -> std::size_t {
+				if (language != MRSyntaxLanguage::Go || currentLast == std::string_view::npos || trimmed[currentLast] != '{') return currentLineIndex;
+				const std::string_view beforeBraceUpper = trimView(upperLine.substr(0, currentLast));
+				const std::string_view normalizedBeforeBraceUpper = normalizeGoStructuralLeadText(beforeBraceUpper);
+				if (trimmed != "{" && !normalizedBeforeBraceUpper.empty() && !isGoStructuralLeadLine(normalizedBeforeBraceUpper) && beforeBraceUpper.find(')') == std::string_view::npos &&
+				    beforeBraceUpper.find(']') == std::string_view::npos)
+					return currentLineIndex;
+				return findRecentGoStructuralLeadLine(localLineIndex);
+			}();
+			const std::size_t recentKotlinLeadLine = [&]() noexcept -> std::size_t {
+				if (language != MRSyntaxLanguage::Kotlin || currentLast == std::string_view::npos || trimmed[currentLast] != '{') return currentLineIndex;
+				const std::string_view beforeBraceUpper = trimView(upperLine.substr(0, currentLast));
+				const std::string_view normalizedBeforeBraceUpper = normalizeKotlinStructuralLeadText(beforeBraceUpper);
+				if (trimmed != "{" && !normalizedBeforeBraceUpper.empty() && !isKotlinStructuralLeadLine(normalizedBeforeBraceUpper) &&
+				    beforeBraceUpper.find(')') == std::string_view::npos && beforeBraceUpper.find(']') == std::string_view::npos)
+					return currentLineIndex;
+				return findRecentKotlinStructuralLeadLine(localLineIndex);
+			}();
+			const std::size_t recentCSharpLeadLine = [&]() noexcept -> std::size_t {
+				if (language != MRSyntaxLanguage::CSharp || currentLast == std::string_view::npos || trimmed[currentLast] != '{') return currentLineIndex;
+				const std::string_view beforeBraceUpper = trimView(upperLine.substr(0, currentLast));
+				const std::string_view normalizedBeforeBraceUpper = normalizeCSharpStructuralLeadText(beforeBraceUpper);
+				if (trimmed != "{" && !normalizedBeforeBraceUpper.empty() && !isCSharpStructuralLeadLine(normalizedBeforeBraceUpper) &&
+				    beforeBraceUpper.find(')') == std::string_view::npos && beforeBraceUpper.find(']') == std::string_view::npos)
+					return currentLineIndex;
+				return findRecentCSharpStructuralLeadLine(localLineIndex);
+			}();
 		const std::size_t recentShellLeadLine = [&]() noexcept -> std::size_t {
 			if (language != MRSyntaxLanguage::Bash && language != MRSyntaxLanguage::Zsh) return currentLineIndex;
 			if (trimmed == "{" || upperLine == "THEN" || upperLine.ends_with(" THEN") || upperLine == "DO" || upperLine.ends_with(" DO")) return findRecentShellStructuralLeadLine(localLineIndex, trimmed, upperLine);
@@ -1793,15 +1908,23 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 				if (isCLikeStructuralBraceLead(trimmed, upperLine, previousTrimmed, previousUpperLine, previousPreviousTrimmed, previousPreviousUpperLine, language))
 					openBlock(MRFoldSourceKind::Delimiter, currentIndent, '}', 0, 0, 0, kLanguageBlockNone, recentSwiftLeadLine, openSiblingContinuation);
 				break;
-			case MRSyntaxLanguage::Rust:
-				if (isCLikeStructuralBraceLead(trimmed, upperLine, previousTrimmed, previousUpperLine, previousPreviousTrimmed, previousPreviousUpperLine, language))
-					openBlock(MRFoldSourceKind::Delimiter, currentIndent, '}', 0, 0, 0, kLanguageBlockNone, recentRustLeadLine, openSiblingContinuation);
-				break;
-			case MRSyntaxLanguage::Go:
-				if (isCLikeStructuralBraceLead(trimmed, upperLine, previousTrimmed, previousUpperLine, previousPreviousTrimmed, previousPreviousUpperLine, language))
-					openBlock(MRFoldSourceKind::Delimiter, currentIndent, '}', 0, 0, 0, kLanguageBlockNone, recentGoLeadLine, openSiblingContinuation);
-				break;
-			case MRSyntaxLanguage::Systemd:
+				case MRSyntaxLanguage::Rust:
+					if (isCLikeStructuralBraceLead(trimmed, upperLine, previousTrimmed, previousUpperLine, previousPreviousTrimmed, previousPreviousUpperLine, language))
+						openBlock(MRFoldSourceKind::Delimiter, currentIndent, '}', 0, 0, 0, kLanguageBlockNone, recentRustLeadLine, openSiblingContinuation);
+					break;
+				case MRSyntaxLanguage::Go:
+					if (isCLikeStructuralBraceLead(trimmed, upperLine, previousTrimmed, previousUpperLine, previousPreviousTrimmed, previousPreviousUpperLine, language))
+						openBlock(MRFoldSourceKind::Delimiter, currentIndent, '}', 0, 0, 0, kLanguageBlockNone, recentGoLeadLine, openSiblingContinuation);
+					break;
+				case MRSyntaxLanguage::Kotlin:
+					if (isCLikeStructuralBraceLead(trimmed, upperLine, previousTrimmed, previousUpperLine, previousPreviousTrimmed, previousPreviousUpperLine, language))
+						openBlock(MRFoldSourceKind::Delimiter, currentIndent, '}', 0, 0, 0, kLanguageBlockNone, recentKotlinLeadLine, openSiblingContinuation);
+					break;
+				case MRSyntaxLanguage::CSharp:
+					if (isCLikeStructuralBraceLead(trimmed, upperLine, previousTrimmed, previousUpperLine, previousPreviousTrimmed, previousPreviousUpperLine, language))
+						openBlock(MRFoldSourceKind::Delimiter, currentIndent, '}', 0, 0, 0, kLanguageBlockNone, recentCSharpLeadLine, openSiblingContinuation);
+					break;
+				case MRSyntaxLanguage::Systemd:
 				if (headingLevel > 0) openBlock(MRFoldSourceKind::Section, currentIndent, 0, 0, 0, headingLevel);
 				break;
 			case MRSyntaxLanguage::Json: {

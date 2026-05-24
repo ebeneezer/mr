@@ -41,6 +41,10 @@ bool parseLanguageName(const std::string &name, MRSyntaxLanguage &language) noex
 		language = MRSyntaxLanguage::Rust;
 	else if (name == "go")
 		language = MRSyntaxLanguage::Go;
+	else if (name == "kotlin" || name == "kt" || name == "kts")
+		language = MRSyntaxLanguage::Kotlin;
+	else if (name == "csharp" || name == "cs" || name == "c#")
+		language = MRSyntaxLanguage::CSharp;
 	else if (name == "pascal" || name == "pas")
 		language = MRSyntaxLanguage::Pascal;
 	else if (name == "systemd" || name == "sd")
@@ -86,6 +90,10 @@ const char *languageName(MRSyntaxLanguage language) noexcept {
 			return "Rust";
 		case MRSyntaxLanguage::Go:
 			return "Go";
+		case MRSyntaxLanguage::Kotlin:
+			return "Kotlin";
+		case MRSyntaxLanguage::CSharp:
+			return "C#";
 		case MRSyntaxLanguage::Pascal:
 			return "Pascal";
 		case MRSyntaxLanguage::Systemd:

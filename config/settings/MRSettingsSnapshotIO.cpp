@@ -3,6 +3,7 @@
 #include "../../app/utils/MRStringUtils.hpp"
 #include "MRSettingsEditSetup.hpp"
 #include "MRSettingsHistory.hpp"
+#include "MRSettingsCompilerProfiles.hpp"
 #include "MRSettingsRuntimeState.hpp"
 #include "MRSettingsSnapshotIO.hpp"
 #include "MRSettingsStorage.hpp"
@@ -357,6 +358,17 @@ bool setSnapshotEditProfiles(MRSettingsSnapshot &snapshot, const std::vector<MRE
 	return true;
 }
 
+bool setSnapshotCompilerProfiles(MRSettingsSnapshot &snapshot, const std::vector<MRCompilerProfile> &profiles, std::string *errorMessage) {
+	std::vector<MRCompilerProfile> normalized = profiles;
+
+	for (MRCompilerProfile &profile : normalized)
+		if (!normalizeCompilerProfileInPlace(profile, errorMessage)) return false;
+	if (!validateCompilerProfiles(normalized, errorMessage)) return false;
+	snapshot.compilerProfiles = std::move(normalized);
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
 MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) {
 	MRSettingsSnapshot snapshot;
 
@@ -384,6 +396,7 @@ MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) 
 	snapshot.defaultProfileDescription = configuredDefaultProfileDescription();
 	snapshot.editSettings = configuredEditSetupSettings();
 	snapshot.colorSettings = configuredColorSetupSettings();
+	snapshot.compilerProfiles = configuredCompilerProfiles();
 	snapshot.editProfiles = configuredEditExtensionProfiles();
 	snapshot.keymapProfiles = configuredKeymapProfiles();
 	snapshot.activeKeymapProfile = configuredActiveKeymapProfile();
@@ -612,82 +625,26 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('DEFAULT_MODE', '" + escapeMrmacSingleQuotedLiteral(edit.defaultMode) + "');\n";
 	source += "MRSETUP('CURSOR_STATUS_COLOR', '" + escapeMrmacSingleQuotedLiteral(edit.cursorStatusColor) + "');\n";
 
+	for (const MRCompilerProfile &profile : snapshot.compilerProfiles) {
+		source += "MRCOMPILERPROFILE('DEFINE', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', '" + escapeMrmacSingleQuotedLiteral(profile.name) + "', '" + escapeMrmacSingleQuotedLiteral(profile.toolchain) + "');\n";
+		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'EXECUTABLE', '" + escapeMrmacSingleQuotedLiteral(profile.executablePath) + "');\n";
+		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'VERSION', '" + escapeMrmacSingleQuotedLiteral(profile.versionText) + "');\n";
+		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'TARGET', '" + escapeMrmacSingleQuotedLiteral(profile.targetTriple) + "');\n";
+		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'FLAGS', '" + escapeMrmacSingleQuotedLiteral(profile.buildFlags) + "');\n";
+		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'INCLUDES', '" + escapeMrmacSingleQuotedLiteral(normalizeCompilerProfilePathList(profile.includePaths)) + "');\n";
+		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'LIBRARIES', '" + escapeMrmacSingleQuotedLiteral(normalizeCompilerProfilePathList(profile.libraryPaths)) + "');\n";
+		source += "MRCOMPILERPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'RUNTIME', '" + escapeMrmacSingleQuotedLiteral(normalizeCompilerProfilePathList(profile.runtimePaths)) + "');\n";
+	}
+
 	for (const auto &profile : snapshot.editProfiles) {
 		source += "MRFEPROFILE('DEFINE', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', '" + escapeMrmacSingleQuotedLiteral(profile.name) + "', '');\n";
 		for (const std::string &ext : profile.extensions)
 			source += "MRFEPROFILE('EXT', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', '" + escapeMrmacSingleQuotedLiteral(ext) + "', '');\n";
 		if (!profile.windowColorThemeUri.empty()) source += "MRFEPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', '" + std::string(kWindowColorThemeProfileKey) + "', '" + escapeMrmacSingleQuotedLiteral(profile.windowColorThemeUri) + "');\n";
+		if (!profile.compilerProfileId.empty()) source += "MRFEPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', 'COMPILER_PROFILE', '" + escapeMrmacSingleQuotedLiteral(profile.compilerProfileId) + "');\n";
 		for (std::size_t i = 0; i < descriptorCount; ++i)
 			if (descriptors[i].profileSupported && (profile.overrides.mask & descriptors[i].overrideBit) != 0) {
-				std::string value;
-
-				if (std::string(descriptors[i].key) == "PAGE_BREAK") value = profile.overrides.values.pageBreak;
-				else if (std::string(descriptors[i].key) == "WORD_DELIMITERS")
-					value = profile.overrides.values.wordDelimiters;
-				else if (std::string(descriptors[i].key) == "DEFAULT_EXTENSIONS")
-					value = profile.overrides.values.defaultExtensions;
-				else if (std::string(descriptors[i].key) == "TRUNCATE_SPACES")
-					value = formatEditSetupBoolean(profile.overrides.values.truncateSpaces);
-				else if (std::string(descriptors[i].key) == "EOF_CTRL_Z")
-					value = formatEditSetupBoolean(profile.overrides.values.eofCtrlZ);
-				else if (std::string(descriptors[i].key) == "EOF_CR_LF")
-					value = formatEditSetupBoolean(profile.overrides.values.eofCrLf);
-				else if (std::string(descriptors[i].key) == "TAB_EXPAND")
-					value = formatEditSetupBoolean(profile.overrides.values.tabExpand);
-				else if (std::string(descriptors[i].key) == "DISPLAY_TABS")
-					value = formatEditSetupBoolean(profile.overrides.values.displayTabs);
-				else if (std::string(descriptors[i].key) == "TAB_SIZE")
-					value = std::to_string(profile.overrides.values.tabSize);
-				else if (std::string(descriptors[i].key) == "LEFT_MARGIN")
-					value = std::to_string(profile.overrides.values.leftMargin);
-				else if (std::string(descriptors[i].key) == "RIGHT_MARGIN")
-					value = std::to_string(profile.overrides.values.rightMargin);
-				else if (std::string(descriptors[i].key) == "FORMAT_RULER")
-					value = formatEditSetupBoolean(profile.overrides.values.formatRuler);
-				else if (std::string(descriptors[i].key) == "WORD_WRAP")
-					value = formatEditSetupBoolean(profile.overrides.values.wordWrap);
-				else if (std::string(descriptors[i].key) == "INDENT_STYLE")
-					value = profile.overrides.values.indentStyle;
-				else if (std::string(descriptors[i].key) == "FILE_TYPE")
-					value = profile.overrides.values.fileType;
-				else if (std::string(descriptors[i].key) == "BINARY_RECORD_LENGTH")
-					value = std::to_string(profile.overrides.values.binaryRecordLength);
-				else if (std::string(descriptors[i].key) == "POST_LOAD_MACRO")
-					value = profile.overrides.values.postLoadMacro;
-				else if (std::string(descriptors[i].key) == "PRE_SAVE_MACRO")
-					value = profile.overrides.values.preSaveMacro;
-				else if (std::string(descriptors[i].key) == "DEFAULT_PATH")
-					value = profile.overrides.values.defaultPath;
-				else if (std::string(descriptors[i].key) == "FORMAT_LINE")
-					value = profile.overrides.values.formatLine;
-				else if (std::string(descriptors[i].key) == "BACKUP_FILES")
-					value = formatEditSetupBoolean(profile.overrides.values.backupFiles);
-				else if (std::string(descriptors[i].key) == "SHOW_EOF_MARKER")
-					value = formatEditSetupBoolean(profile.overrides.values.showEofMarker);
-				else if (std::string(descriptors[i].key) == "SHOW_EOF_MARKER_EMOJI")
-					value = formatEditSetupBoolean(profile.overrides.values.showEofMarkerEmoji);
-				else if (std::string(descriptors[i].key) == "LINE_NUMBERS_POSITION")
-					value = profile.overrides.values.lineNumbersPosition;
-				else if (std::string(descriptors[i].key) == "LINE_NUM_ZERO_FILL")
-					value = formatEditSetupBoolean(profile.overrides.values.lineNumZeroFill);
-				else if (std::string(descriptors[i].key) == "MINIMAP_POSITION")
-					value = profile.overrides.values.miniMapPosition;
-				else if (std::string(descriptors[i].key) == "MINIMAP_WIDTH")
-					value = std::to_string(profile.overrides.values.miniMapWidth);
-				else if (std::string(descriptors[i].key) == "MINIMAP_MARKER_GLYPH")
-					value = profile.overrides.values.miniMapMarkerGlyph;
-				else if (std::string(descriptors[i].key) == "GUTTERS")
-					value = profile.overrides.values.gutters;
-				else if (std::string(descriptors[i].key) == "PERSISTENT_BLOCKS")
-					value = formatEditSetupBoolean(profile.overrides.values.persistentBlocks);
-				else if (std::string(descriptors[i].key) == "CODE_FOLDING_POSITION")
-					value = profile.overrides.values.codeFoldingPosition;
-				else if (std::string(descriptors[i].key) == "COLUMN_BLOCK_MOVE")
-					value = profile.overrides.values.columnBlockMove;
-				else if (std::string(descriptors[i].key) == "DEFAULT_MODE")
-					value = profile.overrides.values.defaultMode;
-				else if (std::string(descriptors[i].key) == "CURSOR_STATUS_COLOR")
-					value = profile.overrides.values.cursorStatusColor;
+				std::string value = editSetupValueLiteral(profile.overrides.values, descriptors[i].key);
 
 				source += "MRFEPROFILE('SET', '" + escapeMrmacSingleQuotedLiteral(profile.id) + "', '" + descriptors[i].key + "', '" + escapeMrmacSingleQuotedLiteral(value) + "');\n";
 			}

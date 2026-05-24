@@ -3,6 +3,7 @@
 #include "../../app/utils/MRFileIOUtils.hpp"
 #include "../../app/utils/MRStringUtils.hpp"
 #include "MRSettingsAssignments.hpp"
+#include "MRSettingsCompilerProfiles.hpp"
 #include "MRSettingsEditSetup.hpp"
 #include "MRSettingsHistory.hpp"
 #include "MRSettingsRuntime.hpp"
@@ -558,6 +559,7 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	configuredColorSettings() = resolveColorSetupDefaults();
 	configuredColorSettingsInitialized() = true;
 	configuredColorThemeDisplayNameValue().clear();
+	if (!setConfiguredCompilerProfiles(std::vector<MRCompilerProfile>(), errorMessage)) return false;
 	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(), errorMessage)) return false;
 	if (!setConfiguredKeymapProfiles(std::vector<MRKeymapProfile>(), errorMessage)) return false;
 	if (!setConfiguredKeymapFilePath("", errorMessage)) return false;
@@ -1618,6 +1620,10 @@ bool applySettingsSnapshotEditExtensionProfileDirective(MRSettingsSnapshot &snap
 			profile->windowColorThemeUri = normalizedTheme;
 			return setSnapshotEditProfiles(snapshot, profiles, errorMessage);
 		}
+		if (upperAscii(trimAscii(arg3)) == "COMPILER_PROFILE") {
+			profile->compilerProfileId = canonicalCompilerProfileId(arg4);
+			return setSnapshotEditProfiles(snapshot, profiles, errorMessage);
+		}
 		const MREditSettingDescriptor *descriptor = editSettingDescriptorByKeyInternal(arg3);
 
 		if (descriptor == nullptr) return setError(errorMessage, "Unknown edit setting key for extension profile.");
@@ -1627,4 +1633,55 @@ bool applySettingsSnapshotEditExtensionProfileDirective(MRSettingsSnapshot &snap
 		return setSnapshotEditProfiles(snapshot, profiles, errorMessage);
 	}
 	return setError(errorMessage, "MRFEPROFILE supports operations DEFINE, EXT and SET.");
+}
+
+bool applySettingsSnapshotCompilerProfileDirective(MRSettingsSnapshot &snapshot, const std::string &operation, const std::string &profileId, const std::string &arg3, const std::string &arg4, std::string *errorMessage) {
+	std::string op = upperAscii(trimAscii(operation));
+	std::string id = canonicalCompilerProfileId(profileId);
+	std::vector<MRCompilerProfile> profiles = snapshot.compilerProfiles;
+	MRCompilerProfile *profile = nullptr;
+
+	if (op.empty()) return setError(errorMessage, "MRCOMPILERPROFILE operation may not be empty.");
+	if (id.empty()) return setError(errorMessage, "MRCOMPILERPROFILE profile id may not be empty.");
+	for (MRCompilerProfile &candidate : profiles)
+		if (candidate.id == id) {
+			profile = &candidate;
+			break;
+		}
+	if (op == "DEFINE") {
+		if (profile != nullptr) return setError(errorMessage, "Duplicate compiler profile id: " + id);
+		MRCompilerProfile created;
+		created.id = id;
+		created.name = canonicalCompilerProfileName(arg3);
+		created.toolchain = arg4;
+		profiles.push_back(created);
+		return setSnapshotCompilerProfiles(snapshot, profiles, errorMessage);
+	}
+	if (profile == nullptr) return setError(errorMessage, "Unknown compiler profile id: " + id);
+	if (op == "SET") {
+		std::string key = upperAscii(trimAscii(arg3));
+
+		if (key == "NAME")
+			profile->name = arg4;
+		else if (key == "TOOLCHAIN")
+			profile->toolchain = arg4;
+		else if (key == "EXECUTABLE")
+			profile->executablePath = arg4;
+		else if (key == "VERSION")
+			profile->versionText = arg4;
+		else if (key == "TARGET")
+			profile->targetTriple = arg4;
+		else if (key == "FLAGS")
+			profile->buildFlags = arg4;
+		else if (key == "INCLUDES")
+			profile->includePaths = splitCompilerProfilePathList(arg4);
+		else if (key == "LIBRARIES")
+			profile->libraryPaths = splitCompilerProfilePathList(arg4);
+		else if (key == "RUNTIME")
+			profile->runtimePaths = splitCompilerProfilePathList(arg4);
+		else
+			return setError(errorMessage, "Unknown compiler profile setting key.");
+		return setSnapshotCompilerProfiles(snapshot, profiles, errorMessage);
+	}
+	return setError(errorMessage, "MRCOMPILERPROFILE supports operations DEFINE and SET.");
 }

@@ -7815,6 +7815,12 @@ void VirtualMachine::executeAt(const unsigned char *bytecode, size_t length, siz
 					if (args.size() != 4 || !isStringLike(args[0]) || !isStringLike(args[1]) || !isStringLike(args[2]) || !isStringLike(args[3])) throw std::runtime_error("MRFEPROFILE expects (string, string, string, string).");
 					if (!applyConfiguredEditExtensionProfileDirective(valueAsString(args[0]), valueAsString(args[1]), valueAsString(args[2]), valueAsString(args[3]), &errorText)) throw std::runtime_error("MRFEPROFILE failed: " + (errorText.empty() ? std::string("invalid directive.") : errorText));
 					runtimeErrorLevel() = 0;
+				} else if (name == "MRCOMPILERPROFILE") {
+					std::string errorText;
+					if (!mrvmIsStartupSettingsMode()) throw std::runtime_error("MRCOMPILERPROFILE is only allowed in settings.mrmac during startup.");
+					if (args.size() != 4 || !isStringLike(args[0]) || !isStringLike(args[1]) || !isStringLike(args[2]) || !isStringLike(args[3])) throw std::runtime_error("MRCOMPILERPROFILE expects (string, string, string, string).");
+					if (!applyConfiguredCompilerProfileDirective(valueAsString(args[0]), valueAsString(args[1]), valueAsString(args[2]), valueAsString(args[3]), &errorText)) throw std::runtime_error("MRCOMPILERPROFILE failed: " + (errorText.empty() ? std::string("invalid directive.") : errorText));
+					runtimeErrorLevel() = 0;
 				} else if (name == "UI_DIALOG") {
 					beginMacroUiDialog(args);
 					runtimeErrorLevel() = 0;

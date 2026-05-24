@@ -389,6 +389,14 @@ class MRTextBufferModel {
 			mLanguage = MRSyntaxLanguage::Go;
 			return;
 		}
+		if (normalizedCodeLanguage == "KOTLIN" || normalizedCodeLanguage == "KT" || normalizedCodeLanguage == "KTS") {
+			mLanguage = MRSyntaxLanguage::Kotlin;
+			return;
+		}
+		if (normalizedCodeLanguage == "CSHARP" || normalizedCodeLanguage == "C#" || normalizedCodeLanguage == "CS") {
+			mLanguage = MRSyntaxLanguage::CSharp;
+			return;
+		}
 		if (normalizedCodeLanguage == "PASCAL") {
 			mLanguage = MRSyntaxLanguage::Pascal;
 			return;

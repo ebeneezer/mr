@@ -1,0 +1,211 @@
+$MACRO REGISTER_KOTLIN_SNIPPETS FROM EDIT;
+DEF_HASH(Snippets, KotlinSnippets);
+
+Snippets := GLOBAL_HASH('SNIPPETS');
+
+DEF_HASH(Kt01);
+Kt01['name'] := 'Kotlin package';
+Kt01['trigger'] := 'package';
+Kt01['body'] := <<BODY
+package com.example
+BODY;
+KotlinSnippets['PACKAGE'] := Kt01;
+
+DEF_HASH(Kt02);
+Kt02['name'] := 'Kotlin import';
+Kt02['trigger'] := 'import';
+Kt02['body'] := <<BODY
+import kotlin.collections.*
+BODY;
+KotlinSnippets['IMPORT'] := Kt02;
+
+DEF_HASH(Kt03);
+Kt03['name'] := 'Kotlin class';
+Kt03['trigger'] := 'class';
+Kt03['body'] := <<BODY
+class Name {
+}
+BODY;
+KotlinSnippets['CLASS'] := Kt03;
+
+DEF_HASH(Kt04);
+Kt04['name'] := 'Kotlin data class';
+Kt04['trigger'] := 'data';
+Kt04['body'] := <<BODY
+data class Name(
+    val value: String
+)
+BODY;
+KotlinSnippets['DATA'] := Kt04;
+
+DEF_HASH(Kt05);
+Kt05['name'] := 'Kotlin object';
+Kt05['trigger'] := 'object';
+Kt05['body'] := <<BODY
+object Name {
+}
+BODY;
+KotlinSnippets['OBJECT'] := Kt05;
+
+DEF_HASH(Kt06);
+Kt06['name'] := 'Kotlin interface';
+Kt06['trigger'] := 'interface';
+Kt06['body'] := <<BODY
+interface Name {
+    fun value(): String
+}
+BODY;
+KotlinSnippets['INTERFACE'] := Kt06;
+
+DEF_HASH(Kt07);
+Kt07['name'] := 'Kotlin enum';
+Kt07['trigger'] := 'enum';
+Kt07['body'] := <<BODY
+enum class Name {
+    First,
+    Second
+}
+BODY;
+KotlinSnippets['ENUM'] := Kt07;
+
+DEF_HASH(Kt08);
+Kt08['name'] := 'Kotlin function';
+Kt08['trigger'] := 'fun';
+Kt08['body'] := <<BODY
+fun name(value: String): String {
+    return value
+}
+BODY;
+KotlinSnippets['FUN'] := Kt08;
+
+DEF_HASH(Kt09);
+Kt09['name'] := 'Kotlin main';
+Kt09['trigger'] := 'main';
+Kt09['body'] := <<BODY
+fun main() {
+    println("Hello")
+}
+BODY;
+KotlinSnippets['MAIN'] := Kt09;
+
+DEF_HASH(Kt10);
+Kt10['name'] := 'Kotlin property';
+Kt10['trigger'] := 'property';
+Kt10['body'] := <<BODY
+val value: String
+    get() = "value"
+BODY;
+KotlinSnippets['PROPERTY'] := Kt10;
+
+DEF_HASH(Kt11);
+Kt11['name'] := 'Kotlin if';
+Kt11['trigger'] := 'if';
+Kt11['body'] := <<BODY
+if (condition) {
+}
+BODY;
+KotlinSnippets['IF'] := Kt11;
+
+DEF_HASH(Kt12);
+Kt12['name'] := 'Kotlin when';
+Kt12['trigger'] := 'when';
+Kt12['body'] := <<BODY
+when (value) {
+    expected -> {
+    }
+    else -> {
+    }
+}
+BODY;
+KotlinSnippets['WHEN'] := Kt12;
+
+DEF_HASH(Kt13);
+Kt13['name'] := 'Kotlin for';
+Kt13['trigger'] := 'for';
+Kt13['body'] := <<BODY
+for (item in items) {
+}
+BODY;
+KotlinSnippets['FOR'] := Kt13;
+
+DEF_HASH(Kt14);
+Kt14['name'] := 'Kotlin while';
+Kt14['trigger'] := 'while';
+Kt14['body'] := <<BODY
+while (condition) {
+}
+BODY;
+KotlinSnippets['WHILE'] := Kt14;
+
+DEF_HASH(Kt15);
+Kt15['name'] := 'Kotlin try catch';
+Kt15['trigger'] := 'try';
+Kt15['body'] := <<BODY
+try {
+} catch (error: Exception) {
+}
+BODY;
+KotlinSnippets['TRY'] := Kt15;
+
+DEF_HASH(Kt16);
+Kt16['name'] := 'Kotlin coroutine';
+Kt16['trigger'] := 'suspend';
+Kt16['body'] := <<BODY
+suspend fun name(): String {
+    return value
+}
+BODY;
+KotlinSnippets['SUSPEND'] := Kt16;
+
+DEF_HASH(Kt17);
+Kt17['name'] := 'Kotlin null check';
+Kt17['trigger'] := 'let';
+Kt17['body'] := <<BODY
+value?.let { item ->
+}
+BODY;
+KotlinSnippets['LET'] := Kt17;
+
+DEF_HASH(Kt18);
+Kt18['name'] := 'Kotlin require';
+Kt18['trigger'] := 'require';
+Kt18['body'] := <<BODY
+require(condition) { "message" }
+BODY;
+KotlinSnippets['REQUIRE'] := Kt18;
+
+DEF_HASH(Kt19);
+Kt19['name'] := 'Kotlin test';
+Kt19['trigger'] := 'test';
+Kt19['body'] := <<BODY
+@Test
+fun name() {
+    assertEquals(expected, actual)
+}
+BODY;
+KotlinSnippets['TEST'] := Kt19;
+
+DEF_HASH(Kt20);
+Kt20['name'] := 'Kotlin comment block';
+Kt20['trigger'] := 'comment';
+Kt20['body'] := <<BODY
+/*
+ description
+ */
+BODY;
+KotlinSnippets['COMMENT'] := Kt20;
+
+Snippets['KOTLIN'] := KotlinSnippets;
+SET_GLOBAL_HASH('SNIPPETS', Snippets);
+
+MACRO_TO_KEY('<Ctrl+Space>', 'kotlin^KOTLIN_SNIPPET_EXPAND_KEYWORD', 0);
+MACRO_TO_KEY('<Ctrl+@>', 'kotlin^KOTLIN_SNIPPET_EXPAND_KEYWORD', 0);
+END_MACRO;
+
+$MACRO KOTLIN_SNIPPET_EXPAND_KEYWORD FROM EDIT;
+SNIPPET_START();
+END_MACRO;
+
+$MACRO KOTLIN_SNIPPETS_UNLOAD FROM EDIT;
+SNIPPETS_UNLOAD('KOTLIN');
+END_MACRO;

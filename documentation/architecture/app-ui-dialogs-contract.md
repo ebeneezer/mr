@@ -11,6 +11,7 @@ Applies to:
 - `dialogs/MRWindowList.cpp`
 - `dialogs/MRKeymapManager.cpp`
 - `dialogs/MRMacroFile.cpp`
+- `dialogs/MRCompilerProfiles.cpp`
 
 ## Authority
 
@@ -47,6 +48,7 @@ Dialogs may trigger:
 - Dialog validators must not display blocking error dialogs.
 - Message-line or marquee feedback is preferred for validation warnings.
 - Dirty state must be set only for real changes.
+- Dialogs whose fixed layout may exceed the current terminal size must use the MR scrollable dialog path (`MRScrollableDialog` / `MRDialogFoundation`) or provide an explicit local proof that all controls remain reachable at smaller terminal sizes.
 
 ## Allowed
 
@@ -86,4 +88,4 @@ For dialog changes, test:
 - valid input,
 - save/apply path,
 - cancel path,
-- terminal-size constraints when relevant.
+- terminal-size constraints when relevant, including reachability of all interactive controls for fixed-size setup dialogs below nominal width or height.

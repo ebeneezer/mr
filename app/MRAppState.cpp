@@ -160,6 +160,7 @@ void updateAppCommandState() {
 	setCommandEnabled(cmMrTextCenterLine, canModify);
 	setCommandEnabled(cmMrTextTimeDateStamp, canModify);
 	setCommandEnabled(cmMrTextReformatParagraph, canModify);
+	setCommandEnabled(cmMrOtherBuildCurrentFile, hasEditor && state.hasPersistentFileName);
 	setCommandEnabled(cmMrOtherStopProgram, hasWindow && state.hasExternalIoTasks);
 	setCommandEnabled(cmMrOtherRestartProgram, hasWindow && state.isCommunicationCommandWindow && !state.hasExternalIoTasks && !state.window->windowRoleDetail().empty());
 	setCommandEnabled(cmMrOtherClearOutput, hasWindow && ((state.isCommunicationWindow && !state.hasExternalIoTasks) || state.isLogWindow));

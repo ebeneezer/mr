@@ -27,6 +27,7 @@
 #include "../mrmac/MRVM.hpp"
 #include "../app/MREditorApp.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
+#include "../config/settings/MRSettingsCompilerProfiles.hpp"
 #include "../config/settings/MRSettingsStorage.hpp"
 #include "../dialogs/setup/MRSetup.hpp"
 #include "../piecetable/MRTextDocument.hpp"
@@ -1706,7 +1707,11 @@ bool testEditProfileRoundtripGuard(std::string &failureReason) {
 	profile.overrides.values.lineNumbersPosition = "LEADING";
 	profile.overrides.values.showLineNumbers = true;
 	profile.overrides.values.defaultMode = "overwrite";
-	profile.overrides.mask = kOvTabSize | kOvLineNumbersPosition | kOvDefaultMode;
+	profile.overrides.values.backupFiles = false;
+	profile.overrides.values.codeLanguage = "PERL";
+	profile.overrides.values.codeColoring = true;
+	profile.overrides.values.codeFoldingFeature = true;
+	profile.overrides.mask = kOvTabSize | kOvLineNumbersPosition | kOvDefaultMode | kOvBackupFiles | kOvCodeLanguage | kOvCodeColoring | kOvCodeFoldingFeature;
 	if (!setConfiguredEditExtensionProfiles(std::vector<MREditExtensionProfile>(1, profile), &errorText)) {
 		restore();
 		failureReason = "Unable to seed extension profile roundtrip probe: " + errorText;
@@ -1719,6 +1724,12 @@ bool testEditProfileRoundtripGuard(std::string &failureReason) {
 	paths.tempPath = configuredTempDirectoryPath();
 	paths.shellUri = configuredShellExecutablePath();
 	source = buildSettingsMacroSource(paths);
+	if (source.find("MRFEPROFILE('SET', 'perl_profile', 'BACKUP_FILES', 'false');") == std::string::npos || source.find("MRFEPROFILE('SET', 'perl_profile', 'CODE_LANGUAGE', 'PERL');") == std::string::npos ||
+	    source.find("MRFEPROFILE('SET', 'perl_profile', 'CODE_COLORING', 'true');") == std::string::npos || source.find("MRFEPROFILE('SET', 'perl_profile', 'CODE_FOLDING', 'true');") == std::string::npos) {
+		restore();
+		failureReason = "Profile roundtrip source did not serialize profile override literals.";
+		return false;
+	}
 
 	if (!setConfiguredEditSetupSettings(resolveEditSetupDefaults(), &errorText)) {
 		restore();
@@ -1767,7 +1778,7 @@ bool testEditProfileRoundtripGuard(std::string &failureReason) {
 		failureReason = "Effective profile lookup did not report the matching profile name.";
 		return false;
 	}
-	if (effective.tabSize != 3 || !effective.showLineNumbers || effective.defaultMode != "OVERWRITE") {
+	if (effective.tabSize != 3 || !effective.showLineNumbers || effective.defaultMode != "OVERWRITE" || effective.backupFiles || effective.codeLanguage != "PERL" || !effective.codeColoring || !effective.codeFoldingFeature) {
 		restore();
 		failureReason = "Effective edit settings did not merge profile overrides onto globals.";
 		return false;
@@ -2364,6 +2375,39 @@ bool testIndicatorLineNumberColorWiringGuard(std::string &failureReason) {
 	}
 	if (windowContent.find("kMrPaletteLineNumbers") == std::string::npos) {
 		failureReason = "MREditWindow palette must include the line-number extension slot.";
+		return false;
+	}
+
+	failureReason.clear();
+	return true;
+}
+
+bool testExplicitSyntaxLanguageMarkerGuard(std::string &failureReason) {
+	const std::string windowPath = absolutePathFromCwd("ui/MREditWindow.hpp");
+	std::string windowContent;
+	std::string ioError;
+	const std::string needle = "const bool showLanguageSlot =";
+	std::size_t pos = std::string::npos;
+	std::size_t lineEnd = std::string::npos;
+	std::string line;
+
+	if (!readTextFile(windowPath, windowContent, ioError)) {
+		failureReason = "Unable to read MREditWindow.hpp for syntax-language marker guard: " + ioError;
+		return false;
+	}
+	pos = windowContent.find(needle);
+	if (pos == std::string::npos) {
+		failureReason = "MREditWindow marker provider must define showLanguageSlot.";
+		return false;
+	}
+	lineEnd = windowContent.find('\n', pos);
+	line = windowContent.substr(pos, lineEnd == std::string::npos ? std::string::npos : lineEnd - pos);
+	if (line.find("syntaxLanguage() != MRSyntaxLanguage::PlainText") == std::string::npos) {
+		failureReason = "Syntax language marker must be shown for every non-plain explicit or automatic language.";
+		return false;
+	}
+	if (line.find("syntaxLanguageAutomatic()") != std::string::npos) {
+		failureReason = "Syntax language marker must not be gated on automatic language detection.";
 		return false;
 	}
 
@@ -3692,6 +3736,49 @@ bool testStartupCliLoadRecursiveGuard(std::string &failureReason) {
 	return true;
 }
 
+bool testCompilerProfileAutomaticSetupGuard(std::string &failureReason) {
+	MRCompilerProfile profile;
+	std::string errorText;
+
+	profile.id = "AUTO_SETUP";
+	profile.name = "Auto Setup";
+	profile.toolchain = "CUSTOM";
+	if (autoConfigureCompilerProfileFromExecutable(profile, &errorText)) {
+		failureReason = "Automatic compiler setup must reject an empty executable field.";
+		return false;
+	}
+	if (errorText != "need compiler executable for automatic setup") {
+		failureReason = "Automatic compiler setup empty-executable error text changed.";
+		return false;
+	}
+	profile.executablePath = "/no/such/compiler";
+	if (autoConfigureCompilerProfileFromExecutable(profile, &errorText)) {
+		failureReason = "Automatic compiler setup must reject an unprobeable executable path.";
+		return false;
+	}
+
+	std::vector<std::string> executablePaths = defaultCompilerExecutablePaths();
+	if (!executablePaths.empty()) {
+		std::string path = executablePaths.front();
+		std::size_t slash = path.find_last_of('/');
+
+		profile.executablePath = slash == std::string::npos ? path : path.substr(slash + 1);
+		profile.id = "AUTO_SETUP_SPEED";
+		profile.name = "Auto Setup Speed";
+		if (!autoConfigureCompilerProfileFromExecutable(profile, &errorText)) {
+			failureReason = "Automatic compiler setup did not resolve a known compiler binary name: " + errorText;
+			return false;
+		}
+		if (profile.executablePath.empty() || profile.toolchain.empty() || profile.versionText.empty() || profile.buildFlags.empty()) {
+			failureReason = "Automatic compiler setup did not populate the expected compiler profile fields.";
+			return false;
+		}
+	}
+
+	failureReason.clear();
+	return true;
+}
+
 void runTest(TestContext &ctx, const char *name, bool (*fn)(std::string &)) {
 	std::string failure;
 
@@ -3717,9 +3804,11 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Legacy MREDITPROFILE drop-to-defaults", testLegacyEditProfileMacroDropToDefaultsGuard);
 	runTest(ctx, "Edit profile case-sensitive macro roundtrip", testEditProfileCaseSensitiveMacroRoundtripGuard);
 	runTest(ctx, "Edit profile duplicate exact extension rejection", testEditProfileDuplicateExactExtensionMacroGuard);
+	runTest(ctx, "Compiler profile automatic setup guard", testCompilerProfileAutomaticSetupGuard);
 	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
 	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
 	runTest(ctx, "WINDOWCOLORS v5 + line numbers theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
+	runTest(ctx, "Explicit syntax-language marker guard", testExplicitSyntaxLanguageMarkerGuard);
 	runTest(ctx, "Touched-range mid-insert guard", testTouchedRangeMidInsertGuard);
 	runTest(ctx, "TRUNCATE_SPACES save-only guard", testTruncateSpacesSaveOnlyGuard);
 	runTest(ctx, "Editor cursor viewport guard", testEditorCursorViewportGuard);
@@ -3766,9 +3855,11 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Legacy MREDITPROFILE drop-to-defaults", testLegacyEditProfileMacroDropToDefaultsGuard);
 	runTest(ctx, "Edit profile case-sensitive macro roundtrip", testEditProfileCaseSensitiveMacroRoundtripGuard);
 	runTest(ctx, "Edit profile duplicate exact extension rejection", testEditProfileDuplicateExactExtensionMacroGuard);
+	runTest(ctx, "Compiler profile automatic setup guard", testCompilerProfileAutomaticSetupGuard);
 	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
 	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
 	runTest(ctx, "WINDOWCOLORS v5 + line numbers theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
+	runTest(ctx, "Explicit syntax-language marker guard", testExplicitSyntaxLanguageMarkerGuard);
 	runTest(ctx, "TRUNCATE_SPACES save-only guard", testTruncateSpacesSaveOnlyGuard);
 	runTest(ctx, "Indicator line-number color wiring guard", testIndicatorLineNumberColorWiringGuard);
 	runTest(ctx, "Current-line color wiring guard", testCurrentLineColorWiringGuard);

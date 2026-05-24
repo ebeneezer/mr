@@ -28,6 +28,10 @@ bool runSetupDialogCommand(unsigned short command) {
 			runFileExtensionProfilesDialogFlow();
 			return true;
 
+		case cmMrSetupCompilerProfiles:
+			runCompilerProfilesDialogFlow();
+			return true;
+
 		case cmMrSetupColorSetup:
 			runColorSetupDialogFlow();
 			return true;

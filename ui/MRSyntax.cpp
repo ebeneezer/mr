@@ -153,6 +153,35 @@ const char *const kGoTypeKeywords[] = {
 	"uint32", "uint64", "uintptr"
 };
 
+const char *const kKotlinKeywords[] = {
+	"as", "break", "by", "catch", "class", "companion", "constructor", "continue", "data", "do", "dynamic", "else", "enum", "expect", "external", "finally", "for", "fun", "if",
+	"import", "in", "infix", "init", "inline", "interface", "internal", "is", "lateinit", "noinline", "object", "operator", "out", "override", "package", "private", "protected", "public",
+	"reified", "return", "sealed", "suspend", "tailrec", "this", "throw", "try", "typealias", "val", "var", "vararg", "when", "where", "while"
+};
+
+const char *const kKotlinConstants[] = {
+	"false", "null", "super", "true"
+};
+
+const char *const kKotlinTypeKeywords[] = {
+	"Any", "Boolean", "Byte", "Char", "Double", "Float", "Int", "Long", "Nothing", "Short", "String", "Unit", "UByte", "UInt", "ULong", "UShort"
+};
+
+const char *const kCSharpKeywords[] = {
+	"abstract", "as", "async", "await", "base", "break", "case", "catch", "checked", "class", "const", "continue", "default", "delegate", "do", "else", "enum", "event",
+	"explicit", "extern", "finally", "fixed", "for", "foreach", "get", "global", "goto", "if", "implicit", "in", "init", "interface", "internal", "is", "lock", "namespace", "new",
+	"operator", "out", "override", "params", "partial", "private", "protected", "public", "readonly", "record", "ref", "required", "return", "scoped", "sealed", "set", "sizeof",
+	"stackalloc", "static", "struct", "switch", "this", "throw", "try", "typeof", "unchecked", "unsafe", "using", "virtual", "volatile", "when", "where", "while", "yield"
+};
+
+const char *const kCSharpConstants[] = {
+	"false", "null", "true"
+};
+
+const char *const kCSharpTypeKeywords[] = {
+	"bool", "byte", "char", "decimal", "double", "dynamic", "float", "int", "long", "nint", "nuint", "object", "sbyte", "short", "string", "uint", "ulong", "ushort", "var", "void"
+};
+
 const char *const kPascalKeywords[] = {
 	"AND", "ARRAY", "ASM", "BEGIN", "CASE", "CLASS", "COMP", "CONST", "CONSTRUCTOR", "DESTRUCTOR", "DIV", "DO", "DOWNTO", "ELSE", "END", "EXCEPT", "EXIT", "EXTERNAL", "FILE", "FINALLY", "FOR",
 	"FUNCTION", "GOTO", "IF", "IMPLEMENTATION", "INTERFACE", "LABEL", "MOD", "NOT", "OBJECT", "OF", "OR", "ORD", "PRIVATE", "PROCEDURE", "PROGRAM", "PROPERTY", "PROTECTED", "PUBLIC", "PUBLISHED",
@@ -537,6 +566,18 @@ static bool isGoCallableIntroducer(std::string_view word) {
 	return word == "func";
 }
 
+static bool isKotlinTypeIntroducer(std::string_view word) {
+	return word == "class" || word == "interface" || word == "object" || word == "typealias";
+}
+
+static bool isKotlinCallableIntroducer(std::string_view word) {
+	return word == "fun" || word == "constructor";
+}
+
+static bool isCSharpTypeIntroducer(std::string_view word) {
+	return word == "class" || word == "interface" || word == "record" || word == "struct" || word == "enum" || word == "namespace";
+}
+
 static std::size_t previousNonWhitespaceIndex(std::string_view line, std::size_t pos) {
 	while (pos > 0) {
 		--pos;
@@ -690,6 +731,22 @@ static std::size_t consumeCppStringLiteral(std::string_view line, std::size_t st
 		++i;
 	}
 	return i;
+}
+
+static std::size_t consumeCSharpVerbatimStringLiteral(std::string_view line, std::size_t start) {
+	std::size_t i = start + 2;
+
+	while (i < line.size()) {
+		if (line[i] == '"') {
+			if (i + 1 < line.size() && line[i + 1] == '"') {
+				i += 2;
+				continue;
+			}
+			return i + 1;
+		}
+		++i;
+	}
+	return line.size();
 }
 
 static std::size_t findStringContinuationEnd(std::string_view line, std::size_t start, char quote) {
@@ -4179,6 +4236,391 @@ MRSyntaxLineResult MRGoSyntaxHighlighter::highlightLine(std::string_view line, M
 	return result;
 }
 
+MRSyntaxLineResult MRKotlinSyntaxHighlighter::highlightLine(std::string_view line, MRSyntaxLineState previousState) {
+	MRSyntaxLineResult result;
+	result.stateOut = MRSyntaxLineState();
+	std::size_t i = 0;
+	std::uint32_t commentDepth = previousState.mode == MRSyntaxMode::BlockComment ? (previousState.payload == 0 ? 1U : previousState.payload) : 0;
+	bool expectTypeName = false;
+	bool expectCallableName = false;
+	bool expectImportName = false;
+
+	if (commentDepth > 0) {
+		const std::size_t start = i;
+		while (i < line.size()) {
+			if (i + 1 < line.size() && line[i] == '/' && line[i + 1] == '*') {
+				++commentDepth;
+				i += 2;
+				continue;
+			}
+			if (i + 1 < line.size() && line[i] == '*' && line[i + 1] == '/') {
+				--commentDepth;
+				i += 2;
+				if (commentDepth == 0) break;
+				continue;
+			}
+			++i;
+		}
+		appendRun(result.tokenRuns, start, i, MRSyntaxToken::Comment);
+		if (commentDepth > 0) {
+			result.stateOut.mode = MRSyntaxMode::BlockComment;
+			result.stateOut.payload = commentDepth;
+			return result;
+		}
+	}
+
+	if (previousState.mode == MRSyntaxMode::QuotedString && (previousState.flags & kSyntaxFlagTripleQuoted) != 0) {
+		const std::size_t end = findTripleQuotedStringEnd(line, 0, '"');
+		if (end == std::string_view::npos) {
+			appendRun(result.tokenRuns, 0, line.size(), MRSyntaxToken::String);
+			result.stateOut.mode = MRSyntaxMode::QuotedString;
+			result.stateOut.flags = kSyntaxFlagTripleQuoted;
+			result.stateOut.payload = static_cast<std::uint32_t>('"');
+			return result;
+		}
+		appendRun(result.tokenRuns, 0, end, MRSyntaxToken::String);
+		i = end;
+	}
+
+	while (i < line.size()) {
+		if (i + 1 < line.size() && line[i] == '/' && line[i + 1] == '/') {
+			appendRun(result.tokenRuns, i, line.size(), MRSyntaxToken::Comment);
+			break;
+		}
+
+		if (i + 1 < line.size() && line[i] == '/' && line[i + 1] == '*') {
+			const std::size_t start = i;
+			commentDepth = 1;
+			i += 2;
+			while (i < line.size()) {
+				if (i + 1 < line.size() && line[i] == '/' && line[i + 1] == '*') {
+					++commentDepth;
+					i += 2;
+					continue;
+				}
+				if (i + 1 < line.size() && line[i] == '*' && line[i + 1] == '/') {
+					--commentDepth;
+					i += 2;
+					if (commentDepth == 0) break;
+					continue;
+				}
+				++i;
+			}
+			appendRun(result.tokenRuns, start, std::min(i, line.size()), MRSyntaxToken::Comment);
+			if (commentDepth > 0) {
+				result.stateOut.mode = MRSyntaxMode::BlockComment;
+				result.stateOut.payload = commentDepth;
+				return result;
+			}
+			continue;
+		}
+
+		if (line[i] == '@') {
+			const std::size_t start = i++;
+			while (i < line.size() && isIdentifierChar(line[i])) ++i;
+			appendRun(result.tokenRuns, start, i, MRSyntaxToken::Directive);
+			continue;
+		}
+
+		if (i + 2 < line.size() && line[i] == '"' && line[i + 1] == '"' && line[i + 2] == '"') {
+			const std::size_t start = i;
+			const std::size_t end = findTripleQuotedStringEnd(line, i + 3, '"');
+			if (end == std::string_view::npos) {
+				appendRun(result.tokenRuns, start, line.size(), MRSyntaxToken::String);
+				result.stateOut.mode = MRSyntaxMode::QuotedString;
+				result.stateOut.flags = kSyntaxFlagTripleQuoted;
+				result.stateOut.payload = static_cast<std::uint32_t>('"');
+				return result;
+			}
+			appendRun(result.tokenRuns, start, end, MRSyntaxToken::String);
+			i = end;
+			continue;
+		}
+
+		if (line[i] == '"' || line[i] == '\'') {
+			const std::size_t start = i;
+			const std::size_t end = consumeCppStringLiteral(line, i, line[i]);
+			appendRun(result.tokenRuns, start, end, MRSyntaxToken::String);
+			i = end;
+			continue;
+		}
+
+		if (isDecimalDigitChar(line[i]) || (line[i] == '.' && i + 1 < line.size() && isDecimalDigitChar(line[i + 1]))) {
+			const std::size_t start = i;
+			const std::size_t end = consumeCppNumber(line, i);
+			appendRun(result.tokenRuns, start, end, MRSyntaxToken::Number);
+			i = end;
+			continue;
+		}
+
+		if (isIdentifierStart(line[i])) {
+			const std::size_t start = i++;
+			while (i < line.size() && isIdentifierChar(line[i])) ++i;
+			const std::string_view word = line.substr(start, i - start);
+			if (wordInList(word, kKotlinKeywords, sizeof(kKotlinKeywords) / sizeof(kKotlinKeywords[0]))) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Keyword);
+				expectTypeName = isKotlinTypeIntroducer(word);
+				expectCallableName = isKotlinCallableIntroducer(word);
+				expectImportName = word == "import" || word == "package";
+				continue;
+			}
+			if (wordInList(word, kKotlinConstants, sizeof(kKotlinConstants) / sizeof(kKotlinConstants[0]))) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Key);
+				continue;
+			}
+			if (wordInList(word, kKotlinTypeKeywords, sizeof(kKotlinTypeKeywords) / sizeof(kKotlinTypeKeywords[0]))) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Type);
+				continue;
+			}
+			if (expectImportName || expectTypeName) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Type);
+				expectImportName = false;
+				expectTypeName = false;
+				continue;
+			}
+			if (expectCallableName) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Key);
+				expectCallableName = false;
+				continue;
+			}
+			if (isUpperCaseIdentifier(word)) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Type);
+				continue;
+			}
+			continue;
+		}
+
+		{
+			const std::size_t delimiterLength = cppDelimiterLength(line, i);
+			if (delimiterLength > 0) {
+				appendRun(result.tokenRuns, i, i + delimiterLength, MRSyntaxToken::Delimiter);
+				i += delimiterLength;
+				continue;
+			}
+		}
+
+		if (isCppDelimiterChar(line[i]) || line[i] == '$') {
+			appendRun(result.tokenRuns, i, i + 1, MRSyntaxToken::Delimiter);
+			++i;
+			continue;
+		}
+
+		++i;
+	}
+
+	return result;
+}
+
+MRSyntaxLineResult MRCSharpSyntaxHighlighter::highlightLine(std::string_view line, MRSyntaxLineState previousState) {
+	MRSyntaxLineResult result;
+	result.stateOut = MRSyntaxLineState();
+	std::size_t i = 0;
+	bool inBlockComment = previousState.mode == MRSyntaxMode::BlockComment;
+	bool expectTypeName = false;
+
+	if (inBlockComment) {
+		const std::size_t start = i;
+		while (i < line.size()) {
+			if (i + 1 < line.size() && line[i] == '*' && line[i + 1] == '/') {
+				i += 2;
+				inBlockComment = false;
+				break;
+			}
+			++i;
+		}
+		appendRun(result.tokenRuns, start, i, MRSyntaxToken::Comment);
+		if (inBlockComment) {
+			result.stateOut.mode = MRSyntaxMode::BlockComment;
+			return result;
+		}
+	}
+
+	if (previousState.mode == MRSyntaxMode::RawString) {
+		std::size_t end = 0;
+		while (end < line.size()) {
+			if (line[end] == '"') {
+				if (end + 1 < line.size() && line[end + 1] == '"') {
+					end += 2;
+					continue;
+				}
+				++end;
+				break;
+			}
+			++end;
+		}
+		appendRun(result.tokenRuns, 0, end, MRSyntaxToken::String);
+		if (end >= line.size() && (line.empty() || line.back() != '"')) {
+			result.stateOut.mode = MRSyntaxMode::RawString;
+			return result;
+		}
+		i = end;
+	} else if (previousState.mode == MRSyntaxMode::QuotedString && (previousState.flags & kSyntaxFlagTripleQuoted) != 0) {
+		const std::size_t end = findTripleQuotedStringEnd(line, 0, '"');
+		if (end == std::string_view::npos) {
+			appendRun(result.tokenRuns, 0, line.size(), MRSyntaxToken::String);
+			result.stateOut.mode = MRSyntaxMode::QuotedString;
+			result.stateOut.flags = kSyntaxFlagTripleQuoted;
+			result.stateOut.payload = static_cast<std::uint32_t>('"');
+			return result;
+		}
+		appendRun(result.tokenRuns, 0, end, MRSyntaxToken::String);
+		i = end;
+	}
+
+	while (i < line.size()) {
+		if (i + 1 < line.size() && line[i] == '/' && line[i + 1] == '/') {
+			appendRun(result.tokenRuns, i, line.size(), MRSyntaxToken::Comment);
+			break;
+		}
+
+		if (i + 1 < line.size() && line[i] == '/' && line[i + 1] == '*') {
+			const std::size_t start = i;
+			i += 2;
+			while (i < line.size()) {
+				if (i + 1 < line.size() && line[i] == '*' && line[i + 1] == '/') {
+					i += 2;
+					break;
+				}
+				++i;
+			}
+			appendRun(result.tokenRuns, start, std::min(i, line.size()), MRSyntaxToken::Comment);
+			if (i >= line.size() && (line.size() < 2 || line.substr(line.size() - 2) != "*/")) {
+				result.stateOut.mode = MRSyntaxMode::BlockComment;
+				return result;
+			}
+			continue;
+		}
+
+		if (line[i] == '#' && trimWhitespaceView(line.substr(0, i)).empty()) {
+			appendRun(result.tokenRuns, i, line.size(), MRSyntaxToken::Directive);
+			break;
+		}
+
+		if (i + 2 < line.size() && line[i] == '"' && line[i + 1] == '"' && line[i + 2] == '"') {
+			const std::size_t start = i;
+			const std::size_t end = findTripleQuotedStringEnd(line, i + 3, '"');
+			if (end == std::string_view::npos) {
+				appendRun(result.tokenRuns, start, line.size(), MRSyntaxToken::String);
+				result.stateOut.mode = MRSyntaxMode::QuotedString;
+				result.stateOut.flags = kSyntaxFlagTripleQuoted;
+				result.stateOut.payload = static_cast<std::uint32_t>('"');
+				return result;
+			}
+			appendRun(result.tokenRuns, start, end, MRSyntaxToken::String);
+			i = end;
+			continue;
+		}
+
+		if (i + 1 < line.size() && line[i] == '@' && line[i + 1] == '"') {
+			const std::size_t start = i;
+			const std::size_t end = consumeCSharpVerbatimStringLiteral(line, i);
+			appendRun(result.tokenRuns, start, end, MRSyntaxToken::String);
+			if (end == line.size() && (line.empty() || line.back() != '"')) {
+				result.stateOut.mode = MRSyntaxMode::RawString;
+				return result;
+			}
+			i = end;
+			continue;
+		}
+
+		if (i + 2 < line.size() && line[i] == '$' && line[i + 1] == '@' && line[i + 2] == '"') {
+			const std::size_t start = i;
+			const std::size_t end = consumeCSharpVerbatimStringLiteral(line, i + 1);
+			appendRun(result.tokenRuns, start, end, MRSyntaxToken::String);
+			if (end == line.size() && (line.empty() || line.back() != '"')) {
+				result.stateOut.mode = MRSyntaxMode::RawString;
+				return result;
+			}
+			i = end;
+			continue;
+		}
+
+		if (i + 2 < line.size() && line[i] == '@' && line[i + 1] == '$' && line[i + 2] == '"') {
+			const std::size_t start = i;
+			const std::size_t end = consumeCSharpVerbatimStringLiteral(line, i + 1);
+			appendRun(result.tokenRuns, start, end, MRSyntaxToken::String);
+			if (end == line.size() && (line.empty() || line.back() != '"')) {
+				result.stateOut.mode = MRSyntaxMode::RawString;
+				return result;
+			}
+			i = end;
+			continue;
+		}
+
+		if (i + 1 < line.size() && line[i] == '$' && line[i + 1] == '"') {
+			const std::size_t start = i;
+			const std::size_t end = consumeCppStringLiteral(line, i + 1, '"');
+			appendRun(result.tokenRuns, start, end, MRSyntaxToken::String);
+			i = end;
+			continue;
+		}
+
+		if (line[i] == '"' || line[i] == '\'') {
+			const std::size_t start = i;
+			const std::size_t end = consumeCppStringLiteral(line, i, line[i]);
+			appendRun(result.tokenRuns, start, end, MRSyntaxToken::String);
+			i = end;
+			continue;
+		}
+
+		if (isDecimalDigitChar(line[i]) || (line[i] == '.' && i + 1 < line.size() && isDecimalDigitChar(line[i + 1]))) {
+			const std::size_t start = i;
+			const std::size_t end = consumeCppNumber(line, i);
+			appendRun(result.tokenRuns, start, end, MRSyntaxToken::Number);
+			i = end;
+			continue;
+		}
+
+		if (isIdentifierStart(line[i])) {
+			const std::size_t start = i++;
+			while (i < line.size() && isIdentifierChar(line[i])) ++i;
+			const std::string_view word = line.substr(start, i - start);
+			if (wordInList(word, kCSharpKeywords, sizeof(kCSharpKeywords) / sizeof(kCSharpKeywords[0]))) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Keyword);
+				expectTypeName = isCSharpTypeIntroducer(word);
+				continue;
+			}
+			if (wordInList(word, kCSharpConstants, sizeof(kCSharpConstants) / sizeof(kCSharpConstants[0]))) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Key);
+				continue;
+			}
+			if (wordInList(word, kCSharpTypeKeywords, sizeof(kCSharpTypeKeywords) / sizeof(kCSharpTypeKeywords[0]))) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Type);
+				continue;
+			}
+			if (expectTypeName) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Type);
+				expectTypeName = false;
+				continue;
+			}
+			if (isUpperCaseIdentifier(word) || isFunctionLikeIdentifier(line, start, i)) {
+				appendRun(result.tokenRuns, start, i, MRSyntaxToken::Key);
+				continue;
+			}
+			continue;
+		}
+
+		{
+			const std::size_t delimiterLength = cppDelimiterLength(line, i);
+			if (delimiterLength > 0) {
+				appendRun(result.tokenRuns, i, i + delimiterLength, MRSyntaxToken::Delimiter);
+				i += delimiterLength;
+				continue;
+			}
+		}
+
+		if (isCppDelimiterChar(line[i]) || line[i] == '$' || line[i] == '@') {
+			appendRun(result.tokenRuns, i, i + 1, MRSyntaxToken::Delimiter);
+			++i;
+			continue;
+		}
+
+		++i;
+	}
+
+	return result;
+}
+
 MRSyntaxTokenMap tmrBuildLegacyTokenMapForTextLine(MRSyntaxLanguage language, std::string_view line, MRSyntaxLineState previousState) {
 	MRSyntaxLineResult result = tmrHighlightTextLine(language, line, previousState);
 	return tokenMapFromRuns(line.size(), result.tokenRuns);
@@ -4264,6 +4706,14 @@ MRSyntaxLineResult tmrHighlightTextLine(MRSyntaxLanguage language, std::string_v
 		}
 		case MRSyntaxLanguage::Go: {
 			MRGoSyntaxHighlighter highlighter;
+			return highlighter.highlightLine(line, previousState);
+		}
+		case MRSyntaxLanguage::Kotlin: {
+			MRKotlinSyntaxHighlighter highlighter;
+			return highlighter.highlightLine(line, previousState);
+		}
+		case MRSyntaxLanguage::CSharp: {
+			MRCSharpSyntaxHighlighter highlighter;
 			return highlighter.highlightLine(line, previousState);
 		}
 		case MRSyntaxLanguage::Pascal: {

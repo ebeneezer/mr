@@ -43,7 +43,7 @@ constexpr int kMinimumMiniMapWidth = 2;
 constexpr int kMaximumMiniMapWidth = 20;
 constexpr int kDefaultMiniMapWidth = 4;
 constexpr ushort kUiManagedOptionsMask = kOptionTruncateSpaces | kOptionEofCtrlZ | kOptionEofCrLf | kOptionPersistentBlocks | kOptionCodeFolding | kOptionWordWrap | kOptionShowLineNumbers | kOptionLineNumZeroFill | kOptionShowEofMarker | kOptionShowEofMarkerEmoji | kOptionDisplayTabs | kOptionFormatRuler | kOptionCodeColoring | kOptionCodeFoldingFeature;
-static const char *const kCodeLanguageChoices[] = {"None", "Automatic", "C", "C++", "Python", "JavaScript", "TypeScript", "TSX", "Bash", "zsh", "fish", "JSON", "YAML", "XML", "Perl", "Swift", "Rust", "Go", "Pascal", "systemd et al."};
+static const char *const kCodeLanguageChoices[] = {"None", "Automatic", "C", "C++", "Python", "JavaScript", "TypeScript", "TSX", "Bash", "zsh", "fish", "JSON", "YAML", "XML", "Perl", "Swift", "Rust", "Go", "Pascal", "Kotlin", "C#", "systemd et al."};
 constexpr short kCodeLanguageMaxVisibleRows = 10;
 
 struct FileExtensionEditorSettingsPanelLayout {

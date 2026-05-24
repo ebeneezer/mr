@@ -166,9 +166,25 @@ struct MREditExtensionProfile {
 	std::string name;
 	std::vector<std::string> extensions;
 	std::string windowColorThemeUri;
+	std::string compilerProfileId;
 	MREditSetupOverrides overrides;
 
 	auto operator==(const MREditExtensionProfile &) const noexcept -> bool = default;
+};
+
+struct MRCompilerProfile {
+	std::string id;
+	std::string name;
+	std::string toolchain;
+	std::string executablePath;
+	std::string versionText;
+	std::string targetTriple;
+	std::string buildFlags;
+	std::vector<std::string> includePaths;
+	std::vector<std::string> libraryPaths;
+	std::vector<std::string> runtimePaths;
+
+	auto operator==(const MRCompilerProfile &) const noexcept -> bool = default;
 };
 
 enum class MRColorSetupGroup : unsigned char {
@@ -502,6 +518,13 @@ bool translateEditFormatLine(const std::string &value, int tabSize, int leftMarg
 MREditSetupSettings mergeEditSetupSettings(const MREditSetupSettings &defaults, const MREditSetupOverrides &overrides);
 const std::vector<MREditExtensionProfile> &configuredEditExtensionProfiles();
 bool setConfiguredEditExtensionProfiles(const std::vector<MREditExtensionProfile> &profiles, std::string *errorMessage = nullptr);
+const std::vector<MRCompilerProfile> &configuredCompilerProfiles();
+bool setConfiguredCompilerProfiles(const std::vector<MRCompilerProfile> &profiles, std::string *errorMessage = nullptr);
+bool applyConfiguredCompilerProfileDirective(const std::string &operation, const std::string &profileId, const std::string &arg3, const std::string &arg4, std::string *errorMessage = nullptr);
+[[nodiscard]] std::vector<MRCompilerProfile> defaultCompilerProfiles();
+[[nodiscard]] std::string canonicalCompilerProfileId(const std::string &value);
+[[nodiscard]] std::string canonicalCompilerProfileName(const std::string &value);
+[[nodiscard]] bool compilerProfileIdExists(const std::string &profileId);
 [[nodiscard]] std::string configuredDefaultProfileDescription();
 bool setConfiguredDefaultProfileDescription(const std::string &value, std::string *errorMessage = nullptr);
 const std::vector<MRKeymapProfile> &configuredKeymapProfiles();
@@ -513,6 +536,7 @@ bool setConfiguredActiveKeymapProfile(const std::string &value, std::string *err
 bool applyConfiguredEditExtensionProfileDirective(const std::string &operation, const std::string &profileId, const std::string &arg3, const std::string &arg4, std::string *errorMessage = nullptr);
 bool effectiveEditSetupSettingsForPath(const std::string &path, MREditSetupSettings &out, std::string *matchedProfileName = nullptr);
 bool effectiveEditWindowColorThemePathForPath(const std::string &path, std::string &themeUri, std::string *matchedProfileName = nullptr);
+bool effectiveCompilerProfileForPath(const std::string &path, MRCompilerProfile &out, std::string *matchedProfileName = nullptr, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string formatEditSetupBoolean(bool value);
 std::vector<std::string> configuredDefaultExtensionList();
 [[nodiscard]] bool configuredDefaultInsertMode();

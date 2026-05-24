@@ -33,6 +33,7 @@ std::string joinStrings(const std::vector<std::string> &values, std::string_view
 MRParsedSettingsDocument parseSettingsDocument(std::string_view source, bool acceptLegacyFeProfileToken) {
 	static const std::regex assignmentPattern("MRSETUP\\s*\\(\\s*'([^']+)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
 	static const std::regex profilePattern("MRFEPROFILE\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
+	static const std::regex compilerProfilePattern("MRCOMPILERPROFILE\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
 	static const std::regex profilePatternWithLegacy("(?:MRFEPROFILE|MREDITPROFILE)\\s*\\(\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*,\\s*'((?:''|[^'])*)'\\s*\\)", std::regex::icase);
 	const std::regex &activeProfilePattern = acceptLegacyFeProfileToken ? profilePatternWithLegacy : profilePattern;
 	MRParsedSettingsDocument document;
@@ -58,6 +59,18 @@ MRParsedSettingsDocument parseSettingsDocument(std::string_view source, bool acc
 			directive.arg3 = unescapeMrmacSingleQuotedLiteral(match[3].str());
 			directive.arg4 = unescapeMrmacSingleQuotedLiteral(match[4].str());
 			document.profileDirectives.push_back(std::move(directive));
+		}
+		remaining = match.suffix().str();
+	}
+	remaining.assign(source.data(), source.size());
+	while (std::regex_search(remaining, match, compilerProfilePattern)) {
+		if (match.size() >= 5) {
+			MRParsedCompilerProfileDirective directive;
+			directive.operation = unescapeMrmacSingleQuotedLiteral(match[1].str());
+			directive.profileId = unescapeMrmacSingleQuotedLiteral(match[2].str());
+			directive.arg3 = unescapeMrmacSingleQuotedLiteral(match[3].str());
+			directive.arg4 = unescapeMrmacSingleQuotedLiteral(match[4].str());
+			document.compilerProfileDirectives.push_back(std::move(directive));
 		}
 		remaining = match.suffix().str();
 	}
@@ -123,6 +136,19 @@ MRFlattenedSettingsDocument flattenSettingsDocument(const MRParsedSettingsDocume
 		std::sort(extensions.begin(), extensions.end());
 		extensions.erase(std::unique(extensions.begin(), extensions.end()), extensions.end());
 	}
+	for (const MRParsedCompilerProfileDirective &directive : document.compilerProfileDirectives) {
+		const std::string op = upperAscii(trimAscii(directive.operation));
+		const std::string profileId = trimAscii(directive.profileId);
+		MRFlattenedEditProfile &profile = flattened.compilerProfiles[profileId];
+		const std::string key = upperAscii(trimAscii(directive.arg3));
+
+		profile.id = profileId;
+		if (op == "DEFINE") {
+			profile.name = trimAscii(directive.arg3);
+			profile.settings["TOOLCHAIN"] = directive.arg4;
+		} else if (op == "SET")
+			profile.settings[key] = directive.arg4;
+	}
 
 	return flattened;
 }
@@ -187,6 +213,31 @@ void diffFlattenedDocuments(const MRFlattenedSettingsDocument &before, const MRF
 		if (afterIt != after.profiles.end()) {
 			afterMap["PROFILE_NAME"] = afterIt->second.name;
 			if (!afterIt->second.extensions.empty()) afterMap["EXTENSIONS"] = joinStrings(afterIt->second.extensions, ", ");
+			for (const auto &entry : afterIt->second.settings)
+				afterMap[entry.first] = entry.second;
+		}
+		diffFlatMap(scope, beforeMap, afterMap, changes);
+	}
+
+	profileIds.clear();
+	for (const auto &entry : before.compilerProfiles)
+		profileIds.insert(entry.first);
+	for (const auto &entry : after.compilerProfiles)
+		profileIds.insert(entry.first);
+	for (const std::string &profileId : profileIds) {
+		auto beforeIt = before.compilerProfiles.find(profileId);
+		auto afterIt = after.compilerProfiles.find(profileId);
+		const std::string scope = "compiler-profile '" + profileId + "'";
+		std::map<std::string, std::string> beforeMap;
+		std::map<std::string, std::string> afterMap;
+
+		if (beforeIt != before.compilerProfiles.end()) {
+			beforeMap["PROFILE_NAME"] = beforeIt->second.name;
+			for (const auto &entry : beforeIt->second.settings)
+				beforeMap[entry.first] = entry.second;
+		}
+		if (afterIt != after.compilerProfiles.end()) {
+			afterMap["PROFILE_NAME"] = afterIt->second.name;
 			for (const auto &entry : afterIt->second.settings)
 				afterMap[entry.first] = entry.second;
 		}

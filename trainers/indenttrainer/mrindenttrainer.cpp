@@ -105,6 +105,10 @@ bool parseLanguageName(const std::string &name, MRSyntaxLanguage &language) noex
 		language = MRSyntaxLanguage::Rust;
 	else if (name == "go")
 		language = MRSyntaxLanguage::Go;
+	else if (name == "kotlin" || name == "kt" || name == "kts")
+		language = MRSyntaxLanguage::Kotlin;
+	else if (name == "csharp" || name == "cs" || name == "c#")
+		language = MRSyntaxLanguage::CSharp;
 	else if (name == "pascal" || name == "pas")
 		language = MRSyntaxLanguage::Pascal;
 	else if (name == "systemd" || name == "sd")
@@ -150,6 +154,10 @@ const char *languageName(MRSyntaxLanguage language) noexcept {
 			return "Rust";
 		case MRSyntaxLanguage::Go:
 			return "Go";
+		case MRSyntaxLanguage::Kotlin:
+			return "Kotlin";
+		case MRSyntaxLanguage::CSharp:
+			return "C#";
 		case MRSyntaxLanguage::Pascal:
 			return "Pascal";
 		case MRSyntaxLanguage::Systemd:
@@ -195,6 +203,10 @@ std::string languageSettingName(MRSyntaxLanguage language, bool automatic) {
 			return "RUST";
 		case MRSyntaxLanguage::Go:
 			return "GO";
+		case MRSyntaxLanguage::Kotlin:
+			return "KOTLIN";
+		case MRSyntaxLanguage::CSharp:
+			return "CSHARP";
 		case MRSyntaxLanguage::Pascal:
 			return "PASCAL";
 		case MRSyntaxLanguage::Systemd:
@@ -248,6 +260,8 @@ std::vector<LanguageRun> allLanguageRuns() {
 		{MRSyntaxLanguage::Swift, false},
 		{MRSyntaxLanguage::Rust, false},
 		{MRSyntaxLanguage::Go, false},
+		{MRSyntaxLanguage::Kotlin, false},
+		{MRSyntaxLanguage::CSharp, false},
 		{MRSyntaxLanguage::Pascal, false},
 		{MRSyntaxLanguage::Systemd, false},
 		{MRSyntaxLanguage::Make, false},
@@ -459,7 +473,7 @@ bool looksLikeFunctionHeaderLead(std::string_view trimmed) {
 
 bool isBraceLanguage(MRSyntaxLanguage language) noexcept {
 	return language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp || language == MRSyntaxLanguage::JavaScript || language == MRSyntaxLanguage::Swift || language == MRSyntaxLanguage::Rust ||
-	       language == MRSyntaxLanguage::Go;
+	       language == MRSyntaxLanguage::Go || language == MRSyntaxLanguage::Kotlin || language == MRSyntaxLanguage::CSharp;
 }
 
 bool isRustStrictLead(std::string_view upperLine) {
@@ -474,6 +488,21 @@ bool isGoStrictLead(std::string_view upperLine) {
 	    startsWithUpperKeyword(upperLine, "SELECT") || startsWithUpperKeyword(upperLine, "FUNC"))
 		return true;
 	return upperLine.starts_with("TYPE ") && (upperLine.find(" STRUCT") != std::string::npos || upperLine.find(" INTERFACE") != std::string::npos);
+}
+
+bool isKotlinStrictLead(std::string_view upperLine) {
+	return startsWithUpperKeyword(upperLine, "IF") || startsWithUpperKeyword(upperLine, "ELSE") || startsWithUpperKeyword(upperLine, "FOR") || startsWithUpperKeyword(upperLine, "WHILE") ||
+	       startsWithUpperKeyword(upperLine, "WHEN") || startsWithUpperKeyword(upperLine, "TRY") || startsWithUpperKeyword(upperLine, "CATCH") || startsWithUpperKeyword(upperLine, "FINALLY") ||
+	       startsWithUpperKeyword(upperLine, "FUN") || startsWithUpperKeyword(upperLine, "CLASS") || startsWithUpperKeyword(upperLine, "INTERFACE") || startsWithUpperKeyword(upperLine, "OBJECT") ||
+	       startsWithUpperKeyword(upperLine, "ENUM") || startsWithUpperKeyword(upperLine, "COMPANION OBJECT");
+}
+
+bool isCSharpStrictLead(std::string_view upperLine) {
+	return startsWithUpperKeyword(upperLine, "IF") || startsWithUpperKeyword(upperLine, "ELSE") || startsWithUpperKeyword(upperLine, "FOR") || startsWithUpperKeyword(upperLine, "FOREACH") ||
+	       startsWithUpperKeyword(upperLine, "WHILE") || startsWithUpperKeyword(upperLine, "DO") || startsWithUpperKeyword(upperLine, "SWITCH") || startsWithUpperKeyword(upperLine, "TRY") ||
+	       startsWithUpperKeyword(upperLine, "CATCH") || startsWithUpperKeyword(upperLine, "FINALLY") || startsWithUpperKeyword(upperLine, "LOCK") || startsWithUpperKeyword(upperLine, "USING") ||
+	       startsWithUpperKeyword(upperLine, "NAMESPACE") || startsWithUpperKeyword(upperLine, "CLASS") || startsWithUpperKeyword(upperLine, "STRUCT") || startsWithUpperKeyword(upperLine, "INTERFACE") ||
+	       startsWithUpperKeyword(upperLine, "RECORD") || looksLikeFunctionHeaderLead(upperLine);
 }
 
 bool isPythonStrictLead(std::string_view upperLine) {
@@ -647,6 +676,14 @@ bool isBraceStructuralLead(std::string_view trimmed, std::string_view upperLine,
 		if (isCLikeCommentOrDirectiveLine(trimmed)) return false;
 		return isGoStrictLead(upperLine) || looksLikeFunctionHeaderLead(trimmed);
 	}
+	if (language == MRSyntaxLanguage::Kotlin) {
+		if (isCLikeCommentOrDirectiveLine(trimmed)) return false;
+		return isKotlinStrictLead(upperLine) || looksLikeFunctionHeaderLead(trimmed);
+	}
+	if (language == MRSyntaxLanguage::CSharp) {
+		if (isCLikeCommentOrDirectiveLine(trimmed) || trimmed.starts_with("#")) return false;
+		return isCSharpStrictLead(upperLine);
+	}
 	return false;
 }
 
@@ -742,10 +779,12 @@ bool mayNeedSmartDedentProbe(std::string_view lineText, MRSyntaxLanguage languag
 		case MRSyntaxLanguage::C:
 		case MRSyntaxLanguage::Cpp:
 		case MRSyntaxLanguage::JavaScript:
-		case MRSyntaxLanguage::Swift:
-		case MRSyntaxLanguage::Rust:
-		case MRSyntaxLanguage::Go:
-			return startsWithUpperKeyword(upper, "ELSE") || startsWithUpperKeyword(upper, "CATCH") || startsWithUpperKeyword(upper, "FINALLY");
+			case MRSyntaxLanguage::Swift:
+			case MRSyntaxLanguage::Rust:
+			case MRSyntaxLanguage::Go:
+			case MRSyntaxLanguage::Kotlin:
+			case MRSyntaxLanguage::CSharp:
+				return startsWithUpperKeyword(upper, "ELSE") || startsWithUpperKeyword(upper, "CATCH") || startsWithUpperKeyword(upper, "FINALLY");
 		default:
 			return false;
 	}
@@ -780,10 +819,12 @@ bool containsTrailingSmartSplitToken(std::string_view lineText, MRSyntaxLanguage
 		case MRSyntaxLanguage::C:
 		case MRSyntaxLanguage::Cpp:
 		case MRSyntaxLanguage::JavaScript:
-		case MRSyntaxLanguage::Swift:
-		case MRSyntaxLanguage::Rust:
-		case MRSyntaxLanguage::Go:
-			return upper.find(" ELSE") != std::string::npos || upper.find(" CATCH") != std::string::npos || upper.find(" FINALLY") != std::string::npos;
+			case MRSyntaxLanguage::Swift:
+			case MRSyntaxLanguage::Rust:
+			case MRSyntaxLanguage::Go:
+			case MRSyntaxLanguage::Kotlin:
+			case MRSyntaxLanguage::CSharp:
+				return upper.find(" ELSE") != std::string::npos || upper.find(" CATCH") != std::string::npos || upper.find(" FINALLY") != std::string::npos;
 		default:
 			return false;
 	}

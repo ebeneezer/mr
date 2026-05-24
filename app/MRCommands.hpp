@@ -104,6 +104,7 @@ enum : ushort {
 	cmMrSetupKeyMapping,
 	cmMrSetupMouseKeyRepeat,
 	cmMrSetupFilenameExtensions,
+	cmMrSetupCompilerProfiles,
 	cmMrSetupPaths,
 	cmMrSetupBackupsAutosave,
 	cmMrSetupSearchAndReplaceDefaults,
@@ -128,7 +129,8 @@ enum : ushort {
 	cmMrDeferredActivateWindow,
 	cmMrWindowTopologyChanged,
 	cmMrFileSaveAll,
-	cmMrFileRevert
+	cmMrFileRevert,
+	cmMrOtherBuildCurrentFile
 };
 
 #endif

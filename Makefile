@@ -141,6 +141,7 @@ CXX_SOURCES = \
 	dialogs/MRMacroFile.cpp \
 	dialogs/MRAcquireDialog.cpp \
 	dialogs/MRPdfExportDialog.cpp \
+	dialogs/MRCompilerProfiles.cpp \
 	dialogs/extensions/MRFileExtensionProfiles.cpp \
 	dialogs/extensions/MRFileExtensionEditorSettings.cpp \
 	dialogs/extensions/MRFileExtensionProfilesSupport.cpp \
@@ -153,6 +154,7 @@ CXX_SOURCES = \
 	config/settings/MRSettingsRuntimeState.cpp \
 	config/settings/MRSettingsHistory.cpp \
 	config/settings/MRSettingsThemesProfiles.cpp \
+	config/settings/MRSettingsCompilerProfiles.cpp \
 	config/settings/MRSettingsEditSetup.cpp \
 	config/settings/MRSettingsAssignments.cpp \
 	config/settings/MRSettingsSnapshotIO.cpp \

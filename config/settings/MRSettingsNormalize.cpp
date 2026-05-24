@@ -59,6 +59,10 @@ bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::
 		++activeReport.appliedAssignmentCount;
 	}
 
+	if (!document.compilerProfileDirectives.empty()) snapshot.compilerProfiles.clear();
+	for (const MRParsedCompilerProfileDirective &directive : document.compilerProfileDirectives)
+		if (!applySettingsSnapshotCompilerProfileDirective(snapshot, directive.operation, directive.profileId, directive.arg3, directive.arg4, errorMessage)) return false;
+
 	for (const MRParsedEditProfileDirective &directive : document.profileDirectives)
 		if (!applySettingsSnapshotEditExtensionProfileDirective(snapshot, directive.operation, directive.profileId, directive.arg3, directive.arg4, errorMessage)) return false;
 

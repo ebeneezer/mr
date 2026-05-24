@@ -122,6 +122,10 @@ static std::string snippetLanguageKey(MRSyntaxLanguage language) {
 			return "RUST";
 		case MRSyntaxLanguage::Go:
 			return "GO";
+		case MRSyntaxLanguage::Kotlin:
+			return "KOTLIN";
+		case MRSyntaxLanguage::CSharp:
+			return "CSHARP";
 		case MRSyntaxLanguage::Pascal:
 			return "PASCAL";
 		case MRSyntaxLanguage::Systemd:

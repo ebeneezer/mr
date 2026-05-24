@@ -101,7 +101,7 @@ class MREditWindow : public TWindow {
 				const bool showTaskIcon = indicator != nullptr && indicator->shouldDrawTaskMarker();
 				const bool hasReadOnlySlot = indicator != nullptr && indicator->hasReadOnlyMarkerSlot();
 				const bool showReadOnlyIcon = indicator != nullptr && indicator->shouldDrawReadOnlyMarker();
-				const bool showLanguageSlot = editor != nullptr && editor->syntaxLanguageAutomatic() && editor->syntaxLanguage() != MRSyntaxLanguage::PlainText;
+				const bool showLanguageSlot = editor != nullptr && editor->syntaxLanguage() != MRSyntaxLanguage::PlainText;
 				const char *languageMarker = showLanguageSlot ? tmrSyntaxLanguageMarker(editor->syntaxLanguage()) : nullptr;
 				const std::uint32_t languageMarkerRgb = showLanguageSlot ? tmrSyntaxLanguageMarkerRgb(editor->syntaxLanguage()) : 0;
 				const bool isActiveWindow = (this->state & sfActive) != 0;

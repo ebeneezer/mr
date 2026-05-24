@@ -65,29 +65,6 @@
           ]
         },
         {
-          "id": "8bae11ac-3fe5-4353-aaf4-75a7bbb39e5f",
-          "listId": "442a00f0-c411-4725-9424-3182418b486d",
-          "title": "Shell Terminal",
-          "description": "libvterm !!",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
-          "id": "4837d859-b453-4072-a9a2-f473b9a8342a",
-          "listId": "442a00f0-c411-4725-9424-3182418b486d",
-          "title": "Compiler Profiles",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": [
-            {
-              "id": "c36c5b72-5512-4018-97a8-a0669d1441ee",
-              "comment": "\nerror parsing? \nfolding einblendung des errors and der error stelle?\nVerbindung via FE Profile"
-            }
-          ]
-        },
-        {
           "id": "d2168d40-7377-4678-b6b5-8e72ee20daff",
           "listId": "442a00f0-c411-4725-9424-3182418b486d",
           "title": "Windowanimations",
@@ -193,6 +170,15 @@
           ]
         },
         {
+          "id": "64057b06-7cd2-4335-ac89-b328d6c7c8ee",
+          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
+          "title": "Regression: Wenn ich für Sources mit Extension die Sprache festlege wird diese nicht als Marker angezeigt. Das geschieht nur im Automatic Modus. Die Zuordnung zum C Profile scheint aber zu funktionieren - insofern wahrscheinlich nur ein Anzeigefehler.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
           "id": "40285382-e934-4b32-bd16-3acffa7645ef",
           "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
           "title": "mrmac VM Befehlssatz komplettieren",
@@ -211,27 +197,41 @@
           ]
         },
         {
-          "id": "9a5f3f46-9173-4245-9f5f-16e996469a1c",
+          "id": "b6c866e1-49fc-4c16-b987-626b8d0a53fc",
           "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "mr/patches prüfen ob wor das noch brauchen.",
+          "title": "Automatic Setup Button für Compiler Profiles: Fragt nach binary des Compilers ohne Pfad und stellt danach alles automatisch ein. Wenn bereits etwas in Compiler binary steht wird nicht gefragt.",
           "description": "",
           "labels": [],
           "checkboxes": [],
           "comments": []
         },
         {
-          "id": "d9673699-ede3-4290-b4aa-1d84ab83ec8a",
+          "id": "6c1518d3-c3ad-4303-9fc4-9511e7c64a27",
           "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Code Folding: Kotlin und C#",
-          "description": "Konfigurierbar für jedes FE Profil.",
+          "title": "Wenn ein FE Profile erstellt wird sollte beim Verlassen des FE Dialogs geprüft werden welche EditorWindows diesem Profil zugeordnet werden müssen.",
+          "description": "",
           "labels": [],
           "checkboxes": [],
           "comments": []
         },
         {
-          "id": "3c66a890-e0d4-4647-96ba-addbf75a6f3d",
+          "id": "4837d859-b453-4072-a9a2-f473b9a8342a",
           "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
-          "title": "Codebase bereinigen, so dass wir problemlos vom Upstream TV updaten können. Offenbar wurde an meinem Contract vorbei in TV geschrieben. Wir sollten das zum Anlass nehmen die neueste Version von TV zu holen und zu integrieren. UNsere Anpassungen finden nur über Vererbung statt.",
+          "title": "Compiler Profiles",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": [
+            {
+              "id": "c36c5b72-5512-4018-97a8-a0669d1441ee",
+              "comment": "\nerror parsing? \nfolding einblendung des errors and der error stelle?\nVerbindung via FE Profile"
+            }
+          ]
+        },
+        {
+          "id": "05832f3b-4ca2-419a-9d52-72c23dc5ea48",
+          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
+          "title": "Split Editor: Horizontal/vertikal: Mehrere Editoren in einem Editor Fenster Rahmen. Grössen durch Ziehen mit der Maus veränderbar. Saubere grafische rahmenabzweigungen. Split Editoren haben im Parent Rahmen nur einzeilige Rahmen, Der Doppelrahmen umschliesst alles und gruppiert so optisch. Wir brauchen so etwas für Compiler fehler, später den Makro Debugger und viele weitere Einsatzmöglichkeiten. Das muss eine eigene von MRFileEditor abgeleitete Klasse werden.",
           "description": "",
           "labels": [],
           "checkboxes": [],
@@ -262,10 +262,37 @@
           "comments": []
         },
         {
+          "id": "9a5f3f46-9173-4245-9f5f-16e996469a1c",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "mr/patches prüfen ob wor das noch brauchen.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "3c66a890-e0d4-4647-96ba-addbf75a6f3d",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Codebase bereinigen, so dass wir problemlos vom Upstream TV updaten können. Offenbar wurde an meinem Contract vorbei in TV geschrieben. Wir sollten das zum Anlass nehmen die neueste Version von TV zu holen und zu integrieren. UNsere Anpassungen finden nur über Vererbung statt.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
           "id": "46352779-58c7-489a-bb8b-5d120f7bcdd7",
           "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
           "title": "Neues UI WIdget: Textfeld mit Speed Search und Droplist",
           "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "d9673699-ede3-4290-b4aa-1d84ab83ec8a",
+          "listId": "126a5e5b-401b-45cd-8c2d-3a943712d14c",
+          "title": "Code Folding: Kotlin und C#",
+          "description": "Konfigurierbar für jedes FE Profil.",
           "labels": [],
           "checkboxes": [],
           "comments": []

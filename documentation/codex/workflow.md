@@ -64,6 +64,12 @@ After implementation:
 
 A tranche is not complete until the build result is known.
 
+Bug fixes require a same-family impact audit before handoff.
+Treat a defect as evidence of a potentially affected class, not as an isolated symptom.
+Check the inverse path, sibling values or operations, alternate entry points, lifecycle transitions
+and existing regression coverage. The maintainer should not have to name the obvious adjacent
+checks one by one.
+
 ## Rejection formula
 
 If a proposed change violates the contracts, respond with:

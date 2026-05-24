@@ -20,9 +20,17 @@ struct MRParsedEditProfileDirective {
 	std::string arg4;
 };
 
+struct MRParsedCompilerProfileDirective {
+	std::string operation;
+	std::string profileId;
+	std::string arg3;
+	std::string arg4;
+};
+
 struct MRParsedSettingsDocument {
 	std::vector<MRParsedSettingsAssignment> assignments;
 	std::vector<MRParsedEditProfileDirective> profileDirectives;
+	std::vector<MRParsedCompilerProfileDirective> compilerProfileDirectives;
 };
 
 struct MRFlattenedEditProfile {
@@ -35,6 +43,7 @@ struct MRFlattenedEditProfile {
 struct MRFlattenedSettingsDocument {
 	std::map<std::string, std::string> globals;
 	std::map<std::string, MRFlattenedEditProfile> profiles;
+	std::map<std::string, MRFlattenedEditProfile> compilerProfiles;
 };
 
 std::string unescapeMrmacSingleQuotedLiteral(const std::string &value);

@@ -403,6 +403,8 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Other / Macro manager";
 		case cmMrOtherExecuteProgram:
 			return "Other / Execute program";
+		case cmMrOtherBuildCurrentFile:
+			return "Other / Build current file";
 		case cmMrOtherStopProgram:
 			return "Other / Stop current program";
 		case cmMrOtherRestartProgram:
@@ -433,6 +435,8 @@ const char *placeholderCommandTitle(ushort command) {
 			return "Installation / Mouse / Key repeat setup";
 		case cmMrSetupFilenameExtensions:
 			return "Installation / Filename extensions";
+		case cmMrSetupCompilerProfiles:
+			return "Installation / Compiler profiles";
 		case cmMrSetupPaths:
 			return "Installation / Paths";
 		case cmMrSetupBackupsAutosave:
@@ -1360,6 +1364,43 @@ bool handleExecuteProgram() {
 	return true;
 }
 
+bool handleBuildCurrentFile() {
+	MREditWindow *win = currentEditWindow();
+	std::string sourcePath;
+	std::string matchedProfileName;
+	std::string errorText;
+	std::string commandLine;
+	MRCompilerProfile compilerProfile;
+	MREditWindow *outputWindow;
+
+	if (win == nullptr) return true;
+	sourcePath = win->currentFileName();
+	if (sourcePath.empty()) {
+		postDialogWarning("Build current file requires a named source file.");
+		return true;
+	}
+	if (win->isFileChanged() && !win->saveCurrentFile()) {
+		postDialogWarning("Unable to save current file before build.");
+		return true;
+	}
+	if (!effectiveCompilerProfileForPath(sourcePath, compilerProfile, &matchedProfileName, &errorText)) {
+		postDialogWarning(errorText.empty() ? "No compiler profile for current file." : errorText);
+		return true;
+	}
+	if (!buildCompilerProfileCommandLine(compilerProfile, sourcePath, commandLine, &errorText)) {
+		postDialogWarning(errorText.empty() ? "Unable to build compiler command line." : errorText);
+		return true;
+	}
+
+	outputWindow = createEditorWindow(shortenCommandTitle(commandLine).c_str());
+	if (outputWindow == nullptr) {
+		postSearchError("Unable to create build output window.");
+		return true;
+	}
+	startExternalCommandInWindow(outputWindow, commandLine, true, true, true);
+	return true;
+}
+
 bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandLine, bool replaceBuffer, bool activate, bool closeOnFailure) {
 	std::string title;
 	std::string initialText;
@@ -2171,6 +2212,7 @@ bool handleMRCommand(ushort command) {
 		case cmMrSetupKeyMapping:
 		case cmMrSetupMouseKeyRepeat:
 		case cmMrSetupFilenameExtensions:
+		case cmMrSetupCompilerProfiles:
 		case cmMrSetupPaths:
 		case cmMrSetupBackupsAutosave:
 		case cmMrSetupUserInterfaceSettings:
@@ -2219,6 +2261,9 @@ bool handleMRCommand(ushort command) {
 
 		case cmMrOtherExecuteProgram:
 			return handleExecuteProgram();
+
+		case cmMrOtherBuildCurrentFile:
+			return handleBuildCurrentFile();
 
 		case cmMrOtherStopProgram:
 			return handleStopCurrentProgram();

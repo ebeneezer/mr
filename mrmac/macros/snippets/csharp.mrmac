@@ -1,0 +1,227 @@
+$MACRO REGISTER_CSHARP_SNIPPETS FROM EDIT;
+DEF_HASH(Snippets, CsharpSnippets);
+
+Snippets := GLOBAL_HASH('SNIPPETS');
+
+DEF_HASH(Cs01);
+Cs01['name'] := 'C# using';
+Cs01['trigger'] := 'using';
+Cs01['body'] := <<BODY
+using System;
+BODY;
+CsharpSnippets['USING'] := Cs01;
+
+DEF_HASH(Cs02);
+Cs02['name'] := 'C# namespace';
+Cs02['trigger'] := 'namespace';
+Cs02['body'] := <<BODY
+namespace Example;
+BODY;
+CsharpSnippets['NAMESPACE'] := Cs02;
+
+DEF_HASH(Cs03);
+Cs03['name'] := 'C# class';
+Cs03['trigger'] := 'class';
+Cs03['body'] := <<BODY
+public sealed class Name
+{
+}
+BODY;
+CsharpSnippets['CLASS'] := Cs03;
+
+DEF_HASH(Cs04);
+Cs04['name'] := 'C# record';
+Cs04['trigger'] := 'record';
+Cs04['body'] := <<BODY
+public sealed record Name(string Value);
+BODY;
+CsharpSnippets['RECORD'] := Cs04;
+
+DEF_HASH(Cs05);
+Cs05['name'] := 'C# interface';
+Cs05['trigger'] := 'interface';
+Cs05['body'] := <<BODY
+public interface IName
+{
+    string Value();
+}
+BODY;
+CsharpSnippets['INTERFACE'] := Cs05;
+
+DEF_HASH(Cs06);
+Cs06['name'] := 'C# method';
+Cs06['trigger'] := 'method';
+Cs06['body'] := <<BODY
+public string MethodName(string value)
+{
+    return value;
+}
+BODY;
+CsharpSnippets['METHOD'] := Cs06;
+
+DEF_HASH(Cs07);
+Cs07['name'] := 'C# async method';
+Cs07['trigger'] := 'async';
+Cs07['body'] := <<BODY
+public async Task<string> MethodNameAsync()
+{
+    return await operation;
+}
+BODY;
+CsharpSnippets['ASYNC'] := Cs07;
+
+DEF_HASH(Cs08);
+Cs08['name'] := 'C# property';
+Cs08['trigger'] := 'property';
+Cs08['body'] := <<BODY
+public string Value { get; init; } = string.Empty;
+BODY;
+CsharpSnippets['PROPERTY'] := Cs08;
+
+DEF_HASH(Cs09);
+Cs09['name'] := 'C# main';
+Cs09['trigger'] := 'main';
+Cs09['body'] := <<BODY
+public static int Main(string[] args)
+{
+    return 0;
+}
+BODY;
+CsharpSnippets['MAIN'] := Cs09;
+
+DEF_HASH(Cs10);
+Cs10['name'] := 'C# if';
+Cs10['trigger'] := 'if';
+Cs10['body'] := <<BODY
+if (condition)
+{
+}
+BODY;
+CsharpSnippets['IF'] := Cs10;
+
+DEF_HASH(Cs11);
+Cs11['name'] := 'C# switch';
+Cs11['trigger'] := 'switch';
+Cs11['body'] := <<BODY
+switch (value)
+{
+    case expected:
+        break;
+    default:
+        break;
+}
+BODY;
+CsharpSnippets['SWITCH'] := Cs11;
+
+DEF_HASH(Cs12);
+Cs12['name'] := 'C# switch expression';
+Cs12['trigger'] := 'switchexpr';
+Cs12['body'] := <<BODY
+var result = value switch
+{
+    expected => result,
+    _ => fallback
+};
+BODY;
+CsharpSnippets['SWITCHEXPR'] := Cs12;
+
+DEF_HASH(Cs13);
+Cs13['name'] := 'C# for';
+Cs13['trigger'] := 'for';
+Cs13['body'] := <<BODY
+for (var i = 0; i < count; i++)
+{
+}
+BODY;
+CsharpSnippets['FOR'] := Cs13;
+
+DEF_HASH(Cs14);
+Cs14['name'] := 'C# foreach';
+Cs14['trigger'] := 'foreach';
+Cs14['body'] := <<BODY
+foreach (var item in items)
+{
+}
+BODY;
+CsharpSnippets['FOREACH'] := Cs14;
+
+DEF_HASH(Cs15);
+Cs15['name'] := 'C# while';
+Cs15['trigger'] := 'while';
+Cs15['body'] := <<BODY
+while (condition)
+{
+}
+BODY;
+CsharpSnippets['WHILE'] := Cs15;
+
+DEF_HASH(Cs16);
+Cs16['name'] := 'C# try catch';
+Cs16['trigger'] := 'try';
+Cs16['body'] := <<BODY
+try
+{
+}
+catch (Exception ex)
+{
+}
+BODY;
+CsharpSnippets['TRY'] := Cs16;
+
+DEF_HASH(Cs17);
+Cs17['name'] := 'C# using block';
+Cs17['trigger'] := 'usingblock';
+Cs17['body'] := <<BODY
+using (var resource = CreateResource())
+{
+}
+BODY;
+CsharpSnippets['USINGBLOCK'] := Cs17;
+
+DEF_HASH(Cs18);
+Cs18['name'] := 'C# LINQ select';
+Cs18['trigger'] := 'linq';
+Cs18['body'] := <<BODY
+var result = items
+    .Where(item => condition)
+    .Select(item => item.Value)
+    .ToList();
+BODY;
+CsharpSnippets['LINQ'] := Cs18;
+
+DEF_HASH(Cs19);
+Cs19['name'] := 'C# test';
+Cs19['trigger'] := 'test';
+Cs19['body'] := <<BODY
+[Fact]
+public void Name()
+{
+    Assert.Equal(expected, actual);
+}
+BODY;
+CsharpSnippets['TEST'] := Cs19;
+
+DEF_HASH(Cs20);
+Cs20['name'] := 'C# comment block';
+Cs20['trigger'] := 'comment';
+Cs20['body'] := <<BODY
+/*
+ description
+ */
+BODY;
+CsharpSnippets['COMMENT'] := Cs20;
+
+Snippets['CSHARP'] := CsharpSnippets;
+SET_GLOBAL_HASH('SNIPPETS', Snippets);
+
+MACRO_TO_KEY('<Ctrl+Space>', 'csharp^CSHARP_SNIPPET_EXPAND_KEYWORD', 0);
+MACRO_TO_KEY('<Ctrl+@>', 'csharp^CSHARP_SNIPPET_EXPAND_KEYWORD', 0);
+END_MACRO;
+
+$MACRO CSHARP_SNIPPET_EXPAND_KEYWORD FROM EDIT;
+SNIPPET_START();
+END_MACRO;
+
+$MACRO CSHARP_SNIPPETS_UNLOAD FROM EDIT;
+SNIPPETS_UNLOAD('CSHARP');
+END_MACRO;

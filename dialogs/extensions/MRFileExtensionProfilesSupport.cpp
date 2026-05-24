@@ -52,6 +52,8 @@ const char *dialogCodeLanguageLabel(const std::string &codeLanguage) {
 	if (normalized == "RUST") return "Rust";
 	if (normalized == "GO") return "Go";
 	if (normalized == "PASCAL") return "Pascal";
+	if (normalized == "KOTLIN") return "Kotlin";
+	if (normalized == "CSHARP") return "C#";
 	if (normalized == "SYSTEMD") return "systemd et al.";
 	return "None";
 }
@@ -78,6 +80,8 @@ bool parseDialogCodeLanguage(const std::string &dialogValue, std::string &canoni
 	else if (normalized == "RUST") canonicalValue = "RUST";
 	else if (normalized == "GO") canonicalValue = "GO";
 	else if (normalized == "PASCAL") canonicalValue = "PASCAL";
+	else if (normalized == "KOTLIN") canonicalValue = "KOTLIN";
+	else if (normalized == "C#" || normalized == "CSHARP") canonicalValue = "CSHARP";
 	else if (normalized == "SYSTEMD" || normalized == "SYSTEMD ET AL.") canonicalValue = "SYSTEMD";
 	else
 		return false;
@@ -135,6 +139,7 @@ void initFileExtensionEditorSettingsDialogRecord(FileExtensionEditorSettingsDial
 	if (settings.formatRuler) record.optionsMask |= kOptionFormatRuler;
 	if (settings.codeColoring) record.optionsMask |= kOptionCodeColoring;
 	if (settings.codeFoldingFeature) record.optionsMask |= kOptionCodeFoldingFeature;
+	if (settings.backupFiles) record.optionsMask |= kOptionBackupFiles;
 
 	record.tabExpandChoice = settings.tabExpand ? kTabExpandTabs : kTabExpandSpaces;
 	record.indentStyleChoice = (indentStyle == "AUTOMATIC") ? kIndentStyleAutomatic : (indentStyle == "SMART") ? kIndentStyleSmart : kIndentStyleOff;
@@ -153,7 +158,7 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.defaultExtensions = readRecordField(record.defaultExtensions);
 	{
 		if (!parseDialogCodeLanguage(readRecordField(record.codeLanguage), settings.codeLanguage)) {
-			errorText = "CODE_LANGUAGE must be None, Automatic, C, C++, Python, JavaScript, TypeScript, TSX, Bash, zsh, fish, JSON, YAML, XML, Perl, Swift, Rust, Go, Pascal or systemd et al..";
+			errorText = "CODE_LANGUAGE must be None, Automatic, C, C++, Python, JavaScript, TypeScript, TSX, Bash, zsh, fish, JSON, YAML, XML, Perl, Swift, Rust, Go, Pascal, Kotlin, C# or systemd et al..";
 			return false;
 		}
 	}
@@ -291,6 +296,7 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.displayTabs = (record.optionsMask & kOptionDisplayTabs) != 0;
 	settings.codeColoring = (record.optionsMask & kOptionCodeColoring) != 0;
 	settings.codeFoldingFeature = (record.optionsMask & kOptionCodeFoldingFeature) != 0;
+	settings.backupFiles = (record.optionsMask & kOptionBackupFiles) != 0;
 	settings.lineNumbersPosition = (record.lineNumbersPositionChoice == kLineNumbersLeading) ? "LEADING" : (record.lineNumbersPositionChoice == kLineNumbersTrailing) ? "TRAILING" : "OFF";
 	if (settings.lineNumbersPosition == "OFF" && (record.optionsMask & kOptionShowLineNumbers) != 0) settings.lineNumbersPosition = "LEADING";
 	settings.showLineNumbers = settings.lineNumbersPosition != "OFF";
@@ -416,6 +422,33 @@ enum : unsigned long long {
 	return validateColorThemeFilePath(themeUri, &errorText);
 }
 
+[[nodiscard]] bool compilerProfileExistsForDraft(const std::string &profileId) {
+	const std::string id = canonicalCompilerProfileId(profileId);
+
+	if (id.empty()) return true;
+	if (compilerProfileIdExists(id)) return true;
+	if (configuredCompilerProfiles().empty()) {
+		for (const MRCompilerProfile &profile : defaultCompilerProfiles())
+			if (profile.id == id) return true;
+	}
+	return false;
+}
+
+[[nodiscard]] bool validateCompilerProfileLiteral(const EditProfileDraft &draft, std::string &errorText) {
+	std::string profileId = canonicalCompilerProfileId(draft.compilerProfileId);
+
+	if (draft.isDefault || profileId.empty()) {
+		errorText.clear();
+		return true;
+	}
+	if (!compilerProfileExistsForDraft(profileId)) {
+		errorText = "Compiler profile is unknown.";
+		return false;
+	}
+	errorText.clear();
+	return true;
+}
+
 [[nodiscard]] bool validateDraftRecordFields(const EditProfileDraft &draft, std::string &errorText) {
 	MRFileExtensionEditorSettings ignored;
 	return fileExtensionEditorSettingsDialogRecordToSettings(draft.settingsRecord, ignored, errorText);
@@ -426,6 +459,7 @@ enum : unsigned long long {
 	if (!validateProfileNameLiteral(draft, errorText)) return false;
 	if (!validateProfileExtensionsLiteral(draft, errorText)) return false;
 	if (!validateProfileColorThemeLiteral(draft, errorText)) return false;
+	if (!validateCompilerProfileLiteral(draft, errorText)) return false;
 	if (!validateDraftRecordFields(draft, errorText)) return false;
 	errorText.clear();
 	return true;
@@ -457,6 +491,7 @@ enum : unsigned long long {
 	if (trimAscii(effective.preSaveMacro) != trimAscii(defaults.preSaveMacro)) mask |= kOvPreSaveMacro;
 	if (trimAscii(effective.defaultPath) != trimAscii(defaults.defaultPath)) mask |= kOvDefaultPath;
 	if (effective.formatLine != defaults.formatLine) mask |= kOvFormatLine;
+	if (effective.backupFiles != defaults.backupFiles) mask |= kOvBackupFiles;
 	if (effective.showEofMarker != defaults.showEofMarker) mask |= kOvShowEofMarker;
 	if (effective.showEofMarkerEmoji != defaults.showEofMarkerEmoji) mask |= kOvShowEofMarkerEmoji;
 	if (upperAscii(effective.lineNumbersPosition) != upperAscii(defaults.lineNumbersPosition)) mask |= kOvLineNumbersPosition;
@@ -503,6 +538,7 @@ bool normalizeDraftSyntaxImpl(EditProfileDraft &draft, std::string &errorText) {
 	draft.id = draft.isDefault ? std::string(kDefaultProfileId) : trimAscii(draft.id);
 	draft.name = trimAscii(draft.name);
 	draft.colorThemeUri = trimAscii(draft.colorThemeUri).empty() ? std::string() : normalizeConfiguredPathInput(draft.colorThemeUri);
+	draft.compilerProfileId = draft.isDefault ? std::string() : canonicalCompilerProfileId(draft.compilerProfileId);
 
 	if (draft.isDefault) draft.extensionsLiteral.clear();
 	else {
@@ -574,6 +610,7 @@ bool normalizeDraftListSyntaxImpl(std::vector<EditProfileDraft> &drafts, std::st
 		profile.name = trimAscii(draft.name);
 		profile.extensions = splitExtensionLiteral(draft.extensionsLiteral);
 		profile.windowColorThemeUri = trimAscii(draft.colorThemeUri);
+		profile.compilerProfileId = canonicalCompilerProfileId(draft.compilerProfileId);
 		profile.overrides.values = effective;
 		profile.overrides.mask = computeOverrideMask(defaultsOut, effective);
 		profilesOut.push_back(profile);
@@ -678,6 +715,7 @@ void settingsToDialogRecord(const MRFileExtensionEditorSettings &settings, FileE
 	if (settings.formatRuler) record.optionsMask |= kOptionFormatRuler;
 	if (settings.codeColoring) record.optionsMask |= kOptionCodeColoring;
 	if (settings.codeFoldingFeature) record.optionsMask |= kOptionCodeFoldingFeature;
+	if (settings.backupFiles) record.optionsMask |= kOptionBackupFiles;
 
 	record.tabExpandChoice = settings.tabExpand ? kTabExpandTabs : kTabExpandSpaces;
 	record.indentStyleChoice = (indentStyle == "AUTOMATIC") ? kIndentStyleAutomatic : (indentStyle == "SMART") ? kIndentStyleSmart : kIndentStyleOff;
@@ -694,9 +732,9 @@ bool draftsEqual(const EditProfileDraft &lhs, const EditProfileDraft &rhs) {
 	EditProfileDraft normalizedRhs = rhs;
 	std::string errorText;
 
-	if (!normalizeDraftSyntax(normalizedLhs, errorText) || !normalizeDraftSyntax(normalizedRhs, errorText)) return lhs.isDefault == rhs.isDefault && trimAscii(lhs.id) == trimAscii(rhs.id) && trimAscii(lhs.name) == trimAscii(rhs.name) && trimAscii(lhs.extensionsLiteral) == trimAscii(rhs.extensionsLiteral) && trimAscii(lhs.colorThemeUri) == trimAscii(rhs.colorThemeUri) && fileExtensionEditorSettingsDialogRecordsEqual(lhs.settingsRecord, rhs.settingsRecord);
+	if (!normalizeDraftSyntax(normalizedLhs, errorText) || !normalizeDraftSyntax(normalizedRhs, errorText)) return lhs.isDefault == rhs.isDefault && trimAscii(lhs.id) == trimAscii(rhs.id) && trimAscii(lhs.name) == trimAscii(rhs.name) && trimAscii(lhs.extensionsLiteral) == trimAscii(rhs.extensionsLiteral) && trimAscii(lhs.colorThemeUri) == trimAscii(rhs.colorThemeUri) && canonicalCompilerProfileId(lhs.compilerProfileId) == canonicalCompilerProfileId(rhs.compilerProfileId) && fileExtensionEditorSettingsDialogRecordsEqual(lhs.settingsRecord, rhs.settingsRecord);
 
-	return normalizedLhs.isDefault == normalizedRhs.isDefault && normalizedLhs.id == normalizedRhs.id && normalizedLhs.name == normalizedRhs.name && normalizedLhs.extensionsLiteral == normalizedRhs.extensionsLiteral && normalizedLhs.colorThemeUri == normalizedRhs.colorThemeUri && fileExtensionEditorSettingsDialogRecordsEqual(normalizedLhs.settingsRecord, normalizedRhs.settingsRecord);
+	return normalizedLhs.isDefault == normalizedRhs.isDefault && normalizedLhs.id == normalizedRhs.id && normalizedLhs.name == normalizedRhs.name && normalizedLhs.extensionsLiteral == normalizedRhs.extensionsLiteral && normalizedLhs.colorThemeUri == normalizedRhs.colorThemeUri && normalizedLhs.compilerProfileId == normalizedRhs.compilerProfileId && fileExtensionEditorSettingsDialogRecordsEqual(normalizedLhs.settingsRecord, normalizedRhs.settingsRecord);
 }
 
 bool draftListsEqual(const std::vector<EditProfileDraft> &lhs, const std::vector<EditProfileDraft> &rhs) {
@@ -715,6 +753,7 @@ EditProfileDraft draftFromProfile(const MRFileExtensionProfile &profile) {
 	draft.name = profile.name;
 	draft.extensionsLiteral = joinExtensionsLiteral(profile.extensions);
 	draft.colorThemeUri = profile.windowColorThemeUri;
+	draft.compilerProfileId = profile.compilerProfileId;
 	effective = mergeFileExtensionEditorSettings(effective, profile.overrides);
 	settingsToDialogRecord(effective, draft.settingsRecord);
 	return draft;
@@ -729,6 +768,7 @@ EditProfileDraft makeDefaultDraft() {
 	draft.name = configuredDefaultProfileDescription();
 	draft.extensionsLiteral.clear();
 	draft.colorThemeUri = configuredColorThemeFilePath();
+	draft.compilerProfileId.clear();
 	settingsToDialogRecord(defaults, draft.settingsRecord);
 	return draft;
 }
@@ -751,6 +791,7 @@ EditProfileDraft makeNewDraft(const std::vector<EditProfileDraft> &existingDraft
 	draft.name = "New profile";
 	draft.extensionsLiteral.clear();
 	draft.colorThemeUri.clear();
+	draft.compilerProfileId.clear();
 	settingsToDialogRecord(configuredFileExtensionEditorSettings(), draft.settingsRecord);
 	return draft;
 }
