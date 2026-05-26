@@ -191,7 +191,7 @@ struct ColorGroupDefinition {
 };
 
 static const MRColorSetupItem kWindowColorItems[] = {
-    {"text", kPaletteBlueWindowText}, {"changed text", kMrPaletteChangedText}, {"highlighted text", kPaletteBlueWindowHighlight}, {"EOF marker", kMrPaletteEofMarker}, {"window border", kPaletteBlueWindowFrame}, {"window bold", kPaletteBlueWindowBold}, {"current line", kMrPaletteCurrentLine}, {"current line in block", kMrPaletteCurrentLineInBlock}, {"line numbers", kMrPaletteLineNumbers}, {"code folding", kMrPaletteCodeFolding}, {"code folding marker", kMrPaletteCodeFoldingMarker}, {"format ruler", kMrPaletteFormatRuler},
+    {"text", kPaletteBlueWindowText}, {"changed text", kMrPaletteChangedText}, {"highlighted text", kPaletteBlueWindowHighlight}, {"EOF marker", kMrPaletteEofMarker}, {"window border", kPaletteBlueWindowFrame}, {"window bold", kPaletteBlueWindowBold}, {"current line", kMrPaletteCurrentLine}, {"current line in block", kMrPaletteCurrentLineInBlock}, {"line numbers", kMrPaletteLineNumbers}, {"code folding", kMrPaletteCodeFolding}, {"code folding marker", kMrPaletteCodeFoldingMarker}, {"format ruler", kMrPaletteFormatRuler}, {"focused pane border", kMrPaletteFocusedPaneBorder},
 };
 
 static const MRColorSetupItem kMenuDialogColorItems[] = {
@@ -274,6 +274,7 @@ unsigned char defaultColorForSlot(unsigned char paletteIndex) {
 	if (paletteIndex == kMrPaletteCodeDelimiters) return defaults[13];
 	if (paletteIndex == kMrPaletteSidekickEditorText) return 0x30;
 	if (paletteIndex == kMrPaletteSidekickEditorHighlight) return 0xE0;
+	if (paletteIndex == kMrPaletteFocusedPaneBorder) return defaults[kPaletteBlueWindowBold];
 	if (paletteIndex == kMrPaletteDropListDescription) return defaults[57];
 	if (paletteIndex == kMrPaletteDropListSelectedInactive) return defaults[59];
 	if (paletteIndex == kMrPaletteDialogInactiveElements) return defaults[kPaletteDialogInactiveClusterGray];
@@ -326,7 +327,7 @@ template <std::size_t N> std::string formatColorListLiteral(const std::array<uns
 
 std::string formatWindowColorListLiteral(const std::array<unsigned char, MRColorSetupSettings::kWindowCount> &values) {
 	std::string out = formatColorListLiteral(values);
-	out[1] = '5';
+	out[1] = '6';
 	return out;
 }
 
@@ -392,13 +393,18 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 	const unsigned char defaultCodeFolding = defaultColorForSlot(kMrPaletteCodeFolding);
 	const unsigned char defaultCodeFoldingMarker = defaultColorForSlot(kMrPaletteCodeFoldingMarker);
 	const unsigned char defaultFormatRuler = defaultColorForSlot(kMrPaletteFormatRuler);
+	const unsigned char defaultFocusedPaneBorder = defaultColorForSlot(kMrPaletteFocusedPaneBorder);
 	unsigned char value = 0;
+	bool v6Format = false;
 	bool v5Format = false;
 	bool v4Format = false;
 	bool v3Format = false;
 	bool v2Format = false;
 
-	if (text.rfind("v5:", 0) == 0 || text.rfind("V5:", 0) == 0) {
+	if (text.rfind("v6:", 0) == 0 || text.rfind("V6:", 0) == 0) {
+		text = text.substr(3);
+		v6Format = true;
+	} else if (text.rfind("v5:", 0) == 0 || text.rfind("V5:", 0) == 0) {
 		text = text.substr(3);
 		v5Format = true;
 	} else if (text.rfind("v4:", 0) == 0 || text.rfind("V4:", 0) == 0) {
@@ -424,21 +430,28 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 		cursor = comma + 1;
 	}
 
-	if (v5Format) {
-		if (parsed.size() != MRColorSetupSettings::kWindowCount) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v5.");
+	if (v6Format) {
+		if (parsed.size() != MRColorSetupSettings::kWindowCount) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v6.");
 		for (std::size_t i = 0; i < outValues.size(); ++i)
 			outValues[i] = parsed[i];
+	} else if (v5Format) {
+		if (parsed.size() != MRColorSetupSettings::kWindowCount - 1) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v5.");
+		for (std::size_t i = 0; i < parsed.size(); ++i)
+			outValues[i] = parsed[i];
+		outValues[12] = defaultFocusedPaneBorder;
 	} else if (v4Format) {
-		if (parsed.size() != MRColorSetupSettings::kWindowCount - 1) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v4.");
+		if (parsed.size() != MRColorSetupSettings::kWindowCount - 2) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v4.");
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
 		outValues[11] = defaultFormatRuler;
+		outValues[12] = defaultFocusedPaneBorder;
 	} else if (v3Format) {
-		if (parsed.size() != MRColorSetupSettings::kWindowCount - 2) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v3.");
+		if (parsed.size() != MRColorSetupSettings::kWindowCount - 3) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v3.");
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
 		outValues[10] = defaultCodeFoldingMarker;
 		outValues[11] = defaultFormatRuler;
+		outValues[12] = defaultFocusedPaneBorder;
 	} else if (v2Format) {
 		if (parsed.size() != 8) return setError(errorMessage, "Unexpected WINDOWCOLORS list size for v2.");
 		outValues[0] = parsed[0];
@@ -453,25 +466,33 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 		outValues[9] = defaultCodeFolding;
 		outValues[10] = defaultCodeFoldingMarker;
 		outValues[11] = defaultFormatRuler;
+		outValues[12] = defaultFocusedPaneBorder;
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount) {
 		for (std::size_t i = 0; i < outValues.size(); ++i)
 			outValues[i] = parsed[i];
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 1) {
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
-		outValues[11] = defaultFormatRuler;
+		outValues[12] = defaultFocusedPaneBorder;
 	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 2) {
+		for (std::size_t i = 0; i < parsed.size(); ++i)
+			outValues[i] = parsed[i];
+		outValues[11] = defaultFormatRuler;
+		outValues[12] = defaultFocusedPaneBorder;
+	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 3) {
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
 		outValues[10] = defaultCodeFoldingMarker;
 		outValues[11] = defaultFormatRuler;
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 3) {
+		outValues[12] = defaultFocusedPaneBorder;
+	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 4) {
 		for (std::size_t i = 0; i < parsed.size(); ++i)
 			outValues[i] = parsed[i];
 		outValues[9] = defaultCodeFolding;
 		outValues[10] = defaultCodeFoldingMarker;
 		outValues[11] = defaultFormatRuler;
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 4) {
+		outValues[12] = defaultFocusedPaneBorder;
+	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 5) {
 		outValues[0] = parsed[0];
 		outValues[1] = parsed[1];
 		outValues[2] = parsed[2];
@@ -484,7 +505,8 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 		outValues[9] = defaultCodeFolding;
 		outValues[10] = defaultCodeFoldingMarker;
 		outValues[11] = defaultFormatRuler;
-	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 5) {
+		outValues[12] = defaultFocusedPaneBorder;
+	} else if (parsed.size() == MRColorSetupSettings::kWindowCount - 6) {
 		outValues[0] = parsed[0];
 		outValues[1] = parsed[1];
 		outValues[2] = parsed[2];
@@ -497,6 +519,7 @@ bool parseWindowColorListLiteral(const std::string &literal, std::array<unsigned
 		outValues[9] = defaultCodeFolding;
 		outValues[10] = defaultCodeFoldingMarker;
 		outValues[11] = defaultFormatRuler;
+		outValues[12] = defaultFocusedPaneBorder;
 	} else {
 		return setError(errorMessage, "Unexpected WINDOWCOLORS list size.");
 	}
@@ -521,6 +544,7 @@ bool parseMenuDialogColorListLiteral(const std::string &literal, std::array<unsi
 		cursor = comma + 1;
 	}
 
+	outValues = defaultsFromColorGroups().menuDialogColors;
 	if (parsed.size() == MRColorSetupSettings::kMenuDialogCount) {
 		for (std::size_t i = 0; i < outValues.size(); ++i)
 			outValues[i] = parsed[i];

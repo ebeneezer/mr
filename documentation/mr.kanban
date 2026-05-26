@@ -101,7 +101,7 @@
         {
           "id": "01e568c5-5863-43f5-96ac-f48feec44128",
           "listId": "4b95c04c-47ab-465d-a34a-9c2cc3b1242d",
-          "title": "Macro Debugger",
+          "title": "Macro Debugger in einer leckeren Bento Box",
           "description": "",
           "labels": [],
           "checkboxes": [],
@@ -168,6 +168,15 @@
               "comment": "Print rein auf PDF Export? Dann brauchen wir keinen Print Margin mehr"
             }
           ]
+        },
+        {
+          "id": "4cbc5016-abd9-4330-8668-f9ffbc6455ae",
+          "listId": "b62bc74e-0d7c-4aa2-9d53-0ab140136f03",
+          "title": "alle Methoden die noch SplitEdit enthalten müssen auf MRBentoBox umbenannt werden",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
         },
         {
           "id": "64057b06-7cd2-4335-ac89-b328d6c7c8ee",

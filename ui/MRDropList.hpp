@@ -26,6 +26,9 @@ class MRDropList {
 	[[nodiscard]] bool handleOpenListEvent(TEvent &event, bool hideOnOutsideMouseDown = true);
 	[[nodiscard]] bool visible() const noexcept;
 	[[nodiscard]] bool acceptSelection(std::string &selectedValue);
+	[[nodiscard]] bool selectedValue(std::string &selectedValue) const;
+	[[nodiscard]] short selectedIndex() const;
+	void focusIndex(short index);
 	[[nodiscard]] bool containsPoint(TPoint where) const noexcept;
 	[[nodiscard]] bool buttonContainsPoint(TPoint where) const noexcept;
 

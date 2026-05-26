@@ -1538,6 +1538,7 @@ class MREditWindow : public TWindow {
 		mWindowPaletteData[9] = static_cast<TColorAttr>(colors[7]);
 		mWindowPaletteData[10] = static_cast<TColorAttr>(colors[1]);
 		mWindowPaletteData[11] = static_cast<TColorAttr>(colors[8]);
+		mWindowPaletteData[12] = static_cast<TColorAttr>(colors[12]);
 		mCustomEofMarkerColorValid = true;
 		mCustomEofMarkerColor = static_cast<TColorAttr>(colors[3]);
 		rebuildWindowPalette();
@@ -1640,6 +1641,9 @@ class MREditWindow : public TWindow {
 			case kMrPaletteLineNumbers:
 				value = 0x1F;
 				break;
+			case kMrPaletteFocusedPaneBorder:
+				value = 0x1F;
+				break;
 			default:
 				break;
 		}
@@ -1647,8 +1651,8 @@ class MREditWindow : public TWindow {
 		return static_cast<TColorAttr>(value);
 	}
 
-	static std::array<TColorAttr, 12> defaultWindowPaletteData() noexcept {
-		return {configuredWindowPaletteSlot(8), configuredWindowPaletteSlot(9), configuredWindowPaletteSlot(10), configuredWindowPaletteSlot(11), configuredWindowPaletteSlot(12), configuredWindowPaletteSlot(13), configuredWindowPaletteSlot(14), configuredWindowPaletteSlot(15), configuredWindowPaletteSlot(kMrPaletteCurrentLine), configuredWindowPaletteSlot(kMrPaletteCurrentLineInBlock), configuredWindowPaletteSlot(kMrPaletteChangedText), configuredWindowPaletteSlot(kMrPaletteLineNumbers)};
+	static std::array<TColorAttr, 13> defaultWindowPaletteData() noexcept {
+		return {configuredWindowPaletteSlot(8), configuredWindowPaletteSlot(9), configuredWindowPaletteSlot(10), configuredWindowPaletteSlot(11), configuredWindowPaletteSlot(12), configuredWindowPaletteSlot(13), configuredWindowPaletteSlot(14), configuredWindowPaletteSlot(15), configuredWindowPaletteSlot(kMrPaletteCurrentLine), configuredWindowPaletteSlot(kMrPaletteCurrentLineInBlock), configuredWindowPaletteSlot(kMrPaletteChangedText), configuredWindowPaletteSlot(kMrPaletteLineNumbers), configuredWindowPaletteSlot(kMrPaletteFocusedPaneBorder)};
 	}
 
 	void rebuildWindowPalette() {
@@ -2176,6 +2180,23 @@ class MREditWindow : public TWindow {
   public:
 	int mVirtualDesktop = 1;
 
+  protected:
+	TScrollBar *horizontalEditorScrollBar() const noexcept {
+		return hScrollBar;
+	}
+
+	TScrollBar *verticalEditorScrollBar() const noexcept {
+		return vScrollBar;
+	}
+
+	MRIndicator *editorIndicator() const noexcept {
+		return indicator;
+	}
+
+	void refreshEditorTaskMarkers() {
+		updateTaskMarkers();
+	}
+
   private:
 	void syncBlockVisual() {
 		uint a;
@@ -2232,7 +2253,7 @@ class MREditWindow : public TWindow {
 	std::size_t mMacroCancelledCount;
 	std::size_t mMacroFailedCount;
 	std::string mLastMacroSummaryText;
-	mutable std::array<TColorAttr, 12> mWindowPaletteData;
+	mutable std::array<TColorAttr, 13> mWindowPaletteData;
 	mutable TPalette mWindowPalette;
 	bool mCustomEofMarkerColorValid;
 	TColorAttr mCustomEofMarkerColor;

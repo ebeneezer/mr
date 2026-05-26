@@ -189,7 +189,11 @@ class MRFileEditor : public TScroller {
 	void syncDisplayedCursorColumnFromCursor(bool preserveFreeColumn) noexcept;
 
 	void refreshConfiguredVisualSettings();
+	void setCommunicationViewerMode(bool enabled, bool lineNumbers);
 	void setCommunicationViewerOptions(bool lineNumbers);
+	void setMiniMapSuppressed(bool suppressed) noexcept;
+	void setWordWrapSuppressed(bool suppressed) noexcept;
+	void setScrollBarsAlwaysVisible(bool visible) noexcept;
 
 	std::size_t cursorOffset() const noexcept;
 
@@ -633,6 +637,9 @@ class MRFileEditor : public TScroller {
 	TColorAttr mCustomWindowEofMarkerColorOverride = 0;
 	bool mCommunicationViewerMode = false;
 	bool mCommunicationViewerLineNumbers = true;
+	bool mMiniMapSuppressed = false;
+	bool mWordWrapSuppressed = false;
+	bool mScrollBarsAlwaysVisible = false;
 	bool mInsertMode;
 	bool mAutoIndent;
 		char fileName[MAXPATH];

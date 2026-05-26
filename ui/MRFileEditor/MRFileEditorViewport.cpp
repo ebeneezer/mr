@@ -44,6 +44,7 @@ MRFileEditor::TextViewportGeometry MRFileEditor::textViewportGeometryFor(const M
 		viewportSettings.codeFoldingPosition = "OFF";
 		viewportSettings.miniMapPosition = "OFF";
 	}
+	if (mMiniMapSuppressed) viewportSettings.miniMapPosition = "OFF";
 	if (!foldingEnabled) {
 		viewportSettings.codeFolding = false;
 		viewportSettings.codeFoldingPosition = "OFF";

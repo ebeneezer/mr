@@ -5,9 +5,11 @@
 #include <string>
 
 class MREditWindow;
+class MRBentoBox;
 struct MRSetupPaths;
 
 [[nodiscard]] MREditWindow *createEditorWindow(const char *title);
+[[nodiscard]] MRBentoBox *createBentoBoxWindow(const char *title);
 [[nodiscard]] std::vector<MREditWindow *> allEditWindowsInZOrder();
 [[nodiscard]] MREditWindow *currentEditWindow();
 [[nodiscard]] MREditWindow *findEditWindowByBufferId(int bufferId);

@@ -31,6 +31,7 @@
 #include "MRPerformance.hpp"
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MREditWindow.hpp"
+#include "../../ui/MRBentoBox.hpp"
 #include "../../ui/MRScopedHistoryUI.hpp"
 #include "../../ui/MRWindowManager.hpp"
 #include "../../ui/MRWindowSupport.hpp"
@@ -447,6 +448,24 @@ MREditWindow *createEditorWindow(const char *title) {
 	return win;
 }
 
+MRBentoBox *createBentoBoxWindow(const char *title) {
+	TRect bounds;
+	MRBentoBox *win;
+
+	if (TProgram::deskTop == nullptr) return nullptr;
+	bounds = MRWindowManager::usableDesktopBounds();
+	bounds.grow(-2, -1);
+	win = new MRBentoBox(bounds, title, nextEditorWindowNumber());
+	TProgram::deskTop->insert(win);
+	if (win != nullptr) {
+		win->mVirtualDesktop = currentVirtualDesktop();
+		win->flags |= (wfMove | wfGrow | wfZoom | wfClose);
+	}
+	if (win != nullptr && win->getEditor() != nullptr) win->getEditor()->setInsertModeEnabled(configuredDefaultInsertMode());
+	mrNotifyWindowTopologyChanged();
+	return win;
+}
+
 MREditWindow *currentEditWindow() {
 	if (TProgram::deskTop == nullptr || TProgram::deskTop->current == nullptr) return nullptr;
 	return dynamic_cast<MREditWindow *>(TProgram::deskTop->current);
@@ -454,8 +473,15 @@ MREditWindow *currentEditWindow() {
 
 MREditWindow *findEditWindowByBufferId(int bufferId) {
 	std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
-	for (auto &window : windows)
+	for (auto &window : windows) {
+		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window);
+
 		if (window != nullptr && window->bufferId() == bufferId) return window;
+		if (bentoBox != nullptr) {
+			MREditWindow *pane = bentoBox->paneForBufferId(bufferId);
+			if (pane != nullptr) return pane;
+		}
+	}
 	return nullptr;
 }
 

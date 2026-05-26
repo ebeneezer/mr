@@ -29,6 +29,8 @@ static const char *kUnZoomIcon = "[▴]";
 static const char *kMinimizeIcon = "[▾]";
 static const char *kDragIcon = "\xC4\xD9";
 static const char *kDragLeftIcon = "\xC0\xC4";
+static const char *kFocusedDragIcon = "\xCD\xBC";
+static const char *kFocusedDragLeftIcon = "\xC8\xCD";
 
 static constexpr char kDirtyMarkerIcon[] = "✎";
 static constexpr char kRecordingMarkerIcon[] = "📼";
@@ -425,8 +427,8 @@ void MRFrame::draw() {
 	}
 	drawFrameLine(b, size.y - 1, f + 6, cFrame);
 	if (isFocused && window != nullptr && (window->flags & wfGrow) != 0) {
-		b.moveCStr(0, kDragLeftIcon, cFrame);
-		b.moveCStr(width - 2, kDragIcon, cFrame);
+		b.moveCStr(0, f == 9 ? kFocusedDragLeftIcon : kDragLeftIcon, cFrame);
+		b.moveCStr(width - 2, f == 9 ? kFocusedDragIcon : kDragIcon, cFrame);
 	}
 	writeLine(0, size.y - 1, size.x, 1, b);
 	if (mTaskOverviewPopup != nullptr && mTaskOverviewProvider) {

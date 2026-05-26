@@ -398,16 +398,27 @@ bool MRDropList::buttonContainsPoint(TPoint where) const noexcept {
 	return buttonView != nullptr && buttonView->mouseInView(where);
 }
 
-bool MRDropList::acceptSelection(std::string &selectedValue) {
-	short selection = -1;
+bool MRDropList::selectedValue(std::string &selectedValue) const {
+	const short selection = selectedIndex();
 
-	if (listView == nullptr) return false;
-	selection = listView->selectedIndex();
-	if (selection < 0 || static_cast<std::size_t>(selection) >= itemValues.size()) {
+	if (selection < 0 || static_cast<std::size_t>(selection) >= itemValues.size()) return false;
+	selectedValue = itemValues[static_cast<std::size_t>(selection)];
+	return true;
+}
+
+short MRDropList::selectedIndex() const {
+	return listView != nullptr ? listView->selectedIndex() : -1;
+}
+
+void MRDropList::focusIndex(short index) {
+	if (listView != nullptr) listView->focusItemNum(index);
+}
+
+bool MRDropList::acceptSelection(std::string &selectedValue) {
+	if (!this->selectedValue(selectedValue)) {
 		hide();
 		return false;
 	}
-	selectedValue = itemValues[static_cast<std::size_t>(selection)];
 	hide();
 	return true;
 }

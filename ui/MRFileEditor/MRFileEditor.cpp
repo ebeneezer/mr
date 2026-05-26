@@ -2559,8 +2559,10 @@ void MRFileEditor::syncFromEditorState(bool) {
 
 void MRFileEditor::syncIndicatorVisualSettings() {
 	if (auto *mrIndicator = dynamic_cast<MRIndicator *>(mIndicator)) {
+		MREditSetupSettings settings = configuredEditSetupSettings();
+		if (mWordWrapSuppressed) settings.wordWrap = false;
 		mrIndicator->setInsertMode(mInsertMode);
-		mrIndicator->setWordWrap(configuredEditSetupSettings().wordWrap);
+		mrIndicator->setWordWrap(settings.wordWrap);
 	}
 }
 
@@ -2702,7 +2704,7 @@ int MRFileEditor::visibleTextRows() const noexcept {
 }
 
 void MRFileEditor::syncScrollBarsToState() noexcept {
-	bool show = (state & (sfActive | sfSelected)) != 0;
+	bool show = mScrollBarsAlwaysVisible || (state & (sfActive | sfSelected)) != 0;
 	MREditWindow *window = dynamic_cast<MREditWindow *>(owner);
 	if (window != nullptr && window->isMinimized()) show = false;
 	if (hScrollBar != nullptr) {
@@ -3034,10 +3036,35 @@ bool MRFileEditor::appendBufferText(const char *text) {
 	return appendBufferData(text, length);
 }
 
-void MRFileEditor::setCommunicationViewerOptions(bool lineNumbers) {
-	mCommunicationViewerMode = true;
+void MRFileEditor::setCommunicationViewerMode(bool enabled, bool lineNumbers) {
+	if (mCommunicationViewerMode == enabled && mCommunicationViewerLineNumbers == lineNumbers) return;
+	mCommunicationViewerMode = enabled;
 	mCommunicationViewerLineNumbers = lineNumbers;
 	refreshSyntaxContext();
+	refreshViewState();
+}
+
+void MRFileEditor::setCommunicationViewerOptions(bool lineNumbers) {
+	setCommunicationViewerMode(true, lineNumbers);
+}
+
+void MRFileEditor::setMiniMapSuppressed(bool suppressed) noexcept {
+	if (mMiniMapSuppressed == suppressed) return;
+	mMiniMapSuppressed = suppressed;
+	refreshViewState();
+}
+
+void MRFileEditor::setWordWrapSuppressed(bool suppressed) noexcept {
+	if (mWordWrapSuppressed == suppressed) return;
+	mWordWrapSuppressed = suppressed;
+	syncIndicatorVisualSettings();
+	refreshViewState();
+}
+
+void MRFileEditor::setScrollBarsAlwaysVisible(bool visible) noexcept {
+	if (mScrollBarsAlwaysVisible == visible) return;
+	mScrollBarsAlwaysVisible = visible;
+	syncScrollBarsToState();
 	refreshViewState();
 }
 
@@ -3382,6 +3409,7 @@ void MRFileEditor::applyLiveWordWrapAfterTextInput() {
 	int leftMargin = 1;
 	int rightMargin = 78;
 
+	if (mWordWrapSuppressed) settings.wordWrap = false;
 	if (mReadOnly || !settings.wordWrap) return;
 	effectiveFormatMargins(settings, leftMargin, rightMargin);
 	for (int wraps = 0; wraps < 64; ++wraps)

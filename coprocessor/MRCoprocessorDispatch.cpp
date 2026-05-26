@@ -29,6 +29,7 @@
 #include "../ui/MRFileEditor/MRFileEditor.hpp"
 #include "../ui/MRIndicator.hpp"
 #include "../ui/MREditWindow.hpp"
+#include "../ui/MRBentoBox.hpp"
 #include "../ui/MRWindowSupport.hpp"
 
 namespace {
@@ -117,6 +118,21 @@ std::string communicationExitLine(const mr::coprocessor::ExternalIoFinishedPaylo
 		out << "exited with code " << payload.exitCode;
 	out << "]\n";
 	return out.str();
+}
+
+std::string communicationDividerStatus(const mr::coprocessor::ExternalIoFinishedPayload &payload) {
+	std::ostringstream out;
+
+	if (payload.signaled) out << "signal " << payload.signalNumber;
+	else
+		out << "exit " << payload.exitCode;
+	return out.str();
+}
+
+void setSplitDiagnosticsStatusForOutput(MREditWindow *outputWindow, const char *status) {
+	MRBentoBox *split = outputWindow != nullptr ? dynamic_cast<MRBentoBox *>(outputWindow->owner) : nullptr;
+
+	if (split != nullptr && split->secondaryEditWindow() == outputWindow) split->setDiagnosticsStatus(status);
 }
 
 std::string macroDisplayName(const mr::coprocessor::TaskInfo &task, const char *payloadName = nullptr) {
@@ -1012,6 +1028,8 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				targetWindow->setFileChanged(false);
 				recordTaskPerformance(result, "External command", targetWindow, targetWindow->documentId(), targetWindow->bufferLength(), externalIoDisplayName(result.task));
 				targetWindow->releaseCoprocessorTask(result.task.id);
+				const std::string dividerStatus = communicationDividerStatus(*finished);
+				setSplitDiagnosticsStatusForOutput(targetWindow, dividerStatus.c_str());
 			} else {
 				recordTaskPerformance(result, "External command", nullptr, 0, 0, externalIoDisplayName(result.task));
 			}

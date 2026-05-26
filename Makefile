@@ -180,6 +180,7 @@ CXX_SOURCES = \
 	mrmac/vm/MRVMSettings.cpp \
 	mrmac/vm/MRVMScreen.cpp \
 	ui/MRFrame.cpp \
+	ui/MRBentoBox.cpp \
 	ui/MRColumnListView.cpp \
 	ui/MRDropList.cpp \
 	ui/MRFileEditor/MRFileEditor.cpp \
@@ -463,7 +464,7 @@ config/settings/MRSettingsRuntime.o: config/settings/MRSettingsRuntime.cpp confi
 config/settings/MRSettingsStorage.o: config/settings/MRSettingsStorage.cpp config/settings/MRSettingsStorage.hpp config/settings/MRSettingsRuntime.hpp
 app/commands/MRExternalCommand.o: app/commands/MRExternalCommand.cpp app/commands/MRExternalCommand.hpp config/settings/MRSettingsRuntime.hpp coprocessor/MRCoprocessor.hpp
 coprocessor/MRPerformance.o: coprocessor/MRPerformance.cpp coprocessor/MRPerformance.hpp coprocessor/MRCoprocessor.hpp
-coprocessor/MRCoprocessorDispatch.o: coprocessor/MRCoprocessorDispatch.cpp coprocessor/MRCoprocessorDispatch.hpp coprocessor/MRPerformance.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRIndicator.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
+coprocessor/MRCoprocessorDispatch.o: coprocessor/MRCoprocessorDispatch.cpp coprocessor/MRCoprocessorDispatch.hpp coprocessor/MRPerformance.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp ui/MRBentoBox.hpp ui/MRIndicator.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRWindowSupport.hpp coprocessor/MRCoprocessor.hpp
 mrmac/MRVM.o: mrmac/MRVM.cpp mrmac/MRVM.hpp mrmac/vm/MRVMDeferredUi.hpp mrmac/vm/MRVMEditor.hpp mrmac/vm/MRVMHash.hpp mrmac/vm/MRVMSettings.hpp mrmac/vm/MRVMScreen.hpp mrmac/mrmac.h dialogs/MRWindowList.hpp ui/MRWindowSupport.hpp ui/MREditWindow.hpp ui/MRTextBuffer.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRTextBufferModel.hpp ui/MRSyntax.hpp piecetable/MRTextDocument.hpp
 mrmac/vm/MRVMProfile.o: mrmac/vm/MRVMProfile.cpp mrmac/vm/MRVMProfile.hpp mrmac/mrmac.h
 mrmac/vm/MRVMDeferredUi.o: mrmac/vm/MRVMDeferredUi.cpp mrmac/vm/MRVMDeferredUi.hpp mrmac/MRVM.hpp
@@ -472,6 +473,7 @@ mrmac/vm/MRVMHash.o: mrmac/vm/MRVMHash.cpp mrmac/vm/MRVMHash.hpp mrmac/MRVM.hpp
 mrmac/vm/MRVMSettings.o: mrmac/vm/MRVMSettings.cpp mrmac/vm/MRVMSettings.hpp mrmac/MRVM.hpp config/settings/MRSettingsRuntime.hpp config/settings/MRSettingsStorage.hpp keymap/MRKeymapProfile.hpp
 mrmac/vm/MRVMScreen.o: mrmac/vm/MRVMScreen.cpp mrmac/vm/MRVMScreen.hpp mrmac/MRVM.hpp ui/MRMenuBar.hpp ui/MRMessageLineController.hpp ui/MRWindowSupport.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp
 ui/MRPalette.o: ui/MRPalette.cpp ui/MRPalette.hpp
+ui/MRBentoBox.o: ui/MRBentoBox.cpp ui/MRBentoBox.hpp ui/MREditWindow.hpp
 ui/MRWindowSupport.o: ui/MRWindowSupport.cpp ui/MRWindowSupport.hpp config/settings/MRSettingsRuntime.hpp app/commands/MRWindowCommands.hpp ui/MREditWindow.hpp
 ui/MRSyntax.o: ui/MRSyntax.cpp ui/MRSyntax.hpp
 coprocessor/MRCoprocessor.o: coprocessor/MRCoprocessor.cpp coprocessor/MRCoprocessor.hpp piecetable/MRTextDocument.hpp

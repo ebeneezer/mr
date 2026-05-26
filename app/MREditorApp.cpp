@@ -1321,7 +1321,7 @@ void MREditorApp::handleEvent(TEvent &event) {
 		clearEvent(event);
 		return;
 	}
-	if (handleMRCommand(event.message.command)) clearEvent(event);
+	if (handleMRCommand(event.message.command, event.message.infoPtr)) clearEvent(event);
 }
 
 void MREditorApp::idle() {

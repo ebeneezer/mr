@@ -1085,7 +1085,7 @@ bool testDialogPaletteOverridesAbsent(std::string &failureReason) {
 }
 
 bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
-	static const unsigned char probeValues[] = {0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5B};
+	static const unsigned char probeValues[] = {0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5B, 0x5C, 0x5D};
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::size_t itemCount = 0;
 	const MRColorSetupItem *items = colorSetupGroupItems(MRColorSetupGroup::Window, itemCount);
@@ -1110,7 +1110,7 @@ bool testWindowColorGroupTargetsBlueWindowPalette(std::string &failureReason) {
 
 	for (std::size_t i = 0; i < itemCount; ++i) {
 		unsigned char slot = items[i].paletteIndex;
-		bool isExpectedSlot = (slot == 8 || slot == 9 || slot == 13 || slot == 14 || slot == kMrPaletteCurrentLine || slot == kMrPaletteCurrentLineInBlock || slot == kMrPaletteChangedText || slot == kMrPaletteLineNumbers || slot == kMrPaletteEofMarker || slot == kMrPaletteCodeFolding || slot == kMrPaletteFormatRuler);
+		bool isExpectedSlot = (slot == 8 || slot == 9 || slot == 13 || slot == 14 || slot == kMrPaletteCurrentLine || slot == kMrPaletteCurrentLineInBlock || slot == kMrPaletteChangedText || slot == kMrPaletteLineNumbers || slot == kMrPaletteEofMarker || slot == kMrPaletteCodeFolding || slot == kMrPaletteCodeFoldingMarker || slot == kMrPaletteFormatRuler || slot == kMrPaletteFocusedPaneBorder);
 		if (!configuredColorSlotOverride(items[i].paletteIndex, value)) {
 			restore();
 			failureReason = "WINDOWCOLORS item must override its mapped palette slot.";
@@ -2261,10 +2261,10 @@ bool testColorSetupSaveThemeUsesWorkingPaletteGuard(std::string &failureReason) 
 
 bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureReason) {
 	const std::string themePath = "/tmp/mr-windowcolors-line-numbers-theme.mrmac";
-	const std::string windowColorsPrefix = "WINDOWCOLORS('v5:";
+	const std::string windowColorsPrefix = "WINDOWCOLORS('v6:";
 	MRColorSetupSettings previous = configuredColorSetupSettings();
 	std::string previousThemePath = configuredColorThemeFilePath();
-	const std::array<unsigned char, MRColorSetupSettings::kWindowCount> probeValues = {0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C};
+	const std::array<unsigned char, MRColorSetupSettings::kWindowCount> probeValues = {0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D};
 	std::string errorText;
 	std::string content;
 	unsigned char slotValue = 0;
@@ -2292,7 +2292,7 @@ bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureRea
 		return false;
 	}
 	if (content.find(windowColorsPrefix) == std::string::npos) {
-		failureReason = "Saved theme must serialize WINDOWCOLORS using canonical v5 list format.";
+		failureReason = "Saved theme must serialize WINDOWCOLORS using canonical v6 list format.";
 		restore();
 		return false;
 	}
@@ -2337,6 +2337,11 @@ bool testWindowColorsThemeVersionAndLineNumbersRoundtrip(std::string &failureRea
 	}
 	if (!configuredColorSlotOverride(kMrPaletteFormatRuler, slotValue) || slotValue != probeValues[11]) {
 		failureReason = "Format-ruler palette slot must be restored from WINDOWCOLORS theme value.";
+		restore();
+		return false;
+	}
+	if (!configuredColorSlotOverride(kMrPaletteFocusedPaneBorder, slotValue) || slotValue != probeValues[12]) {
+		failureReason = "Focused-pane-border palette slot must be restored from WINDOWCOLORS theme value.";
 		restore();
 		return false;
 	}
@@ -2416,23 +2421,29 @@ bool testExplicitSyntaxLanguageMarkerGuard(std::string &failureReason) {
 }
 
 bool testCurrentLineColorWiringGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.cpp");
-	std::string content;
+	const std::string palettePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.cpp");
+	const std::string viewportPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorViewport.cpp");
+	std::string paletteContent;
+	std::string viewportContent;
 	std::string ioError;
 
-	if (!readTextFile(sourcePath, content, ioError)) {
+	if (!readTextFile(palettePath, paletteContent, ioError)) {
 		failureReason = "Unable to read MRFileEditor.cpp for current-line color wiring guard: " + ioError;
 		return false;
 	}
-	if (content.find("TPalette palette(\"\\x06\\x07\\x09\\x0A\\x0B\\x0C\", 6);") == std::string::npos) {
+	if (!readTextFile(viewportPath, viewportContent, ioError)) {
+		failureReason = "Unable to read MRFileEditorViewport.cpp for current-line color wiring guard: " + ioError;
+		return false;
+	}
+	if (paletteContent.find("TPalette palette(\"\\x06\\x07\\x09\\x0A\\x0B\\x0C\", 6);") == std::string::npos) {
 		failureReason = "MRFileEditor palette must expose current-line, changed-text and line-number slots.";
 		return false;
 	}
-	if (content.find("basePair = getColor(0x0303);") == std::string::npos || content.find("basePair = getColor(0x0204);") == std::string::npos) {
+	if (viewportContent.find("basePair = getColor(0x0303);") == std::string::npos || viewportContent.find("basePair = getColor(0x0204);") == std::string::npos) {
 		failureReason = "Current-line and current-line-in-block must be wired to dedicated palette pairs.";
 		return false;
 	}
-	if (content.find("lineStart <= cursorPos && cursorPos < lineEnd") == std::string::npos) {
+	if (viewportContent.find("lineStart <= cursorPos && cursorPos < lineEnd") == std::string::npos) {
 		failureReason = "Current-line detection must be range-based in the active render line.";
 		return false;
 	}
@@ -2442,9 +2453,13 @@ bool testCurrentLineColorWiringGuard(std::string &failureReason) {
 
 bool testChangedTextColorWiringGuard(std::string &failureReason) {
 	const std::string headerPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.hpp");
-	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.cpp");
+	const std::string sourcePath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorViewport.cpp");
+	const std::string editorPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditor.cpp");
+	const std::string indentPath = absolutePathFromCwd("ui/MRFileEditor/MRFileEditorIndent.cpp");
 	std::string headerContent;
 	std::string sourceContent;
+	std::string editorContent;
+	std::string indentContent;
 	std::string ioError;
 
 	if (!readTextFile(headerPath, headerContent, ioError)) {
@@ -2452,22 +2467,30 @@ bool testChangedTextColorWiringGuard(std::string &failureReason) {
 		return false;
 	}
 	if (!readTextFile(sourcePath, sourceContent, ioError)) {
-		failureReason = "Unable to read MRFileEditor.cpp for changed-text color wiring guard: " + ioError;
+		failureReason = "Unable to read MRFileEditorViewport.cpp for changed-text color wiring guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(editorPath, editorContent, ioError)) {
+		failureReason = "Unable to read MRFileEditor.cpp for changed-text dirty-range guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(indentPath, indentContent, ioError)) {
+		failureReason = "Unable to read MRFileEditorIndent.cpp for changed-text dirty-range guard: " + ioError;
 		return false;
 	}
 	if (sourceContent.find("TAttrPair changedPair = getColor(0x0505);") == std::string::npos || sourceContent.find("bool changedChar = !currentLine && !currentLineInBlock && isDirtyOffset(documentPos);") == std::string::npos || sourceContent.find("TAttrPair effectivePair = changedChar ? changedPair : basePair;") == std::string::npos) {
 		failureReason = "Changed-text must be applied per character via dedicated dirty-range lookup.";
 		return false;
 	}
-	if (headerContent.find("std::vector<MRTextBufferModel::Range> mDirtyRanges;") == std::string::npos || headerContent.find("void addDirtyRange(") == std::string::npos || headerContent.find("bool isDirtyOffset(std::size_t pos) const noexcept;") == std::string::npos || sourceContent.find("bool MRFileEditor::isDirtyOffset(") == std::string::npos) {
+	if (headerContent.find("std::vector<MRTextBufferModel::Range> mDirtyRanges;") == std::string::npos || headerContent.find("void addDirtyRange(") == std::string::npos || headerContent.find("bool isDirtyOffset(std::size_t pos) const noexcept;") == std::string::npos || editorContent.find("bool MRFileEditor::isDirtyOffset(") == std::string::npos) {
 		failureReason = "Changed-text wiring requires dedicated dirty-range tracking in MRFileEditor.";
 		return false;
 	}
-	if (sourceContent.find("remapDirtyRangesForAppliedChange(*changeSet);") == std::string::npos || sourceContent.find("void MRFileEditor::remapDirtyRangesForAppliedChange(") == std::string::npos) {
+	if (indentContent.find("remapDirtyRangesForAppliedChange(*changeSet);") == std::string::npos || editorContent.find("void MRFileEditor::remapDirtyRangesForAppliedChange(") == std::string::npos) {
 		failureReason = "Changed-text ranges must be remapped across edits to stay position-correct.";
 		return false;
 	}
-	if (sourceContent.find("if (pos >= mBufferModel.length())") == std::string::npos) {
+	if (editorContent.find("if (pos >= mBufferModel.length())") == std::string::npos) {
 		failureReason = "Changed-text lookup must not clamp offsets beyond EOF into the last dirty character.";
 		return false;
 	}
@@ -2615,16 +2638,22 @@ bool testThemeAndMacroSaveOverwriteWiringGuard(std::string &failureReason) {
 }
 
 bool testPersistentBlocksWiringGuard(std::string &failureReason) {
-	const std::string settingsPath = absolutePathFromCwd("config/settings/MRSettingsRuntime.cpp");
+	const std::string editSetupPath = absolutePathFromCwd("config/settings/MRSettingsEditSetup.cpp");
+	const std::string snapshotPath = absolutePathFromCwd("config/settings/MRSettingsSnapshotIO.cpp");
 	const std::string vmPath = absolutePathFromCwd("mrmac/MRVM.cpp");
 	const std::string panelPath = absolutePathFromCwd("dialogs/extensions/MRFileExtensionEditorSettings.cpp");
-	std::string settingsContent;
+	std::string editSetupContent;
+	std::string snapshotContent;
 	std::string vmContent;
 	std::string panelContent;
 	std::string ioError;
 
-	if (!readTextFile(settingsPath, settingsContent, ioError)) {
-		failureReason = "Unable to read MRSettingsRuntime.cpp for persistent-blocks guard: " + ioError;
+	if (!readTextFile(editSetupPath, editSetupContent, ioError)) {
+		failureReason = "Unable to read MRSettingsEditSetup.cpp for persistent-blocks guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(snapshotPath, snapshotContent, ioError)) {
+		failureReason = "Unable to read MRSettingsSnapshotIO.cpp for persistent-blocks guard: " + ioError;
 		return false;
 	}
 	if (!readTextFile(vmPath, vmContent, ioError)) {
@@ -2635,8 +2664,8 @@ bool testPersistentBlocksWiringGuard(std::string &failureReason) {
 		failureReason = "Unable to read MRFileExtensionEditorSettings.cpp for persistent-blocks guard: " + ioError;
 		return false;
 	}
-	if (settingsContent.find("upperKeyName == \"PERSISTENT_BLOCKS\"") == std::string::npos || settingsContent.find("MRSETUP('PERSISTENT_BLOCKS'") == std::string::npos) {
-		failureReason = "Persistent blocks must be parsed and serialized via MRSETUP in MRDialogPaths.";
+	if (editSetupContent.find("{\"PERSISTENT_BLOCKS\"") == std::string::npos || editSetupContent.find("upperKeyName == \"PERSISTENT_BLOCKS\"") == std::string::npos || snapshotContent.find("MRSETUP('PERSISTENT_BLOCKS'") == std::string::npos) {
+		failureReason = "Persistent blocks must be parsed through edit setup descriptors and serialized via MRSETUP.";
 		return false;
 	}
 	if (vmContent.find("classifySettingsKey(setupKey)") == std::string::npos || vmContent.find("PERSISTENT_BLOCKS") == std::string::npos) {
@@ -3124,6 +3153,7 @@ bool testDeferredUiMutationEpochGuard(std::string &failureReason) {
 	const std::string vmPath = absolutePathFromCwd("mrmac/MRVM.cpp");
 	const std::string vmHeaderPath = absolutePathFromCwd("mrmac/MRVM.hpp");
 	const std::string screenPath = absolutePathFromCwd("mrmac/vm/MRVMScreen.cpp");
+	const std::string editorBridgePath = absolutePathFromCwd("mrmac/vm/MRVMEditor.cpp");
 	const std::string dispatchPath = absolutePathFromCwd("coprocessor/MRCoprocessorDispatch.cpp");
 	const std::string appPath = absolutePathFromCwd("app/MREditorApp.cpp");
 	const std::string menuBarPath = absolutePathFromCwd("ui/MRMenuBar.cpp");
@@ -3133,6 +3163,7 @@ bool testDeferredUiMutationEpochGuard(std::string &failureReason) {
 	std::string vmContent;
 	std::string vmHeaderContent;
 	std::string screenContent;
+	std::string editorBridgeContent;
 	std::string dispatchContent;
 	std::string appContent;
 	std::string menuBarContent;
@@ -3151,6 +3182,10 @@ bool testDeferredUiMutationEpochGuard(std::string &failureReason) {
 	}
 	if (!readTextFile(screenPath, screenContent, ioError)) {
 		failureReason = "Unable to read MRVMScreen.cpp for deferred UI mutation-epoch guard: " + ioError;
+		return false;
+	}
+	if (!readTextFile(editorBridgePath, editorBridgeContent, ioError)) {
+		failureReason = "Unable to read MRVMEditor.cpp for deferred UI mutation-epoch guard: " + ioError;
 		return false;
 	}
 	if (!readTextFile(dispatchPath, dispatchContent, ioError)) {
@@ -3183,8 +3218,8 @@ bool testDeferredUiMutationEpochGuard(std::string &failureReason) {
 		return false;
 	}
 	if (screenContent.find("static std::atomic<std::uint64_t> g_macroScreenMutationEpoch(1);") == std::string::npos || screenContent.find("struct ScreenStateCoordinator") == std::string::npos || screenContent.find("static ScreenStateCoordinator g_screenStateCoordinator;") == std::string::npos || screenContent.find("struct UiScreenStateFacade") == std::string::npos || screenContent.find("class MacroCellGrid") == std::string::npos || screenContent.find("returnWithMacroScreenMutation(") == std::string::npos || screenContent.find("returnWithDirectScreenMutation(") == std::string::npos || screenContent.find("std::uint64_t mrvmUiScreenMutationEpoch() noexcept") == std::string::npos || screenContent.find("void mrvmUiInvalidateScreenBase() noexcept") == std::string::npos || screenContent.find("void mrvmUiTouchScreenMutationEpoch() noexcept") == std::string::npos ||
-	    screenContent.find("void mrvmUiBeginMacroScreenBatch() noexcept") == std::string::npos || screenContent.find("void mrvmUiEndMacroScreenBatch() noexcept") == std::string::npos || vmContent.find("struct UiRenderFacade") == std::string::npos || vmContent.find("bool mrvmUiRenderFacadeRenderDeferredCommand(const MRMacroDeferredUiCommand &command)") == std::string::npos || vmContent.find("bool mrvmUiEraseCurrentWindow()") == std::string::npos || vmContent.find("returnWithDirectScreenMutation(eraseCurrentEditWindow())") == std::string::npos || vmContent.find("ok = mrvmUiEraseCurrentWindow();") == std::string::npos) {
-		failureReason = "MRVM screen layer must maintain a central screen-mutation epoch coordinator and keep the deferred render facade in MRVM.cpp.";
+	    screenContent.find("void mrvmUiBeginMacroScreenBatch() noexcept") == std::string::npos || screenContent.find("void mrvmUiEndMacroScreenBatch() noexcept") == std::string::npos || vmContent.find("struct UiRenderFacade") == std::string::npos || vmContent.find("bool mrvmUiRenderFacadeRenderDeferredCommand(const MRMacroDeferredUiCommand &command)") == std::string::npos || editorBridgeContent.find("bool mrvmUiEraseCurrentWindow()") == std::string::npos || editorBridgeContent.find("return returnWithDirectScreenMutation(mrvmEditorEraseCurrentWindow());") == std::string::npos || vmContent.find("ok = mrvmUiEraseCurrentWindow();") == std::string::npos) {
+		failureReason = "MRVM screen layer must maintain a central screen-mutation epoch coordinator and route editor bridge mutations through it.";
 		return false;
 	}
 	if (dispatchContent.find("observedScreenEpoch") == std::string::npos || dispatchContent.find("liveEpoch != playback.observedScreenEpoch") == std::string::npos || dispatchContent.find("mrvmUiScreenMutationEpoch()") == std::string::npos || dispatchContent.find("mrvmUiRenderFacadeRenderDeferredCommand(command)") == std::string::npos) {
@@ -3613,12 +3648,12 @@ bool testMarqueeColorSourceGuard(std::string &failureReason) {
 }
 
 bool testOtherColorsDedicatedMessageSlotsGuard(std::string &failureReason) {
-	const std::string sourcePath = absolutePathFromCwd("config/settings/MRSettingsRuntime.cpp");
+	const std::string sourcePath = absolutePathFromCwd("config/settings/MRSettingsThemesProfiles.cpp");
 	std::string content;
 	std::string ioError;
 
 	if (!readTextFile(sourcePath, content, ioError)) {
-		failureReason = "Unable to read MRSettingsRuntime.cpp for OTHERCOLORS slot guard: " + ioError;
+		failureReason = "Unable to read MRSettingsThemesProfiles.cpp for OTHERCOLORS slot guard: " + ioError;
 		return false;
 	}
 	if (content.find("{\"error message\", kMrPaletteMessageError}") == std::string::npos || content.find("{\"message\", kMrPaletteMessage}") == std::string::npos || content.find("{\"warning message\", kMrPaletteMessageWarning}") == std::string::npos) {
@@ -3779,6 +3814,99 @@ bool testCompilerProfileAutomaticSetupGuard(std::string &failureReason) {
 	return true;
 }
 
+bool testBentoBoxFoundationGuard(std::string &failureReason) {
+	std::string source;
+	std::string header;
+	std::string frameSource;
+	std::string ioError;
+	std::string missingNeedle;
+	std::size_t commandRouterPos = std::string::npos;
+	std::size_t cmClosePos = std::string::npos;
+	std::size_t commandDefaultPos = std::string::npos;
+	std::size_t splitRightPos = std::string::npos;
+	std::size_t splitDownPos = std::string::npos;
+	std::size_t verticalOrientationPos = std::string::npos;
+	std::size_t horizontalOrientationPos = std::string::npos;
+
+	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBox.cpp"), source, ioError)) {
+		failureReason = "Unable to read MRBentoBox.cpp: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("ui/MRBentoBox.hpp"), header, ioError)) {
+		failureReason = "Unable to read MRBentoBox.hpp: " + ioError;
+		return false;
+	}
+	if (!readTextFile(absolutePathFromCwd("ui/MRFrame.cpp"), frameSource, ioError)) {
+		failureReason = "Unable to read MRFrame.cpp: " + ioError;
+		return false;
+	}
+	commandRouterPos = source.find("bool splitCommandTargetsSecondaryPane(ushort command) noexcept");
+	cmClosePos = commandRouterPos != std::string::npos ? source.find("case cmClose:", commandRouterPos) : std::string::npos;
+	commandDefaultPos = commandRouterPos != std::string::npos ? source.find("default:", commandRouterPos) : std::string::npos;
+	if (commandRouterPos == std::string::npos || cmClosePos == std::string::npos || commandDefaultPos == std::string::npos || cmClosePos > commandDefaultPos) {
+		failureReason = "Bento command routing must keep window-close commands out of secondary panes.";
+		return false;
+	}
+	splitRightPos = source.find("case bppSplitRight:");
+	splitDownPos = source.find("case bppSplitDown:");
+	verticalOrientationPos = splitRightPos != std::string::npos ? source.find("return splitLeafNode(targetLeafId, bsoVertical, role) >= 0;", splitRightPos) : std::string::npos;
+	horizontalOrientationPos = splitDownPos != std::string::npos ? source.find("return splitLeafNode(targetLeafId, bsoHorizontal, role) >= 0;", splitDownPos) : std::string::npos;
+	if (splitRightPos == std::string::npos || splitDownPos == std::string::npos || verticalOrientationPos == std::string::npos || horizontalOrientationPos == std::string::npos || verticalOrientationPos > splitDownPos) {
+		failureReason = "Bento split placement mapping changed.";
+		return false;
+	}
+	if (!containsAllSubstrings(source, {"constexpr BentoFrameGlyphs kBentoFrameGlyphs;", "if (action == kBentoPaneActionSplitRight) return bppSplitDown;", "if (action == kBentoPaneActionSplitDown) return bppSplitRight;"}, missingNeedle)) {
+		failureReason = "Bento frame glyph table and split action mapping changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(source, {"int MRBentoBox::splitLeafNode(int leafId, BentoSplitOrientation orientation, MRBentoPaneRole newRole)", "target.kind = blnSplit;", "target.firstChild = existingLeafNode;", "target.secondChild = newLeafNode;", "layoutTree.push_back(node);"}, missingNeedle)) {
+		failureReason = "Bento recursive split foundation changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(header, {"std::vector<BentoLayoutNode> layoutTree;", "std::vector<BentoLeaf> leaves;", "std::vector<MRBentoPaneFrameView *> paneFrameViews;", "int activeLeafId;"}, missingNeedle)) {
+		failureReason = "Bento dynamic pane members changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(source, {"paneEditor->setMiniMapSuppressed(toolPane);", "paneEditor->setWordWrapSuppressed(toolPane);", "paneEditor->setScrollBarsAlwaysVisible(toolPane);"}, missingNeedle)) {
+		failureReason = "Bento tool-pane editor policy changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(source, {"class MRBentoPaneFrameView : public TView", "const TAttrPair frameColor = TAttrPair(owner != nullptr ? owner->mapColor(focused ? 13 : 1) : mapColor(1));"}, missingNeedle)) {
+		failureReason = "Bento pane focus must remain color-based: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (source.find("insert(view);") != std::string::npos) {
+		failureReason = "Bento pane chrome must not be inserted as a child overlay view.";
+		return false;
+	}
+	if (!containsAllSubstrings(source, {"void MRBentoBox::draw()", "MREditWindow::draw();", "drawPaneFrames();", "void MRBentoBox::handleEvent(TEvent &event)", "const auto redrawChrome = [this]()", "drawPaneFrames();"}, missingNeedle)) {
+		failureReason = "Bento pane chrome redraw guard changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(source, {"TColorAttr MRPaneEditWindow::mapColor(uchar index)", "if (index == 4 || index == 5) return MREditWindow::mapColor(mPaneFocused ? 13 : 1);", "void MRPaneEditWindow::setPaneFocused(bool focused) noexcept", "void MRPaneEditWindow::drawPaneScrollBars() noexcept"}, missingNeedle)) {
+		failureReason = "Bento tool-pane scrollbar focus color guard changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(source, {"TColorAttr MRBentoBox::mapColor(uchar index)", "sourceScrollBarPaletteActive && (index == 4 || index == 5)", "void MRBentoBox::drawSourcePaneScrollBars() noexcept", "sourceScrollBarPaletteActive = true;", "sourceScrollBarPaletteActive = false;", "drawSourcePaneScrollBars();"}, missingNeedle)) {
+		failureReason = "Bento source-pane scrollbar focus color guard changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(header, {"virtual TColorAttr mapColor(uchar index) override;", "void setPaneFocused(bool focused) noexcept;", "void drawPaneScrollBars() noexcept;", "void drawSourcePaneScrollBars() noexcept;", "bool sourceScrollBarPaletteActive;"}, missingNeedle)) {
+		failureReason = "Bento scrollbar focus API guard changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(frameSource, {"kFocusedDragIcon = \"\\xCD\\xBC\"", "kFocusedDragLeftIcon = \"\\xC8\\xCD\"", "f == 9 ? kFocusedDragLeftIcon : kDragLeftIcon", "f == 9 ? kFocusedDragIcon : kDragIcon"}, missingNeedle)) {
+		failureReason = "Focused double-frame resize corner guard changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	if (!containsAllSubstrings(source, {"bool MRBentoBox::handleOuterFrameCloseMouse(TEvent &event)", "message(this, evCommand, cmClose, nullptr);"}, missingNeedle)) {
+		failureReason = "Bento outer frame close routing changed: missing " + missingNeedle + ".";
+		return false;
+	}
+	failureReason.clear();
+	return true;
+}
+
 void runTest(TestContext &ctx, const char *name, bool (*fn)(std::string &)) {
 	std::string failure;
 
@@ -3805,9 +3933,10 @@ void runCoreSuite(TestContext &ctx) {
 	runTest(ctx, "Edit profile case-sensitive macro roundtrip", testEditProfileCaseSensitiveMacroRoundtripGuard);
 	runTest(ctx, "Edit profile duplicate exact extension rejection", testEditProfileDuplicateExactExtensionMacroGuard);
 	runTest(ctx, "Compiler profile automatic setup guard", testCompilerProfileAutomaticSetupGuard);
+	runTest(ctx, "BentoBox foundation guard", testBentoBoxFoundationGuard);
 	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
 	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
-	runTest(ctx, "WINDOWCOLORS v5 + line numbers theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
+	runTest(ctx, "WINDOWCOLORS v6 + focused pane border theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
 	runTest(ctx, "Explicit syntax-language marker guard", testExplicitSyntaxLanguageMarkerGuard);
 	runTest(ctx, "Touched-range mid-insert guard", testTouchedRangeMidInsertGuard);
 	runTest(ctx, "TRUNCATE_SPACES save-only guard", testTruncateSpacesSaveOnlyGuard);
@@ -3856,9 +3985,10 @@ void runFullSuite(TestContext &ctx) {
 	runTest(ctx, "Edit profile case-sensitive macro roundtrip", testEditProfileCaseSensitiveMacroRoundtripGuard);
 	runTest(ctx, "Edit profile duplicate exact extension rejection", testEditProfileDuplicateExactExtensionMacroGuard);
 	runTest(ctx, "Compiler profile automatic setup guard", testCompilerProfileAutomaticSetupGuard);
+	runTest(ctx, "BentoBox foundation guard", testBentoBoxFoundationGuard);
 	runTest(ctx, "Paths settings roundtrip behavior", testPathsBrowseEventGuard);
 	runTest(ctx, "Color setup save-theme behavior", testColorSetupSaveThemeUsesWorkingPaletteGuard);
-	runTest(ctx, "WINDOWCOLORS v5 + line numbers theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
+	runTest(ctx, "WINDOWCOLORS v6 + focused pane border theme roundtrip", testWindowColorsThemeVersionAndLineNumbersRoundtrip);
 	runTest(ctx, "Explicit syntax-language marker guard", testExplicitSyntaxLanguageMarkerGuard);
 	runTest(ctx, "TRUNCATE_SPACES save-only guard", testTruncateSpacesSaveOnlyGuard);
 	runTest(ctx, "Indicator line-number color wiring guard", testIndicatorLineNumberColorWiringGuard);

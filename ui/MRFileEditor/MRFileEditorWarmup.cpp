@@ -774,7 +774,7 @@ bool MRFileEditor::foldingPipelineEnabled() const {
 }
 
 bool MRFileEditor::miniMapPipelineEnabled() const noexcept {
-	return !mCommunicationViewerMode;
+	return !mCommunicationViewerMode && !mMiniMapSuppressed;
 }
 
 void MRFileEditor::resetSyntaxWarmupState(bool clearCache) noexcept {

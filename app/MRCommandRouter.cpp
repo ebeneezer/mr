@@ -70,6 +70,7 @@
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRFrame.hpp"
 #include "../ui/MRMenuBar.hpp"
+#include "../ui/MRBentoBox.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "../coprocessor/MRCoprocessor.hpp"
 #include "../ui/MRMessageLineController.hpp"
@@ -80,7 +81,7 @@
 #include <pcre2.h>
 
 namespace {
-bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandLine, bool replaceBuffer, bool activate, bool closeOnFailure);
+bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandLine, bool replaceBuffer, bool activate, bool closeOnFailure, std::string_view titleOverride = std::string_view());
 
 TFrame *initMrDialogFrame(TRect bounds) {
 	return new MRFrame(bounds);
@@ -1364,16 +1365,322 @@ bool handleExecuteProgram() {
 	return true;
 }
 
+MRBentoBox *findBuildBentoBoxForSource(const std::string &sourcePath) {
+	for (MREditWindow *candidate : allEditWindowsInZOrder()) {
+		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(candidate);
+
+		if (bentoBox != nullptr && sourcePath == bentoBox->currentFileName()) return bentoBox;
+	}
+	return nullptr;
+}
+
+MREditWindow *currentExternalOutputWindow() {
+	MREditWindow *win = currentEditWindow();
+	MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(win);
+
+	if (bentoBox != nullptr && bentoBox->secondaryEditWindow() != nullptr) return bentoBox->secondaryEditWindow();
+	return win;
+}
+
+void setSplitDiagnosticsStatusForOutput(MREditWindow *outputWindow, const char *status) {
+	MRBentoBox *split = outputWindow != nullptr ? dynamic_cast<MRBentoBox *>(outputWindow->owner) : nullptr;
+
+	if (split != nullptr && split->secondaryEditWindow() == outputWindow) split->setDiagnosticsStatus(status);
+}
+
+struct CompilerDiagnosticLocation {
+	std::size_t outputOffset = 0;
+	std::size_t sourceLine = 1;
+	std::size_t sourceColumn = 1;
+};
+
+std::string pathBaseName(const std::string &path) {
+	std::filesystem::path fsPath(path);
+	std::string base = fsPath.filename().string();
+
+	return base.empty() ? path : base;
+}
+
+std::string buildCompilerOutputTitle(const MRCompilerProfile &compilerProfile, const std::string &matchedProfileName, const std::string &sourcePath) {
+	std::string profileName = compilerProfile.name;
+	const std::string sourceName = pathBaseName(sourcePath);
+	std::string title;
+
+	if (profileName.empty()) profileName = !matchedProfileName.empty() ? matchedProfileName : compilerProfile.toolchain;
+	if (profileName.empty()) profileName = "Compiler";
+	title = "Build: " + profileName;
+	if (!sourceName.empty()) title += " - " + sourceName;
+	if (title.size() > 70) title = title.substr(0, 67) + "...";
+	return title;
+}
+
+std::string normalizedDiagnosticPath(const std::string &path) {
+	std::string normalized = path;
+
+	for (char &ch : normalized)
+		if (ch == '\\') ch = '/';
+	normalized = std::filesystem::path(normalized).lexically_normal().generic_string();
+	if (normalized.rfind("./", 0) == 0) normalized.erase(0, 2);
+	return normalized;
+}
+
+bool pathSuffixMatches(const std::string &candidatePath, const std::string &sourcePath) {
+	if (candidatePath.size() > sourcePath.size()) return false;
+	if (candidatePath == sourcePath) return true;
+	if (sourcePath.size() <= candidatePath.size()) return false;
+	if (sourcePath.compare(sourcePath.size() - candidatePath.size(), candidatePath.size(), candidatePath) != 0) return false;
+	return sourcePath[sourcePath.size() - candidatePath.size() - 1] == '/';
+}
+
+bool compilerDiagnosticPathMatches(const std::string &candidatePath, const std::string &sourcePath) {
+	const std::string candidate = normalizedDiagnosticPath(candidatePath);
+	const std::string source = normalizedDiagnosticPath(sourcePath);
+
+	if (candidatePath.empty() || sourcePath.empty()) return false;
+	if (candidate == source || pathSuffixMatches(candidate, source)) return true;
+	return pathBaseName(candidate) == pathBaseName(source);
+}
+
+bool parseUnsignedField(const std::string &text, std::size_t start, std::size_t end, std::size_t &value) {
+	std::size_t parsed = 0;
+
+	if (start >= end || std::isdigit(static_cast<unsigned char>(text[start])) == 0) return false;
+	value = 0;
+	while (start + parsed < end && std::isdigit(static_cast<unsigned char>(text[start + parsed])) != 0) {
+		value = value * 10 + static_cast<std::size_t>(text[start + parsed] - '0');
+		++parsed;
+	}
+	return parsed != 0 && start + parsed == end;
+}
+
+bool compilerDiagnosticSeverityMarkerPresent(const std::string &line) {
+	static const char *markers[] = {": error:", ": fatal error:", ": warning:", ": note:", "): error", "): fatal error", "): warning", "): note"};
+
+	for (const char *marker : markers)
+		if (line.find(marker) != std::string::npos) return true;
+	return false;
+}
+
+bool parseMsvcCompilerDiagnosticLine(const std::string &line, const std::string &sourcePath, CompilerDiagnosticLocation &location) {
+	const std::size_t closeParen = line.find("):");
+	std::size_t openParen;
+	std::size_t comma;
+	std::size_t sourceLine = 0;
+	std::size_t sourceColumn = 1;
+
+	if (closeParen == std::string::npos) return false;
+	openParen = line.rfind('(', closeParen);
+	if (openParen == std::string::npos || openParen == 0) return false;
+	comma = line.find(',', openParen + 1);
+	if (comma != std::string::npos && comma < closeParen) {
+		if (!parseUnsignedField(line, openParen + 1, comma, sourceLine)) return false;
+		static_cast<void>(parseUnsignedField(line, comma + 1, closeParen, sourceColumn));
+	} else if (!parseUnsignedField(line, openParen + 1, closeParen, sourceLine))
+		return false;
+	if (sourceLine == 0 || !compilerDiagnosticPathMatches(line.substr(0, openParen), sourcePath)) return false;
+	if (sourceColumn == 0) sourceColumn = 1;
+	location.sourceLine = sourceLine;
+	location.sourceColumn = sourceColumn;
+	return true;
+}
+
+bool parseColonCompilerDiagnosticLine(const std::string &line, const std::string &sourcePath, CompilerDiagnosticLocation &location) {
+	std::size_t firstColon = line.find(':');
+
+	while (firstColon != std::string::npos) {
+		const std::size_t secondColon = line.find(':', firstColon + 1);
+		std::size_t sourceLine = 0;
+		std::size_t sourceColumn = 1;
+
+		if (secondColon == std::string::npos) return false;
+		if (parseUnsignedField(line, firstColon + 1, secondColon, sourceLine) && sourceLine != 0) {
+			const std::size_t thirdColon = line.find(':', secondColon + 1);
+			if (thirdColon != std::string::npos) static_cast<void>(parseUnsignedField(line, secondColon + 1, thirdColon, sourceColumn));
+			if (sourceColumn == 0) sourceColumn = 1;
+			if (compilerDiagnosticPathMatches(line.substr(0, firstColon), sourcePath)) {
+				location.sourceLine = sourceLine;
+				location.sourceColumn = sourceColumn;
+				return true;
+			}
+		}
+		firstColon = line.find(':', firstColon + 1);
+	}
+	return false;
+}
+
+bool parseCompilerDiagnosticLine(const std::string &line, const std::string &sourcePath, CompilerDiagnosticLocation &location) {
+	if (!compilerDiagnosticSeverityMarkerPresent(line)) return false;
+	return parseColonCompilerDiagnosticLine(line, sourcePath, location) || parseMsvcCompilerDiagnosticLine(line, sourcePath, location);
+}
+
+bool findNextCompilerDiagnostic(const std::string &text, const std::string &sourcePath, std::size_t cursorOffset, CompilerDiagnosticLocation &location) {
+	const std::size_t textLength = text.size();
+	std::size_t start = std::min(cursorOffset, textLength);
+
+	while (start < textLength && text[start] != '\n')
+		++start;
+	if (start < textLength) ++start;
+
+	for (int pass = 0; pass < 2; ++pass) {
+		const std::size_t scanEnd = pass == 0 ? textLength : std::min(cursorOffset, textLength);
+		std::size_t lineStart = pass == 0 ? start : 0;
+
+		while (lineStart < scanEnd) {
+			std::size_t lineEnd = text.find('\n', lineStart);
+			CompilerDiagnosticLocation candidate;
+
+			if (lineEnd == std::string::npos || lineEnd > scanEnd) lineEnd = scanEnd;
+			if (parseCompilerDiagnosticLine(text.substr(lineStart, lineEnd - lineStart), sourcePath, candidate)) {
+				candidate.outputOffset = lineStart;
+				location = candidate;
+				return true;
+			}
+			if (lineEnd == scanEnd) break;
+			lineStart = lineEnd + 1;
+		}
+	}
+	return false;
+}
+
+bool findCompilerDiagnosticAtOffset(const std::string &text, const std::string &sourcePath, std::size_t cursorOffset, CompilerDiagnosticLocation &location) {
+	const std::size_t textLength = text.size();
+	std::size_t probe;
+	std::size_t lineStart;
+	std::size_t lineEnd;
+	CompilerDiagnosticLocation candidate;
+
+	if (textLength == 0) return false;
+	probe = std::min(cursorOffset, textLength - 1);
+	lineStart = text.rfind('\n', probe);
+	lineStart = lineStart == std::string::npos ? 0 : lineStart + 1;
+	lineEnd = text.find('\n', lineStart);
+	if (lineEnd == std::string::npos) lineEnd = textLength;
+	if (!parseCompilerDiagnosticLine(text.substr(lineStart, lineEnd - lineStart), sourcePath, candidate)) return false;
+	candidate.outputOffset = lineStart;
+	location = candidate;
+	return true;
+}
+
+std::size_t countCompilerDiagnostics(const std::string &text, const std::string &sourcePath) {
+	const std::size_t textLength = text.size();
+	std::size_t lineStart = 0;
+	std::size_t count = 0;
+
+	while (lineStart < textLength) {
+		std::size_t lineEnd = text.find('\n', lineStart);
+		CompilerDiagnosticLocation ignored;
+
+		if (lineEnd == std::string::npos) lineEnd = textLength;
+		if (parseCompilerDiagnosticLine(text.substr(lineStart, lineEnd - lineStart), sourcePath, ignored)) ++count;
+		if (lineEnd == textLength) break;
+		lineStart = lineEnd + 1;
+	}
+	return count;
+}
+
+std::size_t compilerDiagnosticOrdinalAtOffset(const std::string &text, const std::string &sourcePath, std::size_t outputOffset) {
+	const std::size_t textLength = text.size();
+	std::size_t lineStart = 0;
+	std::size_t ordinal = 0;
+
+	while (lineStart < textLength && lineStart <= outputOffset) {
+		std::size_t lineEnd = text.find('\n', lineStart);
+		CompilerDiagnosticLocation ignored;
+
+		if (lineEnd == std::string::npos) lineEnd = textLength;
+		if (parseCompilerDiagnosticLine(text.substr(lineStart, lineEnd - lineStart), sourcePath, ignored)) {
+			++ordinal;
+			if (lineStart == outputOffset) return ordinal;
+		}
+		if (lineEnd == textLength) break;
+		lineStart = lineEnd + 1;
+	}
+	return 0;
+}
+
+std::string compilerDiagnosticStatusText(const std::string &text, const std::string &sourcePath, const CompilerDiagnosticLocation &location) {
+	const std::size_t total = countCompilerDiagnostics(text, sourcePath);
+	const std::size_t ordinal = compilerDiagnosticOrdinalAtOffset(text, sourcePath, location.outputOffset);
+
+	if (ordinal != 0 && total != 0) return "diag " + std::to_string(ordinal) + "/" + std::to_string(total);
+	return "diag";
+}
+
+bool jumpBentoBoxToCompilerDiagnostic(MRBentoBox *bentoBox, MREditWindow *outputWindow, const CompilerDiagnosticLocation &location) {
+	MRFileEditor *sourceEditor = bentoBox != nullptr ? bentoBox->getEditor() : nullptr;
+	MRFileEditor *outputEditor = outputWindow != nullptr ? outputWindow->getEditor() : nullptr;
+	MRTextBufferModel::ReadSnapshot sourceSnapshot;
+	std::size_t sourceOffset;
+	std::size_t lineStart;
+	std::size_t sourceLineEnd;
+	std::size_t sourceSelectionEnd;
+	std::size_t outputLineEnd;
+
+	if (bentoBox == nullptr || sourceEditor == nullptr || outputEditor == nullptr) return false;
+	sourceSnapshot = bentoBox->buffer().readSnapshot();
+	lineStart = sourceSnapshot.lineStartByIndex(location.sourceLine > 0 ? location.sourceLine - 1 : 0);
+	sourceOffset = sourceEditor->charPtrOffset(lineStart, static_cast<int>(location.sourceColumn > 0 ? location.sourceColumn - 1 : 0));
+	sourceLineEnd = sourceEditor->lineEndOffset(sourceOffset);
+	sourceSelectionEnd = sourceOffset < sourceLineEnd ? sourceEditor->nextCharOffset(sourceOffset) : sourceOffset;
+	if (sourceSelectionEnd == sourceOffset && lineStart < sourceLineEnd) {
+		sourceOffset = lineStart;
+		sourceSelectionEnd = sourceLineEnd;
+	}
+	outputLineEnd = outputEditor->lineEndOffset(location.outputOffset);
+	sourceEditor->setCursorOffset(sourceOffset);
+	sourceEditor->setSelectionOffsets(sourceOffset, sourceSelectionEnd);
+	outputEditor->setCursorOffset(location.outputOffset);
+	outputEditor->setSelectionOffsets(location.outputOffset, outputLineEnd);
+	bentoBox->activatePrimaryPane();
+	static_cast<void>(mrActivateEditWindow(bentoBox));
+	return true;
+}
+
+bool handleFindNextCompilerError(void *commandInfo) {
+	MREditWindow *win = currentEditWindow();
+	MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(win);
+	MREditWindow *outputWindow = bentoBox != nullptr ? bentoBox->secondaryEditWindow() : nullptr;
+	MRFileEditor *outputEditor = outputWindow != nullptr ? outputWindow->getEditor() : nullptr;
+	CompilerDiagnosticLocation location;
+	std::string outputText;
+	bool foundDiagnostic;
+
+	if (bentoBox == nullptr || outputWindow == nullptr || outputEditor == nullptr) {
+		postDialogWarning("Compiler error navigation requires an active Bento build window.");
+		return true;
+	}
+	outputText = outputWindow->buffer().readSnapshot().text();
+	foundDiagnostic = commandInfo == bentoBox ? findCompilerDiagnosticAtOffset(outputText, bentoBox->currentFileName(), outputEditor->cursorOffset(), location) : findNextCompilerDiagnostic(outputText, bentoBox->currentFileName(), outputEditor->cursorOffset(), location);
+	if (!foundDiagnostic) {
+		bentoBox->setDiagnosticsStatus("");
+		postDialogWarning("No compiler diagnostic location found.");
+		return true;
+	}
+	if (!jumpBentoBoxToCompilerDiagnostic(bentoBox, outputWindow, location))
+		postSearchError("Unable to navigate to compiler error.");
+	else {
+		const std::string statusText = compilerDiagnosticStatusText(outputText, bentoBox->currentFileName(), location);
+		bentoBox->setDiagnosticsStatus(statusText.c_str());
+	}
+	return true;
+}
+
 bool handleBuildCurrentFile() {
 	MREditWindow *win = currentEditWindow();
 	std::string sourcePath;
 	std::string matchedProfileName;
 	std::string errorText;
 	std::string commandLine;
+	std::string outputTitle;
 	MRCompilerProfile compilerProfile;
+	MRBentoBox *bentoBox;
+	MRBentoBox *sourceBentoBox;
 	MREditWindow *outputWindow;
+	MREditWindow *sourceWindowToClose = nullptr;
+	bool createdBentoBox = false;
 
 	if (win == nullptr) return true;
+	sourceBentoBox = dynamic_cast<MRBentoBox *>(win);
 	sourcePath = win->currentFileName();
 	if (sourcePath.empty()) {
 		postDialogWarning("Build current file requires a named source file.");
@@ -1391,24 +1698,52 @@ bool handleBuildCurrentFile() {
 		postDialogWarning(errorText.empty() ? "Unable to build compiler command line." : errorText);
 		return true;
 	}
+	outputTitle = buildCompilerOutputTitle(compilerProfile, matchedProfileName, sourcePath);
 
-	outputWindow = createEditorWindow(shortenCommandTitle(commandLine).c_str());
-	if (outputWindow == nullptr) {
-		postSearchError("Unable to create build output window.");
+	bentoBox = findBuildBentoBoxForSource(sourcePath);
+	if (bentoBox == nullptr) {
+		bentoBox = createBentoBoxWindow(sourcePath.c_str());
+		createdBentoBox = true;
+	}
+	if (bentoBox == nullptr) {
+		postSearchError("Unable to create build BentoBox window.");
 		return true;
 	}
-	startExternalCommandInWindow(outputWindow, commandLine, true, true, true);
+	bentoBox->showSecondaryPane();
+	outputWindow = bentoBox->secondaryEditWindow();
+	if (outputWindow == nullptr) {
+		if (createdBentoBox) message(bentoBox, evCommand, cmClose, nullptr);
+		postSearchError("Unable to create build output pane.");
+		return true;
+	}
+	if (outputWindow->hasTrackedExternalIoTasks()) {
+		bentoBox->setDiagnosticsStatus("busy");
+		postDialogWarning("Build output is still running; stop it before rebuilding.");
+		static_cast<void>(mrActivateEditWindow(bentoBox));
+		return true;
+	}
+	if (bentoBox->isFileChanged() && !bentoBox->confirmAbandonForReload()) return true;
+	if (!loadResolvedFileIntoWindow(bentoBox, sourcePath, "Build current file")) {
+		if (createdBentoBox) message(bentoBox, evCommand, cmClose, nullptr);
+		postSearchError("Unable to load source file into build BentoBox window.");
+		return true;
+	}
+	if (sourceBentoBox == nullptr && win != bentoBox && win->currentFileName() == sourcePath && !win->isFileChanged()) sourceWindowToClose = win;
+	static_cast<void>(mrActivateEditWindow(bentoBox));
+	if (sourceWindowToClose != nullptr) message(sourceWindowToClose, evCommand, cmClose, nullptr);
+	startExternalCommandInWindow(outputWindow, commandLine, true, false, false, outputTitle);
+	bentoBox->activatePrimaryPane();
 	return true;
 }
 
-bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandLine, bool replaceBuffer, bool activate, bool closeOnFailure) {
+bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandLine, bool replaceBuffer, bool activate, bool closeOnFailure, std::string_view titleOverride) {
 	std::string title;
 	std::string initialText;
 	std::ostringstream logLine;
 	std::uint64_t taskId;
 
 	if (win == nullptr) return false;
-	title = shortenCommandTitle(commandLine);
+	title = titleOverride.empty() ? shortenCommandTitle(commandLine) : std::string(titleOverride);
 	initialText = "$ " + commandLine + "\n\n";
 	if (replaceBuffer) {
 		if (!win->replaceTextBuffer(initialText.c_str(), title.c_str())) {
@@ -1429,6 +1764,7 @@ bool startExternalCommandInWindow(MREditWindow *win, const std::string &commandL
 		return false;
 	}
 	win->trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::ExternalIo, commandLine);
+	setSplitDiagnosticsStatusForOutput(win, "running");
 
 	logLine << "Started external command in communication window #" << win->bufferId() << ": " << commandLine << " [task #" << taskId << "]";
 	mrLogMessage(logLine.str().c_str());
@@ -1854,17 +2190,19 @@ bool handleWordstarExitDirtySaveAll() {
 }
 
 bool handleStopCurrentProgram() {
-	MREditWindow *win = currentEditWindow();
+	MREditWindow *win = currentExternalOutputWindow();
 	std::ostringstream line;
 	std::size_t taskCount;
 
 	if (win == nullptr || !win->isCommunicationWindow()) return true;
 	taskCount = win->trackedTaskCount(mr::coprocessor::TaskKind::ExternalIo);
 	if (taskCount == 0) {
+		setSplitDiagnosticsStatusForOutput(win, "idle");
 		postDialogWarning(kNoExternalProgramTaskMessage);
 		return true;
 	}
 	if (!win->cancelTrackedExternalIoTasks()) return true;
+	setSplitDiagnosticsStatusForOutput(win, "stopping");
 	line << "Requested stop of " << taskCount << " external program task";
 	if (taskCount != 1) line << "s";
 	line << " in communication window #" << win->bufferId() << ".";
@@ -1873,10 +2211,14 @@ bool handleStopCurrentProgram() {
 }
 
 bool handleRestartCurrentProgram() {
-	MREditWindow *win = currentEditWindow();
+	MREditWindow *current = currentEditWindow();
+	MREditWindow *win = currentExternalOutputWindow();
+	const bool splitOutputTarget = win != nullptr && win != current;
+	std::string titleOverride;
 
 	if (win == nullptr || win->windowRole() != MREditWindow::wrCommunicationCommand) return true;
 	if (win->hasTrackedExternalIoTasks()) {
+		setSplitDiagnosticsStatusForOutput(win, "busy");
 		postDialogWarning(kStopProgramBeforeRestartMessage);
 		return true;
 	}
@@ -1884,12 +2226,14 @@ bool handleRestartCurrentProgram() {
 		postDialogWarning(kNoRestartableCommandMessage);
 		return true;
 	}
-	startExternalCommandInWindow(win, win->windowRoleDetail(), true, true, false);
+	if (splitOutputTarget && win->getTitle(0) != nullptr) titleOverride = win->getTitle(0);
+	startExternalCommandInWindow(win, win->windowRoleDetail(), true, !splitOutputTarget, false, titleOverride);
+	if (splitOutputTarget && current != nullptr) static_cast<void>(mrActivateEditWindow(current));
 	return true;
 }
 
 bool handleClearCurrentOutput() {
-	MREditWindow *win = currentEditWindow();
+	MREditWindow *win = currentExternalOutputWindow();
 	std::ostringstream line;
 
 	if (win == nullptr) return true;
@@ -1903,6 +2247,7 @@ bool handleClearCurrentOutput() {
 	}
 	if (!win->isCommunicationWindow()) return true;
 	if (win->hasTrackedExternalIoTasks()) {
+		setSplitDiagnosticsStatusForOutput(win, "busy");
 		messageBox(mfInformation | mfOKButton, "Stop the current program before clearing its output.");
 		return true;
 	}
@@ -1912,6 +2257,7 @@ bool handleClearCurrentOutput() {
 	}
 	win->setReadOnly(true);
 	win->setFileChanged(false);
+	setSplitDiagnosticsStatusForOutput(win, "idle");
 	line << "Cleared communication window #" << win->bufferId() << ".";
 	mrLogMessage(line.str().c_str());
 	return true;
@@ -2007,7 +2353,7 @@ bool dispatchMRKeymapMacro(std::string_view macroSpec) {
 	return runMacroSpecByName(std::string(macroSpec).c_str(), &errorText, true);
 }
 
-bool handleMRCommand(ushort command) {
+bool handleMRCommand(ushort command, void *commandInfo) {
 	switch (command) {
 		case cmMrFileOpen:
 			return handleFileOpen();
@@ -2273,6 +2619,9 @@ bool handleMRCommand(ushort command) {
 
 		case cmMrOtherClearOutput:
 			return handleClearCurrentOutput();
+
+		case cmMrOtherFindNextCompilerError:
+			return handleFindNextCompilerError(commandInfo);
 
 		case cmMrOtherMacroManager:
 			return runMacroManagerDialog();
